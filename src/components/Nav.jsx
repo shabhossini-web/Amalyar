@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BRAND, NAV_LINKS } from '../data.jsx';
-import { Pulse, Menu } from './icons.jsx';
+import { Menu } from './icons.jsx';
+import Mark from './Mark.jsx';
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false);
@@ -19,7 +20,7 @@ export default function Nav() {
       <div className="nav-wrap">
         <nav className={`nav${scrolled ? ' scrolled' : ''}`} aria-label="ناوبری اصلی">
           <a className="nav-logo" href="#top" aria-label={`${BRAND.name} — صفحهٔ اصلی`}>
-            <span className="mark" aria-hidden="true"><Pulse size={19} strokeWidth={2.3} /></span>
+            <Mark aria-hidden="true" style={{ width: 46, color: '#f2f0fc', flexShrink: 0 }} />
             <span>عمل<span className="grad-text">‌یار</span></span>
           </a>
 

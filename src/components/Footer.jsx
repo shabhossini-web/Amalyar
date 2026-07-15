@@ -1,12 +1,12 @@
 import { BRAND, NAV_LINKS } from '../data.jsx';
-import { Pulse } from './icons.jsx';
+import Mark from './Mark.jsx';
 
 export default function Footer() {
   return (
     <footer className="footer">
       <div className="container">
         <div className="brandline">
-          <Pulse size={17} strokeWidth={2.2} />
+          <Mark style={{ width: 38, color: 'var(--text2)' }} />
           عمل‌یار
         </div>
         <div className="row">
