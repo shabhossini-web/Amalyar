@@ -1,5 +1,8 @@
 node_modules
-dist
 .git
 *.log
 saas-landing.html
+src
+package.json
+vite.config.js
+index.html
