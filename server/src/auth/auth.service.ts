@@ -44,8 +44,8 @@ export class AuthService {
     await this.prisma.otpCode.create({
       data: { phone, codeHash: sha256(code), purpose: 'signup', expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
-    const res = await this.sms.send(phone, `عمل‌یار: کد تأیید شما ${code}`);
-    // تا وقتی پنلِ پیامک وصل نشده، کد را برمی‌گردانیم تا تست ممکن باشد
+    const res = await this.sms.sendOtp(phone, code);
+    // تا وقتی پنلِ پیامک وصل نشده (stub)، کد را برمی‌گردانیم تا تست ممکن باشد
     return { ok: true, ttl: OTP_TTL_MS / 1000, ...(res.stub ? { devCode: code } : {}) };
   }
 
