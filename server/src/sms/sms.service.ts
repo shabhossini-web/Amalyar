@@ -27,10 +27,16 @@ export class SmsService {
   }
 
   async sendOtp(phone: string, code: string) {
-    return this.send(phone, `عمل‌یار: کد تأیید شما ${code}`);
+    // خطِ آخر = فرمتِ WebOTP تا اندروید کد را خودکار پر کند؛ «لغو۱۱» قبلش می‌آید
+    const text = `عمل‌یار: کد تأیید شما ${code}\nلغو۱۱\n@amalyar.com #${code}`;
+    return this.send(phone, text, { skipLagho: true });
   }
 
-  async send(phone: string, text: string): Promise<{ sent: boolean; stub: boolean }> {
+  async send(
+    phone: string,
+    text: string,
+    opts: { skipLagho?: boolean } = {},
+  ): Promise<{ sent: boolean; stub: boolean }> {
     const apiKey = process.env.MELI_API_KEY;
     const from = process.env.MELI_FROM;
     const to = this.normalize(phone);
@@ -43,7 +49,8 @@ export class SmsService {
       return { sent: false, stub: true };
     }
 
-    const body = JSON.stringify({ from, to: [to], text: this.appendLagho(text), udh: '' });
+    const finalText = opts.skipLagho ? text : this.appendLagho(text);
+    const body = JSON.stringify({ from, to: [to], text: finalText, udh: '' });
     try {
       const res = await fetch(
         `https://console.melipayamak.com/api/send/advanced/${encodeURIComponent(apiKey)}`,

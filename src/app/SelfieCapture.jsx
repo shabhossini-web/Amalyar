@@ -28,11 +28,11 @@ export default function SelfieCapture({ value, onCapture }) {
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setReady(true);
-      }
+      // ویدیو همیشه در DOM هست (نه شرطی) — وگرنه ref موقعِ اتصال null است
+      const v = videoRef.current;
+      v.srcObject = stream;
+      await v.play().catch(() => {});
+      setReady(true);
     } catch {
       setErr('دسترسی به دوربین ممکن نشد؛ اجازهٔ دوربین را بده.');
     }
@@ -69,9 +69,15 @@ export default function SelfieCapture({ value, onCapture }) {
   return (
     <div className="selfie">
       <div className="selfie-frame">
-        {ready ? (
-          <video ref={videoRef} playsInline muted className="selfie-video" />
-        ) : (
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          autoPlay
+          className="selfie-video"
+          style={{ display: ready ? 'block' : 'none' }}
+        />
+        {!ready && (
           <button type="button" className="selfie-start" onClick={start} aria-label="روشن‌کردن دوربین">
             <Camera width="30" height="30" />
             <span>{err ? 'تلاش دوباره' : 'روشن‌کردن دوربین'}</span>

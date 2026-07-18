@@ -40,6 +40,21 @@ export default function Login() {
     if (!loading && user) navigate('/app', { replace: true });
   }, [loading, user, navigate]);
 
+  // WebOTP: وقتی پیامکِ کد می‌رسد، اندروید خودش کد را پر می‌کند
+  useEffect(() => {
+    if (step !== 'form' || !('OTPCredential' in window)) return;
+    const ac = new AbortController();
+    navigator.credentials
+      .get({ otp: { transport: ['sms'] }, signal: ac.signal })
+      .then((otp) => {
+        if (otp?.code) setCode(otp.code);
+      })
+      .catch(() => {
+        /* لغو یا عدمِ پشتیبانی */
+      });
+    return () => ac.abort();
+  }, [step]);
+
   // اگر دیتابیس خالی است → تبِ ثبت‌نام و پیامِ «اولین حساب سوپرادمین می‌شود»
   useEffect(() => {
     let alive = true;
@@ -182,7 +197,8 @@ export default function Login() {
           <form onSubmit={doSignup} className="lg-form">
             {devCode && <div className="lg-devcode">پیامک هنوز وصل نیست — کدِ تست: <b>{devCode}</b></div>}
             {field('کدِ تأیید (پیامک‌شده به ' + phone + ')',
-              <input type="text" inputMode="numeric" value={code} onChange={(e) => setCode(e.target.value)}
+              <input type="text" inputMode="numeric" autoComplete="one-time-code" name="otp"
+                value={code} onChange={(e) => setCode(e.target.value)}
                 placeholder="کد ۶ رقمی" required />)}
             <div className="lg-row2">
               {field('نام', <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />)}
