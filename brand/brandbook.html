@@ -198,7 +198,7 @@ circle{transform-box:fill-box;transform-origin:center}
 
   <!-- shared gradient def -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-    <linearGradient id="mkgrad" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="mkgrad" gradientUnits="userSpaceOnUse" x1="90" y1="20" x2="470" y2="360">
       <stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#5b21b6"/>
     </linearGradient>
   </defs></svg>
@@ -379,7 +379,7 @@ function markSVG(opts){
   const stroke = opts.grad ? 'url(#mkgrad)' : (opts.stroke || 'currentColor');
   const dot = opts.dot || (opts.grad ? '#f97316' : (opts.stroke && opts.stroke!=='currentColor' ? opts.stroke : '#f97316'));
   const cls = opts.draw ? 'draw' : '';
-  let p = SEGS.map((d,i)=>`<path class="d${i+1}" d="${d}"/>`).join('');
+  let p = SEGS.map((d,i)=>`<path class="d${i+1}" pathLength="1" d="${d}"/>`).join('');
   let c = DOTS.map(([cx,cy,r])=>`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${opts.grad?'#f97316':dot}"/>`).join('');
   return `<svg class="${cls}" viewBox="0 0 512 388.6" fill="none" xmlns="http://www.w3.org/2000/svg">`
     + `<g fill="none" stroke="${stroke}" stroke-width="25.1" stroke-linecap="round" stroke-linejoin="round">${p}</g>${c}</svg>`;
