@@ -10,6 +10,12 @@ import { CurrentUser } from './current-user.decorator';
 export class AuthController {
   constructor(private auth: AuthService) {}
 
+  // آیا هنوز هیچ حسابی نیست؟ (برای نمایشِ «ساختِ اولین مدیر»)
+  @Get('setup-status')
+  setupStatus() {
+    return this.auth.setupStatus();
+  }
+
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);

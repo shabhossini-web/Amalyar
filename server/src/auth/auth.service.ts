@@ -43,6 +43,11 @@ export class AuthService {
     return this.publicUser(account);
   }
 
+  async setupStatus() {
+    const count = await this.prisma.account.count();
+    return { needsSetup: count === 0 };
+  }
+
   async login(dto: LoginDto, meta: { ua?: string; ip?: string }) {
     const id = dto.identifier.trim();
     const account = await this.prisma.account.findFirst({

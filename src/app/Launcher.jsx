@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
+import { useAuth } from './auth.jsx';
 import './launcher.css';
 
 /* ── آیکون‌های خطی (lucide-style، stroke=currentColor) ── */
@@ -14,6 +15,9 @@ const Dispatch = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="8" c
 const Mail = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>);
 const Wave = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M2 12h3l3-8 4 16 3-11 2 3h5" /></svg>);
 const Cog = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3.2" /><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9" /></svg>);
+const LogOut = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>);
+
+const ROLE_FA = { super_admin: 'مدیرِ کل', admin: 'مدیر', supervisor: 'سرپرست', tech_admin: 'کارشناسِ ارشد', tech: 'کارشناس', viewer: 'بازدید' };
 const ArrowL = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M19 12H5M11 18l-6-6 6-6" /></svg>);
 const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
 const User = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
@@ -41,6 +45,14 @@ function track(e) {
 
 export default function Launcher() {
   const [toast, setToast] = useState('');
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const userName = user?.displayName || user?.username || user?.phone || 'کاربر';
+  const roleFa = ROLE_FA[user?.role] || '';
+  const doLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
   useEffect(() => { document.title = 'عمل‌یار — سامانه'; }, []);
   useEffect(() => {
     if (!toast) return;
@@ -103,13 +115,22 @@ export default function Launcher() {
         </div>
 
         <footer className="lx-foot">
-          <button className="glass lx-user" onMouseMove={track} onClick={() => soon('ورود')}>
-            <span className="glass-glow" aria-hidden="true" />
-            <span className="lx-avatar"><User width="17" height="17" /></span>
-            <span className="lx-user-name">مهمان</span>
-            <span className="lx-gear"><Cog width="17" height="17" /></span>
-          </button>
-          <p className="lx-note">بک‌اند و ورود در مرحلهٔ بعد وصل می‌شود.</p>
+          <div className="lx-userbar">
+            <button className="glass lx-user" onMouseMove={track} onClick={() => soon('تنظیمات')}>
+              <span className="glass-glow" aria-hidden="true" />
+              <span className="lx-avatar">{user?.avatar
+                ? <img src={user.avatar} alt="" />
+                : <User width="17" height="17" />}</span>
+              <span className="lx-user-meta">
+                <span className="lx-user-name">{userName}</span>
+                {roleFa && <span className="lx-user-role">{roleFa}</span>}
+              </span>
+              <span className="lx-gear"><Cog width="16" height="16" /></span>
+            </button>
+            <button className="lx-logout" onClick={doLogout} title="خروج از حساب" aria-label="خروج از حساب">
+              <LogOut width="18" height="18" />
+            </button>
+          </div>
         </footer>
       </div>
 
