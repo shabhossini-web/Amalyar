@@ -94,6 +94,46 @@
 .lg-devcode b { font-family: var(--mono); font-size: 15px; letter-spacing: 2px; }
 .lg-verified { font-size: 12.5px; font-weight: 700; color: #5eead4; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.3); border-radius: 12px; padding: 9px 12px; text-align: center; }
 
+/* ── ورودیِ کدِ یکبارمصرف (۶ باکسِ انیمیشنی) ── */
+.otp { display: flex; justify-content: center; cursor: text; padding: 4px 0 2px; }
+.otp-row { position: relative; display: flex; gap: 8px; }
+.otp-hidden {
+  position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%;
+  opacity: 0; background: transparent; border: none; color: transparent;
+  caret-color: transparent; font-size: 16px; /* جلوگیری از زومِ iOS */
+}
+.otp-hidden:disabled { pointer-events: none; }
+.otp-box {
+  width: 44px; height: 56px; border-radius: 14px;
+  display: grid; place-items: center; position: relative;
+  font-family: var(--mono); font-size: 24px; font-weight: 800; color: var(--text1);
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.13);
+  transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.otp-box.filled { border-color: rgba(168, 85, 247, 0.55); background: rgba(124, 58, 237, 0.12); }
+.otp-box.focus { border-color: rgba(168, 85, 247, 0.8); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2); }
+.otp-box.focus::after {
+  content: ''; width: 2px; height: 22px; border-radius: 1px;
+  background: var(--brand-2); animation: otpBlink 1.05s steps(1) infinite;
+}
+.otp-box.filled.focus::after { display: none; }
+@keyframes otpBlink { 50% { opacity: 0; } }
+.otp-result {
+  position: absolute; inset: 0; margin: auto; z-index: 2;
+  width: 58px; height: 58px; border-radius: 50%;
+  display: grid; place-items: center;
+}
+.otp-result svg { width: 30px; height: 30px; }
+.otp-result.success { color: #34d399; background: rgba(52, 211, 153, 0.14); border: 1px solid rgba(52, 211, 153, 0.5); box-shadow: 0 0 34px rgba(52, 211, 153, 0.35); }
+.otp-result.error { color: #f87171; background: rgba(248, 113, 113, 0.14); border: 1px solid rgba(248, 113, 113, 0.5); box-shadow: 0 0 34px rgba(248, 113, 113, 0.3); }
+@media (max-width: 360px) {
+  .otp-row { gap: 6px; }
+  .otp-box { width: 40px; height: 52px; font-size: 21px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .otp-box.focus::after { animation: none; }
+}
+
 /* selfie */
 .selfie { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .selfie-frame { width: 150px; height: 150px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,.35); border: 2px solid rgba(168,85,247,.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 24px rgba(124,58,237,.3); display: grid; place-items: center; }

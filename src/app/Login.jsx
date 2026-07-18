@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
+import OtpInput from './OtpInput.jsx';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import './login.css';
@@ -26,6 +27,7 @@ export default function Login() {
   const [step, setStep] = useState('phone'); // phone | code | form | done
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
+  const [otpStatus, setOtpStatus] = useState('idle'); // idle | busy | success | error
   const [devCode, setDevCode] = useState('');
   const [signupToken, setSignupToken] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -109,20 +111,44 @@ export default function Login() {
     }
   };
 
-  const doVerifyOtp = async (e) => {
-    e.preventDefault();
+  const verifyNow = async (c) => {
+    if (busy) return;
     setErr('');
     setBusy(true);
+    setOtpStatus('busy');
     try {
-      const r = await verifyOtp(phone, toEnDigits(code).trim());
-      setSignupToken(r.signupToken);
-      setStep('form');
+      const r = await verifyOtp(phone, toEnDigits(c ?? code).trim());
+      setOtpStatus('success'); // باکس‌ها جمع می‌شوند → تیکِ سبز
+      setTimeout(() => {
+        setSignupToken(r.signupToken);
+        setStep('form');
+        setOtpStatus('idle');
+        setBusy(false);
+      }, 1050);
     } catch (e2) {
-      setErr(e2.message);
-    } finally {
-      setBusy(false);
+      setOtpStatus('error'); // باکس‌ها جمع می‌شوند → ضربدرِ قرمز
+      setTimeout(() => {
+        setOtpStatus('idle');
+        setCode('');
+        setErr(e2.message);
+        setBusy(false);
+      }, 1250);
     }
   };
+
+  const doVerifyOtp = (e) => {
+    e.preventDefault();
+    verifyNow();
+  };
+
+  // کامل‌شدنِ ۶ رقم → تأییدِ خودکار (با مکثِ کوتاه تا انیمیشنِ تایپ دیده شود)
+  useEffect(() => {
+    if (step !== 'code' || otpStatus !== 'idle' || busy) return;
+    if (toEnDigits(code).trim().length !== 6) return;
+    const t = setTimeout(() => verifyNow(code), 380);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, step, otpStatus, busy]);
 
   const doSignup = async (e) => {
     e.preventDefault();
@@ -211,12 +237,15 @@ export default function Login() {
         {tab === 'signup' && step === 'code' && (
           <form onSubmit={doVerifyOtp} className="lg-form">
             {devCode && <div className="lg-devcode">پیامک هنوز وصل نیست — کدِ تست: <b>{devCode}</b></div>}
-            {field('کدِ تأیید (پیامک‌شده به ' + phone + ')',
-              <input type="text" inputMode="numeric" autoComplete="one-time-code" name="otp"
-                value={code} onChange={(e) => setCode(e.target.value)}
-                placeholder="کد ۶ رقمی" autoFocus required />)}
-            <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'تأییدِ کد'}</button>
-            <button type="button" className="lg-link" onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>← اصلاحِ شماره / ارسالِ دوباره</button>
+            <div className="lg-field">
+              <span>کدِ تأیید (پیامک‌شده به {phone})</span>
+              <OtpInput value={code} onChange={setCode} status={otpStatus} />
+            </div>
+            <button className="lg-btn" type="submit" disabled={busy || toEnDigits(code).length < 6}>
+              {busy ? '…' : 'تأییدِ کد'}
+            </button>
+            <button type="button" className="lg-link" disabled={busy}
+              onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>← اصلاحِ شماره / ارسالِ دوباره</button>
           </form>
         )}
 
