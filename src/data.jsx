@@ -4,10 +4,10 @@ import {
 
 export const BRAND = {
   name: 'عمل‌یار',
-  phoneFa: '۰۹۱۲۲۱۵۱۶۵۱',
-  phoneTel: '+989122151651',
+  phoneFa: '۰۹۱۲۵۲۶۸۶۵۴',
+  phoneTel: '+989125268654',
   whatsapp:
-    'https://wa.me/989122151651?text=' +
+    'https://wa.me/989125268654?text=' +
     encodeURIComponent('سلام، برای دموی پلتفرم عمل‌یار وقت می‌خوام'),
 };
 
