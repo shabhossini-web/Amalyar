@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { BRAND } from '../data.jsx';
 import { ArrowLeft, Check } from './icons.jsx';
 import DashboardMock from './DashboardMock.jsx';
+import Mark from './Mark.jsx';
 
 const container = {
   hidden: {},
@@ -23,6 +24,12 @@ export default function Hero() {
     <header className="hero" id="top" ref={ref}>
       <div className="container">
         <motion.div variants={container} initial="hidden" animate="show">
+          <motion.div className="hero-lockup" variants={item}>
+            <Mark className="hero-lockup-mark" gradient aria-hidden="true" />
+            <div className="hero-lockup-word">عمل<span className="grad-text">‌یار</span></div>
+            <div className="hero-lockup-tag">هوشمند <em>عمل</em> کن</div>
+          </motion.div>
+
           <motion.div className="hero-badge" variants={item}>
             <Check size={14} strokeWidth={2} />
             ساخته‌شده در اتاق عمل، برای اتاق عمل
