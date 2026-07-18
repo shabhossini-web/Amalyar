@@ -1,4 +1,4 @@
-// بک‌اندِ عمل‌یار — schema (بازنویسیِ افزایشی؛ فعلاً فقط auth)
+// بک‌اندِ عمل‌یار — schema (استاندارد؛ auth + پروفایل + سطوح ۱–۶ + OTP)
 generator client {
   provider      = "prisma-client-js"
   // native = محیط توسعه؛ linux-musl-openssl-3.0.x = ایمیج Alpine در سرور
@@ -10,30 +10,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  super_admin
-  admin
-  supervisor
-  tech_admin
-  tech
-  viewer
-}
-
-/// همهٔ کاربران — ادمین + کارشناس + supervisor (معادلِ جدولِ accounts در نسخهٔ PHP)
+/// همهٔ کاربران — پروفایلِ استاندارد + سطحِ دسترسیِ ۱..۶
+/// سطوح: 1=بازدید 2=کارشناس 3=کارشناس‌ادمین 4=سوپروایزر 5=ادمین 6=سوپرادمین
 model Account {
   id           Int       @id @default(autoincrement())
+  firstName    String?   @map("first_name")
+  lastName     String?   @map("last_name")
   username     String?   @unique
   phone        String?   @unique
-  displayName  String?   @map("display_name")
-  fullName     String?   @map("full_name")
   passwordHash String    @map("password_hash")
-  role         Role      @default(viewer)
-  status       String    @default("active") // active | disabled
-  fee          Int?      @default(0)
-  baleChatId   String?   @map("bale_chat_id")
-  avatar       String?
+  selfie       String?   // dataURL سلفی (فعلاً؛ بعداً object-storage)
+  level        Int       @default(1) // 1..6
+  status       String    @default("pending") // pending | active | disabled | rejected
+  approvedById Int?      @map("approved_by_id")
+  approvedAt   DateTime? @map("approved_at")
   createdAt    DateTime  @default(now()) @map("created_at")
-  sessions     Session[]
+
+  sessions Session[]
 
   @@map("accounts")
 }
@@ -52,4 +45,19 @@ model Session {
 
   @@index([accountId])
   @@map("account_sessions")
+}
+
+/// کدهای یکبارمصرفِ ثبت‌نام/تأیید موبایل
+model OtpCode {
+  id         Int       @id @default(autoincrement())
+  phone      String
+  codeHash   String    @map("code_hash")
+  purpose    String    @default("signup") // signup | ...
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([phone])
+  @@map("otp_codes")
 }

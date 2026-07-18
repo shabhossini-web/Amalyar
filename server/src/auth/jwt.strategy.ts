@@ -6,7 +6,7 @@ import { AuthService } from './auth.service';
 interface JwtPayload {
   sub: number;
   sid: string;
-  role: string;
+  level: number;
 }
 
 @Injectable()

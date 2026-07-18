@@ -1,8 +1,9 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RequestOtpDto } from './dto/request-otp.dto';
+import { VerifySignupDto } from './dto/verify-signup.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 
@@ -10,23 +11,24 @@ import { CurrentUser } from './current-user.decorator';
 export class AuthController {
   constructor(private auth: AuthService) {}
 
-  // آیا هنوز هیچ حسابی نیست؟ (برای نمایشِ «ساختِ اولین مدیر»)
   @Get('setup-status')
   setupStatus() {
     return this.auth.setupStatus();
   }
 
-  @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto);
+  @Post('signup/request-otp')
+  requestOtp(@Body() dto: RequestOtpDto) {
+    return this.auth.requestSignupOtp(dto.phone);
+  }
+
+  @Post('signup/verify')
+  verifySignup(@Body() dto: VerifySignupDto, @Req() req: Request) {
+    return this.auth.verifySignup(dto, { ua: req.headers['user-agent'], ip: req.ip });
   }
 
   @Post('login')
   login(@Body() dto: LoginDto, @Req() req: Request) {
-    return this.auth.login(dto, {
-      ua: req.headers['user-agent'],
-      ip: req.ip,
-    });
+    return this.auth.login(dto, { ua: req.headers['user-agent'], ip: req.ip });
   }
 
   @UseGuards(JwtAuthGuard)

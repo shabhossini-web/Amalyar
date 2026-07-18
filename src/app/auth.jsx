@@ -35,11 +35,21 @@ export function AuthProvider({ children }) {
     return r.user;
   }, []);
 
-  const register = useCallback(async (payload) => {
-    await api('/auth/register', { method: 'POST', body: payload, auth: false });
-    // بعد از ساختِ اولین مدیر، بلافاصله واردش می‌کنیم
-    return login(payload.username || payload.phone, payload.password);
-  }, [login]);
+  // مرحلهٔ ۱ ثبت‌نام — ارسالِ کدِ یکبارمصرف به موبایل
+  const requestOtp = useCallback(
+    (phone) => api('/auth/signup/request-otp', { method: 'POST', body: { phone }, auth: false }),
+    [],
+  );
+
+  // مرحلهٔ ۲ — تأییدِ کد + ساختِ حساب. اگر اولین حساب باشد خودکار وارد می‌شود.
+  const verifySignup = useCallback(async (payload) => {
+    const r = await api('/auth/signup/verify', { method: 'POST', body: payload, auth: false });
+    if (r.accessToken) {
+      setToken(r.accessToken);
+      setUser(r.user);
+    }
+    return r; // { pending, bootstrap?, user, accessToken? }
+  }, []);
 
   const logout = useCallback(async () => {
     try {
@@ -52,7 +62,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, register, logout, setUser }}>
+    <AuthCtx.Provider value={{ user, loading, login, requestOtp, verifySignup, logout, setUser }}>
       {children}
     </AuthCtx.Provider>
   );
