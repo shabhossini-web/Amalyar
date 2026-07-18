@@ -25,7 +25,7 @@ export default function Hero() {
       <div className="container">
         <motion.div variants={container} initial="hidden" animate="show">
           <motion.div className="hero-lockup" variants={item}>
-            <Mark className="hero-lockup-mark" gradient aria-hidden="true" />
+            <Mark className="hero-lockup-mark" gradient draw aria-hidden="true" />
             <div className="hero-lockup-word">عمل<span className="grad-text">‌یار</span></div>
             <div className="hero-lockup-tag">هوشمند <em>عمل</em> کن</div>
           </motion.div>

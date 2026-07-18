@@ -11,13 +11,23 @@ export default function Mark({
   gradient = false,
   gradFrom = '#a855f7',
   gradTo = '#5b21b6',
+  draw = false,
+  className = '',
   ...props
 }) {
   const rawId = useId();
   const gid = `mk${rawId.replace(/[:]/g, '')}`;
   const stroke = gradient ? `url(#${gid})` : 'currentColor';
+  // ترتیبِ کشیده‌شدن (d1..d5): بدنهٔ «عـ»، دنبالهٔ خم، دنبالهٔ راست، زیگزاگِ «یار»، میله
+  const strokes = [P.segs[0], P.segs[1], P.tail, P.m, P.bar];
   return (
-    <svg viewBox="0 0 512 388.6" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <svg
+      viewBox="0 0 512 388.6"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`${className}${draw ? ' mk-draw' : ''}`.trim()}
+      {...props}
+    >
       {gradient && (
         <defs>
           <linearGradient id={gid} gradientUnits="userSpaceOnUse" x1="90" y1="20" x2="470" y2="360">
@@ -27,10 +37,9 @@ export default function Mark({
         </defs>
       )}
       <g stroke={stroke} strokeWidth={SW} strokeLinecap="round" strokeLinejoin="round">
-        {P.segs.map((d, i) => <path key={i} d={d} />)}
-        <path d={P.tail} />
-        <path d={P.m} />
-        <path d={P.bar} />
+        {strokes.map((d, i) => (
+          <path key={i} className={`d${i + 1}`} pathLength="1" d={d} />
+        ))}
       </g>
       {DOTS.map(([cx, cy, r], i) => <circle key={i} cx={cx} cy={cy} r={r} fill={dotColor} />)}
     </svg>
