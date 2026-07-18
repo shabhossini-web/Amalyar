@@ -41,9 +41,16 @@ export function AuthProvider({ children }) {
     [],
   );
 
-  // مرحلهٔ ۲ — تأییدِ کد + ساختِ حساب. اگر اولین حساب باشد خودکار وارد می‌شود.
-  const verifySignup = useCallback(async (payload) => {
-    const r = await api('/auth/signup/verify', { method: 'POST', body: payload, auth: false });
+  // مرحلهٔ ۲ — تأییدِ کد → توکنِ کوتاه‌عمرِ ثبت‌نام
+  const verifyOtp = useCallback(
+    (phone, code) =>
+      api('/auth/signup/verify-otp', { method: 'POST', body: { phone, code }, auth: false }),
+    [],
+  );
+
+  // مرحلهٔ ۳ — تکمیلِ پروفایل. اگر اولین حساب باشد خودکار وارد می‌شود.
+  const completeSignup = useCallback(async (payload) => {
+    const r = await api('/auth/signup/complete', { method: 'POST', body: payload, auth: false });
     if (r.accessToken) {
       setToken(r.accessToken);
       setUser(r.user);
@@ -62,7 +69,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, requestOtp, verifySignup, logout, setUser }}>
+    <AuthCtx.Provider value={{ user, loading, login, requestOtp, verifyOtp, completeSignup, logout, setUser }}>
       {children}
     </AuthCtx.Provider>
   );

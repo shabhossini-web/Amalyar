@@ -1,11 +1,9 @@
 import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
-export class VerifySignupDto {
-  @Matches(/^0\d{10}$/, { message: 'شمارهٔ موبایل نامعتبر است' })
-  phone: string;
-
-  @Matches(/^\d{5,6}$/, { message: 'کد تأیید نامعتبر است' })
-  code: string;
+export class CompleteSignupDto {
+  // توکنِ کوتاه‌عمرِ صادرشده پس از تأییدِ OTP
+  @IsString() @MinLength(20)
+  signupToken: string;
 
   @IsString() @MinLength(2) @MaxLength(40)
   firstName: string;

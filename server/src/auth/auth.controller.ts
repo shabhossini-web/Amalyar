@@ -3,7 +3,8 @@ import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
-import { VerifySignupDto } from './dto/verify-signup.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { CompleteSignupDto } from './dto/complete-signup.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 
@@ -21,9 +22,14 @@ export class AuthController {
     return this.auth.requestSignupOtp(dto.phone);
   }
 
-  @Post('signup/verify')
-  verifySignup(@Body() dto: VerifySignupDto, @Req() req: Request) {
-    return this.auth.verifySignup(dto, { ua: req.headers['user-agent'], ip: req.ip });
+  @Post('signup/verify-otp')
+  verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.auth.verifySignupOtp(dto);
+  }
+
+  @Post('signup/complete')
+  completeSignup(@Body() dto: CompleteSignupDto, @Req() req: Request) {
+    return this.auth.completeSignup(dto, { ua: req.headers['user-agent'], ip: req.ip });
   }
 
   @Post('login')

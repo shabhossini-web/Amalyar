@@ -10,7 +10,7 @@ const toEnDigits = (s) =>
   (s || '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 
 export default function Login() {
-  const { user, loading, login, requestOtp, verifySignup } = useAuth();
+  const { user, loading, login, requestOtp, verifyOtp, completeSignup } = useAuth();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState('login'); // login | signup
@@ -23,10 +23,11 @@ export default function Login() {
   const [password, setPassword] = useState('');
 
   // signup
-  const [step, setStep] = useState('phone'); // phone | form | done
+  const [step, setStep] = useState('phone'); // phone | code | form | done
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [devCode, setDevCode] = useState('');
+  const [signupToken, setSignupToken] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [username, setUsername] = useState('');
@@ -42,7 +43,7 @@ export default function Login() {
 
   // WebOTP: وقتی پیامکِ کد می‌رسد، اندروید خودش کد را پر می‌کند
   useEffect(() => {
-    if (step !== 'form' || !('OTPCredential' in window)) return;
+    if (step !== 'code' || !('OTPCredential' in window)) return;
     const ac = new AbortController();
     navigator.credentials
       .get({ otp: { transport: ['sms'] }, signal: ac.signal })
@@ -100,6 +101,21 @@ export default function Login() {
         setDevCode(r.devCode);
         setCode(r.devCode);
       }
+      setStep('code');
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doVerifyOtp = async (e) => {
+    e.preventDefault();
+    setErr('');
+    setBusy(true);
+    try {
+      const r = await verifyOtp(phone, toEnDigits(code).trim());
+      setSignupToken(r.signupToken);
       setStep('form');
     } catch (e2) {
       setErr(e2.message);
@@ -117,9 +133,8 @@ export default function Login() {
     }
     setBusy(true);
     try {
-      const r = await verifySignup({
-        phone,
-        code: toEnDigits(code).trim(),
+      const r = await completeSignup({
+        signupToken,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         username: username.trim(),
@@ -192,17 +207,26 @@ export default function Login() {
           </form>
         )}
 
-        {/* ── ثبت‌نام: مرحلهٔ فرم + سلفی ── */}
-        {tab === 'signup' && step === 'form' && (
-          <form onSubmit={doSignup} className="lg-form">
+        {/* ── ثبت‌نام: مرحلهٔ تأییدِ کد ── */}
+        {tab === 'signup' && step === 'code' && (
+          <form onSubmit={doVerifyOtp} className="lg-form">
             {devCode && <div className="lg-devcode">پیامک هنوز وصل نیست — کدِ تست: <b>{devCode}</b></div>}
             {field('کدِ تأیید (پیامک‌شده به ' + phone + ')',
               <input type="text" inputMode="numeric" autoComplete="one-time-code" name="otp"
                 value={code} onChange={(e) => setCode(e.target.value)}
-                placeholder="کد ۶ رقمی" required />)}
+                placeholder="کد ۶ رقمی" autoFocus required />)}
+            <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'تأییدِ کد'}</button>
+            <button type="button" className="lg-link" onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>← اصلاحِ شماره / ارسالِ دوباره</button>
+          </form>
+        )}
+
+        {/* ── ثبت‌نام: مرحلهٔ پروفایل + سلفی ── */}
+        {tab === 'signup' && step === 'form' && (
+          <form onSubmit={doSignup} className="lg-form">
+            <div className="lg-verified">شمارهٔ {phone} تأیید شد ✓</div>
             <div className="lg-row2">
-              {field('نام', <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />)}
-              {field('نام خانوادگی', <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} required />)}
+              {field('نام', <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />)}
+              {field('نام خانوادگی', <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required />)}
             </div>
             {field('نام کاربری',
               <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
@@ -215,7 +239,6 @@ export default function Login() {
               <SelfieCapture value={selfie} onCapture={setSelfie} />
             </div>
             <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'ثبت‌نام'}</button>
-            <button type="button" className="lg-link" onClick={() => { setStep('phone'); setErr(''); }}>← اصلاحِ شماره</button>
           </form>
         )}
 

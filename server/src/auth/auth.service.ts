@@ -6,7 +6,7 @@ import type { Account } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { LoginDto } from './dto/login.dto';
-import { VerifySignupDto } from './dto/verify-signup.dto';
+import { CompleteSignupDto } from './dto/complete-signup.dto';
 import { LEVEL, levelName } from '../common/levels';
 
 const SESSION_TTL_DAYS = 30;
@@ -49,8 +49,8 @@ export class AuthService {
     return { ok: true, ttl: OTP_TTL_MS / 1000, ...(res.stub ? { devCode: code } : {}) };
   }
 
-  // ── ثبت‌نام: مرحلهٔ ۲ — تأییدِ کد و ساختِ حساب ──────────────
-  async verifySignup(dto: VerifySignupDto, meta: { ua?: string; ip?: string }) {
+  // ── ثبت‌نام: مرحلهٔ ۲ — تأییدِ کد → توکنِ کوتاه‌عمرِ ثبت‌نام ──
+  async verifySignupOtp(dto: { phone: string; code: string }) {
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone: dto.phone, purpose: 'signup', consumedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -65,10 +65,31 @@ export class AuthService {
     }
     await this.prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
 
+    // ۱۵ دقیقه فرصت برای تکمیلِ پروفایل
+    const signupToken = await this.jwt.signAsync(
+      { phone: dto.phone, purpose: 'signup' },
+      { expiresIn: '15m' },
+    );
+    return { ok: true, signupToken };
+  }
+
+  // ── ثبت‌نام: مرحلهٔ ۳ — تکمیلِ پروفایل و ساختِ حساب ─────────
+  async completeSignup(dto: CompleteSignupDto, meta: { ua?: string; ip?: string }) {
+    let payload: any;
+    try {
+      payload = await this.jwt.verifyAsync(dto.signupToken);
+    } catch {
+      throw new BadRequestException('مهلتِ تکمیلِ ثبت‌نام تمام شده؛ دوباره کد بگیرید');
+    }
+    if (payload?.purpose !== 'signup' || !payload?.phone) {
+      throw new BadRequestException('توکنِ ثبت‌نام نامعتبر است');
+    }
+    const phone: string = payload.phone;
+
     if (await this.prisma.account.findUnique({ where: { username: dto.username } })) {
       throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
     }
-    if (await this.prisma.account.findUnique({ where: { phone: dto.phone } })) {
+    if (await this.prisma.account.findUnique({ where: { phone } })) {
       throw new BadRequestException('این شماره قبلاً ثبت شده است');
     }
 
@@ -82,7 +103,7 @@ export class AuthService {
         firstName: dto.firstName.trim(),
         lastName: dto.lastName.trim(),
         username: dto.username.trim(),
-        phone: dto.phone,
+        phone,
         passwordHash,
         selfie: dto.selfie,
         level: noSuperAdmin ? LEVEL.SUPER_ADMIN : LEVEL.VIEWER,
