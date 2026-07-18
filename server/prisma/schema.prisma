@@ -1,6 +1,8 @@
 // بک‌اندِ عمل‌یار — schema (بازنویسیِ افزایشی؛ فعلاً فقط auth)
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // native = محیط توسعه؛ linux-musl-openssl-3.0.x = ایمیج Alpine در سرور
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
