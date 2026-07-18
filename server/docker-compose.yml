@@ -1,0 +1,16 @@
+# توسعهٔ محلی — فقط دیتابیس (سرور را با npm run start:dev اجرا کن)
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: amalyar-db
+    environment:
+      POSTGRES_USER: amalyar
+      POSTGRES_PASSWORD: amalyar
+      POSTGRES_DB: amalyar
+    ports:
+      - "5432:5432"
+    volumes:
+      - amalyar_pg:/var/lib/postgresql/data
+
+volumes:
+  amalyar_pg:

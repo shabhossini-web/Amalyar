@@ -1,0 +1,53 @@
+// بک‌اندِ عمل‌یار — schema (بازنویسیِ افزایشی؛ فعلاً فقط auth)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  super_admin
+  admin
+  supervisor
+  tech_admin
+  tech
+  viewer
+}
+
+/// همهٔ کاربران — ادمین + کارشناس + supervisor (معادلِ جدولِ accounts در نسخهٔ PHP)
+model Account {
+  id           Int       @id @default(autoincrement())
+  username     String?   @unique
+  phone        String?   @unique
+  displayName  String?   @map("display_name")
+  fullName     String?   @map("full_name")
+  passwordHash String    @map("password_hash")
+  role         Role      @default(viewer)
+  status       String    @default("active") // active | disabled
+  fee          Int?      @default(0)
+  baleChatId   String?   @map("bale_chat_id")
+  avatar       String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  sessions     Session[]
+
+  @@map("accounts")
+}
+
+/// سشن‌های چندتایی (حداکثر ۱۰ همزمان) — معادلِ account_sessions
+model Session {
+  id        String    @id @default(uuid())
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId Int       @map("account_id")
+  tokenHash String    @map("token_hash")
+  userAgent String?   @map("user_agent")
+  ip        String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  @@index([accountId])
+  @@map("account_sessions")
+}
