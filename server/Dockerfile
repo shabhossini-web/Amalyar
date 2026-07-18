@@ -3,8 +3,13 @@ FROM node:22-alpine AS build
 # Prisma روی Alpine به libssl/openssl نیاز دارد وگرنه موتورش لود نمی‌شود
 RUN apk add --no-cache openssl
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+# شبکهٔ سرور کند/ناپایدار است → retry و timeoutِ بالا تا npm install نیفتد
+RUN npm config set fetch-retries 6 \
+ && npm config set fetch-retry-mintimeout 20000 \
+ && npm config set fetch-retry-maxtimeout 300000 \
+ && npm config set fetch-timeout 600000
+COPY package.json package-lock.json ./
+RUN npm install --no-audit --no-fund
 COPY . .
 RUN npx prisma generate && npm run build
 
