@@ -15,7 +15,6 @@ const Mail = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="5" wi
 const Wave = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M2 12h3l3-8 4 16 3-11 2 3h5" /></svg>);
 const Cog = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3.2" /><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9" /></svg>);
 
-/* آیتم‌های هاب — ready:false یعنی هنوز ساخته نشده (به‌زودی) */
 const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: false };
 const DAILY = [
   { key: 'formgen', label: 'فرم‌ساز', icon: Form, ready: false },
@@ -29,11 +28,17 @@ const TOOLS = [
   { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: false },
 ];
 
+/* اسپاتلایتِ دنبال‌کنندهٔ اشاره‌گر روی کارتِ شیشه‌ای */
+function track(e) {
+  const el = e.currentTarget;
+  const r = el.getBoundingClientRect();
+  el.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
+  el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
+}
+
 export default function Launcher() {
   const [toast, setToast] = useState('');
-  useEffect(() => {
-    document.title = 'عمل‌یار — سامانه';
-  }, []);
+  useEffect(() => { document.title = 'عمل‌یار — سامانه'; }, []);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(''), 1600);
@@ -45,6 +50,9 @@ export default function Launcher() {
   return (
     <div className="lx">
       <div className="lx-bg" aria-hidden="true" />
+      <div className="lx-orbs" aria-hidden="true">
+        <span className="orb o1" /><span className="orb o2" /><span className="orb o3" />
+      </div>
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell">
@@ -57,7 +65,8 @@ export default function Launcher() {
         </header>
 
         <div className="lx-cards">
-          <button className="lx-hero" onClick={() => soon(HERO.label)}>
+          <button className="glass lx-hero shine" onMouseMove={track} onClick={() => soon(HERO.label)}>
+            <span className="glass-glow" aria-hidden="true" />
             <span className="lx-hero-ic"><HERO.icon width="30" height="30" /></span>
             <span className="lx-hero-body">
               <span className="lx-hero-title">{HERO.label}{!HERO.ready && <em className="soon">به‌زودی</em>}</span>
@@ -68,7 +77,8 @@ export default function Launcher() {
 
           <div className="lx-row">
             {DAILY.map((t) => (
-              <button key={t.key} className="lx-card" onClick={() => soon(t.label)}>
+              <button key={t.key} className="glass lx-card" onMouseMove={track} onClick={() => soon(t.label)}>
+                <span className="glass-glow" aria-hidden="true" />
                 <span className="lx-card-ic"><t.icon width="24" height="24" /></span>
                 <span className="lx-card-title">{t.label}</span>
                 {!t.ready && <em className="soon dot" title="به‌زودی" />}
@@ -79,7 +89,8 @@ export default function Launcher() {
           <div className="lx-tools-label">ابزارها</div>
           <div className="lx-tools">
             {TOOLS.map((t) => (
-              <button key={t.key} className="lx-tile" onClick={() => soon(t.label)}>
+              <button key={t.key} className="glass lx-tile" onMouseMove={track} onClick={() => soon(t.label)}>
+                <span className="glass-glow" aria-hidden="true" />
                 <span className={`lx-tile-ic tint-${t.tint}`}><t.icon width="24" height="24" /></span>
                 <span className="lx-tile-label">{t.label}</span>
                 {!t.ready && <em className="soon dot" title="به‌زودی" />}
@@ -89,7 +100,8 @@ export default function Launcher() {
         </div>
 
         <footer className="lx-foot">
-          <button className="lx-user" onClick={() => soon('ورود')}>
+          <button className="glass lx-user" onMouseMove={track} onClick={() => soon('ورود')}>
+            <span className="glass-glow" aria-hidden="true" />
             <span className="lx-avatar">؟</span>
             <span className="lx-user-name">مهمان</span>
             <span className="lx-gear"><Cog width="17" height="17" /></span>
