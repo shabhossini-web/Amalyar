@@ -14,6 +14,9 @@ const Dispatch = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="8" c
 const Mail = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>);
 const Wave = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M2 12h3l3-8 4 16 3-11 2 3h5" /></svg>);
 const Cog = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3.2" /><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.4 5.4l1.9 1.9M16.7 16.7l1.9 1.9M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9" /></svg>);
+const ArrowL = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M19 12H5M11 18l-6-6 6-6" /></svg>);
+const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
+const User = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 
 const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: false };
 const DAILY = [
@@ -56,7 +59,7 @@ export default function Launcher() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell">
-        <Link to="/" className="lx-back" aria-label="بازگشت به سایت">↩ سایت</Link>
+        <Link to="/" className="lx-back" aria-label="بازگشت به سایت"><Back width="15" height="15" /> سایت</Link>
 
         <header className="lx-brand">
           <Mark className="lx-mark" gradient draw aria-hidden="true" />
@@ -72,7 +75,7 @@ export default function Launcher() {
               <span className="lx-hero-title">{HERO.label}{!HERO.ready && <em className="soon">به‌زودی</em>}</span>
               <span className="lx-hero-desc">{HERO.desc}</span>
             </span>
-            <span className="lx-hero-arrow">←</span>
+            <span className="lx-hero-arrow"><ArrowL width="22" height="22" /></span>
           </button>
 
           <div className="lx-row">
@@ -102,7 +105,7 @@ export default function Launcher() {
         <footer className="lx-foot">
           <button className="glass lx-user" onMouseMove={track} onClick={() => soon('ورود')}>
             <span className="glass-glow" aria-hidden="true" />
-            <span className="lx-avatar">؟</span>
+            <span className="lx-avatar"><User width="17" height="17" /></span>
             <span className="lx-user-name">مهمان</span>
             <span className="lx-gear"><Cog width="17" height="17" /></span>
           </button>

@@ -45,10 +45,11 @@
 
 .lx-back {
   align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 6px;
   font-size: 12.5px; font-weight: 700; color: var(--text2);
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  border-radius: 99px; padding: 7px 15px; text-decoration: none;
+  border-radius: 99px; padding: 7px 15px 7px 13px; text-decoration: none;
   transition: color .2s, border-color .2s, background .2s;
 }
 .lx-back:hover { color: var(--cyan); border-color: rgba(0, 229, 255, .4); background: rgba(0, 229, 255, .08); }
@@ -102,7 +103,7 @@
 .lx-hero-body { flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .lx-hero-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .lx-hero-desc { font-size: 12.5px; color: var(--text2); }
-.lx-hero-arrow { color: var(--brand-2); font-size: 20px; transition: transform .25s; }
+.lx-hero-arrow { color: var(--brand-2); display: grid; place-items: center; transition: transform .25s; }
 .lx-hero:hover .lx-hero-arrow { transform: translateX(-5px); }
 
 /* animated sheen sweep on the hero glass */
