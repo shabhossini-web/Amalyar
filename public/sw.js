@@ -3,7 +3,7 @@
  * - داراییِ هم‌مبدأ (assets/آیکون/فونت): cache-first (نامِ فایل‌ها هش‌دارند)
  * - API هرگز کش نمی‌شود (مبدأ جدا: api.amalyar.com)
  */
-const CACHE = 'amalyar-shell-v2';
+const CACHE = 'amalyar-shell-v3';
 const STATIC = ['/icon-192.png', '/icon-512.png', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -26,7 +26,10 @@ self.addEventListener('activate', (e) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
+      .then(() => self.clients.claim())
+      // صفحه‌های بازِ گیرکرده روی نسخهٔ قدیمی را خودکار تازه کن
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((cs) => cs.forEach((c) => { try { c.navigate(c.url); } catch { /* — */ } })),
   );
 });
 
@@ -36,10 +39,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // API و مبدأهای دیگر: دستِ مرورگر
 
-  // ناوبریِ SPA — network-first، آفلاین → شِل
+  // ناوبریِ SPA — network-first (بدونِ کشِ HTTP تا HTMLِ کهنه سرو نشود)، آفلاین → شِل
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: 'no-cache' })
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put('/app', copy));
