@@ -76,6 +76,46 @@ model Feature {
   @@map("features")
 }
 
+/// بیمارِ دائمی — یک نفر، چند مراجعه. کدِ خوانا: AM-NNNN
+model Patient {
+  id         Int      @id @default(autoincrement())
+  code       String   @unique // AM-0001
+  firstName  String   @map("first_name")
+  lastName   String   @map("last_name")
+  phone      String?
+  nationalId String?  @map("national_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  visits Visit[]
+
+  @@index([phone])
+  @@map("patients")
+}
+
+/// مراجعه (Visit) — واحدِ اصلیِ کار: عمل/خدمت برای یک بیمار
+/// ⚠️ همهٔ مبالغ «تومان» و عددِ صحیح‌اند (قانونِ تک‌واحدی — درسِ ملک‌طب)
+model Visit {
+  id           Int       @id @default(autoincrement())
+  patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId    Int       @map("patient_id")
+  seq          Int       @default(1) // شمارهٔ مراجعهٔ بیمار → کدِ AM-0001-V2
+  surgeonName  String?   @map("surgeon_name") // فاز بعد: موجودیتِ جراح
+  hospitalName String?   @map("hospital_name") // فاز بعد: موجودیتِ بیمارستان
+  opDate       DateTime? @map("op_date") // تاریخِ عمل
+  opStatus     String    @default("pending") @map("op_status") // pending | done | cancelled
+  amount       Int       @default(0) // تومان
+  paid         Int       @default(0) // تومان
+  notes        String?
+  createdById  Int?      @map("created_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([opStatus])
+  @@index([opDate])
+  @@map("visits")
+}
+
 /// کدهای یکبارمصرفِ ثبت‌نام/تأیید موبایل
 model OtpCode {
   id         Int       @id @default(autoincrement())

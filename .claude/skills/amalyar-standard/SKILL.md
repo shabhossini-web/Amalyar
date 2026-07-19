@@ -15,12 +15,14 @@ description: >
 
 1. **بک‌اند**
    - `server/src/features/features.service.ts` → به `FEATURE_DEFAULTS` اضافه کن: `reports: { minLevel: 4 }`
-   - ماژولِ Nest با گارد:
+   - ماژولِ Nest با گاردِ **داینامیک** (سطح از DB، نه هاردکد):
      ```ts
      @Controller('reports')
-     @UseGuards(JwtAuthGuard, LevelGuard)
-     @MinLevel(4) // یا روی متدهای خاص
+     @UseGuards(JwtAuthGuard, FeatureGuard)
+     @Feature('reports')
      ```
+     (`LevelGuard + @MinLevel` فقط برای قفل‌های ثابتِ سیستمی مثل accounts.)
+   - **آبجکتِ غنی‌شده**: مشتق‌ها (`due`, `code`, …) فقط در `enrich()` سرویسِ سرور؛ render فرمول ندارد.
    - تغییرِ مدلِ داده؟ → schema.prisma → `migrate diff` با shadow-db → پوشهٔ `prisma/migrations/<ts>_<name>/migration.sql` → `migrate deploy` محلی.
 2. **فرانت**
    - `src/app/Users.jsx` → `FEATURE_FA.reports = 'گزارش‌ها'`
@@ -65,6 +67,9 @@ export default function Reports() {
 | `SelfieCapture value onCapture` | هر عکسِ زنده. ویدیو همیشه mount است (باگِ ref) |
 | `Mark gradient/draw` | لوگو. gradient=userSpaceOnUse (میلهٔ افقی گم نشود)؛ draw=خودکشیده |
 | `glass` + `<span className="glass-glow"/>` + `onMouseMove={track}` | هر کارتِ تعاملی |
+| `MoneyInput` (الگو در Dashboard.jsx) | هر مبلغ: تومان، گروه‌بندی در **blur**، به‌حروفِ زنده (`lib/money.js`) |
+| تاریخِ شمسی | ورودی متنِ «۱۴۰۵/۰۴/۲۸» + دکمهٔ «امروز»؛ تبدیل با `lib/jalali.js`؛ DB=ISO |
+| مودالِ فرم | الگوی `db-overlay/db-sheet` (bottom-sheet موبایل، وسط‌چین دسکتاپ) |
 
 ## ۴) قواعدِ auth که نباید شکست
 
@@ -82,6 +87,7 @@ const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium',
 // اثر انگشتِ مجازی: cdp.send('WebAuthn.addVirtualAuthenticator', {options:{protocol:'ctap2',transport:'internal',hasResidentKey:true,hasUserVerification:true,isUserVerified:true,automaticPresenceSimulation:true}})
 // OTP در حالتِ stub: کد از لاگِ سرور (grep 'شما [0-9]{6}') یا devCode پاسخ
 // قانون: خطای تست → اول ریشه‌یابی (باگِ اپ یا باگِ تست؟) → فیکس → راندِ بعد؛ تا ALL PASS ادامه بده
+// ایدمپوتنت: اولِ هر ران دادهٔ دامنه را TRUNCATE کن (psql -h /tmp -U amalyar) وگرنه راندِ ۲ می‌شکند
 ```
 
 ## ۶) نبایدها (تجربه‌های واقعیِ همین پروژه)

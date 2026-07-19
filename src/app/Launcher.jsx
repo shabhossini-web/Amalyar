@@ -21,7 +21,7 @@ const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5
 const UsersIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.7-3.4 3.4-5.5 6.5-5.5s5.8 2.1 6.5 5.5" /><circle cx="17.5" cy="9" r="2.6" /><path d="M15.6 14.9c2.6.3 4.9 2 5.6 4.6" /></svg>);
 
 /* min = حداقل سطحِ دسترسی (۱ بازدید … ۶ سوپرادمین) */
-const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: false, min: 5 };
+const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: true, min: 5, to: '/app/dashboard' };
 const DAILY = [
   { key: 'formgen', label: 'فرم‌ساز', icon: Form, ready: false, min: 5 },
   { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: false, min: 2 },

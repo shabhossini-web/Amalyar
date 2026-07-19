@@ -18,8 +18,8 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 
 1. **احرازِ واحد:** فقط یک صفحهٔ لاگین/ثبت‌نامِ تب‌دار (`/login`). ثبت‌نام = موبایل → OTP (مرحلهٔ جدا، `OtpInput` انیمیشنی + WebOTP) → پروفایل + **سلفیِ زندهٔ اجباری**. حسابِ جدید `pending` است تا سوپرادمین تأیید و سطح بدهد؛ **اولین حسابِ سیستم** خودکار سوپرادمینِ فعال می‌شود.
 2. **سطوحِ عددی ۱..۶**: ۱ بازدید · ۲ کارشناس · ۳ کارشناس‌ادمین · ۴ سوپروایزر · ۵ ادمین · ۶ سوپرادمین (`server/src/common/levels.ts`).
-3. **دسترسی هرگز هاردکد نشود.** منبعِ حقیقت جدولِ `features` است (`minLevel`, `enabled`)؛ کد فقط seedِ پیش‌فرض (`FEATURE_DEFAULTS`). لانچر از `GET /features` گیت می‌شود. ماژولِ `users` قفلِ سطح ۶ است. `enabled` بعداً اهرمِ لایسنس/پلن است.
-4. **ماژولِ جدید = برشِ عمودی + این چک‌لیست:** کلید در `FEATURE_DEFAULTS` (بک‌اند) + `FEATURE_FA` (Users.jsx) + آیتمِ لانچر با `min` fallback → صفحهٔ `/app/<key>` با هدرِ استاندارد → گاردِ `JwtAuthGuard + LevelGuard + @MinLevel` روی API → تستِ e2e.
+3. **دسترسی هرگز هاردکد نشود.** منبعِ حقیقت جدولِ `features` است (`minLevel`, `enabled`)؛ کد فقط seedِ پیش‌فرض (`FEATURE_DEFAULTS`). لانچر از `GET /features` گیت می‌شود؛ API ماژول‌ها با `@Feature('<key>') + FeatureGuard` (سطح را از DB می‌خواند، سوپرادمین همیشه عبور). ماژولِ `users` قفلِ سطح ۶ است. `enabled` بعداً اهرمِ لایسنس/پلن است.
+4. **ماژولِ جدید = برشِ عمودی + این چک‌لیست:** کلید در `FEATURE_DEFAULTS` (بک‌اند) + `FEATURE_FA` (Users.jsx) + آیتمِ لانچر با `min` fallback → صفحهٔ `/app/<key>` با هدرِ استاندارد → گاردِ `JwtAuthGuard + FeatureGuard + @Feature` روی API → تستِ e2e.
 5. **`ProfileMenu` بالای هر صفحهٔ /app** (چیپِ سلفی+نام+سطح؛ دراپ‌داونِ چندحسابی). حسابِ خودت→`/app/profile`، بقیه→سوییچ.
 6. **چندحسابی:** `src/lib/accountsStore.js`. فقط ورودِ «مرا به خاطر بسپار» ماندگار می‌شود (localStorage)؛ بدونِ تیک → sessionStorage و خارج از لیست.
 7. **آیکون فقط SVGِ خطی** (stroke=currentColor, strokeWidth≈1.9). ایموجی/گلیفِ متنی (↩ ← ؟ …) ممنوع.
@@ -28,6 +28,10 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 10. **طراحیِ شیشه‌ای:** primitive کلاسِ `glass` + `glass-glow` (اسپاتلایتِ `--mx/--my` با `track`) روی توکن‌های `src/index.css`. رعایتِ `prefers-reduced-motion` و focus-visible در هر کامپوننتِ جدید.
 11. **PWA:** `public/sw.js` شِل+asset ها را در نصب precache می‌کند (پارسِ HTML). تغییرِ ساختارِ شِل → `CACHE` bump. `/api` هرگز کش نمی‌شود.
 12. **حلقهٔ توسعه:** هیچ push ای بدونِ build سبزِ هر دو سمت + تستِ e2e محلیِ سناریوهای تغییر (الگوی playwright در اسکیل). تا سبزِ کامل، حلقهٔ دیباگ ادامه دارد.
+13. **پول تک‌واحدی: همهٔ مبالغ «تومان» و عددِ صحیح‌اند** — در DB، API و UI. هیچ فیلدِ ریالی ساخته نشود (درسِ باگ‌های ملک‌طب). ابزار: `src/lib/money.js` (`fmtMoney` نمایشِ فارسی، `parseMoney`، `group3`، `numToWordsFa`). هر input مبلغ: گروه‌بندیِ سه‌رقمی **در blur** (باگِ Gboard اندروید) + «به‌حروفِ» زندهٔ زیرش.
+14. **تاریخِ شمسی:** تبدیل فقط با `src/lib/jalali.js` (`jStrToIso`/`isoToJStr`/`todayJStr`/`faDate`). ورودی متنِ «۱۴۰۵/۰۴/۲۸» + دکمهٔ «امروز»؛ DB همیشه ISO. کبیسه: قراردادِ jalaali-js یعنی `leap === 0`.
+15. **فیلدِ مشتق فقط سمتِ سرور** (قانونِ computeVisit): API آبجکتِ غنی‌شده برمی‌گرداند (`due`, `code`, `fullName`…) و render هیچ فرمولی ندارد.
+16. **شیشهٔ آیکون‌های لانچر (استانداردِ مصوب):** گرادیانِ کم‌آلفا (~۰٫۲–۰٫۴) + بوردرِ رنگی + backdrop-blur + گلو — نسخهٔ فعلیِ `launcher.css`. نه پرِ مات، نه near-outlineِ تاریک.
 
 ## ساختارِ کلیدی
 
@@ -36,6 +40,10 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 | `src/pages/Landing.jsx` + `src/components/*` | لندینگ (Hero لاک‌آپ + نشانِ خودکشیده) |
 | `src/app/Login.jsx` | احرازِ استاندارد (تب‌ها/OTP/سلفی/پس‌کی/remember) |
 | `src/app/Launcher.jsx` | لانچرِ گیت‌شده از `/features` + بنرِ نصبِ PWA |
+| `src/app/Dashboard.jsx` + `dashboard.css` | داشبوردِ مدیریت — مراجعات (لیست/سرچ/فیلتر/فرمِ شیتی/وضعیت) |
+| `src/lib/jalali.js` · `src/lib/money.js` | تقویمِ شمسی و ابزارهای مالی (قوانین ۱۳–۱۴) |
+| `server/src/patients/` | API بیماران/مراجعات (Patient کدِ `AM-NNNN` + Visit با `seq` → کدِ `AM-NNNN-V2`؛ حذفِ آخرین مراجعه بیمار را هم پاک می‌کند) |
+| `server/src/auth/feature.{decorator,guard}.ts` | گاردِ دسترسیِ داینامیک از جدولِ features |
 | `src/app/Users.jsx` | تأیید/سطح‌دهی + تبِ «دسترسی‌ها» (سوپرادمین) |
 | `src/app/Profile.jsx` | پروفایلِ من (نام/سلفی/رمز) |
 | `src/app/ProfileMenu.jsx` · `OtpInput.jsx` · `PasswordInput.jsx` · `SelfieCapture.jsx` | کامپوننت‌های استانداردِ قفل‌شده |
