@@ -337,11 +337,17 @@ export default function Dashboard() {
       });
   }, []);
 
-  // بارِ اول + سرچِ زنده (debounce) + فیلترِ وضعیت
+  // بارِ اول + سرچِ زنده (debounce) + فیلترِ وضعیت.
+  // ⚠️ user.id هم جزو وابستگی‌هاست: بعد از سوییچِ حساب، دسترسی/داده با حسابِ جدید
+  // دوباره از سرور خوانده می‌شود (باگِ واقعی: دادهٔ حسابِ قبلی تا رفرش می‌ماند)
   useEffect(() => {
+    setDenied(false);
     const t = setTimeout(() => load(q, status), q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [q, status, load]);
+  }, [q, status, load, user?.id]);
+
+  // سوییچِ حساب وسطِ فرمِ باز → فرم بسته شود (با حسابِ جدید معنایی ندارد)
+  useEffect(() => { setModal(null); }, [user?.id]);
 
   const stats = useMemo(() => {
     const rows = visits || [];
@@ -394,6 +400,7 @@ export default function Dashboard() {
           <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
+        {!denied && (<>
         <div className="db-stats">
           <div className="glass db-stat"><b>{fmtMoney(stats.total)}</b><span>مراجعه</span></div>
           <div className="glass db-stat"><b>{fmtMoney(stats.pending)}</b><span>در انتظار عمل</span></div>
@@ -423,9 +430,10 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+        </>)}
 
         <div className="us-list">
-          {visits === null && <div className="us-empty">در حال بارگذاری…</div>}
+          {!denied && visits === null && <div className="us-empty">در حال بارگذاری…</div>}
           {denied && <div className="us-empty">دسترسیِ کافی برای این بخش ندارید — مدیرِ سامانه باید سطحِ شما را ارتقا دهد.</div>}
           {!denied && visits?.length === 0 && (
             <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد' : 'هنوز مراجعه‌ای ثبت نشده — اولین را ثبت کن'}</div>
