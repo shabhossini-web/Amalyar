@@ -99,10 +99,10 @@
 }
 .lx-hero-ic {
   flex: 0 0 auto; width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center;
-  color: #fff; background: linear-gradient(135deg, rgba(168, 85, 247, 0.14), rgba(76, 29, 149, 0.10));
-  border: 1px solid rgba(168, 85, 247, 0.55);
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
-  box-shadow: 0 0 16px rgba(124, 58, 237, .28), inset 0 1px 0 rgba(255,255,255,.14);
+  color: #fff; background: linear-gradient(135deg, rgba(168, 85, 247, 0.38), rgba(76, 29, 149, 0.30));
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%);
+  box-shadow: 0 0 18px rgba(124, 58, 237, .35), inset 0 1px 0 rgba(255,255,255,.22);
 }
 .lx-hero-body { flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .lx-hero-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
@@ -124,10 +124,10 @@
 .lx-card { display: flex; align-items: center; gap: 11px; border-radius: 18px; padding: 16px 15px; text-align: right; }
 .lx-card-ic {
   flex: 0 0 auto; width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center;
-  color: #e5ddff; background: linear-gradient(135deg, rgba(124, 58, 237, .12), rgba(76, 29, 149, .08));
-  border: 1px solid rgba(168, 85, 247, .45);
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
-  box-shadow: 0 0 12px rgba(124, 58, 237, .18), inset 0 1px 0 rgba(255,255,255,.12);
+  color: #e5ddff; background: linear-gradient(135deg, rgba(124, 58, 237, .26), rgba(76, 29, 149, .18));
+  border: 1px solid rgba(168, 85, 247, .4);
+  -webkit-backdrop-filter: blur(9px) saturate(150%); backdrop-filter: blur(9px) saturate(150%);
+  box-shadow: 0 0 14px rgba(124, 58, 237, .2), inset 0 1px 0 rgba(255,255,255,.15);
 }
 .lx-card-title { font-size: 14.5px; font-weight: 700; }
 
@@ -137,16 +137,16 @@
 .lx-tile { display: flex; flex-direction: column; align-items: center; gap: 9px; border-radius: 18px; padding: 16px 8px 13px; }
 .lx-tile-ic {
   width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #fff;
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(9px) saturate(150%); backdrop-filter: blur(9px) saturate(150%);
 }
 .lx-tile-label { font-size: 12px; font-weight: 600; color: var(--text1); text-align: center; line-height: 1.4; }
 
-/* تینت‌های شیشه‌ای — near-outline مثل لانچرِ ملک‌طب: بوردرِ رنگیِ نازک + تینتِ خیلی محو؛ پشتشان کامل معلوم است */
-.tint-violet { background: linear-gradient(135deg, rgba(124, 58, 237, .13), rgba(76, 29, 149, .09)); border: 1px solid rgba(147, 100, 235, .50); box-shadow: 0 0 12px rgba(124, 58, 237, .16), inset 0 1px 0 rgba(255,255,255,.10); }
-.tint-green  { background: linear-gradient(135deg, rgba(0, 190, 120, .12), rgba(0, 120, 80, .08)); border: 1px solid rgba(52, 211, 153, .42); box-shadow: 0 0 12px rgba(0, 200, 130, .14), inset 0 1px 0 rgba(255,255,255,.10); }
-.tint-amber  { background: linear-gradient(135deg, rgba(245, 158, 11, .12), rgba(180, 100, 0, .08)); border: 1px solid rgba(245, 158, 11, .45); box-shadow: 0 0 12px rgba(245, 158, 11, .14), inset 0 1px 0 rgba(255,255,255,.10); }
-.tint-blue   { background: linear-gradient(135deg, rgba(59, 130, 246, .12), rgba(0, 70, 140, .08)); border: 1px solid rgba(96, 165, 250, .45); box-shadow: 0 0 12px rgba(59, 130, 246, .14), inset 0 1px 0 rgba(255,255,255,.10); }
-.tint-teal   { background: linear-gradient(135deg, rgba(0, 200, 170, .12), rgba(0, 130, 110, .08)); border: 1px solid rgba(45, 212, 191, .42); box-shadow: 0 0 12px rgba(0, 229, 255, .14), inset 0 1px 0 rgba(255,255,255,.10); }
+/* تینت‌های شیشه‌ای — کم‌آلفا مثل لانچرِ ملک‌طب؛ پس‌زمینه از پشت رد می‌شود */
+.tint-violet { background: linear-gradient(135deg, rgba(60, 30, 110, .40), rgba(124, 58, 237, .40)); border: 1px solid rgba(124, 58, 237, .45); box-shadow: 0 0 14px rgba(124, 58, 237, .22), inset 0 1px 0 rgba(255,255,255,.16); }
+.tint-green  { background: linear-gradient(135deg, rgba(0, 80, 60, .35), rgba(0, 180, 110, .35)); border: 1px solid rgba(0, 255, 170, .28); box-shadow: 0 0 14px rgba(0, 200, 130, .18), inset 0 1px 0 rgba(255,255,255,.16); }
+.tint-amber  { background: linear-gradient(135deg, rgba(120, 60, 0, .35), rgba(200, 120, 0, .35)); border: 1px solid rgba(245, 158, 11, .38); box-shadow: 0 0 14px rgba(245, 158, 11, .18), inset 0 1px 0 rgba(255,255,255,.16); }
+.tint-blue   { background: linear-gradient(135deg, rgba(0, 40, 90, .35), rgba(0, 90, 160, .35)); border: 1px solid rgba(59, 130, 246, .38); box-shadow: 0 0 14px rgba(59, 130, 246, .18), inset 0 1px 0 rgba(255,255,255,.16); }
+.tint-teal   { background: linear-gradient(135deg, rgba(0, 80, 50, .35), rgba(0, 160, 120, .35)); border: 1px solid rgba(0, 229, 255, .32); box-shadow: 0 0 14px rgba(0, 229, 255, .18), inset 0 1px 0 rgba(255,255,255,.16); }
 
 /* نشانِ تعدادِ در‌انتظار روی تایلِ کاربران */
 .lx-badge {
