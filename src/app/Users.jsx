@@ -19,6 +19,17 @@ const LEVELS = [
   { v: 5, l: 'ادمین' },
   { v: 6, l: 'سوپرادمین' },
 ];
+const FEATURE_FA = {
+  dashboard: 'داشبورد مدیریت',
+  formgen: 'فرم‌ساز',
+  messenger: 'پیام‌رسان',
+  accounting: 'حسابداری',
+  calendar: 'تقویم عمل‌ها',
+  dispatch: 'چینش کارشناس‌ها',
+  letter: 'نامه اداری',
+  tech: 'پنل کارشناسی',
+  users: 'مدیریت کاربران',
+};
 const STATUS_FA = { pending: 'در انتظار', active: 'فعال', rejected: 'ردشده', disabled: 'غیرفعال' };
 
 const faDate = (d) => {
@@ -31,9 +42,10 @@ const faDate = (d) => {
 
 export default function Users() {
   const { user } = useAuth();
-  const [tab, setTab] = useState('pending'); // pending | all
+  const [tab, setTab] = useState('pending'); // pending | all | perm
   const [pending, setPending] = useState(null);
   const [all, setAll] = useState(null);
+  const [features, setFeatures] = useState(null);
   const [levelSel, setLevelSel] = useState({}); // id → سطحِ انتخابی
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
@@ -47,14 +59,37 @@ export default function Users() {
 
   const load = useCallback(async () => {
     try {
-      const [p, a] = await Promise.all([api('/accounts/pending'), api('/accounts')]);
+      const [p, a, f] = await Promise.all([api('/accounts/pending'), api('/accounts'), api('/features')]);
       setPending(p);
       setAll(a);
+      setFeatures(f);
     } catch (e) {
       setToast(e.message);
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const patchFeature = async (key, patch) => {
+    // خوش‌بینانه: اول UI، بعد سرور
+    setFeatures((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    try {
+      await api(`/features/${key}`, { method: 'PATCH', body: patch });
+      setToast(`دسترسیِ «${FEATURE_FA[key] || key}» ذخیره شد`);
+    } catch (e) {
+      setToast(e.message);
+      load();
+    }
+  };
+
+  const resetFeatures = async () => {
+    try {
+      const rows = await api('/features/reset', { method: 'POST' });
+      setFeatures(rows);
+      setToast('دسترسی‌ها به پیش‌فرض برگشت');
+    } catch (e) {
+      setToast(e.message);
+    }
+  };
 
   if (user && user.level < 6) return <Navigate to="/app" replace />;
 
@@ -120,6 +155,7 @@ export default function Users() {
             در انتظار تأیید{pending?.length ? <em className="us-count">{pending.length}</em> : null}
           </button>
           <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')} role="tab">همهٔ کاربران</button>
+          <button className={tab === 'perm' ? 'on' : ''} onClick={() => setTab('perm')} role="tab">دسترسی‌ها</button>
         </div>
 
         {/* ── در انتظار تأیید ── */}
@@ -188,6 +224,55 @@ export default function Users() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {/* ── دسترسی‌ها (سطحِ لازم برای هر ماژول) ── */}
+        {tab === 'perm' && (
+          <div className="us-list">
+            <p className="us-hint">
+              حداقل سطحِ لازم برای دیدنِ هر بخش را تعیین کن یا بخش را کلاً خاموش کن.
+              این تنظیمات بلافاصله روی لانچرِ همهٔ کاربران اثر می‌گذارد.
+            </p>
+            {features === null && <p className="us-empty">در حال بارگذاری…</p>}
+            {features?.map((f) => (
+              <div key={f.key} className="glass us-card slim">
+                <div className="us-row">
+                  <div className="us-meta">
+                    <b>{FEATURE_FA[f.key] || f.key}</b>
+                    {f.locked && <small>قفل — همیشه فقط سوپرادمین</small>}
+                  </div>
+                  <label className="us-switch" title={f.enabled ? 'روشن' : 'خاموش'}>
+                    <input
+                      type="checkbox"
+                      checked={f.enabled}
+                      disabled={f.locked}
+                      onChange={(e) => patchFeature(f.key, { enabled: e.target.checked })}
+                    />
+                    <span className="us-track" aria-hidden="true" />
+                  </label>
+                </div>
+                <div className="us-actions">
+                  <label className="us-levelpick grow">
+                    <span>حداقل سطح:</span>
+                    <select
+                      value={f.minLevel}
+                      disabled={f.locked || !f.enabled}
+                      onChange={(e) => patchFeature(f.key, { minLevel: +e.target.value })}
+                    >
+                      {LEVELS.map((l) => <option key={l.v} value={l.v}>{l.v} — {l.l}</option>)}
+                    </select>
+                  </label>
+                  {f.minLevel !== f.defaultLevel && !f.locked && (
+                    <button className="us-btn no" onClick={() => patchFeature(f.key, { minLevel: f.defaultLevel })}>
+                      پیش‌فرض ({f.defaultLevel})
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {features && (
+              <button className="us-btn no us-reset" onClick={resetFeatures}>بازگشتِ همه به پیش‌فرض</button>
+            )}
           </div>
         )}
       </div>

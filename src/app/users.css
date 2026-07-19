@@ -57,4 +57,25 @@
 .us-btn.no { color: #fca5a5; background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.35); }
 .us-btn.no:hover:not(:disabled) { background: rgba(248, 113, 113, 0.16); }
 .us-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.us-reset { align-self: center; margin-top: 4px; }
+.us-hint { font-size: 12px; color: var(--text3); line-height: 1.8; padding: 0 4px; }
+
+/* سوییچِ روشن/خاموشِ ماژول */
+.us-switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; flex: 0 0 auto; }
+.us-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.us-track {
+  width: 40px; height: 22px; border-radius: 99px; position: relative;
+  background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: background .2s, border-color .2s;
+}
+.us-track::after {
+  content: ''; position: absolute; top: 2px; inset-inline-start: 2px;
+  width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transition: translate .2s;
+}
+.us-switch input:checked + .us-track { background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); border-color: rgba(168, 85, 247, 0.6); }
+.us-switch input:checked + .us-track::after { translate: -18px 0; }
+[dir='ltr'] .us-switch input:checked + .us-track::after { translate: 18px 0; }
+.us-switch input:disabled + .us-track { opacity: .45; cursor: default; }
+.us-switch input:focus-visible + .us-track { outline: 2px solid var(--cyan); outline-offset: 2px; }
 

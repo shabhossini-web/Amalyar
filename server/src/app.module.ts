@@ -4,6 +4,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { SmsModule } from './sms/sms.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountsModule } from './accounts/accounts.module';
+import { FeaturesModule } from './features/features.module';
 import { AppController } from './app.controller';
 
 @Module({
@@ -13,6 +14,7 @@ import { AppController } from './app.controller';
     SmsModule,
     AuthModule,
     AccountsModule,
+    FeaturesModule,
   ],
   controllers: [AppController],
 })

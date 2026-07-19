@@ -64,6 +64,18 @@ model Session {
   @@map("account_sessions")
 }
 
+/// دسترسیِ ماژول‌ها — قابلِ‌تنظیم توسط سوپرادمین (پیش‌فرض‌ها از کد seed می‌شوند).
+/// enabled بعداً اهرمِ لایسنس/پلنِ SaaS هم می‌شود.
+model Feature {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  minLevel  Int      @default(6) @map("min_level") // حداقل سطحِ لازم (۱..۶)
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("features")
+}
+
 /// کدهای یکبارمصرفِ ثبت‌نام/تأیید موبایل
 model OtpCode {
   id         Int       @id @default(autoincrement())

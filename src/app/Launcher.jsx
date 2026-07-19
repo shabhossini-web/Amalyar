@@ -75,11 +75,29 @@ export default function Launcher() {
   const soon = (label) => setToast(`«${label}» به‌زودی`);
   const open = (t) => (t.to ? navigate(t.to) : soon(t.label));
 
-  // گیتِ سطح‌محور: فقط آیتم‌هایی که سطحِ کاربر اجازه می‌دهد
+  // دسترسی‌ها از سرور (قابلِ‌تنظیم توسط سوپرادمین)؛ minِ کد فقط fallback است
   const lvl = user?.level ?? 0;
-  const showHero = lvl >= HERO.min;
-  const daily = DAILY.filter((t) => lvl >= t.min);
-  const tools = TOOLS.filter((t) => lvl >= t.min);
+  const [features, setFeatures] = useState(null); // key → {minLevel, enabled}
+  useEffect(() => {
+    let alive = true;
+    import('../lib/api.js').then(({ api }) =>
+      api('/features')
+        .then((rows) => {
+          if (alive) setFeatures(Object.fromEntries(rows.map((r) => [r.key, r])));
+        })
+        .catch(() => {}),
+    );
+    return () => { alive = false; };
+  }, []);
+  const allowed = (t) => {
+    const f = features?.[t.key];
+    const min = f?.minLevel ?? t.min;
+    const enabled = f?.enabled ?? true;
+    return enabled && lvl >= min;
+  };
+  const showHero = allowed(HERO);
+  const daily = DAILY.filter(allowed);
+  const tools = TOOLS.filter(allowed);
   const nothing = !showHero && daily.length === 0 && tools.length === 0;
 
   // نشانِ تعدادِ در انتظارِ تأیید (فقط سوپرادمین)
