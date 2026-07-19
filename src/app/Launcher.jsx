@@ -82,6 +82,29 @@ export default function Launcher() {
   const tools = TOOLS.filter(allowed);
   const nothing = !showHero && daily.length === 0 && tools.length === 0;
 
+  // بنرِ نصبِ PWA (اندروید/کروم — beforeinstallprompt)
+  const [installEvt, setInstallEvt] = useState(null);
+  useEffect(() => {
+    if (localStorage.getItem('amalyar_a2hs_dismissed')) return;
+    const h = (e) => {
+      e.preventDefault();
+      setInstallEvt(e);
+    };
+    window.addEventListener('beforeinstallprompt', h);
+    return () => window.removeEventListener('beforeinstallprompt', h);
+  }, []);
+  const doInstall = async () => {
+    if (!installEvt) return;
+    installEvt.prompt();
+    const { outcome } = await installEvt.userChoice;
+    if (outcome === 'accepted') setToast('عمل‌یار نصب شد ✓');
+    setInstallEvt(null);
+  };
+  const dismissInstall = () => {
+    localStorage.setItem('amalyar_a2hs_dismissed', '1');
+    setInstallEvt(null);
+  };
+
   // نشانِ تعدادِ در انتظارِ تأیید (فقط سوپرادمین)
   const [pendingCount, setPendingCount] = useState(0);
   useEffect(() => {
@@ -169,6 +192,14 @@ export default function Launcher() {
         </div>
 
       </div>
+
+      {installEvt && (
+        <div className="glass lx-install" role="dialog" aria-label="نصبِ اپلیکیشن">
+          <span className="lx-install-txt">عمل‌یار را روی گوشی نصب کن</span>
+          <button className="lx-install-ok" onClick={doInstall}>نصب</button>
+          <button className="lx-install-no" onClick={dismissInstall}>بعداً</button>
+        </div>
+      )}
 
       <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>

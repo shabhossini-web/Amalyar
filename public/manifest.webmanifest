@@ -1,0 +1,19 @@
+{
+  "name": "عمل‌یار — سامانهٔ مدیریت خدمات جراحی",
+  "short_name": "عمل‌یار",
+  "description": "پلتفرم مدیریت عملیات، مالی و کارشناسانِ شرکت‌های خدمات و تجهیزات جراحی",
+  "lang": "fa",
+  "dir": "rtl",
+  "id": "/app",
+  "start_url": "/app",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07051a",
+  "theme_color": "#07051a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

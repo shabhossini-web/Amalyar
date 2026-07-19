@@ -179,6 +179,27 @@
 .lx-logout:hover { background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.5); transform: translateY(-1px); }
 .lx-logout:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
+/* بنرِ نصبِ PWA */
+.lx-install {
+  position: fixed; bottom: 18px; left: 16px; right: 16px; z-index: 55;
+  max-width: 430px; margin: 0 auto;
+  display: flex; align-items: center; gap: 10px;
+  border-radius: 16px; padding: 12px 14px; cursor: default;
+}
+.lx-install:hover { transform: none; }
+.lx-install-txt { flex: 1; font-size: 13.5px; font-weight: 700; }
+.lx-install-ok {
+  font-family: inherit; font-size: 13px; font-weight: 800; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
+  border: none; border-radius: 11px; padding: 9px 18px;
+  box-shadow: 0 6px 18px rgba(124, 58, 237, 0.4);
+}
+.lx-install-no {
+  font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text3); cursor: pointer;
+  background: none; border: none; padding: 9px 6px;
+}
+.lx-install-no:hover { color: var(--text1); }
+
 /* toast */
 .lx-toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(18px);
