@@ -46,7 +46,13 @@ export function AuthProvider({ children }) {
         const me = await api('/auth/me');
         if (alive) {
           setUser(me);
-          updateAccountUser(me.id, me); // پروفایلِ ذخیره‌شده تازه بماند
+          // مهاجرت: توکنِ ماندگارِ قدیمی که هنوز در لیستِ چندحسابی نیست → اضافه شود
+          const tok = localStorage.getItem('amalyar_token');
+          if (tok && !getAccounts().some((a) => a.user.id === me.id)) {
+            upsertAccount(tok, me);
+          } else {
+            updateAccountUser(me.id, me); // پروفایلِ ذخیره‌شده تازه بماند
+          }
           bump();
         }
       } catch {
@@ -202,6 +208,20 @@ export function AuthProvider({ children }) {
     bump();
   }, []);
 
+  /** ویرایشِ پروفایلِ حسابِ جاری (نام/نام‌خانوادگی/سلفی) */
+  const updateProfile = useCallback(async (payload) => {
+    const me = await api('/auth/profile', { method: 'PATCH', body: payload });
+    setUser(me);
+    updateAccountUser(me.id, me);
+    bump();
+    return me;
+  }, []);
+
+  const changePassword = useCallback(
+    (current, next) => api('/auth/change-password', { method: 'POST', body: { current, next } }),
+    [],
+  );
+
   /** خروجِ سادهٔ حسابِ جاری (میان‌بر) */
   const logout = useCallback(async () => {
     if (user) return logoutAccount(user.id);
@@ -227,6 +247,8 @@ export function AuthProvider({ children }) {
         logoutAccount,
         logoutAll,
         logout,
+        updateProfile,
+        changePassword,
         setUser,
       }}
     >

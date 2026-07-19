@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { WebauthnService } from './webauthn.service';
 import { LoginDto } from './dto/login.dto';
 import { WebauthnLoginOptionsDto, WebauthnVerifyDto } from './dto/webauthn.dto';
+import { ChangePasswordDto, UpdateProfileDto } from './dto/profile.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
@@ -52,6 +53,18 @@ export class AuthController {
   @Post('logout')
   logout(@CurrentUser() user: any) {
     return this.auth.logout(user.sid);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('profile')
+  updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  changePassword(@CurrentUser() user: any, @Body() dto: ChangePasswordDto) {
+    return this.auth.changePassword(user.id, dto.current, dto.next);
   }
 
   // ── اثر انگشت / پس‌کی ──────────────────────────────────────

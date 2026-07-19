@@ -136,7 +136,9 @@ export default function Users() {
 
   const Avatar = ({ row, size = 46 }) => (
     <span className="us-avatar" style={{ width: size, height: size }}>
-      {row.selfie ? <img src={row.selfie} alt="" /> : <UserIc width={size * 0.5} height={size * 0.5} />}
+      {row.selfie
+        ? <img src={row.selfie} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        : <UserIc width={size * 0.5} height={size * 0.5} />}
     </span>
   );
 

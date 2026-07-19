@@ -174,6 +174,30 @@ export class AuthService {
     return session.account;
   }
 
+  async updateProfile(id: number, dto: { firstName?: string; lastName?: string; selfie?: string }) {
+    const account = await this.prisma.account.update({
+      where: { id },
+      data: {
+        ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
+        ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() } : {}),
+        ...(dto.selfie !== undefined ? { selfie: dto.selfie } : {}),
+      },
+    });
+    return this.publicUser(account);
+  }
+
+  async changePassword(id: number, current: string, next: string) {
+    const account = await this.prisma.account.findUnique({ where: { id } });
+    if (!account) throw new UnauthorizedException();
+    const ok = await bcrypt.compare(current, account.passwordHash);
+    if (!ok) throw new BadRequestException('رمزِ فعلی اشتباه است');
+    await this.prisma.account.update({
+      where: { id },
+      data: { passwordHash: await bcrypt.hash(next, 10) },
+    });
+    return { ok: true };
+  }
+
   async logout(sid: string) {
     await this.prisma.session.updateMany({ where: { id: sid, revokedAt: null }, data: { revokedAt: new Date() } });
     return { ok: true };

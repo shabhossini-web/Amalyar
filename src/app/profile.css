@@ -1,0 +1,21 @@
+/* ── پروفایل من ── */
+.pf-card { gap: 16px; }
+.pf-h2 { font-size: 16px; font-weight: 800; }
+.pf-avatar-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pf-avatar {
+  width: 120px; height: 120px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center; color: #e6ddff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
+  border: 2px solid rgba(168, 85, 247, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 10px 30px rgba(124, 58, 237, 0.3);
+}
+.pf-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pf-facts { display: flex; flex-direction: column; gap: 0; border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 14px; overflow: hidden; }
+.pf-fact { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 14px; }
+.pf-fact + .pf-fact { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.pf-fact span { font-size: 12px; color: var(--text3); font-weight: 700; }
+.pf-fact b { font-size: 13.5px; font-weight: 800; }
+
+/* فرمِ داخلِ کارتِ پروفایل از توکن‌های login.css استفاده می‌کند؛
+   ولی صفحهٔ لاگین direction دارد — این‌جا مطمئن می‌شویم input تمام‌عرض است */
+.pf-card .lg-field input { width: 100%; }

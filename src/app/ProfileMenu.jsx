@@ -16,7 +16,9 @@ const Finger = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 10a2 
 
 const Avatar = ({ u, size = 32 }) => (
   <span className="pm-avatar" style={{ width: size, height: size }}>
-    {u?.selfie ? <img src={u.selfie} alt="" /> : <UserIc width={size * 0.52} height={size * 0.52} />}
+    {u?.selfie
+      ? <img src={u.selfie} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+      : <UserIc width={size * 0.52} height={size * 0.52} />}
   </span>
 );
 
@@ -75,7 +77,12 @@ export default function ProfileMenu({ onToast }) {
 
   const doSwitch = (id) =>
     run(async () => {
-      if (id === user.id) return setOpen(false);
+      if (id === user.id) {
+        // حسابِ خودت → صفحهٔ پروفایل
+        setOpen(false);
+        navigate('/app/profile');
+        return;
+      }
       const me = await switchAccount(id);
       toast(`سوییچ به «${me.displayName}»`);
       setOpen(false);
@@ -143,7 +150,7 @@ export default function ProfileMenu({ onToast }) {
                     role="menuitem"
                     disabled={busy}
                     onClick={() => doSwitch(a.user.id)}
-                    title={a.user.id === user.id ? 'حسابِ فعال' : 'ورود به این حساب'}
+                    title={a.user.id === user.id ? 'مشاهدهٔ پروفایل' : 'ورود به این حساب'}
                   >
                     <Avatar u={a.user} size={36} />
                     <span className="pm-acc-meta">
