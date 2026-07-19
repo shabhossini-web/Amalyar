@@ -21,17 +21,21 @@ const ArrowL = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M19 12H5M
 const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
 const User = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 
-const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: false };
+const UsersIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.7-3.4 3.4-5.5 6.5-5.5s5.8 2.1 6.5 5.5" /><circle cx="17.5" cy="9" r="2.6" /><path d="M15.6 14.9c2.6.3 4.9 2 5.6 4.6" /></svg>);
+
+/* min = حداقل سطحِ دسترسی (۱ بازدید … ۶ سوپرادمین) */
+const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: false, min: 5 };
 const DAILY = [
-  { key: 'formgen', label: 'فرم‌ساز', icon: Form, ready: false },
-  { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: false },
+  { key: 'formgen', label: 'فرم‌ساز', icon: Form, ready: false, min: 5 },
+  { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: false, min: 2 },
 ];
 const TOOLS = [
-  { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: false },
-  { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: false },
-  { key: 'dispatch', label: 'چینش کارشناس‌ها', icon: Dispatch, tint: 'amber', ready: false },
-  { key: 'letter', label: 'نامه اداری', icon: Mail, tint: 'blue', ready: false },
-  { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: false },
+  { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: false, min: 5 },
+  { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: false, min: 4 },
+  { key: 'dispatch', label: 'چینش کارشناس‌ها', icon: Dispatch, tint: 'amber', ready: false, min: 4 },
+  { key: 'letter', label: 'نامه اداری', icon: Mail, tint: 'blue', ready: false, min: 5 },
+  { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: false, min: 2 },
+  { key: 'users', label: 'کاربران', icon: UsersIc, tint: 'violet', ready: true, min: 6, to: '/app/users' },
 ];
 
 /* اسپاتلایتِ دنبال‌کنندهٔ اشاره‌گر روی کارتِ شیشه‌ای */
@@ -69,6 +73,27 @@ export default function Launcher() {
   }, [toast]);
 
   const soon = (label) => setToast(`«${label}» به‌زودی`);
+  const open = (t) => (t.to ? navigate(t.to) : soon(t.label));
+
+  // گیتِ سطح‌محور: فقط آیتم‌هایی که سطحِ کاربر اجازه می‌دهد
+  const lvl = user?.level ?? 0;
+  const showHero = lvl >= HERO.min;
+  const daily = DAILY.filter((t) => lvl >= t.min);
+  const tools = TOOLS.filter((t) => lvl >= t.min);
+  const nothing = !showHero && daily.length === 0 && tools.length === 0;
+
+  // نشانِ تعدادِ در انتظارِ تأیید (فقط سوپرادمین)
+  const [pendingCount, setPendingCount] = useState(0);
+  useEffect(() => {
+    if (lvl < 6) return;
+    let alive = true;
+    import('../lib/api.js').then(({ api }) =>
+      api('/accounts/pending')
+        .then((rows) => { if (alive) setPendingCount(rows.length); })
+        .catch(() => {}),
+    );
+    return () => { alive = false; };
+  }, [lvl]);
 
   return (
     <div className="lx">
@@ -88,38 +113,56 @@ export default function Launcher() {
         </header>
 
         <div className="lx-cards">
-          <button className="glass lx-hero shine" onMouseMove={track} onClick={() => soon(HERO.label)}>
-            <span className="glass-glow" aria-hidden="true" />
-            <span className="lx-hero-ic"><HERO.icon width="30" height="30" /></span>
-            <span className="lx-hero-body">
-              <span className="lx-hero-title">{HERO.label}{!HERO.ready && <em className="soon">به‌زودی</em>}</span>
-              <span className="lx-hero-desc">{HERO.desc}</span>
-            </span>
-            <span className="lx-hero-arrow"><ArrowL width="22" height="22" /></span>
-          </button>
+          {showHero && (
+            <button className="glass lx-hero shine" onMouseMove={track} onClick={() => open(HERO)}>
+              <span className="glass-glow" aria-hidden="true" />
+              <span className="lx-hero-ic"><HERO.icon width="30" height="30" /></span>
+              <span className="lx-hero-body">
+                <span className="lx-hero-title">{HERO.label}{!HERO.ready && <em className="soon">به‌زودی</em>}</span>
+                <span className="lx-hero-desc">{HERO.desc}</span>
+              </span>
+              <span className="lx-hero-arrow"><ArrowL width="22" height="22" /></span>
+            </button>
+          )}
 
-          <div className="lx-row">
-            {DAILY.map((t) => (
-              <button key={t.key} className="glass lx-card" onMouseMove={track} onClick={() => soon(t.label)}>
-                <span className="glass-glow" aria-hidden="true" />
-                <span className="lx-card-ic"><t.icon width="24" height="24" /></span>
-                <span className="lx-card-title">{t.label}</span>
-                {!t.ready && <em className="soon dot" title="به‌زودی" />}
-              </button>
-            ))}
-          </div>
+          {daily.length > 0 && (
+            <div className="lx-row">
+              {daily.map((t) => (
+                <button key={t.key} className="glass lx-card" onMouseMove={track} onClick={() => open(t)}>
+                  <span className="glass-glow" aria-hidden="true" />
+                  <span className="lx-card-ic"><t.icon width="24" height="24" /></span>
+                  <span className="lx-card-title">{t.label}</span>
+                  {!t.ready && <em className="soon dot" title="به‌زودی" />}
+                </button>
+              ))}
+            </div>
+          )}
 
-          <div className="lx-tools-label">ابزارها</div>
-          <div className="lx-tools">
-            {TOOLS.map((t) => (
-              <button key={t.key} className="glass lx-tile" onMouseMove={track} onClick={() => soon(t.label)}>
-                <span className="glass-glow" aria-hidden="true" />
-                <span className={`lx-tile-ic tint-${t.tint}`}><t.icon width="24" height="24" /></span>
-                <span className="lx-tile-label">{t.label}</span>
-                {!t.ready && <em className="soon dot" title="به‌زودی" />}
-              </button>
-            ))}
-          </div>
+          {tools.length > 0 && (
+            <>
+              <div className="lx-tools-label">ابزارها</div>
+              <div className="lx-tools">
+                {tools.map((t) => (
+                  <button key={t.key} className="glass lx-tile" onMouseMove={track} onClick={() => open(t)}>
+                    <span className="glass-glow" aria-hidden="true" />
+                    <span className={`lx-tile-ic tint-${t.tint}`}><t.icon width="24" height="24" /></span>
+                    <span className="lx-tile-label">{t.label}</span>
+                    {!t.ready && <em className="soon dot" title="به‌زودی" />}
+                    {t.key === 'users' && pendingCount > 0 && <span className="lx-badge">{pendingCount}</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {nothing && (
+            <div className="glass lx-hero" style={{ cursor: 'default' }}>
+              <span className="lx-hero-body">
+                <span className="lx-hero-title">دسترسیِ شما هنوز محدود است</span>
+                <span className="lx-hero-desc">مدیرِ سامانه باید سطحِ دسترسیِ شما را ارتقا دهد.</span>
+              </span>
+            </div>
+          )}
         </div>
 
         <footer className="lx-foot">

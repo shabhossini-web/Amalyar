@@ -1,0 +1,60 @@
+/* ── مدیریت کاربران (سوپرادمین) ── */
+.us-shell { max-width: 520px; }
+.us-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.us-head h1 { font-size: 20px; font-weight: 900; }
+.us-tabs { margin-bottom: 14px; }
+.us-count {
+  font-style: normal; font-size: 11px; font-weight: 800; margin-inline-start: 7px;
+  background: #f97316; color: #fff; border-radius: 99px; padding: 1px 7px; vertical-align: 2px;
+}
+
+.us-list { display: flex; flex-direction: column; gap: 12px; }
+.us-empty { text-align: center; color: var(--text3); font-size: 13.5px; padding: 30px 0; }
+
+.us-card { border-radius: 18px; padding: 15px 16px; display: flex; flex-direction: column; gap: 12px; cursor: default; }
+.us-card:hover { transform: none; }
+.us-row { display: flex; align-items: center; gap: 12px; }
+.us-avatar {
+  flex: 0 0 auto; border-radius: 50%; overflow: hidden; display: grid; place-items: center; color: #d6ccff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.us-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.us-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.55; }
+.us-meta b { font-size: 15px; font-weight: 800; }
+.us-meta span { font-size: 12px; color: var(--text2); direction: ltr; text-align: right; }
+.us-meta small { font-size: 11px; color: var(--text3); }
+.us-you {
+  font-style: normal; font-size: 10px; font-weight: 800; color: var(--cyan);
+  border: 1px solid rgba(0, 229, 255, 0.35); border-radius: 99px; padding: 1px 7px; margin-inline-start: 7px;
+}
+
+.us-status { font-size: 11px; font-weight: 800; border-radius: 99px; padding: 3px 10px; flex: 0 0 auto; }
+.us-status.active { color: #5eead4; background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
+.us-status.pending { color: #fbbf24; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); }
+.us-status.rejected, .us-status.disabled { color: #fca5a5; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
+
+.us-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.us-levelpick { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--text2); }
+.us-levelpick.grow { flex: 1; }
+.us-levelpick select {
+  font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text1); cursor: pointer;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 11px; padding: 8px 10px; transition: border-color .2s;
+}
+.us-levelpick select:focus { outline: none; border-color: rgba(168, 85, 247, 0.7); }
+.us-levelpick select:disabled { opacity: .55; cursor: default; }
+.us-levelpick select option { background: #141033; color: #f2f0fc; }
+
+.us-btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 800;
+  border-radius: 11px; padding: 9px 15px; transition: background .2s, transform .15s;
+}
+.us-btn:disabled { opacity: .55; cursor: default; }
+.us-btn.ok { color: #052e22; background: linear-gradient(135deg, #34d399, #0d9488); border: none; box-shadow: 0 6px 18px rgba(52, 211, 153, 0.3); }
+.us-btn.ok:hover:not(:disabled) { transform: translateY(-1px); }
+.us-btn.no { color: #fca5a5; background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.35); }
+.us-btn.no:hover:not(:disabled) { background: rgba(248, 113, 113, 0.16); }
+.us-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+

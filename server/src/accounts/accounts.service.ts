@@ -15,7 +15,7 @@ export class AccountsService {
       where: status ? { status } : {},
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((a) => this.auth.publicUser(a));
+    return rows.map((a) => ({ ...this.auth.publicUser(a), createdAt: a.createdAt }));
   }
 
   async approve(id: number, level: number, approverId: number) {

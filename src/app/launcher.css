@@ -138,6 +138,15 @@
 .tint-blue   { background: linear-gradient(135deg, rgba(0, 48, 104, .7), rgba(0, 100, 175, .55)); border: 1px solid rgba(59, 130, 246, .45); }
 .tint-teal   { background: linear-gradient(135deg, rgba(0, 90, 74, .7), rgba(0, 175, 155, .55)); border: 1px solid rgba(0, 229, 255, .4); }
 
+/* نشانِ تعدادِ در‌انتظار روی تایلِ کاربران */
+.lx-badge {
+  position: absolute; top: 8px; inset-inline-end: 9px;
+  min-width: 20px; height: 20px; border-radius: 99px; padding: 0 6px;
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 800; color: #fff;
+  background: #f97316; box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+}
+
 /* "به‌زودی" markers */
 .soon { font-style: normal; font-size: 10px; font-weight: 800; color: #fb923c; background: rgba(249, 115, 22, .16); border-radius: 99px; padding: 2px 8px; }
 .soon.dot { position: absolute; top: 10px; left: 10px; width: 7px; height: 7px; padding: 0; border-radius: 50%; background: #fb923c; box-shadow: 0 0 0 3px rgba(249, 115, 22, .18); }
