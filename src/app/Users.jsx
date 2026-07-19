@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
+import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import './users.css';
 
@@ -148,6 +149,7 @@ export default function Users() {
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
           <h1>مدیریت کاربران</h1>
+          <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
         <div className="lg-tabs us-tabs" role="tablist">

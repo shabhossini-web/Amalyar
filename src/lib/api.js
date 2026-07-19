@@ -18,11 +18,11 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = 'GET', body, auth = true } = {}) {
+export async function api(path, { method = 'GET', body, auth = true, token } = {}) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const token = getToken();
-  if (auth && token) headers.Authorization = `Bearer ${token}`;
+  const tok = token ?? getToken(); // token صریح: برای عملیات روی حسابِ غیرفعال (خروجِ تکی)
+  if (auth && tok) headers.Authorization = `Bearer ${tok}`;
 
   let res;
   try {

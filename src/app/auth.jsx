@@ -1,5 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api, getToken, setToken } from '../lib/api.js';
+import {
+  getAccounts,
+  upsertAccount,
+  removeAccount,
+  updateAccountUser,
+  clearAccounts,
+} from '../lib/accountsStore.js';
 
 const AuthCtx = createContext(null);
 
@@ -24,6 +31,9 @@ const addCredId = (id) => {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  // نسخهٔ لیستِ حساب‌ها — برای رفرشِ UI بعد از هر تغییرِ مخزن
+  const [accountsVersion, setAccountsVersion] = useState(0);
+  const bump = () => setAccountsVersion((v) => v + 1);
 
   useEffect(() => {
     let alive = true;
@@ -34,7 +44,11 @@ export function AuthProvider({ children }) {
       }
       try {
         const me = await api('/auth/me');
-        if (alive) setUser(me);
+        if (alive) {
+          setUser(me);
+          updateAccountUser(me.id, me); // پروفایلِ ذخیره‌شده تازه بماند
+          bump();
+        }
       } catch {
         setToken(null);
       } finally {
@@ -46,10 +60,16 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  const adopt = (accessToken, u, remember) => {
+    setToken(accessToken, remember);
+    if (remember) upsertAccount(accessToken, u); // فقط ورودهای ماندگار در لیستِ چندحسابی
+    setUser(u);
+    bump();
+  };
+
   const login = useCallback(async (identifier, password, remember = true) => {
     const r = await api('/auth/login', { method: 'POST', body: { identifier, password }, auth: false });
-    setToken(r.accessToken, remember);
-    setUser(r.user);
+    adopt(r.accessToken, r.user, remember);
     return r.user;
   }, []);
 
@@ -64,8 +84,7 @@ export function AuthProvider({ children }) {
     const response = await startAuthentication({ optionsJSON: options });
     const r = await api('/auth/webauthn/login/verify', { method: 'POST', body: { response, challengeToken }, auth: false });
     addCredId(response?.id);
-    setToken(r.accessToken, true);
-    setUser(r.user);
+    adopt(r.accessToken, r.user, true);
     return r.user;
   }, []);
 
@@ -95,25 +114,122 @@ export function AuthProvider({ children }) {
   // مرحلهٔ ۳ — تکمیلِ پروفایل. اگر اولین حساب باشد خودکار وارد می‌شود.
   const completeSignup = useCallback(async (payload) => {
     const r = await api('/auth/signup/complete', { method: 'POST', body: payload, auth: false });
-    if (r.accessToken) {
-      setToken(r.accessToken);
-      setUser(r.user);
-    }
+    if (r.accessToken) adopt(r.accessToken, r.user, true);
     return r; // { pending, bootstrap?, user, accessToken? }
   }, []);
 
-  const logout = useCallback(async () => {
+  /** سوییچ به حسابِ دیگری از لیست؛ اگر سشنش مرده بود از لیست حذف می‌شود */
+  const switchAccount = useCallback(async (id) => {
+    const acc = getAccounts().find((a) => a.user.id === id);
+    if (!acc) throw new Error('حساب یافت نشد');
+    setToken(acc.token, true);
     try {
-      await api('/auth/logout', { method: 'POST' });
-    } catch {
-      /* توکن به‌هرحال پاک می‌شود */
+      const me = await api('/auth/me');
+      setUser(me);
+      updateAccountUser(id, me);
+      bump();
+      return me;
+    } catch (e) {
+      removeAccount(id);
+      bump();
+      // برگشت به حسابِ قبلی اگر هنوز زنده است
+      const prev = getAccounts()[0];
+      if (prev) {
+        setToken(prev.token, true);
+      } else {
+        setToken(null);
+        setUser(null);
+      }
+      throw new Error(e?.status === 401 ? 'نشستِ این حساب منقضی شده؛ دوباره وارد شوید' : e.message);
     }
-    setToken(null);
-    setUser(null);
   }, []);
 
+  /** خروجِ تکی از یک حساب (فعال یا غیرفعال). خروجی: id حسابِ فعالِ بعدی یا null */
+  const logoutAccount = useCallback(
+    async (id) => {
+      const acc = getAccounts().find((a) => a.user.id === id);
+      if (acc) {
+        try {
+          await api('/auth/logout', { method: 'POST', token: acc.token });
+        } catch {
+          /* سشنِ سرور شاید قبلاً مرده باشد */
+        }
+        removeAccount(id);
+      }
+      if (user?.id === id) {
+        // حسابِ فعال خارج شد → سوییچ به بعدی یا خروجِ کامل
+        const next = getAccounts()[0];
+        if (next) {
+          setToken(next.token, true);
+          try {
+            const me = await api('/auth/me');
+            setUser(me);
+            updateAccountUser(me.id, me);
+            bump();
+            return me.id;
+          } catch {
+            removeAccount(next.user.id);
+          }
+        }
+        setToken(null);
+        setUser(null);
+        bump();
+        return null;
+      }
+      bump();
+      return user?.id ?? null;
+    },
+    [user],
+  );
+
+  /** خروج از همهٔ حساب‌ها (سشن‌های سرور هم باطل می‌شوند) */
+  const logoutAll = useCallback(async () => {
+    const accs = getAccounts();
+    await Promise.allSettled(
+      accs.map((a) => api('/auth/logout', { method: 'POST', token: a.token })),
+    );
+    // سشنِ موقتِ خارج از لیست (ورودِ بدونِ «به خاطر بسپار»)
+    if (getToken() && !accs.some((a) => a.token === getToken())) {
+      try {
+        await api('/auth/logout', { method: 'POST' });
+      } catch {
+        /* — */
+      }
+    }
+    clearAccounts();
+    setToken(null);
+    setUser(null);
+    bump();
+  }, []);
+
+  /** خروجِ سادهٔ حسابِ جاری (میان‌بر) */
+  const logout = useCallback(async () => {
+    if (user) return logoutAccount(user.id);
+    setToken(null);
+    setUser(null);
+    bump();
+    return null;
+  }, [user, logoutAccount]);
+
   return (
-    <AuthCtx.Provider value={{ user, loading, login, requestOtp, verifyOtp, completeSignup, webauthnLogin, webauthnRegister, logout, setUser }}>
+    <AuthCtx.Provider
+      value={{
+        user,
+        loading,
+        accountsVersion,
+        login,
+        requestOtp,
+        verifyOtp,
+        completeSignup,
+        webauthnLogin,
+        webauthnRegister,
+        switchAccount,
+        logoutAccount,
+        logoutAll,
+        logout,
+        setUser,
+      }}
+    >
       {children}
     </AuthCtx.Provider>
   );

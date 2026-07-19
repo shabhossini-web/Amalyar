@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
 import OtpInput from './OtpInput.jsx';
@@ -28,6 +28,8 @@ const toEnDigits = (s) =>
 export default function Login() {
   const { user, loading, login, requestOtp, verifyOtp, completeSignup, webauthnLogin } = useAuth();
   const navigate = useNavigate();
+  const [sp] = useSearchParams();
+  const adding = sp.get('add') === '1'; // حالتِ «افزودن حساب» — حسابِ فعلی حفظ می‌شود
 
   const [tab, setTab] = useState('login'); // login | signup
   const [firstAdmin, setFirstAdmin] = useState(false);
@@ -57,8 +59,9 @@ export default function Login() {
   }, []);
 
   useEffect(() => {
+    if (adding) return; // در حالتِ افزودن، کاربرِ واردشده نباید ریدایرکت شود
     if (!loading && user) navigate('/app', { replace: true });
-  }, [loading, user, navigate]);
+  }, [loading, user, navigate, adding]);
 
   // WebOTP: وقتی پیامکِ کد می‌رسد، اندروید خودش کد را پر می‌کند
   useEffect(() => {
@@ -228,6 +231,9 @@ export default function Login() {
           <div className="lg-word">عمل<span className="grad-text">‌یار</span></div>
         </header>
 
+        {adding && step !== 'done' && (
+          <div className="lg-devcode">در حال افزودنِ حسابِ جدید — حسابِ فعلی حفظ می‌شود.</div>
+        )}
         {firstAdmin && step !== 'done' && (
           <div className="lg-note-badge">این نخستین حساب است و مدیرِ کل (سوپرادمین) می‌شود.</div>
         )}
@@ -330,7 +336,11 @@ export default function Login() {
           </div>
         )}
 
-        {step !== 'done' && <a className="lg-back" href="/">بازگشت به سایت</a>}
+        {step !== 'done' && (
+          adding
+            ? <button type="button" className="lg-back" style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }} onClick={() => navigate('/app')}>انصراف و بازگشت به سامانه</button>
+            : <a className="lg-back" href="/">بازگشت به سایت</a>
+        )}
       </div>
     </div>
   );
