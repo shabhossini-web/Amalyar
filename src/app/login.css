@@ -171,8 +171,9 @@
 }
 .lg-check::after {
   content: ''; position: absolute; inset: 0; margin: auto; width: 10px; height: 6px;
-  border-inline-start: 2px solid #fff; border-bottom: 2px solid #fff;
-  transform: rotate(45deg) scale(0); transform-origin: center; translate: 0 -1.5px; transition: transform .16s;
+  /* بوردرِ فیزیکی (نه منطقی) تا در RTL قرینه نشود */
+  border-left: 2px solid #fff; border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) scale(0); transform-origin: center; translate: 0 -1.5px; transition: transform .16s;
 }
 .lg-remember input:checked + .lg-check { background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); border-color: rgba(168, 85, 247, 0.7); }
 .lg-remember input:checked + .lg-check::after { transform: rotate(-45deg) scale(1); }
