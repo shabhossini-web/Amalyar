@@ -12,6 +12,7 @@
 .db-stat b { font-size: 18px; font-weight: 900; }
 .db-stat span { font-size: 10.5px; color: var(--text2); font-weight: 600; }
 .db-stat-due b { color: #fbbf24; }
+.db-stat-today b { color: #5eead4; }
 
 /* نوارِ ابزار: سرچ + افزودن */
 .db-toolbar { display: flex; gap: 10px; margin-bottom: 12px; }
@@ -38,6 +39,15 @@
 .db-add:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .db-filters { margin-bottom: 14px; }
+.db-defbtn { width: 44px; height: auto; align-self: stretch; border-radius: 13px; }
+
+/* برچسبِ نوعِ عمل روی کارت */
+.db-optype {
+  font-size: 10.5px; font-weight: 700; color: #c4b5fd; flex: 0 0 auto;
+  background: rgba(124, 58, 237, 0.14); border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 99px; padding: 3px 9px; max-width: 110px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* کارتِ مراجعه */
 .db-card { gap: 10px; }
@@ -128,6 +138,63 @@
 }
 .db-field input:focus, .db-field textarea:focus { border-color: rgba(168, 85, 247, 0.65); }
 .db-field textarea { resize: vertical; }
+.db-field select {
+  font-family: inherit; font-size: 14px; color: var(--text1); width: 100%;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 11px; padding: 10px 12px; outline: none; appearance: none;
+}
+.db-field select:focus { border-color: rgba(168, 85, 247, 0.65); }
+.db-field select option { background: #141033; color: #f2f0fc; }
+
+/* سلکت + دکمهٔ افزودنِ سریع */
+.db-selrow { display: flex; gap: 7px; }
+.db-selrow select { flex: 1; min-width: 0; }
+.db-addmini {
+  flex: 0 0 auto; display: grid; place-items: center; width: 40px; cursor: pointer;
+  color: var(--text2); background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.13); border-radius: 11px;
+}
+.db-addmini:hover { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
+
+/* ورودیِ افزودنِ سریع/تعریف‌ها */
+.db-quickadd { display: flex; gap: 7px; }
+.db-quickadd input {
+  flex: 1; min-width: 0; font-family: inherit; font-size: 14px; color: var(--text1);
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(168, 85, 247, 0.5);
+  border-radius: 11px; padding: 10px 12px; outline: none;
+}
+.db-quickadd button {
+  font-family: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; white-space: nowrap;
+  color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
+  border: none; border-radius: 11px; padding: 0 14px;
+}
+.db-quickadd button:disabled { opacity: .55; cursor: default; }
+.db-quickadd button.ghost { color: var(--text2); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.13); }
+
+/* فهرستِ تعریف‌ها */
+.db-defs { display: flex; flex-direction: column; gap: 7px; max-height: 46dvh; overflow-y: auto; }
+.db-def {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px; padding: 9px 12px; font-size: 13.5px;
+}
+.db-def.off { opacity: .55; }
+.db-def b { flex: 1; font-weight: 800; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.db-def b i { font-style: normal; font-size: 11px; color: var(--text3); }
+.db-def small { font-size: 11px; color: var(--text3); flex: 0 0 auto; }
+.db-def-edit {
+  flex: 1; min-width: 0; font-family: inherit; font-size: 13.5px; color: var(--text1);
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(168, 85, 247, 0.55);
+  border-radius: 9px; padding: 6px 10px; outline: none;
+}
+.db-def-acts { display: flex; gap: 5px; flex: 0 0 auto; }
+.db-def-acts button {
+  display: grid; place-items: center; width: 28px; height: 28px; cursor: pointer;
+  font-size: 11px; color: var(--text2); background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;
+}
+.db-def-acts button:hover { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
+.db-def-acts button.danger:hover { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); }
 .db-words { font-style: normal; font-size: 11px; color: var(--cyan); min-height: 15px; font-weight: 600; }
 
 .db-daterow { display: flex; gap: 8px; }

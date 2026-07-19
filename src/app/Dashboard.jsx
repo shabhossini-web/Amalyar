@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr } from '../lib/jalali.js';
-import { fmtMoney, group3, numToWordsFa, parseMoney } from '../lib/money.js';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import './users.css';
@@ -20,6 +19,9 @@ const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6
 const Doctor = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 3v5a3 3 0 0 0 6 0V3" /><path d="M12 11v3a4 4 0 0 1-8 0v-1" /><circle cx="4" cy="11" r="2" /><circle cx="19" cy="16" r="3" /><path d="M19 19v2" /></svg>);
 const Hospital = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21V8l9-5 9 5v13" /><path d="M3 21h18" /><path d="M12 9v6M9 12h6" /></svg>);
 const CalIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>);
+const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
+const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
+const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" /></svg>);
 
 const STATUS_FA = { pending: 'در انتظار عمل', done: 'تمام‌شده', cancelled: 'کنسل' };
 const FILTERS = [
@@ -28,6 +30,7 @@ const FILTERS = [
   { v: 'done', l: 'تمام‌شده' },
   { v: 'cancelled', l: 'کنسل' },
 ];
+const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 
 /* اسپاتلایتِ شیشه */
 function track(e) {
@@ -37,53 +40,85 @@ function track(e) {
   el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
 }
 
-/* ── باکسِ مبلغ: گروه‌بندی در blur (باگِ Gboard)، به‌حروف زنده ── */
-function MoneyInput({ label, value, onChange }) {
-  const [focus, setFocus] = useState(false);
-  const shown = focus ? value : group3(value);
-  const n = parseMoney(value);
+/* ── سلکتِ موجودیت + افزودنِ سریع (جراح/بیمارستان) ── */
+function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlaceholder }) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submitAdd = async () => {
+    const n = name.trim();
+    if (n.length < 2 || busy) return;
+    setBusy(true);
+    try {
+      const created = await onQuickAdd(n);
+      onChange(created.id);
+      setAdding(false);
+      setName('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <label className="db-field">
-      <span>{label} <small>(تومان)</small></span>
-      <input
-        type="text"
-        inputMode="numeric"
-        dir="ltr"
-        value={shown}
-        onFocus={() => setFocus(true)}
-        onBlur={() => setFocus(false)}
-        onChange={(e) => onChange(String(parseMoney(e.target.value) || ''))}
-        placeholder="0"
-      />
-      <em className="db-words">{n ? `${numToWordsFa(n)} تومان` : ' '}</em>
+      <span>{icon} {label}</span>
+      {adding ? (
+        <div className="db-quickadd">
+          <input
+            type="text"
+            value={name}
+            autoFocus
+            placeholder={addPlaceholder}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitAdd(); } }}
+          />
+          <button type="button" disabled={busy || name.trim().length < 2} onClick={submitAdd}>ثبت</button>
+          <button type="button" className="ghost" onClick={() => { setAdding(false); setName(''); }}>لغو</button>
+        </div>
+      ) : (
+        <div className="db-selrow">
+          <select value={value ?? ''} onChange={(e) => onChange(e.target.value ? +e.target.value : null)}>
+            <option value="">— انتخاب —</option>
+            {options.map((o) => (
+              <option key={o.id} value={o.id}>{o.name || o.displayName}</option>
+            ))}
+          </select>
+          {onQuickAdd && (
+            <button type="button" className="db-addmini" title="افزودنِ جدید" onClick={() => setAdding(true)}>
+              <Plus width="15" height="15" />
+            </button>
+          )}
+        </div>
+      )}
     </label>
   );
 }
 
-/* ── فرمِ ثبت/ویرایشِ مراجعه (مودالِ شیشه‌ای) ── */
-function VisitForm({ initial, onClose, onSaved, onToast }) {
+/* ── فرمِ ثبت/ویرایشِ مراجعه ── */
+function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) {
   const editing = !!initial?.id;
-  const [mode, setMode] = useState('new'); // new | existing (فقط در حالتِ افزودن)
+  const [mode, setMode] = useState('new'); // new | existing
   const [pQuery, setPQuery] = useState('');
   const [pResults, setPResults] = useState([]);
-  const [picked, setPicked] = useState(null); // بیمارِ موجودِ انتخاب‌شده
+  const [picked, setPicked] = useState(null);
 
   const [f, setF] = useState(() => ({
     firstName: initial?.firstName || '',
     lastName: initial?.lastName || '',
     phone: initial?.phone || '',
     nationalId: initial?.nationalId || '',
-    surgeonName: initial?.surgeonName || '',
-    hospitalName: initial?.hospitalName || '',
+    birthDateJ: initial?.birthDate ? isoToJStr(initial.birthDate) : '',
+    surgeonId: initial?.surgeonId ?? null,
+    hospitalId: initial?.hospitalId ?? null,
+    techId: initial?.techId ?? null,
+    opType: initial?.opType || '',
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
-    amount: initial?.amount ? String(initial.amount) : '',
-    paid: initial?.paid ? String(initial.paid) : '',
     notes: initial?.notes || '',
   }));
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
-  // جستجوی بیمارِ موجود (debounce)
   useEffect(() => {
     if (mode !== 'existing') return undefined;
     const t = setTimeout(() => {
@@ -94,6 +129,18 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
     return () => clearTimeout(t);
   }, [pQuery, mode]);
 
+  const quickAdd = (kind) => async (name) => {
+    try {
+      const created = await api(`/${kind}`, { method: 'POST', body: { name } });
+      await onDefsChanged();
+      onToast(`«${name}» اضافه شد ✓`);
+      return created;
+    } catch (e) {
+      onToast(e.message);
+      throw e;
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (busy) return;
@@ -102,12 +149,17 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
       opDate = jStrToIso(f.opDateJ);
       if (!opDate) { onToast('تاریخِ عمل نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)'); return; }
     }
+    let birthDate;
+    if (f.birthDateJ.trim()) {
+      birthDate = jStrToIso(f.birthDateJ);
+      if (!birthDate) { onToast('تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)'); return; }
+    }
     const common = {
-      surgeonName: f.surgeonName.trim() || undefined,
-      hospitalName: f.hospitalName.trim() || undefined,
+      surgeonId: f.surgeonId ?? (editing ? null : undefined),
+      hospitalId: f.hospitalId ?? (editing ? null : undefined),
+      techId: f.techId ?? (editing ? null : undefined),
+      opType: f.opType.trim() || undefined,
       opDate,
-      amount: parseMoney(f.amount),
-      paid: parseMoney(f.paid),
       notes: f.notes.trim() || undefined,
     };
     setBusy(true);
@@ -118,11 +170,13 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
           method: 'PATCH',
           body: {
             ...common,
+            opType: f.opType.trim(),
             opDate: opDate ?? null,
             firstName: f.firstName.trim(),
             lastName: f.lastName.trim(),
             phone: f.phone.trim(),
             nationalId: f.nationalId.trim(),
+            birthDate: birthDate ?? null,
           },
         });
       } else if (mode === 'existing') {
@@ -137,6 +191,7 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
             lastName: f.lastName.trim(),
             phone: f.phone.trim() || undefined,
             nationalId: f.nationalId.trim() || undefined,
+            birthDate,
           },
         });
       }
@@ -147,6 +202,9 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
       setBusy(false);
     }
   };
+
+  const activeSurgeons = defs.surgeons.filter((s) => s.active || s.id === f.surgeonId);
+  const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
 
   return (
     <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -185,7 +243,7 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
                     <button type="button" key={p.id} onClick={() => setPicked(p)}>
                       <b>{p.fullName}</b>
                       <span dir="ltr">{p.code}</span>
-                      <small>{p.visitCount} مراجعه</small>
+                      <small>{faNum(p.visitCount)} مراجعه</small>
                     </button>
                   ))}
                   {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
@@ -194,28 +252,52 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
             )}
           </div>
         ) : (
-          <div className="db-grid2">
-            <label className="db-field"><span>نام</span>
-              <input type="text" value={f.firstName} onChange={set('firstName')} required minLength={2} />
+          <>
+            <div className="db-grid2">
+              <label className="db-field"><span>نام</span>
+                <input type="text" value={f.firstName} onChange={set('firstName')} required minLength={2} />
+              </label>
+              <label className="db-field"><span>نام خانوادگی</span>
+                <input type="text" value={f.lastName} onChange={set('lastName')} required minLength={2} />
+              </label>
+              <label className="db-field"><span>موبایل</span>
+                <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
+              </label>
+              <label className="db-field"><span>کد ملی</span>
+                <input type="text" dir="ltr" inputMode="numeric" value={f.nationalId} onChange={set('nationalId')} placeholder="اختیاری" />
+              </label>
+            </div>
+            <label className="db-field"><span>تاریخِ تولد (شمسی)</span>
+              <input type="text" dir="ltr" inputMode="numeric" value={f.birthDateJ} onChange={set('birthDateJ')} placeholder="۱۳۷۰/۰۱/۱۵ — اختیاری" />
             </label>
-            <label className="db-field"><span>نام خانوادگی</span>
-              <input type="text" value={f.lastName} onChange={set('lastName')} required minLength={2} />
-            </label>
-            <label className="db-field"><span>موبایل</span>
-              <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
-            </label>
-            <label className="db-field"><span>کد ملی</span>
-              <input type="text" dir="ltr" inputMode="numeric" value={f.nationalId} onChange={set('nationalId')} placeholder="اختیاری" />
-            </label>
-          </div>
+          </>
         )}
 
         <div className="db-grid2">
-          <label className="db-field"><span>جراح</span>
-            <input type="text" value={f.surgeonName} onChange={set('surgeonName')} placeholder="دکتر …" />
-          </label>
-          <label className="db-field"><span>بیمارستان</span>
-            <input type="text" value={f.hospitalName} onChange={set('hospitalName')} />
+          <DefSelect
+            label="جراح"
+            value={f.surgeonId}
+            onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))}
+            options={activeSurgeons}
+            onQuickAdd={quickAdd('surgeons')}
+            addPlaceholder="نامِ جراحِ جدید…"
+          />
+          <DefSelect
+            label="بیمارستان"
+            value={f.hospitalId}
+            onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))}
+            options={activeHospitals}
+            onQuickAdd={quickAdd('hospitals')}
+            addPlaceholder="نامِ بیمارستانِ جدید…"
+          />
+          <DefSelect
+            label="کارشناس"
+            value={f.techId}
+            onChange={(v) => setF((s) => ({ ...s, techId: v }))}
+            options={defs.techs}
+          />
+          <label className="db-field"><span>نوعِ عمل</span>
+            <input type="text" value={f.opType} onChange={set('opType')} placeholder="مثلاً: فیوژن کمری" />
           </label>
         </div>
 
@@ -227,11 +309,6 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
           </div>
         </label>
 
-        <div className="db-grid2">
-          <MoneyInput label="مبلغ" value={f.amount} onChange={(v) => setF((s) => ({ ...s, amount: v }))} />
-          <MoneyInput label="پرداختی" value={f.paid} onChange={(v) => setF((s) => ({ ...s, paid: v }))} />
-        </div>
-
         <label className="db-field"><span>یادداشت</span>
           <textarea rows={2} value={f.notes} onChange={set('notes')} />
         </label>
@@ -240,6 +317,114 @@ function VisitForm({ initial, onClose, onSaved, onToast }) {
           {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : 'ثبتِ مراجعه'}
         </button>
       </form>
+    </div>
+  );
+}
+
+/* ── شیتِ «تعریف‌ها»: مدیریتِ جراحان و بیمارستان‌ها ── */
+function DefsSheet({ defs, onDefsChanged, onClose, onToast }) {
+  const [tab, setTab] = useState('surgeons'); // surgeons | hospitals
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [editId, setEditId] = useState(0);
+  const [editName, setEditName] = useState('');
+
+  const kind = tab; // مسیرِ API
+  const rows = tab === 'surgeons' ? defs.surgeons : defs.hospitals;
+
+  const run = async (fn, okMsg) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+      await onDefsChanged();
+      if (okMsg) onToast(okMsg);
+    } catch (e) {
+      onToast(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const add = () => {
+    const n = name.trim();
+    if (n.length < 2) return;
+    run(async () => {
+      await api(`/${kind}`, { method: 'POST', body: { name: n } });
+      setName('');
+    }, `«${n}» اضافه شد ✓`);
+  };
+
+  const saveRename = (row) => {
+    const n = editName.trim();
+    if (n.length < 2 || n === row.name) { setEditId(0); return; }
+    run(async () => {
+      await api(`/${kind}/${row.id}`, { method: 'PATCH', body: { name: n } });
+      setEditId(0);
+    }, 'نام ویرایش شد ✓');
+  };
+
+  const toggle = (row) =>
+    run(() => api(`/${kind}/${row.id}`, { method: 'PATCH', body: { active: !row.active } }),
+      row.active ? 'غیرفعال شد' : 'فعال شد ✓');
+
+  const del = (row) =>
+    run(async () => {
+      const r = await api(`/${kind}/${row.id}`, { method: 'DELETE' });
+      onToast(r.deactivated ? 'به‌دلیلِ سابقهٔ مراجعه، غیرفعال شد' : 'حذف شد');
+    });
+
+  return (
+    <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="glass db-sheet">
+        <header className="db-sheet-head">
+          <b>تعریف‌ها</b>
+          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+        </header>
+
+        <div className="lg-tabs db-modetabs" role="tablist">
+          <button type="button" role="tab" aria-selected={tab === 'surgeons'} className={tab === 'surgeons' ? 'on' : ''} onClick={() => setTab('surgeons')}>جراحان</button>
+          <button type="button" role="tab" aria-selected={tab === 'hospitals'} className={tab === 'hospitals' ? 'on' : ''} onClick={() => setTab('hospitals')}>بیمارستان‌ها</button>
+        </div>
+
+        <div className="db-quickadd">
+          <input
+            type="text"
+            value={name}
+            placeholder={tab === 'surgeons' ? 'نامِ جراحِ جدید…' : 'نامِ بیمارستانِ جدید…'}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+          />
+          <button type="button" disabled={busy || name.trim().length < 2} onClick={add}>افزودن</button>
+        </div>
+
+        <div className="db-defs">
+          {rows.length === 0 && <div className="db-pnone">هنوز موردی تعریف نشده</div>}
+          {rows.map((row) => (
+            <div key={row.id} className={`db-def${row.active ? '' : ' off'}`}>
+              {editId === row.id ? (
+                <input
+                  className="db-def-edit"
+                  type="text"
+                  value={editName}
+                  autoFocus
+                  onChange={(e) => setEditName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveRename(row); } if (e.key === 'Escape') setEditId(0); }}
+                  onBlur={() => saveRename(row)}
+                />
+              ) : (
+                <b>{row.name}{!row.active && <i> (غیرفعال)</i>}</b>
+              )}
+              <small>{faNum(row.visitCount)} مراجعه</small>
+              <span className="db-def-acts">
+                <button type="button" title="ویرایشِ نام" disabled={busy} onClick={() => { setEditId(row.id); setEditName(row.name); }}><Pencil width="14" height="14" /></button>
+                <button type="button" title={row.active ? 'غیرفعال‌کردن' : 'فعال‌کردن'} disabled={busy} onClick={() => toggle(row)}>{row.active ? '⏸' : '▶'}</button>
+                <button type="button" className="danger" title="حذف" disabled={busy} onClick={() => del(row)}><Trash width="14" height="14" /></button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -261,19 +446,15 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
           <b>{v.fullName}</b>
           <span>{v.code}</span>
         </div>
+        {v.opType && <span className="db-optype">{v.opType}</span>}
         <span className={`us-status db-st-${v.opStatus}`}>{STATUS_FA[v.opStatus]}</span>
       </div>
 
       <div className="db-facts">
         {v.surgeonName && <span><Doctor width="14" height="14" /> {v.surgeonName}</span>}
+        {v.techName && <span><TechIc width="14" height="14" /> {v.techName}</span>}
         {v.hospitalName && <span><Hospital width="14" height="14" /> {v.hospitalName}</span>}
         {v.opDate && <span><CalIc width="14" height="14" /> {faDate(v.opDate)}</span>}
-      </div>
-
-      <div className="db-money">
-        <span>مبلغ <b>{fmtMoney(v.amount)}</b></span>
-        <span>پرداختی <b className="ok">{fmtMoney(v.paid)}</b></span>
-        <span>مانده <b className={v.due > 0 ? 'due' : 'ok'}>{fmtMoney(v.due)}</b></span>
       </div>
 
       <div className="db-actions">
@@ -311,9 +492,11 @@ export default function Dashboard() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
   const [modal, setModal] = useState(null); // null | {} | {visit}
+  const [defsOpen, setDefsOpen] = useState(false);
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
   const [denied, setDenied] = useState(false);
+  const [defs, setDefs] = useState({ surgeons: [], hospitals: [], techs: [] });
   const qRef = useRef(q);
   qRef.current = q;
 
@@ -337,6 +520,19 @@ export default function Dashboard() {
       });
   }, []);
 
+  const loadDefs = useCallback(async () => {
+    try {
+      const [surgeons, hospitals, techs] = await Promise.all([
+        api('/surgeons'),
+        api('/hospitals'),
+        api('/techs'),
+      ]);
+      setDefs({ surgeons, hospitals, techs });
+    } catch {
+      /* دسترسی نداشته باشد، denied از load اصلی می‌آید */
+    }
+  }, []);
+
   // بارِ اول + سرچِ زنده (debounce) + فیلترِ وضعیت.
   // ⚠️ user.id هم جزو وابستگی‌هاست: بعد از سوییچِ حساب، دسترسی/داده با حسابِ جدید
   // دوباره از سرور خوانده می‌شود (باگِ واقعی: دادهٔ حسابِ قبلی تا رفرش می‌ماند)
@@ -346,15 +542,18 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [q, status, load, user?.id]);
 
-  // سوییچِ حساب وسطِ فرمِ باز → فرم بسته شود (با حسابِ جدید معنایی ندارد)
-  useEffect(() => { setModal(null); }, [user?.id]);
+  useEffect(() => { loadDefs(); }, [loadDefs, user?.id]);
+
+  // سوییچِ حساب وسطِ فرم/شیتِ باز → بسته شود
+  useEffect(() => { setModal(null); setDefsOpen(false); }, [user?.id]);
 
   const stats = useMemo(() => {
     const rows = visits || [];
+    const todayIso = new Date().toDateString();
     return {
       total: rows.length,
       pending: rows.filter((v) => v.opStatus === 'pending').length,
-      due: rows.reduce((s, v) => s + (v.opStatus === 'cancelled' ? 0 : v.due), 0),
+      today: rows.filter((v) => v.opDate && new Date(v.opDate).toDateString() === todayIso && v.opStatus !== 'cancelled').length,
     };
   }, [visits]);
 
@@ -402,9 +601,9 @@ export default function Dashboard() {
 
         {!denied && (<>
         <div className="db-stats">
-          <div className="glass db-stat"><b>{fmtMoney(stats.total)}</b><span>مراجعه</span></div>
-          <div className="glass db-stat"><b>{fmtMoney(stats.pending)}</b><span>در انتظار عمل</span></div>
-          <div className="glass db-stat db-stat-due"><b>{fmtMoney(stats.due)}</b><span>ماندهٔ کل (تومان)</span></div>
+          <div className="glass db-stat"><b>{faNum(stats.total)}</b><span>مراجعه</span></div>
+          <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار عمل</span></div>
+          <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>عملِ امروز</span></div>
         </div>
 
         <div className="db-toolbar">
@@ -418,6 +617,9 @@ export default function Dashboard() {
               aria-label="جستجو"
             />
           </div>
+          <button type="button" className="db-ico db-defbtn" title="تعریف‌ها (جراحان/بیمارستان‌ها)" onClick={() => setDefsOpen(true)}>
+            <Gear width="17" height="17" />
+          </button>
           <button type="button" className="db-add" onClick={() => setModal({})}>
             <Plus width="17" height="17" /> مراجعهٔ جدید
           </button>
@@ -454,10 +656,16 @@ export default function Dashboard() {
       {modal && (
         <VisitForm
           initial={modal.visit}
+          defs={defs}
+          onDefsChanged={loadDefs}
           onClose={() => setModal(null)}
           onSaved={onSaved}
           onToast={setToast}
         />
+      )}
+
+      {defsOpen && (
+        <DefsSheet defs={defs} onDefsChanged={loadDefs} onClose={() => setDefsOpen(false)} onToast={setToast} />
       )}
 
       <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>

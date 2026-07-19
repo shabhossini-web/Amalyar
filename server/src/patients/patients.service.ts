@@ -17,20 +17,24 @@ function enrich(v: any) {
     fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
     phone: v.patient.phone,
     nationalId: v.patient.nationalId,
-    surgeonName: v.surgeonName,
-    hospitalName: v.hospitalName,
+    birthDate: v.patient.birthDate,
+    surgeonId: v.surgeonId,
+    hospitalId: v.hospitalId,
+    techId: v.techId,
+    // نامِ رابطه اگر بود، وگرنه denormalized (رکوردهای قدیمی/موجودیتِ حذف‌شده)
+    surgeonName: v.surgeon?.name ?? v.surgeonName,
+    hospitalName: v.hospital?.name ?? v.hospitalName,
+    techName: v.tech ? `${v.tech.firstName ?? ''} ${v.tech.lastName ?? ''}`.trim() : null,
+    opType: v.opType,
     opDate: v.opDate,
     opStatus: v.opStatus,
-    amount: v.amount, // تومان
-    paid: v.paid, // تومان
-    due: Math.max(0, v.amount - v.paid), // تومان — مانده
     notes: v.notes,
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
   };
 }
 
-const INCLUDE_PATIENT = { patient: true } as const;
+const INCLUDE_PATIENT = { patient: true, surgeon: true, hospital: true, tech: true } as const;
 
 @Injectable()
 export class PatientsService {
@@ -47,8 +51,16 @@ export class PatientsService {
         { patient: { lastName: { contains: t, mode: 'insensitive' } } },
         { patient: { code: { contains: t, mode: 'insensitive' } } },
         { patient: { phone: { contains: t } } },
+        { patient: { nationalId: { contains: t } } },
         { surgeonName: { contains: t, mode: 'insensitive' } },
         { hospitalName: { contains: t, mode: 'insensitive' } },
+        { surgeon: { name: { contains: t, mode: 'insensitive' } } },
+        { hospital: { name: { contains: t, mode: 'insensitive' } } },
+        { opType: { contains: t, mode: 'insensitive' } },
+        { tech: { OR: [
+          { firstName: { contains: t, mode: 'insensitive' } },
+          { lastName: { contains: t, mode: 'insensitive' } },
+        ] } },
       ];
     }
     const rows = await this.prisma.visit.findMany({
@@ -94,6 +106,29 @@ export class PatientsService {
     }));
   }
 
+  /// نامِ denormalizedِ جراح/بیمارستان + اعتبارسنجیِ وجودِ موجودیت‌ها
+  private async resolveRefs(tx: any, dto: { surgeonId?: number | null; hospitalId?: number | null; techId?: number | null }) {
+    const out: any = {};
+    if (dto.surgeonId != null) {
+      const s = await tx.surgeon.findUnique({ where: { id: dto.surgeonId } });
+      if (!s) throw new NotFoundException('جراح یافت نشد');
+      out.surgeonId = s.id;
+      out.surgeonName = s.name;
+    }
+    if (dto.hospitalId != null) {
+      const h = await tx.hospital.findUnique({ where: { id: dto.hospitalId } });
+      if (!h) throw new NotFoundException('بیمارستان یافت نشد');
+      out.hospitalId = h.id;
+      out.hospitalName = h.name;
+    }
+    if (dto.techId != null) {
+      const a = await tx.account.findUnique({ where: { id: dto.techId } });
+      if (!a || a.status !== 'active') throw new NotFoundException('کارشناس یافت نشد');
+      out.techId = a.id;
+    }
+    return out;
+  }
+
   /// ثبتِ مراجعه — بیمارِ موجود (patientId) یا بیمارِ جدید (کدِ AM-NNNN از id ساخته می‌شود)
   async createVisit(dto: CreateVisitDto, userId?: number) {
     const v = await this.prisma.$transaction(async (tx) => {
@@ -109,6 +144,7 @@ export class PatientsService {
             lastName: dto.lastName!,
             phone: dto.phone || null,
             nationalId: dto.nationalId || null,
+            birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
           },
         });
         await tx.patient.update({
@@ -117,16 +153,15 @@ export class PatientsService {
         });
         patientId = p.id;
       }
+      const refs = await this.resolveRefs(tx, dto);
       const seq = (await tx.visit.count({ where: { patientId } })) + 1;
       return tx.visit.create({
         data: {
           patientId,
           seq,
-          surgeonName: dto.surgeonName || null,
-          hospitalName: dto.hospitalName || null,
+          ...refs,
+          opType: dto.opType?.trim() || null,
           opDate: dto.opDate ? new Date(dto.opDate) : null,
-          amount: dto.amount ?? 0, // تومان
-          paid: dto.paid ?? 0, // تومان
           notes: dto.notes || null,
           createdById: userId ?? null,
         },
@@ -145,16 +180,18 @@ export class PatientsService {
     if (dto.lastName !== undefined) patientPatch.lastName = dto.lastName;
     if (dto.phone !== undefined) patientPatch.phone = dto.phone || null;
     if (dto.nationalId !== undefined) patientPatch.nationalId = dto.nationalId || null;
-
-    const visitPatch: any = {};
-    if (dto.surgeonName !== undefined) visitPatch.surgeonName = dto.surgeonName || null;
-    if (dto.hospitalName !== undefined) visitPatch.hospitalName = dto.hospitalName || null;
-    if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
-    if (dto.amount !== undefined) visitPatch.amount = dto.amount; // تومان
-    if (dto.paid !== undefined) visitPatch.paid = dto.paid; // تومان
-    if (dto.notes !== undefined) visitPatch.notes = dto.notes || null;
+    if (dto.birthDate !== undefined) patientPatch.birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
 
     const updated = await this.prisma.$transaction(async (tx) => {
+      const visitPatch: any = await this.resolveRefs(tx, dto);
+      // null صریح یعنی «پاک کن» (SetNull + پاک‌شدنِ نامِ denormalized)
+      if (dto.surgeonId === null) { visitPatch.surgeonId = null; visitPatch.surgeonName = null; }
+      if (dto.hospitalId === null) { visitPatch.hospitalId = null; visitPatch.hospitalName = null; }
+      if (dto.techId === null) visitPatch.techId = null;
+      if (dto.opType !== undefined) visitPatch.opType = dto.opType?.trim() || null;
+      if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
+      if (dto.notes !== undefined) visitPatch.notes = dto.notes || null;
+
       if (Object.keys(patientPatch).length) {
         await tx.patient.update({ where: { id: v.patientId }, data: patientPatch });
       }

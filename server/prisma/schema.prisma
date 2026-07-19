@@ -28,8 +28,34 @@ model Account {
 
   sessions    Session[]
   credentials WebauthnCredential[]
+  techVisits  Visit[]              @relation("VisitTech")
 
   @@map("accounts")
+}
+
+/// جراح — موجودیتِ تعریف‌شده (قرارداد/مالی بعداً در ماژولِ حسابداری اضافه می‌شود)
+model Surgeon {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visits Visit[]
+
+  @@map("surgeons")
+}
+
+/// بیمارستان — موجودیتِ تعریف‌شده
+model Hospital {
+  id        Int      @id @default(autoincrement())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visits Visit[]
+
+  @@map("hospitals")
 }
 
 /// پس‌کی/اثر انگشت (WebAuthn) — هر کاربر می‌تواند چند دستگاه ثبت کند
@@ -83,8 +109,9 @@ model Patient {
   firstName  String   @map("first_name")
   lastName   String   @map("last_name")
   phone      String?
-  nationalId String?  @map("national_id")
-  createdAt  DateTime @default(now()) @map("created_at")
+  nationalId String?   @map("national_id")
+  birthDate  DateTime? @map("birth_date")
+  createdAt  DateTime  @default(now()) @map("created_at")
 
   visits Visit[]
 
@@ -99,8 +126,16 @@ model Visit {
   patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
   patientId    Int       @map("patient_id")
   seq          Int       @default(1) // شمارهٔ مراجعهٔ بیمار → کدِ AM-0001-V2
-  surgeonName  String?   @map("surgeon_name") // فاز بعد: موجودیتِ جراح
-  hospitalName String?   @map("hospital_name") // فاز بعد: موجودیتِ بیمارستان
+  // نامِ جراح/بیمارستان denormalized می‌ماند (fallback برای رکوردهای قدیمی/حذفِ موجودیت)
+  surgeonName  String?   @map("surgeon_name")
+  hospitalName String?   @map("hospital_name")
+  surgeon      Surgeon?  @relation(fields: [surgeonId], references: [id], onDelete: SetNull)
+  surgeonId    Int?      @map("surgeon_id")
+  hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalId   Int?      @map("hospital_id")
+  tech         Account?  @relation("VisitTech", fields: [techId], references: [id], onDelete: SetNull)
+  techId       Int?      @map("tech_id") // کارشناسِ منتسب (از accounts)
+  opType       String?   @map("op_type") // نوعِ عمل
   opDate       DateTime? @map("op_date") // تاریخِ عمل
   opStatus     String    @default("pending") @map("op_status") // pending | done | cancelled
   amount       Int       @default(0) // تومان

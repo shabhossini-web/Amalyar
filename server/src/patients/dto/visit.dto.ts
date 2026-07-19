@@ -38,14 +38,25 @@ export class CreateVisitDto {
   nationalId?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(80, { message: 'نام جراح طولانی است' })
-  surgeonName?: string;
+  @IsISO8601({}, { message: 'تاریخ تولد نامعتبر است' })
+  birthDate?: string;
+
+  @IsOptional()
+  @IsInt({ message: 'جراح نامعتبر است' })
+  surgeonId?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'بیمارستان نامعتبر است' })
+  hospitalId?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'کارشناس نامعتبر است' })
+  techId?: number;
 
   @IsOptional()
   @IsString()
-  @MaxLength(80, { message: 'نام بیمارستان طولانی است' })
-  hospitalName?: string;
+  @MaxLength(120, { message: 'نوع عمل طولانی است' })
+  opType?: string;
 
   @IsOptional()
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
@@ -92,14 +103,29 @@ export class UpdateVisitDto {
   nationalId?: string;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  surgeonName?: string;
+  @ValidateIf((o) => o.birthDate !== null && o.birthDate !== '')
+  @IsISO8601({}, { message: 'تاریخ تولد نامعتبر است' })
+  birthDate?: string | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.surgeonId !== null)
+  @IsInt({ message: 'جراح نامعتبر است' })
+  surgeonId?: number | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.hospitalId !== null)
+  @IsInt({ message: 'بیمارستان نامعتبر است' })
+  hospitalId?: number | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.techId !== null)
+  @IsInt({ message: 'کارشناس نامعتبر است' })
+  techId?: number | null;
 
   @IsOptional()
   @IsString()
-  @MaxLength(80)
-  hospitalName?: string;
+  @MaxLength(120)
+  opType?: string;
 
   @IsOptional()
   @ValidateIf((o) => o.opDate !== null && o.opDate !== '')

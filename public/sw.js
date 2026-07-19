@@ -3,7 +3,7 @@
  * - داراییِ هم‌مبدأ (assets/آیکون/فونت): cache-first (نامِ فایل‌ها هش‌دارند)
  * - API هرگز کش نمی‌شود (مبدأ جدا: api.amalyar.com)
  */
-const CACHE = 'amalyar-shell-v6';
+const CACHE = 'amalyar-shell-v7';
 const STATIC = ['/icon-192.png', '/icon-512.png', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
