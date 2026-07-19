@@ -66,6 +66,48 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  // سشنِ فعال وسطِ کار مُرد (۴۰۱ سراسری از api.js) → حسابِ مرده حذف،
+  // پرش به حسابِ زندهٔ بعدی وگرنه خروج به /login — به‌جای گیرکردنِ اپ
+  useEffect(() => {
+    let recovering = false;
+    const onUnauthorized = async () => {
+      if (recovering) return;
+      recovering = true;
+      try {
+        const deadTok = getToken();
+        try {
+          await api('/auth/me'); // شاید گذرا بود (ری‌استارتِ سرور)
+          return;
+        } catch (e) {
+          if (e?.status !== 401) return; // خطای شبکه → دست نزن
+        }
+        const accs = getAccounts();
+        const dead = accs.find((a) => a.token === deadTok);
+        if (dead) removeAccount(dead.user.id);
+        for (const a of getAccounts()) {
+          try {
+            const me = await api('/auth/me', { token: a.token });
+            setToken(a.token, true);
+            setUser(me);
+            updateAccountUser(me.id, me);
+            bump();
+            return;
+          } catch (e) {
+            if (e?.status === 401 || e?.status === 403) removeAccount(a.user.id);
+            else return; // شبکه قطع → بعداً
+          }
+        }
+        setToken(null);
+        setUser(null);
+        bump();
+      } finally {
+        recovering = false;
+      }
+    };
+    window.addEventListener('amalyar:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('amalyar:unauthorized', onUnauthorized);
+  }, []);
+
   const adopt = (accessToken, u, remember) => {
     setToken(accessToken, remember);
     if (remember) upsertAccount(accessToken, u); // فقط ورودهای ماندگار در لیستِ چندحسابی
@@ -124,29 +166,26 @@ export function AuthProvider({ children }) {
     return r; // { pending, bootstrap?, user, accessToken? }
   }, []);
 
-  /** سوییچ به حسابِ دیگری از لیست؛ اگر سشنش مرده بود از لیست حذف می‌شود */
+  /** سوییچ به حسابِ دیگری از لیست؛ اگر سشنش مرده بود از لیست حذف می‌شود.
+   * ⚠️ اول با توکنِ صریح اعتبارسنجی، بعد فعال‌سازی — تا اگر مقصد مرده بود،
+   * توکنِ فعالِ صفحه هرگز عوض نشود و درخواست‌های موازی ۴۰۱ نگیرند. */
   const switchAccount = useCallback(async (id) => {
     const acc = getAccounts().find((a) => a.user.id === id);
     if (!acc) throw new Error('حساب یافت نشد');
-    setToken(acc.token, true);
     try {
-      const me = await api('/auth/me');
+      const me = await api('/auth/me', { token: acc.token });
+      setToken(acc.token, true);
       setUser(me);
       updateAccountUser(id, me);
       bump();
       return me;
     } catch (e) {
-      removeAccount(id);
-      bump();
-      // برگشت به حسابِ قبلی اگر هنوز زنده است
-      const prev = getAccounts()[0];
-      if (prev) {
-        setToken(prev.token, true);
-      } else {
-        setToken(null);
-        setUser(null);
+      if (e?.status === 401 || e?.status === 403) {
+        removeAccount(id);
+        bump();
+        throw new Error('نشستِ این حساب منقضی شده؛ دوباره وارد شوید');
       }
-      throw new Error(e?.status === 401 ? 'نشستِ این حساب منقضی شده؛ دوباره وارد شوید' : e.message);
+      throw e; // خطای شبکه → حساب حذف نشود
     }
   }, []);
 

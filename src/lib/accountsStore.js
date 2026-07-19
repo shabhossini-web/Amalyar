@@ -21,7 +21,18 @@ export const getAccounts = () => {
   }
 };
 
-const save = (list) => localStorage.setItem(KEY, JSON.stringify(list));
+const save = (list) => {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(list));
+  } catch {
+    // Quota پر (سلفی‌های بزرگ) → بدونِ سلفی ذخیره کن تا اپ کرش نکند
+    try {
+      localStorage.setItem(KEY, JSON.stringify(list.map((a) => ({ ...a, user: { ...a.user, selfie: null } }))));
+    } catch {
+      /* — */
+    }
+  }
+};
 
 /** افزودن/به‌روزرسانیِ حساب؛ حسابِ جدید اولِ لیست (فعال) می‌نشیند */
 export const upsertAccount = (token, user) => {

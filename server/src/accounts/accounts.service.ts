@@ -41,12 +41,24 @@ export class AccountsService {
     return this.auth.publicUser(updated);
   }
 
-  async setLevel(id: number, level: number) {
+  async setLevel(id: number, level: number, actorId?: number) {
     if (level < LEVEL.VIEWER || level > LEVEL.SUPER_ADMIN) {
       throw new BadRequestException('سطح نامعتبر است');
     }
+    if (actorId !== undefined && actorId === id) {
+      throw new BadRequestException('نمی‌توانید سطحِ حسابِ خودتان را تغییر دهید');
+    }
     const acc = await this.prisma.account.findUnique({ where: { id } });
     if (!acc) throw new NotFoundException('حساب یافت نشد');
+    // سیستم هرگز نباید بدونِ سوپرادمینِ فعال بماند
+    if (acc.level === LEVEL.SUPER_ADMIN && level < LEVEL.SUPER_ADMIN && acc.status === 'active') {
+      const others = await this.prisma.account.count({
+        where: { level: LEVEL.SUPER_ADMIN, status: 'active', id: { not: id } },
+      });
+      if (others === 0) {
+        throw new BadRequestException('این آخرین سوپرادمینِ فعال است؛ ابتدا سوپرادمینِ دیگری تعیین کنید');
+      }
+    }
     const updated = await this.prisma.account.update({ where: { id }, data: { level } });
     return this.auth.publicUser(updated);
   }

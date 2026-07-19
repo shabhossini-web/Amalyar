@@ -46,6 +46,10 @@ export async function api(path, { method = 'GET', body, auth = true, token } = {
   }
 
   if (!res.ok) {
+    // سشنِ فعال وسطِ کار مُرد (revoke/انقضا) → رویدادِ سراسری تا AuthProvider بازیابی کند
+    if (res.status === 401 && auth && !token && tok) {
+      window.dispatchEvent(new CustomEvent('amalyar:unauthorized'));
+    }
     const m = data && typeof data === 'object' ? data.message : null;
     const msg = Array.isArray(m) ? m.join('، ') : m || `خطای سرور (${res.status})`;
     throw new ApiError(msg, res.status);

@@ -39,7 +39,11 @@ export class AccountsController {
   }
 
   @Post(':id/level')
-  setLevel(@Param('id', ParseIntPipe) id: number, @Body() dto: ApproveDto) {
-    return this.accounts.setLevel(id, dto.level);
+  setLevel(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ApproveDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.accounts.setLevel(id, dto.level, user?.id);
   }
 }
