@@ -134,7 +134,7 @@ export class AuthService {
     return this.issue(account, meta);
   }
 
-  private async issue(account: Account, meta: { ua?: string; ip?: string }) {
+  async issue(account: Account, meta: { ua?: string; ip?: string }) {
     const active = await this.prisma.session.findMany({
       where: { accountId: account.id, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'asc' },

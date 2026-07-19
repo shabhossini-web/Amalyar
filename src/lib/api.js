@@ -2,8 +2,13 @@
 const BASE = (import.meta.env.VITE_API_BASE || 'https://api.amalyar.com/api').replace(/\/$/, '');
 const TOKEN_KEY = 'amalyar_token';
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
+// «مرا به خاطر بسپار»: تیک‌خورده → localStorage (ماندگار)؛ بدونِ تیک → sessionStorage (تا بستنِ مرورگر)
+export const getToken = () => sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
+export const setToken = (t, remember = true) => {
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  if (t) (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t);
+};
 
 export class ApiError extends Error {
   constructor(message, status) {

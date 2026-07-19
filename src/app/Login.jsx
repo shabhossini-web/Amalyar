@@ -3,6 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
 import OtpInput from './OtpInput.jsx';
+import PasswordInput from './PasswordInput.jsx';
+
+const Finger = (p) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
+    <path d="M14 13.12c0 2.38 0 6.38-1 8.88" />
+    <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02" />
+    <path d="M2 12a10 10 0 0 1 18-6" />
+    <path d="M2 16h.01" />
+    <path d="M21.8 16c.2-2 .131-5.354 0-6" />
+    <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2" />
+    <path d="M8.65 22c.21-.66.45-1.32.57-2" />
+    <path d="M9 6.8a6 6 0 0 1 9 5.2v2" />
+  </svg>
+);
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import './login.css';
@@ -11,7 +26,7 @@ const toEnDigits = (s) =>
   (s || '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 
 export default function Login() {
-  const { user, loading, login, requestOtp, verifyOtp, completeSignup } = useAuth();
+  const { user, loading, login, requestOtp, verifyOtp, completeSignup, webauthnLogin } = useAuth();
   const navigate = useNavigate();
 
   const [tab, setTab] = useState('login'); // login | signup
@@ -22,6 +37,8 @@ export default function Login() {
   // login
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(true);
+  const canBio = typeof window !== 'undefined' && 'PublicKeyCredential' in window;
 
   // signup
   const [step, setStep] = useState('phone'); // phone | code | form | done
@@ -82,10 +99,26 @@ export default function Login() {
     setErr('');
     setBusy(true);
     try {
-      await login(identifier.trim(), password);
+      await login(identifier.trim(), password, remember);
       navigate('/app', { replace: true });
     } catch (e2) {
       setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doBioLogin = async () => {
+    setErr('');
+    setBusy(true);
+    try {
+      await webauthnLogin();
+      navigate('/app', { replace: true });
+    } catch (e2) {
+      // لغو توسط کاربر خطا نشان ندهد
+      if (e2?.name !== 'NotAllowedError' && e2?.name !== 'AbortError') {
+        setErr(e2.message || 'ورود با اثر انگشت ناموفق بود');
+      }
     } finally {
       setBusy(false);
     }
@@ -216,9 +249,23 @@ export default function Login() {
               <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="username یا 09..." autoComplete="username" required />)}
             {field('رمز عبور',
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="رمز عبور" autoComplete="current-password" required />)}
+            <label className="lg-remember">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              <span className="lg-check" aria-hidden="true" />
+              مرا به خاطر بسپار
+            </label>
             <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'ورود'}</button>
+            {canBio && (
+              <>
+                <div className="lg-divider"><span>یا</span></div>
+                <button type="button" className="lg-bio" onClick={doBioLogin} disabled={busy}>
+                  <Finger width="21" height="21" />
+                  ورود با اثر انگشت
+                </button>
+              </>
+            )}
           </form>
         )}
 
@@ -261,7 +308,7 @@ export default function Login() {
               <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                 placeholder="لاتین/عدد" autoComplete="username" required />)}
             {field('رمز عبور',
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+              <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="حداقل ۶ کاراکتر" autoComplete="new-password" required />)}
             <div className="lg-field">
               <span>عکس سلفی</span>

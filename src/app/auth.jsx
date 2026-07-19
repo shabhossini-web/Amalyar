@@ -28,11 +28,30 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const login = useCallback(async (identifier, password) => {
+  const login = useCallback(async (identifier, password, remember = true) => {
     const r = await api('/auth/login', { method: 'POST', body: { identifier, password }, auth: false });
-    setToken(r.accessToken);
+    setToken(r.accessToken, remember);
     setUser(r.user);
     return r.user;
+  }, []);
+
+  // ورود با اثر انگشت (WebAuthn، بدونِ نام کاربری)
+  const webauthnLogin = useCallback(async () => {
+    const { startAuthentication } = await import('@simplewebauthn/browser');
+    const { options, challengeToken } = await api('/auth/webauthn/login/options', { method: 'POST', auth: false });
+    const response = await startAuthentication({ optionsJSON: options });
+    const r = await api('/auth/webauthn/login/verify', { method: 'POST', body: { response, challengeToken }, auth: false });
+    setToken(r.accessToken, true);
+    setUser(r.user);
+    return r.user;
+  }, []);
+
+  // ثبتِ اثر انگشت برای حسابِ جاری
+  const webauthnRegister = useCallback(async () => {
+    const { startRegistration } = await import('@simplewebauthn/browser');
+    const { options, challengeToken } = await api('/auth/webauthn/register/options', { method: 'POST' });
+    const response = await startRegistration({ optionsJSON: options });
+    return api('/auth/webauthn/register/verify', { method: 'POST', body: { response, challengeToken } });
   }, []);
 
   // مرحلهٔ ۱ ثبت‌نام — ارسالِ کدِ یکبارمصرف به موبایل
@@ -69,7 +88,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, login, requestOtp, verifyOtp, completeSignup, logout, setUser }}>
+    <AuthCtx.Provider value={{ user, loading, login, requestOtp, verifyOtp, completeSignup, webauthnLogin, webauthnRegister, logout, setUser }}>
       {children}
     </AuthCtx.Provider>
   );

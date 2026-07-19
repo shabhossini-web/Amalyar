@@ -158,6 +158,13 @@
   background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.28); border-radius: 50%;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: background .2s, border-color .2s, transform .15s;
 }
+.lx-bio {
+  width: 38px; height: 38px; flex: 0 0 auto; display: grid; place-items: center; cursor: pointer; color: #7ef0ff;
+  background: rgba(0, 229, 255, 0.07); border: 1px solid rgba(0, 229, 255, 0.28); border-radius: 50%;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); transition: background .2s, border-color .2s, transform .15s;
+}
+.lx-bio:hover { background: rgba(0, 229, 255, 0.15); border-color: rgba(0, 229, 255, 0.5); transform: translateY(-1px); }
+.lx-bio:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .lx-logout:hover { background: rgba(239, 68, 68, 0.16); border-color: rgba(239, 68, 68, 0.5); transform: translateY(-1px); }
 .lx-logout:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
