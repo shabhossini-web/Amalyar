@@ -86,11 +86,26 @@ export class WebauthnService {
     return { ok: true };
   }
 
-  // ── ورود با اثر انگشت (بدونِ نام کاربری — discoverable) ─────
-  async loginOptions() {
+  // ── ورود با اثر انگشت ────────────────────────────────────────
+  // اگر کلاینت credIdهای این دستگاه را بفرستد، allowCredentials پر می‌شود
+  // → مرورگر بدونِ پنجرهٔ «انتخابِ پس‌کی» مستقیم اثر انگشت می‌خواهد.
+  async loginOptions(credIds?: string[]) {
+    let allowCredentials: { id: string; transports?: any }[] | undefined;
+    if (credIds?.length) {
+      const creds = await this.prisma.webauthnCredential.findMany({
+        where: { credId: { in: credIds.slice(0, 20) } },
+      });
+      if (creds.length) {
+        allowCredentials = creds.map((c) => ({
+          id: c.credId,
+          transports: c.transports ? JSON.parse(c.transports) : undefined,
+        }));
+      }
+    }
     const options = await generateAuthenticationOptions({
       rpID: this.rpID,
       userVerification: 'preferred',
+      allowCredentials,
     });
     const challengeToken = await this.jwt.signAsync(
       { purpose: 'webauthn-auth', challenge: options.challenge },

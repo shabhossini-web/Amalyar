@@ -3,6 +3,24 @@ import { api, getToken, setToken } from '../lib/api.js';
 
 const AuthCtx = createContext(null);
 
+// شناسهٔ پس‌کی‌های ثبت‌شده روی همین دستگاه — تا موقعِ ورود allowCredentials پر شود
+// و مرورگر بدونِ پنجرهٔ «انتخابِ پس‌کی» مستقیم اثر انگشت بخواهد.
+const CRED_KEY = 'amalyar_cred_ids';
+const getCredIds = () => {
+  try {
+    const v = JSON.parse(localStorage.getItem(CRED_KEY) || '[]');
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
+const addCredId = (id) => {
+  if (!id) return;
+  const s = new Set(getCredIds());
+  s.add(id);
+  localStorage.setItem(CRED_KEY, JSON.stringify([...s]));
+};
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,12 +53,17 @@ export function AuthProvider({ children }) {
     return r.user;
   }, []);
 
-  // ورود با اثر انگشت (WebAuthn، بدونِ نام کاربری)
+  // ورود با اثر انگشت (WebAuthn)
   const webauthnLogin = useCallback(async () => {
     const { startAuthentication } = await import('@simplewebauthn/browser');
-    const { options, challengeToken } = await api('/auth/webauthn/login/options', { method: 'POST', auth: false });
+    const { options, challengeToken } = await api('/auth/webauthn/login/options', {
+      method: 'POST',
+      body: { credIds: getCredIds() },
+      auth: false,
+    });
     const response = await startAuthentication({ optionsJSON: options });
     const r = await api('/auth/webauthn/login/verify', { method: 'POST', body: { response, challengeToken }, auth: false });
+    addCredId(response?.id);
     setToken(r.accessToken, true);
     setUser(r.user);
     return r.user;
@@ -51,7 +74,9 @@ export function AuthProvider({ children }) {
     const { startRegistration } = await import('@simplewebauthn/browser');
     const { options, challengeToken } = await api('/auth/webauthn/register/options', { method: 'POST' });
     const response = await startRegistration({ optionsJSON: options });
-    return api('/auth/webauthn/register/verify', { method: 'POST', body: { response, challengeToken } });
+    const r = await api('/auth/webauthn/register/verify', { method: 'POST', body: { response, challengeToken } });
+    addCredId(response?.id);
+    return r;
   }, []);
 
   // مرحلهٔ ۱ ثبت‌نام — ارسالِ کدِ یکبارمصرف به موبایل

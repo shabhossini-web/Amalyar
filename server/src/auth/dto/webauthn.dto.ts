@@ -1,4 +1,11 @@
-import { IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+
+export class WebauthnLoginOptionsDto {
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  credIds?: string[];
+}
 
 export class WebauthnVerifyDto {
   @IsObject()

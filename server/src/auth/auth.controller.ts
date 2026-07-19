@@ -3,7 +3,7 @@ import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { WebauthnService } from './webauthn.service';
 import { LoginDto } from './dto/login.dto';
-import { WebauthnVerifyDto } from './dto/webauthn.dto';
+import { WebauthnLoginOptionsDto, WebauthnVerifyDto } from './dto/webauthn.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
@@ -74,8 +74,8 @@ export class AuthController {
   }
 
   @Post('webauthn/login/options')
-  webauthnLoginOptions() {
-    return this.webauthn.loginOptions();
+  webauthnLoginOptions(@Body() dto: WebauthnLoginOptionsDto) {
+    return this.webauthn.loginOptions(dto.credIds);
   }
 
   @Post('webauthn/login/verify')
