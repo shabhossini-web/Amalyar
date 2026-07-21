@@ -7,11 +7,13 @@ import { AccountsModule } from './accounts/accounts.module';
 import { FeaturesModule } from './features/features.module';
 import { PatientsModule } from './patients/patients.module';
 import { AppController } from './app.controller';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    AuditModule,
     SmsModule,
     AuthModule,
     AccountsModule,
