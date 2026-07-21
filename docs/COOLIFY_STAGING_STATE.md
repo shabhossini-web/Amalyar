@@ -81,7 +81,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Undelivered OTP rows are removed so the resend window does not block the user.
 - Phone number, OTP, message text, raw provider response, raw exception, and API-key URL are not logged.
 - Backend code head: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
-- GitHub Actions `security-ci` run 107: in progress when recorded
+- GitHub Actions `security-ci` run 107: completed successfully
 - Coolify deployment after this change: pending final verification
 
 ## Provisioned tenants
@@ -117,6 +117,6 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 ## Next step
 
 1. Alpha SMS smoke test passed end-to-end: HTTP 201, delivery confirmed, and no OTP/phone exposure in logs.
-2. SMS production fallback is now fail-closed; verify CI run 107 and the final Coolify deployment.
+2. SMS production fallback is fail-closed and CI run 107 passed; verify the final Coolify deployment.
 3. Create separate superadmin accounts in Alpha and Beta.
 4. Perform cross-tenant token and patient-isolation tests.
