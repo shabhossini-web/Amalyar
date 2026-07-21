@@ -19,7 +19,7 @@
 - Working branch: `agent/security-permissions-hardening`
 - Draft PR: https://github.com/shabhossini-web/Amalyar/pull/1
 - وضعیت هنگام تحویل: 59 commit جلوتر از main و 0 commit عقب‌تر
-- آخرین commit کد بک‌اند که CI و Coolify روی آن موفق شد: `3746f25a60a0d414b634e984af15a0fb48c29531`
+- آخرین commit کد بک‌اند که CI و Coolify روی آن موفق شد: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
 - commitهای بعدی ممکن است فقط مستندات باشند؛ وضعیت deploy را از Coolify کنترل کن.
 - main هنوز merge نشده و نباید تا پایان تست staging و rehearsal مهاجرت merge شود.
 
@@ -81,7 +81,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 
 اصلاح مهم: کد از `CORS_ORIGINS` استفاده می‌کند؛ `ALLOWED_ORIGINS` اشتباه است.
 
-در 2026-07-21 متغیرهای `MELI_API_KEY` و `MELI_FROM` از Application فعلی عمل‌یار به staging منتقل و تنظیماتشان تأیید شد. مقدارها محرمانه‌اند و در Git ثبت نشده‌اند. redeploy پس از این تغییر Running و پایدار تأیید شد؛ ارسال واقعی SMS و نبودن OTP در log هنوز باید بررسی شود.
+در 2026-07-21 متغیرهای `MELI_API_KEY` و `MELI_FROM` از Application فعلی عمل‌یار به staging منتقل و تنظیماتشان تأیید شد. مقدارها محرمانه‌اند و در Git ثبت نشده‌اند. redeploy، ارسال واقعی SMS و نبودن OTP/شماره در log همگی تأیید شدند.
 
 ## تست SMS در staging
 
@@ -104,7 +104,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - `.github/workflows/security-ci.yml`: تست خودکار نبود credential در production باید `503` را تأیید کند.
 - commitهای کد: `b8c4b5408537543bd41b345c81f97efa030e85f9` و `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
 - CI run `107`: موفق (`success`)
-- وضعیت Coolify پس از این تغییر: در انتظار تأیید deployment نهایی
+- وضعیت Coolify پس از این تغییر: Running سبز و پایدار؛ تأیید مالک پروژه در 2026-07-22
 
 ## معماری Database-per-Tenant
 
@@ -261,7 +261,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 ## کارهای مهم باقی‌مانده
 
 1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
-2. مسیر fallback پیامک fail-closed شد و CI run 107 سبز است؛ پایداری deployment نهایی Coolify را تأیید کن.
+2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
 3. ساخت superadmin جدا در Alpha و Beta.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
 5. deploy/config frontend tenant-aware.
@@ -285,7 +285,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 3. production یا main را بدون اجازه تغییر نده.
 4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
-6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح و CI سبز شد؛ deployment نهایی را تأیید کن.
+6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
 7. حساب‌های Alpha/Beta را بساز.
 8. تست cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
 9. backup و restore را قبل از production تست کن.
