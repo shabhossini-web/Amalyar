@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
+import { allowedOrigins } from './common/security';
 
 async function bootstrap() {
   // bodyParser را خودمان با سقفِ بالاتر می‌گذاریم (سلفیِ dataURL بزرگ است)
@@ -11,8 +12,21 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  const origins = (process.env.CORS_ORIGINS || '*').split(',').map((s) => s.trim());
-  app.enableCors({ origin: origins.includes('*') ? true : origins, credentials: true });
+  const origins = allowedOrigins();
+  app.enableCors({ origin: origins, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] });
+
+  // Security headers without adding runtime dependencies.
+  app.use((_req: any, res: any, next: any) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    if (process.env.NODE_ENV === 'production') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+  });
 
   const port = parseInt(process.env.PORT || '3001', 10);
   await app.listen(port, '0.0.0.0');
