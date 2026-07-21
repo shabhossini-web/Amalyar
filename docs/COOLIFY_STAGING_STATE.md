@@ -71,7 +71,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - API result: HTTP `201`, body `{"ok":true,"ttl":300}`
 - Phone number and OTP are intentionally not recorded.
 - Mobile delivery confirmation: successful and confirmed by the project owner
-- Application-log OTP exposure check: pending
+- Application-log exposure check (2026-07-22): passed; no `STUB`, phone number, OTP, or verification-code text was observed
 
 ## Provisioned tenants
 
@@ -105,7 +105,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 ## Next step
 
-1. The Alpha SMS request returned HTTP 201 and delivery was confirmed; verify that no OTP or phone number appears in application logs.
-2. Make the production SMS fallback fail closed when credentials are absent.
+1. Alpha SMS smoke test passed end-to-end: HTTP 201, delivery confirmed, and no OTP/phone exposure in logs.
+2. Make the production SMS fallback fail closed when credentials are absent or delivery fails.
 3. Create separate superadmin accounts in Alpha and Beta.
 4. Perform cross-tenant token and patient-isolation tests.
