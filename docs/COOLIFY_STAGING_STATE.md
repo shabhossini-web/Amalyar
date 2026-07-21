@@ -63,6 +63,16 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 `MELI_API_KEY` and `MELI_FROM` were copied securely from the existing Amalyar application to staging on 2026-07-21. The post-change redeploy is running and stable; a real SMS smoke test still needs verification.
 
+## SMS smoke test
+
+- Date: `2026-07-21`
+- Tenant: `alpha-staging`
+- Request: `POST /api/auth/signup/request-otp`
+- API result: HTTP `201`, body `{"ok":true,"ttl":300}`
+- Phone number and OTP are intentionally not recorded.
+- Mobile delivery confirmation: pending
+- Application-log OTP exposure check: pending
+
 ## Provisioned tenants
 
 ### Alpha
@@ -95,7 +105,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 ## Next step
 
-1. Run one real SMS smoke test and verify that no OTP value appears in application logs.
+1. The Alpha SMS request was accepted with HTTP 201; confirm mobile delivery and verify that no OTP value appears in application logs.
 2. Make the production SMS fallback fail closed when credentials are absent.
 3. Create separate superadmin accounts in Alpha and Beta.
 4. Perform cross-tenant token and patient-isolation tests.
