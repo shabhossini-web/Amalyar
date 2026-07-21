@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 
 /**
  * سرویسِ پیامک — ملی‌پیامک (همان روشِ ملک‌طب: endpointِ advanced).
- * تا وقتی MELI_API_KEY و MELI_FROM تنظیم نشده‌اند، پیامک واقعی ارسال نمی‌شود
- * و کد فقط در لاگ می‌آید (و در پاسخِ API به‌صورت devCode برمی‌گردد تا تست ممکن باشد).
+ * در production نبودن تنظیمات یا شکست provider به‌صورت fail-closed با HTTP 503
+ * برگردانده می‌شود. شماره، متن پیام، OTP، پاسخ خام provider و API key هرگز log نمی‌شوند.
+ * در test/development، نبودن credential فقط stub امن بدون محتوای پیام است.
  *
  * برای فعال‌سازی (env در Coolify):
  *   MELI_API_KEY = <همان apiKey ملی‌پیامکِ ملک‌طب>
@@ -41,29 +42,43 @@ export class SmsService {
     const from = process.env.MELI_FROM;
     const to = this.normalize(phone);
     if (!to) {
-      this.log.warn(`شمارهٔ نامعتبر: ${phone}`);
+      this.log.warn('درخواست پیامک با شمارهٔ نامعتبر رد شد');
       return { sent: false, stub: false };
     }
     if (!apiKey || !from) {
-      this.log.warn(`[STUB] پیامک به ${to}: ${text}`);
+      if (process.env.NODE_ENV === 'production') {
+        this.log.error('تنظیمات سرویس پیامک در production ناقص است');
+        throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
+      }
+      this.log.warn('[STUB] سرویس پیامک پیکربندی نشده است؛ پیام واقعی ارسال نشد');
       return { sent: false, stub: true };
     }
 
     const finalText = opts.skipLagho ? text : this.appendLagho(text);
     const body = JSON.stringify({ from, to: [to], text: finalText, udh: '' });
+    let res: Awaited<ReturnType<typeof fetch>>;
     try {
-      const res = await fetch(
+      res = await fetch(
         `https://console.melipayamak.com/api/send/advanced/${encodeURIComponent(apiKey)}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
       );
-      const data: any = await res.json().catch(() => null);
-      const recIds = data?.recIds;
-      const ok = Array.isArray(recIds) && Number(recIds[0]) > 0;
-      if (!ok) this.log.warn(`ملی‌پیامک ناموفق: ${JSON.stringify(data)?.slice(0, 160)}`);
-      return { sent: ok, stub: false };
-    } catch (e) {
-      this.log.error(`ملی‌پیامک خطا: ${e}`);
+    } catch {
+      this.log.error('ارتباط با سرویس ملی‌پیامک برقرار نشد');
+      if (process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
+      }
       return { sent: false, stub: false };
     }
+
+    const data: any = await res.json().catch(() => null);
+    const recIds = data?.recIds;
+    const ok = res.ok && Array.isArray(recIds) && Number(recIds[0]) > 0;
+    if (!ok) {
+      this.log.warn(`ارسال ملی‌پیامک پذیرفته نشد (HTTP ${res.status})`);
+      if (process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
+      }
+    }
+    return { sent: ok, stub: false };
   }
 }
