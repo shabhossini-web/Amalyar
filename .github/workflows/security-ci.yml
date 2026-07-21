@@ -26,14 +26,22 @@ jobs:
       - name: Backend install
         working-directory: server
         run: npm ci
-      - name: Prisma validate
+      - name: Validate tenant schema
         working-directory: server
         env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-        run: npx prisma validate
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant_ci
+        run: npx prisma validate --schema prisma/schema.prisma
+      - name: Validate control schema
+        working-directory: server
+        env:
+          CONTROL_DATABASE_URL: postgresql://ci:ci@localhost:5432/control_ci
+        run: npx prisma validate --schema prisma/control/schema.prisma
       - name: Backend build
         working-directory: server
         env:
           NODE_ENV: test
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant_ci
+          CONTROL_DATABASE_URL: postgresql://ci:ci@localhost:5432/control_ci
+          TENANT_DATABASE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
         run: npm run build
