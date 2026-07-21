@@ -24,8 +24,7 @@
 - Exposed port: `3001`
 - Watch Paths: `server/**` (saved and confirmed)
 - Healthcheck: `GET http://localhost:3001/api/health`
-- Last verified state before the SMS variable change: running and stable
-- Post-change redeploy state: pending health/log verification
+- Post-SMS-variable redeploy state (confirmed 2026-07-21): running and stable
 - Verified public health URL: `https://api-staging.amalyar.com/api/health`
 
 ### PostgreSQL resource
@@ -62,7 +61,7 @@ Secret settings confirmed for `MELI_API_KEY` and `MELI_FROM`: Buildtime off, Run
 
 Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not used.
 
-`MELI_API_KEY` and `MELI_FROM` were copied securely from the existing Amalyar application to staging on 2026-07-21. A post-change redeploy and real SMS smoke test still need verification.
+`MELI_API_KEY` and `MELI_FROM` were copied securely from the existing Amalyar application to staging on 2026-07-21. The post-change redeploy is running and stable; a real SMS smoke test still needs verification.
 
 ## Provisioned tenants
 
@@ -96,8 +95,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 ## Next step
 
-1. Redeploy without force rebuild, then verify stable logs and `https://api-staging.amalyar.com/api/health`.
-2. Run one real SMS smoke test and verify that no OTP value appears in application logs.
-3. Make the production SMS fallback fail closed when credentials are absent.
-4. Create separate superadmin accounts in Alpha and Beta.
-5. Perform cross-tenant token and patient-isolation tests.
+1. Run one real SMS smoke test and verify that no OTP value appears in application logs.
+2. Make the production SMS fallback fail closed when credentials are absent.
+3. Create separate superadmin accounts in Alpha and Beta.
+4. Perform cross-tenant token and patient-isolation tests.
