@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
+import { randomUUID } from 'crypto';
+import { LEVEL } from '../common/levels';
 
 /**
  * غنی‌سازیِ مراجعه — قانونِ computeVisit: فیلدهای مشتق فقط این‌جا ساخته می‌شوند
@@ -40,8 +42,19 @@ const INCLUDE_PATIENT = { patient: true, surgeon: true, hospital: true, tech: tr
 export class PatientsService {
   constructor(private prisma: PrismaService) {}
 
+  private scopedVisitWhere(user: any, where: any = {}) {
+    if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return { ...where };
+    return { ...where, techId: user?.id ?? -1 };
+  }
+
+  private async assertVisitAccess(id: number, user: any) {
+    const v = await this.prisma.visit.findFirst({ where: this.scopedVisitWhere(user, { id }) });
+    if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    return v;
+  }
+
   /// لیستِ مراجعات — q روی نام/کد/موبایل/جراح/بیمارستان، status روی opStatus
-  async listVisits(q?: string, status?: string) {
+  async listVisits(q?: string, status?: string, user?: any) {
     const where: any = {};
     if (status && status !== 'all') where.opStatus = status;
     if (q?.trim()) {
@@ -64,7 +77,7 @@ export class PatientsService {
       ];
     }
     const rows = await this.prisma.visit.findMany({
-      where,
+      where: this.scopedVisitWhere(user, { ...where, patient: { ...(where.patient ?? {}), deletedAt: null } }),
       include: INCLUDE_PATIENT,
       orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
       take: 500,
@@ -72,14 +85,15 @@ export class PatientsService {
     return rows.map(enrich);
   }
 
-  async getVisit(id: number) {
+  async getVisit(id: number, user?: any) {
+    await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     return enrich(v);
   }
 
   /// جستجوی بیمارِ موجود (برای فرمِ «مراجعهٔ مجدد»)
-  async searchPatients(q?: string) {
+  async searchPatients(q?: string, user?: any) {
     const t = q?.trim();
     const where: any = t
       ? {
@@ -92,7 +106,11 @@ export class PatientsService {
         }
       : {};
     const rows = await this.prisma.patient.findMany({
-      where,
+      where: {
+        ...where,
+        deletedAt: null,
+        ...((user?.level ?? 0) < LEVEL.SUPERVISOR ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+      },
       orderBy: { id: 'desc' },
       take: 20,
       include: { _count: { select: { visits: true } } },
@@ -139,7 +157,7 @@ export class PatientsService {
       } else {
         const p = await tx.patient.create({
           data: {
-            code: 'AM-TMP',
+            code: `AM-PENDING-${randomUUID()}`,
             firstName: dto.firstName!,
             lastName: dto.lastName!,
             phone: dto.phone || null,
@@ -154,7 +172,8 @@ export class PatientsService {
         patientId = p.id;
       }
       const refs = await this.resolveRefs(tx, dto);
-      const seq = (await tx.visit.count({ where: { patientId } })) + 1;
+      const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
+      const seq = (max._max.seq ?? 0) + 1;
       return tx.visit.create({
         data: {
           patientId,
@@ -171,7 +190,8 @@ export class PatientsService {
     return enrich(v);
   }
 
-  async updateVisit(id: number, dto: UpdateVisitDto) {
+  async updateVisit(id: number, dto: UpdateVisitDto, user?: any) {
+    await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
 
@@ -200,7 +220,8 @@ export class PatientsService {
     return enrich(updated);
   }
 
-  async setStatus(id: number, opStatus: string) {
+  async setStatus(id: number, opStatus: string, user?: any) {
+    await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id } });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     const updated = await this.prisma.visit.update({
@@ -212,13 +233,19 @@ export class PatientsService {
   }
 
   /// حذفِ مراجعه؛ اگر آخرین مراجعهٔ بیمار بود، خودِ بیمار هم پاک می‌شود
-  async deleteVisit(id: number) {
+  async deleteVisit(id: number, user?: any) {
+    await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id } });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     await this.prisma.$transaction(async (tx) => {
       await tx.visit.delete({ where: { id } });
       const left = await tx.visit.count({ where: { patientId: v.patientId } });
-      if (left === 0) await tx.patient.delete({ where: { id: v.patientId } });
+      if (left === 0) {
+        await tx.patient.update({
+          where: { id: v.patientId },
+          data: { deletedAt: new Date(), deletedById: user?.id ?? null, deleteReason: 'آخرین مراجعه حذف شد' },
+        });
+      }
     });
     return { ok: true };
   }
