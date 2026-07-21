@@ -92,35 +92,39 @@ export class AuthService {
     }
     const phone: string = payload.phone;
 
-    if (await this.prisma.account.findUnique({ where: { username: dto.username } })) {
-      throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
-    }
-    if (await this.prisma.account.findUnique({ where: { phone } })) {
-      throw new BadRequestException('این شماره قبلاً ثبت شده است');
-    }
-
-    // بوت‌استرپ: اگر هیچ سوپرادمینِ فعالی نیست، این حساب سوپرادمینِ فعال می‌شود
-    const noSuperAdmin =
-      (await this.prisma.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
-
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    const account = await this.prisma.account.create({
-      data: {
-        firstName: dto.firstName.trim(),
-        lastName: dto.lastName.trim(),
-        username: dto.username.trim(),
-        phone,
-        passwordHash,
-        selfie: dto.selfie,
-        level: noSuperAdmin ? LEVEL.SUPER_ADMIN : LEVEL.VIEWER,
-        status: noSuperAdmin ? 'active' : 'pending',
-      },
+    const result = await this.prisma.$transaction(async (tx) => {
+      // یک قفل سراسری کوتاه، ثبت‌نام هم‌زمان را از ساخت دو سوپرادمین بازمی‌دارد.
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(73190521)');
+
+      if (await tx.account.findUnique({ where: { username: dto.username } })) {
+        throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
+      }
+      if (await tx.account.findUnique({ where: { phone } })) {
+        throw new BadRequestException('این شماره قبلاً ثبت شده است');
+      }
+
+      const bootstrap =
+        (await tx.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
+      const account = await tx.account.create({
+        data: {
+          firstName: dto.firstName.trim(),
+          lastName: dto.lastName.trim(),
+          username: dto.username.trim(),
+          phone,
+          passwordHash,
+          selfie: dto.selfie,
+          level: bootstrap ? LEVEL.SUPER_ADMIN : LEVEL.VIEWER,
+          status: bootstrap ? 'active' : 'pending',
+        },
+      });
+      return { account, bootstrap };
     });
 
-    if (noSuperAdmin) {
-      return { pending: false, bootstrap: true, ...(await this.issue(account, meta)) };
+    if (result.bootstrap) {
+      return { pending: false, bootstrap: true, ...(await this.issue(result.account, meta)) };
     }
-    return { pending: true, user: this.publicUser(account) };
+    return { pending: true, user: this.publicUser(result.account) };
   }
 
   // ── ورود ───────────────────────────────────────────────────
