@@ -8,6 +8,7 @@ import { SmsService } from '../sms/sms.service';
 import { LoginDto } from './dto/login.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
 import { LEVEL, levelName } from '../common/levels';
+import { RateLimitService } from '../common/rate-limit.service';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_SESSIONS = 10;
@@ -23,6 +24,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private sms: SmsService,
+    private rateLimit: RateLimitService,
   ) {}
 
   async setupStatus() {
@@ -31,7 +33,9 @@ export class AuthService {
   }
 
   // ── ثبت‌نام: مرحلهٔ ۱ — ارسالِ کدِ یکبارمصرف ────────────────
-  async requestSignupOtp(phone: string) {
+  async requestSignupOtp(phone: string, ip = 'unknown') {
+    this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`otp:phone:${phone}`, 3, 15 * 60_000);
     const exists = await this.prisma.account.findUnique({ where: { phone } });
     if (exists) throw new BadRequestException('این شماره قبلاً ثبت شده است');
 
@@ -46,11 +50,13 @@ export class AuthService {
     });
     const res = await this.sms.sendOtp(phone, code);
     // تا وقتی پنلِ پیامک وصل نشده (stub)، کد را برمی‌گردانیم تا تست ممکن باشد
-    return { ok: true, ttl: OTP_TTL_MS / 1000, ...(res.stub ? { devCode: code } : {}) };
+    return { ok: true, ttl: OTP_TTL_MS / 1000, ...(res.stub && process.env.NODE_ENV === 'test' ? { devCode: code } : {}) };
   }
 
   // ── ثبت‌نام: مرحلهٔ ۲ — تأییدِ کد → توکنِ کوتاه‌عمرِ ثبت‌نام ──
-  async verifySignupOtp(dto: { phone: string; code: string }) {
+  async verifySignupOtp(dto: { phone: string; code: string }, ip = 'unknown') {
+    this.rateLimit.hit(`otp-verify:ip:${ip}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`otp-verify:phone:${dto.phone}`, 8, 15 * 60_000);
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone: dto.phone, purpose: 'signup', consumedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -97,7 +103,7 @@ export class AuthService {
     const noSuperAdmin =
       (await this.prisma.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, 12);
     const account = await this.prisma.account.create({
       data: {
         firstName: dto.firstName.trim(),
@@ -119,6 +125,8 @@ export class AuthService {
 
   // ── ورود ───────────────────────────────────────────────────
   async login(dto: LoginDto, meta: { ua?: string; ip?: string }) {
+    this.rateLimit.hit(`login:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
+    this.rateLimit.hit(`login:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
     const id = dto.identifier.trim();
     const account = await this.prisma.account.findFirst({
       where: { OR: [{ username: id }, { phone: id }] },
@@ -191,11 +199,17 @@ export class AuthService {
     if (!account) throw new UnauthorizedException();
     const ok = await bcrypt.compare(current, account.passwordHash);
     if (!ok) throw new BadRequestException('رمزِ فعلی اشتباه است');
-    await this.prisma.account.update({
-      where: { id },
-      data: { passwordHash: await bcrypt.hash(next, 10) },
-    });
-    return { ok: true };
+    await this.prisma.$transaction([
+      this.prisma.account.update({
+        where: { id },
+        data: { passwordHash: await bcrypt.hash(next, 12) },
+      }),
+      this.prisma.session.updateMany({
+        where: { accountId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    return { ok: true, sessionsRevoked: true };
   }
 
   async logout(sid: string) {
