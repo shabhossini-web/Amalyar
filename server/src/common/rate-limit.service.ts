@@ -1,4 +1,4 @@
-import { Injectable, TooManyRequestsException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 
 type Bucket = { count: number; resetAt: number };
 
@@ -16,7 +16,10 @@ export class RateLimitService {
     }
     current.count += 1;
     if (current.count > limit) {
-      throw new TooManyRequestsException('تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره تلاش کنید');
+      throw new HttpException(
+        'تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره تلاش کنید',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
   }
 }
