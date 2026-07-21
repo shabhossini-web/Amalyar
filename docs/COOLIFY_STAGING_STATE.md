@@ -4,8 +4,8 @@
 
 ## Scope
 
-- Coolify project: `Amalyar`
-- Environments: `production`, `staging`
+- Coolify project (confirmed): `Amalyar`
+- Environments (confirmed): `production`, `staging`
 - Active work environment: `staging`
 - Git repository: `shabhossini-web/Amalyar`
 - Git branch: `agent/security-permissions-hardening`
@@ -16,8 +16,8 @@
 
 ### Backend application
 
-- Actual Coolify display shown in screenshots: `agent/security-permissions-hardening`
-- Do not refer to this resource as `amalyar-api-staging` unless the user explicitly renames it.
+- Coolify application resource name (confirmed): `agent/security-permissions-hardening`
+- Never refer to this resource as `amalyar-api-staging` unless the user explicitly renames it.
 - Build pack: Dockerfile
 - Base directory: `/server`
 - Dockerfile location: `/Dockerfile`
@@ -28,7 +28,7 @@
 
 ### PostgreSQL resource
 
-- Coolify resource name: `amalyar-control-staging`
+- Coolify database resource name (confirmed): `amalyar-control-staging`
 - Image: `postgres:18-alpine`
 - Internal port: `5432`
 - Public access: disabled
