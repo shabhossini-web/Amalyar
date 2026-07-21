@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { LEVEL } from '../common/levels';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * غنی‌سازیِ مراجعه — قانونِ computeVisit: فیلدهای مشتق فقط این‌جا ساخته می‌شوند
@@ -40,7 +41,7 @@ const INCLUDE_PATIENT = { patient: true, surgeon: true, hospital: true, tech: tr
 
 @Injectable()
 export class PatientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   private scopedVisitWhere(user: any, where: any = {}) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return { ...where };
@@ -187,7 +188,9 @@ export class PatientsService {
         include: INCLUDE_PATIENT,
       });
     });
-    return enrich(v);
+    const result = enrich(v);
+    await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
+    return result;
   }
 
   async updateVisit(id: number, dto: UpdateVisitDto, user?: any) {
@@ -217,7 +220,9 @@ export class PatientsService {
       }
       return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_PATIENT });
     });
-    return enrich(updated);
+    const result = enrich(updated);
+    await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v), after: result });
+    return result;
   }
 
   async setStatus(id: number, opStatus: string, user?: any) {
@@ -247,6 +252,7 @@ export class PatientsService {
         });
       }
     });
+    await this.audit.record({ actorId: user?.id, action: 'visit.delete', entityType: 'visit', entityId: id, before: v });
     return { ok: true };
   }
 }
