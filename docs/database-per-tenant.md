@@ -18,24 +18,12 @@
 
 ## ساخت شرکت
 
-ابتدا Control DB را migrate کنید:
-
-```sh
-npm run control:migrate
-```
-
-سپس با دسترسی مدیریتی موقت:
-
-```sh
-npm run tenant:provision -- company-a "شرکت الف" company-a.example.com
-```
-
-فرایند، نام‌ها را اعتبارسنجی می‌کند، دیتابیس را می‌سازد، migrationها را اجرا می‌کند و تنها پس از موفقیت شرکت را active می‌کند. شکست باعث حذف دیتابیس نیمه‌ساخته می‌شود.
+ساخت شرکت یک عملیات privileged است و باید توسط job زیرساختی تأییدشده انجام شود، نه API برنامه. این job باید برای هر شرکت role و database مستقل بسازد، migration را اجرا کند، URL را رمزنگاری کند و تنها پس از موفقیت tenant را active کند. پیاده‌سازی اجرایی آن تا تأیید صریح دسترسی‌های ساخت/حذف PostgreSQL در این PR غیرفعال است.
 
 ## انتشار نسخه
 
 1. backup مستقل Control DB و تمام tenantها
-2. اجرای `npm run tenants:migrate` به‌عنوان job یک‌باره
+2. اجرای migration fleet توسط job زیرساختی تأییدشده و دارای dry-run
 3. توقف rollout در صورت شکست حتی یک tenant
 4. deploy برنامه فقط بعد از موفقیت همه migrationها
 5. smoke test ورود و خواندن بیمار روی حداقل دو دامنه
