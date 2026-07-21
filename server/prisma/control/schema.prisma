@@ -1,0 +1,36 @@
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../src/generated/control"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("CONTROL_DATABASE_URL")
+}
+
+model Tenant {
+  id                   String         @id @default(uuid())
+  slug                 String         @unique
+  name                 String
+  status               String         @default("provisioning")
+  databaseUrlEncrypted String         @map("database_url_encrypted")
+  databaseKeyVersion   Int            @default(1) @map("database_key_version")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at")
+  domains              TenantDomain[]
+
+  @@map("tenants")
+}
+
+model TenantDomain {
+  id        String   @id @default(uuid())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId  String   @map("tenant_id")
+  hostname  String   @unique
+  primary   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@map("tenant_domains")
+}
