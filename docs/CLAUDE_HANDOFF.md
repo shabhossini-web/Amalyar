@@ -93,6 +93,19 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - دریافت پیامک روی موبایل: موفق و توسط مالک پروژه تأیید شد
 - بررسی log در 2026-07-22: هیچ `STUB`، متن کد تأیید، شماره موبایل یا OTP مشاهده نشد؛ تأیید مالک پروژه
 
+## اصلاح fail-closed پیامک
+
+در 2026-07-22 روی شاخه `agent/security-permissions-hardening` اعمال شد:
+
+- `server/src/sms/sms.service.ts`: نبود credential یا شکست provider در production اکنون HTTP `503` می‌دهد.
+- شماره موبایل، متن پیام، OTP، پاسخ خام provider، exception خام و URL دارای API key دیگر log نمی‌شوند.
+- `server/src/auth/auth.service.ts`: API در production برای پیام ارسال‌نشده پاسخ موفق نمی‌دهد.
+- OTP ارسال‌نشده پاک می‌شود تا resend window کاربر را بی‌دلیل مسدود نکند.
+- `.github/workflows/security-ci.yml`: تست خودکار نبود credential در production باید `503` را تأیید کند.
+- commitهای کد: `b8c4b5408537543bd41b345c81f97efa030e85f9` و `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
+- CI run `107`: هنگام ثبت این بخش در حال اجرا
+- وضعیت Coolify پس از این تغییر: در انتظار تأیید deployment نهایی
+
 ## معماری Database-per-Tenant
 
 تصمیم تأییدشده: هر شرکت PostgreSQL database مستقل دارد.
@@ -248,7 +261,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 ## کارهای مهم باقی‌مانده
 
 1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
-2. مسیر fallback هنگام نبود credential هنوز باید fail-closed شود تا OTP هرگز log نشود و API موفقیت جعلی ندهد.
+2. مسیر fallback پیامک fail-closed شد؛ CI و پایداری deployment نهایی را تأیید کن.
 3. ساخت superadmin جدا در Alpha و Beta.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
 5. deploy/config frontend tenant-aware.
@@ -272,7 +285,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 3. production یا main را بدون اجازه تغییر نده.
 4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
-6. مشکل log شدن OTP بدون SMS credential را اصلاح کن.
+6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment را تأیید کن.
 7. حساب‌های Alpha/Beta را بساز.
 8. تست cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
 9. backup و restore را قبل از production تست کن.
