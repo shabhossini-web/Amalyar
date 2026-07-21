@@ -83,6 +83,16 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 
 در 2026-07-21 متغیرهای `MELI_API_KEY` و `MELI_FROM` از Application فعلی عمل‌یار به staging منتقل و تنظیماتشان تأیید شد. مقدارها محرمانه‌اند و در Git ثبت نشده‌اند. redeploy پس از این تغییر Running و پایدار تأیید شد؛ ارسال واقعی SMS و نبودن OTP در log هنوز باید بررسی شود.
 
+## تست SMS در staging
+
+- تاریخ: `2026-07-21`
+- Tenant تست‌شده: `alpha-staging`
+- Endpoint: `POST /api/auth/signup/request-otp`
+- نتیجه API: HTTP `201` با پاسخ `{"ok":true,"ttl":300}`
+- هیچ شماره موبایل یا OTP در مستندات ثبت نشده است.
+- دریافت پیامک روی موبایل: در انتظار تأیید مالک پروژه
+- بررسی نبودن OTP در log برنامه: در انتظار انجام
+
 ## معماری Database-per-Tenant
 
 تصمیم تأییدشده: هر شرکت PostgreSQL database مستقل دارد.
@@ -237,7 +247,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 
 ## کارهای مهم باقی‌مانده
 
-1. یک ارسال واقعی SMS آزمایشی انجام بده و دریافت پیامک و نبودن OTP در log را تأیید کن.
+1. درخواست SMS آزمایشی Alpha با HTTP 201 پذیرفته شد؛ دریافت پیامک و نبودن OTP در log را تأیید کن.
 2. SMS stub هنگام نبود credential متن OTP را log می‌کند؛ production باید fail-closed شود و OTP هرگز log نشود.
 3. ساخت superadmin جدا در Alpha و Beta.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
