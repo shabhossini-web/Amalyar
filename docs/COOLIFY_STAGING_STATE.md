@@ -10,7 +10,7 @@
 - Git repository: `shabhossini-web/Amalyar`
 - Git branch: `agent/security-permissions-hardening`
 - Draft PR: https://github.com/shabhossini-web/Amalyar/pull/1
-- Latest verified application commit: `3746f25a60a0d414b634e984af15a0fb48c29531`
+- Latest verified application commit: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
 
 ## Coolify resources
 
@@ -61,7 +61,7 @@ Secret settings confirmed for `MELI_API_KEY` and `MELI_FROM`: Buildtime off, Run
 
 Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not used.
 
-`MELI_API_KEY` and `MELI_FROM` were copied securely from the existing Amalyar application to staging on 2026-07-21. The post-change redeploy is running and stable; a real SMS smoke test still needs verification.
+`MELI_API_KEY` and `MELI_FROM` were copied securely from the existing Amalyar application to staging on 2026-07-21. Redeploy, real SMS delivery, and the no-OTP/no-phone log check all passed.
 
 ## SMS smoke test
 
@@ -82,7 +82,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Phone number, OTP, message text, raw provider response, raw exception, and API-key URL are not logged.
 - Backend code head: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
 - GitHub Actions `security-ci` run 107: completed successfully
-- Coolify deployment after this change: pending final verification
+- Coolify deployment after this change: running, green, and confirmed stable on 2026-07-22
 
 ## Provisioned tenants
 
@@ -117,6 +117,6 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 ## Next step
 
 1. Alpha SMS smoke test passed end-to-end: HTTP 201, delivery confirmed, and no OTP/phone exposure in logs.
-2. SMS production fallback is fail-closed and CI run 107 passed; verify the final Coolify deployment.
+2. SMS production fallback is fail-closed; CI run 107 and the final Coolify deployment both passed.
 3. Create separate superadmin accounts in Alpha and Beta.
 4. Perform cross-tenant token and patient-isolation tests.
