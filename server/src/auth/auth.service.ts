@@ -9,6 +9,7 @@ import { LoginDto } from './dto/login.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
 import { LEVEL, levelName } from '../common/levels';
 import { RateLimitService } from '../common/rate-limit.service';
+import { TenantContext } from '../tenant/tenant-context';
 
 const SESSION_TTL_DAYS = 30;
 const MAX_SESSIONS = 10;
@@ -25,6 +26,7 @@ export class AuthService {
     private jwt: JwtService,
     private sms: SmsService,
     private rateLimit: RateLimitService,
+    private tenantContext: TenantContext,
   ) {}
 
   async setupStatus() {
@@ -170,7 +172,7 @@ export class AuthService {
       },
     });
     const accessToken = await this.jwt.signAsync(
-      { sub: account.id, sid: session.id, level: account.level },
+      { sub: account.id, sid: session.id, level: account.level, tid: this.tenantContext.require().tenantId },
       { expiresIn: `${SESSION_TTL_DAYS}d` },
     );
     return { accessToken, user: this.publicUser(account) };
