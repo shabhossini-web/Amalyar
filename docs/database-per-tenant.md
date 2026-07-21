@@ -18,15 +18,22 @@
 
 ## ساخت شرکت
 
-ساخت شرکت یک عملیات privileged است و باید توسط job زیرساختی تأییدشده انجام شود، نه API برنامه. این job باید برای هر شرکت role و database مستقل بسازد، migration را اجرا کند، URL را رمزنگاری کند و تنها پس از موفقیت tenant را active کند. پیاده‌سازی اجرایی آن تا تأیید صریح دسترسی‌های ساخت/حذف PostgreSQL در این PR غیرفعال است.
+ساخت شرکت فقط از CLI زیرساختی انجام می‌شود، نه API برنامه:
+
+```sh
+npm run tenant:provision -- company-a "شرکت الف" company-a.example.com
+```
+
+این فرمان برای شرکت role و database مستقل می‌سازد، migration را اجرا می‌کند، URL را رمزنگاری می‌کند و تنها پس از موفقیت tenant را active می‌کند. در صورت شکست فقط منابعی که همان اجرا ساخته rollback می‌شوند.
 
 ## انتشار نسخه
 
 1. backup مستقل Control DB و تمام tenantها
-2. اجرای migration fleet توسط job زیرساختی تأییدشده و دارای dry-run
-3. توقف rollout در صورت شکست حتی یک tenant
-4. deploy برنامه فقط بعد از موفقیت همه migrationها
-5. smoke test ورود و خواندن بیمار روی حداقل دو دامنه
+2. مشاهده فهرست بدون تغییر: `npm run tenants:migrate`
+3. اجرای تأییدشده: `npm run tenants:migrate -- --apply`
+4. توقف rollout در صورت شکست حتی یک tenant
+5. deploy برنامه فقط بعد از موفقیت همه migrationها
+6. smoke test ورود و خواندن بیمار روی حداقل دو دامنه
 
 برنامه هنگام startup فقط Control DB را migrate می‌کند و عمداً tenantها را خودکار migrate نمی‌کند تا چند replica هم‌زمان migration اجرا نکنند.
 
