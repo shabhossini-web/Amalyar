@@ -42,8 +42,7 @@
 - Watch Paths: `server/**` (در Coolify ذخیره و تأیید شد).
 - Healthcheck: `GET http://localhost:3001/api/health`
 - Interval 30، timeout 10، retries 5، start period 60
-- آخرین وضعیت تأییدشده پیش از تغییر متغیرهای SMS: Running و پایدار
-- وضعیت redeploy پس از ثبت متغیرهای SMS: هنوز باید با healthcheck و لاگ Coolify دوباره تأیید شود
+- وضعیت redeploy پس از ثبت متغیرهای SMS در 2026-07-21: Running و پایدار (تأیید مالک پروژه)
 - لاگ موفق: `Nest application successfully started`
 - لاگ موفق: `amalyar-server ← http://0.0.0.0:3001/api`
 - Health عمومی تأییدشده: `https://api-staging.amalyar.com/api/health`
@@ -82,7 +81,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 
 اصلاح مهم: کد از `CORS_ORIGINS` استفاده می‌کند؛ `ALLOWED_ORIGINS` اشتباه است.
 
-در 2026-07-21 متغیرهای `MELI_API_KEY` و `MELI_FROM` از Application فعلی عمل‌یار به staging منتقل و تنظیماتشان تأیید شد. مقدارها محرمانه‌اند و در Git ثبت نشده‌اند. بعد از redeploy باید ارسال واقعی SMS و نبودن OTP در log بررسی شود.
+در 2026-07-21 متغیرهای `MELI_API_KEY` و `MELI_FROM` از Application فعلی عمل‌یار به staging منتقل و تنظیماتشان تأیید شد. مقدارها محرمانه‌اند و در Git ثبت نشده‌اند. redeploy پس از این تغییر Running و پایدار تأیید شد؛ ارسال واقعی SMS و نبودن OTP در log هنوز باید بررسی شود.
 
 ## معماری Database-per-Tenant
 
@@ -238,7 +237,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 
 ## کارهای مهم باقی‌مانده
 
-1. redeploy پس از تنظیم متغیرهای SMS را با healthcheck، لاگ پایدار و یک ارسال واقعی آزمایشی تأیید کن.
+1. یک ارسال واقعی SMS آزمایشی انجام بده و دریافت پیامک و نبودن OTP در log را تأیید کن.
 2. SMS stub هنگام نبود credential متن OTP را log می‌کند؛ production باید fail-closed شود و OTP هرگز log نشود.
 3. ساخت superadmin جدا در Alpha و Beta.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
@@ -262,7 +261,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 2. Git branch، commit deployشده و Coolify state را دوباره verify کن.
 3. production یا main را بدون اجازه تغییر نده.
 4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
-5. redeploy پس از MELI variables را با healthcheck، لاگ و ارسال SMS آزمایشی تأیید کن.
+5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
 6. مشکل log شدن OTP بدون SMS credential را اصلاح کن.
 7. حساب‌های Alpha/Beta را بساز.
 8. تست cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
