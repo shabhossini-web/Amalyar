@@ -90,7 +90,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - Endpoint: `POST /api/auth/signup/request-otp`
 - نتیجه API: HTTP `201` با پاسخ `{"ok":true,"ttl":300}`
 - هیچ شماره موبایل یا OTP در مستندات ثبت نشده است.
-- دریافت پیامک روی موبایل: در انتظار تأیید مالک پروژه
+- دریافت پیامک روی موبایل: موفق و توسط مالک پروژه تأیید شد
 - بررسی نبودن OTP در log برنامه: در انتظار انجام
 
 ## معماری Database-per-Tenant
@@ -247,7 +247,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 
 ## کارهای مهم باقی‌مانده
 
-1. درخواست SMS آزمایشی Alpha با HTTP 201 پذیرفته شد؛ دریافت پیامک و نبودن OTP در log را تأیید کن.
+1. درخواست SMS آزمایشی Alpha با HTTP 201 پذیرفته و پیامک دریافت شد؛ نبودن OTP و شماره موبایل در log را تأیید کن.
 2. SMS stub هنگام نبود credential متن OTP را log می‌کند؛ production باید fail-closed شود و OTP هرگز log نشود.
 3. ساخت superadmin جدا در Alpha و Beta.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
