@@ -28,14 +28,14 @@ export class PatientsController {
 
   @RequirePermissions('patients.read')
   @Get('visits')
-  list(@Query('q') q?: string, @Query('status') status?: string) {
-    return this.patients.listVisits(q, status);
+  list(@CurrentUser() user: any, @Query('q') q?: string, @Query('status') status?: string) {
+    return this.patients.listVisits(q, status, user);
   }
 
   @RequirePermissions('patients.read')
   @Get('visits/:id')
-  get(@Param('id', ParseIntPipe) id: number) {
-    return this.patients.getVisit(id);
+  get(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.patients.getVisit(id, user);
   }
 
   @RequirePermissions('patients.create')
@@ -46,25 +46,25 @@ export class PatientsController {
 
   @RequirePermissions('patients.update')
   @Patch('visits/:id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateVisitDto) {
-    return this.patients.updateVisit(id, dto);
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateVisitDto, @CurrentUser() user: any) {
+    return this.patients.updateVisit(id, dto, user);
   }
 
   @RequirePermissions('patients.status')
   @Patch('visits/:id/status')
-  setStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: VisitStatusDto) {
-    return this.patients.setStatus(id, dto.opStatus);
+  setStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: VisitStatusDto, @CurrentUser() user: any) {
+    return this.patients.setStatus(id, dto.opStatus, user);
   }
 
   @RequirePermissions('patients.delete')
   @Delete('visits/:id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.patients.deleteVisit(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.patients.deleteVisit(id, user);
   }
 
   @RequirePermissions('patients.read')
   @Get('patients')
-  searchPatients(@Query('q') q?: string) {
-    return this.patients.searchPatients(q);
+  searchPatients(@CurrentUser() user: any, @Query('q') q?: string) {
+    return this.patients.searchPatients(q, user);
   }
 }
