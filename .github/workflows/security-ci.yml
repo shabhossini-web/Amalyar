@@ -1,0 +1,39 @@
+name: security-ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [agent/security-permissions-hardening]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Frontend install
+        run: npm ci
+      - name: Frontend build
+        run: npm run build
+      - name: Backend install
+        working-directory: server
+        run: npm ci
+      - name: Prisma validate
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+        run: npx prisma validate
+      - name: Backend build
+        working-directory: server
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
+        run: npm run build
