@@ -18,6 +18,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+# Prisma control client is generated outside Nest's TypeScript output.
+COPY --from=build /app/src/generated ./dist/generated
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
 EXPOSE 3001
