@@ -23,6 +23,9 @@ jobs:
         run: npm ci
       - name: Frontend build
         run: npm run build
+      - name: Verify generated control client
+        working-directory: server
+        run: test -f src/generated/control/index.js
       - name: Backend install
         working-directory: server
         run: npm ci
