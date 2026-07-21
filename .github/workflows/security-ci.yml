@@ -45,6 +45,9 @@ jobs:
           TENANT_DATABASE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
         run: npm run build
+      - name: Verify SMS production fallback fails closed
+        working-directory: server
+        run: node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='production'; delete process.env.MELI_API_KEY; delete process.env.MELI_FROM; new SmsService().sendOtp('09120000000','000000').then(() => process.exit(1)).catch((e) => { if (e?.getStatus?.() !== 503) { console.error('expected HTTP 503'); process.exit(1); } });"
       - name: Verify startup does not require tenant context
         working-directory: server
         run: node -e "require('reflect-metadata'); const { PrismaService } = require('./dist/prisma/prisma.service'); const p = new PrismaService({ require() { throw new Error('tenant context accessed during startup'); } }); if (p.then !== undefined) process.exit(1); Promise.resolve(p.onModuleDestroy()).catch(() => process.exit(1));"
