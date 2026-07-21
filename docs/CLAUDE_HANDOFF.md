@@ -39,10 +39,11 @@
 - Dockerfile: `/Dockerfile`
 - Exposed port: `3001`
 - Port mapping: خالی
-- پیشنهاد Watch Paths: `server/**`؛ هنوز تأیید نشده که در Coolify ذخیره شده باشد.
+- Watch Paths: `server/**` (در Coolify ذخیره و تأیید شد).
 - Healthcheck: `GET http://localhost:3001/api/health`
 - Interval 30، timeout 10، retries 5، start period 60
-- وضعیت فعلی: Running و پایدار
+- آخرین وضعیت تأییدشده پیش از تغییر متغیرهای SMS: Running و پایدار
+- وضعیت redeploy پس از ثبت متغیرهای SMS: هنوز باید با healthcheck و لاگ Coolify دوباره تأیید شود
 - لاگ موفق: `Nest application successfully started`
 - لاگ موفق: `amalyar-server ← http://0.0.0.0:3001/api`
 - Health عمومی تأییدشده: `https://api-staging.amalyar.com/api/health`
@@ -74,15 +75,14 @@
 - `NODE_ENV=production`
 - `PORT=3001`
 - `CORS_ORIGINS=https://alpha-staging.amalyar.com,https://beta-staging.amalyar.com`
+- `MELI_API_KEY` (مقدار محرمانه، ثبت‌شده در Coolify)
+- `MELI_FROM` (مقدار محرمانه، ثبت‌شده در Coolify)
 
 Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
 
 اصلاح مهم: کد از `CORS_ORIGINS` استفاده می‌کند؛ `ALLOWED_ORIGINS` اشتباه است.
 
-هنوز باید از Application فعلی عمل‌یار در production، بدون نمایش مقدار، این دو مورد به staging کپی شوند:
-
-- `MELI_API_KEY`
-- `MELI_FROM`
+در 2026-07-21 متغیرهای `MELI_API_KEY` و `MELI_FROM` از Application فعلی عمل‌یار به staging منتقل و تنظیماتشان تأیید شد. مقدارها محرمانه‌اند و در Git ثبت نشده‌اند. بعد از redeploy باید ارسال واقعی SMS و نبودن OTP در log بررسی شود.
 
 ## معماری Database-per-Tenant
 
@@ -238,7 +238,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 
 ## کارهای مهم باقی‌مانده
 
-1. کپی و تست `MELI_API_KEY` و `MELI_FROM`.
+1. redeploy پس از تنظیم متغیرهای SMS را با healthcheck، لاگ پایدار و یک ارسال واقعی آزمایشی تأیید کن.
 2. SMS stub هنگام نبود credential متن OTP را log می‌کند؛ production باید fail-closed شود و OTP هرگز log نشود.
 3. ساخت superadmin جدا در Alpha و Beta.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
@@ -261,8 +261,8 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 1. این فایل و `docs/COOLIFY_STAGING_STATE.md` را کامل بخوان.
 2. Git branch، commit deployشده و Coolify state را دوباره verify کن.
 3. production یا main را بدون اجازه تغییر نده.
-4. Watch Paths را روی `server/**` تأیید کن.
-5. MELI variables را امن به staging منتقل کن.
+4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
+5. redeploy پس از MELI variables را با healthcheck، لاگ و ارسال SMS آزمایشی تأیید کن.
 6. مشکل log شدن OTP بدون SMS credential را اصلاح کن.
 7. حساب‌های Alpha/Beta را بساز.
 8. تست cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
