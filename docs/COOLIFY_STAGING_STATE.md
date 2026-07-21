@@ -22,8 +22,10 @@
 - Base directory: `/server`
 - Dockerfile location: `/Dockerfile`
 - Exposed port: `3001`
+- Watch Paths: `server/**` (saved and confirmed)
 - Healthcheck: `GET http://localhost:3001/api/health`
-- Current state: running and stable
+- Last verified state before the SMS variable change: running and stable
+- Post-change redeploy state: pending health/log verification
 - Verified public health URL: `https://api-staging.amalyar.com/api/health`
 
 ### PostgreSQL resource
@@ -53,13 +55,14 @@ Configured variable names only:
 - `NODE_ENV=production`
 - `PORT=3001`
 - `CORS_ORIGINS=https://alpha-staging.amalyar.com,https://beta-staging.amalyar.com`
+- `MELI_API_KEY` (secret value configured in Coolify)
+- `MELI_FROM` (secret value configured in Coolify)
+
+Secret settings confirmed for `MELI_API_KEY` and `MELI_FROM`: Buildtime off, Runtime on, Multiline off, Literal on. Values are intentionally not recorded.
 
 Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not used.
 
-Pending runtime variables to copy securely from the existing Amalyar production application:
-
-- `MELI_API_KEY`
-- `MELI_FROM`
+`MELI_API_KEY` and `MELI_FROM` were copied securely from the existing Amalyar application to staging on 2026-07-21. A post-change redeploy and real SMS smoke test still need verification.
 
 ## Provisioned tenants
 
@@ -93,7 +96,8 @@ Pending runtime variables to copy securely from the existing Amalyar production 
 
 ## Next step
 
-1. Copy `MELI_API_KEY` and `MELI_FROM` from the existing Amalyar production application to this staging application.
-2. Redeploy without force rebuild.
-3. Create separate superadmin accounts in Alpha and Beta.
-4. Perform cross-tenant token and patient-isolation tests.
+1. Redeploy without force rebuild, then verify stable logs and `https://api-staging.amalyar.com/api/health`.
+2. Run one real SMS smoke test and verify that no OTP value appears in application logs.
+3. Make the production SMS fallback fail closed when credentials are absent.
+4. Create separate superadmin accounts in Alpha and Beta.
+5. Perform cross-tenant token and patient-isolation tests.
