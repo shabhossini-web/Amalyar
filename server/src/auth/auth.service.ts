@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomInt } from 'crypto';
@@ -47,12 +47,25 @@ export class AuthService {
     if (recent) throw new BadRequestException('کمی صبر کنید و دوباره تلاش کنید');
 
     const code = String(randomInt(100000, 1000000)); // ۶ رقمی
-    await this.prisma.otpCode.create({
+    const otp = await this.prisma.otpCode.create({
       data: { phone, codeHash: sha256(code), purpose: 'signup', expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
-    const res = await this.sms.sendOtp(phone, code);
-    // تا وقتی پنلِ پیامک وصل نشده (stub)، کد را برمی‌گردانیم تا تست ممکن باشد
-    return { ok: true, ttl: OTP_TTL_MS / 1000, ...(res.stub && process.env.NODE_ENV === 'test' ? { devCode: code } : {}) };
+    try {
+      const res = await this.sms.sendOtp(phone, code);
+      if (!res.sent && process.env.NODE_ENV === 'production') {
+        throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
+      }
+      // devCode فقط در محیط test و برای stub امن برگردانده می‌شود.
+      return {
+        ok: true,
+        ttl: OTP_TTL_MS / 1000,
+        ...(res.stub && process.env.NODE_ENV === 'test' ? { devCode: code } : {}),
+      };
+    } catch (error) {
+      // کدی که ارسال نشده نباید کاربر را تا پایان resend window مسدود کند.
+      await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
+      throw error;
+    }
   }
 
   // ── ثبت‌نام: مرحلهٔ ۲ — تأییدِ کد → توکنِ کوتاه‌عمرِ ثبت‌نام ──
