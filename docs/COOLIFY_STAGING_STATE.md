@@ -258,4 +258,5 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - All three Platform Admin variables are saved and locked where applicable.
 - Backend was redeployed with the Platform Admin configuration; the project owner confirmed the deployment is stable/correct.
 - A read-only cloud-browser smoke test was blocked by browser security policy; no workaround was attempted and the endpoint is not marked Agent-verified.
+- DNS for `admin-staging.amalyar.com` now points to the staging server; the server IP is intentionally not recorded.
 - Next: configure the dedicated management-domain routes, then test OTP through the management UI.
