@@ -143,8 +143,8 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Alpha first-Super-Admin onboarding started through the UI: SMS request and OTP verification passed, and the profile/username/password/selfie form opened.
 - Alpha first Super Admin creation completed successfully through the UI; automatic login worked and the Alpha `/app` dashboard rendered.
 - Phone, OTP, name, password, face, and all personal data are intentionally not recorded.
-- Alpha `/api/auth/setup-status` should now return `{"needsSetup":false}` and still needs an explicit smoke check.
-- Next: verify Alpha setup status, then create the first Beta Super Admin through the Beta UI.
+- Alpha `/api/auth/setup-status` was explicitly checked after bootstrap and returned `{"needsSetup":false}`.
+- Next: create the first Beta Super Admin through the UI on the exact `beta-staging.amalyar.com` host.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
