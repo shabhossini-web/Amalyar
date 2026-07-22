@@ -261,6 +261,8 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - DNS for `admin-staging.amalyar.com` now points to the staging server; the server IP is intentionally not recorded.
 - `https://admin-staging.amalyar.com` was appended to Frontend resource `amalyar-frontend-staging`; Alpha/Beta domains were preserved. Saved, not yet redeployed.
 - `https://admin-staging.amalyar.com/api` was appended to the Backend resource; the existing API/Alpha/Beta routes were preserved.
-- The first Backend redeploy after the route change failed during Docker build. The normal log only shows wrapper exit code 255 and the last visible build step `RUN apk add --no-cache openssl`; root cause is not yet visible.
+- The first Backend redeploy after the route change failed during Docker build. The normal log shows wrapper exit code 255 and the last visible build step `RUN apk add --no-cache openssl`.
+- Debug Logs contain no `apk`, npm, or TypeScript failure. Coolify recorded `DeploymentException` error code 0, the `docker exec ... /artifacts/build.sh` helper command stopped, and the build container was then gracefully stopped. Current diagnosis is a build-helper/orchestrator failure, not a proven application/Dockerfile error.
+- Operational decision: allow one normal redeploy retry only; if the same failure repeats, stop retries and inspect host disk, RAM, and Docker state.
 - The previous Backend container remains green and Running, so there was no service downtime. Do not retry until Debug Logs are inspected.
 - Next: configure the dedicated management-domain routes, then test OTP through the management UI.
