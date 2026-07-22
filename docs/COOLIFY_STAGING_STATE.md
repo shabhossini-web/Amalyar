@@ -106,7 +106,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 - Date: `2026-07-22`
 - Manual Terminal-based account creation was rejected; no account was created that way.
-- Alpha and Beta remain in `needsSetup=true` state.
+- At this decision point, Alpha and Beta were still in `needsSetup=true`; this is historical and both tenants were later bootstrapped only through the UI.
 - Existing React UI already supports setup-status, OTP, profile fields, live selfie, and automatic bootstrap Super Admin login.
 - A separate frontend Application will serve `/` on tenant domains.
 - The Backend Application will serve the more-specific `/api` path on the same tenant domains.
@@ -136,8 +136,8 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Redeploy completed and the Frontend reports `Running (healthy)`; confirmed by the project owner.
 - Tenant root domains were then assigned to the Frontend: `https://alpha-staging.amalyar.com` and `https://beta-staging.amalyar.com`; the temporary HTTP domain remains during smoke testing.
 - The domain-cutover redeploy also reached `Running (healthy)`.
-- Final routing smoke test passed: Alpha and Beta roots rendered the frontend login/signup UI, while each tenant's `/api/auth/setup-status` returned `{"needsSetup":true}`.
-- No Super Admin account has been created yet.
+- Initial routing smoke test passed: Alpha and Beta roots rendered the frontend login/signup UI, while each tenant's `/api/auth/setup-status` returned `{"needsSetup":true}` at that time.
+- No Super Admin account had been created at that initial smoke-test point; this is historical and both tenants were later bootstrapped only through the UI.
 - Temporary HTTP domain removed; Frontend now has only `https://alpha-staging.amalyar.com` and `https://beta-staging.amalyar.com`.
 - Cleanup redeploy completed and Frontend is `Running (healthy)`; confirmed by the project owner.
 - Alpha first-Super-Admin onboarding started through the UI: SMS request and OTP verification passed, and the profile/username/password/selfie form opened.
@@ -147,7 +147,8 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Beta first Super Admin was also created through the UI; automatic login succeeded and the Beta `/app` dashboard rendered.
 - No phone, OTP, name, password, image, or dashboard personal data is recorded.
 - Visual smoke showed distinct tenant-scoped dashboard data between Alpha and Beta; formal cross-tenant token testing is still required.
-- Beta `/api/auth/setup-status` should now return `{"needsSetup":false}` and needs explicit verification.
+- Beta `/api/auth/setup-status` was explicitly checked after bootstrap and returned `{"needsSetup":false}`.
+- Current onboarding state: Alpha and Beta were both bootstrapped only through the UI, both `/app` dashboards render, and both tenants report `needsSetup=false`.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
@@ -160,7 +161,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Database: `amalyar_alpha_staging`
 - Runtime role: `amalyar_alpha_staging_app`
 - Status: active
-- Setup endpoint result: `{"needsSetup":true}`
+- Setup endpoint result after UI bootstrap: `{"needsSetup":false}`
 
 ### Beta
 
@@ -170,7 +171,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Database: `amalyar_beta_staging`
 - Runtime role: `amalyar_beta_staging_app`
 - Status: active
-- Setup endpoint result: `{"needsSetup":true}`
+- Setup endpoint result after UI bootstrap: `{"needsSetup":false}`
 
 ## Completed fixes discovered during deployment
 
@@ -184,5 +185,5 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 1. Alpha SMS smoke test passed end-to-end: HTTP 201, delivery confirmed, and no OTP/phone exposure in logs.
 2. SMS production fallback is fail-closed; CI run 107 and the final Coolify deployment both passed.
-3. Verify the frontend Git branch, deploy it first on the temporary domain, then configure tenant root/path routing and create Alpha/Beta Super Admin accounts only through the UI.
-4. Perform cross-tenant token and patient-isolation tests.
+3. Frontend branch, tenant domains, healthcheck, and UI-only Alpha/Beta bootstrap are complete and verified.
+4. Add deterministic automated tenant-isolation checks to CI, then perform a live cross-tenant token and patient-isolation test without recording personal data.
