@@ -121,6 +121,16 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - Root دامنه Tenant مستقیماً به `/login` هدایت شود؛ اگر دیتابیس خالی باشد UI خودکار تب ثبت‌نام و پیام اولین Super Admin را نشان دهد.
 - طبق مستندات رسمی Coolify، path-based routing با دامنه‌هایی مثل `https://domain/api` پشتیبانی می‌شود و مسیر خاص‌تر بر `/` اولویت دارد.
 
+پیاده‌سازی انجام‌شده:
+
+- `src/lib/api.js`: پیش‌فرض API از همان origin و مسیر `/api` استفاده می‌کند؛ `VITE_API_BASE` همچنان override اختیاری است.
+- `src/App.jsx`: ریشه دامنه Tenant مستقیماً به `/login` می‌رود؛ marketing hostها Landing را نگه می‌دارند و `VITE_TENANT_UI` override دارد.
+- `public/sw.js`: مسیر `/api` صریحاً از Service Worker خارج شد و cache به `v8` افزایش یافت.
+- `Dockerfile`: Node 22 و `npm ci` با lockfile برای build تکرارپذیر.
+- commitهای فرانت: `a085f8c173d6a85471fca649918e85919cf2a13e`, `4caaf8e8ab7bc96b389a0c11918b87afd0e90adf`, `703ba95524910c07d36c3f2ddd7268dfe9b772df`, `6e4976373184aef9a9f3e708d100be7ac68e573b`.
+- CI run `135`: هنگام ثبت در حال اجرا.
+- هنوز Frontend Application در Coolify ساخته نشده است.
+
 ## معماری Database-per-Tenant
 
 تصمیم تأییدشده: هر شرکت PostgreSQL database مستقل دارد.
