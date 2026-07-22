@@ -140,7 +140,10 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - No Super Admin account has been created yet.
 - Temporary HTTP domain removed; Frontend now has only `https://alpha-staging.amalyar.com` and `https://beta-staging.amalyar.com`.
 - Cleanup redeploy completed and Frontend is `Running (healthy)`; confirmed by the project owner.
-- Next: create the first Alpha Super Admin through the UI only. Never record phone, OTP, password, or selfie.
+- Alpha first-Super-Admin onboarding started through the UI: SMS request and OTP verification passed, and the profile/username/password/selfie form opened.
+- Account creation is not yet complete; `needsSetup` should still be true at this checkpoint.
+- Phone, OTP, password, and personal data are intentionally not recorded.
+- Next: complete the form only on `alpha-staging.amalyar.com` and verify automatic navigation to `/app`.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
