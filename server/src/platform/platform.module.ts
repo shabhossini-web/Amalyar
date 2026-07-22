@@ -18,11 +18,16 @@ import {
 } from '@nestjs/common';
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
-import { IsString, Length, Matches } from 'class-validator';
+import { IsOptional, IsString, Length, Matches } from 'class-validator';
 import { RateLimitService } from '../common/rate-limit.service';
 import { SmsService } from '../sms/sms.service';
 import { ControlPrismaService } from '../tenant/control-prisma.service';
-import { normalizePlatformPhone, platformAdminConfig } from './platform.config';
+import {
+  normalizePlatformPhone,
+  platformAdminConfig,
+  platformPhoneRef,
+  resolvePlatformPhoneRef,
+} from './platform.config';
 
 const OTP_TTL_MS = 5 * 60_000;
 const OTP_RESEND_MS = 60_000;
@@ -62,9 +67,16 @@ function cookieSecure() {
 }
 
 class PlatformPhoneDto {
+  // phone موقتاً برای سازگاری rollout نسخه قبلی نگه داشته شده و UI جدید آن را ارسال نمی‌کند.
+  @IsOptional()
   @IsString()
   @Length(10, 16)
-  phone!: string;
+  phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-f0-9]{64}$/)
+  phoneRef?: string;
 }
 
 class PlatformVerifyDto extends PlatformPhoneDto {
@@ -109,16 +121,37 @@ export class PlatformAuthService {
     return this.hash('ip', ip);
   }
 
-  async requestOtp(phoneInput: string, ip: string) {
+  phoneOptions() {
     const config = this.config();
-    const phone = normalizePlatformPhone(phoneInput);
-    const phoneHash = this.hash('phone', phone ?? phoneInput.trim());
+    const multiple = config.phones.size > 1;
+    return {
+      options: Array.from(config.phones).map((phone, index) => ({
+        ref: platformPhoneRef(config.secret, phone),
+        label: multiple ? `مدیر مجاز ${index + 1}` : 'مدیر مجاز',
+      })),
+    };
+  }
+
+  private resolvePhone(
+    config: ReturnType<typeof platformAdminConfig>,
+    phoneInput?: string,
+    phoneRef?: string,
+  ): string | null {
+    if (phoneRef) return resolvePlatformPhoneRef(config, phoneRef);
+    const phone = normalizePlatformPhone(phoneInput ?? '');
+    return phone && config.phones.has(phone) ? phone : null;
+  }
+
+  async requestOtp(phoneInput: string | undefined, phoneRef: string | undefined, ip: string) {
+    const config = this.config();
+    const phone = this.resolvePhone(config, phoneInput, phoneRef);
+    const phoneHash = this.hash('phone', phone ?? phoneRef ?? phoneInput?.trim() ?? 'missing');
     const ipHash = this.ipHash(ip);
     this.rateLimit.hit(`platform:otp:ip:${ipHash}`, 10, 15 * 60_000);
     this.rateLimit.hit(`platform:otp:phone:${phoneHash}`, 3, 15 * 60_000);
 
     const response = { ok: true, ttl: OTP_TTL_MS / 1000 };
-    if (!phone || !config.phones.has(phone)) return response;
+    if (!phone) return response;
 
     const recent = await this.control.platformOtp.findFirst({
       where: { phoneHash, consumedAt: null, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
@@ -136,7 +169,7 @@ export class PlatformAuthService {
     });
 
     try {
-      const sent = await this.sms.sendOtp(phone, code);
+      const sent = await this.sms.sendOtp(phone, code, config.webOtpHost);
       if (!sent.sent && process.env.NODE_ENV === 'production') throw new Error('SMS delivery failed');
       await this.control.platformAuditEvent.create({
         data: { actorHash: phoneHash, action: 'platform.auth.otp_requested', ipHash },
@@ -148,10 +181,15 @@ export class PlatformAuthService {
     }
   }
 
-  async verifyOtp(phoneInput: string, code: string, ip: string) {
+  async verifyOtp(
+    phoneInput: string | undefined,
+    phoneRef: string | undefined,
+    code: string,
+    ip: string,
+  ) {
     const config = this.config();
-    const phone = normalizePlatformPhone(phoneInput);
-    if (!phone || !config.phones.has(phone)) throw new UnauthorizedException('کد تأیید نامعتبر است');
+    const phone = this.resolvePhone(config, phoneInput, phoneRef);
+    if (!phone) throw new UnauthorizedException('کد تأیید نامعتبر است');
 
     const phoneHash = this.hash('phone', phone);
     const ipHash = this.ipHash(ip);
@@ -410,10 +448,15 @@ export class PlatformController {
     private readonly provisioning: PlatformProvisioningService,
   ) {}
 
+  @Get('auth/options')
+  authOptions() {
+    return this.auth.phoneOptions();
+  }
+
   @Post('auth/request-otp')
   @HttpCode(200)
   requestOtp(@Body() dto: PlatformPhoneDto, @Req() req: Request) {
-    return this.auth.requestOtp(dto.phone, requestIp(req));
+    return this.auth.requestOtp(dto.phone, dto.phoneRef, requestIp(req));
   }
 
   @Post('auth/verify')
@@ -423,7 +466,7 @@ export class PlatformController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.auth.verifyOtp(dto.phone, dto.code, requestIp(req));
+    const result = await this.auth.verifyOtp(dto.phone, dto.phoneRef, dto.code, requestIp(req));
     const secure = cookieSecure();
     res.cookie(SESSION_COOKIE, result.token, {
       httpOnly: true,
