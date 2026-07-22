@@ -453,4 +453,5 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - هر سه متغیر Platform Admin ذخیره شدند و Backend با این مجموعه redeploy شد؛ مالک پروژه وضعیت پایدار/صحیح را تأیید کرد.
 - تلاش برای smoke test read-only از مرورگر ابری Agent به‌دلیل policy مرورگر روی دامنه staging رد شد؛ هیچ دورزدنی انجام نشد و نتیجه endpoint از طرف Agent تأییدشده محسوب نمی‌شود.
 - DNS دامنه `admin-staging.amalyar.com` به همان سرور staging ثبت شد؛ IP در Git ثبت نشده است.
+- دامنه `https://admin-staging.amalyar.com` به Frontend resource `amalyar-frontend-staging` افزوده و Save شد؛ Alpha/Beta حفظ شدند و هنوز redeploy انجام نشده است.
 - گام بعدی: route دامنه مدیریت در Frontend و Backend و سپس تست OTP فقط از UI.
