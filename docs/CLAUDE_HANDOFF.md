@@ -460,5 +460,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - یک redeploy عادی کنترل‌شده تکرار شد و کامل موفق شد؛ Backend با route مدیریت بالا آمد. نتیجه، گذرا بودن failure قبلی build-helper را تأیید می‌کند و نیاز به تغییر Dockerfile ایجاد نشد.
 - Frontend resource `amalyar-frontend-staging` پس از افزودن دامنه مدیریت redeploy شد و مالک پروژه موفقیت deployment را تأیید کرد.
 - smoke test عمومی `admin-staging` از مرورگر ابری Agent نیز به‌دلیل browser security policy رد شد؛ هیچ workaround انجام نشد و visual routing باید از مرورگر مالک پروژه تأیید شود.
+- مالک پروژه visual smoke test را در مرورگر موبایل انجام داد: صفحه مستقل «مدیریت پلتفرم» روی `https://admin-staging.amalyar.com` با HTTPS باز شد؛ صفحه tenant، JSON، 404، 502 و خطای SSL دیده نشد.
+- هیچ شماره، OTP، تصویر شخصی یا داده حساس از smoke test در Git ثبت نشده است.
 - نسخه قبلی Backend همچنان سبز و `Running` باقی ماند؛ downtime رخ نداد. تا دریافت Debug Logs redeploy تکرار نشود.
 - گام بعدی: route دامنه مدیریت در Frontend و Backend و سپس تست OTP فقط از UI.
