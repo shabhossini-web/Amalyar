@@ -464,3 +464,17 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - هیچ شماره، OTP، تصویر شخصی یا داده حساس از smoke test در Git ثبت نشده است.
 - نسخه قبلی Backend همچنان سبز و `Running` باقی ماند؛ downtime رخ نداد. تا دریافت Debug Logs redeploy تکرار نشود.
 - گام بعدی: route دامنه مدیریت در Frontend و Backend و سپس تست OTP فقط از UI.
+
+
+## ورود بدون دریافت شماره و WebOTP — 2026-07-23
+
+- به درخواست مالک پروژه، فیلد ورود شماره از رابط مدیریت پلتفرم حذف شد؛ مقدار allowlist همچنان فقط در متغیر `PLATFORM_ADMIN_PHONES` روی سرور می‌ماند.
+- endpoint عمومی `GET /api/platform/auth/options` فقط برچسب عمومی و شناسه HMAC غیرقابل‌بازگشت برمی‌گرداند؛ شماره خام در response، UI یا log قرار نمی‌گیرد.
+- وقتی یک مدیر مجاز وجود داشته باشد، فرانت همان گزینه را خودکار انتخاب می‌کند؛ در حالت چند مدیر، فقط برچسب‌های عمومی برای انتخاب نمایش داده می‌شوند.
+- مسیرهای request/verify اکنون `phoneRef` را می‌پذیرند. ورودی قدیمی `phone` موقتاً فقط برای rollout بدون قطعی نگه داشته شده و UI جدید آن را ارسال نمی‌کند.
+- WebOTP به صفحه verify افزوده شد و فیلد همچنان `autocomplete="one-time-code"` دارد؛ در مرورگرهای فاقد پشتیبانی، ورود دستی برقرار است.
+- `SmsService` خط پایانی origin-bound پیامک را با host معتبر می‌سازد. متغیر جدید `PLATFORM_ADMIN_WEBOTP_HOST` فقط hostname بدون protocol/path می‌گیرد.
+- تست CI برای شناسه غیرقابل‌بازگشت، resolve امن، اعتبارسنجی host و قالب origin-bound پیامک اضافه شد.
+- آخرین commit این بسته: `1b07c2868fdd55d5d02a5a8b7260b8afb86a692a`. نتیجه CI هنوز در انتظار است.
+- مرحله Coolify هنوز انجام نشده: متغیر `PLATFORM_ADMIN_WEBOTP_HOST` باید روی Backend staging ثبت شود، سپس Backend و Frontend redeploy و OTP واقعی از UI تست شود.
+- هیچ شماره، OTP، secret یا مقدار حساس در Git ثبت نشده است.
