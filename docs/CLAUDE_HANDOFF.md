@@ -170,8 +170,8 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - onboarding اولین Super Admin آلفا از UI آغاز شد: درخواست SMS و تأیید OTP موفق بود و فرم پروفایل/نام کاربری/رمز/سلفی باز شد.
 - ثبت نهایی اولین Super Admin آلفا از UI موفق شد؛ ورود خودکار انجام شد و داشبورد `/app` روی Host آلفا به‌درستی نمایش داده شد.
 - شماره، OTP، نام، رمز، چهره و سایر اطلاعات شخصی عمداً در Git/مستندات ثبت نشده‌اند.
-- `/api/auth/setup-status` آلفا باید اکنون `{"needsSetup":false}` شود و هنوز باید به‌صورت مستقل تأیید شود.
-- مرحله بعد: تأیید setup-status آلفا و سپس ایجاد اولین Super Admin بتا فقط از UI.
+- `/api/auth/setup-status` آلفا پس از bootstrap به‌صورت مستقل تست شد و `{"needsSetup":false}` تأیید شد.
+- مرحله بعد: ایجاد اولین Super Admin بتا فقط از UI روی Host دقیق `beta-staging.amalyar.com`.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
