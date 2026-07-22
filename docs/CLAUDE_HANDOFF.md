@@ -516,3 +516,11 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - مالک پروژه تأیید کرد Backend staging پس از افزودن `PLATFORM_ADMIN_WEBOTP_HOST` با redeploy معمولی بالا آمد و وضعیت `Running` دارد.
 - مرحله بعد: redeploy فرانت `amalyar-frontend-staging` برای فعال‌شدن رابط بدون فیلد شماره و listener خودکار WebOTP.
 - تست واقعی OTP مدیریت هنوز بعد از این deployment انجام نشده است.
+
+
+### Frontend phone-less login deployment confirmed
+
+- مالک پروژه تأیید کرد `amalyar-frontend-staging` با نسخه جدید با موفقیت deploy شده است.
+- Backend و Frontend این بسته اکنون هر دو روی staging مستقر هستند.
+- بررسی بعدی قبل از ارسال OTP: صفحه مدیریت باید بدون فیلد شماره نمایش داده شود و فقط کنترل «ارسال کد ورود» برای مدیر ثبت‌شده در سرور داشته باشد.
+- تست دریافت و autofill واقعی OTP هنوز انجام نشده است.
