@@ -282,3 +282,12 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - New Backend runtime variable required before the next staging redeploy: `PLATFORM_ADMIN_WEBOTP_HOST` (hostname only; no scheme/path).
 - Pending sequence: wait for CI, save the new runtime variable, redeploy Backend, redeploy Frontend, then owner-browser OTP smoke test.
 - No phone, OTP, secret, credential, connection URL, or personal value is recorded here.
+
+
+### CI failure observed
+
+- `security-ci` run 340 failed only in step `Verify Platform Admin SMS uses origin-bound WebOTP`.
+- Frontend build, Backend build, Prisma validation, tenant isolation, fail-closed config and opaque reference checks all passed.
+- Root cause: the inline YAML `run: node -e ...` contained a WebOTP fragment marker; YAML treated the unprotected marker as a comment and the generated shell command ended with an unmatched quote.
+- This is a workflow quoting error, not a failure in application/WebOTP behavior.
+- Focused fix pending owner approval: convert only this CI command to a YAML block scalar while preserving the same assertion, then rerun CI.
