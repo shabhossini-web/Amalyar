@@ -253,5 +253,6 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - A 15-character candidate for `PLATFORM_ADMIN_SECRET` was rejected before deployment because it was too short.
 - `PLATFORM_ADMIN_SECRET` is now saved and locked with a randomly generated 64-character value; the value is intentionally not recorded.
 - Secret flags: Buildtime off, Runtime on, Multiline off, Literal on.
-- `PLATFORM_ADMIN_PHONES` is not configured yet.
-- No deployment has been started yet.
+- `PLATFORM_ADMIN_PHONES` is saved and locked; its value is intentionally not recorded.
+- Allowlist flags: Buildtime off, Runtime on, Multiline off, Literal on.
+- All three Platform Admin variables are now saved; Backend has not yet been redeployed with them.
