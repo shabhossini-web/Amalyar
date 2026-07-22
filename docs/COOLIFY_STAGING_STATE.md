@@ -328,3 +328,12 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - Backend و Frontend این بسته اکنون هر دو روی staging مستقر هستند.
 - بررسی بعدی قبل از ارسال OTP: صفحه مدیریت باید بدون فیلد شماره نمایش داده شود و فقط کنترل «ارسال کد ورود» برای مدیر ثبت‌شده در سرور داشته باشد.
 - تست دریافت و autofill واقعی OTP هنوز انجام نشده است.
+
+
+### Owner visual verification: phone field removed
+
+- مالک پروژه صفحه مدیریت staging را بعد از deploy باز کرد و تأیید تصویری انجام شد.
+- فیلد ورود شماره حذف شده و UI توضیح می‌دهد که شماره مجاز از تنظیم امن سرور انتخاب می‌شود.
+- هیچ شماره یا شناسه خام در صفحه نمایش داده نمی‌شود.
+- در تصویر، دکمه ارسال کم‌رنگ/احتمالاً disabled دیده می‌شود؛ قبل از OTP smoke test باید امکان کلیک آن از مرورگر مالک تأیید شود.
+- تلاش read-only Agent برای endpoint گزینه‌ها دوباره توسط browser safety policy رد شد؛ نتیجه endpoint از سمت Agent تأیید نشده است.
