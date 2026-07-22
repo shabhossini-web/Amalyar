@@ -88,43 +88,40 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
 
     await migrateTenant(tenantUrl.toString());
 
-    const tenant = await control.tenant.create({
-      data: {
-        slug: job.slug,
-        name: job.name.trim(),
-        status: 'active',
-        databaseUrlEncrypted: encryptDatabaseUrl(tenantUrl.toString()),
-        domains: { create: { hostname: job.hostname, primary: true } },
-      },
-      select: { id: true },
-    });
-    tenantId = tenant.id;
-
-    await control.$transaction([
-      control.provisioningJob.update({
+    const tenant = await control.$transaction(async (tx) => {
+      const created = await tx.tenant.create({
+        data: {
+          slug: job.slug,
+          name: job.name.trim(),
+          status: 'active',
+          databaseUrlEncrypted: encryptDatabaseUrl(tenantUrl.toString()),
+          domains: { create: { hostname: job.hostname, primary: true } },
+        },
+        select: { id: true },
+      });
+      await tx.provisioningJob.update({
         where: { id: job.id },
         data: {
           status: 'succeeded',
-          tenantId,
+          tenantId: created.id,
           errorCode: null,
           finishedAt: new Date(),
         },
-      }),
-      control.platformAuditEvent.create({
+      });
+      await tx.platformAuditEvent.create({
         data: {
           actorHash: job.requestedByHash,
           action: 'platform.provisioning.succeeded',
           targetType: 'tenant',
-          targetId: tenantId,
+          targetId: created.id,
           metadata: { jobId: job.id, slug: job.slug, hostname: job.hostname },
         },
-      }),
-    ]);
+      });
+      return created;
+    });
+    tenantId = tenant.id;
     console.log(`Provisioning job ${job.id} succeeded`);
   } catch {
-    if (tenantId) {
-      await control.tenant.deleteMany({ where: { id: tenantId, status: { not: 'active' } } }).catch(() => undefined);
-    }
     if (databaseCreated) {
       await admin.$executeRawUnsafe(
         `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()`,
