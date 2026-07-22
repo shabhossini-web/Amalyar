@@ -45,6 +45,10 @@ jobs:
           TENANT_DATABASE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
         run: npm run build
+      - name: Verify stripped API prefix restoration
+        working-directory: server
+        run: node -e "const { restoreApiPrefix } = require('./dist/common/api-prefix'); const cases = [['/auth/setup-status','/api/auth/setup-status'],['/auth/setup-status?x=1','/api/auth/setup-status?x=1'],['/api/auth/setup-status','/api/auth/setup-status'],['/api?x=1','/api?x=1'],['/','/api/']]; for (const [input, expected] of cases) { const actual = restoreApiPrefix(input); if (actual !== expected) { console.error({ input, expected, actual }); process.exit(1); } }"
+
       - name: Verify SMS production fallback fails closed
         working-directory: server
         run: node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='production'; delete process.env.MELI_API_KEY; delete process.env.MELI_FROM; new SmsService().sendOtp('09120000000','000000').then(() => process.exit(1)).catch((e) => { if (e?.getStatus?.() !== 503) { console.error('expected HTTP 503'); process.exit(1); } });"
