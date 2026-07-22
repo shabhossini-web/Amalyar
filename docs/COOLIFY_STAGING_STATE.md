@@ -58,7 +58,7 @@ Automatic fix added on the working branch:
 - `server/src/main.ts` applies the restoration before Nest route matching while leaving already-prefixed URLs unchanged.
 - Security CI now tests stripped paths, query strings, already-prefixed paths, and root.
 - Code commits: `22a2a69cf9693b2860315a0f62ad194c59a2c71c`, `d82114593dcba25370222a281ffad185165fedea`, `343384a9026669d32dd9a1b4af5c97bdf3d4e0ba`.
-- CI result and Backend redeploy for this fix are pending.
+- GitHub Actions `security-ci` run 179 passed. Backend redeploy and Alpha/Beta smoke retest are pending.
 
 ## Runtime environment variables
 
