@@ -144,7 +144,10 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Alpha first Super Admin creation completed successfully through the UI; automatic login worked and the Alpha `/app` dashboard rendered.
 - Phone, OTP, name, password, face, and all personal data are intentionally not recorded.
 - Alpha `/api/auth/setup-status` was explicitly checked after bootstrap and returned `{"needsSetup":false}`.
-- Next: create the first Beta Super Admin through the UI on the exact `beta-staging.amalyar.com` host.
+- Beta first Super Admin was also created through the UI; automatic login succeeded and the Beta `/app` dashboard rendered.
+- No phone, OTP, name, password, image, or dashboard personal data is recorded.
+- Visual smoke showed distinct tenant-scoped dashboard data between Alpha and Beta; formal cross-tenant token testing is still required.
+- Beta `/api/auth/setup-status` should now return `{"needsSetup":false}` and needs explicit verification.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
