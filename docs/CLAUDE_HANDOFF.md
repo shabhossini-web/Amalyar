@@ -565,3 +565,12 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - در Coolify project `Amalyar` و environment `staging`، فرم Create a new Application برای repo `Amalyar` باز شد.
 - هنوز Continue زده نشده و resource ساخته نشده است.
 - تنظیم بعدی: branch کاری، Dockerfile build pack، base directory `/server` و Port خالی.
+
+
+### Worker application resource created, not deployed
+
+- Coolify application resource از repo و branch کاری در staging ساخته شد.
+- Build Pack و Base Directory به‌ترتیب `Dockerfile` و `/server` هستند.
+- Coolify به‌صورت پیش‌فرض یک دامنه موقت، Traefik labels و exposed port ایجاد کرده است؛ این‌ها برای Worker باید قبل از نخستین deployment کامل حذف شوند.
+- Dockerfile هنوز default `/Dockerfile` است و باید به `/Dockerfile.worker` تغییر کند.
+- resource هنوز deploy نشده و هیچ Worker process اجرا نشده است.
