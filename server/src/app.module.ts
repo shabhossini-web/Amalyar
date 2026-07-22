@@ -9,6 +9,7 @@ import { FeaturesModule } from './features/features.module';
 import { PatientsModule } from './patients/patients.module';
 import { AppController } from './app.controller';
 import { AuditModule } from './audit/audit.module';
+import { PlatformModule } from './platform/platform.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AuditModule } from './audit/audit.module';
     AccountsModule,
     FeaturesModule,
     PatientsModule,
+    PlatformModule,
   ],
   controllers: [AppController],
 })
