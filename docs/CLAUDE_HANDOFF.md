@@ -454,5 +454,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - تلاش برای smoke test read-only از مرورگر ابری Agent به‌دلیل policy مرورگر روی دامنه staging رد شد؛ هیچ دورزدنی انجام نشد و نتیجه endpoint از طرف Agent تأییدشده محسوب نمی‌شود.
 - DNS دامنه `admin-staging.amalyar.com` به همان سرور staging ثبت شد؛ IP در Git ثبت نشده است.
 - دامنه `https://admin-staging.amalyar.com` به Frontend resource `amalyar-frontend-staging` افزوده و Save شد؛ Alpha/Beta حفظ شدند و هنوز redeploy انجام نشده است.
-- route `https://admin-staging.amalyar.com/api` به Backend resource افزوده و Save شد؛ routeهای API/Alpha/Beta حفظ شدند و هنوز redeploy انجام نشده است.
+- route `https://admin-staging.amalyar.com/api` به Backend resource افزوده و Save شد؛ routeهای API/Alpha/Beta حفظ شدند.
+- نخستین redeploy پس از افزودن route در Docker build شکست خورد: wrapper با exit code 255 متوقف شد و آخرین مرحله قابل‌مشاهده `RUN apk add --no-cache openssl` بود؛ علت ریشه‌ای هنوز در log معمولی نمایش داده نشده است.
+- نسخه قبلی Backend همچنان سبز و `Running` باقی ماند؛ downtime رخ نداد. تا دریافت Debug Logs redeploy تکرار نشود.
 - گام بعدی: route دامنه مدیریت در Frontend و Backend و سپس تست OTP فقط از UI.
