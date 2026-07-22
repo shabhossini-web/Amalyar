@@ -260,5 +260,7 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - A read-only cloud-browser smoke test was blocked by browser security policy; no workaround was attempted and the endpoint is not marked Agent-verified.
 - DNS for `admin-staging.amalyar.com` now points to the staging server; the server IP is intentionally not recorded.
 - `https://admin-staging.amalyar.com` was appended to Frontend resource `amalyar-frontend-staging`; Alpha/Beta domains were preserved. Saved, not yet redeployed.
-- `https://admin-staging.amalyar.com/api` was appended to the Backend resource; the existing API/Alpha/Beta routes were preserved. Saved, not yet redeployed.
+- `https://admin-staging.amalyar.com/api` was appended to the Backend resource; the existing API/Alpha/Beta routes were preserved.
+- The first Backend redeploy after the route change failed during Docker build. The normal log only shows wrapper exit code 255 and the last visible build step `RUN apk add --no-cache openssl`; root cause is not yet visible.
+- The previous Backend container remains green and Running, so there was no service downtime. Do not retry until Debug Logs are inspected.
 - Next: configure the dedicated management-domain routes, then test OTP through the management UI.
