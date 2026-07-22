@@ -333,7 +333,9 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 تست `server/scripts/verify-tenant-isolation.js` در commit `9f27d486e3d1a342d66e05ca056136ce819ec942` اضافه و در workflow با commit `3c915d8b753fccc4894bff9712a238c35652b957` اجباری شد. GitHub Actions `security-ci` run 226 موفق شد. این تست قطعی سطح کد/CI است.
 - تست زنده جداسازی داده، مرحله اول، در 2026-07-22 موفق شد: یک رکورد کاملاً ساختگی در Alpha ساخته شد و جست‌وجوی آن در Beta هیچ نتیجه‌ای نداد.
 - هیچ مقدار رکورد، نام، شناسه یا داده شخصی در Git ثبت نشده است.
-- جهت معکوس، ساخت رکورد ساختگی در Beta و جست‌وجوی آن در Alpha، هنوز باید اجرا شود؛ تست زنده cross-tenant token نیز جداگانه باقی مانده است.
+- تست زنده جداسازی داده، مرحله دوم، نیز موفق شد: رکورد کاملاً ساختگی Beta در Alpha پیدا نشد.
+- نتیجه نهایی تست داده: جداسازی زنده در هر دو جهت Alpha→Beta و Beta→Alpha پاس شد؛ هیچ مقدار رکورد یا داده شخصی در Git ثبت نشده است.
+- تست زنده cross-tenant token هنوز باقی مانده و باید به‌صورت خودکار اجرا شود، نه با کپی یا دست‌کاری دستی توکن توسط کاربر.
 
 ## کارهای مهم باقی‌مانده
 
@@ -341,7 +343,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
 3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
 4. تست خودکار قطعی جداسازی به CI اضافه شد و run 226 سبز شد: JWT با `tid` شرکت دیگر 401 می‌شود و Prisma برای Tenantهای متفاوت client/Database route جدا انتخاب می‌کند.
-5. تست زنده داده در جهت Alpha→Beta پاس شد؛ مرحله بعد جهت Beta→Alpha را فقط با داده مصنوعی اجرا کن، سپس تست زنده cross-tenant token را تکمیل کن.
+5. تست زنده داده در هر دو جهت Alpha→Beta و Beta→Alpha پاس شد. مرحله بعد، تست cross-tenant token را خودکار کن و سپس UI امن Platform Admin برای provisioning شرکت جدید را بساز.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
 7. انتقال provisioning credential به job موقت.
 8. Redis rate limit پیش از چند replica.
@@ -364,7 +366,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
 6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
 7. Frontend branch، deploy، دامنه‌ها، Healthcheck و ساخت حساب‌های Alpha/Beta فقط از UI تکمیل و تأیید شده است.
-8. تست خودکار CI و مرحله زنده Alpha→Beta پاس شده‌اند؛ اکنون جهت Beta→Alpha و سپس تست زنده token را اجرا و نتیجه را همین‌جا ثبت کن.
+8. تست خودکار CI و تست زنده داده در هر دو جهت پاس شده‌اند؛ اکنون تست زنده token را خودکار و نتیجه را همین‌جا ثبت کن، سپس provisioning UI را پیاده‌سازی کن.
 9. backup و restore را قبل از production تست کن.
 10. PR را Draft نگه دار.
 
