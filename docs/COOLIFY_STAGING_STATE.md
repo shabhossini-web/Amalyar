@@ -112,7 +112,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - HTTP Basic Authentication: disabled
 - Watch Paths: `src/**`, `public/**`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js`, `Dockerfile`, `nginx.conf`
 - Coolify-generated temporary domain is retained for the first smoke deploy.
-- Git branch must still be visually verified as exactly `agent/security-permissions-hardening` before the first deploy.
+- Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
 
