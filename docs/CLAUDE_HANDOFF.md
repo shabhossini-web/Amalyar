@@ -178,6 +178,21 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - وضعیت جاری onboarding: Alpha و Beta هر دو فقط از UI راه‌اندازی شده‌اند، هر دو داشبورد `/app` را نمایش می‌دهند و هر دو `needsSetup=false` هستند.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
+## تصمیم Platform Admin و provisioning خودکار
+
+در 2026-07-22 مالک پروژه ورود پیامکی Platform Admin را تأیید کرد.
+
+معماری مصوب:
+
+- Platform Admin از حساب و JWT شرکت‌ها کاملاً جدا است.
+- ورود با OTP فقط برای شماره‌های allowlist شده در متغیر Coolify انجام می‌شود؛ هیچ شماره‌ای وارد کد یا Git نمی‌شود.
+- session با token تصادفیِ hash‌شده در Control DB، کوکی `HttpOnly` کوتاه‌عمر و CSRF جدا محافظت می‌شود.
+- OTP، session و درخواست‌ها rate limit و Audit می‌شوند؛ مقدار OTP، شماره، token و secret log نمی‌شود.
+- API اصلی credential دارای `CREATEDB/CREATEROLE` نگه نمی‌دارد.
+- UI یک `ProvisioningJob` در Control DB می‌سازد و وضعیت آن را نمایش می‌دهد.
+- Worker جداگانه job را claim می‌کند، database/role مستقل می‌سازد، migration را اجرا می‌کند و نتیجه را در job ثبت می‌کند.
+- Platform UI روی دامنه مدیریتی جدا deploy می‌شود؛ دامنه و Coolify resource پس از سبزشدن CI تنظیم خواهند شد.
+
 ## معماری Database-per-Tenant
 
 تصمیم تأییدشده: هر شرکت PostgreSQL database مستقل دارد.
@@ -344,7 +359,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
 3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
 4. تست خودکار قطعی جداسازی به CI اضافه شد و run 226 سبز شد: JWT با `tid` شرکت دیگر 401 می‌شود و Prisma برای Tenantهای متفاوت client/Database route جدا انتخاب می‌کند.
-5. تست زنده داده در هر دو جهت پاس و رکوردهای ساختگی پاک‌سازی شدند. تست cross-tenant token در سطح کد/CI خودکار است؛ برای پوشش live نباید کاربر توکن را دستی جابه‌جا کند. مرحله بعد UI امن Platform Admin برای provisioning شرکت جدید است.
+5. تست زنده داده در هر دو جهت پاس و رکوردهای ساختگی پاک‌سازی شدند. معماری Platform Admin با OTP و provisioning queue/Worker تأیید شد؛ مرحله بعد پیاده‌سازی و CI آن است.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
 7. انتقال provisioning credential به job موقت.
 8. Redis rate limit پیش از چند replica.
