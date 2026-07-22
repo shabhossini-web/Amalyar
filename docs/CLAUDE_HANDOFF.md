@@ -335,6 +335,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - هیچ مقدار رکورد، نام، شناسه یا داده شخصی در Git ثبت نشده است.
 - تست زنده جداسازی داده، مرحله دوم، نیز موفق شد: رکورد کاملاً ساختگی Beta در Alpha پیدا نشد.
 - نتیجه نهایی تست داده: جداسازی زنده در هر دو جهت Alpha→Beta و Beta→Alpha پاس شد؛ هیچ مقدار رکورد یا داده شخصی در Git ثبت نشده است.
+- پس از تست، هر دو رکورد کاملاً ساختگی از Tenant مربوط به خودشان حذف شدند؛ staging از داده آزمایشی این تست پاک‌سازی شد.
 - تست زنده cross-tenant token هنوز باقی مانده و باید به‌صورت خودکار اجرا شود، نه با کپی یا دست‌کاری دستی توکن توسط کاربر.
 
 ## کارهای مهم باقی‌مانده
@@ -343,7 +344,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
 3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
 4. تست خودکار قطعی جداسازی به CI اضافه شد و run 226 سبز شد: JWT با `tid` شرکت دیگر 401 می‌شود و Prisma برای Tenantهای متفاوت client/Database route جدا انتخاب می‌کند.
-5. تست زنده داده در هر دو جهت Alpha→Beta و Beta→Alpha پاس شد. مرحله بعد، تست cross-tenant token را خودکار کن و سپس UI امن Platform Admin برای provisioning شرکت جدید را بساز.
+5. تست زنده داده در هر دو جهت پاس و رکوردهای ساختگی پاک‌سازی شدند. تست cross-tenant token در سطح کد/CI خودکار است؛ برای پوشش live نباید کاربر توکن را دستی جابه‌جا کند. مرحله بعد UI امن Platform Admin برای provisioning شرکت جدید است.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
 7. انتقال provisioning credential به job موقت.
 8. Redis rate limit پیش از چند replica.
