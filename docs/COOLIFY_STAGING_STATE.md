@@ -133,7 +133,10 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - The temporary URL is HTTP and showed the expected browser warning; tenant custom domains must use HTTPS.
 - Frontend healthcheck saved and enabled 2026-07-22: `GET http://localhost:80/login`, expected 200, blank response-text match, interval 30s, timeout 10s, retries 5, start period 60s.
 - Coolify shows `Disable Healthcheck`, confirming it is enabled.
-- Redeploy completed and the Frontend now reports `Running (healthy)`; confirmed by the project owner.
+- Redeploy completed and the Frontend reports `Running (healthy)`; confirmed by the project owner.
+- Tenant root domains were then assigned to the Frontend: `https://alpha-staging.amalyar.com` and `https://beta-staging.amalyar.com`; the temporary HTTP domain remains during smoke testing.
+- The domain-cutover redeploy also reached `Running (healthy)`.
+- Root UI plus `/api` path smoke tests are pending; do not create Super Admin accounts or remove the temporary domain until they pass.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
