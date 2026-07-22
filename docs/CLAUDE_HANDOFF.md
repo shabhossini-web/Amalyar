@@ -161,6 +161,9 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - Healthcheck فرانت در 2026-07-22 ذخیره و فعال شد: `GET http://localhost:80/login`، return code 200، interval 30، timeout 10، retries 5، start period 60 و response text خالی.
 - دکمه Coolify اکنون `Disable Healthcheck` را نشان می‌دهد، پس فعال‌سازی تأیید شده است.
 - پس از Redeploy، وضعیت Frontend به `Running (healthy)` رسید و مالک پروژه آن را تأیید کرد.
+- در cutover ریشه دامنه‌ها در 2026-07-22، Frontend Domains روی `https://alpha-staging.amalyar.com`، `https://beta-staging.amalyar.com` و دامنه موقت HTTP تنظیم شد.
+- Redeploy این تنظیم نیز `Running (healthy)` شد؛ smoke test هم‌زمان UI ریشه و Backend مسیر `/api` روی هر Tenant هنوز باید تأیید شود.
+- تا پایان smoke test هیچ حساب Super Admin ساخته نشود؛ دامنه موقت پس از تأیید کامل حذف شود.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
