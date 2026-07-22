@@ -266,5 +266,7 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - One controlled normal redeploy retry completed successfully. Backend is now deployed with the management API route, confirming the prior build-helper failure was transient; no Dockerfile change was needed.
 - Frontend resource `amalyar-frontend-staging` was redeployed after adding the management domain; the project owner confirmed deployment success.
 - Agent cloud-browser access to `admin-staging` was blocked by browser security policy. No workaround was attempted; visual routing remains for owner-browser confirmation.
+- Owner-browser visual smoke test passed: `https://admin-staging.amalyar.com` rendered the dedicated Platform Admin login page over HTTPS, with no tenant UI, JSON, 404, 502, or SSL error.
+- No phone, OTP, image, or sensitive value from the smoke test is recorded.
 - The previous Backend container remains green and Running, so there was no service downtime. Do not retry until Debug Logs are inspected.
 - Next: configure the dedicated management-domain routes, then test OTP through the management UI.
