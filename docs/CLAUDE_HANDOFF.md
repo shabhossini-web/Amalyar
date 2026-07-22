@@ -165,7 +165,9 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - Redeploy این تنظیم نیز `Running (healthy)` شد.
 - smoke test نهایی Routing موفق بود: ریشه Alpha و Beta هر دو صفحه Login/Signup فرانت را نمایش دادند و `/api/auth/setup-status` روی هر دو Tenant پاسخ صحیح `{"needsSetup":true}` داد.
 - هیچ حساب Super Admin هنوز ساخته نشده است.
-- دامنه موقت HTTP اکنون باید از Frontend حذف و فقط دامنه‌های HTTPS Alpha/Beta نگه داشته شوند.
+- دامنه موقت HTTP از Frontend حذف شد؛ فقط `https://alpha-staging.amalyar.com` و `https://beta-staging.amalyar.com` باقی ماندند.
+- Frontend پس از این پاک‌سازی Redeploy و `Running (healthy)` شد؛ تأیید مالک پروژه.
+- مرحله بعد: ایجاد اولین Super Admin آلفا فقط از UI، بدون اشتراک شماره، OTP، رمز یا سلفی در Chat/Git.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
