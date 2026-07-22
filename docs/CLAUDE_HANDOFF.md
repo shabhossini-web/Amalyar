@@ -105,6 +105,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - commitهای کد: `b8c4b5408537543bd41b345c81f97efa030e85f9` و `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
 - CI run `107`: موفق (`success`)
 - وضعیت Coolify پس از این تغییر: Running سبز و پایدار؛ تأیید مالک پروژه در 2026-07-22
+- تست واقعی پس از اصلاح: `POST /api/auth/signup/request-otp` روی Alpha دوباره HTTP `201` و `{"ok":true,"ttl":300}` داد؛ شماره و OTP ثبت نشده‌اند.
 
 ## معماری Database-per-Tenant
 
