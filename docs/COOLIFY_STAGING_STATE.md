@@ -136,7 +136,9 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Redeploy completed and the Frontend reports `Running (healthy)`; confirmed by the project owner.
 - Tenant root domains were then assigned to the Frontend: `https://alpha-staging.amalyar.com` and `https://beta-staging.amalyar.com`; the temporary HTTP domain remains during smoke testing.
 - The domain-cutover redeploy also reached `Running (healthy)`.
-- Root UI plus `/api` path smoke tests are pending; do not create Super Admin accounts or remove the temporary domain until they pass.
+- Final routing smoke test passed: Alpha and Beta roots rendered the frontend login/signup UI, while each tenant's `/api/auth/setup-status` returned `{"needsSetup":true}`.
+- No Super Admin account has been created yet.
+- Next: remove the temporary HTTP domain from the Frontend and retain only the two HTTPS tenant roots.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
