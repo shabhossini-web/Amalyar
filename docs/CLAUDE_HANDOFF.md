@@ -141,7 +141,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - HTTP Basic Authentication: خاموش
 - Watch Paths ذخیره‌شده: `src/**`، `public/**`، `index.html`، `package.json`، `package-lock.json`، `vite.config.js`، `Dockerfile` و `nginx.conf`
 - دامنه موقت تولیدشده توسط Coolify فعلاً نگه داشته شد.
-- قبل از اولین deploy باید Git Source تأیید شود که دقیقاً روی branch `agent/security-permissions-hardening` است.
+- Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
 
