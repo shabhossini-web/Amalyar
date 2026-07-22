@@ -124,7 +124,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 
 ## تصمیم onboarding کاربرپسند
 
-در 2026-07-22 روش ساخت حساب از Terminal رد و لغو شد؛ هیچ حسابی با روش دستی ساخته نشد و Tenantهای Alpha/Beta همچنان `needsSetup=true` دارند.
+در 2026-07-22 روش ساخت حساب از Terminal رد و لغو شد؛ در همان مقطع هیچ حسابی با روش دستی ساخته نشد و Tenantهای Alpha/Beta هنوز `needsSetup=true` داشتند. این وضعیت تاریخی است؛ هر دو Tenant بعداً فقط از UI راه‌اندازی شدند.
 
 تصمیم نهایی:
 
@@ -146,7 +146,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - CI run `135`: موفق.
 - `nginx.conf`: اگر Backend ناسالم باشد و Coolify `/api` را به frontend fallback کند، Nginx با `503` fail-closed می‌شود و SPA HTML تحویل نمی‌دهد.
 - commit fail-closed فرانت: `9ca9a9abb0084baf290e41699eb05b8473e39137`؛ CI run `141` موفق.
-- Frontend Application در Coolify ساخته و تنظیمات آن در 2026-07-22 ذخیره شد؛ هنوز deploy نشده است.
+- Frontend Application در Coolify ساخته و تنظیمات آن در 2026-07-22 ذخیره شد؛ اولین deploy و deployهای بعدی موفق شدند و وضعیت فعلی `Running (healthy)` است.
 - نام Frontend resource: `amalyar-frontend-staging`
 - Build pack: `Dockerfile`
 - Base Directory: `/`
@@ -163,8 +163,8 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - پس از Redeploy، وضعیت Frontend به `Running (healthy)` رسید و مالک پروژه آن را تأیید کرد.
 - در cutover ریشه دامنه‌ها در 2026-07-22، Frontend Domains روی `https://alpha-staging.amalyar.com`، `https://beta-staging.amalyar.com` و دامنه موقت HTTP تنظیم شد.
 - Redeploy این تنظیم نیز `Running (healthy)` شد.
-- smoke test نهایی Routing موفق بود: ریشه Alpha و Beta هر دو صفحه Login/Signup فرانت را نمایش دادند و `/api/auth/setup-status` روی هر دو Tenant پاسخ صحیح `{"needsSetup":true}` داد.
-- هیچ حساب Super Admin هنوز ساخته نشده است.
+- smoke test اولیه Routing موفق بود: ریشه Alpha و Beta هر دو صفحه Login/Signup فرانت را نمایش دادند و `/api/auth/setup-status` در آن مقطع روی هر دو Tenant پاسخ صحیح `{"needsSetup":true}` داد.
+- در آن smoke test اولیه هنوز هیچ حساب Super Admin ساخته نشده بود؛ این وضعیت تاریخی است و هر دو Tenant بعداً فقط از UI راه‌اندازی شدند.
 - دامنه موقت HTTP از Frontend حذف شد؛ فقط `https://alpha-staging.amalyar.com` و `https://beta-staging.amalyar.com` باقی ماندند.
 - Frontend پس از این پاک‌سازی Redeploy و `Running (healthy)` شد؛ تأیید مالک پروژه.
 - onboarding اولین Super Admin آلفا از UI آغاز شد: درخواست SMS و تأیید OTP موفق بود و فرم پروفایل/نام کاربری/رمز/سلفی باز شد.
@@ -174,7 +174,8 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - اولین Super Admin بتا نیز فقط از UI ساخته شد؛ ورود خودکار موفق بود و داشبورد `/app` روی Host بتا نمایش داده شد.
 - هیچ شماره، OTP، نام، رمز، تصویر یا داده شخصی از داشبورد در Git ثبت نشده است.
 - smoke بصری نشان داد داشبوردهای Alpha/Beta داده‌های tenant-scoped متفاوت نمایش می‌دهند؛ این جایگزین تست رسمی cross-tenant token نیست.
-- `/api/auth/setup-status` بتا باید اکنون `{"needsSetup":false}` شود و هنوز باید تأیید شود.
+- `/api/auth/setup-status` بتا پس از bootstrap به‌صورت مستقل تست شد و `{"needsSetup":false}` تأیید شد.
+- وضعیت جاری onboarding: Alpha و Beta هر دو فقط از UI راه‌اندازی شده‌اند، هر دو داشبورد `/app` را نمایش می‌دهند و هر دو `needsSetup=false` هستند.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
@@ -235,7 +236,7 @@ Alpha:
 - DB: `amalyar_alpha_staging`
 - Role: `amalyar_alpha_staging_app`
 - Status: active
-- `/api/auth/setup-status` پاسخ `{"needsSetup":true}` داده است.
+- `/api/auth/setup-status` پس از bootstrap پاسخ `{"needsSetup":false}` داده است.
 
 Beta:
 
@@ -244,7 +245,7 @@ Beta:
 - DB: `amalyar_beta_staging`
 - Role: `amalyar_beta_staging_app`
 - Status: active
-- `/api/auth/setup-status` پاسخ `{"needsSetup":true}` داده است.
+- `/api/auth/setup-status` پس از bootstrap پاسخ `{"needsSetup":false}` داده است.
 
 هر دو فرمان provisioning قبلاً موفق اجرا شده‌اند؛ دوباره اجرا نکن.
 
@@ -333,9 +334,9 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 
 1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
-3. Frontend resource ساخته و تنظیماتش ذخیره شده است؛ branch را کنترل، روی دامنه موقت deploy و سپس مسیرهای دامنه tenant را تنظیم کن.
-4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
-5. deploy/config frontend tenant-aware.
+3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
+4. تست خودکار قطعی جداسازی را به CI اضافه کن: JWT با `tid` شرکت دیگر باید 401 شود و Prisma برای Tenantهای متفاوت client/Database متفاوت انتخاب کند.
+5. پس از سبز شدن CI، تست زنده cross-tenant token/patient را بدون ثبت داده شخصی اجرا کن.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
 7. انتقال provisioning credential به job موقت.
 8. Redis rate limit پیش از چند replica.
@@ -357,8 +358,8 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
 6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
-7. در Frontend resource ابتدا branch دقیق را verify کن، سپس روی دامنه موقت deploy و حساب‌های Alpha/Beta را فقط از UI بساز.
-8. تست cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
+7. Frontend branch، deploy، دامنه‌ها، Healthcheck و ساخت حساب‌های Alpha/Beta فقط از UI تکمیل و تأیید شده است.
+8. اکنون تست خودکار و سپس تست زنده cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
 9. backup و restore را قبل از production تست کن.
 10. PR را Draft نگه دار.
 
