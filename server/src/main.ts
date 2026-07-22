@@ -3,12 +3,21 @@ import { ValidationPipe } from '@nestjs/common';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { allowedOrigins } from './common/security';
+import { restoreApiPrefix } from './common/api-prefix';
 
 async function bootstrap() {
   // bodyParser را خودمان با سقفِ بالاتر می‌گذاریم (سلفیِ dataURL بزرگ است)
   const app = await NestFactory.create(AppModule, { bodyParser: false });
   app.use(json({ limit: '8mb' }));
   app.use(urlencoded({ extended: true, limit: '8mb' }));
+
+  // Coolify path routing strips the matched /api prefix before proxying.
+  // Restore it so Nest's global prefix and the public same-origin API contract
+  // remain stable for every tenant hostname.
+  app.use((req: any, _res: any, next: any) => {
+    req.url = restoreApiPrefix(req.url);
+    next();
+  });
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
