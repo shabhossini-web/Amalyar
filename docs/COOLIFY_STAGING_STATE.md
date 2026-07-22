@@ -313,3 +313,10 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - مالک پروژه تأیید کرد `PLATFORM_ADMIN_WEBOTP_HOST` روی Backend resource در staging اضافه و ذخیره شده است.
 - مقدار، hostname دامنه مدیریت staging است و هیچ secret یا شماره‌ای ثبت نشده است.
 - Backend هنوز بعد از این تغییر redeploy نشده؛ مرحله بعد redeploy کنترل‌شده Backend و بررسی Running/Healthy و log است.
+
+
+### Backend WebOTP deployment confirmed
+
+- مالک پروژه تأیید کرد Backend staging پس از افزودن `PLATFORM_ADMIN_WEBOTP_HOST` با redeploy معمولی بالا آمد و وضعیت `Running` دارد.
+- مرحله بعد: redeploy فرانت `amalyar-frontend-staging` برای فعال‌شدن رابط بدون فیلد شماره و listener خودکار WebOTP.
+- تست واقعی OTP مدیریت هنوز بعد از این deployment انجام نشده است.
