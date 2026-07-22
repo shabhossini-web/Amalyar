@@ -66,7 +66,7 @@
 - `server/src/main.ts` پیش از route matching، URL بدون `/api` را به قرارداد داخلی Nest برمی‌گرداند؛ URLهایی که از قبل `/api` دارند بدون تغییر می‌مانند.
 - CI برای `/auth/setup-status`، query string، URL از قبل prefixed و root test اضافه کرد.
 - commitهای کد: `22a2a69cf9693b2860315a0f62ad194c59a2c71c`، `d82114593dcba25370222a281ffad185165fedea` و `343384a9026669d32dd9a1b4af5c97bdf3d4e0ba`.
-- نتیجه CI و Redeploy این اصلاح هنوز باید تأیید شود.
+- GitHub Actions `security-ci` run 179 برای اصلاح مسیر موفق شد؛ Redeploy Backend و smoke test Alpha/Beta هنوز باید تأیید شود.
 
 تنظیم PostgreSQL:
 
