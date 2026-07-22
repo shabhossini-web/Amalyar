@@ -1,10 +1,10 @@
 # ── build stage ──────────────────────────────────────────────
 # ایمیج‌های پایه از Docker Hub می‌آیند ولی روی سرور از آینه‌ی آروان
 # (registry-mirror در daemon.json) کشیده می‌شوند — پس ۴۰۳/تحریم پیش نمی‌آید.
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
