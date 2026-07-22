@@ -13,7 +13,8 @@
     "prisma:deploy": "prisma migrate deploy --schema prisma/schema.prisma",
     "control:migrate": "prisma migrate deploy --schema prisma/control/schema.prisma",
     "tenant:provision": "node dist/scripts/provision-tenant.js",
-    "tenants:migrate": "node dist/scripts/migrate-tenants.js"
+    "tenants:migrate": "node dist/scripts/migrate-tenants.js",
+    "provisioning:worker": "node dist/scripts/provisioning-worker.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.4",
