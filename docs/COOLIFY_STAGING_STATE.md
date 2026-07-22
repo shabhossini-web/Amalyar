@@ -264,5 +264,7 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - The first Backend redeploy after the route change failed during Docker build. The normal log shows wrapper exit code 255 and the last visible build step `RUN apk add --no-cache openssl`.
 - Debug Logs contain no `apk`, npm, or TypeScript failure. Coolify recorded `DeploymentException` error code 0, the `docker exec ... /artifacts/build.sh` helper command stopped, and the build container was then gracefully stopped. Current diagnosis is a build-helper/orchestrator failure, not a proven application/Dockerfile error.
 - One controlled normal redeploy retry completed successfully. Backend is now deployed with the management API route, confirming the prior build-helper failure was transient; no Dockerfile change was needed.
+- Frontend resource `amalyar-frontend-staging` was redeployed after adding the management domain; the project owner confirmed deployment success.
+- Agent cloud-browser access to `admin-staging` was blocked by browser security policy. No workaround was attempted; visual routing remains for owner-browser confirmation.
 - The previous Backend container remains green and Running, so there was no service downtime. Do not retry until Debug Logs are inspected.
 - Next: configure the dedicated management-domain routes, then test OTP through the management UI.
