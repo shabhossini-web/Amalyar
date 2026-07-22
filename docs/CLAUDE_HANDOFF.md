@@ -327,16 +327,18 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - validate Control schema
 - generated Control client artifact
 - Prisma provider startup بدون tenant request
+- مرز JWT: توکن دارای `tid` شرکت دیگر قبل از session lookup با 401 رد می‌شود.
+- مرز Prisma: Tenantهای متفاوت client/database route جدا دارند، Tenant یکسان client خودش را reuse می‌کند و بدون context دسترسی fail-closed است.
 
-CI سبز است. تست integration واقعی چند DB هنوز باید اضافه شود.
+تست `server/scripts/verify-tenant-isolation.js` در commit `9f27d486e3d1a342d66e05ca056136ce819ec942` اضافه و در workflow با commit `3c915d8b753fccc4894bff9712a238c35652b957` اجباری شد. GitHub Actions `security-ci` run 226 موفق شد. این تست قطعی سطح کد/CI است؛ تست زنده با توکن و داده مصنوعی روی دو دامنه staging هنوز باید اجرا شود.
 
 ## کارهای مهم باقی‌مانده
 
 1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
 3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
-4. تست خودکار قطعی جداسازی را به CI اضافه کن: JWT با `tid` شرکت دیگر باید 401 شود و Prisma برای Tenantهای متفاوت client/Database متفاوت انتخاب کند.
-5. پس از سبز شدن CI، تست زنده cross-tenant token/patient را بدون ثبت داده شخصی اجرا کن.
+4. تست خودکار قطعی جداسازی به CI اضافه شد و run 226 سبز شد: JWT با `tid` شرکت دیگر 401 می‌شود و Prisma برای Tenantهای متفاوت client/Database route جدا انتخاب می‌کند.
+5. مرحله بعد: تست زنده cross-tenant token/patient را فقط با داده مصنوعی و بدون ثبت داده شخصی اجرا کن.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
 7. انتقال provisioning credential به job موقت.
 8. Redis rate limit پیش از چند replica.
@@ -359,7 +361,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
 6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
 7. Frontend branch، deploy، دامنه‌ها، Healthcheck و ساخت حساب‌های Alpha/Beta فقط از UI تکمیل و تأیید شده است.
-8. اکنون تست خودکار و سپس تست زنده cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
+8. تست خودکار cross-tenant در CI کامل و سبز است؛ اکنون تست زنده token/patient را با داده مصنوعی اجرا و نتیجه را همین‌جا ثبت کن.
 9. backup و restore را قبل از production تست کن.
 10. PR را Draft نگه دار.
 
@@ -378,6 +380,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 - `server/src/patients/**`
 - `server/src/prisma/**`
 - `server/src/scripts/**`
+- `server/scripts/**`
 - `server/src/tenant/**`
 - `server/src/app.module.ts`
 - `server/src/main.ts`
