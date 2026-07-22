@@ -173,6 +173,18 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Status: active
 - Setup endpoint result after UI bootstrap: `{"needsSetup":false}`
 
+## Approved Platform Admin and automated provisioning architecture
+
+- Approved by the project owner on 2026-07-22.
+- Platform Admin authentication is separate from tenant accounts and tenant JWTs.
+- OTP is sent only to phone numbers allowlisted in Coolify environment variables; no phone number is committed to Git.
+- Platform sessions use random tokens stored only as hashes in Control DB, short-lived HttpOnly cookies, and separate CSRF protection.
+- OTP/session actions are rate-limited and audited without logging phone, OTP, token, or secrets.
+- The API must not retain a PostgreSQL credential with CREATEDB/CREATEROLE.
+- The UI creates a ProvisioningJob in Control DB and polls its status.
+- A separate Worker claims queued jobs, creates the isolated role/database, runs migrations, and records a safe status/result.
+- A dedicated management domain and Coolify Worker resource will be configured only after CI passes.
+
 ## Completed fixes discovered during deployment
 
 - Deterministic tenant-isolation verifier added at `server/scripts/verify-tenant-isolation.js` in commit `9f27d486e3d1a342d66e05ca056136ce819ec942` and enforced by workflow commit `3c915d8b753fccc4894bff9712a238c35652b957`.
@@ -197,4 +209,4 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 2. SMS production fallback is fail-closed; CI run 107 and the final Coolify deployment both passed.
 3. Frontend branch, tenant domains, healthcheck, and UI-only Alpha/Beta bootstrap are complete and verified.
 4. Deterministic automated tenant-isolation checks are complete and `security-ci` run 226 passed.
-5. Bidirectional live data isolation passed and synthetic records were removed. Cross-tenant token rejection is automated at code/CI level; do not require users to copy tokens manually. Next implement a secure Platform Admin provisioning UI for new companies.
+5. Bidirectional live data isolation passed and synthetic records were removed. The OTP Platform Admin plus queue/Worker provisioning architecture is approved; next implement it and pass CI.
