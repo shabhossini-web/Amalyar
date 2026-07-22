@@ -457,6 +457,6 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - route `https://admin-staging.amalyar.com/api` به Backend resource افزوده و Save شد؛ routeهای API/Alpha/Beta حفظ شدند.
 - نخستین redeploy پس از افزودن route در Docker build شکست خورد: wrapper با exit code 255 متوقف شد و آخرین مرحله قابل‌مشاهده `RUN apk add --no-cache openssl` بود.
 - Debug Logs هیچ خطای `apk`/npm/TypeScript نشان نداد؛ Coolify `DeploymentException` با error code 0 ثبت کرد، فرمان `docker exec ... /artifacts/build.sh` قطع شد و build container سپس gracefully stop شد. تشخیص فعلی: شکست build-helper/orchestrator، نه خطای اثبات‌شده در Dockerfile یا برنامه.
-- تصمیم عملیاتی: فقط یک redeploy عادی دیگر مجاز است؛ در تکرار همان خطا، retry متوقف و disk/RAM/Docker host بررسی شود.
+- یک redeploy عادی کنترل‌شده تکرار شد و کامل موفق شد؛ Backend با route مدیریت بالا آمد. نتیجه، گذرا بودن failure قبلی build-helper را تأیید می‌کند و نیاز به تغییر Dockerfile ایجاد نشد.
 - نسخه قبلی Backend همچنان سبز و `Running` باقی ماند؛ downtime رخ نداد. تا دریافت Debug Logs redeploy تکرار نشود.
 - گام بعدی: route دامنه مدیریت در Frontend و Backend و سپس تست OTP فقط از UI.
