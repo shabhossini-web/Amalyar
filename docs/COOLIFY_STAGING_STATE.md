@@ -299,3 +299,10 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - فقط step تست WebOTP از scalar تک‌خطی به YAML block scalar تبدیل شد تا fragment marker پیامک توسط YAML به‌عنوان comment تفسیر نشود.
 - منطق برنامه، قالب پیامک و assertion تست تغییر نکرد.
 - fix commit: `0334c3831fd45b6450684e36c5edf0500cb2f4d8`; rerun CI در انتظار نتیجه است.
+
+
+### CI verification complete
+
+- `security-ci` run 350 completed successfully on commit `078235f784b747c624c03f4577353c144cd7452d`.
+- Frontend build, Backend build, both Prisma schema validations, tenant isolation, fail-closed Platform Admin config, opaque phone reference and origin-bound WebOTP SMS tests all passed.
+- Code is ready for the Coolify staging variable and controlled Backend/Frontend redeploy.
