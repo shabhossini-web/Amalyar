@@ -45,7 +45,8 @@ const faDate = (value) => value ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 
 
 export default function PlatformAdmin() {
   const [phase, setPhase] = useState('loading');
-  const [phone, setPhone] = useState('');
+  const [authOptions, setAuthOptions] = useState([]);
+  const [phoneRef, setPhoneRef] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -67,9 +68,22 @@ export default function PlatformAdmin() {
     document.title = 'عمل‌یار — مدیریت پلتفرم';
     platformApi('/auth/me')
       .then(async () => { setPhase('dashboard'); await load(); })
-      .catch((error) => {
-        setPhase('login');
-        if (error.status === 404) setNotice('پنل مدیریت هنوز در سرور فعال نشده است.');
+      .catch(async (sessionError) => {
+        try {
+          const data = await platformApi('/auth/options');
+          const options = Array.isArray(data?.options) ? data.options : [];
+          setAuthOptions(options);
+          setPhoneRef(options.length > 0 ? options[0].ref : '');
+          setPhase('login');
+          if (options.length === 0) setNotice('هیچ مدیر مجازی در سرور ثبت نشده است.');
+        } catch (optionsError) {
+          setPhase('login');
+          if (sessionError.status === 404 || optionsError.status === 404) {
+            setNotice('پنل مدیریت هنوز در سرور فعال نشده است.');
+          } else {
+            setNotice(optionsError.message);
+          }
+        }
       });
   }, []);
 
@@ -79,13 +93,33 @@ export default function PlatformAdmin() {
     return () => clearInterval(timer);
   }, [phase, activeJobs]);
 
+  useEffect(() => {
+    if (
+      phase !== 'verify'
+      || typeof window === 'undefined'
+      || !('OTPCredential' in window)
+      || !navigator.credentials
+    ) return undefined;
+
+    const controller = new AbortController();
+    navigator.credentials.get({
+      otp: { transport: ['sms'] },
+      signal: controller.signal,
+    }).then((credential) => {
+      const nextCode = credential?.code?.replace(/\D/g, '').slice(0, 6);
+      if (nextCode) setCode(nextCode);
+    }).catch(() => undefined);
+
+    return () => controller.abort();
+  }, [phase]);
+
   const requestOtp = async (event) => {
     event.preventDefault();
     if (busy) return;
     setBusy(true);
     setNotice('');
     try {
-      await platformApi('/auth/request-otp', { method: 'POST', body: { phone } });
+      await platformApi('/auth/request-otp', { method: 'POST', body: { phoneRef } });
       setPhase('verify');
       setNotice('اگر این شماره مجاز باشد، کد تا چند لحظه دیگر ارسال می‌شود.');
     } catch (error) {
@@ -101,8 +135,7 @@ export default function PlatformAdmin() {
     setBusy(true);
     setNotice('');
     try {
-      await platformApi('/auth/verify', { method: 'POST', body: { phone, code } });
-      setPhone('');
+      await platformApi('/auth/verify', { method: 'POST', body: { phoneRef, code } });
       setCode('');
       setPhase('dashboard');
       await load();
@@ -193,20 +226,15 @@ export default function PlatformAdmin() {
 
           {phase === 'login' ? (
             <form onSubmit={requestOtp}>
-              <label>شماره موبایل مجاز</label>
-              <input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                dir="ltr"
-                placeholder="09xxxxxxxxx"
-                minLength={10}
-                maxLength={16}
-                required
-              />
-              <button disabled={busy}>{busy ? 'در حال بررسی…' : 'ارسال کد ورود'}</button>
+              <label>مدیر ثبت‌شده در سرور</label>
+              {authOptions.length > 1 ? (
+                <select value={phoneRef} onChange={(event) => setPhoneRef(event.target.value)} required>
+                  {authOptions.map((option) => <option key={option.ref} value={option.ref}>{option.label}</option>)}
+                </select>
+              ) : (
+                <div className="pa-identity">شماره مجاز از تنظیم امن سرور انتخاب می‌شود.</div>
+              )}
+              <button disabled={busy || !phoneRef}>{busy ? 'در حال ارسال…' : 'ارسال کد ورود'}</button>
             </form>
           ) : (
             <form onSubmit={verifyOtp}>
@@ -224,7 +252,7 @@ export default function PlatformAdmin() {
                 autoFocus
               />
               <button disabled={busy || code.length !== 6}>{busy ? 'در حال ورود…' : 'ورود امن'}</button>
-              <button className="pa-link" type="button" onClick={() => { setPhase('login'); setCode(''); setNotice(''); }}>اصلاح شماره</button>
+              <button className="pa-link" type="button" onClick={() => { setPhase('login'); setCode(''); setNotice(''); }}>ارسال دوباره کد</button>
             </form>
           )}
           {notice && <div className="pa-notice">{notice}</div>}
@@ -319,7 +347,7 @@ const styles = `
 .pa-shell{width:min(1120px,100%);margin:auto;position:relative}.pa-card{background:rgba(18,13,49,.86);border:1px solid rgba(139,92,246,.28);border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.38);backdrop-filter:blur(18px)}
 .pa-auth{width:min(460px,100%);margin:7vh auto;padding:34px;text-align:center;position:relative}.pa-mark{width:62px;height:62px;margin:0 auto 12px;border-radius:18px;display:grid;place-items:center;font-size:34px;font-weight:900;background:linear-gradient(135deg,#a855f7,#5b21b6);box-shadow:0 0 40px rgba(168,85,247,.35)}
 .pa-kicker{color:#22d3ee;font-size:11px;letter-spacing:2px;font-weight:800}.pa h1{font-size:clamp(25px,5vw,38px);margin:7px 0}.pa-sub{color:#aaa3ca;font-size:14px;line-height:2;margin:0 auto 24px;max-width:370px}
-.pa form{display:grid;gap:10px;text-align:right}.pa label{font-size:12px;color:#c7c2df;margin-top:5px}.pa input{width:100%;height:52px;border-radius:13px;border:1px solid rgba(139,92,246,.3);background:rgba(3,2,18,.62);color:#fff;padding:0 15px;font:inherit;outline:none}.pa input:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.12)}
+.pa form{display:grid;gap:10px;text-align:right}.pa label{font-size:12px;color:#c7c2df;margin-top:5px}.pa input,.pa select{width:100%;height:52px;border-radius:13px;border:1px solid rgba(139,92,246,.3);background:rgba(3,2,18,.62);color:#fff;padding:0 15px;font:inherit;outline:none}.pa input:focus,.pa select:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.12)}.pa-identity{min-height:52px;display:flex;align-items:center;border-radius:13px;border:1px solid rgba(139,92,246,.2);background:rgba(139,92,246,.07);color:#aaa4c6;padding:12px 15px;font-size:12px;line-height:1.8}
 .pa button{font:inherit;border:0;cursor:pointer}.pa form>button:not(.pa-link){height:52px;border-radius:13px;background:linear-gradient(135deg,#a855f7,#6d28d9);color:#fff;font-weight:900;margin-top:10px}.pa button:disabled{opacity:.5;cursor:not-allowed}.pa-link{color:#a9a2cb;background:transparent;padding:10px}
 .pa-notice{margin-top:16px;padding:12px 15px;border-radius:12px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.22);color:#c8f7ff;font-size:13px;line-height:1.8}.pa-security{margin-top:22px;color:#6f6991;font-size:10px;line-height:1.8}
 .pa-loader{width:28px;height:28px;margin:0 auto 15px;border:3px solid rgba(168,85,247,.2);border-top-color:#a855f7;border-radius:50%;animation:paSpin .8s linear infinite}@keyframes paSpin{to{transform:rotate(360deg)}}
