@@ -270,3 +270,15 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - No phone, OTP, image, or sensitive value from the smoke test is recorded.
 - The previous Backend container remains green and Running, so there was no service downtime. Do not retry until Debug Logs are inspected.
 - Next: configure the dedicated management-domain routes, then test OTP through the management UI.
+
+
+## Platform Admin phone-less login / WebOTP — 2026-07-23
+
+- Code head: `1b07c2868fdd55d5d02a5a8b7260b8afb86a692a`; CI pending.
+- Frontend no longer asks for or submits a raw phone number.
+- Backend returns only an opaque HMAC phone reference and a generic label; allowlisted phone values remain server-only.
+- Request/verify use `phoneRef`; the legacy raw-phone field is temporarily accepted only for a zero-downtime rollout.
+- WebOTP listening is enabled in supported browsers with manual-code fallback.
+- New Backend runtime variable required before the next staging redeploy: `PLATFORM_ADMIN_WEBOTP_HOST` (hostname only; no scheme/path).
+- Pending sequence: wait for CI, save the new runtime variable, redeploy Backend, redeploy Frontend, then owner-browser OTP smoke test.
+- No phone, OTP, secret, credential, connection URL, or personal value is recorded here.
