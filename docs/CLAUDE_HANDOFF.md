@@ -53,7 +53,20 @@
 - `https://alpha-staging.amalyar.com/api`
 - `https://beta-staging.amalyar.com/api`
 
-تغییر Domains ذخیره و Backend با موفقیت Redeploy شد؛ تست پاسخ سه endpoint عمومی هنوز در انتظار تأیید مرورگر است. دامنه‌های ریشه Alpha/Beta هنوز به Frontend منتقل نشده‌اند.
+تغییر Domains ذخیره و Backend با موفقیت Redeploy شد. تست مرورگر نشان داد:
+
+- `https://api-staging.amalyar.com/api/health` موفق و `ok:true` بود.
+- مسیرهای Alpha/Beta به Backend رسیدند اما با `Cannot GET /auth/setup-status` و 404 برگشتند؛ این خطا ثابت کرد Proxy پیشوند عمومی `/api` را قبل از تحویل به کانتینر حذف می‌کند.
+- هیچ داده شخصی نمایش‌داده‌شده در اسکرین‌شات‌ها در Git ثبت نشده است.
+- دامنه‌های ریشه Alpha/Beta هنوز به Frontend منتقل نشده‌اند.
+
+اصلاح خودکار روی Branch اعمال شد:
+
+- فایل جدید `server/src/common/api-prefix.ts` پیشوند حذف‌شده را در مرز برنامه بازیابی می‌کند.
+- `server/src/main.ts` پیش از route matching، URL بدون `/api` را به قرارداد داخلی Nest برمی‌گرداند؛ URLهایی که از قبل `/api` دارند بدون تغییر می‌مانند.
+- CI برای `/auth/setup-status`، query string، URL از قبل prefixed و root test اضافه کرد.
+- commitهای کد: `22a2a69cf9693b2860315a0f62ad194c59a2c71c`، `d82114593dcba25370222a281ffad185165fedea` و `343384a9026669d32dd9a1b4af5c97bdf3d4e0ba`.
+- نتیجه CI و Redeploy این اصلاح هنوز باید تأیید شود.
 
 تنظیم PostgreSQL:
 
