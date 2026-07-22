@@ -114,7 +114,9 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Confirmed temporary frontend domain: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`
 - First frontend deployment and page smoke test passed on 2026-07-22: the Persian Amalyar login/signup UI rendered correctly; no 502/503 or backend JSON was shown.
 - The temporary URL is HTTP and showed the expected browser warning; tenant custom domains must use HTTPS.
-- Frontend healthcheck configuration is still pending.
+- Frontend healthcheck saved and enabled 2026-07-22: `GET http://localhost:80/login`, expected 200, blank response-text match, interval 30s, timeout 10s, retries 5, start period 60s.
+- Coolify shows `Disable Healthcheck`, confirming it is enabled.
+- Current container still reports `Running (unknown)`; redeploy is required before the new container health result can be confirmed.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
