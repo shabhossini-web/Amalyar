@@ -58,6 +58,9 @@ jobs:
       - name: Verify tenant isolation boundaries
         working-directory: server
         run: node scripts/verify-tenant-isolation.js
+      - name: Verify Platform Admin configuration fails closed
+        working-directory: server
+        run: node -e "const { platformAdminConfig, normalizePlatformPhone } = require('./dist/platform/platform.module'); process.env.NODE_ENV='production'; process.env.PLATFORM_ADMIN_ENABLED='false'; delete process.env.PLATFORM_ADMIN_SECRET; delete process.env.PLATFORM_ADMIN_PHONES; if (platformAdminConfig().enabled) process.exit(1); process.env.PLATFORM_ADMIN_ENABLED='true'; let failed=false; try { platformAdminConfig(); } catch { failed=true; } if (!failed) { console.error('expected missing Platform Admin secrets to fail'); process.exit(1); } process.env.PLATFORM_ADMIN_SECRET='ci-only-platform-secret-with-32-characters'; process.env.PLATFORM_ADMIN_PHONES='09000000000'; const cfg=platformAdminConfig(); if (!cfg.enabled || !cfg.phones.has('09000000000') || normalizePlatformPhone('+989000000000') !== '09000000000') process.exit(1);"
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js
