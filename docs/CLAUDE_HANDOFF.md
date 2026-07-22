@@ -450,4 +450,6 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - تنظیم secret: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
 - `PLATFORM_ADMIN_PHONES` در Coolify ثبت و Lock شد؛ مقدار و شماره موبایل عمداً در Git/Chat ثبت نشده است.
 - تنظیم allowlist: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
-- هر سه متغیر Platform Admin اکنون ذخیره شده‌اند؛ Backend هنوز با این مجموعه redeploy نشده است.
+- هر سه متغیر Platform Admin ذخیره شدند و Backend با این مجموعه redeploy شد؛ مالک پروژه وضعیت پایدار/صحیح را تأیید کرد.
+- تلاش برای smoke test read-only از مرورگر ابری Agent به‌دلیل policy مرورگر روی دامنه staging رد شد؛ هیچ دورزدنی انجام نشد و نتیجه endpoint از طرف Agent تأییدشده محسوب نمی‌شود.
+- گام بعدی: route دامنه مدیریت در Frontend و Backend و سپس تست OTP فقط از UI.
