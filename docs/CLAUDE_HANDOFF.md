@@ -448,4 +448,6 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - مقدار اولیه ۱۵کاراکتری برای `PLATFORM_ADMIN_SECRET` قبل از deployment به‌دلیل کوتاه‌بودن رد شد؛ هیچ deployment با آن انجام نشد.
 - `PLATFORM_ADMIN_SECRET` با یک مقدار تصادفی ۶۴کاراکتری در Coolify ثبت و Lock شد؛ مقدار آن در Git/Chat ثبت نشده است.
 - تنظیم secret: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
-- `PLATFORM_ADMIN_PHONES` هنوز باید فقط در Coolify ثبت شود؛ مقدار آن نباید در Git یا Chat ذخیره شود.
+- `PLATFORM_ADMIN_PHONES` در Coolify ثبت و Lock شد؛ مقدار و شماره موبایل عمداً در Git/Chat ثبت نشده است.
+- تنظیم allowlist: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
+- هر سه متغیر Platform Admin اکنون ذخیره شده‌اند؛ Backend هنوز با این مجموعه redeploy نشده است.
