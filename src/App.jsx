@@ -8,6 +8,16 @@ import Users from './app/Users.jsx';
 import Profile from './app/Profile.jsx';
 import Dashboard from './app/Dashboard.jsx';
 
+const MARKETING_HOSTS = new Set(['amalyar.com', 'www.amalyar.com', 'localhost', '127.0.0.1']);
+
+function TenantAwareRoot() {
+  const forced = import.meta.env.VITE_TENANT_UI;
+  const tenantMode =
+    forced === 'true' ||
+    (forced !== 'false' && typeof window !== 'undefined' && !MARKETING_HOSTS.has(window.location.hostname));
+  return tenantMode ? <Navigate to="/login" replace /> : <Landing />;
+}
+
 function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="lx-boot">در حال بارگذاری…</div>;
@@ -20,7 +30,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<Landing />} />
+          <Route path="/" element={<TenantAwareRoot />} />
           <Route path="/login" element={<Login />} />
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
           <Route path="/app/dashboard" element={<Protected><Dashboard /></Protected>} />
