@@ -99,7 +99,20 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Frontend implementation head: `6e4976373184aef9a9f3e708d100be7ac68e573b`
 - GitHub Actions `security-ci` run 135: completed successfully
 - Frontend Nginx returns `503` for `/api` fallback if the Backend route is unhealthy; implementation head `9ca9a9abb0084baf290e41699eb05b8473e39137`, CI run 141 passed
-- Frontend Coolify Application: not created yet
+### Frontend application
+
+- Coolify application resource name (confirmed saved 2026-07-22): `amalyar-frontend-staging`
+- Deployment state: not deployed yet
+- Build pack: Dockerfile
+- Base directory: `/`
+- Dockerfile location: `/Dockerfile`
+- Exposed port: `80`
+- Port mapping: empty
+- Network aliases: empty
+- HTTP Basic Authentication: disabled
+- Watch Paths: `src/**`, `public/**`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js`, `Dockerfile`, `nginx.conf`
+- Coolify-generated temporary domain is retained for the first smoke deploy.
+- Git branch must still be visually verified as exactly `agent/security-permissions-hardening` before the first deploy.
 
 ## Provisioned tenants
 
@@ -135,5 +148,5 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 1. Alpha SMS smoke test passed end-to-end: HTTP 201, delivery confirmed, and no OTP/phone exposure in logs.
 2. SMS production fallback is fail-closed; CI run 107 and the final Coolify deployment both passed.
-3. Deploy the tenant-aware frontend and create separate Alpha/Beta Super Admin accounts only through the UI.
+3. Verify the frontend Git branch, deploy it first on the temporary domain, then configure tenant root/path routing and create Alpha/Beta Super Admin accounts only through the UI.
 4. Perform cross-tenant token and patient-isolation tests.
