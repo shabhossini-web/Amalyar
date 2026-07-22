@@ -438,3 +438,11 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - `server/src/main.ts`
 
 مقایسه authoritative: base=`main`، head=`agent/security-permissions-hardening`.
+
+## Coolify Platform Admin activation log — 2026-07-22
+
+- Backend resource: `agent/security-permissions-hardening` در environment `staging`.
+- `PLATFORM_ADMIN_ENABLED=true` در Coolify ثبت شد.
+- تنظیم تأییدشده: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
+- هنوز deployment انجام نشده است.
+- `PLATFORM_ADMIN_SECRET` و `PLATFORM_ADMIN_PHONES` هنوز باید فقط در Coolify ثبت شوند؛ مقدار آن‌ها نباید در Git یا Chat ذخیره شود.
