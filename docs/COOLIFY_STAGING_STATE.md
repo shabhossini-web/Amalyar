@@ -352,3 +352,13 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - مالک پروژه تأیید کرد کد پیامک روی مرورگر موبایل به‌صورت خودکار داخل جریان ورود قرار گرفت؛ ورود دستی شماره و کد لازم نبود.
 - تست staging کامل پاس شد: server allowlist → opaque reference → SMS origin binding → browser WebOTP autofill → secure verify/session → authenticated dashboard.
 - قابلیت ورود بدون شماره و autofill کد اکنون در staging کامل و عملیاتی است.
+
+
+## Provisioning Worker activation started — 2026-07-23
+
+- مالک پروژه شروع راه‌اندازی Worker اختصاصی در Coolify staging را تأیید کرد.
+- کد جاری دوباره بررسی شد: image در `server/Dockerfile.worker` هیچ portی expose نمی‌کند و command ثابت `node dist/scripts/provisioning-worker.js` دارد.
+- Worker در startup وجود `CONTROL_DATABASE_URL`، `PROVISIONING_DATABASE_URL` و `TENANT_DATABASE_ENCRYPTION_KEY` را fail-closed بررسی می‌کند.
+- Worker نباید Domain، Exposed Port، Healthcheck HTTP، JWT secret یا SMS credentials دریافت کند.
+- نام پیشنهادی resource جدید: `amalyar-provisioning-worker-staging`.
+- هنوز resource جدید ساخته نشده و هیچ متغیر یا credential جابه‌جا نشده است.
