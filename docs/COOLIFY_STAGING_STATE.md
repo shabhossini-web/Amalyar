@@ -10,7 +10,8 @@
 - Git repository: `shabhossini-web/Amalyar`
 - Git branch: `agent/security-permissions-hardening`
 - Draft PR: https://github.com/shabhossini-web/Amalyar/pull/1
-- Latest verified application commit: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
+- Latest explicitly Coolify-verified application commit: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
+- Latest branch commit fully verified by CI: `beca79650d7e9989be829affaacd690e61d252df` (`security-ci` run 274)
 
 ## Coolify resources
 
@@ -185,6 +186,40 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - A separate Worker claims queued jobs, creates the isolated role/database, runs migrations, and records a safe status/result.
 - A dedicated management domain and Coolify Worker resource will be configured only after CI passes.
 
+## Platform Admin implementation ready for Coolify
+
+Code and CI status on 2026-07-22:
+
+- Control DB schema/migration for OTP, sessions, provisioning jobs, and platform audit is committed.
+- Backend endpoints are available under `/api/platform/**` but remain fail-closed until explicitly enabled.
+- Mobile Platform Admin UI is available at `/platform-admin`.
+- The default management host recognized by the frontend is `admin-staging.amalyar.com`.
+- Dedicated Worker image: Base directory `/server`, Dockerfile location `/Dockerfile.worker`.
+- The Worker image exposes no port and must have no public domain.
+- `security-ci` run 272 passed after isolating the pure fail-closed configuration test from runtime Prisma imports.
+- `security-ci` run 274 passed after adding the dedicated Worker Dockerfile.
+- CI-verified code head: `beca79650d7e9989be829affaacd690e61d252df`.
+- Coolify resources and DNS for Platform Admin/Worker have not yet been configured.
+
+Backend variables to add in the next Coolify step (values must remain only in Coolify):
+
+- `PLATFORM_ADMIN_ENABLED=true`
+- `PLATFORM_ADMIN_SECRET`
+- `PLATFORM_ADMIN_PHONES`
+- Existing `CONTROL_DATABASE_URL`
+- Existing `TENANT_DATABASE_ENCRYPTION_KEY`
+- Keep `PROVISIONING_DATABASE_URL` temporarily until the Worker is running; then remove it from Backend.
+
+Worker variables required:
+
+- `NODE_ENV=production`
+- `CONTROL_DATABASE_URL`
+- `PROVISIONING_DATABASE_URL`
+- `TENANT_DATABASE_ENCRYPTION_KEY`
+- optional `PROVISIONING_POLL_MS`
+
+The Worker must not receive tenant JWT, SMS credentials, a public domain, or an exposed port.
+
 ## Completed fixes discovered during deployment
 
 - Deterministic tenant-isolation verifier added at `server/scripts/verify-tenant-isolation.js` in commit `9f27d486e3d1a342d66e05ca056136ce819ec942` and enforced by workflow commit `3c915d8b753fccc4894bff9712a238c35652b957`.
@@ -209,4 +244,4 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 2. SMS production fallback is fail-closed; CI run 107 and the final Coolify deployment both passed.
 3. Frontend branch, tenant domains, healthcheck, and UI-only Alpha/Beta bootstrap are complete and verified.
 4. Deterministic automated tenant-isolation checks are complete and `security-ci` run 226 passed.
-5. Bidirectional live data isolation passed and synthetic records were removed. The OTP Platform Admin plus queue/Worker provisioning architecture is approved; next implement it and pass CI.
+5. Bidirectional live data isolation passed and both synthetic records were removed. Platform Admin, queue/Worker, mobile UI, and the dedicated Worker image are implemented; CI run 274 passed. Next configure the management domain, Backend variables, and non-public Worker resource in Coolify staging.
