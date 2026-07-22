@@ -45,7 +45,20 @@ Backend routing saved and successfully redeployed on 2026-07-22:
 - `https://alpha-staging.amalyar.com/api`
 - `https://beta-staging.amalyar.com/api`
 
-Public endpoint response verification is still pending. Alpha/Beta root domains have not yet been assigned to the Frontend Application.
+Browser verification on 2026-07-22:
+
+- Main API health passed with `ok:true`.
+- Alpha/Beta requests reached the Backend but returned 404 `Cannot GET /auth/setup-status`; the proxy stripped the public `/api` prefix.
+- No personal data visible in submitted screenshots was copied into Git.
+- Alpha/Beta root domains are still not assigned to the Frontend Application.
+
+Automatic fix added on the working branch:
+
+- `server/src/common/api-prefix.ts` restores a missing public API prefix.
+- `server/src/main.ts` applies the restoration before Nest route matching while leaving already-prefixed URLs unchanged.
+- Security CI now tests stripped paths, query strings, already-prefixed paths, and root.
+- Code commits: `22a2a69cf9693b2860315a0f62ad194c59a2c71c`, `d82114593dcba25370222a281ffad185165fedea`, `343384a9026669d32dd9a1b4af5c97bdf3d4e0ba`.
+- CI result and Backend redeploy for this fix are pending.
 
 ## Runtime environment variables
 
