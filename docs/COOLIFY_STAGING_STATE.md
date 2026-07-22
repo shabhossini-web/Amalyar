@@ -111,7 +111,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Network aliases: empty
 - HTTP Basic Authentication: disabled
 - Watch Paths: `src/**`, `public/**`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js`, `Dockerfile`, `nginx.conf`
-- Coolify-generated temporary domain is retained for the first smoke deploy.
+- Confirmed temporary frontend domain: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`; retained for the first smoke deploy. Page smoke-test result is still pending confirmation.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
