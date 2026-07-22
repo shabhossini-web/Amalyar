@@ -255,4 +255,7 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - Secret flags: Buildtime off, Runtime on, Multiline off, Literal on.
 - `PLATFORM_ADMIN_PHONES` is saved and locked; its value is intentionally not recorded.
 - Allowlist flags: Buildtime off, Runtime on, Multiline off, Literal on.
-- All three Platform Admin variables are now saved; Backend has not yet been redeployed with them.
+- All three Platform Admin variables are saved and locked where applicable.
+- Backend was redeployed with the Platform Admin configuration; the project owner confirmed the deployment is stable/correct.
+- A read-only cloud-browser smoke test was blocked by browser security policy; no workaround was attempted and the endpoint is not marked Agent-verified.
+- Next: configure the dedicated management-domain routes, then test OTP through the management UI.
