@@ -131,7 +131,17 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - CI run `135`: موفق.
 - `nginx.conf`: اگر Backend ناسالم باشد و Coolify `/api` را به frontend fallback کند، Nginx با `503` fail-closed می‌شود و SPA HTML تحویل نمی‌دهد.
 - commit fail-closed فرانت: `9ca9a9abb0084baf290e41699eb05b8473e39137`؛ CI run `141` موفق.
-- هنوز Frontend Application در Coolify ساخته نشده است.
+- Frontend Application در Coolify ساخته و تنظیمات آن در 2026-07-22 ذخیره شد؛ هنوز deploy نشده است.
+- نام Frontend resource: `amalyar-frontend-staging`
+- Build pack: `Dockerfile`
+- Base Directory: `/`
+- Dockerfile Location: `/Dockerfile`
+- Exposed port: `80`
+- Port Mapping و Network Aliases: خالی
+- HTTP Basic Authentication: خاموش
+- Watch Paths ذخیره‌شده: `src/**`، `public/**`، `index.html`، `package.json`، `package-lock.json`، `vite.config.js`، `Dockerfile` و `nginx.conf`
+- دامنه موقت تولیدشده توسط Coolify فعلاً نگه داشته شد.
+- قبل از اولین deploy باید Git Source تأیید شود که دقیقاً روی branch `agent/security-permissions-hardening` است.
 
 ## معماری Database-per-Tenant
 
@@ -289,7 +299,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 
 1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
-3. deploy فرانت tenant-aware و سپس ساخت Super Admin جدا در Alpha و Beta فقط از UI.
+3. Frontend resource ساخته و تنظیماتش ذخیره شده است؛ branch را کنترل، روی دامنه موقت deploy و سپس مسیرهای دامنه tenant را تنظیم کن.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
 5. deploy/config frontend tenant-aware.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
@@ -313,7 +323,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
 6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
-7. فرانت tenant-aware را deploy کن و حساب‌های Alpha/Beta را فقط از UI بساز.
+7. در Frontend resource ابتدا branch دقیق را verify کن، سپس روی دامنه موقت deploy و حساب‌های Alpha/Beta را فقط از UI بساز.
 8. تست cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
 9. backup و restore را قبل از production تست کن.
 10. PR را Draft نگه دار.
