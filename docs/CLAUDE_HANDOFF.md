@@ -168,9 +168,10 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - دامنه موقت HTTP از Frontend حذف شد؛ فقط `https://alpha-staging.amalyar.com` و `https://beta-staging.amalyar.com` باقی ماندند.
 - Frontend پس از این پاک‌سازی Redeploy و `Running (healthy)` شد؛ تأیید مالک پروژه.
 - onboarding اولین Super Admin آلفا از UI آغاز شد: درخواست SMS و تأیید OTP موفق بود و فرم پروفایل/نام کاربری/رمز/سلفی باز شد.
-- حساب هنوز ثبت نهایی نشده است و `needsSetup` تا این لحظه باید true بماند.
-- شماره، OTP و سایر اطلاعات شخصی عمداً در Chat/Git ثبت نشده‌اند.
-- مرحله بعد: تکمیل فرم روی Host دقیق `alpha-staging.amalyar.com` و تأیید ورود خودکار به `/app`.
+- ثبت نهایی اولین Super Admin آلفا از UI موفق شد؛ ورود خودکار انجام شد و داشبورد `/app` روی Host آلفا به‌درستی نمایش داده شد.
+- شماره، OTP، نام، رمز، چهره و سایر اطلاعات شخصی عمداً در Git/مستندات ثبت نشده‌اند.
+- `/api/auth/setup-status` آلفا باید اکنون `{"needsSetup":false}` شود و هنوز باید به‌صورت مستقل تأیید شود.
+- مرحله بعد: تأیید setup-status آلفا و سپس ایجاد اولین Super Admin بتا فقط از UI.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
