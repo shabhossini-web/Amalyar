@@ -18,8 +18,8 @@
 - Main baseline: `808b2f4b677a9c627b0c01054bf1a92771a1c423`
 - Working branch: `agent/security-permissions-hardening`
 - Draft PR: https://github.com/shabhossini-web/Amalyar/pull/1
-- وضعیت هنگام تحویل: 59 commit جلوتر از main و 0 commit عقب‌تر
-- آخرین commit کد بک‌اند که CI و Coolify روی آن موفق شد: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
+- آخرین commit شاخه که در CI کامل تأیید شد: `beca79650d7e9989be829affaacd690e61d252df` (`security-ci` run 274)
+- آخرین commit کد بک‌اند که deployment آن در Coolify صریحاً تأیید شد: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
 - commitهای بعدی ممکن است فقط مستندات باشند؛ وضعیت deploy را از Coolify کنترل کن.
 - main هنوز merge نشده و نباید تا پایان تست staging و rehearsal مهاجرت merge شود.
 
@@ -353,15 +353,44 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - پس از تست، هر دو رکورد کاملاً ساختگی از Tenant مربوط به خودشان حذف شدند؛ staging از داده آزمایشی این تست پاک‌سازی شد.
 - تست زنده cross-tenant token هنوز باقی مانده و باید به‌صورت خودکار اجرا شود، نه با کپی یا دست‌کاری دستی توکن توسط کاربر.
 
+## پیاده‌سازی Platform Admin و provisioning خودکار — 2026-07-22
+
+معماری تأییدشده اکنون روی شاخه پیاده‌سازی شده و هنوز برای staging در Coolify فعال نشده است:
+
+- مدل‌های Control DB: `PlatformOtp`، `PlatformSession`، `ProvisioningJob` و `PlatformAuditEvent`.
+- migration کنترل: `server/prisma/control/migrations/20260722213000_platform_admin_provisioning/migration.sql`.
+- API مستقل Platform Admin در `server/src/platform/**` با OTP allowlist، session کوتاه HttpOnly، CSRF جدا، rate limit و audit بدون ثبت شماره/OTP/token.
+- endpointهای مدیریتی زیر `/api/platform/**` قرار دارند و وقتی `PLATFORM_ADMIN_ENABLED` فعال نباشد، fail-closed و غیرقابل استفاده‌اند.
+- فرانت مدیریتی موبایل‌پسند در `src/app/PlatformAdmin.jsx` و route `/platform-admin` پیاده‌سازی شد.
+- UI فقط job می‌سازد و status را poll می‌کند؛ credential ساخت دیتابیس در Backend API نگهداری نمی‌شود.
+- Worker در `server/src/scripts/provisioning-worker.ts` job را claim می‌کند، role/database اختصاصی می‌سازد، migration tenant را اجرا می‌کند و ثبت tenant + موفقیت job + audit را در یک transaction کنترل انجام می‌دهد.
+- failure معمولی با error code امن ثبت و role/database ساخته‌شده در همان invocation rollback می‌شود.
+- image مستقل و بدون پورت عمومی Worker در `server/Dockerfile.worker` اضافه شد؛ command ثابت آن `node dist/scripts/provisioning-worker.js` است.
+- script محلی/runtime: `npm run provisioning:worker`.
+- فایل خالص تنظیمات امنیتی `server/src/platform/platform.config.ts` از ماژول runtime جدا شد تا fail-closed بودن بدون نیاز به Prisma Client تست شود.
+- CI run 266 به‌علت import کل `platform.module` و نبود runtime-generated Control client در آن مرحله شکست خورد؛ این شکست مربوط به harness تست بود، نه منطق امنیتی.
+- اصلاح CI با commitهای `78fec7b57332f0a0bf921d3123e36f132627a7f3`، `62827ebcbd490f3f86d416b0022f7cedbf58b055` و `dff8be6d66365159ebfbff0591187efbab78dbd6` انجام شد.
+- `security-ci` run 272 بعد از اصلاح تست موفق شد.
+- Dockerfile مستقل Worker با commit `beca79650d7e9989be829affaacd690e61d252df` اضافه شد و `security-ci` run 274 کامل موفق شد.
+- هیچ secret، شماره تلفن، OTP، token، password یا connection URL در کد و این مستند ثبت نشده است.
+
+تعهدهای اصلی پیاده‌سازی:
+
+- Backend API فقط `CONTROL_DATABASE_URL` را برای صف و metadata نیاز دارد.
+- فقط Worker باید `PROVISIONING_DATABASE_URL` را داشته باشد.
+- Backend و Worker هر دو برای decrypt/encrypt URLهای tenant به `TENANT_DATABASE_ENCRYPTION_KEY` نیاز دارند.
+- Worker نباید domain یا exposed port داشته باشد.
+- دامنه مدیریت پیشنهادی staging: `admin-staging.amalyar.com`؛ هنوز در Coolify/DNS پیکربندی نشده است.
+
 ## کارهای مهم باقی‌مانده
 
 1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
 3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
 4. تست خودکار قطعی جداسازی به CI اضافه شد و run 226 سبز شد: JWT با `tid` شرکت دیگر 401 می‌شود و Prisma برای Tenantهای متفاوت client/Database route جدا انتخاب می‌کند.
-5. تست زنده داده در هر دو جهت پاس و رکوردهای ساختگی پاک‌سازی شدند. معماری Platform Admin با OTP و provisioning queue/Worker تأیید شد؛ مرحله بعد پیاده‌سازی و CI آن است.
+5. تست زنده داده در هر دو جهت پاس و هر دو رکورد ساختگی پاک‌سازی شدند. Platform Admin، provisioning queue/Worker و UI پیاده‌سازی شدند و CI run 274 سبز است؛ مرحله بعد پیکربندی سه resource/route لازم در Coolify staging است.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
-7. انتقال provisioning credential به job موقت.
+7. انتقال نهایی `PROVISIONING_DATABASE_URL` از Backend به Worker اختصاصی پس از سبز شدن Worker در Coolify.
 8. Redis rate limit پیش از چند replica.
 9. permission management API/UI و seed صریح.
 10. audit برای auth، account admin، permission و emergency support.
@@ -382,7 +411,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
 6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
 7. Frontend branch، deploy، دامنه‌ها، Healthcheck و ساخت حساب‌های Alpha/Beta فقط از UI تکمیل و تأیید شده است.
-8. تست خودکار CI و تست زنده داده در هر دو جهت پاس شده‌اند؛ اکنون تست زنده token را خودکار و نتیجه را همین‌جا ثبت کن، سپس provisioning UI را پیاده‌سازی کن.
+8. تست خودکار CI و تست زنده داده در هر دو جهت پاس شده‌اند؛ Platform Admin و Worker نیز پیاده‌سازی و CI شده‌اند. اکنون Coolify staging را مرحله‌ای پیکربندی کن و بعد یک provisioning آزمایشی فقط از UI انجام بده.
 9. backup و restore را قبل از production تست کن.
 10. PR را Draft نگه دار.
 
@@ -391,6 +420,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - `.github/workflows/security-ci.yml`
 - `docs/**`
 - `server/Dockerfile`
+- `server/Dockerfile.worker`
 - `server/package.json`
 - `server/prisma/control/**`
 - `server/prisma/migrations/20260721090000_security_permissions/**`
@@ -399,6 +429,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - `server/src/auth/**`
 - `server/src/common/**`
 - `server/src/patients/**`
+- `server/src/platform/**`
 - `server/src/prisma/**`
 - `server/src/scripts/**`
 - `server/scripts/**`
