@@ -171,7 +171,10 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - ثبت نهایی اولین Super Admin آلفا از UI موفق شد؛ ورود خودکار انجام شد و داشبورد `/app` روی Host آلفا به‌درستی نمایش داده شد.
 - شماره، OTP، نام، رمز، چهره و سایر اطلاعات شخصی عمداً در Git/مستندات ثبت نشده‌اند.
 - `/api/auth/setup-status` آلفا پس از bootstrap به‌صورت مستقل تست شد و `{"needsSetup":false}` تأیید شد.
-- مرحله بعد: ایجاد اولین Super Admin بتا فقط از UI روی Host دقیق `beta-staging.amalyar.com`.
+- اولین Super Admin بتا نیز فقط از UI ساخته شد؛ ورود خودکار موفق بود و داشبورد `/app` روی Host بتا نمایش داده شد.
+- هیچ شماره، OTP، نام، رمز، تصویر یا داده شخصی از داشبورد در Git ثبت نشده است.
+- smoke بصری نشان داد داشبوردهای Alpha/Beta داده‌های tenant-scoped متفاوت نمایش می‌دهند؛ این جایگزین تست رسمی cross-tenant token نیست.
+- `/api/auth/setup-status` بتا باید اکنون `{"needsSetup":false}` شود و هنوز باید تأیید شود.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
