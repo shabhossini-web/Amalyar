@@ -245,3 +245,10 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 3. Frontend branch, tenant domains, healthcheck, and UI-only Alpha/Beta bootstrap are complete and verified.
 4. Deterministic automated tenant-isolation checks are complete and `security-ci` run 226 passed.
 5. Bidirectional live data isolation passed and both synthetic records were removed. Platform Admin, queue/Worker, mobile UI, and the dedicated Worker image are implemented; CI run 274 passed. Next configure the management domain, Backend variables, and non-public Worker resource in Coolify staging.
+
+## Platform Admin Coolify activation progress — 2026-07-22
+
+- Backend resource `agent/security-permissions-hardening`: `PLATFORM_ADMIN_ENABLED=true` saved.
+- Settings: Buildtime off, Runtime on, Multiline off, Literal on.
+- No deployment has been started yet.
+- Secret and allowlist values are intentionally not recorded.
