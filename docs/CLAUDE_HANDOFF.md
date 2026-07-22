@@ -47,11 +47,13 @@
 - لاگ موفق: `amalyar-server ← http://0.0.0.0:3001/api`
 - Health عمومی تأییدشده: `https://api-staging.amalyar.com/api/health`
 
-دامنه‌های Application:
+دامنه‌های Backend Application پس از cutover مسیر در 2026-07-22:
 
 - `https://api-staging.amalyar.com`
-- `https://alpha-staging.amalyar.com`
-- `https://beta-staging.amalyar.com`
+- `https://alpha-staging.amalyar.com/api`
+- `https://beta-staging.amalyar.com/api`
+
+تغییر Domains ذخیره و Backend با موفقیت Redeploy شد؛ تست پاسخ سه endpoint عمومی هنوز در انتظار تأیید مرورگر است. دامنه‌های ریشه Alpha/Beta هنوز به Frontend منتقل نشده‌اند.
 
 تنظیم PostgreSQL:
 
