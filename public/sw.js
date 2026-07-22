@@ -1,9 +1,9 @@
 /* Service Worker عمل‌یار — شِلِ آفلاین برای PWA
  * - ناوبری‌ها: network-first با fallback به شِلِ کش‌شده (SPA)
  * - داراییِ هم‌مبدأ (assets/آیکون/فونت): cache-first (نامِ فایل‌ها هش‌دارند)
- * - API هرگز کش نمی‌شود (مبدأ جدا: api.amalyar.com)
+ * - API هم‌مبدأ روی /api است و Service Worker اصلاً آن را intercept نمی‌کند
  */
-const CACHE = 'amalyar-shell-v7';
+const CACHE = 'amalyar-shell-v8';
 const STATIC = ['/icon-192.png', '/icon-512.png', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -37,7 +37,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // API و مبدأهای دیگر: دستِ مرورگر
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return;
 
   // ناوبریِ SPA — network-first (بدونِ کشِ HTTP تا HTMLِ کهنه سرو نشود)، آفلاین → شِل
   if (req.mode === 'navigate') {
