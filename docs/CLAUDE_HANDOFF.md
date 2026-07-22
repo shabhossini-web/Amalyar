@@ -445,4 +445,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - `PLATFORM_ADMIN_ENABLED=true` در Coolify ثبت شد.
 - تنظیم تأییدشده: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
 - هنوز deployment انجام نشده است.
-- `PLATFORM_ADMIN_SECRET` و `PLATFORM_ADMIN_PHONES` هنوز باید فقط در Coolify ثبت شوند؛ مقدار آن‌ها نباید در Git یا Chat ذخیره شود.
+- مقدار اولیه ۱۵کاراکتری برای `PLATFORM_ADMIN_SECRET` قبل از deployment به‌دلیل کوتاه‌بودن رد شد؛ هیچ deployment با آن انجام نشد.
+- `PLATFORM_ADMIN_SECRET` با یک مقدار تصادفی ۶۴کاراکتری در Coolify ثبت و Lock شد؛ مقدار آن در Git/Chat ثبت نشده است.
+- تنظیم secret: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
+- `PLATFORM_ADMIN_PHONES` هنوز باید فقط در Coolify ثبت شود؛ مقدار آن نباید در Git یا Chat ذخیره شود.
