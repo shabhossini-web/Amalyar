@@ -85,6 +85,17 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Coolify deployment after this change: running, green, and confirmed stable on 2026-07-22
 - Post-hardening real Alpha request: HTTP `201`, body `{"ok":true,"ttl":300}`; phone and OTP are not recorded
 
+## UI-only onboarding decision
+
+- Date: `2026-07-22`
+- Manual Terminal-based account creation was rejected; no account was created that way.
+- Alpha and Beta remain in `needsSetup=true` state.
+- Existing React UI already supports setup-status, OTP, profile fields, live selfie, and automatic bootstrap Super Admin login.
+- A separate frontend Application will serve `/` on tenant domains.
+- The Backend Application will serve the more-specific `/api` path on the same tenant domains.
+- Frontend API default will be same-origin `/api`, preserving the real tenant Host.
+- Coolify officially supports path-based routing and gives a more-specific path priority over `/`.
+
 ## Provisioned tenants
 
 ### Alpha
@@ -119,5 +130,5 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 
 1. Alpha SMS smoke test passed end-to-end: HTTP 201, delivery confirmed, and no OTP/phone exposure in logs.
 2. SMS production fallback is fail-closed; CI run 107 and the final Coolify deployment both passed.
-3. Create separate superadmin accounts in Alpha and Beta.
+3. Deploy the tenant-aware frontend and create separate Alpha/Beta Super Admin accounts only through the UI.
 4. Perform cross-tenant token and patient-isolation tests.
