@@ -102,7 +102,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 ### Frontend application
 
 - Coolify application resource name (confirmed saved 2026-07-22): `amalyar-frontend-staging`
-- Deployment state: not deployed yet
+- Deployment state: first deployment successful; UI smoke test passed
 - Build pack: Dockerfile
 - Base directory: `/`
 - Dockerfile location: `/Dockerfile`
@@ -111,7 +111,10 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Network aliases: empty
 - HTTP Basic Authentication: disabled
 - Watch Paths: `src/**`, `public/**`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js`, `Dockerfile`, `nginx.conf`
-- Confirmed temporary frontend domain: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`; retained for the first smoke deploy. Page smoke-test result is still pending confirmation.
+- Confirmed temporary frontend domain: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`
+- First frontend deployment and page smoke test passed on 2026-07-22: the Persian Amalyar login/signup UI rendered correctly; no 502/503 or backend JSON was shown.
+- The temporary URL is HTTP and showed the expected browser warning; tenant custom domains must use HTTPS.
+- Frontend healthcheck configuration is still pending.
 - Git Source verified 2026-07-22: source `amalyar-git`, repository `shabhossini-web/Amalyar`, branch `agent/security-permissions-hardening`, Commit SHA setting `HEAD`.
 
 ## Provisioned tenants
