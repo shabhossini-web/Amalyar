@@ -64,7 +64,8 @@ jobs:
 
       - name: Verify Platform Admin SMS uses origin-bound WebOTP
         working-directory: server
-        run: node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='test'; process.env.MELI_API_KEY='ci-key'; process.env.MELI_FROM='ci-line'; let payload; global.fetch=async (_url,init) => { payload=JSON.parse(init.body); return { ok:true, json:async()=>({recIds:[1]}) }; }; new SmsService().sendOtp('09000000000','123456','admin-staging.amalyar.com').then((result) => { if (!result.sent || !payload?.text?.endsWith('@admin-staging.amalyar.com #123456')) process.exit(1); }).catch(() => process.exit(1));"
+        run: |
+          node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='test'; process.env.MELI_API_KEY='ci-key'; process.env.MELI_FROM='ci-line'; let payload; global.fetch=async (_url,init) => { payload=JSON.parse(init.body); return { ok:true, json:async()=>({recIds:[1]}) }; }; new SmsService().sendOtp('09000000000','123456','admin-staging.amalyar.com').then((result) => { if (!result.sent || !payload?.text?.endsWith('@admin-staging.amalyar.com #123456')) process.exit(1); }).catch(() => process.exit(1));"
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js
