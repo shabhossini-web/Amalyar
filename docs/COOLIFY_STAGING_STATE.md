@@ -345,3 +345,10 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - این نتیجه تأیید می‌کند گزینه opaque مدیر، درخواست OTP، verify/session cookie و بارگذاری داشبورد عملیاتی هستند.
 - هیچ شماره، OTP، نام، تصویر شخصی یا جزئیات رکوردهای نمایش‌داده‌شده در Git ثبت نشده است.
 - هنوز باید مشخص شود WebOTP کد را خودکار در فیلد گذاشته یا ورود کد به‌صورت دستی انجام شده است.
+
+
+### WebOTP end-to-end verified
+
+- مالک پروژه تأیید کرد کد پیامک روی مرورگر موبایل به‌صورت خودکار داخل جریان ورود قرار گرفت؛ ورود دستی شماره و کد لازم نبود.
+- تست staging کامل پاس شد: server allowlist → opaque reference → SMS origin binding → browser WebOTP autofill → secure verify/session → authenticated dashboard.
+- قابلیت ورود بدون شماره و autofill کد اکنون در staging کامل و عملیاتی است.
