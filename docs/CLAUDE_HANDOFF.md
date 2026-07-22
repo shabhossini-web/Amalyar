@@ -478,3 +478,12 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - آخرین commit این بسته: `1b07c2868fdd55d5d02a5a8b7260b8afb86a692a`. نتیجه CI هنوز در انتظار است.
 - مرحله Coolify هنوز انجام نشده: متغیر `PLATFORM_ADMIN_WEBOTP_HOST` باید روی Backend staging ثبت شود، سپس Backend و Frontend redeploy و OTP واقعی از UI تست شود.
 - هیچ شماره، OTP، secret یا مقدار حساس در Git ثبت نشده است.
+
+
+### CI failure observed
+
+- `security-ci` run 340 failed only in step `Verify Platform Admin SMS uses origin-bound WebOTP`.
+- Frontend build, Backend build, Prisma validation, tenant isolation, fail-closed config and opaque reference checks all passed.
+- Root cause: the inline YAML `run: node -e ...` contained a WebOTP fragment marker; YAML treated the unprotected marker as a comment and the generated shell command ended with an unmatched quote.
+- This is a workflow quoting error, not a failure in application/WebOTP behavior.
+- Focused fix pending owner approval: convert only this CI command to a YAML block scalar while preserving the same assertion, then rerun CI.
