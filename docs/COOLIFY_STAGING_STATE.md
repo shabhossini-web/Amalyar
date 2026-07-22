@@ -337,3 +337,11 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - هیچ شماره یا شناسه خام در صفحه نمایش داده نمی‌شود.
 - در تصویر، دکمه ارسال کم‌رنگ/احتمالاً disabled دیده می‌شود؛ قبل از OTP smoke test باید امکان کلیک آن از مرورگر مالک تأیید شود.
 - تلاش read-only Agent برای endpoint گزینه‌ها دوباره توسط browser safety policy رد شد؛ نتیجه endpoint از سمت Agent تأیید نشده است.
+
+
+### Phone-less Platform Admin login passed
+
+- مالک پروژه از UI بدون شماره عبور کرد و داشبورد احرازشده مدیریت پلتفرم با موفقیت باز شد.
+- این نتیجه تأیید می‌کند گزینه opaque مدیر، درخواست OTP، verify/session cookie و بارگذاری داشبورد عملیاتی هستند.
+- هیچ شماره، OTP، نام، تصویر شخصی یا جزئیات رکوردهای نمایش‌داده‌شده در Git ثبت نشده است.
+- هنوز باید مشخص شود WebOTP کد را خودکار در فیلد گذاشته یا ورود کد به‌صورت دستی انجام شده است.
