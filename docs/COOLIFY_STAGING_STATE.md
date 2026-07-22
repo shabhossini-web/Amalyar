@@ -37,11 +37,15 @@
 - Provisioning username: `amalyar_provisioner`
 - Connection URL and password: never record here
 
-## Domains
+## Domains and path routing
 
-- `api-staging.amalyar.com`
-- `alpha-staging.amalyar.com`
-- `beta-staging.amalyar.com`
+Backend routing saved and successfully redeployed on 2026-07-22:
+
+- `https://api-staging.amalyar.com`
+- `https://alpha-staging.amalyar.com/api`
+- `https://beta-staging.amalyar.com/api`
+
+Public endpoint response verification is still pending. Alpha/Beta root domains have not yet been assigned to the Frontend Application.
 
 ## Runtime environment variables
 
