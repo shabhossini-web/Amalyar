@@ -97,7 +97,8 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Coolify officially supports path-based routing and gives a more-specific path priority over `/`.
 - Frontend code now defaults to same-origin `/api`, redirects tenant root to `/login`, bypasses `/api` in the Service Worker, and builds reproducibly with Node 22 + `npm ci`.
 - Frontend implementation head: `6e4976373184aef9a9f3e708d100be7ac68e573b`
-- GitHub Actions `security-ci` run 135: in progress when recorded
+- GitHub Actions `security-ci` run 135: completed successfully
+- Frontend Nginx returns `503` for `/api` fallback if the Backend route is unhealthy; implementation head `9ca9a9abb0084baf290e41699eb05b8473e39137`, CI run 141 passed
 - Frontend Coolify Application: not created yet
 
 ## Provisioned tenants
