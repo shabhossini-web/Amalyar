@@ -487,3 +487,11 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - Root cause: the inline YAML `run: node -e ...` contained a WebOTP fragment marker; YAML treated the unprotected marker as a comment and the generated shell command ended with an unmatched quote.
 - This is a workflow quoting error, not a failure in application/WebOTP behavior.
 - Focused fix pending owner approval: convert only this CI command to a YAML block scalar while preserving the same assertion, then rerun CI.
+
+
+### CI quoting fix applied
+
+- مالک پروژه اجرای اصلاح محدود را تأیید کرد.
+- فقط step تست WebOTP از scalar تک‌خطی به YAML block scalar تبدیل شد تا fragment marker پیامک توسط YAML به‌عنوان comment تفسیر نشود.
+- منطق برنامه، قالب پیامک و assertion تست تغییر نکرد.
+- fix commit: `0334c3831fd45b6450684e36c5edf0500cb2f4d8`; rerun CI در انتظار نتیجه است.
