@@ -558,3 +558,10 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - Worker نباید Domain، Exposed Port، Healthcheck HTTP، JWT secret یا SMS credentials دریافت کند.
 - نام پیشنهادی resource جدید: `amalyar-provisioning-worker-staging`.
 - هنوز resource جدید ساخته نشده و هیچ متغیر یا credential جابه‌جا نشده است.
+
+
+### Worker creation form reached
+
+- در Coolify project `Amalyar` و environment `staging`، فرم Create a new Application برای repo `Amalyar` باز شد.
+- هنوز Continue زده نشده و resource ساخته نشده است.
+- تنظیم بعدی: branch کاری، Dockerfile build pack، base directory `/server` و Port خالی.
