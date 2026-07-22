@@ -83,6 +83,7 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - Backend code head: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
 - GitHub Actions `security-ci` run 107: completed successfully
 - Coolify deployment after this change: running, green, and confirmed stable on 2026-07-22
+- Post-hardening real Alpha request: HTTP `201`, body `{"ok":true,"ttl":300}`; phone and OTP are not recorded
 
 ## Provisioned tenants
 
