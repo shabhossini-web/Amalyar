@@ -107,6 +107,20 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - وضعیت Coolify پس از این تغییر: Running سبز و پایدار؛ تأیید مالک پروژه در 2026-07-22
 - تست واقعی پس از اصلاح: `POST /api/auth/signup/request-otp` روی Alpha دوباره HTTP `201` و `{"ok":true,"ttl":300}` داد؛ شماره و OTP ثبت نشده‌اند.
 
+## تصمیم onboarding کاربرپسند
+
+در 2026-07-22 روش ساخت حساب از Terminal رد و لغو شد؛ هیچ حسابی با روش دستی ساخته نشد و Tenantهای Alpha/Beta همچنان `needsSetup=true` دارند.
+
+تصمیم نهایی:
+
+- راه‌اندازی هر شرکت فقط از UI انجام شود؛ کاربر نباید command، signup token یا API payload ببیند.
+- UI موجود پروژه در `src/app/Login.jsx` از قبل flow کامل setup-status، OTP، فرم پروفایل، سلفی زنده و ورود خودکار اولین Super Admin را دارد.
+- فرانت باید به‌عنوان Application جدا در Coolify deploy شود.
+- دامنه‌های Alpha/Beta در ریشه `/` به فرانت و مسیر `/api` همان دامنه به Backend route شوند.
+- API frontend به‌صورت same-origin روی `/api` باشد تا Host واقعی شرکت به Backend برسد و tenant از header/body انتخاب نشود.
+- Root دامنه Tenant مستقیماً به `/login` هدایت شود؛ اگر دیتابیس خالی باشد UI خودکار تب ثبت‌نام و پیام اولین Super Admin را نشان دهد.
+- طبق مستندات رسمی Coolify، path-based routing با دامنه‌هایی مثل `https://domain/api` پشتیبانی می‌شود و مسیر خاص‌تر بر `/` اولویت دارد.
+
 ## معماری Database-per-Tenant
 
 تصمیم تأییدشده: هر شرکت PostgreSQL database مستقل دارد.
@@ -263,7 +277,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 
 1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
 2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
-3. ساخت superadmin جدا در Alpha و Beta.
+3. deploy فرانت tenant-aware و سپس ساخت Super Admin جدا در Alpha و Beta فقط از UI.
 4. تست قطعی: توکن Alpha روی Beta باید 401 شود؛ بیمار Alpha در Beta نباید دیده شود.
 5. deploy/config frontend tenant-aware.
 6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
@@ -287,7 +301,7 @@ CI سبز است. تست integration واقعی چند DB هنوز باید اض
 4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
 5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
 6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
-7. حساب‌های Alpha/Beta را بساز.
+7. فرانت tenant-aware را deploy کن و حساب‌های Alpha/Beta را فقط از UI بساز.
 8. تست cross-tenant token/patient را اجرا و نتیجه را همین‌جا ثبت کن.
 9. backup و restore را قبل از production تست کن.
 10. PR را Draft نگه دار.
