@@ -140,7 +140,10 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - Port Mapping و Network Aliases: خالی
 - HTTP Basic Authentication: خاموش
 - Watch Paths ذخیره‌شده: `src/**`، `public/**`، `index.html`، `package.json`، `package-lock.json`، `vite.config.js`، `Dockerfile` و `nginx.conf`
-- دامنه موقت تأییدشده Frontend: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`؛ فعلاً نگه داشته شد و نتیجه smoke test صفحه هنوز در انتظار تأیید است.
+- دامنه موقت تأییدشده Frontend: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`
+- اولین deploy فرانت در 2026-07-22 موفق شد؛ صفحه فارسی ورود/ثبت‌نام عمل‌یار روی دامنه موقت به‌درستی نمایش داده شد و خطای 502/503 یا JSON بک‌اند دیده نشد.
+- هشدار مرورگر دامنه موقت ناشی از HTTP بودن آن است؛ دامنه‌های اصلی tenant باید با HTTPS استفاده شوند.
+- Healthcheck فرانت هنوز باید تنظیم و تأیید شود.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
