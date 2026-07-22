@@ -140,7 +140,7 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - Port Mapping و Network Aliases: خالی
 - HTTP Basic Authentication: خاموش
 - Watch Paths ذخیره‌شده: `src/**`، `public/**`، `index.html`، `package.json`، `package-lock.json`، `vite.config.js`، `Dockerfile` و `nginx.conf`
-- دامنه موقت تولیدشده توسط Coolify فعلاً نگه داشته شد.
+- دامنه موقت تأییدشده Frontend: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`؛ فعلاً نگه داشته شد و نتیجه smoke test صفحه هنوز در انتظار تأیید است.
 - Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
 
 ## معماری Database-per-Tenant
