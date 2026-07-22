@@ -181,7 +181,9 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 - This is the deterministic code/CI boundary test.
 - Live data-isolation stage 1 passed on 2026-07-22: a fully synthetic record created in Alpha was not found when searched from Beta.
 - No record value, name, identifier, credential, or personal data is stored in Git.
-- Reverse Beta-to-Alpha synthetic-record verification and a separate live cross-tenant token test remain pending.
+- Reverse Beta-to-Alpha live data isolation also passed: a fully synthetic Beta record was not found from Alpha.
+- Final live data result: bidirectional Alpha-to-Beta and Beta-to-Alpha separation passed; no record value or personal data is stored in Git.
+- A live cross-tenant token test remains and must be automated rather than requiring the user to copy or manipulate tokens manually.
 - Generated Control Prisma client is copied into the runtime image.
 - Prisma proxy no longer requires tenant context during NestJS provider startup.
 - Control DB migration runs successfully at container startup.
@@ -194,4 +196,4 @@ Correction: the application expects `CORS_ORIGINS`; `ALLOWED_ORIGINS` is not use
 2. SMS production fallback is fail-closed; CI run 107 and the final Coolify deployment both passed.
 3. Frontend branch, tenant domains, healthcheck, and UI-only Alpha/Beta bootstrap are complete and verified.
 4. Deterministic automated tenant-isolation checks are complete and `security-ci` run 226 passed.
-5. Live Alpha-to-Beta data isolation passed; next run the reverse Beta-to-Alpha synthetic-record check, then complete the live cross-tenant token test without recording personal data.
+5. Bidirectional live data isolation passed. Next automate the live cross-tenant token test, then implement a secure Platform Admin provisioning UI for new companies.
