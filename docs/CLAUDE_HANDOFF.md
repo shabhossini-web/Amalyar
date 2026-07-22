@@ -502,3 +502,10 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - `security-ci` run 350 completed successfully on commit `078235f784b747c624c03f4577353c144cd7452d`.
 - Frontend build, Backend build, both Prisma schema validations, tenant isolation, fail-closed Platform Admin config, opaque phone reference and origin-bound WebOTP SMS tests all passed.
 - Code is ready for the Coolify staging variable and controlled Backend/Frontend redeploy.
+
+
+### Coolify WebOTP variable saved
+
+- مالک پروژه تأیید کرد `PLATFORM_ADMIN_WEBOTP_HOST` روی Backend resource در staging اضافه و ذخیره شده است.
+- مقدار، hostname دامنه مدیریت staging است و هیچ secret یا شماره‌ای ثبت نشده است.
+- Backend هنوز بعد از این تغییر redeploy نشده؛ مرحله بعد redeploy کنترل‌شده Backend و بررسی Running/Healthy و log است.
