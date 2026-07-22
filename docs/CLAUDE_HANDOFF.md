@@ -128,7 +128,9 @@ Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Lit
 - `public/sw.js`: مسیر `/api` صریحاً از Service Worker خارج شد و cache به `v8` افزایش یافت.
 - `Dockerfile`: Node 22 و `npm ci` با lockfile برای build تکرارپذیر.
 - commitهای فرانت: `a085f8c173d6a85471fca649918e85919cf2a13e`, `4caaf8e8ab7bc96b389a0c11918b87afd0e90adf`, `703ba95524910c07d36c3f2ddd7268dfe9b772df`, `6e4976373184aef9a9f3e708d100be7ac68e573b`.
-- CI run `135`: هنگام ثبت در حال اجرا.
+- CI run `135`: موفق.
+- `nginx.conf`: اگر Backend ناسالم باشد و Coolify `/api` را به frontend fallback کند، Nginx با `503` fail-closed می‌شود و SPA HTML تحویل نمی‌دهد.
+- commit fail-closed فرانت: `9ca9a9abb0084baf290e41699eb05b8473e39137`؛ CI run `141` موفق.
 - هنوز Frontend Application در Coolify ساخته نشده است.
 
 ## معماری Database-per-Tenant
