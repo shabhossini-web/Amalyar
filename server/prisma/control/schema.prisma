@@ -34,3 +34,64 @@ model TenantDomain {
   @@index([tenantId])
   @@map("tenant_domains")
 }
+
+model PlatformOtp {
+  id         String    @id @default(uuid())
+  phoneHash  String    @map("phone_hash")
+  codeHash   String    @map("code_hash")
+  attempts   Int       @default(0)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([phoneHash, createdAt])
+  @@map("platform_otps")
+}
+
+model PlatformSession {
+  id         String    @id @default(uuid())
+  tokenHash  String    @unique @map("token_hash")
+  phoneHash  String    @map("phone_hash")
+  csrfHash   String    @map("csrf_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@index([phoneHash, expiresAt])
+  @@map("platform_sessions")
+}
+
+model ProvisioningJob {
+  id              String    @id @default(uuid())
+  slug            String    @unique
+  name            String
+  hostname        String    @unique
+  status          String    @default("queued")
+  tenantId        String?   @map("tenant_id")
+  requestedByHash String    @map("requested_by_hash")
+  errorCode       String?   @map("error_code")
+  attempts        Int       @default(0)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+  startedAt       DateTime? @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+
+  @@index([status, createdAt])
+  @@map("provisioning_jobs")
+}
+
+model PlatformAuditEvent {
+  id         String   @id @default(uuid())
+  actorHash  String?  @map("actor_hash")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  ipHash     String?  @map("ip_hash")
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([actorHash, createdAt])
+  @@map("platform_audit_events")
+}
