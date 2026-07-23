@@ -399,3 +399,12 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - Coolify `Auto Deploy` is now disabled for this Worker so documentation commits cannot trigger additional deployments during setup.
 - The Worker remains non-public: no domain, exposed port, port mapping, network alias, Traefik/container label, HTTP Basic Authentication, or pre/post deployment command.
 - Next verification step: perform one manual deployment, then confirm stable runtime and inspect logs without exposing connection URLs or secrets.
+
+### Worker manual deployment stable
+
+- After configuring the Worker runtime variables and disabling Auto Deploy, one manual deployment was performed.
+- Coolify reports `Running (unknown)`, which is expected for this non-HTTP background process.
+- No restart counter is shown after the manual deployment.
+- The log view shows `No logs yet`; this is expected while no provisioning job is queued because the Worker is intentionally silent while idle.
+- No secret values, connection URLs, tenant test data, or container identifiers are recorded.
+- Next functional verification: submit one controlled staging provisioning job through the Platform Admin UI and confirm the Worker records a safe success/failure result.
