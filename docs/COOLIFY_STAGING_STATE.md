@@ -436,3 +436,10 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - هنوز هیچ catch-all label در Coolify و هیچ تغییر wildcard TLS اعمال نشده است.
 - مرحله بعد، تعیین سازگاری HostIran DNS با ACME DNS challenge است؛ تا روشن‌شدن این مورد تنظیمات proxy تغییر نمی‌کند.
 
+### HostIran DNS challenge compatibility unresolved
+
+- جست‌وجوی مستندات عمومی و رسمی قابل‌دسترسی، راهنمای API token یا ACME DNS challenge برای HostIran Cloud DNS پیدا نکرد.
+- نبود نتیجه عمومی به‌معنای نبود قطعی API نیست؛ ممکن است قابلیت فقط در پنل یا از طریق پشتیبانی ارائه شود.
+- تا زمان تأیید API سازگار، هیچ تغییر catch-all routing، Traefik DNS challenge یا wildcard TLS در Coolify اعمال نمی‌شود.
+- مرحله بعد فقط بررسی پنل HostIran برای گزینه‌ای با عنوان API، API Key، Token یا دسترسی API است؛ هیچ token یا credential نباید در Chat یا Git فرستاده شود.
+
