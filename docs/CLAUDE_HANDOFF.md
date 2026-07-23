@@ -584,3 +584,14 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - No manual deployment was started during this configuration step.
 - Coolify UI showed `2 deployments`; before adding environment variables, inspect the resource status and deployment history to detect any webhook-triggered incomplete run.
 - No secrets or temporary generated domain/IP values are recorded here.
+
+### Worker runtime variables saved and automatic deployment paused
+
+- Coolify resource: `amalyar-provisioning-worker-staging` in the `staging` environment.
+- Configured variable names only: `CONTROL_DATABASE_URL`, `PROVISIONING_DATABASE_URL`, `TENANT_DATABASE_ENCRYPTION_KEY`, and `PROVISIONING_POLL_MS=5000`.
+- Secret values remain only in Coolify and are not recorded in Git.
+- Variable flags confirmed by the owner: Buildtime off, Runtime on, Multiline off, Literal on.
+- Before the variables were configured, documentation commits triggered two Webhook deployments: one was cancelled; one completed the deployment but the Worker entered a restart loop because runtime configuration had not yet been applied. A successful deployment badge was not treated as runtime-health proof.
+- Coolify `Auto Deploy` is now disabled for this Worker so documentation commits cannot trigger additional deployments during setup.
+- The Worker remains non-public: no domain, exposed port, port mapping, network alias, Traefik/container label, HTTP Basic Authentication, or pre/post deployment command.
+- Next verification step: perform one manual deployment, then confirm stable runtime and inspect logs without exposing connection URLs or secrets.
