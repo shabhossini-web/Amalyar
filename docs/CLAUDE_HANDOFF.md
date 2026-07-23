@@ -621,3 +621,14 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - No DNS account credential, API token, server IP, or record value is stored in Git.
 - The next one-time step is to add a wildcard `A` record whose target matches the existing staging application records, then verify propagation before changing Coolify catch-all routing or TLS.
 - Wildcard TLS automation remains unresolved until HostIran DNS API/DNS-challenge compatibility is confirmed; no unsafe proxy change has been applied.
+
+### Wildcard DNS A record saved
+
+- در HostIran Cloud DNS یک رکورد wildcard از نوع `A` برای `*.amalyar.com` ذخیره شد.
+- مقدار مقصد همان مقصد رکوردهای موجود staging است و عمداً در Git ثبت نشده است.
+- TTL رکورد `14400` ثانیه است.
+- رکوردهای صریح فعلی مانند دامنه‌های staging بر wildcard اولویت دارند.
+- انتشار DNS هنوز از بیرون تأیید نشده است؛ بررسی resolver محلی Agent به‌علت محدودیت شبکه/DNS محیط قابل اتکا نبود و بررسی مرورگر مالک پس از propagation لازم است.
+- هنوز هیچ catch-all label در Coolify و هیچ تغییر wildcard TLS اعمال نشده است.
+- مرحله بعد، تعیین سازگاری HostIran DNS با ACME DNS challenge است؛ تا روشن‌شدن این مورد تنظیمات proxy تغییر نمی‌کند.
+
