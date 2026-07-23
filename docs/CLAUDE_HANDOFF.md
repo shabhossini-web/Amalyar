@@ -660,3 +660,13 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - هر دو provider در فهرست رسمی Lego، کتابخانه مورداستفاده Traefik برای DNS-01، پشتیبانی می‌شوند. انتخاب یا مهاجرت به آن‌ها هنوز انجام نشده و نیازمند بررسی سرویس، هزینه و برنامه انتقال بدون قطعی است.
 - هیچ API key یا credential در Git ثبت نشده است.
 
+### First manual tenant-domain routing attempt
+
+- دامنه tenant جدید پس از تنظیم DNS دیگر `NXDOMAIN` نیست و درخواست به proxy سرور Coolify می‌رسد.
+- hostname دقیق tenant و سایر داده‌های تست عمداً ثبت نشده‌اند.
+- دامنه ریشه به Frontend و مسیر همان دامنه با `/api` به Backend اضافه شده است.
+- تست مرورگر فعلاً `NET::ERR_CERT_AUTHORITY_INVALID` نشان داد؛ پس گواهی معتبر هنوز برای hostname صادر یا ارائه نشده است.
+- پس از عبور آزمایشی از هشدار، پاسخ `no available server` دیده شد؛ یعنی Traefik route را می‌شناسد اما برای route جاری endpoint سالم/قابل‌دسترس پیدا نکرده است.
+- این مرحله موفق تلقی نمی‌شود و هیچ credential یا داده کاربری نباید تا رفع TLS و upstream وارد شود.
+- بررسی بعدی باید ابتدا صحت رشته Domains و deployment جاری Frontend را تأیید کند؛ سپس Backend و صدور certificate بررسی شود.
+
