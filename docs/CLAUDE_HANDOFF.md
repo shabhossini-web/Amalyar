@@ -614,3 +614,10 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - Opening the generated hostname returned `DNS_PROBE_FINISHED_NXDOMAIN`.
 - The NXDOMAIN result is a DNS/ingress gap, not a Worker or database-provisioning failure: no wildcard DNS record and catch-all HTTPS routing have yet been configured for arbitrary tenant hostnames.
 - Next infrastructure step: configure a one-time wildcard DNS record, a wildcard TLS certificate through DNS challenge, and catch-all SaaS routing for the shared Frontend and the more-specific Backend `/api` route. Per-tenant manual DNS entries are rejected because onboarding must remain UI-driven and automatable.
+
+### Authoritative DNS provider confirmed
+
+- The authoritative DNS zone for `amalyar.com` is managed through HostIran Cloud DNS.
+- No DNS account credential, API token, server IP, or record value is stored in Git.
+- The next one-time step is to add a wildcard `A` record whose target matches the existing staging application records, then verify propagation before changing Coolify catch-all routing or TLS.
+- Wildcard TLS automation remains unresolved until HostIran DNS API/DNS-challenge compatibility is confirmed; no unsafe proxy change has been applied.
