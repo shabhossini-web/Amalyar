@@ -451,3 +451,16 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - برای wildcard TLS کاملاً خودکار، پیشنهاد معماری انتقال فقط مدیریت authoritative DNS به یک provider دارای API سازگار (ترجیحاً Cloudflare) است؛ ثبت/مالکیت دامنه لازم نیست منتقل شود.
 - هیچ nameserver، proxy، TLS یا Coolify catch-all routing هنوز تغییر نکرده است و اجرای این تصمیم منتظر تأیید مالک پروژه است.
 
+### Temporary manual tenant-domain activation
+
+- مالک پروژه فعلاً انتقال authoritative DNS به provider خارجی را به‌دلیل نگرانی از دسترس‌پذیری هنگام اختلال اینترنت بین‌الملل رد کرد.
+- راهکار موقت مصوب: provisioning دیتابیس/role توسط UI و Worker خودکار می‌ماند؛ فعال‌سازی دامنه در مرحله پایانی به‌صورت دستی انجام می‌شود.
+- برای هر tenant جدید، اپراتور پس از موفقیت provisioning باید DNS و route دقیق همان hostname را تکمیل و HTTPS را بررسی کند؛ tenant نباید صرفاً با موفقیت ساخت دیتابیس «قابل‌دسترسی عمومی» تلقی شود.
+- رکورد wildcard فعلی حذف یا تغییر داده نشده است. تا مشخص‌شدن propagation و routing، ساخت رکوردهای اضافی باید با بررسی عدم تداخل انجام شود.
+- هیچ DNS record، nameserver، proxy یا Coolify label در این تصمیم تغییر نکرد.
+- گزینه‌های ایرانی سازگار برای خودکارسازی آینده:
+  - ArvanCloud با provider code `arvancloud` و credential name `ARVANCLOUD_API_KEY`.
+  - Liara با provider code `liara` و credential name `LIARA_API_KEY`.
+- هر دو provider در فهرست رسمی Lego، کتابخانه مورداستفاده Traefik برای DNS-01، پشتیبانی می‌شوند. انتخاب یا مهاجرت به آن‌ها هنوز انجام نشده و نیازمند بررسی سرویس، هزینه و برنامه انتقال بدون قطعی است.
+- هیچ API key یا credential در Git ثبت نشده است.
+
