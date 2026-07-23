@@ -604,3 +604,13 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - The log view shows `No logs yet`; this is expected while no provisioning job is queued because the Worker is intentionally silent while idle.
 - No secret values, connection URLs, tenant test data, or container identifiers are recorded.
 - Next functional verification: submit one controlled staging provisioning job through the Platform Admin UI and confirm the Worker records a safe success/failure result.
+
+### First UI-driven Worker provisioning test
+
+- A controlled third staging tenant was submitted only through the Platform Admin UI.
+- The provisioning queue moved from running to ready/succeeded, and the tenant appeared active in the platform list.
+- This verifies the UI → Control DB job → dedicated Worker → isolated PostgreSQL database/role path without exposing credentials in the UI or API.
+- The tenant name, slug, hostname, database name, role name, and all other test-record values are intentionally not recorded.
+- Opening the generated hostname returned `DNS_PROBE_FINISHED_NXDOMAIN`.
+- The NXDOMAIN result is a DNS/ingress gap, not a Worker or database-provisioning failure: no wildcard DNS record and catch-all HTTPS routing have yet been configured for arbitrary tenant hostnames.
+- Next infrastructure step: configure a one-time wildcard DNS record, a wildcard TLS certificate through DNS challenge, and catch-all SaaS routing for the shared Frontend and the more-specific Backend `/api` route. Per-tenant manual DNS entries are rejected because onboarding must remain UI-driven and automatable.
