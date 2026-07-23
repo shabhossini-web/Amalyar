@@ -378,3 +378,13 @@ The Worker must not receive tenant JWT, SMS credentials, a public domain, or an 
 - Coolify به‌صورت پیش‌فرض یک دامنه موقت، Traefik labels و exposed port ایجاد کرده است؛ این‌ها برای Worker باید قبل از نخستین deployment کامل حذف شوند.
 - Dockerfile هنوز default `/Dockerfile` است و باید به `/Dockerfile.worker` تغییر کند.
 - resource هنوز deploy نشده و هیچ Worker process اجرا نشده است.
+
+### Worker non-public configuration saved
+
+- Coolify resource name: `amalyar-provisioning-worker-staging`.
+- Build configuration: Base Directory `/server`, Dockerfile Location `/Dockerfile.worker`, Watch Paths `server/**`.
+- Non-public Worker configuration verified: Domains, Ports Exposes, Port Mappings, Network Aliases, and container/Traefik labels are empty.
+- HTTP Basic Authentication is disabled; pre-deployment and post-deployment commands are empty.
+- No manual deployment was started during this configuration step.
+- Coolify UI showed `2 deployments`; before adding environment variables, inspect the resource status and deployment history to detect any webhook-triggered incomplete run.
+- No secrets or temporary generated domain/IP values are recorded here.
