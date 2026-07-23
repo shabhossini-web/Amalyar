@@ -639,3 +639,11 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 - تا زمان تأیید API سازگار، هیچ تغییر catch-all routing، Traefik DNS challenge یا wildcard TLS در Coolify اعمال نمی‌شود.
 - مرحله بعد فقط بررسی پنل HostIran برای گزینه‌ای با عنوان API، API Key، Token یا دسترسی API است؛ هیچ token یا credential نباید در Chat یا Git فرستاده شود.
 
+### HostIran panel API not available
+
+- مالک پروژه پنل HostIran Cloud DNS را بررسی کرد و گزینه‌ای برای API، API key، token یا دسترسی برنامه‌نویسی پیدا نکرد.
+- همراه با نبود مستندات عمومی رسمی، HostIran DNS فعلاً برای ACME DNS challenge خودکار قابل‌استفاده در نظر گرفته نمی‌شود؛ این نتیجه به‌معنای ادعای قطعی درباره امکانات داخلی پشتیبانی HostIran نیست.
+- رکورد wildcard `A` موجود حفظ می‌شود و هیچ رکورد tenant به‌صورت دستی ساخته نخواهد شد.
+- برای wildcard TLS کاملاً خودکار، پیشنهاد معماری انتقال فقط مدیریت authoritative DNS به یک provider دارای API سازگار (ترجیحاً Cloudflare) است؛ ثبت/مالکیت دامنه لازم نیست منتقل شود.
+- هیچ nameserver، proxy، TLS یا Coolify catch-all routing هنوز تغییر نکرده است و اجرای این تصمیم منتظر تأیید مالک پروژه است.
+
