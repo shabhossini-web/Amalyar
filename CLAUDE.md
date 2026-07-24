@@ -6,20 +6,29 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 
 | بخش | استک | آدرس |
 |---|---|---|
-| لندینگ + اپ (SPA) | React 18 + Vite + framer-motion | `amalyar.com` (روت=لندینگ، `/app`=سامانه) |
-| بک‌اند | NestJS 10 + Prisma + PostgreSQL 16 | `api.amalyar.com/api` |
+| لندینگ + اپ (SPA) | React 18 + Vite + framer-motion | `amalyar.com` (روت=لندینگ؛ هاستِ tenant→`/login`؛ `/app`=سامانه) |
+| بک‌اند | NestJS 10 + Prisma + PostgreSQL 18 | `api.amalyar.com/api` (روتینگ per-Host) |
+| کنسولِ Platform Admin | همان SPA، مسیر `/platform-admin` | هاستِ مدیریتیِ جدا (مثلاً `admin.amalyar.com`) |
+| Worker پروويژن | ایمیجِ جدا `server/Dockerfile.worker` (غیرعمومی) | — |
 | پنل | Coolify روی VPS `62.60.214.40` | `panel.amalyar.com` |
 
 - **push به `main` = دیپلویِ خودکارِ هر دو اپ** (GitHub App → Coolify). بک‌اند هنگامِ اجرا `prisma migrate deploy` می‌زند.
 - سرور Docker Hub را از **آینهٔ آروان** می‌کشد (daemon.json روی هاست). شبکهٔ سرور کند است → npm در Dockerfile با retry/timeoutِ بالا.
-- env بک‌اند در Coolify: `DATABASE_URL` (Internal URL دیتابیس), `JWT_SECRET`, `PORT=3001`, `CORS_ORIGINS`, `MELI_API_KEY`, `MELI_FROM`, `RP_ID`, `WEBAUTHN_ORIGINS`.
+- **env بک‌اند در Coolify:** `CONTROL_DATABASE_URL` (دیتابیسِ کنترل), `PROVISIONING_DATABASE_URL` (کاربرِ CREATEDB/CREATEROLE — فقط Worker), `TENANT_DATABASE_ENCRYPTION_KEY` (کلیدِ AES-256 برای URL دیتابیسِ tenant), `JWT_SECRET` (حداقل ۳۲کاراکتر), `PORT=3001`, `CORS_ORIGINS`, `MELI_API_KEY`, `MELI_FROM`, `RP_ID`, `WEBAUTHN_ORIGINS`.
+- **مالتی‌تننت (Database-per-Tenant):** هر شرکت دیتابیسِ مستقل دارد. `control-db` فقط نگاشتِ `hostname → شرکت` + URLِ رمزشدهٔ دیتابیس را نگه می‌دارد (نه دادهٔ بیمار/حساب). درخواست از Host → tenant resolve → Prisma به دیتابیسِ همان شرکت route می‌شود.
+- **DNS:** رکوردِ wildcard `*.amalyar.com` → همان مقصدِ اپ‌ها. هر tenant جدید: ساختِ خودکارِ DB/role با Worker + افزودنِ **دستیِ** دامنه در دو اپِ Coolify (فرانت روت + بک‌اند `/api`).
+
+> **📋 منبعِ حقیقتِ عملیات/دیپلوی/staging:** `docs/CLAUDE_HANDOFF.md` (دفترِ ثبتِ کاملِ Coolify، tenantها، متغیرها، کارِ باقی‌مانده). هر تغییرِ زیرساخت/دیپلوی باید همان‌جا هم ثبت شود. معماریِ مالتی‌تننت: `docs/database-per-tenant.md`.
 
 ## ⚠️ قوانینِ قفل‌شده (استانداردِ سراسری)
 
 1. **احرازِ واحد:** فقط یک صفحهٔ لاگین/ثبت‌نامِ تب‌دار (`/login`). ثبت‌نام = موبایل → OTP (مرحلهٔ جدا، `OtpInput` انیمیشنی + WebOTP) → پروفایل + **سلفیِ زندهٔ اجباری**. حسابِ جدید `pending` است تا سوپرادمین تأیید و سطح بدهد؛ **اولین حسابِ سیستم** خودکار سوپرادمینِ فعال می‌شود.
 2. **سطوحِ عددی ۱..۶**: ۱ بازدید · ۲ کارشناس · ۳ کارشناس‌ادمین · ۴ سوپروایزر · ۵ ادمین · ۶ سوپرادمین (`server/src/common/levels.ts`).
-3. **دسترسی هرگز هاردکد نشود.** منبعِ حقیقت جدولِ `features` است (`minLevel`, `enabled`)؛ کد فقط seedِ پیش‌فرض (`FEATURE_DEFAULTS`). لانچر از `GET /features` گیت می‌شود؛ API ماژول‌ها با `@Feature('<key>') + FeatureGuard` (سطح را از DB می‌خواند، سوپرادمین همیشه عبور). ماژولِ `users` قفلِ سطح ۶ است. `enabled` بعداً اهرمِ لایسنس/پلن است.
-4. **ماژولِ جدید = برشِ عمودی + این چک‌لیست:** کلید در `FEATURE_DEFAULTS` (بک‌اند) + `FEATURE_FA` (Users.jsx) + آیتمِ لانچر با `min` fallback → صفحهٔ `/app/<key>` با هدرِ استاندارد → گاردِ `JwtAuthGuard + FeatureGuard + @Feature` روی API → تستِ e2e.
+3. **دسترسی هرگز هاردکد نشود — دو لایهٔ مکمل:**
+   - **`Feature` = روشن/خاموشِ *ماژول* (اهرمِ پلن/لایسنسِ SaaS).** جدولِ `features` (`minLevel`, `enabled`)؛ seedِ کد `FEATURE_DEFAULTS`. لانچر از `GET /features` گیت می‌شود؛ کنترلر با `@Feature('<key>') + FeatureGuard`.
+   - **`Permission` = مجوزِ *عملیاتِ* ریز داخلِ ماژول** (مثلاً `patients.create`, `patients.delete`). جدولِ `permissions`؛ seedِ کد `PERMISSION_DEFAULTS`؛ متد با `@RequirePermissions('<key>') + PermissionGuard`.
+   - هر دو: سطح از DB خوانده می‌شود، سوپرادمین همیشه عبور، منبعِ حقیقت DBِ **همان tenant** است. هرگز کلیدِ سطح در UI/کد هاردکد نشود.
+4. **ماژولِ جدید = برشِ عمودی + این چک‌لیست:** کلیدِ ماژول در `FEATURE_DEFAULTS` + کلیدهای عملیات در `PERMISSION_DEFAULTS` (بک‌اند) + `FEATURE_FA` (Users.jsx) + آیتمِ لانچر با `min` fallback → صفحهٔ `/app/<key>` با هدرِ استاندارد → گاردِ `JwtAuthGuard + FeatureGuard + PermissionGuard` + `@Feature` (کلاس) و `@RequirePermissions` (متد) روی API → **object-authz** (کاربرِ زیرِ سوپروایزر فقط دادهٔ منتسب به خودش) → تستِ e2e.
 5. **`ProfileMenu` بالای هر صفحهٔ /app** (چیپِ سلفی+نام+سطح؛ دراپ‌داونِ چندحسابی). حسابِ خودت→`/app/profile`، بقیه→سوییچ.
 6. **چندحسابی:** `src/lib/accountsStore.js`. فقط ورودِ «مرا به خاطر بسپار» ماندگار می‌شود (localStorage)؛ بدونِ تیک → sessionStorage و خارج از لیست.
 7. **آیکون فقط SVGِ خطی** (stroke=currentColor, strokeWidth≈1.9). ایموجی/گلیفِ متنی (↩ ← ؟ …) ممنوع.
@@ -32,7 +41,8 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 14. **تاریخِ شمسی:** تبدیل فقط با `src/lib/jalali.js` (`jStrToIso`/`isoToJStr`/`todayJStr`/`faDate`). ورودی متنِ «۱۴۰۵/۰۴/۲۸» + دکمهٔ «امروز»؛ DB همیشه ISO. کبیسه: قراردادِ jalaali-js یعنی `leap === 0`.
 15. **فیلدِ مشتق فقط سمتِ سرور** (قانونِ computeVisit): API آبجکتِ غنی‌شده برمی‌گرداند (`due`, `code`, `fullName`…) و render هیچ فرمولی ندارد.
 16. **شیشهٔ آیکون‌های لانچر (استانداردِ مصوب):** گرادیانِ کم‌آلفا (~۰٫۲–۰٫۴) + بوردرِ رنگی + backdrop-blur + گلو — نسخهٔ فعلیِ `launcher.css`. نه پرِ مات، نه near-outlineِ تاریک.
-17. **جداییِ ماژول‌ها: «مدیریت بیماران/داشبورد» بدونِ مالی است.** مبلغ/پرداخت/سهم/مانده فقط در ماژولِ «حسابداری» (بعداً) — ستون‌های مالیِ Visit در DB می‌مانند ولی UI این بخش نمایش/ورودیِ مالی ندارد. موجودیت‌های عملیاتی (جراح/بیمارستان) با تعریف‌ها + افزودنِ سریع از فرم؛ نامشان denormalized روی Visit می‌ماند.
+17. **جداییِ لایه‌های مالی (تصمیمِ مصوب):** داشبوردِ مدیریت یک **خلاصهٔ مالیِ پایه، فقط‌خواندنی و تک‌منبع** دارد (پلنِ مالیِ پایه) — جمعِ مبلغ/پرداختی/ماندهٔ کل + رقم‌های هر کارت که همه از **آبجکتِ غنی‌شدهٔ سرور** (`amount/paid/due`) خوانده می‌شوند، نه فرمولِ تکراری. **حسابداریِ سنگین** (پرداخت‌های چندتایی+فیش، سهمِ N-سهامدار، قراردادِ جراح ٪/ثابت، دستمزدِ کارشناس، هزینه‌ها، خزانه/چک، دفترکل، سال مالی، فاکتور رسمی) در **ماژولِ جدای «حسابداری»** است و با `Feature('accounting')` به‌عنوانِ پلنِ پیشرفته روشن می‌شود. موجودیت‌های عملیاتی (جراح/بیمارستان) با تعریف‌ها + افزودنِ سریع؛ نامشان denormalized روی Visit.
+18. **مالتی‌تننتِ fail-closed (تغییرناپذیر):** tenant فقط از **Host دقیق** resolve می‌شود — هرگز از header/body/query کاربر. JWT شاملِ `tid` است و توکنِ شرکتِ دیگر روی این Host رد می‌شود (۴۰۱ قبل از هر query). `PrismaService` بدونِ tenant-context **throw** می‌کند (نه دیتابیسِ پیش‌فرض). credentialِ `CREATEDB/CREATEROLE` فقط در Workerِ جدا، نه API. تستِ جداسازی: `server/scripts/verify-tenant-isolation.js` (در CI).
 
 ## ساختارِ کلیدی
 
@@ -41,11 +51,15 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 | `src/pages/Landing.jsx` + `src/components/*` | لندینگ (Hero لاک‌آپ + نشانِ خودکشیده) |
 | `src/app/Login.jsx` | احرازِ استاندارد (تب‌ها/OTP/سلفی/پس‌کی/remember) |
 | `src/app/Launcher.jsx` | لانچرِ گیت‌شده از `/features` + بنرِ نصبِ PWA |
-| `src/app/Dashboard.jsx` + `dashboard.css` | داشبوردِ مدیریت — مراجعات (**بدونِ مالی**؛ مالی در ماژولِ حسابداری). لیست/سرچ/فیلتر/فرم/تعریف‌ها |
+| `src/app/Dashboard.jsx` + `dashboard.css` | داشبوردِ مدیریت — مراجعات + خلاصهٔ مالیِ پایه (تک‌منبع). لیست/سرچ/فیلتر/فرم/تعریف‌ها |
+| `src/app/PlatformAdmin.jsx` | کنسولِ Platform Admin (ثبتِ شرکت‌ها/ProvisioningJob) — مسیرِ `/platform-admin` |
 | `server/src/patients/definitions.*` | تعریف‌ها: جراحان/بیمارستان‌ها (CRUD؛ استفاده‌شده → غیرفعال نه حذف) + `GET /techs` |
 | `src/lib/jalali.js` · `src/lib/money.js` | تقویمِ شمسی و ابزارهای مالی (قوانین ۱۳–۱۴) |
-| `server/src/patients/` | API بیماران/مراجعات (Patient کدِ `AM-NNNN` + Visit با `seq` → کدِ `AM-NNNN-V2`؛ حذفِ آخرین مراجعه بیمار را هم پاک می‌کند) |
-| `server/src/auth/feature.{decorator,guard}.ts` | گاردِ دسترسیِ داینامیک از جدولِ features |
+| `server/src/patients/` | API بیماران/مراجعات (کدِ `AM-NNNN` + Visit با `seq`؛ object-authz + audit + soft-delete) |
+| `server/src/auth/feature.*` · `permission.*` | گاردِ ماژول (Feature) و گاردِ عملیات (Permission) — قانون ۳ |
+| `server/src/tenant/*` · `prisma/control/*` | هستهٔ مالتی‌تننت: middleware (Host→tenant)، Prisma-proxyِ per-tenant، control-DB، رمزنگاری URL |
+| `server/src/platform/*` · `scripts/provisioning-worker.ts` | کنسولِ Platform Admin (بک‌اند) + Workerِ ساختِ خودکارِ DB/role |
+| `server/src/audit/*` | ثبتِ رویدادهای حساس (AuditEvent per-tenant) |
 | `src/app/Users.jsx` | تأیید/سطح‌دهی + تبِ «دسترسی‌ها» (سوپرادمین) |
 | `src/app/Profile.jsx` | پروفایلِ من (نام/سلفی/رمز) |
 | `src/app/ProfileMenu.jsx` · `OtpInput.jsx` · `PasswordInput.jsx` · `SelfieCapture.jsx` | کامپوننت‌های استانداردِ قفل‌شده |
