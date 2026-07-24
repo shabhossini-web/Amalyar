@@ -3,6 +3,13 @@
 # (registry-mirror در daemon.json) کشیده می‌شوند — پس ۴۰۳/تحریم پیش نمی‌آید.
 FROM node:22-alpine AS build
 WORKDIR /app
+# میزبانِ کنسولِ Platform Admin و مبنای API در زمانِ build داخلِ باندل می‌نشینند
+# (Vite متغیرهای VITE_* را از process.env در زمانِ build می‌خوانَد).
+# پیش‌فرض‌ها را Coolify با Build Variable می‌تواند override کند.
+ARG VITE_PLATFORM_HOSTS=tenant.amalyar.com
+ARG VITE_API_BASE=""
+ENV VITE_PLATFORM_HOSTS=$VITE_PLATFORM_HOSTS
+ENV VITE_API_BASE=$VITE_API_BASE
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
