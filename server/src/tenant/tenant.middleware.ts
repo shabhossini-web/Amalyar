@@ -20,6 +20,8 @@ export class TenantMiddleware implements NestMiddleware {
       (await this.registry.resolveDevelopmentDefault());
 
     if (!tenant) throw new NotFoundException('شرکت برای این دامنه یافت نشد');
-    this.context.run(tenant, next);
+    // میزبانِ درخواست همراهِ context می‌رود تا سرویس‌های وابسته به دامنه
+    // (پس‌کی و WebOTP) به‌جای یک دامنهٔ ثابت، دامنهٔ همان شرکت را ببینند.
+    this.context.run({ ...tenant, hostname }, next);
   }
 }

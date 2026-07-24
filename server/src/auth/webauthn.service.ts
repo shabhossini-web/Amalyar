@@ -8,11 +8,16 @@ import {
 } from '@simplewebauthn/server';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
+import { TenantContext } from '../tenant/tenant-context';
 
 /**
  * ورود با اثر انگشت / پس‌کی (WebAuthn، discoverable credential).
  * چالش‌ها به‌صورتِ stateless در یک JWT کوتاه‌عمر حمل می‌شوند.
- * env: RP_ID (پیش‌فرض amalyar.com) · WEBAUTHN_ORIGINS (کاما جدا)
+ *
+ * ⚠️ مالتی‌تننت: rpID و originِ موردانتظار باید از میزبانِ همان درخواست ساخته شوند،
+ * نه از یک دامنهٔ ثابت. با دامنهٔ ثابت، تأییدِ پس‌کی روی زیردامنهٔ هر شرکت شکست
+ * می‌خورد (origin در فهرست نیست) و rpIDِ مشترک، پس‌کی را بینِ شرکت‌ها نشت می‌دهد.
+ * env فقط برای توسعهٔ محلی: RP_ID · WEBAUTHN_ORIGINS (کاما جدا)
  */
 @Injectable()
 export class WebauthnService {
@@ -20,13 +25,22 @@ export class WebauthnService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private auth: AuthService,
+    private tenantContext: TenantContext,
   ) {}
 
-  private rpID = process.env.RP_ID || 'amalyar.com';
-  private origins = (process.env.WEBAUTHN_ORIGINS || 'https://amalyar.com,https://www.amalyar.com')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  /** rpID/originِ همین درخواست — هر شرکت روی دامنهٔ خودش قفل می‌شود. */
+  private rp() {
+    const host = (this.tenantContext.current()?.hostname ?? '').trim().toLowerCase();
+    const local = !host || host === 'localhost' || host === '127.0.0.1';
+    if (!local) return { rpID: host, origins: [`https://${host}`] };
+    return {
+      rpID: process.env.RP_ID || 'localhost',
+      origins: (process.env.WEBAUTHN_ORIGINS || 'http://localhost:5173')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    };
+  }
 
   // ── ثبتِ اثر انگشت (کاربرِ واردشده) ─────────────────────────
   async registerOptions(accountId: number) {
@@ -38,7 +52,7 @@ export class WebauthnService {
 
     const options = await generateRegistrationOptions({
       rpName: 'عمل‌یار',
-      rpID: this.rpID,
+      rpID: this.rp().rpID,
       userName: account.username || account.phone || `user${account.id}`,
       userDisplayName:
         [account.firstName, account.lastName].filter(Boolean).join(' ') || account.username || '',
@@ -61,11 +75,12 @@ export class WebauthnService {
     const payload = await this.checkChallenge(body.challengeToken, 'webauthn-reg');
     if (payload.sub !== accountId) throw new BadRequestException('توکنِ چالش نامعتبر است');
 
+    const rp = this.rp();
     const verification = await verifyRegistrationResponse({
       response: body.response,
       expectedChallenge: payload.challenge,
-      expectedOrigin: this.origins,
-      expectedRPID: this.rpID,
+      expectedOrigin: rp.origins,
+      expectedRPID: rp.rpID,
     }).catch(() => null);
     if (!verification?.verified || !verification.registrationInfo) {
       throw new BadRequestException('ثبتِ اثر انگشت ناموفق بود');
@@ -103,7 +118,7 @@ export class WebauthnService {
       }
     }
     const options = await generateAuthenticationOptions({
-      rpID: this.rpID,
+      rpID: this.rp().rpID,
       userVerification: 'preferred',
       allowCredentials,
     });
@@ -124,11 +139,12 @@ export class WebauthnService {
     if (!cred) throw new UnauthorizedException('اثر انگشتِ ثبت‌شده‌ای یافت نشد');
     if (cred.account.status !== 'active') throw new UnauthorizedException('حساب فعال نیست');
 
+    const rp = this.rp();
     const verification = await verifyAuthenticationResponse({
       response: body.response,
       expectedChallenge: payload.challenge,
-      expectedOrigin: this.origins,
-      expectedRPID: this.rpID,
+      expectedOrigin: rp.origins,
+      expectedRPID: rp.rpID,
       credential: {
         id: cred.credId,
         publicKey: new Uint8Array(Buffer.from(cred.publicKey, 'base64')),

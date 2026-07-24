@@ -7,17 +7,20 @@ const { UnauthorizedException } = require('@nestjs/common');
 const { JwtStrategy } = require('../dist/auth/jwt.strategy');
 const { PrismaService } = require('../dist/prisma/prisma.service');
 const { TenantContext } = require('../dist/tenant/tenant-context');
+const { WebauthnService } = require('../dist/auth/webauthn.service');
 
 const alpha = {
   tenantId: 'tenant-alpha',
   tenantSlug: 'alpha',
   databaseUrl: 'postgresql://tenant:tenant@127.0.0.1:1/alpha_ci',
+  hostname: 'alpha.amalyar.com',
 };
 
 const beta = {
   tenantId: 'tenant-beta',
   tenantSlug: 'beta',
   databaseUrl: 'postgresql://tenant:tenant@127.0.0.1:1/beta_ci',
+  hostname: 'beta.amalyar.com',
 };
 
 async function verifyJwtBoundary(context) {
@@ -105,10 +108,34 @@ async function verifyPrismaBoundary(context) {
   }
 }
 
+/**
+ * پس‌کی باید به دامنهٔ همان شرکت قفل باشد. اگر rpID/origin دوباره به یک دامنهٔ
+ * ثابت برگردد، تأییدِ پس‌کی روی زیردامنهٔ شرکت‌ها می‌شکند و اعتبارنامه بینِ
+ * شرکت‌ها مشترک می‌شود؛ این گارد همان بازگشت را می‌گیرد.
+ */
+function verifyWebauthnBoundary(context) {
+  const service = Object.create(WebauthnService.prototype);
+  service.tenantContext = context;
+
+  const alphaRp = context.run(alpha, () => service.rp());
+  const betaRp = context.run(beta, () => service.rp());
+
+  assert.equal(alphaRp.rpID, alpha.hostname, 'rpID must be the requesting tenant hostname');
+  assert.deepEqual(alphaRp.origins, [`https://${alpha.hostname}`]);
+  assert.equal(betaRp.rpID, beta.hostname);
+  assert.notEqual(betaRp.rpID, alphaRp.rpID, 'Tenants must never share a passkey relying party');
+
+  // بیرونِ context (توسعهٔ محلی) نباید دامنهٔ یک شرکت را جا بیندازد.
+  const fallback = service.rp();
+  assert.notEqual(fallback.rpID, alpha.hostname);
+  assert.notEqual(fallback.rpID, beta.hostname);
+}
+
 async function main() {
   const context = new TenantContext();
   await verifyJwtBoundary(context);
   await verifyPrismaBoundary(context);
+  verifyWebauthnBoundary(context);
   process.stdout.write('tenant isolation boundaries verified\n');
 }
 

@@ -51,7 +51,9 @@ export class AuthService {
       data: { phone, codeHash: sha256(code), purpose: 'signup', expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     try {
-      const res = await this.sms.sendOtp(phone, code);
+      // هاستِ WebOTP باید میزبانِ همان شرکت باشد، وگرنه مرورگر کد را اتوفیل نمی‌کند
+      // (WebOTP به origin گره خورده است).
+      const res = await this.sms.sendOtp(phone, code, this.tenantContext.current()?.hostname);
       if (!res.sent && process.env.NODE_ENV === 'production') {
         throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
       }

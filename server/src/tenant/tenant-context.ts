@@ -5,6 +5,8 @@ export interface TenantRequestContext {
   tenantId: string;
   tenantSlug: string;
   databaseUrl: string;
+  /** میزبانِ واقعیِ همین درخواست — مبنای rpIDِ پس‌کی و هاستِ WebOTP. */
+  hostname: string;
 }
 
 @Injectable()
