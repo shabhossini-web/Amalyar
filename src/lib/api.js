@@ -1,5 +1,6 @@
 // کلاینتِ سادهٔ API برای بک‌اندِ عمل‌یار
-const BASE = (import.meta.env.VITE_API_BASE || 'https://api.amalyar.com/api').replace(/\/$/, '');
+const SAME_ORIGIN_API = typeof window === 'undefined' ? '/api' : `${window.location.origin}/api`;
+const BASE = (import.meta.env.VITE_API_BASE || SAME_ORIGIN_API).replace(/\/$/, '');
 const TOKEN_KEY = 'amalyar_token';
 
 // «مرا به خاطر بسپار»: تیک‌خورده → localStorage (ماندگار)؛ بدونِ تیک → sessionStorage (تا بستنِ مرورگر)

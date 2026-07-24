@@ -102,6 +102,35 @@ model Feature {
   @@map("features")
 }
 
+/// مجوزهای ریزدانهٔ عملیات؛ Feature فقط روشن/خاموش بودن ماژول است.
+model Permission {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  minLevel  Int      @default(6) @map("min_level")
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("permissions")
+}
+
+/// ردپای تغییرات حساس؛ این جدول از API عمومی حذف نمی‌شود.
+model AuditEvent {
+  id         BigInt   @id @default(autoincrement())
+  actorId    Int?     @map("actor_id")
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  beforeJson Json?    @map("before_json")
+  afterJson  Json?    @map("after_json")
+  ip         String?
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+}
+
 /// بیمارِ دائمی — یک نفر، چند مراجعه. کدِ خوانا: AM-NNNN
 model Patient {
   id         Int      @id @default(autoincrement())
@@ -112,6 +141,9 @@ model Patient {
   nationalId String?   @map("national_id")
   birthDate  DateTime? @map("birth_date")
   createdAt  DateTime  @default(now()) @map("created_at")
+  deletedAt  DateTime? @map("deleted_at")
+  deletedById Int?     @map("deleted_by_id")
+  deleteReason String? @map("delete_reason")
 
   visits Visit[]
 
@@ -145,6 +177,7 @@ model Visit {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
 
+  @@unique([patientId, seq])
   @@index([patientId])
   @@index([opStatus])
   @@index([opDate])

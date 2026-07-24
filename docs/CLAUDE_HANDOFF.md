@@ -1,0 +1,672 @@
+# Claude handoff — Amalyar
+
+این فایل منبع تحویل و دفتر ثبت اصلی پروژه است. هیچ secret، password، API key یا connection URL واقعی در آن ثبت نشود.
+
+## قاعده اجباری ثبت تغییرات
+
+از تاریخ 2026-07-21 به درخواست مالک پروژه:
+
+- بعد از هر تغییر کد، تنظیم Coolify، عملیات دیتابیس، deployment، تست یا تصمیم معماری، همین فایل در همان نوبت به‌روزرسانی شود.
+- هر Agent بعدی، از جمله Claude یا Codex، باید پیش از شروع این فایل را بخواند و قبل از پایان کار وضعیت جدید، نتیجه تست و کار باقی‌مانده را ثبت کند.
+- اطلاعات محرمانه فقط با نام متغیر ثبت شوند و مقدار آن‌ها هرگز وارد Git نشود.
+- اگر کار شکست خورد، خطا و راه‌حل یا blocker نیز ثبت شود؛ فقط موفقیت‌ها ثبت نشوند.
+- `docs/COOLIFY_STAGING_STATE.md` خلاصه وضعیت استقرار است و در تغییرات Coolify باید هم‌زمان به‌روز شود.
+
+## GitHub
+
+- Repo: `shabhossini-web/Amalyar`
+- Main baseline: `808b2f4b677a9c627b0c01054bf1a92771a1c423`
+- Working branch: `agent/security-permissions-hardening`
+- Draft PR: https://github.com/shabhossini-web/Amalyar/pull/1
+- آخرین commit شاخه که در CI کامل تأیید شد: `beca79650d7e9989be829affaacd690e61d252df` (`security-ci` run 274)
+- آخرین commit کد بک‌اند که deployment آن در Coolify صریحاً تأیید شد: `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
+- commitهای بعدی ممکن است فقط مستندات باشند؛ وضعیت deploy را از Coolify کنترل کن.
+- main هنوز merge نشده و نباید تا پایان تست staging و rehearsal مهاجرت merge شود.
+
+## نام‌ها و مسیر دقیق Coolify
+
+- Project: `Amalyar`
+- Environments: `production` و `staging`
+- Staging Application: `agent/security-permissions-hardening`
+- Staging Database resource: `amalyar-control-staging`
+
+تنظیم Application:
+
+- Repo: `shabhossini-web/Amalyar`
+- Branch: `agent/security-permissions-hardening`
+- Build pack: Dockerfile
+- Base directory: `/server`
+- Dockerfile: `/Dockerfile`
+- Exposed port: `3001`
+- Port mapping: خالی
+- Watch Paths: `server/**` (در Coolify ذخیره و تأیید شد).
+- Healthcheck: `GET http://localhost:3001/api/health`
+- Interval 30، timeout 10، retries 5، start period 60
+- وضعیت redeploy پس از ثبت متغیرهای SMS در 2026-07-21: Running و پایدار (تأیید مالک پروژه)
+- لاگ موفق: `Nest application successfully started`
+- لاگ موفق: `amalyar-server ← http://0.0.0.0:3001/api`
+- Health عمومی تأییدشده: `https://api-staging.amalyar.com/api/health`
+
+دامنه‌های Backend Application پس از cutover مسیر در 2026-07-22:
+
+- `https://api-staging.amalyar.com`
+- `https://alpha-staging.amalyar.com/api`
+- `https://beta-staging.amalyar.com/api`
+
+تغییر Domains ذخیره و Backend با موفقیت Redeploy شد. تست مرورگر نشان داد:
+
+- `https://api-staging.amalyar.com/api/health` موفق و `ok:true` بود.
+- مسیرهای Alpha/Beta به Backend رسیدند اما با `Cannot GET /auth/setup-status` و 404 برگشتند؛ این خطا ثابت کرد Proxy پیشوند عمومی `/api` را قبل از تحویل به کانتینر حذف می‌کند.
+- هیچ داده شخصی نمایش‌داده‌شده در اسکرین‌شات‌ها در Git ثبت نشده است.
+- دامنه‌های ریشه Alpha/Beta هنوز به Frontend منتقل نشده‌اند.
+
+اصلاح خودکار روی Branch اعمال شد:
+
+- فایل جدید `server/src/common/api-prefix.ts` پیشوند حذف‌شده را در مرز برنامه بازیابی می‌کند.
+- `server/src/main.ts` پیش از route matching، URL بدون `/api` را به قرارداد داخلی Nest برمی‌گرداند؛ URLهایی که از قبل `/api` دارند بدون تغییر می‌مانند.
+- CI برای `/auth/setup-status`، query string، URL از قبل prefixed و root test اضافه کرد.
+- commitهای کد: `22a2a69cf9693b2860315a0f62ad194c59a2c71c`، `d82114593dcba25370222a281ffad185165fedea` و `343384a9026669d32dd9a1b4af5c97bdf3d4e0ba`.
+- GitHub Actions `security-ci` run 179 موفق شد؛ Backend سپس Redeploy شد و مالک پروژه تأیید کرد هر دو endpoint Alpha/Beta دوباره `{"needsSetup":true}` می‌دهند.
+
+تنظیم PostgreSQL:
+
+- Image: `postgres:18-alpine`
+- Internal port: 5432
+- Public access: off
+- Initial DB: `amalyar_control_staging`
+- Provisioning user: `amalyar_provisioner`
+- Persistent storage فعال
+- URL و password هرگز در Git/Chat ثبت نشود.
+
+## Environment variables در staging
+
+مقادیر محرمانه حذف شده‌اند:
+
+- `CONTROL_DATABASE_URL`
+- `PROVISIONING_DATABASE_URL`
+- `TENANT_DATABASE_ENCRYPTION_KEY`
+- `JWT_SECRET`
+- `NODE_ENV=production`
+- `PORT=3001`
+- `CORS_ORIGINS=https://alpha-staging.amalyar.com,https://beta-staging.amalyar.com`
+- `MELI_API_KEY` (مقدار محرمانه، ثبت‌شده در Coolify)
+- `MELI_FROM` (مقدار محرمانه، ثبت‌شده در Coolify)
+
+Secretها: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
+
+اصلاح مهم: کد از `CORS_ORIGINS` استفاده می‌کند؛ `ALLOWED_ORIGINS` اشتباه است.
+
+در 2026-07-21 متغیرهای `MELI_API_KEY` و `MELI_FROM` از Application فعلی عمل‌یار به staging منتقل و تنظیماتشان تأیید شد. مقدارها محرمانه‌اند و در Git ثبت نشده‌اند. redeploy، ارسال واقعی SMS و نبودن OTP/شماره در log همگی تأیید شدند.
+
+## تست SMS در staging
+
+- تاریخ: `2026-07-21`
+- Tenant تست‌شده: `alpha-staging`
+- Endpoint: `POST /api/auth/signup/request-otp`
+- نتیجه API: HTTP `201` با پاسخ `{"ok":true,"ttl":300}`
+- هیچ شماره موبایل یا OTP در مستندات ثبت نشده است.
+- دریافت پیامک روی موبایل: موفق و توسط مالک پروژه تأیید شد
+- بررسی log در 2026-07-22: هیچ `STUB`، متن کد تأیید، شماره موبایل یا OTP مشاهده نشد؛ تأیید مالک پروژه
+
+## اصلاح fail-closed پیامک
+
+در 2026-07-22 روی شاخه `agent/security-permissions-hardening` اعمال شد:
+
+- `server/src/sms/sms.service.ts`: نبود credential یا شکست provider در production اکنون HTTP `503` می‌دهد.
+- شماره موبایل، متن پیام، OTP، پاسخ خام provider، exception خام و URL دارای API key دیگر log نمی‌شوند.
+- `server/src/auth/auth.service.ts`: API در production برای پیام ارسال‌نشده پاسخ موفق نمی‌دهد.
+- OTP ارسال‌نشده پاک می‌شود تا resend window کاربر را بی‌دلیل مسدود نکند.
+- `.github/workflows/security-ci.yml`: تست خودکار نبود credential در production باید `503` را تأیید کند.
+- commitهای کد: `b8c4b5408537543bd41b345c81f97efa030e85f9` و `02a86d4bf19d7144b11d92b8f9caa0e37305151e`
+- CI run `107`: موفق (`success`)
+- وضعیت Coolify پس از این تغییر: Running سبز و پایدار؛ تأیید مالک پروژه در 2026-07-22
+- تست واقعی پس از اصلاح: `POST /api/auth/signup/request-otp` روی Alpha دوباره HTTP `201` و `{"ok":true,"ttl":300}` داد؛ شماره و OTP ثبت نشده‌اند.
+
+## تصمیم onboarding کاربرپسند
+
+در 2026-07-22 روش ساخت حساب از Terminal رد و لغو شد؛ در همان مقطع هیچ حسابی با روش دستی ساخته نشد و Tenantهای Alpha/Beta هنوز `needsSetup=true` داشتند. این وضعیت تاریخی است؛ هر دو Tenant بعداً فقط از UI راه‌اندازی شدند.
+
+تصمیم نهایی:
+
+- راه‌اندازی هر شرکت فقط از UI انجام شود؛ کاربر نباید command، signup token یا API payload ببیند.
+- UI موجود پروژه در `src/app/Login.jsx` از قبل flow کامل setup-status، OTP، فرم پروفایل، سلفی زنده و ورود خودکار اولین Super Admin را دارد.
+- فرانت باید به‌عنوان Application جدا در Coolify deploy شود.
+- دامنه‌های Alpha/Beta در ریشه `/` به فرانت و مسیر `/api` همان دامنه به Backend route شوند.
+- API frontend به‌صورت same-origin روی `/api` باشد تا Host واقعی شرکت به Backend برسد و tenant از header/body انتخاب نشود.
+- Root دامنه Tenant مستقیماً به `/login` هدایت شود؛ اگر دیتابیس خالی باشد UI خودکار تب ثبت‌نام و پیام اولین Super Admin را نشان دهد.
+- طبق مستندات رسمی Coolify، path-based routing با دامنه‌هایی مثل `https://domain/api` پشتیبانی می‌شود و مسیر خاص‌تر بر `/` اولویت دارد.
+
+پیاده‌سازی انجام‌شده:
+
+- `src/lib/api.js`: پیش‌فرض API از همان origin و مسیر `/api` استفاده می‌کند؛ `VITE_API_BASE` همچنان override اختیاری است.
+- `src/App.jsx`: ریشه دامنه Tenant مستقیماً به `/login` می‌رود؛ marketing hostها Landing را نگه می‌دارند و `VITE_TENANT_UI` override دارد.
+- `public/sw.js`: مسیر `/api` صریحاً از Service Worker خارج شد و cache به `v8` افزایش یافت.
+- `Dockerfile`: Node 22 و `npm ci` با lockfile برای build تکرارپذیر.
+- commitهای فرانت: `a085f8c173d6a85471fca649918e85919cf2a13e`, `4caaf8e8ab7bc96b389a0c11918b87afd0e90adf`, `703ba95524910c07d36c3f2ddd7268dfe9b772df`, `6e4976373184aef9a9f3e708d100be7ac68e573b`.
+- CI run `135`: موفق.
+- `nginx.conf`: اگر Backend ناسالم باشد و Coolify `/api` را به frontend fallback کند، Nginx با `503` fail-closed می‌شود و SPA HTML تحویل نمی‌دهد.
+- commit fail-closed فرانت: `9ca9a9abb0084baf290e41699eb05b8473e39137`؛ CI run `141` موفق.
+- Frontend Application در Coolify ساخته و تنظیمات آن در 2026-07-22 ذخیره شد؛ اولین deploy و deployهای بعدی موفق شدند و وضعیت فعلی `Running (healthy)` است.
+- نام Frontend resource: `amalyar-frontend-staging`
+- Build pack: `Dockerfile`
+- Base Directory: `/`
+- Dockerfile Location: `/Dockerfile`
+- Exposed port: `80`
+- Port Mapping و Network Aliases: خالی
+- HTTP Basic Authentication: خاموش
+- Watch Paths ذخیره‌شده: `src/**`، `public/**`، `index.html`، `package.json`، `package-lock.json`، `vite.config.js`، `Dockerfile` و `nginx.conf`
+- دامنه موقت تأییدشده Frontend: `http://qryhv6hfkygfyegwc6qrffn5.62.60.214.40.sslip.io`
+- اولین deploy فرانت در 2026-07-22 موفق شد؛ صفحه فارسی ورود/ثبت‌نام عمل‌یار روی دامنه موقت به‌درستی نمایش داده شد و خطای 502/503 یا JSON بک‌اند دیده نشد.
+- هشدار مرورگر دامنه موقت ناشی از HTTP بودن آن است؛ دامنه‌های اصلی tenant باید با HTTPS استفاده شوند.
+- Healthcheck فرانت در 2026-07-22 ذخیره و فعال شد: `GET http://localhost:80/login`، return code 200، interval 30، timeout 10، retries 5، start period 60 و response text خالی.
+- دکمه Coolify اکنون `Disable Healthcheck` را نشان می‌دهد، پس فعال‌سازی تأیید شده است.
+- پس از Redeploy، وضعیت Frontend به `Running (healthy)` رسید و مالک پروژه آن را تأیید کرد.
+- در cutover ریشه دامنه‌ها در 2026-07-22، Frontend Domains روی `https://alpha-staging.amalyar.com`، `https://beta-staging.amalyar.com` و دامنه موقت HTTP تنظیم شد.
+- Redeploy این تنظیم نیز `Running (healthy)` شد.
+- smoke test اولیه Routing موفق بود: ریشه Alpha و Beta هر دو صفحه Login/Signup فرانت را نمایش دادند و `/api/auth/setup-status` در آن مقطع روی هر دو Tenant پاسخ صحیح `{"needsSetup":true}` داد.
+- در آن smoke test اولیه هنوز هیچ حساب Super Admin ساخته نشده بود؛ این وضعیت تاریخی است و هر دو Tenant بعداً فقط از UI راه‌اندازی شدند.
+- دامنه موقت HTTP از Frontend حذف شد؛ فقط `https://alpha-staging.amalyar.com` و `https://beta-staging.amalyar.com` باقی ماندند.
+- Frontend پس از این پاک‌سازی Redeploy و `Running (healthy)` شد؛ تأیید مالک پروژه.
+- onboarding اولین Super Admin آلفا از UI آغاز شد: درخواست SMS و تأیید OTP موفق بود و فرم پروفایل/نام کاربری/رمز/سلفی باز شد.
+- ثبت نهایی اولین Super Admin آلفا از UI موفق شد؛ ورود خودکار انجام شد و داشبورد `/app` روی Host آلفا به‌درستی نمایش داده شد.
+- شماره، OTP، نام، رمز، چهره و سایر اطلاعات شخصی عمداً در Git/مستندات ثبت نشده‌اند.
+- `/api/auth/setup-status` آلفا پس از bootstrap به‌صورت مستقل تست شد و `{"needsSetup":false}` تأیید شد.
+- اولین Super Admin بتا نیز فقط از UI ساخته شد؛ ورود خودکار موفق بود و داشبورد `/app` روی Host بتا نمایش داده شد.
+- هیچ شماره، OTP، نام، رمز، تصویر یا داده شخصی از داشبورد در Git ثبت نشده است.
+- smoke بصری نشان داد داشبوردهای Alpha/Beta داده‌های tenant-scoped متفاوت نمایش می‌دهند؛ این جایگزین تست رسمی cross-tenant token نیست.
+- `/api/auth/setup-status` بتا پس از bootstrap به‌صورت مستقل تست شد و `{"needsSetup":false}` تأیید شد.
+- وضعیت جاری onboarding: Alpha و Beta هر دو فقط از UI راه‌اندازی شده‌اند، هر دو داشبورد `/app` را نمایش می‌دهند و هر دو `needsSetup=false` هستند.
+- Git Source پیش از اولین deploy تأیید شد: source=`amalyar-git`، repo=`shabhossini-web/Amalyar` و branch=`agent/security-permissions-hardening`.
+
+## تصمیم Platform Admin و provisioning خودکار
+
+در 2026-07-22 مالک پروژه ورود پیامکی Platform Admin را تأیید کرد.
+
+معماری مصوب:
+
+- Platform Admin از حساب و JWT شرکت‌ها کاملاً جدا است.
+- ورود با OTP فقط برای شماره‌های allowlist شده در متغیر Coolify انجام می‌شود؛ هیچ شماره‌ای وارد کد یا Git نمی‌شود.
+- session با token تصادفیِ hash‌شده در Control DB، کوکی `HttpOnly` کوتاه‌عمر و CSRF جدا محافظت می‌شود.
+- OTP، session و درخواست‌ها rate limit و Audit می‌شوند؛ مقدار OTP، شماره، token و secret log نمی‌شود.
+- API اصلی credential دارای `CREATEDB/CREATEROLE` نگه نمی‌دارد.
+- UI یک `ProvisioningJob` در Control DB می‌سازد و وضعیت آن را نمایش می‌دهد.
+- Worker جداگانه job را claim می‌کند، database/role مستقل می‌سازد، migration را اجرا می‌کند و نتیجه را در job ثبت می‌کند.
+- Platform UI روی دامنه مدیریتی جدا deploy می‌شود؛ دامنه و Coolify resource پس از سبزشدن CI تنظیم خواهند شد.
+
+## معماری Database-per-Tenant
+
+تصمیم تأییدشده: هر شرکت PostgreSQL database مستقل دارد.
+
+Control DB فقط tenant metadata، hostname و database URL رمزنگاری‌شده را نگه می‌دارد. بیمار، ویزیت، حساب و session در Control DB نیست.
+
+فایل‌های اصلی:
+
+- `server/prisma/control/schema.prisma`
+- `server/prisma/control/migrations/**`
+- `server/src/tenant/control-prisma.service.ts`
+- `server/src/tenant/tenant-context.ts`
+- `server/src/tenant/tenant.middleware.ts`
+- `server/src/tenant/tenant-registry.service.ts`
+- `server/src/tenant/tenant-crypto.ts`
+- `server/src/tenant/tenant.module.ts`
+- `server/src/prisma/prisma.service.ts`
+
+رفتار:
+
+1. tenant فقط از Host دقیق ثبت‌شده resolve می‌شود.
+2. tenant ID/slug/database URL از header یا body کاربر پذیرفته نمی‌شود.
+3. tenant باید active باشد.
+4. AsyncLocalStorage context درخواست را نگه می‌دارد.
+5. Prisma به database همان tenant route می‌شود.
+6. JWT شامل `tid` است؛ توکن یک شرکت روی hostname شرکت دیگر رد می‌شود.
+7. connection URL با AES-256-GCM و `TENANT_DATABASE_ENCRYPTION_KEY` رمزنگاری می‌شود.
+
+## Provisioning و migration fleet
+
+فایل‌ها:
+
+- `server/src/scripts/provision-tenant.ts`
+- `server/src/scripts/migrate-tenants.ts`
+
+دستورات runtime از فایل‌های compiled اجرا می‌شوند:
+
+```bash
+npm run tenant:provision -- SLUG "NAME" HOSTNAME
+npm run tenants:migrate
+npm run tenants:migrate -- --apply
+```
+
+Provisioning برای هر شرکت role و database مستقل می‌سازد، migration را اجرا می‌کند، URL را رمزنگاری می‌کند و فقط پس از موفقیت tenant را active می‌کند. rollback فقط منابع ساخته‌شده همان اجرای اعتبارسنجی‌شده را حذف می‌کند.
+
+Fleet migration پیش‌فرض dry-run است، برای اجرا `--apply` لازم دارد، sequential است و با اولین خطا متوقف می‌شود.
+
+ریسک باقی‌مانده: `PROVISIONING_DATABASE_URL` اکنون داخل کانتینر دائمی API است. قبل از production آن را به یک job کوتاه‌عمر Coolify منتقل کن تا API credential دارای CREATEDB/CREATEROLE نداشته باشد.
+
+## Tenantهای staging ساخته‌شده
+
+Alpha:
+
+- Slug: `alpha-staging`
+- Host: `alpha-staging.amalyar.com`
+- DB: `amalyar_alpha_staging`
+- Role: `amalyar_alpha_staging_app`
+- Status: active
+- `/api/auth/setup-status` پس از bootstrap پاسخ `{"needsSetup":false}` داده است.
+
+Beta:
+
+- Slug: `beta-staging`
+- Host: `beta-staging.amalyar.com`
+- DB: `amalyar_beta_staging`
+- Role: `amalyar_beta_staging_app`
+- Status: active
+- `/api/auth/setup-status` پس از bootstrap پاسخ `{"needsSetup":false}` داده است.
+
+هر دو فرمان provisioning قبلاً موفق اجرا شده‌اند؛ دوباره اجرا نکن.
+
+## امنیت و مجوزهای پیاده‌شده
+
+مجوزهای ریزدانه:
+
+- `patients.read`: level 2
+- `patients.read_all`: 4
+- `patients.create`: 3
+- `patients.update`: 4
+- `patients.status`: 4
+- `patients.delete`: 6
+- `definitions.read`: 2
+- `definitions.manage`: 5
+- `users.manage`: 6
+
+فایل‌ها: `permission.decorator.ts` و `permission.guard.ts`. Permissionها در DB هر tenant هستند. Superadmin bypass دارد.
+
+Object authorization: کاربر زیر supervisor فقط بیمار/ویزیت منتسب به `techId` خودش را می‌بیند. کنترل روی object انجام می‌شود، نه فقط endpoint.
+
+Auth hardening:
+
+- JWT production حداقل 32 کاراکتر و fail-closed
+- JWT متصل به tenant ID
+- bcrypt cost 12
+- تغییر password همه sessionها را revoke می‌کند
+- rate limit برای OTP/login
+- dev OTP فقط با `NODE_ENV=test` در response برمی‌گردد
+- bootstrap اولین superadmin با PostgreSQL advisory lock سریال شده است.
+
+HTTP:
+
+- CORS صریح و fail-closed
+- nosniff، DENY frame، no-referrer، Permissions-Policy، COOP و HSTS production
+
+Rate limiter فعلی in-memory است؛ قبل از چند replica باید Redis-backed شود.
+
+## Data integrity و Audit
+
+Schema tenant اضافه‌شده:
+
+- `Permission`
+- `AuditEvent`
+- soft delete بیمار: `deletedAt`، `deletedById`، `deleteReason`
+- `@@unique([patientId, seq])` برای Visit
+
+رفتار:
+
+- کد موقت مشترک `AM-TMP` با UUID جایگزین شد.
+- حذف آخرین ویزیت بیمار را soft-delete می‌کند.
+- mutationهای حساس بیمار audit می‌شوند.
+- فایل‌ها: `server/src/audit/**`
+- migration: `server/prisma/migrations/20260721090000_security_permissions/migration.sql`
+
+Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع duplicate می‌شود اما بهتر است retry محدود یا transaction سریال‌پذیر اضافه شود.
+
+## خطاهای Coolify که حل شدند
+
+1. `Cannot find module '../generated/control'`
+   - generated Control Prisma client در Docker runtime کپی شد.
+   - CI وجود artifact را بررسی می‌کند.
+
+2. `Tenant context is not available for this request`
+   - Nest propertyهایی مثل `then` را probe می‌کرد.
+   - Proxy اکنون فقط model/operation واقعی Prisma را route می‌کند.
+   - CI startup بدون tenant context را تست می‌کند.
+
+3. `CORS_ORIGINS در production الزامی است`
+   - متغیر Coolify از `ALLOWED_ORIGINS` به `CORS_ORIGINS` اصلاح شد.
+
+## CI
+
+`.github/workflows/security-ci.yml` این موارد را کنترل می‌کند:
+
+- frontend install/build
+- backend install/build
+- validate tenant schema
+- validate Control schema
+- generated Control client artifact
+- Prisma provider startup بدون tenant request
+- مرز JWT: توکن دارای `tid` شرکت دیگر قبل از session lookup با 401 رد می‌شود.
+- مرز Prisma: Tenantهای متفاوت client/database route جدا دارند، Tenant یکسان client خودش را reuse می‌کند و بدون context دسترسی fail-closed است.
+
+تست `server/scripts/verify-tenant-isolation.js` در commit `9f27d486e3d1a342d66e05ca056136ce819ec942` اضافه و در workflow با commit `3c915d8b753fccc4894bff9712a238c35652b957` اجباری شد. GitHub Actions `security-ci` run 226 موفق شد. این تست قطعی سطح کد/CI است.
+- تست زنده جداسازی داده، مرحله اول، در 2026-07-22 موفق شد: یک رکورد کاملاً ساختگی در Alpha ساخته شد و جست‌وجوی آن در Beta هیچ نتیجه‌ای نداد.
+- هیچ مقدار رکورد، نام، شناسه یا داده شخصی در Git ثبت نشده است.
+- تست زنده جداسازی داده، مرحله دوم، نیز موفق شد: رکورد کاملاً ساختگی Beta در Alpha پیدا نشد.
+- نتیجه نهایی تست داده: جداسازی زنده در هر دو جهت Alpha→Beta و Beta→Alpha پاس شد؛ هیچ مقدار رکورد یا داده شخصی در Git ثبت نشده است.
+- پس از تست، هر دو رکورد کاملاً ساختگی از Tenant مربوط به خودشان حذف شدند؛ staging از داده آزمایشی این تست پاک‌سازی شد.
+- تست زنده cross-tenant token هنوز باقی مانده و باید به‌صورت خودکار اجرا شود، نه با کپی یا دست‌کاری دستی توکن توسط کاربر.
+
+## پیاده‌سازی Platform Admin و provisioning خودکار — 2026-07-22
+
+معماری تأییدشده اکنون روی شاخه پیاده‌سازی شده و هنوز برای staging در Coolify فعال نشده است:
+
+- مدل‌های Control DB: `PlatformOtp`، `PlatformSession`، `ProvisioningJob` و `PlatformAuditEvent`.
+- migration کنترل: `server/prisma/control/migrations/20260722213000_platform_admin_provisioning/migration.sql`.
+- API مستقل Platform Admin در `server/src/platform/**` با OTP allowlist، session کوتاه HttpOnly، CSRF جدا، rate limit و audit بدون ثبت شماره/OTP/token.
+- endpointهای مدیریتی زیر `/api/platform/**` قرار دارند و وقتی `PLATFORM_ADMIN_ENABLED` فعال نباشد، fail-closed و غیرقابل استفاده‌اند.
+- فرانت مدیریتی موبایل‌پسند در `src/app/PlatformAdmin.jsx` و route `/platform-admin` پیاده‌سازی شد.
+- UI فقط job می‌سازد و status را poll می‌کند؛ credential ساخت دیتابیس در Backend API نگهداری نمی‌شود.
+- Worker در `server/src/scripts/provisioning-worker.ts` job را claim می‌کند، role/database اختصاصی می‌سازد، migration tenant را اجرا می‌کند و ثبت tenant + موفقیت job + audit را در یک transaction کنترل انجام می‌دهد.
+- failure معمولی با error code امن ثبت و role/database ساخته‌شده در همان invocation rollback می‌شود.
+- image مستقل و بدون پورت عمومی Worker در `server/Dockerfile.worker` اضافه شد؛ command ثابت آن `node dist/scripts/provisioning-worker.js` است.
+- script محلی/runtime: `npm run provisioning:worker`.
+- فایل خالص تنظیمات امنیتی `server/src/platform/platform.config.ts` از ماژول runtime جدا شد تا fail-closed بودن بدون نیاز به Prisma Client تست شود.
+- CI run 266 به‌علت import کل `platform.module` و نبود runtime-generated Control client در آن مرحله شکست خورد؛ این شکست مربوط به harness تست بود، نه منطق امنیتی.
+- اصلاح CI با commitهای `78fec7b57332f0a0bf921d3123e36f132627a7f3`، `62827ebcbd490f3f86d416b0022f7cedbf58b055` و `dff8be6d66365159ebfbff0591187efbab78dbd6` انجام شد.
+- `security-ci` run 272 بعد از اصلاح تست موفق شد.
+- Dockerfile مستقل Worker با commit `beca79650d7e9989be829affaacd690e61d252df` اضافه شد و `security-ci` run 274 کامل موفق شد.
+- هیچ secret، شماره تلفن، OTP، token، password یا connection URL در کد و این مستند ثبت نشده است.
+
+تعهدهای اصلی پیاده‌سازی:
+
+- Backend API فقط `CONTROL_DATABASE_URL` را برای صف و metadata نیاز دارد.
+- فقط Worker باید `PROVISIONING_DATABASE_URL` را داشته باشد.
+- Backend و Worker هر دو برای decrypt/encrypt URLهای tenant به `TENANT_DATABASE_ENCRYPTION_KEY` نیاز دارند.
+- Worker نباید domain یا exposed port داشته باشد.
+- دامنه مدیریت پیشنهادی staging: `admin-staging.amalyar.com`؛ هنوز در Coolify/DNS پیکربندی نشده است.
+
+## کارهای مهم باقی‌مانده
+
+1. تست واقعی SMS آلفا کامل پاس شد: HTTP 201، تحویل موفق، و بدون OTP/شماره در log.
+2. مسیر fallback پیامک fail-closed شد، CI run 107 سبز است و deployment نهایی Coolify Running تأیید شد.
+3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
+4. تست خودکار قطعی جداسازی به CI اضافه شد و run 226 سبز شد: JWT با `tid` شرکت دیگر 401 می‌شود و Prisma برای Tenantهای متفاوت client/Database route جدا انتخاب می‌کند.
+5. تست زنده داده در هر دو جهت پاس و هر دو رکورد ساختگی پاک‌سازی شدند. Platform Admin، provisioning queue/Worker و UI پیاده‌سازی شدند و CI run 274 سبز است؛ مرحله بعد پیکربندی سه resource/route لازم در Coolify staging است.
+6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
+7. انتقال نهایی `PROVISIONING_DATABASE_URL` از Backend به Worker اختصاصی پس از سبز شدن Worker در Coolify.
+8. Redis rate limit پیش از چند replica.
+9. permission management API/UI و seed صریح.
+10. audit برای auth، account admin، permission و emergency support.
+11. backup جدا برای هر tenant، offsite encryption و restore drill.
+12. رفع npm audit findings بدون `--force` کورکورانه.
+13. PgBouncer و connection budget؛ cache فعلی tenant client نامحدود است.
+14. object storage برای selfie/files.
+15. انتقال DB فعلی production به اولین tenant واقعی.
+16. rotation `JWT_SECRET` در cutover تا JWTهای قدیمی بدون tenant باطل شوند.
+17. rehearsal کامل migration و rollback قبل از merge.
+
+## ترتیب ادامه کار برای Claude
+
+1. این فایل و `docs/COOLIFY_STAGING_STATE.md` را کامل بخوان.
+2. Git branch، commit deployشده و Coolify state را دوباره verify کن.
+3. production یا main را بدون اجازه تغییر نده.
+4. Watch Paths روی `server/**` ذخیره و تأیید شده؛ آن را حفظ کن.
+5. redeploy پس از MELI variables Running و پایدار تأیید شده؛ اکنون ارسال SMS آزمایشی و log را بررسی کن.
+6. مشکل log شدن OTP و موفقیت جعلی بدون SMS credential اصلاح شد؛ CI و deployment نهایی هر دو تأیید شدند.
+7. Frontend branch، deploy، دامنه‌ها، Healthcheck و ساخت حساب‌های Alpha/Beta فقط از UI تکمیل و تأیید شده است.
+8. تست خودکار CI و تست زنده داده در هر دو جهت پاس شده‌اند؛ Platform Admin و Worker نیز پیاده‌سازی و CI شده‌اند. اکنون Coolify staging را مرحله‌ای پیکربندی کن و بعد یک provisioning آزمایشی فقط از UI انجام بده.
+9. backup و restore را قبل از production تست کن.
+10. PR را Draft نگه دار.
+
+## محدوده فایل‌های تغییرکرده نسبت به main
+
+- `.github/workflows/security-ci.yml`
+- `docs/**`
+- `server/Dockerfile`
+- `server/Dockerfile.worker`
+- `server/package.json`
+- `server/prisma/control/**`
+- `server/prisma/migrations/20260721090000_security_permissions/**`
+- `server/prisma/schema.prisma`
+- `server/src/audit/**`
+- `server/src/auth/**`
+- `server/src/common/**`
+- `server/src/patients/**`
+- `server/src/platform/**`
+- `server/src/prisma/**`
+- `server/src/scripts/**`
+- `server/scripts/**`
+- `server/src/tenant/**`
+- `server/src/app.module.ts`
+- `server/src/main.ts`
+
+مقایسه authoritative: base=`main`، head=`agent/security-permissions-hardening`.
+
+## Coolify Platform Admin activation log — 2026-07-22
+
+- Backend resource: `agent/security-permissions-hardening` در environment `staging`.
+- `PLATFORM_ADMIN_ENABLED=true` در Coolify ثبت شد.
+- تنظیم تأییدشده: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
+- هنوز deployment انجام نشده است.
+- مقدار اولیه ۱۵کاراکتری برای `PLATFORM_ADMIN_SECRET` قبل از deployment به‌دلیل کوتاه‌بودن رد شد؛ هیچ deployment با آن انجام نشد.
+- `PLATFORM_ADMIN_SECRET` با یک مقدار تصادفی ۶۴کاراکتری در Coolify ثبت و Lock شد؛ مقدار آن در Git/Chat ثبت نشده است.
+- تنظیم secret: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
+- `PLATFORM_ADMIN_PHONES` در Coolify ثبت و Lock شد؛ مقدار و شماره موبایل عمداً در Git/Chat ثبت نشده است.
+- تنظیم allowlist: Buildtime خاموش، Runtime روشن، Multiline خاموش، Literal روشن.
+- هر سه متغیر Platform Admin ذخیره شدند و Backend با این مجموعه redeploy شد؛ مالک پروژه وضعیت پایدار/صحیح را تأیید کرد.
+- تلاش برای smoke test read-only از مرورگر ابری Agent به‌دلیل policy مرورگر روی دامنه staging رد شد؛ هیچ دورزدنی انجام نشد و نتیجه endpoint از طرف Agent تأییدشده محسوب نمی‌شود.
+- DNS دامنه `admin-staging.amalyar.com` به همان سرور staging ثبت شد؛ IP در Git ثبت نشده است.
+- دامنه `https://admin-staging.amalyar.com` به Frontend resource `amalyar-frontend-staging` افزوده و Save شد؛ Alpha/Beta حفظ شدند و هنوز redeploy انجام نشده است.
+- route `https://admin-staging.amalyar.com/api` به Backend resource افزوده و Save شد؛ routeهای API/Alpha/Beta حفظ شدند.
+- نخستین redeploy پس از افزودن route در Docker build شکست خورد: wrapper با exit code 255 متوقف شد و آخرین مرحله قابل‌مشاهده `RUN apk add --no-cache openssl` بود.
+- Debug Logs هیچ خطای `apk`/npm/TypeScript نشان نداد؛ Coolify `DeploymentException` با error code 0 ثبت کرد، فرمان `docker exec ... /artifacts/build.sh` قطع شد و build container سپس gracefully stop شد. تشخیص فعلی: شکست build-helper/orchestrator، نه خطای اثبات‌شده در Dockerfile یا برنامه.
+- یک redeploy عادی کنترل‌شده تکرار شد و کامل موفق شد؛ Backend با route مدیریت بالا آمد. نتیجه، گذرا بودن failure قبلی build-helper را تأیید می‌کند و نیاز به تغییر Dockerfile ایجاد نشد.
+- Frontend resource `amalyar-frontend-staging` پس از افزودن دامنه مدیریت redeploy شد و مالک پروژه موفقیت deployment را تأیید کرد.
+- smoke test عمومی `admin-staging` از مرورگر ابری Agent نیز به‌دلیل browser security policy رد شد؛ هیچ workaround انجام نشد و visual routing باید از مرورگر مالک پروژه تأیید شود.
+- مالک پروژه visual smoke test را در مرورگر موبایل انجام داد: صفحه مستقل «مدیریت پلتفرم» روی `https://admin-staging.amalyar.com` با HTTPS باز شد؛ صفحه tenant، JSON، 404، 502 و خطای SSL دیده نشد.
+- هیچ شماره، OTP، تصویر شخصی یا داده حساس از smoke test در Git ثبت نشده است.
+- نسخه قبلی Backend همچنان سبز و `Running` باقی ماند؛ downtime رخ نداد. تا دریافت Debug Logs redeploy تکرار نشود.
+- گام بعدی: route دامنه مدیریت در Frontend و Backend و سپس تست OTP فقط از UI.
+
+
+## ورود بدون دریافت شماره و WebOTP — 2026-07-23
+
+- به درخواست مالک پروژه، فیلد ورود شماره از رابط مدیریت پلتفرم حذف شد؛ مقدار allowlist همچنان فقط در متغیر `PLATFORM_ADMIN_PHONES` روی سرور می‌ماند.
+- endpoint عمومی `GET /api/platform/auth/options` فقط برچسب عمومی و شناسه HMAC غیرقابل‌بازگشت برمی‌گرداند؛ شماره خام در response، UI یا log قرار نمی‌گیرد.
+- وقتی یک مدیر مجاز وجود داشته باشد، فرانت همان گزینه را خودکار انتخاب می‌کند؛ در حالت چند مدیر، فقط برچسب‌های عمومی برای انتخاب نمایش داده می‌شوند.
+- مسیرهای request/verify اکنون `phoneRef` را می‌پذیرند. ورودی قدیمی `phone` موقتاً فقط برای rollout بدون قطعی نگه داشته شده و UI جدید آن را ارسال نمی‌کند.
+- WebOTP به صفحه verify افزوده شد و فیلد همچنان `autocomplete="one-time-code"` دارد؛ در مرورگرهای فاقد پشتیبانی، ورود دستی برقرار است.
+- `SmsService` خط پایانی origin-bound پیامک را با host معتبر می‌سازد. متغیر جدید `PLATFORM_ADMIN_WEBOTP_HOST` فقط hostname بدون protocol/path می‌گیرد.
+- تست CI برای شناسه غیرقابل‌بازگشت، resolve امن، اعتبارسنجی host و قالب origin-bound پیامک اضافه شد.
+- آخرین commit این بسته: `1b07c2868fdd55d5d02a5a8b7260b8afb86a692a`. نتیجه CI هنوز در انتظار است.
+- مرحله Coolify هنوز انجام نشده: متغیر `PLATFORM_ADMIN_WEBOTP_HOST` باید روی Backend staging ثبت شود، سپس Backend و Frontend redeploy و OTP واقعی از UI تست شود.
+- هیچ شماره، OTP، secret یا مقدار حساس در Git ثبت نشده است.
+
+
+### CI failure observed
+
+- `security-ci` run 340 failed only in step `Verify Platform Admin SMS uses origin-bound WebOTP`.
+- Frontend build, Backend build, Prisma validation, tenant isolation, fail-closed config and opaque reference checks all passed.
+- Root cause: the inline YAML `run: node -e ...` contained a WebOTP fragment marker; YAML treated the unprotected marker as a comment and the generated shell command ended with an unmatched quote.
+- This is a workflow quoting error, not a failure in application/WebOTP behavior.
+- Focused fix pending owner approval: convert only this CI command to a YAML block scalar while preserving the same assertion, then rerun CI.
+
+
+### CI quoting fix applied
+
+- مالک پروژه اجرای اصلاح محدود را تأیید کرد.
+- فقط step تست WebOTP از scalar تک‌خطی به YAML block scalar تبدیل شد تا fragment marker پیامک توسط YAML به‌عنوان comment تفسیر نشود.
+- منطق برنامه، قالب پیامک و assertion تست تغییر نکرد.
+- fix commit: `0334c3831fd45b6450684e36c5edf0500cb2f4d8`; rerun CI در انتظار نتیجه است.
+
+
+### CI verification complete
+
+- `security-ci` run 350 completed successfully on commit `078235f784b747c624c03f4577353c144cd7452d`.
+- Frontend build, Backend build, both Prisma schema validations, tenant isolation, fail-closed Platform Admin config, opaque phone reference and origin-bound WebOTP SMS tests all passed.
+- Code is ready for the Coolify staging variable and controlled Backend/Frontend redeploy.
+
+
+### Coolify WebOTP variable saved
+
+- مالک پروژه تأیید کرد `PLATFORM_ADMIN_WEBOTP_HOST` روی Backend resource در staging اضافه و ذخیره شده است.
+- مقدار، hostname دامنه مدیریت staging است و هیچ secret یا شماره‌ای ثبت نشده است.
+- Backend هنوز بعد از این تغییر redeploy نشده؛ مرحله بعد redeploy کنترل‌شده Backend و بررسی Running/Healthy و log است.
+
+
+### Backend WebOTP deployment confirmed
+
+- مالک پروژه تأیید کرد Backend staging پس از افزودن `PLATFORM_ADMIN_WEBOTP_HOST` با redeploy معمولی بالا آمد و وضعیت `Running` دارد.
+- مرحله بعد: redeploy فرانت `amalyar-frontend-staging` برای فعال‌شدن رابط بدون فیلد شماره و listener خودکار WebOTP.
+- تست واقعی OTP مدیریت هنوز بعد از این deployment انجام نشده است.
+
+
+### Frontend phone-less login deployment confirmed
+
+- مالک پروژه تأیید کرد `amalyar-frontend-staging` با نسخه جدید با موفقیت deploy شده است.
+- Backend و Frontend این بسته اکنون هر دو روی staging مستقر هستند.
+- بررسی بعدی قبل از ارسال OTP: صفحه مدیریت باید بدون فیلد شماره نمایش داده شود و فقط کنترل «ارسال کد ورود» برای مدیر ثبت‌شده در سرور داشته باشد.
+- تست دریافت و autofill واقعی OTP هنوز انجام نشده است.
+
+
+### Owner visual verification: phone field removed
+
+- مالک پروژه صفحه مدیریت staging را بعد از deploy باز کرد و تأیید تصویری انجام شد.
+- فیلد ورود شماره حذف شده و UI توضیح می‌دهد که شماره مجاز از تنظیم امن سرور انتخاب می‌شود.
+- هیچ شماره یا شناسه خام در صفحه نمایش داده نمی‌شود.
+- در تصویر، دکمه ارسال کم‌رنگ/احتمالاً disabled دیده می‌شود؛ قبل از OTP smoke test باید امکان کلیک آن از مرورگر مالک تأیید شود.
+- تلاش read-only Agent برای endpoint گزینه‌ها دوباره توسط browser safety policy رد شد؛ نتیجه endpoint از سمت Agent تأیید نشده است.
+
+
+### Phone-less Platform Admin login passed
+
+- مالک پروژه از UI بدون شماره عبور کرد و داشبورد احرازشده مدیریت پلتفرم با موفقیت باز شد.
+- این نتیجه تأیید می‌کند گزینه opaque مدیر، درخواست OTP، verify/session cookie و بارگذاری داشبورد عملیاتی هستند.
+- هیچ شماره، OTP، نام، تصویر شخصی یا جزئیات رکوردهای نمایش‌داده‌شده در Git ثبت نشده است.
+- هنوز باید مشخص شود WebOTP کد را خودکار در فیلد گذاشته یا ورود کد به‌صورت دستی انجام شده است.
+
+
+### WebOTP end-to-end verified
+
+- مالک پروژه تأیید کرد کد پیامک روی مرورگر موبایل به‌صورت خودکار داخل جریان ورود قرار گرفت؛ ورود دستی شماره و کد لازم نبود.
+- تست staging کامل پاس شد: server allowlist → opaque reference → SMS origin binding → browser WebOTP autofill → secure verify/session → authenticated dashboard.
+- قابلیت ورود بدون شماره و autofill کد اکنون در staging کامل و عملیاتی است.
+
+
+## Provisioning Worker activation started — 2026-07-23
+
+- مالک پروژه شروع راه‌اندازی Worker اختصاصی در Coolify staging را تأیید کرد.
+- کد جاری دوباره بررسی شد: image در `server/Dockerfile.worker` هیچ portی expose نمی‌کند و command ثابت `node dist/scripts/provisioning-worker.js` دارد.
+- Worker در startup وجود `CONTROL_DATABASE_URL`، `PROVISIONING_DATABASE_URL` و `TENANT_DATABASE_ENCRYPTION_KEY` را fail-closed بررسی می‌کند.
+- Worker نباید Domain، Exposed Port، Healthcheck HTTP، JWT secret یا SMS credentials دریافت کند.
+- نام پیشنهادی resource جدید: `amalyar-provisioning-worker-staging`.
+- هنوز resource جدید ساخته نشده و هیچ متغیر یا credential جابه‌جا نشده است.
+
+
+### Worker creation form reached
+
+- در Coolify project `Amalyar` و environment `staging`، فرم Create a new Application برای repo `Amalyar` باز شد.
+- هنوز Continue زده نشده و resource ساخته نشده است.
+- تنظیم بعدی: branch کاری، Dockerfile build pack، base directory `/server` و Port خالی.
+
+
+### Worker application resource created, not deployed
+
+- Coolify application resource از repo و branch کاری در staging ساخته شد.
+- Build Pack و Base Directory به‌ترتیب `Dockerfile` و `/server` هستند.
+- Coolify به‌صورت پیش‌فرض یک دامنه موقت، Traefik labels و exposed port ایجاد کرده است؛ این‌ها برای Worker باید قبل از نخستین deployment کامل حذف شوند.
+- Dockerfile هنوز default `/Dockerfile` است و باید به `/Dockerfile.worker` تغییر کند.
+- resource هنوز deploy نشده و هیچ Worker process اجرا نشده است.
+
+### Worker non-public configuration saved
+
+- Coolify resource name: `amalyar-provisioning-worker-staging`.
+- Build configuration: Base Directory `/server`, Dockerfile Location `/Dockerfile.worker`, Watch Paths `server/**`.
+- Non-public Worker configuration verified: Domains, Ports Exposes, Port Mappings, Network Aliases, and container/Traefik labels are empty.
+- HTTP Basic Authentication is disabled; pre-deployment and post-deployment commands are empty.
+- No manual deployment was started during this configuration step.
+- Coolify UI showed `2 deployments`; before adding environment variables, inspect the resource status and deployment history to detect any webhook-triggered incomplete run.
+- No secrets or temporary generated domain/IP values are recorded here.
+
+### Worker runtime variables saved and automatic deployment paused
+
+- Coolify resource: `amalyar-provisioning-worker-staging` in the `staging` environment.
+- Configured variable names only: `CONTROL_DATABASE_URL`, `PROVISIONING_DATABASE_URL`, `TENANT_DATABASE_ENCRYPTION_KEY`, and `PROVISIONING_POLL_MS=5000`.
+- Secret values remain only in Coolify and are not recorded in Git.
+- Variable flags confirmed by the owner: Buildtime off, Runtime on, Multiline off, Literal on.
+- Before the variables were configured, documentation commits triggered two Webhook deployments: one was cancelled; one completed the deployment but the Worker entered a restart loop because runtime configuration had not yet been applied. A successful deployment badge was not treated as runtime-health proof.
+- Coolify `Auto Deploy` is now disabled for this Worker so documentation commits cannot trigger additional deployments during setup.
+- The Worker remains non-public: no domain, exposed port, port mapping, network alias, Traefik/container label, HTTP Basic Authentication, or pre/post deployment command.
+- Next verification step: perform one manual deployment, then confirm stable runtime and inspect logs without exposing connection URLs or secrets.
+
+### Worker manual deployment stable
+
+- After configuring the Worker runtime variables and disabling Auto Deploy, one manual deployment was performed.
+- Coolify reports `Running (unknown)`, which is expected for this non-HTTP background process.
+- No restart counter is shown after the manual deployment.
+- The log view shows `No logs yet`; this is expected while no provisioning job is queued because the Worker is intentionally silent while idle.
+- No secret values, connection URLs, tenant test data, or container identifiers are recorded.
+- Next functional verification: submit one controlled staging provisioning job through the Platform Admin UI and confirm the Worker records a safe success/failure result.
+
+### First UI-driven Worker provisioning test
+
+- A controlled third staging tenant was submitted only through the Platform Admin UI.
+- The provisioning queue moved from running to ready/succeeded, and the tenant appeared active in the platform list.
+- This verifies the UI → Control DB job → dedicated Worker → isolated PostgreSQL database/role path without exposing credentials in the UI or API.
+- The tenant name, slug, hostname, database name, role name, and all other test-record values are intentionally not recorded.
+- Opening the generated hostname returned `DNS_PROBE_FINISHED_NXDOMAIN`.
+- The NXDOMAIN result is a DNS/ingress gap, not a Worker or database-provisioning failure: no wildcard DNS record and catch-all HTTPS routing have yet been configured for arbitrary tenant hostnames.
+- Next infrastructure step: configure a one-time wildcard DNS record, a wildcard TLS certificate through DNS challenge, and catch-all SaaS routing for the shared Frontend and the more-specific Backend `/api` route. Per-tenant manual DNS entries are rejected because onboarding must remain UI-driven and automatable.
+
+### Authoritative DNS provider confirmed
+
+- The authoritative DNS zone for `amalyar.com` is managed through HostIran Cloud DNS.
+- No DNS account credential, API token, server IP, or record value is stored in Git.
+- The next one-time step is to add a wildcard `A` record whose target matches the existing staging application records, then verify propagation before changing Coolify catch-all routing or TLS.
+- Wildcard TLS automation remains unresolved until HostIran DNS API/DNS-challenge compatibility is confirmed; no unsafe proxy change has been applied.
+
+### Wildcard DNS A record saved
+
+- در HostIran Cloud DNS یک رکورد wildcard از نوع `A` برای `*.amalyar.com` ذخیره شد.
+- مقدار مقصد همان مقصد رکوردهای موجود staging است و عمداً در Git ثبت نشده است.
+- TTL رکورد `14400` ثانیه است.
+- رکوردهای صریح فعلی مانند دامنه‌های staging بر wildcard اولویت دارند.
+- انتشار DNS هنوز از بیرون تأیید نشده است؛ بررسی resolver محلی Agent به‌علت محدودیت شبکه/DNS محیط قابل اتکا نبود و بررسی مرورگر مالک پس از propagation لازم است.
+- هنوز هیچ catch-all label در Coolify و هیچ تغییر wildcard TLS اعمال نشده است.
+- مرحله بعد، تعیین سازگاری HostIran DNS با ACME DNS challenge است؛ تا روشن‌شدن این مورد تنظیمات proxy تغییر نمی‌کند.
+
+### HostIran DNS challenge compatibility unresolved
+
+- جست‌وجوی مستندات عمومی و رسمی قابل‌دسترسی، راهنمای API token یا ACME DNS challenge برای HostIran Cloud DNS پیدا نکرد.
+- نبود نتیجه عمومی به‌معنای نبود قطعی API نیست؛ ممکن است قابلیت فقط در پنل یا از طریق پشتیبانی ارائه شود.
+- تا زمان تأیید API سازگار، هیچ تغییر catch-all routing، Traefik DNS challenge یا wildcard TLS در Coolify اعمال نمی‌شود.
+- مرحله بعد فقط بررسی پنل HostIran برای گزینه‌ای با عنوان API، API Key، Token یا دسترسی API است؛ هیچ token یا credential نباید در Chat یا Git فرستاده شود.
+
+### HostIran panel API not available
+
+- مالک پروژه پنل HostIran Cloud DNS را بررسی کرد و گزینه‌ای برای API، API key، token یا دسترسی برنامه‌نویسی پیدا نکرد.
+- همراه با نبود مستندات عمومی رسمی، HostIran DNS فعلاً برای ACME DNS challenge خودکار قابل‌استفاده در نظر گرفته نمی‌شود؛ این نتیجه به‌معنای ادعای قطعی درباره امکانات داخلی پشتیبانی HostIran نیست.
+- رکورد wildcard `A` موجود حفظ می‌شود و هیچ رکورد tenant به‌صورت دستی ساخته نخواهد شد.
+- برای wildcard TLS کاملاً خودکار، پیشنهاد معماری انتقال فقط مدیریت authoritative DNS به یک provider دارای API سازگار (ترجیحاً Cloudflare) است؛ ثبت/مالکیت دامنه لازم نیست منتقل شود.
+- هیچ nameserver، proxy، TLS یا Coolify catch-all routing هنوز تغییر نکرده است و اجرای این تصمیم منتظر تأیید مالک پروژه است.
+
+### Temporary manual tenant-domain activation
+
+- مالک پروژه فعلاً انتقال authoritative DNS به provider خارجی را به‌دلیل نگرانی از دسترس‌پذیری هنگام اختلال اینترنت بین‌الملل رد کرد.
+- راهکار موقت مصوب: provisioning دیتابیس/role توسط UI و Worker خودکار می‌ماند؛ فعال‌سازی دامنه در مرحله پایانی به‌صورت دستی انجام می‌شود.
+- برای هر tenant جدید، اپراتور پس از موفقیت provisioning باید DNS و route دقیق همان hostname را تکمیل و HTTPS را بررسی کند؛ tenant نباید صرفاً با موفقیت ساخت دیتابیس «قابل‌دسترسی عمومی» تلقی شود.
+- رکورد wildcard فعلی حذف یا تغییر داده نشده است. تا مشخص‌شدن propagation و routing، ساخت رکوردهای اضافی باید با بررسی عدم تداخل انجام شود.
+- هیچ DNS record، nameserver، proxy یا Coolify label در این تصمیم تغییر نکرد.
+- گزینه‌های ایرانی سازگار برای خودکارسازی آینده:
+  - ArvanCloud با provider code `arvancloud` و credential name `ARVANCLOUD_API_KEY`.
+  - Liara با provider code `liara` و credential name `LIARA_API_KEY`.
+- هر دو provider در فهرست رسمی Lego، کتابخانه مورداستفاده Traefik برای DNS-01، پشتیبانی می‌شوند. انتخاب یا مهاجرت به آن‌ها هنوز انجام نشده و نیازمند بررسی سرویس، هزینه و برنامه انتقال بدون قطعی است.
+- هیچ API key یا credential در Git ثبت نشده است.
+
+### First manual tenant-domain routing attempt
+
+- دامنه tenant جدید پس از تنظیم DNS دیگر `NXDOMAIN` نیست و درخواست به proxy سرور Coolify می‌رسد.
+- hostname دقیق tenant و سایر داده‌های تست عمداً ثبت نشده‌اند.
+- دامنه ریشه به Frontend و مسیر همان دامنه با `/api` به Backend اضافه شده است.
+- تست مرورگر فعلاً `NET::ERR_CERT_AUTHORITY_INVALID` نشان داد؛ پس گواهی معتبر هنوز برای hostname صادر یا ارائه نشده است.
+- پس از عبور آزمایشی از هشدار، پاسخ `no available server` دیده شد؛ یعنی Traefik route را می‌شناسد اما برای route جاری endpoint سالم/قابل‌دسترس پیدا نکرده است.
+- این مرحله موفق تلقی نمی‌شود و هیچ credential یا داده کاربری نباید تا رفع TLS و upstream وارد شود.
+- بررسی بعدی باید ابتدا صحت رشته Domains و deployment جاری Frontend را تأیید کند؛ سپس Backend و صدور certificate بررسی شود.
+

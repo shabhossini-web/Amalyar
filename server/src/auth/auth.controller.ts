@@ -24,13 +24,13 @@ export class AuthController {
   }
 
   @Post('signup/request-otp')
-  requestOtp(@Body() dto: RequestOtpDto) {
-    return this.auth.requestSignupOtp(dto.phone);
+  requestOtp(@Body() dto: RequestOtpDto, @Req() req: Request) {
+    return this.auth.requestSignupOtp(dto.phone, req.ip);
   }
 
   @Post('signup/verify-otp')
-  verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifySignupOtp(dto);
+  verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: Request) {
+    return this.auth.verifySignupOtp(dto, req.ip);
   }
 
   @Post('signup/complete')

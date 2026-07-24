@@ -1,0 +1,71 @@
+name: security-ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [agent/security-permissions-hardening]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Frontend install
+        run: npm ci
+      - name: Frontend build
+        run: npm run build
+      - name: Backend install
+        working-directory: server
+        run: npm ci
+      - name: Validate tenant schema
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant_ci
+        run: npx prisma validate --schema prisma/schema.prisma
+      - name: Validate control schema
+        working-directory: server
+        env:
+          CONTROL_DATABASE_URL: postgresql://ci:ci@localhost:5432/control_ci
+        run: npx prisma validate --schema prisma/control/schema.prisma
+      - name: Backend build
+        working-directory: server
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant_ci
+          CONTROL_DATABASE_URL: postgresql://ci:ci@localhost:5432/control_ci
+          TENANT_DATABASE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
+        run: npm run build
+      - name: Verify stripped API prefix restoration
+        working-directory: server
+        run: node -e "const { restoreApiPrefix } = require('./dist/common/api-prefix'); const cases = [['/auth/setup-status','/api/auth/setup-status'],['/auth/setup-status?x=1','/api/auth/setup-status?x=1'],['/api/auth/setup-status','/api/auth/setup-status'],['/api?x=1','/api?x=1'],['/','/api/']]; for (const [input, expected] of cases) { const actual = restoreApiPrefix(input); if (actual !== expected) { console.error({ input, expected, actual }); process.exit(1); } }"
+
+      - name: Verify SMS production fallback fails closed
+        working-directory: server
+        run: node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='production'; delete process.env.MELI_API_KEY; delete process.env.MELI_FROM; new SmsService().sendOtp('09120000000','000000').then(() => process.exit(1)).catch((e) => { if (e?.getStatus?.() !== 503) { console.error('expected HTTP 503'); process.exit(1); } });"
+      - name: Verify startup does not require tenant context
+        working-directory: server
+        run: node -e "require('reflect-metadata'); const { PrismaService } = require('./dist/prisma/prisma.service'); const p = new PrismaService({ require() { throw new Error('tenant context accessed during startup'); } }); if (p.then !== undefined) process.exit(1); Promise.resolve(p.onModuleDestroy()).catch(() => process.exit(1));"
+      - name: Verify tenant isolation boundaries
+        working-directory: server
+        run: node scripts/verify-tenant-isolation.js
+      - name: Verify Platform Admin configuration fails closed
+        working-directory: server
+        run: node -e "const { platformAdminConfig, normalizePlatformPhone, normalizeWebOtpHost, platformPhoneRef, resolvePlatformPhoneRef } = require('./dist/platform/platform.config'); process.env.NODE_ENV='production'; process.env.PLATFORM_ADMIN_ENABLED='false'; delete process.env.PLATFORM_ADMIN_SECRET; delete process.env.PLATFORM_ADMIN_PHONES; delete process.env.PLATFORM_ADMIN_WEBOTP_HOST; if (platformAdminConfig().enabled) process.exit(1); process.env.PLATFORM_ADMIN_ENABLED='true'; let failed=false; try { platformAdminConfig(); } catch { failed=true; } if (!failed) { console.error('expected missing Platform Admin secrets to fail'); process.exit(1); } process.env.PLATFORM_ADMIN_SECRET='ci-only-platform-secret-with-32-characters'; process.env.PLATFORM_ADMIN_PHONES='09000000000'; process.env.PLATFORM_ADMIN_WEBOTP_HOST='admin-staging.amalyar.com'; const cfg=platformAdminConfig(); const ref=platformPhoneRef(cfg.secret,'09000000000'); if (!cfg.enabled || !cfg.phones.has('09000000000') || cfg.webOtpHost !== 'admin-staging.amalyar.com' || normalizeWebOtpHost('ADMIN-STAGING.AMALYAR.COM.') !== 'admin-staging.amalyar.com' || normalizePlatformPhone('+989000000000') !== '09000000000' || ref.includes('09000000000') || resolvePlatformPhoneRef(cfg,ref) !== '09000000000' || resolvePlatformPhoneRef(cfg,'invalid') !== null) process.exit(1);"
+
+      - name: Verify Platform Admin SMS uses origin-bound WebOTP
+        working-directory: server
+        run: |
+          node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='test'; process.env.MELI_API_KEY='ci-key'; process.env.MELI_FROM='ci-line'; let payload; global.fetch=async (_url,init) => { payload=JSON.parse(init.body); return { ok:true, json:async()=>({recIds:[1]}) }; }; new SmsService().sendOtp('09000000000','123456','admin-staging.amalyar.com').then((result) => { if (!result.sent || !payload?.text?.endsWith('@admin-staging.amalyar.com #123456')) process.exit(1); }).catch(() => process.exit(1));"
+      - name: Verify generated control client
+        working-directory: server
+        run: test -f src/generated/control/index.js
