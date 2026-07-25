@@ -81,6 +81,28 @@ model ProvisioningJob {
   @@map("provisioning_jobs")
 }
 
+/// درخواستِ حذفِ شرکت. API فقط آن را در صف می‌گذارد؛ حذفِ واقعیِ دیتابیس و نقش
+/// را Worker انجام می‌دهد — تنها جایی که credentialِ CREATEDB/CREATEROLE دارد.
+model TenantDeletionJob {
+  id              String    @id @default(uuid())
+  tenantId        String    @map("tenant_id")
+  slug            String
+  name            String
+  hostname        String?
+  status          String    @default("queued")
+  requestedByHash String    @map("requested_by_hash")
+  errorCode       String?   @map("error_code")
+  attempts        Int       @default(0)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+  startedAt       DateTime? @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+
+  @@index([status, createdAt])
+  @@index([tenantId])
+  @@map("tenant_deletion_jobs")
+}
+
 model PlatformAuditEvent {
   id         String   @id @default(uuid())
   actorHash  String?  @map("actor_hash")

@@ -163,12 +163,38 @@ async function verifyWebOtpBinding() {
   assert.equal(sentTexts[1].split('\n').pop(), '@amalyar.com #123456');
 }
 
+/**
+ * کدِ تأییدِ حذف نباید با کدِ ورود یکی باشد و نباید بینِ شرکت‌ها قابل‌استفاده باشد.
+ * اگر دامنه‌بندی کد از بین برود، یک کدِ ورودِ لو رفته می‌تواند دیتابیس حذف کند.
+ */
+function verifyDeletionOtpScope() {
+  const { createHmac } = require('node:crypto');
+  const { platformOtpScopeHash } = require('../dist/platform/platform.config');
+
+  const secret = 'ci-only-platform-secret-with-32-characters';
+  const phone = '09000000000';
+  const login = platformOtpScopeHash(secret, phone, 'login');
+  const deleteA = platformOtpScopeHash(secret, phone, 'tenant-delete:tenant-a');
+  const deleteB = platformOtpScopeHash(secret, phone, 'tenant-delete:tenant-b');
+
+  assert.notEqual(deleteA, login, 'A deletion code must not share the login code scope');
+  assert.notEqual(deleteA, deleteB, 'A deletion code must not be reusable on another tenant');
+
+  // دامنهٔ ورود باید دقیقاً همان مقدارِ قبلی بماند، وگرنه همهٔ نشست‌های باز باطل می‌شوند.
+  assert.equal(
+    login,
+    createHmac('sha256', secret).update(`phone:${phone}`).digest('hex'),
+    'The login scope hash must stay byte-compatible with existing sessions',
+  );
+}
+
 async function main() {
   const context = new TenantContext();
   await verifyJwtBoundary(context);
   await verifyPrismaBoundary(context);
   verifyWebauthnBoundary(context);
   await verifyWebOtpBinding();
+  verifyDeletionOtpScope();
   process.stdout.write('tenant isolation boundaries verified\n');
 }
 

@@ -2,7 +2,7 @@ import { execFile } from 'child_process';
 import { randomBytes } from 'crypto';
 import { promisify } from 'util';
 import { PrismaClient } from '../generated/control';
-import { encryptDatabaseUrl } from '../tenant/tenant-crypto';
+import { decryptDatabaseUrl, encryptDatabaseUrl } from '../tenant/tenant-crypto';
 
 const execFileAsync = promisify(execFile);
 let stopping = false;
@@ -20,6 +20,18 @@ function validateJob(job: { slug: string; name: string; hostname: string }) {
   if (!job.name.trim() || !/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(job.hostname)) {
     throw new Error('INVALID_TENANT_INPUT');
   }
+}
+
+/**
+ * نام‌های دیتابیس/نقش پیش از رفتن داخلِ SQL باید به الگوی خودمان محدود باشند.
+ * این نام‌ها را خودِ provisioning ساخته، ولی اعتبارسنجی دوباره جلوی هر مقدارِ
+ * دستکاری‌شده در control-db را می‌گیرد (دفاع لایه‌ای، چون اینجا DROP اجرا می‌شود).
+ */
+const SAFE_PG_NAME = /^amalyar_[a-z0-9_]{1,60}$/;
+
+function assertSafePgName(value: string, label: string) {
+  if (!SAFE_PG_NAME.test(value)) throw new Error(`UNSAFE_${label}`);
+  return value;
 }
 
 async function migrateTenant(databaseUrl: string) {
@@ -158,6 +170,103 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
   }
 }
 
+async function claimNextDeletion(control: PrismaClient) {
+  const candidate = await control.tenantDeletionJob.findFirst({
+    where: { status: 'queued' },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!candidate) return null;
+
+  const claimed = await control.tenantDeletionJob.updateMany({
+    where: { id: candidate.id, status: 'queued' },
+    data: {
+      status: 'running',
+      attempts: { increment: 1 },
+      startedAt: new Date(),
+      finishedAt: null,
+      errorCode: null,
+    },
+  });
+  if (claimed.count !== 1) return null;
+  return control.tenantDeletionJob.findUniqueOrThrow({ where: { id: candidate.id } });
+}
+
+/**
+ * حذفِ کاملِ یک شرکت: دیتابیس و نقشِ اختصاصی‌اش drop می‌شوند و رکوردِ tenant
+ * (به‌همراهِ دامنه‌هایش با cascade) از control-db پاک می‌شود.
+ *
+ * نام دیتابیس/نقش از URLِ رمزگشایی‌شدهٔ خودِ tenant خوانده می‌شود، نه از روی slug —
+ * چون URL منبعِ حقیقتِ اتصال است و اگر روزی الگوی نام‌گذاری عوض شود، حدس‌زدن از
+ * روی slug می‌توانست دیتابیسِ اشتباهی را حذف کند.
+ */
+async function deprovision(control: PrismaClient, job: Awaited<ReturnType<typeof claimNextDeletion>>) {
+  if (!job) return;
+
+  const adminUrl = new URL(required('PROVISIONING_DATABASE_URL'));
+  const admin = new PrismaClient({ datasources: { db: { url: adminUrl.toString() } } });
+
+  try {
+    const tenant = await control.tenant.findUnique({
+      where: { id: job.tenantId },
+      select: { id: true, databaseUrlEncrypted: true },
+    });
+
+    if (tenant) {
+      const tenantUrl = new URL(decryptDatabaseUrl(tenant.databaseUrlEncrypted));
+      const databaseName = assertSafePgName(tenantUrl.pathname.replace(/^\//, ''), 'DATABASE_NAME');
+      const roleName = assertSafePgName(decodeURIComponent(tenantUrl.username), 'ROLE_NAME');
+
+      // اتصال‌های باز مانعِ DROP DATABASE می‌شوند.
+      await admin.$executeRawUnsafe(
+        `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()`,
+      );
+      await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${databaseName}"`);
+      await admin.$executeRawUnsafe(`DROP ROLE IF EXISTS "${roleName}"`);
+    }
+
+    await control.$transaction(async (tx) => {
+      // رکوردِ tenant ممکن است قبلاً نباشد (اجرای دوباره) — حذف باید idempotent بماند.
+      await tx.tenant.deleteMany({ where: { id: job.tenantId } });
+      await tx.provisioningJob.deleteMany({ where: { tenantId: job.tenantId } });
+      await tx.tenantDeletionJob.update({
+        where: { id: job.id },
+        data: { status: 'succeeded', errorCode: null, finishedAt: new Date() },
+      });
+      await tx.platformAuditEvent.create({
+        data: {
+          actorHash: job.requestedByHash,
+          action: 'platform.tenant.deleted',
+          targetType: 'tenant',
+          targetId: job.tenantId,
+          metadata: { jobId: job.id, slug: job.slug, hostname: job.hostname },
+        },
+      });
+    });
+    console.log(`Tenant deletion job ${job.id} succeeded`);
+  } catch {
+    await control.$transaction([
+      control.tenantDeletionJob.update({
+        where: { id: job.id },
+        data: { status: 'failed', errorCode: 'DELETION_FAILED', finishedAt: new Date() },
+      }),
+      // شرکت حذف نشد → از حالتِ «در حال حذف» برگردد تا معلق نماند.
+      control.tenant.updateMany({ where: { id: job.tenantId, status: 'deleting' }, data: { status: 'active' } }),
+      control.platformAuditEvent.create({
+        data: {
+          actorHash: job.requestedByHash,
+          action: 'platform.tenant.deletion_failed',
+          targetType: 'tenant',
+          targetId: job.tenantId,
+          metadata: { jobId: job.id, errorCode: 'DELETION_FAILED' },
+        },
+      }),
+    ]);
+    console.error(`Tenant deletion job ${job.id} failed`);
+  } finally {
+    await admin.$disconnect();
+  }
+}
+
 async function main() {
   required('CONTROL_DATABASE_URL');
   required('PROVISIONING_DATABASE_URL');
@@ -172,10 +281,13 @@ async function main() {
 
   try {
     do {
+      // ساخت مقدم بر حذف است تا یک صفِ حذفِ طولانی، راه‌اندازیِ شرکتِ تازه را عقب نیندازد.
       const job = await claimNext(control);
       if (job) await provision(control, job);
+      const deletion = await claimNextDeletion(control);
+      if (deletion) await deprovision(control, deletion);
       if (once) break;
-      if (!job) await new Promise((resolve) => setTimeout(resolve, pollMs));
+      if (!job && !deletion) await new Promise((resolve) => setTimeout(resolve, pollMs));
     } while (!stopping);
   } finally {
     await control.$disconnect();

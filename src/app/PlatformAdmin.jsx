@@ -41,6 +41,19 @@ const STATUS = {
   failed: ['ناموفق', 'fail'],
 };
 
+const DELETE_STATUS = {
+  queued: ['در صف حذف', 'wait'],
+  running: ['در حال حذف', 'run'],
+  succeeded: ['حذف شد', 'ok'],
+  failed: ['حذف ناموفق', 'fail'],
+};
+
+const TENANT_STATUS = {
+  active: ['فعال', 'ok'],
+  provisioning: ['در حال ساخت', 'run'],
+  deleting: ['در حال حذف', 'fail'],
+};
+
 const faDate = (value) => value ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
 
 export default function PlatformAdmin() {
@@ -50,13 +63,22 @@ export default function PlatformAdmin() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const [snapshot, setSnapshot] = useState({ tenants: [], jobs: [] });
+  const [snapshot, setSnapshot] = useState({ tenants: [], jobs: [], deletions: [] });
   const [form, setForm] = useState({ name: '', slug: '', hostname: '' });
   const [hostnameEdited, setHostnameEdited] = useState(false);
 
+  // مودالِ حذف — دو مرحله: ارسالِ کد، سپس تایپِ شناسه + کد
+  const [doomed, setDoomed] = useState(null); // شرکتِ در دستِ حذف
+  const [delStep, setDelStep] = useState('confirm'); // confirm | code
+  const [delSlug, setDelSlug] = useState('');
+  const [delCode, setDelCode] = useState('');
+  const [delError, setDelError] = useState('');
+
   const activeJobs = useMemo(
-    () => snapshot.jobs.some((job) => job.status === 'queued' || job.status === 'running'),
-    [snapshot.jobs],
+    () =>
+      snapshot.jobs.some((job) => job.status === 'queued' || job.status === 'running')
+      || (snapshot.deletions ?? []).some((job) => job.status === 'queued' || job.status === 'running'),
+    [snapshot.jobs, snapshot.deletions],
   );
 
   const load = async () => {
@@ -93,9 +115,11 @@ export default function PlatformAdmin() {
     return () => clearInterval(timer);
   }, [phase, activeJobs]);
 
+  // اتوفیلِ کدِ پیامک — هم برای ورود و هم برای تأییدِ حذف
+  const awaitingCode = phase === 'verify' ? 'login' : delStep === 'code' && doomed ? 'delete' : null;
   useEffect(() => {
     if (
-      phase !== 'verify'
+      !awaitingCode
       || typeof window === 'undefined'
       || !('OTPCredential' in window)
       || !navigator.credentials
@@ -107,11 +131,13 @@ export default function PlatformAdmin() {
       signal: controller.signal,
     }).then((credential) => {
       const nextCode = credential?.code?.replace(/\D/g, '').slice(0, 6);
-      if (nextCode) setCode(nextCode);
+      if (!nextCode) return;
+      if (awaitingCode === 'login') setCode(nextCode);
+      else setDelCode(nextCode);
     }).catch(() => undefined);
 
     return () => controller.abort();
-  }, [phase]);
+  }, [awaitingCode]);
 
   const requestOtp = async (event) => {
     event.preventDefault();
@@ -190,6 +216,59 @@ export default function PlatformAdmin() {
     } catch (error) {
       if (error.status === 401) setPhase('login');
       setNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openDelete = (tenant) => {
+    setDoomed(tenant);
+    setDelStep('confirm');
+    setDelSlug('');
+    setDelCode('');
+    setDelError('');
+  };
+
+  const closeDelete = () => {
+    setDoomed(null);
+    setDelError('');
+  };
+
+  /** مرحلهٔ ۱ — شناسه تأیید شد، کدِ یکبارمصرف برای همین شرکت ارسال شود. */
+  const sendDeleteCode = async () => {
+    if (busy || !doomed) return;
+    if (delSlug.trim().toLowerCase() !== doomed.slug) {
+      setDelError('شناسهٔ واردشده با شناسهٔ شرکت یکی نیست.');
+      return;
+    }
+    setBusy(true);
+    setDelError('');
+    try {
+      await platformApi(`/tenants/${doomed.id}/deletion-otp`, { method: 'POST', csrf: true });
+      setDelStep('code');
+    } catch (error) {
+      setDelError(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** مرحلهٔ ۲ — کد مصرف می‌شود و حذف وارد صفِ Worker می‌شود. */
+  const confirmDelete = async () => {
+    if (busy || !doomed) return;
+    setBusy(true);
+    setDelError('');
+    try {
+      await platformApi(`/tenants/${doomed.id}/delete`, {
+        method: 'POST',
+        csrf: true,
+        body: { code: delCode, confirmSlug: delSlug.trim().toLowerCase() },
+      });
+      setNotice(`حذفِ «${doomed.name}» وارد صف شد؛ دیتابیس و نقشِ آن حذف می‌شود.`);
+      closeDelete();
+      await load();
+    } catch (error) {
+      setDelError(error.message);
     } finally {
       setBusy(false);
     }
@@ -301,12 +380,35 @@ export default function PlatformAdmin() {
               </div>
               <div className="pa-list">
                 {snapshot.tenants.length === 0 && <div className="pa-empty">هنوز شرکتی ساخته نشده است.</div>}
-                {snapshot.tenants.map((tenant) => (
-                  <article key={tenant.id} className="pa-row">
-                    <div><b>{tenant.name}</b><small dir="ltr">{tenant.hostname || tenant.slug}</small></div>
-                    <span className={tenant.status === 'active' ? 'pa-badge ok' : 'pa-badge'}>{tenant.status === 'active' ? 'فعال' : tenant.status}</span>
-                  </article>
-                ))}
+                {snapshot.tenants.map((tenant) => {
+                  const status = TENANT_STATUS[tenant.status] || [tenant.status, ''];
+                  const removing = tenant.status === 'deleting';
+                  return (
+                    <article key={tenant.id} className="pa-row">
+                      <div className="pa-row-main">
+                        <b>{tenant.name}</b>
+                        {tenant.hostname ? (
+                          <a className="pa-host" dir="ltr" href={`https://${tenant.hostname}`} target="_blank" rel="noreferrer">{tenant.hostname}</a>
+                        ) : (
+                          <small dir="ltr">{tenant.slug}</small>
+                        )}
+                        <small>ساخته‌شده {faDate(tenant.createdAt)}</small>
+                      </div>
+                      <div className="pa-row-side">
+                        <span className={`pa-badge ${status[1]}`}>{status[0]}</span>
+                        <button
+                          type="button"
+                          className="pa-danger"
+                          disabled={busy || removing}
+                          onClick={() => openDelete(tenant)}
+                          title={removing ? 'حذف در جریان است' : 'حذف شرکت و دیتابیس آن'}
+                        >
+                          {removing ? 'در حال حذف…' : 'حذف'}
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </section>
           </section>
@@ -335,6 +437,93 @@ export default function PlatformAdmin() {
               })}
             </div>
           </section>
+
+          {(snapshot.deletions ?? []).length > 0 && (
+            <section className="pa-card pa-jobs">
+              <div className="pa-section-title">
+                <span>{snapshot.deletions.length}</span>
+                <div><h2>صف حذف</h2><p>دیتابیس و نقشِ PostgreSQL شرکت توسط Worker حذف می‌شود.</p></div>
+              </div>
+              <div className="pa-job-grid">
+                {snapshot.deletions.map((job) => {
+                  const status = DELETE_STATUS[job.status] || [job.status, ''];
+                  return (
+                    <article key={job.id} className="pa-job">
+                      <div className="pa-job-top"><b>{job.name}</b><span className={`pa-badge ${status[1]}`}>{status[0]}</span></div>
+                      <code dir="ltr">{job.slug}</code>
+                      {job.hostname && <small dir="ltr">{job.hostname}</small>}
+                      <div className="pa-job-foot"><span>{faDate(job.updatedAt)}</span></div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+
+      {doomed && (
+        <div className="pa-modal-bg" role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget && !busy) closeDelete(); }}>
+          <section className="pa-card pa-modal">
+            <div className="pa-danger-mark" aria-hidden="true">!</div>
+            <h2>حذف کامل شرکت</h2>
+            <p className="pa-modal-sub">
+              دیتابیس، نقشِ PostgreSQL و همهٔ دادهٔ <b>{doomed.name}</b> برای همیشه حذف می‌شود.
+              <br />این کار <b>برگشت‌پذیر نیست</b>.
+            </p>
+
+            {delStep === 'confirm' ? (
+              <>
+                <label>برای تأیید، شناسهٔ شرکت را تایپ کنید</label>
+                <div className="pa-echo" dir="ltr">{doomed.slug}</div>
+                <input
+                  value={delSlug}
+                  onChange={(e) => setDelSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                  dir="ltr"
+                  autoFocus
+                  placeholder={doomed.slug}
+                />
+                <div className="pa-modal-actions">
+                  <button type="button" className="pa-ghost" onClick={closeDelete} disabled={busy}>انصراف</button>
+                  <button
+                    type="button"
+                    className="pa-danger-btn"
+                    onClick={sendDeleteCode}
+                    disabled={busy || delSlug.trim().toLowerCase() !== doomed.slug}
+                  >
+                    {busy ? 'در حال ارسال…' : 'ارسال کد تأیید'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <label>کد شش‌رقمیِ پیامک‌شده</label>
+                <input
+                  value={delCode}
+                  onChange={(e) => setDelCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  dir="ltr"
+                  placeholder="••••••"
+                  autoFocus
+                />
+                <p className="pa-hint">کدِ حذف جداست و فقط برای همین شرکت کار می‌کند.</p>
+                <div className="pa-modal-actions">
+                  <button type="button" className="pa-ghost" onClick={closeDelete} disabled={busy}>انصراف</button>
+                  <button
+                    type="button"
+                    className="pa-danger-btn"
+                    onClick={confirmDelete}
+                    disabled={busy || delCode.length !== 6}
+                  >
+                    {busy ? 'در حال حذف…' : 'حذف قطعی'}
+                  </button>
+                </div>
+              </>
+            )}
+            {delError && <div className="pa-modal-err">{delError}</div>}
+          </section>
         </div>
       )}
     </main>
@@ -356,5 +545,16 @@ const styles = `
 .pa-hint{font-size:10px;color:#77708f;text-align:center}.pa-list{display:grid;gap:10px;max-height:430px;overflow:auto}.pa-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;border-radius:14px;background:rgba(255,255,255,.025);border:1px solid rgba(139,92,246,.12)}.pa-row b,.pa-row small{display:block}.pa-row small{color:#817aa2;font-size:10px;margin-top:4px}
 .pa-badge{font-size:10px;padding:5px 10px;border-radius:99px;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.22);white-space:nowrap}.pa-badge.ok{background:rgba(52,211,153,.1);color:#34d399;border-color:rgba(52,211,153,.22)}.pa-badge.run{color:#22d3ee;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.22)}.pa-badge.fail{color:#fb7185;background:rgba(251,113,133,.1);border-color:rgba(251,113,133,.22)}
 .pa-jobs{margin-top:18px}.pa-job-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.pa-job{padding:15px;border-radius:15px;border:1px solid rgba(139,92,246,.14);background:rgba(255,255,255,.02)}.pa-job-top{display:flex;justify-content:space-between;gap:8px}.pa-job code,.pa-job small{display:block;color:#8f88af;font-size:10px;margin-top:8px;overflow:hidden;text-overflow:ellipsis}.pa-job-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px;font-size:9px;color:#6f688d}.pa-job-foot button{color:#fda4af;background:rgba(251,113,133,.08);border-radius:8px;padding:6px 8px}.pa-empty{padding:24px;text-align:center;color:#817aa2;font-size:13px}
-@media(max-width:760px){.pa{padding:14px}.pa-grid{grid-template-columns:1fr}.pa-job-grid{grid-template-columns:1fr}.pa-auth{margin:2vh auto;padding:26px 20px}.pa-head{align-items:flex-start}.pa-head h1{font-size:24px}.pa-create,.pa-grid>.pa-card,.pa-jobs{padding:18px}.pa-section-title{align-items:flex-start}}
+.pa-row-main{min-width:0}.pa-row-side{display:flex;align-items:center;gap:8px;flex-shrink:0}.pa-host{display:block;color:#67e8f9;font-size:10px;margin-top:4px;text-decoration:none;overflow:hidden;text-overflow:ellipsis}.pa-host:hover{text-decoration:underline}
+.pa-danger{font-size:10px;padding:7px 11px;border-radius:9px;color:#fda4af;background:rgba(251,113,133,.09);border:1px solid rgba(251,113,133,.24)!important}.pa-danger:disabled{opacity:.45}
+.pa-modal-bg{position:fixed;inset:0;z-index:50;background:rgba(4,2,15,.76);backdrop-filter:blur(6px);display:grid;place-items:center;padding:18px;overflow:auto}
+.pa-modal{width:min(430px,100%);padding:28px;text-align:center}.pa-modal h2{font-size:20px;margin:0 0 8px}.pa-modal-sub{color:#c3bcdd;font-size:13px;line-height:2;margin:0 0 20px}
+.pa-danger-mark{width:52px;height:52px;margin:0 auto 14px;border-radius:16px;display:grid;place-items:center;font-size:28px;font-weight:900;color:#fb7185;background:rgba(251,113,133,.12);border:1px solid rgba(251,113,133,.3)}
+.pa-modal label{display:block;text-align:right;font-size:12px;color:#c7c2df;margin-bottom:7px}.pa-modal input{width:100%;height:50px;border-radius:13px;border:1px solid rgba(251,113,133,.28);background:rgba(3,2,18,.62);color:#fff;padding:0 15px;font:inherit;outline:none;text-align:center;letter-spacing:2px}.pa-modal input:focus{border-color:#fb7185;box-shadow:0 0 0 3px rgba(251,113,133,.12)}
+.pa-echo{margin-bottom:9px;padding:9px;border-radius:10px;background:rgba(255,255,255,.04);border:1px dashed rgba(139,92,246,.28);color:#d7d1f2;font-size:13px;user-select:all}
+.pa-modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.pa-modal-actions button{height:48px;border-radius:12px;font-weight:800}
+.pa-ghost{color:#cfc9e8;background:rgba(255,255,255,.05);border:1px solid rgba(139,92,246,.24)!important}
+.pa-danger-btn{color:#fff;background:linear-gradient(135deg,#f43f5e,#9f1239)}.pa-danger-btn:disabled{opacity:.42}
+.pa-modal-err{margin-top:14px;padding:11px 14px;border-radius:11px;background:rgba(251,113,133,.09);border:1px solid rgba(251,113,133,.25);color:#fecdd3;font-size:12px;line-height:1.9}
+@media(max-width:760px){.pa{padding:14px}.pa-grid{grid-template-columns:1fr}.pa-job-grid{grid-template-columns:1fr}.pa-auth{margin:2vh auto;padding:26px 20px}.pa-head{align-items:flex-start}.pa-head h1{font-size:24px}.pa-create,.pa-grid>.pa-card,.pa-jobs{padding:18px}.pa-section-title{align-items:flex-start}.pa-modal{padding:22px 18px}.pa-row{flex-wrap:wrap}}
 `;

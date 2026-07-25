@@ -28,6 +28,16 @@ export function normalizeWebOtpHost(value: string): string {
   return host;
 }
 
+/**
+ * دامنهٔ کدِ یکبارمصرف. کدِ ورود و کدِ عملیاتِ حساس (مثلِ حذفِ شرکت) هرگز نباید
+ * یکی باشند، و کدِ حذفِ یک شرکت نباید روی شرکتِ دیگر کار کند — پس دامنه داخلِ
+ * خودِ hash می‌رود. تابعِ خالص است تا بدونِ بارگذاریِ Prisma قابلِ تست بماند.
+ */
+export function platformOtpScopeHash(secret: string, phone: string, scope: string): string {
+  const value = scope === 'login' ? phone : `${scope}:${phone}`;
+  return createHmac('sha256', secret).update(`phone:${value}`).digest('hex');
+}
+
 export function platformPhoneRef(secret: string, phone: string): string {
   return createHmac('sha256', secret).update(`platform-phone-ref:${phone}`).digest('hex');
 }

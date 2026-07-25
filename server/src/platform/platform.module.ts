@@ -26,6 +26,7 @@ import { ControlPrismaService } from '../tenant/control-prisma.service';
 import {
   normalizePlatformPhone,
   platformAdminConfig,
+  platformOtpScopeHash,
   platformPhoneRef,
   resolvePlatformPhoneRef,
 } from './platform.config';
@@ -100,6 +101,19 @@ class CreateProvisioningJobDto {
   hostname!: string;
 }
 
+class DeleteTenantDto {
+  @IsString()
+  @Matches(/^[0-9]{6}$/)
+  code!: string;
+
+  @IsString()
+  @Length(3, 40)
+  confirmSlug!: string;
+}
+
+/** دامنهٔ کدِ حذف به شناسهٔ همان شرکت گره می‌خورد. */
+const deletionScope = (tenantId: string) => `tenant-delete:${tenantId}`;
+
 @Injectable()
 export class PlatformAuthService {
   constructor(
@@ -141,6 +155,88 @@ export class PlatformAuthService {
     if (phoneRef) return resolvePlatformPhoneRef(config, phoneRef);
     const phone = normalizePlatformPhone(phoneInput ?? '');
     return phone && config.phones.has(phone) ? phone : null;
+  }
+
+  /** دامنهٔ کدِ یکبارمصرف — پیاده‌سازیِ خالص در platform.config است. */
+  private scopeHash(phone: string, scope: string): string {
+    return platformOtpScopeHash(this.config().secret, phone, scope);
+  }
+
+  /** ارسالِ کدِ تأییدِ عملیاتِ حساس (مثلِ حذفِ شرکت) به همان مدیرِ واردشده. */
+  async requestActionOtp(
+    session: { phoneHash: string },
+    scope: string,
+    ip: string,
+    requestHost?: string | null,
+  ) {
+    const config = this.config();
+    const phone = Array.from(config.phones).find(
+      (candidate) => this.scopeHash(candidate, 'login') === session.phoneHash,
+    );
+    const ipHash = this.ipHash(ip);
+    this.rateLimit.hit(`platform:action-otp:ip:${ipHash}`, 10, 15 * 60_000);
+    const response = { ok: true, ttl: OTP_TTL_MS / 1000 };
+    if (!phone) return response;
+
+    const scopedHash = this.scopeHash(phone, scope);
+    this.rateLimit.hit(`platform:action-otp:${scopedHash}`, 5, 15 * 60_000);
+
+    const recent = await this.control.platformOtp.findFirst({
+      where: { phoneHash: scopedHash, consumedAt: null, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (recent) return response;
+
+    const code = String(randomInt(100000, 1000000));
+    const otp = await this.control.platformOtp.create({
+      data: {
+        phoneHash: scopedHash,
+        codeHash: this.hash('otp', `${scopedHash}:${code}`),
+        expiresAt: new Date(Date.now() + OTP_TTL_MS),
+      },
+    });
+    try {
+      const otpHost = sanitizeWebOtpHost(requestHost) ?? config.webOtpHost;
+      const sent = await this.sms.sendOtp(phone, code, otpHost);
+      if (!sent.sent && process.env.NODE_ENV === 'production') throw new Error('SMS delivery failed');
+      await this.control.platformAuditEvent.create({
+        data: { actorHash: session.phoneHash, action: 'platform.action.otp_requested', ipHash, metadata: { scope } },
+      });
+      return response;
+    } catch (error) {
+      await this.control.platformOtp.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  /** مصرفِ یکبارهٔ کدِ عملیات؛ کد پس از موفقیت باطل می‌شود (ضدِّ تکرار). */
+  async consumeActionOtp(session: { phoneHash: string }, scope: string, code: string, ip: string) {
+    const config = this.config();
+    const phone = Array.from(config.phones).find(
+      (candidate) => this.scopeHash(candidate, 'login') === session.phoneHash,
+    );
+    if (!phone) throw new UnauthorizedException('کد تأیید نامعتبر است');
+
+    const scopedHash = this.scopeHash(phone, scope);
+    this.rateLimit.hit(`platform:action-verify:${scopedHash}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`platform:action-verify:ip:${this.ipHash(ip)}`, 20, 15 * 60_000);
+
+    const otp = await this.control.platformOtp.findFirst({
+      where: { phoneHash: scopedHash, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!otp || otp.expiresAt <= new Date() || otp.attempts >= OTP_MAX_ATTEMPTS) {
+      throw new UnauthorizedException('کد تأیید نامعتبر یا منقضی است');
+    }
+    if (!equalText(this.hash('otp', `${scopedHash}:${code}`), otp.codeHash)) {
+      await this.control.platformOtp.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+      throw new UnauthorizedException('کد تأیید نامعتبر یا منقضی است');
+    }
+    const consumed = await this.control.platformOtp.updateMany({
+      where: { id: otp.id, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+    if (consumed.count !== 1) throw new UnauthorizedException('کد تأیید قبلاً استفاده شده است');
   }
 
   async requestOtp(
@@ -377,6 +473,7 @@ export class PlatformProvisioningService {
         createdAt: tenant.createdAt,
       })),
       jobs,
+      deletions: await this.deletionJobs(),
     };
   }
 
@@ -424,6 +521,84 @@ export class PlatformProvisioningService {
       },
     });
     return job;
+  }
+
+  private deletionSelect = {
+    id: true,
+    tenantId: true,
+    slug: true,
+    name: true,
+    hostname: true,
+    status: true,
+    errorCode: true,
+    attempts: true,
+    createdAt: true,
+    updatedAt: true,
+    finishedAt: true,
+  } as const;
+
+  /**
+   * ثبتِ درخواستِ حذف. اینجا هیچ دیتابیسی حذف نمی‌شود — فقط شرکت به وضعیتِ
+   * `deleting` می‌رود (پس بلافاصله برای هیچ دامنه‌ای resolve نمی‌شود) و کار به
+   * صفِ Worker می‌رود. تأییدِ نامِ شناسه، دومین لایهٔ محافظت در برابرِ خطای انسانی است.
+   */
+  /**
+   * اعتبارسنجیِ حذف بدونِ هیچ تغییری. جدا نگه داشته شده تا کدِ یکبارمصرف پیش از
+   * تأییدِ شناسه مصرف نشود؛ وگرنه یک تایپِ اشتباه کدِ کاربر را می‌سوزاند.
+   */
+  async assertDeletable(tenantId: string, confirmSlug: string) {
+    const tenant = await this.control.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, slug: true, name: true, status: true, domains: { where: { primary: true }, take: 1, select: { hostname: true } } },
+    });
+    if (!tenant) throw new NotFoundException('شرکت یافت نشد');
+    if (confirmSlug.trim().toLowerCase() !== tenant.slug) {
+      throw new ConflictException('شناسهٔ تأیید با شناسهٔ شرکت یکی نیست');
+    }
+    const open = await this.control.tenantDeletionJob.findFirst({
+      where: { tenantId, status: { in: ['queued', 'running'] } },
+      select: { id: true },
+    });
+    if (open) throw new ConflictException('درخواستِ حذفِ این شرکت از قبل در صف است');
+    return tenant;
+  }
+
+  async requestDeletion(tenantId: string, confirmSlug: string, actorHash: string, ipHash: string) {
+    const tenant = await this.assertDeletable(tenantId, confirmSlug);
+
+    const job = await this.control.$transaction(async (tx) => {
+      await tx.tenant.update({ where: { id: tenantId }, data: { status: 'deleting' } });
+      const created = await tx.tenantDeletionJob.create({
+        data: {
+          tenantId,
+          slug: tenant.slug,
+          name: tenant.name,
+          hostname: tenant.domains[0]?.hostname ?? null,
+          requestedByHash: actorHash,
+        },
+        select: this.deletionSelect,
+      });
+      await tx.platformAuditEvent.create({
+        data: {
+          actorHash,
+          action: 'platform.tenant.deletion_requested',
+          targetType: 'tenant',
+          targetId: tenantId,
+          ipHash,
+          metadata: { slug: tenant.slug, jobId: created.id },
+        },
+      });
+      return created;
+    });
+    return job;
+  }
+
+  async deletionJobs() {
+    return this.control.tenantDeletionJob.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: this.deletionSelect,
+    });
   }
 
   async retry(id: string, actorHash: string, ipHash: string) {
@@ -536,6 +711,33 @@ export class PlatformController {
   retryJob(@Param('id') id: string, @Req() req: Request) {
     const session = (req as any).platformSession;
     return this.provisioning.retry(id, session.phoneHash, this.auth.ipHash(requestIp(req)));
+  }
+
+  /** مرحلهٔ ۱ حذف: ارسالِ کدِ تأیید به مدیرِ واردشده (کدِ ورود نیست). */
+  @Post('tenants/:id/deletion-otp')
+  @HttpCode(200)
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  async requestDeletionOtp(@Param('id') id: string, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.auth.requestActionOtp(session, deletionScope(id), requestIp(req), req.headers.host);
+  }
+
+  /** مرحلهٔ ۲ حذف: کدِ یکبارمصرف + تایپِ شناسهٔ شرکت → ثبت در صفِ Worker. */
+  @Post('tenants/:id/delete')
+  @HttpCode(200)
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  async deleteTenant(@Param('id') id: string, @Body() dto: DeleteTenantDto, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    const ip = requestIp(req);
+    // اول شناسه تأیید شود، بعد کد مصرف — تایپِ اشتباه نباید کدِ کاربر را بسوزاند.
+    await this.provisioning.assertDeletable(id, dto.confirmSlug);
+    await this.auth.consumeActionOtp(session, deletionScope(id), dto.code, ip);
+    return this.provisioning.requestDeletion(
+      id,
+      dto.confirmSlug,
+      session.phoneHash,
+      this.auth.ipHash(ip),
+    );
   }
 }
 
