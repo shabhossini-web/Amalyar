@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { sanitizeWebOtpHost } from '../common/webotp';
 
 export type PlatformConfig = {
   enabled: boolean;
@@ -14,10 +15,14 @@ export function normalizePlatformPhone(value: string): string | null {
   return /^09[0-9]{9}$/.test(phone) ? phone : null;
 }
 
+/**
+ * fallbackِ env برای میزبانِ WebOTP. خالی مجاز است (میزبانِ درخواست به‌کار می‌رود)
+ * ولی مقدارِ نامعتبر باید در startup سروصدا کند، نه اینکه بی‌صدا نادیده گرفته شود.
+ */
 export function normalizeWebOtpHost(value: string): string {
-  const host = (value || '').trim().toLowerCase().replace(/\.$/, '');
-  if (!host) return '';
-  if (!/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(host)) {
+  if (!(value || '').trim()) return '';
+  const host = sanitizeWebOtpHost(value);
+  if (!host) {
     throw new Error('PLATFORM_ADMIN_WEBOTP_HOST must be a valid hostname without protocol or path');
   }
   return host;

@@ -131,11 +131,44 @@ function verifyWebauthnBoundary(context) {
   assert.notEqual(fallback.rpID, beta.hostname);
 }
 
+/**
+ * خطِ آخرِ پیامکِ OTP باید به میزبانِ همان صفحه گره بخورد. اگر دوباره روی یک
+ * دامنهٔ ثابت بیفتد، مرورگر بی‌صدا اتوفیل نمی‌کند و کسی متوجه نمی‌شود.
+ */
+async function verifyWebOtpBinding() {
+  const { SmsService } = require('../dist/sms/sms.service');
+  const { sanitizeWebOtpHost } = require('../dist/common/webotp');
+
+  assert.equal(sanitizeWebOtpHost('SAMPLE2.AMALYAR.COM.'), 'sample2.amalyar.com');
+  assert.equal(sanitizeWebOtpHost('tenant.amalyar.com:443'), 'tenant.amalyar.com');
+  // ورودیِ نامعتبر نباید به متنِ پیامک راه پیدا کند (ضدِّ تزریق در خطِ اتصال).
+  assert.equal(sanitizeWebOtpHost('bad host\n@evil.com #000000'), null);
+  assert.equal(sanitizeWebOtpHost('localhost'), null);
+
+  const service = new SmsService();
+  const sentTexts = [];
+  service.send = async (_phone, text) => {
+    sentTexts.push(text);
+    return { sent: true, stub: false };
+  };
+
+  await service.sendOtp('09120000000', '123456', 'sample2.amalyar.com');
+  await service.sendOtp('09120000000', '123456', undefined);
+
+  assert.equal(
+    sentTexts[0].split('\n').pop(),
+    '@sample2.amalyar.com #123456',
+    'The OTP SMS must bind to the requesting host, not a fixed domain',
+  );
+  assert.equal(sentTexts[1].split('\n').pop(), '@amalyar.com #123456');
+}
+
 async function main() {
   const context = new TenantContext();
   await verifyJwtBoundary(context);
   await verifyPrismaBoundary(context);
   verifyWebauthnBoundary(context);
+  await verifyWebOtpBinding();
   process.stdout.write('tenant isolation boundaries verified\n');
 }
 

@@ -20,6 +20,7 @@ import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
 import { IsOptional, IsString, Length, Matches } from 'class-validator';
 import { RateLimitService } from '../common/rate-limit.service';
+import { sanitizeWebOtpHost } from '../common/webotp';
 import { SmsService } from '../sms/sms.service';
 import { ControlPrismaService } from '../tenant/control-prisma.service';
 import {
@@ -142,7 +143,12 @@ export class PlatformAuthService {
     return phone && config.phones.has(phone) ? phone : null;
   }
 
-  async requestOtp(phoneInput: string | undefined, phoneRef: string | undefined, ip: string) {
+  async requestOtp(
+    phoneInput: string | undefined,
+    phoneRef: string | undefined,
+    ip: string,
+    requestHost?: string | null,
+  ) {
     const config = this.config();
     const phone = this.resolvePhone(config, phoneInput, phoneRef);
     const phoneHash = this.hash('phone', phone ?? phoneRef ?? phoneInput?.trim() ?? 'missing');
@@ -169,7 +175,10 @@ export class PlatformAuthService {
     });
 
     try {
-      const sent = await this.sms.sendOtp(phone, code, config.webOtpHost);
+      // میزبانِ واقعیِ همین درخواست مقدم است — تنها چیزی که مرورگر برای اتوفیل
+      // می‌پذیرد. env فقط fallbackِ استقرارهای پشتِ پراکسیِ غیرشفاف است.
+      const otpHost = sanitizeWebOtpHost(requestHost) ?? config.webOtpHost;
+      const sent = await this.sms.sendOtp(phone, code, otpHost);
       if (!sent.sent && process.env.NODE_ENV === 'production') throw new Error('SMS delivery failed');
       await this.control.platformAuditEvent.create({
         data: { actorHash: phoneHash, action: 'platform.auth.otp_requested', ipHash },
@@ -456,7 +465,7 @@ export class PlatformController {
   @Post('auth/request-otp')
   @HttpCode(200)
   requestOtp(@Body() dto: PlatformPhoneDto, @Req() req: Request) {
-    return this.auth.requestOtp(dto.phone, dto.phoneRef, requestIp(req));
+    return this.auth.requestOtp(dto.phone, dto.phoneRef, requestIp(req), req.headers.host);
   }
 
   @Post('auth/verify')

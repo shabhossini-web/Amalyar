@@ -1,4 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { sanitizeWebOtpHost } from '../common/webotp';
 
 /**
  * سرویسِ پیامک — ملی‌پیامک (همان روشِ ملک‌طب: endpointِ advanced).
@@ -27,12 +28,10 @@ export class SmsService {
     return text.replace(/\s*لغو\s*[0-9۰-۹]+\s*$/u, '').replace(/\s+$/, '') + '\nلغو۱۱';
   }
 
-  async sendOtp(phone: string, code: string, webOtpHost = 'amalyar.com') {
-    // خطِ آخر = فرمتِ origin-bound WebOTP؛ host فقط از تنظیم معتبر سرور می‌آید.
-    const host = (webOtpHost || 'amalyar.com').trim().toLowerCase();
-    const validHost = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(host)
-      ? host
-      : 'amalyar.com';
+  async sendOtp(phone: string, code: string, webOtpHost?: string | null) {
+    // خطِ آخر = فرمتِ origin-bound WebOTP. میزبان باید میزبانِ همان صفحه باشد،
+    // وگرنه مرورگر بی‌صدا اتوفیل نمی‌کند (sanitizeWebOtpHost تک‌منبعِ اعتبارسنجی است).
+    const validHost = sanitizeWebOtpHost(webOtpHost) ?? 'amalyar.com';
     const text = `عمل‌یار: کد تأیید شما ${code}\nلغو۱۱\n@${validHost} #${code}`;
     return this.send(phone, text, { skipLagho: true });
   }
