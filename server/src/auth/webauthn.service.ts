@@ -46,16 +46,18 @@ export class WebauthnService {
   async registerOptions(accountId: number) {
     const account = await this.prisma.account.findUnique({
       where: { id: accountId },
-      include: { credentials: true },
+      include: { credentials: true, person: true },
     });
     if (!account) throw new UnauthorizedException();
 
     const options = await generateRegistrationOptions({
       rpName: 'عمل‌یار',
       rpID: this.rp().rpID,
-      userName: account.username || account.phone || `user${account.id}`,
+      userName: account.username || account.person?.phone || `user${account.id}`,
       userDisplayName:
-        [account.firstName, account.lastName].filter(Boolean).join(' ') || account.username || '',
+        [account.person?.firstName, account.person?.lastName].filter(Boolean).join(' ')
+        || account.username
+        || '',
       attestationType: 'none',
       excludeCredentials: account.credentials.map((c) => ({
         id: c.credId,
@@ -134,7 +136,7 @@ export class WebauthnService {
 
     const cred = await this.prisma.webauthnCredential.findUnique({
       where: { credId: body.response?.id ?? '' },
-      include: { account: true },
+      include: { account: { include: { person: true } } },
     });
     if (!cred) throw new UnauthorizedException('اثر انگشتِ ثبت‌شده‌ای یافت نشد');
     if (cred.account.status !== 'active') throw new UnauthorizedException('حساب فعال نیست');

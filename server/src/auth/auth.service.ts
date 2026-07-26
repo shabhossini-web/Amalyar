@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, ServiceUnavailableException, Unauthori
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomInt } from 'crypto';
-import type { Account } from '@prisma/client';
+import type { Account, Person } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { LoginDto } from './dto/login.dto';
@@ -18,6 +18,10 @@ const OTP_RESEND_MS = 60_000;
 const OTP_MAX_ATTEMPTS = 5;
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+
+/** هویت در Person است و اعتبارنامه در Account؛ هر جا کاربر برگردانده می‌شود هر دو لازم‌اند. */
+type AccountWithPerson = Account & { person: Person };
+const WITH_PERSON = { person: true } as const;
 
 @Injectable()
 export class AuthService {
@@ -38,7 +42,8 @@ export class AuthService {
   async requestSignupOtp(phone: string, ip = 'unknown') {
     this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
     this.rateLimit.hit(`otp:phone:${phone}`, 3, 15 * 60_000);
-    const exists = await this.prisma.account.findUnique({ where: { phone } });
+    // شماره روی Person یکتاست، پس بررسی از همان‌جا می‌آید نه از Account.
+    const exists = await this.prisma.person.findUnique({ where: { phone } });
     if (exists) throw new BadRequestException('این شماره قبلاً ثبت شده است');
 
     const recent = await this.prisma.otpCode.findFirst({
@@ -117,23 +122,30 @@ export class AuthService {
       if (await tx.account.findUnique({ where: { username: dto.username } })) {
         throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
       }
-      if (await tx.account.findUnique({ where: { phone } })) {
+      if (await tx.person.findUnique({ where: { phone } })) {
         throw new BadRequestException('این شماره قبلاً ثبت شده است');
       }
 
       const bootstrap =
         (await tx.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
+      // هویت و نقش با هم ساخته می‌شوند؛ nested create یعنی اگر یکی شکست بخورد
+      // دیگری هم ثبت نمی‌شود و Personِ بی‌نقش جا نمی‌مانَد.
       const account = await tx.account.create({
         data: {
-          firstName: dto.firstName.trim(),
-          lastName: dto.lastName.trim(),
           username: dto.username.trim(),
-          phone,
           passwordHash,
-          selfie: dto.selfie,
           level: bootstrap ? LEVEL.SUPER_ADMIN : LEVEL.VIEWER,
           status: bootstrap ? 'active' : 'pending',
+          person: {
+            create: {
+              firstName: dto.firstName.trim(),
+              lastName: dto.lastName.trim(),
+              phone,
+              photo: dto.selfie,
+            },
+          },
         },
+        include: WITH_PERSON,
       });
       return { account, bootstrap };
     });
@@ -149,8 +161,10 @@ export class AuthService {
     this.rateLimit.hit(`login:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
     this.rateLimit.hit(`login:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
     const id = dto.identifier.trim();
+    // ورود با نام کاربری (روی Account) یا موبایل (روی Person).
     const account = await this.prisma.account.findFirst({
-      where: { OR: [{ username: id }, { phone: id }] },
+      where: { OR: [{ username: id }, { person: { phone: id } }] },
+      include: WITH_PERSON,
     });
     if (!account) throw new UnauthorizedException('نام کاربری یا رمز عبور اشتباه است');
     const ok = await bcrypt.compare(dto.password, account.passwordHash);
@@ -163,7 +177,7 @@ export class AuthService {
     return this.issue(account, meta);
   }
 
-  async issue(account: Account, meta: { ua?: string; ip?: string }) {
+  async issue(account: AccountWithPerson, meta: { ua?: string; ip?: string }) {
     const active = await this.prisma.session.findMany({
       where: { accountId: account.id, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'asc' },
@@ -196,21 +210,27 @@ export class AuthService {
   async validateSession(sid: string, sub: number) {
     const session = await this.prisma.session.findUnique({
       where: { id: sid },
-      include: { account: true },
+      include: { account: { include: WITH_PERSON } },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
     if (session.accountId !== sub || session.account.status !== 'active') return null;
     return session.account;
   }
 
+  /// پروفایل روی Person نوشته می‌شود — همان رکوردی که نقشِ جراحِ همین آدم هم از آن می‌خوانَد.
   async updateProfile(id: number, dto: { firstName?: string; lastName?: string; selfie?: string }) {
     const account = await this.prisma.account.update({
       where: { id },
       data: {
-        ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
-        ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() } : {}),
-        ...(dto.selfie !== undefined ? { selfie: dto.selfie } : {}),
+        person: {
+          update: {
+            ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
+            ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() } : {}),
+            ...(dto.selfie !== undefined ? { photo: dto.selfie } : {}),
+          },
+        },
       },
+      include: WITH_PERSON,
     });
     return this.publicUser(account);
   }
@@ -238,20 +258,24 @@ export class AuthService {
     return { ok: true };
   }
 
-  publicUser(a: Account) {
+  /// شکلِ عمومیِ کاربر برای کلاینت. قرارداد بیرونی عمداً همان قبلی نگه داشته شد
+  /// (firstName/lastName/phone/selfie) تا جابه‌جاییِ داخلیِ فیلدها به فرانت نشت نکند.
+  publicUser(a: AccountWithPerson) {
+    const p = a.person;
     const displayName =
-      [a.firstName, a.lastName].filter(Boolean).join(' ').trim() || a.username || a.phone || 'کاربر';
+      [p?.firstName, p?.lastName].filter(Boolean).join(' ').trim() || a.username || p?.phone || 'کاربر';
     return {
       id: a.id,
-      firstName: a.firstName,
-      lastName: a.lastName,
+      personId: a.personId,
+      firstName: p?.firstName ?? null,
+      lastName: p?.lastName ?? null,
       displayName,
       username: a.username,
-      phone: a.phone,
+      phone: p?.phone ?? null,
       level: a.level,
       levelName: levelName(a.level),
       status: a.status,
-      selfie: a.selfie ?? null,
+      selfie: p?.photo ?? null,
     };
   }
 }

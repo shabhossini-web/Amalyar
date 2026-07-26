@@ -255,3 +255,12 @@
   .db-grid2 { grid-template-columns: 1fr; }
   .db-add span { display: none; }
 }
+
+/* ویرایشِ درجای تعریف‌ها — جراح دو فیلد دارد (نام/نام‌خانوادگی)، بیمارستان یکی */
+.db-def-editrow { display: flex; gap: 6px; flex: 1; min-width: 0; align-items: center; }
+.db-def-editrow .db-def-edit { min-width: 0; flex: 1; }
+.db-def-save {
+  flex-shrink: 0; padding: 6px 11px; border-radius: 8px; font: inherit; font-size: 12px;
+  cursor: pointer; color: #fff; border: 0;
+  background: linear-gradient(135deg, #a855f7, #6d28d9);
+}

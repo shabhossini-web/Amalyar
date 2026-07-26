@@ -14,6 +14,7 @@ export class AccountsService {
     const rows = await this.prisma.account.findMany({
       where: status ? { status } : {},
       orderBy: { createdAt: 'desc' },
+      include: { person: true },
     });
     return rows.map((a) => ({ ...this.auth.publicUser(a), createdAt: a.createdAt }));
   }
@@ -27,6 +28,7 @@ export class AccountsService {
     const updated = await this.prisma.account.update({
       where: { id },
       data: { status: 'active', level, approvedById: approverId, approvedAt: new Date() },
+      include: { person: true },
     });
     return this.auth.publicUser(updated);
   }
@@ -37,6 +39,7 @@ export class AccountsService {
     const updated = await this.prisma.account.update({
       where: { id },
       data: { status: 'rejected' },
+      include: { person: true },
     });
     return this.auth.publicUser(updated);
   }
@@ -59,7 +62,11 @@ export class AccountsService {
         throw new BadRequestException('این آخرین سوپرادمینِ فعال است؛ ابتدا سوپرادمینِ دیگری تعیین کنید');
       }
     }
-    const updated = await this.prisma.account.update({ where: { id }, data: { level } });
+    const updated = await this.prisma.account.update({
+      where: { id },
+      data: { level },
+      include: { person: true },
+    });
     return this.auth.publicUser(updated);
   }
 }

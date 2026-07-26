@@ -324,10 +324,15 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
 /* ── شیتِ «تعریف‌ها»: مدیریتِ جراحان و بیمارستان‌ها ── */
 function DefsSheet({ defs, onDefsChanged, onClose, onToast }) {
   const [tab, setTab] = useState('surgeons'); // surgeons | hospitals
+  // جراح هویتش در Person است، پس نام و نام‌خانوادگی جدا گرفته می‌شوند؛
+  // بیمارستان سازمان است و یک نام دارد.
   const [name, setName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [busy, setBusy] = useState(false);
   const [editId, setEditId] = useState(0);
   const [editName, setEditName] = useState('');
+  const [editLast, setEditLast] = useState('');
+  const isSurgeon = tab === 'surgeons';
 
   const kind = tab; // مسیرِ API
   const rows = tab === 'surgeons' ? defs.surgeons : defs.hospitals;
@@ -346,20 +351,33 @@ function DefsSheet({ defs, onDefsChanged, onClose, onToast }) {
     }
   };
 
+  const canAdd = isSurgeon
+    ? name.trim().length >= 2 && lastName.trim().length >= 2
+    : name.trim().length >= 2;
+
   const add = () => {
+    if (!canAdd) return;
     const n = name.trim();
-    if (n.length < 2) return;
+    const l = lastName.trim();
     run(async () => {
-      await api(`/${kind}`, { method: 'POST', body: { name: n } });
+      const body = isSurgeon ? { firstName: n, lastName: l } : { name: n };
+      await api(`/${kind}`, { method: 'POST', body });
       setName('');
-    }, `«${n}» اضافه شد ✓`);
+      setLastName('');
+    }, `«${isSurgeon ? `${n} ${l}` : n}» اضافه شد ✓`);
   };
 
   const saveRename = (row) => {
     const n = editName.trim();
-    if (n.length < 2 || n === row.name) { setEditId(0); return; }
+    const l = editLast.trim();
+    if (n.length < 2 || (isSurgeon && l.length < 2)) { setEditId(0); return; }
+    const unchanged = isSurgeon
+      ? n === row.firstName && l === row.lastName
+      : n === row.name;
+    if (unchanged) { setEditId(0); return; }
     run(async () => {
-      await api(`/${kind}/${row.id}`, { method: 'PATCH', body: { name: n } });
+      const body = isSurgeon ? { firstName: n, lastName: l } : { name: n };
+      await api(`/${kind}/${row.id}`, { method: 'PATCH', body });
       setEditId(0);
     }, 'نام ویرایش شد ✓');
   };
@@ -391,11 +409,20 @@ function DefsSheet({ defs, onDefsChanged, onClose, onToast }) {
           <input
             type="text"
             value={name}
-            placeholder={tab === 'surgeons' ? 'نامِ جراحِ جدید…' : 'نامِ بیمارستانِ جدید…'}
+            placeholder={isSurgeon ? 'نام…' : 'نامِ بیمارستانِ جدید…'}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
           />
-          <button type="button" disabled={busy || name.trim().length < 2} onClick={add}>افزودن</button>
+          {isSurgeon && (
+            <input
+              type="text"
+              value={lastName}
+              placeholder="نام خانوادگی…"
+              onChange={(e) => setLastName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+            />
+          )}
+          <button type="button" disabled={busy || !canAdd} onClick={add}>افزودن</button>
         </div>
 
         <div className="db-defs">
@@ -403,21 +430,33 @@ function DefsSheet({ defs, onDefsChanged, onClose, onToast }) {
           {rows.map((row) => (
             <div key={row.id} className={`db-def${row.active ? '' : ' off'}`}>
               {editId === row.id ? (
-                <input
-                  className="db-def-edit"
-                  type="text"
-                  value={editName}
-                  autoFocus
-                  onChange={(e) => setEditName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveRename(row); } if (e.key === 'Escape') setEditId(0); }}
-                  onBlur={() => saveRename(row)}
-                />
+                <span className="db-def-editrow">
+                  <input
+                    className="db-def-edit"
+                    type="text"
+                    value={editName}
+                    autoFocus
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveRename(row); } if (e.key === 'Escape') setEditId(0); }}
+                  />
+                  {isSurgeon && (
+                    <input
+                      className="db-def-edit"
+                      type="text"
+                      value={editLast}
+                      placeholder="نام خانوادگی"
+                      onChange={(e) => setEditLast(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveRename(row); } if (e.key === 'Escape') setEditId(0); }}
+                    />
+                  )}
+                  <button type="button" className="db-def-save" onClick={() => saveRename(row)}>ثبت</button>
+                </span>
               ) : (
                 <b>{row.name}{!row.active && <i> (غیرفعال)</i>}</b>
               )}
               <small>{faNum(row.visitCount)} مراجعه</small>
               <span className="db-def-acts">
-                <button type="button" title="ویرایشِ نام" disabled={busy} onClick={() => { setEditId(row.id); setEditName(row.name); }}><Pencil width="14" height="14" /></button>
+                <button type="button" title="ویرایشِ نام" disabled={busy} onClick={() => { setEditId(row.id); setEditName(isSurgeon ? row.firstName : row.name); setEditLast(isSurgeon ? row.lastName : ''); }}><Pencil width="14" height="14" /></button>
                 <button type="button" title={row.active ? 'غیرفعال‌کردن' : 'فعال‌کردن'} disabled={busy} onClick={() => toggle(row)}>{row.active ? '⏸' : '▶'}</button>
                 <button type="button" className="danger" title="حذف" disabled={busy} onClick={() => del(row)}><Trash width="14" height="14" /></button>
               </span>

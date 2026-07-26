@@ -25,9 +25,14 @@ function enrich(v: any) {
     hospitalId: v.hospitalId,
     techId: v.techId,
     // نامِ رابطه اگر بود، وگرنه denormalized (رکوردهای قدیمی/موجودیتِ حذف‌شده)
-    surgeonName: v.surgeon?.name ?? v.surgeonName,
+    surgeonName: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName,
     hospitalName: v.hospital?.name ?? v.hospitalName,
-    techName: v.tech ? `${v.tech.firstName ?? ''} ${v.tech.lastName ?? ''}`.trim() : null,
+    techName: v.tech ? `${v.tech.person.firstName} ${v.tech.person.lastName}`.trim() : null,
+    procedureTypeId: v.procedureTypeId,
+    procedureTypeName: v.procedureType?.name ?? v.opType,
+    diagnosisId: v.diagnosisId,
+    diagnosisTitle: v.diagnosis?.title ?? null,
+    opReport: v.opReport,
     opType: v.opType,
     opDate: v.opDate,
     opStatus: v.opStatus,
@@ -37,7 +42,15 @@ function enrich(v: any) {
   };
 }
 
-const INCLUDE_PATIENT = { patient: true, surgeon: true, hospital: true, tech: true } as const;
+// جراح و کارشناس هویتشان در Person است، پس همیشه با آن خوانده می‌شوند.
+const INCLUDE_PATIENT = {
+  patient: true,
+  hospital: true,
+  procedureType: true,
+  diagnosis: true,
+  surgeon: { include: { person: true } },
+  tech: { include: { person: true } },
+} as const;
 
 @Injectable()
 export class PatientsService {
@@ -68,13 +81,18 @@ export class PatientsService {
         { patient: { nationalId: { contains: t } } },
         { surgeonName: { contains: t, mode: 'insensitive' } },
         { hospitalName: { contains: t, mode: 'insensitive' } },
-        { surgeon: { name: { contains: t, mode: 'insensitive' } } },
-        { hospital: { name: { contains: t, mode: 'insensitive' } } },
-        { opType: { contains: t, mode: 'insensitive' } },
-        { tech: { OR: [
+        { surgeon: { person: { OR: [
           { firstName: { contains: t, mode: 'insensitive' } },
           { lastName: { contains: t, mode: 'insensitive' } },
-        ] } },
+        ] } } },
+        { procedureType: { name: { contains: t, mode: 'insensitive' } } },
+        { diagnosis: { title: { contains: t, mode: 'insensitive' } } },
+        { hospital: { name: { contains: t, mode: 'insensitive' } } },
+        { opType: { contains: t, mode: 'insensitive' } },
+        { tech: { person: { OR: [
+          { firstName: { contains: t, mode: 'insensitive' } },
+          { lastName: { contains: t, mode: 'insensitive' } },
+        ] } } },
       ];
     }
     const rows = await this.prisma.visit.findMany({
@@ -129,10 +147,11 @@ export class PatientsService {
   private async resolveRefs(tx: any, dto: { surgeonId?: number | null; hospitalId?: number | null; techId?: number | null }) {
     const out: any = {};
     if (dto.surgeonId != null) {
-      const s = await tx.surgeon.findUnique({ where: { id: dto.surgeonId } });
+      const s = await tx.surgeon.findUnique({ where: { id: dto.surgeonId }, include: { person: true } });
       if (!s) throw new NotFoundException('جراح یافت نشد');
       out.surgeonId = s.id;
-      out.surgeonName = s.name;
+      // عکسِ لحظهٔ ثبت — فقط اگر روزی جراح حذف شود خوانده می‌شود.
+      out.surgeonName = `${s.person.firstName} ${s.person.lastName}`.trim();
     }
     if (dto.hospitalId != null) {
       const h = await tx.hospital.findUnique({ where: { id: dto.hospitalId } });

@@ -10,18 +10,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// همهٔ کاربران — پروفایلِ استاندارد + سطحِ دسترسیِ ۱..۶
+/// هویتِ انسانی — تک‌منبعِ مشخصاتِ هر آدم. نقش‌ها (کاربرِ سامانه، جراح) روی همین
+/// یک رکورد سوار می‌شوند، پس کسی که هم کارمند است هم جراح، دو بار وارد نمی‌شود و
+/// افزودنِ یک فیلد (مثلاً ایمیل) یک migration است نه سه تا.
+///
+/// ⚠️ Patient عمداً اینجا نیست: حجمش (ده‌ها هزار رکورد)، چرخهٔ حیاتش (soft-delete)
+/// و قواعدِ حریمِ خصوصی‌اش با کارکنان فرق دارد؛ یکی‌کردنشان تعمیمِ بیش‌ازحد است.
+model Person {
+  id         Int       @id @default(autoincrement())
+  firstName  String    @map("first_name")
+  lastName   String    @map("last_name")
+  nationalId String?   @unique @map("national_id")
+  phone      String?   @unique
+  email      String?
+  birthDate  DateTime? @map("birth_date")
+  photo      String?   // dataURL (فعلاً؛ بعداً object-storage)
+  address    String?
+  city       String?
+  iban       String?   // شبا — برای پرداختِ سهم/دستمزد
+  notes      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  account Account?
+  surgeon Surgeon?
+
+  @@index([lastName, firstName])
+  @@map("people")
+}
+
+/// نقشِ «کاربرِ سامانه» — فقط اعتبارنامه و سطحِ دسترسی. هویت در Person است.
 /// سطوح: 1=بازدید 2=کارشناس 3=کارشناس‌ادمین 4=سوپروایزر 5=ادمین 6=سوپرادمین
 model Account {
   id           Int       @id @default(autoincrement())
-  firstName    String?   @map("first_name")
-  lastName     String?   @map("last_name")
+  person       Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId     Int       @unique @map("person_id")
   username     String?   @unique
-  phone        String?   @unique
   passwordHash String    @map("password_hash")
-  selfie       String?   // dataURL سلفی (فعلاً؛ بعداً object-storage)
   level        Int       @default(1) // 1..6
   status       String    @default("pending") // pending | active | disabled | rejected
+  fee          Int?      // دستمزدِ کارشناس (تومان) — مالیِ سبک؛ قرارداد در حسابداری
   approvedById Int?      @map("approved_by_id")
   approvedAt   DateTime? @map("approved_at")
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -33,11 +61,15 @@ model Account {
   @@map("accounts")
 }
 
-/// جراح — موجودیتِ تعریف‌شده (قرارداد/مالی بعداً در ماژولِ حسابداری اضافه می‌شود)
+/// نقشِ «جراح» — هویت در Person است. اگر جراح بخواهد وارد پورتال شود، کافی است
+/// روی همان Person یک Account هم ساخته شود؛ هیچ مشخصاتی دوباره وارد نمی‌شود.
+/// قرارداد/درصدِ سهم عمداً اینجا نیست و به ماژولِ حسابداری می‌رود.
 model Surgeon {
   id        Int      @id @default(autoincrement())
-  name      String
-  phone     String?
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId  Int      @unique @map("person_id")
+  specialty String?  // تخصص
+  licenseNo String?  @map("license_no") // شمارهٔ نظامِ پزشکی
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -46,16 +78,52 @@ model Surgeon {
   @@map("surgeons")
 }
 
-/// بیمارستان — موجودیتِ تعریف‌شده
+/// بیمارستان/مرکزِ درمانی — سازمان است نه انسان، پس Person ندارد.
+/// ضریبِ تعرفه و مواردِ مالی به ماژولِ حسابداری می‌روند.
 model Hospital {
+  id           Int      @id @default(autoincrement())
+  name         String
+  city         String?
+  address      String?
+  phone        String?
+  contactName  String?  @map("contact_name")  // رابطِ هماهنگی
+  contactPhone String?  @map("contact_phone")
+  notes        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  visits Visit[]
+
+  @@map("hospitals")
+}
+
+/// نوعِ عمل — موجودیتِ تعریف‌شده، نه متنِ آزاد.
+/// دلیل: گزارش‌گیری و تحلیلِ خودکار روی متنِ آزاد ممکن نیست؛ «دیسککتومی» و
+/// «دیسکتومی» و «Discectomy» سه چیزِ متفاوت می‌شوند.
+model ProcedureType {
   id        Int      @id @default(autoincrement())
-  name      String
+  name      String   @unique
+  code      String?  // کدِ داخلی/ملی
+  notes     String?
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
 
   visits Visit[]
 
-  @@map("hospitals")
+  @@map("procedure_types")
+}
+
+/// تشخیص — همان استدلالِ ProcedureType. icdCode برای نگاشتِ بعدی به ICD-10.
+model Diagnosis {
+  id        Int      @id @default(autoincrement())
+  title     String   @unique
+  icdCode   String?  @map("icd_code")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visits Visit[]
+
+  @@map("diagnoses")
 }
 
 /// پس‌کی/اثر انگشت (WebAuthn) — هر کاربر می‌تواند چند دستگاه ثبت کند
@@ -158,16 +226,26 @@ model Visit {
   patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
   patientId    Int       @map("patient_id")
   seq          Int       @default(1) // شمارهٔ مراجعهٔ بیمار → کدِ AM-0001-V2
-  // نامِ جراح/بیمارستان denormalized می‌ماند (fallback برای رکوردهای قدیمی/حذفِ موجودیت)
+  // عکسِ لحظهٔ ثبت — فقط وقتی خوانده می‌شود که رابطه از بین رفته باشد (جراح/بیمارستانِ
+  // حذف‌شده). عمداً با تغییرِ نامِ موجودیت به‌روز نمی‌شود؛ عکسی که بازنویسی شود عکس نیست.
   surgeonName  String?   @map("surgeon_name")
   hospitalName String?   @map("hospital_name")
+  opType       String?   @map("op_type") // عکسِ لحظه‌ای از نامِ نوعِ عمل
   surgeon      Surgeon?  @relation(fields: [surgeonId], references: [id], onDelete: SetNull)
   surgeonId    Int?      @map("surgeon_id")
   hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
   hospitalId   Int?      @map("hospital_id")
   tech         Account?  @relation("VisitTech", fields: [techId], references: [id], onDelete: SetNull)
   techId       Int?      @map("tech_id") // کارشناسِ منتسب (از accounts)
-  opType       String?   @map("op_type") // نوعِ عمل
+
+  procedureType   ProcedureType? @relation(fields: [procedureTypeId], references: [id], onDelete: SetNull)
+  procedureTypeId Int?           @map("procedure_type_id")
+  diagnosis       Diagnosis?     @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
+  diagnosisId     Int?           @map("diagnosis_id")
+  /// شرحِ عمل — متنِ جراح. برخلافِ تشخیص و نوعِ عمل، اینجا متنِ آزاد درست است:
+  /// روایتِ بالینی است، نه چیزی که رویش گروه‌بندی/گزارش‌گیری شود.
+  opReport        String?        @map("op_report")
+
   opDate       DateTime? @map("op_date") // تاریخِ عمل
   opStatus     String    @default("pending") @map("op_status") // pending | done | cancelled
   amount       Int       @default(0) // تومان
@@ -181,6 +259,9 @@ model Visit {
   @@index([patientId])
   @@index([opStatus])
   @@index([opDate])
+  @@index([surgeonId]) // پورتالِ جراح: «مراجعه‌های من»
+  @@index([procedureTypeId])
+  @@index([diagnosisId])
   @@map("visits")
 }
 

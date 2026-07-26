@@ -17,31 +17,70 @@ import { Feature } from '../auth/feature.decorator';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 
-class DefCreateDto {
+/** جراح: هویت (نام/تلفن) به Person می‌رود، تخصص و نظام‌پزشکی روی خودِ نقش می‌مانَد. */
+class SurgeonCreateDto {
   @IsString({ message: 'نام را وارد کنید' })
   @MinLength(2, { message: 'نام کوتاه است' })
-  @MaxLength(80, { message: 'نام طولانی است' })
-  name!: string;
+  @MaxLength(60)
+  firstName!: string;
+
+  @IsString({ message: 'نام خانوادگی را وارد کنید' })
+  @MinLength(2, { message: 'نام خانوادگی کوتاه است' })
+  @MaxLength(60)
+  lastName!: string;
 
   @IsOptional()
   @Matches(/^09\d{9}$/, { message: 'شمارهٔ موبایل نامعتبر است' })
   phone?: string;
-}
 
-class DefPatchDto {
   @IsOptional()
   @IsString()
-  @MinLength(2, { message: 'نام کوتاه است' })
   @MaxLength(80)
-  name?: string;
+  specialty?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  licenseNo?: string;
+}
+
+class SurgeonPatchDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) firstName?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) lastName?: string;
 
   @IsOptional()
   @Matches(/^09\d{9}$|^$/, { message: 'شمارهٔ موبایل نامعتبر است' })
   phone?: string;
 
-  @IsOptional()
-  @IsBoolean()
-  active?: boolean;
+  @IsOptional() @IsString() @MaxLength(80) specialty?: string;
+  @IsOptional() @IsString() @MaxLength(40) licenseNo?: string;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
+/** بیمارستان: سازمان است، پس Person ندارد — ولی پروفایلِ کامل دارد. */
+class HospitalCreateDto {
+  @IsString({ message: 'نام را وارد کنید' })
+  @MinLength(2, { message: 'نام کوتاه است' })
+  @MaxLength(80, { message: 'نام طولانی است' })
+  name!: string;
+
+  @IsOptional() @IsString() @MaxLength(40) city?: string;
+  @IsOptional() @IsString() @MaxLength(200) address?: string;
+  @IsOptional() @IsString() @MaxLength(20) phone?: string;
+  @IsOptional() @IsString() @MaxLength(60) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(20) contactPhone?: string;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+}
+
+class HospitalPatchDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
+  @IsOptional() @IsString() @MaxLength(40) city?: string;
+  @IsOptional() @IsString() @MaxLength(200) address?: string;
+  @IsOptional() @IsString() @MaxLength(20) phone?: string;
+  @IsOptional() @IsString() @MaxLength(60) contactName?: string;
+  @IsOptional() @IsString() @MaxLength(20) contactPhone?: string;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  @IsOptional() @IsBoolean() active?: boolean;
 }
 
 // تعریف‌های ماژولِ بیماران (جراحان/بیمارستان‌ها/کارشناسان) — همان گاردِ dashboard
@@ -59,13 +98,13 @@ export class DefinitionsController {
 
   @RequirePermissions('definitions.manage')
   @Post('surgeons')
-  addSurgeon(@Body() dto: DefCreateDto) {
+  addSurgeon(@Body() dto: SurgeonCreateDto) {
     return this.defs.createSurgeon(dto);
   }
 
   @RequirePermissions('definitions.manage')
   @Patch('surgeons/:id')
-  patchSurgeon(@Param('id', ParseIntPipe) id: number, @Body() dto: DefPatchDto) {
+  patchSurgeon(@Param('id', ParseIntPipe) id: number, @Body() dto: SurgeonPatchDto) {
     return this.defs.updateSurgeon(id, dto);
   }
 
@@ -83,13 +122,13 @@ export class DefinitionsController {
 
   @RequirePermissions('definitions.manage')
   @Post('hospitals')
-  addHospital(@Body() dto: DefCreateDto) {
-    return this.defs.createHospital(dto.name);
+  addHospital(@Body() dto: HospitalCreateDto) {
+    return this.defs.createHospital(dto);
   }
 
   @RequirePermissions('definitions.manage')
   @Patch('hospitals/:id')
-  patchHospital(@Param('id', ParseIntPipe) id: number, @Body() dto: DefPatchDto) {
+  patchHospital(@Param('id', ParseIntPipe) id: number, @Body() dto: HospitalPatchDto) {
     return this.defs.updateHospital(id, dto);
   }
 
