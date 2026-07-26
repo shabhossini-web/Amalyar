@@ -33,6 +33,10 @@ export default function Login() {
 
   const [tab, setTab] = useState('login'); // login | signup
   const [firstAdmin, setFirstAdmin] = useState(false);
+  // این میزبان به هیچ شرکتی نگاشته نشده. با routingِ wildcard هر زیردامنه‌ای به
+  // اینجا می‌رسد، پس باید صریح بگوییم شرکتی وجود ندارد — نه اینکه فرمِ ورودِ
+  // ظاهراً سالم نشان دهیم که کاربر بی‌نتیجه در آن رمز بزند.
+  const [tenantMissing, setTenantMissing] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -88,8 +92,10 @@ export default function Login() {
           setFirstAdmin(true);
           setTab('signup');
         }
-      } catch {
-        /* بی‌خیال */
+      } catch (e) {
+        // ۴۰۴ فقط از میان‌افزارِ tenant می‌آید؛ یعنی دامنه به شرکتی وصل نیست.
+        // خطای شبکه/سرور نباید صفحه را قفل کند، پس بقیهٔ خطاها نادیده می‌مانند.
+        if (alive && e?.status === 404) setTenantMissing(true);
       }
     })();
     return () => {
@@ -218,6 +224,34 @@ export default function Login() {
       {node}
     </label>
   );
+
+  // دامنهٔ ناشناخته: نه فرمِ ورود، نه ثبت‌نام — فقط یک پیامِ روشن.
+  if (tenantMissing) {
+    return (
+      <div className="lg">
+        <div className="lg-bg" aria-hidden="true" />
+        <div className="lg-orbs" aria-hidden="true"><span className="orb o1" /><span className="orb o2" /></div>
+        <div className="glass lg-card">
+          <span className="glass-glow" aria-hidden="true" />
+          <header className="lg-brand">
+            <Mark className="lg-mark" gradient aria-hidden="true" />
+            <div className="lg-word">عمل<span className="grad-text">‌یار</span></div>
+          </header>
+          <div className="lg-done">
+            <div className="lg-done-ic" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 8v5" /><path d="M12 16h.01" /></svg>
+            </div>
+            <h2>شرکتی روی این نشانی نیست</h2>
+            <p>
+              نشانی <b dir="ltr">{typeof window === 'undefined' ? '' : window.location.hostname}</b> به هیچ شرکتی در عمل‌یار وصل نیست.
+              اگر نشانی را دستی تایپ کرده‌اید، املای آن را بررسی کنید؛ در غیر این صورت با مدیر سامانه تماس بگیرید.
+            </p>
+            <a className="lg-btn" href="https://amalyar.com" style={{ display: 'block', textAlign: 'center', lineHeight: '52px', textDecoration: 'none' }}>رفتن به سایت عمل‌یار</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="lg">
