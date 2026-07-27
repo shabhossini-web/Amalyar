@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
+import PersonFields, { personErrors } from './PersonFields.jsx';
+import { toEnDigits } from '../lib/identity.js';
+import './definitions.css';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import './users.css';
@@ -41,6 +44,81 @@ const faDate = (d) => {
   }
 };
 
+/** شیتِ تکمیلِ پروفایل — همان PersonFields جراح، تا شکلِ «شخص» همه‌جا یکی بماند. */
+function ProfileSheet({ id, onClose, onSaved, onError }) {
+  const [form, setForm] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api(`/accounts/${id}`)
+      .then((d) => { if (alive) setForm({ ...d, fee: d.fee ?? '' }); })
+      .catch((e) => onError(e.message));
+    return () => { alive = false; };
+  }, [id, onError]);
+
+  const save = async () => {
+    if (busy || !form) return;
+    const e = personErrors(form);
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    setBusy(true);
+    try {
+      const body = {};
+      for (const k of ['firstName', 'lastName', 'phone', 'nationalId', 'email', 'city', 'address', 'iban', 'notes']) {
+        body[k] = form[k] ?? '';
+      }
+      const fee = String(form.fee ?? '').trim();
+      if (fee !== '') body.fee = Number(toEnDigits(fee).replace(/[^0-9]/g, '')) || 0;
+      await api(`/accounts/${id}`, { method: 'PATCH', body });
+      await onSaved();
+    } catch (err) {
+      onError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="df-overlay" onClick={(ev) => { if (ev.target === ev.currentTarget && !busy) onClose(); }}>
+      <section className="df-sheet">
+        <header className="df-sheet-head">
+          <b>پروفایلِ کارشناس</b>
+          <button type="button" className="df-x" onClick={onClose} aria-label="بستن">✕</button>
+        </header>
+        <div className="df-sheet-body">
+          {!form ? <p className="us-empty">در حال بارگذاری…</p> : (
+            <>
+              <p className="us-hint" style={{ marginTop: 0 }}>
+                نام، موبایل و عکس هنگامِ ثبت‌نام توسطِ خودِ کارشناس پر شده‌اند.
+                کد ملی، شبا و دستمزد فقط از این‌جا تکمیل می‌شوند.
+              </p>
+              <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
+              <label className="pf-field">
+                <span>دستمزد (تومان)</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  value={form.fee ?? ''}
+                  onChange={(ev) => setForm((f) => ({ ...f, fee: toEnDigits(ev.target.value).replace(/[^0-9]/g, '') }))}
+                  disabled={busy}
+                />
+                <em className="pf-hint">قراردادِ کاملِ مالی بعداً در ماژولِ حسابداری</em>
+              </label>
+            </>
+          )}
+        </div>
+        <footer className="df-sheet-foot">
+          <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>انصراف</button>
+          <button type="button" className="df-save" onClick={save} disabled={busy || !form}>{busy ? '…' : 'ذخیره'}</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 export default function Users() {
   const { user } = useAuth();
   const [tab, setTab] = useState('pending'); // pending | all | perm
@@ -50,6 +128,7 @@ export default function Users() {
   const [levelSel, setLevelSel] = useState({}); // id → سطحِ انتخابی
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
+  const [profileId, setProfileId] = useState(0);
 
   useEffect(() => { document.title = 'عمل‌یار — مدیریت کاربران'; }, []);
   useEffect(() => {
@@ -225,6 +304,7 @@ export default function Users() {
                       {LEVELS.map((l) => <option key={l.v} value={l.v}>{l.v} — {l.l}</option>)}
                     </select>
                   </label>
+                  <button type="button" className="us-btn" onClick={() => setProfileId(row.id)}>پروفایل</button>
                 </div>
               </div>
             ))}
@@ -280,6 +360,15 @@ export default function Users() {
           </div>
         )}
       </div>
+
+      {profileId > 0 && (
+        <ProfileSheet
+          id={profileId}
+          onClose={() => setProfileId(0)}
+          onSaved={async () => { setProfileId(0); setToast('پروفایل ذخیره شد ✓'); await load(); }}
+          onError={setToast}
+        />
+      )}
 
       <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>

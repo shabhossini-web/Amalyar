@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEVEL } from '../common/levels';
-import { isValidIban, isValidNationalId, normalizeIban, toEnDigits } from '../common/identity';
+import { buildPersonPatch, PersonInput } from '../common/person';
 
 /**
  * تعریف‌های عملیاتیِ ماژولِ بیماران: جراحان و بیمارستان‌ها (+ فهرستِ کارشناسان).
@@ -43,32 +43,6 @@ export class DefinitionsService {
     };
   }
 
-  /// فیلدهای هویتی یک‌جا اعتبارسنجی و نرمال می‌شوند تا هر نقشی که Person می‌سازد
-  /// دقیقاً همان قواعد را بگیرد.
-  private personPatch(dto: PersonInput, forCreate: boolean) {
-    const out: Record<string, unknown> = {};
-    if (forCreate || dto.firstName !== undefined) out.firstName = dto.firstName?.trim();
-    if (forCreate || dto.lastName !== undefined) out.lastName = dto.lastName?.trim();
-    if (dto.phone !== undefined) out.phone = toEnDigits(dto.phone).trim() || null;
-    if (dto.email !== undefined) out.email = dto.email?.trim() || null;
-    if (dto.city !== undefined) out.city = dto.city?.trim() || null;
-    if (dto.address !== undefined) out.address = dto.address?.trim() || null;
-    if (dto.photo !== undefined) out.photo = dto.photo || null;
-    if (dto.notes !== undefined) out.notes = dto.notes?.trim() || null;
-
-    if (dto.nationalId !== undefined) {
-      const nid = toEnDigits(dto.nationalId).replace(/[^0-9]/g, '');
-      if (nid && !isValidNationalId(nid)) throw new BadRequestException('کدِ ملی معتبر نیست');
-      out.nationalId = nid || null;
-    }
-    if (dto.iban !== undefined) {
-      const raw = (dto.iban ?? '').trim();
-      if (raw && !isValidIban(raw)) throw new BadRequestException('شمارهٔ شبا معتبر نیست');
-      out.iban = raw ? normalizeIban(raw) : null;
-    }
-    return out;
-  }
-
   private static readonly SURGEON_INCLUDE = {
     person: true,
     _count: { select: { visits: true } },
@@ -87,7 +61,7 @@ export class DefinitionsService {
       data: {
         specialty: dto.specialty?.trim() || null,
         licenseNo: dto.licenseNo?.trim() || null,
-        person: { create: this.personPatch(dto, true) as any },
+        person: { create: buildPersonPatch(dto, true) as any },
       },
       include: DefinitionsService.SURGEON_INCLUDE,
     });
@@ -97,7 +71,7 @@ export class DefinitionsService {
   async updateSurgeon(id: number, dto: PersonInput & { specialty?: string; licenseNo?: string; active?: boolean }) {
     const s = await this.prisma.surgeon.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('جراح یافت نشد');
-    const personPatch = this.personPatch(dto, false);
+    const personPatch = buildPersonPatch(dto, false);
     const updated = await this.prisma.surgeon.update({
       where: { id },
       data: {
@@ -299,16 +273,3 @@ export class DefinitionsService {
   }
 }
 
-/** فیلدهای هویتیِ مشترک — هر نقشی که Person می‌سازد از همین شکل استفاده می‌کند. */
-export type PersonInput = {
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-  nationalId?: string;
-  email?: string;
-  city?: string;
-  address?: string;
-  iban?: string;
-  photo?: string;
-  notes?: string;
-};

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { LEVEL } from '../common/levels';
+import { buildPersonPatch, PersonInput } from '../common/person';
 
 @Injectable()
 export class AccountsService {
@@ -68,5 +69,47 @@ export class AccountsService {
       include: { person: true },
     });
     return this.auth.publicUser(updated);
+  }
+
+  /// پروفایلِ کاملِ یک حساب — برای صفحهٔ ویرایشِ سوپرادمین.
+  async get(id: number) {
+    const acc = await this.prisma.account.findUnique({ where: { id }, include: { person: true } });
+    if (!acc) throw new NotFoundException('حساب یافت نشد');
+    const p = acc.person;
+    return {
+      ...this.auth.publicUser(acc),
+      fee: acc.fee,
+      createdAt: acc.createdAt,
+      nationalId: p.nationalId,
+      email: p.email,
+      birthDate: p.birthDate,
+      city: p.city,
+      address: p.address,
+      iban: p.iban,
+      notes: p.notes,
+    };
+  }
+
+  /**
+   * تکمیلِ پروفایل توسط سوپرادمین.
+   *
+   * ثبت‌نام فقط نام، موبایل و عکس را پر می‌کند؛ کدِ ملی، شبا و دستمزد این‌جا
+   * تکمیل می‌شوند. عمداً از مسیرِ خودِ کاربر (`/auth/profile`) جدا است: شبا
+   * مقصدِ پرداخت است و دستمزد رقمِ قرارداد — هیچ‌کدام نباید با حسابِ لو رفتهٔ
+   * خودِ کاربر قابلِ تغییر باشند.
+   */
+  async updateProfile(id: number, dto: PersonInput & { fee?: number | null }) {
+    const acc = await this.prisma.account.findUnique({ where: { id } });
+    if (!acc) throw new NotFoundException('حساب یافت نشد');
+
+    const personPatch = buildPersonPatch(dto, false);
+    await this.prisma.account.update({
+      where: { id },
+      data: {
+        ...(dto.fee !== undefined ? { fee: dto.fee === null ? null : Math.max(0, Math.trunc(dto.fee)) } : {}),
+        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+      },
+    });
+    return this.get(id);
   }
 }

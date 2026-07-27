@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 import { AccountsService } from './accounts.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LevelGuard } from '../auth/level.guard';
@@ -6,6 +7,21 @@ import { MinLevel } from '../auth/min-level.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { LEVEL } from '../common/levels';
 import { ApproveDto } from './dto/approve.dto';
+
+/** همان فیلدهای هویتیِ جراح — تا شکلِ «شخص» همه‌جا یکی بماند. */
+class StaffProfileDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) firstName?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) lastName?: string;
+  @IsOptional() @Matches(/^09\d{9}$|^$/, { message: 'شمارهٔ موبایل نامعتبر است' }) phone?: string;
+  @IsOptional() @IsString() @MaxLength(20) nationalId?: string;
+  @IsOptional() @IsString() @MaxLength(120) email?: string;
+  @IsOptional() @IsString() @MaxLength(40) city?: string;
+  @IsOptional() @IsString() @MaxLength(200) address?: string;
+  @IsOptional() @IsString() @MaxLength(40) iban?: string;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  /** دستمزدِ کارشناس (تومان) — مالیِ سبک؛ قراردادِ کامل در ماژولِ حسابداری. */
+  @IsOptional() @IsInt({ message: 'دستمزد باید عدد باشد' }) @Min(0) fee?: number;
+}
 
 // مدیریتِ کاربران — فقط سوپرادمین (سطح ۶)
 @Controller('accounts')
@@ -22,6 +38,16 @@ export class AccountsController {
   @Get('pending')
   pending() {
     return this.accounts.list('pending');
+  }
+
+  @Get(':id')
+  detail(@Param('id', ParseIntPipe) id: number) {
+    return this.accounts.get(id);
+  }
+
+  @Patch(':id')
+  updateProfile(@Param('id', ParseIntPipe) id: number, @Body() dto: StaffProfileDto) {
+    return this.accounts.updateProfile(id, dto);
   }
 
   @Post(':id/approve')
