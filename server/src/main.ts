@@ -4,6 +4,7 @@ import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { allowedOrigins } from './common/security';
 import { restoreApiPrefix } from './common/api-prefix';
+import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 
 async function bootstrap() {
   // bodyParser را خودمان با سقفِ بالاتر می‌گذاریم (سلفیِ dataURL بزرگ است)
@@ -21,6 +22,8 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  // نقضِ یکتایی و «رکورد نیست» باید پیامِ روشن بدهند، نه 500 خام.
+  app.useGlobalFilters(new PrismaExceptionFilter());
   const origins = allowedOrigins();
   app.enableCors({ origin: origins, credentials: true, methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] });
 

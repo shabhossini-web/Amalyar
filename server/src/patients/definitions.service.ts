@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEVEL } from '../common/levels';
+import { isValidIban, isValidNationalId, normalizeIban, toEnDigits } from '../common/identity';
 
 /**
  * تعریف‌های عملیاتیِ ماژولِ بیماران: جراحان و بیمارستان‌ها (+ فهرستِ کارشناسان).
@@ -19,18 +20,53 @@ export class DefinitionsService {
   }
 
   /// جراح = نقش روی Person؛ نام و تلفن از همان‌جا می‌آیند، نه از خودِ رکوردِ جراح.
-  private surgeonView(s: { id: number; active: boolean; specialty: string | null; licenseNo: string | null; person: { firstName: string; lastName: string; phone: string | null }; _count: { visits: number } }) {
+  private surgeonView(s: any) {
+    const p = s.person;
     return {
       id: s.id,
-      name: `${s.person.firstName} ${s.person.lastName}`.trim(),
-      firstName: s.person.firstName,
-      lastName: s.person.lastName,
-      phone: s.person.phone,
+      personId: s.personId,
+      name: `${p.firstName} ${p.lastName}`.trim(),
+      firstName: p.firstName,
+      lastName: p.lastName,
+      phone: p.phone,
+      nationalId: p.nationalId,
+      email: p.email,
+      city: p.city,
+      address: p.address,
+      iban: p.iban,
+      photo: p.photo,
+      notes: p.notes,
       specialty: s.specialty,
       licenseNo: s.licenseNo,
       active: s.active,
       visitCount: s._count.visits,
     };
+  }
+
+  /// فیلدهای هویتی یک‌جا اعتبارسنجی و نرمال می‌شوند تا هر نقشی که Person می‌سازد
+  /// دقیقاً همان قواعد را بگیرد.
+  private personPatch(dto: PersonInput, forCreate: boolean) {
+    const out: Record<string, unknown> = {};
+    if (forCreate || dto.firstName !== undefined) out.firstName = dto.firstName?.trim();
+    if (forCreate || dto.lastName !== undefined) out.lastName = dto.lastName?.trim();
+    if (dto.phone !== undefined) out.phone = toEnDigits(dto.phone).trim() || null;
+    if (dto.email !== undefined) out.email = dto.email?.trim() || null;
+    if (dto.city !== undefined) out.city = dto.city?.trim() || null;
+    if (dto.address !== undefined) out.address = dto.address?.trim() || null;
+    if (dto.photo !== undefined) out.photo = dto.photo || null;
+    if (dto.notes !== undefined) out.notes = dto.notes?.trim() || null;
+
+    if (dto.nationalId !== undefined) {
+      const nid = toEnDigits(dto.nationalId).replace(/[^0-9]/g, '');
+      if (nid && !isValidNationalId(nid)) throw new BadRequestException('کدِ ملی معتبر نیست');
+      out.nationalId = nid || null;
+    }
+    if (dto.iban !== undefined) {
+      const raw = (dto.iban ?? '').trim();
+      if (raw && !isValidIban(raw)) throw new BadRequestException('شمارهٔ شبا معتبر نیست');
+      out.iban = raw ? normalizeIban(raw) : null;
+    }
+    return out;
   }
 
   private static readonly SURGEON_INCLUDE = {
@@ -46,35 +82,22 @@ export class DefinitionsService {
     return rows.map((s) => this.surgeonView(s));
   }
 
-  async createSurgeon(dto: { firstName: string; lastName: string; phone?: string; specialty?: string; licenseNo?: string }) {
+  async createSurgeon(dto: PersonInput & { specialty?: string; licenseNo?: string }) {
     const row = await this.prisma.surgeon.create({
       data: {
         specialty: dto.specialty?.trim() || null,
         licenseNo: dto.licenseNo?.trim() || null,
-        person: {
-          create: {
-            firstName: dto.firstName.trim(),
-            lastName: dto.lastName.trim(),
-            phone: dto.phone?.trim() || null,
-          },
-        },
+        person: { create: this.personPatch(dto, true) as any },
       },
       include: DefinitionsService.SURGEON_INCLUDE,
     });
     return this.surgeonView(row);
   }
 
-  async updateSurgeon(
-    id: number,
-    dto: { firstName?: string; lastName?: string; phone?: string; specialty?: string; licenseNo?: string; active?: boolean },
-  ) {
+  async updateSurgeon(id: number, dto: PersonInput & { specialty?: string; licenseNo?: string; active?: boolean }) {
     const s = await this.prisma.surgeon.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('جراح یافت نشد');
-    const personPatch = {
-      ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
-      ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() } : {}),
-      ...(dto.phone !== undefined ? { phone: dto.phone?.trim() || null } : {}),
-    };
+    const personPatch = this.personPatch(dto, false);
     const updated = await this.prisma.surgeon.update({
       where: { id },
       data: {
@@ -181,4 +204,111 @@ export class DefinitionsService {
       displayName: `${a.person.firstName} ${a.person.lastName}`.trim() || a.username || a.person.phone,
     }));
   }
+
+  // ── انواعِ عمل و تشخیص‌ها ────────────────────────────────────
+  // موجودیت‌اند نه متنِ آزاد، تا گزارش‌گیری و تحلیل روی داده ممکن باشد.
+
+  async listProcedureTypes() {
+    const rows = await this.prisma.procedureType.findMany({
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      include: { _count: { select: { visits: true } } },
+    });
+    return rows.map((r) => ({ id: r.id, name: r.name, code: r.code, notes: r.notes, active: r.active, visitCount: r._count.visits }));
+  }
+
+  async createProcedureType(dto: { name: string; code?: string; notes?: string }) {
+    await this.uniqueName('procedureType', 'name', dto.name);
+    return this.prisma.procedureType.create({
+      data: { name: dto.name.trim(), code: dto.code?.trim() || null, notes: dto.notes?.trim() || null },
+    });
+  }
+
+  async updateProcedureType(id: number, dto: { name?: string; code?: string; notes?: string; active?: boolean }) {
+    const row = await this.prisma.procedureType.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('نوعِ عمل یافت نشد');
+    if (dto.name) await this.uniqueName('procedureType', 'name', dto.name, id);
+    return this.prisma.procedureType.update({
+      where: { id },
+      data: {
+        ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.code !== undefined ? { code: dto.code?.trim() || null } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+      },
+    });
+  }
+
+  async deleteProcedureType(id: number) {
+    return this.deleteOrDeactivate('procedureType', id, 'نوعِ عمل یافت نشد');
+  }
+
+  async listDiagnoses() {
+    const rows = await this.prisma.diagnosis.findMany({
+      orderBy: [{ active: 'desc' }, { title: 'asc' }],
+      include: { _count: { select: { visits: true } } },
+    });
+    return rows.map((r) => ({ id: r.id, title: r.title, icdCode: r.icdCode, active: r.active, visitCount: r._count.visits }));
+  }
+
+  async createDiagnosis(dto: { title: string; icdCode?: string }) {
+    await this.uniqueName('diagnosis', 'title', dto.title);
+    return this.prisma.diagnosis.create({
+      data: { title: dto.title.trim(), icdCode: dto.icdCode?.trim() || null },
+    });
+  }
+
+  async updateDiagnosis(id: number, dto: { title?: string; icdCode?: string; active?: boolean }) {
+    const row = await this.prisma.diagnosis.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('تشخیص یافت نشد');
+    if (dto.title) await this.uniqueName('diagnosis', 'title', dto.title, id);
+    return this.prisma.diagnosis.update({
+      where: { id },
+      data: {
+        ...(dto.title ? { title: dto.title.trim() } : {}),
+        ...(dto.icdCode !== undefined ? { icdCode: dto.icdCode?.trim() || null } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+      },
+    });
+  }
+
+  async deleteDiagnosis(id: number) {
+    return this.deleteOrDeactivate('diagnosis', id, 'تشخیص یافت نشد');
+  }
+
+  private async uniqueName(model: 'procedureType' | 'diagnosis', field: 'name' | 'title', value: string, exceptId?: number) {
+    const row = await (this.prisma[model] as any).findFirst({
+      where: { [field]: { equals: value.trim(), mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    });
+    if (row) throw new BadRequestException('این عنوان قبلاً ثبت شده است');
+  }
+
+  /// موجودیتی که در مراجعه‌ای استفاده شده حذفِ سخت نمی‌شود — غیرفعال می‌شود تا
+  /// دادهٔ تاریخی نشکند. همان قاعدهٔ جراح و بیمارستان.
+  private async deleteOrDeactivate(model: 'procedureType' | 'diagnosis', id: number, notFound: string) {
+    const row = await (this.prisma[model] as any).findUnique({
+      where: { id },
+      include: { _count: { select: { visits: true } } },
+    });
+    if (!row) throw new NotFoundException(notFound);
+    if (row._count.visits > 0) {
+      await (this.prisma[model] as any).update({ where: { id }, data: { active: false } });
+      return { ok: true, deactivated: true };
+    }
+    await (this.prisma[model] as any).delete({ where: { id } });
+    return { ok: true, deactivated: false };
+  }
 }
+
+/** فیلدهای هویتیِ مشترک — هر نقشی که Person می‌سازد از همین شکل استفاده می‌کند. */
+export type PersonInput = {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  nationalId?: string;
+  email?: string;
+  city?: string;
+  address?: string;
+  iban?: string;
+  photo?: string;
+  notes?: string;
+};

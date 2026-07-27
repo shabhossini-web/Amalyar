@@ -188,6 +188,39 @@ function verifyDeletionOtpScope() {
   );
 }
 
+/**
+ * هر مدلِ schema باید از طریقِ tenant proxy برود. اگر مدلی جا بیفتد، بی‌سروصدا
+ * به کلاینتِ پایه (آدرسِ نامعتبر) می‌خورد و خطایش «Can't reach database server»
+ * می‌شود که علت را پنهان می‌کند. این گارد دقیقاً همان را می‌گیرد.
+ */
+function verifyEveryModelIsTenantScoped(context) {
+  const { Prisma } = require('@prisma/client');
+  const { PrismaService } = require('../dist/prisma/prisma.service');
+
+  const prisma = new PrismaService(context);
+  try {
+    const models = Prisma.dmmf.datamodel.models.map(
+      (m) => m.name.charAt(0).toLowerCase() + m.name.slice(1),
+    );
+    assert.ok(models.length > 5, 'dmmf باید مدل‌ها را برگرداند');
+
+    for (const model of models) {
+      assert.throws(
+        () => context.run(undefined, () => prisma[model]),
+        /Tenant context is not available/,
+        `مدل «${model}» از tenant proxy رد نمی‌شود — به کلاینتِ پایه می‌خورد`,
+      );
+    }
+
+    // دو کلاینتِ متفاوت برای دو شرکت، روی یک مدلِ دلخواه
+    const a = context.run(alpha, () => prisma[models[0]]);
+    const b = context.run(beta, () => prisma[models[0]]);
+    assert.notStrictEqual(a, b, 'مدل‌ها نباید بینِ شرکت‌ها کلاینتِ مشترک بگیرند');
+  } finally {
+    prisma.onModuleDestroy().catch(() => undefined);
+  }
+}
+
 async function main() {
   const context = new TenantContext();
   await verifyJwtBoundary(context);
@@ -195,6 +228,7 @@ async function main() {
   verifyWebauthnBoundary(context);
   await verifyWebOtpBinding();
   verifyDeletionOtpScope();
+  verifyEveryModelIsTenantScoped(context);
   process.stdout.write('tenant isolation boundaries verified\n');
 }
 

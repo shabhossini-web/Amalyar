@@ -1,25 +1,29 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { TenantContext } from '../tenant/tenant-context';
 
-const TENANT_PRISMA_PROPERTIES = new Set([
-  'account',
-  'surgeon',
-  'hospital',
-  'webauthnCredential',
-  'session',
-  'feature',
-  'permission',
-  'auditEvent',
-  'patient',
-  'visit',
-  'otpCode',
+/**
+ * مدل‌ها از خودِ schema خوانده می‌شوند، نه از یک فهرستِ دستی.
+ *
+ * ⚠️ درسِ گران: قبلاً این فهرست hardcode بود و هر مدلِ جدید که یادمان می‌رفت
+ * اضافه کنیم، بی‌سروصدا از proxy رد می‌شد و به کلاینتِ پایه (آدرسِ نامعتبر)
+ * می‌خورد. خطایش «Can't reach database server» بود که هیچ ربطی به علتِ واقعی
+ * نداشت، و TypeScript هم نمی‌توانست بگیردش چون فهرست رشته‌ای و زمان‌اجراست.
+ */
+const MODEL_DELEGATES = new Set(
+  Prisma.dmmf.datamodel.models.map((m) => m.name.charAt(0).toLowerCase() + m.name.slice(1)),
+);
+
+const TENANT_OPERATIONS = new Set([
   '$transaction',
   '$queryRaw',
   '$queryRawUnsafe',
   '$executeRaw',
   '$executeRawUnsafe',
 ]);
+
+const isTenantScoped = (property: string) =>
+  MODEL_DELEGATES.has(property) || TENANT_OPERATIONS.has(property);
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
@@ -33,7 +37,7 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
       get: (target, property, receiver) => {
         // Nest probes properties such as "then" while constructing providers. Only actual
         // Prisma delegates/operations may require request-scoped tenant context.
-        if (typeof property === 'symbol' || !TENANT_PRISMA_PROPERTIES.has(String(property))) {
+        if (typeof property === 'symbol' || !isTenantScoped(String(property))) {
           const own = Reflect.get(target, property, receiver);
           return typeof own === 'function' ? own.bind(target) : own;
         }

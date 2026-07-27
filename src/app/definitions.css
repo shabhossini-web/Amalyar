@@ -1,0 +1,135 @@
+/* تعاریف پایه — همان زبانِ بصریِ داشبورد: تیره، شیشه‌ای، لهجهٔ بنفش */
+.df {
+  min-height: 100vh; background: #07051a; color: #f4f1ff;
+  padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+}
+.df * { box-sizing: border-box; }
+.df-bg {
+  position: fixed; inset: 0; pointer-events: none; opacity: .3;
+  background:
+    radial-gradient(60% 45% at 85% -10%, rgba(124, 58, 237, .5), transparent 70%),
+    radial-gradient(50% 40% at -10% 110%, rgba(0, 212, 255, .18), transparent 70%);
+}
+.df > *:not(.df-bg) { position: relative; }
+
+.df-head { display: flex; align-items: flex-start; gap: 14px; max-width: 900px; margin: 0 auto 18px; }
+.df-back {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  color: #cfc9e8; text-decoration: none; font-size: 12px;
+  padding: 9px 13px; border-radius: 11px;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .24);
+}
+.df-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
+.df-head p { margin: 0; font-size: 12px; color: #9a93bb; line-height: 1.9; }
+
+.df-tabs { display: flex; gap: 6px; overflow-x: auto; max-width: 900px; margin: 0 auto 14px; padding-bottom: 3px; }
+.df-tabs button {
+  flex: 0 0 auto; padding: 10px 16px; border-radius: 12px; font: inherit; font-size: 13px;
+  cursor: pointer; color: #b7b0d4; background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(139, 92, 246, .18);
+}
+.df-tabs button.on {
+  color: #fff; font-weight: 800; border-color: transparent;
+  background: linear-gradient(135deg, #a855f7, #6d28d9);
+}
+
+.df-note {
+  max-width: 900px; margin: 0 auto 12px; padding: 11px 14px; border-radius: 12px;
+  font-size: 12px; line-height: 1.9; color: #c8f7ff;
+  background: rgba(34, 211, 238, .07); border: 1px solid rgba(34, 211, 238, .2);
+}
+
+.df-toolbar { display: flex; align-items: center; gap: 10px; max-width: 900px; margin: 0 auto 12px; }
+.df-add {
+  display: inline-flex; align-items: center; gap: 7px; padding: 11px 17px; border-radius: 12px;
+  font: inherit; font-weight: 800; cursor: pointer; color: #fff; border: 0;
+  background: linear-gradient(135deg, #a855f7, #6d28d9);
+}
+.df-count { margin-right: auto; font-size: 11px; color: #837cA5; color: #837ca5; }
+
+.df-list { display: grid; gap: 9px; max-width: 900px; margin: 0 auto; }
+.df-row {
+  display: flex; align-items: center; gap: 12px; padding: 14px 15px; border-radius: 15px;
+  background: rgba(18, 13, 49, .8); border: 1px solid rgba(139, 92, 246, .16);
+}
+.df-row.off { opacity: .5; }
+.df-row-main { min-width: 0; flex: 1; }
+.df-row-main b { display: block; font-size: 14px; }
+.df-row-main b i { font-style: normal; font-size: 11px; color: #fbbf24; }
+.df-row-main small { display: block; margin-top: 4px; font-size: 11px; color: #8f88af; }
+.df-uses { flex-shrink: 0; font-size: 10px; color: #6f688d; white-space: nowrap; }
+
+.df-acts { display: flex; gap: 5px; flex-shrink: 0; }
+.df-acts button {
+  width: 33px; height: 33px; display: grid; place-items: center; border-radius: 9px;
+  cursor: pointer; color: #cfc9e8; background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(139, 92, 246, .2);
+}
+.df-acts .df-del { color: #fda4af; border-color: rgba(251, 113, 133, .25); }
+.df-dot { width: 9px; height: 9px; border-radius: 50%; background: #6f688d; }
+.df-dot.on { background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, .6); }
+
+.df-empty { padding: 34px; text-align: center; color: #817aa2; font-size: 13px; }
+
+/* ── فرم ── */
+.df-overlay {
+  position: fixed; inset: 0; z-index: 40; padding: 16px; overflow: auto;
+  background: rgba(4, 2, 15, .76); backdrop-filter: blur(6px);
+  display: grid; place-items: start center;
+}
+.df-sheet {
+  width: min(560px, 100%); margin: 3vh 0; border-radius: 20px;
+  background: rgba(18, 13, 49, .96); border: 1px solid rgba(139, 92, 246, .28);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .5);
+}
+.df-sheet-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 17px 19px; border-bottom: 1px solid rgba(139, 92, 246, .16);
+}
+.df-x {
+  width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px;
+  cursor: pointer; color: #cfc9e8; background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(139, 92, 246, .2);
+}
+.df-sheet-body { padding: 19px; }
+.df-sheet-foot {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  padding: 15px 19px 19px; border-top: 1px solid rgba(139, 92, 246, .16);
+}
+.df-sheet-foot button { height: 47px; border-radius: 12px; font: inherit; font-weight: 800; cursor: pointer; border: 0; }
+.df-ghost { color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .24) !important; }
+.df-save { color: #fff; background: linear-gradient(135deg, #a855f7, #6d28d9); }
+.df-sheet-foot button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── فیلدهای شخص (PersonFields) ── */
+.pf { display: grid; gap: 12px; }
+.pf-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pf-field { display: block; }
+.pf-field > span { display: block; font-size: 11px; color: #c7c2df; margin-bottom: 6px; }
+.pf-field input, .pf-field textarea {
+  width: 100%; border-radius: 11px; padding: 12px 13px; font: inherit; font-size: 13px;
+  color: #fff; outline: none; resize: vertical;
+  background: rgba(3, 2, 18, .6); border: 1px solid rgba(139, 92, 246, .26);
+}
+.pf-field input { height: 46px; }
+.pf-field input:focus, .pf-field textarea:focus {
+  border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168, 85, 247, .12);
+}
+.pf-field.bad input, .pf-field.bad textarea { border-color: #fb7185; }
+.pf-err { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #fda4af; }
+.pf-hint { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #7d76a0; }
+
+.df-toast {
+  position: fixed; inset-inline: 16px; bottom: 18px; z-index: 60; margin: auto;
+  width: fit-content; max-width: calc(100% - 32px);
+  padding: 12px 18px; border-radius: 13px; font-size: 13px; color: #ede9ff;
+  background: rgba(30, 20, 70, .96); border: 1px solid rgba(139, 92, 246, .35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .45);
+}
+
+@media (max-width: 620px) {
+  .df { padding: 14px 12px 60px; }
+  .df-head { flex-direction: column; gap: 10px; }
+  .pf-row2 { grid-template-columns: 1fr; }
+  .df-uses { display: none; }
+}
