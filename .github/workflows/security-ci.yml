@@ -161,3 +161,29 @@ jobs:
           }
           console.log('billing summarize ok');
           "
+
+      # حوزهٔ کاری «همان یک تغییرِ کوچک» است: اگر کلیدهای سرور و دیکشنریِ واژگانِ
+      # فرانت از هم جدا بیفتند، نصبِ یک مشتری با واژه‌های نصفه بالا می‌آید.
+      - name: Verify vertical presets match UI terminology
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const { VERTICALS, DEFAULT_VERTICAL, featurePlanFor } = require('./dist/config/verticals');
+          const keys = Object.keys(VERTICALS);
+          if (!keys.includes(DEFAULT_VERTICAL)) { console.error('حوزهٔ پیش‌فرض در فهرست نیست'); process.exit(1); }
+          const terms = fs.readFileSync('../src/lib/terms.js', 'utf8');
+          for (const k of keys) {
+            if (!new RegExp('(^|\\\\s)' + k + '\\\\s*:').test(terms)) {
+              console.error('واژگانِ فرانت برای حوزهٔ ' + k + ' تعریف نشده'); process.exit(1);
+            }
+          }
+          // هر حوزه باید داشبورد و کاربران را داشته باشد، وگرنه نصب بی‌استفاده است.
+          for (const k of keys) {
+            const plan = featurePlanFor(k);
+            for (const must of ['dashboard', 'users']) {
+              if (!plan[must]) { console.error('حوزهٔ ' + k + ' ماژولِ ' + must + ' را ندارد'); process.exit(1); }
+            }
+          }
+          console.log('verticals ok:', keys.join(', '));
+          "

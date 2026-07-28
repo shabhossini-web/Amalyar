@@ -5,6 +5,7 @@ import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import ProfileMenu from './ProfileMenu.jsx';
+import { useTerms } from './config.jsx';
 import BillingSheet from './BillingSheet.jsx';
 import './launcher.css';
 import './users.css';
@@ -117,6 +118,7 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
 
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
 function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) {
+  const t = useTerms();
   const editing = !!initial?.id;
   const [mode, setMode] = useState('new'); // new | existing
   const [pQuery, setPQuery] = useState('');
@@ -273,12 +275,12 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <form className="glass db-sheet" onSubmit={submit}>
         <header className="db-sheet-head">
-          <b>{editing ? `ویرایشِ مراجعه ${initial.code}` : 'ثبتِ مراجعهٔ جدید'}</b>
+          <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
           <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
         </header>
 
         {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
-        <div className="db-kindrow" role="radiogroup" aria-label="نوعِ مراجعه">
+        <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
           {Object.entries(KINDS).map(([v, k]) => (
             <button
               key={v}
@@ -305,7 +307,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
                 <b>{picked.fullName}</b>
                 <span dir="ltr">{picked.code}</span>
                 {/* شمارهٔ مراجعهٔ بعدی، تا پیش از ثبت معلوم باشد کجا می‌نشیند. */}
-                <small>مراجعهٔ {faNum((picked.visitCount ?? 0) + 1)}</small>
+                <small>{t.visit} {faNum((picked.visitCount ?? 0) + 1)}</small>
                 <button type="button" onClick={() => setPicked(null)}>تغییر</button>
               </div>
             ) : (
@@ -322,7 +324,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
                     <button type="button" key={p.id} onClick={() => setPicked(p)}>
                       <b>{p.fullName}</b>
                       <span dir="ltr">{p.code}</span>
-                      <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} مراجعه</small>
+                      <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} {t.visit}</small>
                     </button>
                   ))}
                   {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
@@ -351,11 +353,11 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             {nidMatch && (
               <div className="db-nidmatch">
                 <b>این کد ملی از قبل پرونده دارد</b>
-                <span>{nidMatch.fullName} — <span dir="ltr">{nidMatch.code}</span> ({faNum(nidMatch.visitCount)} مراجعه)</span>
+                <span>{nidMatch.fullName} — <span dir="ltr">{nidMatch.code}</span> ({faNum(nidMatch.visitCount)} {t.visit})</span>
                 <button
                   type="button"
                   onClick={() => { setPicked(nidMatch); setMode('existing'); }}
-                >ثبتِ مراجعهٔ تازه روی همین پرونده</button>
+                >{t.visitOne}ِ تازه روی همین {t.record}</button>
               </div>
             )}
 
@@ -383,7 +385,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             addPlaceholder="نامِ بیمارستانِ جدید…"
           />
           <DefSelect
-            label="کارشناس"
+            label={t.tech}
             value={f.techId}
             onChange={(v) => setF((s) => ({ ...s, techId: v }))}
             options={defs.techs}
@@ -432,7 +434,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </label>
 
         <button className="db-submit" type="submit" disabled={busy}>
-          {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : 'ثبتِ مراجعه'}
+          {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
         </button>
       </form>
     </div>
@@ -657,6 +659,7 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const t = useTerms();
   const [visits, setVisits] = useState(null);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
@@ -743,18 +746,18 @@ export default function Dashboard() {
   const onSaved = (saved, wasEdit) => {
     setModal(null);
     load(qRef.current, status, kind);
-    if (wasEdit) { setToast('مراجعه ویرایش شد ✓'); return; }
+    if (wasEdit) { setToast(`${t.visit} ویرایش شد ✓`); return; }
 
     // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی
     // کد ملی به پروندهٔ موجود خورده و پروندهٔ تکراری ساخته نشده است.
     const seq = faNum(saved.code.split('-V')[1] || '1');
-    const where = `پروندهٔ ${saved.patientCode} — مراجعهٔ ${seq}`;
+    const where = `${t.record} ${saved.patientCode} — ${t.visit} ${seq}`;
     setToast({
-      new: `پروندهٔ جدید ساخته شد ✓ ${where}`,
-      matched: `بیمار از قبل پرونده داشت؛ مراجعهٔ تازه ثبت شد ✓ ${where}`,
-      restored: `پروندهٔ حذف‌شده برگشت و مراجعهٔ تازه ثبت شد ✓ ${where}`,
-      existing: `مراجعه ثبت شد ✓ ${where}`,
-    }[saved.patientStatus] ?? `مراجعهٔ ${saved.code} ثبت شد ✓`);
+      new: `${t.record}ِ جدید ساخته شد ✓ ${where}`,
+      matched: `بیمار از قبل ${t.record} داشت؛ ${t.visit}ِ تازه ثبت شد ✓ ${where}`,
+      restored: `${t.record}ِ حذف‌شده برگشت و ${t.visit}ِ تازه ثبت شد ✓ ${where}`,
+      existing: `${t.visit} ثبت شد ✓ ${where}`,
+    }[saved.patientStatus] ?? `${t.visit} ${saved.code} ثبت شد ✓`);
   };
 
   const onStatus = async (v, st) => {
@@ -795,7 +798,7 @@ export default function Dashboard() {
 
         {!denied && (<>
         <div className="db-stats">
-          <div className="glass db-stat"><b>{faNum(stats.total)}</b><span>مراجعه</span></div>
+          <div className="glass db-stat"><b>{faNum(stats.total)}</b><span>{t.visit}</span></div>
           {/* برچسب‌ها کلی‌اند چون فهرست می‌تواند عمل و ویزیت و پیگیری را با هم داشته باشد؛
               وقتی روی یک نوع فیلتر شده، همان نوع را می‌گویند. */}
           <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار</span></div>
@@ -810,7 +813,7 @@ export default function Dashboard() {
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="جستجوی بیمار، جراح، بیمارستان…"
+              placeholder={t.searchHint}
               aria-label="جستجو"
             />
           </div>
@@ -818,7 +821,7 @@ export default function Dashboard() {
             <Gear width="17" height="17" />
           </button>
           <button type="button" className="db-add" onClick={() => setModal({})}>
-            <Plus width="17" height="17" /> مراجعهٔ جدید
+            <Plus width="17" height="17" /> {t.visitNew}
           </button>
         </div>
 
@@ -835,7 +838,7 @@ export default function Dashboard() {
             ⚠️ وقتی فیلتر فعال است حتماً می‌ماند، وگرنه لیست به یک نوع محدود
             می‌شد، ردیف ناپدید می‌گشت و راهِ برگشتی نبود. */}
         {showKindFilter && (
-          <div className="lg-tabs db-filters db-kindfilter" role="tablist" aria-label="نوعِ مراجعه">
+          <div className="lg-tabs db-filters db-kindfilter" role="tablist" aria-label={`نوعِ ${t.visit}`}>
             {KIND_FILTERS.filter((fl) => kind !== 'all' || fl.v === 'all' || kindsPresent.includes(fl.v)).map((fl) => (
               <button key={fl.v} type="button" role="tab" aria-selected={kind === fl.v} className={kind === fl.v ? 'on' : ''} onClick={() => setKind(fl.v)}>
                 {fl.l}
@@ -849,7 +852,7 @@ export default function Dashboard() {
           {!denied && visits === null && <div className="us-empty">در حال بارگذاری…</div>}
           {denied && <div className="us-empty">دسترسیِ کافی برای این بخش ندارید — مدیرِ سامانه باید سطحِ شما را ارتقا دهد.</div>}
           {!denied && visits?.length === 0 && (
-            <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد' : 'هنوز مراجعه‌ای ثبت نشده — اولین را ثبت کن'}</div>
+            <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد' : t.emptyList}</div>
           )}
           {visits?.map((v) => (
             <VisitCard

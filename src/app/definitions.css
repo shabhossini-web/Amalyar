@@ -133,3 +133,28 @@
   .pf-row2 { grid-template-columns: 1fr; }
   .df-uses { display: none; }
 }
+
+/* ── تنظیماتِ شرکت ── */
+.st-verticals { margin-bottom: 20px; }
+.st-vertical {
+  width: 100%; text-align: right; cursor: pointer; font: inherit; color: inherit;
+  gap: 12px; transition: border-color .15s, background .15s;
+}
+.st-vertical:hover:not(:disabled) { border-color: rgba(168, 85, 247, .45); }
+.st-vertical:disabled { cursor: progress; }
+.st-vertical.on { border-color: rgba(52, 211, 153, .5); background: rgba(52, 211, 153, .07); }
+.st-check {
+  width: 24px; height: 24px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%;
+  color: #0b0820; background: transparent; border: 1.5px solid rgba(139, 92, 246, .35);
+}
+.st-check.on { background: #34d399; border-color: #34d399; }
+
+.st-h3 {
+  max-width: 900px; margin: 0 auto 10px; font-size: 12px; font-weight: 800; color: #c4b5fd;
+  padding-bottom: 7px; border-bottom: 1px solid rgba(139, 92, 246, .2);
+}
+.st-brand {
+  display: grid; gap: 12px; max-width: 900px; margin: 0 auto; padding: 16px; border-radius: 16px;
+  background: rgba(18, 13, 49, .7); border: 1px solid rgba(139, 92, 246, .18);
+}
+.st-brand .df-save { height: 46px; }

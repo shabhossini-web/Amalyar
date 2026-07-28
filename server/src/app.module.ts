@@ -11,6 +11,7 @@ import { AppController } from './app.controller';
 import { AuditModule } from './audit/audit.module';
 import { PlatformModule } from './platform/platform.module';
 import { StorageModule } from './storage/storage.module';
+import { TenantConfigModule } from './config/config.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { StorageModule } from './storage/storage.module';
     AuthModule,
     AccountsModule,
     FeaturesModule,
+    TenantConfigModule,
     PatientsModule,
     PlatformModule,
   ],

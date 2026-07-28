@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ErrorBoundary from './app/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './app/auth.jsx';
+import { ConfigProvider } from './app/config.jsx';
 import Landing from './pages/Landing.jsx';
 import Launcher from './app/Launcher.jsx';
 import Login from './app/Login.jsx';
@@ -9,6 +10,7 @@ import Profile from './app/Profile.jsx';
 import Dashboard from './app/Dashboard.jsx';
 import Definitions from './app/Definitions.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
+import Settings from './app/Settings.jsx';
 import PlatformAdmin from './app/PlatformAdmin.jsx';
 
 const MARKETING_HOSTS = new Set(['amalyar.com', 'www.amalyar.com', 'localhost', '127.0.0.1']);
@@ -35,6 +37,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <ConfigProvider>
         <Routes>
           <Route path="/" element={<TenantAwareRoot />} />
           <Route path="/login" element={<Login />} />
@@ -44,8 +47,10 @@ export default function App() {
           <Route path="/app/users" element={<Protected><Users /></Protected>} />
           <Route path="/app/definitions" element={<Protected><Definitions /></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
+          <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />
         </Routes>
+        </ConfigProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
