@@ -1,8 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { LEVEL } from '../common/levels';
+import { toEnDigits } from '../common/identity';
 import { AuditService } from '../audit/audit.service';
 
 /**
@@ -120,7 +121,10 @@ export class PatientsService {
             { firstName: { contains: t, mode: 'insensitive' } },
             { lastName: { contains: t, mode: 'insensitive' } },
             { code: { contains: t, mode: 'insensitive' } },
-            { phone: { contains: t } },
+            { phone: { contains: toEnDigits(t) } },
+            // کد ملی مطمئن‌ترین راهِ یافتنِ پروندهٔ قبلی است؛ نبودش یعنی کاربر
+            // پروندهٔ موجود را پیدا نمی‌کرد و دوباره «بیمار جدید» می‌زد.
+            { nationalId: { contains: toEnDigits(t) } },
           ],
         }
       : {};
@@ -139,12 +143,22 @@ export class PatientsService {
       code: p.code,
       fullName: `${p.firstName} ${p.lastName}`.trim(),
       phone: p.phone,
+      nationalId: p.nationalId,
       visitCount: p._count.visits,
     }));
   }
 
   /// نامِ denormalizedِ جراح/بیمارستان + اعتبارسنجیِ وجودِ موجودیت‌ها
-  private async resolveRefs(tx: any, dto: { surgeonId?: number | null; hospitalId?: number | null; techId?: number | null }) {
+  private async resolveRefs(
+    tx: any,
+    dto: {
+      surgeonId?: number | null;
+      hospitalId?: number | null;
+      techId?: number | null;
+      procedureTypeId?: number | null;
+      diagnosisId?: number | null;
+    },
+  ) {
     const out: any = {};
     if (dto.surgeonId != null) {
       const s = await tx.surgeon.findUnique({ where: { id: dto.surgeonId }, include: { person: true } });
@@ -164,50 +178,131 @@ export class PatientsService {
       if (!a || a.status !== 'active') throw new NotFoundException('کارشناس یافت نشد');
       out.techId = a.id;
     }
+    if (dto.procedureTypeId != null) {
+      const pt = await tx.procedureType.findUnique({ where: { id: dto.procedureTypeId } });
+      if (!pt) throw new NotFoundException('نوعِ عمل یافت نشد');
+      out.procedureTypeId = pt.id;
+      // opType آینهٔ متنیِ نوعِ عمل است تا گزارش‌های قدیمی نشکنند.
+      out.opType = pt.name;
+    }
+    if (dto.diagnosisId != null) {
+      const dg = await tx.diagnosis.findUnique({ where: { id: dto.diagnosisId } });
+      if (!dg) throw new NotFoundException('تشخیص یافت نشد');
+      out.diagnosisId = dg.id;
+    }
     return out;
   }
 
-  /// ثبتِ مراجعه — بیمارِ موجود (patientId) یا بیمارِ جدید (کدِ AM-NNNN از id ساخته می‌شود)
+  /**
+   * پیداکردنِ پروندهٔ بیمار بر اساسِ کدِ ملی — قلبِ قاعدهٔ «هر کد ملی، یک پرونده».
+   *
+   * سه حالت:
+   *  • نبود                → پروندهٔ تازه
+   *  • بود و نام‌خانوادگی یکی → همان پرونده، مراجعهٔ بعدی
+   *  • بود و نام‌خانوادگی فرق داشت → توقف با ۴۰۹
+   *
+   * حالتِ سوم عمداً خودکار حل نمی‌شود: یا کدِ ملی اشتباه تایپ شده یا واقعاً دو
+   * نفرند؛ هر دو حالت تصمیمِ انسانی می‌خواهد. این همان مرحلهٔ stewardship در MPI
+   * است — ادغامِ خودکارِ هویت، خطایی است که بعداً قابلِ برگرداندن نیست.
+   */
+  private async findByNationalId(tx: any, nationalId: string, lastName: string) {
+    const existing = await tx.patient.findUnique({ where: { nationalId } });
+    if (!existing) return null;
+
+    const same = existing.lastName.trim() === lastName.trim();
+    if (!same) {
+      throw new ConflictException(
+        `این کد ملی به پروندهٔ «${existing.code} — ${existing.firstName} ${existing.lastName}» تعلق دارد.` +
+          ' اگر همان بیمار است، از فهرست انتخابش کنید؛ وگرنه کد ملی را بررسی کنید.',
+      );
+    }
+
+    // پرونده‌ای که soft-delete شده بود با مراجعهٔ جدید برمی‌گردد؛ ساختنِ پروندهٔ
+    // دوم با همان کد ملی هم ممکن نیست (ایندکسِ یکتا) و هم غلط است.
+    if (existing.deletedAt) {
+      await tx.patient.update({
+        where: { id: existing.id },
+        data: { deletedAt: null, deletedById: null, deleteReason: null },
+      });
+      return { patient: existing, restored: true };
+    }
+    return { patient: existing, restored: false };
+  }
+
+  /**
+   * ثبتِ مراجعه.
+   *
+   * سه مسیر دارد و هر سه به یک پرونده ختم می‌شوند:
+   *  • patientId داده شده        → مراجعهٔ جدید روی همان پرونده
+   *  • کد ملی به پرونده‌ای خورد → همان پرونده (بدونِ ساختنِ پروندهٔ دوم)
+   *  • هیچ‌کدام                  → پروندهٔ تازه با کدِ AM-NNNN
+   *
+   * خروجی `patientStatus` را حمل می‌کند تا کلاینت در toast بگوید «پروندهٔ
+   * AM-0012 — مراجعهٔ ۳» و کاربر بفهمد ثبتِ دوباره پروندهٔ تکراری نساخته است.
+   */
   async createVisit(dto: CreateVisitDto, userId?: number) {
-    const v = await this.prisma.$transaction(async (tx) => {
+    const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;
+      let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
       if (patientId) {
         const p = await tx.patient.findUnique({ where: { id: patientId } });
         if (!p) throw new NotFoundException('بیمار پیدا نشد');
+        // ویرایشِ ضمنیِ پرونده ممنوع است، ولی کدِ ملیِ خالی را کامل می‌کنیم.
+        if (dto.nationalId && !p.nationalId) {
+          await tx.patient.update({ where: { id: p.id }, data: { nationalId: dto.nationalId } });
+        }
       } else {
-        const p = await tx.patient.create({
-          data: {
-            code: `AM-PENDING-${randomUUID()}`,
-            firstName: dto.firstName!,
-            lastName: dto.lastName!,
-            phone: dto.phone || null,
-            nationalId: dto.nationalId || null,
-            birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
-          },
-        });
-        await tx.patient.update({
-          where: { id: p.id },
-          data: { code: `AM-${String(p.id).padStart(4, '0')}` },
-        });
-        patientId = p.id;
+        const match = dto.nationalId
+          ? await this.findByNationalId(tx, dto.nationalId, dto.lastName!)
+          : null;
+
+        if (match) {
+          patientId = match.patient.id;
+          patientStatus = match.restored ? 'restored' : 'matched';
+          // شماره و تاریخِ تولدِ تازه فقط جاهای خالی را پر می‌کنند، نه بازنویسی.
+          const fill: any = {};
+          if (dto.phone && !match.patient.phone) fill.phone = dto.phone;
+          if (dto.birthDate && !match.patient.birthDate) fill.birthDate = new Date(dto.birthDate);
+          if (Object.keys(fill).length) await tx.patient.update({ where: { id: patientId }, data: fill });
+        } else {
+          const p = await tx.patient.create({
+            data: {
+              code: `AM-PENDING-${randomUUID()}`,
+              firstName: dto.firstName!,
+              lastName: dto.lastName!,
+              phone: dto.phone || null,
+              nationalId: dto.nationalId || null,
+              birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+            },
+          });
+          await tx.patient.update({
+            where: { id: p.id },
+            data: { code: `AM-${String(p.id).padStart(4, '0')}` },
+          });
+          patientId = p.id;
+          patientStatus = 'new';
+        }
       }
       const refs = await this.resolveRefs(tx, dto);
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
       const seq = (max._max.seq ?? 0) + 1;
-      return tx.visit.create({
+      const visit = await tx.visit.create({
         data: {
           patientId,
           seq,
           ...refs,
-          opType: dto.opType?.trim() || null,
+          // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
+          ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
+          opReport: dto.opReport?.trim() || null,
           opDate: dto.opDate ? new Date(dto.opDate) : null,
           notes: dto.notes || null,
           createdById: userId ?? null,
         },
         include: INCLUDE_PATIENT,
       });
+      return { visit, patientStatus };
     });
-    const result = enrich(v);
+    const result = { ...enrich(v), patientStatus };
     await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
     return result;
   }
@@ -230,7 +325,13 @@ export class PatientsService {
       if (dto.surgeonId === null) { visitPatch.surgeonId = null; visitPatch.surgeonName = null; }
       if (dto.hospitalId === null) { visitPatch.hospitalId = null; visitPatch.hospitalName = null; }
       if (dto.techId === null) visitPatch.techId = null;
-      if (dto.opType !== undefined) visitPatch.opType = dto.opType?.trim() || null;
+      if (dto.procedureTypeId === null) { visitPatch.procedureTypeId = null; visitPatch.opType = null; }
+      if (dto.diagnosisId === null) visitPatch.diagnosisId = null;
+      // متنِ آزاد فقط وقتی خوانده می‌شود که نوعِ عمل انتخاب نشده باشد.
+      if (dto.opType !== undefined && visitPatch.opType === undefined) {
+        visitPatch.opType = dto.opType?.trim() || null;
+      }
+      if (dto.opReport !== undefined) visitPatch.opReport = dto.opReport?.trim() || null;
       if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
       if (dto.notes !== undefined) visitPatch.notes = dto.notes || null;
 

@@ -2,3 +2,5 @@ node_modules
 dist
 .env
 *.log
+# خروجیِ `prisma generate` است، نه کدِ منبع؛ CI خودش می‌سازدش.
+src/generated

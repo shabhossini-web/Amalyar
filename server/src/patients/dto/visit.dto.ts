@@ -10,6 +10,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import { EnDigits, IsNationalId } from '../../common/validators';
 
 /// ثبتِ مراجعه — یا patientId (بیمارِ موجود) یا نام/نام‌خانوادگی (بیمارِ جدید)
 export class CreateVisitDto {
@@ -30,11 +31,14 @@ export class CreateVisitDto {
   lastName?: string;
 
   @IsOptional()
+  @EnDigits()
   @Matches(/^09\d{9}$/, { message: 'شمارهٔ موبایل نامعتبر است (مثال: 09121234567)' })
   phone?: string;
 
   @IsOptional()
-  @Matches(/^\d{10}$/, { message: 'کد ملی باید ۱۰ رقم باشد' })
+  @EnDigits()
+  @ValidateIf((o) => o.nationalId !== '')
+  @IsNationalId()
   nationalId?: string;
 
   @IsOptional()
@@ -54,9 +58,23 @@ export class CreateVisitDto {
   techId?: number;
 
   @IsOptional()
+  @IsInt({ message: 'نوع عمل نامعتبر است' })
+  procedureTypeId?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'تشخیص نامعتبر است' })
+  diagnosisId?: number;
+
+  /** متنِ آزادِ نوعِ عمل — فقط برای سازگاری با رکوردهای قدیمی نگه داشته شده. */
+  @IsOptional()
   @IsString()
   @MaxLength(120, { message: 'نوع عمل طولانی است' })
   opType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000, { message: 'شرحِ عمل طولانی است' })
+  opReport?: string;
 
   @IsOptional()
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
@@ -93,13 +111,15 @@ export class UpdateVisitDto {
   lastName?: string;
 
   @IsOptional()
+  @EnDigits()
   @ValidateIf((o) => o.phone !== '')
   @Matches(/^09\d{9}$/, { message: 'شمارهٔ موبایل نامعتبر است' })
   phone?: string;
 
   @IsOptional()
+  @EnDigits()
   @ValidateIf((o) => o.nationalId !== '')
-  @Matches(/^\d{10}$/, { message: 'کد ملی باید ۱۰ رقم باشد' })
+  @IsNationalId()
   nationalId?: string;
 
   @IsOptional()
@@ -123,9 +143,24 @@ export class UpdateVisitDto {
   techId?: number | null;
 
   @IsOptional()
+  @ValidateIf((o) => o.procedureTypeId !== null)
+  @IsInt({ message: 'نوع عمل نامعتبر است' })
+  procedureTypeId?: number | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.diagnosisId !== null)
+  @IsInt({ message: 'تشخیص نامعتبر است' })
+  diagnosisId?: number | null;
+
+  @IsOptional()
   @IsString()
   @MaxLength(120)
   opType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000, { message: 'شرحِ عمل طولانی است' })
+  opReport?: string;
 
   @IsOptional()
   @ValidateIf((o) => o.opDate !== null && o.opDate !== '')

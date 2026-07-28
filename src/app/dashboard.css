@@ -232,11 +232,30 @@
   border-radius: 11px; padding: 10px 12px;
 }
 .db-picked b { flex: 1; font-weight: 800; }
+.db-picked small { font-size: 11px; font-weight: 700; color: var(--cyan); white-space: nowrap; }
 .db-picked button {
   font-family: inherit; font-size: 11.5px; font-weight: 800; cursor: pointer;
   color: var(--cyan); background: none; border: 1px solid rgba(0, 229, 255, 0.35);
   border-radius: 8px; padding: 4px 10px;
 }
+
+/* هشدارِ «این کد ملی از قبل پرونده دارد» — قلبِ قاعدهٔ یک‌کدملی/یک‌پرونده،
+   پس عمداً کهربایی و پررنگ است، نه یک hint خاکستری. */
+.db-nidmatch {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  font-size: 12.5px; color: #fde68a;
+  background: rgba(251, 191, 36, 0.09); border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 12px; padding: 11px 13px;
+}
+.db-nidmatch b { flex: 1 0 100%; font-weight: 800; font-size: 12.5px; }
+.db-nidmatch > span { color: #fef3c7; }
+.db-nidmatch button {
+  margin-inline-start: auto; font-family: inherit; font-size: 11.5px; font-weight: 800;
+  cursor: pointer; color: #0b0820; background: #fbbf24; border: none;
+  border-radius: 9px; padding: 6px 12px;
+}
+.db-field.bad input { border-color: rgba(251, 113, 133, 0.7); }
+.db-hint.bad { color: #fda4af; font-weight: 700; }
 
 .db-submit {
   font-family: inherit; font-size: 14.5px; font-weight: 800; color: #fff; cursor: pointer;

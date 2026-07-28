@@ -69,3 +69,23 @@ jobs:
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js
+
+      # «هر کد ملی، یک بیمار، یک پرونده» قاعده‌ای داده‌ای است، نه تصمیمی در UI:
+      # اگر ایندکسِ یکتا یا آزمونِ رقمِ کنترلی برگردد، پرونده‌های تکراری بی‌سروصدا
+      # ساخته می‌شوند و ادغامشان بعداً دستی و پرخطاست.
+      - name: Verify patient identity rule (unique national ID + checksum)
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          if (!/nationalId\s+String\?\s+@unique/.test(schema)) { console.error('Patient.nationalId باید @unique بماند'); process.exit(1); }
+          const mig = fs.readFileSync('prisma/migrations/20260728090000_patient_national_id_unique/migration.sql', 'utf8');
+          if (!mig.includes('patients_national_id_key') || !mig.includes('RAISE EXCEPTION')) { console.error('مهاجرتِ یکتاییِ کد ملی دست‌کاری شده'); process.exit(1); }
+          const { isValidNationalId, toEnDigits } = require('./dist/common/identity');
+          const cases = [['0084575646', true], ['۰۰۸۴۵۷۵۶۴۶', true], ['1234567890', false], ['0000000000', false], ['12345', false]];
+          for (const [value, expected] of cases) {
+            if (isValidNationalId(value) !== expected) { console.error({ value, expected }); process.exit(1); }
+          }
+          if (toEnDigits('۰۹۱۲۱۲۳۴۵۶۷') !== '09121234567') process.exit(1);
+          "

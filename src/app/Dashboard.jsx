@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr } from '../lib/jalali.js';
+import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import './users.css';
@@ -18,6 +19,7 @@ const Trash = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 6h18M8 
 const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
 const Doctor = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 3v5a3 3 0 0 0 6 0V3" /><path d="M12 11v3a4 4 0 0 1-8 0v-1" /><circle cx="4" cy="11" r="2" /><circle cx="19" cy="16" r="3" /><path d="M19 19v2" /></svg>);
 const Hospital = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21V8l9-5 9 5v13" /><path d="M3 21h18" /><path d="M12 9v6M9 12h6" /></svg>);
+const DiagIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" /></svg>);
 const CalIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>);
 const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
@@ -80,8 +82,9 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
         <div className="db-selrow">
           <select value={value ?? ''} onChange={(e) => onChange(e.target.value ? +e.target.value : null)}>
             <option value="">— انتخاب —</option>
+            {/* تشخیص‌ها `title` دارند، بقیه `name`/`displayName` — یک select برای همه. */}
             {options.map((o) => (
-              <option key={o.id} value={o.id}>{o.name || o.displayName}</option>
+              <option key={o.id} value={o.id}>{o.name || o.title || o.displayName}</option>
             ))}
           </select>
           {onQuickAdd && (
@@ -112,7 +115,11 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     surgeonId: initial?.surgeonId ?? null,
     hospitalId: initial?.hospitalId ?? null,
     techId: initial?.techId ?? null,
-    opType: initial?.opType || '',
+    procedureTypeId: initial?.procedureTypeId ?? null,
+    diagnosisId: initial?.diagnosisId ?? null,
+    // متنِ آزاد فقط برای رکوردهای قدیمی که هنوز به نوعِ عمل وصل نشده‌اند.
+    opType: initial?.procedureTypeId ? '' : initial?.opType || '',
+    opReport: initial?.opReport || '',
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
     notes: initial?.notes || '',
   }));
@@ -129,9 +136,30 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     return () => clearTimeout(t);
   }, [pQuery, mode]);
 
-  const quickAdd = (kind) => async (name) => {
+  /**
+   * کد ملیِ کامل → همان لحظه پروندهٔ موجود را نشان بده.
+   *
+   * بدونِ این، کاربر کلِ فرم را پر می‌کرد و تازه هنگامِ ثبت با ۴۰۹ روبه‌رو می‌شد.
+   * این‌طور «مراجعهٔ مجدد» پیش از اتلافِ وقت دیده می‌شود، که هدفِ اصلیِ
+   * «هر کد ملی یک پرونده» است.
+   */
+  const [nidMatch, setNidMatch] = useState(null);
+  useEffect(() => {
+    const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
+    if (editing || mode !== 'new' || !isValidNationalId(nid)) { setNidMatch(null); return undefined; }
+    let alive = true;
+    const t = setTimeout(() => {
+      api(`/patients?q=${nid}`)
+        .then((rows) => { if (alive) setNidMatch(rows.find((r) => r.nationalId === nid) || null); })
+        .catch(() => { if (alive) setNidMatch(null); });
+    }, 350);
+    return () => { alive = false; clearTimeout(t); };
+  }, [f.nationalId, mode, editing]);
+
+  // تشخیص با `title` ساخته می‌شود، بقیهٔ تعاریف با `name`.
+  const quickAdd = (kind, field = 'name') => async (name) => {
     try {
-      const created = await api(`/${kind}`, { method: 'POST', body: { name } });
+      const created = await api(`/${kind}`, { method: 'POST', body: { [field]: name } });
       await onDefsChanged();
       onToast(`«${name}» اضافه شد ✓`);
       return created;
@@ -154,11 +182,18 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       birthDate = jStrToIso(f.birthDateJ);
       if (!birthDate) { onToast('تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)'); return; }
     }
+    const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
+    // اعتبارسنجیِ سمتِ کاربر تا پیشِ ارسال بازخورد بگیرد؛ اعتبارِ واقعی سمتِ سرور است.
+    if (nid && !isValidNationalId(nid)) { onToast('کد ملی معتبر نیست — رقم‌ها را بررسی کنید'); return; }
+
     const common = {
       surgeonId: f.surgeonId ?? (editing ? null : undefined),
       hospitalId: f.hospitalId ?? (editing ? null : undefined),
       techId: f.techId ?? (editing ? null : undefined),
-      opType: f.opType.trim() || undefined,
+      procedureTypeId: f.procedureTypeId ?? (editing ? null : undefined),
+      diagnosisId: f.diagnosisId ?? (editing ? null : undefined),
+      opType: f.procedureTypeId ? undefined : f.opType.trim() || undefined,
+      opReport: f.opReport.trim() || undefined,
       opDate,
       notes: f.notes.trim() || undefined,
     };
@@ -170,12 +205,13 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           method: 'PATCH',
           body: {
             ...common,
-            opType: f.opType.trim(),
+            opType: f.procedureTypeId ? undefined : f.opType.trim(),
+            opReport: f.opReport.trim(),
             opDate: opDate ?? null,
             firstName: f.firstName.trim(),
             lastName: f.lastName.trim(),
-            phone: f.phone.trim(),
-            nationalId: f.nationalId.trim(),
+            phone: toEnDigits(f.phone).trim(),
+            nationalId: nid,
             birthDate: birthDate ?? null,
           },
         });
@@ -189,8 +225,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             ...common,
             firstName: f.firstName.trim(),
             lastName: f.lastName.trim(),
-            phone: f.phone.trim() || undefined,
-            nationalId: f.nationalId.trim() || undefined,
+            phone: toEnDigits(f.phone).trim() || undefined,
+            nationalId: nid || undefined,
             birthDate,
           },
         });
@@ -203,8 +239,16 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     }
   };
 
+  // غیرفعال‌ها پنهان‌اند، مگر همان‌که روی این مراجعه ثبت شده — وگرنه ویرایش، مقدارِ
+  // قبلی را بی‌صدا پاک می‌کرد.
+  // «هنوز در حالِ تایپ» غلط نیست؛ فقط طولِ کامل ارزیابی می‌شود.
+  const nidDigits = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
+  const nidBad = nidDigits.length === 10 && !isValidNationalId(nidDigits);
+
   const activeSurgeons = defs.surgeons.filter((s) => s.active || s.id === f.surgeonId);
   const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
+  const activeProcedures = defs.procedures.filter((p) => p.active || p.id === f.procedureTypeId);
+  const activeDiagnoses = defs.diagnoses.filter((d) => d.active || d.id === f.diagnosisId);
 
   return (
     <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -227,6 +271,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
               <div className="db-picked">
                 <b>{picked.fullName}</b>
                 <span dir="ltr">{picked.code}</span>
+                {/* شمارهٔ مراجعهٔ بعدی، تا پیش از ثبت معلوم باشد کجا می‌نشیند. */}
+                <small>مراجعهٔ {faNum((picked.visitCount ?? 0) + 1)}</small>
                 <button type="button" onClick={() => setPicked(null)}>تغییر</button>
               </div>
             ) : (
@@ -235,7 +281,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
                   type="text"
                   value={pQuery}
                   onChange={(e) => setPQuery(e.target.value)}
-                  placeholder="جستجوی نام / کد / موبایل…"
+                  placeholder="جستجوی نام / کد پرونده / موبایل / کد ملی…"
                   autoFocus
                 />
                 <div className="db-plist">
@@ -243,7 +289,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
                     <button type="button" key={p.id} onClick={() => setPicked(p)}>
                       <b>{p.fullName}</b>
                       <span dir="ltr">{p.code}</span>
-                      <small>{faNum(p.visitCount)} مراجعه</small>
+                      <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} مراجعه</small>
                     </button>
                   ))}
                   {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
@@ -263,10 +309,23 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
               <label className="db-field"><span>موبایل</span>
                 <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
               </label>
-              <label className="db-field"><span>کد ملی</span>
-                <input type="text" dir="ltr" inputMode="numeric" value={f.nationalId} onChange={set('nationalId')} placeholder="اختیاری" />
+              <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی</span>
+                <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')} placeholder="کلیدِ پرونده — اختیاری" />
+                {nidBad && <small className="db-hint bad">کد ملی معتبر نیست</small>}
               </label>
             </div>
+
+            {nidMatch && (
+              <div className="db-nidmatch">
+                <b>این کد ملی از قبل پرونده دارد</b>
+                <span>{nidMatch.fullName} — <span dir="ltr">{nidMatch.code}</span> ({faNum(nidMatch.visitCount)} مراجعه)</span>
+                <button
+                  type="button"
+                  onClick={() => { setPicked(nidMatch); setMode('existing'); }}
+                >ثبتِ مراجعهٔ تازه روی همین پرونده</button>
+              </div>
+            )}
+
             <label className="db-field"><span>تاریخِ تولد (شمسی)</span>
               <input type="text" dir="ltr" inputMode="numeric" value={f.birthDateJ} onChange={set('birthDateJ')} placeholder="۱۳۷۰/۰۱/۱۵ — اختیاری" />
             </label>
@@ -296,10 +355,32 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             onChange={(v) => setF((s) => ({ ...s, techId: v }))}
             options={defs.techs}
           />
-          <label className="db-field"><span>نوعِ عمل</span>
-            <input type="text" value={f.opType} onChange={set('opType')} placeholder="مثلاً: فیوژن کمری" />
-          </label>
+          <DefSelect
+            label="نوعِ عمل"
+            value={f.procedureTypeId}
+            onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v, opType: '' }))}
+            options={activeProcedures}
+            onQuickAdd={quickAdd('procedure-types')}
+            addPlaceholder="نامِ نوعِ عملِ جدید…"
+          />
         </div>
+
+        {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
+        {!f.procedureTypeId && f.opType && (
+          <label className="db-field"><span>نوعِ عمل (متنِ قدیمی)</span>
+            <input type="text" value={f.opType} onChange={set('opType')} />
+            <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
+          </label>
+        )}
+
+        <DefSelect
+          label="تشخیص"
+          value={f.diagnosisId}
+          onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
+          options={activeDiagnoses}
+          onQuickAdd={quickAdd('diagnoses', 'title')}
+          addPlaceholder="عنوانِ تشخیصِ جدید…"
+        />
 
         <label className="db-field">
           <span>تاریخِ عمل (شمسی)</span>
@@ -307,6 +388,10 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             <input type="text" dir="ltr" inputMode="numeric" value={f.opDateJ} onChange={set('opDateJ')} placeholder="۱۴۰۵/۰۴/۲۸" />
             <button type="button" className="db-today" onClick={() => setF((s) => ({ ...s, opDateJ: todayJStr() }))}>امروز</button>
           </div>
+        </label>
+
+        <label className="db-field"><span>شرحِ عمل</span>
+          <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
         </label>
 
         <label className="db-field"><span>یادداشت</span>
@@ -485,7 +570,7 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
           <b>{v.fullName}</b>
           <span>{v.code}</span>
         </div>
-        {v.opType && <span className="db-optype">{v.opType}</span>}
+        {(v.procedureTypeName || v.opType) && <span className="db-optype">{v.procedureTypeName || v.opType}</span>}
         <span className={`us-status db-st-${v.opStatus}`}>{STATUS_FA[v.opStatus]}</span>
       </div>
 
@@ -494,6 +579,7 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
         {v.techName && <span><TechIc width="14" height="14" /> {v.techName}</span>}
         {v.hospitalName && <span><Hospital width="14" height="14" /> {v.hospitalName}</span>}
         {v.opDate && <span><CalIc width="14" height="14" /> {faDate(v.opDate)}</span>}
+        {v.diagnosisTitle && <span><DiagIc width="14" height="14" /> {v.diagnosisTitle}</span>}
       </div>
 
       <div className="db-actions">
@@ -535,14 +621,15 @@ export default function Dashboard() {
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
   const [denied, setDenied] = useState(false);
-  const [defs, setDefs] = useState({ surgeons: [], hospitals: [], techs: [] });
+  const [defs, setDefs] = useState({ surgeons: [], hospitals: [], techs: [], procedures: [], diagnoses: [] });
   const qRef = useRef(q);
   qRef.current = q;
 
   useEffect(() => { document.title = 'عمل‌یار — داشبورد مدیریت'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
-    const t = setTimeout(() => setToast(''), 2200);
+    // پیامِ «کدام پرونده، چندمین مراجعه» بلند است؛ ۲۲۰۰ms برای خواندنش کم بود.
+    const t = setTimeout(() => setToast(''), toast.length > 40 ? 4500 : 2200);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -561,12 +648,14 @@ export default function Dashboard() {
 
   const loadDefs = useCallback(async () => {
     try {
-      const [surgeons, hospitals, techs] = await Promise.all([
+      const [surgeons, hospitals, techs, procedures, diagnoses] = await Promise.all([
         api('/surgeons'),
         api('/hospitals'),
         api('/techs'),
+        api('/procedure-types'),
+        api('/diagnoses'),
       ]);
-      setDefs({ surgeons, hospitals, techs });
+      setDefs({ surgeons, hospitals, techs, procedures, diagnoses });
     } catch {
       /* دسترسی نداشته باشد، denied از load اصلی می‌آید */
     }
@@ -598,8 +687,19 @@ export default function Dashboard() {
 
   const onSaved = (saved, wasEdit) => {
     setModal(null);
-    setToast(wasEdit ? 'مراجعه ویرایش شد ✓' : `مراجعهٔ ${saved.code} ثبت شد ✓`);
     load(qRef.current, status);
+    if (wasEdit) { setToast('مراجعه ویرایش شد ✓'); return; }
+
+    // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی
+    // کد ملی به پروندهٔ موجود خورده و پروندهٔ تکراری ساخته نشده است.
+    const seq = faNum(saved.code.split('-V')[1] || '1');
+    const where = `پروندهٔ ${saved.patientCode} — مراجعهٔ ${seq}`;
+    setToast({
+      new: `پروندهٔ جدید ساخته شد ✓ ${where}`,
+      matched: `بیمار از قبل پرونده داشت؛ مراجعهٔ تازه ثبت شد ✓ ${where}`,
+      restored: `پروندهٔ حذف‌شده برگشت و مراجعهٔ تازه ثبت شد ✓ ${where}`,
+      existing: `مراجعه ثبت شد ✓ ${where}`,
+    }[saved.patientStatus] ?? `مراجعهٔ ${saved.code} ثبت شد ✓`);
   };
 
   const onStatus = async (v, st) => {

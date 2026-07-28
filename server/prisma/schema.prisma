@@ -206,7 +206,10 @@ model Patient {
   firstName  String   @map("first_name")
   lastName   String   @map("last_name")
   phone      String?
-  nationalId String?   @map("national_id")
+  /// کلیدِ هویتِ بیمار. یکتا یعنی «هر کد ملی، یک پرونده» — همان اصلِ MPI.
+  /// nullable می‌ماند چون بیمارِ اورژانسی یا اتباع ممکن است کد ملی نداشته باشد؛
+  /// در Postgres چند NULL با ایندکسِ یکتا سازگارند.
+  nationalId String?   @unique @map("national_id")
   birthDate  DateTime? @map("birth_date")
   createdAt  DateTime  @default(now()) @map("created_at")
   deletedAt  DateTime? @map("deleted_at")
