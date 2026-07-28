@@ -25,7 +25,9 @@ const NOTE_KINDS = {
   discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره',
 };
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-const STATUS_FA = { pending: 'در انتظار عمل', done: 'تمام‌شده', cancelled: 'کنسل' };
+const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', cancelled: 'کنسل' };
+/** برچسبِ نوعِ ملاقات — همان فهرستِ داشبورد؛ پرونده باید ویزیت و عمل را از هم جدا نشان دهد. */
+const VISIT_KINDS = { surgery: 'عمل', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره' };
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 const fmtSize = (b) => (b < 1024 ? `${faNum(b)} بایت`
@@ -176,7 +178,11 @@ function VisitsTab({ rec }) {
       {rec.visits.map((v) => (
         <div key={v.id} className="df-row">
           <div className="df-row-main">
-            <b><span dir="ltr">{v.code}</span> {v.procedureTypeName ? `— ${v.procedureTypeName}` : ''}</b>
+            <b>
+              <span dir="ltr">{v.code}</span>
+              <i className={`rc-kind k-${v.kind || 'surgery'}`}>{VISIT_KINDS[v.kind] ?? VISIT_KINDS.surgery}</i>
+              {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
+            </b>
             <small>
               {[v.surgeonName && `جراح: ${v.surgeonName}`, v.hospitalName, v.techName && `کارشناس: ${v.techName}`,
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}

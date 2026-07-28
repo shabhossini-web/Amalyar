@@ -28,8 +28,13 @@ export class PatientsController {
 
   @RequirePermissions('patients.read')
   @Get('visits')
-  list(@CurrentUser() user: any, @Query('q') q?: string, @Query('status') status?: string) {
-    return this.patients.listVisits(q, status, user);
+  list(
+    @CurrentUser() user: any,
+    @Query('q') q?: string,
+    @Query('status') status?: string,
+    @Query('kind') kind?: string,
+  ) {
+    return this.patients.listVisits(q, status, user, kind);
   }
 
   @RequirePermissions('patients.read')

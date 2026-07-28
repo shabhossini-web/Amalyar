@@ -32,6 +32,16 @@
   background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .45);
 }
 
+/* نوعِ ملاقات کنارِ کدِ مراجعه */
+.rc-kind {
+  margin-inline-start: 7px; font-style: normal; font-size: 10px; font-weight: 700;
+  border-radius: 99px; padding: 2px 8px;
+  color: #c4b5fd; background: rgba(124, 58, 237, .16); border: 1px solid rgba(168, 85, 247, .3);
+}
+.rc-kind.k-clinic   { color: #67e8f9; background: rgba(34, 211, 238, .12);  border-color: rgba(34, 211, 238, .35); }
+.rc-kind.k-followup { color: #6ee7b7; background: rgba(52, 211, 153, .12);  border-color: rgba(52, 211, 153, .35); }
+.rc-kind.k-consult  { color: #fcd34d; background: rgba(251, 191, 36, .12);  border-color: rgba(251, 191, 36, .35); }
+
 .rc-st {
   flex-shrink: 0; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 4px 10px; white-space: nowrap;
 }

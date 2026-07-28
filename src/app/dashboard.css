@@ -46,6 +46,26 @@
 .db-patlink:hover b { color: var(--brand-2, #a855f7); }
 .db-patlink:focus-visible { outline: 2px solid rgba(168, 85, 247, .7); outline-offset: 3px; }
 
+/* نوعِ ملاقات — انتخابگرِ بالای فرم */
+.db-kindrow { display: flex; gap: 6px; margin-bottom: 4px; }
+.db-kindrow button {
+  flex: 1; padding: 9px 6px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
+  color: #b7b0d4; background: rgba(255, 255, 255, .04); border: 1px solid rgba(139, 92, 246, .18);
+}
+.db-kindrow button.on {
+  color: #fff; font-weight: 800; border-color: transparent;
+  background: linear-gradient(135deg, #a855f7, #6d28d9);
+}
+.db-kindfilter { margin-top: -6px; }
+
+/* نشانِ نوع روی کارت — رنگ به نوع، تا در فهرست از هم تفکیک شوند */
+.db-kindtag {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
+}
+.db-kindtag.k-clinic   { color: #67e8f9; background: rgba(34, 211, 238, .12);  border: 1px solid rgba(34, 211, 238, .35); }
+.db-kindtag.k-followup { color: #6ee7b7; background: rgba(52, 211, 153, .12);  border: 1px solid rgba(52, 211, 153, .35); }
+.db-kindtag.k-consult  { color: #fcd34d; background: rgba(251, 191, 36, .12);  border: 1px solid rgba(251, 191, 36, .35); }
+
 /* برچسبِ نوعِ عمل روی کارت */
 .db-optype {
   font-size: 10.5px; font-weight: 700; color: #c4b5fd; flex: 0 0 auto;

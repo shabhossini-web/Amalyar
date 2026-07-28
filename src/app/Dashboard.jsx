@@ -25,13 +25,28 @@ const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy
 const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
 const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" /></svg>);
 
-const STATUS_FA = { pending: 'در انتظار عمل', done: 'تمام‌شده', cancelled: 'کنسل' };
+/**
+ * نوعِ ملاقات. برچسبِ وضعیت و تاریخ به همین بستگی دارد: «در انتظارِ عمل» برای
+ * ویزیتِ مطب بی‌معنی است، و «تاریخِ عمل» هم همین‌طور. ستون‌های DB نامِ op* دارند
+ * ولی آنچه کاربر می‌بیند از این‌جا می‌آید.
+ */
+const KINDS = {
+  surgery:  { label: 'عمل',     date: 'تاریخِ عمل',   pending: 'در انتظار عمل' },
+  clinic:   { label: 'ویزیت',   date: 'تاریخِ ویزیت', pending: 'در انتظار ویزیت' },
+  followup: { label: 'پیگیری',  date: 'تاریخِ پیگیری', pending: 'در انتظار پیگیری' },
+  consult:  { label: 'مشاوره',  date: 'تاریخِ مشاوره', pending: 'در انتظار مشاوره' },
+};
+const kindOf = (k) => KINDS[k] ?? KINDS.surgery;
+const statusLabel = (v) => (v.opStatus === 'pending' ? kindOf(v.kind).pending : STATUS_FA[v.opStatus]);
+
+const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', cancelled: 'کنسل' };
 const FILTERS = [
   { v: 'all', l: 'همه' },
   { v: 'pending', l: 'در انتظار' },
   { v: 'done', l: 'تمام‌شده' },
   { v: 'cancelled', l: 'کنسل' },
 ];
+const KIND_FILTERS = [{ v: 'all', l: 'همه' }, ...Object.entries(KINDS).map(([v, k]) => ({ v, l: k.label }))];
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 
 /* اسپاتلایتِ شیشه */
@@ -107,6 +122,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const [picked, setPicked] = useState(null);
 
   const [f, setF] = useState(() => ({
+    kind: initial?.kind || 'surgery',
     firstName: initial?.firstName || '',
     lastName: initial?.lastName || '',
     phone: initial?.phone || '',
@@ -175,7 +191,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     let opDate;
     if (f.opDateJ.trim()) {
       opDate = jStrToIso(f.opDateJ);
-      if (!opDate) { onToast('تاریخِ عمل نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)'); return; }
+      if (!opDate) { onToast(`${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`); return; }
     }
     let birthDate;
     if (f.birthDateJ.trim()) {
@@ -187,6 +203,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     if (nid && !isValidNationalId(nid)) { onToast('کد ملی معتبر نیست — رقم‌ها را بررسی کنید'); return; }
 
     const common = {
+      kind: f.kind,
       surgeonId: f.surgeonId ?? (editing ? null : undefined),
       hospitalId: f.hospitalId ?? (editing ? null : undefined),
       techId: f.techId ?? (editing ? null : undefined),
@@ -257,6 +274,20 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           <b>{editing ? `ویرایشِ مراجعه ${initial.code}` : 'ثبتِ مراجعهٔ جدید'}</b>
           <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
         </header>
+
+        {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
+        <div className="db-kindrow" role="radiogroup" aria-label="نوعِ مراجعه">
+          {Object.entries(KINDS).map(([v, k]) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={f.kind === v}
+              className={f.kind === v ? 'on' : ''}
+              onClick={() => setF((s) => ({ ...s, kind: v }))}
+            >{k.label}</button>
+          ))}
+        </div>
 
         {!editing && (
           <div className="lg-tabs db-modetabs" role="tablist">
@@ -383,7 +414,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         />
 
         <label className="db-field">
-          <span>تاریخِ عمل (شمسی)</span>
+          <span>{kindOf(f.kind).date} (شمسی)</span>
           <div className="db-daterow">
             <input type="text" dir="ltr" inputMode="numeric" value={f.opDateJ} onChange={set('opDateJ')} placeholder="۱۴۰۵/۰۴/۲۸" />
             <button type="button" className="db-today" onClick={() => setF((s) => ({ ...s, opDateJ: todayJStr() }))}>امروز</button>
@@ -572,8 +603,10 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
           <b>{v.fullName}</b>
           <span>{v.code}</span>
         </Link>
+        {/* نشانِ نوع فقط وقتی «عمل» نیست — برچسبِ تکراری روی همهٔ کارت‌ها اطلاعات نیست. */}
+        {v.kind && v.kind !== 'surgery' && <span className={`db-kindtag k-${v.kind}`}>{kindOf(v.kind).label}</span>}
         {(v.procedureTypeName || v.opType) && <span className="db-optype">{v.procedureTypeName || v.opType}</span>}
-        <span className={`us-status db-st-${v.opStatus}`}>{STATUS_FA[v.opStatus]}</span>
+        <span className={`us-status db-st-${v.opStatus}`}>{statusLabel(v)}</span>
       </div>
 
       <div className="db-facts">
@@ -618,6 +651,7 @@ export default function Dashboard() {
   const [visits, setVisits] = useState(null);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
+  const [kind, setKind] = useState('all');
   const [modal, setModal] = useState(null); // null | {} | {visit}
   const [defsOpen, setDefsOpen] = useState(false);
   const [busyId, setBusyId] = useState(0);
@@ -635,10 +669,11 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const load = useCallback((query, st) => {
+  const load = useCallback((query, st, kn) => {
     const params = new URLSearchParams();
     if (query?.trim()) params.set('q', query.trim());
     if (st && st !== 'all') params.set('status', st);
+    if (kn && kn !== 'all') params.set('kind', kn);
     return api(`/visits?${params}`)
       .then((rows) => { setDenied(false); setVisits(rows); })
       .catch((e) => {
@@ -668,14 +703,20 @@ export default function Dashboard() {
   // دوباره از سرور خوانده می‌شود (باگِ واقعی: دادهٔ حسابِ قبلی تا رفرش می‌ماند)
   useEffect(() => {
     setDenied(false);
-    const t = setTimeout(() => load(q, status), q ? 300 : 0);
+    const t = setTimeout(() => load(q, status, kind), q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [q, status, load, user?.id]);
+  }, [q, status, kind, load, user?.id]);
 
   useEffect(() => { loadDefs(); }, [loadDefs, user?.id]);
 
   // سوییچِ حساب وسطِ فرم/شیتِ باز → بسته شود
   useEffect(() => { setModal(null); setDefsOpen(false); }, [user?.id]);
+
+  const kindsPresent = useMemo(
+    () => [...new Set((visits || []).map((v) => v.kind || 'surgery'))],
+    [visits],
+  );
+  const showKindFilter = kind !== 'all' || kindsPresent.length > 1;
 
   const stats = useMemo(() => {
     const rows = visits || [];
@@ -689,7 +730,7 @@ export default function Dashboard() {
 
   const onSaved = (saved, wasEdit) => {
     setModal(null);
-    load(qRef.current, status);
+    load(qRef.current, status, kind);
     if (wasEdit) { setToast('مراجعه ویرایش شد ✓'); return; }
 
     // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی
@@ -743,8 +784,10 @@ export default function Dashboard() {
         {!denied && (<>
         <div className="db-stats">
           <div className="glass db-stat"><b>{faNum(stats.total)}</b><span>مراجعه</span></div>
-          <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار عمل</span></div>
-          <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>عملِ امروز</span></div>
+          {/* برچسب‌ها کلی‌اند چون فهرست می‌تواند عمل و ویزیت و پیگیری را با هم داشته باشد؛
+              وقتی روی یک نوع فیلتر شده، همان نوع را می‌گویند. */}
+          <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار</span></div>
+          <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>{kind === 'all' ? 'امروز' : `${kindOf(kind).label}ِ امروز`}</span></div>
         </div>
 
         <div className="db-toolbar">
@@ -773,6 +816,20 @@ export default function Dashboard() {
             </button>
           ))}
         </div>
+
+        {/* فیلترِ نوع فقط وقتی دیده می‌شود که واقعاً بیش از یک نوع در کار باشد؛
+            برای شرکتی که فقط عمل ثبت می‌کند، یک ردیفِ اضافه فقط شلوغی است.
+            ⚠️ وقتی فیلتر فعال است حتماً می‌ماند، وگرنه لیست به یک نوع محدود
+            می‌شد، ردیف ناپدید می‌گشت و راهِ برگشتی نبود. */}
+        {showKindFilter && (
+          <div className="lg-tabs db-filters db-kindfilter" role="tablist" aria-label="نوعِ مراجعه">
+            {KIND_FILTERS.filter((fl) => kind !== 'all' || fl.v === 'all' || kindsPresent.includes(fl.v)).map((fl) => (
+              <button key={fl.v} type="button" role="tab" aria-selected={kind === fl.v} className={kind === fl.v ? 'on' : ''} onClick={() => setKind(fl.v)}>
+                {fl.l}
+              </button>
+            ))}
+          </div>
+        )}
         </>)}
 
         <div className="us-list">

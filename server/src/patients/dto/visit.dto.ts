@@ -12,8 +12,15 @@ import {
 } from 'class-validator';
 import { EnDigits, IsNationalId } from '../../common/validators';
 
+/** نوعِ ملاقات — فهرستِ بسته تا گزارش‌گیری روی متنِ آزاد نیفتد. */
+export const VISIT_KINDS = ['surgery', 'clinic', 'followup', 'consult'] as const;
+
 /// ثبتِ مراجعه — یا patientId (بیمارِ موجود) یا نام/نام‌خانوادگی (بیمارِ جدید)
 export class CreateVisitDto {
+  @IsOptional()
+  @IsIn(VISIT_KINDS as unknown as string[], { message: 'نوعِ مراجعه نامعتبر است' })
+  kind?: string;
+
   @IsOptional()
   @IsInt({ message: 'شناسهٔ بیمار نامعتبر است' })
   patientId?: number;
@@ -98,6 +105,10 @@ export class CreateVisitDto {
 
 /// ویرایشِ مراجعه — همهٔ فیلدها اختیاری؛ نام/موبایل بیمار هم قابلِ اصلاح است
 export class UpdateVisitDto {
+  @IsOptional()
+  @IsIn(VISIT_KINDS as unknown as string[], { message: 'نوعِ مراجعه نامعتبر است' })
+  kind?: string;
+
   @IsOptional()
   @IsString()
   @MinLength(2, { message: 'نام کوتاه است' })

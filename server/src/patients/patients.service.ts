@@ -15,6 +15,7 @@ function enrich(v: any) {
   return {
     id: v.id,
     patientId: v.patientId,
+    kind: v.kind,
     code: `${v.patient.code}-V${v.seq}`,
     patientCode: v.patient.code,
     firstName: v.patient.firstName,
@@ -77,10 +78,11 @@ export class PatientsService {
     return v;
   }
 
-  /// لیستِ مراجعات — q روی نام/کد/موبایل/جراح/بیمارستان، status روی opStatus
-  async listVisits(q?: string, status?: string, user?: any) {
+  /// لیستِ مراجعات — q روی نام/کد/موبایل/جراح/بیمارستان، status روی opStatus، kind روی نوعِ ملاقات
+  async listVisits(q?: string, status?: string, user?: any, kind?: string) {
     const where: any = {};
     if (status && status !== 'all') where.opStatus = status;
+    if (kind && kind !== 'all') where.kind = kind;
     if (q?.trim()) {
       const t = q.trim();
       where.OR = [
@@ -332,6 +334,7 @@ export class PatientsService {
         data: {
           patientId,
           seq,
+          kind: dto.kind || 'surgery',
           ...refs,
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
@@ -381,6 +384,7 @@ export class PatientsService {
         visitPatch.opType = dto.opType?.trim() || null;
       }
       if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
+      if (dto.kind !== undefined) visitPatch.kind = dto.kind;
       if (dto.notes !== undefined) visitPatch.notes = dto.notes || null;
 
       if (Object.keys(patientPatch).length) {

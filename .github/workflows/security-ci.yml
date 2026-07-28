@@ -110,3 +110,27 @@ jobs:
           if (/clinicalNote\.update\([^)]*body/s.test(svc)) { console.error('شرحِ بالینی نباید UPDATE شود؛ نسخهٔ تازه بسازید'); process.exit(1); }
           console.log('patient record boundaries ok');
           "
+
+      # نوعِ ملاقات باید فهرستِ بسته بماند. اگر روزی متنِ آزاد شود، همان مشکلِ
+      # opType برمی‌گردد: «ویزیت» و «ویزیت مطب» و «clinic» سه چیزِ متفاوت می‌شوند
+      # و گزارش‌گیری بی‌معنی می‌گردد.
+      - name: Verify visit kind stays a closed set
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const dto = fs.readFileSync('src/patients/dto/visit.dto.ts', 'utf8');
+          const m = dto.match(/VISIT_KINDS = \[([^\]]+)\]/);
+          if (!m) { console.error('VISIT_KINDS تعریف نشده است'); process.exit(1); }
+          const kinds = m[1].split(',').map((s) => s.trim().replace(/['\\\"]/g, '')).filter(Boolean);
+          if (!kinds.includes('surgery')) { console.error('surgery باید در فهرست بماند'); process.exit(1); }
+          if (!/@IsIn\(VISIT_KINDS/.test(dto)) { console.error('kind باید با IsIn اعتبارسنجی شود'); process.exit(1); }
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          if (!/kind\s+String\s+@default\(\"surgery\"\)/.test(schema)) { console.error('پیش‌فرضِ kind باید surgery بماند'); process.exit(1); }
+          // برچسب‌های فارسی باید برای همهٔ مقادیر وجود داشته باشند، وگرنه UI خالی نشان می‌دهد.
+          const ui = fs.readFileSync('../src/app/Dashboard.jsx', 'utf8');
+          for (const k of kinds) {
+            if (!new RegExp('\\\\b' + k + '\\\\s*:').test(ui)) { console.error('برچسبِ UI برای ' + k + ' نیست'); process.exit(1); }
+          }
+          console.log('visit kinds ok:', kinds.join(', '));
+          "

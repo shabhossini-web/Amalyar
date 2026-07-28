@@ -116,6 +116,7 @@ export class RecordService {
       visits: visits.map((v) => ({
         id: v.id,
         seq: v.seq,
+        kind: v.kind,
         code: `${patient.code}-V${v.seq}`,
         opDate: v.opDate,
         opStatus: v.opStatus,
