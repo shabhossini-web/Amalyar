@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import Mark from '../components/Mark.jsx';
+import './platform.css';
 
 const API = typeof window === 'undefined' ? '/api/platform' : `${window.location.origin}/api/platform`;
 
@@ -23,6 +25,15 @@ async function platformApi(path, { method = 'GET', body, csrf = false } = {}) {
   let data = null;
   if (text) {
     try { data = JSON.parse(text); } catch { data = text; }
+  }
+  // ⚠️ اگر API بالا نباشد، سرورِ استاتیک همان index.html را با ۲۰۰ برمی‌گرداند.
+  // بدونِ این بررسی، رشتهٔ HTML به‌جای snapshot می‌نشست و صفحه با
+  // «Cannot read properties of undefined» کاملاً سفید می‌شد — خطایی که هیچ
+  // ربطی به علتِ واقعی نداشت.
+  if (response.ok && typeof data === 'string') {
+    const error = new Error('پاسخِ سرور معتبر نیست؛ به نظر می‌رسد API در دسترس نیست.');
+    error.status = 502;
+    throw error;
   }
   if (!response.ok) {
     const raw = data && typeof data === 'object' ? data.message : null;
@@ -55,6 +66,10 @@ const TENANT_STATUS = {
 };
 
 const faDate = (value) => value ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
+const faNum = (value) => String(value ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+
+/// یک ثابت، تا هیچ‌جا snapshot با آرایهٔ جاافتاده ست نشود (باگِ واقعیِ خروج).
+const EMPTY_SNAPSHOT = { tenants: [], jobs: [], deletions: [] };
 
 export default function PlatformAdmin() {
   const [phase, setPhase] = useState('loading');
@@ -63,7 +78,7 @@ export default function PlatformAdmin() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const [snapshot, setSnapshot] = useState({ tenants: [], jobs: [], deletions: [] });
+  const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
   const [form, setForm] = useState({ name: '', slug: '', hostname: '' });
   const [hostnameEdited, setHostnameEdited] = useState(false);
 
@@ -75,15 +90,32 @@ export default function PlatformAdmin() {
   const [delError, setDelError] = useState('');
 
   const activeJobs = useMemo(
-    () =>
-      snapshot.jobs.some((job) => job.status === 'queued' || job.status === 'running')
-      || (snapshot.deletions ?? []).some((job) => job.status === 'queued' || job.status === 'running'),
+    () => [...snapshot.jobs, ...snapshot.deletions]
+      .some((job) => job.status === 'queued' || job.status === 'running'),
     [snapshot.jobs, snapshot.deletions],
   );
 
+  const stats = useMemo(() => {
+    const all = [...snapshot.jobs, ...snapshot.deletions];
+    return {
+      active: snapshot.tenants.filter((t) => t.status === 'active').length,
+      building: snapshot.tenants.filter((t) => t.status !== 'active').length,
+      failed: all.filter((j) => j.status === 'failed').length,
+      queued: all.filter((j) => j.status === 'queued' || j.status === 'running').length,
+    };
+  }, [snapshot]);
+
+  /**
+   * snapshot همیشه هر سه آرایه را دارد، حتی اگر سرور یکی را نفرستد.
+   * کنسولِ مدیریت نباید با یک فیلدِ غایب کلاً از کار بیفتد.
+   */
   const load = async () => {
     const data = await platformApi('/snapshot');
-    setSnapshot(data);
+    setSnapshot({
+      tenants: Array.isArray(data?.tenants) ? data.tenants : [],
+      jobs: Array.isArray(data?.jobs) ? data.jobs : [],
+      deletions: Array.isArray(data?.deletions) ? data.deletions : [],
+    });
   };
 
   useEffect(() => {
@@ -179,7 +211,7 @@ export default function PlatformAdmin() {
     } catch {
       // پاک‌شدن session سمت سرور هدف است؛ در هر حالت UI به ورود برمی‌گردد.
     } finally {
-      setSnapshot({ tenants: [], jobs: [] });
+      setSnapshot(EMPTY_SNAPSHOT);
       setPhase('login');
       setBusy(false);
     }
@@ -290,7 +322,6 @@ export default function PlatformAdmin() {
 
   return (
     <main className="pa" dir="rtl">
-      <style>{styles}</style>
       <div className="pa-glow pa-g1" aria-hidden="true" />
       <div className="pa-glow pa-g2" aria-hidden="true" />
 
@@ -298,7 +329,9 @@ export default function PlatformAdmin() {
 
       {(phase === 'login' || phase === 'verify') && (
         <section className="pa-card pa-auth">
-          <div className="pa-mark">ع</div>
+          {/* نشانِ رسمیِ برند — همان کامپوننتی که لانچر استفاده می‌کند، نه یک حرفِ جایگزین. */}
+          <div className="pa-mark"><Mark draw aria-hidden="true" /></div>
+          <p className="pa-word">عمل‌یار</p>
           <p className="pa-kicker">AMALYAR PLATFORM</p>
           <h1>مدیریت پلتفرم</h1>
           <p className="pa-sub">این بخش از حساب‌های شرکت‌ها کاملاً جداست و فقط برای مدیران مجاز پلتفرم فعال می‌شود.</p>
@@ -342,12 +375,34 @@ export default function PlatformAdmin() {
       {phase === 'dashboard' && (
         <div className="pa-shell">
           <header className="pa-head">
-            <div>
+            <Mark className="pa-head-mark" aria-hidden="true" />
+            <div className="pa-head-text">
               <p className="pa-kicker">AMALYAR CONTROL PLANE</p>
-              <h1>شرکت‌ها و provisioning</h1>
+              <h1>شرکت‌ها و ساختِ خودکار</h1>
             </div>
+            {/* نبضِ زنده: تا وقتی کاری در صف است، اپراتور باید بدون شمردنِ کارت‌ها بفهمد. */}
+            {activeJobs && <span className="pa-live"><i />در حال پردازش</span>}
             <button className="pa-logout" onClick={logout} disabled={busy}>خروج امن</button>
           </header>
+
+          <div className="pa-stats">
+            <div className="pa-stat">
+              <b>{faNum(stats.active)}</b>
+              <small>شرکتِ فعال</small>
+            </div>
+            <div className="pa-stat">
+              <b>{faNum(stats.building)}</b>
+              <small>در حال ساخت</small>
+            </div>
+            <div className={`pa-stat${stats.failed ? ' bad' : ''}`}>
+              <b>{faNum(stats.failed)}</b>
+              <small>ناموفق</small>
+            </div>
+            <div className="pa-stat">
+              <b>{faNum(stats.queued)}</b>
+              <small>در صف</small>
+            </div>
+          </div>
 
           {notice && <div className="pa-notice pa-wide">{notice}</div>}
 
@@ -438,7 +493,7 @@ export default function PlatformAdmin() {
             </div>
           </section>
 
-          {(snapshot.deletions ?? []).length > 0 && (
+          {snapshot.deletions.length > 0 && (
             <section className="pa-card pa-jobs">
               <div className="pa-section-title">
                 <span>{snapshot.deletions.length}</span>
@@ -529,32 +584,3 @@ export default function PlatformAdmin() {
     </main>
   );
 }
-
-const styles = `
-.pa{min-height:100vh;background:#07051a;color:#f4f1ff;font-family:Vazirmatn,system-ui,sans-serif;padding:24px;position:relative;overflow:hidden}
-.pa *{box-sizing:border-box}.pa-glow{position:fixed;border-radius:50%;filter:blur(110px);pointer-events:none;opacity:.28}.pa-g1{width:480px;height:480px;background:#7c3aed;top:-220px;right:-160px}.pa-g2{width:420px;height:420px;background:#00d4ff;bottom:-240px;left:-180px;opacity:.12}
-.pa-shell{width:min(1120px,100%);margin:auto;position:relative}.pa-card{background:rgba(18,13,49,.86);border:1px solid rgba(139,92,246,.28);border-radius:24px;box-shadow:0 24px 80px rgba(0,0,0,.38);backdrop-filter:blur(18px)}
-.pa-auth{width:min(460px,100%);margin:7vh auto;padding:34px;text-align:center;position:relative}.pa-mark{width:62px;height:62px;margin:0 auto 12px;border-radius:18px;display:grid;place-items:center;font-size:34px;font-weight:900;background:linear-gradient(135deg,#a855f7,#5b21b6);box-shadow:0 0 40px rgba(168,85,247,.35)}
-.pa-kicker{color:#22d3ee;font-size:11px;letter-spacing:2px;font-weight:800}.pa h1{font-size:clamp(25px,5vw,38px);margin:7px 0}.pa-sub{color:#aaa3ca;font-size:14px;line-height:2;margin:0 auto 24px;max-width:370px}
-.pa form{display:grid;gap:10px;text-align:right}.pa label{font-size:12px;color:#c7c2df;margin-top:5px}.pa input,.pa select{width:100%;height:52px;border-radius:13px;border:1px solid rgba(139,92,246,.3);background:rgba(3,2,18,.62);color:#fff;padding:0 15px;font:inherit;outline:none}.pa input:focus,.pa select:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.12)}.pa-identity{min-height:52px;display:flex;align-items:center;border-radius:13px;border:1px solid rgba(139,92,246,.2);background:rgba(139,92,246,.07);color:#aaa4c6;padding:12px 15px;font-size:12px;line-height:1.8}
-.pa button{font:inherit;border:0;cursor:pointer}.pa form>button:not(.pa-link){height:52px;border-radius:13px;background:linear-gradient(135deg,#a855f7,#6d28d9);color:#fff;font-weight:900;margin-top:10px}.pa button:disabled{opacity:.5;cursor:not-allowed}.pa-link{color:#a9a2cb;background:transparent;padding:10px}
-.pa-notice{margin-top:16px;padding:12px 15px;border-radius:12px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.22);color:#c8f7ff;font-size:13px;line-height:1.8}.pa-security{margin-top:22px;color:#6f6991;font-size:10px;line-height:1.8}
-.pa-loader{width:28px;height:28px;margin:0 auto 15px;border:3px solid rgba(168,85,247,.2);border-top-color:#a855f7;border-radius:50%;animation:paSpin .8s linear infinite}@keyframes paSpin{to{transform:rotate(360deg)}}
-.pa-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:16px 0 24px}.pa-head h1{margin:2px 0}.pa-logout,.pa-refresh{color:#ddd7f5;background:rgba(255,255,255,.05);border:1px solid rgba(139,92,246,.24)!important;border-radius:12px;padding:10px 15px}.pa-wide{margin:0 0 18px}
-.pa-grid{display:grid;grid-template-columns:minmax(300px,.8fr) minmax(340px,1.2fr);gap:18px}.pa-create,.pa-grid>.pa-card,.pa-jobs{padding:24px}.pa-section-title{display:flex;align-items:center;gap:12px;margin-bottom:18px}.pa-section-title>span{min-width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:rgba(168,85,247,.13);color:#c084fc;font-weight:900}.pa-section-title h2{font-size:18px;margin:0}.pa-section-title p{font-size:11px;color:#8982aa;margin:3px 0 0}.pa-section-title .pa-refresh{margin-right:auto}
-.pa-hint{font-size:10px;color:#77708f;text-align:center}.pa-list{display:grid;gap:10px;max-height:430px;overflow:auto}.pa-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;border-radius:14px;background:rgba(255,255,255,.025);border:1px solid rgba(139,92,246,.12)}.pa-row b,.pa-row small{display:block}.pa-row small{color:#817aa2;font-size:10px;margin-top:4px}
-.pa-badge{font-size:10px;padding:5px 10px;border-radius:99px;background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.22);white-space:nowrap}.pa-badge.ok{background:rgba(52,211,153,.1);color:#34d399;border-color:rgba(52,211,153,.22)}.pa-badge.run{color:#22d3ee;background:rgba(34,211,238,.1);border-color:rgba(34,211,238,.22)}.pa-badge.fail{color:#fb7185;background:rgba(251,113,133,.1);border-color:rgba(251,113,133,.22)}
-.pa-jobs{margin-top:18px}.pa-job-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.pa-job{padding:15px;border-radius:15px;border:1px solid rgba(139,92,246,.14);background:rgba(255,255,255,.02)}.pa-job-top{display:flex;justify-content:space-between;gap:8px}.pa-job code,.pa-job small{display:block;color:#8f88af;font-size:10px;margin-top:8px;overflow:hidden;text-overflow:ellipsis}.pa-job-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px;font-size:9px;color:#6f688d}.pa-job-foot button{color:#fda4af;background:rgba(251,113,133,.08);border-radius:8px;padding:6px 8px}.pa-empty{padding:24px;text-align:center;color:#817aa2;font-size:13px}
-.pa-row-main{min-width:0}.pa-row-side{display:flex;align-items:center;gap:8px;flex-shrink:0}.pa-host{display:block;color:#67e8f9;font-size:10px;margin-top:4px;text-decoration:none;overflow:hidden;text-overflow:ellipsis}.pa-host:hover{text-decoration:underline}
-.pa-danger{font-size:10px;padding:7px 11px;border-radius:9px;color:#fda4af;background:rgba(251,113,133,.09);border:1px solid rgba(251,113,133,.24)!important}.pa-danger:disabled{opacity:.45}
-.pa-modal-bg{position:fixed;inset:0;z-index:50;background:rgba(4,2,15,.76);backdrop-filter:blur(6px);display:grid;place-items:center;padding:18px;overflow:auto}
-.pa-modal{width:min(430px,100%);padding:28px;text-align:center}.pa-modal h2{font-size:20px;margin:0 0 8px}.pa-modal-sub{color:#c3bcdd;font-size:13px;line-height:2;margin:0 0 20px}
-.pa-danger-mark{width:52px;height:52px;margin:0 auto 14px;border-radius:16px;display:grid;place-items:center;font-size:28px;font-weight:900;color:#fb7185;background:rgba(251,113,133,.12);border:1px solid rgba(251,113,133,.3)}
-.pa-modal label{display:block;text-align:right;font-size:12px;color:#c7c2df;margin-bottom:7px}.pa-modal input{width:100%;height:50px;border-radius:13px;border:1px solid rgba(251,113,133,.28);background:rgba(3,2,18,.62);color:#fff;padding:0 15px;font:inherit;outline:none;text-align:center;letter-spacing:2px}.pa-modal input:focus{border-color:#fb7185;box-shadow:0 0 0 3px rgba(251,113,133,.12)}
-.pa-echo{margin-bottom:9px;padding:9px;border-radius:10px;background:rgba(255,255,255,.04);border:1px dashed rgba(139,92,246,.28);color:#d7d1f2;font-size:13px;user-select:all}
-.pa-modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.pa-modal-actions button{height:48px;border-radius:12px;font-weight:800}
-.pa-ghost{color:#cfc9e8;background:rgba(255,255,255,.05);border:1px solid rgba(139,92,246,.24)!important}
-.pa-danger-btn{color:#fff;background:linear-gradient(135deg,#f43f5e,#9f1239)}.pa-danger-btn:disabled{opacity:.42}
-.pa-modal-err{margin-top:14px;padding:11px 14px;border-radius:11px;background:rgba(251,113,133,.09);border:1px solid rgba(251,113,133,.25);color:#fecdd3;font-size:12px;line-height:1.9}
-@media(max-width:760px){.pa{padding:14px}.pa-grid{grid-template-columns:1fr}.pa-job-grid{grid-template-columns:1fr}.pa-auth{margin:2vh auto;padding:26px 20px}.pa-head{align-items:flex-start}.pa-head h1{font-size:24px}.pa-create,.pa-grid>.pa-card,.pa-jobs{padding:18px}.pa-section-title{align-items:flex-start}.pa-modal{padding:22px 18px}.pa-row{flex-wrap:wrap}}
-`;
