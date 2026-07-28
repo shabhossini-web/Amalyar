@@ -89,3 +89,24 @@ jobs:
           }
           if (toEnDigits('۰۹۱۲۱۲۳۴۵۶۷') !== '09121234567') process.exit(1);
           "
+
+      # پروندهٔ بیمار دو مرزِ حساس دارد که هیچ‌کدام را تایپ‌چک نمی‌گیرد:
+      # جداییِ فیلدهای بالینی از هویتی، و ساخته‌شدنِ مسیرِ فایل از tenantId.
+      - name: Verify patient record boundaries
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const svc = fs.readFileSync('src/patients/record.service.ts', 'utf8');
+          // فیلدهای حساس نباید به نمای عمومی سُر بخورند.
+          const pub = svc.split('const PUBLIC_FIELDS')[1].split('} as const')[0];
+          for (const leaked of ['allergies', 'insurer', 'chronicConditions', 'medications', 'emergencyPhone']) {
+            if (pub.includes(leaked)) { console.error('فیلدِ بالینی در PUBLIC_FIELDS: ' + leaked); process.exit(1); }
+          }
+          const store = fs.readFileSync('src/storage/storage.service.ts', 'utf8');
+          if (!store.includes('tenantContext.require()')) { console.error('مسیرِ ذخیره‌سازی باید از TenantContext بیاید'); process.exit(1); }
+          if (!/\\\$\\{tenantId\\}|tenantId/.test(store) || !store.includes('createHash')) { console.error('نامِ فایل باید hash محتوا باشد'); process.exit(1); }
+          // شرحِ بالینی باید تغییرناپذیر بماند: هیچ update ای روی body.
+          if (/clinicalNote\.update\([^)]*body/s.test(svc)) { console.error('شرحِ بالینی نباید UPDATE شود؛ نسخهٔ تازه بسازید'); process.exit(1); }
+          console.log('patient record boundaries ok');
+          "

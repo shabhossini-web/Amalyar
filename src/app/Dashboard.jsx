@@ -566,10 +566,12 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
     <div className="glass us-card db-card" onMouseMove={track}>
       <span className="glass-glow" aria-hidden="true" />
       <div className="us-row">
-        <div className="us-meta">
+        {/* نامِ بیمار درِ ورودیِ پرونده است — کاربر همان‌جا که بیمار را می‌بیند
+            انتظار دارد بتواند سابقه‌اش را باز کند، نه از یک منویِ دیگر. */}
+        <Link className="us-meta db-patlink" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">
           <b>{v.fullName}</b>
           <span>{v.code}</span>
-        </div>
+        </Link>
         {(v.procedureTypeName || v.opType) && <span className="db-optype">{v.procedureTypeName || v.opType}</span>}
         <span className={`us-status db-st-${v.opStatus}`}>{STATUS_FA[v.opStatus]}</span>
       </div>

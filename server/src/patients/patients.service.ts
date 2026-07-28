@@ -4,6 +4,7 @@ import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
+import { actorName } from '../common/person';
 import { AuditService } from '../audit/audit.service';
 
 /**
@@ -33,7 +34,9 @@ function enrich(v: any) {
     procedureTypeName: v.procedureType?.name ?? v.opType,
     diagnosisId: v.diagnosisId,
     diagnosisTitle: v.diagnosis?.title ?? null,
-    opReport: v.opReport,
+    // شرحِ عمل حالا یک ClinicalNote است (نسخه‌دار و تغییرناپذیر)، ولی فرمِ مراجعه
+    // همان یک فیلد را می‌بیند — تنها نسخهٔ جاری.
+    opReport: v.clinicalNotes?.[0]?.body ?? null,
     opType: v.opType,
     opDate: v.opDate,
     opStatus: v.opStatus,
@@ -51,6 +54,12 @@ const INCLUDE_PATIENT = {
   diagnosis: true,
   surgeon: { include: { person: true } },
   tech: { include: { person: true } },
+  // فقط نسخهٔ جاریِ شرحِ عمل؛ تاریخچه از مسیرِ پروندهٔ بیمار خوانده می‌شود.
+  clinicalNotes: {
+    where: { kind: 'op', replacedAt: null },
+    orderBy: { createdAt: 'desc' },
+    take: 1,
+  },
 } as const;
 
 @Injectable()
@@ -194,6 +203,38 @@ export class PatientsService {
   }
 
   /**
+   * نوشتنِ شرحِ عمل از فرمِ مراجعه.
+   *
+   * فرم یک textarea است ولی مقصد یک سندِ نسخه‌دار: متنِ تازه رکوردِ جدید می‌سازد و
+   * قبلی `replacedAt` می‌گیرد، هرگز بازنویسی نمی‌شود. خالی‌کردنِ فیلد یعنی
+   * «این شرح دیگر جاری نیست»، نه «هیچ‌وقت نوشته نشده بود».
+   */
+  private async setOpReport(tx: any, visit: { id: number; patientId: number }, body: string | null, user: any) {
+    const current = await tx.clinicalNote.findFirst({
+      where: { visitId: visit.id, kind: 'op', replacedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    const text = body?.trim() || null;
+    if (current?.body === text) return;
+    if (!text && !current) return;
+
+    if (current) await tx.clinicalNote.update({ where: { id: current.id }, data: { replacedAt: new Date() } });
+    if (text) {
+      await tx.clinicalNote.create({
+        data: {
+          patientId: visit.patientId,
+          visitId: visit.id,
+          kind: 'op',
+          body: text,
+          authorId: user?.id ?? null,
+          authorName: actorName(user),
+          replacesId: current?.id ?? null,
+        },
+      });
+    }
+  }
+
+  /**
    * پیداکردنِ پروندهٔ بیمار بر اساسِ کدِ ملی — قلبِ قاعدهٔ «هر کد ملی، یک پرونده».
    *
    * سه حالت:
@@ -240,7 +281,8 @@ export class PatientsService {
    * خروجی `patientStatus` را حمل می‌کند تا کلاینت در toast بگوید «پروندهٔ
    * AM-0012 — مراجعهٔ ۳» و کاربر بفهمد ثبتِ دوباره پروندهٔ تکراری نساخته است.
    */
-  async createVisit(dto: CreateVisitDto, userId?: number) {
+  async createVisit(dto: CreateVisitDto, user?: any) {
+    const userId: number | undefined = user?.id;
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
@@ -293,13 +335,20 @@ export class PatientsService {
           ...refs,
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
-          opReport: dto.opReport?.trim() || null,
           opDate: dto.opDate ? new Date(dto.opDate) : null,
           notes: dto.notes || null,
           createdById: userId ?? null,
         },
         include: INCLUDE_PATIENT,
       });
+      if (dto.opReport?.trim()) {
+        await this.setOpReport(tx, visit, dto.opReport, user);
+        visit.clinicalNotes = await tx.clinicalNote.findMany({
+          where: { visitId: visit.id, kind: 'op', replacedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        });
+      }
       return { visit, patientStatus };
     });
     const result = { ...enrich(v), patientStatus };
@@ -331,12 +380,14 @@ export class PatientsService {
       if (dto.opType !== undefined && visitPatch.opType === undefined) {
         visitPatch.opType = dto.opType?.trim() || null;
       }
-      if (dto.opReport !== undefined) visitPatch.opReport = dto.opReport?.trim() || null;
       if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
       if (dto.notes !== undefined) visitPatch.notes = dto.notes || null;
 
       if (Object.keys(patientPatch).length) {
         await tx.patient.update({ where: { id: v.patientId }, data: patientPatch });
+      }
+      if (dto.opReport !== undefined) {
+        await this.setOpReport(tx, { id, patientId: v.patientId }, dto.opReport, user);
       }
       return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_PATIENT });
     });

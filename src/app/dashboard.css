@@ -41,6 +41,11 @@
 .db-filters { margin-bottom: 14px; }
 .db-defbtn { width: 44px; height: auto; align-self: stretch; border-radius: 13px; }
 
+/* نامِ بیمار روی کارت = لینکِ پرونده */
+.db-patlink { text-decoration: none; color: inherit; border-radius: 9px; }
+.db-patlink:hover b { color: var(--brand-2, #a855f7); }
+.db-patlink:focus-visible { outline: 2px solid rgba(168, 85, 247, .7); outline-offset: 3px; }
+
 /* برچسبِ نوعِ عمل روی کارت */
 .db-optype {
   font-size: 10.5px; font-weight: 700; color: #c4b5fd; flex: 0 0 auto;

@@ -11,6 +11,15 @@ export const PERMISSION_DEFAULTS: Record<string, number> = {
   'patients.update': LEVEL.SUPERVISOR,
   'patients.status': LEVEL.SUPERVISOR,
   'patients.delete': LEVEL.SUPER_ADMIN,
+  // بخشِ بالینیِ پرونده (حساسیت، سابقه، بیمه، شرح‌ها) از بخشِ هویتی جداست:
+  // کارشناسی که برای چینشِ کار نامِ بیمار را می‌بیند، لازم نیست سابقهٔ پزشکی‌اش را ببیند.
+  'patients.clinical.read': LEVEL.TECH_ADMIN,
+  'patients.clinical.write': LEVEL.TECH_ADMIN,
+  // آپلودِ گزارشِ عمل کارِ خودِ کارشناس است، پس نوشتن از سطحِ کارشناس باز است؛
+  // دامنه‌اش با scope محدود می‌شود (فقط بیمارانی که در مراجعه‌شان بوده).
+  'documents.read': LEVEL.TECH,
+  'documents.write': LEVEL.TECH,
+  'documents.delete': LEVEL.ADMIN,
   'definitions.read': LEVEL.TECH,
   'definitions.manage': LEVEL.ADMIN,
   'users.manage': LEVEL.SUPER_ADMIN,

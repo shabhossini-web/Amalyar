@@ -41,7 +41,7 @@ export class PatientsController {
   @RequirePermissions('patients.create')
   @Post('visits')
   create(@Body() dto: CreateVisitDto, @CurrentUser() user: any) {
-    return this.patients.createVisit(dto, user?.id);
+    return this.patients.createVisit(dto, user);
   }
 
   @RequirePermissions('patients.update')

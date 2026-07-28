@@ -199,7 +199,16 @@ model AuditEvent {
   @@map("audit_events")
 }
 
-/// بیمارِ دائمی — یک نفر، چند مراجعه. کدِ خوانا: AM-NNNN
+/// پروندهٔ بیمار — یک نفر، یک پرونده، چند مراجعه. کدِ خوانا: AM-NNNN
+///
+/// این رکورد «پوشهٔ» بیمار است: مراجعات، مدارک و شرح‌ها همه به همین id می‌چسبند،
+/// حتی وقتی به یک مراجعهٔ مشخص هم مربوط باشند. پس هیچ مدرکی بی‌پرونده نمی‌ماند و
+/// «همهٔ سابقهٔ این بیمار» یک query است، نه جمع‌کردن از چند جا.
+///
+/// تفکیکِ عمومی/بالینی عمداً در سطحِ مجوز است نه جدول: فیلدهای هویتی با
+/// `patients.read` و فیلدهای بالینی (حساسیت، سابقه، بیمه) با
+/// `patients.clinical.read`. سرویس دو نمای متفاوت می‌سازد، نه یک نما با فیلدهای
+/// خالی — چیزی که کاربر اجازه‌اش را ندارد اصلاً از DB بیرون نمی‌آید.
 model Patient {
   id         Int      @id @default(autoincrement())
   code       String   @unique // AM-0001
@@ -211,15 +220,111 @@ model Patient {
   /// در Postgres چند NULL با ایندکسِ یکتا سازگارند.
   nationalId String?   @unique @map("national_id")
   birthDate  DateTime? @map("birth_date")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  deletedAt  DateTime? @map("deleted_at")
-  deletedById Int?     @map("deleted_by_id")
-  deleteReason String? @map("delete_reason")
 
-  visits Visit[]
+  // ── جمعیت‌شناختی ──
+  gender  String? // male | female
+  city    String?
+  address String?
+
+  // ── بالینیِ پایه ──
+  bloodType         String? @map("blood_type") // A+ … O-
+  /// فعلاً متنِ آزاد. ساختاری‌کردنشان (مثل ProcedureType) وقتی ارزش دارد که رویشان
+  /// هشدار یا گزارش بسازیم؛ تا آن روز، متنِ آزاد صادقانه‌تر از فهرستِ ناقصِ اجباری است.
+  allergies         String?
+  chronicConditions String? @map("chronic_conditions")
+  medications       String?
+
+  // ── بیمه ──
+  insurer             String?
+  insuranceNo         String? @map("insurance_no")
+  supplementalInsurer String? @map("supplemental_insurer")
+
+  // ── تماسِ اضطراری ──
+  emergencyName     String? @map("emergency_name")
+  emergencyPhone    String? @map("emergency_phone")
+  emergencyRelation String? @map("emergency_relation")
+
+  notes String?
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  deletedById  Int?      @map("deleted_by_id")
+  deleteReason String?   @map("delete_reason")
+
+  visits        Visit[]
+  documents     Document[]
+  clinicalNotes ClinicalNote[]
 
   @@index([phone])
   @@map("patients")
+}
+
+/// مدرکِ پزشکی — آزمایش، تصویربرداری، گزارش، رضایت‌نامه، مدرکِ هویتی…
+///
+/// خودِ فایل هرگز در DB نمی‌نشیند: روی دیسک با نامِ sha256 ذخیره می‌شود و فقط از
+/// طریقِ endpointِ احرازشده سرو می‌شود. دلیل: یک CT چند ده مگابایت است؛ dataURL
+/// در DB هم backup را می‌ترکاند هم هر query روی بیمار را سنگین می‌کند.
+model Document {
+  id        Int     @id @default(autoincrement())
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId Int     @map("patient_id")
+  /// اختیاری: مدرک یا به کلِ پرونده مربوط است یا به یک مراجعهٔ مشخص.
+  visit     Visit?  @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId   Int?    @map("visit_id")
+
+  category String  // lab | imaging | report | consent | identity | receipt | other
+  title    String?
+  fileName String  @map("file_name") // نامِ اصلیِ کاربر — فقط نمایش و دانلود
+  mimeType String  @map("mime_type")
+  size     Int
+  /// هم نامِ فایل روی دیسک است هم کلیدِ یکسانی؛ آپلودِ تکراری فضای تازه نمی‌گیرد.
+  sha256   String
+  /// تاریخِ خودِ آزمایش/تصویربرداری، نه تاریخِ آپلود — مدرکِ پارسال ممکن است
+  /// امروز آپلود شود و مرتب‌سازیِ زمانیِ پرونده باید بالینی باشد نه اداری.
+  takenAt  DateTime? @map("taken_at")
+
+  uploadedById Int?      @map("uploaded_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+  deletedById  Int?      @map("deleted_by_id")
+
+  @@index([patientId, category])
+  @@index([visitId])
+  @@index([sha256])
+  @@map("documents")
+}
+
+/// شرحِ بالینی — شرحِ ویزیت، شرحِ عمل، سیرِ بیماری، خلاصهٔ ترخیص.
+///
+/// ⚠️ رکوردها تغییرناپذیرند. «ویرایش» رکوردِ تازه‌ای می‌سازد که به قبلی اشاره
+/// می‌کند و قبلی `replacedAt` می‌گیرد. پروندهٔ پزشکی سندی است که باید بشود ثابت
+/// کرد چه زمانی چه چیزی نوشته شده بود؛ UPDATE روی متنِ بالینی آن تاریخچه را
+/// نابود می‌کند. نمایشِ پیش‌فرض فقط نسخه‌های جاری است (`replacedAt IS NULL`).
+model ClinicalNote {
+  id        Int     @id @default(autoincrement())
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId Int     @map("patient_id")
+  visit     Visit?  @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId   Int?    @map("visit_id")
+
+  kind String // visit | op | progress | discharge | consult
+  body String
+
+  authorId   Int?    @map("author_id")
+  /// عکسِ لحظهٔ نگارش — نویسندهٔ سند باید معلوم بماند حتی اگر حسابش حذف شود.
+  authorName String? @map("author_name")
+
+  replacesId Int?          @unique @map("replaces_id")
+  replaces   ClinicalNote? @relation("NoteVersion", fields: [replacesId], references: [id], onDelete: SetNull)
+  replacedBy ClinicalNote? @relation("NoteVersion")
+  replacedAt DateTime?     @map("replaced_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([patientId, kind])
+  @@index([visitId])
+  @@map("clinical_notes")
 }
 
 /// مراجعه (Visit) — واحدِ اصلیِ کار: عمل/خدمت برای یک بیمار
@@ -245,9 +350,6 @@ model Visit {
   procedureTypeId Int?           @map("procedure_type_id")
   diagnosis       Diagnosis?     @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
   diagnosisId     Int?           @map("diagnosis_id")
-  /// شرحِ عمل — متنِ جراح. برخلافِ تشخیص و نوعِ عمل، اینجا متنِ آزاد درست است:
-  /// روایتِ بالینی است، نه چیزی که رویش گروه‌بندی/گزارش‌گیری شود.
-  opReport        String?        @map("op_report")
 
   opDate       DateTime? @map("op_date") // تاریخِ عمل
   opStatus     String    @default("pending") @map("op_status") // pending | done | cancelled
@@ -257,6 +359,9 @@ model Visit {
   createdById  Int?      @map("created_by_id")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  documents     Document[]
+  clinicalNotes ClinicalNote[]
 
   @@unique([patientId, seq])
   @@index([patientId])

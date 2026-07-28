@@ -8,6 +8,7 @@ import Users from './app/Users.jsx';
 import Profile from './app/Profile.jsx';
 import Dashboard from './app/Dashboard.jsx';
 import Definitions from './app/Definitions.jsx';
+import PatientRecord from './app/PatientRecord.jsx';
 import PlatformAdmin from './app/PlatformAdmin.jsx';
 
 const MARKETING_HOSTS = new Set(['amalyar.com', 'www.amalyar.com', 'localhost', '127.0.0.1']);
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/app/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/app/users" element={<Protected><Users /></Protected>} />
           <Route path="/app/definitions" element={<Protected><Definitions /></Protected>} />
+          <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />
         </Routes>
       </AuthProvider>

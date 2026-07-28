@@ -57,3 +57,44 @@ export async function api(path, { method = 'GET', body, auth = true, token } = {
   }
   return data;
 }
+
+/**
+ * آپلودِ فایل. عمداً `Content-Type` ست نمی‌شود: مرورگر باید خودش
+ * `multipart/form-data` را با boundary بسازد و دست‌کاریِ ما آن را خراب می‌کند.
+ */
+export async function apiUpload(path, formData) {
+  const headers = {};
+  const tok = getToken();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
+  } catch {
+    throw new ApiError('اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.', 0);
+  }
+  const text = await res.text();
+  let data = null;
+  if (text) { try { data = JSON.parse(text); } catch { data = text; } }
+  if (!res.ok) {
+    if (res.status === 401 && tok) window.dispatchEvent(new CustomEvent('amalyar:unauthorized'));
+    const m = data && typeof data === 'object' ? data.message : null;
+    throw new ApiError(Array.isArray(m) ? m.join('، ') : m || `خطای سرور (${res.status})`, res.status);
+  }
+  return data;
+}
+
+/**
+ * فایلِ محافظت‌شده را به‌شکلِ blob URL می‌گیرد.
+ *
+ * لازم است چون مدارک پشتِ هدرِ Authorization‌اند و `<img src>` هدر نمی‌فرستد.
+ * ⚠️ فراخوان باید URL را با `URL.revokeObjectURL` آزاد کند وگرنه حافظه نشت می‌کند.
+ */
+export async function apiBlobUrl(path) {
+  const headers = {};
+  const tok = getToken();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+  const res = await fetch(`${BASE}${path}`, { headers });
+  if (!res.ok) throw new ApiError('فایل در دسترس نیست', res.status);
+  return URL.createObjectURL(await res.blob());
+}

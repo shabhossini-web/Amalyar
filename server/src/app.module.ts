@@ -10,6 +10,7 @@ import { PatientsModule } from './patients/patients.module';
 import { AppController } from './app.controller';
 import { AuditModule } from './audit/audit.module';
 import { PlatformModule } from './platform/platform.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PlatformModule } from './platform/platform.module';
     TenantModule,
     PrismaModule,
     AuditModule,
+    StorageModule,
     SmsModule,
     AuthModule,
     AccountsModule,

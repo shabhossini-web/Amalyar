@@ -17,6 +17,19 @@ export type PersonInput = {
 };
 
 /**
+ * نامِ کاربرِ جاری برای «عکسِ لحظه» در اسنادی مثل شرحِ بالینی.
+ *
+ * ⚠️ کاربرِ درخواست یک Account است و هویتش در `person` نشسته، نه روی خودش.
+ * یک‌بار `user.firstName` نوشتم و بی‌سروصدا undefined شد: سند بدونِ نامِ نویسنده
+ * ثبت می‌شد و چون خطایی نمی‌داد، فقط در آزمونِ زندهٔ مرورگر معلوم شد.
+ */
+export function actorName(user: any): string | null {
+  const p = user?.person;
+  if (!p) return null;
+  return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || null;
+}
+
+/**
  * ساختِ patchِ Person با اعتبارسنجی و نرمال‌سازیِ یکسان.
  *
  * عمداً تابعِ خالص و بیرونِ سرویس‌هاست: جراح و کارشناس هر دو Person می‌سازند و
