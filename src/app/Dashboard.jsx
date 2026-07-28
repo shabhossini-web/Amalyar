@@ -5,6 +5,7 @@ import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import ProfileMenu from './ProfileMenu.jsx';
+import BillingSheet from './BillingSheet.jsx';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
@@ -23,6 +24,7 @@ const DiagIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M14 2H6a2
 const CalIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>);
 const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
+const Money = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></svg>);
 const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" /></svg>);
 
 /**
@@ -585,7 +587,7 @@ function DefsSheet({ defs, onDefsChanged, onClose, onToast }) {
 }
 
 /* ── کارتِ مراجعه ── */
-function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
+function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
   const [confirmDel, setConfirmDel] = useState(false);
   useEffect(() => {
     if (!confirmDel) return undefined;
@@ -606,6 +608,12 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
         {/* نشانِ نوع فقط وقتی «عمل» نیست — برچسبِ تکراری روی همهٔ کارت‌ها اطلاعات نیست. */}
         {v.kind && v.kind !== 'surgery' && <span className={`db-kindtag k-${v.kind}`}>{kindOf(v.kind).label}</span>}
         {(v.procedureTypeName || v.opType) && <span className="db-optype">{v.procedureTypeName || v.opType}</span>}
+        {/* مانده فقط وقتی صورت‌حساب دارد؛ «۰ تومان» روی هر کارت اطلاعات نیست. */}
+        {v.total !== 0 && (
+          <span className={`db-due${v.due <= 0 ? ' ok' : ''}`}>
+            {v.due > 0 ? `مانده ${faNum(v.due)}` : 'تسویه'}
+          </span>
+        )}
         <span className={`us-status db-st-${v.opStatus}`}>{statusLabel(v)}</span>
       </div>
 
@@ -631,6 +639,7 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete }) {
             </button>
           ))}
         </div>
+        <button type="button" className="db-ico" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}><Money width="15" height="15" /></button>
         <button type="button" className="db-ico" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}><Pencil width="15" height="15" /></button>
         <button
           type="button"
@@ -654,6 +663,7 @@ export default function Dashboard() {
   const [kind, setKind] = useState('all');
   const [modal, setModal] = useState(null); // null | {} | {visit}
   const [defsOpen, setDefsOpen] = useState(false);
+  const [billing, setBilling] = useState(null); // مراجعه‌ای که صورت‌حسابش باز است
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
   const [denied, setDenied] = useState(false);
@@ -725,6 +735,8 @@ export default function Dashboard() {
       total: rows.length,
       pending: rows.filter((v) => v.opStatus === 'pending').length,
       today: rows.filter((v) => v.opDate && new Date(v.opDate).toDateString() === todayIso && v.opStatus !== 'cancelled').length,
+      // مانده فقط از مراجعاتِ کنسل‌نشده — بدهیِ یک عملِ لغوشده بدهی نیست.
+      due: rows.filter((v) => v.opStatus !== 'cancelled').reduce((sum, v) => sum + Math.max(0, v.due || 0), 0),
     };
   }, [visits]);
 
@@ -787,6 +799,7 @@ export default function Dashboard() {
           {/* برچسب‌ها کلی‌اند چون فهرست می‌تواند عمل و ویزیت و پیگیری را با هم داشته باشد؛
               وقتی روی یک نوع فیلتر شده، همان نوع را می‌گویند. */}
           <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار</span></div>
+          {stats.due > 0 && <div className="glass db-stat db-stat-due"><b>{faNum(stats.due)}</b><span>ماندهٔ کل</span></div>}
           <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>{kind === 'all' ? 'امروز' : `${kindOf(kind).label}ِ امروز`}</span></div>
         </div>
 
@@ -846,6 +859,7 @@ export default function Dashboard() {
               onEdit={(vv) => setModal({ visit: vv })}
               onStatus={onStatus}
               onDelete={onDelete}
+              onBilling={setBilling}
             />
           ))}
         </div>
@@ -864,6 +878,15 @@ export default function Dashboard() {
 
       {defsOpen && (
         <DefsSheet defs={defs} onDefsChanged={loadDefs} onClose={() => setDefsOpen(false)} onToast={setToast} />
+      )}
+
+      {billing && (
+        <BillingSheet
+          visit={billing}
+          onClose={() => setBilling(null)}
+          onChanged={() => load(qRef.current, status, kind)}
+          onToast={setToast}
+        />
       )}
 
       <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>

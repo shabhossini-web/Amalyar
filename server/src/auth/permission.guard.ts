@@ -20,6 +20,10 @@ export const PERMISSION_DEFAULTS: Record<string, number> = {
   'documents.read': LEVEL.TECH,
   'documents.write': LEVEL.TECH,
   'documents.delete': LEVEL.ADMIN,
+  // مالی از بالینی جداست: سوپروایزری که وضعیتِ عمل را می‌بندد لازم نیست
+  // صورت‌حساب را ببیند، و حسابدار لازم نیست سابقهٔ پزشکی را.
+  'billing.read': LEVEL.SUPERVISOR,
+  'billing.write': LEVEL.ADMIN,
   'definitions.read': LEVEL.TECH,
   'definitions.manage': LEVEL.ADMIN,
   'users.manage': LEVEL.SUPER_ADMIN,

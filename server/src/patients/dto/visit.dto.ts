@@ -6,7 +6,6 @@ import {
   IsString,
   Matches,
   MaxLength,
-  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -88,16 +87,6 @@ export class CreateVisitDto {
   opDate?: string;
 
   @IsOptional()
-  @IsInt({ message: 'مبلغ باید عدد باشد' })
-  @Min(0, { message: 'مبلغ نمی‌تواند منفی باشد' })
-  amount?: number; // تومان
-
-  @IsOptional()
-  @IsInt({ message: 'پرداختی باید عدد باشد' })
-  @Min(0, { message: 'پرداختی نمی‌تواند منفی باشد' })
-  paid?: number; // تومان
-
-  @IsOptional()
   @IsString()
   @MaxLength(1000, { message: 'یادداشت طولانی است' })
   notes?: string;
@@ -177,16 +166,6 @@ export class UpdateVisitDto {
   @ValidateIf((o) => o.opDate !== null && o.opDate !== '')
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
   opDate?: string | null;
-
-  @IsOptional()
-  @IsInt({ message: 'مبلغ باید عدد باشد' })
-  @Min(0)
-  amount?: number; // تومان
-
-  @IsOptional()
-  @IsInt({ message: 'پرداختی باید عدد باشد' })
-  @Min(0)
-  paid?: number; // تومان
 
   @IsOptional()
   @IsString()

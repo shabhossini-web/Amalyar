@@ -134,3 +134,30 @@ jobs:
           }
           console.log('visit kinds ok:', kinds.join(', '));
           "
+
+      # مالیِ مراجعه باید از ردیف‌ها مشتق شود، نه از ستونِ سرجمع. یک ستونِ
+      # cache شده دیر یا زود از ردیف‌ها عقب می‌ماند و آن‌وقت معلوم نیست کدام درست است.
+      - name: Verify billing derives from rows, not cached columns
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const visit = schema.split('model Visit {')[1].split(/\n}/)[0];
+          for (const dead of ['amount', 'paid']) {
+            if (new RegExp('^\\\\s*' + dead + '\\\\s', 'm').test(visit)) {
+              console.error('ستونِ سرجمعِ ' + dead + ' نباید به Visit برگردد'); process.exit(1);
+            }
+          }
+          const { summarize } = require('./dist/patients/billing.service');
+          const cases = [
+            [[], [], 0, 0, 0],
+            [[{amount: 12000000}, {amount: 14000000}, {amount: -2000000}], [{amount: 15000000}], 24000000, 15000000, 9000000],
+            [[{amount: 100}], [{amount: 300}], 100, 300, -200],
+          ];
+          for (const [c, p, total, paid, due] of cases) {
+            const r = summarize(c, p);
+            if (r.total !== total || r.paid !== paid || r.due !== due) { console.error({ r, total, paid, due }); process.exit(1); }
+          }
+          console.log('billing summarize ok');
+          "

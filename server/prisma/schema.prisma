@@ -295,6 +295,62 @@ model Document {
   @@map("documents")
 }
 
+/// قلمِ صورت‌حساب.
+///
+/// جایگزینِ دو ستونِ `amount`/`paid` که روی Visit بودند. آن دو ستون برای
+/// نورومانیتورینگ هم نازک بودند (سهمِ جراح و کارشناس و شرکا جا نمی‌شد) و برای
+/// شرکتِ ست و پیچ که به‌ازای هر قلمِ کالا فاکتور می‌کند اصلاً کار نمی‌کردند.
+/// با ردیف‌های مستقل، «چه چیزی چقدر شد» تاریخچه دارد نه یک عددِ سرجمع.
+///
+/// ⚠️ `amount` علامت‌دار است: تخفیف ردیفی با مبلغِ منفی است، نه یک حالتِ خاص در
+/// محاسبه. این‌طور جمعِ کل همیشه `sum(amount)` می‌ماند و هیچ render ای فرمول ندارد.
+model Charge {
+  id      Int   @id @default(autoincrement())
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int   @map("visit_id")
+
+  /// service | item | discount
+  kind      String @default("service")
+  title     String
+  quantity  Int    @default(1)
+  unitPrice Int    @map("unit_price") // تومان
+  /// quantity × unitPrice، ذخیره‌شده تا تغییرِ بعدیِ قیمت، فاکتورِ قدیمی را عوض نکند.
+  amount    Int // تومان (علامت‌دار)
+
+  notes       String?
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([visitId])
+  @@map("charges")
+}
+
+/// پرداخت — هر دریافتِ واقعی از بیمار یا بیمه.
+///
+/// جدا از Charge است چون سؤال‌های متفاوتی جواب می‌دهد: Charge می‌گوید «چقدر
+/// بدهکار است»، Payment می‌گوید «چقدر و کِی و چطور داد». یک عددِ `paid` هیچ‌کدام
+/// از این‌ها را نگه نمی‌داشت.
+model Payment {
+  id      Int   @id @default(autoincrement())
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int   @map("visit_id")
+
+  amount Int // تومان
+  /// cash | card | transfer | cheque | insurance
+  method String   @default("cash")
+  paidAt DateTime @map("paid_at")
+  /// شمارهٔ پیگیری/ارجاع — برای تطبیق با صورت‌حسابِ بانک.
+  reference String?
+
+  notes       String?
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([visitId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
 /// شرحِ بالینی — شرحِ ویزیت، شرحِ عمل، سیرِ بیماری، خلاصهٔ ترخیص.
 ///
 /// ⚠️ رکوردها تغییرناپذیرند. «ویرایش» رکوردِ تازه‌ای می‌سازد که به قبلی اشاره
@@ -366,8 +422,6 @@ model Visit {
 
   opDate       DateTime? @map("op_date") // تاریخِ عمل
   opStatus     String    @default("pending") @map("op_status") // pending | done | cancelled
-  amount       Int       @default(0) // تومان
-  paid         Int       @default(0) // تومان
   notes        String?
   createdById  Int?      @map("created_by_id")
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -375,6 +429,8 @@ model Visit {
 
   documents     Document[]
   clinicalNotes ClinicalNote[]
+  charges       Charge[]
+  payments      Payment[]
 
   @@unique([patientId, seq])
   @@index([patientId])

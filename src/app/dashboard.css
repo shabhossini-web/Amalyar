@@ -3,7 +3,9 @@
 .db-shell .us-head h1 { font-size: 17px; white-space: nowrap; }
 
 /* آمارِ بالای صفحه */
-.db-stats { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 10px; margin-bottom: 14px; }
+/* تعدادِ کارت‌ها متغیر است (ماندهٔ کل فقط وقتی بدهی هست ظاهر می‌شود)،
+   پس ستون‌ها ثابت نیستند. */
+.db-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .db-stat {
   border-radius: 15px; padding: 11px 8px 9px; text-align: center; cursor: default;
   display: flex; flex-direction: column; gap: 2px;
@@ -294,7 +296,7 @@
 .db-submit:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 @media (max-width: 430px) {
-  .db-stats { grid-template-columns: 1fr 1fr 1.3fr; gap: 7px; }
+  .db-stats { grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 7px; }
   .db-stat b { font-size: 15.5px; }
   .db-grid2 { grid-template-columns: 1fr; }
   .db-add span { display: none; }
@@ -307,4 +309,64 @@
   flex-shrink: 0; padding: 6px 11px; border-radius: 8px; font: inherit; font-size: 12px;
   cursor: pointer; color: #fff; border: 0;
   background: linear-gradient(135deg, #a855f7, #6d28d9);
+}
+
+/* ── صورت‌حساب ── */
+.bl-sheet { gap: 12px; }
+.bl-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.bl-summary > div {
+  padding: 13px 14px; border-radius: 14px; text-align: center;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(139, 92, 246, .16);
+}
+.bl-summary b { display: block; font-size: 19px; font-weight: 900; line-height: 1.25; }
+.bl-summary span { display: block; margin-top: 3px; font-size: 10.5px; color: var(--text3); }
+.bl-summary .bl-due  { background: rgba(251, 191, 36, .08);  border-color: rgba(251, 191, 36, .3); }
+.bl-summary .bl-due b { color: #fbbf24; }
+/* اضافه‌پرداخت خطا نیست ولی باید به چشم بیاید — معمولاً یعنی جایی اشتباه ثبت شده. */
+.bl-summary .bl-over { background: rgba(34, 211, 238, .08); border-color: rgba(34, 211, 238, .3); }
+.bl-summary .bl-over b { color: #22d3ee; }
+
+.bl-add {
+  display: grid; gap: 10px; padding: 14px; border-radius: 15px;
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(139, 92, 246, .14);
+}
+.bl-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; }
+
+.bl-list { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+.bl-row {
+  display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 13px;
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(139, 92, 246, .12);
+}
+.bl-row-main { min-width: 0; flex: 1; }
+.bl-row-main b { display: block; font-size: 13px; }
+.bl-row-main small { display: block; margin-top: 3px; font-size: 10.5px; color: var(--text3); }
+.bl-amount { flex-shrink: 0; font-size: 13.5px; font-weight: 900; }
+.bl-amount.neg { color: #6ee7b7; }
+
+.bl-tag {
+  flex-shrink: 0; font-size: 10px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
+  color: #c4b5fd; background: rgba(124, 58, 237, .14); border: 1px solid rgba(168, 85, 247, .3);
+}
+.bl-tag.t-item     { color: #67e8f9; background: rgba(34, 211, 238, .12); border-color: rgba(34, 211, 238, .3); }
+.bl-tag.t-discount { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .3); }
+.bl-tag.t-pay      { color: #fcd34d; background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .3); }
+
+.bl-del {
+  width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center; border-radius: 9px;
+  cursor: pointer; color: #fda4af;
+  background: rgba(251, 113, 133, .08); border: 1px solid rgba(251, 113, 133, .22);
+}
+
+/* مبلغِ مانده روی کارتِ مراجعه */
+.db-due {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
+  color: #fbbf24; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .32);
+}
+.db-due.ok { color: #6ee7b7; background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .3); }
+
+@media (max-width: 620px) {
+  .bl-summary { grid-template-columns: 1fr; }
+  .bl-summary > div { display: flex; align-items: center; justify-content: space-between; text-align: right; padding: 11px 13px; }
+  .bl-summary b { font-size: 16px; }
+  .bl-summary span { margin-top: 0; }
 }

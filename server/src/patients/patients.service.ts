@@ -6,6 +6,7 @@ import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { actorName } from '../common/person';
 import { AuditService } from '../audit/audit.service';
+import { summarize } from './billing.service';
 
 /**
  * غنی‌سازیِ مراجعه — قانونِ computeVisit: فیلدهای مشتق فقط این‌جا ساخته می‌شوند
@@ -41,6 +42,9 @@ function enrich(v: any) {
     opType: v.opType,
     opDate: v.opDate,
     opStatus: v.opStatus,
+    // جمع‌های مالی از ردیف‌ها مشتق می‌شوند (قانونِ computeVisit)؛ هیچ render ای
+    // اجازهٔ جمع‌زدن ندارد و هیچ ستونِ سرجمعی در DB نیست که از واقعیت عقب بماند.
+    ...summarize(v.charges ?? [], v.payments ?? []),
     notes: v.notes,
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
@@ -61,6 +65,9 @@ const INCLUDE_PATIENT = {
     orderBy: { createdAt: 'desc' },
     take: 1,
   },
+  // فقط مبلغ لازم است؛ کلِ ردیف‌ها را برای فهرستِ ۵۰۰تایی نمی‌کشیم.
+  charges: { select: { amount: true } },
+  payments: { select: { amount: true } },
 } as const;
 
 @Injectable()
