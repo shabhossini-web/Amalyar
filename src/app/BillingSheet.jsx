@@ -23,7 +23,9 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('charges');
 
-  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '' });
+  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '' });
+  const [codeQ, setCodeQ] = useState('');
+  const [codeHits, setCodeHits] = useState([]);
   const [p, setP] = useState({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '' });
 
   const load = useCallback(async () => {
@@ -31,6 +33,35 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     catch (e) { onToast(e.message); onClose(); }
   }, [visit.id, onClose, onToast]);
   useEffect(() => { load(); }, [load]);
+
+  /** جستجوی کتابِ ارزش نسبی — با کد یا با شرح. */
+  useEffect(() => {
+    if (codeQ.trim().length < 2) { setCodeHits([]); return undefined; }
+    let alive = true;
+    const timer = setTimeout(() => {
+      api(`/service-codes?q=${encodeURIComponent(codeQ.trim())}`)
+        .then((rows) => { if (alive) setCodeHits(rows); })
+        .catch(() => { if (alive) setCodeHits([]); });
+    }, 300);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [codeQ]);
+
+  /**
+   * انتخابِ کد: عنوان و مبلغ خودکار پر می‌شوند.
+   *
+   * مبلغ فقط وقتی می‌آید که ضریبِ ریالیِ سال تعریف شده باشد؛ وگرنه عنوان و کد
+   * پر می‌شود و مبلغ دستِ کاربر می‌ماند — بهتر از گذاشتنِ صفرِ گمراه‌کننده.
+   */
+  const pickCode = async (hit) => {
+    setCodeQ('');
+    setCodeHits([]);
+    setC((s) => ({ ...s, title: hit.title, serviceCode: hit.code }));
+    try {
+      const priced = await api(`/service-codes/price?code=${hit.code}`);
+      if (priced.price != null) setC((s) => ({ ...s, unitPrice: String(priced.price) }));
+      else onToast('ضریبِ ریالیِ تعرفه تعریف نشده — مبلغ را دستی وارد کنید');
+    } catch { /* قیمت اختیاری است */ }
+  };
 
   const addCharge = async () => {
     const unitPrice = parseMoney(c.unitPrice);
@@ -40,9 +71,13 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     try {
       await api(`/visits/${visit.id}/charges`, {
         method: 'POST',
-        body: { kind: c.kind, title: c.title.trim(), quantity: Math.max(1, parseMoney(c.quantity) || 1), unitPrice },
+        body: {
+          kind: c.kind, title: c.title.trim(),
+          quantity: Math.max(1, parseMoney(c.quantity) || 1), unitPrice,
+          ...(c.serviceCode ? { serviceCode: c.serviceCode } : {}),
+        },
       });
-      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '' });
+      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '' });
       await load(); onChanged?.();
       onToast('قلم اضافه شد ✓');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
@@ -109,6 +144,32 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
             {tab === 'charges' ? (
               <>
                 <div className="bl-add">
+                  {/* جستجوی کتابِ ارزش نسبی: کد و عنوان و فی یک‌جا می‌آیند،
+                      تا کاربر نه کد را حفظ کند نه فی را دستی حساب کند. */}
+                  <label className="db-field bl-codesearch"><span>کدِ ملیِ خدمت (کتابِ ارزش نسبی)</span>
+                    <input
+                      value={codeQ}
+                      onChange={(e) => setCodeQ(e.target.value)}
+                      placeholder="کد یا شرحِ خدمت — مثلاً ۹۰۱۳۰۰ یا مانیتورینگ"
+                    />
+                    {c.serviceCode && (
+                      <i className="bl-picked">
+                        کدِ انتخاب‌شده: <b dir="ltr">{c.serviceCode}</b>
+                        <button type="button" onClick={() => setC((s2) => ({ ...s2, serviceCode: '' }))}>حذفِ کد</button>
+                      </i>
+                    )}
+                    {codeHits.length > 0 && (
+                      <div className="bl-hits">
+                        {codeHits.map((h) => (
+                          <button type="button" key={h.code} onClick={() => pickCode(h)}>
+                            <b dir="ltr">{h.code}</b>
+                            <span>{h.title}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </label>
+
                   <div className="db-grid2">
                     <label className="db-field"><span>نوع</span>
                       <select value={c.kind} onChange={(e) => setC((s) => ({ ...s, kind: e.target.value }))}>
@@ -138,7 +199,12 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         <span className={`bl-tag t-${row.kind}`}>{CHARGE_KINDS[row.kind] ?? row.kind}</span>
                         <div className="bl-row-main">
                           <b>{row.title}</b>
-                          {row.quantity > 1 && <small>{money(row.quantity)} × {money(row.unitPrice)}</small>}
+                          {(row.quantity > 1 || row.serviceCode) && (
+                            <small>
+                              {row.serviceCode && <span dir="ltr">{row.serviceCode}</span>}
+                              {row.quantity > 1 && `${row.serviceCode ? ' · ' : ''}${money(row.quantity)} × ${money(row.unitPrice)}`}
+                            </small>
+                          )}
                         </div>
                         <b className={`bl-amount${row.amount < 0 ? ' neg' : ''}`}>{money(row.amount)}</b>
                         <button type="button" className="bl-del" disabled={busy} onClick={() => remove(`/visits/charges/${row.id}`, 'قلم')}>

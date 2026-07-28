@@ -97,6 +97,60 @@ model Hospital {
   @@map("hospitals")
 }
 
+/// کتابِ ارزش نسبیِ خدماتِ سلامت — کدِ ملیِ خدمت.
+///
+/// مرجعِ ملی است و برای همهٔ شرکت‌ها یکی، ولی عمداً در دیتابیسِ خودِ شرکت
+/// می‌نشیند: ۶۰۰۰ ردیف چیزی نیست، مرزِ جداییِ شرکت‌ها دست‌نخورده می‌ماند، و هر
+/// شرکت می‌تواند کدِ محلیِ خودش را اضافه کند یا نسخهٔ سالِ قبل را نگه دارد
+/// (پروندهٔ قدیمی باید با تعرفهٔ همان سال صورت‌حساب شود).
+///
+/// ⚠️ ارزش‌ها «هزارم‌واحد»اند و عددِ صحیح: در کلِ کتاب بیشترین دقت سه رقمِ اعشار
+/// است، پس ×۱۰۰۰ دقیقاً صحیح می‌شود و جمعِ صدها ردیفِ فاکتور خطای شناور نمی‌گیرد.
+model ServiceCode {
+  code    String  @id // کدِ ملیِ ۶ رقمی
+  title   String
+  notes   String?
+  /// ویژگی: + (کدِ افزوده) * # و ترکیب‌هایشان
+  modifier String?
+
+  rvuTotal        Int? @map("rvu_total")
+  rvuProfessional Int? @map("rvu_professional")
+  rvuTechnical    Int? @map("rvu_technical")
+  rvuAnesthesia   Int? @map("rvu_anesthesia")
+  /// ارزشِ بیهوشی مقطوع است («ارزش تام N واحد») نه محاسبه‌شده.
+  anesthesiaFlat  Boolean @default(false) @map("anesthesia_flat")
+
+  /// نسخهٔ کتاب (سالِ شمسی) — تا معلوم باشد این ردیف از کدام ویرایش آمده.
+  version String
+  active  Boolean @default(true)
+
+  procedureTypes ProcedureType[]
+
+  @@index([title])
+  @@map("service_codes")
+}
+
+/// ضریبِ ریالیِ هر واحدِ ارزشِ نسبی.
+///
+/// جدا از ServiceCode است چون سالانه و بر اساسِ بخش (خصوصی/دولتی/…) عوض می‌شود
+/// در حالی که خودِ ارزشِ نسبی ثابت می‌ماند. مبالغ «تومان» و عددِ صحیح‌اند.
+model Tariff {
+  id     Int    @id @default(autoincrement())
+  year   String // سالِ شمسی
+  /// private | public | nonprofit | charity
+  sector String
+
+  professional Int // تومان به‌ازای هر واحدِ جزء حرفه‌ای
+  technical    Int
+  anesthesia   Int
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([year, sector])
+  @@map("tariffs")
+}
+
 /// نوعِ عمل — موجودیتِ تعریف‌شده، نه متنِ آزاد.
 /// دلیل: گزارش‌گیری و تحلیلِ خودکار روی متنِ آزاد ممکن نیست؛ «دیسککتومی» و
 /// «دیسکتومی» و «Discectomy» سه چیزِ متفاوت می‌شوند.
@@ -105,6 +159,11 @@ model ProcedureType {
   name      String   @unique
   code      String?  // کدِ داخلی/ملی
   notes     String?
+
+  /// اتصال به کتابِ ارزش نسبی — اختیاری، چون بعضی خدمات کدِ ملی ندارند.
+  /// با این اتصال، صورت‌حساب می‌تواند فی را از ارزشِ نسبی × ضریب حساب کند.
+  serviceCode     ServiceCode? @relation(fields: [serviceCodeRef], references: [code], onDelete: SetNull)
+  serviceCodeRef  String?      @map("service_code_ref")
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -326,6 +385,9 @@ model Charge {
   /// service | item | discount
   kind      String @default("service")
   title     String
+  /// کدِ ملیِ خدمت — عکسِ لحظهٔ صدور، نه رابطه: فاکتورِ صادرشده نباید با
+  /// ویرایشِ بعدیِ کتاب تغییر کند، و بیمه همین رشته را می‌خواهد.
+  serviceCode String? @map("service_code")
   quantity  Int    @default(1)
   unitPrice Int    @map("unit_price") // تومان
   /// quantity × unitPrice، ذخیره‌شده تا تغییرِ بعدیِ قیمت، فاکتورِ قدیمی را عوض نکند.

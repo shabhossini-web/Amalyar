@@ -187,3 +187,35 @@ jobs:
           }
           console.log('verticals ok:', keys.join(', '));
           "
+
+      # کتابِ ارزش نسبی مرجعِ صورت‌حساب و بیمه است: ثابتِ «کل = حرفه‌ای + فنی»
+      # باید برقرار بماند و ارزش‌ها عددِ صحیحِ هزارم‌واحد، وگرنه جمعِ فاکتور
+      # خطای شناور می‌گیرد و با صورت‌حسابِ بیمه نمی‌خواند.
+      - name: Verify service-code catalog integrity
+        working-directory: server
+        run: |
+          node -e "
+          const seed = require('./prisma/seed-data/service-codes.json');
+          const i = Object.fromEntries(seed.fields.map((f, n) => [f, n]));
+          if (!seed.rows.length) { console.error('کتابِ خالی'); process.exit(1); }
+          const codes = new Set();
+          for (const r of seed.rows) {
+            const code = r[i.code];
+            if (!/^[0-9]{6}\$/.test(code)) { console.error('کدِ نامعتبر: ' + code); process.exit(1); }
+            if (codes.has(code)) { console.error('کدِ تکراری: ' + code); process.exit(1); }
+            codes.add(code);
+            if (!r[i.title]) { console.error('کدِ بدونِ شرح: ' + code); process.exit(1); }
+            for (const f of ['rvuTotal', 'rvuProfessional', 'rvuTechnical', 'rvuAnesthesia']) {
+              const v = r[i[f]];
+              if (v !== null && !Number.isInteger(v)) { console.error(code + ': ' + f + ' صحیح نیست'); process.exit(1); }
+            }
+            const [t, pro, tech] = [r[i.rvuTotal], r[i.rvuProfessional], r[i.rvuTechnical]];
+            if ([t, pro, tech].every((v) => v !== null) && t !== pro + tech) {
+              console.error(code + ': کل ≠ حرفه‌ای + فنی'); process.exit(1);
+            }
+          }
+          // محاسبهٔ فی: هر جزء جدا ضرب و گرد می‌شود، نه ارزشِ کل در یک ضریب.
+          const part = (rvu, factor) => (rvu ? Math.round((rvu * factor) / 1000) : 0);
+          if (part(15000, 320000) + part(7300, 160000) !== 5968000) { console.error('فرمولِ فی غلط است'); process.exit(1); }
+          console.log('service codes ok:', seed.rows.length, 'نسخهٔ', seed.version);
+          "

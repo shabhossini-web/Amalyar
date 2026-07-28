@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { CHARGE_KINDS, PAYMENT_METHODS } from '../billing.service';
 
 export class ChargeCreateDto {
@@ -14,6 +14,10 @@ export class ChargeCreateDto {
   // سقف عمداً بالاست: فاکتورِ یک ستِ ایمپلنت به‌راحتی چند صد میلیون تومان می‌شود.
   @IsInt({ message: 'مبلغ باید عددِ صحیح باشد' }) @Min(0, { message: 'مبلغ نمی‌تواند منفی باشد' })
   unitPrice!: number;
+
+  /** کدِ ملیِ خدمت — اگر از کتابِ ارزش نسبی انتخاب شده باشد. */
+  @IsOptional() @Matches(/^\d{4,8}$/, { message: 'کدِ خدمت نامعتبر است' })
+  serviceCode?: string;
 
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }

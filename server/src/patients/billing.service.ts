@@ -47,7 +47,7 @@ export class BillingService {
 
   async addCharge(
     visitId: number,
-    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string },
+    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string },
     user: any,
   ) {
     await this.assertVisit(visitId, user);
@@ -71,13 +71,14 @@ export class BillingService {
     const row = await this.prisma.charge.create({
       data: {
         visitId, kind, title, quantity, unitPrice, amount,
+        serviceCode: dto.serviceCode?.trim() || null,
         notes: dto.notes?.trim() || null,
         createdById: user?.id ?? null,
       },
     });
     await this.audit.record({
       actorId: user?.id, action: 'charge.create', entityType: 'charge', entityId: row.id,
-      after: { visitId, title, amount },
+      after: { visitId, title, amount, serviceCode: dto.serviceCode ?? null },
     });
     return row;
   }
