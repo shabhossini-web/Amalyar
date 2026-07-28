@@ -234,11 +234,41 @@ jobs:
             if (!body.includes('ensureImported')) { console.error(entry + ' باید کاتالوگ را seed کند'); process.exit(1); }
           }
           const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
-          const item = schema.split('model Item {')[1].split(/\n}/)[0];
+          // خطوطِ رابطه کنار گذاشته می‌شوند: \`lots StockLot[]\` مجاز است، ستونِ اسکالر نه.
+          const item = schema.split('model Item {')[1].split(/\n}/)[0]
+            .split('\n').filter((l) => !/\[\]|StockLot|Charge/.test(l)).join('\n');
           for (const stock of ['quantity', 'stock', 'onHand', 'lot', 'serial', 'expiry']) {
             if (new RegExp('^\\\\s*' + stock + '\\\\s', 'mi').test(item)) {
               console.error('Item کاتالوگ است نه انبار؛ ' + stock + ' جدولِ خودش را می‌خواهد'); process.exit(1);
             }
           }
           console.log('catalog boundaries ok');
+          "
+
+      - name: Verify stock balance is derived from an append-only ledger
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const lot = schema.split('model StockLot {')[1].split(/\n}/)[0];
+          // موجودیِ ذخیره‌شده کنارِ دفتر، دیر یا زود از دفتر جدا می‌افتد.
+          for (const cached of ['quantity', 'balance', 'onHand', 'count']) {
+            if (new RegExp('^\\\\s*' + cached + '\\\\s', 'mi').test(lot)) {
+              console.error('موجودی باید از دفتر مشتق شود؛ StockLot.' + cached + ' ممنوع است'); process.exit(1);
+            }
+          }
+          const svc = fs.readFileSync('src/patients/inventory.service.ts', 'utf8');
+          if (!/export function balanceOf/.test(svc)) { console.error('balanceOf باید یک فرمولِ مشترک باشد'); process.exit(1); }
+          // دفتر فقط اضافه می‌شود؛ اصلاح با حرکتِ جبرانی است نه با حذف/ویرایش.
+          if (/stockMovement\\.(delete|deleteMany|update|updateMany)/.test(svc)) {
+            console.error('دفترِ انبار فقط append است — حذف/ویرایشِ حرکت ممنوع'); process.exit(1);
+          }
+          const move = svc.split('private async move')[1].split(/\n  }/)[0];
+          for (const rule of ['FOR UPDATE', 'expires_at', 'next < 0', 'serial_no']) {
+            if (!move.includes(rule)) { console.error('قاعدهٔ انبار در move غایب است: ' + rule); process.exit(1); }
+          }
+          const bill = fs.readFileSync('src/patients/billing.service.ts', 'utf8');
+          if (!/returnToStock/.test(bill)) { console.error('حذفِ قلمِ فاکتور باید کالا را با حرکتِ جبرانی برگرداند'); process.exit(1); }
+          console.log('stock ledger ok');
           "

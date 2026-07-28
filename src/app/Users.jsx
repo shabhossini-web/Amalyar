@@ -32,6 +32,7 @@ const FEATURE_FA = {
   dispatch: 'چینش کارشناس‌ها',
   letter: 'نامه اداری',
   tech: 'پنل کارشناسی',
+  inventory: 'انبار',
   users: 'مدیریت کاربران',
 };
 const STATUS_FA = { pending: 'در انتظار', active: 'فعال', rejected: 'ردشده', disabled: 'غیرفعال' };

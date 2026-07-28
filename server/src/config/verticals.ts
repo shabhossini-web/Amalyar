@@ -14,13 +14,16 @@ export const VERTICALS = {
   /** نورومانیتورینگ حین عمل — حوزهٔ فعلی. */
   ionm: {
     label: 'نورومانیتورینگ حین عمل',
-    features: { dashboard: 5, calendar: 4, dispatch: 4, tech: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, users: 6 },
+    // انبار اینجا هم هست: الکترود و سوزنِ یک‌بارمصرف هم لات و تاریخِ انقضا دارند.
+    features: { dashboard: 5, calendar: 4, dispatch: 4, tech: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, inventory: 3, users: 6 },
   },
   /** تأمین‌کنندهٔ ست و ایمپلنت — واحدِ کار همان مراجعه است، با قلم‌های کالا. */
   implant: {
     label: 'تجهیزات و ایمپلنت',
-    // چینشِ کارشناس معنا ندارد؛ در عوض انبار و فاکتور مهم است.
-    features: { dashboard: 5, calendar: 4, accounting: 4, messenger: 2, letter: 5, users: 6 },
+    // چینشِ کارشناس معنا ندارد؛ در عوض انبار و فاکتور مهم است. برای این حوزه
+    // انبار هستهٔ کار است نه جانبی — ردیابیِ سریالِ ایمپلنت الزامِ فراخوان است،
+    // پس از سطحِ کارشناس باز می‌شود.
+    features: { dashboard: 5, calendar: 4, accounting: 4, messenger: 2, letter: 5, inventory: 2, users: 6 },
   },
   /** مطب و تیمِ جراحی — از ویزیت تا عمل تا پیگیری. */
   clinic: {

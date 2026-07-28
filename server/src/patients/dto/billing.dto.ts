@@ -24,6 +24,10 @@ export class ChargeCreateDto {
   @IsOptional() @Type(() => Number) @IsInt({ message: 'کالای انتخابی نامعتبر است' })
   itemId?: number;
 
+  /** لاتِ انبار — اگر بیاید، همین قلم موجودی را کم می‌کند و مصرف ردیابی می‌شود. */
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'لاتِ انتخابی نامعتبر است' })
+  lotId?: number;
+
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }
 

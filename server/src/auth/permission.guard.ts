@@ -24,6 +24,12 @@ export const PERMISSION_DEFAULTS: Record<string, number> = {
   // صورت‌حساب را ببیند، و حسابدار لازم نیست سابقهٔ پزشکی را.
   'billing.read': LEVEL.SUPERVISOR,
   'billing.write': LEVEL.ADMIN,
+  // انبار کارِ روزمرهٔ کارشناس و انباردار است نه کارِ مدیر، پس نوشتنش پایین‌تر
+  // از مالی است. ولی انبارگردانی جداست: با یک عدد موجودیِ هر لاتی بازنویسی
+  // می‌شود و اختلافش دیگر قابلِ ردیابی نیست — آن یکی سطحِ سوپروایزر می‌خواهد.
+  'inventory.read': LEVEL.TECH,
+  'inventory.write': LEVEL.TECH_ADMIN,
+  'inventory.adjust': LEVEL.SUPERVISOR,
   'definitions.read': LEVEL.TECH,
   'definitions.manage': LEVEL.ADMIN,
   'users.manage': LEVEL.SUPER_ADMIN,

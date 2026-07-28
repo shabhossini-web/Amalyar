@@ -9,6 +9,7 @@ import Users from './app/Users.jsx';
 import Profile from './app/Profile.jsx';
 import Dashboard from './app/Dashboard.jsx';
 import Definitions from './app/Definitions.jsx';
+import Inventory from './app/Inventory.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
 import PlatformAdmin from './app/PlatformAdmin.jsx';
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/app/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/app/users" element={<Protected><Users /></Protected>} />
           <Route path="/app/definitions" element={<Protected><Definitions /></Protected>} />
+          <Route path="/app/inventory" element={<Protected><Inventory /></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />

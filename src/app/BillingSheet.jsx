@@ -23,10 +23,11 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('charges');
 
-  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null });
+  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null });
   const [codeQ, setCodeQ] = useState('');
   const [codeHits, setCodeHits] = useState([]);
   const [itemHits, setItemHits] = useState([]);
+  const [lots, setLots] = useState([]);
   const [p, setP] = useState({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '' });
 
   const load = useCallback(async () => {
@@ -59,17 +60,27 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     return () => { alive = false; clearTimeout(timer); };
   }, [codeQ, c.kind]);
 
-  /** انتخابِ کالا: نام و قیمتِ پایه پر می‌شوند و ارجاعِ کاتالوگ نگه داشته می‌شود. */
-  const pickItem = (it) => {
+  /**
+   * انتخابِ کالا: نام و قیمتِ پایه پر می‌شوند و ارجاعِ کاتالوگ نگه داشته می‌شود.
+   *
+   * لات‌های موجود هم همین‌جا خوانده می‌شوند: اگر کاربر لات را انتخاب کند، همین
+   * قلمِ فاکتور موجودیِ انبار را کم می‌کند و مصرف به بیمار گره می‌خورد. اگر
+   * انبار برای این کالا خالی/تعریف‌نشده باشد، انتخابگر اصلاً نشان داده نمی‌شود
+   * تا فاکتورِ شرکتی که انبار ندارد شلوغ نشود.
+   */
+  const pickItem = async (it) => {
     setCodeQ('');
     setItemHits([]);
     setC((s) => ({
       ...s,
       title: [it.name, it.size].filter(Boolean).join(' '),
       itemId: it.id,
+      lotId: null,
       unitPrice: it.price != null ? String(it.price) : s.unitPrice,
     }));
     if (it.price == null) onToast('این کالا قیمتِ پایه ندارد — مبلغ را دستی وارد کنید');
+    try { setLots(await api(`/stock/items/${it.id}/lots`)); }
+    catch { setLots([]); } // انبار ممکن است برای این شرکت خاموش باشد
   };
 
   /**
@@ -102,9 +113,11 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
           quantity: Math.max(1, parseMoney(c.quantity) || 1), unitPrice,
           ...(c.serviceCode ? { serviceCode: c.serviceCode } : {}),
           ...(c.itemId ? { itemId: c.itemId } : {}),
+          ...(c.lotId ? { lotId: c.lotId } : {}),
         },
       });
-      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null });
+      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null });
+      setLots([]);
       await load(); onChanged?.();
       onToast('قلم اضافه شد ✓');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
@@ -173,7 +186,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                 <div className="bl-add">
                   {/* جستجوی کتابِ ارزش نسبی: کد و عنوان و فی یک‌جا می‌آیند،
                       تا کاربر نه کد را حفظ کند نه فی را دستی حساب کند. */}
-                  <label className="db-field bl-codesearch">
+                  {/* ⚠️ div است نه label: در label، مرورگر کلیکِ روی نتیجهٔ
+                      جستجو را به اولین کنترلِ همان label هم می‌فرستد و انتخاب
+                      بلافاصله پس گرفته می‌شود. */}
+                  <div className="db-field bl-codesearch">
                     <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : 'کدِ ملیِ خدمت (کتابِ ارزش نسبی)'}</span>
                     <input
                       value={codeQ}
@@ -211,7 +227,25 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         ))}
                       </div>
                     )}
-                  </label>
+                  </div>
+
+                  {/* انتخابِ لات فقط وقتی دیده می‌شود که کالای انتخاب‌شده واقعاً
+                      در انبار لات داشته باشد — وگرنه فیلدی که همیشه خالی است. */}
+                  {c.kind === 'item' && c.itemId && lots.length > 0 && (
+                    <label className="db-field bl-lotpick">
+                      <span>لاتِ مصرفی (موجودی کم می‌شود و به بیمار گره می‌خورد)</span>
+                      <select value={c.lotId ?? ''} onChange={(e) => setC((s) => ({ ...s, lotId: e.target.value ? Number(e.target.value) : null }))}>
+                        <option value="">بدونِ برداشت از انبار</option>
+                        {lots.map((l) => (
+                          <option key={l.id} value={l.id} disabled={l.expired}>
+                            {(l.serialNo ? `سریال ${l.serialNo}` : l.lotNo ? `لات ${l.lotNo}` : `لات #${l.id}`)}
+                            {` — ${money(l.quantity)} ${l.unit}`}
+                            {l.expired ? ' (منقضی)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
 
                   <div className="db-grid2">
                     <label className="db-field"><span>نوع</span>
@@ -220,8 +254,8 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         onChange={(e) => {
                           // با تغییرِ نوع، ارجاعِ قبلی باید برود؛ کدِ خدمت روی
                           // قلمِ کالا (و برعکس) بی‌معنی و گمراه‌کننده است.
-                          setCodeQ(''); setCodeHits([]); setItemHits([]);
-                          setC((s) => ({ ...s, kind: e.target.value, serviceCode: '', itemId: null }));
+                          setCodeQ(''); setCodeHits([]); setItemHits([]); setLots([]);
+                          setC((s) => ({ ...s, kind: e.target.value, serviceCode: '', itemId: null, lotId: null }));
                         }}
                       >
                         {Object.entries(CHARGE_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -250,10 +284,16 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         <span className={`bl-tag t-${row.kind}`}>{CHARGE_KINDS[row.kind] ?? row.kind}</span>
                         <div className="bl-row-main">
                           <b>{row.title}</b>
-                          {(row.quantity > 1 || row.serviceCode) && (
+                          {(row.quantity > 1 || row.serviceCode || row.lot) && (
                             <small>
                               {row.serviceCode && <span dir="ltr">{row.serviceCode}</span>}
                               {row.quantity > 1 && `${row.serviceCode ? ' · ' : ''}${money(row.quantity)} × ${money(row.unitPrice)}`}
+                              {row.lot && (
+                                <i className="bl-lot">
+                                  {row.lot.serialNo ? 'سریال ' : 'لات '}
+                                  <span dir="ltr">{row.lot.serialNo || row.lot.lotNo || `#${row.lot.lotId}`}</span>
+                                </i>
+                              )}
                             </small>
                           )}
                         </div>

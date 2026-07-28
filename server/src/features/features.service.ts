@@ -15,6 +15,7 @@ export const FEATURE_DEFAULTS: Record<string, { minLevel: number }> = {
   dispatch: { minLevel: 4 },
   letter: { minLevel: 5 },
   tech: { minLevel: 2 },
+  inventory: { minLevel: 3 },
   users: { minLevel: 6 },
 };
 

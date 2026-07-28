@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { InventoryService } from './inventory.service';
 import { LEVEL } from '../common/levels';
 
 /** نوعِ قلمِ صورت‌حساب. discount همیشه مبلغِ منفی می‌سازد. */
@@ -17,7 +18,7 @@ export const PAYMENT_METHODS = ['cash', 'card', 'transfer', 'cheque', 'insurance
  */
 @Injectable()
 export class BillingService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private inventory: InventoryService) {}
 
   /** همان قاعدهٔ scope که برای مراجعه داریم؛ کارشناس فقط مراجعاتِ خودش. */
   private async assertVisit(visitId: number, user: any) {
@@ -38,16 +39,27 @@ export class BillingService {
    */
   async get(visitId: number, user: any) {
     await this.assertVisit(visitId, user);
-    const [charges, payments] = await Promise.all([
+    const [charges, payments, moves] = await Promise.all([
       this.prisma.charge.findMany({ where: { visitId }, orderBy: { id: 'asc' } }),
       this.prisma.payment.findMany({ where: { visitId }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] }),
+      this.prisma.stockMovement.findMany({
+        where: { visitId, chargeId: { not: null }, kind: 'out' },
+        include: { lot: { select: { lotNo: true, serialNo: true } } },
+      }),
     ]);
-    return { ...summarize(charges, payments), charges, payments };
+    // لاتِ مصرف‌شده روی خودِ قلم دیده می‌شود؛ وگرنه کاربر برای فهمیدنِ «کدام
+    // سریال روی این فاکتور رفت» باید صفحهٔ انبار را جدا باز کند.
+    const lotOf = new Map(moves.map((m) => [m.chargeId, { lotId: m.lotId, lotNo: m.lot.lotNo, serialNo: m.lot.serialNo }]));
+    return {
+      ...summarize(charges, payments),
+      charges: charges.map((c) => ({ ...c, lot: lotOf.get(c.id) ?? null })),
+      payments,
+    };
   }
 
   async addCharge(
     visitId: number,
-    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; itemId?: number },
+    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; itemId?: number; lotId?: number },
     user: any,
   ) {
     await this.assertVisit(visitId, user);
@@ -77,6 +89,22 @@ export class BillingService {
         createdById: user?.id ?? null,
       },
     });
+
+    // مصرف از انبار بعد از ساختِ قلم انجام می‌شود تا شمارهٔ قلم در دفتر بنشیند
+    // و ردیابی دوطرفه شود. اگر موجودی کم بود، قلمِ تازه‌ساخته پس گرفته می‌شود:
+    // فاکتوری که کالایش از انبار در نیامده، فاکتورِ غلط است.
+    if (dto.lotId) {
+      try {
+        await this.inventory.consume(
+          { lotId: dto.lotId, quantity, visitId, chargeId: row.id, reason: `فاکتورِ ${title}` },
+          user,
+        );
+      } catch (err) {
+        await this.prisma.charge.delete({ where: { id: row.id } });
+        throw err;
+      }
+    }
+
     await this.audit.record({
       actorId: user?.id, action: 'charge.create', entityType: 'charge', entityId: row.id,
       after: { visitId, title, amount, serviceCode: dto.serviceCode ?? null },
@@ -88,6 +116,19 @@ export class BillingService {
     const row = await this.prisma.charge.findUnique({ where: { id: chargeId } });
     if (!row) throw new NotFoundException('قلمِ صورت‌حساب پیدا نشد');
     await this.assertVisit(row.visitId, user);
+
+    // کالای مصرف‌شده با حرکتِ جبرانی برمی‌گردد، نه با پاک‌کردنِ حرکتِ مصرف:
+    // دفترِ انبار فقط اضافه می‌شود، وگرنه «چه وقت چه شد» از بین می‌رود.
+    const consumed = await this.prisma.stockMovement.findMany({
+      where: { chargeId, kind: 'out' },
+    });
+    for (const m of consumed) {
+      await this.inventory.returnToStock(
+        { lotId: m.lotId, quantity: Math.abs(m.quantity), visitId: row.visitId, chargeId, reason: 'حذفِ قلمِ فاکتور' },
+        user,
+      );
+    }
+
     await this.prisma.charge.delete({ where: { id: chargeId } });
     await this.audit.record({
       actorId: user?.id, action: 'charge.delete', entityType: 'charge', entityId: chargeId, before: row,

@@ -397,3 +397,12 @@
 .bl-hits button:hover { background: rgba(124, 58, 237, .18); }
 .bl-hits b { flex-shrink: 0; font-weight: 800; color: #c4b5fd; }
 .bl-hits span { line-height: 1.7; }
+
+/* انتخابِ لاتِ انبار روی قلمِ کالا */
+.bl-lotpick select { width: 100%; }
+.bl-lotpick > span { color: #6ee7b7; }
+.bl-lot {
+  display: inline-block; margin-inline-start: 8px; padding: 1px 7px; border-radius: 7px;
+  font-style: normal; font-size: 10px; color: #6ee7b7;
+  background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .25);
+}

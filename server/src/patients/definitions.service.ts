@@ -293,14 +293,16 @@ export class DefinitionsService {
     return this.prisma.item.update({ where: { id }, data: itemPatch(dto, false) });
   }
 
-  /// کالایی که در فاکتوری استفاده شده حذفِ سخت نمی‌شود — همان قاعدهٔ بقیهٔ تعاریف.
+  /// کالایی که در فاکتوری استفاده شده یا لاتِ انبار دارد حذفِ سخت نمی‌شود —
+  /// همان قاعدهٔ بقیهٔ تعاریف. (لات هم FKِ RESTRICT دارد؛ این‌جا پیش از رسیدن
+  /// به خطای خامِ دیتابیس، پیامِ درست داده می‌شود.)
   async deleteItem(id: number) {
     const row = await this.prisma.item.findUnique({
       where: { id },
-      include: { _count: { select: { charges: true } } },
+      include: { _count: { select: { charges: true, lots: true } } },
     });
     if (!row) throw new NotFoundException('کالا یافت نشد');
-    if (row._count.charges > 0) {
+    if (row._count.charges > 0 || row._count.lots > 0) {
       await this.prisma.item.update({ where: { id }, data: { active: false } });
       return { ok: true, deactivated: true };
     }

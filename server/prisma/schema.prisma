@@ -177,9 +177,9 @@ model ProcedureType {
 /// برای شرکتِ تجهیزات همان نقشی را دارد که ProcedureType برای شرکتِ خدمات:
 /// موجودیتِ تعریف‌شده به‌جای متنِ آزاد، تا فاکتور و گزارشِ مصرف معنا داشته باشد.
 ///
-/// ⚠️ این کاتالوگ است نه انبار. «چند تا داریم» و «کدام لات کجا رفت» لایهٔ
-/// بعدی است و جدولِ خودش را می‌خواهد؛ ریختنشان اینجا یعنی یک ردیفِ کاتالوگ
-/// همزمان تعریف و موجودی باشد که با اولین انتقالِ انبار می‌شکند.
+/// ⚠️ این کاتالوگ است نه انبار. «چند تا داریم» و «کدام لات کجا رفت» در
+/// StockLot/StockMovement است؛ ریختنشان اینجا یعنی یک ردیفِ کاتالوگ همزمان
+/// تعریف و موجودی باشد که با اولین انتقالِ انبار می‌شکند.
 model Item {
   id       Int     @id @default(autoincrement())
   name     String
@@ -201,10 +201,81 @@ model Item {
   createdAt DateTime @default(now()) @map("created_at")
 
   charges Charge[]
+  lots    StockLot[]
 
   @@index([name])
   @@index([category])
   @@map("items")
+}
+
+/// یک لاتِ فیزیکی از یک کالا — «کدام بچ، چند تا، کجا، تا کِی».
+///
+/// ⚠️ تفاوتش با Item بنیادی است و نباید محو شود: Item می‌گوید «پیچ پدیکولار ۵٫۵»
+/// (تعریف)، StockLot می‌گوید «این ۱۲ عددِ لاتِ A-4471 که تا مهرِ ۱۴۰۶ اعتبار
+/// دارد و در ستِ شمارهٔ ۲ است» (شیءِ واقعی). فراخوانِ سازنده روی لات است، نه
+/// روی تعریف — و همین دلیلِ وجودِ این جدول است.
+///
+/// serialNo برای ایمپلنتی است که تک‌تک ردیابی می‌شود؛ چنین لاتی حداکثر یک عدد
+/// دارد. این قاعده در سرویس اعمال می‌شود، چون DB نمی‌تواند جمعِ دفتر را ببیند.
+model StockLot {
+  id        Int       @id @default(autoincrement())
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  itemId    Int       @map("item_id")
+  /// شمارهٔ لات/بچِ سازنده — کلیدِ فراخوان.
+  lotNo     String?   @map("lot_no")
+  /// شمارهٔ سریالِ یکتا (اگر کالا سریالی باشد).
+  serialNo  String?   @unique @map("serial_no")
+  expiresAt DateTime? @map("expires_at")
+  /// محلِ نگه‌داری: انبارِ مرکزی، ستِ ۲، امانیِ بیمارستانِ فلان.
+  location  String?
+  notes     String?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  movements StockMovement[]
+
+  @@index([itemId])
+  @@index([lotNo])
+  @@index([expiresAt])
+  @@map("stock_lots")
+}
+
+/// دفترِ حرکتِ انبار — تنها منبعِ حقیقتِ موجودی.
+///
+/// موجودی ستون نیست، جمعِ همین ردیف‌هاست (`balanceOf`). عمداً: عددِ ذخیره‌شده
+/// در کنارِ دفتر دیر یا زود از دفتر جدا می‌افتد و آن‌وقت معلوم نیست کدام درست
+/// است. همان قاعدهٔ `summarize` در مالی — یک فرمول، یک جا.
+///
+/// دفتر فقط اضافه می‌شود: اشتباه با حرکتِ جبرانی اصلاح می‌شود، نه با حذف.
+model StockMovement {
+  id    Int      @id @default(autoincrement())
+  lot   StockLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  lotId Int      @map("lot_id")
+
+  /// in | out | return | adjust
+  kind     String
+  /// علامت‌دار: ورود مثبت، مصرف منفی. علامت را سرویس می‌گذارد نه کاربر — وگرنه
+  /// یک‌بار کسی یادش می‌رود منفی بزند و موجودی برای همیشه غلط می‌ماند.
+  quantity Int
+
+  visit     Visit?  @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId   Int?    @map("visit_id")
+  /// عکسِ کدِ مراجعه. رابطه ممکن است از بین برود؛ پاسخِ «این لات در کدام عمل‌ها
+  /// مصرف شد» نباید با آن از بین برود.
+  visitCode String? @map("visit_code")
+  /// قلمِ فاکتورِ مرتبط — عمداً بدون رابطه: حذفِ قلمِ فاکتور نباید سابقهٔ مصرفِ
+  /// یک ایمپلنتِ کارگذاشته‌شده را پاک کند.
+  chargeId  Int?    @map("charge_id")
+
+  reason      String?
+  /// شمارهٔ رسیدِ خرید، حواله، یا هر ارجاعِ بیرونی.
+  reference   String?
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([lotId])
+  @@index([visitId])
+  @@index([chargeId])
+  @@map("stock_movements")
 }
 
 /// تشخیص — همان استدلالِ ProcedureType. icdCode برای نگاشتِ بعدی به ICD-10.
@@ -542,10 +613,11 @@ model Visit {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  documents     Document[]
-  clinicalNotes ClinicalNote[]
-  charges       Charge[]
-  payments      Payment[]
+  documents      Document[]
+  clinicalNotes  ClinicalNote[]
+  charges        Charge[]
+  payments       Payment[]
+  stockMovements StockMovement[]
 
   @@unique([patientId, seq])
   @@index([patientId])
