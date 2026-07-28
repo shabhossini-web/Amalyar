@@ -63,6 +63,27 @@ const SECTIONS = [
     ],
   },
   {
+    key: 'items',
+    label: 'کالاها',
+    path: '/items',
+    title: (r) => r.name,
+    sub: (r) => [r.brand, r.size, r.sku, r.price && `${Number(r.price).toLocaleString('fa-IR')} تومان`]
+      .filter(Boolean).join(' · '),
+    empty: 'هنوز کالایی تعریف نشده',
+    hint: 'کاتالوگِ کالاست، نه انبار — «چند تا داریم» و «کدام لات کجا رفت» لایهٔ بعدی است.',
+    fields: [
+      { key: 'name', label: 'نامِ کالا *', required: true },
+      { key: 'brand', label: 'برند' },
+      { key: 'size', label: 'اندازه / مشخصه' },
+      { key: 'category', label: 'دسته (پیچ، راد، کیج…)' },
+      { key: 'sku', label: 'کدِ کالا (SKU)', dir: 'ltr' },
+      { key: 'irc', label: 'کد IRC', dir: 'ltr' },
+      { key: 'unit', label: 'واحد' },
+      { key: 'price', label: 'قیمتِ پایه (تومان)', dir: 'ltr' },
+      { key: 'notes', label: 'یادداشت', textarea: true },
+    ],
+  },
+  {
     key: 'diagnoses',
     label: 'تشخیص‌ها',
     path: '/diagnoses',

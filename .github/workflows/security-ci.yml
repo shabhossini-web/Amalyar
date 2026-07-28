@@ -219,3 +219,26 @@ jobs:
           if (part(15000, 320000) + part(7300, 160000) !== 5968000) { console.error('فرمولِ فی غلط است'); process.exit(1); }
           console.log('service codes ok:', seed.rows.length, 'نسخهٔ', seed.version);
           "
+
+      # دو مرزی که تایپ‌چک نمی‌گیرد: کاتالوگ باید خودش seed شود (وگرنه شرکتِ تازه
+      # جستجوی بی‌نتیجه می‌بیند بدونِ هیچ نشانه‌ای)، و Item باید کاتالوگ بماند
+      # نه انبار — ستونِ موجودی اینجا یعنی یک ردیف همزمان تعریف و موجودی است.
+      - name: Verify catalog self-seeds and Item stays catalog-only
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const svc = fs.readFileSync('src/patients/service-codes.service.ts', 'utf8');
+          for (const entry of ['async search', 'async priceOf', 'async count']) {
+            const body = svc.split(entry)[1]?.split('\n  }')[0] ?? '';
+            if (!body.includes('ensureImported')) { console.error(entry + ' باید کاتالوگ را seed کند'); process.exit(1); }
+          }
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const item = schema.split('model Item {')[1].split(/\n}/)[0];
+          for (const stock of ['quantity', 'stock', 'onHand', 'lot', 'serial', 'expiry']) {
+            if (new RegExp('^\\\\s*' + stock + '\\\\s', 'mi').test(item)) {
+              console.error('Item کاتالوگ است نه انبار؛ ' + stock + ' جدولِ خودش را می‌خواهد'); process.exit(1);
+            }
+          }
+          console.log('catalog boundaries ok');
+          "

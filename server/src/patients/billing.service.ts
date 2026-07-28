@@ -47,7 +47,7 @@ export class BillingService {
 
   async addCharge(
     visitId: number,
-    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string },
+    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; itemId?: number },
     user: any,
   ) {
     await this.assertVisit(visitId, user);
@@ -72,6 +72,7 @@ export class BillingService {
       data: {
         visitId, kind, title, quantity, unitPrice, amount,
         serviceCode: dto.serviceCode?.trim() || null,
+        itemId: dto.itemId ?? null,
         notes: dto.notes?.trim() || null,
         createdById: user?.id ?? null,
       },

@@ -77,7 +77,20 @@ export class ServiceCodesService {
     return { version, imported: data.length };
   }
 
+  /**
+   * seedِ تنبل — همان الگوی Features.
+   *
+   * بدونِ این، شرکتِ تازه کاتالوگِ خالی داشت تا کسی دستی import بزند؛ کاربر
+   * جستجو می‌کرد، هیچ نتیجه‌ای نمی‌آمد و هیچ نشانه‌ای هم نبود که چرا. (همین
+   * در آزمونِ زنده پیش آمد.) وارد کردن idempotent است، پس تکرارش بی‌خطر است.
+   */
+  private async ensureImported() {
+    if (await this.prisma.serviceCode.count()) return;
+    await this.importCatalog();
+  }
+
   async count() {
+    await this.ensureImported();
     const [total, version] = await Promise.all([
       this.prisma.serviceCode.count(),
       this.prisma.serviceCode.findFirst({ select: { version: true }, orderBy: { code: 'asc' } }),
@@ -94,6 +107,7 @@ export class ServiceCodesService {
   async search(q?: string, limit = 25) {
     const term = (q ?? '').trim();
     if (term.length < 2) return [];
+    await this.ensureImported();
     const numeric = /^\d+$/.test(term);
 
     const rows = await this.prisma.serviceCode.findMany({
@@ -144,6 +158,7 @@ export class ServiceCodesService {
    * ضریبِ حرفه‌ای و فنی متفاوت‌اند و جمع‌کردنشان پیش از ضرب، جواب را غلط می‌کند.
    */
   async priceOf(code: string, year?: string, sector = 'private') {
+    await this.ensureImported();
     const service = await this.prisma.serviceCode.findUnique({ where: { code } });
     if (!service) throw new BadRequestException('کدِ خدمت پیدا نشد');
 

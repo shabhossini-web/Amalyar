@@ -158,3 +158,12 @@
   background: rgba(18, 13, 49, .7); border: 1px solid rgba(139, 92, 246, .18);
 }
 .st-brand .df-save { height: 46px; }
+
+.st-tnote { margin-top: -4px; }
+.st-tariff { margin-bottom: 14px; }
+.st-tlist { margin-bottom: 20px; }
+.st-load {
+  flex-shrink: 0; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer; color: #cfc9e8;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .24);
+  border-radius: 9px; padding: 6px 11px;
+}

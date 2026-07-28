@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { toEnDigits } from '../common/identity';
 import { LEVEL } from '../common/levels';
 import { buildPersonPatch, PersonInput } from '../common/person';
 
@@ -249,6 +250,64 @@ export class DefinitionsService {
     return this.deleteOrDeactivate('diagnosis', id, 'تشخیص یافت نشد');
   }
 
+
+  // ───────────────────────── کالا ─────────────────────────
+
+  /**
+   * فهرست/جستجوی کالا.
+   *
+   * جستجو روی نام، SKU و برند است — انباردار معمولاً کد را می‌داند و کاربرِ
+   * اتاقِ عمل نام را؛ هر دو باید به یک نتیجه برسند.
+   */
+  async listItems(q?: string) {
+    const t = q?.trim();
+    const rows = await this.prisma.item.findMany({
+      where: t
+        ? {
+            OR: [
+              { name: { contains: t, mode: 'insensitive' } },
+              { sku: { contains: t, mode: 'insensitive' } },
+              { brand: { contains: t, mode: 'insensitive' } },
+              { irc: { contains: t } },
+            ],
+          }
+        : {},
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      take: 200,
+      include: { _count: { select: { charges: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id, name: r.name, sku: r.sku, irc: r.irc, brand: r.brand, size: r.size,
+      category: r.category, unit: r.unit, price: r.price, notes: r.notes, active: r.active,
+      usedCount: r._count.charges,
+    }));
+  }
+
+  async createItem(dto: any) {
+    return this.prisma.item.create({ data: itemPatch(dto, true) as any });
+  }
+
+  async updateItem(id: number, dto: any) {
+    const row = await this.prisma.item.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('کالا یافت نشد');
+    return this.prisma.item.update({ where: { id }, data: itemPatch(dto, false) });
+  }
+
+  /// کالایی که در فاکتوری استفاده شده حذفِ سخت نمی‌شود — همان قاعدهٔ بقیهٔ تعاریف.
+  async deleteItem(id: number) {
+    const row = await this.prisma.item.findUnique({
+      where: { id },
+      include: { _count: { select: { charges: true } } },
+    });
+    if (!row) throw new NotFoundException('کالا یافت نشد');
+    if (row._count.charges > 0) {
+      await this.prisma.item.update({ where: { id }, data: { active: false } });
+      return { ok: true, deactivated: true };
+    }
+    await this.prisma.item.delete({ where: { id } });
+    return { ok: true, deactivated: false };
+  }
+
   private async uniqueName(model: 'procedureType' | 'diagnosis', field: 'name' | 'title', value: string, exceptId?: number) {
     const row = await (this.prisma[model] as any).findFirst({
       where: { [field]: { equals: value.trim(), mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
@@ -273,3 +332,33 @@ export class DefinitionsService {
   }
 }
 
+
+/**
+ * نرمال‌سازیِ فیلدهای کالا — یک قاعده برای ساخت و ویرایش.
+ * قیمت عددِ صحیحِ تومان است؛ ارقامِ فارسی و جداکنندهٔ هزارگان پذیرفته می‌شوند.
+ */
+function itemPatch(dto: any, forCreate: boolean): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() || null : null);
+
+  if (forCreate || dto.name !== undefined) {
+    const name = text(dto.name);
+    if (forCreate && (!name || name.length < 2)) throw new BadRequestException('نامِ کالا را کامل وارد کنید');
+    if (name !== null) out.name = name;
+  }
+  for (const key of ['sku', 'irc', 'brand', 'size', 'category', 'notes']) {
+    if (dto[key] !== undefined) out[key] = text(dto[key]);
+  }
+  if (dto.unit !== undefined) out.unit = text(dto.unit) || 'عدد';
+  if (dto.active !== undefined) out.active = !!dto.active;
+
+  if (dto.price !== undefined) {
+    if (dto.price === null || dto.price === '') out.price = null;
+    else {
+      const n = Number(toEnDigits(String(dto.price)).replace(/[^0-9]/g, ''));
+      if (!Number.isInteger(n) || n < 0) throw new BadRequestException('قیمت باید عددِ صحیحِ نامنفی باشد');
+      out.price = n;
+    }
+  }
+  return out;
+}

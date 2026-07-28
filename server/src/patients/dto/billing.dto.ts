@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { CHARGE_KINDS, PAYMENT_METHODS } from '../billing.service';
 
@@ -18,6 +19,10 @@ export class ChargeCreateDto {
   /** کدِ ملیِ خدمت — اگر از کتابِ ارزش نسبی انتخاب شده باشد. */
   @IsOptional() @Matches(/^\d{4,8}$/, { message: 'کدِ خدمت نامعتبر است' })
   serviceCode?: string;
+
+  /** کالای مصرف‌شده از کاتالوگ. */
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'کالای انتخابی نامعتبر است' })
+  itemId?: number;
 
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }

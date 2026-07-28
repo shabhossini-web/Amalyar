@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
@@ -119,6 +120,30 @@ class HospitalPatchDto {
 }
 
 // تعریف‌های ماژولِ بیماران (جراحان/بیمارستان‌ها/کارشناسان) — همان گاردِ dashboard
+
+/** کالا — ست، پیچ، ایمپلنت، مصرفی. */
+export class ItemCreateDto {
+  @IsString() @MinLength(2, { message: 'نامِ کالا کوتاه است' }) @MaxLength(120)
+  name!: string;
+
+  @IsOptional() @IsString() @MaxLength(60) sku?: string;
+  @IsOptional() @IsString() @MaxLength(40) irc?: string;
+  @IsOptional() @IsString() @MaxLength(60) brand?: string;
+  @IsOptional() @IsString() @MaxLength(60) size?: string;
+  @IsOptional() @IsString() @MaxLength(40) category?: string;
+  @IsOptional() @IsString() @MaxLength(20) unit?: string;
+  @IsOptional() @IsString() @MaxLength(300) notes?: string;
+  // به‌شکلِ رشته هم پذیرفته می‌شود چون کاربر با جداکنندهٔ هزارگان تایپ می‌کند.
+  @IsOptional() price?: string | number;
+}
+
+export class ItemPatchDto extends ItemCreateDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120)
+  declare name: string;
+
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
 @Controller()
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('dashboard')
@@ -195,6 +220,30 @@ export class DefinitionsController {
   @Delete('procedure-types/:id')
   delProcedureType(@Param('id', ParseIntPipe) id: number) {
     return this.defs.deleteProcedureType(id);
+  }
+
+  @RequirePermissions('definitions.read')
+  @Get('items')
+  items(@Query('q') q?: string) {
+    return this.defs.listItems(q);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Post('items')
+  addItem(@Body() dto: ItemCreateDto) {
+    return this.defs.createItem(dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Patch('items/:id')
+  patchItem(@Param('id', ParseIntPipe) id: number, @Body() dto: ItemPatchDto) {
+    return this.defs.updateItem(id, dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Delete('items/:id')
+  delItem(@Param('id', ParseIntPipe) id: number) {
+    return this.defs.deleteItem(id);
   }
 
   @RequirePermissions('definitions.read')

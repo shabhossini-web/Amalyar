@@ -172,6 +172,41 @@ model ProcedureType {
   @@map("procedure_types")
 }
 
+/// کالا — ست، پیچ، ایمپلنت و هر قلمِ مصرفی که در عمل استفاده می‌شود.
+///
+/// برای شرکتِ تجهیزات همان نقشی را دارد که ProcedureType برای شرکتِ خدمات:
+/// موجودیتِ تعریف‌شده به‌جای متنِ آزاد، تا فاکتور و گزارشِ مصرف معنا داشته باشد.
+///
+/// ⚠️ این کاتالوگ است نه انبار. «چند تا داریم» و «کدام لات کجا رفت» لایهٔ
+/// بعدی است و جدولِ خودش را می‌خواهد؛ ریختنشان اینجا یعنی یک ردیفِ کاتالوگ
+/// همزمان تعریف و موجودی باشد که با اولین انتقالِ انبار می‌شکند.
+model Item {
+  id       Int     @id @default(autoincrement())
+  name     String
+  /// کدِ کالای شرکت (SKU) — یکتا اگر باشد.
+  sku      String? @unique
+  /// کدِ IRC / اصالت‌سنجیِ وزارت بهداشت.
+  irc      String?
+  brand    String?
+  /// اندازه/مشخصهٔ فنی: «۵٫۵×۴۵ میلی‌متر»
+  size     String?
+  category String? // پیچ، راد، کیج، مصرفی…
+  unit     String  @default("عدد")
+  /// قیمتِ پایه (تومان). فاکتور مبلغِ خودش را کپی می‌کند، پس تغییرِ بعدیِ
+  /// این عدد فاکتورهای صادرشده را دست نمی‌زند.
+  price    Int?
+  notes    String?
+  active   Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  charges Charge[]
+
+  @@index([name])
+  @@index([category])
+  @@map("items")
+}
+
 /// تشخیص — همان استدلالِ ProcedureType. icdCode برای نگاشتِ بعدی به ICD-10.
 model Diagnosis {
   id        Int      @id @default(autoincrement())
@@ -388,6 +423,9 @@ model Charge {
   /// کدِ ملیِ خدمت — عکسِ لحظهٔ صدور، نه رابطه: فاکتورِ صادرشده نباید با
   /// ویرایشِ بعدیِ کتاب تغییر کند، و بیمه همین رشته را می‌خواهد.
   serviceCode String? @map("service_code")
+  /// کالای مصرف‌شده — رابطه است (برای گزارشِ مصرف) ولی نام و مبلغ کپی می‌شوند.
+  item        Item?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemId      Int?    @map("item_id")
   quantity  Int    @default(1)
   unitPrice Int    @map("unit_price") // تومان
   /// quantity × unitPrice، ذخیره‌شده تا تغییرِ بعدیِ قیمت، فاکتورِ قدیمی را عوض نکند.
@@ -398,6 +436,7 @@ model Charge {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([visitId])
+  @@index([itemId])
   @@map("charges")
 }
 

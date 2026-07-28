@@ -23,9 +23,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('charges');
 
-  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '' });
+  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null });
   const [codeQ, setCodeQ] = useState('');
   const [codeHits, setCodeHits] = useState([]);
+  const [itemHits, setItemHits] = useState([]);
   const [p, setP] = useState({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '' });
 
   const load = useCallback(async () => {
@@ -45,6 +46,31 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     }, 300);
     return () => { alive = false; clearTimeout(timer); };
   }, [codeQ]);
+
+  /** جستجوی کاتالوگِ کالا — فقط وقتی نوعِ قلم «کالا» است. */
+  useEffect(() => {
+    if (c.kind !== 'item' || codeQ.trim().length < 2) { setItemHits([]); return undefined; }
+    let alive = true;
+    const timer = setTimeout(() => {
+      api(`/items?q=${encodeURIComponent(codeQ.trim())}`)
+        .then((rows) => { if (alive) setItemHits(rows.filter((r) => r.active)); })
+        .catch(() => { if (alive) setItemHits([]); });
+    }, 300);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [codeQ, c.kind]);
+
+  /** انتخابِ کالا: نام و قیمتِ پایه پر می‌شوند و ارجاعِ کاتالوگ نگه داشته می‌شود. */
+  const pickItem = (it) => {
+    setCodeQ('');
+    setItemHits([]);
+    setC((s) => ({
+      ...s,
+      title: [it.name, it.size].filter(Boolean).join(' '),
+      itemId: it.id,
+      unitPrice: it.price != null ? String(it.price) : s.unitPrice,
+    }));
+    if (it.price == null) onToast('این کالا قیمتِ پایه ندارد — مبلغ را دستی وارد کنید');
+  };
 
   /**
    * انتخابِ کد: عنوان و مبلغ خودکار پر می‌شوند.
@@ -75,9 +101,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
           kind: c.kind, title: c.title.trim(),
           quantity: Math.max(1, parseMoney(c.quantity) || 1), unitPrice,
           ...(c.serviceCode ? { serviceCode: c.serviceCode } : {}),
+          ...(c.itemId ? { itemId: c.itemId } : {}),
         },
       });
-      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '' });
+      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null });
       await load(); onChanged?.();
       onToast('قلم اضافه شد ✓');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
@@ -146,11 +173,14 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                 <div className="bl-add">
                   {/* جستجوی کتابِ ارزش نسبی: کد و عنوان و فی یک‌جا می‌آیند،
                       تا کاربر نه کد را حفظ کند نه فی را دستی حساب کند. */}
-                  <label className="db-field bl-codesearch"><span>کدِ ملیِ خدمت (کتابِ ارزش نسبی)</span>
+                  <label className="db-field bl-codesearch">
+                    <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : 'کدِ ملیِ خدمت (کتابِ ارزش نسبی)'}</span>
                     <input
                       value={codeQ}
                       onChange={(e) => setCodeQ(e.target.value)}
-                      placeholder="کد یا شرحِ خدمت — مثلاً ۹۰۱۳۰۰ یا مانیتورینگ"
+                      placeholder={c.kind === 'item'
+                        ? 'نام، برند یا کدِ کالا — مثلاً پیچ پدیکولار'
+                        : 'کد یا شرحِ خدمت — مثلاً ۹۰۱۳۰۰ یا مانیتورینگ'}
                     />
                     {c.serviceCode && (
                       <i className="bl-picked">
@@ -158,7 +188,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         <button type="button" onClick={() => setC((s2) => ({ ...s2, serviceCode: '' }))}>حذفِ کد</button>
                       </i>
                     )}
-                    {codeHits.length > 0 && (
+                    {c.kind !== 'item' && codeHits.length > 0 && (
                       <div className="bl-hits">
                         {codeHits.map((h) => (
                           <button type="button" key={h.code} onClick={() => pickCode(h)}>
@@ -168,11 +198,32 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         ))}
                       </div>
                     )}
+                    {c.kind === 'item' && itemHits.length > 0 && (
+                      <div className="bl-hits">
+                        {itemHits.map((it) => (
+                          <button type="button" key={it.id} onClick={() => pickItem(it)}>
+                            <b>{it.name}</b>
+                            <span>
+                              {[it.brand, it.size, it.sku].filter(Boolean).join(' · ')}
+                              {it.price != null && ` — ${money(it.price)} تومان`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </label>
 
                   <div className="db-grid2">
                     <label className="db-field"><span>نوع</span>
-                      <select value={c.kind} onChange={(e) => setC((s) => ({ ...s, kind: e.target.value }))}>
+                      <select
+                        value={c.kind}
+                        onChange={(e) => {
+                          // با تغییرِ نوع، ارجاعِ قبلی باید برود؛ کدِ خدمت روی
+                          // قلمِ کالا (و برعکس) بی‌معنی و گمراه‌کننده است.
+                          setCodeQ(''); setCodeHits([]); setItemHits([]);
+                          setC((s) => ({ ...s, kind: e.target.value, serviceCode: '', itemId: null }));
+                        }}
+                      >
                         {Object.entries(CHARGE_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                       </select>
                     </label>
