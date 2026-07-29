@@ -187,3 +187,17 @@
 .st-skipped .df-row-main b { color: #9a93bb; }
 .st-warn { border-color: rgba(251, 191, 36, .35); }
 .st-warn .df-row-main b { color: #fcd34d; }
+
+/* خطای بارگذاری — به‌جای بخشِ خالی و بی‌توضیح */
+.st-fail {
+  max-width: 900px; margin: 0 auto 14px; padding: 13px 15px; border-radius: 14px;
+  display: grid; gap: 6px; justify-items: start;
+  background: rgba(251, 113, 133, .08); border: 1px solid rgba(251, 113, 133, .3);
+}
+.st-fail b { font-size: 13px; color: #fda4af; }
+.st-fail small { font-size: 11.5px; line-height: 1.9; color: #cfc9e8; }
+.st-fail button {
+  margin-top: 4px; padding: 8px 16px; border-radius: 10px; cursor: pointer;
+  font: inherit; font-size: 12px; color: #fff; border: 0;
+  background: linear-gradient(135deg, #a855f7, #6d28d9);
+}

@@ -23,7 +23,7 @@ const Check = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="m4 12 5 5L
  * تا از تغییرش نترسد.
  */
 export default function Settings() {
-  const { vertical, verticals, brandName, reload } = useConfig();
+  const { vertical, verticals, brandName, error: configError, reload } = useConfig();
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const [brand, setBrand] = useState(brandName || '');
@@ -33,12 +33,17 @@ export default function Settings() {
   const [tf, setTf] = useState({ year: '', sector: 'private', professional: '', technical: '', anesthesia: '' });
   const setT = (k) => (e) => setTf((s) => ({ ...s, [k]: e.target.value }));
 
+  const [codesError, setCodesError] = useState(null);
   const loadTariffs = useCallback(async () => {
     try {
       const [rows, status] = await Promise.all([api('/service-codes/tariffs'), api('/service-codes/status')]);
       setTariffs(rows);
       setCodes(status);
-    } catch { /* بدونِ تعرفه هم صفحه باید کار کند */ }
+      setCodesError(null);
+    } catch (e) {
+      // بلعیدنِ خطا یعنی کاربر بخشِ خالی می‌بیند و نمی‌داند چرا.
+      setCodesError(e?.status ? `${e.message} (کد ${e.status})` : e?.message || 'ارتباط با سرور برقرار نشد');
+    }
   }, []);
   useEffect(() => { loadTariffs(); }, [loadTariffs]);
 
@@ -103,6 +108,15 @@ export default function Settings() {
         برگشت به حوزهٔ قبلی هم همین‌قدر بی‌خطر است.
       </div>
 
+      {configError && (
+        <div className="st-fail">
+          <b>پیکربندیِ شرکت خوانده نشد</b>
+          <small>{configError}</small>
+          <small>حوزهٔ کاری و نامِ برند تا وقتی این خطا هست نمایش داده نمی‌شوند. بقیهٔ سامانه با واژگانِ پیش‌فرض کار می‌کند.</small>
+          <button type="button" onClick={() => reload()}>تلاشِ دوباره</button>
+        </div>
+      )}
+
       <div className="df-list st-verticals">
         {verticals.map((v) => {
           const on = v.key === vertical;
@@ -156,6 +170,14 @@ export default function Settings() {
         </div>
         <button type="button" className="df-save" onClick={saveTariff} disabled={busy}>ذخیرهٔ ضریب</button>
       </div>
+
+      {codesError && (
+        <div className="st-fail">
+          <b>کتابِ ارزش نسبی و تعرفه‌ها خوانده نشدند</b>
+          <small>{codesError}</small>
+          <button type="button" onClick={() => loadTariffs()}>تلاشِ دوباره</button>
+        </div>
+      )}
 
       {tariffs.length > 0 && (
         <div className="df-list st-tlist">

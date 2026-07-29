@@ -15,28 +15,43 @@ const Ctx = createContext(null);
  */
 export function ConfigProvider({ children }) {
   const [config, setConfig] = useState({ vertical: DEFAULT_VERTICAL, brandName: null, verticals: [] });
+  /**
+   * خطا نگه داشته می‌شود، بلعیده نمی‌شود.
+   *
+   * ⚠️ قبلاً catch خالی بود: اگر `/config` نمی‌آمد، رابط با واژگانِ پیش‌فرض کار
+   * می‌کرد ولی صفحهٔ تنظیمات فهرستِ حوزه‌ها را **بی‌هیچ پیامی** خالی نشان
+   * می‌داد — کاربر صفحه را «ناقص» می‌دید و هیچ سرنخی نداشت. رابط باید بدونِ
+   * پیکربندی هم کار کند، ولی باید بگوید که نشد.
+   */
+  const [error, setError] = useState(null);
 
   const reload = useCallback(async () => {
     try {
       const fresh = await api('/config');
       setConfig((c) => ({ ...c, ...fresh }));
-    } catch {
-      /* بدونِ پیکربندی هم رابط باید کار کند — واژگانِ پیش‌فرض می‌مانند */
+      setError(null);
+      return true;
+    } catch (e) {
+      setError(e?.status ? `${e.message} (کد ${e.status})` : e?.message || 'ارتباط با سرور برقرار نشد');
+      return false;
     }
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
 
   const value = useMemo(
-    () => ({ ...config, t: termsFor(config.vertical), reload }),
-    [config, reload],
+    () => ({ ...config, t: termsFor(config.vertical), error, reload }),
+    [config, error, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 /** واژگان + پیکربندی. خارج از Provider هم امن است (پیش‌فرض برمی‌گردد). */
 export function useConfig() {
-  return useContext(Ctx) ?? { vertical: DEFAULT_VERTICAL, brandName: null, verticals: [], t: termsFor(DEFAULT_VERTICAL), reload: () => {} };
+  return useContext(Ctx) ?? {
+    vertical: DEFAULT_VERTICAL, brandName: null, verticals: [], error: null,
+    t: termsFor(DEFAULT_VERTICAL), reload: () => {},
+  };
 }
 
 /** میان‌بر برای جایی که فقط واژه لازم است. */
