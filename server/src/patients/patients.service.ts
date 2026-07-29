@@ -118,6 +118,8 @@ export type SortKey = (typeof SORTS)[number];
 export const DEFAULT_SORT: SortKey = 'date';
 export const DEFAULT_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 200;
+/// سقفِ خروجی — بالا ولی صریح؛ فراتر از این، گزارش کارِ ماژولِ حسابداری است.
+export const EXPORT_LIMIT = 5000;
 
 export type VisitFilter = {
   q?: string;
@@ -200,7 +202,13 @@ export class PatientsService {
    * می‌ماند و قانونِ computeVisit منعش می‌کند. سورت/فیلترِ مالی وقتی می‌آید که
    * ماژولِ حسابداری aggregate یا view واقعی بسازد.
    */
-  async listVisits(f: VisitFilter = {}, user?: any) {
+  /**
+   * ساختِ شرطِ جستجو — **یک جا**، تا فهرست و خروجی هرگز از هم جدا نشوند.
+   *
+   * اگر خروجی شرطِ خودش را می‌ساخت، اولین فیلترِ تازه در یکی اضافه می‌شد و در
+   * دیگری نه؛ کاربر «همین فهرست» را خروجی می‌گرفت و چیزِ دیگری تحویل می‌گرفت.
+   */
+  private visitWhere(f: VisitFilter, user?: any) {
     const { q, status, kind } = f;
     const where: any = {};
     if (status && status !== 'all') where.opStatus = status;
@@ -246,7 +254,11 @@ export class PatientsService {
         ] } } },
       ];
     }
-    const scoped = this.scopedVisitWhere(user, { ...where, patient: { ...(where.patient ?? {}), deletedAt: null } });
+    return this.scopedVisitWhere(user, { ...where, patient: { ...(where.patient ?? {}), deletedAt: null } });
+  }
+
+  async listVisits(f: VisitFilter = {}, user?: any) {
+    const scoped = this.visitWhere(f, user);
 
     const pageSize = clamp(f.pageSize ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
     const page = Math.max(1, f.page ?? 1);
@@ -277,13 +289,47 @@ export class PatientsService {
   }
 
   /**
+   * همهٔ ردیف‌های مطابقِ فیلتر — برای CSV و چاپ.
+   *
+   * صفحه‌بندی ندارد چون کاربر «همین فهرست» را می‌خواهد نه صفحهٔ جاری‌اش. ولی
+   * بی‌سقف هم نیست: سقف صریح است و اگر خورد، `truncated` برمی‌گردد تا UI
+   * بگوید — خروجیِ بی‌صدا بریده‌شده بدترین حالت است، چون کاربر آن را کامل
+   * فرض می‌کند و رویش تصمیم می‌گیرد.
+   */
+  async exportVisits(f: VisitFilter = {}, user?: any) {
+    const scoped = this.visitWhere(f, user);
+    const rows = await this.prisma.visit.findMany({
+      where: scoped,
+      include: INCLUDE_PATIENT,
+      orderBy: orderFor(f.sort, f.dir),
+      take: EXPORT_LIMIT + 1,
+    });
+    const truncated = rows.length > EXPORT_LIMIT;
+    return {
+      rows: rows.slice(0, EXPORT_LIMIT).map(enrich),
+      truncated,
+      limit: EXPORT_LIMIT,
+      stats: await this.visitStats(scoped),
+    };
+  }
+
+  /**
    * آمارِ کلِ نتیجهٔ فیلترشده — نه فقط صفحهٔ جاری.
    *
    * با آمدنِ صفحه‌بندی، جمع‌زدنِ سمتِ کلاینت غلط شد: کاربر «ماندهٔ کل» را
    * می‌خواند ولی فقط ماندهٔ ۵۰ ردیفِ روی صفحه را می‌دید. پس آمار به سرور آمد.
    */
   private async visitStats(scoped: any) {
-    const live = { ...scoped, opStatus: { not: 'cancelled' } };
+    /**
+     * ⚠️ شرطِ اضافه با AND ترکیب می‌شود، نه با بازنویسیِ کلید.
+     *
+     * قبلاً `{ ...scoped, opStatus: 'pending' }` بود؛ وقتی کاربر روی «تمام‌شده»
+     * فیلتر کرده بود، همین spread شرطِ خودش را پاک می‌کرد و آمار از کلِ
+     * دیتابیس حساب می‌شد — یعنی «ماندهٔ کل» و «در انتظار»ِ روی صفحه به فیلترِ
+     * وضعیت اعتنا نمی‌کردند.
+     */
+    const and = (extra: any) => ({ ...scoped, AND: [...(scoped.AND ?? []), extra] });
+    const live = and({ opStatus: { not: 'cancelled' } });
     const dayStart = new Date();
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(dayStart);
@@ -291,8 +337,8 @@ export class PatientsService {
 
     const [total, pending, today, kinds, chargeRows, payRows] = await Promise.all([
       this.prisma.visit.count({ where: scoped }),
-      this.prisma.visit.count({ where: { ...scoped, opStatus: 'pending' } }),
-      this.prisma.visit.count({ where: { ...live, opDate: { gte: dayStart, lte: dayEnd } } }),
+      this.prisma.visit.count({ where: and({ opStatus: 'pending' }) }),
+      this.prisma.visit.count({ where: { ...live, AND: [...live.AND, { opDate: { gte: dayStart, lte: dayEnd } }] } }),
       // نوع‌های موجود در کلِ نتیجه — نه فقط صفحهٔ جاری، وگرنه چیپِ «ویزیت» با
       // ورق‌زدن ظاهر و ناپدید می‌شود.
       this.prisma.visit.groupBy({ by: ['kind'], where: scoped }),

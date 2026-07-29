@@ -355,3 +355,32 @@ jobs:
           if (!/isBroken/.test(mw)) { console.error('شرکتِ عقب‌مانده باید پیامِ روشن بگیرد نه ۵۰۰های پراکنده'); process.exit(1); }
           console.log('tenant migration ok');
           "
+
+      - name: Verify export reuses the list filter and never truncates silently
+        run: |
+          node -e "
+          const fs = require('fs');
+          const svc = fs.readFileSync('server/src/patients/patients.service.ts', 'utf8');
+          // فیلتر یک جا ساخته می‌شود؛ وگرنه خروجی و فهرست از هم جدا می‌افتند.
+          for (const m of ['async listVisits', 'async exportVisits']) {
+            const body = svc.split(m)[1].split(/\\n  }/)[0];
+            if (!/this\\.visitWhere\\(/.test(body)) { console.error(m + ' باید از visitWhere استفاده کند'); process.exit(1); }
+          }
+          // آمار نباید شرطِ فراخوان را بازنویسی کند (باگِ واقعی: فیلترِ وضعیت نادیده می‌شد).
+          const strip = (t) => t.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/\\/\\/.*\$/gm, '');
+          const stats = strip(svc.split('private async visitStats')[1].split(/\\n  }/)[0]);
+          if (/\\.\\.\\.scoped, opStatus:/.test(stats)) {
+            console.error('visitStats نباید opStatus فراخوان را بازنویسی کند؛ با AND ترکیب کن'); process.exit(1);
+          }
+          if (!/AND:/.test(stats)) { console.error('visitStats باید شرط‌ها را با AND ترکیب کند'); process.exit(1); }
+          // بریدنِ بی‌صدا ممنوع.
+          if (!/truncated/.test(svc)) { console.error('خروجی باید بریده‌شدن را اعلام کند'); process.exit(1); }
+          const exp = fs.readFileSync('src/app/exports.js', 'utf8');
+          if (!/\\uFEFF/.test(exp) && !exp.includes('BOM')) { console.error('CSV باید BOM داشته باشد وگرنه Excel فارسی را خراب می‌کند'); process.exit(1); }
+          // نامِ فایل باید ASCII باشد: کرومیوم نامِ غیر-ASCII را دور می‌ریزد.
+          const dl = exp.split('export function downloadCsv')[1].split(/\\n}/)[0];
+          if (/[^\\x00-\\x7F]/.test((dl.match(/const name = \`[^\`]*\`/) || [''])[0])) {
+            console.error('نامِ فایلِ CSV باید ASCII باشد'); process.exit(1);
+          }
+          console.log('export ok');
+          "

@@ -33,25 +33,14 @@ export class PatientsController {
   @RequirePermissions('patients.read')
   @Get('visits')
   list(@CurrentUser() user: any, @Query() query: Record<string, string>) {
-    return this.patients.listVisits(
-      {
-        q: query.q,
-        status: query.status,
-        kind: query.kind,
-        surgeonId: intOf(query.surgeonId),
-        hospitalId: intOf(query.hospitalId),
-        techId: intOf(query.techId),
-        procedureTypeId: intOf(query.procedureTypeId),
-        diagnosisId: intOf(query.diagnosisId),
-        from: dateOf(query.from),
-        to: dateOf(query.to),
-        sort: query.sort,
-        dir: query.dir,
-        page: intOf(query.page),
-        pageSize: intOf(query.pageSize),
-      },
-      user,
-    );
+    return this.patients.listVisits(filterFrom(query), user);
+  }
+
+  /// خروجیِ کاملِ همان فیلتر (CSV/چاپ) — بدونِ صفحه‌بندی، با سقفِ صریح.
+  @RequirePermissions('patients.read')
+  @Get('visits/export')
+  export(@CurrentUser() user: any, @Query() query: Record<string, string>) {
+    return this.patients.exportVisits(filterFrom(query), user);
   }
 
   @RequirePermissions('patients.read')
@@ -97,6 +86,26 @@ export class PatientsController {
   searchPatients(@CurrentUser() user: any, @Query('q') q?: string) {
     return this.patients.searchPatients(q, user);
   }
+}
+
+/// خواندنِ فیلتر از query — یک جا، تا فهرست و خروجی همان پارامترها را بفهمند.
+function filterFrom(query: Record<string, string>) {
+  return {
+    q: query.q,
+    status: query.status,
+    kind: query.kind,
+    surgeonId: intOf(query.surgeonId),
+    hospitalId: intOf(query.hospitalId),
+    techId: intOf(query.techId),
+    procedureTypeId: intOf(query.procedureTypeId),
+    diagnosisId: intOf(query.diagnosisId),
+    from: dateOf(query.from),
+    to: dateOf(query.to),
+    sort: query.sort,
+    dir: query.dir,
+    page: intOf(query.page),
+    pageSize: intOf(query.pageSize),
+  };
 }
 
 /// پارامترِ عددیِ اختیاری. مقدارِ بی‌معنی نادیده گرفته می‌شود نه اینکه به خطا

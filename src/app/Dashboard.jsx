@@ -5,9 +5,10 @@ import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import ProfileMenu from './ProfileMenu.jsx';
-import { useTerms } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
 import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
+import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
@@ -29,6 +30,8 @@ const ArriveIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 12h1
 const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
 const Money = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></svg>);
+const DownIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M4 20h16" /></svg>);
+const PrintIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M7 9V3h10v6" /><rect x="4" y="9" width="16" height="7" rx="2" /><path d="M7 16h10v5H7z" /></svg>);
 const FilterIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 5h18l-7 8v6l-4 2v-8z" /></svg>);
 const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" /></svg>);
 
@@ -884,7 +887,8 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const t = useTerms();
+  // brandName برای سربرگِ برگهٔ چاپ لازم است، پس کلِ config خوانده می‌شود نه فقط واژگان.
+  const { t, brandName } = useConfig();
   const [visits, setVisits] = useState(null);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
@@ -999,6 +1003,59 @@ export default function Dashboard() {
   }, [adv, defs]);
   const advCount = activeChips.length;
   const clearOne = (key) => setAdv((a) => ({ ...a, [key]: '' }));
+
+  /**
+   * خروجی — ردیف‌ها از سرور و با همین فیلتر خوانده می‌شوند، نه از صفحهٔ جاری.
+   *
+   * با صفحه‌بندی، `visits` فقط یک صفحه است؛ خروجی گرفتن از آن یعنی کاربر فایلی
+   * می‌گیرد که فکر می‌کند کلِ نتیجه است و نیست.
+   */
+  const [exporting, setExporting] = useState('');
+  const runExport = async (mode) => {
+    if (exporting) return;
+    setExporting(mode);
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set('q', q.trim());
+      if (status !== 'all') params.set('status', status);
+      if (kind !== 'all') params.set('kind', kind);
+      for (const key of ADV_IDS) if (adv[key]) params.set(key, adv[key]);
+      const from = adv.fromJ ? jStrToIso(adv.fromJ) : null;
+      const to = adv.toJ ? jStrToIso(adv.toJ) : null;
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      params.set('sort', sort); params.set('dir', dir);
+
+      const res = await api(`/visits/export?${params}`);
+      if (!res.rows.length) { setToast('برای این فیلتر موردی نیست'); return; }
+
+      const opts = {
+        rows: res.rows,
+        stats: res.stats,
+        truncated: res.truncated,
+        limit: res.limit,
+        filterLabel: [
+          q.trim() && `جستجو: ${q.trim()}`,
+          status !== 'all' && `وضعیت: ${FILTERS.find((f) => f.v === status)?.l}`,
+          kind !== 'all' && `نوع: ${kindOf(kind).label}`,
+          ...activeChips.map((c) => c.label),
+        ].filter(Boolean).join(' · '),
+        kindLabel: (v) => kindOf(v.kind).label,
+        statusLabel,
+        brandName,
+        title: `فهرستِ ${t.visits}`,
+      };
+
+      if (mode === 'csv') {
+        const name = downloadCsv(visitsToCsv(res.rows, opts));
+        setToast(res.truncated
+          ? `${faNum(res.rows.length)} ردیف در «${name}» — نتیجه از سقفِ ${faNum(res.limit)} بیشتر بود`
+          : `${faNum(res.rows.length)} ردیف در «${name}» ذخیره شد ✓`);
+      } else if (!printVisits(res.rows, opts)) {
+        setToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را برای این سایت بدهید');
+      }
+    } catch (e) { setToast(e.message); } finally { setExporting(''); }
+  };
   const kindsPresent = stats.kinds ?? [];
   const showKindFilter = kind !== 'all' || kindsPresent.length > 1;
 
@@ -1148,6 +1205,18 @@ export default function Dashboard() {
               ? `${faNum((page - 1) * pageSize + 1)}–${faNum(Math.min(page * pageSize, meta.total))} از ${faNum(meta.total)}`
               : ''}
           </span>
+          <button
+            type="button" className="db-ico db-expbtn" title="خروجیِ CSV"
+            disabled={!!exporting || !meta.total} onClick={() => runExport('csv')}
+          >
+            {exporting === 'csv' ? '…' : <DownIc width="16" height="16" />}
+          </button>
+          <button
+            type="button" className="db-ico db-expbtn" title="چاپ"
+            disabled={!!exporting || !meta.total} onClick={() => runExport('print')}
+          >
+            {exporting === 'print' ? '…' : <PrintIc width="16" height="16" />}
+          </button>
           <label className="db-psize">
             <span>در صفحه</span>
             <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
