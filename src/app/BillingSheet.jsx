@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
+import JDate from './JDate.jsx';
 import { toEnDigits } from '../lib/identity.js';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -318,9 +319,8 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         {Object.entries(METHODS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                       </select>
                     </label>
-                    <label className="db-field"><span>تاریخ (شمسی)</span>
-                      <input dir="ltr" inputMode="numeric" value={p.dateJ} onChange={(e) => setP((s) => ({ ...s, dateJ: e.target.value }))} />
-                    </label>
+                    <JDate label="تاریخ (شمسی)" value={p.dateJ}
+                      onChange={(v) => setP((s) => ({ ...s, dateJ: v }))} />
                     <label className="db-field"><span>شمارهٔ پیگیری</span>
                       <input dir="ltr" value={p.reference} onChange={(e) => setP((s) => ({ ...s, reference: e.target.value }))} placeholder="اختیاری" />
                     </label>

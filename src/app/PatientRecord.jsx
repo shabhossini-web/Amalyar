@@ -5,6 +5,7 @@ import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
+import JDate from './JDate.jsx';
 import './record.css';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -115,7 +116,8 @@ function ProfileTab({ rec, onSave, toast }) {
         <label className="pf-field"><span>نام</span><input value={f.firstName} onChange={set('firstName')} /></label>
         <label className="pf-field"><span>نام خانوادگی</span><input value={f.lastName} onChange={set('lastName')} /></label>
         <label className="pf-field"><span>موبایل</span><input dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} /></label>
-        <label className="pf-field"><span>تاریخِ تولد (شمسی)</span><input dir="ltr" inputMode="numeric" value={f.birthDateJ} onChange={set('birthDateJ')} placeholder="۱۳۷۰/۰۱/۱۵" /></label>
+        <JDate className="pf-field" label="تاریخِ تولد (شمسی)" mode="birth" value={f.birthDateJ}
+          onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))} placeholder="۱۳۷۰/۰۱/۱۵" />
         <label className="pf-field"><span>جنسیت</span>
           <select value={f.gender} onChange={set('gender')}>
             <option value="">—</option><option value="female">زن</option><option value="male">مرد</option>
@@ -257,10 +259,8 @@ function DocsTab({ rec, reload, toast }) {
           <label className="pf-field"><span>عنوان</span>
             <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثلاً: MRI کمر" />
           </label>
-          <label className="pf-field"><span>تاریخِ مدرک (شمسی)</span>
-            <input dir="ltr" inputMode="numeric" value={takenJ} onChange={(e) => setTakenJ(e.target.value)} placeholder="۱۴۰۵/۰۴/۲۸" />
-            <i className="pf-hint">تاریخِ خودِ آزمایش، نه تاریخِ آپلود.</i>
-          </label>
+          <JDate className="pf-field" label="تاریخِ مدرک (شمسی)" value={takenJ}
+            onChange={setTakenJ} placeholder="۱۴۰۵/۰۴/۲۸" hint="تاریخِ خودِ آزمایش، نه تاریخِ آپلود." />
           <label className="pf-field"><span>مربوط به مراجعه</span>
             <select value={visitId} onChange={(e) => setVisitId(e.target.value)}>
               <option value="">— کلِ پرونده —</option>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits } from '../lib/jalali.js';
+import JDate from './JDate.jsx';
 import './inventory.css';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -254,9 +255,8 @@ function LotSheet({ onClose, onSaved, onError }) {
           <label className="iv-field"><span>تعداد</span>
             <input dir="ltr" inputMode="numeric" value={form.quantity} onChange={set('quantity')} />
           </label>
-          <label className="iv-field"><span>تاریخِ انقضا (شمسی)</span>
-            <input dir="ltr" inputMode="numeric" value={form.expiresJ} onChange={set('expiresJ')} placeholder="۱۴۰۶/۰۷/۳۰" />
-          </label>
+          <JDate className="iv-field" label="تاریخِ انقضا (شمسی)" value={form.expiresJ}
+            onChange={(v) => setForm((s) => ({ ...s, expiresJ: v }))} placeholder="۱۴۰۶/۰۷/۳۰" />
           <label className="iv-field"><span>محلِ نگه‌داری</span>
             <input value={form.location} onChange={set('location')} placeholder="انبارِ مرکزی، ستِ ۲…" />
           </label>

@@ -7,6 +7,7 @@ import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import ProfileMenu from './ProfileMenu.jsx';
 import { useTerms } from './config.jsx';
 import BillingSheet from './BillingSheet.jsx';
+import JDate from './JDate.jsx';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
@@ -477,9 +478,13 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
               </div>
             )}
 
-            <label className="db-field"><span>تاریخِ تولد (شمسی)</span>
-              <input type="text" dir="ltr" inputMode="numeric" value={f.birthDateJ} onChange={set('birthDateJ')} placeholder="۱۳۷۰/۰۱/۱۵ — اختیاری" />
-            </label>
+            <JDate
+              label="تاریخِ تولد (شمسی)"
+              mode="birth"
+              value={f.birthDateJ}
+              onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
+              placeholder="۱۳۷۰/۰۱/۱۵ — اختیاری"
+            />
           </>
         )}
 
@@ -533,13 +538,13 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           addPlaceholder="عنوانِ تشخیصِ جدید…"
         />
 
-        <label className="db-field">
-          <span>{kindOf(f.kind).date} (شمسی)</span>
-          <div className="db-daterow">
-            <input type="text" dir="ltr" inputMode="numeric" value={f.opDateJ} onChange={set('opDateJ')} placeholder="۱۴۰۵/۰۴/۲۸" />
-            <button type="button" className="db-today" onClick={() => setF((s) => ({ ...s, opDateJ: todayJStr() }))}>امروز</button>
-          </div>
-        </label>
+        {/* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */}
+        <JDate
+          label={`${kindOf(f.kind).date} (شمسی)`}
+          value={f.opDateJ}
+          onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
+          placeholder="۱۴۰۵/۰۴/۲۸"
+        />
 
         {/* ساعت‌ها کنارِ هم: کاربر شروع و پایان را با هم می‌زند، و مدت را
             همان‌جا می‌بیند — بدونِ حسابِ ذهنی. */}
@@ -861,16 +866,11 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
           </div>
 
           <div className="db-grid2">
-            <label className={`db-field${badDate(f.fromJ) ? ' bad' : ''}`}>
-              <span>از تاریخ (شمسی)</span>
-              <input dir="ltr" inputMode="numeric" value={f.fromJ} onChange={set('fromJ')} placeholder="۱۴۰۵/۰۱/۰۱" />
-            </label>
-            <label className={`db-field${badDate(f.toJ) ? ' bad' : ''}`}>
-              <span>تا تاریخ (شمسی)</span>
-              <input dir="ltr" inputMode="numeric" value={f.toJ} onChange={set('toJ')} placeholder={todayJStr()} />
-            </label>
+            <JDate label="از تاریخ (شمسی)" value={f.fromJ}
+              onChange={(v) => setF((s2) => ({ ...s2, fromJ: v }))} placeholder="۱۴۰۵/۰۱/۰۱" />
+            <JDate label="تا تاریخ (شمسی)" value={f.toJ}
+              onChange={(v) => setF((s2) => ({ ...s2, toJ: v }))} placeholder={todayJStr()} />
           </div>
-          {invalid && <p className="db-hint db-hint-bad">تاریخ باید به شکلِ ۱۴۰۵/۰۵/۰۶ باشد.</p>}
         </div>
 
         <footer className="db-sheet-foot">

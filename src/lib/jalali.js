@@ -112,3 +112,52 @@ export function faDate(iso) {
     return '';
   }
 }
+
+export const J_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+/// هفتهٔ ایرانی از شنبه شروع می‌شود.
+export const J_DAYS = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+
+/**
+ * تعدادِ روزهای ماهِ شمسی.
+ *
+ * اسفند ۲۹ یا ۳۰ روز است. به‌جای پیاده‌سازیِ دوبارهٔ قاعدهٔ کبیسه، ۳۰ اسفند را
+ * به میلادی و دوباره به شمسی می‌بریم: اگر همان ۳۰ اسفند برگشت، سال کبیسه است.
+ * یک قاعدهٔ کبیسه در کلِ فایل، نه دو تا.
+ */
+export function jMonthDays(jy, jm) {
+  if (jm <= 6) return 31;
+  if (jm <= 11) return 30;
+  const g = toGregorian(jy, 12, 30);
+  const back = toJalaali(g.gy, g.gm, g.gd);
+  return back.jy === jy && back.jm === 12 && back.jd === 30 ? 30 : 29;
+}
+
+/// شمارهٔ روزِ هفته (۰ = شنبه … ۶ = جمعه)
+export function jDayOfWeek(jy, jm, jd) {
+  const g = toGregorian(jy, jm, jd);
+  return (new Date(g.gy, g.gm - 1, g.gd).getDay() + 1) % 7;
+}
+
+/// «۱۴۰۵/۰۵/۰۷» از اجزا
+export const jStr = (jy, jm, jd) =>
+  `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+
+/// «۱۴۰۵/۰۵/۰۷» → [۱۴۰۵, ۵, ۷] یا null
+export function jParse(str) {
+  const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(toEnDigits(String(str ?? '')).trim());
+  if (!m) return null;
+  const [jy, jm, jd] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (jm < 1 || jm > 12 || jd < 1 || jd > jMonthDays(jy, jm)) return null;
+  return [jy, jm, jd];
+}
+
+/// امروز به‌شکلِ [jy, jm, jd]
+export function jToday() {
+  const d = new Date();
+  const { jy, jm, jd } = toJalaali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  return [jy, jm, jd];
+}
+
+/// ارقامِ لاتینِ یک رشته → فارسی (فقط برای نمایش)
+export const jToFa = (s) => String(s ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
