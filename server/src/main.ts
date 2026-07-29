@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { allowedOrigins } from './common/security';
 import { restoreApiPrefix } from './common/api-prefix';
 import { PrismaExceptionFilter } from './common/prisma-exception.filter';
+import { TenantMigratorService } from './tenant/tenant-migrator.service';
 
 async function bootstrap() {
   // bodyParser را خودمان با سقفِ بالاتر می‌گذاریم (سلفیِ dataURL بزرگ است)
@@ -39,6 +40,28 @@ async function bootstrap() {
     }
     next();
   });
+
+  /**
+   * migrationِ دیتابیسِ شرکت‌ها — پیش از پذیرفتنِ ترافیک.
+   *
+   * ⚠️ قبلاً دستی بود و یک بار فراموش شد؛ نتیجه‌اش هیچ خطای آشکاری نداشت، فقط
+   * جدول‌های تازه غایب بودند و صفحه‌ها ناقص دیده می‌شدند. مرحله‌ای که به یادِ
+   * آدم تکیه کند بالاخره فراموش می‌شود.
+   *
+   * قبل از listen است تا اولین درخواست به دیتابیسِ نیمه‌مهاجرت‌یافته نخورد.
+   * با AUTO_MIGRATE_TENANTS=0 می‌شود خاموشش کرد (مثلاً وقتی مهاجرت را دستی و
+   * با بکاپِ تازه انجام می‌دهند).
+   */
+  if (process.env.AUTO_MIGRATE_TENANTS !== '0') {
+    try {
+      await app.get(TenantMigratorService).runAll();
+    } catch (e) {
+      // بالا نیامدنِ سرویس بدتر از عقب‌ماندنِ یک شرکت است؛ خطا بلند لاگ می‌شود
+      // و /health آن را نشان می‌دهد.
+      // eslint-disable-next-line no-console
+      console.error('migrationِ شرکت‌ها ناتمام ماند:', e instanceof Error ? e.message : e);
+    }
+  }
 
   const port = parseInt(process.env.PORT || '3001', 10);
   await app.listen(port, '0.0.0.0');

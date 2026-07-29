@@ -1,3 +1,4 @@
+import { TenantMigratorService } from '../tenant/tenant-migrator.service';
 import {
   Body,
   CanActivate,
@@ -630,6 +631,7 @@ export class PlatformController {
   constructor(
     private readonly auth: PlatformAuthService,
     private readonly provisioning: PlatformProvisioningService,
+    private readonly migrator: TenantMigratorService,
   ) {}
 
   @Get('auth/options')
@@ -691,6 +693,14 @@ export class PlatformController {
   @UseGuards(PlatformSessionGuard)
   snapshot() {
     return this.provisioning.snapshot();
+  }
+
+  /// وضعیتِ هم‌گامیِ دیتابیسِ هر شرکت — با نام، پس فقط پشتِ نشستِ پلتفرم.
+  /// `/health` همین را بی‌نام و بی‌احراز هویت می‌دهد.
+  @Get('migrations')
+  @UseGuards(PlatformSessionGuard)
+  migrations() {
+    return { ...this.migrator.summary(), tenants: this.migrator.details() };
   }
 
   @Get('provisioning-jobs/:id')

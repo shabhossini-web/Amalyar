@@ -3,11 +3,12 @@ import { ControlPrismaService } from './control-prisma.service';
 import { TenantContext } from './tenant-context';
 import { TenantMiddleware } from './tenant.middleware';
 import { TenantRegistryService } from './tenant-registry.service';
+import { TenantMigratorService } from './tenant-migrator.service';
 
 @Global()
 @Module({
-  providers: [ControlPrismaService, TenantContext, TenantRegistryService, TenantMiddleware],
-  exports: [ControlPrismaService, TenantContext, TenantRegistryService],
+  providers: [ControlPrismaService, TenantContext, TenantRegistryService, TenantMigratorService, TenantMiddleware],
+  exports: [ControlPrismaService, TenantContext, TenantRegistryService, TenantMigratorService],
 })
 export class TenantModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

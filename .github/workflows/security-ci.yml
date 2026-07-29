@@ -328,3 +328,30 @@ jobs:
           if (jalaliStrToDate('چرت') !== null) { console.error('ورودیِ نامعتبر باید null بدهد'); process.exit(1); }
           console.log('jalali ok');
           "
+
+      - name: Verify tenant databases migrate before serving traffic
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const main = fs.readFileSync('src/main.ts', 'utf8');
+          // migration باید *پیش از* listen اجرا شود، وگرنه اولین درخواست به
+          // دیتابیسِ نیمه‌مهاجرت‌یافته می‌خورد.
+          const iMigrate = main.indexOf('TenantMigratorService');
+          const iListen = main.indexOf('app.listen');
+          if (iMigrate < 0 || iListen < 0 || iMigrate > iListen) {
+            console.error('migrationِ شرکت‌ها باید پیش از app.listen اجرا شود'); process.exit(1);
+          }
+          const svc = fs.readFileSync('src/tenant/tenant-migrator.service.ts', 'utf8');
+          // قفلِ مشورتی: دو نمونه در دیپلویِ چرخشی نباید همزمان migrate کنند.
+          if (!/pg_try_advisory_lock/.test(svc)) { console.error('قفلِ مشورتی لازم است'); process.exit(1); }
+          // شرکتِ خراب نباید جلوی بقیه را بگیرد (برخلافِ ابزارِ دستی که break می‌زند).
+          const loop = svc.split('for (const t of tenants)')[1].split('\\n    }')[0];
+          if (/\\bbreak\\b/.test(loop)) { console.error('حلقهٔ fleet نباید با اولین خطا متوقف شود'); process.exit(1); }
+          // خرابی باید دیده شود: هم در /health هم به‌شکلِ ۵۰۳ برای همان شرکت.
+          const health = fs.readFileSync('src/app.controller.ts', 'utf8');
+          if (!/migrations/.test(health)) { console.error('/health باید وضعیتِ migration را بدهد'); process.exit(1); }
+          const mw = fs.readFileSync('src/tenant/tenant.middleware.ts', 'utf8');
+          if (!/isBroken/.test(mw)) { console.error('شرکتِ عقب‌مانده باید پیامِ روشن بگیرد نه ۵۰۰های پراکنده'); process.exit(1); }
+          console.log('tenant migration ok');
+          "
