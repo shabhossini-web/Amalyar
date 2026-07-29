@@ -185,7 +185,113 @@ export default function Settings() {
         <button type="button" className="df-save" onClick={saveBrand} disabled={busy}>ذخیره</button>
       </div>
 
+      <ImportPanel onToast={setToast} />
+
       {toast && <div className="df-toast">{toast}</div>}
     </div>
+  );
+}
+
+/**
+ * وارد کردنِ backupِ ملک‌طب.
+ *
+ * ⚠️ همیشه اول آزمایشی: کاربر گزارشِ «چه چیزی وارد می‌شود» را می‌بیند و بعد
+ * تأیید می‌کند. ایمپورتِ کور روی دیتابیسِ واقعی، برگشت‌ناپذیرترین دکمهٔ سامانه
+ * می‌شد. اجرای دوباره هم بی‌خطر است — رکوردِ تکراری ساخته نمی‌شود.
+ */
+function ImportPanel({ onToast }) {
+  const [file, setFile] = useState(null);
+  const [dump, setDump] = useState(null);
+  const [report, setReport] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const pickFile = async (ev) => {
+    const f = ev.target.files?.[0];
+    setReport(null); setDump(null); setFile(null);
+    if (!f) return;
+    try {
+      const parsed = JSON.parse(await f.text());
+      if (!parsed?.tables) throw new Error('این فایل ساختارِ backupِ ملک‌طب را ندارد');
+      setFile(f); setDump(parsed);
+      onToast(`فایل خوانده شد: ${Object.keys(parsed.tables).length} جدول`);
+    } catch (e) {
+      onToast(e.message.startsWith('این فایل') ? e.message : 'فایل JSONِ معتبر نیست');
+    }
+  };
+
+  const run = async (dryRun) => {
+    if (!dump || busy) return;
+    setBusy(true);
+    try {
+      const res = await api(`/import/malekteb${dryRun ? '?dryRun=1' : ''}`, { method: 'POST', body: dump });
+      setReport(res);
+      onToast(dryRun ? 'اجرای آزمایشی انجام شد — چیزی ذخیره نشد' : 'ایمپورت انجام شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const LABELS = {
+    surgeons: 'جراحان', hospitals: 'بیمارستان‌ها', procedureTypes: 'انواعِ عمل',
+    patients: 'پرونده‌های بیمار', visits: 'مراجعات', charges: 'اقلامِ صورت‌حساب', payments: 'پرداخت‌ها',
+  };
+
+  return (
+    <>
+      <h3 className="st-h3">وارد کردنِ دادهٔ ملک‌طب</h3>
+      <div className="df-note">
+        فایلِ backupِ JSON را انتخاب کنید. اول «اجرای آزمایشی» بزنید تا ببینید چه چیزی وارد می‌شود؛
+        هیچ‌چیز ذخیره نمی‌شود. مبالغ از ریال به تومان تبدیل می‌شوند و اجرای دوباره رکوردِ تکراری نمی‌سازد.
+      </div>
+
+      <div className="st-import">
+        <label className="st-file">
+          <input type="file" accept="application/json,.json" onChange={pickFile} />
+          <span>{file ? file.name : 'انتخابِ فایلِ backup…'}</span>
+        </label>
+        <button type="button" className="df-save st-dry" disabled={!dump || busy} onClick={() => run(true)}>
+          اجرای آزمایشی
+        </button>
+        <button type="button" className="df-save" disabled={!report || busy} onClick={() => run(false)}>
+          وارد کن
+        </button>
+      </div>
+
+      {report && (
+        <div className="df-list st-report">
+          <div className="df-row st-report-head">
+            <b>{report.dryRun ? 'نتیجهٔ اجرای آزمایشی (ذخیره نشد)' : 'ایمپورت انجام شد'}</b>
+          </div>
+          {Object.entries(report.counts).map(([k, v]) => (
+            <div key={k} className="df-row">
+              <div className="df-row-main">
+                <b>{LABELS[k] ?? k}</b>
+                <small>
+                  ساخته {faNum(v.created)}
+                  {v.existing > 0 && ` · از قبل موجود ${faNum(v.existing)}`}
+                  {v.skipped > 0 && ` · ردشده ${faNum(v.skipped)}`}
+                </small>
+              </div>
+            </div>
+          ))}
+          {report.skippedTables.length > 0 && (
+            <div className="df-row st-skipped">
+              <div className="df-row-main">
+                <b>وارد نشد</b>
+                {report.skippedTables.map((t) => (
+                  <small key={t.table}>{t.table} ({faNum(t.rows)} ردیف) — {t.reason}</small>
+                ))}
+              </div>
+            </div>
+          )}
+          {report.warnings.length > 0 && (
+            <div className="df-row st-warn">
+              <div className="df-row-main">
+                <b>هشدارها</b>
+                {report.warnings.map((w, i) => <small key={i}>{w}</small>)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }

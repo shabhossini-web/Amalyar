@@ -36,6 +36,8 @@ export const PERMISSION_DEFAULTS: Record<string, number> = {
   'definitions.read': LEVEL.TECH,
   'definitions.manage': LEVEL.ADMIN,
   'users.manage': LEVEL.SUPER_ADMIN,
+  // وارد کردنِ دادهٔ سامانهٔ قبلی کلِ دیتابیسِ شرکت را دست می‌زند.
+  'import.run': LEVEL.SUPER_ADMIN,
 };
 
 @Injectable()

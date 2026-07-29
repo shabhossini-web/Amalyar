@@ -302,3 +302,29 @@ jobs:
           if (/type=\"time\"/.test(ui)) { console.error('input[type=time] قالبش را مرورگر تعیین می‌کند؛ ورودیِ متنیِ نرمال‌شده لازم است'); process.exit(1); }
           console.log('op duration ok');
           "
+
+      - name: Verify Jalali conversion matches reference dates
+        run: |
+          # هستهٔ سرور و فرانت باید یکی باشند. یک‌بار سمتِ سرور از روی حافظه
+          # بازنویسی شد، جدولِ breaks فرق کرد و همهٔ تاریخ‌های وارد‌شده یک سال
+          # عقب افتادند — بدونِ هیچ خطایی. این گارد همان را می‌گیرد.
+          server/node_modules/.bin/tsc server/src/common/jalali.ts --outDir /tmp/jal --module commonjs --target es2020
+          node -e "
+          const fs = require('fs');
+          const srv = fs.readFileSync('server/src/common/jalali.ts', 'utf8');
+          const web = fs.readFileSync('src/lib/jalali.js', 'utf8');
+          const breaksOf = (t) => (t.match(/breaks = \\[[^\\]]+\\]/) || [''])[0].replace(/\\s+/g, '');
+          if (!breaksOf(srv) || breaksOf(srv) !== breaksOf(web)) {
+            console.error('جدولِ breaks سرور و فرانت یکی نیست'); process.exit(1);
+          }
+          if (!srv.includes('~~(a / b)')) { console.error('تقسیم باید truncation باشد (~~) نه Math.floor'); process.exit(1); }
+          const { jalaliStrToDate } = require('/tmp/jal/jalali.js');
+          const cases = { '1403/01/01': '2024-03-20', '1404/12/29': '2026-03-20', '1405/04/10': '2026-07-01', '1405/05/07': '2026-07-29' };
+          for (const [j, g] of Object.entries(cases)) {
+            const got = jalaliStrToDate(j);
+            const iso = got && got.toISOString().slice(0, 10);
+            if (iso !== g) { console.error(j + ' → ' + iso + ' ولی باید ' + g + ' باشد'); process.exit(1); }
+          }
+          if (jalaliStrToDate('چرت') !== null) { console.error('ورودیِ نامعتبر باید null بدهد'); process.exit(1); }
+          console.log('jalali ok');
+          "

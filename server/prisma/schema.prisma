@@ -391,6 +391,10 @@ model AuditEvent {
 model Patient {
   id         Int      @id @default(autoincrement())
   code       String   @unique // AM-0001
+  /// ردِ منبع برای دادهٔ وارد‌شده از سامانهٔ قبلی — «malekteb:patient_profiles:۴۲».
+  /// وجودش وارد کردن را قابلِ تکرار می‌کند: دفعهٔ دوم ردیفِ تکراری ساخته نمی‌شود.
+  /// یکتا نیست چون ممکن است دو منبع به یک بیمار برسند؛ یکتاییِ واقعی با کد ملی است.
+  sourceRef  String?  @map("source_ref")
   firstName  String   @map("first_name")
   lastName   String   @map("last_name")
   phone      String?
@@ -436,6 +440,7 @@ model Patient {
   clinicalNotes ClinicalNote[]
 
   @@index([phone])
+  @@index([sourceRef])
   @@map("patients")
 }
 
@@ -615,6 +620,8 @@ model Visit {
   /// نه لحظه‌ای روی خطِ زمان. ذخیره‌شان به‌شکلِ DateTime یعنی چسباندنشان به
   /// opDate و بعد گرفتارِ منطقهٔ زمانی شدن — عملی که ۲۳:۳۰ شروع شده با یک
   /// جابه‌جاییِ ساعت به روزِ دیگر می‌پرد. مدتِ عمل مشتق است و در enrich می‌آید.
+  /// ردِ منبعِ وارد‌کردن — همان استدلالِ Patient.sourceRef.
+  sourceRef    String?   @map("source_ref")
   opStartTime  String?   @map("op_start_time")
   opEndTime    String?   @map("op_end_time")
   /// ساعتِ حضورِ کارشناس در بیمارستان (از پنلِ چینش).
@@ -641,6 +648,7 @@ model Visit {
   @@index([surgeonId]) // پورتالِ جراح: «مراجعه‌های من»
   @@index([procedureTypeId])
   @@index([diagnosisId])
+  @@index([sourceRef])
   @@map("visits")
 }
 

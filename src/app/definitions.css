@@ -167,3 +167,23 @@
   background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .24);
   border-radius: 9px; padding: 6px 11px;
 }
+
+/* وارد کردنِ دادهٔ سامانهٔ قبلی */
+.st-import { display: flex; flex-wrap: wrap; gap: 8px; max-width: 900px; margin: 0 auto 12px; align-items: stretch; }
+.st-file {
+  flex: 1 1 220px; min-width: 0; display: flex; align-items: center; padding: 11px 14px;
+  border-radius: 12px; cursor: pointer; font-size: 12.5px; color: #cfc9e8;
+  background: rgba(255, 255, 255, .05); border: 1px dashed rgba(139, 92, 246, .35);
+}
+.st-file input { display: none; }
+.st-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-import .df-save { flex: 0 0 auto; padding: 11px 20px; white-space: nowrap; }
+.st-dry { background: rgba(34, 211, 238, .16) !important; color: #67e8f9 !important; }
+@media (max-width: 560px) { .st-file { flex-basis: 100%; } .st-import .df-save { flex: 1; } }
+.df-save:disabled { opacity: .45; cursor: not-allowed; }
+.st-report { margin-bottom: 18px; }
+.st-report-head { background: rgba(139, 92, 246, .12); }
+.st-report .df-row-main small { display: block; margin-top: 3px; line-height: 1.9; }
+.st-skipped .df-row-main b { color: #9a93bb; }
+.st-warn { border-color: rgba(251, 191, 36, .35); }
+.st-warn .df-row-main b { color: #fcd34d; }
