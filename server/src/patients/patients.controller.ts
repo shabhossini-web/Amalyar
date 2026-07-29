@@ -26,15 +26,32 @@ import { CreateVisitDto, UpdateVisitDto, VisitStatusDto } from './dto/visit.dto'
 export class PatientsController {
   constructor(private patients: PatientsService) {}
 
+  /**
+   * فهرستِ مراجعات. همهٔ پارامترها اختیاری‌اند، پس `/visits` خالی همان رفتارِ
+   * قبلی را دارد و فیلترِ پیشرفته فقط چند پارامتر اضافه می‌کند.
+   */
   @RequirePermissions('patients.read')
   @Get('visits')
-  list(
-    @CurrentUser() user: any,
-    @Query('q') q?: string,
-    @Query('status') status?: string,
-    @Query('kind') kind?: string,
-  ) {
-    return this.patients.listVisits(q, status, user, kind);
+  list(@CurrentUser() user: any, @Query() query: Record<string, string>) {
+    return this.patients.listVisits(
+      {
+        q: query.q,
+        status: query.status,
+        kind: query.kind,
+        surgeonId: intOf(query.surgeonId),
+        hospitalId: intOf(query.hospitalId),
+        techId: intOf(query.techId),
+        procedureTypeId: intOf(query.procedureTypeId),
+        diagnosisId: intOf(query.diagnosisId),
+        from: dateOf(query.from),
+        to: dateOf(query.to),
+        sort: query.sort,
+        dir: query.dir,
+        page: intOf(query.page),
+        pageSize: intOf(query.pageSize),
+      },
+      user,
+    );
   }
 
   @RequirePermissions('patients.read')
@@ -72,4 +89,18 @@ export class PatientsController {
   searchPatients(@CurrentUser() user: any, @Query('q') q?: string) {
     return this.patients.searchPatients(q, user);
   }
+}
+
+/// پارامترِ عددیِ اختیاری. مقدارِ بی‌معنی نادیده گرفته می‌شود نه اینکه به خطا
+/// تبدیل شود — فیلترِ خرابِ یک URLِ کپی‌شده نباید کلِ فهرست را بشکند.
+function intOf(v?: string): number | undefined {
+  if (!v) return undefined;
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+function dateOf(v?: string): Date | undefined {
+  if (!v) return undefined;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d;
 }

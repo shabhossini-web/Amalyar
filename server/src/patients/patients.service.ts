@@ -51,6 +51,51 @@ function enrich(v: any) {
   };
 }
 
+/** فهرستِ بستهٔ سورت — رشتهٔ دلخواهِ کاربر مستقیم به orderBy نمی‌رود. */
+export const SORTS = ['date', 'created', 'name', 'code'] as const;
+export type SortKey = (typeof SORTS)[number];
+export const DEFAULT_SORT: SortKey = 'date';
+export const DEFAULT_PAGE_SIZE = 50;
+export const MAX_PAGE_SIZE = 200;
+
+export type VisitFilter = {
+  q?: string;
+  status?: string;
+  kind?: string;
+  surgeonId?: number;
+  hospitalId?: number;
+  techId?: number;
+  procedureTypeId?: number;
+  diagnosisId?: number;
+  from?: Date;
+  to?: Date;
+  sort?: string;
+  dir?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/**
+ * ترتیب — همیشه با `id` به‌عنوانِ شکنندهٔ تساوی تمام می‌شود.
+ *
+ * بدونِ آن، دو مراجعه با تاریخِ یکسان ترتیبِ ناپایدار می‌گیرند و همان رکورد در
+ * صفحهٔ ۱ و ۲ ظاهر (یا از هر دو غایب) می‌شود — باگی که فقط با صفحه‌بندی دیده می‌شود.
+ */
+function orderFor(sort?: string, dir?: string): any[] {
+  const d: 'asc' | 'desc' = dir === 'asc' ? 'asc' : 'desc';
+  const key = (SORTS as readonly string[]).includes(sort ?? '') ? (sort as SortKey) : DEFAULT_SORT;
+  const tail = [{ id: d }];
+  switch (key) {
+    case 'created': return [{ createdAt: d }, ...tail];
+    case 'name': return [{ patient: { lastName: d } }, { patient: { firstName: d } }, ...tail];
+    case 'code': return [{ patient: { code: d } }, { seq: d }, ...tail];
+    // مراجعهٔ بدونِ تاریخ همیشه ته فهرست، چه صعودی چه نزولی.
+    default: return [{ opDate: { sort: d, nulls: 'last' } }, ...tail];
+  }
+}
+
 // جراح و کارشناس هویتشان در Person است، پس همیشه با آن خوانده می‌شوند.
 const INCLUDE_PATIENT = {
   patient: true,
@@ -85,11 +130,37 @@ export class PatientsService {
     return v;
   }
 
-  /// لیستِ مراجعات — q روی نام/کد/موبایل/جراح/بیمارستان، status روی opStatus، kind روی نوعِ ملاقات
-  async listVisits(q?: string, status?: string, user?: any, kind?: string) {
+  /**
+   * لیستِ مراجعات — جستجوی آزاد + فیلترِ چندپارامتری + سورت + صفحه‌بندی.
+   *
+   * ⚠️ سورت و فیلتر فقط روی ستون‌های واقعیِ دیتابیس‌اند. «مانده» و «جمعِ کل»
+   * مشتق‌اند (جمعِ ردیف‌های Charge/Payment) و ستونی ندارند که بشود روی آن
+   * ORDER BY زد؛ ساختنِ چنین ستونی همان عددِ ذخیره‌شده‌ای است که از واقعیت عقب
+   * می‌ماند و قانونِ computeVisit منعش می‌کند. سورت/فیلترِ مالی وقتی می‌آید که
+   * ماژولِ حسابداری aggregate یا view واقعی بسازد.
+   */
+  async listVisits(f: VisitFilter = {}, user?: any) {
+    const { q, status, kind } = f;
     const where: any = {};
     if (status && status !== 'all') where.opStatus = status;
     if (kind && kind !== 'all') where.kind = kind;
+
+    for (const key of ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'] as const) {
+      if (f[key]) where[key] = f[key];
+    }
+
+    // بازهٔ تاریخِ عمل. «تا» شاملِ خودِ روز است — کاربری که یک تاریخ را به‌عنوان
+    // پایان می‌زند انتظار دارد عمل‌های همان روز را هم ببیند.
+    if (f.from || f.to) {
+      where.opDate = {};
+      if (f.from) where.opDate.gte = f.from;
+      if (f.to) {
+        const end = new Date(f.to);
+        end.setHours(23, 59, 59, 999);
+        where.opDate.lte = end;
+      }
+    }
+
     if (q?.trim()) {
       const t = q.trim();
       where.OR = [
@@ -114,13 +185,68 @@ export class PatientsService {
         ] } } },
       ];
     }
-    const rows = await this.prisma.visit.findMany({
-      where: this.scopedVisitWhere(user, { ...where, patient: { ...(where.patient ?? {}), deletedAt: null } }),
-      include: INCLUDE_PATIENT,
-      orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
-      take: 500,
-    });
-    return rows.map(enrich);
+    const scoped = this.scopedVisitWhere(user, { ...where, patient: { ...(where.patient ?? {}), deletedAt: null } });
+
+    const pageSize = clamp(f.pageSize ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
+    const page = Math.max(1, f.page ?? 1);
+
+    // total جدا شمرده می‌شود چون طولِ صفحه جوابِ «چند تا هست» را نمی‌دهد.
+    const [total, rows, stats] = await Promise.all([
+      this.prisma.visit.count({ where: scoped }),
+      this.prisma.visit.findMany({
+        where: scoped,
+        include: INCLUDE_PATIENT,
+        orderBy: orderFor(f.sort, f.dir),
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.visitStats(scoped),
+    ]);
+
+    return {
+      rows: rows.map(enrich),
+      total,
+      page,
+      pageSize,
+      pages: Math.max(1, Math.ceil(total / pageSize)),
+      sort: (SORTS as readonly string[]).includes(f.sort ?? '') ? f.sort : DEFAULT_SORT,
+      dir: f.dir === 'asc' ? 'asc' : 'desc',
+      stats,
+    };
+  }
+
+  /**
+   * آمارِ کلِ نتیجهٔ فیلترشده — نه فقط صفحهٔ جاری.
+   *
+   * با آمدنِ صفحه‌بندی، جمع‌زدنِ سمتِ کلاینت غلط شد: کاربر «ماندهٔ کل» را
+   * می‌خواند ولی فقط ماندهٔ ۵۰ ردیفِ روی صفحه را می‌دید. پس آمار به سرور آمد.
+   */
+  private async visitStats(scoped: any) {
+    const live = { ...scoped, opStatus: { not: 'cancelled' } };
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const [total, pending, today, kinds, chargeRows, payRows] = await Promise.all([
+      this.prisma.visit.count({ where: scoped }),
+      this.prisma.visit.count({ where: { ...scoped, opStatus: 'pending' } }),
+      this.prisma.visit.count({ where: { ...live, opDate: { gte: dayStart, lte: dayEnd } } }),
+      // نوع‌های موجود در کلِ نتیجه — نه فقط صفحهٔ جاری، وگرنه چیپِ «ویزیت» با
+      // ورق‌زدن ظاهر و ناپدید می‌شود.
+      this.prisma.visit.groupBy({ by: ['kind'], where: scoped }),
+      // به‌ازای هر مراجعه جمع می‌شود نه یک‌جا: مانده باید در سطحِ مراجعه صفر
+      // شود، وگرنه اضافه‌پرداختِ یک بیمار بدهیِ بیمارِ دیگر را می‌پوشاند.
+      this.prisma.charge.groupBy({ by: ['visitId'], where: { visit: live }, _sum: { amount: true } }),
+      this.prisma.payment.groupBy({ by: ['visitId'], where: { visit: live }, _sum: { amount: true } }),
+    ]);
+
+    const paid = new Map(payRows.map((r) => [r.visitId, r._sum.amount ?? 0]));
+    const due = chargeRows.reduce(
+      (sum, r) => sum + Math.max(0, (r._sum.amount ?? 0) - (paid.get(r.visitId) ?? 0)),
+      0,
+    );
+    return { total, pending, today, due, kinds: kinds.map((k) => k.kind) };
   }
 
   async getVisit(id: number, user?: any) {

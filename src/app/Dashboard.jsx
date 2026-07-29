@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
-import { faDate, isoToJStr, jStrToIso, todayJStr } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import ProfileMenu from './ProfileMenu.jsx';
 import { useTerms } from './config.jsx';
@@ -26,7 +26,52 @@ const CalIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" w
 const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
 const Money = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></svg>);
+const FilterIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 5h18l-7 8v6l-4 2v-8z" /></svg>);
 const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" /></svg>);
+
+/** فیلترهای پیشرفته‌ای که مستقیم به query سرور می‌روند. */
+const ADV_IDS = ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'];
+const EMPTY_ADV = { surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '', diagnosisId: '', fromJ: '', toJ: '' };
+const EMPTY_META = { total: 0, pages: 1, stats: { total: 0, pending: 0, today: 0, due: 0, kinds: [] } };
+
+const SORT_OPTIONS = [
+  { v: 'date', l: 'تاریخ' },
+  { v: 'created', l: 'تاریخِ ثبت' },
+  { v: 'name', l: 'نامِ بیمار' },
+  { v: 'code', l: 'کدِ پرونده' },
+];
+const PAGE_SIZES = [25, 50, 100, 200];
+
+/**
+ * بازه‌های سریع بر تقویمِ شمسی حساب می‌شوند، نه میلادی: «این ماه» یعنی ماهِ
+ * شمسی، و هفته از شنبه شروع می‌شود. حسابِ میلادی این‌جا جوابِ غلط می‌دهد.
+ */
+function quickRange(key) {
+  const now = new Date();
+  const iso = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+  if (key === 'today') return { fromJ: isoToJStr(iso(now)), toJ: isoToJStr(iso(now)) };
+  if (key === 'week') {
+    const back = (now.getDay() + 1) % 7; // شنبه = ابتدای هفته
+    const from = new Date(now); from.setDate(now.getDate() - back);
+    const to = new Date(from); to.setDate(from.getDate() + 6);
+    return { fromJ: isoToJStr(iso(from)), toJ: isoToJStr(iso(to)) };
+  }
+  const [jy, jm] = jParts(now);
+  const start = jToDate(jy, jm, 1);
+  const nextY = jm === 12 ? jy + 1 : jy;
+  const nextM = jm === 12 ? 1 : jm + 1;
+  const end = jToDate(nextY, nextM, 1);
+  end.setDate(end.getDate() - 1);
+  return { fromJ: isoToJStr(start.toISOString()), toJ: isoToJStr(end.toISOString()) };
+}
+const jParts = (d) => {
+  const j = toJalaali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  return [j.jy, j.jm, j.jd];
+};
+const jToDate = (jy, jm, jd) => {
+  const g = toGregorian(jy, jm, jd);
+  return new Date(g.gy, g.gm - 1, g.gd);
+};
 
 /**
  * نوعِ ملاقات. برچسبِ وضعیت و تاریخ به همین بستگی دارد: «در انتظارِ عمل» برای
@@ -51,6 +96,9 @@ const FILTERS = [
 ];
 const KIND_FILTERS = [{ v: 'all', l: 'همه' }, ...Object.entries(KINDS).map(([v, k]) => ({ v, l: k.label }))];
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
+/// ارقامِ لاتینِ یک رشته (مثلِ «۱۴۰۵/۰۵/۰۱»ِ ورودی) را فارسی می‌کند — فقط برای
+/// نمایش؛ مقدارِ داخلِ input عمداً لاتین می‌ماند تا تایپ و ویرایش ساده بماند.
+const faDigits = (s) => String(s ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
 /* اسپاتلایتِ شیشه */
 function track(e) {
@@ -657,6 +705,78 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
   );
 }
 
+/* ── جستجوی پیشرفته ──
+   پاپ‌آپِ چندپارامتری. عمداً «اعمال» دارد و زنده نیست: کاربر پنج فیلتر را
+   می‌چیند و یک‌بار نتیجه می‌خواهد، نه پنج بار بارگذاریِ نصفه‌کاره. */
+function AdvancedSearch({ value, defs, onApply, onClose }) {
+  const t = useTerms();
+  const [f, setF] = useState(value);
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const pickRange = (key) => setF((s) => ({ ...s, ...quickRange(key) }));
+
+  const badDate = (v) => !!v.trim() && !jStrToIso(v);
+  const invalid = badDate(f.fromJ) || badDate(f.toJ);
+
+  const FIELDS = [
+    { key: 'surgeonId', label: 'جراح', options: defs.surgeons },
+    { key: 'hospitalId', label: 'بیمارستان', options: defs.hospitals },
+    { key: 'techId', label: t.tech, options: defs.techs },
+    { key: 'procedureTypeId', label: 'نوعِ عمل', options: defs.procedures },
+    { key: 'diagnosisId', label: 'تشخیص', options: defs.diagnoses },
+  ];
+
+  return (
+    <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="glass db-sheet db-advsheet">
+        <header className="db-sheet-head">
+          <b>جستجوی پیشرفته</b>
+          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+        </header>
+
+        <div className="db-advbody">
+          <div className="db-grid2">
+            {FIELDS.map((fl) => (
+              <label key={fl.key} className="db-field">
+                <span>{fl.label}</span>
+                <select value={f[fl.key] ?? ''} onChange={set(fl.key)}>
+                  <option value="">همه</option>
+                  {(fl.options ?? []).map((o) => (
+                    <option key={o.id} value={o.id}>{o.name || o.title || o.displayName}</option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+
+          <div className="db-quickdates">
+            <button type="button" onClick={() => pickRange('today')}>امروز</button>
+            <button type="button" onClick={() => pickRange('week')}>این هفته</button>
+            <button type="button" onClick={() => pickRange('month')}>این ماه</button>
+            <button type="button" onClick={() => setF((s) => ({ ...s, fromJ: '', toJ: '' }))}>بدونِ بازه</button>
+          </div>
+
+          <div className="db-grid2">
+            <label className={`db-field${badDate(f.fromJ) ? ' bad' : ''}`}>
+              <span>از تاریخ (شمسی)</span>
+              <input dir="ltr" inputMode="numeric" value={f.fromJ} onChange={set('fromJ')} placeholder="۱۴۰۵/۰۱/۰۱" />
+            </label>
+            <label className={`db-field${badDate(f.toJ) ? ' bad' : ''}`}>
+              <span>تا تاریخ (شمسی)</span>
+              <input dir="ltr" inputMode="numeric" value={f.toJ} onChange={set('toJ')} placeholder={todayJStr()} />
+            </label>
+          </div>
+          {invalid && <p className="db-hint db-hint-bad">تاریخ باید به شکلِ ۱۴۰۵/۰۵/۰۶ باشد.</p>}
+        </div>
+
+        <footer className="db-sheet-foot">
+          <button type="button" className="db-ghost" onClick={() => setF(EMPTY_ADV)}>پاک‌کردن</button>
+          <button type="button" className="db-submit" disabled={invalid} onClick={() => onApply(f)}>اعمال</button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const t = useTerms();
@@ -664,6 +784,15 @@ export default function Dashboard() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
   const [kind, setKind] = useState('all');
+  // فیلترِ پیشرفته، سورت و صفحه — همه در URL نیستند چون داشبورد صفحهٔ کاری است
+  // نه لینکِ اشتراکی؛ اگر روزی لینکِ فیلتر لازم شد، همین شیء به query می‌رود.
+  const [adv, setAdv] = useState(EMPTY_ADV);
+  const [advOpen, setAdvOpen] = useState(false);
+  const [sort, setSort] = useState('date');
+  const [dir, setDir] = useState('desc');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [meta, setMeta] = useState(EMPTY_META);
   const [modal, setModal] = useState(null); // null | {} | {visit}
   const [defsOpen, setDefsOpen] = useState(false);
   const [billing, setBilling] = useState(null); // مراجعه‌ای که صورت‌حسابش باز است
@@ -682,15 +811,29 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const load = useCallback((query, st, kn) => {
+  const load = useCallback((query, st, kn, a = EMPTY_ADV, so = 'date', dr = 'desc', pg = 1, ps = 50) => {
     const params = new URLSearchParams();
     if (query?.trim()) params.set('q', query.trim());
     if (st && st !== 'all') params.set('status', st);
     if (kn && kn !== 'all') params.set('kind', kn);
+    for (const key of ADV_IDS) if (a[key]) params.set(key, a[key]);
+    // تاریخِ شمسیِ نامعتبر اصلاً فرستاده نمی‌شود؛ کاربر وسطِ تایپ نباید
+    // فهرستش خالی شود.
+    const from = a.fromJ ? jStrToIso(a.fromJ) : null;
+    const to = a.toJ ? jStrToIso(a.toJ) : null;
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    params.set('sort', so); params.set('dir', dr);
+    params.set('page', String(pg)); params.set('pageSize', String(ps));
     return api(`/visits?${params}`)
-      .then((rows) => { setDenied(false); setVisits(rows); })
+      .then((res) => {
+        setDenied(false);
+        setVisits(res.rows);
+        setMeta({ total: res.total, pages: res.pages, stats: res.stats ?? EMPTY_META.stats });
+      })
       .catch((e) => {
         setVisits([]);
+        setMeta(EMPTY_META);
         if (e.status === 403) setDenied(true);
         else setToast(e.message);
       });
@@ -716,32 +859,43 @@ export default function Dashboard() {
   // دوباره از سرور خوانده می‌شود (باگِ واقعی: دادهٔ حسابِ قبلی تا رفرش می‌ماند)
   useEffect(() => {
     setDenied(false);
-    const t = setTimeout(() => load(q, status, kind), q ? 300 : 0);
+    const t = setTimeout(() => load(q, status, kind, adv, sort, dir, page, pageSize), q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [q, status, kind, load, user?.id]);
+  }, [q, status, kind, adv, sort, dir, page, pageSize, load, user?.id]);
+
+  // هر تغییرِ فیلتر کاربر را به صفحهٔ یک برمی‌گرداند؛ وگرنه در صفحهٔ ۴ فیلتری
+  // می‌زند که سه صفحه بیشتر ندارد و فهرستِ خالی می‌بیند.
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    setPage(1);
+  }, [q, status, kind, adv, sort, dir, pageSize]);
 
   useEffect(() => { loadDefs(); }, [loadDefs, user?.id]);
 
   // سوییچِ حساب وسطِ فرم/شیتِ باز → بسته شود
   useEffect(() => { setModal(null); setDefsOpen(false); }, [user?.id]);
 
-  const kindsPresent = useMemo(
-    () => [...new Set((visits || []).map((v) => v.kind || 'surgery'))],
-    [visits],
-  );
-  const showKindFilter = kind !== 'all' || kindsPresent.length > 1;
+  // آمار از سرور می‌آید و کلِ نتیجهٔ فیلترشده را می‌شمارد، نه صفحهٔ جاری را.
+  const stats = meta.stats;
 
-  const stats = useMemo(() => {
-    const rows = visits || [];
-    const todayIso = new Date().toDateString();
-    return {
-      total: rows.length,
-      pending: rows.filter((v) => v.opStatus === 'pending').length,
-      today: rows.filter((v) => v.opDate && new Date(v.opDate).toDateString() === todayIso && v.opStatus !== 'cancelled').length,
-      // مانده فقط از مراجعاتِ کنسل‌نشده — بدهیِ یک عملِ لغوشده بدهی نیست.
-      due: rows.filter((v) => v.opStatus !== 'cancelled').reduce((sum, v) => sum + Math.max(0, v.due || 0), 0),
-    };
-  }, [visits]);
+  /** نامِ خواندنیِ هر فیلترِ فعال — از همان تعریف‌هایی که در فرم انتخاب شدند. */
+  const activeChips = useMemo(() => {
+    const nameOf = (list, id, get) => get(list.find((r) => String(r.id) === String(id))) || `#${id}`;
+    const out = [];
+    if (adv.surgeonId) out.push({ key: 'surgeonId', label: `جراح: ${nameOf(defs.surgeons, adv.surgeonId, (r) => r?.name)}` });
+    if (adv.hospitalId) out.push({ key: 'hospitalId', label: `بیمارستان: ${nameOf(defs.hospitals, adv.hospitalId, (r) => r?.name)}` });
+    if (adv.techId) out.push({ key: 'techId', label: `کارشناس: ${nameOf(defs.techs, adv.techId, (r) => r?.name)}` });
+    if (adv.procedureTypeId) out.push({ key: 'procedureTypeId', label: `نوعِ عمل: ${nameOf(defs.procedures, adv.procedureTypeId, (r) => r?.name)}` });
+    if (adv.diagnosisId) out.push({ key: 'diagnosisId', label: `تشخیص: ${nameOf(defs.diagnoses, adv.diagnosisId, (r) => r?.title)}` });
+    if (adv.fromJ) out.push({ key: 'fromJ', label: `از ${faDigits(adv.fromJ)}` });
+    if (adv.toJ) out.push({ key: 'toJ', label: `تا ${faDigits(adv.toJ)}` });
+    return out;
+  }, [adv, defs]);
+  const advCount = activeChips.length;
+  const clearOne = (key) => setAdv((a) => ({ ...a, [key]: '' }));
+  const kindsPresent = stats.kinds ?? [];
+  const showKindFilter = kind !== 'all' || kindsPresent.length > 1;
 
   const onSaved = (saved, wasEdit) => {
     setModal(null);
@@ -817,6 +971,15 @@ export default function Dashboard() {
               aria-label="جستجو"
             />
           </div>
+          <button
+            type="button"
+            className={`db-ico db-advbtn${advCount ? ' on' : ''}`}
+            title="جستجوی پیشرفته"
+            onClick={() => setAdvOpen(true)}
+          >
+            <FilterIc width="17" height="17" />
+            {advCount > 0 && <i>{faNum(advCount)}</i>}
+          </button>
           <button type="button" className="db-ico db-defbtn" title="تعریف‌ها (جراحان/بیمارستان‌ها)" onClick={() => setDefsOpen(true)}>
             <Gear width="17" height="17" />
           </button>
@@ -846,6 +1009,47 @@ export default function Dashboard() {
             ))}
           </div>
         )}
+
+        {/* چیپِ هر فیلترِ فعال با ضربدرِ خودش — کاربر باید بتواند یک فیلتر را
+            بردارد بی‌آنکه پاپ‌آپ را باز کند یا همه را پاک کند. */}
+        {activeChips.length > 0 && (
+          <div className="db-chips">
+            {activeChips.map((c) => (
+              <button key={c.key} type="button" onClick={() => clearOne(c.key)}>
+                {c.label}<XIc width="12" height="12" />
+              </button>
+            ))}
+            <button type="button" className="db-chip-clear" onClick={() => setAdv(EMPTY_ADV)}>پاک‌کردنِ همه</button>
+          </div>
+        )}
+
+        <div className="db-sortbar">
+          <label>
+            <span>مرتب‌سازی</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              {SORT_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="db-dir"
+            title={dir === 'desc' ? 'نزولی' : 'صعودی'}
+            onClick={() => setDir((d) => (d === 'desc' ? 'asc' : 'desc'))}
+          >
+            {dir === 'desc' ? '↓' : '↑'}
+          </button>
+          <span className="db-count">
+            {meta.total > 0
+              ? `${faNum((page - 1) * pageSize + 1)}–${faNum(Math.min(page * pageSize, meta.total))} از ${faNum(meta.total)}`
+              : ''}
+          </span>
+          <label className="db-psize">
+            <span>در صفحه</span>
+            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
+              {PAGE_SIZES.map((n) => <option key={n} value={n}>{faNum(n)}</option>)}
+            </select>
+          </label>
+        </div>
         </>)}
 
         <div className="us-list">
@@ -866,7 +1070,24 @@ export default function Dashboard() {
             />
           ))}
         </div>
+
+        {!denied && meta.pages > 1 && (
+          <div className="db-pager">
+            <button type="button" disabled={page <= 1} onClick={() => setPage((n) => n - 1)}>قبلی</button>
+            <span>صفحهٔ {faNum(page)} از {faNum(meta.pages)}</span>
+            <button type="button" disabled={page >= meta.pages} onClick={() => setPage((n) => n + 1)}>بعدی</button>
+          </div>
+        )}
       </div>
+
+      {advOpen && (
+        <AdvancedSearch
+          value={adv}
+          defs={defs}
+          onApply={(next) => { setAdv(next); setAdvOpen(false); }}
+          onClose={() => setAdvOpen(false)}
+        />
+      )}
 
       {modal && (
         <VisitForm
