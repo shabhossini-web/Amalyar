@@ -17,7 +17,7 @@ import { Feature } from '../auth/feature.decorator';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { CreateVisitDto, UpdateVisitDto, VisitStatusDto } from './dto/visit.dto';
+import { CreateVisitDto, UpdateVisitDto, VisitStatusDto, VisitTimesDto } from './dto/visit.dto';
 
 // مدیریتِ بیماران/مراجعات — دسترسی داینامیک از جدولِ features (کلیدِ dashboard)
 @Controller()
@@ -70,6 +70,14 @@ export class PatientsController {
   @Patch('visits/:id')
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateVisitDto, @CurrentUser() user: any) {
     return this.patients.updateVisit(id, dto, user);
+  }
+
+  /// ثبتِ ساعت‌ها مجوزِ سبک‌ترِ خودش را دارد: کارشناسی که سرِ عمل ساعت می‌زند
+  /// نباید بتواند مبلغ و جراح را هم عوض کند.
+  @RequirePermissions('visits.times')
+  @Patch('visits/:id/times')
+  setTimes(@Param('id', ParseIntPipe) id: number, @Body() dto: VisitTimesDto, @CurrentUser() user: any) {
+    return this.patients.setTimes(id, dto, user);
   }
 
   @RequirePermissions('patients.status')

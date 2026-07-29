@@ -459,3 +459,9 @@
   padding: 11px 18px; border-radius: 12px; font: inherit; font-size: 13px; cursor: pointer;
   color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .2);
 }
+
+/* ساعتِ عمل در فرم */
+.db-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 430px) { .db-grid3 { grid-template-columns: 1fr 1fr; } }
+.db-grid3 input { width: 100%; font-family: inherit; }
+.db-durhint { color: #6ee7b7; }

@@ -272,3 +272,33 @@ jobs:
           if (!/returnToStock/.test(bill)) { console.error('حذفِ قلمِ فاکتور باید کالا را با حرکتِ جبرانی برگرداند'); process.exit(1); }
           console.log('stock ledger ok');
           "
+
+      - name: Verify op duration is derived, never stored
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const visit = schema.split('model Visit {')[1].split(/\n}/)[0];
+          for (const cached of ['duration', 'durationMin', 'opMinutes']) {
+            if (new RegExp('^\\\\s*' + cached + '\\\\s', 'mi').test(visit)) {
+              console.error('مدتِ عمل مشتق است؛ Visit.' + cached + ' ممنوع است'); process.exit(1);
+            }
+          }
+          // ساعت‌ها رشته‌اند نه DateTime — وگرنه عملِ ۲۳:۳۰ با منطقهٔ زمانی به روزِ بعد می‌پرد.
+          for (const col of ['opStartTime', 'opEndTime', 'techArriveTime']) {
+            const line = visit.split('\n').find((l) => l.trim().startsWith(col));
+            if (!line || !/String\\?/.test(line)) { console.error(col + ' باید String? باشد'); process.exit(1); }
+          }
+          const svc = fs.readFileSync('src/patients/patients.service.ts', 'utf8');
+          if (!/export function durationOf/.test(svc)) { console.error('durationOf باید یک فرمولِ مشترک باشد'); process.exit(1); }
+          if (!/durationMin: durationOf\\(/.test(svc)) { console.error('enrich باید مدت را از durationOf بگیرد'); process.exit(1); }
+          // گذشتن از نیمه‌شب باید صریح هندل شده باشد، نه عددِ منفی.
+          const body = svc.split('export function durationOf')[1].split(/\n}/)[0];
+          if (!body.includes('24 * 60')) { console.error('عملِ نیمه‌شب‌گذر در durationOf هندل نشده'); process.exit(1); }
+          const ui = fs.readFileSync('../src/app/Dashboard.jsx', 'utf8');
+          // input[type=time] قالبِ نمایشش را مرورگر تعیین می‌کند (۱۲ساعته در کرومیوم)
+          // و بین اندروید/سافاری/ویندوز فرق می‌کند — قانونِ سازگاریِ چندپلتفرمی.
+          if (/type=\"time\"/.test(ui)) { console.error('input[type=time] قالبش را مرورگر تعیین می‌کند؛ ورودیِ متنیِ نرمال‌شده لازم است'); process.exit(1); }
+          console.log('op duration ok');
+          "

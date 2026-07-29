@@ -86,6 +86,18 @@ export class CreateVisitDto {
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
   opDate?: string;
 
+  /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
+  /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
+  /// تا یک regex در دو جا تکرار نشود.
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opStartTime?: string;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opEndTime?: string;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  techArriveTime?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(1000, { message: 'یادداشت طولانی است' })
@@ -167,10 +179,34 @@ export class UpdateVisitDto {
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
   opDate?: string | null;
 
+  /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
+  /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
+  /// تا یک regex در دو جا تکرار نشود.
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opStartTime?: string;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opEndTime?: string;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  techArriveTime?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(1000)
   notes?: string;
+}
+
+/// فقط ساعت‌ها — برای کارشناسِ سرِ عمل و پنلِ چینش، بدونِ اجازهٔ ویرایشِ بقیهٔ مراجعه.
+export class VisitTimesDto {
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opStartTime?: string;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opEndTime?: string;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  techArriveTime?: string;
 }
 
 export class VisitStatusDto {

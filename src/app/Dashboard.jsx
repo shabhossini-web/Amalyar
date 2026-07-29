@@ -23,6 +23,8 @@ const Doctor = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 3v5a3 
 const Hospital = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21V8l9-5 9 5v13" /><path d="M3 21h18" /><path d="M12 9v6M9 12h6" /></svg>);
 const DiagIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" /></svg>);
 const CalIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>);
+const ClockIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>);
+const ArriveIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 12h11" /><path d="m10 8 4 4-4 4" /><path d="M17 4h4v16h-4" /></svg>);
 const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
 const Money = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></svg>);
@@ -99,6 +101,54 @@ const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 /// ارقامِ لاتینِ یک رشته (مثلِ «۱۴۰۵/۰۵/۰۱»ِ ورودی) را فارسی می‌کند — فقط برای
 /// نمایش؛ مقدارِ داخلِ input عمداً لاتین می‌ماند تا تایپ و ویرایش ساده بماند.
 const faDigits = (s) => String(s ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+
+/**
+ * مدتِ عمل به دقیقه — همان فرمولِ سرور، فقط برای پیش‌نمایشِ زندهٔ داخلِ فرم
+ * (قبل از ذخیره هنوز رکوردی نیست که سرور محاسبه‌اش کند). عددِ نمایش‌داده‌شده
+ * روی کارت‌ها همیشه از سرور می‌آید، نه از این.
+ *
+ * پایانِ کوچک‌تر از شروع = گذشتن از نیمه‌شب، نه عددِ منفی.
+ */
+const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+function durationMin(start, end) {
+  if (!TIME_RE.test(start || '') || !TIME_RE.test(end || '')) return null;
+  const m = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+  const d = m(end) - m(start);
+  return d < 0 ? d + 24 * 60 : d;
+}
+
+/**
+ * نرمال‌سازیِ ساعتِ تایپ‌شده: «۸:۵»، «830»، «۰۸۳۰» → «08:30».
+ *
+ * ⚠️ چرا input[type=time] نداریم: مرورگر قالبِ نمایشش را خودش تعیین می‌کند و
+ * تغییرش با lang یا CSS ممکن نیست — کرومیوم همین‌جا «11:30 PM» می‌دهد. یعنی
+ * همان فیلد روی اندروید/سافاری/ویندوز سه شکلِ متفاوت می‌شود، آن هم ۱۲ساعته.
+ * پس مثلِ تاریخِ شمسی، ورودیِ متنی با نرمال‌سازیِ خودمان.
+ *
+ * رشتهٔ نامعتبر دست‌نخورده برمی‌گردد تا کاربر ببیند چه تایپ کرده، نه اینکه
+ * نوشته‌اش بی‌صدا پاک شود.
+ */
+function normTime(v) {
+  const raw = toEnDigits(String(v ?? '')).trim();
+  if (!raw) return '';
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(raw) || /^(\d{1,2})(\d{2})$/.exec(raw);
+  if (!m) return raw;
+  const h = Number(m[1]);
+  const mi = Number(m[2]);
+  if (h > 23 || mi > 59) return raw;
+  return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
+}
+const badTime = (v) => !!v && !TIME_RE.test(v);
+
+/** «۳ ساعت و ۲۵ دقیقه» — صفرِ بی‌معنی («۰ ساعت») نشان داده نمی‌شود. */
+function faDuration(min) {
+  if (min == null) return '';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (!h) return `${faNum(m)} دقیقه`;
+  if (!m) return `${faNum(h)} ساعت`;
+  return `${faNum(h)} ساعت و ${faNum(m)} دقیقه`;
+}
 
 /* اسپاتلایتِ شیشه */
 function track(e) {
@@ -189,10 +239,14 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     opType: initial?.procedureTypeId ? '' : initial?.opType || '',
     opReport: initial?.opReport || '',
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
+    opStartTime: initial?.opStartTime || '',
+    opEndTime: initial?.opEndTime || '',
+    techArriveTime: initial?.techArriveTime || '',
     notes: initial?.notes || '',
   }));
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const formDuration = durationMin(f.opStartTime, f.opEndTime);
 
   useEffect(() => {
     if (mode !== 'existing') return undefined;
@@ -250,6 +304,15 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       birthDate = jStrToIso(f.birthDateJ);
       if (!birthDate) { onToast('تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)'); return; }
     }
+    // ساعت‌ها پیش از ارسال نرمال می‌شوند (کاربر ممکن است بدونِ blur ذخیره بزند).
+    const times = {
+      opStartTime: normTime(f.opStartTime),
+      opEndTime: normTime(f.opEndTime),
+      techArriveTime: normTime(f.techArriveTime),
+    };
+    const badKey = Object.entries(times).find(([, v]) => badTime(v));
+    if (badKey) { onToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
+
     const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
     // اعتبارسنجیِ سمتِ کاربر تا پیشِ ارسال بازخورد بگیرد؛ اعتبارِ واقعی سمتِ سرور است.
     if (nid && !isValidNationalId(nid)) { onToast('کد ملی معتبر نیست — رقم‌ها را بررسی کنید'); return; }
@@ -264,6 +327,11 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       opType: f.procedureTypeId ? undefined : f.opType.trim() || undefined,
       opReport: f.opReport.trim() || undefined,
       opDate,
+      // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
+      // منظورش «پاکش کن» است، نه «دست نزن».
+      opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
+      opEndTime: editing || times.opEndTime ? times.opEndTime : undefined,
+      techArriveTime: editing || times.techArriveTime ? times.techArriveTime : undefined,
       notes: f.notes.trim() || undefined,
     };
     setBusy(true);
@@ -473,6 +541,29 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           </div>
         </label>
 
+        {/* ساعت‌ها کنارِ هم: کاربر شروع و پایان را با هم می‌زند، و مدت را
+            همان‌جا می‌بیند — بدونِ حسابِ ذهنی. */}
+        <div className="db-grid3">
+          {[
+            { key: 'opStartTime', label: 'ساعتِ شروع' },
+            { key: 'opEndTime', label: 'ساعتِ پایان' },
+            { key: 'techArriveTime', label: `حضورِ ${t.tech}` },
+          ].map((fl) => (
+            <label key={fl.key} className={`db-field${badTime(f[fl.key]) ? ' bad' : ''}`}>
+              <span>{fl.label}</span>
+              <input
+                type="text" dir="ltr" inputMode="numeric" placeholder="۰۸:۳۰"
+                value={f[fl.key]}
+                onChange={set(fl.key)}
+                onBlur={() => setF((s) => ({ ...s, [fl.key]: normTime(s[fl.key]) }))}
+              />
+            </label>
+          ))}
+        </div>
+        {formDuration != null && (
+          <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
+        )}
+
         <label className="db-field"><span>شرحِ عمل</span>
           <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
         </label>
@@ -672,6 +763,20 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
         {v.techName && <span><TechIc width="14" height="14" /> {v.techName}</span>}
         {v.hospitalName && <span><Hospital width="14" height="14" /> {v.hospitalName}</span>}
         {v.opDate && <span><CalIc width="14" height="14" /> {faDate(v.opDate)}</span>}
+        {/* ساعت فقط وقتی ثبت شده باشد؛ «—:—» روی هر کارت اطلاعات نیست.
+            مدت از سرور می‌آید (durationMin)، نه از تفریقِ همین‌جا. */}
+        {v.opStartTime && (
+          <span title={v.durationMin != null ? `مدت: ${faDuration(v.durationMin)}` : undefined}>
+            <ClockIc width="14" height="14" />
+            <span dir="ltr">{v.opStartTime}{v.opEndTime ? `–${v.opEndTime}` : ''}</span>
+            {v.durationMin != null && ` (${faDuration(v.durationMin)})`}
+          </span>
+        )}
+        {v.techArriveTime && (
+          <span title={`ساعتِ حضورِ ${v.techName || 'کارشناس'}`}>
+            <ArriveIc width="14" height="14" /> <span dir="ltr">{v.techArriveTime}</span>
+          </span>
+        )}
         {v.diagnosisTitle && <span><DiagIc width="14" height="14" /> {v.diagnosisTitle}</span>}
       </div>
 

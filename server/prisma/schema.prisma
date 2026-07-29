@@ -608,6 +608,20 @@ model Visit {
 
   opDate       DateTime? @map("op_date") // تاریخِ عمل
   opStatus     String    @default("pending") @map("op_status") // pending | done | cancelled
+
+  /// ساعتِ شروع/پایانِ عمل و ساعتِ حضورِ کارشناس — «HH:MM» بیست‌وچهارساعته.
+  ///
+  /// ⚠️ عمداً رشته است نه DateTime: این‌ها ساعتِ روی ساعتِ دیوارِ اتاقِ عمل‌اند،
+  /// نه لحظه‌ای روی خطِ زمان. ذخیره‌شان به‌شکلِ DateTime یعنی چسباندنشان به
+  /// opDate و بعد گرفتارِ منطقهٔ زمانی شدن — عملی که ۲۳:۳۰ شروع شده با یک
+  /// جابه‌جاییِ ساعت به روزِ دیگر می‌پرد. مدتِ عمل مشتق است و در enrich می‌آید.
+  opStartTime  String?   @map("op_start_time")
+  opEndTime    String?   @map("op_end_time")
+  /// ساعتِ حضورِ کارشناس در بیمارستان (از پنلِ چینش).
+  techArriveTime String? @map("tech_arrive_time")
+  /// آخرین باری که ساعت‌ها ثبت/اصلاح شدند — برای تایم‌لاینِ پنلِ کارشناسی.
+  opTimesUpdatedAt DateTime? @map("op_times_updated_at")
+
   notes        String?
   createdById  Int?      @map("created_by_id")
   createdAt    DateTime  @default(now()) @map("created_at")

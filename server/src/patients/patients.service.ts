@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
@@ -42,6 +42,13 @@ function enrich(v: any) {
     opType: v.opType,
     opDate: v.opDate,
     opStatus: v.opStatus,
+    opStartTime: v.opStartTime,
+    opEndTime: v.opEndTime,
+    techArriveTime: v.techArriveTime,
+    opTimesUpdatedAt: v.opTimesUpdatedAt,
+    // مدتِ عمل مشتق است و فقط این‌جا حساب می‌شود — هیچ render ای اجازهٔ تفریقِ
+    // ساعت ندارد، وگرنه عملِ نیمه‌شب در یک جا درست و در جای دیگر منفی می‌شود.
+    durationMin: durationOf(v.opStartTime, v.opEndTime),
     // جمع‌های مالی از ردیف‌ها مشتق می‌شوند (قانونِ computeVisit)؛ هیچ render ای
     // اجازهٔ جمع‌زدن ندارد و هیچ ستونِ سرجمعی در DB نیست که از واقعیت عقب بماند.
     ...summarize(v.charges ?? [], v.payments ?? []),
@@ -49,6 +56,60 @@ function enrich(v: any) {
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
   };
+}
+
+/** «HH:MM» بیست‌وچهارساعته — تنها شکلِ پذیرفته‌شدهٔ ساعت. */
+export const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/**
+ * نرمال‌سازیِ ساعتِ ورودی.
+ *
+ * ارقامِ فارسی/عربی و «۸:۵» را می‌پذیرد و به «08:05» تبدیل می‌کند؛ رشتهٔ خالی
+ * یعنی «پاک کن». هرچیزِ دیگر خطاست — ساعتِ نامعتبر که سکوت‌وار nullشود، یعنی
+ * کاربر فکر می‌کند ثبت شده و نشده.
+ */
+export function normalizeTime(v: unknown, label: string): string | null {
+  if (v === undefined || v === null) return null;
+  const raw = toEnDigits(String(v)).trim();
+  if (!raw) return null;
+  const m = /^(\d{1,2}):(\d{1,2})$/.exec(raw);
+  if (!m) throw new BadRequestException(`${label} باید به شکلِ ۰۸:۳۰ باشد`);
+  const out = `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`;
+  if (!TIME_RE.test(out)) throw new BadRequestException(`${label} معتبر نیست`);
+  return out;
+}
+
+/**
+ * مدتِ عمل به دقیقه.
+ *
+ * پایانِ کوچک‌تر از شروع یعنی عمل از نیمه‌شب گذشته — که در جراحیِ طولانی
+ * عادی است — پس ۲۴ ساعت اضافه می‌شود، نه اینکه عددِ منفی برگردد.
+ */
+export function durationOf(start?: string | null, end?: string | null): number | null {
+  if (!start || !end || !TIME_RE.test(start) || !TIME_RE.test(end)) return null;
+  const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
+  const diff = mins(end) - mins(start);
+  return diff < 0 ? diff + 24 * 60 : diff;
+}
+
+/**
+ * تکهٔ ساعت‌ها برای patch — فقط کلیدهایی که واقعاً آمده‌اند.
+ *
+ * `undefined` یعنی «دست نزن» و رشتهٔ خالی یعنی «پاک کن»؛ تفاوتشان مهم است،
+ * وگرنه هر ذخیرهٔ فرم، ساعتی را که کارشناس ثبت کرده پاک می‌کند.
+ */
+function timePatch(dto: any): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const map = {
+    opStartTime: 'ساعتِ شروع',
+    opEndTime: 'ساعتِ پایان',
+    techArriveTime: 'ساعتِ حضورِ کارشناس',
+  } as const;
+  for (const [key, label] of Object.entries(map)) {
+    if (dto[key] !== undefined) out[key] = normalizeTime(dto[key], label);
+  }
+  if (Object.keys(out).length) out.opTimesUpdatedAt = new Date();
+  return out;
 }
 
 /** فهرستِ بستهٔ سورت — رشتهٔ دلخواهِ کاربر مستقیم به orderBy نمی‌رود. */
@@ -472,6 +533,7 @@ export class PatientsService {
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
           opDate: dto.opDate ? new Date(dto.opDate) : null,
+          ...timePatch(dto),
           notes: dto.notes || null,
           createdById: userId ?? null,
         },
@@ -489,6 +551,29 @@ export class PatientsService {
     });
     const result = { ...enrich(v), patientStatus };
     await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
+    return result;
+  }
+
+  /**
+   * ثبتِ ساعت‌ها بدونِ بازکردنِ کلِ فرمِ مراجعه.
+   *
+   * جدا از updateVisit است چون کسی که ساعت را ثبت می‌کند (کارشناسِ سرِ عمل،
+   * یا پنلِ چینش) لازم نیست اجازهٔ ویرایشِ مبلغ و جراح و بیمار را داشته باشد.
+   * دامنه‌اش همان scope مراجعه است: کارشناس فقط مراجعاتِ خودش.
+   */
+  async setTimes(id: number, dto: any, user?: any) {
+    await this.assertVisitAccess(id, user);
+    const patch = timePatch(dto);
+    if (!Object.keys(patch).length) throw new BadRequestException('ساعتی برای ثبت نیامده است');
+
+    const before = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
+    const updated = await this.prisma.visit.update({ where: { id }, data: patch, include: INCLUDE_PATIENT });
+    const result = enrich(updated);
+    await this.audit.record({
+      actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: id,
+      before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, techArriveTime: before?.techArriveTime },
+      after: patch,
+    });
     return result;
   }
 
@@ -518,6 +603,7 @@ export class PatientsService {
       }
       if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
+      Object.assign(visitPatch, timePatch(dto));
       if (dto.notes !== undefined) visitPatch.notes = dto.notes || null;
 
       if (Object.keys(patientPatch).length) {

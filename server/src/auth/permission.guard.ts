@@ -10,6 +10,9 @@ export const PERMISSION_DEFAULTS: Record<string, number> = {
   'patients.create': LEVEL.TECH_ADMIN,
   'patients.update': LEVEL.SUPERVISOR,
   'patients.status': LEVEL.SUPERVISOR,
+  // ثبتِ ساعتِ عمل کارِ کسی است که سرِ عمل حاضر است — کارشناس. جدا از
+  // patients.update نگه داشته شده تا این اجازه، اجازهٔ ویرایشِ مالی نشود.
+  'visits.times': LEVEL.TECH,
   'patients.delete': LEVEL.SUPER_ADMIN,
   // بخشِ بالینیِ پرونده (حساسیت، سابقه، بیمه، شرح‌ها) از بخشِ هویتی جداست:
   // کارشناسی که برای چینشِ کار نامِ بیمار را می‌بیند، لازم نیست سابقهٔ پزشکی‌اش را ببیند.
