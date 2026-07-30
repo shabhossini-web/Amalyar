@@ -177,6 +177,10 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
       onChange(created.id);
       setAdding(false);
       setName('');
+    } catch {
+      // پیام را onQuickAdd به‌شکلِ toast داده؛ این‌جا فقط پنل باز می‌ماند تا
+      // کاربر همان نوشته را اصلاح کند. بدونِ این catch، خطای اعتبارسنجیِ
+      // معمولی به‌صورت unhandled rejection در کنسول می‌نشست.
     } finally {
       setBusy(false);
     }
@@ -283,11 +287,27 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   }, [f.nationalId, mode, editing]);
 
   // تشخیص با `title` ساخته می‌شود، بقیهٔ تعاریف با `name`.
-  const quickAdd = (kind, field = 'name') => async (name) => {
+  /**
+   * افزودنِ سریع از داخلِ فرم.
+   *
+   * ⚠️ جراح استثناست: هویتش یک Person است و سرور `firstName` و `lastName`
+   * جدا می‌خواهد، نه یک `name`. تا امروز همان `{name}` فرستاده می‌شد و دکمهٔ
+   * `+` کنارِ جراح **همیشه** با خطای اعتبارسنجی رد می‌شد — بی‌صدا، چون کاربر
+   * فقط یک toastِ انگلیسیِ نامفهوم می‌دید. این‌جا نام از اولین فاصله تکه
+   * می‌شود (فامیلِ دوکلمه‌ای رایج است، نامِ مرکب نادر).
+   */
+  const bodyFor = (kind, value) => {
+    if (kind !== 'surgeons') return { [kind === 'diagnoses' ? 'title' : 'name']: value };
+    const parts = value.trim().split(/\s+/);
+    if (parts.length < 2) throw new Error('نام و نام خانوادگیِ جراح را با یک فاصله وارد کنید');
+    return { firstName: parts[0], lastName: parts.slice(1).join(' ') };
+  };
+
+  const quickAdd = (kind) => async (value) => {
     try {
-      const created = await api(`/${kind}`, { method: 'POST', body: { [field]: name } });
+      const created = await api(`/${kind}`, { method: 'POST', body: bodyFor(kind, value) });
       await onDefsChanged();
-      onToast(`«${name}» اضافه شد ✓`);
+      onToast(`«${value}» اضافه شد ✓`);
       return created;
     } catch (e) {
       onToast(e.message);
@@ -498,7 +518,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))}
             options={activeSurgeons}
             onQuickAdd={quickAdd('surgeons')}
-            addPlaceholder="نامِ جراحِ جدید…"
+            addPlaceholder="نام و نام خانوادگیِ جراح…"
           />
           <DefSelect
             label="بیمارستان"
@@ -537,7 +557,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           value={f.diagnosisId}
           onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
           options={activeDiagnoses}
-          onQuickAdd={quickAdd('diagnoses', 'title')}
+          onQuickAdd={quickAdd('diagnoses')}
           addPlaceholder="عنوانِ تشخیصِ جدید…"
         />
 
@@ -589,151 +609,6 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
 }
 
 /* ── شیتِ «تعریف‌ها»: مدیریتِ جراحان و بیمارستان‌ها ── */
-function DefsSheet({ defs, onDefsChanged, onClose, onToast }) {
-  const [tab, setTab] = useState('surgeons'); // surgeons | hospitals
-  // جراح هویتش در Person است، پس نام و نام‌خانوادگی جدا گرفته می‌شوند؛
-  // بیمارستان سازمان است و یک نام دارد.
-  const [name, setName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [editId, setEditId] = useState(0);
-  const [editName, setEditName] = useState('');
-  const [editLast, setEditLast] = useState('');
-  const isSurgeon = tab === 'surgeons';
-
-  const kind = tab; // مسیرِ API
-  const rows = tab === 'surgeons' ? defs.surgeons : defs.hospitals;
-
-  const run = async (fn, okMsg) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await fn();
-      await onDefsChanged();
-      if (okMsg) onToast(okMsg);
-    } catch (e) {
-      onToast(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const canAdd = isSurgeon
-    ? name.trim().length >= 2 && lastName.trim().length >= 2
-    : name.trim().length >= 2;
-
-  const add = () => {
-    if (!canAdd) return;
-    const n = name.trim();
-    const l = lastName.trim();
-    run(async () => {
-      const body = isSurgeon ? { firstName: n, lastName: l } : { name: n };
-      await api(`/${kind}`, { method: 'POST', body });
-      setName('');
-      setLastName('');
-    }, `«${isSurgeon ? `${n} ${l}` : n}» اضافه شد ✓`);
-  };
-
-  const saveRename = (row) => {
-    const n = editName.trim();
-    const l = editLast.trim();
-    if (n.length < 2 || (isSurgeon && l.length < 2)) { setEditId(0); return; }
-    const unchanged = isSurgeon
-      ? n === row.firstName && l === row.lastName
-      : n === row.name;
-    if (unchanged) { setEditId(0); return; }
-    run(async () => {
-      const body = isSurgeon ? { firstName: n, lastName: l } : { name: n };
-      await api(`/${kind}/${row.id}`, { method: 'PATCH', body });
-      setEditId(0);
-    }, 'نام ویرایش شد ✓');
-  };
-
-  const toggle = (row) =>
-    run(() => api(`/${kind}/${row.id}`, { method: 'PATCH', body: { active: !row.active } }),
-      row.active ? 'غیرفعال شد' : 'فعال شد ✓');
-
-  const del = (row) =>
-    run(async () => {
-      const r = await api(`/${kind}/${row.id}`, { method: 'DELETE' });
-      onToast(r.deactivated ? 'به‌دلیلِ سابقهٔ مراجعه، غیرفعال شد' : 'حذف شد');
-    });
-
-  return (
-    <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="glass db-sheet">
-        <header className="db-sheet-head">
-          <b>تعریف‌ها</b>
-          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
-        </header>
-
-        <div className="lg-tabs db-modetabs" role="tablist">
-          <button type="button" role="tab" aria-selected={tab === 'surgeons'} className={tab === 'surgeons' ? 'on' : ''} onClick={() => setTab('surgeons')}>جراحان</button>
-          <button type="button" role="tab" aria-selected={tab === 'hospitals'} className={tab === 'hospitals' ? 'on' : ''} onClick={() => setTab('hospitals')}>بیمارستان‌ها</button>
-        </div>
-
-        <div className="db-quickadd">
-          <input
-            type="text"
-            value={name}
-            placeholder={isSurgeon ? 'نام…' : 'نامِ بیمارستانِ جدید…'}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          />
-          {isSurgeon && (
-            <input
-              type="text"
-              value={lastName}
-              placeholder="نام خانوادگی…"
-              onChange={(e) => setLastName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-            />
-          )}
-          <button type="button" disabled={busy || !canAdd} onClick={add}>افزودن</button>
-        </div>
-
-        <div className="db-defs">
-          {rows.length === 0 && <div className="db-pnone">هنوز موردی تعریف نشده</div>}
-          {rows.map((row) => (
-            <div key={row.id} className={`db-def${row.active ? '' : ' off'}`}>
-              {editId === row.id ? (
-                <span className="db-def-editrow">
-                  <input
-                    className="db-def-edit"
-                    type="text"
-                    value={editName}
-                    autoFocus
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveRename(row); } if (e.key === 'Escape') setEditId(0); }}
-                  />
-                  {isSurgeon && (
-                    <input
-                      className="db-def-edit"
-                      type="text"
-                      value={editLast}
-                      placeholder="نام خانوادگی"
-                      onChange={(e) => setEditLast(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveRename(row); } if (e.key === 'Escape') setEditId(0); }}
-                    />
-                  )}
-                  <button type="button" className="db-def-save" onClick={() => saveRename(row)}>ثبت</button>
-                </span>
-              ) : (
-                <b>{row.name}{!row.active && <i> (غیرفعال)</i>}</b>
-              )}
-              <small>{faNum(row.visitCount)} مراجعه</small>
-              <span className="db-def-acts">
-                <button type="button" title="ویرایشِ نام" disabled={busy} onClick={() => { setEditId(row.id); setEditName(isSurgeon ? row.firstName : row.name); setEditLast(isSurgeon ? row.lastName : ''); }}><Pencil width="14" height="14" /></button>
-                <button type="button" title={row.active ? 'غیرفعال‌کردن' : 'فعال‌کردن'} disabled={busy} onClick={() => toggle(row)}>{row.active ? '⏸' : '▶'}</button>
-                <button type="button" className="danger" title="حذف" disabled={busy} onClick={() => del(row)}><Trash width="14" height="14" /></button>
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ── کارتِ مراجعه ── */
 function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
@@ -903,7 +778,6 @@ export default function Dashboard() {
   const [pageSize, setPageSize] = useState(50);
   const [meta, setMeta] = useState(EMPTY_META);
   const [modal, setModal] = useState(null); // null | {} | {visit}
-  const [defsOpen, setDefsOpen] = useState(false);
   const [billing, setBilling] = useState(null); // مراجعه‌ای که صورت‌حسابش باز است
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
@@ -983,7 +857,7 @@ export default function Dashboard() {
   useEffect(() => { loadDefs(); }, [loadDefs, user?.id]);
 
   // سوییچِ حساب وسطِ فرم/شیتِ باز → بسته شود
-  useEffect(() => { setModal(null); setDefsOpen(false); }, [user?.id]);
+  useEffect(() => { setModal(null); }, [user?.id]);
 
   // آمار از سرور می‌آید و کلِ نتیجهٔ فیلترشده را می‌شمارد، نه صفحهٔ جاری را.
   const stats = meta.stats;
@@ -1142,9 +1016,14 @@ export default function Dashboard() {
             <FilterIc width="17" height="17" />
             {advCount > 0 && <i>{faNum(advCount)}</i>}
           </button>
-          <button type="button" className="db-ico db-defbtn" title="تعریف‌ها (جراحان/بیمارستان‌ها)" onClick={() => setDefsOpen(true)}>
+          {/* پیش‌تر این دکمه یک شیتِ کوچکِ خودش داشت که فقط نام و فامیلِ جراح را
+              می‌گرفت — نسخهٔ ناقصی از صفحهٔ «تعاریف پایه» که تخصص و شمارهٔ
+              نظام‌پزشکی و تلفن هم دارد. نتیجه‌اش جراحانِ نصفه‌کاره بود. حالا
+              مستقیم به همان صفحه می‌رود؛ افزودنِ سریعِ داخلِ فرم (دکمهٔ +) سرِ
+              جایش است، چون آن یکی در جریانِ کار است نه مدیریتِ فهرست. */}
+          <Link to="/app/definitions" className="db-ico db-defbtn" title="تعاریف پایه (جراحان، بیمارستان‌ها، انواعِ عمل…)">
             <Gear width="17" height="17" />
-          </button>
+          </Link>
           <button type="button" className="db-add" onClick={() => setModal({})}>
             <Plus width="17" height="17" /> {t.visitNew}
           </button>
@@ -1274,9 +1153,6 @@ export default function Dashboard() {
         />
       )}
 
-      {defsOpen && (
-        <DefsSheet defs={defs} onDefsChanged={loadDefs} onClose={() => setDefsOpen(false)} onToast={setToast} />
-      )}
 
       {billing && (
         <BillingSheet

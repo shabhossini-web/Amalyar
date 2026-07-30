@@ -466,3 +466,5 @@
 .db-grid3 input { width: 100%; font-family: inherit; }
 .db-durhint { color: #6ee7b7; }
 .db-expbtn { width: 32px; height: 30px; }
+/* لینکِ تعاریف در نوارِ ابزار — مثل دکمه دیده شود، نه لینکِ آبی. */
+a.db-defbtn { text-decoration: none; }
