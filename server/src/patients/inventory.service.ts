@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { LEVEL } from '../common/levels';
 
 /** نوعِ حرکتِ انبار. علامت را سرویس تعیین می‌کند، نه کاربر. */
 export const MOVEMENT_KINDS = ['in', 'out', 'return', 'adjust', 'transfer'] as const;
@@ -421,7 +422,7 @@ export class InventoryService {
       actorId: user?.id, action: 'stock.transfer.send', entityType: 'stock_transfer', entityId: transfer.id,
       after: { code: transfer.code, from, to, lines: lines.length },
     });
-    return this.transfer(transfer.id);
+    return this.transfer(transfer.id, user);
   }
 
   /**
@@ -444,7 +445,7 @@ export class InventoryService {
       actorId: user?.id, action: 'stock.transfer.receive', entityType: 'stock_transfer', entityId: id,
       before: { status: t.status }, after: { receivedBy },
     });
-    return this.transfer(id);
+    return this.transfer(id, user);
   }
 
   /**
@@ -483,11 +484,86 @@ export class InventoryService {
       actorId: user?.id, action: 'stock.transfer.return', entityType: 'stock_transfer', entityId: id,
       after: { returned },
     });
-    return this.transfer(id);
+    return this.transfer(id, user);
   }
 
-  async listTransfers(opts: { status?: string; visitId?: number } = {}) {
-    const where: any = {};
+  /**
+   * برگهٔ مصرف — کارشناسِ سرِ عمل می‌گوید «چند تا مصرف شد».
+   *
+   * عمداً همان منطقِ انبارگردانی: کاربر **جمعِ مصرف‌شده** را می‌دهد نه «چقدر کم
+   * کن»، و اختلاف را ما حساب می‌کنیم. کارشناس وسطِ کار حسابِ «قبلاً چند تا زده
+   * بودم» را نگه نمی‌دارد؛ اگر مجبورش کنیم، همان‌جا دوباره‌شماری می‌شود.
+   *
+   * پس اصلاحِ رو به پایین هم کار می‌کند: اگر اول ۸ زد و بعد فهمید ۶ بوده،
+   * حرکتِ جبرانیِ برگشت ثبت می‌شود، نه حذفِ حرکتِ قبلی.
+   *
+   * مانده و «چه چیزی باید برگردد» از همین‌جا خودکار درمی‌آید — کارشناس هیچ‌وقت
+   * چیزی را که برمی‌گردد نمی‌شمارد.
+   */
+  async recordUsage(id: number, lines: { lotId: number; used: number }[], user: any) {
+    const t = await this.assertTransfer(id, user);
+    if (t.status === 'closed') throw new BadRequestException('این حواله بسته شده و مصرفش قابلِ تغییر نیست');
+
+    const sent = await this.prisma.stockMovement.findMany({
+      where: { transferId: id, kind: 'transfer', quantity: { gt: 0 }, location: t.toLocation },
+      select: { lotId: true, quantity: true },
+    });
+    const sentOf = new Map(sent.map((s) => [s.lotId, s.quantity]));
+
+    const changes: { lotId: number; from: number; to: number }[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      for (const line of lines) {
+        if (!sentOf.has(line.lotId)) throw new BadRequestException('این لات در حواله نیست');
+        const target = intOrZero(line.used, 'تعدادِ مصرف‌شده');
+        if (target < 0) throw new BadRequestException('تعدادِ مصرف‌شده نمی‌تواند منفی باشد');
+        if (target > sentOf.get(line.lotId)!) {
+          throw new BadRequestException(`بیشتر از ارسالی مصرف نمی‌شود — ${sentOf.get(line.lotId)} عدد فرستاده شده`);
+        }
+
+        const agg = await tx.stockMovement.aggregate({
+          where: { transferId: id, lotId: line.lotId, kind: { in: ['out', 'return'] } },
+          _sum: { quantity: true },
+        });
+        const already = -(agg._sum.quantity ?? 0); // خروج منفی است
+        const delta = target - already;
+        if (delta === 0) continue;
+
+        const meta = { transferId: id, visitId: t.visitId, visitCode: t.visitCode, location: t.toLocation, reason: `برگهٔ مصرفِ ${t.code}` };
+        if (delta > 0) await this.move(line.lotId, 'out', -delta, meta, user, tx);
+        else await this.move(line.lotId, 'return', -delta, { ...meta, reason: `اصلاحِ برگهٔ مصرفِ ${t.code}` }, user, tx);
+        changes.push({ lotId: line.lotId, from: already, to: target });
+      }
+    });
+
+    await this.audit.record({
+      actorId: user?.id, action: 'stock.transfer.usage', entityType: 'stock_transfer', entityId: id,
+      after: { changes },
+    });
+    return this.transfer(id, user);
+  }
+
+  /**
+   * دامنهٔ حواله برای کارشناس.
+   *
+   * کارشناس فقط حواله‌ای را می‌بیند که به عملِ خودش گره خورده. حوالهٔ بینِ دو
+   * انبار (بدونِ مراجعه) کارِ دفتر است و اصلاً به او مربوط نیست.
+   */
+  private transferScope(user: any) {
+    if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return {};
+    return { visit: { techId: user?.id ?? -1 } };
+  }
+
+  private async assertTransfer(id: number, user: any) {
+    const t = await this.prisma.stockTransfer.findFirst({
+      where: { id, ...this.transferScope(user) },
+      include: { visit: { select: { seq: true, patient: { select: { code: true } } } } },
+    });
+    if (!t) throw new NotFoundException('حواله یافت نشد');
+    return { ...t, visitCode: t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null };
+  }
+
+  async listTransfers(opts: { status?: string; visitId?: number } = {}, user?: any) {
+    const where: any = { ...this.transferScope(user) };
     if (opts.status) where.status = opts.status;
     if (opts.visitId) where.visitId = opts.visitId;
     const rows = await this.prisma.stockTransfer.findMany({
@@ -509,13 +585,17 @@ export class InventoryService {
   }
 
   /** یک حواله با قلم‌هایش و ماندهٔ هر قلم در مقصد — همان چیزی که برگهٔ چاپ لازم دارد. */
-  async transfer(id: number) {
-    const t = await this.prisma.stockTransfer.findUnique({
-      where: { id },
+  async transfer(id: number, user?: any) {
+    const t = await this.prisma.stockTransfer.findFirst({
+      where: { id, ...this.transferScope(user) },
       include: {
         hospital: { select: { id: true, name: true } },
         movements: {
-          where: { quantity: { gt: 0 } }, // فقط پایهٔ ورود، وگرنه هر قلم دوبار می‌آید
+          // ⚠️ `kind: 'transfer'` هم لازم است، نه فقط مثبت‌بودن: اصلاحِ رو به
+          // پایینِ برگهٔ مصرف یک حرکتِ `return` مثبت روی همین حواله می‌سازد و
+          // بدونِ این شرط، آن هم یک «قلمِ حواله» شمرده می‌شد و جمع‌ها دو برابر
+          // می‌شدند.
+          where: { quantity: { gt: 0 }, kind: 'transfer' },
           orderBy: { id: 'asc' },
           include: { lot: { include: { item: { select: { name: true, brand: true, size: true, unit: true } } } } },
         },
@@ -535,9 +615,11 @@ export class InventoryService {
     // ⚠️ «مصرف» از تفریقِ ارسال و مانده درنمی‌آید: پس از برگشتِ مانده، مانده صفر
     // می‌شود و آن تفریق کلِ ارسال را مصرف می‌شمارد. مصرف باید از حرکت‌های `out`
     // که به همین حواله گره خورده‌اند بیاید.
+    // مصرفِ **خالص**: اصلاحِ رو به پایین یک `return` می‌سازد، پس شمردنِ فقط
+    // `out` عددِ قبل از اصلاح را نشان می‌داد.
     const used = await this.prisma.stockMovement.groupBy({
       by: ['lotId'],
-      where: { transferId: t.id, kind: 'out' },
+      where: { transferId: t.id, kind: { in: ['out', 'return'] } },
       _sum: { quantity: true },
     });
     const usedOf = new Map(used.map((u) => [u.lotId, -(u._sum.quantity ?? 0)]));

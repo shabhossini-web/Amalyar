@@ -308,6 +308,25 @@ jobs:
           if (/dto\./.test(back)) { console.error('برگشتِ مانده نباید تعداد از کاربر بگیرد'); process.exit(1); }
           const ui = fs.readFileSync('../src/app/Inventory.jsx', 'utf8');
           if (!/lot.available/.test(ui)) { console.error('UI باید «در دسترس» را از «کل» جدا نشان دهد'); process.exit(1); }
+
+          // برگهٔ مصرف: کارِ کارشناسِ سرِ عمل، با مجوز و ماژولِ سبک‌ترِ خودش.
+          const perms = fs.readFileSync('src/auth/permission.guard.ts', 'utf8');
+          if (!/'stock.consume': LEVEL.TECH/.test(perms)) {
+            console.error('ثبتِ مصرف باید مجوزِ جدا در سطحِ کارشناس داشته باشد، نه inventory.write'); process.exit(1);
+          }
+          const ctrl = fs.readFileSync('src/patients/inventory.controller.ts', 'utf8');
+          const usage = ctrl.split('usage(@Param')[0].split('@RequirePermissions').pop();
+          if (!/Feature\('tech'\)/.test(ctrl.split(\"@RequirePermissions('stock.consume')\")[0].split('/**').pop())) {
+            console.error('برگهٔ مصرف باید زیرِ ماژولِ tech باشد وگرنه کارشناسِ سطح ۲ به آن نمی‌رسد'); process.exit(1);
+          }
+          // ورودی «جمعِ مصرف‌شده» است نه دلتا — همان قاعدهٔ انبارگردانی.
+          const rec = svc.split('async recordUsage')[1].split(/\n  \/\*\*/)[0];
+          if (!/const delta = target - already/.test(rec)) {
+            console.error('برگهٔ مصرف باید جمع بگیرد و اختلاف را خودش حساب کند'); process.exit(1);
+          }
+          if (!/kind: \{ in: \['out', 'return'\] \}/.test(rec)) {
+            console.error('مصرفِ ثبت‌شده باید خالص باشد (out و return)'); process.exit(1);
+          }
           console.log('lot journey ok');
           "
 

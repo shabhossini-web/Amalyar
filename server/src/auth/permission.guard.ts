@@ -33,6 +33,11 @@ export const PERMISSION_DEFAULTS: Record<string, number> = {
   'inventory.read': LEVEL.TECH,
   'inventory.write': LEVEL.TECH_ADMIN,
   'inventory.adjust': LEVEL.SUPERVISOR,
+  // ثبتِ «چه چیزی سرِ عمل مصرف شد» کارِ کارشناسِ حاضر در اتاقِ عمل است و همان
+  // استدلالِ `visits.times` را دارد: جدا از inventory.write نگه داشته شده تا
+  // این اجازه، اجازهٔ ساختِ لات یا صدورِ حواله نشود. دامنه‌اش هم محدود است —
+  // کارشناس فقط حواله‌های عملی را می‌بیند که خودش کارشناسش بوده.
+  'stock.consume': LEVEL.TECH,
   'definitions.read': LEVEL.TECH,
   'definitions.manage': LEVEL.ADMIN,
   'users.manage': LEVEL.SUPER_ADMIN,

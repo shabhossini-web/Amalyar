@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, TransferReceiveDto, TransferSendDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
 
 /**
  * انبار — لات، سریال، دفترِ حرکت و ردیابی.
@@ -101,16 +101,39 @@ export class InventoryController {
 
   // ── حواله‌ها: سفرِ ست به بیمارستان و برگشتش ──
 
+  /**
+   * ⚠️ خواندنِ حواله و ثبتِ مصرف زیرِ ماژولِ `tech` (سطح ۲) هستند نه `inventory`
+   * (سطح ۳)، چون کارِ کارشناسِ سرِ عمل‌اند نه کارِ انباردار. دامنه‌شان هم با
+   * `transferScope` به عمل‌های خودِ کارشناس محدود است.
+   *
+   * هرچه انبار را دست می‌زند (ساختِ لات، صدور، رسید، برگشت) زیرِ `inventory`
+   * می‌ماند — کارشناس ست را می‌بیند و مصرفش را می‌زند، ولی انبار نمی‌گرداند.
+   */
+  @Feature('tech')
   @RequirePermissions('inventory.read')
   @Get('transfers')
-  transfers(@Query('status') status?: string, @Query('visit') visit?: string) {
-    return this.inv.listTransfers({ status, visitId: visit ? Number(visit) : undefined });
+  transfers(@CurrentUser() user: any, @Query('status') status?: string, @Query('visit') visit?: string) {
+    return this.inv.listTransfers({ status, visitId: visit ? Number(visit) : undefined }, user);
   }
 
+  @Feature('tech')
   @RequirePermissions('inventory.read')
   @Get('transfers/:id')
-  transfer(@Param('id', ParseIntPipe) id: number) {
-    return this.inv.transfer(id);
+  transfer(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.inv.transfer(id, user);
+  }
+
+  /**
+   * برگهٔ مصرف — کارشناسِ سرِ عمل «چند تا مصرف شد» را می‌زند.
+   *
+   * مجوزِ سبک‌ترِ خودش (`stock.consume`) را دارد، نه `inventory.write`: کارشناسی
+   * که سرِ عمل مصرف ثبت می‌کند نباید بتواند لات بسازد یا حواله صادر کند.
+   */
+  @Feature('tech')
+  @RequirePermissions('stock.consume')
+  @Post('transfers/:id/usage')
+  usage(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferUsageDto, @CurrentUser() user: any) {
+    return this.inv.recordUsage(id, dto.lines, user);
   }
 
   @RequirePermissions('inventory.write')

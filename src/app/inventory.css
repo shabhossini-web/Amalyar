@@ -255,3 +255,17 @@
   color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
 }
 .iv-mini.warn { color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
+
+/* برگهٔ مصرف — کارِ کارشناسِ سرِ عمل */
+.iv-uline { display: flex; align-items: center; gap: 10px; margin-block-start: 5px; font-size: 11px; color: #a5b4fc; }
+.iv-uline label { display: flex; align-items: center; gap: 6px; color: #6ee7b7; }
+.iv-uline input {
+  width: 62px; padding: 5px; text-align: center; border-radius: 9px; font: inherit; font-size: 12px;
+  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(52, 211, 153, .3);
+}
+.iv-uline .rem { color: #fcd34d; }
+.iv-usebtn {
+  width: 100%; padding: 11px; margin-block-end: 12px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
+  color: #052e1a; font-weight: 700; background: linear-gradient(135deg, #34d399, #059669); border: 0;
+}
+.iv-usebtn:disabled { opacity: .55; cursor: default; }

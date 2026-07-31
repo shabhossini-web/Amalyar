@@ -378,10 +378,15 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
   const [t, setT] = useState(null);
   const [busy, setBusy] = useState(false);
   const [csr, setCsr] = useState('');
+  const [used, setUsed] = useState({}); // lotId → مقدارِ در حالِ ویرایش
 
   const load = useCallback(async () => {
-    try { setT(await api(`/stock/transfers/${id}`)); }
-    catch (e) { onError(e.message); onClose(); }
+    try {
+      const fresh = await api(`/stock/transfers/${id}`);
+      setT(fresh);
+      // ورودی‌ها با عددِ سرور هم‌گام می‌شوند تا پس از ثبت، مقدارِ قدیمی نماند.
+      setUsed(Object.fromEntries(fresh.lines.map((l) => [l.lotId, String(l.used)])));
+    } catch (e) { onError(e.message); onClose(); }
   }, [id, onError, onClose]);
   useEffect(() => { load(); }, [load]);
 
@@ -408,15 +413,41 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
             <div className={t.totals.remaining ? 'iv-warn' : ''}><b>{num(t.totals.remaining)}</b><span>مانده در مقصد</span></div>
           </div>
 
+          {/* برگهٔ مصرف — کاری که کارشناس سرِ عمل می‌کند. عدد «جمعِ مصرف‌شده»
+              است نه «چقدر کم کن»؛ کارشناس وسطِ عمل حسابِ قبلی را نگه نمی‌دارد. */}
           <div className="iv-trlines">
             {t.lines.map((l) => (
               <div key={l.movementId} className="iv-trline">
                 <b>{l.itemName}{l.itemSize ? ` — ${l.itemSize}` : ''}</b>
                 <small dir="ltr">{l.serialNo || l.lotNo || `#${l.lotId}`}</small>
-                <span>ارسال {num(l.sent)} · مصرف {num(l.used)} · مانده {num(l.remaining)}</span>
+                {t.status === 'closed' ? (
+                  <span>ارسال {num(l.sent)} · مصرف {num(l.used)} · مانده {num(l.remaining)}</span>
+                ) : (
+                  <div className="iv-uline">
+                    <span>ارسال {num(l.sent)}</span>
+                    <label>
+                      مصرف شد
+                      <input dir="ltr" inputMode="numeric"
+                             value={used[l.lotId] ?? String(l.used)}
+                             onChange={(e) => setUsed((s) => ({ ...s, [l.lotId]: e.target.value }))} />
+                    </label>
+                    <span className={l.remaining ? 'rem' : ''}>مانده {num(l.remaining)}</span>
+                  </div>
+                )}
               </div>
             ))}
           </div>
+
+          {t.status !== 'closed' && (
+            <button type="button" className="iv-usebtn" disabled={busy}
+                    onClick={() => act(
+                      `/stock/transfers/${id}/usage`,
+                      { lines: t.lines.map((l) => ({ lotId: l.lotId, used: Number(toEnDigits(used[l.lotId] ?? String(l.used))) || 0 })) },
+                      'برگهٔ مصرف ثبت شد ✓',
+                    )}>
+              ثبتِ برگهٔ مصرف
+            </button>
+          )}
 
           {t.receivedBy ? (
             <p className="iv-note">تحویلِ CSR: <b>{t.receivedBy}</b> — {faDate(t.receivedAt)}</p>

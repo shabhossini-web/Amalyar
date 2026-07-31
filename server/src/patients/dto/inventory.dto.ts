@@ -97,3 +97,21 @@ export class TransferReceiveDto {
   @IsString() @MinLength(2, { message: 'نامِ تحویل‌گیرنده را وارد کنید' }) @MaxLength(80)
   receivedBy!: string;
 }
+
+/** یک قلمِ برگهٔ مصرف: از این لات، **جمعاً** چند تا مصرف شد. */
+export class UsageLineDto {
+  @Type(() => Number) @IsInt({ message: 'لاتِ انتخابی نامعتبر است' })
+  lotId!: number;
+
+  /// عمداً «جمعِ مصرف‌شده» است نه «چقدر کم کن» — همان قاعدهٔ انبارگردانی.
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(0, { message: 'تعداد نمی‌تواند منفی باشد' })
+  used!: number;
+}
+
+export class TransferUsageDto {
+  @IsArray({ message: 'قلم‌های مصرف نامعتبر است' })
+  @ArrayMinSize(1, { message: 'حداقل یک قلم لازم است' })
+  @ValidateNested({ each: true })
+  @Type(() => UsageLineDto)
+  lines!: UsageLineDto[];
+}
