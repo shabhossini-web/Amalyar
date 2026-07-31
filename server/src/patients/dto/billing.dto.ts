@@ -1,6 +1,6 @@
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
-import { CHARGE_KINDS, PAYMENT_METHODS } from '../billing.service';
+import { CHARGE_KINDS, PAYMENT_METHODS, STOCK_EFFECTS } from '../billing.service';
 
 export class ChargeCreateDto {
   @IsOptional() @IsIn(CHARGE_KINDS as unknown as string[], { message: 'نوعِ قلم نامعتبر است' })
@@ -24,9 +24,17 @@ export class ChargeCreateDto {
   @IsOptional() @Type(() => Number) @IsInt({ message: 'کالای انتخابی نامعتبر است' })
   itemId?: number;
 
-  /** لاتِ انبار — اگر بیاید، همین قلم موجودی را کم می‌کند و مصرف ردیابی می‌شود. */
+  /** لاتِ انبار — فقط و فقط وقتی `stockEffect = consumed` باشد. */
   @IsOptional() @Type(() => Number) @IsInt({ message: 'لاتِ انتخابی نامعتبر است' })
   lotId?: number;
+
+  /**
+   * اثرِ قلم روی انبار: `consumed` (از انبارِ ما کم شود) · `virtual` (فقط روی
+   * فاکتور) · `hospital` (کالای خودِ بیمارستان). فقط برای `kind = item` معنا
+   * دارد؛ برای خدمت و تخفیف سرور خودش virtual می‌گذارد.
+   */
+  @IsOptional() @IsIn(STOCK_EFFECTS as unknown as string[], { message: 'اثرِ انبار نامعتبر است' })
+  stockEffect?: string;
 
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }

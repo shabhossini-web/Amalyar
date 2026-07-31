@@ -7,6 +7,19 @@ import { LEVEL } from '../common/levels';
 /** نوعِ قلمِ صورت‌حساب. discount همیشه مبلغِ منفی می‌سازد. */
 export const CHARGE_KINDS = ['service', 'item', 'discount'] as const;
 
+/**
+ * اثرِ قلمِ فاکتور روی انبار.
+ *
+ * مدلِ مالیِ شرکت‌های تجهیزاتِ پزشکی دو بخش دارد و این دو **یکی نیستند**:
+ * آنچه روی فاکتور می‌آید، و آنچه واقعاً از انبار خارج می‌شود. یک فاکتور
+ * می‌تواند قلمی داشته باشد که از انبار کم نمی‌شود (قیمتِ توافقی، کالای خودِ
+ * بیمارستان)، و کالایی مصرف شود که فاکتور نمی‌خورد (اضافه‌مصرف، شکست، هدیه).
+ *
+ * تا وقتی این نیت ثبت نشود، «قلمِ مجازیِ عمدی» و «کاربر یادش رفت لات را انتخاب
+ * کند» در دیتابیس دقیقاً یک شکل دارند — و هیچ گزارشِ مغایرتی ممکن نیست.
+ */
+export const STOCK_EFFECTS = ['consumed', 'virtual', 'hospital'] as const;
+
 /** روشِ پرداخت — فهرستِ بسته تا گزارشِ روشِ دریافت معنا داشته باشد. */
 export const PAYMENT_METHODS = ['cash', 'card', 'transfer', 'cheque', 'insurance'] as const;
 
@@ -42,29 +55,54 @@ export class BillingService {
     const [charges, payments, moves] = await Promise.all([
       this.prisma.charge.findMany({ where: { visitId }, orderBy: { id: 'asc' } }),
       this.prisma.payment.findMany({ where: { visitId }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] }),
+      // ⚠️ همهٔ حرکت‌های این مراجعه، نه فقط آن‌هایی که قلمِ فاکتور دارند. فیلترِ
+      // قبلی (`chargeId: { not: null }`) دقیقاً نیمهٔ دومِ مدلِ دوبخشی را نامرئی
+      // می‌کرد: کالایی که سرِ عمل مصرف شد ولی فاکتور نخورد.
       this.prisma.stockMovement.findMany({
-        where: { visitId, chargeId: { not: null }, kind: 'out' },
-        include: { lot: { select: { lotNo: true, serialNo: true } } },
+        where: { visitId },
+        include: { lot: { select: { lotNo: true, serialNo: true, item: { select: { name: true } } } } },
+        orderBy: { id: 'asc' },
       }),
     ]);
     // لاتِ مصرف‌شده روی خودِ قلم دیده می‌شود؛ وگرنه کاربر برای فهمیدنِ «کدام
     // سریال روی این فاکتور رفت» باید صفحهٔ انبار را جدا باز کند.
-    const lotOf = new Map(moves.map((m) => [m.chargeId, { lotId: m.lotId, lotNo: m.lot.lotNo, serialNo: m.lot.serialNo }]));
+    const lotOf = new Map(
+      moves
+        .filter((m) => m.kind === 'out' && m.chargeId)
+        .map((m) => [m.chargeId, { lotId: m.lotId, lotNo: m.lot.lotNo, serialNo: m.lot.serialNo }]),
+    );
     return {
       ...summarize(charges, payments),
       charges: charges.map((c) => ({ ...c, lot: lotOf.get(c.id) ?? null })),
       payments,
+      reconcile: reconcile(charges, moves),
     };
   }
 
   async addCharge(
     visitId: number,
-    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; itemId?: number; lotId?: number },
+    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; itemId?: number; lotId?: number; stockEffect?: string },
     user: any,
   ) {
     await this.assertVisit(visitId, user);
     const kind = dto.kind ?? 'service';
     if (!CHARGE_KINDS.includes(kind as any)) throw new BadRequestException('نوعِ قلم نامعتبر است');
+
+    // خدمت و تخفیف ذاتاً کالا نیستند، پس اثرِ انبار برایشان بی‌معنی است و
+    // به‌جای «خطا بده» بی‌سروصدا virtual می‌شوند — این حالت اشتباهِ کاربر نیست.
+    const stockEffect = kind === 'item' ? dto.stockEffect ?? 'virtual' : 'virtual';
+    if (!STOCK_EFFECTS.includes(stockEffect as any)) throw new BadRequestException('اثرِ انبار نامعتبر است');
+
+    // این دو شرط، هستهٔ تفکیکِ فاکتور از انبارند:
+    // بدونِ اولی، «مصرفی» ثبت می‌شود بی‌آنکه چیزی از انبار کم شود (فاکتورِ
+    // کالایی که هیچ‌وقت خارج نشد). بدونِ دومی، «مجازی» ثبت می‌شود ولی کالا
+    // خارج می‌شود — و بعداً معلوم نیست کدام‌شان دروغ گفته.
+    if (stockEffect === 'consumed' && !dto.lotId) {
+      throw new BadRequestException('برای قلمِ مصرفی باید لاتِ انبار انتخاب شود؛ اگر از انبارِ ما خارج نمی‌شود، «مجازی» یا «کالای بیمارستان» را بزنید');
+    }
+    if (stockEffect !== 'consumed' && dto.lotId) {
+      throw new BadRequestException('قلمی که از انبارِ ما کم نمی‌شود نباید لات داشته باشد');
+    }
 
     const title = dto.title?.trim();
     if (!title) throw new BadRequestException('عنوانِ قلم را وارد کنید');
@@ -82,7 +120,7 @@ export class BillingService {
 
     const row = await this.prisma.charge.create({
       data: {
-        visitId, kind, title, quantity, unitPrice, amount,
+        visitId, kind, title, quantity, unitPrice, amount, stockEffect,
         serviceCode: dto.serviceCode?.trim() || null,
         itemId: dto.itemId ?? null,
         notes: dto.notes?.trim() || null,
@@ -112,28 +150,47 @@ export class BillingService {
     return row;
   }
 
-  async removeCharge(chargeId: number, user: any) {
+  /**
+   * حذفِ قلمِ فاکتور.
+   *
+   * ⚠️ **حذفِ قلم به‌خودیِ‌خود کالا را به انبار برنمی‌گرداند.** این‌جا قبلاً
+   * خودکار حرکتِ `return` زده می‌شد و باگ بود: پیچی که داخلِ بدنِ بیمار است با
+   * اصلاحِ یک اشتباهِ تایپی در فاکتور، به موجودی برمی‌گشت.
+   *
+   * عدم‌تقارن با `addCharge` عمدی است و باید بماند: ساختنِ قلمِ مصرفی ادعا
+   * می‌کند «این اتفاق افتاد» — ادعایی که کاربر همان لحظه دارد می‌کند. حذفِ قلمِ
+   * فاکتور ادعا نمی‌کند «آن اتفاق نیفتاد»؛ فقط می‌گوید فاکتور غلط بود. برگشتِ
+   * فیزیکی سؤالِ دیگری است که فقط کاربر جوابش را دارد، پس `returnStock` صریح
+   * خواسته می‌شود و پیش‌فرضش خاموش است.
+   *
+   * حرکتِ مصرف پاک نمی‌شود (دفتر فقط‌افزودنی است) و `chargeId` روی آن باقی
+   * می‌ماند؛ چون رابطهٔ FK ندارد، به قلمِ حذف‌شده اشاره می‌کند و در نمای مغایرت
+   * به‌شکلِ «مصرف‌شده بدونِ قلمِ فاکتور» دیده می‌شود — دقیقاً همان چیزی که هست.
+   */
+  async removeCharge(chargeId: number, user: any, returnStock = false) {
     const row = await this.prisma.charge.findUnique({ where: { id: chargeId } });
     if (!row) throw new NotFoundException('قلمِ صورت‌حساب پیدا نشد');
     await this.assertVisit(row.visitId, user);
 
-    // کالای مصرف‌شده با حرکتِ جبرانی برمی‌گردد، نه با پاک‌کردنِ حرکتِ مصرف:
-    // دفترِ انبار فقط اضافه می‌شود، وگرنه «چه وقت چه شد» از بین می‌رود.
-    const consumed = await this.prisma.stockMovement.findMany({
-      where: { chargeId, kind: 'out' },
-    });
-    for (const m of consumed) {
-      await this.inventory.returnToStock(
-        { lotId: m.lotId, quantity: Math.abs(m.quantity), visitId: row.visitId, chargeId, reason: 'حذفِ قلمِ فاکتور' },
-        user,
-      );
+    if (returnStock) {
+      // کالا با حرکتِ جبرانی برمی‌گردد، نه با پاک‌کردنِ حرکتِ مصرف: دفترِ انبار
+      // فقط اضافه می‌شود، وگرنه «چه وقت چه شد» از بین می‌رود.
+      const moves = await this.prisma.stockMovement.findMany({ where: { chargeId } });
+      const net = moves.reduce((s, m) => s + m.quantity, 0); // خروج منفی است
+      if (net < 0) {
+        await this.inventory.returnToStock(
+          { lotId: moves.find((m) => m.kind === 'out')!.lotId, quantity: -net, visitId: row.visitId, chargeId, reason: 'کالا مصرف نشد — حذفِ قلمِ فاکتور' },
+          user,
+        );
+      }
     }
 
     await this.prisma.charge.delete({ where: { id: chargeId } });
     await this.audit.record({
-      actorId: user?.id, action: 'charge.delete', entityType: 'charge', entityId: chargeId, before: row,
+      actorId: user?.id, action: 'charge.delete', entityType: 'charge', entityId: chargeId,
+      before: row, after: { returnedToStock: returnStock },
     });
-    return { ok: true };
+    return { ok: true, returnedToStock: returnStock };
   }
 
   async addPayment(
@@ -193,4 +250,66 @@ export function summarize(
   const total = charges.reduce((s, c) => s + c.amount, 0);
   const paid = payments.reduce((s, p) => s + p.amount, 0);
   return { total, paid, due: total - paid };
+}
+
+type ChargeRow = { id: number; kind: string; title: string; quantity: number; stockEffect: string };
+type MoveRow = {
+  id: number; lotId: number; kind: string; quantity: number; chargeId: number | null; reason: string | null;
+  lot: { lotNo: string | null; serialNo: string | null; item: { name: string } };
+};
+
+/**
+ * مغایرتِ **فاکتور در برابر مصرف** — دو طرفِ مدلِ دوبخشی کنارِ هم.
+ *
+ * این نه گزارشِ خطا است نه هشدار؛ نمای واقعیتِ کار است. هر سه دسته می‌توانند
+ * کاملاً درست باشند و تصمیم با کاربر است. چیزی که تا حالا نبود، *دیدنشان* بود.
+ *
+ * مشتق و خالص، مطابقِ قانونِ ۱۷: هیچ render ای اجازه ندارد این تطبیق را
+ * دوباره حساب کند، وگرنه دو نسخهٔ واگرا از «مغایرت» خواهیم داشت.
+ */
+export function reconcile(charges: ChargeRow[], moves: MoveRow[]) {
+  const chargeIds = new Set(charges.map((c) => c.id));
+
+  /**
+   * گروه‌بندیِ **خالص**، نه شمارشِ خام.
+   *
+   * خروج منفی است و برگشت مثبت، پس جمعِ صفر یعنی رفت و برگشت — عملاً چیزی
+   * مصرف نشده. بدونِ این، قلمی که با «مصرف نشد، برگردد» حذف شده بود همچنان
+   * «مصرف‌شده ولی بی‌فاکتور» گزارش می‌شد؛ یعنی گزارشِ مغایرت خودش مغایرتِ
+   * جعلی می‌ساخت و کاربر یاد می‌گرفت نادیده‌اش بگیرد.
+   *
+   * کلیدِ گروه: قلمِ فاکتور اگر باشد، وگرنه خودِ لات — تا مصرف و برگشتِ
+   * مستقیمِ انبار (بدونِ فاکتور) هم همدیگر را خنثی کنند.
+   */
+  const groups = new Map<string, { net: number; first: MoveRow; chargeId: number | null }>();
+  for (const m of moves) {
+    const key = m.chargeId != null ? `c${m.chargeId}` : `l${m.lotId}`;
+    const g = groups.get(key);
+    if (g) g.net += m.quantity;
+    else groups.set(key, { net: m.quantity, first: m, chargeId: m.chargeId });
+  }
+  const netByCharge = new Map<number, number>();
+  for (const [, g] of groups) if (g.chargeId != null) netByCharge.set(g.chargeId, g.net);
+
+  return {
+    /// قلمِ «مصرفی» که خالصِ خروجی ندارد — یا برگشت خورده یا هیچ‌وقت خارج نشد.
+    billedNotConsumed: charges
+      .filter((c) => c.stockEffect === 'consumed' && (netByCharge.get(c.id) ?? 0) >= 0)
+      .map((c) => ({ chargeId: c.id, title: c.title, quantity: c.quantity })),
+
+    /// کالایی که خالصاً از انبار بیرون است ولی قلمِ فاکتوری ندارد (یا قلمش حذف شده).
+    consumedNotBilled: [...groups.values()]
+      .filter((g) => g.net < 0 && (g.chargeId == null || !chargeIds.has(g.chargeId)))
+      .map(({ net, first: m, chargeId }) => ({
+        movementId: m.id, lotId: m.lotId, itemName: m.lot.item.name,
+        lotNo: m.lot.lotNo, serialNo: m.lot.serialNo,
+        quantity: -net, reason: m.reason,
+        orphaned: chargeId != null, // قلمش بعداً حذف شده، از اول بی‌فاکتور نبوده
+      })),
+
+    /// قلمِ کالا که عمداً از انبارِ ما کم نمی‌شود — مغایرت نیست، تصمیم است.
+    offStock: charges
+      .filter((c) => c.kind === 'item' && c.stockEffect !== 'consumed')
+      .map((c) => ({ chargeId: c.id, title: c.title, quantity: c.quantity, stockEffect: c.stockEffect })),
+  };
 }

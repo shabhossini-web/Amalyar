@@ -10,6 +10,17 @@ const Trash = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 6h18M8 
 const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
 
 const CHARGE_KINDS = { service: 'خدمت', item: 'کالا', discount: 'تخفیف' };
+/**
+ * اثرِ قلمِ کالا روی انبار.
+ *
+ * فاکتور و انبار دو چیزند: قیمتِ توافقیِ یک ست روی فاکتور می‌آید بی‌آنکه چیزی
+ * از انبار خارج شود، و کالای بیمارستان فاکتور می‌شود بی‌آنکه اصلاً مالِ ما باشد.
+ */
+const STOCK_EFFECTS = {
+  consumed: 'از انبارِ ما کم شود',
+  virtual: 'فقط روی فاکتور (از انبار کم نشود)',
+  hospital: 'کالای خودِ بیمارستان',
+};
 const METHODS = { cash: 'نقدی', card: 'کارت‌خوان', transfer: 'انتقال', cheque: 'چک', insurance: 'بیمه' };
 
 const money = (n) => Number(n || 0).toLocaleString('fa-IR');
@@ -24,7 +35,9 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('charges');
 
-  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null });
+  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null, stockEffect: 'virtual' });
+  /// قلمی که کاربر دکمهٔ حذفش را زده و باید سؤالِ «کالا واقعاً مصرف شد؟» را جواب دهد.
+  const [delRow, setDelRow] = useState(null);
   const [codeQ, setCodeQ] = useState('');
   const [codeHits, setCodeHits] = useState([]);
   const [itemHits, setItemHits] = useState([]);
@@ -64,10 +77,11 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   /**
    * انتخابِ کالا: نام و قیمتِ پایه پر می‌شوند و ارجاعِ کاتالوگ نگه داشته می‌شود.
    *
-   * لات‌های موجود هم همین‌جا خوانده می‌شوند: اگر کاربر لات را انتخاب کند، همین
-   * قلمِ فاکتور موجودیِ انبار را کم می‌کند و مصرف به بیمار گره می‌خورد. اگر
-   * انبار برای این کالا خالی/تعریف‌نشده باشد، انتخابگر اصلاً نشان داده نمی‌شود
-   * تا فاکتورِ شرکتی که انبار ندارد شلوغ نشود.
+   * لات‌های موجود هم همین‌جا خوانده می‌شوند. پیش‌فرضِ «اثرِ انبار» از واقعیتِ
+   * انبار می‌آید نه از یک ثابت: کالایی که لاتِ سالم دارد یعنی از انبارِ ماست
+   * (`consumed`)، و کالایی که ندارد یعنی یا شرکت انبار ندارد یا کالا از جای
+   * دیگری می‌آید (`virtual`). این‌طور کاربرِ عادی هیچ‌وقت با خطا روبه‌رو نمی‌شود
+   * ولی نیت همچنان صریح ثبت می‌شود.
    */
   const pickItem = async (it) => {
     setCodeQ('');
@@ -80,8 +94,16 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
       unitPrice: it.price != null ? String(it.price) : s.unitPrice,
     }));
     if (it.price == null) onToast('این کالا قیمتِ پایه ندارد — مبلغ را دستی وارد کنید');
-    try { setLots(await api(`/stock/items/${it.id}/lots`)); }
-    catch { setLots([]); } // انبار ممکن است برای این شرکت خاموش باشد
+    let rows = [];
+    try { rows = await api(`/stock/items/${it.id}/lots`); }
+    catch { rows = []; } // انبار ممکن است برای این شرکت خاموش باشد
+    setLots(rows);
+    const usable = rows.find((l) => !l.expired && l.quantity > 0);
+    setC((s) => ({
+      ...s,
+      stockEffect: usable ? 'consumed' : 'virtual',
+      lotId: usable ? usable.id : null,
+    }));
   };
 
   /**
@@ -114,10 +136,11 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
           quantity: Math.max(1, parseMoney(c.quantity) || 1), unitPrice,
           ...(c.serviceCode ? { serviceCode: c.serviceCode } : {}),
           ...(c.itemId ? { itemId: c.itemId } : {}),
-          ...(c.lotId ? { lotId: c.lotId } : {}),
+          ...(c.kind === 'item' ? { stockEffect: c.stockEffect } : {}),
+          ...(c.stockEffect === 'consumed' && c.lotId ? { lotId: c.lotId } : {}),
         },
       });
-      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null });
+      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null, stockEffect: 'virtual' });
       setLots([]);
       await load(); onChanged?.();
       onToast('قلم اضافه شد ✓');
@@ -230,21 +253,43 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                     )}
                   </div>
 
-                  {/* انتخابِ لات فقط وقتی دیده می‌شود که کالای انتخاب‌شده واقعاً
-                      در انبار لات داشته باشد — وگرنه فیلدی که همیشه خالی است. */}
-                  {c.kind === 'item' && c.itemId && lots.length > 0 && (
+                  {/* اثرِ انبار — نیمهٔ دومِ مدلِ دوبخشی. تا وقتی این انتخاب صریح
+                      نبود، «قلمِ مجازیِ عمدی» و «یادم رفت لات بزنم» یک شکل داشتند. */}
+                  {c.kind === 'item' && c.itemId && (
+                    <label className="db-field bl-lotpick">
+                      <span>اثر روی انبار</span>
+                      <select
+                        value={c.stockEffect}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          const usable = lots.find((l) => !l.expired && l.quantity > 0);
+                          setC((s) => ({ ...s, stockEffect: v, lotId: v === 'consumed' ? s.lotId ?? usable?.id ?? null : null }));
+                        }}
+                      >
+                        {Object.entries(STOCK_EFFECTS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                    </label>
+                  )}
+
+                  {/* انتخابِ لات فقط برای قلمِ مصرفی. «بدونِ برداشت از انبار» دیگر
+                      این‌جا نیست — آن حالت حالا اسم دارد و بالاتر انتخاب می‌شود. */}
+                  {c.kind === 'item' && c.itemId && c.stockEffect === 'consumed' && (
                     <label className="db-field bl-lotpick">
                       <span>لاتِ مصرفی (موجودی کم می‌شود و به بیمار گره می‌خورد)</span>
-                      <select value={c.lotId ?? ''} onChange={(e) => setC((s) => ({ ...s, lotId: e.target.value ? Number(e.target.value) : null }))}>
-                        <option value="">بدونِ برداشت از انبار</option>
-                        {lots.map((l) => (
-                          <option key={l.id} value={l.id} disabled={l.expired}>
-                            {(l.serialNo ? `سریال ${l.serialNo}` : l.lotNo ? `لات ${l.lotNo}` : `لات #${l.id}`)}
-                            {` — ${money(l.quantity)} ${l.unit}`}
-                            {l.expired ? ' (منقضی)' : ''}
-                          </option>
-                        ))}
-                      </select>
+                      {lots.length === 0 ? (
+                        <p className="db-hint bl-warn">برای این کالا لاتی در انبار نیست — «فقط روی فاکتور» یا «کالای بیمارستان» را انتخاب کنید.</p>
+                      ) : (
+                        <select value={c.lotId ?? ''} onChange={(e) => setC((s) => ({ ...s, lotId: e.target.value ? Number(e.target.value) : null }))}>
+                          <option value="">— لات را انتخاب کنید —</option>
+                          {lots.map((l) => (
+                            <option key={l.id} value={l.id} disabled={l.expired}>
+                              {(l.serialNo ? `سریال ${l.serialNo}` : l.lotNo ? `لات ${l.lotNo}` : `لات #${l.id}`)}
+                              {` — ${money(l.quantity)} ${l.unit}`}
+                              {l.expired ? ' (منقضی)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </label>
                   )}
 
@@ -299,13 +344,21 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                           )}
                         </div>
                         <b className={`bl-amount${row.amount < 0 ? ' neg' : ''}`}>{money(row.amount)}</b>
-                        <button type="button" className="bl-del" disabled={busy} onClick={() => remove(`/visits/charges/${row.id}`, 'قلم')}>
+                        {/* قلمی که کالا از انبار برده، مستقیم حذف نمی‌شود: اول باید
+                            معلوم شود کالا واقعاً مصرف شده یا نه. سرور هم بدونِ
+                            پرچمِ صریح چیزی به انبار برنمی‌گرداند. */}
+                        <button
+                          type="button" className="bl-del" disabled={busy}
+                          onClick={() => (row.lot ? setDelRow(row) : remove(`/visits/charges/${row.id}`, 'قلم'))}
+                        >
                           <Trash width="14" height="14" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
+
+                <Reconcile rec={data.reconcile} />
               </>
             ) : (
               <>
@@ -351,7 +404,91 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
             )}
           </>
         )}
+
+        {delRow && (
+          <DeleteAsk
+            row={delRow} busy={busy}
+            onClose={() => setDelRow(null)}
+            onPick={async (returnStock) => {
+              setDelRow(null);
+              await remove(`/visits/charges/${delRow.id}${returnStock ? '?returnStock=1' : ''}`, 'قلم');
+            }}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * سؤالِ حذفِ قلمِ مصرفی.
+ *
+ * دو دکمه، چون واقعاً دو حالتِ متفاوتِ دنیای واقعی است و سیستم نمی‌تواند حدس
+ * بزند کدام: پیچی که داخلِ بدنِ بیمار است هیچ‌وقت به انبار برنمی‌گردد، ولی
+ * پیچی که از ست در آمد و باز نشد باید برگردد.
+ */
+function DeleteAsk({ row, busy, onClose, onPick }) {
+  const lot = row.lot?.serialNo ? `سریال ${row.lot.serialNo}` : row.lot?.lotNo ? `لات ${row.lot.lotNo}` : `لات #${row.lot?.lotId}`;
+  return (
+    <div className="db-overlay bl-ask-wrap" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="glass bl-ask">
+        <b>حذفِ «{row.title}»</b>
+        <p>این قلم <span dir="ltr">{lot}</span> را از انبار خارج کرده است. کالا واقعاً مصرف شد؟</p>
+        <button type="button" className="db-submit" disabled={busy} onClick={() => onPick(false)}>
+          بله، مصرف شد — فقط قلمِ فاکتور حذف شود
+        </button>
+        <button type="button" className="bl-ask-alt" disabled={busy} onClick={() => onPick(true)}>
+          نه، مصرف نشد — به انبار برگردد
+        </button>
+        <button type="button" className="bl-ask-cancel" onClick={onClose}>انصراف</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * مغایرتِ فاکتور در برابر مصرف.
+ *
+ * هیچ‌کدام از این سه دسته «خطا» نیستند — واقعیتِ کارند و تصمیم با کاربر است.
+ * چیزی که تا حالا نبود، دیدنشان بود. همه از سرور آماده می‌آیند (قانون ۱۷)؛
+ * این‌جا فقط نمایش است.
+ */
+function Reconcile({ rec }) {
+  if (!rec) return null;
+  const { billedNotConsumed: nb = [], consumedNotBilled: cn = [], offStock: off = [] } = rec;
+  if (!nb.length && !cn.length && !off.length) return null;
+  return (
+    <div className="bl-rec">
+      <b>فاکتور در برابرِ مصرف</b>
+      {cn.length > 0 && (
+        <div className="bl-rec-g warn">
+          <span>مصرف شد ولی روی فاکتور نیست</span>
+          <ul>
+            {cn.map((m) => (
+              <li key={m.movementId}>
+                {m.itemName} ×{money(m.quantity)}
+                {(m.serialNo || m.lotNo) && <i dir="ltr"> {m.serialNo || m.lotNo}</i>}
+                {m.orphaned && <em> — قلمش از فاکتور حذف شده</em>}
+                {m.reason && <small> · {m.reason}</small>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {nb.length > 0 && (
+        <div className="bl-rec-g warn">
+          <span>روی فاکتور هست ولی از انبار خارج نشده</span>
+          <ul>{nb.map((x) => <li key={x.chargeId}>{x.title} ×{money(x.quantity)}</li>)}</ul>
+        </div>
+      )}
+      {off.length > 0 && (
+        <div className="bl-rec-g">
+          <span>عمداً خارج از انبارِ ما</span>
+          <ul>
+            {off.map((x) => <li key={x.chargeId}>{x.title} <i>{STOCK_EFFECTS[x.stockEffect]}</i></li>)}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

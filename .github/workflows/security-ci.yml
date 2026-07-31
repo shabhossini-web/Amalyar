@@ -269,8 +269,46 @@ jobs:
             if (!move.includes(rule)) { console.error('قاعدهٔ انبار در move غایب است: ' + rule); process.exit(1); }
           }
           const bill = fs.readFileSync('src/patients/billing.service.ts', 'utf8');
-          if (!/returnToStock/.test(bill)) { console.error('حذفِ قلمِ فاکتور باید کالا را با حرکتِ جبرانی برگرداند'); process.exit(1); }
+          // برگشت باید با حرکتِ جبرانی باشد، نه با حذفِ حرکتِ مصرف.
+          if (!/returnToStock/.test(bill)) { console.error('برگشتِ کالا باید با حرکتِ جبرانی باشد'); process.exit(1); }
           console.log('stock ledger ok');
+          "
+
+      - name: Verify the invoice line is decoupled from stock consumption
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const charge = schema.split('model Charge {')[1].split(/\n}/)[0];
+          // نیتِ قلم باید ثبت شود، وگرنه «مجازیِ عمدی» و «یادم رفت لات بزنم» یک شکل‌اند.
+          if (!/stockEffect/.test(charge)) { console.error('Charge.stockEffect لازم است'); process.exit(1); }
+          const bill = fs.readFileSync('src/patients/billing.service.ts', 'utf8');
+          for (const v of ['consumed', 'virtual', 'hospital']) {
+            if (!bill.includes(\"'\" + v + \"'\")) { console.error('اثرِ انبار غایب: ' + v); process.exit(1); }
+          }
+          const rm = bill.split('async removeCharge')[1].split(/\n  async /)[0];
+          // ⚠️ باگی که این گارد جلویش را می‌گیرد: حذفِ قلمِ فاکتور، پیچِ کارگذاشته‌شده
+          // را به موجودی برمی‌گرداند. برگشت فقط با پرچمِ صریحِ کاربر مجاز است.
+          if (!/if \(returnStock\)/.test(rm)) {
+            console.error('حذفِ قلم نباید خودکار کالا را برگرداند — باید پشتِ returnStock باشد'); process.exit(1);
+          }
+          if (/returnStock\s*=\s*true/.test(bill)) { console.error('returnStock نباید پیش‌فرضِ روشن باشد'); process.exit(1); }
+          // مصرفِ بدونِ فاکتور نباید از نما حذف شود: پرس‌وجوی حرکت‌ها باید کلِ
+          // مراجعه را بخواند. (ادعای مثبت، تا متنِ توضیحات گارد را نلغزاند.)
+          const get = bill.split('async get(')[1].split(/\n  async /)[0];
+          const mv = get.split('stockMovement.findMany')[1] || '';
+          if (!/where: \{ visitId \}/.test(mv.split('}),')[0])) {
+            console.error('نمای صورت‌حساب باید همهٔ حرکت‌های مراجعه را بخواند، نه فقط قلم‌دارها'); process.exit(1);
+          }
+          if (!/export function reconcile/.test(bill)) { console.error('تطبیقِ فاکتور/مصرف باید یک تابعِ مشترک باشد'); process.exit(1); }
+          // تطبیق باید خالص باشد وگرنه قلمِ برگشت‌خورده مغایرتِ جعلی می‌سازد.
+          if (!/net < 0/.test(bill.split('export function reconcile')[1])) {
+            console.error('تطبیق باید بر مبنای خالص باشد نه شمارشِ خام'); process.exit(1);
+          }
+          const ui = fs.readFileSync('../src/app/BillingSheet.jsx', 'utf8');
+          if (!/returnStock=1/.test(ui)) { console.error('UI باید سؤالِ برگشتِ کالا را بپرسد'); process.exit(1); }
+          console.log('billing/stock decoupling ok');
           "
 
       - name: Verify op duration is derived, never stored

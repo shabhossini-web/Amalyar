@@ -502,6 +502,15 @@ model Charge {
   /// کالای مصرف‌شده — رابطه است (برای گزارشِ مصرف) ولی نام و مبلغ کپی می‌شوند.
   item        Item?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
   itemId      Int?    @map("item_id")
+  /// اثرِ این قلم روی انبار — **صریح**، چون «قلمِ بدونِ حرکتِ انبار» سه معنیِ
+  /// کاملاً متفاوت دارد و بدونِ ثبتِ نیت، مغایرت‌گیری ناممکن است:
+  ///   `consumed` — کالای واقعیِ ما، از انبار کم می‌شود (lotId اجباری)
+  ///   `virtual`  — فقط روی فاکتور می‌آید: خدمت، قیمتِ توافقی، قلمِ تجمیعی
+  ///   `hospital` — کالای خودِ بیمارستان؛ فاکتور می‌کنیم، انبارِ ما دست نمی‌خورد
+  ///
+  /// بدونِ این فیلد، «قلمِ مجازیِ عمدی» از «کاربر یادش رفت لات را انتخاب کند»
+  /// قابلِ تشخیص نبود — و هر دو در دیتابیس دقیقاً یک شکل داشتند.
+  stockEffect String @default("virtual") @map("stock_effect")
   quantity  Int    @default(1)
   unitPrice Int    @map("unit_price") // تومان
   /// quantity × unitPrice، ذخیره‌شده تا تغییرِ بعدیِ قیمت، فاکتورِ قدیمی را عوض نکند.
@@ -513,6 +522,7 @@ model Charge {
 
   @@index([visitId])
   @@index([itemId])
+  @@index([stockEffect])
   @@map("charges")
 }
 

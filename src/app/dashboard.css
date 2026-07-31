@@ -407,6 +407,36 @@
   background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .25);
 }
 
+.bl-warn { color: #fbbf24; margin: 4px 0 0; }
+
+/* مغایرتِ فاکتور در برابرِ مصرف — نه خطا، نمای واقعیت */
+.bl-rec { margin-block-start: 14px; padding-block-start: 12px; border-block-start: 1px dashed rgba(255, 255, 255, .12); }
+.bl-rec > b { display: block; font-size: 12px; color: #a5b4fc; margin-block-end: 8px; }
+.bl-rec-g { margin-block-end: 9px; }
+.bl-rec-g > span {
+  display: inline-block; padding: 2px 9px; border-radius: 8px; font-size: 10.5px;
+  color: #a7f3d0; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .22);
+}
+.bl-rec-g.warn > span { color: #fcd34d; background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .25); }
+.bl-rec-g ul { margin: 6px 0 0; padding-inline-start: 18px; }
+.bl-rec-g li { font-size: 11.5px; line-height: 1.9; color: rgba(255, 255, 255, .84); }
+.bl-rec-g li i { font-style: normal; color: #c4b5fd; }
+.bl-rec-g li em { font-style: normal; color: #fca5a5; }
+.bl-rec-g li small { color: rgba(255, 255, 255, .5); }
+
+/* سؤالِ حذفِ قلمِ مصرفی */
+.bl-ask-wrap { z-index: 95; }
+.bl-ask { width: min(420px, 92vw); padding: 20px; border-radius: 18px; text-align: center; }
+.bl-ask > b { display: block; font-size: 14px; margin-block-end: 6px; }
+.bl-ask > p { font-size: 12.5px; line-height: 2; color: rgba(255, 255, 255, .78); margin: 0 0 14px; }
+.bl-ask .db-submit { width: 100%; margin-block-end: 8px; }
+.bl-ask-alt, .bl-ask-cancel {
+  width: 100%; padding: 10px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
+  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
+}
+.bl-ask-alt { margin-block-end: 8px; color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
+.bl-ask-cancel { color: rgba(255, 255, 255, .55); background: none; border-color: transparent; }
+
 /* ── جستجوی پیشرفته، سورت و صفحه‌بندی ── */
 .db-advbtn { position: relative; }
 .db-advbtn.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -32,10 +32,19 @@ export class BillingController {
     return this.billing.addCharge(id, dto, user);
   }
 
+  /**
+   * حذفِ قلم. `?returnStock=1` یعنی «کالا واقعاً مصرف نشد، به انبار برگردد» —
+   * صریح و پیش‌فرض خاموش، چون این ادعایی دربارهٔ دنیای فیزیکی است که فقط کاربر
+   * می‌تواند بکند، نه نتیجهٔ منطقیِ ویرایشِ فاکتور.
+   */
   @RequirePermissions('billing.write')
   @Delete('charges/:chargeId')
-  removeCharge(@Param('chargeId', ParseIntPipe) chargeId: number, @CurrentUser() user: any) {
-    return this.billing.removeCharge(chargeId, user);
+  removeCharge(
+    @Param('chargeId', ParseIntPipe) chargeId: number,
+    @Query('returnStock') returnStock: string | undefined,
+    @CurrentUser() user: any,
+  ) {
+    return this.billing.removeCharge(chargeId, user, returnStock === '1' || returnStock === 'true');
   }
 
   @RequirePermissions('billing.write')
