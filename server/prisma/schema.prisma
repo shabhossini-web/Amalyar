@@ -92,7 +92,8 @@ model Hospital {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
 
-  visits Visit[]
+  visits    Visit[]
+  transfers StockTransfer[]
 
   @@map("hospitals")
 }
@@ -226,7 +227,9 @@ model StockLot {
   /// شمارهٔ سریالِ یکتا (اگر کالا سریالی باشد).
   serialNo  String?   @unique @map("serial_no")
   expiresAt DateTime? @map("expires_at")
-  /// محلِ نگه‌داری: انبارِ مرکزی، ستِ ۲، امانیِ بیمارستانِ فلان.
+  /// **محلِ خانهٔ** لات — انبارِ خودمان که این لات از آن‌جا می‌رود و به آن‌جا
+  /// برمی‌گردد. محلِ *فعلیِ* هر تعداد، از دفتر مشتق می‌شود (`StockMovement.location`)،
+  /// چون یک لات می‌تواند همزمان چند جا باشد. «در دسترس» = موجودی در همین محل.
   location  String?
   notes     String?
   createdAt DateTime  @default(now()) @map("created_at")
@@ -269,13 +272,69 @@ model StockMovement {
   reason      String?
   /// شمارهٔ رسیدِ خرید، حواله، یا هر ارجاعِ بیرونی.
   reference   String?
+
+  /// **محلِ وقوعِ حرکت.** موجودیِ هر محل از جمعِ همین ستون مشتق می‌شود، دقیقاً
+  /// مثلِ خودِ موجودی که جمعِ `quantity` است.
+  ///
+  /// چرا ستونِ `StockLot.location` کافی نبود: یک لاتِ ۲۰تایی می‌تواند ۱۲ عددش
+  /// در ستِ بیمارستانِ الف باشد و ۸ عددش در انبار. «محلِ لات» برای چنین چیزی
+  /// سؤالِ غلطی است؛ سؤالِ درست «چند تا کجاست» است و جوابش فقط از دفتر می‌آید.
+  location    String?
+
+  /// حوالهٔ ارسال — دو پایهٔ یک انتقال (خروج از مبدأ، ورود به مقصد) را به هم می‌بندد.
+  transfer    StockTransfer? @relation(fields: [transferId], references: [id], onDelete: SetNull)
+  transferId  Int?     @map("transfer_id")
+
   createdById Int?     @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@index([lotId])
   @@index([visitId])
   @@index([chargeId])
+  @@index([transferId])
+  @@index([lotId, location])
   @@map("stock_movements")
+}
+
+/// حوالهٔ ارسال — سندِ سفرِ کالا از انبارِ ما به یک مقصد و برگشتش.
+///
+/// چرخهٔ واقعیِ شرکتِ ایمپلنت: ست به بیمارستان می‌رود → CSR استریل می‌کند →
+/// سرِ عمل بخشی مصرف می‌شود → بقیه برمی‌گردد. بدونِ این سند، «چند تا رفت و
+/// چند تا برگشت» قابلِ اثبات نیست و دعوای «یکی کم است» با بیمارستان راهِ حل
+/// ندارد. رسیدِ تحویلِ CSR (`receivedBy`) دقیقاً همین را حل می‌کند.
+///
+/// خودِ سند موجودی را جابه‌جا نمی‌کند؛ حرکت‌های `transfer` این کار را می‌کنند.
+/// سند فقط آن‌ها را به هم می‌بندد و امضا/تاریخ را نگه می‌دارد.
+model StockTransfer {
+  id           Int     @id @default(autoincrement())
+  /// HV-NNNN — شمارهٔ حواله روی برگهٔ چاپی.
+  code         String  @unique
+  fromLocation String  @map("from_location")
+  toLocation   String  @map("to_location")
+
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalId Int?      @map("hospital_id")
+  /// عملی که این ست برایش رفته — مبنای «این ست فردا آزاد است؟»
+  visit      Visit?    @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId    Int?      @map("visit_id")
+
+  /// sent | received | closed
+  status     String    @default("sent")
+  sentAt     DateTime  @default(now()) @map("sent_at")
+  receivedAt DateTime? @map("received_at")
+  /// نامِ تحویل‌گیرندهٔ CSR.
+  receivedBy String?   @map("received_by")
+  notes      String?
+
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  movements StockMovement[]
+
+  @@index([status])
+  @@index([visitId])
+  @@index([hospitalId])
+  @@map("stock_transfers")
 }
 
 /// تشخیص — همان استدلالِ ProcedureType. icdCode برای نگاشتِ بعدی به ICD-10.
@@ -649,6 +708,7 @@ model Visit {
   charges        Charge[]
   payments       Payment[]
   stockMovements StockMovement[]
+  stockTransfers StockTransfer[]
 
   @@unique([patientId, seq])
   @@index([patientId])

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, ValidateIf } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 
 export class LotCreateDto {
   @Type(() => Number) @IsInt({ message: 'کالای انتخابی نامعتبر است' })
@@ -54,4 +54,46 @@ export class AdjustDto {
   counted!: number;
 
   @IsOptional() @IsString() @MaxLength(120) reason?: string;
+}
+
+/** یک قلمِ حواله: کدام لات، چند تا. */
+export class TransferLineDto {
+  @Type(() => Number) @IsInt({ message: 'لاتِ انتخابی نامعتبر است' })
+  lotId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(1, { message: 'تعداد باید بیشتر از صفر باشد' })
+  quantity!: number;
+}
+
+/**
+ * ارسالِ ست.
+ *
+ * `fromLocation` اختیاری است و پیش‌فرضش محلِ خانهٔ لات — کاربری که ست را از
+ * انبارِ همیشگی می‌فرستد نباید مجبور باشد اسمش را تایپ کند.
+ */
+export class TransferSendDto {
+  @IsString() @MinLength(2, { message: 'مقصد را وارد کنید' }) @MaxLength(80, { message: 'نامِ مقصد طولانی است' })
+  toLocation!: string;
+
+  @IsOptional() @IsString() @MaxLength(80) fromLocation?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'بیمارستانِ انتخابی نامعتبر است' })
+  hospitalId?: number;
+
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'مراجعهٔ انتخابی نامعتبر است' })
+  visitId?: number;
+
+  @IsArray({ message: 'قلم‌های حواله نامعتبر است' })
+  @ArrayMinSize(1, { message: 'حواله بدونِ قلم معنا ندارد' })
+  @ValidateNested({ each: true })
+  @Type(() => TransferLineDto)
+  lines!: TransferLineDto[];
+
+  @IsOptional() @IsString() @MaxLength(300) notes?: string;
+}
+
+/** رسیدِ CSR — نامِ تحویل‌گیرنده اجباری است، چون همان چیزی است که سند را سند می‌کند. */
+export class TransferReceiveDto {
+  @IsString() @MinLength(2, { message: 'نامِ تحویل‌گیرنده را وارد کنید' }) @MaxLength(80)
+  receivedBy!: string;
 }

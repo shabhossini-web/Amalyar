@@ -39,6 +39,8 @@ export default function Inventory() {
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(null); // {lot, mode}
   const [tracing, setTracing] = useState(null);
+  const [tab, setTab] = useState('lots');
+  const [openTransfers, setOpenTransfers] = useState(0);
 
   useEffect(() => { document.title = 'عمل‌یار — انبار'; }, []);
   useEffect(() => {
@@ -64,8 +66,16 @@ export default function Inventory() {
     return () => clearTimeout(t);
   }, [load, q]);
 
+  /// شمارندهٔ حواله‌های باز روی تب — تا «ستی که برنگشته» فراموش نشود.
+  useEffect(() => {
+    api('/stock/transfers')
+      .then((t) => setOpenTransfers(t.filter((x) => x.status !== 'closed').length))
+      .catch(() => setOpenTransfers(0));
+  }, [tab]);
+
   const inStock = rows.filter((r) => r.quantity > 0).length;
   const expiredCount = rows.filter((r) => r.expired && r.quantity > 0).length;
+  const outCount = rows.reduce((s, r) => s + (r.outside?.reduce((a, o) => a + o.quantity, 0) ?? 0), 0);
 
   return (
     <div className="iv">
@@ -78,9 +88,21 @@ export default function Inventory() {
         </div>
       </header>
 
+      <div className="iv-tabs">
+        <button type="button" className={tab === 'lots' ? 'on' : ''} onClick={() => setTab('lots')}>لات‌ها</button>
+        <button type="button" className={tab === 'transfers' ? 'on' : ''} onClick={() => setTab('transfers')}>
+          حواله‌ها{openTransfers ? <i>{num(openTransfers)}</i> : null}
+        </button>
+      </div>
+
+      {tab === 'transfers' ? (
+        <Transfers onToast={setToast} onChanged={load} />
+      ) : (
+      <>
       <div className="iv-stats">
         <div><b>{num(rows.length)}</b><span>لات</span></div>
         <div><b>{num(inStock)}</b><span>دارای موجودی</span></div>
+        <div className={outCount ? 'iv-warn' : ''}><b>{num(outCount)}</b><span>بیرون از انبار</span></div>
         <div className={expiredCount ? 'iv-warn' : ''}><b>{num(expiredCount)}</b><span>منقضیِ موجود</span></div>
       </div>
 
@@ -112,9 +134,13 @@ export default function Inventory() {
         )}
         {!loading && rows.map((lot) => (
           <article key={lot.id} className={`iv-row${lot.quantity <= 0 ? ' zero' : ''}${lot.expired ? ' exp' : ''}`}>
+            {/* عددِ بزرگ «در دسترس» است نه «کل»: کالایی که در بیمارستان است
+                موجود هست ولی نمی‌شود دوباره تعهدش کرد، و همین تفاوت است که
+                چینشِ غلط می‌سازد. کل زیرش می‌آید، فقط وقتی فرق دارد. */}
             <div className="iv-qty">
-              <b>{num(lot.quantity)}</b>
+              <b>{num(lot.available)}</b>
               <span>{lot.unit}</span>
+              {lot.available !== lot.quantity && <i className="iv-oftotal">از {num(lot.quantity)}</i>}
             </div>
             <div className="iv-row-main">
               <b>{lot.itemName}{lot.itemSize ? ` — ${lot.itemSize}` : ''}</b>
@@ -131,6 +157,13 @@ export default function Inventory() {
                   : <span>بدونِ تاریخِ انقضا</span>}
                 {lot.itemPrice != null && ` · ${money(lot.itemPrice)}`}
               </small>
+              {lot.outside?.length > 0 && (
+                <small className="iv-out">
+                  {lot.outside.map((o) => (
+                    <i key={o.location}>{o.location}: {num(o.quantity)}</i>
+                  ))}
+                </small>
+              )}
             </div>
             <div className="iv-acts">
               <button type="button" onClick={() => setMoving({ lot, mode: 'in' })}>ورود</button>
@@ -143,6 +176,8 @@ export default function Inventory() {
           </article>
         ))}
       </div>
+      </>
+      )}
 
       {adding && (
         <LotSheet
@@ -165,6 +200,294 @@ export default function Inventory() {
       {toast && <div className="iv-toast" role="status">{toast}</div>}
     </div>
   );
+}
+
+/**
+ * حواله‌ها — سفرِ ست به بیمارستان و برگشتش.
+ *
+ * چرخه: ارسال → رسیدِ CSR → مصرفِ سرِ عمل → برگشتِ مانده. تعدادِ برگشتی را
+ * کاربر وارد نمی‌کند؛ از دفتر می‌آید. اگر کاربر عدد بزند، همان‌جاست که
+ * «۳۴ تا فرستادم، ۳۳ تا زدم» به مغایرتِ دائمی تبدیل می‌شود.
+ */
+function Transfers({ onToast, onChanged }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(null);   // شناسهٔ حوالهٔ بازشده
+  const [sending, setSending] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setRows(await api('/stock/transfers')); }
+    catch (e) { onToast(e.message); setRows([]); }
+    finally { setLoading(false); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <>
+      <div className="iv-toolbar">
+        <p className="iv-note">
+          ستی که به بیمارستان می‌رود از انبار کم نمی‌شود، ولی از «در دسترس» کم می‌شود.
+        </p>
+        <button type="button" className="iv-add" onClick={() => setSending(true)}>
+          <Plus width="16" height="16" /> حوالهٔ جدید
+        </button>
+      </div>
+
+      <div className="iv-list">
+        {loading && <div className="iv-empty">در حال بارگذاری…</div>}
+        {!loading && rows.length === 0 && (
+          <div className="iv-empty">هنوز حواله‌ای صادر نشده — با «حوالهٔ جدید» ستِ ارسالی را ثبت کنید</div>
+        )}
+        {!loading && rows.map((t) => (
+          <article key={t.id} className={`iv-row iv-tr st-${t.status}`}>
+            <div className="iv-qty"><b dir="ltr">{t.code.replace('HV-', '')}</b><span>حواله</span></div>
+            <div className="iv-row-main">
+              <b>{t.toLocation}</b>
+              <small>{t.fromLocation} ← {t.hospitalName || 'بدونِ بیمارستان'} · {num(t.lineCount)} قلم</small>
+              <small className="iv-sub2">
+                <span className={`iv-tag s-${t.status}`}>{t.statusLabel}</span>
+                {' '}ارسال: {faDate(t.sentAt)}
+                {t.receivedBy && ` · تحویل: ${t.receivedBy}`}
+              </small>
+            </div>
+            <div className="iv-acts">
+              <button type="button" onClick={() => setOpen(t.id)}>جزئیات</button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {sending && (
+        <TransferSheet
+          onClose={() => setSending(false)}
+          onSaved={async (msg) => { setSending(false); onToast(msg); await load(); onChanged?.(); }}
+          onError={onToast}
+        />
+      )}
+      {open && (
+        <TransferDetail
+          id={open}
+          onClose={() => setOpen(null)}
+          onChanged={async (msg) => { onToast(msg); await load(); onChanged?.(); }}
+          onError={onToast}
+        />
+      )}
+    </>
+  );
+}
+
+/** صدورِ حواله: مقصد + چند لات. لات‌ها فقط از موجودیِ **در دسترس** انتخاب می‌شوند. */
+function TransferSheet({ onClose, onSaved, onError }) {
+  const [q, setQ] = useState('');
+  const [hits, setHits] = useState([]);
+  const [lines, setLines] = useState([]); // [{lot, quantity}]
+  const [form, setForm] = useState({ toLocation: '', hospitalId: '', notes: '' });
+  const [hospitals, setHospitals] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { api('/hospitals').then(setHospitals).catch(() => setHospitals([])); }, []);
+
+  useEffect(() => {
+    if (q.trim().length < 2) { setHits([]); return undefined; }
+    let alive = true;
+    const t = setTimeout(() => {
+      api(`/stock/lots?q=${encodeURIComponent(q.trim())}&inStock=1`)
+        .then((r) => { if (alive) setHits(r.filter((x) => x.available > 0 && !x.expired)); })
+        .catch(() => { if (alive) setHits([]); });
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [q]);
+
+  const add = (lot) => {
+    setQ(''); setHits([]);
+    if (lines.some((l) => l.lot.id === lot.id)) return;
+    setLines((s) => [...s, { lot, quantity: String(lot.available) }]);
+  };
+
+  const submit = async () => {
+    if (!form.toLocation.trim()) { onError('مقصد را وارد کنید'); return; }
+    if (!lines.length) { onError('حداقل یک لات به حواله اضافه کنید'); return; }
+    setBusy(true);
+    try {
+      const t = await api('/stock/transfers', {
+        method: 'POST',
+        body: {
+          toLocation: form.toLocation.trim(),
+          hospitalId: form.hospitalId ? Number(form.hospitalId) : undefined,
+          notes: form.notes.trim() || undefined,
+          lines: lines.map((l) => ({ lotId: l.lot.id, quantity: Number(toEnDigits(l.quantity)) || 0 })),
+        },
+      });
+      onSaved(`حوالهٔ ${t.code} صادر شد ✓`);
+    } catch (e) { onError(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Overlay title="حوالهٔ جدید" onClose={onClose}>
+      <label className="iv-field"><span>مقصد *</span>
+        <input value={form.toLocation} onChange={(e) => setForm((s) => ({ ...s, toLocation: e.target.value }))}
+               placeholder="مثلاً: بیمارستانِ رضوی — CSR" />
+      </label>
+      <label className="iv-field"><span>بیمارستان (اختیاری)</span>
+        <select value={form.hospitalId} onChange={(e) => setForm((s) => ({ ...s, hospitalId: e.target.value }))}>
+          <option value="">—</option>
+          {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+        </select>
+      </label>
+
+      <div className="iv-field">
+        <span>افزودنِ لات</span>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="نامِ کالا، شمارهٔ لات یا سریال" />
+        {hits.length > 0 && (
+          <div className="iv-hits">
+            {hits.map((l) => (
+              <button key={l.id} type="button" onClick={() => add(l)}>
+                <b>{num(l.available)}</b>
+                <span>{l.itemName}{l.itemSize ? ` — ${l.itemSize}` : ''} · {l.serialNo || l.lotNo || `#${l.id}`}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {lines.length > 0 && (
+        <div className="iv-lines">
+          {lines.map((l, i) => (
+            <div key={l.lot.id} className="iv-line">
+              <span>{l.lot.itemName} · {l.lot.serialNo || l.lot.lotNo || `#${l.lot.id}`}</span>
+              <input dir="ltr" inputMode="numeric" value={l.quantity}
+                     onChange={(e) => setLines((s) => s.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
+              <small>از {num(l.lot.available)}</small>
+              <button type="button" onClick={() => setLines((s) => s.filter((_, j) => j !== i))}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <label className="iv-field"><span>یادداشت</span>
+        <input value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} placeholder="مثلاً: ستِ فیوژن کمری" />
+      </label>
+      <Foot busy={busy} onClose={onClose} onSubmit={submit} label="صدور و ارسال" />
+    </Overlay>
+  );
+}
+
+/** جزئیاتِ حواله: چه رفت، چه مصرف شد، چه مانده — و دو عملِ رسید و برگشت. */
+function TransferDetail({ id, onClose, onChanged, onError }) {
+  const [t, setT] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [csr, setCsr] = useState('');
+
+  const load = useCallback(async () => {
+    try { setT(await api(`/stock/transfers/${id}`)); }
+    catch (e) { onError(e.message); onClose(); }
+  }, [id, onError, onClose]);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (path, body, msg) => {
+    setBusy(true);
+    try {
+      await api(path, { method: 'POST', body });
+      await load(); onChanged(msg);
+    } catch (e) { onError(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Overlay title={t ? `حوالهٔ ${t.code}` : 'حواله'} onClose={onClose}>
+      {!t ? <div className="iv-empty">در حال بارگذاری…</div> : (
+        <>
+          <div className="iv-trmeta">
+            <div><b>{t.fromLocation}</b><span>مبدأ</span></div>
+            <div><b>{t.toLocation}</b><span>مقصد</span></div>
+            <div><b>{t.statusLabel}</b><span>وضعیت</span></div>
+          </div>
+          <div className="iv-stats iv-trtot">
+            <div><b>{num(t.totals.sent)}</b><span>ارسال</span></div>
+            <div><b>{num(t.totals.used)}</b><span>مصرف</span></div>
+            <div className={t.totals.remaining ? 'iv-warn' : ''}><b>{num(t.totals.remaining)}</b><span>مانده در مقصد</span></div>
+          </div>
+
+          <div className="iv-trlines">
+            {t.lines.map((l) => (
+              <div key={l.movementId} className="iv-trline">
+                <b>{l.itemName}{l.itemSize ? ` — ${l.itemSize}` : ''}</b>
+                <small dir="ltr">{l.serialNo || l.lotNo || `#${l.lotId}`}</small>
+                <span>ارسال {num(l.sent)} · مصرف {num(l.used)} · مانده {num(l.remaining)}</span>
+              </div>
+            ))}
+          </div>
+
+          {t.receivedBy ? (
+            <p className="iv-note">تحویلِ CSR: <b>{t.receivedBy}</b> — {faDate(t.receivedAt)}</p>
+          ) : (
+            <label className="iv-field"><span>رسیدِ تحویل به CSR</span>
+              <input value={csr} onChange={(e) => setCsr(e.target.value)} placeholder="نامِ تحویل‌گیرنده" />
+              <button type="button" className="iv-mini" disabled={busy}
+                      onClick={() => act(`/stock/transfers/${id}/receive`, { receivedBy: csr.trim() }, 'رسیدِ CSR ثبت شد ✓')}>
+                ثبتِ رسید
+              </button>
+            </label>
+          )}
+
+          <div className="iv-tracts">
+            <button type="button" className="iv-mini" onClick={() => printTransfer(t)}>چاپِ حواله</button>
+            {t.status !== 'closed' && (
+              <button type="button" className="iv-mini warn" disabled={busy}
+                      onClick={() => act(`/stock/transfers/${id}/return`, undefined, 'ماندهٔ حواله برگشت خورد ✓')}>
+                برگشتِ مانده و بستنِ حواله
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </Overlay>
+  );
+}
+
+/**
+ * برگهٔ حواله — سندِ کاغذی که CSR امضا می‌کند.
+ *
+ * پنجرهٔ جدا با سندِ سفیدِ خودبسنده، به همان دلیلِ خروجیِ فهرستِ مراجعات: تمِ
+ * تیره و شیشه‌ای برای چاپ باید یکی‌یکی بازنویسی شود و باز هم مرورگرها فرق دارند.
+ */
+function printTransfer(t) {
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const rows = t.lines.map((l) => `<tr>
+    <td>${esc(l.itemName)}${l.itemSize ? ` — ${esc(l.itemSize)}` : ''}</td>
+    <td dir="ltr">${esc(l.serialNo || l.lotNo || '—')}</td>
+    <td dir="ltr">${l.expiresAt ? esc(faDate(l.expiresAt)) : '—'}</td>
+    <td class="n">${num(l.sent)}</td><td class="n">${num(l.used)}</td><td class="n">${num(l.remaining)}</td>
+  </tr>`).join('');
+  const w = window.open('', '_blank');
+  if (!w) return;
+  w.document.write(`<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<title>حوالهٔ ${esc(t.code)}</title><style>
+  @page { size: A4; margin: 14mm; }
+  body { font-family: Vazirmatn, Tahoma, sans-serif; color: #111; font-size: 11pt; }
+  h1 { font-size: 15pt; margin: 0 0 4px; }
+  .meta { font-size: 10pt; line-height: 2; margin-block-end: 10px; }
+  table { width: 100%; border-collapse: collapse; margin-block-end: 26px; }
+  th, td { border: 1px solid #888; padding: 5px 7px; text-align: right; }
+  th { background: #eee; }
+  td.n { text-align: center; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sign { display: flex; gap: 40px; font-size: 10pt; }
+  .sign div { flex: 1; border-top: 1px solid #333; padding-block-start: 6px; }
+</style></head><body>
+<h1>حوالهٔ ارسال — ${esc(t.code)}</h1>
+<div class="meta">
+  مبدأ: ${esc(t.fromLocation)} &nbsp;·&nbsp; مقصد: ${esc(t.toLocation)}<br>
+  تاریخِ ارسال: ${esc(faDate(t.sentAt))}
+  ${t.receivedBy ? ` &nbsp;·&nbsp; تحویل‌گیرندهٔ CSR: ${esc(t.receivedBy)} (${esc(faDate(t.receivedAt))})` : ''}
+  ${t.notes ? `<br>${esc(t.notes)}` : ''}
+</div>
+<table><thead><tr><th>کالا</th><th>لات / سریال</th><th>انقضا</th><th>ارسال</th><th>مصرف</th><th>مانده</th></tr></thead>
+<tbody>${rows}</tbody></table>
+<div class="sign"><div>امضای تحویل‌دهنده</div><div>امضا و مهرِ تحویل‌گیرنده (CSR)</div></div>
+</body></html>`);
+  w.document.close(); w.focus();
+  setTimeout(() => w.print(), 350);
 }
 
 /** ثبتِ لاتِ تازه‌رسیده. کالا از کاتالوگ انتخاب می‌شود — تایپِ آزاد نداریم. */

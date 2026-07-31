@@ -192,3 +192,66 @@
   background: rgba(18, 13, 49, .96); border: 1px solid rgba(139, 92, 246, .3);
   box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
 }
+
+/* ── تب‌ها: لات‌ها / حواله‌ها ── */
+.iv-tabs { display: flex; gap: 8px; margin-block-end: 14px; }
+.iv-tabs button {
+  flex: 1; padding: 11px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
+  color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .12);
+}
+.iv-tabs button.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--brand-2, #7c3aed), var(--brand-dark, #4c1d95)); }
+.iv-tabs button i {
+  display: inline-block; min-width: 18px; margin-inline-start: 6px; padding: 0 5px; border-radius: 9px;
+  font-style: normal; font-size: 11px; background: rgba(251, 191, 36, .22); color: #fcd34d;
+}
+
+/* موجودیِ کل زیرِ «در دسترس» — فقط وقتی فرق دارند */
+.iv-oftotal { display: block; font-style: normal; font-size: 9.5px; color: rgba(255, 255, 255, .45); }
+.iv-out { display: flex; flex-wrap: wrap; gap: 5px; margin-block-start: 4px; }
+.iv-out i {
+  font-style: normal; font-size: 10px; padding: 1px 8px; border-radius: 8px;
+  color: #fcd34d; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .24);
+}
+
+/* ── حواله‌ها ── */
+.iv-note { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.9; color: rgba(255, 255, 255, .6); }
+.iv-tr .iv-qty b { font-size: 15px; }
+.iv-tag { padding: 1px 8px; border-radius: 8px; font-size: 10px; }
+.iv-tag.s-sent     { color: #93c5fd; background: rgba(59, 130, 246, .12); }
+.iv-tag.s-received { color: #fcd34d; background: rgba(251, 191, 36, .12); }
+.iv-tag.s-closed   { color: #6ee7b7; background: rgba(52, 211, 153, .12); }
+.iv-row.st-closed { opacity: .72; }
+
+.iv-hits { margin-block-start: 6px; max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+.iv-hits button {
+  display: flex; gap: 9px; align-items: baseline; text-align: right; cursor: pointer;
+  color: inherit; background: none; border: 0; border-radius: 9px; padding: 7px 9px; font: inherit; font-size: 12px;
+}
+.iv-hits button:hover { background: rgba(124, 58, 237, .18); }
+.iv-hits b { flex-shrink: 0; color: #6ee7b7; }
+
+.iv-lines { display: flex; flex-direction: column; gap: 6px; margin-block-end: 12px; }
+.iv-line { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.iv-line > span { flex: 1; }
+.iv-line input { width: 68px; text-align: center; }
+.iv-line small { color: rgba(255, 255, 255, .45); font-size: 10px; }
+.iv-line button { width: 26px; height: 26px; border-radius: 8px; cursor: pointer; color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25); }
+
+.iv-trmeta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-block-end: 12px; }
+.iv-trmeta div { padding: 9px; border-radius: 12px; background: rgba(255, 255, 255, .04); text-align: center; }
+.iv-trmeta b { display: block; font-size: 12px; }
+.iv-trmeta span { font-size: 10px; color: rgba(255, 255, 255, .5); }
+.iv-trtot { margin-block-end: 12px; }
+.iv-trlines { display: flex; flex-direction: column; gap: 7px; margin-block-end: 12px; }
+.iv-trline { padding: 9px 11px; border-radius: 12px; background: rgba(255, 255, 255, .04); font-size: 12px; }
+.iv-trline b { display: block; }
+.iv-trline small { color: rgba(255, 255, 255, .5); font-size: 10.5px; }
+.iv-trline span { display: block; margin-block-start: 3px; font-size: 11px; color: #a5b4fc; }
+
+.iv-tracts { display: flex; gap: 8px; }
+.iv-mini {
+  padding: 9px 13px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
+  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
+}
+.iv-mini.warn { color: #fcd34d; border-color: rgba(251, 191, 36, .3); }

@@ -274,6 +274,43 @@ jobs:
           console.log('stock ledger ok');
           "
 
+      - name: Verify lot location is a ledger, not a column
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const mv = schema.split('model StockMovement {')[1].split(/\n}/)[0];
+          if (!/location/.test(mv)) { console.error('StockMovement.location لازم است'); process.exit(1); }
+          if (!/model StockTransfer/.test(schema)) { console.error('سندِ حواله لازم است'); process.exit(1); }
+          const svc = fs.readFileSync('src/patients/inventory.service.ts', 'utf8');
+          // محلِ فعلی مثلِ موجودی مشتق است، نه ستونِ ذخیره‌شده.
+          if (!/export function balanceByLocation/.test(svc)) {
+            console.error('موجودیِ هر محل باید از یک فرمولِ مشترک بیاید'); process.exit(1);
+          }
+          const tr = schema.split('model StockTransfer {')[1].split(/\n}/)[0];
+          for (const cached of ['quantity', 'sentQty', 'remaining']) {
+            if (new RegExp('^\\\\s*' + cached + '\\\\s', 'mi').test(tr)) {
+              console.error('تعدادِ حواله باید از دفتر بیاید؛ StockTransfer.' + cached + ' ممنوع است'); process.exit(1);
+            }
+          }
+          // کنترلِ per-location وگرنه می‌شود از انبار «سرِ عملِ بیمارستان» مصرف زد.
+          const move = svc.split('private async move')[1].split(/\n  }/)[0];
+          if (!/here < 0/.test(move)) { console.error('move باید موجودیِ همان محل را کنترل کند'); process.exit(1); }
+          // ⚠️ «مصرف» نباید از تفریقِ ارسال و مانده بیاید: پس از برگشتِ مانده،
+          // آن تفریق کلِ ارسال را مصرف می‌شمارد.
+          const detail = svc.split('async transfer(')[1].split(/\n  async /)[0];
+          if (!/transferId: t.id, kind: 'out'/.test(detail)) {
+            console.error('مصرفِ حواله باید از حرکت‌های گره‌خورده به همان حواله بیاید'); process.exit(1);
+          }
+          // تعدادِ برگشتی از دفتر می‌آید نه از کاربر.
+          const back = svc.split('async returnTransfer')[1].split(/\n  async /)[0];
+          if (/dto\./.test(back)) { console.error('برگشتِ مانده نباید تعداد از کاربر بگیرد'); process.exit(1); }
+          const ui = fs.readFileSync('../src/app/Inventory.jsx', 'utf8');
+          if (!/lot.available/.test(ui)) { console.error('UI باید «در دسترس» را از «کل» جدا نشان دهد'); process.exit(1); }
+          console.log('lot journey ok');
+          "
+
       - name: Verify the invoice line is decoupled from stock consumption
         working-directory: server
         run: |

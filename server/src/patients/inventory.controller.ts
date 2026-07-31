@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, TransferReceiveDto, TransferSendDto } from './dto/inventory.dto';
 
 /**
  * انبار — لات، سریال، دفترِ حرکت و ردیابی.
@@ -97,6 +97,40 @@ export class InventoryController {
   @Post('lots/:id/adjust')
   adjust(@Param('id', ParseIntPipe) id: number, @Body() dto: AdjustDto, @CurrentUser() user: any) {
     return this.inv.adjust(id, dto.counted, dto.reason, user);
+  }
+
+  // ── حواله‌ها: سفرِ ست به بیمارستان و برگشتش ──
+
+  @RequirePermissions('inventory.read')
+  @Get('transfers')
+  transfers(@Query('status') status?: string, @Query('visit') visit?: string) {
+    return this.inv.listTransfers({ status, visitId: visit ? Number(visit) : undefined });
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get('transfers/:id')
+  transfer(@Param('id', ParseIntPipe) id: number) {
+    return this.inv.transfer(id);
+  }
+
+  @RequirePermissions('inventory.write')
+  @Post('transfers')
+  send(@Body() dto: TransferSendDto, @CurrentUser() user: any) {
+    return this.inv.sendTransfer(dto, user);
+  }
+
+  /// رسیدِ CSR — موجودی جابه‌جا نمی‌شود، فقط امضا و ساعت ثبت می‌شود.
+  @RequirePermissions('inventory.write')
+  @Post('transfers/:id/receive')
+  csr(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferReceiveDto, @CurrentUser() user: any) {
+    return this.inv.receiveTransfer(id, dto, user);
+  }
+
+  /// برگشتِ مانده — تعداد از دفتر می‌آید نه از کاربر.
+  @RequirePermissions('inventory.write')
+  @Post('transfers/:id/return')
+  back(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.inv.returnTransfer(id, user);
   }
 }
 
