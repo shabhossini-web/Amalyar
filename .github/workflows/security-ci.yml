@@ -274,6 +274,48 @@ jobs:
           console.log('stock ledger ok');
           "
 
+      - name: Verify share split is one formula and the ledger is append-only
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const svc = fs.readFileSync('src/patients/settlement.service.ts', 'utf8');
+          if (!/export function computeShares/.test(svc)) {
+            console.error('تقسیمِ سهم باید یک فرمولِ خالصِ مشترک باشد'); process.exit(1);
+          }
+          // ثابتِ نگهبان: جمعِ ردیف‌ها همیشه برابرِ درآمد. با هزینهٔ منفی می‌شکست.
+          if (!/checksum/.test(svc)) { console.error('checksum لازم است'); process.exit(1); }
+          const compute = svc.split('export function computeShares')[1].split(/\n}/)[0];
+          if (/amount: -input.cost/.test(compute)) {
+            console.error('قلمِ هزینه نباید منفی باشد — checksum را برابرِ revenue-2×cost می‌کند'); process.exit(1);
+          }
+          if (!/remainder - given/.test(compute)) {
+            console.error('باقی‌ماندهٔ گِردکردن باید به آخرین شریک برسد وگرنه ریال گم می‌شود'); process.exit(1);
+          }
+          // تسویه نسخه‌دار است: محاسبهٔ دوباره نسخهٔ تازه می‌سازد، نه ویرایش.
+          if (/settlement\.update\(\{ where: \{ id: [a-z.]+ \}, data: \{ (revenue|entries)/.test(svc)) {
+            console.error('تسویه نباید در جای خودش بازنویسی شود'); process.exit(1);
+          }
+          if (/shareEntry\.(update|delete)/.test(svc)) { console.error('دفترِ سهم فقط‌افزودنی است'); process.exit(1); }
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const entry = schema.split('model ShareEntry {')[1].split(/\n}/)[0];
+          // نام و مبنا عکس‌اند نه رابطه: حذفِ جراح نباید سابقهٔ مالی را ببرد.
+          for (const f of ['partyName', 'basis']) {
+            if (!new RegExp(f).test(entry)) { console.error('ShareEntry.' + f + ' لازم است'); process.exit(1); }
+          }
+          if (/partyId\s+Int\?\s+@relation/.test(entry)) {
+            console.error('partyId نباید رابطهٔ FK باشد — حذفِ طرف سابقهٔ مالی را پاک می‌کند'); process.exit(1);
+          }
+          // قرارداد تاریخ‌دار است و «آخرین» نیست، «معتبر در آن تاریخ» است.
+          if (!/effectiveFrom: \{ lte: when \}/.test(svc)) {
+            console.error('قرارداد باید بر اساسِ تاریخِ عمل انتخاب شود نه آخرین ردیف'); process.exit(1);
+          }
+          if (!/!== 100/.test(svc)) { console.error('جمعِ درصدِ شرکا باید کنترل شود'); process.exit(1); }
+          const stats = fs.readFileSync('src/patients/patients.service.ts', 'utf8');
+          if (!/byPayer/.test(stats)) { console.error('ماندهٔ per-counterparty لازم است'); process.exit(1); }
+          console.log('share split ok');
+          "
+
       - name: Verify lot location is a ledger, not a column
         working-directory: server
         run: |

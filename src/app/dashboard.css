@@ -498,3 +498,36 @@
 .db-expbtn { width: 32px; height: 30px; }
 /* لینکِ تعاریف در نوارِ ابزار — مثل دکمه دیده شود، نه لینکِ آبی. */
 a.db-defbtn { text-decoration: none; }
+
+/* ── تسویه (تقسیمِ سهم) داخلِ صورت‌حساب ── */
+.bl-split { padding-block-start: 4px; }
+.bl-warns { margin-block-end: 12px; }
+.bl-warns p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.9; color: #fcd34d; }
+.bl-splithead { font-size: 11.5px; color: rgba(255, 255, 255, .55); margin-block-end: 10px; }
+.bl-vtag { display: inline-block; padding: 2px 9px; margin-inline-end: 7px; border-radius: 8px; font-size: 10.5px; }
+.bl-vtag.draft { color: #fcd34d; background: rgba(251, 191, 36, .12); }
+.bl-vtag.final { color: #6ee7b7; background: rgba(52, 211, 153, .12); }
+
+.bl-shares { display: flex; flex-direction: column; gap: 6px; margin-block-end: 12px; }
+.bl-share {
+  display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); font-size: 12px;
+}
+.bl-share b { min-width: 108px; }
+.bl-share b small { display: block; font-size: 10px; color: rgba(255, 255, 255, .5); font-weight: 400; }
+.bl-share span { flex: 1; font-size: 10.5px; color: rgba(255, 255, 255, .45); }
+.bl-share i { font-style: normal; font-weight: 700; }
+.bl-share.total { background: rgba(124, 58, 237, .14); border-color: rgba(124, 58, 237, .3); }
+.bl-share.p-surgeon i { color: #93c5fd; }
+.bl-share.p-tech i    { color: #6ee7b7; }
+.bl-share.p-cost i    { color: #fca5a5; }
+.bl-share.p-partner i { color: #c4b5fd; }
+
+.bl-stale { font-size: 11.5px; line-height: 1.9; color: #fcd34d; margin: 0 0 12px; }
+.bl-splitacts { display: flex; gap: 8px; }
+.bl-splitacts .db-submit { flex: 1; }
+.bl-mini {
+  padding: 10px 14px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
+  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
+}
+.bl-mini.warn { flex: 1; color: #fcd34d; border-color: rgba(251, 191, 36, .3); }

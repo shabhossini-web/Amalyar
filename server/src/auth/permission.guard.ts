@@ -38,6 +38,10 @@ export const PERMISSION_DEFAULTS: Record<string, number> = {
   // این اجازه، اجازهٔ ساختِ لات یا صدورِ حواله نشود. دامنه‌اش هم محدود است —
   // کارشناس فقط حواله‌های عملی را می‌بیند که خودش کارشناسش بوده.
   'stock.consume': LEVEL.TECH,
+  // حسابداری از صورت‌حساب جداست: کسی که فاکتورِ بیمار را می‌بندد لازم نیست
+  // سهمِ جراح و درصدِ شرکا را ببیند، و برعکس.
+  'accounting.read': LEVEL.ADMIN,
+  'accounting.manage': LEVEL.ADMIN,
   'definitions.read': LEVEL.TECH,
   'definitions.manage': LEVEL.ADMIN,
   'users.manage': LEVEL.SUPER_ADMIN,

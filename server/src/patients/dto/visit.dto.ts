@@ -6,10 +6,13 @@ import {
   IsString,
   Matches,
   MaxLength,
+  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { EnDigits, IsNationalId } from '../../common/validators';
+import { PAYERS } from '../settlement.service';
 
 /** نوعِ ملاقات — فهرستِ بسته تا گزارش‌گیری روی متنِ آزاد نیفتد. */
 export const VISIT_KINDS = ['surgery', 'clinic', 'followup', 'consult'] as const;
@@ -109,6 +112,31 @@ export class UpdateVisitDto {
   @IsOptional()
   @IsIn(VISIT_KINDS as unknown as string[], { message: 'نوعِ مراجعه نامعتبر است' })
   kind?: string;
+
+  /// طرفِ حسابِ فاکتور — بیمار یا بیمارستان.
+  @IsOptional()
+  @IsIn(PAYERS as unknown as string[], { message: 'طرفِ حساب نامعتبر است' })
+  payer?: string;
+
+  @IsOptional() @ValidateIf((o) => o.payerHospitalId !== null)
+  @Type(() => Number) @IsInt({ message: 'بیمارستانِ طرفِ حساب نامعتبر است' })
+  payerHospitalId?: number | null;
+
+  /// استثنای قراردادِ جراح برای همین مراجعه. رشتهٔ خالی یعنی «برگرد به قرارداد».
+  @IsOptional()
+  @IsIn(['percent', 'fixed', ''], { message: 'نوعِ سهمِ جراح نامعتبر است' })
+  surgeonShareKind?: string | null;
+
+  @IsOptional() @ValidateIf((o) => o.surgeonShareValue !== null)
+  @Type(() => Number) @IsInt({ message: 'مقدارِ سهمِ جراح باید عددِ صحیح باشد' })
+  @Min(0, { message: 'مقدارِ سهمِ جراح نمی‌تواند منفی باشد' })
+  surgeonShareValue?: number | null;
+
+  /// هزینهٔ مستقیمِ این کیس (تومان) — تا ماژولِ هزینه‌ها بیاید، دستی.
+  @IsOptional() @ValidateIf((o) => o.caseCost !== null)
+  @Type(() => Number) @IsInt({ message: 'هزینهٔ کیس باید عددِ صحیح باشد' })
+  @Min(0, { message: 'هزینهٔ کیس نمی‌تواند منفی باشد' })
+  caseCost?: number | null;
 
   @IsOptional()
   @IsString()

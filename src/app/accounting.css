@@ -1,0 +1,165 @@
+/* حسابداری — همان زبانِ بصریِ انبار و تعاریف */
+.ac {
+  min-height: 100vh; background: #07051a; color: #f4f1ff;
+  padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+}
+.ac * { box-sizing: border-box; }
+.ac-bg {
+  position: fixed; inset: 0; pointer-events: none; opacity: .3;
+  background:
+    radial-gradient(60% 45% at 85% -10%, rgba(124, 58, 237, .5), transparent 70%),
+    radial-gradient(50% 40% at -10% 110%, rgba(0, 212, 255, .18), transparent 70%);
+}
+.ac > *:not(.ac-bg) { position: relative; }
+
+.ac-head { display: flex; align-items: flex-start; gap: 14px; max-width: 940px; margin: 0 auto 18px; }
+.ac-back {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+  color: #cfc9e8; text-decoration: none; font-size: 12px;
+  padding: 9px 13px; border-radius: 11px;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .24);
+}
+.ac-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
+.ac-head p { margin: 0; font-size: 12px; color: #9a93bb; line-height: 1.9; }
+
+.ac-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
+  max-width: 940px; margin: 0 auto 12px;
+}
+.ac-search {
+  flex: 1 1 240px; min-width: 0; padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 13px;
+  color: #f4f1ff; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .2);
+}
+.ac-search::placeholder { color: #6f688d; }
+.ac-filters { display: flex; gap: 5px; }
+.ac-filters button {
+  padding: 10px 14px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
+  color: #b7b0d4; background: rgba(255, 255, 255, .04); border: 1px solid rgba(139, 92, 246, .18);
+}
+.ac-filters button.on { color: #fff; font-weight: 800; border-color: transparent; background: linear-gradient(135deg, #a855f7, #6d28d9); }
+.ac-add {
+  display: inline-flex; align-items: center; gap: 7px; padding: 11px 17px; border-radius: 12px;
+  font: inherit; font-weight: 800; cursor: pointer; color: #fff; border: 0;
+  background: linear-gradient(135deg, #a855f7, #6d28d9);
+}
+
+.ac-list { display: grid; gap: 9px; max-width: 940px; margin: 0 auto; }
+.ac-empty {
+  padding: 26px 16px; text-align: center; font-size: 12.5px; color: #8f88af;
+  border-radius: 15px; background: rgba(18, 13, 49, .55); border: 1px dashed rgba(139, 92, 246, .2);
+}
+.ac-row {
+  display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-radius: 15px;
+  background: rgba(18, 13, 49, .8); border: 1px solid rgba(139, 92, 246, .16);
+}
+.ac-row.zero { opacity: .55; }
+.ac-row.exp { border-color: rgba(251, 113, 133, .32); }
+
+.ac-qty {
+  flex-shrink: 0; width: 62px; text-align: center; padding: 8px 4px; border-radius: 12px;
+  background: rgba(139, 92, 246, .12); border: 1px solid rgba(139, 92, 246, .22);
+}
+.ac-qty b { display: block; font-size: 17px; line-height: 1.2; }
+.ac-qty span { font-size: 10px; color: #9a93bb; }
+.ac-row.zero .ac-qty { background: rgba(255, 255, 255, .04); }
+
+.ac-row-main { min-width: 0; flex: 1; }
+.ac-row-main b { display: block; font-size: 13.5px; }
+.ac-row-main small { display: block; margin-top: 4px; font-size: 11px; color: #8f88af; }
+.ac-sub2 { color: #6f688d !important; }
+.ac-expired { color: #fda4af; font-weight: 700; }
+
+.ac-field { display: block; position: relative; }
+.ac-field > span { display: block; margin-bottom: 5px; font-size: 11px; color: #9a93bb; }
+.ac-field input {
+  width: 100%; padding: 11px 13px; border-radius: 11px; font: inherit; font-size: 13px;
+  color: #f4f1ff; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .2);
+}
+.ac-field input::placeholder { color: #6f688d; font-size: 12px; }
+
+.ac-hint {
+  margin: 0; padding: 10px 13px; border-radius: 11px; font-size: 11.5px; line-height: 1.9;
+  color: #c8f7ff; background: rgba(34, 211, 238, .07); border: 1px solid rgba(34, 211, 238, .18);
+}
+
+.ac-toast {
+  position: fixed; inset-inline: 0; bottom: 22px; z-index: 80; width: fit-content; max-width: 90vw;
+  margin: 0 auto; padding: 12px 20px; border-radius: 13px; font-size: 12.5px;
+  background: rgba(18, 13, 49, .96); border: 1px solid rgba(139, 92, 246, .3);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
+}
+
+/* ── حواله‌ها ── */
+.ac-note { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.9; color: rgba(255, 255, 255, .6); }
+.ac-tr .ac-qty b { font-size: 15px; }
+.ac-tag { padding: 1px 8px; border-radius: 8px; font-size: 10px; }
+.ac-tag.s-sent     { color: #93c5fd; background: rgba(59, 130, 246, .12); }
+.ac-tag.s-received { color: #fcd34d; background: rgba(251, 191, 36, .12); }
+.ac-tag.s-closed   { color: #6ee7b7; background: rgba(52, 211, 153, .12); }
+.ac-row.st-closed { opacity: .72; }
+
+/* ── مخصوصِ حسابداری ── */
+.ac-tabs { display: flex; gap: 8px; max-width: 940px; margin: 0 auto 14px; }
+.ac-tabs button {
+  flex: 1; padding: 11px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
+  color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .12);
+}
+.ac-tabs button.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, #7c3aed, #4c1d95); }
+
+.ac-add, .ac-list { max-width: 940px; margin: 0 auto 16px; }
+.ac-add {
+  padding: 16px; border-radius: 18px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+}
+.ac-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-block-end: 10px; }
+.ac-field { display: block; font-size: 11.5px; }
+.ac-field > span { display: block; margin-block-end: 5px; color: rgba(255, 255, 255, .62); }
+.ac-field input, .ac-field select {
+  width: 100%; padding: 10px; border-radius: 11px; font: inherit; font-size: 13px;
+  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .14);
+}
+.ac-hint { font-size: 11.5px; line-height: 2; color: rgba(255, 255, 255, .55); margin: 0 0 12px; }
+.ac-hint b { color: #c4b5fd; }
+.ac-submit {
+  width: 100%; padding: 12px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  color: #fff; border: 0; background: linear-gradient(135deg, #7c3aed, #4c1d95);
+}
+.ac-submit:disabled { opacity: .5; cursor: default; }
+
+.ac-row {
+  display: flex; align-items: center; gap: 13px; padding: 13px 15px; margin-block-end: 9px;
+  border-radius: 15px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
+}
+.ac-row.off { opacity: .5; }
+.ac-val { min-width: 82px; text-align: center; }
+.ac-val b { display: block; font-size: 17px; color: #c4b5fd; }
+.ac-val span { font-size: 10px; color: rgba(255, 255, 255, .45); }
+.ac-row-main { flex: 1; min-width: 0; }
+.ac-row-main b { display: block; font-size: 13.5px; }
+.ac-row-main small { display: block; font-size: 11px; color: rgba(255, 255, 255, .55); line-height: 1.9; }
+.ac-note { color: rgba(255, 255, 255, .4) !important; }
+.ac-off {
+  padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
+  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25);
+}
+
+.ac-prow { display: flex; align-items: center; gap: 8px; margin-block-end: 8px; }
+.ac-prow input {
+  padding: 10px; border-radius: 11px; font: inherit; font-size: 13px;
+  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .14);
+}
+.ac-pname { flex: 1; }
+.ac-ppct { width: 74px; text-align: center; }
+.ac-pc { color: rgba(255, 255, 255, .5); font-size: 12px; }
+.ac-pcolor { width: 42px; height: 38px; padding: 3px; }
+.ac-prm { width: 32px; height: 34px; border-radius: 10px; cursor: pointer; color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25); }
+.ac-prm:disabled { opacity: .35; cursor: default; }
+.ac-padd {
+  padding: 9px 13px; margin-block-end: 12px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  color: #c4b5fd; background: rgba(124, 58, 237, .12); border: 1px solid rgba(124, 58, 237, .3);
+}
+.ac-total { font-size: 12.5px; color: #fcd34d; margin: 0 0 12px; }
+.ac-total.ok { color: #6ee7b7; }

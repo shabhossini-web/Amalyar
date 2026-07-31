@@ -24,10 +24,10 @@ model Person {
   phone      String?   @unique
   email      String?
   birthDate  DateTime? @map("birth_date")
-  photo      String?   // dataURL (فعلاً؛ بعداً object-storage)
+  photo      String? // dataURL (فعلاً؛ بعداً object-storage)
   address    String?
   city       String?
-  iban       String?   // شبا — برای پرداختِ سهم/دستمزد
+  iban       String? // شبا — برای پرداختِ سهم/دستمزد
   notes      String?
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
@@ -49,7 +49,7 @@ model Account {
   passwordHash String    @map("password_hash")
   level        Int       @default(1) // 1..6
   status       String    @default("pending") // pending | active | disabled | rejected
-  fee          Int?      // دستمزدِ کارشناس (تومان) — مالیِ سبک؛ قرارداد در حسابداری
+  fee          Int? // دستمزدِ کارشناس (تومان) — مالیِ سبک؛ قرارداد در حسابداری
   approvedById Int?      @map("approved_by_id")
   approvedAt   DateTime? @map("approved_at")
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -68,12 +68,13 @@ model Surgeon {
   id        Int      @id @default(autoincrement())
   person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
   personId  Int      @unique @map("person_id")
-  specialty String?  // تخصص
+  specialty String? // تخصص
   licenseNo String?  @map("license_no") // شمارهٔ نظامِ پزشکی
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
 
-  visits Visit[]
+  visits    Visit[]
+  contracts SurgeonContract[]
 
   @@map("surgeons")
 }
@@ -86,13 +87,14 @@ model Hospital {
   city         String?
   address      String?
   phone        String?
-  contactName  String?  @map("contact_name")  // رابطِ هماهنگی
+  contactName  String?  @map("contact_name") // رابطِ هماهنگی
   contactPhone String?  @map("contact_phone")
   notes        String?
   active       Boolean  @default(true)
   createdAt    DateTime @default(now()) @map("created_at")
 
   visits    Visit[]
+  payerFor  Visit[]         @relation("VisitPayer")
   transfers StockTransfer[]
 
   @@map("hospitals")
@@ -108,16 +110,16 @@ model Hospital {
 /// ⚠️ ارزش‌ها «هزارم‌واحد»اند و عددِ صحیح: در کلِ کتاب بیشترین دقت سه رقمِ اعشار
 /// است، پس ×۱۰۰۰ دقیقاً صحیح می‌شود و جمعِ صدها ردیفِ فاکتور خطای شناور نمی‌گیرد.
 model ServiceCode {
-  code    String  @id // کدِ ملیِ ۶ رقمی
-  title   String
-  notes   String?
+  code     String  @id // کدِ ملیِ ۶ رقمی
+  title    String
+  notes    String?
   /// ویژگی: + (کدِ افزوده) * # و ترکیب‌هایشان
   modifier String?
 
-  rvuTotal        Int? @map("rvu_total")
-  rvuProfessional Int? @map("rvu_professional")
-  rvuTechnical    Int? @map("rvu_technical")
-  rvuAnesthesia   Int? @map("rvu_anesthesia")
+  rvuTotal        Int?    @map("rvu_total")
+  rvuProfessional Int?    @map("rvu_professional")
+  rvuTechnical    Int?    @map("rvu_technical")
+  rvuAnesthesia   Int?    @map("rvu_anesthesia")
   /// ارزشِ بیهوشی مقطوع است («ارزش تام N واحد») نه محاسبه‌شده.
   anesthesiaFlat  Boolean @default(false) @map("anesthesia_flat")
 
@@ -156,17 +158,17 @@ model Tariff {
 /// دلیل: گزارش‌گیری و تحلیلِ خودکار روی متنِ آزاد ممکن نیست؛ «دیسککتومی» و
 /// «دیسکتومی» و «Discectomy» سه چیزِ متفاوت می‌شوند.
 model ProcedureType {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  code      String?  // کدِ داخلی/ملی
-  notes     String?
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  code  String? // کدِ داخلی/ملی
+  notes String?
 
   /// اتصال به کتابِ ارزش نسبی — اختیاری، چون بعضی خدمات کدِ ملی ندارند.
   /// با این اتصال، صورت‌حساب می‌تواند فی را از ارزشِ نسبی × ضریب حساب کند.
-  serviceCode     ServiceCode? @relation(fields: [serviceCodeRef], references: [code], onDelete: SetNull)
-  serviceCodeRef  String?      @map("service_code_ref")
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
+  serviceCode    ServiceCode? @relation(fields: [serviceCodeRef], references: [code], onDelete: SetNull)
+  serviceCodeRef String?      @map("service_code_ref")
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @map("created_at")
 
   visits Visit[]
 
@@ -269,9 +271,9 @@ model StockMovement {
   /// یک ایمپلنتِ کارگذاشته‌شده را پاک کند.
   chargeId  Int?    @map("charge_id")
 
-  reason      String?
+  reason    String?
   /// شمارهٔ رسیدِ خرید، حواله، یا هر ارجاعِ بیرونی.
-  reference   String?
+  reference String?
 
   /// **محلِ وقوعِ حرکت.** موجودیِ هر محل از جمعِ همین ستون مشتق می‌شود، دقیقاً
   /// مثلِ خودِ موجودی که جمعِ `quantity` است.
@@ -279,11 +281,11 @@ model StockMovement {
   /// چرا ستونِ `StockLot.location` کافی نبود: یک لاتِ ۲۰تایی می‌تواند ۱۲ عددش
   /// در ستِ بیمارستانِ الف باشد و ۸ عددش در انبار. «محلِ لات» برای چنین چیزی
   /// سؤالِ غلطی است؛ سؤالِ درست «چند تا کجاست» است و جوابش فقط از دفتر می‌آید.
-  location    String?
+  location String?
 
   /// حوالهٔ ارسال — دو پایهٔ یک انتقال (خروج از مبدأ، ورود به مقصد) را به هم می‌بندد.
-  transfer    StockTransfer? @relation(fields: [transferId], references: [id], onDelete: SetNull)
-  transferId  Int?     @map("transfer_id")
+  transfer   StockTransfer? @relation(fields: [transferId], references: [id], onDelete: SetNull)
+  transferId Int?           @map("transfer_id")
 
   createdById Int?     @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -306,11 +308,11 @@ model StockMovement {
 /// خودِ سند موجودی را جابه‌جا نمی‌کند؛ حرکت‌های `transfer` این کار را می‌کنند.
 /// سند فقط آن‌ها را به هم می‌بندد و امضا/تاریخ را نگه می‌دارد.
 model StockTransfer {
-  id           Int     @id @default(autoincrement())
+  id           Int    @id @default(autoincrement())
   /// HV-NNNN — شمارهٔ حواله روی برگهٔ چاپی.
-  code         String  @unique
-  fromLocation String  @map("from_location")
-  toLocation   String  @map("to_location")
+  code         String @unique
+  fromLocation String @map("from_location")
+  toLocation   String @map("to_location")
 
   hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
   hospitalId Int?      @map("hospital_id")
@@ -448,14 +450,14 @@ model AuditEvent {
 /// `patients.clinical.read`. سرویس دو نمای متفاوت می‌سازد، نه یک نما با فیلدهای
 /// خالی — چیزی که کاربر اجازه‌اش را ندارد اصلاً از DB بیرون نمی‌آید.
 model Patient {
-  id         Int      @id @default(autoincrement())
-  code       String   @unique // AM-0001
+  id         Int       @id @default(autoincrement())
+  code       String    @unique // AM-0001
   /// ردِ منبع برای دادهٔ وارد‌شده از سامانهٔ قبلی — «malekteb:patient_profiles:۴۲».
   /// وجودش وارد کردن را قابلِ تکرار می‌کند: دفعهٔ دوم ردیفِ تکراری ساخته نمی‌شود.
   /// یکتا نیست چون ممکن است دو منبع به یک بیمار برسند؛ یکتاییِ واقعی با کد ملی است.
-  sourceRef  String?  @map("source_ref")
-  firstName  String   @map("first_name")
-  lastName   String   @map("last_name")
+  sourceRef  String?   @map("source_ref")
+  firstName  String    @map("first_name")
+  lastName   String    @map("last_name")
   phone      String?
   /// کلیدِ هویتِ بیمار. یکتا یعنی «هر کد ملی، یک پرونده» — همان اصلِ MPI.
   /// nullable می‌ماند چون بیمارِ اورژانسی یا اتباع ممکن است کد ملی نداشته باشد؛
@@ -516,10 +518,10 @@ model Document {
   visit     Visit?  @relation(fields: [visitId], references: [id], onDelete: SetNull)
   visitId   Int?    @map("visit_id")
 
-  category String  // lab | imaging | report | consent | identity | receipt | other
+  category String // lab | imaging | report | consent | identity | receipt | other
   title    String?
-  fileName String  @map("file_name") // نامِ اصلیِ کاربر — فقط نمایش و دانلود
-  mimeType String  @map("mime_type")
+  fileName String    @map("file_name") // نامِ اصلیِ کاربر — فقط نمایش و دانلود
+  mimeType String    @map("mime_type")
   size     Int
   /// هم نامِ فایل روی دیسک است هم کلیدِ یکسانی؛ آپلودِ تکراری فضای تازه نمی‌گیرد.
   sha256   String
@@ -553,8 +555,8 @@ model Charge {
   visitId Int   @map("visit_id")
 
   /// service | item | discount
-  kind      String @default("service")
-  title     String
+  kind        String  @default("service")
+  title       String
   /// کدِ ملیِ خدمت — عکسِ لحظهٔ صدور، نه رابطه: فاکتورِ صادرشده نباید با
   /// ویرایشِ بعدیِ کتاب تغییر کند، و بیمه همین رشته را می‌خواهد.
   serviceCode String? @map("service_code")
@@ -569,11 +571,11 @@ model Charge {
   ///
   /// بدونِ این فیلد، «قلمِ مجازیِ عمدی» از «کاربر یادش رفت لات را انتخاب کند»
   /// قابلِ تشخیص نبود — و هر دو در دیتابیس دقیقاً یک شکل داشتند.
-  stockEffect String @default("virtual") @map("stock_effect")
-  quantity  Int    @default(1)
-  unitPrice Int    @map("unit_price") // تومان
+  stockEffect String  @default("virtual") @map("stock_effect")
+  quantity    Int     @default(1)
+  unitPrice   Int     @map("unit_price") // تومان
   /// quantity × unitPrice، ذخیره‌شده تا تغییرِ بعدیِ قیمت، فاکتورِ قدیمی را عوض نکند.
-  amount    Int // تومان (علامت‌دار)
+  amount      Int // تومان (علامت‌دار)
 
   notes       String?
   createdById Int?     @map("created_by_id")
@@ -595,10 +597,10 @@ model Payment {
   visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
   visitId Int   @map("visit_id")
 
-  amount Int // تومان
+  amount    Int // تومان
   /// cash | card | transfer | cheque | insurance
-  method String   @default("cash")
-  paidAt DateTime @map("paid_at")
+  method    String   @default("cash")
+  paidAt    DateTime @map("paid_at")
   /// شمارهٔ پیگیری/ارجاع — برای تطبیق با صورت‌حسابِ بانک.
   reference String?
 
@@ -646,10 +648,10 @@ model ClinicalNote {
 /// مراجعه (Visit) — واحدِ اصلیِ کار: عمل/خدمت برای یک بیمار
 /// ⚠️ همهٔ مبالغ «تومان» و عددِ صحیح‌اند (قانونِ تک‌واحدی — درسِ ملک‌طب)
 model Visit {
-  id           Int       @id @default(autoincrement())
-  patient      Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  patientId    Int       @map("patient_id")
-  seq          Int       @default(1) // شمارهٔ مراجعهٔ بیمار → کدِ AM-0001-V2
+  id        Int     @id @default(autoincrement())
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId Int     @map("patient_id")
+  seq       Int     @default(1) // شمارهٔ مراجعهٔ بیمار → کدِ AM-0001-V2
 
   /// نوعِ ملاقات: surgery | clinic | followup | consult
   ///
@@ -680,8 +682,8 @@ model Visit {
   diagnosis       Diagnosis?     @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
   diagnosisId     Int?           @map("diagnosis_id")
 
-  opDate       DateTime? @map("op_date") // تاریخِ عمل
-  opStatus     String    @default("pending") @map("op_status") // pending | done | cancelled
+  opDate   DateTime? @map("op_date") // تاریخِ عمل
+  opStatus String    @default("pending") @map("op_status") // pending | done | cancelled
 
   /// ساعتِ شروع/پایانِ عمل و ساعتِ حضورِ کارشناس — «HH:MM» بیست‌وچهارساعته.
   ///
@@ -690,18 +692,35 @@ model Visit {
   /// opDate و بعد گرفتارِ منطقهٔ زمانی شدن — عملی که ۲۳:۳۰ شروع شده با یک
   /// جابه‌جاییِ ساعت به روزِ دیگر می‌پرد. مدتِ عمل مشتق است و در enrich می‌آید.
   /// ردِ منبعِ وارد‌کردن — همان استدلالِ Patient.sourceRef.
-  sourceRef    String?   @map("source_ref")
-  opStartTime  String?   @map("op_start_time")
-  opEndTime    String?   @map("op_end_time")
+  sourceRef        String?   @map("source_ref")
+  opStartTime      String?   @map("op_start_time")
+  opEndTime        String?   @map("op_end_time")
   /// ساعتِ حضورِ کارشناس در بیمارستان (از پنلِ چینش).
-  techArriveTime String? @map("tech_arrive_time")
+  techArriveTime   String?   @map("tech_arrive_time")
   /// آخرین باری که ساعت‌ها ثبت/اصلاح شدند — برای تایم‌لاینِ پنلِ کارشناسی.
   opTimesUpdatedAt DateTime? @map("op_times_updated_at")
 
-  notes        String?
-  createdById  Int?      @map("created_by_id")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
+  notes       String?
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  /// **طرفِ حسابِ فاکتور** — `patient` یا `hospital`.
+  ///
+  /// در هسته می‌ماند حتی با اینکه گردشِ کارِ قراردادی به ماژولِ جدا رفته: «مانده»
+  /// بی‌معنی است تا معلوم نباشد طلب از کیست. تشخیصِ خودکارش از روی قرارداد کارِ
+  /// ماژولِ «سفارش‌های قراردادی» است؛ این‌جا دستی انتخاب می‌شود.
+  payer           String    @default("patient")
+  payerHospital   Hospital? @relation("VisitPayer", fields: [payerHospitalId], references: [id], onDelete: SetNull)
+  payerHospitalId Int?      @map("payer_hospital_id")
+
+  /// استثنای قراردادِ جراح برای همین مراجعه — `percent` یا `fixed`، وگرنه null
+  /// و قراردادِ جاری اعمال می‌شود. جدا از خودِ قرارداد است چون استثنا نباید
+  /// قراردادِ بقیهٔ عمل‌ها را عوض کند.
+  surgeonShareKind  String? @map("surgeon_share_kind")
+  surgeonShareValue Int?    @map("surgeon_share_value")
+  /// هزینهٔ مستقیمِ این کیس (تومان) — تا ماژولِ هزینه‌ها بیاید، دستی وارد می‌شود.
+  caseCost          Int?    @map("case_cost")
 
   documents      Document[]
   clinicalNotes  ClinicalNote[]
@@ -709,6 +728,7 @@ model Visit {
   payments       Payment[]
   stockMovements StockMovement[]
   stockTransfers StockTransfer[]
+  settlements    Settlement[]
 
   @@unique([patientId, seq])
   @@index([patientId])
@@ -735,4 +755,112 @@ model OtpCode {
 
   @@index([phone])
   @@map("otp_codes")
+}
+
+// ═══════════════════════ حسابداری — تقسیمِ سهم ═══════════════════════
+
+/// قراردادِ جراح — درصدی یا مبلغِ ثابت.
+///
+/// ⚠️ **تاریخ‌دار** است و ردیفِ قدیمی ویرایش نمی‌شود. قرارداد در طولِ زمان عوض
+/// می‌شود و عملِ پارسال باید با قراردادِ پارسال حساب شود؛ اگر یک ردیف را جای
+/// خودش بازنویسی کنیم، محاسبهٔ دوبارهٔ یک تسویهٔ قدیمی عددِ دیگری می‌دهد و هیچ
+/// راهی نمی‌ماند بفهمیم کدام درست بود.
+model SurgeonContract {
+  id        Int     @id @default(autoincrement())
+  surgeon   Surgeon @relation(fields: [surgeonId], references: [id], onDelete: Cascade)
+  surgeonId Int     @map("surgeon_id")
+
+  /// percent | fixed
+  kind    String
+  /// درصدِ صحیح (۰..۱۰۰) وقتی kind=percent
+  percent Int?
+  /// مبلغِ ثابت به تومان وقتی kind=fixed
+  amount  Int?
+
+  effectiveFrom DateTime @map("effective_from")
+  active        Boolean  @default(true)
+  notes         String?
+  createdById   Int?     @map("created_by_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([surgeonId, effectiveFrom])
+  @@map("surgeon_contracts")
+}
+
+/// سهامدارِ شرکت — جایگزینِ `partners_config` که در ملک‌طب یک JSON در settings بود.
+///
+/// جدول است نه JSON چون هر سهم در دفترِ تسویه به یک ردیف ارجاع می‌دهد؛ با JSON،
+/// «شریکِ حذف‌شده» ارجاعِ شکسته می‌شد. درصدها باید جمعاً ۱۰۰ شوند و سرویس این را
+/// کنترل می‌کند — نه UI، چون API هم مستقیم صدا زده می‌شود.
+model Partner {
+  id        Int      @id @default(autoincrement())
+  name      String
+  /// درصدِ صحیح. جمعِ شریک‌های فعال باید دقیقاً ۱۰۰ باشد.
+  percent   Int
+  color     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("partners")
+}
+
+/// تسویهٔ یک مراجعه — یک نسخهٔ کاملِ محاسبه‌شده.
+///
+/// ⚠️ **نسخه‌دار و فقط‌افزودنی.** محاسبهٔ دوباره ردیفِ قبلی را عوض نمی‌کند؛ نسخهٔ
+/// تازه می‌سازد و قبلی `supersededAt` می‌خورد. دلیلش همان دلیلِ دفترِ انبار است:
+/// عددِ مالی که بازنویسی شود، «چرا آن‌موقع این عدد بود» را برای همیشه می‌برد.
+///
+/// ورودی‌های محاسبه (درآمد، هزینه) این‌جا **عکس** می‌شوند، نه اینکه هر بار از
+/// فاکتور خوانده شوند: تسویه‌ای که با تغییرِ بعدیِ فاکتور بی‌سروصدا عوض شود،
+/// تسویه نیست.
+model Settlement {
+  id      Int   @id @default(autoincrement())
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int   @map("visit_id")
+  version Int
+
+  /// draft | final — تا وقتی final نشده، عددِ پیشنهادی است نه مرجع.
+  /// عمداً پیش‌فرضش draft است: دورهٔ سایه، تا وقتی عددها با سامانهٔ قبلی یکی شوند.
+  status String @default("draft")
+
+  /// عکسِ لحظهٔ محاسبه — تومان.
+  revenue Int
+  cost    Int @default(0)
+
+  supersededAt DateTime? @map("superseded_at")
+  finalizedAt  DateTime? @map("finalized_at")
+  notes        String?
+  createdById  Int?      @map("created_by_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  entries ShareEntry[]
+
+  @@unique([visitId, version])
+  @@index([visitId, supersededAt])
+  @@map("settlements")
+}
+
+/// یک سهم از یک تسویه.
+///
+/// `partyId` عمداً رابطه نیست: حذفِ جراح یا کارشناس نباید سابقهٔ مالی را پاک کند.
+/// نام و مبنای محاسبه در همان لحظه **کپی** می‌شوند، پس تغییرِ بعدیِ قرارداد یا
+/// درصدِ شریک، دفترِ گذشته را دست نمی‌زند.
+model ShareEntry {
+  id           Int        @id @default(autoincrement())
+  settlement   Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  settlementId Int        @map("settlement_id")
+
+  /// surgeon | tech | partner | cost
+  party     String
+  partyId   Int?   @map("party_id")
+  partyName String @map("party_name")
+  /// تومان — علامت‌دار: هزینه منفی است تا جمعِ همهٔ ردیف‌ها همیشه صفر شود.
+  amount    Int
+  /// عکسِ مبنا: {"kind":"percent","percent":30,"of":120000000} یا {"kind":"fixed"}
+  /// بدونِ این، «چرا این عدد» فقط با بازسازیِ کلِ محاسبه جواب داده می‌شود.
+  basis     Json?
+
+  @@index([settlementId])
+  @@index([party, partyId])
+  @@map("share_entries")
 }

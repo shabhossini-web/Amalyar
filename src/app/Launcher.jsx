@@ -30,7 +30,7 @@ const DAILY = [
   { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: false, min: 2 },
 ];
 const TOOLS = [
-  { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: false, min: 5 },
+  { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: false, min: 4 },
   { key: 'dispatch', label: 'چینش کارشناس‌ها', icon: Dispatch, tint: 'amber', ready: false, min: 4 },
   { key: 'letter', label: 'نامه اداری', icon: Mail, tint: 'blue', ready: false, min: 5 },

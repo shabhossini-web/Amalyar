@@ -203,9 +203,16 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
               <button type="button" role="tab" aria-selected={tab === 'payments'} className={tab === 'payments' ? 'on' : ''} onClick={() => setTab('payments')}>
                 پرداخت‌ها ({data.payments.length.toLocaleString('fa-IR')})
               </button>
+              {/* تسویه همین‌جاست نه در صفحهٔ حسابداری: پولِ این بیمار است، و
+                  کاربر برای دیدنِ تقسیمش نباید صفحه عوض کند. */}
+              <button type="button" role="tab" aria-selected={tab === 'split'} className={tab === 'split' ? 'on' : ''} onClick={() => setTab('split')}>
+                تسویه
+              </button>
             </div>
 
-            {tab === 'charges' ? (
+            {tab === 'split' ? (
+              <Settlement visitId={visit.id} onToast={onToast} onChanged={onChanged} />
+            ) : tab === 'charges' ? (
               <>
                 <div className="bl-add">
                   {/* جستجوی کتابِ ارزش نسبی: کد و عنوان و فی یک‌جا می‌آیند،
@@ -416,6 +423,108 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * تسویهٔ مراجعه — تقسیمِ سهم.
+ *
+ * دو ستون کنارِ هم: نسخهٔ ذخیره‌شده و پیش‌نمایشِ وضعیتِ فعلی. اگر عددها فرق
+ * داشته باشند یعنی از زمانِ محاسبه چیزی عوض شده (فاکتور، قرارداد، هزینه) و
+ * تسویه کهنه است — بدونِ نشان‌دادنِ هر دو، کهنه‌بودن نامرئی است.
+ */
+function Settlement({ visitId, onToast, onChanged }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setD(await api(`/visits/${visitId}/settlement`)); }
+    catch (e) { onToast(e.message); }
+  }, [visitId, onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (path, msg) => {
+    setBusy(true);
+    try { await api(path, { method: 'POST' }); await load(); onChanged?.(); onToast(msg); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  if (!d) return <div className="us-empty">در حال بارگذاری…</div>;
+  const saved = d.settlement;
+  const now = d.preview;
+  const stale = saved && (saved.revenue !== now.revenue || saved.cost !== now.cost);
+
+  return (
+    <div className="bl-split">
+      {now.warnings?.length > 0 && (
+        <div className="bl-warns">{now.warnings.map((w) => <p key={w}>⚠️ {w}</p>)}</div>
+      )}
+
+      {saved ? (
+        <>
+          <div className="bl-splithead">
+            <span className={`bl-vtag ${saved.status}`}>{saved.status === 'final' ? 'نهایی' : 'پیش‌نویس'}</span>
+            نسخهٔ {money(saved.version)} · {faDate(saved.createdAt)}
+          </div>
+          <ShareList list={saved.entries} revenue={saved.revenue} />
+          {stale && (
+            <p className="bl-stale">
+              از زمانِ محاسبه چیزی عوض شده — درآمدِ فعلی {money(now.revenue)} است، نه {money(saved.revenue)}.
+              برای به‌روزرسانی دوباره محاسبه کنید.
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="bl-splithead"><span className="bl-vtag draft">محاسبه‌نشده</span> پیش‌نمایش بر اساسِ وضعیتِ فعلی</div>
+          <ShareList list={now.entries} revenue={now.revenue} />
+        </>
+      )}
+
+      <div className="bl-splitacts">
+        {saved?.status === 'final' ? (
+          <button type="button" className="bl-mini warn" disabled={busy}
+                  onClick={() => act(`/visits/${visitId}/settlement/reopen`, 'تسویه باطل شد')}>
+            باطل‌کردنِ تسویهٔ نهایی
+          </button>
+        ) : (
+          <>
+            <button type="button" className="db-submit" disabled={busy}
+                    onClick={() => act(`/visits/${visitId}/settlement`, 'تسویه محاسبه شد ✓')}>
+              {saved ? 'محاسبهٔ دوباره' : 'محاسبه و ذخیره'}
+            </button>
+            {saved && (
+              <button type="button" className="bl-mini" disabled={busy}
+                      onClick={() => act(`/visits/${visitId}/settlement/finalize`, 'تسویه نهایی شد ✓')}>
+                نهایی‌کردن
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** فهرستِ سهم‌ها با مبنای هر کدام — «چرا این عدد» باید روی صفحه باشد. */
+function ShareList({ list, revenue }) {
+  const why = (b) => {
+    if (!b) return '';
+    if (b.kind === 'percent') return `${money(b.percent)}٪ از ${money(b.of)}`;
+    if (b.kind === 'fixed') return 'مبلغِ ثابت';
+    return 'هزینهٔ مستقیم';
+  };
+  return (
+    <div className="bl-shares">
+      <div className="bl-share total"><b>درآمدِ کل</b><i>{money(revenue)}</i></div>
+      {list.map((e, i) => (
+        <div key={i} className={`bl-share p-${e.party}`}>
+          <b>{e.partyLabel}<small>{e.partyName}</small></b>
+          <span>{why(e.basis)}</span>
+          <i>{money(e.amount)}</i>
+        </div>
+      ))}
     </div>
   );
 }

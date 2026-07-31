@@ -349,11 +349,37 @@ export class PatientsService {
     ]);
 
     const paid = new Map(payRows.map((r) => [r.visitId, r._sum.amount ?? 0]));
-    const due = chargeRows.reduce(
-      (sum, r) => sum + Math.max(0, (r._sum.amount ?? 0) - (paid.get(r.visitId) ?? 0)),
-      0,
-    );
-    return { total, pending, today, due, kinds: kinds.map((k) => k.kind) };
+    const dueOf = (visitId: number, charged: number) => Math.max(0, charged - (paid.get(visitId) ?? 0));
+    const due = chargeRows.reduce((sum, r) => sum + dueOf(r.visitId, r._sum.amount ?? 0), 0);
+
+    /**
+     * ماندهٔ **به تفکیکِ طرفِ حساب**.
+     *
+     * «ماندهٔ کل» به‌تنهایی برای وصول بی‌فایده است: طلب از بیمار و طلب از
+     * بیمارستانِ الف دو پرونده‌اند با دو تماس و دو زمان‌بندی. جمعِ سرجمعشان
+     * فقط می‌گوید چقدر، نه از که.
+     */
+    const owing = chargeRows.filter((r) => dueOf(r.visitId, r._sum.amount ?? 0) > 0);
+    let byPayer: { key: string; label: string; due: number; count: number }[] = [];
+    if (owing.length) {
+      const rows = await this.prisma.visit.findMany({
+        where: { id: { in: owing.map((r) => r.visitId) } },
+        select: { id: true, payer: true, payerHospitalId: true, payerHospital: { select: { name: true } } },
+      });
+      const chargedOf = new Map(owing.map((r) => [r.visitId, r._sum.amount ?? 0]));
+      const acc = new Map<string, { label: string; due: number; count: number }>();
+      for (const v of rows) {
+        const key = v.payer === 'hospital' ? `hospital:${v.payerHospitalId ?? 0}` : 'patient';
+        const label = v.payer === 'hospital' ? v.payerHospital?.name ?? 'بیمارستانِ نامشخص' : 'بیمار';
+        const cur = acc.get(key) ?? { label, due: 0, count: 0 };
+        cur.due += dueOf(v.id, chargedOf.get(v.id) ?? 0);
+        cur.count += 1;
+        acc.set(key, cur);
+      }
+      byPayer = [...acc.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.due - a.due);
+    }
+
+    return { total, pending, today, due, byPayer, kinds: kinds.map((k) => k.kind) };
   }
 
   async getVisit(id: number, user?: any) {
@@ -649,6 +675,18 @@ export class PatientsService {
       }
       if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
+      // طرفِ حساب و استثنای سهمِ جراح — فیلدهای مالیِ سبک که روی خودِ مراجعه‌اند.
+      if (dto.payer !== undefined) visitPatch.payer = dto.payer;
+      if (dto.payerHospitalId !== undefined) visitPatch.payerHospitalId = dto.payerHospitalId ?? null;
+      if (dto.caseCost !== undefined) visitPatch.caseCost = dto.caseCost ?? null;
+      if (dto.surgeonShareKind !== undefined) {
+        // پاک‌کردنِ نوع، مقدار را هم پاک می‌کند؛ وگرنه عددِ یتیم می‌ماند که هیچ
+        // جا خوانده نمی‌شود ولی در ویرایشِ بعدی ناگهان دوباره اعمال می‌شود.
+        visitPatch.surgeonShareKind = dto.surgeonShareKind || null;
+        visitPatch.surgeonShareValue = dto.surgeonShareKind ? dto.surgeonShareValue ?? null : null;
+      } else if (dto.surgeonShareValue !== undefined) {
+        visitPatch.surgeonShareValue = dto.surgeonShareValue ?? null;
+      }
       Object.assign(visitPatch, timePatch(dto));
       if (dto.notes !== undefined) visitPatch.notes = dto.notes || null;
 
