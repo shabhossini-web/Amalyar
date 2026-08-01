@@ -50,6 +50,12 @@ model Account {
   level        Int       @default(1) // 1..6
   status       String    @default("pending") // pending | active | disabled | rejected
   fee          Int? // دستمزدِ کارشناس (تومان) — مالیِ سبک؛ قرارداد در حسابداری
+  /// ⚠️ **نقشِ شغلی، جدا از `level`.** سطح می‌گوید «چه چیزی را می‌تواند ببیند»،
+  /// این می‌گوید «چه کاری می‌کند». راننده و پیک سطحِ دسترسیِ پایینی دارند ولی
+  /// در چینش نقشِ مستقل دارند؛ قاطی‌کردنشان یعنی برای دادنِ نقشِ راننده مجبور
+  /// شویم دسترسی‌اش را هم بالا ببریم.
+  /// tech | driver | courier | office
+  jobRole      String?   @map("job_role")
   approvedById Int?      @map("approved_by_id")
   approvedAt   DateTime? @map("approved_at")
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -57,6 +63,7 @@ model Account {
   sessions    Session[]
   credentials WebauthnCredential[]
   techVisits  Visit[]              @relation("VisitTech")
+  assignments VisitAssignment[]    @relation("Assignee")
 
   @@map("accounts")
 }
@@ -739,6 +746,7 @@ model Visit {
   stockTransfers StockTransfer[]
   settlements    Settlement[]
   payouts        Payout[]
+  assignments    VisitAssignment[]
 
   @@unique([patientId, seq])
   @@index([patientId])
@@ -1061,4 +1069,32 @@ model FiscalYear {
 
   @@index([startsAt, endsAt])
   @@map("fiscal_years")
+}
+
+/// تخصیصِ نیرو به یک عمل — راننده و پیک.
+///
+/// ⚠️ **کارشناس عمداً این‌جا نیست و روی `Visit.techId` می‌ماند.** دامنهٔ دسترسیِ
+/// کارشناس (چه مراجعه‌ای را می‌بیند)، فیلترها، خروجی‌ها و برگهٔ مصرف همه به آن
+/// ستون آویزان‌اند؛ جابه‌جا کردنش یک بازنویسیِ پرریسک است که هیچ قابلیتِ تازه‌ای
+/// نمی‌دهد. اگر روزی یک عمل به دو کارشناس نیاز داشت، همان وقت مهاجرت می‌کنیم.
+model VisitAssignment {
+  id      Int   @id @default(autoincrement())
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int   @map("visit_id")
+
+  account   Account @relation("Assignee", fields: [accountId], references: [id], onDelete: Cascade)
+  accountId Int     @map("account_id")
+
+  /// driver | courier
+  role String
+  /// جزئیاتِ همین مأموریت: «تحویل به CSR تا ساعت ۷»
+  note String?
+
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([visitId, accountId, role])
+  @@index([visitId])
+  @@index([accountId])
+  @@map("visit_assignments")
 }

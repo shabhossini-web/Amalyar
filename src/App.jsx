@@ -12,6 +12,7 @@ import Definitions from './app/Definitions.jsx';
 import Inventory from './app/Inventory.jsx';
 import Accounting from './app/Accounting.jsx';
 import Calendar from './app/Calendar.jsx';
+import Dispatch from './app/Dispatch.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
 import PlatformAdmin from './app/PlatformAdmin.jsx';
@@ -52,6 +53,7 @@ export default function App() {
           <Route path="/app/inventory" element={<Protected><Inventory /></Protected>} />
           <Route path="/app/accounting" element={<Protected><Accounting /></Protected>} />
           <Route path="/app/calendar" element={<Protected><Calendar /></Protected>} />
+          <Route path="/app/dispatch" element={<Protected><Dispatch /></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />

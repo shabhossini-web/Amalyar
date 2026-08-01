@@ -618,3 +618,52 @@ jobs:
           }
           console.log('export ok');
           "
+
+      - name: Verify dispatch never leaks patient data to drivers and couriers
+        run: |
+          node -e "
+          const fs = require('fs');
+          const svc = fs.readFileSync('server/src/patients/dispatch.service.ts', 'utf8');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+
+          // ⚠️ همیشه *گزاره‌ی مثبت* بسنج، نه نبودِ یک رشته: دو بار پیش آمده که
+          // نگهبان با متنِ خودِ کامنت مچ شد. برای همین متن‌ها اول strip می‌شوند.
+          const src = strip(svc);
+
+          // ① نقشِ تخصیص فقط راننده و پیک — کارشناس روی خودِ Visit می‌ماند.
+          const roles = (src.match(/ASSIGN_ROLES = \[([^\]]*)\]/) || [])[1] || '';
+          if (!/'driver'/.test(roles) || !/'courier'/.test(roles)) {
+            console.error('ASSIGN_ROLES باید راننده و پیک را داشته باشد'); process.exit(1);
+          }
+          if (/'tech'/.test(roles)) {
+            console.error('کارشناس نباید از مسیرِ تخصیص بیاید — روی خودِ Visit است'); process.exit(1);
+          }
+
+          // ② متنِ ابلاغ در *سرویس* ساخته می‌شود نه در UI، وگرنه کانالِ بعدی
+          //    (بله/پیامک) فیلترِ حریمِ خصوصی را دور می‌زند.
+          if (!/export function briefingText/.test(src)) {
+            console.error('briefingText باید تابعِ خالصِ سرویس باشد'); process.exit(1);
+          }
+          const ui = fs.readFileSync('src/app/Dispatch.jsx', 'utf8');
+          if (!/briefing\?role=/.test(ui)) { console.error('UI باید متن را از سرور بگیرد نه بسازد'); process.exit(1); }
+
+          // ③ آزمونِ رفتاری: راننده و پیک هیچ فیلدِ بیمار نمی‌گیرند، کارشناس می‌گیرد.
+          const body = src.split('export function briefingText')[1];
+          const guard = body.split('if (role === ')[1] || '';
+          if (!/v\.fullName/.test(guard.split('} else {')[0] || '')) {
+            console.error('نامِ بیمار فقط باید داخلِ شاخهٔ کارشناس باشد'); process.exit(1);
+          }
+          for (const f of ['v.fullName', 'v.code', 'v.surgeonName', 'v.procedureName']) {
+            const after = body.split('} else {')[1] || '';
+            const tail = after.split('L.push(\`بیمارستان')[0];
+            if (tail.includes(f)) { console.error('شاخهٔ راننده/پیک نباید ' + f + ' داشته باشد'); process.exit(1); }
+          }
+
+          // ④ کمبودِ راننده فقط وقتی معنا دارد که باری برای بردن باشد.
+          const month = src.split('async month(')[1].split(/\n  }/)[0];
+          if (!/stockTransfers\.length > 0/.test(month)) {
+            console.error('«بی‌راننده» باید مشروط به وجودِ حواله باشد وگرنه کلِ ماه هشدارِ دروغ می‌دهد');
+            process.exit(1);
+          }
+          console.log('dispatch ok');
+          "

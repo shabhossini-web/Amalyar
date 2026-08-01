@@ -32,7 +32,7 @@ const DAILY = [
 const TOOLS = [
   { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
-  { key: 'dispatch', label: 'چینش کارشناس‌ها', icon: Dispatch, tint: 'amber', ready: false, min: 4 },
+  { key: 'dispatch', label: 'چینشِ نیروها', icon: Dispatch, tint: 'amber', ready: true, min: 4, to: '/app/dispatch' },
   { key: 'letter', label: 'نامه اداری', icon: Mail, tint: 'blue', ready: false, min: 5 },
   { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: false, min: 2 },
   { key: 'inventory', label: 'انبار', icon: BoxIc, tint: 'green', ready: true, min: 3, to: '/app/inventory' },
