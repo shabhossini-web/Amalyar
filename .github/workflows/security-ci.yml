@@ -345,6 +345,36 @@ jobs:
           console.log('share split ok');
           "
 
+      - name: Verify the Jalali month grid is shared and boundary-correct
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const cal = fs.readFileSync('src/patients/calendar.service.ts', 'utf8');
+          // بازهٔ ماه باید شمسی بریده شود، وگرنه چند روزِ ابتدا/انتها می‌افتند.
+          if (!/jalaliMonthRange/.test(cal)) { console.error('بازهٔ تقویم باید شمسی باشد'); process.exit(1); }
+          // گروه‌بندی سمتِ سرور بماند تا تقویم و چینش یک تعریف داشته باشند.
+          if (!/toJalali/.test(cal)) { console.error('گروه‌بندیِ روز باید سمتِ سرور و شمسی باشد'); process.exit(1); }
+          if (!/LEVEL.SUPERVISOR/.test(cal)) { console.error('تقویم باید scope کارشناس را رعایت کند'); process.exit(1); }
+          const jal = fs.readFileSync('src/common/jalali.ts', 'utf8');
+          const rng = jal.split('export function jalaliMonthRange')[1].split(/\n}/)[0];
+          // طولِ ماه دوباره محاسبه نشود؛ «اولِ ماهِ بعد» کبیسه را خودش هندل می‌کند.
+          if (/jMonthDays|29|30|31/.test(rng)) {
+            console.error('بازهٔ ماه نباید طولِ ماه را دوباره حساب کند — تقویمِ دوم می‌سازد'); process.exit(1);
+          }
+          const grid = fs.readFileSync('../src/app/JGrid.jsx', 'utf8');
+          // هفته شنبه‌محور است؛ getDay() یکشنبه‌محور ستون‌ها را می‌چرخاند.
+          // ادعای مثبت، تا متنِ توضیحات گارد را نلغزاند (یک‌بار همین‌جا افتاد).
+          if (!/const lead = jDayOfWeek\(/.test(grid)) {
+            console.error('شمارِ ابتدای ماه باید از jDayOfWeek بیاید نه Date.getDay'); process.exit(1);
+          }
+          // گرید باید بی‌طرف بماند تا چینش (فازِ ۳) همان را دوباره استفاده کند.
+          for (const leaked of ['/calendar', 'visits', 'opStatus']) {
+            if (grid.includes(leaked)) { console.error('JGrid نباید از محتوای تقویم بداند: ' + leaked); process.exit(1); }
+          }
+          console.log('calendar grid ok');
+          "
+
       - name: Verify financial reports reuse existing definitions
         working-directory: server
         run: |

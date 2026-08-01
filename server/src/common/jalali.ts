@@ -106,3 +106,22 @@ export function toJalali(date: Date): [number, number, number] {
   }
   return [jy, 7 + div(k, 30), mod(k, 30) + 1];
 }
+
+/**
+ * بازهٔ میلادیِ یک ماهِ شمسی: `[شروع, پایان]` — هر دو نیمه‌شبِ UTC، پایان
+ * **ابتدای روزِ اولِ ماهِ بعد** (بازهٔ نیم‌باز).
+ *
+ * ⚠️ عمداً از `jMonthDays` استفاده نمی‌کند: طولِ اسفند به کبیسه بستگی دارد و
+ * تکرارِ آن منطق یعنی یک تقویمِ دوم که ممکن است با اولی اختلاف پیدا کند. با
+ * «اولِ ماهِ بعد» طولِ ماه اصلاً لازم نیست.
+ */
+export function jalaliMonthRange(jy: number, jm: number): [Date, Date] {
+  const start = d2g(j2d(jy, jm, 1));
+  const ny = jm === 12 ? jy + 1 : jy;
+  const nm = jm === 12 ? 1 : jm + 1;
+  const end = d2g(j2d(ny, nm, 1));
+  return [
+    new Date(Date.UTC(start.gy, start.gm - 1, start.gd)),
+    new Date(Date.UTC(end.gy, end.gm - 1, end.gd)),
+  ];
+}
