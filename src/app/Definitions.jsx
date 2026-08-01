@@ -12,6 +12,7 @@ const Trash = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 6h18M8 
 const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
+const ASSET_FA = { set: 'ست', device: 'دستگاه' }; // «مصرفی» پیش‌فرض است و برچسب نمی‌خواهد
 
 /**
  * ساختارِ هر بخش در یک جا تعریف می‌شود تا افزودنِ بخشِ جدید یک ورودی به این
@@ -82,12 +83,18 @@ const SECTIONS = [
     label: 'کالاها',
     path: '/items',
     title: (r) => r.name,
-    sub: (r) => [r.brand, r.size, r.sku, r.price && `${Number(r.price).toLocaleString('fa-IR')} تومان`]
+    sub: (r) => [ASSET_FA[r.assetKind], r.brand, r.size, r.sku, r.price && `${Number(r.price).toLocaleString('fa-IR')} تومان`]
       .filter(Boolean).join(' · '),
     empty: 'هنوز کالایی تعریف نشده',
-    hint: 'کاتالوگِ کالاست، نه انبار — «چند تا داریم» و «کدام لات کجا رفت» لایهٔ بعدی است.',
+    hint: 'کاتالوگِ کالاست، نه انبار. «نوع» تعیین می‌کند برمی‌گردد یا نه: ست و دستگاه برمی‌گردند و تقویمِ در دسترس‌بودن می‌گیرند، مصرفی نه.',
     fields: [
       { key: 'name', label: 'نامِ کالا *', required: true },
+      { key: 'assetKind', label: 'نوع *', options: [
+        { v: 'consumable', l: 'مصرفی — یک‌بار می‌رود' },
+        { v: 'set', l: 'ست — برمی‌گردد' },
+        { v: 'device', l: 'دستگاه — برمی‌گردد' },
+      ] },
+      { key: 'turnaroundHours', label: 'ساعتِ آماده‌سازی پس از برگشت', dir: 'ltr' },
       { key: 'brand', label: 'برند' },
       { key: 'size', label: 'اندازه / مشخصه' },
       { key: 'category', label: 'دسته (پیچ، راد، کیج…)' },
@@ -250,9 +257,11 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
       setErrors(e);
       if (Object.keys(e).length) return;
     } else {
-      const required = (section.fields ?? []).filter((f) => f.required);
       const e = {};
-      for (const f of required) if (!form[f.key]?.trim()) e[f.key] = 'این فیلد لازم است';
+      for (const f of section.fields ?? []) {
+        const need = f.required || (f.options && f.label.includes('*'));
+        if (need && !String(form[f.key] ?? '').trim()) e[f.key] = 'این فیلد لازم است';
+      }
       setErrors(e);
       if (Object.keys(e).length) return;
     }
@@ -311,7 +320,12 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
               {(section.fields ?? []).map((f) => (
                 <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
                   <span>{f.label}</span>
-                  {f.textarea
+                  {f.options ? (
+                    <select value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy}>
+                      <option value="">— انتخاب کنید —</option>
+                      {f.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                    </select>
+                  ) : f.textarea
                     ? <textarea rows={2} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
                     : <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />}
                   {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}

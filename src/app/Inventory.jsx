@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { faDate, jStrToIso, toEnDigits } from '../lib/jalali.js';
+import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
 
@@ -93,9 +93,12 @@ export default function Inventory() {
         <button type="button" className={tab === 'transfers' ? 'on' : ''} onClick={() => setTab('transfers')}>
           حواله‌ها{openTransfers ? <i>{num(openTransfers)}</i> : null}
         </button>
+        <button type="button" className={tab === 'assets' ? 'on' : ''} onClick={() => setTab('assets')}>دارایی‌ها</button>
       </div>
 
-      {tab === 'transfers' ? (
+      {tab === 'assets' ? (
+        <Assets onToast={setToast} />
+      ) : tab === 'transfers' ? (
         <Transfers onToast={setToast} onChanged={load} />
       ) : (
       <>
@@ -209,6 +212,184 @@ export default function Inventory() {
  * کاربر وارد نمی‌کند؛ از دفتر می‌آید. اگر کاربر عدد بزند، همان‌جاست که
  * «۳۴ تا فرستادم، ۳۳ تا زدم» به مغایرتِ دائمی تبدیل می‌شود.
  */
+const STATE_TONE = { free: 'ok', booked: 'warn', out: 'out', service: 'bad' };
+
+/**
+ * دارایی‌های برگشتی — ست و دستگاه.
+ *
+ * جدا از تبِ «لات‌ها» است چون سؤالش فرق می‌کند: آن‌جا «چند تا داریم»، این‌جا
+ * «این دستگاه فلان روز آزاد است؟». همان دلیلی که تقویمِ چینش از فهرستِ
+ * مراجعات جدا شد.
+ */
+function Assets({ onToast }) {
+  const [day, setDay] = useState(() => jStr(...jToday()));
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [needsFor, setNeedsFor] = useState(null); // بیمارستانِ بازشده
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const iso = jStrToIso(day);
+      setRows(await api(`/assets${iso ? `?on=${iso}` : ''}`));
+    } catch (e) { onToast(e.message); setRows([]); }
+    finally { setLoading(false); }
+  }, [day, onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const counts = rows.reduce((a, r) => ({ ...a, [r.state]: (a[r.state] ?? 0) + 1 }), {});
+
+  return (
+    <>
+      <div className="iv-stats">
+        <div><b>{num(rows.length)}</b><span>داراییِ برگشتی</span></div>
+        <div><b>{num(counts.free ?? 0)}</b><span>آزاد</span></div>
+        <div className={counts.booked ? 'iv-warn' : ''}><b>{num(counts.booked ?? 0)}</b><span>رزروِ همین روز</span></div>
+        <div className={counts.out || counts.service ? 'iv-warn' : ''}>
+          <b>{num((counts.out ?? 0) + (counts.service ?? 0))}</b><span>بیرون یا نیازمندِ سرویس</span>
+        </div>
+      </div>
+
+      <div className="iv-toolbar">
+        <JDate label="وضعیت در تاریخِ" value={day} onChange={setDay} className="iv-daypick" />
+        <p className="iv-note">
+          «آزاد» یعنی همین روز تعهدی ندارد. ستی که بیرون است موجود هست ولی در دسترس نیست.
+        </p>
+        <button type="button" className="iv-add" onClick={() => setNeedsFor(0)}>نیازِ بیمارستان‌ها</button>
+      </div>
+
+      <div className="iv-list">
+        {loading && <div className="iv-empty">در حال بارگذاری…</div>}
+        {!loading && rows.length === 0 && (
+          <div className="iv-empty">
+            هنوز داراییِ برگشتی ندارید — در تعاریفِ پایه نوعِ کالا را «ست» یا «دستگاه» بگذارید.
+          </div>
+        )}
+        {!loading && rows.map((r) => (
+          <article key={r.lotId} className={`iv-row as-${r.state}`}>
+            <div className="iv-row-main">
+              <b>
+                {r.itemName}
+                <i className="as-kind">{r.assetLabel}</i>
+                {r.serialNo && <i className="as-sn" dir="ltr">{r.serialNo}</i>}
+              </b>
+              <small>
+                {r.state === 'out' ? `الان در: ${r.at}` : `محلِ خانه: ${r.home}`}
+                {r.nextServiceAt && ` · سرویسِ بعدی: ${faDate(r.nextServiceAt)}`}
+                {r.turnaroundHours ? ` · آماده‌سازی: ${num(r.turnaroundHours)} ساعت` : ''}
+              </small>
+              {r.commitments.length > 0 && (
+                <small className="as-book">
+                  {r.commitments.map((c) => `${faDate(c.on)} — ${c.hospital}${c.visitCode ? ` (${c.visitCode})` : ''}`).join(' · ')}
+                </small>
+              )}
+            </div>
+            <span className={`as-state ${STATE_TONE[r.state] ?? ''}`}>{r.stateLabel}</span>
+          </article>
+        ))}
+      </div>
+
+      {needsFor !== null && <Needs onClose={() => setNeedsFor(null)} onToast={onToast} />}
+    </>
+  );
+}
+
+/** نیازِ استانداردِ هر بیمارستان — «لقمان همیشه دستگاهِ C2 می‌خواهد». */
+function Needs({ onClose, onToast }) {
+  const [hospitals, setHospitals] = useState([]);
+  const [items, setItems] = useState([]);
+  const [hid, setHid] = useState('');
+  const [rows, setRows] = useState([]);
+  const [pick, setPick] = useState('');
+  const [qty, setQty] = useState('1');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api('/hospitals').then(setHospitals).catch(() => {});
+    api('/items').then(setItems).catch(() => {});
+  }, []);
+
+  const load = useCallback(async (id) => {
+    if (!id) { setRows([]); return; }
+    try { setRows(await api(`/assets/hospitals/${id}/needs`)); }
+    catch (e) { onToast(e.message); }
+  }, [onToast]);
+  useEffect(() => { load(hid); }, [load, hid]);
+
+  const add = async () => {
+    if (!hid || !pick || busy) return;
+    setBusy(true);
+    try {
+      await api(`/assets/hospitals/${hid}/needs`, { method: 'POST', body: { itemId: Number(pick), quantity: int(qty) || 1 } });
+      setPick(''); setQty('1');
+      await load(hid);
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const remove = async (id) => {
+    setBusy(true);
+    try { await api(`/assets/needs/${id}`, { method: 'DELETE' }); await load(hid); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="iv-sheet">
+        <header className="iv-sheet-head">
+          <b>نیازِ استانداردِ بیمارستان</b>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+        </header>
+        <div className="iv-sheet-body">
+          <p className="iv-note">
+            پیشنهادِ پیش‌فرضِ حواله برای این بیمارستان. الزام نیست — عملِ خاص می‌تواند چیزِ دیگری بخواهد.
+          </p>
+          <label className="iv-field">
+            <span>بیمارستان</span>
+            <select value={hid} onChange={(e) => setHid(e.target.value)}>
+              <option value="">— انتخاب کنید —</option>
+              {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </label>
+
+          {hid && (
+            <>
+              <div className="iv-list">
+                {rows.length === 0 && <div className="iv-empty">هنوز چیزی برای این بیمارستان تعریف نشده</div>}
+                {rows.map((r) => (
+                  <article key={r.id} className="iv-row">
+                    <div className="iv-row-main">
+                      <b>{r.itemName} <i className="as-kind">{r.assetLabel}</i></b>
+                      <small>{num(r.quantity)} عدد{r.notes ? ` · ${r.notes}` : ''}</small>
+                    </div>
+                    <button type="button" className="iv-del" disabled={busy} onClick={() => remove(r.id)}>حذف</button>
+                  </article>
+                ))}
+              </div>
+
+              <div className="iv-row2">
+                <label className="iv-field">
+                  <span>کالا</span>
+                  <select value={pick} onChange={(e) => setPick(e.target.value)}>
+                    <option value="">— انتخاب —</option>
+                    {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
+                  </select>
+                </label>
+                <label className="iv-field">
+                  <span>تعداد</span>
+                  <input type="text" inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} />
+                </label>
+                <button type="button" className="iv-add" disabled={busy || !pick} onClick={add}>
+                  <Plus width="15" height="15" /> افزودن
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function Transfers({ onToast, onChanged }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);

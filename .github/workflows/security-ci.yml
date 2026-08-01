@@ -696,3 +696,64 @@ jobs:
           }
           console.log('dispatch ok');
           "
+
+      - name: Verify returnable assets separate commitment from stock movement
+        run: |
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+          const inv = strip(fs.readFileSync('server/src/patients/inventory.service.ts', 'utf8'));
+          const ast = strip(fs.readFileSync('server/src/patients/assets.service.ts', 'utf8'));
+
+          // ① رزرو ≠ حرکت: حوالهٔ روزِ آینده نباید دفترِ انبار را بزند، وگرنه
+          //    برنامه‌ریزیِ فردا با «موجود نیست» رد می‌شود چون دستگاه هنوز بیرون است.
+          const send = inv.split('async sendTransfer(')[1].split('async shipTransfer')[0];
+          if (!/const future =/.test(send) || !/status = future \?/.test(send)) {
+            console.error('حوالهٔ روزِ آینده باید planned شود'); process.exit(1);
+          }
+          if (!/if \(future\) \{[\s\S]*?plannedLines/.test(send)) {
+            console.error('قلم‌های حوالهٔ برنامه‌ریزی‌شده باید در plannedLines بمانند'); process.exit(1);
+          }
+          const moveIdx = send.indexOf('this.move(');
+          const elseIdx = send.indexOf('} else {');
+          if (moveIdx < 0 || elseIdx < 0 || moveIdx < elseIdx) {
+            console.error('حرکتِ انبار فقط در شاخهٔ «امروز» مجاز است'); process.exit(1);
+          }
+
+          // ② موجودی موقعِ *ارسال* بررسی می‌شود نه موقعِ برنامه‌ریزی.
+          const ship = inv.split('async shipTransfer(')[1].split(/\n  \}/)[0];
+          if (!/status !== 'planned'/.test(ship)) { console.error('ارسالِ دوباره باید مسدود شود'); process.exit(1); }
+          if (!/this\.move\(/.test(ship)) { console.error('ارسال باید دفتر را بزند'); process.exit(1); }
+
+          // ③ تعارضِ رزرو پیش از ساختِ حواله بررسی می‌شود — سندِ صادرشده پس‌گرفتنی نیست.
+          const guardIdx = send.indexOf('this.assets.conflicts(');
+          const createIdx = send.indexOf('stockTransfer.create(');
+          if (guardIdx < 0 || createIdx < 0 || guardIdx > createIdx) {
+            console.error('تعارض باید پیش از ساختِ حواله بررسی شود'); process.exit(1);
+          }
+          if (!/dto\.force/.test(send)) { console.error('عبور از تعارض باید صریح باشد'); process.exit(1); }
+
+          // ④ فقط داراییِ برگشتی تعارض دارد: از یک لاتِ مصرفیِ ۱۰۰تایی می‌شود
+          //    همزمان به دو بیمارستان داد.
+          const conf = ast.split('async conflicts(')[1].split(/\n  \}/)[0];
+          if (!/assetKind: \{ in: RETURNABLE \}/.test(conf)) {
+            console.error('تعارض باید فقط روی داراییِ برگشتی باشد'); process.exit(1);
+          }
+
+          // ⑤ حوالهٔ planned هیچ حرکتی ندارد، پس تقویم باید قلم‌هایش را از
+          //    plannedLines بخواند وگرنه تعهدِ فردا نامرئی می‌شود.
+          if (!/function lotsOf/.test(ast) || !/plannedLines/.test(ast)) {
+            console.error('تقویم باید تعهدِ برنامه‌ریزی‌شده را هم ببیند'); process.exit(1);
+          }
+          for (const fn of ['async assets(', 'async conflicts(', 'async month(']) {
+            const body = ast.split(fn)[1].split(/\n  \}/)[0];
+            if (!/lotsOf\(/.test(body)) { console.error(fn + ' باید از lotsOf استفاده کند'); process.exit(1); }
+          }
+
+          // ⑥ کمبود باید دیده شود، نه اینکه ردیف بی‌صدا خالی بماند.
+          const sug = ast.split('async suggestFor(')[1];
+          if (!/shortBy/.test(sug) || !/picked\.length < want/.test(sug)) {
+            console.error('پیشنهاد باید کمبود را صریح اعلام کند'); process.exit(1);
+          }
+          console.log('assets ok');
+          "

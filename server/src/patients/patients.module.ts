@@ -19,6 +19,8 @@ import { TreasuryController } from './treasury.controller';
 import { TreasuryService } from './treasury.service';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
+import { AssetsController } from './assets.controller';
+import { AssetsService } from './assets.service';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
 import { DispatchController } from './dispatch.controller';
@@ -30,11 +32,13 @@ import { PermissionGuard } from '../auth/permission.guard';
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
-    RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, CalendarController, DispatchController, DefinitionsController,
+    RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController,
+    CalendarController, DispatchController, DefinitionsController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
-    ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, CalendarService, DispatchService, PermissionGuard,
+    ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService,
+    CalendarService, DispatchService, PermissionGuard,
   ],
 })
 export class PatientsModule {}

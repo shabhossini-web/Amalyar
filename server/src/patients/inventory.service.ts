@@ -1,6 +1,12 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { AssetsService } from './assets.service';
+import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
+
+// فرمول‌های موجودی در `stock-math` هستند؛ این‌جا فقط دوباره صادر می‌شوند تا
+// فراخوان‌های موجود نشکنند.
+export { balanceByLocation, balanceOf, HOME_FALLBACK };
 import { LEVEL } from '../common/levels';
 
 /** نوعِ حرکتِ انبار. علامت را سرویس تعیین می‌کند، نه کاربر. */
@@ -15,46 +21,26 @@ export const MOVEMENT_LABELS: Record<string, string> = {
   transfer: 'انتقال',
 };
 
-/// محلِ پیش‌فرض وقتی لات محلی ثبت‌نشده دارد — تا موجودی زیرِ کلیدِ `null` گم نشود.
-export const HOME_FALLBACK = 'انبارِ مرکزی';
 
-/** وضعیتِ حواله. `closed` یعنی ماندهٔ مصرف‌نشده برگشته و پرونده بسته است. */
-export const TRANSFER_STATUSES = ['sent', 'received', 'closed'] as const;
+/**
+ * وضعیتِ حواله. `closed` یعنی ماندهٔ مصرف‌نشده برگشته و پرونده بسته است.
+ *
+ * ⚠️ **`planned` تعهد است، نه حرکت.** حوالهٔ فردا امروز صادر می‌شود در حالی که
+ * همان دستگاه هنوز در بیمارستانِ دیروز است؛ اگر صدورِ حواله فوراً از انبار کم
+ * کند، برنامه‌ریزیِ فردا با «موجود نیست» رد می‌شود — دقیقاً همان کاری که
+ * راننده هر روز می‌کند. پس دفترِ انبار وقتی می‌خورد که بار **واقعاً** برود
+ * (`ship`)، و تا آن لحظه حواله فقط تقویمِ دارایی را اشغال می‌کند.
+ */
+export const TRANSFER_STATUSES = ['planned', 'sent', 'received', 'closed'] as const;
 export const TRANSFER_LABELS: Record<string, string> = {
+  planned: 'برنامه‌ریزی‌شده',
   sent: 'ارسال‌شده',
   received: 'تحویلِ CSR',
   closed: 'بسته (مانده برگشت)',
 };
 
-/**
- * موجودیِ لات = جمعِ دفتر.
- *
- * خالص و بیرونِ کلاس، دقیقاً به همان دلیلِ `summarize` در مالی: هرجا موجودی
- * لازم شد از همین یک فرمول می‌آید، پس دو نقطه از برنامه نمی‌توانند دو عددِ
- * متفاوت بگویند.
- */
-export function balanceOf(movements: { quantity: number }[]): number {
-  return movements.reduce((sum, m) => sum + m.quantity, 0);
-}
-
-/**
- * موجودیِ تفکیک‌شده به محل — همان `balanceOf`، فقط گروه‌بندی‌شده.
- *
- * لازم است چون یک لاتِ ۲۰تایی می‌تواند ۱۲ عددش در ستِ بیمارستانِ الف باشد و ۸
- * عددش در انبار. «موجودی» هر دو را می‌شمارد ولی فقط ۸ تا **در دسترس** است، و
- * چینشی که این تفاوت را نبیند ستِ رفته را دوباره تعهد می‌کند.
- */
-export function balanceByLocation(
-  movements: { quantity: number; location: string | null }[],
-  home: string,
-): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const m of movements) {
-    const key = m.location ?? home;
-    map.set(key, (map.get(key) ?? 0) + m.quantity);
-  }
-  return map;
-}
+/** روزِ محلی (بدونِ ساعت) — برای مقایسهٔ «امروز است یا آینده». */
+const startOfDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
 /**
  * انبارِ لات‌محور.
@@ -66,7 +52,7 @@ export function balanceByLocation(
  */
 @Injectable()
 export class InventoryService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private assets: AssetsService) {}
 
   // ───────────────────────── لات‌ها ─────────────────────────
 
@@ -151,6 +137,7 @@ export class InventoryService {
           lotNo: text(dto.lotNo),
           serialNo,
           expiresAt,
+          nextServiceAt: dateOrNull(dto.nextServiceAt, 'تاریخِ سرویسِ بعدی'),
           location: text(dto.location),
           notes: text(dto.notes),
         },
@@ -183,6 +170,7 @@ export class InventoryService {
     const data: any = {};
     for (const key of ['lotNo', 'location', 'notes']) if (dto[key] !== undefined) data[key] = text(dto[key]);
     if (dto.expiresAt !== undefined) data.expiresAt = dateOrNull(dto.expiresAt, 'تاریخِ انقضا');
+    if (dto.nextServiceAt !== undefined) data.nextServiceAt = dateOrNull(dto.nextServiceAt, 'تاریخِ سرویسِ بعدی');
     if (dto.serialNo !== undefined) {
       const serialNo = text(dto.serialNo);
       if (serialNo && serialNo !== before.serialNo) {
@@ -373,7 +361,10 @@ export class InventoryService {
    * — که همان چیزی است که چینش باید ببیند.
    */
   async sendTransfer(
-    dto: { toLocation?: string; fromLocation?: string; hospitalId?: number; visitId?: number; notes?: string; lines?: { lotId: number; quantity: number }[] },
+    dto: {
+      toLocation?: string; fromLocation?: string; hospitalId?: number; visitId?: number; notes?: string;
+      plannedFor?: string; force?: boolean; lines?: { lotId: number; quantity: number }[];
+    },
     user: any,
   ) {
     const to = text(dto.toLocation);
@@ -382,13 +373,31 @@ export class InventoryService {
     if (!lines.length) throw new BadRequestException('حواله بدونِ قلم معنا ندارد');
 
     let visitCode: string | null = null;
+    let visitDate: Date | null = null;
     if (dto.visitId) {
       const v = await this.prisma.visit.findUnique({
         where: { id: dto.visitId },
-        select: { seq: true, patient: { select: { code: true } } },
+        select: { seq: true, opDate: true, patient: { select: { code: true } } },
       });
       if (!v) throw new NotFoundException('مراجعه یافت نشد');
       visitCode = `${v.patient.code}-V${v.seq}`;
+      visitDate = v.opDate;
+    }
+    // روزِ تعهد: صریحِ کاربر، وگرنه روزِ عمل، وگرنه امروز.
+    const plannedFor = dateOrNull(dto.plannedFor, 'تاریخِ حواله') ?? visitDate ?? new Date();
+
+    // ⚠️ تعارض پیش از ساختِ حواله بررسی می‌شود، نه بعدش: حوالهٔ صادرشده سند
+    // است و پس‌گرفتنش ردیفِ ابطال می‌خواهد. هشدار قابلِ عبور است ولی باید
+    // **صریح** باشد (`force`)، وگرنه همان صبحِ عمل معلوم می‌شود.
+    if (!dto.force) {
+      const clash = await this.assets.conflicts(lines.map((l) => Number(l.lotId)), plannedFor);
+      if (clash.length) {
+        const first = clash[0];
+        throw new BadRequestException(
+          `«${first.itemName}»${first.serialNo ? ` (${first.serialNo})` : ''} همین روز در حوالهٔ ${first.transferCode}` +
+          ` برای ${first.hospital} تعهد شده است. اگر عمدی است، دوباره با تأیید بفرستید.`,
+        );
+      }
     }
 
     // مبدأ اگر داده نشده، محلِ خانهٔ اولین لات است — همان جایی که کالا واقعاً هست.
@@ -397,32 +406,83 @@ export class InventoryService {
     const from = text(dto.fromLocation) ?? first.location ?? HOME_FALLBACK;
     if (from === to) throw new BadRequestException('مبدأ و مقصد یکی است');
 
+    // حوالهٔ روزِ آینده فقط **تعهد** است؛ دفتر وقتی می‌خورد که بار برود.
+    const future = startOfDay(plannedFor) > startOfDay(new Date());
+    const status = future ? 'planned' : 'sent';
+
     const transfer = await this.prisma.$transaction(async (tx) => {
       const last = await tx.stockTransfer.findFirst({ orderBy: { id: 'desc' }, select: { id: true } });
       const t = await tx.stockTransfer.create({
         data: {
           code: `HV-${String((last?.id ?? 0) + 1).padStart(4, '0')}`,
           fromLocation: from, toLocation: to,
+          plannedFor, status,
           hospitalId: dto.hospitalId ?? null,
           visitId: dto.visitId ?? null,
           notes: text(dto.notes),
           createdById: user?.id ?? null,
         },
       });
-      for (const l of lines) {
-        const qty = positiveInt(l.quantity, 'تعداد');
-        const meta = { visitId: dto.visitId ?? null, visitCode, transferId: t.id, reason: `حوالهٔ ${t.code}` };
-        await this.move(l.lotId, 'transfer', -qty, { ...meta, location: from }, user, tx);
-        await this.move(l.lotId, 'transfer', qty, { ...meta, location: to }, user, tx);
+      // قلم‌های حوالهٔ برنامه‌ریزی‌شده در `planned_lines` نگه داشته می‌شوند تا
+      // موقعِ ارسال همان‌ها حرکت بخورند.
+      if (future) {
+        await tx.stockTransfer.update({
+          where: { id: t.id },
+          data: { plannedLines: lines.map((l) => ({ lotId: Number(l.lotId), quantity: positiveInt(l.quantity, 'تعداد') })) },
+        });
+      } else {
+        for (const l of lines) {
+          const qty = positiveInt(l.quantity, 'تعداد');
+          const meta = { visitId: dto.visitId ?? null, visitCode, transferId: t.id, reason: `حوالهٔ ${t.code}` };
+          await this.move(l.lotId, 'transfer', -qty, { ...meta, location: from }, user, tx);
+          await this.move(l.lotId, 'transfer', qty, { ...meta, location: to }, user, tx);
+        }
       }
       return t;
     });
 
     await this.audit.record({
-      actorId: user?.id, action: 'stock.transfer.send', entityType: 'stock_transfer', entityId: transfer.id,
-      after: { code: transfer.code, from, to, lines: lines.length },
+      actorId: user?.id, action: future ? 'stock.transfer.plan' : 'stock.transfer.send',
+      entityType: 'stock_transfer', entityId: transfer.id,
+      after: { code: transfer.code, from, to, lines: lines.length, status },
     });
     return this.transfer(transfer.id, user);
+  }
+
+  /**
+   * ارسالِ واقعیِ حوالهٔ برنامه‌ریزی‌شده — همین‌جا دفترِ انبار می‌خورد.
+   *
+   * موجودی **این‌جا** بررسی می‌شود نه موقعِ برنامه‌ریزی: دیروز که برنامه ریختیم
+   * دستگاه هنوز بیرون بود و درست هم بود؛ اگر امروز هنوز برنگشته، همین‌جا باید
+   * جلوی ارسال گرفته شود.
+   */
+  async shipTransfer(id: number, user: any) {
+    const t = await this.prisma.stockTransfer.findUnique({
+      where: { id },
+      include: { visit: { select: { seq: true, patient: { select: { code: true } } } } },
+    });
+    if (!t) throw new NotFoundException('حواله یافت نشد');
+    if (t.status !== 'planned') throw new BadRequestException('این حواله قبلاً ارسال شده است');
+    const lines = (t.plannedLines as any[] | null) ?? [];
+    if (!lines.length) throw new BadRequestException('این حواله قلمی ندارد');
+    const visitCode = t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const l of lines) {
+        const meta = { visitId: t.visitId, visitCode, transferId: t.id, reason: `حوالهٔ ${t.code}` };
+        await this.move(l.lotId, 'transfer', -l.quantity, { ...meta, location: t.fromLocation }, user, tx);
+        await this.move(l.lotId, 'transfer', l.quantity, { ...meta, location: t.toLocation }, user, tx);
+      }
+      await tx.stockTransfer.update({
+        where: { id }, data: { status: 'sent', sentAt: new Date(), plannedLines: undefined },
+      });
+    });
+
+    await this.audit.record({
+      actorId: user?.id, action: 'stock.transfer.send', entityType: 'stock_transfer', entityId: id,
+      before: { status: 'planned' }, after: { status: 'sent' },
+    });
+    return this.transfer(id, user);
   }
 
   /**
@@ -435,6 +495,7 @@ export class InventoryService {
     const t = await this.prisma.stockTransfer.findUnique({ where: { id } });
     if (!t) throw new NotFoundException('حواله یافت نشد');
     if (t.status === 'closed') throw new BadRequestException('این حواله بسته شده است');
+    if (t.status === 'planned') throw new BadRequestException('این حواله هنوز ارسال نشده است');
     const receivedBy = text(dto.receivedBy);
     if (!receivedBy) throw new BadRequestException('نامِ تحویل‌گیرنده را وارد کنید');
 
@@ -462,6 +523,7 @@ export class InventoryService {
     });
     if (!t) throw new NotFoundException('حواله یافت نشد');
     if (t.status === 'closed') throw new BadRequestException('این حواله قبلاً بسته شده است');
+    if (t.status === 'planned') throw new BadRequestException('حوالهٔ ارسال‌نشده برگشت ندارد');
 
     const lotIds = [...new Set(t.movements.map((m) => m.lotId))];
     const returned: { lotId: number; quantity: number }[] = [];
@@ -579,8 +641,11 @@ export class InventoryService {
       id: t.id, code: t.code, fromLocation: t.fromLocation, toLocation: t.toLocation,
       hospitalName: t.hospital?.name ?? null, visitId: t.visitId,
       status: t.status, statusLabel: TRANSFER_LABELS[t.status] ?? t.status,
+      plannedFor: t.plannedFor,
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
-      lineCount: new Set(t.movements.map((m) => m.lotId)).size,
+      lineCount: t.status === 'planned'
+        ? new Set(((t.plannedLines as any[] | null) ?? []).map((l) => l.lotId)).size
+        : new Set(t.movements.map((m) => m.lotId)).size,
     }));
   }
 
@@ -624,7 +689,27 @@ export class InventoryService {
     });
     const usedOf = new Map(used.map((u) => [u.lotId, -(u._sum.quantity ?? 0)]));
 
-    const lines = t.movements
+    // حوالهٔ برنامه‌ریزی‌شده هنوز حرکتی ندارد؛ قلم‌هایش را از `plannedLines`
+    // می‌سازیم تا برگهٔ چاپ و صفحه با حوالهٔ ارسال‌شده یک شکل باشند.
+    const planned = (t.plannedLines as any[] | null) ?? [];
+    const plannedLots = planned.length
+      ? await this.prisma.stockLot.findMany({
+          where: { id: { in: planned.map((l) => Number(l.lotId)) } },
+          include: { item: { select: { name: true, brand: true, size: true, unit: true } } },
+        })
+      : [];
+    const lines = t.status === 'planned'
+      ? planned.map((l) => {
+          const lot = plannedLots.find((x) => x.id === Number(l.lotId));
+          return {
+            movementId: null, lotId: Number(l.lotId),
+            lotNo: lot?.lotNo ?? null, serialNo: lot?.serialNo ?? null, expiresAt: lot?.expiresAt ?? null,
+            itemName: lot?.item.name ?? '—', itemBrand: lot?.item.brand ?? null, itemSize: lot?.item.size ?? null,
+            unit: lot?.item.unit ?? 'عدد',
+            sent: Number(l.quantity), remaining: 0, used: 0,
+          };
+        })
+      : t.movements
       .filter((m) => m.location === t.toLocation)
       .map((m) => {
         const rows = all.filter((r) => r.lotId === m.lotId);
@@ -645,6 +730,7 @@ export class InventoryService {
       id: t.id, code: t.code, fromLocation: t.fromLocation, toLocation: t.toLocation,
       hospital: t.hospital, visitId: t.visitId,
       status: t.status, statusLabel: TRANSFER_LABELS[t.status] ?? t.status,
+      plannedFor: t.plannedFor,
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
       lines,
       totals: {

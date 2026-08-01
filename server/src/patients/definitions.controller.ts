@@ -10,7 +10,8 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
 import { DefinitionsService } from './definitions.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
@@ -154,6 +155,11 @@ export class ItemCreateDto {
   @IsOptional() @IsString() @MaxLength(60) size?: string;
   @IsOptional() @IsString() @MaxLength(40) category?: string;
   @IsOptional() @IsString() @MaxLength(20) unit?: string;
+  /// consumable | set | device — «برگشتی» بودن اینجا تعیین می‌شود.
+  @IsOptional() @IsIn(['consumable', 'set', 'device'], { message: 'نوعِ کالا نامعتبر است' })
+  assetKind?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0, { message: 'ساعتِ آماده‌سازی نمی‌تواند منفی باشد' })
+  turnaroundHours?: number;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
   // به‌شکلِ رشته هم پذیرفته می‌شود چون کاربر با جداکنندهٔ هزارگان تایپ می‌کند.
   @IsOptional() price?: string | number;

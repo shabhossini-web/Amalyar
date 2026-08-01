@@ -143,6 +143,13 @@ export class InventoryController {
   }
 
   /// رسیدِ CSR — موجودی جابه‌جا نمی‌شود، فقط امضا و ساعت ثبت می‌شود.
+  /// ارسالِ واقعیِ حوالهٔ برنامه‌ریزی‌شده — دفترِ انبار همین‌جا می‌خورد.
+  @RequirePermissions('inventory.write')
+  @Post('transfers/:id/ship')
+  ship(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.inv.shipTransfer(id, user);
+  }
+
   @RequirePermissions('inventory.write')
   @Post('transfers/:id/receive')
   csr(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferReceiveDto, @CurrentUser() user: any) {

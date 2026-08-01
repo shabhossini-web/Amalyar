@@ -368,6 +368,7 @@ export class DefinitionsService {
     return rows.map((r) => ({
       id: r.id, name: r.name, sku: r.sku, irc: r.irc, brand: r.brand, size: r.size,
       category: r.category, unit: r.unit, price: r.price, notes: r.notes, active: r.active,
+      assetKind: r.assetKind, turnaroundHours: r.turnaroundHours,
       usedCount: r._count.charges,
     }));
   }
@@ -442,6 +443,12 @@ function itemPatch(dto: any, forCreate: boolean): Record<string, unknown> {
   }
   if (dto.unit !== undefined) out.unit = text(dto.unit) || 'عدد';
   if (dto.active !== undefined) out.active = !!dto.active;
+  if (dto.assetKind !== undefined) out.assetKind = text(dto.assetKind) || 'consumable';
+  if (dto.turnaroundHours !== undefined) {
+    const h = dto.turnaroundHours === null || dto.turnaroundHours === '' ? null : Number(dto.turnaroundHours);
+    if (h !== null && (!Number.isInteger(h) || h < 0)) throw new BadRequestException('ساعتِ آماده‌سازی باید عددِ صحیحِ نامنفی باشد');
+    out.turnaroundHours = h;
+  }
 
   if (dto.price !== undefined) {
     if (dto.price === null || dto.price === '') out.price = null;

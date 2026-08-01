@@ -15,6 +15,10 @@ export class LotCreateDto {
   @IsISO8601({}, { message: 'تاریخِ انقضا نامعتبر است' })
   expiresAt?: string;
 
+  @IsOptional() @ValidateIf((o) => o.nextServiceAt !== '')
+  @IsISO8601({}, { message: 'تاریخِ سرویسِ بعدی نامعتبر است' })
+  nextServiceAt?: string;
+
   @IsOptional() @IsString() @MaxLength(80) location?: string;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 
@@ -32,6 +36,9 @@ export class LotPatchDto {
   @IsOptional() @ValidateIf((o) => o.expiresAt !== '')
   @IsISO8601({}, { message: 'تاریخِ انقضا نامعتبر است' })
   expiresAt?: string;
+  @IsOptional() @ValidateIf((o) => o.nextServiceAt !== '')
+  @IsISO8601({}, { message: 'تاریخِ سرویسِ بعدی نامعتبر است' })
+  nextServiceAt?: string;
   @IsOptional() @IsString() @MaxLength(80) location?: string;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
   @IsOptional() @IsBoolean() active?: boolean;
@@ -82,6 +89,14 @@ export class TransferSendDto {
 
   @IsOptional() @Type(() => Number) @IsInt({ message: 'مراجعهٔ انتخابی نامعتبر است' })
   visitId?: number;
+
+  /// روزی که این حواله برای آن است؛ نیامده باشد از تاریخِ عمل برداشته می‌شود.
+  @IsOptional() @ValidateIf((o) => o.plannedFor !== '')
+  @IsISO8601({}, { message: 'تاریخِ حواله نامعتبر است' })
+  plannedFor?: string;
+
+  /// تأییدِ صریحِ کاربر برای صدور با وجودِ تعارضِ رزرو.
+  @IsOptional() @IsBoolean() force?: boolean;
 
   @IsArray({ message: 'قلم‌های حواله نامعتبر است' })
   @ArrayMinSize(1, { message: 'حواله بدونِ قلم معنا ندارد' })

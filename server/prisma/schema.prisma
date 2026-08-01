@@ -97,8 +97,29 @@ model Hospital {
   visits    Visit[]
   payerFor  Visit[]         @relation("VisitPayer")
   transfers StockTransfer[]
+  needs     HospitalItem[]
 
   @@map("hospitals")
+}
+
+/// نیازِ استانداردِ یک بیمارستان — «لقمان همیشه دستگاهِ C2 و ستِ پدیکولار می‌خواهد».
+///
+/// چینش بدونِ این باید هر بار از حافظهٔ آدم‌ها دربیاورد که کجا چه می‌خواهد؛ با
+/// این، پیشنهادِ پیش‌فرضِ حواله از خودِ بیمارستان می‌آید. **الزام نیست، پیشنهاد
+/// است**: عملِ خاص می‌تواند چیزِ دیگری بخواهد.
+model HospitalItem {
+  id         Int      @id @default(autoincrement())
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospitalId Int      @map("hospital_id")
+  item       Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId     Int      @map("item_id")
+  quantity   Int      @default(1)
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([hospitalId, itemId])
+  @@index([itemId])
+  @@map("hospital_items")
 }
 
 /// کتابِ ارزش نسبیِ خدماتِ سلامت — کدِ ملیِ خدمت.
@@ -196,6 +217,16 @@ model Item {
   size     String?
   category String? // پیچ، راد، کیج، مصرفی…
   unit     String  @default("عدد")
+  /// consumable | set | device
+  ///
+  /// ⚠️ تفاوتِ بنیادی: مصرفی یک‌بار می‌رود و تمام؛ ست و دستگاه **برمی‌گردند** و
+  /// فردا دوباره می‌روند. برای مصرفی سؤال «چند تا داریم» است، برای برگشتی
+  /// «فردا آزاد است؟» — و جوابِ دومی از موجودی درنمی‌آید، از تقویمِ تعهدها.
+  assetKind String  @default("consumable") @map("asset_kind")
+  /// ساعتِ آماده‌سازی پس از برگشت (استریل در CSR، شارژ، کالیبراسیونِ سریع).
+  /// بدونِ این، تقویم داراییِ تازه‌برگشته را همان لحظه آزاد نشان می‌دهد و
+  /// چینش ستی را می‌فرستد که هنوز استریل نشده.
+  turnaroundHours Int? @map("turnaround_hours")
   /// قیمتِ پایه (تومان). فاکتور مبلغِ خودش را کپی می‌کند، پس تغییرِ بعدیِ
   /// این عدد فاکتورهای صادرشده را دست نمی‌زند.
   price    Int?
@@ -204,8 +235,9 @@ model Item {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  charges Charge[]
-  lots    StockLot[]
+  charges       Charge[]
+  lots          StockLot[]
+  hospitalNeeds HospitalItem[]
 
   @@index([name])
   @@index([category])
@@ -230,6 +262,9 @@ model StockLot {
   /// شمارهٔ سریالِ یکتا (اگر کالا سریالی باشد).
   serialNo  String?   @unique @map("serial_no")
   expiresAt DateTime? @map("expires_at")
+  /// کالیبراسیون/سرویسِ بعدیِ دستگاه. دستگاهِ از کالیبراسیون‌افتاده سرِ عمل
+  /// مسئولیتِ حقوقی است، پس تقویم آن را «آمادهٔ اعزام» نشان نمی‌دهد.
+  nextServiceAt DateTime? @map("next_service_at")
   /// **محلِ خانهٔ** لات — انبارِ خودمان که این لات از آن‌جا می‌رود و به آن‌جا
   /// برمی‌گردد. محلِ *فعلیِ* هر تعداد، از دفتر مشتق می‌شود (`StockMovement.location`)،
   /// چون یک لات می‌تواند همزمان چند جا باشد. «در دسترس» = موجودی در همین محل.
@@ -321,8 +356,15 @@ model StockTransfer {
   visit      Visit?    @relation(fields: [visitId], references: [id], onDelete: SetNull)
   visitId    Int?      @map("visit_id")
 
-  /// sent | received | closed
+  /// planned | sent | received | closed
   status     String    @default("sent")
+  /// قلم‌های حوالهٔ **برنامه‌ریزی‌شده** — تا وقتی بار نرفته، دفترِ انبار نباید
+  /// بخورد؛ پس قلم‌ها این‌جا می‌مانند و موقعِ `ship` به حرکت تبدیل می‌شوند.
+  /// [{ lotId, quantity }]
+  plannedLines Json?    @map("planned_lines")
+  /// روزی که این حواله برای آن است — مبنای تقویمِ دارایی و تشخیصِ تعارض.
+  /// جدا از `sentAt` است: حوالهٔ فردا را امروز صادر می‌کنیم.
+  plannedFor DateTime? @map("planned_for")
   sentAt     DateTime  @default(now()) @map("sent_at")
   receivedAt DateTime? @map("received_at")
   /// نامِ تحویل‌گیرندهٔ CSR.
