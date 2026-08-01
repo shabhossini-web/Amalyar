@@ -3,16 +3,17 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 
-/** نقشِ شغلی — جدا از سطحِ دسترسی. */
-export const JOB_ROLES = ['tech', 'driver', 'courier', 'office'] as const;
+/** نقش‌هایی که ابلاغ می‌گیرند. */
+export const BRIEF_ROLES = ['tech', 'driver', 'courier'] as const;
 export const JOB_LABELS: Record<string, string> = {
   tech: 'کارشناس',
   driver: 'راننده',
   courier: 'پیک',
-  office: 'دفتر',
 };
 
-/// نقش‌هایی که در چینش تخصیص داده می‌شوند (کارشناس روی خودِ Visit است).
+/// نقش‌هایی که در تبِ حمل‌ونقل تخصیص داده می‌شوند.
+/// کارشناس این‌جا نیست چون روی خودِ `Visit.techId` نوشته می‌شود، نه چون
+/// انتخاب نمی‌شود — تبِ کارشناسِ همین پنل همان ستون را می‌نویسد.
 export const ASSIGN_ROLES = ['driver', 'courier'] as const;
 
 /**
@@ -30,33 +31,21 @@ export const ASSIGN_ROLES = ['driver', 'courier'] as const;
 export class DispatchService {
   constructor(private prisma: PrismaService, private audit: AuditService) {}
 
-  /** نیروهای قابلِ تخصیص، گروه‌بندی‌شده بر نقشِ شغلی. */
+  /** نیروهای حمل‌ونقلِ فعال — همان‌هایی که در تعاریفِ پایه تعریف شده‌اند. */
   async staff() {
-    const rows = await this.prisma.account.findMany({
-      where: { status: 'active' },
+    const rows = await this.prisma.transportStaff.findMany({
+      where: { active: true },
       include: { person: { select: { firstName: true, lastName: true, phone: true } } },
-      orderBy: { id: 'asc' },
+      orderBy: [{ role: 'asc' }, { id: 'asc' }],
     });
-    return rows.map((a) => ({
-      id: a.id,
-      name: `${a.person.firstName} ${a.person.lastName}`.trim(),
-      phone: a.person.phone,
-      level: a.level,
-      jobRole: a.jobRole,
-      jobLabel: a.jobRole ? JOB_LABELS[a.jobRole] ?? a.jobRole : null,
+    return rows.map((s) => ({
+      id: s.id,
+      name: `${s.person.firstName} ${s.person.lastName}`.trim(),
+      phone: s.person.phone,
+      role: s.role,
+      roleLabel: JOB_LABELS[s.role] ?? s.role,
+      vehicle: s.vehicle,
     }));
-  }
-
-  async setJobRole(accountId: number, jobRole: string | null, user: any) {
-    if (jobRole && !JOB_ROLES.includes(jobRole as any)) throw new BadRequestException('نقشِ شغلی نامعتبر است');
-    const row = await this.prisma.account.findUnique({ where: { id: accountId } });
-    if (!row) throw new NotFoundException('کاربر یافت نشد');
-    await this.prisma.account.update({ where: { id: accountId }, data: { jobRole } });
-    await this.audit.record({
-      actorId: user?.id, action: 'account.jobrole', entityType: 'account', entityId: accountId,
-      before: { jobRole: row.jobRole }, after: { jobRole },
-    });
-    return { ok: true };
   }
 
   /**
@@ -121,7 +110,7 @@ export class DispatchService {
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         procedureType: { select: { name: true } },
-        assignments: { include: { account: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } },
+        assignments: { include: { staff: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } },
         stockTransfers: {
           where: { status: { not: 'closed' } },
           include: { movements: { where: { quantity: { gt: 0 }, kind: 'transfer' }, include: { lot: { include: { item: { select: { name: true, size: true } } } } } } },
@@ -143,6 +132,7 @@ export class DispatchService {
           transferCode: t.code,
           toLocation: t.toLocation,
           itemName: [m.lot.item.name, m.lot.item.size].filter(Boolean).join(' '),
+          category: m.lot.item.category,
           lotNo: m.lot.serialNo || m.lot.lotNo,
           quantity: m.quantity,
         })),
@@ -155,6 +145,7 @@ export class DispatchService {
       opStartTime: v.opStartTime,
       opEndTime: v.opEndTime,
       techArriveTime: v.techArriveTime,
+      cargoDueTime: v.cargoDueTime,
       surgeonName: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName,
       procedureName: v.procedureType?.name ?? v.opType,
       hospital: v.hospital
@@ -165,34 +156,35 @@ export class DispatchService {
         : null,
       assignments: v.assignments.map((a: any) => ({
         id: a.id, role: a.role, roleLabel: JOB_LABELS[a.role] ?? a.role,
-        accountId: a.accountId,
-        name: `${a.account.person.firstName} ${a.account.person.lastName}`.trim(),
-        phone: a.account.person.phone,
+        staffId: a.staffId,
+        name: `${a.staff.person.firstName} ${a.staff.person.lastName}`.trim(),
+        phone: a.staff.person.phone,
+        vehicle: a.staff.vehicle,
         note: a.note,
       })),
       cargo,
     };
   }
 
-  async assign(visitId: number, dto: { accountId: number; role: string; note?: string }, user: any) {
+  async assign(visitId: number, dto: { staffId: number; role: string; note?: string }, user: any) {
     if (!ASSIGN_ROLES.includes(dto.role as any)) {
-      throw new BadRequestException('نقشِ تخصیص فقط راننده یا پیک است؛ کارشناس از فرمِ خودِ مراجعه انتخاب می‌شود');
+      throw new BadRequestException('نقشِ تخصیص فقط راننده یا پیک است؛ کارشناس از تبِ کارشناسِ همین پنل انتخاب می‌شود');
     }
-    const [visit, account] = await Promise.all([
+    const [visit, staff] = await Promise.all([
       this.prisma.visit.findUnique({ where: { id: visitId }, select: { id: true } }),
-      this.prisma.account.findUnique({ where: { id: Number(dto.accountId) }, select: { id: true, status: true } }),
+      this.prisma.transportStaff.findUnique({ where: { id: Number(dto.staffId) }, select: { id: true, active: true } }),
     ]);
     if (!visit) throw new NotFoundException('مراجعه پیدا نشد');
-    if (!account || account.status !== 'active') throw new NotFoundException('کاربرِ فعال یافت نشد');
+    if (!staff || !staff.active) throw new NotFoundException('نیروی فعال یافت نشد');
 
     const row = await this.prisma.visitAssignment.upsert({
-      where: { visitId_accountId_role: { visitId, accountId: account.id, role: dto.role } },
-      create: { visitId, accountId: account.id, role: dto.role, note: text(dto.note), createdById: user?.id ?? null },
+      where: { visitId_staffId_role: { visitId, staffId: staff.id, role: dto.role } },
+      create: { visitId, staffId: staff.id, role: dto.role, note: text(dto.note), createdById: user?.id ?? null },
       update: { note: text(dto.note) },
     });
     await this.audit.record({
       actorId: user?.id, action: 'dispatch.assign', entityType: 'visit_assignment', entityId: row.id,
-      after: { visitId, accountId: account.id, role: dto.role },
+      after: { visitId, staffId: staff.id, role: dto.role },
     });
     return row;
   }
@@ -212,7 +204,7 @@ export class DispatchService {
    * دو متنِ جدا برای دو کانال یعنی دو روز بعد یکی‌شان تاریخ را جا می‌اندازد.
    */
   async briefing(visitId: number, role: string) {
-    if (!JOB_ROLES.includes(role as any)) throw new BadRequestException('نقش نامعتبر است');
+    if (!BRIEF_ROLES.includes(role as any)) throw new BadRequestException('نقش نامعتبر است');
     const v = await this.prisma.visit.findUnique({
       where: { id: visitId },
       include: {
@@ -221,7 +213,7 @@ export class DispatchService {
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         procedureType: { select: { name: true } },
-        assignments: { include: { account: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } },
+        assignments: { include: { staff: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } },
         stockTransfers: {
           where: { status: { not: 'closed' } },
           include: { movements: { where: { quantity: { gt: 0 }, kind: 'transfer' }, include: { lot: { include: { item: { select: { name: true, size: true } } } } } } },
@@ -273,7 +265,14 @@ export function briefingText(v: any, opDate: Date | null, role: string): string 
   }
 
   L.push(`زمان: ${when}`);
-  if (role === 'tech' && v.techArriveTime) L.push(`ساعتِ حضورِ شما: ${v.techArriveTime}`);
+  // هر نقش ساعتِ خودش را می‌گیرد: کارشناس ساعتِ حضور، راننده و پیک ساعتی که
+  // بار باید تحویلِ CSR شده باشد. دادنِ هر دو به هر دو یعنی یکی‌شان را اشتباه
+  // می‌گیرند.
+  if (role === 'tech') {
+    if (v.techArriveTime) L.push(`ساعتِ حضورِ شما: ${v.techArriveTime}`);
+  } else if (v.cargoDueTime) {
+    L.push(`بار باید تا ساعتِ ${v.cargoDueTime} تحویل شده باشد`);
+  }
 
   if (v.cargo?.length) {
     L.push('');

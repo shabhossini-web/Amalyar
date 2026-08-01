@@ -45,6 +45,7 @@ function enrich(v: any) {
     opStartTime: v.opStartTime,
     opEndTime: v.opEndTime,
     techArriveTime: v.techArriveTime,
+    cargoDueTime: v.cargoDueTime,
     opTimesUpdatedAt: v.opTimesUpdatedAt,
     // مدتِ عمل مشتق است و فقط این‌جا حساب می‌شود — هیچ render ای اجازهٔ تفریقِ
     // ساعت ندارد، وگرنه عملِ نیمه‌شب در یک جا درست و در جای دیگر منفی می‌شود.
@@ -104,6 +105,7 @@ function timePatch(dto: any): Record<string, unknown> {
     opStartTime: 'ساعتِ شروع',
     opEndTime: 'ساعتِ پایان',
     techArriveTime: 'ساعتِ حضورِ کارشناس',
+    cargoDueTime: 'ساعتِ تحویلِ بار',
   } as const;
   for (const [key, label] of Object.entries(map)) {
     if (dto[key] !== undefined) out[key] = normalizeTime(dto[key], label);
@@ -735,7 +737,7 @@ export class PatientsService {
     const result = enrich(updated);
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: id,
-      before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, techArriveTime: before?.techArriveTime },
+      before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, techArriveTime: before?.techArriveTime, cargoDueTime: before?.cargoDueTime },
       after: patch,
     });
     return result;

@@ -32,6 +32,21 @@ const SECTIONS = [
     ],
   },
   {
+    key: 'transport-staff',
+    label: 'راننده و پیک',
+    path: '/transport-staff',
+    person: true,
+    title: (r) => r.name,
+    sub: (r) => [r.roleLabel, r.phone, r.vehicle].filter(Boolean).join(' · '),
+    uses: (r) => `${faNum(r.missionCount)} مأموریت`,
+    empty: 'هنوز راننده یا پیکی تعریف نشده',
+    hint: 'راننده و پیک به سامانه وارد نمی‌شوند، پس حسابِ کاربری ندارند و این‌جا تعریف می‌شوند — نه در «کاربران». همین‌ها در پنلِ چینش، تبِ حمل‌ونقل، انتخاب می‌شوند.',
+    extra: [
+      { key: 'role', label: 'نقش *', options: [{ v: 'driver', l: 'راننده' }, { v: 'courier', l: 'پیک' }] },
+      { key: 'vehicle', label: 'خودرو و پلاک' },
+    ],
+  },
+  {
     key: 'hospitals',
     label: 'بیمارستان‌ها',
     path: '/hospitals',
@@ -188,7 +203,7 @@ export default function Definitions() {
               <b>{section.title(row)}{!row.active && <i> (غیرفعال)</i>}</b>
               {section.sub(row) && <small dir="auto">{section.sub(row)}</small>}
             </div>
-            <span className="df-uses">{faNum(row.visitCount)} مراجعه</span>
+            <span className="df-uses">{section.uses ? section.uses(row) : `${faNum(row.visitCount)} مراجعه`}</span>
             <div className="df-acts">
               <button type="button" title="ویرایش" onClick={() => setEditing(row)}><Pencil width="15" height="15" /></button>
               <button type="button" title={row.active ? 'غیرفعال کن' : 'فعال کن'} onClick={() => toggle(row)}>
@@ -228,6 +243,10 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
     if (busy) return;
     if (section.person) {
       const e = personErrors(form);
+      // فیلدهای اختصاصیِ بخش (مثلِ «نقش») هم اجباری‌اند اگر گزینه‌دار باشند.
+      for (const f of section.extra ?? []) {
+        if (f.options && !form[f.key]) e[f.key] = 'این فیلد لازم است';
+      }
       setErrors(e);
       if (Object.keys(e).length) return;
     } else {
@@ -272,9 +291,17 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
               <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
               <div className="pf-row2">
                 {(section.extra ?? []).map((f) => (
-                  <label key={f.key} className="pf-field">
+                  <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
                     <span>{f.label}</span>
-                    <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
+                    {f.options
+                      ? (
+                        <select value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy}>
+                          <option value="">— انتخاب کنید —</option>
+                          {f.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                        </select>
+                      )
+                      : <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />}
+                    {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}
                   </label>
                 ))}
               </div>

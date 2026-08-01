@@ -32,8 +32,9 @@ model Person {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
 
-  account Account?
-  surgeon Surgeon?
+  account   Account?
+  surgeon   Surgeon?
+  transport TransportStaff?
 
   @@index([lastName, firstName])
   @@map("people")
@@ -50,12 +51,6 @@ model Account {
   level        Int       @default(1) // 1..6
   status       String    @default("pending") // pending | active | disabled | rejected
   fee          Int? // دستمزدِ کارشناس (تومان) — مالیِ سبک؛ قرارداد در حسابداری
-  /// ⚠️ **نقشِ شغلی، جدا از `level`.** سطح می‌گوید «چه چیزی را می‌تواند ببیند»،
-  /// این می‌گوید «چه کاری می‌کند». راننده و پیک سطحِ دسترسیِ پایینی دارند ولی
-  /// در چینش نقشِ مستقل دارند؛ قاطی‌کردنشان یعنی برای دادنِ نقشِ راننده مجبور
-  /// شویم دسترسی‌اش را هم بالا ببریم.
-  /// tech | driver | courier | office
-  jobRole      String?   @map("job_role")
   approvedById Int?      @map("approved_by_id")
   approvedAt   DateTime? @map("approved_at")
   createdAt    DateTime  @default(now()) @map("created_at")
@@ -63,7 +58,6 @@ model Account {
   sessions    Session[]
   credentials WebauthnCredential[]
   techVisits  Visit[]              @relation("VisitTech")
-  assignments VisitAssignment[]    @relation("Assignee")
 
   @@map("accounts")
 }
@@ -713,6 +707,10 @@ model Visit {
   opEndTime        String?   @map("op_end_time")
   /// ساعتِ حضورِ کارشناس در بیمارستان (از پنلِ چینش).
   techArriveTime   String?   @map("tech_arrive_time")
+  /// ساعتی که بار باید در بیمارستان باشد — معمولاً چند ساعت قبل از عمل، چون
+  /// ست باید در CSR استریل شود. جدا از `techArriveTime` است: راننده و کارشناس
+  /// دو ساعتِ متفاوت دارند و یکی‌کردنشان یعنی یکی‌شان همیشه غلط است.
+  cargoDueTime     String?   @map("cargo_due_time")
   /// آخرین باری که ساعت‌ها ثبت/اصلاح شدند — برای تایم‌لاینِ پنلِ کارشناسی.
   opTimesUpdatedAt DateTime? @map("op_times_updated_at")
 
@@ -1071,21 +1069,51 @@ model FiscalYear {
   @@map("fiscal_years")
 }
 
-/// تخصیصِ نیرو به یک عمل — راننده و پیک.
+/// نیروی حمل‌ونقل — راننده یا پیک. همان الگوی `Surgeon`: هویت در `Person`،
+/// نقش این‌جا.
+///
+/// ⚠️ عمداً `Account` نیست. راننده به سامانه وارد نمی‌شود؛ گره‌زدنش به حسابِ
+/// کاربری یعنی برای تعریفِ هر راننده باید یک لاگین ساخت و مسیرِ ثبت‌نامِ OTP
+/// را طی کرد — و در عمل یعنی راننده هیچ‌وقت تعریف نمی‌شود. کارشناس برعکس،
+/// حساب دارد چون به پنلِ کارشناسی وارد می‌شود.
+model TransportStaff {
+  id       Int    @id @default(autoincrement())
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  personId Int    @unique @map("person_id")
+
+  /// driver | courier — نقشِ معمولِ این نفر؛ نقشِ هر مأموریت روی خودِ تخصیص است.
+  role String
+  /// خودرو و پلاک — در ابلاغ و هماهنگی با نگهبانیِ بیمارستان لازم می‌شود.
+  vehicle String?
+  active  Boolean @default(true)
+  notes   String?
+
+  assignments VisitAssignment[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([role, active])
+  @@map("transport_staff")
+}
+
+/// تخصیصِ نیروی حمل‌ونقل به یک عمل — راننده و پیک.
 ///
 /// ⚠️ **کارشناس عمداً این‌جا نیست و روی `Visit.techId` می‌ماند.** دامنهٔ دسترسیِ
 /// کارشناس (چه مراجعه‌ای را می‌بیند)، فیلترها، خروجی‌ها و برگهٔ مصرف همه به آن
 /// ستون آویزان‌اند؛ جابه‌جا کردنش یک بازنویسیِ پرریسک است که هیچ قابلیتِ تازه‌ای
-/// نمی‌دهد. اگر روزی یک عمل به دو کارشناس نیاز داشت، همان وقت مهاجرت می‌کنیم.
+/// نمی‌دهد. این یعنی «کارشناس انتخاب نمی‌شود» نیست: پنلِ چینش همان `Visit.techId`
+/// را می‌نویسد، فقط ستونِ دوم نمی‌سازد.
 model VisitAssignment {
   id      Int   @id @default(autoincrement())
   visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
   visitId Int   @map("visit_id")
 
-  account   Account @relation("Assignee", fields: [accountId], references: [id], onDelete: Cascade)
-  accountId Int     @map("account_id")
+  staff   TransportStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staffId Int            @map("staff_id")
 
-  /// driver | courier
+  /// driver | courier — نقشِ *همین* مأموریت. جدا از `TransportStaff.role` است
+  /// چون رانندهٔ همیشگی گاهی پیکِ یک عمل می‌شود و نباید دوبار تعریف شود.
   role String
   /// جزئیاتِ همین مأموریت: «تحویل به CSR تا ساعت ۷»
   note String?
@@ -1093,8 +1121,8 @@ model VisitAssignment {
   createdById Int?     @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  @@unique([visitId, accountId, role])
+  @@unique([visitId, staffId, role])
   @@index([visitId])
-  @@index([accountId])
+  @@index([staffId])
   @@map("visit_assignments")
 }

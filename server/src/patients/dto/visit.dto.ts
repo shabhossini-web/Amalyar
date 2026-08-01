@@ -101,6 +101,9 @@ export class CreateVisitDto {
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   techArriveTime?: string;
 
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  cargoDueTime?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(1000, { message: 'یادداشت طولانی است' })
@@ -219,6 +222,9 @@ export class UpdateVisitDto {
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   techArriveTime?: string;
 
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  cargoDueTime?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(1000)
@@ -235,6 +241,9 @@ export class VisitTimesDto {
 
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   techArriveTime?: string;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  cargoDueTime?: string;
 }
 
 export class VisitStatusDto {

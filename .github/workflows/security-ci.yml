@@ -639,12 +639,17 @@ jobs:
             console.error('کارشناس نباید از مسیرِ تخصیص بیاید — روی خودِ Visit است'); process.exit(1);
           }
 
+          // ①ب ولی *باید* از پنلِ چینش قابلِ انتخاب باشد. پنلی که کارشناس نمی‌چیند
+          //     اسمش چینش نیست؛ فقط ستونِ دومی نمی‌سازد.
+          const ui = fs.readFileSync('src/app/Dispatch.jsx', 'utf8');
+          if (!/techId:/.test(ui)) { console.error('تبِ کارشناس باید Visit.techId را بنویسد'); process.exit(1); }
+          if (!/dispatch\/visits\/\\\${visitId}\/assign/.test(ui)) { console.error('تبِ حمل‌ونقل باید تخصیص بدهد'); process.exit(1); }
+
           // ② متنِ ابلاغ در *سرویس* ساخته می‌شود نه در UI، وگرنه کانالِ بعدی
           //    (بله/پیامک) فیلترِ حریمِ خصوصی را دور می‌زند.
           if (!/export function briefingText/.test(src)) {
             console.error('briefingText باید تابعِ خالصِ سرویس باشد'); process.exit(1);
           }
-          const ui = fs.readFileSync('src/app/Dispatch.jsx', 'utf8');
           if (!/briefing\?role=/.test(ui)) { console.error('UI باید متن را از سرور بگیرد نه بسازد'); process.exit(1); }
 
           // ③ آزمونِ رفتاری: راننده و پیک هیچ فیلدِ بیمار نمی‌گیرند، کارشناس می‌گیرد.
@@ -658,12 +663,36 @@ jobs:
             const tail = after.split('L.push(\`بیمارستان')[0];
             if (tail.includes(f)) { console.error('شاخهٔ راننده/پیک نباید ' + f + ' داشته باشد'); process.exit(1); }
           }
+          // ساعتِ حضورِ کارشناس هم دادهٔ او است نه راننده — هرکس ساعتِ خودش.
+          const times = body.split('L.push(\`زمان:')[1] || '';
+          if (!/techArriveTime/.test(times) || !/cargoDueTime/.test(times)) {
+            console.error('کارشناس ساعتِ حضور و راننده ساعتِ تحویلِ بار می‌گیرد'); process.exit(1);
+          }
+          const drvTime = times.split('} else if')[1] || '';
+          if (/techArriveTime/.test(drvTime)) { console.error('راننده نباید ساعتِ حضورِ کارشناس را بگیرد'); process.exit(1); }
 
           // ④ کمبودِ راننده فقط وقتی معنا دارد که باری برای بردن باشد.
           const month = src.split('async month(')[1].split(/\n  }/)[0];
           if (!/stockTransfers\.length > 0/.test(month)) {
             console.error('«بی‌راننده» باید مشروط به وجودِ حواله باشد وگرنه کلِ ماه هشدارِ دروغ می‌دهد');
             process.exit(1);
+          }
+
+          // ⑤ راننده و پیک حسابِ کاربری ندارند: اگر تخصیص به Account گره بخورد،
+          //    تعریفِ هر راننده یک ثبت‌نامِ OTP لازم دارد و در عمل انجام نمی‌شود.
+          const schema = fs.readFileSync('server/prisma/schema.prisma', 'utf8');
+          const model = schema.split('model VisitAssignment')[1].split('}')[0];
+          if (!/TransportStaff/.test(model) || /Account/.test(model)) {
+            console.error('تخصیص باید به TransportStaff گره بخورد نه به Account'); process.exit(1);
+          }
+          const defs = fs.readFileSync('server/src/patients/definitions.service.ts', 'utf8');
+          if (!/createTransportStaff/.test(defs)) {
+            console.error('راننده و پیک باید در تعاریفِ پایه تعریف شوند'); process.exit(1);
+          }
+          // نیرویی که مأموریت داشته حذفِ سخت نمی‌شود وگرنه چینشِ گذشته بی‌راننده می‌ماند.
+          const del = defs.split('async deleteTransportStaff')[1].split(/\n  }/)[0];
+          if (!/_count\.assignments > 0/.test(del) || !/active: false/.test(del)) {
+            console.error('نیروی دارای مأموریت باید غیرفعال شود نه حذف'); process.exit(1);
           }
           console.log('dispatch ok');
           "

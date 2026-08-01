@@ -4,6 +4,8 @@ import { toEnDigits } from '../common/identity';
 import { LEVEL } from '../common/levels';
 import { buildPersonPatch, PersonInput } from '../common/person';
 
+const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
+
 /**
  * تعریف‌های عملیاتیِ ماژولِ بیماران: جراحان و بیمارستان‌ها (+ فهرستِ کارشناسان).
  * موجودیتِ استفاده‌شده در مراجعه‌ها حذفِ سخت نمی‌شود — غیرفعال (active=false) می‌شود
@@ -100,6 +102,93 @@ export class DefinitionsService {
       return { ok: true, deactivated: true };
     }
     await this.prisma.surgeon.delete({ where: { id } });
+    return { ok: true, deactivated: false };
+  }
+
+  // ── نیروی حمل‌ونقل (راننده و پیک) ─────────────────────────────
+  // ⚠️ این‌جا تعریف می‌شوند نه در «کاربران»: راننده به سامانه وارد نمی‌شود، پس
+  // اجبار به ساختنِ حسابِ کاربری (با مسیرِ ثبت‌نامِ OTP) یعنی در عمل هیچ راننده‌ای
+  // تعریف نمی‌شود. الگو همان جراح است: هویت در Person، نقش در جدولِ خودش.
+
+  private static readonly STAFF_INCLUDE = {
+    person: true,
+    _count: { select: { assignments: true } },
+  } as const;
+
+  private staffView(s: any) {
+    const p = s.person;
+    return {
+      id: s.id,
+      personId: s.personId,
+      name: `${p.firstName} ${p.lastName}`.trim(),
+      firstName: p.firstName,
+      lastName: p.lastName,
+      phone: p.phone,
+      nationalId: p.nationalId,
+      city: p.city,
+      address: p.address,
+      iban: p.iban,
+      photo: p.photo,
+      notes: s.notes ?? p.notes,
+      role: s.role,
+      roleLabel: STAFF_ROLE_FA[s.role] ?? s.role,
+      vehicle: s.vehicle,
+      active: s.active,
+      missionCount: s._count.assignments,
+    };
+  }
+
+  async listTransportStaff() {
+    const rows = await this.prisma.transportStaff.findMany({
+      orderBy: [{ active: 'desc' }, { role: 'asc' }, { person: { lastName: 'asc' } }],
+      include: DefinitionsService.STAFF_INCLUDE,
+    });
+    return rows.map((s) => this.staffView(s));
+  }
+
+  async createTransportStaff(dto: PersonInput & { role: string; vehicle?: string; notes?: string }) {
+    const row = await this.prisma.transportStaff.create({
+      data: {
+        role: dto.role,
+        vehicle: dto.vehicle?.trim() || null,
+        notes: dto.notes?.trim() || null,
+        person: { create: buildPersonPatch(dto, true) as any },
+      },
+      include: DefinitionsService.STAFF_INCLUDE,
+    });
+    return this.staffView(row);
+  }
+
+  async updateTransportStaff(id: number, dto: PersonInput & { role?: string; vehicle?: string; notes?: string; active?: boolean }) {
+    const s = await this.prisma.transportStaff.findUnique({ where: { id } });
+    if (!s) throw new NotFoundException('نیرو یافت نشد');
+    const personPatch = buildPersonPatch(dto, false);
+    const updated = await this.prisma.transportStaff.update({
+      where: { id },
+      data: {
+        ...(dto.role !== undefined ? { role: dto.role } : {}),
+        ...(dto.vehicle !== undefined ? { vehicle: dto.vehicle?.trim() || null } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+      },
+      include: DefinitionsService.STAFF_INCLUDE,
+    });
+    return this.staffView(updated);
+  }
+
+  /// نیرویی که مأموریت داشته غیرفعال می‌شود نه حذف — وگرنه چینشِ گذشته بی‌راننده می‌شود.
+  async deleteTransportStaff(id: number) {
+    const s = await this.prisma.transportStaff.findUnique({
+      where: { id },
+      include: { _count: { select: { assignments: true } } },
+    });
+    if (!s) throw new NotFoundException('نیرو یافت نشد');
+    if (s._count.assignments > 0) {
+      await this.prisma.transportStaff.update({ where: { id }, data: { active: false } });
+      return { ok: true, deactivated: true };
+    }
+    await this.prisma.transportStaff.delete({ where: { id } });
     return { ok: true, deactivated: false };
   }
 

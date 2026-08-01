@@ -23,32 +23,24 @@
 .dp-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
 .dp-head p { margin: 0; font-size: 12px; color: #9a93bb; line-height: 1.9; }
 .dp-gapnote { font-style: normal; color: #fbbf24; }
-.dp-staffbtn {
-  flex-shrink: 0; font: inherit; font-size: 12px; cursor: pointer; padding: 9px 13px; border-radius: 11px;
-  color: #fcd34d; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .3);
-}
-
 .dp-err { max-width: 940px; margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }
-.dp-hint { font-size: 11.5px; color: #9a93bb; line-height: 2; margin: 0 0 10px; }
 
-/* نقشِ شغلیِ نیروها */
-.dp-staff {
-  max-width: 940px; margin: 0 auto 18px; padding: 14px 16px; border-radius: 16px;
-  background: rgba(18, 13, 49, .75); border: 1px solid rgba(139, 92, 246, .18);
+/* تب‌ها */
+.dp-tabs { display: flex; gap: 8px; max-width: 940px; margin: 0 auto 16px; }
+.dp-tabs button {
+  flex: 1; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  padding: 11px 14px; border-radius: 13px;
+  color: #b9b2d8; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
 }
-.dp-staffrow {
-  display: flex; align-items: center; gap: 10px; padding: 8px 0;
-  border-block-start: 1px solid rgba(255, 255, 255, .06);
+.dp-tabs button.on {
+  color: #fff; background: rgba(245, 158, 11, .14); border-color: rgba(245, 158, 11, .45);
 }
-.dp-staffrow:first-of-type { border-block-start: none; }
-.dp-staffrow b { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; }
-.dp-staffrow span { font-size: 11px; color: rgba(255, 255, 255, .45); }
-.dp-staffrow select,
+
 .dp-pick select {
   font: inherit; font-size: 11.5px; padding: 6px 9px; border-radius: 9px; cursor: pointer;
   color: #f4f1ff; background: rgba(255, 255, 255, .06); border: 1px solid rgba(139, 92, 246, .28);
 }
-.dp-staffrow select option, .dp-pick select option { background: #14103a; }
+.dp-pick select option { background: #14103a; }
 
 /* خلاصهٔ سلولِ روز */
 .dp-cell { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
@@ -88,7 +80,6 @@
 .dp-chip em { font-style: normal; font-size: 9.5px; color: rgba(255, 255, 255, .4); }
 .dp-chip.cargo { color: #86efac; border-color: rgba(52, 211, 153, .28); background: rgba(52, 211, 153, .08); }
 .dp-chip.tech { color: #a5b4fc; border-color: rgba(129, 140, 248, .3); }
-.dp-chip.tech.miss { color: #fbbf24; border-color: rgba(251, 191, 36, .3); border-style: dashed; }
 .dp-chip.driver { color: #fcd34d; border-color: rgba(245, 158, 11, .3); }
 .dp-chip.courier { color: #67e8f9; border-color: rgba(34, 211, 238, .3); }
 .dp-chip button {
@@ -100,7 +91,6 @@
 
 .dp-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block-start: 10px; }
 .dp-pick label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255, 255, 255, .5); }
-.dp-nopool { font-style: normal; font-size: 11px; color: #fbbf24; }
 
 /* شیتِ متنِ ابلاغ */
 .dp-overlay {
@@ -134,3 +124,35 @@
   color: #f4f1ff; background: rgba(18, 13, 49, .95); border: 1px solid rgba(139, 92, 246, .3);
 }
 .dp-toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* کارتی که نیرو کم دارد باید بدونِ خواندنِ متن دیده شود */
+.dp-card.gap { border-inline-start-color: rgba(248, 113, 113, .8); }
+
+.dp-chip .cat {
+  padding: 1px 6px; border-radius: 6px; font-size: 9px; font-style: normal;
+  color: #d1fae5; background: rgba(52, 211, 153, .18);
+}
+.dp-dest { font-size: 10.5px; color: rgba(255, 255, 255, .5); align-self: center; }
+.dp-none { font-size: 11px; color: #fbbf24; }
+
+.dp-timebox { display: inline-flex; align-items: center; gap: 6px; }
+.dp-timebox input {
+  width: 74px; font: inherit; font-size: 11.5px; text-align: center;
+  padding: 6px 8px; border-radius: 9px;
+  color: #f4f1ff; background: rgba(255, 255, 255, .06); border: 1px solid rgba(139, 92, 246, .28);
+}
+.dp-brief-btn {
+  font: inherit; font-size: 11px; cursor: pointer; padding: 6px 11px; border-radius: 9px;
+  color: #c4b5fd; background: rgba(124, 58, 237, .14); border: 1px solid rgba(124, 58, 237, .34);
+}
+.dp-nopool a { color: #fcd34d; }
+.dp-nopool {
+  max-width: 940px; margin: 12px auto 0; padding: 14px 16px; border-radius: 14px;
+  font-size: 12px; color: #fbbf24; line-height: 2;
+  background: rgba(245, 158, 11, .07); border: 1px dashed rgba(245, 158, 11, .3);
+}
+
+@media (max-width: 640px) {
+  .dp-pick { gap: 8px; }
+  .dp-pick label, .dp-timebox { font-size: 10.5px; }
+}

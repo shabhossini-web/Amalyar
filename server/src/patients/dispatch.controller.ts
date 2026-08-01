@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { DispatchService } from './dispatch.service';
-import { AssignDto, JobRoleDto } from './dto/dispatch.dto';
+import { AssignDto } from './dto/dispatch.dto';
 
 /** چینشِ نیروها — کارشناس، راننده و پیک. */
 @Controller('dispatch')
@@ -19,13 +19,6 @@ export class DispatchController {
   @Get('staff')
   staff() {
     return this.dis.staff();
-  }
-
-  /// نقشِ شغلی روی حساب می‌نشیند و کارِ مدیرِ کاربران است، نه چینش‌کننده.
-  @RequirePermissions('users.manage')
-  @Patch('staff/:id/role')
-  role(@Param('id', ParseIntPipe) id: number, @Body() dto: JobRoleDto, @CurrentUser() user: any) {
-    return this.dis.setJobRole(id, dto.jobRole ?? null, user);
   }
 
   @RequirePermissions('patients.read')

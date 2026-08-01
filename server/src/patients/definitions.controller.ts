@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { DefinitionsService } from './definitions.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
@@ -116,6 +116,28 @@ class HospitalPatchDto {
   @IsOptional() @IsString() @MaxLength(60) contactName?: string;
   @IsOptional() @IsString() @MaxLength(20) contactPhone?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
+/// نیروی حمل‌ونقل — راننده یا پیک. همان فیلدهای هویتیِ جراح + خودرو.
+class StaffCreateDto extends PersonFieldsDto {
+  @IsString({ message: 'نام را وارد کنید' }) @MinLength(2, { message: 'نام کوتاه است' }) @MaxLength(60)
+  firstName!: string;
+
+  @IsString({ message: 'نام خانوادگی را وارد کنید' }) @MinLength(2, { message: 'نام خانوادگی کوتاه است' }) @MaxLength(60)
+  lastName!: string;
+
+  @IsIn(['driver', 'courier'], { message: 'نقش باید راننده یا پیک باشد' })
+  role!: string;
+
+  @IsOptional() @IsString() @MaxLength(60) vehicle?: string;
+}
+
+class StaffPatchDto extends PersonFieldsDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) firstName?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) lastName?: string;
+  @IsOptional() @IsIn(['driver', 'courier'], { message: 'نقش باید راننده یا پیک باشد' }) role?: string;
+  @IsOptional() @IsString() @MaxLength(60) vehicle?: string;
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
@@ -275,5 +297,30 @@ export class DefinitionsController {
   @Get('techs')
   techs() {
     return this.defs.listTechs();
+  }
+
+  // ── نیروی حمل‌ونقل ────────────────────────────────────────────
+  @RequirePermissions('definitions.read')
+  @Get('transport-staff')
+  staff() {
+    return this.defs.listTransportStaff();
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Post('transport-staff')
+  createStaff(@Body() dto: StaffCreateDto) {
+    return this.defs.createTransportStaff(dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Patch('transport-staff/:id')
+  updateStaff(@Param('id', ParseIntPipe) id: number, @Body() dto: StaffPatchDto) {
+    return this.defs.updateTransportStaff(id, dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Delete('transport-staff/:id')
+  deleteStaff(@Param('id', ParseIntPipe) id: number) {
+    return this.defs.deleteTransportStaff(id);
   }
 }
