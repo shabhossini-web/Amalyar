@@ -512,6 +512,8 @@ function Settlement({ visitId, onToast, onChanged }) {
         </>
       )}
 
+      {saved?.status === 'final' && <Payouts visitId={visitId} onToast={onToast} />}
+
       <div className="bl-splitacts">
         {saved?.status === 'final' ? (
           <button type="button" className="bl-mini warn" disabled={busy}
@@ -533,6 +535,56 @@ function Settlement({ visitId, onToast, onChanged }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * پرداختِ سهم — فقط پس از نهایی‌شدنِ تسویه.
+ *
+ * «استحقاق» از تسویهٔ جاری می‌آید و «پرداخت‌شده» از دفترِ پرداخت‌ها؛ مانده مشتق
+ * است. روی خودِ ShareEntry ذخیره نمی‌شود چون تسویه نسخه‌دار است و با محاسبهٔ
+ * دوباره پاک می‌شد.
+ */
+function Payouts({ visitId, onToast }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [banks, setBanks] = useState([]);
+
+  const load = useCallback(async () => {
+    try { setD(await api(`/visits/${visitId}/payouts`)); } catch (e) { onToast(e.message); }
+  }, [visitId, onToast]);
+  useEffect(() => { load(); api('/bank-accounts').then(setBanks).catch(() => setBanks([])); }, [load]);
+
+  const pay = async (row, bankAccountId) => {
+    setBusy(true);
+    try {
+      await api(`/visits/${visitId}/payouts`, {
+        method: 'POST',
+        body: {
+          party: row.party, partyId: row.partyId ?? undefined, partyName: row.partyName,
+          amount: row.remaining, bankAccountId: bankAccountId || undefined,
+        },
+      });
+      await load(); onToast('پرداختِ سهم ثبت شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  if (!d) return null;
+  return (
+    <div className="bl-payouts">
+      <b>پرداختِ سهم‌ها</b>
+      {d.rows.map((r) => (
+        <div key={`${r.party}-${r.partyId}`} className={`bl-po${r.remaining <= 0 ? ' done' : ''}`}>
+          <span>{r.partyName}</span>
+          <i>{money(r.paid)} از {money(r.entitled)}</i>
+          {r.remaining > 0 ? (
+            <button type="button" disabled={busy} onClick={() => pay(r, banks[0]?.id)}>
+              پرداختِ {money(r.remaining)}
+            </button>
+          ) : <em>تسویه ✓</em>}
+        </div>
+      ))}
     </div>
   );
 }

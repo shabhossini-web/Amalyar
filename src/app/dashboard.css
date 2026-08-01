@@ -531,3 +531,13 @@ a.db-defbtn { text-decoration: none; }
   color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
 }
 .bl-mini.warn { flex: 1; color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
+
+/* پرداختِ سهم داخلِ تبِ تسویه */
+.bl-payouts { margin-block-end: 12px; padding-block-start: 10px; border-block-start: 1px dashed rgba(255, 255, 255, .12); }
+.bl-payouts > b { display: block; font-size: 12px; color: #a5b4fc; margin-block-end: 8px; }
+.bl-po { display: flex; align-items: center; gap: 10px; padding: 8px 11px; margin-block-end: 6px; border-radius: 11px; background: rgba(255, 255, 255, .04); font-size: 12px; }
+.bl-po > span { flex: 1; }
+.bl-po i { font-style: normal; font-size: 11px; color: rgba(255, 255, 255, .55); }
+.bl-po em { font-style: normal; font-size: 11px; color: #6ee7b7; }
+.bl-po.done { opacity: .65; }
+.bl-po button { padding: 6px 11px; border-radius: 9px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }

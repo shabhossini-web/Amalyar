@@ -22,7 +22,7 @@ const parseNum = (v) => {
  * صورت‌حسابِ همان مراجعه. این صفحه فقط **قواعد** را نگه می‌دارد.
  */
 export default function Accounting() {
-  const [tab, setTab] = useState('contracts');
+  const [tab, setTab] = useState('treasury');
   const [toast, setToast] = useState('');
 
   useEffect(() => { document.title = 'عمل‌یار — حسابداری'; }, []);
@@ -44,7 +44,7 @@ export default function Accounting() {
       </header>
 
       <div className="ac-tabs">
-        {[['contracts', 'قراردادِ جراحان'], ['partners', 'سهامداران'], ['expenses', 'هزینه‌ها'], ['banks', 'حساب‌های بانکی'], ['ledger', 'حسابِ جاریِ شرکا']].map(([k, l]) => (
+        {[['treasury', 'خزانه'], ['contracts', 'قراردادِ جراحان'], ['partners', 'سهامداران'], ['expenses', 'هزینه‌ها'], ['banks', 'حساب‌های بانکی'], ['ledger', 'حسابِ جاریِ شرکا'], ['cheques', 'چک‌ها'], ['fiscal', 'سالِ مالی']].map(([k, l]) => (
           <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -54,6 +54,9 @@ export default function Accounting() {
       {tab === 'expenses' && <Expenses onToast={setToast} />}
       {tab === 'banks' && <Banks onToast={setToast} />}
       {tab === 'ledger' && <Ledger onToast={setToast} />}
+      {tab === 'treasury' && <Treasury onToast={setToast} />}
+      {tab === 'cheques' && <Cheques onToast={setToast} />}
+      {tab === 'fiscal' && <Fiscal onToast={setToast} />}
       {toast && <div className="ac-toast" role="status">{toast}</div>}
     </div>
   );
@@ -468,6 +471,223 @@ function Ledger({ onToast }) {
               <b>{r.fromName} → {r.toName}</b>
               <small>{faDate(r.entryDate)}{r.description ? ` · ${r.description}` : ''}</small>
             </div>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * خزانه — موجودیِ هر حساب.
+ *
+ * ⚠️ چکِ در جریان عمداً **بیرونِ** موجودی گزارش می‌شود: پولی که هنوز وصول نشده
+ * پول نیست، و ریختنش در موجودی یعنی خزانه رقمی نشان بدهد که در حساب نیست.
+ */
+function Treasury({ onToast }) {
+  const [d, setD] = useState(null);
+  useEffect(() => { api('/treasury').then(setD).catch((e) => onToast(e.message)); }, [onToast]);
+  if (!d) return <div className="ac-empty">در حال بارگذاری…</div>;
+  return (
+    <>
+      <div className="ac-add">
+        <div className="ac-tre">
+          <div className="big"><b>{num(d.total)}</b><span>جمعِ موجودی (تومان)</span></div>
+          <div><b className="in">{num(d.chequesPendingIn)}</b><span>چکِ دریافتیِ در جریان</span></div>
+          <div><b className="out">{num(d.chequesPendingOut)}</b><span>چکِ صادرهٔ در جریان</span></div>
+        </div>
+        <p className="ac-hint">
+          موجودی <b>مشتق</b> است: دریافتِ بیمار منهای هزینه و پرداختِ سهم. چکِ در جریان تا وصول‌نشدن در موجودی نمی‌آید.
+        </p>
+      </div>
+      <div className="ac-list">
+        {d.accounts.map((a) => (
+          <article key={a.id} className="ac-row">
+            <div className="ac-val"><b>{num(a.balance)}</b><span>تومان</span></div>
+            <div className="ac-row-main">
+              <b>{a.ownerName}{a.bankName ? ` — ${a.bankName}` : ''}</b>
+              <small>دریافت {num(a.in)} · پرداخت {num(a.out)}</small>
+            </div>
+          </article>
+        ))}
+        {(d.unassigned.in !== 0 || d.unassigned.out !== 0) && (
+          <article className="ac-row off">
+            <div className="ac-val"><b>{num(d.unassigned.balance)}</b><span>تومان</span></div>
+            <div className="ac-row-main">
+              <b>بدونِ حسابِ ثبت‌شده</b>
+              <small>اسنادی که حسابشان انتخاب نشده — در جمع می‌آیند ولی به حسابی نسبت داده نشده‌اند</small>
+            </div>
+          </article>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** چک‌ها — سررسید و سرنوشت. */
+function Cheques({ onToast }) {
+  const [d, setD] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [f, setF] = useState({ number: '', direction: 'in', partyName: '', amount: '', dueJ: todayJStr(), bankName: '', bankAccountId: '' });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [c, b] = await Promise.all([api('/cheques'), api('/bank-accounts')]);
+      setD(c); setAccounts(b);
+    } catch (e) { onToast(e.message); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async () => {
+    const amount = parseNum(f.amount);
+    if (f.number.trim().length < 2) { onToast('شمارهٔ چک را وارد کنید'); return; }
+    if (f.partyName.trim().length < 2) { onToast('طرفِ چک را وارد کنید'); return; }
+    if (amount <= 0) { onToast('مبلغ را وارد کنید'); return; }
+    const dueAt = jStrToIso(f.dueJ);
+    if (!dueAt) { onToast('تاریخِ سررسید نامعتبر است'); return; }
+    setBusy(true);
+    try {
+      await api('/cheques', {
+        method: 'POST',
+        body: {
+          number: f.number.trim(), direction: f.direction, partyName: f.partyName.trim(),
+          amount, dueAt, bankName: f.bankName.trim() || undefined,
+          bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
+        },
+      });
+      setF((s) => ({ ...s, number: '', partyName: '', amount: '' }));
+      await load(); onToast('چک ثبت شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const setStatus = async (id, status) => {
+    setBusy(true);
+    try { await api(`/cheques/${id}`, { method: 'PATCH', body: { status } }); await load(); onToast('وضعیتِ چک ثبت شد ✓'); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  if (!d) return <div className="ac-empty">در حال بارگذاری…</div>;
+  return (
+    <>
+      <div className="ac-add">
+        <div className="ac-grid">
+          <label className="ac-field"><span>جهت</span>
+            <select value={f.direction} onChange={(e) => setF((s) => ({ ...s, direction: e.target.value }))}>
+              <option value="in">دریافتی (از بیمار/بیمارستان)</option>
+              <option value="out">صادره (به جراح/تأمین‌کننده)</option>
+            </select>
+          </label>
+          <label className="ac-field"><span>شمارهٔ چک *</span>
+            <input dir="ltr" value={f.number} onChange={(e) => setF((s) => ({ ...s, number: e.target.value }))} />
+          </label>
+          <label className="ac-field"><span>طرفِ چک *</span>
+            <input value={f.partyName} onChange={(e) => setF((s) => ({ ...s, partyName: e.target.value }))} />
+          </label>
+          <label className="ac-field"><span>مبلغ (تومان) *</span>
+            <input dir="ltr" inputMode="numeric" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} />
+          </label>
+          <JDate label="سررسید *" value={f.dueJ} onChange={(v) => setF((s) => ({ ...s, dueJ: v }))} />
+          <label className="ac-field"><span>بانک</span>
+            <input value={f.bankName} onChange={(e) => setF((s) => ({ ...s, bankName: e.target.value }))} />
+          </label>
+        </div>
+        <button type="button" className="ac-submit" onClick={submit} disabled={busy}>
+          <Plus width="15" height="15" /> ثبتِ چک
+        </button>
+      </div>
+      <div className="ac-list">
+        <p className="ac-total">در جریان — دریافتی {num(d.pendingIn)} · صادره {num(d.pendingOut)}</p>
+        {d.rows.length === 0 && <div className="ac-empty">چکی ثبت نشده</div>}
+        {d.rows.map((c) => (
+          <article key={c.id} className={`ac-row${c.status === 'pending' ? '' : ' off'}`}>
+            <div className="ac-val"><b>{num(c.amount)}</b><span>{c.direction === 'in' ? 'دریافتی' : 'صادره'}</span></div>
+            <div className="ac-row-main">
+              <b><span dir="ltr">{c.number}</span> — {c.partyName}</b>
+              <small>
+                سررسید {faDate(c.dueAt)} · {c.statusLabel}
+                {c.dueSoon && <em className="ac-soon"> ⚠️ نزدیکِ سررسید</em>}
+              </small>
+            </div>
+            {c.status === 'pending' && (
+              <div className="ac-chq">
+                <button type="button" disabled={busy} onClick={() => setStatus(c.id, 'cashed')}>وصول</button>
+                <button type="button" className="warn" disabled={busy} onClick={() => setStatus(c.id, 'bounced')}>برگشت</button>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * سالِ مالی و قفلِ دوره.
+ *
+ * بستنِ دوره یعنی هیچ سندی با تاریخِ داخلِ آن نوشته یا حذف نشود — وگرنه اصلاحِ
+ * یک هزینهٔ پارسال گزارشِ بسته‌شدهٔ پارسال را بی‌سروصدا عوض می‌کند.
+ */
+function Fiscal({ onToast }) {
+  const [rows, setRows] = useState([]);
+  const [f, setF] = useState({ title: '', fromJ: '', toJ: '' });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows(await api('/fiscal-years')); } catch (e) { onToast(e.message); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async () => {
+    const startsAt = jStrToIso(f.fromJ);
+    const endsAt = jStrToIso(f.toJ);
+    if (f.title.trim().length < 2) { onToast('عنوانِ سال را وارد کنید'); return; }
+    if (!startsAt || !endsAt) { onToast('تاریخِ شروع و پایان را درست وارد کنید'); return; }
+    setBusy(true);
+    try {
+      await api('/fiscal-years', { method: 'POST', body: { title: f.title.trim(), startsAt, endsAt } });
+      setF({ title: '', fromJ: '', toJ: '' });
+      await load(); onToast('سالِ مالی ثبت شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const toggle = async (y) => {
+    setBusy(true);
+    try {
+      await api(`/fiscal-years/${y.id}/${y.closedAt ? 'reopen' : 'close'}`, { method: 'POST' });
+      await load(); onToast(y.closedAt ? 'دوره باز شد' : 'دوره بسته شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <div className="ac-add">
+        <div className="ac-grid">
+          <label className="ac-field"><span>عنوان *</span>
+            <input value={f.title} onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} placeholder="۱۴۰۵" />
+          </label>
+          <JDate label="از تاریخ *" value={f.fromJ} onChange={(v) => setF((s) => ({ ...s, fromJ: v }))} />
+          <JDate label="تا تاریخ *" value={f.toJ} onChange={(v) => setF((s) => ({ ...s, toJ: v }))} />
+        </div>
+        <p className="ac-hint">
+          بستنِ دوره یعنی هیچ هزینه، پرداخت یا پرداختِ سهمی با تاریخِ داخلِ آن ثبت یا حذف نشود.
+        </p>
+        <button type="button" className="ac-submit" onClick={submit} disabled={busy}>
+          <Plus width="15" height="15" /> افزودنِ سالِ مالی
+        </button>
+      </div>
+      <div className="ac-list">
+        {rows.length === 0 && <div className="ac-empty">سالِ مالی تعریف نشده</div>}
+        {rows.map((y) => (
+          <article key={y.id} className={`ac-row${y.closedAt ? ' off' : ''}`}>
+            <div className="ac-val"><b>{y.title}</b><span>{y.closedAt ? 'بسته' : 'باز'}</span></div>
+            <div className="ac-row-main">
+              <b>{faDate(y.startsAt)} تا {faDate(y.endsAt)}</b>
+              {y.closedAt && <small>بسته‌شده در {faDate(y.closedAt)}</small>}
+            </div>
+            <button type="button" className={y.closedAt ? 'ac-mini' : 'ac-off'} disabled={busy} onClick={() => toggle(y)}>
+              {y.closedAt ? 'بازکردن' : 'بستنِ دوره'}
+            </button>
           </article>
         ))}
       </div>

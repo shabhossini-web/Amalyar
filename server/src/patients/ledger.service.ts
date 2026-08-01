@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { TreasuryService } from './treasury.service';
 
 export const LEDGER_TYPES = ['profit_share', 'expense_paid', 'settlement'] as const;
 export const LEDGER_LABELS: Record<string, string> = {
@@ -54,7 +55,7 @@ export function pairDebts(deltas: Delta[]): { fromId: number; fromName: string; 
  */
 @Injectable()
 export class LedgerService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private treasury: TreasuryService) {}
 
   // ─────────────── حساب‌های بانکی ───────────────
 
@@ -124,6 +125,7 @@ export class LedgerService {
     if (!Number.isInteger(amount) || amount <= 0) throw new BadRequestException('مبلغِ هزینه باید عددِ مثبت باشد');
     const spentAt = dto.spentAt ? new Date(dto.spentAt) : new Date();
     if (Number.isNaN(spentAt.getTime())) throw new BadRequestException('تاریخِ هزینه نامعتبر است');
+    await this.treasury.assertOpen(spentAt);
 
     const created = await this.prisma.expense.create({
       data: {
@@ -147,6 +149,7 @@ export class LedgerService {
   async removeExpense(id: number, user: any) {
     const row = await this.prisma.expense.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('هزینه یافت نشد');
+    await this.treasury.assertOpen(row.spentAt);
     await this.prisma.$transaction(async (tx) => {
       // ردیف‌های دفتر باطل می‌شوند نه پاک — همان قاعدهٔ فقط‌افزودنی.
       await tx.partnerLedger.updateMany({

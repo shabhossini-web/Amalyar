@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryService } from './inventory.service';
+import { TreasuryService } from './treasury.service';
 import { LEVEL } from '../common/levels';
 
 /** نوعِ قلمِ صورت‌حساب. discount همیشه مبلغِ منفی می‌سازد. */
@@ -31,7 +32,7 @@ export const PAYMENT_METHODS = ['cash', 'card', 'transfer', 'cheque', 'insurance
  */
 @Injectable()
 export class BillingService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private inventory: InventoryService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private inventory: InventoryService, private treasury: TreasuryService) {}
 
   /** همان قاعدهٔ scope که برای مراجعه داریم؛ کارشناس فقط مراجعاتِ خودش. */
   private async assertVisit(visitId: number, user: any) {
@@ -211,6 +212,8 @@ export class BillingService {
       if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخِ پرداخت معتبر نیست');
       paidAt = d;
     }
+    // قفلِ دورهٔ مالی: سندی با تاریخِ داخلِ سالِ بسته‌شده نوشته نمی‌شود.
+    await this.treasury.assertOpen(paidAt);
 
     const row = await this.prisma.payment.create({
       data: {
@@ -234,6 +237,7 @@ export class BillingService {
     const row = await this.prisma.payment.findUnique({ where: { id: paymentId } });
     if (!row) throw new NotFoundException('پرداخت پیدا نشد');
     await this.assertVisit(row.visitId, user);
+    await this.treasury.assertOpen(row.paidAt);
     await this.prisma.payment.delete({ where: { id: paymentId } });
     await this.audit.record({
       actorId: user?.id, action: 'payment.delete', entityType: 'payment', entityId: paymentId, before: row,

@@ -738,6 +738,7 @@ model Visit {
   stockMovements StockMovement[]
   stockTransfers StockTransfer[]
   settlements    Settlement[]
+  payouts        Payout[]
 
   @@unique([patientId, seq])
   @@index([patientId])
@@ -894,6 +895,8 @@ model BankAccount {
 
   payments Payment[]
   expenses Expense[]
+  payouts  Payout[]
+  cheques  Cheque[]
 
   @@map("bank_accounts")
 }
@@ -971,4 +974,91 @@ model PartnerLedger {
   @@index([settlementId])
   @@index([expenseId])
   @@map("partner_ledger")
+}
+
+/// پرداختِ سهم — جراح، کارشناس یا شریک پولش را گرفت.
+///
+/// ⚠️ به `ShareEntry` گره نمی‌خورد بلکه به (مراجعه، طرف): تسویه نسخه‌دار است و
+/// با هر محاسبهٔ دوباره ردیف‌های سهم عوض می‌شوند، ولی «سهمِ جراحِ این عمل پرداخت
+/// شده» واقعیتی است که با محاسبهٔ دوباره از بین نمی‌رود.
+model Payout {
+  id      Int   @id @default(autoincrement())
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int   @map("visit_id")
+
+  /// surgeon | tech | partner
+  party     String
+  partyId   Int?   @map("party_id")
+  partyName String @map("party_name")
+  amount    Int // تومان
+
+  paidAt        DateTime     @map("paid_at")
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  bankAccountId Int?         @map("bank_account_id")
+  reference     String?
+  notes         String?
+
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  cheques Cheque[]
+
+  @@index([visitId])
+  @@index([party, partyId])
+  @@index([paidAt])
+  @@map("payouts")
+}
+
+/// چک — ابزارِ پرداختِ رایج در ایران، با سررسید و سرنوشتِ مستقل.
+///
+/// جدا از Payment/Payout است چون **زمانِ تعهد با زمانِ نقد‌شدن فرق دارد**: چکی
+/// که امروز گرفته‌ایم ممکن است دو ماهِ دیگر پاس شود یا برگشت بخورد. ثبتش
+/// به‌عنوانِ پرداختِ نقدی یعنی خزانه پولی را نشان می‌دهد که هنوز نیامده.
+model Cheque {
+  id       Int      @id @default(autoincrement())
+  number   String
+  bankName String?  @map("bank_name")
+  amount   Int // تومان
+  dueAt    DateTime @map("due_at")
+
+  /// in = دریافتی (از بیمار/بیمارستان) · out = صادره (به جراح/تأمین‌کننده)
+  direction String
+  partyName String @map("party_name")
+
+  /// pending | cashed | bounced | cancelled
+  status   String    @default("pending")
+  statusAt DateTime? @map("status_at")
+
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  bankAccountId Int?         @map("bank_account_id")
+  visitId       Int?         @map("visit_id")
+  payout        Payout?      @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  payoutId      Int?         @map("payout_id")
+
+  notes       String?
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([status, dueAt])
+  @@index([direction])
+  @@map("cheques")
+}
+
+/// سالِ مالی — و مهم‌تر: **قفلِ دوره**.
+///
+/// وقتی سالی بسته می‌شود، هیچ سند مالی با تاریخِ داخلِ آن دوره ثبت یا حذف
+/// نمی‌شود. بدونِ این، اصلاحِ یک هزینهٔ پارسال گزارشِ بسته‌شدهٔ پارسال را
+/// بی‌سروصدا عوض می‌کند و هیچ‌کس نمی‌فهمد.
+model FiscalYear {
+  id       Int      @id @default(autoincrement())
+  title    String   @unique // «۱۴۰۵»
+  startsAt DateTime @map("starts_at")
+  endsAt   DateTime @map("ends_at")
+
+  closedAt   DateTime? @map("closed_at")
+  closedById Int?      @map("closed_by_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([startsAt, endsAt])
+  @@map("fiscal_years")
 }
