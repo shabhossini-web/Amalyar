@@ -345,6 +345,45 @@ jobs:
           console.log('share split ok');
           "
 
+      - name: Verify financial reports reuse existing definitions
+        working-directory: server
+        run: |
+          node -e "
+          const fs = require('fs');
+          const rep = fs.readFileSync('src/patients/reports.service.ts', 'utf8');
+          // گزارش نباید تعریفِ خودش را از درآمد/وصولی بسازد.
+          if (/prisma\.\\$queryRaw/.test(rep)) { console.error('گزارش نباید SQLِ خام بزند؛ تعریفِ موازی می‌سازد'); process.exit(1); }
+          // درآمد و وصولی باید جدا بمانند.
+          for (const k of ['revenue', 'collected', 'profit']) {
+            if (!new RegExp(k).test(rep)) { console.error('گزارش باید ' + k + ' را جدا بدهد'); process.exit(1); }
+          }
+          if (!/revenue - expenseTotal/.test(rep)) {
+            console.error('سود باید بر مبنای درآمدِ شناسایی‌شده باشد نه وصولی'); process.exit(1);
+          }
+          // ماهِ نمودار باید شمسی باشد وگرنه با تقویمِ کاربر نمی‌خواند.
+          if (!/toJalali/.test(rep)) { console.error('گروه‌بندیِ ماه باید شمسی باشد'); process.exit(1); }
+          const jal = fs.readFileSync('src/common/jalali.ts', 'utf8');
+          if (!/getUTCFullYear/.test(jal)) {
+            console.error('تبدیلِ میلادی→شمسی باید UTC بخواند، وگرنه سرور یک روز جابه‌جا می‌شود'); process.exit(1);
+          }
+          // سورتِ مالی نباید به ستونِ ذخیره‌شده تبدیل شود.
+          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const visit = schema.split('model Visit {')[1].split(/\n}/)[0];
+          for (const cached of ['due', 'total', 'paid']) {
+            if (new RegExp('^\\s*' + cached + '\\s+Int', 'mi').test(visit)) {
+              console.error('Visit.' + cached + ' ممنوع است — مشتق بماند (قانونِ computeVisit)'); process.exit(1);
+            }
+          }
+          const svc = fs.readFileSync('src/patients/patients.service.ts', 'utf8');
+          if (!/moneyOrderedIds/.test(svc)) { console.error('سورتِ مالی باید از aggregate بیاید'); process.exit(1); }
+          // خروجی باید همان مسیرِ مالی را برود وگرنه CSV با فهرست نمی‌خواند.
+          const exp = svc.split('async exportVisits')[1].split(/\n  \/\*\*/)[0];
+          if (!/moneyOrderedIds/.test(exp)) {
+            console.error('خروجی باید فیلتر و سورتِ مالی را هم بفهمد'); process.exit(1);
+          }
+          console.log('financial reports ok');
+          "
+
       - name: Verify lot location is a ledger, not a column
         working-directory: server
         run: |

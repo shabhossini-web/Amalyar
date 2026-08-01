@@ -37,7 +37,7 @@ const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="
 
 /** فیلترهای پیشرفته‌ای که مستقیم به query سرور می‌روند. */
 const ADV_IDS = ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'];
-const EMPTY_ADV = { surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '', diagnosisId: '', fromJ: '', toJ: '' };
+const EMPTY_ADV = { surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '', diagnosisId: '', fromJ: '', toJ: '', owing: false };
 const EMPTY_META = { total: 0, pages: 1, stats: { total: 0, pending: 0, today: 0, due: 0, kinds: [] } };
 
 const SORT_OPTIONS = [
@@ -45,6 +45,10 @@ const SORT_OPTIONS = [
   { v: 'created', l: 'تاریخِ ثبت' },
   { v: 'name', l: 'نامِ بیمار' },
   { v: 'code', l: 'کدِ پرونده' },
+  // ⚠️ این دو مشتق‌اند و ستونِ دیتابیس ندارند؛ سرور با aggregate مرتب می‌کند.
+  // تا فازِ حسابداری عمداً نبودند — ساختنِ ستونِ ذخیره‌شده ناقضِ computeVisit بود.
+  { v: 'due', l: 'مانده' },
+  { v: 'total', l: 'جمعِ کل' },
 ];
 const PAGE_SIZES = [25, 50, 100, 200];
 
@@ -749,6 +753,12 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
             <JDate label="تا تاریخ (شمسی)" value={f.toJ}
               onChange={(v) => setF((s2) => ({ ...s2, toJ: v }))} placeholder={todayJStr()} />
           </div>
+
+          {/* فیلترِ مالی — تا فازِ حسابداری نبود چون «مانده» ستون ندارد. */}
+          <label className="db-owing">
+            <input type="checkbox" checked={!!f.owing} onChange={(e) => setF((s2) => ({ ...s2, owing: e.target.checked }))} />
+            <span>فقط مراجعاتی که هنوز بدهی دارند</span>
+          </label>
         </div>
 
         <footer className="db-sheet-foot">
@@ -806,6 +816,7 @@ export default function Dashboard() {
     const to = a.toJ ? jStrToIso(a.toJ) : null;
     if (from) params.set('from', from);
     if (to) params.set('to', to);
+    if (a.owing) params.set('owing', '1');
     params.set('sort', so); params.set('dir', dr);
     params.set('page', String(pg)); params.set('pageSize', String(ps));
     return api(`/visits?${params}`)
@@ -873,10 +884,11 @@ export default function Dashboard() {
     if (adv.diagnosisId) out.push({ key: 'diagnosisId', label: `تشخیص: ${nameOf(defs.diagnoses, adv.diagnosisId, (r) => r?.title)}` });
     if (adv.fromJ) out.push({ key: 'fromJ', label: `از ${faDigits(adv.fromJ)}` });
     if (adv.toJ) out.push({ key: 'toJ', label: `تا ${faDigits(adv.toJ)}` });
+    if (adv.owing) out.push({ key: 'owing', label: 'فقط بدهکار' });
     return out;
   }, [adv, defs]);
   const advCount = activeChips.length;
-  const clearOne = (key) => setAdv((a) => ({ ...a, [key]: '' }));
+  const clearOne = (key) => setAdv((a) => ({ ...a, [key]: key === 'owing' ? false : '' }));
 
   /**
    * خروجی — ردیف‌ها از سرور و با همین فیلتر خوانده می‌شوند، نه از صفحهٔ جاری.
@@ -898,6 +910,7 @@ export default function Dashboard() {
       const to = adv.toJ ? jStrToIso(adv.toJ) : null;
       if (from) params.set('from', from);
       if (to) params.set('to', to);
+      if (adv.owing) params.set('owing', '1');
       params.set('sort', sort); params.set('dir', dir);
 
       const res = await api(`/visits/export?${params}`);

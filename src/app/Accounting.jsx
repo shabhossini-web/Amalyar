@@ -22,7 +22,7 @@ const parseNum = (v) => {
  * صورت‌حسابِ همان مراجعه. این صفحه فقط **قواعد** را نگه می‌دارد.
  */
 export default function Accounting() {
-  const [tab, setTab] = useState('treasury');
+  const [tab, setTab] = useState('report');
   const [toast, setToast] = useState('');
 
   useEffect(() => { document.title = 'عمل‌یار — حسابداری'; }, []);
@@ -44,7 +44,7 @@ export default function Accounting() {
       </header>
 
       <div className="ac-tabs">
-        {[['treasury', 'خزانه'], ['contracts', 'قراردادِ جراحان'], ['partners', 'سهامداران'], ['expenses', 'هزینه‌ها'], ['banks', 'حساب‌های بانکی'], ['ledger', 'حسابِ جاریِ شرکا'], ['cheques', 'چک‌ها'], ['fiscal', 'سالِ مالی']].map(([k, l]) => (
+        {[['report', 'گزارشِ مالی'], ['treasury', 'خزانه'], ['contracts', 'قراردادِ جراحان'], ['partners', 'سهامداران'], ['expenses', 'هزینه‌ها'], ['banks', 'حساب‌های بانکی'], ['ledger', 'حسابِ جاریِ شرکا'], ['cheques', 'چک‌ها'], ['fiscal', 'سالِ مالی']].map(([k, l]) => (
           <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -57,6 +57,7 @@ export default function Accounting() {
       {tab === 'treasury' && <Treasury onToast={setToast} />}
       {tab === 'cheques' && <Cheques onToast={setToast} />}
       {tab === 'fiscal' && <Fiscal onToast={setToast} />}
+      {tab === 'report' && <Report onToast={setToast} />}
       {toast && <div className="ac-toast" role="status">{toast}</div>}
     </div>
   );
@@ -692,5 +693,115 @@ function Fiscal({ onToast }) {
         ))}
       </div>
     </>
+  );
+}
+
+/**
+ * گزارشِ مالی.
+ *
+ * ⚠️ **درآمد و وصولی کنارِ هم و جدا نشان داده می‌شوند** و این تصمیمِ اصلیِ این
+ * صفحه است: فاکتورِ صادره درآمدِ شناسایی‌شده است، پرداخت پولِ رسیده. یکی‌کردنشان
+ * همان اشتباهی است که شرکتِ سودده را بی‌نقدینگی می‌کند.
+ */
+function Report({ onToast }) {
+  const [d, setD] = useState(null);
+  const [r, setR] = useState({ fromJ: '', toJ: '' });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (from, to) => {
+    setBusy(true);
+    try {
+      const qs = new URLSearchParams();
+      if (from) qs.set('from', from);
+      if (to) qs.set('to', to);
+      setD(await api(`/reports/financial${qs.toString() ? `?${qs}` : ''}`));
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const apply = () => {
+    const from = r.fromJ.trim() ? jStrToIso(r.fromJ) : undefined;
+    const to = r.toJ.trim() ? jStrToIso(r.toJ) : undefined;
+    if ((r.fromJ.trim() && !from) || (r.toJ.trim() && !to)) { onToast('تاریخ نامعتبر است'); return; }
+    load(from, to);
+  };
+
+  if (!d) return <div className="ac-empty">در حال بارگذاری…</div>;
+  const t = d.totals;
+  const peak = Math.max(1, ...d.byMonth.map((m) => Math.max(m.revenue, m.expenses)));
+
+  return (
+    <>
+      <div className="ac-add">
+        <div className="ac-grid">
+          <JDate label="از تاریخ" value={r.fromJ} onChange={(v) => setR((s) => ({ ...s, fromJ: v }))} />
+          <JDate label="تا تاریخ" value={r.toJ} onChange={(v) => setR((s) => ({ ...s, toJ: v }))} />
+        </div>
+        <button type="button" className="ac-submit" onClick={apply} disabled={busy}>اعمالِ بازه</button>
+
+        <div className="ac-tre ac-rep">
+          <div className="big"><b>{num(t.revenue)}</b><span>درآمدِ شناسایی‌شده</span></div>
+          <div><b className="in">{num(t.collected)}</b><span>وصولی</span></div>
+          <div><b className="due">{num(t.due)}</b><span>مانده</span></div>
+          <div><b className="out">{num(t.expenses)}</b><span>هزینه</span></div>
+          <div><b className={t.profit >= 0 ? 'in' : 'due'}>{num(t.profit)}</b><span>سودِ ناخالص</span></div>
+          <div><b>{num(t.visits)}</b><span>مراجعه</span></div>
+        </div>
+        <p className="ac-hint">
+          <b>درآمد</b> جمعِ فاکتورهای صادره است و <b>وصولی</b> پولِ رسیده — سود با اولی حساب می‌شود و نقدینگی با دومی.
+        </p>
+      </div>
+
+      {d.byMonth.length > 0 && (
+        <div className="ac-add">
+          <b className="ac-secttl">روندِ ماهانه</b>
+          <div className="ac-chart">
+            {d.byMonth.map((m) => (
+              <div key={m.month} className="ac-bar" title={`${m.month} — درآمد ${num(m.revenue)} · هزینه ${num(m.expenses)}`}>
+                <div className="ac-bar-stack">
+                  <i className="rev" style={{ height: `${(m.revenue / peak) * 100}%` }} />
+                  <i className="exp" style={{ height: `${(m.expenses / peak) * 100}%` }} />
+                </div>
+                <span>{m.month.replace(/^\d{4}\//, '')}</span>
+              </div>
+            ))}
+          </div>
+          <div className="ac-legend"><i className="rev" /> درآمد <i className="exp" /> هزینه</div>
+        </div>
+      )}
+
+      <Breakdown title="به تفکیکِ جراح" rows={d.bySurgeon} />
+      <Breakdown title="به تفکیکِ بیمارستان" rows={d.byHospital} />
+      <Breakdown title="به تفکیکِ نوعِ عمل" rows={d.byProcedure} />
+      {d.byExpenseCategory.length > 0 && (
+        <div className="ac-list">
+          <b className="ac-secttl">هزینه به تفکیکِ دسته</b>
+          {d.byExpenseCategory.map((x) => (
+            <article key={x.label} className="ac-row">
+              <div className="ac-val"><b>{num(x.amount)}</b><span>تومان</span></div>
+              <div className="ac-row-main"><b>{x.label}</b></div>
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function Breakdown({ title, rows }) {
+  if (!rows?.length) return null;
+  return (
+    <div className="ac-list">
+      <b className="ac-secttl">{title}</b>
+      {rows.map((x) => (
+        <article key={x.label} className="ac-row">
+          <div className="ac-val"><b>{num(x.revenue)}</b><span>درآمد</span></div>
+          <div className="ac-row-main">
+            <b>{x.label}</b>
+            <small>وصولی {num(x.collected)} · مانده {num(x.due)} · {num(x.visits)} مراجعه</small>
+          </div>
+        </article>
+      ))}
+    </div>
   );
 }

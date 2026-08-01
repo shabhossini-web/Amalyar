@@ -193,3 +193,103 @@ export function printVisits(rows, opts) {
   setTimeout(() => w.print(), 350);
   return true;
 }
+
+/**
+ * فاکتورِ رسمیِ یک مراجعه — برگهٔ A4 عمودی.
+ *
+ * جدا از برگهٔ فهرستِ مراجعات است چون مخاطبش فرق دارد: آن گزارشِ داخلی است،
+ * این سندی است که دستِ بیمار یا بیمارستان می‌رود. پس سربرگِ برند، مشخصاتِ
+ * طرفِ حساب، اقلام، پرداخت‌ها و **مانده** را دارد و جای امضا.
+ *
+ * ⚠️ ارقام فارسی‌اند (برخلافِ CSV): این برگه خوانده می‌شود نه جمع زده.
+ */
+export function printInvoice({ visit, billing, brand }) {
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const fa = (n) => Number(n || 0).toLocaleString('fa-IR');
+
+  const items = billing.charges.map((c, i) => `<tr>
+    <td class="c">${jToFa(i + 1)}</td>
+    <td>${esc(c.title)}${c.serviceCode ? ` <small dir="ltr">${esc(c.serviceCode)}</small>` : ''}</td>
+    <td class="c">${fa(c.quantity)}</td>
+    <td class="n">${fa(c.unitPrice)}</td>
+    <td class="n">${fa(c.amount)}</td>
+  </tr>`).join('');
+
+  const pays = billing.payments.length
+    ? `<h2>پرداخت‌ها</h2><table><thead><tr><th>تاریخ</th><th>روش</th><th>پیگیری</th><th>مبلغ</th></tr></thead><tbody>${
+        billing.payments.map((p) => `<tr>
+          <td>${esc(faDate(p.paidAt))}</td>
+          <td>${esc(PAY_METHODS[p.method] ?? p.method)}</td>
+          <td dir="ltr">${esc(p.reference || '—')}</td>
+          <td class="n">${fa(p.amount)}</td>
+        </tr>`).join('')
+      }</tbody></table>`
+    : '';
+
+  const payTo = visit.payer === 'hospital'
+    ? `بیمارستان: ${esc(visit.payerHospitalName || visit.hospitalName || '—')}`
+    : `بیمار: ${esc(visit.fullName)}`;
+
+  const html = `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<title>فاکتور ${esc(visit.code)}</title><style>
+  @page { size: A4; margin: 14mm; }
+  body { font-family: Vazirmatn, Tahoma, sans-serif; color: #111; font-size: 11pt; }
+  header { display: flex; align-items: flex-start; gap: 12px; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 10px; }
+  header h1 { font-size: 16pt; margin: 0; }
+  header .sub { font-size: 9.5pt; color: #555; }
+  header .no { margin-inline-start: auto; text-align: left; font-size: 10pt; }
+  .party { font-size: 10.5pt; line-height: 2; margin-bottom: 10px; }
+  h2 { font-size: 11pt; margin: 14px 0 6px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+  th, td { border: 1px solid #999; padding: 5px 7px; text-align: right; font-size: 10pt; }
+  th { background: #eee; }
+  td.n { text-align: left; direction: ltr; white-space: nowrap; }
+  td.c { text-align: center; }
+  tfoot td { font-weight: 700; background: #f4f4f4; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .due { color: #b00; }
+  .sign { display: flex; gap: 40px; margin-top: 34px; font-size: 10pt; }
+  .sign div { flex: 1; border-top: 1px solid #333; padding-top: 6px; }
+</style></head><body>
+<header>
+  <div>
+    <h1>${esc(brand?.name || 'عمل‌یار')}</h1>
+    ${brand?.phone ? `<div class="sub">تلفن: ${esc(jToFa(brand.phone))}</div>` : ''}
+  </div>
+  <div class="no">
+    <b>صورت‌حساب</b><br>
+    شماره: <span dir="ltr">${esc(visit.code)}</span><br>
+    تاریخ: ${esc(faDate(visit.opDate || visit.createdAt))}
+  </div>
+</header>
+<div class="party">
+  ${payTo}
+  ${visit.nationalId ? ` &nbsp;·&nbsp; کد ملی: ${esc(jToFa(visit.nationalId))}` : ''}
+  ${visit.phone ? ` &nbsp;·&nbsp; موبایل: ${esc(jToFa(visit.phone))}` : ''}
+  ${visit.surgeonName ? `<br>جراح: ${esc(visit.surgeonName)}` : ''}
+  ${visit.hospitalName ? ` &nbsp;·&nbsp; بیمارستان: ${esc(visit.hospitalName)}` : ''}
+  ${visit.procedureTypeName || visit.opType ? `<br>نوعِ عمل: ${esc(visit.procedureTypeName || visit.opType)}` : ''}
+</div>
+<table>
+  <thead><tr><th>ردیف</th><th>شرح</th><th>تعداد</th><th>مبلغِ واحد</th><th>مبلغ</th></tr></thead>
+  <tbody>${items || '<tr><td colspan="5">قلمی ثبت نشده است</td></tr>'}</tbody>
+  <tfoot>
+    <tr><td colspan="4">جمعِ کل (تومان)</td><td class="n">${fa(billing.total)}</td></tr>
+    <tr><td colspan="4">پرداخت‌شده</td><td class="n">${fa(billing.paid)}</td></tr>
+    <tr><td colspan="4" class="due">مانده</td><td class="n due">${fa(billing.due)}</td></tr>
+  </tfoot>
+</table>
+${pays}
+<div class="sign"><div>مهر و امضای صادرکننده</div><div>امضای دریافت‌کننده</div></div>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) return false;
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 350);
+  return true;
+}
+
+const PAY_METHODS = { cash: 'نقدی', card: 'کارت‌خوان', transfer: 'انتقال', cheque: 'چک', insurance: 'بیمه' };

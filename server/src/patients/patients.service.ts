@@ -113,7 +113,18 @@ function timePatch(dto: any): Record<string, unknown> {
 }
 
 /** فهرستِ بستهٔ سورت — رشتهٔ دلخواهِ کاربر مستقیم به orderBy نمی‌رود. */
-export const SORTS = ['date', 'created', 'name', 'code'] as const;
+/**
+ * کلیدهای سورت.
+ *
+ * ⚠️ `due` و `total` **مشتق‌اند و ستونِ دیتابیس ندارند**، پس ORDER BY نمی‌گیرند.
+ * تا فازِ حسابداری نداشتیم عمداً حذف شده بودند (ساختنِ ستونِ ذخیره‌شده ناقضِ
+ * قانونِ computeVisit بود). حالا با aggregate واقعی می‌آیند: شناسه‌ها اول
+ * مرتب و صفحه‌بندی می‌شوند، بعد ردیف‌ها خوانده می‌شوند — نه اینکه کلِ جدول در
+ * حافظه بیاید.
+ */
+export const SORTS = ['date', 'created', 'name', 'code', 'due', 'total'] as const;
+/// سورت‌هایی که از جمعِ مالی می‌آیند نه از ستونِ Visit.
+export const MONEY_SORTS = ['due', 'total'] as const;
 export type SortKey = (typeof SORTS)[number];
 export const DEFAULT_SORT: SortKey = 'date';
 export const DEFAULT_PAGE_SIZE = 50;
@@ -132,6 +143,8 @@ export type VisitFilter = {
   diagnosisId?: number;
   from?: Date;
   to?: Date;
+  /// فقط مراجعاتی که هنوز بدهی دارند.
+  owing?: boolean;
   sort?: string;
   dir?: string;
   page?: number;
@@ -262,6 +275,32 @@ export class PatientsService {
 
     const pageSize = clamp(f.pageSize ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
     const page = Math.max(1, f.page ?? 1);
+    const moneySort = (MONEY_SORTS as readonly string[]).includes(f.sort ?? '');
+
+    // مسیرِ مالی: چون «مانده» ستون نیست، اول شناسه‌های مطابقِ فیلتر با جمعِ
+    // مالی‌شان مرتب و بریده می‌شوند، بعد فقط همان صفحه از دیتابیس خوانده
+    // می‌شود. مرتب‌کردنِ کلِ ردیف‌ها در حافظه با ۱۰هزار مراجعه می‌شکند.
+    if (moneySort || f.owing) {
+      const ids = await this.moneyOrderedIds(scoped, f);
+      const total = ids.length;
+      const pageIds = moneySort
+        ? ids.slice((page - 1) * pageSize, page * pageSize)
+        : ids.slice((page - 1) * pageSize, page * pageSize);
+      const [found, stats] = await Promise.all([
+        this.prisma.visit.findMany({ where: { id: { in: pageIds } }, include: INCLUDE_PATIENT }),
+        this.visitStats({ ...scoped, AND: [...(scoped.AND ?? []), { id: { in: ids } }] }),
+      ]);
+      // ترتیبِ `IN` تضمین‌شده نیست، پس ردیف‌ها به ترتیبِ شناسه‌ها چیده می‌شوند.
+      const byId = new Map(found.map((r) => [r.id, r]));
+      return {
+        rows: pageIds.map((id) => byId.get(id)).filter(Boolean).map(enrich),
+        total, page, pageSize,
+        pages: Math.max(1, Math.ceil(total / pageSize)),
+        sort: moneySort ? f.sort : DEFAULT_SORT,
+        dir: f.dir === 'asc' ? 'asc' : 'desc',
+        stats,
+      };
+    }
 
     // total جدا شمرده می‌شود چون طولِ صفحه جوابِ «چند تا هست» را نمی‌دهد.
     const [total, rows, stats] = await Promise.all([
@@ -289,6 +328,42 @@ export class PatientsService {
   }
 
   /**
+   * شناسه‌های مطابقِ فیلتر، مرتب‌شده بر مبنای مالی.
+   *
+   * جمع‌ها با دو groupBy می‌آیند (نه N کوئری) و مرتب‌سازی روی همان شناسه‌ها
+   * انجام می‌شود. مراجعهٔ بدونِ قلمِ فاکتور جمعِ صفر دارد، پس از فهرست نمی‌افتد —
+   * وگرنه «سورت بر مانده» بی‌سروصدا بخشی از نتیجه را حذف می‌کرد.
+   */
+  private async moneyOrderedIds(scoped: any, f: VisitFilter): Promise<number[]> {
+    const visits = await this.prisma.visit.findMany({ where: scoped, select: { id: true } });
+    if (!visits.length) return [];
+    const ids = visits.map((v) => v.id);
+    const [charges, payments] = await Promise.all([
+      this.prisma.charge.groupBy({ by: ['visitId'], where: { visitId: { in: ids } }, _sum: { amount: true } }),
+      this.prisma.payment.groupBy({ by: ['visitId'], where: { visitId: { in: ids } }, _sum: { amount: true } }),
+    ]);
+    const totalOf = new Map(charges.map((c) => [c.visitId, c._sum.amount ?? 0]));
+    const paidOf = new Map(payments.map((p) => [p.visitId, p._sum.amount ?? 0]));
+
+    let rows = ids.map((id) => {
+      const total = totalOf.get(id) ?? 0;
+      return { id, total, due: Math.max(0, total - (paidOf.get(id) ?? 0)) };
+    });
+    if (f.owing) rows = rows.filter((r) => r.due > 0);
+
+    const key = f.sort === 'total' ? 'total' : 'due';
+    const asc = f.dir === 'asc';
+    // شناسه tiebreaker است تا صفحه‌بندی پایدار بماند؛ بدونش ردیف‌های هم‌مبلغ
+    // بین دو صفحه جابه‌جا می‌شوند و کاربر یکی را دوبار می‌بیند.
+    if ((MONEY_SORTS as readonly string[]).includes(f.sort ?? '')) {
+      rows.sort((a, b) => (asc ? a[key] - b[key] : b[key] - a[key]) || b.id - a.id);
+    } else {
+      rows.sort((a, b) => b.id - a.id);
+    }
+    return rows.map((r) => r.id);
+  }
+
+  /**
    * همهٔ ردیف‌های مطابقِ فیلتر — برای CSV و چاپ.
    *
    * صفحه‌بندی ندارد چون کاربر «همین فهرست» را می‌خواهد نه صفحهٔ جاری‌اش. ولی
@@ -298,6 +373,23 @@ export class PatientsService {
    */
   async exportVisits(f: VisitFilter = {}, user?: any) {
     const scoped = this.visitWhere(f, user);
+
+    // ⚠️ خروجی باید **همان** فیلتر و سورتِ فهرست را بفهمد، از جمله مالی‌ها.
+    // اگر این‌جا مسیرِ مالی نمی‌آمد، CSVِ «فقط بدهکار» همهٔ مراجعات را
+    // برمی‌گرداند و کاربر بدونِ هیچ هشداری فایلِ اشتباه می‌گرفت.
+    if ((MONEY_SORTS as readonly string[]).includes(f.sort ?? '') || f.owing) {
+      const ids = await this.moneyOrderedIds(scoped, f);
+      const take = ids.slice(0, EXPORT_LIMIT);
+      const found = await this.prisma.visit.findMany({ where: { id: { in: take } }, include: INCLUDE_PATIENT });
+      const byId = new Map(found.map((r) => [r.id, r]));
+      return {
+        rows: take.map((id) => byId.get(id)).filter(Boolean).map(enrich),
+        truncated: ids.length > EXPORT_LIMIT,
+        limit: EXPORT_LIMIT,
+        stats: await this.visitStats({ ...scoped, AND: [...(scoped.AND ?? []), { id: { in: ids } }] }),
+      };
+    }
+
     const rows = await this.prisma.visit.findMany({
       where: scoped,
       include: INCLUDE_PATIENT,

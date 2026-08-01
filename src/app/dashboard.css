@@ -541,3 +541,8 @@ a.db-defbtn { text-decoration: none; }
 .bl-po em { font-style: normal; font-size: 11px; color: #6ee7b7; }
 .bl-po.done { opacity: .65; }
 .bl-po button { padding: 6px 11px; border-radius: 9px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
+
+/* فیلترِ مالی در سرچِ پیشرفته */
+.db-owing { display: flex; align-items: center; gap: 8px; margin-block-start: 10px; font-size: 12.5px; cursor: pointer; }
+.db-owing input { width: 17px; height: 17px; accent-color: #a855f7; cursor: pointer; }
+.bl-inv { width: 100%; margin-block-start: 8px; }

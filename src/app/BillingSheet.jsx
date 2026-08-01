@@ -3,6 +3,8 @@ import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import { toEnDigits } from '../lib/identity.js';
+import { printInvoice } from './exports.js';
+import { useConfig } from './config.jsx';
 
 const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
 const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
@@ -31,6 +33,7 @@ const parseMoney = (v) => {
 };
 
 export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
+  const cfg = useConfig();
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('charges');
@@ -339,6 +342,12 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                   {c.kind === 'discount' && <p className="db-hint">تخفیف را مثبت وارد کنید؛ خودش از جمع کم می‌شود.</p>}
                   <button type="button" className="db-submit bl-btn" onClick={addCharge} disabled={busy}>
                     <Plus width="15" height="15" /> افزودنِ قلم
+                  </button>
+                  {/* فاکتورِ رسمی — سندی که دستِ بیمار/بیمارستان می‌رود، پس
+                      جدا از برگهٔ گزارشِ داخلیِ فهرستِ مراجعات است. */}
+                  <button type="button" className="bl-mini bl-inv"
+                    onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
+                    چاپِ فاکتورِ رسمی
                   </button>
                 </div>
 

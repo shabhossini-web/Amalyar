@@ -78,3 +78,31 @@ export function jalaliStrToDate(str: unknown): Date | null {
     return null;
   }
 }
+
+/**
+ * میلادی → شمسی: `[jy, jm, jd]`.
+ *
+ * ⚠️ روی **UTC** خوانده می‌شود نه ساعتِ محلیِ سرور: تاریخ‌های ما نیمه‌شبِ UTC
+ * ذخیره می‌شوند، و اگر با `getMonth()` محلی خوانده شوند، سرورِ با منطقهٔ زمانیِ
+ * منفی یک روز عقب می‌رود و «۱ مرداد» در گزارش «۳۱ تیر» می‌شود.
+ *
+ * از همان هستهٔ `jalCal`/`g2d`/`d2g` استفاده می‌کند که `jalaliStrToDate` هم
+ * می‌کند — دو هستهٔ موازی یعنی دو تقویمِ کمی متفاوت.
+ */
+export function toJalali(date: Date): [number, number, number] {
+  const jdn = g2d(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+  const gy = d2g(jdn).gy;
+  let jy = gy - 621;
+  const r = jalCal(jy);
+  const jdn1f = g2d(gy, 3, r.march);
+  let k = jdn - jdn1f;
+  if (k >= 0) {
+    if (k <= 185) return [jy, 1 + div(k, 31), mod(k, 31) + 1];
+    k -= 186;
+  } else {
+    jy -= 1;
+    k += 179;
+    if (r.leap === 1) k += 1;
+  }
+  return [jy, 7 + div(k, 30), mod(k, 30) + 1];
+}
