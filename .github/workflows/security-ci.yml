@@ -643,7 +643,8 @@ jobs:
           //     اسمش چینش نیست؛ فقط ستونِ دومی نمی‌سازد.
           const ui = fs.readFileSync('src/app/Dispatch.jsx', 'utf8');
           if (!/techId:/.test(ui)) { console.error('تبِ کارشناس باید Visit.techId را بنویسد'); process.exit(1); }
-          if (!/dispatch\/visits\/\\\${visitId}\/assign/.test(ui)) { console.error('تبِ حمل‌ونقل باید تخصیص بدهد'); process.exit(1); }
+          // تبِ حمل‌ونقل حالا مسیر می‌چیند، نه تخصیصِ per-visit.
+          if (!/routes\/\\\${runId}\/stops/.test(ui)) { console.error('تبِ حمل‌ونقل باید توقفِ مسیر بسازد'); process.exit(1); }
 
           // ② متنِ ابلاغ در *سرویس* ساخته می‌شود نه در UI، وگرنه کانالِ بعدی
           //    (بله/پیامک) فیلترِ حریمِ خصوصی را دور می‌زند.
@@ -661,38 +662,40 @@ jobs:
           for (const f of ['v.fullName', 'v.code', 'v.surgeonName', 'v.procedureName']) {
             const after = body.split('} else {')[1] || '';
             const tail = after.split('L.push(\`بیمارستان')[0];
-            if (tail.includes(f)) { console.error('شاخهٔ راننده/پیک نباید ' + f + ' داشته باشد'); process.exit(1); }
+            if (tail.includes(f)) { console.error('شاخهٔ غیرکارشناس نباید ' + f + ' داشته باشد'); process.exit(1); }
           }
-          // ساعتِ حضورِ کارشناس هم دادهٔ او است نه راننده — هرکس ساعتِ خودش.
+          // ساعتِ حضورِ کارشناس دادهٔ او است نه حمل‌کننده — هرکس ساعتِ خودش.
           const times = body.split('L.push(\`زمان:')[1] || '';
           if (!/techArriveTime/.test(times) || !/cargoDueTime/.test(times)) {
-            console.error('کارشناس ساعتِ حضور و راننده ساعتِ تحویلِ بار می‌گیرد'); process.exit(1);
+            console.error('کارشناس ساعتِ حضور و حمل‌کننده ساعتِ تحویلِ بار می‌گیرد'); process.exit(1);
           }
           const drvTime = times.split('} else if')[1] || '';
-          if (/techArriveTime/.test(drvTime)) { console.error('راننده نباید ساعتِ حضورِ کارشناس را بگیرد'); process.exit(1); }
-
-          // ④ کمبودِ راننده فقط وقتی معنا دارد که باری برای بردن باشد.
+          if (/techArriveTime/.test(drvTime)) { console.error('حمل‌کننده نباید ساعتِ حضورِ کارشناس را بگیرد'); process.exit(1); }
+          // ④ «بی‌راننده» یعنی حواله‌ای که هنوز روی هیچ مسیری ننشسته. عملِ
+          //    بی‌حواله راننده نمی‌خواهد و علامت‌زدنش هشدارِ دروغ در کلِ ماه است.
           const month = src.split('async month(')[1].split(/\n  }/)[0];
-          if (!/stockTransfers\.length > 0/.test(month)) {
-            console.error('«بی‌راننده» باید مشروط به وجودِ حواله باشد وگرنه کلِ ماه هشدارِ دروغ می‌دهد');
+          if (!/!t\.stopId/.test(month)) {
+            console.error('«بی‌راننده» یعنی حواله‌ای که هنوز روی هیچ مسیری نیست');
             process.exit(1);
           }
 
-          // ⑤ راننده و پیک حسابِ کاربری ندارند: اگر تخصیص به Account گره بخورد،
+          // ⑤ راننده و پیک حسابِ کاربری ندارند: اگر حمل به Account گره بخورد،
           //    تعریفِ هر راننده یک ثبت‌نامِ OTP لازم دارد و در عمل انجام نمی‌شود.
+          //    (اینکه حمل از «مسیر» می‌آید نه از تخصیصِ per-visit، نگهبانِ
+          //    «transport is planned by route» را دارد.)
           const schema = fs.readFileSync('server/prisma/schema.prisma', 'utf8');
-          const model = schema.split('model VisitAssignment')[1].split('}')[0];
-          if (!/TransportStaff/.test(model) || /Account/.test(model)) {
-            console.error('تخصیص باید به TransportStaff گره بخورد نه به Account'); process.exit(1);
+          const run = schema.split('model TransportRun')[1].split('}')[0];
+          if (!/TransportStaff/.test(run) || /Account/.test(run)) {
+            console.error('مسیر باید به TransportStaff گره بخورد نه به Account'); process.exit(1);
           }
           const defs = fs.readFileSync('server/src/patients/definitions.service.ts', 'utf8');
           if (!/createTransportStaff/.test(defs)) {
             console.error('راننده و پیک باید در تعاریفِ پایه تعریف شوند'); process.exit(1);
           }
-          // نیرویی که مأموریت داشته حذفِ سخت نمی‌شود وگرنه چینشِ گذشته بی‌راننده می‌ماند.
-          const del = defs.split('async deleteTransportStaff')[1].split(/\n  }/)[0];
-          if (!/_count\.assignments > 0/.test(del) || !/active: false/.test(del)) {
-            console.error('نیروی دارای مأموریت باید غیرفعال شود نه حذف'); process.exit(1);
+          // نیرویی که مسیر داشته حذفِ سخت نمی‌شود وگرنه چینشِ گذشته بی‌راننده می‌ماند.
+          const del = defs.split('async deleteTransportStaff')[1].split(/\n  \}/)[0];
+          if (!/_count\.runs > 0/.test(del) || !/active: false/.test(del)) {
+            console.error('نیروی دارای مسیر باید غیرفعال شود نه حذف'); process.exit(1);
           }
           console.log('dispatch ok');
           "
@@ -756,4 +759,67 @@ jobs:
             console.error('پیشنهاد باید کمبود را صریح اعلام کند'); process.exit(1);
           }
           console.log('assets ok');
+          "
+
+      - name: Verify transport is planned by route, not per visit
+        run: |
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+          const routes = strip(fs.readFileSync('server/src/patients/routes.service.ts', 'utf8'));
+          const dis = strip(fs.readFileSync('server/src/patients/dispatch.service.ts', 'utf8'));
+          const schema = fs.readFileSync('server/prisma/schema.prisma', 'utf8');
+
+          // ① دانهٔ حمل «مسیر» است نه «عمل»: راننده چند بیمارستان را به ترتیب
+          //    می‌رود، پس تخصیصِ per-visit جوابِ غلط می‌داد.
+          if (/model VisitAssignment/.test(schema)) {
+            console.error('تخصیصِ per-visit باید حذف شده باشد؛ حمل از مسیر می‌آید'); process.exit(1);
+          }
+          if (!/model TransportRun/.test(schema) || !/model TransportStop/.test(schema)) {
+            console.error('مسیر و توقف باید در schema باشند'); process.exit(1);
+          }
+          if (!/stopId/.test(schema)) { console.error('حواله باید به توقف گره بخورد'); process.exit(1); }
+
+          // ② «رانندهٔ این عمل» مشتق است، نه ستونِ ذخیره‌شده.
+          if (!/function carriersOf/.test(dis)) { console.error('حمل‌کننده باید مشتق شود'); process.exit(1); }
+          const carriers = dis.split('function carriersOf')[1].split(/\n\}/)[0];
+          if (!/t\.stop\?\.run/.test(carriers)) {
+            console.error('حمل‌کننده باید از مسیرِ توقف بیاید'); process.exit(1);
+          }
+
+          // ③ ترتیبِ توقف در دو مرحله نوشته می‌شود — (runId, seq) یکتاست و
+          //    نوشتنِ مستقیم وسطِ جابه‌جایی به تصادمِ کلید می‌خورد.
+          const re = routes.split('async reorder(')[1].split(/\n  \}/)[0];
+          if ((re.match(/transportStop\.update/g) || []).length < 2 || !/-\(i \+ 1\)/.test(re)) {
+            console.error('جابه‌جاییِ ترتیب باید دومرحله‌ای باشد'); process.exit(1);
+          }
+
+          // ④ حذفِ مسیر نباید حواله را ببرد — حواله سند است، مسیر برنامه.
+          const del = routes.split('async deleteRun(')[1].split(/\n  \}/)[0];
+          if (!/stockTransfer\.updateMany/.test(del) || !/stopId: null/.test(del)) {
+            console.error('حذفِ مسیر باید حواله را آزاد کند نه حذف'); process.exit(1);
+          }
+
+          // ⑤ ابلاغِ مسیر یک پیام است و همان قاعدهٔ حریمِ خصوصی را دارد:
+          //    راننده «چه چیزی، کجا، ساعتِ چند» می‌گیرد، نه «برای کیست».
+          if (!/export function runBriefing/.test(routes)) {
+            console.error('متنِ ابلاغِ مسیر باید تابعِ خالصِ سرویس باشد'); process.exit(1);
+          }
+          const rb = routes.split('export function runBriefing')[1];
+          for (const f of ['fullName', 'patient', 'surgeonName', 'visitCode', 'procedureName']) {
+            if (rb.includes(f)) { console.error('ابلاغِ مسیر نباید ' + f + ' داشته باشد'); process.exit(1); }
+          }
+          // ابلاغِ per-visit فقط برای کارشناس می‌ماند؛ راننده ابلاغِ مسیر می‌گیرد.
+          const brief = (dis.match(/BRIEF_ROLES = \[([^\]]*)\]/) || [])[1] || '';
+          if (!/'tech'/.test(brief) || /'driver'/.test(brief)) {
+            console.error('ابلاغِ per-visit فقط برای کارشناس است'); process.exit(1);
+          }
+
+          // ⑥ نامِ کالای حوالهٔ برنامه‌ریزی‌شده باید resolve شود، وگرنه بارِ
+          //    مسیرِ فردا بی‌نام دیده می‌شود — همان مسیری که باید چیده شود.
+          for (const fn of ['async day(', 'async run(']) {
+            const body = routes.split(fn)[1].split(/\n  \}/)[0];
+            if (!/withPlannedLots/.test(body)) { console.error(fn + ' باید نامِ قلم‌ها را resolve کند'); process.exit(1); }
+          }
+          console.log('routes ok');
           "

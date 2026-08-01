@@ -156,3 +156,80 @@
   .dp-pick { gap: 8px; }
   .dp-pick label, .dp-timebox { font-size: 10.5px; }
 }
+
+/* ── تختهٔ مسیر ── */
+.dp-routes { display: grid; gap: 12px; }
+
+.dp-loose {
+  padding: 12px 14px; border-radius: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: rgba(255, 255, 255, .04); border: 1px dashed rgba(255, 255, 255, .14);
+}
+.dp-loose.has { border-color: rgba(251, 191, 36, .45); background: rgba(245, 158, 11, .07); }
+.dp-loose > b { font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+.dp-loose > b i {
+  font-style: normal; font-size: 10px; padding: 1px 7px; border-radius: 99px;
+  color: #07051a; background: #fbbf24; font-weight: 700;
+}
+.dp-none.ok { color: #86efac; }
+
+.dp-newrun { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.dp-newrun label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(255, 255, 255, .55); }
+.dp-newrun select, .dp-attach, .dp-addstop select, .dp-addstop input {
+  font: inherit; font-size: 11.5px; padding: 6px 9px; border-radius: 9px;
+  color: #f4f1ff; background: rgba(255, 255, 255, .06); border: 1px solid rgba(139, 92, 246, .28);
+}
+.dp-newrun select option, .dp-attach option, .dp-addstop select option { background: #14103a; }
+
+.dp-run {
+  padding: 13px 15px; border-radius: 16px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
+  border-inline-start: 3px solid rgba(245, 158, 11, .65);
+}
+.dp-run > header { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.dp-run > header > b { font-size: 13.5px; display: inline-flex; align-items: center; gap: 7px; }
+.dp-runrole {
+  font-style: normal; font-size: 9.5px; padding: 1px 7px; border-radius: 7px;
+  color: #fcd34d; background: rgba(245, 158, 11, .14);
+}
+.dp-run > header em { font-style: normal; font-size: 10.5px; color: rgba(255, 255, 255, .45); }
+.dp-runmeta { flex: 1; font-size: 11px; color: rgba(255, 255, 255, .45); }
+.dp-runx {
+  font: inherit; font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 8px;
+  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .26);
+}
+
+.dp-stops { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 9px; }
+.dp-stops > li {
+  padding: 10px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, .035); border: 1px solid rgba(255, 255, 255, .07);
+}
+.dp-stops > li.done { opacity: .6; }
+.dp-stophead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dp-stophead > b { font-size: 12.5px; }
+.dp-seq {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 99px;
+  font-size: 11px; font-weight: 700; color: #07051a; background: #fbbf24;
+}
+.dp-kind { font-style: normal; font-size: 9.5px; padding: 2px 8px; border-radius: 7px; }
+.dp-kind.deliver { color: #86efac; background: rgba(52, 211, 153, .14); }
+.dp-kind.pickup { color: #67e8f9; background: rgba(34, 211, 238, .14); }
+.dp-stophead button {
+  font: inherit; font-size: 11px; line-height: 1; cursor: pointer; padding: 5px 8px; border-radius: 8px;
+  color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+}
+.dp-stophead button:disabled { opacity: .35; cursor: default; }
+.dp-stophead button.x { color: #fca5a5; }
+.dp-stophead button.dp-doneon { color: #86efac; border-color: rgba(52, 211, 153, .4); }
+
+.dp-addstop {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 9px; margin-block-start: 12px;
+  padding-block-start: 11px; border-block-start: 1px dashed rgba(255, 255, 255, .1);
+}
+.dp-addstop label { display: grid; gap: 4px; font-size: 10.5px; color: rgba(255, 255, 255, .5); }
+.dp-addstop input:disabled { opacity: .4; }
+
+@media (max-width: 640px) {
+  .dp-stophead { gap: 6px; }
+  .dp-addstop label { flex: 1; min-width: 120px; }
+  .dp-addstop select, .dp-addstop input { width: 100%; }
+}

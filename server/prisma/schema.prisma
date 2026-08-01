@@ -98,6 +98,7 @@ model Hospital {
   payerFor  Visit[]         @relation("VisitPayer")
   transfers StockTransfer[]
   needs     HospitalItem[]
+  stops     TransportStop[]
 
   @@map("hospitals")
 }
@@ -355,6 +356,10 @@ model StockTransfer {
   /// عملی که این ست برایش رفته — مبنای «این ست فردا آزاد است؟»
   visit      Visit?    @relation(fields: [visitId], references: [id], onDelete: SetNull)
   visitId    Int?      @map("visit_id")
+  /// توقفی که این حواله را می‌برد یا برمی‌گرداند — «چه کسی این را حمل می‌کند»
+  /// از همین‌جا مشتق می‌شود، نه از تخصیصِ جدا.
+  stop       TransportStop? @relation(fields: [stopId], references: [id], onDelete: SetNull)
+  stopId     Int?      @map("stop_id")
 
   /// planned | sent | received | closed
   status     String    @default("sent")
@@ -786,7 +791,6 @@ model Visit {
   stockTransfers StockTransfer[]
   settlements    Settlement[]
   payouts        Payout[]
-  assignments    VisitAssignment[]
 
   @@unique([patientId, seq])
   @@index([patientId])
@@ -1130,7 +1134,7 @@ model TransportStaff {
   active  Boolean @default(true)
   notes   String?
 
-  assignments VisitAssignment[]
+  runs TransportRun[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
@@ -1139,32 +1143,62 @@ model TransportStaff {
   @@map("transport_staff")
 }
 
-/// تخصیصِ نیروی حمل‌ونقل به یک عمل — راننده و پیک.
+/// مسیرِ یک روزِ یک نیرو — «صبح پخش، عصر جمع».
 ///
-/// ⚠️ **کارشناس عمداً این‌جا نیست و روی `Visit.techId` می‌ماند.** دامنهٔ دسترسیِ
-/// کارشناس (چه مراجعه‌ای را می‌بیند)، فیلترها، خروجی‌ها و برگهٔ مصرف همه به آن
-/// ستون آویزان‌اند؛ جابه‌جا کردنش یک بازنویسیِ پرریسک است که هیچ قابلیتِ تازه‌ای
-/// نمی‌دهد. این یعنی «کارشناس انتخاب نمی‌شود» نیست: پنلِ چینش همان `Visit.techId`
-/// را می‌نویسد، فقط ستونِ دوم نمی‌سازد.
-model VisitAssignment {
-  id      Int   @id @default(autoincrement())
-  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
-  visitId Int   @map("visit_id")
-
-  staff   TransportStaff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+/// ⚠️ **دانهٔ درست، «مسیر» است نه «عمل».** اول راننده به هر مراجعه جدا تخصیص
+/// داده می‌شد؛ ولی راننده یک ست را به یک بیمارستان نمی‌برد — چند ست را به
+/// ترتیب به چند بیمارستان می‌برد و عصر جمع می‌کند. با تخصیصِ per-visit،
+/// «رانندهٔ امروز چه مسیری دارد» جواب نداشت و ابلاغ هم N پیامِ جدا می‌شد.
+/// حالا «رانندهٔ این عمل» **مشتق** است: عمل ← حواله ← توقف ← مسیر ← نیرو.
+model TransportRun {
+  id      Int            @id @default(autoincrement())
+  staff   TransportStaff @relation(fields: [staffId], references: [id], onDelete: Restrict)
   staffId Int            @map("staff_id")
+  /// روزِ مسیر (بدونِ ساعت) — کلیدِ «مسیرهای امروز».
+  runDate DateTime       @map("run_date")
+  /// خودرو اگر با خودروی همیشگیِ نیرو فرق کند.
+  vehicle String?
+  /// planned | active | done
+  status  String         @default("planned")
+  notes   String?
 
-  /// driver | courier — نقشِ *همین* مأموریت. جدا از `TransportStaff.role` است
-  /// چون رانندهٔ همیشگی گاهی پیکِ یک عمل می‌شود و نباید دوبار تعریف شود.
-  role String
-  /// جزئیاتِ همین مأموریت: «تحویل به CSR تا ساعت ۷»
-  note String?
+  stops TransportStop[]
 
   createdById Int?     @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
-  @@unique([visitId, staffId, role])
-  @@index([visitId])
-  @@index([staffId])
-  @@map("visit_assignments")
+  @@index([runDate, staffId])
+  @@map("transport_runs")
 }
+
+/// یک توقف در مسیر — تحویل یا جمع‌آوری، با ترتیبِ صریح.
+model TransportStop {
+  id     Int          @id @default(autoincrement())
+  run    TransportRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId  Int          @map("run_id")
+  /// ترتیبِ توقف در مسیر. عددِ صریح، نه ترتیبِ ساعت: گاهی دو توقف ساعت ندارند
+  /// و ترتیبشان را چینش‌کننده تعیین می‌کند.
+  seq    Int
+
+  hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalId   Int?      @map("hospital_id")
+  /// مقصدی که بیمارستان نیست (انبار، دفتر، آدرسِ آزاد).
+  locationName String?   @map("location_name")
+
+  /// deliver | pickup
+  kind      String
+  /// ساعتِ برنامه‌ریزی‌شده — «HH:MM»
+  plannedAt String?   @map("planned_at")
+  doneAt    DateTime? @map("done_at")
+  /// نامِ تحویل‌گیرنده/تحویل‌دهنده در همین توقف.
+  handedTo  String?   @map("handed_to")
+  notes     String?
+
+  transfers StockTransfer[]
+
+  @@unique([runId, seq])
+  @@index([runId])
+  @@map("transport_stops")
+}
+

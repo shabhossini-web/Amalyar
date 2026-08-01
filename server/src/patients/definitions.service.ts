@@ -112,7 +112,7 @@ export class DefinitionsService {
 
   private static readonly STAFF_INCLUDE = {
     person: true,
-    _count: { select: { assignments: true } },
+    _count: { select: { runs: true } },
   } as const;
 
   private staffView(s: any) {
@@ -134,7 +134,7 @@ export class DefinitionsService {
       roleLabel: STAFF_ROLE_FA[s.role] ?? s.role,
       vehicle: s.vehicle,
       active: s.active,
-      missionCount: s._count.assignments,
+      missionCount: s._count.runs,
     };
   }
 
@@ -177,14 +177,14 @@ export class DefinitionsService {
     return this.staffView(updated);
   }
 
-  /// نیرویی که مأموریت داشته غیرفعال می‌شود نه حذف — وگرنه چینشِ گذشته بی‌راننده می‌شود.
+  /// نیرویی که مسیر داشته غیرفعال می‌شود نه حذف — وگرنه چینشِ گذشته بی‌راننده می‌شود.
   async deleteTransportStaff(id: number) {
     const s = await this.prisma.transportStaff.findUnique({
       where: { id },
-      include: { _count: { select: { assignments: true } } },
+      include: { _count: { select: { runs: true } } },
     });
     if (!s) throw new NotFoundException('نیرو یافت نشد');
-    if (s._count.assignments > 0) {
+    if (s._count.runs > 0) {
       await this.prisma.transportStaff.update({ where: { id }, data: { active: false } });
       return { ok: true, deactivated: true };
     }

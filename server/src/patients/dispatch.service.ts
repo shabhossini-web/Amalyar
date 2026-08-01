@@ -3,15 +3,21 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 
-/** نقش‌هایی که ابلاغ می‌گیرند. */
-export const BRIEF_ROLES = ['tech', 'driver', 'courier'] as const;
+/**
+ * نقش‌هایی که ابلاغِ **per-visit** می‌گیرند.
+ *
+ * ⚠️ فقط کارشناس. راننده و پیک ابلاغِ **مسیر** می‌گیرند نه ابلاغِ عمل: یک نفر
+ * چند بیمارستان را به ترتیب می‌رود، و N پیامِ جدا یعنی خودش باید مرتبشان کند.
+ * متنِ مسیر در `routes.service` است.
+ */
+export const BRIEF_ROLES = ['tech'] as const;
 export const JOB_LABELS: Record<string, string> = {
   tech: 'کارشناس',
   driver: 'راننده',
   courier: 'پیک',
 };
 
-/// نقش‌هایی که در تبِ حمل‌ونقل تخصیص داده می‌شوند.
+/// نقش‌هایی که مسیرِ حمل می‌گیرند.
 /// کارشناس این‌جا نیست چون روی خودِ `Visit.techId` نوشته می‌شود، نه چون
 /// انتخاب نمی‌شود — تبِ کارشناسِ همین پنل همان ستون را می‌نویسد.
 export const ASSIGN_ROLES = ['driver', 'courier'] as const;
@@ -62,8 +68,7 @@ export class DispatchService {
       where: { opDate: { gte: from, lt: to }, opStatus: { not: 'cancelled' } },
       select: {
         opDate: true, techId: true,
-        assignments: { select: { role: true } },
-        stockTransfers: { where: { status: { not: 'closed' } }, select: { id: true } },
+        stockTransfers: { where: { status: { not: 'closed' } }, select: { id: true, stopId: true } },
       },
     });
 
@@ -73,9 +78,9 @@ export class DispatchService {
       const cell = days.get(jd) ?? { day: jd, total: 0, noTech: 0, noDriver: 0 };
       cell.total += 1;
       if (!v.techId) cell.noTech += 1;
-      // «بی‌راننده» فقط وقتی کمبود است که باری برای بردن باشد؛ عملِ بی‌حواله
-      // راننده نمی‌خواهد و علامت‌زدنش یعنی هشدارِ دروغ در تمامِ ماه.
-      if (v.stockTransfers.length > 0 && !v.assignments.some((a) => a.role === 'driver')) cell.noDriver += 1;
+      // «بی‌راننده» یعنی حواله‌ای دارد که هنوز روی هیچ مسیری ننشسته. عملِ
+      // بی‌حواله راننده نمی‌خواهد و علامت‌زدنش هشدارِ دروغ در تمامِ ماه است.
+      if (v.stockTransfers.some((t: any) => !t.stopId)) cell.noDriver += 1;
       days.set(jd, cell);
     }
     return { year: jy, month: jm, days: [...days.values()].sort((a, b) => a.day - b.day), total: rows.length };
@@ -110,10 +115,14 @@ export class DispatchService {
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         procedureType: { select: { name: true } },
-        assignments: { include: { staff: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } },
+        // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
+        // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {
           where: { status: { not: 'closed' } },
-          include: { movements: { where: { quantity: { gt: 0 }, kind: 'transfer' }, include: { lot: { include: { item: { select: { name: true, size: true } } } } } } },
+          include: {
+            movements: { where: { quantity: { gt: 0 }, kind: 'transfer' }, include: { lot: { include: { item: { select: { name: true, size: true, category: true } } } } } },
+            stop: { include: { run: { include: { staff: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } } } },
+          },
         },
       },
     });
@@ -154,48 +163,12 @@ export class DispatchService {
       tech: v.tech
         ? { id: v.tech.id, name: `${v.tech.person.firstName} ${v.tech.person.lastName}`.trim(), phone: v.tech.person.phone }
         : null,
-      assignments: v.assignments.map((a: any) => ({
-        id: a.id, role: a.role, roleLabel: JOB_LABELS[a.role] ?? a.role,
-        staffId: a.staffId,
-        name: `${a.staff.person.firstName} ${a.staff.person.lastName}`.trim(),
-        phone: a.staff.person.phone,
-        vehicle: a.staff.vehicle,
-        note: a.note,
-      })),
+      // مشتق از مسیر: هر حوالهٔ این عمل یک توقف دارد و هر توقف یک نیرو.
+      carriers: carriersOf(v),
       cargo,
     };
   }
 
-  async assign(visitId: number, dto: { staffId: number; role: string; note?: string }, user: any) {
-    if (!ASSIGN_ROLES.includes(dto.role as any)) {
-      throw new BadRequestException('نقشِ تخصیص فقط راننده یا پیک است؛ کارشناس از تبِ کارشناسِ همین پنل انتخاب می‌شود');
-    }
-    const [visit, staff] = await Promise.all([
-      this.prisma.visit.findUnique({ where: { id: visitId }, select: { id: true } }),
-      this.prisma.transportStaff.findUnique({ where: { id: Number(dto.staffId) }, select: { id: true, active: true } }),
-    ]);
-    if (!visit) throw new NotFoundException('مراجعه پیدا نشد');
-    if (!staff || !staff.active) throw new NotFoundException('نیروی فعال یافت نشد');
-
-    const row = await this.prisma.visitAssignment.upsert({
-      where: { visitId_staffId_role: { visitId, staffId: staff.id, role: dto.role } },
-      create: { visitId, staffId: staff.id, role: dto.role, note: text(dto.note), createdById: user?.id ?? null },
-      update: { note: text(dto.note) },
-    });
-    await this.audit.record({
-      actorId: user?.id, action: 'dispatch.assign', entityType: 'visit_assignment', entityId: row.id,
-      after: { visitId, staffId: staff.id, role: dto.role },
-    });
-    return row;
-  }
-
-  async unassign(id: number, user: any) {
-    const row = await this.prisma.visitAssignment.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('تخصیص یافت نشد');
-    await this.prisma.visitAssignment.delete({ where: { id } });
-    await this.audit.record({ actorId: user?.id, action: 'dispatch.unassign', entityType: 'visit_assignment', entityId: id, before: row });
-    return { ok: true };
-  }
 
   /**
    * متنِ ابلاغِ یک نفر برای یک عمل.
@@ -213,10 +186,14 @@ export class DispatchService {
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         procedureType: { select: { name: true } },
-        assignments: { include: { staff: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } },
+        // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
+        // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {
           where: { status: { not: 'closed' } },
-          include: { movements: { where: { quantity: { gt: 0 }, kind: 'transfer' }, include: { lot: { include: { item: { select: { name: true, size: true } } } } } } },
+          include: {
+            movements: { where: { quantity: { gt: 0 }, kind: 'transfer' }, include: { lot: { include: { item: { select: { name: true, size: true, category: true } } } } } },
+            stop: { include: { run: { include: { staff: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } } } },
+          },
         },
       },
     });
@@ -226,6 +203,39 @@ export class DispatchService {
 }
 
 const text = (v: unknown) => (typeof v === 'string' ? v.trim() || null : null);
+
+/**
+ * حمل‌کننده‌های یک عمل — **مشتق** از مسیر، نه ستونِ ذخیره‌شده.
+ *
+ * عمل ← حواله ← توقف ← مسیر ← نیرو. همان قاعدهٔ `computeVisit`: عددِ ذخیره‌شده
+ * در کنارِ منبع، دیر یا زود از منبع جدا می‌افتد. اگر رانندهٔ مسیر عوض شود،
+ * این‌جا بی‌هیچ همگام‌سازی درست می‌ماند.
+ */
+function carriersOf(v: any) {
+  const out = new Map<number, any>();
+  for (const t of v.stockTransfers ?? []) {
+    const run = t.stop?.run;
+    if (!run) continue;
+    const key = run.staff.id;
+    const row = out.get(key) ?? {
+      staffId: run.staff.id,
+      runId: run.id,
+      stopId: t.stop.id,
+      seq: t.stop.seq,
+      kind: t.stop.kind,
+      plannedAt: t.stop.plannedAt,
+      role: run.staff.role,
+      roleLabel: JOB_LABELS[run.staff.role] ?? run.staff.role,
+      name: `${run.staff.person.firstName} ${run.staff.person.lastName}`.trim(),
+      phone: run.staff.person.phone,
+      vehicle: run.vehicle ?? run.staff.vehicle,
+      transferCodes: [] as string[],
+    };
+    row.transferCodes.push(t.code);
+    out.set(key, row);
+  }
+  return [...out.values()];
+}
 const faNum = (n: number) => Number(n).toLocaleString('fa-IR');
 
 function faDate(d: Date | null): string {
@@ -286,9 +296,6 @@ export function briefingText(v: any, opDate: Date | null, role: string): string 
     L.push('');
     L.push('📦 هنوز حواله‌ای برای این عمل صادر نشده است.');
   }
-
-  const mine = (v.assignments ?? []).filter((a: any) => a.role === role);
-  for (const a of mine) if (a.note) { L.push(''); L.push(`یادداشت: ${a.note}`); }
 
   return L.join('\n');
 }
