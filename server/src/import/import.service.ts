@@ -5,7 +5,7 @@ import { jalaliStrToDate } from '../common/jalali';
 import { toEnDigits } from '../common/identity';
 
 /** جدول‌هایی که وارد می‌شوند. بقیه عمداً رد می‌شوند و در گزارش اعلام می‌گردند. */
-const IMPORTED = ['surgeons', 'patient_profiles', 'patients', 'payments'] as const;
+const IMPORTED = ['surgeons', 'patient_profiles', 'patients', 'payments', 'bank_accounts', 'expenses', 'partner_ledger'] as const;
 
 /**
  * چرا این‌ها وارد نمی‌شوند — هر کدام دلیلِ خودش را دارد و در گزارش برمی‌گردد
@@ -15,9 +15,6 @@ const SKIP_REASONS: Record<string, string> = {
   accounts: 'کاربران باید در همین سامانه ثبت‌نام کنند؛ رمزِ سامانهٔ دیگر منتقل نمی‌شود',
   files: 'فایل‌ها روی دیسکِ سرورِ قبلی‌اند، نه داخلِ backup',
   settings: 'تنظیماتِ سامانهٔ قبلی با ساختارِ این سامانه یکی نیست',
-  expenses: 'هزینه‌ها به ماژولِ حسابداری تعلق دارند که هنوز ساخته نشده',
-  bank_accounts: 'به ماژولِ حسابداری تعلق دارد',
-  partner_ledger: 'تقسیمِ سهمِ شرکا به ماژولِ حسابداری تعلق دارد',
   form_tokens: 'به ماژولِ فرم‌ساز تعلق دارد که هنوز ساخته نشده',
   message_templates: 'به ماژولِ پیام‌رسان تعلق دارد',
   surgeon_tokens: 'توکنِ سامانهٔ قبلی در این سامانه بی‌اعتبار است',
@@ -26,6 +23,17 @@ const SKIP_REASONS: Record<string, string> = {
 
 type Counter = { created: number; existing: number; skipped: number };
 const counter = (): Counter => ({ created: 0, existing: 0, skipped: 0 });
+
+/// نگاشتِ نوعِ ردیفِ دفترِ ملک‌طب به این سامانه. `visit_income` و
+/// `case_cost_claim` هر دو در مدلِ ما «سهمِ سود»اند؛ تفکیکشان آن‌جا برای گزارش
+/// بود، نه برای محاسبه.
+const LEDGER_TYPE_MAP: Record<string, string> = {
+  visit_income: 'profit_share',
+  profit_share: 'profit_share',
+  case_cost_claim: 'profit_share',
+  expense_paid: 'expense_paid',
+  settlement: 'settlement',
+};
 
 /**
  * وارد کردنِ backupِ JSONِ ملک‌طب.
@@ -58,6 +66,7 @@ export class ImportService {
       counts: {
         surgeons: counter(), hospitals: counter(), procedureTypes: counter(),
         patients: counter(), visits: counter(), charges: counter(), payments: counter(),
+        bankAccounts: counter(), expenses: counter(), partnerLedger: counter(),
       } as Record<string, Counter>,
       skippedTables: [] as { table: string; rows: number; reason: string }[],
       warnings: [] as string[],
@@ -258,10 +267,92 @@ export class ImportService {
       c.payments.created += 1;
       report.warnings.push(`مراجعهٔ ${row.id}: ردیفِ پرداخت نداشت، ستونِ «پرداختی» به‌عنوان یک پرداخت ثبت شد`);
     }
+    await this.runAccounting(tx, tables, c, report);
+
     if (report.warnings.length > 20) {
       const n = report.warnings.length;
       report.warnings = report.warnings.slice(0, 20);
       report.warnings.push(`… و ${n - 20} مورد دیگر`);
+    }
+  }
+
+  /**
+   * حساب‌های بانکی، هزینه‌ها و دفترِ حسابِ جاریِ شرکا.
+   *
+   * سه نکتهٔ نگاشت که بدونشان داده بی‌معنی وارد می‌شود:
+   *  ۱) تاریخ‌های ملک‌طب رشتهٔ شمسی‌اند (`۱۴۰۵/۰۵/۰۹`)، پس از `jalaliStrToDate`.
+   *  ۲) مبالغ ریال‌اند، مثلِ بقیهٔ ایمپورت → `toToman`.
+   *  ۳) شرکا در ملک‌طب **نام** بودند نه شناسه (`partner_from`/`partner_to`)، پس
+   *     نام به شریکِ تعریف‌شده در این سامانه نگاشت می‌شود؛ نامِ ناشناخته یعنی
+   *     ردیف رد می‌شود، نه اینکه به شریکِ اشتباه بچسبد.
+   */
+  private async runAccounting(tx: any, tables: any, c: any, report: any) {
+    for (const row of arr(tables.bank_accounts)) {
+      const ownerName = text(row.owner_name);
+      if (!ownerName) { c.bankAccounts.skipped += 1; continue; }
+      const dup = await tx.bankAccount.findFirst({ where: { ownerName, iban: text(row.sheba) }, select: { id: true } });
+      if (dup) { c.bankAccounts.existing += 1; continue; }
+      await tx.bankAccount.create({
+        data: {
+          ownerName, cardNumber: text(row.card_number), iban: text(row.sheba),
+          active: row.is_active === undefined ? true : !!Number(row.is_active),
+        },
+      });
+      c.bankAccounts.created += 1;
+    }
+
+    const expenseIdMap = new Map<string, number>();
+    for (const row of arr(tables.expenses)) {
+      const amount = toToman(row.amount);
+      const title = text(row.description) ?? text(row.title) ?? text(row.category) ?? 'هزینه';
+      if (amount <= 0) { c.expenses.skipped += 1; continue; }
+      const ref = `malekteb:expenses:${row.id}`;
+      const dup = await tx.expense.findFirst({ where: { notes: ref }, select: { id: true } });
+      if (dup) { expenseIdMap.set(String(row.id), dup.id); c.expenses.existing += 1; continue; }
+      const created = await tx.expense.create({
+        data: {
+          title: title.slice(0, 120), category: text(row.category), amount,
+          spentAt: jalaliStrToDate(row.date) ?? new Date(),
+          // ⚠️ ارجاعِ منبع در notes می‌نشیند چون Expense ستونِ sourceRef ندارد؛
+          // بدونِ آن، اجرای دوبارهٔ ایمپورت هزینه‌ها را دو برابر می‌کرد.
+          notes: ref,
+        },
+      });
+      expenseIdMap.set(String(row.id), created.id);
+      c.expenses.created += 1;
+    }
+
+    const ledgerRows = arr(tables.partner_ledger);
+    if (ledgerRows.length) {
+      const partners = await tx.partner.findMany({ where: { active: true }, select: { id: true, name: true } });
+      const byName = new Map<string, number>(partners.map((p: any) => [p.name, p.id]));
+      let unknown = 0;
+      for (const row of ledgerRows) {
+        const from = byName.get(text(row.partner_from) ?? '');
+        const to = byName.get(text(row.partner_to) ?? '');
+        const amount = toToman(row.amount);
+        if (!from || !to || from === to || amount <= 0) { c.partnerLedger.skipped += 1; if (!from || !to) unknown += 1; continue; }
+        const ref = `malekteb:partner_ledger:${row.id}`;
+        const dup = await tx.partnerLedger.findFirst({ where: { description: { endsWith: ref } }, select: { id: true } });
+        if (dup) { c.partnerLedger.existing += 1; continue; }
+        await tx.partnerLedger.create({
+          data: {
+            entryType: LEDGER_TYPE_MAP[row.entry_type] ?? 'settlement',
+            fromPartnerId: from, fromName: text(row.partner_from)!,
+            toPartnerId: to, toName: text(row.partner_to)!,
+            amount,
+            expenseId: row.expense_id ? expenseIdMap.get(String(row.expense_id)) ?? null : null,
+            visitCode: text(row.visit_code),
+            description: `${text(row.description) ?? ''} — ${ref}`.trim(),
+            status: row.status === 'settled' ? 'settled' : 'open',
+            entryDate: jalaliStrToDate(row.entry_date) ?? new Date(),
+          },
+        });
+        c.partnerLedger.created += 1;
+      }
+      if (unknown) {
+        report.warnings.push(`${unknown} ردیفِ دفترِ شرکا رد شد: نامِ شریک با سهامدارانِ تعریف‌شده در این سامانه یکی نبود — اول سهامداران را در حسابداری تعریف کنید`);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { LedgerService } from './ledger.service';
 
 export const CONTRACT_KINDS = ['percent', 'fixed'] as const;
 export const PAYERS = ['patient', 'hospital'] as const;
@@ -111,7 +112,7 @@ export function computeShares(input: SettlementInput): ComputedEntry[] {
  */
 @Injectable()
 export class SettlementService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private ledger: LedgerService) {}
 
   // ─────────────── قراردادِ جراح ───────────────
 
@@ -350,6 +351,9 @@ export class SettlementService {
     if (!row) throw new NotFoundException('تسویه‌ای برای نهایی‌کردن نیست');
     if (row.status === 'final') throw new BadRequestException('این تسویه قبلاً نهایی شده است');
     await this.prisma.settlement.update({ where: { id: row.id }, data: { status: 'final', finalizedAt: new Date() } });
+    // بدهیِ بینِ شرکا فقط با نهایی‌شدن ساخته می‌شود: پیش‌نویس نباید حسابِ جاری
+    // را تکان بدهد، وگرنه هر بار محاسبهٔ آزمایشی یک بدهیِ ساختگی می‌سازد.
+    await this.ledger.ledgerForSettlement(row.id, user);
     await this.audit.record({ actorId: user?.id, action: 'settlement.finalize', entityType: 'settlement', entityId: row.id });
     return this.get(visitId);
   }
@@ -359,6 +363,8 @@ export class SettlementService {
     const row = await this.currentRow(visitId);
     if (!row) throw new NotFoundException('تسویه‌ای وجود ندارد');
     await this.prisma.settlement.update({ where: { id: row.id }, data: { supersededAt: new Date() } });
+    // ردیف‌های دفتر باطل می‌شوند نه پاک — همان قاعدهٔ فقط‌افزودنی.
+    await this.ledger.voidForSettlement(row.id);
     await this.audit.record({ actorId: user?.id, action: 'settlement.reopen', entityType: 'settlement', entityId: row.id });
     return this.get(visitId);
   }

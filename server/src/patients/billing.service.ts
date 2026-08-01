@@ -195,7 +195,7 @@ export class BillingService {
 
   async addPayment(
     visitId: number,
-    dto: { amount?: number; method?: string; paidAt?: string; reference?: string; notes?: string },
+    dto: { amount?: number; method?: string; paidAt?: string; reference?: string; notes?: string; bankAccountId?: number; receivedById?: number },
     user: any,
   ) {
     await this.assertVisit(visitId, user);
@@ -215,6 +215,9 @@ export class BillingService {
     const row = await this.prisma.payment.create({
       data: {
         visitId, amount, method, paidAt,
+        bankAccountId: dto.bankAccountId ?? null,
+        // شریکِ دریافت‌کننده مبنای بدهیِ بینِ شرکاست؛ خالی یعنی به حسابِ مشترک رفته.
+        receivedById: dto.receivedById ?? null,
         reference: dto.reference?.trim() || null,
         notes: dto.notes?.trim() || null,
         createdById: user?.id ?? null,

@@ -313,6 +313,35 @@ jobs:
           if (!/!== 100/.test(svc)) { console.error('جمعِ درصدِ شرکا باید کنترل شود'); process.exit(1); }
           const stats = fs.readFileSync('src/patients/patients.service.ts', 'utf8');
           if (!/byPayer/.test(stats)) { console.error('ماندهٔ per-counterparty لازم است'); process.exit(1); }
+
+          // دفترِ حسابِ جاریِ شرکا — «چه کسی به چه کسی بدهکار است».
+          const led = fs.readFileSync('src/patients/ledger.service.ts', 'utf8');
+          if (!/export function pairDebts/.test(led)) {
+            console.error('تبدیلِ اختلاف به بدهی باید یک تابعِ خالصِ مشترک باشد'); process.exit(1);
+          }
+          if (/partnerLedger\.delete/.test(led)) { console.error('دفترِ شرکا فقط‌افزودنی است — حذف ممنوع'); process.exit(1); }
+          // ابطال با voidedAt، نه پاک‌کردن — همان الگوی supersededAt.
+          if (!/voidedAt: new Date\(\)/.test(led)) { console.error('ابطال باید با voidedAt باشد'); process.exit(1); }
+          // بدهی فقط با نهایی‌شدنِ تسویه ساخته می‌شود، نه با هر محاسبهٔ پیش‌نویس.
+          const st = fs.readFileSync('src/patients/settlement.service.ts', 'utf8');
+          const fin = st.split('async finalize')[1].split(/\n  \/\/\/|\n  async /)[0];
+          if (!/ledgerForSettlement/.test(fin)) {
+            console.error('بدهیِ بینِ شرکا باید هنگام نهایی‌شدن ساخته شود'); process.exit(1);
+          }
+          const reo = st.split('async reopen')[1].split(/\n  async /)[0];
+          if (!/voidForSettlement/.test(reo)) { console.error('باطل‌کردنِ تسویه باید ردیف‌های دفتر را باطل کند'); process.exit(1); }
+          // نقدی که به حسابِ مشترک رفته نباید بدهیِ بینِ شرکا بسازد.
+          if (!/if \(!personal\) return \[\];/.test(led)) {
+            console.error('نقدِ حسابِ مشترک نباید بدهیِ بینِ شرکا بسازد'); process.exit(1);
+          }
+          // ایمپورت: سه جدولِ حسابداری دیگر رد نمی‌شوند و تکرارناپذیرند.
+          const imp = fs.readFileSync('src/import/import.service.ts', 'utf8');
+          for (const t of ['bank_accounts', 'expenses', 'partner_ledger']) {
+            if (!new RegExp(\"'\" + t + \"'\").test(imp.split('const IMPORTED')[1].split(';')[0])) {
+              console.error('ایمپورت باید ' + t + ' را وارد کند'); process.exit(1);
+            }
+          }
+          if (!/malekteb:expenses:/.test(imp)) { console.error('ایمپورتِ هزینه باید ارجاعِ منبع بگذارد وگرنه تکرار می‌شود'); process.exit(1); }
           console.log('share split ok');
           "
 

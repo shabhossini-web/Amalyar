@@ -42,7 +42,15 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   const [codeHits, setCodeHits] = useState([]);
   const [itemHits, setItemHits] = useState([]);
   const [lots, setLots] = useState([]);
-  const [p, setP] = useState({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '' });
+  const [p, setP] = useState({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '', bankAccountId: '', receivedById: '' });
+  /// حساب‌ها و شرکا فقط برای فرمِ پرداخت‌اند؛ اگر ماژولِ حسابداری خاموش باشد
+  /// خطا نمی‌دهیم و فیلدها ساده پنهان می‌مانند.
+  const [banks, setBanks] = useState([]);
+  const [partners, setPartners] = useState([]);
+  useEffect(() => {
+    api('/bank-accounts').then(setBanks).catch(() => setBanks([]));
+    api('/partners').then((r) => setPartners(r.filter((x) => x.active))).catch(() => setPartners([]));
+  }, []);
 
   const load = useCallback(async () => {
     try { setData(await api(`/visits/${visit.id}/billing`)); }
@@ -159,9 +167,13 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     try {
       await api(`/visits/${visit.id}/payments`, {
         method: 'POST',
-        body: { amount, method: p.method, paidAt, reference: p.reference.trim() || undefined },
+        body: {
+          amount, method: p.method, paidAt, reference: p.reference.trim() || undefined,
+          bankAccountId: p.bankAccountId ? Number(p.bankAccountId) : undefined,
+          receivedById: p.receivedById ? Number(p.receivedById) : undefined,
+        },
       });
-      setP({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '' });
+      setP({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '', bankAccountId: '', receivedById: '' });
       await load(); onChanged?.();
       onToast('پرداخت ثبت شد ✓');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
@@ -384,6 +396,24 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                     <label className="db-field"><span>شمارهٔ پیگیری</span>
                       <input dir="ltr" value={p.reference} onChange={(e) => setP((s) => ({ ...s, reference: e.target.value }))} placeholder="اختیاری" />
                     </label>
+                    {banks.length > 0 && (
+                      <label className="db-field"><span>به کدام حساب</span>
+                        <select value={p.bankAccountId} onChange={(e) => setP((s) => ({ ...s, bankAccountId: e.target.value }))}>
+                          <option value="">—</option>
+                          {banks.map((b) => <option key={b.id} value={b.id}>{b.ownerName}{b.bankName ? ` · ${b.bankName}` : ''}</option>)}
+                        </select>
+                      </label>
+                    )}
+                    {/* ⚠️ اگر پول به حسابِ شخصیِ یک شریک برود، همان لحظه به بقیه
+                        بدهکار می‌شود. خالی یعنی حسابِ مشترکِ شرکت و بدهی نمی‌سازد. */}
+                    {partners.length > 1 && (
+                      <label className="db-field"><span>دریافت‌کننده (شریک)</span>
+                        <select value={p.receivedById} onChange={(e) => setP((s) => ({ ...s, receivedById: e.target.value }))}>
+                          <option value="">حسابِ شرکت</option>
+                          {partners.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                        </select>
+                      </label>
+                    )}
                   </div>
                   <button type="button" className="db-submit bl-btn" onClick={addPayment} disabled={busy}>
                     <Plus width="15" height="15" /> ثبتِ پرداخت

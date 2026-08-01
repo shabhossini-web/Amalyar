@@ -44,11 +44,16 @@ export default function Accounting() {
       </header>
 
       <div className="ac-tabs">
-        <button type="button" className={tab === 'contracts' ? 'on' : ''} onClick={() => setTab('contracts')}>قراردادِ جراحان</button>
-        <button type="button" className={tab === 'partners' ? 'on' : ''} onClick={() => setTab('partners')}>سهامداران</button>
+        {[['contracts', 'قراردادِ جراحان'], ['partners', 'سهامداران'], ['expenses', 'هزینه‌ها'], ['banks', 'حساب‌های بانکی'], ['ledger', 'حسابِ جاریِ شرکا']].map(([k, l]) => (
+          <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
+        ))}
       </div>
 
-      {tab === 'contracts' ? <Contracts onToast={setToast} /> : <Partners onToast={setToast} />}
+      {tab === 'contracts' && <Contracts onToast={setToast} />}
+      {tab === 'partners' && <Partners onToast={setToast} />}
+      {tab === 'expenses' && <Expenses onToast={setToast} />}
+      {tab === 'banks' && <Banks onToast={setToast} />}
+      {tab === 'ledger' && <Ledger onToast={setToast} />}
       {toast && <div className="ac-toast" role="status">{toast}</div>}
     </div>
   );
@@ -227,5 +232,245 @@ function Partners({ onToast }) {
       </p>
       <button type="button" className="ac-submit" onClick={save} disabled={busy || total !== 100}>ذخیرهٔ سهامداران</button>
     </div>
+  );
+}
+
+/**
+ * هزینه‌های شرکت.
+ *
+ * «پرداخت‌کننده» اختیاری است ولی مهم‌ترین فیلد است: اگر شریکی از جیبِ خودش داده
+ * باشد، همان لحظه بدهیِ بقیه در دفترِ حسابِ جاری ثبت می‌شود. خالی‌گذاشتنش یعنی
+ * از حسابِ مشترکِ شرکت رفته و بینِ شرکا بدهی نمی‌سازد.
+ */
+function Expenses({ onToast }) {
+  const [d, setD] = useState(null);
+  const [partners, setPartners] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [f, setF] = useState({ title: '', category: '', amount: '', dateJ: todayJStr(), paidById: '', bankAccountId: '' });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [e, p, b] = await Promise.all([api('/expenses'), api('/partners'), api('/bank-accounts')]);
+      setD(e); setPartners(p.filter((x) => x.active)); setAccounts(b);
+    } catch (e) { onToast(e.message); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async () => {
+    const amount = parseNum(f.amount);
+    if (f.title.trim().length < 2) { onToast('عنوانِ هزینه را وارد کنید'); return; }
+    if (amount <= 0) { onToast('مبلغ را وارد کنید'); return; }
+    const spentAt = f.dateJ.trim() ? jStrToIso(f.dateJ) : undefined;
+    if (f.dateJ.trim() && !spentAt) { onToast('تاریخ نامعتبر است'); return; }
+    setBusy(true);
+    try {
+      await api('/expenses', {
+        method: 'POST',
+        body: {
+          title: f.title.trim(), amount, spentAt,
+          category: f.category.trim() || undefined,
+          paidById: f.paidById ? Number(f.paidById) : undefined,
+          bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
+        },
+      });
+      setF((s) => ({ ...s, title: '', category: '', amount: '' }));
+      await load(); onToast('هزینه ثبت شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const drop = async (id) => {
+    setBusy(true);
+    try { await api(`/expenses/${id}`, { method: 'DELETE' }); await load(); onToast('هزینه حذف شد'); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  if (!d) return <div className="ac-empty">در حال بارگذاری…</div>;
+  return (
+    <>
+      <div className="ac-add">
+        <div className="ac-grid">
+          <label className="ac-field"><span>عنوان *</span>
+            <input value={f.title} onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} placeholder="مثلاً: اجارهٔ دفتر" />
+          </label>
+          <label className="ac-field"><span>دسته</span>
+            <input value={f.category} onChange={(e) => setF((s) => ({ ...s, category: e.target.value }))} placeholder="اداری، حمل‌ونقل…" />
+          </label>
+          <label className="ac-field"><span>مبلغ (تومان) *</span>
+            <input dir="ltr" inputMode="numeric" value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} placeholder="۰" />
+          </label>
+          <JDate label="تاریخ" value={f.dateJ} onChange={(v) => setF((s) => ({ ...s, dateJ: v }))} />
+          <label className="ac-field"><span>پرداخت‌کننده (شریک)</span>
+            <select value={f.paidById} onChange={(e) => setF((s) => ({ ...s, paidById: e.target.value }))}>
+              <option value="">از حسابِ شرکت</option>
+              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className="ac-field"><span>حساب</span>
+            <select value={f.bankAccountId} onChange={(e) => setF((s) => ({ ...s, bankAccountId: e.target.value }))}>
+              <option value="">—</option>
+              {accounts.map((b) => <option key={b.id} value={b.id}>{b.ownerName}{b.bankName ? ` · ${b.bankName}` : ''}</option>)}
+            </select>
+          </label>
+        </div>
+        <p className="ac-hint">
+          اگر <b>شریکی از جیبِ خودش</b> داده، پرداخت‌کننده را انتخاب کنید — بدهیِ بقیه خودکار در حسابِ جاری ثبت می‌شود.
+        </p>
+        <button type="button" className="ac-submit" onClick={submit} disabled={busy}>
+          <Plus width="15" height="15" /> ثبتِ هزینه
+        </button>
+      </div>
+
+      <div className="ac-list">
+        <p className="ac-total ok">جمعِ هزینه‌ها: {num(d.total)} تومان</p>
+        {d.rows.length === 0 && <div className="ac-empty">هزینه‌ای ثبت نشده</div>}
+        {d.rows.map((e) => (
+          <article key={e.id} className="ac-row">
+            <div className="ac-val"><b>{num(e.amount)}</b><span>تومان</span></div>
+            <div className="ac-row-main">
+              <b>{e.title}</b>
+              <small>{faDate(e.spentAt)}{e.category ? ` · ${e.category}` : ''}{e.paidByName ? ` · پرداختِ ${e.paidByName}` : ''}</small>
+            </div>
+            <button type="button" className="ac-off" disabled={busy} onClick={() => drop(e.id)}>حذف</button>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** حساب‌های بانکی — شرکت یا شخصیِ یک شریک. */
+function Banks({ onToast }) {
+  const [rows, setRows] = useState([]);
+  const [partners, setPartners] = useState([]);
+  const [f, setF] = useState({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '' });
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [b, p] = await Promise.all([api('/bank-accounts?all=1'), api('/partners')]);
+      setRows(b); setPartners(p.filter((x) => x.active));
+    } catch (e) { onToast(e.message); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async () => {
+    if (f.ownerName.trim().length < 2) { onToast('نامِ صاحبِ حساب را وارد کنید'); return; }
+    setBusy(true);
+    try {
+      await api('/bank-accounts', {
+        method: 'POST',
+        body: {
+          ownerName: f.ownerName.trim(), bankName: f.bankName.trim() || undefined,
+          cardNumber: f.cardNumber.trim() || undefined, iban: f.iban.trim() || undefined,
+          partnerId: f.partnerId ? Number(f.partnerId) : undefined,
+        },
+      });
+      setF({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '' });
+      await load(); onToast('حساب اضافه شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <div className="ac-add">
+        <div className="ac-grid">
+          <label className="ac-field"><span>صاحبِ حساب *</span>
+            <input value={f.ownerName} onChange={(e) => setF((s) => ({ ...s, ownerName: e.target.value }))} />
+          </label>
+          <label className="ac-field"><span>بانک</span>
+            <input value={f.bankName} onChange={(e) => setF((s) => ({ ...s, bankName: e.target.value }))} />
+          </label>
+          <label className="ac-field"><span>شمارهٔ کارت</span>
+            <input dir="ltr" value={f.cardNumber} onChange={(e) => setF((s) => ({ ...s, cardNumber: e.target.value }))} />
+          </label>
+          <label className="ac-field"><span>شبا</span>
+            <input dir="ltr" value={f.iban} onChange={(e) => setF((s) => ({ ...s, iban: e.target.value }))} placeholder="IR..." />
+          </label>
+          <label className="ac-field"><span>حسابِ شخصیِ کدام شریک</span>
+            <select value={f.partnerId} onChange={(e) => setF((s) => ({ ...s, partnerId: e.target.value }))}>
+              <option value="">حسابِ شرکت</option>
+              {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+        </div>
+        <button type="button" className="ac-submit" onClick={submit} disabled={busy}>
+          <Plus width="15" height="15" /> افزودنِ حساب
+        </button>
+      </div>
+      <div className="ac-list">
+        {rows.length === 0 && <div className="ac-empty">حسابی ثبت نشده</div>}
+        {rows.map((b) => (
+          <article key={b.id} className={`ac-row${b.active ? '' : ' off'}`}>
+            <div className="ac-row-main">
+              <b>{b.ownerName}{b.bankName ? ` — ${b.bankName}` : ''}</b>
+              <small dir="ltr">{b.iban || b.cardNumber || '—'}</small>
+              {b.partner && <small>حسابِ شخصیِ {b.partner.name}</small>}
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/**
+ * حسابِ جاریِ شرکا.
+ *
+ * فقط **خالص** نشان داده می‌شود: «الف ۵ به ب بدهکار، ب ۳ به الف بدهکار» برای
+ * کاربر بی‌معنی است؛ او می‌خواهد بداند «الف ۲ به ب بدهکار است».
+ */
+function Ledger({ onToast }) {
+  const [sum, setSum] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [s, e] = await Promise.all([api('/ledger/summary'), api('/ledger')]);
+      setSum(s); setRows(e);
+    } catch (e) { onToast(e.message); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const settle = async (pair) => {
+    setBusy(true);
+    try {
+      await api('/ledger/settle', {
+        method: 'POST',
+        body: { fromPartnerId: pair.fromId, toPartnerId: pair.toId, amount: pair.amount },
+      });
+      await load(); onToast('تسویه ثبت شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  if (!sum) return <div className="ac-empty">در حال بارگذاری…</div>;
+  return (
+    <>
+      <div className="ac-add">
+        {sum.pairs.length === 0 ? (
+          <p className="ac-total ok">حسابِ شرکا تسویه است ✓</p>
+        ) : sum.pairs.map((p) => (
+          <div key={`${p.fromId}-${p.toId}`} className="ac-pair">
+            <b>{p.fromName}</b>
+            <span>به</span>
+            <b>{p.toName}</b>
+            <i>{num(p.amount)} تومان</i>
+            <button type="button" className="ac-mini" disabled={busy} onClick={() => settle(p)}>ثبتِ پرداختِ کامل</button>
+          </div>
+        ))}
+      </div>
+      <div className="ac-list">
+        {rows.map((r) => (
+          <article key={r.id} className="ac-row">
+            <div className="ac-val"><b>{num(r.amount)}</b><span>{r.typeLabel}</span></div>
+            <div className="ac-row-main">
+              <b>{r.fromName} → {r.toName}</b>
+              <small>{faDate(r.entryDate)}{r.description ? ` · ${r.description}` : ''}</small>
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
   );
 }

@@ -53,5 +53,12 @@ export class PaymentCreateDto {
   @IsOptional() @IsString() @MaxLength(60, { message: 'شمارهٔ پیگیری طولانی است' })
   reference?: string;
 
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'حسابِ انتخابی نامعتبر است' })
+  bankAccountId?: number;
+
+  /// اگر پول به حسابِ شخصیِ یک شریک رفت — مبنای دفترِ حسابِ جاری.
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'شریکِ انتخابی نامعتبر است' })
+  receivedById?: number;
+
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }

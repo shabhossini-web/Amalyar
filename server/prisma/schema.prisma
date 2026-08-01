@@ -604,6 +604,15 @@ model Payment {
   /// شمارهٔ پیگیری/ارجاع — برای تطبیق با صورت‌حسابِ بانک.
   reference String?
 
+  /// به کدام حساب واریز شد.
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  bankAccountId Int?         @map("bank_account_id")
+  /// ⚠️ اگر پول به حسابِ **شخصیِ** یک شریک رفت، همین‌جا ثبت می‌شود. مبنای
+  /// «چه کسی نقد را در دست دارد» و در نتیجه بدهیِ بینِ شرکا. خالی یعنی به
+  /// حسابِ مشترکِ شرکت رفته و بدهیِ بینِ شرکا نمی‌سازد.
+  receivedBy    Partner?     @relation("PaymentReceiver", fields: [receivedById], references: [id], onDelete: SetNull)
+  receivedById  Int?         @map("received_by_id")
+
   notes       String?
   createdById Int?     @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -801,6 +810,10 @@ model Partner {
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
 
+  accounts BankAccount[]
+  expenses Expense[]
+  received Payment[]     @relation("PaymentReceiver")
+
   @@map("partners")
 }
 
@@ -863,4 +876,99 @@ model ShareEntry {
   @@index([settlementId])
   @@index([party, partyId])
   @@map("share_entries")
+}
+
+/// حسابِ بانکیِ شرکت یا شریک — مقصدِ دریافت و مبدأ پرداخت.
+model BankAccount {
+  id         Int      @id @default(autoincrement())
+  ownerName  String   @map("owner_name")
+  bankName   String?  @map("bank_name")
+  cardNumber String?  @map("card_number")
+  iban       String?
+  /// اگر حسابِ شخصیِ یک شریک است — مبنای «چه کسی پول را گرفت».
+  partner    Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  partnerId  Int?     @map("partner_id")
+  active     Boolean  @default(true)
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  payments Payment[]
+  expenses Expense[]
+
+  @@map("bank_accounts")
+}
+
+/// هزینهٔ جانبیِ شرکت — اجاره، حقوق، حمل‌ونقل، تعمیرِ ست…
+///
+/// جدا از `Visit.caseCost` است: آن هزینهٔ مستقیمِ یک عمل است و در تسویهٔ همان
+/// عمل کم می‌شود؛ این هزینهٔ عمومیِ شرکت است و بینِ شرکا تقسیم می‌شود.
+model Expense {
+  id       Int      @id @default(autoincrement())
+  title    String
+  category String?
+  /// تومان
+  amount   Int
+  spentAt  DateTime @map("spent_at")
+
+  /// از کدام حساب پرداخت شد.
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  bankAccountId Int?         @map("bank_account_id")
+  /// ⚠️ کدام **شریک** از جیبِ خودش داد. اگر پر باشد، بقیهٔ شرکا به او بدهکار
+  /// می‌شوند و دفترِ حسابِ جاری همین‌جا ساخته می‌شود.
+  paidBy        Partner?     @relation(fields: [paidById], references: [id], onDelete: SetNull)
+  paidById      Int?         @map("paid_by_id")
+
+  notes       String?
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([spentAt])
+  @@index([category])
+  @@map("expenses")
+}
+
+/// دفترِ حسابِ جاریِ شرکا — «چه کسی به چه کسی چقدر بدهکار است».
+///
+/// ⚠️ این با `ShareEntry` فرق دارد و جایگزینش نیست: ShareEntry می‌گوید سهمِ هر
+/// شریک از یک عمل **چقدر است**، این‌جا می‌گوید چون پول به حسابِ یکی رفت یا
+/// هزینه را یکی داد، **چه کسی به چه کسی بدهکار شد**. در ملک‌طب همین جدول
+/// (`partner_ledger`) وجود داشت و بدونش، شرکت با دو حسابِ شخصی قابلِ اداره نیست.
+///
+/// فقط‌افزودنی: تسویه با ردیفِ تازه انجام می‌شود، و ابطال با `voidedAt` —
+/// همان الگوی `supersededAt` روی Settlement.
+model PartnerLedger {
+  id Int @id @default(autoincrement())
+
+  /// profit_share | expense_paid | settlement
+  entryType String @map("entry_type")
+
+  fromPartnerId Int    @map("from_partner_id") // بدهکار
+  fromName      String @map("from_name")
+  toPartnerId   Int    @map("to_partner_id") // بستانکار
+  toName        String @map("to_name")
+
+  /// تومان، همیشه مثبت. جهت با from/to مشخص می‌شود نه با علامت.
+  amount Int
+
+  /// ارجاع‌های اختیاری — بدونِ FK، تا حذفِ مراجعه سابقهٔ مالی را نبرد.
+  visitId      Int?    @map("visit_id")
+  visitCode    String? @map("visit_code")
+  expenseId    Int?    @map("expense_id")
+  settlementId Int?    @map("settlement_id")
+
+  description String?
+  /// open | settled
+  status      String    @default("open")
+  settledAt   DateTime? @map("settled_at")
+  voidedAt    DateTime? @map("voided_at")
+
+  entryDate   DateTime @map("entry_date")
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([status, voidedAt])
+  @@index([fromPartnerId, toPartnerId])
+  @@index([settlementId])
+  @@index([expenseId])
+  @@map("partner_ledger")
 }

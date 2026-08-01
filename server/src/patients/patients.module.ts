@@ -13,6 +13,8 @@ import { InventoryController, VisitStockController } from './inventory.controlle
 import { InventoryService } from './inventory.service';
 import { SettlementController } from './settlement.controller';
 import { SettlementService } from './settlement.service';
+import { LedgerController } from './ledger.controller';
+import { LedgerService } from './ledger.service';
 import { PermissionGuard } from '../auth/permission.guard';
 
 @Module({
@@ -20,11 +22,11 @@ import { PermissionGuard } from '../auth/permission.guard';
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
-    RecordController, InventoryController, SettlementController, DefinitionsController,
+    RecordController, InventoryController, SettlementController, LedgerController, DefinitionsController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
-    ServiceCodesService, InventoryService, SettlementService, PermissionGuard,
+    ServiceCodesService, InventoryService, SettlementService, LedgerService, PermissionGuard,
   ],
 })
 export class PatientsModule {}
