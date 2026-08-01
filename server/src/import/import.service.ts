@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliStrToDate } from '../common/jalali';
+import { normalizeName } from '../common/name-match';
 import { toEnDigits } from '../common/identity';
 
 /** جدول‌هایی که وارد می‌شوند. بقیه عمداً رد می‌شوند و در گزارش اعلام می‌گردند. */
@@ -394,10 +395,31 @@ export class ImportService {
     return tx.patient.findFirst({ where: { sourceRef: ref }, select: { id: true } });
   }
 
-  /** موجودیت‌هایی که در ملک‌طب متنِ آزاد بودند: از نام‌های یکتا ساخته می‌شوند. */
+  /**
+   * موجودیت‌هایی که در ملک‌طب متنِ آزاد بودند: از نام‌های یکتا ساخته می‌شوند.
+   *
+   * ⚠️ برای بیمارستان، تطبیق روی **شکلِ کانونی** و نام‌های مستعارِ تأییدشده هم
+   * انجام می‌شود: «لقمان»، «بیمارستان لقمان» و «لقمان حکیم» یک جا هستند و
+   * ساختنِ سه رکورد یعنی گزارشِ درآمد سه ردیفِ نصفه بدهد. آنچه تطبیق نخورد
+   * ساخته می‌شود ولی در صفحهٔ یکسان‌سازی قابلِ ادغام می‌ماند — **حدس این‌جا
+   * ادغام نمی‌کند**، فقط تصمیمِ قبلیِ آدم را دوباره اعمال می‌کند.
+   */
   private async upsertByName(tx: any, model: 'hospital' | 'procedureType', names: string[], c: Counter) {
     const map = new Map<string, number>();
+    const canon = new Map<string, number>();
+    if (model === 'hospital') {
+      for (const h of await tx.hospital.findMany({ select: { id: true, name: true } })) {
+        canon.set(normalizeName(h.name), h.id);
+      }
+      for (const a of await tx.hospitalAlias.findMany({ select: { aliasNorm: true, hospitalId: true } })) {
+        canon.set(a.aliasNorm, a.hospitalId);
+      }
+    }
     for (const name of names) {
+      if (model === 'hospital') {
+        const hit = canon.get(normalizeName(name));
+        if (hit) { map.set(name, hit); c.existing += 1; continue; }
+      }
       const found = await tx[model].findFirst({
         where: { name: { equals: name, mode: 'insensitive' } },
         select: { id: true },
@@ -405,6 +427,7 @@ export class ImportService {
       if (found) { map.set(name, found.id); c.existing += 1; continue; }
       const created = await tx[model].create({ data: { name } });
       map.set(name, created.id);
+      if (model === 'hospital') canon.set(normalizeName(name), created.id);
       c.created += 1;
     }
     return map;

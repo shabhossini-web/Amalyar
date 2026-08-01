@@ -823,3 +823,64 @@ jobs:
           }
           console.log('routes ok');
           "
+
+      - name: Verify name unification never merges silently
+        run: |
+          rm -rf /tmp/nm && mkdir -p /tmp/nm
+          npx --yes esbuild server/src/common/name-match.ts --bundle --platform=node --outfile=/tmp/nm/name-match.js --log-level=error
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+          const svc = strip(fs.readFileSync('server/src/patients/name-merge.service.ts', 'utf8'));
+          const { normalizeName, similarity, SUGGEST_MIN } = require('/tmp/nm/name-match.js');
+
+          // ① رفتارِ واقعیِ نرمال‌سازی — نه اینکه فقط تابع وجود دارد.
+          const same = ['لقمان حکیم', 'بیمارستان لقمان حکیم', 'بيمارستان لقمان حكيم', 'بیمارستانِ  لقمان  حکیم'];
+          const keys = new Set(same.map(normalizeName));
+          if (keys.size !== 1) {
+            console.error('این‌ها باید یک کلید بدهند: ' + [...keys].join(' | ')); process.exit(1);
+          }
+          // نامِ متفاوت نباید تصادفاً یکی شود.
+          if (normalizeName('بیمارستان میلاد') === normalizeName('بیمارستان لقمان')) {
+            console.error('دو نامِ متفاوت یک کلید گرفتند'); process.exit(1);
+          }
+          if (similarity('بیمارستان میلاد', 'بیمارستان لقمان حکیم') >= SUGGEST_MIN) {
+            console.error('نامِ بی‌ربط نباید پیشنهاد شود'); process.exit(1);
+          }
+          // نامی که فقط از واژه‌های عمومی ساخته شده نباید کلیدِ خالی بگیرد،
+          // وگرنه با هر نامِ خالیِ دیگری یکی می‌شود.
+          if (!normalizeName('بیمارستان امام')) { console.error('کلیدِ خالی ممنوع'); process.exit(1); }
+
+          // ② ادغام هرگز خودکار نیست: resolve فقط پیشنهاد می‌دهد و چیزی نمی‌نویسد.
+          const resolve = svc.split('async resolve(')[1].split(/\n  \}/)[0];
+          if (/\.update|\.create|\.updateMany/.test(resolve)) {
+            console.error('resolve نباید چیزی بنویسد — تصمیم با آدم است'); process.exit(1);
+          }
+
+          // ③ تأیید هم back-fill می‌کند هم حافظه می‌سازد؛ بدونِ دومی هر ایمپورت
+          //    همان سؤال را دوباره می‌پرسد.
+          const link = svc.split('async link(')[1].split(/\n  \}/)[0];
+          if (!/hospitalAlias\.create/.test(link) || !/visit\.updateMany/.test(link)) {
+            console.error('تأیید باید هم نامِ مستعار بسازد هم مراجعات را وصل کند'); process.exit(1);
+          }
+          // یک نام نباید به دو بیمارستان نگاشت شود.
+          if (!/clash\.hospitalId !== h\.id/.test(link)) {
+            console.error('نگاشتِ متناقض باید مسدود شود'); process.exit(1);
+          }
+          const schema = fs.readFileSync('server/prisma/schema.prisma', 'utf8');
+          if (!/aliasNorm  String   @unique/.test(schema)) {
+            console.error('aliasNorm باید یکتا باشد'); process.exit(1);
+          }
+
+          // ④ ایمپورت باید همان تصمیم را دوباره اعمال کند، نه رکوردِ تکراری بسازد.
+          const imp = strip(fs.readFileSync('server/src/import/import.service.ts', 'utf8'));
+          const up = imp.split('private async upsertByName(')[1].split(/\n  \}/)[0];
+          if (!/canon\.get\(normalizeName\(name\)\)/.test(up) || !/hospitalAlias\.findMany/.test(up)) {
+            console.error('ایمپورت باید نام را با شکلِ کانونی و نام‌های مستعار تطبیق دهد'); process.exit(1);
+          }
+          // تطبیق باید *پیش از* ساختِ رکوردِ تازه باشد، وگرنه بی‌اثر است.
+          if (up.indexOf('canon.get(') > up.indexOf('.create({ data: { name } })')) {
+            console.error('تطبیق باید پیش از ساختِ بیمارستانِ تازه انجام شود'); process.exit(1);
+          }
+          console.log('name-merge ok');
+          "

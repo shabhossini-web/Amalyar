@@ -122,6 +122,7 @@ const SECTIONS = [
 
 export default function Definitions() {
   const [tab, setTab] = useState('surgeons');
+  const [merging, setMerging] = useState(false);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
@@ -178,20 +179,31 @@ export default function Definitions() {
       </header>
 
       <nav className="df-tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={merging}
+          className={merging ? 'on' : ''}
+          onClick={() => setMerging(true)}
+        >
+          یکسان‌سازیِ نام‌ها
+        </button>
         {SECTIONS.map((s) => (
           <button
             key={s.key}
             type="button"
             role="tab"
             aria-selected={tab === s.key}
-            className={tab === s.key ? 'on' : ''}
-            onClick={() => setTab(s.key)}
+            className={tab === s.key && !merging ? 'on' : ''}
+            onClick={() => { setTab(s.key); setMerging(false); }}
           >
             {s.label}
           </button>
         ))}
       </nav>
 
+      {merging ? <NameMerge onToast={setToast} /> : (
+      <>
       {section.hint && <p className="df-note">{section.hint}</p>}
 
       <div className="df-toolbar">
@@ -222,6 +234,9 @@ export default function Definitions() {
         ))}
       </div>
 
+      </>
+      )}
+
       {editing && (
         <EditSheet
           section={section}
@@ -234,6 +249,112 @@ export default function Definitions() {
 
       {toast && <div className="df-toast" role="status">{toast}</div>}
     </div>
+  );
+}
+
+/**
+ * یکسان‌سازیِ نامِ بیمارستان.
+ *
+ * فرمِ مراجعه و ایمپورت نامِ آزاد می‌دهند: «لقمان»، «لقمان حکیم»، «بیمارستان
+ * لقمان». تا این‌ها به یک موجودیت نرسند، گزارشِ «درآمد به تفکیکِ بیمارستان»
+ * چند ردیفِ نصفه می‌دهد.
+ *
+ * ⚠️ هیچ ادغامی خودکار نیست — پیشنهاد از سرور می‌آید و تأیید با کاربر است.
+ */
+function NameMerge({ onToast }) {
+  const [rows, setRows] = useState(null);
+  const [hospitals, setHospitals] = useState([]);
+  const [pick, setPick] = useState({});   // key → hospitalId
+  const [busy, setBusy] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const [p, h] = await Promise.all([api('/name-merge/hospitals/pending'), api('/hospitals')]);
+      setRows(p);
+      setHospitals(h);
+    } catch (e) { onToast(e.message); setRows([]); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const run = async (key, fn, msg) => {
+    if (busy) return;
+    setBusy(key);
+    try { const r = await fn(); onToast(msg(r)); await load(); }
+    catch (e) { onToast(e.message); } finally { setBusy(''); }
+  };
+
+  const link = (g, hospitalId) => run(
+    g.key,
+    () => api('/name-merge/hospitals/link', { method: 'POST', body: { name: g.names[0], hospitalId: Number(hospitalId) } }),
+    (r) => `${r.hospitalName} — ${faNum(r.visitsLinked)} مراجعه وصل شد ✓`,
+  );
+
+  const create = (g) => run(
+    g.key,
+    () => api('/name-merge/hospitals/create', { method: 'POST', body: { name: g.names[0] } }),
+    (r) => `«${r.hospitalName}» ساخته شد — ${faNum(r.visitsLinked)} مراجعه وصل شد ✓`,
+  );
+
+  return (
+    <>
+      <p className="df-note">
+        نامِ بیمارستان در فرم‌ها به شکل‌های مختلف نوشته می‌شود. این‌جا هرکدام را به بیمارستانِ
+        درست وصل کنید؛ تصمیمِ شما ذخیره می‌شود و دفعهٔ بعد خودکار اعمال می‌شود.
+        <b> هیچ ادغامی خودکار انجام نمی‌شود.</b>
+      </p>
+
+      <div className="df-list">
+        {rows === null && <div className="df-empty">در حال بارگذاری…</div>}
+        {rows?.length === 0 && <div className="df-empty">همهٔ نام‌ها به بیمارستانِ تعریف‌شده وصل‌اند ✓</div>}
+        {rows?.map((g) => (
+          <article key={g.key} className="df-row nm">
+            <div className="df-row-main">
+              <b>{g.names.join(' · ')}</b>
+              <small>
+                {faNum(g.count)} مراجعه
+                {g.resolvedHospitalId && ' · قبلاً تأیید شده، فقط اعمال نشده'}
+              </small>
+              {g.suggestions.length > 0 && (
+                <div className="nm-sugg">
+                  {g.suggestions.map((sg) => (
+                    <button
+                      key={sg.id}
+                      type="button"
+                      className={sg.strong ? 'strong' : ''}
+                      disabled={!!busy}
+                      onClick={() => link(g, sg.id)}
+                    >
+                      {sg.name} <i>{Math.round(sg.score * 100)}٪</i>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="df-acts nm-acts">
+              <select
+                value={pick[g.key] ?? g.resolvedHospitalId ?? ''}
+                disabled={!!busy}
+                onChange={(e) => setPick((s) => ({ ...s, [g.key]: e.target.value }))}
+              >
+                <option value="">— بیمارستان —</option>
+                {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+              </select>
+              <button
+                type="button"
+                className="df-save"
+                disabled={!!busy || !(pick[g.key] ?? g.resolvedHospitalId)}
+                onClick={() => link(g, pick[g.key] ?? g.resolvedHospitalId)}
+              >
+                وصل کن
+              </button>
+              <button type="button" className="us-btn" disabled={!!busy} onClick={() => create(g)}>
+                بیمارستانِ تازه
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
   );
 }
 

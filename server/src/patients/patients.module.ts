@@ -20,6 +20,8 @@ import { TreasuryService } from './treasury.service';
 import { ReportsController } from './reports.controller';
 import { ReportsService } from './reports.service';
 import { AssetsController } from './assets.controller';
+import { NameMergeController } from './name-merge.controller';
+import { NameMergeService } from './name-merge.service';
 import { RoutesController } from './routes.controller';
 import { RoutesService } from './routes.service';
 import { AssetsService } from './assets.service';
@@ -34,12 +36,12 @@ import { PermissionGuard } from '../auth/permission.guard';
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
-    RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController,
+    RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, DispatchController, DefinitionsController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
-    ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService,
+    ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
     CalendarService, DispatchService, PermissionGuard,
   ],
 })

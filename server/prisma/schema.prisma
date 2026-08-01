@@ -99,8 +99,31 @@ model Hospital {
   transfers StockTransfer[]
   needs     HospitalItem[]
   stops     TransportStop[]
+  aliases   HospitalAlias[]
 
   @@map("hospitals")
+}
+
+/// نامِ مستعارِ یک بیمارستان — «لقمان»، «بیمارستان لقمان»، «لقمان حکیم».
+///
+/// ⚠️ این جدول **حافظهٔ تصمیمِ آدم** است، نه حدسِ ماشین. تطبیقِ خودکار فقط
+/// پیشنهاد می‌دهد؛ وقتی کاربر تأیید کرد، اینجا ثبت می‌شود تا دیگر نپرسد.
+/// ادغامِ خودکار دو بیمارستانِ واقعاً متفاوت را برای همیشه یکی می‌کند و
+/// گزارشِ مالی را بی‌سروصدا خراب.
+model HospitalAlias {
+  id         Int      @id @default(autoincrement())
+  hospital   Hospital @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  hospitalId Int      @map("hospital_id")
+  /// نامی که کاربر واقعاً نوشته بود — برای اینکه معلوم باشد از کجا آمده.
+  alias      String
+  /// شکلِ کانونی (`normalizeName`) — کلیدِ تطبیق. یکتاست تا یک نام به دو
+  /// بیمارستان نگاشت نشود.
+  aliasNorm  String   @unique @map("alias_norm")
+  createdById Int?    @map("created_by_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([hospitalId])
+  @@map("hospital_aliases")
 }
 
 /// نیازِ استانداردِ یک بیمارستان — «لقمان همیشه دستگاهِ C2 و ستِ پدیکولار می‌خواهد».
