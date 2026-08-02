@@ -130,3 +130,8 @@ export class TransferUsageDto {
   @Type(() => UsageLineDto)
   lines!: UsageLineDto[];
 }
+
+/** اعلامِ پایانیِ کارشناس — یادداشت اختیاری است، خودِ رویداد مهم است. */
+export class ReleaseDto {
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}

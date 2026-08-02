@@ -38,6 +38,7 @@ export default function Dispatch() {
   const [techs, setTechs] = useState([]);
   const [runs, setRuns] = useState([]);
   const [loose, setLoose] = useState([]);   // حواله‌های بی‌مسیرِ همان روز
+  const [pickup, setPickup] = useState([]); // آنچه کارشناس «تمام شد» اعلام کرده
   const [newRun, setNewRun] = useState(''); // نیروی انتخاب‌شده برای مسیرِ تازه
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
@@ -82,12 +83,14 @@ export default function Dispatch() {
   const loadRoutes = useCallback(async () => {
     if (!onIso) return;
     try {
-      const [d, u] = await Promise.all([
+      const [d, u, q] = await Promise.all([
         api(`/routes/day?on=${onIso}`),
         api(`/routes/unassigned?on=${onIso}`),
+        api('/routes/pickup-queue'),
       ]);
       setRuns(d.runs);
       setLoose(u);
+      setPickup(q);
     } catch (e) { setErr(e.message); }
   }, [onIso]);
   useEffect(() => { if (tab === 'transport') loadRoutes(); }, [tab, loadRoutes]);
@@ -269,6 +272,23 @@ export default function Dispatch() {
                 ))}
             </div>
 
+            {/* صفِ جمع‌آوری: آنچه کارشناس «تمام شد» اعلام کرده و هنوز برنگشته.
+                عمداً به روزِ انتخاب‌شده مقید نیست — ستی که دیروز آزاد شد و کسی
+                جمعش نکرد باید امروز هم دیده شود. */}
+            {pickup.length > 0 && (
+              <div className="dp-loose pickup">
+                <b>آمادهٔ جمع‌آوری <i>{faNum(pickup.length)}</i></b>
+                {pickup.map((t) => (
+                  <span key={t.id} className="dp-chip courier">
+                    <em dir="ltr">{t.code}</em>
+                    {t.hospitalName}
+                    {' · '}{t.lines.map((l) => `${l.itemName}${l.serialNo ? ` (${l.serialNo})` : ''}`).join('، ') || 'بدونِ قلم'}
+                    {t.releaseNote && <em title={t.releaseNote}>یادداشت</em>}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="dp-newrun">
               <label>
                 <span>مسیرِ تازه برای</span>
@@ -326,15 +346,17 @@ export default function Dispatch() {
                             <button type="button" className="x" disabled={busy} onClick={() => detach(st.id, t.id)} title="جدا کردن">✕</button>
                           </span>
                         ))}
-                        {loose.length > 0 && (
+                        {/* توقفِ جمع‌آوری از صفِ آزادشده‌ها تغذیه می‌شود، توقفِ
+                            تحویل از بارِ بی‌مسیر — دو کارِ متفاوت با دو منبع. */}
+                        {(st.kind === 'pickup' ? pickup : loose).length > 0 && (
                           <select
                             className="dp-attach"
                             value=""
                             disabled={busy}
                             onChange={(e) => e.target.value && addTo(st.id, Number(e.target.value))}
                           >
-                            <option value="">افزودنِ بار…</option>
-                            {loose.map((t) => (
+                            <option value="">{st.kind === 'pickup' ? 'افزودن از صفِ جمع‌آوری…' : 'افزودنِ بار…'}</option>
+                            {(st.kind === 'pickup' ? pickup : loose).map((t) => (
                               <option key={t.id} value={t.id}>{t.code} — {t.hospitalName}</option>
                             ))}
                           </select>

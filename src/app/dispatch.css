@@ -233,3 +233,6 @@
   .dp-addstop label { flex: 1; min-width: 120px; }
   .dp-addstop select, .dp-addstop input { width: 100%; }
 }
+
+.dp-loose.pickup { border-color: rgba(34, 211, 238, .45); background: rgba(34, 211, 238, .07); }
+.dp-loose.pickup > b i { background: #22d3ee; }

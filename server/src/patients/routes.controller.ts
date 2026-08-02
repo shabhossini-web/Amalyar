@@ -34,6 +34,13 @@ export class RoutesController {
     return this.routes.unassigned(on ? new Date(on) : new Date());
   }
 
+  /// صفِ جمع‌آوری — آنچه کارشناس «تمام شد» اعلام کرده و هنوز برنگشته.
+  @RequirePermissions('patients.read')
+  @Get('pickup-queue')
+  pickupQueue() {
+    return this.routes.pickupQueue();
+  }
+
   @RequirePermissions('patients.read')
   @Get(':id')
   run(@Param('id', ParseIntPipe) id: number) {

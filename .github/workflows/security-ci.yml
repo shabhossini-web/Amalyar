@@ -742,6 +742,14 @@ jobs:
           if (!/assetKind: \{ in: RETURNABLE \}/.test(conf)) {
             console.error('تعارض باید فقط روی داراییِ برگشتی باشد'); process.exit(1);
           }
+          // ⚠️ «همان روز» غلط بود: یک دستگاه در یک روز بینِ چند بیمارستان
+          //    می‌چرخد. تعارض هم‌پوشانیِ **بازه** است.
+          if (!/overlaps\(want, have\)/.test(conf)) {
+            console.error('تعارض باید هم‌پوشانیِ بازه باشد نه اشتراکِ روز'); process.exit(1);
+          }
+          if (/dayKey\(/.test(conf)) {
+            console.error('مقایسهٔ روز در تعارض باقی مانده'); process.exit(1);
+          }
 
           // ⑤ حوالهٔ planned هیچ حرکتی ندارد، پس تقویم باید قلم‌هایش را از
           //    plannedLines بخواند وگرنه تعهدِ فردا نامرئی می‌شود.
@@ -883,4 +891,66 @@ jobs:
             console.error('تطبیق باید پیش از ساختِ بیمارستانِ تازه انجام شود'); process.exit(1);
           }
           console.log('name-merge ok');
+          "
+
+      - name: Verify asset commitment is a time window released by the tech
+        run: |
+          rm -rf /tmp/win && mkdir -p /tmp/win
+          npx --yes esbuild server/src/common/asset-window.ts --bundle --platform=node --outfile=/tmp/win/assets.js --log-level=error
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+          const { windowOf, overlaps } = require('/tmp/win/assets.js');
+          const day = new Date('2026-11-10T00:00:00.000Z');
+          const w = (due, end, turn) => windowOf({ plannedFor: day, visit: { cargoDueTime: due, opEndTime: end } }, turn);
+
+          // ① چرخشِ روزانه نباید مسدود شود: صبح لقمان، بعدازظهر میلاد.
+          if (overlaps(w('06:00','10:00',0), w('13:00','17:00',0))) {
+            console.error('چرخشِ صبح/عصرِ یک دستگاه نباید تعارض بدهد'); process.exit(1);
+          }
+          // ② ولی عملِ هم‌پوش باید تعارض بدهد.
+          if (!overlaps(w('06:00','10:00',0), w('09:00','12:00',0))) {
+            console.error('دو عملِ هم‌پوش باید تعارض بدهند'); process.exit(1);
+          }
+          // ③ ساعتِ آماده‌سازی باید بازه را کش بدهد، وگرنه ستِ استریل‌نشده اعزام می‌شود.
+          if (!overlaps(w('06:00','10:00',6), w('13:00','17:00',0))) {
+            console.error('turnaroundHours باید در بازه اثر کند'); process.exit(1);
+          }
+          // ④ ندانستنِ ساعت به «آزاد» ترجمه نمی‌شود — کلِ روز تعهد است.
+          const blind = windowOf({ plannedFor: day, visit: {} }, 0);
+          if (blind[1] - blind[0] < 23 * 3600e3) {
+            console.error('بدونِ ساعت باید کلِ روز تعهد شود'); process.exit(1);
+          }
+          // ⑤ آزادسازیِ کارشناس بر ساعتِ برنامه مقدم است — واقعیت بر حدس.
+          const rel = new Date('2026-11-10T09:40:00.000Z');
+          const got = windowOf({ plannedFor: day, releasedAt: rel, visit: { cargoDueTime: '06:00', opEndTime: '10:00' } }, 0);
+          if (+got[1] !== +rel) { console.error('آزادسازیِ کارشناس باید پایانِ بازه را تعیین کند'); process.exit(1); }
+
+          // ⑥ آزادسازی کارِ کارشناسِ سرِ عمل است، نه دفتر.
+          const ctl = fs.readFileSync('server/src/patients/inventory.controller.ts', 'utf8');
+          const rl = ctl.split(\"@Post('transfers/:id/release')\")[0].split('@RequirePermissions').pop();
+          if (!/stock\.consume/.test(rl)) {
+            console.error('اعلامِ پایان باید با مجوزِ کارشناس باشد'); process.exit(1);
+          }
+          const svc = strip(fs.readFileSync('server/src/patients/inventory.service.ts', 'utf8'));
+          const body = svc.split('async releaseTransfer(')[1].split(/\n  \}/)[0];
+          if (!/windowTo: now/.test(body)) { console.error('آزادسازی باید بازه را ببندد'); process.exit(1); }
+          if (!/releasedAt\) throw/.test(body)) { console.error('آزادسازیِ دوباره باید مسدود شود'); process.exit(1); }
+
+          // ⑦ صفِ جمع‌آوری به روز مقید نیست: ستی که دیروز آزاد شد و جمع نشد
+          //    باید امروز هم دیده شود.
+          const routes = strip(fs.readFileSync('server/src/patients/routes.service.ts', 'utf8'));
+          const q = routes.split('async pickupQueue(')[1].split(/\n  \}/)[0];
+          if (/runDate|gte:/.test(q)) { console.error('صفِ جمع‌آوری نباید به روز مقید باشد'); process.exit(1); }
+          if (!/NOT: \{ releasedAt: null \}/.test(q)) { console.error('صف باید فقط آزادشده‌ها را بدهد'); process.exit(1); }
+
+          // ⑧ کارشناس همکار است نه بیمار: نامش در ابلاغِ راننده مجاز و لازم است،
+          //    ولی نامِ بیمار همچنان ممنوع.
+          const rb = routes.split('export function runBriefing')[1];
+          if (!/کارشناسِ حاضر/.test(rb)) { console.error('ابلاغِ راننده باید کارشناس را بگوید'); process.exit(1); }
+          if (!/ساعتِ تحویل/.test(rb)) { console.error('ابلاغِ راننده باید ساعتِ تحویل را بگوید'); process.exit(1); }
+          for (const f of ['fullName', 'patient.', 'surgeonName']) {
+            if (rb.includes(f)) { console.error('ابلاغِ مسیر نباید ' + f + ' داشته باشد'); process.exit(1); }
+          }
+          console.log('window ok');
           "

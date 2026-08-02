@@ -559,6 +559,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
   const [t, setT] = useState(null);
   const [busy, setBusy] = useState(false);
   const [csr, setCsr] = useState('');
+  const [rel, setRel] = useState('');
   const [used, setUsed] = useState({}); // lotId → مقدارِ در حالِ ویرایش
 
   const load = useCallback(async () => {
@@ -640,6 +641,25 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
                 ثبتِ رسید
               </button>
             </label>
+          )}
+
+          {/* اعلامِ پایانیِ کارشناس — دفتر نمی‌داند عمل کِی واقعاً تمام شد؛
+              همین رویداد هم دارایی را آزاد می‌کند هم صفِ جمع‌آوری را می‌سازد. */}
+          {t.status !== 'planned' && t.status !== 'closed' && (
+            t.releasedAt ? (
+              <p className="iv-note ok">
+                کارشناس پایان را اعلام کرد — {faDate(t.releasedAt)}
+                {t.releaseNote ? ` · ${t.releaseNote}` : ''} · آمادهٔ جمع‌آوری
+              </p>
+            ) : (
+              <label className="iv-field"><span>پایانِ عمل — آمادهٔ جمع‌آوری</span>
+                <input value={rel} onChange={(e) => setRel(e.target.value)} placeholder="یادداشت (اختیاری)" />
+                <button type="button" className="iv-mini" disabled={busy}
+                        onClick={() => act(`/stock/transfers/${id}/release`, { note: rel.trim() }, 'پایانِ عمل اعلام شد ✓')}>
+                  اعلامِ پایان
+                </button>
+              </label>
+            )
           )}
 
           <div className="iv-tracts">

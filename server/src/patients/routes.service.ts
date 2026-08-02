@@ -43,7 +43,15 @@ export class RoutesService {
     hospital: { select: { id: true, name: true, address: true, phone: true, contactName: true, contactPhone: true } },
     transfers: {
       include: {
-        visit: { select: { id: true, seq: true, opStartTime: true, patient: { select: { code: true } } } },
+        // ⚠️ کارشناس دادهٔ بیمار نیست، همکار است: راننده باید بداند سرِ عمل
+        // با چه کسی هماهنگ کند و ست را به دستِ چه کسی برساند.
+        visit: {
+          select: {
+            id: true, seq: true, opStartTime: true, opEndTime: true, cargoDueTime: true,
+            patient: { select: { code: true } },
+            tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
+          },
+        },
         movements: {
           where: { kind: 'transfer', quantity: { gt: 0 } },
           include: { lot: { include: { item: { select: { name: true, size: true, assetKind: true } } } } },
@@ -136,6 +144,14 @@ export class RoutesService {
           status: t.status,
           visitCode: t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null,
           opStartTime: t.visit?.opStartTime ?? null,
+          cargoDueTime: t.visit?.cargoDueTime ?? null,
+          releasedAt: t.releasedAt,
+          tech: t.visit?.tech
+            ? {
+              name: `${t.visit.tech.person.firstName} ${t.visit.tech.person.lastName}`.trim(),
+              phone: t.visit.tech.person.phone,
+            }
+            : null,
           lines: this.linesOf(t),
         })),
       })),
@@ -331,6 +347,42 @@ export class RoutesService {
     return this.run(stop.runId);
   }
 
+  /**
+   * حواله‌هایی که کارشناس آزاد اعلام کرده و هنوز جمع نشده‌اند.
+   *
+   * ⚠️ عمداً به روز مقید نیست: ستی که دیروز آزاد شد و کسی جمعش نکرد، باید
+   * امروز هم دیده شود. صفی که با گذشتنِ روز خالی می‌شود، ست را گم می‌کند.
+   */
+  async pickupQueue() {
+    const rows = await this.prisma.stockTransfer.findMany({
+      where: { status: { not: 'closed' }, NOT: { releasedAt: null } },
+      orderBy: { releasedAt: 'asc' },
+      include: {
+        hospital: { select: { id: true, name: true } },
+        visit: { select: { seq: true, patient: { select: { code: true } } } },
+        stop: { select: { id: true, kind: true, runId: true } },
+        movements: {
+          where: { kind: 'transfer', quantity: { gt: 0 } },
+          include: { lot: { include: { item: { select: { name: true, size: true, assetKind: true } } } } },
+        },
+      },
+    });
+    return rows
+      // حواله‌ای که همین حالا روی توقفِ جمع‌آوری نشسته دیگر «در صف» نیست.
+      .filter((t) => t.stop?.kind !== 'pickup')
+      .map((t) => ({
+        id: t.id,
+        code: t.code,
+        hospitalId: t.hospitalId,
+        hospitalName: t.hospital?.name ?? t.toLocation,
+        toLocation: t.toLocation,
+        releasedAt: t.releasedAt,
+        releaseNote: t.releaseNote,
+        visitCode: t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null,
+        lines: this.linesOf(t),
+      }));
+  }
+
   /** حواله‌های یک روز که هنوز به هیچ مسیری وصل نشده‌اند — کارِ باقی‌ماندهٔ چینش. */
   async unassigned(on: Date) {
     const from = dayOf(on);
@@ -446,6 +498,10 @@ export function runBriefing(r: any): string {
         L.push(`   • ${l.itemName}${l.serialNo ? ` (${l.serialNo})` : ''} — ${faNum(l.quantity)} عدد · حوالهٔ ${t.code}`);
       }
       if (!t.lines.length) L.push(`   • حوالهٔ ${t.code} — بدونِ قلم`);
+      // ساعتِ تحویل و نامِ کارشناس — همان دو چیزی که راننده سرِ بیمارستان
+      // لازم دارد. کارشناس همکار است نه بیمار، پس نامش نشتِ دادهٔ درمانی نیست.
+      if (s.kind === 'deliver' && t.cargoDueTime) L.push(`   ساعتِ تحویل: تا ${t.cargoDueTime}`);
+      if (t.tech) L.push(`   کارشناسِ حاضر: ${t.tech.name}${t.tech.phone ? ` — ${t.tech.phone}` : ''}`);
     }
     if (!s.transfers.length) L.push('   • بدونِ بار');
     if (s.notes) L.push(`   یادداشت: ${s.notes}`);

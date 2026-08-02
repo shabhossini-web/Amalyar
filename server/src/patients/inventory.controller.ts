@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, ReleaseDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
 
 /**
  * انبار — لات، سریال، دفترِ حرکت و ردیابی.
@@ -148,6 +148,13 @@ export class InventoryController {
   @Post('transfers/:id/ship')
   ship(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.inv.shipTransfer(id, user);
+  }
+
+  /// اعلامِ پایانیِ کارشناسِ سرِ عمل — مجوزِ سبک، چون کارِ خودِ اوست.
+  @RequirePermissions('stock.consume')
+  @Post('transfers/:id/release')
+  release(@Param('id', ParseIntPipe) id: number, @Body() dto: ReleaseDto, @CurrentUser() user: any) {
+    return this.inv.releaseTransfer(id, dto, user);
   }
 
   @RequirePermissions('inventory.write')

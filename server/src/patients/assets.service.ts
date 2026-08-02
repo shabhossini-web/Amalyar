@@ -2,6 +2,11 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { balanceByLocation, HOME_FALLBACK } from './stock-math';
+import { at, overlaps, windowOf } from '../common/asset-window';
+
+// محاسبهٔ بازه در `common/asset-window` است؛ این‌جا دوباره صادر می‌شود تا
+// فراخوان‌های موجود نشکنند.
+export { at, overlaps, windowOf };
 
 /** consumable = یک‌بار می‌رود؛ set/device = برمی‌گردد و فردا دوباره می‌رود. */
 export const ASSET_KINDS = ['consumable', 'set', 'device'] as const;
@@ -86,7 +91,7 @@ export class AssetsService {
         },
         include: {
           hospital: { select: { id: true, name: true } },
-          visit: { select: { id: true, seq: true, opDate: true, opStartTime: true, patient: { select: { code: true } } } },
+          visit: { select: { id: true, seq: true, opDate: true, opStartTime: true, opEndTime: true, cargoDueTime: true, patient: { select: { code: true } } } },
           movements: { where: { lotId: { in: ids }, kind: 'transfer' }, select: { lotId: true } },
         },
       }),
@@ -138,15 +143,21 @@ export class AssetsService {
         turnaroundHours: l.item.turnaroundHours,
         state,
         stateLabel: STATE_LABELS[state],
-        commitments: mine.map((t) => ({
-          transferId: t.id,
-          code: t.code,
-          on: AssetsService.committedOn(t),
-          status: t.status,
-          hospital: t.hospital?.name ?? t.toLocation,
-          visitCode: t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null,
-          opStartTime: t.visit?.opStartTime ?? null,
-        })),
+        commitments: mine.map((t) => {
+          const w = windowOf(t, l.item.turnaroundHours);
+          return {
+            transferId: t.id,
+            code: t.code,
+            on: AssetsService.committedOn(t),
+            from: w[0],
+            to: w[1],
+            released: !!t.releasedAt,
+            status: t.status,
+            hospital: t.hospital?.name ?? t.toLocation,
+            visitCode: t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null,
+            opStartTime: t.visit?.opStartTime ?? null,
+          };
+        }),
       };
     });
   }
@@ -158,13 +169,13 @@ export class AssetsService {
    * می‌شود هم در تقویم نشان داده می‌شود. اگر UI جدا برای خودش حساب می‌کرد،
    * اولین اختلاف بینِ هشدارِ صفحه و رفتارِ سرور پیدا می‌شد.
    */
-  async conflicts(lotIds: number[], on: Date, exceptTransferId?: number) {
+  async conflicts(lotIds: number[], want: [Date, Date], exceptTransferId?: number) {
     if (!lotIds.length) return [];
     // فقط داراییِ برگشتی تعارض دارد: از یک لاتِ مصرفیِ ۱۰۰تایی می‌شود همزمان
     // به دو بیمارستان داد.
     const lots = await this.prisma.stockLot.findMany({
       where: { id: { in: lotIds }, item: { assetKind: { in: RETURNABLE } } },
-      include: { item: { select: { name: true, size: true } } },
+      include: { item: { select: { name: true, size: true, turnaroundHours: true } } },
     });
     if (!lots.length) return [];
     const byId = new Map(lots.map((l) => [l.id, l]));
@@ -177,17 +188,19 @@ export class AssetsService {
       },
       include: {
         hospital: { select: { name: true } },
-        visit: { select: { seq: true, opDate: true, patient: { select: { code: true } } } },
+        visit: { select: { seq: true, opDate: true, opStartTime: true, opEndTime: true, cargoDueTime: true, patient: { select: { code: true } } } },
         movements: { where: { lotId: { in: [...byId.keys()] }, kind: 'transfer' }, select: { lotId: true } },
       },
     });
 
     const out: any[] = [];
     for (const t of rows) {
-      if (dayKey(AssetsService.committedOn(t)) !== dayKey(on)) continue;
       for (const lotId of new Set(lotsOf(t))) {
         const lot = byId.get(lotId);
         if (!lot) continue;
+        // بازه با ساعتِ آماده‌سازیِ همان کالا حساب می‌شود، نه کلی.
+        const have = windowOf(t, lot.item.turnaroundHours);
+        if (!overlaps(want, have)) continue;
         out.push({
           lotId,
           serialNo: lot.serialNo,
@@ -195,6 +208,8 @@ export class AssetsService {
           transferCode: t.code,
           hospital: t.hospital?.name ?? t.toLocation,
           visitCode: t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null,
+          from: have[0],
+          to: have[1],
         });
       }
     }

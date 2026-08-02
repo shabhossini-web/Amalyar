@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { AssetsService } from './assets.service';
+import { AssetsService, windowOf } from './assets.service';
 import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
 
 // فرمول‌های موجودی در `stock-math` هستند؛ این‌جا فقط دوباره صادر می‌شوند تا
@@ -41,6 +41,8 @@ export const TRANSFER_LABELS: Record<string, string> = {
 
 /** روزِ محلی (بدونِ ساعت) — برای مقایسهٔ «امروز است یا آینده». */
 const startOfDay = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+/** «۰۸:۳۰» از یک لحظه — برای پیامِ تداخل. */
+const hhmm = (d: Date) => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 
 /**
  * انبارِ لات‌محور.
@@ -363,7 +365,8 @@ export class InventoryService {
   async sendTransfer(
     dto: {
       toLocation?: string; fromLocation?: string; hospitalId?: number; visitId?: number; notes?: string;
-      plannedFor?: string; force?: boolean; lines?: { lotId: number; quantity: number }[];
+      plannedFor?: string; windowFrom?: string; windowTo?: string; force?: boolean;
+      lines?: { lotId: number; quantity: number }[];
     },
     user: any,
   ) {
@@ -373,29 +376,36 @@ export class InventoryService {
     if (!lines.length) throw new BadRequestException('حواله بدونِ قلم معنا ندارد');
 
     let visitCode: string | null = null;
-    let visitDate: Date | null = null;
+    let visit: any = null;
     if (dto.visitId) {
-      const v = await this.prisma.visit.findUnique({
+      visit = await this.prisma.visit.findUnique({
         where: { id: dto.visitId },
-        select: { seq: true, opDate: true, patient: { select: { code: true } } },
+        select: { seq: true, opDate: true, opStartTime: true, opEndTime: true, cargoDueTime: true, patient: { select: { code: true } } },
       });
-      if (!v) throw new NotFoundException('مراجعه یافت نشد');
-      visitCode = `${v.patient.code}-V${v.seq}`;
-      visitDate = v.opDate;
+      if (!visit) throw new NotFoundException('مراجعه یافت نشد');
+      visitCode = `${visit.patient.code}-V${visit.seq}`;
     }
     // روزِ تعهد: صریحِ کاربر، وگرنه روزِ عمل، وگرنه امروز.
-    const plannedFor = dateOrNull(dto.plannedFor, 'تاریخِ حواله') ?? visitDate ?? new Date();
+    const plannedFor = dateOrNull(dto.plannedFor, 'تاریخِ حواله') ?? visit?.opDate ?? new Date();
+
+    // بازهٔ تعهد از همان اطلاعاتی می‌آید که هست: ساعتِ تحویلِ بار تا ساعتِ
+    // پایانِ عمل. نبودشان به «تمامِ روز» ترجمه می‌شود، نه به «آزاد».
+    const want = windowOf(
+      { plannedFor, windowFrom: dateOrNull(dto.windowFrom, 'شروعِ تعهد'), windowTo: dateOrNull(dto.windowTo, 'پایانِ تعهد'), visit },
+      0,
+    );
 
     // ⚠️ تعارض پیش از ساختِ حواله بررسی می‌شود، نه بعدش: حوالهٔ صادرشده سند
     // است و پس‌گرفتنش ردیفِ ابطال می‌خواهد. هشدار قابلِ عبور است ولی باید
     // **صریح** باشد (`force`)، وگرنه همان صبحِ عمل معلوم می‌شود.
     if (!dto.force) {
-      const clash = await this.assets.conflicts(lines.map((l) => Number(l.lotId)), plannedFor);
+      const clash = await this.assets.conflicts(lines.map((l) => Number(l.lotId)), want);
       if (clash.length) {
         const first = clash[0];
         throw new BadRequestException(
-          `«${first.itemName}»${first.serialNo ? ` (${first.serialNo})` : ''} همین روز در حوالهٔ ${first.transferCode}` +
-          ` برای ${first.hospital} تعهد شده است. اگر عمدی است، دوباره با تأیید بفرستید.`,
+          `«${first.itemName}»${first.serialNo ? ` (${first.serialNo})` : ''} در همین بازه ` +
+          `(${hhmm(first.from)} تا ${hhmm(first.to)}) با حوالهٔ ${first.transferCode} برای ${first.hospital} تداخل دارد. ` +
+          'اگر عمدی است، دوباره با تأیید بفرستید.',
         );
       }
     }
@@ -417,6 +427,7 @@ export class InventoryService {
           code: `HV-${String((last?.id ?? 0) + 1).padStart(4, '0')}`,
           fromLocation: from, toLocation: to,
           plannedFor, status,
+          windowFrom: want[0], windowTo: dateOrNull(dto.windowTo, 'پایانِ تعهد'),
           hospitalId: dto.hospitalId ?? null,
           visitId: dto.visitId ?? null,
           notes: text(dto.notes),
@@ -481,6 +492,39 @@ export class InventoryService {
     await this.audit.record({
       actorId: user?.id, action: 'stock.transfer.send', entityType: 'stock_transfer', entityId: id,
       before: { status: 'planned' }, after: { status: 'sent' },
+    });
+    return this.transfer(id, user);
+  }
+
+  /**
+   * **اعلامِ پایانیِ کارشناس** — «عمل تمام شد، ست آمادهٔ جمع‌آوری است».
+   *
+   * ⚠️ آزادسازی از خودِ کارشناسِ سرِ عمل می‌آید، نه از ساعتِ حدسیِ دفتر. دفتر
+   * نمی‌داند عمل کِی واقعاً تمام شد؛ اگر روی «ساعتِ پایانِ برنامه‌ریزی‌شده»
+   * حساب کند، یا دستگاه را زودتر تعهد می‌کند (و راننده به ستِ هنوز-مشغول
+   * می‌رسد) یا دیرتر (و دستگاه بی‌دلیل یک روز می‌خوابد).
+   *
+   * همین یک رویداد دو کار می‌کند: پایانِ بازهٔ تعهد را واقعی می‌کند، و حواله
+   * را در صفِ جمع‌آوریِ راننده می‌گذارد.
+   */
+  async releaseTransfer(id: number, dto: { note?: string }, user: any) {
+    const t = await this.prisma.stockTransfer.findFirst({
+      where: { id, ...this.transferScope(user) },
+      select: { id: true, code: true, status: true, releasedAt: true },
+    });
+    if (!t) throw new NotFoundException('حواله یافت نشد');
+    if (t.status === 'planned') throw new BadRequestException('این حواله هنوز ارسال نشده است');
+    if (t.status === 'closed') throw new BadRequestException('این حواله بسته شده است');
+    if (t.releasedAt) throw new BadRequestException('این حواله قبلاً آزاد اعلام شده است');
+
+    const now = new Date();
+    await this.prisma.stockTransfer.update({
+      where: { id },
+      data: { releasedAt: now, releasedById: user?.id ?? null, releaseNote: text(dto.note), windowTo: now },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'stock.transfer.release', entityType: 'stock_transfer', entityId: id,
+      after: { releasedAt: now, note: text(dto.note) },
     });
     return this.transfer(id, user);
   }
@@ -730,7 +774,8 @@ export class InventoryService {
       id: t.id, code: t.code, fromLocation: t.fromLocation, toLocation: t.toLocation,
       hospital: t.hospital, visitId: t.visitId,
       status: t.status, statusLabel: TRANSFER_LABELS[t.status] ?? t.status,
-      plannedFor: t.plannedFor,
+      plannedFor: t.plannedFor, windowFrom: t.windowFrom, windowTo: t.windowTo,
+      releasedAt: t.releasedAt, releaseNote: t.releaseNote,
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
       lines,
       totals: {
