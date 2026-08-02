@@ -3,13 +3,8 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
+import { Back, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
-const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
-const Pencil = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>);
-const Trash = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>);
-const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
 const ASSET_FA = { set: 'ست', device: 'دستگاه' }; // «مصرفی» پیش‌فرض است و برچسب نمی‌خواهد
@@ -304,7 +299,7 @@ function SetContents({ item, onClose, onToast }) {
       <section className="df-sheet">
         <header className="df-sheet-head">
           <b>محتویاتِ «{item.name}»</b>
-          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
         <div className="df-sheet-body">
           <p className="df-note" style={{ marginTop: 0 }}>
@@ -512,7 +507,7 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
       <section className="df-sheet">
         <header className="df-sheet-head">
           <b>{isNew ? `افزودن به ${section.label}` : 'ویرایش'}</b>
-          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
 
         <div className="df-sheet-body">

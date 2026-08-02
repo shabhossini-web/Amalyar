@@ -4,24 +4,10 @@ import Mark from '../components/Mark.jsx';
 import { useAuth } from './auth.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
+import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Dispatch, Form, Gear, Mail, Users, Wave } from '../ui/icons.jsx';
 
 /* ── آیکون‌های خطی (lucide-style، stroke=currentColor) ── */
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Chart = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 3v18h18" /><path d="M7 15l3-4 3 2 4-6" /></svg>);
-const Form = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></svg>);
-const Chat = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>);
-const Bank = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 10l9-6 9 6" /><path d="M5 10v9M19 10v9M9 10v9M15 10v9M3 21h18" /></svg>);
-const Calendar = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>);
-const Dispatch = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="8" cy="8" r="3" /><circle cx="17" cy="16" r="3" /><path d="M11 8h4a2 2 0 0 1 2 2v3M8 11v3a2 2 0 0 0 2 2h3" /></svg>);
-const Mail = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 7l9 6 9-6" /></svg>);
-const Wave = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M2 12h3l3-8 4 16 3-11 2 3h5" /></svg>);
-const ArrowL = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M19 12H5M11 18l-6-6 6-6" /></svg>);
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
 
-const BoxIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M21 8 12 3 3 8v8l9 5 9-5z" /><path d="m3 8 9 5 9-5M12 13v8" /></svg>);
-const BookIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z" /><path d="M9 7h7M9 11h7" /></svg>);
-const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" /></svg>);
-const UsersIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.7-3.4 3.4-5.5 6.5-5.5s5.8 2.1 6.5 5.5" /><circle cx="17.5" cy="9" r="2.6" /><path d="M15.6 14.9c2.6.3 4.9 2 5.6 4.6" /></svg>);
 
 /* min = حداقل سطحِ دسترسی (۱ بازدید … ۶ سوپرادمین) */
 const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: true, min: 5, to: '/app/dashboard' };
@@ -35,9 +21,9 @@ const TOOLS = [
   { key: 'dispatch', label: 'چینشِ نیروها', icon: Dispatch, tint: 'amber', ready: true, min: 4, to: '/app/dispatch' },
   { key: 'letter', label: 'نامه اداری', icon: Mail, tint: 'blue', ready: false, min: 5 },
   { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: false, min: 2 },
-  { key: 'inventory', label: 'انبار', icon: BoxIc, tint: 'green', ready: true, min: 3, to: '/app/inventory' },
-  { key: 'definitions', label: 'تعاریف پایه', icon: BookIc, tint: 'teal', ready: true, min: 5, to: '/app/definitions' },
-  { key: 'users', label: 'کاربران', icon: UsersIc, tint: 'violet', ready: true, min: 6, to: '/app/users' },
+  { key: 'inventory', label: 'انبار', icon: Box, tint: 'green', ready: true, min: 3, to: '/app/inventory' },
+  { key: 'definitions', label: 'تعاریف پایه', icon: Book, tint: 'teal', ready: true, min: 5, to: '/app/definitions' },
+  { key: 'users', label: 'کاربران', icon: Users, tint: 'violet', ready: true, min: 6, to: '/app/users' },
   { key: 'settings', label: 'تنظیماتِ شرکت', icon: Gear, tint: 'amber', ready: true, min: 6, to: '/app/settings' },
 ];
 
@@ -153,7 +139,7 @@ export default function Launcher() {
                 <span className="lx-hero-title">{HERO.label}{!HERO.ready && <em className="soon">به‌زودی</em>}</span>
                 <span className="lx-hero-desc">{HERO.desc}</span>
               </span>
-              <span className="lx-hero-arrow"><ArrowL width="22" height="22" /></span>
+              <span className="lx-hero-arrow"><ArrowStart width="22" height="22" /></span>
             </button>
           )}
 

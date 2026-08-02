@@ -4,10 +4,8 @@ import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
+import { ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Send } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 6l6 6-6 6" /></svg>);
-const Copy = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></svg>);
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 
@@ -200,7 +198,7 @@ export default function Dispatch() {
     <div className="dp">
       <div className="dp-bg" aria-hidden="true" />
       <header className="dp-head">
-        <Link to="/app" className="dp-back"><Back width="15" height="15" /> سامانه</Link>
+        <Link to="/app" className="dp-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
         <div>
           <h1>چینشِ نیروها</h1>
           <p>
@@ -272,7 +270,7 @@ export default function Dispatch() {
               </label>
               <TimeBox label="ساعتِ حضور" value={v.techArriveTime} disabled={busy} onSave={(x) => setTime(v.id, 'techArriveTime', x)} />
               {v.tech && (
-                <button type="button" className="dp-brief-btn" onClick={() => openBrief(v.id, 'tech')}>✉ متنِ ابلاغ</button>
+                <button type="button" className="dp-brief-btn" onClick={() => openBrief(v.id, 'tech')}><Send size={14} /> متنِ ابلاغ</button>
               )}
             </div>
           </article>
@@ -340,9 +338,9 @@ export default function Dispatch() {
                   {run.cost?.total > 0 && (
                     <span className="dp-runcost" title="هزینهٔ حملِ این مسیر">{faNum(run.cost.total)} تومان</span>
                   )}
-                  <button type="button" className="dp-brief-btn" onClick={() => setCostFor(run)}>◎ هزینه</button>
-                  <button type="button" className="dp-brief-btn" onClick={() => openRunBrief(run)}>✉ ابلاغِ مسیر</button>
-                  <button type="button" className="dp-runx" disabled={busy} onClick={() => removeRun(run.id)} title="حذفِ مسیر">✕</button>
+                  <button type="button" className="dp-brief-btn" onClick={() => setCostFor(run)}><Money size={14} /> هزینه</button>
+                  <button type="button" className="dp-brief-btn" onClick={() => openRunBrief(run)}><Send size={14} /> ابلاغِ مسیر</button>
+                  <button type="button" className="dp-runx" disabled={busy} onClick={() => removeRun(run.id)} title="حذفِ مسیر"><Close size={14} /></button>
                 </header>
 
                 <ol className="dp-stops">
@@ -353,16 +351,16 @@ export default function Dispatch() {
                         <b>{st.locationName}</b>
                         <i className={`dp-kind ${st.kind}`}>{st.kindLabel}</i>
                         <TimeBox label="ساعت" value={st.plannedAt} disabled={busy} onSave={(x) => patchStop(st.id, { plannedAt: x })} />
-                        <button type="button" disabled={busy || i === 0} onClick={() => move(run, i, -1)} title="بالاتر">▲</button>
-                        <button type="button" disabled={busy || i === run.stops.length - 1} onClick={() => move(run, i, 1)} title="پایین‌تر">▼</button>
+                        <button type="button" disabled={busy || i === 0} onClick={() => move(run, i, -1)} title="بالاتر"><ArrowUp size={13} /></button>
+                        <button type="button" disabled={busy || i === run.stops.length - 1} onClick={() => move(run, i, 1)} title="پایین‌تر"><ArrowDown size={13} /></button>
                         <button
                           type="button"
                           className={st.doneAt ? 'dp-doneon' : ''}
                           disabled={busy}
                           onClick={() => patchStop(st.id, { done: !st.doneAt })}
                           title={st.doneAt ? 'برگرداندن به انجام‌نشده' : 'انجام شد'}
-                        >✔</button>
-                        <button type="button" className="x" disabled={busy} onClick={() => removeStop(st.id)} title="حذفِ توقف">✕</button>
+                        ><CheckCircle size={14} /></button>
+                        <button type="button" className="x" disabled={busy} onClick={() => removeStop(st.id)} title="حذفِ توقف"><Close size={13} /></button>
                       </div>
 
                       {/* رسیدِ تحویل — سندِ عملیاتی، نه مدرکِ بالینی. بیشترین
@@ -399,7 +397,7 @@ export default function Dispatch() {
                           <span key={t.id} className="dp-chip cargo">
                             <em dir="ltr">{t.code}</em>
                             {t.lines.map((l) => `${l.itemName}${l.serialNo ? ` (${l.serialNo})` : ''} × ${faNum(l.quantity)}`).join('، ') || 'بدونِ قلم'}
-                            <button type="button" className="x" disabled={busy} onClick={() => detach(st.id, t.id)} title="جدا کردن">✕</button>
+                            <button type="button" className="x" disabled={busy} onClick={() => detach(st.id, t.id)} title="جدا کردن"><Close size={12} /></button>
                           </span>
                         ))}
                         {/* توقفِ جمع‌آوری از صفِ آزادشده‌ها تغذیه می‌شود، توقفِ
@@ -446,7 +444,7 @@ export default function Dispatch() {
           <section className="dp-sheet">
             <header>
               <b>متنِ ابلاغ — {brief.roleLabel ?? '…'}</b>
-              <button type="button" onClick={() => setBrief(null)} aria-label="بستن">✕</button>
+              <button type="button" onClick={() => setBrief(null)} aria-label="بستن"><Close size={16} /></button>
             </header>
             <pre className="dp-brief">{brief.text || 'در حال ساخت…'}</pre>
             <footer>
@@ -594,7 +592,7 @@ function RunCost({ run, busy, onClose, onSave }) {
       <section className="dp-sheet">
         <header>
           <b>هزینهٔ مسیر — {run.staff.name}</b>
-          <button type="button" onClick={onClose} aria-label="بستن">✕</button>
+          <button type="button" onClick={onClose} aria-label="بستن"><Close size={16} /></button>
         </header>
         <div className="dp-costbody">
           <label><span>بنزین</span>

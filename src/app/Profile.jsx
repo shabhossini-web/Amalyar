@@ -8,10 +8,8 @@ import './launcher.css';
 import './users.css';
 import './login.css';
 import './profile.css';
+import { Back, User } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
-const UserIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
 
 export default function Profile() {
   const { user, updateProfile, changePassword } = useAuth();
@@ -100,7 +98,7 @@ export default function Profile() {
               <span className="pf-avatar">
                 {selfie || user.selfie
                   ? <img src={selfie || user.selfie} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  : <UserIc width="48" height="48" />}
+                  : <User width="48" height="48" />}
               </span>
             )}
             <button type="button" className="selfie-link" onClick={() => { setRetaking((v) => !v); if (retaking) setSelfie(''); }}>

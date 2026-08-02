@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { Alert } from '../ui/icons.jsx';
 
 /**
  * مرزِ خطای سراسری — هر کرشِ render به‌جای صفحهٔ سفیدِ PWA،
@@ -30,7 +31,7 @@ export default class ErrorBoundary extends Component {
           background: '#0b0620', color: '#f2f0fc', fontFamily: "'Vazirmatn', system-ui, sans-serif",
         }}
       >
-        <div style={{ fontSize: 40 }} aria-hidden="true">⚠️</div>
+        <div aria-hidden="true"><Alert size={40} strokeWidth={1.6} /></div>
         <b style={{ fontSize: 17 }}>مشکلی پیش آمد</b>
         <p style={{ fontSize: 13, color: '#b7b0d8', maxWidth: 300, lineHeight: 1.9 }}>
           خطای غیرمنتظره‌ای رخ داد. اگر تکرار شد، از «خروج از همهٔ حساب‌ها» و ورودِ دوباره استفاده کنید.

@@ -1,8 +1,7 @@
 import { J_DAYS, J_MONTHS, jDayOfWeek, jMonthDays, jToday } from '../lib/jalali.js';
 import './jgrid.css';
+import { ChevronEnd } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Chevron = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 6l6 6-6 6" /></svg>);
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 
@@ -39,9 +38,9 @@ export default function JGrid({ year, month, onNav, renderDay, onPickDay, select
     <div className="jg">
       <header className="jg-head">
         {/* در RTL، «ماهِ قبل» سمتِ راست است؛ آیکون هم باید به همان سمت اشاره کند. */}
-        <button type="button" onClick={() => go(-1)} aria-label="ماهِ قبل"><Chevron width="16" height="16" /></button>
+        <button type="button" onClick={() => go(-1)} aria-label="ماهِ قبل"><ChevronEnd width="16" height="16" /></button>
         <b>{J_MONTHS[month - 1]} {faNum(year).replace(/٬/g, '')}</b>
-        <button type="button" className="flip" onClick={() => go(1)} aria-label="ماهِ بعد"><Chevron width="16" height="16" /></button>
+        <button type="button" className="flip" onClick={() => go(1)} aria-label="ماهِ بعد"><ChevronEnd width="16" height="16" /></button>
         <button type="button" className="jg-today" onClick={() => onNav(ty, tm)}>امروز</button>
       </header>
 

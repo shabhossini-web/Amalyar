@@ -6,14 +6,13 @@ import { termsFor } from '../lib/terms.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
+import { Back, Check } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
+
 /** بخش‌های تعرفه‌ای — باید با SECTORS سمتِ سرور یکی بماند. */
 const SECTORS = { private: 'خصوصی', public: 'دولتی', nonprofit: 'عمومی غیردولتی', charity: 'خیریه' };
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
-const Check = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="m4 12 5 5L20 6" /></svg>);
 
 /**
  * تنظیماتِ شرکت — «همان یک تغییرِ کوچک».

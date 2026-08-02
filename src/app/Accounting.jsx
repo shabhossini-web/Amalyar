@@ -4,10 +4,8 @@ import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './accounting.css';
+import { Alert, ChevronEnd, Plus } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 6l6 6-6 6" /></svg>);
-const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const parseNum = (v) => {
@@ -36,7 +34,7 @@ export default function Accounting() {
     <div className="ac">
       <div className="ac-bg" aria-hidden="true" />
       <header className="ac-head">
-        <Link to="/app" className="ac-back"><Back width="15" height="15" /> سامانه</Link>
+        <Link to="/app" className="ac-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
         <div>
           <h1>حسابداری</h1>
           <p>قاعده‌ها این‌جا تعریف می‌شوند؛ تقسیمِ سهمِ هر عمل در صورت‌حسابِ همان مراجعه است.</p>
@@ -607,7 +605,7 @@ function Cheques({ onToast }) {
               <b><span dir="ltr">{c.number}</span> — {c.partyName}</b>
               <small>
                 سررسید {faDate(c.dueAt)} · {c.statusLabel}
-                {c.dueSoon && <em className="ac-soon"> ⚠️ نزدیکِ سررسید</em>}
+                {c.dueSoon && <em className="ac-soon"><Alert size={12} /> نزدیکِ سررسید</em>}
               </small>
             </div>
             {c.status === 'pending' && (

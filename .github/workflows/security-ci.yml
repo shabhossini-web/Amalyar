@@ -1237,3 +1237,68 @@ jobs:
           }
           console.log('tenant settings ok');
           "
+
+      - name: Verify icons stay in one place and no glyph is used as an icon
+        run: |
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const jsx = execSync(\"find src -name '*.jsx' -o -name '*.js'\", { encoding: 'utf8' })
+            .split('\n').filter(Boolean);
+
+          // ① هیچ <svg> بیرونِ src/ui — وگرنه دوباره ۸۰ آیکون در ۱۸ فایل پخش
+          //    می‌شود و «مداد» در دو صفحه دو شکل پیدا می‌کند بی‌آنکه کسی ببیند.
+          //    استثنا: src/components (لندینگِ بازاریابی، سیستمِ دیداریِ جدا).
+          const stray = jsx.filter((f) =>
+            !f.startsWith('src/ui/') && !f.startsWith('src/components/') &&
+            /<svg[\s>]/.test(fs.readFileSync(f, 'utf8')));
+          if (stray.length) {
+            console.error('SVG بیرونِ src/ui: ' + stray.join('، ')); process.exit(1);
+          }
+
+          // ② هیچ نویسهٔ متنی به‌جای آیکون. اندازه و ضخامتش کنترل‌پذیر نیست،
+          //    روی سه سیستم‌عامل سه شکل دارد، و متحرک نمی‌شود.
+          const GLYPH = /[✕✖✔✉◎▲▼★☆⚠]/;
+          const bad = [];
+          for (const f of jsx) {
+            // ⚠️ کامنت‌ها اول حذف می‌شوند وگرنه نگهبان روی توضیحاتِ خودِ کد
+            //    گیر می‌کند — و آن‌وقت یا کامنت‌ها بی‌معنا می‌شوند یا نگهبان
+            //    خاموش. خطوط با \n جایگزین می‌شوند تا شمارهٔ خط نلغزد.
+            const src = fs.readFileSync(f, 'utf8')
+              .replace(/\{?\/\*[\s\S]*?\*\/\}?/g, (m) => m.replace(/[^\n]/g, ' '))
+              .replace(/^\s*\/\/.*\$/gm, '');
+            src.split('\n').forEach((line, i) => {
+              if (GLYPH.test(line)) bad.push(f + ':' + (i + 1) + ' ' + line.trim().slice(0, 60));
+            });
+          }
+          if (bad.length) {
+            console.error('نویسه به‌جای آیکون:\n  ' + bad.join('\n  ')); process.exit(1);
+          }
+
+          // ③ هیچ ایموجی در رابط. ملک‌طب پر از 🔔📊💬 بود؛ عمل‌یار از اول نگرفت
+          //    و نباید بگیرد — ایموجی نه با تم عوض می‌شود نه متحرک.
+          const EMOJI = /[\u{1F300}-\u{1FAFF}\u{1F000}-\u{1F0FF}]/u;
+          const emo = jsx.filter((f) => EMOJI.test(fs.readFileSync(f, 'utf8')));
+          if (emo.length) { console.error('ایموجی در: ' + emo.join('، ')); process.exit(1); }
+
+          // ④ ماژولِ آیکونِ ساده باید بی‌وابستگی بماند تا هر جا (حتی چاپ) قابلِ
+          //    استفاده باشد؛ آیکونِ متحرک فایلِ خودش را دارد.
+          const plain = fs.readFileSync('src/ui/icons.jsx', 'utf8');
+          if (/^\s*import /m.test(plain)) {
+            console.error('src/ui/icons.jsx باید بدونِ وابستگی بماند'); process.exit(1);
+          }
+
+          // ⑤ همهٔ آیکون‌ها از یک شبکه — viewBox یکسان، رنگ از currentColor.
+          for (const f of ['src/ui/icons.jsx', 'src/ui/icons-motion.jsx']) {
+            const t = fs.readFileSync(f, 'utf8');
+            const boxes = [...t.matchAll(/viewBox: ?'([^']+)'|viewBox=\"([^\"]+)\"/g)]
+              .map((m) => m[1] || m[2]);
+            const odd = boxes.filter((b) => b !== '0 0 24 24');
+            if (odd.length) { console.error(f + ': viewBoxِ ناهمگون → ' + odd.join('، ')); process.exit(1); }
+            if (!/stroke: ?'currentColor'|stroke=\"currentColor\"/.test(t)) {
+              console.error(f + ': آیکون باید رنگ را از currentColor بگیرد'); process.exit(1);
+            }
+          }
+          console.log('icon system ok');
+          "

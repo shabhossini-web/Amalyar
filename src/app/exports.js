@@ -88,7 +88,7 @@ export function visitsToCsv(rows, opts) {
       ['در انتظار', Number(s.pending ?? 0)],
     );
     if (opts.filterLabel) lines.push(['فیلترِ اعمال‌شده', opts.filterLabel]);
-    if (opts.truncated) lines.push(['⚠️ هشدار', `فقط ${opts.limit} ردیفِ اول — نتیجه بیشتر از سقف بود`]);
+    if (opts.truncated) lines.push(['هشدار', `فقط ${opts.limit} ردیفِ اول — نتیجه بیشتر از سقف بود`]);
   }
 
   return `﻿${lines.map((r) => r.map(esc).join(',')).join('\r\n')}`;
@@ -179,7 +179,7 @@ export function printVisits(rows, opts) {
   ${s.due ? ` · ماندهٔ کل: ${faNum(s.due)} تومان` : ''}
   ${s.pending != null ? ` · در انتظار: ${jToFa(s.pending)}` : ''}
   ${opts.filterLabel ? `<br>فیلتر: ${escHtml(opts.filterLabel)}` : ''}
-  ${opts.truncated ? `<br><span class="warn">⚠️ فقط ${jToFa(opts.limit)} ردیفِ اول چاپ شده — نتیجه بیشتر از سقف بود.</span>` : ''}
+  ${opts.truncated ? `<br><span class="warn">هشدار: فقط ${jToFa(opts.limit)} ردیفِ اول چاپ شده — نتیجه بیشتر از سقف بود.</span>` : ''}
 </div>
 <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
 </body></html>`;

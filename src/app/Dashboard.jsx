@@ -12,28 +12,10 @@ import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
+import { Arrive, Back, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
 
 /* ── آیکون‌های خطی ── */
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
-const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
-const SearchIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="11" cy="11" r="7" /><path d="m21 21-4-4" /></svg>);
-const Pencil = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>);
-const Trash = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>);
-const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
-const Doctor = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 3v5a3 3 0 0 0 6 0V3" /><path d="M12 11v3a4 4 0 0 1-8 0v-1" /><circle cx="4" cy="11" r="2" /><circle cx="19" cy="16" r="3" /><path d="M19 19v2" /></svg>);
-const Hospital = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21V8l9-5 9 5v13" /><path d="M3 21h18" /><path d="M12 9v6M9 12h6" /></svg>);
-const DiagIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8M8 17h5" /></svg>);
-const CalIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>);
-const ClockIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>);
-const ArriveIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 12h11" /><path d="m10 8 4 4-4 4" /><path d="M17 4h4v16h-4" /></svg>);
-const TechIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
-const Scalpel = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 21l7-2 11-11a2.5 2.5 0 0 0-4-4L6 15z" /><path d="M14 6l4 4" /></svg>);
-const Money = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2.5" /><path d="M6 12h.01M18 12h.01" /></svg>);
-const DownIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M4 20h16" /></svg>);
-const PrintIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M7 9V3h10v6" /><rect x="4" y="9" width="16" height="7" rx="2" /><path d="M7 16h10v5H7z" /></svg>);
-const FilterIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 5h18l-7 8v6l-4 2v-8z" /></svg>);
-const Gear = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.51 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z" /></svg>);
+
 
 /** فیلترهای پیشرفته‌ای که مستقیم به query سرور می‌روند. */
 const ADV_IDS = ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'];
@@ -420,7 +402,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       <form className="glass db-sheet" onSubmit={submit}>
         <header className="db-sheet-head">
           <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
-          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
 
         {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
@@ -647,24 +629,24 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
 
       <div className="db-facts">
         {v.surgeonName && <span><Doctor width="14" height="14" /> {v.surgeonName}</span>}
-        {v.techName && <span><TechIc width="14" height="14" /> {v.techName}</span>}
+        {v.techName && <span><User width="14" height="14" /> {v.techName}</span>}
         {v.hospitalName && <span><Hospital width="14" height="14" /> {v.hospitalName}</span>}
-        {v.opDate && <span><CalIc width="14" height="14" /> {faDate(v.opDate)}</span>}
+        {v.opDate && <span><Calendar width="14" height="14" /> {faDate(v.opDate)}</span>}
         {/* ساعت فقط وقتی ثبت شده باشد؛ «—:—» روی هر کارت اطلاعات نیست.
             مدت از سرور می‌آید (durationMin)، نه از تفریقِ همین‌جا. */}
         {v.opStartTime && (
           <span title={v.durationMin != null ? `مدت: ${faDuration(v.durationMin)}` : undefined}>
-            <ClockIc width="14" height="14" />
+            <Clock width="14" height="14" />
             <span dir="ltr">{v.opStartTime}{v.opEndTime ? `–${v.opEndTime}` : ''}</span>
             {v.durationMin != null && ` (${faDuration(v.durationMin)})`}
           </span>
         )}
         {v.techArriveTime && (
           <span title={`ساعتِ حضورِ ${v.techName || 'کارشناس'}`}>
-            <ArriveIc width="14" height="14" /> <span dir="ltr">{v.techArriveTime}</span>
+            <Arrive width="14" height="14" /> <span dir="ltr">{v.techArriveTime}</span>
           </span>
         )}
-        {v.diagnosisTitle && <span><DiagIc width="14" height="14" /> {v.diagnosisTitle}</span>}
+        {v.diagnosisTitle && <span><Diagnosis width="14" height="14" /> {v.diagnosisTitle}</span>}
       </div>
 
       <div className="db-actions">
@@ -722,7 +704,7 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
       <div className="glass db-sheet db-advsheet">
         <header className="db-sheet-head">
           <b>جستجوی پیشرفته</b>
-          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
 
         <div className="db-advbody">
@@ -1011,7 +993,7 @@ export default function Dashboard() {
 
         <div className="db-toolbar">
           <div className="db-search">
-            <SearchIc width="16" height="16" />
+            <Search width="16" height="16" />
             <input
               type="search"
               value={q}
@@ -1026,7 +1008,7 @@ export default function Dashboard() {
             title="جستجوی پیشرفته"
             onClick={() => setAdvOpen(true)}
           >
-            <FilterIc width="17" height="17" />
+            <Filter width="17" height="17" />
             {advCount > 0 && <i>{faNum(advCount)}</i>}
           </button>
           {/* پیش‌تر این دکمه یک شیتِ کوچکِ خودش داشت که فقط نام و فامیلِ جراح را
@@ -1070,7 +1052,7 @@ export default function Dashboard() {
           <div className="db-chips">
             {activeChips.map((c) => (
               <button key={c.key} type="button" onClick={() => clearOne(c.key)}>
-                {c.label}<XIc width="12" height="12" />
+                {c.label}<Close width="12" height="12" />
               </button>
             ))}
             <button type="button" className="db-chip-clear" onClick={() => setAdv(EMPTY_ADV)}>پاک‌کردنِ همه</button>
@@ -1101,13 +1083,13 @@ export default function Dashboard() {
             type="button" className="db-ico db-expbtn" title="خروجیِ CSV"
             disabled={!!exporting || !meta.total} onClick={() => runExport('csv')}
           >
-            {exporting === 'csv' ? '…' : <DownIc width="16" height="16" />}
+            {exporting === 'csv' ? '…' : <Download width="16" height="16" />}
           </button>
           <button
             type="button" className="db-ico db-expbtn" title="چاپ"
             disabled={!!exporting || !meta.total} onClick={() => runExport('print')}
           >
-            {exporting === 'print' ? '…' : <PrintIc width="16" height="16" />}
+            {exporting === 'print' ? '…' : <Print width="16" height="16" />}
           </button>
           <label className="db-psize">
             <span>در صفحه</span>

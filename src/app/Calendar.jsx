@@ -4,9 +4,8 @@ import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './calendar.css';
+import { ChevronEnd } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 6l6 6-6 6" /></svg>);
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const KIND_TAG = { surgery: '', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره' };
@@ -41,7 +40,7 @@ export default function Calendar() {
     <div className="cal">
       <div className="cal-bg" aria-hidden="true" />
       <header className="cal-head">
-        <Link to="/app" className="cal-back"><Back width="15" height="15" /> سامانه</Link>
+        <Link to="/app" className="cal-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
         <div>
           <h1>تقویمِ عمل‌ها</h1>
           <p>{data ? `${faNum(data.total)} عمل در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}</p>

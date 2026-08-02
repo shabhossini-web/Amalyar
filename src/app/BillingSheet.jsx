@@ -5,11 +5,8 @@ import JDate from './JDate.jsx';
 import { toEnDigits } from '../lib/identity.js';
 import { printInvoice } from './exports.js';
 import { useConfig } from './config.jsx';
+import { Alert, Close, Plus, Trash } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
-const Trash = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>);
-const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
 
 const CHARGE_KINDS = { service: 'خدمت', item: 'کالا', discount: 'تخفیف' };
 /**
@@ -196,7 +193,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
       <div className="glass db-sheet bl-sheet">
         <header className="db-sheet-head">
           <b>صورت‌حسابِ {visit.code}</b>
-          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
 
         {!data ? <div className="us-empty">در حال بارگذاری…</div> : (
@@ -497,7 +494,7 @@ function Settlement({ visitId, onToast, onChanged }) {
   return (
     <div className="bl-split">
       {now.warnings?.length > 0 && (
-        <div className="bl-warns">{now.warnings.map((w) => <p key={w}>⚠️ {w}</p>)}</div>
+        <div className="bl-warns">{now.warnings.map((w) => <p key={w}><Alert size={12} /> {w}</p>)}</div>
       )}
 
       {saved ? (

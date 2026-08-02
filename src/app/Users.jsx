@@ -8,12 +8,8 @@ import './definitions.css';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import './users.css';
+import { Back, Check, Close, User } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
-const UserIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
-const Check = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M20 6 9 17l-5-5" /></svg>);
-const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
 
 const LEVELS = [
   { v: 1, l: 'بازدید' },
@@ -86,7 +82,7 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
       <section className="df-sheet">
         <header className="df-sheet-head">
           <b>پروفایلِ کارشناس</b>
-          <button type="button" className="df-x" onClick={onClose} aria-label="بستن">✕</button>
+          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close size={16} /></button>
         </header>
         <div className="df-sheet-body">
           {!form ? <p className="us-empty">در حال بارگذاری…</p> : (
@@ -218,7 +214,7 @@ export default function Users() {
     <span className="us-avatar" style={{ width: size, height: size }}>
       {row.selfie
         ? <img src={row.selfie} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-        : <UserIc width={size * 0.5} height={size * 0.5} />}
+        : <User width={size * 0.5} height={size * 0.5} />}
     </span>
   );
 
@@ -272,7 +268,7 @@ export default function Users() {
                     <Check width="16" height="16" /> تأیید
                   </button>
                   <button className="us-btn no" disabled={busyId === row.id} onClick={() => reject(row)}>
-                    <XIc width="16" height="16" /> رد
+                    <Close width="16" height="16" /> رد
                   </button>
                 </div>
               </div>

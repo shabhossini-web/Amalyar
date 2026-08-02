@@ -4,12 +4,8 @@ import { api } from '../lib/api.js';
 import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
+import { Back, Close, Plus, Route } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
-const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
-const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
-const Route = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="6" cy="19" r="2.5" /><circle cx="18" cy="5" r="2.5" /><path d="M8.5 19h5a4 4 0 0 0 0-8h-3a4 4 0 0 1 0-8h5" /></svg>);
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const money = (n) => (n == null ? '—' : `${Number(n).toLocaleString('fa-IR')} تومان`);
@@ -357,7 +353,7 @@ function Consign({ row, onClose, onToast, onDone }) {
       <section className="iv-sheet sm">
         <header className="iv-sheet-head">
           <b>امانیِ مستقر — {row.itemName}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
         <div className="iv-sheet-body">
           <p className="iv-note">
@@ -404,7 +400,7 @@ function Consignments({ onClose, onToast, onDone }) {
       <section className="iv-sheet">
         <header className="iv-sheet-head">
           <b>داراییِ امانیِ مستقر{data?.overdue ? ` — ${num(data.overdue)} عقب‌افتاده` : ''}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
         <div className="iv-sheet-body">
           <p className="iv-note">
@@ -498,7 +494,7 @@ function CountSheet({ row, onClose, onToast, onDone }) {
       <section className="iv-sheet">
         <header className="iv-sheet-head">
           <b>صورت‌برداری — {row.itemName} · {row.hospitalName}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
         <div className="iv-sheet-body">
           {!sheet && <div className="iv-empty">در حال بارگذاری…</div>}
@@ -599,7 +595,7 @@ function Needs({ onClose, onToast }) {
       <section className="iv-sheet">
         <header className="iv-sheet-head">
           <b>نیازِ استانداردِ بیمارستان</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
         <div className="iv-sheet-body">
           <p className="iv-note">
@@ -951,7 +947,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
                       {sh.label} × {num(sh.missing)}
                       <i>{sh.kind === 'damaged' ? 'آسیب‌دیده' : 'کسری'}</i>
                       <button type="button" disabled={busy}
-                              onClick={() => act(`/assets/shortages/${sh.id}`, undefined, 'کسری حذف شد', 'DELETE', setCheck)}>✕</button>
+                              onClick={() => act(`/assets/shortages/${sh.id}`, undefined, 'کسری حذف شد', 'DELETE', setCheck)}><Close size={12} /></button>
                     </span>
                   ))}
                   <div className="iv-row2">
@@ -1254,7 +1250,7 @@ function Overlay({ title, children, onClose }) {
       <section className="iv-sheet">
         <header className="iv-sheet-head">
           <b>{title}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
         </header>
         {children}
       </section>

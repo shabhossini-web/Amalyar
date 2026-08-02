@@ -7,15 +7,8 @@ import './launcher.css';
 import './definitions.css';
 import JDate from './JDate.jsx';
 import './record.css';
+import { Alert, Back, Close, Download, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const Back = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 5 5v6" /></svg>);
-const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
-const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
-const Trash = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>);
-const Pencil = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>);
-const DlIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M4 21h16" /></svg>);
-const Lock = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>);
 
 const CATEGORIES = {
   lab: 'آزمایش', imaging: 'تصویربرداری', report: 'گزارش',
@@ -302,7 +295,7 @@ function DocsTab({ rec, reload, toast }) {
                 {d.visitId && <small className="rc-doc-visit">{rec.visits.find((v) => v.id === d.visitId)?.code}</small>}
               </div>
               <div className="df-acts">
-                <button title="دانلود" onClick={() => openDoc(d, toast)}><DlIc width="14" height="14" /></button>
+                <button title="دانلود" onClick={() => openDoc(d, toast)}><Download width="14" height="14" /></button>
                 <button className="df-del" title="حذف" onClick={() => remove(d)}><Trash width="14" height="14" /></button>
               </div>
             </div>
@@ -401,7 +394,7 @@ function NotesTab({ rec, reload, toast }) {
           <div className="df-sheet">
             <div className="df-sheet-head">
               <b>ویرایشِ شرح</b>
-              <button className="df-x" onClick={() => setEditing(null)}><XIc width="16" height="16" /></button>
+              <button className="df-x" onClick={() => setEditing(null)}><Close width="16" height="16" /></button>
             </div>
             <div className="df-sheet-body">
               <div className="df-note">متنِ قبلی پاک نمی‌شود — نسخهٔ تازه‌ای ثبت می‌شود و نسخهٔ قبلی در تاریخچه می‌ماند.</div>
@@ -422,7 +415,7 @@ function NotesTab({ rec, reload, toast }) {
           <div className="df-sheet">
             <div className="df-sheet-head">
               <b>تاریخچهٔ شرح</b>
-              <button className="df-x" onClick={() => setHistory(null)}><XIc width="16" height="16" /></button>
+              <button className="df-x" onClick={() => setHistory(null)}><Close width="16" height="16" /></button>
             </div>
             <div className="df-sheet-body rc-history">
               {history.rows.map((r, i) => (
@@ -493,7 +486,7 @@ export default function PatientRecord() {
       </header>
 
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
-      {rec.allergies && <div className="rc-alert">⚠️ حساسیت: {rec.allergies}</div>}
+      {rec.allergies && <div className="rc-alert"><Alert size={13} /> حساسیت: {rec.allergies}</div>}
 
       <div className="df-tabs">
         {TABS.map(([k, l]) => (

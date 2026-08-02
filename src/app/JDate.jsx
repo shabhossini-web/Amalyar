@@ -2,11 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { J_DAYS, J_MONTHS, jDayOfWeek, jMonthDays, jParse, jStr, jToFa, jToday, toEnDigits } from '../lib/jalali.js';
 import './jdate.css';
+import { Calendar as CalendarIcon, ChevronEnd, Close } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const CalIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" /></svg>);
-const XIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>);
-const Chev = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="m9 6 6 6-6 6" /></svg>);
 
 /**
  * ورودیِ تاریخِ شمسی + تقویمِ بازشونده.
@@ -45,13 +42,13 @@ export default function JDate({
           title="تقویم" aria-label="انتخاب از تقویم"
           onClick={() => setOpen(true)}
         >
-          <CalIc width="16" height="16" />
+          <CalendarIcon width="16" height="16" />
         </button>
       </div>
       {hint && <em className="jd-hint">{hint}</em>}
       {bad && <em className="jd-err">تاریخ باید به شکلِ ۱۴۰۵/۰۵/۰۷ باشد</em>}
       {open && (
-        <Calendar
+        <CalendarIcon
           value={value}
           mode={mode}
           title={label}
@@ -116,11 +113,11 @@ function Calendar({ value, mode, title, onPick, onClose }) {
       <div className="jd-cal" role="dialog" aria-modal="true" aria-label={title || 'انتخابِ تاریخ'}>
         <header className="jd-cal-head">
           <b>{title || 'انتخابِ تاریخ'}</b>
-          <button type="button" className="jd-x" onClick={onClose} aria-label="بستن"><XIc width="17" height="17" /></button>
+          <button type="button" className="jd-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
         </header>
 
         <div className="jd-nav">
-          <button type="button" onClick={() => step(-1)} aria-label="ماهِ قبل"><Chev width="16" height="16" /></button>
+          <button type="button" onClick={() => step(-1)} aria-label="ماهِ قبل"><ChevronEnd width="16" height="16" /></button>
           <select value={m} onChange={(e) => setM(Number(e.target.value))} aria-label="ماه">
             {J_MONTHS.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
           </select>
@@ -128,7 +125,7 @@ function Calendar({ value, mode, title, onPick, onClose }) {
             {years.map((yy) => <option key={yy} value={yy}>{jToFa(yy)}</option>)}
           </select>
           {/* جهتِ فلش‌ها در RTL برعکس است: «بعدی» سمتِ چپ. */}
-          <button type="button" onClick={() => step(1)} aria-label="ماهِ بعد" className="jd-next"><Chev width="16" height="16" /></button>
+          <button type="button" onClick={() => step(1)} aria-label="ماهِ بعد" className="jd-next"><ChevronEnd width="16" height="16" /></button>
         </div>
 
         <div className="jd-grid">

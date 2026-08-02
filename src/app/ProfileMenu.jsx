@@ -4,21 +4,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { getAccounts } from '../lib/accountsStore.js';
 import './profile-menu.css';
+import { Caret, Check, Fingerprint, Grid, LogOut, Plus, User } from '../ui/icons.jsx';
 
-const S = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round' };
-const UserIc = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-6.5 8-6.5s8 2.5 8 6.5" /></svg>);
-const Caret = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="m6 9 6 6 6-6" /></svg>);
-const Check = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M20 6 9 17l-5-5" /></svg>);
-const Plus = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 5v14M5 12h14" /></svg>);
-const Grid = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>);
-const LogOut = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></svg>);
-const Finger = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" /><path d="M14 13.12c0 2.38 0 6.38-1 8.88" /><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02" /><path d="M2 12a10 10 0 0 1 18-6" /><path d="M2 16h.01" /><path d="M21.8 16c.2-2 .131-5.354 0-6" /><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2" /><path d="M8.65 22c.21-.66.45-1.32.57-2" /><path d="M9 6.8a6 6 0 0 1 9 5.2v2" /></svg>);
 
 const Avatar = ({ u, size = 32 }) => (
   <span className="pm-avatar" style={{ width: size, height: size }}>
     {u?.selfie
       ? <img src={u.selfie} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-      : <UserIc width={size * 0.52} height={size * 0.52} />}
+      : <User width={size * 0.52} height={size * 0.52} />}
   </span>
 );
 
@@ -188,7 +181,7 @@ export default function ProfileMenu({ onToast }) {
 
             {'PublicKeyCredential' in window && (
               <button className="pm-item" role="menuitem" disabled={busy} onClick={doBio}>
-                <Finger width="17" height="17" /> فعال‌سازی ورود با اثر انگشت
+                <Fingerprint width="17" height="17" /> فعال‌سازی ورود با اثر انگشت
               </button>
             )}
 
