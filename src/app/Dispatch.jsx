@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
 import { ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import Overlay from '../ui/Overlay.jsx';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -442,9 +444,9 @@ export default function Dispatch() {
         )}
       </section>
 
-      {brief && (
-        <div className="dp-overlay" onClick={(e) => { if (e.target === e.currentTarget) setBrief(null); }}>
-          <section className="dp-sheet">
+      <AnimatePresence>
+        {brief && (
+          <Overlay backdrop="dp-overlay" panel="dp-sheet" as="section" onClose={() => setBrief(null)}>
             <header>
               <b>متنِ ابلاغ — {brief.roleLabel ?? '…'}</b>
               <button type="button" onClick={() => setBrief(null)} aria-label="بستن"><Close size={16} /></button>
@@ -458,21 +460,23 @@ export default function Dispatch() {
                 <Copy width="15" height="15" /> کپیِ متن
               </button>
             </footer>
-          </section>
-        </div>
-      )}
+          </Overlay>
+        )}
+      </AnimatePresence>
 
-      {costFor && (
-        <RunCost
-          run={costFor}
-          busy={busy}
-          onClose={() => setCostFor(null)}
-          onSave={async (body) => {
-            await guard(() => api(`/routes/${costFor.id}/cost`, { method: 'PATCH', body }), 'هزینهٔ مسیر ثبت شد');
-            setCostFor(null);
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {costFor && (
+          <RunCost
+            run={costFor}
+            busy={busy}
+            onClose={() => setCostFor(null)}
+            onSave={async (body) => {
+              await guard(() => api(`/routes/${costFor.id}/cost`, { method: 'PATCH', body }), 'هزینهٔ مسیر ثبت شد');
+              setCostFor(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
 
       <div className={`dp-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>
@@ -591,40 +595,38 @@ function RunCost({ run, busy, onClose, onSave }) {
   const per = visits.length ? Math.floor(total / visits.length) : 0;
 
   return (
-    <div className="dp-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="dp-sheet">
-        <header>
-          <b>هزینهٔ مسیر — {run.staff.name}</b>
-          <button type="button" onClick={onClose} aria-label="بستن"><Close size={16} /></button>
-        </header>
-        <div className="dp-costbody">
-          <label><span>بنزین</span>
-            <input type="text" inputMode="numeric" dir="ltr" value={fuel} onChange={(e) => setFuel(e.target.value)} /></label>
-          <label><span>دستمزدِ راننده</span>
-            <input type="text" inputMode="numeric" dir="ltr" value={fee} onChange={(e) => setFee(e.target.value)} /></label>
-          <label><span>هزینهٔ دیگر</span>
-            <input type="text" inputMode="numeric" dir="ltr" value={other} onChange={(e) => setOther(e.target.value)} /></label>
-          <label className="wide"><span>توضیح</span>
-            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} /></label>
-          <p className="dp-costsum">
-            جمع: <b>{faNum(total)}</b> تومان
-            {visits.length > 0
-              ? ` · سرشکن روی ${faNum(visits.length)} عمل ≈ ${faNum(per)} تومان`
-              : ' · هیچ عملی روی این مسیر نیست؛ کلِ مبلغ هزینهٔ عمومیِ حمل می‌ماند'}
-          </p>
-        </div>
-        <footer>
-          <span className="dp-privacy">ردیفِ هزینه در دفترِ مالی با دستهٔ «حمل و نقل» ثبت می‌شود.</span>
-          <button
-            type="button"
-            className="dp-copy"
-            disabled={busy}
-            onClick={() => onSave({ fuelCost: n(fuel), driverFee: n(fee), otherCost: n(other), costNote: note || undefined })}
-          >
-            ثبتِ هزینه
-          </button>
-        </footer>
-      </section>
-    </div>
+    <Overlay backdrop="dp-overlay" panel="dp-sheet" as="section" onClose={onClose}>
+      <header>
+        <b>هزینهٔ مسیر — {run.staff.name}</b>
+        <button type="button" onClick={onClose} aria-label="بستن"><Close size={16} /></button>
+      </header>
+      <div className="dp-costbody">
+        <label><span>بنزین</span>
+          <input type="text" inputMode="numeric" dir="ltr" value={fuel} onChange={(e) => setFuel(e.target.value)} /></label>
+        <label><span>دستمزدِ راننده</span>
+          <input type="text" inputMode="numeric" dir="ltr" value={fee} onChange={(e) => setFee(e.target.value)} /></label>
+        <label><span>هزینهٔ دیگر</span>
+          <input type="text" inputMode="numeric" dir="ltr" value={other} onChange={(e) => setOther(e.target.value)} /></label>
+        <label className="wide"><span>توضیح</span>
+          <input type="text" value={note} onChange={(e) => setNote(e.target.value)} /></label>
+        <p className="dp-costsum">
+          جمع: <b>{faNum(total)}</b> تومان
+          {visits.length > 0
+            ? ` · سرشکن روی ${faNum(visits.length)} عمل ≈ ${faNum(per)} تومان`
+            : ' · هیچ عملی روی این مسیر نیست؛ کلِ مبلغ هزینهٔ عمومیِ حمل می‌ماند'}
+        </p>
+      </div>
+      <footer>
+        <span className="dp-privacy">ردیفِ هزینه در دفترِ مالی با دستهٔ «حمل و نقل» ثبت می‌شود.</span>
+        <button
+          type="button"
+          className="dp-copy"
+          disabled={busy}
+          onClick={() => onSave({ fuelCost: n(fuel), driverFee: n(fee), otherCost: n(other), costNote: note || undefined })}
+        >
+          ثبتِ هزینه
+        </button>
+      </footer>
+    </Overlay>
   );
 }

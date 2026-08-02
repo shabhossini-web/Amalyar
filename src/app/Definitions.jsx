@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { api } from '../lib/api.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
 import { Back, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import Overlay from '../ui/Overlay.jsx';
 
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
@@ -228,17 +230,21 @@ export default function Definitions() {
       </>
       )}
 
-      {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={setToast} />}
+      <AnimatePresence>
+        {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={setToast} />}
+      </AnimatePresence>
 
-      {editing && (
-        <EditSheet
-          section={section}
-          row={editing}
-          onClose={() => setEditing(null)}
-          onSaved={async (msg) => { setEditing(null); setToast(msg); await load(); }}
-          onError={setToast}
-        />
-      )}
+      <AnimatePresence>
+        {editing && (
+          <EditSheet
+            section={section}
+            row={editing}
+            onClose={() => setEditing(null)}
+            onSaved={async (msg) => { setEditing(null); setToast(msg); await load(); }}
+            onError={setToast}
+          />
+        )}
+      </AnimatePresence>
 
       {toast && <div className="df-toast" role="status">{toast}</div>}
     </div>
@@ -286,55 +292,53 @@ function SetContents({ item, onClose, onToast }) {
   };
 
   return (
-    <div className="df-overlay" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <section className="df-sheet">
-        <header className="df-sheet-head">
-          <b>محتویاتِ «{item.name}»</b>
-          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
-        <div className="df-sheet-body">
-          <p className="df-note" style={{ marginTop: 0 }}>
-            هنگام برگشتِ ست، همین فهرست چک‌لیستِ شمارش می‌شود و فقط <b>کسری</b> ثبت می‌شود.
-          </p>
-          <div className="df-list">
-            {rows.length === 0 && <div className="df-empty">هنوز قلمی تعریف نشده</div>}
-            {rows.map((r) => (
-              <article key={r.id} className="df-row">
-                <div className="df-row-main">
-                  <b>{r.label}</b>
-                  <small>{faNum(r.quantity)} عدد{r.partName ? ` · کالای تعریف‌شده` : ''}</small>
-                </div>
-                <button type="button" className="df-del" disabled={busy} onClick={() => remove(r.id)}>
-                  <Trash width="15" height="15" />
-                </button>
-              </article>
-            ))}
-          </div>
-
-          <div className="pf-row2" style={{ marginTop: 12 }}>
-            <label className="pf-field">
-              <span>از کالاهای تعریف‌شده</span>
-              <select value={partId} onChange={(e) => { setPartId(e.target.value); if (e.target.value) setLabel(''); }} disabled={busy}>
-                <option value="">— انتخاب —</option>
-                {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
-              </select>
-            </label>
-            <label className="pf-field">
-              <span>یا عنوانِ دستی</span>
-              <input type="text" value={label} disabled={busy || !!partId} onChange={(e) => setLabel(e.target.value)} />
-            </label>
-            <label className="pf-field">
-              <span>تعداد</span>
-              <input type="text" inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} disabled={busy} />
-            </label>
-          </div>
+    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="df-sheet-head">
+        <b>محتویاتِ «{item.name}»</b>
+        <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+      <div className="df-sheet-body">
+        <p className="df-note" style={{ marginTop: 0 }}>
+          هنگام برگشتِ ست، همین فهرست چک‌لیستِ شمارش می‌شود و فقط <b>کسری</b> ثبت می‌شود.
+        </p>
+        <div className="df-list">
+          {rows.length === 0 && <div className="df-empty">هنوز قلمی تعریف نشده</div>}
+          {rows.map((r) => (
+            <article key={r.id} className="df-row">
+              <div className="df-row-main">
+                <b>{r.label}</b>
+                <small>{faNum(r.quantity)} عدد{r.partName ? ` · کالای تعریف‌شده` : ''}</small>
+              </div>
+              <button type="button" className="df-del" disabled={busy} onClick={() => remove(r.id)}>
+                <Trash width="15" height="15" />
+              </button>
+            </article>
+          ))}
         </div>
-        <footer className="df-sheet-foot">
-          <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>بستن</button>
-          <button type="button" className="df-save" onClick={add} disabled={busy || (!label.trim() && !partId)}>افزودنِ قلم</button>
-        </footer>
-      </section>
-    </div>
+
+        <div className="pf-row2" style={{ marginTop: 12 }}>
+          <label className="pf-field">
+            <span>از کالاهای تعریف‌شده</span>
+            <select value={partId} onChange={(e) => { setPartId(e.target.value); if (e.target.value) setLabel(''); }} disabled={busy}>
+              <option value="">— انتخاب —</option>
+              {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
+            </select>
+          </label>
+          <label className="pf-field">
+            <span>یا عنوانِ دستی</span>
+            <input type="text" value={label} disabled={busy || !!partId} onChange={(e) => setLabel(e.target.value)} />
+          </label>
+          <label className="pf-field">
+            <span>تعداد</span>
+            <input type="text" inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} disabled={busy} />
+          </label>
+        </div>
+      </div>
+      <footer className="df-sheet-foot">
+        <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>بستن</button>
+        <button type="button" className="df-save" onClick={add} disabled={busy || (!label.trim() && !partId)}>افزودنِ قلم</button>
+      </footer>
+    </Overlay>
   );
 }
 
@@ -494,59 +498,57 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
   };
 
   return (
-    <div className="df-overlay" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <section className="df-sheet">
-        <header className="df-sheet-head">
-          <b>{isNew ? `افزودن به ${section.label}` : 'ویرایش'}</b>
-          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
+    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="df-sheet-head">
+        <b>{isNew ? `افزودن به ${section.label}` : 'ویرایش'}</b>
+        <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
 
-        <div className="df-sheet-body">
-          {section.person ? (
-            <>
-              <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
-              <div className="pf-row2">
-                {(section.extra ?? []).map((f) => (
-                  <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
-                    <span>{f.label}</span>
-                    {f.options
-                      ? (
-                        <select value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy}>
-                          <option value="">— انتخاب کنید —</option>
-                          {f.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-                        </select>
-                      )
-                      : <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />}
-                    {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}
-                  </label>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="pf">
-              {(section.fields ?? []).map((f) => (
+      <div className="df-sheet-body">
+        {section.person ? (
+          <>
+            <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
+            <div className="pf-row2">
+              {(section.extra ?? []).map((f) => (
                 <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
                   <span>{f.label}</span>
-                  {f.options ? (
-                    <select value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy}>
-                      <option value="">— انتخاب کنید —</option>
-                      {f.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-                    </select>
-                  ) : f.textarea
-                    ? <textarea rows={2} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
+                  {f.options
+                    ? (
+                      <select value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy}>
+                        <option value="">— انتخاب کنید —</option>
+                        {f.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                      </select>
+                    )
                     : <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />}
                   {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}
                 </label>
               ))}
             </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <div className="pf">
+            {(section.fields ?? []).map((f) => (
+              <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
+                <span>{f.label}</span>
+                {f.options ? (
+                  <select value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy}>
+                    <option value="">— انتخاب کنید —</option>
+                    {f.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                  </select>
+                ) : f.textarea
+                  ? <textarea rows={2} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
+                  : <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />}
+                {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
 
-        <footer className="df-sheet-foot">
-          <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>انصراف</button>
-          <button type="button" className="df-save" onClick={submit} disabled={busy}>{busy ? '…' : 'ذخیره'}</button>
-        </footer>
-      </section>
-    </div>
+      <footer className="df-sheet-foot">
+        <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>انصراف</button>
+        <button type="button" className="df-save" onClick={submit} disabled={busy}>{busy ? '…' : 'ذخیره'}</button>
+      </footer>
+    </Overlay>
   );
 }

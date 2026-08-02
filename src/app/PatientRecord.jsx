@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { toEnDigits } from '../lib/identity.js';
@@ -9,6 +10,7 @@ import JDate from './JDate.jsx';
 import './record.css';
 import { Alert, Back, Close, Download, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import Overlay from '../ui/Overlay.jsx';
 
 
 const CATEGORIES = {
@@ -390,9 +392,9 @@ function NotesTab({ rec, reload, toast }) {
         </div>
       )}
 
-      {editing && (
-        <div className="df-overlay" onClick={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
-          <div className="df-sheet">
+      <AnimatePresence>
+        {editing && (
+          <Overlay backdrop="df-overlay" panel="df-sheet" onClose={() => setEditing(null)}>
             <div className="df-sheet-head">
               <b>ویرایشِ شرح</b>
               <button className="df-x" onClick={() => setEditing(null)}><Close width="16" height="16" /></button>
@@ -407,13 +409,13 @@ function NotesTab({ rec, reload, toast }) {
               <button className="df-ghost" onClick={() => setEditing(null)}>انصراف</button>
               <button className="df-save" onClick={amend} disabled={busy}>ثبتِ نسخهٔ تازه</button>
             </div>
-          </div>
-        </div>
-      )}
+          </Overlay>
+        )}
+      </AnimatePresence>
 
-      {history && (
-        <div className="df-overlay" onClick={(e) => { if (e.target === e.currentTarget) setHistory(null); }}>
-          <div className="df-sheet">
+      <AnimatePresence>
+        {history && (
+          <Overlay backdrop="df-overlay" panel="df-sheet" onClose={() => setHistory(null)}>
             <div className="df-sheet-head">
               <b>تاریخچهٔ شرح</b>
               <button className="df-x" onClick={() => setHistory(null)}><Close width="16" height="16" /></button>
@@ -426,9 +428,9 @@ function NotesTab({ rec, reload, toast }) {
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-      )}
+          </Overlay>
+        )}
+      </AnimatePresence>
     </>
   );
 }

@@ -119,28 +119,24 @@
 .db-ico.del.arm { width: auto; padding: 0 10px; color: #fff; background: #dc2626; border-color: #dc2626; }
 .db-ico:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
-/* ── مودالِ فرم ── */
+/* ── مودالِ فرم ──
+   ورود/خروج دستِ `ui/Overlay.jsx` است، نه @keyframes: انیمیشنِ CSS فقط ورود
+   را می‌توانست بسازد چون هنگامِ بسته‌شدن، المان پیش از شروعِ انیمیشن از DOM
+   رفته است. ⚠️ اگر اینجا `animation` برگردد، روی transformِ inlineِ framer
+   سوار می‌شود و حرکت می‌پرد. */
 .db-overlay {
   position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
   background: rgba(8, 4, 24, 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-  animation: dbFade .18s ease;
 }
-@keyframes dbFade { from { opacity: 0; } }
 .db-sheet {
   width: 100%; max-width: 560px; max-height: 92dvh; overflow-y: auto; cursor: default;
   border-radius: 22px 22px 0 0; padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 18px);
   display: flex; flex-direction: column; gap: 12px;
   background: rgba(22, 16, 46, 0.92);
-  animation: dbUp .25s cubic-bezier(.2, .8, .25, 1);
 }
-.db-sheet:hover { transform: none; }
-@keyframes dbUp { from { transform: translateY(40px); opacity: 0; } }
 @media (min-width: 640px) {
   .db-overlay { align-items: center; padding: 20px; }
   .db-sheet { border-radius: 22px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .db-overlay, .db-sheet { animation: none; }
 }
 
 .db-sheet-head { display: flex; align-items: center; justify-content: space-between; }

@@ -1351,3 +1351,66 @@ jobs:
           }
           console.log('tabs ok');
           "
+
+      - name: Verify sheets close with an animation, not a jump
+        run: |
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const jsx = execSync(\"find src -name '*.jsx'\", { encoding: 'utf8' }).split('\n').filter(Boolean);
+          const ovl = fs.readFileSync('src/ui/Overlay.jsx', 'utf8');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          // ① پوششِ دست‌ساز ممنوع. هجده جای برنامه همان سه خط را تکرار می‌کردند
+          //    و چون رندرِ شرطی بودند، هیچ‌کدام انیمیشنِ **خروج** نداشتند.
+          const rogue = jsx.filter((f) => !f.startsWith('src/ui/')
+            && /<div className=\"[\w\- ]*(-overlay|-modal-bg)/.test(read(f)));
+          if (rogue.length) {
+            console.error('پوششِ دست‌ساز در: ' + rogue.join('، ')); process.exit(1);
+          }
+
+          // ② ⚠️ AnimatePresence باید در **والد** باشد. اگر داخلِ خودِ شیت
+          //    بنشیند، با unmountِ شیت خودش هم می‌رود و خروج هرگز اجرا نمی‌شود.
+          //    پس هر فایلی که Overlay را رندر می‌کند باید AnimatePresence هم
+          //    وارد کرده باشد.
+          const users = jsx.filter((f) => !f.startsWith('src/ui/') && /<Overlay\b/.test(read(f)));
+          const missing = users.filter((f) => !/AnimatePresence/.test(read(f)));
+          if (missing.length) {
+            console.error('Overlay بدونِ AnimatePresence در: ' + missing.join('، ')); process.exit(1);
+          }
+          // و هر شرطیِ درجا که مستقیم Overlay می‌سازد باید داخلِ AnimatePresence باشد.
+          for (const f of users) {
+            const lines = read(f).split('\n');
+            lines.forEach((l, i) => {
+              if (!/^\s*<Overlay\b/.test(l)) return;
+              const above = lines.slice(Math.max(0, i - 3), i).join(' ');
+              if (/&& \(\s*$/.test(lines[i - 1] || '') && !/<AnimatePresence>/.test(above)) {
+                console.error(f + ':' + (i + 1) + ' — شرطیِ Overlay بیرونِ AnimatePresence'); process.exit(1);
+              }
+            });
+          }
+
+          // ③ ⚠️ بدونِ onUpdate، framer شفافیت را با Web Animations API اجرا
+          //    می‌کند و در style نمی‌نویسد؛ با پایانِ خروج آن انیمیشن لغو می‌شود
+          //    و شفافیت یک فریم به ۱ برمی‌گردد — چشمکِ دیدنی درست پیش از حذف.
+          //    (اندازه‌گیری شده: ۰٫۱۰ → ۱٫۰۰ → حذف.)
+          if ((ovl.match(/onUpdate=\{noop\}/g) || []).length < 2) {
+            console.error('پس‌زمینه و پنل هر دو به onUpdate نیاز دارند وگرنه هنگامِ بسته‌شدن چشمک می‌زنند');
+            process.exit(1);
+          }
+
+          // ④ «حرکتِ کمتر» انتخابِ کاربر است، نه پیشنهاد.
+          if (!/useReducedMotion\(\)/.test(ovl) || !/duration: 0/.test(ovl)) {
+            console.error('پوشش باید prefers-reduced-motion را رعایت کند'); process.exit(1);
+          }
+
+          // ⑤ انیمیشنِ CSS نباید برگردد: @keyframes روی transform با استایلِ
+          //    inlineِ framer می‌جنگد (و CSS برنده می‌شود) — حرکت می‌پرد.
+          for (const f of ['src/app/dashboard.css', 'src/app/jdate.css']) {
+            const css = read(f);
+            if (/\.(db|jd)-(overlay|sheet|cal)[^{]*\{[^}]*animation:/.test(css)) {
+              console.error(f + ' — انیمیشنِ CSS روی پوشش/شیت ممنوع است'); process.exit(1);
+            }
+          }
+          console.log('overlay ok');
+          "

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
 import { Back, Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import Overlay from '../ui/Overlay.jsx';
 
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -182,23 +184,29 @@ export default function Inventory() {
       </>
       )}
 
-      {adding && (
-        <LotSheet
-          onClose={() => setAdding(false)}
-          onSaved={async (msg) => { setAdding(false); setToast(msg); await load(); }}
-          onError={setToast}
-        />
-      )}
-      {moving && (
-        <MoveSheet
-          lot={moving.lot}
-          mode={moving.mode}
-          onClose={() => setMoving(null)}
-          onSaved={async (msg) => { setMoving(null); setToast(msg); await load(); }}
-          onError={setToast}
-        />
-      )}
-      {tracing && <TraceSheet lotId={tracing} onClose={() => setTracing(null)} onError={setToast} />}
+      <AnimatePresence>
+        {adding && (
+          <LotSheet
+            onClose={() => setAdding(false)}
+            onSaved={async (msg) => { setAdding(false); setToast(msg); await load(); }}
+            onError={setToast}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {moving && (
+          <MoveSheet
+            lot={moving.lot}
+            mode={moving.mode}
+            onClose={() => setMoving(null)}
+            onSaved={async (msg) => { setMoving(null); setToast(msg); await load(); }}
+            onError={setToast}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {tracing && <TraceSheet lotId={tracing} onClose={() => setTracing(null)} onError={setToast} />}
+      </AnimatePresence>
 
       {toast && <div className="iv-toast" role="status">{toast}</div>}
     </div>
@@ -307,11 +315,17 @@ function Assets({ onToast }) {
         ))}
       </div>
 
-      {needsFor !== null && <Needs onClose={() => setNeedsFor(null)} onToast={onToast} />}
-      {consignFor && (
-        <Consign row={consignFor} onClose={() => setConsignFor(null)} onToast={onToast} onDone={load} />
-      )}
-      {showConsigned && <Consignments onClose={() => setShowConsigned(false)} onToast={onToast} onDone={load} />}
+      <AnimatePresence>
+        {needsFor !== null && <Needs onClose={() => setNeedsFor(null)} onToast={onToast} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {consignFor && (
+          <Consign row={consignFor} onClose={() => setConsignFor(null)} onToast={onToast} onDone={load} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {showConsigned && <Consignments onClose={() => setShowConsigned(false)} onToast={onToast} onDone={load} />}
+      </AnimatePresence>
     </>
   );
 }
@@ -353,37 +367,35 @@ function Consign({ row, onClose, onToast, onDone }) {
   };
 
   return (
-    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="iv-sheet sm">
-        <header className="iv-sheet-head">
-          <b>امانیِ مستقر — {row.itemName}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
-        <div className="iv-sheet-body">
-          <p className="iv-note">
-            دستگاهی که در بیمارستان مستقر است «بیرون» نیست، آن‌جا زندگی می‌کند. با ثبتِ امانت،
-            از صفِ جمع‌آوری خارج می‌شود و به‌جایش سررسیدِ صورت‌برداری می‌گیرد.
-          </p>
-          <label className="iv-field">
-            <span>بیمارستان</span>
-            <select value={hid} onChange={(e) => setHid(e.target.value)}>
-              <option value="">— انتخاب کنید —</option>
-              {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
-          </label>
-          <label className="iv-field">
-            <span>دورهٔ صورت‌برداری (روز)</span>
-            <input type="text" inputMode="numeric" dir="ltr" value={every} onChange={(e) => setEvery(e.target.value)} />
-          </label>
-          <div className="iv-row2">
-            <button type="button" className="iv-add" disabled={busy || !hid} onClick={save}>ثبتِ امانت</button>
-            {row.consignedToId && (
-              <button type="button" className="iv-del" disabled={busy} onClick={end}>پایانِ امانت</button>
-            )}
-          </div>
+    <Overlay backdrop="iv-overlay" panel="iv-sheet sm" as="section" onClose={onClose}>
+      <header className="iv-sheet-head">
+        <b>امانیِ مستقر — {row.itemName}</b>
+        <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+      <div className="iv-sheet-body">
+        <p className="iv-note">
+          دستگاهی که در بیمارستان مستقر است «بیرون» نیست، آن‌جا زندگی می‌کند. با ثبتِ امانت،
+          از صفِ جمع‌آوری خارج می‌شود و به‌جایش سررسیدِ صورت‌برداری می‌گیرد.
+        </p>
+        <label className="iv-field">
+          <span>بیمارستان</span>
+          <select value={hid} onChange={(e) => setHid(e.target.value)}>
+            <option value="">— انتخاب کنید —</option>
+            {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+        </label>
+        <label className="iv-field">
+          <span>دورهٔ صورت‌برداری (روز)</span>
+          <input type="text" inputMode="numeric" dir="ltr" value={every} onChange={(e) => setEvery(e.target.value)} />
+        </label>
+        <div className="iv-row2">
+          <button type="button" className="iv-add" disabled={busy || !hid} onClick={save}>ثبتِ امانت</button>
+          {row.consignedToId && (
+            <button type="button" className="iv-del" disabled={busy} onClick={end}>پایانِ امانت</button>
+          )}
         </div>
-      </section>
-    </div>
+      </div>
+    </Overlay>
   );
 }
 
@@ -400,41 +412,45 @@ function Consignments({ onClose, onToast, onDone }) {
 
   const rows = data?.rows ?? [];
   return (
-    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="iv-sheet">
-        <header className="iv-sheet-head">
-          <b>داراییِ امانیِ مستقر{data?.overdue ? ` — ${num(data.overdue)} عقب‌افتاده` : ''}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
-        <div className="iv-sheet-body">
-          <p className="iv-note">
-            امانیِ بدونِ شمارشِ دوره‌ای یعنی موجودیِ کاغذی: مصرف‌شده‌ها فاکتور نمی‌شوند و کسری سال‌ها بعد پیدا می‌شود.
-          </p>
-          <div className="iv-list">
-            {rows.length === 0 && <div className="iv-empty">هنوز داراییِ امانی ثبت نشده</div>}
-            {rows.map((r) => (
-              <article key={r.lotId} className={`iv-row as-count-${r.status}`}>
-                <div className="iv-row-main">
-                  <b>
-                    {r.itemName}
-                    {r.serialNo && <i className="as-sn" dir="ltr">{r.serialNo}</i>}
-                  </b>
-                  <small>{r.hospitalName} · از {faDate(r.consignedAt)}</small>
-                  <small className={`as-count ${COUNT_TONE[r.status] ?? ''}`}>
-                    {r.lastCountAt ? `آخرین شمارش: ${faDate(r.lastCountAt)}` : 'هنوز شمرده نشده'}
-                    {r.dueAt ? ` · سررسید: ${faDate(r.dueAt)}` : ''}
-                    {r.lastCount ? ` · مصرف ${num(r.lastCount.used)} / کسری ${num(r.lastCount.missing)}` : ''}
-                  </small>
-                </div>
-                <div className="as-actions">
-                  <span className={`as-state ${COUNT_TONE[r.status] ?? ''}`}>{r.statusLabel}</span>
-                  <button type="button" className="iv-ghost sm" onClick={() => setCountFor(r)}>صورت‌برداری</button>
-                </div>
-              </article>
-            ))}
-          </div>
+    <>
+    <Overlay backdrop="iv-overlay" panel="iv-sheet" as="section" onClose={onClose}>
+      <header className="iv-sheet-head">
+        <b>داراییِ امانیِ مستقر{data?.overdue ? ` — ${num(data.overdue)} عقب‌افتاده` : ''}</b>
+        <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+      <div className="iv-sheet-body">
+        <p className="iv-note">
+          امانیِ بدونِ شمارشِ دوره‌ای یعنی موجودیِ کاغذی: مصرف‌شده‌ها فاکتور نمی‌شوند و کسری سال‌ها بعد پیدا می‌شود.
+        </p>
+        <div className="iv-list">
+          {rows.length === 0 && <div className="iv-empty">هنوز داراییِ امانی ثبت نشده</div>}
+          {rows.map((r) => (
+            <article key={r.lotId} className={`iv-row as-count-${r.status}`}>
+              <div className="iv-row-main">
+                <b>
+                  {r.itemName}
+                  {r.serialNo && <i className="as-sn" dir="ltr">{r.serialNo}</i>}
+                </b>
+                <small>{r.hospitalName} · از {faDate(r.consignedAt)}</small>
+                <small className={`as-count ${COUNT_TONE[r.status] ?? ''}`}>
+                  {r.lastCountAt ? `آخرین شمارش: ${faDate(r.lastCountAt)}` : 'هنوز شمرده نشده'}
+                  {r.dueAt ? ` · سررسید: ${faDate(r.dueAt)}` : ''}
+                  {r.lastCount ? ` · مصرف ${num(r.lastCount.used)} / کسری ${num(r.lastCount.missing)}` : ''}
+                </small>
+              </div>
+              <div className="as-actions">
+                <span className={`as-state ${COUNT_TONE[r.status] ?? ''}`}>{r.statusLabel}</span>
+                <button type="button" className="iv-ghost sm" onClick={() => setCountFor(r)}>صورت‌برداری</button>
+              </div>
+            </article>
+          ))}
         </div>
-      </section>
+      </div>
+    </Overlay>
+    {/* برگهٔ شمارش **خواهرِ** این شیت است نه فرزندش: پوششِ داخلی
+        `position: fixed` است و اگر داخلِ پنلِ متحرک بنشیند، transformِ پنل
+        مرجعش می‌شود و وسطِ انیمیشن کج می‌افتد. */}
+    <AnimatePresence>
       {countFor && (
         <CountSheet
           row={countFor}
@@ -443,7 +459,8 @@ function Consignments({ onClose, onToast, onDone }) {
           onDone={async () => { await load(); await onDone(); }}
         />
       )}
-    </div>
+    </AnimatePresence>
+    </>
   );
 }
 
@@ -494,65 +511,63 @@ function CountSheet({ row, onClose, onToast, onDone }) {
   }, { short: 0, used: 0, missing: 0 });
 
   return (
-    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="iv-sheet">
-        <header className="iv-sheet-head">
-          <b>صورت‌برداری — {row.itemName} · {row.hospitalName}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
-        <div className="iv-sheet-body">
-          {!sheet && <div className="iv-empty">در حال بارگذاری…</div>}
-          {sheet && sheet.lines.length === 0 && (
-            <div className="iv-empty">
-              محتویاتِ این ست تعریف نشده — در تعاریفِ پایه «محتویاتِ ست» را پر کنید تا برگهٔ شمارش ساخته شود.
-            </div>
-          )}
-          {sheet && lines.length > 0 && (
-            <>
-              <div className="as-count-grid">
-                <div className="as-count-head"><span>قلم</span><span>انتظار</span><span>شمرده</span><span>مصرف</span><span>کسری</span></div>
-                {lines.map((l, i) => {
-                  const short = Math.max(0, (int(l.expected) || 0) - (int(l.counted) || 0));
-                  const used = Math.min(int(l.used) || 0, short);
-                  return (
-                    <div key={l.label} className="as-count-row">
-                      <span>{l.label}</span>
-                      <input type="text" inputMode="numeric" dir="ltr" value={l.expected}
-                        onChange={(e) => setCell(i, 'expected', e.target.value)} />
-                      <input type="text" inputMode="numeric" dir="ltr" value={l.counted}
-                        onChange={(e) => setCell(i, 'counted', e.target.value)} />
-                      <input type="text" inputMode="numeric" dir="ltr" value={l.used}
-                        onChange={(e) => setCell(i, 'used', e.target.value)} />
-                      <span className={short - used > 0 ? 'as-miss' : ''}>{num(short - used)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="iv-note">
-                جمع: {num(totals.used)} مصرف (قابلِ فاکتور) · {num(totals.missing)} کسری
-              </p>
-              <button type="button" className="iv-add" disabled={busy} onClick={save}>ثبتِ صورت‌برداری</button>
-            </>
-          )}
-
-          {hist.length > 0 && (
-            <div className="iv-list">
-              {hist.map((h) => (
-                <article key={h.id} className="iv-row">
-                  <div className="iv-row-main">
-                    <b>{faDate(h.countedAt)}</b>
-                    <small>
-                      انتظار {num(h.totals.expected)} · شمرده {num(h.totals.counted)} ·
-                      مصرف {num(h.totals.used)} · کسری {num(h.totals.missing)}
-                    </small>
+    <Overlay backdrop="iv-overlay" panel="iv-sheet" as="section" onClose={onClose}>
+      <header className="iv-sheet-head">
+        <b>صورت‌برداری — {row.itemName} · {row.hospitalName}</b>
+        <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+      <div className="iv-sheet-body">
+        {!sheet && <div className="iv-empty">در حال بارگذاری…</div>}
+        {sheet && sheet.lines.length === 0 && (
+          <div className="iv-empty">
+            محتویاتِ این ست تعریف نشده — در تعاریفِ پایه «محتویاتِ ست» را پر کنید تا برگهٔ شمارش ساخته شود.
+          </div>
+        )}
+        {sheet && lines.length > 0 && (
+          <>
+            <div className="as-count-grid">
+              <div className="as-count-head"><span>قلم</span><span>انتظار</span><span>شمرده</span><span>مصرف</span><span>کسری</span></div>
+              {lines.map((l, i) => {
+                const short = Math.max(0, (int(l.expected) || 0) - (int(l.counted) || 0));
+                const used = Math.min(int(l.used) || 0, short);
+                return (
+                  <div key={l.label} className="as-count-row">
+                    <span>{l.label}</span>
+                    <input type="text" inputMode="numeric" dir="ltr" value={l.expected}
+                      onChange={(e) => setCell(i, 'expected', e.target.value)} />
+                    <input type="text" inputMode="numeric" dir="ltr" value={l.counted}
+                      onChange={(e) => setCell(i, 'counted', e.target.value)} />
+                    <input type="text" inputMode="numeric" dir="ltr" value={l.used}
+                      onChange={(e) => setCell(i, 'used', e.target.value)} />
+                    <span className={short - used > 0 ? 'as-miss' : ''}>{num(short - used)}</span>
                   </div>
-                </article>
-              ))}
+                );
+              })}
             </div>
-          )}
-        </div>
-      </section>
-    </div>
+            <p className="iv-note">
+              جمع: {num(totals.used)} مصرف (قابلِ فاکتور) · {num(totals.missing)} کسری
+            </p>
+            <button type="button" className="iv-add" disabled={busy} onClick={save}>ثبتِ صورت‌برداری</button>
+          </>
+        )}
+
+        {hist.length > 0 && (
+          <div className="iv-list">
+            {hist.map((h) => (
+              <article key={h.id} className="iv-row">
+                <div className="iv-row-main">
+                  <b>{faDate(h.countedAt)}</b>
+                  <small>
+                    انتظار {num(h.totals.expected)} · شمرده {num(h.totals.counted)} ·
+                    مصرف {num(h.totals.used)} · کسری {num(h.totals.missing)}
+                  </small>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </Overlay>
   );
 }
 
@@ -595,60 +610,58 @@ function Needs({ onClose, onToast }) {
   };
 
   return (
-    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="iv-sheet">
-        <header className="iv-sheet-head">
-          <b>نیازِ استانداردِ بیمارستان</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
-        <div className="iv-sheet-body">
-          <p className="iv-note">
-            پیشنهادِ پیش‌فرضِ حواله برای این بیمارستان. الزام نیست — عملِ خاص می‌تواند چیزِ دیگری بخواهد.
-          </p>
-          <label className="iv-field">
-            <span>بیمارستان</span>
-            <select value={hid} onChange={(e) => setHid(e.target.value)}>
-              <option value="">— انتخاب کنید —</option>
-              {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-            </select>
-          </label>
+    <Overlay backdrop="iv-overlay" panel="iv-sheet" as="section" onClose={onClose}>
+      <header className="iv-sheet-head">
+        <b>نیازِ استانداردِ بیمارستان</b>
+        <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+      <div className="iv-sheet-body">
+        <p className="iv-note">
+          پیشنهادِ پیش‌فرضِ حواله برای این بیمارستان. الزام نیست — عملِ خاص می‌تواند چیزِ دیگری بخواهد.
+        </p>
+        <label className="iv-field">
+          <span>بیمارستان</span>
+          <select value={hid} onChange={(e) => setHid(e.target.value)}>
+            <option value="">— انتخاب کنید —</option>
+            {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+        </label>
 
-          {hid && (
-            <>
-              <div className="iv-list">
-                {rows.length === 0 && <div className="iv-empty">هنوز چیزی برای این بیمارستان تعریف نشده</div>}
-                {rows.map((r) => (
-                  <article key={r.id} className="iv-row">
-                    <div className="iv-row-main">
-                      <b>{r.itemName} <i className="as-kind">{r.assetLabel}</i></b>
-                      <small>{num(r.quantity)} عدد{r.notes ? ` · ${r.notes}` : ''}</small>
-                    </div>
-                    <button type="button" className="iv-del" disabled={busy} onClick={() => remove(r.id)}>حذف</button>
-                  </article>
-                ))}
-              </div>
+        {hid && (
+          <>
+            <div className="iv-list">
+              {rows.length === 0 && <div className="iv-empty">هنوز چیزی برای این بیمارستان تعریف نشده</div>}
+              {rows.map((r) => (
+                <article key={r.id} className="iv-row">
+                  <div className="iv-row-main">
+                    <b>{r.itemName} <i className="as-kind">{r.assetLabel}</i></b>
+                    <small>{num(r.quantity)} عدد{r.notes ? ` · ${r.notes}` : ''}</small>
+                  </div>
+                  <button type="button" className="iv-del" disabled={busy} onClick={() => remove(r.id)}>حذف</button>
+                </article>
+              ))}
+            </div>
 
-              <div className="iv-row2">
-                <label className="iv-field">
-                  <span>کالا</span>
-                  <select value={pick} onChange={(e) => setPick(e.target.value)}>
-                    <option value="">— انتخاب —</option>
-                    {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
-                  </select>
-                </label>
-                <label className="iv-field">
-                  <span>تعداد</span>
-                  <input type="text" inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} />
-                </label>
-                <button type="button" className="iv-add" disabled={busy || !pick} onClick={add}>
-                  <Plus width="15" height="15" /> افزودن
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </section>
-    </div>
+            <div className="iv-row2">
+              <label className="iv-field">
+                <span>کالا</span>
+                <select value={pick} onChange={(e) => setPick(e.target.value)}>
+                  <option value="">— انتخاب —</option>
+                  {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
+                </select>
+              </label>
+              <label className="iv-field">
+                <span>تعداد</span>
+                <input type="text" inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} />
+              </label>
+              <button type="button" className="iv-add" disabled={busy || !pick} onClick={add}>
+                <Plus width="15" height="15" /> افزودن
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </Overlay>
   );
 }
 
@@ -701,21 +714,25 @@ function Transfers({ onToast, onChanged }) {
         ))}
       </div>
 
-      {sending && (
-        <TransferSheet
-          onClose={() => setSending(false)}
-          onSaved={async (msg) => { setSending(false); onToast(msg); await load(); onChanged?.(); }}
-          onError={onToast}
-        />
-      )}
-      {open && (
-        <TransferDetail
-          id={open}
-          onClose={() => setOpen(null)}
-          onChanged={async (msg) => { onToast(msg); await load(); onChanged?.(); }}
-          onError={onToast}
-        />
-      )}
+      <AnimatePresence>
+        {sending && (
+          <TransferSheet
+            onClose={() => setSending(false)}
+            onSaved={async (msg) => { setSending(false); onToast(msg); await load(); onChanged?.(); }}
+            onError={onToast}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {open && (
+          <TransferDetail
+            id={open}
+            onClose={() => setOpen(null)}
+            onChanged={async (msg) => { onToast(msg); await load(); onChanged?.(); }}
+            onError={onToast}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }
@@ -767,7 +784,7 @@ function TransferSheet({ onClose, onSaved, onError }) {
   };
 
   return (
-    <Overlay title="حوالهٔ جدید" onClose={onClose}>
+    <TitledSheet title="حوالهٔ جدید" onClose={onClose}>
       <label className="iv-field"><span>مقصد *</span>
         <input value={form.toLocation} onChange={(e) => setForm((s) => ({ ...s, toLocation: e.target.value }))}
                placeholder="مثلاً: بیمارستانِ رضوی — CSR" />
@@ -812,7 +829,7 @@ function TransferSheet({ onClose, onSaved, onError }) {
         <input value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} placeholder="مثلاً: ستِ فیوژن کمری" />
       </label>
       <Foot busy={busy} onClose={onClose} onSubmit={submit} label="صدور و ارسال" />
-    </Overlay>
+    </TitledSheet>
   );
 }
 
@@ -854,7 +871,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
   }, [t, id]);
 
   return (
-    <Overlay title={t ? `حوالهٔ ${t.code}` : 'حواله'} onClose={onClose}>
+    <TitledSheet title={t ? `حوالهٔ ${t.code}` : 'حواله'} onClose={onClose}>
       {!t ? <div className="iv-empty">در حال بارگذاری…</div> : (
         <>
           <div className="iv-trmeta">
@@ -986,7 +1003,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
           </div>
         </>
       )}
-    </Overlay>
+    </TitledSheet>
   );
 }
 
@@ -1083,7 +1100,7 @@ function LotSheet({ onClose, onSaved, onError }) {
   };
 
   return (
-    <Overlay onClose={() => !busy && onClose()} title="ثبتِ لاتِ جدید">
+    <TitledSheet onClose={() => !busy && onClose()} title="ثبتِ لاتِ جدید">
       <div className="iv-form">
         {/* ⚠️ div است نه label: در label، مرورگر کلیکِ روی نتیجه را به اولین
             کنترلِ داخلِ همان label می‌فرستد. با انتخابِ کالا، input جای خودش را
@@ -1137,7 +1154,7 @@ function LotSheet({ onClose, onSaved, onError }) {
         </p>
       </div>
       <Foot busy={busy} onClose={onClose} onSubmit={submit} />
-    </Overlay>
+    </TitledSheet>
   );
 }
 
@@ -1170,7 +1187,7 @@ function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
   };
 
   return (
-    <Overlay onClose={() => !busy && onClose()} title={meta.title}>
+    <TitledSheet onClose={() => !busy && onClose()} title={meta.title}>
       <div className="iv-form">
         <div className="iv-lotcard">
           <b>{lot.itemName}</b>
@@ -1195,7 +1212,7 @@ function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
         )}
       </div>
       <Foot busy={busy} onClose={onClose} onSubmit={submit} label="ثبت" />
-    </Overlay>
+    </TitledSheet>
   );
 }
 
@@ -1208,7 +1225,7 @@ function TraceSheet({ lotId, onClose, onError }) {
   }, [lotId, onClose, onError]);
 
   return (
-    <Overlay onClose={onClose} title="ردیابیِ لات">
+    <TitledSheet onClose={onClose} title="ردیابیِ لات">
       {!data ? <div className="iv-empty">در حال بارگذاری…</div> : (
         <div className="iv-form">
           <div className="iv-lotcard">
@@ -1244,21 +1261,20 @@ function TraceSheet({ lotId, onClose, onError }) {
         </div>
       )}
       <footer className="iv-foot"><button type="button" className="iv-ghost" onClick={onClose}>بستن</button></footer>
-    </Overlay>
+    </TitledSheet>
   );
 }
 
-function Overlay({ title, children, onClose }) {
+/** شیتِ عنوان‌دارِ انبار — لایهٔ نازکی روی `Overlay`ِ مشترک، فقط برای سرتیترِ تکراری. */
+function TitledSheet({ title, children, onClose }) {
   return (
-    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <section className="iv-sheet">
-        <header className="iv-sheet-head">
-          <b>{title}</b>
-          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
-        {children}
-      </section>
-    </div>
+    <Overlay backdrop="iv-overlay" panel="iv-sheet" as="section" onClose={onClose}>
+      <header className="iv-sheet-head">
+        <b>{title}</b>
+        <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+      {children}
+    </Overlay>
   );
 }
 

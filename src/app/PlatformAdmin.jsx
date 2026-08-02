@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import Mark from '../components/Mark.jsx';
 import './platform.css';
+import Overlay from '../ui/Overlay.jsx';
 
 const API = typeof window === 'undefined' ? '/api/platform' : `${window.location.origin}/api/platform`;
 
@@ -517,9 +519,16 @@ export default function PlatformAdmin() {
         </div>
       )}
 
-      {doomed && (
-        <div className="pa-modal-bg" role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget && !busy) closeDelete(); }}>
-          <section className="pa-card pa-modal">
+      <AnimatePresence>
+        {doomed && (
+          <Overlay
+            backdrop="pa-modal-bg"
+            panel="pa-card pa-modal"
+            as="section"
+            onClose={closeDelete}
+            closable={!busy}
+            role="dialog" aria-modal="true"
+          >
             <div className="pa-danger-mark" aria-hidden="true">!</div>
             <h2>حذف کامل شرکت</h2>
             <p className="pa-modal-sub">
@@ -578,9 +587,9 @@ export default function PlatformAdmin() {
               </>
             )}
             {delError && <div className="pa-modal-err">{delError}</div>}
-          </section>
-        </div>
-      )}
+          </Overlay>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

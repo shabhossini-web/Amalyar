@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
@@ -14,6 +15,7 @@ import './users.css';
 import './dashboard.css';
 import { Arrive, Back, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import Overlay from '../ui/Overlay.jsx';
 
 /* ── آیکون‌های خطی ── */
 
@@ -399,203 +401,201 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const activeDiagnoses = defs.diagnoses.filter((d) => d.active || d.id === f.diagnosisId);
 
   return (
-    <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <form className="glass db-sheet" onSubmit={submit}>
-        <header className="db-sheet-head">
-          <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
-          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
+    <Overlay backdrop="db-overlay" panel="glass db-sheet" as="form" from="bottom" onClose={onClose} onSubmit={submit}>
+      <header className="db-sheet-head">
+        <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
+        <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
 
-        {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
-        <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
-          {Object.entries(KINDS).map(([v, k]) => (
-            <button
-              key={v}
-              type="button"
-              role="radio"
-              aria-checked={f.kind === v}
-              className={f.kind === v ? 'on' : ''}
-              onClick={() => setF((s) => ({ ...s, kind: v }))}
-            >{k.label}</button>
-          ))}
-        </div>
+      {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
+      <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
+        {Object.entries(KINDS).map(([v, k]) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={f.kind === v}
+            className={f.kind === v ? 'on' : ''}
+            onClick={() => setF((s) => ({ ...s, kind: v }))}
+          >{k.label}</button>
+        ))}
+      </div>
 
-        {!editing && (
-          <Tabs
-            variant="inset"
-            className="db-modetabs"
-            label="نوعِ ثبت"
-            value={mode}
-            onChange={(k) => { setMode(k); if (k === 'existing') setPicked(null); }}
-            items={[{ key: 'new', label: 'بیمارِ جدید' }, { key: 'existing', label: 'بیمارِ موجود' }]}
-          />
-        )}
+      {!editing && (
+        <Tabs
+          variant="inset"
+          className="db-modetabs"
+          label="نوعِ ثبت"
+          value={mode}
+          onChange={(k) => { setMode(k); if (k === 'existing') setPicked(null); }}
+          items={[{ key: 'new', label: 'بیمارِ جدید' }, { key: 'existing', label: 'بیمارِ موجود' }]}
+        />
+      )}
 
-        {(!editing && mode === 'existing') ? (
-          <div className="db-psearch">
-            {picked ? (
-              <div className="db-picked">
-                <b>{picked.fullName}</b>
-                <span dir="ltr">{picked.code}</span>
-                {/* شمارهٔ مراجعهٔ بعدی، تا پیش از ثبت معلوم باشد کجا می‌نشیند. */}
-                <small>{t.visit} {faNum((picked.visitCount ?? 0) + 1)}</small>
-                <button type="button" onClick={() => setPicked(null)}>تغییر</button>
-              </div>
-            ) : (
-              <>
-                <input
-                  type="text"
-                  value={pQuery}
-                  onChange={(e) => setPQuery(e.target.value)}
-                  placeholder="جستجوی نام / کد پرونده / موبایل / کد ملی…"
-                  autoFocus
-                />
-                <div className="db-plist">
-                  {pResults.map((p) => (
-                    <button type="button" key={p.id} onClick={() => setPicked(p)}>
-                      <b>{p.fullName}</b>
-                      <span dir="ltr">{p.code}</span>
-                      <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} {t.visit}</small>
-                    </button>
-                  ))}
-                  {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="db-grid2">
-              <label className="db-field"><span>نام</span>
-                <input type="text" value={f.firstName} onChange={set('firstName')} required minLength={2} />
-              </label>
-              <label className="db-field"><span>نام خانوادگی</span>
-                <input type="text" value={f.lastName} onChange={set('lastName')} required minLength={2} />
-              </label>
-              <label className="db-field"><span>موبایل</span>
-                <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
-              </label>
-              <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی</span>
-                <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')} placeholder="کلیدِ پرونده — اختیاری" />
-                {nidBad && <small className="db-hint bad">کد ملی معتبر نیست</small>}
-              </label>
+      {(!editing && mode === 'existing') ? (
+        <div className="db-psearch">
+          {picked ? (
+            <div className="db-picked">
+              <b>{picked.fullName}</b>
+              <span dir="ltr">{picked.code}</span>
+              {/* شمارهٔ مراجعهٔ بعدی، تا پیش از ثبت معلوم باشد کجا می‌نشیند. */}
+              <small>{t.visit} {faNum((picked.visitCount ?? 0) + 1)}</small>
+              <button type="button" onClick={() => setPicked(null)}>تغییر</button>
             </div>
-
-            {nidMatch && (
-              <div className="db-nidmatch">
-                <b>این کد ملی از قبل پرونده دارد</b>
-                <span>{nidMatch.fullName} — <span dir="ltr">{nidMatch.code}</span> ({faNum(nidMatch.visitCount)} {t.visit})</span>
-                <button
-                  type="button"
-                  onClick={() => { setPicked(nidMatch); setMode('existing'); }}
-                >{t.visitOne}ِ تازه روی همین {t.record}</button>
-              </div>
-            )}
-
-            <JDate
-              label="تاریخِ تولد (شمسی)"
-              mode="birth"
-              value={f.birthDateJ}
-              onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
-              placeholder="۱۳۷۰/۰۱/۱۵ — اختیاری"
-            />
-          </>
-        )}
-
-        <div className="db-grid2">
-          <DefSelect
-            label="جراح"
-            value={f.surgeonId}
-            onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))}
-            options={activeSurgeons}
-            onQuickAdd={quickAdd('surgeons')}
-            addPlaceholder="نام و نام خانوادگیِ جراح…"
-          />
-          <DefSelect
-            label="بیمارستان"
-            value={f.hospitalId}
-            onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))}
-            options={activeHospitals}
-            onQuickAdd={quickAdd('hospitals')}
-            addPlaceholder="نامِ بیمارستانِ جدید…"
-          />
-          <DefSelect
-            label={t.tech}
-            value={f.techId}
-            onChange={(v) => setF((s) => ({ ...s, techId: v }))}
-            options={defs.techs}
-          />
-          <DefSelect
-            label="نوعِ عمل"
-            value={f.procedureTypeId}
-            onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v, opType: '' }))}
-            options={activeProcedures}
-            onQuickAdd={quickAdd('procedure-types')}
-            addPlaceholder="نامِ نوعِ عملِ جدید…"
-          />
-        </div>
-
-        {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
-        {!f.procedureTypeId && f.opType && (
-          <label className="db-field"><span>نوعِ عمل (متنِ قدیمی)</span>
-            <input type="text" value={f.opType} onChange={set('opType')} />
-            <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
-          </label>
-        )}
-
-        <DefSelect
-          label="تشخیص"
-          value={f.diagnosisId}
-          onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
-          options={activeDiagnoses}
-          onQuickAdd={quickAdd('diagnoses')}
-          addPlaceholder="عنوانِ تشخیصِ جدید…"
-        />
-
-        {/* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */}
-        <JDate
-          label={`${kindOf(f.kind).date} (شمسی)`}
-          value={f.opDateJ}
-          onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
-          placeholder="۱۴۰۵/۰۴/۲۸"
-        />
-
-        {/* ساعت‌ها کنارِ هم: کاربر شروع و پایان را با هم می‌زند، و مدت را
-            همان‌جا می‌بیند — بدونِ حسابِ ذهنی. */}
-        <div className="db-grid3">
-          {[
-            { key: 'opStartTime', label: 'ساعتِ شروع' },
-            { key: 'opEndTime', label: 'ساعتِ پایان' },
-            { key: 'techArriveTime', label: `حضورِ ${t.tech}` },
-          ].map((fl) => (
-            <label key={fl.key} className={`db-field${badTime(f[fl.key]) ? ' bad' : ''}`}>
-              <span>{fl.label}</span>
+          ) : (
+            <>
               <input
-                type="text" dir="ltr" inputMode="numeric" placeholder="۰۸:۳۰"
-                value={f[fl.key]}
-                onChange={set(fl.key)}
-                onBlur={() => setF((s) => ({ ...s, [fl.key]: normTime(s[fl.key]) }))}
+                type="text"
+                value={pQuery}
+                onChange={(e) => setPQuery(e.target.value)}
+                placeholder="جستجوی نام / کد پرونده / موبایل / کد ملی…"
+                autoFocus
               />
-            </label>
-          ))}
+              <div className="db-plist">
+                {pResults.map((p) => (
+                  <button type="button" key={p.id} onClick={() => setPicked(p)}>
+                    <b>{p.fullName}</b>
+                    <span dir="ltr">{p.code}</span>
+                    <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} {t.visit}</small>
+                  </button>
+                ))}
+                {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
+              </div>
+            </>
+          )}
         </div>
-        {formDuration != null && (
-          <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
-        )}
+      ) : (
+        <>
+          <div className="db-grid2">
+            <label className="db-field"><span>نام</span>
+              <input type="text" value={f.firstName} onChange={set('firstName')} required minLength={2} />
+            </label>
+            <label className="db-field"><span>نام خانوادگی</span>
+              <input type="text" value={f.lastName} onChange={set('lastName')} required minLength={2} />
+            </label>
+            <label className="db-field"><span>موبایل</span>
+              <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
+            </label>
+            <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی</span>
+              <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')} placeholder="کلیدِ پرونده — اختیاری" />
+              {nidBad && <small className="db-hint bad">کد ملی معتبر نیست</small>}
+            </label>
+          </div>
 
-        <label className="db-field"><span>شرحِ عمل</span>
-          <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
+          {nidMatch && (
+            <div className="db-nidmatch">
+              <b>این کد ملی از قبل پرونده دارد</b>
+              <span>{nidMatch.fullName} — <span dir="ltr">{nidMatch.code}</span> ({faNum(nidMatch.visitCount)} {t.visit})</span>
+              <button
+                type="button"
+                onClick={() => { setPicked(nidMatch); setMode('existing'); }}
+              >{t.visitOne}ِ تازه روی همین {t.record}</button>
+            </div>
+          )}
+
+          <JDate
+            label="تاریخِ تولد (شمسی)"
+            mode="birth"
+            value={f.birthDateJ}
+            onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
+            placeholder="۱۳۷۰/۰۱/۱۵ — اختیاری"
+          />
+        </>
+      )}
+
+      <div className="db-grid2">
+        <DefSelect
+          label="جراح"
+          value={f.surgeonId}
+          onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))}
+          options={activeSurgeons}
+          onQuickAdd={quickAdd('surgeons')}
+          addPlaceholder="نام و نام خانوادگیِ جراح…"
+        />
+        <DefSelect
+          label="بیمارستان"
+          value={f.hospitalId}
+          onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))}
+          options={activeHospitals}
+          onQuickAdd={quickAdd('hospitals')}
+          addPlaceholder="نامِ بیمارستانِ جدید…"
+        />
+        <DefSelect
+          label={t.tech}
+          value={f.techId}
+          onChange={(v) => setF((s) => ({ ...s, techId: v }))}
+          options={defs.techs}
+        />
+        <DefSelect
+          label="نوعِ عمل"
+          value={f.procedureTypeId}
+          onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v, opType: '' }))}
+          options={activeProcedures}
+          onQuickAdd={quickAdd('procedure-types')}
+          addPlaceholder="نامِ نوعِ عملِ جدید…"
+        />
+      </div>
+
+      {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
+      {!f.procedureTypeId && f.opType && (
+        <label className="db-field"><span>نوعِ عمل (متنِ قدیمی)</span>
+          <input type="text" value={f.opType} onChange={set('opType')} />
+          <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
         </label>
+      )}
 
-        <label className="db-field"><span>یادداشت</span>
-          <textarea rows={2} value={f.notes} onChange={set('notes')} />
-        </label>
+      <DefSelect
+        label="تشخیص"
+        value={f.diagnosisId}
+        onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
+        options={activeDiagnoses}
+        onQuickAdd={quickAdd('diagnoses')}
+        addPlaceholder="عنوانِ تشخیصِ جدید…"
+      />
 
-        <button className="db-submit" type="submit" disabled={busy}>
-          {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
-        </button>
-      </form>
-    </div>
+      {/* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */}
+      <JDate
+        label={`${kindOf(f.kind).date} (شمسی)`}
+        value={f.opDateJ}
+        onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
+        placeholder="۱۴۰۵/۰۴/۲۸"
+      />
+
+      {/* ساعت‌ها کنارِ هم: کاربر شروع و پایان را با هم می‌زند، و مدت را
+          همان‌جا می‌بیند — بدونِ حسابِ ذهنی. */}
+      <div className="db-grid3">
+        {[
+          { key: 'opStartTime', label: 'ساعتِ شروع' },
+          { key: 'opEndTime', label: 'ساعتِ پایان' },
+          { key: 'techArriveTime', label: `حضورِ ${t.tech}` },
+        ].map((fl) => (
+          <label key={fl.key} className={`db-field${badTime(f[fl.key]) ? ' bad' : ''}`}>
+            <span>{fl.label}</span>
+            <input
+              type="text" dir="ltr" inputMode="numeric" placeholder="۰۸:۳۰"
+              value={f[fl.key]}
+              onChange={set(fl.key)}
+              onBlur={() => setF((s) => ({ ...s, [fl.key]: normTime(s[fl.key]) }))}
+            />
+          </label>
+        ))}
+      </div>
+      {formDuration != null && (
+        <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
+      )}
+
+      <label className="db-field"><span>شرحِ عمل</span>
+        <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
+      </label>
+
+      <label className="db-field"><span>یادداشت</span>
+        <textarea rows={2} value={f.notes} onChange={set('notes')} />
+      </label>
+
+      <button className="db-submit" type="submit" disabled={busy}>
+        {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
+      </button>
+    </Overlay>
   );
 }
 
@@ -705,55 +705,53 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
   ];
 
   return (
-    <div className="db-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="glass db-sheet db-advsheet">
-        <header className="db-sheet-head">
-          <b>جستجوی پیشرفته</b>
-          <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-        </header>
+    <Overlay backdrop="db-overlay" panel="glass db-sheet db-advsheet" from="bottom" onClose={onClose}>
+      <header className="db-sheet-head">
+        <b>جستجوی پیشرفته</b>
+        <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
 
-        <div className="db-advbody">
-          <div className="db-grid2">
-            {FIELDS.map((fl) => (
-              <label key={fl.key} className="db-field">
-                <span>{fl.label}</span>
-                <select value={f[fl.key] ?? ''} onChange={set(fl.key)}>
-                  <option value="">همه</option>
-                  {(fl.options ?? []).map((o) => (
-                    <option key={o.id} value={o.id}>{o.name || o.title || o.displayName}</option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-
-          <div className="db-quickdates">
-            <button type="button" onClick={() => pickRange('today')}>امروز</button>
-            <button type="button" onClick={() => pickRange('week')}>این هفته</button>
-            <button type="button" onClick={() => pickRange('month')}>این ماه</button>
-            <button type="button" onClick={() => setF((s) => ({ ...s, fromJ: '', toJ: '' }))}>بدونِ بازه</button>
-          </div>
-
-          <div className="db-grid2">
-            <JDate label="از تاریخ (شمسی)" value={f.fromJ}
-              onChange={(v) => setF((s2) => ({ ...s2, fromJ: v }))} placeholder="۱۴۰۵/۰۱/۰۱" />
-            <JDate label="تا تاریخ (شمسی)" value={f.toJ}
-              onChange={(v) => setF((s2) => ({ ...s2, toJ: v }))} placeholder={todayJStr()} />
-          </div>
-
-          {/* فیلترِ مالی — تا فازِ حسابداری نبود چون «مانده» ستون ندارد. */}
-          <label className="db-owing">
-            <input type="checkbox" checked={!!f.owing} onChange={(e) => setF((s2) => ({ ...s2, owing: e.target.checked }))} />
-            <span>فقط مراجعاتی که هنوز بدهی دارند</span>
-          </label>
+      <div className="db-advbody">
+        <div className="db-grid2">
+          {FIELDS.map((fl) => (
+            <label key={fl.key} className="db-field">
+              <span>{fl.label}</span>
+              <select value={f[fl.key] ?? ''} onChange={set(fl.key)}>
+                <option value="">همه</option>
+                {(fl.options ?? []).map((o) => (
+                  <option key={o.id} value={o.id}>{o.name || o.title || o.displayName}</option>
+                ))}
+              </select>
+            </label>
+          ))}
         </div>
 
-        <footer className="db-sheet-foot">
-          <button type="button" className="db-ghost" onClick={() => setF(EMPTY_ADV)}>پاک‌کردن</button>
-          <button type="button" className="db-submit" disabled={invalid} onClick={() => onApply(f)}>اعمال</button>
-        </footer>
+        <div className="db-quickdates">
+          <button type="button" onClick={() => pickRange('today')}>امروز</button>
+          <button type="button" onClick={() => pickRange('week')}>این هفته</button>
+          <button type="button" onClick={() => pickRange('month')}>این ماه</button>
+          <button type="button" onClick={() => setF((s) => ({ ...s, fromJ: '', toJ: '' }))}>بدونِ بازه</button>
+        </div>
+
+        <div className="db-grid2">
+          <JDate label="از تاریخ (شمسی)" value={f.fromJ}
+            onChange={(v) => setF((s2) => ({ ...s2, fromJ: v }))} placeholder="۱۴۰۵/۰۱/۰۱" />
+          <JDate label="تا تاریخ (شمسی)" value={f.toJ}
+            onChange={(v) => setF((s2) => ({ ...s2, toJ: v }))} placeholder={todayJStr()} />
+        </div>
+
+        {/* فیلترِ مالی — تا فازِ حسابداری نبود چون «مانده» ستون ندارد. */}
+        <label className="db-owing">
+          <input type="checkbox" checked={!!f.owing} onChange={(e) => setF((s2) => ({ ...s2, owing: e.target.checked }))} />
+          <span>فقط مراجعاتی که هنوز بدهی دارند</span>
+        </label>
       </div>
-    </div>
+
+      <footer className="db-sheet-foot">
+        <button type="button" className="db-ghost" onClick={() => setF(EMPTY_ADV)}>پاک‌کردن</button>
+        <button type="button" className="db-submit" disabled={invalid} onClick={() => onApply(f)}>اعمال</button>
+      </footer>
+    </Overlay>
   );
 }
 
@@ -1137,35 +1135,41 @@ export default function Dashboard() {
         )}
       </div>
 
-      {advOpen && (
-        <AdvancedSearch
-          value={adv}
-          defs={defs}
-          onApply={(next) => { setAdv(next); setAdvOpen(false); }}
-          onClose={() => setAdvOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {advOpen && (
+          <AdvancedSearch
+            value={adv}
+            defs={defs}
+            onApply={(next) => { setAdv(next); setAdvOpen(false); }}
+            onClose={() => setAdvOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
-      {modal && (
-        <VisitForm
-          initial={modal.visit}
-          defs={defs}
-          onDefsChanged={loadDefs}
-          onClose={() => setModal(null)}
-          onSaved={onSaved}
-          onToast={setToast}
-        />
-      )}
+      <AnimatePresence>
+        {modal && (
+          <VisitForm
+            initial={modal.visit}
+            defs={defs}
+            onDefsChanged={loadDefs}
+            onClose={() => setModal(null)}
+            onSaved={onSaved}
+            onToast={setToast}
+          />
+        )}
+      </AnimatePresence>
 
 
-      {billing && (
-        <BillingSheet
-          visit={billing}
-          onClose={() => setBilling(null)}
-          onChanged={() => load(qRef.current, status, kind)}
-          onToast={setToast}
-        />
-      )}
+      <AnimatePresence>
+        {billing && (
+          <BillingSheet
+            visit={billing}
+            onClose={() => setBilling(null)}
+            onChanged={() => load(qRef.current, status, kind)}
+            onToast={setToast}
+          />
+        )}
+      </AnimatePresence>
 
       <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>

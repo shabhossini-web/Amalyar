@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
@@ -10,6 +11,7 @@ import './launcher.css';
 import './users.css';
 import { Back, Check, Close, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import Overlay from '../ui/Overlay.jsx';
 
 
 const LEVELS = [
@@ -79,41 +81,39 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
   };
 
   return (
-    <div className="df-overlay" onClick={(ev) => { if (ev.target === ev.currentTarget && !busy) onClose(); }}>
-      <section className="df-sheet">
-        <header className="df-sheet-head">
-          <b>پروفایلِ کارشناس</b>
-          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close size={16} /></button>
-        </header>
-        <div className="df-sheet-body">
-          {!form ? <p className="us-empty">در حال بارگذاری…</p> : (
-            <>
-              <p className="us-hint" style={{ marginTop: 0 }}>
-                نام، موبایل و عکس هنگامِ ثبت‌نام توسطِ خودِ کارشناس پر شده‌اند.
-                کد ملی، شبا و دستمزد فقط از این‌جا تکمیل می‌شوند.
-              </p>
-              <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
-              <label className="pf-field">
-                <span>دستمزد (تومان)</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  dir="ltr"
-                  value={form.fee ?? ''}
-                  onChange={(ev) => setForm((f) => ({ ...f, fee: toEnDigits(ev.target.value).replace(/[^0-9]/g, '') }))}
-                  disabled={busy}
-                />
-                <em className="pf-hint">قراردادِ کاملِ مالی بعداً در ماژولِ حسابداری</em>
-              </label>
-            </>
-          )}
-        </div>
-        <footer className="df-sheet-foot">
-          <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>انصراف</button>
-          <button type="button" className="df-save" onClick={save} disabled={busy || !form}>{busy ? '…' : 'ذخیره'}</button>
-        </footer>
-      </section>
-    </div>
+    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="df-sheet-head">
+        <b>پروفایلِ کارشناس</b>
+        <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close size={16} /></button>
+      </header>
+      <div className="df-sheet-body">
+        {!form ? <p className="us-empty">در حال بارگذاری…</p> : (
+          <>
+            <p className="us-hint" style={{ marginTop: 0 }}>
+              نام، موبایل و عکس هنگامِ ثبت‌نام توسطِ خودِ کارشناس پر شده‌اند.
+              کد ملی، شبا و دستمزد فقط از این‌جا تکمیل می‌شوند.
+            </p>
+            <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
+            <label className="pf-field">
+              <span>دستمزد (تومان)</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                value={form.fee ?? ''}
+                onChange={(ev) => setForm((f) => ({ ...f, fee: toEnDigits(ev.target.value).replace(/[^0-9]/g, '') }))}
+                disabled={busy}
+              />
+              <em className="pf-hint">قراردادِ کاملِ مالی بعداً در ماژولِ حسابداری</em>
+            </label>
+          </>
+        )}
+      </div>
+      <footer className="df-sheet-foot">
+        <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>انصراف</button>
+        <button type="button" className="df-save" onClick={save} disabled={busy || !form}>{busy ? '…' : 'ذخیره'}</button>
+      </footer>
+    </Overlay>
   );
 }
 
@@ -364,14 +364,16 @@ export default function Users() {
         )}
       </div>
 
-      {profileId > 0 && (
-        <ProfileSheet
-          id={profileId}
-          onClose={() => setProfileId(0)}
-          onSaved={async () => { setProfileId(0); setToast('پروفایل ذخیره شد ✓'); await load(); }}
-          onError={setToast}
-        />
-      )}
+      <AnimatePresence>
+        {profileId > 0 && (
+          <ProfileSheet
+            id={profileId}
+            onClose={() => setProfileId(0)}
+            onSaved={async () => { setProfileId(0); setToast('پروفایل ذخیره شد ✓'); await load(); }}
+            onError={setToast}
+          />
+        )}
+      </AnimatePresence>
 
       <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>

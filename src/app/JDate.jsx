@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence } from 'framer-motion';
 import { J_DAYS, J_MONTHS, jDayOfWeek, jMonthDays, jParse, jStr, jToFa, jToday, toEnDigits } from '../lib/jalali.js';
 import './jdate.css';
 import { Calendar as CalendarIcon, ChevronEnd, Close } from '../ui/icons.jsx';
+import Overlay from '../ui/Overlay.jsx';
 
 
 /**
@@ -47,15 +49,17 @@ export default function JDate({
       </div>
       {hint && <em className="jd-hint">{hint}</em>}
       {bad && <em className="jd-err">تاریخ باید به شکلِ ۱۴۰۵/۰۵/۰۷ باشد</em>}
-      {open && (
-        <CalendarIcon
-          value={value}
-          mode={mode}
-          title={label}
-          onPick={(v) => { onChange(v); setOpen(false); }}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {open && (
+          <Calendar
+            value={value}
+            mode={mode}
+            title={label}
+            onPick={(v) => { onChange(v); setOpen(false); }}
+            onClose={() => setOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </label>
   );
 }
@@ -109,49 +113,52 @@ function Calendar({ value, mode, title, onPick, onClose }) {
   };
 
   return createPortal(
-    <div className="jd-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="jd-cal" role="dialog" aria-modal="true" aria-label={title || 'انتخابِ تاریخ'}>
-        <header className="jd-cal-head">
-          <b>{title || 'انتخابِ تاریخ'}</b>
-          <button type="button" className="jd-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
-        </header>
+    <Overlay
+      backdrop="jd-overlay"
+      panel="jd-cal"
+      onClose={onClose}
+      role="dialog" aria-modal="true" aria-label={title || 'انتخابِ تاریخ'}
+    >
+      <header className="jd-cal-head">
+        <b>{title || 'انتخابِ تاریخ'}</b>
+        <button type="button" className="jd-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
 
-        <div className="jd-nav">
-          <button type="button" onClick={() => step(-1)} aria-label="ماهِ قبل"><ChevronEnd width="16" height="16" /></button>
-          <select value={m} onChange={(e) => setM(Number(e.target.value))} aria-label="ماه">
-            {J_MONTHS.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
-          </select>
-          <select value={y} onChange={(e) => setY(Number(e.target.value))} aria-label="سال">
-            {years.map((yy) => <option key={yy} value={yy}>{jToFa(yy)}</option>)}
-          </select>
-          {/* جهتِ فلش‌ها در RTL برعکس است: «بعدی» سمتِ چپ. */}
-          <button type="button" onClick={() => step(1)} aria-label="ماهِ بعد" className="jd-next"><ChevronEnd width="16" height="16" /></button>
-        </div>
-
-        <div className="jd-grid">
-          {J_DAYS.map((d) => <i key={d} className="jd-dow">{d}</i>)}
-          {Array.from({ length: lead }, (_, i) => <span key={`e${i}`} className="jd-empty" />)}
-          {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
-            const isToday = today[0] === y && today[1] === m && today[2] === d;
-            const isSel = picked && picked[0] === y && picked[1] === m && picked[2] === d;
-            return (
-              <button
-                key={d} type="button"
-                className={`jd-day${isToday ? ' today' : ''}${isSel ? ' sel' : ''}`}
-                onClick={() => onPick(jStr(y, m, d))}
-              >
-                {jToFa(d)}
-              </button>
-            );
-          })}
-        </div>
-
-        <footer className="jd-cal-foot">
-          <button type="button" className="jd-ghost" onClick={() => onPick('')}>پاک‌کردن</button>
-          <button type="button" className="jd-todaybtn" onClick={() => onPick(jStr(...jToday()))}>امروز</button>
-        </footer>
+      <div className="jd-nav">
+        <button type="button" onClick={() => step(-1)} aria-label="ماهِ قبل"><ChevronEnd width="16" height="16" /></button>
+        <select value={m} onChange={(e) => setM(Number(e.target.value))} aria-label="ماه">
+          {J_MONTHS.map((n, i) => <option key={n} value={i + 1}>{n}</option>)}
+        </select>
+        <select value={y} onChange={(e) => setY(Number(e.target.value))} aria-label="سال">
+          {years.map((yy) => <option key={yy} value={yy}>{jToFa(yy)}</option>)}
+        </select>
+        {/* جهتِ فلش‌ها در RTL برعکس است: «بعدی» سمتِ چپ. */}
+        <button type="button" onClick={() => step(1)} aria-label="ماهِ بعد" className="jd-next"><ChevronEnd width="16" height="16" /></button>
       </div>
-    </div>,
+
+      <div className="jd-grid">
+        {J_DAYS.map((d) => <i key={d} className="jd-dow">{d}</i>)}
+        {Array.from({ length: lead }, (_, i) => <span key={`e${i}`} className="jd-empty" />)}
+        {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
+          const isToday = today[0] === y && today[1] === m && today[2] === d;
+          const isSel = picked && picked[0] === y && picked[1] === m && picked[2] === d;
+          return (
+            <button
+              key={d} type="button"
+              className={`jd-day${isToday ? ' today' : ''}${isSel ? ' sel' : ''}`}
+              onClick={() => onPick(jStr(y, m, d))}
+            >
+              {jToFa(d)}
+            </button>
+          );
+        })}
+      </div>
+
+      <footer className="jd-cal-foot">
+        <button type="button" className="jd-ghost" onClick={() => onPick('')}>پاک‌کردن</button>
+        <button type="button" className="jd-todaybtn" onClick={() => onPick(jStr(...jToday()))}>امروز</button>
+      </footer>
+    </Overlay>,
     document.body,
   );
 }
