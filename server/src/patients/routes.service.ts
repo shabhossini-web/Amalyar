@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { StorageService } from '../storage/storage.service';
 
 export const STOP_KINDS = ['deliver', 'pickup'] as const;
 export const STOP_LABELS: Record<string, string> = { deliver: 'تحویل', pickup: 'جمع‌آوری' };
@@ -37,10 +38,15 @@ const dayOf = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth()
  */
 @Injectable()
 export class RoutesService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    private storage: StorageService,
+  ) {}
 
   private static readonly STOP_INCLUDE = {
     hospital: { select: { id: true, name: true, address: true, phone: true, contactName: true, contactPhone: true } },
+    proofs: { select: { id: true, fileName: true, mimeType: true, size: true, caption: true, createdAt: true }, orderBy: { id: 'asc' } },
     transfers: {
       include: {
         // ⚠️ کارشناس دادهٔ بیمار نیست، همکار است: راننده باید بداند سرِ عمل
@@ -136,6 +142,7 @@ export class RoutesService {
         doneAt: s.doneAt,
         handedTo: s.handedTo,
         notes: s.notes,
+        proofs: s.proofs ?? [],
         hospital: s.hospital,
         locationName: s.locationName ?? s.hospital?.name ?? null,
         transfers: s.transfers.map((t: any) => ({
@@ -434,6 +441,55 @@ export class RoutesService {
     }
     for (const t of rows) if (t.status === 'planned') t.__lots = map;
     return rows;
+  }
+
+  // ── رسیدِ تحویل ───────────────────────────────────────────────
+
+  /**
+   * عکسِ رسیدِ تحویل روی یک توقف.
+   *
+   * ⚠️ در `Document` بیمار ذخیره نمی‌شود: راننده هیچ زمینهٔ بیماری ندارد و
+   * رسیدِ تحویل سندِ عملیاتی است نه بالینی. مخلوط‌کردنشان یعنی عکسِ امضای CSR
+   * در پروندهٔ پزشکیِ بیمار بنشیند.
+   */
+  async addProof(stopId: number, file: any, caption: string | undefined, user: any) {
+    const stop = await this.prisma.transportStop.findUnique({ where: { id: stopId } });
+    if (!stop) throw new NotFoundException('توقف یافت نشد');
+    if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
+    if (!/^image\//.test(file.mimetype ?? '')) throw new BadRequestException('رسیدِ تحویل باید عکس باشد');
+
+    const { sha256, size } = await this.storage.save(file.buffer);
+    const row = await this.prisma.stopProof.create({
+      data: {
+        stopId,
+        fileName: file.originalname || 'receipt.jpg',
+        mimeType: file.mimetype,
+        size, sha256,
+        caption: text(caption),
+        uploadedById: user?.id ?? null,
+      },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'transport.proof.add', entityType: 'transport_stop', entityId: stopId,
+      after: { proofId: row.id, fileName: row.fileName },
+    });
+    return this.run(stop.runId);
+  }
+
+  async openProof(id: number) {
+    const p = await this.prisma.stopProof.findUnique({ where: { id } });
+    if (!p) throw new NotFoundException('رسید یافت نشد');
+    return { proof: p, stream: this.storage.stream(p.sha256) };
+  }
+
+  async removeProof(id: number, user: any) {
+    const p = await this.prisma.stopProof.findUnique({ where: { id } });
+    if (!p) throw new NotFoundException('رسید یافت نشد');
+    await this.prisma.stopProof.delete({ where: { id } });
+    await this.audit.record({
+      actorId: user?.id, action: 'transport.proof.remove', entityType: 'transport_stop', entityId: p.stopId, before: p,
+    });
+    return { ok: true };
   }
 
   /**

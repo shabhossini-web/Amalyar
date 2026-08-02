@@ -954,3 +954,62 @@ jobs:
           }
           console.log('window ok');
           "
+
+      - name: Verify delivery proof stays operational and shortages stay visible
+        run: |
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+          const routes = strip(fs.readFileSync('server/src/patients/routes.service.ts', 'utf8'));
+          const assets = strip(fs.readFileSync('server/src/patients/assets.service.ts', 'utf8'));
+          const schema = fs.readFileSync('server/prisma/schema.prisma', 'utf8');
+          const ctl = fs.readFileSync('server/src/patients/routes.controller.ts', 'utf8');
+
+          // ① رسیدِ تحویل سندِ عملیاتی است نه بالینی: در پروندهٔ بیمار نمی‌نشیند.
+          //    راننده هیچ زمینهٔ بیماری ندارد و عکسِ امضای CSR مدرکِ پزشکی نیست.
+          if (!/model StopProof/.test(schema)) { console.error('رسیدِ تحویل باید مدلِ خودش را داشته باشد'); process.exit(1); }
+          const proof = schema.split('model StopProof')[1].split('}')[0];
+          if (/patientId|Document/.test(proof)) {
+            console.error('رسیدِ تحویل نباید به پروندهٔ بیمار وصل شود'); process.exit(1);
+          }
+          const add = routes.split('async addProof(')[1].split(/\n  \}/)[0];
+          // ⚠️ روی متنِ **خام** بسنج نه strip‌شده: الگوی ^image\/ خودش دو اسلش
+          //    دارد و کامنت‌زدای این نگهبان آن را می‌خورد.
+          const rawRoutes = fs.readFileSync('server/src/patients/routes.service.ts', 'utf8');
+          const addRaw = rawRoutes.split('async addProof(')[1].split(/\n  }/)[0];
+          if (!addRaw.includes('^image')) { console.error('رسید باید عکس باشد'); process.exit(1); }
+
+          // ② فایل مستقیم از دیسک سرو نمی‌شود — URLِ ثابتِ عمومی یعنی نشتِ سند
+          //    با یک لینکِ فوروارد‌شده.
+          if (!/@RequirePermissions\('patients\.read'\)[\s\S]{0,120}@Get\('proofs\/:id\/file'\)/.test(ctl)) {
+            console.error('دانلودِ رسید باید پشتِ مجوز باشد'); process.exit(1);
+          }
+          if (!/no-store/.test(ctl)) { console.error('رسید نباید در کشِ میانی بنشیند'); process.exit(1); }
+
+          // ③ فقط **کسری** ثبت می‌شود نه کلِ شمارش: ثبتِ ۲۰ ردیفِ «سالم» برای هر
+          //    برگشت یعنی هیچ‌کس این کار را نمی‌کند و کسری هم ثبت نمی‌شود.
+          const sh = schema.split('model SetShortage')[1].split('}')[0];
+          if (!/missing/.test(sh) || /checked|counted|okCount/.test(sh)) {
+            console.error('مدلِ کسری باید فقط کسری را ثبت کند'); process.exit(1);
+          }
+
+          // ④ محتویات فقط برای داراییِ برگشتی معنا دارد.
+          const ac = assets.split('async addContent(')[1].split(/\n  \}/)[0];
+          if (!/RETURNABLE\.includes\(set\.assetKind\)/.test(ac)) {
+            console.error('قلمِ مصرفی نباید محتویات بگیرد'); process.exit(1);
+          }
+
+          // ⑤ چک‌لیستِ برگشت باید محتویات را از **تعریفِ ست** بیاورد، نه دستی.
+          const rc = assets.split('async returnCheck(')[1].split(/\n  \}/)[0];
+          if (!/itemComponent\.findMany/.test(rc)) {
+            console.error('چک‌لیست باید از تعریفِ ست بیاید'); process.exit(1);
+          }
+
+          // ⑥ گزارشِ کسری باید «کدام ست» و «کدام بیمارستان» را بدهد — بدونِ این،
+          //    نشتی عدد دارد ولی علت ندارد.
+          const rep = assets.split('async shortageReport(')[1];
+          if (!/byItem/.test(rep) || !/byHospital/.test(rep)) {
+            console.error('گزارشِ کسری باید تفکیکِ ست و بیمارستان بدهد'); process.exit(1);
+          }
+          console.log('proof ok');
+          "

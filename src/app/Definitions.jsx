@@ -123,6 +123,7 @@ const SECTIONS = [
 export default function Definitions() {
   const [tab, setTab] = useState('surgeons');
   const [merging, setMerging] = useState(false);
+  const [parts, setParts] = useState(null); // کالایی که محتویاتش باز است
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
@@ -224,6 +225,10 @@ export default function Definitions() {
             </div>
             <span className="df-uses">{section.uses ? section.uses(row) : `${faNum(row.visitCount)} مراجعه`}</span>
             <div className="df-acts">
+              {/* فقط ست و دستگاه محتویات دارند؛ قلمِ مصرفی جزء ندارد. */}
+              {tab === 'items' && row.assetKind && row.assetKind !== 'consumable' && (
+                <button type="button" className="df-parts" onClick={() => setParts(row)}>محتویات</button>
+              )}
               <button type="button" title="ویرایش" onClick={() => setEditing(row)}><Pencil width="15" height="15" /></button>
               <button type="button" title={row.active ? 'غیرفعال کن' : 'فعال کن'} onClick={() => toggle(row)}>
                 <span className={`df-dot${row.active ? ' on' : ''}`} />
@@ -237,6 +242,8 @@ export default function Definitions() {
       </>
       )}
 
+      {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={setToast} />}
+
       {editing && (
         <EditSheet
           section={section}
@@ -248,6 +255,99 @@ export default function Definitions() {
       )}
 
       {toast && <div className="df-toast" role="status">{toast}</div>}
+    </div>
+  );
+}
+
+/**
+ * محتویاتِ یک ست.
+ *
+ * ⚠️ بدونِ این فهرست، ست یک واحدِ اتمی است و کسریِ برگشت دیده نمی‌شود: ستی که
+ * با ۲۰ قلم رفت و با ۱۹ برگشت، در دفتر همان «۱ ست» است.
+ */
+function SetContents({ item, onClose, onToast }) {
+  const [rows, setRows] = useState([]);
+  const [items, setItems] = useState([]);
+  const [label, setLabel] = useState('');
+  const [partId, setPartId] = useState('');
+  const [qty, setQty] = useState('1');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows(await api(`/assets/items/${item.id}/contents`)); }
+    catch (e) { onToast(e.message); }
+  }, [item.id, onToast]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { api('/items').then((r) => setItems(r.filter((i) => i.id !== item.id))).catch(() => {}); }, [item.id]);
+
+  const add = async () => {
+    if (busy || (!label.trim() && !partId)) return;
+    setBusy(true);
+    try {
+      await api(`/assets/items/${item.id}/contents`, {
+        method: 'POST',
+        body: { label: label.trim() || undefined, partId: partId ? Number(partId) : undefined, quantity: Number(qty) || 1 },
+      });
+      setLabel(''); setPartId(''); setQty('1');
+      await load();
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const remove = async (id) => {
+    setBusy(true);
+    try { await api(`/assets/contents/${id}`, { method: 'DELETE' }); await load(); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="df-overlay" onClick={(e) => { if (e.target === e.currentTarget && !busy) onClose(); }}>
+      <section className="df-sheet">
+        <header className="df-sheet-head">
+          <b>محتویاتِ «{item.name}»</b>
+          <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+        </header>
+        <div className="df-sheet-body">
+          <p className="df-note" style={{ marginTop: 0 }}>
+            هنگام برگشتِ ست، همین فهرست چک‌لیستِ شمارش می‌شود و فقط <b>کسری</b> ثبت می‌شود.
+          </p>
+          <div className="df-list">
+            {rows.length === 0 && <div className="df-empty">هنوز قلمی تعریف نشده</div>}
+            {rows.map((r) => (
+              <article key={r.id} className="df-row">
+                <div className="df-row-main">
+                  <b>{r.label}</b>
+                  <small>{faNum(r.quantity)} عدد{r.partName ? ` · کالای تعریف‌شده` : ''}</small>
+                </div>
+                <button type="button" className="df-del" disabled={busy} onClick={() => remove(r.id)}>
+                  <Trash width="15" height="15" />
+                </button>
+              </article>
+            ))}
+          </div>
+
+          <div className="pf-row2" style={{ marginTop: 12 }}>
+            <label className="pf-field">
+              <span>از کالاهای تعریف‌شده</span>
+              <select value={partId} onChange={(e) => { setPartId(e.target.value); if (e.target.value) setLabel(''); }} disabled={busy}>
+                <option value="">— انتخاب —</option>
+                {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
+              </select>
+            </label>
+            <label className="pf-field">
+              <span>یا عنوانِ دستی</span>
+              <input type="text" value={label} disabled={busy || !!partId} onChange={(e) => setLabel(e.target.value)} />
+            </label>
+            <label className="pf-field">
+              <span>تعداد</span>
+              <input type="text" inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} disabled={busy} />
+            </label>
+          </div>
+        </div>
+        <footer className="df-sheet-foot">
+          <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>بستن</button>
+          <button type="button" className="df-save" onClick={add} disabled={busy || (!label.trim() && !partId)}>افزودنِ قلم</button>
+        </footer>
+      </section>
     </div>
   );
 }

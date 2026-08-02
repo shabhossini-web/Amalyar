@@ -236,3 +236,19 @@
 
 .dp-loose.pickup { border-color: rgba(34, 211, 238, .45); background: rgba(34, 211, 238, .07); }
 .dp-loose.pickup > b i { background: #22d3ee; }
+
+/* ── رسیدِ تحویل ── */
+.dp-proofs { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-block-start: 9px; }
+.dp-proof {
+  display: grid; place-items: center; width: 46px; height: 46px; overflow: hidden;
+  border-radius: 9px; border: 1px solid rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .05);
+}
+.dp-proof img { width: 100%; height: 100%; object-fit: cover; }
+.dp-proof i { font-style: normal; font-size: 11px; color: rgba(255, 255, 255, .4); }
+.dp-upload {
+  font-size: 11px; cursor: pointer; padding: 6px 11px; border-radius: 9px;
+  color: #86efac; background: rgba(52, 211, 153, .1); border: 1px dashed rgba(52, 211, 153, .34);
+}
+.dp-upload.off { opacity: .5; cursor: default; }
+.dp-upload input { display: none; }
+.dp-handed { font-size: 10.5px; color: rgba(255, 255, 255, .5); }

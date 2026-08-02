@@ -262,6 +262,8 @@ model Item {
   charges       Charge[]
   lots          StockLot[]
   hospitalNeeds HospitalItem[]
+  contents      ItemComponent[] @relation("SetContents")
+  partOf        ItemComponent[] @relation("PartOfSets")
 
   @@index([name])
   @@index([category])
@@ -297,6 +299,7 @@ model StockLot {
   createdAt DateTime  @default(now()) @map("created_at")
 
   movements StockMovement[]
+  shortages SetShortage[]
 
   @@index([itemId])
   @@index([lotNo])
@@ -419,6 +422,7 @@ model StockTransfer {
   createdAt   DateTime @default(now()) @map("created_at")
 
   movements StockMovement[]
+  shortages SetShortage[]
 
   @@index([status])
   @@index([visitId])
@@ -1235,9 +1239,78 @@ model TransportStop {
   notes     String?
 
   transfers StockTransfer[]
+  proofs    StopProof[]
 
   @@unique([runId, seq])
   @@index([runId])
   @@map("transport_stops")
+}
+
+/// عکسِ رسیدِ تحویل — امضای CSR، برگهٔ مهرشده، یا خودِ ست روی میز.
+///
+/// ⚠️ عمداً `Document` نیست: مدرکِ بیمار به پروندهٔ بیمار می‌رود و راننده هیچ
+/// زمینهٔ بیماری ندارد. رسیدِ تحویل سندِ **عملیاتی** است نه بالینی، و بیشترین
+/// اختلاف با بیمارستان («ما تحویل نگرفتیم» / «ست ناقص بود») دقیقاً همین‌جاست.
+model StopProof {
+  id     Int           @id @default(autoincrement())
+  stop   TransportStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  stopId Int           @map("stop_id")
+
+  fileName String @map("file_name")
+  mimeType String @map("mime_type")
+  size     Int
+  /// هم نامِ فایل روی دیسک است هم کلیدِ یکسانی.
+  sha256   String
+  caption  String?
+
+  uploadedById Int?     @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([stopId])
+  @@map("stop_proofs")
+}
+
+/// قلمِ داخلِ یک ست — «ستِ پدیکولار ۲۰ قلم دارد».
+///
+/// ⚠️ بدونِ این، ست یک واحدِ اتمی است و کسریِ برگشت دیده نمی‌شود: ستی که با
+/// ۲۰ قلم رفت و با ۱۹ برگشت، در دفتر همان «۱ ست» است. بیشترین نشتیِ مالیِ
+/// شرکتِ تجهیزات همین است.
+model ItemComponent {
+  id     Int  @id @default(autoincrement())
+  set    Item @relation("SetContents", fields: [setId], references: [id], onDelete: Cascade)
+  setId  Int  @map("set_id")
+  /// قلم می‌تواند خودش کالای تعریف‌شده باشد یا فقط یک نام (پیچِ بی‌کد).
+  part   Item? @relation("PartOfSets", fields: [partId], references: [id], onDelete: SetNull)
+  partId Int?  @map("part_id")
+  label  String
+  quantity Int @default(1)
+  notes  String?
+
+  @@index([setId])
+  @@map("item_components")
+}
+
+/// شمارشِ محتویاتِ ست هنگام برگشت — «چه چیزی کم آمد».
+///
+/// فقط کسری ثبت می‌شود، نه کلِ شمارش: ثبتِ ۲۰ ردیفِ «سالم» برای هر برگشت
+/// یعنی هیچ‌کس این کار را نمی‌کند و کسری هم ثبت نمی‌شود.
+model SetShortage {
+  id         Int           @id @default(autoincrement())
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  transferId Int           @map("transfer_id")
+  lot        StockLot      @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  lotId      Int           @map("lot_id")
+
+  label    String
+  missing  Int    @default(1)
+  /// missing | damaged
+  kind     String @default("missing")
+  notes    String?
+
+  reportedById Int?     @map("reported_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([transferId])
+  @@map("set_shortages")
 }
 

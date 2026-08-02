@@ -560,6 +560,8 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
   const [busy, setBusy] = useState(false);
   const [csr, setCsr] = useState('');
   const [rel, setRel] = useState('');
+  const [check, setCheck] = useState(null);
+  const [miss, setMiss] = useState({});
   const [used, setUsed] = useState({}); // lotId → مقدارِ در حالِ ویرایش
 
   const load = useCallback(async () => {
@@ -572,13 +574,22 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
   }, [id, onError, onClose]);
   useEffect(() => { load(); }, [load]);
 
-  const act = async (path, body, msg) => {
+  /** فراخوانِ مشترکِ کنش‌های حواله. `method` و `sink` برای کنش‌هایی که پاسخشان
+      چک‌لیستِ برگشت است، نه خودِ حواله. */
+  const act = async (path, body, msg, method = 'POST', sink) => {
     setBusy(true);
     try {
-      await api(path, { method: 'POST', body });
-      await load(); onChanged(msg);
+      const res = await api(path, { method, body });
+      if (sink) sink(res); else { await load(); }
+      onChanged(msg);
     } catch (e) { onError(e.message); } finally { setBusy(false); }
   };
+
+  // چک‌لیستِ برگشت جدا بارگذاری می‌شود: فقط برای حواله‌ای که داراییِ برگشتی دارد.
+  useEffect(() => {
+    if (!t || t.status === 'planned') { setCheck(null); return; }
+    api(`/assets/transfers/${id}/return-check`).then(setCheck).catch(() => setCheck(null));
+  }, [t, id]);
 
   return (
     <Overlay title={t ? `حوالهٔ ${t.code}` : 'حواله'} onClose={onClose}>
@@ -660,6 +671,46 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
                 </button>
               </label>
             )
+          )}
+
+          {/* چک‌لیستِ برگشت — فقط **کسری** ثبت می‌شود نه کلِ شمارش. ثبتِ ۲۰
+              ردیفِ «سالم» یعنی هیچ‌کس این کار را نمی‌کند. */}
+          {check && check.lots.length > 0 && (
+            <div className="iv-check">
+              <b>محتویاتِ ست هنگام برگشت</b>
+              {check.lots.map((l) => (
+                <div key={l.lotId} className="iv-checklot">
+                  <span className="iv-checkname">{l.itemName}{l.serialNo ? ` (${l.serialNo})` : ''}</span>
+                  {l.contents.length === 0
+                    ? <em className="iv-none">فهرستِ محتویات تعریف نشده — از تعاریفِ پایه ← کالاها اضافه کنید</em>
+                    : <em className="iv-none">{num(l.contents.length)} قلم</em>}
+                  {l.shortages.map((sh) => (
+                    <span key={sh.id} className="iv-short">
+                      {sh.label} × {num(sh.missing)}
+                      <i>{sh.kind === 'damaged' ? 'آسیب‌دیده' : 'کسری'}</i>
+                      <button type="button" disabled={busy}
+                              onClick={() => act(`/assets/shortages/${sh.id}`, undefined, 'کسری حذف شد', 'DELETE', setCheck)}>✕</button>
+                    </span>
+                  ))}
+                  <div className="iv-row2">
+                    <select value={miss[l.lotId] ?? ''} onChange={(e) => setMiss((m) => ({ ...m, [l.lotId]: e.target.value }))}>
+                      <option value="">— قلمِ کسری —</option>
+                      {l.contents.map((c) => <option key={c.label} value={c.label}>{c.label}</option>)}
+                    </select>
+                    <button type="button" className="iv-mini warn" disabled={busy || !miss[l.lotId]}
+                            onClick={() => act(
+                              `/assets/transfers/${id}/shortages`,
+                              { lotId: l.lotId, label: miss[l.lotId], missing: 1 },
+                              'کسری ثبت شد',
+                              'POST',
+                              setCheck,
+                            )}>
+                      ثبتِ کسری
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
 
           <div className="iv-tracts">

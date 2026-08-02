@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../lib/api.js';
+import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
@@ -76,6 +76,23 @@ export default function Dispatch() {
 
   const byDay = useMemo(() => new Map((month?.days ?? []).map((d) => [d.day, d])), [month]);
 
+  /* عکسِ رسید پشتِ هدرِ Authorization است و `<img src>` هدر نمی‌فرستد، پس
+     blob URL می‌سازیم — و در پاک‌سازی آزادش می‌کنیم وگرنه حافظه نشت می‌کند. */
+  const [proofUrls, setProofUrls] = useState({});
+  useEffect(() => {
+    const ids = runs.flatMap((r) => r.stops.flatMap((s) => s.proofs.map((p) => p.id)));
+    const fresh = ids.filter((id) => !proofUrls[id]);
+    if (!fresh.length) return undefined;
+    let alive = true;
+    const made = [];
+    Promise.all(fresh.map((id) => apiBlobUrl(`/routes/proofs/${id}/file`).then((u) => { made.push(u); return [id, u]; }).catch(() => null)))
+      .then((pairs) => {
+        if (!alive) { made.forEach(URL.revokeObjectURL); return; }
+        setProofUrls((m) => ({ ...m, ...Object.fromEntries(pairs.filter(Boolean)) }));
+      });
+    return () => { alive = false; };
+  }, [runs, proofUrls]);
+
   /* روزِ انتخاب‌شده به میلادی — مسیرها با تاریخِ میلادی صدا زده می‌شوند تا
      تفسیرِ «روز» فقط یک جا (تقویمِ شمسی) انجام شود. */
   const onIso = useMemo(() => jStrToIso(`${ym.y}/${String(ym.m).padStart(2, '0')}/${String(day).padStart(2, '0')}`), [ym, day]);
@@ -130,6 +147,12 @@ export default function Dispatch() {
   const removeStop = (id) => guard(() => api(`/routes/stops/${id}`, { method: 'DELETE' }));
   const removeRun = (id) => guard(() => api(`/routes/${id}`, { method: 'DELETE' }), 'مسیر حذف شد');
   const detach = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers/${tid}`, { method: 'DELETE' }));
+  const addProof = (stopId, file) => guard(async () => {
+    const fd = new FormData();
+    fd.append('file', file);
+    await apiUpload(`/routes/stops/${stopId}/proofs`, fd);
+  }, 'رسید ثبت شد ✓');
+
   const addTo = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers`, { method: 'POST', body: { transferIds: [tid] } }), 'بار به توقف اضافه شد ✓');
   const move = (run, i, dir) => {
     const ids = run.stops.map((s) => s.id);
@@ -335,6 +358,34 @@ export default function Dispatch() {
                           title={st.doneAt ? 'برگرداندن به انجام‌نشده' : 'انجام شد'}
                         >✔</button>
                         <button type="button" className="x" disabled={busy} onClick={() => removeStop(st.id)} title="حذفِ توقف">✕</button>
+                      </div>
+
+                      {/* رسیدِ تحویل — سندِ عملیاتی، نه مدرکِ بالینی. بیشترین
+                          اختلاف با بیمارستان همین‌جاست. */}
+                      <div className="dp-proofs">
+                        {st.proofs.map((pr) => (
+                          <a
+                            key={pr.id}
+                            className="dp-proof"
+                            href={proofUrls[pr.id] ?? '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={pr.caption || pr.fileName}
+                          >
+                            {proofUrls[pr.id] ? <img src={proofUrls[pr.id]} alt="" /> : <i>…</i>}
+                          </a>
+                        ))}
+                        <label className={`dp-upload${busy ? ' off' : ''}`}>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            disabled={busy}
+                            onChange={(e) => { if (e.target.files?.[0]) addProof(st.id, e.target.files[0]); e.target.value = ''; }}
+                          />
+                          + رسیدِ تحویل
+                        </label>
+                        {st.handedTo && <span className="dp-handed">تحویل به: {st.handedTo}</span>}
                       </div>
 
                       <div className="dp-cargo">

@@ -1,4 +1,9 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query,
+  Res, UploadedFile, UseGuards, UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -99,6 +104,42 @@ export class RoutesController {
   @Post('stops/:id/transfers')
   attach(@Param('id', ParseIntPipe) id: number, @Body() dto: AttachDto, @CurrentUser() user: any) {
     return this.routes.attach(id, dto.transferIds, user);
+  }
+
+  // ── رسیدِ تحویل ───────────────────────────────────────────────
+
+  /// عکسِ رسید — سندِ عملیاتی، نه مدرکِ بالینیِ بیمار.
+  @RequirePermissions('patients.update')
+  @Post('stops/:id/proofs')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }))
+  addProof(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: any,
+    @Body('caption') caption: string | undefined,
+    @CurrentUser() user: any,
+  ) {
+    return this.routes.addProof(id, file, caption, user);
+  }
+
+  /**
+   * دانلودِ رسید — زیرِ همان guardها و مستقیم از دیسک سرو نمی‌شود.
+   * URLِ ثابتِ عمومی برای عکسِ تحویل یعنی نشتِ سند با یک لینکِ فوروارد‌شده.
+   */
+  @RequirePermissions('patients.read')
+  @Get('proofs/:id/file')
+  async proofFile(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
+    const { proof, stream } = await this.routes.openProof(id);
+    res.setHeader('Content-Type', proof.mimeType);
+    res.setHeader('Content-Length', String(proof.size));
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(proof.fileName)}`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    stream.pipe(res);
+  }
+
+  @RequirePermissions('patients.update')
+  @Delete('proofs/:id')
+  removeProof(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.routes.removeProof(id, user);
   }
 
   @RequirePermissions('patients.update')

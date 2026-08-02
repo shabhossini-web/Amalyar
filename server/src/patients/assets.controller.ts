@@ -5,7 +5,8 @@ import { Feature } from '../auth/feature.decorator';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { AssetsService } from './assets.service';
-import { HospitalNeedDto } from './dto/assets.dto';
+import { CurrentUser } from '../auth/current-user.decorator';
+import { ComponentDto, HospitalNeedDto, ShortageDto } from './dto/assets.dto';
 
 /** داراییِ برگشتی (ست و دستگاه) + نیازِ استانداردِ بیمارستان. */
 @Controller('assets')
@@ -48,5 +49,51 @@ export class AssetsController {
   @Delete('needs/:id')
   removeNeed(@Param('id', ParseIntPipe) id: number) {
     return this.assets.removeNeed(id);
+  }
+
+  // ── محتویاتِ ست ──────────────────────────────────────────────
+  @RequirePermissions('inventory.read')
+  @Get('items/:id/contents')
+  contents(@Param('id', ParseIntPipe) id: number) {
+    return this.assets.contents(id);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Post('items/:id/contents')
+  addContent(@Param('id', ParseIntPipe) id: number, @Body() dto: ComponentDto) {
+    return this.assets.addContent(id, dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Delete('contents/:id')
+  removeContent(@Param('id', ParseIntPipe) id: number) {
+    return this.assets.removeContent(id);
+  }
+
+  // ── کسریِ برگشت ─────────────────────────────────────────────
+  /// چک‌لیستِ برگشت — کارِ کارشناس/انباردار هنگام تحویلِ ست.
+  @RequirePermissions('inventory.read')
+  @Get('transfers/:id/return-check')
+  returnCheck(@Param('id', ParseIntPipe) id: number) {
+    return this.assets.returnCheck(id);
+  }
+
+  @RequirePermissions('stock.consume')
+  @Post('transfers/:id/shortages')
+  reportShortage(@Param('id', ParseIntPipe) id: number, @Body() dto: ShortageDto, @CurrentUser() user: any) {
+    return this.assets.reportShortage(id, dto, user);
+  }
+
+  @RequirePermissions('inventory.write')
+  @Delete('shortages/:id')
+  removeShortage(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.assets.removeShortage(id, user);
+  }
+
+  /// «کدام ست بیشتر قلم گم می‌کند» و «کدام بیمارستان» — نشتیِ مالیِ دیده‌نشده.
+  @RequirePermissions('inventory.read')
+  @Get('shortages/report')
+  shortageReport(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.assets.shortageReport(from ? new Date(from) : undefined, to ? new Date(to) : undefined);
   }
 }

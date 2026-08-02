@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { balanceByLocation, HOME_FALLBACK } from './stock-math';
 import { at, overlaps, windowOf } from '../common/asset-window';
@@ -52,7 +53,7 @@ function lotsOf(t: any): number[] {
  */
 @Injectable()
 export class AssetsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   /** روزِ تعهدِ یک حواله: روزِ برنامه‌ریزی‌شده، وگرنه روزِ عملِ مربوطه، وگرنه روزِ ارسال. */
   private static committedOn(t: any): Date {
@@ -256,6 +257,179 @@ export class AssetsService {
       days.set(jd, cell);
     }
     return { year: jy, month: jm, days: [...days.values()].sort((a, b) => a.day - b.day) };
+  }
+
+  // ── محتویاتِ ست ──────────────────────────────────────────────
+
+  /** فهرستِ اقلامِ داخلِ یک ست. */
+  async contents(itemId: number) {
+    const rows = await this.prisma.itemComponent.findMany({
+      where: { setId: itemId },
+      include: { part: { select: { id: true, name: true, size: true } } },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      label: r.label,
+      quantity: r.quantity,
+      notes: r.notes,
+      partId: r.partId,
+      partName: r.part ? [r.part.name, r.part.size].filter(Boolean).join(' ') : null,
+    }));
+  }
+
+  async addContent(itemId: number, dto: { label?: string; partId?: number; quantity?: number; notes?: string }) {
+    const set = await this.prisma.item.findUnique({ where: { id: itemId }, select: { id: true, assetKind: true } });
+    if (!set) throw new NotFoundException('کالا یافت نشد');
+    if (!RETURNABLE.includes(set.assetKind)) {
+      throw new BadRequestException('فقط ست و دستگاه محتویات دارند؛ قلمِ مصرفی جزء ندارد');
+    }
+    let label = typeof dto.label === 'string' ? dto.label.trim() : '';
+    if (dto.partId) {
+      const part = await this.prisma.item.findUnique({ where: { id: Number(dto.partId) }, select: { name: true, size: true } });
+      if (!part) throw new NotFoundException('قلمِ انتخابی یافت نشد');
+      // نامِ کالای تعریف‌شده بر متنِ دستی مقدم است تا فهرست یک‌دست بماند.
+      label = [part.name, part.size].filter(Boolean).join(' ');
+    }
+    if (!label) throw new BadRequestException('عنوانِ قلم را وارد کنید');
+    return this.prisma.itemComponent.create({
+      data: {
+        setId: itemId,
+        partId: dto.partId ? Number(dto.partId) : null,
+        label,
+        quantity: Math.max(1, Math.trunc(Number(dto.quantity ?? 1)) || 1),
+        notes: typeof dto.notes === 'string' ? dto.notes.trim() || null : null,
+      },
+    });
+  }
+
+  async removeContent(id: number) {
+    const row = await this.prisma.itemComponent.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('قلم یافت نشد');
+    await this.prisma.itemComponent.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  // ── کسریِ ست هنگام برگشت ─────────────────────────────────────
+
+  /**
+   * چک‌لیستِ برگشتِ یک حواله: هر لاتِ برگشتی با محتویاتش و کسریِ ثبت‌شده.
+   *
+   * ⚠️ فقط **کسری** ثبت می‌شود نه کلِ شمارش. ثبتِ ۲۰ ردیفِ «سالم» برای هر
+   * برگشت یعنی هیچ‌کس این کار را نمی‌کند — و آن‌وقت کسری هم ثبت نمی‌شود.
+   */
+  async returnCheck(transferId: number) {
+    const t = await this.prisma.stockTransfer.findUnique({
+      where: { id: transferId },
+      include: {
+        movements: {
+          where: { kind: 'transfer', quantity: { gt: 0 } },
+          include: { lot: { include: { item: { select: { id: true, name: true, size: true, assetKind: true } } } } },
+        },
+        shortages: true,
+      },
+    });
+    if (!t) throw new NotFoundException('حواله یافت نشد');
+
+    const setIds = [...new Set(t.movements.filter((m) => RETURNABLE.includes(m.lot.item.assetKind)).map((m) => m.lot.itemId))];
+    const comps = setIds.length
+      ? await this.prisma.itemComponent.findMany({ where: { setId: { in: setIds } }, orderBy: { id: 'asc' } })
+      : [];
+
+    return {
+      transferId: t.id,
+      code: t.code,
+      lots: t.movements
+        .filter((m) => RETURNABLE.includes(m.lot.item.assetKind))
+        .map((m) => ({
+          lotId: m.lotId,
+          serialNo: m.lot.serialNo || m.lot.lotNo,
+          itemName: [m.lot.item.name, m.lot.item.size].filter(Boolean).join(' '),
+          contents: comps.filter((c) => c.setId === m.lot.itemId).map((c) => ({ label: c.label, quantity: c.quantity })),
+          shortages: t.shortages.filter((sh) => sh.lotId === m.lotId).map((sh) => ({
+            id: sh.id, label: sh.label, missing: sh.missing, kind: sh.kind, notes: sh.notes,
+          })),
+        })),
+    };
+  }
+
+  async reportShortage(
+    transferId: number,
+    dto: { lotId: number; label: string; missing?: number; kind?: string; notes?: string },
+    user: any,
+  ) {
+    const t = await this.prisma.stockTransfer.findUnique({ where: { id: transferId }, select: { id: true } });
+    if (!t) throw new NotFoundException('حواله یافت نشد');
+    const lot = await this.prisma.stockLot.findUnique({ where: { id: Number(dto.lotId) }, select: { id: true } });
+    if (!lot) throw new NotFoundException('لات یافت نشد');
+    const label = dto.label?.trim();
+    if (!label) throw new BadRequestException('عنوانِ قلمِ کسری را وارد کنید');
+    if (dto.kind && !['missing', 'damaged'].includes(dto.kind)) throw new BadRequestException('نوعِ کسری نامعتبر است');
+
+    const row = await this.prisma.setShortage.create({
+      data: {
+        transferId, lotId: lot.id, label,
+        missing: Math.max(1, Math.trunc(Number(dto.missing ?? 1)) || 1),
+        kind: dto.kind ?? 'missing',
+        notes: typeof dto.notes === 'string' ? dto.notes.trim() || null : null,
+        reportedById: user?.id ?? null,
+      },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'stock.shortage.report', entityType: 'stock_transfer', entityId: transferId,
+      after: { lotId: lot.id, label, missing: row.missing, kind: row.kind },
+    });
+    return this.returnCheck(transferId);
+  }
+
+  async removeShortage(id: number, user: any) {
+    const row = await this.prisma.setShortage.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('کسری یافت نشد');
+    await this.prisma.setShortage.delete({ where: { id } });
+    await this.audit.record({
+      actorId: user?.id, action: 'stock.shortage.remove', entityType: 'stock_transfer', entityId: row.transferId, before: row,
+    });
+    return this.returnCheck(row.transferId);
+  }
+
+  /** گزارشِ کسری — «کدام ست بیشتر قلم گم می‌کند» و «کدام بیمارستان». */
+  async shortageReport(from?: Date, to?: Date) {
+    const rows = await this.prisma.setShortage.findMany({
+      where: { ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lt: to } : {}) } } : {}) },
+      include: {
+        lot: { include: { item: { select: { name: true, size: true } } } },
+        transfer: { include: { hospital: { select: { name: true } } } },
+      },
+      orderBy: { id: 'desc' },
+      take: 500,
+    });
+    const byItem = new Map<string, number>();
+    const byHospital = new Map<string, number>();
+    for (const r of rows) {
+      const item = [r.lot.item.name, r.lot.item.size].filter(Boolean).join(' ');
+      const hosp = r.transfer.hospital?.name ?? r.transfer.toLocation;
+      byItem.set(item, (byItem.get(item) ?? 0) + r.missing);
+      byHospital.set(hosp, (byHospital.get(hosp) ?? 0) + r.missing);
+    }
+    const rank = (m: Map<string, number>) =>
+      [...m.entries()].map(([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count);
+    return {
+      total: rows.reduce((s, r) => s + r.missing, 0),
+      byItem: rank(byItem),
+      byHospital: rank(byHospital),
+      rows: rows.map((r) => ({
+        id: r.id,
+        label: r.label,
+        missing: r.missing,
+        kind: r.kind,
+        notes: r.notes,
+        at: r.createdAt,
+        serialNo: r.lot.serialNo || r.lot.lotNo,
+        itemName: [r.lot.item.name, r.lot.item.size].filter(Boolean).join(' '),
+        transferCode: r.transfer.code,
+        hospital: r.transfer.hospital?.name ?? r.transfer.toLocation,
+      })),
+    };
   }
 
   // ── نیازِ استانداردِ بیمارستان ─────────────────────────────────
