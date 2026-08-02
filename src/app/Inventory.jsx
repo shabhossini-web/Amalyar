@@ -212,7 +212,8 @@ export default function Inventory() {
  * کاربر وارد نمی‌کند؛ از دفتر می‌آید. اگر کاربر عدد بزند، همان‌جاست که
  * «۳۴ تا فرستادم، ۳۳ تا زدم» به مغایرتِ دائمی تبدیل می‌شود.
  */
-const STATE_TONE = { free: 'ok', booked: 'warn', out: 'out', service: 'bad' };
+const STATE_TONE = { free: 'ok', booked: 'warn', out: 'out', service: 'bad', consigned: 'consign' };
+const COUNT_TONE = { overdue: 'bad', due_soon: 'warn', ok: 'ok', none: '' };
 
 /**
  * دارایی‌های برگشتی — ست و دستگاه.
@@ -226,6 +227,8 @@ function Assets({ onToast }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [needsFor, setNeedsFor] = useState(null); // بیمارستانِ بازشده
+  const [consignFor, setConsignFor] = useState(null); // لاتِ در حالِ سپردن
+  const [showConsigned, setShowConsigned] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -248,6 +251,7 @@ function Assets({ onToast }) {
         <div className={counts.out || counts.service ? 'iv-warn' : ''}>
           <b>{num((counts.out ?? 0) + (counts.service ?? 0))}</b><span>بیرون یا نیازمندِ سرویس</span>
         </div>
+        <div><b>{num(counts.consigned ?? 0)}</b><span>امانیِ مستقر</span></div>
       </div>
 
       <div className="iv-toolbar">
@@ -255,6 +259,7 @@ function Assets({ onToast }) {
         <p className="iv-note">
           «آزاد» یعنی همین روز تعهدی ندارد. ستی که بیرون است موجود هست ولی در دسترس نیست.
         </p>
+        <button type="button" className="iv-ghost" onClick={() => setShowConsigned(true)}>امانی‌ها</button>
         <button type="button" className="iv-add" onClick={() => setNeedsFor(0)}>نیازِ بیمارستان‌ها</button>
       </div>
 
@@ -274,23 +279,280 @@ function Assets({ onToast }) {
                 {r.serialNo && <i className="as-sn" dir="ltr">{r.serialNo}</i>}
               </b>
               <small>
-                {r.state === 'out' ? `الان در: ${r.at}` : `محلِ خانه: ${r.home}`}
+                {r.consignedToId
+                  ? `امانیِ ${r.consignedToName}`
+                  : r.state === 'out' ? `الان در: ${r.at}` : `محلِ خانه: ${r.home}`}
                 {r.nextServiceAt && ` · سرویسِ بعدی: ${faDate(r.nextServiceAt)}`}
                 {r.turnaroundHours ? ` · آماده‌سازی: ${num(r.turnaroundHours)} ساعت` : ''}
               </small>
+              {r.consignedToId && (
+                <small className={`as-count ${COUNT_TONE[r.countStatus] ?? ''}`}>
+                  {r.lastCountAt ? `آخرین صورت‌برداری: ${faDate(r.lastCountAt)}` : 'هنوز صورت‌برداری نشده'}
+                  {r.countDueAt ? ` · سررسید: ${faDate(r.countDueAt)} (${r.countStatusLabel})` : ' · دوره‌ای تعریف نشده'}
+                </small>
+              )}
               {r.commitments.length > 0 && (
                 <small className="as-book">
                   {r.commitments.map((c) => `${faDate(c.on)} — ${c.hospital}${c.visitCode ? ` (${c.visitCode})` : ''}`).join(' · ')}
                 </small>
               )}
             </div>
-            <span className={`as-state ${STATE_TONE[r.state] ?? ''}`}>{r.stateLabel}</span>
+            <div className="as-actions">
+              <span className={`as-state ${STATE_TONE[r.state] ?? ''}`}>{r.stateLabel}</span>
+              <button type="button" className="iv-ghost sm" onClick={() => setConsignFor(r)}>
+                {r.consignedToId ? 'امانت' : 'سپردن'}
+              </button>
+            </div>
           </article>
         ))}
       </div>
 
       {needsFor !== null && <Needs onClose={() => setNeedsFor(null)} onToast={onToast} />}
+      {consignFor && (
+        <Consign row={consignFor} onClose={() => setConsignFor(null)} onToast={onToast} onDone={load} />
+      )}
+      {showConsigned && <Consignments onClose={() => setShowConsigned(false)} onToast={onToast} onDone={load} />}
     </>
+  );
+}
+
+/**
+ * سپردنِ یک دارایی به بیمارستان.
+ *
+ * ⚠️ «امانی» جابه‌جایی نیست، **اعلامِ وضعیت** است: می‌گوید بیرون‌بودنِ این
+ * دستگاه خواسته است، پس نه در صفِ جمع‌آوری بیاید نه هر روز در فهرستِ بیرون.
+ */
+function Consign({ row, onClose, onToast, onDone }) {
+  const [hospitals, setHospitals] = useState([]);
+  const [hid, setHid] = useState(row.consignedToId ? String(row.consignedToId) : '');
+  const [every, setEvery] = useState(row.countEveryDays ? String(row.countEveryDays) : '30');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { api('/hospitals').then(setHospitals).catch(() => {}); }, []);
+
+  const save = async () => {
+    if (!hid || busy) return;
+    setBusy(true);
+    try {
+      await api(`/assets/lots/${row.lotId}/consign`, {
+        method: 'POST',
+        body: { hospitalId: Number(hid), countEveryDays: int(every) || undefined },
+      });
+      onToast('امانت ثبت شد');
+      await onDone(); onClose();
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const end = async () => {
+    setBusy(true);
+    try {
+      await api(`/assets/lots/${row.lotId}/consign`, { method: 'DELETE' });
+      onToast('امانت پایان یافت');
+      await onDone(); onClose();
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="iv-sheet sm">
+        <header className="iv-sheet-head">
+          <b>امانیِ مستقر — {row.itemName}</b>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+        </header>
+        <div className="iv-sheet-body">
+          <p className="iv-note">
+            دستگاهی که در بیمارستان مستقر است «بیرون» نیست، آن‌جا زندگی می‌کند. با ثبتِ امانت،
+            از صفِ جمع‌آوری خارج می‌شود و به‌جایش سررسیدِ صورت‌برداری می‌گیرد.
+          </p>
+          <label className="iv-field">
+            <span>بیمارستان</span>
+            <select value={hid} onChange={(e) => setHid(e.target.value)}>
+              <option value="">— انتخاب کنید —</option>
+              {hospitals.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </label>
+          <label className="iv-field">
+            <span>دورهٔ صورت‌برداری (روز)</span>
+            <input type="text" inputMode="numeric" dir="ltr" value={every} onChange={(e) => setEvery(e.target.value)} />
+          </label>
+          <div className="iv-row2">
+            <button type="button" className="iv-add" disabled={busy || !hid} onClick={save}>ثبتِ امانت</button>
+            {row.consignedToId && (
+              <button type="button" className="iv-del" disabled={busy} onClick={end}>پایانِ امانت</button>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** فهرستِ امانی‌ها با سررسید + صورت‌برداری. */
+function Consignments({ onClose, onToast, onDone }) {
+  const [data, setData] = useState(null);
+  const [countFor, setCountFor] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setData(await api('/assets/consignments')); }
+    catch (e) { onToast(e.message); }
+  }, [onToast]);
+  useEffect(() => { load(); }, [load]);
+
+  const rows = data?.rows ?? [];
+  return (
+    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="iv-sheet">
+        <header className="iv-sheet-head">
+          <b>داراییِ امانیِ مستقر{data?.overdue ? ` — ${num(data.overdue)} عقب‌افتاده` : ''}</b>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+        </header>
+        <div className="iv-sheet-body">
+          <p className="iv-note">
+            امانیِ بدونِ شمارشِ دوره‌ای یعنی موجودیِ کاغذی: مصرف‌شده‌ها فاکتور نمی‌شوند و کسری سال‌ها بعد پیدا می‌شود.
+          </p>
+          <div className="iv-list">
+            {rows.length === 0 && <div className="iv-empty">هنوز داراییِ امانی ثبت نشده</div>}
+            {rows.map((r) => (
+              <article key={r.lotId} className={`iv-row as-count-${r.status}`}>
+                <div className="iv-row-main">
+                  <b>
+                    {r.itemName}
+                    {r.serialNo && <i className="as-sn" dir="ltr">{r.serialNo}</i>}
+                  </b>
+                  <small>{r.hospitalName} · از {faDate(r.consignedAt)}</small>
+                  <small className={`as-count ${COUNT_TONE[r.status] ?? ''}`}>
+                    {r.lastCountAt ? `آخرین شمارش: ${faDate(r.lastCountAt)}` : 'هنوز شمرده نشده'}
+                    {r.dueAt ? ` · سررسید: ${faDate(r.dueAt)}` : ''}
+                    {r.lastCount ? ` · مصرف ${num(r.lastCount.used)} / کسری ${num(r.lastCount.missing)}` : ''}
+                  </small>
+                </div>
+                <div className="as-actions">
+                  <span className={`as-state ${COUNT_TONE[r.status] ?? ''}`}>{r.statusLabel}</span>
+                  <button type="button" className="iv-ghost sm" onClick={() => setCountFor(r)}>صورت‌برداری</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+      {countFor && (
+        <CountSheet
+          row={countFor}
+          onClose={() => setCountFor(null)}
+          onToast={onToast}
+          onDone={async () => { await load(); await onDone(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * برگهٔ صورت‌برداری.
+ *
+ * ⚠️ سه ستون دارد نه دو: انتظار، شمرده‌شده، و «چند تا از کسری مصرف شد».
+ * تفاوتِ مصرف و گم تفاوتِ فاکتورِ فروش با زیانِ شرکت است.
+ */
+function CountSheet({ row, onClose, onToast, onDone }) {
+  const [sheet, setSheet] = useState(null);
+  const [lines, setLines] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [hist, setHist] = useState([]);
+
+  useEffect(() => {
+    api(`/assets/lots/${row.lotId}/count-sheet`).then((d) => { setSheet(d); setLines(d.lines.map((l) => ({ ...l }))); }).catch((e) => onToast(e.message));
+    api(`/assets/lots/${row.lotId}/counts`).then((d) => setHist(d.rows)).catch(() => {});
+  }, [row.lotId, onToast]);
+
+  const setCell = (i, k, v) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
+
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const d = await api(`/assets/lots/${row.lotId}/counts`, {
+        method: 'POST',
+        body: {
+          lines: lines.map((l) => ({
+            label: l.label,
+            expected: int(l.expected) || 0,
+            counted: int(l.counted) || 0,
+            used: int(l.used) || 0,
+          })),
+        },
+      });
+      setHist(d.rows);
+      onToast('صورت‌برداری ثبت شد');
+      await onDone();
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const totals = lines.reduce((a, l) => {
+    const short = Math.max(0, (int(l.expected) || 0) - (int(l.counted) || 0));
+    const used = Math.min(int(l.used) || 0, short);
+    return { short: a.short + short, used: a.used + used, missing: a.missing + (short - used) };
+  }, { short: 0, used: 0, missing: 0 });
+
+  return (
+    <div className="iv-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="iv-sheet">
+        <header className="iv-sheet-head">
+          <b>صورت‌برداری — {row.itemName} · {row.hospitalName}</b>
+          <button type="button" className="iv-x" onClick={onClose} aria-label="بستن"><XIc width="18" height="18" /></button>
+        </header>
+        <div className="iv-sheet-body">
+          {!sheet && <div className="iv-empty">در حال بارگذاری…</div>}
+          {sheet && sheet.lines.length === 0 && (
+            <div className="iv-empty">
+              محتویاتِ این ست تعریف نشده — در تعاریفِ پایه «محتویاتِ ست» را پر کنید تا برگهٔ شمارش ساخته شود.
+            </div>
+          )}
+          {sheet && lines.length > 0 && (
+            <>
+              <div className="as-count-grid">
+                <div className="as-count-head"><span>قلم</span><span>انتظار</span><span>شمرده</span><span>مصرف</span><span>کسری</span></div>
+                {lines.map((l, i) => {
+                  const short = Math.max(0, (int(l.expected) || 0) - (int(l.counted) || 0));
+                  const used = Math.min(int(l.used) || 0, short);
+                  return (
+                    <div key={l.label} className="as-count-row">
+                      <span>{l.label}</span>
+                      <input type="text" inputMode="numeric" dir="ltr" value={l.expected}
+                        onChange={(e) => setCell(i, 'expected', e.target.value)} />
+                      <input type="text" inputMode="numeric" dir="ltr" value={l.counted}
+                        onChange={(e) => setCell(i, 'counted', e.target.value)} />
+                      <input type="text" inputMode="numeric" dir="ltr" value={l.used}
+                        onChange={(e) => setCell(i, 'used', e.target.value)} />
+                      <span className={short - used > 0 ? 'as-miss' : ''}>{num(short - used)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="iv-note">
+                جمع: {num(totals.used)} مصرف (قابلِ فاکتور) · {num(totals.missing)} کسری
+              </p>
+              <button type="button" className="iv-add" disabled={busy} onClick={save}>ثبتِ صورت‌برداری</button>
+            </>
+          )}
+
+          {hist.length > 0 && (
+            <div className="iv-list">
+              {hist.map((h) => (
+                <article key={h.id} className="iv-row">
+                  <div className="iv-row-main">
+                    <b>{faDate(h.countedAt)}</b>
+                    <small>
+                      انتظار {num(h.totals.expected)} · شمرده {num(h.totals.counted)} ·
+                      مصرف {num(h.totals.used)} · کسری {num(h.totals.missing)}
+                    </small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
 

@@ -44,6 +44,7 @@ export default function Dispatch() {
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
   const [brief, setBrief] = useState(null); // {visitId, role, text}
+  const [costFor, setCostFor] = useState(null); // مسیرِ در حالِ هزینه‌گذاری
 
   useEffect(() => { document.title = 'عمل‌یار — چینش'; }, []);
   useEffect(() => {
@@ -336,6 +337,10 @@ export default function Dispatch() {
                     {run.vehicle && <em>{run.vehicle}</em>}
                   </b>
                   <span className="dp-runmeta">{faNum(run.stops.length)} توقف</span>
+                  {run.cost?.total > 0 && (
+                    <span className="dp-runcost" title="هزینهٔ حملِ این مسیر">{faNum(run.cost.total)} تومان</span>
+                  )}
+                  <button type="button" className="dp-brief-btn" onClick={() => setCostFor(run)}>◎ هزینه</button>
                   <button type="button" className="dp-brief-btn" onClick={() => openRunBrief(run)}>✉ ابلاغِ مسیر</button>
                   <button type="button" className="dp-runx" disabled={busy} onClick={() => removeRun(run.id)} title="حذفِ مسیر">✕</button>
                 </header>
@@ -456,6 +461,18 @@ export default function Dispatch() {
         </div>
       )}
 
+      {costFor && (
+        <RunCost
+          run={costFor}
+          busy={busy}
+          onClose={() => setCostFor(null)}
+          onSave={async (body) => {
+            await guard(() => api(`/routes/${costFor.id}/cost`, { method: 'PATCH', body }), 'هزینهٔ مسیر ثبت شد');
+            setCostFor(null);
+          }}
+        />
+      )}
+
       <div className={`dp-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>
   );
@@ -549,5 +566,64 @@ function TimeBox({ label, value, disabled, onSave }) {
         onBlur={() => { if ((v ?? '') !== (value ?? '')) onSave(v); }}
       />
     </label>
+  );
+}
+
+/**
+ * هزینهٔ یک مسیر.
+ *
+ * ⚠️ همین‌جا **ردیفِ هزینهٔ دفتر** ساخته می‌شود، نه عددی کنارِ مسیر: اگر هزینهٔ
+ * حمل فقط روی مسیر می‌نشست، در گزارشِ مالی دیده نمی‌شد و سودِ ماه بیشتر از
+ * واقعیت گزارش می‌شد.
+ *
+ * سرشکنِ per-visit نمایشی است و ذخیره نمی‌شود — وگرنه هزینه دو بار شمرده می‌شد.
+ */
+function RunCost({ run, busy, onClose, onSave }) {
+  const [fuel, setFuel] = useState(run.cost?.fuelCost != null ? String(run.cost.fuelCost) : '');
+  const [fee, setFee] = useState(run.cost?.driverFee != null ? String(run.cost.driverFee) : '');
+  const [other, setOther] = useState(run.cost?.otherCost != null ? String(run.cost.otherCost) : '');
+  const [note, setNote] = useState(run.cost?.costNote ?? '');
+
+  const n = (v) => Math.max(0, Number(toEnDigits(String(v)).replace(/[^\d]/g, '')) || 0);
+  const total = n(fuel) + n(fee) + n(other);
+  const visits = [...new Set(run.stops.flatMap((s) => s.transfers.map((t) => t.visitCode).filter(Boolean)))];
+  const per = visits.length ? Math.floor(total / visits.length) : 0;
+
+  return (
+    <div className="dp-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="dp-sheet">
+        <header>
+          <b>هزینهٔ مسیر — {run.staff.name}</b>
+          <button type="button" onClick={onClose} aria-label="بستن">✕</button>
+        </header>
+        <div className="dp-costbody">
+          <label><span>بنزین</span>
+            <input type="text" inputMode="numeric" dir="ltr" value={fuel} onChange={(e) => setFuel(e.target.value)} /></label>
+          <label><span>دستمزدِ راننده</span>
+            <input type="text" inputMode="numeric" dir="ltr" value={fee} onChange={(e) => setFee(e.target.value)} /></label>
+          <label><span>هزینهٔ دیگر</span>
+            <input type="text" inputMode="numeric" dir="ltr" value={other} onChange={(e) => setOther(e.target.value)} /></label>
+          <label className="wide"><span>توضیح</span>
+            <input type="text" value={note} onChange={(e) => setNote(e.target.value)} /></label>
+          <p className="dp-costsum">
+            جمع: <b>{faNum(total)}</b> تومان
+            {visits.length > 0
+              ? ` · سرشکن روی ${faNum(visits.length)} عمل ≈ ${faNum(per)} تومان`
+              : ' · هیچ عملی روی این مسیر نیست؛ کلِ مبلغ هزینهٔ عمومیِ حمل می‌ماند'}
+          </p>
+        </div>
+        <footer>
+          <span className="dp-privacy">ردیفِ هزینه در دفترِ مالی با دستهٔ «حمل و نقل» ثبت می‌شود.</span>
+          <button
+            type="button"
+            className="dp-copy"
+            disabled={busy}
+            onClick={() => onSave({ fuelCost: n(fuel), driverFee: n(fee), otherCost: n(other), costNote: note || undefined })}
+          >
+            ثبتِ هزینه
+          </button>
+        </footer>
+      </section>
+    </div>
   );
 }

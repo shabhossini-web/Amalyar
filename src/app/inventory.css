@@ -320,3 +320,39 @@
 }
 .iv-short i { font-style: normal; font-size: 9.5px; opacity: .75; }
 .iv-short button { font: inherit; font-size: 11px; cursor: pointer; color: inherit; background: none; border: none; }
+
+/* ── داراییِ امانی و صورت‌برداری ─────────────────────────────── */
+.as-state.consign { color: #5eead4; background: rgba(45, 212, 191, .13); }
+.iv-row.as-consigned { border-inline-start: 3px solid rgba(45, 212, 191, .7); }
+.iv-row.as-count-overdue { border-inline-start: 3px solid rgba(248, 113, 113, .8); }
+.iv-row.as-count-due_soon { border-inline-start: 3px solid rgba(245, 158, 11, .7); }
+
+.as-count { font-size: 12px; opacity: .85; }
+.as-count.bad { color: #fca5a5; opacity: 1; }
+.as-count.warn { color: #fcd34d; opacity: 1; }
+.as-count.ok { color: #86efac; }
+
+.as-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.iv-ghost.sm { padding: 4px 10px; font-size: 12px; }
+.iv-sheet.sm { max-width: 420px; }
+
+/* شبکهٔ شمارش — عرضِ ستون‌ها ثابت تا ستونِ کسری زیرِ نامِ بلند نلغزد */
+.as-count-grid { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.as-count-head, .as-count-row {
+  display: grid; grid-template-columns: minmax(90px, 1fr) 62px 62px 62px 46px;
+  gap: 6px; align-items: center;
+}
+.as-count-head { font-size: 12px; opacity: .7; padding-inline: 2px; }
+.as-count-head span:not(:first-child), .as-count-row > span:last-child { text-align: center; }
+.as-count-row > span:first-child { font-size: 13px; }
+.as-count-row input {
+  width: 100%; padding: 5px 6px; text-align: center; font-size: 13px;
+  border-radius: 8px; border: 1px solid rgba(148, 163, 184, .25);
+  background: rgba(15, 23, 42, .5); color: inherit;
+}
+.as-count-row .as-miss { color: #fca5a5; font-weight: 700; }
+
+@media (max-width: 520px) {
+  .as-count-head, .as-count-row { grid-template-columns: minmax(70px, 1fr) 52px 52px 52px 38px; gap: 4px; }
+  .as-count-row input { padding: 4px 2px; font-size: 12px; }
+}

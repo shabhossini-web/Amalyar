@@ -252,3 +252,20 @@
 .dp-upload.off { opacity: .5; cursor: default; }
 .dp-upload input { display: none; }
 .dp-handed { font-size: 10.5px; color: rgba(255, 255, 255, .5); }
+
+/* ── هزینهٔ مسیر ─────────────────────────────────────────────── */
+.dp-runcost {
+  font-size: 12px; padding: 2px 8px; border-radius: 999px;
+  color: #fcd34d; background: rgba(245, 158, 11, .13); white-space: nowrap;
+}
+.dp-costbody { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px; }
+.dp-costbody label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.dp-costbody label.wide { grid-column: 1 / -1; }
+.dp-costbody input {
+  padding: 7px 9px; border-radius: 9px; font-size: 13px;
+  border: 1px solid rgba(148, 163, 184, .25); background: rgba(15, 23, 42, .5); color: inherit;
+}
+.dp-costsum { grid-column: 1 / -1; margin: 0; font-size: 12.5px; opacity: .9; }
+.dp-costsum b { font-size: 14px; }
+
+@media (max-width: 520px) { .dp-costbody { grid-template-columns: 1fr; } }

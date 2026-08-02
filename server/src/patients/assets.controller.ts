@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { AssetsService } from './assets.service';
 import { CurrentUser } from '../auth/current-user.decorator';
-import { ComponentDto, HospitalNeedDto, ShortageDto } from './dto/assets.dto';
+import { ComponentDto, ConsignDto, CountDto, HospitalNeedDto, ShortageDto } from './dto/assets.dto';
 
 /** داراییِ برگشتی (ست و دستگاه) + نیازِ استانداردِ بیمارستان. */
 @Controller('assets')
@@ -68,6 +68,51 @@ export class AssetsController {
   @Delete('contents/:id')
   removeContent(@Param('id', ParseIntPipe) id: number) {
     return this.assets.removeContent(id);
+  }
+
+  // ── داراییِ امانی ───────────────────────────────────────────
+  /// «کدام امانی کجاست و کِی باید شمرده شود».
+  @RequirePermissions('inventory.read')
+  @Get('consignments')
+  consignments(@Query('hospital') hospital?: string) {
+    return this.assets.consignments(hospital ? Number(hospital) : undefined);
+  }
+
+  @RequirePermissions('inventory.write')
+  @Post('lots/:id/consign')
+  consign(@Param('id', ParseIntPipe) id: number, @Body() dto: ConsignDto, @CurrentUser() user: any) {
+    return this.assets.consign(id, dto, user);
+  }
+
+  @RequirePermissions('inventory.write')
+  @Delete('lots/:id/consign')
+  unconsign(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.assets.unconsign(id, user);
+  }
+
+  /// قالبِ شمارش — محتویاتِ ست به‌عنوانِ «انتظار».
+  @RequirePermissions('inventory.read')
+  @Get('lots/:id/count-sheet')
+  countSheet(@Param('id', ParseIntPipe) id: number) {
+    return this.assets.countSheet(id);
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get('lots/:id/counts')
+  counts(@Param('id', ParseIntPipe) id: number) {
+    return this.assets.counts(id);
+  }
+
+  @RequirePermissions('stock.consume')
+  @Post('lots/:id/counts')
+  addCount(@Param('id', ParseIntPipe) id: number, @Body() dto: CountDto, @CurrentUser() user: any) {
+    return this.assets.addCount(id, dto, user);
+  }
+
+  @RequirePermissions('inventory.write')
+  @Delete('counts/:id')
+  removeCount(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.assets.removeCount(id, user);
   }
 
   // ── کسریِ برگشت ─────────────────────────────────────────────

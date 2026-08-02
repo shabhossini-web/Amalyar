@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { balanceByLocation, HOME_FALLBACK } from './stock-math';
 import { at, overlaps, windowOf } from '../common/asset-window';
+import { COUNT_STATUS_LABELS, countDueAt, countStatus, reconcileCount } from '../common/consignment';
 
 // محاسبهٔ بازه در `common/asset-window` است؛ این‌جا دوباره صادر می‌شود تا
 // فراخوان‌های موجود نشکنند.
@@ -19,9 +20,10 @@ export const ASSET_LABELS: Record<string, string> = {
 export const RETURNABLE = ['set', 'device'];
 
 /** وضعیتِ یک دارایی در یک روز. ترتیب = اولویتِ نمایش. */
-export const ASSET_STATES = ['service', 'out', 'booked', 'free'] as const;
+export const ASSET_STATES = ['service', 'consigned', 'out', 'booked', 'free'] as const;
 export const STATE_LABELS: Record<string, string> = {
   service: 'نیازمندِ سرویس',
+  consigned: 'امانی',
   out: 'بیرون',
   booked: 'رزرو',
   free: 'آزاد',
@@ -72,7 +74,11 @@ export class AssetsService {
       where: {
         item: { assetKind: { in: RETURNABLE }, ...(itemId ? { id: itemId } : {}) },
       },
-      include: { item: true },
+      include: {
+        item: true,
+        consignedTo: { select: { id: true, name: true } },
+        counts: { orderBy: { countedAt: 'desc' }, take: 1, select: { id: true, countedAt: true } },
+      },
       orderBy: [{ itemId: 'asc' }, { id: 'asc' }],
     });
     if (!lots.length) return [];
@@ -125,10 +131,17 @@ export class AssetsService {
 
       // ترتیبِ تصمیم عمدی است: سرویس بر همه‌چیز مقدم است، چون دستگاهِ از
       // کالیبراسیون‌افتاده حتی اگر در انبار و آزاد باشد نباید اعزام شود.
+      // امانی بر «بیرون» مقدم است: بیرون‌بودنش وضعیتِ عادیِ اوست، نه کارِ
+      // نکرده. اگر جای این دو عوض شود، دستگاهِ مستقر هر روز در فهرستِ
+      // «باید برگردد» تکرار می‌شود تا کاربر کلِ فهرست را نادیده بگیرد.
       let state: string = 'free';
       if (l.nextServiceAt && l.nextServiceAt <= day) state = 'service';
+      else if (l.consignedToId) state = 'consigned';
       else if (away.length) state = 'out';
       else if (today.length) state = 'booked';
+
+      const lastCount = l.counts[0] ?? null;
+      const dueAt = countDueAt(lastCount?.countedAt, l.consignedAt, l.countEveryDays);
 
       return {
         lotId: l.id,
@@ -139,7 +152,15 @@ export class AssetsService {
         serialNo: l.serialNo,
         lotNo: l.lotNo,
         home,
-        at: away.length ? away[0][0] : home,
+        at: l.consignedTo?.name ?? (away.length ? away[0][0] : home),
+        consignedToId: l.consignedToId,
+        consignedToName: l.consignedTo?.name ?? null,
+        consignedAt: l.consignedAt,
+        countEveryDays: l.countEveryDays,
+        lastCountAt: lastCount?.countedAt ?? null,
+        countDueAt: dueAt,
+        countStatus: l.consignedToId ? countStatus(dueAt, day) : 'none',
+        countStatusLabel: l.consignedToId ? COUNT_STATUS_LABELS[countStatus(dueAt, day)] : '—',
         nextServiceAt: l.nextServiceAt,
         turnaroundHours: l.item.turnaroundHours,
         state,
@@ -308,6 +329,242 @@ export class AssetsService {
     if (!row) throw new NotFoundException('قلم یافت نشد');
     await this.prisma.itemComponent.delete({ where: { id } });
     return { ok: true };
+  }
+
+  // ── داراییِ امانیِ مستقر ──────────────────────────────────────
+
+  /**
+   * سپردنِ یک لات به بیمارستان به‌صورتِ امانی.
+   *
+   * ⚠️ این **جابه‌جاییِ انبار نیست** و عمداً حرکتِ دفتری نمی‌سازد: محلِ فیزیکی
+   * از همان `StockMovement` می‌آید (اگر دستگاه رفته، حواله‌اش ثبت شده) و این
+   * فقط می‌گوید بیرون‌بودنش **دائمی و خواسته** است. اگر این‌جا هم دفتر می‌خورد،
+   * یک جابه‌جایی دو بار در موجودی می‌نشست.
+   */
+  async consign(lotId: number, dto: { hospitalId: number; countEveryDays?: number; notes?: string }, user: any) {
+    const lot = await this.prisma.stockLot.findUnique({ where: { id: lotId }, include: { item: true } });
+    if (!lot) throw new NotFoundException('لات یافت نشد');
+    if (!RETURNABLE.includes(lot.item.assetKind)) {
+      throw new BadRequestException('فقط ست و دستگاه امانی می‌شوند؛ قلمِ مصرفی فروخته می‌شود نه سپرده');
+    }
+    const hospital = await this.prisma.hospital.findUnique({ where: { id: Number(dto.hospitalId) } });
+    if (!hospital) throw new NotFoundException('بیمارستان یافت نشد');
+    const every = dto.countEveryDays === undefined || dto.countEveryDays === null || dto.countEveryDays === ('' as any)
+      ? null
+      : Math.trunc(Number(dto.countEveryDays));
+    if (every !== null && (!Number.isFinite(every) || every <= 0)) {
+      throw new BadRequestException('دورهٔ صورت‌برداری باید عددِ روزِ مثبت باشد');
+    }
+
+    await this.prisma.stockLot.update({
+      where: { id: lotId },
+      data: {
+        consignedToId: hospital.id,
+        consignedAt: lot.consignedAt ?? new Date(),
+        countEveryDays: every,
+        ...(typeof dto.notes === 'string' ? { notes: dto.notes.trim() || null } : {}),
+      },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'asset.consign', entityType: 'stock_lot', entityId: lotId,
+      before: { consignedToId: lot.consignedToId }, after: { consignedToId: hospital.id, countEveryDays: every },
+    });
+    return this.consignments();
+  }
+
+  /** پایانِ امانت — دستگاه به انبار برمی‌گردد. تاریخچهٔ شمارش‌ها می‌ماند. */
+  async unconsign(lotId: number, user: any) {
+    const lot = await this.prisma.stockLot.findUnique({ where: { id: lotId } });
+    if (!lot) throw new NotFoundException('لات یافت نشد');
+    if (!lot.consignedToId) throw new BadRequestException('این لات امانی نیست');
+    await this.prisma.stockLot.update({
+      where: { id: lotId },
+      data: { consignedToId: null, consignedAt: null, countEveryDays: null },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'asset.unconsign', entityType: 'stock_lot', entityId: lotId,
+      before: { consignedToId: lot.consignedToId },
+    });
+    return this.consignments();
+  }
+
+  /** فهرستِ امانی‌ها با سررسیدِ صورت‌برداری — «کدام‌ها را باید رفت و شمرد». */
+  async consignments(hospitalId?: number) {
+    const now = new Date();
+    const lots = await this.prisma.stockLot.findMany({
+      where: { NOT: { consignedToId: null }, ...(hospitalId ? { consignedToId: hospitalId } : {}) },
+      include: {
+        item: { select: { id: true, name: true, size: true, assetKind: true } },
+        consignedTo: { select: { id: true, name: true } },
+        counts: { orderBy: { countedAt: 'desc' }, take: 1, include: { lines: true } },
+      },
+      orderBy: [{ consignedToId: 'asc' }, { id: 'asc' }],
+    });
+    const rows = lots.map((l) => {
+      const last = l.counts[0] ?? null;
+      const dueAt = countDueAt(last?.countedAt, l.consignedAt, l.countEveryDays);
+      const st = countStatus(dueAt, now);
+      return {
+        lotId: l.id,
+        itemId: l.itemId,
+        itemName: [l.item.name, l.item.size].filter(Boolean).join(' '),
+        assetKind: l.item.assetKind,
+        assetLabel: ASSET_LABELS[l.item.assetKind] ?? l.item.assetKind,
+        serialNo: l.serialNo || l.lotNo,
+        hospitalId: l.consignedToId,
+        hospitalName: l.consignedTo?.name ?? '—',
+        consignedAt: l.consignedAt,
+        countEveryDays: l.countEveryDays,
+        lastCountAt: last?.countedAt ?? null,
+        lastCountId: last?.id ?? null,
+        lastCount: last ? reconcileCount(last.lines as any).totals : null,
+        dueAt,
+        status: st,
+        statusLabel: COUNT_STATUS_LABELS[st],
+      };
+    });
+    // عقب‌افتاده‌ها اول — فهرستی که به ترتیبِ شناسه مرتب باشد کارِ فوری را
+    // ته صفحه پنهان می‌کند.
+    const rank: Record<string, number> = { overdue: 0, due_soon: 1, ok: 2, none: 3 };
+    rows.sort((a, b) => (rank[a.status] - rank[b.status]) || (+(a.dueAt ?? 0) - +(b.dueAt ?? 0)));
+    return {
+      rows,
+      overdue: rows.filter((r) => r.status === 'overdue').length,
+      total: rows.length,
+    };
+  }
+
+  /**
+   * قالبِ صورت‌برداری: محتویاتِ ست به‌عنوانِ «انتظار»، و شمارشِ قبلی برای
+   * مقایسه. کاربر با فهرستِ خالی سرِ بیمارستان نمی‌رود.
+   */
+  async countSheet(lotId: number) {
+    const lot = await this.prisma.stockLot.findUnique({
+      where: { id: lotId },
+      include: {
+        item: { select: { id: true, name: true, size: true } },
+        consignedTo: { select: { id: true, name: true } },
+        counts: { orderBy: { countedAt: 'desc' }, take: 1, include: { lines: true } },
+      },
+    });
+    if (!lot) throw new NotFoundException('لات یافت نشد');
+    const comps = await this.prisma.itemComponent.findMany({ where: { setId: lot.itemId }, orderBy: { id: 'asc' } });
+    const prev = lot.counts[0] ?? null;
+    const prevBy = new Map((prev?.lines ?? []).map((l) => [l.label, l]));
+    return {
+      lotId: lot.id,
+      itemName: [lot.item.name, lot.item.size].filter(Boolean).join(' '),
+      serialNo: lot.serialNo || lot.lotNo,
+      hospitalId: lot.consignedToId,
+      hospitalName: lot.consignedTo?.name ?? null,
+      lastCountAt: prev?.countedAt ?? null,
+      // «انتظار» از تعریفِ ست می‌آید، نه از شمارشِ قبلی: اگر پایهٔ انتظار را
+      // شمارشِ قبلی بگذاریم، کسریِ دفعهٔ قبل به‌سکوت تبدیل به وضعِ عادی می‌شود.
+      lines: comps.map((c) => ({
+        label: c.label,
+        expected: c.quantity,
+        counted: prevBy.get(c.label)?.counted ?? c.quantity,
+        used: 0,
+      })),
+    };
+  }
+
+  /** ثبتِ یک صورت‌برداری. */
+  async addCount(
+    lotId: number,
+    dto: { countedAt?: string; notes?: string; lines?: { label: string; expected?: number; counted?: number; used?: number; notes?: string }[] },
+    user: any,
+  ) {
+    const lot = await this.prisma.stockLot.findUnique({ where: { id: lotId } });
+    if (!lot) throw new NotFoundException('لات یافت نشد');
+    if (!lot.consignedToId) throw new BadRequestException('صورت‌برداری برای داراییِ امانی است؛ این لات امانی نیست');
+    const countedAt = dto.countedAt ? new Date(dto.countedAt) : new Date();
+    if (Number.isNaN(countedAt.getTime())) throw new BadRequestException('تاریخِ صورت‌برداری نامعتبر است');
+    const raw = (dto.lines ?? []).filter((l) => String(l?.label ?? '').trim());
+    if (!raw.length) throw new BadRequestException('حداقل یک قلم برای شمارش لازم است');
+
+    const fixed = reconcileCount(
+      raw.map((l) => ({ label: String(l.label).trim(), expected: Number(l.expected), counted: Number(l.counted), used: Number(l.used) })),
+    );
+    const row = await this.prisma.consignmentCount.create({
+      data: {
+        lotId,
+        hospitalId: lot.consignedToId,
+        countedAt,
+        notes: typeof dto.notes === 'string' ? dto.notes.trim() || null : null,
+        countedById: user?.id ?? null,
+        lines: {
+          create: fixed.lines.map((l, i) => ({
+            label: l.label,
+            expected: l.expected,
+            counted: l.counted,
+            // مقدارِ اصلاح‌شده ذخیره می‌شود نه ورودیِ خام، تا خواندنِ بعدی
+            // دوباره همان اصلاح را لازم نداشته باشد.
+            used: l.used,
+            notes: typeof raw[i]?.notes === 'string' ? raw[i].notes!.trim() || null : null,
+          })),
+        },
+      },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'asset.count', entityType: 'consignment_count', entityId: row.id,
+      after: { lotId, totals: fixed.totals },
+    });
+    return this.counts(lotId);
+  }
+
+  /** تاریخچهٔ صورت‌برداریِ یک لات. */
+  async counts(lotId: number) {
+    const rows = await this.prisma.consignmentCount.findMany({
+      where: { lotId },
+      orderBy: [{ countedAt: 'desc' }, { id: 'desc' }],
+      include: { lines: { orderBy: { id: 'asc' } }, hospital: { select: { name: true } } },
+      take: 50,
+    });
+    return {
+      lotId,
+      rows: rows.map((c) => {
+        const r = reconcileCount(c.lines as any);
+        return {
+          id: c.id,
+          countedAt: c.countedAt,
+          hospitalName: c.hospital?.name ?? '—',
+          notes: c.notes,
+          lines: r.lines,
+          totals: r.totals,
+        };
+      }),
+    };
+  }
+
+  async removeCount(id: number, user: any) {
+    const row = await this.prisma.consignmentCount.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('صورت‌برداری یافت نشد');
+    await this.prisma.consignmentCount.delete({ where: { id } });
+    await this.audit.record({ actorId: user?.id, action: 'asset.count.delete', entityType: 'consignment_count', entityId: id, before: row });
+    return this.counts(row.lotId);
+  }
+
+  /**
+   * لات‌هایی که امانیِ **جای دیگری**اند.
+   *
+   * صدور حواله برایشان معمولاً اشتباهِ تایپی است: دستگاهِ مستقر در لقمان قرار
+   * نیست فردا برود میلاد. مثلِ تعارضِ زمانی، قابلِ عبور با تأییدِ صریح.
+   */
+  async consignedElsewhere(lotIds: number[], hospitalId?: number | null) {
+    if (!lotIds.length) return [];
+    const rows = await this.prisma.stockLot.findMany({
+      where: { id: { in: lotIds }, NOT: { consignedToId: null } },
+      include: { item: { select: { name: true, size: true } }, consignedTo: { select: { id: true, name: true } } },
+    });
+    return rows
+      .filter((l) => l.consignedToId !== (hospitalId ?? null))
+      .map((l) => ({
+        lotId: l.id,
+        serialNo: l.serialNo || l.lotNo,
+        itemName: [l.item.name, l.item.size].filter(Boolean).join(' '),
+        hospitalName: l.consignedTo?.name ?? '—',
+      }));
   }
 
   // ── کسریِ ست هنگام برگشت ─────────────────────────────────────

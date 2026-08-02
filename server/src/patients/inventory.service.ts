@@ -408,6 +408,14 @@ export class InventoryService {
           'اگر عمدی است، دوباره با تأیید بفرستید.',
         );
       }
+      // امانیِ جای دیگر: تعارضِ زمانی ندارد ولی اشتباهِ رایجی است.
+      const away = await this.assets.consignedElsewhere(lines.map((l) => Number(l.lotId)), dto.hospitalId ? Number(dto.hospitalId) : null);
+      if (away.length) {
+        throw new BadRequestException(
+          `«${away[0].itemName}»${away[0].serialNo ? ` (${away[0].serialNo})` : ''} امانیِ ${away[0].hospitalName} است. ` +
+          'اگر واقعاً جابه‌جا می‌شود، دوباره با تأیید بفرستید.',
+        );
+      }
     }
 
     // مبدأ اگر داده نشده، محلِ خانهٔ اولین لات است — همان جایی که کالا واقعاً هست.

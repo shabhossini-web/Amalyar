@@ -1013,3 +1013,122 @@ jobs:
           }
           console.log('proof ok');
           "
+
+      - name: Verify consigned assets stop reading as overdue and transport cost lands in the ledger
+        run: |
+          rm -rf /tmp/cj && mkdir -p /tmp/cj
+          npx --yes esbuild server/src/common/transport-cost.ts --bundle --platform=node --outfile=/tmp/cj/cost.js --log-level=error
+          npx --yes esbuild server/src/common/consignment.ts --bundle --platform=node --outfile=/tmp/cj/cons.js --log-level=error
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+          const assets = strip(fs.readFileSync('server/src/patients/assets.service.ts', 'utf8'));
+          const routes = strip(fs.readFileSync('server/src/patients/routes.service.ts', 'utf8'));
+          const schema = fs.readFileSync('server/prisma/schema.prisma', 'utf8');
+
+          // ① امانی باید بر «بیرون» مقدم باشد. اگر ترتیب برعکس شود، دستگاهِ
+          //    مستقر هر روز در فهرستِ «باید برگردد» تکرار می‌شود تا کاربر کلِ
+          //    فهرست را نادیده بگیرد — یعنی هشدارِ واقعی هم گم می‌شود.
+          const order = ['service', 'consigned', 'out', 'booked'].map((s) => assets.indexOf(\"state = '\" + s + \"'\"));
+          if (order.some((i) => i < 0) || order.some((v, i) => i && v < order[i - 1])) {
+            console.error('ترتیبِ وضعیتِ دارایی باید سرویس ← امانی ← بیرون ← رزرو باشد'); process.exit(1);
+          }
+
+          // ② امانی در صفِ جمع‌آوری نمی‌آید: آن‌جا زندگی می‌کند، پس هر روز ته صف
+          //    می‌ماند و صف بی‌معنا می‌شود.
+          const pq = routes.split('async pickupQueue(')[1].split(/\n  \}/)[0];
+          if (!/consigned\.has\(/.test(pq)) {
+            console.error('صفِ جمع‌آوری باید امانی را کنار بگذارد'); process.exit(1);
+          }
+
+          // ③ سپردن حرکتِ دفتری نمی‌سازد — وگرنه یک جابه‌جایی دو بار در موجودی
+          //    می‌نشیند. محلِ فیزیکی همچنان از StockMovement می‌آید.
+          const cons = assets.split('async consign(')[1].split(/\n  \}/)[0];
+          if (/stockMovement\.create|createMany/.test(cons)) {
+            console.error('سپردنِ امانی نباید حرکتِ انبار بسازد'); process.exit(1);
+          }
+          if (!/RETURNABLE\.includes\(lot\.item\.assetKind\)/.test(cons)) {
+            console.error('قلمِ مصرفی امانی نمی‌شود'); process.exit(1);
+          }
+
+          // ④ صورت‌برداری سه عدد دارد نه دو: تفاوتِ «مصرف» و «گم» تفاوتِ فاکتورِ
+          //    فروش با زیانِ شرکت است. یک عددِ «مغایرت» هر دو را دفن می‌کند.
+          const line = schema.split('model ConsignmentCountLine')[1].split('}')[0];
+          for (const f of ['expected', 'counted', 'used']) {
+            if (!new RegExp('\\\\b' + f + '\\\\b').test(line)) {
+              console.error('قلمِ صورت‌برداری باید ' + f + ' داشته باشد'); process.exit(1);
+            }
+          }
+
+          // ⑤ تطبیق تابعِ خالص است و در سرویس دوباره نوشته نمی‌شود — دو تعریف از
+          //    «کسری» یعنی عددِ صفحه با عددِ گزارش فرق کند.
+          // ⚠️ خلوص را با نبودِ خطِ import بسنج نه با جست‌وجوی واژهٔ prisma: خودِ
+          //    کامنتِ بالای فایل کلمهٔ Prisma را دارد و نگهبان بی‌دلیل می‌ترکید.
+          const rec = strip(fs.readFileSync('server/src/common/consignment.ts', 'utf8'));
+          if (!/export function reconcileCount/.test(rec) || /^\s*import /m.test(rec)) {
+            console.error('ریاضیِ امانی باید خالص و جدا بماند'); process.exit(1);
+          }
+          if (!/Math\.min\(/.test(rec)) {
+            console.error('مصرفِ اعلامی باید به کسریِ واقعی سنجاق شود'); process.exit(1);
+          }
+          if (!/reconcileCount\(/.test(assets)) {
+            console.error('سرویس باید از همان تابعِ خالص بخواند'); process.exit(1);
+          }
+
+          // ⑥ هزینهٔ حمل باید به **ردیفِ دفتر** برسد. اگر فقط روی مسیر بنشیند، در
+          //    گزارشِ مالی دیده نمی‌شود و سودِ ماه بیشتر از واقعیت گزارش می‌شود.
+          const cost = routes.split('async setCost(')[1].split(/\n  \}/)[0];
+          if (!/ledger\.addExpense/.test(cost)) {
+            console.error('هزینهٔ مسیر باید ردیفِ Expense بسازد'); process.exit(1);
+          }
+          if (!/removeExpense/.test(cost)) {
+            console.error('ویرایشِ هزینه باید ردیفِ قبلی را ببرد، وگرنه دو بار شمرده می‌شود'); process.exit(1);
+          }
+
+          // ⑦ سرشکنِ per-visit ذخیره نمی‌شود — ذخیره‌اش یعنی هزینه دو بار در
+          //    گزارشِ مالی بیاید (یک‌بار Expense، یک‌بار سهمِ عمل).
+          const tc = strip(fs.readFileSync('server/src/common/transport-cost.ts', 'utf8'));
+          if (/^\s*import /m.test(tc)) { console.error('سرشکنِ هزینه باید خالص بماند'); process.exit(1); }
+          const stop = schema.split('model TransportStop')[1].split(/\n\}/)[0];
+          if (/visitCost|costShare|allocatedCost/.test(stop)) {
+            console.error('سهمِ عمل نباید روی توقف ذخیره شود'); process.exit(1);
+          }
+
+          // ⑧ باقی‌ماندهٔ تقسیم گم نمی‌شود: جمعِ سرشکن باید دقیقاً برابرِ هزینه باشد،
+          //    وگرنه همان اختلافِ یک‌تومانی اعتماد به گزارش را می‌برد.
+          const { allocate, allocateRun } = require('/tmp/cj/cost.js');
+          for (const [total, n] of [[100000, 3], [7, 3], [1, 4], [999999, 7]]) {
+            const sum = [...allocate(total, Array.from({ length: n }, (_, i) => i)).values()].reduce((a, b) => a + b, 0);
+            if (sum !== total) { console.error('سرشکنِ ' + total + ' روی ' + n + ' برابرِ کل نشد: ' + sum); process.exit(1); }
+          }
+
+          // ⑨ عملی که هم تحویل دارد هم جمع‌آوری، یک‌بار شمرده می‌شود — وگرنه
+          //    رفت‌وبرگشت دو برابر هزینه می‌گیرد.
+          const both = allocateRun({
+            fuelCost: 100, stops: [{ transfers: [{ visitId: 5 }] }, { transfers: [{ visitId: 5 }] }],
+          });
+          if (both.shares.length !== 1 || both.shares[0].amount !== 100) {
+            console.error('عملِ رفت‌وبرگشتی نباید دو سهم بگیرد'); process.exit(1);
+          }
+          // توقفِ بدونِ عمل سهمی نمی‌گیرد و مبلغش صریح «سرشکن‌نشده» می‌ماند،
+          // نه اینکه بی‌سروصدا به گردنِ یک بیمار بیفتد.
+          const none = allocateRun({ fuelCost: 100, stops: [{ transfers: [{ visitId: null }] }] });
+          if (none.unallocated !== 100) { console.error('هزینهٔ بی‌عمل باید صریح سرشکن‌نشده بماند'); process.exit(1); }
+
+          // ⑩ سررسیدِ امانیِ هرگز‌نشمرده از **روزِ سپردن** می‌آید. اگر فقط آخرین
+          //    شمارش مبنا بود، امانی‌ای که یک‌بار هم شمرده نشده هیچ‌وقت سررسید
+          //    نمی‌گرفت — یعنی همانی که بیشتر از همه باید شمرده شود از فهرست
+          //    می‌افتاد.
+          const { countDueAt, countStatus, reconcileCount } = require('/tmp/cj/cons.js');
+          const from = new Date('2026-01-01T00:00:00.000Z');
+          const due = countDueAt(null, from, 30);
+          if (!due || countStatus(due, new Date('2026-03-01T00:00:00.000Z')) !== 'overdue') {
+            console.error('امانیِ نشمرده باید از روزِ سپردن سررسید بگیرد'); process.exit(1);
+          }
+          if (countDueAt(null, from, 0) !== null) { console.error('دورهٔ صفر نباید همه را عقب‌افتاده کند'); process.exit(1); }
+          const r = reconcileCount([{ label: 'x', expected: 6, counted: 3, used: 99 }]);
+          if (r.totals.used !== 3 || r.totals.missing !== 0) {
+            console.error('مصرفِ بیش از کسری باید سنجاق شود، نه کسریِ منفی بسازد'); process.exit(1);
+          }
+          console.log('consignment + transport cost ok');
+          "

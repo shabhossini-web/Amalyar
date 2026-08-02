@@ -100,6 +100,8 @@ model Hospital {
   needs     HospitalItem[]
   stops     TransportStop[]
   aliases   HospitalAlias[]
+  consigned StockLot[]
+  counts    ConsignmentCount[]
 
   @@map("hospitals")
 }
@@ -295,11 +297,22 @@ model StockLot {
   /// برمی‌گردد. محلِ *فعلیِ* هر تعداد، از دفتر مشتق می‌شود (`StockMovement.location`)،
   /// چون یک لات می‌تواند همزمان چند جا باشد. «در دسترس» = موجودی در همین محل.
   location  String?
+  /// **امانیِ مستقر** — این لات در بیمارستان زندگی می‌کند، نه در انبار. اگر پر
+  /// باشد، «بیرون بودن» وضعیتِ عادیِ اوست نه بدهیِ برگشت: تقویم آن را «امانی»
+  /// نشان می‌دهد و صفِ جمع‌آوری سراغش نمی‌رود. بدونِ این، دستگاهِ امانی برای
+  /// همیشه «بیرون» می‌ماند و هر روز در فهرستِ کارِ نکرده تکرار می‌شود.
+  consignedTo   Hospital? @relation(fields: [consignedToId], references: [id], onDelete: SetNull)
+  consignedToId Int?      @map("consigned_to_id")
+  consignedAt   DateTime? @map("consigned_at")
+  /// دورهٔ صورت‌برداری به روز. امانی بدونِ شمارشِ دوره‌ای یعنی موجودیِ کاغذی:
+  /// مصرف‌شده‌ها فاکتور نمی‌شوند و کسری سال‌ها بعد پیدا می‌شود.
+  countEveryDays Int?     @map("count_every_days")
   notes     String?
   createdAt DateTime  @default(now()) @map("created_at")
 
   movements StockMovement[]
   shortages SetShortage[]
+  counts    ConsignmentCount[]
 
   @@index([itemId])
   @@index([lotNo])
@@ -1020,6 +1033,8 @@ model Expense {
   createdById Int?     @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
+  transportRun TransportRun?
+
   @@index([spentAt])
   @@index([category])
   @@map("expenses")
@@ -1205,6 +1220,18 @@ model TransportRun {
   status  String         @default("planned")
   notes   String?
 
+  /// هزینهٔ همین مسیر — تومان. سه قلمِ جدا چون مدیر می‌پرسد «بنزین چقدر شد»
+  /// نه فقط «حمل چقدر شد».
+  fuelCost  Int?    @map("fuel_cost")
+  driverFee Int?    @map("driver_fee")
+  otherCost Int?    @map("other_cost")
+  costNote  String? @map("cost_note")
+  /// ⚠️ هزینه **دو جا ثبت نمی‌شود**: عددهای بالا فقط تفکیک‌اند و ردیفِ واقعیِ
+  /// دفتر همین `Expense` است. اگر مسیر هزینهٔ مستقلِ خودش را نگه می‌داشت،
+  /// گزارشِ مالی یا دوبار می‌شمرد یا اصلاً نمی‌دید.
+  expense   Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  expenseId Int?     @unique @map("expense_id")
+
   stops TransportStop[]
 
   createdById Int?     @map("created_by_id")
@@ -1312,5 +1339,46 @@ model SetShortage {
 
   @@index([transferId])
   @@map("set_shortages")
+}
+
+/// صورت‌برداریِ دوره‌ای از یک داراییِ امانی.
+///
+/// ⚠️ سه عدد دارد نه دو: **انتظار**، **شمرده‌شده**، و از کسریِ بینشان آن بخشی
+/// که «مصرف شد» جدا می‌شود. تفاوتِ «مصرف» و «گم» تفاوتِ فاکتورِ فروش با زیانِ
+/// شرکت است؛ اگر یک عددِ «مغایرت» بنویسیم، هر دو با هم دفن می‌شوند.
+model ConsignmentCount {
+  id         Int      @id @default(autoincrement())
+  lot        StockLot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+  lotId      Int      @map("lot_id")
+  hospital   Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  hospitalId Int?     @map("hospital_id")
+  countedAt  DateTime @map("counted_at")
+  notes      String?
+
+  lines ConsignmentCountLine[]
+
+  countedById Int?     @map("counted_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([lotId, countedAt])
+  @@map("consignment_counts")
+}
+
+/// یک قلم از صورت‌برداری. `label` همان عنوانِ محتویاتِ ست است تا شمارش و
+/// چک‌لیستِ برگشت از یک واژگان بخوانند.
+model ConsignmentCountLine {
+  id      Int              @id @default(autoincrement())
+  count   ConsignmentCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  countId Int              @map("count_id")
+
+  label    String
+  expected Int @default(0)
+  counted  Int @default(0)
+  /// چند تا از کسری «مصرف شد» — یعنی قابلِ فاکتور. باقی‌اش گم/خراب است.
+  used     Int @default(0)
+  notes    String?
+
+  @@index([countId])
+  @@map("consignment_count_lines")
 }
 

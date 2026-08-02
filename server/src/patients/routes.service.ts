@@ -3,6 +3,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { StorageService } from '../storage/storage.service';
+import { LedgerService } from './ledger.service';
+import { allocateRun, runTotal } from '../common/transport-cost';
 
 export const STOP_KINDS = ['deliver', 'pickup'] as const;
 export const STOP_LABELS: Record<string, string> = { deliver: 'تحویل', pickup: 'جمع‌آوری' };
@@ -42,6 +44,7 @@ export class RoutesService {
     private prisma: PrismaService,
     private audit: AuditService,
     private storage: StorageService,
+    private ledger: LedgerService,
   ) {}
 
   private static readonly STOP_INCLUDE = {
@@ -133,6 +136,7 @@ export class RoutesService {
       },
       // خودروی مسیر بر خودروی همیشگیِ نیرو مقدم است.
       vehicle: r.vehicle ?? r.staff.vehicle,
+      cost: RoutesService.costOf(r),
       stops: r.stops.map((s: any) => ({
         id: s.id,
         seq: s.seq,
@@ -374,9 +378,15 @@ export class RoutesService {
         },
       },
     });
+    // امانیِ مستقر جمع نمی‌شود: آن‌جا زندگی می‌کند. بدونِ این، هر دستگاهِ امانی
+    // برای همیشه ته صفِ جمع‌آوری می‌ماند و صف بی‌معنا می‌شود.
+    const consigned = new Set(
+      (await this.prisma.stockLot.findMany({ where: { NOT: { consignedToId: null } }, select: { id: true } })).map((l) => l.id),
+    );
     return rows
       // حواله‌ای که همین حالا روی توقفِ جمع‌آوری نشسته دیگر «در صف» نیست.
       .filter((t) => t.stop?.kind !== 'pickup')
+      .filter((t) => !t.movements.length || !t.movements.every((m: any) => consigned.has(m.lotId)))
       .map((t) => ({
         id: t.id,
         code: t.code,
@@ -441,6 +451,168 @@ export class RoutesService {
     }
     for (const t of rows) if (t.status === 'planned') t.__lots = map;
     return rows;
+  }
+
+  // ── هزینهٔ حمل ───────────────────────────────────────────────
+
+  /**
+   * هزینهٔ مسیر و سرشکنش — از تابعِ خالص، تا صفحه و گزارش یک عدد بگویند.
+   *
+   * `stops` گاهی بار نشده (نمای ماه) — آن‌وقت فقط جمع برمی‌گردد و سهم خالی
+   * است، نه صفر، تا «سرشکن نشده» با «سهمِ صفر» اشتباه نشود.
+   */
+  private static costOf(r: any) {
+    const a = r.stops ? allocateRun({ ...r, stops: r.stops.map((s: any) => ({ transfers: s.transfers ?? [] })) }) : null;
+    return {
+      fuelCost: r.fuelCost ?? null,
+      driverFee: r.driverFee ?? null,
+      otherCost: r.otherCost ?? null,
+      costNote: r.costNote ?? null,
+      expenseId: r.expenseId ?? null,
+      total: runTotal(r),
+      shares: a?.shares ?? null,
+      unallocated: a?.unallocated ?? null,
+    };
+  }
+
+  /**
+   * ثبت/به‌روزرسانیِ هزینهٔ یک مسیر.
+   *
+   * ⚠️ ردیفِ `Expense` **بازساخته** می‌شود نه ویرایش: حذفِ هزینه ردیف‌های دفترِ
+   * شرکا را باطل می‌کند و ثبتِ دوباره ردیفِ درست می‌سازد. ویرایشِ درجا مبلغ را
+   * عوض می‌کرد و بدهیِ شرکا روی عددِ قبلی جا می‌ماند.
+   */
+  async setCost(
+    id: number,
+    dto: { fuelCost?: number; driverFee?: number; otherCost?: number; costNote?: string; paidById?: number; bankAccountId?: number },
+    user: any,
+  ) {
+    const run = await this.prisma.transportRun.findUnique({
+      where: { id },
+      include: { staff: { include: { person: { select: { firstName: true, lastName: true } } } } },
+    });
+    if (!run) throw new NotFoundException('مسیر یافت نشد');
+
+    const num = (v: unknown, label: string) => {
+      if (v === undefined || v === null || v === '') return null;
+      const n = Math.trunc(Number(v));
+      if (!Number.isFinite(n) || n < 0) throw new BadRequestException(`${label} باید عددِ نامنفی باشد`);
+      return n;
+    };
+    const fuelCost = num(dto.fuelCost, 'بنزین');
+    const driverFee = num(dto.driverFee, 'دستمزدِ راننده');
+    const otherCost = num(dto.otherCost, 'هزینهٔ دیگر');
+    const total = runTotal({ fuelCost, driverFee, otherCost });
+
+    // ردیفِ قبلی هرچه بود می‌رود؛ بعد اگر مبلغی هست، ردیفِ تازه ساخته می‌شود.
+    if (run.expenseId) {
+      await this.prisma.transportRun.update({ where: { id }, data: { expenseId: null } });
+      await this.ledger.removeExpense(run.expenseId, user).catch(() => null);
+    }
+
+    let expenseId: number | null = null;
+    if (total > 0) {
+      const staffName = `${run.staff.person.firstName} ${run.staff.person.lastName}`.trim();
+      const created = await this.ledger.addExpense(
+        {
+          title: `حملِ ${staffName} — ${faDate(run.runDate)}`,
+          category: 'حمل و نقل',
+          amount: total,
+          spentAt: run.runDate,
+          notes: [dto.costNote, `مسیرِ #${run.id}`].filter(Boolean).join(' · '),
+          paidById: dto.paidById ?? undefined,
+          bankAccountId: dto.bankAccountId ?? undefined,
+        },
+        user,
+      );
+      expenseId = created.id;
+    }
+
+    await this.prisma.transportRun.update({
+      where: { id },
+      data: { fuelCost, driverFee, otherCost, costNote: text(dto.costNote), expenseId },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'transport.run.cost', entityType: 'transport_run', entityId: id,
+      before: { total: runTotal(run) }, after: { total, expenseId },
+    });
+    return this.run(id);
+  }
+
+  /**
+   * گزارشِ هزینهٔ حملِ یک ماه — جمع، به تفکیکِ نیرو، و **سهمِ هر عمل**.
+   *
+   * سهمِ عمل این‌جا حساب می‌شود و در `Expense` ذخیره نمی‌شود: هزینه یک ردیفِ
+   * دفتری دارد و سرشکن یک نما. اگر سهم را هم می‌نوشتیم، گزارشِ مالی هزینه را
+   * دو بار می‌شمرد.
+   */
+  async costReport(jy: number, jm: number) {
+    if (!Number.isInteger(jy) || jy < 1300 || jy > 1500) throw new BadRequestException('سالِ نامعتبر');
+    if (!Number.isInteger(jm) || jm < 1 || jm > 12) throw new BadRequestException('ماهِ نامعتبر');
+    const [from, to] = jalaliMonthRange(jy, jm);
+    const runs = await this.prisma.transportRun.findMany({
+      where: { runDate: { gte: from, lt: to } },
+      orderBy: { runDate: 'asc' },
+      include: {
+        staff: { include: { person: { select: { firstName: true, lastName: true } } } },
+        stops: {
+          orderBy: { seq: 'asc' },
+          include: {
+            hospital: { select: { name: true } },
+            transfers: { select: { visitId: true, visit: { select: { seq: true, patient: { select: { code: true } } } } } },
+          },
+        },
+      },
+    });
+
+    const byVisit = new Map<number, { visitId: number; visitCode: string | null; amount: number; runs: number }>();
+    const byStaff = new Map<string, { label: string; amount: number; runs: number }>();
+    let total = 0;
+    let unallocated = 0;
+
+    const rows = runs.map((r) => {
+      const a = allocateRun(r as any);
+      total += a.total;
+      unallocated += a.unallocated;
+      const staffName = `${r.staff.person.firstName} ${r.staff.person.lastName}`.trim();
+      const st = byStaff.get(staffName) ?? { label: staffName, amount: 0, runs: 0 };
+      st.amount += a.total;
+      st.runs += 1;
+      byStaff.set(staffName, st);
+
+      const codeOf = new Map<number, string | null>();
+      for (const s of r.stops) {
+        for (const t of s.transfers) {
+          if (t.visitId) codeOf.set(t.visitId, t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null);
+        }
+      }
+      for (const sh of a.shares) {
+        const cur = byVisit.get(sh.visitId) ?? { visitId: sh.visitId, visitCode: codeOf.get(sh.visitId) ?? null, amount: 0, runs: 0 };
+        cur.amount += sh.amount;
+        cur.runs += 1;
+        byVisit.set(sh.visitId, cur);
+      }
+
+      return {
+        id: r.id,
+        runDate: r.runDate,
+        staffName,
+        stops: r.stops.length,
+        fuelCost: r.fuelCost, driverFee: r.driverFee, otherCost: r.otherCost,
+        total: a.total,
+        expenseId: r.expenseId,
+        shares: a.shares.map((sh) => ({ ...sh, visitCode: codeOf.get(sh.visitId) ?? null })),
+        unallocated: a.unallocated,
+      };
+    });
+
+    return {
+      year: jy, month: jm,
+      totals: { total, unallocated, runs: rows.length },
+      rows,
+      byStaff: [...byStaff.values()].sort((a, b) => b.amount - a.amount),
+      byVisit: [...byVisit.values()].sort((a, b) => b.amount - a.amount),
+    };
   }
 
   // ── رسیدِ تحویل ───────────────────────────────────────────────

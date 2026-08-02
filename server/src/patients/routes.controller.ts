@@ -11,7 +11,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RoutesService } from './routes.service';
-import { AttachDto, ReorderDto, RunCreateDto, RunPatchDto, StopCreateDto, StopPatchDto } from './dto/routes.dto';
+import { AttachDto, ReorderDto, RunCostDto, RunCreateDto, RunPatchDto, StopCreateDto, StopPatchDto } from './dto/routes.dto';
 
 /** مسیرهای حمل — یک نیرو، یک روز، چند توقفِ مرتب. */
 @Controller('routes')
@@ -44,6 +44,13 @@ export class RoutesController {
   @Get('pickup-queue')
   pickupQueue() {
     return this.routes.pickupQueue();
+  }
+
+  /// ⚠️ پیش از `:id` ثبت شده، وگرنه «cost-report» شناسهٔ مسیر خوانده می‌شود.
+  @RequirePermissions('accounting.read')
+  @Get('cost-report')
+  costReport(@Query('year') y?: string, @Query('month') m?: string) {
+    return this.routes.costReport(Number(y), Number(m));
   }
 
   @RequirePermissions('patients.read')
@@ -104,6 +111,15 @@ export class RoutesController {
   @Post('stops/:id/transfers')
   attach(@Param('id', ParseIntPipe) id: number, @Body() dto: AttachDto, @CurrentUser() user: any) {
     return this.routes.attach(id, dto.transferIds, user);
+  }
+
+  // ── هزینهٔ حمل ───────────────────────────────────────────────
+
+  /// هزینهٔ مسیر — ردیفِ دفتری همان‌جا ساخته می‌شود.
+  @RequirePermissions('accounting.manage')
+  @Patch(':id/cost')
+  setCost(@Param('id', ParseIntPipe) id: number, @Body() dto: RunCostDto, @CurrentUser() user: any) {
+    return this.routes.setCost(id, dto, user);
   }
 
   // ── رسیدِ تحویل ───────────────────────────────────────────────

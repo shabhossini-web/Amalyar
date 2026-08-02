@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { RUN_STATUSES, STOP_KINDS } from '../routes.service';
 
 export class RunCreateDto {
@@ -46,4 +46,15 @@ export class ReorderDto {
 export class AttachDto {
   @IsArray() @ArrayMinSize(1, { message: 'حواله‌ای انتخاب نشده است' })
   transferIds!: number[];
+}
+
+/** هزینهٔ یک مسیر — تومان. */
+export class RunCostDto {
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0, { message: 'بنزین باید عددِ نامنفی باشد' }) fuelCost?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0, { message: 'دستمزدِ راننده باید عددِ نامنفی باشد' }) driverFee?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0, { message: 'هزینهٔ دیگر باید عددِ نامنفی باشد' }) otherCost?: number;
+  @IsOptional() @IsString() @MaxLength(200) costNote?: string;
+  /// اگر شریکی از جیبِ خودش داد — همان‌جا بدهیِ بقیه ثبت می‌شود.
+  @IsOptional() @Type(() => Number) @IsInt() paidById?: number;
+  @IsOptional() @Type(() => Number) @IsInt() bankAccountId?: number;
 }
