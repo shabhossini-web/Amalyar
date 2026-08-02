@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
 import { Back, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
@@ -174,29 +175,19 @@ export default function Definitions() {
         </div>
       </header>
 
-      <nav className="df-tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={merging}
-          className={merging ? 'on' : ''}
-          onClick={() => setMerging(true)}
-        >
-          یکسان‌سازیِ نام‌ها
-        </button>
-        {SECTIONS.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === s.key}
-            className={tab === s.key && !merging ? 'on' : ''}
-            onClick={() => { setTab(s.key); setMerging(false); }}
-          >
-            {s.label}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        label="بخش‌های تعاریفِ پایه"
+        variant="scroll"
+        value={merging ? '__merge' : tab}
+        onChange={(k) => {
+          if (k === '__merge') { setMerging(true); return; }
+          setTab(k); setMerging(false);
+        }}
+        items={[
+          { key: '__merge', label: 'یکسان‌سازیِ نام‌ها' },
+          ...SECTIONS.map((s) => ({ key: s.key, label: s.label })),
+        ]}
+      />
 
       {merging ? <NameMerge onToast={setToast} /> : (
       <>

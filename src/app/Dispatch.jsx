@@ -4,7 +4,8 @@ import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
-import { ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Send } from '../ui/icons.jsx';
+import { ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -212,14 +213,16 @@ export default function Dispatch() {
         </div>
       </header>
 
-      <nav className="dp-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === 'tech'} className={tab === 'tech' ? 'on' : ''} onClick={() => setTab('tech')}>
-          کارشناس
-        </button>
-        <button type="button" role="tab" aria-selected={tab === 'transport'} className={tab === 'transport' ? 'on' : ''} onClick={() => setTab('transport')}>
-          حمل و نقل
-        </button>
-      </nav>
+      <Tabs
+        label="نوعِ چینش"
+        tone="amber"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'tech', label: 'کارشناس', icon: User },
+          { key: 'transport', label: 'حمل و نقل', icon: Route },
+        ]}
+      />
 
       {err && <div className="dp-err">{err}</div>}
 

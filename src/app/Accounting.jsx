@@ -4,7 +4,8 @@ import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './accounting.css';
-import { Alert, ChevronEnd, Plus } from '../ui/icons.jsx';
+import { Alert, Bank, Book, Calendar, Chart, ChevronEnd, Doctor, Money, Plus, Users } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -41,11 +42,23 @@ export default function Accounting() {
         </div>
       </header>
 
-      <div className="ac-tabs">
-        {[['report', 'گزارشِ مالی'], ['treasury', 'خزانه'], ['contracts', 'قراردادِ جراحان'], ['partners', 'سهامداران'], ['expenses', 'هزینه‌ها'], ['banks', 'حساب‌های بانکی'], ['ledger', 'حسابِ جاریِ شرکا'], ['cheques', 'چک‌ها'], ['fiscal', 'سالِ مالی']].map(([k, l]) => (
-          <button key={k} type="button" className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
-        ))}
-      </div>
+      <Tabs
+        label="بخش‌های حسابداری"
+        variant="scroll"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'report', label: 'گزارشِ مالی', icon: Chart },
+          { key: 'treasury', label: 'خزانه', icon: Bank },
+          { key: 'contracts', label: 'قراردادِ جراحان', icon: Doctor },
+          { key: 'partners', label: 'سهامداران', icon: Users },
+          { key: 'expenses', label: 'هزینه‌ها', icon: Money },
+          { key: 'banks', label: 'حساب‌های بانکی', icon: Bank },
+          { key: 'ledger', label: 'حسابِ جاریِ شرکا', icon: Book },
+          { key: 'cheques', label: 'چک‌ها', icon: Money },
+          { key: 'fiscal', label: 'سالِ مالی', icon: Calendar },
+        ]}
+      />
 
       {tab === 'contracts' && <Contracts onToast={setToast} />}
       {tab === 'partners' && <Partners onToast={setToast} />}

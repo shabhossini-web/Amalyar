@@ -9,6 +9,7 @@ import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import './users.css';
 import { Back, Check, Close, User } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 
 const LEVELS = [
@@ -230,13 +231,18 @@ export default function Users() {
           <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
-        <div className="lg-tabs us-tabs" role="tablist">
-          <button className={tab === 'pending' ? 'on' : ''} onClick={() => setTab('pending')} role="tab">
-            در انتظار تأیید{pending?.length ? <em className="us-count">{pending.length}</em> : null}
-          </button>
-          <button className={tab === 'all' ? 'on' : ''} onClick={() => setTab('all')} role="tab">همهٔ کاربران</button>
-          <button className={tab === 'perm' ? 'on' : ''} onClick={() => setTab('perm')} role="tab">دسترسی‌ها</button>
-        </div>
+        <Tabs
+          variant="inset"
+          className="us-tabs"
+          label="بخش‌های کاربران"
+          value={tab}
+          onChange={setTab}
+          items={[
+            { key: 'pending', label: 'در انتظار تأیید', badge: pending?.length || null },
+            { key: 'all', label: 'همهٔ کاربران' },
+            { key: 'perm', label: 'دسترسی‌ها' },
+          ]}
+        />
 
         {/* ── در انتظار تأیید ── */}
         {tab === 'pending' && (

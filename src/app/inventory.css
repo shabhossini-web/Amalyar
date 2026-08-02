@@ -194,17 +194,6 @@
 }
 
 /* ── تب‌ها: لات‌ها / حواله‌ها ── */
-.iv-tabs { display: flex; gap: 8px; margin-block-end: 14px; }
-.iv-tabs button {
-  flex: 1; padding: 11px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
-  color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .12);
-}
-.iv-tabs button.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, var(--brand-2, #7c3aed), var(--brand-dark, #4c1d95)); }
-.iv-tabs button i {
-  display: inline-block; min-width: 18px; margin-inline-start: 6px; padding: 0 5px; border-radius: 9px;
-  font-style: normal; font-size: 11px; background: rgba(251, 191, 36, .22); color: #fcd34d;
-}
 
 /* موجودیِ کل زیرِ «در دسترس» — فقط وقتی فرق دارند */
 .iv-oftotal { display: block; font-style: normal; font-size: 9.5px; color: rgba(255, 255, 255, .45); }

@@ -99,13 +99,6 @@
 .ac-row.st-closed { opacity: .72; }
 
 /* ── مخصوصِ حسابداری ── */
-.ac-tabs { display: flex; gap: 8px; max-width: 940px; margin: 0 auto 14px; }
-.ac-tabs button {
-  flex: 1; padding: 11px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
-  color: rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .12);
-}
-.ac-tabs button.on { color: #fff; border-color: transparent; background: linear-gradient(135deg, #7c3aed, #4c1d95); }
 
 .ac-add, .ac-list { max-width: 940px; margin: 0 auto 16px; }
 .ac-add {
@@ -168,8 +161,6 @@
 .ac-pair span { color: rgba(255, 255, 255, .5); font-size: 11px; }
 .ac-pair i { flex: 1; font-style: normal; font-weight: 800; color: #fcd34d; text-align: end; }
 .ac-mini { padding: 8px 12px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
-.ac-tabs { flex-wrap: wrap; }
-.ac-tabs button { flex: 1 1 130px; }
 
 /* خزانه */
 .ac-tre { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-block-end: 10px; }

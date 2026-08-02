@@ -8,6 +8,7 @@ import './definitions.css';
 import JDate from './JDate.jsx';
 import './record.css';
 import { Alert, Back, Close, Download, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 
 const CATEGORIES = {
@@ -488,11 +489,13 @@ export default function PatientRecord() {
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
       {rec.allergies && <div className="rc-alert"><Alert size={13} /> حساسیت: {rec.allergies}</div>}
 
-      <div className="df-tabs">
-        {TABS.map(([k, l]) => (
-          <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>
-        ))}
-      </div>
+      <Tabs
+        label="بخش‌های پرونده"
+        variant="scroll"
+        value={tab}
+        onChange={setTab}
+        items={TABS.map(([k, l]) => ({ key: k, label: l }))}
+      />
 
       <div className="rc-body">
         {tab === 'profile' && <ProfileTab key={rec.updatedAt} rec={rec} onSave={save} toast={setToast} />}

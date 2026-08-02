@@ -1,0 +1,104 @@
+/*
+ * لایهٔ رابطِ مشترک.
+ *
+ * لهجهٔ هر نوار از `--tab-accent` می‌آید نه از یک قاعدهٔ جدا؛ پس افزودنِ
+ * لهجهٔ تازه یک متغیر است، نه یک کپیِ کاملِ استایل. همان اشتباهی که شش نوارِ
+ * تبِ جدا را ساخت.
+ */
+
+.ui-tabs {
+  display: flex;
+  gap: 8px;
+  max-width: 940px;
+  margin: 0 auto 14px;
+}
+
+.ui-tone-brand  { --tab-accent: linear-gradient(135deg, #a855f7, #6d28d9); --tab-ring: rgba(139, 92, 246, .5); }
+.ui-tone-amber  { --tab-accent: linear-gradient(135deg, rgba(245, 158, 11, .28), rgba(217, 119, 6, .3)); --tab-ring: rgba(245, 158, 11, .55); }
+
+.ui-tabs button {
+  position: relative;              /* قرصِ لغزان absolute داخلِ همین می‌نشیند */
+  flex: 1;
+  padding: 11px 14px;
+  border-radius: 13px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: rgba(255, 255, 255, .68);
+  background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .12);
+  /* رنگ transition دارد ولی پس‌زمینه نه — پس‌زمینه کارِ قرص است. */
+  transition: color .18s ease, border-color .18s ease;
+}
+.ui-tabs button:hover { color: rgba(255, 255, 255, .9); }
+.ui-tabs button.on { color: #fff; border-color: transparent; }
+.ui-tabs button:focus-visible { outline: 2px solid var(--tab-ring); outline-offset: 2px; }
+
+/* قرصِ فعال — تنها المانی که بینِ تب‌ها جابه‌جا می‌شود. */
+.ui-tab-pill {
+  position: absolute;
+  inset: 0;
+  border-radius: 13px;
+  background: var(--tab-accent);
+  box-shadow: 0 6px 18px rgba(124, 58, 237, .28);
+}
+.ui-tone-amber .ui-tab-pill {
+  box-shadow: none;
+  border: 1px solid var(--tab-ring);
+}
+
+/* محتوا باید **روی** قرص بماند، وگرنه گرادیان متن را می‌خورد. */
+.ui-tab-in {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ui-tab-ic { display: inline-flex; }
+
+.ui-tab-badge {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-style: normal;
+  font-size: 11px;
+  background: rgba(251, 191, 36, .22);
+  color: #fcd34d;
+}
+.ui-tabs button.on .ui-tab-badge { background: rgba(0, 0, 0, .22); color: #fff; }
+
+/* ── گونهٔ «قاب‌دار» — کنترلِ بخش‌بندی‌شده (ورود/ثبت‌نام) ── */
+.ui-tabs-inset {
+  gap: 6px;
+  padding: 5px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .25);
+  border: 1px solid rgba(255, 255, 255, .1);
+}
+.ui-tabs-inset button {
+  padding: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+}
+.ui-tabs-inset .ui-tab-pill { border-radius: 10px; box-shadow: 0 6px 18px rgba(124, 58, 237, .4); }
+
+/* ── گونهٔ «اسکرولی» — وقتی تب‌ها زیادند (حسابداری، تعاریف) ── */
+.ui-tabs-scroll {
+  overflow-x: auto;
+  padding-bottom: 3px;
+  scrollbar-width: thin;
+}
+.ui-tabs-scroll button { flex: 0 0 auto; padding: 10px 16px; font-size: 13px; }
+
+@media (max-width: 560px) {
+  .ui-tabs { gap: 6px; }
+  .ui-tabs button { padding: 10px 8px; font-size: 12px; }
+}

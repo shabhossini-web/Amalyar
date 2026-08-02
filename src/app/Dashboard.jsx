@@ -13,6 +13,7 @@ import './launcher.css';
 import './users.css';
 import './dashboard.css';
 import { Arrive, Back, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 /* ── آیکون‌های خطی ── */
 
@@ -420,10 +421,14 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </div>
 
         {!editing && (
-          <div className="lg-tabs db-modetabs" role="tablist">
-            <button type="button" role="tab" aria-selected={mode === 'new'} className={mode === 'new' ? 'on' : ''} onClick={() => setMode('new')}>بیمارِ جدید</button>
-            <button type="button" role="tab" aria-selected={mode === 'existing'} className={mode === 'existing' ? 'on' : ''} onClick={() => { setMode('existing'); setPicked(null); }}>بیمارِ موجود</button>
-          </div>
+          <Tabs
+            variant="inset"
+            className="db-modetabs"
+            label="نوعِ ثبت"
+            value={mode}
+            onChange={(k) => { setMode(k); if (k === 'existing') setPicked(null); }}
+            items={[{ key: 'new', label: 'بیمارِ جدید' }, { key: 'existing', label: 'بیمارِ موجود' }]}
+          />
         )}
 
         {(!editing && mode === 'existing') ? (
@@ -1024,26 +1029,30 @@ export default function Dashboard() {
           </button>
         </div>
 
-        <div className="lg-tabs db-filters" role="tablist">
-          {FILTERS.map((fl) => (
-            <button key={fl.v} type="button" role="tab" aria-selected={status === fl.v} className={status === fl.v ? 'on' : ''} onClick={() => setStatus(fl.v)}>
-              {fl.l}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          variant="inset"
+          className="db-filters"
+          label="وضعیت"
+          value={status}
+          onChange={setStatus}
+          items={FILTERS.map((fl) => ({ key: fl.v, label: fl.l }))}
+        />
 
         {/* فیلترِ نوع فقط وقتی دیده می‌شود که واقعاً بیش از یک نوع در کار باشد؛
             برای شرکتی که فقط عمل ثبت می‌کند، یک ردیفِ اضافه فقط شلوغی است.
             ⚠️ وقتی فیلتر فعال است حتماً می‌ماند، وگرنه لیست به یک نوع محدود
             می‌شد، ردیف ناپدید می‌گشت و راهِ برگشتی نبود. */}
         {showKindFilter && (
-          <div className="lg-tabs db-filters db-kindfilter" role="tablist" aria-label={`نوعِ ${t.visit}`}>
-            {KIND_FILTERS.filter((fl) => kind !== 'all' || fl.v === 'all' || kindsPresent.includes(fl.v)).map((fl) => (
-              <button key={fl.v} type="button" role="tab" aria-selected={kind === fl.v} className={kind === fl.v ? 'on' : ''} onClick={() => setKind(fl.v)}>
-                {fl.l}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            variant="inset"
+            className="db-filters db-kindfilter"
+            label={`نوعِ ${t.visit}`}
+            value={kind}
+            onChange={setKind}
+            items={KIND_FILTERS
+              .filter((fl) => kind !== 'all' || fl.v === 'all' || kindsPresent.includes(fl.v))
+              .map((fl) => ({ key: fl.v, label: fl.l }))}
+          />
         )}
 
         {/* چیپِ هر فیلترِ فعال با ضربدرِ خودش — کاربر باید بتواند یک فیلتر را

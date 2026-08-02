@@ -6,6 +6,7 @@ import { toEnDigits } from '../lib/identity.js';
 import { printInvoice } from './exports.js';
 import { useConfig } from './config.jsx';
 import { Alert, Close, Plus, Trash } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 
 const CHARGE_KINDS = { service: 'خدمت', item: 'کالا', discount: 'تخفیف' };
@@ -208,19 +209,20 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
               </div>
             </div>
 
-            <div className="lg-tabs db-modetabs" role="tablist">
-              <button type="button" role="tab" aria-selected={tab === 'charges'} className={tab === 'charges' ? 'on' : ''} onClick={() => setTab('charges')}>
-                اقلام ({data.charges.length.toLocaleString('fa-IR')})
-              </button>
-              <button type="button" role="tab" aria-selected={tab === 'payments'} className={tab === 'payments' ? 'on' : ''} onClick={() => setTab('payments')}>
-                پرداخت‌ها ({data.payments.length.toLocaleString('fa-IR')})
-              </button>
-              {/* تسویه همین‌جاست نه در صفحهٔ حسابداری: پولِ این بیمار است، و
-                  کاربر برای دیدنِ تقسیمش نباید صفحه عوض کند. */}
-              <button type="button" role="tab" aria-selected={tab === 'split'} className={tab === 'split' ? 'on' : ''} onClick={() => setTab('split')}>
-                تسویه
-              </button>
-            </div>
+            <Tabs
+              variant="inset"
+              className="db-modetabs"
+              label="بخش‌های صورت‌حساب"
+              value={tab}
+              onChange={setTab}
+              items={[
+                { key: 'charges', label: `اقلام (${data.charges.length.toLocaleString('fa-IR')})` },
+                { key: 'payments', label: `پرداخت‌ها (${data.payments.length.toLocaleString('fa-IR')})` },
+                /* تسویه همین‌جاست نه در صفحهٔ حسابداری: پولِ این بیمار است، و
+                   کاربر برای دیدنِ تقسیمش نباید صفحه عوض کند. */
+                { key: 'split', label: 'تسویه' },
+              ]}
+            />
 
             {tab === 'split' ? (
               <Settlement visitId={visit.id} onToast={onToast} onChanged={onChanged} />

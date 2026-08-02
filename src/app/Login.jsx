@@ -10,6 +10,7 @@ import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import './login.css';
 import { Clock, Fingerprint, Info } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 const toEnDigits = (s) =>
   (s || '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
@@ -263,10 +264,13 @@ export default function Login() {
 
         {/* تب‌ها */}
         {step !== 'done' && (
-          <div className="lg-tabs" role="tablist">
-            <button className={tab === 'login' ? 'on' : ''} onClick={() => { setTab('login'); setErr(''); }} role="tab">ورود</button>
-            <button className={tab === 'signup' ? 'on' : ''} onClick={() => { setTab('signup'); setErr(''); }} role="tab">ثبت‌نام</button>
-          </div>
+          <Tabs
+            variant="inset"
+            label="ورود یا ثبت‌نام"
+            value={tab}
+            onChange={(k) => { setTab(k); setErr(''); }}
+            items={[{ key: 'login', label: 'ورود' }, { key: 'signup', label: 'ثبت‌نام' }]}
+          />
         )}
 
         {err && <div className="lg-err" role="alert">{err}</div>}

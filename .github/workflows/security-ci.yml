@@ -1302,3 +1302,52 @@ jobs:
           }
           console.log('icon system ok');
           "
+
+      - name: Verify tabs come from one component and honour reduced motion
+        run: |
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const jsx = execSync(\"find src -name '*.jsx'\", { encoding: 'utf8' }).split('\n').filter(Boolean);
+          const tabs = fs.readFileSync('src/ui/Tabs.jsx', 'utf8');
+
+          // ① نوارِ تبِ دست‌ساز ممنوع. شش صفحه شش نوارِ جدا داشتند با شش CSS؛
+          //    نتیجه‌اش سه لهجهٔ رنگیِ متفاوت بود که هیچ‌کس تصمیم نگرفته بود.
+          const rogue = jsx.filter((f) => f !== 'src/ui/Tabs.jsx'
+            && /role=\"tablist\"/.test(fs.readFileSync(f, 'utf8')));
+          if (rogue.length) {
+            console.error('نوارِ تبِ دست‌ساز در: ' + rogue.join('، ')); process.exit(1);
+          }
+
+          // ② قرصِ فعال باید **یک المان** باشد که با layoutId می‌لغزد، نه
+          //    پس‌زمینه‌ای که روی هر دکمه خاموش/روشن شود.
+          if (!/layoutId=\{/.test(tabs)) {
+            console.error('قرصِ تب باید با layoutId جابه‌جا شود'); process.exit(1);
+          }
+
+          // ③ ⚠️ شناسهٔ قرص باید per-instance باشد. با یک رشتهٔ ثابت، دو نوارِ
+          //    تب در یک صفحه قرصشان را به هم قرض می‌دهند و قرص از این نوار به
+          //    آن یکی پرواز می‌کند — باگی که فقط در صفحه‌ای با دو نوار دیده
+          //    می‌شود، یعنی دیر.
+          if (!/useId\(\)/.test(tabs)) {
+            console.error('layoutId باید از useId بیاید نه رشتهٔ ثابت'); process.exit(1);
+          }
+          if (/layoutId=\{'[^']+'\}|layoutId=\"/.test(tabs)) {
+            console.error('layoutIdِ ثابت ممنوع'); process.exit(1);
+          }
+
+          // ④ «حرکتِ کمتر» انتخابِ کاربر است، نه پیشنهاد. انیمیشنی که با
+          //    prefers-reduced-motion خاموش نشود، برای کسی که سرگیجه می‌گیرد
+          //    قابلِ استفاده نیست.
+          if (!/useReducedMotion\(\)/.test(tabs) || !/duration: 0/.test(tabs)) {
+            console.error('نوارِ تب باید prefers-reduced-motion را رعایت کند'); process.exit(1);
+          }
+
+          // ⑤ لهجهٔ رنگ از متغیر می‌آید نه از قاعدهٔ کپی‌شده — وگرنه لهجهٔ
+          //    بعدی باز یک کپیِ کاملِ استایل می‌شود.
+          const css = fs.readFileSync('src/ui/ui.css', 'utf8');
+          if (!/--tab-accent/.test(css) || !/background: var\(--tab-accent\)/.test(css)) {
+            console.error('رنگِ قرص باید از --tab-accent بیاید'); process.exit(1);
+          }
+          console.log('tabs ok');
+          "

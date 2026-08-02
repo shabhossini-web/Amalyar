@@ -4,7 +4,8 @@ import { api } from '../lib/api.js';
 import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
-import { Back, Close, Plus, Route } from '../ui/icons.jsx';
+import { Back, Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -84,13 +85,16 @@ export default function Inventory() {
         </div>
       </header>
 
-      <div className="iv-tabs">
-        <button type="button" className={tab === 'lots' ? 'on' : ''} onClick={() => setTab('lots')}>لات‌ها</button>
-        <button type="button" className={tab === 'transfers' ? 'on' : ''} onClick={() => setTab('transfers')}>
-          حواله‌ها{openTransfers ? <i>{num(openTransfers)}</i> : null}
-        </button>
-        <button type="button" className={tab === 'assets' ? 'on' : ''} onClick={() => setTab('assets')}>دارایی‌ها</button>
-      </div>
+      <Tabs
+        label="بخش‌های انبار"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'lots', label: 'لات‌ها', icon: Box },
+          { key: 'transfers', label: 'حواله‌ها', icon: Route, badge: openTransfers ? num(openTransfers) : null },
+          { key: 'assets', label: 'دارایی‌ها', icon: Wave },
+        ]}
+      />
 
       {tab === 'assets' ? (
         <Assets onToast={setToast} />
