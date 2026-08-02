@@ -2,9 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
+import { SettingsService } from './settings.service';
 
 const KEY_VERTICAL = 'vertical';
-const KEY_BRAND = 'brand_name';
 
 /**
  * پیکربندیِ سطحِ شرکت.
@@ -14,7 +14,7 @@ const KEY_BRAND = 'brand_name';
  */
 @Injectable()
 export class ConfigService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private settings: SettingsService) {}
 
   private async read(key: string): Promise<string | null> {
     const row = await this.prisma.setting.findUnique({ where: { key } });
@@ -28,11 +28,14 @@ export class ConfigService {
   }
 
   async get() {
-    const [vertical, brandName] = await Promise.all([this.vertical(), this.read(KEY_BRAND)]);
+    const [vertical, brand] = await Promise.all([this.vertical(), this.settings.brand()]);
     return {
       vertical,
       verticalLabel: VERTICALS[vertical].label,
-      brandName,
+      brandName: brand.name,
+      /// هویتِ کاملِ شرکت برای سربرگ و فاکتور — یک منبع، تا هر چاپ‌گر خودش
+      /// از تنظیمات نچیندش و یکی‌شان از قلم نیفتد.
+      brand,
       /// فهرست برای صفحهٔ تنظیمات؛ کلاینت نباید این‌ها را hardcode کند.
       verticals: Object.entries(VERTICALS).map(([key, v]) => ({ key, label: v.label })),
     };
@@ -75,24 +78,6 @@ export class ConfigService {
     await this.audit.record({
       actorId: user?.id, action: 'config.vertical', entityType: 'setting', entityId: 0,
       before: { vertical: before }, after: { vertical: value },
-    });
-    return this.get();
-  }
-
-  async setBrandName(value: string | null, user: any) {
-    const name = value?.trim() || null;
-    if (name && name.length > 60) throw new BadRequestException('نامِ برند طولانی است');
-    if (name) {
-      await this.prisma.setting.upsert({
-        where: { key: KEY_BRAND },
-        create: { key: KEY_BRAND, value: name },
-        update: { value: name },
-      });
-    } else {
-      await this.prisma.setting.deleteMany({ where: { key: KEY_BRAND } });
-    }
-    await this.audit.record({
-      actorId: user?.id, action: 'config.brand', entityType: 'setting', entityId: 0, after: { brandName: name },
     });
     return this.get();
   }

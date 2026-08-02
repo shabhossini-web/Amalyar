@@ -23,10 +23,9 @@ const Check = (p) => (<svg viewBox="0 0 24 24" {...S} {...p}><path d="m4 12 5 5L
  * تا از تغییرش نترسد.
  */
 export default function Settings() {
-  const { vertical, verticals, brandName, error: configError, reload } = useConfig();
+  const { vertical, verticals, error: configError, reload } = useConfig();
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
-  const [brand, setBrand] = useState(brandName || '');
 
   const [tariffs, setTariffs] = useState([]);
   const [codes, setCodes] = useState({ total: 0, version: null });
@@ -66,7 +65,6 @@ export default function Settings() {
   };
 
   useEffect(() => { document.title = 'عمل‌یار — تنظیماتِ شرکت'; }, []);
-  useEffect(() => { setBrand(brandName || ''); }, [brandName]);
   useEffect(() => {
     if (!toast) return undefined;
     const timer = setTimeout(() => setToast(''), toast.length > 40 ? 4500 : 2200);
@@ -80,15 +78,6 @@ export default function Settings() {
       await api('/config/vertical', { method: 'PATCH', body: { vertical: key } });
       await reload();
       setToast('حوزهٔ کاری تغییر کرد ✓ واژگان و ماژول‌ها به‌روز شدند.');
-    } catch (e) { setToast(e.message); } finally { setBusy(false); }
-  };
-
-  const saveBrand = async () => {
-    setBusy(true);
-    try {
-      await api('/config/brand', { method: 'PATCH', body: { brandName: brand.trim() } });
-      await reload();
-      setToast('نامِ برند ذخیره شد ✓');
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
 
@@ -198,19 +187,138 @@ export default function Settings() {
         </div>
       )}
 
-      <h3 className="st-h3">نامِ برند</h3>
-      <div className="st-brand">
-        <label className="pf-field">
-          <span>نامی که در سربرگ‌ها و گزارش‌ها نشان داده می‌شود</span>
-          <input value={brand} onChange={(e) => setBrand(e.target.value)} maxLength={60} placeholder="نامِ شرکت" />
-        </label>
-        <button type="button" className="df-save" onClick={saveBrand} disabled={busy}>ذخیره</button>
-      </div>
+      <Knobs onToast={setToast} onSaved={reload} />
 
       <ImportPanel onToast={setToast} />
 
       {toast && <div className="df-toast">{toast}</div>}
     </div>
+  );
+}
+
+/**
+ * تنظیماتِ اختصاصیِ شرکت.
+ *
+ * ⚠️ این صفحه **از رجیستریِ سرور ساخته می‌شود**، نه از فهرستی که این‌جا نوشته
+ * شده باشد. افزودنِ تنظیمِ تازه یعنی یک ردیف در `settings-registry.ts` و
+ * همین‌جا خودش ظاهر می‌شود — وگرنه هر تنظیمِ جدید دو تغییر لازم داشت و دیر یا
+ * زود یکی‌شان جا می‌ماند.
+ */
+function Knobs({ onToast, onSaved }) {
+  const [groups, setGroups] = useState(null);
+  const [draft, setDraft] = useState({});     // فقط فیلدهای دست‌خورده
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const d = await api('/settings');
+      setGroups(d.groups);
+      setDraft({});
+      setError(null);
+    } catch (e) {
+      setError(e?.status ? `${e.message} (کد ${e.status})` : e?.message || 'ارتباط با سرور برقرار نشد');
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const items = (groups ?? []).flatMap((g) => g.items);
+  const valueOf = (it) => (it.key in draft ? draft[it.key] : it.value);
+  const dirty = Object.keys(draft).filter((k) => {
+    const it = items.find((i) => i.key === k);
+    return it && String(draft[k]) !== String(it.value);
+  });
+
+  const set = (key, v) => setDraft((d) => ({ ...d, [key]: v }));
+  const reset = (it) => set(it.key, it.default);
+
+  const save = async () => {
+    if (!dirty.length || busy) return;
+    setBusy(true);
+    try {
+      const values = Object.fromEntries(dirty.map((k) => [k, draft[k]]));
+      const d = await api('/settings', { method: 'PATCH', body: { values } });
+      setGroups(d.groups);
+      setDraft({});
+      // پیکربندی دوباره خوانده می‌شود تا نامِ برند در همین لحظه در رابط عوض شود.
+      await onSaved?.();
+      onToast(`${faNum(d.changed)} تنظیم ذخیره شد ✓`);
+    } catch (e) {
+      // پیام‌های گروهی را خودِ لایهٔ api به هم چسبانده؛ همه را نشان می‌دهیم نه فقط اولی.
+      onToast(e.message);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <h3 className="st-h3">تنظیماتِ شرکت</h3>
+      <div className="df-note">
+        این‌ها فقط برای همین شرکت‌اند و روی نصبِ بقیه اثری ندارند. «پیش‌فرض» یعنی
+        هنوز دست نخورده — و اگر روزی پیش‌فرضِ سامانه بهتر شود، همین‌ها خودشان به‌روز می‌شوند.
+      </div>
+
+      {error && (
+        <div className="st-fail">
+          <b>تنظیمات خوانده نشد</b>
+          <small>{error}</small>
+          <button type="button" onClick={load}>تلاشِ دوباره</button>
+        </div>
+      )}
+
+      {(groups ?? []).map((g) => (
+        <div key={g.key} className="st-group">
+          <div className="st-group-head">
+            <b>{g.label}</b>
+            {g.hint && <small>{g.hint}</small>}
+          </div>
+          <div className="st-knobs">
+            {g.items.map((it) => {
+              const v = valueOf(it);
+              const touched = String(v) !== String(it.default);
+              return (
+                <label key={it.key} className={`pf-field st-knob${it.type === 'textarea' ? ' wide' : ''}`}>
+                  <span>
+                    {it.label}
+                    {!touched && <i className="st-tag">پیش‌فرض</i>}
+                    {touched && <button type="button" className="st-reset" onClick={() => reset(it)}>بازگرداندن</button>}
+                  </span>
+                  {it.type === 'textarea' ? (
+                    <textarea rows={2} maxLength={it.maxLength ?? undefined} value={v}
+                      onChange={(e) => set(it.key, e.target.value)} />
+                  ) : it.type === 'bool' ? (
+                    <select value={v ? 'true' : 'false'} onChange={(e) => set(it.key, e.target.value === 'true')}>
+                      <option value="true">بله</option>
+                      <option value="false">خیر</option>
+                    </select>
+                  ) : (
+                    <input
+                      dir={it.ltr || it.type === 'number' ? 'ltr' : undefined}
+                      inputMode={it.type === 'number' ? 'numeric' : undefined}
+                      maxLength={it.maxLength ?? undefined}
+                      value={v}
+                      placeholder={String(it.default) || undefined}
+                      onChange={(e) => set(it.key, e.target.value)}
+                    />
+                  )}
+                  {it.hint && <em className="st-hint">{it.hint}</em>}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {groups && (
+        <div className="st-knobsave">
+          <button type="button" className="df-save" disabled={busy || !dirty.length} onClick={save}>
+            {dirty.length ? `ذخیرهٔ ${faNum(dirty.length)} تغییر` : 'تغییری نداده‌اید'}
+          </button>
+          {dirty.length > 0 && (
+            <button type="button" className="st-load" disabled={busy} onClick={() => setDraft({})}>انصراف</button>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 

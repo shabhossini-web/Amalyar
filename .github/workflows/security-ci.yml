@@ -1132,3 +1132,108 @@ jobs:
           }
           console.log('consignment + transport cost ok');
           "
+
+      - name: Verify tenant settings stay declared, isolated per tenant, and actually consumed
+        run: |
+          rm -rf /tmp/stg && mkdir -p /tmp/stg
+          npx --yes esbuild server/src/config/settings-registry.ts --bundle --platform=node --outfile=/tmp/stg/reg.js --log-level=error
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*\$/gm, '');
+          const svc = strip(fs.readFileSync('server/src/config/settings.service.ts', 'utf8'));
+          const reg = strip(fs.readFileSync('server/src/config/settings-registry.ts', 'utf8'));
+          const ctl = fs.readFileSync('server/src/config/settings.controller.ts', 'utf8');
+
+          // ① **مهم‌ترین ادعای این بخش**: کشِ تنظیمات باید با شناسهٔ تنانت کلید
+          //    بخورد. PrismaService تک‌نمونه است و تنانت از AsyncLocalStorage
+          //    می‌آید؛ کشِ بی‌کلید یعنی نامِ انبارِ شرکتِ اول روی فاکتورِ شرکتِ
+          //    دوم چاپ شود — و سامانه کاملاً سالم به‌نظر برسد.
+          if (!/tenantKey\(\)[\s\S]{0,200}tenants\.require\(\)\.tenantId/.test(svc)) {
+            console.error('کلیدِ کش باید tenantId باشد'); process.exit(1);
+          }
+          for (const m of ['rows', 'invalidate']) {
+            const body = svc.split('private ' + m + '(')[1] ?? svc.split(m + '(')[1];
+            if (!/tenantKey\(\)/.test((body ?? '').slice(0, 400))) {
+              console.error('«' + m + '» باید از کلیدِ تنانت استفاده کند'); process.exit(1);
+            }
+          }
+          // نوشتن باید کش را باطل کند، وگرنه همان replica مقدارِ کهنه می‌دهد.
+          const upd = svc.split('async update(')[1].split(/\n  \}/)[0];
+          if (!/this\.invalidate\(\)/.test(upd)) { console.error('ذخیره باید کش را باطل کند'); process.exit(1); }
+
+          // ② کلیدِ نااعلام **رد** می‌شود، نه بی‌سروصدا نادیده گرفته: نادیده‌گرفتن
+          //    یعنی کاربر «ذخیره شد ✓» ببیند و مقدارش هیچ‌جا نرود.
+          // نگهبان باید **پرتابِ خطا** را ببیند نه صرفاً ذکرِ نام؛ وگرنه
+          // \`if (false && unknown.length)\` هم از آن رد می‌شد.
+          if (!/SETTING_BY_KEY\.has/.test(upd)
+              || !/if \(unknown\.length\) \{[\s\S]{0,200}throw new BadRequestException/.test(upd)) {
+            console.error('کلیدِ ناشناخته باید رد شود'); process.exit(1);
+          }
+
+          // ③ رجیستری خالص می‌ماند تا هم CI بسنجدش هم صفحه از رویش ساخته شود.
+          if (/^\s*import /m.test(reg)) { console.error('رجیستری باید خالص بماند'); process.exit(1); }
+
+          // ④ نوشتن مالِ سوپرادمین است، خواندن برای مدیر باز.
+          if (!/MinLevel\(LEVEL\.SUPER_ADMIN\)[\s\S]{0,80}@Patch\(\)/.test(ctl)) {
+            console.error('نوشتنِ تنظیمات باید سطحِ سوپرادمین بخواهد'); process.exit(1);
+          }
+
+          // ⑤ برای هر کلید فقط **یک** نویسنده باشد. مسیرِ دومِ نوشتن یعنی یکی‌شان
+          //    کش را باطل نکند و صفحه مقدارِ کهنه نشان دهد.
+          const cfgCtl = fs.readFileSync('server/src/config/config.controller.ts', 'utf8');
+          if (/@Patch\('brand'\)/.test(cfgCtl)) {
+            console.error('نامِ برند فقط از راهِ PATCH /settings نوشته می‌شود'); process.exit(1);
+          }
+
+          // ⑥ تنظیمی که کد نمی‌خواندش تنظیم نیست، یادداشت است: هر کلیدِ اعلام‌شده
+          //    باید جایی در سرور یا رابط واقعاً مصرف شود.
+          const { SETTINGS } = require('/tmp/stg/reg.js');
+          const { execSync } = require('child_process');
+          // ⚠️ خودِ رجیستری از جست‌وجو کنار گذاشته می‌شود: اعلامِ کلید مصرفِ آن
+          //    نیست، و بدونِ این استثنا هر کلیدِ بی‌مصرفی خودش را تأیید می‌کرد.
+          //    فیلتر در Node انجام می‌شود نه با \`grep --exclude\`: آن گزینه این‌جا
+          //    بی‌اثر بود و نگهبان بی‌سروصدا همیشه سبز می‌شد. \`-I\` هم فایلِ
+          //    دودوییِ Prisma را کنار می‌گذارد.
+          const REG = 'server/src/config/settings-registry.ts';
+          const hay = new Set(
+            execSync(
+              \"grep -rIHo \\\"'[a-z_]*'\\\" server/src src --include=*.ts --include=*.js --include=*.jsx\",
+              { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+            )
+              .split('\n')
+              .filter((l) => l && !l.startsWith(REG + ':'))
+              .map((l) => l.slice(l.indexOf(':') + 1)),
+          );
+          const brandKeys = new Set(['company_legal_name', 'company_national_id', 'company_econ_code', 'company_phone', 'company_address', 'brand_name']);
+          for (const d of SETTINGS) {
+            // کلیدهای هویت را \`SettingsService.brand()\` یک‌جا می‌خواند.
+            if (brandKeys.has(d.key)) continue;
+            if (!hay.has(\"'\" + d.key + \"'\")) {
+              console.error('تنظیمِ «' + d.key + '» هیچ‌جا خوانده نمی‌شود'); process.exit(1);
+            }
+          }
+          if (!/get\('company_national_id'\)|company_national_id/.test(svc)) {
+            console.error('هویتِ شرکت باید در brand() خوانده شود'); process.exit(1);
+          }
+
+          // ⑦ برابرِ پیش‌فرض = **نبودِ ردیف**. اگر پیش‌فرض‌ها در دیتابیس کپی شوند،
+          //    روزی که پیش‌فرضِ کد بهتر شود هیچ نصبی آن را نمی‌گیرد.
+          if (!/isDefault\(def, value\)[\s\S]{0,120}deleteMany/.test(upd)) {
+            console.error('مقدارِ برابرِ پیش‌فرض باید ردیف را پاک کند'); process.exit(1);
+          }
+
+          // ⑧ رفتارِ خالص: شناسه‌ها با ارقامِ انگلیسی ذخیره می‌شوند، عددِ فارسی
+          //    خوانده می‌شود، و خطاها یک‌جا برمی‌گردند نه یکی‌یکی.
+          const { coerce, SETTING_BY_KEY, isDefault } = require('/tmp/stg/reg.js');
+          const nid = coerce(SETTING_BY_KEY.get('company_national_id'), '۱۴۰۰۳۳۳۲۲۲۱');
+          if (nid.value !== '14003332221') { console.error('شناسه باید با رقمِ انگلیسی ذخیره شود: ' + nid.value); process.exit(1); }
+          const days = coerce(SETTING_BY_KEY.get('consignment_default_days'), '۴۵');
+          if (days.value !== 45) { console.error('عددِ فارسی باید خوانده شود'); process.exit(1); }
+          if (!coerce(SETTING_BY_KEY.get('consignment_default_days'), 'خیلی').error) {
+            console.error('عددِ نامعتبر باید خطا بدهد'); process.exit(1);
+          }
+          if (!isDefault(SETTING_BY_KEY.get('home_location'), 'انبارِ مرکزی')) {
+            console.error('تشخیصِ پیش‌فرض کار نمی‌کند'); process.exit(1);
+          }
+          console.log('tenant settings ok');
+          "

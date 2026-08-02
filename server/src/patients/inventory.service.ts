@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AssetsService, windowOf } from './assets.service';
 import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
+import { SettingsService } from '../config/settings.service';
 
 // فرمول‌های موجودی در `stock-math` هستند؛ این‌جا فقط دوباره صادر می‌شوند تا
 // فراخوان‌های موجود نشکنند.
@@ -54,7 +55,23 @@ const hhmm = (d: Date) => `${String(d.getUTCHours()).padStart(2, '0')}:${String(
  */
 @Injectable()
 export class InventoryService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private assets: AssetsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    private assets: AssetsService,
+    private settings: SettingsService,
+  ) {}
+
+  /**
+   * نامِ انبارِ پیش‌فرضِ همین شرکت.
+   *
+   * ⚠️ `HOME_FALLBACK` فقط **پیش‌فرضِ کد** است، نه مقدارِ نهایی: شرکتی که
+   * انبارش «انبارِ شرکت» نام دارد نباید در همهٔ صفحه‌ها «انبارِ مرکزی» ببیند.
+   * هر جا لات محلِ صریح ندارد، این خوانده می‌شود نه آن ثابت.
+   */
+  private home(): Promise<string> {
+    return this.settings.textOr('home_location', HOME_FALLBACK);
+  }
 
   // ───────────────────────── لات‌ها ─────────────────────────
 
@@ -105,7 +122,8 @@ export class InventoryService {
       byLot.set(s.lotId, arr);
     }
 
-    const rows = lots.map((l) => this.shapeLot(l, byLot.get(l.id) ?? []));
+    const home = await this.home();
+    const rows = lots.map((l) => this.shapeLot(l, byLot.get(l.id) ?? [], home));
     return opts.inStock ? rows.filter((r) => r.quantity > 0) : rows;
   }
 
@@ -132,6 +150,11 @@ export class InventoryService {
       if (dup) throw new BadRequestException('این شمارهٔ سریال قبلاً ثبت شده است');
     }
 
+    // محلِ نداده‌شده = انبارِ پیش‌فرضِ همین شرکت، و **صریح ذخیره می‌شود** نه
+    // به‌صورتِ null: لاتِ بی‌محل هر بار به fallback تکیه می‌کند و اگر شرکت
+    // بعداً نامِ انبارش را عوض کند، تاریخچه‌اش هم بی‌سروصدا جابه‌جا می‌شود.
+    const location = text(dto.location) ?? (await this.home());
+
     const lot = await this.prisma.$transaction(async (tx) => {
       const created = await tx.stockLot.create({
         data: {
@@ -140,7 +163,7 @@ export class InventoryService {
           serialNo,
           expiresAt,
           nextServiceAt: dateOrNull(dto.nextServiceAt, 'تاریخِ سرویسِ بعدی'),
-          location: text(dto.location),
+          location,
           notes: text(dto.notes),
         },
       });
@@ -211,7 +234,7 @@ export class InventoryService {
     });
     if (!row) throw new NotFoundException('لات یافت نشد');
     const rows = await this.prisma.stockMovement.findMany({ where: { lotId: id }, select: { quantity: true, location: true } });
-    return this.shapeLot(row, rows);
+    return this.shapeLot(row, rows, await this.home());
   }
 
   // ───────────────────────── حرکت ─────────────────────────
@@ -298,12 +321,13 @@ export class InventoryService {
     user: any,
     tx?: any,
   ) {
+    const homeName = await this.home();
     const run = async (db: any) => {
       const locked = await db.$queryRaw<{ id: number; serial_no: string | null; expires_at: Date | null; location: string | null }[]>`
         SELECT id, serial_no, expires_at, location FROM stock_lots WHERE id = ${lotId} FOR UPDATE`;
       if (!locked.length) throw new NotFoundException('لات یافت نشد');
       const lot = locked[0];
-      const home = lot.location ?? HOME_FALLBACK;
+      const home = lot.location ?? homeName;
       const where = extra.location ?? home;
 
       if (kind === 'out' && lot.expires_at && lot.expires_at.getTime() < Date.now()) {
@@ -421,7 +445,7 @@ export class InventoryService {
     // مبدأ اگر داده نشده، محلِ خانهٔ اولین لات است — همان جایی که کالا واقعاً هست.
     const first = await this.prisma.stockLot.findUnique({ where: { id: lines[0].lotId }, select: { location: true } });
     if (!first) throw new NotFoundException('لات یافت نشد');
-    const from = text(dto.fromLocation) ?? first.location ?? HOME_FALLBACK;
+    const from = text(dto.fromLocation) ?? first.location ?? (await this.home());
     if (from === to) throw new BadRequestException('مبدأ و مقصد یکی است');
 
     // حوالهٔ روزِ آینده فقط **تعهد** است؛ دفتر وقتی می‌خورد که بار برود.
@@ -579,12 +603,13 @@ export class InventoryService {
 
     const lotIds = [...new Set(t.movements.map((m) => m.lotId))];
     const returned: { lotId: number; quantity: number }[] = [];
+    const homeName = await this.home();
 
     await this.prisma.$transaction(async (tx) => {
       for (const lotId of lotIds) {
         const rows = await tx.stockMovement.findMany({ where: { lotId }, select: { quantity: true, location: true } });
         const lot = await tx.stockLot.findUnique({ where: { id: lotId }, select: { location: true } });
-        const atDest = balanceByLocation(rows, lot?.location ?? HOME_FALLBACK).get(t.toLocation) ?? 0;
+        const atDest = balanceByLocation(rows, lot?.location ?? homeName).get(t.toLocation) ?? 0;
         if (atDest <= 0) continue; // همه‌اش مصرف شد
         const meta = { transferId: t.id, visitId: t.visitId, reason: `برگشتِ حوالهٔ ${t.code}` };
         await this.move(lotId, 'transfer', -atDest, { ...meta, location: t.toLocation }, user, tx);
@@ -727,7 +752,8 @@ export class InventoryService {
     const lots = lotIds.length
       ? await this.prisma.stockLot.findMany({ where: { id: { in: lotIds } }, select: { id: true, location: true } })
       : [];
-    const homeOf = new Map(lots.map((l) => [l.id, l.location ?? HOME_FALLBACK]));
+    const homeName = await this.home();
+    const homeOf = new Map(lots.map((l) => [l.id, l.location ?? homeName]));
 
     // ⚠️ «مصرف» از تفریقِ ارسال و مانده درنمی‌آید: پس از برگشتِ مانده، مانده صفر
     // می‌شود و آن تفریق کلِ ارسال را مصرف می‌شمارد. مصرف باید از حرکت‌های `out`
@@ -765,7 +791,7 @@ export class InventoryService {
       .filter((m) => m.location === t.toLocation)
       .map((m) => {
         const rows = all.filter((r) => r.lotId === m.lotId);
-        const atDest = balanceByLocation(rows, homeOf.get(m.lotId) ?? HOME_FALLBACK).get(t.toLocation) ?? 0;
+        const atDest = balanceByLocation(rows, homeOf.get(m.lotId) ?? homeName).get(t.toLocation) ?? 0;
         return {
           movementId: m.id, lotId: m.lotId,
           lotNo: m.lot.lotNo, serialNo: m.lot.serialNo, expiresAt: m.lot.expiresAt,
@@ -811,7 +837,7 @@ export class InventoryService {
     if (!open) return null;
     const rows = await this.prisma.stockMovement.findMany({ where: { lotId }, select: { quantity: true, location: true } });
     const lot = await this.prisma.stockLot.findUnique({ where: { id: lotId }, select: { location: true } });
-    const atDest = balanceByLocation(rows, lot?.location ?? HOME_FALLBACK).get(open.toLocation) ?? 0;
+    const atDest = balanceByLocation(rows, lot?.location ?? (await this.home())).get(open.toLocation) ?? 0;
     // مصرف به خودِ حواله گره می‌خورد، وگرنه «چقدرش مصرف شد» فقط از تفریقِ
     // ارسال و مانده درمی‌آید — که پس از برگشتِ مانده، برگشتی‌ها را هم مصرف
     // می‌شمارد و عددِ حواله بعد از بسته‌شدن غلط می‌شود.
@@ -890,8 +916,8 @@ export class InventoryService {
    * عمداً: `quantity` (کل) و `available` (در انبارِ خودمان) باید از یک منبع
    * بیرون بیایند، وگرنه دو تابع دو تعریفِ متفاوت از موجودی پیدا می‌کنند.
    */
-  private shapeLot(lot: any, rows: { quantity: number; location: string | null }[]) {
-    const home = lot.location ?? HOME_FALLBACK;
+  private shapeLot(lot: any, rows: { quantity: number; location: string | null }[], homeName: string) {
+    const home = lot.location ?? homeName;
     const byLoc = balanceByLocation(rows, home);
     const quantity = balanceOf(rows);
     const available = byLoc.get(home) ?? 0;

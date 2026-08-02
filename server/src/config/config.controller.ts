@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ConfigService } from './config.service';
@@ -11,11 +11,6 @@ import { LevelGuard } from '../auth/level.guard';
 class VerticalDto {
   @IsIn(Object.keys(VERTICALS), { message: 'حوزهٔ کاری نامعتبر است' })
   vertical!: string;
-}
-
-class BrandDto {
-  @IsOptional() @IsString() @MaxLength(60, { message: 'نامِ برند طولانی است' })
-  brandName?: string;
 }
 
 @Controller('config')
@@ -36,10 +31,7 @@ export class ConfigController {
     return this.config.setVertical(dto.vertical, user);
   }
 
-  @UseGuards(LevelGuard)
-  @MinLevel(LEVEL.SUPER_ADMIN)
-  @Patch('brand')
-  setBrand(@Body() dto: BrandDto, @CurrentUser() user: any) {
-    return this.config.setBrandName(dto.brandName ?? null, user);
-  }
+  // ⚠️ نوشتنِ نامِ برند عمداً این‌جا نیست: `brand_name` یک تنظیمِ معمولی است و
+  // نویسنده‌اش `PATCH /settings` است. دو مسیرِ نوشتن برای یک کلید یعنی یکی‌شان
+  // کش را باطل نکند و صفحه مقدارِ کهنه نشان دهد.
 }

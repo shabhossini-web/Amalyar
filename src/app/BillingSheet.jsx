@@ -346,7 +346,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                   {/* فاکتورِ رسمی — سندی که دستِ بیمار/بیمارستان می‌رود، پس
                       جدا از برگهٔ گزارشِ داخلیِ فهرستِ مراجعات است. */}
                   <button type="button" className="bl-mini bl-inv"
-                    onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
+                    onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
                     چاپِ فاکتورِ رسمی
                   </button>
                 </div>

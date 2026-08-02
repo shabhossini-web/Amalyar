@@ -5,6 +5,7 @@ import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { balanceByLocation, HOME_FALLBACK } from './stock-math';
 import { at, overlaps, windowOf } from '../common/asset-window';
 import { COUNT_STATUS_LABELS, countDueAt, countStatus, reconcileCount } from '../common/consignment';
+import { SettingsService } from '../config/settings.service';
 
 // محاسبهٔ بازه در `common/asset-window` است؛ این‌جا دوباره صادر می‌شود تا
 // فراخوان‌های موجود نشکنند.
@@ -55,7 +56,11 @@ function lotsOf(t: any): number[] {
  */
 @Injectable()
 export class AssetsService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    private settings: SettingsService,
+  ) {}
 
   /** روزِ تعهدِ یک حواله: روزِ برنامه‌ریزی‌شده، وگرنه روزِ عملِ مربوطه، وگرنه روزِ ارسال. */
   private static committedOn(t: any): Date {
@@ -82,6 +87,7 @@ export class AssetsService {
       orderBy: [{ itemId: 'asc' }, { id: 'asc' }],
     });
     if (!lots.length) return [];
+    const homeName = await this.settings.textOr('home_location', HOME_FALLBACK);
     const ids = lots.map((l) => l.id);
 
     const [moves, transfers] = await Promise.all([
@@ -121,7 +127,7 @@ export class AssetsService {
     }
 
     return lots.map((l) => {
-      const home = l.location ?? HOME_FALLBACK;
+      const home = l.location ?? homeName;
       const bal = balanceByLocation(byLot.get(l.id) ?? [], home);
       const away = [...bal.entries()].filter(([loc, q]) => loc !== home && q > 0);
       const mine = (commitments.get(l.id) ?? []).sort(
@@ -349,8 +355,11 @@ export class AssetsService {
     }
     const hospital = await this.prisma.hospital.findUnique({ where: { id: Number(dto.hospitalId) } });
     if (!hospital) throw new NotFoundException('بیمارستان یافت نشد');
+    // دورهٔ نداده‌شده از تنظیماتِ شرکت می‌آید، نه از عددی که در UI تایپ شده
+    // باشد: پیش‌فرضِ سمتِ کلاینت با اولین صفحهٔ تازه از دست می‌رود.
+    const fallbackDays = await this.settings.num('consignment_default_days');
     const every = dto.countEveryDays === undefined || dto.countEveryDays === null || dto.countEveryDays === ('' as any)
-      ? null
+      ? (fallbackDays > 0 ? fallbackDays : null)
       : Math.trunc(Number(dto.countEveryDays));
     if (every !== null && (!Number.isFinite(every) || every <= 0)) {
       throw new BadRequestException('دورهٔ صورت‌برداری باید عددِ روزِ مثبت باشد');

@@ -226,6 +226,14 @@ export function printInvoice({ visit, billing, brand }) {
       }</tbody></table>`
     : '';
 
+  // هویتِ حقوقیِ شرکت زیرِ نام. فاکتورِ بدونِ شناسهٔ ملی و کدِ اقتصادی سندِ
+  // مالیاتی نیست، پس هرکدام که پر باشد چاپ می‌شود.
+  const idLine = [
+    brand?.phone ? `تلفن: ${esc(jToFa(brand.phone))}` : '',
+    brand?.nationalId ? `شناسهٔ ملی: ${esc(jToFa(brand.nationalId))}` : '',
+    brand?.econCode ? `کد اقتصادی: ${esc(jToFa(brand.econCode))}` : '',
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ');
+
   const payTo = visit.payer === 'hospital'
     ? `بیمارستان: ${esc(visit.payerHospitalName || visit.hospitalName || '—')}`
     : `بیمار: ${esc(visit.fullName)}`;
@@ -253,8 +261,9 @@ export function printInvoice({ visit, billing, brand }) {
 </style></head><body>
 <header>
   <div>
-    <h1>${esc(brand?.name || 'عمل‌یار')}</h1>
-    ${brand?.phone ? `<div class="sub">تلفن: ${esc(jToFa(brand.phone))}</div>` : ''}
+    <h1>${esc(brand?.legalName || brand?.name || 'عمل‌یار')}</h1>
+    ${idLine ? `<div class="sub">${idLine}</div>` : ''}
+    ${brand?.address ? `<div class="sub">${esc(brand.address)}</div>` : ''}
   </div>
   <div class="no">
     <b>صورت‌حساب</b><br>

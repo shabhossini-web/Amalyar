@@ -5,6 +5,7 @@ import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { StorageService } from '../storage/storage.service';
 import { LedgerService } from './ledger.service';
 import { allocateRun, runTotal } from '../common/transport-cost';
+import { SettingsService } from '../config/settings.service';
 
 export const STOP_KINDS = ['deliver', 'pickup'] as const;
 export const STOP_LABELS: Record<string, string> = { deliver: 'تحویل', pickup: 'جمع‌آوری' };
@@ -45,6 +46,7 @@ export class RoutesService {
     private audit: AuditService,
     private storage: StorageService,
     private ledger: LedgerService,
+    private settings: SettingsService,
   ) {}
 
   private static readonly STOP_INCLUDE = {
@@ -516,7 +518,7 @@ export class RoutesService {
       const created = await this.ledger.addExpense(
         {
           title: `حملِ ${staffName} — ${faDate(run.runDate)}`,
-          category: 'حمل و نقل',
+          category: await this.settings.textOr('transport_expense_category', 'حمل و نقل'),
           amount: total,
           spentAt: run.runDate,
           notes: [dto.costNote, `مسیرِ #${run.id}`].filter(Boolean).join(' · '),
