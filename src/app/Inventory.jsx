@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
@@ -8,6 +8,7 @@ import './inventory.css';
 import { Back, Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import { useStagger } from '../ui/stagger.js';
 
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -30,6 +31,7 @@ const FILTERS = [
  * انباردار با آن کار می‌کند شیءِ فیزیکی است — این بچ، این سریال، این تاریخ.
  */
 export default function Inventory() {
+  const row = useStagger();
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('all');
@@ -137,8 +139,8 @@ export default function Inventory() {
             {q.trim() || filter !== 'all' ? 'موردی با این فیلتر نیست' : 'هنوز لاتی ثبت نشده — با «لاتِ جدید» کالای رسیده را وارد کنید'}
           </div>
         )}
-        {!loading && rows.map((lot) => (
-          <article key={lot.id} className={`iv-row${lot.quantity <= 0 ? ' zero' : ''}${lot.expired ? ' exp' : ''}`}>
+        {!loading && rows.map((lot, i) => (
+          <motion.article key={lot.id} {...row(i)} className={`iv-row${lot.quantity <= 0 ? ' zero' : ''}${lot.expired ? ' exp' : ''}`}>
             {/* عددِ بزرگ «در دسترس» است نه «کل»: کالایی که در بیمارستان است
                 موجود هست ولی نمی‌شود دوباره تعهدش کرد، و همین تفاوت است که
                 چینشِ غلط می‌سازد. کل زیرش می‌آید، فقط وقتی فرق دارد. */}
@@ -178,7 +180,7 @@ export default function Inventory() {
                 <Route width="15" height="15" />
               </button>
             </div>
-          </article>
+          </motion.article>
         ))}
       </div>
       </>
@@ -231,6 +233,7 @@ const COUNT_TONE = { overdue: 'bad', due_soon: 'warn', ok: 'ok', none: '' };
  * مراجعات جدا شد.
  */
 function Assets({ onToast }) {
+  const row = useStagger();
   const [day, setDay] = useState(() => jStr(...jToday()));
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -278,8 +281,8 @@ function Assets({ onToast }) {
             هنوز داراییِ برگشتی ندارید — در تعاریفِ پایه نوعِ کالا را «ست» یا «دستگاه» بگذارید.
           </div>
         )}
-        {!loading && rows.map((r) => (
-          <article key={r.lotId} className={`iv-row as-${r.state}`}>
+        {!loading && rows.map((r, i) => (
+          <motion.article key={r.lotId} {...row(i)} className={`iv-row as-${r.state}`}>
             <div className="iv-row-main">
               <b>
                 {r.itemName}
@@ -311,7 +314,7 @@ function Assets({ onToast }) {
                 {r.consignedToId ? 'امانت' : 'سپردن'}
               </button>
             </div>
-          </article>
+          </motion.article>
         ))}
       </div>
 

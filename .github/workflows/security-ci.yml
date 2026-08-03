@@ -1414,3 +1414,54 @@ jobs:
           }
           console.log('overlay ok');
           "
+
+      - name: Verify list entry animates the head only and keeps CSS dimming
+        run: |
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const jsx = execSync(\"find src -name '*.jsx'\", { encoding: 'utf8' }).split('\n').filter(Boolean);
+          const st = fs.readFileSync('src/ui/stagger.js', 'utf8');
+
+          // ① ⚠️ محوشدنِ ردیف باید با filter باشد نه opacity. چند ردیف حالتِ
+          //    CSSِ کم‌رنگ دارند (لاتِ بی‌موجودی ۰٫۵۵، حوالهٔ بسته ۰٫۷۲). استایلِ
+          //    inlineِ framer آن قاعده را می‌خورَد و لاتِ صفر مثلِ لاتِ پر دیده
+          //    می‌شود — یعنی انیمیشن یک دادهٔ غلط نشان می‌دهد. filter ضرب می‌شود.
+          if (!/filter: 'opacity\(0\)'/.test(st) || /animate: \{ opacity:/.test(st)) {
+            console.error('ورودِ ردیف باید با filter: opacity() باشد نه opacity'); process.exit(1);
+          }
+          const dimmed = fs.readFileSync('src/app/inventory.css', 'utf8');
+          if (!/\.iv-row\.zero \{ opacity:/.test(dimmed)) {
+            console.error('قاعدهٔ کم‌رنگیِ لاتِ صفر عوض شده — دلیلِ filter را دوباره بسنجید');
+            process.exit(1);
+          }
+
+          // ② سرِ فهرست حرکت می‌گیرد، نه دویست ردیف. سقف باید صریح باشد.
+          if (!/i > HEAD/.test(st) || !/HEAD = \d+/.test(st)) {
+            console.error('ورودِ پلکانی باید سقفِ صریح داشته باشد'); process.exit(1);
+          }
+          const head = Number(/HEAD = (\d+)/.exec(st)[1]);
+          if (head > 20) { console.error('سقفِ ورودِ پلکانی خیلی بالاست: ' + head); process.exit(1); }
+
+          // ③ همان تلهٔ WAAPIِ Overlay: بدونِ onUpdate، مقدارِ محاسبه‌شده در
+          //    پایانِ انیمیشن یک فریم به مقدارِ inline (opacity(0)) برمی‌گردد و
+          //    ردیف درست در پایانِ ورودش ناپدید می‌شود. اندازه‌گیری: ۰٫۹۸ → ۰٫۰۰ → ۱٫۰۰.
+          if (!/onUpdate: noop/.test(st)) {
+            console.error('بدونِ onUpdate، ردیف در پایانِ ورودش یک فریم می‌پرد'); process.exit(1);
+          }
+
+          // ④ «حرکتِ کمتر» انتخابِ کاربر است، نه پیشنهاد.
+          if (!/useReducedMotion\(\)/.test(st) || !/if \(still/.test(st)) {
+            console.error('ورودِ پلکانی باید prefers-reduced-motion را رعایت کند'); process.exit(1);
+          }
+
+          // ⑤ هر جا ردیفِ فهرست حرکت می‌گیرد باید از همین قلاب بیاید، نه دست‌ساز.
+          const rogue = jsx.filter((f) => {
+            const s = fs.readFileSync(f, 'utf8');
+            return /<motion\.(article|div)[^>]*className=\{?.[^>]*-(row|card)/.test(s) && !/useStagger/.test(s);
+          });
+          if (rogue.length) {
+            console.error('ورودِ دست‌سازِ ردیف در: ' + rogue.join('، ')); process.exit(1);
+          }
+          console.log('stagger ok');
+          "

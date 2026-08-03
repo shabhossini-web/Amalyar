@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './accounting.css';
 import { Alert, Bank, Book, Calendar, Chart, ChevronEnd, Doctor, Money, Plus, Users } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import { useStagger } from '../ui/stagger.js';
 
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -82,6 +84,7 @@ export default function Accounting() {
  * نبودنش را نقص می‌بیند نه تصمیم.
  */
 function Contracts({ onToast }) {
+  const row = useStagger();
   const [rows, setRows] = useState([]);
   const [surgeons, setSurgeons] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -164,8 +167,8 @@ function Contracts({ onToast }) {
       <div className="ac-list">
         {loading && <div className="ac-empty">در حال بارگذاری…</div>}
         {!loading && rows.length === 0 && <div className="ac-empty">هنوز قراردادی ثبت نشده</div>}
-        {!loading && rows.map((r) => (
-          <article key={r.id} className={`ac-row${r.active ? '' : ' off'}`}>
+        {!loading && rows.map((r, i) => (
+          <motion.article key={r.id} {...row(i)} className={`ac-row${r.active ? '' : ' off'}`}>
             <div className="ac-val">
               <b>{r.kind === 'percent' ? `${num(r.percent)}٪` : num(r.amount)}</b>
               <span>{r.kind === 'percent' ? 'از فاکتور' : 'تومان'}</span>
@@ -178,7 +181,7 @@ function Contracts({ onToast }) {
             {r.active && (
               <button type="button" className="ac-off" disabled={busy} onClick={() => drop(r.id)}>غیرفعال</button>
             )}
-          </article>
+          </motion.article>
         ))}
       </div>
     </>

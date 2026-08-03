@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
@@ -12,6 +12,7 @@ import './users.css';
 import { Back, Check, Close, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import { useStagger } from '../ui/stagger.js';
 
 
 const LEVELS = [
@@ -118,6 +119,7 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
 }
 
 export default function Users() {
+  const stagger = useStagger();
   const { user } = useAuth();
   const [tab, setTab] = useState('pending'); // pending | all | perm
   const [pending, setPending] = useState(null);
@@ -249,8 +251,8 @@ export default function Users() {
           <div className="us-list">
             {pending === null && <p className="us-empty">در حال بارگذاری…</p>}
             {pending?.length === 0 && <p className="us-empty">درخواستی در انتظارِ تأیید نیست.</p>}
-            {pending?.map((row) => (
-              <div key={row.id} className="glass us-card">
+            {pending?.map((row, i) => (
+              <motion.div key={row.id} {...stagger(i)} className="glass us-card">
                 <div className="us-row">
                   <Avatar row={row} size={52} />
                   <div className="us-meta">
@@ -277,7 +279,7 @@ export default function Users() {
                     <Close width="16" height="16" /> رد
                   </button>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}
@@ -286,8 +288,8 @@ export default function Users() {
         {tab === 'all' && (
           <div className="us-list">
             {all === null && <p className="us-empty">در حال بارگذاری…</p>}
-            {all?.map((row) => (
-              <div key={row.id} className="glass us-card slim">
+            {all?.map((row, i) => (
+              <motion.div key={row.id} {...stagger(i)} className="glass us-card slim">
                 <div className="us-row">
                   <Avatar row={row} />
                   <div className="us-meta">
@@ -309,7 +311,7 @@ export default function Users() {
                   </label>
                   <button type="button" className="us-btn" onClick={() => setProfileId(row.id)}>پروفایل</button>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         )}

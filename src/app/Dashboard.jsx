@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
@@ -16,6 +16,7 @@ import './dashboard.css';
 import { Arrive, Back, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import { useStagger } from '../ui/stagger.js';
 
 /* ── آیکون‌های خطی ── */
 
@@ -602,7 +603,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
 /* ── شیتِ «تعریف‌ها»: مدیریتِ جراحان و بیمارستان‌ها ── */
 
 /* ── کارتِ مراجعه ── */
-function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
+function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
+  const row = useStagger();
   const [confirmDel, setConfirmDel] = useState(false);
   useEffect(() => {
     if (!confirmDel) return undefined;
@@ -611,7 +613,7 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
   }, [confirmDel]);
 
   return (
-    <div className="glass us-card db-card" onMouseMove={track}>
+    <motion.div className="glass us-card db-card" onMouseMove={track} {...row(index)}>
       <span className="glass-glow" aria-hidden="true" />
       <div className="us-row">
         {/* نامِ بیمار درِ ورودیِ پرونده است — کاربر همان‌جا که بیمار را می‌بیند
@@ -680,7 +682,7 @@ function VisitCard({ v, busy, onEdit, onStatus, onDelete, onBilling }) {
           {confirmDel ? 'حذف؟' : <Trash width="15" height="15" />}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1113,10 +1115,11 @@ export default function Dashboard() {
           {!denied && visits?.length === 0 && (
             <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد' : t.emptyList}</div>
           )}
-          {visits?.map((v) => (
+          {visits?.map((v, i) => (
             <VisitCard
               key={v.id}
               v={v}
+              index={i}
               busy={busyId === v.id}
               onEdit={(vv) => setModal({ visit: vv })}
               onStatus={onStatus}

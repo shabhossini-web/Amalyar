@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
 import { Back, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import { useStagger } from '../ui/stagger.js';
 
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
@@ -119,6 +120,7 @@ const SECTIONS = [
 ];
 
 export default function Definitions() {
+  const stagger = useStagger();
   const [tab, setTab] = useState('surgeons');
   const [merging, setMerging] = useState(false);
   const [parts, setParts] = useState(null); // کالایی که محتویاتش باز است
@@ -205,8 +207,8 @@ export default function Definitions() {
       <div className="df-list">
         {loading && <div className="df-empty">در حال بارگذاری…</div>}
         {!loading && rows.length === 0 && <div className="df-empty">{section.empty}</div>}
-        {!loading && rows.map((row) => (
-          <article key={row.id} className={`df-row${row.active ? '' : ' off'}`}>
+        {!loading && rows.map((row, i) => (
+          <motion.article key={row.id} {...stagger(i)} className={`df-row${row.active ? '' : ' off'}`}>
             <div className="df-row-main">
               <b>{section.title(row)}{!row.active && <i> (غیرفعال)</i>}</b>
               {section.sub(row) && <small dir="auto">{section.sub(row)}</small>}
@@ -223,7 +225,7 @@ export default function Definitions() {
               </button>
               <button type="button" className="df-del" title="حذف" onClick={() => remove(row)}><Trash width="15" height="15" /></button>
             </div>
-          </article>
+          </motion.article>
         ))}
       </div>
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
@@ -8,6 +8,7 @@ import './dispatch.css';
 import { ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import { useStagger } from '../ui/stagger.js';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -29,6 +30,7 @@ const timeOk = (v) => v === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
  * نمی‌گیرد» باید یک‌جا اعمال شود تا کانالِ بعدی (بله/پیامک) دورش نزند.
  */
 export default function Dispatch() {
+  const row = useStagger();
   const [ty, tm, td] = jToday();
   const [tab, setTab] = useState('tech');
   const [ym, setYm] = useState({ y: ty, m: tm });
@@ -255,8 +257,8 @@ export default function Dispatch() {
         <b>{faNum(day)} {J_MONTHS[ym.m - 1]}</b>
         {visits.length === 0 && <div className="dp-empty">عملی برای این روز ثبت نشده</div>}
 
-        {tab === 'tech' && visits.map((v) => (
-          <article key={v.id} className={`dp-card${v.tech ? '' : ' gap'}`}>
+        {tab === 'tech' && visits.map((v, i) => (
+          <motion.article key={v.id} {...row(i)} className={`dp-card${v.tech ? '' : ' gap'}`}>
             <header>
               <span className="dp-time" dir="ltr">{v.opStartTime || '—'}</span>
               <div className="dp-title">
@@ -278,7 +280,7 @@ export default function Dispatch() {
                 <button type="button" className="dp-brief-btn" onClick={() => openBrief(v.id, 'tech')}><Send size={14} /> متنِ ابلاغ</button>
               )}
             </div>
-          </article>
+          </motion.article>
         ))}
 
         {tab === 'transport' && (
