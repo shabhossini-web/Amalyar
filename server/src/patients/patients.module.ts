@@ -28,7 +28,9 @@ import { AssetsService } from './assets.service';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
 import { DispatchController } from './dispatch.controller';
+import { TechController } from './tech.controller';
 import { DispatchService } from './dispatch.service';
+import { TechService } from './tech.service';
 import { PermissionGuard } from '../auth/permission.guard';
 
 @Module({
@@ -37,12 +39,12 @@ import { PermissionGuard } from '../auth/permission.guard';
   controllers: [
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
-    CalendarController, DispatchController, DefinitionsController,
+    CalendarController, DispatchController, DefinitionsController, TechController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, DispatchService, PermissionGuard,
+    CalendarService, DispatchService, TechService, PermissionGuard,
   ],
 })
 export class PatientsModule {}

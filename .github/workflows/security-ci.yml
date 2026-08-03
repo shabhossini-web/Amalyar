@@ -1523,3 +1523,54 @@ jobs:
           }
           console.log('brand ok');
           "
+
+      - name: Verify the tech portal shows work, never money
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const svc = fs.readFileSync('server/src/patients/tech.service.ts', 'utf8');
+          const ctl = fs.readFileSync('server/src/patients/tech.controller.ts', 'utf8');
+          const ui = fs.readFileSync('src/app/Tech.jsx', 'utf8');
+
+          // ① ⚠️ نمای کارشناس **پروجکشن** است نه آبجکتِ مراجعه. اگر روزی یکی از
+          //    این کلیدها این‌جا select شود، رقمِ قراردادِ جراح از اولین صفحه‌ای
+          //    که رندر می‌شود بیرون می‌زند.
+          const MONEY = /\b(amount|paid|charges|payments|settlement|shares?|price|fee|discount|counterparty)\b/;
+          const hit = svc.split('\n').filter((l) => MONEY.test(l) && !l.trim().startsWith('*') && !l.trim().startsWith('//'));
+          if (hit.length) { console.error('فیلدِ مالی در نمای کارشناس: ' + hit.join(' / ')); process.exit(1); }
+          if (MONEY.test(ui.replace(/\/\*[\s\S]*?\*\//g, ''))) { console.error('واژهٔ مالی در صفحهٔ کارشناسی'); process.exit(1); }
+
+          // ② دامنه همیشه خودِ کاربر است. اگر endpoint یک techIdِ دلخواه بپذیرد،
+          //    مسیرِ دومی برای خواندنِ کارِ همه ساخته می‌شود که guardش جای دیگر است.
+          // هر جا techId مقدار می‌گیرد باید از خودِ توکن بیاید، نه از ورودی.
+          const techIdSites = svc.match(/techId:\s*[^,\n]+/g) || [];
+          const fromUser = techIdSites.filter((x) => /user\?\.id/.test(x));
+          if (!techIdSites.length || fromUser.length !== techIdSites.length) {
+            console.error('دامنهٔ دفترِ کار از توکن نمی‌آید: ' + techIdSites.join(' / ')); process.exit(1);
+          }
+          if (/Query\('techId'\)|dto\.techId|query\.techId/.test(ctl + svc)) {
+            console.error('پنلِ کارشناسی نباید techIdِ ورودی بپذیرد'); process.exit(1);
+          }
+
+          // ③ ⚠️ مجوزِ درست با ماژولِ غلط یعنی درِ بسته: هر مسیری که مجوزِ
+          //    stock.consume دارد (یعنی برای کارشناس نوشته شده) باید ماژولِ tech
+          //    را هم اعلام کند، وگرنه ماژولِ کنترلر (انبار، سطح ۳) همان
+          //    کارشناسِ سطح ۲ را بیرون می‌گذارد. این دقیقاً همان باگی بود که
+          //    «اعلامِ پایانِ عمل» را یک فاز بی‌صدا از کار انداخت.
+          for (const f of ['server/src/patients/inventory.controller.ts', 'server/src/patients/tech.controller.ts']) {
+            const lines = fs.readFileSync(f, 'utf8').split('\n');
+            const classFeature = /@Feature\('tech'\)/.test(lines.slice(0, 40).join('\n'));
+            lines.forEach((l, i) => {
+              if (!/RequirePermissions\('stock\.consume'\)/.test(l)) return;
+              // ⚠️ فقط دکوراتورِ واقعی، نه ذکرش در کامنت — وگرنه یک توضیح
+              //    جای یک guard را می‌گیرد.
+              const above = lines.slice(Math.max(0, i - 12), i);
+              const decorated = above.some((x) => /^\s*@Feature\('tech'\)\s*$/.test(x));
+              if (!classFeature && !decorated) {
+                console.error(f + ':' + (i + 1) + ' — مجوزِ کارشناس بدونِ ماژولِ tech'); process.exit(1);
+              }
+            });
+          }
+          console.log('tech ok');
+          "

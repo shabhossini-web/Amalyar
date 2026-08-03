@@ -150,7 +150,15 @@ export class InventoryController {
     return this.inv.shipTransfer(id, user);
   }
 
-  /// اعلامِ پایانیِ کارشناسِ سرِ عمل — مجوزِ سبک، چون کارِ خودِ اوست.
+  /**
+   * اعلامِ پایانیِ کارشناسِ سرِ عمل — مجوزِ سبک، چون کارِ خودِ اوست.
+   *
+   * ⚠️ `@Feature('tech')` هم لازم است، نه فقط مجوزِ سبک: ماژولِ این کنترلر
+   * `inventory` (سطح ۳) است و کارشناس سطح ۲ دارد. تا وقتی پنلِ کارشناسی ساخته
+   * نشده بود، این endpoint برای **همان کسی که برایش نوشته شده بود** بسته بود و
+   * کسی نفهمید — مجوزِ درست با ماژولِ غلط یعنی درِ بسته.
+   */
+  @Feature('tech')
   @RequirePermissions('stock.consume')
   @Post('transfers/:id/release')
   release(@Param('id', ParseIntPipe) id: number, @Body() dto: ReleaseDto, @CurrentUser() user: any) {
