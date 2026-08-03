@@ -7,12 +7,12 @@
 }
 .pa * { box-sizing: border-box; }
 .pa-glow { position: fixed; border-radius: 50%; filter: blur(110px); pointer-events: none; opacity: .28; }
-.pa-g1 { width: 480px; height: 480px; background: #7c3aed; top: -220px; right: -160px; }
+.pa-g1 { width: 480px; height: 480px; background: var(--brand); top: -220px; right: -160px; }
 .pa-g2 { width: 420px; height: 420px; background: #00d4ff; bottom: -240px; left: -180px; opacity: .12; }
 
 .pa-shell { width: min(1120px, 100%); margin: auto; position: relative; }
 .pa-card {
-  background: rgba(18, 13, 49, .86); border: 1px solid rgba(139, 92, 246, .28);
+  background: rgba(18, 13, 49, .86); border: 1px solid rgba(var(--brand-soft-rgb), .28);
   border-radius: 24px; box-shadow: 0 24px 80px rgba(0, 0, 0, .38); backdrop-filter: blur(18px);
 }
 
@@ -20,7 +20,7 @@
 .pa-auth { width: min(460px, 100%); margin: 7vh auto; padding: 34px; text-align: center; position: relative; }
 .pa-mark {
   width: 84px; height: 66px; margin: 0 auto 16px; display: grid; place-items: center;
-  color: #fff; filter: drop-shadow(0 10px 28px rgba(124, 58, 237, .55));
+  color: #fff; filter: drop-shadow(0 10px 28px rgba(var(--brand-rgb), .55));
 }
 .pa-mark svg { width: 100%; height: auto; }
 
@@ -33,19 +33,19 @@
 .pa label { font-size: 12px; color: #c7c2df; margin-top: 5px; }
 .pa input, .pa select {
   width: 100%; height: 52px; border-radius: 13px; padding: 0 15px; font: inherit; outline: none;
-  color: #fff; background: rgba(3, 2, 18, .62); border: 1px solid rgba(139, 92, 246, .3);
+  color: #fff; background: rgba(3, 2, 18, .62); border: 1px solid rgba(var(--brand-soft-rgb), .3);
 }
-.pa input:focus, .pa select:focus { border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168, 85, 247, .12); }
+.pa input:focus, .pa select:focus { border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(var(--brand-2-rgb), .12); }
 .pa-identity {
   min-height: 52px; display: flex; align-items: center; padding: 12px 15px;
   border-radius: 13px; font-size: 12px; line-height: 1.8; color: #aaa4c6;
-  background: rgba(139, 92, 246, .07); border: 1px solid rgba(139, 92, 246, .2);
+  background: rgba(var(--brand-soft-rgb), .07); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 
 .pa button { font: inherit; border: 0; cursor: pointer; }
 .pa form > button:not(.pa-link) {
   height: 52px; margin-top: 10px; border-radius: 13px; font-weight: 900; color: #fff;
-  background: linear-gradient(135deg, #a855f7, #6d28d9);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 .pa button:disabled { opacity: .5; cursor: not-allowed; }
 .pa-link { color: #a9a2cb; background: transparent; padding: 10px; }
@@ -57,7 +57,7 @@
 .pa-security { margin-top: 22px; color: #6f6991; font-size: 10px; line-height: 1.8; }
 .pa-loader {
   width: 28px; height: 28px; margin: 0 auto 15px; border-radius: 50%;
-  border: 3px solid rgba(168, 85, 247, .2); border-top-color: #a855f7;
+  border: 3px solid rgba(var(--brand-2-rgb), .2); border-top-color: var(--brand-2);
   animation: paSpin .8s linear infinite;
 }
 @keyframes paSpin { to { transform: rotate(360deg); } }
@@ -69,7 +69,7 @@
 .pa-head h1 { margin: 2px 0; }
 .pa-logout, .pa-refresh {
   flex-shrink: 0; padding: 10px 15px; border-radius: 12px; color: #ddd7f5;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .24) !important;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .24) !important;
 }
 .pa-wide { margin: 0 0 18px; }
 
@@ -85,7 +85,7 @@
 .pa-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .pa-stat {
   padding: 15px 17px; border-radius: 16px;
-  background: rgba(18, 13, 49, .7); border: 1px solid rgba(139, 92, 246, .18);
+  background: rgba(18, 13, 49, .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .pa-stat b { display: block; font-size: 26px; font-weight: 900; line-height: 1.2; }
 .pa-stat small { display: block; margin-top: 3px; font-size: 11px; color: #8982aa; }
@@ -97,7 +97,7 @@
 .pa-section-title { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .pa-section-title > span {
   min-width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px;
-  font-weight: 900; color: #c084fc; background: rgba(168, 85, 247, .13);
+  font-weight: 900; color: #c084fc; background: rgba(var(--brand-2-rgb), .13);
 }
 .pa-section-title h2 { font-size: 18px; margin: 0; }
 .pa-section-title p { font-size: 11px; color: #8982aa; margin: 3px 0 0; }
@@ -108,7 +108,7 @@
 .pa-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 14px; border-radius: 14px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(139, 92, 246, .12);
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 .pa-row b, .pa-row small { display: block; }
 .pa-row small { color: #817aa2; font-size: 10px; margin-top: 4px; }
@@ -132,7 +132,7 @@
 .pa-job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .pa-job {
   padding: 15px; border-radius: 15px;
-  background: rgba(255, 255, 255, .02); border: 1px solid rgba(139, 92, 246, .14);
+  background: rgba(255, 255, 255, .02); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .pa-job-top { display: flex; justify-content: space-between; gap: 8px; }
 .pa-job code, .pa-job small {
@@ -175,11 +175,11 @@
 .pa-modal input:focus { border-color: #fb7185; box-shadow: 0 0 0 3px rgba(251, 113, 133, .12); }
 .pa-echo {
   margin-bottom: 9px; padding: 9px; border-radius: 10px; font-size: 13px; color: #d7d1f2; user-select: all;
-  background: rgba(255, 255, 255, .04); border: 1px dashed rgba(139, 92, 246, .28);
+  background: rgba(255, 255, 255, .04); border: 1px dashed rgba(var(--brand-soft-rgb), .28);
 }
 .pa-modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .pa-modal-actions button { height: 48px; border-radius: 12px; font-weight: 800; }
-.pa-ghost { color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .24) !important; }
+.pa-ghost { color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .24) !important; }
 .pa-danger-btn { color: #fff; background: linear-gradient(135deg, #f43f5e, #9f1239); }
 .pa-danger-btn:disabled { opacity: .42; }
 .pa-modal-err {

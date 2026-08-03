@@ -17,7 +17,7 @@
  * `features` را بازچینی می‌کند — پس سرویس و صفحهٔ خودش را دارد.
  */
 
-export type SettingType = 'text' | 'textarea' | 'number' | 'bool';
+export type SettingType = 'text' | 'textarea' | 'number' | 'bool' | 'color';
 
 export interface SettingDef {
   key: string;
@@ -58,6 +58,12 @@ export const SETTINGS: SettingDef[] = [
     label: 'نامِ برند',
     hint: 'نامی که در رابط و بالای فاکتور دیده می‌شود.',
     group: 'identity', type: 'text', default: '', maxLength: 60,
+  },
+  {
+    key: 'brand_color',
+    label: 'رنگِ برند',
+    hint: 'رنگِ اصلیِ رابط. بقیهٔ سایه‌ها از همین ساخته می‌شوند.',
+    group: 'identity', type: 'color', default: '#7c3aed', maxLength: 7, ltr: true,
   },
   {
     key: 'company_legal_name',
@@ -140,6 +146,18 @@ export function coerce(def: SettingDef, raw: unknown): { value?: string | number
     if (def.min !== undefined && n < def.min) return { error: `«${def.label}» نباید کمتر از ${def.min} باشد` };
     if (def.max !== undefined && n > def.max) return { error: `«${def.label}» نباید بیشتر از ${def.max} باشد` };
     return { value: n };
+  }
+
+  // ⚠️ رنگ باید `#rrggbb` باشد، نه هر رشته‌ای. مقدارِ نامعتبر در دیتابیس
+  // یعنی رابطِ بی‌رنگ برای همان شرکت؛ و چون رنگ از تنظیمات مستقیم به CSS
+  // می‌رود، رشتهٔ دلخواه یک راهِ تزریق هم هست.
+  if (def.type === 'color') {
+    const c = String(raw ?? '').trim().toLowerCase();
+    if (!c) return { value: String(def.default) };
+    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/.exec(c);
+    if (!m) return { error: `«${def.label}» باید رنگی مثلِ #7c3aed باشد` };
+    const hex = m[1].length === 3 ? m[1].replace(/./g, (ch) => ch + ch) : m[1];
+    return { value: `#${hex}` };
   }
 
   // ⚠️ شناسه‌ها (شناسهٔ ملی، کدِ اقتصادی، تلفن) با ارقامِ **انگلیسی** ذخیره

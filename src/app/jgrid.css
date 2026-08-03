@@ -7,9 +7,9 @@
 .jg-head button {
   display: grid; place-items: center; width: 36px; height: 36px; cursor: pointer;
   color: #cfc9e8; background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(139, 92, 246, .24); border-radius: 11px;
+  border: 1px solid rgba(var(--brand-soft-rgb), .24); border-radius: 11px;
 }
-.jg-head button:hover { color: #fff; border-color: rgba(168, 85, 247, .6); }
+.jg-head button:hover { color: #fff; border-color: rgba(var(--brand-2-rgb), .6); }
 /* در RTL آیکونِ «بعد» باید برعکس شود */
 .jg-head button.flip svg { transform: scaleX(-1); }
 .jg-today { width: auto !important; padding: 0 12px; font: inherit; font-size: 12px; }
@@ -25,10 +25,10 @@
 }
 .jg-cell.empty { background: none; border-color: transparent; }
 .jg-cell.pick { cursor: pointer; }
-.jg-cell.pick:hover { border-color: rgba(168, 85, 247, .5); }
-.jg-cell.pick:focus-visible { outline: 2px solid rgba(168, 85, 247, .7); outline-offset: 2px; }
+.jg-cell.pick:hover { border-color: rgba(var(--brand-2-rgb), .5); }
+.jg-cell.pick:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 2px; }
 .jg-cell.today { border-color: rgba(0, 229, 255, .5); background: rgba(0, 229, 255, .06); }
-.jg-cell.sel { border-color: transparent; box-shadow: 0 0 0 2px #a855f7; }
+.jg-cell.sel { border-color: transparent; box-shadow: 0 0 0 2px var(--brand-2); }
 .jg-num { font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, .75); }
 .jg-cell.today .jg-num { color: #67e8f9; }
 

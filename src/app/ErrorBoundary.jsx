@@ -40,7 +40,7 @@ export default class ErrorBoundary extends Component {
           onClick={() => { this.setState({ error: null }); window.location.replace('/app'); }}
           style={{
             fontFamily: 'inherit', fontSize: 14, fontWeight: 800, color: '#fff', cursor: 'pointer',
-            background: 'linear-gradient(135deg,#a855f7,#4c1d95)', border: 'none',
+            background: 'linear-gradient(135deg,var(--brand-2),var(--brand-dark))', border: 'none',
             borderRadius: 12, padding: '12px 28px',
           }}
         >

@@ -1465,3 +1465,61 @@ jobs:
           }
           console.log('stagger ok');
           "
+
+      - name: Verify the brand colour is one setting the whole UI follows
+        run: |
+          set -e   # دو دستورِ node در یک مرحله — شکستِ اولی نباید بی‌صدا رد شود
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const reg = fs.readFileSync('server/src/config/settings-registry.ts', 'utf8');
+
+          // ① رنگ یک تنظیمِ اعلام‌شده است، نه یک ثابت در کد.
+          if (!/key: 'brand_color'/.test(reg) || !/type: 'color'/.test(reg)) {
+            console.error('brand_color باید در رجیستری با نوعِ color اعلام شده باشد'); process.exit(1);
+          }
+          // ⚠️ رنگ مستقیم به CSS می‌رود؛ رشتهٔ دلخواه هم رابط را بی‌رنگ می‌کند
+          //    هم یک راهِ تزریق است. پس coerce باید شکلِ hex را اجبار کند.
+          if (!/\[0-9a-f\]\{3\}\|\[0-9a-f\]\{6\}/.test(reg)) {
+            console.error('coerce باید فقط #rgb یا #rrggbb را بپذیرد'); process.exit(1);
+          }
+
+          // ② رنگِ خامِ بنفش نباید در CSS برگردد — هر hexِ برگشته یعنی نقطه‌ای
+          //    که با رنگِ شرکت عوض نمی‌شود. استثنا فقط تعریفِ پیش‌فرض در :root.
+          const css = execSync(\"find src -name '*.css'\", { encoding: 'utf8' }).split('\n').filter(Boolean);
+          const PURPLE = /#(7c3aed|a855f7|8b5cf6|6d28d9|5b21b6)\b|rgba?\(\s*(124,\s*58,\s*237|168,\s*85,\s*247|139,\s*92,\s*246|109,\s*40,\s*217|91,\s*33,\s*182)\s*[,)]/i;
+          const bad = [];
+          for (const f of css) {
+            let body = fs.readFileSync(f, 'utf8');
+            if (f === 'src/index.css') body = body.replace(/^:root \{[\s\S]*?^\}/m, '');
+            body.split('\n').forEach((l, i) => { if (PURPLE.test(l)) bad.push(f + ':' + (i + 1)); });
+          }
+          if (bad.length) { console.error('بنفشِ خام در: ' + bad.join('، ')); process.exit(1); }
+
+          // ③ رنگ روی <html> می‌نشیند، همان‌جا که پیکربندی می‌رسد.
+          const cfg = fs.readFileSync('src/app/config.jsx', 'utf8');
+          if (!/applyBrand\(/.test(cfg)) {
+            console.error('رنگِ شرکت باید هنگامِ رسیدنِ /config اعمال شود'); process.exit(1);
+          }
+          "
+          # ④ ⚠️ با رنگِ پیش‌فرض، خانواده باید **دقیقاً** همان پنج بنفشِ امروز
+          #    باشد. افست‌ها از روی همین رنگ‌ها درآمده‌اند؛ «مرتب‌کردن»شان ظاهرِ
+          #    هر نصبِ موجود را جابه‌جا می‌کند.
+          node --input-type=module -e "
+          import { brandPalette } from './src/lib/brand-palette.js';
+          const want = { brand: '#7c3aed', brand2: '#a855f7', soft: '#8b5cf6', mid: '#6d28d9', dark: '#5b21b6' };
+          const p = brandPalette('#7c3aed');
+          for (const [k, v] of Object.entries(want)) {
+            if (p[k].hex !== v) { console.error(\`سایهٔ \${k}: \${p[k].hex} ≠ \${v}\`); process.exit(1); }
+          }
+          // سه‌تاییِ rgb باید با hex بخواند، وگرنه شفافیت‌ها رنگِ دیگری می‌گیرند.
+          if (p.brand.rgb !== '124, 58, 237') { console.error('سه‌تاییِ rgb با hex نمی‌خواند'); process.exit(1); }
+          // رنگِ نامعتبر نباید رابط را بی‌رنگ کند.
+          if (brandPalette('لاجورد').brand.hex !== '#7c3aed') { console.error('رنگِ نامعتبر باید به پیش‌فرض برگردد'); process.exit(1); }
+          // رنگِ دیگر باید واقعاً خانواده را ببرد، نه فقط پایه را.
+          const q = brandPalette('#0ea5e9');
+          if (q.mid.hex === p.mid.hex || q.brand2.hex === p.brand2.hex) {
+            console.error('سایه‌ها از پایه مشتق نمی‌شوند'); process.exit(1);
+          }
+          console.log('brand ok');
+          "

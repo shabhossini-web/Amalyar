@@ -23,7 +23,7 @@
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 13px; padding: 0 12px; color: var(--text2);
 }
-.db-search:focus-within { border-color: rgba(168, 85, 247, 0.6); }
+.db-search:focus-within { border-color: rgba(var(--brand-2-rgb), 0.6); }
 .db-search input {
   flex: 1; background: none; border: none; outline: none; color: var(--text1);
   font-family: inherit; font-size: 13.5px; padding: 11px 0; min-width: 0;
@@ -34,10 +34,10 @@
   font-family: inherit; font-size: 13px; font-weight: 800; color: #fff; cursor: pointer;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
   border: none; border-radius: 13px; padding: 0 15px;
-  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 8px 22px rgba(var(--brand-rgb), 0.35);
   transition: transform .15s, box-shadow .2s;
 }
-.db-add:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(124, 58, 237, 0.45); }
+.db-add:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(var(--brand-rgb), 0.45); }
 .db-add:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .db-filters { margin-bottom: 14px; }
@@ -45,18 +45,18 @@
 
 /* نامِ بیمار روی کارت = لینکِ پرونده */
 .db-patlink { text-decoration: none; color: inherit; border-radius: 9px; }
-.db-patlink:hover b { color: var(--brand-2, #a855f7); }
-.db-patlink:focus-visible { outline: 2px solid rgba(168, 85, 247, .7); outline-offset: 3px; }
+.db-patlink:hover b { color: var(--brand-2, var(--brand-2)); }
+.db-patlink:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 3px; }
 
 /* نوعِ ملاقات — انتخابگرِ بالای فرم */
 .db-kindrow { display: flex; gap: 6px; margin-bottom: 4px; }
 .db-kindrow button {
   flex: 1; padding: 9px 6px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #b7b0d4; background: rgba(255, 255, 255, .04); border: 1px solid rgba(139, 92, 246, .18);
+  color: #b7b0d4; background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .db-kindrow button.on {
   color: #fff; font-weight: 800; border-color: transparent;
-  background: linear-gradient(135deg, #a855f7, #6d28d9);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 .db-kindfilter { margin-top: -6px; }
 
@@ -71,7 +71,7 @@
 /* برچسبِ نوعِ عمل روی کارت */
 .db-optype {
   font-size: 10.5px; font-weight: 700; color: #c4b5fd; flex: 0 0 auto;
-  background: rgba(124, 58, 237, 0.14); border: 1px solid rgba(168, 85, 247, 0.35);
+  background: rgba(var(--brand-rgb), 0.14); border: 1px solid rgba(var(--brand-2-rgb), 0.35);
   border-radius: 99px; padding: 3px 9px; max-width: 110px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -104,7 +104,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 9px; padding: 6px 4px;
   transition: color .15s, border-color .15s, background .15s;
 }
-.db-statuspick button:hover:not(:disabled) { color: var(--text1); border-color: rgba(168, 85, 247, 0.5); }
+.db-statuspick button:hover:not(:disabled) { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.5); }
 .db-statuspick button:disabled { cursor: default; }
 .db-statuspick button.on { cursor: default; }
 .db-ico {
@@ -159,14 +159,14 @@
   border-radius: 11px; padding: 10px 12px; outline: none; width: 100%;
   transition: border-color .15s;
 }
-.db-field input:focus, .db-field textarea:focus { border-color: rgba(168, 85, 247, 0.65); }
+.db-field input:focus, .db-field textarea:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
 .db-field textarea { resize: vertical; }
 .db-field select {
   font-family: inherit; font-size: 14px; color: var(--text1); width: 100%;
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 11px; padding: 10px 12px; outline: none; appearance: none;
 }
-.db-field select:focus { border-color: rgba(168, 85, 247, 0.65); }
+.db-field select:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
 .db-field select option { background: #141033; color: #f2f0fc; }
 
 /* سلکت + دکمهٔ افزودنِ سریع */
@@ -183,7 +183,7 @@
 .db-quickadd { display: flex; gap: 7px; }
 .db-quickadd input {
   flex: 1; min-width: 0; font-family: inherit; font-size: 14px; color: var(--text1);
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(168, 85, 247, 0.5);
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(var(--brand-2-rgb), 0.5);
   border-radius: 11px; padding: 10px 12px; outline: none;
 }
 .db-quickadd button {
@@ -207,7 +207,7 @@
 .db-def small { font-size: 11px; color: var(--text3); flex: 0 0 auto; }
 .db-def-edit {
   flex: 1; min-width: 0; font-family: inherit; font-size: 13.5px; color: var(--text1);
-  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(168, 85, 247, 0.55);
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(var(--brand-2-rgb), 0.55);
   border-radius: 9px; padding: 6px 10px; outline: none;
 }
 .db-def-acts { display: flex; gap: 5px; flex: 0 0 auto; }
@@ -227,7 +227,7 @@
   color: var(--text1); background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 11px; padding: 0 13px;
 }
-.db-today:hover { border-color: rgba(168, 85, 247, 0.55); }
+.db-today:hover { border-color: rgba(var(--brand-2-rgb), 0.55); }
 
 /* جستجوی بیمارِ موجود */
 .db-psearch { display: flex; flex-direction: column; gap: 8px; }
@@ -236,7 +236,7 @@
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 11px; padding: 10px 12px; outline: none;
 }
-.db-psearch > input:focus { border-color: rgba(168, 85, 247, 0.65); }
+.db-psearch > input:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
 .db-plist { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
 .db-plist button {
   display: flex; align-items: center; gap: 10px; text-align: right; cursor: pointer;
@@ -244,14 +244,14 @@
   background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 11px; padding: 9px 12px;
 }
-.db-plist button:hover { border-color: rgba(168, 85, 247, 0.55); background: rgba(124, 58, 237, 0.1); }
+.db-plist button:hover { border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.1); }
 .db-plist b { font-weight: 800; flex: 1; }
 .db-plist span, .db-picked span { font-size: 11.5px; color: var(--text3); }
 .db-plist small { font-size: 11px; color: var(--text2); }
 .db-pnone { text-align: center; font-size: 12.5px; color: var(--text3); padding: 12px 0; }
 .db-picked {
   display: flex; align-items: center; gap: 10px; font-size: 13.5px;
-  background: rgba(124, 58, 237, 0.12); border: 1px solid rgba(168, 85, 247, 0.45);
+  background: rgba(var(--brand-rgb), 0.12); border: 1px solid rgba(var(--brand-2-rgb), 0.45);
   border-radius: 11px; padding: 10px 12px;
 }
 .db-picked b { flex: 1; font-weight: 800; }
@@ -284,7 +284,7 @@
   font-family: inherit; font-size: 14.5px; font-weight: 800; color: #fff; cursor: pointer;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
   border: none; border-radius: 13px; padding: 13px;
-  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.35);
+  box-shadow: 0 8px 22px rgba(var(--brand-rgb), 0.35);
   transition: transform .15s, box-shadow .2s, opacity .2s;
 }
 .db-submit:hover:not(:disabled) { transform: translateY(-1px); }
@@ -304,7 +304,7 @@
 .db-def-save {
   flex-shrink: 0; padding: 6px 11px; border-radius: 8px; font: inherit; font-size: 12px;
   cursor: pointer; color: #fff; border: 0;
-  background: linear-gradient(135deg, #a855f7, #6d28d9);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 
 /* ── صورت‌حساب ── */
@@ -312,7 +312,7 @@
 .bl-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .bl-summary > div {
   padding: 13px 14px; border-radius: 14px; text-align: center;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(139, 92, 246, .16);
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .bl-summary b { display: block; font-size: 19px; font-weight: 900; line-height: 1.25; }
 .bl-summary span { display: block; margin-top: 3px; font-size: 10.5px; color: var(--text3); }
@@ -324,14 +324,14 @@
 
 .bl-add {
   display: grid; gap: 10px; padding: 14px; border-radius: 15px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(139, 92, 246, .14);
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .bl-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; }
 
 .bl-list { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
 .bl-row {
   display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 13px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(139, 92, 246, .12);
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 .bl-row-main { min-width: 0; flex: 1; }
 .bl-row-main b { display: block; font-size: 13px; }
@@ -341,7 +341,7 @@
 
 .bl-tag {
   flex-shrink: 0; font-size: 10px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
-  color: #c4b5fd; background: rgba(124, 58, 237, .14); border: 1px solid rgba(168, 85, 247, .3);
+  color: #c4b5fd; background: rgba(var(--brand-rgb), .14); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
 .bl-tag.t-item     { color: #67e8f9; background: rgba(34, 211, 238, .12); border-color: rgba(34, 211, 238, .3); }
 .bl-tag.t-discount { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .3); }
@@ -382,7 +382,7 @@
   position: absolute; z-index: 5; inset-inline: 0; top: 100%; margin-top: 4px;
   max-height: 230px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
   padding: 6px; border-radius: 12px;
-  background: rgba(18, 13, 49, .98); border: 1px solid rgba(139, 92, 246, .35);
+  background: rgba(18, 13, 49, .98); border: 1px solid rgba(var(--brand-soft-rgb), .35);
   box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
 }
 .bl-hits button {
@@ -390,7 +390,7 @@
   font: inherit; font-size: 12px; color: var(--text1);
   background: none; border: 0; border-radius: 9px; padding: 8px 9px;
 }
-.bl-hits button:hover { background: rgba(124, 58, 237, .18); }
+.bl-hits button:hover { background: rgba(var(--brand-rgb), .18); }
 .bl-hits b { flex-shrink: 0; font-weight: 800; color: #c4b5fd; }
 .bl-hits span { line-height: 1.7; }
 
@@ -447,7 +447,7 @@
 .db-chips button {
   display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 10px;
   font: inherit; font-size: 11.5px; cursor: pointer; color: #ddd6fe;
-  background: rgba(124, 58, 237, .16); border: 1px solid rgba(139, 92, 246, .3);
+  background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-soft-rgb), .3);
 }
 .db-chips .db-chip-clear { color: #fda4af; background: none; border-color: rgba(251, 113, 133, .3); }
 
@@ -455,11 +455,11 @@
 .db-sortbar label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #9a93bb; }
 .db-sortbar select {
   padding: 7px 10px; border-radius: 10px; font: inherit; font-size: 12px; color: var(--text1);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .22);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .db-dir {
   width: 30px; height: 30px; border-radius: 9px; font: inherit; font-size: 14px; cursor: pointer;
-  color: #ddd6fe; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .22);
+  color: #ddd6fe; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .db-count { margin-inline-start: auto; font-size: 11px; color: #837ca5; }
 .db-psize { flex-shrink: 0; }
@@ -467,7 +467,7 @@
 .db-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; font-size: 12px; color: #9a93bb; }
 .db-pager button {
   padding: 9px 16px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #ddd6fe; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .22);
+  color: #ddd6fe; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .db-pager button:disabled { opacity: .35; cursor: not-allowed; }
 
@@ -476,14 +476,14 @@
 .db-quickdates { display: flex; flex-wrap: wrap; gap: 6px; }
 .db-quickdates button {
   padding: 8px 13px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
-  color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .2);
+  color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .db-hint-bad { color: #fda4af; font-size: 11.5px; margin: 0; }
 .db-sheet-foot { display: flex; gap: 9px; justify-content: flex-end; margin-top: 14px; }
 .db-sheet-foot .db-submit { padding: 11px 24px; font-size: 13px; }
 .db-ghost {
   padding: 11px 18px; border-radius: 12px; font: inherit; font-size: 13px; cursor: pointer;
-  color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .2);
+  color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 
 /* ساعتِ عمل در فرم */
@@ -513,7 +513,7 @@ a.db-defbtn { text-decoration: none; }
 .bl-share b small { display: block; font-size: 10px; color: rgba(255, 255, 255, .5); font-weight: 400; }
 .bl-share span { flex: 1; font-size: 10.5px; color: rgba(255, 255, 255, .45); }
 .bl-share i { font-style: normal; font-weight: 700; }
-.bl-share.total { background: rgba(124, 58, 237, .14); border-color: rgba(124, 58, 237, .3); }
+.bl-share.total { background: rgba(var(--brand-rgb), .14); border-color: rgba(var(--brand-rgb), .3); }
 .bl-share.p-surgeon i { color: #93c5fd; }
 .bl-share.p-tech i    { color: #6ee7b7; }
 .bl-share.p-cost i    { color: #fca5a5; }
@@ -540,5 +540,5 @@ a.db-defbtn { text-decoration: none; }
 
 /* فیلترِ مالی در سرچِ پیشرفته */
 .db-owing { display: flex; align-items: center; gap: 8px; margin-block-start: 10px; font-size: 12.5px; cursor: pointer; }
-.db-owing input { width: 17px; height: 17px; accent-color: #a855f7; cursor: pointer; }
+.db-owing input { width: 17px; height: 17px; accent-color: var(--brand-2); cursor: pointer; }
 .bl-inv { width: 100%; margin-block-start: 8px; }

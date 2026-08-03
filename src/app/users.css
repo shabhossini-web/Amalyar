@@ -43,7 +43,7 @@
   background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 11px; padding: 8px 10px; transition: border-color .2s;
 }
-.us-levelpick select:focus { outline: none; border-color: rgba(168, 85, 247, 0.7); }
+.us-levelpick select:focus { outline: none; border-color: rgba(var(--brand-2-rgb), 0.7); }
 .us-levelpick select:disabled { opacity: .55; cursor: default; }
 .us-levelpick select option { background: #141033; color: #f2f0fc; }
 
@@ -74,7 +74,7 @@
   width: 16px; height: 16px; border-radius: 50%; background: #fff;
   transition: translate .2s;
 }
-.us-switch input:checked + .us-track { background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); border-color: rgba(168, 85, 247, 0.6); }
+.us-switch input:checked + .us-track { background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); border-color: rgba(var(--brand-2-rgb), 0.6); }
 .us-switch input:checked + .us-track::after { translate: -18px 0; }
 [dir='ltr'] .us-switch input:checked + .us-track::after { translate: 18px 0; }
 .us-switch input:disabled + .us-track { opacity: .45; cursor: default; }

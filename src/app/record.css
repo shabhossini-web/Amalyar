@@ -4,16 +4,16 @@
 
 .rc-h3 {
   margin: 6px 0 0; font-size: 12px; font-weight: 800; color: #c4b5fd;
-  padding-bottom: 7px; border-bottom: 1px solid rgba(139, 92, 246, .2);
+  padding-bottom: 7px; border-bottom: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .rc-h3:first-child { margin-top: 0; }
 
 .pf-field select {
   width: 100%; height: 46px; border-radius: 11px; padding: 0 13px; font: inherit; font-size: 13px;
   color: #fff; outline: none; appearance: none; cursor: pointer;
-  background: rgba(3, 2, 18, .6); border: 1px solid rgba(139, 92, 246, .26);
+  background: rgba(3, 2, 18, .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
 }
-.pf-field select:focus { border-color: #a855f7; }
+.pf-field select:focus { border-color: var(--brand-2); }
 .pf-field select option { background: #141033; color: #f2f0fc; }
 .pf-field input[readonly] { opacity: .65; cursor: default; }
 
@@ -36,7 +36,7 @@
 .rc-kind {
   margin-inline-start: 7px; font-style: normal; font-size: 10px; font-weight: 700;
   border-radius: 99px; padding: 2px 8px;
-  color: #c4b5fd; background: rgba(124, 58, 237, .16); border: 1px solid rgba(168, 85, 247, .3);
+  color: #c4b5fd; background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
 .rc-kind.k-clinic   { color: #67e8f9; background: rgba(34, 211, 238, .12);  border-color: rgba(34, 211, 238, .35); }
 .rc-kind.k-followup { color: #6ee7b7; background: rgba(52, 211, 153, .12);  border-color: rgba(52, 211, 153, .35); }
@@ -52,18 +52,18 @@
 /* ── آپلود / فرمِ افزودن ── */
 .rc-upload {
   display: grid; gap: 12px; margin-bottom: 14px; padding: 15px; border-radius: 16px;
-  background: rgba(18, 13, 49, .7); border: 1px solid rgba(139, 92, 246, .18);
+  background: rgba(18, 13, 49, .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 /* ناحیهٔ انتخاب/رهاکردنِ فایل — inputِ نیتیو پنهان است */
 .rc-drop {
   display: grid; place-items: center; gap: 4px; cursor: pointer; text-align: center;
   padding: 20px 14px; border-radius: 13px; transition: border-color .15s, background .15s;
-  background: rgba(3, 2, 18, .5); border: 1.5px dashed rgba(139, 92, 246, .4);
+  background: rgba(3, 2, 18, .5); border: 1.5px dashed rgba(var(--brand-soft-rgb), .4);
 }
 .rc-drop input { display: none; }
 .rc-drop b { font-size: 13px; font-weight: 800; color: #d8d2f5; }
 .rc-drop small { font-size: 11px; color: #837ca5; }
-.rc-drop:hover, .rc-drop.on { border-color: #a855f7; background: rgba(124, 58, 237, .1); }
+.rc-drop:hover, .rc-drop.on { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .1); }
 .rc-drop.busy { opacity: .6; cursor: progress; }
 .rc-filter { margin-bottom: 10px; }
 
@@ -71,7 +71,7 @@
 .rc-docs { display: grid; gap: 9px; }
 .rc-doc {
   display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 15px;
-  background: rgba(18, 13, 49, .8); border: 1px solid rgba(139, 92, 246, .16);
+  background: rgba(18, 13, 49, .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .rc-doc-main { min-width: 0; flex: 1; }
 .rc-doc-main b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -80,7 +80,7 @@
 
 .rc-thumb {
   width: 52px; height: 52px; flex-shrink: 0; border-radius: 11px; object-fit: cover;
-  background: rgba(3, 2, 18, .6); border: 1px solid rgba(139, 92, 246, .25);
+  background: rgba(3, 2, 18, .6); border: 1px solid rgba(var(--brand-soft-rgb), .25);
 }
 .rc-thumb-ph { animation: rc-pulse 1.4s ease-in-out infinite; }
 @keyframes rc-pulse { 0%, 100% { opacity: .35; } 50% { opacity: .7; } }
@@ -92,14 +92,14 @@
 /* ── شرح‌ها ── */
 .rc-note {
   padding: 13px 15px; border-radius: 15px;
-  background: rgba(18, 13, 49, .8); border: 1px solid rgba(139, 92, 246, .16);
+  background: rgba(18, 13, 49, .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .rc-note-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .rc-note-head b { font-size: 12.5px; color: #c4b5fd; }
 .rc-note-head small { font-size: 10.5px; color: #837ca5; }
 .rc-note-visit {
   font-size: 10px; font-weight: 700; color: #8b7ff0; border-radius: 99px; padding: 2px 8px;
-  background: rgba(124, 58, 237, .16); border: 1px solid rgba(168, 85, 247, .3);
+  background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
 .rc-edited {
   font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; color: #fbbf24;
@@ -109,14 +109,14 @@
 .rc-note-edit {
   margin-inline-start: auto; width: 28px; height: 28px; display: grid; place-items: center;
   border-radius: 8px; cursor: pointer; color: #cfc9e8;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .2);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .rc-note-body { margin: 0; font-size: 13px; line-height: 2; color: #e6e2f7; white-space: pre-wrap; }
 
 .rc-history { display: grid; gap: 10px; max-height: 60vh; overflow-y: auto; }
 .rc-hrow {
   padding: 11px 13px; border-radius: 12px;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(139, 92, 246, .14);
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .rc-hrow.on { border-color: rgba(52, 211, 153, .4); background: rgba(52, 211, 153, .07); }
 .rc-hrow small { display: block; margin-bottom: 6px; font-size: 10.5px; color: #8f88af; }

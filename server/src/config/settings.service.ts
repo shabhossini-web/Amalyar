@@ -185,6 +185,8 @@ export class SettingsService {
       econCode: get('company_econ_code') || null,
       phone: get('company_phone') || null,
       address: get('company_address') || null,
+      /// رنگ همیشه مقدار دارد (پیش‌فرضِ رجیستری) — کلاینت نباید fallback بچیند.
+      color: get('brand_color') || '#7c3aed',
     };
   }
 }

@@ -31,7 +31,7 @@
 
 .pm-accounts { display: flex; flex-direction: column; gap: 2px; max-height: 250px; overflow-y: auto; }
 .pm-acc { display: flex; align-items: center; gap: 4px; border-radius: 13px; }
-.pm-acc.active { background: rgba(124, 58, 237, 0.14); }
+.pm-acc.active { background: rgba(var(--brand-rgb), 0.14); }
 .pm-acc-main {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
   font-family: inherit; color: inherit; text-align: right; cursor: pointer;

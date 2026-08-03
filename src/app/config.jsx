@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
 import { DEFAULT_VERTICAL, termsFor } from '../lib/terms.js';
+import { applyBrand } from '../lib/brand-palette.js';
 
 const Ctx = createContext(null);
 
@@ -29,6 +30,15 @@ export function ConfigProvider({ children }) {
     try {
       const fresh = await api('/config');
       setConfig((c) => ({ ...c, ...fresh }));
+      /**
+       * رنگِ شرکت روی `<html>` می‌نشیند، نه در state.
+       *
+       * ⚠️ عمداً این‌جاست و نه در یک `useEffect`ِ جدا: رنگ باید همان لحظه‌ای
+       * که پیکربندی می‌رسد اعمال شود. اگر منتظرِ رندرِ بعدی می‌ماند، صفحه یک
+       * فریم با بنفشِ پیش‌فرض دیده می‌شد و بعد می‌پرید به رنگِ شرکت — و
+       * دقیقاً همان اولین فریم است که کاربر «رنگِ برنامه» می‌خواندش.
+       */
+      applyBrand(fresh?.brand?.color);
       setError(null);
       return true;
     } catch (e) {

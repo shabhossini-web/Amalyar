@@ -5,9 +5,9 @@
 .jd-btn {
   flex: 0 0 auto; display: grid; place-items: center; width: 40px; cursor: pointer;
   color: #cfc9e8; background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(139, 92, 246, .25); border-radius: 11px;
+  border: 1px solid rgba(var(--brand-soft-rgb), .25); border-radius: 11px;
 }
-.jd-btn:hover:not(:disabled) { color: #a855f7; border-color: rgba(168, 85, 247, .5); }
+.jd-btn:hover:not(:disabled) { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
 .jd-btn:disabled { opacity: .4; cursor: not-allowed; }
 .jd-btn:focus-visible { outline: 2px solid var(--cyan, #22d3ee); outline-offset: 2px; }
 .jd-hint, .jd-err { display: block; margin-top: 4px; font-style: normal; font-size: 11px; }
@@ -23,20 +23,20 @@
 /* ورود/خروج در `ui/Overlay.jsx` — اینجا @keyframes نگذارید (توضیح در dashboard.css). */
 .jd-cal {
   width: min(340px, 100%); border-radius: 20px; overflow: hidden;
-  background: #150f36; border: 1px solid rgba(139, 92, 246, .32);
+  background: #150f36; border: 1px solid rgba(var(--brand-soft-rgb), .32);
   box-shadow: 0 26px 70px rgba(0, 0, 0, .65);
   color: #f4f1ff; font-family: inherit;
 }
 
 .jd-cal-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 13px 15px; border-bottom: 1px solid rgba(139, 92, 246, .16);
+  padding: 13px 15px; border-bottom: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .jd-cal-head b { font-size: 13.5px; font-weight: 800; }
 .jd-x {
   display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer;
   color: #cfc9e8; background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(139, 92, 246, .2); border-radius: 9px;
+  border: 1px solid rgba(var(--brand-soft-rgb), .2); border-radius: 9px;
 }
 .jd-x:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
 
@@ -44,15 +44,15 @@
 .jd-nav button {
   flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer;
   color: #cfc9e8; background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(139, 92, 246, .2); border-radius: 9px;
+  border: 1px solid rgba(var(--brand-soft-rgb), .2); border-radius: 9px;
 }
-.jd-nav button:hover { color: #a855f7; }
+.jd-nav button:hover { color: var(--brand-2); }
 /* در RTL، «قبلی» فلشِ رو به راست است و «بعدی» رو به چپ. */
 .jd-nav .jd-next svg { transform: rotate(180deg); }
 .jd-nav select {
   flex: 1; min-width: 0; padding: 8px 9px; border-radius: 10px; cursor: pointer;
   font: inherit; font-size: 12.5px; color: #f4f1ff;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(139, 92, 246, .2);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 
 .jd-grid {
@@ -68,17 +68,17 @@
   font: inherit; font-size: 12.5px; color: #ddd6fe;
   background: rgba(255, 255, 255, .035); border: 1px solid transparent;
 }
-.jd-day:hover { background: rgba(139, 92, 246, .22); }
+.jd-day:hover { background: rgba(var(--brand-soft-rgb), .22); }
 .jd-day.today { border-color: rgba(34, 211, 238, .55); color: #67e8f9; }
 .jd-day.sel {
   color: #fff; font-weight: 800; border-color: transparent;
-  background: linear-gradient(135deg, #a855f7, #6d28d9);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 .jd-day:focus-visible { outline: 2px solid var(--cyan, #22d3ee); outline-offset: 1px; }
 
 .jd-cal-foot {
   display: flex; gap: 8px; padding: 11px 13px 13px;
-  border-top: 1px solid rgba(139, 92, 246, .14);
+  border-top: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .jd-cal-foot button {
   flex: 1; padding: 10px; border-radius: 11px; cursor: pointer; font: inherit; font-size: 12.5px;
@@ -88,5 +88,5 @@
 }
 .jd-todaybtn {
   color: #fff; font-weight: 800; border: 0;
-  background: linear-gradient(135deg, #a855f7, #6d28d9);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }

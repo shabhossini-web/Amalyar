@@ -289,6 +289,15 @@ function Knobs({ onToast, onSaved }) {
                       <option value="true">بله</option>
                       <option value="false">خیر</option>
                     </select>
+                  ) : it.type === 'color' ? (
+                    /* هم انتخابگرِ رنگ هم متن: انتخابگر برای کسی که رنگ را
+                       می‌بیند، متن برای کسی که کدِ رنگِ برندش را دارد. */
+                    <span className="st-color">
+                      <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(v) ? v : '#7c3aed'}
+                        onChange={(e) => set(it.key, e.target.value)} aria-label={it.label} />
+                      <input dir="ltr" maxLength={7} value={v} placeholder={String(it.default)}
+                        onChange={(e) => set(it.key, e.target.value)} />
+                    </span>
                   ) : (
                     <input
                       dir={it.ltr || it.type === 'number' ? 'ltr' : undefined}
