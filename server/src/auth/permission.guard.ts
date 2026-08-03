@@ -3,56 +3,31 @@ import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEVEL } from '../common/levels';
 import { PERMISSIONS_KEY } from './permission.decorator';
+import { PERMISSION_DEFAULT_LEVELS } from './access-registry';
 
-export const PERMISSION_DEFAULTS: Record<string, number> = {
-  'patients.read': LEVEL.TECH,
-  'patients.read_all': LEVEL.SUPERVISOR,
-  'patients.create': LEVEL.TECH_ADMIN,
-  'patients.update': LEVEL.SUPERVISOR,
-  'patients.status': LEVEL.SUPERVISOR,
-  // ثبتِ ساعتِ عمل کارِ کسی است که سرِ عمل حاضر است — کارشناس. جدا از
-  // patients.update نگه داشته شده تا این اجازه، اجازهٔ ویرایشِ مالی نشود.
-  'visits.times': LEVEL.TECH,
-  'patients.delete': LEVEL.SUPER_ADMIN,
-  // بخشِ بالینیِ پرونده (حساسیت، سابقه، بیمه، شرح‌ها) از بخشِ هویتی جداست:
-  // کارشناسی که برای چینشِ کار نامِ بیمار را می‌بیند، لازم نیست سابقهٔ پزشکی‌اش را ببیند.
-  'patients.clinical.read': LEVEL.TECH_ADMIN,
-  'patients.clinical.write': LEVEL.TECH_ADMIN,
-  // آپلودِ گزارشِ عمل کارِ خودِ کارشناس است، پس نوشتن از سطحِ کارشناس باز است؛
-  // دامنه‌اش با scope محدود می‌شود (فقط بیمارانی که در مراجعه‌شان بوده).
-  'documents.read': LEVEL.TECH,
-  'documents.write': LEVEL.TECH,
-  'documents.delete': LEVEL.ADMIN,
-  // مالی از بالینی جداست: سوپروایزری که وضعیتِ عمل را می‌بندد لازم نیست
-  // صورت‌حساب را ببیند، و حسابدار لازم نیست سابقهٔ پزشکی را.
-  'billing.read': LEVEL.SUPERVISOR,
-  'billing.write': LEVEL.ADMIN,
-  // انبار کارِ روزمرهٔ کارشناس و انباردار است نه کارِ مدیر، پس نوشتنش پایین‌تر
-  // از مالی است. ولی انبارگردانی جداست: با یک عدد موجودیِ هر لاتی بازنویسی
-  // می‌شود و اختلافش دیگر قابلِ ردیابی نیست — آن یکی سطحِ سوپروایزر می‌خواهد.
-  'inventory.read': LEVEL.TECH,
-  'inventory.write': LEVEL.TECH_ADMIN,
-  'inventory.adjust': LEVEL.SUPERVISOR,
-  // ثبتِ «چه چیزی سرِ عمل مصرف شد» کارِ کارشناسِ حاضر در اتاقِ عمل است و همان
-  // استدلالِ `visits.times` را دارد: جدا از inventory.write نگه داشته شده تا
-  // این اجازه، اجازهٔ ساختِ لات یا صدورِ حواله نشود. دامنه‌اش هم محدود است —
-  // کارشناس فقط حواله‌های عملی را می‌بیند که خودش کارشناسش بوده.
-  'stock.consume': LEVEL.TECH,
-  // حسابداری از صورت‌حساب جداست: کسی که فاکتورِ بیمار را می‌بندد لازم نیست
-  // سهمِ جراح و درصدِ شرکا را ببیند، و برعکس.
-  'accounting.read': LEVEL.ADMIN,
-  'accounting.manage': LEVEL.ADMIN,
-  'definitions.read': LEVEL.TECH,
-  'definitions.manage': LEVEL.ADMIN,
-  'users.manage': LEVEL.SUPER_ADMIN,
-  // وارد کردنِ دادهٔ سامانهٔ قبلی کلِ دیتابیسِ شرکت را دست می‌زند.
-  'import.run': LEVEL.SUPER_ADMIN,
-};
+/**
+ * پیش‌فرضِ سطحِ هر مجوز.
+ *
+ * ⚠️ فهرست دیگر این‌جا نوشته نمی‌شود: هر مجوز در `access-registry.ts` با
+ * **برچسبِ فارسی** اعلام می‌شود و این نگاشت از رویش ساخته می‌شود. دلیلش این
+ * است که تا دیروز مجوزها فقط یک `Record<string, number>` بودند — مدیر نه
+ * می‌دید چه مجوزهایی هست، نه می‌فهمید `stock.consume` یعنی چه، و تغییرشان
+ * فقط با deploy ممکن بود. برگرداندنِ یک فهرستِ بی‌برچسب به این‌جا یعنی
+ * برگشتن به همان وضع؛ نگهبانِ CI جلویش را می‌گیرد.
+ */
+export const PERMISSION_DEFAULTS: Record<string, number> = PERMISSION_DEFAULT_LEVELS;
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
   constructor(private reflector: Reflector, private prisma: PrismaService) {}
 
+  /**
+   * ⚠️ عمداً **بدونِ کش**: سطحِ هر مجوز در همین درخواست از DB خوانده می‌شود.
+   * کشِ چنددقیقه‌ای یعنی مدیری که همین الان دری را بست، تا انقضای کش باور کند
+   * بسته است در حالی که باز است. برای یک تغییرِ امنیتی، «به‌نظر انجام‌شده»
+   * بدترین حالتِ ممکن است. هزینهٔ یک `findUnique` روی کلیدِ یکتا ناچیز است؛
+   * هزینهٔ درِ باز نه.
+   */
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
       ctx.getHandler(),

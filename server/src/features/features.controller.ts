@@ -1,23 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { FeaturesService } from './features.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { LevelGuard } from '../auth/level.guard';
-import { MinLevel } from '../auth/min-level.decorator';
-import { LEVEL } from '../common/levels';
 
-class FeaturePatchDto {
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(6)
-  minLevel?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  enabled?: boolean;
-}
-
+/**
+ * ماژول‌های فعال — فقط **خواندنی**.
+ *
+ * ⚠️ نوشتن عمداً این‌جا نیست: `PATCH /access/features/:key` تنها نویسنده است،
+ * چون فقط آن مسیر تغییر را در `audit` ثبت می‌کند و قفلِ ضدِ‌ارتقا را می‌سنجد.
+ * مسیرِ دومِ نوشتن یعنی روزی یکی از دو مسیر یکی از این دو کار را فراموش کند و
+ * دری بی‌ردپا باز شود.
+ */
 @Controller('features')
 @UseGuards(JwtAuthGuard)
 export class FeaturesController {
@@ -27,19 +19,5 @@ export class FeaturesController {
   @Get()
   list() {
     return this.features.list();
-  }
-
-  @UseGuards(LevelGuard)
-  @MinLevel(LEVEL.SUPER_ADMIN)
-  @Patch(':key')
-  update(@Param('key') key: string, @Body() dto: FeaturePatchDto) {
-    return this.features.update(key, dto);
-  }
-
-  @UseGuards(LevelGuard)
-  @MinLevel(LEVEL.SUPER_ADMIN)
-  @Post('reset')
-  reset() {
-    return this.features.reset();
   }
 }

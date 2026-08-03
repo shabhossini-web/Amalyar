@@ -1,0 +1,104 @@
+/* ماتریسِ سطوحِ دسترسی — ردیف‌ها درها، ستون‌ها سطح‌ها. */
+.ax { position: relative; min-height: 100dvh; padding: 16px 14px 60px; color: var(--text1); }
+.ax-bg {
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(900px 520px at 15% -10%, rgba(var(--brand-rgb), .16), transparent 60%),
+    var(--bg);
+}
+
+.ax-head { max-width: 980px; margin: 0 auto 14px; }
+.ax-back {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
+  font-size: 12.5px; text-decoration: none; color: var(--text2);
+}
+.ax-back:hover { color: var(--brand-2); }
+.ax-head h1 { font-size: 20px; font-weight: 900; }
+.ax-head p { margin-top: 5px; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
+
+.ax-err {
+  display: flex; align-items: center; gap: 7px; max-width: 980px; margin: 0 auto 12px;
+  padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
+  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+}
+.ax-empty { max-width: 980px; margin: 0 auto; padding: 26px; text-align: center; color: var(--text3); font-size: 13px; }
+
+/* ذره‌بینِ سطح */
+.ax-lens {
+  display: flex; gap: 6px; overflow-x: auto; max-width: 980px; margin: 0 auto 8px;
+  padding-bottom: 3px; scrollbar-width: thin;
+}
+.ax-lens button {
+  flex: 0 0 auto; padding: 8px 12px; border-radius: 11px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600; white-space: nowrap;
+  color: var(--text2); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
+}
+.ax-lens button.on {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}
+.ax-lenshint { max-width: 980px; margin: 0 auto 12px; font-size: 12px; color: var(--text3); }
+.ax-lenshint b { color: var(--brand-2); }
+
+.ax-group { max-width: 980px; margin: 0 auto 18px; }
+.ax-group h2 { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+.ax-ghint { font-size: 11.5px; line-height: 1.9; color: var(--text3); margin-bottom: 9px; }
+.ax-rows { display: grid; gap: 8px; }
+
+.ax-row {
+  display: grid; gap: 9px; padding: 11px 12px; border-radius: 15px;
+  background: rgba(255, 255, 255, .045); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  grid-template-columns: 1fr auto auto; align-items: center;
+}
+.ax-row.locked { border-style: dashed; opacity: .8; }
+/* «کم‌رنگ» یعنی این سطح به آن نمی‌رسد — نه اینکه غیرفعال باشد. */
+.ax-row.dim { opacity: .38; }
+
+.ax-name { min-width: 0; }
+.ax-name b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.ax-name b svg { color: var(--text3); }
+.ax-name small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.8; color: var(--text3); }
+.ax-key { display: block; margin-top: 3px; font-size: 10px; font-style: normal; color: rgba(255, 255, 255, .28); }
+.ax-tag {
+  font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px;
+  color: #fcd34d; background: rgba(245, 158, 11, .14);
+}
+
+.ax-cells { display: flex; gap: 3px; }
+.ax-cell {
+  width: 30px; height: 30px; border-radius: 9px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--text3); background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+  transition: background .15s, color .15s, border-color .15s;
+}
+.ax-cell.on { color: #fff; background: rgba(var(--brand-rgb), .5); border-color: transparent; }
+/* پله — همان سطحی که در از آن‌جا باز می‌شود. */
+.ax-cell.edge { box-shadow: inset 0 0 0 1px var(--brand-2); }
+.ax-cell:disabled { cursor: not-allowed; opacity: .55; }
+
+.ax-acts { display: flex; flex-direction: column; gap: 5px; }
+.ax-sw, .ax-reset {
+  font: inherit; font-size: 11px; font-weight: 700; padding: 6px 10px; border-radius: 9px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px; justify-content: center;
+  color: var(--text3); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
+}
+.ax-sw.on { color: #6ee7b7; border-color: rgba(52, 211, 153, .32); background: rgba(52, 211, 153, .1); }
+.ax-reset { color: #fcd34d; border-color: rgba(245, 158, 11, .3); background: rgba(245, 158, 11, .1); }
+.ax-sw:disabled, .ax-reset:disabled { opacity: .5; cursor: not-allowed; }
+
+.ax-toast {
+  position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
+  padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
+  color: #fff; background: rgba(22, 16, 46, .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  opacity: 0; transition: opacity .2s, transform .2s;
+}
+.ax-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
+
+@media (max-width: 620px) {
+  .ax { padding: 12px 10px 40px; }
+  /* در موبایل سه‌ستونه نمی‌شود: نام بالا، ستون‌ها و کلیدها زیرش. */
+  .ax-row { grid-template-columns: 1fr auto; }
+  .ax-name { grid-column: 1 / -1; }
+  .ax-cells { justify-content: flex-start; }
+  .ax-acts { flex-direction: row; }
+}

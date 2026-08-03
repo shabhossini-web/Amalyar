@@ -1,27 +1,21 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LEVEL } from '../common/levels';
+import { FEATURES, FEATURE_BY_KEY, FEATURE_DEFAULT_LEVELS, LOCKED_FEATURES } from '../auth/access-registry';
 
 /**
- * پیش‌فرض‌ها فقط seed اولیه‌اند؛ منبعِ حقیقت DB است و سوپرادمین تغییرش می‌دهد.
- * enabled بعداً اهرمِ لایسنس/پلنِ SaaS هم می‌شود.
+ * پیش‌فرضِ سطحِ ماژول‌ها — از رجیستریِ دسترسی می‌آید، نه از فهرستی که این‌جا
+ * نوشته شده باشد. منبعِ حقیقتِ زمانِ اجرا همچنان DB است.
  */
-export const FEATURE_DEFAULTS: Record<string, { minLevel: number }> = {
-  dashboard: { minLevel: 5 },
-  formgen: { minLevel: 5 },
-  messenger: { minLevel: 2 },
-  accounting: { minLevel: 5 },
-  calendar: { minLevel: 4 },
-  dispatch: { minLevel: 4 },
-  letter: { minLevel: 5 },
-  tech: { minLevel: 2 },
-  inventory: { minLevel: 3 },
-  users: { minLevel: 6 },
-};
+export const FEATURE_DEFAULTS = FEATURE_DEFAULT_LEVELS;
 
-/// «کاربران» قفلِ سطح ۶ می‌ماند — پایین‌آوردنش یعنی امکانِ ارتقای دسترسی توسط غیرسوپرادمین
-const LOCKED_KEYS = new Set(['users']);
-
+/**
+ * خواندنِ ماژول‌ها.
+ *
+ * ⚠️ **نوشتن این‌جا نیست، در `AccessService` است.** تا دیروز هم این سرویس
+ * می‌نوشت هم صفحهٔ کاربران صدایش می‌زد؛ حالا که ماتریسِ دسترسی هر دو لایه را
+ * با هم می‌نویسد و در `audit` ثبت می‌کند، مسیرِ دومِ نوشتن یعنی تغییری که هیچ
+ * ردی از خودش نمی‌گذارد. برای هر جدول فقط **یک** نویسنده.
+ */
 @Injectable()
 export class FeaturesService {
   constructor(private prisma: PrismaService) {}
@@ -29,45 +23,31 @@ export class FeaturesService {
   /// seedِ تنبل: کلیدهای غایب با پیش‌فرض ساخته می‌شوند
   private async ensureSeeded() {
     await this.prisma.feature.createMany({
-      data: Object.entries(FEATURE_DEFAULTS).map(([key, d]) => ({ key, minLevel: d.minLevel })),
+      data: FEATURES.map((f) => ({ key: f.key, minLevel: f.defaultLevel })),
       skipDuplicates: true,
     });
   }
 
+  /**
+   * فهرستِ ماژول‌ها برای لانچر — همهٔ کاربرانِ واردشده می‌خوانند.
+   * ⚠️ برچسبِ فارسی هم برمی‌گردد تا لانچر و ماتریس نامِ ماژول را hardcode نکنند.
+   */
   async list() {
     await this.ensureSeeded();
     const rows = await this.prisma.feature.findMany();
-    const order = Object.keys(FEATURE_DEFAULTS);
+    const order = FEATURES.map((f) => f.key);
     rows.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
-    return rows.map((r) => ({
-      key: r.key,
-      minLevel: r.minLevel,
-      enabled: r.enabled,
-      defaultLevel: FEATURE_DEFAULTS[r.key]?.minLevel ?? 6,
-      locked: LOCKED_KEYS.has(r.key),
-    }));
-  }
-
-  async update(key: string, patch: { minLevel?: number; enabled?: boolean }) {
-    if (!(key in FEATURE_DEFAULTS)) throw new BadRequestException('ماژولِ ناشناخته');
-    if (LOCKED_KEYS.has(key)) throw new BadRequestException('دسترسیِ این ماژول قفل است');
-    if (patch.minLevel !== undefined && (patch.minLevel < LEVEL.VIEWER || patch.minLevel > LEVEL.SUPER_ADMIN)) {
-      throw new BadRequestException('سطح نامعتبر است');
-    }
-    await this.ensureSeeded();
-    const row = await this.prisma.feature.update({
-      where: { key },
-      data: {
-        ...(patch.minLevel !== undefined ? { minLevel: patch.minLevel } : {}),
-        ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
-      },
+    return rows.map((r) => {
+      const def = FEATURE_BY_KEY.get(r.key);
+      return {
+        key: r.key,
+        label: def?.label ?? r.key,
+        hint: def?.hint ?? null,
+        minLevel: r.minLevel,
+        enabled: r.enabled,
+        defaultLevel: def?.defaultLevel ?? 6,
+        locked: LOCKED_FEATURES.has(r.key),
+      };
     });
-    return { key: row.key, minLevel: row.minLevel, enabled: row.enabled };
-  }
-
-  async reset() {
-    await this.prisma.feature.deleteMany({});
-    await this.ensureSeeded();
-    return this.list();
   }
 }

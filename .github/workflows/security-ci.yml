@@ -1624,3 +1624,53 @@ jobs:
           if (faTime('08:30') !== '۰۸:۳۰') { console.error('نمایشِ فارسیِ ساعت غلط است'); process.exit(1); }
           console.log('time ok');
           "
+
+      - name: Verify the access matrix is the single, audited writer
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const reg = fs.readFileSync('server/src/auth/access-registry.ts', 'utf8');
+          const svc = fs.readFileSync('server/src/auth/access.service.ts', 'utf8');
+          const feat = fs.readFileSync('server/src/features/features.controller.ts', 'utf8');
+          const ui = fs.readFileSync('src/app/Access.jsx', 'utf8');
+
+          // ① ⚠️ هر کلید باید برچسبِ فارسی داشته باشد. مدیری که ردیفِ
+          //    stock.consume را می‌بیند نمی‌داند چه چیزی را باز یا بسته می‌کند —
+          //    و دسترسی‌ای که فهمیده نشود، تنظیم نمی‌شود، فقط دست‌کاری می‌شود.
+          const defs = reg.split('\n').filter((l) => /^\s*key: '/.test(l) || /key: '[\w.]+', label:/.test(l));
+          const keys = (reg.match(/key: '[\w.]+'/g) || []).length;
+          const labels = (reg.match(/label: '[^']+'/g) || []).length;
+          if (!keys || labels < keys) {
+            console.error('کلیدِ بی‌برچسب در رجیستریِ دسترسی: ' + keys + ' کلید، ' + labels + ' برچسب'); process.exit(1);
+          }
+
+          // ② تنها نویسنده. مسیرِ دومِ نوشتن یعنی روزی یکی از دو مسیر audit یا
+          //    قفل را فراموش می‌کند و دری بی‌ردپا باز می‌شود.
+          if (/@(Patch|Post|Put|Delete)\(/.test(feat)) {
+            console.error('features نباید مسیرِ نوشتن داشته باشد — نویسنده فقط access است'); process.exit(1);
+          }
+
+          // ③ هر نوشتن ثبت می‌شود.
+          const writes = (svc.match(/async (update|resetOne|resetAll)\(/g) || []).length;
+          if (writes < 3 || !/audit\.record\(/.test(svc)) {
+            console.error('نوشتنِ بی‌ردِ audit در ماتریسِ دسترسی'); process.exit(1);
+          }
+
+          // ④ ⚠️ درِ ضدِ‌ارتقا: کلیدهایی که با آن‌ها می‌شود به خود سطح داد باید
+          //    قفل بمانند. بدونشان یک ادمین می‌تواند users.manage را به سطحِ
+          //    خودش بیاورد و بعد هر کاری بکند.
+          for (const k of ['users', 'access', 'users.manage']) {
+            if (!new RegExp(\"'\" + k.replace('.', '\\\\.') + \"'\").test(reg)) {
+              console.error('کلیدِ قفل‌شدنی ' + k + ' در رجیستری نیست'); process.exit(1);
+            }
+          }
+          if (!/locked: true/.test(reg)) { console.error('هیچ ردیفی قفل نیست'); process.exit(1); }
+
+          // ⑤ رابط باید همان دو لایه را با هم نشان دهد، وگرنه مدیر باید دو
+          //    جدول را در ذهنش روی هم بگذارد.
+          if (!/access\/matrix/.test(ui) || !/permissions/.test(ui) || !/features/.test(ui)) {
+            console.error('صفحهٔ ماتریس باید هر دو لایه را بگیرد'); process.exit(1);
+          }
+          console.log('access ok');
+          "

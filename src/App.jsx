@@ -6,6 +6,7 @@ import Landing from './pages/Landing.jsx';
 import Launcher from './app/Launcher.jsx';
 import Login from './app/Login.jsx';
 import Users from './app/Users.jsx';
+import Access from './app/Access.jsx';
 import Profile from './app/Profile.jsx';
 import Dashboard from './app/Dashboard.jsx';
 import Definitions from './app/Definitions.jsx';
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
           <Route path="/app/dashboard" element={<Protected><Dashboard /></Protected>} />
           <Route path="/app/users" element={<Protected><Users /></Protected>} />
+          <Route path="/app/access" element={<Protected><Access /></Protected>} />
           <Route path="/app/definitions" element={<Protected><Definitions /></Protected>} />
           <Route path="/app/inventory" element={<Protected><Inventory /></Protected>} />
           <Route path="/app/accounting" element={<Protected><Accounting /></Protected>} />
