@@ -8,13 +8,15 @@ import './dispatch.css';
 import { ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
+import { badTime, normTime } from '../lib/time.js';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 
 /** ساعتِ HH:MM — همان قاعدهٔ سرور، تا پیش از رفت‌وبرگشت خطا معلوم شود. */
-const timeOk = (v) => v === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
+const timeOk = (v) => !badTime(v);
 
 /**
  * پنلِ چینش — دو تب، چون دو کارِ متفاوت‌اند با دو سؤالِ متفاوت.
@@ -133,7 +135,7 @@ export default function Dispatch() {
       techId ? 'کارشناس ثبت شد ✓' : 'کارشناس برداشته شد');
 
   const setTime = (visitId, field, value) => {
-    const v = toEnDigits(String(value ?? '')).trim();
+    const v = normTime(value);
     if (!timeOk(v)) { setToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return undefined; }
     return guard(() => api(`/visits/${visitId}/times`, { method: 'PATCH', body: { [field]: v } }), 'ساعت ثبت شد ✓');
   };
@@ -148,6 +150,13 @@ export default function Dispatch() {
     guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body: { hospitalId, locationName, kind, transferIds } }), 'توقف اضافه شد ✓');
 
   const patchStop = (id, body) => guard(() => api(`/routes/stops/${id}`, { method: 'PATCH', body }));
+  /* ⚠️ ساعتِ توقف هم باید از همان دروازهٔ اعتبارسنجی رد شود؛ پیش از این متنِ
+     نامعتبر مستقیم PATCH می‌شد و کاربر فقط یک خطای خامِ سرور می‌دید. */
+  const setStopTime = (id, value) => {
+    const v = normTime(value);
+    if (!timeOk(v)) { setToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return undefined; }
+    return patchStop(id, { plannedAt: v });
+  };
   const removeStop = (id) => guard(() => api(`/routes/stops/${id}`, { method: 'DELETE' }));
   const removeRun = (id) => guard(() => api(`/routes/${id}`, { method: 'DELETE' }), 'مسیر حذف شد');
   const detach = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers/${tid}`, { method: 'DELETE' }));
@@ -357,7 +366,7 @@ export default function Dispatch() {
                         <span className="dp-seq">{faNum(st.seq)}</span>
                         <b>{st.locationName}</b>
                         <i className={`dp-kind ${st.kind}`}>{st.kindLabel}</i>
-                        <TimeBox label="ساعت" value={st.plannedAt} disabled={busy} onSave={(x) => patchStop(st.id, { plannedAt: x })} />
+                        <TimeBox label="ساعت" value={st.plannedAt} disabled={busy} onSave={(x) => setStopTime(st.id, x)} />
                         <button type="button" disabled={busy || i === 0} onClick={() => move(run, i, -1)} title="بالاتر"><ArrowUp size={13} /></button>
                         <button type="button" disabled={busy || i === run.stops.length - 1} onClick={() => move(run, i, 1)} title="پایین‌تر"><ArrowDown size={13} /></button>
                         <button
@@ -551,28 +560,29 @@ function AddStop({ run, hospitals, loose, busy, onAdd }) {
 }
 
 /**
- * ورودیِ ساعت که فقط هنگام خروج از فیلد ذخیره می‌کند.
+ * ورودیِ ساعت که فقط هنگام **قطعی‌شدن** ذخیره می‌کند.
  *
  * ذخیره روی هر کلید یعنی «۰۸» به‌عنوان ساعتِ ناقص به سرور می‌رود و خطا می‌گیرد؛
- * ذخیره روی blur یعنی کاربر عدد را کامل می‌کند و بعد یک درخواست می‌رود.
+ * ذخیره روی خروج از فیلد (یا انتخاب از فهرست) یعنی کاربر عدد را کامل می‌کند و
+ * بعد یک درخواست می‌رود.
+ *
+ * ⚠️ حالتِ محلی می‌ماند چون این فیلد **بی‌فرم** است: تا وقتی درخواست ننشسته،
+ * `value`ِ والد همان مقدارِ قدیمِ سرور است و اگر مستقیم به آن وصل می‌شد، هر
+ * کلید بی‌درنگ پس زده می‌شد. مقایسه با `value` هم لازم است تا صرفِ tab‌زدن از
+ * روی فیلد یک PATCHِ بی‌خود نفرستد.
  */
 function TimeBox({ label, value, disabled, onSave }) {
   const [v, setV] = useState(value ?? '');
   useEffect(() => { setV(value ?? ''); }, [value]);
   return (
-    <label className="dp-timebox">
-      <span>{label}</span>
-      <input
-        type="text"
-        inputMode="numeric"
-        dir="ltr"
-        placeholder="۰۸:۳۰"
-        value={v}
-        disabled={disabled}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => { if ((v ?? '') !== (value ?? '')) onSave(v); }}
-      />
-    </label>
+    <TimePick
+      className="dp-timebox"
+      label={label}
+      value={v}
+      disabled={disabled}
+      onChange={setV}
+      onCommit={(next) => { if (next !== (value ?? '')) onSave(next); }}
+    />
   );
 }
 

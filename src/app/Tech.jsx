@@ -7,10 +7,14 @@ import './tech.css';
 import { Alert, Arrive, Back, CheckCircle, Clock, Close, Hospital, Doctor, Box, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import TimePick from '../ui/TimePick.jsx';
+import { badTime, faTime, normTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
-const time = (t) => (t ? String(t).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]) : '—');
+/* نمایشِ فارسیِ ساعت از `lib/time` می‌آید — همان تبدیلی که خودِ ورودی به کار
+   می‌برد، تا آنچه کارشناس ثبت می‌کند و آنچه بعداً روی کارت می‌بیند یکی باشد. */
+const time = (t) => (t ? faTime(t) : '—');
 
 const SCOPES = [
   { key: 'today', label: 'امروز', icon: Arrive },
@@ -282,9 +286,13 @@ function TimesSheet({ visit, onClose, onSaved }) {
   const [err, setErr] = useState('');
 
   const save = async () => {
+    // ⚠️ نرمال‌سازی پیش از ارسال، چون کاربر ممکن است بدونِ خروج از فیلد
+    //    مستقیم «ذخیره» را بزند و «۸:۵» خام به سرور برسد.
+    const body = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, normTime(v)]));
+    if (Object.values(body).some(badTime)) { setErr('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
     setBusy(true); setErr('');
     try {
-      await api(`/tech/visits/${visit.id}/times`, { method: 'PATCH', body: f });
+      await api(`/tech/visits/${visit.id}/times`, { method: 'PATCH', body });
       onSaved('ساعت ثبت شد ✓');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
@@ -297,11 +305,13 @@ function TimesSheet({ visit, onClose, onSaved }) {
       </header>
       <div className="tk-sheet-body">
         {[['techArriveTime', 'ساعتِ حضورِ شما'], ['opStartTime', 'شروعِ عمل'], ['opEndTime', 'پایانِ عمل']].map(([k, label]) => (
-          <label key={k} className="tk-field">
-            <span>{label}</span>
-            <input dir="ltr" inputMode="numeric" placeholder="۰۸:۳۰" value={f[k]}
-                   onChange={(e) => setF((s) => ({ ...s, [k]: e.target.value }))} />
-          </label>
+          <TimePick
+            key={k}
+            className="tk-field"
+            label={label}
+            value={f[k]}
+            onChange={(v) => setF((s) => ({ ...s, [k]: v }))}
+          />
         ))}
         {err && <p className="tk-note no">{err}</p>}
         <button type="button" className="tk-save" disabled={busy} onClick={save}>

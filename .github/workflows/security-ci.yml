@@ -1574,3 +1574,53 @@ jobs:
           }
           console.log('tech ok');
           "
+
+      - name: Verify time input is one control, typed or picked
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const jsx = execSync(\"find src -name '*.jsx'\", { encoding: 'utf8' }).split('\n').filter(Boolean);
+          const lib = fs.readFileSync('src/lib/time.js', 'utf8');
+          const pick = fs.readFileSync('src/ui/TimePick.jsx', 'utf8');
+
+          // ① ورودیِ ساعتِ دست‌ساز ممنوع. سه صفحه سه input خالی داشتند و
+          //    قاعدهٔ اعتبارسنجی در دو فایل جدا نوشته شده بود — یعنی «۹:۵» در
+          //    یکی به 09:05 تبدیل می‌شد و در دیگری خام به سرور می‌رفت.
+          const rogue = jsx.filter((f) => !f.startsWith('src/ui/')
+            && /placeholder=[\"']\\u06F0\\u06F8:\\u06F3\\u06F0[\"']/.test(fs.readFileSync(f, 'utf8')));
+          if (rogue.length) { console.error('ورودیِ ساعتِ دست‌ساز در: ' + rogue.join('، ')); process.exit(1); }
+
+          // ② الگوی ساعت فقط یک جا تعریف می‌شود.
+          const owners = jsx.concat(execSync(\"find src -name '*.js'\", { encoding: 'utf8' }).split('\n').filter(Boolean))
+            .filter((f) => f !== 'src/lib/time.js' && /\\[01\\]\\\\d\\|2\\[0-3\\]/.test(fs.readFileSync(f, 'utf8')));
+          if (owners.length) { console.error('الگوی ساعت تکرار شده در: ' + owners.join('، ')); process.exit(1); }
+
+          // ③ هم تایپ هم انتخاب — یکی‌شان به‌تنهایی کافی نیست: کاربرِ پشتِ میز
+          //    تایپ می‌کند، کارشناسِ داخلِ اتاقِ عمل با یک دست انتخاب می‌کند.
+          if (!/onChange=\{\(e\) => onChange\(toEnDigits/.test(pick) || !/onPick\(t\)/.test(pick)) {
+            console.error('کنترلِ ساعت باید هم تایپ بپذیرد هم انتخاب'); process.exit(1);
+          }
+
+          // ④ ⚠️ input[type=time] ممنوع: قالبِ نمایشش دستِ مرورگر است و روی
+          //    کرومیومِ همین‌جا ۱۲ساعته با AM/PM می‌شود — یعنی همان فیلد روی
+          //    اندروید و سافاری و ویندوز سه شکلِ متفاوت می‌گیرد.
+          const timeInputs = jsx.filter((f) => /type=[\"']time[\"']/.test(fs.readFileSync(f, 'utf8')));
+          if (timeInputs.length) { console.error('input[type=time] در: ' + timeInputs.join('، ')); process.exit(1); }
+          "
+          # ⑤ نرمال‌سازی واقعاً کار می‌کند — با اجرای خودِ ماژول، نه با نگاه به کد.
+          node --input-type=module -e "
+          import { normTime, badTime, faTime } from './src/lib/time.js';
+          const cases = [['830','08:30'], ['9:5','09:05'], ['۹۴۷','09:47'], ['١٢:٣٠','12:30'], ['','']];
+          for (const [inp, want] of cases) {
+            const got = normTime(inp);
+            if (got !== want) { console.error('normTime(' + inp + ') = ' + got + ' ≠ ' + want); process.exit(1); }
+          }
+          // رشتهٔ نامعتبر دست‌نخورده برمی‌گردد تا کاربر ببیند چه تایپ کرده.
+          if (normTime('abc') !== 'abc' || !badTime('abc')) { console.error('ورودیِ نامعتبر نباید بی‌صدا پاک شود'); process.exit(1); }
+          // ساعتِ خارج از گام باید سالم بماند، نه گرد شود.
+          if (normTime('09:47') !== '09:47') { console.error('ساعتِ خارج از گام گرد شد'); process.exit(1); }
+          if (faTime('08:30') !== '۰۸:۳۰') { console.error('نمایشِ فارسیِ ساعت غلط است'); process.exit(1); }
+          console.log('time ok');
+          "

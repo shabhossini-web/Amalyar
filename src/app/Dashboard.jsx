@@ -5,6 +5,7 @@ import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
+import { badTime, durationMin, normTime } from '../lib/time.js';
 import ProfileMenu from './ProfileMenu.jsx';
 import { useConfig, useTerms } from './config.jsx';
 import BillingSheet from './BillingSheet.jsx';
@@ -16,6 +17,7 @@ import './dashboard.css';
 import { Arrive, Back, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 /* ── آیکون‌های خطی ── */
@@ -95,44 +97,6 @@ const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 /// ارقامِ لاتینِ یک رشته (مثلِ «۱۴۰۵/۰۵/۰۱»ِ ورودی) را فارسی می‌کند — فقط برای
 /// نمایش؛ مقدارِ داخلِ input عمداً لاتین می‌ماند تا تایپ و ویرایش ساده بماند.
 const faDigits = (s) => String(s ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
-
-/**
- * مدتِ عمل به دقیقه — همان فرمولِ سرور، فقط برای پیش‌نمایشِ زندهٔ داخلِ فرم
- * (قبل از ذخیره هنوز رکوردی نیست که سرور محاسبه‌اش کند). عددِ نمایش‌داده‌شده
- * روی کارت‌ها همیشه از سرور می‌آید، نه از این.
- *
- * پایانِ کوچک‌تر از شروع = گذشتن از نیمه‌شب، نه عددِ منفی.
- */
-const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
-function durationMin(start, end) {
-  if (!TIME_RE.test(start || '') || !TIME_RE.test(end || '')) return null;
-  const m = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3));
-  const d = m(end) - m(start);
-  return d < 0 ? d + 24 * 60 : d;
-}
-
-/**
- * نرمال‌سازیِ ساعتِ تایپ‌شده: «۸:۵»، «830»، «۰۸۳۰» → «08:30».
- *
- * ⚠️ چرا input[type=time] نداریم: مرورگر قالبِ نمایشش را خودش تعیین می‌کند و
- * تغییرش با lang یا CSS ممکن نیست — کرومیوم همین‌جا «11:30 PM» می‌دهد. یعنی
- * همان فیلد روی اندروید/سافاری/ویندوز سه شکلِ متفاوت می‌شود، آن هم ۱۲ساعته.
- * پس مثلِ تاریخِ شمسی، ورودیِ متنی با نرمال‌سازیِ خودمان.
- *
- * رشتهٔ نامعتبر دست‌نخورده برمی‌گردد تا کاربر ببیند چه تایپ کرده، نه اینکه
- * نوشته‌اش بی‌صدا پاک شود.
- */
-function normTime(v) {
-  const raw = toEnDigits(String(v ?? '')).trim();
-  if (!raw) return '';
-  const m = /^(\d{1,2}):(\d{1,2})$/.exec(raw) || /^(\d{1,2})(\d{2})$/.exec(raw);
-  if (!m) return raw;
-  const h = Number(m[1]);
-  const mi = Number(m[2]);
-  if (h > 23 || mi > 59) return raw;
-  return `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
-}
-const badTime = (v) => !!v && !TIME_RE.test(v);
 
 /** «۳ ساعت و ۲۵ دقیقه» — صفرِ بی‌معنی («۰ ساعت») نشان داده نمی‌شود. */
 function faDuration(min) {
@@ -570,15 +534,12 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           { key: 'opEndTime', label: 'ساعتِ پایان' },
           { key: 'techArriveTime', label: `حضورِ ${t.tech}` },
         ].map((fl) => (
-          <label key={fl.key} className={`db-field${badTime(f[fl.key]) ? ' bad' : ''}`}>
-            <span>{fl.label}</span>
-            <input
-              type="text" dir="ltr" inputMode="numeric" placeholder="۰۸:۳۰"
-              value={f[fl.key]}
-              onChange={set(fl.key)}
-              onBlur={() => setF((s) => ({ ...s, [fl.key]: normTime(s[fl.key]) }))}
-            />
-          </label>
+          <TimePick
+            key={fl.key}
+            label={fl.label}
+            value={f[fl.key]}
+            onChange={(v) => setF((s) => ({ ...s, [fl.key]: v }))}
+          />
         ))}
       </div>
       {formDuration != null && (

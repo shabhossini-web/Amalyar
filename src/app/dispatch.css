@@ -132,6 +132,13 @@
   padding: 6px 8px; border-radius: 9px;
   color: #f4f1ff; background: rgba(255, 255, 255, .06); border: 1px solid rgba(var(--brand-soft-rgb), .28);
 }
+/* ⚠️ ورودیِ ساعت (`ui/TimePick`) اینجا در یک ردیفِ فشرده می‌نشیند نه در فرم:
+   بدونِ عرضِ صریح، جفتِ «فیلد + دکمهٔ فهرست» یا تا تهِ ردیف کش می‌آید یا تا
+   حدِ ناخوانا جمع می‌شود. */
+.dp-timebox .tp-row { width: 112px; }
+.dp-timebox .tp-btn { width: 30px; padding: 0; border-radius: 9px; }
+/* خطا در این ردیفِ باریک جا نمی‌شود؛ همان پیام از راهِ toast می‌آید. */
+.dp-timebox .tp-err { display: none; }
 .dp-brief-btn {
   font: inherit; font-size: 11px; cursor: pointer; padding: 6px 11px; border-radius: 9px;
   color: #c4b5fd; background: rgba(var(--brand-rgb), .14); border: 1px solid rgba(var(--brand-rgb), .34);

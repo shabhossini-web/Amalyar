@@ -1,0 +1,97 @@
+/*
+ * ورودیِ ساعت + فهرستِ وسطِ صفحه.
+ *
+ * هم‌خانوادهٔ `jdate.css` است و عمداً همان اندازه‌ها/شعاع‌ها را دارد: این دو
+ * فیلد در فرمِ مراجعه کنارِ هم می‌نشینند و هر اختلافی در ارتفاع یا شعاع
+ * بلافاصله به چشم می‌آید.
+ */
+.tp-wrap { position: relative; }
+.tp-row { display: flex; gap: 6px; align-items: stretch; }
+/* ⚠️ `min-width: 0` لازم است: بدونِ آن، فیلد در گریدِ سه‌ستونیِ فرم از عرضِ
+   ستون بیرون می‌زند و در موبایل صفحه را افقی می‌شکند. */
+.tp-row .tp-input { flex: 1; min-width: 0; width: 100%; font-family: inherit; text-align: center; }
+.tp-btn {
+  flex: 0 0 auto; display: grid; place-items: center; width: 40px; cursor: pointer;
+  color: var(--text2); background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(var(--brand-soft-rgb), .25); border-radius: 11px;
+}
+.tp-btn:hover:not(:disabled) { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
+.tp-btn:disabled { opacity: .4; cursor: not-allowed; }
+.tp-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.tp-hint, .tp-err { display: block; margin-top: 4px; font-style: normal; font-size: 11px; font-weight: 600; }
+.tp-hint { color: var(--text3); }
+.tp-err { color: #fda4af; }
+
+/* ── فهرستِ ساعت ──
+   z-index هم‌ترازِ تقویم (۹۰): هر دو از داخلِ شیت باز می‌شوند و باید رویش بیایند. */
+.tp-overlay {
+  position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px;
+  background: rgba(6, 3, 20, .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+/* ورود/خروج در `ui/Overlay.jsx` — اینجا @keyframes نگذارید. */
+.tp-panel {
+  width: min(340px, 100%); max-height: min(560px, 88vh);
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 20px; color: var(--text1); font-family: inherit;
+  background: #150f36; border: 1px solid rgba(var(--brand-soft-rgb), .32);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, .65);
+}
+
+.tp-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 13px 15px; border-bottom: 1px solid rgba(var(--brand-soft-rgb), .16);
+}
+.tp-head b { font-size: 13.5px; font-weight: 800; }
+.tp-x {
+  display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer;
+  color: var(--text2); background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(var(--brand-soft-rgb), .2); border-radius: 9px;
+}
+.tp-x:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
+
+/* ⚠️ `overscroll-behavior: contain` وگرنه رسیدن به تهِ فهرست روی موبایل
+   صفحهٔ زیرین را اسکرول می‌کند و شیت از زیرِ دست در می‌رود. */
+.tp-list {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 8px 13px 12px; display: grid; gap: 4px;
+}
+.tp-hour {
+  display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px;
+}
+.tp-hlabel {
+  font-style: normal; font-size: 11px; font-weight: 800; color: #837ca5; text-align: center;
+}
+/* گام‌های یک ساعت در یک ردیف؛ گامِ ریزتر (۵ دقیقه) خودش می‌شکند و سرریز نمی‌کند. */
+.tp-slots { display: flex; flex-wrap: wrap; gap: 4px; }
+.tp-slot {
+  flex: 1 1 58px; min-width: 0; height: 34px; border-radius: 10px; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: #ddd6fe;
+  background: rgba(255, 255, 255, .035); border: 1px solid transparent;
+}
+.tp-slot:hover { background: rgba(var(--brand-soft-rgb), .22); }
+.tp-slot.sel {
+  color: #fff; font-weight: 800; border-color: transparent;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}
+.tp-slot:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+.tp-foot {
+  display: flex; gap: 8px; padding: 11px 13px 13px;
+  border-top: 1px solid rgba(var(--brand-soft-rgb), .14);
+}
+.tp-foot button {
+  flex: 1; padding: 10px; border-radius: 11px; cursor: pointer; font: inherit; font-size: 12.5px;
+}
+.tp-ghost {
+  color: #fda4af; background: rgba(255, 255, 255, .04); border: 1px solid rgba(251, 113, 133, .28);
+}
+.tp-now {
+  color: #fff; font-weight: 800; border: 0;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}
+
+/* در گوشی، دکمهٔ فهرست کمی باریک‌تر تا فیلد جا بماند. */
+@media (max-width: 430px) {
+  .tp-btn { width: 36px; }
+  .tp-slot { flex-basis: 52px; font-size: 12px; }
+}
