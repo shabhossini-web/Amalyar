@@ -10,14 +10,12 @@ import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { badTime, faTime, normTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
+import { usePlaces } from '../lib/places.js';
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* نمایشِ فارسیِ ساعت از `lib/time` می‌آید — همان تبدیلی که خودِ ورودی به کار
    می‌برد، تا آنچه کارشناس ثبت می‌کند و آنچه بعداً روی کارت می‌بیند یکی باشد. */
 const time = (t) => (t ? faTime(t) : '—');
-
-/* محل‌های پرتکرارِ تحویل — تایپ آزاد است، این‌ها فقط میان‌بُرند. */
-const PLACES = ['CSR', 'اتاقِ عمل', 'انبارِ بیمارستان', 'داروخانه', 'نگهبانی'];
 
 const SCOPES = [
   { key: 'today', label: 'امروز', icon: Arrive },
@@ -199,6 +197,8 @@ function UsageSheet({ transferId, onClose, onToast }) {
   const [pickupAt, setPickupAt] = useState('');
   const [leftAt, setLeftAt] = useState('');
   const [busy, setBusy] = useState(false);
+  /* میان‌بُرهای محل از تعاریفِ پایه می‌آیند، نه از آرایهٔ ثابتِ این فایل. */
+  const places = usePlaces();
 
   const load = useCallback(async () => {
     try { setT(await api(`/stock/transfers/${transferId}`)); }
@@ -284,7 +284,7 @@ function UsageSheet({ transferId, onClose, onToast }) {
                   <input value={leftAt} onChange={(e) => setLeftAt(e.target.value)} placeholder="مثلاً CSR" />
                 </label>
                 <div className="tk-chips">
-                  {PLACES.map((p) => (
+                  {places.map((p) => (
                     <button key={p} type="button" className={`tk-chip${leftAt === p ? ' on' : ''}`}
                             onClick={() => setLeftAt(p)}>{p}</button>
                   ))}

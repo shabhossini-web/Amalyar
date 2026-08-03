@@ -106,6 +106,21 @@ const SECTIONS = [
     ],
   },
   {
+    key: 'delivery-places',
+    label: 'محل‌های تحویل',
+    path: '/delivery-places',
+    listPath: '/delivery-places?all=1', // غیرفعال‌ها هم این‌جا دیده شوند
+    title: (r) => r.name,
+    sub: (r) => (r.aliases?.length ? `همچنین: ${r.aliases.join('، ')}` : ''),
+    uses: () => '',
+    empty: 'هنوز محلی تعریف نشده',
+    hint: 'جایی که بار تحویل داده یا گذاشته می‌شود: CSR، اتاقِ عمل، داروخانه… کارشناس و راننده همچنان می‌توانند هر چیزی تایپ کنند؛ این فهرست فقط باعث می‌شود «CSR» و «سی اس آر» یک چیز شمرده شوند تا گزارشِ تأخیر و تحویل معنا داشته باشد.',
+    fields: [
+      { key: 'name', label: 'نامِ محل *', required: true },
+      { key: 'aliases', label: 'املاهای دیگر (با ، جدا کنید)', list: true },
+    ],
+  },
+  {
     key: 'diagnoses',
     label: 'تشخیص‌ها',
     path: '/diagnoses',
@@ -143,7 +158,9 @@ export default function Definitions() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(await api(section.path));
+      // بعضی بخش‌ها برای فهرستِ مدیریتی مسیرِ متفاوت می‌خواهند (مثلاً محل‌های
+      // تحویل که غیرفعال‌ها هم باید دیده شوند تا بشود دوباره فعالشان کرد).
+      setRows(await api(section.listPath ?? section.path));
     } catch (e) {
       setToast(e.message);
       setRows([]);
@@ -568,7 +585,15 @@ function NameMerge({ onToast }) {
 /** فرمِ افزودن/ویرایش — برای بخشِ «شخص‌دار» از کامپوننتِ مشترک استفاده می‌کند. */
 function EditSheet({ section, row, onClose, onSaved, onError }) {
   const isNew = !row.id;
-  const [form, setForm] = useState(() => ({ ...row }));
+  /* فیلدِ فهرستی (مثلِ املاهای یک محل) در فرم به‌شکلِ متنِ جداشده با «،»
+     ویرایش می‌شود و هنگامِ ارسال دوباره آرایه می‌شود — چون آرایه ورودیِ
+     قابلِ‌تایپ ندارد و ساختنِ ویرایشگرِ چندتایی برای یک فیلد صرف نمی‌کند. */
+  const listKeys = (section.fields ?? []).filter((f) => f.list).map((f) => f.key);
+  const [form, setForm] = useState(() => {
+    const f = { ...row };
+    for (const k of listKeys) if (Array.isArray(f[k])) f[k] = f[k].join('، ');
+    return f;
+  });
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
 
@@ -600,7 +625,12 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
          ...(section.extra ?? []).map((f) => f.key)]
       : (section.fields ?? []).map((f) => f.key);
     const body = {};
-    for (const k of keys) if (form[k] !== undefined) body[k] = form[k] ?? '';
+    for (const k of keys) {
+      if (form[k] === undefined) continue;
+      body[k] = listKeys.includes(k)
+        ? String(form[k] ?? '').split(/[،,]/).map((x) => x.trim()).filter(Boolean)
+        : form[k] ?? '';
+    }
 
     setBusy(true);
     try {

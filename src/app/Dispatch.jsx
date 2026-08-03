@@ -11,6 +11,7 @@ import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
 import { badTime, normTime } from '../lib/time.js';
+import { usePlaces } from '../lib/places.js';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -564,6 +565,7 @@ function AddStop({ run, hospitals, loose, busy, onAdd, onErr }) {
   const [pick, setPick] = useState([]);
   const [at, setAt] = useState('');
   const [who, setWho] = useState('');
+  const places = usePlaces();
 
   const submit = () => {
     if (!hid && !name.trim()) return;
@@ -612,15 +614,21 @@ function AddStop({ run, hospitals, loose, busy, onAdd, onErr }) {
           با یک PATCH. راننده‌ای که فقط مقصد را دارد نمی‌داند کِی برود و
           به‌دستِ چه کسی بدهد، و همان جاست که بار پشتِ درِ بستهٔ CSR می‌ماند. */}
       <TimePick className="dp-timebox" label="ساعت" value={at} disabled={busy} onChange={setAt} />
+      {/* ⚠️ `list` و نه `select`: «تحویل به» گاهی نامِ یک آدم است («آقای
+          رضایی») که در هیچ فهرستی نیست. فهرست میان‌بُر است، نه قفل. */}
       <label>
         <span>تحویل به</span>
         <input
           type="text"
+          list="dp-places"
           value={who}
           placeholder="کارشناسِ حاضر / CSR"
           disabled={busy}
           onChange={(e) => setWho(e.target.value)}
         />
+        <datalist id="dp-places">
+          {places.map((p) => <option key={p} value={p} />)}
+        </datalist>
       </label>
       {loose.length > 0 && (
         <label>

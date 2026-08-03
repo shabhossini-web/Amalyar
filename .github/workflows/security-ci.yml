@@ -1786,3 +1786,68 @@ jobs:
 
           console.log('transport cycle ok');
           "
+
+      - name: Verify the delivery place is canonical at write time
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          // ① کانونی‌سازی باید هنگامِ **نوشتن** باشد. اگر متنِ خام ذخیره شود،
+          //    بعداً «csr» و «سی اس آر» قابلِ یکی‌کردن نیستند چون نمی‌دانیم
+          //    کاربر کدام را قصد کرده — و گذشته بازسازی‌شدنی نیست.
+          const paths = {
+            'server/src/patients/inventory.service.ts': 'leftAt',
+            'server/src/patients/transport.service.ts': 'handedActual',
+            'server/src/patients/routes.service.ts': 'handedTo',
+          };
+          for (const [f, field] of Object.entries(paths)) {
+            const src = read(f);
+            if (!/places\.canonical\(/.test(src)) {
+              console.error(f + ': ' + field + ' بدونِ کانونی‌سازی ذخیره می‌شود'); process.exit(1);
+            }
+          }
+
+          // ② ⚠️ متنِ آزاد نباید رد شود. کارشناسِ وسطِ عمل باید بتواند جایی را
+          //    ثبت کند که کسی از قبل تعریفش نکرده؛ قفل‌کردنِ فیلد بدتر از
+          //    دادهٔ نامرتب است.
+          const svc = read('server/src/patients/places.service.ts');
+          if (!/hit\?\.name \?\? text/.test(svc)) {
+            console.error('canonical باید متنِ ناشناخته را دست‌نخورده برگرداند، نه خطا'); process.exit(1);
+          }
+          // ③ املا هم باید در جست‌وجو باشد، وگرنه «سی اس آر» محلِ دوم می‌شود.
+          if (!/aliasKeys: \{ has:/.test(svc)) {
+            console.error('findByKey باید املاها را هم بگردد'); process.exit(1);
+          }
+
+          // ④ نرمال‌سازیِ محل عمداً `normalizeName`ِ بیمارستان نیست: آن‌جا
+          //    واژهٔ «بیمارستان» حذف می‌شود و «انبارِ بیمارستان» به «انبار»
+          //    می‌رسد و با انبارِ مرکزی یکی می‌شود.
+          const place = read('server/src/common/place.ts');
+          if (/name-match/.test(place)) {
+            console.error('placeKey نباید از نرمال‌سازیِ نامِ بیمارستان استفاده کند'); process.exit(1);
+          }
+
+          // ⑤ فهرستِ محل‌ها **یک منبع** دارد. سه آرایهٔ هاردکد در سه صفحه یعنی
+          //    کاربر در یک صفحه گزینه‌ای می‌بیند که در صفحهٔ دیگر نیست.
+          for (const f of ['src/app/Tech.jsx', 'src/app/Transport.jsx', 'src/app/Dispatch.jsx']) {
+            const src = read(f);
+            if (/(const|let)\s+[A-Z_]+\s*=\s*\[[^\]]*'CSR'/.test(src)) {
+              console.error(f + ': فهرستِ محل هاردکد شده — باید از usePlaces بیاید'); process.exit(1);
+            }
+            if (!/usePlaces/.test(src)) {
+              console.error(f + ': محل‌ها را از تک‌منبع نمی‌گیرد'); process.exit(1);
+            }
+          }
+
+          // ⑥ خواندنِ فهرست نباید پشتِ ماژولِ داشبورد (سطح ۵) باشد: کارشناس و
+          //    رانندهٔ سطح ۲ همان دو نفری‌اند که این فهرست برایشان است.
+          const ctl = read('server/src/patients/places.controller.ts');
+          const getBlock = ctl.slice(ctl.indexOf('@Get()') - 200, ctl.indexOf('@Get()') + 60);
+          if (/@Feature\(/.test(getBlock)) {
+            console.error('GET محل‌ها نباید پشتِ ماژولِ سطح‌بالا باشد'); process.exit(1);
+          }
+
+          console.log('delivery place ok');
+          "

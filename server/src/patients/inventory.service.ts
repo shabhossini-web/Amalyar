@@ -5,6 +5,7 @@ import { AssetsService, windowOf } from './assets.service';
 import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
 import { SettingsService } from '../config/settings.service';
 import { RoutesService, normalizeTime } from './routes.service';
+import { PlacesService } from './places.service';
 
 // فرمول‌های موجودی در `stock-math` هستند؛ این‌جا فقط دوباره صادر می‌شوند تا
 // فراخوان‌های موجود نشکنند.
@@ -62,6 +63,7 @@ export class InventoryService {
     private audit: AuditService,
     private assets: AssetsService,
     private settings: SettingsService,
+    private places: PlacesService,
     // ⚠️ حلقهٔ وابستگی: مسیرها هم انبار را می‌خواهند. `forwardRef` در ماژول
     //    حلش می‌کند — بدونِ آن Nest هنگامِ بالا آمدن گیر می‌کند.
     @Inject(forwardRef(() => RoutesService)) private routes: RoutesService,
@@ -558,7 +560,9 @@ export class InventoryService {
 
     const now = new Date();
     const pickupAt = normalizeTime(dto.pickupAt);
-    const leftAt = text(dto.leftAt);
+    // ⚠️ محل **هنگامِ نوشتن** کانونی می‌شود، نه هنگامِ گزارش: «csr» و «سی اس
+    //    آر» بعداً قابلِ یکی‌کردن نیستند چون نمی‌دانیم کاربر کدام را قصد کرده.
+    const leftAt = await this.places.canonical(dto.leftAt);
     await this.prisma.stockTransfer.update({
       where: { id },
       data: {

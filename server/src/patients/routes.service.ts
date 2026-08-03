@@ -6,6 +6,7 @@ import { StorageService } from '../storage/storage.service';
 import { LedgerService } from './ledger.service';
 import { allocateRun, runTotal } from '../common/transport-cost';
 import { SettingsService } from '../config/settings.service';
+import { PlacesService } from './places.service';
 
 export const STOP_KINDS = ['deliver', 'pickup'] as const;
 export const STOP_LABELS: Record<string, string> = { deliver: 'تحویل', pickup: 'جمع‌آوری' };
@@ -47,6 +48,7 @@ export class RoutesService {
     private storage: StorageService,
     private ledger: LedgerService,
     private settings: SettingsService,
+    private places: PlacesService,
   ) {}
 
   private static readonly STOP_INCLUDE = {
@@ -273,7 +275,7 @@ export class RoutesService {
         plannedAt: normalizeTime(dto.plannedAt),
         // «به چه کسی» از همان لحظهٔ چینش تعیین می‌شود؛ آن‌که واقعاً تحویل
         // گرفت را راننده جدا ثبت می‌کند (`handedActual`).
-        handedTo: text(dto.handedTo),
+        handedTo: await this.places.canonical(dto.handedTo),
         notes: text(dto.notes),
       },
     });
@@ -297,8 +299,8 @@ export class RoutesService {
       data: {
         ...(dto.plannedAt !== undefined ? { plannedAt: normalizeTime(dto.plannedAt) } : {}),
         ...(dto.notes !== undefined ? { notes: text(dto.notes) } : {}),
-        ...(dto.handedTo !== undefined ? { handedTo: text(dto.handedTo) } : {}),
-        ...(dto.handedActual !== undefined ? { handedActual: text(dto.handedActual) } : {}),
+        ...(dto.handedTo !== undefined ? { handedTo: await this.places.canonical(dto.handedTo) } : {}),
+        ...(dto.handedActual !== undefined ? { handedActual: await this.places.canonical(dto.handedActual) } : {}),
         ...(dto.done !== undefined ? { doneAt: dto.done ? new Date() : null } : {}),
       },
     });

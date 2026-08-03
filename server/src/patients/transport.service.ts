@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { PlacesService } from './places.service';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -27,7 +28,7 @@ function dayBounds(at: Date): [Date, Date] {
  */
 @Injectable()
 export class TransportService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private places: PlacesService) {}
 
   /** رکوردِ نیرویِ حمل‌ونقلِ همین کاربر — از روی شخصِ مشترک. */
   private async me(user: any) {
@@ -145,17 +146,20 @@ export class TransportService {
     if (!stop) throw new NotFoundException('این توقف در مسیرِ شما نیست');
     if (stop.doneAt) throw new BadRequestException('این توقف قبلاً انجام‌شده ثبت شده است');
 
+    // ⚠️ همان کانونی‌سازیِ کارشناس، این‌بار روی حرفِ راننده — وگرنه یک طرفِ
+    //    مقایسه مرتب می‌شد و طرفِ دیگر نه، و «برنامه در برابر واقعیت» بی‌معنا.
+    const handedActual = await this.places.canonical(dto.handedActual);
     await this.prisma.transportStop.update({
       where: { id: stopId },
       data: {
         doneAt: new Date(),
-        ...(dto.handedActual?.trim() ? { handedActual: dto.handedActual.trim() } : {}),
+        ...(handedActual ? { handedActual } : {}),
         ...(dto.notes?.trim() ? { notes: dto.notes.trim() } : {}),
       },
     });
     await this.audit.record({
       actorId: user?.id, action: 'transport.stop.done', entityType: 'transport_stop', entityId: stopId,
-      after: { handedActual: dto.handedActual?.trim() ?? null },
+      after: { handedActual },
     });
     return this.agenda(user, 'today');
   }

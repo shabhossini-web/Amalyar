@@ -9,6 +9,7 @@ import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { faTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
+import { usePlaces } from '../lib/places.js';
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const time = (t) => (t ? faTime(t) : '—');
@@ -18,9 +19,6 @@ const SCOPES = [
   { key: 'upcoming', label: 'پیشِ رو', icon: Clock },
   { key: 'past', label: 'گذشته', icon: CheckCircle },
 ];
-
-/* آن‌که واقعاً تحویل می‌گیرد — تایپ آزاد است، این‌ها میان‌بُرند. */
-const RECEIVERS = ['CSR', 'اتاقِ عمل', 'انبارِ بیمارستان', 'داروخانه', 'نگهبانی', 'کارشناسِ حاضر'];
 
 /**
  * پرتالِ تیمِ حمل‌ونقل.
@@ -193,6 +191,7 @@ function DoneSheet({ stop, onClose, onSaved, onError }) {
   const [who, setWho] = useState(stop.handedTo ?? '');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
+  const places = usePlaces();
 
   const save = async () => {
     setBusy(true);
@@ -218,7 +217,7 @@ function DoneSheet({ stop, onClose, onSaved, onError }) {
           <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="نام یا بخش" />
         </label>
         <div className="tr-chips">
-          {RECEIVERS.map((r) => (
+          {places.map((r) => (
             <button key={r} type="button" className={`tr-chip${who === r ? ' on' : ''}`} onClick={() => setWho(r)}>{r}</button>
           ))}
         </div>

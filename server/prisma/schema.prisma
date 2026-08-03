@@ -486,6 +486,30 @@ model Diagnosis {
   @@map("diagnoses")
 }
 
+/// محلِ تحویل — «کجا گذاشتم / به کجا دادم».
+///
+/// ⚠️ این جدول برای **قابلِ‌تحلیل‌کردنِ متنِ آزاد** است، نه محدودکردنِ کاربر.
+/// کارشناس هرچه بخواهد می‌نویسد؛ اگر با یکی از این‌ها یکی درآمد، شکلِ کانونی
+/// ذخیره می‌شود. `key` نتیجهٔ `placeKey()` است و یکتا، تا «CSR» و «سی اس آر»
+/// دو ردیف نشوند.
+model DeliveryPlace {
+  id   Int    @id @default(autoincrement())
+  name String
+  key  String @unique
+
+  /// املاهای دیگرِ همین محل — کلیدِ کانونی‌شده، نه متنِ خام.
+  ///
+  /// ⚠️ **حدس‌زدنی نیست، گفتنی است.** «سی اس آر» و «CSR» یک جا هستند ولی هیچ
+  /// نرمال‌سازیِ متنی این را نمی‌فهمد؛ آوانویسی است نه تفاوتِ فاصله و نویسه.
+  /// همان درسِ `HospitalAlias`: تصمیمِ آدم ذخیره می‌شود تا دفعهٔ بعد نپرسد.
+  aliasKeys String[] @default([]) @map("alias_keys")
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("delivery_places")
+}
+
 /// پس‌کی/اثر انگشت (WebAuthn) — هر کاربر می‌تواند چند دستگاه ثبت کند
 model WebauthnCredential {
   id         Int      @id @default(autoincrement())
