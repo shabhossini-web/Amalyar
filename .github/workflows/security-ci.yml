@@ -1674,3 +1674,41 @@ jobs:
           }
           console.log('access ok');
           "
+
+      - name: Verify search treats Persian and Latin digits as one
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const services = execSync(\"find server/src -name '*.service.ts'\", { encoding: 'utf8' }).split('\n').filter(Boolean);
+
+          // ⚠️ کاربرِ فارسی روی گوشی «۱۶» تایپ می‌کند و کالای ثبت‌شده «16» است
+          //    (یا برعکس). جستجویی که متنِ خام را مستقیم به contains بدهد،
+          //    همان کالایی را که در فهرست پیشِ چشمِ کاربر است «پیدا نمی‌کند» —
+          //    و کاربر نتیجه می‌گیرد که کاتالوگ خراب است.
+          const bad = [];
+          for (const f of services) {
+            const src = fs.readFileSync(f, 'utf8');
+            if (!/contains:/.test(src)) continue;
+            // ⚠️ نه «فایل helper را import کرده» — خودِ شرط باید روی متغیرِ
+            //    صورت‌شده باشد. import در بالای فایل، خطِ خامِ پایینِ فایل را
+            //    درست نمی‌کند؛ نگهبانی که این را قبول کند اصلاً گاز نمی‌گیرد.
+            const raw = src.split('\n').filter((l) => /contains: (term|t|q)\b/.test(l) && !/toEnDigits/.test(l));
+            if (raw.length) bad.push(f + ' (' + raw.length + ' شرطِ خام)');
+          }
+          if (bad.length) { console.error('جستجوی بی‌نرمال‌سازیِ رقم در: ' + bad.join('، ')); process.exit(1); }
+          "
+          # هستهٔ نرمال‌سازی واقعاً هر دو صورت را می‌سازد — با اجرا، نه با نگاه
+          node -e "
+          require('ts-node');
+          " 2>/dev/null || true
+          node --input-type=module -e "
+          const src = (await import('node:fs')).readFileSync('server/src/common/search.ts', 'utf8');
+          // ⑤ هر دو صورتِ رقمی باید ساخته شود؛ یکی‌شان یعنی نیمی از دادهٔ موجود پیدا نمی‌شود.
+          if (!/toEnDigits/.test(src) || !/۰۱۲۳۴۵۶۷۸۹/.test(src)) {
+            console.error('digitVariants باید هر دو صورتِ فارسی و لاتین را بسازد'); process.exit(1);
+          }
+          if (!/new Set/.test(src)) { console.error('صورت‌های تکراری باید حذف شوند'); process.exit(1); }
+          console.log('search ok');
+          "

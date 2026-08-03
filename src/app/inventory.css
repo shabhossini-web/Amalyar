@@ -22,7 +22,13 @@
 .iv-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
 .iv-head p { margin: 0; font-size: 12px; color: #9a93bb; line-height: 1.9; }
 
-.iv-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; max-width: 940px; margin: 0 auto 14px; }
+/* ⚠️ سه‌ستونهٔ ثابت نه: چهار کارت روی سه ستون یعنی کارتِ چهارم تنها در ردیفِ
+   دوم می‌ماند و کج به‌نظر می‌رسد — همان چیزی که مالکِ محصول در موبایل دید.
+   با auto-fit، کارت‌ها خودشان بینِ دو و سه ستون پخش می‌شوند. */
+.iv-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 9px; max-width: 940px; margin: 0 auto 14px;
+}
 .iv-stats > div {
   padding: 13px 14px; border-radius: 14px; text-align: center;
   background: rgba(18, 13, 49, .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
@@ -344,4 +350,11 @@
 @media (max-width: 520px) {
   .as-count-head, .as-count-row { grid-template-columns: minmax(70px, 1fr) 52px 52px 52px 38px; gap: 4px; }
   .as-count-row input { padding: 4px 2px; font-size: 12px; }
+}
+
+/* «کالایی پیدا نشد» — درِ ساختنِ کالا از همین‌جا، تا کاربر بن‌بست نخورد. */
+.iv-nohit {
+  display: grid; gap: 7px; margin-top: 6px; padding: 10px 11px; border-radius: 12px;
+  font-size: 12px; color: var(--text2);
+  background: rgba(var(--brand-rgb), .08); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
 }

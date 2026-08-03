@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toEnDigits } from '../common/identity';
+import { textSearchOr } from '../common/search';
 import { LEVEL } from '../common/levels';
 import { buildPersonPatch, PersonInput } from '../common/person';
 
@@ -351,16 +352,9 @@ export class DefinitionsService {
   async listItems(q?: string) {
     const t = q?.trim();
     const rows = await this.prisma.item.findMany({
-      where: t
-        ? {
-            OR: [
-              { name: { contains: t, mode: 'insensitive' } },
-              { sku: { contains: t, mode: 'insensitive' } },
-              { brand: { contains: t, mode: 'insensitive' } },
-              { irc: { contains: t } },
-            ],
-          }
-        : {},
+      // ⚠️ جستجو با هر دو صورتِ رقمی — «۱۶» و «16» یک کالا را پیدا می‌کنند.
+      //    توضیحِ کامل در `common/search.ts`.
+      where: t ? { OR: textSearchOr(t, ['name', 'sku', 'brand', 'irc']) } : {},
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
       take: 200,
       include: { _count: { select: { charges: true } } },

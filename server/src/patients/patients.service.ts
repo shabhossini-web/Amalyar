@@ -4,6 +4,7 @@ import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
+import { digitVariants, textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { AuditService } from '../audit/audit.service';
 import { summarize } from './billing.service';
@@ -247,26 +248,33 @@ export class PatientsService {
 
     if (q?.trim()) {
       const t = q.trim();
+      // ⚠️ کد و شماره را کاربر با ارقامِ فارسی هم تایپ می‌کند: «AM-۰۰۰۱» باید
+      //    همان «AM-0001» را پیدا کند (`common/search.ts`).
+      const vs = digitVariants(t);
       where.OR = [
-        { patient: { firstName: { contains: t, mode: 'insensitive' } } },
-        { patient: { lastName: { contains: t, mode: 'insensitive' } } },
-        { patient: { code: { contains: t, mode: 'insensitive' } } },
-        { patient: { phone: { contains: t } } },
-        { patient: { nationalId: { contains: t } } },
-        { surgeonName: { contains: t, mode: 'insensitive' } },
-        { hospitalName: { contains: t, mode: 'insensitive' } },
-        { surgeon: { person: { OR: [
-          { firstName: { contains: t, mode: 'insensitive' } },
-          { lastName: { contains: t, mode: 'insensitive' } },
-        ] } } },
-        { procedureType: { name: { contains: t, mode: 'insensitive' } } },
-        { diagnosis: { title: { contains: t, mode: 'insensitive' } } },
-        { hospital: { name: { contains: t, mode: 'insensitive' } } },
-        { opType: { contains: t, mode: 'insensitive' } },
-        { tech: { person: { OR: [
-          { firstName: { contains: t, mode: 'insensitive' } },
-          { lastName: { contains: t, mode: 'insensitive' } },
-        ] } } },
+        ...vs.flatMap((v) => [
+          { patient: { firstName: { contains: v, mode: 'insensitive' } } },
+          { patient: { lastName: { contains: v, mode: 'insensitive' } } },
+          { patient: { code: { contains: v, mode: 'insensitive' } } },
+          { patient: { phone: { contains: v } } },
+          { patient: { nationalId: { contains: v } } },
+          { surgeonName: { contains: v, mode: 'insensitive' } },
+          { hospitalName: { contains: v, mode: 'insensitive' } },
+          { surgeon: { person: { OR: [
+            { firstName: { contains: v, mode: 'insensitive' } },
+            { lastName: { contains: v, mode: 'insensitive' } },
+          ] } } },
+        ]),
+        ...vs.flatMap((v) => [
+          { procedureType: { name: { contains: v, mode: 'insensitive' } } },
+          { diagnosis: { title: { contains: v, mode: 'insensitive' } } },
+          { hospital: { name: { contains: v, mode: 'insensitive' } } },
+          { opType: { contains: v, mode: 'insensitive' } },
+          { tech: { person: { OR: [
+            { firstName: { contains: v, mode: 'insensitive' } },
+            { lastName: { contains: v, mode: 'insensitive' } },
+          ] } } },
+        ]),
       ];
     }
     return this.scopedVisitWhere(user, { ...where, patient: { ...(where.patient ?? {}), deletedAt: null } });
@@ -489,9 +497,7 @@ export class PatientsService {
     const where: any = t
       ? {
           OR: [
-            { firstName: { contains: t, mode: 'insensitive' } },
-            { lastName: { contains: t, mode: 'insensitive' } },
-            { code: { contains: t, mode: 'insensitive' } },
+            ...textSearchOr(t, ['firstName', 'lastName', 'code']),
             { phone: { contains: toEnDigits(t) } },
             // کد ملی مطمئن‌ترین راهِ یافتنِ پروندهٔ قبلی است؛ نبودش یعنی کاربر
             // پروندهٔ موجود را پیدا نمی‌کرد و دوباره «بیمار جدید» می‌زد.

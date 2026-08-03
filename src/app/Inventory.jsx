@@ -12,6 +12,8 @@ import { useStagger } from '../ui/stagger.js';
 
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
+// «مصرفی» پیش‌فرض است و برچسب نمی‌خواهد — همان قرارداد صفحهٔ تعاریف.
+const ASSET_FA = { set: 'ست', device: 'دستگاه' };
 const money = (n) => (n == null ? '—' : `${Number(n).toLocaleString('fa-IR')} تومان`);
 const int = (v) => {
   const digits = toEnDigits(String(v ?? '')).replace(/[^0-9]/g, '');
@@ -1060,19 +1062,40 @@ function LotSheet({ onClose, onSaved, onError }) {
   const [itemQ, setItemQ] = useState('');
   const [hits, setHits] = useState([]);
   const [item, setItem] = useState(null);
+  const [searched, setSearched] = useState(false);   // «جست‌وجو شد و چیزی نبود»
+  const [making, setMaking] = useState(false);
   const [form, setForm] = useState({ lotNo: '', serialNo: '', expiresJ: '', location: '', quantity: '1', reference: '' });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (item || itemQ.trim().length < 2) { setHits([]); return undefined; }
+    if (item || itemQ.trim().length < 2) { setHits([]); setSearched(false); return undefined; }
     let alive = true;
     const timer = setTimeout(() => {
       api(`/items?q=${encodeURIComponent(itemQ.trim())}`)
-        .then((rows) => { if (alive) setHits(rows.filter((r) => r.active)); })
-        .catch(() => { if (alive) setHits([]); });
+        .then((rows) => { if (alive) { setHits(rows.filter((r) => r.active)); setSearched(true); } })
+        .catch(() => { if (alive) { setHits([]); setSearched(true); } });
     }, 300);
     return () => { alive = false; clearTimeout(timer); };
   }, [itemQ, item]);
+
+  /**
+   * ساختِ کالای تازه از همین‌جا.
+   *
+   * ⚠️ بدونِ این، کاربری که کالایش هنوز در کاتالوگ نیست بن‌بست می‌خورد: باید
+   * شیت را ببندد، به «تعاریفِ پایه» برود، کالا را بسازد و برگردد — و همان‌جا
+   * است که نتیجه می‌گیرد «انبار کار نمی‌کند». کاتالوگ همچنان تک‌منبع می‌ماند؛
+   * فقط درِ ساختنش این‌جا هم باز است.
+   */
+  const makeItem = async () => {
+    const name = itemQ.trim();
+    if (!name || making) return;
+    setMaking(true);
+    try {
+      const fresh = await api('/items', { method: 'POST', body: { name } });
+      setItem(fresh);
+      setHits([]);
+    } catch (e) { onError(e.message); } finally { setMaking(false); }
+  };
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -1113,7 +1136,7 @@ function LotSheet({ onClose, onSaved, onError }) {
           {item ? (
             <div className="iv-picked">
               <b>{item.name}</b>
-              <small>{[item.brand, item.size, item.sku].filter(Boolean).join(' · ')}</small>
+              <small>{[ASSET_FA[item.assetKind], item.brand, item.size, item.sku, item.unit].filter(Boolean).join(' · ') || 'بدونِ برند و اندازه'}</small>
               <button type="button" onClick={() => { setItem(null); setItemQ(''); }}>تغییر</button>
             </div>
           ) : (
@@ -1124,9 +1147,17 @@ function LotSheet({ onClose, onSaved, onError }) {
                   {hits.map((it) => (
                     <button type="button" key={it.id} onClick={() => { setItem(it); setHits([]); }}>
                       <b>{it.name}</b>
-                      <span>{[it.brand, it.size, it.sku].filter(Boolean).join(' · ')}</span>
+                      <span>{[ASSET_FA[it.assetKind], it.brand, it.size, it.sku].filter(Boolean).join(' · ')}</span>
                     </button>
                   ))}
+                </div>
+              )}
+              {searched && hits.length === 0 && (
+                <div className="iv-nohit">
+                  <span>کالایی با «{itemQ.trim()}» در کاتالوگ نیست.</span>
+                  <button type="button" className="iv-mini" disabled={making} onClick={makeItem}>
+                    {making ? 'در حال ساخت…' : `ساختِ کالای «${itemQ.trim()}»`}
+                  </button>
                 </div>
               )}
             </>

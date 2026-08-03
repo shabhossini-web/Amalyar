@@ -9,6 +9,7 @@ import { SettingsService } from '../config/settings.service';
 // فراخوان‌های موجود نشکنند.
 export { balanceByLocation, balanceOf, HOME_FALLBACK };
 import { LEVEL } from '../common/levels';
+import { digitVariants, textSearchOr } from '../common/search';
 
 /** نوعِ حرکتِ انبار. علامت را سرویس تعیین می‌کند، نه کاربر. */
 export const MOVEMENT_KINDS = ['in', 'out', 'return', 'adjust', 'transfer'] as const;
@@ -86,13 +87,15 @@ export class InventoryService {
     const where: any = {};
     if (opts.itemId) where.itemId = opts.itemId;
     if (term) {
+      // ⚠️ شمارهٔ لات و سریال را کاربر با کیبوردِ فارسی هم تایپ می‌کند و هم
+      //    وارد کرده است؛ پس هر دو صورتِ رقمی جست‌وجو می‌شود (`common/search.ts`).
       where.OR = [
-        { lotNo: { contains: term, mode: 'insensitive' } },
-        { serialNo: { contains: term, mode: 'insensitive' } },
-        { location: { contains: term, mode: 'insensitive' } },
-        { item: { name: { contains: term, mode: 'insensitive' } } },
-        { item: { sku: { contains: term, mode: 'insensitive' } } },
-        { item: { brand: { contains: term, mode: 'insensitive' } } },
+        ...textSearchOr(term, ['lotNo', 'serialNo', 'location']),
+        ...digitVariants(term).flatMap((v) => [
+          { item: { name: { contains: v, mode: 'insensitive' } } },
+          { item: { sku: { contains: v, mode: 'insensitive' } } },
+          { item: { brand: { contains: v, mode: 'insensitive' } } },
+        ]),
       ];
     }
     if (opts.expiringDays !== undefined) {

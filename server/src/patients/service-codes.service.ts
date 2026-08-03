@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { textSearchOr } from '../common/search';
+import { toEnDigits } from '../common/identity';
 
 /** بخش‌های تعرفه‌ای — ضریبِ ریالی برای هرکدام جدا تعیین می‌شود. */
 export const SECTORS = ['private', 'public', 'nonprofit', 'charity'] as const;
@@ -108,14 +110,18 @@ export class ServiceCodesService {
     const term = (q ?? '').trim();
     if (term.length < 2) return [];
     await this.ensureImported();
-    const numeric = /^\d+$/.test(term);
+    // ⚠️ کاربرِ فارسی «۹۰۱۳۰۰» تایپ می‌کند. بدونِ نرمال‌سازی، این عبارت
+    //    «عددِ محض» شناخته نمی‌شد و به‌جای کد در **شرح** جست‌وجو می‌شد —
+    //    یعنی کدی که کاربر دقیقاً می‌دانست، پیدا نمی‌شد.
+    const en = toEnDigits(term);
+    const numeric = /^\d+$/.test(en);
 
     const rows = await this.prisma.serviceCode.findMany({
       where: {
         active: true,
         ...(numeric
-          ? { code: { startsWith: term } }
-          : { title: { contains: term, mode: 'insensitive' } }),
+          ? { code: { startsWith: en } }
+          : { OR: textSearchOr(term, ['title']) }),
       },
       take: Math.min(limit, 50),
       orderBy: { code: 'asc' },
