@@ -82,6 +82,28 @@ model Surgeon {
 
 /// بیمارستان/مرکزِ درمانی — سازمان است نه انسان، پس Person ندارد.
 /// ضریبِ تعرفه و مواردِ مالی به ماژولِ حسابداری می‌روند.
+/// الگوی اقلامِ یک نوعِ عمل.
+///
+/// ⚠️ «نیاز» است نه «تعهد»: می‌گوید نورومانیتورینگ دستگاه می‌خواهد و
+/// پیچ‌گذاری ست و مصرفی — ولی خودش هیچ لاتی را رزرو نمی‌کند. چینش از روی
+/// همین الگو بار را **پیشنهاد** می‌دهد و کسری را نشان می‌دهد؛ تصمیم با
+/// چینش‌کننده است. اگر این جدول رزرو می‌کرد، هر تغییرِ الگو تعهدهای دیروزِ
+/// ثبت‌شده را هم عوض می‌کرد.
+model ProcedureTypeItem {
+  id              Int           @id @default(autoincrement())
+  procedureType   ProcedureType @relation(fields: [procedureTypeId], references: [id], onDelete: Cascade)
+  procedureTypeId Int           @map("procedure_type_id")
+  item            Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId          Int           @map("item_id")
+  /// تعدادِ معمول — برای مصرفی معنا دارد، برای دستگاه معمولاً ۱.
+  quantity        Int           @default(1)
+  notes           String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@unique([procedureTypeId, itemId])
+  @@map("procedure_type_items")
+}
+
 model Hospital {
   id           Int      @id @default(autoincrement())
   name         String
@@ -219,6 +241,8 @@ model ProcedureType {
   createdAt      DateTime     @default(now()) @map("created_at")
 
   visits Visit[]
+  /// الگوی اقلام — «این نوعِ عمل معمولاً چه چیزی می‌خواهد».
+  needs  ProcedureTypeItem[]
 
   @@map("procedure_types")
 }
@@ -270,6 +294,8 @@ model Item {
   @@index([name])
   @@index([category])
   @@map("items")
+  /// در الگوی کدام نوع‌عمل‌ها آمده است.
+  procedureNeeds ProcedureTypeItem[]
 }
 
 /// یک لاتِ فیزیکی از یک کالا — «کدام بچ، چند تا، کجا، تا کِی».
@@ -425,6 +451,10 @@ model StockTransfer {
   releasedAt   DateTime? @map("released_at")
   releasedById Int?      @map("released_by_id")
   releaseNote  String?   @map("release_note")
+  /// «ساعت ۵ بیا ببر» — ساعتِ درخواستیِ کارشناس برای جمع‌آوری، «HH:MM».
+  pickupAt     String?   @map("pickup_at")
+  /// «گذاشتم CSR» — کجا تحویل داده شده تا جمع‌آور بداند سراغِ کجا برود.
+  leftAt       String?   @map("left_at")
   sentAt     DateTime  @default(now()) @map("sent_at")
   receivedAt DateTime? @map("received_at")
   /// نامِ تحویل‌گیرندهٔ CSR.
@@ -1245,8 +1275,11 @@ model TransportRun {
 /// یک توقف در مسیر — تحویل یا جمع‌آوری، با ترتیبِ صریح.
 model TransportStop {
   id     Int          @id @default(autoincrement())
-  run    TransportRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  runId  Int          @map("run_id")
+  /// ⚠️ اختیاری: توقفِ جمع‌آوری که از اعلامِ پایانِ کارشناس ساخته می‌شود هنوز
+  /// راننده ندارد. «بی‌مسیر» یعنی کاری که باید انجام شود ولی هنوز کسی
+  /// برایش تعیین نشده — همان چیزی که مدیر باید ببیند، نه اینکه گم شود.
+  run    TransportRun? @relation(fields: [runId], references: [id], onDelete: Cascade)
+  runId  Int?          @map("run_id")
   /// ترتیبِ توقف در مسیر. عددِ صریح، نه ترتیبِ ساعت: گاهی دو توقف ساعت ندارند
   /// و ترتیبشان را چینش‌کننده تعیین می‌کند.
   seq    Int
@@ -1261,8 +1294,12 @@ model TransportStop {
   /// ساعتِ برنامه‌ریزی‌شده — «HH:MM»
   plannedAt String?   @map("planned_at")
   doneAt    DateTime? @map("done_at")
-  /// نامِ تحویل‌گیرنده/تحویل‌دهنده در همین توقف.
+  /// نامِ تحویل‌گیرندهٔ **برنامه‌ریزی‌شده** — «بده به کارشناس».
   handedTo  String?   @map("handed_to")
+  /// آن‌که **واقعاً** تحویل گرفت. راننده گاهی زودتر می‌رسد و بار را به
+  /// داروخانه یا CSR می‌دهد؛ اگر همان فیلدِ برنامه بازنویسی شود، بعداً
+  /// معلوم نیست برنامه چه بود و واقعیت چه شد.
+  handedActual String? @map("handed_actual")
   notes     String?
 
   transfers StockTransfer[]

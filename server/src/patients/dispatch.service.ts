@@ -114,7 +114,8 @@ export class DispatchService {
         surgeon: { include: { person: { select: { firstName: true, lastName: true } } } },
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
-        procedureType: { select: { name: true } },
+        // الگوی اقلام: «این نوعِ عمل چه می‌خواهد» — برای هشدارِ عملِ بی‌بار.
+        procedureType: { select: { name: true, needs: { include: { item: { select: { id: true, name: true, size: true, assetKind: true } } } } } },
         // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
         // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {
@@ -146,9 +147,32 @@ export class DispatchService {
           quantity: m.quantity,
         })),
     );
+    /**
+     * ⚠️ «عملِ بی‌بار» — عملی که هیچ ستی به اسمش نیست.
+     *
+     * بیمارستانی که عمل دارد بدونِ دستگاه یا ست نمی‌شود؛ نورومانیتورینگ
+     * دستگاه می‌خواهد و پیچ‌گذاری ست و مصرفی. تا امروز این را فقط چینش‌کننده
+     * از حافظه‌اش می‌دانست و صبحِ عمل معلوم می‌شد. حالا خودِ تخته می‌گوید.
+     *
+     * دو سطح: **بی‌بار** (اصلاً حواله‌ای ندارد) و **کسری** (الگوی نوعِ عمل
+     * چیزی می‌خواهد که در بار نیست). کسری فقط وقتی معنا دارد که الگو تعریف
+     * شده باشد — نبودِ الگو یعنی «نمی‌دانیم»، نه «چیزی لازم نیست».
+     */
+    const needs = v.procedureType?.needs ?? [];
+    const loadedIds = new Set(
+      v.stockTransfers.flatMap((t: any) => t.movements.map((m: any) => m.lot?.itemId).filter(Boolean)),
+    );
+    const missing = needs
+      .filter((n: any) => !loadedIds.has(n.itemId))
+      .map((n: any) => ({ itemId: n.itemId, name: [n.item.name, n.item.size].filter(Boolean).join(' '), quantity: n.quantity }));
+
     return {
       id: v.id,
       code: `${v.patient.code}-V${v.seq}`,
+      /// هیچ حواله‌ای ندارد — قرمزِ درجه‌یک.
+      noCargo: v.stockTransfers.length === 0,
+      /// الگو چیزی می‌خواهد که در بار نیست.
+      missingNeeds: missing,
       fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
       opStatus: v.opStatus,
       opStartTime: v.opStartTime,
@@ -185,7 +209,8 @@ export class DispatchService {
         surgeon: { include: { person: { select: { firstName: true, lastName: true } } } },
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
-        procedureType: { select: { name: true } },
+        // الگوی اقلام: «این نوعِ عمل چه می‌خواهد» — برای هشدارِ عملِ بی‌بار.
+        procedureType: { select: { name: true, needs: { include: { item: { select: { id: true, name: true, size: true, assetKind: true } } } } } },
         // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
         // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {

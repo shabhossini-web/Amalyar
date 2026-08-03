@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
+import { toEnDigits } from '../lib/jalali.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
 import { Back, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
@@ -124,6 +125,7 @@ export default function Definitions() {
   const [tab, setTab] = useState('surgeons');
   const [merging, setMerging] = useState(false);
   const [parts, setParts] = useState(null); // کالایی که محتویاتش باز است
+  const [needsFor, setNeedsFor] = useState(null); // نوعِ عملی که الگوی اقلامش باز است
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
@@ -219,6 +221,11 @@ export default function Definitions() {
               {tab === 'items' && row.assetKind && row.assetKind !== 'consumable' && (
                 <button type="button" className="df-parts" onClick={() => setParts(row)}>محتویات</button>
               )}
+              {/* الگوی اقلامِ نوعِ عمل — تختهٔ چینش از همین می‌فهمد که
+                  «نورومانیتورینگِ بدونِ دستگاه» کسری دارد. */}
+              {tab === 'procedure-types' && (
+                <button type="button" className="df-parts" onClick={() => setNeedsFor(row)}>الگوی اقلام</button>
+              )}
               <button type="button" title="ویرایش" onClick={() => setEditing(row)}><Pencil width="15" height="15" /></button>
               <button type="button" title={row.active ? 'غیرفعال کن' : 'فعال کن'} onClick={() => toggle(row)}>
                 <span className={`df-dot${row.active ? ' on' : ''}`} />
@@ -234,6 +241,10 @@ export default function Definitions() {
 
       <AnimatePresence>
         {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={setToast} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {needsFor && <ProcedureNeeds type={needsFor} onClose={() => setNeedsFor(null)} onToast={setToast} />}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -339,6 +350,110 @@ function SetContents({ item, onClose, onToast }) {
       <footer className="df-sheet-foot">
         <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>بستن</button>
         <button type="button" className="df-save" onClick={add} disabled={busy || (!label.trim() && !partId)}>افزودنِ قلم</button>
+      </footer>
+    </Overlay>
+  );
+}
+
+/**
+ * الگوی اقلامِ یک نوعِ عمل — «این عمل چه می‌خواهد».
+ *
+ * ⚠️ این **تعهد نیست، نیاز است.** حواله همچنان دستی صادر می‌شود؛ کارِ این
+ * فهرست فقط این است که تختهٔ چینش بتواند بگوید «نورومانیتورینگِ فردا هنوز
+ * دستگاه ندارد» — پیش از آن‌که صبحِ عمل معلوم شود.
+ *
+ * قلم از **کاتالوگ** می‌آید نه متنِ آزاد: کسری وقتی قابلِ تشخیص است که همان
+ * کالایی باشد که در حواله می‌رود.
+ */
+function ProcedureNeeds({ type, onClose, onToast }) {
+  const [rows, setRows] = useState([]);
+  const [items, setItems] = useState([]);
+  const [itemId, setItemId] = useState('');
+  const [qty, setQty] = useState('1');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows(await api(`/procedure-types/${type.id}/needs`)); }
+    catch (e) { onToast(e.message); }
+  }, [type.id, onToast]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { api('/items').then(setItems).catch(() => {}); }, []);
+
+  const add = async () => {
+    if (busy || !itemId) return;
+    setBusy(true);
+    try {
+      setRows(await api(`/procedure-types/${type.id}/needs`, {
+        method: 'POST',
+        body: { itemId: Number(itemId), quantity: Number(toEnDigits(qty)) || 1, notes: note.trim() || undefined },
+      }));
+      setItemId(''); setQty('1'); setNote('');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const remove = async (id) => {
+    setBusy(true);
+    try { setRows(await api(`/procedure-types/${type.id}/needs/${id}`, { method: 'DELETE' })); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="df-sheet-head">
+        <b>الگوی اقلامِ «{type.name}»</b>
+        <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+      <div className="df-sheet-body">
+        <p className="df-note" style={{ marginTop: 0 }}>
+          هر عملی از این نوع باید این اقلام را همراه داشته باشد. تختهٔ چینش کسری را
+          <b> قرمز</b> نشان می‌دهد — پیش از روزِ عمل.
+        </p>
+        <div className="df-list">
+          {rows.length === 0 && <div className="df-empty">هنوز قلمی تعریف نشده</div>}
+          {rows.map((r) => (
+            <article key={r.id} className="df-row">
+              <div className="df-row-main">
+                <b>{[r.name, r.size].filter(Boolean).join(' ')}</b>
+                <small>
+                  {faNum(r.quantity)} {r.unit || 'عدد'}
+                  {r.brand ? ` · ${r.brand}` : ''}
+                  {ASSET_FA[r.assetKind] ? ` · ${ASSET_FA[r.assetKind]}` : ''}
+                  {r.notes ? ` · ${r.notes}` : ''}
+                </small>
+              </div>
+              <button type="button" className="df-del" disabled={busy} onClick={() => remove(r.id)}>
+                <Trash width="15" height="15" />
+              </button>
+            </article>
+          ))}
+        </div>
+
+        <div className="pf-row2" style={{ marginTop: 12 }}>
+          <label className="pf-field">
+            <span>کالا از کاتالوگ</span>
+            <select value={itemId} onChange={(e) => setItemId(e.target.value)} disabled={busy}>
+              <option value="">— انتخاب —</option>
+              {items.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {[i.name, i.size, i.brand].filter(Boolean).join(' · ')}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="pf-field">
+            <span>تعداد</span>
+            <input type="text" inputMode="numeric" dir="ltr" value={qty} disabled={busy} onChange={(e) => setQty(e.target.value)} />
+          </label>
+          <label className="pf-field">
+            <span>یادداشت</span>
+            <input type="text" value={note} disabled={busy} onChange={(e) => setNote(e.target.value)} />
+          </label>
+        </div>
+      </div>
+      <footer className="df-sheet-foot">
+        <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>بستن</button>
+        <button type="button" className="df-save" onClick={add} disabled={busy || !itemId}>افزودنِ قلم</button>
       </footer>
     </Overlay>
   );

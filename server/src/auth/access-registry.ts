@@ -126,6 +126,11 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.SUPER_ADMIN, locked: true,
   },
   {
+    key: 'transport', label: 'پرتالِ حمل‌ونقل', group: 'modules',
+    hint: 'راننده و پیک مسیرِ خودشان را می‌بینند و تحویل را ثبت می‌کنند. هیچ اطلاعاتی از بیمار در آن نیست.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
     key: 'access', label: 'سطوحِ دسترسی', group: 'modules',
     hint: 'همین صفحه. قفل است — صفحه‌ای که دسترسی‌ها را عوض می‌کند نمی‌تواند خودش را برای سطحِ پایین‌تر باز کند.',
     defaultLevel: LEVEL.SUPER_ADMIN, locked: true,
@@ -134,6 +139,11 @@ export const FEATURES: AccessDef[] = [
 
 /** مجوزهای ریزدانهٔ عملیات. */
 export const PERMISSIONS: AccessDef[] = [
+  {
+    key: 'transport.own', label: 'دیدنِ مسیرِ خود و ثبتِ تحویل', group: 'inventory',
+    hint: 'راننده و پیک: مسیرِ امروزِ خودشان، بارِ هر توقف، و ثبتِ آن‌که واقعاً تحویل گرفت.',
+    defaultLevel: LEVEL.TECH,
+  },
   // ── بیماران و مراجعات ─────────────────────────────────────────
   {
     key: 'patients.read', label: 'دیدنِ فهرستِ مراجعات', group: 'patients',

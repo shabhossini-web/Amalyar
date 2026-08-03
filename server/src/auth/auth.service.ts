@@ -42,9 +42,19 @@ export class AuthService {
   async requestSignupOtp(phone: string, ip = 'unknown') {
     this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
     this.rateLimit.hit(`otp:phone:${phone}`, 3, 15 * 60_000);
-    // شماره روی Person یکتاست، پس بررسی از همان‌جا می‌آید نه از Account.
-    const exists = await this.prisma.person.findUnique({ where: { phone } });
-    if (exists) throw new BadRequestException('این شماره قبلاً ثبت شده است');
+    /**
+     * ⚠️ «شماره تکراری است» فقط وقتی درست است که آن شخص **حساب** داشته باشد.
+     *
+     * راننده، پیک و جراح در تعاریفِ پایه یک `Person` می‌شوند بدونِ حساب. اگر
+     * صرفِ وجودِ Person ثبت‌نام را رد کند، همان راننده هیچ‌وقت نمی‌تواند وارد
+     * پرتالش شود — شماره‌اش «قبلاً ثبت شده» است، آن هم توسطِ خودش. پس شرط
+     * روی داشتنِ حساب است، نه روی وجودِ شخص.
+     */
+    const exists = await this.prisma.person.findUnique({
+      where: { phone },
+      include: { account: { select: { id: true } } },
+    });
+    if (exists?.account) throw new BadRequestException('این شماره قبلاً ثبت شده است');
 
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone, purpose: 'signup', createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
@@ -122,9 +132,13 @@ export class AuthService {
       if (await tx.account.findUnique({ where: { username: dto.username } })) {
         throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
       }
-      if (await tx.person.findUnique({ where: { phone } })) {
-        throw new BadRequestException('این شماره قبلاً ثبت شده است');
-      }
+      // شخصی که از قبل هست ولی حساب ندارد (راننده/پیکِ تعریف‌شده) به همان
+      // هویت وصل می‌شود، نه یک Personِ دومِ هم‌شماره.
+      const known = await tx.person.findUnique({
+        where: { phone },
+        include: { account: { select: { id: true } } },
+      });
+      if (known?.account) throw new BadRequestException('این شماره قبلاً ثبت شده است');
 
       const bootstrap =
         (await tx.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
@@ -136,14 +150,20 @@ export class AuthService {
           passwordHash,
           level: bootstrap ? LEVEL.SUPER_ADMIN : LEVEL.VIEWER,
           status: bootstrap ? 'active' : 'pending',
-          person: {
-            create: {
-              firstName: dto.firstName.trim(),
-              lastName: dto.lastName.trim(),
-              phone,
-              photo: dto.selfie,
-            },
-          },
+          person: known
+            ? {
+                // هویتِ موجود می‌ماند و فقط عکسِ سلفی به آن اضافه می‌شود؛
+                // نامِ ثبت‌شده در تعاریف را ثبت‌نام بازنویسی نمی‌کند.
+                connect: { id: known.id },
+              }
+            : {
+                create: {
+                  firstName: dto.firstName.trim(),
+                  lastName: dto.lastName.trim(),
+                  phone,
+                  photo: dto.selfie,
+                },
+              },
         },
         include: WITH_PERSON,
       });

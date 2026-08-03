@@ -256,7 +256,7 @@ export class RoutesService {
 
   async addStop(
     runId: number,
-    dto: { hospitalId?: number; locationName?: string; kind: string; plannedAt?: string; notes?: string; transferIds?: number[] },
+    dto: { hospitalId?: number; locationName?: string; kind: string; plannedAt?: string; notes?: string; handedTo?: string; transferIds?: number[] },
     user: any,
   ) {
     const run = await this.prisma.transportRun.findUnique({ where: { id: runId }, include: { stops: true } });
@@ -271,6 +271,9 @@ export class RoutesService {
         hospitalId: dto.hospitalId ?? null,
         locationName: text(dto.locationName),
         plannedAt: normalizeTime(dto.plannedAt),
+        // «به چه کسی» از همان لحظهٔ چینش تعیین می‌شود؛ آن‌که واقعاً تحویل
+        // گرفت را راننده جدا ثبت می‌کند (`handedActual`).
+        handedTo: text(dto.handedTo),
         notes: text(dto.notes),
       },
     });
@@ -282,7 +285,11 @@ export class RoutesService {
     return this.run(runId);
   }
 
-  async updateStop(id: number, dto: { plannedAt?: string; notes?: string; handedTo?: string; done?: boolean }, user: any) {
+  async updateStop(
+    id: number,
+    dto: { plannedAt?: string; notes?: string; handedTo?: string; handedActual?: string; done?: boolean },
+    user: any,
+  ) {
     const s = await this.prisma.transportStop.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('توقف یافت نشد');
     await this.prisma.transportStop.update({
@@ -291,6 +298,7 @@ export class RoutesService {
         ...(dto.plannedAt !== undefined ? { plannedAt: normalizeTime(dto.plannedAt) } : {}),
         ...(dto.notes !== undefined ? { notes: text(dto.notes) } : {}),
         ...(dto.handedTo !== undefined ? { handedTo: text(dto.handedTo) } : {}),
+        ...(dto.handedActual !== undefined ? { handedActual: text(dto.handedActual) } : {}),
         ...(dto.done !== undefined ? { doneAt: dto.done ? new Date() : null } : {}),
       },
     });
@@ -298,7 +306,71 @@ export class RoutesService {
       actorId: user?.id, action: 'transport.stop.update', entityType: 'transport_stop', entityId: id,
       before: s, after: dto,
     });
-    return this.run(s.runId);
+    return s.runId ? this.run(s.runId) : { unassigned: true };
+  }
+
+  /**
+   * توقفِ بی‌مسیر — کاری که باید انجام شود ولی هنوز راننده ندارد.
+   *
+   * ⚠️ چرا رکوردِ واقعی و نه یک صفِ مشتق: اعلامِ کارشناس («ساعت ۵ بیا ببر»)
+   * یک **تعهدِ زمان‌دار** است. اگر فقط یک صفِ محاسبه‌شده بود، ساعتی که
+   * کارشناس خواسته و محلی که وسیله را گذاشته جایی ثبت نمی‌شد و مدیر باید
+   * از حافظه‌اش می‌چید.
+   */
+  async createUnassignedStop(
+    dto: { hospitalId?: number; locationName?: string; kind: string; plannedAt?: string; notes?: string; transferIds?: number[] },
+    user: any,
+  ) {
+    if (!STOP_KINDS.includes(dto.kind as any)) throw new BadRequestException('نوعِ توقف باید تحویل یا جمع‌آوری باشد');
+    const stop = await this.prisma.transportStop.create({
+      data: {
+        runId: null, seq: 0, kind: dto.kind,
+        hospitalId: dto.hospitalId ?? null,
+        locationName: text(dto.locationName),
+        plannedAt: normalizeTime(dto.plannedAt),
+        notes: text(dto.notes),
+      },
+    });
+    if (dto.transferIds?.length) {
+      await this.prisma.stockTransfer.updateMany({ where: { id: { in: dto.transferIds } }, data: { stopId: stop.id } });
+    }
+    await this.audit.record({
+      actorId: user?.id, action: 'transport.stop.unassigned', entityType: 'transport_stop', entityId: stop.id,
+      after: { kind: dto.kind, hospitalId: dto.hospitalId ?? null, plannedAt: stop.plannedAt },
+    });
+    return stop;
+  }
+
+  /** کارهای بی‌راننده — همان چیزی که مدیر صبح باید ببیند. */
+  async unassignedStops() {
+    const rows = await this.prisma.transportStop.findMany({
+      where: { runId: null, doneAt: null },
+      orderBy: [{ plannedAt: 'asc' }, { id: 'asc' }],
+      include: {
+        hospital: { select: { name: true, address: true } },
+        transfers: { select: { id: true, code: true, toLocation: true, leftAt: true, pickupAt: true } },
+      },
+    });
+    return rows.map((s) => ({
+      id: s.id, kind: s.kind, plannedAt: s.plannedAt, notes: s.notes,
+      hospitalName: s.hospital?.name ?? s.locationName,
+      transfers: s.transfers,
+    }));
+  }
+
+  /** واگذاریِ توقفِ بی‌مسیر به یک مسیر — انتهای صف می‌نشیند. */
+  async assignStop(id: number, runId: number, user: any) {
+    const stop = await this.prisma.transportStop.findUnique({ where: { id } });
+    if (!stop) throw new NotFoundException('توقف یافت نشد');
+    const run = await this.prisma.transportRun.findUnique({ where: { id: runId }, include: { stops: true } });
+    if (!run) throw new NotFoundException('مسیر یافت نشد');
+    const seq = Math.max(0, ...run.stops.map((x) => x.seq)) + 1;
+    await this.prisma.transportStop.update({ where: { id }, data: { runId, seq } });
+    await this.audit.record({
+      actorId: user?.id, action: 'transport.stop.assign', entityType: 'transport_stop', entityId: id,
+      after: { runId, seq },
+    });
+    return this.run(runId);
   }
 
   async removeStop(id: number, user: any) {
@@ -307,7 +379,7 @@ export class RoutesService {
     await this.prisma.stockTransfer.updateMany({ where: { stopId: id }, data: { stopId: null } });
     await this.prisma.transportStop.delete({ where: { id } });
     await this.audit.record({ actorId: user?.id, action: 'transport.stop.remove', entityType: 'transport_stop', entityId: id, before: s });
-    return this.run(s.runId);
+    return s.runId ? this.run(s.runId) : { unassigned: true };
   }
 
   /**
@@ -346,7 +418,7 @@ export class RoutesService {
       actorId: user?.id, action: 'transport.stop.attach', entityType: 'transport_stop', entityId: stopId,
       after: { transferIds: ids },
     });
-    return this.run(stop.runId);
+    return stop.runId ? this.run(stop.runId) : { unassigned: true };
   }
 
   async detach(stopId: number, transferId: number, user: any) {
@@ -357,7 +429,7 @@ export class RoutesService {
       actorId: user?.id, action: 'transport.stop.detach', entityType: 'transport_stop', entityId: stopId,
       after: { transferId },
     });
-    return this.run(stop.runId);
+    return stop.runId ? this.run(stop.runId) : { unassigned: true };
   }
 
   /**
@@ -647,7 +719,7 @@ export class RoutesService {
       actorId: user?.id, action: 'transport.proof.add', entityType: 'transport_stop', entityId: stopId,
       after: { proofId: row.id, fileName: row.fileName },
     });
-    return this.run(stop.runId);
+    return stop.runId ? this.run(stop.runId) : { unassigned: true };
   }
 
   async openProof(id: number) {
@@ -687,7 +759,9 @@ export class RoutesService {
   }
 }
 
-function normalizeTime(v: unknown): string | null {
+// ⚠️ export شد تا اعلامِ پایانِ کارشناس در انبار همین قاعده را به کار ببرد؛
+// دو نرمال‌سازیِ ساعت یعنی «۵» در یکی 05:00 و در دیگری خطا.
+export function normalizeTime(v: unknown): string | null {
   const t = text(v);
   if (!t) return null;
   const en = t.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));

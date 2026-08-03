@@ -167,4 +167,19 @@ export class RoutesController {
   ) {
     return this.routes.detach(id, tid, user);
   }
+
+  /// کارهای بی‌راننده — جمع‌آوری‌هایی که کارشناس خواسته و هنوز مسیر ندارند.
+  /// ⚠️ جدا از `GET /routes/unassigned` که **بارِ** بی‌مسیر را می‌دهد؛ این‌جا
+  /// خودِ **توقف** ساخته شده و فقط راننده‌اش تعیین نشده.
+  @RequirePermissions('patients.read')
+  @Get('stops/unassigned')
+  unassignedStops() {
+    return this.routes.unassignedStops();
+  }
+
+  @RequirePermissions('patients.update')
+  @Post('stops/:id/assign')
+  assignStop(@Param('id', ParseIntPipe) id: number, @Body() dto: { runId: number }, @CurrentUser() user: any) {
+    return this.routes.assignStop(id, Number(dto.runId), user);
+  }
 }

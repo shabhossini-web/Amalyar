@@ -1712,3 +1712,77 @@ jobs:
           if (!/new Set/.test(src)) { console.error('صورت‌های تکراری باید حذف شوند'); process.exit(1); }
           console.log('search ok');
           "
+
+      - name: Verify the transport cycle is closed end to end
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          // ① پرتالِ راننده هیچ دادهٔ بیمار نمی‌دهد. راننده برای رساندنِ ست به
+          //    نامِ بیمار احتیاج ندارد؛ همان قاعدهٔ ابلاغ، این‌بار روی یک
+          //    endpointِ تازه که خیلی راحت می‌شد patient را در include گذاشت.
+          const tp = read('server/src/patients/transport.service.ts');
+          const leak = /include:[\s\S]*?\bpatient\b/.test(tp) || /select:[\s\S]*?firstName[\s\S]*?patient/.test(tp);
+          if (/\bpatient:\s*{/.test(tp)) { console.error('transport.service به بیمار دسترسی می‌دهد'); process.exit(1); }
+          if (/nationalId|amount|price|totalAmount/.test(tp)) { console.error('پرتالِ راننده نباید داده‌ی هویتی یا مالی بدهد'); process.exit(1); }
+
+          // ② هویتِ راننده از شخصِ مشترک می‌آید، نه یک ستونِ تازه روی Account.
+          //    ستونِ دوم یعنی دو منبعِ حقیقت برای «این کاربر کدام راننده است».
+          if (!/personId/.test(tp)) { console.error('هویتِ راننده باید از Person بیاید'); process.exit(1); }
+
+          // ③ برنامه و واقعیت دو ستونِ جدا می‌مانند: اگر راننده روی handedTo
+          //    بنویسد، فردا معلوم نیست برنامه چه بود و واقعیت چه شد.
+          const sch = read('server/prisma/schema.prisma');
+          if (!/handedActual/.test(sch) || !/handedTo/.test(sch)) {
+            console.error('هر دو ستونِ handedTo و handedActual لازم‌اند'); process.exit(1);
+          }
+          if (!/handedActual/.test(tp) || /handedTo:\s*dto\./.test(tp)) {
+            console.error('markDone باید handedActual بنویسد نه handedTo'); process.exit(1);
+          }
+
+          // ④ ⚠️ هر فیلدی که کلاینت می‌فرستد باید در DTO باشد، وگرنه
+          //    ValidationPipe با whitelist آن را بی‌صدا دور می‌ریزد و رفتار
+          //    «کار می‌کند ولی ذخیره نمی‌شود» می‌شود — همین دو بار اتفاق افتاد.
+          const inv = read('server/src/patients/dto/inventory.dto.ts');
+          for (const f of ['pickupAt', 'leftAt']) {
+            if (!new RegExp(f).test(inv)) { console.error('ReleaseDto باید ' + f + ' داشته باشد'); process.exit(1); }
+          }
+          const rt = read('server/src/patients/dto/routes.dto.ts');
+          for (const f of ['handedTo', 'handedActual']) {
+            if (!new RegExp(f).test(rt)) { console.error('DTOهای مسیر باید ' + f + ' داشته باشند'); process.exit(1); }
+          }
+
+          // ⑤ اعلامِ پایانِ کارشناس باید خودش توقفِ جمع‌آوری بسازد. اگر فقط
+          //    releasedAt را می‌زد، ستِ آزادشده در هیچ صفِ کاری نمی‌افتاد.
+          const invSvc = read('server/src/patients/inventory.service.ts');
+          if (!/createUnassignedStop/.test(invSvc)) {
+            console.error('releaseTransfer باید توقفِ جمع‌آوریِ بی‌راننده بسازد'); process.exit(1);
+          }
+
+          // ⑥ کسریِ الگو و «عملِ بی‌بار» در سرور محاسبه می‌شوند، نه در رندر —
+          //    وگرنه هر نمای تازه تعریفِ خودش را از «بی‌بار» می‌سازد.
+          const dis = read('server/src/patients/dispatch.service.ts');
+          if (!/noCargo/.test(dis) || !/missingNeeds/.test(dis)) {
+            console.error('تختهٔ چینش باید noCargo و missingNeeds بدهد'); process.exit(1);
+          }
+          const dj = read('src/app/Dispatch.jsx');
+          if (!/noCargo/.test(dj) || !/missingNeeds/.test(dj)) {
+            console.error('هشدارِ عملِ بی‌بار در تختهٔ چینش دیده نمی‌شود'); process.exit(1);
+          }
+
+          // ⑦ توقف باید از همان لحظهٔ ساخت ساعت و تحویل‌گیرنده بگیرد. مقصدِ
+          //    تنها یعنی راننده نمی‌داند کِی برود و به دستِ چه کسی بدهد.
+          // ⚠️ فقط بدنهٔ خودِ AddStop، نه تا آخرِ فایل: TimeBox که پایین‌تر
+          //    تعریف شده هم TimePick دارد و نسخهٔ اولِ این نگهبان به‌خاطرش
+          //    گاز نگرفت — فرمِ توقف را به input خام برگرداندیم و سبز ماند.
+          const from = dj.indexOf('function AddStop');
+          const next = dj.indexOf('\nfunction ', from + 1);
+          const addStop = dj.slice(from, next === -1 ? undefined : next);
+          if (!/TimePick/.test(addStop) || !/handedTo/.test(addStop)) {
+            console.error('فرمِ افزودنِ توقف باید ساعت و تحویل‌گیرنده داشته باشد'); process.exit(1);
+          }
+
+          console.log('transport cycle ok');
+          "

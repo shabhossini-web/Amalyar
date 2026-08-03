@@ -27,6 +27,9 @@ export class StopCreateDto {
   kind!: string;
 
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' }) plannedAt?: string;
+  /// ⚠️ «به چه کسی تحویل داده شود» از همان لحظهٔ چینش. بدونِ این فیلد در
+  /// DTO، ValidationPipe مقدارِ ارسالی را بی‌صدا دور می‌ریخت.
+  @IsOptional() @IsString() @MaxLength(80) handedTo?: string;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
   @IsOptional() @IsArray() transferIds?: number[];
 }
@@ -35,7 +38,15 @@ export class StopPatchDto {
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' }) plannedAt?: string;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
   @IsOptional() @IsString() @MaxLength(80) handedTo?: string;
+  /// آن‌که واقعاً تحویل گرفت — جدا از برنامه می‌ماند.
+  @IsOptional() @IsString() @MaxLength(80) handedActual?: string;
   @IsOptional() @IsBoolean() done?: boolean;
+}
+
+/** ثبتِ تحویل توسط خودِ راننده در پرتال. */
+export class StopDoneDto {
+  @IsOptional() @IsString() @MaxLength(80) handedActual?: string;
+  @IsOptional() @IsString() @MaxLength(300) notes?: string;
 }
 
 export class ReorderDto {

@@ -4,7 +4,7 @@ import Mark from '../components/Mark.jsx';
 import { useAuth } from './auth.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
-import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Dispatch, Form, Gear, Lock, Mail, Users, Wave } from '../ui/icons.jsx';
+import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Dispatch, Form, Gear, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
 
 /* ── آیکون‌های خطی (lucide-style، stroke=currentColor) ── */
 
@@ -21,6 +21,7 @@ const TOOLS = [
   { key: 'dispatch', label: 'چینشِ نیروها', icon: Dispatch, tint: 'amber', ready: true, min: 4, to: '/app/dispatch' },
   { key: 'letter', label: 'نامه اداری', icon: Mail, tint: 'blue', ready: false, min: 5 },
   { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: true, min: 2, to: '/app/tech' },
+  { key: 'transport', label: 'پرتالِ حمل‌ونقل', icon: Truck, tint: 'amber', ready: true, min: 2, to: '/app/transport' },
   { key: 'inventory', label: 'انبار', icon: Box, tint: 'green', ready: true, min: 3, to: '/app/inventory' },
   { key: 'definitions', label: 'تعاریف پایه', icon: Book, tint: 'teal', ready: true, min: 5, to: '/app/definitions' },
   { key: 'users', label: 'کاربران', icon: Users, tint: 'violet', ready: true, min: 6, to: '/app/users' },

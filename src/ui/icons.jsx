@@ -183,6 +183,17 @@ export const Route = (p) => (
   </Svg>
 );
 export const Wave = (p) => <Svg {...p}><path d="M2 12h3l3-8 4 16 3-11 2 3h5" /></Svg>;
+export const Truck = (p) => (
+  <Svg {...p}>
+    <path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z" />
+    <circle cx="6.5" cy="18.5" r="1.8" /><circle cx="17" cy="18.5" r="1.8" />
+  </Svg>
+);
+export const Phone = (p) => (
+  <Svg {...p}>
+    <path d="M6.5 3h3l1.5 4-2 1.5a12 12 0 0 0 5.5 5.5L16 12l4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4 6.2 2 2 0 0 1 6 4z" />
+  </Svg>
+);
 
 // ── مالی ─────────────────────────────────────────────────────
 export const Money = (p) => (

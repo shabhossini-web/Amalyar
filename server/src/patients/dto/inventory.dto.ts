@@ -134,4 +134,12 @@ export class TransferUsageDto {
 /** اعلامِ پایانیِ کارشناس — یادداشت اختیاری است، خودِ رویداد مهم است. */
 export class ReleaseDto {
   @IsOptional() @IsString() @MaxLength(200) note?: string;
+
+  /// ⚠️ این دو باید در DTO باشند وگرنه ValidationPipe با whitelist آن‌ها را
+  /// بی‌صدا دور می‌ریزد: کارشناس «ساعت ۵، گذاشتم CSR» می‌فرستد و سرور فقط
+  /// یادداشت را می‌بیند — دقیقاً همان چیزی که در آزمونِ چرخه لو رفت.
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۱۷:۰۰ باشد' })
+  pickupAt?: string;
+
+  @IsOptional() @IsString() @MaxLength(60) leftAt?: string;
 }

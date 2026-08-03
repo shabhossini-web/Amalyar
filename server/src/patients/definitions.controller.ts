@@ -244,6 +244,25 @@ export class DefinitionsController {
     return this.defs.updateProcedureType(id, dto);
   }
 
+  /// الگوی اقلام — خواندنش برای چینش لازم است، پس مجوزِ سبک‌ترِ read دارد.
+  @RequirePermissions('definitions.read')
+  @Get('procedure-types/:id/needs')
+  needs(@Param('id', ParseIntPipe) id: number) {
+    return this.defs.listNeeds(id);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Post('procedure-types/:id/needs')
+  addNeed(@Param('id', ParseIntPipe) id: number, @Body() dto: { itemId: number; quantity?: number; notes?: string }) {
+    return this.defs.addNeed(id, dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Delete('procedure-types/:id/needs/:needId')
+  delNeed(@Param('id', ParseIntPipe) id: number, @Param('needId', ParseIntPipe) needId: number) {
+    return this.defs.removeNeed(id, needId);
+  }
+
   @RequirePermissions('definitions.manage')
   @Delete('procedure-types/:id')
   delProcedureType(@Param('id', ParseIntPipe) id: number) {

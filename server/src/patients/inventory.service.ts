@@ -1,9 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AssetsService, windowOf } from './assets.service';
 import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
 import { SettingsService } from '../config/settings.service';
+import { RoutesService, normalizeTime } from './routes.service';
 
 // فرمول‌های موجودی در `stock-math` هستند؛ این‌جا فقط دوباره صادر می‌شوند تا
 // فراخوان‌های موجود نشکنند.
@@ -61,6 +62,9 @@ export class InventoryService {
     private audit: AuditService,
     private assets: AssetsService,
     private settings: SettingsService,
+    // ⚠️ حلقهٔ وابستگی: مسیرها هم انبار را می‌خواهند. `forwardRef` در ماژول
+    //    حلش می‌کند — بدونِ آن Nest هنگامِ بالا آمدن گیر می‌کند.
+    @Inject(forwardRef(() => RoutesService)) private routes: RoutesService,
   ) {}
 
   /**
@@ -542,10 +546,10 @@ export class InventoryService {
    * همین یک رویداد دو کار می‌کند: پایانِ بازهٔ تعهد را واقعی می‌کند، و حواله
    * را در صفِ جمع‌آوریِ راننده می‌گذارد.
    */
-  async releaseTransfer(id: number, dto: { note?: string }, user: any) {
+  async releaseTransfer(id: number, dto: { note?: string; pickupAt?: string; leftAt?: string }, user: any) {
     const t = await this.prisma.stockTransfer.findFirst({
       where: { id, ...this.transferScope(user) },
-      select: { id: true, code: true, status: true, releasedAt: true },
+      select: { id: true, code: true, status: true, releasedAt: true, hospitalId: true, toLocation: true },
     });
     if (!t) throw new NotFoundException('حواله یافت نشد');
     if (t.status === 'planned') throw new BadRequestException('این حواله هنوز ارسال نشده است');
@@ -553,13 +557,42 @@ export class InventoryService {
     if (t.releasedAt) throw new BadRequestException('این حواله قبلاً آزاد اعلام شده است');
 
     const now = new Date();
+    const pickupAt = normalizeTime(dto.pickupAt);
+    const leftAt = text(dto.leftAt);
     await this.prisma.stockTransfer.update({
       where: { id },
-      data: { releasedAt: now, releasedById: user?.id ?? null, releaseNote: text(dto.note), windowTo: now },
+      data: {
+        releasedAt: now, releasedById: user?.id ?? null, releaseNote: text(dto.note),
+        windowTo: now, pickupAt, leftAt,
+      },
     });
+
+    /**
+     * ⚠️ اعلامِ پایان خودش **توقفِ جمع‌آوری** می‌سازد.
+     *
+     * قبلاً فقط یک صفِ مشتق بود و مدیر باید از روی آن دستی توقف می‌ساخت —
+     * یعنی حرفِ کارشناس («ساعت ۵ بیا ببر، گذاشتم CSR») تا وقتی کسی آن را
+     * دوباره تایپ نمی‌کرد وجود نداشت. حالا کار ساخته می‌شود و فقط راننده‌اش
+     * تعیین نشده؛ تصمیمِ «چه کسی برود» همچنان با مدیر است.
+     */
+    const already = await this.prisma.transportStop.findFirst({
+      where: { kind: 'pickup', doneAt: null, transfers: { some: { id } } },
+      select: { id: true },
+    });
+    if (!already) {
+      await this.routes.createUnassignedStop({
+        hospitalId: t.hospitalId ?? undefined,
+        locationName: t.hospitalId ? undefined : t.toLocation,
+        kind: 'pickup',
+        plannedAt: pickupAt ?? undefined,
+        notes: [leftAt && `محلِ تحویل: ${leftAt}`, text(dto.note)].filter(Boolean).join(' · ') || undefined,
+        transferIds: [id],
+      }, user);
+    }
+
     await this.audit.record({
       actorId: user?.id, action: 'stock.transfer.release', entityType: 'stock_transfer', entityId: id,
-      after: { releasedAt: now, note: text(dto.note) },
+      after: { releasedAt: now, note: text(dto.note), pickupAt, leftAt },
     });
     return this.transfer(id, user);
   }
@@ -812,7 +845,9 @@ export class InventoryService {
       hospital: t.hospital, visitId: t.visitId,
       status: t.status, statusLabel: TRANSFER_LABELS[t.status] ?? t.status,
       plannedFor: t.plannedFor, windowFrom: t.windowFrom, windowTo: t.windowTo,
-      releasedAt: t.releasedAt, releaseNote: t.releaseNote,
+      // ساعت و محلی که کارشناس هنگامِ اعلامِ پایان گفت — همان که توقفِ
+      // جمع‌آوری از رویش ساخته شد؛ بی این دو کارت فقط «تمام شد» می‌گوید.
+      releasedAt: t.releasedAt, releaseNote: t.releaseNote, pickupAt: t.pickupAt, leftAt: t.leftAt,
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
       lines,
       totals: {

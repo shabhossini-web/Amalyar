@@ -138,6 +138,13 @@
 
 .tk-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
 .tk-rel { display: grid; gap: 8px; }
+/* میان‌بُرهای محلِ تحویل — تایپ همچنان آزاد است، این‌ها فقط لمسی‌اند. */
+.tk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tk-chip {
+  font: inherit; font-size: 11.5px; cursor: pointer; padding: 6px 11px; border-radius: 99px;
+  color: var(--text2); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .13);
+}
+.tk-chip.on { color: #fff; background: rgba(var(--brand-2-rgb), .3); border-color: rgba(var(--brand-2-rgb), .6); }
 .tk-save {
   padding: 11px; color: #fff; border: 0;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));

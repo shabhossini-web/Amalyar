@@ -5,7 +5,7 @@ import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
-import { ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
+import { Alert, ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -44,6 +44,7 @@ export default function Dispatch() {
   const [runs, setRuns] = useState([]);
   const [loose, setLoose] = useState([]);   // حواله‌های بی‌مسیرِ همان روز
   const [pickup, setPickup] = useState([]); // آنچه کارشناس «تمام شد» اعلام کرده
+  const [orphan, setOrphan] = useState([]); // توقفِ جمع‌آوریِ ساخته‌شده ولی بی‌راننده
   const [newRun, setNewRun] = useState(''); // نیروی انتخاب‌شده برای مسیرِ تازه
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
@@ -106,14 +107,17 @@ export default function Dispatch() {
   const loadRoutes = useCallback(async () => {
     if (!onIso) return;
     try {
-      const [d, u, q] = await Promise.all([
+      const [d, u, q, o] = await Promise.all([
         api(`/routes/day?on=${onIso}`),
         api(`/routes/unassigned?on=${onIso}`),
         api('/routes/pickup-queue'),
+        // توقفی که خودِ اعلامِ پایانِ کارشناس ساخته و هنوز راننده ندارد.
+        api('/routes/stops/unassigned'),
       ]);
       setRuns(d.runs);
       setLoose(u);
       setPickup(q);
+      setOrphan(o);
     } catch (e) { setErr(e.message); }
   }, [onIso]);
   useEffect(() => { if (tab === 'transport') loadRoutes(); }, [tab, loadRoutes]);
@@ -146,8 +150,12 @@ export default function Dispatch() {
       setNewRun('');
     }, 'مسیر ساخته شد ✓');
 
-  const addStop = (runId, hospitalId, locationName, kind, transferIds) =>
-    guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body: { hospitalId, locationName, kind, transferIds } }), 'توقف اضافه شد ✓');
+  const addStop = (runId, body) =>
+    guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body }), 'توقف اضافه شد ✓');
+
+  /** توقفِ بی‌راننده را به مسیرِ یک نیرو می‌سپارد. */
+  const assignStop = (stopId, runId) =>
+    guard(() => api(`/routes/stops/${stopId}/assign`, { method: 'POST', body: { runId: Number(runId) } }), 'به مسیر سپرده شد ✓');
 
   const patchStop = (id, body) => guard(() => api(`/routes/stops/${id}`, { method: 'PATCH', body }));
   /* ⚠️ ساعتِ توقف هم باید از همان دروازهٔ اعتبارسنجی رد شود؛ پیش از این متنِ
@@ -294,6 +302,54 @@ export default function Dispatch() {
 
         {tab === 'transport' && (
           <div className="dp-routes">
+            {/* ⚠️ «عملِ بی‌بار» بالاتر از همه‌چیز است، چون تنها خطای این صفحه
+                است که **روزِ عمل** معلوم می‌شود: بیمارستانی که دستگاه یا ست
+                نرسیده، عمل ندارد. `noCargo` یعنی هیچ حواله‌ای به نامِ این عمل
+                نیست؛ `missingNeeds` یعنی حواله هست ولی الگوی نوعِ عمل کسری
+                دارد (مثلاً نورومانیتورینگ بدونِ دستگاه). */}
+            {visits.some((v) => v.noCargo || v.missingNeeds?.length) && (
+              <div className="dp-nocargo">
+                <b><Alert size={14} /> عمل‌های بی‌بار</b>
+                {visits.filter((v) => v.noCargo || v.missingNeeds?.length).map((v) => (
+                  <span key={v.id} className="dp-chip bad">
+                    <em dir="ltr">{v.code}</em>
+                    {v.hospital?.name || '—'}
+                    {v.opStartTime ? ` · ${v.opStartTime}` : ''}
+                    {' · '}
+                    {v.noCargo
+                      ? 'هیچ حواله‌ای ندارد'
+                      : `کسری: ${v.missingNeeds.map((n) => n.name).join('، ')}`}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* توقفی که خودِ اعلامِ پایانِ کارشناس ساخته و هنوز راننده ندارد —
+                کارشناس گفته «ساعت ۱۷ بیایید CSR»، حالا باید کسی برود. */}
+            {orphan.length > 0 && (
+              <div className="dp-loose orphan has">
+                <b>جمع‌آوریِ بی‌راننده <i>{faNum(orphan.length)}</i></b>
+                {orphan.map((s) => (
+                  <div key={s.id} className="dp-orphan">
+                    <span className="dp-chip courier">
+                      {s.plannedAt && <em dir="ltr">{s.plannedAt}</em>}
+                      {s.hospitalName || s.locationName || '—'}
+                      {s.transfers?.length ? ` · ${s.transfers.map((t) => t.code).join('، ')}` : ''}
+                      {s.notes ? ` · ${s.notes}` : ''}
+                    </span>
+                    <select
+                      defaultValue=""
+                      disabled={busy || runs.length === 0}
+                      onChange={(e) => e.target.value && assignStop(s.id, e.target.value)}
+                    >
+                      <option value="">— بسپار به مسیرِ —</option>
+                      {runs.map((r) => <option key={r.id} value={r.id}>{r.staff.name}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* حواله‌های بی‌مسیر = کارِ باقی‌ماندهٔ چینش. بالای صفحه است چون
                 همان چیزی است که چینش‌کننده دنبالش آمده. */}
             <div className={`dp-loose${loose.length ? ' has' : ''}`}>
@@ -441,7 +497,8 @@ export default function Dispatch() {
                   hospitals={hospitals}
                   loose={loose}
                   busy={busy}
-                  onAdd={(hid, name, kind, ids) => addStop(run.id, hid, name, kind, ids)}
+                  onAdd={(body) => addStop(run.id, body)}
+                  onErr={setToast}
                 />
               </article>
             ))}
@@ -500,16 +557,29 @@ export default function Dispatch() {
  * مقصد یا بیمارستانِ تعریف‌شده است یا نامِ آزاد (انبار، دفتر) — هر دو لازم‌اند:
  * «برگشت به انبار» توقفِ واقعیِ آخرِ روز است و بیمارستان نیست.
  */
-function AddStop({ run, hospitals, loose, busy, onAdd }) {
+function AddStop({ run, hospitals, loose, busy, onAdd, onErr }) {
   const [hid, setHid] = useState('');
   const [name, setName] = useState('');
   const [kind, setKind] = useState('deliver');
   const [pick, setPick] = useState([]);
+  const [at, setAt] = useState('');
+  const [who, setWho] = useState('');
 
   const submit = () => {
     if (!hid && !name.trim()) return;
-    onAdd(hid ? Number(hid) : undefined, name.trim() || undefined, kind, pick);
-    setHid(''); setName(''); setPick([]);
+    // ⚠️ ساعت همین‌جا نرمال و سنجیده می‌شود، وگرنه «۸:۵» خام به سرور می‌رود و
+    //    کاربر فقط یک خطای خامِ اعتبارسنجی می‌بیند.
+    const plannedAt = normTime(at);
+    if (plannedAt && !timeOk(plannedAt)) { onErr('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
+    onAdd({
+      hospitalId: hid ? Number(hid) : undefined,
+      locationName: name.trim() || undefined,
+      kind,
+      transferIds: pick,
+      plannedAt: plannedAt || undefined,
+      handedTo: who.trim() || undefined,
+    });
+    setHid(''); setName(''); setPick([]); setAt(''); setWho('');
   };
 
   return (
@@ -538,6 +608,20 @@ function AddStop({ run, hospitals, loose, busy, onAdd }) {
           <option value="pickup">جمع‌آوری</option>
         </select>
       </label>
+      {/* «چه ساعتی» و «به چه کسی» از همان لحظهٔ چینش تعیین می‌شوند — نه بعداً
+          با یک PATCH. راننده‌ای که فقط مقصد را دارد نمی‌داند کِی برود و
+          به‌دستِ چه کسی بدهد، و همان جاست که بار پشتِ درِ بستهٔ CSR می‌ماند. */}
+      <TimePick className="dp-timebox" label="ساعت" value={at} disabled={busy} onChange={setAt} />
+      <label>
+        <span>تحویل به</span>
+        <input
+          type="text"
+          value={who}
+          placeholder="کارشناسِ حاضر / CSR"
+          disabled={busy}
+          onChange={(e) => setWho(e.target.value)}
+        />
+      </label>
       {loose.length > 0 && (
         <label>
           <span>بار</span>
@@ -548,7 +632,12 @@ function AddStop({ run, hospitals, loose, busy, onAdd }) {
             disabled={busy}
             onChange={(e) => setPick([...e.target.selectedOptions].map((o) => Number(o.value)))}
           >
-            {loose.map((t) => <option key={t.id} value={t.id}>{t.code} — {t.hospitalName}</option>)}
+            {loose.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.code} — {t.hospitalName}
+                {t.lines?.length ? ` · ${t.lines.map((l) => l.itemName).join('، ')}` : ''}
+              </option>
+            ))}
           </select>
         </label>
       )}

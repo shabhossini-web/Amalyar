@@ -170,6 +170,27 @@
 }
 .dp-none.ok { color: #86efac; }
 
+/* ── عملِ بی‌بار ──
+   عمداً قرمز و بالای صفحه: تنها خطای این تخته که روزِ عمل معلوم می‌شود.
+   زردِ «بارِ بی‌مسیر» یعنی کارِ نکردهٔ چینش؛ این یعنی عمل نمی‌شود. */
+.dp-nocargo {
+  padding: 12px 14px; border-radius: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: rgba(248, 113, 113, .09); border: 1px solid rgba(248, 113, 113, .38);
+}
+.dp-nocargo > b {
+  font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; color: #fca5a5;
+}
+.dp-chip.bad { color: #fca5a5; border-color: rgba(248, 113, 113, .38); background: rgba(248, 113, 113, .1); }
+
+/* ── جمع‌آوریِ بی‌راننده ── */
+.dp-loose.orphan { width: 100%; }
+.dp-orphan { display: inline-flex; align-items: center; gap: 6px; }
+.dp-orphan select {
+  font: inherit; font-size: 11px; padding: 5px 8px; border-radius: 9px;
+  color: #f4f1ff; background: rgba(255, 255, 255, .06); border: 1px solid rgba(var(--brand-soft-rgb), .28);
+}
+.dp-orphan select option { background: #14103a; }
+
 .dp-newrun { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .dp-newrun label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: rgba(255, 255, 255, .55); }
 .dp-newrun select, .dp-attach, .dp-addstop select, .dp-addstop input {

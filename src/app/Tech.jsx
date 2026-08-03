@@ -16,6 +16,9 @@ const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
    می‌برد، تا آنچه کارشناس ثبت می‌کند و آنچه بعداً روی کارت می‌بیند یکی باشد. */
 const time = (t) => (t ? faTime(t) : '—');
 
+/* محل‌های پرتکرارِ تحویل — تایپ آزاد است، این‌ها فقط میان‌بُرند. */
+const PLACES = ['CSR', 'اتاقِ عمل', 'انبارِ بیمارستان', 'داروخانه', 'نگهبانی'];
+
 const SCOPES = [
   { key: 'today', label: 'امروز', icon: Arrive },
   { key: 'upcoming', label: 'پیشِ رو', icon: Clock },
@@ -193,6 +196,8 @@ function UsageSheet({ transferId, onClose, onToast }) {
   const [t, setT] = useState(null);
   const [used, setUsed] = useState({});
   const [note, setNote] = useState('');
+  const [pickupAt, setPickupAt] = useState('');
+  const [leftAt, setLeftAt] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -258,12 +263,43 @@ function UsageSheet({ transferId, onClose, onToast }) {
               دفتر خودش نمی‌داند عمل کِی واقعاً تمام شد. */}
           {t.status !== 'planned' && t.status !== 'closed' && (
             t.releasedAt ? (
-              <p className="tk-note ok">پایان اعلام شد — {faDate(t.releasedAt)} · آمادهٔ جمع‌آوری</p>
+              <p className="tk-note ok">
+                پایان اعلام شد — {faDate(t.releasedAt)}
+                {t.pickupAt ? ` · ساعتِ ${faTime(t.pickupAt)}` : ''}
+                {t.leftAt ? ` · ${t.leftAt}` : ''} · آمادهٔ جمع‌آوری
+              </p>
             ) : (
               <div className="tk-rel">
+                {/* ⚠️ «تمام شد» به‌تنهایی برای تیمِ حمل‌ونقل تکلیف نمی‌سازد: راننده
+                    باید بداند **کِی** برود و **از کجا** بردارد. همین دو فیلد
+                    توقفِ جمع‌آوری را در تختهٔ چینش می‌سازد. */}
+                <TimePick
+                  className="tk-field"
+                  label="کِی بیایند ببرند؟"
+                  value={pickupAt}
+                  onChange={setPickupAt}
+                />
+                <label className="tk-field">
+                  <span>کجا گذاشتید؟</span>
+                  <input value={leftAt} onChange={(e) => setLeftAt(e.target.value)} placeholder="مثلاً CSR" />
+                </label>
+                <div className="tk-chips">
+                  {PLACES.map((p) => (
+                    <button key={p} type="button" className={`tk-chip${leftAt === p ? ' on' : ''}`}
+                            onClick={() => setLeftAt(p)}>{p}</button>
+                  ))}
+                </div>
                 <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="یادداشت (اختیاری)" />
                 <button type="button" className="tk-save" disabled={busy}
-                        onClick={() => act(`/stock/transfers/${transferId}/release`, { note: note.trim() }, 'پایانِ عمل اعلام شد ✓')}>
+                        onClick={() => {
+                          const at = normTime(pickupAt);
+                          if (badTime(at)) { onToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
+                          act(
+                            `/stock/transfers/${transferId}/release`,
+                            { note: note.trim(), pickupAt: at, leftAt: leftAt.trim() },
+                            'پایانِ عمل اعلام شد ✓',
+                          );
+                        }}>
                   اعلامِ پایانِ عمل
                 </button>
               </div>
