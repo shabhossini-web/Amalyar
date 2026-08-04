@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, toEnDigits } from '../lib/jalali.js';
 import './tech.css';
@@ -137,20 +137,27 @@ export default function Tech() {
         ))}
       </div>
 
-      {usageFor && (
-        <UsageSheet
-          transferId={usageFor.transfer.id}
-          onClose={() => setUsageFor(null)}
-          onToast={(m) => { setToast(m); load(scope); }}
-        />
-      )}
-      {timesFor && (
-        <TimesSheet
-          visit={timesFor}
-          onClose={() => setTimesFor(null)}
-          onSaved={(m) => { setTimesFor(null); setToast(m); load(scope); }}
-        />
-      )}
+      {/* ⚠️ `AnimatePresence` باید در **والد** باشد، نه داخلِ خودِ شیت: اگر
+          داخل بنشیند، با unmountِ شیت خودش هم می‌رود و انیمیشنِ خروج هرگز
+          اجرا نمی‌شود — شیت به‌جای بسته‌شدن، می‌پرد. */}
+      <AnimatePresence>
+        {usageFor && (
+          <UsageSheet
+            transferId={usageFor.transfer.id}
+            onClose={() => setUsageFor(null)}
+            onToast={(m) => { setToast(m); load(scope); }}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {timesFor && (
+          <TimesSheet
+            visit={timesFor}
+            onClose={() => setTimesFor(null)}
+            onSaved={(m) => { setTimesFor(null); setToast(m); load(scope); }}
+          />
+        )}
+      </AnimatePresence>
 
       <div className={`tk-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>

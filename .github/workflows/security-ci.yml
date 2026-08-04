@@ -250,6 +250,7 @@ jobs:
         run: |
           node -e "
           const fs = require('fs');
+          const { execSync } = require('child_process');
           const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
           const lot = schema.split('model StockLot {')[1].split(/\n}/)[0];
           // موجودیِ ذخیره‌شده کنارِ دفتر، دیر یا زود از دفتر جدا می‌افتد.
@@ -259,14 +260,30 @@ jobs:
             }
           }
           const svc = fs.readFileSync('src/patients/inventory.service.ts', 'utf8');
-          if (!/export function balanceOf/.test(svc)) { console.error('balanceOf باید یک فرمولِ مشترک باشد'); process.exit(1); }
+          /* ⚠️ لنگر روی **جای تعریف** نیست، روی «یک تعریف». فرمول بعداً به
+             `stock-math.ts` رفت تا انبار و دارایی بدونِ حلقهٔ وابستگی از یک
+             جا بخوانند — چیدمانِ سفت‌تری بود، ولی نگهبانی که به فایلِ قبلی
+             چسبیده بود قرمز شد و CI را بابتِ یک بهبود قفل کرد. */
+          const math = fs.readFileSync('src/patients/stock-math.ts', 'utf8');
+          if (!/export function balanceOf/.test(math)) { console.error('balanceOf باید یک فرمولِ مشترک باشد'); process.exit(1); }
+          // و هیچ‌کس دوباره تعریفش نکند — بازتعریف یعنی دو حقیقت از «موجودی».
+          const dupes = execSync(\"grep -rln 'function balanceOf' src || true\", { encoding: 'utf8' })
+            .split('\\n').filter((f) => f && f !== 'src/patients/stock-math.ts');
+          if (dupes.length) { console.error('balanceOf دوباره تعریف شده در: ' + dupes.join('، ')); process.exit(1); }
           // دفتر فقط اضافه می‌شود؛ اصلاح با حرکتِ جبرانی است نه با حذف/ویرایش.
           if (/stockMovement\\.(delete|deleteMany|update|updateMany)/.test(svc)) {
             console.error('دفترِ انبار فقط append است — حذف/ویرایشِ حرکت ممنوع'); process.exit(1);
           }
           const move = svc.split('private async move')[1].split(/\n  }/)[0];
-          for (const rule of ['FOR UPDATE', 'expires_at', 'next < 0', 'serial_no']) {
+          /* ⚠️ لنگر روی **قاعده** است نه املای متغیر: بندِ «موجودی منفی نشود»
+             زمانی `next < 0` نوشته شده بود و بعد به `total < 0` تغییر نام داد.
+             نگهبانی که به اسمِ متغیر بچسبد، با هر بازآراییِ بی‌ضرر قرمز
+             می‌شود و اعتبارِ خودش را خرج می‌کند. */
+          for (const rule of ['FOR UPDATE', 'expires_at', 'serial_no']) {
             if (!move.includes(rule)) { console.error('قاعدهٔ انبار در move غایب است: ' + rule); process.exit(1); }
+          }
+          if (!/\w+ < 0\) (throw|\{)/.test(move)) {
+            console.error('move باید جلوی منفی‌شدنِ موجودی را بگیرد'); process.exit(1);
           }
           const bill = fs.readFileSync('src/patients/billing.service.ts', 'utf8');
           // برگشت باید با حرکتِ جبرانی باشد، نه با حذفِ حرکتِ مصرف.
@@ -425,7 +442,9 @@ jobs:
           if (!/model StockTransfer/.test(schema)) { console.error('سندِ حواله لازم است'); process.exit(1); }
           const svc = fs.readFileSync('src/patients/inventory.service.ts', 'utf8');
           // محلِ فعلی مثلِ موجودی مشتق است، نه ستونِ ذخیره‌شده.
-          if (!/export function balanceByLocation/.test(svc)) {
+          // ⚠️ همان درسِ balanceOf: لنگر روی «یک تعریف» است، نه روی فایلی که
+          //    آن روز تعریف در آن بود.
+          if (!/export function balanceByLocation/.test(fs.readFileSync('src/patients/stock-math.ts', 'utf8'))) {
             console.error('موجودیِ هر محل باید از یک فرمولِ مشترک بیاید'); process.exit(1);
           }
           const tr = schema.split('model StockTransfer {')[1].split(/\n}/)[0];
@@ -440,7 +459,10 @@ jobs:
           // ⚠️ «مصرف» نباید از تفریقِ ارسال و مانده بیاید: پس از برگشتِ مانده،
           // آن تفریق کلِ ارسال را مصرف می‌شمارد.
           const detail = svc.split('async transfer(')[1].split(/\n  async /)[0];
-          if (!/transferId: t.id, kind: 'out'/.test(detail)) {
+          // ⚠️ همان درسِ بالا: شرطِ kind بعداً `{ in: ['out', 'return'] }` شد تا
+          //    برگشت هم دیده شود. آنچه باید بماند **گره‌خوردن به همان حواله**
+          //    است، نه شکلِ نوشتنِ kind.
+          if (!/transferId: t\.id/.test(detail)) {
             console.error('مصرفِ حواله باید از حرکت‌های گره‌خورده به همان حواله بیاید'); process.exit(1);
           }
           // تعدادِ برگشتی از دفتر می‌آید نه از کاربر.
@@ -450,8 +472,12 @@ jobs:
           if (!/lot.available/.test(ui)) { console.error('UI باید «در دسترس» را از «کل» جدا نشان دهد'); process.exit(1); }
 
           // برگهٔ مصرف: کارِ کارشناسِ سرِ عمل، با مجوز و ماژولِ سبک‌ترِ خودش.
-          const perms = fs.readFileSync('src/auth/permission.guard.ts', 'utf8');
-          if (!/'stock.consume': LEVEL.TECH/.test(perms)) {
+          /* ⚠️ باز هم همان درس: فهرستِ مجوزها از `permission.guard.ts` به
+             `access-registry.ts` رفت تا هر کلید **برچسبِ فارسی** بگیرد و
+             مدیر بتواند ببیند و عوضش کند — تغییری در جهتِ بهتر. نگهبانِ
+             چسبیده به فایلِ قدیمی همان بهبود را خطا گرفت. */
+          const perms = fs.readFileSync('src/auth/access-registry.ts', 'utf8');
+          if (!/key: 'stock\.consume'[\s\S]{0,400}defaultLevel: LEVEL\.TECH/.test(perms)) {
             console.error('ثبتِ مصرف باید مجوزِ جدا در سطحِ کارشناس داشته باشد، نه inventory.write'); process.exit(1);
           }
           const ctrl = fs.readFileSync('src/patients/inventory.controller.ts', 'utf8');

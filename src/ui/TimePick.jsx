@@ -230,7 +230,8 @@ function Wheel({ label, items, value, onChange }) {
   }, []);
 
   const onScroll = () => {
-    schedulePaint(); // ⚠️ بیرون از نگهبان: اسکرولِ برنامه‌ای هم باید رنگ بخورد
+    // ⚠️ بیرون از نگهبان: اسکرولِ برنامه‌ای هم باید رنگ بخورد
+    schedulePaint();
     if (programmatic.current) return;
     clearTimeout(settle.current);
     settle.current = setTimeout(() => {

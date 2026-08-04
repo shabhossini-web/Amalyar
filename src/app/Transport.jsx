@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import './transport.css';
@@ -166,14 +166,19 @@ export default function Transport() {
         ))}
       </div>
 
-      {doneFor && (
-        <DoneSheet
-          stop={doneFor}
-          onClose={() => setDoneFor(null)}
-          onSaved={(m) => { setDoneFor(null); setToast(m); load(scope); }}
-          onError={setErr}
-        />
-      )}
+      {/* ⚠️ `AnimatePresence` باید در **والد** باشد، نه داخلِ خودِ شیت: اگر
+          داخل بنشیند، با unmountِ شیت خودش هم می‌رود و انیمیشنِ خروج هرگز
+          اجرا نمی‌شود — شیت به‌جای بسته‌شدن، می‌پرد. */}
+      <AnimatePresence>
+        {doneFor && (
+          <DoneSheet
+            stop={doneFor}
+            onClose={() => setDoneFor(null)}
+            onSaved={(m) => { setDoneFor(null); setToast(m); load(scope); }}
+            onError={setErr}
+          />
+        )}
+      </AnimatePresence>
 
       <div className={`tr-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>
