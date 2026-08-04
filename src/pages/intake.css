@@ -111,3 +111,25 @@
 }
 .ik-code button:disabled { opacity: .45; cursor: not-allowed; }
 .ik-off { font-style: normal; font-size: 11.5px; color: #6ee7b7; }
+
+/* ── شمارهٔ حسابِ واریز ── */
+.ik-pay-to {
+  display: grid; gap: 8px; padding: 11px 12px; border-radius: 13px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .11);
+}
+.ik-pay-to > b { font-size: 12.5px; }
+.ik-acc { display: grid; gap: 6px; }
+.ik-acc-who { font-size: 12px; color: var(--text2); }
+.ik-copy {
+  display: flex; align-items: center; gap: 9px; width: 100%; cursor: pointer;
+  font: inherit; text-align: start; padding: 9px 11px; border-radius: 11px;
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .14);
+}
+.ik-copy span { font-size: 11px; color: var(--text3); flex: 0 0 auto; }
+.ik-copy b { flex: 1; font-size: 14.5px; font-weight: 800; letter-spacing: .5px; color: var(--text1); }
+.ik-copy i {
+  flex: 0 0 auto; font-style: normal; font-size: 11px; padding: 3px 9px; border-radius: 8px;
+  color: var(--text2); background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .13);
+}
+.ik-copy.ok { border-color: rgba(52, 211, 153, .45); }
+.ik-copy.ok i { color: #6ee7b7; background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .35); }

@@ -1164,6 +1164,15 @@ model BankAccount {
   /// اگر حسابِ شخصیِ یک شریک است — مبنای «چه کسی پول را گرفت».
   partner    Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   partnerId  Int?     @map("partner_id")
+
+  /// روی فرمِ عمومیِ ثبت‌نام به بیمار نشان داده شود؟
+  ///
+  /// ⚠️ **پیش‌فرض خاموش و opt-inِ صریح.** این تنها جایی است که شمارهٔ حساب
+  /// عمداً از یک نشانیِ بی‌احراز خوانده می‌شود؛ اگر پیش‌فرض روشن بود، اولین
+  /// حسابِ شخصیِ یک شریک هم روی اینترنت می‌رفت. بدونِ هیچ حسابِ علامت‌خورده،
+  /// فرمِ بیمار شمارهٔ حساب ندارد — که دقیقاً باگِ امروز بود، ولی راهِ حلش
+  /// «همه را نشان بده» نیست.
+  showOnIntake Boolean @default(false) @map("show_on_intake")
   active     Boolean  @default(true)
   notes      String?
   createdAt  DateTime @default(now()) @map("created_at")

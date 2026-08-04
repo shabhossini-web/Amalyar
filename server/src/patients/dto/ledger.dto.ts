@@ -1,9 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 
 export class BankAccountDto {
   @IsString() @MinLength(2, { message: 'نامِ صاحبِ حساب کوتاه است' }) @MaxLength(80)
   ownerName!: string;
+
+  /// روی فرمِ عمومیِ ثبت‌نام دیده شود؟
+  /// ⚠️ باید در DTO باشد وگرنه ValidationPipe با whitelist بی‌صدا دورش می‌ریزد.
+  @IsOptional() @IsBoolean() showOnIntake?: boolean;
 
   @IsOptional() @IsString() @MaxLength(60) bankName?: string;
   @IsOptional() @IsString() @MaxLength(24) cardNumber?: string;

@@ -75,11 +75,30 @@ export class LedgerService {
         ownerName,
         bankName: text(dto.bankName), cardNumber: text(dto.cardNumber), iban: text(dto.iban),
         partnerId: dto.partnerId ? Number(dto.partnerId) : null,
+        showOnIntake: !!dto.showOnIntake,
         notes: text(dto.notes),
       },
     });
     await this.audit.record({ actorId: user?.id, action: 'bank.create', entityType: 'bank_account', entityId: row.id, after: row });
     return row;
+  }
+
+  /**
+   * تغییرِ «روی فرمِ ثبت‌نام نشان داده شود».
+   *
+   * ⚠️ جدا از ساخت و **در `audit`**: این کلید یک شمارهٔ حساب را روی نشانیِ
+   * عمومی می‌برد؛ تغییری که رد نگذارد یعنی فردا کسی نداند چه کسی و کِی
+   * حسابِ شخصی را عمومی کرد.
+   */
+  async setAccountPublic(id: number, showOnIntake: boolean, user: any) {
+    const row = await this.prisma.bankAccount.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('حساب یافت نشد');
+    const next = await this.prisma.bankAccount.update({ where: { id }, data: { showOnIntake } });
+    await this.audit.record({
+      actorId: user?.id, action: 'bank.public', entityType: 'bank_account', entityId: id,
+      before: { showOnIntake: row.showOnIntake }, after: { showOnIntake },
+    });
+    return next;
   }
 
   async disableAccount(id: number, user: any) {

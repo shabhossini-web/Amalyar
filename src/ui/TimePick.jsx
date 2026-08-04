@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AnimatePresence, useReducedMotion } from 'framer-motion';
-import { badTime, faTime, minToTime, normTime, timeSlots } from '../lib/time.js';
+import { AnimatePresence } from 'framer-motion';
+import { badTime, faTime, minToTime, normTime } from '../lib/time.js';
 import { toEnDigits } from '../lib/jalali.js';
 import './timepick.css';
 import { Clock, Close } from './icons.jsx';
@@ -20,7 +20,12 @@ import Overlay from './Overlay.jsx';
  * گوشی داخلِ اتاقِ عمل ترجیح می‌دهد بزند. هر دو راه باز است و هر دو روی یک
  * مقدار کار می‌کنند.
  *
- * ⚠️ فهرست با portal روی <body> و **وسطِ صفحه** باز می‌شود، نه چسبیده به
+ * ⚠️ انتخابگر یک **ساعتِ دیجیتالِ دوستونه** است: ساعت و دقیقه جدا، هرکدام
+ * با چرخِ اسکرول یا کلیک. نسخهٔ اول ۹۶ دکمهٔ پشتِ‌هم بود که مالکِ محصول
+ * درست گفت «خشک و زشت» — گشتن در فهرستِ تخت کارِ چشم را زیاد می‌کند، در
+ * حالی که آدم ساعت را به‌شکلِ «عدد بالا/پایین» تصور می‌کند.
+ *
+ * ⚠️ با portal روی <body> و **وسطِ صفحه** باز می‌شود، نه چسبیده به
  * فیلد — دقیقاً به همان دلیلِ تقویمِ شمسی (`JDate`): نیمی از این فیلدها داخلِ
  * شیتِ اسکرول‌شونده‌اند و پاپ‌آپِ چسبیده یا زیرِ لبه گم می‌شد یا با اسکرول از
  * فیلدش جدا می‌افتاد.
@@ -77,7 +82,7 @@ export default function TimePick({
       {bad && <em className="tp-err">ساعت باید به شکلِ ۰۸:۳۰ باشد</em>}
       <AnimatePresence>
         {open && (
-          <SlotList
+          <ClockPick
             value={normTime(v)}
             step={step}
             title={label}
@@ -91,43 +96,41 @@ export default function TimePick({
 }
 
 /**
- * فهرستِ ساعت‌ها — هر ساعتِ روز یک ردیف، گام‌ها در همان ردیف.
+ * ساعتِ دیجیتالِ دوستونه — ساعت و دقیقه جدا.
  *
- * ⚠️ چیدمانِ «۹۶ دکمه پشتِ هم» روی موبایل غیرقابل‌استفاده بود: کاربر باید تا
- * وسطِ فهرست اسکرول می‌کرد تا بفهمد کجاست. با ردیف‌بندیِ ساعتی، عنوانِ ساعت
- * لنگر است و چشم مستقیم می‌رود سرِ ۰۸.
+ * ⚠️ **چرخش با اسکرولِ خودِ مرورگر است، نه شبیه‌سازیِ دستیِ درگ.** با
+ * `scroll-snap` هم چرخِ ماوس کار می‌کند، هم کشیدنِ انگشت با شتابِ طبیعیِ
+ * موبایل، هم `PageUp/Down` و کیبورد. هر پیاده‌سازیِ دستی یکی از این سه را
+ * از دست می‌داد و روی iOS مثلِ سنگ حرکت می‌کرد.
+ *
+ * ⚠️ انتخاب وقتی ثبت می‌شود که اسکرول **بایستد** (debounce)، نه در هر فریم:
+ * وگرنه عبور از روی ۱۷ عدد، هفده بار `onChange` می‌فرستاد.
+ *
+ * ⚠️ فاصله‌گذارِ بالا و پایین (`tp-pad`) تزئینی نیست: بدونِ آن اولین و آخرین
+ * عدد هرگز به وسطِ کادر نمی‌رسند و ۰۰ و ۵۹ عملاً انتخاب‌نشدنی می‌شوند.
  */
-function SlotList({ value, step, title, onPick, onClose }) {
-  const still = useReducedMotion();
-  const listRef = useRef(null);
-  const selRef = useRef(null);
+function ClockPick({ value, step, title, onPick, onClose }) {
+  const parts = /^(\d{2}):(\d{2})$/.exec(value || '');
+  const [h, setH] = useState(parts ? Number(parts[1]) : 8);
+  const [m, setM] = useState(parts ? Number(parts[2]) : 0);
 
-  const rows = useMemo(() => {
-    const byHour = new Map();
-    for (const t of timeSlots(step, value)) {
-      const h = t.slice(0, 2);
-      if (!byHour.has(h)) byHour.set(h, []);
-      byHour.get(h).push(t);
-    }
-    return [...byHour.entries()];
-  }, [step, value]);
-
-  // Esc همیشه ببندد — فهرستِ وسطِ صفحه بدونِ راهِ فرار، حبس است.
   useEffect(() => {
-    const h = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
-    window.addEventListener('keydown', h, true);
-    return () => window.removeEventListener('keydown', h, true);
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  // ⚠️ بدونِ این پرش، فهرست همیشه از ۰۰:۰۰ باز می‌شد و کاربر برای دیدنِ ساعتِ
-  //    فعلیِ خودش باید دستی پایین می‌آمد. مقصد وسطِ کادر می‌نشیند تا ساعتِ
-  //    قبل و بعدش هم دیده شود.
-  useEffect(() => {
-    const el = selRef.current ?? listRef.current?.querySelector('[data-anchor="1"]');
-    el?.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
-  }, [still]);
-
+  const two = (n) => String(n).padStart(2, '0');
   const now = () => { const d = new Date(); return minToTime(d.getHours() * 60 + d.getMinutes()); };
+  /* گامِ دقیقه از `step` می‌آید ولی هرگز درشت‌تر از ۵ نمی‌شود: چرخِ دقیقه با
+     گامِ ۱۵ فقط چهار عدد دارد و دیگر «ساعت» به‌نظر نمی‌رسد. تایپِ آزاد هم
+     همیشه باز است، پس دقتِ دلخواه از دست نمی‌رود. */
+  const mStep = Math.min(5, Math.max(1, step >= 15 ? 5 : step));
+  const minutes = useMemo(
+    () => Array.from({ length: Math.ceil(60 / mStep) }, (_, i) => i * mStep),
+    [mStep],
+  );
+  const hours = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
 
   return createPortal(
     <Overlay
@@ -141,41 +144,137 @@ function SlotList({ value, step, title, onPick, onClose }) {
         <button type="button" className="tp-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
 
-      <div className="tp-list" ref={listRef}>
-        {rows.map(([h, slots]) => (
-          <div className="tp-hour" key={h}>
-            {/* ساعت با ارقامِ فارسی نوشته می‌شود ولی `dir="ltr"` می‌ماند،
-                وگرنه «۰۸» در ستونِ راست‌چین جابه‌جا دیده می‌شود. */}
-            <i className="tp-hlabel" dir="ltr">{faTime(h)}</i>
-            <div className="tp-slots">
-              {slots.map((t) => {
-                const sel = t === value;
-                // ⚠️ لنگرِ پیش‌فرضِ اسکرول وقتی هنوز ساعتی انتخاب نشده: ۰۸:۰۰،
-                //    چون تقریباً همهٔ عمل‌ها صبح شروع می‌شوند.
-                const anchor = !value && t === '08:00';
-                return (
-                  <button
-                    key={t} type="button" dir="ltr"
-                    ref={sel ? selRef : undefined}
-                    data-anchor={anchor ? '1' : undefined}
-                    className={`tp-slot${sel ? ' sel' : ''}`}
-                    aria-pressed={sel}
-                    onClick={() => onPick(t)}
-                  >
-                    {faTime(t)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      {/* نمایشگرِ بزرگ — کاربر پیش از تأیید عددِ نهایی را می‌بیند. */}
+      <div className="tp-read" dir="ltr">
+        <span>{faTime(two(h))}</span><i>:</i><span>{faTime(two(m))}</span>
+      </div>
+
+      <div className="tp-wheels">
+        <Wheel label="ساعت" items={hours} value={h} onChange={setH} />
+        <Wheel label="دقیقه" items={minutes} value={m} onChange={setM} />
       </div>
 
       <footer className="tp-foot">
         <button type="button" className="tp-ghost" onClick={() => onPick('')}>پاک‌کردن</button>
-        <button type="button" className="tp-now" onClick={() => onPick(now())}>اکنون</button>
+        <button type="button" className="tp-ghost" onClick={() => onPick(now())}>اکنون</button>
+        <button type="button" className="tp-ok" onClick={() => onPick(`${two(h)}:${two(m)}`)}>تأیید</button>
       </footer>
     </Overlay>,
     document.body,
+  );
+}
+
+/**
+ * یک ستونِ چرخشی.
+ *
+ * ⚠️ **انحنای استوانه‌ای از موقعیتِ اسکرولِ بومی می‌آید، نه از حلقهٔ درگِ
+ * دست‌ساز.** نمونه‌های آمادهٔ «چرخِ گزینه» ظاهرِ درستی دارند ولی برای رسیدن
+ * به آن، اسکرولِ مرورگر را با `touch-action: none` خاموش و با رویدادِ
+ * pointer بازسازی می‌کنند — و همان‌جا شتابِ لمسِ موبایل، چرخِ ماوس،
+ * کیبورد و اسکرول‌بارِ سافاری از دست می‌رود. این‌جا اسکرول بومی می‌ماند و
+ * فقط **رنگ‌آمیزیِ سه‌بعدی** روی آن سوار می‌شود: هر عدد بر پایهٔ فاصله‌اش
+ * از مرکز می‌چرخد، کوچک و کم‌رنگ و مات می‌شود.
+ */
+function Wheel({ label, items, value, onChange }) {
+  const ref = useRef(null);
+  const settle = useRef(null);
+  const frame = useRef(0);
+  /* ⚠️ نگهبانِ ضدِ حلقه: وقتی خودمان اسکرول می‌کنیم، رویدادِ scroll نباید
+     دوباره مقدار را عوض کند — وگرنه چرخ روی عددِ همسایه می‌لرزد. */
+  const programmatic = useRef(false);
+
+  /* هندسهٔ استوانه: `d` فاصلهٔ هر عدد از مرکز برحسبِ «ردیف» است. چرخش خطی،
+     ولی کوچک‌شدن و محوشدن **درجه‌دو** — لبه‌ها سریع‌تر عقب می‌نشینند و حس
+     گردیِ درام می‌دهند، همان‌طور که در چرخِ واقعی نور از لبه کم می‌شود. */
+  const paint = () => {
+    const el = ref.current;
+    if (!el) return;
+    const mid = el.clientHeight / 2;
+    for (let i = 0; i < items.length; i += 1) {
+      const it = el.children[i + 1]; // +۱ برای فاصله‌گذارِ بالا
+      if (!it) continue;
+      const d = (it.offsetTop - el.scrollTop + it.clientHeight / 2 - mid) / it.clientHeight;
+      const a = Math.min(Math.abs(d), 3.2);
+      it.style.setProperty('--d', d.toFixed(3));
+      it.style.setProperty('--s', (1 - 0.06 * a * a).toFixed(3));
+      /* ⚠️ کفِ ۰٫۴۵ و ضریبِ ملایم: نسخهٔ اول لبه‌ها را تا ۰٫۱۲ می‌برد و
+         ردیفِ دومِ بالا و پایین عملاً ناپیدا می‌شد — کاربر دیگر نمی‌دید به
+         کدام سمت باید بچرخد. چرخ باید گرد به‌نظر برسد، نه نصفه‌کور. */
+      it.style.setProperty('--f', Math.max(0.45, 1 - 0.16 * a * a).toFixed(3));
+      it.style.setProperty('--b', `${(a > 1.6 ? (a - 1.6) * 0.5 : 0).toFixed(2)}px`);
+    }
+  };
+  // ⚠️ در هر فریم یک‌بار، نه در هر رویدادِ scroll: اسکرولِ لمسی ده‌ها رویداد
+  //    در یک فریم می‌فرستد و بدونِ این، هر کدام یک layout کامل می‌گیرد.
+  const schedulePaint = () => {
+    if (frame.current) return;
+    frame.current = requestAnimationFrame(() => { frame.current = 0; paint(); });
+  };
+
+  const centerOn = (idx, smooth) => {
+    const el = ref.current;
+    const item = el?.children[idx + 1]; // +۱ برای فاصله‌گذارِ بالا
+    if (!el || !item) return;
+    programmatic.current = true;
+    el.scrollTo({ top: item.offsetTop - el.clientHeight / 2 + item.clientHeight / 2, behavior: smooth ? 'smooth' : 'auto' });
+    clearTimeout(settle.current);
+    settle.current = setTimeout(() => { programmatic.current = false; }, smooth ? 420 : 60);
+  };
+
+  // بازکردنِ پنل → مقدارِ فعلی وسطِ کادر
+  useEffect(() => {
+    centerOn(items.indexOf(value), false);
+    paint();
+    return () => cancelAnimationFrame(frame.current);
+    /* eslint-disable-next-line */
+  }, []);
+
+  const onScroll = () => {
+    schedulePaint(); // ⚠️ بیرون از نگهبان: اسکرولِ برنامه‌ای هم باید رنگ بخورد
+    if (programmatic.current) return;
+    clearTimeout(settle.current);
+    settle.current = setTimeout(() => {
+      const el = ref.current;
+      if (!el) return;
+      const mid = el.scrollTop + el.clientHeight / 2;
+      let best = 0; let bestD = Infinity;
+      for (let i = 0; i < items.length; i += 1) {
+        const it = el.children[i + 1];
+        if (!it) continue;
+        const d = Math.abs(it.offsetTop + it.clientHeight / 2 - mid);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      if (items[best] !== value) onChange(items[best]);
+    }, 110);
+  };
+
+  return (
+    <div className="tp-wheel">
+      <span className="tp-wlabel">{label}</span>
+      {/* ⚠️ نوارِ وسط **داخلِ کادرِ خودِ ستون** است، نه هم‌ترازِ کلِ چرخ.
+          نسخهٔ اول نوار را کنارِ برچسب می‌گذاشت و با یک `margin`ِ دستی
+          بلندیِ برچسب را جبران می‌کرد؛ نتیجه این شد که نوار یک ردیف
+          پایین‌ترِ عددِ انتخاب‌شده می‌افتاد و کاربر عددی می‌دید که با
+          هایلایت نمی‌خواند. حالا مرکزِ نوار همان مرکزِ ستون است. */}
+      <div className="tp-view">
+        <div className="tp-band" aria-hidden="true" />
+        <div
+          className="tp-col" ref={ref} onScroll={onScroll} dir="ltr"
+          role="listbox" aria-label={label} tabIndex={0}
+        >
+          <div className="tp-pad" />
+          {items.map((n, i) => (
+            <button
+              key={n} type="button" role="option" aria-selected={n === value}
+              className={`tp-num${n === value ? ' on' : ''}`}
+              onClick={() => { onChange(n); centerOn(i, true); }}
+            >
+              {faTime(String(n).padStart(2, '0'))}
+            </button>
+          ))}
+          <div className="tp-pad" />
+        </div>
+      </div>
+    </div>
   );
 }

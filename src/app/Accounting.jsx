@@ -361,7 +361,7 @@ function Expenses({ onToast }) {
 function Banks({ onToast }) {
   const [rows, setRows] = useState([]);
   const [partners, setPartners] = useState([]);
-  const [f, setF] = useState({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '' });
+  const [f, setF] = useState({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '', showOnIntake: false });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -382,9 +382,10 @@ function Banks({ onToast }) {
           ownerName: f.ownerName.trim(), bankName: f.bankName.trim() || undefined,
           cardNumber: f.cardNumber.trim() || undefined, iban: f.iban.trim() || undefined,
           partnerId: f.partnerId ? Number(f.partnerId) : undefined,
+          showOnIntake: f.showOnIntake,
         },
       });
-      setF({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '' });
+      setF({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '', showOnIntake: false });
       await load(); onToast('حساب اضافه شد ✓');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
@@ -412,6 +413,13 @@ function Banks({ onToast }) {
             </select>
           </label>
         </div>
+        {/* ⚠️ تنها کلیدی که یک شمارهٔ حساب را روی نشانیِ **عمومی** می‌برد.
+            پیش‌فرض خاموش است تا حسابِ شخصیِ شریک اتفاقی بیرون نرود. */}
+        <label className="ac-pub">
+          <input type="checkbox" checked={f.showOnIntake}
+                 onChange={(e) => setF((s) => ({ ...s, showOnIntake: e.target.checked }))} />
+          <span>روی فرمِ ثبت‌نامِ بیمار نشان داده شود</span>
+        </label>
         <button type="button" className="ac-submit" onClick={submit} disabled={busy}>
           <Plus width="15" height="15" /> افزودنِ حساب
         </button>
@@ -425,6 +433,19 @@ function Banks({ onToast }) {
               <small dir="ltr">{b.iban || b.cardNumber || '—'}</small>
               {b.partner && <small>حسابِ شخصیِ {b.partner.name}</small>}
             </div>
+            {/* حساب‌های موجود هم باید بتوانند عمومی شوند — وگرنه فقط حسابِ
+                تازه‌ساخته روی فرمِ بیمار می‌رفت. */}
+            <label className="ac-pub row" title="روی فرمِ ثبت‌نامِ بیمار">
+              <input type="checkbox" checked={!!b.showOnIntake} disabled={busy}
+                     onChange={async (e) => {
+                       setBusy(true);
+                       try {
+                         await api(`/bank-accounts/${b.id}/public`, { method: 'PATCH', body: { showOnIntake: e.target.checked } });
+                         await load();
+                       } catch (err) { onToast(err.message); } finally { setBusy(false); }
+                     }} />
+              <span>روی فرمِ بیمار</span>
+            </label>
           </article>
         ))}
       </div>

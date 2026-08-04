@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -25,6 +25,12 @@ export class LedgerController {
   @Post('bank-accounts')
   addAccount(@Body() dto: BankAccountDto, @CurrentUser() user: any) {
     return this.led.addAccount(dto, user);
+  }
+
+  @RequirePermissions('accounting.manage')
+  @Patch('bank-accounts/:id/public')
+  setPublic(@Param('id', ParseIntPipe) id: number, @Body() dto: { showOnIntake?: boolean }, @CurrentUser() user: any) {
+    return this.led.setAccountPublic(id, !!dto.showOnIntake, user);
   }
 
   @RequirePermissions('accounting.manage')

@@ -51,29 +51,7 @@
 
 /* ⚠️ `overscroll-behavior: contain` وگرنه رسیدن به تهِ فهرست روی موبایل
    صفحهٔ زیرین را اسکرول می‌کند و شیت از زیرِ دست در می‌رود. */
-.tp-list {
-  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
-  padding: 8px 13px 12px; display: grid; gap: 4px;
-}
-.tp-hour {
-  display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px;
-}
-.tp-hlabel {
-  font-style: normal; font-size: 11px; font-weight: 800; color: #837ca5; text-align: center;
-}
 /* گام‌های یک ساعت در یک ردیف؛ گامِ ریزتر (۵ دقیقه) خودش می‌شکند و سرریز نمی‌کند. */
-.tp-slots { display: flex; flex-wrap: wrap; gap: 4px; }
-.tp-slot {
-  flex: 1 1 58px; min-width: 0; height: 34px; border-radius: 10px; cursor: pointer;
-  font: inherit; font-size: 12.5px; color: #ddd6fe;
-  background: rgba(255, 255, 255, .035); border: 1px solid transparent;
-}
-.tp-slot:hover { background: rgba(var(--brand-soft-rgb), .22); }
-.tp-slot.sel {
-  color: #fff; font-weight: 800; border-color: transparent;
-  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
-}
-.tp-slot:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
 
 .tp-foot {
   display: flex; gap: 8px; padding: 11px 13px 13px;
@@ -94,4 +72,80 @@
 @media (max-width: 430px) {
   .tp-btn { width: 36px; }
   .tp-slot { flex-basis: 52px; font-size: 12px; }
+}
+
+
+/* ── ساعتِ دیجیتالِ دوستونه ──
+   ⚠️ چرخش با `scroll-snap`ِ خودِ مرورگر است: چرخِ ماوس، کشیدنِ انگشت با
+   شتابِ طبیعی، و کیبورد هر سه رایگان به دست می‌آیند. */
+.tp-read {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 10px 0 2px; font-size: 34px; font-weight: 900; letter-spacing: 1px;
+}
+.tp-read span {
+  min-width: 62px; text-align: center; padding: 2px 8px; border-radius: 12px;
+  background: rgba(var(--brand-2-rgb), .14); border: 1px solid rgba(var(--brand-2-rgb), .3);
+}
+.tp-read i { font-style: normal; opacity: .5; }
+
+/* ⚠️ `direction: ltr` روی چرخ‌ها: ستونِ ساعت باید **چپ** باشد و دقیقه راست،
+   دقیقاً مثلِ نمایشگرِ ۱۴:۲۰ی بالای آن. با جهتِ راست‌به‌چپِ صفحه، ساعت سمتِ
+   راست می‌افتاد و چشم عددِ بزرگِ چپ (ساعت) را به ستونِ دقیقه وصل می‌کرد. */
+.tp-wheels {
+  position: relative; direction: ltr;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 14px 4px;
+}
+.tp-wheel { display: grid; gap: 6px; justify-items: center; }
+.tp-wlabel { font-size: 11px; color: var(--text3); }
+
+/* کادرِ ستون — مرجعِ جای‌گیریِ نوار. */
+.tp-view { position: relative; width: 100%; }
+
+/* نوارِ وسط — «اینجا انتخاب می‌شود». */
+.tp-band {
+  position: absolute; inset-inline: 0; inset-block-start: 50%; height: 42px;
+  transform: translateY(-50%); pointer-events: none; z-index: 1;
+  border-radius: 11px; background: rgba(255, 255, 255, .05);
+  border-block: 1px solid rgba(var(--brand-2-rgb), .45);
+}
+
+.tp-col {
+  height: 210px; width: 100%; overflow-y: auto; overscroll-behavior: contain;
+  scroll-snap-type: y mandatory; scrollbar-width: none;
+  display: grid; justify-items: stretch;
+  /* عمقِ استوانه — بدونِ آن `rotateX` فقط عدد را له می‌کند و نمی‌چرخاند. */
+  perspective: 560px; perspective-origin: 50% 50%;
+}
+.tp-col::-webkit-scrollbar { display: none; }
+.tp-col:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .6); outline-offset: 2px; border-radius: 12px; }
+/* بدونِ این، ۰۰ و ۵۹ هرگز به وسطِ کادر نمی‌رسند. */
+.tp-pad { height: 84px; }
+
+/* ⚠️ `--d/--s/--f/--b` را جاوااسکریپت در هر فریم از **موقعیتِ اسکرول** حساب
+   می‌کند؛ این‌جا فقط مصرف می‌شوند. پس `transform` نباید `transition` داشته
+   باشد، وگرنه با هر فریم مسابقه می‌دهد و چرخ کش می‌آید. */
+.tp-num {
+  scroll-snap-align: center;
+  font: inherit; font-size: 19px; font-weight: 700; cursor: pointer;
+  height: 42px; border: 0; background: none; color: var(--text2);
+  transform: rotateX(calc(var(--d, 0) * -21deg)) scale(var(--s, 1));
+  opacity: var(--f, 1);
+  filter: blur(var(--b, 0px));
+  transition: color .15s;
+  backface-visibility: hidden;
+}
+.tp-num:hover { color: var(--text2); }
+.tp-num.on { color: var(--text1); font-size: 22px; font-weight: 900; }
+
+.tp-ok {
+  flex: 1; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+  padding: 10px 16px; border-radius: 11px; color: #fff; border: 0;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}
+
+/* ⚠️ کاربری که حرکت را کم کرده، انحنا و تاری را هم نمی‌خواهد؛ ولی چرخ باید
+   همچنان **کار** کند — پس فقط جلوه برداشته می‌شود، نه اسکرول. */
+@media (prefers-reduced-motion: reduce) {
+  .tp-col { scroll-behavior: auto; perspective: none; }
+  .tp-num { transition: none; transform: none; filter: none; opacity: 1; }
 }

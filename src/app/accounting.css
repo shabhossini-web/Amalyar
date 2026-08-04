@@ -190,3 +190,8 @@
 .ac-bar span { font-size: 10px; color: rgba(255, 255, 255, .5); }
 .ac-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255, 255, 255, .55); margin-block-start: 8px; }
 .ac-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
+
+/* کلیدِ «روی فرمِ بیمار» — تنها راهِ عمومی‌شدنِ یک شمارهٔ حساب. */
+.ac-pub { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; color: var(--text2); }
+.ac-pub input { width: 15px; height: 15px; accent-color: #10b981; cursor: pointer; }
+.ac-pub.row { flex: 0 0 auto; margin-inline-start: auto; font-size: 11px; }

@@ -163,6 +163,10 @@ export class IntakeService {
   async publicView(token: string) {
     const row = await this.expireIfDue(token);
     return {
+      // ⚠️ بدونِ این، بیمار مبلغ را می‌بیند ولی نمی‌داند **به کجا** بریزد —
+      //    و فیشی که آپلود می‌کرد به حسابِ ما نبود. فقط حساب‌هایی که ادمین
+      //    صریحاً برای فرمِ عمومی علامت زده، و فقط فیلدهای لازمِ واریز.
+      payTo: await this.payTo(),
       token: row.token,
       status: row.status,
       statusLabel: INTAKE_LABELS[row.status] ?? row.status,
@@ -176,6 +180,23 @@ export class IntakeService {
       reviewNote: row.reviewNote,
       expiresAt: row.expiresAt,
     };
+  }
+
+  /**
+   * حساب‌هایی که بیمار باید به آن‌ها واریز کند.
+   *
+   * ⚠️ تنها نقطه‌ای است که شمارهٔ حساب از یک نشانیِ **بی‌احراز** خوانده
+   * می‌شود، پس فهرست از `showOnIntake` می‌آید نه از «همهٔ حساب‌های فعال»:
+   * حسابِ شخصیِ شریک نباید روی اینترنت برود. `partnerId` و یادداشت هم
+   * برنمی‌گردند — بیمار فقط به نام و شماره احتیاج دارد.
+   */
+  private async payTo() {
+    const rows = await this.prisma.bankAccount.findMany({
+      where: { active: true, showOnIntake: true },
+      orderBy: { id: 'asc' },
+      select: { id: true, ownerName: true, bankName: true, cardNumber: true, iban: true },
+    });
+    return rows;
   }
 
   /** پرکردنِ اطلاعاتِ عمل. */

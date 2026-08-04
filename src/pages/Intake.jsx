@@ -207,6 +207,11 @@ function Form() {
 
       {d.status === 'pending_payment' && (
         <div className="ik-pay">
+          {/* ⚠️ ترتیب: **اول چقدر، بعد به کجا.** نسخهٔ اول شماره‌حساب‌ها را
+              بالای مبلغ می‌گذاشت و بیمار پیش از دانستنِ عدد با فهرستِ کارت
+              روبه‌رو می‌شد؛ و مبلغ زیرِ فهرست، خارج از دیدِ صفحه می‌افتاد.
+              کدِ تخفیف هم باید همان‌جا کنارِ مبلغ باشد، وگرنه بعد از دیدنِ
+              کارت‌ها دیگر دنبالش نمی‌گردد. */}
           <p className="ik-note">
             <Box width="15" height="15" /> مبلغِ قابلِ پرداخت: <b>{faNum(d.payable ?? d.amount)} تومان</b>
             {d.discountAmount > 0 && (
@@ -219,6 +224,24 @@ function Form() {
               <input value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} placeholder="کدِ تخفیف (اختیاری)" />
               <button type="button" disabled={busy || code.trim().length < 3} onClick={applyCode}>اعمال</button>
             </div>
+          )}
+          {/* ⚠️ بدونِ شمارهٔ حساب، بیمار مبلغ را می‌دید ولی نمی‌دانست به کجا
+              بریزد — و فیشی که آپلود می‌کرد به حسابِ ما نبود. */}
+          {d.payTo?.length > 0 ? (
+            <div className="ik-pay-to">
+              <b>واریز به:</b>
+              {d.payTo.map((a) => (
+                <div key={a.id} className="ik-acc">
+                  <span className="ik-acc-who">{[a.ownerName, a.bankName].filter(Boolean).join(' · ')}</span>
+                  {a.cardNumber && <CopyRow label="شمارهٔ کارت" value={a.cardNumber} />}
+                  {a.iban && <CopyRow label="شبا" value={a.iban} />}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="ik-warn">
+              <Alert width="15" height="15" /> شمارهٔ حسابی تنظیم نشده — پیش از واریز با ما تماس بگیرید.
+            </p>
           )}
           <input ref={fileRef} type="file" hidden accept="image/*,application/pdf"
                  onChange={(e) => { sendReceipt(e.target.files?.[0]); e.target.value = ''; }} />
@@ -236,6 +259,34 @@ function Form() {
 
       {err && <p className="ik-bad"><Alert width="15" height="15" /> {err}</p>}
     </Shell>
+  );
+}
+
+/**
+ * یک ردیفِ «شماره + کپی».
+ *
+ * ⚠️ دکمهٔ کپی تزئینی نیست: بیمار روی گوشی است و باید شمارهٔ کارت را در
+ * اپِ بانکش بچسباند؛ تایپِ دستیِ ۱۶ رقم یعنی واریز به حسابِ اشتباه.
+ * ارقام `dir="ltr"` و با فاصلهٔ چهارتایی نمایش داده می‌شوند ولی آنچه کپی
+ * می‌شود **بدونِ فاصله** است، چون اپِ بانک فاصله را نمی‌پذیرد.
+ */
+function CopyRow({ label, value }) {
+  const [done, setDone] = useState(false);
+  const plain = String(value).replace(/[^0-9A-Za-z]/g, '');
+  /* ⚠️ ارقامِ **نمایش** فارسی می‌شوند ولی آنچه کپی می‌شود لاتینِ بی‌فاصله
+     می‌ماند: اپِ بانک نه فاصله می‌پذیرد نه رقمِ فارسی. */
+  const grouped = /^\d+$/.test(plain) ? plain.replace(/(\d{4})(?=\d)/g, '$1 ') : plain;
+  const pretty = grouped.replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(plain); setDone(true); setTimeout(() => setDone(false), 1600); }
+    catch { /* مرورگرِ بدونِ clipboard: خودِ عدد روی صفحه هست */ }
+  };
+  return (
+    <button type="button" className={`ik-copy${done ? ' ok' : ''}`} onClick={copy}>
+      <span>{label}</span>
+      <b dir="ltr">{pretty}</b>
+      <i>{done ? 'کپی شد' : 'کپی'}</i>
+    </button>
   );
 }
 

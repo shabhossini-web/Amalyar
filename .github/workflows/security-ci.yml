@@ -1599,7 +1599,12 @@ jobs:
 
           // ③ هم تایپ هم انتخاب — یکی‌شان به‌تنهایی کافی نیست: کاربرِ پشتِ میز
           //    تایپ می‌کند، کارشناسِ داخلِ اتاقِ عمل با یک دست انتخاب می‌کند.
-          if (!/onChange=\{\(e\) => onChange\(toEnDigits/.test(pick) || !/onPick\(t\)/.test(pick)) {
+          // ⚠️ لنگرِ سمتِ «انتخاب» روی **اتصالِ onPick به commit** است، نه روی
+          //    نامِ کامپوننتِ داخلی: بارِ اول به `onPick(t)`ِ داخلِ SlotList
+          //    بسته بود و با جایگزینیِ فهرستِ تخت با چرخِ ساعت، نگهبان قرمز
+          //    شد بی‌آنکه چیزی خراب شده باشد.
+          if (!/onChange=\{\(e\) => onChange\(toEnDigits/.test(pick)
+            || !/onPick=\{\(picked\) => \{ commit\(picked\)/.test(pick)) {
             console.error('کنترلِ ساعت باید هم تایپ بپذیرد هم انتخاب'); process.exit(1);
           }
 
@@ -1608,6 +1613,70 @@ jobs:
           //    اندروید و سافاری و ویندوز سه شکلِ متفاوت می‌گیرد.
           const timeInputs = jsx.filter((f) => /type=[\"']time[\"']/.test(fs.readFileSync(f, 'utf8')));
           if (timeInputs.length) { console.error('input[type=time] در: ' + timeInputs.join('، ')); process.exit(1); }
+
+          /* ⑤ ⚠️ **انتخاب باید ساعت باشد، نه فهرستِ بازه‌ها.** نسخهٔ اول ۹۶
+             دکمهٔ مسطح («۰۰:۰۰، ۰۰:۱۵، …») می‌ریخت که مالکِ محصول «خشک و
+             زشت» خواندش: کاربر برای رسیدن به ۱۴:۵۰ باید ۵۹ خانه اسکرول
+             می‌کرد و ساعت و دقیقه هیچ‌وقت جدا انتخاب نمی‌شدند. */
+          if (!/tp-wheels/.test(pick) || (pick.match(/<Wheel\b/g) || []).length < 2) {
+            console.error('ساعت و دقیقه باید دو ستونِ جدا باشند'); process.exit(1);
+          }
+          const wheel = pick.slice(pick.indexOf('function Wheel('));
+          /* ⚠️ چرخش با **اسکرولِ خودِ مرورگر** باشد نه درگِ دست‌ساز: فقط
+             این‌طور چرخِ ماوس و شتابِ لمسِ موبایل و کیبورد هر سه کار می‌کنند.
+             لنگر روی CSS است چون خودِ رفتار آن‌جا تعریف می‌شود. */
+          if (!/scroll-snap-type:\\s*y/.test(fs.readFileSync('src/ui/timepick.css', 'utf8'))) {
+            console.error('چرخِ ساعت باید با scroll-snapِ بومی بچرخد'); process.exit(1);
+          }
+          /* ⚠️ نوارِ وسط باید در **همان کادرِ ستون** جای بگیرد. نسخهٔ اول آن را
+             هم‌ترازِ کلِ چرخ (شاملِ برچسبِ «ساعت») می‌گذاشت و بلندیِ برچسب را
+             با یک `margin`ِ دستی جبران می‌کرد؛ نتیجه: نوار یک ردیف پایین‌ترِ
+             عددِ انتخاب‌شده. عددِ جادویی یعنی همین اشکال با هر تغییرِ فونت
+             برمی‌گردد، پس ممنوع است. */
+          const css = fs.readFileSync('src/ui/timepick.css', 'utf8');
+          const band = css.slice(css.indexOf('.tp-band {'), css.indexOf('}', css.indexOf('.tp-band {')));
+          if (/margin/.test(band)) {
+            console.error('جای نوارِ وسط نباید با marginِ دستی تنظیم شود'); process.exit(1);
+          }
+          if (!/tp-view/.test(pick) || !/\.tp-view\s*\{[^}]*position:\\s*relative/.test(css)) {
+            console.error('نوار باید داخلِ کادرِ خودِ ستون باشد'); process.exit(1);
+          }
+          // ستونِ ساعت چپ و دقیقه راست — هم‌جهت با نمایشگرِ بالای آن.
+          const wheels = css.slice(css.indexOf('.tp-wheels {'), css.indexOf('}', css.indexOf('.tp-wheels {')));
+          if (!/direction:\\s*ltr/.test(wheels)) {
+            console.error('چرخ‌ها باید هم‌جهتِ نمایشگرِ HH:MM باشند'); process.exit(1);
+          }
+          // فاصله‌گذارِ بالا و پایین: بدونِ آن ۰۰ و ۵۹ هرگز به وسط نمی‌رسند.
+          if ((wheel.match(/tp-pad/g) || []).length < 2) {
+            console.error('بدونِ فاصله‌گذار، اولین و آخرین عدد انتخاب‌نشدنی می‌شوند'); process.exit(1);
+          }
+          // نگهبانِ ضدِ حلقه: اسکرولِ برنامه‌ای نباید دوباره مقدار را عوض کند.
+          if (!/programmatic/.test(wheel)) {
+            console.error('اسکرولِ برنامه‌ای باید از رویدادِ scroll جدا شود'); process.exit(1);
+          }
+          // مقدار وقتی ثبت شود که اسکرول **بایستد**، نه در هر فریم.
+          if (!/setTimeout\(/.test(wheel)) {
+            console.error('انتخاب باید پس از ایستادنِ اسکرول ثبت شود'); process.exit(1);
+          }
+          // ⚠️ کلیک هم باید کار کند — روی دسکتاپ کسی چرخ را نمی‌کشد.
+          if (!/onClick=\{\(\) => \{ onChange\(n\)/.test(wheel)) {
+            console.error('کلیک روی عدد هم باید انتخابش کند'); process.exit(1);
+          }
+          /* ⚠️ **انحنای استوانه از اسکرول می‌آید، نه از حلقهٔ درگِ دست‌ساز.**
+             نمونه‌های آمادهٔ «چرخِ گزینه» برای این ظاهر، اسکرولِ مرورگر را با
+             `touch-action: none` خاموش و با رویدادِ pointer بازسازی می‌کنند —
+             و همان‌جا شتابِ لمس، چرخِ ماوس و کیبورد از دست می‌رود. */
+          if (/touch-action:\\s*none/.test(css)) {
+            console.error('چرخ نباید اسکرولِ بومی را خاموش کند'); process.exit(1);
+          }
+          if (!/el\.scrollTop/.test(wheel) || !/requestAnimationFrame\(/.test(wheel)) {
+            console.error('انحنا باید از موقعیتِ اسکرول و یک‌بار در هر فریم حساب شود'); process.exit(1);
+          }
+          // کاربرِ کم‌حرکت جلوه را نمی‌خواهد ولی چرخ باید کار کند.
+          const rm = css.slice(css.indexOf('prefers-reduced-motion'));
+          if (!/transform:\\s*none/.test(rm)) {
+            console.error('در حالتِ کم‌حرکت باید انحنا برداشته شود'); process.exit(1);
+          }
           "
           # ⑤ نرمال‌سازی واقعاً کار می‌کند — با اجرای خودِ ماژول، نه با نگاه به کد.
           node --input-type=module -e "
@@ -1994,10 +2063,60 @@ jobs:
           if (/unitPrice: row\.amount - row\.discountAmount/.test(svc)) {
             console.error('مبلغِ خدمت نباید از پیش خالص شود'); process.exit(1);
           }
-          // ⑤ **پرداخت خودکار ثبت نشود.** فیش ادعای واریز است؛ Paymentِ خودکار
-          //    بدونِ حسابِ بانکی، خزانه و بدهیِ بینِ شرکا را آلوده می‌کند.
-          if (/addPayment\(|payment\.create\(/.test(svc)) {
-            console.error('intake نباید خودش پرداخت ثبت کند — تطبیقِ بانکی کارِ حسابداری است'); process.exit(1);
+          /* ⑤ ⚠️ **این بند یک‌بار برعکس بود و مالکِ محصول ردش کرد.**
+             نسخهٔ اول می‌گفت «intake هرگز پرداخت ثبت نکند»، چون Paymentِ
+             بی‌حساب خزانه را آلوده می‌کند. نتیجه‌اش این شد که مراجعهٔ
+             تأییدشده — با فیشی که ادمین همان لحظه دیده بود — کلِ مبلغش
+             «مانده» می‌ماند. ترس درست بود، درمان غلط: راهِ حل **پرسیدنِ
+             حسابِ مقصد از ادمین** است، نه ثبت‌نکردنِ پول.
+             پس آن‌چه ممنوع می‌ماند فقط حدسِ حسابِ مقصد است. */
+          const payBlock = svc.slice(svc.indexOf('addPayment('), svc.indexOf('addPayment(') + 400);
+          if (svc.includes('addPayment(') && !/bankAccountId: dto\.bankAccountId/.test(payBlock)) {
+            console.error('حسابِ مقصدِ پرداخت باید از ادمین بیاید، نه حدس زده شود'); process.exit(1);
+          }
+          // تنها نویسندهٔ جدولِ پرداخت، سرویسِ حسابداری است.
+          if (/payment\.create\(/.test(svc)) {
+            console.error('intake نباید مستقیم در جدولِ پرداخت بنویسد — از billing برود'); process.exit(1);
+          }
+
+          /* ⑤-ب ⚠️ **بیمار باید بداند به کجا واریز کند.** فرم مبلغ را نشان
+             می‌داد و فیش می‌خواست ولی هیچ شمارهٔ حسابی نمی‌داد — یعنی فیشی
+             که آپلود می‌شد به حسابِ ما نبود.
+             ولی «همهٔ حساب‌های فعال» هم غلط است: این تنها نقطه‌ای است که
+             شمارهٔ حساب از نشانیِ **بی‌احراز** خوانده می‌شود، و حسابِ شخصیِ
+             شریک نباید سرِ اینترنت برود. پس فقط حسابِ علامت‌خوردهٔ ادمین. */
+          if (!svc.includes('private async payTo(')) {
+            console.error('نمای عمومیِ فرم باید حسابِ واریز بدهد'); process.exit(1);
+          }
+          const payTo = svc.slice(svc.indexOf('private async payTo('), svc.indexOf('private async payTo(') + 600);
+          if (!/showOnIntake: true/.test(payTo) || !/active: true/.test(payTo)) {
+            console.error('فهرستِ واریز فقط حسابِ فعالِ علامت‌خورده باشد'); process.exit(1);
+          }
+          // ⚠️ **select**ِ صریح، نه شیِ کامل: بدونِ آن یادداشتِ داخلی و شریکِ
+          //    صاحبِ حساب هم با یک GETِ بی‌احراز بیرون می‌رفت.
+          if (!/select: \{/.test(payTo)) {
+            console.error('حسابِ واریز باید select صریح داشته باشد'); process.exit(1);
+          }
+          for (const leak of ['partnerId', 'notes', 'balance']) {
+            if (new RegExp(leak + ': true').test(payTo)) {
+              console.error('فیلدِ ' + leak + ' نباید به فرمِ عمومی برود'); process.exit(1);
+            }
+          }
+          // پیش‌فرضِ ستون **خاموش**: عمومی‌شدن باید تصمیمِ صریحِ ادمین باشد.
+          const bank = schema.slice(schema.indexOf('model BankAccount'), schema.indexOf('model BankAccount') + 900);
+          if (!/showOnIntake\s+Boolean\s+@default\(false\)/.test(bank)) {
+            console.error('showOnIntake باید پیش‌فرض false باشد'); process.exit(1);
+          }
+          // تغییرش هم مثلِ هر تغییرِ مالیِ دیگر باید ردّ ممیزی بگذارد.
+          const setPub = (() => {
+            const led = read('server/src/patients/ledger.service.ts');
+            const i = led.indexOf('async setAccountPublic(');
+            return i < 0 ? '' : led.slice(i, i + 700);
+          })();
+          // ⚠️ لنگر روی **فراخوانی** است نه کلمهٔ audit: کامنتِ بالای همین تابع
+          //    خودش این کلمه را دارد و نگهبانِ کلمه‌ای با حذفِ فراخوانی هم سبز می‌ماند.
+          if (!/this\.audit\.record\(/.test(setPub)) {
+            console.error('عمومی‌کردنِ حساب باید ممیزی شود'); process.exit(1);
           }
           // ⑥ ⚠️ **ادمین نباید فیشِ ندیده را تأیید کند.** تأیید یعنی «پول
           //    رسیده»؛ اگر مدرک در همان شیت نباشد، تأیید امضای نادیده است.
