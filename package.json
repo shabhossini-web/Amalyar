@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "ui:search": "node scripts/ui-search.mjs"
   },
   "dependencies": {
     "@fontsource/vazirmatn": "^5.1.0",
