@@ -80,6 +80,11 @@ export const Filter = (p) => <Svg {...p}><path d="M3 5h18l-7 8v6l-4 2v-8z" /></S
 export const Download = (p) => (
   <Svg {...p}><path d="M12 3v12" /><path d="m7 11 5 5 5-5" /><path d="M4 21h16" /></Svg>
 );
+export const Upload = (p) => (
+  <Svg {...p}>
+    <path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+  </Svg>
+);
 export const Print = (p) => (
   <Svg {...p}><path d="M7 9V3h10v6" /><rect x="4" y="9" width="16" height="7" rx="2" /><path d="M7 16h10v5H7z" /></Svg>
 );

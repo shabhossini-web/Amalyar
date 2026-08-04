@@ -241,6 +241,23 @@ export const PERMISSIONS: AccessDef[] = [
     defaultLevel: LEVEL.TECH,
   },
 
+  // ── فرمِ ثبت‌نامِ بیمار ────────────────────────────────────────
+  {
+    key: 'intake.read', label: 'دیدنِ صفِ ثبت‌نامِ بیماران', group: 'patients',
+    hint: 'فرم‌هایی که بیماران از لینکِ عمومی پر کرده‌اند و هنوز مراجعه نشده‌اند.',
+    defaultLevel: LEVEL.ADMIN,
+  },
+  {
+    key: 'intake.review', label: 'تأیید، رد و بازگرداندنِ ثبت‌نام', group: 'patients',
+    hint: 'تأیید یعنی ساختِ مراجعهٔ واقعی — از این‌جا داده وارد دفترِ عملیاتی و مالی می‌شود.',
+    defaultLevel: LEVEL.ADMIN,
+  },
+  {
+    key: 'intake.manage', label: 'ساخت و ویرایشِ لینکِ ثبت‌نام', group: 'system',
+    hint: 'لینکِ عمومی و مبلغش. هر کسی این لینک را داشته باشد می‌تواند ثبت‌نام کند.',
+    defaultLevel: LEVEL.ADMIN,
+  },
+
   // ── تعاریف و سامانه ──────────────────────────────────────────
   {
     key: 'definitions.read', label: 'دیدنِ تعاریفِ پایه', group: 'system',

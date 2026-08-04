@@ -1851,3 +1851,90 @@ jobs:
 
           console.log('delivery place ok');
           "
+
+      - name: Verify the patient intake form stays public but never leaks
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+          const ctl = read('server/src/patients/intake.controller.ts');
+
+          // ① کنترلرِ عمومی نباید هیچ گاردی داشته باشد و کنترلرِ ادمین باید
+          //    همه را داشته باشد. مرزِ این دو تنها چیزی است که بینِ نشانیِ
+          //    بی‌ورود و کلِ دادهٔ شرکت ایستاده.
+          // ⚠️ برش از خطِ **دکوراتور** است نه از export class: گاردهای کلاسِ
+          //    ادمین بالای خطِ export می‌نشینند و نسخهٔ اولِ این نگهبان آن‌ها را
+          //    داخلِ بلوکِ عمومی می‌دید و روی کدِ سالم قرمز می‌شد.
+          const pubStart = ctl.indexOf(\"@Controller('public/intake')\");
+          const admStart = ctl.indexOf(\"@Controller('intake')\");
+          if (pubStart < 0 || admStart < 0) { console.error('کنترلرهای intake پیدا نشدند'); process.exit(1); }
+          if (pubStart > admStart) { console.error('ترتیبِ کلاس‌ها عوض شده — این نگهبان را به‌روز کنید'); process.exit(1); }
+          const pubBlock = ctl.slice(pubStart, admStart);
+          const admBlock = ctl.slice(admStart);
+
+          if (/@UseGuards|@RequirePermissions|@Feature\(/.test(pubBlock)) {
+            console.error('کنترلرِ عمومی گارد گرفته — بیمار دیگر نمی‌تواند فرم را باز کند'); process.exit(1);
+          }
+          for (const need of ['JwtAuthGuard', 'FeatureGuard', 'PermissionGuard']) {
+            if (!new RegExp(need).test(admBlock.split('\n').slice(0, 6).join('\n'))) {
+              console.error('کنترلرِ ادمینِ intake بدونِ ' + need + ' است'); process.exit(1);
+            }
+          }
+          // هر متدِ ادمین باید مجوزِ صریح داشته باشد؛ متدِ بی‌مجوز یعنی هرکه
+          // ماژول را دارد می‌تواند تأیید کند.
+          const admMethods = (admBlock.match(/@(Get|Post|Patch|Delete)\(/g) ?? []).length;
+          const admPerms = (admBlock.match(/@RequirePermissions\(/g) ?? []).length;
+          if (admPerms < admMethods) {
+            console.error('متدِ بی‌مجوز در کنترلرِ ادمینِ intake: ' + admPerms + '/' + admMethods); process.exit(1);
+          }
+
+          const svc = read('server/src/patients/intake.service.ts');
+
+          // ② کپچا روی **سرور** سنجیده شود — این نشانی عمومی است و اعتبارسنجیِ
+          //    کلاینت جلوی یک اسکریپت را نمی‌گیرد.
+          if (!/if \(Number\(dto\.captchaAnswer\) !== Number\(dto\.captchaA\)/.test(svc)) {
+            console.error('کپچا روی سرور سنجیده نمی‌شود'); process.exit(1);
+          }
+          // ③ نوعِ فایلِ فیش هم روی سرور. ⚠️ لنگر روی خودِ `if (` است نه فقط
+          //    نامِ ثابت: با `false &&` رشته می‌ماند ولی شرط اجرا نمی‌شود و
+          //    نسخهٔ اولِ نگهبان همان را قبول کرد. — `accept`ِ HTML فقط پنجرهٔ انتخاب را
+          //    محدود می‌کند، نه درخواست را.
+          if (!/if \(!RECEIPT_MIME\.test\(/.test(svc)) {
+            console.error('نوعِ فایلِ فیش روی سرور سنجیده نمی‌شود'); process.exit(1);
+          }
+
+          // ④ نمای عمومی نباید دادهٔ پرونده بدهد: توکنِ فرم در پیامک می‌رود و
+          //    پیامک فوروارد می‌شود.
+          const view = svc.slice(svc.indexOf('async publicView'), svc.indexOf('/** پرکردنِ اطلاعاتِ عمل'));
+          for (const leak of ['patient:', 'nationalId:', 'visit:', 'reviewedById']) {
+            if (view.includes(leak)) { console.error('publicView دارد ' + leak + ' را لو می‌دهد'); process.exit(1); }
+          }
+
+          // ⑤ تأیید باید از همان createVisitِ موجود بگذرد. مسیرِ دومِ ساختِ
+          //    مراجعه یعنی روزی یکی‌شان seq یا audit را جا می‌اندازد.
+          if (!/this\.patients\.createVisit\(/.test(svc)) {
+            console.error('تأیید باید از createVisitِ موجود مراجعه بسازد'); process.exit(1);
+          }
+          if (/prisma\.visit\.create\(/.test(svc)) {
+            console.error('intake نباید مستقیم Visit بسازد'); process.exit(1);
+          }
+
+          // ⑥ تولیدِ کدِ بیمار **یک** جا بماند. کپی‌اش در intake یعنی دو تعریف
+          //    از «همان بیمار» و روزی یک نفر دو پرونده می‌گیرد.
+          if (/AM-\\\${/.test(svc) || /AM-PENDING/.test(svc)) {
+            console.error('intake نباید خودش کدِ بیمار بسازد — resolveOrCreatePatient'); process.exit(1);
+          }
+          if (!/resolveOrCreatePatient/.test(svc)) {
+            console.error('intake باید از resolveOrCreatePatientِ مشترک استفاده کند'); process.exit(1);
+          }
+
+          // ⑦ صفحهٔ بیمار بیرونِ Protected بماند — بیمار حساب ندارد.
+          const app = read('src/App.jsx');
+          for (const m of app.matchAll(/<Route path=\"(\/[rf])\/:token\" element=\{([^}]*)\}/g)) {
+            if (m[2].includes('Protected')) {
+              console.error('صفحهٔ عمومیِ بیمار پشتِ Protected رفته: ' + m[1]); process.exit(1);
+            }
+          }
+          console.log('intake ok');
+          "

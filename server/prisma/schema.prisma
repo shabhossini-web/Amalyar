@@ -486,6 +486,69 @@ model Diagnosis {
   @@map("diagnoses")
 }
 
+/// لینکِ دائمیِ ثبت‌نام — نشانی‌ای که شرکت در بیو و کانالش می‌گذارد.
+///
+/// ⚠️ **دائمی است و به بیمار گره نمی‌خورد.** هر بار که کسی رویش می‌زند یک
+/// `IntakeSubmission`ِ تازه ساخته می‌شود. لینکِ یک‌بارمصرفِ per-patient یعنی
+/// کسی باید برای هر بیمار دستی لینک بسازد — همان کاری که قرار بود حذف شود.
+model IntakeLink {
+  id     Int     @id @default(autoincrement())
+  token  String  @unique
+  title  String
+  /// مبلغِ پیش‌فرضِ این لینک — **ریال**، مثلِ بقیهٔ ستون‌های مبلغ.
+  amount Int     @default(0)
+  active Boolean @default(true)
+  notes  String?
+
+  createdAt   DateTime           @default(now()) @map("created_at")
+  submissions IntakeSubmission[]
+
+  @@map("intake_links")
+}
+
+/// یک ثبت‌نامِ در جریان — از لحظه‌ای که بیمار روی لینک زد تا تأیید یا رد.
+///
+/// ⚠️ این **مراجعه نیست.** تا وقتی ادمین تأیید نکرده، `Visit` ساخته نمی‌شود:
+/// چیزی که بیمار خودش پر کرده نباید مستقیم وارد دفترِ عملیاتی و مالی شود.
+/// پس از تأیید، `visitId` پر می‌شود و همین ردیف سندِ منشأ می‌ماند.
+model IntakeSubmission {
+  id     Int        @id @default(autoincrement())
+  token  String     @unique
+  link   IntakeLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  linkId Int        @map("link_id")
+
+  /// پروفایلِ بیمار از همان لحظهٔ ثبت‌نام ساخته یا پیدا می‌شود (کلید: کد ملی)،
+  /// چون فیشِ واریزی باید جایی بنشیند و `Document` بیمار می‌خواهد.
+  patient   Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  patientId Int?     @map("patient_id")
+
+  /// بعد از تأیید پر می‌شود. یکتا: یک ثبت‌نام حداکثر یک مراجعه می‌سازد.
+  visit   Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId Int?   @unique @map("visit_id")
+
+  /// pending_fill | pending_payment | pending_approval | approved | rejected | expired
+  status String @default("pending_fill")
+  /// مبلغِ همین ثبت‌نام — **ریال**. از لینک کپی می‌شود تا تغییرِ بعدیِ لینک
+  /// مبلغِ ثبت‌نام‌های در جریان را عوض نکند.
+  amount Int    @default(0)
+
+  /// آنچه بیمار پر کرده — عمداً JSON و نه ستون‌های جدا: این‌ها هنوز **ادعای
+  /// بیمار**اند نه دادهٔ تأییدشده. دادهٔ واقعی هنگامِ تأیید به Patient/Visit
+  /// می‌رود، جایی که ستونِ درست و اعتبارسنجیِ درست دارد.
+  data Json @default("{}")
+
+  reviewNote   String?   @map("review_note")
+  reviewedById Int?      @map("reviewed_by_id")
+  reviewedAt   DateTime? @map("reviewed_at")
+
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("intake_submissions")
+}
+
 /// محلِ تحویل — «کجا گذاشتم / به کجا دادم».
 ///
 /// ⚠️ این جدول برای **قابلِ‌تحلیل‌کردنِ متنِ آزاد** است، نه محدودکردنِ کاربر.
@@ -661,6 +724,9 @@ model Patient {
   @@index([phone])
   @@index([sourceRef])
   @@map("patients")
+
+  /// ثبت‌نام‌هایی که به این پرونده رسیده‌اند.
+  intakes IntakeSubmission[]
 }
 
 /// مدرکِ پزشکی — آزمایش، تصویربرداری، گزارش، رضایت‌نامه، مدرکِ هویتی…
@@ -912,6 +978,9 @@ model Visit {
   @@index([diagnosisId])
   @@index([sourceRef])
   @@map("visits")
+
+  /// ثبت‌نامی که این مراجعه از آن ساخته شد (اگر از فرمِ بیمار آمده باشد).
+  intake IntakeSubmission?
 }
 
 /// کدهای یکبارمصرفِ ثبت‌نام/تأیید موبایل

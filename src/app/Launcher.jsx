@@ -12,7 +12,7 @@ import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Dispatch, For
 /* min = حداقل سطحِ دسترسی (۱ بازدید … ۶ سوپرادمین) */
 const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: true, min: 5, to: '/app/dashboard' };
 const DAILY = [
-  { key: 'formgen', label: 'فرم‌ساز', icon: Form, ready: false, min: 5 },
+  { key: 'formgen', label: 'ثبت‌نامِ بیماران', icon: Form, ready: true, min: 5, to: '/app/intake' },
   { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: false, min: 2 },
 ];
 const TOOLS = [

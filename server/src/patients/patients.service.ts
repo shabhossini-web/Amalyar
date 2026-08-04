@@ -639,6 +639,50 @@ export class PatientsService {
   }
 
   /**
+   * «این آدم کدام پرونده است؟» — پیداکردن یا ساختن.
+   *
+   * ⚠️ **عمومی است تا ثبتِ مراجعه و فرمِ ثبت‌نامِ بیمار هر دو از همین بگذرند.**
+   * کپی‌کردنش در فرمِ بیمار یعنی دو جا کدِ `AM-NNNN` تولید می‌کنند و دو تعریفِ
+   * متفاوت از «همان بیمار» وجود دارد؛ اولین جایی که یکی‌شان عقب بماند، یک
+   * نفر دو پرونده می‌گیرد.
+   *
+   * شماره و تاریخِ تولدِ تازه فقط جاهای **خالی** را پر می‌کنند: فرمی که بیمار
+   * خودش پر کرده نباید دادهٔ تأییدشدهٔ پرونده را بازنویسی کند.
+   */
+  async resolveOrCreatePatient(
+    tx: any,
+    dto: { firstName?: string; lastName?: string; phone?: string; nationalId?: string; birthDate?: string },
+  ): Promise<{ patientId: number; patientStatus: 'matched' | 'restored' | 'new' }> {
+    const match = dto.nationalId
+      ? await this.findByNationalId(tx, dto.nationalId, dto.lastName!)
+      : null;
+
+    if (match) {
+      const fill: any = {};
+      if (dto.phone && !match.patient.phone) fill.phone = dto.phone;
+      if (dto.birthDate && !match.patient.birthDate) fill.birthDate = new Date(dto.birthDate);
+      if (Object.keys(fill).length) await tx.patient.update({ where: { id: match.patient.id }, data: fill });
+      return { patientId: match.patient.id, patientStatus: match.restored ? 'restored' : 'matched' };
+    }
+
+    const p = await tx.patient.create({
+      data: {
+        code: `AM-PENDING-${randomUUID()}`,
+        firstName: dto.firstName!,
+        lastName: dto.lastName!,
+        phone: dto.phone || null,
+        nationalId: dto.nationalId || null,
+        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+      },
+    });
+    await tx.patient.update({
+      where: { id: p.id },
+      data: { code: `AM-${String(p.id).padStart(4, '0')}` },
+    });
+    return { patientId: p.id, patientStatus: 'new' };
+  }
+
+  /**
    * ثبتِ مراجعه.
    *
    * سه مسیر دارد و هر سه به یک پرونده ختم می‌شوند:
@@ -662,36 +706,9 @@ export class PatientsService {
           await tx.patient.update({ where: { id: p.id }, data: { nationalId: dto.nationalId } });
         }
       } else {
-        const match = dto.nationalId
-          ? await this.findByNationalId(tx, dto.nationalId, dto.lastName!)
-          : null;
-
-        if (match) {
-          patientId = match.patient.id;
-          patientStatus = match.restored ? 'restored' : 'matched';
-          // شماره و تاریخِ تولدِ تازه فقط جاهای خالی را پر می‌کنند، نه بازنویسی.
-          const fill: any = {};
-          if (dto.phone && !match.patient.phone) fill.phone = dto.phone;
-          if (dto.birthDate && !match.patient.birthDate) fill.birthDate = new Date(dto.birthDate);
-          if (Object.keys(fill).length) await tx.patient.update({ where: { id: patientId }, data: fill });
-        } else {
-          const p = await tx.patient.create({
-            data: {
-              code: `AM-PENDING-${randomUUID()}`,
-              firstName: dto.firstName!,
-              lastName: dto.lastName!,
-              phone: dto.phone || null,
-              nationalId: dto.nationalId || null,
-              birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
-            },
-          });
-          await tx.patient.update({
-            where: { id: p.id },
-            data: { code: `AM-${String(p.id).padStart(4, '0')}` },
-          });
-          patientId = p.id;
-          patientStatus = 'new';
-        }
+        const r = await this.resolveOrCreatePatient(tx, dto);
+        patientId = r.patientId;
+        patientStatus = r.patientStatus;
       }
       const refs = await this.resolveRefs(tx, dto);
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });

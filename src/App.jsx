@@ -3,6 +3,7 @@ import ErrorBoundary from './app/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './app/auth.jsx';
 import { ConfigProvider } from './app/config.jsx';
 import Landing from './pages/Landing.jsx';
+import Intake from './pages/Intake.jsx';
 import Launcher from './app/Launcher.jsx';
 import Login from './app/Login.jsx';
 import Users from './app/Users.jsx';
@@ -16,6 +17,7 @@ import Calendar from './app/Calendar.jsx';
 import Dispatch from './app/Dispatch.jsx';
 import Tech from './app/Tech.jsx';
 import Transport from './app/Transport.jsx';
+import IntakeAdmin from './app/Intake.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
 import PlatformAdmin from './app/PlatformAdmin.jsx';
@@ -48,6 +50,9 @@ export default function App() {
         <Routes>
           <Route path="/" element={<TenantAwareRoot />} />
           <Route path="/login" element={<Login />} />
+          {/* ⚠️ عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. */}
+          <Route path="/r/:token" element={<Intake step="register" />} />
+          <Route path="/f/:token" element={<Intake step="form" />} />
           <Route path="/platform-admin" element={<PlatformAdmin />} />
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
           <Route path="/app/dashboard" element={<Protected><Dashboard /></Protected>} />
@@ -60,6 +65,7 @@ export default function App() {
           <Route path="/app/dispatch" element={<Protected><Dispatch /></Protected>} />
           <Route path="/app/tech" element={<Protected><Tech /></Protected>} />
           <Route path="/app/transport" element={<Protected><Transport /></Protected>} />
+          <Route path="/app/intake" element={<Protected><IntakeAdmin /></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />
