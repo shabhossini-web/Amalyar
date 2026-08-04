@@ -1938,3 +1938,66 @@ jobs:
           }
           console.log('intake ok');
           "
+
+      - name: Verify intake money is one unit, lands in the ledger, and is server-computed
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          // ① **یک واحدِ پول در کلِ سامانه.** عمل‌یار تومان است؛ نسخهٔ اولِ
+          //    intake قراردادِ ریالیِ سامانهٔ قبلی را آورده بود و کلاینت بر ۱۰
+          //    تقسیم می‌کرد — یعنی بیمار یک‌دهمِ مبلغ را می‌دید.
+          const schema = read('server/prisma/schema.prisma');
+          const intakeBlock = schema.slice(schema.indexOf('model IntakeLink'), schema.indexOf('model DiscountCode'));
+          // ⚠️ لنگر روی **اعلامِ واحد** است (\`**ریال**\`) نه هر ذکرِ کلمه: خودِ
+          //    توضیحِ «اولین نسخه ریال بود» باید مجاز بماند، وگرنه نگهبان
+          //    درسِ ثبت‌شده را پاک می‌کند.
+          if (/\*\*ریال\*\*/.test(intakeBlock)) { console.error('ستونِ مبلغِ intake به ریال اعلام شده'); process.exit(1); }
+          for (const f of ['src/pages/Intake.jsx', 'src/app/Intake.jsx']) {
+            const src = read(f);
+            if (/amount[^\n]*[/*]\s*10\b/.test(src) || /\/ 10\)/.test(src)) {
+              console.error(f + ': تبدیلِ واحدِ پول در کلاینت — همه‌جا تومان است'); process.exit(1);
+            }
+          }
+
+          const svc = read('server/src/patients/intake.service.ts');
+
+          // ② مبلغِ تخفیف **روی سرور** حساب می‌شود. اگر کلاینت مبلغ می‌فرستاد،
+          //    هر کسی با یک درخواستِ دستی صفر تومان می‌پرداخت.
+          const ctl = read('server/src/patients/intake.controller.ts');
+          const dtoBlock = ctl.slice(ctl.indexOf('class DiscountApplyDto'), ctl.indexOf('class CodeCreateDto'));
+          if (/amount|discount/i.test(dtoBlock.replace('DiscountApplyDto', ''))) {
+            console.error('DTOی اعمالِ تخفیف نباید مبلغ بگیرد — فقط کد'); process.exit(1);
+          }
+          if (!/Math\.round\(\(row\.amount \*/.test(svc)) {
+            console.error('تخفیفِ درصدی باید روی سرور از روی مبلغِ ذخیره‌شده حساب شود'); process.exit(1);
+          }
+          // تخفیف هرگز از خودِ مبلغ بیشتر نشود، وگرنه فاکتورِ منفی می‌سازد.
+          if (!/Math\.max\(0, Math\.min\(off, row\.amount\)\)/.test(svc)) {
+            console.error('تخفیف باید به خودِ مبلغ سقف بخورد'); process.exit(1);
+          }
+
+          // ③ مبلغ باید وارد **دفتر** شود. تا دیروز amountِ ثبت‌نام هیچ‌جا
+          //    نمی‌رفت و مراجعهٔ تأییدشده صفر تومان بود.
+          // ⚠️ وجودِ **قلمِ خدمت با خودِ مبلغ** سنجیده می‌شود، نه صرفِ وجودِ
+          //    addCharge: قلمِ تخفیف هم همان تابع را صدا می‌زند و نسخهٔ اولِ
+          //    نگهبان با حذفِ قلمِ خدمت هم سبز می‌ماند.
+          if (!/kind: 'service'[\s\S]{0,200}unitPrice: row\.amount/.test(svc)) {
+            console.error('تأیید باید مبلغِ ثبت‌نام را به‌شکلِ قلمِ خدمت در فاکتور بنشاند'); process.exit(1);
+          }
+          // ④ تخفیف **قلمِ جدا** بماند؛ خالص‌کردنِ عدد یعنی گم‌شدنِ اطلاعات.
+          if (!/kind: 'discount'/.test(svc)) {
+            console.error('تخفیف باید قلمِ جدا باشد نه کسر از مبلغِ خدمت'); process.exit(1);
+          }
+          if (/unitPrice: row\.amount - row\.discountAmount/.test(svc)) {
+            console.error('مبلغِ خدمت نباید از پیش خالص شود'); process.exit(1);
+          }
+          // ⑤ **پرداخت خودکار ثبت نشود.** فیش ادعای واریز است؛ Paymentِ خودکار
+          //    بدونِ حسابِ بانکی، خزانه و بدهیِ بینِ شرکا را آلوده می‌کند.
+          if (/addPayment\(|payment\.create\(/.test(svc)) {
+            console.error('intake نباید خودش پرداخت ثبت کند — تطبیقِ بانکی کارِ حسابداری است'); process.exit(1);
+          }
+          console.log('intake money ok');
+          "

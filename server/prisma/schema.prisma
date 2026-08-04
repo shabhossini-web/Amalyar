@@ -495,7 +495,11 @@ model IntakeLink {
   id     Int     @id @default(autoincrement())
   token  String  @unique
   title  String
-  /// مبلغِ پیش‌فرضِ این لینک — **ریال**، مثلِ بقیهٔ ستون‌های مبلغ.
+  /// مبلغِ پیش‌فرضِ این لینک — **تومان**، مثلِ `Charge.amount` و `Payment.amount`.
+  ///
+  /// ⚠️ اولین نسخه ریال بود چون قراردادِ سامانهٔ قبلی را کورکورانه آورده بودم.
+  /// عمل‌یار همه‌جا تومان است و دو واحدِ پول در یک سامانه یعنی روزی یک عدد
+  /// ده‌برابر یا یک‌دهم در گزارش می‌نشیند.
   amount Int     @default(0)
   active Boolean @default(true)
   notes  String?
@@ -528,9 +532,15 @@ model IntakeSubmission {
 
   /// pending_fill | pending_payment | pending_approval | approved | rejected | expired
   status String @default("pending_fill")
-  /// مبلغِ همین ثبت‌نام — **ریال**. از لینک کپی می‌شود تا تغییرِ بعدیِ لینک
+  /// مبلغِ همین ثبت‌نام — **تومان**. از لینک کپی می‌شود تا تغییرِ بعدیِ لینک
   /// مبلغِ ثبت‌نام‌های در جریان را عوض نکند.
   amount Int    @default(0)
+
+  /// کدِ تخفیفِ اعمال‌شده و مبلغی که کم کرد — **تومان**.
+  /// مبلغِ کسرشده ذخیره می‌شود نه محاسبه‌شونده: کدِ تخفیف ممکن است فردا عوض
+  /// شود و آن‌وقت معلوم نبود این بیمار چقدر تخفیف گرفت.
+  discountCode   String? @map("discount_code")
+  discountAmount Int     @default(0) @map("discount_amount")
 
   /// آنچه بیمار پر کرده — عمداً JSON و نه ستون‌های جدا: این‌ها هنوز **ادعای
   /// بیمار**اند نه دادهٔ تأییدشده. دادهٔ واقعی هنگامِ تأیید به Patient/Visit
@@ -547,6 +557,40 @@ model IntakeSubmission {
 
   @@index([status, createdAt])
   @@map("intake_submissions")
+}
+
+/// کدِ تخفیفِ ثبت‌نام.
+///
+/// ⚠️ **درصد و مبلغِ ثابت دو ستونِ جدا نیستند، یک `kind` و یک `value`اند.**
+/// دو ستونِ nullable یعنی ردیفی که هر دو را پر دارد یا هیچ‌کدام را — و آن
+/// وقت باید در کد حدس بزنیم کدام برنده است.
+///
+/// ⚠️ `usedCount` شمارنده است نه دفتر: چه کسی استفاده کرد از `IntakeSubmission.
+/// discountCode` خوانده می‌شود. شمارنده فقط برای سقفِ استفاده است.
+model DiscountCode {
+  id   Int    @id @default(autoincrement())
+  code String @unique
+
+  /// percent | fixed
+  kind String @default("percent")
+  /// درصد (۱..۱۰۰) یا مبلغِ ثابت به **تومان** — بسته به `kind`.
+  value Int
+
+  /// سقفِ تخفیف وقتی درصدی است — **تومان**. صفر یعنی بی‌سقف.
+  maxAmount Int @default(0) @map("max_amount")
+  /// حداقلِ مبلغِ فاکتور برای اعمال — **تومان**.
+  minAmount Int @default(0) @map("min_amount")
+
+  /// صفر یعنی بی‌نهایت.
+  maxUses   Int       @default(0) @map("max_uses")
+  usedCount Int       @default(0) @map("used_count")
+  expiresAt DateTime? @map("expires_at")
+
+  active    Boolean  @default(true)
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("discount_codes")
 }
 
 /// محلِ تحویل — «کجا گذاشتم / به کجا دادم».

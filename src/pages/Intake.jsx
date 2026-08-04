@@ -8,8 +8,9 @@ import './intake.css';
 import { Alert, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
-/** مبلغ‌ها در همه‌جای سامانه ریال‌اند؛ بیمار تومان می‌فهمد. */
-const toman = (rial) => faNum(Math.round((rial ?? 0) / 10));
+/* ⚠️ مبلغ‌ها در کلِ عمل‌یار **تومان**اند (مثلِ `Charge.amount`). نسخهٔ اول
+   این‌جا بر ۱۰ تقسیم می‌کرد چون قراردادِ ریالیِ سامانهٔ قبلی را آورده بودم —
+   یعنی بیمار یک‌دهمِ مبلغ را می‌دید. */
 
 /**
  * فرمِ ثبت‌نامِ بیمار — **عمومی، بدونِ ورود**.
@@ -109,6 +110,7 @@ function Form() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ procedure: '', surgeonName: '', hospitalName: '', opDate: '', notes: '' });
+  const [code, setCode] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => { document.title = 'فرمِ مراجعه'; }, []);
@@ -132,6 +134,12 @@ function Form() {
   const saveFill = async () => {
     setErr(''); setBusy(true);
     try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body: f })); }
+    catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  const applyCode = async () => {
+    setErr(''); setBusy(true);
+    try { setD(await api(`/public/intake/form/${token}/discount`, { auth: false, method: 'POST', body: { code: code.trim() } })); }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -200,8 +208,18 @@ function Form() {
       {d.status === 'pending_payment' && (
         <div className="ik-pay">
           <p className="ik-note">
-            <Box width="15" height="15" /> مبلغِ قابلِ پرداخت: <b>{toman(d.amount)} تومان</b>
+            <Box width="15" height="15" /> مبلغِ قابلِ پرداخت: <b>{faNum(d.payable ?? d.amount)} تومان</b>
+            {d.discountAmount > 0 && (
+              <em className="ik-off">({faNum(d.discountAmount)} تومان تخفیف با کدِ {d.discountCode})</em>
+            )}
           </p>
+          {/* ⚠️ فقط کد فرستاده می‌شود؛ مبلغ را سرور حساب می‌کند. */}
+          {!d.discountCode && (
+            <div className="ik-code">
+              <input value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} placeholder="کدِ تخفیف (اختیاری)" />
+              <button type="button" disabled={busy || code.trim().length < 3} onClick={applyCode}>اعمال</button>
+            </div>
+          )}
           <input ref={fileRef} type="file" hidden accept="image/*,application/pdf"
                  onChange={(e) => { sendReceipt(e.target.files?.[0]); e.target.value = ''; }} />
           <button type="button" className="ik-go" disabled={busy} onClick={() => fileRef.current?.click()}>
@@ -233,7 +251,7 @@ function Shell({ title, amount, children }) {
             <b data-brand-name>عمل‌یار</b>
             {title && <small>{title}</small>}
           </div>
-          {amount > 0 && <span className="ik-amount">{toman(amount)} تومان</span>}
+          {amount > 0 && <span className="ik-amount">{faNum(amount)} تومان</span>}
         </header>
         {children}
       </main>

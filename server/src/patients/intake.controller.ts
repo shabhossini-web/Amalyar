@@ -33,6 +33,26 @@ class FillDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }
 
+class DiscountApplyDto {
+  @IsString() @MinLength(3) @MaxLength(40) code!: string;
+}
+
+class CodeCreateDto {
+  @IsString() @MinLength(3, { message: 'کد را کامل وارد کنید' }) @MaxLength(40) code!: string;
+  @IsOptional() @IsString() kind?: string;
+  @Type(() => Number) @IsInt() @Min(1) value!: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) maxAmount?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) minAmount?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) maxUses?: number;
+  @IsOptional() @IsString() @MaxLength(30) expiresAt?: string;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
+class CodePatchDto {
+  @IsOptional() @IsBoolean() active?: boolean;
+  @IsOptional() @IsString() @MaxLength(200) note?: string;
+}
+
 class LinkCreateDto {
   @IsString() @MinLength(2) @MaxLength(120) title!: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) amount?: number;
@@ -94,6 +114,17 @@ export class PublicIntakeController {
     return this.intake.fill(token, dto);
   }
 
+  /**
+   * اعمالِ کدِ تخفیف.
+   *
+   * ⚠️ فقط **کد** فرستاده می‌شود، نه مبلغ. اگر مبلغ از کلاینت می‌آمد، هر کسی
+   * با یک درخواستِ دستی صفر تومان می‌پرداخت.
+   */
+  @Post('form/:token/discount')
+  discount(@Param('token') token: string, @Body() dto: DiscountApplyDto) {
+    return this.intake.applyDiscount(token, dto.code);
+  }
+
   @Post('form/:token/receipt')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }))
   receipt(@Param('token') token: string, @UploadedFile() file: any) {
@@ -124,6 +155,24 @@ export class IntakeController {
   @Patch('links/:id')
   patchLink(@Param('id', ParseIntPipe) id: number, @Body() dto: LinkPatchDto, @CurrentUser() user: any) {
     return this.intake.patchLink(id, dto, user);
+  }
+
+  @RequirePermissions('intake.read')
+  @Get('codes')
+  codes() {
+    return this.intake.listCodes();
+  }
+
+  @RequirePermissions('intake.manage')
+  @Post('codes')
+  addCode(@Body() dto: CodeCreateDto, @CurrentUser() user: any) {
+    return this.intake.createCode(dto, user);
+  }
+
+  @RequirePermissions('intake.manage')
+  @Patch('codes/:id')
+  patchCode(@Param('id', ParseIntPipe) id: number, @Body() dto: CodePatchDto, @CurrentUser() user: any) {
+    return this.intake.patchCode(id, dto, user);
   }
 
   @RequirePermissions('intake.read')

@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { PatientsService } from './patients.service';
 import { StorageService } from '../storage/storage.service';
+import { BillingService } from './billing.service';
 import { toEnDigits } from '../common/identity';
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
@@ -48,6 +49,7 @@ export class IntakeService {
     private audit: AuditService,
     private patients: PatientsService,
     private storage: StorageService,
+    private billing: BillingService,
   ) {}
 
   private token() {
@@ -160,7 +162,12 @@ export class IntakeService {
       token: row.token,
       status: row.status,
       statusLabel: INTAKE_LABELS[row.status] ?? row.status,
+      // ⚠️ هر سه عدد برمی‌گردند نه فقط «قابلِ پرداخت»: بیمار باید ببیند
+      //    تخفیفش واقعاً خورده، وگرنه عددِ کمتر شبیهِ اشتباه به‌نظر می‌رسد.
       amount: row.amount,
+      discountCode: row.discountCode,
+      discountAmount: row.discountAmount,
+      payable: Math.max(0, row.amount - row.discountAmount),
       data: row.data,
       reviewNote: row.reviewNote,
       expiresAt: row.expiresAt,
@@ -294,6 +301,34 @@ export class IntakeService {
       where: { id },
       data: { status: 'approved', visitId: visit.id, reviewNote: text(dto.note, 300), reviewedById: user?.id ?? null, reviewedAt: new Date() },
     });
+
+    /**
+     * ⚠️ مبلغ باید **وارد دفتر** شود، وگرنه مراجعهٔ تأییدشده صفر تومان است و
+     * گزارشِ مالی بی‌سروصدا کم می‌شود. تا دیروز `amount`ِ ثبت‌نام هیچ‌جا
+     * نمی‌رفت و همین یک شکافِ واقعی بود.
+     *
+     * تخفیف **قلمِ جدا** می‌شود نه کسر از مبلغِ خدمت: فاکتور باید نشان دهد
+     * مبلغِ اصلی چه بود و چقدر تخفیف خورد؛ عددِ خالص‌شده همان اطلاعات را
+     * برای همیشه گم می‌کند. علامتِ منفی را خودِ `addCharge` می‌گذارد.
+     *
+     * ⚠️ **پرداخت ثبت نمی‌شود.** فیشِ بیمار ادعای واریز است؛ ثبتِ خودکارِ
+     * `Payment` بدونِ حسابِ بانکیِ مقصد، خزانه و بدهیِ بینِ شرکا را آلوده
+     * می‌کند. تطبیقِ بانکی کارِ صفحهٔ حسابداری است.
+     */
+    if (row.amount > 0) {
+      await this.billing.addCharge(visit.id, {
+        kind: 'service',
+        title: d.procedure || 'خدمتِ ثبت‌شده در فرمِ ثبت‌نام',
+        unitPrice: row.amount,
+      }, user);
+    }
+    if (row.discountAmount > 0) {
+      await this.billing.addCharge(visit.id, {
+        kind: 'discount',
+        title: `کدِ تخفیف ${row.discountCode ?? ''}`.trim(),
+        unitPrice: row.discountAmount,
+      }, user);
+    }
     // فیشِ واریزی حالا صاحبِ مراجعه دارد — تا امروز فقط به پرونده وصل بود.
     if (d.receiptDocumentId) {
       await this.prisma.document.updateMany({ where: { id: Number(d.receiptDocumentId) }, data: { visitId: visit.id } });
@@ -342,6 +377,100 @@ export class IntakeService {
     });
     await this.audit.record({ actorId: user?.id, action: 'intake.return', entityType: 'intake_submission', entityId: id, after: { note } });
     return { ok: true };
+  }
+
+  // ── کدِ تخفیف ─────────────────────────────────────────────────────
+  /**
+   * اعمالِ کدِ تخفیف روی یک ثبت‌نام.
+   *
+   * ⚠️ **مبلغ روی سرور حساب می‌شود و مبلغِ کسرشده ذخیره می‌شود، نه دوباره
+   * محاسبه.** اگر فردا درصدِ کد عوض شود، تخفیفِ این بیمار نباید عوض شود —
+   * و اگر کلاینت مبلغ را می‌فرستاد، هر کسی می‌توانست صفر بپردازد.
+   *
+   * ⚠️ شمارندهٔ مصرف فقط وقتی بالا می‌رود که کد **تازه** روی این فرم بنشیند؛
+   * زدنِ دوبارهٔ همان کد سهمِ استفاده را نمی‌سوزاند.
+   */
+  async applyDiscount(token: string, rawCode: string) {
+    const row = await this.expireIfDue(token);
+    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+    }
+    const code = (text(rawCode, 40) ?? '').toUpperCase();
+    if (!code) throw new BadRequestException('کد را وارد کنید');
+    if (row.discountCode === code) return this.publicView(token);
+
+    const dc = await this.prisma.discountCode.findFirst({
+      where: { code: { equals: code, mode: 'insensitive' } },
+    });
+    if (!dc || !dc.active) throw new BadRequestException('این کد معتبر نیست');
+    if (dc.expiresAt && dc.expiresAt.getTime() < Date.now()) throw new BadRequestException('این کد منقضی شده است');
+    if (dc.maxUses > 0 && dc.usedCount >= dc.maxUses) throw new BadRequestException('ظرفیتِ این کد تمام شده است');
+    if (dc.minAmount > 0 && row.amount < dc.minAmount) {
+      throw new BadRequestException(`این کد برای مبلغ‌های بالای ${dc.minAmount.toLocaleString('fa-IR')} تومان است`);
+    }
+
+    let off = dc.kind === 'percent'
+      ? Math.round((row.amount * Math.max(1, Math.min(100, dc.value))) / 100)
+      : dc.value;
+    if (dc.kind === 'percent' && dc.maxAmount > 0) off = Math.min(off, dc.maxAmount);
+    // تخفیف هرگز از خودِ مبلغ بیشتر نمی‌شود — مبلغِ منفی یعنی ما بدهکار شویم.
+    off = Math.max(0, Math.min(off, row.amount));
+
+    await this.prisma.$transaction([
+      this.prisma.intakeSubmission.update({
+        where: { id: row.id },
+        data: { discountCode: dc.code, discountAmount: off },
+      }),
+      this.prisma.discountCode.update({ where: { id: dc.id }, data: { usedCount: { increment: 1 } } }),
+    ]);
+    return this.publicView(token);
+  }
+
+  async listCodes() {
+    const rows = await this.prisma.discountCode.findMany({ orderBy: { id: 'desc' } });
+    return rows.map((r) => ({
+      ...r,
+      kindLabel: r.kind === 'percent' ? 'درصدی' : 'مبلغِ ثابت',
+      remaining: r.maxUses > 0 ? Math.max(0, r.maxUses - r.usedCount) : null,
+    }));
+  }
+
+  async createCode(dto: { code: string; kind?: string; value: number; maxAmount?: number; minAmount?: number; maxUses?: number; expiresAt?: string; note?: string }, user: any) {
+    const code = (text(dto.code, 40) ?? '').toUpperCase();
+    if (code.length < 3) throw new BadRequestException('کد را کامل وارد کنید');
+    const kind = dto.kind === 'fixed' ? 'fixed' : 'percent';
+    const value = Number(dto.value) || 0;
+    if (kind === 'percent' && (value < 1 || value > 100)) throw new BadRequestException('درصد باید بینِ ۱ تا ۱۰۰ باشد');
+    if (kind === 'fixed' && value < 1) throw new BadRequestException('مبلغِ تخفیف را وارد کنید');
+    const dup = await this.prisma.discountCode.findFirst({ where: { code: { equals: code, mode: 'insensitive' } } });
+    if (dup) throw new BadRequestException('این کد قبلاً ساخته شده است');
+
+    const row = await this.prisma.discountCode.create({
+      data: {
+        code, kind, value,
+        maxAmount: Math.max(0, Number(dto.maxAmount) || 0),
+        minAmount: Math.max(0, Number(dto.minAmount) || 0),
+        maxUses: Math.max(0, Number(dto.maxUses) || 0),
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        note: text(dto.note, 200),
+      },
+    });
+    await this.audit.record({ actorId: user?.id, action: 'discount.create', entityType: 'discount_code', entityId: row.id, after: row });
+    return row;
+  }
+
+  async patchCode(id: number, dto: { active?: boolean; note?: string }, user: any) {
+    const row = await this.prisma.discountCode.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('کد پیدا نشد');
+    const next = await this.prisma.discountCode.update({
+      where: { id },
+      data: {
+        ...(dto.active !== undefined ? { active: !!dto.active } : {}),
+        ...(dto.note !== undefined ? { note: text(dto.note, 200) } : {}),
+      },
+    });
+    await this.audit.record({ actorId: user?.id, action: 'discount.update', entityType: 'discount_code', entityId: id, before: row, after: next });
+    return next;
   }
 
   /**

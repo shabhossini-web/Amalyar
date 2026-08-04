@@ -12,7 +12,7 @@ import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
-const toman = (rial) => faNum(Math.round((rial ?? 0) / 10));
+/* ⚠️ مبلغ‌ها تومان‌اند؛ نسخهٔ اول تقسیم بر ۱۰ می‌کرد و عددِ یک‌دهم نشان می‌داد. */
 
 const TABS = [
   { key: 'pending_approval', label: 'در انتظارِ تأیید' },
@@ -88,7 +88,7 @@ export default function IntakeAdmin() {
         {links.map((l) => (
           <span key={l.id} className={`ia-link${l.active ? '' : ' off'}`}>
             {l.title}
-            <em>{toman(l.amount)} تومان</em>
+            <em>{faNum(l.amount)} تومان</em>
             <i>{faNum(l.submissionCount)} ثبت‌نام</i>
             <button type="button" onClick={() => copyLink(l.token)} title="کپیِ نشانی"><Copy size={13} /></button>
             <button type="button" onClick={() => api(`/intake/links/${l.id}`, { method: 'PATCH', body: { active: !l.active } }).then(load)}>
@@ -118,7 +118,7 @@ export default function IntakeAdmin() {
                 </small>
               </div>
               <span className={`ia-tag s-${s.status}`}>{s.statusLabel}</span>
-              <span className="ia-amount">{toman(s.amount)} تومان</span>
+              <span className="ia-amount">{faNum(s.amount)} تومان</span>
             </header>
 
             <div className="ia-facts">
@@ -255,8 +255,7 @@ function LinkSheet({ onClose, onDone }) {
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      // ⚠️ کاربر تومان می‌زند و ستونِ مبلغ ریال است — همان قراردادِ کلِ سامانه.
-      await api('/intake/links', { method: 'POST', body: { title, amount: (Number(amount) || 0) * 10 } });
+      await api('/intake/links', { method: 'POST', body: { title, amount: Number(amount) || 0 } });
       onDone('لینک ساخته شد ✓');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
