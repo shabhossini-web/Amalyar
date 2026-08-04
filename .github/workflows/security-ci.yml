@@ -586,6 +586,51 @@ jobs:
             if (iso !== g) { console.error(j + ' → ' + iso + ' ولی باید ' + g + ' باشد'); process.exit(1); }
           }
           if (jalaliStrToDate('چرت') !== null) { console.error('ورودیِ نامعتبر باید null بدهد'); process.exit(1); }
+
+          /* ── تورِ تاریخ ───────────────────────────────────────────────
+             ⚠️ **این اشکال خطا نمی‌داد و همان بدترین حالتش بود.** فرمِ عمومیِ
+             بیمار مقدارِ تقویمِ شمسی را خام می‌فرستاد؛ سرور
+             `new Date('1405/05/14')` می‌ساخت و آن را سالِ ۱۴۰۵ **میلادی**
+             می‌فهمید. مراجعه با موفقیت ثبت می‌شد و بعد از تقویم و هر گزارشِ
+             بازه‌ای غیب بود. */
+          const { toDateValue } = require('/tmp/jal/jalali.js');
+          if (typeof toDateValue !== 'function') {
+            console.error('تبدیلِ تاریخ باید یک تابعِ مشترک باشد'); process.exit(1);
+          }
+          const y = (v) => (v ? v.toISOString().slice(0, 10) : String(v));
+          // شمسی → میلادیِ درست، نه سالِ ۱۴۰۵ میلادی
+          if (y(toDateValue('1405/05/14')) !== '2026-08-05') {
+            console.error('رشتهٔ شمسی باید درست تبدیل شود، شد: ' + y(toDateValue('1405/05/14'))); process.exit(1);
+          }
+          if (toDateValue('1405/05/14').getUTCFullYear() < 1700) {
+            console.error('سالِ کمتر از ۱۷۰۰ یعنی شمسی به‌جای میلادی خوانده شده'); process.exit(1);
+          }
+          // ISOِ سالم دست‌نخورده
+          if (y(toDateValue('2026-08-05')) !== '2026-08-05') { console.error('ISO نباید دست بخورد'); process.exit(1); }
+          // آشغال باید undefinedِ صریح بدهد، نه Invalid Date که بی‌صدا بنشیند
+          if (toDateValue('فردا') !== undefined) { console.error('متنِ بی‌معنا باید undefined بدهد'); process.exit(1); }
+          if (toDateValue(null) !== null || toDateValue('') !== undefined) {
+            console.error('خالی و null باید از هم جدا بمانند'); process.exit(1);
+          }
+
+          /* هیچ‌کس دیگر `new Date()` را روی تاریخِ ورودی صدا نزند — تکِ‌نقطهٔ
+             تبدیل همین است. (یک بار سه ستون از یک قاعده جدا افتادند.) */
+          const pvc = fs.readFileSync('server/src/patients/patients.service.ts', 'utf8');
+          if (/new Date\(dto\.(opDate|birthDate)/.test(pvc)) {
+            console.error('تاریخِ ورودی باید از toDateValue بگذرد، نه new Date'); process.exit(1);
+          }
+
+          /* و کلاینت **شمسی خام نفرستد**: تور برای دادهٔ قدیمی است، نه مجوزِ
+             تنبلیِ کلاینتِ تازه. هر فرمی که JDate دارد باید jStrToIso بزند. */
+          for (const f of ['src/pages/Intake.jsx', 'src/app/Intake.jsx']) {
+            const src = fs.readFileSync(f, 'utf8');
+            if (!/jStrToIso\(/.test(src)) {
+              console.error(f + ' مقدارِ تقویمِ شمسی را بدونِ تبدیل می‌فرستد'); process.exit(1);
+            }
+            if (!/isoToJStr\(/.test(src)) {
+              console.error(f + ' تاریخِ ISOِ سرور را بدونِ تبدیل در تقویم می‌گذارد'); process.exit(1);
+            }
+          }
           console.log('jalali ok');
           "
 

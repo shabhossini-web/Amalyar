@@ -6,6 +6,7 @@ import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
+import { toDateValue } from '../common/jalali';
 import { AuditService } from '../audit/audit.service';
 import { summarize } from './billing.service';
 
@@ -660,7 +661,7 @@ export class PatientsService {
     if (match) {
       const fill: any = {};
       if (dto.phone && !match.patient.phone) fill.phone = dto.phone;
-      if (dto.birthDate && !match.patient.birthDate) fill.birthDate = new Date(dto.birthDate);
+      if (dto.birthDate && !match.patient.birthDate) fill.birthDate = toDateValue(dto.birthDate) ?? null;
       if (Object.keys(fill).length) await tx.patient.update({ where: { id: match.patient.id }, data: fill });
       return { patientId: match.patient.id, patientStatus: match.restored ? 'restored' : 'matched' };
     }
@@ -672,7 +673,7 @@ export class PatientsService {
         lastName: dto.lastName!,
         phone: dto.phone || null,
         nationalId: dto.nationalId || null,
-        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+        birthDate: toDateValue(dto.birthDate) ?? null,
       },
     });
     await tx.patient.update({
@@ -721,7 +722,7 @@ export class PatientsService {
           ...refs,
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
-          opDate: dto.opDate ? new Date(dto.opDate) : null,
+          opDate: toDateValue(dto.opDate) ?? null,
           ...timePatch(dto),
           notes: dto.notes || null,
           createdById: userId ?? null,
@@ -796,7 +797,7 @@ export class PatientsService {
     if (dto.lastName !== undefined) patientPatch.lastName = dto.lastName;
     if (dto.phone !== undefined) patientPatch.phone = dto.phone || null;
     if (dto.nationalId !== undefined) patientPatch.nationalId = dto.nationalId || null;
-    if (dto.birthDate !== undefined) patientPatch.birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
+    if (dto.birthDate !== undefined) patientPatch.birthDate = toDateValue(dto.birthDate) ?? null;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const visitPatch: any = await this.resolveRefs(tx, dto);
@@ -810,7 +811,7 @@ export class PatientsService {
       if (dto.opType !== undefined && visitPatch.opType === undefined) {
         visitPatch.opType = dto.opType?.trim() || null;
       }
-      if (dto.opDate !== undefined) visitPatch.opDate = dto.opDate ? new Date(dto.opDate) : null;
+      if (dto.opDate !== undefined) visitPatch.opDate = toDateValue(dto.opDate) ?? null;
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
       // طرفِ حساب و استثنای سهمِ جراح — فیلدهای مالیِ سبک که روی خودِ مراجعه‌اند.
       if (dto.payer !== undefined) visitPatch.payer = dto.payer;

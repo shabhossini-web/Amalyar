@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
 import { Alert, Back, CheckCircle, Close, Copy, Doctor, Hospital, Plus, Search } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
@@ -126,7 +126,9 @@ export default function IntakeAdmin() {
               {s.data?.procedure && <span>{s.data.procedure}</span>}
               {s.data?.surgeonName && <span><Doctor width="13" height="13" /> {s.data.surgeonName}</span>}
               {s.data?.hospitalName && <span><Hospital width="13" height="13" /> {s.data.hospitalName}</span>}
-              {s.data?.opDate && <span>{s.data.opDate}</span>}
+              {/* ⚠️ `faDate` نه رشتهٔ خام: مقدارِ ذخیره‌شده ISO است و چاپِ
+                  خامش «2026-08-05» به ادمینِ فارسی‌زبان نشان می‌داد. */}
+              {s.data?.opDate && <span>{faDate(s.data.opDate)}</span>}
               <span className="ia-when">{faDate(s.createdAt)}</span>
             </div>
 
@@ -235,7 +237,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [], banks: [] });
   const [f, setF] = useState({
     surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '',
-    opDate: row.data?.opDate ?? '', opStartTime: '',
+    // آنچه بیمار فرستاده ISO است؛ `JDate` شمسی می‌خواهد.
+    opDate: row.data?.opDate ? isoToJStr(row.data.opDate) : '', opStartTime: '',
     /* ⚠️ پیش‌فرض **روشن**: ادمین همین حالا فیش را دیده و تأیید یعنی «پول
        رسیده». خاموش‌بودنش یعنی هر مراجعهٔ تأییدشده بدهکار بماند. */
     registerPayment: true, bankAccountId: '',
@@ -263,7 +266,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           hospitalId: f.hospitalId ? Number(f.hospitalId) : undefined,
           techId: f.techId ? Number(f.techId) : undefined,
           procedureTypeId: f.procedureTypeId ? Number(f.procedureTypeId) : undefined,
-          opDate: f.opDate || undefined,
+          // ⚠️ و در برگشت دوباره ISO — همان قاعده، همان اشتباهِ یک‌بار رخ‌داده.
+          opDate: f.opDate.trim() ? jStrToIso(f.opDate) : undefined,
           opStartTime: f.opStartTime || undefined,
           registerPayment: f.registerPayment,
           bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,

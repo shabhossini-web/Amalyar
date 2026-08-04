@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, apiUpload } from '../lib/api.js';
-import { toEnDigits } from '../lib/jalali.js';
+import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import Mark from '../components/Mark.jsx';
 import './intake.css';
@@ -60,6 +60,8 @@ function Register() {
           ...f,
           nationalId: toEnDigits(f.nationalId),
           phone: toEnDigits(f.phone),
+          // ⚠️ تاریخِ تولد هم مثلِ تاریخِ عمل: شمسی در مرورگر، ISO روی سیم.
+          birthDate: f.birthDate.trim() ? jStrToIso(f.birthDate) : '',
           captchaA: cap.a, captchaB: cap.b, captchaAnswer: Number(toEnDigits(answer)) || 0,
         },
       });
@@ -122,7 +124,10 @@ function Form() {
         procedure: r.data?.procedure ?? s.procedure,
         surgeonName: r.data?.surgeonName ?? s.surgeonName,
         hospitalName: r.data?.hospitalName ?? s.hospitalName,
-        opDate: r.data?.opDate ?? s.opDate,
+        /* ⚠️ برگشت هم باید تبدیل شود: سرور ISO می‌دهد و `JDate` شمسی
+           می‌خواهد. بدونِ این، بیمار فرم را نیمه‌کاره رها می‌کرد و در
+           بازگشت «۲۰۲۶-۰۸-۰۵» در فیلدِ تاریخ می‌دید. */
+        opDate: r.data?.opDate ? isoToJStr(r.data.opDate) : s.opDate,
         notes: r.data?.patientNotes ?? s.notes,
       }));
     } catch (e) { setErr(e.message); }
@@ -133,7 +138,12 @@ function Form() {
 
   const saveFill = async () => {
     setErr(''); setBusy(true);
-    try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body: f })); }
+    /* ⚠️ تاریخ **شمسی فقط در مرورگر** زندگی می‌کند؛ روی سیم همیشه ISO می‌رود.
+       تا دیروز `f` خام فرستاده می‌شد، یعنی «۱۴۰۵/۰۵/۱۴» به سرور می‌رسید و
+       سرور آن را سالِ ۱۴۰۵ **میلادی** می‌فهمید — و مراجعه بی‌سروصدا شش قرن
+       عقب ثبت می‌شد. هیچ خطایی نمی‌داد؛ فقط از تقویم و گزارش‌ها غیب می‌شد. */
+    const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '' };
+    try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body })); }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
