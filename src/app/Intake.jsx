@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { api } from '../lib/api.js';
+import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import './intake-admin.css';
-import { Alert, Back, CheckCircle, Close, Copy, Doctor, Hospital, Plus } from '../ui/icons.jsx';
+import { Alert, Back, CheckCircle, Close, Copy, Doctor, Hospital, Plus, Search } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
@@ -38,6 +38,7 @@ export default function IntakeAdmin() {
   const [toast, setToast] = useState('');
   const [approving, setApproving] = useState(null);
   const [newLink, setNewLink] = useState(false);
+  const [zoom, setZoom] = useState(null); // نشانیِ blobِ فیشِ در حالِ بزرگ‌نمایی
   const row = useStagger();
 
   useEffect(() => { document.title = 'عمل‌یار — ثبت‌نامِ بیماران'; }, []);
@@ -133,6 +134,12 @@ export default function IntakeAdmin() {
             {s.reviewNote && <p className="ia-note warn">{s.reviewNote}</p>}
             {s.visitCode && <p className="ia-note ok"><CheckCircle width="13" height="13" /> مراجعهٔ {s.visitCode} ساخته شد</p>}
 
+            {/* فیش روی خودِ کارت هم هست: ادمین اغلب می‌خواهد فقط نگاه کند
+                و بعد تصمیم بگیرد، نه اینکه اول شیت را باز کند. */}
+            {s.status === 'pending_approval' && (
+              <Receipt documentId={s.data?.receiptDocumentId} onOpen={setZoom} />
+            )}
+
             {s.status === 'pending_approval' && (
               <footer className="ia-acts">
                 <button type="button" className="ia-ok" onClick={() => setApproving(s)}>تأیید و ساختِ مراجعه</button>
@@ -156,6 +163,7 @@ export default function IntakeAdmin() {
             row={approving}
             onClose={() => setApproving(null)}
             onDone={(m) => { setApproving(null); setToast(m); load(); }}
+            onZoom={setZoom}
           />
         )}
       </AnimatePresence>
@@ -165,13 +173,65 @@ export default function IntakeAdmin() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {zoom && <ReceiptZoom url={zoom} onClose={() => setZoom(null)} />}
+      </AnimatePresence>
+
       <div className={`ia-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>
   );
 }
 
+/**
+ * فیشِ واریزی.
+ *
+ * ⚠️ عکسِ مدرک پشتِ هدرِ `Authorization` است و `<img src>` هدر نمی‌فرستد، پس
+ * blob URL ساخته می‌شود — و در پاک‌سازی آزاد می‌شود وگرنه حافظه نشت می‌کند.
+ * همان الگویی که رسیدِ توقف در تختهٔ چینش دارد.
+ *
+ * ⚠️ URLِ عمومیِ ثابت برای فیش عمداً نداریم: لینکِ فوروارد‌شده یعنی هر کسی
+ * مدرکِ مالیِ بیمار را ببیند.
+ */
+function Receipt({ documentId, onOpen }) {
+  const [url, setUrl] = useState(null);
+  const [bad, setBad] = useState(false);
+
+  useEffect(() => {
+    if (!documentId) return undefined;
+    let alive = true;
+    let made = null;
+    apiBlobUrl(`/patients/documents/${documentId}/file`)
+      .then((u) => { made = u; if (alive) setUrl(u); else URL.revokeObjectURL(u); })
+      .catch(() => { if (alive) setBad(true); });
+    return () => { alive = false; if (made) URL.revokeObjectURL(made); };
+  }, [documentId]);
+
+  if (!documentId) {
+    return <p className="ia-note warn"><Alert width="13" height="13" /> فیشی آپلود نشده است</p>;
+  }
+  if (bad) return <p className="ia-note warn"><Alert width="13" height="13" /> فیش باز نشد</p>;
+  if (!url) return <p className="ia-note">در حال بازکردنِ فیش…</p>;
+
+  return (
+    <button type="button" className="ia-receipt" onClick={() => onOpen(url)} title="بزرگ‌نمایی">
+      <img src={url} alt="فیشِ واریزی" />
+      <span><Search width="13" height="13" /> فیشِ واریزی — برای بزرگ‌نمایی بزنید</span>
+    </button>
+  );
+}
+
+/** بزرگ‌نماییِ فیش — تصمیمِ مالی با تصویرِ کوچک گرفته نمی‌شود. */
+function ReceiptZoom({ url, onClose }) {
+  return (
+    <Overlay backdrop="ia-overlay" panel="ia-zoom" as="section" onClose={onClose}>
+      <button type="button" className="ia-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      <img src={url} alt="فیشِ واریزی" />
+    </Overlay>
+  );
+}
+
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
-function ApproveSheet({ row, onClose, onDone }) {
+function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [] });
   const [f, setF] = useState({
     surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '',
@@ -227,6 +287,19 @@ function ApproveSheet({ row, onClose, onDone }) {
         <p className="ia-note">
           بیمار نوشته: {[row.data?.procedure, row.data?.surgeonName, row.data?.hospitalName].filter(Boolean).join(' · ') || '—'}
         </p>
+        {/* ⚠️ فیش **بالای** انتخابگرهاست و نه در یک صفحهٔ دیگر: تأیید یعنی
+            «پول رسیده»، و تصمیمِ مالی نباید بدونِ دیدنِ مدرک گرفته شود. */}
+        <div className="ia-money">
+          <span>مبلغ: <b>{faNum(row.amount)} تومان</b></span>
+          {row.discountAmount > 0 && (
+            <span className="off">تخفیف {faNum(row.discountAmount)} با کدِ {row.discountCode}</span>
+          )}
+          <span className="pay">قابلِ پرداخت: <b>{faNum(row.payable ?? row.amount)} تومان</b></span>
+        </div>
+        {/* ⚠️ بزرگ‌نمایی **در والد** رندر می‌شود نه این‌جا: پوششِ `fixed` داخلِ
+            پنلی که `transform` دارد نسبت به همان پنل جا می‌گیرد، نه صفحه —
+            همان تلهٔ آشنای شیت‌های تودرتو. */}
+        <Receipt documentId={row.data?.receiptDocumentId} onOpen={onZoom} />
         <div className="ia-grid">
           <Sel k="surgeonId" label="جراح" list={refs.surgeons} />
           <Sel k="hospitalId" label="بیمارستان" list={refs.hospitals} />

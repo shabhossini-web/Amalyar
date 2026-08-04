@@ -1999,5 +1999,29 @@ jobs:
           if (/addPayment\(|payment\.create\(/.test(svc)) {
             console.error('intake نباید خودش پرداخت ثبت کند — تطبیقِ بانکی کارِ حسابداری است'); process.exit(1);
           }
+          // ⑥ ⚠️ **ادمین نباید فیشِ ندیده را تأیید کند.** تأیید یعنی «پول
+          //    رسیده»؛ اگر مدرک در همان شیت نباشد، تأیید امضای نادیده است.
+          //    مبلغ و تخفیف هم باید همان‌جا باشند تا با فیش مقایسه شوند.
+          const ui = read('src/app/Intake.jsx');
+          const sheet = ui.slice(ui.indexOf('function ApproveSheet'), ui.indexOf('function LinkSheet'));
+          if (!/<Receipt\s/.test(sheet)) {
+            console.error('شیتِ تأیید باید فیش را نشان دهد'); process.exit(1);
+          }
+          if (!/ia-money/.test(sheet)) {
+            console.error('مبلغ و تخفیف باید کنارِ فیش در شیتِ تأیید باشند'); process.exit(1);
+          }
+          // تخفیف باید در پاسخِ صفِ ادمین هم بیاید، وگرنه «قابلِ پرداخت» برابرِ
+          // مبلغِ کامل می‌شود و با فیشِ جلوی چشمِ ادمین نمی‌خواند.
+          const listBlock = svc.slice(svc.indexOf('async list('), svc.indexOf('async approve('));
+          for (const f of ['discountAmount', 'payable']) {
+            if (!listBlock.includes(f)) { console.error('صفِ ادمین باید ' + f + ' بدهد'); process.exit(1); }
+          }
+          // ⑦ فیش با URLِ عمومیِ ثابت سرو نشود — لینکِ فوروارد‌شده یعنی نشتِ مدرکِ مالی.
+          if (/<img[^>]*src=\{`\$\{[^}]*\}\/patients/.test(ui)) {
+            console.error('فیش باید با blobِ پشتِ احراز باز شود، نه URLِ مستقیم'); process.exit(1);
+          }
+          if (!/apiBlobUrl\(/.test(ui)) {
+            console.error('فیش باید از apiBlobUrl بیاید تا هدرِ احراز برود'); process.exit(1);
+          }
           console.log('intake money ok');
           "

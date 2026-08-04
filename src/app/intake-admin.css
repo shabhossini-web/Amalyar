@@ -140,3 +140,38 @@
   .ia-acts { flex-direction: column; }
   .ia-ok { min-width: 0; }
 }
+
+/* ── فیشِ واریزی ──
+   بندانگشتی روی کارت و بزرگ در شیتِ تأیید: تصمیمِ مالی با تصویرِ کوچک گرفته
+   نمی‌شود، ولی مرورِ صف هم نباید ده تصویرِ تمام‌قد باشد. */
+.ia-receipt {
+  display: grid; gap: 6px; padding: 8px; cursor: zoom-in; text-align: start;
+  border-radius: 13px; background: rgba(0, 0, 0, .25);
+  border: 1px solid rgba(255, 255, 255, .1);
+}
+.ia-receipt img {
+  width: 100%; max-height: 220px; object-fit: contain; border-radius: 9px;
+  background: #fff; /* فیشِ اسکن‌شده اغلب زمینهٔ سفید دارد */
+}
+.ia-receipt span {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--text3);
+}
+.ia-receipt:hover { border-color: rgba(var(--brand-2-rgb), .45); }
+
+.ia-money {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  padding: 9px 11px; border-radius: 12px; font-size: 12px; color: var(--text2);
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+}
+.ia-money b { color: var(--text1); font-weight: 800; }
+.ia-money .off { color: #6ee7b7; }
+.ia-money .pay { margin-inline-start: auto; }
+
+.ia-zoom {
+  position: relative; width: min(900px, 96vw); max-height: 92dvh; overflow: auto;
+  border-radius: 16px; background: #0d0a22; border: 1px solid rgba(var(--brand-soft-rgb), .3);
+  padding: 12px;
+}
+.ia-zoom img { width: 100%; height: auto; border-radius: 10px; background: #fff; }
+.ia-zoom .ia-x { position: absolute; inset-block-start: 18px; inset-inline-end: 18px; z-index: 2; }

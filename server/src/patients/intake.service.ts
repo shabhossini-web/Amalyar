@@ -252,7 +252,13 @@ export class IntakeService {
       token: r.token,
       status: r.status,
       statusLabel: INTAKE_LABELS[r.status] ?? r.status,
+      // ⚠️ هر سه عدد، مثلِ نمای بیمار: بدونِ تخفیف، «قابلِ پرداخت»ِ صفحهٔ
+      //    ادمین برابرِ مبلغِ کامل می‌شد و ادمین رقمی را تأیید می‌کرد که با
+      //    فیشِ جلوی چشمش نمی‌خواند.
       amount: r.amount,
+      discountCode: r.discountCode,
+      discountAmount: r.discountAmount,
+      payable: Math.max(0, r.amount - r.discountAmount),
       data: r.data,
       linkTitle: r.link.title,
       patient: r.patient,
