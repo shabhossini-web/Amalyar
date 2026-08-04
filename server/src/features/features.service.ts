@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FEATURES, FEATURE_BY_KEY, FEATURE_DEFAULT_LEVELS, LOCKED_FEATURES } from '../auth/access-registry';
+import { LEVEL } from '../common/levels';
 
 /**
  * پیش‌فرضِ سطحِ ماژول‌ها — از رجیستریِ دسترسی می‌آید، نه از فهرستی که این‌جا
@@ -29,7 +30,79 @@ export class FeaturesService {
   }
 
   /**
-   * فهرستِ ماژول‌ها برای لانچر — همهٔ کاربرانِ واردشده می‌خوانند.
+   * ماژول‌هایی که **این کاربر** واقعاً می‌تواند باز کند.
+   *
+   * ⚠️ «سطحت کافی است» با «این ماژول به کارِ تو می‌آید» یکی نیست. رانندهٔ سطح
+   * ۲ و کارشناسِ سطح ۲ هر دو از فیلترِ سطح رد می‌شوند، پس تا دیروز راننده
+   * کاشیِ «پنلِ کارشناسی» را می‌دید و کارشناس کاشیِ «پرتالِ حمل‌ونقل» را —
+   * و هر کدام که می‌زد به صفحهٔ خالی یا خطا می‌رسید.
+   *
+   * پس علاوه بر سطح، **صلاحیتِ نقش** هم سنجیده می‌شود: پرتالِ حمل‌ونقل فقط
+   * برای کسی که به یک `TransportStaff` وصل است، و پنلِ کارشناسی فقط برای
+   * حسابی که نقشش کارشناسی است.
+   *
+   * ⚠️ این محاسبه **روی سرور** است و لانچر فقط `allowed` را می‌خواند. تا
+   * دیروز کلاینت خودش `level >= minLevel` را حساب می‌کرد؛ دو منبعِ حقیقت
+   * برای «چه چیزی را می‌بینم» یعنی روزی یکی‌شان عقب می‌ماند.
+   */
+  async forUser(user: any) {
+    const rows = await this.list();
+    const level = user?.level ?? 0;
+    const eligible = await this.eligibility(user);
+    return rows.map((r) => {
+      const byLevel = level >= r.minLevel;
+      const byRole = eligible[r.key] ?? true;
+      return {
+        ...r,
+        allowed: r.enabled && byLevel && byRole,
+        // دلیل برای صفحه‌ای که کاربر مستقیم نشانی‌اش را تایپ کرده.
+        reason: !r.enabled ? 'این بخش غیرفعال است'
+          : !byLevel ? 'سطحِ دسترسیِ شما برای این بخش کافی نیست'
+            : !byRole ? 'این بخش برای نقشِ دیگری است'
+              : null,
+      };
+    });
+  }
+
+  /**
+   * صلاحیتِ نقش‌محور — فقط برای ماژول‌هایی که «کیستی» می‌خواهند، نه «سطح».
+   *
+   * ⚠️ سوپرادمین استثنا **نمی‌شود**: پرتالِ راننده بدونِ رکوردِ راننده حتی
+   * برای سوپرادمین هم صفحهٔ خطاست، پس نشان‌دادنش فقط سردرگمی می‌سازد.
+   */
+  private async eligibility(user: any): Promise<Record<string, boolean>> {
+    const id = user?.id ?? -1;
+    const account = await this.prisma.account.findUnique({
+      where: { id },
+      select: { personId: true, level: true },
+    });
+    const staff = account?.personId
+      ? await this.prisma.transportStaff.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } })
+      : null;
+    const level = account?.level ?? user?.level ?? 0;
+    // بازهٔ سطحی که `listTechs` «کارشناس» می‌داند — تعریفِ دومِ «چه کسی
+    // کارشناس است» یعنی روزی لانچر و فهرستِ چینش دو جوابِ متفاوت بدهند.
+    const inTechBand = level >= LEVEL.TECH && level <= LEVEL.SUPERVISOR;
+
+    /**
+     * ⚠️ **سطح به‌تنهایی راننده را از کارشناس جدا نمی‌کند** — هر دو سطح ۲اند.
+     * نسخهٔ اول همین را جا انداخت و راننده همچنان کاشیِ پنلِ کارشناسی را
+     * می‌دید. پس رانندهٔ ثبت‌شده کارشناس **نیست**، مگر واقعاً عملی به نامش
+     * خورده باشد (کسی که هر دو نقش را دارد پنلش را از دست نمی‌دهد).
+     */
+    const hasTechVisits = inTechBand
+      ? (await this.prisma.visit.count({ where: { techId: id } })) > 0
+      : false;
+
+    return {
+      // پرتالِ راننده بدونِ رکوردِ نیرو صفحهٔ خطاست — حتی برای سوپرادمین.
+      transport: !!staff,
+      tech: inTechBand && (!staff || hasTechVisits),
+    };
+  }
+
+  /**
+   * فهرستِ ماژول‌ها — بدونِ در نظر گرفتنِ کاربر. ماتریسِ دسترسی از این می‌خواند.
    * ⚠️ برچسبِ فارسی هم برمی‌گردد تا لانچر و ماتریس نامِ ماژول را hardcode نکنند.
    */
   async list() {

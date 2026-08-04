@@ -74,6 +74,10 @@ class ApproveDto {
   @IsOptional() @IsString() @MaxLength(12) opDate?: string;
   @IsOptional() @IsString() @MaxLength(5) opStartTime?: string;
   @IsOptional() @IsString() @MaxLength(300) note?: string;
+  /// ⚠️ باید در DTO باشند وگرنه ValidationPipe با whitelist بی‌صدا دورشان می‌ریزد.
+  @IsOptional() @IsBoolean() registerPayment?: boolean;
+  @IsOptional() @Type(() => Number) @IsInt() bankAccountId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) paidAmount?: number;
 }
 
 class NoteDto {

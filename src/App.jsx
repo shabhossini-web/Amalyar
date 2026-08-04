@@ -18,6 +18,7 @@ import Dispatch from './app/Dispatch.jsx';
 import Tech from './app/Tech.jsx';
 import Transport from './app/Transport.jsx';
 import IntakeAdmin from './app/Intake.jsx';
+import Gate from './app/Gate.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
 import PlatformAdmin from './app/PlatformAdmin.jsx';
@@ -55,17 +56,17 @@ export default function App() {
           <Route path="/f/:token" element={<Intake step="form" />} />
           <Route path="/platform-admin" element={<PlatformAdmin />} />
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
-          <Route path="/app/dashboard" element={<Protected><Dashboard /></Protected>} />
-          <Route path="/app/users" element={<Protected><Users /></Protected>} />
-          <Route path="/app/access" element={<Protected><Access /></Protected>} />
+          <Route path="/app/dashboard" element={<Protected><Gate feature="dashboard"><Dashboard /></Gate></Protected>} />
+          <Route path="/app/users" element={<Protected><Gate feature="users"><Users /></Gate></Protected>} />
+          <Route path="/app/access" element={<Protected><Gate feature="access"><Access /></Gate></Protected>} />
           <Route path="/app/definitions" element={<Protected><Definitions /></Protected>} />
-          <Route path="/app/inventory" element={<Protected><Inventory /></Protected>} />
-          <Route path="/app/accounting" element={<Protected><Accounting /></Protected>} />
-          <Route path="/app/calendar" element={<Protected><Calendar /></Protected>} />
-          <Route path="/app/dispatch" element={<Protected><Dispatch /></Protected>} />
-          <Route path="/app/tech" element={<Protected><Tech /></Protected>} />
-          <Route path="/app/transport" element={<Protected><Transport /></Protected>} />
-          <Route path="/app/intake" element={<Protected><IntakeAdmin /></Protected>} />
+          <Route path="/app/inventory" element={<Protected><Gate feature="inventory"><Inventory /></Gate></Protected>} />
+          <Route path="/app/accounting" element={<Protected><Gate feature="accounting"><Accounting /></Gate></Protected>} />
+          <Route path="/app/calendar" element={<Protected><Gate feature="calendar"><Calendar /></Gate></Protected>} />
+          <Route path="/app/dispatch" element={<Protected><Gate feature="dispatch"><Dispatch /></Gate></Protected>} />
+          <Route path="/app/tech" element={<Protected><Gate feature="tech"><Tech /></Gate></Protected>} />
+          <Route path="/app/transport" element={<Protected><Gate feature="transport"><Transport /></Gate></Protected>} />
+          <Route path="/app/intake" element={<Protected><Gate feature="formgen"><IntakeAdmin /></Gate></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />

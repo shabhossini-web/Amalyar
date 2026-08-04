@@ -2025,3 +2025,82 @@ jobs:
           }
           console.log('intake money ok');
           "
+
+      - name: Verify money reaches the ledger and portals follow permissions
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          // ① مراجعهٔ تازه باید بتواند مبلغ بگیرد و آن مبلغ **قلمِ فاکتور**
+          //    بشود، نه ستونی روی مراجعه: جمعِ فاکتور از قلم‌ها مشتق می‌شود و
+          //    ستونِ موازی یعنی دو منبعِ حقیقت برای «مبلغِ این عمل».
+          const pvc = read('server/src/patients/patients.service.ts');
+          const from = pvc.indexOf('async createVisit(');
+          const create = pvc.slice(from, pvc.indexOf('async setTimes(', from));
+          if (!/tx\\.charge\\.create\\(/.test(create) || !/dto\\.amount/.test(create)) {
+            console.error('ثبتِ مراجعه باید از مبلغ قلمِ خدمت بسازد'); process.exit(1);
+          }
+          if (/visit.*amount.*Int/.test(read('server/prisma/schema.prisma').slice(
+                read('server/prisma/schema.prisma').indexOf('model Visit'),
+                read('server/prisma/schema.prisma').indexOf('model Charge')))) {
+            console.error('مبلغ نباید ستونی روی Visit شود'); process.exit(1);
+          }
+
+          // ② ⚠️ مراجعهٔ تأییدشده نباید بدهکار بماند: تأیید یعنی ادمین فیش را
+          //    دیده. پرداخت ثبت می‌شود ولی **حسابِ مقصد را ادمین می‌گوید**.
+          const isvc = read('server/src/patients/intake.service.ts');
+          if (!/this\\.billing\\.addPayment\\(/.test(isvc)) {
+            console.error('تأیید باید پرداخت را هم ثبت کند وگرنه مراجعه بدهکار می‌ماند'); process.exit(1);
+          }
+          if (!/dto\\.registerPayment !== false/.test(isvc)) {
+            console.error('ثبتِ پرداخت باید پیش‌فرض روشن و قابلِ خاموش‌کردن باشد'); process.exit(1);
+          }
+          if (!/bankAccountId: dto\\.bankAccountId/.test(isvc)) {
+            console.error('حسابِ مقصد باید از ادمین بیاید، نه حدس زده شود'); process.exit(1);
+          }
+
+          // ③ اعتبارسنجیِ کدِ ملی در **درِ عمومی** نباید سست‌تر از مسیرِ ادمین
+          //    باشد؛ وگرنه پرونده‌ای ساخته می‌شود که ادمین هرگز نمی‌توانست.
+          if (!/isValidNationalId\\(nationalId\\)/.test(isvc)) {
+            console.error('فرمِ عمومی باید همان اعتبارسنجیِ کدِ ملی را داشته باشد'); process.exit(1);
+          }
+
+          // ④ ⚠️ «چه چیزی را می‌بینم» **یک** منبع دارد و آن سرور است. تا دیروز
+          //    لانچر خودش level >= minLevel حساب می‌کرد و صلاحیتِ نقش را
+          //    نمی‌دانست: رانندهٔ سطح ۲ کاشیِ پنلِ کارشناسی را می‌دید.
+          const fsvc = read('server/src/features/features.service.ts');
+          if (!/async forUser\\(/.test(fsvc) || !/allowed:/.test(fsvc)) {
+            console.error('سرور باید allowed را به‌ازای کاربر بدهد'); process.exit(1);
+          }
+          /**
+           * ⚠️ کامنت‌ها پیش از سنجش حذف می‌شوند.
+           *
+           * نسخهٔ اولِ این بند **توضیحِ خودِ کد** را خطا گرفت: جمله‌ای که
+           * می‌گفت «تا دیروز این‌جا سطح حساب می‌شد» عیناً همان الگو را
+           * داشت. نگهبانی که درسِ ثبت‌شده را پاک کند بدتر از نداشتنش
+           * است — همان اشتباه یک‌بار سرِ «ریال» هم رخ داد.
+           */
+          const code = (src) => src.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/\\/\\/[^\\n]*/g, '');
+          const lx = code(read('src/app/Launcher.jsx'));
+          if (/lvl >= min\\b/.test(lx) || /f\\?\\.minLevel/.test(lx)) {
+            console.error('لانچر نباید خودش سطح را حساب کند — allowedِ سرور'); process.exit(1);
+          }
+          if (!/f\\.allowed/.test(lx)) { console.error('لانچر باید allowed را بخواند'); process.exit(1); }
+
+          // ⑤ سطح به‌تنهایی راننده را از کارشناس جدا نمی‌کند — هر دو سطح ۲اند.
+          if (!/TransportStaff|transportStaff/.test(fsvc) || !/!staff \\|\\| hasTechVisits/.test(fsvc)) {
+            console.error('صلاحیتِ نقش باید راننده را از کارشناس جدا کند'); process.exit(1);
+          }
+
+          // ⑥ هر صفحهٔ ماژولی پشتِ دروازه باشد تا تایپِ مستقیمِ نشانی صفحهٔ
+          //    خالی ندهد. (دروازه جایگزینِ گاردِ سرور نیست، مکملِ آن است.)
+          const app = read('src/App.jsx');
+          for (const key of ['tech', 'transport', 'dashboard', 'accounting', 'inventory']) {
+            if (!new RegExp('Gate feature=\\\\\"' + key + '\\\\\"').test(app)) {
+              console.error('صفحهٔ ' + key + ' پشتِ Gate نیست'); process.exit(1);
+            }
+          }
+          console.log('money+acl ok');
+          "

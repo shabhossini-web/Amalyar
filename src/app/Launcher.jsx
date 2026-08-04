@@ -65,11 +65,19 @@ export default function Launcher() {
     );
     return () => { alive = false; };
   }, []);
+  /**
+   * ⚠️ تصمیم از **سرور** می‌آید (`allowed`)، نه از حسابِ سطح در کلاینت.
+   *
+   * تا دیروز این‌جا `lvl >= min` حساب می‌شد و صلاحیتِ نقش اصلاً دیده نمی‌شد:
+   * رانندهٔ سطح ۲ کاشیِ «پنلِ کارشناسی» را می‌دید و کارشناسِ سطح ۲ کاشیِ
+   * «پرتالِ حمل‌ونقل» را، و هر کدام که می‌زد به صفحهٔ خالی می‌رسید.
+   *
+   * `min`ِ کد فقط تا رسیدنِ پاسخِ سرور به کار می‌آید تا کاشی‌ها نپرند.
+   */
   const allowed = (t) => {
     const f = features?.[t.key];
-    const min = f?.minLevel ?? t.min;
-    const enabled = f?.enabled ?? true;
-    return enabled && lvl >= min;
+    if (f) return !!f.allowed;
+    return lvl >= t.min;
   };
   const showHero = allowed(HERO);
   const daily = DAILY.filter(allowed);

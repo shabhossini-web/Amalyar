@@ -232,10 +232,13 @@ function ReceiptZoom({ url, onClose }) {
 
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
 function ApproveSheet({ row, onClose, onDone, onZoom }) {
-  const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [] });
+  const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [], banks: [] });
   const [f, setF] = useState({
     surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '',
     opDate: row.data?.opDate ?? '', opStartTime: '',
+    /* ⚠️ پیش‌فرض **روشن**: ادمین همین حالا فیش را دیده و تأیید یعنی «پول
+       رسیده». خاموش‌بودنش یعنی هر مراجعهٔ تأییدشده بدهکار بماند. */
+    registerPayment: true, bankAccountId: '',
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -246,7 +249,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
       api('/hospitals').catch(() => []),
       api('/techs').catch(() => []),
       api('/procedure-types').catch(() => []),
-    ]).then(([surgeons, hospitals, techs, types]) => setRefs({ surgeons, hospitals, techs, types }));
+      api('/bank-accounts').catch(() => []),
+    ]).then(([surgeons, hospitals, techs, types, banks]) => setRefs({ surgeons, hospitals, techs, types, banks }));
   }, []);
 
   const save = async () => {
@@ -261,6 +265,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           procedureTypeId: f.procedureTypeId ? Number(f.procedureTypeId) : undefined,
           opDate: f.opDate || undefined,
           opStartTime: f.opStartTime || undefined,
+          registerPayment: f.registerPayment,
+          bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
         },
       });
       onDone(`مراجعهٔ ${r.visitCode} ساخته شد ✓`);
@@ -310,6 +316,27 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           <TimePick className="ia-field" label="ساعتِ عمل" value={f.opStartTime}
                     onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />
         </div>
+        {/* ⚠️ ثبتِ پرداخت همین‌جاست چون همین‌جا فیش جلوی چشمِ ادمین است و
+            می‌داند پول کجا نشسته. نسخهٔ اول پرداخت ثبت نمی‌کرد و نتیجه‌اش
+            مراجعهٔ تأییدشده‌ای بود که کلِ مبلغش «مانده» می‌ماند. */}
+        <div className="ia-pay">
+          <label className="ia-check">
+            <input type="checkbox" checked={f.registerPayment} disabled={busy}
+                   onChange={(e) => setF((s) => ({ ...s, registerPayment: e.target.checked }))} />
+            <span>پرداختِ {faNum(row.payable ?? row.amount)} تومان ثبت شود</span>
+          </label>
+          {f.registerPayment && (
+            <label className="ia-field">
+              <span>به کدام حساب واریز شده؟</span>
+              <select value={f.bankAccountId} disabled={busy}
+                      onChange={(e) => setF((s) => ({ ...s, bankAccountId: e.target.value }))}>
+                <option value="">— نامشخص —</option>
+                {refs.banks.map((b) => <option key={b.id} value={b.id}>{[b.ownerName, b.bankName].filter(Boolean).join(" — ")}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+
         {err && <p className="ia-note warn">{err}</p>}
         <button type="button" className="ia-ok" disabled={busy} onClick={save}>
           {busy ? 'در حال ساخت…' : 'تأیید و ساختِ مراجعه'}

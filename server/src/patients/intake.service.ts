@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { PatientsService } from './patients.service';
 import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
-import { toEnDigits } from '../common/identity';
+import { isValidNationalId, toEnDigits } from '../common/identity';
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
@@ -123,7 +123,11 @@ export class IntakeService {
     const nationalId = toEnDigits(text(dto.nationalId, 15) ?? '');
     const phone = toEnDigits(text(dto.phone, 20) ?? '');
     if (!firstName || !lastName) throw new BadRequestException('نام و نامِ خانوادگی را وارد کنید');
-    if (!/^\d{10}$/.test(nationalId)) throw new BadRequestException('کدِ ملی باید ۱۰ رقم باشد');
+    /* ⚠️ همان اعتبارسنجیِ مسیرِ ادمین، نه یک «۱۰ رقم» ساده‌تر. نسخهٔ اول فقط
+       طول را می‌سنجید، پس کدِ ملیِ بی‌اعتبار از **درِ عمومی** وارد می‌شد و
+       هنگامِ تأیید هم دوباره سنجیده نمی‌شد (چون آن‌جا با `patientId` می‌رویم).
+       نتیجه: پرونده‌ای با کدِ ملیِ غلط که ادمین هرگز نمی‌توانست بسازد. */
+    if (!isValidNationalId(nationalId)) throw new BadRequestException('کدِ ملی معتبر نیست');
     if (!/^09\d{9}$/.test(phone)) throw new BadRequestException('شمارهٔ موبایل نامعتبر است');
 
     const { patientId } = await this.prisma.$transaction((tx) =>
@@ -282,7 +286,12 @@ export class IntakeService {
    */
   async approve(
     id: number,
-    dto: { surgeonId?: number; hospitalId?: number; techId?: number; procedureTypeId?: number; opDate?: string; opStartTime?: string; note?: string },
+    dto: {
+      surgeonId?: number; hospitalId?: number; techId?: number; procedureTypeId?: number;
+      opDate?: string; opStartTime?: string; note?: string;
+      /// ثبتِ پرداختِ همان فیش — پیش‌فرض روشن، ولی حسابِ مقصد را ادمین می‌گوید.
+      registerPayment?: boolean; bankAccountId?: number; paidAmount?: number;
+    },
     user: any,
   ) {
     const row = await this.prisma.intakeSubmission.findUnique({ where: { id }, include: { patient: true } });
@@ -317,9 +326,15 @@ export class IntakeService {
      * مبلغِ اصلی چه بود و چقدر تخفیف خورد؛ عددِ خالص‌شده همان اطلاعات را
      * برای همیشه گم می‌کند. علامتِ منفی را خودِ `addCharge` می‌گذارد.
      *
-     * ⚠️ **پرداخت ثبت نمی‌شود.** فیشِ بیمار ادعای واریز است؛ ثبتِ خودکارِ
-     * `Payment` بدونِ حسابِ بانکیِ مقصد، خزانه و بدهیِ بینِ شرکا را آلوده
-     * می‌کند. تطبیقِ بانکی کارِ صفحهٔ حسابداری است.
+     * ⚠️ **پرداخت هم ثبت می‌شود، ولی حسابِ مقصد را ادمین می‌گوید.**
+     *
+     * نسخهٔ اول عمداً پرداخت ثبت نمی‌کرد تا خزانه با حسابِ نامعلوم آلوده
+     * نشود — ولی نتیجه‌اش این بود که هر مراجعهٔ تأییدشده کلِ مبلغش «مانده»
+     * می‌ماند و در فیلترِ «فقط بدهکار» و گزارشِ مالی بدهکار به‌نظر می‌رسید،
+     * در حالی که بیمار پولش را داده و ادمین همین حالا فیشش را دیده.
+     *
+     * راهِ درست «ثبت نکردن» نبود، «پرسیدنِ حسابِ مقصد» بود: ادمین در همان
+     * لحظه فیش را جلوی چشمش دارد، پس می‌تواند بگوید پول کجا نشسته.
      */
     if (row.amount > 0) {
       await this.billing.addCharge(visit.id, {
@@ -339,9 +354,22 @@ export class IntakeService {
     if (d.receiptDocumentId) {
       await this.prisma.document.updateMany({ where: { id: Number(d.receiptDocumentId) }, data: { visitId: visit.id } });
     }
+    const payable = Math.max(0, row.amount - row.discountAmount);
+    const pay = dto.registerPayment !== false && payable > 0;
+    if (pay) {
+      await this.billing.addPayment(visit.id, {
+        amount: Math.max(1, Number(dto.paidAmount) || payable),
+        // فیشِ واریزی یعنی انتقالِ بانکی؛ روشِ دیگر را ادمین بعداً در
+        // صفحهٔ حسابداری اصلاح می‌کند.
+        method: 'transfer',
+        bankAccountId: dto.bankAccountId,
+        reference: `ثبت‌نامِ ${row.token.slice(0, 8)}`,
+      }, user);
+    }
+
     await this.audit.record({
       actorId: user?.id, action: 'intake.approve', entityType: 'intake_submission', entityId: id,
-      after: { visitId: visit.id },
+      after: { visitId: visit.id, charged: row.amount, discount: row.discountAmount, paid: pay ? payable : 0 },
     });
     // ⚠️ کدِ مراجعه از خروجیِ `createVisit` می‌آید نه ساختِ دستیِ
     //    `code + '-V' + seq`: قالبِ کد یک جا تعریف شده و ساختنش این‌جا یعنی

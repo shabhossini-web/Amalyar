@@ -175,3 +175,11 @@
 }
 .ia-zoom img { width: 100%; height: auto; border-radius: 10px; background: #fff; }
 .ia-zoom .ia-x { position: absolute; inset-block-start: 18px; inset-inline-end: 18px; z-index: 2; }
+
+/* ثبتِ پرداخت هنگامِ تأیید — کنارِ فیش، چون همان‌جا تصمیم گرفته می‌شود. */
+.ia-pay {
+  display: grid; gap: 8px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(52, 211, 153, .07); border: 1px solid rgba(52, 211, 153, .28);
+}
+.ia-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.ia-check input { width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; }

@@ -1,0 +1,19 @@
+/* دروازهٔ ماژول — پیامِ روشن به‌جای صفحهٔ خالی. */
+.gt-wait { padding: 40px 16px; text-align: center; font-size: 13px; color: var(--text3); }
+.gt { min-height: 100dvh; display: grid; place-items: center; padding: 20px 14px; }
+.gt-card {
+  width: min(420px, 100%); display: grid; gap: 9px; justify-items: center; text-align: center;
+  padding: 26px 20px; border-radius: 19px;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+}
+.gt-ic {
+  display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px;
+  color: #fcd34d; background: rgba(245, 158, 11, .12); border: 1px solid rgba(251, 191, 36, .32);
+}
+.gt-card b { font-size: 15px; font-weight: 900; }
+.gt-card p { font-size: 12.5px; line-height: 1.9; color: var(--text2); }
+.gt-back {
+  margin-top: 5px; font-size: 12.5px; font-weight: 700; text-decoration: none;
+  padding: 9px 18px; border-radius: 11px; color: #fff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}

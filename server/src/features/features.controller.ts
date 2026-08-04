@@ -1,4 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { FeaturesService } from './features.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -15,9 +16,15 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 export class FeaturesController {
   constructor(private features: FeaturesService) {}
 
-  /// همهٔ کاربرانِ واردشده — لانچر از همین گیت می‌شود
+  /**
+   * همهٔ کاربرانِ واردشده — لانچر از همین گیت می‌شود.
+   *
+   * ⚠️ `allowed` را **سرور** حساب می‌کند، نه لانچر. تا دیروز کلاینت خودش
+   * `level >= minLevel` را می‌سنجید و صلاحیتِ نقش را اصلاً نمی‌دانست؛ نتیجه
+   * این بود که راننده کاشیِ پنلِ کارشناسی را می‌دید.
+   */
   @Get()
-  list() {
-    return this.features.list();
+  list(@CurrentUser() user: any) {
+    return this.features.forUser(user);
   }
 }

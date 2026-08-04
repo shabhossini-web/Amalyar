@@ -200,6 +200,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     // متنِ آزاد فقط برای رکوردهای قدیمی که هنوز به نوعِ عمل وصل نشده‌اند.
     opType: initial?.procedureTypeId ? '' : initial?.opType || '',
     opReport: initial?.opReport || '',
+    amount: '', // مبلغِ توافقی — فقط هنگامِ ساخت
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
@@ -312,6 +313,9 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       techArriveTime: editing || times.techArriveTime ? times.techArriveTime : undefined,
       notes: f.notes.trim() || undefined,
     };
+    /* ⚠️ مبلغ فقط در **ساخت** می‌رود، نه در ویرایش: ویرایشِ مراجعه نباید
+       بی‌سروصدا قلمِ تازه بسازد. اصلاحِ مبلغ کارِ صورت‌حساب است. */
+    const amount = Number(toEnDigits(String(f.amount)).replace(/[^0-9]/g, '')) || 0;
     setBusy(true);
     try {
       let saved;
@@ -332,11 +336,12 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         });
       } else if (mode === 'existing') {
         if (!picked) { onToast('یک بیمار را از فهرست انتخاب کنید'); setBusy(false); return; }
-        saved = await api('/visits', { method: 'POST', body: { ...common, patientId: picked.id } });
+        saved = await api('/visits', { method: 'POST', body: { ...common, patientId: picked.id, amount: amount || undefined } });
       } else {
         saved = await api('/visits', {
           method: 'POST',
           body: {
+            amount: amount || undefined,
             ...common,
             firstName: f.firstName.trim(),
             lastName: f.lastName.trim(),
@@ -544,6 +549,15 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       </div>
       {formDuration != null && (
         <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
+      )}
+
+      {/* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
+          در ویرایش، صورت‌حساب جای اصلاح است. */}
+      {!editing && (
+        <label className="db-field"><span>مبلغِ توافقی (تومان)</span>
+          <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
+                 placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
+        </label>
       )}
 
       <label className="db-field"><span>شرحِ عمل</span>

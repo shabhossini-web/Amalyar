@@ -728,6 +728,26 @@ export class PatientsService {
         },
         include: INCLUDE_PATIENT,
       });
+      /**
+       * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
+       *
+       * ⚠️ همان مسیرِ تأییدِ فرمِ ثبت‌نام: جمعِ فاکتور از قلم‌ها مشتق می‌شود و
+       * دو منبعِ حقیقت برای «مبلغِ این عمل» ساخته نمی‌شود. عنوانِ قلم از نوعِ
+       * عمل می‌آید تا فاکتور خوانا باشد.
+       *
+       * ⚠️ داخلِ همین تراکنش نوشته می‌شود: مراجعه‌ای که ساخته شود ولی قلمش
+       * نه، دقیقاً همان مراجعهٔ صفرتومانی است که این تغییر برای حذفش آمده.
+       */
+      const charge = Math.trunc(Number(dto.amount) || 0);
+      if (charge > 0) {
+        const title = (refs.opType || dto.opType?.trim() || 'خدمتِ ثبت‌شده').slice(0, 120);
+        await tx.charge.create({
+          data: {
+            visitId: visit.id, kind: 'service', title,
+            quantity: 1, unitPrice: charge, amount: charge, stockEffect: 'virtual',
+          },
+        });
+      }
       if (dto.opReport?.trim()) {
         await this.setOpReport(tx, visit, dto.opReport, user);
         visit.clinicalNotes = await tx.clinicalNote.findMany({
