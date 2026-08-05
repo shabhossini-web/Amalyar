@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toJalali } from '../common/jalali';
+import { recognize } from './revenue';
 
 /**
  * گزارشِ مالی.
@@ -10,10 +11,14 @@ import { toJalali } from '../common/jalali';
  * `Expense.amount`. اگر گزارش تعریفِ خودش را بسازد، عددِ گزارش با عددِ صفحهٔ
  * مراجعه فرق می‌کند و کاربر به هر دو بی‌اعتماد می‌شود.
  *
- * ⚠️ **درآمد و وصولی یکی نیستند** و عمداً کنارِ هم گزارش می‌شوند: فاکتورِ صادره
- * درآمدِ شناسایی‌شده است، پرداخت پولِ رسیده. سودِ حسابداری با اولی حساب می‌شود و
- * نقدینگی با دومی، و قاطی‌کردنشان همان اشتباهی است که شرکت‌های کوچک را
- * ورشکسته می‌کند.
+ * ⚠️ **درآمد و وصولی یکی نیستند** و عمداً کنارِ هم گزارش می‌شوند: سودِ حسابداری
+ * با اولی حساب می‌شود و نقدینگی با دومی، و قاطی‌کردنشان همان اشتباهی است که
+ * شرکت‌های کوچک را ورشکسته می‌کند.
+ *
+ * ⚠️ **و درآمد با «فاکتورِ صادره» هم یکی نیست.** قرارِ شناسایی در `revenue.ts`
+ * است: تا وقتی عمل انجام نشده، پولِ رسیده **پیش‌دریافت** است نه درآمد. این‌جا
+ * فقط مصرف می‌شود؛ اگر گزارش قاعدهٔ خودش را بسازد، همان دوپارگی‌ای پیش می‌آید
+ * که این فایل از اولش برای جلوگیری از آن نوشته شد.
  */
 @Injectable()
 export class ReportsService {
@@ -38,7 +43,7 @@ export class ReportsService {
       this.prisma.visit.findMany({
         where: visitWhere,
         select: {
-          id: true, opDate: true, createdAt: true, payer: true,
+          id: true, opDate: true, createdAt: true, payer: true, opStatus: true,
           surgeonId: true, surgeonName: true,
           hospitalId: true, hospitalName: true,
           procedureTypeId: true, opType: true,
@@ -60,13 +65,18 @@ export class ReportsService {
     const payOf = new Map(payments.filter((p) => ids.has(p.visitId)).map((p) => [p.visitId, p._sum.amount ?? 0]));
 
     const rows = visits.map((v) => {
-      const revenue = chargeOf.get(v.id) ?? 0;
+      const contracted = chargeOf.get(v.id) ?? 0;
       const collected = payOf.get(v.id) ?? 0;
+      const m = recognize({ contracted, collected, opStatus: v.opStatus });
       return {
         ...v,
-        revenue,
+        /// ⚠️ `revenue` عمداً **شناسایی‌شده** است، نه جمعِ فاکتور: هرجا این کلمه
+        ///    در گزارش می‌آید باید همان چیزی باشد که سود با آن حساب می‌شود.
+        revenue: m.recognized,
+        contracted,
+        deferred: m.deferred,
         collected,
-        due: Math.max(0, revenue - collected),
+        due: m.due,
         month: monthKey(v.opDate ?? v.createdAt),
         surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName ?? '—',
         hospitalLabel: v.hospital?.name ?? v.hospitalName ?? '—',
@@ -75,6 +85,8 @@ export class ReportsService {
     });
 
     const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const contracted = rows.reduce((s, r) => s + r.contracted, 0);
+    const deferred = rows.reduce((s, r) => s + r.deferred, 0);
     const collected = rows.reduce((s, r) => s + r.collected, 0);
     const expenseTotal = expenses.reduce((s, e) => s + e.amount, 0);
 
@@ -82,11 +94,16 @@ export class ReportsService {
       range: { from: opts.from ?? null, to: opts.to ?? null },
       totals: {
         visits: rows.length,
+        /// درآمدِ **شناسایی‌شده** — فقط عمل‌های انجام‌شده.
         revenue,
+        /// جمعِ فاکتورها صرف‌نظر از انجام — «چقدر کار در جریان است».
+        contracted,
+        /// پیش‌دریافت: پولِ رسیده بابتِ عملِ انجام‌نشده. **بدهی است، نه درآمد.**
+        deferred,
         collected,
         due: rows.reduce((s, r) => s + r.due, 0),
         expenses: expenseTotal,
-        /// سودِ ناخالص بر مبنای **درآمدِ شناسایی‌شده**، نه وصولی.
+        /// سودِ ناخالص بر مبنای **درآمدِ شناسایی‌شده**، نه وصولی و نه فاکتور.
         profit: revenue - expenseTotal,
       },
       byMonth: byMonth(rows, expenses),
@@ -104,17 +121,17 @@ function monthKey(d: Date): string {
   return `${y}/${String(m).padStart(2, '0')}`;
 }
 
-type Row = { revenue: number; collected: number; due: number; month: string };
+type Row = { revenue: number; contracted: number; deferred: number; collected: number; due: number; month: string };
 
 function byMonth(rows: Row[], expenses: { amount: number; spentAt: Date }[]) {
-  const map = new Map<string, { month: string; revenue: number; collected: number; expenses: number; visits: number }>();
+  const map = new Map<string, { month: string; revenue: number; deferred: number; collected: number; expenses: number; visits: number }>();
   const at = (k: string) => {
-    if (!map.has(k)) map.set(k, { month: k, revenue: 0, collected: 0, expenses: 0, visits: 0 });
+    if (!map.has(k)) map.set(k, { month: k, revenue: 0, deferred: 0, collected: 0, expenses: 0, visits: 0 });
     return map.get(k)!;
   };
   for (const r of rows) {
     const m = at(r.month);
-    m.revenue += r.revenue; m.collected += r.collected; m.visits += 1;
+    m.revenue += r.revenue; m.deferred += r.deferred; m.collected += r.collected; m.visits += 1;
   }
   for (const e of expenses) at(monthKey(e.spentAt)).expenses += e.amount;
   return [...map.values()]
@@ -129,11 +146,11 @@ function byMonth(rows: Row[], expenses: { amount: number; spentAt: Date }[]) {
  * پیدا نکنند — همان دلیلِ `summarize` و `balanceOf`.
  */
 function groupBy(rows: (Row & Record<string, any>)[], key: (r: any) => string) {
-  const map = new Map<string, { label: string; revenue: number; collected: number; due: number; visits: number }>();
+  const map = new Map<string, { label: string; revenue: number; deferred: number; collected: number; due: number; visits: number }>();
   for (const r of rows) {
     const k = key(r);
-    const cur = map.get(k) ?? { label: k, revenue: 0, collected: 0, due: 0, visits: 0 };
-    cur.revenue += r.revenue; cur.collected += r.collected; cur.due += r.due; cur.visits += 1;
+    const cur = map.get(k) ?? { label: k, revenue: 0, deferred: 0, collected: 0, due: 0, visits: 0 };
+    cur.revenue += r.revenue; cur.deferred += r.deferred; cur.collected += r.collected; cur.due += r.due; cur.visits += 1;
     map.set(k, cur);
   }
   return [...map.values()].sort((a, b) => b.revenue - a.revenue);

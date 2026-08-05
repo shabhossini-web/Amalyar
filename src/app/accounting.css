@@ -180,6 +180,9 @@
 /* گزارشِ مالی */
 .ac-rep { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-block-start: 12px; }
 .ac-rep .due { color: #fbbf24; }
+/* ⚠️ پیش‌دریافت رنگِ خودش را دارد و عمداً **نه سبزِ درآمد است نه زردِ بدهکاری**:
+   پولی است که رسیده (پس بد نیست) ولی هنوز مالِ شرکت نیست (پس خوب هم نیست). */
+.ac-rep .wait { color: #a5b4fc; }
 .ac-secttl { display: block; font-size: 12.5px; color: #a5b4fc; margin-block-end: 9px; }
 .ac-chart { display: flex; align-items: flex-end; gap: 8px; height: 150px; padding: 10px 4px 0; }
 .ac-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; }

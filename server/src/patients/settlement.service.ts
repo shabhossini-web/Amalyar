@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isEarned } from './revenue';
 import { AuditService } from '../audit/audit.service';
 import { LedgerService } from './ledger.service';
 
@@ -295,6 +296,16 @@ export class SettlementService {
       throw new BadRequestException('این تسویه نهایی شده است؛ برای محاسبهٔ دوباره اول آن را باطل کنید');
     }
     const input = await this.gather(visitId);
+    /* ⚠️ **تسویه فقط روی عملِ انجام‌شده.** تا دیروز هر مراجعه‌ای قابلِ تسویه بود،
+       حتی عملی که هفتهٔ بعد بود: پولِ بیمار در صندوق نشسته بود ولی هنوز بابتش
+       کاری نشده، و تقسیمش یعنی اگر عمل لغو شود باید از جیبِ شریک پس گرفته شود.
+       `preview` عمداً باز مانده تا ادمین بتواند عددِ آینده را ببیند — دیدن
+       مشکلی ندارد، **نوشتن** دارد. */
+    if (!isEarned(input.visit.opStatus)) {
+      throw new BadRequestException(
+        'این عمل هنوز «انجام‌شده» نیست؛ تا آن موقع پولش پیش‌دریافت است و تقسیم نمی‌شود',
+      );
+    }
     const entries = computeShares(input);
 
     const created = await this.prisma.$transaction(async (tx) => {
@@ -346,6 +357,7 @@ export class SettlementService {
     };
   }
 
+  /** نهایی‌کردن — همان قاعده، چون نهایی‌کردن هم نوشتن است. */
   async finalize(visitId: number, user: any) {
     const row = await this.currentRow(visitId);
     if (!row) throw new NotFoundException('تسویه‌ای برای نهایی‌کردن نیست');

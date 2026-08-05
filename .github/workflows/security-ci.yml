@@ -2216,6 +2216,87 @@ jobs:
           console.log('intake money ok');
           "
 
+      - name: Verify revenue is recognized only when the work is done
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          /* ⚠️ **پول رسیده ≠ درآمد.** تا دیروز درآمد جمعِ Charge بود، بی‌هیچ
+             توجهی به انجامِ عمل: لحظه‌ای که ادمین فرم را تأیید می‌کرد، کلِ مبلغ
+             در سود می‌نشست — برای عملی که هفتهٔ بعد بود. و چون تقسیمِ سهم روی
+             همان عدد کار می‌کند، سهمِ شرکا و جراح هم روی پولِ نشناخته تقسیم
+             می‌شد؛ اگر عمل لغو می‌شد باید از جیبِ شریک پس گرفته می‌شد. */
+          const rev = read('server/src/patients/revenue.ts');
+          if (!/export function recognize/.test(rev) || !/export const isEarned/.test(rev)) {
+            console.error('قرارِ شناسایی باید یک تعریفِ مشترک باشد'); process.exit(1);
+          }
+
+          // ① گزارش قاعده را **مصرف** کند، نه بازتعریف.
+          const rep = read('server/src/patients/reports.service.ts');
+          if (!/from '\.\/revenue'/.test(rep) || !/recognize\(/.test(rep)) {
+            console.error('گزارشِ مالی باید از قرارِ مشترک بخواند'); process.exit(1);
+          }
+          // ⚠️ لنگر روی **نبودِ بازتعریف** هم هست: اگر گزارش خودش opStatus را
+          //    با done مقایسه کند، فردا یکی‌شان عوض می‌شود و دیگری نه.
+          if (/opStatus === '/.test(rep)) {
+            console.error('گزارش نباید خودش وضعیت را تفسیر کند — isEarned'); process.exit(1);
+          }
+          // ② سود از **شناسایی‌شده** حساب شود، نه از فاکتور و نه از وصولی.
+          if (!/profit: revenue - expenseTotal/.test(rep)) {
+            console.error('سود باید بر مبنای درآمدِ شناسایی‌شده باشد'); process.exit(1);
+          }
+          for (const f of ['deferred', 'contracted']) {
+            if (!new RegExp(f + ',').test(rep)) {
+              console.error('گزارش باید ' + f + ' را جدا بدهد'); process.exit(1);
+            }
+          }
+
+          /* ③ ⚠️ **تسویه فقط روی عملِ انجام‌شده** — و این گاردِ سرور است، نه
+             پیامِ UI: پولِ تقسیم‌شدهٔ عملِ لغوشده باید از جیبِ شریک برگردد. */
+          const st = read('server/src/patients/settlement.service.ts');
+          const compute = st.slice(st.indexOf('async compute('), st.indexOf('async finalize('));
+          /* ⚠️ لنگر روی **شکلِ شرط** است نه صرفِ حضورِ نام: بندِ اول فقط
+             `isEarned(` را می‌دید و با `if (false && !isEarned(...))` سبز
+             می‌ماند. همین اشتباه پیش‌تر سه بار تکرار شده بود. */
+          if (!/if \(!isEarned\(/.test(compute)) {
+            console.error('نوشتنِ تسویه باید به انجامِ عمل مشروط باشد'); process.exit(1);
+          }
+          if (/if \(false/.test(compute)) {
+            console.error('شرطِ تسویه خنثی شده است'); process.exit(1);
+          }
+          // پیش‌نمایش عمداً باز است — دیدن اشکالی ندارد، نوشتن دارد.
+          const preview = st.slice(st.indexOf('async preview('), st.indexOf('async compute('));
+          if (/isEarned\(/.test(preview)) {
+            console.error('پیش‌نمایش نباید بسته شود — فقط نوشتن مشروط است'); process.exit(1);
+          }
+
+          /* ④ هیچ ستونِ ذخیره‌شده‌ای. `opStatus` یک‌بار عوض می‌شود و همهٔ
+             گزارش‌ها باید همان لحظه درست شوند؛ ستونِ ذخیره‌شده جا می‌ماند. */
+          const schema = read('server/prisma/schema.prisma');
+          for (const col of ['recognizedRevenue', 'deferredRevenue', 'recognized_revenue']) {
+            if (schema.includes(col)) {
+              console.error('درآمدِ شناسایی‌شده باید مشتق بماند، نه ستونِ ' + col); process.exit(1);
+            }
+          }
+
+          // ⑤ کاربر باید هر سه عدد را ببیند، وگرنه فکر می‌کند درآمدش پریده.
+          /* ⚠️ لنگر روی **رندرِ خودِ عدد** است نه وجودِ کلمه: نسخهٔ اول دنبالِ
+             واژهٔ «پیش‌دریافت» می‌گشت و چون همان واژه در پاراگرافِ راهنما هم
+             بود، حذفِ کاشیِ عدد را نمی‌گرفت. */
+          const ui = read('src/app/Accounting.jsx');
+          for (const field of ['t.deferred', 't.contracted', 't.revenue']) {
+            if (!ui.includes(field)) {
+              console.error('صفحهٔ حسابداری باید ' + field + ' را نشان دهد'); process.exit(1);
+            }
+          }
+          if (!/درآمدِ شناسایی‌شده/.test(ui) || !/پیش‌دریافت/.test(ui)) {
+            console.error('اعداد باید برچسبِ روشن داشته باشند'); process.exit(1);
+          }
+          console.log('revenue ok');
+          "
+
       - name: Verify money reaches the ledger and portals follow permissions
         run: |
           set -e

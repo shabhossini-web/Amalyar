@@ -774,16 +774,24 @@ function Report({ onToast }) {
         </div>
         <button type="button" className="ac-submit" onClick={apply} disabled={busy}>اعمالِ بازه</button>
 
+        {/* ⚠️ سه عددِ متفاوت که قبلاً یکی بودند. «درآمد» تا دیروز جمعِ فاکتورها
+            بود، پس عملِ هفتهٔ بعد هم در سود می‌نشست. حالا شناسایی‌شده، در جریان،
+            و پیش‌دریافت از هم جدایند — و کاربر باید هر سه را ببیند وگرنه فکر
+            می‌کند درآمدش کم شده. */}
         <div className="ac-tre ac-rep">
           <div className="big"><b>{num(t.revenue)}</b><span>درآمدِ شناسایی‌شده</span></div>
           <div><b className="in">{num(t.collected)}</b><span>وصولی</span></div>
+          <div><b className="wait">{num(t.deferred)}</b><span>پیش‌دریافت</span></div>
+          <div><b>{num(t.contracted)}</b><span>در جریان</span></div>
           <div><b className="due">{num(t.due)}</b><span>مانده</span></div>
           <div><b className="out">{num(t.expenses)}</b><span>هزینه</span></div>
           <div><b className={t.profit >= 0 ? 'in' : 'due'}>{num(t.profit)}</b><span>سودِ ناخالص</span></div>
           <div><b>{num(t.visits)}</b><span>مراجعه</span></div>
         </div>
         <p className="ac-hint">
-          <b>درآمد</b> جمعِ فاکتورهای صادره است و <b>وصولی</b> پولِ رسیده — سود با اولی حساب می‌شود و نقدینگی با دومی.
+          <b>درآمدِ شناسایی‌شده</b> فقط عمل‌های <b>انجام‌شده</b> است و سود با همان حساب می‌شود.
+          پولی که رسیده ولی عملش نشده <b>پیش‌دریافت</b> است — در صندوق هست، ولی هنوز
+          بدهیِ شرکت به بیمار است و تقسیم نمی‌شود. <b>در جریان</b> جمعِ فاکتورها صرف‌نظر از انجام.
         </p>
       </div>
 
