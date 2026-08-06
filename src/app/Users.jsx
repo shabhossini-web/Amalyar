@@ -5,6 +5,11 @@ import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import { toEnDigits } from '../lib/identity.js';
+/* ⚠️ `faDate` استفاده می‌شد ولی هرگز ایمپورت نشده بود. چون پشتِ
+   `row.createdAt &&` بود، فقط وقتی می‌ترکید که **واقعاً کاربرِ در انتظار
+   وجود داشت** — یعنی دقیقاً روی نصبِ مشتری، و هرگز روی دیتابیسِ خالیِ
+   توسعه. همین کرش صفحهٔ کاربران را روی error boundary می‌انداخت. */
+import { faDate } from '../lib/jalali.js';
 import './definitions.css';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
@@ -14,6 +19,22 @@ import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 
+
+/**
+ * وضعیتِ **حساب** — نه وضعیتِ مراجعه.
+ *
+ * ⚠️ این ثابت اصلاً نوشته نشده بود و `STATUS_FA[row.status]` مستقیم به
+ * `ReferenceError` می‌خورد؛ کلِ صفحهٔ کاربران روی error boundary می‌افتاد و
+ * ادمین نه می‌توانست کاربری را تأیید کند نه ببیند. نامِ یکسان در
+ * `Dashboard.jsx` و `PatientRecord.jsx` وجود دارد ولی آن‌ها وضعیتِ **عمل**‌اند
+ * (pending/done/cancelled) — پس ایمپورت‌کردنشان اشتباه بود، نه راه‌حل.
+ */
+const STATUS_FA = {
+  pending: 'در انتظارِ تأیید',
+  active: 'فعال',
+  disabled: 'غیرفعال',
+  rejected: 'ردشده',
+};
 
 const LEVELS = [
   { v: 1, l: 'بازدید' },
