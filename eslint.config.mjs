@@ -26,7 +26,12 @@ export default [
       ecmaVersion: 2023,
       sourceType: 'module',
       parserOptions: { ecmaFeatures: { jsx: true } },
-      globals: { ...globals.browser, ...globals.es2021 },
+      globals: {
+        ...globals.browser,
+        ...globals.es2021,
+        /// تزریقِ `vite define` — در سورس تعریف ندارد ولی در باندل هست.
+        __BUILD_ID__: 'readonly',
+      },
     },
     // ⚠️ `no-inline-config` در فراخوانِ CI: کامنت‌های `eslint-disable` که به
     //    افزونه‌های نصب‌نشده اشاره می‌کنند نباید کلِ لینت را از کار بیندازند.
