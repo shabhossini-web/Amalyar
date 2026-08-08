@@ -11,6 +11,7 @@ import Access from './app/Access.jsx';
 import Profile from './app/Profile.jsx';
 import Dashboard from './app/Dashboard.jsx';
 import Definitions from './app/Definitions.jsx';
+import FormBuilder from './app/FormBuilder.jsx';
 import Inventory from './app/Inventory.jsx';
 import Accounting from './app/Accounting.jsx';
 import Calendar from './app/Calendar.jsx';
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/app/users" element={<Protected><Gate feature="users"><Users /></Gate></Protected>} />
           <Route path="/app/access" element={<Protected><Gate feature="access"><Access /></Gate></Protected>} />
           <Route path="/app/definitions" element={<Protected><Definitions /></Protected>} />
+          <Route path="/app/forms" element={<Protected><FormBuilder /></Protected>} />
           <Route path="/app/inventory" element={<Protected><Gate feature="inventory"><Inventory /></Gate></Protected>} />
           <Route path="/app/accounting" element={<Protected><Gate feature="accounting"><Accounting /></Gate></Protected>} />
           <Route path="/app/calendar" element={<Protected><Gate feature="calendar"><Calendar /></Gate></Protected>} />

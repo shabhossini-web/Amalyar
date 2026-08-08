@@ -2216,6 +2216,91 @@ jobs:
           console.log('intake money ok');
           "
 
+      - name: Verify the form engine keeps one definition of "required"
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          const presets = read('server/src/patients/form-presets.ts');
+          const service = read('server/src/patients/forms.service.ts');
+          const dyn     = read('src/ui/DynForm.jsx');
+
+          /* ① ⚠️ **قرارِ کلیدِ هسته‌ای.** \`split()\` هر کلیدی را که در
+             BUILTIN_VISIT_KEYS نباشد به \`Visit.extra\` می‌فرستد — بی‌صدا و
+             بدونِ خطا. پس فیلدی که در قالبِ یک فرمِ **مراجعه** builtin علامت
+             خورده ولی از فهرست جا مانده، مقدارش در JSON دفن می‌شود و ستونش
+             خالی می‌ماند. هیچ آزمونی این را نمی‌گیرد چون هیچ‌چیز خطا نمی‌دهد. */
+          const setBody = presets.match(/BUILTIN_VISIT_KEYS = new Set\(\[([^\]]*)\]/s);
+          if (!setBody) { console.error('BUILTIN_VISIT_KEYS پیدا نشد'); process.exit(1); }
+          const declared = new Set(
+            setBody[1].split(',').map((x) => x.trim().replace(/^'|'\$/g, '')).filter(Boolean),
+          );
+
+          /* فقط قالب‌های scope=visit سنجیده می‌شوند: فیلدهای builtinِ فرمِ
+             ثبت‌نام ستونِ Patient هستند و مسیرِ ذخیره‌شان IntakeService است،
+             نه split(). */
+          const visitBlocks = presets.split(/const [A-Z_]+: PresetForm = \{/).slice(1)
+            .filter((b) => /scope: 'visit'/.test(b));
+          const missing = [];
+          for (const b of visitBlocks) {
+            for (const m of b.matchAll(/key: '([a-zA-Z0-9_]+)'[^}]*builtin: true/g)) {
+              if (!declared.has(m[1])) missing.push(m[1]);
+            }
+          }
+          /* فیلدهای CORE با spread می‌آیند، پس جدا هم سنجیده می‌شوند. */
+          const coreBlock = presets.match(/const CORE = \{(.*?)\} as const;/s);
+          if (coreBlock) {
+            for (const m of coreBlock[1].matchAll(/key: '([a-zA-Z0-9_]+)'/g)) {
+              if (!declared.has(m[1])) missing.push(m[1]);
+            }
+          }
+          if (missing.length) {
+            console.error('کلیدِ هسته‌ایِ فرمِ مراجعه که در BUILTIN_VISIT_KEYS نیست: ' + [...new Set(missing)].join('، '));
+            process.exit(1);
+          }
+
+          /* ② نوعِ فیلد باید در **هر دو** طرف شناخته شود. نوعی که فقط سرور
+             بشناسد، فیلدی می‌سازد که کاربر ساخته و هیچ‌جا دیده نمی‌شود؛ نوعی
+             که فقط کلاینت بشناسد، فرمی می‌سازد که در مرورگر درست به‌نظر
+             می‌رسد و روی سرور رد می‌شود. */
+          const serverTypes = new Set(
+            (service.match(/FIELD_TYPES = \[([^\]]*)\]/s)?.[1] ?? '')
+              .split(',').map((x) => x.trim().replace(/^'|'\$/g, '')).filter(Boolean),
+          );
+          if (serverTypes.size < 5) { console.error('FIELD_TYPES خوانده نشد'); process.exit(1); }
+          for (const t of serverTypes) {
+            /* 'text' شاخه‌ی default است و case ندارد. */
+            if (t === 'text') continue;
+            if (!new RegExp(\"case '\" + t + \"'\").test(dyn)) {
+              console.error('نوعِ ' + t + ' در سرور هست ولی DynForm رندرش نمی‌کند'); process.exit(1);
+            }
+          }
+
+          /* ③ اجباری‌بودن باید **یک** منبع داشته باشد. */
+          if (!/required\s+Boolean/.test(read('server/prisma/schema.prisma'))) {
+            console.error('ستونِ required روی FormField لازم است'); process.exit(1);
+          }
+          /* ⚠️ کامنت‌ها قبل از سنجش برداشته می‌شوند. بندِ اول همین‌جا **گاز
+             دروغین** داد: کامنتِ خودِ DynForm الگوی ضدِ‌نمونه را توضیح می‌داد
+             (\"label.includes('*')\") و نگهبان همان نثر را کدِ واقعی خواند. */
+          const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*\$/gm, '');
+          const dynCode = code(dyn);
+          if (!/f\.required/.test(dynCode) || /label[^\n]*includes\(\s*['\\\"]\\*['\\\"]\s*\)/.test(dynCode)) {
+            console.error('ستاره باید از required بیاید، نه از متنِ برچسب'); process.exit(1);
+          }
+          /* ④ اعتبارسنجیِ سرور هم از همان ستون بخواند، نه از فهرستی در کد. */
+          if (!/f\.required/.test(code(service)) || !/async validate\(/.test(service)) {
+            console.error('اعتبارسنجیِ سرور باید از تعریفِ فرم بخواند'); process.exit(1);
+          }
+          /* ⑤ کلیدِ رزروشده نباید به‌عنوان فیلدِ دلخواه پذیرفته شود. */
+          if (!/BUILTIN_VISIT_KEYS\.has\(key\)/.test(service)) {
+            console.error('addField باید کلیدهای رزروشده را رد کند'); process.exit(1);
+          }
+          console.log('forms ok');
+          "
+
       - name: Verify no undefined identifiers reach the browser
         run: npm run lint
 

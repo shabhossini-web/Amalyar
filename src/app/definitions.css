@@ -260,3 +260,37 @@
    کنارِ فرمِ بزرگ به‌چشم نمی‌آید و کاربر فکر می‌کند تغییرش ذخیره نشده. */
 .st-knobsave .df-save { padding: 9px 20px; border-radius: 11px; font-size: 13px; border: 0; cursor: pointer; }
 .st-knobsave .st-load { padding: 9px 16px; }
+
+/* ── فرمِ داده‌محور (DynForm) ─────────────────────────────────────────────
+   کلاس‌های `pf-*` را به ارث می‌برد و فقط نوع‌های تازه را اضافه می‌کند. */
+
+/* ستاره‌ی اجباری — همان رنگی که در فرم‌ساز دیده می‌شود، تا کاربر بین دو صفحه
+   یک زبان ببیند. */
+.dyn-star { color: #f87171; font-style: normal; font-weight: 900; }
+
+.dyn-bool { display: flex; align-items: center; gap: 9px; }
+.dyn-bool input { width: 18px; height: 18px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
+.dyn-bool i { font-style: normal; font-size: 13px; color: var(--muted, #b7b0d8); }
+
+.dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
+.dyn-pill {
+  cursor: pointer; font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 99px;
+  color: var(--muted, #b7b0d8); background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .12); transition: color .15s, background .15s, border-color .15s;
+}
+.dyn-pill.on { color: #fff; background: rgba(167, 139, 250, .2); border-color: rgba(167, 139, 250, .5); }
+
+.dyn-rate { display: flex; gap: 4px; }
+.dyn-star-btn {
+  cursor: pointer; background: transparent; border: none; padding: 2px;
+  display: grid; place-items: center; line-height: 1;
+  color: rgba(255, 255, 255, .18); transition: color .12s, transform .12s;
+}
+.dyn-star-btn.on { color: #fbbf24; }
+.dyn-star-btn:hover:not(:disabled) { transform: scale(1.12); }
+.dyn-star-btn:disabled { cursor: default; }
+
+/* تایم‌پیکر داخلِ فرمِ داده‌محور باید مثل بقیه‌ی فیلدها بنشیند، نه با حاشیه‌ی
+   خودش — `db-field`ِ پیش‌فرضش فاصله‌ی دوباره می‌ساخت. */
+.dyn .dyn-time { display: block; }
+.dyn .dyn-time > span { display: none; }

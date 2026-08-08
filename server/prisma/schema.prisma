@@ -982,6 +982,20 @@ model Visit {
   opTimesUpdatedAt DateTime? @map("op_times_updated_at")
 
   notes       String?
+
+  /// پاسخِ **فیلدهای دلخواه** این مراجعه — کلیدِ فیلد به مقدار.
+  ///
+  /// ⚠️ فقط فیلدهای دلخواه. فیلدهای هسته‌ای (جراح، تاریخ، بیمارستان، مبلغ) ستونِ
+  /// واقعیِ خودشان را دارند و هرگز این‌جا نمی‌آیند — حتی با اینکه هر دو از یک
+  /// `FormDef` می‌آیند. دلیل همان قاعدهٔ پروژه است: چیزی که رویش گزارش می‌گیریم
+  /// یا join می‌کنیم باید ستون باشد. فیلدِ دلخواه گزارش‌پذیر نیست چون هر شرکت
+  /// کلیدهای خودش را می‌سازد.
+  ///
+  /// ⚠️ همان قرارِ `IntakeSubmission.data` — شکلِ داده را کاربر تعیین می‌کند،
+  /// نه ما. اگر روزی فیلدی آن‌قدر مهم شد که گزارش خواست، راهِ درست ساختنِ ستون
+  /// و مهاجرتِ مقادیر است، نه گزارش‌گرفتن از JSON.
+  extra       Json     @default("{}")
+
   createdById Int?     @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
@@ -1565,3 +1579,105 @@ model ConsignmentCountLine {
   @@map("consignment_count_lines")
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// تعریفِ فرم — همان «چه چیزی پرسیده می‌شود» به‌شکلِ داده، نه کد
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// یک فرم: مجموعه‌ای از فیلدها که در یک جای مشخص از برنامه پرسیده می‌شوند.
+///
+/// ⚠️ چرا اصلاً جدول شد و در کد نماند: تا دیروز «فرمِ ثبتِ مراجعه» یعنی JSXِ
+/// دستی در `Dashboard.jsx` و «فرمِ ثبت‌نام» یعنی JSXِ دستی در `pages/Intake.jsx`.
+/// نتیجه این بود که هر شرکت باید همان فرم را می‌پذیرفت — مطبی که می‌خواهد
+/// «شکایتِ اصلی» بپرسد یا نورومانیتورینگی که «تعدادِ کانال» می‌خواهد، هیچ راهی
+/// جز تغییرِ کدِ محصول نداشت.
+///
+/// ⚠️ **حوزهٔ کاری (`vertical`) فرم را قفل نمی‌کند، فقط شروعش می‌کند.** موقعِ
+/// seed، مجموعهٔ فرم‌های همان حوزه ساخته می‌شود (مطب: ویزیت/جراحی/پیگیری —
+/// نورومانیتورینگ: فقط عمل) ولی از آن لحظه به بعد سوپرادمین صاحبِ آن‌هاست.
+/// اگر حوزه فرم را قفل می‌کرد، «ماژولِ ویرایشِ فرم» بی‌معنا بود.
+model FormDef {
+  id  Int    @id @default(autoincrement())
+  /// کلیدِ پایدارِ ماشینی: `visit.clinic`, `visit.surgery`, `visit.followup`,
+  /// `intake`, `survey`. کد با این کلید فرم را پیدا می‌کند، نه با عنوان —
+  /// چون عنوان را کاربر عوض می‌کند و آن‌وقت هر ارجاعِ کدی می‌شکند.
+  key String @unique
+
+  /// آنچه کاربر می‌بیند. قابلِ تغییر، بی‌آنکه چیزی بشکند.
+  title String
+
+  /// کجا استفاده می‌شود: `visit` | `intake` | `survey`.
+  scope String
+
+  /// فقط برای `scope=visit`: این فرم مالِ کدام نوعِ مراجعه است
+  /// (`clinic` | `surgery` | `followup` | `consult`). همان مقادیرِ `Visit.kind`.
+  visitKind String? @map("visit_kind")
+
+  /// راهنمای بالای فرم — یک جمله برای پرکننده.
+  hint String?
+
+  active Boolean @default(true)
+
+  fields FormField[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([scope, active])
+  @@map("form_defs")
+}
+
+/// یک پرسشِ فرم.
+///
+/// ⚠️ **فیلدهای هسته‌ای هم این‌جا ردیف دارند** (`builtin = true`) — نه فقط
+/// فیلدهای دلخواه. دلیلش خواستهٔ صریحِ «سوپرادمین بتواند هر فیلد را ستاره‌دار
+/// کند یا نکند» است: اگر اجباری‌بودنِ «جراح» در کد بماند و اجباری‌بودنِ فیلدِ
+/// دلخواه در دیتابیس، دو منبعِ حقیقت داریم و کاربر نمی‌فهمد چرا بعضی ستاره‌ها
+/// قابلِ تغییرند و بعضی نه.
+///
+/// تفاوتِ builtin با فیلدِ دلخواه فقط سه چیز است: حذف نمی‌شود، `key`اش عوض
+/// نمی‌شود، و مقدارش به **ستونِ واقعیِ** `Visit`/`Patient` می‌نشیند نه به JSON.
+model FormField {
+  id     Int     @id @default(autoincrement())
+  form   FormDef @relation(fields: [formId], references: [id], onDelete: Cascade)
+  formId Int     @map("form_id")
+
+  /// کلیدِ ماشینی. برای builtin همان نامِ ستون (`surgeonId`, `opDate`, …).
+  key String
+
+  label String
+
+  /// `text | textarea | number | money | select | multiselect | date | time |
+  ///  bool | phone | rating`
+  ///
+  /// ⚠️ عمداً محدود و کم: هر نوعِ تازه یعنی یک شاخهٔ تازه در رندرِ کلاینت **و**
+  /// یک قاعدهٔ تازه در اعتبارسنجیِ سرور. نوعی که فقط یک‌جا پیاده شود، فرمی
+  /// می‌سازد که در مرورگر درست به‌نظر می‌رسد و روی سرور بی‌صدا رد می‌شود.
+  type String @default("text")
+
+  /// همان «ستاره». تک‌منبعِ اجباری‌بودن: هم ستارهٔ کنارِ برچسب و هم ۴۰۰ِ سرور
+  /// از همین یک ستون می‌آیند، تا فرم و سرور هیچ‌وقت دو نظر نداشته باشند.
+  required Boolean @default(false)
+
+  /// گزینه‌های `select`/`multiselect` — آرایهٔ `{ v, l }`.
+  options Json @default("[]")
+
+  hint        String?
+  placeholder String?
+
+  /// ترتیبِ نمایش. عدد و نه رشته، تا جابه‌جایی با یک UPDATE انجام شود.
+  sort Int @default(0)
+
+  /// فیلدِ هسته‌ای — حذف‌نشدنی، کلید ثابت، مقدارش به ستونِ واقعی می‌رود.
+  builtin Boolean @default(false)
+
+  /// خاموش‌کردنِ فیلد بدونِ حذفش. برای builtin تنها راهِ «نمی‌خواهمش» است.
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([formId, key])
+  @@index([formId, sort])
+  @@map("form_fields")
+}

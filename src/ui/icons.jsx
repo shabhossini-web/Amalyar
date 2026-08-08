@@ -72,6 +72,18 @@ export const Check = (p) => <Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>;
 export const CheckCircle = (p) => (
   <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></Svg>
 );
+/**
+ * ستاره‌ی امتیاز — جایگزینِ نویسه‌ی `★`.
+ *
+ * ⚠️ `fill="currentColor"` می‌گیرد نه `stroke`: ستاره‌ی توخالی و ستاره‌ی پر
+ * باید در یک نگاه فرق کنند، و با خطِ دور این تفاوت به ضخامتِ خط تقلیل پیدا
+ * می‌کرد. رنگ را CSS تعیین می‌کند (`.dyn-star-btn.on`).
+ */
+export const Star = (p) => (
+  <Svg {...p} fill="currentColor" stroke="none">
+    <path d="M12 2.5l2.9 5.9 6.5.95-4.7 4.6 1.1 6.5-5.8-3.05-5.8 3.05 1.1-6.5-4.7-4.6 6.5-.95z" />
+  </Svg>
+);
 export const Copy = (p) => (
   <Svg {...p}><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></Svg>
 );

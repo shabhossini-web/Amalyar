@@ -24,6 +24,7 @@ const TOOLS = [
   { key: 'transport', label: 'پرتالِ حمل‌ونقل', icon: Truck, tint: 'amber', ready: true, min: 2, to: '/app/transport' },
   { key: 'inventory', label: 'انبار', icon: Box, tint: 'green', ready: true, min: 3, to: '/app/inventory' },
   { key: 'definitions', label: 'تعاریف پایه', icon: Book, tint: 'teal', ready: true, min: 5, to: '/app/definitions' },
+  { key: 'forms', label: 'فرم‌ساز', icon: Book, tint: 'violet', ready: true, min: 6, to: '/app/forms' },
   { key: 'users', label: 'کاربران', icon: Users, tint: 'violet', ready: true, min: 6, to: '/app/users' },
   { key: 'access', label: 'سطوحِ دسترسی', icon: Lock, tint: 'blue', ready: true, min: 6, to: '/app/access' },
   { key: 'settings', label: 'تنظیماتِ شرکت', icon: Gear, tint: 'amber', ready: true, min: 6, to: '/app/settings' },

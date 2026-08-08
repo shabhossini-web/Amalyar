@@ -1,0 +1,397 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { api } from '../lib/api.js';
+import { useConfig } from './config.jsx';
+import './definitions.css';
+import './formbuilder.css';
+import { ArrowDown, ArrowUp, Back, Close, Eye, EyeOff, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
+import Overlay from '../ui/Overlay.jsx';
+import { useStagger } from '../ui/stagger.js';
+
+/**
+ * فرم‌ساز — سوپرادمین تعیین می‌کند چه چیزی پرسیده شود و چه چیزی اجباری باشد.
+ *
+ * ⚠️ **ستاره این‌جا تزئین نیست.** همان `required`ی که این‌جا روشن می‌شود، هم
+ * ستاره‌ی قرمزِ کنارِ برچسب را می‌سازد و هم ۴۰۰ِ سرور را. تا دیروز این دو در دو
+ * جای مستقل نوشته می‌شدند (`personErrors` در کلاینت و دکوراتورهای DTO در سرور)
+ * و نتیجه‌اش فرم‌هایی بود که ستاره داشتند ولی سرور قبولشان می‌کرد، یا برعکس.
+ *
+ * ⚠️ **فیلدِ هسته‌ای و دلخواه عمداً در یک فهرست‌اند و شبیهِ هم دیده می‌شوند.**
+ * وسوسه این بود که هسته‌ای‌ها بالا و قفل‌شده جدا شوند، ولی آن‌وقت کاربر فکر
+ * می‌کرد ستاره‌ی آن‌ها هم قفل است — و کلِ خواسته همین بود که نباشد. تفاوتشان
+ * فقط با یک نشانِ کوچک و **نبودِ** سطلِ زباله گفته می‌شود.
+ */
+
+const TYPES = [
+  { v: 'text', l: 'متنِ کوتاه' },
+  { v: 'textarea', l: 'متنِ بلند' },
+  { v: 'number', l: 'عدد' },
+  { v: 'money', l: 'مبلغ' },
+  { v: 'select', l: 'انتخاب از فهرست' },
+  { v: 'multiselect', l: 'انتخابِ چندتایی' },
+  { v: 'date', l: 'تاریخ' },
+  { v: 'time', l: 'ساعت' },
+  { v: 'bool', l: 'بله/خیر' },
+  { v: 'phone', l: 'موبایل' },
+  { v: 'rating', l: 'امتیاز (۱ تا ۵)' },
+];
+const typeLabel = (v) => TYPES.find((t) => t.v === v)?.l ?? v;
+
+const SCOPE_FA = { visit: 'مراجعه', intake: 'ثبت‌نام', survey: 'نظرسنجی' };
+
+export default function FormBuilder() {
+  const stagger = useStagger();
+  const { verticalLabel } = useConfig();
+  const [forms, setForms] = useState(null);
+  const [tab, setTab] = useState('');
+  const [editing, setEditing] = useState(null); // {formId, field} — field={} یعنی جدید
+  const [resetting, setResetting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState('');
+  const [err, setErr] = useState('');
+
+  useEffect(() => { document.title = 'عمل‌یار — فرم‌ساز'; }, []);
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(''), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const load = useCallback(async () => {
+    setErr('');
+    try {
+      const d = await api('/forms');
+      setForms(d);
+      /* ⚠️ تبِ فعال فقط وقتی ست می‌شود که هنوز چیزی انتخاب نشده یا تبِ فعلی
+         دیگر وجود ندارد (مثلاً بعد از «بازگرداندن به قالب»). اگر هر بار ست
+         می‌شد، بعد از هر ذخیره کاربر به تبِ اول پرت می‌شد. */
+      setTab((cur) => (cur && d.some((f) => f.key === cur) ? cur : d[0]?.key ?? ''));
+    } catch (e) { setErr(e.message); setForms([]); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const form = useMemo(() => forms?.find((f) => f.key === tab) ?? null, [forms, tab]);
+
+  /** هر نوشتن پاسخِ همان فرم را برمی‌گرداند — همان الگوی `addNeed` در تعاریف. */
+  const apply = async (fn, msg) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const fresh = await fn();
+      setForms((list) => list.map((f) => (f.id === fresh.id ? fresh : f)));
+      if (msg) setToast(msg);
+    } catch (e) {
+      setToast(e.message);
+      /* ⚠️ در شکست، فهرست از سرور تازه می‌شود. بدونِ این، جابه‌جاییِ خوش‌بینانه‌ی
+         `move()` روی صفحه می‌ماند در حالی که سرور ترتیبِ قبلی را دارد — و کاربر
+         ترتیبی می‌بیند که وجود ندارد. */
+      load();
+    } finally { setBusy(false); }
+  };
+
+  const toggleRequired = (field) =>
+    apply(
+      () => api(`/forms/fields/${field.id}`, { method: 'PATCH', body: { required: !field.required } }),
+      !field.required ? `«${field.label}» اجباری شد` : `«${field.label}» اختیاری شد`,
+    );
+
+  const toggleActive = (field) =>
+    apply(
+      () => api(`/forms/fields/${field.id}`, { method: 'PATCH', body: { active: !field.active } }),
+      !field.active ? 'روشن شد' : 'خاموش شد',
+    );
+
+  const removeField = (field) =>
+    apply(() => api(`/forms/fields/${field.id}`, { method: 'DELETE' }), 'حذف شد');
+
+  /** جابه‌جایی — کلِ ترتیب یک‌جا می‌رود تا دو کلیکِ سریع ترتیب را قاطی نکنند. */
+  const move = (field, dir) => {
+    const list = [...form.fields];
+    const i = list.findIndex((f) => f.id === field.id);
+    const j = i + dir;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    setForms((fs) => fs.map((f) => (f.id === form.id ? { ...f, fields: list } : f)));
+    apply(() => api(`/forms/${form.id}/reorder`, { method: 'POST', body: { ids: list.map((f) => f.id) } }));
+  };
+
+  const doReset = async () => {
+    setBusy(true);
+    try {
+      setForms(await api('/forms/reset', { method: 'POST', body: {} }));
+      setResetting(false);
+      setToast('فرم‌ها به قالبِ حوزه برگشتند');
+    } catch (e) { setToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="lx df fb">
+      <div className="lx-bg" aria-hidden="true" />
+      <div className="lx-grid" aria-hidden="true" />
+
+      <div className="lx-shell">
+        <header className="df-head">
+          <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
+          <h1>فرم‌ساز</h1>
+        </header>
+
+        <p className="fb-lead">
+          هر فرم را می‌توانید کامل بچینید: فیلدِ تازه اضافه کنید، ترتیب را عوض کنید،
+          و <b>ستاره‌ی هر فیلد</b> را روشن یا خاموش کنید. ستاره فقط ظاهر نیست —
+          فیلدِ ستاره‌دار روی سرور هم اجباری می‌شود.
+        </p>
+
+        {err && <div className="df-err">{err}</div>}
+        {forms === null && <p className="df-empty">در حال بارگذاری…</p>}
+        {forms?.length === 0 && !err && <p className="df-empty">هنوز فرمی تعریف نشده.</p>}
+
+        {forms?.length > 0 && (
+          <>
+            <Tabs
+              variant="scroll"
+              label="فرم‌ها"
+              value={tab}
+              onChange={setTab}
+              items={forms.map((f) => ({ key: f.key, label: f.title }))}
+            />
+
+            {form && (
+              <>
+                <div className="fb-meta">
+                  <span className="fb-chip">{SCOPE_FA[form.scope] ?? form.scope}</span>
+                  {form.visitKind && <span className="fb-chip ghost">{form.visitKind}</span>}
+                  <span className="fb-count">{form.fields.length} فیلد</span>
+                </div>
+                {form.hint && <p className="fb-hint">{form.hint}</p>}
+
+                <div className="fb-list">
+                  {form.fields.map((f, i) => (
+                    <motion.article key={f.id} {...stagger(i)} className={`glass fb-row${f.active ? '' : ' off'}`}>
+                      <div className="fb-order">
+                        {/* ⚠️ آیکونِ SVG، نه نویسه‌ی «▲»: نویسه‌های هندسی روی
+                            اندروید و سافاری با فونت‌های متفاوت رندر می‌شوند و
+                            گاهی اصلاً glyph ندارند. نگهبانِ CI همین را می‌گیرد. */}
+                        <button type="button" onClick={() => move(f, -1)} disabled={busy || i === 0} aria-label="بالاتر"><ArrowUp width="11" height="11" /></button>
+                        <button type="button" onClick={() => move(f, 1)} disabled={busy || i === form.fields.length - 1} aria-label="پایین‌تر"><ArrowDown width="11" height="11" /></button>
+                      </div>
+
+                      <div className="fb-main">
+                        <b>
+                          {f.label}
+                          {f.required && <i className="fb-star" title="اجباری">*</i>}
+                        </b>
+                        <span>
+                          {typeLabel(f.type)}
+                          {f.builtin ? <i className="fb-tag core">هسته‌ای</i> : <i className="fb-tag">دلخواه</i>}
+                          {!f.active && <i className="fb-tag off">خاموش</i>}
+                        </span>
+                        {f.options?.length > 0 && (
+                          <small className="fb-opts">{f.options.map((o) => o.l).join(' · ')}</small>
+                        )}
+                      </div>
+
+                      <div className="fb-acts">
+                        {/* ⚠️ کلیدِ اجباری عمداً جدا از فرمِ ویرایش است و همان‌جا اثر
+                            می‌کند: پرتکرارترین کاری که سوپرادمین می‌کند همین است،
+                            و بردنش داخلِ شیت یعنی سه کلیک به‌جای یک کلیک. */}
+                        <button
+                          type="button"
+                          className={`fb-req${f.required ? ' on' : ''}`}
+                          disabled={busy}
+                          onClick={() => toggleRequired(f)}
+                          aria-pressed={f.required}
+                          title={f.required ? 'اجباری — برای اختیاری‌کردن بزنید' : 'اختیاری — برای اجباری‌کردن بزنید'}
+                        >
+                          <span aria-hidden="true">*</span> اجباری
+                        </button>
+                        <button type="button" className="df-act" disabled={busy} onClick={() => setEditing({ formId: form.id, field: f })} aria-label="ویرایش">
+                          <Pencil width="15" height="15" />
+                        </button>
+                        <button type="button" className="df-act" disabled={busy} onClick={() => toggleActive(f)} aria-label={f.active ? 'خاموش‌کردن' : 'روشن‌کردن'}>
+                          {f.active ? <Eye width="15" height="15" /> : <EyeOff width="15" height="15" />}
+                        </button>
+                        {/* فیلدِ هسته‌ای سطلِ زباله ندارد — نبودِ دکمه از خطای بعدِ کلیک بهتر است. */}
+                        {!f.builtin && (
+                          <button type="button" className="df-act danger" disabled={busy} onClick={() => removeField(f)} aria-label="حذف">
+                            <Trash width="15" height="15" />
+                          </button>
+                        )}
+                      </div>
+                    </motion.article>
+                  ))}
+                </div>
+
+                <div className="fb-foot">
+                  <button type="button" className="df-add" onClick={() => setEditing({ formId: form.id, field: {} })}>
+                    <Plus width="16" height="16" /> فیلدِ تازه
+                  </button>
+                  <button type="button" className="fb-reset" onClick={() => setResetting(true)}>
+                    بازگرداندن به قالبِ {verticalLabel || 'حوزه'}
+                  </button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {editing && (
+          <FieldSheet
+            formId={editing.formId}
+            field={editing.field}
+            onClose={() => setEditing(null)}
+            onSaved={(fresh, msg) => {
+              setForms((list) => list.map((f) => (f.id === fresh.id ? fresh : f)));
+              setEditing(null);
+              setToast(msg);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {resetting && (
+          <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={() => setResetting(false)} closable={!busy}>
+            <header className="df-sheet-head">
+              <b>بازگرداندن به قالب</b>
+              <button type="button" className="df-x" onClick={() => setResetting(false)} aria-label="بستن"><Close width="17" height="17" /></button>
+            </header>
+            <div className="df-sheet-body">
+              {/* ⚠️ متنِ هشدار صریح می‌گوید چه چیزی از دست می‌رود. «آیا مطمئنید؟»
+                  به کسی نمی‌گوید چه اتفاقی می‌افتد. */}
+              <p className="fb-warn">
+                همه‌ی فرم‌ها به قالبِ پیش‌فرضِ <b>{verticalLabel}</b> برمی‌گردند.
+                فیلدهایی که خودتان ساخته‌اید <b>پاک می‌شوند</b> و ستاره‌هایی که
+                جابه‌جا کرده‌اید به حالتِ اول برمی‌گردند. این کار برگشت ندارد.
+              </p>
+            </div>
+            <footer className="df-sheet-foot">
+              <button type="button" className="df-ghost" onClick={() => setResetting(false)} disabled={busy}>انصراف</button>
+              <button type="button" className="df-save danger" onClick={doReset} disabled={busy}>
+                {busy ? 'در حال بازگرداندن…' : 'بله، برگردان'}
+              </button>
+            </footer>
+          </Overlay>
+        )}
+      </AnimatePresence>
+
+      <div className={`df-toast${toast ? ' on' : ''}`} role="status">{toast}</div>
+    </div>
+  );
+}
+
+/** شیتِ ساخت/ویرایشِ یک فیلد. */
+function FieldSheet({ formId, field, onClose, onSaved }) {
+  const isNew = !field.id;
+  const [form, setForm] = useState(() => ({
+    key: field.key ?? '',
+    label: field.label ?? '',
+    type: field.type ?? 'text',
+    required: !!field.required,
+    hint: field.hint ?? '',
+    placeholder: field.placeholder ?? '',
+    /* گزینه‌ها به‌شکلِ متنِ چندخطی ویرایش می‌شوند — سریع‌ترین راه برای کاربر.
+       سرور هر دو شکل (متن و آرایه) را می‌پذیرد. */
+    options: (field.options ?? []).map((o) => (o.v === o.l ? o.l : `${o.v}=${o.l}`)).join('\n'),
+  }));
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
+  const hasOptions = form.type === 'select' || form.type === 'multiselect';
+
+  const save = async () => {
+    if (busy) return;
+    const e = {};
+    if (!form.label.trim() || form.label.trim().length < 2) e.label = 'برچسب را کامل بنویسید';
+    if (isNew && !/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(form.key.trim())) {
+      e.key = 'با حرفِ لاتین شروع شود؛ فقط حرف، رقم و _';
+    }
+    if (hasOptions && !form.options.trim()) e.options = 'دستِ‌کم یک گزینه بنویسید';
+    setErrors(e);
+    if (Object.keys(e).length) return;
+
+    setBusy(true);
+    try {
+      const body = {
+        label: form.label.trim(),
+        required: form.required,
+        hint: form.hint,
+        placeholder: form.placeholder,
+        ...(hasOptions ? { options: form.options } : {}),
+        /* نوع فقط برای فیلدِ تازه یا دلخواه فرستاده می‌شود. سرور فرستادنِ همان
+           نوعِ فعلی روی فیلدِ هسته‌ای را هم می‌پذیرد، ولی نفرستادنش صریح‌تر است. */
+        ...(isNew || !field.builtin ? { type: form.type } : {}),
+        ...(isNew ? { key: form.key.trim() } : {}),
+      };
+      const fresh = isNew
+        ? await api(`/forms/${formId}/fields`, { method: 'POST', body })
+        : await api(`/forms/fields/${field.id}`, { method: 'PATCH', body });
+      onSaved(fresh, isNew ? 'فیلد اضافه شد ✓' : 'ذخیره شد ✓');
+    } catch (err) {
+      setErrors({ _: err.message });
+      setBusy(false);
+    }
+  };
+
+  const fld = (key, label, node, hint) => (
+    <label className={`pf-field${errors[key] ? ' bad' : ''}`}>
+      <span>{label}</span>
+      {node}
+      {errors[key] ? <em className="pf-err">{errors[key]}</em> : hint ? <em className="pf-hint">{hint}</em> : null}
+    </label>
+  );
+
+  return (
+    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="df-sheet-head">
+        <b>{isNew ? 'فیلدِ تازه' : field.builtin ? `ویرایشِ «${field.label}» (هسته‌ای)` : `ویرایشِ «${field.label}»`}</b>
+        <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+
+      <div className="df-sheet-body pf">
+        {errors._ && <div className="df-err">{errors._}</div>}
+
+        {fld('label', 'برچسب', <input type="text" value={form.label} onChange={set('label')} disabled={busy} />)}
+
+        {isNew && fld('key', 'کلید', (
+          <input type="text" dir="ltr" value={form.key} onChange={set('key')} disabled={busy} placeholder="chiefComplaint" />
+        ), 'نامِ ماشینی — بعداً عوض نمی‌شود، چون داده با همین کلید ذخیره می‌شود.')}
+
+        {field.builtin && !isNew && (
+          <p className="fb-note">
+            این فیلدِ هسته‌ای است: مقدارش به ستونِ خودش در پرونده می‌نشیند، پس
+            <b> کلید و نوعش عوض نمی‌شود</b>. برچسب، اجباری‌بودن و ترتیبش کاملاً دستِ شماست.
+          </p>
+        )}
+
+        {(isNew || !field.builtin) && fld('type', 'نوع', (
+          <select value={form.type} onChange={set('type')} disabled={busy}>
+            {TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+          </select>
+        ))}
+
+        {hasOptions && fld('options', 'گزینه‌ها', (
+          <textarea rows={4} dir="auto" value={form.options} onChange={set('options')} disabled={busy} placeholder={'بله\nخیر'} />
+        ), 'هر خط یک گزینه. برای کلیدِ جدا: «yes=بله».')}
+
+        {fld('placeholder', 'متنِ راهنمای داخلِ کادر', <input type="text" value={form.placeholder} onChange={set('placeholder')} disabled={busy} />)}
+        {fld('hint', 'راهنمای زیرِ فیلد', <input type="text" value={form.hint} onChange={set('hint')} disabled={busy} />)}
+
+        <label className="fb-check">
+          <input type="checkbox" checked={form.required} onChange={(e) => setForm((s) => ({ ...s, required: e.target.checked }))} disabled={busy} />
+          <span>اجباری — بدونِ پرکردنش فرم ذخیره نمی‌شود</span>
+        </label>
+      </div>
+
+      <footer className="df-sheet-foot">
+        <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>انصراف</button>
+        <button type="button" className="df-save" onClick={save} disabled={busy}>
+          {busy ? 'در حال ذخیره…' : isNew ? 'افزودن' : 'ذخیره'}
+        </button>
+      </footer>
+    </Overlay>
+  );
+}

@@ -1,0 +1,96 @@
+/* فرم‌ساز — روی پایه‌ی `definitions.css` سوار است و فقط تفاوت‌ها را می‌نویسد. */
+
+.fb-lead { margin: 0 0 14px; font-size: 13px; line-height: 2; color: var(--muted, #b7b0d8); max-width: 620px; }
+.fb-lead b { color: var(--fg, #f2f0fc); }
+
+.fb-meta { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; flex-wrap: wrap; }
+.fb-chip {
+  font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 99px;
+  color: var(--brand-2, #a78bfa); background: rgba(167, 139, 250, .12);
+  border: 1px solid rgba(167, 139, 250, .3);
+}
+.fb-chip.ghost { color: #9aa2c0; background: rgba(255, 255, 255, .04); border-color: rgba(255, 255, 255, .12); }
+.fb-count { margin-inline-start: auto; font-size: 11px; color: #8f88b5; }
+.fb-hint { margin: 0 0 10px; font-size: 12px; color: #8f88b5; }
+
+.fb-list { display: flex; flex-direction: column; gap: 8px; }
+.fb-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; }
+/* خاموش کم‌رنگ می‌شود ولی خوانا می‌ماند — کاربر باید بتواند دوباره روشنش کند. */
+.fb-row.off { opacity: .5; }
+
+.fb-order { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+.fb-order button {
+  width: 22px; height: 18px; display: grid; place-items: center; cursor: pointer;
+  color: #8f88b5; background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .1); border-radius: 6px;
+}
+.fb-order button:hover:not(:disabled) { color: var(--fg, #f2f0fc); background: rgba(255, 255, 255, .1); }
+.fb-order button:disabled { opacity: .3; cursor: default; }
+
+.fb-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.fb-main b { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 4px; }
+.fb-main > span { font-size: 11px; color: #8f88b5; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+/* ستاره‌ی قرمز — همان نشانی که کاربرِ فرم هم می‌بیند، تا فرم‌ساز و فرم یک زبان
+   داشته باشند. */
+.fb-star { color: #f87171; font-style: normal; font-weight: 900; }
+
+.fb-tag {
+  font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
+  color: #9aa2c0; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+}
+.fb-tag.core { color: #7dd3fc; background: rgba(56, 189, 248, .1); border-color: rgba(56, 189, 248, .3); }
+.fb-tag.off { color: #fbbf24; background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .3); }
+
+.fb-opts { font-size: 10.5px; color: #6f679a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-acts { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
+
+/* کلیدِ اجباری — پرتکرارترین کار، پس بزرگ‌ترین و روشن‌ترین دکمه‌ی ردیف. */
+.fb-req {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font-family: inherit; font-size: 11px; font-weight: 800; padding: 5px 10px; border-radius: 9px;
+  color: #8f88b5; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .12);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.fb-req span { font-size: 13px; line-height: 1; }
+.fb-req:hover:not(:disabled) { color: var(--fg, #f2f0fc); border-color: rgba(255, 255, 255, .25); }
+.fb-req.on { color: #fca5a5; background: rgba(248, 113, 113, .12); border-color: rgba(248, 113, 113, .4); }
+.fb-req:disabled { opacity: .5; cursor: default; }
+
+.fb-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.fb-reset {
+  margin-inline-start: auto; cursor: pointer; font-family: inherit; font-size: 12px;
+  color: #8f88b5; background: transparent; border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 10px; padding: 8px 14px;
+}
+.fb-reset:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
+
+.fb-warn { font-size: 13px; line-height: 2; color: #fcd34d; margin: 0; }
+.fb-warn b { color: #fff; }
+
+.fb-note {
+  font-size: 12px; line-height: 1.9; color: #7dd3fc; margin: 0 0 4px;
+  background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .22);
+  border-radius: 10px; padding: 9px 11px;
+}
+.fb-note b { color: #bae6fd; }
+
+.fb-check {
+  display: flex; align-items: center; gap: 9px; cursor: pointer;
+  font-size: 13px; padding: 10px 12px; border-radius: 11px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+}
+.fb-check input { width: 17px; height: 17px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
+
+.df-save.danger { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+.df-act.danger:hover { color: #fca5a5; }
+
+@media (max-width: 560px) {
+  /* در موبایل ردیف دو طبقه می‌شود: مشخصات بالا، دکمه‌ها پایین — وگرنه کلیدِ
+     «اجباری» یا از لبه بیرون می‌زند یا آن‌قدر کوچک می‌شود که زدنش سخت است. */
+  .fb-row { flex-wrap: wrap; }
+  .fb-main { flex: 1 1 100%; order: 1; }
+  .fb-order { order: 0; flex-direction: row; }
+  .fb-acts { order: 2; width: 100%; justify-content: flex-end; }
+  .fb-count { margin-inline-start: 0; }
+}

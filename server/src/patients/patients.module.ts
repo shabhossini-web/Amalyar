@@ -7,6 +7,8 @@ import { PlacesService } from './places.service';
 import { PlacesController } from './places.controller';
 import { IntakeService } from './intake.service';
 import { IntakeController, PublicIntakeController } from './intake.controller';
+import { FormsController } from './forms.controller';
+import { FormsService } from './forms.service';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
 import { ServiceCodesController } from './service-codes.controller';
@@ -45,12 +47,12 @@ import { PermissionGuard } from '../auth/permission.guard';
   controllers: [
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
-    CalendarController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController,
+    CalendarController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, DispatchService, TechService, TransportService, PlacesService, IntakeService, PermissionGuard,
+    CalendarService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, PermissionGuard,
   ],
 })
 export class PatientsModule {}
