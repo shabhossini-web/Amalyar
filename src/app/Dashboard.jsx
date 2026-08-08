@@ -78,13 +78,27 @@ const jToDate = (jy, jm, jd) => {
  * ویزیتِ مطب بی‌معنی است، و «تاریخِ عمل» هم همین‌طور. ستون‌های DB نامِ op* دارند
  * ولی آنچه کاربر می‌بیند از این‌جا می‌آید.
  */
+/**
+ * برچسبِ **پشتیبان** برای نوع‌های پیش‌فرض.
+ *
+ * ⚠️ این دیگر فهرستِ نوع‌ها نیست — نوع‌ها را سوپرادمین در فرم‌ساز می‌سازد و
+ * فهرستِ واقعی از `/forms/visit-kinds` می‌آید. این‌جا فقط برای دو حالت مانده:
+ * تا وقتی پاسخِ سرور نرسیده، و برای مراجعاتِ قدیمی که نوعشان فرمی ندارد
+ * (مثلاً فرمش حذف شده). بدونِ پشتیبان، آن مراجعات در فهرست بی‌نام می‌ماندند.
+ */
 const KINDS = {
   surgery:  { label: 'عمل',     date: 'تاریخِ عمل',   pending: 'در انتظار عمل' },
   clinic:   { label: 'ویزیت',   date: 'تاریخِ ویزیت', pending: 'در انتظار ویزیت' },
   followup: { label: 'پیگیری',  date: 'تاریخِ پیگیری', pending: 'در انتظار پیگیری' },
   consult:  { label: 'مشاوره',  date: 'تاریخِ مشاوره', pending: 'در انتظار مشاوره' },
 };
-const kindOf = (k) => KINDS[k] ?? KINDS.surgery;
+/**
+ * برچسبِ یک نوع — اول از تعریف، بعد از پشتیبان، و در نهایت خودِ کلید.
+ *
+ * ⚠️ برگشت به خودِ کلید عمدی است و نه به «عمل»: نوعِ ناشناخته‌ای که به‌شکلِ
+ * «عمل» نشان داده شود، دروغ می‌گوید. `treatment` خام زشت است ولی صادق.
+ */
+const kindOf = (k) => KINDS[k] ?? { label: k, date: 'تاریخ', pending: 'در انتظار' };
 const statusLabel = (v) => (v.opStatus === 'pending' ? kindOf(v.kind).pending : STATUS_FA[v.opStatus]);
 
 const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', cancelled: 'کنسل' };
@@ -94,7 +108,15 @@ const FILTERS = [
   { v: 'done', l: 'تمام‌شده' },
   { v: 'cancelled', l: 'کنسل' },
 ];
-const KIND_FILTERS = [{ v: 'all', l: 'همه' }, ...Object.entries(KINDS).map(([v, k]) => ({ v, l: k.label }))];
+/**
+ * فیلترِ نوع از **نوع‌هایی که واقعاً در داده هستند** ساخته می‌شود، نه از فهرستی
+ * در کد. نوعِ دلخواهی که سوپرادمین ساخته (مثلاً «درمان») همان‌جا در فیلتر
+ * پیدا می‌شود، بی‌آنکه کسی این فایل را دست بزند.
+ */
+const kindFilters = (present) => [
+  { v: 'all', l: 'همه' },
+  ...present.map((v) => ({ v, l: kindOf(v).label })),
+];
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 /// ارقامِ لاتینِ یک رشته (مثلِ «۱۴۰۵/۰۵/۰۱»ِ ورودی) را فارسی می‌کند — فقط برای
 /// نمایش؛ مقدارِ داخلِ input عمداً لاتین می‌ماند تا تایپ و ویرایش ساده بماند.
@@ -1081,9 +1103,7 @@ export default function Dashboard() {
             label={`نوعِ ${t.visit}`}
             value={kind}
             onChange={setKind}
-            items={KIND_FILTERS
-              .filter((fl) => kind !== 'all' || fl.v === 'all' || kindsPresent.includes(fl.v))
-              .map((fl) => ({ key: fl.v, label: fl.l }))}
+            items={kindFilters(kindsPresent).map((fl) => ({ key: fl.v, label: fl.l }))}
           />
         )}
 

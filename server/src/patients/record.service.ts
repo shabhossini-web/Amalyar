@@ -91,7 +91,7 @@ export class RecordService {
     // ⚠️ نامِ آرایه عمداً `clinicalNotes` است، نه `notes`: خودِ بیمار یک فیلدِ متنیِ
     // `notes` دارد و اگر هم‌نام شوند، spread آن را با آرایه می‌پوشاند و ذخیرهٔ
     // پروفایل با «notes must be a string» می‌شکند. (همین باگ یک‌بار رخ داد.)
-    const [visits, documents, clinicalNotes] = await Promise.all([
+    const [visits, documents, clinicalNotes, kindDefs] = await Promise.all([
       this.prisma.visit.findMany({
         where: { patientId },
         include: {
@@ -105,7 +105,13 @@ export class RecordService {
       }),
       this.listDocuments(patientId, user),
       clinical ? this.listNotes(patientId, user) : Promise.resolve([]),
+      this.prisma.formDef.findMany({ where: { scope: 'visit' }, select: { visitKind: true, title: true } }),
     ]);
+    /* ⚠️ فرمِ **خاموش** هم خوانده می‌شود (بدونِ `active: true`): مراجعاتِ قدیمی
+       با نوعی که دیگر استفاده نمی‌شود باید همچنان نامِ درست را نشان بدهند،
+       نه کلیدِ خام. */
+    const kindTitles: Record<string, string> = {};
+    for (const d of kindDefs) if (d.visitKind) kindTitles[d.visitKind] = d.title;
 
     return {
       ...patient,
@@ -126,7 +132,58 @@ export class RecordService {
         procedureTypeName: v.procedureType?.name ?? v.opType,
         diagnosisTitle: v.diagnosis?.title ?? null,
         notes: v.notes,
+        extra: v.extra ?? {},
       })),
+      /**
+       * **مسیرِ درمان** — مشتق از توالیِ مراجعات، نه ذخیره‌شده.
+       *
+       * ⚠️ وسوسه این بود که هر مراجعه به مراجعهٔ قبلی گره بخورد
+       * (`parentVisitId`) و مسیر یک درخت شود. ولی مسیرِ واقعی جایگشتِ زیادی
+       * دارد: «ویزیت → درمان → پیگیری»، «ویزیت → جراحی → ادامهٔ درمان →
+       * پیگیری»، مطبِ داخلی بدونِ جراحی. هر ساختارِ ثابتی دستِ‌کم یکی را غلط
+       * می‌کند، و گره‌زدنِ دستی یعنی کاربری که فراموش کند گره بزند، مسیرش
+       * تکه‌تکه می‌شود.
+       *
+       * پس مسیر **خوانده** می‌شود نه ساخته: همان مراجعاتِ همین پرونده، به
+       * ترتیبِ زمان. هیچ ستونی، هیچ گرهی، هیچ کارِ اضافه‌ای برای کاربر.
+       *
+       * ⚠️ ترتیب این‌جا **صعودی** است (قدیمی → تازه) برخلافِ `visits` که
+       * نزولی است: فهرست را کاربر «تازه‌ترین اول» می‌خواهد، ولی مسیر را
+       * «از کجا شروع شد» — و همان یک آرایه با دو ترتیب، یعنی یکی‌شان همیشه
+       * برعکس دیده می‌شود.
+       */
+      journey: [...visits]
+        .sort((a, b) => {
+          const ta = a.opDate ? a.opDate.getTime() : Number.MAX_SAFE_INTEGER;
+          const tb = b.opDate ? b.opDate.getTime() : Number.MAX_SAFE_INTEGER;
+          return ta - tb || a.seq - b.seq;
+        })
+        .map((v, i) => ({
+          step: i + 1,
+          id: v.id,
+          kind: v.kind,
+          code: `${patient.code}-V${v.seq}`,
+          opDate: v.opDate,
+          opStatus: v.opStatus,
+          title: v.procedureType?.name ?? v.opType ?? null,
+          /// فاصله از مراجعهٔ قبلی — «۳۲ روز بعد» چیزی است که پزشک می‌خواهد بداند.
+          daysFromPrev: null as number | null,
+        }))
+        .map((row, i, arr) => {
+          if (i === 0) return row;
+          const prev = arr[i - 1];
+          if (!row.opDate || !prev.opDate) return row;
+          const d = Math.round((row.opDate.getTime() - prev.opDate.getTime()) / 86400000);
+          return { ...row, daysFromPrev: d };
+        }),
+      /**
+       * برچسبِ هر نوعِ مراجعه، از خودِ تعریف.
+       *
+       * ⚠️ همراهِ پرونده می‌آید و نه از یک درخواستِ جدا: کلاینت این را در
+       * همان لحظه‌ی رندر لازم دارد و یک رفت‌وبرگشتِ دوم یعنی نیم‌ثانیه‌ای که
+       * نوعِ مراجعه به‌شکلِ کلیدِ خام دیده می‌شود و بعد می‌پرد.
+       */
+      kindTitles,
       documents,
       clinicalNotes,
       counts: { visits: visits.length, documents: documents.length, notes: clinicalNotes.length },

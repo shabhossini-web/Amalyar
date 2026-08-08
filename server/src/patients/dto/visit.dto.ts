@@ -15,13 +15,26 @@ import { Type } from 'class-transformer';
 import { EnDigits, IsNationalId } from '../../common/validators';
 import { PAYERS } from '../settlement.service';
 
-/** نوعِ ملاقات — فهرستِ بسته تا گزارش‌گیری روی متنِ آزاد نیفتد. */
+/**
+ * نوع‌های **پایه‌ی** ملاقات — نه فهرستِ کامل.
+ *
+ * ⚠️ تا دیروز این فهرست بسته بود و هر مراجعه‌ای باید یکی از این چهار می‌شد.
+ * ولی مسیرِ درمان جایگشتِ زیادی دارد: یک مطب «ویزیت → درمان → پیگیری» دارد،
+ * دیگری «ویزیت → جراحی → ادامه‌ی درمان → پیگیری»، و مطبِ داخلی اصلاً جراحی
+ * ندارد. هر فهرستِ ثابتی دستِ‌کم یکی از این‌ها را غلط می‌کند.
+ *
+ * حالا نوعِ معتبر = نوعی که **فرم دارد** (`FormDef.visitKind`). این‌ها فقط
+ * پیش‌فرضِ seed و پشتوانه‌ی نصب‌های قدیمی‌اند تا داده‌ی موجود نامعتبر نشود.
+ * اعتبارسنجیِ واقعی در سرویس است نه در دکوراتور — چون class-validator
+ * فهرستش را در زمانِ کامپایل می‌خواهد و این فهرست را کاربر در زمانِ اجرا
+ * می‌سازد. همان دلیلِ اعتبارسنجیِ اجباری‌بودن.
+ */
 export const VISIT_KINDS = ['surgery', 'clinic', 'followup', 'consult'] as const;
 
 /// ثبتِ مراجعه — یا patientId (بیمارِ موجود) یا نام/نام‌خانوادگی (بیمارِ جدید)
 export class CreateVisitDto {
-  @IsOptional()
-  @IsIn(VISIT_KINDS as unknown as string[], { message: 'نوعِ مراجعه نامعتبر است' })
+  /// اعتبارش در `assertKind` سنجیده می‌شود، نه این‌جا — فهرست پویاست.
+  @IsOptional() @IsString() @MaxLength(40)
   kind?: string;
 
   @IsOptional()
@@ -142,8 +155,8 @@ export class CreateVisitDto {
 
 /// ویرایشِ مراجعه — همهٔ فیلدها اختیاری؛ نام/موبایل بیمار هم قابلِ اصلاح است
 export class UpdateVisitDto {
-  @IsOptional()
-  @IsIn(VISIT_KINDS as unknown as string[], { message: 'نوعِ مراجعه نامعتبر است' })
+  /// اعتبارش در `assertKind` سنجیده می‌شود، نه این‌جا — فهرست پویاست.
+  @IsOptional() @IsString() @MaxLength(40)
   kind?: string;
 
   /// طرفِ حسابِ فاکتور — بیمار یا بیمارستان.

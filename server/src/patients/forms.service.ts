@@ -82,6 +82,22 @@ export class FormsService {
     return row ? this.view(row) : null;
   }
 
+  /**
+   * آیا این نوعِ مراجعه معتبر است؟
+   *
+   * ⚠️ «معتبر» یعنی **فرم دارد** — نه اینکه در فهرستی در کد باشد. مسیرِ درمان
+   * جایگشتِ زیادی دارد و هر فهرستِ ثابتی یکی‌شان را غلط می‌کند.
+   *
+   * ⚠️ اگر این نصب **هیچ** فرمِ مراجعه‌ای ندارد، همه‌چیز پذیرفته می‌شود. وگرنه
+   * نصبی که هنوز فرمی نساخته اصلاً نمی‌توانست مراجعه ثبت کند، و دادهٔ
+   * وارد‌شده از سامانهٔ قبلی با نوع‌های قدیمی رد می‌شد.
+   */
+  async isValidKind(kind: string) {
+    const kinds = await this.visitKinds();
+    if (kinds.length === 0) return true;
+    return kinds.some((k) => k.kind === kind);
+  }
+
   /** نوع‌های مراجعه‌ای که این نصب واقعاً فرم دارد — منبعِ انتخابگرِ نوع. */
   async visitKinds() {
     await this.ensureSeeded();
@@ -127,7 +143,15 @@ export class FormsService {
   private async seedFrom(forms: PresetForm[]) {
     for (const f of forms) {
       const exists = await this.prisma.formDef.findUnique({ where: { key: f.key } });
-      if (exists) continue;
+      /* ⚠️ اگر همین فرم از قبل هست ولی خاموش شده (چون مراجعه داشت و
+         `resetToPreset` نگهش داشت)، دوباره روشن می‌شود — وگرنه «بازگرداندن به
+         قالب» فرمی را که خودش قرار بود بسازد، خاموش تحویل می‌داد. */
+      if (exists) {
+        if (!exists.active) {
+          await this.prisma.formDef.update({ where: { id: exists.id }, data: { active: true } });
+        }
+        continue;
+      }
       await this.prisma.formDef.create({
         data: {
           key: f.key, title: f.title, scope: f.scope,
@@ -161,7 +185,23 @@ export class FormsService {
     const v = (vertical as any) ?? (await this.config.vertical());
     const forms = PRESETS[v as keyof typeof PRESETS];
     if (!forms) throw new BadRequestException('حوزه‌ی کاری نامعتبر است');
-    await this.prisma.formDef.deleteMany({});
+
+    /* ⚠️ فرمی که **مراجعه دارد** پاک نمی‌شود، فقط خاموش می‌شود — همان قاعده‌ی
+       `removeForm` و همان قاعده‌ی کلِ پروژه برای موجودیتِ استفاده‌شده.
+       نسخه‌ی اول کورکورانه `deleteMany({})` می‌زد و نتیجه‌اش این بود که
+       مراجعاتِ ثبت‌شده با نوعِ دلخواه (مثلاً «درمان») **برچسبشان را از دست
+       می‌دادند** و برای همیشه با کلیدِ خامِ `treatment` دیده می‌شدند. داده‌ی
+       بالینی سرِ جایش می‌ماند ولی خواندنی نبود، که عملاً یعنی از دست رفته. */
+    const all = await this.prisma.formDef.findMany({ select: { id: true, visitKind: true } });
+    const keep: number[] = [];
+    for (const f of all) {
+      const used = f.visitKind
+        ? await this.prisma.visit.count({ where: { kind: f.visitKind } })
+        : 0;
+      if (used > 0) keep.push(f.id);
+    }
+    await this.prisma.formDef.deleteMany({ where: { id: { notIn: keep } } });
+    await this.prisma.formDef.updateMany({ where: { id: { in: keep } }, data: { active: false } });
     await this.seedFrom(forms);
     return this.list();
   }
@@ -287,6 +327,71 @@ export class FormsService {
       ),
     );
     return this.byKey(form.key);
+  }
+
+  /**
+   * ساختِ فرمِ تازه — یعنی **یک نوعِ تازه‌ی مراجعه**.
+   *
+   * ⚠️ این همان چیزی است که «چینشِ شناور» را ممکن می‌کند: مطبی که مسیرش
+   * «ویزیت → درمان → پیگیری» است فرمِ «درمان» را خودش می‌سازد؛ مطبِ داخلی
+   * فرمِ «جراحی» را حذف می‌کند. ما ترتیب را تحمیل نمی‌کنیم، فقط جعبه‌ها را
+   * می‌دهیم و ترتیب از خودِ مراجعاتِ ثبت‌شده خوانده می‌شود.
+   *
+   * ⚠️ `visitKind` از `key` مشتق می‌شود و جدا گرفته نمی‌شود: دو شناسه برای یک
+   * چیز یعنی روزی که با هم نخوانند، فرم پیدا نمی‌شود و کسی نمی‌فهمد چرا.
+   */
+  async createForm(dto: { key?: string; title?: string; scope?: string; hint?: string }) {
+    const key = String(dto.key ?? '').trim();
+    if (!KEY_RE.test(key)) {
+      throw new BadRequestException('کلید باید با حرفِ لاتین شروع شود و فقط حرف، رقم و _ داشته باشد');
+    }
+    const title = String(dto.title ?? '').trim();
+    if (title.length < 2) throw new BadRequestException('عنوان کوتاه است');
+
+    const scope = String(dto.scope ?? 'visit');
+    if (!FORM_SCOPES.includes(scope as any)) throw new BadRequestException('محدودهٔ فرم نامعتبر است');
+
+    const fullKey = scope === 'visit' ? `visit.${key}` : key;
+    const dup = await this.prisma.formDef.findUnique({ where: { key: fullKey } });
+    if (dup) throw new BadRequestException('فرمی با این کلید هست');
+
+    await this.prisma.formDef.create({
+      data: {
+        key: fullKey, title, scope,
+        visitKind: scope === 'visit' ? key : null,
+        hint: dto.hint?.trim() || null,
+        /* ⚠️ فرمِ مراجعه بدونِ تاریخ بی‌معنی است — تقویم، گزارشِ بازه‌ای و
+           ترتیبِ خطِ درمان همه رویش بنا شده‌اند. پس یک فیلدِ تاریخ از همان
+           اول ساخته می‌شود تا کاربر با فرمِ خالیِ بی‌مصرف روبه‌رو نشود. */
+        ...(scope === 'visit'
+          ? { fields: { create: [{ key: 'opDate', label: 'تاریخ', type: 'date', required: true, builtin: true, sort: 10 }] } }
+          : {}),
+      },
+    });
+    return this.byKey(fullKey);
+  }
+
+  /**
+   * حذفِ فرم.
+   *
+   * ⚠️ همان قاعدهٔ کلِ پروژه: موجودیتِ استفاده‌شده حذفِ سخت نمی‌شود. اگر
+   * مراجعه‌ای با این نوع ثبت شده، فرم فقط **خاموش** می‌شود — وگرنه آن
+   * مراجعات نوعی می‌گرفتند که هیچ تعریفی ندارد و در هر فهرستی بی‌نام
+   * می‌ماندند. شکلِ خروجی `{ok, deactivated}` است چون کلاینتِ این پروژه
+   * مستقیم به همان فیلد نگاه می‌کند تا پیام را انتخاب کند.
+   */
+  async removeForm(id: number) {
+    const row = await this.prisma.formDef.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('فرم پیدا نشد');
+    const used = row.visitKind
+      ? await this.prisma.visit.count({ where: { kind: row.visitKind } })
+      : 0;
+    if (used > 0) {
+      await this.prisma.formDef.update({ where: { id }, data: { active: false } });
+      return { ok: true, deactivated: true, used };
+    }
+    await this.prisma.formDef.delete({ where: { id } });
+    return { ok: true, deactivated: false, used: 0 };
   }
 
   // ── اعتبارسنجی و تفکیکِ مقادیر ────────────────────────────────────────────

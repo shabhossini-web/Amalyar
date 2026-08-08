@@ -24,7 +24,16 @@ const NOTE_KINDS = {
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', cancelled: 'کنسل' };
 /** برچسبِ نوعِ ملاقات — همان فهرستِ داشبورد؛ پرونده باید ویزیت و عمل را از هم جدا نشان دهد. */
+/**
+ * برچسبِ **پشتیبان** — نه فهرستِ نوع‌ها.
+ *
+ * ⚠️ نوع‌ها را سوپرادمین در فرم‌ساز می‌سازد؛ این‌جا فقط برای مراجعاتی مانده
+ * که نوعشان دیگر فرمی ندارد (فرمش حذف شده) یا پیش از رسیدنِ تعریف. نوعِ
+ * ناشناخته با **کلیدِ خودش** نشان داده می‌شود نه با «عمل»: برچسبِ حدسی
+ * دروغ می‌گوید.
+ */
 const VISIT_KINDS = { surgery: 'عمل', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره' };
+const kindLabel = (k, defs) => defs?.[k] ?? VISIT_KINDS[k] ?? k ?? '—';
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 const fmtSize = (b) => (b < 1024 ? `${faNum(b)} بایت`
@@ -178,7 +187,7 @@ function VisitsTab({ rec }) {
           <div className="df-row-main">
             <b>
               <span dir="ltr">{v.code}</span>
-              <i className={`rc-kind k-${v.kind || 'surgery'}`}>{VISIT_KINDS[v.kind] ?? VISIT_KINDS.surgery}</i>
+              <i className={`rc-kind k-${v.kind || 'surgery'}`}>{kindLabel(v.kind, rec.kindTitles)}</i>
               {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
             </b>
             <small>
@@ -188,6 +197,53 @@ function VisitsTab({ rec }) {
             {v.diagnosisTitle && <small>تشخیص: {v.diagnosisTitle}</small>}
           </div>
           <span className={`rc-st rc-st-${v.opStatus}`}>{STATUS_FA[v.opStatus]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ══════════════ تبِ مسیرِ درمان ══════════════ */
+
+/**
+ * مسیرِ درمان — **خوانده‌شده از توالیِ مراجعات، نه ساخته‌شده.**
+ *
+ * ⚠️ هیچ ترتیبی این‌جا تعریف نمی‌شود و هیچ مراجعه‌ای به مراجعهٔ دیگر گره
+ * نمی‌خورد. دلیلش این است که مسیرِ واقعی جایگشتِ زیادی دارد — «ویزیت →
+ * درمان → پیگیری»، «ویزیت → جراحی → ادامهٔ درمان → پیگیری»، مطبِ داخلی
+ * بدونِ جراحی — و هر ساختارِ ثابتی دستِ‌کم یکی را غلط می‌کند. گره‌زدنِ دستی
+ * هم یعنی کاربری که فراموش کند، مسیرش تکه‌تکه می‌شود.
+ *
+ * پس مسیر همان چیزی است که واقعاً اتفاق افتاده، به ترتیبِ تاریخ.
+ */
+function JourneyTab({ rec }) {
+  const rows = rec.journey ?? [];
+  if (!rows.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
+  return (
+    <div className="rc-journey">
+      <p className="rc-jhint">
+        این مسیر از خودِ مراجعات خوانده می‌شود — جایی تعریف نشده و لازم نیست
+        چیزی را به هم گره بزنید.
+      </p>
+      {rows.map((r, i) => (
+        <div key={r.id} className={`rc-jstep st-${r.opStatus}`}>
+          <div className="rc-jline" aria-hidden="true">
+            <i className="rc-jdot" />
+            {i < rows.length - 1 && <i className="rc-jbar" />}
+          </div>
+          <div className="rc-jmain">
+            <b>
+              <span className={`rc-kind k-${r.kind || 'surgery'}`}>{kindLabel(r.kind, rec.kindTitles)}</span>
+              {r.title ? ` — ${r.title}` : ''}
+            </b>
+            <small>
+              <span dir="ltr">{r.code}</span>
+              {r.opDate ? ` · ${faDate(r.opDate)}` : ' · بدونِ تاریخ'}
+              {/* فاصله از مراجعهٔ قبلی — «۳۲ روز بعد» چیزی است که پزشک می‌خواهد بداند. */}
+              {r.daysFromPrev != null && ` · ${faNum(r.daysFromPrev)} روز بعد`}
+            </small>
+          </div>
+          <span className={`rc-st rc-st-${r.opStatus}`}>{STATUS_FA[r.opStatus]}</span>
         </div>
       ))}
     </div>
@@ -467,6 +523,7 @@ export default function PatientRecord() {
   const TABS = [
     ['profile', 'خلاصه'],
     ['visits', `مراجعات (${faNum(rec.counts.visits)})`],
+    ...(rec.counts.visits > 1 ? [['journey', 'مسیرِ درمان']] : []),
     ['docs', `مدارک (${faNum(rec.counts.documents)})`],
     ...(rec.clinicalVisible ? [['notes', `شرح‌ها (${faNum(rec.counts.notes)})`]] : []),
   ];
@@ -502,6 +559,7 @@ export default function PatientRecord() {
       <div className="rc-body">
         {tab === 'profile' && <ProfileTab key={rec.updatedAt} rec={rec} onSave={save} toast={setToast} />}
         {tab === 'visits' && <VisitsTab rec={rec} />}
+        {tab === 'journey' && <JourneyTab rec={rec} />}
         {tab === 'docs' && <DocsTab rec={rec} reload={load} toast={setToast} />}
         {tab === 'notes' && <NotesTab rec={rec} reload={load} toast={setToast} />}
       </div>

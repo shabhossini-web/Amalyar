@@ -46,6 +46,13 @@ class ReorderDto {
   @IsArray() ids!: number[];
 }
 
+class FormCreateDto {
+  @IsString() @MinLength(1) key!: string;
+  @IsString() @MinLength(2, { message: 'عنوان کوتاه است' }) @MaxLength(80) title!: string;
+  @IsOptional() @IsIn(['visit', 'intake', 'survey'], { message: 'محدودهٔ فرم نامعتبر است' }) scope?: string;
+  @IsOptional() @IsString() @MaxLength(200) hint?: string;
+}
+
 /**
  * تعریفِ فرم‌ها.
  *
@@ -84,6 +91,19 @@ export class FormsController {
   @Get('forms/:key')
   byKey(@Param('key') key: string) {
     return this.forms.byKey(key);
+  }
+
+  /** فرمِ تازه = نوعِ تازه‌ی مراجعه. مطب مسیرِ خودش را خودش می‌چیند. */
+  @RequirePermissions('forms.manage')
+  @Post('forms')
+  create(@Body() dto: FormCreateDto) {
+    return this.forms.createForm(dto);
+  }
+
+  @RequirePermissions('forms.manage')
+  @Delete('forms/:id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.forms.removeForm(id);
   }
 
   @RequirePermissions('forms.manage')

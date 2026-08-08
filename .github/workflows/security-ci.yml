@@ -114,29 +114,75 @@ jobs:
       # نوعِ ملاقات باید فهرستِ بسته بماند. اگر روزی متنِ آزاد شود، همان مشکلِ
       # opType برمی‌گردد: «ویزیت» و «ویزیت مطب» و «clinic» سه چیزِ متفاوت می‌شوند
       # و گزارش‌گیری بی‌معنی می‌گردد.
-      - name: Verify visit kind stays a closed set
+      - name: Verify visit kind is open but never unvalidated
         working-directory: server
         run: |
+          set -e
           node -e "
           const fs = require('fs');
-          const dto = fs.readFileSync('src/patients/dto/visit.dto.ts', 'utf8');
-          const m = dto.match(/VISIT_KINDS = \[([^\]]+)\]/);
-          if (!m) { console.error('VISIT_KINDS تعریف نشده است'); process.exit(1); }
-          const kinds = m[1].split(',').map((s) => s.trim().replace(/['\\\"]/g, '')).filter(Boolean);
-          if (!kinds.includes('surgery')) { console.error('surgery باید در فهرست بماند'); process.exit(1); }
-          if (!/@IsIn\(VISIT_KINDS/.test(dto)) { console.error('kind باید با IsIn اعتبارسنجی شود'); process.exit(1); }
-          const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
-          if (!/kind\s+String\s+@default\(\"surgery\"\)/.test(schema)) { console.error('پیش‌فرضِ kind باید surgery بماند'); process.exit(1); }
-          // برچسب‌های فارسی باید برای همهٔ مقادیر وجود داشته باشند، وگرنه UI خالی نشان می‌دهد.
-          const ui = fs.readFileSync('../src/app/Dashboard.jsx', 'utf8');
-          for (const k of kinds) {
-            if (!new RegExp('\\\\b' + k + '\\\\s*:').test(ui)) { console.error('برچسبِ UI برای ' + k + ' نیست'); process.exit(1); }
+          const dto     = fs.readFileSync('src/patients/dto/visit.dto.ts', 'utf8');
+          const forms   = fs.readFileSync('src/patients/forms.service.ts', 'utf8');
+          const patients= fs.readFileSync('src/patients/patients.service.ts', 'utf8');
+          const record  = fs.readFileSync('src/patients/record.service.ts', 'utf8');
+          const schema  = fs.readFileSync('prisma/schema.prisma', 'utf8');
+          const ui      = fs.readFileSync('../src/app/Dashboard.jsx', 'utf8');
+
+          /* ⚠️ این نگهبان **جای نگهبانِ قبلی** نشسته که فهرستِ نوع‌ها را بسته
+             نگه می‌داشت. آن قاعده عمداً کنار گذاشته شد: مسیرِ درمان جایگشتِ
+             زیادی دارد (ویزیت→درمان→پیگیری، ویزیت→جراحی→ادامه→پیگیری، مطبِ
+             داخلی بدونِ جراحی) و فهرستِ بسته دستِ‌کم یکی را غلط می‌کرد.
+             ولی «باز» یعنی «تعریف‌شدنی»، نه «هرچه بادا باد» — و این‌جا همان
+             مرز نگه داشته می‌شود. */
+
+          // ① فهرستِ بسته نباید برگردد.
+          if (/@IsIn\(VISIT_KINDS/.test(dto)) {
+            console.error('kind نباید با فهرستِ ثابت بسته شود — نوع‌ها را کاربر می‌سازد'); process.exit(1);
           }
-          console.log('visit kinds ok:', kinds.join(', '));
+          // ② ولی بی‌اعتبارسنجی هم نباید بماند: نوعِ بی‌فرم یعنی مراجعه‌ای که
+          //    هیچ فرمی ندارد و در هر فهرستی بی‌نام است.
+          if (!/assertKind\(/.test(patients) || !/isValidKind\(/.test(forms)) {
+            console.error('kind باید در برابرِ تعریفِ فرم‌ها سنجیده شود'); process.exit(1);
+          }
+          if (!/await this\.assertKind\(/.test(patients)) {
+            console.error('assertKind باید در مسیرِ ساختِ مراجعه صدا زده شود'); process.exit(1);
+          }
+          // ③ نصبِ بدونِ فرم نباید قفل شود — وگرنه شرکتِ تازه اصلاً نمی‌تواند
+          //    مراجعه ثبت کند و دادهٔ وارد‌شده از سامانهٔ قبلی رد می‌شود.
+          if (!/kinds\.length === 0/.test(forms)) {
+            console.error('نصبِ بدونِ فرمِ مراجعه باید همه‌چیز را بپذیرد'); process.exit(1);
+          }
+          // ④ پیش‌فرضِ ستون همان surgery بماند — دادهٔ موجود رویش حساب کرده.
+          if (!/kind\s+String\s+@default\(\"surgery\"\)/.test(schema)) {
+            console.error('پیش‌فرضِ kind باید surgery بماند'); process.exit(1);
+          }
+          // ⑤ برچسبِ پشتیبان برای نوع‌های قدیمی باید بماند، وگرنه مراجعاتِ
+          //    قبلی بی‌نام می‌شوند. ولی نوعِ ناشناخته نباید به «عمل» ترجمه شود.
+          for (const k of ['surgery', 'clinic', 'followup', 'consult']) {
+            /* ⚠️ زیررشته‌ی ساده و نه regex: زنجیره‌ی YAML→bash→node یک لایه
+               بک‌اسلش می‌خورد و «\\b» به نویسه‌ی backspace تبدیل می‌شد —
+               الگویی که هرگز match نمی‌کند و نگهبان را دروغین قرمز می‌کند. */
+            if (!ui.includes(k + ':')) {
+              console.error('برچسبِ پشتیبانِ ' + k + ' نیست'); process.exit(1);
+            }
+          }
+          if (/KINDS\[k\] \?\? KINDS\.surgery/.test(ui)) {
+            console.error('نوعِ ناشناخته نباید «عمل» خوانده شود — برچسبِ حدسی دروغ می‌گوید'); process.exit(1);
+          }
+          // ⑥ مسیرِ درمان باید **مشتق** بماند. ستونِ گرهِ والد یعنی کاربری که
+          //    گره‌زدن را فراموش کند، مسیرش تکه‌تکه می‌شود.
+          for (const col of ['parentVisitId', 'parent_visit_id', 'journeyId']) {
+            if (schema.includes(col)) {
+              console.error('مسیر باید از توالیِ مراجعات خوانده شود، نه از ستونِ ' + col); process.exit(1);
+            }
+          }
+          /* ⚠️ کلیدِ دقیق سنجیده می‌شود نه زیررشته: «journeyX» هم شاملِ
+             «journey» است و نگهبان را بی‌خود سبز می‌کرد. */
+          if (!/\bjourney:/.test(record)) {
+            console.error('پرونده باید مسیرِ مشتق‌شده را بدهد'); process.exit(1);
+          }
+          console.log('visit kinds ok');
           "
 
-      # مالیِ مراجعه باید از ردیف‌ها مشتق شود، نه از ستونِ سرجمع. یک ستونِ
-      # cache شده دیر یا زود از ردیف‌ها عقب می‌ماند و آن‌وقت معلوم نیست کدام درست است.
       - name: Verify billing derives from rows, not cached columns
         working-directory: server
         run: |

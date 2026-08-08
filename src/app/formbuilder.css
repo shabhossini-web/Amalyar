@@ -94,3 +94,19 @@
   .fb-acts { order: 2; width: 100%; justify-content: flex-end; }
   .fb-count { margin-inline-start: 0; }
 }
+
+.fb-tabrow { display: flex; align-items: center; gap: 8px; }
+.fb-tabrow > :first-child { flex: 1 1 auto; min-width: 0; }
+.fb-newform {
+  flex: 0 0 auto; width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer;
+  color: #fff; /* توکنِ برند بدونِ fallbackِ خام — رنگِ هر شرکت از تنظیمات می‌آید و
+     رنگِ ثابتِ نوشته‌شده در CSS یعنی یک نقطه که با برند عوض نمی‌شود. */
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
+  border: none; border-radius: 11px;
+}
+.fb-delform {
+  cursor: pointer; font-family: inherit; font-size: 12px;
+  color: #8f88b5; background: transparent; border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 10px; padding: 8px 14px;
+}
+.fb-delform:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }

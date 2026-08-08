@@ -703,6 +703,20 @@ export class PatientsService {
    * ⚠️ اگر برای این نوع فرمی تعریف نشده باشد، `validate` بی‌صدا `ok` می‌دهد.
    * عمدی است: نصبی که فرمِ «پیگیری» ندارد نباید نتواند پیگیری ثبت کند.
    */
+  /**
+   * نوعِ مراجعه باید فرمی داشته باشد.
+   *
+   * ⚠️ پیام عمداً می‌گوید **چه باید کرد**، نه فقط «نامعتبر است»: کاربری که
+   * نوعِ تازه‌ای می‌خواهد باید بداند جایش فرم‌ساز است.
+   */
+  private async assertKind(kind?: string) {
+    const k = kind || 'surgery';
+    if (await this.forms.isValidKind(k)) return;
+    throw new BadRequestException(
+      `نوعِ «${k}» فرمی ندارد — از فرم‌ساز برایش فرم بسازید یا نوعِ دیگری انتخاب کنید`,
+    );
+  }
+
   private async assertFormValid(dto: any) {
     const kind = dto.kind || 'surgery';
     const values = { ...(dto.extra ?? {}), ...pickBuiltin(dto) };
@@ -726,6 +740,7 @@ export class PatientsService {
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
        بی‌آن فیلد را با خوش‌رویی می‌پذیرفت — یعنی «اجباری» فقط یک نقاشی بود.
        اعتبارسنجیِ کلاینت دور زدنی است؛ این نیست. */
+    await this.assertKind(dto.kind);
     await this.assertFormValid(dto);
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;

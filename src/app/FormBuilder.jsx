@@ -48,6 +48,7 @@ export default function FormBuilder() {
   const [tab, setTab] = useState('');
   const [editing, setEditing] = useState(null); // {formId, field} — field={} یعنی جدید
   const [resetting, setResetting] = useState(false);
+  const [newForm, setNewForm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
@@ -149,13 +150,21 @@ export default function FormBuilder() {
 
         {forms?.length > 0 && (
           <>
-            <Tabs
-              variant="scroll"
-              label="فرم‌ها"
-              value={tab}
-              onChange={setTab}
-              items={forms.map((f) => ({ key: f.key, label: f.title }))}
-            />
+            <div className="fb-tabrow">
+              <Tabs
+                variant="scroll"
+                label="فرم‌ها"
+                value={tab}
+                onChange={setTab}
+                items={forms.map((f) => ({ key: f.key, label: f.title }))}
+              />
+              {/* ⚠️ ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
+                  مسیرش «ویزیت → درمان → پیگیری» است، «درمان» را خودش
+                  می‌سازد؛ ما ترتیب را تحمیل نمی‌کنیم. */}
+              <button type="button" className="fb-newform" onClick={() => setNewForm(true)} title="فرمِ تازه">
+                <Plus width="15" height="15" />
+              </button>
+            </div>
 
             {form && (
               <>
@@ -227,6 +236,20 @@ export default function FormBuilder() {
                   <button type="button" className="df-add" onClick={() => setEditing({ formId: form.id, field: {} })}>
                     <Plus width="16" height="16" /> فیلدِ تازه
                   </button>
+                  <button
+                    type="button"
+                    className="fb-delform"
+                    onClick={async () => {
+                      const r = await api(`/forms/${form.id}`, { method: 'DELETE' }).catch((e) => ({ error: e.message }));
+                      if (r.error) { setToast(r.error); return; }
+                      /* پیام از خودِ پاسخ ساخته می‌شود، نه از حدس: سرور
+                         می‌داند حذف شد یا فقط خاموش. */
+                      setToast(r.deactivated ? `به‌دلیلِ ${r.used} مراجعهٔ ثبت‌شده فقط خاموش شد` : 'فرم حذف شد');
+                      load();
+                    }}
+                  >
+                    حذفِ این فرم
+                  </button>
                   <button type="button" className="fb-reset" onClick={() => setResetting(true)}>
                     بازگرداندن به قالبِ {verticalLabel || 'حوزه'}
                   </button>
@@ -247,6 +270,20 @@ export default function FormBuilder() {
               setForms((list) => list.map((f) => (f.id === fresh.id ? fresh : f)));
               setEditing(null);
               setToast(msg);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {newForm && (
+          <NewFormSheet
+            onClose={() => setNewForm(false)}
+            onCreated={(fresh) => {
+              setNewForm(false);
+              setForms((list) => [...list, fresh]);
+              setTab(fresh.key);
+              setToast('فرم ساخته شد ✓');
             }}
           />
         )}
@@ -391,6 +428,77 @@ function FieldSheet({ formId, field, onClose, onSaved }) {
         <button type="button" className="df-save" onClick={save} disabled={busy}>
           {busy ? 'در حال ذخیره…' : isNew ? 'افزودن' : 'ذخیره'}
         </button>
+      </footer>
+    </Overlay>
+  );
+}
+
+/**
+ * ساختِ فرمِ تازه — یعنی نوعِ تازه‌ی مراجعه.
+ *
+ * ⚠️ فقط سه چیز می‌پرسد و بقیه را بعداً می‌شود چید: عنوان، کلید، و اینکه
+ * کجای برنامه استفاده می‌شود. فرمی که ساختش ده فیلد بخواهد، ساخته نمی‌شود.
+ */
+function NewFormSheet({ onClose, onCreated }) {
+  const [form, setForm] = useState({ title: '', key: '', scope: 'visit', hint: '' });
+  const [errors, setErrors] = useState({});
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
+
+  const save = async () => {
+    if (busy) return;
+    const e = {};
+    if (form.title.trim().length < 2) e.title = 'عنوان را کامل بنویسید';
+    if (!/^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(form.key.trim())) {
+      e.key = 'با حرفِ لاتین شروع شود؛ فقط حرف، رقم و _';
+    }
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    setBusy(true);
+    try {
+      onCreated(await api('/forms', { method: 'POST', body: { ...form, key: form.key.trim(), title: form.title.trim() } }));
+    } catch (err) { setErrors({ _: err.message }); setBusy(false); }
+  };
+
+  const fld = (key, label, node, hint) => (
+    <label className={`pf-field${errors[key] ? ' bad' : ''}`}>
+      <span>{label}</span>
+      {node}
+      {errors[key] ? <em className="pf-err">{errors[key]}</em> : hint ? <em className="pf-hint">{hint}</em> : null}
+    </label>
+  );
+
+  return (
+    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="df-sheet-head">
+        <b>فرمِ تازه</b>
+        <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      <div className="df-sheet-body pf">
+        {errors._ && <div className="df-err">{errors._}</div>}
+        {fld('title', 'عنوان', <input type="text" value={form.title} onChange={set('title')} disabled={busy} placeholder="فرمِ درمان" />)}
+        {fld('key', 'کلید', (
+          <input type="text" dir="ltr" value={form.key} onChange={set('key')} disabled={busy} placeholder="treatment" />
+        ), 'نامِ ماشینی — بعداً عوض نمی‌شود.')}
+        {fld('scope', 'کجا استفاده می‌شود', (
+          <select value={form.scope} onChange={set('scope')} disabled={busy}>
+            <option value="visit">مراجعه — نوعِ تازه‌ای در مسیرِ بیمار</option>
+            <option value="survey">نظرسنجی</option>
+            <option value="intake">ثبت‌نام</option>
+          </select>
+        ))}
+        {fld('hint', 'راهنمای بالای فرم', <input type="text" value={form.hint} onChange={set('hint')} disabled={busy} />)}
+        {form.scope === 'visit' && (
+          <p className="fb-note">
+            یک نوعِ تازه‌ی مراجعه ساخته می‌شود با یک فیلدِ <b>تاریخ</b>. بقیه‌ی
+            فیلدها را همین‌جا اضافه کنید. <b>ترتیبِ مسیر جایی تعریف نمی‌شود</b> —
+            از خودِ مراجعاتی که ثبت می‌کنید خوانده می‌شود.
+          </p>
+        )}
+      </div>
+      <footer className="df-sheet-foot">
+        <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>انصراف</button>
+        <button type="button" className="df-save" onClick={save} disabled={busy}>{busy ? 'در حال ساخت…' : 'بساز'}</button>
       </footer>
     </Overlay>
   );
