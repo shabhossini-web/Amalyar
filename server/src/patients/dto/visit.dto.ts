@@ -9,6 +9,7 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { EnDigits, IsNationalId } from '../../common/validators';
@@ -124,6 +125,19 @@ export class CreateVisitDto {
   @IsString()
   @MaxLength(1000, { message: 'یادداشت طولانی است' })
   notes?: string;
+
+  /**
+   * پاسخِ فیلدهای **دلخواه** — کلیدِ فیلد به مقدار.
+   *
+   * ⚠️ عمداً بدونِ دکوراتورِ ساختاری: شکلش را سوپرادمین در فرم‌ساز تعیین
+   * می‌کند، نه ما در زمانِ کامپایل. اعتبارسنجیِ واقعی (اجباری‌بودن) در
+   * `FormsService.assertValid` انجام می‌شود، جایی که تعریفِ فرم در دسترس است.
+   *
+   * ⚠️ `@IsObject()` لازم است وگرنه `ValidationPipe` با `whitelist: true` این
+   * فیلد را **بی‌صدا دور می‌ریزد** و پاسخ‌های کاربر هرگز به سرور نمی‌رسند.
+   */
+  @IsOptional() @IsObject({ message: 'فیلدهای دلخواه نامعتبرند' })
+  extra?: Record<string, any>;
 }
 
 /// ویرایشِ مراجعه — همهٔ فیلدها اختیاری؛ نام/موبایل بیمار هم قابلِ اصلاح است
@@ -245,6 +259,20 @@ export class UpdateVisitDto {
   @IsString()
   @MaxLength(1000)
   notes?: string;
+
+  /**
+   * پاسخِ فیلدهای **دلخواه** — کلیدِ فیلد به مقدار.
+   *
+   * ⚠️ عمداً بدونِ دکوراتورِ ساختاری: شکلش را سوپرادمین در فرم‌ساز تعیین
+   * می‌کند، نه ما در زمانِ کامپایل. اعتبارسنجیِ واقعی (اجباری‌بودن) در
+   * `FormsService.assertValid` انجام می‌شود، جایی که تعریفِ فرم در دسترس است.
+   *
+   * ⚠️ `@IsObject()` لازم است وگرنه `ValidationPipe` با `whitelist: true` این
+   * فیلد را **بی‌صدا دور می‌ریزد** و پاسخ‌های کاربر هرگز به سرور نمی‌رسند.
+   */
+  @IsOptional() @IsObject({ message: 'فیلدهای دلخواه نامعتبرند' })
+  extra?: Record<string, any>;
+
 }
 
 /// فقط ساعت‌ها — برای کارشناسِ سرِ عمل و پنلِ چینش، بدونِ اجازهٔ ویرایشِ بقیهٔ مراجعه.

@@ -542,3 +542,15 @@ a.db-defbtn { text-decoration: none; }
 .db-owing { display: flex; align-items: center; gap: 8px; margin-block-start: 10px; font-size: 12.5px; cursor: pointer; }
 .db-owing input { width: 17px; height: 17px; accent-color: var(--brand-2); cursor: pointer; }
 .bl-inv { width: 100%; margin-block-start: 8px; }
+
+/* بلوکِ فیلدهای دلخواهِ فرم‌ساز — عمداً جدا و نشان‌دار، چون به‌ازای هر شرکت
+   فرق می‌کند و کاربری که بین دو نصب جابه‌جا می‌شود باید بفهمد این بخش مالِ
+   همین شرکت است. */
+.db-extra {
+  margin-top: 6px; padding: 12px; border-radius: 14px;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(255, 255, 255, .09);
+}
+.db-extra h4 {
+  margin: 0 0 4px; font-size: 12.5px; font-weight: 800; color: var(--brand-2, #a78bfa);
+}
+.db-extra .db-hint { margin: 0 0 10px; }

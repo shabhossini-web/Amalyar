@@ -8,6 +8,7 @@ import { digitVariants, textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { toDateValue } from '../common/jalali';
 import { AuditService } from '../audit/audit.service';
+import { FormsService } from './forms.service';
 import { summarize } from './billing.service';
 
 /**
@@ -56,6 +57,11 @@ function enrich(v: any) {
     // اجازهٔ جمع‌زدن ندارد و هیچ ستونِ سرجمعی در DB نیست که از واقعیت عقب بماند.
     ...summarize(v.charges ?? [], v.payments ?? []),
     notes: v.notes,
+    /* ⚠️ پاسخِ فیلدهای دلخواه باید برگردد وگرنه چرخه نیمه‌کاره است: مقدار در
+       دیتابیس می‌نشیند ولی هیچ صفحه‌ای نشانش نمی‌دهد و ویرایش هم خالی باز
+       می‌شود. اولین نسخه دقیقاً همین را جا انداخته بود — نوشتن کار می‌کرد،
+       خواندن نه، و آزمون آن را گرفت. */
+    extra: v.extra ?? {},
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
   };
@@ -197,7 +203,11 @@ const INCLUDE_PATIENT = {
 
 @Injectable()
 export class PatientsService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    private forms: FormsService,
+  ) {}
 
   private scopedVisitWhere(user: any, where: any = {}) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return { ...where };
@@ -684,6 +694,22 @@ export class PatientsService {
   }
 
   /**
+   * قاعده‌ی اجباری‌بودنِ فرمِ همین نوعِ مراجعه را اعمال می‌کند.
+   *
+   * ⚠️ مقادیر از **دو جا** جمع می‌شوند: فیلدهای هسته‌ای از خودِ `dto` (چون
+   * ستون‌اند) و فیلدهای دلخواه از `dto.extra`. اگر فقط یکی را می‌سنجیدیم،
+   * ستاره‌ی نیمی از فرم بی‌اثر می‌شد و کاربر نمی‌فهمید چرا.
+   *
+   * ⚠️ اگر برای این نوع فرمی تعریف نشده باشد، `validate` بی‌صدا `ok` می‌دهد.
+   * عمدی است: نصبی که فرمِ «پیگیری» ندارد نباید نتواند پیگیری ثبت کند.
+   */
+  private async assertFormValid(dto: any) {
+    const kind = dto.kind || 'surgery';
+    const values = { ...(dto.extra ?? {}), ...pickBuiltin(dto) };
+    await this.forms.assertValid(`visit.${kind}`, values);
+  }
+
+  /**
    * ثبتِ مراجعه.
    *
    * سه مسیر دارد و هر سه به یک پرونده ختم می‌شوند:
@@ -696,6 +722,11 @@ export class PatientsService {
    */
   async createVisit(dto: CreateVisitDto, user?: any) {
     const userId: number | undefined = user?.id;
+    /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
+       فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
+       بی‌آن فیلد را با خوش‌رویی می‌پذیرفت — یعنی «اجباری» فقط یک نقاشی بود.
+       اعتبارسنجیِ کلاینت دور زدنی است؛ این نیست. */
+    await this.assertFormValid(dto);
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
@@ -725,6 +756,9 @@ export class PatientsService {
           opDate: toDateValue(dto.opDate) ?? null,
           ...timePatch(dto),
           notes: dto.notes || null,
+          /* پاسخِ فیلدهای دلخواه. `{}` و نه null: ستون NOT NULL است و کدِ
+             خواننده نباید مجبور باشد هر بار nullish-check بزند. */
+          extra: (dto as any).extra ?? {},
           createdById: userId ?? null,
         },
         include: INCLUDE_PATIENT,
@@ -871,4 +905,23 @@ export class PatientsService {
     await this.audit.record({ actorId: user?.id, action: 'visit.delete', entityType: 'visit', entityId: id, before: v });
     return { ok: true };
   }
+}
+
+/**
+ * فیلدهای هسته‌ای را از `dto` بیرون می‌کشد تا اعتبارسنجیِ فرم بتواند بسنجدشان.
+ *
+ * ⚠️ مقدارِ `null` و `''` هر دو «خالی» می‌مانند و به همان شکل رد می‌شوند؛
+ * تبدیلشان به `undefined` یعنی فیلدِ اجباریِ خالی از اعتبارسنجی می‌گریزد.
+ * ⚠️ `opDate` رشته‌ی ورودی است نه `Date` — سنجشِ خالی‌بودن روی همان رشته
+ * انجام می‌شود، پیش از تبدیل.
+ */
+function pickBuiltin(dto: any): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const k of [
+    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
+    'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount', 'payer', 'kind',
+  ]) {
+    if (k in dto) out[k] = dto[k];
+  }
+  return out;
 }

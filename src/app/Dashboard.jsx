@@ -8,6 +8,8 @@ import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime } from '../lib/time.js';
 import ProfileMenu from './ProfileMenu.jsx';
 import { useConfig, useTerms } from './config.jsx';
+import { useFormDef, star } from './useFormDef.jsx';
+import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
@@ -211,6 +213,12 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const formDuration = durationMin(f.opStartTime, f.opEndTime);
 
+  /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
+     فیلدهای دلخواهی که سوپرادمین ساخته. */
+  const fd = useFormDef(f.kind);
+  const [extra, setExtra] = useState(() => initial?.extra ?? {});
+  const [extraErr, setExtraErr] = useState({});
+
   useEffect(() => {
     if (mode !== 'existing') return undefined;
     const t = setTimeout(() => {
@@ -296,6 +304,28 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     // اعتبارسنجیِ سمتِ کاربر تا پیشِ ارسال بازخورد بگیرد؛ اعتبارِ واقعی سمتِ سرور است.
     if (nid && !isValidNationalId(nid)) { onToast('کد ملی معتبر نیست — رقم‌ها را بررسی کنید'); return; }
 
+    /* ⚠️ ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها.
+       سرور هر دو را می‌سنجد؛ این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود.
+       مقدارها از دو جا می‌آیند چون هسته‌ای‌ها در `f` هستند و دلخواه‌ها در
+       `extra` — همان تقسیمی که سرور هم دارد. */
+    const eCustom = dynErrors(fd.customFields, extra);
+    setExtraErr(eCustom);
+    if (Object.keys(eCustom).length) {
+      onToast(Object.values(eCustom)[0]);
+      return;
+    }
+    const builtinVals = {
+      surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
+      procedureTypeId: f.procedureTypeId, diagnosisId: f.diagnosisId,
+      opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
+      notes: f.notes, amount: f.amount,
+    };
+    const eBuiltin = dynErrors(
+      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals),
+      builtinVals,
+    );
+    if (Object.keys(eBuiltin).length) { onToast(Object.values(eBuiltin)[0]); return; }
+
     const common = {
       kind: f.kind,
       surgeonId: f.surgeonId ?? (editing ? null : undefined),
@@ -304,6 +334,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       procedureTypeId: f.procedureTypeId ?? (editing ? null : undefined),
       diagnosisId: f.diagnosisId ?? (editing ? null : undefined),
       opType: f.procedureTypeId ? undefined : f.opType.trim() || undefined,
+      // پاسخِ فیلدهای دلخواه — سرور خودش به ستون و JSON تقسیمشان می‌کند.
+      extra,
       opReport: f.opReport.trim() || undefined,
       opDate,
       // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
@@ -378,8 +410,14 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       </header>
 
       {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
+      {/* ⚠️ فقط نوع‌هایی که این نصب واقعاً فرم دارد. نصبِ نورومانیتورینگ چهار
+          دکمه نشان نمی‌دهد وقتی سه‌تایشان فرمی ندارند — انتخابی که به هیچ فرمی
+          نمی‌رسد، فقط کاربر را سرگردان می‌کند. تا وقتی پاسخِ سرور نرسیده
+          (`kinds === null`) فهرستِ کامل می‌ماند، نه فهرستِ خالی. */}
       <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
-        {Object.entries(KINDS).map(([v, k]) => (
+        {Object.entries(KINDS)
+          .filter(([v]) => !fd.kinds || fd.kinds.some((x) => x.kind === v) || v === f.kind)
+          .map(([v, k]) => (
           <button
             key={v}
             type="button"
@@ -387,7 +425,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             aria-checked={f.kind === v}
             className={f.kind === v ? 'on' : ''}
             onClick={() => setF((s) => ({ ...s, kind: v }))}
-          >{k.label}</button>
+          >{fd.kinds?.find((x) => x.kind === v)?.title ?? k.label}</button>
         ))}
       </div>
 
@@ -474,36 +512,36 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       )}
 
       <div className="db-grid2">
-        <DefSelect
-          label="جراح"
+        {fd.isOn('surgeonId') && <DefSelect
+          label={<>{fd.labelOf('surgeonId', 'جراح')}{star(fd.requiredOf('surgeonId'))}</>}
           value={f.surgeonId}
           onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))}
           options={activeSurgeons}
           onQuickAdd={quickAdd('surgeons')}
           addPlaceholder="نام و نام خانوادگیِ جراح…"
-        />
-        <DefSelect
-          label="بیمارستان"
+        />}
+        {fd.isOn('hospitalId') && <DefSelect
+          label={<>{fd.labelOf('hospitalId', 'بیمارستان')}{star(fd.requiredOf('hospitalId'))}</>}
           value={f.hospitalId}
           onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))}
           options={activeHospitals}
           onQuickAdd={quickAdd('hospitals')}
           addPlaceholder="نامِ بیمارستانِ جدید…"
-        />
-        <DefSelect
-          label={t.tech}
+        />}
+        {fd.isOn('techId') && <DefSelect
+          label={<>{fd.labelOf('techId', t.tech)}{star(fd.requiredOf('techId'))}</>}
           value={f.techId}
           onChange={(v) => setF((s) => ({ ...s, techId: v }))}
           options={defs.techs}
-        />
-        <DefSelect
-          label="نوعِ عمل"
+        />}
+        {fd.isOn('procedureTypeId') && <DefSelect
+          label={<>{fd.labelOf('procedureTypeId', 'نوعِ عمل')}{star(fd.requiredOf('procedureTypeId'))}</>}
           value={f.procedureTypeId}
           onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v, opType: '' }))}
           options={activeProcedures}
           onQuickAdd={quickAdd('procedure-types')}
           addPlaceholder="نامِ نوعِ عملِ جدید…"
-        />
+        />}
       </div>
 
       {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
@@ -514,18 +552,18 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </label>
       )}
 
-      <DefSelect
-        label="تشخیص"
+      {fd.isOn('diagnosisId') && <DefSelect
+        label={<>{fd.labelOf('diagnosisId', 'تشخیص')}{star(fd.requiredOf('diagnosisId'))}</>}
         value={f.diagnosisId}
         onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
         options={activeDiagnoses}
         onQuickAdd={quickAdd('diagnoses')}
         addPlaceholder="عنوانِ تشخیصِ جدید…"
-      />
+      />}
 
       {/* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */}
       <JDate
-        label={`${kindOf(f.kind).date} (شمسی)`}
+        label={<>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){star(fd.requiredOf('opDate'))}</>}
         value={f.opDateJ}
         onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
         placeholder="۱۴۰۵/۰۴/۲۸"
@@ -553,8 +591,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
 
       {/* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
           در ویرایش، صورت‌حساب جای اصلاح است. */}
-      {!editing && (
-        <label className="db-field"><span>مبلغِ توافقی (تومان)</span>
+      {!editing && fd.isOn('amount') && (
+        <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount'))}</span>
           <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
                  placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
         </label>
@@ -564,9 +602,28 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
       </label>
 
-      <label className="db-field"><span>یادداشت</span>
-        <textarea rows={2} value={f.notes} onChange={set('notes')} />
-      </label>
+      {fd.isOn('notes') && (
+        <label className="db-field"><span>{fd.labelOf('notes', 'یادداشت')}{star(fd.requiredOf('notes'))}</span>
+          <textarea rows={2} value={f.notes} onChange={set('notes')} />
+        </label>
+      )}
+
+      {/* ⚠️ فیلدهای دلخواهِ سوپرادمین. عمداً **انتهای فرم** و زیرِ یک عنوان:
+          این‌ها به‌ازای هر شرکت فرق می‌کنند و قاطی‌کردنشان با فیلدهای همیشگی
+          یعنی کاربری که بین دو نصب جابه‌جا می‌شود، فرم را نمی‌شناسد. */}
+      {fd.customFields.length > 0 && (
+        <div className="db-extra">
+          <h4>{fd.def?.title ?? 'اطلاعاتِ تکمیلی'}</h4>
+          {fd.def?.hint && <p className="db-hint">{fd.def.hint}</p>}
+          <DynForm
+            fields={fd.customFields}
+            values={extra}
+            errors={extraErr}
+            onChange={setExtra}
+            disabled={busy}
+          />
+        </div>
+      )}
 
       <button className="db-submit" type="submit" disabled={busy}>
         {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
