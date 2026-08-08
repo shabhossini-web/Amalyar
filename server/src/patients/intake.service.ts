@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { PatientsService } from './patients.service';
 import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
+import { SurveyService } from './survey.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
@@ -50,6 +51,7 @@ export class IntakeService {
     private patients: PatientsService,
     private storage: StorageService,
     private billing: BillingService,
+    private survey: SurveyService,
   ) {}
 
   private token() {
@@ -109,7 +111,7 @@ export class IntakeService {
    */
   async register(
     linkToken: string,
-    dto: { firstName: string; lastName: string; nationalId: string; phone: string; birthDate?: string; address?: string; captchaA: number; captchaB: number; captchaAnswer: number },
+    dto: { firstName: string; lastName: string; nationalId: string; phone: string; birthDate?: string; address?: string; referralSourceId?: number; referralNote?: string; captchaA: number; captchaB: number; captchaAnswer: number },
   ) {
     const link = await this.prisma.intakeLink.findUnique({ where: { token: linkToken } });
     if (!link) throw new NotFoundException('این لینک معتبر نیست');
@@ -133,6 +135,11 @@ export class IntakeService {
     const { patientId } = await this.prisma.$transaction((tx) =>
       this.patients.resolveOrCreatePatient(tx, { firstName, lastName, phone, nationalId, birthDate: dto.birthDate }),
     );
+
+    /* **کانالِ آشنایی** روی خودِ پرونده می‌نشیند نه در JSONِ ثبت‌نام، چون
+       رویش گزارش می‌گیریم. منطقش — از جمله «فقط اگر پرونده هنوز خالی است» —
+       در `SurveyService.attachSource` است تا یک جا بماند. */
+    await this.survey.attachSource(patientId, dto.referralSourceId, dto.referralNote);
 
     const open = await this.prisma.intakeSubmission.findFirst({
       where: { patientId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] } },

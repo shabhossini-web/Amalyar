@@ -9,6 +9,8 @@ import { IntakeService } from './intake.service';
 import { IntakeController, PublicIntakeController } from './intake.controller';
 import { FormsController } from './forms.controller';
 import { FormsService } from './forms.service';
+import { SurveyController, PublicSurveyController } from './survey.controller';
+import { SurveyService } from './survey.service';
 import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
 import { ServiceCodesController } from './service-codes.controller';
@@ -47,12 +49,12 @@ import { PermissionGuard } from '../auth/permission.guard';
   controllers: [
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
-    CalendarController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController,
+    CalendarController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, PermissionGuard,
+    CalendarService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, PermissionGuard,
   ],
 })
 export class PatientsModule {}

@@ -755,6 +755,21 @@ model Patient {
 
   notes String?
 
+  /// **چطور با ما آشنا شد** — کانالی که این بیمار را آورد.
+  ///
+  /// ⚠️ جدولِ جدا دارد و در JSON نمی‌نشیند، چون رویش **گزارش می‌گیریم**:
+  /// «کدام کانال بیمار می‌آورد» عددی است که تصمیمِ تبلیغات را می‌سازد. همان
+  /// قاعدهٔ پروژه — چیزی که رویش گزارش می‌گیریم یا join می‌کنیم باید ستون باشد.
+  ///
+  /// ⚠️ روی **بیمار** است نه مراجعه: آدم یک‌بار با ما آشنا می‌شود، نه در هر
+  /// مراجعه از نو.
+  referralSource   ReferralSource? @relation(fields: [referralSourceId], references: [id], onDelete: SetNull)
+  referralSourceId Int?            @map("referral_source_id")
+  /// نامِ معرف، وقتی کانال «معرفیِ پزشک/بیمار» باشد — متنِ آزاد چون ممکن است
+  /// معرف بیرونِ سامانه باشد.
+  referralNote     String?         @map("referral_note")
+  surveyInvites    SurveyInvite[]
+
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at")
   deletedAt    DateTime? @map("deleted_at")
@@ -1019,6 +1034,7 @@ model Visit {
 
   documents      Document[]
   clinicalNotes  ClinicalNote[]
+  surveyInvites  SurveyInvite[]
   charges        Charge[]
   payments       Payment[]
   stockMovements StockMovement[]
@@ -1680,4 +1696,60 @@ model FormField {
   @@unique([formId, key])
   @@index([formId, sort])
   @@map("form_fields")
+}
+
+
+/// کانالِ آشناییِ بیمار — کاتالوگِ قابلِ ویرایشِ کاربر، مثلِ بقیهٔ تعاریفِ پایه.
+///
+/// ⚠️ فهرستِ ثابت در کد نوشته نشد چون هر شرکت کانال‌های خودش را دارد: یکی
+/// اینستاگرام دارد و دیگری «تابلوی مطب» و سومی «بیمهٔ فلان». فهرستِ ما هر
+/// کدامشان را جا بیندازد، کاربر مجبور می‌شود «سایر» بزند — و همان‌جا گزارش
+/// بی‌معنی می‌شود.
+model ReferralSource {
+  id      Int     @id @default(autoincrement())
+  name    String  @unique
+  /// آیا نامِ معرف پرسیده شود؟ برای «معرفیِ پزشک» بله، برای «اینستاگرام» نه.
+  asksWho Boolean @default(false) @map("asks_who")
+  active  Boolean @default(true)
+  sort    Int     @default(0)
+
+  patients  Patient[]
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("referral_sources")
+}
+
+/// دعوت‌نامهٔ نظرسنجی — یک لینکِ یکتا برای یک بیمار، پس از یک مراجعه.
+///
+/// ⚠️ چرا جدولِ جدا و نه یک فیلد روی مراجعه: نظرسنجی ممکن است فرستاده شود و
+/// بی‌جواب بماند، دوباره فرستاده شود، یا اصلاً برای مراجعه‌ای نباشد. هر سه
+/// حالت روی یک ستونِ ساده نمی‌نشیند و «فرستادیم ولی جواب نداد» — که خودش
+/// عددِ مهمی است — گم می‌شد.
+model SurveyInvite {
+  id    Int    @id @default(autoincrement())
+  token String @unique
+
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId Int     @map("patient_id")
+  /// مراجعه‌ای که نظرسنجی دربارهٔ آن است. اختیاری: ممکن است نظرسنجیِ کلی باشد.
+  visit     Visit?  @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId   Int?    @map("visit_id")
+
+  /// pending | answered | expired
+  status String @default("pending")
+
+  /// پاسخ‌ها — کلیدِ فیلد به مقدار، همان قرارِ `Visit.extra`.
+  answers Json @default("{}")
+
+  /// ⚠️ امتیازِ کلی **جدا** از JSON هم ذخیره می‌شود، چون گزارشِ رضایت رویش
+  /// میانگین می‌گیرد و میانگین‌گرفتن از JSON یعنی خواندنِ کلِ جدول در حافظه.
+  overall Int?
+
+  sentAt     DateTime  @default(now()) @map("sent_at")
+  answeredAt DateTime? @map("answered_at")
+  expiresAt  DateTime  @map("expires_at")
+
+  @@index([status, sentAt])
+  @@index([patientId])
+  @@map("survey_invites")
 }

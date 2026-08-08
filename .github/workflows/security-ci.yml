@@ -2262,6 +2262,85 @@ jobs:
           console.log('intake money ok');
           "
 
+      - name: Verify the public survey never leaks the patient
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const svc  = fs.readFileSync('server/src/patients/survey.service.ts', 'utf8');
+          const ctrl = fs.readFileSync('server/src/patients/survey.controller.ts', 'utf8');
+          const reg  = fs.readFileSync('server/src/auth/access-registry.ts', 'utf8');
+          const css  = fs.readFileSync('src/app/definitions.css', 'utf8');
+
+          /* ⚠️ کامنت‌ها قبل از هر تطبیق برداشته می‌شوند. بندِ اول همین‌جا **گاز
+             دروغین** داد: کامنتِ خودِ کنترلر توضیح می‌داد چرا `@UseGuards`
+             این‌جا نیست و نگهبان همان نثر را کدِ واقعی خواند. دومین بار است که
+             این تله را می‌بینم. */
+          const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*\$/gm, '');
+          const sCode = code(svc);
+          const cCode = code(ctrl);
+
+          /* ① ⚠️ **صفحه‌ی عمومیِ نظرسنجی نباید چیزی از بیمار بدهد.** لینک با
+             پیامک می‌رود و فوروارد می‌شود؛ اگر نام یا کدِ پرونده برگردد،
+             نظرسنجی به پنجره‌ای به پروندهٔ بیمار تبدیل می‌شود. */
+          const pv = sCode.slice(sCode.indexOf('async publicView('), sCode.indexOf('async submit('));
+          for (const leak of ['firstName', 'lastName', 'patient:', 'code', 'phone', 'nationalId']) {
+            /* زیررشته‌ی ساده — `\b` در زنجیره‌ی YAML→bash→node به نویسه‌ی
+               backspace تبدیل می‌شد و هرگز match نمی‌کرد. */
+            if (pv.includes(leak)) {
+              console.error('publicViewِ نظرسنجی نباید ' + leak + ' بدهد'); process.exit(1);
+            }
+          }
+          // ② کنترلرِ عمومی باید **بدونِ گارد** باشد و کنترلرِ ادمین **با گارد**.
+          /* ⚠️ مرزِ برش روی **دکوراتور** است نه روی `export class`: دکوراتورها
+             پیش از تعریفِ کلاس می‌آیند، پس بریدن تا `export class
+             SurveyController` دکوراتورِ کنترلرِ ادمین را داخلِ سهمِ کنترلرِ
+             عمومی می‌گذاشت و نگهبان گاردِ آن یکی را به این یکی نسبت می‌داد. */
+          const pubStart = cCode.indexOf(\"@Controller('public')\");
+          const pubEnd = cCode.indexOf('@Controller()', pubStart);
+          const pubCtrl = cCode.slice(pubStart, pubEnd > 0 ? pubEnd : cCode.length);
+          if (/UseGuards/.test(pubCtrl)) {
+            console.error('کنترلرِ عمومی نباید گارد داشته باشد — بیمار لاگین ندارد'); process.exit(1);
+          }
+          if (!/@UseGuards\(JwtAuthGuard, PermissionGuard\)[\s\S]{0,80}export class SurveyController/.test(cCode)) {
+            console.error('کنترلرِ ادمین باید پشتِ گارد باشد'); process.exit(1);
+          }
+          // ③ فهرستِ عمومیِ کانال‌ها نباید شمارنده‌ی بیمار بدهد.
+          /* ⚠️ سنجه **وجودِ projectionِ صریح** است، نه نبودِ واژه‌ی
+             `patientCount`. بندِ اول دنبالِ آن واژه می‌گشت و وقتی کسی کلِ ردیف
+             را برمی‌گرداند (`return rows;`) هیچ واژه‌ای نبود تا ببیند —
+             نگهبان سبز می‌ماند در حالی که همه‌چیز لو می‌رفت. */
+          const src = pubCtrl.slice(pubCtrl.indexOf('async sources('), pubCtrl.indexOf('view(@Param'));
+          if (!src.includes('asksWho: r.asksWho') || src.includes('patientCount')) {
+            console.error('فهرستِ عمومیِ کانال‌ها باید فیلدها را صریح انتخاب کند، نه کلِ ردیف را'); process.exit(1);
+          }
+          // ④ پاسخ یک‌بار مصرف است — نظرسنجیِ بازنویسی‌شدنی داده نیست.
+          if (!/answered.*قبلاً ثبت شده/s.test(svc)) {
+            console.error('پاسخِ دوباره باید رد شود'); process.exit(1);
+          }
+          /* ⑤ کلیدهای مجوز باید در رجیستری **وجود داشته باشند**. کلیدِ اختراعی
+             را گارد با پیش‌فرضِ سوپرادمین می‌بندد و ادمین ۴۰۳ می‌گیرد بی‌آنکه
+             در ماتریسِ دسترسی چیزی برای روشن‌کردن ببیند. */
+          for (const m of cCode.matchAll(/RequirePermissions\('([^']+)'\)/g)) {
+            if (!reg.includes(\"key: '\" + m[1] + \"'\")) {
+              console.error('مجوزِ ' + m[1] + ' در access-registry نیست'); process.exit(1);
+            }
+          }
+          /* ⑥ ⚠️ کنترل‌های `<span>`ی فرمِ داده‌محور باید با پیشوندِ `.dyn`
+             نوشته شوند: `.pf-field > span { display: block }` وزنش بیشتر است
+             و بدونِ پیشوند، ستاره‌های امتیاز **زیرِ هم** می‌افتند. هیچ آزمونِ
+             APIای این را نمی‌گیرد. */
+          for (const k of ['dyn-rate', 'dyn-bool', 'dyn-multi']) {
+            /* ⚠️ زیررشته‌ی ساده و نه regex — زنجیره‌ی YAML→bash→node یک لایه
+               بک‌اسلش می‌خورد و `\\.` به نویسه‌ی نقطه‌ی معمولی تبدیل می‌شد؛
+               الگو دیگر match نمی‌کرد و نگهبان دروغین قرمز می‌شد. */
+            if (!css.includes('.dyn .' + k + ' {')) {
+              console.error('.' + k + ' باید با پیشوندِ .dyn نوشته شود وگرنه display اش بازنویسی می‌شود'); process.exit(1);
+            }
+          }
+          console.log('survey ok');
+          "
+
       - name: Verify the form engine keeps one definition of "required"
         run: |
           set -e

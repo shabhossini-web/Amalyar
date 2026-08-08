@@ -30,6 +30,12 @@ export const MAX_DOCUMENT_BYTES = Number(process.env.MAX_DOCUMENT_BYTES || 25 * 
 const PUBLIC_FIELDS = {
   id: true, code: true, firstName: true, lastName: true, phone: true,
   nationalId: true, birthDate: true, gender: true, city: true,
+  /* ⚠️ کانالِ آشنایی عمداً **عمومی** است نه بالینی: دادهٔ بازاریابی است نه
+     پزشکی، و کسی که فهرستِ بیماران را می‌بیند باید بتواند بداند از کجا
+     آمده‌اند. نامِ معرف هم همین‌طور — «دکتر رضایی معرفی کرده» رازِ پزشکی نیست.
+     ⚠️ خودِ رابطه هم `include` می‌شود وگرنه فقط یک عددِ بی‌معنی برمی‌گشت. */
+  referralSourceId: true, referralNote: true,
+  referralSource: { select: { id: true, name: true } },
   createdAt: true, updatedAt: true, deletedAt: true,
 } as const;
 
@@ -116,6 +122,8 @@ export class RecordService {
     return {
       ...patient,
       fullName: `${patient.firstName} ${patient.lastName}`.trim(),
+      /// نامِ کانال صاف بالا می‌آید تا کلاینت مجبور به گشتن در شیءِ تودرتو نباشد.
+      referralSourceName: (patient as any).referralSource?.name ?? null,
       age: patient.birthDate ? ageFrom(patient.birthDate) : null,
       /// کلاینت باید بداند بخشِ بالینی «خالی» است یا «اجازه ندارد» — این دو یکی نیستند.
       clinicalVisible: clinical,

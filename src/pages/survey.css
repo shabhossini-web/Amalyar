@@ -1,0 +1,26 @@
+/* نظرسنجی — روی پایه‌ی `intake.css` سوار است (همان پوسته‌ی صفحه‌ی عمومی). */
+
+.sv-card { max-width: 520px; }
+
+.sv-head { margin-bottom: 18px; }
+.sv-head h1 { margin: 0 0 6px; font-size: 20px; font-weight: 900; }
+.sv-head p { margin: 0; font-size: 13px; line-height: 1.9; color: var(--muted, #b7b0d8); }
+
+/* پیامِ پایانی — بزرگ و وسط، چون تنها چیزِ صفحه است. */
+.sv-msg {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center; padding: 28px 12px; color: var(--muted, #b7b0d8);
+}
+.sv-msg b { font-size: 17px; color: var(--fg, #f2f0fc); }
+.sv-msg p { margin: 0; font-size: 13px; line-height: 2; max-width: 320px; }
+.sv-msg.ok { color: #6ee7b7; }
+.sv-msg.ok b { color: #a7f3d0; }
+
+.sv-foot {
+  margin: 12px 0 0; text-align: center; font-size: 11.5px; line-height: 1.9; color: #6f679a;
+}
+
+/* ستاره‌های امتیاز روی صفحه‌ی بیمار بزرگ‌ترند: انگشت روی گوشی باید بدونِ دقت
+   بزند، و این تنها ورودیِ اصلیِ صفحه است. */
+.sv .dyn-star-btn { padding: 4px; }
+.sv .dyn .dyn-rate { gap: 6px; }

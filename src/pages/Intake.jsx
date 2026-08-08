@@ -34,7 +34,11 @@ function Register() {
   const [link, setLink] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
-  const [f, setF] = useState({ firstName: '', lastName: '', nationalId: '', phone: '', birthDate: '', address: '' });
+  const [f, setF] = useState({ firstName: '', lastName: '', nationalId: '', phone: '', birthDate: '', address: '', referralSourceId: '', referralNote: '' });
+  /* ⚠️ کانال‌ها از یک endpointِ **عمومی** می‌آیند که فقط نام و شناسه می‌دهد —
+     نه تعدادِ بیمارِ هر کانال، که دادهٔ تجاریِ شرکت است و روی صفحهٔ بی‌احراز
+     جایی ندارد. */
+  const [sources, setSources] = useState([]);
   /* ⚠️ دو عددِ کپچا یک‌بار ساخته می‌شوند و در رندرِ بعدی عوض نمی‌شوند — با
      `useMemo` و نه در بدنهٔ تابع، وگرنه هر تایپِ کاربر عددها را عوض می‌کرد و
      پاسخِ درست هم غلط می‌شد. */
@@ -42,6 +46,11 @@ function Register() {
   const [answer, setAnswer] = useState('');
 
   useEffect(() => { document.title = 'ثبت‌نام'; }, []);
+  useEffect(() => {
+    /* خطا بلعیده می‌شود: نبودِ فهرستِ کانال‌ها نباید جلوی ثبت‌نام را بگیرد —
+       این یک پرسشِ اختیاری است، نه شرطِ پذیرش. */
+    api('/public/referral-sources', { auth: false }).then(setSources).catch(() => {});
+  }, []);
   useEffect(() => {
     api(`/public/intake/link/${token}`, { auth: false })
       .then(setLink)
@@ -62,6 +71,8 @@ function Register() {
           phone: toEnDigits(f.phone),
           // ⚠️ تاریخِ تولد هم مثلِ تاریخِ عمل: شمسی در مرورگر، ISO روی سیم.
           birthDate: f.birthDate.trim() ? jStrToIso(f.birthDate) : '',
+          ...(f.referralSourceId ? { referralSourceId: Number(f.referralSourceId) } : {}),
+          ...(f.referralNote.trim() ? { referralNote: f.referralNote.trim() } : {}),
           captchaA: cap.a, captchaB: cap.b, captchaAnswer: Number(toEnDigits(answer)) || 0,
         },
       });
@@ -84,6 +95,29 @@ function Register() {
         <JDate className="ik-field" mode="birth" label="تاریخِ تولد" value={f.birthDate}
                onChange={(v) => setF((s) => ({ ...s, birthDate: v }))} disabled={busy} />
         <Field label="نشانی" value={f.address} onChange={set('address')} disabled={busy} />
+
+        {/* ⚠️ «چطور با ما آشنا شدید» همین‌جا پرسیده می‌شود و نه در نظرسنجیِ
+            بعدی: بیمار الان یادش هست چطور پیدایمان کرده. پرسیدنش هفته‌ها بعد
+            جوابِ حدسی می‌گیرد — و این همان عددی است که تصمیمِ تبلیغات را
+            می‌سازد. */}
+        {sources.length > 0 && (
+          <label className="ik-field">
+            <span>چطور با ما آشنا شدید؟</span>
+            <select
+              value={f.referralSourceId}
+              disabled={busy}
+              onChange={(e) => setF((s2) => ({ ...s2, referralSourceId: e.target.value, referralNote: '' }))}
+            >
+              <option value="">— انتخاب کنید —</option>
+              {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </label>
+        )}
+        {/* نامِ معرف فقط برای کانال‌هایی که معرف دارند — پرسیدنش از کسی که
+            «اینستاگرام» زده، سؤالِ بی‌جواب است. */}
+        {sources.find((o) => String(o.id) === String(f.referralSourceId))?.asksWho && (
+          <Field label="نامِ معرف" value={f.referralNote} onChange={set('referralNote')} disabled={busy} />
+        )}
       </div>
 
       <div className="ik-cap">

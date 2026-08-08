@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './app/auth.jsx';
 import { ConfigProvider } from './app/config.jsx';
 import Landing from './pages/Landing.jsx';
 import Intake from './pages/Intake.jsx';
+import Survey from './pages/Survey.jsx';
 import Launcher from './app/Launcher.jsx';
 import Login from './app/Login.jsx';
 import Users from './app/Users.jsx';
@@ -55,6 +56,8 @@ export default function App() {
           {/* ⚠️ عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. */}
           <Route path="/r/:token" element={<Intake step="register" />} />
           <Route path="/f/:token" element={<Intake step="form" />} />
+          {/* نظرسنجیِ بیمار — عمومی، مثلِ لینک‌های ثبت‌نام. */}
+          <Route path="/s/:token" element={<Survey />} />
           <Route path="/platform-admin" element={<PlatformAdmin />} />
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
           <Route path="/app/dashboard" element={<Protected><Gate feature="dashboard"><Dashboard /></Gate></Protected>} />

@@ -19,6 +19,10 @@ class RegisterDto {
   @IsString() @MaxLength(20) phone!: string;
   @IsOptional() @IsString() @MaxLength(12) birthDate?: string;
   @IsOptional() @IsString() @MaxLength(300) address?: string;
+  /// کانالِ آشنایی — شناسه از فهرستِ عمومیِ `/public/referral-sources`.
+  @IsOptional() @Type(() => Number) @IsInt() referralSourceId?: number;
+  /// نامِ معرف، وقتی کانال «معرفیِ پزشک/بیمار» باشد.
+  @IsOptional() @IsString() @MaxLength(120) referralNote?: string;
   /// کپچا: دو عددی که به بیمار نشان داده شد، به‌علاوهٔ پاسخش.
   @Type(() => Number) @IsInt() captchaA!: number;
   @Type(() => Number) @IsInt() captchaB!: number;

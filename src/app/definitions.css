@@ -268,11 +268,17 @@
    یک زبان ببیند. */
 .dyn-star { color: #f87171; font-style: normal; font-weight: 900; }
 
-.dyn-bool { display: flex; align-items: center; gap: 9px; }
+/* ⚠️ همه‌ی این کنترل‌ها با پیشوندِ `.dyn` نوشته می‌شوند، نه تنها.
+   دلیل: `.pf-field > span { display: block }` بالاتر در همین فایل هست و
+   وزنش (۰,۱,۱) از یک کلاسِ تنها (۰,۱,۰) بیشتر است. این کنترل‌ها `<span>` و
+   فرزندِ مستقیمِ `.pf-field`اند، پس `display: flex`شان بی‌صدا بازنویسی می‌شد
+   و ستاره‌های امتیاز **زیرِ هم** می‌افتادند. هیچ آزمونِ APIای این را
+   نمی‌گرفت؛ فقط با نگاه‌کردن به عکسِ صفحه پیدا شد. */
+.dyn .dyn-bool { display: flex; align-items: center; gap: 9px; }
 .dyn-bool input { width: 18px; height: 18px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
 .dyn-bool i { font-style: normal; font-size: 13px; color: var(--muted, #b7b0d8); }
 
-.dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
+.dyn .dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
 .dyn-pill {
   cursor: pointer; font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 99px;
   color: var(--muted, #b7b0d8); background: rgba(255, 255, 255, .05);
@@ -280,7 +286,7 @@
 }
 .dyn-pill.on { color: #fff; background: rgba(167, 139, 250, .2); border-color: rgba(167, 139, 250, .5); }
 
-.dyn-rate { display: flex; gap: 4px; }
+.dyn .dyn-rate { display: flex; gap: 4px; align-items: center; }
 .dyn-star-btn {
   cursor: pointer; background: transparent; border: none; padding: 2px;
   display: grid; place-items: center; line-height: 1;
