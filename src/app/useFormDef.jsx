@@ -69,7 +69,43 @@ export function useFormDef(kind) {
     [def],
   );
 
-  return { def, kinds, labelOf, requiredOf, isOn, customFields };
+  /**
+   * ترتیبِ فیلدهای هسته‌ای — از تعریف، نه از ترتیبِ کد.
+   *
+   * ⚠️ **این تکهٔ گم‌شدهٔ فرم‌ساز بود.** برچسب و ستاره و روشن/خاموش از تعریف
+   * می‌آمدند ولی *جای* فیلد همان‌جا می‌ماند که در JSX نوشته شده بود. یعنی
+   * سوپرادمین در فرم‌ساز تاریخ را می‌برد اولِ فرم، ذخیره می‌کرد، و در فرمِ
+   * واقعی تاریخ همچنان ششم بود — بی‌هیچ خطایی. قالبِ `visit.surgery` دقیقاً
+   * همین بود: تعریفش تاریخ را اول دارد، فرم بعد از چهار انتخابگر نشانش می‌داد.
+   *
+   * `codeOrder` نقشِ **پشتوانه** دارد نه تشریفات: فیلدی که در تعریف نیامده
+   * (چون هنوز در هیچ قالبی نیست — مثل حضورِ کارشناس) باید سرِ جای منطقیِ خودش
+   * بماند، نه اینکه به تهِ فرم پرت شود. سرور فیلدها را با `sort` مرتب می‌دهد،
+   * پس ترتیبِ `def.fields` همان چیزی است که در فرم‌ساز چیده شده.
+   */
+  const orderBuiltins = useCallback((codeOrder) => {
+    const rank = new Map();
+    let i = 0;
+    for (const fl of def?.fields ?? []) {
+      // کلیدِ تکراری ممکن است: قالب‌ها گاهی یک کلید را با دو برچسب دارند.
+      if (!fl.builtin || rank.has(fl.key) || !codeOrder.includes(fl.key)) continue;
+      rank.set(fl.key, i++);
+    }
+    if (rank.size === 0) return [...codeOrder]; // تعریفی نیست → همان ترتیبِ کد
+
+    /* فیلدِ تعریف‌نشده به **همسایهٔ قبلیِ خودش می‌چسبد**، نه به تهِ فرم.
+       تشخیص در هیچ قالبی نیست ولی جایش کنارِ نوعِ عمل است؛ اگر به آخر پرتاب
+       می‌شد، تعریف‌نکردنِ یک فیلد سکوت نبود — جابه‌جاییِ ناخواسته بود. */
+    let anchor = -1;
+    const rows = codeOrder.map((key, ci) => {
+      if (rank.has(key)) anchor = rank.get(key);
+      return { key, anchor, glued: rank.has(key) ? 0 : 1, ci };
+    });
+    rows.sort((a, b) => a.anchor - b.anchor || a.glued - b.glued || a.ci - b.ci);
+    return rows.map((r) => r.key);
+  }, [def]);
+
+  return { def, kinds, labelOf, requiredOf, isOn, customFields, orderBuiltins };
 }
 
 /** ستاره‌ی کنارِ برچسب — یک نشانِ مشترک، تا فرم‌ساز و فرم یک زبان داشته باشند. */

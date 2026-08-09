@@ -424,6 +424,108 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const activeProcedures = defs.procedures.filter((p) => p.active || p.id === f.procedureTypeId);
   const activeDiagnoses = defs.diagnoses.filter((d) => d.active || d.id === f.diagnosisId);
 
+  /**
+   * ترتیبِ پیش‌فرضِ کد — پشتوانه‌ای برای فیلدهایی که هنوز در هیچ قالبی نیامده‌اند.
+   * تعریفِ فرم بر این مقدم است؛ این فقط می‌گوید «اگر تعریف چیزی نگفت، کجا بنشیند».
+   */
+  const BUILTIN_ORDER = [
+    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
+    'opDate', 'opStartTime', 'opEndTime', 'techArriveTime', 'amount', 'notes',
+  ];
+
+  /**
+   * هر فیلدِ هسته‌ای یک گرهِ نام‌دار.
+   *
+   * ⚠️ `isOn` این‌جا اعمال می‌شود نه در JSX: گرهِ خاموش اصلاً ساخته نمی‌شود تا
+   * جای خالی در شبکه نگذارد. ساعت‌ها هم تازه این‌جا به تعریف وصل شدند — تا
+   * دیروز `opStartTime`/`opEndTime` با اینکه در `BUILTIN_VISIT_KEYS` بودند،
+   * برچسب و ستاره و خاموشی‌شان را از تعریف نمی‌گرفتند.
+   */
+  const timeNode = (key, fallback) => (
+    <TimePick
+      label={<>{fd.labelOf(key, fallback)}{star(fd.requiredOf(key))}</>}
+      value={f[key]}
+      onChange={(v) => setF((s) => ({ ...s, [key]: v }))}
+    />
+  );
+
+  const builtinNodes = {};
+  if (fd.isOn('surgeonId')) builtinNodes.surgeonId = { el: (
+    <DefSelect
+      label={<>{fd.labelOf('surgeonId', 'جراح')}{star(fd.requiredOf('surgeonId'))}</>}
+      value={f.surgeonId}
+      onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))}
+      options={activeSurgeons}
+      onQuickAdd={quickAdd('surgeons')}
+      addPlaceholder="نام و نام خانوادگیِ جراح…"
+    />) };
+  if (fd.isOn('hospitalId')) builtinNodes.hospitalId = { el: (
+    <DefSelect
+      label={<>{fd.labelOf('hospitalId', 'بیمارستان')}{star(fd.requiredOf('hospitalId'))}</>}
+      value={f.hospitalId}
+      onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))}
+      options={activeHospitals}
+      onQuickAdd={quickAdd('hospitals')}
+      addPlaceholder="نامِ بیمارستانِ جدید…"
+    />) };
+  if (fd.isOn('techId')) builtinNodes.techId = { el: (
+    <DefSelect
+      label={<>{fd.labelOf('techId', t.tech)}{star(fd.requiredOf('techId'))}</>}
+      value={f.techId}
+      onChange={(v) => setF((s) => ({ ...s, techId: v }))}
+      options={defs.techs}
+    />) };
+  if (fd.isOn('procedureTypeId')) builtinNodes.procedureTypeId = { el: (
+    <DefSelect
+      label={<>{fd.labelOf('procedureTypeId', 'نوعِ عمل')}{star(fd.requiredOf('procedureTypeId'))}</>}
+      value={f.procedureTypeId}
+      onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v, opType: '' }))}
+      options={activeProcedures}
+      onQuickAdd={quickAdd('procedure-types')}
+      addPlaceholder="نامِ نوعِ عملِ جدید…"
+    />) };
+  if (fd.isOn('diagnosisId')) builtinNodes.diagnosisId = { wide: true, el: (
+    <DefSelect
+      label={<>{fd.labelOf('diagnosisId', 'تشخیص')}{star(fd.requiredOf('diagnosisId'))}</>}
+      value={f.diagnosisId}
+      onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
+      options={activeDiagnoses}
+      onQuickAdd={quickAdd('diagnoses')}
+      addPlaceholder="عنوانِ تشخیصِ جدید…"
+    />) };
+  if (fd.isOn('opDate')) builtinNodes.opDate = { wide: true, el: (
+    /* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */
+    <JDate
+      label={<>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){star(fd.requiredOf('opDate'))}</>}
+      value={f.opDateJ}
+      onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
+      placeholder="۱۴۰۵/۰۴/۲۸"
+    />) };
+  if (fd.isOn('opStartTime')) builtinNodes.opStartTime = { el: timeNode('opStartTime', 'ساعتِ شروع') };
+  if (fd.isOn('opEndTime')) builtinNodes.opEndTime = { el: (
+    <>
+      {timeNode('opEndTime', 'ساعتِ پایان')}
+      {/* مدت زیرِ ساعتِ پایان می‌نشیند تا کاربر حسابِ ذهنی نکند — هر جای فرم که
+          ساعت‌ها رفته باشند، این هم با آن‌ها می‌رود. */}
+      {formDuration != null && (
+        <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
+      )}
+    </>) };
+  // حضورِ کارشناس در هیچ قالبی نیست، پس «تعریف‌نشده = روشن» و سرِ جای کدش می‌ماند.
+  builtinNodes.techArriveTime = { el: timeNode('techArriveTime', `حضورِ ${t.tech}`) };
+  /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
+     در ویرایش، صورت‌حساب جای اصلاح است. */
+  if (!editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
+    <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount'))}</span>
+      <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
+             placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
+    </label>) };
+  if (fd.isOn('notes')) builtinNodes.notes = { wide: true, el: (
+    <label className="db-field"><span>{fd.labelOf('notes', 'یادداشت')}{star(fd.requiredOf('notes'))}</span>
+      <textarea rows={2} value={f.notes} onChange={set('notes')} />
+    </label>) };
+
+
   return (
     <Overlay backdrop="db-overlay" panel="glass db-sheet" as="form" from="bottom" onClose={onClose} onSubmit={submit}>
       <header className="db-sheet-head">
@@ -533,37 +635,20 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </>
       )}
 
-      <div className="db-grid2">
-        {fd.isOn('surgeonId') && <DefSelect
-          label={<>{fd.labelOf('surgeonId', 'جراح')}{star(fd.requiredOf('surgeonId'))}</>}
-          value={f.surgeonId}
-          onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))}
-          options={activeSurgeons}
-          onQuickAdd={quickAdd('surgeons')}
-          addPlaceholder="نام و نام خانوادگیِ جراح…"
-        />}
-        {fd.isOn('hospitalId') && <DefSelect
-          label={<>{fd.labelOf('hospitalId', 'بیمارستان')}{star(fd.requiredOf('hospitalId'))}</>}
-          value={f.hospitalId}
-          onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))}
-          options={activeHospitals}
-          onQuickAdd={quickAdd('hospitals')}
-          addPlaceholder="نامِ بیمارستانِ جدید…"
-        />}
-        {fd.isOn('techId') && <DefSelect
-          label={<>{fd.labelOf('techId', t.tech)}{star(fd.requiredOf('techId'))}</>}
-          value={f.techId}
-          onChange={(v) => setF((s) => ({ ...s, techId: v }))}
-          options={defs.techs}
-        />}
-        {fd.isOn('procedureTypeId') && <DefSelect
-          label={<>{fd.labelOf('procedureTypeId', 'نوعِ عمل')}{star(fd.requiredOf('procedureTypeId'))}</>}
-          value={f.procedureTypeId}
-          onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v, opType: '' }))}
-          options={activeProcedures}
-          onQuickAdd={quickAdd('procedure-types')}
-          addPlaceholder="نامِ نوعِ عملِ جدید…"
-        />}
+      {/* ⚠️ فیلدهای هسته‌ای **به ترتیبِ تعریف** چیده می‌شوند، نه به ترتیبِ این
+          فایل. هر کدام یک ورودیِ نام‌دار است تا `orderBuiltins` بتواند
+          جابه‌جاشان کند؛ اگر مثل قبل JSXِ درجا بودند، ترتیبِ فرم‌ساز هیچ
+          اثری نداشت. `wide` یعنی تمامِ عرضِ ردیف را بگیرد. */}
+      <div className="db-grid2 db-builtins">
+        {fd.orderBuiltins(BUILTIN_ORDER).map((key) => {
+          const node = builtinNodes[key];
+          if (!node) return null;
+          return (
+            <div key={key} className={node.wide ? 'db-span2' : undefined}>
+              {node.el}
+            </div>
+          );
+        })}
       </div>
 
       {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
@@ -574,61 +659,10 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </label>
       )}
 
-      {fd.isOn('diagnosisId') && <DefSelect
-        label={<>{fd.labelOf('diagnosisId', 'تشخیص')}{star(fd.requiredOf('diagnosisId'))}</>}
-        value={f.diagnosisId}
-        onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
-        options={activeDiagnoses}
-        onQuickAdd={quickAdd('diagnoses')}
-        addPlaceholder="عنوانِ تشخیصِ جدید…"
-      />}
-
-      {/* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */}
-      <JDate
-        label={<>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){star(fd.requiredOf('opDate'))}</>}
-        value={f.opDateJ}
-        onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
-        placeholder="۱۴۰۵/۰۴/۲۸"
-      />
-
-      {/* ساعت‌ها کنارِ هم: کاربر شروع و پایان را با هم می‌زند، و مدت را
-          همان‌جا می‌بیند — بدونِ حسابِ ذهنی. */}
-      <div className="db-grid3">
-        {[
-          { key: 'opStartTime', label: 'ساعتِ شروع' },
-          { key: 'opEndTime', label: 'ساعتِ پایان' },
-          { key: 'techArriveTime', label: `حضورِ ${t.tech}` },
-        ].map((fl) => (
-          <TimePick
-            key={fl.key}
-            label={fl.label}
-            value={f[fl.key]}
-            onChange={(v) => setF((s) => ({ ...s, [fl.key]: v }))}
-          />
-        ))}
-      </div>
-      {formDuration != null && (
-        <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
-      )}
-
-      {/* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
-          در ویرایش، صورت‌حساب جای اصلاح است. */}
-      {!editing && fd.isOn('amount') && (
-        <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount'))}</span>
-          <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
-                 placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
-        </label>
-      )}
-
+      {/* شرحِ عمل جزوِ فیلدهای هسته‌ایِ تعریف‌شده نیست، پس جایش ثابت می‌ماند. */}
       <label className="db-field"><span>شرحِ عمل</span>
         <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
       </label>
-
-      {fd.isOn('notes') && (
-        <label className="db-field"><span>{fd.labelOf('notes', 'یادداشت')}{star(fd.requiredOf('notes'))}</span>
-          <textarea rows={2} value={f.notes} onChange={set('notes')} />
-        </label>
-      )}
 
       {/* ⚠️ فیلدهای دلخواهِ سوپرادمین. عمداً **انتهای فرم** و زیرِ یک عنوان:
           این‌ها به‌ازای هر شرکت فرق می‌کنند و قاطی‌کردنشان با فیلدهای همیشگی
