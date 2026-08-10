@@ -25,14 +25,23 @@ export type PresetField = {
   hint?: string;
   placeholder?: string;
   options?: { v: string; l: string }[];
+  /** صفحهٔ چینش. نیامدنش یعنی صفحهٔ ۱ — قالب‌های امروز همه تک‌صفحه‌اند. */
+  page?: number;
 };
 
 export type PresetForm = {
   key: string;
   title: string;
-  scope: 'visit' | 'intake' | 'survey';
+  /**
+   * ⚠️ `survey` دیگر یک محدوده نیست: نظرسنجی **مصداقی** از فرمِ زیرپرونده است
+   * و `scope: 'record'` می‌گیرد. مهاجرت مقدارِ قدیمیِ داخلِ دیتابیس را هم
+   * برمی‌گرداند، پس نصب‌های موجود چیزی گم نمی‌کنند.
+   */
+  scope: 'visit' | 'record' | 'intake';
   visitKind?: string;
   hint?: string;
+  /** توکنِ رنگِ کارت. نیامدنش یعنی «خودکار از کلید». */
+  color?: string;
   fields: PresetField[];
 };
 
@@ -217,11 +226,17 @@ const INTAKE: PresetForm = {
   ],
 };
 
-/** نظرسنجی — سؤال‌ها کاملاً قابلِ ویرایش، ولی با یک شروعِ معقول. */
+/**
+ * نظرسنجی — سؤال‌ها کاملاً قابلِ ویرایش، ولی با یک شروعِ معقول.
+ *
+ * ⚠️ `scope: 'record'` است نه `'survey'`: پرشدنش مراجعه نمی‌سازد، به **پرونده**
+ * می‌چسبد. کلیدش عمداً همان `survey` ماند چون `survey.service.ts` با همین کلید
+ * پیدایش می‌کند.
+ */
 const SURVEY: PresetForm = {
   key: 'survey',
   title: 'نظرسنجی',
-  scope: 'survey',
+  scope: 'record',
   hint: 'نظرِ شما کیفیتِ کارِ ما را می‌سازد.',
   fields: [
     { key: 'overall', label: 'رضایتِ کلی', type: 'rating', required: true },

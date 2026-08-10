@@ -301,6 +301,73 @@
 .dyn .dyn-time { display: block; }
 .dyn .dyn-time > span { display: none; }
 
+/* ── باکسِ عکس ───────────────────────────────────────────────────────────
+   همان قاعده‌ی بالا: با پیشوندِ `.dyn` وگرنه `.pf-field > span` بلعش می‌کند. */
+.dyn .dyn-img { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dyn-img-pick {
+  cursor: pointer; font-family: inherit; font-size: 12.5px;
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
+  border-radius: 10px; color: var(--muted, #b7b0d8);
+  background: rgba(255, 255, 255, .05); border: 1px dashed rgba(255, 255, 255, .2);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.dyn-img-pick:hover:not(:disabled) {
+  color: #fff; background: rgba(167, 139, 250, .14); border-color: rgba(167, 139, 250, .5);
+}
+.dyn-img-pick:disabled { cursor: default; opacity: .55; }
+
+.dyn-img-has {
+  display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 6px;
+  border-radius: 10px; background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .12); max-width: 100%;
+}
+/* ⚠️ اندازه‌ی ثابت + `object-fit: cover`: عکسِ موبایل ۴۰۰۰ پیکسل عرض دارد و
+   بدونِ این، یک پیوستِ ساده کلِ شیت را می‌کشد. */
+.dyn-img-has img { width: 42px; height: 42px; border-radius: 7px; object-fit: cover; display: block; }
+.dyn-img-has b {
+  font-weight: 500; font-size: 12.5px; color: var(--muted, #b7b0d8);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;
+}
+.dyn-img-has button {
+  cursor: pointer; display: grid; place-items: center; padding: 6px; border-radius: 8px;
+  color: #fca5a5; background: transparent; border: none; transition: background .15s;
+}
+.dyn-img-has button:hover:not(:disabled) { background: rgba(248, 113, 113, .15); }
+
+.dyn .dyn-note, .dyn .dyn-img .dyn-note {
+  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); opacity: .75;
+}
+
+/* ── باکسِ پرداخت ────────────────────────────────────────────────────────
+   فقط نمایش: بیمار باید شماره را ببیند و بتواند کپی کند. */
+.dyn .dyn-pay {
+  display: flex; flex-direction: column; gap: 7px; padding: 11px 13px;
+  border-radius: 12px; background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .12);
+}
+.dyn-pay-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #fff; }
+.dyn-pay-head i { font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); }
+.dyn-pay-row { display: flex; align-items: center; gap: 8px; }
+.dyn-pay-row i {
+  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8);
+  min-width: 74px; flex-shrink: 0;
+}
+/* ⚠️ `tabular-nums` تا ارقام هم‌عرض باشند، و `isolate` چون یک عددِ لاتین
+   داخلِ بندِ راست‌به‌چپ بدونِ آن تکه‌تکه و وارونه دیده می‌شود. */
+.dyn-pay-row code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 13px; letter-spacing: .04em; font-variant-numeric: tabular-nums;
+  color: #fff; direction: ltr; unicode-bidi: isolate;
+  overflow-x: auto; white-space: nowrap;
+}
+.dyn-pay-row button {
+  cursor: pointer; display: grid; place-items: center; padding: 5px; border-radius: 7px;
+  color: var(--muted, #b7b0d8); background: transparent;
+  border: 1px solid rgba(255, 255, 255, .12); transition: color .15s, background .15s;
+  margin-inline-start: auto; flex-shrink: 0;
+}
+.dyn-pay-row button:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+
 /* ── مسیرِ درمان ─────────────────────────────────────────────────────────
    خطِ زمانیِ ساده: نقطه‌ها و میله‌ی رابط. عمداً بدونِ فلش و درخت — مسیر یک
    دنباله است، نه یک ساختارِ شاخه‌دار. */

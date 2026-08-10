@@ -1,8 +1,8 @@
 import {
   Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards,
 } from '@nestjs/common';
-import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { FormsService, FIELD_TYPES } from './forms.service';
+import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { FormsService, FIELD_TYPES, FORM_COLORS, FORM_SCOPES } from './forms.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
@@ -14,6 +14,11 @@ class FormPatchDto {
   @IsOptional() @IsString() @MinLength(2, { message: 'عنوان کوتاه است' }) @MaxLength(80) title?: string;
   @IsOptional() @IsString() @MaxLength(200) hint?: string;
   @IsOptional() @IsBoolean() active?: boolean;
+  /* ⚠️ رشته‌ی خالی عمداً مجاز است و یعنی «برگرد به رنگِ خودکار». `@IsIn` تنها
+     روی توکن‌ها بود، پس پاک‌کردنِ رنگ ۴۰۰ می‌گرفت. */
+  @IsOptional() @IsIn([...FORM_COLORS, ''], { message: 'رنگ نامعتبر است' }) color?: string;
+  /* ⚠️ `scope` عمداً این‌جا نیست: عوض‌کردنِ محدودهٔ فرمی که قبلاً پر شده،
+     ثبت‌های گذشته را در جای اشتباه می‌گذارد. */
 }
 
 /**
@@ -29,6 +34,7 @@ class FieldCreateDto {
   @IsOptional() options?: any;
   @IsOptional() @IsString() @MaxLength(160) hint?: string;
   @IsOptional() @IsString() @MaxLength(80) placeholder?: string;
+  @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
 }
 
 class FieldPatchDto {
@@ -40,6 +46,7 @@ class FieldPatchDto {
   @IsOptional() @IsString() @MaxLength(160) hint?: string;
   @IsOptional() @IsString() @MaxLength(80) placeholder?: string;
   @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
 }
 
 class ReorderDto {
@@ -49,8 +56,12 @@ class ReorderDto {
 class FormCreateDto {
   @IsString() @MinLength(1) key!: string;
   @IsString() @MinLength(2, { message: 'عنوان کوتاه است' }) @MaxLength(80) title!: string;
-  @IsOptional() @IsIn(['visit', 'intake', 'survey'], { message: 'محدودهٔ فرم نامعتبر است' }) scope?: string;
+  /* ⚠️ `survey` هنوز پذیرفته می‌شود ولی در سرویس به `record` تبدیل می‌شود:
+     کلاینتِ کهنه‌ای که از کش بارگذاری شده همان مقدار را می‌فرستد، و ۴۰۰ گرفتن
+     به‌خاطرِ یک تغییرِ نام‌گذاری کاربری را که کارش را می‌کرد متوقف می‌کند. */
+  @IsOptional() @IsIn([...FORM_SCOPES, 'survey'], { message: 'محدودهٔ فرم نامعتبر است' }) scope?: string;
   @IsOptional() @IsString() @MaxLength(200) hint?: string;
+  @IsOptional() @IsIn([...FORM_COLORS, ''], { message: 'رنگ نامعتبر است' }) color?: string;
 }
 
 /**

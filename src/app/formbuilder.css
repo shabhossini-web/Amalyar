@@ -10,8 +10,45 @@
   border: 1px solid rgba(167, 139, 250, .3);
 }
 .fb-chip.ghost { color: #9aa2c0; background: rgba(255, 255, 255, .04); border-color: rgba(255, 255, 255, .12); }
-.fb-count { margin-inline-start: auto; font-size: 11px; color: #8f88b5; }
+/* ⚠️ فقط **اولین** شمارنده به لبه چسبیده می‌شود. با آمدنِ «N صفحه» دو
+   `.fb-count` کنارِ هم افتادند و اگر هر دو `margin-inline-start: auto`
+   می‌گرفتند، بینشان یک شکافِ کشسان می‌افتاد و دو عدد به دو گوشه پرت می‌شدند. */
+.fb-count { font-size: 11px; color: #8f88b5; }
+.fb-count:first-of-type { margin-inline-start: auto; }
 .fb-hint { margin: 0 0 10px; font-size: 12px; color: #8f88b5; }
+
+/* نشانِ صفحه روی ردیفِ فیلد — فقط در فرمِ چندصفحه‌ای دیده می‌شود. */
+.fb-page {
+  font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
+  color: #c4b5fd; background: rgba(167, 139, 250, .12); border: 1px solid rgba(167, 139, 250, .3);
+}
+
+/* ── انتخابگرِ رنگِ کارت ────────────────────────────────────────────────── */
+.fb-colors { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.fb-color {
+  width: 20px; height: 20px; border-radius: 7px; cursor: pointer; padding: 0;
+  background: var(--sw, #64748b);
+  /* ⚠️ حاشیه همیشه هست و فقط رنگش عوض می‌شود: اگر «انتخاب‌شده» حاشیه اضافه
+     می‌کرد، هر بار سوییچ‌کردن کلِ ردیف را دو پیکسل تکان می‌داد. */
+  border: 2px solid transparent; outline: none;
+  transition: border-color .15s, transform .12s;
+}
+.fb-color:hover:not(:disabled) { transform: scale(1.14); }
+.fb-color.on { border-color: var(--fg, #f2f0fc); }
+.fb-color:focus-visible { border-color: var(--fg, #f2f0fc); }
+.fb-color:disabled { cursor: default; opacity: .5; }
+.fb-color.auto {
+  width: auto; height: 20px; padding: 0 9px; font-family: inherit; font-size: 10px; font-weight: 800;
+  color: #8f88b5; background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
+.fb-color.auto.on { color: var(--fg, #f2f0fc); border-color: var(--fg, #f2f0fc); }
+
+/* حرکت اختیاری است، نه بخشی از معنی — کاربری که کاهشِ حرکت خواسته، نباید
+   برای فهمیدنِ رنگِ انتخاب‌شده به بزرگ‌شدنِ سوآچ تکیه کند. */
+@media (prefers-reduced-motion: reduce) {
+  .fb-color, .fb-color:hover:not(:disabled) { transition: none; transform: none; }
+}
 
 .fb-list { display: flex; flex-direction: column; gap: 8px; }
 .fb-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; }
