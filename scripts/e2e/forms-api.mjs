@@ -57,24 +57,28 @@ let form;
   ok('فرمِ تازه ساخته شد', c.status === 201 || c.status === 200, c.status + ' ' + c.text.slice(0, 160));
   form = c.json;
   ok('رنگِ انتخابی نشست', form?.color === 'teal', 'color=' + form?.color);
-  ok('colorSet درست است', form?.colorSet === true);
 
+  const KEYS = ['violet', 'teal', 'amber', 'rose', 'sky', 'lime', 'fuchsia', 'slate'];
   const auto = await api('/forms', { method: 'POST', body: { key: 'checkup' + RUN, title: 'چکاپ', scope: 'visit' } });
   ok('فرمِ بی‌رنگ هم رنگ می‌گیرد', !!auto.json?.color, 'color=' + auto.json?.color);
-  ok('ولی colorSet=false است', auto.json?.colorSet === false);
+  ok('رنگِ خودکار از پالتِ مشترک است', KEYS.includes(auto.json?.color), 'color=' + auto.json?.color);
 
-  // همان تابعِ hash در کلاینت هم هست؛ اگر دو طرف یکی نباشند، رنگِ داشبورد و
-  // فرم‌ساز فرق می‌کند. این‌جا مقدارِ سرور را با پیاده‌سازیِ کلاینت می‌سنجیم.
-  const KEYS = ['violet', 'teal', 'amber', 'rose', 'sky', 'lime', 'fuchsia', 'slate'];
-  const clientColor = (k) => { let h = 0; for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) >>> 0; return KEYS[h % KEYS.length]; };
-  ok('رنگِ خودکارِ سرور با کلاینت یکی است',
-    auto.json?.color === clientColor('visit.checkup' + RUN),
-    'server=' + auto.json?.color + ' client=' + clientColor('visit.checkup' + RUN));
+  /* ⚠️ ادعای قدیمی این بود که رنگِ خودکار **دقیقاً** hashِ کلید است. دیگر
+     نیست و نباید باشد: hash تصادم دارد و دو فرم را هم‌رنگ می‌کرد. حالا hash
+     فقط نقطهٔ شروع است و سرور تا اولین رنگِ آزادِ همان محدوده جلو می‌رود.
+     ادعای درست این است که **هیچ دو فرمِ مراجعه‌ای هم‌رنگ نباشند**. */
+  const visitForms = (await api('/forms')).json.filter((f) => f.scope === 'visit' && f.active);
+  const used = visitForms.map((f) => f.color);
+  ok('هیچ دو فرمِ مراجعه‌ای هم‌رنگ نیستند',
+    used.length > KEYS.length || new Set(used).size === used.length,
+    visitForms.map((f) => `${f.title}=${f.color}`).join('، '));
 
+  /* «خودکار» یعنی «یک رنگِ آزاد بده» — نتیجه‌اش رنگِ **واقعی** است، نه خالی. */
   const back = await api(`/forms/${form.id}`, { method: 'PATCH', body: { color: '' } });
-  ok('رشته‌ی خالی رنگ را خودکار می‌کند', back.json?.colorSet === false, back.status + ' colorSet=' + back.json?.colorSet);
+  ok('رشته‌ی خالی رنگِ آزاد می‌گیرد، نه هیچ', KEYS.includes(back.json?.color),
+    back.status + ' color=' + back.json?.color);
   const again = await api(`/forms/${form.id}`, { method: 'PATCH', body: { color: 'rose' } });
-  ok('رنگِ دستی دوباره می‌نشیند', again.json?.color === 'rose' && again.json?.colorSet === true);
+  ok('رنگِ دستی دوباره می‌نشیند', again.json?.color === 'rose', 'color=' + again.json?.color);
   form = again.json;
 
   const badColor = await api(`/forms/${form.id}`, { method: 'PATCH', body: { color: '#ff0000' } });

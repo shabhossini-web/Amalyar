@@ -71,8 +71,8 @@ console.log('\n۲) انتخابگرِ رنگ روی صفحه هست و کار م
 
   const after = await fetch(API + '/forms', { headers: { Authorization: 'Bearer ' + login.accessToken } }).then((r) => r.json());
   const now = after.find((f) => f.id === shown.id);
-  ok('کلیکِ سوآچ رنگ را روی سرور عوض کرد', now.color === target && now.colorSet === true,
-    `${shown.color} → ${now.color} (colorSet=${now.colorSet})`);
+  ok('کلیکِ سوآچ رنگ را روی سرور عوض کرد', now.color === target,
+    `${shown.color} → ${now.color}`);
 
   const onCount = await page.locator('.fb-meta .fb-color.on').count();
   ok('دقیقاً یک سوآچ نشانِ «انتخاب‌شده» دارد', onCount === 1, 'n=' + onCount);
