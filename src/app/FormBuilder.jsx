@@ -367,20 +367,23 @@ export default function FormBuilder() {
 /**
  * انتخابگرِ رنگِ کارت.
  *
- * ⚠️ «خودکار» یک گزینهٔ واقعی است، نه نبودِ انتخاب: سرور رنگِ مشتق از کلید را
- * برمی‌گرداند، پس فرمی که رنگ ندارد هم رنگ **دارد**. اگر «خودکار» را حذف
- * می‌کردیم، کاربر بعد از یک‌بار انتخاب هیچ راهی برای برگشتن نداشت.
+ * ⚠️ «خودکار» یعنی «یک رنگِ **آزاد** به من بده»، نه «رنگ نداشته باش». هر فرم
+ * هنگامِ ساخت رنگِ واقعی می‌گیرد، پس بعد از زدنِ این دکمه بلافاصله یکی از
+ * سوآچ‌ها انتخاب‌شده دیده می‌شود. کاربردش وقتی است که رنگِ دستی را پس بگیری و
+ * بگذاری سرور رنگی بدهد که هیچ فرمِ دیگری برنداشته.
+ *
+ * ⚠️ `colorSet` **حذف شد**: با تثبیتِ رنگ هنگامِ ساخت همیشه `true` می‌شد و
+ * هیچ اطلاعاتی حمل نمی‌کرد. انتخاب حالا فقط با مقایسهٔ خودِ رنگ مشخص می‌شود.
  */
 function ColorPick({ form, busy, onPick }) {
   return (
     <span className="fb-colors" role="group" aria-label="رنگِ کارت">
       <button
         type="button"
-        className={`fb-color auto${form.colorSet ? '' : ' on'}`}
+        className="fb-color auto"
         disabled={busy}
         onClick={() => onPick('')}
-        aria-pressed={!form.colorSet}
-        title="رنگِ خودکار از روی کلیدِ فرم"
+        title="یک رنگِ آزاد از پالت بگیر"
       >
         خودکار
       </button>
@@ -388,11 +391,11 @@ function ColorPick({ form, busy, onPick }) {
         <button
           key={k}
           type="button"
-          className={`fb-color${form.colorSet && form.color === k ? ' on' : ''}`}
+          className={`fb-color${form.color === k ? ' on' : ''}`}
           style={{ '--sw': FORM_COLORS[k].solid }}
           disabled={busy}
           onClick={() => onPick(k)}
-          aria-pressed={form.colorSet && form.color === k}
+          aria-pressed={form.color === k}
           aria-label={FORM_COLORS[k].fa}
           title={FORM_COLORS[k].fa}
         />

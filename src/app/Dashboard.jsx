@@ -113,9 +113,14 @@ const FILTERS = [
  * در کد. نوعِ دلخواهی که سوپرادمین ساخته (مثلاً «درمان») همان‌جا در فیلتر
  * پیدا می‌شود، بی‌آنکه کسی این فایل را دست بزند.
  */
-const kindFilters = (present) => [
+/**
+ * ⚠️ `titles` نگاشتِ سرور است (`visitKind → عنوانِ فرم`). بدونِ آن، فیلترِ یک
+ * نوعِ دلخواه کلیدِ خامِ انگلیسی را نشان می‌داد (`implantr14518`) در حالی که
+ * برچسبِ همان نوع روی کارت فارسی بود — دو نامِ متفاوت برای یک چیز، در یک صفحه.
+ */
+const kindFilters = (present, titles = {}) => [
   { v: 'all', l: 'همه' },
-  ...present.map((v) => ({ v, l: kindOf(v).label })),
+  ...present.map((v) => ({ v, l: titles[v] || kindOf(v).label })),
 ];
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 /// ارقامِ لاتینِ یک رشته (مثلِ «۱۴۰۵/۰۵/۰۱»ِ ورودی) را فارسی می‌کند — فقط برای
@@ -536,20 +541,29 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
       {/* ⚠️ فقط نوع‌هایی که این نصب واقعاً فرم دارد. نصبِ نورومانیتورینگ چهار
           دکمه نشان نمی‌دهد وقتی سه‌تایشان فرمی ندارند — انتخابی که به هیچ فرمی
-          نمی‌رسد، فقط کاربر را سرگردان می‌کند. تا وقتی پاسخِ سرور نرسیده
-          (`kinds === null`) فهرستِ کامل می‌ماند، نه فهرستِ خالی. */}
+          نمی‌رسد، فقط کاربر را سرگردان می‌کند.
+
+          ⚠️ **فهرست از سرور می‌آید، نه از `KINDS`.** تا دیروز روی
+          `Object.entries(KINDS)` می‌چرخید و `filter` هم فقط همان چهار کلیدِ
+          هاردکد را نگه می‌داشت: نوعی که کاربر در فرم‌ساز می‌ساخت (مثلاً
+          «ایمپلنت») **در داشبورد اصلاً دیده نمی‌شد** — هرچند
+          `/forms/visit-kinds` می‌شناختش و `approve` هم رویش مراجعه می‌ساخت.
+          هیچ خطایی نبود؛ فقط یک نوعِ نامرئی.
+
+          تا وقتی پاسخِ سرور نرسیده فهرستِ پشتیبان می‌ماند، وگرنه یک قطعیِ
+          لحظه‌ای ردیف را **خالی** می‌کرد. */}
       <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
-        {Object.entries(KINDS)
-          .filter(([v]) => !fd.kinds || fd.kinds.some((x) => x.kind === v) || v === f.kind)
-          .map(([v, k]) => (
+        {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
+          .map((k) => (
           <button
-            key={v}
+            key={k.kind}
             type="button"
             role="radio"
-            aria-checked={f.kind === v}
-            className={f.kind === v ? 'on' : ''}
-            onClick={() => setF((s) => ({ ...s, kind: v }))}
-          >{fd.kinds?.find((x) => x.kind === v)?.title ?? k.label}</button>
+            aria-checked={f.kind === k.kind}
+            className={f.kind === k.kind ? 'on' : ''}
+            style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
+            onClick={() => setF((s) => ({ ...s, kind: k.kind }))}
+          >{k.title}</button>
         ))}
       </div>
 
@@ -710,8 +724,22 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
           <b>{v.fullName}</b>
           <span>{v.code}</span>
         </Link>
-        {/* نشانِ نوع فقط وقتی «عمل» نیست — برچسبِ تکراری روی همهٔ کارت‌ها اطلاعات نیست. */}
-        {v.kind && v.kind !== 'surgery' && <span className={`db-kindtag k-${v.kind}`}>{kindOf(v.kind).label}</span>}
+        {/* ⚠️ نشانِ نوع روی **هر** مراجعه، و با رنگِ خودِ فرم.
+            تا دیروز `v.kind !== 'surgery'` بود، یعنی «عمل» بی‌نشان می‌ماند و
+            کاربر باید از نبودِ برچسب حدس می‌زد که عمل است — تفکیکی که خواسته
+            شده بود، دقیقاً روی پرتکرارترین نوع کار نمی‌کرد. حالا همه برچسب
+            دارند و رنگ کار را می‌کند، نه حذفِ برچسب.
+
+            ⚠️ `kindTitle`/`kindColor` **از سرور** می‌آیند (قانون ۱۵)؛ `kindOf`
+            فقط وقتی می‌ماند که آن نوع فرمی ندارد. */}
+        {v.kind && (
+          <span
+            className="db-kindtag"
+            style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined}
+          >
+            {v.kindTitle || kindOf(v.kind).label}
+          </span>
+        )}
         {(v.procedureTypeName || v.opType) && <span className="db-optype">{v.procedureTypeName || v.opType}</span>}
         {/* مانده فقط وقتی صورت‌حساب دارد؛ «۰ تومان» روی هر کارت اطلاعات نیست. */}
         {v.total !== 0 && (
@@ -942,6 +970,20 @@ export default function Dashboard() {
 
   useEffect(() => { loadDefs(); }, [loadDefs, user?.id]);
 
+  /* نوع‌های مراجعه — برای برچسبِ فیلتر. کارتِ مراجعه به این نیازی ندارد
+     (`kindTitle`/`kindColor` را سرور در خودِ ردیف می‌فرستد)؛ این فقط برای
+     نوع‌هایی است که در `stats.kinds` کلید خام‌اند. */
+  const [visitKinds, setVisitKinds] = useState([]);
+  useEffect(() => {
+    api('/forms/visit-kinds')
+      .then((r) => setVisitKinds(Array.isArray(r) ? r : []))
+      .catch(() => setVisitKinds([]));
+  }, [user?.id]);
+  const kindTitles = useMemo(
+    () => Object.fromEntries(visitKinds.map((k) => [k.kind, k.title])),
+    [visitKinds],
+  );
+
   // سوییچِ حساب وسطِ فرم/شیتِ باز → بسته شود
   useEffect(() => { setModal(null); }, [user?.id]);
 
@@ -999,10 +1041,10 @@ export default function Dashboard() {
         filterLabel: [
           q.trim() && `جستجو: ${q.trim()}`,
           status !== 'all' && `وضعیت: ${FILTERS.find((f) => f.v === status)?.l}`,
-          kind !== 'all' && `نوع: ${kindOf(kind).label}`,
+          kind !== 'all' && `نوع: ${kindTitles[kind] || kindOf(kind).label}`,
           ...activeChips.map((c) => c.label),
         ].filter(Boolean).join(' · '),
-        kindLabel: (v) => kindOf(v.kind).label,
+        kindLabel: (v) => v.kindTitle || kindOf(v.kind).label,
         statusLabel,
         brandName,
         title: `فهرستِ ${t.visits}`,
@@ -1081,7 +1123,7 @@ export default function Dashboard() {
               وقتی روی یک نوع فیلتر شده، همان نوع را می‌گویند. */}
           <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار</span></div>
           {stats.due > 0 && <div className="glass db-stat db-stat-due"><b>{faNum(stats.due)}</b><span>ماندهٔ کل</span></div>}
-          <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>{kind === 'all' ? 'امروز' : `${kindOf(kind).label}ِ امروز`}</span></div>
+          <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>{kind === 'all' ? 'امروز' : `${kindTitles[kind] || kindOf(kind).label}ِ امروز`}</span></div>
         </div>
 
         <div className="db-toolbar">
@@ -1137,7 +1179,7 @@ export default function Dashboard() {
             label={`نوعِ ${t.visit}`}
             value={kind}
             onChange={setKind}
-            items={kindFilters(kindsPresent).map((fl) => ({ key: fl.v, label: fl.l }))}
+            items={kindFilters(kindsPresent, kindTitles).map((fl) => ({ key: fl.v, label: fl.l }))}
           />
         )}
 

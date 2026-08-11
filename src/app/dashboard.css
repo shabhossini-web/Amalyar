@@ -48,25 +48,38 @@
 .db-patlink:hover b { color: var(--brand-2, var(--brand-2)); }
 .db-patlink:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 3px; }
 
-/* نوعِ ملاقات — انتخابگرِ بالای فرم */
-.db-kindrow { display: flex; gap: 6px; margin-bottom: 4px; }
+/* نوعِ ملاقات — انتخابگرِ بالای فرم.
+   ⚠️ `wrap` لازم است: فهرست دیگر چهار دکمهٔ ثابت نیست و هر نصب می‌تواند
+   نوعِ دلخواه بسازد. بدونش، نوعِ ششم از لبهٔ شیت بیرون می‌زد. */
+.db-kindrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
 .db-kindrow button {
-  flex: 1; padding: 9px 6px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
+  flex: 1 1 90px; padding: 9px 6px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
   color: #b7b0d4; background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .db-kindrow button.on {
   color: #fff; font-weight: 800; border-color: transparent;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
+/* نوعی که رنگِ خودش را دارد، همان رنگ را در حالتِ انتخاب نشان می‌دهد —
+   وگرنه انتخابگر و کارتِ همان نوع دو رنگِ متفاوت داشتند. */
+.db-kindrow button[style*="--k"].on {
+  background: rgb(var(--k)); color: #fff;
+}
 .db-kindfilter { margin-top: -6px; }
 
-/* نشانِ نوع روی کارت — رنگ به نوع، تا در فهرست از هم تفکیک شوند */
+/* نشانِ نوع روی کارت.
+   ⚠️ یک قاعده برای همهٔ رنگ‌ها، نه یک کلاس به‌ازای هر نوع: فهرستِ نوع‌ها باز
+   است و هر نوعِ تازه‌ای که کاربر می‌ساخت، در CSS کلاسی نداشت و برچسبش
+   **بی‌رنگ** می‌ماند. رنگ از `--k` می‌آید که سرور تعیینش کرده. */
 .db-kindtag {
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
+  color: #c9c2e4; background: rgba(255, 255, 255, .06); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
-.db-kindtag.k-clinic   { color: #67e8f9; background: rgba(34, 211, 238, .12);  border: 1px solid rgba(34, 211, 238, .35); }
-.db-kindtag.k-followup { color: #6ee7b7; background: rgba(52, 211, 153, .12);  border: 1px solid rgba(52, 211, 153, .35); }
-.db-kindtag.k-consult  { color: #fcd34d; background: rgba(251, 191, 36, .12);  border: 1px solid rgba(251, 191, 36, .35); }
+.db-kindtag[style*="--k"] {
+  color: rgb(var(--k));
+  background: rgba(var(--k), .13);
+  border: 1px solid rgba(var(--k), .38);
+}
 
 /* برچسبِ نوعِ عمل روی کارت */
 .db-optype {
