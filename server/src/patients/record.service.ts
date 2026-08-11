@@ -5,6 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { actorName } from '../common/person';
+import { colorForKey } from './forms.service';
 
 /** دسته‌های مدرک — فهرستِ بسته، تا گزارش‌گیری روی متنِ آزاد نیفتد. */
 export const DOCUMENT_CATEGORIES = [
@@ -97,7 +98,7 @@ export class RecordService {
     // ⚠️ نامِ آرایه عمداً `clinicalNotes` است، نه `notes`: خودِ بیمار یک فیلدِ متنیِ
     // `notes` دارد و اگر هم‌نام شوند، spread آن را با آرایه می‌پوشاند و ذخیرهٔ
     // پروفایل با «notes must be a string» می‌شکند. (همین باگ یک‌بار رخ داد.)
-    const [visits, documents, clinicalNotes, kindDefs] = await Promise.all([
+    const [visits, documents, clinicalNotes, kindDefs, attachedForms] = await Promise.all([
       this.prisma.visit.findMany({
         where: { patientId },
         include: {
@@ -111,13 +112,23 @@ export class RecordService {
       }),
       this.listDocuments(patientId, user),
       clinical ? this.listNotes(patientId, user) : Promise.resolve([]),
-      this.prisma.formDef.findMany({ where: { scope: 'visit' }, select: { visitKind: true, title: true } }),
+      this.prisma.formDef.findMany({ where: { scope: 'visit' }, select: { visitKind: true, title: true, key: true, color: true } }),
+      this.listAttachedForms(patientId, clinical),
     ]);
     /* ⚠️ فرمِ **خاموش** هم خوانده می‌شود (بدونِ `active: true`): مراجعاتِ قدیمی
        با نوعی که دیگر استفاده نمی‌شود باید همچنان نامِ درست را نشان بدهند،
        نه کلیدِ خام. */
     const kindTitles: Record<string, string> = {};
-    for (const d of kindDefs) if (d.visitKind) kindTitles[d.visitKind] = d.title;
+    /* ⚠️ رنگ هم مثلِ عنوان **سمتِ سرور** وصل می‌شود (قانون ۱۵). تا دیروز
+       پروندهٔ بیمار کلاسِ `k-${kind}`ِ هاردکد می‌گذاشت، پس نوعی که کاربر در
+       فرم‌ساز ساخته بود در داشبورد رنگی و این‌جا **بی‌رنگ** دیده می‌شد — یک
+       نوع، دو ظاهر، در دو صفحه. */
+    const kindColors: Record<string, string> = {};
+    for (const d of kindDefs) {
+      if (!d.visitKind) continue;
+      kindTitles[d.visitKind] = d.title;
+      kindColors[d.visitKind] = d.color || colorForKey(d.key);
+    }
 
     return {
       ...patient,
@@ -141,6 +152,10 @@ export class RecordService {
         diagnosisTitle: v.diagnosis?.title ?? null,
         notes: v.notes,
         extra: v.extra ?? {},
+        /* ⚠️ `null` وقتی این نوع فرمی ندارد — کلاینت آن‌وقت به کلید برمی‌گردد.
+           «عمل» نامیدنِ نوعِ ناشناخته دروغ است. */
+        kindTitle: v.kind ? kindTitles[v.kind] ?? null : null,
+        kindColor: v.kind ? kindColors[v.kind] ?? null : null,
       })),
       /**
        * **مسیرِ درمان** — مشتق از توالیِ مراجعات، نه ذخیره‌شده.
@@ -194,7 +209,11 @@ export class RecordService {
       kindTitles,
       documents,
       clinicalNotes,
-      counts: { visits: visits.length, documents: documents.length, notes: clinicalNotes.length },
+      attachedForms,
+      counts: {
+        visits: visits.length, documents: documents.length,
+        notes: clinicalNotes.length, forms: attachedForms.length,
+      },
     };
   }
 
@@ -259,6 +278,61 @@ export class RecordService {
       before, after: patch,
     });
     return this.get(patientId, user);
+  }
+
+  /**
+   * فرم‌هایی که به **پرونده** چسبیده‌اند — نظرسنجی، جوابِ آزمایش، شرحِ حال.
+   *
+   * ⚠️ **حلقه‌ای که تا امروز باز بود.** از مرحلهٔ ۴، فرمِ `scope: 'record'`
+   * هنگامِ تأیید مراجعه نمی‌سازد و فقط `patientId` می‌گیرد
+   * (`intake.service.ts` → `madeVisit: false`). یعنی بیمار فرم را پر می‌کرد،
+   * ادمین تأییدش می‌کرد، و بعد **هیچ صفحه‌ای نشانش نمی‌داد**: داده در
+   * `intake_submissions.data` می‌نشست و آن‌جا دفن می‌شد. نه خطایی، نه
+   * لاگی — فقط کاری که نیمه‌کاره مانده بود.
+   *
+   * ⚠️ برچسبِ هر پاسخ **این‌جا** به مقدارش جوش می‌خورد، نه در مرورگر: کلاینت
+   * وگرنه باید تعریفِ فرم را جدا می‌گرفت و خودش zip می‌کرد — دو منبع برای یک
+   * چیز، و روزی که فیلدی حذف شود، پاسخِ یتیم زیرِ برچسبِ فیلدِ بعدی می‌نشست.
+   *
+   * ⚠️ `formId` عکسِ لحظه‌ایِ ثبت‌نام است (نه `link.formId`)، پس اگر ادمین فردا
+   * فرمِ لینک را عوض کند، پاسخ‌های دیروز همچنان با برچسب‌های **همان** فرمی
+   * خوانده می‌شوند که بیمار دیده بود.
+   */
+  private async listAttachedForms(patientId: number, clinical: boolean) {
+    const rows = await this.prisma.intakeSubmission.findMany({
+      where: { patientId, status: 'approved', form: { scope: 'record' } },
+      orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
+      include: {
+        form: {
+          select: {
+            id: true, key: true, title: true, color: true,
+            fields: { where: { builtin: false }, orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }] },
+          },
+        },
+      },
+    });
+
+    return rows.map((r) => {
+      const data = (r.data ?? {}) as Record<string, any>;
+      return {
+        id: r.id,
+        formTitle: r.form?.title ?? 'فرمِ حذف‌شده',
+        formColor: r.form ? r.form.color || colorForKey(r.form.key) : null,
+        submittedAt: r.reviewedAt ?? r.updatedAt,
+        /* ⚠️ محتوا پشتِ همان درِ بالینی است که یادداشت‌ها. «شرحِ حال» و
+           «جوابِ آزمایش» فرمِ زیرپرونده‌اند و کارشناسی که اجازهٔ خواندنِ
+           یادداشتِ بالینی ندارد، نباید از این در واردشان شود. ولی **وجودِ**
+           فرم پنهان نمی‌شود: کاربر باید بداند چیزی هست که نمی‌بیند. */
+        locked: !clinical,
+        answers: clinical
+          ? (r.form?.fields ?? [])
+            .map((f) => ({ key: f.key, label: f.label, type: f.type, value: data[f.key] }))
+            /* فیلدِ بی‌پاسخ ردیفِ خالی نمی‌سازد — فرمِ ده‌فیلدی که بیمار سه‌تا
+               پر کرده، نباید هفت خطِ «—» نشان دهد. */
+            .filter((a) => a.value !== undefined && a.value !== null && a.value !== '')
+          : [],
+      };
+    });
   }
 
   // ───────────────────────── مدارک ─────────────────────────

@@ -38,9 +38,29 @@
   border-radius: 99px; padding: 2px 8px;
   color: #c4b5fd; background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
-.rc-kind.k-clinic   { color: #67e8f9; background: rgba(34, 211, 238, .12);  border-color: rgba(34, 211, 238, .35); }
-.rc-kind.k-followup { color: #6ee7b7; background: rgba(52, 211, 153, .12);  border-color: rgba(52, 211, 153, .35); }
-.rc-kind.k-consult  { color: #fcd34d; background: rgba(251, 191, 36, .12);  border-color: rgba(251, 191, 36, .35); }
+/* ⚠️ یک قاعده برای همهٔ رنگ‌ها، نه یک کلاس به‌ازای هر نوع. فهرستِ نوع‌ها باز
+   است: نوعی که کاربر در فرم‌ساز می‌سازد کلاسی در CSS ندارد و برچسبش این‌جا
+   **بی‌رنگ** می‌ماند — همان نوع در داشبورد رنگی بود و در پرونده خاکستری.
+   رنگ از `--k` می‌آید که سرور تعیینش کرده (`kindColor`). */
+.rc-kind[style*="--k"] {
+  color: rgb(var(--k));
+  background: rgba(var(--k), .13);
+  border-color: rgba(var(--k), .38);
+}
+
+/* ── فرم‌های ضمیمهٔ پرونده ── */
+.rc-form { display: flex; flex-direction: column; gap: 8px; }
+.rc-form-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rc-form-head b { font-size: 13.5px; }
+.rc-form-when { font-size: 11.5px; color: var(--text3); margin-inline-start: auto; }
+.rc-form-ans { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 12.5px; }
+.rc-form-ans dt { color: var(--text3); }
+.rc-form-ans dd { margin: 0; color: var(--text1); overflow-wrap: anywhere; }
+.rc-form-lock {
+  font-size: 12px; color: var(--text3);
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  border-radius: 10px; padding: 8px 10px;
+}
 
 .rc-st {
   flex-shrink: 0; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 4px 10px; white-space: nowrap;

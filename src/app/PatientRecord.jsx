@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
@@ -178,6 +178,61 @@ function ProfileTab({ rec, onSave, toast }) {
 }
 
 /* ══════════════ تبِ مراجعات ══════════════ */
+/**
+ * فرم‌هایی که به پرونده چسبیده‌اند — نظرسنجی، جوابِ آزمایش، شرحِ حال.
+ *
+ * ⚠️ برچسبِ هر پاسخ از **سرور** می‌آید، جوش‌خورده به مقدارش. این‌جا هیچ
+ * zipکردنی نیست: اگر کلاینت تعریفِ فرم را جدا می‌گرفت، روزی که فیلدی حذف شود
+ * پاسخِ یتیم زیرِ برچسبِ فیلدِ بعدی می‌نشست — و هیچ‌کس نمی‌فهمید.
+ */
+/** مقدارِ پاسخ به متنِ خواندنی — ارقام فارسی، آرایه با «،»، بولی به بله/خیر. */
+function answerText(v) {
+  if (typeof v === 'boolean') return v ? 'بله' : 'خیر';
+  if (Array.isArray(v)) return faNum(v.join('، '));
+  return faNum(String(v));
+}
+
+function FormsTab({ rec }) {
+  const rows = rec.attachedForms ?? [];
+  if (!rows.length) return <div className="df-empty">فرمی به این پرونده نچسبیده است</div>;
+  return (
+    <div className="df-list">
+      {rows.map((f) => (
+        <div key={f.id} className="df-row rc-form">
+          <div className="rc-form-head">
+            <b>{f.formTitle}</b>
+            <i className="rc-kind" style={f.formColor ? { '--k': `var(--kind-${f.formColor})` } : undefined}>
+              زیرپرونده
+            </i>
+            {f.submittedAt && <span className="rc-form-when">{faDate(f.submittedAt)}</span>}
+          </div>
+          {/* ⚠️ «قفل» با «خالی» یکی نیست و کاربر باید تفاوتشان را ببیند:
+              یکی یعنی اجازه نداری، دیگری یعنی چیزی نیست. */}
+          {f.locked ? (
+            <p className="rc-form-lock">محتوای این فرم بالینی است و در سطحِ دسترسیِ شما دیده نمی‌شود.</p>
+          ) : f.answers.length === 0 ? (
+            <p className="rc-form-lock">این فرم بدونِ پاسخ ثبت شده است.</p>
+          ) : (
+            <dl className="rc-form-ans">
+              {f.answers.map((a) => (
+                <Fragment key={a.key}>
+                  <dt>{a.label}</dt>
+                  {/* ⚠️ `faNum` روی همهٔ مقادیر، نه فقط عددها: امتیازِ «۵» و
+                      تاریخِ داخلِ متن باید مثلِ بقیهٔ صفحه فارسی دیده شوند.
+                      در اسکرین‌شات دیدمش — «۲۰ مرداد ۱۴۰۵» فارسی بود و
+                      امتیاز کنارش `5`. `bool` هم عدد نیست ولی «بله/خیر»
+                      خواناتر از `true` است. */}
+                  <dd>{answerText(a.value)}</dd>
+                </Fragment>
+              ))}
+            </dl>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function VisitsTab({ rec }) {
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
@@ -187,7 +242,9 @@ function VisitsTab({ rec }) {
           <div className="df-row-main">
             <b>
               <span dir="ltr">{v.code}</span>
-              <i className={`rc-kind k-${v.kind || 'surgery'}`}>{kindLabel(v.kind, rec.kindTitles)}</i>
+              <i className="rc-kind" style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined}>
+                {v.kindTitle || kindLabel(v.kind, rec.kindTitles)}
+              </i>
               {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
             </b>
             <small>
@@ -233,7 +290,9 @@ function JourneyTab({ rec }) {
           </div>
           <div className="rc-jmain">
             <b>
-              <span className={`rc-kind k-${r.kind || 'surgery'}`}>{kindLabel(r.kind, rec.kindTitles)}</span>
+              <span className="rc-kind" style={r.kindColor ? { '--k': `var(--kind-${r.kindColor})` } : undefined}>
+                {r.kindTitle || kindLabel(r.kind, rec.kindTitles)}
+              </span>
               {r.title ? ` — ${r.title}` : ''}
             </b>
             <small>
@@ -525,6 +584,9 @@ export default function PatientRecord() {
     ['visits', `مراجعات (${faNum(rec.counts.visits)})`],
     ...(rec.counts.visits > 1 ? [['journey', 'مسیرِ درمان']] : []),
     ['docs', `مدارک (${faNum(rec.counts.documents)})`],
+    /* فقط وقتی چیزی هست: تبِ همیشه‌خالی، فضای نوارِ تب را می‌گیرد و هیچ
+       نمی‌گوید. نصبی که فرمِ زیرپرونده ندارد اصلاً این تب را نمی‌بیند. */
+    ...(rec.counts.forms > 0 ? [['forms', `فرم‌ها (${faNum(rec.counts.forms)})`]] : []),
     ...(rec.clinicalVisible ? [['notes', `شرح‌ها (${faNum(rec.counts.notes)})`]] : []),
   ];
 
@@ -561,6 +623,7 @@ export default function PatientRecord() {
         {tab === 'visits' && <VisitsTab rec={rec} />}
         {tab === 'journey' && <JourneyTab rec={rec} />}
         {tab === 'docs' && <DocsTab rec={rec} reload={load} toast={setToast} />}
+        {tab === 'forms' && <FormsTab rec={rec} />}
         {tab === 'notes' && <NotesTab rec={rec} reload={load} toast={setToast} />}
       </div>
 
