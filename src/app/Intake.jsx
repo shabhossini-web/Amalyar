@@ -166,7 +166,12 @@ export default function IntakeAdmin() {
 
             {s.status === 'pending_approval' && (
               <footer className="ia-acts">
-                <button type="button" className="ia-ok" onClick={() => setApproving(s)}>تأیید و ساختِ مراجعه</button>
+                {/* ⚠️ متنِ دکمه از `makesVisit`ِ **سرور** می‌آید: فرمِ زیرپرونده
+                    مراجعه نمی‌سازد و «تأیید و ساختِ مراجعه» روی آن یک وعدهٔ
+                    دروغ بود. */}
+                <button type="button" className="ia-ok" onClick={() => setApproving(s)}>
+                  {s.makesVisit === false ? 'تأیید و ثبت در پرونده' : 'تأیید و ساختِ مراجعه'}
+                </button>
                 <button type="button" className="ia-ghost" onClick={() => {
                   const n = window.prompt('چه چیزی باید اصلاح شود؟');
                   if (n?.trim()) act(s.id, 'return', { note: n.trim() }, 'برای اصلاح برگردانده شد');
@@ -295,7 +300,9 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
         },
       });
-      onDone(`مراجعهٔ ${r.visitCode} ساخته شد ✓`);
+      /* ⚠️ پیام از **پاسخِ سرور** ساخته می‌شود نه از حدس: فرمِ زیرپرونده
+         `visitCode` ندارد و متنِ قبلی «مراجعهٔ undefined ساخته شد» می‌داد. */
+      onDone(r.madeVisit === false ? 'در پروندهٔ بیمار ثبت شد ✓' : `مراجعهٔ ${r.visitCode} ساخته شد ✓`);
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
@@ -319,6 +326,15 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
         <p className="ia-note">
           بیمار نوشته: {[row.data?.procedure, row.data?.surgeonName, row.data?.hospitalName].filter(Boolean).join(' · ') || '—'}
         </p>
+        {/* ⚠️ فرمِ زیرپرونده مراجعه نمی‌سازد، پس جراح/بیمارستان/تاریخ و ردیفِ
+            پرداخت برایش بی‌معنی‌اند — نشان‌دادنشان یعنی ادمین چیزی را انتخاب
+            کند که هیچ‌جا نمی‌نشیند. */}
+        {row.makesVisit === false && (
+          <p className="ia-note">
+            فرمِ «{row.formTitle}» زیرپرونده است: با تأیید، پاسخ‌ها به پروندهٔ
+            بیمار می‌چسبند و <b>مراجعه‌ای ساخته نمی‌شود</b>.
+          </p>
+        )}
         {/* ⚠️ فیش **بالای** انتخابگرهاست و نه در یک صفحهٔ دیگر: تأیید یعنی
             «پول رسیده»، و تصمیمِ مالی نباید بدونِ دیدنِ مدرک گرفته شود. */}
         <div className="ia-money">
@@ -332,6 +348,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
             پنلی که `transform` دارد نسبت به همان پنل جا می‌گیرد، نه صفحه —
             همان تلهٔ آشنای شیت‌های تودرتو. */}
         <Receipt documentId={row.data?.receiptDocumentId} onOpen={onZoom} />
+        {row.makesVisit !== false && (
         <div className="ia-grid">
           <Sel k="surgeonId" label="جراح" list={refs.surgeons} />
           <Sel k="hospitalId" label="بیمارستان" list={refs.hospitals} />
@@ -342,9 +359,11 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           <TimePick className="ia-field" label="ساعتِ عمل" value={f.opStartTime}
                     onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />
         </div>
+        )}
         {/* ⚠️ ثبتِ پرداخت همین‌جاست چون همین‌جا فیش جلوی چشمِ ادمین است و
             می‌داند پول کجا نشسته. نسخهٔ اول پرداخت ثبت نمی‌کرد و نتیجه‌اش
             مراجعهٔ تأییدشده‌ای بود که کلِ مبلغش «مانده» می‌ماند. */}
+        {row.makesVisit !== false && (
         <div className="ia-pay">
           <label className="ia-check">
             <input type="checkbox" checked={f.registerPayment} disabled={busy}
@@ -362,10 +381,13 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
             </label>
           )}
         </div>
+        )}
 
         {err && <p className="ia-note warn">{err}</p>}
         <button type="button" className="ia-ok" disabled={busy} onClick={save}>
-          {busy ? 'در حال ساخت…' : 'تأیید و ساختِ مراجعه'}
+          {busy
+            ? 'در حال ثبت…'
+            : row.makesVisit === false ? 'تأیید و ثبت در پرونده' : 'تأیید و ساختِ مراجعه'}
         </button>
       </div>
     </Overlay>

@@ -621,10 +621,29 @@ export class FormsService {
   async validate(formKey: string, values: Record<string, any>) {
     const form = await this.byKey(formKey).catch(() => null);
     if (!form) return { ok: true as const, errors: {} as Record<string, string> };
+    return this.validateFields(form.fields, values);
+  }
 
+  /**
+   * همان قاعده، روی یک **زیرمجموعهٔ** فیلدها.
+   *
+   * ⚠️ چرا لازم شد: فرمِ عمومیِ بیمار فقط فیلدهای **دلخواه** را نشان می‌دهد؛
+   * فیلدهای builtin (تاریخِ عمل، جراح، …) را ادمین هنگامِ تأیید پر می‌کند. اگر
+   * فرمِ عمومی کلِ فرم را اعتبارسنجی می‌کرد، `opDate`ِ اجباری — که `createForm`
+   * روی هر فرمِ مراجعه می‌سازد — ذخیرهٔ بیمار را ۴۰۰ می‌کرد برای کادری که
+   * اصلاً روی صفحه‌اش نیست.
+   *
+   * ⚠️ و چرا کپیِ قاعده نه: «خالی یعنی چه» یک تصمیم است، نه یک شرط. دو نسخه‌اش
+   * یعنی روزی ستارهٔ فرم‌ساز در یک صفحه اثر کند و در صفحهٔ دیگر نه.
+   */
+  validateFields(fields: any[], values: Record<string, any>) {
     const errors: Record<string, string> = {};
-    for (const f of form.fields) {
-      if (!f.active || !f.required) continue;
+    for (const f of fields ?? []) {
+      /* ⚠️ `active !== false` و نه `!active`: فراخوانی که فیلدها را از قبل با
+         `active` فیلتر کرده (مثلِ نمای عمومیِ فرم) اصلاً این کلید را نمی‌فرستد،
+         و `!undefined` یعنی **همه‌چیز رد شود** — اعتبارسنجی‌ای که بی‌صدا هیچ
+         چیزی را نمی‌سنجد. همان قراردادِ `DynForm`. */
+      if (f.active === false || !f.required) continue;
       /* ⚠️ عکس و پرداخت مقدارشان در `values` نمی‌نشیند — فایل به `Document`
          می‌رود و شماره‌های حساب از لینک خوانده می‌شوند. ستاره‌ی رویشان اگر
          این‌جا سنجیده می‌شد، فرمی می‌ساخت که هیچ‌وقت ذخیره نمی‌شود. */

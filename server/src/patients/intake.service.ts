@@ -6,7 +6,7 @@ import { PatientsService } from './patients.service';
 import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
-import { FormsService } from './forms.service';
+import { FormsService, FORM_SCOPES } from './forms.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
@@ -112,22 +112,33 @@ export class IntakeService {
   }
 
   /**
-   * فرم‌هایی که می‌شود پشتِ یک لینک گذاشت.
+   * فرم‌هایی که می‌شود پشتِ یک لینک گذاشت — **هر سه محدوده**.
    *
-   * ⚠️ فقط `scope: 'intake'`: پرشدنِ فرمِ ثبت‌نام است که پرونده باز می‌کند
-   * (`register`)، و کلیدهای builtinاش ستونِ `Patient`اند نه `Visit`. پیشنهادِ
-   * فرمِ مراجعه این‌جا یعنی وعدهٔ رفتاری که هنوز وجود ندارد (مرحلهٔ ۴).
+   * ⚠️ تا مرحلهٔ ۳ فقط `intake` برمی‌گشت، چون هیچ‌چیز به `scope` احترام
+   * نمی‌گذاشت و پیشنهادِ فرمِ مراجعه یعنی وعدهٔ رفتاری که وجود نداشت. حالا
+   * `approve` هر سه را می‌شناسد، پس انتخابگر هم می‌تواند نشانشان بدهد.
+   *
+   * `scope` برمی‌گردد تا رابط بتواند بگوید پرشدنِ این فرم **چه می‌سازد** —
+   * انتخابی که پیامدش پیدا نباشد، انتخابِ آگاهانه نیست.
    *
    * ⚠️ چرا endpointِ جدا و نه همان `GET /forms`: آن پشتِ مجوزِ `forms.read`
    * است و این صفحه مجوزِ `intake.*` دارد.
    */
   async formsForLinks() {
     const rows = await this.prisma.formDef.findMany({
-      where: { scope: 'intake', active: true },
-      orderBy: { id: 'asc' },
-      select: { id: true, title: true, color: true, fields: { where: { type: 'payment' }, select: { id: true } } },
+      where: { active: true },
+      orderBy: [{ scope: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true, title: true, color: true, scope: true, visitKind: true,
+        fields: { where: { type: 'payment' }, select: { id: true } },
+      },
     });
-    return rows.map((f) => ({ id: f.id, title: f.title, color: f.color, hasPayment: f.fields.length > 0 }));
+    return rows.map((f) => ({
+      id: f.id, title: f.title, color: f.color, scope: f.scope, visitKind: f.visitKind,
+      hasPayment: f.fields.length > 0,
+      /* پرشدنش مراجعه می‌سازد؟ `record` نمی‌سازد و همین تفاوتِ اصلی است. */
+      makesVisit: f.scope !== 'record',
+    }));
   }
 
   /**
@@ -161,16 +172,23 @@ export class IntakeService {
    * POST یعنی دروازه‌ای که نیست.
    */
   private async resolveLinkRefs(dto: { formId?: number | null; bankAccountId?: number | null }) {
-    const out: { formId?: number | null; bankAccountId?: number | null } = {};
+    const out: { formId?: number | null; bankAccountId?: number | null; formScope?: string } = {};
 
     if (dto.formId !== undefined) {
       if (dto.formId === null || Number(dto.formId) === 0) out.formId = null;
       else {
         const form = await this.prisma.formDef.findUnique({ where: { id: Number(dto.formId) } });
         if (!form) throw new BadRequestException('فرمِ انتخاب‌شده پیدا نشد');
-        if (form.scope !== 'intake') throw new BadRequestException('فقط فرمِ «ثبت‌نام» را می‌شود پشتِ لینک گذاشت');
         if (!form.active) throw new BadRequestException('این فرم خاموش است — اول در فرم‌ساز روشنش کنید');
+        /* هر سه محدوده مجازند و هرکدام مسیرِ تأییدِ خودش را دارد
+           (`approve`): `intake`/`visit` مراجعه می‌سازند، `record` به پرونده
+           می‌چسبد. تا مرحلهٔ ۳ فقط `intake` پذیرفته می‌شد، چون هیچ‌چیز به
+           `scope` احترام نمی‌گذاشت و پذیرشِ بقیه یعنی وعدهٔ رفتاری که نبود. */
+        if (!(FORM_SCOPES as readonly string[]).includes(form.scope)) {
+          throw new BadRequestException('محدودهٔ این فرم پشتیبانی نمی‌شود');
+        }
         out.formId = form.id;
+        out.formScope = form.scope;
       }
     }
 
@@ -190,6 +208,24 @@ export class IntakeService {
     return out;
   }
 
+  /**
+   * فرمِ **زیرپرونده** نمی‌تواند مبلغ داشته باشد.
+   *
+   * ⚠️ چرا این‌جا و نه هنگامِ تأیید: پرشدنِ فرمِ `record` مراجعه‌ای نمی‌سازد، و
+   * دفترِ مالی همه‌چیزش به `visitId` گره خورده — نه Charge دارد نه Payment.
+   * پس مبلغی که روی چنین لینکی گذاشته شود، **هیچ‌وقت وارد دفتر نمی‌شود**:
+   * بیمار پول می‌فرستد، ادمین فیش را می‌بیند و تأیید می‌کند، و آن عدد در هیچ
+   * گزارشی پیدا نمی‌شود. جلوگیری موقعِ ساختِ لینک بلند است؛ کشفش سرِ گزارشِ
+   * آخرِ ماه بی‌صدا.
+   */
+  private async assertRecordFormHasNoAmount(scope: string | null | undefined, amount: number) {
+    if (scope === 'record' && amount > 0) {
+      throw new BadRequestException(
+        'فرمِ «زیرپرونده» مراجعه‌ای نمی‌سازد، پس مبلغش جایی در دفترِ مالی ثبت نمی‌شود — مبلغ را صفر بگذارید یا فرمِ «مراجعه» انتخاب کنید',
+      );
+    }
+  }
+
   async createLink(
     dto: { title: string; amount?: number; notes?: string; formId?: number | null; bankAccountId?: number | null },
     user: any,
@@ -197,11 +233,13 @@ export class IntakeService {
     const title = text(dto.title, 120);
     if (!title) throw new BadRequestException('عنوانِ لینک را وارد کنید');
     const refs = await this.resolveLinkRefs(dto);
+    const amount = Math.max(0, Number(dto.amount) || 0);
+    await this.assertRecordFormHasNoAmount(refs.formScope, amount);
     const row = await this.prisma.intakeLink.create({
       data: {
         token: this.token(),
         title,
-        amount: Math.max(0, Number(dto.amount) || 0),
+        amount,
         notes: text(dto.notes, 300),
         formId: refs.formId ?? null,
         bankAccountId: refs.bankAccountId ?? null,
@@ -227,9 +265,20 @@ export class IntakeService {
     const row = await this.prisma.intakeLink.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('لینک پیدا نشد');
     const refs = await this.resolveLinkRefs(dto);
+
+    /* ⚠️ **حالتِ نهایی** سنجیده می‌شود، نه فقط چیزی که در این درخواست آمده:
+       گذاشتنِ مبلغ روی لینکی که از قبل فرمِ زیرپرونده دارد، و گذاشتنِ فرمِ
+       زیرپرونده روی لینکی که از قبل مبلغ دارد، هر دو یک وضعیتِ نامعتبرند. */
+    const nextAmount = dto.amount !== undefined ? Math.max(0, Number(dto.amount) || 0) : row.amount;
+    let nextScope = refs.formScope;
+    if (refs.formId === undefined && row.formId) {
+      nextScope = (await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true } }))?.scope;
+    }
+    await this.assertRecordFormHasNoAmount(nextScope, nextAmount);
+
     const data: any = {};
     if (dto.title !== undefined) data.title = text(dto.title, 120) ?? row.title;
-    if (dto.amount !== undefined) data.amount = Math.max(0, Number(dto.amount) || 0);
+    if (dto.amount !== undefined) data.amount = nextAmount;
     if (dto.active !== undefined) data.active = !!dto.active;
     if (dto.notes !== undefined) data.notes = text(dto.notes, 300);
     if (refs.formId !== undefined) data.formId = refs.formId;
@@ -480,8 +529,13 @@ export class IntakeService {
       for (const [k, v] of Object.entries(dto.values)) {
         if (writable.has(k)) data[k] = typeof v === 'string' ? text(v, 2000) : v;
       }
-      /* همان قاعدهٔ ستارهٔ فرم‌ساز، روی همان تعریف — نه یک کپیِ دوم. */
-      await this.forms.assertValid(form.key, data);
+      /* ⚠️ همان قاعدهٔ ستارهٔ فرم‌ساز، ولی فقط روی فیلدهایی که بیمار **می‌بیند**.
+         نسخهٔ اول کلِ فرم را می‌سنجید و روی فرمِ مراجعه شکست: `createForm` یک
+         `opDate`ِ اجباریِ builtin روی هر فرمِ مراجعه می‌سازد، و آن را ادمین
+         هنگامِ تأیید پر می‌کند نه بیمار — پس ذخیرهٔ بیمار ۴۰۰ می‌گرفت برای
+         کادری که اصلاً روی صفحه‌اش نبود. */
+      const r = this.forms.validateFields(form.fields, data);
+      if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
     }
 
     await this.prisma.intakeSubmission.update({
@@ -592,6 +646,10 @@ export class IntakeService {
         link: { select: { title: true } },
         patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true, nationalId: true } },
         visit: { select: { id: true, seq: true } },
+        /* فرمِ **همین ثبت‌نام** (عکسِ لحظه‌ای)، نه فرمِ فعلیِ لینک: پنلِ تأیید
+           باید بگوید این ثبت‌نام چه می‌سازد، و آن از روی همان فرمی معلوم
+           می‌شود که بیمار پر کرده. */
+        form: { select: { title: true, scope: true, color: true } },
       },
     });
     return rows.map((r) => ({
@@ -608,6 +666,12 @@ export class IntakeService {
       payable: Math.max(0, r.amount - r.discountAmount),
       data: r.data,
       linkTitle: r.link.title,
+      formTitle: r.form?.title ?? null,
+      formColor: r.form?.color ?? null,
+      /* ⚠️ **مشتق سمتِ سرور** (قانون ۱۵): «آیا تأییدِ این ثبت‌نام مراجعه
+         می‌سازد؟» یک قاعدهٔ سرور است و اگر کلاینت خودش از `scope` استنتاجش
+         می‌کرد، روزی رفتارِ واقعی و آنچه پنل وعده می‌دهد از هم جدا می‌شدند. */
+      makesVisit: (r.form?.scope ?? 'intake') !== 'record',
       patient: r.patient,
       visitId: r.visitId,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
@@ -643,22 +707,70 @@ export class IntakeService {
     if (!row.patientId) throw new BadRequestException('این ثبت‌نام پرونده‌ای ندارد');
 
     const d = row.data as any;
-    const visit = await this.patients.createVisit({
-      patientId: row.patientId,
-      surgeonId: dto.surgeonId,
-      hospitalId: dto.hospitalId,
-      techId: dto.techId,
-      procedureTypeId: dto.procedureTypeId,
-      opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
-      opDate: dto.opDate ?? d.opDate ?? undefined,
-      opStartTime: dto.opStartTime,
-      notes: d.patientNotes ?? undefined,
-    } as any, user);
+
+    /* ⚠️ **این‌جاست که `scope`ِ فرم بالاخره معنی پیدا می‌کند.**
+       تا دیروز `approve` اصلاً فرم را نمی‌خواند و `kind` را هم نمی‌فرستاد، پس
+       `createVisit` روی پیش‌فرضِ `'surgery'` می‌افتاد: **هر** ثبت‌نامِ
+       تأییدشده یک «جراحی» می‌شد و با `visit.surgery` اعتبارسنجی می‌گشت — حتی
+       وقتی لینک فرمِ «ویزیت» یا «پیگیری» داشت. بی‌هیچ خطایی؛ فقط نوعِ غلط در
+       تقویم و گزارش. */
+    const form = row.formId
+      ? await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true, visitKind: true, key: true } })
+      : null;
+
+    /* پاسخِ فیلدهای دلخواه باید به `Visit.extra` برسد، وگرنه چیزی که بیمار پر
+       کرده در JSONِ ثبت‌نام دفن می‌شود و در پروندهٔ او پیدا نیست. کلیدهای
+       ثابتِ خودِ ثبت‌نام کنار گذاشته می‌شوند: آن‌ها ستونِ واقعی دارند. */
+    const RESERVED = new Set([
+      'firstName', 'lastName', 'nationalId', 'phone', 'address', 'birthDate',
+      'procedure', 'surgeonName', 'hospitalName', 'opDate', 'patientNotes', 'receiptDocumentId',
+    ]);
+    const extra: Record<string, any> = {};
+    for (const [k, v] of Object.entries(d ?? {})) if (!RESERVED.has(k)) extra[k] = v;
+
+    /* فرمِ **زیرپرونده** مراجعه نمی‌سازد — به پروندهٔ بیمار می‌چسبد و همان‌جا
+       می‌ماند. `visitId` خالی می‌ماند و دفترِ مالی هم دست نمی‌خورد (لینکِ چنین
+       فرمی اصلاً نمی‌تواند مبلغ داشته باشد؛ `assertRecordFormHasNoAmount`). */
+    const makesVisit = form?.scope !== 'record';
+
+    const visit = makesVisit
+      ? await this.patients.createVisit({
+        patientId: row.patientId,
+        /* `visitKind` فقط روی فرمِ `visit` پر است؛ فرمِ `intake` نوعِ مراجعه
+           ندارد و همان پیش‌فرضِ `createVisit` را می‌گیرد. */
+        kind: form?.visitKind || undefined,
+        surgeonId: dto.surgeonId,
+        hospitalId: dto.hospitalId,
+        techId: dto.techId,
+        procedureTypeId: dto.procedureTypeId,
+        opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
+        opDate: dto.opDate ?? d.opDate ?? undefined,
+        opStartTime: dto.opStartTime,
+        notes: d.patientNotes ?? undefined,
+        ...(Object.keys(extra).length ? { extra } : {}),
+      } as any, user)
+      : null;
 
     await this.prisma.intakeSubmission.update({
       where: { id },
-      data: { status: 'approved', visitId: visit.id, reviewNote: text(dto.note, 300), reviewedById: user?.id ?? null, reviewedAt: new Date() },
+      data: {
+        status: 'approved',
+        visitId: visit?.id ?? null,
+        reviewNote: text(dto.note, 300),
+        reviewedById: user?.id ?? null,
+        reviewedAt: new Date(),
+      },
     });
+
+    /* از این‌جا به بعد فقط مسیرِ مراجعه معنی دارد. `return`ِ زودهنگام تا
+       بندهای مالیِ پایین مجبور نباشند هر خط `visit!` بنویسند. */
+    if (!visit) {
+      await this.audit.record({
+        actorId: user?.id, action: 'intake.approve.record', entityType: 'intake_submission', entityId: id,
+        after: { patientId: row.patientId, formKey: form?.key },
+      });
+      return { ok: true, madeVisit: false, patientId: row.patientId, patientCode: row.patient?.code ?? null };
+    }
 
     /**
      * ⚠️ مبلغ باید **وارد دفتر** شود، وگرنه مراجعهٔ تأییدشده صفر تومان است و

@@ -72,8 +72,12 @@ console.log('\n۱) گزینه‌های لینک — فقط فرمِ ثبت‌ن�
   const o = (await api('/intake/link-options')).json;
   ok('endpoint پاسخ می‌دهد', !!o?.forms, JSON.stringify(o).slice(0, 120));
   ok('فرمِ ثبت‌نام در فهرست هست', o.forms.some((f) => f.id === plain.id));
-  ok('فرمِ مراجعه در فهرست **نیست**', !o.forms.some((f) => f.id === visitForm.id),
+  /* ⚠️ تا مرحلهٔ ۳ فرمِ مراجعه از این فهرست بیرون بود، چون هیچ‌چیز به `scope`
+     احترام نمی‌گذاشت. مرحلهٔ ۴ آن را عوض کرد: `approve` حالا `visitKind` را
+     می‌خواند، پس پیشنهادش دیگر وعدهٔ توخالی نیست. */
+  ok('فرمِ مراجعه هم پیشنهاد می‌شود', o.forms.some((f) => f.id === visitForm.id),
     o.forms.map((f) => f.title).join('،'));
+  ok('و علامت خورده که مراجعه می‌سازد', o.forms.find((f) => f.id === visitForm.id)?.makesVisit === true);
   ok('hasPayment برای فرمِ پرداخت‌دار true است', o.forms.find((f) => f.id === payForm.id)?.hasPayment === true);
   ok('hasPayment برای فرمِ ساده false است', o.forms.find((f) => f.id === plain.id)?.hasPayment === false);
   ok('حساب‌ها فقط برچسب دارند، بدونِ شماره',
@@ -112,8 +116,9 @@ let link;
 
 console.log('\n۳) اعتبارسنجیِ سمتِ سرور — فیلترِ کلاینت کافی نیست');
 {
-  const a = await api('/intake/links', { method: 'POST', body: { title: '[e2e] بد ۱', formId: visitForm.id } });
-  ok('فرمِ مراجعه پشتِ لینک رد می‌شود', a.status === 400, a.status + ' ' + a.text.slice(0, 140));
+  const a = await api('/intake/links', { method: 'POST', body: { title: '[e2e] مراجعه‌دار', formId: visitForm.id } });
+  ok('فرمِ مراجعه پشتِ لینک پذیرفته می‌شود (مرحلهٔ ۴)', a.status < 300, a.status + ' ' + a.text.slice(0, 140));
+  ok('و formId واقعاً نشست', a.json?.formId === visitForm.id, 'formId=' + a.json?.formId);
 
   const b = await api('/intake/links', { method: 'POST', body: { title: '[e2e] بد ۲', formId: payForm.id, bankAccountId: priv.id } });
   ok('حسابِ علامت‌نخورده رد می‌شود', b.status === 400, b.status + ' ' + b.text.slice(0, 140));

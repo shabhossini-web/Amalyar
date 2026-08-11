@@ -42,6 +42,7 @@ node scripts/e2e/forms-boxes.mjs      # رندرِ باکسِ عکس و پردا
 node scripts/e2e/link-form.mjs        # مرحلهٔ ۲ — لینک ← فرم و حساب (API)
 node scripts/e2e/link-builder.mjs     # مرحلهٔ ۲ — سازندهٔ لینک در مرورگر
 node scripts/e2e/public-form.mjs      # مرحلهٔ ۳ — فرمِ ساخته‌شده روی صفحهٔ بیمار
+node scripts/e2e/approve-kind.mjs     # مرحلهٔ ۴ — تأیید بر اساسِ kindِ فرم
 ```
 
 ## قاعده‌ها
