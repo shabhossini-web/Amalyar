@@ -81,6 +81,17 @@ export class PatientsController {
     return this.patients.deleteVisit(id, user);
   }
 
+  /**
+   * ⚠️ **قبل از** `@Get('patients')` نمی‌آید چون مسیرِ ثابت است و تداخلی
+   * ندارد، ولی عمداً کنارش می‌ماند: هر دو یک سؤال را جواب می‌دهند و باید با
+   * هم خوانده شوند.
+   */
+  @RequirePermissions('patients.read')
+  @Get('patients/by-national-id')
+  byNationalId(@CurrentUser() user: any, @Query('nid') nid?: string) {
+    return this.patients.patientByNationalId(nid, user);
+  }
+
   @RequirePermissions('patients.read')
   @Get('patients')
   searchPatients(@CurrentUser() user: any, @Query('q') q?: string) {

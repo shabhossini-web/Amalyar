@@ -214,6 +214,20 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const [pResults, setPResults] = useState([]);
   const [picked, setPicked] = useState(null);
 
+  /**
+   * گام‌های ثبتِ تازه: ۱ پرونده → ۲ نوعِ فرم → ۳ پرکردن.
+   *
+   * ⚠️ ترتیب عمدی است و برعکسِ قبل. تا دیروز نوعِ مراجعه **اولین** چیزِ فرم
+   * بود و پرونده دومی؛ یعنی کاربر پیش از آنکه بداند این آدم کیست، باید
+   * تصمیم می‌گرفت چه نوع مراجعه‌ای است. در پذیرشِ واقعی اول می‌پرسند «شما؟»
+   * و بعد «برای چه آمده‌اید؟».
+   *
+   * ⚠️ در **ویرایش** هیچ گامی نیست: پرونده از قبل معلوم است و کاربر آمده یک
+   * فیلد را درست کند، نه اینکه سه‌بار «بعدی» بزند.
+   */
+  const [step, setStep] = useState(1);
+  const [stepErr, setStepErr] = useState('');
+
   const [f, setF] = useState(() => ({
     kind: initial?.kind || 'surgery',
     firstName: initial?.firstName || '',
@@ -269,12 +283,50 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     if (editing || mode !== 'new' || !isValidNationalId(nid)) { setNidMatch(null); return undefined; }
     let alive = true;
     const t = setTimeout(() => {
-      api(`/patients?q=${nid}`)
-        .then((rows) => { if (alive) setNidMatch(rows.find((r) => r.nationalId === nid) || null); })
+      /* ⚠️ endpointِ **دقیق**، نه `/patients?q=`. آن `contains` می‌زد و تا ۲۰
+         پرونده می‌آورد تا کلاینت خودش دنبالِ تطابقِ دقیق بگردد — یعنی برای یک
+         «بله/خیر»، بیست پروندهٔ دیگر هم از سرور بیرون می‌رفت. */
+      api(`/patients/by-national-id?nid=${nid}`)
+        .then((r) => { if (alive) setNidMatch(r?.found ? (r.patient ?? { restricted: true }) : null); })
         .catch(() => { if (alive) setNidMatch(null); });
     }, 350);
     return () => { alive = false; clearTimeout(t); };
   }, [f.nationalId, mode, editing]);
+
+  /**
+   * آیا گامِ «پرونده» تمام است؟ — و اگر نه، **چرا**.
+   *
+   * ⚠️ خواستهٔ کاربر (بندِ ۱۴): کد ملیِ تازه یعنی اول پرونده باز و **کامل**
+   * شود، بعد مراجعه. پس این‌جا جلوی رفتن به گامِ بعد گرفته می‌شود، نه در
+   * لحظهٔ ثبت. تفاوتش این است که کاربر پیش از پرکردنِ کلِ فرم می‌فهمد چه کم
+   * دارد، نه بعدش.
+   *
+   * ⚠️ حالتِ نام‌خانوادگیِ متفاوت **بلوکه** می‌شود چون سرور همان‌جا ۴۰۹
+   * می‌دهد (`findByNationalId`). بدونِ این سد، کاربر سه گام جلو می‌رفت و
+   * دستِ آخر خطایی می‌گرفت که ربطی به گامِ سوم نداشت.
+   */
+  const stepOneProblem = () => {
+    if (mode === 'existing') return picked ? '' : `${t.record}ی انتخاب نشده — از فهرست یکی را بردارید`;
+    if (f.firstName.trim().length < 2) return 'نام را وارد کنید';
+    if (f.lastName.trim().length < 2) return 'نام خانوادگی را وارد کنید';
+    const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
+    if (nid && !isValidNationalId(nid)) return 'کد ملی معتبر نیست — رقم‌ها را بررسی کنید';
+    if (nidMatch && !nidMatch.restricted && nidMatch.lastName?.trim() !== f.lastName.trim()) {
+      return `این کد ملی به پروندهٔ «${nidMatch.code} — ${nidMatch.fullName}» تعلق دارد.`
+        + ' اگر همان بیمار است رویش بزنید، وگرنه کد ملی را بررسی کنید.';
+    }
+    return '';
+  };
+
+  const goNext = () => {
+    if (step === 1) {
+      const bad = stepOneProblem();
+      setStepErr(bad);
+      if (bad) return;
+    }
+    setStepErr('');
+    setStep((s) => Math.min(3, s + 1));
+  };
 
   // تشخیص با `title` ساخته می‌شود، بقیهٔ تعاریف با `name`.
   /**
@@ -308,6 +360,10 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const submit = async (e) => {
     e.preventDefault();
     if (busy) return;
+    /* ⚠️ Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
+       زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
+       کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
+    if (!editing && step < 3) { goNext(); return; }
     let opDate;
     if (f.opDateJ.trim()) {
       opDate = jStrToIso(f.opDateJ);
@@ -538,35 +594,34 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
 
-      {/* نوعِ ملاقات اول می‌آید چون بقیهٔ برچسب‌های فرم از آن پیروی می‌کنند. */}
-      {/* ⚠️ فقط نوع‌هایی که این نصب واقعاً فرم دارد. نصبِ نورومانیتورینگ چهار
-          دکمه نشان نمی‌دهد وقتی سه‌تایشان فرمی ندارند — انتخابی که به هیچ فرمی
-          نمی‌رسد، فقط کاربر را سرگردان می‌کند.
+      {/* نشانگرِ گام — کاربر باید بداند کجای کار است و چند قدم مانده. */}
+      {!editing && (
+        <ol className="db-steps" aria-label="گام‌های ثبت">
+          {[t.record, `نوعِ ${t.visit}`, 'تکمیل'].map((label, i) => (
+            <li key={label} className={step === i + 1 ? 'on' : step > i + 1 ? 'done' : ''}>
+              {/* برگشت فقط به گامِ **گذشته** — پرشِ رو به جلو همان دور زدنِ
+                  اعتبارسنجیِ گام است. */}
+              <button
+                type="button"
+                disabled={step <= i + 1}
+                onClick={() => { setStepErr(''); setStep(i + 1); }}
+              >
+                <i>{faNum(i + 1)}</i>{label}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
 
-          ⚠️ **فهرست از سرور می‌آید، نه از `KINDS`.** تا دیروز روی
-          `Object.entries(KINDS)` می‌چرخید و `filter` هم فقط همان چهار کلیدِ
-          هاردکد را نگه می‌داشت: نوعی که کاربر در فرم‌ساز می‌ساخت (مثلاً
-          «ایمپلنت») **در داشبورد اصلاً دیده نمی‌شد** — هرچند
-          `/forms/visit-kinds` می‌شناختش و `approve` هم رویش مراجعه می‌ساخت.
-          هیچ خطایی نبود؛ فقط یک نوعِ نامرئی.
-
-          تا وقتی پاسخِ سرور نرسیده فهرستِ پشتیبان می‌ماند، وگرنه یک قطعیِ
-          لحظه‌ای ردیف را **خالی** می‌کرد. */}
-      <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
-        {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
-          .map((k) => (
-          <button
-            key={k.kind}
-            type="button"
-            role="radio"
-            aria-checked={f.kind === k.kind}
-            className={f.kind === k.kind ? 'on' : ''}
-            style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
-            onClick={() => setF((s) => ({ ...s, kind: k.kind }))}
-          >{k.title}</button>
-        ))}
-      </div>
-
+      {/* ── گامِ ۱: پرونده ──
+          ⚠️ **پنهان می‌شود، unmount نمی‌شود.** `Tabs` یک `motion.span` با
+          `layoutId` دارد؛ اگر وسطِ باز‌بودنِ شیت از DOM برود، حسابداریِ
+          shared-layoutِ framer گیر می‌کند و بعداً `AnimatePresence` هرگز
+          پوششِ شیت را حذف نمی‌کند. نتیجه‌اش یک `.db-overlay`ِ **نامرئی** بود
+          که روی صفحه می‌ماند و کلیک‌ها را می‌بلعید: شیت بسته به‌نظر می‌رسید
+          ولی هیچ دکمه‌ای دیگر کار نمی‌کرد. با آزمونِ مرورگر پیدا شد، نه با
+          چشم — چون چیزی برای دیدن نبود. */}
+      <div className="db-step" hidden={!(editing || step === 1)}>
       {!editing && (
         <Tabs
           variant="inset"
@@ -613,11 +668,16 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       ) : (
         <>
           <div className="db-grid2">
+            {/* ⚠️ `required` فقط وقتی که این گام **دیده می‌شود**. کادرِ
+                اجباریِ پنهان، submit را با «An invalid form control is not
+                focusable» بی‌صدا متوقف می‌کند — کاربر دکمه را می‌زند و هیچ
+                اتفاقی نمی‌افتد. اعتبارسنجیِ واقعیِ این گام در
+                `stepOneProblem` است که پیام را کنارِ دکمه می‌نویسد. */}
             <label className="db-field"><span>نام</span>
-              <input type="text" value={f.firstName} onChange={set('firstName')} required minLength={2} />
+              <input type="text" value={f.firstName} onChange={set('firstName')} required={editing || step === 1} minLength={2} />
             </label>
             <label className="db-field"><span>نام خانوادگی</span>
-              <input type="text" value={f.lastName} onChange={set('lastName')} required minLength={2} />
+              <input type="text" value={f.lastName} onChange={set('lastName')} required={editing || step === 1} minLength={2} />
             </label>
             <label className="db-field"><span>موبایل</span>
               <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
@@ -649,6 +709,46 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </>
       )}
 
+      </div>
+
+      {/* ── گامِ ۲: نوعِ فرم ── */}
+      {(editing || step === 2) && (<>
+      {/* ⚠️ نوعِ فرم **بعد از** پرونده می‌آید، نه قبلش. در پذیرشِ واقعی اول
+          می‌پرسند «شما؟» و بعد «برای چه آمده‌اید؟» — و تا ندانیم بیمار کیست،
+          پیشنهادِ نوع هم بی‌معنی است. برچسب‌های بقیهٔ فرم از همین انتخاب
+          پیروی می‌کنند، پس گامِ بعدی به آن وابسته است. */}
+      {/* ⚠️ فقط نوع‌هایی که این نصب واقعاً فرم دارد. نصبِ نورومانیتورینگ چهار
+          دکمه نشان نمی‌دهد وقتی سه‌تایشان فرمی ندارند — انتخابی که به هیچ فرمی
+          نمی‌رسد، فقط کاربر را سرگردان می‌کند.
+
+          ⚠️ **فهرست از سرور می‌آید، نه از `KINDS`.** تا دیروز روی
+          `Object.entries(KINDS)` می‌چرخید و `filter` هم فقط همان چهار کلیدِ
+          هاردکد را نگه می‌داشت: نوعی که کاربر در فرم‌ساز می‌ساخت (مثلاً
+          «ایمپلنت») **در داشبورد اصلاً دیده نمی‌شد** — هرچند
+          `/forms/visit-kinds` می‌شناختش و `approve` هم رویش مراجعه می‌ساخت.
+          هیچ خطایی نبود؛ فقط یک نوعِ نامرئی.
+
+          تا وقتی پاسخِ سرور نرسیده فهرستِ پشتیبان می‌ماند، وگرنه یک قطعیِ
+          لحظه‌ای ردیف را **خالی** می‌کرد. */}
+      <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
+        {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
+          .map((k) => (
+          <button
+            key={k.kind}
+            type="button"
+            role="radio"
+            aria-checked={f.kind === k.kind}
+            className={f.kind === k.kind ? 'on' : ''}
+            style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
+            onClick={() => setF((s) => ({ ...s, kind: k.kind }))}
+          >{k.title}</button>
+        ))}
+      </div>
+
+      </>)}
+
+      {/* ── گامِ ۳: تکمیل ── */}
+      {(editing || step === 3) && (<>
       {/* ⚠️ فیلدهای هسته‌ای **به ترتیبِ تعریف** چیده می‌شوند، نه به ترتیبِ این
           فایل. هر کدام یک ورودیِ نام‌دار است تا `orderBuiltins` بتواند
           جابه‌جاشان کند؛ اگر مثل قبل JSXِ درجا بودند، ترتیبِ فرم‌ساز هیچ
@@ -698,6 +798,24 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       <button className="db-submit" type="submit" disabled={busy}>
         {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
       </button>
+      </>)}
+
+      {/* ── ناوبریِ گام ── */}
+      {!editing && step < 3 && (
+        <>
+          {/* ⚠️ دلیلِ نرفتن **کنارِ خودِ دکمه** نوشته می‌شود، نه در toast:
+              toast می‌رود و کاربر با یک دکمهٔ بی‌جواب می‌ماند. */}
+          {stepErr && <p className="db-steperr" role="alert">{stepErr}</p>}
+          <div className="db-stepnav">
+            {step > 1 && (
+              <button type="button" className="db-stepback" onClick={() => { setStepErr(''); setStep(step - 1); }}>
+                بازگشت
+              </button>
+            )}
+            <button type="button" className="db-submit" onClick={goNext}>بعدی</button>
+          </div>
+        </>
+      )}
     </Overlay>
   );
 }

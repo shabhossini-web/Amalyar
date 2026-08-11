@@ -300,6 +300,55 @@
 .db-field.bad input { border-color: rgba(251, 113, 133, 0.7); }
 .db-hint.bad { color: #fda4af; font-weight: 700; }
 
+/* ── گام‌های ثبتِ مراجعه: پرونده → نوعِ فرم → تکمیل ── */
+/* گامِ پنهان **در DOM می‌ماند** (دلیلش در Dashboard.jsx کنارِ `db-step`)، پس
+   باید چیدمانِ ستونیِ شیت را حفظ کند و در حالتِ پنهان کاملاً برود.
+   ⚠️ `[hidden]` صریح لازم است: قاعدهٔ `display:flex` بر `display:none`ِ
+   پیش‌فرضِ مرورگر برای `hidden` می‌چربد و گام پنهان **نمی‌شد**. */
+.db-step { display: flex; flex-direction: column; gap: 12px; }
+.db-step[hidden] { display: none; }
+
+.db-steps {
+  display: flex; gap: 6px; list-style: none; margin: 0 0 4px; padding: 0;
+}
+.db-steps li { flex: 1; }
+.db-steps button {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  padding: 8px 4px; border-radius: 11px; color: #7d77a3;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+}
+/* گامِ جلوتر کلیک‌پذیر نیست — پرشِ رو به جلو یعنی دور زدنِ اعتبارسنجیِ گام. */
+.db-steps button:disabled { cursor: default; }
+.db-steps i {
+  display: grid; place-items: center; inline-size: 18px; block-size: 18px; border-radius: 50%;
+  font-style: normal; font-size: 10.5px; background: rgba(255, 255, 255, .07);
+}
+.db-steps .on button {
+  color: #fff; border-color: transparent;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}
+.db-steps .on i { background: rgba(0, 0, 0, .22); }
+/* گامِ تمام‌شده کم‌رنگ ولی **خوانا** می‌ماند: کاربر باید بتواند برگردد. */
+.db-steps .done button { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .4); cursor: pointer; }
+.db-steps .done i { background: rgba(var(--brand-2-rgb), .2); }
+
+.db-stepnav { display: flex; gap: 8px; }
+.db-stepnav .db-submit { flex: 1; }
+.db-stepback {
+  font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  padding: 13px 20px; border-radius: 13px; color: #b7b0d4;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+}
+.db-stepback:hover { color: #fff; }
+/* خطای گام کنارِ خودِ دکمه می‌نشیند، نه در toast: toast می‌رود و کاربر با یک
+   دکمهٔ بی‌جواب می‌ماند. */
+.db-steperr {
+  margin: 0; font-size: 12.5px; line-height: 1.7; color: #fda4af;
+  background: rgba(244, 63, 94, .1); border: 1px solid rgba(244, 63, 94, .3);
+  border-radius: 11px; padding: 9px 12px;
+}
+
 .db-submit {
   font-family: inherit; font-size: 14.5px; font-weight: 800; color: #fff; cursor: pointer;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
