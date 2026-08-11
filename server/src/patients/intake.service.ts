@@ -6,6 +6,7 @@ import { PatientsService } from './patients.service';
 import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
+import { FormsService } from './forms.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
@@ -61,6 +62,10 @@ export class IntakeService {
     private storage: StorageService,
     private billing: BillingService,
     private survey: SurveyService,
+    /* ⚠️ اعتبارسنجیِ فرم از **همان** سرویسی می‌آید که فرم‌ساز و ثبتِ مراجعه
+       استفاده می‌کنند. کپیِ دومِ قاعدهٔ «اجباری» یعنی روزی ستاره‌ای که ادمین
+       روشن کرده روی فرمِ عمومی اثر نداشته باشد، بی‌هیچ خطایی. */
+    private forms: FormsService,
   ) {}
 
   private token() {
@@ -333,6 +338,11 @@ export class IntakeService {
       //    و فیشی که آپلود می‌کرد به حسابِ ما نبود. فقط حساب‌هایی که ادمین
       //    صریحاً برای فرمِ عمومی علامت زده، و فقط فیلدهای لازمِ واریز.
       payTo: await this.payTo(link?.bankAccountId ?? null),
+      /* ⚠️ تعریفِ فرم از **عکسِ لحظه‌ایِ خودِ ثبت‌نام** می‌آید نه از لینک: اگر
+         ادمین وسطِ کار فرمِ لینک را عوض کند، بیمارِ در جریان باید همان فرمی را
+         ببیند که شروع کرده. `null` یعنی «فرمی ندارد» و صفحه به فیلدهای
+         هاردکدِ امروز برمی‌گردد. */
+      form: await this.formView(row.formId),
       token: row.token,
       status: row.status,
       statusLabel: INTAKE_LABELS[row.status] ?? row.status,
@@ -388,24 +398,147 @@ export class IntakeService {
     return rows;
   }
 
-  /** پرکردنِ اطلاعاتِ عمل. */
-  async fill(token: string, dto: { procedure?: string; surgeonName?: string; hospitalName?: string; opDate?: string; notes?: string }) {
+  /**
+   * تعریفِ فرمی که بیمار باید پر کند — فقط فیلدهای **دلخواه**.
+   *
+   * ⚠️ فیلدهای `builtin`ِ فرمِ ثبت‌نام (نام، کدِ ملی، موبایل، …) ستونِ `Patient`
+   * هستند و در گامِ **اول** (`register`) گرفته می‌شوند، نه این‌جا. اگر این‌جا
+   * هم می‌آمدند، بیمار همان چهار فیلد را دو بار پر می‌کرد و نسخهٔ دوم روی
+   * پرونده نمی‌نشست.
+   *
+   * ⚠️ فرمِ **خاموش‌شده** مثلِ فرمِ نبوده رفتار می‌کند (`null`): ادمین فرم را
+   * خاموش کرده و صفحه باید به مسیرِ هاردکدِ قدیمی برگردد، نه اینکه فرمِ خالی
+   * نشان بدهد.
+   */
+  private async formView(formId: number | null) {
+    if (!formId) return null;
+    const f = await this.prisma.formDef.findUnique({
+      where: { id: formId },
+      include: { fields: { orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }] } },
+    });
+    if (!f || !f.active) return null;
+    const fields = f.fields
+      .filter((x) => !x.builtin && x.active)
+      .map((x) => ({
+        key: x.key, label: x.label, type: x.type, required: x.required,
+        options: x.options ?? [], hint: x.hint, placeholder: x.placeholder, page: x.page,
+      }));
+    return {
+      key: f.key,
+      title: f.title,
+      hint: f.hint,
+      /* صفحه‌شمار سمتِ سرور (قانون ۱۵) — و از روی همین فیلدهای دیده‌شده، نه
+         از کلِ فرم: اگر تنها فیلدِ صفحهٔ ۲ خاموش باشد، صفحهٔ ۲ وجود ندارد. */
+      pages: fields.reduce((m, x) => Math.max(m, x.page), 1),
+      fields,
+    };
+  }
+
+  /**
+   * پرکردنِ اطلاعاتِ عمل.
+   *
+   * ⚠️ **ادغام، نه بازنویسی.** نسخهٔ قبلی هر پنج کلید را بی‌قید از `text(...)`
+   * رد می‌کرد و `text` برای مقدارِ نیامده `null` برمی‌گرداند — یعنی یک ذخیرهٔ
+   * جزئی مقادیرِ قبلی را **پاک می‌کرد**. با آمدنِ فیلدهای دلخواه و فرمِ
+   * چندصفحه‌ای این دیگر یک خطرِ نظری نیست: ذخیرهٔ صفحهٔ ۲ صفحهٔ ۱ را می‌ریخت.
+   */
+  async fill(
+    token: string,
+    dto: {
+      procedure?: string; surgeonName?: string; hospitalName?: string; opDate?: string; notes?: string;
+      values?: Record<string, any>;
+    },
+  ) {
     const row = await this.expireIfDue(token);
     if (!['pending_fill', 'pending_payment'].includes(row.status)) {
       throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
     }
-    const data = {
-      ...(row.data as any),
-      procedure: text(dto.procedure, 200),
-      surgeonName: text(dto.surgeonName, 100),
-      hospitalName: text(dto.hospitalName, 150),
-      opDate: text(dto.opDate, 12),
-      patientNotes: text(dto.notes, 500),
-    };
+
+    const data: Record<string, any> = { ...(row.data as any) };
+    const fixed: [keyof typeof dto, string, number][] = [
+      ['procedure', 'procedure', 200],
+      ['surgeonName', 'surgeonName', 100],
+      ['hospitalName', 'hospitalName', 150],
+      ['opDate', 'opDate', 12],
+      ['notes', 'patientNotes', 500],
+    ];
+    for (const [from, to, max] of fixed) {
+      if (dto[from] !== undefined) data[to] = text(dto[from], max);
+    }
+
+    const form = await this.formView(row.formId);
+    if (form && dto.values) {
+      /* ⚠️ فقط کلیدهای **همین فرم** پذیرفته می‌شوند: بدونِ این، یک POSTِ
+         دست‌ساز می‌توانست هر کلیدی را در `data` بنشاند — از جمله کلیدهایی که
+         هنگامِ تأیید به ستونِ واقعیِ پرونده می‌روند.
+         ⚠️ `payment` بیرون می‌ماند چون مقدار ندارد، و `image` هم بیرون می‌ماند
+         چون ارجاعش را فقط مسیرِ آپلود می‌نویسد — وگرنه بیمار می‌توانست id یک
+         مدرکِ دیگر را جا بزند. */
+      const writable = new Set(
+        form.fields.filter((x) => x.type !== 'payment' && x.type !== 'image').map((x) => x.key),
+      );
+      for (const [k, v] of Object.entries(dto.values)) {
+        if (writable.has(k)) data[k] = typeof v === 'string' ? text(v, 2000) : v;
+      }
+      /* همان قاعدهٔ ستارهٔ فرم‌ساز، روی همان تعریف — نه یک کپیِ دوم. */
+      await this.forms.assertValid(form.key, data);
+    }
+
     await this.prisma.intakeSubmission.update({
       where: { id: row.id },
       data: { data, status: 'pending_payment' },
     });
+    return this.publicView(token);
+  }
+
+  /**
+   * عکسی که بیمار روی یک **باکسِ عکسِ** فرم پیوست می‌کند.
+   *
+   * ⚠️ جدا از `attachReceipt` است و عمداً وضعیت را جلو نمی‌برد: فیش یعنی
+   * «پول فرستادم» و ثبت‌نام را کامل می‌کند؛ عکسِ رادیولوژی یک پاسخِ معمولیِ
+   * فرم است.
+   *
+   * ⚠️ در `data` فقط **ارجاع** می‌نشیند و هیچ نشانیِ عمومی برنمی‌گردد: مدرکِ
+   * پزشکی پشتِ همان guardهای پرونده می‌ماند. بیمار نامِ فایلِ خودش را می‌بیند،
+   * نه راهی برای دوباره‌خواندنش.
+   */
+  async attachImage(
+    token: string,
+    fieldKey: string,
+    file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
+  ) {
+    const row = await this.expireIfDue(token);
+    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+    }
+    if (!row.patientId) throw new BadRequestException('این فرم پرونده‌ای ندارد');
+
+    /* کلید باید واقعاً یک باکسِ عکسِ **همین** فرم باشد — وگرنه این نشانیِ
+       عمومی یک آپلودرِ آزاد است. */
+    const form = await this.formView(row.formId);
+    const fld = form?.fields.find((x) => x.key === fieldKey && x.type === 'image');
+    if (!fld) throw new BadRequestException('این کادر عکس نمی‌گیرد');
+
+    if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
+    if (file.size > MAX_RECEIPT_BYTES) throw new BadRequestException('حجمِ فایل بیش از ۸ مگابایت است');
+    // نوعِ فایل روی سرور سنجیده می‌شود؛ `accept`ِ HTML فقط پنجره را محدود می‌کند.
+    if (!RECEIPT_MIME.test(file.mimetype || '')) throw new BadRequestException('فقط عکس یا PDF بفرستید');
+
+    const { sha256, size } = await this.storage.save(file.buffer);
+    const doc = await this.prisma.document.create({
+      data: {
+        patientId: row.patientId,
+        category: 'other',
+        title: fld.label,
+        fileName: file.originalname?.slice(0, 200) || 'image',
+        mimeType: file.mimetype,
+        sha256,
+        size,
+      },
+    });
+
+    const data = { ...(row.data as any), [fieldKey]: { id: doc.id, name: doc.fileName } };
+    await this.prisma.intakeSubmission.update({ where: { id: row.id }, data: { data } });
     return this.publicView(token);
   }
 

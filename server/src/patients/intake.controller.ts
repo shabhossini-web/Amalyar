@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsObject, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -35,6 +35,17 @@ class FillDto {
   @IsOptional() @IsString() @MaxLength(150) hospitalName?: string;
   @IsOptional() @IsString() @MaxLength(12) opDate?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  /**
+   * پاسخِ فیلدهای **دلخواهِ** فرم — شکلش را کاربر در فرم‌ساز تعیین می‌کند، پس
+   * در زمانِ کامپایل دانستنی نیست.
+   *
+   * ⚠️ عمداً `@IsObject` و بدونِ شکلِ ثابت، ولی **بی‌قید نیست**: سرویس فقط
+   * کلیدهای همان فرم را می‌نویسد و بقیه را دور می‌ریزد. بدونِ آن، یک POSTِ
+   * دست‌ساز می‌توانست هر کلیدی را در `data` بنشاند.
+   * ⚠️ باید این‌جا اعلام شود وگرنه `ValidationPipe` با `whitelist` بی‌صدا
+   * دورش می‌ریزد و فرم «ذخیره شد» می‌گوید بی‌آنکه چیزی ذخیره شود.
+   */
+  @IsOptional() @IsObject({ message: 'پاسخ‌های فرم نامعتبر است' }) values?: Record<string, any>;
 }
 
 class DiscountApplyDto {
@@ -150,6 +161,19 @@ export class PublicIntakeController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }))
   receipt(@Param('token') token: string, @UploadedFile() file: any) {
     return this.intake.attachReceipt(token, file);
+  }
+
+  /**
+   * عکسِ یک **باکسِ عکسِ** فرم — جدا از فیشِ واریزی.
+   *
+   * ⚠️ `field` از نشانی می‌آید ولی آزاد نیست: سرویس می‌سنجد که واقعاً یک
+   * فیلدِ `image`ِ همین فرم باشد. بدونِ آن، این نشانیِ عمومی یک آپلودرِ آزاد
+   * روی دیسکِ ما بود.
+   */
+  @Post('form/:token/image/:field')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }))
+  image(@Param('token') token: string, @Param('field') field: string, @UploadedFile() file: any) {
+    return this.intake.attachImage(token, field, file);
   }
 }
 

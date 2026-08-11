@@ -133,3 +133,14 @@
 }
 .ik-copy.ok { border-color: rgba(52, 211, 153, .45); }
 .ik-copy.ok i { color: #6ee7b7; background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .35); }
+
+/* ── فرمِ ساخته‌شده روی صفحهٔ بیمار ──
+   ⚠️ `.dyn`ِ مشترک استایلِ خودش را از `definitions.css` می‌گیرد؛ این‌جا فقط
+   چیزهایی است که مالِ همین صفحه است. */
+.ik-hint { margin: 0 0 10px; font-size: 12px; line-height: 2; color: rgba(255, 255, 255, .6); }
+.ik-pages { margin: 0 0 8px; font-size: 11.5px; color: rgba(255, 255, 255, .5); }
+/* ⚠️ روی موبایل ستونی: دو دکمهٔ «قبلی/بعدی» کنارِ هم در عرضِ ۳۲۰ پیکسل
+   آن‌قدر باریک می‌شوند که زدنشان با انگشت سخت است. */
+.ik-nav { display: flex; gap: 9px; margin-block-start: 12px; }
+.ik-nav .ik-go { flex: 1 1 0; min-width: 0; }
+@media (max-width: 380px) { .ik-nav { flex-direction: column; } }

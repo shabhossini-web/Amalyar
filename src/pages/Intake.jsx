@@ -6,6 +6,7 @@ import JDate from '../app/JDate.jsx';
 import Mark from '../components/Mark.jsx';
 import './intake.css';
 import { Alert, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
+import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* ⚠️ مبلغ‌ها در کلِ عمل‌یار **تومان**اند (مثلِ `Charge.amount`). نسخهٔ اول
@@ -146,6 +147,10 @@ function Form() {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ procedure: '', surgeonName: '', hospitalName: '', opDate: '', notes: '' });
+  /* پاسخِ فیلدهای **دلخواهِ** فرمِ ساخته‌شده — جدا از `f` که فیلدهای ثابت است. */
+  const [vals, setVals] = useState({});
+  const [vErr, setVErr] = useState({});
+  const [page, setPage] = useState(1);
   const [code, setCode] = useState('');
   const fileRef = useRef(null);
 
@@ -164,11 +169,40 @@ function Form() {
         opDate: r.data?.opDate ? isoToJStr(r.data.opDate) : s.opDate,
         notes: r.data?.patientNotes ?? s.notes,
       }));
+      /* مقادیرِ فیلدهای دلخواه هم از `data` برمی‌گردند — بیمار فرم را نیمه‌کاره
+         رها می‌کند و باید در بازگشت همان‌جا ادامه بدهد، نه از صفر. */
+      if (r.form?.fields?.length) {
+        setVals((s) => {
+          const next = { ...s };
+          for (const fl of r.form.fields) {
+            if (r.data?.[fl.key] !== undefined && next[fl.key] === undefined) next[fl.key] = r.data[fl.key];
+          }
+          return next;
+        });
+      }
     } catch (e) { setErr(e.message); }
   }, [token]);
   useEffect(() => { load(); }, [load]);
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+
+  /**
+   * شماره‌هایی که باکسِ پرداختِ فرم نشان می‌دهد.
+   *
+   * ⚠️ **اولین** حسابِ `payTo` است، نه همه: وقتی لینک حساب دارد سرور دقیقاً
+   * یکی برمی‌گرداند؛ وقتی ندارد فهرستِ سراسری می‌آید و باکس اولی را نشان
+   * می‌دهد، در حالی که بخشِ «واریز به» پایین‌تر همه را فهرست می‌کند. دو فهرستِ
+   * کامل در یک صفحه فقط شلوغی است.
+   */
+  const payInfo = d?.payTo?.length
+    ? {
+      bank: d.payTo[0].bankName,
+      holder: d.payTo[0].ownerName,
+      accountNumber: d.payTo[0].accountNumber,
+      cardNumber: d.payTo[0].cardNumber,
+      iban: d.payTo[0].iban,
+    }
+    : null;
 
   const saveFill = async () => {
     setErr(''); setBusy(true);
@@ -176,9 +210,54 @@ function Form() {
        تا دیروز `f` خام فرستاده می‌شد، یعنی «۱۴۰۵/۰۵/۱۴» به سرور می‌رسید و
        سرور آن را سالِ ۱۴۰۵ **میلادی** می‌فهمید — و مراجعه بی‌سروصدا شش قرن
        عقب ثبت می‌شد. هیچ خطایی نمی‌داد؛ فقط از تقویم و گزارش‌ها غیب می‌شد. */
-    const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '' };
+    const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '', values: vals };
     try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body })); }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  /**
+   * ذخیره‌ی فرمِ ساخته‌شده.
+   *
+   * ⚠️ اعتبارسنجیِ کلاینت **قبل** از رفتن به صفحهٔ بعد اجرا می‌شود، ولی فقط
+   * روی فیلدهای همان صفحه: خطای فیلدی که هنوز دیده نشده، کاربر را سردرگم
+   * می‌کند. سرور در پایان همه را دوباره می‌سنجد — این‌جا فقط زودتر است.
+   */
+  const nextPage = () => {
+    const here = (d.form?.fields ?? []).filter((x) => (x.page ?? 1) === page);
+    const e = dynErrors(here, vals);
+    setVErr(e);
+    if (Object.keys(e).length) return;
+    setPage((p) => p + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const saveForm = async () => {
+    const e = dynErrors(d.form?.fields ?? [], vals);
+    setVErr(e);
+    if (Object.keys(e).length) {
+      /* برو به اولین صفحه‌ای که خطا دارد، وگرنه کاربر یک پیامِ خطا می‌بیند
+         بدونِ اینکه بداند کدام کادر را باید پر کند. */
+      const bad = (d.form.fields ?? []).find((x) => e[x.key]);
+      if (bad) setPage(bad.page ?? 1);
+      return;
+    }
+    await saveFill();
+  };
+
+  /**
+   * آپلودِ عکسِ یک باکسِ عکس.
+   *
+   * ⚠️ پاسخِ سرور کلِ نمای فرم است، پس `setD` می‌کنیم و مقدارِ فیلد را هم از
+   * همان `data` برمی‌داریم — منبعِ حقیقت سرور است، نه چیزی که مرورگر حدس زد.
+   */
+  const uploadImage = async (file, field) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const fresh = await apiUpload(`/public/intake/form/${token}/image/${encodeURIComponent(field.key)}`, fd);
+    setD(fresh);
+    const ref = fresh?.data?.[field.key];
+    setVals((s) => ({ ...s, [field.key]: ref }));
+    return ref ?? {};
   };
 
   const applyCode = async () => {
@@ -230,23 +309,61 @@ function Form() {
       {rejected && <p className="ik-bad"><Alert width="16" height="16" /> {d.reviewNote || 'این ثبت‌نام تأیید نشد.'}</p>}
       {expired && <p className="ik-bad"><Clock width="16" height="16" /> مهلتِ این فرم تمام شده — دوباره از لینکِ ثبت‌نام شروع کنید.</p>}
 
+      {/* ⚠️ **فرمِ ساخته‌شده جایگزینِ فیلدهای هاردکد می‌شود، نه اضافه بر آن.**
+          اگر هر دو رندر می‌شدند، بیمار «نوعِ عمل» را دو بار می‌دید — یک بار
+          هاردکد و یک بار همان فیلد در فرمِ ساخته‌شده.
+          لینکِ بدونِ فرم (`d.form === null`) دقیقاً همان صفحهٔ امروز را
+          می‌بیند — همهٔ لینک‌های موجود این‌طورند. */}
       {(d.status === 'pending_fill' || d.status === 'pending_payment') && (
-        <>
-          <div className="ik-grid">
-            <Field label="نوعِ عمل" value={f.procedure} onChange={set('procedure')} disabled={busy} />
-            <Field label="نامِ جراح" value={f.surgeonName} onChange={set('surgeonName')} disabled={busy} />
-            <Field label="بیمارستان" value={f.hospitalName} onChange={set('hospitalName')} disabled={busy} />
-            <JDate className="ik-field" label="تاریخِ عمل" value={f.opDate}
-                   onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />
-          </div>
-          <label className="ik-field">
-            <span>توضیح (اختیاری)</span>
-            <textarea rows={2} value={f.notes} onChange={set('notes')} disabled={busy} />
-          </label>
-          <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
-            {busy ? 'در حال ذخیره…' : 'ذخیرهٔ اطلاعات'}
-          </button>
-        </>
+        d.form?.fields?.length ? (
+          <>
+            {d.form.hint && <p className="ik-hint">{d.form.hint}</p>}
+            {d.form.pages > 1 && (
+              <p className="ik-pages">صفحهٔ {faNum(page)} از {faNum(d.form.pages)}</p>
+            )}
+            <DynForm
+              fields={d.form.fields.filter((x) => (x.page ?? 1) === page)}
+              values={vals}
+              errors={vErr}
+              onChange={setVals}
+              disabled={busy}
+              payment={payInfo}
+              onUpload={uploadImage}
+            />
+            <div className="ik-nav">
+              {page > 1 && (
+                <button type="button" className="ik-go ghost" disabled={busy}
+                        onClick={() => { setPage((p) => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
+                  قبلی
+                </button>
+              )}
+              {page < (d.form.pages ?? 1) ? (
+                <button type="button" className="ik-go" disabled={busy} onClick={nextPage}>بعدی</button>
+              ) : (
+                <button type="button" className="ik-go ghost" disabled={busy} onClick={saveForm}>
+                  {busy ? 'در حال ذخیره…' : 'ذخیرهٔ اطلاعات'}
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="ik-grid">
+              <Field label="نوعِ عمل" value={f.procedure} onChange={set('procedure')} disabled={busy} />
+              <Field label="نامِ جراح" value={f.surgeonName} onChange={set('surgeonName')} disabled={busy} />
+              <Field label="بیمارستان" value={f.hospitalName} onChange={set('hospitalName')} disabled={busy} />
+              <JDate className="ik-field" label="تاریخِ عمل" value={f.opDate}
+                     onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />
+            </div>
+            <label className="ik-field">
+              <span>توضیح (اختیاری)</span>
+              <textarea rows={2} value={f.notes} onChange={set('notes')} disabled={busy} />
+            </label>
+            <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
+              {busy ? 'در حال ذخیره…' : 'ذخیرهٔ اطلاعات'}
+            </button>
+          </>
+        )
       )}
 
       {d.status === 'pending_payment' && (
@@ -278,6 +395,9 @@ function Form() {
                 <div key={a.id} className="ik-acc">
                   <span className="ik-acc-who">{[a.ownerName, a.bankName].filter(Boolean).join(' · ')}</span>
                   {a.cardNumber && <CopyRow label="شمارهٔ کارت" value={a.cardNumber} />}
+                  {/* ⚠️ شمارهٔ حساب سومین شماره است، نه هم‌معنیِ کارت یا شبا:
+                      بیمارِ شعبه‌رو فقط با همین می‌تواند واریز کند. */}
+                  {a.accountNumber && <CopyRow label="شمارهٔ حساب" value={a.accountNumber} />}
                   {a.iban && <CopyRow label="شبا" value={a.iban} />}
                 </div>
               ))}
