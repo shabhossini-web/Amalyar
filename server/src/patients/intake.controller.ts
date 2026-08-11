@@ -94,6 +94,17 @@ class LinkPatchDto {
   @IsOptional() @Type(() => Number) @IsInt({ message: 'حسابِ انتخاب‌شده نامعتبر است' }) @Min(0) bankAccountId?: number;
 }
 
+/**
+ * ⚠️ شماره **باید** در DTO اعلام شود، وگرنه `ValidationPipe({whitelist:true})`
+ * بی‌صدا دورش می‌ریزد و سرویس با `undefined` روبه‌رو می‌شود — همان تلهٔ
+ * تکرارشوندهٔ این مخزن.
+ */
+class LinkSmsDto {
+  @IsString({ message: 'شمارهٔ موبایل را وارد کنید' })
+  @MaxLength(20)
+  phone!: string;
+}
+
 class ApproveDto {
   @IsOptional() @Type(() => Number) @IsInt() surgeonId?: number;
   @IsOptional() @Type(() => Number) @IsInt() hospitalId?: number;
@@ -215,6 +226,18 @@ export class IntakeController {
   @Patch('links/:id')
   patchLink(@Param('id', ParseIntPipe) id: number, @Body() dto: LinkPatchDto, @CurrentUser() user: any) {
     return this.intake.patchLink(id, dto, user);
+  }
+
+  /**
+   * فرستادنِ لینک با پیامک.
+   *
+   * ⚠️ زیرِ `intake.manage` و نه `intake.read`: این یک **کنشِ بیرونی** است که
+   * به شمارهٔ یک آدمِ واقعی پیام می‌فرستد، نه خواندنِ یک فهرست.
+   */
+  @RequirePermissions('intake.manage')
+  @Post('links/:id/sms')
+  sendLinkSms(@Param('id', ParseIntPipe) id: number, @Body() dto: LinkSmsDto, @CurrentUser() user: any) {
+    return this.intake.sendLinkSms(id, dto.phone, user);
   }
 
   @RequirePermissions('intake.read')

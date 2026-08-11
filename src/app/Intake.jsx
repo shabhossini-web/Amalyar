@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
-import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Form, Hospital, Plus, Search } from '../ui/icons.jsx';
+import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Eye, Form, Hospital, Pencil, Plus, Search, Send } from '../ui/icons.jsx';
 import { group3, numToWordsFa, parseMoney } from '../lib/money.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -13,6 +13,9 @@ import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
+/* ⚠️ برای شماره‌ی موبایل `faNum` **غلط** است: `Number` صفرِ اول را می‌خورد و
+   جداکنندهٔ سه‌رقمی می‌گذارد — «۰۹۱۲۱۲۳۴۵۶۷» به «۹٬۱۲۱٬۲۳۴٬۵۶۷» تبدیل می‌شد. */
+const faDigits = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 /* ⚠️ مبلغ‌ها تومان‌اند؛ نسخهٔ اول تقسیم بر ۱۰ می‌کرد و عددِ یک‌دهم نشان می‌داد. */
 
 const TABS = [
@@ -38,7 +41,11 @@ export default function IntakeAdmin() {
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
   const [approving, setApproving] = useState(null);
+  /* `true` یعنی «لینکِ تازه»، و یک شیء یعنی «همین لینک را ویرایش کن» — یک
+     state برای یک شیت، نه دو تا که بشود هر دو را با هم باز کرد. */
   const [newLink, setNewLink] = useState(false);
+  /* شمارهٔ درحالِ ارسال — `null` یعنی هیچ ردیفی باز نیست. */
+  const [smsFor, setSmsFor] = useState(null);
   const [zoom, setZoom] = useState(null); // نشانیِ blobِ فیشِ در حالِ بزرگ‌نمایی
   const row = useStagger();
 
@@ -111,6 +118,18 @@ export default function IntakeAdmin() {
             )}
             <i>{faNum(l.submissionCount)} ثبت‌نام</i>
             <button type="button" onClick={() => copyLink(l.token)} title="کپیِ نشانی"><Copy width="13" height="13" /></button>
+            {/* ⚠️ پریویو = بازکردنِ **همان** نشانیِ بیمار در تبِ تازه، نه یک
+                شبیه‌سازی. شبیه‌سازی چیزی را نشان می‌دهد که ممکن است با
+                واقعیت فرق داشته باشد؛ این‌طور ادمین دقیقاً همانی را می‌بیند
+                که بیمار می‌بیند. `noopener` چون تبِ باز‌شده به `window.opener`
+                دسترسی پیدا می‌کند. */}
+            <a
+              className="ia-linkbtn"
+              href={`${window.location.origin}/r/${l.token}`}
+              target="_blank" rel="noopener noreferrer" title="پیش‌نمایشِ صفحهٔ بیمار"
+            ><Eye width="13" height="13" /></a>
+            <button type="button" onClick={() => setNewLink(l)} title="ویرایشِ لینک"><Pencil width="13" height="13" /></button>
+            <button type="button" onClick={() => setSmsFor(l)} title="ارسال با پیامک"><Send width="13" height="13" /></button>
             {/* ⚠️ از راهِ `toggleLink` و نه `api(...).then(load)`: نسخهٔ قبلی
                 `catch` نداشت، پس یک ۴۰۳ ردیف را بی‌تغییر می‌گذاشت و فقط یک
                 unhandled rejection در کنسول می‌ریخت. */}
@@ -197,8 +216,17 @@ export default function IntakeAdmin() {
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {smsFor && (
+          <SmsSheet link={smsFor} onClose={() => setSmsFor(null)} onDone={(m) => { setSmsFor(null); setToast(m); }} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {newLink && (
-          <LinkSheet onClose={() => setNewLink(false)} onDone={(m) => { setNewLink(false); setToast(m); load(); }} />
+          <LinkSheet
+            initial={newLink === true ? null : newLink}
+            onClose={() => setNewLink(false)}
+            onDone={(m) => { setNewLink(false); setToast(m); load(); }}
+          />
         )}
       </AnimatePresence>
 
@@ -401,11 +429,74 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
  * دارد) حساب → ساخت. انتخابگرِ حساب عمداً **مشروط** است: فرمی که پرداخت ندارد
  * حساب هم لازم ندارد، و نشان‌دادنش فقط یک انتخابِ بی‌مصرف سرِ راه می‌گذارد.
  */
-function LinkSheet({ onClose, onDone }) {
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [formId, setFormId] = useState('');
-  const [bankId, setBankId] = useState('');
+/**
+ * فرستادنِ لینک با پیامک.
+ *
+ * ⚠️ نشانیِ داخلِ پیامک را **سرور** می‌سازد، نه این‌جا. اگر کلاینت متن را
+ * می‌ساخت و می‌فرستاد، هر کسی که به این نشانی برسد می‌توانست هر متنی را با
+ * نامِ شرکت به هر شماره‌ای بفرستد.
+ */
+function SmsSheet({ link, onClose, onDone }) {
+  const [phone, setPhone] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const send = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await api(`/intake/links/${link.id}/sms`, { method: 'POST', body: { phone } });
+      /* ⚠️ `stub` یعنی سرویسِ پیامک پیکربندی نشده. اگر این را «فرستاده شد»
+         می‌گفتیم، در محیطِ توسعه همه‌چیز موفق به‌نظر می‌رسید و کسی نمی‌فهمید
+         هیچ پیامکی نرفته — و همان اشتباه روی سرورِ بدونِ کلید تکرار می‌شد. */
+      onDone(r.stub
+        ? 'سرویسِ پیامک پیکربندی نشده — چیزی ارسال نشد'
+        : r.sent ? `لینک به ${faDigits(r.to)} پیامک شد ✓` : 'ارسال انجام نشد — شماره یا سرویس را بررسی کنید');
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+
+  return (
+    <Overlay backdrop="ia-overlay" panel="ia-sheet sm" as="section" onClose={onClose} closable={!busy}>
+      <header className="ia-sheet-head">
+        <b>ارسالِ «{link.title}»</b>
+        <button type="button" className="ia-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      <div className="ia-sheet-body">
+        <label className="ia-field">
+          <span>شمارهٔ موبایلِ بیمار</span>
+          <input
+            dir="ltr" inputMode="numeric" value={phone} disabled={busy}
+            onChange={(e) => setPhone(e.target.value)} placeholder="09xxxxxxxxx" autoFocus
+          />
+        </label>
+        {/* ادمین باید پیش از زدنِ دکمه بداند چه چیزی می‌رود. */}
+        <p className="ia-note">
+          متنِ پیامک: «{link.title}» به‌همراهِ نشانیِ ثبت‌نام. «لغو۱۱» خودکار اضافه می‌شود.
+        </p>
+        {!link.active && (
+          <p className="ia-note warn">این لینک غیرفعال است — اول فعالش کنید، وگرنه بیمار صفحهٔ بسته می‌بیند.</p>
+        )}
+        {err && <p className="ia-note warn">{err}</p>}
+        <button type="button" className="ia-ok" onClick={send} disabled={busy || !phone.trim() || !link.active}>
+          {busy ? 'در حال ارسال…' : 'ارسال'}
+        </button>
+      </div>
+    </Overlay>
+  );
+}
+
+/**
+ * شیتِ لینک — **ساخت و ویرایش، یکی**.
+ *
+ * ⚠️ نسخهٔ دوم برای ویرایش نساختم: دو شیت که یک فرم را نشان می‌دهند یعنی
+ * فیلدی که فردا به ساخت اضافه می‌شود، در ویرایش نیست — و کاربر می‌بیند
+ * چیزی را که ساخته، نمی‌تواند عوض کند.
+ */
+function LinkSheet({ initial, onClose, onDone }) {
+  const editing = !!initial?.id;
+  const [title, setTitle] = useState(initial?.title ?? '');
+  const [amount, setAmount] = useState(initial ? group3(String(initial.amount || '')) : '');
+  const [formId, setFormId] = useState(initial?.formId ? String(initial.formId) : '');
+  const [bankId, setBankId] = useState(initial?.bankAccountId ? String(initial.bankAccountId) : '');
   const [opts, setOpts] = useState(null); // {forms, banks} — null یعنی هنوز نیامده
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -419,11 +510,14 @@ function LinkSheet({ onClose, onDone }) {
         /* یک فرم که بیشتر نیست، انتخابش را به کاربر تحمیل نکن — نصبِ تازه
            دقیقاً یک فرمِ ثبت‌نام دارد و «— انتخاب کنید —»ِ تک‌گزینه‌ای فقط
            یک کلیکِ اضافه است. */
-        if (d.forms?.length === 1) setFormId(String(d.forms[0].id));
+        /* ⚠️ فقط هنگامِ **ساخت**: در ویرایش، فرمِ همان لینک از قبل ست شده و
+           این خط رویش می‌نوشت — یعنی بازکردنِ شیتِ ویرایش، بی‌آنکه کاربر
+           چیزی بزند، فرمِ لینک را عوض می‌کرد. */
+        if (!editing && d.forms?.length === 1) setFormId(String(d.forms[0].id));
       })
       .catch(() => { if (alive) setOpts({ forms: [], banks: [] }); });
     return () => { alive = false; };
-  }, []);
+  }, [editing]);
 
   const picked = opts?.forms?.find((f) => String(f.id) === formId) ?? null;
   const needsBank = !!picked?.hasPayment;
@@ -432,8 +526,8 @@ function LinkSheet({ onClose, onDone }) {
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      await api('/intake/links', {
-        method: 'POST',
+      await api(editing ? `/intake/links/${initial.id}` : '/intake/links', {
+        method: editing ? 'PATCH' : 'POST',
         body: {
           title: title.trim(),
           /* ⚠️ `parseMoney` و نه `Number(amount)`: کاربرِ فارسی «۵۰۰۰۰۰» تایپ
@@ -446,14 +540,14 @@ function LinkSheet({ onClose, onDone }) {
           bankAccountId: needsBank && bankId ? Number(bankId) : 0,
         },
       });
-      onDone('لینک ساخته شد ✓');
+      onDone(editing ? 'لینک ویرایش شد ✓' : 'لینک ساخته شد ✓');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
   return (
     <Overlay backdrop="ia-overlay" panel="ia-sheet sm" as="section" onClose={onClose} closable={!busy}>
       <header className="ia-sheet-head">
-        <b>لینکِ ثبت‌نامِ تازه</b>
+        <b>{editing ? `ویرایشِ «${initial.title}»` : 'لینکِ ثبت‌نامِ تازه'}</b>
         <button type="button" className="ia-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <div className="ia-sheet-body">
@@ -501,7 +595,7 @@ function LinkSheet({ onClose, onDone }) {
         )}
 
         {err && <p className="ia-note warn">{err}</p>}
-        <button type="button" className="ia-ok" disabled={busy || title.trim().length < 2} onClick={save}>ساختِ لینک</button>
+        <button type="button" className="ia-ok" disabled={busy || title.trim().length < 2} onClick={save}>{editing ? 'ذخیرهٔ تغییرات' : 'ساختِ لینک'}</button>
       </div>
     </Overlay>
   );
