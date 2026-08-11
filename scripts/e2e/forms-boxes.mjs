@@ -50,8 +50,22 @@ await page.waitForTimeout(1500);
 
 console.log('\n۱) شیتِ ثبتِ مراجعه باز می‌شود');
 await page.locator('.db-add').first().click();
-await page.waitForTimeout(1500);
-ok('شیت باز شد', await page.locator('.db-kindrow').count() > 0);
+await page.waitForTimeout(1200);
+ok('شیت باز شد', await page.locator('.db-sheet').count() > 0);
+
+/* ⚠️ ثبتِ تازه از مرحلهٔ ۶ **سه‌گامی** شد: پرونده → نوعِ فرم → تکمیل.
+   فیلدهای دلخواه (که باکسِ عکس و پرداخت هم جزوشان‌اند) در گامِ ۳ هستند، پس
+   این آزمون باید تا آن‌جا برود. پیش از این، سرِ گامِ ۱ دنبالِ `.dyn-img`
+   می‌گشت و صفر پیدا می‌کرد. */
+{
+  const inp = page.locator('.db-sheet .db-grid2 input');
+  await inp.nth(0).fill('باکس'); await inp.nth(1).fill('آزما');
+  await page.locator('.db-stepnav button').last().click();
+  await page.waitForTimeout(700);
+  ok('گامِ نوعِ فرم آمد', await page.locator('.db-kindrow').count() > 0);
+  await page.locator('.db-stepnav button').last().click();
+  await page.waitForTimeout(1200);
+}
 
 console.log('\n۲) باکسِ عکس رندر می‌شود');
 {
