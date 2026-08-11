@@ -504,9 +504,33 @@ model IntakeLink {
   active Boolean @default(true)
   notes  String?
 
+  /// کدام فرم پشتِ این لینک است.
+  ///
+  /// ⚠️ **این تکهٔ گم‌شدهٔ کلِ ماجرا بود.** تا دیروز لینک هیچ ارجاعی به فرم
+  /// نداشت و فرمِ عمومی در JSX هاردکد بود؛ یعنی «می‌خواهم برای بیمار فرم
+  /// بفرستم، چه فرمی؟» اصلاً جوابی نداشت.
+  ///
+  /// ⚠️ `Restrict` و نه `SetNull`: اگر فرمِ زیرِ یک لینکِ زنده حذف می‌شد،
+  /// `formId` بی‌صدا به null برمی‌گشت و لینک به مسیرِ هاردکدِ قدیمی می‌افتاد —
+  /// بدونِ خطا، بدونِ رد در audit، بدونِ هیچ تغییری در فهرستِ ادمین.
+  /// نگهبانِ واقعی در `FormsService.removeForm` است؛ این آخرین سد است.
+  form   FormDef? @relation(fields: [formId], references: [id], onDelete: Restrict)
+  formId Int?     @map("form_id")
+
+  /// حسابی که شماره‌هایش روی باکسِ پرداختِ این لینک نشان داده می‌شود.
+  ///
+  /// ⚠️ شماره‌ها در خودِ فرم ذخیره **نمی‌شوند**: اگر می‌شدند، عوض‌کردنِ حساب
+  /// فرم‌های ساخته‌شده را بازنویسی می‌کرد و فیش‌ها به حسابِ بسته می‌رفت.
+  /// `null` یعنی «همان فهرستِ سراسریِ `showOnIntake`» — رفتارِ امروز، تا
+  /// لینک‌های موجود بی‌شماره نمانند.
+  bankAccount   BankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  bankAccountId Int?         @map("bank_account_id")
+
   createdAt   DateTime           @default(now()) @map("created_at")
   submissions IntakeSubmission[]
 
+  @@index([formId])
+  @@index([bankAccountId])
   @@map("intake_links")
 }
 
@@ -529,6 +553,17 @@ model IntakeSubmission {
   /// بعد از تأیید پر می‌شود. یکتا: یک ثبت‌نام حداکثر یک مراجعه می‌سازد.
   visit   Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
   visitId Int?   @unique @map("visit_id")
+
+  /// فرمی که بیمار **زیرِ آن** ثبت‌نام کرد — عکسِ لحظه‌ای از `IntakeLink.formId`.
+  ///
+  /// ⚠️ دقیقاً همان دلیلی که `amount` کپی می‌شود (پایین‌تر): ادمین می‌تواند فردا
+  /// فرمِ لینک را عوض کند، و آن‌وقت پاسخ‌هایی که بیمار زیرِ فرمِ A داده با
+  /// کلیدهای فرمِ B خوانده می‌شدند — هر جواب زیرِ برچسبِ اشتباه، بی‌هیچ خطایی.
+  ///
+  /// `SetNull` نه `Restrict`: ثبت‌نامِ گذشته سندِ تاریخی است و نباید جلوی
+  /// پاک‌سازیِ یک فرمِ متروک را بگیرد؛ `data` خودش پاسخ‌ها را نگه داشته.
+  form   FormDef? @relation(fields: [formId], references: [id], onDelete: SetNull)
+  formId Int?     @map("form_id")
 
   /// pending_fill | pending_payment | pending_approval | approved | rejected | expired
   status String @default("pending_fill")
@@ -1191,6 +1226,15 @@ model BankAccount {
   bankName   String?  @map("bank_name")
   cardNumber String?  @map("card_number")
   iban       String?
+  /// شمارهٔ حسابِ بانکی — جدا از کارت و شبا.
+  ///
+  /// ⚠️ سه شمارهٔ متفاوت‌اند و بیمار گاهی فقط یکی‌شان را می‌تواند استفاده کند:
+  /// کارت برای انتقالِ کارت‌به‌کارت، شبا برای پایا/ساتنا، و شمارهٔ حساب برای
+  /// واریزِ حضوری در شعبه. نبودش یعنی بیمارِ شعبه‌رو نمی‌تواند واریز کند.
+  ///
+  /// ⚠️ طولِ حساب بینِ بانک‌های ایران یکسان نیست، پس سقف مثلِ شبا (۳۴) گرفته
+  /// شده نه تنگ‌تر — سقفِ تنگ یک ۴۰۰ می‌سازد که کاربر دلیلش را نمی‌فهمد.
+  accountNumber String? @map("account_number")
   /// اگر حسابِ شخصیِ یک شریک است — مبنای «چه کسی پول را گرفت».
   partner    Partner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   partnerId  Int?     @map("partner_id")
@@ -1211,6 +1255,8 @@ model BankAccount {
   expenses Expense[]
   payouts  Payout[]
   cheques  Cheque[]
+  /// لینک‌های ثبت‌نامی که شماره‌های همین حساب را به بیمار نشان می‌دهند.
+  intakeLinks IntakeLink[]
 
   @@map("bank_accounts")
 }
@@ -1653,6 +1699,11 @@ model FormDef {
 
   fields FormField[]
 
+  /// لینک‌هایی که این فرم را می‌فرستند — منبعِ «آیا این فرم استفاده می‌شود؟»
+  /// در `removeForm`. بدونِ این، حذفِ فرم لینک را بی‌صدا از کار می‌انداخت.
+  intakeLinks       IntakeLink[]
+  intakeSubmissions IntakeSubmission[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
@@ -1687,10 +1738,12 @@ model FormField {
   /// یک قاعدهٔ تازه در اعتبارسنجیِ سرور. نوعی که فقط یک‌جا پیاده شود، فرمی
   /// می‌سازد که در مرورگر درست به‌نظر می‌رسد و روی سرور بی‌صدا رد می‌شود.
   ///
-  /// ⚠️ `image` و `payment` **مقدارشان در `data` نمی‌نشیند**: فایل به
-  /// `Document`/`IntakeSubmission.receipt` می‌رود و شماره‌های حساب هنگامِ رندر
-  /// از `IntakeLink.bankAccountId` خوانده می‌شوند. پس اعتبارسنجیِ «اجباری» روی
-  /// این دو اعمال نمی‌شود — وگرنه فرمی می‌ساختیم که هیچ‌وقت ذخیره نمی‌شود.
+  /// ⚠️ `payment` **مقداری در `data` نمی‌نشیند**: شماره‌های حساب هنگامِ رندر از
+  /// `IntakeLink.bankAccountId` خوانده می‌شوند (و اگر خالی بود، از فهرستِ
+  /// سراسریِ `showOnIntake`). پس اعتبارسنجیِ «اجباری» رویش اعمال نمی‌شود —
+  /// وگرنه فرمی می‌ساختیم که هیچ‌وقت ذخیره نمی‌شود.
+  /// `image` برعکس، یک **ارجاع** (`{id,url,name}`) ذخیره می‌کند و ستاره‌اش
+  /// معنی دارد.
   type String @default("text")
 
   /// همان «ستاره». تک‌منبعِ اجباری‌بودن: هم ستارهٔ کنارِ برچسب و هم ۴۰۰ِ سرور

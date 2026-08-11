@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { LedgerService } from './ledger.service';
-import { BankAccountDto, ExpenseCreateDto, SettleDto } from './dto/ledger.dto';
+import { BankAccountDto, BankAccountPatchDto, ExpenseCreateDto, SettleDto } from './dto/ledger.dto';
 
 /** هزینه‌ها، حساب‌های بانکی و دفترِ حسابِ جاریِ شرکا. */
 @Controller()
@@ -31,6 +31,20 @@ export class LedgerController {
   @Patch('bank-accounts/:id/public')
   setPublic(@Param('id', ParseIntPipe) id: number, @Body() dto: { showOnIntake?: boolean }, @CurrentUser() user: any) {
     return this.led.setAccountPublic(id, !!dto.showOnIntake, user);
+  }
+
+  /**
+   * ویرایشِ شماره‌های حساب.
+   *
+   * ⚠️ **بعد از** `:id/public` اعلام شده و عمداً مسیرِ جداست: آن یکی دروازهٔ
+   * افشای عمومی است و نباید با یک ویرایشِ معمولی هم‌مسیر شود. بدونِ این
+   * endpoint، حساب‌هایی که از قبل در دیتابیس‌اند تا ابد `accountNumber` خالی
+   * می‌مانند و کاربر با ساختنِ حسابِ تکراری «درستش می‌کند».
+   */
+  @RequirePermissions('accounting.manage')
+  @Patch('bank-accounts/:id')
+  patchAccount(@Param('id', ParseIntPipe) id: number, @Body() dto: BankAccountPatchDto, @CurrentUser() user: any) {
+    return this.led.patchAccount(id, dto, user);
   }
 
   @RequirePermissions('accounting.manage')

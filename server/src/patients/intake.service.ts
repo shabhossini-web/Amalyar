@@ -32,6 +32,15 @@ const text = (v: unknown, max = 200) =>
   typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
 
 /**
+ * برچسبِ خواندنیِ یک حسابِ بانکی — «شهاب حسینی — بانکِ ملت».
+ *
+ * ⚠️ سمتِ سرور و نه در render (قانون ۱۵): همین رشته امروز در سه فایلِ کلاینت
+ * جدا ساخته می‌شود و روزی یکی‌شان جداکننده یا ترتیب را عوض می‌کند.
+ */
+const bankLabel = (b: { ownerName: string; bankName?: string | null }) =>
+  [b.ownerName, b.bankName].filter(Boolean).join(' — ');
+
+/**
  * فرمِ ثبت‌نامِ بیمار.
  *
  * ⚠️ **آنچه بیمار پر می‌کند مراجعه نیست.** تا وقتی ادمین تأیید نکرده، هیچ
@@ -59,32 +68,167 @@ export class IntakeService {
   }
 
   // ── لینکِ دائمی (ادمین) ────────────────────────────────────────────
+
+  /**
+   * فهرستِ لینک‌ها — با **برچسبِ** فرم و حساب، نه فقط شناسه‌شان.
+   *
+   * ⚠️ قانون ۱۵: هیچ فرمولی در render. اگر کلاینت `formId` می‌گرفت و خودش به
+   * عنوان وصلش می‌کرد، همان join در فهرستِ ادمین و در رندرِ عمومی دو جا نوشته
+   * می‌شد و روزی دو جواب می‌داد. برچسبِ حساب هم همان
+   * `[ownerName, bankName]`ی است که سه فایلِ دیگر جدا می‌سازند.
+   *
+   * `formHasPayment` هم این‌جا حساب می‌شود: «آیا این فرم باکسِ پرداخت دارد؟»
+   * پرسشی دربارهٔ تعریفِ فرم است، نه دربارهٔ صفحه.
+   */
   async listLinks() {
     const rows = await this.prisma.intakeLink.findMany({
       orderBy: { id: 'desc' },
-      include: { _count: { select: { submissions: true } } },
+      include: {
+        _count: { select: { submissions: true } },
+        form: { select: { title: true, color: true, fields: { where: { type: 'payment' }, select: { id: true } } } },
+        bankAccount: { select: { ownerName: true, bankName: true, showOnIntake: true, active: true } },
+      },
     });
-    return rows.map((r) => ({ ...r, submissionCount: r._count.submissions, _count: undefined }));
+    return rows.map((r) => ({
+      ...r,
+      submissionCount: r._count.submissions,
+      formTitle: r.form?.title ?? null,
+      formColor: r.form?.color ?? null,
+      formHasPayment: (r.form?.fields.length ?? 0) > 0,
+      bankLabel: r.bankAccount ? bankLabel(r.bankAccount) : null,
+      /* ⚠️ حسابی که بعد از ساختِ لینک از فرمِ عمومی برداشته شده هنوز به لینک
+         وصل است ولی به بیمار نشان داده **نمی‌شود**. بدونِ این پرچم، ادمین یک
+         نامِ حساب روی ردیف می‌دید و فکر می‌کرد کار می‌کند. */
+      bankHidden: !!r.bankAccount && !(r.bankAccount.showOnIntake && r.bankAccount.active),
+      _count: undefined,
+      form: undefined,
+      bankAccount: undefined,
+    }));
   }
 
-  async createLink(dto: { title: string; amount?: number; notes?: string }, user: any) {
+  /**
+   * فرم‌هایی که می‌شود پشتِ یک لینک گذاشت.
+   *
+   * ⚠️ فقط `scope: 'intake'`: پرشدنِ فرمِ ثبت‌نام است که پرونده باز می‌کند
+   * (`register`)، و کلیدهای builtinاش ستونِ `Patient`اند نه `Visit`. پیشنهادِ
+   * فرمِ مراجعه این‌جا یعنی وعدهٔ رفتاری که هنوز وجود ندارد (مرحلهٔ ۴).
+   *
+   * ⚠️ چرا endpointِ جدا و نه همان `GET /forms`: آن پشتِ مجوزِ `forms.read`
+   * است و این صفحه مجوزِ `intake.*` دارد.
+   */
+  async formsForLinks() {
+    const rows = await this.prisma.formDef.findMany({
+      where: { scope: 'intake', active: true },
+      orderBy: { id: 'asc' },
+      select: { id: true, title: true, color: true, fields: { where: { type: 'payment' }, select: { id: true } } },
+    });
+    return rows.map((f) => ({ id: f.id, title: f.title, color: f.color, hasPayment: f.fields.length > 0 }));
+  }
+
+  /**
+   * حساب‌هایی که می‌شود به یک لینک بست — **فقط نام**، بدونِ هیچ شماره‌ای.
+   *
+   * ⚠️ چرا از `GET /bank-accounts` استفاده نمی‌کنیم: آن پشتِ
+   * `@Feature('accounting')` است و نصبی که پلنِ حسابداری ندارد ۴۰۳ می‌گیرد —
+   * انتخابگر برای همیشه خالی می‌ماند بی‌آنکه کسی بفهمد چرا. (`ApproveSheet`
+   * همین حالا با `.catch(() => [])` همین خطا را می‌بلعد.)
+   *
+   * ⚠️ شماره‌ها عمداً برنمی‌گردند: برای انتخابِ حساب فقط نام لازم است، و
+   * برگرداندنِ شماره یعنی گستردنِ سطحِ افشا به یک مجوزِ دیگر.
+   */
+  async banksForLinks() {
+    const rows = await this.prisma.bankAccount.findMany({
+      where: { active: true, showOnIntake: true },
+      orderBy: { id: 'asc' },
+      select: { id: true, ownerName: true, bankName: true },
+    });
+    return rows.map((b) => ({ id: b.id, label: bankLabel(b) }));
+  }
+
+  /**
+   * فرم و حسابِ انتخاب‌شده را می‌سنجد و شناسه‌های تمیز برمی‌گرداند.
+   *
+   * ⚠️ **اعتبارسنجی روی سرور، نه فیلترِ کلاینت.** انتخابگر فقط حساب‌های
+   * `showOnIntake` را نشان می‌دهد، ولی هر کسی با مجوزِ `intake.manage`
+   * می‌تواند یک id دلخواه POST کند — و `intake.manage` به‌معنیِ
+   * `accounting.manage` نیست. `showOnIntake` تنها دروازهٔ opt-inِ ممیزی‌شده‌ای
+   * است که شمارهٔ حساب را از یک نشانیِ بی‌احراز دور نگه می‌دارد؛ دورزدنش با یک
+   * POST یعنی دروازه‌ای که نیست.
+   */
+  private async resolveLinkRefs(dto: { formId?: number | null; bankAccountId?: number | null }) {
+    const out: { formId?: number | null; bankAccountId?: number | null } = {};
+
+    if (dto.formId !== undefined) {
+      if (dto.formId === null || Number(dto.formId) === 0) out.formId = null;
+      else {
+        const form = await this.prisma.formDef.findUnique({ where: { id: Number(dto.formId) } });
+        if (!form) throw new BadRequestException('فرمِ انتخاب‌شده پیدا نشد');
+        if (form.scope !== 'intake') throw new BadRequestException('فقط فرمِ «ثبت‌نام» را می‌شود پشتِ لینک گذاشت');
+        if (!form.active) throw new BadRequestException('این فرم خاموش است — اول در فرم‌ساز روشنش کنید');
+        out.formId = form.id;
+      }
+    }
+
+    if (dto.bankAccountId !== undefined) {
+      if (dto.bankAccountId === null || Number(dto.bankAccountId) === 0) out.bankAccountId = null;
+      else {
+        const acc = await this.prisma.bankAccount.findUnique({ where: { id: Number(dto.bankAccountId) } });
+        if (!acc) throw new BadRequestException('حسابِ انتخاب‌شده پیدا نشد');
+        if (!acc.active) throw new BadRequestException('این حساب غیرفعال است');
+        if (!acc.showOnIntake) {
+          throw new BadRequestException('این حساب برای نمایش در فرمِ بیمار علامت نخورده — اول در حسابداری علامتش بزنید');
+        }
+        out.bankAccountId = acc.id;
+      }
+    }
+
+    return out;
+  }
+
+  async createLink(
+    dto: { title: string; amount?: number; notes?: string; formId?: number | null; bankAccountId?: number | null },
+    user: any,
+  ) {
     const title = text(dto.title, 120);
     if (!title) throw new BadRequestException('عنوانِ لینک را وارد کنید');
+    const refs = await this.resolveLinkRefs(dto);
     const row = await this.prisma.intakeLink.create({
-      data: { token: this.token(), title, amount: Math.max(0, Number(dto.amount) || 0), notes: text(dto.notes, 300) },
+      data: {
+        token: this.token(),
+        title,
+        amount: Math.max(0, Number(dto.amount) || 0),
+        notes: text(dto.notes, 300),
+        formId: refs.formId ?? null,
+        bankAccountId: refs.bankAccountId ?? null,
+      },
     });
     await this.audit.record({ actorId: user?.id, action: 'intake.link.create', entityType: 'intake_link', entityId: row.id, after: row });
     return row;
   }
 
-  async patchLink(id: number, dto: { title?: string; amount?: number; active?: boolean; notes?: string }, user: any) {
+  /**
+   * ویرایشِ لینک.
+   *
+   * ⚠️ عوض‌کردنِ `formId` روی ثبت‌نام‌های **در جریان** اثر ندارد و نباید داشته
+   * باشد: هر ثبت‌نام فرمش را هنگامِ شروع عکس می‌گیرد
+   * (`IntakeSubmission.formId`). بدونِ آن، پاسخ‌هایی که بیمار زیرِ فرمِ A داده
+   * با کلیدهای فرمِ B خوانده می‌شدند — هر جواب زیرِ برچسبِ اشتباه، بی‌هیچ خطایی.
+   */
+  async patchLink(
+    id: number,
+    dto: { title?: string; amount?: number; active?: boolean; notes?: string; formId?: number | null; bankAccountId?: number | null },
+    user: any,
+  ) {
     const row = await this.prisma.intakeLink.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('لینک پیدا نشد');
+    const refs = await this.resolveLinkRefs(dto);
     const data: any = {};
     if (dto.title !== undefined) data.title = text(dto.title, 120) ?? row.title;
     if (dto.amount !== undefined) data.amount = Math.max(0, Number(dto.amount) || 0);
     if (dto.active !== undefined) data.active = !!dto.active;
     if (dto.notes !== undefined) data.notes = text(dto.notes, 300);
+    if (refs.formId !== undefined) data.formId = refs.formId;
+    if (refs.bankAccountId !== undefined) data.bankAccountId = refs.bankAccountId;
     const next = await this.prisma.intakeLink.update({ where: { id }, data });
     await this.audit.record({ actorId: user?.id, action: 'intake.link.update', entityType: 'intake_link', entityId: id, before: row, after: next });
     return next;
@@ -141,8 +285,13 @@ export class IntakeService {
        در `SurveyService.attachSource` است تا یک جا بماند. */
     await this.survey.attachSource(patientId, dto.referralSourceId, dto.referralNote);
 
+    /* ⚠️ ثبت‌نامِ نیمه‌کاره فقط **روی همین لینک** ادامه پیدا می‌کند.
+       نسخهٔ قبلی فقط `patientId` را می‌سنجید: بیماری که فرمِ لینکِ A را نیمه‌کاره
+       رها کرده بود و بعد روی لینکِ B می‌زد، ثبت‌نامِ A را تحویل می‌گرفت — با
+       مبلغِ A. تا دیروز فقط قیمت غلط می‌شد؛ حالا که لینک فرم دارد، **پرسش‌نامهٔ
+       اشتباه** هم به بیمار داده می‌شود، باز هم بی‌هیچ خطایی. */
     const open = await this.prisma.intakeSubmission.findFirst({
-      where: { patientId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] } },
+      where: { patientId, linkId: link.id, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] } },
       orderBy: { id: 'desc' },
     });
     if (open) return this.publicView(open.token);
@@ -153,6 +302,8 @@ export class IntakeService {
         linkId: link.id,
         patientId,
         amount: link.amount,
+        /* عکسِ لحظه‌ای از فرمِ لینک — به همان دلیلی که `amount` کپی می‌شود. */
+        formId: link.formId,
         status: 'pending_fill',
         data: { firstName, lastName, nationalId, phone, address: text(dto.address, 300), birthDate: dto.birthDate ?? null },
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
@@ -169,11 +320,19 @@ export class IntakeService {
    */
   async publicView(token: string) {
     const row = await this.expireIfDue(token);
+    /* ⚠️ حساب از **لینکِ همین ثبت‌نام** خوانده می‌شود، نه از خودِ ثبت‌نام.
+       عمداً snapshot نشد (برخلافِ `amount` و `formId`): اگر حسابی بسته شود،
+       فیشِ بیمار باید به حسابِ تازه برود — نه به حسابی که موقعِ شروعِ فرم
+       انتخاب شده بود و حالا دیگر پول نمی‌گیرد. */
+    const link = await this.prisma.intakeLink.findUnique({
+      where: { id: row.linkId },
+      select: { bankAccountId: true },
+    });
     return {
       // ⚠️ بدونِ این، بیمار مبلغ را می‌بیند ولی نمی‌داند **به کجا** بریزد —
       //    و فیشی که آپلود می‌کرد به حسابِ ما نبود. فقط حساب‌هایی که ادمین
       //    صریحاً برای فرمِ عمومی علامت زده، و فقط فیلدهای لازمِ واریز.
-      payTo: await this.payTo(),
+      payTo: await this.payTo(link?.bankAccountId ?? null),
       token: row.token,
       status: row.status,
       statusLabel: INTAKE_LABELS[row.status] ?? row.status,
@@ -196,13 +355,36 @@ export class IntakeService {
    * می‌شود، پس فهرست از `showOnIntake` می‌آید نه از «همهٔ حساب‌های فعال»:
    * حسابِ شخصیِ شریک نباید روی اینترنت برود. `partnerId` و یادداشت هم
    * برنمی‌گردند — بیمار فقط به نام و شماره احتیاج دارد.
+   *
+   * ⚠️ **`showOnIntake` دوباره این‌جا سنجیده می‌شود، حتی وقتی لینک حساب دارد.**
+   * `resolveLinkRefs` هنگامِ ساختِ لینک سنجیده بود، ولی ادمین می‌تواند فردا
+   * حساب را از فرمِ عمومی بردارد؛ اگر این‌جا دوباره نمی‌سنجیدیم، آن «برداشتن»
+   * روی لینک‌های ساخته‌شده هیچ اثری نداشت — یک دروازهٔ امنیتی که فقط یک بار
+   * قفل می‌شود، قفل نیست.
+   *
+   * ⚠️ **fallback به فهرستِ سراسری اجباری است.** همهٔ لینک‌های موجود
+   * `bankAccountId = null` دارند؛ بدونِ این، همین یک تغییر شمارهٔ حساب را از
+   * روی **تمام** فرم‌های امروز برمی‌داشت و بیمار به‌جای شماره، هشدارِ «شمارهٔ
+   * حسابی تنظیم نشده» می‌دید — بدونِ خطا، بدونِ لاگ، فقط ثبت‌نامِ صفر.
    */
-  private async payTo() {
-    const rows = await this.prisma.bankAccount.findMany({
-      where: { active: true, showOnIntake: true },
-      orderBy: { id: 'asc' },
-      select: { id: true, ownerName: true, bankName: true, cardNumber: true, iban: true },
-    });
+  private async payTo(bankAccountId: number | null) {
+    const where = bankAccountId
+      ? { id: bankAccountId, active: true, showOnIntake: true }
+      : { active: true, showOnIntake: true };
+    const select = {
+      id: true, ownerName: true, bankName: true,
+      accountNumber: true, cardNumber: true, iban: true,
+    };
+    const rows = await this.prisma.bankAccount.findMany({ where, orderBy: { id: 'asc' }, select });
+    /* حسابِ انتخاب‌شده بسته یا از فرمِ عمومی برداشته شده → به فهرستِ سراسری
+       برگرد، وگرنه بیمار با فرمی روبه‌رو می‌شود که هیچ راهِ پرداختی ندارد. */
+    if (bankAccountId && rows.length === 0) {
+      return this.prisma.bankAccount.findMany({
+        where: { active: true, showOnIntake: true },
+        orderBy: { id: 'asc' },
+        select,
+      });
+    }
     return rows;
   }
 

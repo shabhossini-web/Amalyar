@@ -138,6 +138,29 @@
   color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25);
 }
 
+/* ── ویرایشِ درجای شماره‌های حساب ──
+   ⚠️ `.ac-row` یک flexِ تک‌ردیفه است؛ بدونِ شکستنِ ردیف، کادرِ ویرایش کنارِ نام
+   فشرده می‌شد و ورودی‌ها به چند پیکسل می‌رسیدند. کلاسِ صریح روی خودِ ردیف
+   گذاشته می‌شود نه `:has()` — پشتیبانیِ `:has` روی وب‌ویوهای قدیمیِ اندروید
+   تضمینی نیست و شکستش این‌جا **بی‌صدا** است. */
+.ac-row.editing { flex-wrap: wrap; align-items: flex-start; }
+.ac-edit {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
+  color: rgba(255, 255, 255, .72); background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .14);
+}
+.ac-edit:hover:not(:disabled) { color: #fff; background: rgba(255, 255, 255, .1); }
+.ac-edit:disabled { opacity: .5; cursor: default; }
+.ac-editbox { flex: 1 1 100%; margin-block-start: 4px; }
+.ac-editacts { display: flex; gap: 8px; margin-block-start: 9px; }
+.ac-editacts .ac-submit { width: auto; padding: 9px 18px; }
+.ac-ghost {
+  padding: 9px 16px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
+  color: rgba(255, 255, 255, .7); background: transparent; border: 1px solid rgba(255, 255, 255, .16);
+}
+.ac-ghost:disabled { opacity: .5; cursor: default; }
+
 .ac-prow { display: flex; align-items: center; gap: 8px; margin-block-end: 8px; }
 .ac-prow input {
   padding: 10px; border-radius: 11px; font: inherit; font-size: 13px;

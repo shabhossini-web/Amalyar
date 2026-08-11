@@ -35,6 +35,14 @@
 }
 .ia-link.off { opacity: .5; }
 .ia-link em, .ia-link i { font-style: normal; font-size: 10.5px; color: var(--text3); }
+/* نشانِ فرم و حساب روی ردیفِ لینک — تا دو لینک از هم قابلِ تفکیک باشند. */
+.ia-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 99px;
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1);
+}
+/* حسابی که دیگر روی فرمِ بیمار نشان داده نمی‌شود — ادمین باید ببیند، وگرنه
+   یک نامِ حساب روی ردیف است و هیچ شماره‌ای روی فرم. */
+.ia-chip.warn { color: #fbbf24; background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .3); }
 .ia-link button {
   font: inherit; font-size: 10.5px; cursor: pointer; padding: 2px 7px; border-radius: 8px;
   color: var(--text2); background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .13);
@@ -125,6 +133,10 @@
 }
 .ia-field select option { background: #14103a; }
 .ia-field input:focus, .ia-field select:focus { border-color: rgba(var(--brand-2-rgb), .6); }
+/* راهنمای زیرِ فیلد و «به‌حروف»ِ مبلغ — قانون ۱۳ می‌گوید هر ورودیِ مبلغ باید
+   عددش را به حروف هم نشان بدهد، چون یک صفرِ اضافه در رقم دیده نمی‌شود. */
+.ia-field .ia-hint { font-size: 10.5px; color: var(--text3); line-height: 1.7; }
+.ia-field .ia-words { font-size: 10.5px; color: var(--brand-2); }
 
 .ia-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
@@ -139,6 +151,10 @@
   .ia-grid { grid-template-columns: 1fr; }
   .ia-acts { flex-direction: column; }
   .ia-ok { min-width: 0; }
+  /* ⚠️ ردیفِ لینک با آمدنِ نشانِ فرم و حساب دو چیپِ دیگر گرفت و روی موبایل
+     بدجور می‌شکست. هر لینک یک بلوکِ کامل می‌شود تا چیپ‌ها داخلِ خودش بپیچند
+     نه بینِ دو لینک. */
+  .ia-link { flex-wrap: wrap; width: 100%; border-radius: 12px; }
 }
 
 /* ── فیشِ واریزی ──

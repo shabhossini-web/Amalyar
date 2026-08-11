@@ -74,6 +74,7 @@ export class LedgerService {
       data: {
         ownerName,
         bankName: text(dto.bankName), cardNumber: text(dto.cardNumber), iban: text(dto.iban),
+        accountNumber: text(dto.accountNumber),
         partnerId: dto.partnerId ? Number(dto.partnerId) : null,
         showOnIntake: !!dto.showOnIntake,
         notes: text(dto.notes),
@@ -81,6 +82,38 @@ export class LedgerService {
     });
     await this.audit.record({ actorId: user?.id, action: 'bank.create', entityType: 'bank_account', entityId: row.id, after: row });
     return row;
+  }
+
+  /**
+   * ویرایشِ شماره‌های یک حساب.
+   *
+   * ⚠️ **ممیزی می‌شود، چون تغییرِ این فیلدها یعنی تغییرِ جایی که به بیمار گفته
+   * می‌شود پول بفرستد.** یک شمارهٔ کارتِ عوض‌شده هیچ خطایی نمی‌سازد و در هیچ
+   * گزارشی دیده نمی‌شود؛ فقط پول جای دیگری می‌رود.
+   *
+   * ⚠️ فقط کلیدهای **آمده** نوشته می‌شوند: فرمی که کلِ آبجکت را می‌فرستد نباید
+   * فیلدهای نافرستاده را با `null` پاک کند.
+   */
+  async patchAccount(id: number, dto: any, user: any) {
+    const row = await this.prisma.bankAccount.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('حساب یافت نشد');
+    const data: any = {};
+    if (dto.ownerName !== undefined) {
+      const ownerName = String(dto.ownerName ?? '').trim();
+      if (ownerName.length < 2) throw new BadRequestException('نامِ صاحبِ حساب کوتاه است');
+      data.ownerName = ownerName;
+    }
+    for (const k of ['bankName', 'cardNumber', 'iban', 'accountNumber', 'notes'] as const) {
+      if (dto[k] !== undefined) data[k] = text(dto[k]);
+    }
+    if (dto.partnerId !== undefined) data.partnerId = dto.partnerId ? Number(dto.partnerId) : null;
+    if (Object.keys(data).length === 0) return row;
+    const next = await this.prisma.bankAccount.update({ where: { id }, data });
+    await this.audit.record({
+      actorId: user?.id, action: 'bank.update', entityType: 'bank_account', entityId: id,
+      before: row, after: next,
+    });
+    return next;
   }
 
   /**

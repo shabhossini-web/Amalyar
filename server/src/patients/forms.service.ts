@@ -303,10 +303,11 @@ export class FormsService {
     const all = await this.prisma.formDef.findMany({ select: { id: true, visitKind: true } });
     const keep: number[] = [];
     for (const f of all) {
-      const used = f.visitKind
-        ? await this.prisma.visit.count({ where: { kind: f.visitKind } })
-        : 0;
-      if (used > 0) keep.push(f.id);
+      /* ⚠️ همان `formUsage`ِ `removeForm` و نه یک شمارشِ دوم: فرمی که یک لینکِ
+         زنده می‌فرستدش هم «استفاده‌شده» است. بدونِ این، «بازگرداندن به قالب»
+         با FKِ `Restrict` روبه‌رو می‌شد و با یک خطای خامِ دیتابیس می‌ترکید. */
+      const { total } = await this.formUsage(f);
+      if (total > 0) keep.push(f.id);
     }
     await this.prisma.formDef.deleteMany({ where: { id: { notIn: keep } } });
     await this.prisma.formDef.updateMany({ where: { id: { in: keep } }, data: { active: false } });
@@ -572,18 +573,37 @@ export class FormsService {
    * می‌ماندند. شکلِ خروجی `{ok, deactivated}` است چون کلاینتِ این پروژه
    * مستقیم به همان فیلد نگاه می‌کند تا پیام را انتخاب کند.
    */
+  /**
+   * «آیا این فرم استفاده می‌شود؟» — دو جور استفاده، و هر دو باید شمرده شوند.
+   *
+   * ⚠️ **تا دیروز فقط مراجعه شمرده می‌شد و این یک حفرهٔ بی‌صدا بود.** شمارش
+   * `visit.count({ kind: row.visitKind })` است و فرمِ `scope: 'intake'`
+   * اصلاً `visitKind` ندارد — پس همیشه صفر می‌داد و شاخهٔ **حذفِ سخت** اجرا
+   * می‌شد. با آمدنِ `IntakeLink.formId`، حذفِ چنین فرمی یعنی لینکِ زنده به
+   * مسیرِ هاردکدِ قدیمی برمی‌گشت: بدونِ خطا، بدونِ ردِ audit، بدونِ هیچ تغییری
+   * در فهرستِ ادمین. حالا FKِ `Restrict` هم آخرین سد است، ولی سدِ اول همین‌جاست
+   * چون فقط این‌جا می‌شود پیامِ فارسیِ درست داد.
+   */
+  private async formUsage(row: { id: number; visitKind: string | null }) {
+    const [visits, links] = await Promise.all([
+      row.visitKind ? this.prisma.visit.count({ where: { kind: row.visitKind } }) : Promise.resolve(0),
+      this.prisma.intakeLink.count({ where: { formId: row.id } }),
+    ]);
+    return { visits, links, total: visits + links };
+  }
+
   async removeForm(id: number) {
     const row = await this.prisma.formDef.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('فرم پیدا نشد');
-    const used = row.visitKind
-      ? await this.prisma.visit.count({ where: { kind: row.visitKind } })
-      : 0;
-    if (used > 0) {
+    const { visits, links, total } = await this.formUsage(row);
+    if (total > 0) {
       await this.prisma.formDef.update({ where: { id }, data: { active: false } });
-      return { ok: true, deactivated: true, used };
+      /* `used` برای سازگاری با کلاینتِ فعلی می‌ماند؛ `visits`/`links` تازه‌اند
+         تا پیام بتواند بگوید **چرا** حذف نشد. */
+      return { ok: true, deactivated: true, used: total, visits, links };
     }
     await this.prisma.formDef.delete({ where: { id } });
-    return { ok: true, deactivated: false, used: 0 };
+    return { ok: true, deactivated: false, used: 0, visits: 0, links: 0 };
   }
 
   // ── اعتبارسنجی و تفکیکِ مقادیر ────────────────────────────────────────────

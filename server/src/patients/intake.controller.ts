@@ -57,17 +57,30 @@ class CodePatchDto {
   @IsOptional() @IsString() @MaxLength(200) note?: string;
 }
 
+/**
+ * ⚠️ `formId` و `bankAccountId` **باید** این‌جا اعلام شوند وگرنه
+ * `ValidationPipe({ whitelist: true })` در `main.ts:25` بی‌صدا دورشان می‌ریزد و
+ * POST با ۲۰۱ برمی‌گردد در حالی که ستون خالی مانده. همان تلهٔ `ApproveDto`
+ * (خطِ ۸۱ پایین‌تر) — دستِ‌کم دو بار در همین مخزن رخ داده.
+ *
+ * ⚠️ `@Min(0)` و نه `@Min(1)`: صفر یعنی «پاکش کن» و سرویس همان را `null`
+ * می‌کند. بدونِ آن، ادمین می‌توانست فرم را انتخاب کند ولی هرگز برندارد.
+ */
 class LinkCreateDto {
-  @IsString() @MinLength(2) @MaxLength(120) title!: string;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) amount?: number;
+  @IsString() @MinLength(2, { message: 'عنوانِ لینک کوتاه است' }) @MaxLength(120) title!: string;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'مبلغ باید عدد باشد' }) @Min(0) amount?: number;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'فرمِ انتخاب‌شده نامعتبر است' }) @Min(0) formId?: number;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'حسابِ انتخاب‌شده نامعتبر است' }) @Min(0) bankAccountId?: number;
 }
 
 class LinkPatchDto {
-  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) title?: string;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) amount?: number;
+  @IsOptional() @IsString() @MinLength(2, { message: 'عنوانِ لینک کوتاه است' }) @MaxLength(120) title?: string;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'مبلغ باید عدد باشد' }) @Min(0) amount?: number;
   @IsOptional() @IsBoolean() active?: boolean;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'فرمِ انتخاب‌شده نامعتبر است' }) @Min(0) formId?: number;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'حسابِ انتخاب‌شده نامعتبر است' }) @Min(0) bankAccountId?: number;
 }
 
 class ApproveDto {
@@ -151,6 +164,21 @@ export class IntakeController {
   @Get('links')
   links() {
     return this.intake.listLinks();
+  }
+
+  /**
+   * فرم‌ها و حساب‌های قابلِ انتخاب برای یک لینک.
+   *
+   * ⚠️ عمداً زیرِ `@Feature('formgen')` و مجوزِ `intake.read` است، نه
+   * `forms.read`/`accounting.read`: نصبی که پلنِ حسابداری ندارد از
+   * `GET /bank-accounts` ۴۰۳ می‌گیرد و انتخابگر برای همیشه خالی می‌ماند —
+   * بدونِ هیچ پیامی. حساب‌ها هم فقط **نام** برمی‌گردانند، نه شماره.
+   */
+  @RequirePermissions('intake.read')
+  @Get('link-options')
+  async linkOptions() {
+    const [forms, banks] = await Promise.all([this.intake.formsForLinks(), this.intake.banksForLinks()]);
+    return { forms, banks };
   }
 
   @RequirePermissions('intake.manage')

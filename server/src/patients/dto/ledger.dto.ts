@@ -12,9 +12,38 @@ export class BankAccountDto {
   @IsOptional() @IsString() @MaxLength(60) bankName?: string;
   @IsOptional() @IsString() @MaxLength(24) cardNumber?: string;
   @IsOptional() @IsString() @MaxLength(34) iban?: string;
+  /// ⚠️ سقف مثلِ شبا (۳۴) و نه مثلِ کارت (۲۴): طولِ شمارهٔ حساب بینِ بانک‌های
+  /// ایران یکسان نیست و سقفِ تنگ یک ۴۰۰ می‌سازد که کاربر دلیلش را نمی‌فهمد.
+  @IsOptional() @IsString() @MaxLength(34) accountNumber?: string;
   @IsOptional() @IsString() @MaxLength(200) notes?: string;
 
   /// اگر حسابِ شخصیِ یک شریک است.
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'شریکِ انتخابی نامعتبر است' })
+  partnerId?: number;
+}
+
+/**
+ * ویرایشِ فیلدهای یک حسابِ موجود.
+ *
+ * ⚠️ تا امروز فقط ساخت، تغییرِ «نمایش در فرمِ بیمار» و غیرفعال‌سازی وجود داشت —
+ * هیچ راهی برای اصلاحِ خودِ شماره‌ها نبود. یعنی هر حسابی که از قبل در دیتابیس
+ * است تا ابد `accountNumber` خالی می‌ماند و کاربر «درستش می‌کند» با ساختنِ
+ * حسابِ تکراری — که انتسابِ خزانه را دو تکه می‌کند (پرداخت، هزینه، پرداختی و
+ * چک همه با `bankAccountId` گروه می‌شوند).
+ *
+ * ⚠️ `showOnIntake` عمداً این‌جا **نیست**: دروازهٔ افشای عمومی endpointِ
+ * ممیزی‌شدهٔ خودش را دارد (`PATCH /bank-accounts/:id/public`) و قاطی‌کردنش با
+ * یک ویرایشِ معمولی یعنی روزی کسی ناخواسته حسابی را روی اینترنت می‌برد.
+ */
+export class BankAccountPatchDto {
+  @IsOptional() @IsString() @MinLength(2, { message: 'نامِ صاحبِ حساب کوتاه است' }) @MaxLength(80)
+  ownerName?: string;
+
+  @IsOptional() @IsString() @MaxLength(60) bankName?: string;
+  @IsOptional() @IsString() @MaxLength(24) cardNumber?: string;
+  @IsOptional() @IsString() @MaxLength(34) iban?: string;
+  @IsOptional() @IsString() @MaxLength(34) accountNumber?: string;
+  @IsOptional() @IsString() @MaxLength(200) notes?: string;
   @IsOptional() @Type(() => Number) @IsInt({ message: 'شریکِ انتخابی نامعتبر است' })
   partnerId?: number;
 }

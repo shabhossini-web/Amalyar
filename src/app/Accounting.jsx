@@ -5,7 +5,7 @@ import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './accounting.css';
-import { Alert, Bank, Book, Calendar, Chart, ChevronEnd, Doctor, Money, Plus, Users } from '../ui/icons.jsx';
+import { Alert, Bank, Book, Calendar, Chart, ChevronEnd, Doctor, Money, Pencil, Plus, Users } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import { useStagger } from '../ui/stagger.js';
 
@@ -361,8 +361,11 @@ function Expenses({ onToast }) {
 function Banks({ onToast }) {
   const [rows, setRows] = useState([]);
   const [partners, setPartners] = useState([]);
-  const [f, setF] = useState({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '', showOnIntake: false });
+  const [f, setF] = useState({ ownerName: '', bankName: '', cardNumber: '', accountNumber: '', iban: '', partnerId: '', showOnIntake: false });
   const [busy, setBusy] = useState(false);
+  /* شناسهٔ حسابی که شماره‌هایش در حالِ ویرایش است — تا امروز هیچ راهی برای
+     اصلاحِ یک حسابِ ثبت‌شده نبود و کاربر با ساختنِ حسابِ تکراری «درستش می‌کرد». */
+  const [editing, setEditing] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -381,11 +384,12 @@ function Banks({ onToast }) {
         body: {
           ownerName: f.ownerName.trim(), bankName: f.bankName.trim() || undefined,
           cardNumber: f.cardNumber.trim() || undefined, iban: f.iban.trim() || undefined,
+          accountNumber: f.accountNumber.trim() || undefined,
           partnerId: f.partnerId ? Number(f.partnerId) : undefined,
           showOnIntake: f.showOnIntake,
         },
       });
-      setF({ ownerName: '', bankName: '', cardNumber: '', iban: '', partnerId: '', showOnIntake: false });
+      setF({ ownerName: '', bankName: '', cardNumber: '', accountNumber: '', iban: '', partnerId: '', showOnIntake: false });
       await load(); onToast('حساب اضافه شد ✓');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
@@ -402,6 +406,11 @@ function Banks({ onToast }) {
           </label>
           <label className="ac-field"><span>شمارهٔ کارت</span>
             <input dir="ltr" value={f.cardNumber} onChange={(e) => setF((s) => ({ ...s, cardNumber: e.target.value }))} />
+          </label>
+          {/* ⚠️ شمارهٔ حساب سومین شمارهٔ متفاوت است، نه هم‌معنیِ کارت یا شبا:
+              بیمارِ شعبه‌رو فقط با همین می‌تواند واریز کند. */}
+          <label className="ac-field"><span>شمارهٔ حساب</span>
+            <input dir="ltr" value={f.accountNumber} onChange={(e) => setF((s) => ({ ...s, accountNumber: e.target.value }))} />
           </label>
           <label className="ac-field"><span>شبا</span>
             <input dir="ltr" value={f.iban} onChange={(e) => setF((s) => ({ ...s, iban: e.target.value }))} placeholder="IR..." />
@@ -427,12 +436,36 @@ function Banks({ onToast }) {
       <div className="ac-list">
         {rows.length === 0 && <div className="ac-empty">حسابی ثبت نشده</div>}
         {rows.map((b) => (
-          <article key={b.id} className={`ac-row${b.active ? '' : ' off'}`}>
+          <article key={b.id} className={`ac-row${b.active ? '' : ' off'}${editing === b.id ? ' editing' : ''}`}>
             <div className="ac-row-main">
               <b>{b.ownerName}{b.bankName ? ` — ${b.bankName}` : ''}</b>
-              <small dir="ltr">{b.iban || b.cardNumber || '—'}</small>
+              {/* هر سه شماره، چون هر کدام کاربردِ متفاوتی دارد و «یکی‌شان کافی
+                  است» یعنی ادمین نمی‌فهمد کدام یکی جا مانده. */}
+              <small dir="ltr">{[b.accountNumber, b.cardNumber, b.iban].filter(Boolean).join(' · ') || '—'}</small>
               {b.partner && <small>حسابِ شخصیِ {b.partner.name}</small>}
             </div>
+
+            {editing === b.id ? (
+              <AccountEdit
+                row={b}
+                busy={busy}
+                onCancel={() => setEditing(null)}
+                onSave={async (body) => {
+                  setBusy(true);
+                  try {
+                    await api(`/bank-accounts/${b.id}`, { method: 'PATCH', body });
+                    setEditing(null);
+                    await load();
+                    onToast('حساب به‌روز شد ✓');
+                  } catch (err) { onToast(err.message); } finally { setBusy(false); }
+                }}
+              />
+            ) : (
+              <button type="button" className="ac-edit" disabled={busy} onClick={() => setEditing(b.id)}>
+                <Pencil width="14" height="14" /> ویرایشِ شماره‌ها
+              </button>
+            )}
+
             {/* حساب‌های موجود هم باید بتوانند عمومی شوند — وگرنه فقط حسابِ
                 تازه‌ساخته روی فرمِ بیمار می‌رفت. */}
             <label className="ac-pub row" title="روی فرمِ ثبت‌نامِ بیمار">
@@ -450,6 +483,62 @@ function Banks({ onToast }) {
         ))}
       </div>
     </>
+  );
+}
+
+/**
+ * ویرایشِ درجای شماره‌های یک حساب.
+ *
+ * ⚠️ کامپوننتِ **بیرونی** و نه تعریف‌شده داخلِ `Banks`: کامپوننتی که در بدنهٔ
+ * render تعریف شود هویتش هر بار عوض می‌شود و React به‌جای به‌روزرسانی،
+ * ورودی‌ها را از نو mount می‌کند — یعنی با هر حرفِ تایپ‌شده فوکوس می‌پرد.
+ * (`ApproveSheet.Sel` در `Intake.jsx` دقیقاً همین اشتباه را دارد.)
+ *
+ * ⚠️ «نمایش روی فرمِ بیمار» عمداً این‌جا نیست: آن دروازهٔ افشای عمومی است و
+ * endpointِ ممیزی‌شدهٔ خودش را دارد.
+ */
+function AccountEdit({ row, busy, onCancel, onSave }) {
+  const [e, setE] = useState({
+    ownerName: row.ownerName ?? '',
+    bankName: row.bankName ?? '',
+    cardNumber: row.cardNumber ?? '',
+    accountNumber: row.accountNumber ?? '',
+    iban: row.iban ?? '',
+  });
+  const set = (k) => (ev) => setE((s) => ({ ...s, [k]: ev.target.value }));
+
+  return (
+    <div className="ac-editbox">
+      <div className="ac-grid">
+        <label className="ac-field"><span>صاحبِ حساب</span>
+          <input value={e.ownerName} onChange={set('ownerName')} disabled={busy} />
+        </label>
+        <label className="ac-field"><span>بانک</span>
+          <input value={e.bankName} onChange={set('bankName')} disabled={busy} />
+        </label>
+        <label className="ac-field"><span>شمارهٔ کارت</span>
+          <input dir="ltr" value={e.cardNumber} onChange={set('cardNumber')} disabled={busy} />
+        </label>
+        <label className="ac-field"><span>شمارهٔ حساب</span>
+          <input dir="ltr" value={e.accountNumber} onChange={set('accountNumber')} disabled={busy} />
+        </label>
+        <label className="ac-field"><span>شبا</span>
+          <input dir="ltr" value={e.iban} onChange={set('iban')} disabled={busy} placeholder="IR..." />
+        </label>
+      </div>
+      <div className="ac-editacts">
+        <button type="button" className="ac-submit" disabled={busy} onClick={() => onSave({
+          ownerName: e.ownerName.trim(),
+          /* رشته‌ی خالی فرستاده می‌شود نه حذف‌شده: «پاکش کن» یک خواستهٔ واقعی
+             است و سرور `text()` آن را به `null` تبدیل می‌کند. */
+          bankName: e.bankName.trim(),
+          cardNumber: e.cardNumber.trim(),
+          accountNumber: e.accountNumber.trim(),
+          iban: e.iban.trim(),
+        })}>ذخیره</button>
+        <button type="button" className="ac-ghost" disabled={busy} onClick={onCancel}>انصراف</button>
+      </div>
+    </div>
   );
 }
 

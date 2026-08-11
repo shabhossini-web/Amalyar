@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
-import { Alert, Back, CheckCircle, Close, Copy, Doctor, Hospital, Plus, Search } from '../ui/icons.jsx';
+import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Form, Hospital, Plus, Search } from '../ui/icons.jsx';
+import { group3, numToWordsFa, parseMoney } from '../lib/money.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
@@ -72,6 +73,15 @@ export default function IntakeAdmin() {
     catch { setToast(url); }
   };
 
+  /** روشن/خاموشِ لینک — با گزارشِ خطا، نه سکوت. */
+  const toggleLink = async (l) => {
+    try {
+      await api(`/intake/links/${l.id}`, { method: 'PATCH', body: { active: !l.active } });
+      setToast(l.active ? 'لینک غیرفعال شد' : 'لینک فعال شد');
+      await load();
+    } catch (e) { setToast(e.message); }
+  };
+
   return (
     <div className="ia">
       <div className="ia-bg" aria-hidden="true" />
@@ -90,9 +100,21 @@ export default function IntakeAdmin() {
           <span key={l.id} className={`ia-link${l.active ? '' : ' off'}`}>
             {l.title}
             <em>{faNum(l.amount)} تومان</em>
+            {/* ⚠️ بدونِ نشانِ فرم و حساب، دو لینک از هم قابلِ تفکیک نیستند و
+                ادمین هیچ راهی ندارد بفهمد حسابِ اشتباهی انتخاب کرده. */}
+            {l.formTitle && <i className="ia-chip"><Form width="12" height="12" /> {l.formTitle}</i>}
+            {l.bankLabel && (
+              <i className={`ia-chip${l.bankHidden ? ' warn' : ''}`}
+                 title={l.bankHidden ? 'این حساب دیگر روی فرمِ بیمار نشان داده نمی‌شود' : undefined}>
+                <Bank width="12" height="12" /> {l.bankLabel}
+              </i>
+            )}
             <i>{faNum(l.submissionCount)} ثبت‌نام</i>
-            <button type="button" onClick={() => copyLink(l.token)} title="کپیِ نشانی"><Copy size={13} /></button>
-            <button type="button" onClick={() => api(`/intake/links/${l.id}`, { method: 'PATCH', body: { active: !l.active } }).then(load)}>
+            <button type="button" onClick={() => copyLink(l.token)} title="کپیِ نشانی"><Copy width="13" height="13" /></button>
+            {/* ⚠️ از راهِ `toggleLink` و نه `api(...).then(load)`: نسخهٔ قبلی
+                `catch` نداشت، پس یک ۴۰۳ ردیف را بی‌تغییر می‌گذاشت و فقط یک
+                unhandled rejection در کنسول می‌ریخت. */}
+            <button type="button" onClick={() => toggleLink(l)}>
               {l.active ? 'غیرفعال' : 'فعال'}
             </button>
           </span>
@@ -350,16 +372,58 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
   );
 }
 
+/**
+ * ساختِ لینکِ ثبت‌نام — **جایی که «چه فرمی؟» بالاخره جواب می‌گیرد.**
+ *
+ * ترتیبِ پرسش‌ها همان است که کاربر خواست: نام → فرم → (اگر فرم باکسِ پرداخت
+ * دارد) حساب → ساخت. انتخابگرِ حساب عمداً **مشروط** است: فرمی که پرداخت ندارد
+ * حساب هم لازم ندارد، و نشان‌دادنش فقط یک انتخابِ بی‌مصرف سرِ راه می‌گذارد.
+ */
 function LinkSheet({ onClose, onDone }) {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
+  const [formId, setFormId] = useState('');
+  const [bankId, setBankId] = useState('');
+  const [opts, setOpts] = useState(null); // {forms, banks} — null یعنی هنوز نیامده
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    api('/intake/link-options')
+      .then((d) => {
+        if (!alive) return;
+        setOpts(d);
+        /* یک فرم که بیشتر نیست، انتخابش را به کاربر تحمیل نکن — نصبِ تازه
+           دقیقاً یک فرمِ ثبت‌نام دارد و «— انتخاب کنید —»ِ تک‌گزینه‌ای فقط
+           یک کلیکِ اضافه است. */
+        if (d.forms?.length === 1) setFormId(String(d.forms[0].id));
+      })
+      .catch(() => { if (alive) setOpts({ forms: [], banks: [] }); });
+    return () => { alive = false; };
+  }, []);
+
+  const picked = opts?.forms?.find((f) => String(f.id) === formId) ?? null;
+  const needsBank = !!picked?.hasPayment;
+  const toman = parseMoney(amount);
 
   const save = async () => {
     setBusy(true); setErr('');
     try {
-      await api('/intake/links', { method: 'POST', body: { title, amount: Number(amount) || 0 } });
+      await api('/intake/links', {
+        method: 'POST',
+        body: {
+          title: title.trim(),
+          /* ⚠️ `parseMoney` و نه `Number(amount)`: کاربرِ فارسی «۵۰۰۰۰۰» تایپ
+             می‌کند و `Number('۵۰۰۰۰۰')` برابرِ NaN است — `|| 0` آن را به صفر
+             تبدیل می‌کرد و لینک با «۰ تومان» ساخته می‌شد، با پیامِ موفقیت و
+             بدونِ هیچ خطایی. جداکنندهٔ سه‌رقمی هم همان بلا را می‌آورد. */
+          amount: toman,
+          /* صفر یعنی «هیچ‌کدام» و سرور همان را `null` می‌کند. */
+          formId: formId ? Number(formId) : 0,
+          bankAccountId: needsBank && bankId ? Number(bankId) : 0,
+        },
+      });
       onDone('لینک ساخته شد ✓');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
@@ -372,13 +436,48 @@ function LinkSheet({ onClose, onDone }) {
       </header>
       <div className="ia-sheet-body">
         <label className="ia-field">
-          <span>عنوان</span>
+          <span>نامِ لینک</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} placeholder="ثبت‌نامِ نورومانیتورینگ" />
         </label>
+
         <label className="ia-field">
           <span>مبلغ (تومان)</span>
-          <input dir="ltr" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} />
+          {/* ⚠️ گروه‌بندیِ سه‌رقمی در **blur** نه حینِ تایپ: روی Gboardِ اندروید
+              بازنویسیِ مقدار وسطِ تایپ مکان‌نما را می‌پراند (قانون ۱۳). */}
+          <input
+            dir="ltr" inputMode="numeric" value={amount} disabled={busy}
+            onChange={(e) => setAmount(e.target.value)}
+            onBlur={() => setAmount(group3(amount))}
+          />
+          {toman > 0 && <small className="ia-words">{numToWordsFa(toman)} تومان</small>}
         </label>
+
+        <label className="ia-field">
+          <span>کدام فرم پر شود؟</span>
+          <select value={formId} onChange={(e) => setFormId(e.target.value)} disabled={busy || !opts}>
+            <option value="">— فرمِ پیش‌فرضِ سامانه —</option>
+            {opts?.forms?.map((f) => <option key={f.id} value={f.id}>{f.title}</option>)}
+          </select>
+          {opts && opts.forms.length === 0 && (
+            <small className="ia-hint">هنوز فرمِ ثبت‌نامی ساخته نشده — در فرم‌ساز یکی بسازید.</small>
+          )}
+        </label>
+
+        {needsBank && (
+          <label className="ia-field">
+            <span>واریز به کدام حساب؟</span>
+            <select value={bankId} onChange={(e) => setBankId(e.target.value)} disabled={busy}>
+              <option value="">— همهٔ حساب‌های علامت‌خورده —</option>
+              {opts?.banks?.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+            <small className="ia-hint">
+              {opts?.banks?.length
+                ? 'شماره‌های همین حساب روی باکسِ پرداختِ فرم نشان داده می‌شود.'
+                : 'هیچ حسابی برای نمایش در فرمِ بیمار علامت نخورده — اول در حسابداری علامتش بزنید.'}
+            </small>
+          </label>
+        )}
+
         {err && <p className="ia-note warn">{err}</p>}
         <button type="button" className="ia-ok" disabled={busy || title.trim().length < 2} onClick={save}>ساختِ لینک</button>
       </div>

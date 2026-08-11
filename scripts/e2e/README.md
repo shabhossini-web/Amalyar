@@ -39,6 +39,8 @@ node scripts/e2e/forms-api.mjs        # رنگ، صفحه، دو نوعِ تاز
 node scripts/e2e/forms-validate.mjs   # اجباری‌بودن از مسیرِ واقعیِ ثبتِ مراجعه
 node scripts/e2e/forms-builder.mjs    # فرم‌ساز در مرورگرِ واقعی
 node scripts/e2e/forms-boxes.mjs      # رندرِ باکسِ عکس و پرداخت
+node scripts/e2e/link-form.mjs        # مرحلهٔ ۲ — لینک ← فرم و حساب (API)
+node scripts/e2e/link-builder.mjs     # مرحلهٔ ۲ — سازندهٔ لینک در مرورگر
 ```
 
 ## قاعده‌ها
