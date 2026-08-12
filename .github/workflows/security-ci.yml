@@ -307,7 +307,7 @@ jobs:
           }
           const svc = fs.readFileSync('src/patients/inventory.service.ts', 'utf8');
           /* ⚠️ لنگر روی **جای تعریف** نیست، روی «یک تعریف». فرمول بعداً به
-             `stock-math.ts` رفت تا انبار و دارایی بدونِ حلقهٔ وابستگی از یک
+             \`stock-math.ts\` رفت تا انبار و دارایی بدونِ حلقهٔ وابستگی از یک
              جا بخوانند — چیدمانِ سفت‌تری بود، ولی نگهبانی که به فایلِ قبلی
              چسبیده بود قرمز شد و CI را بابتِ یک بهبود قفل کرد. */
           const math = fs.readFileSync('src/patients/stock-math.ts', 'utf8');
@@ -322,7 +322,7 @@ jobs:
           }
           const move = svc.split('private async move')[1].split(/\n  }/)[0];
           /* ⚠️ لنگر روی **قاعده** است نه املای متغیر: بندِ «موجودی منفی نشود»
-             زمانی `next < 0` نوشته شده بود و بعد به `total < 0` تغییر نام داد.
+             زمانی \`next < 0\` نوشته شده بود و بعد به \`total < 0\` تغییر نام داد.
              نگهبانی که به اسمِ متغیر بچسبد، با هر بازآراییِ بی‌ضرر قرمز
              می‌شود و اعتبارِ خودش را خرج می‌کند. */
           for (const rule of ['FOR UPDATE', 'expires_at', 'serial_no']) {
@@ -524,8 +524,8 @@ jobs:
           if (!/lot.available/.test(ui)) { console.error('UI باید «در دسترس» را از «کل» جدا نشان دهد'); process.exit(1); }
 
           // برگهٔ مصرف: کارِ کارشناسِ سرِ عمل، با مجوز و ماژولِ سبک‌ترِ خودش.
-          /* ⚠️ باز هم همان درس: فهرستِ مجوزها از `permission.guard.ts` به
-             `access-registry.ts` رفت تا هر کلید **برچسبِ فارسی** بگیرد و
+          /* ⚠️ باز هم همان درس: فهرستِ مجوزها از \`permission.guard.ts\` به
+             \`access-registry.ts\` رفت تا هر کلید **برچسبِ فارسی** بگیرد و
              مدیر بتواند ببیند و عوضش کند — تغییری در جهتِ بهتر. نگهبانِ
              چسبیده به فایلِ قدیمی همان بهبود را خطا گرفت. */
           const perms = fs.readFileSync('src/auth/access-registry.ts', 'utf8');
@@ -642,7 +642,7 @@ jobs:
           /* ── تورِ تاریخ ───────────────────────────────────────────────
              ⚠️ **این اشکال خطا نمی‌داد و همان بدترین حالتش بود.** فرمِ عمومیِ
              بیمار مقدارِ تقویمِ شمسی را خام می‌فرستاد؛ سرور
-             `new Date('1405/05/14')` می‌ساخت و آن را سالِ ۱۴۰۵ **میلادی**
+             \`new Date('1405/05/14')\` می‌ساخت و آن را سالِ ۱۴۰۵ **میلادی**
              می‌فهمید. مراجعه با موفقیت ثبت می‌شد و بعد از تقویم و هر گزارشِ
              بازه‌ای غیب بود. */
           const { toDateValue } = require('/tmp/jal/jalali.js');
@@ -665,7 +665,7 @@ jobs:
             console.error('خالی و null باید از هم جدا بمانند'); process.exit(1);
           }
 
-          /* هیچ‌کس دیگر `new Date()` را روی تاریخِ ورودی صدا نزند — تکِ‌نقطهٔ
+          /* هیچ‌کس دیگر \`new Date()\` را روی تاریخِ ورودی صدا نزند — تکِ‌نقطهٔ
              تبدیل همین است. (یک بار سه ستون از یک قاعده جدا افتادند.) */
           const pvc = fs.readFileSync('server/src/patients/patients.service.ts', 'utf8');
           if (/new Date\(dto\.(opDate|birthDate)/.test(pvc)) {
@@ -1753,7 +1753,7 @@ jobs:
           }
           /* ⚠️ نوارِ وسط باید در **همان کادرِ ستون** جای بگیرد. نسخهٔ اول آن را
              هم‌ترازِ کلِ چرخ (شاملِ برچسبِ «ساعت») می‌گذاشت و بلندیِ برچسب را
-             با یک `margin`ِ دستی جبران می‌کرد؛ نتیجه: نوار یک ردیف پایین‌ترِ
+             با یک \`margin\`ِ دستی جبران می‌کرد؛ نتیجه: نوار یک ردیف پایین‌ترِ
              عددِ انتخاب‌شده. عددِ جادویی یعنی همین اشکال با هر تغییرِ فونت
              برمی‌گردد، پس ممنوع است. */
           const css = fs.readFileSync('src/ui/timepick.css', 'utf8');
@@ -1787,7 +1787,7 @@ jobs:
           }
           /* ⚠️ **انحنای استوانه از اسکرول می‌آید، نه از حلقهٔ درگِ دست‌ساز.**
              نمونه‌های آمادهٔ «چرخِ گزینه» برای این ظاهر، اسکرولِ مرورگر را با
-             `touch-action: none` خاموش و با رویدادِ pointer بازسازی می‌کنند —
+             \`touch-action: none\` خاموش و با رویدادِ pointer بازسازی می‌کنند —
              و همان‌جا شتابِ لمس، چرخِ ماوس و کیبورد از دست می‌رود. */
           if (/touch-action:\\s*none/.test(css)) {
             console.error('چرخ نباید اسکرولِ بومی را خاموش کند'); process.exit(1);
@@ -2218,13 +2218,25 @@ jobs:
           if (!svc.includes('private async payTo(')) {
             console.error('نمای عمومیِ فرم باید حسابِ واریز بدهد'); process.exit(1);
           }
-          const payTo = svc.slice(svc.indexOf('private async payTo('), svc.indexOf('private async payTo(') + 600);
+          // ⚠️ مرزِ برش «متدِ بعدی» است نه ۶۰۰ کاراکترِ ثابت. پنجرهٔ ثابت با
+          //    بلندشدنِ متد از رویِ بندِ select رد می‌شد و نگهبان روی کدِ
+          //    کاملاً امن قرمز می‌شد — دقیقاً همان چیزی که رخ داد.
+          const pStart = svc.indexOf('private async payTo(');
+          const pNext = svc.indexOf('\n  private ', pStart + 1);
+          const payTo = svc.slice(pStart, pNext === -1 ? svc.length : pNext);
           if (!/showOnIntake: true/.test(payTo) || !/active: true/.test(payTo)) {
             console.error('فهرستِ واریز فقط حسابِ فعالِ علامت‌خورده باشد'); process.exit(1);
           }
           // ⚠️ **select**ِ صریح، نه شیِ کامل: بدونِ آن یادداشتِ داخلی و شریکِ
           //    صاحبِ حساب هم با یک GETِ بی‌احراز بیرون می‌رفت.
-          if (!/select: \{/.test(payTo)) {
+          //    ⚠️ ادعا روی **هر** findMany است، نه صرفاً بودنِ رشتهٔ 'select: {'.
+          //    شکلِ درستِ دیگری هم هست: فهرستِ فیلدها یک‌بار در متغیر و بعد
+          //    'select' کوتاه‌نویسی شود — که بهتر هم هست، چون دو نسخهٔ فهرست
+          //    نمی‌سازد که روزی از هم جدا بیفتند. نسخهٔ قبلیِ نگهبان همان را
+          //    رد می‌کرد و آدم را به تکرارِ فهرست هل می‌داد.
+          const finds = payTo.match(/findMany\(\{[^;]*?\}\)/gs) || [];
+          if (finds.length === 0) { console.error('payTo باید findMany بزند'); process.exit(1); }
+          if (!finds.every((f) => /select\s*[,:}]/.test(f))) {
             console.error('حسابِ واریز باید select صریح داشته باشد'); process.exit(1);
           }
           for (const leak of ['partnerId', 'notes', 'balance']) {
@@ -2233,7 +2245,11 @@ jobs:
             }
           }
           // پیش‌فرضِ ستون **خاموش**: عمومی‌شدن باید تصمیمِ صریحِ ادمین باشد.
-          const bank = schema.slice(schema.indexOf('model BankAccount'), schema.indexOf('model BankAccount') + 900);
+          // ⚠️ تا خطِ پایانِ خودِ مدل، نه ۹۰۰ کاراکترِ ثابت: مدل که بلندتر
+          //    شد، ستون از پنجره بیرون افتاد و نگهبان روی schemaِ درست قرمز
+          //    شد. هر برشِ با طولِ ثابت همین سرنوشت را دارد.
+          const bStart = schema.indexOf('model BankAccount');
+          const bank = schema.slice(bStart, schema.indexOf('\n}', bStart));
           if (!/showOnIntake\s+Boolean\s+@default\(false\)/.test(bank)) {
             console.error('showOnIntake باید پیش‌فرض false باشد'); process.exit(1);
           }
@@ -2266,7 +2282,7 @@ jobs:
             if (!listBlock.includes(f)) { console.error('صفِ ادمین باید ' + f + ' بدهد'); process.exit(1); }
           }
           // ⑦ فیش با URLِ عمومیِ ثابت سرو نشود — لینکِ فوروارد‌شده یعنی نشتِ مدرکِ مالی.
-          if (/<img[^>]*src=\{`\$\{[^}]*\}\/patients/.test(ui)) {
+          if (/<img[^>]*src=\{\`\$\{[^}]*\}\/patients/.test(ui)) {
             console.error('فیش باید با blobِ پشتِ احراز باز شود، نه URLِ مستقیم'); process.exit(1);
           }
           if (!/apiBlobUrl\(/.test(ui)) {
@@ -2286,7 +2302,7 @@ jobs:
           const css  = fs.readFileSync('src/app/definitions.css', 'utf8');
 
           /* ⚠️ کامنت‌ها قبل از هر تطبیق برداشته می‌شوند. بندِ اول همین‌جا **گاز
-             دروغین** داد: کامنتِ خودِ کنترلر توضیح می‌داد چرا `@UseGuards`
+             دروغین** داد: کامنتِ خودِ کنترلر توضیح می‌داد چرا \`@UseGuards\`
              این‌جا نیست و نگهبان همان نثر را کدِ واقعی خواند. دومین بار است که
              این تله را می‌بینم. */
           const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*\$/gm, '');
@@ -2298,16 +2314,16 @@ jobs:
              نظرسنجی به پنجره‌ای به پروندهٔ بیمار تبدیل می‌شود. */
           const pv = sCode.slice(sCode.indexOf('async publicView('), sCode.indexOf('async submit('));
           for (const leak of ['firstName', 'lastName', 'patient:', 'code', 'phone', 'nationalId']) {
-            /* زیررشته‌ی ساده — `\b` در زنجیره‌ی YAML→bash→node به نویسه‌ی
+            /* زیررشته‌ی ساده — \`\b\` در زنجیره‌ی YAML→bash→node به نویسه‌ی
                backspace تبدیل می‌شد و هرگز match نمی‌کرد. */
             if (pv.includes(leak)) {
               console.error('publicViewِ نظرسنجی نباید ' + leak + ' بدهد'); process.exit(1);
             }
           }
           // ② کنترلرِ عمومی باید **بدونِ گارد** باشد و کنترلرِ ادمین **با گارد**.
-          /* ⚠️ مرزِ برش روی **دکوراتور** است نه روی `export class`: دکوراتورها
-             پیش از تعریفِ کلاس می‌آیند، پس بریدن تا `export class
-             SurveyController` دکوراتورِ کنترلرِ ادمین را داخلِ سهمِ کنترلرِ
+          /* ⚠️ مرزِ برش روی **دکوراتور** است نه روی \`export class\`: دکوراتورها
+             پیش از تعریفِ کلاس می‌آیند، پس بریدن تا \`export class
+             SurveyController\` دکوراتورِ کنترلرِ ادمین را داخلِ سهمِ کنترلرِ
              عمومی می‌گذاشت و نگهبان گاردِ آن یکی را به این یکی نسبت می‌داد. */
           const pubStart = cCode.indexOf(\"@Controller('public')\");
           const pubEnd = cCode.indexOf('@Controller()', pubStart);
@@ -2320,8 +2336,8 @@ jobs:
           }
           // ③ فهرستِ عمومیِ کانال‌ها نباید شمارنده‌ی بیمار بدهد.
           /* ⚠️ سنجه **وجودِ projectionِ صریح** است، نه نبودِ واژه‌ی
-             `patientCount`. بندِ اول دنبالِ آن واژه می‌گشت و وقتی کسی کلِ ردیف
-             را برمی‌گرداند (`return rows;`) هیچ واژه‌ای نبود تا ببیند —
+             \`patientCount\`. بندِ اول دنبالِ آن واژه می‌گشت و وقتی کسی کلِ ردیف
+             را برمی‌گرداند (\`return rows;\`) هیچ واژه‌ای نبود تا ببیند —
              نگهبان سبز می‌ماند در حالی که همه‌چیز لو می‌رفت. */
           const src = pubCtrl.slice(pubCtrl.indexOf('async sources('), pubCtrl.indexOf('view(@Param'));
           if (!src.includes('asksWho: r.asksWho') || src.includes('patientCount')) {
@@ -2339,13 +2355,13 @@ jobs:
               console.error('مجوزِ ' + m[1] + ' در access-registry نیست'); process.exit(1);
             }
           }
-          /* ⑥ ⚠️ کنترل‌های `<span>`ی فرمِ داده‌محور باید با پیشوندِ `.dyn`
-             نوشته شوند: `.pf-field > span { display: block }` وزنش بیشتر است
+          /* ⑥ ⚠️ کنترل‌های \`<span>\`ی فرمِ داده‌محور باید با پیشوندِ \`.dyn\`
+             نوشته شوند: \`.pf-field > span { display: block }\` وزنش بیشتر است
              و بدونِ پیشوند، ستاره‌های امتیاز **زیرِ هم** می‌افتند. هیچ آزمونِ
              APIای این را نمی‌گیرد. */
           for (const k of ['dyn-rate', 'dyn-bool', 'dyn-multi']) {
             /* ⚠️ زیررشته‌ی ساده و نه regex — زنجیره‌ی YAML→bash→node یک لایه
-               بک‌اسلش می‌خورد و `\\.` به نویسه‌ی نقطه‌ی معمولی تبدیل می‌شد؛
+               بک‌اسلش می‌خورد و \`\\.\` به نویسه‌ی نقطه‌ی معمولی تبدیل می‌شد؛
                الگو دیگر match نمی‌کرد و نگهبان دروغین قرمز می‌شد. */
             if (!css.includes('.dyn .' + k + ' {')) {
               console.error('.' + k + ' باید با پیشوندِ .dyn نوشته شود وگرنه display اش بازنویسی می‌شود'); process.exit(1);
@@ -2484,7 +2500,7 @@ jobs:
           const st = read('server/src/patients/settlement.service.ts');
           const compute = st.slice(st.indexOf('async compute('), st.indexOf('async finalize('));
           /* ⚠️ لنگر روی **شکلِ شرط** است نه صرفِ حضورِ نام: بندِ اول فقط
-             `isEarned(` را می‌دید و با `if (false && !isEarned(...))` سبز
+             \`isEarned(\` را می‌دید و با \`if (false && !isEarned(...))\` سبز
              می‌ماند. همین اشتباه پیش‌تر سه بار تکرار شده بود. */
           if (!/if \(!isEarned\(/.test(compute)) {
             console.error('نوشتنِ تسویه باید به انجامِ عمل مشروط باشد'); process.exit(1);
@@ -2498,7 +2514,7 @@ jobs:
             console.error('پیش‌نمایش نباید بسته شود — فقط نوشتن مشروط است'); process.exit(1);
           }
 
-          /* ④ هیچ ستونِ ذخیره‌شده‌ای. `opStatus` یک‌بار عوض می‌شود و همهٔ
+          /* ④ هیچ ستونِ ذخیره‌شده‌ای. \`opStatus\` یک‌بار عوض می‌شود و همهٔ
              گزارش‌ها باید همان لحظه درست شوند؛ ستونِ ذخیره‌شده جا می‌ماند. */
           const schema = read('server/prisma/schema.prisma');
           for (const col of ['recognizedRevenue', 'deferredRevenue', 'recognized_revenue']) {
