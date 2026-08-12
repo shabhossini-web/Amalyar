@@ -445,7 +445,13 @@ jobs:
           const fs = require('fs');
           const rep = fs.readFileSync('src/patients/reports.service.ts', 'utf8');
           // گزارش نباید تعریفِ خودش را از درآمد/وصولی بسازد.
-          if (/prisma\.\\$queryRaw/.test(rep)) { console.error('گزارش نباید SQLِ خام بزند؛ تعریفِ موازی می‌سازد'); process.exit(1); }
+          // نکته: این متن داخلِ node -e است و bash اول آن را می‌خوانَد، پس
+          // دلار باید سه‌بار بک‌اسلش بگیرد. با دوتا، bash نامِ متغیر را بسط
+          // می‌داد (خالی) و JS یک regexِ بی‌پایان می‌دید: SyntaxError. کلِ این
+          // گام از همان روز می‌ترکید و هیچ‌کدام از نگهبان‌های بعدی‌اش اجرا
+          // نمی‌شد؛ چون از آن به بعد CIای اجرا نشده بود، کسی ندید. الگوی
+          // درست همان است که خطوطِ ۱۰۸ و ۷۶۴ دارند.
+          if (/prisma\.\\\$queryRaw/.test(rep)) { console.error('گزارش نباید SQLِ خام بزند؛ تعریفِ موازی می‌سازد'); process.exit(1); }
           // درآمد و وصولی باید جدا بمانند.
           for (const k of ['revenue', 'collected', 'profit']) {
             if (!new RegExp(k).test(rep)) { console.error('گزارش باید ' + k + ' را جدا بدهد'); process.exit(1); }
