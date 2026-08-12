@@ -16,7 +16,7 @@ import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
-import { Arrive, Back, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
+import { Arrive, Back, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -135,14 +135,6 @@ function faDuration(min) {
   if (!h) return `${faNum(m)} دقیقه`;
   if (!m) return `${faNum(h)} ساعت`;
   return `${faNum(h)} ساعت و ${faNum(m)} دقیقه`;
-}
-
-/* اسپاتلایتِ شیشه */
-function track(e) {
-  const el = e.currentTarget;
-  const r = el.getBoundingClientRect();
-  el.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
-  el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
 }
 
 /* ── سلکتِ موجودیت + افزودنِ سریع (جراح/بیمارستان) ── */
@@ -833,64 +825,92 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
   }, [confirmDel]);
 
   return (
-    <motion.div className="glass us-card db-card" onMouseMove={track} {...row(index)}>
-      <span className="glass-glow" aria-hidden="true" />
-      <div className="us-row">
+    /* ⚠️ رنگِ اکسنت روی **کلِ کارت** می‌نشیند نه فقط برچسب: طرحِ مرجع
+       (21st.dev/Course Design Cards) درخششِ گوشه، لبه و نوارِ پیشرفت را از یک
+       رنگ می‌گیرد. چون `kindColor` را در مرحلهٔ ۵ سمتِ سرور ساختیم، همان یک
+       متغیر هر سه را می‌بَرد و کارتِ ویزیت/جراحی/پیگیری از دور از هم جدا
+       دیده می‌شوند. نوعِ بی‌فرم `--k` نمی‌گیرد و کارت به خاکستریِ خنثی
+       برمی‌گردد — دروغِ رنگی بهتر از بی‌رنگی نیست. */
+    <motion.div
+      className="db-card"
+      style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined}
+      {...row(index)}
+    >
+      {/* ⚠️ درخشش **ثابت** است و دنبالِ نشانگر نمی‌آید. اسپاتلایتِ قبلی روی
+          هر جابه‌جاییِ ماوس دو متغیرِ inline روی کارت می‌نوشت — روی فهرستی
+          که ۵۰ کارت دارد، هزینه‌ای بود که هیچ‌کس نمی‌دید. */}
+      <div className="db-panel">
+        <span className="db-panel-glow" aria-hidden="true" />
+
+        <div className="db-panel-top">
+          <span className="db-when">{v.opDate ? faDate(v.opDate) : 'بدونِ تاریخ'}</span>
+          {v.kind && <span className="db-kindtag">{v.kindTitle || kindOf(v.kind).label}</span>}
+        </div>
+
         {/* نامِ بیمار درِ ورودیِ پرونده است — کاربر همان‌جا که بیمار را می‌بیند
             انتظار دارد بتواند سابقه‌اش را باز کند، نه از یک منویِ دیگر. */}
-        <Link className="us-meta db-patlink" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">
+        <Link className="db-title" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">
           <b>{v.fullName}</b>
-          <span>{v.code}</span>
+          <span dir="ltr">{v.code}</span>
         </Link>
-        {/* ⚠️ نشانِ نوع روی **هر** مراجعه، و با رنگِ خودِ فرم.
-            تا دیروز `v.kind !== 'surgery'` بود، یعنی «عمل» بی‌نشان می‌ماند و
-            کاربر باید از نبودِ برچسب حدس می‌زد که عمل است — تفکیکی که خواسته
-            شده بود، دقیقاً روی پرتکرارترین نوع کار نمی‌کرد. حالا همه برچسب
-            دارند و رنگ کار را می‌کند، نه حذفِ برچسب.
-
-            ⚠️ `kindTitle`/`kindColor` **از سرور** می‌آیند (قانون ۱۵)؛ `kindOf`
-            فقط وقتی می‌ماند که آن نوع فرمی ندارد. */}
-        {v.kind && (
-          <span
-            className="db-kindtag"
-            style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined}
-          >
-            {v.kindTitle || kindOf(v.kind).label}
-          </span>
+        {(v.procedureTypeName || v.opType) && (
+          <p className="db-sub">{v.procedureTypeName || v.opType}</p>
         )}
-        {(v.procedureTypeName || v.opType) && <span className="db-optype">{v.procedureTypeName || v.opType}</span>}
-        {/* مانده فقط وقتی صورت‌حساب دارد؛ «۰ تومان» روی هر کارت اطلاعات نیست. */}
+
+        <div className="db-facts">
+          {v.surgeonName && <span><Doctor width="14" height="14" /> {v.surgeonName}</span>}
+          {v.techName && <span><User width="14" height="14" /> {v.techName}</span>}
+          {v.hospitalName && <span><Hospital width="14" height="14" /> {v.hospitalName}</span>}
+          {/* ساعت فقط وقتی ثبت شده باشد؛ «—:—» روی هر کارت اطلاعات نیست.
+              مدت از سرور می‌آید (durationMin)، نه از تفریقِ همین‌جا. */}
+          {v.opStartTime && (
+            <span title={v.durationMin != null ? `مدت: ${faDuration(v.durationMin)}` : undefined}>
+              <Clock width="14" height="14" />
+              <span dir="ltr">{v.opStartTime}{v.opEndTime ? `–${v.opEndTime}` : ''}</span>
+              {v.durationMin != null && ` (${faDuration(v.durationMin)})`}
+            </span>
+          )}
+          {v.techArriveTime && (
+            <span title={`ساعتِ حضورِ ${v.techName || 'کارشناس'}`}>
+              <Arrive width="14" height="14" /> <span dir="ltr">{v.techArriveTime}</span>
+            </span>
+          )}
+          {v.diagnosisTitle && <span><Diagnosis width="14" height="14" /> {v.diagnosisTitle}</span>}
+        </div>
+
+        {/* ⚠️ نوارِ پیشرفت = **وصولِ صورت‌حساب**، و فقط وقتی صورت‌حسابی هست.
+            `paidPct` از سرور می‌آید (قانون ۱۵): تقسیم بر صفر یک‌جا مهار
+            می‌شود، نه در هر صفحه‌ای که نوار می‌کشد. مراجعهٔ بی‌فاکتور نوار
+            نمی‌گیرد — نوارِ صفردرصد روی کارتی که اصلاً فاکتور ندارد، خبرِ
+            غلط می‌دهد. */}
         {v.total !== 0 && (
-          <span className={`db-due${v.due <= 0 ? ' ok' : ''}`}>
-            {v.due > 0 ? `مانده ${faNum(v.due)}` : 'تسویه'}
-          </span>
+          <div className="db-prog">
+            <div className="db-prog-head">
+              <span>وصول</span>
+              <b>{faNum(v.paidPct)}٪</b>
+            </div>
+            <div className="db-prog-bar" role="progressbar"
+                 aria-valuenow={v.paidPct} aria-valuemin={0} aria-valuemax={100}
+                 aria-label={`وصولِ صورت‌حسابِ ${v.fullName}`}>
+              <i style={{ inlineSize: `${v.paidPct}%` }} />
+            </div>
+            <small className={v.due <= 0 ? 'ok' : undefined}>
+              {v.due > 0 ? `مانده ${faNum(v.due)} از ${faNum(v.total)}` : `تسویه — ${faNum(v.total)}`}
+            </small>
+          </div>
         )}
+      </div>
+
+      {/* ⚠️ ردیفِ پایین **بیرونِ** پنل است، مثلِ طرحِ مرجع: پنل «خودِ مراجعه»
+          است و این ردیف «کاری که با آن می‌کنی». جداکردنشان یعنی چشم برای
+          خواندنِ کارت لازم نیست از میانِ دکمه‌ها رد شود.
+
+          ⚠️ وضعیت این‌جا **قرصِ خواندنی** است و انتخابگرِ وضعیت هم همین‌جا
+          می‌ماند — پنهان‌کردنش پشتِ یک منویِ ⋮ (مثلِ طرحِ مرجع) یعنی
+          پرتکرارترین کارِ این صفحه دو کلیک شود. طرح را می‌گیریم، نه ضعفِ
+          کاربردی‌اش را. */}
+      <div className="db-foot">
         <span className={`us-status db-st-${v.opStatus}`}>{statusLabel(v)}</span>
-      </div>
-
-      <div className="db-facts">
-        {v.surgeonName && <span><Doctor width="14" height="14" /> {v.surgeonName}</span>}
-        {v.techName && <span><User width="14" height="14" /> {v.techName}</span>}
-        {v.hospitalName && <span><Hospital width="14" height="14" /> {v.hospitalName}</span>}
-        {v.opDate && <span><Calendar width="14" height="14" /> {faDate(v.opDate)}</span>}
-        {/* ساعت فقط وقتی ثبت شده باشد؛ «—:—» روی هر کارت اطلاعات نیست.
-            مدت از سرور می‌آید (durationMin)، نه از تفریقِ همین‌جا. */}
-        {v.opStartTime && (
-          <span title={v.durationMin != null ? `مدت: ${faDuration(v.durationMin)}` : undefined}>
-            <Clock width="14" height="14" />
-            <span dir="ltr">{v.opStartTime}{v.opEndTime ? `–${v.opEndTime}` : ''}</span>
-            {v.durationMin != null && ` (${faDuration(v.durationMin)})`}
-          </span>
-        )}
-        {v.techArriveTime && (
-          <span title={`ساعتِ حضورِ ${v.techName || 'کارشناس'}`}>
-            <Arrive width="14" height="14" /> <span dir="ltr">{v.techArriveTime}</span>
-          </span>
-        )}
-        {v.diagnosisTitle && <span><Diagnosis width="14" height="14" /> {v.diagnosisTitle}</span>}
-      </div>
-
-      <div className="db-actions">
         <div className="db-statuspick" role="group" aria-label="تغییر وضعیت">
           {Object.entries(STATUS_FA).map(([k, l]) => (
             <button
@@ -904,17 +924,22 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
             </button>
           ))}
         </div>
-        <button type="button" className="db-ico" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}><Money width="15" height="15" /></button>
-        <button type="button" className="db-ico" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}><Pencil width="15" height="15" /></button>
-        <button
-          type="button"
-          className={`db-ico del${confirmDel ? ' arm' : ''}`}
-          title={confirmDel ? 'برای حذفِ قطعی دوباره بزنید' : 'حذف'}
-          disabled={busy}
-          onClick={() => (confirmDel ? onDelete(v) : setConfirmDel(true))}
-        >
-          {confirmDel ? 'حذف؟' : <Trash width="15" height="15" />}
-        </button>
+        {/* ⚠️ آیکون‌ها یک **گروه**اند نه سه فرزندِ جدا: در عرضِ کم باید با هم
+            به خطِ دوم بروند. تا وقتی مستقیم فرزندِ `.db-foot` بودند فقط
+            «حذف» تنها می‌افتاد پایین و ردیف شکسته به‌نظر می‌رسید. */}
+        <div className="db-tools">
+          <button type="button" className="db-ico" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}><Money width="15" height="15" /></button>
+          <button type="button" className="db-ico" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}><Pencil width="15" height="15" /></button>
+          <button
+            type="button"
+            className={`db-ico del${confirmDel ? ' arm' : ''}`}
+            title={confirmDel ? 'برای حذفِ قطعی دوباره بزنید' : 'حذف'}
+            disabled={busy}
+            onClick={() => (confirmDel ? onDelete(v) : setConfirmDel(true))}
+          >
+            {confirmDel ? 'حذف؟' : <Trash width="15" height="15" />}
+          </button>
+        </div>
       </div>
     </motion.div>
   );

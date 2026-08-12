@@ -256,7 +256,16 @@ export function summarize(
 ) {
   const total = charges.reduce((s, c) => s + c.amount, 0);
   const paid = payments.reduce((s, p) => s + p.amount, 0);
-  return { total, paid, due: total - paid };
+  /* ⚠️ درصد هم **این‌جا** حساب می‌شود، نه در نوارِ پیشرفتِ کارت (قانون ۱۵).
+     وسوسه این بود که کلاینت `paid/total*100` بزند — ولی آن‌وقت کارتِ داشبورد،
+     صورت‌حساب و فاکتورِ چاپی هرکدام نسخهٔ خودشان را داشتند و تقسیم بر صفر هم
+     در هر سه جا جدا باید مهار می‌شد.
+
+     ⚠️ `total === 0` یعنی «هنوز صورت‌حسابی نیست»، نه «صددرصد وصول». صفر
+     برمی‌گردد و کارت اصلاً نوار نشان نمی‌دهد؛ اگر ۱۰۰ می‌دادیم، مراجعهٔ
+     بی‌فاکتور «تسویه‌شده» به‌نظر می‌رسید. */
+  const paidPct = total > 0 ? Math.min(100, Math.max(0, Math.round((paid / total) * 100))) : 0;
+  return { total, paid, due: total - paid, paidPct };
 }
 
 type ChargeRow = { id: number; kind: string; title: string; quantity: number; stockEffect: string };

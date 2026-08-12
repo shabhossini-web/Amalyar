@@ -43,11 +43,6 @@
 .db-filters { margin-bottom: 14px; }
 .db-defbtn { width: 44px; height: auto; align-self: stretch; border-radius: 13px; }
 
-/* نامِ بیمار روی کارت = لینکِ پرونده */
-.db-patlink { text-decoration: none; color: inherit; border-radius: 9px; }
-.db-patlink:hover b { color: var(--brand-2, var(--brand-2)); }
-.db-patlink:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 3px; }
-
 /* نوعِ ملاقات — انتخابگرِ بالای فرم.
    ⚠️ `wrap` لازم است: فهرست دیگر چهار دکمهٔ ثابت نیست و هر نصب می‌تواند
    نوعِ دلخواه بسازد. بدونش، نوعِ ششم از لبهٔ شیت بیرون می‌زد. */
@@ -75,22 +70,90 @@
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
   color: #c9c2e4; background: rgba(255, 255, 255, .06); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
+/* ⚠️ سلکتور از **کارت** می‌آید نه از خودِ برچسب. تا دیروز `--k` روی همان
+   `<span>` inline بود و قاعده `[style*="--k"]` روی خودش می‌نشست؛ با انتقالِ
+   متغیر به ریشهٔ کارت، برچسب بی‌صدا خاکستری شد — نه خطایی، نه هشداری، فقط
+   رنگی که رفت. در اسکرین‌شات دیده شد، نه در بیلد. */
+.db-card[style*="--k"] .db-kindtag,
 .db-kindtag[style*="--k"] {
   color: rgb(var(--k));
   background: rgba(var(--k), .13);
   border: 1px solid rgba(var(--k), .38);
 }
 
-/* برچسبِ نوعِ عمل روی کارت */
-.db-optype {
-  font-size: 10.5px; font-weight: 700; color: #c4b5fd; flex: 0 0 auto;
-  background: rgba(var(--brand-rgb), 0.14); border: 1px solid rgba(var(--brand-2-rgb), 0.35);
-  border-radius: 99px; padding: 3px 9px; max-width: 110px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* ── کارتِ مراجعه ──
+   الگو از «Course Design Cards» (21st.dev): پوستهٔ تیره + پنلِ داخلی که
+   درخششِ رنگی در گوشه و لبهٔ روشن دارد، و ردیفِ کنش‌ها **بیرونِ** پنل.
+   ⚠️ رنگ از `--k` می‌آید که سرور به‌ازای نوعِ مراجعه می‌دهد؛ کارتِ بدونِ
+   نوعِ فرم‌دار `--k` ندارد و به خاکستریِ خنثی برمی‌گردد. هیچ hexِ ثابتی
+   این‌جا نیست، وگرنه رنگِ برندِ هر نصب با کارت‌ها نمی‌خواند. */
+.db-card {
+  display: flex; flex-direction: column; gap: 10px;
+  border-radius: 20px; padding: 10px;
+  background: rgba(255, 255, 255, .022);
+  border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 
-/* کارتِ مراجعه */
-.db-card { gap: 10px; }
+.db-panel {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column; gap: 9px;
+  border-radius: 15px; padding: 14px 15px;
+  background: rgba(10, 7, 26, .55);
+  border: 1px solid rgba(var(--brand-soft-rgb), .14);
+}
+/* لبهٔ رنگی فقط در بالا-ابتدای کارت (در RTL: بالا-راست) — قرینهٔ طرحِ مرجع
+   که LTR است. لبه با gradient محو می‌شود تا خطِ سختِ دور تا دور نسازد. */
+.db-card[style*="--k"] .db-panel {
+  border-color: rgba(var(--k), .3);
+  border-block-start-color: rgba(var(--k), .55);
+  border-inline-end-color: rgba(var(--k), .5);
+}
+/* درخششِ گوشه — همان چیزی که در طرحِ مرجع کارت را از یک مستطیلِ ساده جدا
+   می‌کند. `radial-gradient` و نه یک تصویر: با هر رنگی کار می‌کند. */
+.db-panel-glow { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+.db-card[style*="--k"] .db-panel-glow {
+  /* ⚠️ گوشهٔ **چپِ** بالا، نه راست: طرحِ مرجع LTR است و درخشش را روبه‌روی
+     تاریخ می‌گذارد. در RTL تاریخ سمتِ راست می‌نشیند، پس قرینه‌اش چپ است.
+     درصدِ background فیزیکی است و با `direction` برنمی‌گردد، پس دستی. */
+  background: radial-gradient(120% 90% at 0% 0%, rgba(var(--k), .26), transparent 62%);
+}
+
+.db-panel-top { display: flex; align-items: center; gap: 8px; }
+.db-when { font-size: 11.5px; color: var(--text3); }
+.db-panel-top .db-kindtag { margin-inline-start: auto; }
+
+/* عنوان وسط‌چین مثلِ طرحِ مرجع: نامِ بیمار تنها چیزی است که کاربر با آن
+   کارت را می‌شناسد، پس بزرگ‌ترین چیزِ کارت است. */
+.db-title {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  text-decoration: none; color: inherit; padding: 6px 0 0; border-radius: 10px;
+}
+.db-title b { font-size: 18px; font-weight: 900; letter-spacing: -.2px; }
+.db-title span { font-size: 11px; color: var(--text3); }
+.db-title:hover b { color: rgb(var(--k, var(--brand-2-rgb))); }
+.db-title:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 3px; }
+.db-sub { margin: -4px 0 2px; text-align: center; font-size: 12.5px; color: var(--text2); }
+
+/* نوارِ وصولِ صورت‌حساب */
+.db-prog { display: flex; flex-direction: column; gap: 5px; margin-block-start: 2px; }
+.db-prog-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; color: var(--text2); }
+.db-prog-head b { font-size: 13.5px; font-weight: 800; color: rgb(var(--k, var(--brand-2-rgb))); }
+.db-prog-bar { block-size: 6px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.db-prog-bar i {
+  display: block; block-size: 100%; border-radius: 99px;
+  background: rgb(var(--k, var(--brand-2-rgb)));
+  transition: inline-size .35s ease;
+}
+@media (prefers-reduced-motion: reduce) { .db-prog-bar i { transition: none; } }
+.db-prog small { font-size: 11px; color: var(--text3); }
+.db-prog small.ok { color: #5eead4; }
+
+/* ردیفِ کنش‌ها — بیرونِ پنل، مثلِ طرحِ مرجع */
+.db-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-inline: 4px; }
+.db-foot .us-status { flex: 0 0 auto; }
+/* در عرضِ کم کلِ گروه به خطِ دوم می‌رود و به لبهٔ پایانی می‌چسبد — دو دستهٔ
+   تمیز، نه یک دکمهٔ سرگردان. */
+.db-tools { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
 .db-st-pending { color: #fbbf24; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); }
 .db-st-done { color: #5eead4; background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
 .db-st-cancelled { color: #fca5a5; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
@@ -109,7 +172,6 @@
 .db-money b.ok { color: #5eead4; }
 .db-money b.due { color: #fbbf24; }
 
-.db-actions { display: flex; align-items: center; gap: 8px; }
 .db-statuspick { flex: 1; display: flex; gap: 6px; }
 .db-statuspick button {
   flex: 1; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
@@ -421,13 +483,6 @@
   cursor: pointer; color: #fda4af;
   background: rgba(251, 113, 133, .08); border: 1px solid rgba(251, 113, 133, .22);
 }
-
-/* مبلغِ مانده روی کارتِ مراجعه */
-.db-due {
-  flex: 0 0 auto; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
-  color: #fbbf24; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .32);
-}
-.db-due.ok { color: #6ee7b7; background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .3); }
 
 @media (max-width: 620px) {
   .bl-summary { grid-template-columns: 1fr; }
