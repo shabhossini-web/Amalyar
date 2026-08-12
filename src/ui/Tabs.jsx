@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import './ui.css';
 
@@ -10,10 +10,23 @@ import './ui.css';
  * `className` **می‌پرید**: پس‌زمینه از یک دکمه ناپدید و روی دکمهٔ بعدی ظاهر
  * می‌شد و چشم رابطه‌شان را نمی‌گرفت.
  *
- * ⚠️ حالا قرصِ فعال یک المانِ **واحد** است که با `layoutId` بینِ تب‌ها
- * **می‌لغزد**. همین یک تغییر، «کدام تب فعال شد» را از یک پرشِ ناگهانی به یک
- * حرکتِ قابلِ دنبال‌کردن تبدیل می‌کند — و چون یک المان است، هیچ‌وقت دو تب
- * هم‌زمان فعال به‌نظر نمی‌رسند.
+ * حالا قرصِ فعال یک المانِ **واحد** است که بینِ تب‌ها **می‌لغزد** — پس
+ * هیچ‌وقت دو تب هم‌زمان فعال به‌نظر نمی‌رسند و «کدام تب فعال شد» یک حرکتِ
+ * قابلِ دنبال‌کردن است، نه یک پرشِ ناگهانی.
+ *
+ * ⚠️ **قرص هرگز unmount نمی‌شود** و `layoutId` ندارد — تصمیمی که از یک باگِ
+ * واقعی درآمده، نه از سلیقه. نسخهٔ قبلی قرص را فقط داخلِ دکمهٔ فعال رندر
+ * می‌کرد و با `layoutId` جابه‌جایش می‌کرد؛ یعنی هر بار که کاربر تب عوض
+ * می‌کرد، یک المانِ shared-layout از DOM می‌رفت و یکی دیگر می‌آمد. اگر این
+ * نوار داخلِ شیتی بود که `AnimatePresence` دارد، حسابداریِ framer گیر می‌کرد
+ * و **خروجِ شیت هرگز تمام نمی‌شد**: پوششِ `*-overlay` نامرئی روی صفحه می‌ماند
+ * و همهٔ کلیک‌ها را می‌بلعید. کاربر می‌دید فرم بسته شد ولی هیچ دکمه‌ای دیگر
+ * کار نمی‌کرد.
+ *
+ * قبلاً این را با «unmount نکردنِ گامِ ۱ در شیتِ مراجعه» دور زده بودیم — یک
+ * وصله سرِ یک مصرف‌کننده، در حالی که `BillingSheet` و فرم‌ساز و شیتِ تعریف‌ها
+ * هم همین تب را داشتند. حالا ریشه بسته است: موقعیتِ دکمهٔ فعال اندازه‌گیری
+ * می‌شود و قرص با `x/y/width/height` به آن‌جا می‌رود.
  */
 export default function Tabs({
   items,
@@ -24,13 +37,60 @@ export default function Tabs({
   className = '',
   label,
 }) {
-  // ⚠️ شناسهٔ یکتا per instance. اگر `layoutId` ثابت بود، دو نوارِ تب در یک
-  // صفحه قرصشان را به هم قرض می‌دادند و قرص از این نوار به آن یکی پرواز می‌کرد.
-  const pill = `tabpill-${useId()}`;
+  const navRef = useRef(null);
+  const [box, setBox] = useState(null);
   const still = useReducedMotion();
 
+  /* `offset*` و نه `getBoundingClientRect`: مختصاتِ offset از قبل نسبت به
+     محتوای نوار است، پس نوارِ اسکرولی (`variant="scroll"`) هم بدونِ حساب‌کردنِ
+     `scrollLeft` درست می‌افتد — و در RTL که `scrollLeft` منفی می‌شود، اصلاً
+     مسئله‌ای نمی‌ماند.
+
+     ⚠️ `setBox` فقط وقتی صدا زده می‌شود که عدد **واقعاً** عوض شده باشد. بدونِ
+     این مقایسه هر بار یک شیءِ تازه ساخته می‌شد، React آن را تغییرِ state
+     می‌دید، دوباره رندر می‌کرد و افکت دوباره اندازه می‌گرفت — حلقهٔ رندر. در
+     ظاهرِ صفحه دیده نمی‌شد (قرص سرِ جایش بود) ولی برنامه را می‌سوزاند. */
+  const measure = useCallback(() => {
+    const nav = navRef.current;
+    const btn = nav?.querySelector('button[aria-selected="true"]');
+    if (!btn) { setBox((b) => (b === null ? b : null)); return; }
+    const next = { x: btn.offsetLeft, y: btn.offsetTop, width: btn.offsetWidth, height: btn.offsetHeight };
+    setBox((b) => (b && b.x === next.x && b.y === next.y && b.width === next.width && b.height === next.height ? b : next));
+  }, []);
+
+  /* ⚠️ کلیدِ تب‌ها، نه خودِ آرایه: تقریباً همهٔ مصرف‌کننده‌ها `items` را inline
+     می‌سازند، پس هویتش هر رندر عوض می‌شود و اگر در وابستگی‌ها بیاید، افکت
+     هر رندر اجرا می‌شود. */
+  const sig = items.map((i) => i.key).join('|');
+
+  useLayoutEffect(measure, [measure, value, sig]);
+
+  /* عرضِ دکمه‌ها با تغییرِ عرضِ صفحه و با آمدنِ فونت عوض می‌شود؛ بدونِ این،
+     قرص سرِ چرخشِ گوشی یا بعد از لود شدنِ Vazirmatn یک تب عقب می‌ماند. */
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    nav.querySelectorAll('button').forEach((el) => ro.observe(el));
+    return () => ro.disconnect();
+  }, [measure, sig]);
+
   return (
-    <nav className={`ui-tabs ui-tabs-${variant} ui-tone-${tone} ${className}`} role="tablist" aria-label={label}>
+    <nav ref={navRef} className={`ui-tabs ui-tabs-${variant} ui-tone-${tone} ${className}`} role="tablist" aria-label={label}>
+      {box && (
+        <motion.span
+          className="ui-tab-pill"
+          aria-hidden="true"
+          /* `initial={false}` یعنی اولین رندر بدونِ انیمیشن سرِ جایش می‌نشیند؛
+             وگرنه قرص هر بار که نوار mount می‌شود از گوشهٔ صفحه می‌آمد. */
+          initial={false}
+          animate={box}
+          // فنر، نه خطی: حرکتِ خطی مکانیکی به‌نظر می‌رسد. `duration: 0` برای
+          // کسی که «حرکتِ کمتر» را انتخاب کرده — پرش، ولی بی‌سرگیجه.
+          transition={still ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
+        />
+      )}
       {items.map((it) => {
         const on = it.key === value;
         const Icon = it.icon;
@@ -43,15 +103,6 @@ export default function Tabs({
             className={on ? 'on' : ''}
             onClick={() => onChange(it.key)}
           >
-            {on && (
-              <motion.span
-                className="ui-tab-pill"
-                layoutId={pill}
-                // فنر، نه خطی: حرکتِ خطی مکانیکی به‌نظر می‌رسد. `duration: 0`
-                // برای کسی که «حرکتِ کمتر» را انتخاب کرده — پرش، ولی بی‌سرگیجه.
-                transition={still ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
-              />
-            )}
             <span className="ui-tab-in">
               {Icon && (
                 <motion.span

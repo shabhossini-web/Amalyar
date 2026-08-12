@@ -601,9 +601,24 @@ export class IntakeService {
       if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
     }
 
+    /* ⚠️ **فرمِ رایگان به مرحلهٔ فیش نمی‌رود.**
+       تا دیروز این‌جا بی‌قید `pending_payment` می‌نشست، چون اولین مصرف‌کننده
+       ثبت‌نامِ نورومانیتورینگ بود و آن همیشه پول داشت. ولی همین لینک‌ساز
+       «پیگیری» و «نظرسنجی» هم می‌سازد که مبلغشان صفر است — و بیمار پشتِ
+       «در انتظارِ فیش» گیر می‌کرد و باید عکسِ فیشی می‌فرستاد که اصلاً وجود
+       نداشت. قالبِ یک محصول روی همهٔ فرم‌ها هاردکد شده بود.
+
+       «رایگان» یعنی هم مبلغِ قابلِ پرداخت صفر باشد و هم فرم کادرِ پرداخت
+       نداشته باشد. فرمی که کادرِ پرداخت **دارد** ولی مبلغش صفر است عمداً
+       همچنان فیش می‌خواهد: آن یک خطای پیکربندی است، نه یک فرمِ رایگان، و
+       بی‌صدا ردکردنش یعنی پولِ نگرفته «تأییدشده» به‌نظر برسد. */
+    const payable = Math.max(0, row.amount - row.discountAmount);
+    const hasPaymentBox = !!form?.fields.some((x) => x.type === 'payment');
+    const next = payable === 0 && !hasPaymentBox ? 'pending_approval' : 'pending_payment';
+
     await this.prisma.intakeSubmission.update({
       where: { id: row.id },
-      data: { data, status: 'pending_payment' },
+      data: { data, status: next },
     });
     return this.publicView(token);
   }

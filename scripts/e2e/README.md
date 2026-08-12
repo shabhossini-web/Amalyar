@@ -46,6 +46,9 @@ node scripts/e2e/approve-kind.mjs     # مرحلهٔ ۴ — تأیید بر اس
 node scripts/e2e/dashboard-kind.mjs   # مرحلهٔ ۵ — رنگ و تفکیکِ نوعِ مراجعه
 node scripts/e2e/record-forms.mjs     # مرحلهٔ ۷ — فرم‌های ضمیمهٔ پرونده
 node scripts/e2e/link-actions.mjs     # مرحلهٔ ۸ — ویرایش و ارسالِ پیامکیِ لینک
+node scripts/e2e/sheet-overlay.mjs    # شیت واقعاً بسته می‌شود (باگِ overlayِ نامرئی)
+node scripts/e2e/card-targets.mjs     # کارت→مراجعه · نام→پرونده
+node scripts/e2e/free-form.mjs        # فرمِ بی‌مبلغ فیش نمی‌خواهد
 ```
 
 ## قاعده‌ها

@@ -7,6 +7,7 @@
  */
 
 .ui-tabs {
+  position: relative;              /* قرصِ لغزان absolute نسبت به همین می‌نشیند */
   display: flex;
   gap: 8px;
   max-width: 940px;
@@ -17,7 +18,7 @@
 .ui-tone-amber  { --tab-accent: linear-gradient(135deg, rgba(245, 158, 11, .28), rgba(217, 119, 6, .3)); --tab-ring: rgba(245, 158, 11, .55); }
 
 .ui-tabs button {
-  position: relative;              /* قرصِ لغزان absolute داخلِ همین می‌نشیند */
+  position: relative;              /* محتوا باید روی قرص بماند */
   flex: 1;
   padding: 11px 14px;
   border-radius: 13px;
@@ -32,13 +33,19 @@
   transition: color .18s ease, border-color .18s ease;
 }
 .ui-tabs button:hover { color: rgba(255, 255, 255, .9); }
-.ui-tabs button.on { color: #fff; border-color: transparent; }
+/* قرص **پشتِ** دکمه‌ها می‌نشیند (ترتیبِ DOM)، پس دکمهٔ فعال باید پس‌زمینهٔ
+   خودش را کنار بگذارد وگرنه یک پردهٔ سفید روی گرادیان می‌ماند. */
+.ui-tabs button.on { color: #fff; border-color: transparent; background: transparent; }
 .ui-tabs button:focus-visible { outline: 2px solid var(--tab-ring); outline-offset: 2px; }
 
-/* قرصِ فعال — تنها المانی که بینِ تب‌ها جابه‌جا می‌شود. */
+/* قرصِ فعال — یک المانِ **همیشه‌مانده** که روی دکمهٔ فعال می‌لغزد.
+   ابعادش را جاوااسکریپت از خودِ دکمه اندازه می‌گیرد (`Tabs.jsx`)، پس
+   این‌جا فقط نقطهٔ صفر و ظاهر تعریف می‌شود. */
 .ui-tab-pill {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  pointer-events: none;            /* کلیک باید به خودِ دکمه برسد */
   border-radius: 13px;
   background: var(--tab-accent);
   box-shadow: 0 6px 18px rgba(var(--brand-rgb), .28);
