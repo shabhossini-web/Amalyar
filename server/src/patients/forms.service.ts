@@ -109,6 +109,39 @@ export function colorForKey(key: string): string {
 }
 
 /**
+ * رنگِ **آزاد** برای یک فرم: از رنگِ مشتق شروع می‌کند و در پالت جلو می‌رود تا
+ * اولین رنگی که کسی برنداشته.
+ *
+ * ⚠️ چرا `colorForKey` به‌تنهایی کافی نیست: hash تصادم دارد، و تصادمِ رنگ
+ * این‌جا یعنی دو نوعِ مراجعه در داشبورد **دقیقاً یک‌شکل** دیده شوند — همان
+ * تفکیکی که کاربر خواسته بود، بی‌سروصدا از بین می‌رفت. با ۸ رنگ و ۵ فرمِ
+ * قالبِ مطب، احتمالِ دستِ‌کم یک تصادم از ۷۰٪ می‌گذشت. در آزمونِ مرورگر
+ * دیدمش: «فرمِ عمل» و «پیگیری» هر دو کهربایی، بدونِ هیچ خطایی.
+ *
+ * ⚠️ hash به‌عنوانِ **نقطهٔ شروع** می‌ماند نه ایندکسِ فهرست، و نتیجه در ستون
+ * ذخیره می‌شود. پس ساختنِ فرمِ بعدی رنگِ فرم‌های قبلی را عوض نمی‌کند؛ اگر
+ * رنگ در زمانِ نمایش حساب می‌شد، هر فرمِ تازه کلِ داشبورد را دوباره
+ * رنگ‌آمیزی می‌کرد و کاربر فکر می‌کرد سامانه قاطی کرده.
+ *
+ * ⚠️ `taken` را فراخوان **به‌ازای هر محدوده** می‌سازد، نه از کلِ جدول. نسخهٔ
+ * سراسری را نوشتم و آزمون ردش کرد: فرم‌های `intake` و `record` پالت را تمام
+ * کردند و دو فرمِ **مراجعه** به رنگِ تکراری رسیدند — یعنی همان دو کارتی که
+ * کنارِ هم در داشبورد دیده می‌شوند. فرمِ ثبت‌نام و فرمِ مراجعه هیچ‌وقت کنارِ
+ * هم برچسب نمی‌شوند، پس رقابتِ رنگ بینشان بی‌دلیل بود.
+ *
+ * وقتی هر ۸ رنگِ یک محدوده گرفته شده باشد تصادم اجتناب‌ناپذیر است و به همان
+ * hash برمی‌گردیم — پخشِ یکنواخت بهتر از «همه خاکستری» است.
+ */
+export function pickColor(fullKey: string, taken: Set<string>): string {
+  const start = FORM_COLORS.indexOf(colorForKey(fullKey) as (typeof FORM_COLORS)[number]);
+  for (let i = 0; i < FORM_COLORS.length; i++) {
+    const c = FORM_COLORS[(start + i) % FORM_COLORS.length];
+    if (!taken.has(c)) return c;
+  }
+  return FORM_COLORS[start];
+}
+
+/**
  * ترتیبِ واقعیِ فیلدها: صفحه، بعد ترتیبِ داخلِ صفحه، بعد id برای گره‌گشایی.
  *
  * ⚠️ عمداً بدونِ `as const`: Prisma برای `orderBy` یک آرایهٔ **تغییرپذیر**
@@ -191,12 +224,32 @@ export class FormsService {
     await this.ensureSeeded();
     const rows = await this.prisma.formDef.findMany({
       where: { scope: 'visit', active: true },
-      select: { visitKind: true, title: true },
+      select: { key: true, visitKind: true, title: true, color: true },
       orderBy: { id: 'asc' },
     });
     return rows
       .filter((r) => r.visitKind)
-      .map((r) => ({ kind: r.visitKind as string, title: r.title }));
+      .map((r) => ({
+        kind: r.visitKind as string,
+        title: r.title,
+        /* ⚠️ رنگ هم برمی‌گردد و مثلِ `view()` هیچ‌وقت خالی نیست: کارتِ مراجعه
+           در داشبورد با همین رنگ از بقیه جدا می‌شود، و اگر مشتق‌کردنش به
+           کلاینت می‌افتاد یک نوع در داشبورد و در فرم‌ساز دو رنگ می‌گرفت. */
+        color: r.color || colorForKey(r.key),
+      }));
+  }
+
+  /**
+   * همان فهرست، به‌شکلِ نگاشت — برای غنی‌سازیِ مراجعه در `patients.service`.
+   *
+   * ⚠️ **join سمتِ سرور، نه در render** (قانون ۱۵). وسوسه این بود که کلاینت
+   * `/forms/visit-kinds` را بگیرد و خودش وصل کند، ولی آن‌وقت داشبورد و تقویم و
+   * پرتالِ پزشک هرکدام نسخهٔ خودشان را می‌داشتند و یک نوع در سه صفحه سه‌جور
+   * دیده می‌شد — دقیقاً همان چیزی که `KINDS`ِ هاردکد می‌ساخت.
+   */
+  async kindMap(): Promise<Map<string, { title: string; color: string }>> {
+    const rows = await this.visitKinds();
+    return new Map(rows.map((r) => [r.kind, { title: r.title, color: r.color }]));
   }
 
   /**
@@ -206,8 +259,13 @@ export class FormsService {
    * مشتق از کلید را می‌گذارد. قانون ۱۵ همین است — هیچ فرمولی در render. اگر
    * مشتق‌کردن به کلاینت می‌افتاد، داشبورد و فرم‌ساز و پرتالِ پزشک هرکدام
    * می‌توانستند نسخهٔ خودشان را داشته باشند و رنگِ یک فرم در سه صفحه سه‌جور
-   * دیده می‌شد. `colorSet` می‌گوید انتخابِ کاربر بوده یا خودکار، تا فرم‌ساز
-   * بتواند «خودکار» را به‌شکلِ خودکار نشان دهد.
+   * دیده می‌شد.
+   *
+   * ⚠️ `colorSet` **حذف شد** و برنمی‌گردد. کارش این بود که بگوید رنگ انتخابِ
+   * کاربر بوده یا خودکار، ولی حالا هر فرم هنگامِ ساخت رنگِ واقعی می‌گیرد
+   * (`freeColor`) پس همیشه `true` می‌شد — یعنی فیلدی که همیشه یک مقدار دارد و
+   * هیچ اطلاعاتی حمل نمی‌کند. «خودکار» در فرم‌ساز حالا معنیِ روشن‌تری دارد:
+   * «یک رنگِ آزاد به من بده»، و بلافاصله همان رنگ انتخاب‌شده دیده می‌شود.
    *
    * ⚠️ `pages` هم این‌جا حساب می‌شود نه در مرورگر: هر جای دیگری که بخواهد
    * «این فرم چند صفحه است» را بداند، باید همان `Math.max` را تکرار کند.
@@ -223,7 +281,6 @@ export class FormsService {
       id: f.id, key: f.key, title: f.title, scope: f.scope,
       visitKind: f.visitKind, hint: f.hint, active: f.active,
       color: f.color || colorForKey(f.key),
-      colorSet: !!f.color,
       pages: fields.reduce((m: number, x: any) => Math.max(m, x.page), 1),
       fields,
     };
@@ -240,9 +297,49 @@ export class FormsService {
    */
   private async ensureSeeded() {
     const n = await this.prisma.formDef.count();
-    if (n > 0) return;
+    if (n > 0) return this.backfillColors();
     const vertical = await this.config.vertical();
     await this.seedFrom(PRESETS[vertical] ?? []);
+  }
+
+  /**
+   * رنگ‌دادن به فرم‌هایی که از قبل ساخته شده‌اند و `color` ندارند.
+   *
+   * ⚠️ چرا این‌جا و نه در یک migrationِ SQL: الگوریتم «اولین رنگِ آزاد» است و
+   * دو پیاده‌سازیِ جدا (یکی SQL یکی TS) دو نتیجهٔ متفاوت می‌دهند. اولین
+   * نسخه‌ام دقیقاً همین اشتباه را کرد — SQLِ چرخشیِ ساده‌ای نوشتم که رنگ‌های
+   * **گرفته‌شده** را نمی‌دید و همان تصادمی را ساخت که قرار بود ببندد. حالا
+   * تنها یک `pickColor` هست و همه از آن می‌گذرند.
+   *
+   * ⚠️ یکی‌یکی و نه دسته‌ای: هر فرم باید رنگِ فرمِ قبلی را **ببیند**، وگرنه
+   * همه از یک مجموعهٔ «گرفته‌شده»ی قدیمی می‌خوانند و هم‌رنگ می‌شوند.
+   *
+   * تنبل است مثلِ `ensureSeeded`: نصبِ موجود بدونِ هیچ کارِ دستی، در اولین
+   * خواندنِ فهرستِ فرم‌ها رنگ می‌گیرد و از آن به بعد پرس‌وجو خالی برمی‌گردد.
+   */
+  private async backfillColors() {
+    const blank = await this.prisma.formDef.findMany({
+      where: { color: null }, select: { id: true, key: true, scope: true }, orderBy: { id: 'asc' },
+    });
+    if (!blank.length) return;
+    const rows = await this.prisma.formDef.findMany({
+      where: { NOT: { color: null } }, select: { color: true, scope: true },
+    });
+    const taken = new Map<string, Set<string>>();
+    const bucket = (s: string) => taken.get(s) ?? taken.set(s, new Set()).get(s)!;
+    for (const r of rows) bucket(r.scope).add(r.color as string);
+    for (const f of blank) {
+      const b = bucket(f.scope);
+      const c = pickColor(f.key, b);
+      b.add(c);
+      await this.prisma.formDef.update({ where: { id: f.id }, data: { color: c } });
+    }
+  }
+
+  /** رنگِ آزادِ **همان محدوده** — دلیلِ محدوده‌ای‌بودن در `pickColor`. */
+  private async freeColor(fullKey: string, scope: string): Promise<string> {
+    const rows = await this.prisma.formDef.findMany({ where: { scope }, select: { color: true } });
+    return pickColor(fullKey, new Set(rows.map((r) => r.color).filter(Boolean) as string[]));
   }
 
   private async seedFrom(forms: PresetForm[]) {
@@ -263,7 +360,12 @@ export class FormsService {
           visitKind: f.visitKind ?? null, hint: f.hint ?? null,
           /* رنگ در قالب‌ها نوشته نشده و عمداً `null` می‌ماند: «خودکار» یعنی
              `view()` از کلید مشتقش می‌کند و همهٔ نصب‌ها یک رنگ می‌بینند. */
-          color: normColor(f.color),
+          /* ⚠️ قالب‌ها هم رنگِ **آزاد** می‌گیرند، نه فقط مشتقِ کلید: قالبِ
+             مطب/کلینیک پنج فرمِ مراجعه دارد و با ۸ رنگ، hashِ خالی تقریباً
+             همیشه دست‌کم یک تصادم می‌ساخت — دو نوعِ هم‌رنگ از همان اولین
+             روزِ نصب. چون یکی‌یکی ساخته می‌شوند، هرکدام رنگِ قبلی‌ها را
+             می‌بیند. */
+          color: normColor(f.color) ?? (await this.freeColor(f.key, f.scope)),
           fields: {
             create: f.fields.map((x, i) => ({
               key: x.key, label: x.label, type: x.type ?? 'text',
@@ -552,7 +654,9 @@ export class FormsService {
         key: fullKey, title, scope,
         visitKind: scope === 'visit' ? key : null,
         hint: dto.hint?.trim() || null,
-        color: normColor(dto.color),
+        /* رنگ همین‌جا **تثبیت** می‌شود، نه در زمانِ نمایش — دلیلش در
+           `pickColor`. */
+        color: normColor(dto.color) ?? (await this.freeColor(fullKey, scope)),
         /* ⚠️ فرمِ مراجعه بدونِ تاریخ بی‌معنی است — تقویم، گزارشِ بازه‌ای و
            ترتیبِ خطِ درمان همه رویش بنا شده‌اند. پس یک فیلدِ تاریخ از همان
            اول ساخته می‌شود تا کاربر با فرمِ خالیِ بی‌مصرف روبه‌رو نشود. */

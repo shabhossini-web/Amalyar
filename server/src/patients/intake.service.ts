@@ -8,6 +8,8 @@ import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
+import { SmsService } from '../sms/sms.service';
+import { TenantContext } from '../tenant/tenant-context';
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
@@ -66,6 +68,14 @@ export class IntakeService {
        استفاده می‌کنند. کپیِ دومِ قاعدهٔ «اجباری» یعنی روزی ستاره‌ای که ادمین
        روشن کرده روی فرمِ عمومی اثر نداشته باشد، بی‌هیچ خطایی. */
     private forms: FormsService,
+    private sms: SmsService,
+    /* ⚠️ نشانیِ عمومیِ لینک از **میزبانِ همین درخواست** ساخته می‌شود، نه از یک
+       متغیرِ محیطی: هر شرکت دامنهٔ خودش را دارد و یک `BASE_URL`ِ سراسری،
+       لینکِ شرکتِ الف را با دامنهٔ شرکتِ ب می‌فرستاد. در production این میزبان
+       **تأییدشده** است — تنانت فقط وقتی حل می‌شود که هاست در `tenant_domains`
+       باشد — پس جای تزریقِ Host نیست. همان مبنایی که rpIDِ پس‌کی و هاستِ
+       WebOTP از آن می‌آیند. */
+    private tenant: TenantContext,
   ) {}
 
   private token() {
@@ -286,6 +296,59 @@ export class IntakeService {
     const next = await this.prisma.intakeLink.update({ where: { id }, data });
     await this.audit.record({ actorId: user?.id, action: 'intake.link.update', entityType: 'intake_link', entityId: id, before: row, after: next });
     return next;
+  }
+
+  /**
+   * نشانیِ عمومیِ یک لینک — **تک‌منبع**.
+   *
+   * ⚠️ تا امروز فقط مرورگر این رشته را می‌ساخت (`${origin}/r/${token}` در
+   * `Intake.jsx`). حالا سرور هم باید همان را در پیامک بگذارد، و دو جا که یک
+   * نشانی می‌سازند یعنی روزی که مسیر عوض شود، یکی‌شان عقب می‌ماند و بیمار
+   * لینکِ ۴۰۴ می‌گیرد.
+   */
+  private publicUrl(token: string) {
+    const host = this.tenant.require().hostname;
+    return `https://${host}/r/${token}`;
+  }
+
+  /**
+   * فرستادنِ لینک با پیامک — همان کاری که ادمین امروز دستی می‌کند: کپی، رفتن
+   * به پیام‌رسان، چسباندن.
+   *
+   * ⚠️ لینکِ **غیرفعال** فرستاده نمی‌شود. بدونِ این سد، ادمین لینکی می‌فرستاد
+   * که بیمار با بازکردنش «این لینک غیرفعال شده است» می‌دید — و تماسِ
+   * پشتیبانی می‌گرفت. خطا این‌جا ارزان است، آن‌جا گران.
+   *
+   * ⚠️ شماره **سمتِ سرور** هم سنجیده می‌شود: `SmsService` شمارهٔ نامعتبر را
+   * بی‌صدا رد می‌کند (`sent:false`) و ادمین فکر می‌کرد فرستاده شده. پس
+   * پیش از رسیدن به آن، ۴۰۰ می‌دهیم با دلیل.
+   */
+  async sendLinkSms(id: number, phone: string, user: any) {
+    const link = await this.prisma.intakeLink.findUnique({ where: { id } });
+    if (!link) throw new NotFoundException('لینک پیدا نشد');
+    if (!link.active) throw new BadRequestException('این لینک غیرفعال است — اول فعالش کنید');
+
+    const to = toEnDigits(String(phone ?? '')).replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(to)) throw new BadRequestException('شمارهٔ موبایل نامعتبر است (مثال: ۰۹۱۲۱۲۳۴۵۶۷)');
+
+    /* ⚠️ عنوانِ لینک داخلِ متن می‌آید تا بیمار بداند این پیامک برای چیست.
+       «لغو۱۱» را خودِ `send` می‌چسباند — این‌جا تکرارش نکن، وگرنه دوبار
+       می‌آید (خودِ `appendLagho` نسخهٔ قبلی را پاک می‌کند، ولی به آن تکیه
+       نکن). */
+    const text = `${link.title}\n${this.publicUrl(link.token)}`;
+    const res = await this.sms.send(to, text);
+
+    /* ⚠️ متنِ پیامک در audit **نوشته نمی‌شود** ولی مقصد بله: باید بتوان
+       پاسخ داد «این لینک برای چه شماره‌ای رفت»، بی‌آنکه دفترِ ممیزی به
+       آرشیوِ محتوای پیام‌ها تبدیل شود. */
+    await this.audit.record({
+      actorId: user?.id, action: 'intake.link.sms', entityType: 'intake_link', entityId: id,
+      after: { to, sent: res.sent, stub: res.stub },
+    });
+    /* `stub` یعنی سرویسِ پیامک پیکربندی نشده (محیطِ توسعه). کلاینت باید
+       تفاوتش را با «فرستاده شد» بداند، وگرنه در dev همه‌چیز موفق به‌نظر
+       می‌رسد و کسی نمی‌فهمد هیچ پیامکی نرفته. */
+    return { ...res, to, url: this.publicUrl(link.token) };
   }
 
   // ── مسیرِ عمومیِ بیمار ─────────────────────────────────────────────

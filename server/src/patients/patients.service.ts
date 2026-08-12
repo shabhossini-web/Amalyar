@@ -12,14 +12,30 @@ import { FormsService } from './forms.service';
 import { summarize } from './billing.service';
 
 /**
+ * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
+ *
+ * ⚠️ **join سمتِ سرور، نه در render** (قانون ۱۵). وسوسه این بود که کلاینت
+ * `/forms/visit-kinds` را بگیرد و خودش وصل کند، ولی آن‌وقت داشبورد و تقویم و
+ * پرتالِ پزشک هرکدام نسخهٔ خودشان را می‌داشتند و یک نوع در سه صفحه سه‌جور دیده
+ * می‌شد — دقیقاً همان چیزی که `KINDS`ِ هاردکد امروز می‌سازد.
+ */
+export type KindMap = Map<string, { title: string; color: string }>;
+
+/**
  * غنی‌سازیِ مراجعه — قانونِ computeVisit: فیلدهای مشتق فقط این‌جا ساخته می‌شوند
  * و کلاینت هیچ فرمولی در render ندارد. همهٔ مبالغ «تومان»اند.
  */
-function enrich(v: any) {
+function enrich(v: any, kinds?: KindMap) {
+  const k = v.kind ? kinds?.get(v.kind) : undefined;
   return {
     id: v.id,
     patientId: v.patientId,
     kind: v.kind,
+    /* ⚠️ `null` وقتی این نوع فرمی ندارد (فرمش خاموش شده، یا دادهٔ واردشده از
+       سامانهٔ قبلی). کلاینت آن‌وقت به برچسبِ پشتیبانِ خودش برمی‌گردد —
+       «عمل» نامیدنِ یک نوعِ ناشناخته دروغ است. */
+    kindTitle: k?.title ?? null,
+    kindColor: k?.color ?? null,
     code: `${v.patient.code}-V${v.seq}`,
     patientCode: v.patient.code,
     firstName: v.patient.firstName,
@@ -313,8 +329,12 @@ export class PatientsService {
       ]);
       // ترتیبِ `IN` تضمین‌شده نیست، پس ردیف‌ها به ترتیبِ شناسه‌ها چیده می‌شوند.
       const byId = new Map(found.map((r) => [r.id, r]));
+      const kinds = await this.forms.kindMap();
       return {
-        rows: pageIds.map((id) => byId.get(id)).filter(Boolean).map(enrich),
+        /* ⚠️ `.map(enrich)`ِ خالی ننویس: `Array.map` ایندکس را به‌عنوانِ
+           آرگومانِ دوم می‌فرستد و آن‌وقت یک **عدد** به‌جای نگاشتِ نوع‌ها
+           می‌رسید. TypeScript گرفتش؛ در JS بی‌صدا `undefined` می‌داد. */
+        rows: pageIds.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds)),
         total, page, pageSize,
         pages: Math.max(1, Math.ceil(total / pageSize)),
         sort: moneySort ? f.sort : DEFAULT_SORT,
@@ -336,8 +356,11 @@ export class PatientsService {
       this.visitStats(scoped),
     ]);
 
+    /* یک بار برای کلِ صفحه، نه یک بار به‌ازای هر ردیف. */
+    const kinds = await this.forms.kindMap();
+
     return {
-      rows: rows.map(enrich),
+      rows: rows.map((v) => enrich(v, kinds)),
       total,
       page,
       pageSize,
@@ -403,8 +426,9 @@ export class PatientsService {
       const take = ids.slice(0, EXPORT_LIMIT);
       const found = await this.prisma.visit.findMany({ where: { id: { in: take } }, include: INCLUDE_PATIENT });
       const byId = new Map(found.map((r) => [r.id, r]));
+      const kinds = await this.forms.kindMap();
       return {
-        rows: take.map((id) => byId.get(id)).filter(Boolean).map(enrich),
+        rows: take.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds)),
         truncated: ids.length > EXPORT_LIMIT,
         limit: EXPORT_LIMIT,
         stats: await this.visitStats({ ...scoped, AND: [...(scoped.AND ?? []), { id: { in: ids } }] }),
@@ -418,8 +442,9 @@ export class PatientsService {
       take: EXPORT_LIMIT + 1,
     });
     const truncated = rows.length > EXPORT_LIMIT;
+    const kinds = await this.forms.kindMap();
     return {
-      rows: rows.slice(0, EXPORT_LIMIT).map(enrich),
+      rows: rows.slice(0, EXPORT_LIMIT).map((v) => enrich(v, kinds)),
       truncated,
       limit: EXPORT_LIMIT,
       stats: await this.visitStats(scoped),
@@ -499,7 +524,53 @@ export class PatientsService {
     await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
-    return enrich(v);
+    return enrich(v, await this.forms.kindMap());
+  }
+
+  /**
+   * «این کد ملی پرونده دارد؟» — پاسخِ **دقیق**، نه جستجوی متنی.
+   *
+   * ⚠️ چرا endpointِ جدا و نه `searchPatients`: آن `contains` می‌زند و تا ۲۰
+   * پرونده برمی‌گرداند، و کلاینت خودش دنبالِ تطابقِ دقیق می‌گشت. یعنی برای
+   * پاسخِ «بله/خیر» بیستْ پروندهٔ **دیگر** هم از سرور بیرون می‌رفت. جریانِ
+   * «+ جدید» روی همین جواب شاخه می‌خورد، پس باید دقیق و کم‌هزینه باشد.
+   *
+   * ⚠️ `restricted`: کارشناس فقط پرونده‌هایی را می‌بیند که خودش مراجعه‌ای در
+   * آن‌ها داشته. ولی قاعدهٔ «هر کد ملی یک پرونده» سراسری است — اگر به کارشناس
+   * «پرونده‌ای نیست» می‌گفتیم، پروندهٔ دوم می‌ساخت و سرور با ۴۰۹ ردش می‌کرد،
+   * بعد از پرکردنِ کلِ فرم. پس **وجودش** را می‌گوییم ولی **هویتش** را نه:
+   * کارشناس می‌فهمد مراجعه به پروندهٔ موجود می‌چسبد، بی‌آنکه نامِ بیماری را
+   * ببیند که اجازهٔ دیدنش را ندارد.
+   */
+  async patientByNationalId(nid?: string, user?: any) {
+    const clean = toEnDigits(String(nid ?? '')).replace(/[^0-9]/g, '');
+    if (clean.length !== 10) return { found: false };
+
+    const p = await this.prisma.patient.findUnique({
+      where: { nationalId: clean },
+      include: { _count: { select: { visits: true } } },
+    });
+    if (!p || p.deletedAt) return { found: false };
+
+    if ((user?.level ?? 0) < LEVEL.SUPERVISOR) {
+      const mine = await this.prisma.visit.count({ where: { patientId: p.id, techId: user?.id ?? -1 } });
+      if (!mine) return { found: true, restricted: true };
+    }
+    return {
+      found: true,
+      restricted: false,
+      patient: {
+        id: p.id,
+        code: p.code,
+        fullName: `${p.firstName} ${p.lastName}`.trim(),
+        firstName: p.firstName,
+        lastName: p.lastName,
+        phone: p.phone,
+        nationalId: p.nationalId,
+        birthDate: p.birthDate,
+        visitCount: p._count.visits,
+      },
+    };
   }
 
   /// جستجوی بیمارِ موجود (برای فرمِ «مراجعهٔ مجدد»)
@@ -808,7 +879,11 @@ export class PatientsService {
       }
       return { visit, patientStatus };
     });
-    const result = { ...enrich(v), patientStatus };
+    /* ⚠️ نگاشتِ نوع‌ها این‌جا هم لازم است، نه فقط در فهرست: داشبورد پاسخِ ثبت
+       را مستقیم به فهرستش اضافه می‌کند. بدونِ نگاشت، کارتِ تازه‌ساخته‌شده
+       **بی‌رنگ و بی‌عنوان** می‌نشست تا وقتی کاربر صفحه را تازه کند — و چون
+       بعد از تازه‌سازی درست می‌شد، کسی باور نمی‌کرد باگ است. */
+    const result = { ...enrich(v, await this.forms.kindMap()), patientStatus };
     await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
     return result;
   }
@@ -827,7 +902,7 @@ export class PatientsService {
 
     const before = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
     const updated = await this.prisma.visit.update({ where: { id }, data: patch, include: INCLUDE_PATIENT });
-    const result = enrich(updated);
+    const result = enrich(updated, await this.forms.kindMap());
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: id,
       before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, techArriveTime: before?.techArriveTime, cargoDueTime: before?.cargoDueTime },
@@ -885,8 +960,9 @@ export class PatientsService {
       }
       return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_PATIENT });
     });
-    const result = enrich(updated);
-    await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v), after: result });
+    const kinds = await this.forms.kindMap();
+    const result = enrich(updated, kinds);
+    await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v, kinds), after: result });
     return result;
   }
 
@@ -899,7 +975,7 @@ export class PatientsService {
       data: { opStatus },
       include: INCLUDE_PATIENT,
     });
-    return enrich(updated);
+    return enrich(updated, await this.forms.kindMap());
   }
 
   /// حذفِ مراجعه؛ اگر آخرین مراجعهٔ بیمار بود، خودِ بیمار هم پاک می‌شود

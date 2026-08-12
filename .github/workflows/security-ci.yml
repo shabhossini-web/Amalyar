@@ -280,7 +280,7 @@ jobs:
             if (!body.includes('ensureImported')) { console.error(entry + ' باید کاتالوگ را seed کند'); process.exit(1); }
           }
           const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
-          // خطوطِ رابطه کنار گذاشته می‌شوند: \`lots StockLot[]\` مجاز است، ستونِ اسکالر نه.
+          // خطوطِ رابطه کنار گذاشته می‌شوند: \«lots StockLot[]\» مجاز است، ستونِ اسکالر نه.
           const item = schema.split('model Item {')[1].split(/\n}/)[0]
             .split('\n').filter((l) => !/\[\]|StockLot|Charge/.test(l)).join('\n');
           for (const stock of ['quantity', 'stock', 'onHand', 'lot', 'serial', 'expiry']) {
@@ -307,7 +307,7 @@ jobs:
           }
           const svc = fs.readFileSync('src/patients/inventory.service.ts', 'utf8');
           /* ⚠️ لنگر روی **جای تعریف** نیست، روی «یک تعریف». فرمول بعداً به
-             `stock-math.ts` رفت تا انبار و دارایی بدونِ حلقهٔ وابستگی از یک
+             \`stock-math.ts\` رفت تا انبار و دارایی بدونِ حلقهٔ وابستگی از یک
              جا بخوانند — چیدمانِ سفت‌تری بود، ولی نگهبانی که به فایلِ قبلی
              چسبیده بود قرمز شد و CI را بابتِ یک بهبود قفل کرد. */
           const math = fs.readFileSync('src/patients/stock-math.ts', 'utf8');
@@ -322,7 +322,7 @@ jobs:
           }
           const move = svc.split('private async move')[1].split(/\n  }/)[0];
           /* ⚠️ لنگر روی **قاعده** است نه املای متغیر: بندِ «موجودی منفی نشود»
-             زمانی `next < 0` نوشته شده بود و بعد به `total < 0` تغییر نام داد.
+             زمانی \`next < 0\` نوشته شده بود و بعد به \`total < 0\` تغییر نام داد.
              نگهبانی که به اسمِ متغیر بچسبد، با هر بازآراییِ بی‌ضرر قرمز
              می‌شود و اعتبارِ خودش را خرج می‌کند. */
           for (const rule of ['FOR UPDATE', 'expires_at', 'serial_no']) {
@@ -445,7 +445,13 @@ jobs:
           const fs = require('fs');
           const rep = fs.readFileSync('src/patients/reports.service.ts', 'utf8');
           // گزارش نباید تعریفِ خودش را از درآمد/وصولی بسازد.
-          if (/prisma\.\\$queryRaw/.test(rep)) { console.error('گزارش نباید SQLِ خام بزند؛ تعریفِ موازی می‌سازد'); process.exit(1); }
+          // نکته: این متن داخلِ node -e است و bash اول آن را می‌خوانَد، پس
+          // دلار باید سه‌بار بک‌اسلش بگیرد. با دوتا، bash نامِ متغیر را بسط
+          // می‌داد (خالی) و JS یک regexِ بی‌پایان می‌دید: SyntaxError. کلِ این
+          // گام از همان روز می‌ترکید و هیچ‌کدام از نگهبان‌های بعدی‌اش اجرا
+          // نمی‌شد؛ چون از آن به بعد CIای اجرا نشده بود، کسی ندید. الگوی
+          // درست همان است که خطوطِ ۱۰۸ و ۷۶۴ دارند.
+          if (/prisma\.\\\$queryRaw/.test(rep)) { console.error('گزارش نباید SQLِ خام بزند؛ تعریفِ موازی می‌سازد'); process.exit(1); }
           // درآمد و وصولی باید جدا بمانند.
           for (const k of ['revenue', 'collected', 'profit']) {
             if (!new RegExp(k).test(rep)) { console.error('گزارش باید ' + k + ' را جدا بدهد'); process.exit(1); }
@@ -505,7 +511,7 @@ jobs:
           // ⚠️ «مصرف» نباید از تفریقِ ارسال و مانده بیاید: پس از برگشتِ مانده،
           // آن تفریق کلِ ارسال را مصرف می‌شمارد.
           const detail = svc.split('async transfer(')[1].split(/\n  async /)[0];
-          // ⚠️ همان درسِ بالا: شرطِ kind بعداً `{ in: ['out', 'return'] }` شد تا
+          // ⚠️ همان درسِ بالا: شرطِ kind بعداً «{ in: ['out', 'return'] }» شد تا
           //    برگشت هم دیده شود. آنچه باید بماند **گره‌خوردن به همان حواله**
           //    است، نه شکلِ نوشتنِ kind.
           if (!/transferId: t\.id/.test(detail)) {
@@ -518,8 +524,8 @@ jobs:
           if (!/lot.available/.test(ui)) { console.error('UI باید «در دسترس» را از «کل» جدا نشان دهد'); process.exit(1); }
 
           // برگهٔ مصرف: کارِ کارشناسِ سرِ عمل، با مجوز و ماژولِ سبک‌ترِ خودش.
-          /* ⚠️ باز هم همان درس: فهرستِ مجوزها از `permission.guard.ts` به
-             `access-registry.ts` رفت تا هر کلید **برچسبِ فارسی** بگیرد و
+          /* ⚠️ باز هم همان درس: فهرستِ مجوزها از \`permission.guard.ts\` به
+             \`access-registry.ts\` رفت تا هر کلید **برچسبِ فارسی** بگیرد و
              مدیر بتواند ببیند و عوضش کند — تغییری در جهتِ بهتر. نگهبانِ
              چسبیده به فایلِ قدیمی همان بهبود را خطا گرفت. */
           const perms = fs.readFileSync('src/auth/access-registry.ts', 'utf8');
@@ -636,7 +642,7 @@ jobs:
           /* ── تورِ تاریخ ───────────────────────────────────────────────
              ⚠️ **این اشکال خطا نمی‌داد و همان بدترین حالتش بود.** فرمِ عمومیِ
              بیمار مقدارِ تقویمِ شمسی را خام می‌فرستاد؛ سرور
-             `new Date('1405/05/14')` می‌ساخت و آن را سالِ ۱۴۰۵ **میلادی**
+             \`new Date('1405/05/14')\` می‌ساخت و آن را سالِ ۱۴۰۵ **میلادی**
              می‌فهمید. مراجعه با موفقیت ثبت می‌شد و بعد از تقویم و هر گزارشِ
              بازه‌ای غیب بود. */
           const { toDateValue } = require('/tmp/jal/jalali.js');
@@ -659,7 +665,7 @@ jobs:
             console.error('خالی و null باید از هم جدا بمانند'); process.exit(1);
           }
 
-          /* هیچ‌کس دیگر `new Date()` را روی تاریخِ ورودی صدا نزند — تکِ‌نقطهٔ
+          /* هیچ‌کس دیگر \`new Date()\` را روی تاریخِ ورودی صدا نزند — تکِ‌نقطهٔ
              تبدیل همین است. (یک بار سه ستون از یک قاعده جدا افتادند.) */
           const pvc = fs.readFileSync('server/src/patients/patients.service.ts', 'utf8');
           if (/new Date\(dto\.(opDate|birthDate)/.test(pvc)) {
@@ -1281,7 +1287,7 @@ jobs:
           // ② کلیدِ نااعلام **رد** می‌شود، نه بی‌سروصدا نادیده گرفته: نادیده‌گرفتن
           //    یعنی کاربر «ذخیره شد ✓» ببیند و مقدارش هیچ‌جا نرود.
           // نگهبان باید **پرتابِ خطا** را ببیند نه صرفاً ذکرِ نام؛ وگرنه
-          // \`if (false && unknown.length)\` هم از آن رد می‌شد.
+          // \«if (false && unknown.length)\» هم از آن رد می‌شد.
           if (!/SETTING_BY_KEY\.has/.test(upd)
               || !/if \(unknown\.length\) \{[\s\S]{0,200}throw new BadRequestException/.test(upd)) {
             console.error('کلیدِ ناشناخته باید رد شود'); process.exit(1);
@@ -1308,8 +1314,8 @@ jobs:
           const { execSync } = require('child_process');
           // ⚠️ خودِ رجیستری از جست‌وجو کنار گذاشته می‌شود: اعلامِ کلید مصرفِ آن
           //    نیست، و بدونِ این استثنا هر کلیدِ بی‌مصرفی خودش را تأیید می‌کرد.
-          //    فیلتر در Node انجام می‌شود نه با \`grep --exclude\`: آن گزینه این‌جا
-          //    بی‌اثر بود و نگهبان بی‌سروصدا همیشه سبز می‌شد. \`-I\` هم فایلِ
+          //    فیلتر در Node انجام می‌شود نه با \«grep --exclude\»: آن گزینه این‌جا
+          //    بی‌اثر بود و نگهبان بی‌سروصدا همیشه سبز می‌شد. \«-I\» هم فایلِ
           //    دودوییِ Prisma را کنار می‌گذارد.
           const REG = 'server/src/config/settings-registry.ts';
           const hay = new Set(
@@ -1323,7 +1329,7 @@ jobs:
           );
           const brandKeys = new Set(['company_legal_name', 'company_national_id', 'company_econ_code', 'company_phone', 'company_address', 'brand_name']);
           for (const d of SETTINGS) {
-            // کلیدهای هویت را \`SettingsService.brand()\` یک‌جا می‌خواند.
+            // کلیدهای هویت را \«SettingsService.brand()\» یک‌جا می‌خواند.
             if (brandKeys.has(d.key)) continue;
             if (!hay.has(\"'\" + d.key + \"'\")) {
               console.error('تنظیمِ «' + d.key + '» هیچ‌جا خوانده نمی‌شود'); process.exit(1);
@@ -1717,7 +1723,7 @@ jobs:
           // ③ هم تایپ هم انتخاب — یکی‌شان به‌تنهایی کافی نیست: کاربرِ پشتِ میز
           //    تایپ می‌کند، کارشناسِ داخلِ اتاقِ عمل با یک دست انتخاب می‌کند.
           // ⚠️ لنگرِ سمتِ «انتخاب» روی **اتصالِ onPick به commit** است، نه روی
-          //    نامِ کامپوننتِ داخلی: بارِ اول به `onPick(t)`ِ داخلِ SlotList
+          //    نامِ کامپوننتِ داخلی: بارِ اول به «onPick(t)»ِ داخلِ SlotList
           //    بسته بود و با جایگزینیِ فهرستِ تخت با چرخِ ساعت، نگهبان قرمز
           //    شد بی‌آنکه چیزی خراب شده باشد.
           if (!/onChange=\{\(e\) => onChange\(toEnDigits/.test(pick)
@@ -1747,7 +1753,7 @@ jobs:
           }
           /* ⚠️ نوارِ وسط باید در **همان کادرِ ستون** جای بگیرد. نسخهٔ اول آن را
              هم‌ترازِ کلِ چرخ (شاملِ برچسبِ «ساعت») می‌گذاشت و بلندیِ برچسب را
-             با یک `margin`ِ دستی جبران می‌کرد؛ نتیجه: نوار یک ردیف پایین‌ترِ
+             با یک \`margin\`ِ دستی جبران می‌کرد؛ نتیجه: نوار یک ردیف پایین‌ترِ
              عددِ انتخاب‌شده. عددِ جادویی یعنی همین اشکال با هر تغییرِ فونت
              برمی‌گردد، پس ممنوع است. */
           const css = fs.readFileSync('src/ui/timepick.css', 'utf8');
@@ -1781,7 +1787,7 @@ jobs:
           }
           /* ⚠️ **انحنای استوانه از اسکرول می‌آید، نه از حلقهٔ درگِ دست‌ساز.**
              نمونه‌های آمادهٔ «چرخِ گزینه» برای این ظاهر، اسکرولِ مرورگر را با
-             `touch-action: none` خاموش و با رویدادِ pointer بازسازی می‌کنند —
+             \`touch-action: none\` خاموش و با رویدادِ pointer بازسازی می‌کنند —
              و همان‌جا شتابِ لمس، چرخِ ماوس و کیبورد از دست می‌رود. */
           if (/touch-action:\\s*none/.test(css)) {
             console.error('چرخ نباید اسکرولِ بومی را خاموش کند'); process.exit(1);
@@ -2007,7 +2013,7 @@ jobs:
             console.error('findByKey باید املاها را هم بگردد'); process.exit(1);
           }
 
-          // ④ نرمال‌سازیِ محل عمداً `normalizeName`ِ بیمارستان نیست: آن‌جا
+          // ④ نرمال‌سازیِ محل عمداً «normalizeName»ِ بیمارستان نیست: آن‌جا
           //    واژهٔ «بیمارستان» حذف می‌شود و «انبارِ بیمارستان» به «انبار»
           //    می‌رسد و با انبارِ مرکزی یکی می‌شود.
           const place = read('server/src/common/place.ts');
@@ -2082,9 +2088,9 @@ jobs:
           if (!/if \(Number\(dto\.captchaAnswer\) !== Number\(dto\.captchaA\)/.test(svc)) {
             console.error('کپچا روی سرور سنجیده نمی‌شود'); process.exit(1);
           }
-          // ③ نوعِ فایلِ فیش هم روی سرور. ⚠️ لنگر روی خودِ `if (` است نه فقط
-          //    نامِ ثابت: با `false &&` رشته می‌ماند ولی شرط اجرا نمی‌شود و
-          //    نسخهٔ اولِ نگهبان همان را قبول کرد. — `accept`ِ HTML فقط پنجرهٔ انتخاب را
+          // ③ نوعِ فایلِ فیش هم روی سرور. ⚠️ لنگر روی خودِ «if (» است نه فقط
+          //    نامِ ثابت: با «false &&» رشته می‌ماند ولی شرط اجرا نمی‌شود و
+          //    نسخهٔ اولِ نگهبان همان را قبول کرد. — «accept»ِ HTML فقط پنجرهٔ انتخاب را
           //    محدود می‌کند، نه درخواست را.
           if (!/if \(!RECEIPT_MIME\.test\(/.test(svc)) {
             console.error('نوعِ فایلِ فیش روی سرور سنجیده نمی‌شود'); process.exit(1);
@@ -2092,7 +2098,14 @@ jobs:
 
           // ④ نمای عمومی نباید دادهٔ پرونده بدهد: توکنِ فرم در پیامک می‌رود و
           //    پیامک فوروارد می‌شود.
-          const view = svc.slice(svc.indexOf('async publicView'), svc.indexOf('/** پرکردنِ اطلاعاتِ عمل'));
+          // ⚠️ پایانِ برش با «متدِ بعدی» گرفته می‌شود نه با یک کامنتِ خاص.
+          //    لنگرِ قبلی یک رشتهٔ کامنت بود که **در فایل وجود نداشت**، پس
+          //    indexOf منفی‌یک می‌داد و slice تا تهِ فایل می‌رفت: نگهبان به‌جای
+          //    publicView کلِ سرویس را می‌دید و روی هر کدِ سالمی قرمز می‌شد.
+          //    چون گامِ قبلی‌اش زودتر می‌ترکید، این خطا هیچ‌وقت دیده نشد.
+          const vStart = svc.indexOf('async publicView');
+          const vNext = svc.indexOf('\n  async ', vStart + 1);
+          const view = svc.slice(vStart, vNext === -1 ? svc.length : vNext);
           for (const leak of ['patient:', 'nationalId:', 'visit:', 'reviewedById']) {
             if (view.includes(leak)) { console.error('publicView دارد ' + leak + ' را لو می‌دهد'); process.exit(1); }
           }
@@ -2137,7 +2150,7 @@ jobs:
           //    تقسیم می‌کرد — یعنی بیمار یک‌دهمِ مبلغ را می‌دید.
           const schema = read('server/prisma/schema.prisma');
           const intakeBlock = schema.slice(schema.indexOf('model IntakeLink'), schema.indexOf('model DiscountCode'));
-          // ⚠️ لنگر روی **اعلامِ واحد** است (\`**ریال**\`) نه هر ذکرِ کلمه: خودِ
+          // ⚠️ لنگر روی **اعلامِ واحد** است (\«**ریال**\») نه هر ذکرِ کلمه: خودِ
           //    توضیحِ «اولین نسخه ریال بود» باید مجاز بماند، وگرنه نگهبان
           //    درسِ ثبت‌شده را پاک می‌کند.
           if (/\*\*ریال\*\*/.test(intakeBlock)) { console.error('ستونِ مبلغِ intake به ریال اعلام شده'); process.exit(1); }
@@ -2205,13 +2218,25 @@ jobs:
           if (!svc.includes('private async payTo(')) {
             console.error('نمای عمومیِ فرم باید حسابِ واریز بدهد'); process.exit(1);
           }
-          const payTo = svc.slice(svc.indexOf('private async payTo('), svc.indexOf('private async payTo(') + 600);
+          // ⚠️ مرزِ برش «متدِ بعدی» است نه ۶۰۰ کاراکترِ ثابت. پنجرهٔ ثابت با
+          //    بلندشدنِ متد از رویِ بندِ select رد می‌شد و نگهبان روی کدِ
+          //    کاملاً امن قرمز می‌شد — دقیقاً همان چیزی که رخ داد.
+          const pStart = svc.indexOf('private async payTo(');
+          const pNext = svc.indexOf('\n  private ', pStart + 1);
+          const payTo = svc.slice(pStart, pNext === -1 ? svc.length : pNext);
           if (!/showOnIntake: true/.test(payTo) || !/active: true/.test(payTo)) {
             console.error('فهرستِ واریز فقط حسابِ فعالِ علامت‌خورده باشد'); process.exit(1);
           }
           // ⚠️ **select**ِ صریح، نه شیِ کامل: بدونِ آن یادداشتِ داخلی و شریکِ
           //    صاحبِ حساب هم با یک GETِ بی‌احراز بیرون می‌رفت.
-          if (!/select: \{/.test(payTo)) {
+          //    ⚠️ ادعا روی **هر** findMany است، نه صرفاً بودنِ رشتهٔ 'select: {'.
+          //    شکلِ درستِ دیگری هم هست: فهرستِ فیلدها یک‌بار در متغیر و بعد
+          //    'select' کوتاه‌نویسی شود — که بهتر هم هست، چون دو نسخهٔ فهرست
+          //    نمی‌سازد که روزی از هم جدا بیفتند. نسخهٔ قبلیِ نگهبان همان را
+          //    رد می‌کرد و آدم را به تکرارِ فهرست هل می‌داد.
+          const finds = payTo.match(/findMany\(\{[^;]*?\}\)/gs) || [];
+          if (finds.length === 0) { console.error('payTo باید findMany بزند'); process.exit(1); }
+          if (!finds.every((f) => /select\s*[,:}]/.test(f))) {
             console.error('حسابِ واریز باید select صریح داشته باشد'); process.exit(1);
           }
           for (const leak of ['partnerId', 'notes', 'balance']) {
@@ -2220,7 +2245,11 @@ jobs:
             }
           }
           // پیش‌فرضِ ستون **خاموش**: عمومی‌شدن باید تصمیمِ صریحِ ادمین باشد.
-          const bank = schema.slice(schema.indexOf('model BankAccount'), schema.indexOf('model BankAccount') + 900);
+          // ⚠️ تا خطِ پایانِ خودِ مدل، نه ۹۰۰ کاراکترِ ثابت: مدل که بلندتر
+          //    شد، ستون از پنجره بیرون افتاد و نگهبان روی schemaِ درست قرمز
+          //    شد. هر برشِ با طولِ ثابت همین سرنوشت را دارد.
+          const bStart = schema.indexOf('model BankAccount');
+          const bank = schema.slice(bStart, schema.indexOf('\n}', bStart));
           if (!/showOnIntake\s+Boolean\s+@default\(false\)/.test(bank)) {
             console.error('showOnIntake باید پیش‌فرض false باشد'); process.exit(1);
           }
@@ -2253,7 +2282,7 @@ jobs:
             if (!listBlock.includes(f)) { console.error('صفِ ادمین باید ' + f + ' بدهد'); process.exit(1); }
           }
           // ⑦ فیش با URLِ عمومیِ ثابت سرو نشود — لینکِ فوروارد‌شده یعنی نشتِ مدرکِ مالی.
-          if (/<img[^>]*src=\{`\$\{[^}]*\}\/patients/.test(ui)) {
+          if (/<img[^>]*src=\{\`\$\{[^}]*\}\/patients/.test(ui)) {
             console.error('فیش باید با blobِ پشتِ احراز باز شود، نه URLِ مستقیم'); process.exit(1);
           }
           if (!/apiBlobUrl\(/.test(ui)) {
@@ -2273,7 +2302,7 @@ jobs:
           const css  = fs.readFileSync('src/app/definitions.css', 'utf8');
 
           /* ⚠️ کامنت‌ها قبل از هر تطبیق برداشته می‌شوند. بندِ اول همین‌جا **گاز
-             دروغین** داد: کامنتِ خودِ کنترلر توضیح می‌داد چرا `@UseGuards`
+             دروغین** داد: کامنتِ خودِ کنترلر توضیح می‌داد چرا \`@UseGuards\`
              این‌جا نیست و نگهبان همان نثر را کدِ واقعی خواند. دومین بار است که
              این تله را می‌بینم. */
           const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*\$/gm, '');
@@ -2285,16 +2314,16 @@ jobs:
              نظرسنجی به پنجره‌ای به پروندهٔ بیمار تبدیل می‌شود. */
           const pv = sCode.slice(sCode.indexOf('async publicView('), sCode.indexOf('async submit('));
           for (const leak of ['firstName', 'lastName', 'patient:', 'code', 'phone', 'nationalId']) {
-            /* زیررشته‌ی ساده — `\b` در زنجیره‌ی YAML→bash→node به نویسه‌ی
+            /* زیررشته‌ی ساده — \`\b\` در زنجیره‌ی YAML→bash→node به نویسه‌ی
                backspace تبدیل می‌شد و هرگز match نمی‌کرد. */
             if (pv.includes(leak)) {
               console.error('publicViewِ نظرسنجی نباید ' + leak + ' بدهد'); process.exit(1);
             }
           }
           // ② کنترلرِ عمومی باید **بدونِ گارد** باشد و کنترلرِ ادمین **با گارد**.
-          /* ⚠️ مرزِ برش روی **دکوراتور** است نه روی `export class`: دکوراتورها
-             پیش از تعریفِ کلاس می‌آیند، پس بریدن تا `export class
-             SurveyController` دکوراتورِ کنترلرِ ادمین را داخلِ سهمِ کنترلرِ
+          /* ⚠️ مرزِ برش روی **دکوراتور** است نه روی \`export class\`: دکوراتورها
+             پیش از تعریفِ کلاس می‌آیند، پس بریدن تا \`export class
+             SurveyController\` دکوراتورِ کنترلرِ ادمین را داخلِ سهمِ کنترلرِ
              عمومی می‌گذاشت و نگهبان گاردِ آن یکی را به این یکی نسبت می‌داد. */
           const pubStart = cCode.indexOf(\"@Controller('public')\");
           const pubEnd = cCode.indexOf('@Controller()', pubStart);
@@ -2307,8 +2336,8 @@ jobs:
           }
           // ③ فهرستِ عمومیِ کانال‌ها نباید شمارنده‌ی بیمار بدهد.
           /* ⚠️ سنجه **وجودِ projectionِ صریح** است، نه نبودِ واژه‌ی
-             `patientCount`. بندِ اول دنبالِ آن واژه می‌گشت و وقتی کسی کلِ ردیف
-             را برمی‌گرداند (`return rows;`) هیچ واژه‌ای نبود تا ببیند —
+             \`patientCount\`. بندِ اول دنبالِ آن واژه می‌گشت و وقتی کسی کلِ ردیف
+             را برمی‌گرداند (\`return rows;\`) هیچ واژه‌ای نبود تا ببیند —
              نگهبان سبز می‌ماند در حالی که همه‌چیز لو می‌رفت. */
           const src = pubCtrl.slice(pubCtrl.indexOf('async sources('), pubCtrl.indexOf('view(@Param'));
           if (!src.includes('asksWho: r.asksWho') || src.includes('patientCount')) {
@@ -2326,13 +2355,13 @@ jobs:
               console.error('مجوزِ ' + m[1] + ' در access-registry نیست'); process.exit(1);
             }
           }
-          /* ⑥ ⚠️ کنترل‌های `<span>`ی فرمِ داده‌محور باید با پیشوندِ `.dyn`
-             نوشته شوند: `.pf-field > span { display: block }` وزنش بیشتر است
+          /* ⑥ ⚠️ کنترل‌های \`<span>\`ی فرمِ داده‌محور باید با پیشوندِ \`.dyn\`
+             نوشته شوند: \`.pf-field > span { display: block }\` وزنش بیشتر است
              و بدونِ پیشوند، ستاره‌های امتیاز **زیرِ هم** می‌افتند. هیچ آزمونِ
              APIای این را نمی‌گیرد. */
           for (const k of ['dyn-rate', 'dyn-bool', 'dyn-multi']) {
             /* ⚠️ زیررشته‌ی ساده و نه regex — زنجیره‌ی YAML→bash→node یک لایه
-               بک‌اسلش می‌خورد و `\\.` به نویسه‌ی نقطه‌ی معمولی تبدیل می‌شد؛
+               بک‌اسلش می‌خورد و \`\\.\` به نویسه‌ی نقطه‌ی معمولی تبدیل می‌شد؛
                الگو دیگر match نمی‌کرد و نگهبان دروغین قرمز می‌شد. */
             if (!css.includes('.dyn .' + k + ' {')) {
               console.error('.' + k + ' باید با پیشوندِ .dyn نوشته شود وگرنه display اش بازنویسی می‌شود'); process.exit(1);
@@ -2471,7 +2500,7 @@ jobs:
           const st = read('server/src/patients/settlement.service.ts');
           const compute = st.slice(st.indexOf('async compute('), st.indexOf('async finalize('));
           /* ⚠️ لنگر روی **شکلِ شرط** است نه صرفِ حضورِ نام: بندِ اول فقط
-             `isEarned(` را می‌دید و با `if (false && !isEarned(...))` سبز
+             \`isEarned(\` را می‌دید و با \`if (false && !isEarned(...))\` سبز
              می‌ماند. همین اشتباه پیش‌تر سه بار تکرار شده بود. */
           if (!/if \(!isEarned\(/.test(compute)) {
             console.error('نوشتنِ تسویه باید به انجامِ عمل مشروط باشد'); process.exit(1);
@@ -2485,7 +2514,7 @@ jobs:
             console.error('پیش‌نمایش نباید بسته شود — فقط نوشتن مشروط است'); process.exit(1);
           }
 
-          /* ④ هیچ ستونِ ذخیره‌شده‌ای. `opStatus` یک‌بار عوض می‌شود و همهٔ
+          /* ④ هیچ ستونِ ذخیره‌شده‌ای. \`opStatus\` یک‌بار عوض می‌شود و همهٔ
              گزارش‌ها باید همان لحظه درست شوند؛ ستونِ ذخیره‌شده جا می‌ماند. */
           const schema = read('server/prisma/schema.prisma');
           for (const col of ['recognizedRevenue', 'deferredRevenue', 'recognized_revenue']) {

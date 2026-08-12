@@ -43,6 +43,9 @@ node scripts/e2e/link-form.mjs        # مرحلهٔ ۲ — لینک ← فرم 
 node scripts/e2e/link-builder.mjs     # مرحلهٔ ۲ — سازندهٔ لینک در مرورگر
 node scripts/e2e/public-form.mjs      # مرحلهٔ ۳ — فرمِ ساخته‌شده روی صفحهٔ بیمار
 node scripts/e2e/approve-kind.mjs     # مرحلهٔ ۴ — تأیید بر اساسِ kindِ فرم
+node scripts/e2e/dashboard-kind.mjs   # مرحلهٔ ۵ — رنگ و تفکیکِ نوعِ مراجعه
+node scripts/e2e/record-forms.mjs     # مرحلهٔ ۷ — فرم‌های ضمیمهٔ پرونده
+node scripts/e2e/link-actions.mjs     # مرحلهٔ ۸ — ویرایش و ارسالِ پیامکیِ لینک
 ```
 
 ## قاعده‌ها
