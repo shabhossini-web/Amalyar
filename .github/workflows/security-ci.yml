@@ -280,7 +280,7 @@ jobs:
             if (!body.includes('ensureImported')) { console.error(entry + ' باید کاتالوگ را seed کند'); process.exit(1); }
           }
           const schema = fs.readFileSync('prisma/schema.prisma', 'utf8');
-          // خطوطِ رابطه کنار گذاشته می‌شوند: \`lots StockLot[]\` مجاز است، ستونِ اسکالر نه.
+          // خطوطِ رابطه کنار گذاشته می‌شوند: \«lots StockLot[]\» مجاز است، ستونِ اسکالر نه.
           const item = schema.split('model Item {')[1].split(/\n}/)[0]
             .split('\n').filter((l) => !/\[\]|StockLot|Charge/.test(l)).join('\n');
           for (const stock of ['quantity', 'stock', 'onHand', 'lot', 'serial', 'expiry']) {
@@ -511,7 +511,7 @@ jobs:
           // ⚠️ «مصرف» نباید از تفریقِ ارسال و مانده بیاید: پس از برگشتِ مانده،
           // آن تفریق کلِ ارسال را مصرف می‌شمارد.
           const detail = svc.split('async transfer(')[1].split(/\n  async /)[0];
-          // ⚠️ همان درسِ بالا: شرطِ kind بعداً `{ in: ['out', 'return'] }` شد تا
+          // ⚠️ همان درسِ بالا: شرطِ kind بعداً «{ in: ['out', 'return'] }» شد تا
           //    برگشت هم دیده شود. آنچه باید بماند **گره‌خوردن به همان حواله**
           //    است، نه شکلِ نوشتنِ kind.
           if (!/transferId: t\.id/.test(detail)) {
@@ -1287,7 +1287,7 @@ jobs:
           // ② کلیدِ نااعلام **رد** می‌شود، نه بی‌سروصدا نادیده گرفته: نادیده‌گرفتن
           //    یعنی کاربر «ذخیره شد ✓» ببیند و مقدارش هیچ‌جا نرود.
           // نگهبان باید **پرتابِ خطا** را ببیند نه صرفاً ذکرِ نام؛ وگرنه
-          // \`if (false && unknown.length)\` هم از آن رد می‌شد.
+          // \«if (false && unknown.length)\» هم از آن رد می‌شد.
           if (!/SETTING_BY_KEY\.has/.test(upd)
               || !/if \(unknown\.length\) \{[\s\S]{0,200}throw new BadRequestException/.test(upd)) {
             console.error('کلیدِ ناشناخته باید رد شود'); process.exit(1);
@@ -1314,8 +1314,8 @@ jobs:
           const { execSync } = require('child_process');
           // ⚠️ خودِ رجیستری از جست‌وجو کنار گذاشته می‌شود: اعلامِ کلید مصرفِ آن
           //    نیست، و بدونِ این استثنا هر کلیدِ بی‌مصرفی خودش را تأیید می‌کرد.
-          //    فیلتر در Node انجام می‌شود نه با \`grep --exclude\`: آن گزینه این‌جا
-          //    بی‌اثر بود و نگهبان بی‌سروصدا همیشه سبز می‌شد. \`-I\` هم فایلِ
+          //    فیلتر در Node انجام می‌شود نه با \«grep --exclude\»: آن گزینه این‌جا
+          //    بی‌اثر بود و نگهبان بی‌سروصدا همیشه سبز می‌شد. \«-I\» هم فایلِ
           //    دودوییِ Prisma را کنار می‌گذارد.
           const REG = 'server/src/config/settings-registry.ts';
           const hay = new Set(
@@ -1329,7 +1329,7 @@ jobs:
           );
           const brandKeys = new Set(['company_legal_name', 'company_national_id', 'company_econ_code', 'company_phone', 'company_address', 'brand_name']);
           for (const d of SETTINGS) {
-            // کلیدهای هویت را \`SettingsService.brand()\` یک‌جا می‌خواند.
+            // کلیدهای هویت را \«SettingsService.brand()\» یک‌جا می‌خواند.
             if (brandKeys.has(d.key)) continue;
             if (!hay.has(\"'\" + d.key + \"'\")) {
               console.error('تنظیمِ «' + d.key + '» هیچ‌جا خوانده نمی‌شود'); process.exit(1);
@@ -1723,7 +1723,7 @@ jobs:
           // ③ هم تایپ هم انتخاب — یکی‌شان به‌تنهایی کافی نیست: کاربرِ پشتِ میز
           //    تایپ می‌کند، کارشناسِ داخلِ اتاقِ عمل با یک دست انتخاب می‌کند.
           // ⚠️ لنگرِ سمتِ «انتخاب» روی **اتصالِ onPick به commit** است، نه روی
-          //    نامِ کامپوننتِ داخلی: بارِ اول به `onPick(t)`ِ داخلِ SlotList
+          //    نامِ کامپوننتِ داخلی: بارِ اول به «onPick(t)»ِ داخلِ SlotList
           //    بسته بود و با جایگزینیِ فهرستِ تخت با چرخِ ساعت، نگهبان قرمز
           //    شد بی‌آنکه چیزی خراب شده باشد.
           if (!/onChange=\{\(e\) => onChange\(toEnDigits/.test(pick)
@@ -2013,7 +2013,7 @@ jobs:
             console.error('findByKey باید املاها را هم بگردد'); process.exit(1);
           }
 
-          // ④ نرمال‌سازیِ محل عمداً `normalizeName`ِ بیمارستان نیست: آن‌جا
+          // ④ نرمال‌سازیِ محل عمداً «normalizeName»ِ بیمارستان نیست: آن‌جا
           //    واژهٔ «بیمارستان» حذف می‌شود و «انبارِ بیمارستان» به «انبار»
           //    می‌رسد و با انبارِ مرکزی یکی می‌شود.
           const place = read('server/src/common/place.ts');
@@ -2088,9 +2088,9 @@ jobs:
           if (!/if \(Number\(dto\.captchaAnswer\) !== Number\(dto\.captchaA\)/.test(svc)) {
             console.error('کپچا روی سرور سنجیده نمی‌شود'); process.exit(1);
           }
-          // ③ نوعِ فایلِ فیش هم روی سرور. ⚠️ لنگر روی خودِ `if (` است نه فقط
-          //    نامِ ثابت: با `false &&` رشته می‌ماند ولی شرط اجرا نمی‌شود و
-          //    نسخهٔ اولِ نگهبان همان را قبول کرد. — `accept`ِ HTML فقط پنجرهٔ انتخاب را
+          // ③ نوعِ فایلِ فیش هم روی سرور. ⚠️ لنگر روی خودِ «if (» است نه فقط
+          //    نامِ ثابت: با «false &&» رشته می‌ماند ولی شرط اجرا نمی‌شود و
+          //    نسخهٔ اولِ نگهبان همان را قبول کرد. — «accept»ِ HTML فقط پنجرهٔ انتخاب را
           //    محدود می‌کند، نه درخواست را.
           if (!/if \(!RECEIPT_MIME\.test\(/.test(svc)) {
             console.error('نوعِ فایلِ فیش روی سرور سنجیده نمی‌شود'); process.exit(1);
@@ -2098,7 +2098,14 @@ jobs:
 
           // ④ نمای عمومی نباید دادهٔ پرونده بدهد: توکنِ فرم در پیامک می‌رود و
           //    پیامک فوروارد می‌شود.
-          const view = svc.slice(svc.indexOf('async publicView'), svc.indexOf('/** پرکردنِ اطلاعاتِ عمل'));
+          // ⚠️ پایانِ برش با «متدِ بعدی» گرفته می‌شود نه با یک کامنتِ خاص.
+          //    لنگرِ قبلی یک رشتهٔ کامنت بود که **در فایل وجود نداشت**، پس
+          //    indexOf منفی‌یک می‌داد و slice تا تهِ فایل می‌رفت: نگهبان به‌جای
+          //    publicView کلِ سرویس را می‌دید و روی هر کدِ سالمی قرمز می‌شد.
+          //    چون گامِ قبلی‌اش زودتر می‌ترکید، این خطا هیچ‌وقت دیده نشد.
+          const vStart = svc.indexOf('async publicView');
+          const vNext = svc.indexOf('\n  async ', vStart + 1);
+          const view = svc.slice(vStart, vNext === -1 ? svc.length : vNext);
           for (const leak of ['patient:', 'nationalId:', 'visit:', 'reviewedById']) {
             if (view.includes(leak)) { console.error('publicView دارد ' + leak + ' را لو می‌دهد'); process.exit(1); }
           }
@@ -2143,7 +2150,7 @@ jobs:
           //    تقسیم می‌کرد — یعنی بیمار یک‌دهمِ مبلغ را می‌دید.
           const schema = read('server/prisma/schema.prisma');
           const intakeBlock = schema.slice(schema.indexOf('model IntakeLink'), schema.indexOf('model DiscountCode'));
-          // ⚠️ لنگر روی **اعلامِ واحد** است (\`**ریال**\`) نه هر ذکرِ کلمه: خودِ
+          // ⚠️ لنگر روی **اعلامِ واحد** است (\«**ریال**\») نه هر ذکرِ کلمه: خودِ
           //    توضیحِ «اولین نسخه ریال بود» باید مجاز بماند، وگرنه نگهبان
           //    درسِ ثبت‌شده را پاک می‌کند.
           if (/\*\*ریال\*\*/.test(intakeBlock)) { console.error('ستونِ مبلغِ intake به ریال اعلام شده'); process.exit(1); }
