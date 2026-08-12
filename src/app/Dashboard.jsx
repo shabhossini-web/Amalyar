@@ -483,7 +483,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
    */
   const BUILTIN_ORDER = [
     'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
-    'opDate', 'opStartTime', 'opEndTime', 'techArriveTime', 'amount', 'notes',
+    'opDate', 'opStartTime', 'opEndTime', 'techArriveTime', 'opReport', 'amount', 'notes',
   ];
 
   /**
@@ -564,8 +564,13 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
       )}
     </>) };
-  // حضورِ کارشناس در هیچ قالبی نیست، پس «تعریف‌نشده = روشن» و سرِ جای کدش می‌ماند.
-  builtinNodes.techArriveTime = { el: timeNode('techArriveTime', `حضورِ ${t.tech}`) };
+  if (fd.isOn('techArriveTime')) builtinNodes.techArriveTime = { el: timeNode('techArriveTime', `حضورِ ${t.tech}`) };
+  /* شرحِ عمل هم حالا ردیفِ کاتالوگ دارد؛ روی نوعی مثلِ «ویزیت» که عمل ندارد
+     خاموش است و برچسبش را سوپرادمین می‌تواند مثلاً «شرحِ معاینه» کند. */
+  if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: (
+    <label className="db-field"><span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
+      <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
+    </label>) };
   /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
      در ویرایش، صورت‌حساب جای اصلاح است. */
   if (!editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
@@ -765,11 +770,6 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
         </label>
       )}
-
-      {/* شرحِ عمل جزوِ فیلدهای هسته‌ایِ تعریف‌شده نیست، پس جایش ثابت می‌ماند. */}
-      <label className="db-field"><span>شرحِ عمل</span>
-        <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
-      </label>
 
       {/* ⚠️ فیلدهای دلخواهِ سوپرادمین. عمداً **انتهای فرم** و زیرِ یک عنوان:
           این‌ها به‌ازای هر شرکت فرق می‌کنند و قاطی‌کردنشان با فیلدهای همیشگی

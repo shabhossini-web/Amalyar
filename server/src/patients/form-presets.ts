@@ -62,8 +62,44 @@ export type PresetForm = {
 export const BUILTIN_VISIT_KEYS = new Set([
   'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
   'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount',
-  'payer', 'kind',
+  'payer', 'kind', 'techArriveTime',
 ]);
+
+/**
+ * کاتالوگِ **کاملِ** فیلدهای هسته‌ایِ قابلِ چینشِ فرمِ مراجعه.
+ *
+ * ⚠️ چرا این فهرست جدا از `BUILTIN_VISIT_KEYS` است: آن یکی قراردادِ
+ * «کدام کلید به ستون می‌نشیند» است و این یکی «کدام فیلد در فرم‌ساز قابلِ
+ * روشن/خاموش و جابه‌جایی است». `opReport` دقیقاً جای اختلافشان است: در فرم
+ * چیده می‌شود ولی ستون نیست — `setOpReport` آن را به `ClinicalNote` می‌برد،
+ * و اگر در `BUILTIN_VISIT_KEYS` بود، `split()` ستونی را می‌نوشت که وجود
+ * ندارد و approve با خطای Prisma می‌ترکید.
+ *
+ * ⚠️ **هر فرمِ مراجعه باید همهٔ این کلیدها را به‌شکلِ ردیفِ builtin داشته
+ * باشد** (backfill در `forms.service`). دلیلش باگی است که کاربر گزارش کرد:
+ * تا وقتی کاتالوگ ناقص بود، کلاینت فیلدِ «تعریف‌نشده» را روشن حساب می‌کرد —
+ * چاره‌ای هم نداشت، چون خاموش‌حساب‌کردنش یعنی ناپدیدشدنِ بی‌صدای فیلدهایی
+ * که در هیچ قالبی نبودند. نتیجه: نوعِ «ویزیت» که سوپرادمین می‌ساخت با
+ * جراح/بیمارستان/ساعتِ عمل رندر می‌شد و **هیچ راهی برای برداشتنشان نبود**.
+ * حالا که کاتالوگ کامل است، «در تعریف نیست» یعنی خاموش، و همهٔ فیلدها در
+ * فرم‌ساز یک ردیفِ قابلِ کنترل دارند.
+ */
+export const VISIT_BUILTIN_CATALOG: { key: string; label: string; type: string }[] = [
+  { key: 'opDate', label: 'تاریخ', type: 'date' },
+  { key: 'surgeonId', label: 'پزشک/جراح', type: 'select' },
+  { key: 'hospitalId', label: 'بیمارستان/مرکز', type: 'select' },
+  { key: 'techId', label: 'کارشناس', type: 'select' },
+  { key: 'procedureTypeId', label: 'نوعِ عمل', type: 'select' },
+  { key: 'diagnosisId', label: 'تشخیص', type: 'select' },
+  { key: 'opStartTime', label: 'ساعتِ شروع', type: 'time' },
+  { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time' },
+  { key: 'techArriveTime', label: 'حضورِ کارشناس', type: 'time' },
+  { key: 'opReport', label: 'شرحِ عمل', type: 'textarea' },
+  { key: 'amount', label: 'مبلغ (تومان)', type: 'money' },
+  { key: 'notes', label: 'یادداشت', type: 'textarea' },
+];
+
+export const VISIT_CATALOG_KEYS = new Set(VISIT_BUILTIN_CATALOG.map((f) => f.key));
 
 /** فیلدهای هسته‌ای که تقریباً هر فرمِ مراجعه‌ای دارد. */
 const CORE = {

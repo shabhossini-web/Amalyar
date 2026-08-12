@@ -49,6 +49,7 @@ node scripts/e2e/link-actions.mjs     # مرحلهٔ ۸ — ویرایش و ار
 node scripts/e2e/sheet-overlay.mjs    # شیت واقعاً بسته می‌شود (باگِ overlayِ نامرئی)
 node scripts/e2e/card-targets.mjs     # کارت→مراجعه · نام→پرونده
 node scripts/e2e/free-form.mjs        # فرمِ بی‌مبلغ فیش نمی‌خواهد
+node scripts/e2e/kind-fields.mjs      # فرمِ هر نوع فقط فیلدهای خودش را دارد
 ```
 
 ## قاعده‌ها

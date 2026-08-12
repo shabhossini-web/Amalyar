@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, PRESETS, PresetForm } from './form-presets';
+import { BUILTIN_VISIT_KEYS, PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
 
 /**
  * موتورِ فرم — «چه چیزی پرسیده می‌شود» و «چه چیزی اجباری است».
@@ -297,9 +297,16 @@ export class FormsService {
    */
   private async ensureSeeded() {
     const n = await this.prisma.formDef.count();
-    if (n > 0) return this.backfillColors();
+    if (n > 0) {
+      await this.backfillColors();
+      return this.backfillVisitBuiltins();
+    }
     const vertical = await this.config.vertical();
     await this.seedFrom(PRESETS[vertical] ?? []);
+    /* قالب‌ها عمداً کاتالوگِ کامل ندارند (سندِ خوانا ماندن مهم‌تر است)؛
+       تکمیلشان کارِ همین backfill است تا نصبِ تازه و نصبِ قدیمی یک مسیر
+       داشته باشند. */
+    return this.backfillVisitBuiltins();
   }
 
   /**
@@ -333,6 +340,59 @@ export class FormsService {
       const c = pickColor(f.key, b);
       b.add(c);
       await this.prisma.formDef.update({ where: { id: f.id }, data: { color: c } });
+    }
+  }
+
+  /**
+   * تکمیلِ کاتالوگِ فیلدهای هسته‌ای روی فرم‌های مراجعهٔ موجود.
+   *
+   * ⚠️ این پایانِ قاعدهٔ «تعریف‌نشده = روشن» است. آن قاعده چاره بود نه
+   * انتخاب: تا وقتی کاتالوگ ناقص بود، خاموش‌حساب‌کردنِ فیلدِ غایب یعنی
+   * ناپدیدشدنِ بی‌صدای فیلدهایی که در هیچ قالبی نبودند (حضورِ کارشناس،
+   * شرحِ عمل). عوارضش را کاربر گزارش کرد: نوعِ «ویزیت» با جراح و بیمارستان
+   * و ساعتِ عمل رندر می‌شد و هیچ راهی برای برداشتنشان نبود — فیلدی که در
+   * تعریف نیست، در فرم‌ساز هم ردیفی ندارد که خاموشش کنی.
+   *
+   * حالا هر فرمِ مراجعه همهٔ کاتالوگ را به‌شکلِ ردیفِ builtin دارد و کلاینت
+   * «غایب = خاموش» می‌خواند. ردیف‌های تازه **خاموش** ساخته می‌شوند تا فرمِ
+   * موجود همان تعریفش بماند، با دو استثنا که رفتارِ دیده‌شدهٔ امروز را حفظ
+   * می‌کنند:
+   * - `techArriveTime` فقط با کارشناسِ فعال معنی دارد → همان‌جا روشن می‌ماند
+   *   (فرمِ عملِ نورومانیتورینگ همین است).
+   * - `opReport` مالِ فرم‌های عمل‌گونه است → جایی روشن می‌ماند که ساعتِ
+   *   شروعِ فعال دارد.
+   * - فرمی که فقط `opDate` داشت (نوعِ ساخته‌شده در فرم‌ساز با seedِ قدیمی)
+   *   مبلغ و یادداشت هم می‌گیرد — همان پیش‌فرضِ نوعِ تازه، وگرنه فرمش فقط
+   *   یک تاریخِ خالی بود.
+   *
+   * تنبل و idempotent مثلِ `backfillColors`: چیزی که کم نیست، هیچ نوشتنی
+   * ندارد.
+   */
+  private async backfillVisitBuiltins() {
+    const forms = await this.prisma.formDef.findMany({
+      where: { scope: 'visit' },
+      select: {
+        id: true,
+        fields: { select: { key: true, active: true, builtin: true, sort: true } },
+      },
+    });
+    for (const f of forms) {
+      const have = new Set(f.fields.map((x) => x.key));
+      const missing = VISIT_BUILTIN_CATALOG.filter((c) => !have.has(c.key));
+      if (!missing.length) continue;
+      const activeKeys = new Set(f.fields.filter((x) => x.active !== false).map((x) => x.key));
+      const bare = f.fields.filter((x) => x.builtin).length <= 1;
+      let sort = Math.max(0, ...f.fields.map((x) => x.sort ?? 0));
+      await this.prisma.formField.createMany({
+        data: missing.map((c) => ({
+          formId: f.id, key: c.key, label: c.label, type: c.type,
+          builtin: true, required: false, sort: (sort += 10),
+          active:
+            (c.key === 'techArriveTime' && activeKeys.has('techId')) ||
+            (c.key === 'opReport' && activeKeys.has('opStartTime')) ||
+            (bare && (c.key === 'amount' || c.key === 'notes')),
+        })),
+      });
     }
   }
 
@@ -454,7 +514,7 @@ export class FormsService {
     /* ⚠️ کلیدِ دلخواه نباید هم‌نامِ ستونِ واقعی باشد: `split()` کلیدهای builtin
        را به ستون می‌فرستد، پس یک فیلدِ دلخواه به‌نامِ `opDate` بی‌صدا تاریخِ
        عمل را بازنویسی می‌کرد. */
-    if (BUILTIN_VISIT_KEYS.has(key)) {
+    if (BUILTIN_VISIT_KEYS.has(key) || VISIT_CATALOG_KEYS.has(key)) {
       throw new BadRequestException('این کلید برای فیلدهای هسته‌ای رزرو است — نامِ دیگری بگذارید');
     }
     const dup = await this.prisma.formField.findUnique({ where: { formId_key: { formId, key } } });
@@ -657,11 +717,23 @@ export class FormsService {
         /* رنگ همین‌جا **تثبیت** می‌شود، نه در زمانِ نمایش — دلیلش در
            `pickColor`. */
         color: normColor(dto.color) ?? (await this.freeColor(fullKey, scope)),
-        /* ⚠️ فرمِ مراجعه بدونِ تاریخ بی‌معنی است — تقویم، گزارشِ بازه‌ای و
-           ترتیبِ خطِ درمان همه رویش بنا شده‌اند. پس یک فیلدِ تاریخ از همان
-           اول ساخته می‌شود تا کاربر با فرمِ خالیِ بی‌مصرف روبه‌رو نشود. */
+        /* ⚠️ نوعِ تازه با فرمِ **کمینه** شروع می‌شود، نه با فرمِ عمل:
+           تاریخ (اجباری — تقویم و گزارشِ بازه‌ای رویش بنا شده‌اند) + مبلغ +
+           یادداشت روشن‌اند و بقیهٔ کاتالوگ خاموش ولی **حاضر**، تا سوپرادمین
+           هرکدام را با یک کلیک روشن کند. باگی که این را ساخت: نوعِ «ویزیت»
+           فقط opDate می‌گرفت و کلاینت غایب‌ها را روشن حساب می‌کرد — فرمِ
+           ویزیت با جراح و ساعتِ عمل رندر می‌شد و راهی برای برداشتنشان نبود. */
         ...(scope === 'visit'
-          ? { fields: { create: [{ key: 'opDate', label: 'تاریخ', type: 'date', required: true, builtin: true, sort: 10 }] } }
+          ? {
+              fields: {
+                create: VISIT_BUILTIN_CATALOG.map((c, i) => ({
+                  key: c.key, label: c.label, type: c.type, builtin: true,
+                  sort: (i + 1) * 10,
+                  required: c.key === 'opDate',
+                  active: ['opDate', 'amount', 'notes'].includes(c.key),
+                })),
+              },
+            }
           : {}),
       },
     });
