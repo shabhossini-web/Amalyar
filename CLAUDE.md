@@ -39,6 +39,11 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 | پنل | Coolify روی VPS `62.60.214.40` | `panel.amalyar.com` |
 
 - **push به `main` = دیپلویِ خودکارِ هر دو اپ** (GitHub App → Coolify). بک‌اند هنگامِ اجرا `prisma migrate deploy` می‌زند.
+- **⚠️ دیپلوی خودکار است — هر بار نپرس.** کاربر یک‌بار برای همیشه اجازه داده:
+  هر تغییرِ تمام‌شده بعد از سبزشدنِ سنجه‌های قانون ۱۲ (بیلد + e2e محلی + گام‌های
+  CI) مستقیم روی `main` می‌رود. اجازه‌گرفتنِ دوباره برای «دیپلوی کنم؟» ممنوع.
+  استثنا فقط وقتی است که خودِ کار نیمه‌کاره باشد یا سنجه‌ای قرمز مانده باشد —
+  آن‌وقت دیپلوی نکن و **بگو چرا**.
 - سرور Docker Hub را از **آینهٔ آروان** می‌کشد (daemon.json روی هاست). شبکهٔ سرور کند است → npm در Dockerfile با retry/timeoutِ بالا.
 - **env بک‌اند در Coolify:** `CONTROL_DATABASE_URL` (دیتابیسِ کنترل), `PROVISIONING_DATABASE_URL` (کاربرِ CREATEDB/CREATEROLE — فقط Worker), `TENANT_DATABASE_ENCRYPTION_KEY` (کلیدِ AES-256 برای URL دیتابیسِ tenant), `JWT_SECRET` (حداقل ۳۲کاراکتر), `PORT=3001`, `CORS_ORIGINS`, `MELI_API_KEY`, `MELI_FROM`, `RP_ID`, `WEBAUTHN_ORIGINS`.
 - **مالتی‌تننت (Database-per-Tenant):** هر شرکت دیتابیسِ مستقل دارد. `control-db` فقط نگاشتِ `hostname → شرکت` + URLِ رمزشدهٔ دیتابیس را نگه می‌دارد (نه دادهٔ بیمار/حساب). درخواست از Host → tenant resolve → Prisma به دیتابیسِ همان شرکت route می‌شود.
