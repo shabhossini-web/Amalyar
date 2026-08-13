@@ -132,6 +132,41 @@ try {
   await t.click();
   await p.waitForTimeout(500);
   ok(await p.locator('.df-toast').count() === 0, 'با کلیک بسته می‌شود');
+
+  console.log('\n۶) «ثبت شد ✓» فقط وقتی گفته می‌شود که شرح واقعاً در پرونده باشد');
+  /* ⚠️ گزارشِ دومِ کاربر: «سیو شد هم می‌ده ولی تو لیست نشون نمی‌ده». یعنی
+     پیامِ موفقیت روی یک شکست نشسته بود، چون «ثبت شد» فقط یعنی «POST دو‌ایکس
+     داد». این‌جا سرور ۲۰۰ می‌دهد با شناسه‌ای که هرگز نوشته نشده؛ پروندهٔ
+     بازخوانی‌شده **واقعی** است و آن شناسه را ندارد. ادعا: کاربر باید پیامِ
+     شکست ببیند، نه تیکِ سبز. */
+  const GHOST_ID = 999999;
+  await p.route('**/api/patients/*/notes', (route) => (route.request().method() === 'POST'
+    ? route.fulfill({
+      status: 201, contentType: 'application/json',
+      body: JSON.stringify({ id: GHOST_ID, kind: 'consult', body: 'شرحی که هرگز نوشته نشد' }),
+    })
+    : route.continue()));
+  await p.locator('.rc-upload textarea').fill('این باید شکست را نشان بدهد.');
+  await p.locator('.rc-save').click();
+  await p.waitForTimeout(1800);
+
+  const t6 = p.locator('.df-toast');
+  ok((await t6.getAttribute('class') ?? '').includes('bad'), 'پیام قرمز است، نه تیکِ موفقیت');
+  const txt6 = await t6.innerText();
+  ok(/برنگرداند/.test(txt6), `می‌گوید پرونده آن را برنگرداند («${txt6.trim().slice(0, 60)}…»)`);
+  ok(/۹۹۹۹۹۹/.test(txt6), 'شناسهٔ برگشتیِ سرور را نام می‌برد تا گزارش دقیق باشد');
+  ok(!/ثبت شد ✓/.test(txt6), '**و هرگز «ثبت شد ✓» نمی‌گوید**');
+  ok(await p.locator('.rc-upload textarea').inputValue() === 'این باید شکست را نشان بدهد.',
+    'نوشتهٔ پزشک دست‌نخورده می‌ماند — کارِ ازدست‌رفته بدترین بخشِ این باگ بود');
+
+  console.log('\n۷) و مسیرِ سالم همچنان تیکِ موفقیت می‌گیرد');
+  await p.unroute('**/api/patients/*/notes');
+  await p.locator('.rc-upload textarea').fill('این یکی واقعاً ثبت می‌شود.');
+  await p.locator('.rc-save').click();
+  await p.waitForTimeout(1800);
+  const t7 = await p.locator('.df-toast').innerText().catch(() => '');
+  ok(/ثبت شد ✓/.test(t7), `ثبتِ واقعی پیامِ موفقیت می‌گیرد («${t7.trim()}»)`);
+  ok(await p.locator('.rc-upload textarea').inputValue() === '', 'و کادر بعد از موفقیت خالی می‌شود');
 } finally {
   console.log('\n' + '─'.repeat(50));
   console.log(`قبول: ${pass}   رد: ${fail}`);

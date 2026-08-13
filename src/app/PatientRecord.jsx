@@ -438,26 +438,58 @@ function NotesTab({ rec, reload, toast }) {
   const [editing, setEditing] = useState(null); // {id, body}
   const [history, setHistory] = useState(null);
 
+  /**
+   * ثبتِ شرح — و بعد **اثباتِ** اینکه واقعاً در پرونده نشسته.
+   *
+   * ⚠️ گزارشِ کاربر: «شرح ویزیت می‌زنم، سیو شد هم می‌ده، ولی تو لیست نشون
+   * نمی‌ده». تا دیروز «ثبت شد ✓» فقط یعنی «POST دو‌ایکس‌ایکس داد» — و همان
+   * پیام را می‌داد حتی وقتی پروندهٔ بازخوانی‌شده هیچ شرحی نداشت. یعنی
+   * بدترین حالتِ ممکن: پیامِ موفقیت روی یک شکست.
+   *
+   * حالا شناسه‌ای که خودِ سرور برگردانده در پروندهٔ تازه جست‌وجو می‌شود و
+   * «ثبت شد» فقط وقتی گفته می‌شود که واقعاً آن‌جا باشد. اگر نباشد، پیامِ
+   * قرمزِ ماندگار می‌گوید کدام نیمه شکسته — و نوشتهٔ کاربر هم پاک نمی‌شود.
+   *
+   * این خودش علت را رفع نمی‌کند؛ ولی «انگار ذخیره نمی‌شود» را به یک گزارشِ
+   * دقیق تبدیل می‌کند، و مهم‌تر: جلوی از‌دست‌رفتنِ متنِ پزشک را می‌گیرد.
+   */
   const add = async () => {
     if (!body.trim()) { toast('متنِ شرح خالی است', true); return; }
     setBusy(true);
     try {
-      await api(`/patients/${rec.id}/notes`, {
+      const created = await api(`/patients/${rec.id}/notes`, {
         method: 'POST',
         body: { kind, body: body.trim(), ...(visitId ? { visitId: +visitId } : {}) },
       });
+      const fresh = await reload();
+      const landed = created?.id != null
+        ? (fresh?.clinicalNotes ?? []).some((n) => n.id === created.id)
+        : (fresh?.clinicalNotes ?? []).length > (rec.clinicalNotes?.length ?? 0);
+      if (!landed) {
+        toast(
+          `سرور ثبت را پذیرفت${created?.id != null ? ` (شناسهٔ ${faNum(created.id)})` : ''} `
+          + 'ولی پرونده آن را برنگرداند. نوشتهٔ شما پاک نشد — همین پیام را گزارش کنید.',
+          true,
+        );
+        return;
+      }
       setBody(''); setVisitId('');
-      await reload();
       toast('شرح ثبت شد ✓');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
+  /* ویرایش هم همان قرارداد را دارد: «ثبت شد» فقط وقتی که نسخهٔ تازه واقعاً
+     در پروندهٔ بازخوانی‌شده باشد. */
   const amend = async () => {
     setBusy(true);
     try {
-      await api(`/patients/notes/${editing.id}`, { method: 'PATCH', body: { body: editing.body.trim() } });
+      const fresh = await api(`/patients/notes/${editing.id}`, { method: 'PATCH', body: { body: editing.body.trim() } });
+      const rec2 = await reload();
+      if (fresh?.id != null && !(rec2?.clinicalNotes ?? []).some((n) => n.id === fresh.id)) {
+        toast(`سرور نسخهٔ تازه را پذیرفت (شناسهٔ ${faNum(fresh.id)}) ولی پرونده آن را برنگرداند. همین پیام را گزارش کنید.`, true);
+        return;
+      }
       setEditing(null);
-      await reload();
       toast('نسخهٔ تازه ثبت شد ✓ (نسخهٔ قبلی در تاریخچه می‌ماند)');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
@@ -608,9 +640,11 @@ export default function PatientRecord() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  /* پروندهٔ تازه **برگردانده** می‌شود، نه فقط در state نشانده: فراخوان باید
+     بتواند بلافاصله بسنجد که نوشته‌اش واقعاً در پرونده نشسته یا نه. */
   const load = useCallback(async () => {
-    try { setRec(await api(`/patients/${id}/record`)); setErr(''); }
-    catch (e) { setErr(e.message); }
+    try { const fresh = await api(`/patients/${id}/record`); setRec(fresh); setErr(''); return fresh; }
+    catch (e) { setErr(e.message); return null; }
   }, [id]);
   useEffect(() => { load(); }, [load]);
 
