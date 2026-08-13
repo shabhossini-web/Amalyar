@@ -16,6 +16,7 @@ import FormBuilder from './app/FormBuilder.jsx';
 import Inventory from './app/Inventory.jsx';
 import Accounting from './app/Accounting.jsx';
 import Calendar from './app/Calendar.jsx';
+import Schedule from './app/Schedule.jsx';
 import Dispatch from './app/Dispatch.jsx';
 import Tech from './app/Tech.jsx';
 import Transport from './app/Transport.jsx';
@@ -68,6 +69,7 @@ export default function App() {
           <Route path="/app/inventory" element={<Protected><Gate feature="inventory"><Inventory /></Gate></Protected>} />
           <Route path="/app/accounting" element={<Protected><Gate feature="accounting"><Accounting /></Gate></Protected>} />
           <Route path="/app/calendar" element={<Protected><Gate feature="calendar"><Calendar /></Gate></Protected>} />
+          <Route path="/app/schedule" element={<Protected><Gate feature="calendar"><Schedule /></Gate></Protected>} />
           <Route path="/app/dispatch" element={<Protected><Gate feature="dispatch"><Dispatch /></Gate></Protected>} />
           <Route path="/app/tech" element={<Protected><Gate feature="tech"><Tech /></Gate></Protected>} />
           <Route path="/app/transport" element={<Protected><Gate feature="transport"><Transport /></Gate></Protected>} />

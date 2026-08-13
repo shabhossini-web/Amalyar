@@ -4,7 +4,7 @@ import Mark from '../components/Mark.jsx';
 import { useAuth } from './auth.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
-import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Dispatch, Form, Gear, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
+import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Form, Gear, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
 
 /* ── آیکون‌های خطی (lucide-style، stroke=currentColor) ── */
 
@@ -18,6 +18,9 @@ const DAILY = [
 const TOOLS = [
   { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
+  /* برنامهٔ کاری — `docs/BOOKING.md`. کنارِ تقویم می‌نشیند چون هم‌خانواده‌اند:
+     یکی می‌گوید چه شد، آن یکی می‌گوید چه وقتی می‌شود. */
+  { key: 'schedule', label: 'برنامهٔ کاری', icon: Clock, tint: 'green', ready: true, min: 5, to: '/app/schedule' },
   { key: 'dispatch', label: 'چینشِ نیروها', icon: Dispatch, tint: 'amber', ready: true, min: 4, to: '/app/dispatch' },
   { key: 'letter', label: 'نامه اداری', icon: Mail, tint: 'blue', ready: false, min: 5 },
   { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: true, min: 2, to: '/app/tech' },
