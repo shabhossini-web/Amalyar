@@ -70,6 +70,32 @@
 .rc-st-cancelled { color: #fda4af; background: rgba(251, 113, 133, .1); border: 1px solid rgba(251, 113, 133, .35); }
 
 /* ── آپلود / فرمِ افزودن ── */
+/* ردیفِ نوعِ شرح — جانشینِ `<select>`ِ بسته.
+   نوعی که فقط در dropdown نامش می‌آید، برای کاربر وجود ندارد؛ همین باعثِ
+   شکایتِ «سیرِ بیماری حذف شده» شد. `wrap` لازم است: پنج نوع در عرضِ گوشی
+   جا نمی‌شود و بریدنِ نام همان پنهان‌کردن است. */
+.rc-kindrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.rc-kindrow button {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 11px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: #b7b0d4;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.rc-kindrow button:hover { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .45); }
+.rc-kindrow button.on {
+  color: #fff; font-weight: 800; border-color: transparent;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}
+.rc-kindrow button:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .8); outline-offset: 2px; }
+/* شمارش داخلِ خودِ چیپ — «۰» عمداً نشان داده می‌شود: خالی‌بودن هم خبر است. */
+.rc-kindrow i {
+  font-style: normal; font-size: 11px; font-weight: 700;
+  min-width: 18px; padding: 1px 5px; border-radius: 8px; text-align: center;
+  color: var(--text2); background: rgba(0, 0, 0, .28);
+}
+.rc-kindrow button.on i { color: #fff; background: rgba(0, 0, 0, .22); }
+
 .rc-upload {
   display: grid; gap: 12px; margin-bottom: 14px; padding: 15px; border-radius: 16px;
   background: rgba(18, 13, 49, .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);

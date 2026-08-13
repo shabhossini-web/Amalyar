@@ -426,6 +426,11 @@ function DocsTab({ rec, reload, toast }) {
 
 /* ══════════════ تبِ شرح‌ها ══════════════ */
 function NotesTab({ rec, reload, toast }) {
+  /* ⚠️ `kind` هم **فیلترِ فهرست** است و هم نوعِ شرحِ تازه — عمداً یک state،
+     نه دو تا. کاربر وقتی روی «سیرِ بیماری» است، هم سیرِ بیماری را می‌خواند و
+     هم اگر بنویسد سیرِ بیماری می‌نویسد؛ دو کنترلِ جدا برای همین یک مفهوم
+     فقط جای بیشتری می‌گرفت و امکانِ ناهماهنگی می‌ساخت («سیرِ بیماری» را
+     فیلتر کرده باشی و نوشته‌ات «مشاوره» ثبت شود). */
   const [kind, setKind] = useState('visit');
   const [body, setBody] = useState('');
   const [visitId, setVisitId] = useState('');
@@ -462,15 +467,41 @@ function NotesTab({ rec, reload, toast }) {
     catch (e) { toast(e.message); }
   };
 
+  /* فیلترِ نمایش — روی همان آرایه‌ای که سرور داده، بدونِ رفت‌وبرگشتِ تازه:
+     شرح‌ها کم‌شمارند و صفحه از قبل همه را دارد. */
+  const shown = rec.clinicalNotes.filter((n) => n.kind === kind);
+
   return (
     <>
+      {/* ⚠️ **ردیفِ نوع‌ها، نه یک `<select>`.** شکایتِ کاربر این بود که
+          «سیرِ بیماری از پرونده حذف شده» — حذف نشده بود، ولی تنها جایی که
+          نامش دیده می‌شد داخلِ یک dropdownِ بسته بود. چیزی که برای دیدنش
+          باید کلیک کنی، برای کاربر وجود ندارد. حالا هر پنج نوع با نام و
+          شمارش روی صفحه‌اند؛ شمارش از سرور می‌آید (`counts.notesByKind`) و
+          نوعِ بی‌شرح هم چیپِ «۰» دارد. */}
+      {/* ⚠️ `radiogroup` است نه `tablist` — و این تفاوت هم معنایی است هم
+          دیداری: نوارِ تبِ صفحه (`Tabs`) بالای همین صفحه هست و دو نوارِ
+          هم‌شکلِ روی‌هم یعنی کاربر نداند کدام‌یک کجا می‌بَرد. این‌جا یکی از
+          چند گزینه انتخاب می‌شود (هم فیلتر، هم نوعِ شرحِ تازه)، دقیقاً مثلِ
+          `.db-kindrow`ِ داشبورد. نگهبانِ CI هم به‌درستی `tablist`ِ دست‌ساز را
+          رد می‌کند: تبِ واقعی فقط از `Tabs` می‌آید. */}
+      <div className="rc-kindrow" role="radiogroup" aria-label="نوعِ شرح">
+        {Object.entries(NOTE_KINDS).map(([k, l]) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={kind === k}
+            className={kind === k ? 'on' : ''}
+            onClick={() => setKind(k)}
+          >
+            {l}<i>{faNum(rec.counts.notesByKind?.[k] ?? 0)}</i>
+          </button>
+        ))}
+      </div>
+
       <div className="rc-upload">
         <div className="pf-row2">
-          <label className="pf-field"><span>نوعِ شرح</span>
-            <select value={kind} onChange={(e) => setKind(e.target.value)}>
-              {Object.entries(NOTE_KINDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
-          </label>
           <label className="pf-field"><span>مربوط به مراجعه</span>
             <select value={visitId} onChange={(e) => setVisitId(e.target.value)}>
               <option value="">— کلِ پرونده —</option>
@@ -482,13 +513,17 @@ function NotesTab({ rec, reload, toast }) {
           <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} placeholder="یافته‌ها، سیرِ بیماری، توصیه‌ها…" />
         </label>
         <button className="df-save rc-save" onClick={add} disabled={busy}>
-          <Plus width="15" height="15" /> ثبتِ شرح
+          {/* نوع در متنِ دکمه می‌آید تا وقتی چیپ بالا از چشم افتاده، کاربر
+              نداند دارد چه چیزی ثبت می‌کند. */}
+          <Plus width="15" height="15" /> ثبتِ {NOTE_KINDS[kind]}
         </button>
       </div>
 
-      {rec.clinicalNotes.length === 0 ? <div className="df-empty">شرحی ثبت نشده است</div> : (
+      {shown.length === 0 ? (
+        <div className="df-empty">هنوز «{NOTE_KINDS[kind]}»ی ثبت نشده است</div>
+      ) : (
         <div className="df-list">
-          {rec.clinicalNotes.map((n) => (
+          {shown.map((n) => (
             <div key={n.id} className="rc-note">
               <div className="rc-note-head">
                 <b>{NOTE_KINDS[n.kind] ?? n.kind}</b>

@@ -213,6 +213,18 @@ export class RecordService {
       counts: {
         visits: visits.length, documents: documents.length,
         notes: clinicalNotes.length, forms: attachedForms.length,
+        /* ⚠️ شمارشِ **هر نوعِ شرح** حتی وقتی صفر است — و صفرها عمداً حذف
+           نمی‌شوند (قانون ۱۵: مشتق سمتِ سرور).
+
+           این کلید از یک شکایتِ واقعی آمد: «سیرِ بیماری از پرونده حذف شده».
+           حذف نشده بود؛ یکی از پنج نوعِ شرح بود که فقط داخلِ یک `<select>`
+           دیده می‌شد — یعنی برای فهمیدنِ وجودش باید dropdown را باز می‌کردی.
+           حالا کلاینت از روی همین نگاشت ردیفِ چیپ می‌سازد و هر پنج نوع با
+           نامشان روی صفحه‌اند. نوعِ بی‌شرح هم چیپِ «۰» می‌گیرد، وگرنه باز
+           همان مسئله بود: چیزی که نیست، پیدا هم نمی‌شود. */
+        notesByKind: Object.fromEntries(
+          NOTE_KINDS.map((k) => [k, clinicalNotes.filter((n) => n.kind === k).length]),
+        ) as Record<string, number>,
       },
     };
   }
