@@ -80,6 +80,27 @@ class ProcedurePatchDto {
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
+/** موضوعِ ویزیت — ویزیتِ اولیه / پست‌آپ / زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. */
+class TopicCreateDto {
+  @IsString({ message: 'عنوان را وارد کنید' })
+  @MinLength(2, { message: 'عنوان کوتاه است' })
+  @MaxLength(60)
+  name!: string;
+
+  /// توکنِ رنگ، نه هگز — همان قرارِ `FormDef.color`.
+  @IsOptional() @IsString() @MaxLength(30) color?: string;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  @IsOptional() @IsInt() sort?: number;
+}
+
+class TopicPatchDto {
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(60) name?: string;
+  @IsOptional() @IsString() @MaxLength(30) color?: string;
+  @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  @IsOptional() @IsBoolean() active?: boolean;
+  @IsOptional() @IsInt() sort?: number;
+}
+
 class DiagnosisCreateDto {
   @IsString({ message: 'عنوان را وارد کنید' })
   @MinLength(2, { message: 'عنوان کوتاه است' })
@@ -224,6 +245,32 @@ export class DefinitionsController {
   @Delete('hospitals/:id')
   delHospital(@Param('id', ParseIntPipe) id: number) {
     return this.defs.deleteHospital(id);
+  }
+
+  /* ── موضوعِ ویزیت — مرحلهٔ ۱ از `docs/BOOKING.md` ── */
+
+  @RequirePermissions('definitions.read')
+  @Get('visit-topics')
+  visitTopics() {
+    return this.defs.listVisitTopics();
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Post('visit-topics')
+  addVisitTopic(@Body() dto: TopicCreateDto) {
+    return this.defs.createVisitTopic(dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Patch('visit-topics/:id')
+  patchVisitTopic(@Param('id', ParseIntPipe) id: number, @Body() dto: TopicPatchDto) {
+    return this.defs.updateVisitTopic(id, dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Delete('visit-topics/:id')
+  delVisitTopic(@Param('id', ParseIntPipe) id: number) {
+    return this.defs.deleteVisitTopic(id);
   }
 
   @RequirePermissions('definitions.read')

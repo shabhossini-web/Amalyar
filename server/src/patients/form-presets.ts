@@ -62,7 +62,7 @@ export type PresetForm = {
 export const BUILTIN_VISIT_KEYS = new Set([
   'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
   'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount',
-  'payer', 'kind', 'techArriveTime',
+  'payer', 'kind', 'techArriveTime', 'topicId',
 ]);
 
 /**
@@ -91,6 +91,8 @@ export const VISIT_BUILTIN_CATALOG: { key: string; label: string; type: string }
   { key: 'techId', label: 'کارشناس', type: 'select' },
   { key: 'procedureTypeId', label: 'نوعِ عمل', type: 'select' },
   { key: 'diagnosisId', label: 'تشخیص', type: 'select' },
+  /* موضوعِ ویزیت — اولیه/پست‌آپ/زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. */
+  { key: 'topicId', label: 'موضوعِ ویزیت', type: 'select' },
   { key: 'opStartTime', label: 'ساعتِ شروع', type: 'time' },
   { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time' },
   { key: 'techArriveTime', label: 'حضورِ کارشناس', type: 'time' },
@@ -111,6 +113,7 @@ const CORE = {
   assistant: { key: 'techId', label: 'دستیار', type: 'select', builtin: true },
   procedure: { key: 'procedureTypeId', label: 'نوعِ عمل', type: 'select', builtin: true },
   diagnosis: { key: 'diagnosisId', label: 'تشخیص', type: 'select', builtin: true },
+  topic: { key: 'topicId', label: 'موضوعِ ویزیت', type: 'select', builtin: true },
   date: { key: 'opDate', label: 'تاریخ', type: 'date', builtin: true },
   start: { key: 'opStartTime', label: 'ساعتِ شروع', type: 'time', builtin: true },
   end: { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time', builtin: true },

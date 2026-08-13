@@ -232,6 +232,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     techId: initial?.techId ?? null,
     procedureTypeId: initial?.procedureTypeId ?? null,
     diagnosisId: initial?.diagnosisId ?? null,
+    topicId: initial?.topicId ?? null,
     // متنِ آزاد فقط برای رکوردهای قدیمی که هنوز به نوعِ عمل وصل نشده‌اند.
     opType: initial?.procedureTypeId ? '' : initial?.opType || '',
     opReport: initial?.opReport || '',
@@ -391,7 +392,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     }
     const builtinVals = {
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
-      procedureTypeId: f.procedureTypeId, diagnosisId: f.diagnosisId,
+      procedureTypeId: f.procedureTypeId, diagnosisId: f.diagnosisId, topicId: f.topicId,
       opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
       notes: f.notes, amount: f.amount,
     };
@@ -408,6 +409,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       techId: f.techId ?? (editing ? null : undefined),
       procedureTypeId: f.procedureTypeId ?? (editing ? null : undefined),
       diagnosisId: f.diagnosisId ?? (editing ? null : undefined),
+      topicId: f.topicId ?? (editing ? null : undefined),
       opType: f.procedureTypeId ? undefined : f.opType.trim() || undefined,
       // پاسخِ فیلدهای دلخواه — سرور خودش به ستون و JSON تقسیمشان می‌کند.
       extra,
@@ -476,13 +478,14 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
   const activeProcedures = defs.procedures.filter((p) => p.active || p.id === f.procedureTypeId);
   const activeDiagnoses = defs.diagnoses.filter((d) => d.active || d.id === f.diagnosisId);
+  const activeTopics = (defs.topics ?? []).filter((t) => t.active || t.id === f.topicId);
 
   /**
    * ترتیبِ پیش‌فرضِ کد — پشتوانه‌ای برای فیلدهایی که هنوز در هیچ قالبی نیامده‌اند.
    * تعریفِ فرم بر این مقدم است؛ این فقط می‌گوید «اگر تعریف چیزی نگفت، کجا بنشیند».
    */
   const BUILTIN_ORDER = [
-    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
+    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId',
     'opDate', 'opStartTime', 'opEndTime', 'techArriveTime', 'opReport', 'amount', 'notes',
   ];
 
@@ -545,6 +548,17 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       options={activeDiagnoses}
       onQuickAdd={quickAdd('diagnoses')}
       addPlaceholder="عنوانِ تشخیصِ جدید…"
+    />) };
+  /* موضوعِ ویزیت — اولیه/پست‌آپ/زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. مثلِ بقیهٔ
+     تعریف‌ها افزودنِ سریع دارد تا منشی وسطِ ثبت مجبور به رفتن به «تعریف‌ها» نشود. */
+  if (fd.isOn('topicId')) builtinNodes.topicId = { wide: true, el: (
+    <DefSelect
+      label={<>{fd.labelOf('topicId', 'موضوعِ ویزیت')}{star(fd.requiredOf('topicId'))}</>}
+      value={f.topicId}
+      onChange={(v) => setF((s) => ({ ...s, topicId: v }))}
+      options={activeTopics}
+      onQuickAdd={quickAdd('visit-topics')}
+      addPlaceholder="موضوعِ تازه… مثلِ پست‌آپ"
     />) };
   if (fd.isOn('opDate')) builtinNodes.opDate = { wide: true, el: (
     /* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */
@@ -1001,6 +1015,7 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
     { key: 'techId', label: t.tech, options: defs.techs },
     { key: 'procedureTypeId', label: 'نوعِ عمل', options: defs.procedures },
     { key: 'diagnosisId', label: 'تشخیص', options: defs.diagnoses },
+    { key: 'topicId', label: 'موضوعِ ویزیت', options: defs.topics ?? [] },
   ];
 
   return (
@@ -1076,7 +1091,7 @@ export default function Dashboard() {
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
   const [denied, setDenied] = useState(false);
-  const [defs, setDefs] = useState({ surgeons: [], hospitals: [], techs: [], procedures: [], diagnoses: [] });
+  const [defs, setDefs] = useState({ surgeons: [], hospitals: [], techs: [], procedures: [], diagnoses: [], topics: [] });
   const qRef = useRef(q);
   qRef.current = q;
 
@@ -1119,14 +1134,15 @@ export default function Dashboard() {
 
   const loadDefs = useCallback(async () => {
     try {
-      const [surgeons, hospitals, techs, procedures, diagnoses] = await Promise.all([
+      const [surgeons, hospitals, techs, procedures, diagnoses, topics] = await Promise.all([
         api('/surgeons'),
         api('/hospitals'),
         api('/techs'),
         api('/procedure-types'),
         api('/diagnoses'),
+        api('/visit-topics'),
       ]);
-      setDefs({ surgeons, hospitals, techs, procedures, diagnoses });
+      setDefs({ surgeons, hospitals, techs, procedures, diagnoses, topics });
     } catch {
       /* دسترسی نداشته باشد، denied از load اصلی می‌آید */
     }

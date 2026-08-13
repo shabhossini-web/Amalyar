@@ -88,6 +88,11 @@ export class CreateVisitDto {
   @IsInt({ message: 'تشخیص نامعتبر است' })
   diagnosisId?: number;
 
+  /** موضوعِ ویزیت — اولیه / پست‌آپ / زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. */
+  @IsOptional()
+  @IsInt({ message: 'موضوعِ ویزیت نامعتبر است' })
+  topicId?: number;
+
   /** متنِ آزادِ نوعِ عمل — فقط برای سازگاری با رکوردهای قدیمی نگه داشته شده. */
   @IsOptional()
   @IsString()
@@ -237,6 +242,12 @@ export class UpdateVisitDto {
   @ValidateIf((o) => o.diagnosisId !== null)
   @IsInt({ message: 'تشخیص نامعتبر است' })
   diagnosisId?: number | null;
+
+  /** `null` صریح یعنی «موضوع را بردار». */
+  @IsOptional()
+  @ValidateIf((o) => o.topicId !== null)
+  @IsInt({ message: 'موضوعِ ویزیت نامعتبر است' })
+  topicId?: number | null;
 
   @IsOptional()
   @IsString()

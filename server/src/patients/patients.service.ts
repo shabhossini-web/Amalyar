@@ -54,6 +54,9 @@ function enrich(v: any, kinds?: KindMap) {
     procedureTypeId: v.procedureTypeId,
     procedureTypeName: v.procedureType?.name ?? v.opType,
     diagnosisId: v.diagnosisId,
+    topicId: v.topicId,
+    topicName: v.topic?.name ?? null,
+    topicColor: v.topic?.color ?? null,
     diagnosisTitle: v.diagnosis?.title ?? null,
     // شرحِ عمل حالا یک ClinicalNote است (نسخه‌دار و تغییرناپذیر)، ولی فرمِ مراجعه
     // همان یک فیلد را می‌بیند — تنها نسخهٔ جاری.
@@ -167,6 +170,7 @@ export type VisitFilter = {
   techId?: number;
   procedureTypeId?: number;
   diagnosisId?: number;
+  topicId?: number;
   from?: Date;
   to?: Date;
   /// فقط مراجعاتی که هنوز بدهی دارند.
@@ -204,6 +208,7 @@ const INCLUDE_PATIENT = {
   hospital: true,
   procedureType: true,
   diagnosis: true,
+  topic: true,
   surgeon: { include: { person: true } },
   tech: { include: { person: true } },
   // فقط نسخهٔ جاریِ شرحِ عمل؛ تاریخچه از مسیرِ پروندهٔ بیمار خوانده می‌شود.
@@ -257,7 +262,7 @@ export class PatientsService {
     if (status && status !== 'all') where.opStatus = status;
     if (kind && kind !== 'all') where.kind = kind;
 
-    for (const key of ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'] as const) {
+    for (const key of ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId'] as const) {
       if (f[key]) where[key] = f[key];
     }
 
@@ -616,6 +621,7 @@ export class PatientsService {
       techId?: number | null;
       procedureTypeId?: number | null;
       diagnosisId?: number | null;
+      topicId?: number | null;
     },
   ) {
     const out: any = {};
@@ -643,6 +649,11 @@ export class PatientsService {
       out.procedureTypeId = pt.id;
       // opType آینهٔ متنیِ نوعِ عمل است تا گزارش‌های قدیمی نشکنند.
       out.opType = pt.name;
+    }
+    if (dto.topicId != null) {
+      const tp = await tx.visitTopic.findUnique({ where: { id: dto.topicId } });
+      if (!tp) throw new BadRequestException('موضوعِ ویزیت پیدا نشد');
+      out.topicId = tp.id;
     }
     if (dto.diagnosisId != null) {
       const dg = await tx.diagnosis.findUnique({ where: { id: dto.diagnosisId } });
@@ -931,6 +942,7 @@ export class PatientsService {
       if (dto.techId === null) visitPatch.techId = null;
       if (dto.procedureTypeId === null) { visitPatch.procedureTypeId = null; visitPatch.opType = null; }
       if (dto.diagnosisId === null) visitPatch.diagnosisId = null;
+      if (dto.topicId === null) visitPatch.topicId = null;
       // متنِ آزاد فقط وقتی خوانده می‌شود که نوعِ عمل انتخاب نشده باشد.
       if (dto.opType !== undefined && visitPatch.opType === undefined) {
         visitPatch.opType = dto.opType?.trim() || null;
@@ -1026,7 +1038,7 @@ export class PatientsService {
 function pickBuiltin(dto: any): Record<string, any> {
   const out: Record<string, any> = {};
   for (const k of [
-    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
+    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId',
     'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount', 'payer', 'kind',
   ]) {
     if (k in dto) out[k] = dto[k];

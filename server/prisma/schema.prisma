@@ -247,6 +247,33 @@ model ProcedureType {
   @@map("procedure_types")
 }
 
+/// **موضوعِ ویزیت** — ویزیتِ اولیه، پست‌آپ، زیبایی، …
+///
+/// ⚠️ عمداً جدا از `Visit.kind`. `kind` تعیین می‌کند **کدام فرم** رندر شود
+/// (فرمِ ویزیت در برابر فرمِ جراحی)؛ موضوع یک دسته‌بندی **داخلِ** همان فرم
+/// است. ویزیتِ اولیه و پست‌آپ هر دو همان فرمِ ویزیت را می‌گیرند ولی روزِ
+/// کاریِ متفاوتی دارند و گزارشِ متفاوتی می‌سازند. اگر یکی می‌شدند، برای هر
+/// موضوع باید یک فرمِ کامل ساخته می‌شد و هر تغییرِ فرم چندبار تکرار می‌شد.
+///
+/// موضوع در مرحلهٔ بعد به برنامهٔ کاری وصل می‌شود («شنبه‌ها ویزیتِ اولیه») تا
+/// بیمار در هر روز فقط موضوعِ همان روز را ببیند. طراحی: `docs/BOOKING.md`.
+model VisitTopic {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  /// توکنِ رنگ (نه هگز) — همان قرارِ `FormDef.color`، تا با تمِ برند بخواند.
+  color String?
+  notes String?
+
+  active Boolean @default(true)
+  /// ترتیبِ نمایش؛ عدد تا جابه‌جایی با یک UPDATE انجام شود.
+  sort      Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visits Visit[]
+
+  @@map("visit_topics")
+}
+
 /// کالا — ست، پیچ، ایمپلنت و هر قلمِ مصرفی که در عمل استفاده می‌شود.
 ///
 /// برای شرکتِ تجهیزات همان نقشی را دارد که ProcedureType برای شرکتِ خدمات:
@@ -1008,6 +1035,11 @@ model Visit {
   procedureTypeId Int?           @map("procedure_type_id")
   diagnosis       Diagnosis?     @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
   diagnosisId     Int?           @map("diagnosis_id")
+
+  /// موضوعِ ویزیت — اولیه / پست‌آپ / زیبایی. `SetNull` چون حذفِ یک موضوع
+  /// نباید مراجعهٔ ثبت‌شده را ببرد؛ مراجعه بی‌موضوع می‌شود، نه ناپدید.
+  topic   VisitTopic? @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  topicId Int?        @map("topic_id")
 
   opDate   DateTime? @map("op_date") // تاریخِ عمل
   opStatus String    @default("pending") @map("op_status") // pending | done | cancelled

@@ -318,6 +318,66 @@ export class DefinitionsService {
     return this.listNeeds(procedureTypeId);
   }
 
+  /* ────────────── موضوعِ ویزیت (ویزیتِ اولیه / پست‌آپ / زیبایی) ──────────────
+     مرحلهٔ ۱ از `docs/BOOKING.md`. عمداً جدا از `Visit.kind`: آن یکی تعیین
+     می‌کند کدام فرم رندر شود، این یکی دسته‌بندیِ داخلِ همان فرم است. */
+
+  async listVisitTopics() {
+    const rows = await this.prisma.visitTopic.findMany({
+      orderBy: [{ active: 'desc' }, { sort: 'asc' }, { name: 'asc' }],
+      include: { _count: { select: { visits: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id, name: r.name, color: r.color, notes: r.notes,
+      active: r.active, sort: r.sort, visitCount: r._count.visits,
+    }));
+  }
+
+  async createVisitTopic(dto: { name: string; color?: string; notes?: string; sort?: number }) {
+    await this.uniqueName('visitTopic', 'name', dto.name);
+    return this.prisma.visitTopic.create({
+      data: {
+        name: dto.name.trim(),
+        color: dto.color?.trim() || null,
+        notes: dto.notes?.trim() || null,
+        sort: dto.sort ?? 0,
+      },
+    });
+  }
+
+  async updateVisitTopic(id: number, dto: { name?: string; color?: string; notes?: string; active?: boolean; sort?: number }) {
+    const row = await this.prisma.visitTopic.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('موضوعِ ویزیت یافت نشد');
+    if (dto.name) await this.uniqueName('visitTopic', 'name', dto.name, id);
+    return this.prisma.visitTopic.update({
+      where: { id },
+      data: {
+        ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.color !== undefined ? { color: dto.color?.trim() || null } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+        ...(dto.sort !== undefined ? { sort: dto.sort } : {}),
+      },
+    });
+  }
+
+  /**
+   * حذفِ موضوع — **فقط وقتی هیچ مراجعه‌ای نگرفته باشدش**، وگرنه خاموش می‌شود.
+   *
+   * ⚠️ FK روی `SetNull` است، پس حذفِ سخت مراجعه را نمی‌بَرد ولی موضوعش را
+   * بی‌صدا پاک می‌کند — و «این ویزیتِ اولیه بود یا پست‌آپ؟» دیگر جواب ندارد.
+   * خاموش‌کردن همان کارِ فهرست‌ها را می‌کند بدونِ ازدست‌دادنِ تاریخ.
+   */
+  async deleteVisitTopic(id: number) {
+    const used = await this.prisma.visit.count({ where: { topicId: id } });
+    if (used > 0) {
+      await this.prisma.visitTopic.update({ where: { id }, data: { active: false } });
+      return { ok: true, deactivated: true, visitCount: used };
+    }
+    await this.prisma.visitTopic.delete({ where: { id } });
+    return { ok: true, deactivated: false, visitCount: 0 };
+  }
+
   async createProcedureType(dto: { name: string; code?: string; notes?: string }) {
     await this.uniqueName('procedureType', 'name', dto.name);
     return this.prisma.procedureType.create({
@@ -431,7 +491,7 @@ export class DefinitionsService {
     return { ok: true, deactivated: false };
   }
 
-  private async uniqueName(model: 'procedureType' | 'diagnosis', field: 'name' | 'title', value: string, exceptId?: number) {
+  private async uniqueName(model: 'procedureType' | 'diagnosis' | 'visitTopic', field: 'name' | 'title', value: string, exceptId?: number) {
     const row = await (this.prisma[model] as any).findFirst({
       where: { [field]: { equals: value.trim(), mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
     });
