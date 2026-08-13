@@ -218,10 +218,11 @@ export class AvailabilityService {
         include: AvailabilityService.RULE_INCLUDE,
       }),
       this.prisma.availabilityException.findMany({ where: { date: { gte: from, lt: to } } }),
-      /* نوبت‌های زنده. `cancelled` جا اشغال نمی‌کند — وگرنه هر کنسلی یک جای
-         سوخته می‌ساخت و ظرفیتِ مطب به‌مرور صفر می‌شد. */
+      /* نوبت‌های زنده. `cancelled` و `noshow` جا اشغال نمی‌کنند — وگرنه هر
+         کنسلی یک جای سوخته می‌ساخت. ⚠️ `arrived` حتماً باید باشد: بیماری که
+         در مطب نشسته اگر جا آزاد کند، نفرِ بعدی روی همان اسلات می‌نشیند. */
       this.prisma.appointment.findMany({
-        where: { date: { gte: from, lt: to }, status: { in: ['held', 'confirmed', 'done'] } },
+        where: { date: { gte: from, lt: to }, status: { in: ['held', 'confirmed', 'arrived', 'done'] } },
         select: { date: true, startMin: true, doctorId: true },
       }),
     ]);

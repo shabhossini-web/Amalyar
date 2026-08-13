@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { LEVEL } from '../common/levels';
+import { APPT_LABELS, APPT_TRANSITIONS } from './appointments.service';
 
 /**
  * تقویمِ ماهانهٔ عمل‌ها.
@@ -58,21 +59,57 @@ export class CalendarService {
       });
     }
 
+    /* ⚠️ نوبت‌ها هم در همین پاسخ می‌آیند، نه یک endpoint دوم: تقویم یک صفحه
+       است و دو fetch یعنی روزی یکی‌شان شکست بخورد و صفحه نصفه باشد. نوبتِ
+       لغوشده نمی‌آید — تقویم برنامهٔ روز است، نه بایگانی. */
+    const appts = await this.prisma.appointment.findMany({
+      where: { date: { gte: from, lt: to }, status: { not: 'cancelled' } },
+      orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }],
+      include: {
+        patient: { select: { code: true, firstName: true, lastName: true, phone: true } },
+        topic: { select: { name: true, color: true } },
+      },
+    });
+    const apptDays = new Map<number, any[]>();
+    for (const a of appts) {
+      const [, , jd] = toJalali(a.date);
+      if (!apptDays.has(jd)) apptDays.set(jd, []);
+      apptDays.get(jd)!.push({
+        id: a.id,
+        time: a.startMin == null ? null : `${String(Math.floor(a.startMin / 60)).padStart(2, '0')}:${String(a.startMin % 60).padStart(2, '0')}`,
+        seq: a.seq,
+        status: a.status,
+        statusLabel: APPT_LABELS[a.status] ?? a.status,
+        fullName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}`.trim() : 'بدونِ پرونده',
+        patientCode: a.patient?.code ?? null,
+        phone: a.patient?.phone ?? null,
+        topicName: a.topic?.name ?? null,
+        visitId: a.visitId,
+        next: APPT_TRANSITIONS[a.status] ?? [],
+      });
+    }
+    const allDays = new Set([...days.keys(), ...apptDays.keys()]);
+
     return {
       year: jy,
       month: jm,
-      days: [...days.entries()]
+      days: [...allDays]
+        .sort((a, b) => a - b)
+        .map((day) => ({ day, visits: days.get(day) ?? [], appointments: apptDays.get(day) ?? [] }))
+        .map(({ day, visits, appointments }) => ({ day, visits, appointments }))
         .sort((a, b) => a[0] - b[0])
-        .map(([day, visits]) => ({
+        // شمارشِ وضعیت روی خودِ سلول دیده می‌شود؛ بدونش کاربر باید هر روز را
+        // باز کند تا بفهمد کدام عمل هنوز بی‌وضعیت مانده.
+        .map(({ day, visits, appointments }) => ({
           day,
           visits,
-          // شمارشِ وضعیت روی خودِ سلول دیده می‌شود؛ بدونش کاربر باید هر روز را
-          // باز کند تا بفهمد کدام عمل هنوز بی‌وضعیت مانده.
+          appointments,
           counts: {
             total: visits.length,
             pending: visits.filter((v: any) => v.opStatus === 'pending').length,
             done: visits.filter((v: any) => v.opStatus === 'done').length,
             cancelled: visits.filter((v: any) => v.opStatus === 'cancelled').length,
+            appointments: appointments.length,
           },
         })),
       total: rows.length,

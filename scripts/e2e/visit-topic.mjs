@@ -111,10 +111,11 @@ p.on('pageerror', (e) => errs.push(String(e)));
 try {
   await p.goto(UI + '/', { waitUntil: 'domcontentloaded' });
   await p.evaluate((t) => localStorage.setItem('amalyar_token', t), login.accessToken);
-  await p.goto(UI + '/app/dashboard', { waitUntil: 'networkidle' });
-  await p.waitForTimeout(2200);
-  await p.locator('.db-card').first().locator('.db-tools button[title="ویرایش"]').click();
-  await p.waitForTimeout(1400);
+  /* ⚠️ دیپ‌لینک به مراجعهٔ **خودِ همین آزمون** — «اولین کارتِ فهرست» ممکن
+     است جامانده‌ی سوئیتِ دیگری با نوعِ دیگری باشد و برچسبِ موضوع را نداشته
+     باشد؛ یک‌بار دقیقاً همین‌طور قرمز شد. */
+  await p.goto(UI + `/app/dashboard?patient=${visit.id}`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(2400);
   const sheet = await p.locator('.db-sheet').innerText();
   ok(/موضوعِ ویزیت/.test(sheet), 'برچسبِ «موضوعِ ویزیت» در فرم دیده می‌شود');
   ok(new RegExp(NAME).test(sheet), `و موضوعِ تعریف‌شده در گزینه‌ها هست («${NAME}»)`);

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './calendar.css';
-import { ChevronEnd } from '../ui/icons.jsx';
+import { ChevronEnd, Clock } from '../ui/icons.jsx';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -18,6 +18,9 @@ const KIND_TAG = { surgery: '', clinic: 'ویزیت', followup: 'پیگیری', 
  * می‌کند و همان‌جاست که کاربر به فهرست برمی‌گردد.
  */
 export default function Calendar() {
+  const navigate = useNavigate();
+  const [busyAppt, setBusyAppt] = useState(0);
+  const [err2, setErr2] = useState('');
   const [ty, tm, td] = jToday();
   const [ym, setYm] = useState({ y: ty, m: tm });
   const [data, setData] = useState(null);
@@ -35,6 +38,23 @@ export default function Calendar() {
 
   const byDay = new Map((data?.days ?? []).map((d) => [d.day, d]));
   const picked = byDay.get(day);
+
+  /* میزِ پذیرش — گذارِ وضعیتِ نوبت. دکمه‌ها از `next`ِ خودِ سرور ساخته
+     می‌شوند، نه از کپیِ کلاینتیِ ماشینِ وضعیت. */
+  const setApptStatus = async (a, status) => {
+    setBusyAppt(a.id); setErr2('');
+    try { await api(`/appointments/${a.id}/status`, { method: 'POST', body: { status } }); await load(ym.y, ym.m); }
+    catch (e) { setErr2(e.message); } finally { setBusyAppt(0); }
+  };
+
+  /* شروعِ ویزیت — مراجعه از خودِ نوبت ساخته (یا پیدا) می‌شود و فرمش باز. */
+  const startVisit = async (a) => {
+    setBusyAppt(a.id); setErr2('');
+    try {
+      const r = await api(`/appointments/${a.id}/visit`, { method: 'POST' });
+      navigate(`/app/dashboard?patient=${r.visitId}`);
+    } catch (e) { setErr2(e.message); setBusyAppt(0); }
+  };
 
   return (
     <div className="cal">
@@ -65,6 +85,9 @@ export default function Calendar() {
                 {cell.counts.done > 0 && <i className="d" title="تمام‌شده">{faNum(cell.counts.done)}</i>}
                 {cell.counts.cancelled > 0 && <i className="c" title="لغو">{faNum(cell.counts.cancelled)}</i>}
               </div>
+              {cell.counts.appointments > 0 && (
+                <div className="cal-appt-dot" title="نوبت‌ها"><Clock width="9" height="9" /> {faNum(cell.counts.appointments)}</div>
+              )}
               <div className="cal-names">
                 {cell.visits.slice(0, 2).map((v) => (
                   <span key={v.id} className={`s-${v.opStatus}`}>
@@ -80,8 +103,57 @@ export default function Calendar() {
 
       <section className="cal-day">
         <b>{faNum(day)} {J_MONTHS[ym.m - 1]}</b>
-        {!picked ? (
-          <div className="cal-empty">عملی برای این روز ثبت نشده</div>
+        {err2 && <div className="cal-err">{err2}</div>}
+
+        {/* ── میزِ پذیرش: نوبت‌های این روز ──
+            «در انتظارِ پرداخت ← قطعی ← در مطب ← انجام شد» — همان چرخه‌ای که
+            نرم‌افزارهای مطب دارند، ولی دکمه‌ها از ماشینِ وضعیتِ سرور می‌آیند. */}
+        {(picked?.appointments ?? []).length > 0 && (
+          <div className="cal-appts">
+            <small className="cal-appts-title">نوبت‌های این روز</small>
+            {picked.appointments.map((a) => (
+              <article key={`ap${a.id}`} className={`cal-appt st-${a.status}`}>
+                <div className="cal-time">
+                  {a.time ? <b dir="ltr">{a.time}</b> : a.seq ? <b>#{faNum(a.seq)}</b> : <b className="none">—</b>}
+                </div>
+                <div className="cal-main">
+                  <b>
+                    {a.fullName}
+                    <i className={`cal-appt-st st-${a.status}`}>{a.statusLabel}</i>
+                  </b>
+                  <small>{[a.topicName, a.patientCode, a.phone].filter(Boolean).join(' · ') || '—'}</small>
+                </div>
+                <div className="cal-appt-acts">
+                  {/* «شروعِ ویزیت» مقصدِ اصلیِ کلِ این ماژول است: نوبت ← فرمِ
+                      همان مراجعه، هر نقش بخشِ خودش. */}
+                  {a.status !== 'cancelled' && a.status !== 'noshow' && (
+                    <button type="button" className="cal-appt-go" disabled={busyAppt === a.id}
+                            onClick={() => startVisit(a)}>
+                      {a.visitId ? 'بازکردنِ ویزیت' : 'شروعِ ویزیت'}
+                    </button>
+                  )}
+                  {a.next.filter((s) => s !== 'done').map((s) => (
+                    <button key={s} type="button" className={`cal-appt-act st-${s}`} disabled={busyAppt === a.id}
+                            onClick={() => setApptStatus(a, s)}>
+                      {{ confirmed: 'قطعی', arrived: 'رسید', noshow: 'نیامد', cancelled: 'لغو' }[s] ?? s}
+                    </button>
+                  ))}
+                  {a.next.includes('done') && (
+                    <button type="button" className="cal-appt-act st-done" disabled={busyAppt === a.id}
+                            onClick={() => setApptStatus(a, 'done')}>
+                      تمام شد
+                    </button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        {!picked || picked.visits.length === 0 ? (
+          (picked?.appointments ?? []).length === 0
+            ? <div className="cal-empty">عملی برای این روز ثبت نشده</div>
+            : null
         ) : picked.visits.map((v) => (
           <article key={v.id} className={`cal-row s-${v.opStatus}`}>
             <div className="cal-time">

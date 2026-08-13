@@ -866,14 +866,19 @@ export class PatientsService {
     }
   }
 
-  async createVisit(dto: CreateVisitDto, user?: any) {
+  async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean }) {
     const userId: number | undefined = user?.id;
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
        بی‌آن فیلد را با خوش‌رویی می‌پذیرفت — یعنی «اجباری» فقط یک نقاشی بود.
        اعتبارسنجیِ کلاینت دور زدنی است؛ این نیست. */
     await this.assertKind(dto.kind);
-    await this.assertFormValid(dto);
+    /* ⚠️ «شروعِ ویزیت» از میزِ پذیرش پوسته‌ی مراجعه را می‌سازد که **بعداً**
+       پر شود؛ اگر ستاره‌های فرم همین‌جا اجرا می‌شدند، پذیرش نمی‌توانست هیچ
+       ویزیتی را شروع کند مگر همهٔ فیلدهای اجباریِ پزشک را هم خودش بداند —
+       یعنی هرگز. ستاره‌ها در مسیرهای ثبتِ کامل (داشبورد/فرمِ عمومی) سرِ
+       جایشان‌اند؛ این پرچم فقط از `startVisit` می‌آید. */
+    if (!opts?.skipFormValidation) await this.assertFormValid(dto);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;

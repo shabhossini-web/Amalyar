@@ -152,6 +152,7 @@ try {
   ok(!!mine, 'ثبت‌نام در صفِ تأیید هست');
   const okRes = await send(`/intake/submissions/${mine.id}/approve`, 'POST', {});
   ok(okRes.status < 300, `تأیید شد (${okRes.status})`);
+  if (okRes.json?.visitId) trash.visits = [...(trash.visits ?? []), okRes.json.visitId];
   const visit = await get(`/visits/${(await get('/visits')).rows?.[0]?.id ?? 0}`).catch(() => null);
   void visit;
   const view = await fetch(`${API}/public/intake/form/${tok1}`).then((r) => r.json());
@@ -182,6 +183,7 @@ try {
 } finally {
   console.log('\n' + '─'.repeat(50));
   console.log(`قبول: ${pass}   رد: ${fail}`);
+  for (const id of trash.visits ?? []) await fetch(API + `/visits/${id}`, { method: 'DELETE', headers: A });
   /* نوبت‌های همین اجرا — از راهِ ثبت‌نام‌هایی که به لینکِ این آزمون وصل‌اند. */
   for (const id of trash.links) {
     sql(`DELETE FROM appointments WHERE submission_id IN (SELECT id FROM intake_submissions WHERE link_id = ${id})`);
