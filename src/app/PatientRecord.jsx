@@ -92,7 +92,7 @@ function ProfileTab({ rec, onSave, toast }) {
     let birthDate = null;
     if (f.birthDateJ.trim()) {
       birthDate = jStrToIso(f.birthDateJ);
-      if (!birthDate) { toast('تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)'); return; }
+      if (!birthDate) { toast('تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)', true); return; }
     }
     setBusy(true);
     try {
@@ -108,7 +108,7 @@ function ProfileTab({ rec, onSave, toast }) {
       await onSave(body);
       toast('پرونده به‌روز شد ✓');
     } catch (e) {
-      toast(e.message);
+      toast(e.message, true);
     } finally {
       setBusy(false);
     }
@@ -325,7 +325,7 @@ function DocsTab({ rec, reload, toast }) {
     let takenAt;
     if (takenJ.trim()) {
       takenAt = jStrToIso(takenJ);
-      if (!takenAt) { toast('تاریخِ مدرک نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)'); return; }
+      if (!takenAt) { toast('تاریخِ مدرک نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)', true); return; }
     }
     setBusy(true);
     try {
@@ -341,7 +341,7 @@ function DocsTab({ rec, reload, toast }) {
       await reload();
       toast('مدرک اضافه شد ✓');
     } catch (e) {
-      toast(e.message);
+      toast(e.message, true);
     } finally {
       setBusy(false);
     }
@@ -352,7 +352,7 @@ function DocsTab({ rec, reload, toast }) {
       await api(`/patients/documents/${doc.id}`, { method: 'DELETE' });
       await reload();
       toast('مدرک حذف شد');
-    } catch (e) { toast(e.message); }
+    } catch (e) { toast(e.message, true); }
   };
 
   const shown = filter === 'all' ? rec.documents : rec.documents.filter((d) => d.category === filter);
@@ -439,7 +439,7 @@ function NotesTab({ rec, reload, toast }) {
   const [history, setHistory] = useState(null);
 
   const add = async () => {
-    if (!body.trim()) { toast('متنِ شرح خالی است'); return; }
+    if (!body.trim()) { toast('متنِ شرح خالی است', true); return; }
     setBusy(true);
     try {
       await api(`/patients/${rec.id}/notes`, {
@@ -449,7 +449,7 @@ function NotesTab({ rec, reload, toast }) {
       setBody(''); setVisitId('');
       await reload();
       toast('شرح ثبت شد ✓');
-    } catch (e) { toast(e.message); } finally { setBusy(false); }
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
   const amend = async () => {
@@ -459,12 +459,12 @@ function NotesTab({ rec, reload, toast }) {
       setEditing(null);
       await reload();
       toast('نسخهٔ تازه ثبت شد ✓ (نسخهٔ قبلی در تاریخچه می‌ماند)');
-    } catch (e) { toast(e.message); } finally { setBusy(false); }
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
   const showHistory = async (note) => {
     try { setHistory({ note, rows: await api(`/patients/notes/${note.id}/history`) }); }
-    catch (e) { toast(e.message); }
+    catch (e) { toast(e.message, true); }
   };
 
   /* فیلترِ نمایش — روی همان آرایه‌ای که سرور داده، بدونِ رفت‌وبرگشتِ تازه:
@@ -591,11 +591,20 @@ export default function PatientRecord() {
   const [rec, setRec] = useState(null);
   const [err, setErr] = useState('');
   const [tab, setTab] = useState('profile');
-  const [toast, setToast] = useState('');
+  /* ⚠️ **شکست باید از موفقیت قابلِ تشخیص باشد.**
+     تا دیروز toast فقط یک رشته بود و خطا با موفقیت یک شکل داشت: همان قابِ
+     بنفش، ۲٫۲ ثانیه، بعد رفت. یعنی اگر ثبتِ شرح ۴۰۳ یا ۵۰۰ می‌گرفت، کاربر
+     یک چشمکِ بنفش می‌دید و نتیجه می‌گرفت «سیو نمی‌شود» — بدونِ هیچ متنی که
+     بشود گزارشش کرد. دقیقاً همین شکایت آمد و بازتولیدش ممکن نبود، چون خودِ
+     پیام هیچ‌جا نمی‌ماند.
+     حالا خطا قرمز است، **خودش نمی‌رود** (کاربر می‌بندد) و متنِ سرور را
+     کامل نشان می‌دهد. */
+  const [toast, setToast] = useState(null);   // { text, bad }
+  const say = useCallback((text, bad = false) => setToast(text ? { text, bad } : null), []);
 
   useEffect(() => {
-    if (!toast) return undefined;
-    const t = setTimeout(() => setToast(''), toast.length > 40 ? 4500 : 2200);
+    if (!toast || toast.bad) return undefined;   // خطا با دستِ کاربر بسته می‌شود
+    const t = setTimeout(() => setToast(null), toast.text.length > 40 ? 4500 : 2200);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -654,15 +663,25 @@ export default function PatientRecord() {
       />
 
       <div className="rc-body">
-        {tab === 'profile' && <ProfileTab key={rec.updatedAt} rec={rec} onSave={save} toast={setToast} />}
+        {tab === 'profile' && <ProfileTab key={rec.updatedAt} rec={rec} onSave={save} toast={say} />}
         {tab === 'visits' && <VisitsTab rec={rec} />}
         {tab === 'journey' && <JourneyTab rec={rec} />}
-        {tab === 'docs' && <DocsTab rec={rec} reload={load} toast={setToast} />}
+        {tab === 'docs' && <DocsTab rec={rec} reload={load} toast={say} />}
         {tab === 'forms' && <FormsTab rec={rec} />}
-        {tab === 'notes' && <NotesTab rec={rec} reload={load} toast={setToast} />}
+        {tab === 'notes' && <NotesTab rec={rec} reload={load} toast={say} />}
       </div>
 
-      {toast && <div className="df-toast">{toast}</div>}
+      {toast && (
+        <button
+          type="button"
+          className={`df-toast${toast.bad ? ' bad' : ''}`}
+          onClick={() => setToast(null)}
+          aria-live={toast.bad ? 'assertive' : 'polite'}
+        >
+          {toast.text}
+          {toast.bad && <i>ثبت نشد — برای بستن بزنید</i>}
+        </button>
+      )}
     </div>
   );
 }
