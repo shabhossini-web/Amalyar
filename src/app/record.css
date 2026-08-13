@@ -172,3 +172,22 @@
   .rc-doc { gap: 10px; padding: 10px; }
   .rc-thumb { width: 44px; height: 44px; }
 }
+
+/* ── toast ──
+   ⚠️ خطا **قرمز** است و خودش نمی‌رود. تا دیروز شکست و موفقیت یک قابِ بنفشِ
+   ۲ثانیه‌ای داشتند، پس ثبتِ ناموفقِ شرح فقط یک چشمک بود و کاربر می‌گفت «سیو
+   نمی‌شود» بی‌آنکه پیامی برای گزارش داشته باشد. حالا متنِ سرور می‌ماند تا
+   کاربر ببندش. */
+.df-toast {
+  font: inherit; text-align: center; cursor: default;
+  display: flex; flex-direction: column; gap: 3px; align-items: center;
+}
+.df-toast.bad {
+  cursor: pointer;
+  color: #fee2e2;
+  background: rgba(76, 12, 20, .97);
+  border-color: rgba(248, 113, 113, .55);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+}
+.df-toast.bad i { font-style: normal; font-size: 11px; color: #fca5a5; }
+.df-toast:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

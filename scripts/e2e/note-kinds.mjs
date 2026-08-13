@@ -106,6 +106,32 @@ try {
   const after = await fetch(API + `/patients/${pid}/record`, { headers: A }).then((r) => r.json());
   ok(after.counts.notesByKind.consult === 1, `شرحِ تازه «مشاوره» ثبت شد (${after.counts.notesByKind.consult})`);
   ok(after.counts.notesByKind.progress === 1, 'و سیرِ بیماری دست‌نخورده ماند');
+
+  console.log('\n۵) شکستِ ثبت باید دیده شود — نه یک چشمکِ هم‌شکلِ موفقیت');
+  /* ⚠️ این بند از یک گزارشِ واقعی آمد: «شرح‌ها سیو نمی‌شوند». مسیرِ ذخیره
+     سالم بود، ولی اگر درخواست شکست می‌خورد کاربر همان قابِ بنفشِ ۲ثانیه‌ایِ
+     موفقیت را می‌دید و بعد هیچ — نه رنگی که بگوید خطاست، نه متنی که بشود
+     گزارشش کرد. شکستی که پیام نداشته باشد، از «کار نکردن» قابلِ تشخیص
+     نیست. پس پاسخِ سرور به ۴۰۳ی که خودش می‌دهد قلاب می‌شود. */
+  await p.route('**/api/patients/*/notes', (route) => (route.request().method() === 'POST'
+    ? route.fulfill({
+      status: 403, contentType: 'application/json',
+      body: JSON.stringify({ message: 'اجازهٔ ثبتِ شرحِ بالینی را ندارید' }),
+    })
+    : route.continue()));
+  await p.locator('.rc-upload textarea').fill('این نباید بی‌صدا گم شود.');
+  await p.locator('.rc-save').click();
+  await p.waitForTimeout(1200);
+
+  const t = p.locator('.df-toast');
+  ok((await t.getAttribute('class') ?? '').includes('bad'), 'قابِ خطا از موفقیت جدا است (کلاسِ bad)');
+  ok(/اجازهٔ ثبتِ شرحِ بالینی/.test(await t.innerText()), 'متنِ خودِ سرور را نشان می‌دهد');
+  await p.waitForTimeout(5000);
+  ok(await t.count() === 1, 'بعد از ۵ ثانیه هنوز روی صفحه است — خودش نمی‌رود');
+  ok(!!(await p.locator('.rc-upload textarea').inputValue()), 'و نوشتهٔ کاربر پاک نشده');
+  await t.click();
+  await p.waitForTimeout(500);
+  ok(await p.locator('.df-toast').count() === 0, 'با کلیک بسته می‌شود');
 } finally {
   console.log('\n' + '─'.repeat(50));
   console.log(`قبول: ${pass}   رد: ${fail}`);
