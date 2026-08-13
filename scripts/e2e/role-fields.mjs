@@ -1,18 +1,19 @@
 /**
  * **«هر کس قسمتِ خودش را پر کند»** — `docs/BOOKING.md` مرحلهٔ ۴.
  *
- * ⚠️ قاعده دنبالِ **نقش** است نه سطح: حسابِ بی‌نقش (همهٔ حساب‌های امروز) هیچ
- * محدودیتی ندارد؛ حسابِ نقش‌دار — هر سطحی — فقط بخشِ خودش و بخش‌های عمومی را
- * می‌نویسد. اگر به سطح گره می‌خورد، پزشکِ سطح‌بالا از قاعده بیرون می‌افتاد و
- * کلِ بخش‌بندی نمایشی می‌شد.
+ * ⚠️ قاعده دنبالِ **نقش** است، با یک استثنای صریح: **سوپرادمین (سطح ۶) همیشه
+ * بیرون از قاعده است** — باید یک نفر باشد که کلِ چرخه را ببیند و هر بخشی را
+ * اصلاح کند. از ادمین (سطح ۵) به پایین، حسابِ نقش‌دار فقط بخشِ خودش و
+ * بخش‌های عمومی را می‌نویسد؛ حسابِ بی‌نقش هیچ محدودیتی ندارد.
  *
  * ⚠️ فقط مقدارِ **تغییرکرده** رد می‌شود: کلاینتی که مقدارِ دست‌نخورده‌ی بخشِ
  * دیگر را echo می‌کند نباید رد شود — وگرنه هر ذخیره‌ی منشی به «شرحِ معاینه»ی
  * پزشک گیر می‌کرد.
  *
- * نقشِ حسابِ آزمون با SQL ست/پاک می‌شود چون ساختِ حسابِ دوم مسیرِ OTP دارد.
- * پاک‌سازی هم در ابتدا هم در `finally` — تا کرشِ وسطِ کار admin را نقش‌دار
- * جا نگذارد و سوئیت‌های بعدی بی‌دلیل قرمز شوند.
+ * نقش و سطحِ حسابِ آزمون با SQL ست/پاک می‌شود (ساختِ حسابِ دوم مسیرِ OTP
+ * دارد؛ سطح را هم باید پایین‌وبالا کنیم که با API خودِ حساب شدنی نیست).
+ * بازگردانی به (سطح ۶، بی‌نقش) هم در ابتدا هم در `finally` — کرشِ وسطِ کار
+ * نباید admin را سطح‌۵ یا نقش‌دار جا بگذارد و سوئیت‌های بعدی را قرمز کند.
  */
 import { chromium } from 'playwright-core';
 
@@ -27,8 +28,9 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail
 const { execSync } = await import('node:child_process');
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
 const sql = (q) => execSync(`psql "${DB}" -qtAc ${JSON.stringify(q)}`).toString().trim().split('\n')[0];
-const setMyRole = (r) => sql(`UPDATE accounts SET job_role=${r ? `'${r}'` : 'NULL'} WHERE username='${USER}'`);
-setMyRole(null); // اجرای قبلی اگر وسطِ راه مرده باشد
+const setMe = (role, level) =>
+  sql(`UPDATE accounts SET job_role=${role ? `'${role}'` : 'NULL'}, level=${level} WHERE username='${USER}'`);
+setMe(null, 6); // اجرای قبلی اگر وسطِ راه مرده باشد
 
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -64,7 +66,8 @@ try {
   ok(def2.fields.find((x) => x.key === 'opDate')?.role === 'secretary', 'تاریخ بخشِ منشی شد');
   await send(`/forms/fields/${dateRow.id}`, 'PATCH', { role: null });
 
-  console.log('\n۳) حسابِ بی‌نقش همه‌چیز را می‌نویسد — رفتارِ همهٔ نصب‌های امروز');
+  console.log('\n۳) ادمینِ بی‌نقش (سطح ۵) همه‌چیز را می‌نویسد — رفتارِ همهٔ نصب‌های امروز');
+  setMe(null, 5);
   const visit = (await send('/visits', 'POST', {
     kind: `rl${tag}`, firstName: 'بخشِ', lastName: 'نقش',
     opDate: new Date().toISOString(),
@@ -74,15 +77,15 @@ try {
   trash.visits.push(visit.id);
   ok(visit.extra?.examNote === 'معاینهٔ اولیه', 'هر سه بخش نوشته شد');
 
-  console.log('\n۴) حسابِ نقش‌دار فقط بخشِ خودش را می‌نویسد — سطح مهم نیست');
-  setMyRole('secretary');
+  console.log('\n۴) ادمینِ نقش‌دار (سطح ۵ + منشی) فقط بخشِ خودش را می‌نویسد');
+  setMe('secretary', 5);
   const okOwn = await send(`/visits/${visit.id}`, 'PATCH', { extra: { reception: 'پروندهٔ کاغذی آماده شد' } });
   ok(okOwn.status === 200, `منشی بخشِ خودش را نوشت (${okOwn.status})`);
   const okShared = await send(`/visits/${visit.id}`, 'PATCH', { extra: { shared: 'به‌روز شد' } });
   ok(okShared.status === 200, `و بخشِ عمومی را هم (${okShared.status})`);
 
   const denied = await send(`/visits/${visit.id}`, 'PATCH', { extra: { examNote: 'دست‌کاریِ منشی' } });
-  ok(denied.status === 400, `**ولی بخشِ پزشک را نه — با اینکه سوپرادمین است** (${denied.status})`);
+  ok(denied.status === 400, `**ولی بخشِ پزشک را نه** (${denied.status})`);
   ok(/شرحِ معاینه/.test(denied.json?.message ?? '') && /پزشک/.test(denied.json?.message ?? ''),
     `پیام نامِ فیلد و صاحبش را می‌گوید («${denied.json?.message}»)`);
   const fresh = await get(`/visits/${visit.id}`);
@@ -111,7 +114,7 @@ try {
   ok(!!okCreate?.id, 'ولی با بخشِ خودش (و بخشِ پزشکِ خالی) ساخته شد');
   if (okCreate?.id) trash.visits.push(okCreate.id);
 
-  console.log('\n۷) روی صفحه: بخشِ پزشک برای منشی قفل و برچسب‌دار است');
+  console.log('\n۷) روی صفحه: بخشِ پزشک برای منشیِ سطح‌۵ قفل و برچسب‌دار است');
   const b = await chromium.launch({
     executablePath: process.env.E2E_CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
     args: ['--no-sandbox'],
@@ -140,21 +143,37 @@ try {
     const after = await get(`/visits/${visit.id}`);
     ok(after.extra?.reception === 'پذیرشِ مرورگری', 'ذخیرهٔ منشی از مرورگر نشست');
     ok(after.extra?.examNote === 'معاینهٔ اولیه', '**و بخشِ پزشک را با خود نبرد**');
+
+    console.log('\n۸) **سوپرادمین (سطح ۶) بیرون از قاعده است — حتی نقش‌دار**');
+    setMe('secretary', 6);
+    const superEdit = await send(`/visits/${visit.id}`, 'PATCH', { extra: { examNote: 'اصلاحِ سوپرادمین' } });
+    ok(superEdit.status === 200, `سوپرادمینِ منشی‌نقش بخشِ پزشک را نوشت (${superEdit.status})`);
+    const afterSuper = await get(`/visits/${visit.id}`);
+    ok(afterSuper.extra?.examNote === 'اصلاحِ سوپرادمین', 'و واقعاً نشست — کلِ چرخه زیرِ دستش است');
+
+    /* روی صفحه: برچسبِ بخش می‌ماند (بداند کجای چرخه است) ولی قفلی در کار نیست. */
+    await p.goto(UI + `/app/dashboard?patient=${visit.id}`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(2500);
+    const sheet2 = p.locator('.db-sheet');
+    ok(await sheet2.count() === 1, 'شیت دوباره باز شد');
+    const docField2 = sheet2.locator('.pf-field', { hasText: 'شرحِ معاینه' });
+    ok(/بخشِ پزشک/.test(await docField2.innerText()), 'برچسبِ بخش برای سوپرادمین می‌ماند');
+    ok(!(await docField2.locator('textarea').isDisabled()), '**ولی هیچ فیلدی برایش قفل نیست**');
   } finally {
     await b.close();
   }
 
-  console.log('\n۸) نقش که برداشته شود، همه‌چیز مثلِ قبل باز می‌شود');
-  setMyRole(null);
+  console.log('\n۹) نقش که برداشته شود، ادمینِ سطح‌۵ هم دوباره همه‌کاره است');
+  setMe(null, 5);
   const freed = await send(`/visits/${visit.id}`, 'PATCH', { extra: { examNote: 'اصلاحِ ادمینِ بی‌نقش' } });
-  ok(freed.status === 200, `بی‌نقش دوباره همه‌کاره است (${freed.status})`);
+  ok(freed.status === 200, `بی‌نقش بی‌محدودیت است (${freed.status})`);
 
   console.log('\n' + '─'.repeat(50));
   console.log(`قبول: ${pass}   رد: ${fail}`);
   console.log('خطای جاوااسکریپت:', errs.length ? errs : 'ندارد');
   process.exitCode = fail || errs.length ? 1 : 0;
 } finally {
-  setMyRole(null);
+  setMe(null, 6);
   for (const id of trash.visits) await fetch(API + `/visits/${id}`, { method: 'DELETE', headers: A });
   for (const id of trash.forms) await fetch(API + `/forms/${id}`, { method: 'DELETE', headers: A });
 }

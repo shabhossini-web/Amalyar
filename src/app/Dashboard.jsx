@@ -251,9 +251,11 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
      فیلدهای دلخواهی که سوپرادمین ساخته. */
   const fd = useFormDef(f.kind);
   /* «هر کس قسمتِ خودش را پر کند» — نقشِ شغلیِ کاربرِ جاری. قفل و برچسب فقط
-     نمایش‌اند؛ اجرای واقعی سمتِ سرور است. */
+     نمایش‌اند؛ اجرای واقعی سمتِ سرور است. سوپرادمین (سطح ۶) بیرون از قاعده
+     است: برچسبِ بخش‌ها را می‌بیند ولی هیچ فیلدی برایش قفل نمی‌شود — یک نفر
+     باید کلِ چرخه را ببیند و اصلاح کند. */
   const { user: me } = useAuth();
-  const myRole = me?.jobRole ?? null;
+  const myRole = (me?.level ?? 0) >= 6 ? null : (me?.jobRole ?? null);
   const keyLocked = (key) => { const r = fd.roleOf(key); return !!(r && myRole && r !== myRole); };
   const [extra, setExtra] = useState(() => initial?.extra ?? {});
   const [extraErr, setExtraErr] = useState({});

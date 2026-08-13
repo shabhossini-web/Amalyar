@@ -296,12 +296,16 @@ export default function Users() {
                   </label>
                   {/* نقشِ شغلی — «هر کس قسمتِ خودش را پر کند» (BOOKING مرحلهٔ ۴).
                       جدا از سطح: سطح می‌گوید چقدر می‌بینی، نقش می‌گوید کدام
-                      بخشِ فرم مالِ توست. */}
-                  <label className="us-levelpick">
+                      بخشِ فرم مالِ توست. سوپرادمین (سطح ۶) بیرون از قاعده است:
+                      نقش رویش اثری ندارد، پس انتخابگر برایش بسته است. */}
+                  <label
+                    className="us-levelpick"
+                    title={row.level >= 6 ? 'سوپرادمین بیرون از قاعدهٔ نقش است — کلِ چرخه را می‌بیند و ویرایش می‌کند' : undefined}
+                  >
                     <span>نقش:</span>
                     <select
                       value={row.jobRole ?? ''}
-                      disabled={busyId === row.id || row.status !== 'active'}
+                      disabled={busyId === row.id || row.status !== 'active' || row.level >= 6}
                       onChange={(e) => setJobRole(row, e.target.value || null)}
                     >
                       <option value="">— بدونِ نقش —</option>
