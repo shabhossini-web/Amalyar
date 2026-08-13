@@ -52,6 +52,7 @@ node scripts/e2e/free-form.mjs        # فرمِ بی‌مبلغ فیش نمی�
 node scripts/e2e/kind-fields.mjs      # فرمِ هر نوع فقط فیلدهای خودش را دارد
 node scripts/e2e/record-direct.mjs    # فرمِ زیرپرونده‌ی رایگان بی‌صف در پرونده می‌نشیند
 node scripts/e2e/note-kinds.mjs       # «سیرِ بیماری» در پرونده دیده می‌شود، نه لای dropdown
+node scripts/e2e/visit-extra.mjs      # ویرایشِ مراجعه فیلدهای فرمِ سفارشی را گم نمی‌کند
 node scripts/e2e/tenant-isolation.mjs # دو تنانتِ واقعی، دو دیتابیس، هیچ نشتی (پیش‌نیاز پایین)
 node scripts/e2e/platform-domains.mjs # پنلِ پلتفرم هیچ دامنه‌ای را پنهان نمی‌کند
 ```

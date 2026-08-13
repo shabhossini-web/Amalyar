@@ -117,6 +117,43 @@ jobs:
       # نوعِ ملاقات باید فهرستِ بسته بماند. اگر روزی متنِ آزاد شود، همان مشکلِ
       # opType برمی‌گردد: «ویزیت» و «ویزیت مطب» و «clinic» سه چیزِ متفاوت می‌شوند
       # و گزارش‌گیری بی‌معنی می‌گردد.
+      - name: Verify custom form answers survive a visit edit
+        working-directory: server
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const src = fs.readFileSync('src/patients/patients.service.ts', 'utf8');
+
+          /* ⚠️ این نگهبان از یک باگِ واقعیِ ازدست‌رفتنِ داده آمد: createVisit
+             مقدارِ \`extra\` را می‌نوشت ولی updateVisit اصلاً به آن دست نمی‌زد،
+             پس هر ویرایشِ فیلدِ سفارشی بی‌صدا دور ریخته می‌شد — با پیامِ
+             «ویزیت ویرایش شد ✓».
+
+             خطرناک‌تر اینکه **در همهٔ نصب‌ها دیده نمی‌شد**: نصبی که فرمش
+             فیلدِ هسته‌ای دارد (ستون) هیچ نشانه‌ای نمی‌دید، و نصبی که فرمش
+             سفارشی است هیچ‌چیز ذخیره نمی‌کرد. باگی که فقط بعضی مشتری‌ها
+             می‌بینند، دیرتر پیدا می‌شود و بیشتر داده می‌خورد. */
+          /* بریدن تا **متدِ بعدیِ کلاس** (تورفتگیِ دو فاصله)، نه تا اولین
+             \`async\`: داخلِ همین متد یک \`\$transaction(async (tx) =>\` هست و
+             برشِ ساده بدنه را قبل از خطِ موردِ نظر قطع می‌کرد. */
+          const upd = src.slice(src.indexOf('async updateVisit'));
+          const next = upd.slice(20).search(/\n  (?:private |public )?(?:async )?[a-zA-Z_]+\(/);
+          const body = next === -1 ? upd : upd.slice(0, 20 + next);
+          if (!/dto\.extra !== undefined/.test(body)) {
+            console.error('updateVisit مقدارِ dto.extra را نمی‌نویسد — ویرایشِ فیلدهای سفارشی گم می‌شود');
+            process.exit(1);
+          }
+          if (!/visitPatch\.extra = \{ \.\.\./.test(body)) {
+            console.error('extra باید با پاسخ‌های موجود ادغام شود، نه جایگزینِ کامل');
+            process.exit(1);
+          }
+          if (!/extra: \(dto as any\)\.extra \?\? \{\}/.test(src)) {
+            console.error('createVisit دیگر extra را نمی‌نویسد');
+            process.exit(1);
+          }
+          console.log('custom form answers survive a visit edit');
+          "
       - name: Verify visit kind is open but never unvalidated
         working-directory: server
         run: |
