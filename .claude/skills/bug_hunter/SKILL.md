@@ -11,7 +11,8 @@ description: >
 
 اسکنر باگ مخصوص عمل‌یار. استک پروژه:
 - **فرانت:** React 18 + Vite + framer-motion + react-router (`src/`)
-- **بک‌اند:** NestJS 10 + Prisma + PostgreSQL 16 (`server/src/`)
+- **بک‌اند:** NestJS 10 + Prisma + PostgreSQL 18 (`server/src/`)
+- **مالتی‌تننت:** Database-per-Tenant — tenant فقط از **Host** resolve می‌شود
 - **RTL فارسی**، تک‌تمِ تاریک، PWA با `public/sw.js`
 
 ---
@@ -48,23 +49,51 @@ description: >
 // ❌ سطح در کد
 if (user.level >= 4) return this.reports();
 
-// ✅ گاردِ داینامیک از جدولِ features
-@UseGuards(JwtAuthGuard, FeatureGuard)
-@Feature('reports')
+// ✅ دو لایهٔ مکمل، هر دو از DB
+@Controller('reports')
+@UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
+@Feature('reports')                       // ماژول روشن/خاموش (پلن)
+export class ReportsController {
+  @Get()
+  @RequirePermissions('reports.read')     // عملیاتِ ریز
+  list() {}
+}
 ```
 همچنین در UI: `Launcher.jsx` باید از `GET /features` گیت شود؛ `min` فقط fallback است.
 
-**کنترلرِ بدونِ گارد:**
+**گاردِ ناقص — `@Feature` هست ولی `PermissionGuard` نیست:**
 ```ts
-// ❌ endpoint باز
-@Controller('reports')
-export class ReportsController {}
+// ❌ ماژول گیت شده ولی حذف و خواندن یک سطح دارند
+@UseGuards(JwtAuthGuard, FeatureGuard)
+@Feature('dashboard')
 
 // ✅
-@Controller('reports')
-@UseGuards(JwtAuthGuard, FeatureGuard)
-@Feature('reports')
+@UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 ```
+هر متدِ نوشتاری باید `@RequirePermissions('<entity>.<action>')` داشته باشد
+(`patients.create`, `patients.delete`, `visits.times`…). متدِ بدونِ آن یعنی
+هرکسی که ماژول را می‌بیند می‌تواند بنویسد.
+
+**نبودِ اسکوپِ سطح — object-authz (نقضِ قانون ۴):**
+```ts
+// ❌ کارشناس مراجعاتِ همه را می‌بیند
+return this.prisma.visit.findMany({ where });
+
+// ✅ زیرِ سوپروایزر فقط مالِ خودش
+return this.prisma.visit.findMany({ where: this.scopedVisitWhere(user, where) });
+```
+و برای خواندنِ تکی `assertVisitAccess(id, user)` — وگرنه با حدسِ `id`
+رکوردِ دیگران خوانده می‌شود. هر endpoint جدیدی که ردیف برمی‌گرداند باید اسکوپ شود.
+
+**نشتِ مالتی‌تننت (نقضِ قانون ۱۸):**
+```ts
+// ❌ tenant از ورودیِ کاربر
+const tenant = req.headers['x-tenant'] ?? req.body.tenantId;
+
+// ✅ فقط از Host دقیق، در middleware
+```
+پرچمِ خطر: هر جایی که `tenantId`/`tid` از header، body یا query خوانده شود؛
+یا کوئری‌ای که خارج از tenant-context به Prisma می‌رود.
 
 **فیلدِ ریالی (نقضِ قانون ۱۳):**
 ```ts
@@ -135,6 +164,25 @@ const onSave = async () => { await api('/visits', { method: 'POST', body }); };
 // ✅ + همیشه finally برای busy
 try { … } catch (e) { setToast(e.message); } finally { setBusy(false); }
 ```
+
+**`.map(f)`ِ خالی روی تابعِ چندآرگومانی:**
+```ts
+// ❌ Array.map ایندکس را آرگومانِ دوم می‌فرستد → عدد به‌جای نگاشت
+rows.map(enrich)
+// ✅
+rows.map((v) => enrich(v, kinds))
+```
+باگِ واقعیِ همین ریپو. در TS گرفته شد، در JS بی‌صدا `undefined` می‌داد.
+
+**صفحه‌بندیِ ناپایدار:**
+```ts
+// ❌ دو ردیفِ هم‌تاریخ ترتیبِ تصادفی می‌گیرند → رکورد در صفحهٔ ۱ و ۲ تکرار می‌شود
+orderBy: [{ opDate: 'desc' }]
+// ✅ همیشه با id تمام شود
+orderBy: [{ opDate: 'desc' }, { id: 'desc' }]
+```
+
+**`pageSize` بدونِ clamp** — `?pageSize=999999` کلِ جدول را می‌کشد.
 
 **آرایهٔ وابستگیِ ناقص یا `key` با ایندکس:**
 ```jsx
@@ -215,8 +263,14 @@ grep -rni "rial\|ریال" src/ server/src/
 # سطحِ هاردکد
 grep -rn "level\s*[><=]=\?\s*[0-9]" src/ server/src/
 
-# کنترلرِ بدونِ FeatureGuard
-grep -rLn "FeatureGuard" server/src/*/*.controller.ts
+# کنترلرِ بدونِ گاردِ کامل
+grep -rLn "PermissionGuard" server/src/*/*.controller.ts
+
+# متدِ نوشتاری بدونِ مجوز
+grep -rn -A2 "@\(Post\|Patch\|Put\|Delete\)(" server/src/*/*.controller.ts | grep -B1 -v "RequirePermissions"
+
+# tenant از ورودیِ کاربر (باید خالی باشد)
+grep -rn "headers\[.x-tenant\|body\.tenantId\|query\.tenantId" server/src/
 
 # ایموجی در JSX
 grep -rnP "[\x{1F300}-\x{1FAFF}\x{2190}-\x{21FF}\x{2700}-\x{27BF}]" src/ --include=*.jsx

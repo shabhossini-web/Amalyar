@@ -23,9 +23,20 @@ description: >
 (جزئیات در اسکیلِ `amalyar-standard` §۱):
 
 1. **بک‌اند**
-   - `features.service.ts` → `FEATURE_DEFAULTS.invoices = { minLevel: 4 }`
-   - `server/src/invoices/` با `@Controller('invoices')` +
-     `@UseGuards(JwtAuthGuard, FeatureGuard)` + `@Feature('invoices')`
+   - `features.service.ts` → `FEATURE_DEFAULTS.invoices = { minLevel: 4 }` (ماژول)
+   - `PERMISSION_DEFAULTS` → `invoices.read` / `invoices.create` / `invoices.update`
+     / `invoices.delete` (عملیاتِ ریز)
+   - `server/src/invoices/` با گاردِ کامل:
+     ```ts
+     @Controller('invoices')
+     @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
+     @Feature('invoices')
+     export class InvoicesController {
+       @Post() @RequirePermissions('invoices.create') create() {}
+     }
+     ```
+   - **object-authz:** کاربرِ زیرِ سوپروایزر فقط فاکتورهای مراجعاتِ خودش را ببیند
+     (همان الگوی `scopedVisitWhere`).
    - مدلِ پریزما: `Invoice` با رابطه به `Visit`، و `InvoiceLine` برای سطرهای خدمت.
      تغییرِ schema → `migrate diff` با shadow-db → پوشهٔ migration.
    - **همهٔ مبالغ تومانِ صحیح** (قانون ۱۳). هیچ فیلدِ ریالی ساخته نشود.

@@ -15,13 +15,19 @@ description: >
 
 1. **بک‌اند**
    - `server/src/features/features.service.ts` → به `FEATURE_DEFAULTS` اضافه کن: `reports: { minLevel: 4 }`
-   - ماژولِ Nest با گاردِ **داینامیک** (سطح از DB، نه هاردکد):
+   - کلیدهای عملیات به `PERMISSION_DEFAULTS`: `reports.read`, `reports.create`, …
+   - ماژولِ Nest با **هر دو** گاردِ داینامیک (سطح از DB، نه هاردکد):
      ```ts
      @Controller('reports')
-     @UseGuards(JwtAuthGuard, FeatureGuard)
-     @Feature('reports')
+     @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
+     @Feature('reports')                        // ماژول روشن/خاموش (پلن)
+     export class ReportsController {
+       @Get() @RequirePermissions('reports.read') list() {}
+     }
      ```
      (`LevelGuard + @MinLevel` فقط برای قفل‌های ثابتِ سیستمی مثل accounts.)
+   - **object-authz:** کاربرِ زیرِ سوپروایزر فقط دادهٔ منتسب به خودش را ببیند
+     (الگوی `scopedVisitWhere` / `assertVisitAccess` در `patients.service.ts`).
    - **آبجکتِ غنی‌شده**: مشتق‌ها (`due`, `code`, …) فقط در `enrich()` سرویسِ سرور؛ render فرمول ندارد.
    - تغییرِ مدلِ داده؟ → schema.prisma → `migrate diff` با shadow-db → پوشهٔ `prisma/migrations/<ts>_<name>/migration.sql` → `migrate deploy` محلی.
 2. **فرانت**

@@ -1,142 +1,157 @@
 ---
 name: advanced-search
 description: >
-  سیستم جستجو و فیلترِ عمل‌یار — سرچِ زندهٔ سمتِ سرور روی مراجعات، به‌همراه الگوی افزودنِ
-  فیلترِ تازه. هر بار که کاربر می‌خواهد فیلد/پارامتر جدیدی به جستجو اضافه کند، رفتارِ فیلتر
-  را تغییر دهد، یا همین الگو را در صفحه/ماژولِ دیگری (گزارش‌ها، کاربران، هزینه‌ها) پیاده کند
-  این اسکیل را فعال کن. همچنین با «سرچ پیشرفته»، «فیلتر پیشرفته»، «جستجوی پیشرفته»،
-  «advanced search» یا «پاپ‌آپ سرچ».
+  سیستم جستجو و فیلترِ عمل‌یار — فیلترِ چندپارامتریِ سمتِ سرور روی مراجعات، به‌همراه
+  صفحه‌بندی، سورت، آمار و اسکوپِ سطحِ کاربر. هر بار که کاربر می‌خواهد فیلد/پارامتر جدیدی
+  به جستجو اضافه کند، رفتارِ فیلتر یا سورت را تغییر دهد، یا همین الگو را در ماژولِ دیگری
+  (حسابداری، کاربران، گزارش‌ها) پیاده کند این اسکیل را فعال کن. همچنین با «سرچ پیشرفته»،
+  «فیلتر پیشرفته»، «جستجوی پیشرفته»، «صفحه‌بندی»، «مرتب‌سازی»، «advanced search».
 ---
 
 # جستجو و فیلترِ عمل‌یار
 
-> **تفاوتِ بنیادی با ملک‌طب:** آن‌جا فیلتر سمتِ کلاینت روی آرایهٔ کاملِ بیماران بود.
-> این‌جا **فیلتر سمتِ سرور** است — کلاینت فقط پارامتر می‌فرستد و لیستِ آمادهٔ
-> غنی‌شده می‌گیرد. هیچ‌وقت کلِ داده را نگیر و در مرورگر فیلتر نکن.
+> **همه‌چیز سمتِ سرور است.** کلاینت پارامتر می‌فرستد و یک بستهٔ آمادهٔ
+> `{rows, total, page, pageSize, pages, sort, dir, stats}` می‌گیرد.
+> هرگز کلِ داده را نگیر و در مرورگر فیلتر/سورت/صفحه‌بندی نکن — با ۱۰هزار
+> مراجعه می‌شکند.
 
 ---
 
-## ۱. معماری — یک مسیرِ واحد
+## ۱. مسیرِ واحد
 
 ```
-ورودی سرچ (q)  ─┐
-چیپِ وضعیت (status) ─┼─►  URLSearchParams  ─►  GET /visits?q=&status=
-فیلترهای بعدی      ─┘                                  │
-                                                       ▼
-                                   PatientsService.listVisits()  ← منبعِ حقیقتِ فیلتر
-                                                       │
-                                                enrich(row)  ← فیلدهای مشتق
-                                                       │
-                                                setVisits(rows)  ─►  render
+ورودی‌های کاربر ─► URLSearchParams ─► GET /visits?…
+                                          │
+                        PatientsController.list(@CurrentUser, @Query)
+                                          │
+                        listVisits(f: VisitFilter, user)
+                                          │
+                   visitWhere(f, user) ← تنها جای منطقِ فیلتر
+                                          │
+                   scopedVisitWhere(user, where) ← اسکوپِ سطح
+                                          │
+                        enrich(v, kinds) ← فیلدهای مشتق
+                                          │
+                   { rows, total, page, pages, sort, dir, stats }
 ```
 
-**قانون طلایی:** هر شرطِ فیلترِ جدید فقط داخلِ `listVisits()` در
-`server/src/patients/patients.service.ts` ساخته می‌شود. کلاینت هیچ‌وقت
-`rows.filter(...)` برای فیلترِ کاربر نمی‌زند.
-
-> استثنا: `stats` در `Dashboard.jsx` که روی همان نتیجهٔ فیلترشده شمارش می‌کند
-> (`rows.filter(v => v.opStatus === 'pending').length`) — این تجمیعِ نمایشی است، نه فیلتر.
+**قانون طلایی:** هر شرطِ فیلترِ جدید فقط داخلِ `visitWhere()` در
+`server/src/patients/patients.service.ts` ساخته می‌شود.
 
 ---
 
-## ۲. نقشهٔ کد
+## ۲. اسکوپِ سطحِ کاربر (object-authz — قانون ۴)
 
-| جزء | محل | نقش |
-|---|---|---|
-| state سرچ | `Dashboard.jsx` → `q`, `status` | ورودی‌های کاربر |
-| debounce | `useEffect` با `setTimeout(…, q ? 300 : 0)` | ۳۰۰ms هنگام تایپ، فوری برای چیپ |
-| فراخوان | `load(query, st)` | `URLSearchParams` → `api('/visits?…')` |
-| endpoint | `patients.controller.ts` → `@Get('visits')` | `@Query('q')`, `@Query('status')` |
-| فیلترِ اصلی | `patients.service.ts` → `listVisits()` | ساختِ `where` پریزما |
-| غنی‌سازی | `enrich(v)` همان فایل | `code`, `fullName`, `due` … |
-| گارد | `@UseGuards(JwtAuthGuard, FeatureGuard) @Feature('dashboard')` | سطح از DB |
-
-**رفتارِ ۴۰۳:** اگر `FeatureGuard` رد کند، `load` وضعیتِ `denied` را ست می‌کند و
-پیامِ «دسترسیِ کافی برای این بخش ندارید» نمایش داده می‌شود — نه توست خطا.
-
----
-
-## ۳. فیلدهای فعلی
-
-| پارامتر | تطبیق در سرور |
-|---|---|
-| `q` | `OR` روی `patient.firstName` / `lastName` / `code` / `phone` / `surgeonName` / `hospitalName` — همه `contains` و `mode:'insensitive'` (جز `phone`) |
-| `status` | برابری با `opStatus` ∈ `pending` / `done` / `cancelled`؛ مقدار `all` یعنی بدونِ شرط |
-
----
-
-## ۴. افزودنِ فیلترِ جدید — چهار جای هماهنگ
-
-مثال: فیلترِ بازهٔ مبلغ (`amountMin` / `amountMax`).
-
-### گام ۱ — کنترلر
 ```ts
-@Get('visits')
-list(
-  @Query('q') q?: string,
-  @Query('status') status?: string,
-  @Query('amountMin') amountMin?: string,
-  @Query('amountMax') amountMax?: string,
-) {
-  return this.patients.listVisits(q, status, { amountMin, amountMax });
+private scopedVisitWhere(user: any, where: any = {}) {
+  if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return { ...where };
+  return { ...where, techId: user?.id ?? -1 };   // فقط مالِ خودش
 }
 ```
-> پارامترهای query همیشه **رشته**اند — با `Number()` تبدیل کن و `NaN` را دور بریز.
 
-### گام ۲ — سرویس (تنها جای منطقِ فیلتر)
+- کاربرِ **زیرِ سوپروایزر** فقط مراجعاتی را می‌بیند که به خودش منتسب است.
+- `-1` عمدی است: اگر `user.id` نبود، شرط به هیچ ردیفی نمی‌خورد (fail-closed)،
+  نه اینکه فیلتر حذف شود و همه‌چیز دیده شود.
+- خواندنِ تکی هم باید از `assertVisitAccess(id, user)` رد شود — وگرنه کاربر با
+  حدسِ `id` به رکوردِ دیگران می‌رسد.
+
+> هر endpoint جدیدی که ردیف برمی‌گرداند **باید** از همین اسکوپ عبور کند.
+
+---
+
+## ۳. `VisitFilter` — پارامترهای فعلی
+
 ```ts
-const min = Number(f?.amountMin);
-const max = Number(f?.amountMax);
-if (Number.isFinite(min)) where.amount = { ...where.amount, gte: min };
-if (Number.isFinite(max)) where.amount = { ...where.amount, lte: max };
+export type VisitFilter = {
+  q?: string;                 // جستجوی آزاد
+  status?: string;  kind?: string;
+  surgeonId?: number; hospitalId?: number; techId?: number;
+  procedureTypeId?: number; diagnosisId?: number;
+  from?: Date; to?: Date;
+  owing?: boolean;            // فقط آن‌هایی که بدهی دارند
+  sort?: string; dir?: string;
+  page?: number; pageSize?: number;
+};
+```
+
+کنترلر کلِ query را می‌گیرد (`@Query() query: Record<string, string>`) و به این
+شکل نرمال می‌کند؛ پس افزودنِ پارامتر نیازی به تغییرِ امضای کنترلر ندارد.
+
+---
+
+## ۴. افزودنِ فیلترِ جدید — سه گام
+
+### گام ۱ — به `VisitFilter` اضافه کن
+```ts
+amountMin?: number; amountMax?: number;
+```
+
+### گام ۲ — نرمال‌سازی از query (رشته → عدد/تاریخ/بولین)
+پارامترهای HTTP همیشه **رشته**اند. با `Number()` تبدیل کن و `NaN` را دور بریز:
+```ts
+const n = (v?: string) => { const x = Number(v); return Number.isFinite(x) ? x : undefined; };
+```
+
+### گام ۳ — شرط در `visitWhere()`
+```ts
+if (f.amountMin != null) where.amount = { ...where.amount, gte: f.amountMin };
+if (f.amountMax != null) where.amount = { ...where.amount, lte: f.amountMax };
 ```
 همهٔ شرط‌ها با **AND** ترکیب می‌شوند (رفتارِ پیش‌فرضِ `where` در پریزما).
 
-### گام ۳ — کلاینت: state + پارامتر
-```jsx
-const [amountMin, setAmountMin] = useState('');
-// داخلِ load():
-if (amountMin) params.set('amountMin', amountMin);
-// وابستگیِ useEffect را اضافه کن:
-useEffect(() => { … }, [q, status, amountMin, load]);
-```
-
-### گام ۴ — کنترلِ UI
-ورودیِ مبلغ الگوی `MoneyInput` را دارد: تومان، گروه‌بندیِ سه‌رقمی **در blur**،
-«به‌حروفِ» زنده زیرش (`lib/money.js`). فیلترِ تاریخ ورودیِ متنیِ «۱۴۰۵/۰۴/۲۸»
-با دکمهٔ «امروز» است و قبل از ارسال با `jStrToIso` به ISO تبدیل می‌شود.
-
-> اگر فیلد مشتق است (`due`)، در پریزما مستقیم قابل فیلتر نیست چون در DB ستون ندارد.
-> یا شرط را با ریاضیِ معادلِ ستون‌های واقعی بنویس، یا ستونِ محاسبه‌شده اضافه کن —
-> **هرگز** کلِ رکوردها را نگیر و در JS فیلتر نکن.
+سمتِ کلاینت فقط state + `params.set(...)` + افزودنِ کلید به وابستگیِ `useEffect`.
 
 ---
 
-## ۵. اگر پاپ‌آپِ چندپارامتری ساختی
+## ۵. فیلدِ مشتق قابلِ فیلتر نیست — مسیرِ مالی
 
-- مودال با الگوی `db-overlay` / `db-sheet` (bottom-sheet در موبایل، وسط‌چین در دسکتاپ).
-- **مودال باید در ریشهٔ درختِ صفحه رندر شود**، نه داخلِ کارتی که `backdrop-filter`
-  یا `transform` دارد — وگرنه `position:fixed` نسبت به آن کانتینر محاسبه می‌شود و
-  بک‌دراپ فقط بخشی از صفحه را می‌گیرد. (`.glass` هر دو را دارد، پس این تله واقعی است.)
-- بستن با کلیک روی بک‌دراپ **و** کلیدِ `Escape`.
-- بجِ «تعداد فیلترِ فعال» روی دکمهٔ باز کردن.
-- «پاک کردن همه» همهٔ stateها را ریست و یک بار `load` می‌زند.
-- هر ورودی فقط state را ست می‌کند؛ منطق در `useEffect`ِ واحدِ debounce می‌ماند —
-  پراکنده‌اش نکن.
+«مانده» (`due`) ستونِ دیتابیس نیست، پس نه در `where` می‌آید و نه در `orderBy`.
+برای سورت/فیلترِ مالی مسیرِ جداگانه‌ای هست:
+
+1. شناسه‌های مطابقِ فیلتر با جمعِ مالی‌شان مرتب و بریده می‌شوند (`moneyOrderedIds`)
+2. فقط همان صفحه از دیتابیس خوانده می‌شود
+3. چون ترتیبِ `IN` تضمین‌شده نیست، ردیف‌ها دوباره به ترتیبِ شناسه‌ها چیده می‌شوند
+
+اگر فیلدِ مشتقِ جدیدی خواستی فیلتر شود، یا همین الگو را دنبال کن یا ستونِ
+محاسبه‌شده بساز — **هرگز** همهٔ ردیف‌ها را در حافظه نگیر.
 
 ---
 
-## ۶. تأیید پس از تغییر
+## ۶. تله‌های واقعیِ این کد
+
+1. **ترتیبِ ناپایدار در صفحه‌بندی** — هر `orderBy` باید با `id` تمام شود.
+   بدونِ آن، دو مراجعه با تاریخِ یکسان ترتیبِ تصادفی می‌گیرند و یک رکورد در
+   صفحهٔ ۱ و ۲ ظاهر (یا از هر دو غایب) می‌شود. `orderFor()` این را رعایت می‌کند.
+
+2. **`.map(enrich)`ِ خالی ننویس.** `Array.map` ایندکس را به‌عنوانِ آرگومانِ دوم
+   می‌فرستد، پس یک **عدد** به‌جای نگاشتِ نوع‌ها می‌رسد:
+   ```ts
+   rows.map(enrich)              // ❌ ایندکس به‌عنوان kinds
+   rows.map((v) => enrich(v, kinds))  // ✅
+   ```
+   TypeScript این را گرفت؛ در JS بی‌صدا `undefined` می‌داد.
+
+3. **`total` را از طولِ صفحه حساب نکن** — جدا شمرده می‌شود.
+
+4. **`pageSize` را clamp کن** (`clamp(f.pageSize ?? DEFAULT, 1, MAX)`) وگرنه
+   `?pageSize=999999` کلِ جدول را می‌کشد.
+
+5. **debounce فقط برای تایپ** — چیپ/دراپ‌داون باید فوری اعمال شود.
+
+---
+
+## ۷. تأیید پس از تغییر
 
 ```bash
-npm run build && cd server && npm run build     # هر دو سمت سبز (قانون ۱۲)
-grep -rn "\.filter(" src/app/Dashboard.jsx      # نباید فیلترِ کاربر باشد، فقط تجمیعِ stats
+npm run build && cd server && npm run build      # هر دو سمت سبز (قانون ۱۲)
+grep -n "\.filter(" src/app/Dashboard.jsx        # نباید فیلترِ کاربر باشد
 ```
 
 چک‌لیستِ دستی:
-- [ ] تایپ در سرچ → بعد از ~۳۰۰ms یک درخواست (نه یکی به‌ازای هر حرف)
-- [ ] چیپِ وضعیت فوری اعمال می‌شود
 - [ ] فیلترها با هم AND می‌شوند
-- [ ] خالی‌بودنِ نتیجه پیامِ درست می‌دهد («موردی مطابقِ جستجو پیدا نشد» در برابر «هنوز مراجعه‌ای ثبت نشده»)
-- [ ] کاربرِ کم‌سطح ۴۰۳ می‌گیرد و پیامِ `denied` می‌بیند
-- [ ] تستِ e2e سناریوی فیلترِ جدید (الگوی §۵ اسکیلِ `amalyar-standard`)
+- [ ] صفحه‌بندی پایدار است (رکوردِ تکراری بین صفحه‌ها نیست)
+- [ ] سورتِ مالی درست کار می‌کند
+- [ ] `stats` با فیلترِ فعال هم‌خوان است (نه کلِ جدول)
+- [ ] کاربرِ زیرِ سوپروایزر فقط مراجعاتِ خودش را می‌بیند
+- [ ] کاربرِ بدونِ مجوز ۴۰۳ می‌گیرد
+- [ ] تستِ e2e سناریوی فیلترِ جدید
