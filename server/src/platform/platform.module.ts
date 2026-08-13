@@ -451,10 +451,22 @@ export class PlatformProvisioningService {
           name: true,
           status: true,
           createdAt: true,
+          /**
+           * **همهٔ** دامنه‌ها، نه فقط primary.
+           *
+           * ⚠️ تا دیروز این `where: { primary: true }, take: 1` بود و نتیجه‌اش
+           * یک نقطهٔ کورِ خطرناک بود: اگر دو دامنه به یک شرکت نگاشت شده باشند
+           * — یعنی دو نشانی که کاربر «دو شرکتِ جدا» می‌پنداردشان روی یک
+           * دیتابیس — دامنهٔ دوم در پنل اصلاً دیده نمی‌شد. گزارشِ «تنانت‌ها
+           * از دیتابیسِ هم می‌خوانند» از بیرون دقیقاً همین شکلی است، و تنها
+           * راهِ پاسخ‌دادنش باز کردنِ psql روی دیتابیسِ کنترل بود.
+           *
+           * عکسش شدنی نیست: `TenantDomain.hostname` یکتاست، پس یک دامنه
+           * هرگز به دو شرکت نمی‌رود.
+           */
           domains: {
-            where: { primary: true },
-            take: 1,
-            select: { hostname: true },
+            orderBy: [{ primary: 'desc' }, { hostname: 'asc' }],
+            select: { hostname: true, primary: true },
           },
         },
       }),
@@ -470,7 +482,11 @@ export class PlatformProvisioningService {
         slug: tenant.slug,
         name: tenant.name,
         status: tenant.status,
-        hostname: tenant.domains[0]?.hostname ?? null,
+        hostname: tenant.domains.find((d) => d.primary)?.hostname ?? tenant.domains[0]?.hostname ?? null,
+        /* آرایهٔ کامل — کلاینت نباید دوباره چیزی را استنتاج کند (قانون ۱۵). */
+        domains: tenant.domains.map((d) => ({ hostname: d.hostname, primary: d.primary })),
+        /* «این شرکت از بیش از یک نشانی سرو می‌شود» — پرچمِ مشتق، سمتِ سرور. */
+        shared: tenant.domains.length > 1,
         createdAt: tenant.createdAt,
       })),
       jobs,

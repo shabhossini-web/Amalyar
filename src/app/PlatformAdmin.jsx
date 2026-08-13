@@ -70,6 +70,16 @@ const TENANT_STATUS = {
 const faDate = (value) => value ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
 const faNum = (value) => String(value ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
+/**
+ * دامنه‌های یک شرکت، با سازگاری با پاسخِ قدیمیِ سرور که فقط `hostname` داشت.
+ * پنل و API جدا دیپلوی می‌شوند؛ اگر یکی زودتر بالا بیاید، فهرست نباید خالی شود.
+ */
+const domainsOf = (tenant) => (
+  Array.isArray(tenant?.domains) && tenant.domains.length
+    ? tenant.domains
+    : (tenant?.hostname ? [{ hostname: tenant.hostname, primary: true }] : [])
+);
+
 /// یک ثابت، تا هیچ‌جا snapshot با آرایهٔ جاافتاده ست نشود (باگِ واقعیِ خروج).
 const EMPTY_SNAPSHOT = { tenants: [], jobs: [], deletions: [] };
 
@@ -444,10 +454,34 @@ export default function PlatformAdmin() {
                     <article key={tenant.id} className="pa-row">
                       <div className="pa-row-main">
                         <b>{tenant.name}</b>
-                        {tenant.hostname ? (
-                          <a className="pa-host" dir="ltr" href={`https://${tenant.hostname}`} target="_blank" rel="noreferrer">{tenant.hostname}</a>
+                        {/* هر دامنه‌ای که به این شرکت می‌رسد — نه فقط primary.
+                            دو نشانی زیرِ یک کارت یعنی هر دو **یک دیتابیس** را
+                            می‌بینند؛ این تنها جایی است که آن را می‌شود فهمید. */}
+                        {domainsOf(tenant).length ? (
+                          <span className="pa-hosts">
+                            {domainsOf(tenant).map((d) => (
+                              <a
+                                key={d.hostname}
+                                className={`pa-host${d.primary ? ' on' : ''}`}
+                                dir="ltr"
+                                href={`https://${d.hostname}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={d.primary ? 'دامنهٔ اصلی' : 'دامنهٔ دیگرِ همین شرکت'}
+                              >
+                                {d.hostname}
+                              </a>
+                            ))}
+                          </span>
                         ) : (
                           <small dir="ltr">{tenant.slug}</small>
+                        )}
+                        {tenant.shared && (
+                          <small className="pa-shared">
+                            {faNum(domainsOf(tenant).length)} نشانی به این شرکت می‌رسند — هر
+                            {' '}
+                            {faNum(domainsOf(tenant).length)} یک دیتابیس را می‌بینند.
+                          </small>
                         )}
                         <small>ساخته‌شده {faDate(tenant.createdAt)}</small>
                       </div>

@@ -120,6 +120,17 @@
 }
 .pa-host:hover { text-decoration: underline; }
 
+/* چند دامنه روی یک شرکت: هر کدام یک تراشه، دامنهٔ اصلی پررنگ‌تر. اگر بیش از
+   یکی باشد یعنی هر دو نشانی **یک دیتابیس** را می‌بینند — و همین باید در نگاهِ
+   اول دیده شود، نه از راهِ psql. */
+.pa-hosts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.pa-hosts .pa-host {
+  margin-top: 0; padding: 2px 7px; border-radius: 99px;
+  background: rgba(103, 232, 249, .07); border: 1px solid rgba(103, 232, 249, .16);
+}
+.pa-hosts .pa-host.on { background: rgba(103, 232, 249, .14); border-color: rgba(103, 232, 249, .34); }
+.pa-shared { color: #fbbf24 !important; }
+
 .pa-badge {
   font-size: 10px; padding: 5px 10px; border-radius: 99px; white-space: nowrap;
   color: #fbbf24; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .22);

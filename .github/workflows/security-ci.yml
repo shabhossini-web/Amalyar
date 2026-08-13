@@ -58,6 +58,9 @@ jobs:
       - name: Verify tenant isolation boundaries
         working-directory: server
         run: node scripts/verify-tenant-isolation.js
+      - name: Verify the platform panel hides no tenant domain
+        working-directory: server
+        run: node scripts/verify-platform-domains.js
       - name: Verify Platform Admin configuration fails closed
         working-directory: server
         run: node -e "const { platformAdminConfig, normalizePlatformPhone, normalizeWebOtpHost, platformPhoneRef, resolvePlatformPhoneRef } = require('./dist/platform/platform.config'); process.env.NODE_ENV='production'; process.env.PLATFORM_ADMIN_ENABLED='false'; delete process.env.PLATFORM_ADMIN_SECRET; delete process.env.PLATFORM_ADMIN_PHONES; delete process.env.PLATFORM_ADMIN_WEBOTP_HOST; if (platformAdminConfig().enabled) process.exit(1); process.env.PLATFORM_ADMIN_ENABLED='true'; let failed=false; try { platformAdminConfig(); } catch { failed=true; } if (!failed) { console.error('expected missing Platform Admin secrets to fail'); process.exit(1); } process.env.PLATFORM_ADMIN_SECRET='ci-only-platform-secret-with-32-characters'; process.env.PLATFORM_ADMIN_PHONES='09000000000'; process.env.PLATFORM_ADMIN_WEBOTP_HOST='admin-staging.amalyar.com'; const cfg=platformAdminConfig(); const ref=platformPhoneRef(cfg.secret,'09000000000'); if (!cfg.enabled || !cfg.phones.has('09000000000') || cfg.webOtpHost !== 'admin-staging.amalyar.com' || normalizeWebOtpHost('ADMIN-STAGING.AMALYAR.COM.') !== 'admin-staging.amalyar.com' || normalizePlatformPhone('+989000000000') !== '09000000000' || ref.includes('09000000000') || resolvePlatformPhoneRef(cfg,ref) !== '09000000000' || resolvePlatformPhoneRef(cfg,'invalid') !== null) process.exit(1);"
