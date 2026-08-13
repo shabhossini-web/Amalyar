@@ -112,7 +112,21 @@ export class RecordService {
       }),
       this.listDocuments(patientId, user),
       clinical ? this.listNotes(patientId, user) : Promise.resolve([]),
-      this.prisma.formDef.findMany({ where: { scope: 'visit' }, select: { visitKind: true, title: true, key: true, color: true } }),
+      /* فیلدها هم خوانده می‌شوند تا پاسخ‌های فرم در پرونده **برچسب** داشته
+         باشند. بدونِ برچسب، `extra` یک شیءِ کلید-مقدارِ خام است که به درد
+         هیچ‌کس نمی‌خورد. */
+      this.prisma.formDef.findMany({
+        where: { scope: 'visit' },
+        select: {
+          visitKind: true, title: true, key: true, color: true,
+          /* همان ترتیبِ `(page, sort, id)`ِ خودِ فرم — پرونده باید همان چیدمانی
+             را نشان بدهد که کاربر موقعِ پرکردن دیده بود. */
+          fields: {
+            orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }],
+            select: { key: true, label: true, builtin: true, active: true },
+          },
+        },
+      }),
       this.listAttachedForms(patientId, clinical),
     ]);
     /* ⚠️ فرمِ **خاموش** هم خوانده می‌شود (بدونِ `active: true`): مراجعاتِ قدیمی
@@ -124,11 +138,43 @@ export class RecordService {
        فرم‌ساز ساخته بود در داشبورد رنگی و این‌جا **بی‌رنگ** دیده می‌شد — یک
        نوع، دو ظاهر، در دو صفحه. */
     const kindColors: Record<string, string> = {};
+    /* برچسبِ فیلدهای **سفارشی** هر نوع. فیلدهای هسته‌ای کنار گذاشته می‌شوند
+       چون همین‌جا ستونِ خودشان را دارند (جراح، بیمارستان، تاریخ، …) و دوباره
+       نشان‌دادنشان فقط شلوغی است. */
+    const kindFields: Record<string, { key: string; label: string }[]> = {};
     for (const d of kindDefs) {
       if (!d.visitKind) continue;
       kindTitles[d.visitKind] = d.title;
       kindColors[d.visitKind] = d.color || colorForKey(d.key);
+      kindFields[d.visitKind] = (d.fields ?? [])
+        .filter((f) => !f.builtin && f.active !== false)
+        .map((f) => ({ key: f.key, label: f.label }));
     }
+
+    /**
+     * پاسخ‌های فرمِ یک مراجعه، **برچسب‌خورده و مرتب** — مشتقِ سمتِ سرور (قانون ۱۵).
+     *
+     * ⚠️ چرا لازم شد: پزشک «شرحِ معاینه» را در فرمِ ویزیت می‌نوشت و بعد در
+     * پرونده هیچ اثری از آن نبود. پاسخ‌ها در `Visit.extra` بودند و پرونده
+     * همان شیءِ خام را پاس می‌داد و هیچ‌جا نشانش نمی‌داد. یعنی چیزی که نوشته
+     * شده بود، در جایی که باید خوانده شود وجود نداشت.
+     *
+     * ترتیب از خودِ تعریفِ فرم می‌آید تا پرونده همان چیدمانی را نشان بدهد که
+     * کاربر موقعِ پرکردن دیده بود؛ فیلدِ بی‌پاسخ حذف می‌شود چون ردیفِ خالی
+     * چیزی نمی‌گوید. فیلدی که از فرم حذف شده ولی پاسخش مانده هم — با کلیدِ
+     * خودش — می‌آید: دادهٔ ثبت‌شده نباید با ویرایشِ فرم از پرونده غیب شود.
+     */
+    const answersOf = (kind: string | null, extra: any) => {
+      const vals = (extra && typeof extra === 'object') ? extra as Record<string, any> : {};
+      const defined = kind ? kindFields[kind] ?? [] : [];
+      const seen = new Set(defined.map((f) => f.key));
+      const rows = defined
+        .map((f) => ({ key: f.key, label: f.label, value: vals[f.key] }))
+        .concat(Object.keys(vals).filter((k) => !seen.has(k)).map((k) => ({ key: k, label: k, value: vals[k] })));
+      return rows
+        .filter((r) => r.value !== null && r.value !== undefined && String(r.value).trim() !== '')
+        .map((r) => ({ key: r.key, label: r.label, value: String(r.value) }));
+    };
 
     return {
       ...patient,
@@ -152,6 +198,8 @@ export class RecordService {
         diagnosisTitle: v.diagnosis?.title ?? null,
         notes: v.notes,
         extra: v.extra ?? {},
+        /* پاسخ‌های فرم — همان چیزی که پزشک نوشته، با برچسبِ خودش. */
+        answers: answersOf(v.kind, v.extra),
         /* ⚠️ `null` وقتی این نوع فرمی ندارد — کلاینت آن‌وقت به کلید برمی‌گردد.
            «عمل» نامیدنِ نوعِ ناشناخته دروغ است. */
         kindTitle: v.kind ? kindTitles[v.kind] ?? null : null,

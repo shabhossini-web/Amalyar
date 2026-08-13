@@ -252,6 +252,21 @@ function VisitsTab({ rec }) {
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}
             </small>
             {v.diagnosisTitle && <small>تشخیص: {v.diagnosisTitle}</small>}
+            {/* ⚠️ **پاسخ‌های فرمِ مراجعه.** پزشک «شکایتِ اصلی» و «شرحِ معاینه»
+                را در فرمِ ویزیت می‌نویسد؛ تا دیروز پرونده هیچ اثری از آن‌ها
+                نداشت و همه‌شان فقط داخلِ فرمِ خودِ مراجعه می‌ماندند. چیزی که
+                نوشته شده ولی در پرونده خوانده نمی‌شود، عملاً نوشته نشده.
+                برچسب و ترتیب از سرور می‌آید (قانون ۱۵)، نه از حدسِ کلاینت. */}
+            {(v.answers ?? []).length > 0 && (
+              <dl className="rc-answers">
+                {v.answers.map((a) => (
+                  <div key={a.key}>
+                    <dt>{a.label}</dt>
+                    <dd>{a.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
           </div>
           <span className={`rc-st rc-st-${v.opStatus}`}>{STATUS_FA[v.opStatus]}</span>
         </div>

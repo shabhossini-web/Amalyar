@@ -191,3 +191,15 @@
 }
 .df-toast.bad i { font-style: normal; font-size: 11px; color: #fca5a5; }
 .df-toast:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ── پاسخ‌های فرمِ مراجعه، داخلِ پرونده ──
+   ⚠️ برچسب و مقدار **کنارِ هم** (grid دو ستونی) نه زیرِ هم: در فهرستی که چند
+   مراجعه دارد، هر پاسخ باید یک خط باشد وگرنه کارت‌ها چند برابر بلند می‌شوند
+   و «فهرستِ مراجعات» به یک دیوارِ متن تبدیل می‌شود. متنِ بلند خودش می‌شکند. */
+.rc-answers {
+  margin: 6px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px;
+  font-size: 11.5px; line-height: 1.75;
+}
+.rc-answers > div { display: contents; }
+.rc-answers dt { color: var(--text3); white-space: nowrap; }
+.rc-answers dd { margin: 0; color: var(--text2); overflow-wrap: anywhere; white-space: pre-wrap; }

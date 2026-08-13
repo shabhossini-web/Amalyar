@@ -13,6 +13,9 @@
  *
  * پس ادعا روی خواندنِ **بعد از** نوشتن است، نه روی پاسخِ خودِ PATCH.
  */
+import { chromium } from 'playwright-core';
+
+const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const USER = process.env.E2E_USER ?? 'admin';
 const PASS = process.env.E2E_PASS ?? 'test1234';
@@ -86,8 +89,59 @@ ok(fresh.notes === 'یادداشتِ داخلی', 'یادداشتِ هسته‌�
 ok(fresh.extra?.chiefComplaint === 'کمردردِ تشدیدشده',
   'و PATCHِ بدونِ extra پاسخ‌های سفارشی را پاک نکرد');
 
+console.log('\n۷) پاسخ‌های فرم در **پروندهٔ بیمار** دیده می‌شوند');
+/* ⚠️ گزارشِ بعدیِ کاربر: «الان ادیت می‌مونه ولی شرح تو پرونده نمی‌ره».
+   ذخیره‌شدن کافی نیست: «شرحِ معاینه»‌ای که فقط داخلِ فرمِ خودِ مراجعه بماند و
+   در پرونده خوانده نشود، عملاً نوشته نشده. پرونده باید پاسخ‌ها را با
+   **برچسبِ خودشان** نشان بدهد. */
+await send(`/visits/${created.id}`, 'PATCH', { extra: { examNote: 'لاسگِ راست مثبت', chiefComplaint: 'کمردردِ تشدیدشده' } });
+const rec = await get(`/patients/${created.patientId}/record`);
+const visit = (rec.visits ?? []).find((x) => x.id === created.id);
+ok(!!visit, 'مراجعه در پرونده هست');
+const ans = visit?.answers ?? [];
+ok(ans.length >= 2, `پاسخ‌ها در پرونده آمده‌اند (${ans.length})`);
+const exam = ans.find((a) => a.key === 'examNote');
+ok(exam?.value === 'لاسگِ راست مثبت', `**شرحِ معاینه در پرونده دیده می‌شود** («${exam?.value}»)`);
+ok(exam?.label === 'شرحِ معاینه', `و برچسبِ خودش را دارد، نه کلیدِ خام («${exam?.label}»)`);
+ok(ans[0].key === 'chiefComplaint', `ترتیب همان ترتیبِ فرم است (${ans.map((a) => a.key).join('، ')})`);
+
+console.log('\n۸) فیلدِ بی‌پاسخ ردیفِ خالی نمی‌سازد');
+await send(`/visits/${created.id}`, 'PATCH', { extra: { examNote: '' } });
+const rec2 = await get(`/patients/${created.patientId}/record`);
+const ans2 = (rec2.visits ?? []).find((x) => x.id === created.id)?.answers ?? [];
+ok(!ans2.some((a) => a.key === 'examNote'), 'فیلدِ خالی از پرونده حذف شد');
+ok(ans2.some((a) => a.key === 'chiefComplaint'), 'و بقیه سرِ جایشان‌اند');
+
+console.log('\n۹) و روی صفحهٔ پرونده واقعاً کشیده می‌شوند');
+/* ⚠️ «API برمی‌گرداند» با «پزشک می‌بیند» یکی نیست — همین تفاوت باعث شد
+   باگِ هدفِ کلیکِ کارت از زیرِ یک آزمونِ سبز رد شود. پس ادعا روی متنِ روی
+   صفحه است. */
+await send(`/visits/${created.id}`, 'PATCH', { extra: { examNote: 'لاسگِ راست مثبت' } });
+const b = await chromium.launch({
+  executablePath: process.env.E2E_CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  args: ['--no-sandbox'],
+});
+const p = await (await b.newContext({ viewport: { width: 420, height: 900 }, locale: 'fa-IR' })).newPage();
+const errs = [];
+p.on('pageerror', (e) => errs.push(String(e)));
+try {
+  await p.goto(UI + '/', { waitUntil: 'domcontentloaded' });
+  await p.evaluate((t) => localStorage.setItem('amalyar_token', t), login.accessToken);
+  await p.goto(UI + `/app/patients/${created.patientId}`, { waitUntil: 'networkidle' });
+  await p.waitForTimeout(1500);
+  await p.locator('.ui-tabs button', { hasText: 'مراجعات' }).click();
+  await p.waitForTimeout(800);
+  const txt = await p.locator('.df-list').innerText();
+  ok(/شرحِ معاینه/.test(txt), 'برچسبِ «شرحِ معاینه» روی صفحهٔ پرونده هست');
+  ok(/لاسگِ راست مثبت/.test(txt), '**و متنی که پزشک نوشته، دیده می‌شود**');
+  ok(await p.locator('.rc-answers dt').count() >= 2, 'هر پاسخ ردیفِ خودش را دارد');
+} finally {
+  await b.close();
+}
+
 console.log('\n' + '─'.repeat(50));
 console.log(`قبول: ${pass}   رد: ${fail}`);
+console.log('خطای جاوااسکریپت:', errs.length ? errs : 'ندارد');
 await fetch(API + `/visits/${created.id}`, { method: 'DELETE', headers: A });
 await fetch(API + `/forms/${form.id}`, { method: 'DELETE', headers: A });
-process.exit(fail ? 1 : 0);
+process.exit(fail || errs.length ? 1 : 0);
