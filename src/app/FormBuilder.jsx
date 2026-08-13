@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
+import { JOB_ROLES } from '../lib/job-roles.js';
 import { useConfig } from './config.jsx';
 import './definitions.css';
 import './formbuilder.css';
@@ -116,6 +117,13 @@ export default function FormBuilder() {
 
   const removeField = (field) =>
     apply(() => api(`/forms/fields/${field.id}`, { method: 'DELETE' }), 'حذف شد');
+
+  /** بخشِ نقشِ فیلد — «این فیلد مالِ کیست». خالی = عمومی. */
+  const setFieldRole = (field, role) =>
+    apply(
+      () => api(`/forms/fields/${field.id}`, { method: 'PATCH', body: { role: role || null } }),
+      role ? `«${field.label}» بخشِ ${JOB_ROLES.find((r) => r.v === role)?.l ?? role} شد` : `«${field.label}» عمومی شد`,
+    );
 
   /** رنگِ کارتِ فرم. رشته‌ی خالی یعنی «برگرد به خودکار». */
   const setColor = (color) =>
@@ -237,6 +245,7 @@ export default function FormBuilder() {
                           {/* نشانِ صفحه فقط وقتی فرم چندصفحه‌ای است — روی فرمِ
                               تک‌صفحه‌ای «صفحهٔ ۱» روی هر ردیف فقط شلوغی است. */}
                           {form.pages > 1 && <i className="fb-page">صفحهٔ {toFa(f.page ?? 1)}</i>}
+                          {f.role && <i className="fb-tag role">بخشِ {f.roleLabel ?? f.role}</i>}
                           {!f.active && <i className="fb-tag off">خاموش</i>}
                         </span>
                         {f.options?.length > 0 && (
@@ -258,6 +267,19 @@ export default function FormBuilder() {
                         >
                           <span aria-hidden="true">*</span> اجباری
                         </button>
+                        {/* بخشِ نقش — «هر کس قسمتِ خودش را پر کند». روی فیلدِ
+                            هسته‌ای هم می‌نشیند: «تاریخ مالِ منشی» به‌اندازهٔ
+                            «شرحِ معاینه مالِ پزشک» معنا دارد. */}
+                        <select
+                          className="fb-role"
+                          value={f.role ?? ''}
+                          disabled={busy}
+                          onChange={(e) => setFieldRole(f, e.target.value)}
+                          title="این فیلد بخشِ کدام نقش است؟"
+                        >
+                          <option value="">— عمومی —</option>
+                          {JOB_ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+                        </select>
                         <button type="button" className="df-act" disabled={busy} onClick={() => setEditing({ formId: form.id, field: f })} aria-label="ویرایش">
                           <Pencil width="15" height="15" />
                         </button>

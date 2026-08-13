@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { LEVEL } from '../common/levels';
+import { JOB_ROLE_KEYS } from '../common/job-roles';
 import { buildPersonPatch, PersonInput } from '../common/person';
 
 @Injectable()
@@ -43,6 +44,20 @@ export class AccountsService {
       include: { person: true },
     });
     return this.auth.publicUser(updated);
+  }
+
+  /** نقشِ شغلی — پزشک/منشی/… . `null` یعنی برداشتنِ نقش. */
+  async setJobRole(id: number, jobRole: string | null, actorId?: number) {
+    if (jobRole != null && !JOB_ROLE_KEYS.includes(jobRole)) {
+      throw new BadRequestException('نقشِ شغلی نامعتبر است');
+    }
+    void actorId;
+    const acc = await this.prisma.account.update({
+      where: { id },
+      data: { jobRole },
+      include: { person: true },
+    });
+    return this.auth.publicUser(acc);
   }
 
   async setLevel(id: number, level: number, actorId?: number) {

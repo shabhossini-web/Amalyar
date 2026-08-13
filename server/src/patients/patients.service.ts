@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
+import { jobRoleLabel } from '../common/job-roles';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
@@ -816,6 +817,55 @@ export class PatientsService {
    * خروجی `patientStatus` را حمل می‌کند تا کلاینت در toast بگوید «پروندهٔ
    * AM-0012 — مراجعهٔ ۳» و کاربر بفهمد ثبتِ دوباره پروندهٔ تکراری نساخته است.
    */
+  /**
+   * «هر کس قسمتِ خودش را پر کند» — اجرای واقعی (`docs/BOOKING.md` مرحلهٔ ۴).
+   *
+   * ⚠️ قاعده دنبالِ **نقش** است نه سطح: حسابِ بی‌نقش (همهٔ حساب‌های موجود)
+   * هیچ محدودیتی ندارد، و حسابِ نقش‌دار — هر سطحی که باشد — فقط بخشِ خودش و
+   * بخش‌های عمومی را می‌نویسد. اگر به سطح گره می‌خورد، پزشکِ سطح‌بالا از
+   * قاعده بیرون می‌افتاد و کلِ «بخش‌بندی» نمایشی می‌شد.
+   *
+   * ⚠️ فقط مقدارِ **تغییرکرده** رد می‌شود، نه هر کلیدِ حاضر در payload:
+   * کلاینتِ قدیمی (یا فرمی که همهٔ مقادیر را echo می‌کند) نباید فقط به‌خاطرِ
+   * بازفرستادنِ مقدارِ دست‌نخوردهٔ بخشِ دیگری رد شود.
+   */
+  private async assertRoleOwnership(
+    kind: string | null | undefined,
+    dto: any,
+    user: any,
+    current?: { extra?: any } & Record<string, any>,
+  ) {
+    const myRole: string | null = user?.jobRole ?? null;
+    if (!myRole) return; // بی‌نقش = بی‌محدودیت (رفتارِ همهٔ نصب‌های امروز)
+    if (!kind) return;
+    const form = await this.prisma.formDef.findFirst({
+      where: { scope: 'visit', visitKind: kind },
+      select: { fields: { where: { role: { not: null } }, select: { key: true, label: true, role: true } } },
+    });
+    if (!form || form.fields.length === 0) return;
+
+    const norm = (v: unknown) => {
+      if (v === null || v === undefined) return '';
+      if (v instanceof Date) return v.toISOString();
+      return String(v);
+    };
+    const curExtra = (current?.extra && typeof current.extra === 'object') ? current.extra as Record<string, any> : {};
+    for (const f of form.fields) {
+      if (f.role === myRole) continue;
+      const inExtra = dto.extra && Object.prototype.hasOwnProperty.call(dto.extra, f.key);
+      const inRoot = Object.prototype.hasOwnProperty.call(dto, f.key);
+      if (!inExtra && !inRoot) continue;
+      const next = inExtra ? dto.extra[f.key] : dto[f.key];
+      const prev = inExtra ? curExtra[f.key] : current?.[f.key];
+      /* در ساخت (current تهی) مقدارِ خالی مجاز است — فرم مقدارِ پیش‌فرضِ
+         خالی می‌فرستد و آن «نوشتن» نیست. */
+      if (norm(next) === norm(prev ?? '')) continue;
+      throw new BadRequestException(
+        `«${f.label}» بخشِ ${jobRoleLabel(f.role)} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
+      );
+    }
+  }
+
   async createVisit(dto: CreateVisitDto, user?: any) {
     const userId: number | undefined = user?.id;
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
@@ -824,6 +874,7 @@ export class PatientsService {
        اعتبارسنجیِ کلاینت دور زدنی است؛ این نیست. */
     await this.assertKind(dto.kind);
     await this.assertFormValid(dto);
+    await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
@@ -926,6 +977,7 @@ export class PatientsService {
     await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    await this.assertRoleOwnership((dto as any).kind ?? v.kind, dto, user, v as any);
 
     const patientPatch: any = {};
     if (dto.firstName !== undefined) patientPatch.firstName = dto.firstName;

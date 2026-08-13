@@ -147,3 +147,11 @@
   border-radius: 10px; padding: 8px 14px;
 }
 .fb-delform:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
+
+/* بخشِ نقشِ فیلد — «هر کس قسمتِ خودش را پر کند» */
+.fb-tag.role { color: #67e8f9; background: rgba(103, 232, 249, .08); border-color: rgba(103, 232, 249, .3); }
+.fb-role {
+  font-family: inherit; font-size: 10.5px; color: var(--text2); cursor: pointer;
+  padding: 5px 7px; border-radius: 8px; max-width: 96px;
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
+}

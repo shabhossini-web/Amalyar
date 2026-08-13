@@ -30,6 +30,14 @@ export default function DynForm({
   onChange,
   disabled,
   /**
+   * نقشِ شغلیِ کاربرِ جاری — «هر کس قسمتِ خودش را پر کند».
+   *
+   * ⚠️ قفلِ این‌جا فقط **نمایشِ** قاعده است؛ اجرای واقعی سمتِ سرور است
+   * (`assertRoleOwnership`). فیلدی که `role` دارد برچسبِ بخش می‌گیرد، و اگر
+   * نقشِ کاربر با آن فرق کند غیرفعال می‌شود. کاربرِ بی‌نقش همه را می‌نویسد.
+   */
+  myRole = null,
+  /**
    * منبعِ گزینه‌های فیلدهای هسته‌ای که به موجودیتِ دیگری اشاره می‌کنند
    * (`surgeonId` → فهرستِ جراحان). شکل: `{ surgeonId: [{v,l}], ... }`.
    *
@@ -64,18 +72,25 @@ export default function DynForm({
 
   return (
     <div className="pf dyn">
-      {fields.filter((f) => f.active !== false).map((f) => (
-        <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
+      {fields.filter((f) => f.active !== false).map((f) => {
+        const locked = !!(f.role && myRole && f.role !== myRole);
+        return (
+        <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}${locked ? ' dyn-locked' : ''}`}>
           <span>
             {f.label}
             {f.required && <i className="dyn-star" aria-label="اجباری"> *</i>}
+            {f.role && (
+              <i className={`dyn-role${locked ? ' off' : ''}`}>
+                بخشِ {f.roleLabel ?? f.role}{locked ? ' — فقط‌خواندنی' : ''}
+              </i>
+            )}
           </span>
 
           <Input
             field={f}
             value={values[f.key]}
             set={(v) => set(f.key, v)}
-            disabled={disabled}
+            disabled={disabled || locked}
             lookups={lookups}
             onUpload={onUpload}
             payment={payment}
@@ -85,7 +100,8 @@ export default function DynForm({
             ? <em className="pf-err">{errors[f.key]}</em>
             : f.hint ? <em className="pf-hint">{f.hint}</em> : null}
         </label>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -342,10 +358,14 @@ function PaymentBox({ info }) {
  * کلی بعد از رفت‌وبرگشت. هر دو از یک منبع می‌خوانند (`field.required`) پس
  * نمی‌توانند اختلاف پیدا کنند.
  */
-export function dynErrors(fields, values) {
+export function dynErrors(fields, values, myRole = null) {
   const e = {};
   for (const f of fields ?? []) {
     if (f.active === false || !f.required) continue;
+    /* فیلدِ اجباریِ بخشِ دیگر نباید ذخیرهٔ این نقش را قفل کند: منشی که فرم
+       را می‌بندد مسئولِ «شرحِ معاینه»ی پزشک نیست. سرور هم همین‌طور رفتار
+       می‌کند (assertRoleOwnership فقط تغییر را می‌سنجد، نه خالی‌بودن را). */
+    if (f.role && myRole && f.role !== myRole) continue;
     /* ⚠️ باکسِ پرداخت مقدار ندارد — شماره‌ها از لینک می‌آیند و فیش endpointِ
        خودش را دارد. `VALUELESS_TYPES` سمتِ سرور همین است؛ اگر این دو از هم
        جدا می‌شدند، یکی خطا می‌داد و دیگری نه. */

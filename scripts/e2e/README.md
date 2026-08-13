@@ -57,6 +57,7 @@ node scripts/e2e/visit-topic.mjs      # موضوعِ ویزیت (اولیه/پس
 node scripts/e2e/availability.mjs     # برنامهٔ کاری و روزهای آزاد (API) — مرحلهٔ ۲
 node scripts/e2e/schedule-panel.mjs   # پنلِ برنامهٔ کاری در مرورگر — مرحلهٔ ۲
 node scripts/e2e/booking-flow.mjs     # نوبت‌گیریِ بیمار تا تأیید — مرحلهٔ ۳
+node scripts/e2e/role-fields.mjs      # «هر کس قسمتِ خودش را پر کند» — مرحلهٔ ۴
 node scripts/e2e/tenant-isolation.mjs # دو تنانتِ واقعی، دو دیتابیس، هیچ نشتی (پیش‌نیاز پایین)
 node scripts/e2e/platform-domains.mjs # پنلِ پلتفرم هیچ دامنه‌ای را پنهان نمی‌کند
 ```

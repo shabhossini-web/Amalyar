@@ -53,6 +53,10 @@ export function useFormDef(kind) {
   /** آیا ستاره بخورد؟ فیلدی که تعریف ندارد، اجباری نیست. */
   const requiredOf = useCallback((key) => !!byKey.get(key)?.required, [byKey]);
 
+  /** بخشِ نقشِ فیلد — «این فیلد مالِ کیست». null = عمومی. */
+  const roleOf = useCallback((key) => byKey.get(key)?.role ?? null, [byKey]);
+  const roleLabelOf = useCallback((key) => byKey.get(key)?.roleLabel ?? null, [byKey]);
+
   /**
    * آیا این فیلد نشان داده شود؟
    *
@@ -117,7 +121,7 @@ export function useFormDef(kind) {
     return rows.map((r) => r.key);
   }, [def]);
 
-  return { def, kinds, labelOf, requiredOf, isOn, customFields, orderBuiltins };
+  return { def, kinds, labelOf, requiredOf, roleOf, roleLabelOf, isOn, customFields, orderBuiltins };
 }
 
 /** ستاره‌ی کنارِ برچسب — یک نشانِ مشترک، تا فرم‌ساز و فرم یک زبان داشته باشند. */

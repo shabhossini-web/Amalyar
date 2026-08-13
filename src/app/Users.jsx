@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
+import { JOB_ROLES } from '../lib/job-roles.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import { toEnDigits } from '../lib/identity.js';
 /* ⚠️ `faDate` استفاده می‌شد ولی هرگز ایمپورت نشده بود. چون پشتِ
@@ -175,6 +176,15 @@ export default function Users() {
     }
   };
 
+  const setJobRole = async (row, jobRole) => {
+    setBusyId(row.id);
+    try {
+      await api(`/accounts/${row.id}/job-role`, { method: 'POST', body: { jobRole } });
+      setToast(jobRole ? 'نقشِ شغلی ثبت شد ✓' : 'نقشِ شغلی برداشته شد ✓');
+      await load();
+    } catch (e) { setToast(e.message); } finally { setBusyId(0); }
+  };
+
   const setLevel = async (row, level) => {
     setBusyId(row.id);
     try {
@@ -282,6 +292,20 @@ export default function Users() {
                       onChange={(e) => setLevel(row, +e.target.value)}
                     >
                       {LEVELS.map((l) => <option key={l.v} value={l.v}>{l.v} — {l.l}</option>)}
+                    </select>
+                  </label>
+                  {/* نقشِ شغلی — «هر کس قسمتِ خودش را پر کند» (BOOKING مرحلهٔ ۴).
+                      جدا از سطح: سطح می‌گوید چقدر می‌بینی، نقش می‌گوید کدام
+                      بخشِ فرم مالِ توست. */}
+                  <label className="us-levelpick">
+                    <span>نقش:</span>
+                    <select
+                      value={row.jobRole ?? ''}
+                      disabled={busyId === row.id || row.status !== 'active'}
+                      onChange={(e) => setJobRole(row, e.target.value || null)}
+                    >
+                      <option value="">— بدونِ نقش —</option>
+                      {JOB_ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
                     </select>
                   </label>
                   <button type="button" className="us-btn" onClick={() => setProfileId(row.id)}>پروفایل</button>

@@ -35,6 +35,7 @@ class FieldCreateDto {
   @IsOptional() @IsString() @MaxLength(160) hint?: string;
   @IsOptional() @IsString() @MaxLength(80) placeholder?: string;
   @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
+  @IsOptional() @IsString() @MaxLength(20) role?: string;
 }
 
 class FieldPatchDto {
@@ -46,6 +47,7 @@ class FieldPatchDto {
   @IsOptional() @IsString() @MaxLength(160) hint?: string;
   @IsOptional() @IsString() @MaxLength(80) placeholder?: string;
   @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @IsString() @MaxLength(20) role?: string | null;
   @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
 }
 

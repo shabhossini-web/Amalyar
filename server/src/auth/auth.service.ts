@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { LoginDto } from './dto/login.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
+import { jobRoleLabel } from '../common/job-roles';
 import { LEVEL, levelName } from '../common/levels';
 import { RateLimitService } from '../common/rate-limit.service';
 import { TenantContext } from '../tenant/tenant-context';
@@ -294,6 +295,8 @@ export class AuthService {
       phone: p?.phone ?? null,
       level: a.level,
       levelName: levelName(a.level),
+      jobRole: a.jobRole ?? null,
+      jobRoleLabel: jobRoleLabel(a.jobRole),
       status: a.status,
       selfie: p?.photo ?? null,
     };

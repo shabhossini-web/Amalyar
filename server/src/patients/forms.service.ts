@@ -1,3 +1,4 @@
+import { JOB_ROLE_KEYS, jobRoleLabel } from '../common/job-roles';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -88,6 +89,12 @@ function normColor(v: any): string | null {
 }
 
 /** صفحهٔ سالم: عددِ صحیحِ ۱ تا `MAX_PAGE`. هر چیزِ دیگری → صفحهٔ ۱. */
+/** بخشِ نقش — فقط نقش‌های شناخته‌شده؛ هرچیزِ دیگر یعنی «عمومی». */
+function normRole(v: unknown): string | null {
+  const r = String(v ?? '').trim();
+  return JOB_ROLE_KEYS.includes(r) ? r : null;
+}
+
 function normPage(v: any): number {
   const n = Math.trunc(Number(v));
   if (!Number.isFinite(n) || n < 1) return 1;
@@ -274,6 +281,10 @@ export class FormsService {
     const fields = (f.fields ?? []).map((x: any) => ({
       id: x.id, key: x.key, label: x.label, type: x.type,
       required: x.required, options: x.options ?? [],
+      /* بخشِ نقش + برچسبِ فارسی‌اش — مشتقِ سرور (قانون ۱۵)، تا کلاینت نگاشتِ
+         خودش را نسازد. */
+      role: x.role ?? null,
+      roleLabel: jobRoleLabel(x.role),
       hint: x.hint, placeholder: x.placeholder,
       sort: x.sort, page: x.page ?? 1, builtin: x.builtin, active: x.active,
     }));
@@ -551,6 +562,7 @@ export class FormsService {
         placeholder: dto.placeholder?.trim() || null,
         sort: (last?.sort ?? 0) + 10,
         builtin: false,
+        role: normRole(dto.role),
       },
     });
     await this.compactPages(formId);
@@ -601,6 +613,9 @@ export class FormsService {
         /* ⚠️ صفحه روی فیلدِ هسته‌ای هم عوض می‌شود: چینش کارِ سوپرادمین است و
            قفلِ builtin فقط دربارهٔ `key` و `type` است، نه جای فیلد. */
         ...(dto.page !== undefined ? { page: normPage(dto.page) } : {}),
+        /* بخشِ نقش روی فیلدِ هسته‌ای هم می‌نشیند: «تاریخِ عمل مالِ منشی است»
+           به‌اندازهٔ «شرحِ معاینه مالِ پزشک است» معنا دارد. */
+        ...(dto.role !== undefined ? { role: normRole(dto.role) } : {}),
       },
     });
     if (dto.page !== undefined) await this.compactPages(row.formId);

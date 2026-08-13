@@ -716,3 +716,16 @@ a.db-defbtn { text-decoration: none; }
   margin: 0 0 4px; font-size: 12.5px; font-weight: 800; color: var(--brand-2, #a78bfa);
 }
 .db-extra .db-hint { margin: 0 0 10px; }
+
+/* ── بخش‌بندیِ نقش روی فرمِ مراجعه — `docs/BOOKING.md` مرحلهٔ ۴ ──
+   `<fieldset disabled>` قفلِ بومی است؛ این‌جا فقط «چرا قفل است» دیده می‌شود. */
+.db-rolebox {
+  margin: 0; padding: 8px 10px 10px; border-radius: 12px;
+  border: 1px dashed rgba(var(--brand-2-rgb), .35);
+  background: rgba(var(--brand-2-rgb), .04);
+}
+.db-rolebox > legend {
+  padding: 0 7px; font-size: 10.5px; font-weight: 700; color: rgb(var(--brand-2-rgb));
+}
+.db-rolebox.locked { border-style: solid; border-color: rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .02); opacity: .75; }
+.db-rolebox.locked > legend { color: var(--text3); }

@@ -59,6 +59,11 @@ model Account {
   credentials WebauthnCredential[]
   techVisits  Visit[]              @relation("VisitTech")
 
+  /// نقشِ شغلی — doctor | secretary | nurse | assistant. جدا از `level`:
+  /// سطح می‌گوید «چقدر می‌بینی»، نقش می‌گوید «کدام بخشِ فرم مالِ توست».
+  /// `null` = بی‌نقش؛ هیچ محدودیتی ندارد (همهٔ حساب‌های موجود همین‌اند).
+  jobRole String? @map("job_role")
+
   /// نوبت‌دهی (`docs/BOOKING.md`) — برنامهٔ کاری، استثنا و نوبت‌های این پزشک.
   availabilityRules      AvailabilityRule[]      @relation("AvailabilityDoctor")
   availabilityExceptions AvailabilityException[] @relation("AvailabilityExceptionDoctor")
@@ -1777,6 +1782,11 @@ model FormField {
   key String
 
   label String
+
+  /// بخشِ نقش — «این فیلد مالِ کیست». doctor | secretary | nurse | assistant.
+  /// `null` = عمومی، همه می‌نویسند. اجرای واقعی سمتِ سرور است
+  /// (`assertRoleOwnership`)؛ رنگ و قفلِ کلاینت فقط نمایشِ همان است.
+  role String?
 
   /// `text | textarea | number | money | select | multiselect | date | time |
   ///  bool | phone | rating | image | payment`

@@ -250,6 +250,11 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
      فیلدهای دلخواهی که سوپرادمین ساخته. */
   const fd = useFormDef(f.kind);
+  /* «هر کس قسمتِ خودش را پر کند» — نقشِ شغلیِ کاربرِ جاری. قفل و برچسب فقط
+     نمایش‌اند؛ اجرای واقعی سمتِ سرور است. */
+  const { user: me } = useAuth();
+  const myRole = me?.jobRole ?? null;
+  const keyLocked = (key) => { const r = fd.roleOf(key); return !!(r && myRole && r !== myRole); };
   const [extra, setExtra] = useState(() => initial?.extra ?? {});
   const [extraErr, setExtraErr] = useState({});
 
@@ -384,7 +389,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
        سرور هر دو را می‌سنجد؛ این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود.
        مقدارها از دو جا می‌آیند چون هسته‌ای‌ها در `f` هستند و دلخواه‌ها در
        `extra` — همان تقسیمی که سرور هم دارد. */
-    const eCustom = dynErrors(fd.customFields, extra);
+    const eCustom = dynErrors(fd.customFields, extra, myRole);
     setExtraErr(eCustom);
     if (Object.keys(eCustom).length) {
       onToast(Object.values(eCustom)[0]);
@@ -399,6 +404,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     const eBuiltin = dynErrors(
       (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals),
       builtinVals,
+      myRole,
     );
     if (Object.keys(eBuiltin).length) { onToast(Object.values(eBuiltin)[0]); return; }
 
@@ -422,6 +428,16 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       techArriveTime: editing || times.techArriveTime ? times.techArriveTime : undefined,
       notes: f.notes.trim() || undefined,
     };
+    /* ⚠️ فیلدِ بخشِ نقشِ دیگر اصلاً فرستاده نمی‌شود — نه مقدارِ قفل‌شده‌اش.
+       سرور echoی بی‌تغییر را تحمل می‌کند، ولی نفرستادن هم تمیزتر است هم
+       جلوی ردشدنِ الکی با کلاینتِ ناهمگام را می‌گیرد. */
+    for (const k of Object.keys(common)) {
+      if (k !== 'extra' && keyLocked(k)) delete common[k];
+    }
+    if (common.extra) {
+      common.extra = Object.fromEntries(Object.entries(common.extra).filter(([k]) => !keyLocked(k)));
+    }
+
     /* ⚠️ مبلغ فقط در **ساخت** می‌رود، نه در ویرایش: ویرایشِ مراجعه نباید
        بی‌سروصدا قلمِ تازه بسازد. اصلاحِ مبلغ کارِ صورت‌حساب است. */
     const amount = Number(toEnDigits(String(f.amount)).replace(/[^0-9]/g, '')) || 0;
@@ -596,6 +612,22 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     <label className="db-field"><span>{fd.labelOf('notes', 'یادداشت')}{star(fd.requiredOf('notes'))}</span>
       <textarea rows={2} value={f.notes} onChange={set('notes')} />
     </label>) };
+
+  /* ⚠️ بخش‌بندیِ نقش روی فیلدهای هسته‌ای — بعد از ساختِ همهٔ نودها اعمال
+     می‌شود تا سیزده بلوکِ جدا هرکدام کپیِ خودش را نگیرد. `<fieldset disabled>`
+     همهٔ ورودی‌های داخلش را بومی قفل می‌کند؛ برچسبِ بخش هم همان‌جاست تا
+     «چرا قفل است» بی‌جواب نماند. */
+  for (const bk of Object.keys(builtinNodes)) {
+    const role = fd.roleOf(bk);
+    if (!role) continue;
+    const locked = keyLocked(bk);
+    const node = builtinNodes[bk];
+    builtinNodes[bk] = { ...node, el: (
+      <fieldset key={bk} className={`db-rolebox${locked ? ' locked' : ''}`} disabled={locked || undefined}>
+        <legend>بخشِ {fd.roleLabelOf(bk)}{locked ? ' — فقط‌خواندنی' : ''}</legend>
+        {node.el}
+      </fieldset>) };
+  }
 
 
   return (
@@ -798,6 +830,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             errors={extraErr}
             onChange={setExtra}
             disabled={busy}
+            myRole={myRole}
           />
         </div>
       )}
@@ -1146,6 +1179,22 @@ export default function Dashboard() {
     } catch {
       /* دسترسی نداشته باشد، denied از load اصلی می‌آید */
     }
+  }, []);
+
+  /* دیپ‌لینکِ ?patient=<visitId> — تقویم و نوتیف به همین‌جا لینک می‌دهند.
+     ⚠️ تا امروز این پارامتر **هیچ‌جا خوانده نمی‌شد**: لینکِ «بازکردن در
+     داشبورد»ِ تقویم صفحه را باز می‌کرد و هیچ اتفاقی نمی‌افتاد — دری که به
+     دیوار باز می‌شد. حالا شیتِ ویرایشِ همان مراجعه باز می‌شود؛ پایهٔ
+     مرحلهٔ ۵ نوبت‌دهی (کلیک روی نوبت ← فرمِ ویزیت) هم همین است. */
+  const deepRef = useRef(false);
+  useEffect(() => {
+    if (deepRef.current) return;
+    deepRef.current = true;
+    const vid = Number(new URLSearchParams(window.location.search).get('patient'));
+    if (!vid) return;
+    api(`/visits/${vid}`)
+      .then((v) => { if (v?.id) setModal({ visit: v }); })
+      .catch(() => { /* مراجعهٔ حذف‌شده یا بی‌دسترسی — صفحه عادی می‌ماند */ });
   }, []);
 
   // بارِ اول + سرچِ زنده (debounce) + فیلترِ وضعیت.

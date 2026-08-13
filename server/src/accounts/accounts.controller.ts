@@ -9,6 +9,11 @@ import { LEVEL } from '../common/levels';
 import { ApproveDto } from './dto/approve.dto';
 
 /** همان فیلدهای هویتیِ جراح — تا شکلِ «شخص» همه‌جا یکی بماند. */
+class JobRoleDto {
+  /// `null` = برداشتنِ نقش. اعتبارسنجیِ مقدار در سرویس است تا پیامش فارسی باشد.
+  @IsOptional() @IsString() jobRole?: string | null;
+}
+
 class StaffProfileDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(60) firstName?: string;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(60) lastName?: string;
@@ -62,6 +67,16 @@ export class AccountsController {
   @Post(':id/reject')
   reject(@Param('id', ParseIntPipe) id: number) {
     return this.accounts.reject(id);
+  }
+
+  /** نقشِ شغلی — پزشک/منشی/… («هر کس قسمتِ خودش را پر کند»). */
+  @Post(':id/job-role')
+  setJobRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: JobRoleDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.accounts.setJobRole(id, dto.jobRole ?? null, user?.id);
   }
 
   @Post(':id/level')
