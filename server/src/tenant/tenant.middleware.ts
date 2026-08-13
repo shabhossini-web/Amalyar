@@ -19,7 +19,10 @@ export class TenantMiddleware implements NestMiddleware {
     const hostname = (req.headers.host ?? '').split(':')[0].trim().toLowerCase();
     const tenant =
       (hostname ? await this.registry.resolveHostname(hostname) : null) ??
-      (await this.registry.resolveDevelopmentDefault());
+      /* ⚠️ میزبان به پیش‌فرض **پاس داده می‌شود** — بدونِ آن، بازگشتِ توسعه
+         نمی‌تواند دامنهٔ واقعی را از loopback جدا کند و هر Hostِ ناشناخته
+         دیتابیسِ تنانتِ پیش‌فرض را می‌گرفت. */
+      (await this.registry.resolveDevelopmentDefault(hostname));
 
     if (!tenant) throw new NotFoundException('شرکت برای این دامنه یافت نشد');
 

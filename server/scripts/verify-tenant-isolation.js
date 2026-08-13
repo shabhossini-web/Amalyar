@@ -221,6 +221,66 @@ function verifyEveryModelIsTenantScoped(context) {
   }
 }
 
+/**
+ * پیش‌فرضِ توسعه نباید به هیچ دامنهٔ واقعی برسد.
+ *
+ * ⚠️ این گارد از یک نشتِ واقعی آمد: `resolveDevelopmentDefault` تنها با
+ * `NODE_ENV !== 'production'` محافظت می‌شد، پس هر Hostی که در `tenant_domains`
+ * پیدا نمی‌شد بی‌سروصدا دیتابیسِ `DEFAULT_TENANT_SLUG` را می‌گرفت. با کدِ
+ * قبلی، درخواستی با `Host: ghost-clinic.example.com` روی سرورِ محلی
+ * ۲۰۰ و **۵۰ مراجعهٔ تنانتِ دیگر** برگرداند. حالا ۴۰۴ می‌گیرد.
+ *
+ * ادعا روی هر سه قفل است، چون هر کدام جدا برداشته شود نشت برمی‌گردد.
+ */
+async function verifyDevelopmentFallbackStaysLoopback() {
+  const { TenantRegistryService } = require('../dist/tenant/tenant-registry.service');
+
+  let lookups = 0;
+  const control = {
+    tenant: {
+      async findUnique() {
+        lookups += 1;
+        // اگر این اجرا شود یعنی قفل‌ها رد شده‌اند؛ DSN بی‌ربط است.
+        return null;
+      },
+    },
+  };
+  const registry = new TenantRegistryService(control);
+
+  const env = { ...process.env };
+  try {
+    process.env.DEFAULT_TENANT_SLUG = 'alpha';
+    process.env.NODE_ENV = 'development';
+
+    for (const host of ['beta.amalyar.com', 'reyteb.amalyar.com', 'evil.example', '127.0.0.1.nip.io']) {
+      assert.equal(
+        await registry.resolveDevelopmentDefault(host),
+        null,
+        `میزبانِ واقعی «${host}» هرگز نباید به تنانتِ پیش‌فرض بیفتد`,
+      );
+    }
+    assert.equal(lookups, 0, 'برای میزبانِ غیرِloopback حتی نباید تنانتِ پیش‌فرض را جست‌وجو کند');
+
+    // loopback هنوز کار می‌کند — وگرنه توسعهٔ محلی می‌شکند.
+    for (const host of ['localhost', '127.0.0.1', '127.0.0.2', '::1', '']) {
+      await registry.resolveDevelopmentDefault(host);
+    }
+    assert.equal(lookups, 5, 'میزبانِ loopback باید همچنان به پیش‌فرضِ توسعه برسد');
+
+    // قفلِ دوم: بدونِ DEFAULT_TENANT_SLUG هیچ‌چیز، حتی روی loopback.
+    delete process.env.DEFAULT_TENANT_SLUG;
+    assert.equal(await registry.resolveDevelopmentDefault('localhost'), null);
+
+    // قفلِ اول: در production حتی با اسلاگِ ست‌شده و روی loopback.
+    process.env.DEFAULT_TENANT_SLUG = 'alpha';
+    process.env.NODE_ENV = 'production';
+    assert.equal(await registry.resolveDevelopmentDefault('localhost'), null);
+    assert.equal(lookups, 5, 'هیچ‌کدام از دو حالتِ آخر نباید به دیتابیسِ کنترل برسد');
+  } finally {
+    process.env = env;
+  }
+}
+
 async function main() {
   const context = new TenantContext();
   await verifyJwtBoundary(context);
@@ -229,6 +289,7 @@ async function main() {
   await verifyWebOtpBinding();
   verifyDeletionOtpScope();
   verifyEveryModelIsTenantScoped(context);
+  await verifyDevelopmentFallbackStaysLoopback();
   process.stdout.write('tenant isolation boundaries verified\n');
 }
 
