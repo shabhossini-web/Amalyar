@@ -16,7 +16,7 @@ import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
-import { Arrive, Back, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
+import { Arrive, Back, Book, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -869,11 +869,24 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
         </div>
 
         {/* نامِ بیمار درِ ورودیِ پرونده است — کاربر همان‌جا که بیمار را می‌بیند
-            انتظار دارد بتواند سابقه‌اش را باز کند، نه از یک منویِ دیگر. */}
-        <Link className="db-title" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">
-          <b>{v.fullName}</b>
-          <span dir="ltr">{v.code}</span>
-        </Link>
+            انتظار دارد بتواند سابقه‌اش را باز کند، نه از یک منویِ دیگر.
+
+            ⚠️ **فقط خودِ نام لینک است، نه کلِ بلوکِ عنوان.** تا دیروز کدِ
+            مراجعه و بالشتکِ دورش هم داخلِ لینک بودند، پس یک هدفِ ۲۰۲×۶۳ در
+            **مرکزِ دیداریِ کارت** می‌ساخت. روی کارتِ کم‌ارتفاع (بی‌عمل،
+            بی‌مبلغ) مرکزِ هندسیِ کارت دقیقاً همان‌جا می‌افتاد — یعنی ضربهٔ
+            طبیعیِ وسط، «پرونده» را باز می‌کرد نه «مراجعه» را. سنجیده شد،
+            حدس نیست.
+
+            حالا سطحِ لینک به یک خطِ متن کوچک شده و زیرخطِ نقطه‌چین دارد تا
+            پیدا باشد یک مقصدِ **دیگر** است؛ برای هدفِ مطمئن هم دکمهٔ
+            «پرونده» در ردیفِ ابزار هست. */}
+        <div className="db-title">
+          <Link className="db-name" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">
+            {v.fullName}
+          </Link>
+          <span className="db-code" dir="ltr">{v.code}</span>
+        </div>
         {(v.procedureTypeName || v.opType) && (
           <p className="db-sub">{v.procedureTypeName || v.opType}</p>
         )}
@@ -949,6 +962,10 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
             به خطِ دوم بروند. تا وقتی مستقیم فرزندِ `.db-foot` بودند فقط
             «حذف» تنها می‌افتاد پایین و ردیف شکسته به‌نظر می‌رسید. */}
         <div className="db-tools">
+          {/* ⚠️ هدفِ **مطمئنِ** پرونده. نامِ وسطِ کارت یک میان‌بُر است و روی
+              موبایل با ضربهٔ «وسطِ کارت» قاطی می‌شود؛ این یکی هرگز قاطی
+              نمی‌شود چون کنارِ بقیهٔ ابزارهاست و برچسب دارد. */}
+          <Link className="db-ico" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار"><Book width="15" height="15" /></Link>
           <button type="button" className="db-ico" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}><Money width="15" height="15" /></button>
           <button type="button" className="db-ico" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}><Pencil width="15" height="15" /></button>
           <button

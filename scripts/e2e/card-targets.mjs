@@ -68,7 +68,7 @@ try {
   ok(await p.locator('[class*="overlay"]').count() === 0, 'بعد از بستن overlayی نماند');
 
   console.log('\n۲) کلیک روی نام → پروندهٔ بیمار');
-  await p.locator('.db-title').first().click();
+  await p.locator('.db-name').first().click();
   await p.waitForTimeout(1600);
   ok(/\/app\/patients\/\d+/.test(p.url()), `URL به پرونده رفت (${p.url().split('/app')[1]})`);
 
@@ -89,6 +89,58 @@ try {
   ok(focusable === 1, 'دکمهٔ پوششی یک `button` واقعی است (نه onClick روی div)');
   const lab = await p.locator('.db-card').first().locator('.db-open').getAttribute('aria-label');
   ok(!!lab && lab.length > 5, `و برچسبِ خواندنی دارد («${lab}»)`);
+
+  console.log('\n۵) نقشهٔ ضربهٔ کلِ کارت — نه اندازه‌گیریِ عرض');
+  /* ⚠️ این بند بعد از یک شکایتِ دوباره اضافه شد: «رو کارت می‌زنیم پرونده باز
+     می‌شه». ادعاهای بالا سبز بودند چون **عرضِ** نام را می‌سنجیدند، در حالی
+     که مسئله عرض نبود:
+       ۱. `.db-panel-top` با `z-index: 2` بالای دکمهٔ پوششی می‌نشست، پس تمامِ
+          نوارِ بالای کارت **منطقهٔ مرده** بود — ضربه می‌خورد و هیچ نمی‌شد.
+       ۲. کلِ بلوکِ عنوان (نام + کد + بالشتک) لینکِ پرونده بود، پس روی
+          کارتِ کم‌ارتفاع مرکزِ هندسی هم روی «پرونده» می‌افتاد.
+     هیچ‌کدام با «عرضِ نام از پنل کمتر است» گرفته نمی‌شد. پس حالا کلِ سطحِ
+     کارت نقطه‌به‌نقطه hit-test می‌شود. */
+  await home();
+  const map = await p.locator('.db-card').first().evaluate((el) => {
+    const panel = el.querySelector('.db-panel');
+    const r = panel.getBoundingClientRect();
+    const at = (x, y) => {
+      const e = document.elementFromPoint(x, y);
+      if (!e) return 'out';
+      if (e.closest('.db-name')) return 'record';
+      if (e.closest('.db-open')) return 'visit';
+      return 'dead';
+    };
+    /* نمونه‌برداری **داخلِ** پنل: آخرین ردیف/ستون دقیقاً روی لبه می‌افتاد و
+       `elementFromPoint` والد را برمی‌گرداند — مصنوعِ اندازه‌گیری، نه نقطهٔ
+       مرده. ۳ پیکسل حاشیه هم گوشه‌های گردشده را کنار می‌گذارد. */
+    let visit = 0, record = 0, dead = 0;
+    for (let y = 3; y <= r.height - 4; y += 5) {
+      for (let x = 3; x <= r.width - 4; x += 5) {
+        const k = at(r.x + x, r.y + y);
+        if (k === 'visit') visit++; else if (k === 'record') record++; else if (k === 'dead') dead++;
+      }
+    }
+    const total = visit + record + dead;
+    return { visit, record, dead, total, top: at(r.x + r.width / 2, r.y + 10) };
+  });
+  ok(map.dead === 0, `هیچ نقطهٔ مرده‌ای روی کارت نیست (${map.dead} از ${map.total})`);
+  ok(map.top === 'visit', `نوارِ بالای کارت (تاریخ/نوع) هم مراجعه را باز می‌کند، نه هیچ (${map.top})`);
+  const share = Math.round((map.visit / map.total) * 100);
+  ok(share >= 85, `**دستِ‌کم ۸۵٪ سطحِ کارت مراجعه را باز می‌کند** (${share}٪)`);
+  ok(map.record > 0, 'و نام همچنان مقصدِ پرونده است، صفر نشده');
+
+  console.log('\n۶) هدفِ مطمئنِ پرونده در ردیفِ ابزار');
+  /* نامِ وسطِ کارت یک میان‌بُر است و روی موبایل با ضربهٔ «وسط» قاطی می‌شود؛
+     باید یک هدفِ بی‌ابهام هم باشد که هرگز قاطی نشود. */
+  const pid = await p.locator('.db-card').first().getAttribute('data-visit-id').catch(() => null);
+  const rec = p.locator('.db-card').first().locator('.db-tools a.db-ico');
+  ok(await rec.count() === 1, 'یک لینکِ پرونده در ردیفِ ابزار هست');
+  ok(/\/app\/patients\/\d+/.test(await rec.getAttribute('href') ?? ''), `و به پرونده اشاره می‌کند (${await rec.getAttribute('href')})`);
+  void pid;
+  await rec.click();
+  await p.waitForTimeout(1600);
+  ok(/\/app\/patients\/\d+/.test(p.url()), `و واقعاً پرونده را باز می‌کند (${p.url().split('/app')[1]})`);
 } finally {
   console.log('\n' + '─'.repeat(50));
   console.log(`قبول: ${pass}   رد: ${fail}`);

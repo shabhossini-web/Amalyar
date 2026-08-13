@@ -124,31 +124,49 @@
    بالاتر جدا می‌ماند. */
 .db-open {
   position: absolute; inset: 0; z-index: 1;
-  padding: 0; border: none; background: none; cursor: pointer; border-radius: 15px;
+  padding: 0; border: none; background: none; cursor: pointer;
+  /* ⚠️ **بدونِ گردیِ گوشه**: گردی از سطحِ ضربه هم کم می‌کند، پس چهار گوشهٔ
+     کارت به هیچ کنشی نمی‌رسیدند. گردی فقط هنگامِ فوکوس برمی‌گردد تا حلقهٔ
+     فوکوس با شکلِ کارت جور باشد — آن‌جا دیگر مسئلهٔ ضربه نیست. */
+  border-radius: 0;
 }
-.db-open:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .8); outline-offset: -3px; }
+.db-open:focus-visible { border-radius: 15px; outline: 2px solid rgba(var(--brand-2-rgb), .8); outline-offset: -3px; }
 .db-open:disabled { cursor: default; }
 /* بازخوردِ hover روی **خودِ پنل** می‌نشیند نه روی دکمه: دکمه بالای متن است و
    هر پس‌زمینه‌ای رویش، پرده‌ای روی نوشته‌ها می‌کشد. */
 .db-panel:hover { background: rgba(var(--k, var(--brand-soft-rgb)), .07); }
 
-.db-panel-top { position: relative; z-index: 2; display: flex; align-items: center; gap: 8px; }
+/* ⚠️ `pointer-events: none` عمدی است. این ردیف فقط تاریخ و نوع را نشان
+   می‌دهد و هیچ کنشی ندارد، ولی چون `z-index: 2` دارد بالای دکمهٔ پوششی
+   می‌نشست و **بالای کارت یک منطقهٔ مرده** می‌ساخت: ضربه می‌خورد و هیچ
+   نمی‌شد. کاربری که یک‌جا واکنشی نبیند جای دیگری می‌زند، و آن «جای دیگر»
+   معمولاً نامِ درشتِ وسط است — یعنی همان پرونده‌ای که نمی‌خواست. */
+.db-panel-top { position: relative; z-index: 2; pointer-events: none; display: flex; align-items: center; gap: 8px; }
 .db-when { font-size: 11.5px; color: var(--text3); }
 .db-panel-top .db-kindtag { margin-inline-start: auto; }
 
 /* عنوان وسط‌چین مثلِ طرحِ مرجع: نامِ بیمار تنها چیزی است که کاربر با آن
    کارت را می‌شناسد، پس بزرگ‌ترین چیزِ کارت است.
-   ⚠️ `align-self: center` یعنی فقط به عرضِ خودِ نام است، نه تمامِ عرضِ پنل —
-   وگرنه کلیک در فضای خالیِ کنارِ نام هم «پرونده» را باز می‌کرد. */
+   ⚠️ خودِ بلوک **لینک نیست** و ضربه از رویش رد می‌شود؛ فقط `.db-name` لینک
+   است. وگرنه کدِ مراجعه و بالشتکِ دورش هم یک هدفِ بزرگ در مرکزِ دیداریِ
+   کارت می‌ساختند و ضربهٔ «وسطِ کارت» پرونده را باز می‌کرد. */
 .db-title {
-  position: relative; z-index: 2; align-self: center;
+  position: relative; z-index: 2; align-self: center; pointer-events: none;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
-  text-decoration: none; color: inherit; padding: 6px 10px 2px; border-radius: 10px;
+  padding: 6px 10px 2px;
 }
-.db-title b { font-size: 18px; font-weight: 900; letter-spacing: -.2px; }
-.db-title span { font-size: 11px; color: var(--text3); }
-.db-title:hover b { color: rgb(var(--k, var(--brand-2-rgb))); }
-.db-title:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 3px; }
+.db-name {
+  pointer-events: auto; border-radius: 8px; padding: 1px 4px;
+  font-size: 18px; font-weight: 900; letter-spacing: -.2px;
+  color: inherit; text-align: center;
+  /* زیرخطِ نقطه‌چین: نام باید **پیدا** باشد که مقصدِ دیگری است، نه اینکه
+     کاربر تصادفی کشفش کند. */
+  text-decoration: underline dotted rgba(var(--brand-soft-rgb), .45);
+  text-underline-offset: 4px;
+}
+.db-name:hover { color: rgb(var(--k, var(--brand-2-rgb))); }
+.db-name:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 3px; }
+.db-code { font-size: 11px; color: var(--text3); }
 .db-sub { margin: -4px 0 2px; text-align: center; font-size: 12.5px; color: var(--text2); }
 
 /* نوارِ وصولِ صورت‌حساب */
@@ -206,6 +224,9 @@
   border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 9px;
   transition: color .15s, border-color .15s, background .15s, width .15s;
 }
+/* یکی از ابزارها یک `<a>` است (پرونده) نه دکمه — زیرخطِ پیش‌فرضِ لینک نباید
+   بیاید، وگرنه در ردیفِ آیکون‌ها یک خطِ بی‌ربط دیده می‌شود. */
+a.db-ico { text-decoration: none; }
 .db-ico:hover:not(:disabled) { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
 .db-ico.del:hover:not(:disabled) { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); }
 .db-ico.del.arm { width: auto; padding: 0 10px; color: #fff; background: #dc2626; border-color: #dc2626; }
