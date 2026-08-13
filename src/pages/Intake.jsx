@@ -7,6 +7,7 @@ import Mark from '../components/Mark.jsx';
 import './intake.css';
 import { Alert, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
+import BookingPick from './BookingPick.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* ⚠️ مبلغ‌ها در کلِ عمل‌یار **تومان**اند (مثلِ `Charge.amount`). نسخهٔ اول
@@ -318,6 +319,14 @@ function Form() {
           هاردکد و یک بار همان فیلد در فرمِ ساخته‌شده.
           لینکِ بدونِ فرم (`d.form === null`) دقیقاً همان صفحهٔ امروز را
           می‌بیند — همهٔ لینک‌های موجود این‌طورند. */}
+      {/* ⚠️ نوبت **قبل از** فرم می‌آید: روزِ نوبت چیزی است که بیمار برایش
+          آمده، و گذاشتنش بعد از یک فرمِ بلند یعنی کسی که فرم را نیمه رها
+          می‌کند اصلاً نوبتی نگرفته. نصبی که برنامهٔ کاری ندارد این بخش را
+          اصلاً نمی‌بیند (`booking.required === false`). */}
+      {(d.status === 'pending_fill' || d.status === 'pending_payment') && d.booking?.required && (
+        <BookingPick token={token} booking={d.booking} disabled={busy} onBooked={setD} />
+      )}
+
       {(d.status === 'pending_fill' || d.status === 'pending_payment') && (
         d.form?.fields?.length ? (
           <>

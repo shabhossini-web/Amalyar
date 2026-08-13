@@ -48,6 +48,13 @@ class FillDto {
   @IsOptional() @IsObject({ message: 'پاسخ‌های فرم نامعتبر است' }) values?: Record<string, any>;
 }
 
+/** رزروِ نوبت توسطِ بیمار — `docs/BOOKING.md` مرحلهٔ ۳. */
+class BookDto {
+  @IsString({ message: 'روزِ نوبت را انتخاب کنید' }) date!: string;
+  @IsOptional() @IsInt({ message: 'ساعتِ نوبت نامعتبر است' }) startMin?: number;
+  @IsOptional() @IsInt({ message: 'موضوعِ ویزیت نامعتبر است' }) topicId?: number;
+}
+
 class DiscountApplyDto {
   @IsString() @MinLength(3) @MaxLength(40) code!: string;
 }
@@ -155,6 +162,28 @@ export class PublicIntakeController {
   @Post('form/:token/fill')
   fill(@Param('token') token: string, @Body() dto: FillDto) {
     return this.intake.fill(token, dto);
+  }
+
+  /* ── نوبت‌دهی: عمومی و فقط با توکن، چون بیمار حساب ندارد ── */
+
+  @Get('form/:token/slots')
+  slots(
+    @Param('token') token: string,
+    @Query('year') year: string,
+    @Query('month') month: string,
+    @Query('topicId') topicId?: string,
+  ) {
+    return this.intake.publicSlots(token, Number(year), Number(month), topicId ? Number(topicId) : undefined);
+  }
+
+  @Get('form/:token/topics')
+  topics(@Param('token') token: string) {
+    return this.intake.publicTopics(token);
+  }
+
+  @Post('form/:token/book')
+  book(@Param('token') token: string, @Body() dto: BookDto) {
+    return this.intake.book(token, dto);
   }
 
   /**

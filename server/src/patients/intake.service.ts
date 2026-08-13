@@ -10,6 +10,17 @@ import { FormsService, FORM_SCOPES } from './forms.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { TenantContext } from '../tenant/tenant-context';
+import { AvailabilityService } from './availability.service';
+
+/** سال و ماهِ شمسیِ یک تاریخ — برای گرفتنِ تقویمِ همان ماه (قانون ۱۴). */
+function jalaliYm(d: Date): [number, number] {
+  const parts = new Intl.DateTimeFormat('en-u-ca-persian', { year: 'numeric', month: 'numeric', timeZone: 'UTC' })
+    .formatToParts(d);
+  return [
+    Number(parts.find((x) => x.type === 'year')!.value.replace(/[^\d]/g, '')),
+    Number(parts.find((x) => x.type === 'month')!.value),
+  ];
+}
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
@@ -76,6 +87,10 @@ export class IntakeService {
        باشد — پس جای تزریقِ Host نیست. همان مبنایی که rpIDِ پس‌کی و هاستِ
        WebOTP از آن می‌آیند. */
     private tenant: TenantContext,
+    /* نوبت‌دهی (`docs/BOOKING.md` مرحلهٔ ۳). محاسبهٔ روزهای آزاد **همان**
+       سرویسی است که پنلِ ادمین از آن می‌خواند؛ نسخهٔ دومِ این محاسبه یعنی
+       بیمار جای آزادی ببیند که ادمین نمی‌بیند. */
+    private availability: AvailabilityService,
   ) {}
 
   private token() {
@@ -435,6 +450,116 @@ export class IntakeService {
    * ⚠️ فقط دادهٔ **خودِ همین فرم** برمی‌گردد. هرچه از پروندهٔ بیمار این‌جا
    * اضافه شود، با داشتنِ توکن قابلِ خواندن است — و توکن در پیامک می‌رود.
    */
+  /* ══════════ نوبت‌دهی — `docs/BOOKING.md` مرحلهٔ ۳ ══════════ */
+
+  /**
+   * آیا این نصب اصلاً نوبت‌دهی دارد؟
+   *
+   * ⚠️ **fail-soft عمدی**: نصبی که هیچ برنامهٔ کاری تعریف نکرده باید دقیقاً
+   * مثلِ دیروز کار کند. اگر گامِ نوبت را بی‌قید اضافه می‌کردیم، هر مشتریِ
+   * موجود فردا صبح به فرمی می‌رسید که هیچ روزی برای انتخاب ندارد و ثبت‌نام
+   * از همان‌جا می‌مُرد.
+   */
+  private async bookingOn() {
+    return (await this.prisma.availabilityRule.count({ where: { active: true } })) > 0;
+  }
+
+  /** تقویمِ آزادِ ماه برای صفحهٔ بیمار — بدونِ نیاز به لاگین، فقط با توکن. */
+  async publicSlots(token: string, jy: number, jm: number, topicId?: number) {
+    await this.expireIfDue(token); // توکنِ نامعتبر همین‌جا رد می‌شود
+    return this.availability.month(jy, jm, { topicId });
+  }
+
+  /** موضوع‌های قابلِ انتخاب — فقط آن‌هایی که واقعاً روزی دارند. */
+  async publicTopics(token: string) {
+    await this.expireIfDue(token);
+    const rules = await this.prisma.availabilityRule.findMany({
+      where: { active: true },
+      include: { topics: { include: { topic: { select: { id: true, name: true, active: true } } } } },
+    });
+    /* ⚠️ قاعده‌ای که هیچ موضوعی ندارد یعنی «همهٔ موضوع‌ها» — پس اگر چنین
+       قاعده‌ای هست، فهرست باید کاملِ موضوع‌های فعال باشد، نه تهی. */
+    if (rules.some((r) => r.topics.length === 0)) {
+      const all = await this.prisma.visitTopic.findMany({
+        where: { active: true }, orderBy: [{ sort: 'asc' }, { name: 'asc' }],
+        select: { id: true, name: true },
+      });
+      return all;
+    }
+    const seen = new Map<number, { id: number; name: string }>();
+    for (const r of rules) {
+      for (const t of r.topics) if (t.topic.active) seen.set(t.topic.id, { id: t.topic.id, name: t.topic.name });
+    }
+    return [...seen.values()];
+  }
+
+  /**
+   * رزروِ نوبت توسطِ بیمار — وضعیتِ `held` تا وقتی پرداخت تأیید شود.
+   *
+   * ⚠️ `held` عمداً از `confirmed` جداست: وضعیتِ **نوبت** نباید با وضعیتِ
+   * **پرداخت** یکی شود. افزودنِ درگاهِ آنلاین در آینده فقط باید یک منبعِ
+   * تأیید اضافه کند، نه ماشینِ وضعیت را بازنویسی.
+   *
+   * ⚠️ برخوردِ همزمانی با **قیدِ یکتای دیتابیس** گرفته می‌شود، نه با
+   * «اول بخوان بعد بنویس»: دو بیمار که همان لحظه روی یک اسلات بزنند، در
+   * حالتِ خواندنِ قبل از نوشتن هر دو موفق می‌شوند.
+   */
+  async book(token: string, dto: { date?: string; startMin?: number; topicId?: number }) {
+    const row = await this.expireIfDue(token);
+    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+    }
+    if (!dto.date) throw new BadRequestException('روزِ نوبت را انتخاب کنید');
+    const date = new Date(`${dto.date}T00:00:00.000Z`);
+    if (Number.isNaN(date.getTime())) throw new BadRequestException('روزِ نوبت نامعتبر است');
+
+    /* ⚠️ ادعای بیمار دربارهٔ «آزاد بودن» بازخوانی می‌شود. صفحه ممکن است چند
+       دقیقه باز مانده باشد و آن جا از دست رفته باشد؛ اعتمادِ به کلاینت یعنی
+       رزروِ روی روزِ تعطیل یا ظرفیتِ پرشده. */
+    const [jy, jm] = jalaliYm(date);
+    const cal = await this.availability.month(jy, jm, { topicId: dto.topicId });
+    const day = cal.days.find((d: any) => d.date === dto.date);
+    if (!day || !day.open) throw new BadRequestException('این روز دیگر آزاد نیست — روزِ دیگری انتخاب کنید');
+
+    const slotMode = day.windows.some((w: any) => w.mode === 'slot');
+    if (slotMode) {
+      const free = day.windows
+        .filter((w: any) => w.mode === 'slot')
+        .flatMap((w: any) => w.slots)
+        .find((sl: any) => sl.startMin === dto.startMin && !sl.taken);
+      if (!free) throw new BadRequestException('این ساعت دیگر آزاد نیست — ساعتِ دیگری انتخاب کنید');
+    }
+
+    const prev = await this.prisma.appointment.findUnique({ where: { submissionId: row.id } });
+    const data = {
+      patientId: row.patientId ?? null,
+      /* ⚠️ موضوع **حفظ** می‌شود اگر این درخواست چیزی نگوید. بیمار که فقط
+         ساعتش را جابه‌جا می‌کند، انتظار ندارد موضوعِ انتخابی‌اش پاک شود —
+         و اگر پاک می‌شد، مراجعهٔ ساخته‌شده بی‌موضوع می‌ماند بی‌آنکه کسی
+         بفهمد کجا گم شد. همان قرارِ ادغامِ `extra` در ویرایشِ مراجعه. */
+      topicId: dto.topicId ?? prev?.topicId ?? null,
+      date,
+      startMin: slotMode ? dto.startMin ?? null : null,
+      status: 'held',
+      submissionId: row.id,
+    };
+    try {
+      /* یک ثبت‌نام یک نوبت دارد: تغییرِ انتخاب باید همان رکورد را جابه‌جا
+         کند، نه نوبتِ دومی بسازد که تا ابد جا اشغال می‌کند. */
+      const appt = prev
+        ? await this.prisma.appointment.update({ where: { id: prev.id }, data })
+        : await this.prisma.appointment.create({ data });
+      await this.audit.record({
+        actorId: null, action: 'appointment.hold', entityType: 'appointment', entityId: appt.id,
+        after: { date: dto.date, startMin: data.startMin, submissionId: row.id },
+      });
+      return this.publicView(token);
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new BadRequestException('همین حالا کسی این نوبت را گرفت — لطفاً ساعتِ دیگری بزنید');
+      throw e;
+    }
+  }
+
   async publicView(token: string) {
     const row = await this.expireIfDue(token);
     /* ⚠️ حساب از **لینکِ همین ثبت‌نام** خوانده می‌شود، نه از خودِ ثبت‌نام.
@@ -457,6 +582,29 @@ export class IntakeService {
       form: await this.formView(row.formId),
       token: row.token,
       status: row.status,
+      /* ⚠️ نوبت‌دهی فقط وقتی در صفحهٔ بیمار ظاهر می‌شود که نصب برنامهٔ کاری
+         داشته باشد. نصبی که ندارد باید دقیقاً مثلِ دیروز کار کند — نه اینکه
+         به گامی برسد که هیچ روزی برای انتخاب ندارد. */
+      booking: (await this.bookingOn())
+        ? {
+          required: true,
+          appointment: await this.prisma.appointment
+            .findUnique({
+              where: { submissionId: row.id },
+              select: { date: true, startMin: true, status: true, topic: { select: { id: true, name: true } } },
+            })
+            .then((a) => (a
+              ? {
+                date: a.date.toISOString().slice(0, 10),
+                startMin: a.startMin,
+                time: a.startMin == null ? null : AvailabilityService.minToHHMM(a.startMin),
+                status: a.status,
+                topicId: a.topic?.id ?? null,
+                topicName: a.topic?.name ?? null,
+              }
+              : null)),
+        }
+        : { required: false, appointment: null },
       statusLabel: INTAKE_LABELS[row.status] ?? row.status,
       /* مشتقِ سرور (قانون ۱۵): پیامِ پایانیِ صفحهٔ بیمار به «این فرم چه
          می‌سازد» وابسته است. نظرسنجیِ تأییدشده نباید بخواند «ثبت‌نامِ شما
@@ -648,6 +796,17 @@ export class IntakeService {
     const meta = row.formId
       ? await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true, key: true } })
       : null;
+
+    /* ⚠️ اگر نصب نوبت‌دهی دارد و این فرم مراجعه می‌سازد، بدونِ نوبت نمی‌شود
+       تمام کرد. وگرنه ثبت‌نامی به صفِ تأیید می‌رسید که هیچ روزی ندارد و
+       ادمین باید تلفنی می‌پرسید «کِی می‌آیی؟» — یعنی همان کاری که این
+       مرحله برای حذفش آمده. فرمِ زیرپرونده (نظرسنجی) مستثناست. */
+    if (meta?.scope !== 'record' && (await this.bookingOn())) {
+      const appt = await this.prisma.appointment.findUnique({ where: { submissionId: row.id } });
+      if (!appt || appt.status === 'cancelled') {
+        throw new BadRequestException('روزِ نوبت را انتخاب کنید');
+      }
+    }
     const free = payable === 0 && !hasPaymentBox;
     const direct = free && meta?.scope === 'record' && form !== null;
 
@@ -860,9 +1019,17 @@ export class IntakeService {
        فرمی اصلاً نمی‌تواند مبلغ داشته باشد؛ `assertRecordFormHasNoAmount`). */
     const makesVisit = form?.scope !== 'record';
 
+    /* نوبتِ رزروشدهٔ همین ثبت‌نام — تاریخ و ساعتِ مراجعه از این‌جا می‌آید. */
+    const held = await this.prisma.appointment.findUnique({ where: { submissionId: id } });
+
     const visit = makesVisit
       ? await this.patients.createVisit({
         patientId: row.patientId,
+        /* ⚠️ نوبتِ بیمار **منبعِ تاریخ** است، نه یک یادداشتِ جانبی. اگر
+           `opDate` از نوبت نمی‌آمد، مراجعه‌ای ساخته می‌شد که تاریخش با
+           نوبتِ گرفته‌شده فرق دارد — و آن‌وقت تقویمِ مطب و برگهٔ بیمار دو
+           چیزِ متفاوت می‌گفتند. اولویت با انتخابِ صریحِ ادمین است. */
+        ...(held ? { topicId: held.topicId ?? undefined } : {}),
         /* `visitKind` فقط روی فرمِ `visit` پر است؛ فرمِ `intake` نوعِ مراجعه
            ندارد و همان پیش‌فرضِ `createVisit` را می‌گیرد. */
         kind: form?.visitKind || undefined,
@@ -871,12 +1038,22 @@ export class IntakeService {
         techId: dto.techId,
         procedureTypeId: dto.procedureTypeId,
         opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
-        opDate: dto.opDate ?? d.opDate ?? undefined,
-        opStartTime: dto.opStartTime,
+        opDate: dto.opDate ?? held?.date?.toISOString() ?? d.opDate ?? undefined,
+        opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
         notes: d.patientNotes ?? undefined,
         ...(Object.keys(extra).length ? { extra } : {}),
       } as any, user)
       : null;
+
+    /* ⚠️ نوبت این‌جا **قطعی** می‌شود، نه هنگامِ رزرو: `held` یعنی «جا نگه
+       داشته شده تا پرداخت دیده شود». همین جدایی است که بعداً اجازه می‌دهد
+       درگاهِ آنلاین فقط یک منبعِ تأییدِ دیگر باشد. */
+    if (held) {
+      await this.prisma.appointment.update({
+        where: { id: held.id },
+        data: { status: 'confirmed', visitId: visit?.id ?? null, patientId: row.patientId ?? null },
+      });
+    }
 
     await this.prisma.intakeSubmission.update({
       where: { id },
@@ -979,6 +1156,13 @@ export class IntakeService {
     await this.prisma.intakeSubmission.update({
       where: { id },
       data: { status: 'rejected', reviewNote: note, reviewedById: user?.id ?? null, reviewedAt: new Date() },
+    });
+    /* ⚠️ نوبتِ ثبت‌نامِ ردشده باید **آزاد** شود. بدونِ این، هر ردکردن یک جای
+       سوخته در تقویم می‌گذاشت که هیچ‌کس نمی‌توانست بگیردش و هیچ‌کس هم
+       نمی‌دانست چرا. */
+    await this.prisma.appointment.updateMany({
+      where: { submissionId: id, status: { in: ['held', 'confirmed'] } },
+      data: { status: 'cancelled' },
     });
     await this.audit.record({ actorId: user?.id, action: 'intake.reject', entityType: 'intake_submission', entityId: id, after: { note } });
     return { ok: true };
@@ -1111,6 +1295,12 @@ export class IntakeService {
     if (!row) throw new NotFoundException('این فرم معتبر نیست');
     const open = ['pending_fill', 'pending_payment'].includes(row.status);
     if (open && row.expiresAt.getTime() < Date.now()) {
+      /* ثبت‌نامِ منقضی نوبتش را هم پس می‌دهد — همان دلیلِ ردکردن: جای سوخته
+         در تقویم که کسی نمی‌تواند بگیرد و کسی هم نمی‌داند چرا. */
+      await this.prisma.appointment.updateMany({
+        where: { submissionId: row.id, status: 'held' },
+        data: { status: 'cancelled' },
+      });
       return this.prisma.intakeSubmission.update({ where: { id: row.id }, data: { status: 'expired' } });
     }
     return row;

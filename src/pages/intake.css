@@ -144,3 +144,52 @@
 .ik-nav { display: flex; gap: 9px; margin-block-start: 12px; }
 .ik-nav .ik-go { flex: 1 1 0; min-width: 0; }
 @media (max-width: 380px) { .ik-nav { flex-direction: column; } }
+
+/* ── انتخابِ نوبت — `docs/BOOKING.md` مرحلهٔ ۳ ── */
+.ik-book { display: grid; gap: 10px; margin-bottom: 18px; }
+.ik-book h3 { margin: 0; font-size: 14px; font-weight: 800; }
+.ik-book-has {
+  margin: 0; padding: 9px 11px; border-radius: 11px; font-size: 12.5px;
+  background: rgba(var(--brand-2-rgb), .12); border: 1px solid rgba(var(--brand-2-rgb), .3);
+}
+.ik-book-has small { display: block; margin-top: 3px; font-size: 10.5px; opacity: .75; }
+.ik-book-err {
+  padding: 9px 11px; border-radius: 10px; font-size: 12px; color: #fecaca;
+  background: rgba(127, 29, 29, .5); border: 1px solid rgba(248, 113, 113, .45);
+}
+.ik-book-topics { display: flex; flex-wrap: wrap; gap: 6px; }
+.ik-book-topics button {
+  font-family: inherit; font-size: 12px; cursor: pointer; color: var(--text2);
+  padding: 7px 13px; border-radius: 99px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+}
+.ik-book-topics button.on { color: #fff; background: rgba(var(--brand-2-rgb), .22); border-color: rgba(var(--brand-2-rgb), .55); }
+
+.ik-cell { display: grid; place-items: center; min-height: 16px; }
+.ik-cell b { font-size: 11px; font-weight: 800; color: rgb(var(--brand-2-rgb)); }
+
+.ik-book-day {
+  display: grid; gap: 7px; padding: 11px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+}
+.ik-book-day > b { font-size: 13px; }
+.ik-book-day > small { font-size: 11.5px; color: var(--text3); }
+.ik-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+/* هدفِ ضربه دستِ‌کم ۴۴ پیکسل — بیمار روی موبایل با انگشت می‌زند. */
+.ik-slots button {
+  min-width: 68px; min-height: 40px; font-family: inherit; font-size: 12.5px; cursor: pointer;
+  color: var(--text); padding: 8px 10px; border-radius: 10px;
+  background: rgba(var(--brand-2-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .28);
+}
+.ik-slots button.on { color: #fff; background: rgba(var(--brand-2-rgb), .35); border-color: rgba(var(--brand-2-rgb), .7); }
+/* اشغال: خط‌خورده و کم‌رنگ — «نمی‌شود گرفت» باید در یک نگاه پیدا باشد. */
+.ik-slots button:disabled {
+  cursor: default; color: var(--text3); text-decoration: line-through;
+  background: rgba(255, 255, 255, .03); border-color: rgba(255, 255, 255, .1);
+}
+.ik-book-go {
+  justify-self: start; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; color: #fff;
+  padding: 11px 18px; border-radius: 11px; border: none;
+  background: linear-gradient(135deg, rgb(var(--brand-2-rgb)), rgb(var(--brand-soft-rgb)));
+}
+.ik-book-go:disabled { opacity: .55; cursor: default; }
