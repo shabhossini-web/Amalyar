@@ -54,6 +54,7 @@ node scripts/e2e/record-direct.mjs    # فرمِ زیرپرونده‌ی رای�
 node scripts/e2e/note-kinds.mjs       # «سیرِ بیماری» در پرونده دیده می‌شود، نه لای dropdown
 node scripts/e2e/visit-extra.mjs      # ویرایشِ مراجعه فیلدهای فرمِ سفارشی را گم نمی‌کند
 node scripts/e2e/visit-topic.mjs      # موضوعِ ویزیت (اولیه/پست‌آپ/زیبایی) — مرحلهٔ ۱ نوبت‌دهی
+node scripts/e2e/availability.mjs     # برنامهٔ کاری و روزهای آزاد — مرحلهٔ ۲ نوبت‌دهی
 node scripts/e2e/tenant-isolation.mjs # دو تنانتِ واقعی، دو دیتابیس، هیچ نشتی (پیش‌نیاز پایین)
 node scripts/e2e/platform-domains.mjs # پنلِ پلتفرم هیچ دامنه‌ای را پنهان نمی‌کند
 ```

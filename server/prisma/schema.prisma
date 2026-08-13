@@ -59,6 +59,11 @@ model Account {
   credentials WebauthnCredential[]
   techVisits  Visit[]              @relation("VisitTech")
 
+  /// نوبت‌دهی (`docs/BOOKING.md`) — برنامهٔ کاری، استثنا و نوبت‌های این پزشک.
+  availabilityRules      AvailabilityRule[]      @relation("AvailabilityDoctor")
+  availabilityExceptions AvailabilityException[] @relation("AvailabilityExceptionDoctor")
+  appointments           Appointment[]           @relation("AppointmentDoctor")
+
   @@map("accounts")
 }
 
@@ -270,6 +275,10 @@ model VisitTopic {
   createdAt DateTime @default(now()) @map("created_at")
 
   visits Visit[]
+
+  /// روزهای کاری‌ای که این موضوع رویشان مجاز است، و نوبت‌هایی که گرفته‌اند.
+  ruleTopics   AvailabilityRuleTopic[]
+  appointments Appointment[]
 
   @@map("visit_topics")
 }
@@ -848,6 +857,9 @@ model Patient {
 
   /// ثبت‌نام‌هایی که به این پرونده رسیده‌اند.
   intakes IntakeSubmission[]
+
+  /// نوبت‌های این بیمار (`docs/BOOKING.md`).
+  appointments Appointment[]
 }
 
 /// مدرکِ پزشکی — آزمایش، تصویربرداری، گزارش، رضایت‌نامه، مدرکِ هویتی…
@@ -1122,6 +1134,9 @@ model Visit {
 
   /// ثبت‌نامی که این مراجعه از آن ساخته شد (اگر از فرمِ بیمار آمده باشد).
   intake IntakeSubmission?
+
+  /// نوبتی که این مراجعه از آن ساخته شد — یک‌به‌یک.
+  appointment Appointment?
 }
 
 /// کدهای یکبارمصرفِ ثبت‌نام/تأیید موبایل
@@ -1870,4 +1885,146 @@ model SurveyInvite {
   @@index([status, sentAt])
   @@index([patientId])
   @@map("survey_invites")
+}
+
+// ═══════════════════ نوبت‌دهی — `docs/BOOKING.md` مرحلهٔ ۲ ═══════════════════
+
+/// **برنامهٔ کاری** — «چه کسی، چه روزی، چه ساعتی، چه موضوعی».
+///
+/// دو حالت دارد و هر مطب یکی را می‌گیرد:
+///  • `slot`     — بازه به نوبت‌های `slotMinutes` دقیقه‌ای تقسیم می‌شود و بیمار
+///                 **ساعتِ دقیق** می‌گیرد (شنبه ۱۶–۲۰، هر نوبت ۱۵ دقیقه).
+///  • `capacity` — در همان بازه فقط `capacity` نفر پذیرفته می‌شوند و بیمار
+///                 **روز** می‌گیرد نه ساعت. برای مطبی که ساعتِ دقیق نمی‌دهد.
+///
+/// ⚠️ هر دو حالت در **یک** جدول‌اند نه دو جدول: تفاوتشان فقط در «واحدِ ظرفیت»
+/// است و همهٔ چیزهای دیگر — روز، بازه، پزشک، موضوع، بازهٔ اعتبار — یکی است.
+/// دو جدول یعنی هر قاعدهٔ تازه (تعطیلی، موضوع، اعتبار) دوبار نوشته شود و
+/// روزی یکی‌شان جا بیفتد.
+model AvailabilityRule {
+  id Int @id @default(autoincrement())
+
+  /// پزشکِ این برنامه. خالی = کلِ مطب (نصبی که یک پزشک دارد چیزی انتخاب نمی‌کند).
+  doctor   Account? @relation("AvailabilityDoctor", fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorId Int?     @map("doctor_id")
+
+  /// روزِ هفتهٔ **شمسی**: شنبه = ۰ … جمعه = ۶ (قانون ۱۴).
+  weekday Int
+
+  /// دقیقه از نیمه‌شب — ۱۷:۰۰ می‌شود 1020. عدد و نه رشته، تا مقایسه و
+  /// تقسیم‌بندی حساب باشد نه تجزیهٔ متن.
+  startMin Int @map("start_min")
+  endMin   Int @map("end_min")
+
+  /// `slot` | `capacity`
+  mode String @default("slot")
+
+  /// فقط در `slot` — طولِ هر نوبت به دقیقه.
+  slotMinutes Int? @map("slot_minutes")
+
+  /// فقط در `capacity` — تعدادِ نفراتِ پذیرفته‌شده در کلِ بازه.
+  capacity Int?
+
+  /// موضوع‌های مجازِ این روز — «شنبه‌ها ویزیتِ اولیه». خالی = همهٔ موضوع‌ها.
+  topics AvailabilityRuleTopic[]
+
+  /// بازهٔ اعتبارِ خودِ قاعده — برنامهٔ تابستان با برنامهٔ زمستان فرق می‌کند.
+  activeFrom DateTime  @default(now()) @map("active_from")
+  activeTo   DateTime? @map("active_to")
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([weekday, active])
+  @@map("availability_rules")
+}
+
+/// موضوع‌های مجازِ یک قاعده — رابطهٔ چندبه‌چند با جدولِ صریح، تا بعداً بشود
+/// روی خودِ رابطه چیزی نشاند (مثلاً ظرفیتِ جدا برای هر موضوع).
+model AvailabilityRuleTopic {
+  rule    AvailabilityRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId  Int              @map("rule_id")
+  topic   VisitTopic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  topicId Int              @map("topic_id")
+
+  @@id([ruleId, topicId])
+  @@map("availability_rule_topics")
+}
+
+/// **استثنای تقویم** — یک روزِ خاص که تعطیل است یا برنامهٔ ویژه دارد.
+///
+/// ⚠️ بدونِ این، «پنجشنبهٔ این هفته تعطیل است» فقط با خاموش‌کردنِ کلِ قاعدهٔ
+/// پنجشنبه ممکن بود — یعنی همهٔ پنجشنبه‌های آینده هم می‌رفتند.
+model AvailabilityException {
+  id   Int      @id @default(autoincrement())
+  date DateTime @db.Date
+
+  doctor   Account? @relation("AvailabilityExceptionDoctor", fields: [doctorId], references: [id], onDelete: Cascade)
+  doctorId Int?     @map("doctor_id")
+
+  /// `true` = این روز تعطیل است. `false` = روزِ اضافه با بازه/ظرفیتِ زیر.
+  closed Boolean @default(true)
+
+  startMin    Int? @map("start_min")
+  endMin      Int? @map("end_min")
+  mode        String?
+  slotMinutes Int? @map("slot_minutes")
+  capacity    Int?
+
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([date])
+  @@map("availability_exceptions")
+}
+
+/// **نوبت** — خودِ رزرو.
+///
+/// ⚠️ عمداً جدا از `Visit`: نوبت پیش از مراجعه وجود دارد و ممکن است هرگز به
+/// مراجعه نرسد (کنسل، عدم‌مراجعه). ریختنِ هر دو در یک جدول یعنی فهرستِ
+/// مراجعات پر شود از رکوردهایی که هیچ‌وقت مراجعه نشدند و هر گزارشِ مالی —
+/// درآمد، سهم، بدهی — رویشان حساب کند.
+model Appointment {
+  id Int @id @default(autoincrement())
+
+  patient   Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  patientId Int?     @map("patient_id")
+
+  doctor   Account? @relation("AppointmentDoctor", fields: [doctorId], references: [id], onDelete: SetNull)
+  doctorId Int?     @map("doctor_id")
+
+  topic   VisitTopic? @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  topicId Int?        @map("topic_id")
+
+  date DateTime @db.Date
+
+  /// فقط در حالتِ `slot` — دقیقه از نیمه‌شب.
+  startMin Int? @map("start_min")
+
+  /// فقط در حالتِ `capacity` — شمارهٔ صف در آن روز.
+  seq Int?
+
+  /// held | confirmed | cancelled | done | noshow
+  ///
+  /// ⚠️ `held` جداست تا وضعیتِ **نوبت** از وضعیتِ **پرداخت** مستقل بماند:
+  /// افزودنِ درگاهِ آنلاین باید فقط یک منبعِ تأیید اضافه کند، نه ماشینِ
+  /// وضعیت را بازنویسی.
+  status String @default("held")
+
+  /// ثبت‌نامی که این نوبت را گرفت (مرحلهٔ ۳).
+  submissionId Int? @unique @map("submission_id")
+
+  /// مراجعه‌ای که از این نوبت ساخته شد.
+  visit   Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId Int?   @unique @map("visit_id")
+
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// ⚠️ همین قید است که جلوی «دو بیمار، یک اسلات» را می‌گیرد. بدونِ آن،
+  /// «اول بخوان بعد بنویس» دو درخواستِ همزمان را هر دو موفق می‌کند.
+  @@unique([doctorId, date, startMin])
+  @@index([date, status])
+  @@map("appointments")
 }

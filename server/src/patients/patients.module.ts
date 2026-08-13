@@ -35,6 +35,8 @@ import { RoutesService } from './routes.service';
 import { AssetsService } from './assets.service';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
+import { AvailabilityController } from './availability.controller';
+import { AvailabilityService } from './availability.service';
 import { DispatchController } from './dispatch.controller';
 import { TechController } from './tech.controller';
 import { TransportController } from './transport.controller';
@@ -49,12 +51,12 @@ import { PermissionGuard } from '../auth/permission.guard';
   controllers: [
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
-    CalendarController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
+    CalendarController, AvailabilityController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, PermissionGuard,
+    CalendarService, AvailabilityService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, PermissionGuard,
   ],
 })
 export class PatientsModule {}
