@@ -201,6 +201,20 @@ export default function IntakeAdmin() {
                 }}>رد</button>
               </footer>
             )}
+
+            {/* ⚠️ رکوردِ **خودکارتأییدشده** (فرمِ زیرپرونده‌ی رایگان که بدونِ
+                چشمِ انسان approved شده) باید ردشدنی بماند — وگرنه یک ثبتِ
+                آشغال از نشانیِ عمومی برای همیشه در پروندهٔ بالینی می‌ماند.
+                `autoApproved` از سرور می‌آید؛ تأییدشدهٔ دستی این دکمه را
+                نمی‌گیرد و سرور هم پسش می‌زند. */}
+            {s.autoApproved && (
+              <footer className="ia-acts">
+                <button type="button" className="ia-no" onClick={() => {
+                  const n = window.prompt('دلیلِ حذف از پرونده — در دفترِ رسیدگی می‌ماند:');
+                  if (n?.trim()) act(s.id, 'reject', { note: n.trim() }, 'از پرونده حذف شد');
+                }}>حذف از پرونده</button>
+              </footer>
+            )}
           </motion.article>
         ))}
       </div>

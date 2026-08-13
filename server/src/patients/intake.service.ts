@@ -458,6 +458,10 @@ export class IntakeService {
       token: row.token,
       status: row.status,
       statusLabel: INTAKE_LABELS[row.status] ?? row.status,
+      /* مشتقِ سرور (قانون ۱۵): پیامِ پایانیِ صفحهٔ بیمار به «این فرم چه
+         می‌سازد» وابسته است. نظرسنجیِ تأییدشده نباید بخواند «ثبت‌نامِ شما
+         تأیید شد، تماس می‌گیریم» — کسی قرار نیست تماس بگیرد. */
+      makesVisit: (await this.formScope(row.formId)) !== 'record',
       // ⚠️ هر سه عدد برمی‌گردند نه فقط «قابلِ پرداخت»: بیمار باید ببیند
       //    تخفیفش واقعاً خورده، وگرنه عددِ کمتر شبیهِ اشتباه به‌نظر می‌رسد.
       amount: row.amount,
@@ -522,6 +526,13 @@ export class IntakeService {
    * خاموش کرده و صفحه باید به مسیرِ هاردکدِ قدیمی برگردد، نه اینکه فرمِ خالی
    * نشان بدهد.
    */
+  /** محدودهٔ فرمِ یک ثبت‌نام — null یعنی فرمِ هاردکدِ قدیمی (intake). */
+  private async formScope(formId: number | null): Promise<string | null> {
+    if (!formId) return null;
+    const f = await this.prisma.formDef.findUnique({ where: { id: formId }, select: { scope: true } });
+    return f?.scope ?? null;
+  }
+
   private async formView(formId: number | null) {
     if (!formId) return null;
     const f = await this.prisma.formDef.findUnique({
@@ -614,12 +625,46 @@ export class IntakeService {
        بی‌صدا ردکردنش یعنی پولِ نگرفته «تأییدشده» به‌نظر برسد. */
     const payable = Math.max(0, row.amount - row.discountAmount);
     const hasPaymentBox = !!form?.fields.some((x) => x.type === 'payment');
-    const next = payable === 0 && !hasPaymentBox ? 'pending_approval' : 'pending_payment';
+
+    /* ⚠️ **فرمِ زیرپرونده‌ی رایگان صفِ تأیید هم ندارد.** صفِ تأیید برای دو
+       چیز است: پول (فیش باید با چشمِ ادمین بخواند) و ساختِ مراجعه (جراح و
+       تاریخ را ادمین گره می‌زند). نظرسنجی و فرمِ زیرپرونده هیچ‌کدام را
+       ندارند — مبلغشان از ریشه بسته است (`assertRecordFormHasNoAmount`) و
+       مراجعه هم نمی‌سازند؛ تا دیروز ادمین برای تک‌تکشان یک مُهرِ خالی
+       می‌کوبید.
+
+       `reviewedById` عمداً خالی می‌ماند: هیچ آدمی این را ندیده و دفترِ
+       رسیدگی نباید امضا جعل کند. audit با کنشِ جدا ثبت می‌شود تا «خودکار»
+       از «دستی» قابلِ تفکیک بماند. جبرانش هم هست: `reject` رکوردِ
+       خودکارتأییدشده را می‌پذیرد.
+
+       ⚠️ `form !== null` شرطِ سوم است و تزئینی نیست: `formView` برای فرمِ
+       **خاموش‌شده** null برمی‌گرداند، پس اعتبارسنجی و نوشتنِ پاسخ‌ها بالاتر
+       کلاً رد شده‌اند. اگر بی‌قید خودکار تأیید می‌کردیم (بازبینیِ خصمانه
+       گرفتش)، فرمی که ادمین قصدِ توقفش را داشت یک رکوردِ بالینیِ approvedِ
+       **تهی** در پرونده می‌کاشت. فرمِ خاموش به صفِ تأیید می‌افتد تا چشمِ
+       انسان ببیندش. فرمِ record با کادرِ پرداخت (خطای پیکربندی) هم عمداً در
+       مسیرِ فیش می‌ماند. */
+    const meta = row.formId
+      ? await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true, key: true } })
+      : null;
+    const free = payable === 0 && !hasPaymentBox;
+    const direct = free && meta?.scope === 'record' && form !== null;
 
     await this.prisma.intakeSubmission.update({
       where: { id: row.id },
-      data: { data, status: next },
+      data: {
+        data,
+        status: direct ? 'approved' : free ? 'pending_approval' : 'pending_payment',
+        ...(direct ? { reviewedAt: new Date() } : {}),
+      },
     });
+    if (direct) {
+      await this.audit.record({
+        actorId: null, action: 'intake.approve.auto', entityType: 'intake_submission', entityId: row.id,
+        after: { patientId: row.patientId, formKey: meta?.key ?? null },
+      });
+    }
     return this.publicView(token);
   }
 
@@ -750,6 +795,10 @@ export class IntakeService {
          می‌سازد؟» یک قاعدهٔ سرور است و اگر کلاینت خودش از `scope` استنتاجش
          می‌کرد، روزی رفتارِ واقعی و آنچه پنل وعده می‌دهد از هم جدا می‌شدند. */
       makesVisit: (r.form?.scope ?? 'intake') !== 'record',
+      /* مشتقِ سرور (قانون ۱۵): «این را ماشین تأیید کرده یا آدم؟» — UI با
+         همین تصمیم می‌گیرد دکمهٔ «حذف از پرونده» را نشان بدهد و آزمون هم
+         چیزی برای سنجیدنِ ادعای «امضا جعل نشد» دارد. */
+      autoApproved: r.status === 'approved' && r.reviewedById === null && r.visitId === null,
       patient: r.patient,
       visitId: r.visitId,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
@@ -914,7 +963,17 @@ export class IntakeService {
   async reject(id: number, dto: { note?: string }, user: any) {
     const row = await this.prisma.intakeSubmission.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('ثبت‌نام پیدا نشد');
-    if (row.status === 'approved') throw new BadRequestException('ثبت‌نامِ تأییدشده رد نمی‌شود');
+    /* ⚠️ تأییدشدهٔ **دستی** رد نمی‌شود — مراجعه/پرداخت رویش بنا شده و
+       برگرداندنش یعنی دفترِ مالی و تقویم دروغ بگویند. ولی رکوردِ
+       **خودکارتأییدشده** (فرمِ زیرپرونده‌ی رایگان: بدونِ امضای ادمین و بدونِ
+       مراجعه) باید ردشدنی بماند، وگرنه auto-approve یعنی حذفِ دروازهٔ
+       انسانی بدونِ هیچ ابزارِ جبرانی — نشانیِ عمومی است و یک ثبتِ آشغال
+       برای همیشه در پروندهٔ بالینی می‌ماند (بازبینیِ خصمانه گرفتش). رد یعنی
+       خروج از `attachedForms`؛ آن فهرست فقط approved را می‌خواند. */
+    const autoApproved = row.status === 'approved' && row.reviewedById === null && row.visitId === null;
+    if (row.status === 'approved' && !autoApproved) {
+      throw new BadRequestException('ثبت‌نامِ تأییدشدهٔ دستی رد نمی‌شود');
+    }
     const note = text(dto.note, 300);
     if (!note) throw new BadRequestException('دلیلِ رد را بنویسید — بیمار همین را می‌بیند');
     await this.prisma.intakeSubmission.update({

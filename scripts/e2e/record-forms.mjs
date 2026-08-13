@@ -126,21 +126,19 @@ let subId = 0;
   });
   ok('پاسخ‌ها ذخیره شدند', fill.status < 300, fill.status + ' ' + fill.text.slice(0, 140));
 
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-  const fd = new FormData();
-  fd.append('file', new Blob([png], { type: 'image/png' }), 'r.png');
-  await fetch(`${API}/public/intake/form/${reg.token}/receipt`, { method: 'POST', body: fd });
+  /* ⚠️ قراردادِ تازه: فرمِ زیرپرونده‌ی رایگان **اصلاً صفِ تأیید ندارد** —
+     پرشدن همان نشستن در پرونده است. صفِ تأیید مالِ پول و ساختِ مراجعه است و
+     این فرم هیچ‌کدام را ندارد؛ تا دیروز ادمین برای هر نظرسنجی یک مُهرِ خالی
+     می‌کوبید (خواستهٔ صریحِ کاربر بود که برداشته شود). */
+  ok('پرشدن مستقیم approved شد — بدونِ صف', fill.json?.status === 'approved', 'status=' + fill.json?.status);
 
-  const sub = (await api('/intake/submissions?status=pending_approval')).json.find((x) => x.token === reg.token);
-  ok('در صفِ تأیید نشست', !!sub, 'sub=' + !!sub);
+  const sub = (await api('/intake/submissions?status=approved')).json.find((x) => x.token === reg.token);
+  ok('در فهرستِ ادمین با وضعیتِ تأییدشده هست', !!sub, 'sub=' + !!sub);
   ok('فهرستِ ادمین می‌گوید مراجعه **نمی‌سازد**', sub?.makesVisit === false, 'makesVisit=' + sub?.makesVisit);
+  ok('و مراجعه‌ای نساخته', sub?.visitId == null, 'visitId=' + sub?.visitId);
+  ok('به همان پرونده اشاره می‌کند', sub?.patient?.id === patientId,
+    `${sub?.patient?.id} ≠ ${patientId}`);
   subId = sub?.id;
-
-  const app = await api(`/intake/submissions/${subId}/approve`, { method: 'POST', body: {} });
-  ok('تأیید انجام شد', app.status < 300, app.status + ' ' + app.text.slice(0, 160));
-  ok('و مراجعه‌ای نساخت', app.json?.madeVisit === false, JSON.stringify(app.json));
-  ok('به همان پرونده اشاره می‌کند', app.json?.patientId === patientId,
-    `${app.json?.patientId} ≠ ${patientId}`);
 }
 
 console.log('\n۵) حالا فرم در پرونده **دیده می‌شود** — همان حلقه‌ای که باز بود');

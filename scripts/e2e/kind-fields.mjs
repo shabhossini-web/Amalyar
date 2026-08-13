@@ -85,10 +85,10 @@ try {
     await p.waitForTimeout(700);
     await p.locator('input[required]').first().fill('آزمونِ');
     await p.locator('input[required]').nth(1).fill('فرمِ نوع');
-    await p.locator('button:has-text("بعدی")').click();
+    await p.locator('.db-stepnav .db-submit').click();
     await p.waitForTimeout(600);
     await p.locator(`.db-kindrow button:has-text("${kindTitle}")`).click();
-    await p.locator('button:has-text("بعدی")').click();
+    await p.locator('.db-stepnav .db-submit').click();
     await p.waitForTimeout(900);
     const labels = await p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span').allInnerTexts();
     const text = labels.join(' | ');

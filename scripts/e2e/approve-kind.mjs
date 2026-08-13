@@ -152,22 +152,16 @@ console.log('\n۴) فرمِ زیرپرونده → **هیچ مراجعه‌ای*
     method: 'POST', auth: false,
     body: { firstName: 'سارا', lastName: 'نظرده', nationalId: nid(RUN * 23 + 11), phone: '09120000032', captchaA: 2, captchaB: 2, captchaAnswer: 4 },
   })).json;
-  await api(`/public/intake/form/${reg.token}/fill`, { method: 'POST', auth: false, body: { values: { akScore: 5 } } });
-
-  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
-  const fd = new FormData();
-  fd.append('file', new Blob([png], { type: 'image/png' }), 'r.png');
-  await fetch(`${API}/public/intake/form/${reg.token}/receipt`, { method: 'POST', body: fd });
-
-  const sub = (await api('/intake/submissions?status=pending_approval')).json.find((x) => x.token === reg.token);
-  ok('ثبت‌نام در صفِ تأیید است', !!sub);
-  ok('فهرستِ ادمین می‌گوید مراجعه نمی‌سازد', sub?.makesVisit === false, 'makesVisit=' + sub?.makesVisit);
-
   const visitsBefore = await visitCount();
-  const app = await api(`/intake/submissions/${sub.id}/approve`, { method: 'POST', body: {} });
-  ok('تأیید انجام شد', app.status < 300, app.status + ' ' + app.text.slice(0, 160));
-  ok('madeVisit صریحاً false است', app.json?.madeVisit === false, JSON.stringify(app.json));
-  ok('visitId برنگشت', app.json?.visitId === undefined, JSON.stringify(app.json));
+  /* ⚠️ قراردادِ تازه: فرمِ زیرپرونده‌ی رایگان صفِ تأیید ندارد — پرشدن همان
+     approved است و هیچ approveی از سمتِ ادمین صدا زده نمی‌شود. صفِ تأیید
+     مالِ پول و ساختِ مراجعه است و این فرم هیچ‌کدام را ندارد. */
+  const fill = await api(`/public/intake/form/${reg.token}/fill`, { method: 'POST', auth: false, body: { values: { akScore: 5 } } });
+  ok('پرشدن مستقیم approved شد — بدونِ صف', fill.json?.status === 'approved', 'status=' + fill.json?.status);
+
+  const sub = (await api('/intake/submissions?status=approved')).json.find((x) => x.token === reg.token);
+  ok('در فهرستِ ادمین با وضعیتِ تأییدشده هست', !!sub);
+  ok('فهرستِ ادمین می‌گوید مراجعه نمی‌سازد', sub?.makesVisit === false, 'makesVisit=' + sub?.makesVisit);
 
   const visitsAfter = await visitCount();
   ok('شمارِ مراجعات تکان نخورد', visitsBefore > 0 && visitsAfter === visitsBefore, `${visitsBefore} → ${visitsAfter}`);

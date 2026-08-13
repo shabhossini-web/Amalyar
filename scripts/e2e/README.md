@@ -50,6 +50,7 @@ node scripts/e2e/sheet-overlay.mjs    # شیت واقعاً بسته می‌شو
 node scripts/e2e/card-targets.mjs     # کارت→مراجعه · نام→پرونده
 node scripts/e2e/free-form.mjs        # فرمِ بی‌مبلغ فیش نمی‌خواهد
 node scripts/e2e/kind-fields.mjs      # فرمِ هر نوع فقط فیلدهای خودش را دارد
+node scripts/e2e/record-direct.mjs    # فرمِ زیرپرونده‌ی رایگان بی‌صف در پرونده می‌نشیند
 ```
 
 ## قاعده‌ها
