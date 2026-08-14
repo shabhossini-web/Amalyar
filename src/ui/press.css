@@ -1,18 +1,23 @@
 /**
- * دکمه‌های سه‌بعدی + کفِ تاچ‌تارگت — یک‌جا برای همهٔ صفحه‌ها.
+ * زبانِ تعاملِ دکمه‌ها + پوستِ نرمِ سراسری — یک‌جا برای همهٔ صفحه‌ها.
+ *
+ * دو الگو، از دو مرجعی که کاربر انتخاب کرد (21st.dev):
+ *  • **شاینی** (دکمهٔ اصلی): پیل، با نورِ رنگی که از زیرِ دکمه بیرون می‌زند و
+ *    با هاور و مخصوصاً با فشردن **زیاد می‌شود** — دکمه خودش کمی جمع می‌شود
+ *    (ژله)؛ نور دوهیوست: برند + سیان، تا با رنگِ هر شرکت هماهنگ بماند.
+ *  • **شیشه‌ای/ژله‌ای** (دکمهٔ شبح): پیلِ نیمه‌شفاف با blur، برقِ باریکِ لبهٔ
+ *    بالا و تهِ روشنِ داخلی؛ فشردن یعنی جمع‌شدنِ نرم و روشن‌ترشدنِ داخل.
  *
  * چرا یک فایلِ سراسری: هر صفحه کلاسِ دکمهٔ خودش را دارد (df-save، ik-go،
- * ac-submit، …) و «سه‌بعدی‌کردن» اگر صفحه‌به‌صفحه کپی شود، نسخه‌های ناهماهنگ
- * می‌سازد — همان دردی که computeVisit برای فرمول‌ها بست، این‌جا برای ظاهرِ
- * دکمه بسته می‌شود. رنگ از توکن‌های برند می‌آید تا با رنگِ هر شرکت عوض شود.
+ * ac-submit، …). اگر سبک صفحه‌به‌صفحه کپی شود، نسخه‌های ناهماهنگ می‌سازد —
+ * همان دردی که computeVisit برای فرمول‌ها بست، این‌جا برای ظاهر بسته می‌شود.
  *
- * الگوی سه‌بعدی: برآمدگیِ بالای دکمه (inset روشن)، لبهٔ پایین (inset تیره)،
- * یک «پاشنه»ی هم‌رنگِ تیره زیرِ دکمه، و سایهٔ نرمِ دورتر. فشردن یعنی دکمه
- * روی پاشنه می‌نشیند: translateY کوچک + جمع‌شدنِ پاشنه. با
- * prefers-reduced-motion جابه‌جایی حذف می‌شود ولی عمق می‌ماند.
+ * «پوستِ نرم» هم همین‌جاست: کاربر گفت همه‌چیز خشک و مربعی شده — دکمه‌ها و
+ * چیپ‌ها و جستجوها پیل می‌شوند، ورودی‌ها و کارت‌ها گردتر. رنگ همیشه از
+ * توکن‌های برند می‌آید.
  */
 
-/* ── دکمهٔ اصلی (پُر) ─────────────────────────────────────────── */
+/* ── دکمهٔ اصلی — «شاینی»: نورِ زیرین که با کلیک زیاد می‌شود ───────── */
 .btn-primary,
 .nav-cta,
 .plan .cta.solid,
@@ -21,6 +26,7 @@
 .db-add,
 .lg-btn,
 .ac-submit,
+.ac-padd,
 .dp-brief-btn,
 .tk-save,
 .tr-save,
@@ -33,50 +39,57 @@
 .us-btn.ok,
 .tp-btn {
   position: relative;
+  border-radius: 999px;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
-    0 3px 0 rgba(var(--brand-dark-rgb), 0.9),
-    0 10px 22px rgba(0, 0, 0, 0.38);
-  transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.2s ease;
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 6px 22px -4px rgba(var(--brand-rgb), 0.55),
+    -10px 8px 30px -10px rgba(var(--brand-2-rgb), 0.45),
+    10px 8px 30px -10px rgba(0, 229, 255, 0.28);
+  transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.22s ease, filter 0.2s ease;
   will-change: transform;
 }
 .btn-primary:hover, .nav-cta:hover, .plan .cta.solid:hover,
 .df-save:hover, .db-submit:hover, .db-add:hover, .lg-btn:hover,
-.ac-submit:hover, .dp-brief-btn:hover, .tk-save:hover, .tr-save:hover,
+.ac-submit:hover, .ac-padd:hover, .dp-brief-btn:hover, .tk-save:hover, .tr-save:hover,
 .sc-save:hover, .iv-save:hover, .st-knobsave:hover,
 .ik-go:not(.ghost):hover, .ik-submit:hover, .ik-book-go:hover,
 .us-btn.ok:hover, .tp-btn:hover {
-  filter: brightness(1.07);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
-    0 3px 0 rgba(var(--brand-dark-rgb), 0.9),
-    0 14px 30px rgba(var(--brand-rgb), 0.35);
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 10px 30px -4px rgba(var(--brand-rgb), 0.65),
+    -14px 10px 40px -10px rgba(var(--brand-2-rgb), 0.55),
+    14px 10px 40px -10px rgba(0, 229, 255, 0.38);
 }
+/* فشردن: دکمه جمع می‌شود و نورِ زیرش **بیشترین** می‌شود — همان مرجعِ اول. */
 .btn-primary:active, .nav-cta:active, .plan .cta.solid:active,
 .df-save:active, .db-submit:active, .db-add:active, .lg-btn:active,
-.ac-submit:active, .dp-brief-btn:active, .tk-save:active, .tr-save:active,
+.ac-submit:active, .ac-padd:active, .dp-brief-btn:active, .tk-save:active, .tr-save:active,
 .sc-save:active, .iv-save:active, .st-knobsave:active,
 .ik-go:not(.ghost):active, .ik-submit:active, .ik-book-go:active,
 .us-btn.ok:active, .tp-btn:active {
-  transform: translateY(2px);
+  filter: brightness(1.12);
+  transform: translateY(0) scale(0.965);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-    0 1px 0 rgba(var(--brand-dark-rgb), 0.9),
-    0 5px 12px rgba(0, 0, 0, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 4px 44px 2px rgba(var(--brand-rgb), 0.85),
+    -18px 8px 54px -8px rgba(var(--brand-2-rgb), 0.7),
+    18px 8px 54px -8px rgba(0, 229, 255, 0.5);
 }
-/* دکمهٔ غیرفعال نه برجسته است نه فشردنی — عمقِ دروغین یعنی «کلیک کن». */
+/* دکمهٔ غیرفعال نه می‌درخشد نه فشرده می‌شود — نورِ دروغین یعنی «کلیک کن». */
 .df-save:disabled, .db-submit:disabled, .lg-btn:disabled, .ac-submit:disabled,
-.ik-go:disabled, .ik-submit:disabled, .ik-book-go:disabled, .tk-save:disabled,
-.tr-save:disabled, .sc-save:disabled, .iv-save:disabled, .st-knobsave:disabled {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+.ac-padd:disabled, .ik-go:disabled, .ik-submit:disabled, .ik-book-go:disabled,
+.tk-save:disabled, .tr-save:disabled, .sc-save:disabled, .iv-save:disabled, .st-knobsave:disabled {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   transform: none;
   filter: none;
 }
 
-/* ── دکمهٔ خطی/شبح (ghost) — عمقِ کمتر، همان مکانیک ───────────── */
+/* ── دکمهٔ شبح — «شیشه‌ای/ژله‌ای» ─────────────────────────────────── */
 .btn-ghost,
 .plan .cta.line,
 .df-ghost,
@@ -87,41 +100,74 @@
 .jd-ghost,
 .ik-go.ghost,
 .us-btn:not(.ok):not(.no) {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.09),
-    0 2px 0 rgba(0, 0, 0, 0.35),
-    0 6px 14px rgba(0, 0, 0, 0.25);
-  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.2s, background 0.2s;
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -6px 14px -10px rgba(255, 255, 255, 0.35),
+    0 8px 20px -6px rgba(0, 0, 0, 0.45);
+  transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.22s ease, border-color 0.2s, background 0.2s;
+}
+.btn-ghost:hover, .plan .cta.line:hover, .df-ghost:hover, .iv-ghost:hover,
+.tp-ghost:hover, .pa-ghost:hover, .tk-ghost:hover, .jd-ghost:hover,
+.ik-go.ghost:hover, .us-btn:not(.ok):not(.no):hover {
+  border-color: rgba(255, 255, 255, 0.26);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05) 55%, rgba(255, 255, 255, 0.09));
 }
 .btn-ghost:active, .plan .cta.line:active, .df-ghost:active, .iv-ghost:active,
 .tp-ghost:active, .pa-ghost:active, .tk-ghost:active, .jd-ghost:active,
 .ik-go.ghost:active, .us-btn:not(.ok):not(.no):active {
-  transform: translateY(1px);
+  transform: scale(0.955);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 0 rgba(0, 0, 0, 0.35),
-    0 3px 8px rgba(0, 0, 0, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -10px 22px -10px rgba(255, 255, 255, 0.5),
+    inset 0 0 18px rgba(255, 255, 255, 0.06),
+    0 4px 12px -4px rgba(0, 0, 0, 0.4);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn-primary:active, .nav-cta:active, .plan .cta.solid:active,
-  .df-save:active, .db-submit:active, .db-add:active, .lg-btn:active,
-  .ac-submit:active, .dp-brief-btn:active, .tk-save:active, .tr-save:active,
-  .sc-save:active, .iv-save:active, .st-knobsave:active,
-  .ik-go:active, .ik-submit:active, .ik-book-go:active,
-  .us-btn:active, .tp-btn:active,
-  .btn-ghost:active, .plan .cta.line:active, .df-ghost:active, .iv-ghost:active,
-  .tp-ghost:active, .pa-ghost:active, .tk-ghost:active, .jd-ghost:active {
+  .btn-primary, .nav-cta, .plan .cta.solid, .df-save, .db-submit, .db-add,
+  .lg-btn, .ac-submit, .ac-padd, .dp-brief-btn, .tk-save, .tr-save, .sc-save,
+  .iv-save, .st-knobsave, .ik-go, .ik-submit, .ik-book-go, .us-btn, .tp-btn,
+  .btn-ghost, .plan .cta.line, .df-ghost, .iv-ghost, .tp-ghost, .pa-ghost,
+  .tk-ghost, .jd-ghost {
+    transition: box-shadow 0.22s ease, border-color 0.2s, background 0.2s, filter 0.2s;
+  }
+  .btn-primary:hover, .btn-primary:active, .nav-cta:hover, .nav-cta:active,
+  .df-save:hover, .df-save:active, .db-submit:active, .db-add:hover, .db-add:active,
+  .lg-btn:active, .ac-submit:active, .ik-go:active, .ik-submit:active,
+  .us-btn:active, .tp-btn:active, .btn-ghost:active, .df-ghost:active,
+  .iv-ghost:active, .ik-go.ghost:active {
     transform: none;
   }
 }
 
-/* ── کفِ تاچ‌تارگت روی موبایل (قاعدهٔ ۴۴px؛ کفِ عملی ۳۸px) ─────────
-   آدیتِ ۳۹۰px این‌ها را کوچک‌تر از ۳۲px گرفت. اندازهٔ **بصری** دست نمی‌خورد؛
-   جای لمس با padding و min-height بزرگ می‌شود. */
+/* ── پوستِ نرم: خداحافظی با مربع‌مستطیل ───────────────────────────
+   دکمه‌های آیکونی دایره، جستجوها و چیپ‌ها پیل، ورودی‌ها و کارت‌ها گردتر.
+   اندازه‌ها دست نمی‌خورند؛ فقط شکل نرم می‌شود. */
+.db-ico, .db-dir, .df-x, .ac-prm, .db-defbtn { border-radius: 999px; }
+.db-search, .ac-search { border-radius: 999px; }
+.ac-search { padding-inline: 18px; }
+.db-search { padding-inline: 16px; }
+.ac-filters button, .db-st-pending, .db-st-done, .db-st-cancelled { border-radius: 999px; }
+.ik-field input, .ik-field textarea, .ik-field select { border-radius: 16px; }
+.ac-field input, .ac-field select, .pf-field input, .pf-field select, .pf-field textarea { border-radius: 14px; }
+.ac-add, .ac-row, .ac-empty { border-radius: 22px; }
+.ik-code input, .ik-code button { border-radius: 999px; }
+/* تب‌ها و قرصِ فعالشان هم پیل — نرم‌ترین شکلِ ممکن برای ناوبری. */
+.ui-tabs, .ui-tabs button, .ui-tab-pill { border-radius: 999px; }
+.db-sortbar select { border-radius: 999px; padding-inline: 14px; }
+
+/* ── کفِ تاچ‌تارگت روی موبایل (قاعدهٔ ۴۴px؛ کفِ عملی ۳۶px) ─────────
+   آدیتِ ۳۹۰px این‌ها را کوچک‌تر از ۳۲px گرفته بود. اندازهٔ **بصری** دست
+   نمی‌خورد؛ جای لمس با padding و min-height بزرگ می‌شود. */
 @media (max-width: 640px), (pointer: coarse) {
   .db-dir, .db-ico { min-width: 38px; min-height: 38px; }
   .db-st-pending, .db-st-done, .db-st-cancelled { min-height: 36px; }
+  .db-add { min-height: 42px; }
   .ax-cell { min-width: 36px; min-height: 36px; }
   .ax-back, .ia-back { padding: 8px 10px; margin: -8px -10px; }
   .fb-color { width: 26px; height: 26px; }
