@@ -17,16 +17,17 @@
  * توکن‌های برند می‌آید.
  */
 
-/* ── دکمهٔ اصلی — «شاینی»: هالهٔ بزرگِ زنده، شعله با کلیک ─────────────
-   از اسکرین‌ریکوردِ مرجعِ کاربر (21st.dev Shiny Button) بازسازی شد:
-   • هاله خیلی بزرگ‌تر از خودِ دکمه است (شبه‌المانِ بلوردار، نه box-shadow —
-     box-shadow در آن ابعاد هم گران است هم لبه‌دار).
-   • دو لایه: ::before نفسِ آرامِ همیشگی می‌کشد (انیمیشن)، ::after لایهٔ
-     شعله است (ترنزیشن) — جدا از هم، چون animation روی همان property
-     ترنزیشن را می‌بلعد و شعلهٔ کلیک هرگز دیده نمی‌شد.
-   • ریتمِ مرجع: با فشردن **سریع** روشن می‌شود (۱۰۰ms) و بعد از رهاکردن
-     **آرام** فروکش می‌کند (~۱.۲s) — همان «زیاد و کم شدنِ» ویدئو.
-   • لبهٔ خودِ دکمه هم رینگِ روشن دارد که با فشردن پررنگ می‌شود. */
+/* ── دکمهٔ اصلی — «شاینی»: بدنهٔ تیره، رینگِ نئون، هاله روی پس‌زمینه ────
+   مقایسهٔ کنارهم‌گذاشتهٔ کاربر با مرجع (21st.dev Shiny Button) سه رکنش را
+   نهایی کرد:
+   • **بدنهٔ دکمه تیره است** — دکمه خودش نمی‌درخشد. گرادیانِ روشنِ قبلی
+     (که همهٔ صفحه‌ها به این کلاس‌ها می‌دهند) این‌جا با بدنهٔ تیرهٔ توکنی
+     بازنویسی می‌شود.
+   • رینگِ گرادیانِ نئون دقیقاً روی لبه (ترفندِ دو-پس‌زمینه: padding-box تیره
+     + border-box گرادیان).
+   • هالهٔ نرمِ دوهیو روی پس‌زمینه می‌افتد (شبه‌المانِ بلوردار). دو لایه:
+     ::before نفسِ آرام (انیمیشن)، ::after شعلهٔ کلیک (ترنزیشن — جدا، چون
+     animation ترنزیشنِ همان property را می‌بلعد). شعله ۱۰۰ms، فروکش ~۱.۲s. */
 .btn-primary,
 .nav-cta,
 .plan .cta.solid,
@@ -50,10 +51,14 @@
   position: relative;
   isolation: isolate;
   border-radius: 999px;
+  color: #fff;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, #1c1837, var(--bg2)) padding-box,
+    linear-gradient(135deg, var(--brand-2), var(--brand) 45%, rgba(0, 229, 255, 0.85)) border-box;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(255, 255, 255, 0.16);
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -8px 18px -12px rgba(var(--brand-rgb), 0.6);
   transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease;
   will-change: transform;
 }
@@ -72,19 +77,16 @@
   content: '';
   position: absolute;
   z-index: -1;
-  /* ⚠️ هم‌اندازهٔ خودِ دکمه، نه بزرگ‌تر: نور «از پشت» نمی‌تابد — تیوبِ نئون
-     دورِ لبهٔ کلید است و box-shadow (که سیلوئتِ پیل را دنبال می‌کند) تابشِ
-     باریکش را روی پس‌زمینه می‌اندازد. بازخوردِ دقیقِ کاربر بعد از دیدنِ
-     نسخهٔ توده‌ای. */
-  inset: 0;
+  /* هاله مثلِ مرجع سخاوتمند است — ولی چون بدنه حالا تیره است، نور «دورِ»
+     کلید خوانده می‌شود نه «خودِ» کلید. */
+  inset: -60% -22%;
   border-radius: 999px;
   pointer-events: none;
-  box-shadow:
-    0 0 5px 0 rgba(255, 255, 255, 0.28),
-    0 0 9px 1px rgba(var(--brand-2-rgb), 0.75),
-    0 0 20px 2px rgba(var(--brand-rgb), 0.45),
-    -9px 0 20px -8px rgba(0, 229, 255, 0.6),
-    9px 0 20px -8px rgba(var(--brand-2-rgb), 0.7);
+  background:
+    radial-gradient(50% 82% at 22% 50%, rgba(var(--brand-2-rgb), 0.8), transparent 70%),
+    radial-gradient(50% 82% at 78% 50%, rgba(0, 229, 255, 0.5), transparent 70%),
+    radial-gradient(88% 125% at 50% 50%, rgba(var(--brand-rgb), 0.5), transparent 74%);
+  filter: blur(16px);
 }
 /* لایهٔ نفس — همیشه هست، آرام بالا و پایین می‌رود تا دکمه «زنده» باشد. */
 .btn-primary::before, .nav-cta::before, .plan .cta.solid::before,
@@ -105,12 +107,6 @@
 .us-btn.ok::after, .tp-btn::after {
   opacity: 0;
   transition: opacity 1.2s ease;
-  box-shadow:
-    0 0 8px 1px rgba(255, 255, 255, 0.35),
-    0 0 16px 2px rgba(var(--brand-2-rgb), 0.95),
-    0 0 34px 6px rgba(var(--brand-rgb), 0.6),
-    -14px 0 30px -8px rgba(0, 229, 255, 0.75),
-    14px 0 30px -8px rgba(var(--brand-2-rgb), 0.85);
 }
 .btn-primary:hover::after, .nav-cta:hover::after, .plan .cta.solid:hover::after,
 .df-save:hover::after, .db-submit:hover::after, .db-add:hover::after, .lg-btn:hover::after,
