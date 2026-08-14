@@ -47,16 +47,22 @@
 .ik-submit,
 .ik-book-go,
 .us-btn.ok,
-.tp-btn {
+.tp-btn, .ia-ok, .ia-no {
   position: relative;
   isolation: isolate;
   border-radius: 999px;
   color: #fff;
+  /* سه‌رنگِ نئون — پیش‌فرض برند+سیان؛ واریانت‌ها (پایین) فقط همین سه متغیر
+     را عوض می‌کنند و کلِ دستور (رینگ، انعکاسِ پشت، شعلهٔ کنار) با رنگِ نو
+     کار می‌کند. */
+  --neon: var(--brand-2-rgb);
+  --neon2: 0, 229, 255;
+  --neon-deep: var(--brand-rgb);
   /* بدنهٔ شیشه‌ای به سبکِ دکمه‌های شبح — که کاربر جنسِ شیشه‌شان را پسندید.
      نکته‌ای که یک دور اشتباه رفتیم: روی پس‌زمینهٔ تقریباً سیاه، «شفافِ
      مطلق» سیاه دیده می‌شود؛ آنچه چشم «شیشه» می‌خواند تینتِ سفیدِ کم‌رنگ +
      مات‌شدنِ پشت است. فیزیکِ نور (هالهٔ فقط-بیرون) دست‌نخورده. */
-  border: 1px solid rgba(var(--brand-2-rgb), 0.75);
+  border: 1px solid rgba(var(--neon), 0.75);
   /* زلالِ مطلق — مثلِ کارت‌های لانچرِ ملک‌طب که کاربر مرجع گرفت: نه تینت،
      نه backdrop-blur (blur خطوطِ ظریفِ پشت را محو می‌کرد و شفافیت
      «دیده نمی‌شد»). پس‌زمینه عیناً و شفاف از داخلِ کلید رد می‌شود. */
@@ -72,13 +78,13 @@
 .ac-submit::before, .ac-padd::before, .dp-brief-btn::before, .tk-save::before,
 .tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
 .ik-go:not(.ghost)::before, .ik-submit::before, .ik-book-go::before,
-.us-btn.ok::before, .tp-btn::before,
+.us-btn.ok::before, .tp-btn::before, .ia-ok::before, .ia-no::before,
 .btn-primary::after, .nav-cta::after, .plan .cta.solid::after,
 .df-save::after, .db-submit::after, .db-add::after, .lg-btn::after,
 .ac-submit::after, .ac-padd::after, .dp-brief-btn::after, .tk-save::after,
 .tr-save::after, .sc-save::after, .iv-save::after, .st-knobsave::after,
 .ik-go:not(.ghost)::after, .ik-submit::after, .ik-book-go::after,
-.us-btn.ok::after, .tp-btn::after {
+.us-btn.ok::after, .tp-btn::after, .ia-ok::after, .ia-no::after {
   content: '';
   position: absolute;
   z-index: -1;
@@ -96,19 +102,19 @@
 .ac-submit::before, .ac-padd::before, .dp-brief-btn::before, .tk-save::before,
 .tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
 .ik-go:not(.ghost)::before, .ik-submit::before, .ik-book-go::before,
-.us-btn.ok::before, .tp-btn::before {
+.us-btn.ok::before, .tp-btn::before, .ia-ok::before, .ia-no::before {
   opacity: 0.38;
   animation: pressHaloBreath 3.6s ease-in-out infinite;
   /* انعکاسِ نورِ اولیه از **پشتِ** شیشه — فقط این لایه پشتِ کلید را روشن
      می‌کند و سطحش با نفس ثابت‌وار می‌ماند؛ لایهٔ شعله (پایین) background
      ندارد، پس پرنورشدنِ کلیک هیچ‌چیز به داخل اضافه نمی‌کند و متن خوانا
      می‌ماند — «پر نور که می‌شود از کنار بتابد». */
-  background: radial-gradient(75% 130% at 50% 50%, rgba(var(--brand-2-rgb), 0.5), rgba(var(--brand-rgb), 0.3) 55%, transparent 90%);
+  background: radial-gradient(75% 130% at 50% 50%, rgba(var(--neon), 0.5), rgba(var(--neon-deep), 0.3) 55%, transparent 90%);
   box-shadow:
-    0 0 18px 2px rgba(var(--brand-2-rgb), 0.55),
-    0 0 46px 12px rgba(var(--brand-rgb), 0.4),
-    -26px 0 56px -8px rgba(0, 229, 255, 0.4),
-    26px 0 56px -8px rgba(var(--brand-2-rgb), 0.5);
+    0 0 18px 2px rgba(var(--neon), 0.55),
+    0 0 46px 12px rgba(var(--neon-deep), 0.4),
+    -26px 0 56px -8px rgba(var(--neon2), 0.4),
+    26px 0 56px -8px rgba(var(--neon), 0.5);
 }
 /* لایهٔ شعله — خاموش؛ هاور کمی، فشردن کامل. فروکش آرام، شعله سریع. */
 .btn-primary::after, .nav-cta::after, .plan .cta.solid::after,
@@ -116,21 +122,21 @@
 .ac-submit::after, .ac-padd::after, .dp-brief-btn::after, .tk-save::after,
 .tr-save::after, .sc-save::after, .iv-save::after, .st-knobsave::after,
 .ik-go:not(.ghost)::after, .ik-submit::after, .ik-book-go::after,
-.us-btn.ok::after, .tp-btn::after {
+.us-btn.ok::after, .tp-btn::after, .ia-ok::after, .ia-no::after {
   opacity: 0;
   transition: opacity 1.2s ease;
   box-shadow:
-    0 0 26px 5px rgba(var(--brand-2-rgb), 0.8),
-    0 0 72px 20px rgba(var(--brand-rgb), 0.55),
-    -42px 0 84px -8px rgba(0, 229, 255, 0.6),
-    42px 0 84px -8px rgba(var(--brand-2-rgb), 0.7);
+    0 0 26px 5px rgba(var(--neon), 0.8),
+    0 0 72px 20px rgba(var(--neon-deep), 0.55),
+    -42px 0 84px -8px rgba(var(--neon2), 0.6),
+    42px 0 84px -8px rgba(var(--neon), 0.7);
 }
 .btn-primary:hover::after, .nav-cta:hover::after, .plan .cta.solid:hover::after,
 .df-save:hover::after, .db-submit:hover::after, .db-add:hover::after, .lg-btn:hover::after,
 .ac-submit:hover::after, .ac-padd:hover::after, .dp-brief-btn:hover::after, .tk-save:hover::after,
 .tr-save:hover::after, .sc-save:hover::after, .iv-save:hover::after, .st-knobsave:hover::after,
 .ik-go:not(.ghost):hover::after, .ik-submit:hover::after, .ik-book-go:hover::after,
-.us-btn.ok:hover::after, .tp-btn:hover::after {
+.us-btn.ok:hover::after, .tp-btn:hover::after, .ia-ok:hover::after, .ia-no:hover::after {
   opacity: 0.32;
   transition: opacity 0.3s ease;
 }
@@ -139,7 +145,7 @@
 .ac-submit:active::after, .ac-padd:active::after, .dp-brief-btn:active::after, .tk-save:active::after,
 .tr-save:active::after, .sc-save:active::after, .iv-save:active::after, .st-knobsave:active::after,
 .ik-go:not(.ghost):active::after, .ik-submit:active::after, .ik-book-go:active::after,
-.us-btn.ok:active::after, .tp-btn:active::after {
+.us-btn.ok:active::after, .tp-btn:active::after, .ia-ok:active::after, .ia-no:active::after {
   /* اوجِ شعله ۳۰٪ مهارشده — به‌خواستِ کاربر. */
   opacity: 0.7;
   transition: opacity 0.1s ease;
@@ -150,7 +156,7 @@
 .ac-submit:active, .ac-padd:active, .dp-brief-btn:active, .tk-save:active, .tr-save:active,
 .sc-save:active, .iv-save:active, .st-knobsave:active,
 .ik-go:not(.ghost):active, .ik-submit:active, .ik-book-go:active,
-.us-btn.ok:active, .tp-btn:active {
+.us-btn.ok:active, .tp-btn:active, .ia-ok:active, .ia-no:active {
   transform: scale(0.965);
   /* فقط رینگِ لبه داغ‌تر می‌شود؛ داخلِ کلید همان تاریک می‌ماند. */
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
@@ -177,6 +183,30 @@
 .ik-submit:disabled::after, .ik-book-go:disabled::after, .tk-save:disabled::after,
 .tr-save:disabled::after, .sc-save:disabled::after, .iv-save:disabled::after,
 .st-knobsave:disabled::after { opacity: 0; animation: none; }
+
+/* ── واریانت‌های رنگیِ نئون — «بسته به موضوع» ─────────────────────────
+   همان کلید، فقط رنگِ نور: سبز = تأیید/موفقیت، قرمز = خطر/رد،
+   نارنجی = هشدار/اصلاح. برای هر دکمهٔ تازه کافی است کلاسِ neon-* را کنارِ
+   کلاسِ خودش بگذارید؛ نگاشت‌های معناییِ موجود هم همین‌جا CSSی بسته شده‌اند. */
+.neon-green, .us-btn.ok, .ia-ok, .ik-book-go {
+  --neon: 52, 211, 153;
+  --neon2: 45, 212, 191;
+  --neon-deep: 5, 150, 105;
+}
+.neon-red, .ia-no, .df-save.danger {
+  --neon: 244, 63, 94;
+  --neon2: 251, 113, 133;
+  --neon-deep: 190, 18, 60;
+}
+.neon-orange {
+  --neon: 251, 146, 60;
+  --neon2: 251, 191, 36;
+  --neon-deep: 234, 88, 12;
+}
+/* پس‌زمینه‌های پُرِ قدیمیِ این‌ها باید کنار بروند تا شیشهٔ شفاف کار کند
+   (specificity بالاتر از پایه دارند). */
+.df-save.danger, .ia-ok, .ia-no, .us-btn.ok { background: transparent; }
+.ia-no { color: #fff; }
 
 /* ── دکمهٔ شبح — «شیشه‌ای/ژله‌ای» ─────────────────────────────────── */
 .btn-ghost,
@@ -223,10 +253,10 @@
   .ac-submit::before, .ac-padd::before, .dp-brief-btn::before, .tk-save::before,
   .tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
   .ik-go::before, .ik-submit::before, .ik-book-go::before,
-  .us-btn.ok::before, .tp-btn::before { animation: none; opacity: 0.45; }
+  .us-btn.ok::before, .tp-btn::before, .ia-ok::before, .ia-no::before { animation: none; opacity: 0.45; }
   .btn-primary, .nav-cta, .plan .cta.solid, .df-save, .db-submit, .db-add,
   .lg-btn, .ac-submit, .ac-padd, .dp-brief-btn, .tk-save, .tr-save, .sc-save,
-  .iv-save, .st-knobsave, .ik-go, .ik-submit, .ik-book-go, .us-btn, .tp-btn,
+  .iv-save, .st-knobsave, .ik-go, .ik-submit, .ik-book-go, .us-btn, .tp-btn, .ia-ok, .ia-no,
   .btn-ghost, .plan .cta.line, .df-ghost, .iv-ghost, .tp-ghost, .pa-ghost,
   .tk-ghost, .jd-ghost {
     transition: box-shadow 0.22s ease, border-color 0.2s, background 0.2s, filter 0.2s;
@@ -234,7 +264,7 @@
   .btn-primary:hover, .btn-primary:active, .nav-cta:hover, .nav-cta:active,
   .df-save:hover, .df-save:active, .db-submit:active, .db-add:hover, .db-add:active,
   .lg-btn:active, .ac-submit:active, .ik-go:active, .ik-submit:active,
-  .us-btn:active, .tp-btn:active, .btn-ghost:active, .df-ghost:active,
+  .us-btn:active, .tp-btn:active, .ia-ok:active, .ia-no:active, .btn-ghost:active, .df-ghost:active,
   .iv-ghost:active, .ik-go.ghost:active {
     transform: none;
   }
