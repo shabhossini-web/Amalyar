@@ -53,9 +53,17 @@
   border-radius: 999px;
   color: #fff;
   border: 1px solid transparent;
+  /* بدنهٔ **شیشه‌ای** با همان فیزیکِ نور: تینتِ تیرهٔ نیمه‌شفاف + blurِ
+     پس‌زمینه + فقط یک برقِ ثابتِ خیلی ملایم بالای شیشه (هویتِ شیشه، نه
+     روشنایی — همان قدری که دکمه‌های شبحِ پسندیده‌شده دارند). هاله همچنان
+     box-shadowِ بیرونی است و پشتِ مرکزِ دکمه چیزی نمی‌درخشد، پس شیشه تیره
+     می‌ماند. */
   background:
-    linear-gradient(180deg, #16122c, var(--bg2)) padding-box,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0) 65%) padding-box,
+    linear-gradient(180deg, rgba(22, 17, 43, 0.62), rgba(12, 9, 31, 0.55)) padding-box,
     linear-gradient(135deg, var(--brand-2), var(--brand) 45%, rgba(0, 229, 255, 0.85)) border-box;
+  -webkit-backdrop-filter: blur(10px) saturate(1.25);
+  backdrop-filter: blur(10px) saturate(1.25);
   /* ⚠️ هیچ insetی این‌جا نه: داخلِ کلید باید تیره بماند — نور فقط رینگِ
      لبه و هالهٔ پشت است (بازخوردِ کاربر: «نور نباید به داخل بیاد»). */
   box-shadow: none;
