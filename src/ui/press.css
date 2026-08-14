@@ -77,19 +77,13 @@
   content: '';
   position: absolute;
   z-index: -1;
-  /* هاله مثلِ مرجع سخاوتمند است — ولی چون بدنه حالا تیره است، نور «دورِ»
-     کلید خوانده می‌شود نه «خودِ» کلید. */
-  inset: -60% -22%;
+  /* ⚠️ هاله با box-shadow ساخته می‌شود، نه گرادیانِ بلورشده: سایه‌ی بیرونی
+     **هرگز** داخلِ کادرِ خودش رنگ نمی‌گذارد — پس حتی یک پیکسل نور هم واردِ
+     کلید نمی‌شود و متن در اوجِ شعله خوانا می‌ماند (بازخوردِ کاربر). آفستِ
+     چپ/راست نور را به «کنار و پشت» می‌برد. */
+  inset: 0;
   border-radius: 999px;
   pointer-events: none;
-  /* ⚠️ گرادیان‌ها **توخالی**اند (از transparent شروع می‌شوند): درخششِ اوج،
-     زیرِ بدنه و لبهٔ داخلی نیست که با feather به داخل نشت کند — نور از
-     حوالیِ لبه به بیرون جان می‌گیرد. «۵۰٪ کمترشدنِ نورِ داخل» از همین‌جاست. */
-  background:
-    radial-gradient(50% 82% at 14% 50%, transparent 22%, rgba(var(--brand-2-rgb), 0.7) 46%, transparent 74%),
-    radial-gradient(50% 82% at 86% 50%, transparent 22%, rgba(0, 229, 255, 0.45) 46%, transparent 74%),
-    radial-gradient(88% 125% at 50% 50%, transparent 40%, rgba(var(--brand-rgb), 0.5) 58%, transparent 78%);
-  filter: blur(16px);
 }
 /* لایهٔ نفس — همیشه هست، آرام بالا و پایین می‌رود تا دکمه «زنده» باشد. */
 .btn-primary::before, .nav-cta::before, .plan .cta.solid::before,
@@ -100,6 +94,11 @@
 .us-btn.ok::before, .tp-btn::before {
   opacity: 0.4;
   animation: pressHaloBreath 3.6s ease-in-out infinite;
+  box-shadow:
+    0 0 18px 2px rgba(var(--brand-2-rgb), 0.55),
+    0 0 46px 12px rgba(var(--brand-rgb), 0.4),
+    -26px 0 56px -8px rgba(0, 229, 255, 0.4),
+    26px 0 56px -8px rgba(var(--brand-2-rgb), 0.5);
 }
 /* لایهٔ شعله — خاموش؛ هاور کمی، فشردن کامل. فروکش آرام، شعله سریع. */
 .btn-primary::after, .nav-cta::after, .plan .cta.solid::after,
@@ -110,6 +109,11 @@
 .us-btn.ok::after, .tp-btn::after {
   opacity: 0;
   transition: opacity 1.2s ease;
+  box-shadow:
+    0 0 26px 5px rgba(var(--brand-2-rgb), 0.8),
+    0 0 72px 20px rgba(var(--brand-rgb), 0.55),
+    -42px 0 84px -8px rgba(0, 229, 255, 0.6),
+    42px 0 84px -8px rgba(var(--brand-2-rgb), 0.7);
 }
 .btn-primary:hover::after, .nav-cta:hover::after, .plan .cta.solid:hover::after,
 .df-save:hover::after, .db-submit:hover::after, .db-add:hover::after, .lg-btn:hover::after,
