@@ -57,9 +57,11 @@
      مطلق» سیاه دیده می‌شود؛ آنچه چشم «شیشه» می‌خواند تینتِ سفیدِ کم‌رنگ +
      مات‌شدنِ پشت است. فیزیکِ نور (هالهٔ فقط-بیرون) دست‌نخورده. */
   border: 1px solid rgba(var(--brand-2-rgb), 0.75);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0.06));
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  /* اوپَسیتیِ شیشه صفر — هیچ تینتی؛ فقط یک blurِ ملایم که جنسِ شیشه را
+     بدهد. آنچه از پشتِ شیشه دیده می‌شود، تابشِ پشتِ کلید است (پایین). */
+  background: transparent;
+  -webkit-backdrop-filter: blur(7px);
+  backdrop-filter: blur(7px);
   /* ⚠️ هیچ insetی این‌جا نه: داخلِ کلید باید تیره بماند — نور فقط رینگِ
      لبه و هالهٔ پشت است (بازخوردِ کاربر: «نور نباید به داخل بیاد»). */
   box-shadow: none;
@@ -88,6 +90,10 @@
   inset: 0;
   border-radius: 999px;
   pointer-events: none;
+  /* تابشِ **پشتِ** کلید — چون بدنه شفاف است، از داخلِ شیشه دیده می‌شود
+     (خواستهٔ کاربر: «پشتش معلوم باشه»). ملایم است که متن خوانا بماند؛
+     نورِ اصلی همچنان box-shadowِ بیرونی است. */
+  background: radial-gradient(70% 120% at 50% 50%, rgba(var(--brand-2-rgb), 0.38), rgba(var(--brand-rgb), 0.22) 55%, transparent 88%);
 }
 /* لایهٔ نفس — همیشه هست، آرام بالا و پایین می‌رود تا دکمه «زنده» باشد. */
 .btn-primary::before, .nav-cta::before, .plan .cta.solid::before,
