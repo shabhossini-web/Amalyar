@@ -17,7 +17,16 @@
  * توکن‌های برند می‌آید.
  */
 
-/* ── دکمهٔ اصلی — «شاینی»: نورِ زیرین که با کلیک زیاد می‌شود ───────── */
+/* ── دکمهٔ اصلی — «شاینی»: هالهٔ بزرگِ زنده، شعله با کلیک ─────────────
+   از اسکرین‌ریکوردِ مرجعِ کاربر (21st.dev Shiny Button) بازسازی شد:
+   • هاله خیلی بزرگ‌تر از خودِ دکمه است (شبه‌المانِ بلوردار، نه box-shadow —
+     box-shadow در آن ابعاد هم گران است هم لبه‌دار).
+   • دو لایه: ::before نفسِ آرامِ همیشگی می‌کشد (انیمیشن)، ::after لایهٔ
+     شعله است (ترنزیشن) — جدا از هم، چون animation روی همان property
+     ترنزیشن را می‌بلعد و شعلهٔ کلیک هرگز دیده نمی‌شد.
+   • ریتمِ مرجع: با فشردن **سریع** روشن می‌شود (۱۰۰ms) و بعد از رهاکردن
+     **آرام** فروکش می‌کند (~۱.۲s) — همان «زیاد و کم شدنِ» ویدئو.
+   • لبهٔ خودِ دکمه هم رینگِ روشن دارد که با فشردن پررنگ می‌شود. */
 .btn-primary,
 .nav-cta,
 .plan .cta.solid,
@@ -39,46 +48,94 @@
 .us-btn.ok,
 .tp-btn {
   position: relative;
+  isolation: isolate;
   border-radius: 999px;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 6px 22px -4px rgba(var(--brand-rgb), 0.55),
-    -10px 8px 30px -10px rgba(var(--brand-2-rgb), 0.45),
-    10px 8px 30px -10px rgba(0, 229, 255, 0.28);
-  transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.22s ease, filter 0.2s ease;
+    0 0 0 1px rgba(255, 255, 255, 0.10);
+  transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease;
   will-change: transform;
 }
-.btn-primary:hover, .nav-cta:hover, .plan .cta.solid:hover,
-.df-save:hover, .db-submit:hover, .db-add:hover, .lg-btn:hover,
-.ac-submit:hover, .ac-padd:hover, .dp-brief-btn:hover, .tk-save:hover, .tr-save:hover,
-.sc-save:hover, .iv-save:hover, .st-knobsave:hover,
-.ik-go:not(.ghost):hover, .ik-submit:hover, .ik-book-go:hover,
-.us-btn.ok:hover, .tp-btn:hover {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.32),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 10px 30px -4px rgba(var(--brand-rgb), 0.65),
-    -14px 10px 40px -10px rgba(var(--brand-2-rgb), 0.55),
-    14px 10px 40px -10px rgba(0, 229, 255, 0.38);
+.btn-primary::before, .nav-cta::before, .plan .cta.solid::before,
+.df-save::before, .db-submit::before, .db-add::before, .lg-btn::before,
+.ac-submit::before, .ac-padd::before, .dp-brief-btn::before, .tk-save::before,
+.tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
+.ik-go:not(.ghost)::before, .ik-submit::before, .ik-book-go::before,
+.us-btn.ok::before, .tp-btn::before,
+.btn-primary::after, .nav-cta::after, .plan .cta.solid::after,
+.df-save::after, .db-submit::after, .db-add::after, .lg-btn::after,
+.ac-submit::after, .ac-padd::after, .dp-brief-btn::after, .tk-save::after,
+.tr-save::after, .sc-save::after, .iv-save::after, .st-knobsave::after,
+.ik-go:not(.ghost)::after, .ik-submit::after, .ik-book-go::after,
+.us-btn.ok::after, .tp-btn::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -55% -18%;
+  border-radius: 999px;
+  pointer-events: none;
+  background:
+    radial-gradient(55% 85% at 20% 50%, rgba(var(--brand-2-rgb), 0.85), transparent 68%),
+    radial-gradient(55% 85% at 80% 50%, rgba(0, 229, 255, 0.6), transparent 68%),
+    radial-gradient(95% 130% at 50% 50%, rgba(var(--brand-rgb), 0.6), transparent 72%);
+  filter: blur(18px);
 }
-/* فشردن: دکمه جمع می‌شود و نورِ زیرش **بیشترین** می‌شود — همان مرجعِ اول. */
+/* لایهٔ نفس — همیشه هست، آرام بالا و پایین می‌رود تا دکمه «زنده» باشد. */
+.btn-primary::before, .nav-cta::before, .plan .cta.solid::before,
+.df-save::before, .db-submit::before, .db-add::before, .lg-btn::before,
+.ac-submit::before, .ac-padd::before, .dp-brief-btn::before, .tk-save::before,
+.tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
+.ik-go:not(.ghost)::before, .ik-submit::before, .ik-book-go::before,
+.us-btn.ok::before, .tp-btn::before {
+  opacity: 0.4;
+  animation: pressHaloBreath 3.6s ease-in-out infinite;
+}
+/* لایهٔ شعله — خاموش؛ هاور کمی، فشردن کامل. فروکش آرام، شعله سریع. */
+.btn-primary::after, .nav-cta::after, .plan .cta.solid::after,
+.df-save::after, .db-submit::after, .db-add::after, .lg-btn::after,
+.ac-submit::after, .ac-padd::after, .dp-brief-btn::after, .tk-save::after,
+.tr-save::after, .sc-save::after, .iv-save::after, .st-knobsave::after,
+.ik-go:not(.ghost)::after, .ik-submit::after, .ik-book-go::after,
+.us-btn.ok::after, .tp-btn::after {
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+.btn-primary:hover::after, .nav-cta:hover::after, .plan .cta.solid:hover::after,
+.df-save:hover::after, .db-submit:hover::after, .db-add:hover::after, .lg-btn:hover::after,
+.ac-submit:hover::after, .ac-padd:hover::after, .dp-brief-btn:hover::after, .tk-save:hover::after,
+.tr-save:hover::after, .sc-save:hover::after, .iv-save:hover::after, .st-knobsave:hover::after,
+.ik-go:not(.ghost):hover::after, .ik-submit:hover::after, .ik-book-go:hover::after,
+.us-btn.ok:hover::after, .tp-btn:hover::after {
+  opacity: 0.45;
+  transition: opacity 0.3s ease;
+}
+.btn-primary:active::after, .nav-cta:active::after, .plan .cta.solid:active::after,
+.df-save:active::after, .db-submit:active::after, .db-add:active::after, .lg-btn:active::after,
+.ac-submit:active::after, .ac-padd:active::after, .dp-brief-btn:active::after, .tk-save:active::after,
+.tr-save:active::after, .sc-save:active::after, .iv-save:active::after, .st-knobsave:active::after,
+.ik-go:not(.ghost):active::after, .ik-submit:active::after, .ik-book-go:active::after,
+.us-btn.ok:active::after, .tp-btn:active::after {
+  opacity: 1;
+  transition: opacity 0.1s ease;
+}
+/* فشردن: جمع‌شدنِ ژله‌ای + پررنگ‌شدنِ رینگِ لبه — نور را ::after می‌دهد. */
 .btn-primary:active, .nav-cta:active, .plan .cta.solid:active,
 .df-save:active, .db-submit:active, .db-add:active, .lg-btn:active,
 .ac-submit:active, .ac-padd:active, .dp-brief-btn:active, .tk-save:active, .tr-save:active,
 .sc-save:active, .iv-save:active, .st-knobsave:active,
 .ik-go:not(.ghost):active, .ik-submit:active, .ik-book-go:active,
 .us-btn.ok:active, .tp-btn:active {
-  filter: brightness(1.12);
-  transform: translateY(0) scale(0.965);
+  transform: scale(0.965);
+  filter: brightness(1.1);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
     inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-    0 4px 44px 2px rgba(var(--brand-rgb), 0.85),
-    -18px 8px 54px -8px rgba(var(--brand-2-rgb), 0.7),
-    18px 8px 54px -8px rgba(0, 229, 255, 0.5);
+    0 0 0 1.5px rgba(255, 255, 255, 0.26);
+}
+@keyframes pressHaloBreath {
+  0%, 100% { opacity: 0.34; }
+  50% { opacity: 0.55; }
 }
 /* دکمهٔ غیرفعال نه می‌درخشد نه فشرده می‌شود — نورِ دروغین یعنی «کلیک کن». */
 .df-save:disabled, .db-submit:disabled, .lg-btn:disabled, .ac-submit:disabled,
@@ -88,6 +145,16 @@
   transform: none;
   filter: none;
 }
+.df-save:disabled::before, .db-submit:disabled::before, .lg-btn:disabled::before,
+.ac-submit:disabled::before, .ac-padd:disabled::before, .ik-go:disabled::before,
+.ik-submit:disabled::before, .ik-book-go:disabled::before, .tk-save:disabled::before,
+.tr-save:disabled::before, .sc-save:disabled::before, .iv-save:disabled::before,
+.st-knobsave:disabled::before,
+.df-save:disabled::after, .db-submit:disabled::after, .lg-btn:disabled::after,
+.ac-submit:disabled::after, .ac-padd:disabled::after, .ik-go:disabled::after,
+.ik-submit:disabled::after, .ik-book-go:disabled::after, .tk-save:disabled::after,
+.tr-save:disabled::after, .sc-save:disabled::after, .iv-save:disabled::after,
+.st-knobsave:disabled::after { opacity: 0; animation: none; }
 
 /* ── دکمهٔ شبح — «شیشه‌ای/ژله‌ای» ─────────────────────────────────── */
 .btn-ghost,
@@ -129,6 +196,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .btn-primary::before, .nav-cta::before, .plan .cta.solid::before,
+  .df-save::before, .db-submit::before, .db-add::before, .lg-btn::before,
+  .ac-submit::before, .ac-padd::before, .dp-brief-btn::before, .tk-save::before,
+  .tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
+  .ik-go::before, .ik-submit::before, .ik-book-go::before,
+  .us-btn.ok::before, .tp-btn::before { animation: none; opacity: 0.45; }
   .btn-primary, .nav-cta, .plan .cta.solid, .df-save, .db-submit, .db-add,
   .lg-btn, .ac-submit, .ac-padd, .dp-brief-btn, .tk-save, .tr-save, .sc-save,
   .iv-save, .st-knobsave, .ik-go, .ik-submit, .ik-book-go, .us-btn, .tp-btn,
