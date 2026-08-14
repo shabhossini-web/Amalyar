@@ -124,7 +124,7 @@
 .tr-save:hover::after, .sc-save:hover::after, .iv-save:hover::after, .st-knobsave:hover::after,
 .ik-go:not(.ghost):hover::after, .ik-submit:hover::after, .ik-book-go:hover::after,
 .us-btn.ok:hover::after, .tp-btn:hover::after {
-  opacity: 0.45;
+  opacity: 0.32;
   transition: opacity 0.3s ease;
 }
 .btn-primary:active::after, .nav-cta:active::after, .plan .cta.solid:active::after,
@@ -133,7 +133,8 @@
 .tr-save:active::after, .sc-save:active::after, .iv-save:active::after, .st-knobsave:active::after,
 .ik-go:not(.ghost):active::after, .ik-submit:active::after, .ik-book-go:active::after,
 .us-btn.ok:active::after, .tp-btn:active::after {
-  opacity: 1;
+  /* اوجِ شعله ۳۰٪ مهارشده — به‌خواستِ کاربر. */
+  opacity: 0.7;
   transition: opacity 0.1s ease;
 }
 /* فشردن: جمع‌شدنِ ژله‌ای + پررنگ‌شدنِ رینگِ لبه — نور را ::after می‌دهد. */
