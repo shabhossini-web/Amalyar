@@ -19,7 +19,9 @@ const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
  * ⚠️ هفته از **شنبه** شروع می‌شود و `jDayOfWeek` همین را برمی‌گرداند؛ استفاده
  * از `Date.getDay()` (که یکشنبه‌محور است) ستون‌ها را یک روز می‌چرخاند.
  */
-export default function JGrid({ year, month, onNav, renderDay, onPickDay, selected }) {
+/** `compact`: نمای جمع‌وجورِ انتخابِ تاریخ (سلولِ مربعِ وسط‌چین) — فقط کلاس؛
+ *  گرید همچنان از محتوا بی‌خبر است. */
+export default function JGrid({ year, month, onNav, renderDay, onPickDay, selected, compact = false }) {
   const [ty, tm, td] = jToday();
   const days = jMonthDays(year, month);
   // شمارِ سلول‌های خالیِ ابتدای ماه تا روزِ اول زیرِ ستونِ درستش بیفتد.
@@ -35,7 +37,7 @@ export default function JGrid({ year, month, onNav, renderDay, onPickDay, select
   };
 
   return (
-    <div className="jg">
+    <div className={`jg${compact ? ' compact' : ''}`}>
       <header className="jg-head">
         {/* در RTL، «ماهِ قبل» سمتِ راست است؛ آیکون هم باید به همان سمت اشاره کند. */}
         <button type="button" onClick={() => go(-1)} aria-label="ماهِ قبل"><ChevronEnd width="16" height="16" /></button>

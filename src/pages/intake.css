@@ -187,8 +187,18 @@
 }
 .ik-book-topics button.on { color: #fff; background: rgba(var(--brand-2-rgb), .22); border-color: rgba(var(--brand-2-rgb), .55); }
 
-.ik-cell { display: grid; place-items: center; min-height: 16px; }
-.ik-cell b { font-size: 11px; font-weight: 800; color: rgb(var(--brand-2-rgb)); }
+/* سلولِ تقویمِ نوبت — نمای compact: روزِ باز فقط یک نقطهٔ نئونیِ کوچک دارد
+   و شمارهٔ روزش روشن‌تر است؛ عددِ ظرفیت به کارتِ پایین رفت. */
+.ik-cell { display: grid; place-items: center; min-height: 0; }
+.ik-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: linear-gradient(135deg, rgb(var(--brand-2-rgb)), #00e5ff);
+  box-shadow: 0 0 8px rgba(var(--brand-2-rgb), .9), 0 0 3px rgba(0, 229, 255, .8);
+}
+/* روزی که جا دارد، شماره‌اش هم زنده است — روزِ بسته کم‌رنگ می‌ماند. */
+.jg.compact .jg-cell:has(.ik-cell.open) { border-color: rgba(var(--brand-soft-rgb), .28); background: rgba(var(--brand-rgb), .07); }
+.jg.compact .jg-cell:has(.ik-cell.open) .jg-num { color: #efeaff; }
+.jg.compact .jg-cell.sel .ik-dot { background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, .9); }
 
 .ik-book-day {
   display: grid; gap: 7px; padding: 11px 12px; border-radius: 12px;

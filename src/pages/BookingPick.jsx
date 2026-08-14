@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
-import { J_MONTHS, jToday } from '../lib/jalali.js';
+import { faDate, J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from '../app/JGrid.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -71,7 +71,9 @@ export default function BookingPick({ token, booking, onBooked, disabled }) {
 
       {chosen && (
         <p className="ik-book-has">
-          نوبتِ شما: <b>{chosen.date}</b>
+          {/* ⚠️ تاریخ به بیمار **شمسی** نشان داده می‌شود — ISOِ خامِ سرور
+              (2026-08-15) روی نصبِ واقعی دیده شد و برای بیمار بی‌معنی است. */}
+          نوبتِ شما: <b>{faDate(chosen.date) || chosen.date}</b>
           {chosen.time ? <> ساعتِ <b dir="ltr">{chosen.time}</b></> : null}
           {chosen.topicName ? <> — {chosen.topicName}</> : null}
           <small>می‌توانید روزِ دیگری بزنید تا جابه‌جا شود.</small>
@@ -99,6 +101,7 @@ export default function BookingPick({ token, booking, onBooked, disabled }) {
       {err && <div className="ik-book-err">{err}</div>}
 
       <JGrid
+        compact
         year={ym.y}
         month={ym.m}
         selected={picked?.day ?? null}
@@ -112,8 +115,11 @@ export default function BookingPick({ token, booking, onBooked, disabled }) {
           const cell = byDay.get(dd);
           if (!cell) return null;
           return (
+            /* مینیمال: روزِ باز فقط یک نقطهٔ نئون می‌گیرد؛ عددِ «جا مانده» در
+               کارتِ پایینِ تقویم می‌آید، نه داخلِ سلول — سلولِ شلوغ همان
+               چیزی بود که کاربر «افتضاح» خواند. */
             <div className={`ik-cell${cell.open ? ' open' : ''}`}>
-              {cell.open ? <b>{faNum(cell.free)}</b> : null}
+              {cell.open ? <i className="ik-dot" aria-hidden="true" /> : null}
             </div>
           );
         }}
