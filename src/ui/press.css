@@ -97,8 +97,13 @@
 .tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
 .ik-go:not(.ghost)::before, .ik-submit::before, .ik-book-go::before,
 .us-btn.ok::before, .tp-btn::before {
-  opacity: 0.2;
+  opacity: 0.38;
   animation: pressHaloBreath 3.6s ease-in-out infinite;
+  /* انعکاسِ نورِ اولیه از **پشتِ** شیشه — فقط این لایه پشتِ کلید را روشن
+     می‌کند و سطحش با نفس ثابت‌وار می‌ماند؛ لایهٔ شعله (پایین) background
+     ندارد، پس پرنورشدنِ کلیک هیچ‌چیز به داخل اضافه نمی‌کند و متن خوانا
+     می‌ماند — «پر نور که می‌شود از کنار بتابد». */
+  background: radial-gradient(75% 130% at 50% 50%, rgba(var(--brand-2-rgb), 0.5), rgba(var(--brand-rgb), 0.3) 55%, transparent 90%);
   box-shadow:
     0 0 18px 2px rgba(var(--brand-2-rgb), 0.55),
     0 0 46px 12px rgba(var(--brand-rgb), 0.4),
@@ -151,8 +156,8 @@
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 @keyframes pressHaloBreath {
-  0%, 100% { opacity: 0.14; }
-  50% { opacity: 0.26; }
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.48; }
 }
 /* دکمهٔ غیرفعال نه می‌درخشد نه فشرده می‌شود — نورِ دروغین یعنی «کلیک کن». */
 .df-save:disabled, .db-submit:disabled, .lg-btn:disabled, .ac-submit:disabled,
