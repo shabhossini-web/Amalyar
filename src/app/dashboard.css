@@ -16,8 +16,12 @@
 .db-stat-due b { color: #fbbf24; }
 .db-stat-today b { color: #5eead4; }
 
-/* نوارِ ابزار: سرچ + افزودن */
-.db-toolbar { display: flex; gap: 10px; margin-bottom: 12px; }
+/* نوارِ ابزار: سرچ + افزودن.
+   ⚠️ روی موبایل wrap می‌شود — بدونِ آن، دکمهٔ «افزودن» در عرضِ تنگ از لبهٔ
+   چپِ صفحه بیرون می‌زد (آدیتِ ۳۹۰px: left = -17). */
+.db-toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.db-toolbar .db-search { min-width: 200px; }
+.db-add { min-height: 42px; }
 .db-search {
   flex: 1; display: flex; align-items: center; gap: 8px;
   background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);

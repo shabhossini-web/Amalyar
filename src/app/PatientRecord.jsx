@@ -8,7 +8,7 @@ import './launcher.css';
 import './definitions.css';
 import JDate from './JDate.jsx';
 import './record.css';
-import { Alert, Back, Close, Download, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import { Alert, Back, Close, Download, LinkIcon, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 
@@ -362,6 +362,39 @@ function DocsTab({ rec, reload, toast }) {
     }
   };
 
+  /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
+     فایلش را کسی ندارد؛ دسته/عنوان/تاریخ از همان فیلدهای بالا می‌آید. */
+  const [linkUrl, setLinkUrl] = useState('');
+  const addLink = async () => {
+    const url = linkUrl.trim();
+    if (!url) return;
+    let takenAt;
+    if (takenJ.trim()) {
+      takenAt = jStrToIso(takenJ);
+      if (!takenAt) { toast('تاریخِ مدرک نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)', true); return; }
+    }
+    setBusy(true);
+    try {
+      await api(`/patients/${rec.id}/documents/link`, {
+        method: 'POST',
+        body: {
+          url,
+          category: cat,
+          ...(title.trim() ? { title: title.trim() } : {}),
+          ...(visitId ? { visitId: Number(visitId) } : {}),
+          ...(takenAt ? { takenAt } : {}),
+        },
+      });
+      setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId('');
+      await reload();
+      toast('لینک ثبت شد ✓');
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async (doc) => {
     try {
       await api(`/patients/documents/${doc.id}`, { method: 'DELETE' });
@@ -406,6 +439,21 @@ function DocsTab({ rec, reload, toast }) {
           <b>{busy ? 'در حال آپلود…' : 'انتخاب یا رهاکردنِ فایل'}</b>
           <small>عکس، PDF یا هر مدرکِ دیگر — تا {faNum(25)} مگابایت</small>
         </label>
+        {/* لینک به‌جای فایل: MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود. */}
+        <div className="rc-linkrow">
+          <LinkIcon width="15" height="15" />
+          <input
+            dir="ltr"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            placeholder="…https://  — اگر فایل ندارید، لینکِ MRI/پاراکلینیک را بگذارید"
+            disabled={busy}
+            onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }}
+          />
+          <button type="button" className="df-save" disabled={busy || !linkUrl.trim()} onClick={addLink}>
+            ثبتِ لینک
+          </button>
+        </div>
       </div>
 
       {present.length > 1 && (
@@ -421,14 +469,25 @@ function DocsTab({ rec, reload, toast }) {
         <div className="rc-docs">
           {shown.map((d) => (
             <div key={d.id} className="rc-doc">
-              {d.isImage ? <DocThumb id={d.id} alt={d.title || d.fileName} /> : <div className="rc-thumb rc-thumb-file">{(d.fileName.split('.').pop() || '?').slice(0, 4)}</div>}
+              {d.isLink
+                ? <div className="rc-thumb rc-thumb-file"><LinkIcon width="16" height="16" /></div>
+                : d.isImage
+                  ? <DocThumb id={d.id} alt={d.title || d.fileName} />
+                  : <div className="rc-thumb rc-thumb-file">{(d.fileName.split('.').pop() || '?').slice(0, 4)}</div>}
               <div className="rc-doc-main">
                 <b>{d.title || d.fileName}</b>
-                <small>{CATEGORIES[d.category] ?? d.category} · {fmtSize(d.size)}{d.takenAt ? ` · ${faDate(d.takenAt)}` : ''}</small>
+                <small>{CATEGORIES[d.category] ?? d.category} · {d.isLink ? 'لینک' : fmtSize(d.size)}{d.takenAt ? ` · ${faDate(d.takenAt)}` : ''}</small>
                 {d.visitId && <small className="rc-doc-visit">{rec.visits.find((v) => v.id === d.visitId)?.code}</small>}
               </div>
               <div className="df-acts">
-                <button title="دانلود" onClick={() => openDoc(d, toast)}><Download width="14" height="14" /></button>
+                {d.isLink ? (
+                  /* لینکِ خارجی در تبِ تازه — `noopener` تا صفحهٔ مقصد به پنجرهٔ پرونده دست نیابد. */
+                  <a className="rc-doc-open" href={d.externalUrl} target="_blank" rel="noopener noreferrer" title="بازکردنِ لینک">
+                    <LinkIcon width="14" height="14" />
+                  </a>
+                ) : (
+                  <button title="دانلود" onClick={() => openDoc(d, toast)}><Download width="14" height="14" /></button>
+                )}
                 <button className="df-del" title="حذف" onClick={() => remove(d)}><Trash width="14" height="14" /></button>
               </div>
             </div>

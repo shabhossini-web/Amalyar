@@ -11,7 +11,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { MAX_DOCUMENT_BYTES, RecordService } from './record.service';
-import { DocumentUploadDto, NoteAmendDto, NoteCreateDto, PatientPatchDto } from './dto/record.dto';
+import { DocumentLinkDto, DocumentUploadDto, NoteAmendDto, NoteCreateDto, PatientPatchDto } from './dto/record.dto';
 
 /**
  * پروندهٔ بیمار — یک ریشه برای همهٔ چیزهایی که به یک بیمار مربوط‌اند.
@@ -56,6 +56,17 @@ export class RecordController {
     @CurrentUser() user: any,
   ) {
     return this.record.addDocument(id, file, dto, user);
+  }
+
+  /** مدرکِ لینکی — MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود؛ فایلی آپلود نمی‌شود. */
+  @RequirePermissions('documents.write')
+  @Post(':id/documents/link')
+  addLink(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: DocumentLinkDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.record.addDocumentLink(id, dto, user);
   }
 
   /**

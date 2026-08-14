@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import JDate from '../app/JDate.jsx';
 import TimePick from './TimePick.jsx';
+import './dynform.css';
 import { toEnDigits } from '../lib/identity.js';
 import { Bank, Camera, Check, Copy, Star, Trash } from './icons.jsx';
 

@@ -203,3 +203,25 @@
 .rc-answers > div { display: contents; }
 .rc-answers dt { color: var(--text3); white-space: nowrap; }
 .rc-answers dd { margin: 0; color: var(--text2); overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* ── مدرکِ لینکی ─────────────────────────────────────────────── */
+.rc-linkrow {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px; padding: 8px 10px;
+  border: 1px dashed color-mix(in srgb, var(--brand, #7c6cf0) 35%, transparent);
+  border-radius: 12px;
+  color: #a9a1d8;
+}
+.rc-linkrow input {
+  flex: 1; min-width: 0; background: transparent; border: 0; outline: none;
+  color: #e5e0ff; font-size: 12.5px; direction: ltr; text-align: left;
+}
+.rc-linkrow input::placeholder { color: #6d6796; direction: rtl; text-align: right; }
+.rc-linkrow .df-save { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+.rc-doc-open {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a9a1d8; background: rgba(255, 255, 255, 0.03);
+}
+.rc-doc-open:hover { color: #e5e0ff; border-color: color-mix(in srgb, var(--brand, #7c6cf0) 45%, transparent); }

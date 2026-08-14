@@ -69,6 +69,25 @@ export class DocumentUploadDto {
   takenAt?: string;
 }
 
+/** مدرکِ لینکی — نشانیِ MRI/پاراکلینیک روی سرویسِ دیگر. sanitization در سرویس. */
+export class DocumentLinkDto {
+  @IsString() @MinLength(8, { message: 'نشانی کوتاه است' }) @MaxLength(2000, { message: 'نشانی طولانی است' })
+  url!: string;
+
+  @IsOptional() @IsIn(DOCUMENT_CATEGORIES as unknown as string[], { message: 'دستهٔ مدرک نامعتبر است' })
+  category?: string;
+
+  @IsOptional() @IsString() @MaxLength(120, { message: 'عنوان طولانی است' })
+  title?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'مراجعهٔ انتخابی نامعتبر است' })
+  visitId?: number;
+
+  @IsOptional() @ValidateIf((o) => o.takenAt !== '')
+  @IsISO8601({}, { message: 'تاریخِ مدرک نامعتبر است' })
+  takenAt?: string;
+}
+
 export class NoteCreateDto {
   @IsOptional() @IsIn(NOTE_KINDS as unknown as string[], { message: 'نوعِ شرح نامعتبر است' })
   kind?: string;

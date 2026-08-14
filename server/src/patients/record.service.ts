@@ -409,7 +409,70 @@ export class RecordService {
       takenAt: d.takenAt, createdAt: d.createdAt,
       /// نوعِ محتوا برای کلاینت: عکس را inline نشان می‌دهد، بقیه را دانلود.
       isImage: d.mimeType.startsWith('image/'),
+      /// مدرکِ لینکی: کلاینت به‌جای دانلود، همین نشانی را باز می‌کند.
+      externalUrl: d.externalUrl,
+      isLink: !!d.externalUrl,
     }));
+  }
+
+  /**
+   * مدرکِ **لینکی** — MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود (پکس،
+   * درایو، سایتِ آزمایشگاه). فایلی روی دیسک نمی‌نشیند؛ فقط نشانی.
+   *
+   * ⚠️ فقط `http(s)`. هر schemeِ دیگر (`javascript:`, `file:`, `data:`) یعنی
+   * لینکی که در مرورگرِ همکارِ بعدی کد اجرا می‌کند یا به دیسکِ سرور اشاره
+   * دارد — این ورودیِ کاربر است و روی صفحهٔ پرونده کلیک‌شدنی می‌شود.
+   */
+  async addDocumentLink(
+    patientId: number,
+    dto: { url?: string; category?: string; title?: string; visitId?: number; takenAt?: string },
+    user: any,
+  ) {
+    await this.assertAccess(patientId, user);
+    const raw = (dto.url ?? '').trim();
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      throw new BadRequestException('نشانی معتبر نیست — کاملش را با https بگذارید');
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      throw new BadRequestException('فقط لینکِ http/https پذیرفته می‌شود');
+    }
+    const category = dto.category ?? 'other';
+    if (!DOCUMENT_CATEGORIES.includes(category as any)) throw new BadRequestException('دستهٔ مدرک نامعتبر است');
+    if (dto.visitId != null) {
+      const visit = await this.prisma.visit.findFirst({ where: { id: dto.visitId, patientId } });
+      if (!visit) throw new BadRequestException('مراجعهٔ انتخابی برای این بیمار نیست');
+    }
+    let takenAt: Date | null = null;
+    if (dto.takenAt) {
+      const d = new Date(dto.takenAt);
+      if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخِ مدرک معتبر نیست');
+      takenAt = d;
+    }
+    const row = await this.prisma.document.create({
+      data: {
+        patientId,
+        visitId: dto.visitId ?? null,
+        category,
+        title: dto.title?.trim() || null,
+        // نامِ نمایشی: عنوان اگر هست، وگرنه دامنهٔ لینک — «لینکِ بی‌نام» در
+        // فهرستِ مدارک هیچ‌چیز نمی‌گوید.
+        fileName: (dto.title?.trim() || url.hostname).slice(0, 200),
+        mimeType: 'text/uri-list',
+        size: 0,
+        sha256: '',
+        externalUrl: url.toString().slice(0, 2000),
+        takenAt,
+        uploadedById: user?.id ?? null,
+      },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'document.link', entityType: 'document', entityId: row.id,
+      after: { patientId, category, url: row.externalUrl },
+    });
+    return { id: row.id, category: row.category, fileName: row.fileName, externalUrl: row.externalUrl };
   }
 
   async addDocument(
@@ -469,6 +532,8 @@ export class RecordService {
     const doc = await this.prisma.document.findFirst({ where: { id: documentId, deletedAt: null } });
     if (!doc) throw new NotFoundException('مدرک پیدا نشد');
     await this.assertAccess(doc.patientId, user);
+    // مدرکِ لینکی فایلی روی دیسک ندارد — کلاینت باید خودِ لینک را باز کند.
+    if (doc.externalUrl) throw new BadRequestException('این مدرک لینکی است — خودِ لینک را باز کنید');
     if (!(await this.storage.exists(doc.sha256))) throw new NotFoundException('فایلِ این مدرک روی سرور نیست');
     return { doc, stream: this.storage.stream(doc.sha256) };
   }

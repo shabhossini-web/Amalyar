@@ -54,6 +54,28 @@
   width: 100%;
 }
 .ik-field input:focus, .ik-field textarea:focus { border-color: rgba(var(--brand-2-rgb), .6); }
+/* ⚠️ select هم باید همان پوستِ inputها را بگیرد — بدونِ این، مرورگر کنترلِ
+   سفیدِ پیش‌فرضش را وسطِ فرمِ تیره می‌گذاشت (اسکرین‌شاتِ کاربر، اندروید).
+   appearance خاموش و فلشِ خودمان با SVGِ inline؛ رنگِ optionها هم صریح،
+   چون بعضی مرورگرها پس‌زمینهٔ منو را از option می‌گیرند نه از select. */
+.ik-field select {
+  width: 100%;
+  appearance: none; -webkit-appearance: none;
+  background-color: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 12px;
+  color: var(--text1);
+  font-family: inherit; font-size: 15px;
+  padding: 12px 14px; padding-inline-start: 38px;
+  min-height: 48px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b8b3d6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;
+  cursor: pointer;
+  transition: border-color .2s;
+}
+.ik-field select:focus { border-color: rgba(var(--brand-2-rgb), .6); outline: none; }
+.ik-field select option { background: #14103a; color: var(--text1); }
 .ik-field textarea { resize: vertical; }
 
 .ik-cap {

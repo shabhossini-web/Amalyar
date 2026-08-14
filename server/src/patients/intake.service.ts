@@ -409,7 +409,9 @@ export class IntakeService {
     if (!/^09\d{9}$/.test(phone)) throw new BadRequestException('شمارهٔ موبایل نامعتبر است');
 
     const { patientId } = await this.prisma.$transaction((tx) =>
-      this.patients.resolveOrCreatePatient(tx, { firstName, lastName, phone, nationalId, birthDate: dto.birthDate }),
+      /* ⚠️ `public: true` پیامِ برخوردِ کد ملی را بی‌نام می‌کند — این نشانی
+         بی‌احراز است و نامِ صاحبِ پرونده نباید به تایپ‌کنندهٔ کد ملی برسد. */
+      this.patients.resolveOrCreatePatient(tx, { firstName, lastName, phone, nationalId, birthDate: dto.birthDate }, { public: true }),
     );
 
     /* **کانالِ آشنایی** روی خودِ پرونده می‌نشیند نه در JSONِ ثبت‌نام، چون
@@ -689,7 +691,12 @@ export class IntakeService {
     });
     if (!f || !f.active) return null;
     const fields = f.fields
-      .filter((x) => !x.builtin && x.active)
+      /* ⚠️ فیلدِ **بخش‌دار** (نقشِ پزشک/منشی/…) کارِ داخلیِ مطب است و روی فرمِ
+         عمومی جایی ندارد: «شرحِ معاینه» را پزشک بعد از دیدنِ بیمار می‌نویسد،
+         نه خودِ بیمار پیش از آمدن. همین فیلتر سدِ نوشتن هم هست — `fill` فقط
+         کلیدهای همین نما را می‌پذیرد، پس بیمار نمی‌تواند مقداری در بخشِ
+         پزشک جا بگذارد. روی نصبِ واقعی دیده شد. */
+      .filter((x) => !x.builtin && x.active && !x.role)
       .map((x) => ({
         key: x.key, label: x.label, type: x.type, required: x.required,
         options: x.options ?? [], hint: x.hint, placeholder: x.placeholder, page: x.page,
@@ -771,6 +778,21 @@ export class IntakeService {
        نداشته باشد. فرمی که کادرِ پرداخت **دارد** ولی مبلغش صفر است عمداً
        همچنان فیش می‌خواهد: آن یک خطای پیکربندی است، نه یک فرمِ رایگان، و
        بی‌صدا ردکردنش یعنی پولِ نگرفته «تأییدشده» به‌نظر برسد. */
+    /* ⚠️ **snapshotِ کهنهٔ مبلغ همین‌جا تازه می‌شود.** مبلغ هنگامِ ثبت‌نام از
+       لینک عکس‌برداری می‌شود؛ ولی ثبت‌نامی که **قبل از قیمت‌گذاریِ لینک**
+       ساخته شده بود، صفر می‌ماند و از مرحلهٔ فیش می‌پرید — روی نصبِ واقعی
+       دیده شد: لینکِ ویزیت ۱٬۲۰۰٬۰۰۰ نشان می‌داد و بیمار بدونِ هیچ فیشی به
+       «بررسیِ ما» می‌رسید. تا وقتی بیمار به مرحلهٔ پرداخت نرسیده، قیمتِ
+       معتبر همان است که **الان روی لینک است** — همان عددی که صفحهٔ ثبت‌نام
+       به خودش نشان می‌دهد. تخفیفِ اعمال‌شده روی مبلغِ قبلی محاسبه شده، پس
+       با تخفیفِ خورده دست نمی‌زنیم تا عددِ پذیرفته‌شدهٔ بیمار عوض نشود. */
+    if (row.linkId && row.discountAmount === 0) {
+      const lk = await this.prisma.intakeLink.findUnique({ where: { id: row.linkId }, select: { amount: true } });
+      if (lk && lk.amount !== row.amount) {
+        await this.prisma.intakeSubmission.update({ where: { id: row.id }, data: { amount: lk.amount } });
+        row.amount = lk.amount;
+      }
+    }
     const payable = Math.max(0, row.amount - row.discountAmount);
     const hasPaymentBox = !!form?.fields.some((x) => x.type === 'payment');
 

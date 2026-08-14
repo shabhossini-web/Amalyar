@@ -158,6 +158,10 @@ const CLINIC_VISIT: PresetForm = {
     { ...CORE.date, required: true },
     { ...CORE.doctor, required: true },
     { ...CORE.center },
+    /* شرحِ ویزیت (اولیه/پست‌آپ/زیبایی…) — سازندهٔ ویزیت انتخاب یا اضافه‌اش
+       می‌کند (quick-add در خودِ فرم). نبودنش در پریست یعنی هیچ مطبی این
+       فیلد را نمی‌دید — روی نصبِ واقعی گزارش شد. */
+    { ...CORE.topic },
     { key: 'chiefComplaint', label: 'شکایتِ اصلی', type: 'textarea', required: true, placeholder: 'به زبانِ خودِ بیمار' },
     { key: 'historyDuration', label: 'مدتِ علائم', type: 'text', placeholder: 'مثلاً ۳ ماه' },
     { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' },
@@ -221,6 +225,7 @@ const CLINIC_FOLLOWUP: PresetForm = {
   fields: [
     { ...CORE.date, required: true },
     { ...CORE.doctor },
+    { ...CORE.topic },
     {
       key: 'recovery',
       label: 'وضعیتِ بهبود',

@@ -708,12 +708,23 @@ export class PatientsService {
    * نفرند؛ هر دو حالت تصمیمِ انسانی می‌خواهد. این همان مرحلهٔ stewardship در MPI
    * است — ادغامِ خودکارِ هویت، خطایی است که بعداً قابلِ برگرداندن نیست.
    */
-  private async findByNationalId(tx: any, nationalId: string, lastName: string) {
+  private async findByNationalId(tx: any, nationalId: string, lastName: string, isPublic = false) {
     const existing = await tx.patient.findUnique({ where: { nationalId } });
     if (!existing) return null;
 
     const same = existing.lastName.trim() === lastName.trim();
     if (!same) {
+      /* ⚠️ دو مخاطب، دو پیام. پیامِ ادمین نام و کدِ پرونده را می‌گوید چون
+         فهرستِ بیماران جلوی چشمش است و انتخاب از آن معنی دارد. همان پیام روی
+         **فرمِ عمومی** دو غلط داشت: به بیمار می‌گفت «از فهرست انتخاب کنید» —
+         فهرستی که ندارد — و نامِ صاحبِ پرونده را به هر غریبه‌ای که آن کد ملی
+         را تایپ کند **نشت می‌داد**. روی نصبِ واقعی دیده شد. */
+      if (isPublic) {
+        throw new ConflictException(
+          'این کد ملی قبلاً با نامِ خانوادگیِ دیگری ثبت شده. اگر پروندهٔ قبلی دارید،' +
+            ' نامِ خانوادگی را همان‌طور که پیش‌تر ثبت کرده‌اید بنویسید؛ وگرنه کد ملی را بررسی کنید.',
+        );
+      }
       throw new ConflictException(
         `این کد ملی به پروندهٔ «${existing.code} — ${existing.firstName} ${existing.lastName}» تعلق دارد.` +
           ' اگر همان بیمار است، از فهرست انتخابش کنید؛ وگرنه کد ملی را بررسی کنید.',
@@ -746,9 +757,10 @@ export class PatientsService {
   async resolveOrCreatePatient(
     tx: any,
     dto: { firstName?: string; lastName?: string; phone?: string; nationalId?: string; birthDate?: string },
+    opts?: { public?: boolean },
   ): Promise<{ patientId: number; patientStatus: 'matched' | 'restored' | 'new' }> {
     const match = dto.nationalId
-      ? await this.findByNationalId(tx, dto.nationalId, dto.lastName!)
+      ? await this.findByNationalId(tx, dto.nationalId, dto.lastName!, opts?.public === true)
       : null;
 
     if (match) {
