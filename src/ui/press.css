@@ -59,8 +59,10 @@
      box-shadowِ بیرونی است و پشتِ مرکزِ دکمه چیزی نمی‌درخشد، پس شیشه تیره
      می‌ماند. */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0) 65%) padding-box,
-    linear-gradient(180deg, rgba(22, 17, 43, 0.62), rgba(12, 9, 31, 0.55)) padding-box,
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015) 45%, rgba(255, 255, 255, 0) 65%) padding-box,
+    /* تینتِ کم — شیشهٔ «توخالی»: پس‌زمینه از پشتش پیداست (مرجعِ تأییدشدهٔ
+       کاربر). خوانایی از تیرگیِ خودِ صفحه می‌آید نه از پُریِ بدنه. */
+    linear-gradient(180deg, rgba(22, 17, 43, 0.38), rgba(12, 9, 31, 0.32)) padding-box,
     linear-gradient(135deg, var(--brand-2), var(--brand) 45%, rgba(0, 229, 255, 0.85)) border-box;
   -webkit-backdrop-filter: blur(10px) saturate(1.25);
   backdrop-filter: blur(10px) saturate(1.25);
