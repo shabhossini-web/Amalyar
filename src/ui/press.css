@@ -57,11 +57,10 @@
      مطلق» سیاه دیده می‌شود؛ آنچه چشم «شیشه» می‌خواند تینتِ سفیدِ کم‌رنگ +
      مات‌شدنِ پشت است. فیزیکِ نور (هالهٔ فقط-بیرون) دست‌نخورده. */
   border: 1px solid rgba(var(--brand-2-rgb), 0.75);
-  /* اوپَسیتیِ شیشه صفر — هیچ تینتی؛ فقط یک blurِ ملایم که جنسِ شیشه را
-     بدهد. آنچه از پشتِ شیشه دیده می‌شود، تابشِ پشتِ کلید است (پایین). */
+  /* زلالِ مطلق — مثلِ کارت‌های لانچرِ ملک‌طب که کاربر مرجع گرفت: نه تینت،
+     نه backdrop-blur (blur خطوطِ ظریفِ پشت را محو می‌کرد و شفافیت
+     «دیده نمی‌شد»). پس‌زمینه عیناً و شفاف از داخلِ کلید رد می‌شود. */
   background: transparent;
-  -webkit-backdrop-filter: blur(7px);
-  backdrop-filter: blur(7px);
   /* ⚠️ هیچ insetی این‌جا نه: داخلِ کلید باید تیره بماند — نور فقط رینگِ
      لبه و هالهٔ پشت است (بازخوردِ کاربر: «نور نباید به داخل بیاد»). */
   box-shadow: none;
@@ -90,10 +89,6 @@
   inset: 0;
   border-radius: 999px;
   pointer-events: none;
-  /* تابشِ **پشتِ** کلید — چون بدنه شفاف است، از داخلِ شیشه دیده می‌شود
-     (خواستهٔ کاربر: «پشتش معلوم باشه»). ملایم است که متن خوانا بماند؛
-     نورِ اصلی همچنان box-shadowِ بیرونی است. */
-  background: radial-gradient(70% 120% at 50% 50%, rgba(var(--brand-2-rgb), 0.38), rgba(var(--brand-rgb), 0.22) 55%, transparent 88%);
 }
 /* لایهٔ نفس — همیشه هست، آرام بالا و پایین می‌رود تا دکمه «زنده» باشد. */
 .btn-primary::before, .nav-cta::before, .plan .cta.solid::before,
@@ -102,7 +97,7 @@
 .tr-save::before, .sc-save::before, .iv-save::before, .st-knobsave::before,
 .ik-go:not(.ghost)::before, .ik-submit::before, .ik-book-go::before,
 .us-btn.ok::before, .tp-btn::before {
-  opacity: 0.4;
+  opacity: 0.2;
   animation: pressHaloBreath 3.6s ease-in-out infinite;
   box-shadow:
     0 0 18px 2px rgba(var(--brand-2-rgb), 0.55),
@@ -156,8 +151,8 @@
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 @keyframes pressHaloBreath {
-  0%, 100% { opacity: 0.34; }
-  50% { opacity: 0.55; }
+  0%, 100% { opacity: 0.14; }
+  50% { opacity: 0.26; }
 }
 /* دکمهٔ غیرفعال نه می‌درخشد نه فشرده می‌شود — نورِ دروغین یعنی «کلیک کن». */
 .df-save:disabled, .db-submit:disabled, .lg-btn:disabled, .ac-submit:disabled,
