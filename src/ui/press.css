@@ -54,7 +54,7 @@
   color: #fff;
   border: 1px solid transparent;
   background:
-    linear-gradient(180deg, #1c1837, var(--bg2)) padding-box,
+    linear-gradient(180deg, #16122c, var(--bg2)) padding-box,
     linear-gradient(135deg, var(--brand-2), var(--brand) 45%, rgba(0, 229, 255, 0.85)) border-box;
   /* ⚠️ هیچ insetی این‌جا نه: داخلِ کلید باید تیره بماند — نور فقط رینگِ
      لبه و هالهٔ پشت است (بازخوردِ کاربر: «نور نباید به داخل بیاد»). */
@@ -82,10 +82,13 @@
   inset: -60% -22%;
   border-radius: 999px;
   pointer-events: none;
+  /* ⚠️ گرادیان‌ها **توخالی**اند (از transparent شروع می‌شوند): درخششِ اوج،
+     زیرِ بدنه و لبهٔ داخلی نیست که با feather به داخل نشت کند — نور از
+     حوالیِ لبه به بیرون جان می‌گیرد. «۵۰٪ کمترشدنِ نورِ داخل» از همین‌جاست. */
   background:
-    radial-gradient(50% 82% at 22% 50%, rgba(var(--brand-2-rgb), 0.8), transparent 70%),
-    radial-gradient(50% 82% at 78% 50%, rgba(0, 229, 255, 0.5), transparent 70%),
-    radial-gradient(88% 125% at 50% 50%, rgba(var(--brand-rgb), 0.5), transparent 74%);
+    radial-gradient(50% 82% at 14% 50%, transparent 22%, rgba(var(--brand-2-rgb), 0.7) 46%, transparent 74%),
+    radial-gradient(50% 82% at 86% 50%, transparent 22%, rgba(0, 229, 255, 0.45) 46%, transparent 74%),
+    radial-gradient(88% 125% at 50% 50%, transparent 40%, rgba(var(--brand-rgb), 0.5) 58%, transparent 78%);
   filter: blur(16px);
 }
 /* لایهٔ نفس — همیشه هست، آرام بالا و پایین می‌رود تا دکمه «زنده» باشد. */
@@ -135,7 +138,7 @@
 .us-btn.ok:active, .tp-btn:active {
   transform: scale(0.965);
   /* فقط رینگِ لبه داغ‌تر می‌شود؛ داخلِ کلید همان تاریک می‌ماند. */
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 @keyframes pressHaloBreath {
   0%, 100% { opacity: 0.34; }
