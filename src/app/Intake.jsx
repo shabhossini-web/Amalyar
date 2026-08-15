@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
-import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Eye, Form, Hospital, Pencil, Plus, Search, Send } from '../ui/icons.jsx';
+import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Eye, Form, Hospital, Pencil, Plus, Search, Send, Trash } from '../ui/icons.jsx';
 import { group3, numToWordsFa, parseMoney } from '../lib/money.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -81,6 +81,29 @@ export default function IntakeAdmin() {
   };
 
   /** روشن/خاموشِ لینک — با گزارشِ خطا، نه سکوت. */
+  /* حذفِ لینک: ثبت‌نام‌های موجود می‌مانند (سمتِ سرور SetNull)؛ تأییدِ دوقدمی
+     با prompt نه، با confirm — عملِ برگشت‌ناپذیرِ ساده. */
+  const deleteLink = async (l) => {
+    const n = l.submissionCount
+      ? `این لینک ${l.submissionCount} ثبت‌نام دارد؛ ثبت‌نام‌ها می‌مانند ولی نشانی برای همیشه بسته می‌شود. حذف شود؟`
+      : 'لینک برای همیشه حذف شود؟';
+    if (!window.confirm(n)) return;
+    try {
+      await api(`/intake/links/${l.id}`, { method: 'DELETE' });
+      setToast('لینک حذف شد');
+      await load();
+    } catch (e) { setToast(e.message); }
+  };
+
+  const deleteSubmission = async (r) => {
+    if (!window.confirm(`ثبت‌نامِ «${r.patient ? `${r.patient.firstName} ${r.patient.lastName}` : r.id}» حذف شود؟ نوبتِ نگه‌داشته هم آزاد می‌شود.`)) return;
+    try {
+      await api(`/intake/submissions/${r.id}`, { method: 'DELETE' });
+      setToast('ثبت‌نام حذف شد');
+      await load();
+    } catch (e) { setToast(e.message); }
+  };
+
   const toggleLink = async (l) => {
     try {
       await api(`/intake/links/${l.id}`, { method: 'PATCH', body: { active: !l.active } });
@@ -136,6 +159,9 @@ export default function IntakeAdmin() {
             <button type="button" onClick={() => toggleLink(l)}>
               {l.active ? 'غیرفعال' : 'فعال'}
             </button>
+            <button type="button" className="ia-del" title="حذفِ لینک" onClick={() => deleteLink(l)}>
+              <Trash width="13" height="13" />
+            </button>
           </span>
         ))}
         <button type="button" className="ia-add" onClick={() => setNewLink(true)}><Plus size={14} /> لینکِ تازه</button>
@@ -161,6 +187,13 @@ export default function IntakeAdmin() {
               </div>
               <span className={`ia-tag s-${s.status}`}>{s.statusLabel}</span>
               <span className="ia-amount">{faNum(s.amount)} تومان</span>
+              {/* حذفِ ثبت‌نام — تأییدشده‌ای که مراجعه ساخته حذف نمی‌شود (سرور هم
+                  رد می‌کند)؛ برای بقیه یعنی «این را از صف و پرونده پاک کن». */}
+              {!(s.status === 'approved' && s.visitId) && (
+                <button type="button" className="ia-cardel" title="حذفِ ثبت‌نام" onClick={() => deleteSubmission(s)}>
+                  <Trash width="13" height="13" />
+                </button>
+              )}
             </header>
 
             <div className="ia-facts">

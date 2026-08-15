@@ -568,7 +568,8 @@ export class IntakeService {
        عمداً snapshot نشد (برخلافِ `amount` و `formId`): اگر حسابی بسته شود،
        فیشِ بیمار باید به حسابِ تازه برود — نه به حسابی که موقعِ شروعِ فرم
        انتخاب شده بود و حالا دیگر پول نمی‌گیرد. */
-    const link = await this.prisma.intakeLink.findUnique({
+    /* ثبت‌نامِ مستقیم (ارسال از کارتِ مراجعه) لینک ندارد → حسابِ سراسری. */
+    const link = row.linkId === null ? null : await this.prisma.intakeLink.findUnique({
       where: { id: row.linkId },
       select: { bankAccountId: true },
     });
@@ -939,6 +940,241 @@ export class IntakeService {
     return this.publicView(token);
   }
 
+  /**
+   * ارسالِ مستقیمِ فرم به بیمارِ مشخص — از روی کارتِ مراجعه.
+   *
+   * ⚠️ صفحهٔ اولِ ثبت‌نام (مشخصات + کپچا) عمداً حذف است: هویت از پرونده
+   * می‌آید، پس دوباره پرسیدنش هم اصطکاک بود هم منبعِ مغایرت. `linkId` هم
+   * ندارد — این ثبت‌نام از لینکِ عمومی نیامده.
+   *
+   * فقط فرمِ **زیرپرونده** (record): فرمِ مراجعه‌ساز جراح/تاریخ/مبلغ می‌خواهد
+   * و مسیرِ درستش همان لینکِ عمومی است؛ این میان‌بر برای نظرسنجی و
+   * پرسش‌نامه‌های پیگیری است.
+   */
+  async sendToPatient(patientId: number, formId: number, user: any) {
+    const patient = await this.prisma.patient.findFirst({
+      where: { id: patientId, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true, nationalId: true, phone: true, birthDate: true, address: true },
+    });
+    if (!patient) throw new NotFoundException('پرونده پیدا نشد');
+    const form = await this.prisma.formDef.findFirst({ where: { id: formId, active: true } });
+    if (!form) throw new NotFoundException('فرم پیدا نشد یا خاموش است');
+    if (form.scope !== 'record') {
+      throw new BadRequestException('فقط فرمِ زیرپرونده از این‌جا فرستاده می‌شود — فرمِ مراجعه‌ساز از لینکِ عمومی');
+    }
+
+    /* ثبت‌نامِ بازِ همین فرم برای همین بیمار → همان ادامه پیدا کند، نه نسخهٔ
+       دوم؛ وگرنه هر بار «ارسال» یک ردیفِ نیمه‌کارهٔ تازه می‌کاشت. */
+    const open = await this.prisma.intakeSubmission.findFirst({
+      where: { patientId, formId, linkId: null, status: { in: ['pending_fill', 'pending_payment'] } },
+      orderBy: { id: 'desc' },
+    });
+    if (open) return { token: open.token, reused: true };
+
+    const row = await this.prisma.intakeSubmission.create({
+      data: {
+        token: this.token(),
+        linkId: null,
+        formId,
+        patientId,
+        amount: 0,
+        status: 'pending_fill',
+        data: {
+          firstName: patient.firstName, lastName: patient.lastName,
+          nationalId: patient.nationalId, phone: patient.phone,
+          address: patient.address ?? null,
+          birthDate: patient.birthDate ? patient.birthDate.toISOString() : null,
+        },
+        expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
+      },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'intake.send_form', entityType: 'intake_submission', entityId: row.id,
+      after: { patientId, formId, formKey: form.key },
+    });
+    return { token: row.token, reused: false };
+  }
+
+  /**
+   * حذفِ لینکِ ثبت‌نام. ثبت‌نام‌های موجود می‌مانند (SetNull) — سابقهٔ پرشده
+   * مالِ پرونده است، نه مالِ لینک؛ فقط دیگر ثبت‌نامِ تازه‌ای از این نشانی
+   * ساخته نمی‌شود.
+   */
+  async deleteLink(id: number, user: any) {
+    const row = await this.prisma.intakeLink.findUnique({
+      where: { id },
+      include: { _count: { select: { submissions: true } } },
+    });
+    if (!row) throw new NotFoundException('لینک پیدا نشد');
+    await this.prisma.intakeLink.delete({ where: { id } });
+    await this.audit.record({
+      actorId: user?.id, action: 'intake.link.delete', entityType: 'intake_link', entityId: id,
+      before: { title: row.title, token: row.token, submissions: row._count.submissions },
+    });
+    return { ok: true };
+  }
+
+  /**
+   * حذفِ یک ثبت‌نام.
+   *
+   * ⚠️ تأییدشده‌ای که مراجعه ساخته حذف نمی‌شود — مراجعه و دفترِ مالی رویش
+   * بنا شده‌اند؛ اول باید خودِ مراجعه تعیین‌تکلیف شود. نوبتِ نگه‌داشته آزاد
+   * می‌شود، مثلِ reject.
+   */
+  async deleteSubmission(id: number, user: any) {
+    const row = await this.prisma.intakeSubmission.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('ثبت‌نام پیدا نشد');
+    if (row.status === 'approved' && row.visitId !== null) {
+      throw new BadRequestException('این ثبت‌نام مراجعه ساخته — اول مراجعه را تعیین‌تکلیف کنید');
+    }
+    await this.prisma.appointment.updateMany({
+      where: { submissionId: id, status: { in: ['held', 'confirmed'] } },
+      data: { status: 'cancelled' },
+    });
+    await this.prisma.intakeSubmission.delete({ where: { id } });
+    await this.audit.record({
+      actorId: user?.id, action: 'intake.submission.delete', entityType: 'intake_submission', entityId: id,
+      before: { status: row.status, patientId: row.patientId, formId: row.formId },
+    });
+    return { ok: true };
+  }
+
+  /**
+   * تحلیلِ فرم‌های زیرپرونده (نظرسنجی/پرسش‌نامه) + کانالِ آشناییِ بیماران —
+   * خوراکِ صفحهٔ CRM.
+   *
+   * همهٔ استخراج‌ها **سمتِ سرور** انجام می‌شود (قاعدهٔ ۱۵): کلاینت فقط
+   * رسم می‌کند. توزیعِ گزینه‌ها از پاسخ‌های واقعیِ `data` درمی‌آید و برچسبِ
+   * هر گزینه از `options`ِ خودِ فیلد — نه از حدسِ کلاینت.
+   *
+   * ⚠️ فقط ثبت‌نام‌های **پرشده** (pending_approval | approved) در توزیع‌ها
+   * می‌نشینند: ردیفِ pending_fill هنوز پاسخی ندارد و شمردنش یعنی توزیعِ
+   * آلوده به صفرهای ساختگی. ولی در شمارشِ کلی (total/statuses) همه هستند،
+   * چون «چند نفر اصلاً باز نکردند» خودش یکی از پرسش‌های CRM است.
+   */
+  async analytics() {
+    const forms = await this.prisma.formDef.findMany({
+      where: { scope: 'record' },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true, title: true, color: true, active: true,
+        fields: {
+          where: { active: true, type: { in: ['select', 'multiselect', 'rating', 'bool', 'number', 'text', 'textarea'] } },
+          orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }],
+          select: { key: true, label: true, type: true, options: true },
+        },
+      },
+    });
+
+    const subs = forms.length
+      ? await this.prisma.intakeSubmission.findMany({
+          where: { formId: { in: forms.map((f) => f.id) } },
+          orderBy: { id: 'desc' },
+          select: {
+            formId: true, status: true, data: true, createdAt: true, linkId: true,
+            patient: { select: { code: true, firstName: true, lastName: true } },
+          },
+        })
+      : [];
+    const byForm = new Map<number, typeof subs>();
+    for (const s of subs) {
+      if (s.formId === null) continue;
+      const list = byForm.get(s.formId) ?? [];
+      if (!list.length) byForm.set(s.formId, list);
+      list.push(s);
+    }
+
+    const formStats = forms.map((f) => {
+      const rows = byForm.get(f.id) ?? [];
+      const filled = rows.filter((r) => r.status === 'pending_approval' || r.status === 'approved');
+      const statuses: Record<string, number> = {};
+      for (const r of rows) statuses[r.status] = (statuses[r.status] ?? 0) + 1;
+
+      const fields = f.fields.map((fd) => {
+        const vals = filled
+          .map((r) => (r.data as any)?.[fd.key])
+          .filter((v) => v !== undefined && v !== null && v !== '');
+
+        if (fd.type === 'select' || fd.type === 'multiselect' || fd.type === 'bool') {
+          const counts: Record<string, number> = {};
+          for (const v of vals) {
+            for (const one of Array.isArray(v) ? v : [v]) {
+              const k = String(one);
+              counts[k] = (counts[k] ?? 0) + 1;
+            }
+          }
+          const opts = Array.isArray(fd.options) ? (fd.options as any[]) : [];
+          const labelOf = (v: string) =>
+            fd.type === 'bool'
+              ? (v === 'true' || v === '1' ? 'بله' : 'خیر')
+              : (opts.find((o) => String(o?.v) === v)?.l ?? v);
+          const dist = Object.entries(counts)
+            .map(([value, count]) => ({ value, label: labelOf(value), count }))
+            .sort((a, b) => b.count - a.count);
+          return { key: fd.key, label: fd.label, type: fd.type, answered: vals.length, dist };
+        }
+
+        if (fd.type === 'rating' || fd.type === 'number') {
+          const nums = vals.map(Number).filter((n) => Number.isFinite(n));
+          const counts: Record<string, number> = {};
+          for (const n of nums) counts[String(n)] = (counts[String(n)] ?? 0) + 1;
+          const dist = Object.entries(counts)
+            .map(([value, count]) => ({ value, label: value, count }))
+            .sort((a, b) => Number(a.value) - Number(b.value));
+          const avg = nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100 : null;
+          return { key: fd.key, label: fd.label, type: fd.type, answered: nums.length, avg, dist };
+        }
+
+        /* text/textarea — خودِ متن‌ها، تازه‌ترین اول (rows از قبل نزولی است).
+           سقفِ ۳۰: صفحهٔ تحلیل مرورِ کیفی است نه آرشیو؛ آرشیوِ کامل در صفِ
+           ثبت‌نام‌ها هست. */
+        const texts = filled
+          .map((r) => ({ v: (r.data as any)?.[fd.key], r }))
+          .filter((x) => typeof x.v === 'string' && x.v.trim() !== '');
+        const answers = texts.slice(0, 30).map((x) => ({
+          text: String(x.v).slice(0, 500),
+          patient: x.r.patient ? `${x.r.patient.firstName} ${x.r.patient.lastName}` : null,
+          code: x.r.patient?.code ?? null,
+          at: x.r.createdAt,
+        }));
+        return { key: fd.key, label: fd.label, type: fd.type, answered: texts.length, answers };
+      });
+
+      return {
+        id: f.id, title: f.title, color: f.color, active: f.active,
+        total: rows.length,
+        filled: filled.length,
+        direct: rows.filter((r) => r.linkId === null).length,
+        statuses,
+        lastAt: rows[0]?.createdAt ?? null,
+        fields,
+      };
+    });
+
+    /* کانالِ آشنایی — روی **بیماران** نه ثبت‌نام‌ها: پرسشِ CRM «بیمارها از
+       کجا می‌آیند» است و هر بیمار یک‌بار شمرده می‌شود، هرچند ده فرم پر کند. */
+    const refRows = await this.prisma.patient.groupBy({
+      by: ['referralSourceId'],
+      where: { deletedAt: null },
+      _count: { _all: true },
+    });
+    const refDefs = await this.prisma.referralSource.findMany({ select: { id: true, name: true } });
+    const refName = new Map(refDefs.map((r) => [r.id, r.name] as const));
+    const referrals = refRows
+      .map((r) => ({
+        id: r.referralSourceId,
+        name: r.referralSourceId === null ? 'نامشخص' : (refName.get(r.referralSourceId) ?? '—'),
+        count: r._count._all,
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return {
+      forms: formStats,
+      referrals,
+      patientsTotal: refRows.reduce((a, r) => a + r._count._all, 0),
+    };
+  }
+
   // ── صفِ تأیید (ادمین) ─────────────────────────────────────────────
   async list(status?: string) {
     const where = status && status !== 'all' ? { status } : {};
@@ -969,7 +1205,10 @@ export class IntakeService {
       discountAmount: r.discountAmount,
       payable: Math.max(0, r.amount - r.discountAmount),
       data: r.data,
-      linkTitle: r.link.title,
+      /* لینک nullable شد: ثبت‌نامِ مستقیم (از کارتِ مراجعه) لینک ندارد و
+         لینکِ حذف‌شده هم SetNull می‌شود. */
+      linkTitle: r.link?.title ?? null,
+      direct: r.linkId === null,
       formTitle: r.form?.title ?? null,
       formColor: r.form?.color ?? null,
       /* ⚠️ **مشتق سمتِ سرور** (قانون ۱۵): «آیا تأییدِ این ثبت‌نام مراجعه

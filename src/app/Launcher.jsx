@@ -16,6 +16,9 @@ const DAILY = [
   { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: false, min: 2 },
 ];
 const TOOLS = [
+  /* CRM زیرِ همان featureِ formgen (feature override): تفکیکِ مجوز وقتی معنا
+     دارد که داده‌اش از جای دیگری بیاید — فعلاً تماماً از ثبت‌نام‌هاست. */
+  { key: 'crm', feature: 'formgen', label: 'تحلیل و CRM', icon: Chart, tint: 'blue', ready: true, min: 5, to: '/app/crm' },
   { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
   /* برنامهٔ کاری — `docs/BOOKING.md`. کنارِ تقویم می‌نشیند چون هم‌خانواده‌اند:
@@ -79,7 +82,7 @@ export default function Launcher() {
    * `min`ِ کد فقط تا رسیدنِ پاسخِ سرور به کار می‌آید تا کاشی‌ها نپرند.
    */
   const allowed = (t) => {
-    const f = features?.[t.key];
+    const f = features?.[t.feature ?? t.key];
     if (f) return !!f.allowed;
     return lvl >= t.min;
   };

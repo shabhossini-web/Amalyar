@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors,
+  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Type } from 'class-transformer';
@@ -110,6 +110,15 @@ class LinkSmsDto {
   @IsString({ message: 'شمارهٔ موبایل را وارد کنید' })
   @MaxLength(20)
   phone!: string;
+}
+
+/** ارسالِ مستقیمِ فرم از کارتِ مراجعه. */
+class SendFormDto {
+  @Type(() => Number) @IsInt({ message: 'پرونده را انتخاب کنید' })
+  patientId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'فرم را انتخاب کنید' })
+  formId!: number;
 }
 
 class ApproveDto {
@@ -269,6 +278,27 @@ export class IntakeController {
     return this.intake.sendLinkSms(id, dto.phone, user);
   }
 
+  /** حذفِ لینک — ثبت‌نام‌های موجود می‌مانند (SetNull)؛ فقط نشانی بسته می‌شود. */
+  @RequirePermissions('intake.manage')
+  @Delete('links/:id')
+  deleteLink(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.intake.deleteLink(id, user);
+  }
+
+  /** ارسالِ مستقیمِ فرمِ زیرپرونده به بیمارِ یک مراجعه — بدونِ صفحهٔ مشخصات. */
+  @RequirePermissions('intake.manage')
+  @Post('send')
+  sendForm(@Body() dto: SendFormDto, @CurrentUser() user: any) {
+    return this.intake.sendToPatient(dto.patientId, dto.formId, user);
+  }
+
+  /** تحلیلِ فرم‌های زیرپرونده + کانالِ آشنایی — خوراکِ صفحهٔ CRM. */
+  @RequirePermissions('intake.read')
+  @Get('analytics')
+  analytics() {
+    return this.intake.analytics();
+  }
+
   @RequirePermissions('intake.read')
   @Get('codes')
   codes() {
@@ -291,6 +321,12 @@ export class IntakeController {
   @Get('submissions')
   submissions(@Query('status') status?: string) {
     return this.intake.list(status);
+  }
+
+  @RequirePermissions('intake.manage')
+  @Delete('submissions/:id')
+  deleteSubmission(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.intake.deleteSubmission(id, user);
   }
 
   @RequirePermissions('intake.review')

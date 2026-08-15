@@ -583,8 +583,11 @@ model IntakeLink {
 model IntakeSubmission {
   id     Int        @id @default(autoincrement())
   token  String     @unique
-  link   IntakeLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
-  linkId Int        @map("link_id")
+  /// nullable شد: ثبت‌نامی که ادمین «از روی کارتِ مراجعه» مستقیم می‌فرستد
+  /// لینکِ عمومی ندارد؛ و حذفِ لینک هم ثبت‌نام‌های موجود را نمی‌بلعد
+  /// (SetNull) — سابقهٔ پرشده مالِ پرونده است، نه مالِ لینک.
+  link   IntakeLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
+  linkId Int?        @map("link_id")
 
   /// پروفایلِ بیمار از همان لحظهٔ ثبت‌نام ساخته یا پیدا می‌شود (کلید: کد ملی)،
   /// چون فیشِ واریزی باید جایی بنشیند و `Document` بیمار می‌خواهد.

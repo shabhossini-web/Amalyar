@@ -1,0 +1,90 @@
+/* تحلیل و CRM — نسخهٔ اول: نظرسنجی‌های زیرپرونده + کانالِ آشنایی. */
+.crm { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+.crm-bg {
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(900px 520px at 30% -10%, rgba(var(--brand-rgb), .16), transparent 60%),
+    var(--bg);
+}
+.crm-head { max-width: 880px; margin: 0 auto 14px; }
+.crm-back {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
+  font-size: 12.5px; text-decoration: none; color: var(--text2);
+}
+.crm-back:hover { color: var(--brand-2); }
+.crm-head h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
+.crm-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
+
+.crm-err {
+  display: flex; align-items: center; gap: 7px; max-width: 880px; margin: 0 auto 12px;
+  padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
+  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+}
+.crm-empty {
+  max-width: 880px; margin: 0 auto 12px; padding: 22px 16px; text-align: center;
+  font-size: 13px; color: var(--text3);
+  border: 1px dashed rgba(255, 255, 255, .12); border-radius: 16px;
+}
+
+/* ── کارتِ یک فرم / یک بخش ── */
+.crm-card {
+  max-width: 880px; margin: 0 auto 12px; padding: 14px; border-radius: 17px;
+  background: rgba(255, 255, 255, .045); border: 1px solid rgba(var(--brand-soft-rgb), .17);
+}
+.crm-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.crm-card-head b { font-size: 14.5px; }
+.crm-card-head small { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
+.crm-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 99px; }
+.crm-off {
+  font-style: normal; font-size: 10.5px; padding: 2px 8px; border-radius: 99px;
+  color: var(--text3); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+}
+
+/* چیپ‌های وضعیت — چند نفر کجای مسیرند */
+.crm-statuses { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.crm-chip {
+  font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
+  color: var(--text2); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+}
+.crm-chip.s-pending_approval { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
+.crm-chip.s-approved { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.crm-chip.s-rejected, .crm-chip.s-expired { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+
+/* ── یک فیلدِ تحلیل‌شده ── */
+.crm-field { padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, .07); }
+.crm-field-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.crm-field-head b { font-size: 13px; }
+.crm-field-head small { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
+.crm-field-head.as-btn {
+  width: 100%; margin-bottom: 0; padding: 0; font: inherit; text-align: start;
+  cursor: pointer; color: inherit; background: none; border: 0;
+}
+.crm-avg { display: inline-flex; align-items: center; gap: 4px; color: #fcd34d !important; }
+
+/* نوارهای توزیع */
+.crm-bars { display: grid; gap: 6px; }
+.crm-bar { display: grid; grid-template-columns: minmax(90px, 150px) 1fr auto; align-items: center; gap: 9px; }
+.crm-bar-label { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.crm-bar-track { height: 9px; border-radius: 99px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.crm-bar-fill {
+  display: block; height: 100%; border-radius: 99px; min-width: 2px;
+  background: linear-gradient(90deg, var(--brand-2), var(--brand-mid));
+}
+.crm-bar-fill.good { background: linear-gradient(90deg, #34d399, #2dd4bf); }
+.crm-bar-fill.bad { background: linear-gradient(90deg, #f43f5e, #fb7185); }
+.crm-bar-num { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.crm-bar-num em { font-style: normal; font-weight: 400; font-size: 10px; color: var(--text3); }
+
+/* پاسخ‌های متنی */
+.crm-texts { display: grid; gap: 8px; margin-top: 10px; }
+.crm-texts blockquote {
+  margin: 0; padding: 9px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, .04); border-inline-start: 3px solid rgba(var(--brand-soft-rgb), .5);
+}
+.crm-texts p { font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; }
+.crm-texts footer { margin-top: 5px; font-size: 10.5px; color: var(--text3); }
+
+@media (max-width: 480px) {
+  .crm-bar { grid-template-columns: 1fr auto; }
+  .crm-bar-label { grid-column: 1 / -1; }
+}

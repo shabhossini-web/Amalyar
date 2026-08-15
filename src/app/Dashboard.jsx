@@ -16,7 +16,7 @@ import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
-import { Arrive, Back, Book, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Trash, User } from '../ui/icons.jsx';
+import { Arrive, Back, Book, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -865,7 +865,82 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
 /* ── شیتِ «تعریف‌ها»: مدیریتِ جراحان و بیمارستان‌ها ── */
 
 /* ── کارتِ مراجعه ── */
-function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
+/**
+ * ارسالِ فرمِ زیرپرونده از روی کارتِ مراجعه.
+ *
+ * ⚠️ صفحهٔ مشخصات ندارد: هویت از خودِ پرونده می‌آید (`/intake/send` سمتِ
+ * سرور پُرش می‌کند). کلیک روی نامِ فرم = ساختِ ثبت‌نام + کپیِ لینک — ادمین
+ * فقط باید لینک را برای بیمار بفرستد.
+ * فهرستِ فرم‌ها یک‌بار برای کلِ صفحه کش می‌شود؛ منو per-card است ولی داده
+ * مشترک است.
+ */
+let recordFormsCache = null;
+function SendFormMenu({ patientId, busy, onToast }) {
+  const [open, setOpen] = useState(false);
+  const [forms, setForms] = useState(recordFormsCache);
+  const [sending, setSending] = useState(0);
+  const wrapRef = useRef(null);
+
+  /* ⚠️ بستن با شنوندهٔ سند، نه با پردهٔ `position:fixed`: کارتِ framer-motion
+     `transform` دارد و transform مرجعِ fixed را به خودِ کارت محدود می‌کند —
+     پرده فقط روی کارت می‌افتاد و کلیکِ بیرونِ کارت هیچ‌جا نمی‌خورد. */
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', h);
+    return () => document.removeEventListener('pointerdown', h);
+  }, [open]);
+
+  const toggle = async () => {
+    const next = !open;
+    setOpen(next);
+    if (next && !recordFormsCache) {
+      try {
+        const all = await api('/forms');
+        recordFormsCache = (all ?? []).filter((f) => f.scope === 'record' && f.active !== false);
+        setForms(recordFormsCache);
+      } catch (e) { onToast(e.message); setOpen(false); }
+    }
+  };
+
+  const sendForm = async (f) => {
+    setSending(f.id);
+    try {
+      const r = await api('/intake/send', { method: 'POST', body: { patientId, formId: f.id } });
+      const url = `${window.location.origin}/f/${r.token}`;
+      let copied = false;
+      try { await navigator.clipboard.writeText(url); copied = true; } catch { /* http یا بدونِ اجازه */ }
+      /* ⚠️ کپی ممکن است شکست بخورد (کلیپ‌بورد فقط روی https/localhost باز
+         است) — آن‌وقت خودِ لینک را نشان بده، نه یک «کپی شد»ِ دروغ. */
+      onToast(copied
+        ? `لینکِ «${f.title}» کپی شد ✓${r.reused ? ' (همان فرمِ بازِ قبلی)' : ''}`
+        : `لینکِ «${f.title}»: ${url}`);
+      setOpen(false);
+    } catch (e) { onToast(e.message); } finally { setSending(0); }
+  };
+
+  return (
+    <span className="db-sendwrap" ref={wrapRef}>
+      <button type="button" className="db-ico" title="ارسالِ فرم برای بیمار" disabled={busy} onClick={toggle}>
+        <Send width="15" height="15" />
+      </button>
+      {open && (
+        <div className="db-sendmenu" role="menu">
+          <b>ارسالِ فرم برای این بیمار</b>
+          {forms === null && <small>در حال بارگذاری…</small>}
+          {forms?.length === 0 && <small>فرمِ زیرپرونده‌ای ساخته نشده — از فرم‌ساز بسازید</small>}
+          {forms?.map((f) => (
+            <button key={f.id} type="button" role="menuitem" disabled={!!sending} onClick={() => sendForm(f)}>
+              {sending === f.id ? 'در حال ساخت…' : f.title}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onToast }) {
   const row = useStagger();
   const [confirmDel, setConfirmDel] = useState(false);
   useEffect(() => {
@@ -1015,6 +1090,7 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling }) {
               موبایل با ضربهٔ «وسطِ کارت» قاطی می‌شود؛ این یکی هرگز قاطی
               نمی‌شود چون کنارِ بقیهٔ ابزارهاست و برچسب دارد. */}
           <Link className="db-ico" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار"><Book width="15" height="15" /></Link>
+          <SendFormMenu patientId={v.patientId} busy={busy} onToast={onToast} />
           <button type="button" className="db-ico" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}><Money width="15" height="15" /></button>
           <button type="button" className="db-ico" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}><Pencil width="15" height="15" /></button>
           <button
@@ -1501,6 +1577,7 @@ export default function Dashboard() {
               onStatus={onStatus}
               onDelete={onDelete}
               onBilling={setBilling}
+              onToast={setToast}
             />
           ))}
         </div>

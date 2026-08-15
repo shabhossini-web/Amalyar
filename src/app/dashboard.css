@@ -733,3 +733,21 @@ a.db-defbtn { text-decoration: none; }
 }
 .db-rolebox.locked { border-style: solid; border-color: rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .02); opacity: .75; }
 .db-rolebox.locked > legend { color: var(--text3); }
+
+/* ── منوی ارسالِ فرم از کارت ─────────────────────────────────────── */
+.db-sendwrap { position: relative; display: inline-flex; }
+.db-sendmenu {
+  position: absolute; bottom: calc(100% + 8px); inset-inline-end: 0; z-index: 41;
+  min-width: 210px; padding: 10px; border-radius: 16px;
+  display: grid; gap: 4px;
+  background: rgba(16, 12, 40, 0.97);
+  border: 1px solid rgba(var(--brand-soft-rgb), 0.35);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
+.db-sendmenu b { font-size: 11px; color: var(--text3); font-weight: 700; padding: 2px 6px 6px; }
+.db-sendmenu small { font-size: 11px; color: var(--text3); padding: 4px 6px; }
+.db-sendmenu button {
+  text-align: start; font-size: 12.5px; font-weight: 700; color: var(--text1);
+  padding: 9px 10px; border-radius: 10px;
+}
+.db-sendmenu button:hover { background: rgba(var(--brand-rgb), 0.16); }

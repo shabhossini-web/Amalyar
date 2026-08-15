@@ -21,6 +21,7 @@ import Dispatch from './app/Dispatch.jsx';
 import Tech from './app/Tech.jsx';
 import Transport from './app/Transport.jsx';
 import IntakeAdmin from './app/Intake.jsx';
+import Crm from './app/Crm.jsx';
 import Gate from './app/Gate.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
@@ -76,6 +77,9 @@ export default function App() {
           <Route path="/app/tech" element={<Protected><Gate feature="tech"><Tech /></Gate></Protected>} />
           <Route path="/app/transport" element={<Protected><Gate feature="transport"><Transport /></Gate></Protected>} />
           <Route path="/app/intake" element={<Protected><Gate feature="formgen"><IntakeAdmin /></Gate></Protected>} />
+          {/* CRM زیرِ همان featureِ formgen: داده‌اش تماماً از ثبت‌نام‌ها می‌آید
+              و مجوزِ تازه در ماتریسِ دسترسی یعنی یک ردیفِ پیکربندی برای هر نصب. */}
+          <Route path="/app/crm" element={<Protected><Gate feature="formgen"><Crm /></Gate></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />

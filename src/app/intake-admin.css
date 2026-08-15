@@ -207,3 +207,15 @@
 }
 .ia-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; cursor: pointer; }
 .ia-check input { width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; }
+
+/* ── حذفِ لینک و ثبت‌نام ─────────────────────────────────────────── */
+.ia-del { color: #fda4af; }
+.ia-del:hover { color: #fb7185; }
+.ia-cardel {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 999px;
+  color: #8f88af; background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ia-cardel:hover { color: #fb7185; border-color: rgba(251, 113, 133, 0.4); }
