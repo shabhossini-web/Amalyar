@@ -75,9 +75,22 @@ try {
   console.log('\n۱) ارسالِ مستقیم فقط برای فرمِ زیرپرونده');
   const wrong = await send('/intake/send', 'POST', { patientId, formId: visitForm.id });
   ok(wrong.status === 400, `فرمِ مراجعه‌ساز رد شد (${wrong.status})`);
+  /* بدونِ شمارهٔ معتبر «ارسال» معنایی ندارد — پیش از هر ساختی ۴۰۰. */
+  sql(`UPDATE patients SET phone='123' WHERE id=${patientId}`);
+  const noPhone = await send('/intake/send', 'POST', { patientId, formId: survey.id });
+  ok(noPhone.status === 400 && /شماره/.test(noPhone.json?.message ?? ''),
+    `شمارهٔ نامعتبرِ پرونده رد شد (${noPhone.status} — «${noPhone.json?.message}»)`);
+  sql(`UPDATE patients SET phone='09120000611' WHERE id=${patientId}`);
   const sent = await send('/intake/send', 'POST', { patientId, formId: survey.id });
   ok(sent.status < 300 && !!sent.json?.token, `فرمِ record فرستاده شد (${sent.status})`);
   ok(sent.json?.reused === false, 'بارِ اول reused=false');
+  /* «ارسال» یعنی پیامک به شمارهٔ پرونده — در dev سرویسِ پیامک stub است ولی
+     مقصد و نشانی باید درست باشند. */
+  ok(sent.json?.to === '09120000611', `پیامک به شمارهٔ خودِ پرونده (${sent.json?.to})`);
+  ok(typeof sent.json?.url === 'string' && sent.json.url.includes(`/f/${sent.json.token}`),
+    'و متنِ پیامک نشانیِ مستقیمِ فرم را دارد (/f/…)');
+  ok(sent.json?.sent === true || sent.json?.stub === true,
+    `نتیجهٔ پیامک گزارش می‌شود (sent=${sent.json?.sent}, stub=${sent.json?.stub})`);
 
   console.log('\n۲) فرمِ مستقیم بدونِ صفحهٔ مشخصات باز می‌شود و پیش‌پُر است');
   const view = await send(`/public/intake/form/${sent.json.token}`, 'GET', null, false);

@@ -950,6 +950,11 @@ export class IntakeService {
    * فقط فرمِ **زیرپرونده** (record): فرمِ مراجعه‌ساز جراح/تاریخ/مبلغ می‌خواهد
    * و مسیرِ درستش همان لینکِ عمومی است؛ این میان‌بر برای نظرسنجی و
    * پرسش‌نامه‌های پیگیری است.
+   *
+   * «ارسال» یعنی **پیامک به خودِ بیمار** — نه کپیِ لینک برای ادمین؛ شماره از
+   * پرونده می‌آید و اگر نامعتبر باشد پیش از هر ساختی ۴۰۰ می‌گیرد، وگرنه
+   * ثبت‌نامی کاشته می‌شد که هیچ‌کس خبرش را نداشت. کلیکِ دوباره روی همان فرم
+   * = پیامکِ دوباره با همان توکنِ باز (یادآوری)، نه ردیفِ تازه.
    */
   async sendToPatient(patientId: number, formId: number, user: any) {
     const patient = await this.prisma.patient.findFirst({
@@ -962,6 +967,10 @@ export class IntakeService {
     if (form.scope !== 'record') {
       throw new BadRequestException('فقط فرمِ زیرپرونده از این‌جا فرستاده می‌شود — فرمِ مراجعه‌ساز از لینکِ عمومی');
     }
+    const to = toEnDigits(String(patient.phone ?? '')).replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(to)) {
+      throw new BadRequestException('شمارهٔ موبایلِ معتبری در پرونده نیست — اول شماره را در پرونده اصلاح کنید');
+    }
 
     /* ثبت‌نامِ بازِ همین فرم برای همین بیمار → همان ادامه پیدا کند، نه نسخهٔ
        دوم؛ وگرنه هر بار «ارسال» یک ردیفِ نیمه‌کارهٔ تازه می‌کاشت. */
@@ -969,9 +978,7 @@ export class IntakeService {
       where: { patientId, formId, linkId: null, status: { in: ['pending_fill', 'pending_payment'] } },
       orderBy: { id: 'desc' },
     });
-    if (open) return { token: open.token, reused: true };
-
-    const row = await this.prisma.intakeSubmission.create({
+    const row = open ?? await this.prisma.intakeSubmission.create({
       data: {
         token: this.token(),
         linkId: null,
@@ -988,11 +995,19 @@ export class IntakeService {
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
       },
     });
+
+    /* همان قالبِ `sendLinkSms`: عنوان + نشانی؛ ولی مستقیم به صفحهٔ فرم
+       (`/f/`) چون صفحهٔ مشخصات (`/r/`) این‌جا وجود ندارد. */
+    const host = this.tenant.require().hostname;
+    const url = `https://${host}/f/${row.token}`;
+    const res = await this.sms.send(to, `${form.title}\n${url}`);
+
+    /* مثلِ `intake.link.sms`: مقصد در audit هست، متن نه. */
     await this.audit.record({
       actorId: user?.id, action: 'intake.send_form', entityType: 'intake_submission', entityId: row.id,
-      after: { patientId, formId, formKey: form.key },
+      after: { patientId, formId, formKey: form.key, to, sent: res.sent, stub: res.stub, reused: !!open },
     });
-    return { token: row.token, reused: false };
+    return { token: row.token, reused: !!open, to, url, sent: res.sent, stub: res.stub };
   }
 
   /**

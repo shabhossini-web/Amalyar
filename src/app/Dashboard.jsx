@@ -907,14 +907,16 @@ function SendFormMenu({ patientId, busy, onToast }) {
     setSending(f.id);
     try {
       const r = await api('/intake/send', { method: 'POST', body: { patientId, formId: f.id } });
-      const url = `${window.location.origin}/f/${r.token}`;
-      let copied = false;
-      try { await navigator.clipboard.writeText(url); copied = true; } catch { /* http یا بدونِ اجازه */ }
-      /* ⚠️ کپی ممکن است شکست بخورد (کلیپ‌بورد فقط روی https/localhost باز
-         است) — آن‌وقت خودِ لینک را نشان بده، نه یک «کپی شد»ِ دروغ. */
-      onToast(copied
-        ? `لینکِ «${f.title}» کپی شد ✓${r.reused ? ' (همان فرمِ بازِ قبلی)' : ''}`
-        : `لینکِ «${f.title}»: ${url}`);
+      /* «ارسال» = پیامک به خودِ بیمار (سمتِ سرور). گزارش باید همان واقعیت
+         باشد: فرستاده شد / سرویسِ پیامک پیکربندی نیست — نه «کپی شد». */
+      const toFa = String(r.to ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+      if (r.sent) {
+        onToast(`«${f.title}» پیامک شد به ${toFa}${r.reused ? ' (یادآوریِ همان فرمِ باز)' : ''} ✓`);
+      } else if (r.stub) {
+        onToast(`سرویسِ پیامک پیکربندی نشده — لینک: ${r.url}`);
+      } else {
+        onToast(`پیامک نرفت — لینک: ${r.url}`);
+      }
       setOpen(false);
     } catch (e) { onToast(e.message); } finally { setSending(0); }
   };
