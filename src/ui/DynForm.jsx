@@ -143,16 +143,20 @@ function Input({ field: f, value, set, disabled, lookups, onUpload, payment }) {
     case 'time':
       return <TimePick value={v} onChange={set} onCommit={set} disabled={disabled} className="dyn-time" />;
 
-    case 'bool':
-      /* ⚠️ چک‌باکسِ ساده و نه سه‌حالته: «تیک نخورده» یعنی «نه»، نه «نمی‌دانم».
-         اگر فیلد اجباری باشد، سرور مقدارِ `false` را **پر** می‌شمارد — «نه»
-         یک جوابِ واقعی است. */
+    case 'bool': {
+      /* ⚠️ دو پیلِ صریحِ «بله/خیر»، نه چک‌باکس: چک‌باکسِ خالی با برچسبِ «خیر»
+         کنارش دوپهلو بود (اسکرین‌شاتِ کاربر — تیک بزنم یعنی بله یا خیر؟).
+         این‌جا بیمار خودش یکی را می‌زند؛ `false` جوابِ واقعی است و سرور
+         پرش می‌شمارد. همان زبانِ پیلِ multiselect. */
+      const yes = v === true || v === 'true';
+      const no = v === false || v === 'false';
       return (
-        <span className="dyn-bool">
-          <input type="checkbox" checked={v === true || v === 'true'} onChange={(e) => set(e.target.checked)} disabled={disabled} />
-          <i>{v === true || v === 'true' ? 'بله' : 'خیر'}</i>
+        <span className="dyn-multi dyn-yesno">
+          <button type="button" className={`dyn-pill${yes ? ' on' : ''}`} disabled={disabled} onClick={() => set(true)}>بله</button>
+          <button type="button" className={`dyn-pill${no ? ' on' : ''}`} disabled={disabled} onClick={() => set(false)}>خیر</button>
         </span>
       );
+    }
 
     case 'rating':
       return <Rating value={Number(v) || 0} set={set} disabled={disabled} />;

@@ -97,6 +97,10 @@ try {
   ok(view.status === 200, `نمای عمومی با توکن باز شد (${view.status})`);
   ok(view.json?.data?.firstName === 'بیمارِ', `نام از پرونده پیش‌پُر است («${view.json?.data?.firstName}»)`);
   ok((view.json?.payable ?? view.json?.amount ?? 0) === 0, 'و مبلغی در کار نیست');
+  /* نظرسنجی مراجعه نمی‌سازد → تقویمِ «روزِ نوبت» هم نباید نشانش داده شود،
+     هرچند نوبت‌دهیِ نصب روشن باشد (اسکرین‌شاتِ کاربر). */
+  ok(view.json?.booking?.required === false, 'فرمِ زیرپرونده نوبت نمی‌خواهد (booking.required=false)');
+  ok(view.json?.makesVisit === false, 'و صادقانه می‌گوید مراجعه نمی‌سازد');
 
   const again = await send('/intake/send', 'POST', { patientId, formId: survey.id });
   ok(again.json?.reused === true && again.json?.token === sent.json.token,

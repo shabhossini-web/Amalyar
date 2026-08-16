@@ -564,6 +564,8 @@ export class IntakeService {
 
   async publicView(token: string) {
     const row = await this.expireIfDue(token);
+    /* یک‌بار برای دو مصرف: هم `makesVisit` هم خاموش‌کردنِ نوبت‌دهی. */
+    const scope = await this.formScope(row.formId);
     /* ⚠️ حساب از **لینکِ همین ثبت‌نام** خوانده می‌شود، نه از خودِ ثبت‌نام.
        عمداً snapshot نشد (برخلافِ `amount` و `formId`): اگر حسابی بسته شود،
        فیشِ بیمار باید به حسابِ تازه برود — نه به حسابی که موقعِ شروعِ فرم
@@ -587,8 +589,12 @@ export class IntakeService {
       status: row.status,
       /* ⚠️ نوبت‌دهی فقط وقتی در صفحهٔ بیمار ظاهر می‌شود که نصب برنامهٔ کاری
          داشته باشد. نصبی که ندارد باید دقیقاً مثلِ دیروز کار کند — نه اینکه
-         به گامی برسد که هیچ روزی برای انتخاب ندارد. */
-      booking: (await this.bookingOn())
+         به گامی برسد که هیچ روزی برای انتخاب ندارد.
+         ⚠️ فرمِ زیرپرونده (نظرسنجی/پرسش‌نامه) هم **هرگز** نوبت ندارد: مراجعه
+         نمی‌سازد، پس «روزِ نوبت را انتخاب کنید» رویش یک وعدهٔ دروغ بود —
+         همان قاعده‌ای که `fill` (خطِ bookingOnِ پایین‌تر) از روزِ اول داشت
+         ولی نما نداشت. */
+      booking: scope !== 'record' && (await this.bookingOn())
         ? {
           required: true,
           appointment: await this.prisma.appointment
@@ -612,7 +618,7 @@ export class IntakeService {
       /* مشتقِ سرور (قانون ۱۵): پیامِ پایانیِ صفحهٔ بیمار به «این فرم چه
          می‌سازد» وابسته است. نظرسنجیِ تأییدشده نباید بخواند «ثبت‌نامِ شما
          تأیید شد، تماس می‌گیریم» — کسی قرار نیست تماس بگیرد. */
-      makesVisit: (await this.formScope(row.formId)) !== 'record',
+      makesVisit: scope !== 'record',
       // ⚠️ هر سه عدد برمی‌گردند نه فقط «قابلِ پرداخت»: بیمار باید ببیند
       //    تخفیفش واقعاً خورده، وگرنه عددِ کمتر شبیهِ اشتباه به‌نظر می‌رسد.
       amount: row.amount,

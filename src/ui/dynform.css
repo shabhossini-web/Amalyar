@@ -20,3 +20,32 @@
 .pf-field select:focus { border-color: var(--brand-2); }
 .pf-field select option { background: #141033; color: #f2f0fc; }
 .pf-field select:disabled { opacity: .6; cursor: default; }
+
+/* ── کنترل‌های مشترکِ DynForm — پیل، بله/خیر، ستاره ──────────────────────
+   ⚠️ این‌ها این‌جا هستند نه فقط در definitions.css: DynForm در **فرمِ عمومیِ
+   بیمار** هم رندر می‌شود که definitions.css را ایمپورت نمی‌کند — پیلِ
+   multiselect و بله/خیر آن‌جا دکمهٔ خامِ مرورگر می‌شدند (اسکرین‌شاتِ کاربر،
+   «ما را به دیگران معرفی می‌کنید؟»). پیشوندِ `.dyn` برای بردن از
+   `.pf-field > span { display:block }`. */
+.dyn .dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
+.dyn-pill {
+  cursor: pointer; font-family: inherit; font-size: 12.5px; padding: 8px 16px; border-radius: 99px;
+  color: var(--muted, #b7b0d8); background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .14); transition: color .15s, background .15s, border-color .15s;
+}
+.dyn-pill.on {
+  color: #fff; background: rgba(var(--brand-soft-rgb), .22);
+  border-color: rgba(var(--brand-soft-rgb), .55);
+}
+/* بله/خیر: دو گزینهٔ هم‌عرض تا انگشتِ موبایل راحت باشد */
+.dyn .dyn-yesno .dyn-pill { min-width: 74px; text-align: center; }
+
+.dyn .dyn-rate { display: flex; gap: 4px; align-items: center; }
+.dyn-star-btn {
+  cursor: pointer; background: transparent; border: none; padding: 2px;
+  display: grid; place-items: center; line-height: 1;
+  color: rgba(255, 255, 255, .18); transition: color .12s, transform .12s;
+}
+.dyn-star-btn.on { color: #fbbf24; }
+.dyn-star-btn:hover:not(:disabled) { transform: scale(1.12); }
+.dyn-star-btn:disabled { cursor: default; }
