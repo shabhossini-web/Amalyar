@@ -908,14 +908,22 @@ function SendFormMenu({ patientId, busy, onToast }) {
     try {
       const r = await api('/intake/send', { method: 'POST', body: { patientId, formId: f.id } });
       /* «ارسال» = پیامک به خودِ بیمار (سمتِ سرور). گزارش باید همان واقعیت
-         باشد: فرستاده شد / سرویسِ پیامک پیکربندی نیست — نه «کپی شد». */
+         باشد: فرستاده شد / پیکربندی نیست / نرفت — نه «کپی شد». */
       const toFa = String(r.to ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+      /* ⚠️ نشانی از توکن بازسازی می‌شود، نه فقط از `r.url`: وقتی سرورِ در
+         حالِ دیپلوی هنوز نسخهٔ قدیم است، `url/sent/stub` در پاسخ نیست و
+         toast «undefined» چاپ می‌کرد. توکن در هر دو نسخه هست. */
+      const url = r.url ?? `${window.location.origin}/f/${r.token}`;
       if (r.sent) {
         onToast(`«${f.title}» پیامک شد به ${toFa}${r.reused ? ' (یادآوریِ همان فرمِ باز)' : ''} ✓`);
       } else if (r.stub) {
-        onToast(`سرویسِ پیامک پیکربندی نشده — لینک: ${r.url}`);
+        onToast(`سرویسِ پیامک پیکربندی نشده — لینک: ${url}`);
+      } else if (r.sent === undefined) {
+        let copied = false;
+        try { await navigator.clipboard.writeText(url); copied = true; } catch { /* کلیپ‌بورد بسته */ }
+        onToast(`سرور هنوز به‌روز نشده و پیامک نفرستاد — لینک${copied ? ' کپی شد' : ''}: ${url}`);
       } else {
-        onToast(`پیامک نرفت — لینک: ${r.url}`);
+        onToast(`پیامک نرفت — لینک: ${url}`);
       }
       setOpen(false);
     } catch (e) { onToast(e.message); } finally { setSending(0); }
