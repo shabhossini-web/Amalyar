@@ -604,8 +604,20 @@ function NotesTab({ rec, reload, toast }) {
             {l}<i>{faNum(rec.counts.notesByKind?.[k] ?? 0)}</i>
           </button>
         ))}
+        {/* شرح‌هایی که در خودِ فرم‌های مراجعه نوشته شده‌اند (معاینه، طرحِ
+            درمان، یادداشت…) — خواندنی؛ جای نوشتنشان خودِ فرم است. */}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={kind === 'form'}
+          className={kind === 'form' ? 'on' : ''}
+          onClick={() => setKind('form')}
+        >
+          شرحِ فرم‌ها<i>{faNum(rec.counts.visitTexts ?? 0)}</i>
+        </button>
       </div>
 
+      {kind !== 'form' && (
       <div className="rc-upload">
         <div className="pf-row2">
           <label className="pf-field"><span>مربوط به مراجعه</span>
@@ -624,8 +636,26 @@ function NotesTab({ rec, reload, toast }) {
           <Plus width="15" height="15" /> ثبتِ {NOTE_KINDS[kind]}
         </button>
       </div>
+      )}
 
-      {shown.length === 0 ? (
+      {kind === 'form' ? (
+        (rec.visitTexts ?? []).length === 0 ? (
+          <div className="df-empty">هنوز شرحی در فرم‌های مراجعه نوشته نشده است</div>
+        ) : (
+          <div className="df-list">
+            {rec.visitTexts.map((t, i) => (
+              <div key={`${t.visitId}-${i}`} className="rc-note">
+                <div className="rc-note-head">
+                  <b>{t.label}</b>
+                  <span className="rc-note-visit">{t.code}</span>
+                  <small>{t.opDate ? faDate(t.opDate) : ''}</small>
+                </div>
+                <p className="rc-note-body">{t.body}</p>
+              </div>
+            ))}
+          </div>
+        )
+      ) : shown.length === 0 ? (
         <div className="df-empty">هنوز «{NOTE_KINDS[kind]}»ی ثبت نشده است</div>
       ) : (
         <div className="df-list">

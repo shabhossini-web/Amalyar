@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { LEVEL } from '../common/levels';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { PlacesService } from './places.service';
 
@@ -48,7 +49,13 @@ export class TransportService {
   }
 
   async agenda(user: any, scope: 'today' | 'upcoming' | 'past' = 'today') {
-    const staff = await this.me(user);
+    /* ⚠️ سوپرادمین بدونِ رکوردِ نیرو تا امروز به دیوارِ ۴۰۴ می‌خورد؛ حالا
+       نمای سرپرستی می‌گیرد: **همهٔ** مسیرهای بازه، با نامِ نیرو روی هر
+       مسیر. نوشتن‌ها (markDone و بقیه) همچنان مالِ خودِ نیرو هستند. */
+    const isSuper = (user?.level ?? 0) >= LEVEL.SUPER_ADMIN;
+    const staff = isSuper
+      ? await (async () => { try { return await this.me(user); } catch { return null; } })()
+      : await this.me(user);
     const [start, end] = dayBounds(new Date());
     const [from, to] =
       scope === 'upcoming' ? [end, new Date(end.getTime() + 14 * DAY)]
@@ -56,9 +63,10 @@ export class TransportService {
           : [start, end];
 
     const runs = await this.prisma.transportRun.findMany({
-      where: { staffId: staff.id, runDate: { gte: from, lt: to } },
+      where: { ...(staff ? { staffId: staff.id } : {}), runDate: { gte: from, lt: to } },
       orderBy: { runDate: scope === 'past' ? 'desc' : 'asc' },
       include: {
+        staff: { include: { person: { select: { firstName: true, lastName: true } } } },
         stops: {
           orderBy: { seq: 'asc' },
           include: {
@@ -83,13 +91,18 @@ export class TransportService {
 
     return {
       scope,
-      staff: {
+      /* بدونِ رکوردِ نیرو (سوپرادمینِ ناظر) `staff: null` — کلاینت با همین
+         تفاوت، نمای سرپرستی را از نمای شخصی جدا می‌کند. */
+      staff: staff ? {
         id: staff.id, role: staff.role, vehicle: staff.vehicle,
         name: `${staff.person.firstName} ${staff.person.lastName}`.trim(),
-      },
-      runs: runs.map((r) => ({
-        id: r.id, runDate: r.runDate, status: r.status, vehicle: r.vehicle ?? staff.vehicle,
-        stops: r.stops.map((s) => this.shapeStop(s)),
+      } : null,
+      runs: runs.map((r: any) => ({
+        id: r.id, runDate: r.runDate, status: r.status, vehicle: r.vehicle ?? staff?.vehicle ?? null,
+        staffName: r.staff?.person
+          ? `${r.staff.person.firstName} ${r.staff.person.lastName}`.trim()
+          : null,
+        stops: r.stops.map((s: any) => this.shapeStop(s)),
       })),
     };
   }

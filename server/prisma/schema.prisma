@@ -745,10 +745,13 @@ model Setting {
 /// دسترسیِ ماژول‌ها — قابلِ‌تنظیم توسط سوپرادمین (پیش‌فرض‌ها از کد seed می‌شوند).
 /// enabled بعداً اهرمِ لایسنس/پلنِ SaaS هم می‌شود.
 model Feature {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique
-  minLevel  Int      @default(6) @map("min_level") // حداقل سطحِ لازم (۱..۶)
-  enabled   Boolean  @default(true)
+  id       Int     @id @default(autoincrement())
+  key      String  @unique
+  minLevel Int     @default(6) @map("min_level") // حداقل سطحِ لازم (۱..۶)
+  enabled  Boolean @default(true)
+  /// نقش‌های مجاز (کلیدهای JOB_ROLES) — **AND با سطح**: خالی یعنی «هر نقشی».
+  /// دو نفرِ هم‌سطح می‌توانند دسترسیِ متفاوت بگیرند («خدمتِ مالی فقط منشی»).
+  roles     Json     @default("[]")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("features")
@@ -756,10 +759,12 @@ model Feature {
 
 /// مجوزهای ریزدانهٔ عملیات؛ Feature فقط روشن/خاموش بودن ماژول است.
 model Permission {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique
-  minLevel  Int      @default(6) @map("min_level")
-  enabled   Boolean  @default(true)
+  id       Int     @id @default(autoincrement())
+  key      String  @unique
+  minLevel Int     @default(6) @map("min_level")
+  enabled  Boolean @default(true)
+  /// همان قراردادِ Feature.roles — AND با سطح؛ خالی = بدونِ قیدِ نقش.
+  roles     Json     @default("[]")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
   @@map("permissions")

@@ -34,6 +34,12 @@ export class FeatureGuard implements CanActivate {
     if ((user.level ?? 0) < minLevel) {
       throw new ForbiddenException('دسترسیِ کافی برای این بخش ندارید');
     }
+    /* نقش — **AND** با سطح: دو نفرِ هم‌سطح می‌توانند دسترسیِ متفاوت داشته
+       باشند. آرایهٔ خالی یعنی قیدی نیست؛ سوپرادمین بالاتر عبور کرده. */
+    const roles = Array.isArray(row?.roles) ? (row!.roles as string[]) : [];
+    if (roles.length && !roles.includes(user.jobRole ?? '')) {
+      throw new ForbiddenException('این بخش برای نقشِ شغلیِ شما نیست');
+    }
     return true;
   }
 }

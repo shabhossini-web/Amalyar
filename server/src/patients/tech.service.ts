@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { LEVEL } from '../common/levels';
 import { PatientsService } from './patients.service';
 import { RecordService } from './record.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
@@ -47,9 +48,13 @@ export class TechService {
 
   async agenda(user: any, scope: AgendaScope = 'today') {
     const [from, to] = this.range(scope);
+    /* ⚠️ سوپرادمین **همه** را می‌بیند (خواستهٔ کاربر — همان الگوی ملک‌طب):
+       یک نفر باید کلِ چرخه را با دیدِ کامل ببیند. برای بقیه دامنه همچنان
+       خودِ کاربر است؛ نوشتن‌ها (`ownVisit`) هم برای همه شخصی می‌مانند. */
+    const allTechs = (user?.level ?? 0) >= LEVEL.SUPER_ADMIN;
     const rows = await this.prisma.visit.findMany({
       where: {
-        techId: user?.id ?? -1,
+        ...(allTechs ? { techId: { not: null } } : { techId: user?.id ?? -1 }),
         opDate: { gte: from, lt: to },
         // عملِ لغوشده کارِ امروزِ کسی نیست؛ ولی در «گذشته» می‌ماند تا کارشناس
         // بداند چرا آن روز خالی بوده.
@@ -62,6 +67,7 @@ export class TechService {
         surgeonName: true, hospitalName: true, opType: true,
         patient: { select: { id: true, code: true, firstName: true, lastName: true } },
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
+        tech: { select: { person: { select: { firstName: true, lastName: true } } } },
         hospital: { select: { name: true, address: true } },
         procedureType: { select: { name: true } },
         documents: { where: { category: 'report' }, select: { id: true, createdAt: true } },
@@ -100,6 +106,11 @@ export class TechService {
       // نامِ بیمار می‌ماند: کارشناس سرِ عملِ همین بیمار حاضر است و بدونِ نام
       // نمی‌داند سراغِ کدام اتاق برود. سابقهٔ بالینی‌اش اما این‌جا نیست.
       patientName: [v.patient.firstName, v.patient.lastName].filter(Boolean).join(' '),
+      /* برای نمای سرپرستی — کارشناسِ خودش نامِ خودش را لازم ندارد ولی
+         سوپرادمین باید بداند هر ردیف مالِ کیست. */
+      techName: v.tech?.person
+        ? [v.tech.person.firstName, v.tech.person.lastName].filter(Boolean).join(' ')
+        : null,
       surgeonName: person ? [person.firstName, person.lastName].filter(Boolean).join(' ') : v.surgeonName,
       hospitalName: v.hospital?.name ?? v.hospitalName,
       hospitalAddress: v.hospital?.address ?? null,

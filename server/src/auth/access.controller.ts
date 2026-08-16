@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { AccessService } from './access.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { LevelGuard } from './level.guard';
@@ -19,6 +19,17 @@ class AccessPatchDto {
   @IsOptional()
   @IsBoolean({ message: 'وضعیتِ روشن/خاموش نامعتبر است' })
   enabled?: boolean;
+
+  /**
+   * نقش‌های مجاز — AND با سطح؛ آرایهٔ خالی = بدونِ قیدِ نقش.
+   * ⚠️ باید در DTO اعلام شود وگرنه ValidationPipe با whitelist بی‌صدا دورش
+   * می‌ریزد — همان تلهٔ همیشگیِ این مخزن. اعتبارِ کلیدها در سرویس است
+   * (guardRoles) تا فهرستِ JOB_ROLES دوجا نوشته نشود.
+   */
+  @IsOptional()
+  @IsArray({ message: 'نقش‌ها باید فهرست باشند' })
+  @IsString({ each: true, message: 'نقشِ نامعتبر' })
+  roles?: string[];
 }
 
 /**

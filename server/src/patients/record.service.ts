@@ -123,7 +123,7 @@ export class RecordService {
              را نشان بدهد که کاربر موقعِ پرکردن دیده بود. */
           fields: {
             orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }],
-            select: { key: true, label: true, builtin: true, active: true },
+            select: { key: true, label: true, builtin: true, active: true, type: true },
           },
         },
       }),
@@ -141,14 +141,14 @@ export class RecordService {
     /* برچسبِ فیلدهای **سفارشی** هر نوع. فیلدهای هسته‌ای کنار گذاشته می‌شوند
        چون همین‌جا ستونِ خودشان را دارند (جراح، بیمارستان، تاریخ، …) و دوباره
        نشان‌دادنشان فقط شلوغی است. */
-    const kindFields: Record<string, { key: string; label: string }[]> = {};
+    const kindFields: Record<string, { key: string; label: string; type?: string }[]> = {};
     for (const d of kindDefs) {
       if (!d.visitKind) continue;
       kindTitles[d.visitKind] = d.title;
       kindColors[d.visitKind] = d.color || colorForKey(d.key);
       kindFields[d.visitKind] = (d.fields ?? [])
         .filter((f) => !f.builtin && f.active !== false)
-        .map((f) => ({ key: f.key, label: f.label }));
+        .map((f) => ({ key: f.key, label: f.label, type: f.type }));
     }
 
     /**
@@ -175,6 +175,33 @@ export class RecordService {
         .filter((r) => r.value !== null && r.value !== undefined && String(r.value).trim() !== '')
         .map((r) => ({ key: r.key, label: r.label, value: String(r.value) }));
     };
+
+    /**
+     * **همهٔ شرح‌های نوشته‌شده در فرم‌های مراجعه، یک‌جا** — بدهیِ قدیمی:
+     * پزشک «شرحِ معاینه» یا «طرحِ درمان» را در فرمِ ویزیت می‌نوشت و تبِ
+     * «شرح‌ها» فقط ClinicalNoteها را نشان می‌داد؛ متنِ فرم فقط لای جزئیاتِ
+     * همان یک مراجعه بود. حالا هر پاسخِ متنیِ بلند (textarea) + یادداشتِ
+     * builtin هر مراجعه، با برچسب و کدِ مراجعه، در همان تب می‌نشیند.
+     *
+     * ⚠️ پشتِ همان دروازهٔ بالینی (`clinical`) که خودِ شرح‌ها: متنِ معاینه
+     * محتوای بالینی است، فرقی نمی‌کند در کدام جدول ذخیره شده باشد.
+     * فقط **خواندنی** است — جای نوشتنش خودِ فرمِ مراجعه است.
+     */
+    const visitTexts = !clinical ? [] : visits
+      .flatMap((v) => {
+        const code = `${patient.code}-V${v.seq}`;
+        const vals = (v.extra && typeof v.extra === 'object') ? v.extra as Record<string, any> : {};
+        const rows = (v.kind ? kindFields[v.kind] ?? [] : [])
+          .filter((f) => f.type === 'textarea')
+          .map((f) => ({ label: f.label, body: vals[f.key] }))
+          .filter((r) => typeof r.body === 'string' && r.body.trim() !== '')
+          .map((r) => ({ visitId: v.id, code, kind: v.kind, opDate: v.opDate, label: r.label, body: String(r.body).trim() }));
+        if (v.notes && v.notes.trim()) {
+          rows.push({ visitId: v.id, code, kind: v.kind, opDate: v.opDate, label: 'یادداشتِ مراجعه', body: v.notes.trim() });
+        }
+        return rows;
+      })
+      .sort((a, b) => (b.opDate?.getTime() ?? 0) - (a.opDate?.getTime() ?? 0));
 
     return {
       ...patient,
@@ -257,10 +284,13 @@ export class RecordService {
       kindTitles,
       documents,
       clinicalNotes,
+      /* شرح‌های نوشته‌شده در خودِ فرم‌های مراجعه — خوراکِ چیپِ «شرحِ فرم‌ها». */
+      visitTexts,
       attachedForms,
       counts: {
         visits: visits.length, documents: documents.length,
         notes: clinicalNotes.length, forms: attachedForms.length,
+        visitTexts: visitTexts.length,
         /* ⚠️ شمارشِ **هر نوعِ شرح** حتی وقتی صفر است — و صفرها عمداً حذف
            نمی‌شوند (قانون ۱۵: مشتق سمتِ سرور).
 

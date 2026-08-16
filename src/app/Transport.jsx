@@ -54,7 +54,7 @@ export default function Transport() {
   useEffect(() => { load(scope); }, [load, scope]);
 
   const runs = data?.runs ?? [];
-  const stops = runs.flatMap((r) => (r.stops ?? []).map((s) => ({ ...s, runDate: r.runDate, vehicle: r.vehicle })));
+  const stops = runs.flatMap((r) => (r.stops ?? []).map((s) => ({ ...s, runDate: r.runDate, vehicle: r.vehicle, staffName: r.staffName })));
   const left = stops.filter((s) => !s.doneAt).length;
 
   return (
@@ -67,7 +67,7 @@ export default function Transport() {
           <p>
             {data?.staff
               ? <>{data.staff.name}{data.staff.vehicle ? ` · ${data.staff.vehicle}` : ''} — چه چیزی، کجا، چه ساعتی، به چه کسی.</>
-              : 'چه چیزی، کجا، چه ساعتی، به چه کسی.'}
+              : data ? 'نمای سرپرستی — همهٔ مسیرها و نیروها.' : 'چه چیزی، کجا، چه ساعتی، به چه کسی.'}
           </p>
         </div>
       </header>
@@ -100,6 +100,7 @@ export default function Transport() {
                 <small>
                   {s.kind === 'pickup' ? 'جمع‌آوری' : 'تحویل'}
                   {scope !== 'today' && s.runDate ? ` · ${faDate(s.runDate)}` : ''}
+                  {s.staffName ? ` · ${s.staffName}` : ''}
                 </small>
               </div>
               {s.doneAt

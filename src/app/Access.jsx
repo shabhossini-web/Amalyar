@@ -131,6 +131,32 @@ export default function Access() {
                     ))}
                   </div>
 
+                  {/* نقش — شرطِ **دومِ** در، AND با سطح: دو نفرِ هم‌سطح
+                      می‌توانند دسترسیِ متفاوت بگیرند. هیچ‌کدام روشن نباشد
+                      یعنی «هر نقشی»؛ سوپرادمین همیشه بیرونِ قاعده است. */}
+                  <div className="ax-roles" role="group" aria-label={`نقش‌های مجاز برای ${r.label}`}>
+                    <em>نقش:</em>
+                    {(data.roles ?? []).map((ro) => {
+                      const on = r.roles.includes(ro.key);
+                      return (
+                        <button
+                          key={ro.key} type="button"
+                          aria-pressed={on}
+                          disabled={r.locked || busy === `${r.kind}:${r.key}`}
+                          className={`ax-role${on ? ' on' : ''}`}
+                          onClick={() => patch(
+                            r,
+                            { roles: on ? r.roles.filter((x) => x !== ro.key) : [...r.roles, ro.key] },
+                            on ? `«${r.label}» دیگر به ${ro.label} محدود نیست` : `«${r.label}» به نقشِ ${ro.label} محدود شد`,
+                          )}
+                        >
+                          {ro.label}
+                        </button>
+                      );
+                    })}
+                    {r.roles.length === 0 && <small>هر نقشی</small>}
+                  </div>
+
                   <div className="ax-acts">
                     <button
                       type="button"

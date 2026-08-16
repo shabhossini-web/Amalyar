@@ -48,18 +48,30 @@ export class FeaturesService {
   async forUser(user: any) {
     const rows = await this.list();
     const level = user?.level ?? 0;
+    /* ⚠️ سوپرادمین **همهٔ** پنل‌ها را می‌بیند — همان قاعدهٔ گاردها (عبورِ
+       بی‌قیدِ سطح ۶) و همان انتظارِ کاربر از ملک‌طب: یک نفر باید کلِ چرخه را
+       با دیدِ کامل ببیند. تا امروز صلاحیتِ نقش‌محور (راننده/کارشناس) کاشیِ
+       سوپرادمین را هم پنهان می‌کرد در حالی که خودِ endpointها برایش باز بودند
+       — لانچر و سرور دو حرفِ متفاوت می‌زدند. */
+    if (level >= LEVEL.SUPER_ADMIN) {
+      return rows.map((r) => ({ ...r, allowed: true, reason: null }));
+    }
     const eligible = await this.eligibility(user);
+    const jobRole = user?.jobRole ?? '';
     return rows.map((r) => {
       const byLevel = level >= r.minLevel;
       const byRole = eligible[r.key] ?? true;
+      /* قیدِ نقشِ ماتریس — AND با سطح؛ آرایهٔ خالی یعنی بدونِ قید. */
+      const byJobRole = !r.roles.length || r.roles.includes(jobRole);
       return {
         ...r,
-        allowed: r.enabled && byLevel && byRole,
+        allowed: r.enabled && byLevel && byRole && byJobRole,
         // دلیل برای صفحه‌ای که کاربر مستقیم نشانی‌اش را تایپ کرده.
         reason: !r.enabled ? 'این بخش غیرفعال است'
           : !byLevel ? 'سطحِ دسترسیِ شما برای این بخش کافی نیست'
             : !byRole ? 'این بخش برای نقشِ دیگری است'
-              : null,
+              : !byJobRole ? 'این بخش برای نقشِ شغلیِ شما نیست'
+                : null,
       };
     });
   }
@@ -118,6 +130,7 @@ export class FeaturesService {
         hint: def?.hint ?? null,
         minLevel: r.minLevel,
         enabled: r.enabled,
+        roles: Array.isArray(r.roles) ? (r.roles as string[]) : [],
         defaultLevel: def?.defaultLevel ?? 6,
         locked: LOCKED_FEATURES.has(r.key),
       };

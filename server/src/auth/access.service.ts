@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL, LEVEL_NAMES, MAX_LEVEL, MIN_LEVEL } from '../common/levels';
+import { JOB_ROLES, JOB_ROLE_KEYS } from '../common/job-roles';
 import {
   ACCESS_GROUPS,
   AccessDef,
@@ -18,6 +19,8 @@ export type AccessKind = 'feature' | 'permission';
 export interface AccessPatch {
   minLevel?: number;
   enabled?: boolean;
+  /** نقش‌های مجاز — AND با سطح؛ آرایهٔ خالی یعنی بدونِ قیدِ نقش. */
+  roles?: string[];
 }
 
 /** یک ردیفِ ماتریس، همان‌طور که رابط می‌بیندش. */
@@ -29,6 +32,7 @@ export interface AccessRow {
   group: string;
   minLevel: number;
   enabled: boolean;
+  roles: string[];
   defaultLevel: number;
   locked: boolean;
   /** «دست‌نخورده» صریح گفته می‌شود تا مدیر بداند کدام را خودش عوض کرده. */
@@ -69,9 +73,10 @@ export class AccessService {
 
   // ── خواندنِ ماتریس ────────────────────────────────────────────
 
-  private row(kind: AccessKind, def: AccessDef, stored?: { minLevel: number; enabled: boolean }): AccessRow {
+  private row(kind: AccessKind, def: AccessDef, stored?: { minLevel: number; enabled: boolean; roles?: any }): AccessRow {
     const minLevel = stored?.minLevel ?? def.defaultLevel;
     const enabled = stored?.enabled ?? true;
+    const roles = Array.isArray(stored?.roles) ? (stored!.roles as string[]) : [];
     return {
       kind,
       key: def.key,
@@ -80,9 +85,10 @@ export class AccessService {
       group: def.group,
       minLevel,
       enabled,
+      roles,
       defaultLevel: def.defaultLevel,
       locked: this.isLocked(kind, def.key),
-      isDefault: enabled && minLevel === def.defaultLevel,
+      isDefault: enabled && minLevel === def.defaultLevel && roles.length === 0,
     };
   }
 
@@ -109,6 +115,8 @@ export class AccessService {
     ];
 
     return {
+      /* کاتالوگِ نقش‌ها برای UI — برچسبِ فارسی از همان تک‌منبعِ JOB_ROLES. */
+      roles: JOB_ROLE_KEYS.map((k) => ({ key: k, label: JOB_ROLES[k] })),
       levels: Array.from({ length: MAX_LEVEL - MIN_LEVEL + 1 }, (_, i) => ({
         value: MIN_LEVEL + i,
         label: LEVEL_NAMES[MIN_LEVEL + i],
@@ -163,16 +171,26 @@ export class AccessService {
     }
   }
 
+  /** فقط کلیدهای شناخته‌شدهٔ JOB_ROLES — نقشِ آزادِ تایپی، دروازه نیست. */
+  private guardRoles(roles?: string[]) {
+    if (roles === undefined) return;
+    if (!Array.isArray(roles) || roles.some((r) => !JOB_ROLE_KEYS.includes(r))) {
+      throw new BadRequestException('نقشِ نامعتبر در فهرست');
+    }
+  }
+
   async update(kind: AccessKind, key: string, patch: AccessPatch, user: any) {
     const def = this.def(kind, key);
     this.guardLock(kind, key);
     this.guardLevel(patch.minLevel);
-    if (patch.minLevel === undefined && patch.enabled === undefined) {
+    this.guardRoles(patch.roles);
+    if (patch.minLevel === undefined && patch.enabled === undefined && patch.roles === undefined) {
       throw new BadRequestException('چیزی برای تغییر نیست');
     }
     return this.write(kind, def, {
       minLevel: patch.minLevel ?? undefined,
       enabled: patch.enabled ?? undefined,
+      roles: patch.roles ?? undefined,
     }, user, `access.${kind}.update`);
   }
 
@@ -180,7 +198,7 @@ export class AccessService {
   async resetOne(kind: AccessKind, key: string, user: any) {
     const def = this.def(kind, key);
     this.guardLock(kind, key);
-    return this.write(kind, def, { minLevel: def.defaultLevel, enabled: true }, user, `access.${kind}.reset`);
+    return this.write(kind, def, { minLevel: def.defaultLevel, enabled: true, roles: [] }, user, `access.${kind}.reset`);
   }
 
   private async write(
@@ -197,22 +215,25 @@ export class AccessService {
     const prev = {
       minLevel: before?.minLevel ?? def.defaultLevel,
       enabled: before?.enabled ?? true,
+      roles: Array.isArray(before?.roles) ? (before.roles as string[]) : [],
     };
     const next = {
       minLevel: patch.minLevel ?? prev.minLevel,
       enabled: patch.enabled ?? prev.enabled,
+      roles: patch.roles ?? prev.roles,
     };
 
     // بی‌تغییر = بی‌رکورد. وگرنه دفترِ رویدادها پر می‌شود از ردیف‌هایی که چیزی
     // نگفته‌اند و تغییرِ واقعی بینشان گم می‌شود.
-    if (prev.minLevel === next.minLevel && prev.enabled === next.enabled) {
+    if (prev.minLevel === next.minLevel && prev.enabled === next.enabled
+        && JSON.stringify(prev.roles) === JSON.stringify(next.roles)) {
       return this.row(kind, def, next);
     }
 
     await (table as any).upsert({
       where: { key: def.key },
-      create: { key: def.key, minLevel: next.minLevel, enabled: next.enabled },
-      update: { minLevel: next.minLevel, enabled: next.enabled },
+      create: { key: def.key, minLevel: next.minLevel, enabled: next.enabled, roles: next.roles },
+      update: { minLevel: next.minLevel, enabled: next.enabled, roles: next.roles },
     });
 
     await this.audit.record({
@@ -247,15 +268,17 @@ export class AccessService {
     for (const def of FEATURES) {
       if (LOCKED_FEATURES.has(def.key)) continue;
       const cur = fMap.get(def.key);
-      if (cur && cur.minLevel === def.defaultLevel && cur.enabled) continue;
-      await this.write('feature', def, { minLevel: def.defaultLevel, enabled: true }, user, 'access.feature.reset');
+      if (cur && cur.minLevel === def.defaultLevel && cur.enabled
+          && (!Array.isArray(cur.roles) || (cur.roles as any[]).length === 0)) continue;
+      await this.write('feature', def, { minLevel: def.defaultLevel, enabled: true, roles: [] }, user, 'access.feature.reset');
       changed += 1;
     }
     for (const def of PERMISSIONS) {
       if (LOCKED_PERMISSIONS.has(def.key)) continue;
       const cur = pMap.get(def.key);
-      if (cur && cur.minLevel === def.defaultLevel && cur.enabled) continue;
-      await this.write('permission', def, { minLevel: def.defaultLevel, enabled: true }, user, 'access.permission.reset');
+      if (cur && cur.minLevel === def.defaultLevel && cur.enabled
+          && (!Array.isArray(cur.roles) || (cur.roles as any[]).length === 0)) continue;
+      await this.write('permission', def, { minLevel: def.defaultLevel, enabled: true, roles: [] }, user, 'access.permission.reset');
       changed += 1;
     }
 

@@ -95,6 +95,7 @@ export default function Tech() {
             <div className="tk-facts">
               <span><Hospital width="14" height="14" /> {v.hospitalName || '—'}</span>
               <span><Doctor width="14" height="14" /> {v.surgeonName || '—'}</span>
+              {v.techName && <span className="tk-tech">{v.techName}</span>}
               {v.procedure && <span><Wave width="14" height="14" /> {v.procedure}</span>}
               {v.techArriveTime && <span><Clock width="14" height="14" /> حضور {time(v.techArriveTime)}</span>}
             </div>

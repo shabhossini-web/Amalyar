@@ -48,6 +48,11 @@ export class PermissionGuard implements CanActivate {
       if (!enabled || (user.level ?? 0) < minLevel) {
         throw new ForbiddenException('اجازهٔ انجام این عملیات را ندارید');
       }
+      /* نقش — AND با سطح؛ آرایهٔ خالی یعنی بدونِ قید (سوپرادمین بالاتر عبور کرده). */
+      const roles = Array.isArray(row?.roles) ? (row!.roles as string[]) : [];
+      if (roles.length && !roles.includes(user.jobRole ?? '')) {
+        throw new ForbiddenException('این عملیات برای نقشِ شغلیِ شما نیست');
+      }
     }
     return true;
   }
