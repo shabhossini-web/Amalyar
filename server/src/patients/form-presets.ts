@@ -62,7 +62,7 @@ export type PresetForm = {
 export const BUILTIN_VISIT_KEYS = new Set([
   'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
   'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount',
-  'payer', 'kind', 'techArriveTime', 'topicId',
+  'payer', 'kind', 'techArriveTime', 'topicId', 'nextVisitDate',
 ]);
 
 /**
@@ -97,6 +97,8 @@ export const VISIT_BUILTIN_CATALOG: { key: string; label: string; type: string }
   { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time' },
   { key: 'techArriveTime', label: 'حضورِ کارشناس', type: 'time' },
   { key: 'opReport', label: 'شرحِ عمل', type: 'textarea' },
+  /* «دو هفتهٔ دیگر بیاید» — ستونِ واقعی، پایهٔ فازِ یادآوری‌ها. */
+  { key: 'nextVisitDate', label: 'ویزیتِ بعدی', type: 'date' },
   { key: 'amount', label: 'مبلغ (تومان)', type: 'money' },
   { key: 'notes', label: 'یادداشت', type: 'textarea' },
 ];
@@ -119,6 +121,10 @@ const CORE = {
   end: { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time', builtin: true },
   amount: { key: 'amount', label: 'مبلغ (تومان)', type: 'money', builtin: true },
   notes: { key: 'notes', label: 'توضیحات', type: 'textarea', builtin: true },
+  nextVisit: {
+    key: 'nextVisitDate', label: 'ویزیتِ بعدی', type: 'date', builtin: true,
+    hint: 'اگر بیمار باید دوباره بیاید، همین‌جا ثبت شود — پایهٔ یادآوری‌ها',
+  },
 } as const;
 
 /** فرمِ عملِ نورومانیتورینگ/تجهیزات — یک فرم، چون یک نوع کار هست. */
@@ -179,6 +185,10 @@ const CLINIC_VISIT: PresetForm = {
       ],
       hint: '«کاندیدِ جراحی» یعنی این بیمار در ادامه فرمِ جراحی می‌گیرد.',
     },
+    /* طرحِ درمان و نسخه — روایتِ آزادِ پزشک؛ «تصمیم»ِ بالا فقط دسته است. */
+    { key: 'planNote', label: 'طرحِ درمان', type: 'textarea', placeholder: 'شرحِ درمان، توصیه‌ها…' },
+    { key: 'prescription', label: 'نسخه / دارو', type: 'textarea', placeholder: 'داروها و دستورِ مصرف' },
+    { ...CORE.nextVisit },
     { ...CORE.amount },
     { ...CORE.notes },
   ],
@@ -239,7 +249,9 @@ const CLINIC_FOLLOWUP: PresetForm = {
     },
     { key: 'painScore', label: 'شدتِ درد (۰ تا ۱۰)', type: 'number', hint: '۰ بدونِ درد، ۱۰ شدیدترین' },
     { key: 'complication', label: 'عارضه', type: 'textarea', placeholder: 'اگر عارضه‌ای بوده' },
-    { key: 'nextVisit', label: 'پیگیریِ بعدی', type: 'date' },
+    /* ⚠️ builtin شد (ستونِ واقعی) — کلیدِ قدیمیِ `nextVisit` در نصب‌های
+       موجود به‌شکلِ فیلدِ دلخواه می‌ماند و داده‌اش سرِ جایش است. */
+    { ...CORE.nextVisit, label: 'پیگیریِ بعدی' },
     { ...CORE.amount },
     { ...CORE.notes },
   ],

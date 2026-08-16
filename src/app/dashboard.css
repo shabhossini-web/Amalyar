@@ -751,3 +751,8 @@ a.db-defbtn { text-decoration: none; }
   padding: 9px 10px; border-radius: 10px;
 }
 .db-sendmenu button:hover { background: rgba(var(--brand-rgb), 0.16); }
+
+/* «ویزیتِ بعدی» روی کارت — سبز تا از واقعیت‌های گذشته جدا دیده شود: این
+   تنها چیزِ روی کارت است که به «آینده» اشاره می‌کند و منشی باید پیگیرش باشد. */
+.db-facts .db-nextvisit { color: #6ee7b7; }
+.db-facts .db-nextvisit svg { color: #34d399; }

@@ -124,6 +124,12 @@ export class CreateVisitDto {
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
   opDate?: string;
 
+  /// «ویزیتِ بعدی» — پزشک روی خودِ فرم ثبت می‌کند؛ ستونِ واقعی، پایهٔ یادآوری‌ها.
+  /// پاک‌کردن با `null` است نه رشتهٔ خالی (IsISO8601 رشتهٔ خالی را رد می‌کند).
+  @IsOptional()
+  @IsISO8601({}, { message: 'تاریخِ ویزیتِ بعدی نامعتبر است' })
+  nextVisitDate?: string;
+
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
   /// تا یک regex در دو جا تکرار نشود.
@@ -263,6 +269,12 @@ export class UpdateVisitDto {
   @ValidateIf((o) => o.opDate !== null && o.opDate !== '')
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
   opDate?: string | null;
+
+  /// «ویزیتِ بعدی» — `null`/رشتهٔ خالی یعنی پاکش کن (پزشک منصرف شد).
+  @IsOptional()
+  @ValidateIf((o) => o.nextVisitDate !== null && o.nextVisitDate !== '')
+  @IsISO8601({}, { message: 'تاریخِ ویزیتِ بعدی نامعتبر است' })
+  nextVisitDate?: string | null;
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

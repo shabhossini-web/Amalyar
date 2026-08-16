@@ -64,6 +64,7 @@ function enrich(v: any, kinds?: KindMap) {
     opReport: v.clinicalNotes?.[0]?.body ?? null,
     opType: v.opType,
     opDate: v.opDate,
+    nextVisitDate: v.nextVisitDate,
     opStatus: v.opStatus,
     opStartTime: v.opStartTime,
     opEndTime: v.opEndTime,
@@ -920,6 +921,7 @@ export class PatientsService {
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
           opDate: toDateValue(dto.opDate) ?? null,
+          nextVisitDate: toDateValue(dto.nextVisitDate) ?? null,
           ...timePatch(dto),
           notes: dto.notes || null,
           /* پاسخِ فیلدهای دلخواه. `{}` و نه null: ستون NOT NULL است و کدِ
@@ -1018,6 +1020,7 @@ export class PatientsService {
         visitPatch.opType = dto.opType?.trim() || null;
       }
       if (dto.opDate !== undefined) visitPatch.opDate = toDateValue(dto.opDate) ?? null;
+      if (dto.nextVisitDate !== undefined) visitPatch.nextVisitDate = toDateValue(dto.nextVisitDate) ?? null;
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
       // طرفِ حساب و استثنای سهمِ جراح — فیلدهای مالیِ سبک که روی خودِ مراجعه‌اند.
       if (dto.payer !== undefined) visitPatch.payer = dto.payer;

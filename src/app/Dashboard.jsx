@@ -16,7 +16,7 @@ import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
-import { Arrive, Back, Book, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
+import { Arrive, Back, Book, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -238,6 +238,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     opReport: initial?.opReport || '',
     amount: '', // مبلغِ توافقی — فقط هنگامِ ساخت
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
+    nextVisitDateJ: initial?.nextVisitDate ? isoToJStr(initial.nextVisitDate) : '',
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
     techArriveTime: initial?.techArriveTime || '',
@@ -369,6 +370,11 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       opDate = jStrToIso(f.opDateJ);
       if (!opDate) { onToast(`${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`); return; }
     }
+    let nextVisitDate;
+    if (f.nextVisitDateJ.trim()) {
+      nextVisitDate = jStrToIso(f.nextVisitDateJ);
+      if (!nextVisitDate) { onToast('تاریخِ ویزیتِ بعدی نامعتبر است (مثال: ۱۴۰۵/۰۵/۱۰)'); return; }
+    }
     let birthDate;
     if (f.birthDateJ.trim()) {
       birthDate = jStrToIso(f.birthDateJ);
@@ -401,7 +407,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
       procedureTypeId: f.procedureTypeId, diagnosisId: f.diagnosisId, topicId: f.topicId,
       opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
-      notes: f.notes, amount: f.amount,
+      nextVisitDate: f.nextVisitDateJ, notes: f.notes, amount: f.amount,
     };
     const eBuiltin = dynErrors(
       (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals),
@@ -423,6 +429,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       extra,
       opReport: f.opReport.trim() || undefined,
       opDate,
+      /* پاک‌کردن در ویرایش با null — پزشکِ منصرف باید بتواند برش دارد. */
+      nextVisitDate: f.nextVisitDateJ.trim() ? nextVisitDate : (editing ? null : undefined),
       // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
       // منظورش «پاکش کن» است، نه «دست نزن».
       opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
@@ -504,7 +512,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
    */
   const BUILTIN_ORDER = [
     'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId',
-    'opDate', 'opStartTime', 'opEndTime', 'techArriveTime', 'opReport', 'amount', 'notes',
+    'opDate', 'opStartTime', 'opEndTime', 'techArriveTime', 'opReport', 'nextVisitDate',
+    'amount', 'notes',
   ];
 
   /**
@@ -603,6 +612,15 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     <label className="db-field"><span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
       <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
     </label>) };
+  /* «دو هفتهٔ دیگر بیاید» — روی خودِ فرم، تا پزشک وسطِ ویزیت ثبتش کند؛
+     پایهٔ فازِ یادآوری‌ها. */
+  if (fd.isOn('nextVisitDate')) builtinNodes.nextVisitDate = { wide: true, el: (
+    <JDate
+      label={<>{fd.labelOf('nextVisitDate', 'ویزیتِ بعدی')} (شمسی){star(fd.requiredOf('nextVisitDate'))}</>}
+      value={f.nextVisitDateJ}
+      onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
+      placeholder="۱۴۰۵/۰۵/۱۰"
+    />) };
   /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
      در ویرایش، صورت‌حساب جای اصلاح است. */
   if (!editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
@@ -1044,6 +1062,13 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
             </span>
           )}
           {v.diagnosisTitle && <span><Diagnosis width="14" height="14" /> {v.diagnosisTitle}</span>}
+          {/* «ویزیتِ بعدی» — پزشک روی فرم ثبت کرده؛ منشی از روی همین کارت
+              پیگیری می‌کند تا فازِ یادآوریِ خودکار برسد. */}
+          {v.nextVisitDate && (
+            <span className="db-nextvisit" title="ویزیتِ بعدی">
+              <Calendar width="14" height="14" /> ویزیتِ بعدی: {faDate(v.nextVisitDate)}
+            </span>
+          )}
         </div>
 
         {/* ⚠️ نوارِ پیشرفت = **وصولِ صورت‌حساب**، و فقط وقتی صورت‌حسابی هست.
