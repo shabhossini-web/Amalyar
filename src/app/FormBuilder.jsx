@@ -221,6 +221,14 @@ export default function FormBuilder() {
                   {form.pages > 1 && <span className="fb-count">{toFa(form.pages)} صفحه</span>}
                   <ColorPick form={form} busy={busy} onPick={setColor} />
                 </div>
+                {/* نقش در پیگیریِ پس از عمل — فقط فرمِ زیرپرونده. */}
+                {form.scope === 'record' && (
+                  <FollowUpPick form={form} busy={busy}
+                    onPick={(body) => apply(
+                      () => api(`/forms/${form.id}`, { method: 'PATCH', body }),
+                      'نقشِ پیگیری ذخیره شد ✓',
+                    )} />
+                )}
                 {form.hint && <p className="fb-hint">{form.hint}</p>}
 
                 <div className="fb-list">
@@ -426,9 +434,80 @@ function ColorPick({ form, busy, onPick }) {
   );
 }
 
+/**
+ * نقشِ فرم در **پیگیریِ پس از عمل** — فقط فرمِ زیرپرونده.
+ *
+ * «عمومی» برای همهٔ عمل‌ها می‌رود؛ «اختصاصی» به یک نوعِ عمل یا تشخیص گره
+ * می‌خورد و هنگامِ ارسال، صفحه‌های بعدیِ همان فرمِ عمومی می‌شود — بیمار یک
+ * لینک می‌بیند، دو بخش. روزهای ارسال روی خودِ نوعِ عمل است (تعریف‌های پایه).
+ */
+function FollowUpPick({ form, busy, onPick }) {
+  const [procs, setProcs] = useState([]);
+  const [diags, setDiags] = useState([]);
+  useEffect(() => {
+    api('/procedure-types').then((r) => setProcs(r.filter((x) => x.active !== false))).catch(() => setProcs([]));
+    api('/diagnoses').then((r) => setDiags(r.filter((x) => x.active !== false))).catch(() => setDiags([]));
+  }, []);
+
+  /* نوعِ نقش draft محلی است: «اختصاصی» تا مرجعش انتخاب نشود PATCH نمی‌شود،
+     ولی selectِ دوم باید همان لحظه ظاهر شود — پس نمی‌شود منتظرِ پاسخِ سرور ماند. */
+  const [kind, setKind] = useState(form.followUp ?? '');
+  useEffect(() => { setKind(form.followUp ?? ''); }, [form.id, form.followUp]);
+
+  const pickKind = (next) => {
+    setKind(next);
+    if (next === '') onPick({ followUp: '' });
+    else if (next === 'general') onPick({ followUp: 'general' });
+    /* procedure/diagnosis: صبر تا انتخابِ مرجع. */
+  };
+  const pickTarget = (targetId) => {
+    if (!targetId) return;
+    onPick(kind === 'procedure'
+      ? { followUp: 'procedure', procedureTypeId: Number(targetId) }
+      : { followUp: 'diagnosis', diagnosisId: Number(targetId) });
+  };
+
+  return (
+    <div className="fb-followup">
+      <label>
+        <span>نقش در پیگیریِ پس از عمل</span>
+        <select value={kind} disabled={busy} onChange={(e) => pickKind(e.target.value)}>
+          <option value="">— هیچ —</option>
+          <option value="general">بخشِ عمومی (همهٔ عمل‌ها)</option>
+          <option value="procedure">اختصاصیِ نوعِ عمل</option>
+          <option value="diagnosis">اختصاصیِ تشخیص</option>
+        </select>
+      </label>
+      {kind === 'procedure' && (
+        <label>
+          <span>نوعِ عمل</span>
+          <select value={form.procedureTypeId ?? ''} disabled={busy}
+            onChange={(e) => pickTarget(e.target.value)}>
+            <option value="">— انتخاب کنید —</option>
+            {procs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+      )}
+      {kind === 'diagnosis' && (
+        <label>
+          <span>تشخیص</span>
+          <select value={form.diagnosisId ?? ''} disabled={busy}
+            onChange={(e) => pickTarget(e.target.value)}>
+            <option value="">— انتخاب کنید —</option>
+            {diags.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+          </select>
+        </label>
+      )}
+      <small>
+        بخشِ اختصاصی هنگامِ ارسال، صفحهٔ بعدیِ فرمِ عمومی می‌شود — بیمار یک لینک
+        می‌بیند. روزهای ارسال روی خودِ نوعِ عمل تنظیم می‌شود (تعریف‌های پایه).
+      </small>
+    </div>
+  );
+}
+
 /** شیتِ ساخت/ویرایشِ یک فیلد. */
-function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {
-  const isNew = !field.id;
+function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isNew = !field.id;
   const [form, setForm] = useState(() => ({
     key: field.key ?? '',
     label: field.label ?? '',

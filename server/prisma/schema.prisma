@@ -253,12 +253,18 @@ model ProcedureType {
   /// خالی = برای این نوعِ عمل پیامِ مراقبتی نمی‌رود.
   preOpCare  String? @map("pre_op_care")
   postOpCare String? @map("post_op_care")
+  /// روزهای پیگیریِ پس از عمل — «۷,۳۰,۹۰» (روزِ بعد از opDate). خالی = پیگیریِ
+  /// خودکاری برای این نوعِ عمل نمی‌رود. متن است نه جدول، چون فقط زمان‌بندی است
+  /// و ویرایشش باید به سادگیِ همان قالبِ مراقبت باشد.
+  followUpDays String? @map("follow_up_days")
   active         Boolean      @default(true)
   createdAt      DateTime     @default(now()) @map("created_at")
 
   visits Visit[]
   /// الگوی اقلام — «این نوعِ عمل معمولاً چه چیزی می‌خواهد».
   needs  ProcedureTypeItem[]
+  /// فرم‌های پیگیریِ اختصاصیِ همین نوعِ عمل (FormDef.followUp = procedure).
+  followUpForms FormDef[]
 
   @@map("procedure_types")
 }
@@ -529,6 +535,8 @@ model Diagnosis {
   createdAt DateTime @default(now()) @map("created_at")
 
   visits Visit[]
+  /// فرم‌های پیگیریِ اختصاصیِ همین تشخیص (FormDef.followUp = diagnosis).
+  followUpForms FormDef[]
 
   @@map("diagnoses")
 }
@@ -611,6 +619,11 @@ model IntakeSubmission {
   /// (SetNull) — سابقهٔ پرشده مالِ پرونده است، نه مالِ لینک.
   link   IntakeLink? @relation(fields: [linkId], references: [id], onDelete: SetNull)
   linkId Int?        @map("link_id")
+
+  /// بخش‌های اختصاصیِ فرمِ پیگیری که به این ثبت‌نام چسبیده‌اند — شناسهٔ
+  /// FormDef های followUp=procedure/diagnosisِ منطبق با عملِ بیمار. فیلدهایشان
+  /// صفحه‌های بعدیِ همان فرمِ عمومی می‌شوند و پاسخ‌ها در همین `data` می‌نشینند.
+  extraFormIds Int[] @default([]) @map("extra_form_ids")
 
   /// پروفایلِ بیمار از همان لحظهٔ ثبت‌نام ساخته یا پیدا می‌شود (کلید: کد ملی)،
   /// چون فیشِ واریزی باید جایی بنشیند و `Document` بیمار می‌خواهد.
@@ -1813,6 +1826,19 @@ model FormDef {
   color String?
 
   active Boolean @default(true)
+
+  /// نقشِ این فرم در **پیگیریِ پس از عمل** (فقط scope=record):
+  /// `general` → بخشِ عمومیِ فرمِ پیگیری، برای همهٔ عمل‌ها.
+  /// `procedure` → بخشِ اختصاصیِ نوعِ عملِ `procedureTypeId`.
+  /// `diagnosis` → بخشِ اختصاصیِ تشخیصِ `diagnosisId`.
+  /// null → این فرم ربطی به پیگیری ندارد.
+  /// هنگامِ ارسال، بخشِ عمومی + بخش‌های اختصاصیِ منطبق **یک لینک** می‌شوند
+  /// (فیلدهای اختصاصی صفحه‌های بعدیِ همان فرم‌اند).
+  followUp        String?        @map("follow_up")
+  procedureType   ProcedureType? @relation(fields: [procedureTypeId], references: [id], onDelete: SetNull)
+  procedureTypeId Int?           @map("procedure_type_id")
+  diagnosis       Diagnosis?     @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
+  diagnosisId     Int?           @map("diagnosis_id")
 
   fields FormField[]
 

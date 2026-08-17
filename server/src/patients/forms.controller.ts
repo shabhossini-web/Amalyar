@@ -2,6 +2,7 @@ import {
   Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, UseGuards,
 } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
 import { FormsService, FIELD_TYPES, FORM_COLORS, FORM_SCOPES } from './forms.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionGuard } from '../auth/permission.guard';
@@ -19,6 +20,13 @@ class FormPatchDto {
   @IsOptional() @IsIn([...FORM_COLORS, ''], { message: 'رنگ نامعتبر است' }) color?: string;
   /* ⚠️ `scope` عمداً این‌جا نیست: عوض‌کردنِ محدودهٔ فرمی که قبلاً پر شده،
      ثبت‌های گذشته را در جای اشتباه می‌گذارد. */
+
+  /** نقش در پیگیریِ پس از عمل — فقط برای فرمِ زیرپرونده؛ '' یعنی هیچ. */
+  @IsOptional() @IsIn(['general', 'procedure', 'diagnosis', ''], { message: 'نقشِ پیگیری نامعتبر است' })
+  followUp?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt() procedureTypeId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() diagnosisId?: number;
 }
 
 /**

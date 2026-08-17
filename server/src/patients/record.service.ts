@@ -402,8 +402,30 @@ export class RecordService {
       },
     });
 
+    /* بخش‌های اختصاصیِ فرمِ پیگیری (extra_form_ids): پاسخ‌ها در همین submission
+       است ولی برچسب‌ها در فرمِ خودشان — یک‌جا خوانده می‌شوند تا هر پاسخ
+       برچسبِ درستش را بگیرد، نه اینکه پاسخِ بخشِ اختصاصی نامرئی بماند. */
+    const extraIds = [...new Set(rows.flatMap((r) => r.extraFormIds ?? []))];
+    const extraFieldsOf = new Map(
+      extraIds.length
+        ? (await this.prisma.formDef.findMany({
+          where: { id: { in: extraIds } },
+          select: {
+            id: true,
+            fields: { where: { builtin: false }, orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }] },
+          },
+        })).map((f) => [f.id, f.fields] as const)
+        : [],
+    );
+
     return rows.map((r) => {
       const data = (r.data ?? {}) as Record<string, any>;
+      const ownFields = r.form?.fields ?? [];
+      const seen = new Set(ownFields.map((f) => f.key));
+      const mergedFields = [
+        ...ownFields,
+        ...(r.extraFormIds ?? []).flatMap((id) => (extraFieldsOf.get(id) ?? []).filter((f) => !seen.has(f.key))),
+      ];
       return {
         id: r.id,
         formTitle: r.form?.title ?? 'فرمِ حذف‌شده',
@@ -415,7 +437,7 @@ export class RecordService {
            فرم پنهان نمی‌شود: کاربر باید بداند چیزی هست که نمی‌بیند. */
         locked: !clinical,
         answers: clinical
-          ? (r.form?.fields ?? [])
+          ? mergedFields
             .map((f) => ({ key: f.key, label: f.label, type: f.type, value: data[f.key] }))
             /* فیلدِ بی‌پاسخ ردیفِ خالی نمی‌سازد — فرمِ ده‌فیلدی که بیمار سه‌تا
                پر کرده، نباید هفت خطِ «—» نشان دهد. */

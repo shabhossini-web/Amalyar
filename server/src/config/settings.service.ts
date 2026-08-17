@@ -193,6 +193,7 @@ export class SettingsService {
       portalText: String(get('sms_portal_text')),
       summaryText: String(get('sms_summary_text')),
       formSendText: String(get('sms_form_send_text')),
+      followUpText: String(get('sms_follow_up_text')),
     };
   }
 

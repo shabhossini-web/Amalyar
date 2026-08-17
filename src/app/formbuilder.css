@@ -23,6 +23,21 @@
   color: #c4b5fd; background: rgba(167, 139, 250, .12); border: 1px solid rgba(167, 139, 250, .3);
 }
 
+/* ── نقشِ فرم در پیگیریِ پس از عمل (فقط فرمِ زیرپرونده) ─────────────────── */
+.fb-followup {
+  display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
+  margin: 4px 0 10px; padding: 10px 12px; border-radius: 13px;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+}
+.fb-followup label { display: grid; gap: 4px; }
+.fb-followup label span { font-size: 10.5px; font-weight: 700; color: var(--text3, #8f88b5); }
+.fb-followup select {
+  font: inherit; font-size: 12px; padding: 7px 10px; border-radius: 10px;
+  color: var(--text1, #f2f0fc); background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(var(--brand-soft-rgb), .22);
+}
+.fb-followup small { flex-basis: 100%; font-size: 10.5px; line-height: 1.9; color: var(--text3, #8f88b5); }
+
 /* ── انتخابگرِ رنگِ کارت ────────────────────────────────────────────────── */
 .fb-colors { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .fb-color {

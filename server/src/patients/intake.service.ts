@@ -593,7 +593,7 @@ export class IntakeService {
          ادمین وسطِ کار فرمِ لینک را عوض کند، بیمارِ در جریان باید همان فرمی را
          ببیند که شروع کرده. `null` یعنی «فرمی ندارد» و صفحه به فیلدهای
          هاردکدِ امروز برمی‌گردد. */
-      form: await this.formView(row.formId),
+      form: await this.formView(row.formId, row.extraFormIds ?? []),
       token: row.token,
       status: row.status,
       /* ⚠️ نوبت‌دهی فقط وقتی در صفحهٔ بیمار ظاهر می‌شود که نصب برنامهٔ کاری
@@ -699,14 +699,14 @@ export class IntakeService {
     return f?.scope ?? null;
   }
 
-  private async formView(formId: number | null) {
+  private async formView(formId: number | null, extraFormIds: number[] = []) {
     if (!formId) return null;
     const f = await this.prisma.formDef.findUnique({
       where: { id: formId },
       include: { fields: { orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }] } },
     });
     if (!f || !f.active) return null;
-    const fields = f.fields
+    const publicFields = (rows: any[]) => rows
       /* ⚠️ فیلدِ **بخش‌دار** (نقشِ پزشک/منشی/…) کارِ داخلیِ مطب است و روی فرمِ
          عمومی جایی ندارد: «شرحِ معاینه» را پزشک بعد از دیدنِ بیمار می‌نویسد،
          نه خودِ بیمار پیش از آمدن. همین فیلتر سدِ نوشتن هم هست — `fill` فقط
@@ -717,6 +717,33 @@ export class IntakeService {
         key: x.key, label: x.label, type: x.type, required: x.required,
         options: x.options ?? [], hint: x.hint, placeholder: x.placeholder, page: x.page,
       }));
+    const fields = publicFields(f.fields);
+
+    /* بخش‌های اختصاصیِ فرمِ پیگیری (extra_form_ids روی خودِ ثبت‌نام): فیلدهای
+       هر بخش، صفحه(های) **بعدیِ** همان فرم می‌شوند — بیمار یک لینک می‌بیند،
+       دو بخش: عمومی و اختصاصیِ عمل/تشخیصِ خودش. کلیدِ تکراری از بخشِ اختصاصی
+       حذف می‌شود تا پاسخِ عمومی بازنویسی نشود. */
+    if (extraFormIds.length) {
+      const extras = await this.prisma.formDef.findMany({
+        where: { id: { in: extraFormIds }, active: true },
+        include: { fields: { orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }] } },
+        orderBy: { id: 'asc' },
+      });
+      const seen = new Set(fields.map((x) => x.key));
+      let offset = fields.reduce((m, x) => Math.max(m, x.page), 1);
+      for (const ex of extras) {
+        const exFields = publicFields(ex.fields).filter((x) => !seen.has(x.key));
+        if (!exFields.length) continue;
+        const minPage = Math.min(...exFields.map((x) => x.page));
+        const maxPage = Math.max(...exFields.map((x) => x.page));
+        for (const x of exFields) {
+          fields.push({ ...x, page: offset + (x.page - minPage) + 1 });
+          seen.add(x.key);
+        }
+        offset += maxPage - minPage + 1;
+      }
+    }
+
     return {
       key: f.key,
       title: f.title,
@@ -760,7 +787,7 @@ export class IntakeService {
       if (dto[from] !== undefined) data[to] = text(dto[from], max);
     }
 
-    const form = await this.formView(row.formId);
+    const form = await this.formView(row.formId, row.extraFormIds ?? []);
     if (form && dto.values) {
       /* ⚠️ فقط کلیدهای **همین فرم** پذیرفته می‌شوند: بدونِ این، یک POSTِ
          دست‌ساز می‌توانست هر کلیدی را در `data` بنشاند — از جمله کلیدهایی که
@@ -889,7 +916,7 @@ export class IntakeService {
 
     /* کلید باید واقعاً یک باکسِ عکسِ **همین** فرم باشد — وگرنه این نشانیِ
        عمومی یک آپلودرِ آزاد است. */
-    const form = await this.formView(row.formId);
+    const form = await this.formView(row.formId, row.extraFormIds ?? []);
     const fld = form?.fields.find((x) => x.key === fieldKey && x.type === 'image');
     if (!fld) throw new BadRequestException('این کادر عکس نمی‌گیرد');
 

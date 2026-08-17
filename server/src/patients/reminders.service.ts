@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
+import { TenantContext } from '../tenant/tenant-context';
+import { toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 
@@ -24,6 +27,7 @@ export class RemindersService {
     private prisma: PrismaService,
     private sms: SmsService,
     private settings: SettingsService,
+    private tenant: TenantContext,
   ) {}
 
   /**
@@ -55,9 +59,14 @@ export class RemindersService {
         where: { id: visitId },
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
-          opDate: true, opStatus: true,
-          procedureType: { select: { preOpCare: true, postOpCare: true } },
-          patient: { select: { phone: true, firstName: true, lastName: true, code: true } },
+          opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
+          procedureType: { select: { preOpCare: true, postOpCare: true, followUpDays: true } },
+          patient: {
+            select: {
+              phone: true, firstName: true, lastName: true, code: true,
+              nationalId: true, birthDate: true, address: true,
+            },
+          },
         },
       });
       if (!v) return;
@@ -90,10 +99,34 @@ export class RemindersService {
          متنِ مراقبت از قالبِ **نوعِ عمل** می‌آید (تعریف‌های پایه)؛ قالبِ خالی
          یعنی برای این نوع پیامی نمی‌رود. */
       await this.prisma.reminder.updateMany({
-        where: { visitId, kind: { in: ['surgery', 'pre_op_care', 'post_op_care'] }, status: 'pending' },
+        where: { visitId, kind: { in: ['surgery', 'pre_op_care', 'post_op_care', 'follow_up'] }, status: 'pending' },
         data: { status: 'cancelled' },
       });
       if (v.kind === 'surgery' && v.opDate && v.opStatus !== 'cancelled') {
+        /* فرمِ پیگیریِ پس از عمل — روزها از خودِ نوعِ عمل (تعریف‌های پایه).
+           لینکِ فرم همین‌جا آماده می‌شود تا متنِ ثبت‌شده در دفتر کامل باشد؛
+           پیامکِ مراقبتِ بعد از عمل هم همان لینک را ضمیمه می‌کند. */
+        const followDays = RemindersService.parseDays(v.procedureType?.followUpDays);
+        /* خطای ساختِ لینک (مثلاً نبودِ tenant context) نباید یادآوریِ عمل و
+           مراقبت‌ها را قربانی کند — بدونِ لینک ادامه می‌دهیم و لاگ می‌ماند. */
+        const followUrl = followDays.length
+          ? await this.followUpUrl(v, followDays).catch((e) => {
+            this.log.warn(`لینکِ پیگیریِ visit ${visitId} ساخته نشد: ${e instanceof Error ? e.message : e}`);
+            return null;
+          })
+          : null;
+        if (followUrl) {
+          for (const day of followDays) {
+            const due = this.dueOn(v.opDate, day, hour);
+            if (!due) continue;
+            await this.prisma.reminder.create({
+              data: {
+                patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone,
+                text: `${prefix}${renderSms(cfg.followUpText, { link: followUrl })}`,
+              },
+            });
+          }
+        }
         const dueAt = this.dueOn(v.opDate, -cfg.surgeryDays, hour);
         if (dueAt) {
           await this.prisma.reminder.create({
@@ -117,7 +150,12 @@ export class RemindersService {
           const postDue = this.dueOn(v.opDate, cfg.postOpDays, hour);
           if (postDue) {
             await this.prisma.reminder.create({
-              data: { patientId: v.patientId, visitId, kind: 'post_op_care', dueAt: postDue, phone, text: `${prefix}${post}` },
+              data: {
+                patientId: v.patientId, visitId, kind: 'post_op_care', dueAt: postDue, phone,
+                /* لینکِ فرمِ پیگیری ضمیمهٔ همین پیامِ مراقبت — «پیامِ روزِ بعد =
+                   متنِ مراقبت + لینکِ فرم» (docs/BOOKING.md). */
+                text: `${prefix}${post}${followUrl ? `\n${followUrl}` : ''}`,
+              },
             });
           }
         }
@@ -125,6 +163,88 @@ export class RemindersService {
     } catch (e) {
       this.log.error(`syncNextVisit(${visitId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
     }
+  }
+
+  /** «۷,۳۰,۹۰» (فارسی یا لاتین، با هر جداکننده) → [7, 30, 90]. */
+  static parseDays(raw?: string | null): number[] {
+    if (!raw?.trim()) return [];
+    const days = toEnDigits(raw).split(/[^0-9]+/)
+      .map((x) => Number(x))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 365);
+    return [...new Set(days)].sort((a, b) => a - b);
+  }
+
+  /**
+   * لینکِ فرمِ پیگیریِ این جراحی — بخشِ عمومی + بخش‌های اختصاصیِ منطبق با
+   * نوعِ عمل و تشخیصِ ثبت‌شده، همه پشتِ **یک** توکن (بخش‌های اختصاصی
+   * صفحه‌های بعدیِ همان فرم می‌شوند — `formView`ِ intake).
+   *
+   * ثبت‌نامِ بازِ همین فرم برای همین بیمار دوباره استفاده می‌شود (همان قاعدهٔ
+   * `sendToPatient`)، پس هم‌گام‌سازی‌های مکرر ردیفِ نیمه‌کاره نمی‌کارند؛
+   * اعتبارش تا آخرین موعدِ پیگیری + ۱۴ روز تمدید می‌شود.
+   */
+  private async followUpUrl(
+    v: {
+      patientId: number; opDate: Date | null; procedureTypeId: number | null; diagnosisId: number | null;
+      patient: {
+        firstName: string; lastName: string; phone: string | null;
+        nationalId: string | null; birthDate: Date | null; address: string | null;
+      } | null;
+    },
+    days: number[],
+  ): Promise<string | null> {
+    const forms = await this.prisma.formDef.findMany({
+      where: {
+        active: true, scope: 'record',
+        OR: [
+          { followUp: 'general' },
+          ...(v.procedureTypeId ? [{ followUp: 'procedure', procedureTypeId: v.procedureTypeId }] : []),
+          ...(v.diagnosisId ? [{ followUp: 'diagnosis', diagnosisId: v.diagnosisId }] : []),
+        ],
+      },
+      orderBy: { id: 'asc' },
+      select: { id: true, followUp: true },
+    });
+    if (!forms.length) return null;
+    /* پایه، بخشِ عمومی است؛ اگر تعریف نشده، اولین بخشِ اختصاصی پایه می‌شود. */
+    const base = forms.find((f) => f.followUp === 'general') ?? forms[0];
+    const extraFormIds = forms.filter((f) => f.id !== base.id).map((f) => f.id);
+
+    const lastDay = days[days.length - 1];
+    const opMs = (v.opDate ?? new Date()).getTime();
+    const expiresAt = new Date(Math.max(Date.now(), opMs + lastDay * 24 * 3600_000) + 14 * 24 * 3600_000);
+
+    const open = await this.prisma.intakeSubmission.findFirst({
+      where: { patientId: v.patientId, formId: base.id, linkId: null, status: { in: ['pending_fill', 'pending_payment'] } },
+      orderBy: { id: 'desc' },
+    });
+    const row = open
+      ? await this.prisma.intakeSubmission.update({
+        where: { id: open.id },
+        data: {
+          extraFormIds,
+          expiresAt: open.expiresAt && open.expiresAt > expiresAt ? open.expiresAt : expiresAt,
+        },
+      })
+      : await this.prisma.intakeSubmission.create({
+        data: {
+          token: randomBytes(18).toString('base64url'),
+          linkId: null,
+          formId: base.id,
+          patientId: v.patientId,
+          amount: 0,
+          status: 'pending_fill',
+          extraFormIds,
+          data: {
+            firstName: v.patient?.firstName, lastName: v.patient?.lastName,
+            nationalId: v.patient?.nationalId ?? null, phone: v.patient?.phone ?? null,
+            address: v.patient?.address ?? null,
+            birthDate: v.patient?.birthDate ? v.patient.birthDate.toISOString() : null,
+          },
+          expiresAt,
+        },
+      });
+    return `https://${this.tenant.require().hostname}/f/${row.token}`;
   }
 
   /**

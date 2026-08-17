@@ -292,6 +292,10 @@ export class FormsService {
       id: f.id, key: f.key, title: f.title, scope: f.scope,
       visitKind: f.visitKind, hint: f.hint, active: f.active,
       color: f.color || colorForKey(f.key),
+      /* نقشِ فرم در پیگیریِ پس از عمل — فرم‌ساز از همین می‌خواند. */
+      followUp: f.followUp ?? null,
+      procedureTypeId: f.procedureTypeId ?? null,
+      diagnosisId: f.diagnosisId ?? null,
       pages: fields.reduce((m: number, x: any) => Math.max(m, x.page), 1),
       fields,
     };
@@ -498,9 +502,37 @@ export class FormsService {
    * شده، ثبت‌های گذشته را در جای اشتباه می‌گذارد — و برگرداندنش دستی است.
    * فرمِ تازه بسازید.
    */
-  async patchForm(id: number, dto: { title?: string; hint?: string; active?: boolean; color?: string | null }) {
+  async patchForm(
+    id: number,
+    dto: {
+      title?: string; hint?: string; active?: boolean; color?: string | null;
+      followUp?: string | null; procedureTypeId?: number | null; diagnosisId?: number | null;
+    },
+  ) {
     const row = await this.prisma.formDef.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('فرم پیدا نشد');
+
+    /* نقشِ پیگیری فقط برای فرمِ زیرپرونده معنا دارد: پیگیری به پرونده می‌چسبد،
+       مراجعه نمی‌سازد. بخشِ اختصاصی بدونِ مرجعش (نوعِ عمل/تشخیص) بی‌معناست. */
+    let followUpPatch: Record<string, unknown> = {};
+    if (dto.followUp !== undefined) {
+      const fu = dto.followUp || null;
+      if (fu && row.scope !== 'record') {
+        throw new BadRequestException('نقشِ پیگیری فقط روی فرمِ زیرپرونده می‌نشیند');
+      }
+      if (fu === 'procedure' && !dto.procedureTypeId) {
+        throw new BadRequestException('بخشِ اختصاصیِ عمل، نوعِ عملش را می‌خواهد');
+      }
+      if (fu === 'diagnosis' && !dto.diagnosisId) {
+        throw new BadRequestException('بخشِ اختصاصیِ تشخیص، تشخیصش را می‌خواهد');
+      }
+      followUpPatch = {
+        followUp: fu,
+        procedureTypeId: fu === 'procedure' ? dto.procedureTypeId : null,
+        diagnosisId: fu === 'diagnosis' ? dto.diagnosisId : null,
+      };
+    }
+
     await this.prisma.formDef.update({
       where: { id },
       data: {
@@ -509,6 +541,7 @@ export class FormsService {
         ...(dto.active !== undefined ? { active: dto.active } : {}),
         /* رشته‌ی خالی یعنی «برگرد به خودکار» — پس `null` می‌نشیند، نه ''. */
         ...(dto.color !== undefined ? { color: normColor(dto.color) } : {}),
+        ...followUpPatch,
       },
     });
     return this.byKey(row.key);

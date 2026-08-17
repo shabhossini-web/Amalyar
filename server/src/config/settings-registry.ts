@@ -171,6 +171,11 @@ export const SETTINGS: SettingDef[] = [
     key: 'sms_form_send_text', label: 'متنِ پیامکِ ارسالِ فرم',
     group: 'sms', type: 'textarea', default: '{title}\n{link}', maxLength: 500,
   },
+  {
+    key: 'sms_follow_up_text', label: 'متنِ پیامکِ فرمِ پیگیریِ پس از عمل',
+    hint: 'روزهای ارسال روی خودِ نوعِ عمل تنظیم می‌شود (تعریف‌های پایه — «روزهای پیگیری»).',
+    group: 'sms', type: 'textarea', default: 'پیگیریِ پس از عمل — لطفاً وضعیتِ خود را در این فرم ثبت کنید:\n{link}', maxLength: 500,
+  },
   // ── سربرگ (با آپلود پر می‌شوند؛ در صفحه پنهان‌اند) ─────────────
   {
     key: 'letterhead_sha', label: 'سربرگ — شناسهٔ فایل',

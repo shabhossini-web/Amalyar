@@ -74,6 +74,8 @@ class ProcedureCreateDto {
   /// قالبِ مراقبت — باید در DTO اعلام شود وگرنه whitelist بی‌صدا دورش می‌ریزد.
   @IsOptional() @IsString() @MaxLength(900) preOpCare?: string;
   @IsOptional() @IsString() @MaxLength(900) postOpCare?: string;
+  /// روزهای فرمِ پیگیریِ پس از عمل — «۷,۳۰,۹۰».
+  @IsOptional() @IsString() @MaxLength(60) followUpDays?: string;
 }
 
 class ProcedurePatchDto {
@@ -82,6 +84,7 @@ class ProcedurePatchDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @IsOptional() @IsString() @MaxLength(900) preOpCare?: string;
   @IsOptional() @IsString() @MaxLength(900) postOpCare?: string;
+  @IsOptional() @IsString() @MaxLength(60) followUpDays?: string;
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
