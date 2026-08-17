@@ -652,6 +652,9 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   }
 
 
+  /* فرمِ انتخاب‌شده — برای عنوان و رنگِ بخشِ «فرم» (تمایز از ردیفِ نوع‌ها). */
+  const kindMeta = (fd.kinds ?? []).find((k) => k.kind === f.kind) ?? null;
+
   return (
     <Overlay backdrop="db-overlay" panel="glass db-sheet" as="form" from="bottom" onClose={onClose} onSubmit={submit}>
       <header className="db-sheet-head">
@@ -688,6 +691,15 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           می‌بلعید. آن ریشه در `Tabs.jsx` بسته شد (قرصِ همیشه‌مانده، بدونِ
           `layoutId`) و این `hidden` فقط برای اعتبارسنجی مانده. */}
       <div className="db-step" hidden={!(editing || step === 1)}>
+      {/* توضیحِ بالای بخش — کاربر باید بداند این قسمت چه کاری می‌کند. */}
+      <div className="db-sect">
+        <b>{!editing && <i>{faNum(1)}</i>}{t.record}</b>
+        <small>
+          {editing
+            ? 'مشخصاتِ بیمار — تغییرش روی همهٔ مراجعاتِ همین پرونده اثر می‌گذارد.'
+            : 'اول بیمار: پروندهٔ جدید بسازید یا پروندهٔ موجود را جستجو کنید — مراجعه زیرِ همین پرونده ثبت می‌شود.'}
+        </small>
+      </div>
       {!editing && (
         <Tabs
           variant="inset"
@@ -796,25 +808,50 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
 
           تا وقتی پاسخِ سرور نرسیده فهرستِ پشتیبان می‌ماند، وگرنه یک قطعیِ
           لحظه‌ای ردیف را **خالی** می‌کرد. */}
-      <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
-        {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
-          .map((k) => (
-          <button
-            key={k.kind}
-            type="button"
-            role="radio"
-            aria-checked={f.kind === k.kind}
-            className={f.kind === k.kind ? 'on' : ''}
-            style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
-            onClick={() => setF((s) => ({ ...s, kind: k.kind }))}
-          >{k.title}</button>
-        ))}
+      <div className="db-sect">
+        <b>{!editing && <i>{faNum(2)}</i>}نوعِ فرم</b>
+        <small>
+          این {t.visit} با کدام فرم ثبت شود؟ هر دکمه یکی از فرم‌های ساخته‌شده در
+          فرم‌ساز است و رنگش، رنگِ کارتِ همان فرم روی داشبورد.
+        </small>
+      </div>
+      {/* جعبهٔ خنثیِ خط‌چین — تا ردیفِ انتخابِ نوع از کارتِ رنگیِ خودِ فرم
+          (پایین) جدا دیده شود؛ گزارشِ کاربر: «رنگ‌ها قاطی می‌شد». */}
+      <div className="db-kindbox">
+        <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
+          {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
+            .map((k) => (
+            <button
+              key={k.kind}
+              type="button"
+              role="radio"
+              aria-checked={f.kind === k.kind}
+              className={f.kind === k.kind ? 'on' : ''}
+              style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
+              onClick={() => setF((s) => ({ ...s, kind: k.kind }))}
+            >{k.title}</button>
+          ))}
+        </div>
       </div>
 
       </>)}
 
       {/* ── گامِ ۳: تکمیل ── */}
       {(editing || step === 3) && (<>
+      <div className="db-sect">
+        <b>
+          {!editing && <i>{faNum(3)}</i>}
+          {/* عنوانِ فرم‌ها معمولاً خودشان با «فرم» شروع می‌شوند («فرمِ عمل»)؛
+              پیشوندِ دوباره «فرمِ فرمِ عمل» می‌ساخت. */}
+          {(() => { const ft = kindMeta?.title ?? fd.def?.title ?? t.visit; return /^\s*فرم/.test(ft) ? ft : `فرمِ ${ft}`; })()}
+        </b>
+        <small>فیلدهای همین فرم — لبهٔ رنگیِ این کارت، رنگِ همان فرم است تا با انتخابگرِ بالا اشتباه نشود.</small>
+      </div>
+      {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده — تمایز از ردیفِ نوع‌ها. */}
+      <div
+        className="db-formcard"
+        style={kindMeta?.color ? { '--k': `var(--kind-${kindMeta.color})` } : undefined}
+      >
       {/* ⚠️ فیلدهای هسته‌ای **به ترتیبِ تعریف** چیده می‌شوند، نه به ترتیبِ این
           فایل. هر کدام یک ورودیِ نام‌دار است تا `orderBuiltins` بتواند
           جابه‌جاشان کند؛ اگر مثل قبل JSXِ درجا بودند، ترتیبِ فرم‌ساز هیچ
@@ -856,6 +893,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           />
         </div>
       )}
+      </div>
 
       <button className="db-submit" type="submit" disabled={busy}>
         {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}

@@ -47,6 +47,35 @@
 .db-filters { margin-bottom: 14px; }
 .db-defbtn { width: 44px; height: auto; align-self: stretch; border-radius: 13px; }
 
+/* سرصفحهٔ هر بخشِ فرمِ مراجعه — شماره + عنوان + یک خط توضیح.
+   گزارشِ کاربر: «فرم پیچیده شده، تفکیک‌بندی بیشتر شود» — هر بخش باید بگوید
+   چه کاری می‌کند، نه اینکه کاربر از چیدمان حدس بزند. */
+.db-sect { display: flex; flex-direction: column; gap: 3px; margin: 2px 0; }
+.db-sect b { display: flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 900; color: var(--text1); }
+.db-sect b i {
+  font-style: normal; flex: 0 0 auto; display: grid; place-items: center;
+  width: 20px; height: 20px; border-radius: 7px; font-size: 11px;
+  color: #fff; background: rgba(var(--brand-soft-rgb), .3);
+}
+.db-sect small { font-size: 11px; font-weight: 600; line-height: 1.9; color: var(--text3); }
+
+/* جعبهٔ خنثیِ انتخابِ نوع — خط‌چین و بی‌رنگ، تا با کارتِ رنگیِ خودِ فرم
+   (db-formcard) قاطی نشود. */
+.db-kindbox {
+  padding: 10px; border-radius: 14px;
+  background: rgba(255, 255, 255, .02); border: 1px dashed rgba(255, 255, 255, .16);
+}
+.db-kindbox .db-kindrow { margin-bottom: 0; }
+
+/* کارتِ خودِ فرم — زمینهٔ جدا + لبهٔ رنگی از رنگِ فرمِ انتخاب‌شده. */
+.db-formcard {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 12px; border-radius: 14px;
+  background: rgba(var(--brand-soft-rgb), .05);
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-inline-start: 3px solid rgb(var(--k, var(--brand-soft-rgb)));
+}
+
 /* نوعِ ملاقات — انتخابگرِ بالای فرم.
    ⚠️ `wrap` لازم است: فهرست دیگر چهار دکمهٔ ثابت نیست و هر نصب می‌تواند
    نوعِ دلخواه بسازد. بدونش، نوعِ ششم از لبهٔ شیت بیرون می‌زد. */

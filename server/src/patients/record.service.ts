@@ -187,12 +187,17 @@ export class RecordService {
      * محتوای بالینی است، فرقی نمی‌کند در کدام جدول ذخیره شده باشد.
      * فقط **خواندنی** است — جای نوشتنش خودِ فرمِ مراجعه است.
      */
+    /* «شرح» فقط textarea نیست: خیلی از مطب‌ها فیلدِ شرح را تک‌خطی (text)
+       تعریف می‌کنند. قاعده: هر textarea + هر فیلدِ متنی که برچسبش شرح/توضیح/
+       گزارش دارد. عددی و انتخابی بیرون می‌مانند — آن‌ها «شرح» نیستند. */
+    const isTextField = (f: { type?: string | null; label: string }) =>
+      f.type === 'textarea' || (f.type === 'text' && /شرح|توضیح|گزارش/.test(f.label));
     const visitTexts = !clinical ? [] : visits
       .flatMap((v) => {
         const code = `${patient.code}-V${v.seq}`;
         const vals = (v.extra && typeof v.extra === 'object') ? v.extra as Record<string, any> : {};
         const rows = (v.kind ? kindFields[v.kind] ?? [] : [])
-          .filter((f) => f.type === 'textarea')
+          .filter(isTextField)
           .map((f) => ({ label: f.label, body: vals[f.key] }))
           .filter((r) => typeof r.body === 'string' && r.body.trim() !== '')
           .map((r) => ({ visitId: v.id, code, kind: v.kind, opDate: v.opDate, label: r.label, body: String(r.body).trim() }));
@@ -201,7 +206,17 @@ export class RecordService {
         }
         return rows;
       })
-      .sort((a, b) => (b.opDate?.getTime() ?? 0) - (a.opDate?.getTime() ?? 0));
+      /* «همهٔ شرح‌های فرم‌ها» شاملِ فرم‌های **زیرپرونده** هم هست (شرحِ حال،
+         پیگیری، جوابِ آزمایش) — بدهیِ گزارش‌شده: پاسخِ متنیِ این فرم‌ها فقط در
+         تبِ فرم‌ها بود و تبِ شرح‌ها آن را نداشت. کد این‌جا عنوانِ فرم است چون
+         این ثبت‌ها به مراجعهٔ خاصی نمی‌چسبند. */
+      .concat(attachedForms.flatMap((s: any) => (s.answers ?? [])
+        .filter((a: any) => isTextField(a) && typeof a.value === 'string' && a.value.trim() !== '')
+        .map((a: any) => ({
+          visitId: null, code: s.formTitle, kind: null, opDate: s.submittedAt,
+          label: a.label, body: String(a.value).trim(),
+        }))))
+      .sort((a, b) => (b.opDate ? new Date(b.opDate).getTime() : 0) - (a.opDate ? new Date(a.opDate).getTime() : 0));
 
     return {
       ...patient,
