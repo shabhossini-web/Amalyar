@@ -495,6 +495,24 @@ a.db-ico { text-decoration: none; }
 .bl-summary .bl-over { background: rgba(34, 211, 238, .08); border-color: rgba(34, 211, 238, .3); }
 .bl-summary .bl-over b { color: #22d3ee; }
 
+/* مدلِ قیمت‌گذاری — با کد / گلوبال */
+.bl-pricing {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: 13px;
+  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+}
+.bl-pricing-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 99px; background: rgba(255, 255, 255, .05); }
+.bl-pricing-tabs button {
+  cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 800; border: 0;
+  padding: 6px 14px; border-radius: 99px; color: var(--text2); background: transparent;
+}
+.bl-pricing-tabs button.on { color: #fff; background: rgba(var(--brand-soft-rgb), .3); }
+.bl-pricing input {
+  flex: 1 1 150px; min-width: 0; padding: 8px 12px; border-radius: 10px; font: inherit; font-size: 12.5px;
+  color: var(--text1); background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+}
+.bl-pricing-note { flex-basis: 100%; font-size: 10.5px; color: var(--text3); }
+
 .bl-add {
   display: grid; gap: 10px; padding: 14px; border-radius: 15px;
   background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .14);

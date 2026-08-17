@@ -239,7 +239,10 @@ export class SettlementService {
     });
     if (!visit) throw new NotFoundException('مراجعه پیدا نشد');
 
-    const revenue = visit.charges.reduce((s, c) => s + c.amount, 0);
+    // مدلِ گلوبال: درآمدِ تقسیم‌شدنی همان مبلغِ توافقیِ فاکتور است، نه جمعِ اقلامِ نمایشی.
+    const revenue = visit.pricingModel === 'global' && visit.globalAmount != null
+      ? visit.globalAmount
+      : visit.charges.reduce((s: number, c: { amount: number }) => s + c.amount, 0);
     const when = visit.opDate ?? visit.createdAt;
 
     /// استثنای همین مراجعه بر قراردادِ جاری مقدم است — همان معنیِ «override».

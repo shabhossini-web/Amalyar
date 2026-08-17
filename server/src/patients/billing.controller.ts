@@ -1,4 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -7,6 +9,17 @@ import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { BillingService } from './billing.service';
 import { ChargeCreateDto, PaymentCreateDto } from './dto/billing.dto';
+
+class PricingDto {
+  @IsIn(['coded', 'global'], { message: 'مدلِ قیمت‌گذاری نامعتبر است' })
+  pricingModel!: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'مبلغِ کل باید عددِ صحیح باشد' })
+  @Min(0)
+  globalAmount?: number;
+}
 
 /**
  * صورت‌حسابِ مراجعه — اقلام و پرداخت‌ها.
@@ -24,6 +37,13 @@ export class BillingController {
   @Get(':id/billing')
   get(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.billing.get(id, user);
+  }
+
+  /** مدلِ قیمت‌گذاری: coded (جمعِ اقلام) یا global (مبلغِ کلِ توافقی). */
+  @RequirePermissions('billing.write')
+  @Post(':id/billing/pricing')
+  setPricing(@Param('id', ParseIntPipe) id: number, @Body() dto: PricingDto, @CurrentUser() user: any) {
+    return this.billing.setPricing(id, dto, user);
   }
 
   @RequirePermissions('billing.write')

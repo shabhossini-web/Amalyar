@@ -203,21 +203,28 @@ export function printVisits(rows, opts) {
  *
  * ⚠️ ارقام فارسی‌اند (برخلافِ CSV): این برگه خوانده می‌شود نه جمع زده.
  */
-export function printInvoice({ visit, billing, brand, letterheadUrl }) {
+export function printInvoice({ visit, billing, brand, letterheadUrl, variant = 'official' }) {
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fa = (n) => Number(n || 0).toLocaleString('fa-IR');
+  /* غیررسمی = صورت‌حسابِ دستِ بیمار: بدونِ سربرگِ رسمی و بدونِ هویتِ مالیاتی.
+     رسمی = سندِ حسابداری/بیمارستان: سربرگ + شناسهٔ ملی و کدِ اقتصادی. */
+  const official = variant !== 'informal';
   /* با سربرگ، هویتِ متنیِ شرکت چاپ نمی‌شود — خودِ سربرگ نام و نشان را دارد و
      دوبار چاپ‌شدنش سند را خراب می‌کند. صفحه تمام‌بوم می‌شود (حاشیهٔ صفر) تا
      تصویرِ سربرگ تا لبهٔ کاغذ برسد؛ محتوا با paddingِ بدنه جای خودش می‌ماند. */
-  const lh = typeof letterheadUrl === 'string' && letterheadUrl.startsWith('data:image/') ? letterheadUrl : null;
+  const lh = official && typeof letterheadUrl === 'string' && letterheadUrl.startsWith('data:image/') ? letterheadUrl : null;
 
+  /* مدلِ گلوبال: کدها، شرح و تعداد چاپ می‌شوند ولی ستون‌های مبلغِ تک‌قلم نه —
+     مبلغِ فاکتور همان توافقیِ کل است که سرور در billing.total گذاشته. */
+  const global = billing.pricingModel === 'global';
   const items = billing.charges.map((c, i) => `<tr>
     <td class="c">${jToFa(i + 1)}</td>
     <td>${esc(c.title)}${c.serviceCode ? ` <small dir="ltr">${esc(c.serviceCode)}</small>` : ''}</td>
     <td class="c">${fa(c.quantity)}</td>
-    <td class="n">${fa(c.unitPrice)}</td>
-    <td class="n">${fa(c.amount)}</td>
+    ${global ? '' : `<td class="n">${fa(c.unitPrice)}</td>
+    <td class="n">${fa(c.amount)}</td>`}
   </tr>`).join('');
+  const cols = global ? 3 : 5;
 
   const pays = billing.payments.length
     ? `<h2>پرداخت‌ها</h2><table><thead><tr><th>تاریخ</th><th>روش</th><th>پیگیری</th><th>مبلغ</th></tr></thead><tbody>${
@@ -231,11 +238,11 @@ export function printInvoice({ visit, billing, brand, letterheadUrl }) {
     : '';
 
   // هویتِ حقوقیِ شرکت زیرِ نام. فاکتورِ بدونِ شناسهٔ ملی و کدِ اقتصادی سندِ
-  // مالیاتی نیست، پس هرکدام که پر باشد چاپ می‌شود.
+  // مالیاتی نیست، پس در رسمی هرکدام که پر باشد چاپ می‌شود؛ غیررسمی فقط تلفن.
   const idLine = [
     brand?.phone ? `تلفن: ${esc(jToFa(brand.phone))}` : '',
-    brand?.nationalId ? `شناسهٔ ملی: ${esc(jToFa(brand.nationalId))}` : '',
-    brand?.econCode ? `کد اقتصادی: ${esc(jToFa(brand.econCode))}` : '',
+    official && brand?.nationalId ? `شناسهٔ ملی: ${esc(jToFa(brand.nationalId))}` : '',
+    official && brand?.econCode ? `کد اقتصادی: ${esc(jToFa(brand.econCode))}` : '',
   ].filter(Boolean).join(' &nbsp;·&nbsp; ');
 
   const payTo = visit.payer === 'hospital'
@@ -273,7 +280,7 @@ ${lh ? `<img class="lh-bg" src="${lh}" alt="">` : ''}
     ${brand?.address ? `<div class="sub">${esc(brand.address)}</div>` : ''}
   </div>`}
   <div class="no">
-    <b>صورت‌حساب</b><br>
+    <b>${official ? 'صورت‌حساب' : 'صورت‌حسابِ غیررسمی'}</b><br>
     شماره: <span dir="ltr">${esc(visit.code)}</span><br>
     تاریخ: ${esc(faDate(visit.opDate || visit.createdAt))}
   </div>
@@ -287,12 +294,12 @@ ${lh ? `<img class="lh-bg" src="${lh}" alt="">` : ''}
   ${visit.procedureTypeName || visit.opType ? `<br>نوعِ عمل: ${esc(visit.procedureTypeName || visit.opType)}` : ''}
 </div>
 <table>
-  <thead><tr><th>ردیف</th><th>شرح</th><th>تعداد</th><th>مبلغِ واحد</th><th>مبلغ</th></tr></thead>
-  <tbody>${items || '<tr><td colspan="5">قلمی ثبت نشده است</td></tr>'}</tbody>
+  <thead><tr><th>ردیف</th><th>شرح</th><th>تعداد</th>${global ? '' : '<th>مبلغِ واحد</th><th>مبلغ</th>'}</tr></thead>
+  <tbody>${items || `<tr><td colspan="${cols}">قلمی ثبت نشده است</td></tr>`}</tbody>
   <tfoot>
-    <tr><td colspan="4">جمعِ کل (تومان)</td><td class="n">${fa(billing.total)}</td></tr>
-    <tr><td colspan="4">پرداخت‌شده</td><td class="n">${fa(billing.paid)}</td></tr>
-    <tr><td colspan="4" class="due">مانده</td><td class="n due">${fa(billing.due)}</td></tr>
+    <tr><td colspan="${cols - 1}">${global ? 'مبلغِ کلِ توافقی (تومان)' : 'جمعِ کل (تومان)'}</td><td class="n">${fa(billing.total)}</td></tr>
+    <tr><td colspan="${cols - 1}">پرداخت‌شده</td><td class="n">${fa(billing.paid)}</td></tr>
+    <tr><td colspan="${cols - 1}" class="due">مانده</td><td class="n due">${fa(billing.due)}</td></tr>
   </tfoot>
 </table>
 ${pays}

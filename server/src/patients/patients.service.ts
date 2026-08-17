@@ -77,7 +77,10 @@ function enrich(v: any, kinds?: KindMap) {
     durationMin: durationOf(v.opStartTime, v.opEndTime),
     // جمع‌های مالی از ردیف‌ها مشتق می‌شوند (قانونِ computeVisit)؛ هیچ render ای
     // اجازهٔ جمع‌زدن ندارد و هیچ ستونِ سرجمعی در DB نیست که از واقعیت عقب بماند.
-    ...summarize(v.charges ?? [], v.payments ?? []),
+    // مدلِ «گلوبال» همین‌جا اعمال می‌شود تا کارت و فهرست همان عددِ فاکتور را ببینند.
+    ...summarize(v.charges ?? [], v.payments ?? [], v),
+    pricingModel: v.pricingModel,
+    globalAmount: v.globalAmount,
     notes: v.notes,
     /* ⚠️ پاسخِ فیلدهای دلخواه باید برگردد وگرنه چرخه نیمه‌کاره است: مقدار در
        دیتابیس می‌نشیند ولی هیچ صفحه‌ای نشانش نمی‌دهد و ویرایش هم خالی باز
@@ -388,7 +391,10 @@ export class PatientsService {
    * وگرنه «سورت بر مانده» بی‌سروصدا بخشی از نتیجه را حذف می‌کرد.
    */
   private async moneyOrderedIds(scoped: any, f: VisitFilter): Promise<number[]> {
-    const visits = await this.prisma.visit.findMany({ where: scoped, select: { id: true } });
+    const visits = await this.prisma.visit.findMany({
+      where: scoped,
+      select: { id: true, pricingModel: true, globalAmount: true },
+    });
     if (!visits.length) return [];
     const ids = visits.map((v) => v.id);
     const [charges, payments] = await Promise.all([
@@ -396,6 +402,11 @@ export class PatientsService {
       this.prisma.payment.groupBy({ by: ['visitId'], where: { visitId: { in: ids } }, _sum: { amount: true } }),
     ]);
     const totalOf = new Map(charges.map((c) => [c.visitId, c._sum.amount ?? 0]));
+    // مدلِ گلوبال: مبلغِ توافقی جای جمعِ اقلام می‌نشیند — سورت و فیلترِ «بدهکار»
+    // باید همان عددی را ببینند که روی فاکتور است.
+    for (const v of visits) {
+      if (v.pricingModel === 'global' && v.globalAmount != null) totalOf.set(v.id, v.globalAmount);
+    }
     const paidOf = new Map(payments.map((p) => [p.visitId, p._sum.amount ?? 0]));
 
     let rows = ids.map((id) => {

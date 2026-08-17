@@ -44,6 +44,7 @@ export class ReportsService {
         where: visitWhere,
         select: {
           id: true, opDate: true, createdAt: true, payer: true, opStatus: true,
+          pricingModel: true, globalAmount: true,
           surgeonId: true, surgeonName: true,
           hospitalId: true, hospitalName: true,
           procedureTypeId: true, opType: true,
@@ -65,7 +66,10 @@ export class ReportsService {
     const payOf = new Map(payments.filter((p) => ids.has(p.visitId)).map((p) => [p.visitId, p._sum.amount ?? 0]));
 
     const rows = visits.map((v) => {
-      const contracted = chargeOf.get(v.id) ?? 0;
+      // مدلِ گلوبال: قراردادِ مراجعه همان مبلغِ توافقی است، نه جمعِ اقلامِ نمایشی.
+      const contracted = v.pricingModel === 'global' && v.globalAmount != null
+        ? v.globalAmount
+        : chargeOf.get(v.id) ?? 0;
       const collected = payOf.get(v.id) ?? 0;
       const m = recognize({ contracted, collected, opStatus: v.opStatus });
       return {

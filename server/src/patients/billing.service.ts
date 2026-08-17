@@ -39,7 +39,7 @@ export class BillingService {
     const scoped = (user?.level ?? 0) < LEVEL.SUPERVISOR;
     const visit = await this.prisma.visit.findFirst({
       where: { id: visitId, ...(scoped ? { techId: user?.id ?? -1 } : {}) },
-      select: { id: true, patientId: true },
+      select: { id: true, patientId: true, pricingModel: true, globalAmount: true },
     });
     if (!visit) throw new NotFoundException('مراجعه پیدا نشد');
     return visit;
@@ -52,7 +52,7 @@ export class BillingService {
    * جمع‌زدن ندارد، وگرنه همان پراکندگیِ فرمول که در ملک‌طب داشتیم برمی‌گردد.
    */
   async get(visitId: number, user: any) {
-    await this.assertVisit(visitId, user);
+    const visit = await this.assertVisit(visitId, user);
     const [charges, payments, moves] = await Promise.all([
       this.prisma.charge.findMany({ where: { visitId }, orderBy: { id: 'asc' } }),
       this.prisma.payment.findMany({ where: { visitId }, orderBy: [{ paidAt: 'desc' }, { id: 'desc' }] }),
@@ -73,11 +73,39 @@ export class BillingService {
         .map((m) => [m.chargeId, { lotId: m.lotId, lotNo: m.lot.lotNo, serialNo: m.lot.serialNo }]),
     );
     return {
-      ...summarize(charges, payments),
+      ...summarize(charges, payments, visit),
+      pricingModel: visit.pricingModel,
+      globalAmount: visit.globalAmount,
       charges: charges.map((c) => ({ ...c, lot: lotOf.get(c.id) ?? null })),
       payments,
       reconcile: reconcile(charges, moves),
     };
+  }
+
+  /**
+   * تعیینِ مدلِ قیمت‌گذاریِ فاکتورِ یک مراجعه.
+   *
+   * «گلوبال» بدونِ مبلغ پذیرفته نمی‌شود: مدلی که مبنایش مبلغِ توافقی است ولی
+   * مبلغ ندارد، در عمل همان coded است و فقط کاربر را گیج می‌کند.
+   */
+  async setPricing(visitId: number, dto: { pricingModel?: string; globalAmount?: number | null }, user: any) {
+    const before = await this.assertVisit(visitId, user);
+    const model = dto.pricingModel ?? 'coded';
+    if (!['coded', 'global'].includes(model)) throw new BadRequestException('مدلِ قیمت‌گذاری نامعتبر است');
+    let globalAmount: number | null = null;
+    if (model === 'global') {
+      if (!Number.isInteger(dto.globalAmount) || (dto.globalAmount as number) < 0) {
+        throw new BadRequestException('برای مدلِ گلوبال، مبلغِ کل (تومان، عددِ صحیحِ نامنفی) لازم است');
+      }
+      globalAmount = dto.globalAmount as number;
+    }
+    await this.prisma.visit.update({ where: { id: visitId }, data: { pricingModel: model, globalAmount } });
+    await this.audit.record({
+      actorId: user?.id, action: 'billing.pricing', entityType: 'visit', entityId: visitId,
+      before: { pricingModel: before.pricingModel, globalAmount: before.globalAmount },
+      after: { pricingModel: model, globalAmount },
+    });
+    return this.get(visitId, user);
   }
 
   async addCharge(
@@ -253,8 +281,13 @@ export class BillingService {
 export function summarize(
   charges: { amount: number }[],
   payments: { amount: number }[],
+  pricing?: { pricingModel?: string | null; globalAmount?: number | null },
 ) {
-  const total = charges.reduce((s, c) => s + c.amount, 0);
+  const itemsTotal = charges.reduce((s, c) => s + c.amount, 0);
+  /* مدلِ «گلوبال»: مبلغِ توافقیِ کل مبناست؛ اقلام فقط برای نمایش ثبت شده‌اند.
+     جمعِ اقلام هم برمی‌گردد (`itemsTotal`) تا UI بتواند تفاوت را نشان دهد. */
+  const global = pricing?.pricingModel === 'global' && pricing?.globalAmount != null;
+  const total = global ? pricing!.globalAmount! : itemsTotal;
   const paid = payments.reduce((s, p) => s + p.amount, 0);
   /* ⚠️ درصد هم **این‌جا** حساب می‌شود، نه در نوارِ پیشرفتِ کارت (قانون ۱۵).
      وسوسه این بود که کلاینت `paid/total*100` بزند — ولی آن‌وقت کارتِ داشبورد،
@@ -265,7 +298,7 @@ export function summarize(
      برمی‌گردد و کارت اصلاً نوار نشان نمی‌دهد؛ اگر ۱۰۰ می‌دادیم، مراجعهٔ
      بی‌فاکتور «تسویه‌شده» به‌نظر می‌رسید. */
   const paidPct = total > 0 ? Math.min(100, Math.max(0, Math.round((paid / total) * 100))) : 0;
-  return { total, paid, due: total - paid, paidPct };
+  return { total, itemsTotal, paid, due: total - paid, paidPct };
 }
 
 type ChargeRow = { id: number; kind: string; title: string; quantity: number; stockEffect: string };

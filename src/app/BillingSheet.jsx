@@ -206,13 +206,19 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
         <>
           {/* سه عددِ اصلی همیشه بالا — کاربر برای «چقدر مانده» نباید اسکرول کند. */}
           <div className="bl-summary">
-            <div><b>{money(data.total)}</b><span>جمعِ کل</span></div>
+            <div>
+              <b>{money(data.total)}</b>
+              <span>{data.pricingModel === 'global' ? 'مبلغِ کل (گلوبال)' : 'جمعِ کل'}</span>
+            </div>
             <div><b>{money(data.paid)}</b><span>پرداخت‌شده</span></div>
             <div className={data.due > 0 ? 'bl-due' : data.due < 0 ? 'bl-over' : ''}>
               <b>{money(Math.abs(data.due))}</b>
               <span>{data.due > 0 ? 'مانده' : data.due < 0 ? 'اضافه‌پرداخت' : 'تسویه'}</span>
             </div>
           </div>
+
+          <PricingBar data={data} busy={busy} setBusy={setBusy} onToast={onToast}
+            visitId={visit.id} reload={async () => { await load(); onChanged?.(); }} />
 
           <Tabs
             variant="inset"
@@ -347,11 +353,15 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                 <button type="button" className="db-submit bl-btn" onClick={addCharge} disabled={busy}>
                   <Plus width="15" height="15" /> افزودنِ قلم
                 </button>
-                {/* فاکتورِ رسمی — سندی که دستِ بیمار/بیمارستان می‌رود، پس
-                    جدا از برگهٔ گزارشِ داخلیِ فهرستِ مراجعات است. */}
+                {/* فاکتورِ رسمی سندِ مالیاتی است (سربرگ + هویتِ حقوقی)؛
+                    غیررسمی همان صورت‌حساب برای دستِ بیمار، بدونِ هویتِ رسمی. */}
                 <button type="button" className="bl-mini bl-inv"
                   onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand, letterheadUrl })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
                   چاپِ فاکتورِ رسمی
+                </button>
+                <button type="button" className="bl-mini"
+                  onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand, variant: 'informal' })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
+                  چاپِ فاکتورِ غیررسمی
                 </button>
               </div>
 
@@ -478,6 +488,63 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
  * داشته باشند یعنی از زمانِ محاسبه چیزی عوض شده (فاکتور، قرارداد، هزینه) و
  * تسویه کهنه است — بدونِ نشان‌دادنِ هر دو، کهنه‌بودن نامرئی است.
  */
+/**
+ * مدلِ قیمت‌گذاریِ فاکتور — «با کد» (جمعِ اقلام) یا «گلوبال» (مبلغِ کلِ توافقی).
+ *
+ * در گلوبال، اقلام و کدها همچنان ثبت و چاپ می‌شوند ولی جمعشان ملاک نیست؛
+ * مبلغِ توافقی مبنای مانده، گزارش و تسویه است — همان مدلِ ملک‌طب.
+ */
+function PricingBar({ data, busy, setBusy, onToast, visitId, reload }) {
+  const [amount, setAmount] = useState('');
+  useEffect(() => {
+    setAmount(data.globalAmount != null ? String(data.globalAmount) : '');
+  }, [data.globalAmount]);
+
+  const setModel = async (model, amountToman) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api(`/visits/${visitId}/billing/pricing`, {
+        method: 'POST',
+        body: model === 'global' ? { pricingModel: 'global', globalAmount: amountToman } : { pricingModel: 'coded' },
+      });
+      await reload();
+      onToast(model === 'global' ? 'مدلِ گلوبال با مبلغِ توافقی ذخیره شد ✓' : 'مدل به «با کد» برگشت — جمعِ اقلام ملاک است');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const isGlobal = data.pricingModel === 'global';
+  return (
+    <div className="bl-pricing">
+      <div className="bl-pricing-tabs" role="radiogroup" aria-label="مدلِ قیمت‌گذاری">
+        <button type="button" role="radio" aria-checked={!isGlobal} className={!isGlobal ? 'on' : ''}
+          disabled={busy} onClick={() => { if (isGlobal) setModel('coded'); }}>
+          با کد
+        </button>
+        <button type="button" role="radio" aria-checked={isGlobal} className={isGlobal ? 'on' : ''}
+          disabled={busy}
+          onClick={() => {
+            const v = parseMoney(amount);
+            if (!v && !isGlobal) { onToast('اول مبلغِ کلِ توافقی را وارد کنید'); return; }
+            if (!isGlobal) setModel('global', v);
+          }}>
+          گلوبال
+        </button>
+      </div>
+      <input dir="ltr" inputMode="numeric" value={amount} placeholder="مبلغِ کلِ توافقی (تومان)"
+        onChange={(e) => setAmount(e.target.value)} />
+      {isGlobal && parseMoney(amount) !== (data.globalAmount ?? 0) && (
+        <button type="button" className="bl-mini" disabled={busy} onClick={() => setModel('global', parseMoney(amount))}>
+          ذخیرهٔ مبلغ
+        </button>
+      )}
+      {isGlobal && data.itemsTotal !== data.total && (
+        <small className="bl-pricing-note">جمعِ اقلام {money(data.itemsTotal)} است؛ ملاکِ فاکتور مبلغِ توافقیِ {money(data.total)}.</small>
+      )}
+    </div>
+  );
+}
+
 function Settlement({ visitId, onToast, onChanged }) {
   const [d, setD] = useState(null);
   const [busy, setBusy] = useState(false);
