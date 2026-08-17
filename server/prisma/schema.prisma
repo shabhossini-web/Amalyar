@@ -533,6 +533,23 @@ model Diagnosis {
   @@map("diagnoses")
 }
 
+/// جراحی/خدمتِ داخلِ مطب — کدِ **داخلیِ** خودِ مطب با مبلغِ مصوبش.
+///
+/// جدا از کتابِ ارزش نسبی است: آن کتاب ملی و مرکزی است، این را هر مطب برای
+/// کارهای خودش (تزریق، بخیه، عملِ سرپایی…) تعریف می‌کند. فاکتورِ «با کد» هر
+/// دو نظامِ کد را می‌پذیرد و روی قلم، منبعِ کد (`Charge.codeSystem`) می‌ماند.
+model InternalCode {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique // کدِ دلخواهِ مطب — MT-01، INJ3، …
+  name      String
+  price     Int // تومان
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("internal_codes")
+}
+
 /// لینکِ دائمیِ ثبت‌نام — نشانی‌ای که شرکت در بیو و کانالش می‌گذارد.
 ///
 /// ⚠️ **دائمی است و به بیمار گره نمی‌خورد.** هر بار که کسی رویش می‌زند یک
@@ -943,9 +960,12 @@ model Charge {
   /// service | item | discount
   kind        String  @default("service")
   title       String
-  /// کدِ ملیِ خدمت — عکسِ لحظهٔ صدور، نه رابطه: فاکتورِ صادرشده نباید با
-  /// ویرایشِ بعدیِ کتاب تغییر کند، و بیمه همین رشته را می‌خواهد.
+  /// کدِ خدمت — عکسِ لحظهٔ صدور، نه رابطه: فاکتورِ صادرشده نباید با
+  /// ویرایشِ بعدیِ کتاب یا کدهای داخلی تغییر کند، و بیمه همین رشته را می‌خواهد.
   serviceCode String? @map("service_code")
+  /// نظامِ کد: `book` (کتابِ ارزش نسبی) | `internal` (کدِ داخلیِ مطب).
+  /// فقط وقتی serviceCode پر است معنا دارد؛ null یعنی قلمِ بی‌کد.
+  codeSystem  String? @map("code_system")
   /// کالای مصرف‌شده — رابطه است (برای گزارشِ مصرف) ولی نام و مبلغ کپی می‌شوند.
   item        Item?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
   itemId      Int?    @map("item_id")

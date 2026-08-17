@@ -38,7 +38,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState('charges');
 
-  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null, stockEffect: 'virtual' });
+  const [c, setC] = useState({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', codeSystem: '', itemId: null, lotId: null, stockEffect: 'virtual' });
   /// قلمی که کاربر دکمهٔ حذفش را زده و باید سؤالِ «کالا واقعاً مصرف شد؟» را جواب دهد.
   const [delRow, setDelRow] = useState(null);
   const [codeQ, setCodeQ] = useState('');
@@ -65,14 +65,18 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   }, [visit.id, onClose, onToast]);
   useEffect(() => { load(); }, [load]);
 
-  /** جستجوی کتابِ ارزش نسبی — با کد یا با شرح. */
+  /** جستجوی کد — هم کتابِ ارزش نسبی هم کدهای داخلیِ مطب، با یک عبارت. */
+  const [internalHits, setInternalHits] = useState([]);
   useEffect(() => {
-    if (codeQ.trim().length < 2) { setCodeHits([]); return undefined; }
+    if (codeQ.trim().length < 2) { setCodeHits([]); setInternalHits([]); return undefined; }
     let alive = true;
     const timer = setTimeout(() => {
       api(`/service-codes?q=${encodeURIComponent(codeQ.trim())}`)
         .then((rows) => { if (alive) setCodeHits(rows); })
         .catch(() => { if (alive) setCodeHits([]); });
+      api(`/internal-codes?q=${encodeURIComponent(codeQ.trim())}`)
+        .then((rows) => { if (alive) setInternalHits(rows.filter((r) => r.active)); })
+        .catch(() => { if (alive) setInternalHits([]); });
     }, 300);
     return () => { alive = false; clearTimeout(timer); };
   }, [codeQ]);
@@ -130,12 +134,21 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   const pickCode = async (hit) => {
     setCodeQ('');
     setCodeHits([]);
-    setC((s) => ({ ...s, title: hit.title, serviceCode: hit.code }));
+    setInternalHits([]);
+    setC((s) => ({ ...s, title: hit.title, serviceCode: hit.code, codeSystem: 'book' }));
     try {
       const priced = await api(`/service-codes/price?code=${hit.code}`);
       if (priced.price != null) setC((s) => ({ ...s, unitPrice: String(priced.price) }));
       else onToast('ضریبِ ریالیِ تعرفه تعریف نشده — مبلغ را دستی وارد کنید');
     } catch { /* قیمت اختیاری است */ }
+  };
+
+  /** انتخابِ کدِ داخلیِ مطب: نام و مبلغِ مصوبِ خودِ مطب مستقیم می‌نشینند. */
+  const pickInternal = (hit) => {
+    setCodeQ('');
+    setCodeHits([]);
+    setInternalHits([]);
+    setC((s) => ({ ...s, title: hit.name, serviceCode: hit.code, codeSystem: 'internal', unitPrice: String(hit.price ?? '') }));
   };
 
   const addCharge = async () => {
@@ -149,13 +162,13 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
         body: {
           kind: c.kind, title: c.title.trim(),
           quantity: Math.max(1, parseMoney(c.quantity) || 1), unitPrice,
-          ...(c.serviceCode ? { serviceCode: c.serviceCode } : {}),
+          ...(c.serviceCode ? { serviceCode: c.serviceCode, codeSystem: c.codeSystem || 'book' } : {}),
           ...(c.itemId ? { itemId: c.itemId } : {}),
           ...(c.kind === 'item' ? { stockEffect: c.stockEffect } : {}),
           ...(c.stockEffect === 'consumed' && c.lotId ? { lotId: c.lotId } : {}),
         },
       });
-      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', itemId: null, lotId: null, stockEffect: 'virtual' });
+      setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', codeSystem: '', itemId: null, lotId: null, stockEffect: 'virtual' });
       setLots([]);
       await load(); onChanged?.();
       onToast('قلم اضافه شد ✓');
@@ -246,7 +259,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                     جستجو را به اولین کنترلِ همان label هم می‌فرستد و انتخاب
                     بلافاصله پس گرفته می‌شود. */}
                 <div className="db-field bl-codesearch">
-                  <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : 'کدِ ملیِ خدمت (کتابِ ارزش نسبی)'}</span>
+                  <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : 'کدِ خدمت (کتابِ ارزش نسبی یا کدِ داخلیِ مطب)'}</span>
                   <input
                     value={codeQ}
                     onChange={(e) => setCodeQ(e.target.value)}
@@ -257,11 +270,20 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                   {c.serviceCode && (
                     <i className="bl-picked">
                       کدِ انتخاب‌شده: <b dir="ltr">{c.serviceCode}</b>
-                      <button type="button" onClick={() => setC((s2) => ({ ...s2, serviceCode: '' }))}>حذفِ کد</button>
+                      {c.codeSystem === 'internal' && <em className="bl-internal-tag">داخلی</em>}
+                      <button type="button" onClick={() => setC((s2) => ({ ...s2, serviceCode: '', codeSystem: '' }))}>حذفِ کد</button>
                     </i>
                   )}
-                  {c.kind !== 'item' && codeHits.length > 0 && (
+                  {c.kind !== 'item' && (codeHits.length > 0 || internalHits.length > 0) && (
                     <div className="bl-hits">
+                      {/* کدهای داخلیِ مطب اول — کم‌تعداد و مالِ خودِ مطب‌اند. */}
+                      {internalHits.map((h) => (
+                        <button type="button" key={`i${h.id}`} onClick={() => pickInternal(h)}>
+                          <b dir="ltr">{h.code}</b>
+                          <em className="bl-internal-tag">داخلی</em>
+                          <span>{h.name} — {money(h.price)} تومان</span>
+                        </button>
+                      ))}
                       {codeHits.map((h) => (
                         <button type="button" key={h.code} onClick={() => pickCode(h)}>
                           <b dir="ltr">{h.code}</b>
@@ -375,6 +397,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                         {(row.quantity > 1 || row.serviceCode || row.lot) && (
                           <small>
                             {row.serviceCode && <span dir="ltr">{row.serviceCode}</span>}
+                            {row.codeSystem === 'internal' && <em className="bl-internal-tag"> داخلی</em>}
                             {row.quantity > 1 && `${row.serviceCode ? ' · ' : ''}${money(row.quantity)} × ${money(row.unitPrice)}`}
                             {row.lot && (
                               <i className="bl-lot">

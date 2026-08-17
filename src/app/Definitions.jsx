@@ -82,6 +82,24 @@ const SECTIONS = [
       { key: 'notes', label: 'یادداشت', textarea: true },
     ],
   },
+  /* جراحی/خدمتِ داخلِ مطب — کدِ **داخلیِ** خودِ مطب با مبلغِ مصوب. جدا از
+     کتابِ ارزش نسبی (که ملی و مرکزی است)؛ فاکتورِ «با کد» هر دو را می‌پذیرد. */
+  {
+    key: 'internal-codes',
+    label: 'جراحیِ داخلِ مطب',
+    path: '/internal-codes',
+    title: (r) => r.name,
+    sub: (r) => [r.code, `${Number(r.price).toLocaleString('fa-IR')} تومان`].filter(Boolean).join(' · '),
+    uses: (r) => (r.usedCount ? `${faNum(r.usedCount)} فاکتور` : ''),
+    empty: 'هنوز کدی تعریف نشده — مثلاً تزریق، بخیه، عملِ سرپایی',
+    hint: 'هر مطب برای کارهای داخلِ مطبش کد و مبلغِ خودش را تعیین می‌کند. این کدها در فاکتورِ «با کد» کنارِ کدهای کتابِ ارزش نسبی قابلِ انتخاب‌اند.',
+    fields: [
+      { key: 'code', label: 'کدِ داخلی *', dir: 'ltr', required: true },
+      { key: 'name', label: 'نامِ خدمت/عمل *', required: true },
+      { key: 'price', label: 'مبلغ (تومان) *', dir: 'ltr', required: true, num: true },
+      { key: 'notes', label: 'یادداشت', textarea: true },
+    ],
+  },
   {
     key: 'items',
     label: 'کالاها',
@@ -645,12 +663,16 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
       ? ['firstName', 'lastName', 'phone', 'nationalId', 'email', 'city', 'address', 'iban', 'notes',
          ...(section.extra ?? []).map((f) => f.key)]
       : (section.fields ?? []).map((f) => f.key);
+    // فیلدِ عددی (مبلغ) قبل از ارسال نرمال می‌شود — ارقامِ فارسی و جداکننده مجازند.
+    const numKeys = (section.fields ?? []).filter((f) => f.num).map((f) => f.key);
     const body = {};
     for (const k of keys) {
       if (form[k] === undefined) continue;
       body[k] = listKeys.includes(k)
         ? String(form[k] ?? '').split(/[،,]/).map((x) => x.trim()).filter(Boolean)
-        : form[k] ?? '';
+        : numKeys.includes(k)
+          ? Number(toEnDigits(String(form[k] ?? '')).replace(/[^0-9]/g, '') || 0)
+          : form[k] ?? '';
     }
 
     setBusy(true);

@@ -495,6 +495,12 @@ a.db-ico { text-decoration: none; }
 .bl-summary .bl-over { background: rgba(34, 211, 238, .08); border-color: rgba(34, 211, 238, .3); }
 .bl-summary .bl-over b { color: #22d3ee; }
 
+/* نشانِ کدِ داخلیِ مطب — تا از کدِ کتابِ ارزش نسبی جدا دیده شود. */
+.bl-internal-tag {
+  font-style: normal; font-size: 9px; font-weight: 800; padding: 1px 7px; border-radius: 99px;
+  color: #6ee7b7; background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .32);
+}
+
 /* مدلِ قیمت‌گذاری — با کد / گلوبال */
 .bl-pricing {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

@@ -110,12 +110,30 @@ export class BillingService {
 
   async addCharge(
     visitId: number,
-    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; itemId?: number; lotId?: number; stockEffect?: string },
+    dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; codeSystem?: string; itemId?: number; lotId?: number; stockEffect?: string },
     user: any,
   ) {
     await this.assertVisit(visitId, user);
     const kind = dto.kind ?? 'service';
     if (!CHARGE_KINDS.includes(kind as any)) throw new BadRequestException('نوعِ قلم نامعتبر است');
+
+    /* دو نظامِ کد روی فاکتورِ «با کد»: کتابِ ارزش نسبی (رقمی) و کدِ داخلیِ
+       مطب (باید تعریف و فعال باشد). منبع روی خودِ قلم می‌ماند تا فاکتور و
+       گزارش بدانند این کد را در کدام دفتر باید جست. */
+    const serviceCode = dto.serviceCode?.trim() || null;
+    let codeSystem: string | null = null;
+    if (serviceCode) {
+      codeSystem = dto.codeSystem ?? 'book';
+      if (codeSystem === 'book' && !/^\d{4,8}$/.test(serviceCode)) {
+        throw new BadRequestException('کدِ کتابِ ارزش نسبی باید ۴ تا ۸ رقم باشد');
+      }
+      if (codeSystem === 'internal') {
+        const def = await this.prisma.internalCode.findFirst({
+          where: { code: { equals: serviceCode, mode: 'insensitive' }, active: true },
+        });
+        if (!def) throw new BadRequestException('کدِ داخلی تعریف نشده یا غیرفعال است — اول در تعاریف پایه ثبتش کنید');
+      }
+    }
 
     // خدمت و تخفیف ذاتاً کالا نیستند، پس اثرِ انبار برایشان بی‌معنی است و
     // به‌جای «خطا بده» بی‌سروصدا virtual می‌شوند — این حالت اشتباهِ کاربر نیست.
@@ -150,7 +168,7 @@ export class BillingService {
     const row = await this.prisma.charge.create({
       data: {
         visitId, kind, title, quantity, unitPrice, amount, stockEffect,
-        serviceCode: dto.serviceCode?.trim() || null,
+        serviceCode, codeSystem,
         itemId: dto.itemId ?? null,
         notes: dto.notes?.trim() || null,
         createdById: user?.id ?? null,

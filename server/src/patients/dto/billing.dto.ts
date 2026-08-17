@@ -16,9 +16,16 @@ export class ChargeCreateDto {
   @IsInt({ message: 'مبلغ باید عددِ صحیح باشد' }) @Min(0, { message: 'مبلغ نمی‌تواند منفی باشد' })
   unitPrice!: number;
 
-  /** کدِ ملیِ خدمت — اگر از کتابِ ارزش نسبی انتخاب شده باشد. */
-  @IsOptional() @Matches(/^\d{4,8}$/, { message: 'کدِ خدمت نامعتبر است' })
+  /**
+   * کدِ خدمت — از کتابِ ارزش نسبی (رقمی) یا کدِ داخلیِ مطب.
+   * قاعدهٔ سختِ هر نظام در `addCharge` است: کتاب فقط رقم، داخلی باید تعریف شده باشد.
+   */
+  @IsOptional() @Matches(/^[A-Za-z0-9-]{1,20}$/, { message: 'کدِ خدمت نامعتبر است' })
   serviceCode?: string;
+
+  /** نظامِ کد: `book` (کتابِ ارزش نسبی، پیش‌فرض) | `internal` (کدِ داخلیِ مطب). */
+  @IsOptional() @IsIn(['book', 'internal'], { message: 'نظامِ کد نامعتبر است' })
+  codeSystem?: string;
 
   /** کالای مصرف‌شده از کاتالوگ. */
   @IsOptional() @Type(() => Number) @IsInt({ message: 'کالای انتخابی نامعتبر است' })

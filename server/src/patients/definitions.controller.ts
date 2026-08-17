@@ -106,6 +106,34 @@ class TopicPatchDto {
   @IsOptional() @IsInt() sort?: number;
 }
 
+/** کدِ داخلیِ مطب — جراحی/خدمتِ داخلِ مطب با کد و مبلغِ خودِ مطب. */
+class InternalCodeCreateDto {
+  @Matches(/^[A-Za-z0-9-]{1,20}$/, { message: 'کد فقط حرف/رقمِ لاتین و خط تیره (حداکثر ۲۰)' })
+  code!: string;
+
+  @IsString({ message: 'نام را وارد کنید' })
+  @MinLength(2, { message: 'نام کوتاه است' })
+  @MaxLength(120)
+  name!: string;
+
+  @Type(() => Number)
+  @IsInt({ message: 'مبلغ باید عددِ صحیح باشد (تومان)' })
+  @Min(0)
+  price!: number;
+
+  @IsOptional() @IsString() @MaxLength(300) notes?: string;
+}
+
+class InternalCodePatchDto {
+  @IsOptional() @Matches(/^[A-Za-z0-9-]{1,20}$/, { message: 'کد فقط حرف/رقمِ لاتین و خط تیره (حداکثر ۲۰)' })
+  code?: string;
+
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(120) name?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) price?: number;
+  @IsOptional() @IsString() @MaxLength(300) notes?: string;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
 class DiagnosisCreateDto {
   @IsString({ message: 'عنوان را وارد کنید' })
   @MinLength(2, { message: 'عنوان کوتاه است' })
@@ -343,6 +371,31 @@ export class DefinitionsController {
   @Delete('items/:id')
   delItem(@Param('id', ParseIntPipe) id: number) {
     return this.defs.deleteItem(id);
+  }
+
+  /// کدهای داخلیِ مطب — جستجو با ?q= برای انتخاب در فاکتورِ «با کد».
+  @RequirePermissions('definitions.read')
+  @Get('internal-codes')
+  internalCodes(@Query('q') q?: string) {
+    return this.defs.listInternalCodes(q);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Post('internal-codes')
+  addInternalCode(@Body() dto: InternalCodeCreateDto) {
+    return this.defs.createInternalCode(dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Patch('internal-codes/:id')
+  patchInternalCode(@Param('id', ParseIntPipe) id: number, @Body() dto: InternalCodePatchDto) {
+    return this.defs.updateInternalCode(id, dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Delete('internal-codes/:id')
+  delInternalCode(@Param('id', ParseIntPipe) id: number) {
+    return this.defs.deleteInternalCode(id);
   }
 
   @RequirePermissions('definitions.read')

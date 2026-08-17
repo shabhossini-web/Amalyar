@@ -219,7 +219,7 @@ export function printInvoice({ visit, billing, brand, letterheadUrl, variant = '
   const global = billing.pricingModel === 'global';
   const items = billing.charges.map((c, i) => `<tr>
     <td class="c">${jToFa(i + 1)}</td>
-    <td>${esc(c.title)}${c.serviceCode ? ` <small dir="ltr">${esc(c.serviceCode)}</small>` : ''}</td>
+    <td>${esc(c.title)}${c.serviceCode ? ` <small dir="ltr">${esc(c.serviceCode)}</small>${c.codeSystem === 'internal' ? ' <small>(کدِ داخلی)</small>' : ''}` : ''}</td>
     <td class="c">${fa(c.quantity)}</td>
     ${global ? '' : `<td class="n">${fa(c.unitPrice)}</td>
     <td class="n">${fa(c.amount)}</td>`}

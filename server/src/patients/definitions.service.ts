@@ -442,6 +442,72 @@ export class DefinitionsService {
     return this.deleteOrDeactivate('diagnosis', id, 'تشخیص یافت نشد');
   }
 
+  // ─────────────── کدهای داخلیِ مطب (جراحیِ داخلِ مطب) ───────────────
+
+  /** فهرست/جستجو — با کد یا نام؛ برای فاکتورِ «با کد» و صفحهٔ تعاریف. */
+  async listInternalCodes(q?: string) {
+    const t = q?.trim();
+    const rows = await this.prisma.internalCode.findMany({
+      // هر دو صورتِ رقمی («۱۲» و «12») پیدا می‌شوند — توضیح در `common/search.ts`.
+      where: t ? { OR: textSearchOr(t, ['code', 'name']) } : {},
+      orderBy: [{ active: 'desc' }, { code: 'asc' }],
+      take: 200,
+    });
+    // شمارِ استفاده از روی عکسِ کد در قلم‌ها — رابطه نیست، چون فاکتورِ صادرشده
+    // نباید با ویرایشِ بعدیِ تعریف عوض شود.
+    const used = await this.prisma.charge.groupBy({
+      by: ['serviceCode'],
+      where: { codeSystem: 'internal', serviceCode: { in: rows.map((r) => r.code) } },
+      _count: { _all: true },
+    });
+    const usedOf = new Map(used.map((u) => [u.serviceCode, u._count._all]));
+    return rows.map((r) => ({ ...r, usedCount: usedOf.get(r.code) ?? 0 }));
+  }
+
+  async createInternalCode(dto: { code: string; name: string; price: number; notes?: string }) {
+    const code = dto.code.trim().toUpperCase();
+    const dup = await this.prisma.internalCode.findFirst({ where: { code: { equals: code, mode: 'insensitive' } } });
+    if (dup) throw new BadRequestException('این کد قبلاً ثبت شده است');
+    return this.prisma.internalCode.create({
+      data: { code, name: dto.name.trim(), price: dto.price, notes: dto.notes?.trim() || null },
+    });
+  }
+
+  async updateInternalCode(id: number, dto: { code?: string; name?: string; price?: number; notes?: string; active?: boolean }) {
+    const row = await this.prisma.internalCode.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('کدِ داخلی یافت نشد');
+    const code = dto.code?.trim().toUpperCase();
+    if (code && code !== row.code) {
+      const dup = await this.prisma.internalCode.findFirst({
+        where: { code: { equals: code, mode: 'insensitive' }, id: { not: id } },
+      });
+      if (dup) throw new BadRequestException('این کد قبلاً ثبت شده است');
+    }
+    return this.prisma.internalCode.update({
+      where: { id },
+      data: {
+        ...(code ? { code } : {}),
+        ...(dto.name ? { name: dto.name.trim() } : {}),
+        ...(dto.price !== undefined ? { price: dto.price } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+      },
+    });
+  }
+
+  /** کدِ استفاده‌شده در فاکتور حذف نمی‌شود — غیرفعال می‌شود؛ همان قاعدهٔ بقیه. */
+  async deleteInternalCode(id: number) {
+    const row = await this.prisma.internalCode.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('کدِ داخلی یافت نشد');
+    const used = await this.prisma.charge.count({ where: { codeSystem: 'internal', serviceCode: row.code } });
+    if (used > 0) {
+      await this.prisma.internalCode.update({ where: { id }, data: { active: false } });
+      return { ok: true, deactivated: true };
+    }
+    await this.prisma.internalCode.delete({ where: { id } });
+    return { ok: true, deactivated: false };
+  }
+
 
   // ───────────────────────── کالا ─────────────────────────
 
