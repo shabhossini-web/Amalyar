@@ -106,7 +106,7 @@ export class SettingsService {
       groups: SETTING_GROUPS.map((g) => ({
         ...g,
         hint: g.hint ?? null,
-        items: SETTINGS.filter((d) => d.group === g.key).map(item),
+        items: SETTINGS.filter((d) => d.group === g.key && !d.hidden).map(item),
       })).filter((g) => g.items.length > 0),
     };
   }
@@ -173,6 +173,38 @@ export class SettingsService {
   }
 
   /** هویتِ شرکت برای سربرگ و فاکتور — یک‌جا، تا هر چاپ‌گر خودش نچیندش. */
+  /**
+   * همهٔ مقادیرِ گروهِ پیامک در یک خواندن — مصرف‌کننده‌ها (یادآوری، پرتال،
+   * خلاصه، ارسالِ فرم) متن و زمان‌بندی را از همین می‌گیرند.
+   */
+  async sms() {
+    const rows = await this.rows();
+    const get = (k: string) => parse(SETTING_BY_KEY.get(k)!, rows.get(k));
+    return {
+      nextVisitText: String(get('sms_next_visit_text')),
+      nextVisitDays: Number(get('sms_next_visit_days')),
+      surgeryText: String(get('sms_surgery_text')),
+      surgeryDays: Number(get('sms_surgery_days')),
+      preOpDays: Number(get('sms_pre_op_days')),
+      postOpDays: Number(get('sms_post_op_days')),
+      reminderHour: Number(get('sms_reminder_hour')),
+      appointmentText: String(get('sms_appointment_text')),
+      appointmentHour: Number(get('sms_appointment_hour')),
+      portalText: String(get('sms_portal_text')),
+      summaryText: String(get('sms_summary_text')),
+      formSendText: String(get('sms_form_send_text')),
+    };
+  }
+
+  /** سربرگِ آپلودشده — یا null اگر شرکتی هنوز سربرگ نگذاشته. */
+  async letterhead(): Promise<{ sha256: string; mime: string } | null> {
+    const rows = await this.rows();
+    const get = (k: string) => String(parse(SETTING_BY_KEY.get(k)!, rows.get(k))).trim();
+    const sha256 = get('letterhead_sha');
+    const mime = get('letterhead_mime');
+    return sha256 && mime ? { sha256, mime } : null;
+  }
+
   async brand() {
     const rows = await this.rows();
     const get = (k: string) => String(parse(SETTING_BY_KEY.get(k)!, rows.get(k))).trim();

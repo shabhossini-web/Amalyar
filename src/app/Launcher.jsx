@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import { useAuth } from './auth.jsx';
+import { useConfig } from './config.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Form, Gear, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
@@ -48,6 +49,7 @@ function track(e) {
 export default function Launcher() {
   const [toast, setToast] = useState('');
   const { user } = useAuth();
+  const { brandName } = useConfig();
   const navigate = useNavigate();
   useEffect(() => { document.title = 'عمل‌یار — سامانه'; }, []);
   useEffect(() => {
@@ -146,6 +148,8 @@ export default function Launcher() {
           <Mark className="lx-mark" gradient draw aria-hidden="true" />
           <div className="lx-word">عمل<span className="grad-text">‌یار</span></div>
           <div className="lx-tag">هوشمند <em>عمل</em> کن</div>
+          {/* نامِ شرکتِ مشتری — تنها جایی که برندِ انتخابیِ خودش را می‌بیند. */}
+          {brandName && <div className="lx-company">{brandName}</div>}
         </header>
 
         <div className="lx-cards">

@@ -7,6 +7,7 @@ import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
+import { renderSms } from '../common/sms-template';
 import { AvailabilityService } from './availability.service';
 
 /**
@@ -63,8 +64,9 @@ export class PortalService {
       throw new BadRequestException('شمارهٔ موبایلِ معتبری در پرونده نیست — اول شماره را در پرونده اصلاح کنید');
     }
     const brand = await this.settings.brand();
+    const cfg = await this.settings.sms();
     const url = this.urlOf(token);
-    const text = `${brand.name ? brand.name + '\n' : ''}پروندهٔ الکترونیکِ شما — مراجعات، نوبت‌ها و پیام‌ها:\n${url}`;
+    const text = `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.portalText, { link: url })}`;
     const res = await this.sms.send(to, text);
     await this.prisma.reminder.create({
       data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },

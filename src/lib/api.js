@@ -90,6 +90,29 @@ export async function apiUpload(path, formData) {
  * لازم است چون مدارک پشتِ هدرِ Authorization‌اند و `<img src>` هدر نمی‌فرستد.
  * ⚠️ فراخوان باید URL را با `URL.revokeObjectURL` آزاد کند وگرنه حافظه نشت می‌کند.
  */
+/**
+ * فایلِ محافظت‌شده به‌شکلِ data URL — برای جاسازی در سندِ چاپیِ پنجرهٔ جدا،
+ * جایی که blob URLِ پنجرهٔ مادر قابلِ‌اتکا نیست. نبودِ فایل، null است نه خطا.
+ */
+export async function apiDataUrl(path) {
+  const headers = {};
+  const tok = getToken();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+  try {
+    const res = await fetch(`${BASE}${path}`, { headers });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => resolve(null);
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function apiBlobUrl(path) {
   const headers = {};
   const tok = getToken();

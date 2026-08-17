@@ -203,9 +203,13 @@ export function printVisits(rows, opts) {
  *
  * ⚠️ ارقام فارسی‌اند (برخلافِ CSV): این برگه خوانده می‌شود نه جمع زده.
  */
-export function printInvoice({ visit, billing, brand }) {
+export function printInvoice({ visit, billing, brand, letterheadUrl }) {
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fa = (n) => Number(n || 0).toLocaleString('fa-IR');
+  /* با سربرگ، هویتِ متنیِ شرکت چاپ نمی‌شود — خودِ سربرگ نام و نشان را دارد و
+     دوبار چاپ‌شدنش سند را خراب می‌کند. صفحه تمام‌بوم می‌شود (حاشیهٔ صفر) تا
+     تصویرِ سربرگ تا لبهٔ کاغذ برسد؛ محتوا با paddingِ بدنه جای خودش می‌ماند. */
+  const lh = typeof letterheadUrl === 'string' && letterheadUrl.startsWith('data:image/') ? letterheadUrl : null;
 
   const items = billing.charges.map((c, i) => `<tr>
     <td class="c">${jToFa(i + 1)}</td>
@@ -240,8 +244,10 @@ export function printInvoice({ visit, billing, brand }) {
 
   const html = `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
 <title>فاکتور ${esc(visit.code)}</title><style>
-  @page { size: A4; margin: 14mm; }
-  body { font-family: Vazirmatn, Tahoma, sans-serif; color: #111; font-size: 11pt; }
+  @page { size: A4; margin: ${lh ? '0' : '14mm'}; }
+  body { font-family: Vazirmatn, Tahoma, sans-serif; color: #111; font-size: 11pt;${lh ? ' margin: 0; padding: 42mm 16mm 24mm;' : ''} }
+  /* سربرگ روی هر صفحهٔ چاپی تکرار می‌شود (fixed در چاپ = هر صفحه). */
+  .lh-bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; }
   header { display: flex; align-items: flex-start; gap: 12px; border-bottom: 2px solid #333; padding-bottom: 8px; margin-bottom: 10px; }
   header h1 { font-size: 16pt; margin: 0; }
   header .sub { font-size: 9.5pt; color: #555; }
@@ -259,12 +265,13 @@ export function printInvoice({ visit, billing, brand }) {
   .sign { display: flex; gap: 40px; margin-top: 34px; font-size: 10pt; }
   .sign div { flex: 1; border-top: 1px solid #333; padding-top: 6px; }
 </style></head><body>
+${lh ? `<img class="lh-bg" src="${lh}" alt="">` : ''}
 <header>
-  <div>
+  ${lh ? '<div></div>' : `<div>
     <h1>${esc(brand?.legalName || brand?.name || 'عمل‌یار')}</h1>
     ${idLine ? `<div class="sub">${idLine}</div>` : ''}
     ${brand?.address ? `<div class="sub">${esc(brand.address)}</div>` : ''}
-  </div>
+  </div>`}
   <div class="no">
     <b>صورت‌حساب</b><br>
     شماره: <span dir="ltr">${esc(visit.code)}</span><br>

@@ -8,9 +8,11 @@ import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
 import { PortalService } from './portal.service';
+import { renderSms } from '../common/sms-template';
 import { RemindersService } from './reminders.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
+import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { AvailabilityService } from './availability.service';
 
@@ -93,8 +95,9 @@ export class IntakeService {
        سرویسی است که پنلِ ادمین از آن می‌خواند؛ نسخهٔ دومِ این محاسبه یعنی
        بیمار جای آزادی ببیند که ادمین نمی‌بیند. */
     private availability: AvailabilityService,
-      private portal: PortalService,
-      private reminders: RemindersService,
+    private portal: PortalService,
+    private reminders: RemindersService,
+    private settings: SettingsService,
   ) {}
 
   private token() {
@@ -1012,7 +1015,8 @@ export class IntakeService {
        (`/f/`) چون صفحهٔ مشخصات (`/r/`) این‌جا وجود ندارد. */
     const host = this.tenant.require().hostname;
     const url = `https://${host}/f/${row.token}`;
-    const noticeText = `${form.title}\n${url}`;
+    const smsCfg = await this.settings.sms();
+    const noticeText = renderSms(smsCfg.formSendText, { title: form.title, link: url });
     const res = await this.sms.send(to, noticeText);
     /* دفترِ اطلاع‌رسانیِ بیمار — پروندهٔ الکترونیک همهٔ پیام‌ها را نشان می‌دهد. */
     await this.prisma.reminder.create({

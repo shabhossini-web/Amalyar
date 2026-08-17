@@ -179,6 +179,12 @@
 .st-file span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-import .df-save { flex: 0 0 auto; padding: 11px 20px; white-space: nowrap; }
 .st-dry { background: rgba(34, 211, 238, .16) !important; color: #67e8f9 !important; }
+/* پیش‌نمایشِ سربرگ — قاب روشن چون سربرگِ واقعی روی کاغذِ سفید چاپ می‌شود. */
+.st-letterhead-preview {
+  max-width: 900px; margin: 0 auto 18px; padding: 10px; border-radius: 14px;
+  background: #fff; border: 1px solid rgba(255, 255, 255, .18);
+}
+.st-letterhead-preview img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; }
 @media (max-width: 560px) { .st-file { flex-basis: 100%; } .st-import .df-save { flex: 1; } }
 .df-save:disabled { opacity: .45; cursor: not-allowed; }
 .st-report { margin-bottom: 18px; }

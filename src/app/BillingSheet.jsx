@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { api } from '../lib/api.js';
+import { api, apiDataUrl } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import { toEnDigits } from '../lib/identity.js';
@@ -50,9 +50,13 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   /// خطا نمی‌دهیم و فیلدها ساده پنهان می‌مانند.
   const [banks, setBanks] = useState([]);
   const [partners, setPartners] = useState([]);
+  /* سربرگ پیشاپیش گرفته می‌شود تا کلیکِ «چاپ» sync بماند — window.openِ بعد از
+     await را مسدودکنندهٔ پاپ‌آپ می‌گیرد. */
+  const [letterheadUrl, setLetterheadUrl] = useState(null);
   useEffect(() => {
     api('/bank-accounts').then(setBanks).catch(() => setBanks([]));
     api('/partners').then((r) => setPartners(r.filter((x) => x.active))).catch(() => setPartners([]));
+    apiDataUrl('/settings/letterhead').then(setLetterheadUrl);
   }, []);
 
   const load = useCallback(async () => {
@@ -346,7 +350,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                 {/* فاکتورِ رسمی — سندی که دستِ بیمار/بیمارستان می‌رود، پس
                     جدا از برگهٔ گزارشِ داخلیِ فهرستِ مراجعات است. */}
                 <button type="button" className="bl-mini bl-inv"
-                  onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
+                  onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand, letterheadUrl })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
                   چاپِ فاکتورِ رسمی
                 </button>
               </div>

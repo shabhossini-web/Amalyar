@@ -32,6 +32,8 @@ export interface SettingDef {
   maxLength?: number;
   /** ورودیِ لاتین (شماره، کد) — تا در RTL جابه‌جا نشود. */
   ltr?: boolean;
+  /** در صفحهٔ تنظیمات نشان داده نمی‌شود — با فرایندِ خودش (مثلاً آپلود) پر می‌شود. */
+  hidden?: boolean;
 }
 
 export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
@@ -48,6 +50,11 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
   {
     key: 'transport',
     label: 'حمل و نقل',
+  },
+  {
+    key: 'sms',
+    label: 'پیامک‌ها و زمان‌بندی',
+    hint: 'متن و زمانِ همهٔ پیامک‌هایی که برای بیمار می‌رود. نامِ برند خودکار اولِ هر پیامک می‌آید. جای‌گیرها: {date} تاریخِ شمسی، {time} ساعت، {topic} موضوع، {title} نامِ فرم، {link} لینک — جای‌گیرِ ساعت و موضوع خودشان جداکننده دارند.',
   },
 ];
 
@@ -112,6 +119,66 @@ export const SETTINGS: SettingDef[] = [
     label: 'دستهٔ هزینهٔ حمل',
     hint: 'ردیفِ هزینهٔ هر مسیر با همین دسته در دفترِ مالی ثبت می‌شود و گزارش با همین تفکیک می‌کند.',
     group: 'transport', type: 'text', default: 'حمل و نقل', maxLength: 40,
+  },
+  // ── پیامک‌ها ─────────────────────────────────────────────────
+  {
+    key: 'sms_next_visit_text', label: 'متنِ یادآوریِ ویزیتِ بعدی',
+    group: 'sms', type: 'textarea', default: 'یادآوری: ویزیتِ بعدیِ شما {date} است.', maxLength: 500,
+  },
+  {
+    key: 'sms_next_visit_days', label: 'ویزیتِ بعدی — چند روز قبل',
+    group: 'sms', type: 'number', default: 1, min: 0, max: 30,
+  },
+  {
+    key: 'sms_surgery_text', label: 'متنِ یادآوریِ عمل',
+    group: 'sms', type: 'textarea', default: 'یادآوری: عملِ شما {date} است. لطفاً توصیه‌های پیش از عمل را رعایت فرمایید.', maxLength: 500,
+  },
+  {
+    key: 'sms_surgery_days', label: 'یادآوریِ عمل — چند روز قبل',
+    group: 'sms', type: 'number', default: 1, min: 0, max: 30,
+  },
+  {
+    key: 'sms_pre_op_days', label: 'مراقبتِ قبل از عمل — چند روز قبل',
+    hint: 'متنش از قالبِ خودِ نوعِ عمل می‌آید (تعریف‌های پایه).',
+    group: 'sms', type: 'number', default: 2, min: 0, max: 30,
+  },
+  {
+    key: 'sms_post_op_days', label: 'مراقبتِ بعد از عمل — چند روز بعد',
+    group: 'sms', type: 'number', default: 1, min: 0, max: 30,
+  },
+  {
+    key: 'sms_reminder_hour', label: 'ساعتِ ارسالِ یادآوری‌های روزانه',
+    hint: 'به وقتِ تهران — ویزیتِ بعدی، عمل و مراقبت‌ها در این ساعت می‌روند.',
+    group: 'sms', type: 'number', default: 10, min: 6, max: 22,
+  },
+  {
+    key: 'sms_appointment_text', label: 'متنِ یادآوریِ نوبت',
+    group: 'sms', type: 'textarea', default: 'یادآوری نوبت: {date}{time}{topic}. لطفاً به‌موقع مراجعه فرمایید.', maxLength: 500,
+  },
+  {
+    key: 'sms_appointment_hour', label: 'ساعتِ یادآوریِ نوبت (عصرِ روزِ قبل)',
+    group: 'sms', type: 'number', default: 17, min: 6, max: 22,
+  },
+  {
+    key: 'sms_portal_text', label: 'متنِ پیامکِ پروندهٔ الکترونیک',
+    group: 'sms', type: 'textarea', default: 'پروندهٔ الکترونیکِ شما — مراجعات، نوبت‌ها و پیام‌ها:\n{link}', maxLength: 500,
+  },
+  {
+    key: 'sms_summary_text', label: 'متنِ پیامکِ خلاصهٔ ویزیت',
+    group: 'sms', type: 'textarea', default: 'خلاصهٔ ویزیتِ شما:\n{link}', maxLength: 500,
+  },
+  {
+    key: 'sms_form_send_text', label: 'متنِ پیامکِ ارسالِ فرم',
+    group: 'sms', type: 'textarea', default: '{title}\n{link}', maxLength: 500,
+  },
+  // ── سربرگ (با آپلود پر می‌شوند؛ در صفحه پنهان‌اند) ─────────────
+  {
+    key: 'letterhead_sha', label: 'سربرگ — شناسهٔ فایل',
+    group: 'identity', type: 'text', default: '', maxLength: 64, ltr: true, hidden: true,
+  },
+  {
+    key: 'letterhead_mime', label: 'سربرگ — نوعِ فایل',
+    group: 'identity', type: 'text', default: '', maxLength: 60, ltr: true, hidden: true,
   },
 ];
 

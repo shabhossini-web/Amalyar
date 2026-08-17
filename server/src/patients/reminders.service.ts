@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { faDateStr } from './summary.service';
+import { renderSms } from '../common/sms-template';
 
 /**
  * یادآوری‌ها — نسخهٔ ۱: «ویزیتِ بعدی» (docs/BOOKING.md، فازِ یادآوری‌ها).
@@ -38,9 +39,9 @@ export class RemindersService {
     return eventEnd > Date.now() || offsetDays > 0 ? new Date(Date.now() + 60_000) : null;
   }
 
-  /** روزِ قبل، ~۱۰:۰۰ تهران — موعدِ پیش‌فرضِ یادآوری‌های ویزیت/عمل. */
-  private dueFor(event: Date): Date | null {
-    return this.dueOn(event, -1, 6.5);
+  /** ساعتِ تهران → ساعتِ UTC برای dueOn. */
+  private static utcHour(tehranHour: number) {
+    return tehranHour - 3.5;
   }
 
   /**
@@ -63,6 +64,10 @@ export class RemindersService {
       const phone = String(v.patient?.phone ?? '').trim() || null;
       const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
       const prefix = brand.name ? brand.name + '\n' : '';
+      /* متن و زمان‌بندی از تنظیماتِ شرکت — «مرکزِ پیامک‌ها»؛ متنِ ویراسته و
+         روز/ساعتِ انتخابیِ خودِ مطب. */
+      const cfg = await this.settings.sms();
+      const hour = RemindersService.utcHour(cfg.reminderHour);
 
       /* «ویزیتِ بعدی» */
       await this.prisma.reminder.updateMany({
@@ -70,12 +75,12 @@ export class RemindersService {
         data: { status: 'cancelled' },
       });
       if (v.nextVisitDate) {
-        const dueAt = this.dueFor(v.nextVisitDate);
+        const dueAt = this.dueOn(v.nextVisitDate, -cfg.nextVisitDays, hour);
         if (dueAt) {
           await this.prisma.reminder.create({
             data: {
               patientId: v.patientId, visitId, kind: 'next_visit', dueAt, phone,
-              text: `${prefix}یادآوری: ویزیتِ بعدیِ شما ${faDateStr(v.nextVisitDate)} است.`,
+              text: `${prefix}${renderSms(cfg.nextVisitText, { date: faDateStr(v.nextVisitDate) })}`,
             },
           });
         }
@@ -89,18 +94,18 @@ export class RemindersService {
         data: { status: 'cancelled' },
       });
       if (v.kind === 'surgery' && v.opDate && v.opStatus !== 'cancelled') {
-        const dueAt = this.dueFor(v.opDate);
+        const dueAt = this.dueOn(v.opDate, -cfg.surgeryDays, hour);
         if (dueAt) {
           await this.prisma.reminder.create({
             data: {
               patientId: v.patientId, visitId, kind: 'surgery', dueAt, phone,
-              text: `${prefix}یادآوری: عملِ شما ${faDateStr(v.opDate)} است. لطفاً توصیه‌های پیش از عمل را رعایت فرمایید.`,
+              text: `${prefix}${renderSms(cfg.surgeryText, { date: faDateStr(v.opDate) })}`,
             },
           });
         }
         const pre = v.procedureType?.preOpCare?.trim();
         if (pre) {
-          const preDue = this.dueOn(v.opDate, -2, 6.5);
+          const preDue = this.dueOn(v.opDate, -cfg.preOpDays, hour);
           if (preDue) {
             await this.prisma.reminder.create({
               data: { patientId: v.patientId, visitId, kind: 'pre_op_care', dueAt: preDue, phone, text: `${prefix}${pre}` },
@@ -109,7 +114,7 @@ export class RemindersService {
         }
         const post = v.procedureType?.postOpCare?.trim();
         if (post) {
-          const postDue = this.dueOn(v.opDate, 1, 6.5);
+          const postDue = this.dueOn(v.opDate, cfg.postOpDays, hour);
           if (postDue) {
             await this.prisma.reminder.create({
               data: { patientId: v.patientId, visitId, kind: 'post_op_care', dueAt: postDue, phone, text: `${prefix}${post}` },
@@ -142,7 +147,8 @@ export class RemindersService {
         data: { status: 'cancelled' },
       });
       if (!['held', 'confirmed'].includes(a.status)) return;
-      const dueAt = this.dueOn(a.date, -1, 13.5);
+      const cfg = await this.settings.sms();
+      const dueAt = this.dueOn(a.date, -1, RemindersService.utcHour(cfg.appointmentHour));
       if (!dueAt) return;
       const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
       const time = a.startMin != null
@@ -153,7 +159,7 @@ export class RemindersService {
         data: {
           patientId: a.patientId, appointmentId, kind: 'appointment', dueAt,
           phone: String(a.patient?.phone ?? '').trim() || null,
-          text: `${brand.name ? brand.name + '\n' : ''}یادآوری نوبت: ${faDateStr(a.date)}${time}${topic}. لطفاً به‌موقع مراجعه فرمایید.`,
+          text: `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.appointmentText, { date: faDateStr(a.date), time, topic })}`,
         },
       });
     } catch (e) {

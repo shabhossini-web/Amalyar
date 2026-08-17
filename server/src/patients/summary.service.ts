@@ -7,6 +7,7 @@ import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { toEnDigits } from '../common/identity';
 import { toJalali } from '../common/jalali';
+import { renderSms } from '../common/sms-template';
 
 /** ۱۴۰۵/۰۵/۲۶ با ارقامِ فارسی — برای متنِ پیامک و صفحهٔ خلاصه. */
 export function faDateStr(d: Date): string {
@@ -66,8 +67,9 @@ export class SummaryService {
       throw new BadRequestException('شمارهٔ موبایلِ معتبری در پرونده نیست — اول شماره را در پرونده اصلاح کنید');
     }
     const brand = await this.settings.brand();
+    const cfg = await this.settings.sms();
     const url = this.urlOf(token);
-    const text = `${brand.name ? brand.name + '\n' : ''}خلاصهٔ ویزیتِ شما:\n${url}`;
+    const text = `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.summaryText, { link: url })}`;
     const res = await this.sms.send(to, text);
     /* در دفترِ اطلاع‌رسانی هم ثبت می‌شود — پروندهٔ الکترونیکِ بیمار همهٔ
        پیام‌های ما را یک‌جا نشان می‌دهد. */

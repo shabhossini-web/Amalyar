@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../lib/api.js';
+import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { useConfig } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
 import { toEnDigits } from '../lib/identity.js';
@@ -188,6 +188,8 @@ export default function Settings() {
 
       <Knobs onToast={setToast} onSaved={reload} />
 
+      <LetterheadPanel onToast={setToast} />
+
       <ImportPanel onToast={setToast} />
 
       {toast && <div className="df-toast">{toast}</div>}
@@ -324,6 +326,78 @@ function Knobs({ onToast, onSaved }) {
           {dirty.length > 0 && (
             <button type="button" className="st-load" disabled={busy} onClick={() => setDraft({})}>انصراف</button>
           )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * سربرگِ شرکت — تصویری که پشتِ فاکتورِ رسمی و نامهٔ اداری چاپ می‌شود.
+ *
+ * فایل پشتِ Authorization است، پس پیش‌نمایش با blob URL می‌آید نه `<img src>`ِ
+ * مستقیم — همان الگوی مدارکِ پرونده.
+ */
+function LetterheadPanel({ onToast }) {
+  const [preview, setPreview] = useState(null); // blob URL یا null = سربرگی نیست
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const url = await apiBlobUrl('/settings/letterhead');
+      setPreview((old) => { if (old) URL.revokeObjectURL(old); return url; });
+    } catch {
+      setPreview((old) => { if (old) URL.revokeObjectURL(old); return null; });
+    }
+  }, []);
+  useEffect(() => {
+    load();
+    return () => setPreview((old) => { if (old) URL.revokeObjectURL(old); return null; });
+  }, [load]);
+
+  const pick = async (ev) => {
+    const f = ev.target.files?.[0];
+    ev.target.value = '';
+    if (!f || busy) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      await apiUpload('/settings/letterhead', fd);
+      await load();
+      onToast('سربرگ ذخیره شد ✓');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  const remove = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await api('/settings/letterhead', { method: 'DELETE' });
+      await load();
+      onToast('سربرگ حذف شد');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <h3 className="st-h3">سربرگِ شرکت</h3>
+      <div className="df-note">
+        تصویرِ سربرگِ رسمی (PNG، JPEG یا WebP — ترجیحاً اندازهٔ A4). روی فاکتورِ رسمی
+        و نامهٔ اداری همین چاپ می‌شود؛ تا وقتی سربرگی نگذاشته‌اید، اسناد بدونِ سربرگ چاپ می‌شوند.
+      </div>
+      <div className="st-import st-letterhead">
+        <label className="st-file">
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={pick} disabled={busy} />
+          <span>{preview ? 'تعویضِ سربرگ…' : 'انتخابِ تصویرِ سربرگ…'}</span>
+        </label>
+        {preview && (
+          <button type="button" className="st-load" disabled={busy} onClick={remove}>حذفِ سربرگ</button>
+        )}
+      </div>
+      {preview && (
+        <div className="st-letterhead-preview">
+          <img src={preview} alt="پیش‌نمایشِ سربرگ" />
         </div>
       )}
     </>

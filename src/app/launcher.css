@@ -63,6 +63,13 @@
 .lx-word { font-size: 42px; font-weight: 900; letter-spacing: -1.5px; line-height: 1; margin-top: 6px; }
 .lx-tag { font-size: 14px; font-weight: 600; color: var(--text2); }
 .lx-tag em { font-style: normal; color: #fb923c; }
+/* نامِ شرکتِ مشتری زیرِ نشانِ عمل‌یار — تا برندِ خودش را در سامانه ببیند. */
+.lx-company {
+  margin-top: 8px; padding: 4px 14px; border-radius: 99px;
+  font-size: 13px; font-weight: 800; color: var(--text1);
+  background: rgba(var(--brand-soft-rgb), .16);
+  border: 1px solid rgba(var(--brand-soft-rgb), .38);
+}
 
 .lx-cards { display: flex; flex-direction: column; gap: 13px; }
 
