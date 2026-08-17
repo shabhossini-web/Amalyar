@@ -9,6 +9,7 @@ import { MinLevel } from '../auth/min-level.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { LEVEL } from '../common/levels';
 import { SummaryService } from './summary.service';
+import { PortalService } from './portal.service';
 import { RemindersService } from './reminders.service';
 
 /**
@@ -18,11 +19,17 @@ import { RemindersService } from './reminders.service';
  */
 @Controller('public')
 export class PublicSummaryController {
-  constructor(private summary: SummaryService) {}
+  constructor(private summary: SummaryService, private portal: PortalService) {}
 
   @Get('visit-summary/:token')
   view(@Param('token') token: string) {
     return this.summary.publicView(token);
+  }
+
+  /** پروندهٔ الکترونیکِ بیمار — لینکِ دائمی، بدونِ ورود. */
+  @Get('portal/:token')
+  portalView(@Param('token') token: string) {
+    return this.portal.publicView(token);
   }
 }
 
@@ -31,7 +38,25 @@ export class PublicSummaryController {
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard, LevelGuard)
 @Feature('dashboard')
 export class SummaryController {
-  constructor(private summary: SummaryService, private reminders: RemindersService) {}
+  constructor(
+    private summary: SummaryService,
+    private reminders: RemindersService,
+    private portal: PortalService,
+  ) {}
+
+  /** لینکِ دائمیِ پروندهٔ الکترونیکِ بیمار. */
+  @RequirePermissions('patients.read')
+  @Post('patients/:id/portal-link')
+  portalLink(@Param('id', ParseIntPipe) id: number) {
+    return this.portal.link(id);
+  }
+
+  /** پیامکِ لینکِ پرونده به بیمار — کنشِ بیرونی. */
+  @RequirePermissions('patients.write')
+  @Post('patients/:id/portal-sms')
+  portalSms(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.portal.sendSms(id, user);
+  }
 
   /** ساختِ (تنبلِ) لینکِ خلاصه — برای بازکردن/چاپ/PDF توسطِ خودِ ادمین. */
   @RequirePermissions('patients.read')

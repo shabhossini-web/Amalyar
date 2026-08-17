@@ -67,7 +67,17 @@ export class SummaryService {
     }
     const brand = await this.settings.brand();
     const url = this.urlOf(token);
-    const res = await this.sms.send(to, `${brand.name ? brand.name + '\n' : ''}خلاصهٔ ویزیتِ شما:\n${url}`);
+    const text = `${brand.name ? brand.name + '\n' : ''}خلاصهٔ ویزیتِ شما:\n${url}`;
+    const res = await this.sms.send(to, text);
+    /* در دفترِ اطلاع‌رسانی هم ثبت می‌شود — پروندهٔ الکترونیکِ بیمار همهٔ
+       پیام‌های ما را یک‌جا نشان می‌دهد. */
+    await this.prisma.reminder.create({
+      data: {
+        patientId: (await this.prisma.visit.findUnique({ where: { id: visitId }, select: { patientId: true } }))?.patientId,
+        visitId, kind: 'notice', dueAt: new Date(), phone: to, text,
+        status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date(),
+      },
+    }).catch(() => undefined);
     await this.audit.record({
       actorId: user?.id, action: 'visit.summary.sms', entityType: 'visit', entityId: visitId,
       after: { to, sent: res.sent, stub: res.stub },

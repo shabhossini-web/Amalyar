@@ -48,6 +48,7 @@ import { TransportService } from './transport.service';
 import { SummaryService } from './summary.service';
 import { SummaryController, PublicSummaryController } from './summary.controller';
 import { RemindersService } from './reminders.service';
+import { PortalService } from './portal.service';
 import { PermissionGuard } from '../auth/permission.guard';
 
 @Module({
@@ -62,7 +63,7 @@ import { PermissionGuard } from '../auth/permission.guard';
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PermissionGuard,
+    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, PermissionGuard,
   ],
 })
 export class PatientsModule {}

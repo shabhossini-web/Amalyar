@@ -45,24 +45,49 @@ export class RemindersService {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
         select: {
-          id: true, patientId: true, nextVisitDate: true, seq: true,
+          id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
+          opDate: true, opStatus: true,
           patient: { select: { phone: true, firstName: true, lastName: true, code: true } },
         },
       });
       if (!v) return;
+      const phone = String(v.patient?.phone ?? '').trim() || null;
+      const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
+      const prefix = brand.name ? brand.name + '\n' : '';
+
+      /* «ویزیتِ بعدی» */
       await this.prisma.reminder.updateMany({
         where: { visitId, kind: 'next_visit', status: 'pending' },
         data: { status: 'cancelled' },
       });
-      if (!v.nextVisitDate) return;
-      const dueAt = this.dueFor(v.nextVisitDate);
-      if (!dueAt) return;
-      const phone = String(v.patient?.phone ?? '').trim() || null;
-      const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
-      const text = `${brand.name ? brand.name + '\n' : ''}یادآوری: ویزیتِ بعدیِ شما ${faDateStr(v.nextVisitDate)} است.`;
-      await this.prisma.reminder.create({
-        data: { patientId: v.patientId, visitId, kind: 'next_visit', dueAt, phone, text },
+      if (v.nextVisitDate) {
+        const dueAt = this.dueFor(v.nextVisitDate);
+        if (dueAt) {
+          await this.prisma.reminder.create({
+            data: {
+              patientId: v.patientId, visitId, kind: 'next_visit', dueAt, phone,
+              text: `${prefix}یادآوری: ویزیتِ بعدیِ شما ${faDateStr(v.nextVisitDate)} است.`,
+            },
+          });
+        }
+      }
+
+      /* «عملِ پیشِ‌رو» — فقط مراجعهٔ از نوعِ جراحی با تاریخِ آینده و لغونشده. */
+      await this.prisma.reminder.updateMany({
+        where: { visitId, kind: 'surgery', status: 'pending' },
+        data: { status: 'cancelled' },
       });
+      if (v.kind === 'surgery' && v.opDate && v.opStatus !== 'cancelled') {
+        const dueAt = this.dueFor(v.opDate);
+        if (dueAt) {
+          await this.prisma.reminder.create({
+            data: {
+              patientId: v.patientId, visitId, kind: 'surgery', dueAt, phone,
+              text: `${prefix}یادآوری: عملِ شما ${faDateStr(v.opDate)} است. لطفاً توصیه‌های پیش از عمل را رعایت فرمایید.`,
+            },
+          });
+        }
+      }
     } catch (e) {
       this.log.error(`syncNextVisit(${visitId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
     }

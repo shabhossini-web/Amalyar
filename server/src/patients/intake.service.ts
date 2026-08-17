@@ -7,6 +7,7 @@ import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
+import { PortalService } from './portal.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { TenantContext } from '../tenant/tenant-context';
@@ -91,6 +92,7 @@ export class IntakeService {
        سرویسی است که پنلِ ادمین از آن می‌خواند؛ نسخهٔ دومِ این محاسبه یعنی
        بیمار جای آزادی ببیند که ادمین نمی‌بیند. */
     private availability: AvailabilityService,
+      private portal: PortalService,
   ) {}
 
   private token() {
@@ -1006,7 +1008,15 @@ export class IntakeService {
        (`/f/`) چون صفحهٔ مشخصات (`/r/`) این‌جا وجود ندارد. */
     const host = this.tenant.require().hostname;
     const url = `https://${host}/f/${row.token}`;
-    const res = await this.sms.send(to, `${form.title}\n${url}`);
+    const noticeText = `${form.title}\n${url}`;
+    const res = await this.sms.send(to, noticeText);
+    /* دفترِ اطلاع‌رسانیِ بیمار — پروندهٔ الکترونیک همهٔ پیام‌ها را نشان می‌دهد. */
+    await this.prisma.reminder.create({
+      data: {
+        patientId, kind: 'notice', dueAt: new Date(), phone: to, text: noticeText,
+        status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date(),
+      },
+    }).catch(() => undefined);
 
     /* مثلِ `intake.link.sms`: مقصد در audit هست، متن نه. */
     await this.audit.record({
@@ -1412,6 +1422,12 @@ export class IntakeService {
       actorId: user?.id, action: 'intake.approve', entityType: 'intake_submission', entityId: id,
       after: { visitId: visit.id, charged: row.amount, discount: row.discountAmount, paid: pay ? payable : 0 },
     });
+    /* لحظهٔ «رسمی‌شدنِ» بیمار: لینکِ پروندهٔ الکترونیک خودکار پیامک می‌شود —
+       راهِ ارتباطیِ دائمیِ ما با او از همین‌جا شروع می‌شود. best-effort:
+       نبودِ شماره یا خطای پیامک نباید تأیید را بشکند. */
+    if (row.patientId) {
+      await this.portal.sendSms(row.patientId, user).catch(() => undefined);
+    }
     // ⚠️ کدِ مراجعه از خروجیِ `createVisit` می‌آید نه ساختِ دستیِ
     //    `code + '-V' + seq`: قالبِ کد یک جا تعریف شده و ساختنش این‌جا یعنی
     //    اولین تغییرِ قالب، دو شکلِ متفاوت در دو صفحه.

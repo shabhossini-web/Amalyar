@@ -6,6 +6,7 @@ import Landing from './pages/Landing.jsx';
 import Intake from './pages/Intake.jsx';
 import Survey from './pages/Survey.jsx';
 import VisitSummary from './pages/VisitSummary.jsx';
+import Portal from './pages/Portal.jsx';
 import Launcher from './app/Launcher.jsx';
 import Login from './app/Login.jsx';
 import Users from './app/Users.jsx';
@@ -65,6 +66,8 @@ export default function App() {
           <Route path="/s/:token" element={<Survey />} />
           {/* خلاصهٔ ویزیت — سندِ چاپیِ بیمار؛ عمومی با توکن. */}
           <Route path="/v/:token" element={<VisitSummary />} />
+          {/* پروندهٔ الکترونیکِ بیمار — لینکِ دائمی؛ عمومی با توکن. */}
+          <Route path="/p/:token" element={<Portal />} />
           <Route path="/platform-admin" element={<PlatformAdmin />} />
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
           <Route path="/app/dashboard" element={<Protected><Gate feature="dashboard"><Dashboard /></Gate></Protected>} />

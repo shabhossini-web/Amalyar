@@ -1083,6 +1083,8 @@ export class PatientsService {
       data: { opStatus },
       include: INCLUDE_PATIENT,
     });
+    /* لغوِ عمل باید یادآوریِ «عملِ پیشِ‌رو» را هم باطل کند. */
+    await this.reminders.syncNextVisit(id);
     return enrich(updated, await this.forms.kindMap());
   }
 
