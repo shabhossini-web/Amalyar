@@ -19,6 +19,7 @@ const TOOLS = [
   /* CRM زیرِ همان featureِ formgen (feature override): تفکیکِ مجوز وقتی معنا
      دارد که داده‌اش از جای دیگری بیاید — فعلاً تماماً از ثبت‌نام‌هاست. */
   { key: 'crm', feature: 'formgen', label: 'تحلیل و CRM', icon: Chart, tint: 'blue', ready: true, min: 5, to: '/app/crm' },
+  { key: 'reminders', feature: 'dashboard', label: 'یادآوری‌ها', icon: Clock, tint: 'teal', ready: true, min: 5, to: '/app/reminders' },
   { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
   /* برنامهٔ کاری — `docs/BOOKING.md`. کنارِ تقویم می‌نشیند چون هم‌خانواده‌اند:

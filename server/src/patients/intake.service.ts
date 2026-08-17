@@ -8,6 +8,7 @@ import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
 import { PortalService } from './portal.service';
+import { RemindersService } from './reminders.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { TenantContext } from '../tenant/tenant-context';
@@ -93,6 +94,7 @@ export class IntakeService {
        بیمار جای آزادی ببیند که ادمین نمی‌بیند. */
     private availability: AvailabilityService,
       private portal: PortalService,
+      private reminders: RemindersService,
   ) {}
 
   private token() {
@@ -557,6 +559,8 @@ export class IntakeService {
         actorId: null, action: 'appointment.hold', entityType: 'appointment', entityId: appt.id,
         after: { date: dto.date, startMin: data.startMin, submissionId: row.id },
       });
+      /* یادآوریِ «نوبتِ فردا» — همین‌جا که نوبت گرفته/جابه‌جا شد. */
+      await this.reminders.syncAppointment(appt.id);
       return this.publicView(token);
     } catch (e: any) {
       if (e?.code === 'P2002') throw new BadRequestException('همین حالا کسی این نوبت را گرفت — لطفاً ساعتِ دیگری بزنید');
@@ -1058,10 +1062,15 @@ export class IntakeService {
     if (row.status === 'approved' && row.visitId !== null) {
       throw new BadRequestException('این ثبت‌نام مراجعه ساخته — اول مراجعه را تعیین‌تکلیف کنید');
     }
+    const heldAppts = await this.prisma.appointment.findMany({
+      where: { submissionId: id, status: { in: ['held', 'confirmed'] } },
+      select: { id: true },
+    });
     await this.prisma.appointment.updateMany({
       where: { submissionId: id, status: { in: ['held', 'confirmed'] } },
       data: { status: 'cancelled' },
     });
+    for (const a2 of heldAppts) await this.reminders.syncAppointment(a2.id);
     await this.prisma.intakeSubmission.delete({ where: { id } });
     await this.audit.record({
       actorId: user?.id, action: 'intake.submission.delete', entityType: 'intake_submission', entityId: id,
@@ -1345,6 +1354,8 @@ export class IntakeService {
         where: { id: held.id },
         data: { status: 'confirmed', visitId: visit?.id ?? null, patientId: row.patientId ?? null },
       });
+      /* قطعی‌شدن: یادآوریِ نوبت با patientId و وضعیتِ تازه دوباره کاشته می‌شود. */
+      await this.reminders.syncAppointment(held.id);
     }
 
     await this.prisma.intakeSubmission.update({
@@ -1458,10 +1469,14 @@ export class IntakeService {
     /* ⚠️ نوبتِ ثبت‌نامِ ردشده باید **آزاد** شود. بدونِ این، هر ردکردن یک جای
        سوخته در تقویم می‌گذاشت که هیچ‌کس نمی‌توانست بگیردش و هیچ‌کس هم
        نمی‌دانست چرا. */
+    const rejAppts = await this.prisma.appointment.findMany({
+      where: { submissionId: id, status: { in: ['held', 'confirmed'] } }, select: { id: true },
+    });
     await this.prisma.appointment.updateMany({
       where: { submissionId: id, status: { in: ['held', 'confirmed'] } },
       data: { status: 'cancelled' },
     });
+    for (const a2 of rejAppts) await this.reminders.syncAppointment(a2.id);
     await this.audit.record({ actorId: user?.id, action: 'intake.reject', entityType: 'intake_submission', entityId: id, after: { note } });
     return { ok: true };
   }
@@ -1595,10 +1610,14 @@ export class IntakeService {
     if (open && row.expiresAt.getTime() < Date.now()) {
       /* ثبت‌نامِ منقضی نوبتش را هم پس می‌دهد — همان دلیلِ ردکردن: جای سوخته
          در تقویم که کسی نمی‌تواند بگیرد و کسی هم نمی‌داند چرا. */
+      const expAppts = await this.prisma.appointment.findMany({
+        where: { submissionId: row.id, status: 'held' }, select: { id: true },
+      });
       await this.prisma.appointment.updateMany({
         where: { submissionId: row.id, status: 'held' },
         data: { status: 'cancelled' },
       });
+      for (const a2 of expAppts) await this.reminders.syncAppointment(a2.id);
       return this.prisma.intakeSubmission.update({ where: { id: row.id }, data: { status: 'expired' } });
     }
     return row;

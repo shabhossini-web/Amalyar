@@ -378,14 +378,17 @@ export class DefinitionsService {
     return { ok: true, deactivated: false, visitCount: 0 };
   }
 
-  async createProcedureType(dto: { name: string; code?: string; notes?: string }) {
+  async createProcedureType(dto: { name: string; code?: string; notes?: string; preOpCare?: string; postOpCare?: string }) {
     await this.uniqueName('procedureType', 'name', dto.name);
     return this.prisma.procedureType.create({
-      data: { name: dto.name.trim(), code: dto.code?.trim() || null, notes: dto.notes?.trim() || null },
+      data: {
+        name: dto.name.trim(), code: dto.code?.trim() || null, notes: dto.notes?.trim() || null,
+        preOpCare: dto.preOpCare?.trim() || null, postOpCare: dto.postOpCare?.trim() || null,
+      },
     });
   }
 
-  async updateProcedureType(id: number, dto: { name?: string; code?: string; notes?: string; active?: boolean }) {
+  async updateProcedureType(id: number, dto: { name?: string; code?: string; notes?: string; active?: boolean; preOpCare?: string; postOpCare?: string }) {
     const row = await this.prisma.procedureType.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('نوعِ عمل یافت نشد');
     if (dto.name) await this.uniqueName('procedureType', 'name', dto.name, id);
@@ -395,6 +398,8 @@ export class DefinitionsService {
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.code !== undefined ? { code: dto.code?.trim() || null } : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+        ...(dto.preOpCare !== undefined ? { preOpCare: dto.preOpCare?.trim() || null } : {}),
+        ...(dto.postOpCare !== undefined ? { postOpCare: dto.postOpCare?.trim() || null } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
       },
     });

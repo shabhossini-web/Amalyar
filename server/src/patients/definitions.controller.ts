@@ -71,12 +71,17 @@ class ProcedureCreateDto {
 
   @IsOptional() @IsString() @MaxLength(30) code?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  /// قالبِ مراقبت — باید در DTO اعلام شود وگرنه whitelist بی‌صدا دورش می‌ریزد.
+  @IsOptional() @IsString() @MaxLength(900) preOpCare?: string;
+  @IsOptional() @IsString() @MaxLength(900) postOpCare?: string;
 }
 
 class ProcedurePatchDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
   @IsOptional() @IsString() @MaxLength(30) code?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
+  @IsOptional() @IsString() @MaxLength(900) preOpCare?: string;
+  @IsOptional() @IsString() @MaxLength(900) postOpCare?: string;
   @IsOptional() @IsBoolean() active?: boolean;
 }
 

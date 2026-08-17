@@ -75,6 +75,10 @@ const SECTIONS = [
     fields: [
       { key: 'name', label: 'عنوان *', required: true },
       { key: 'code', label: 'کد', dir: 'ltr' },
+      /* قالبِ پیامکِ مراقبت — خالی یعنی برای این نوعِ عمل پیامی نمی‌رود.
+         دو روز قبل و یک روز بعدِ عمل، خودکار به بیمار پیامک می‌شود. */
+      { key: 'preOpCare', label: 'مراقبتِ قبل از عمل (پیامک به بیمار، ۲ روز قبل)', textarea: true },
+      { key: 'postOpCare', label: 'مراقبتِ بعد از عمل (پیامک به بیمار، روزِ بعد)', textarea: true },
       { key: 'notes', label: 'یادداشت', textarea: true },
     ],
   },

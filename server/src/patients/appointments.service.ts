@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { PatientsService } from './patients.service';
 import { FormsService } from './forms.service';
 import { AvailabilityService } from './availability.service';
+import { RemindersService } from './reminders.service';
 
 /** برچسب‌های فارسیِ وضعیتِ نوبت — مشتقِ سرور (قانون ۱۵). */
 export const APPT_LABELS: Record<string, string> = {
@@ -43,6 +44,7 @@ export class AppointmentsService {
     private patients: PatientsService,
     private forms: FormsService,
     private availability: AvailabilityService,
+    private reminders: RemindersService,
   ) {}
 
   private view(a: any) {
@@ -128,6 +130,8 @@ export class AppointmentsService {
         actorId: user?.id, action: 'appointment.walkin', entityType: 'appointment', entityId: appt.id,
         after: { patientId: dto.patientId, date: dto.date, startMin: appt.startMin },
       });
+      /* یادآوریِ «نوبتِ فردا» — عصرِ روزِ قبل. */
+      await this.reminders.syncAppointment(appt.id);
       return this.view(appt);
     } catch (e: any) {
       if (e?.code === 'P2002') throw new BadRequestException('همین حالا کسی این نوبت را گرفت');
@@ -175,6 +179,8 @@ export class AppointmentsService {
       actorId: user?.id, action: 'appointment.status', entityType: 'appointment', entityId: id,
       before: { status: row.status }, after: { status },
     });
+    /* لغو/نیامد → یادآوری باطل؛ برگشت به قطعی → دوباره کاشته می‌شود. */
+    await this.reminders.syncAppointment(id);
     return this.view(updated);
   }
 

@@ -95,7 +95,10 @@ try {
   sql(`UPDATE reminders SET due_at = now() - interval '1 minute' WHERE visit_id=${visit.id} AND status='pending'`);
   const sw = (await send('/reminders/sweep', 'POST')).json;
   ok(sw?.sent >= 1, `sweep فرستاد (${JSON.stringify(sw)})`);
-  ok(cnt('sent') === 1, 'وضعیت sent شد');
+  /* فقط خودِ یادآوری — پیامکِ خلاصهٔ گامِ ۲ هم به‌عنوانِ notice با وضعیتِ
+     sent در دفتر ثبت می‌شود (پروندهٔ الکترونیک) و نباید این را کج کند. */
+  ok(Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='next_visit' AND status='sent'`)) === 1,
+    'وضعیتِ یادآوری sent شد');
   const sw2 = (await send('/reminders/sweep', 'POST')).json;
   ok((sw2?.due ?? 0) === 0, 'sweepِ دوم چیزی برای فرستادن ندارد — دوباره‌فرستی نیست');
 } finally {

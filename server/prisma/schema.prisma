@@ -247,6 +247,12 @@ model ProcedureType {
   /// با این اتصال، صورت‌حساب می‌تواند فی را از ارزشِ نسبی × ضریب حساب کند.
   serviceCode    ServiceCode? @relation(fields: [serviceCodeRef], references: [code], onDelete: SetNull)
   serviceCodeRef String?      @map("service_code_ref")
+
+  /// قالبِ پیامِ مراقبت — به تفکیکِ نوعِ عمل، ویراستنی توسطِ خودِ مطب
+  /// (نه متنِ سختِ کد): قبل از عمل (ناشتایی، قطعِ دارو…) و بعد از عمل.
+  /// خالی = برای این نوعِ عمل پیامِ مراقبتی نمی‌رود.
+  preOpCare  String? @map("pre_op_care")
+  postOpCare String? @map("post_op_care")
   active         Boolean      @default(true)
   createdAt      DateTime     @default(now()) @map("created_at")
 
@@ -2087,7 +2093,10 @@ model Reminder {
   visit   Visit? @relation(fields: [visitId], references: [id], onDelete: Cascade)
   visitId Int?   @map("visit_id")
 
-  /// next_visit | (آینده: surgery، pre_op_care، post_op_care، appointment)
+  /// نوبتی که این یادآوری مالِ آن است — برای هم‌گام‌سازیِ لغو/جابه‌جایی.
+  appointmentId Int? @map("appointment_id")
+
+  /// next_visit | surgery | pre_op_care | post_op_care | appointment | notice
   kind String
 
   /// موعدِ ارسال — UTC. sweep هر چند دقیقه pendingهای سررسیده را می‌فرستد.

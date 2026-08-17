@@ -25,14 +25,22 @@ export class RemindersService {
     private settings: SettingsService,
   ) {}
 
-  /** موعدِ ارسال از تاریخِ ویزیت: روزِ قبل، ۰۶:۳۰ UTC (~۱۰:۰۰ تهران). */
-  private dueFor(nextVisit: Date): Date | null {
-    const base = Date.UTC(nextVisit.getUTCFullYear(), nextVisit.getUTCMonth(), nextVisit.getUTCDate());
-    const due = new Date(base - 24 * 3600_000 + 6.5 * 3600_000);
+  /**
+   * موعدِ ارسال نسبت به یک تاریخ: `offsetDays` روز جلو/عقب، در ساعتِ ثابتِ
+   * UTC. اگر موعدِ محاسبه‌شده گذشته ولی خودِ رویداد هنوز نیامده (ویزیتِ
+   * فردا که امروز عصر ثبت شد) → اولین sweep؛ رویدادِ گذشته → یادآوری ندارد.
+   */
+  private dueOn(event: Date, offsetDays: number, hourUtc: number): Date | null {
+    const base = Date.UTC(event.getUTCFullYear(), event.getUTCMonth(), event.getUTCDate());
+    const due = new Date(base + offsetDays * 24 * 3600_000 + hourUtc * 3600_000);
     if (due.getTime() > Date.now()) return due;
-    /* موعدِ محاسبه‌شده گذشته ولی خودِ ویزیت هنوز نیامده (ویزیتِ فردا که
-       امروز عصر ثبت شد) → در اولین sweep برود. ویزیتِ گذشته → یادآوری ندارد. */
-    return nextVisit.getTime() > Date.now() ? new Date(Date.now() + 60_000) : null;
+    const eventEnd = base + 24 * 3600_000; // تا پایانِ روزِ رویداد
+    return eventEnd > Date.now() || offsetDays > 0 ? new Date(Date.now() + 60_000) : null;
+  }
+
+  /** روزِ قبل، ~۱۰:۰۰ تهران — موعدِ پیش‌فرضِ یادآوری‌های ویزیت/عمل. */
+  private dueFor(event: Date): Date | null {
+    return this.dueOn(event, -1, 6.5);
   }
 
   /**
@@ -47,6 +55,7 @@ export class RemindersService {
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
           opDate: true, opStatus: true,
+          procedureType: { select: { preOpCare: true, postOpCare: true } },
           patient: { select: { phone: true, firstName: true, lastName: true, code: true } },
         },
       });
@@ -72,9 +81,11 @@ export class RemindersService {
         }
       }
 
-      /* «عملِ پیشِ‌رو» — فقط مراجعهٔ از نوعِ جراحی با تاریخِ آینده و لغونشده. */
+      /* «عملِ پیشِ‌رو» + مراقبتِ قبل/بعدِ عمل — فقط جراحیِ لغونشدهٔ تاریخ‌دار.
+         متنِ مراقبت از قالبِ **نوعِ عمل** می‌آید (تعریف‌های پایه)؛ قالبِ خالی
+         یعنی برای این نوع پیامی نمی‌رود. */
       await this.prisma.reminder.updateMany({
-        where: { visitId, kind: 'surgery', status: 'pending' },
+        where: { visitId, kind: { in: ['surgery', 'pre_op_care', 'post_op_care'] }, status: 'pending' },
         data: { status: 'cancelled' },
       });
       if (v.kind === 'surgery' && v.opDate && v.opStatus !== 'cancelled') {
@@ -87,9 +98,66 @@ export class RemindersService {
             },
           });
         }
+        const pre = v.procedureType?.preOpCare?.trim();
+        if (pre) {
+          const preDue = this.dueOn(v.opDate, -2, 6.5);
+          if (preDue) {
+            await this.prisma.reminder.create({
+              data: { patientId: v.patientId, visitId, kind: 'pre_op_care', dueAt: preDue, phone, text: `${prefix}${pre}` },
+            });
+          }
+        }
+        const post = v.procedureType?.postOpCare?.trim();
+        if (post) {
+          const postDue = this.dueOn(v.opDate, 1, 6.5);
+          if (postDue) {
+            await this.prisma.reminder.create({
+              data: { patientId: v.patientId, visitId, kind: 'post_op_care', dueAt: postDue, phone, text: `${prefix}${post}` },
+            });
+          }
+        }
       }
     } catch (e) {
       this.log.error(`syncNextVisit(${visitId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
+    }
+  }
+
+  /**
+   * هم‌گام‌سازیِ یادآوریِ یک **نوبت** — گرفتن/جابه‌جایی/لغو.
+   * موعد: عصرِ روزِ قبل (~۱۷:۰۰ تهران) تا بیمار برای فردایش برنامه بریزد.
+   */
+  async syncAppointment(appointmentId: number) {
+    try {
+      const a = await this.prisma.appointment.findUnique({
+        where: { id: appointmentId },
+        select: {
+          id: true, patientId: true, date: true, startMin: true, status: true,
+          topic: { select: { name: true } },
+          patient: { select: { phone: true } },
+        },
+      });
+      if (!a) return;
+      await this.prisma.reminder.updateMany({
+        where: { appointmentId, kind: 'appointment', status: 'pending' },
+        data: { status: 'cancelled' },
+      });
+      if (!['held', 'confirmed'].includes(a.status)) return;
+      const dueAt = this.dueOn(a.date, -1, 13.5);
+      if (!dueAt) return;
+      const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
+      const time = a.startMin != null
+        ? `، ساعتِ ${String(Math.floor(a.startMin / 60)).padStart(2, '0')}:${String(a.startMin % 60).padStart(2, '0')}`
+        : '';
+      const topic = a.topic?.name ? ` (${a.topic.name})` : '';
+      await this.prisma.reminder.create({
+        data: {
+          patientId: a.patientId, appointmentId, kind: 'appointment', dueAt,
+          phone: String(a.patient?.phone ?? '').trim() || null,
+          text: `${brand.name ? brand.name + '\n' : ''}یادآوری نوبت: ${faDateStr(a.date)}${time}${topic}. لطفاً به‌موقع مراجعه فرمایید.`,
+        },
+      });
+    } catch (e) {
+      this.log.error(`syncAppointment(${appointmentId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
     }
   }
 
