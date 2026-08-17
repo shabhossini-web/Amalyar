@@ -1,0 +1,76 @@
+/* خلاصهٔ ویزیت — سندِ چاپی. عمداً روشن: سند روی کاغذِ سفید زندگی می‌کند. */
+.vs {
+  min-height: 100dvh; background: #eceaf3; color: #1c1633;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 18px 10px 90px; font-size: 14px;
+}
+.vs-err {
+  min-height: 100dvh; display: grid; place-items: center; background: #eceaf3;
+  color: #b91c1c; font-size: 14px; padding: 20px; text-align: center;
+}
+.vs-err.quiet { color: #6b7280; }
+
+.vs-page {
+  width: min(760px, 100%); background: #fff; border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(28, 22, 51, .12);
+  padding: 26px 26px 20px;
+}
+
+.vs-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding-bottom: 14px; border-bottom: 2px solid #1c1633;
+}
+.vs-head h1 { font-size: 19px; font-weight: 900; }
+.vs-head small { color: #6b7280; }
+.vs-doc { text-align: left; }
+.vs-doc b { display: block; font-size: 13px; }
+.vs-doc small { color: #6b7280; font-size: 11px; }
+
+.vs-patient {
+  display: flex; align-items: baseline; gap: 10px; padding: 12px 0 4px;
+}
+.vs-patient b { font-size: 16px; }
+.vs-patient small { color: #6b7280; }
+
+.vs-facts {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px 18px; margin: 8px 0 14px; padding: 10px 12px;
+  background: #f6f5fa; border-radius: 10px;
+}
+.vs-facts div { display: flex; gap: 7px; align-items: baseline; }
+.vs-facts dt { color: #6b7280; font-size: 12px; flex: 0 0 auto; }
+.vs-facts dt::after { content: ':'; }
+.vs-facts dd { font-weight: 700; font-size: 13px; }
+
+.vs-block { padding: 8px 0; border-bottom: 1px solid #eeecf4; }
+.vs-block h2 { font-size: 13px; color: #4b3f78; margin-bottom: 4px; }
+.vs-block p { font-size: 13.5px; line-height: 1.9; white-space: pre-wrap; }
+
+.vs-next {
+  margin-top: 14px; padding: 12px 14px; border-radius: 10px;
+  background: #eefaf4; border: 1px solid #b7e7cf;
+}
+.vs-next b { display: block; color: #047857; font-size: 14px; }
+.vs-next small { color: #059669; font-size: 12px; }
+
+.vs-foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #eeecf4; text-align: center; }
+.vs-foot small { color: #6b7280; font-size: 11px; }
+
+.vs-actions {
+  position: fixed; inset-inline: 0; bottom: 0; display: flex; justify-content: center;
+  padding: 12px; background: linear-gradient(transparent, rgba(236, 234, 243, .96) 40%);
+}
+.vs-actions button {
+  cursor: pointer; font: inherit; font-weight: 800; font-size: 14px;
+  padding: 12px 30px; border-radius: 99px; color: #fff; border: 0;
+  background: #4b3f78; box-shadow: 0 8px 24px rgba(75, 63, 120, .35);
+}
+
+/* ── چاپ: خودِ سند، تمام‌صفحه، بدونِ دکمه — Safari هم صفحهٔ دومِ سفید نسازد ── */
+@media print {
+  .vs { background: #fff; padding: 0; display: block; }
+  .vs-page { width: 100%; box-shadow: none; border-radius: 0; padding: 0; }
+  .vs-actions { display: none; }
+  .vs, .vs-page { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+@page { size: A4; margin: 14mm; }

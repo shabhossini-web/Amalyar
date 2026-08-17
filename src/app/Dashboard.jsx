@@ -968,6 +968,57 @@ function SendFormMenu({ patientId, busy, onToast }) {
   );
 }
 
+/**
+ * منوی «خلاصهٔ ویزیت» — چاپ/PDF برای خودِ ادمین، یا پیامکِ لینک برای بیمار.
+ * لینک تنبل سمتِ سرور ساخته می‌شود؛ بازکردنِ دوباره همان را می‌دهد.
+ */
+function SummaryMenu({ visitId, busy, onToast }) {
+  const [open, setOpen] = useState(false);
+  const [working, setWorking] = useState(false);
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', h);
+    return () => document.removeEventListener('pointerdown', h);
+  }, [open]);
+
+  const openPrint = async () => {
+    setWorking(true);
+    try {
+      const r = await api(`/visits/${visitId}/summary-link`, { method: 'POST' });
+      window.open(r.url ?? `/v/${r.token}`, '_blank', 'noopener');
+      setOpen(false);
+    } catch (e) { onToast(e.message); } finally { setWorking(false); }
+  };
+  const sendSms = async () => {
+    setWorking(true);
+    try {
+      const r = await api(`/visits/${visitId}/summary-sms`, { method: 'POST' });
+      const toFa = String(r.to ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+      onToast(r.sent ? `خلاصهٔ ویزیت پیامک شد به ${toFa} ✓`
+        : r.stub ? `سرویسِ پیامک پیکربندی نشده — لینک: ${r.url}`
+          : `پیامک نرفت — لینک: ${r.url}`);
+      setOpen(false);
+    } catch (e) { onToast(e.message); } finally { setWorking(false); }
+  };
+
+  return (
+    <span className="db-sendwrap" ref={wrapRef}>
+      <button type="button" className="db-ico" title="خلاصهٔ ویزیت (چاپ / ارسال)" disabled={busy} onClick={() => setOpen((o) => !o)}>
+        <Print width="15" height="15" />
+      </button>
+      {open && (
+        <div className="db-sendmenu" role="menu">
+          <b>خلاصهٔ ویزیت</b>
+          <button type="button" role="menuitem" disabled={working} onClick={openPrint}>بازکردن — چاپ / ذخیرهٔ PDF</button>
+          <button type="button" role="menuitem" disabled={working} onClick={sendSms}>پیامکِ لینک برای بیمار</button>
+        </div>
+      )}
+    </span>
+  );
+}
+
 function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onToast }) {
   const row = useStagger();
   const [confirmDel, setConfirmDel] = useState(false);
@@ -1126,6 +1177,7 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
               نمی‌شود چون کنارِ بقیهٔ ابزارهاست و برچسب دارد. */}
           <Link className="db-ico" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار"><Book width="15" height="15" /></Link>
           <SendFormMenu patientId={v.patientId} busy={busy} onToast={onToast} />
+          <SummaryMenu visitId={v.id} busy={busy} onToast={onToast} />
           <button type="button" className="db-ico" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}><Money width="15" height="15" /></button>
           <button type="button" className="db-ico" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}><Pencil width="15" height="15" /></button>
           <button

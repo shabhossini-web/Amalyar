@@ -5,6 +5,7 @@ import { ConfigProvider } from './app/config.jsx';
 import Landing from './pages/Landing.jsx';
 import Intake from './pages/Intake.jsx';
 import Survey from './pages/Survey.jsx';
+import VisitSummary from './pages/VisitSummary.jsx';
 import Launcher from './app/Launcher.jsx';
 import Login from './app/Login.jsx';
 import Users from './app/Users.jsx';
@@ -62,6 +63,8 @@ export default function App() {
           <Route path="/f/:token" element={<Intake step="form" />} />
           {/* نظرسنجیِ بیمار — عمومی، مثلِ لینک‌های ثبت‌نام. */}
           <Route path="/s/:token" element={<Survey />} />
+          {/* خلاصهٔ ویزیت — سندِ چاپیِ بیمار؛ عمومی با توکن. */}
+          <Route path="/v/:token" element={<VisitSummary />} />
           <Route path="/platform-admin" element={<PlatformAdmin />} />
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
           <Route path="/app/dashboard" element={<Protected><Gate feature="dashboard"><Dashboard /></Gate></Protected>} />

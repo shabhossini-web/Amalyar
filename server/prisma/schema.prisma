@@ -873,6 +873,7 @@ model Patient {
 
   /// نوبت‌های این بیمار (`docs/BOOKING.md`).
   appointments Appointment[]
+  reminders Reminder[]
 }
 
 /// مدرکِ پزشکی — آزمایش، تصویربرداری، گزارش، رضایت‌نامه، مدرکِ هویتی…
@@ -1073,6 +1074,11 @@ model Visit {
   opDate   DateTime? @map("op_date") // تاریخِ عمل
   opStatus String    @default("pending") @map("op_status") // pending | done | cancelled
 
+  /// توکنِ لینکِ عمومیِ «خلاصهٔ ویزیت» — تنبل ساخته می‌شود، اولین باری که
+  /// ادمین خلاصه را باز می‌کند یا برای بیمار می‌فرستد. صفحهٔ عمومی هیچ
+  /// عددِ مالی‌ای ندارد؛ همان قاعدهٔ توکنِ فرمِ بیمار.
+  summaryToken String? @unique @map("summary_token")
+
   /// «ویزیتِ بعدی» که پزشک روی خودِ فرم ثبت می‌کند — «دو هفتهٔ دیگر بیاید».
   ///
   /// ⚠️ ستونِ واقعی و نه کلیدی در `extra`: فازِ یادآوری‌ها (docs/BOOKING.md)
@@ -1161,6 +1167,7 @@ model Visit {
 
   /// نوبتی که این مراجعه از آن ساخته شد — یک‌به‌یک.
   appointment Appointment?
+  reminders Reminder[]
 }
 
 /// کدهای یکبارمصرفِ ثبت‌نام/تأیید موبایل
@@ -2056,4 +2063,43 @@ model Appointment {
   @@unique([doctorId, date, startMin])
   @@index([date, status])
   @@map("appointments")
+}
+
+/// یادآوریِ برنامه‌ریزی‌شده — دفترِ ارسال، نه صف: هر ردیف یک پیامکِ قرار است
+/// که یا هنوز موعدش نرسیده (pending)، یا رفته (sent)، یا نرفت (failed)، یا
+/// موضوعش منتفی شد (cancelled — تاریخِ ویزیت عوض/پاک شد).
+///
+/// ⚠️ متن و شماره **همین‌جا کپی می‌شوند** نه لحظهٔ ارسال: یادآوری سندِ
+/// «قرار بود چه بگوییم» است؛ اگر شمارهٔ بیمار فردا عوض شود، یادآوریِ
+/// برنامه‌ریزی‌شده با شمارهٔ روزِ برنامه‌ریزی می‌ماند و sweep بعدی با
+/// شمارهٔ تازه ساخته می‌شود (syncNextVisitReminder).
+model Reminder {
+  id Int @id @default(autoincrement())
+
+  patient   Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId Int?     @map("patient_id")
+
+  visit   Visit? @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int?   @map("visit_id")
+
+  /// next_visit | (آینده: surgery، pre_op_care، post_op_care، appointment)
+  kind String
+
+  /// موعدِ ارسال — UTC. sweep هر چند دقیقه pendingهای سررسیده را می‌فرستد.
+  dueAt DateTime @map("due_at")
+
+  phone String?
+  text  String
+
+  /// pending | sent | failed | cancelled
+  status String  @default("pending")
+  sentAt DateTime? @map("sent_at")
+  error  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([status, dueAt])
+  @@index([visitId, kind])
+  @@map("reminders")
 }

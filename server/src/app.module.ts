@@ -11,6 +11,7 @@ import { PatientsModule } from './patients/patients.module';
 import { AppController } from './app.controller';
 import { AuditModule } from './audit/audit.module';
 import { PlatformModule } from './platform/platform.module';
+import { RemindersModule } from './reminders/reminders.module';
 import { StorageModule } from './storage/storage.module';
 import { TenantConfigModule } from './config/config.module';
 
@@ -29,6 +30,7 @@ import { TenantConfigModule } from './config/config.module';
     PatientsModule,
     ImportModule,
     PlatformModule,
+    RemindersModule,
   ],
   controllers: [AppController],
 })

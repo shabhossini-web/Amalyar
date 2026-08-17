@@ -8,6 +8,7 @@ import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { toDateValue } from '../common/jalali';
+import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { FormsService } from './forms.service';
 import { summarize } from './billing.service';
@@ -230,6 +231,7 @@ export class PatientsService {
     private prisma: PrismaService,
     private audit: AuditService,
     private forms: FormsService,
+      private reminders: RemindersService,
   ) {}
 
   private scopedVisitWhere(user: any, where: any = {}) {
@@ -967,6 +969,8 @@ export class PatientsService {
        بعد از تازه‌سازی درست می‌شد، کسی باور نمی‌کرد باگ است. */
     const result = { ...enrich(v, await this.forms.kindMap()), patientStatus };
     await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
+    /* یادآوریِ «ویزیتِ بعدی» — خطایش بلعیده می‌شود؛ ثبتِ مراجعه مقدم است. */
+    await this.reminders.syncNextVisit(v.id);
     return result;
   }
 
@@ -1065,6 +1069,8 @@ export class PatientsService {
     const kinds = await this.forms.kindMap();
     const result = enrich(updated, kinds);
     await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v, kinds), after: result });
+    /* ویرایش ممکن است تاریخِ ویزیتِ بعدی یا شمارهٔ بیمار را عوض کرده باشد. */
+    await this.reminders.syncNextVisit(id);
     return result;
   }
 
@@ -1113,6 +1119,7 @@ function pickBuiltin(dto: any): Record<string, any> {
   for (const k of [
     'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId',
     'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount', 'payer', 'kind',
+    'nextVisitDate',
   ]) {
     if (k in dto) out[k] = dto[k];
   }
