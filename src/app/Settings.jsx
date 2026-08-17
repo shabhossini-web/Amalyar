@@ -331,7 +331,7 @@ function Knobs({ onToast, onSaved }) {
 }
 
 /**
- * وارد کردنِ backupِ ملک‌طب.
+ * وارد کردنِ backupِ سامانهٔ قبلی (نامِ محصولِ دیگر در UI نمی‌آید — white-label).
  *
  * ⚠️ همیشه اول آزمایشی: کاربر گزارشِ «چه چیزی وارد می‌شود» را می‌بیند و بعد
  * تأیید می‌کند. ایمپورتِ کور روی دیتابیسِ واقعی، برگشت‌ناپذیرترین دکمهٔ سامانه
@@ -349,7 +349,7 @@ function ImportPanel({ onToast }) {
     if (!f) return;
     try {
       const parsed = JSON.parse(await f.text());
-      if (!parsed?.tables) throw new Error('این فایل ساختارِ backupِ ملک‌طب را ندارد');
+      if (!parsed?.tables) throw new Error('این فایل ساختارِ backupِ سامانهٔ قبلی را ندارد');
       setFile(f); setDump(parsed);
       onToast(`فایل خوانده شد: ${Object.keys(parsed.tables).length} جدول`);
     } catch (e) {
@@ -374,7 +374,7 @@ function ImportPanel({ onToast }) {
 
   return (
     <>
-      <h3 className="st-h3">وارد کردنِ دادهٔ ملک‌طب</h3>
+      <h3 className="st-h3">وارد کردنِ دادهٔ سامانهٔ قبلی</h3>
       <div className="df-note">
         فایلِ backupِ JSON را انتخاب کنید. اول «اجرای آزمایشی» بزنید تا ببینید چه چیزی وارد می‌شود؛
         هیچ‌چیز ذخیره نمی‌شود. مبالغ از ریال به تومان تبدیل می‌شوند و اجرای دوباره رکوردِ تکراری نمی‌سازد.

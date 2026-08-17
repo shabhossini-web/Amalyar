@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
+import { useAuth } from './auth.jsx';
 import { DEFAULT_VERTICAL, termsFor } from '../lib/terms.js';
 import { applyBrand } from '../lib/brand-palette.js';
 
@@ -47,7 +48,14 @@ export function ConfigProvider({ children }) {
     }
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  /**
+   * ⚠️ به `user?.id` هم گره خورده، نه فقط mount: `/config` احراز می‌خواهد و
+   * وقتی اپ پیش از ورود بالا می‌آمد، این fetch یک‌بار ۴۰۱ می‌گرفت و خطا تا
+   * رفرشِ کاملِ صفحه می‌ماند — «تنظیماتِ شرکت» با بنرِ Unauthorized باز می‌شد
+   * (اسکرین‌شاتِ کاربر). حالا هر ورود/تعویضِ حساب یک بازخوانیِ تازه است.
+   */
+  const { user } = useAuth();
+  useEffect(() => { reload(); }, [reload, user?.id]);
 
   const value = useMemo(
     () => ({ ...config, t: termsFor(config.vertical), error, reload }),
