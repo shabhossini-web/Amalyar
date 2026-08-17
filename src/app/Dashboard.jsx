@@ -20,6 +20,7 @@ import { Arrive, Back, Book, Calendar, Clock, Close, Diagnosis, Doctor, Download
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
+import Pick from '../ui/Pick.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 /* ── آیکون‌های خطی ── */
@@ -179,13 +180,14 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
         </div>
       ) : (
         <div className="db-selrow">
-          <select value={value ?? ''} onChange={(e) => onChange(e.target.value ? +e.target.value : null)}>
-            <option value="">— انتخاب —</option>
-            {/* تشخیص‌ها `title` دارند، بقیه `name`/`displayName` — یک select برای همه. */}
-            {options.map((o) => (
-              <option key={o.id} value={o.id}>{o.name || o.title || o.displayName}</option>
-            ))}
-          </select>
+          {/* ⚠️ Pick به‌جای selectِ بومی: پاپ‌آپِ بومی روی ویندوز کند و بدرنگ
+              باز می‌شد (گزینه‌ها تا repaint سیاه می‌ماندند) — گزارشِ کاربر. */}
+          <Pick
+            label={label}
+            value={value ?? null}
+            onChange={onChange}
+            options={options}
+          />
           {onQuickAdd && (
             <button type="button" className="db-addmini" title="افزودنِ جدید" onClick={() => setAdding(true)}>
               <Plus width="15" height="15" />

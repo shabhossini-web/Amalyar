@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import JDate from '../app/JDate.jsx';
 import TimePick from './TimePick.jsx';
+import Pick from './Pick.jsx';
 import './dynform.css';
 import { toEnDigits } from '../lib/identity.js';
 import { Bank, Camera, Check, Copy, Star, Trash } from './icons.jsx';
@@ -191,11 +192,18 @@ function Input({ field: f, value, set, disabled, lookups, onUpload, payment }) {
 
     case 'select': {
       const opts = optionsOf(f, lookups);
+      /* ⚠️ Pick به‌جای selectِ بومی — پاپ‌آپِ بومی روی ویندوز کند و بدرنگ باز
+         می‌شد؛ توضیحِ کامل در `ui/Pick.jsx`. مقدارِ خالی همان '' می‌ماند تا
+         اعتبارسنجی و ذخیره دست نخورند. */
       return (
-        <select value={v} onChange={(e) => set(e.target.value)} disabled={disabled}>
-          <option value="">— انتخاب کنید —</option>
-          {opts.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-        </select>
+        <Pick
+          label={f.label}
+          value={v || null}
+          onChange={(id) => set(id ?? '')}
+          options={opts.map((o) => ({ id: o.v, name: o.l }))}
+          placeholder="— انتخاب کنید —"
+          disabled={disabled}
+        />
       );
     }
 

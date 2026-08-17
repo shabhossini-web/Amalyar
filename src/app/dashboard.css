@@ -295,7 +295,7 @@ a.db-ico { text-decoration: none; }
 
 /* سلکت + دکمهٔ افزودنِ سریع */
 .db-selrow { display: flex; gap: 7px; }
-.db-selrow select { flex: 1; min-width: 0; }
+.db-selrow select, .db-selrow .pk-btn { flex: 1; min-width: 0; }
 .db-addmini {
   flex: 0 0 auto; display: grid; place-items: center; width: 40px; cursor: pointer;
   color: var(--text2); background: rgba(255, 255, 255, 0.05);
