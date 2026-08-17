@@ -10,7 +10,7 @@ import { Back, Check } from '../ui/icons.jsx';
 
 
 /** بخش‌های تعرفه‌ای — باید با SECTORS سمتِ سرور یکی بماند. */
-const SECTORS = { private: 'خصوصی', public: 'دولتی', nonprofit: 'عمومی غیردولتی', charity: 'خیریه' };
+const SECTORS = { private: 'خصوصی', public: 'دولتی', nonprofit: 'عمومی غیردولتی', charity: 'خیریه', military: 'نیروهای مسلح' };
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
 
@@ -130,9 +130,9 @@ export default function Settings() {
 
       <h3 className="st-h3">ضریبِ ریالیِ تعرفه</h3>
       <div className="df-note st-tnote">
-        فیِ هر خدمت = ارزشِ نسبی (از کتاب) × ضریبِ ریالی. هر جزء جدا ضرب می‌شود،
-        پس ضریبِ حرفه‌ای و فنی را جدا وارد کنید. تا وقتی ضریب تعریف نشده، انتخابِ
-        کد فقط عنوان را پر می‌کند و مبلغ دستِ شماست.
+        فیِ هر خدمت = ارزشِ نسبی (از کتاب) × ضریبِ ریالی. ضریب‌های <b>سراسری</b> سالی
+        یک‌بار مرکزی اعلام می‌شوند و لازم نیست چیزی وارد کنید؛ اگر قراردادِ خاصی
+        دارید، ضریبِ اختصاصیِ خودتان را ثبت کنید — برای همان سال و بخش، مقدم است.
         {codes.total > 0 && <> فعلاً <b>{faNum(codes.total)}</b> کد از نسخهٔ <b>{faNum(codes.version)}</b> در سامانه است.</>}
       </div>
 
@@ -170,9 +170,15 @@ export default function Settings() {
       {tariffs.length > 0 && (
         <div className="df-list st-tlist">
           {tariffs.map((t) => (
-            <div key={t.id} className="df-row">
+            <div key={`${t.source}-${t.id}`} className="df-row">
               <div className="df-row-main">
-                <b>{faNum(t.year)} — {t.sectorLabel}</b>
+                <b>
+                  {faNum(t.year)} — {t.sectorLabel}
+                  {/* منبعِ ضریب: سراسری از مرکز می‌آید، اختصاصی را خودِ شرکت گذاشته و مقدم است. */}
+                  <i className={`st-tsrc${t.source === 'local' ? ' own' : ''}`}>
+                    {t.source === 'local' ? 'اختصاصیِ شرکت' : 'سراسری'}
+                  </i>
+                </b>
                 <small>
                   حرفه‌ای {faNum(t.professional)} · فنی {faNum(t.technical)} · بیهوشی {faNum(t.anesthesia)}
                 </small>

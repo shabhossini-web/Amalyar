@@ -103,6 +103,30 @@ model TenantDeletionJob {
   @@map("tenant_deletion_jobs")
 }
 
+/// ضریبِ ریالیِ سراسریِ تعرفه — سالی یک‌بار، برای **همهٔ** شرکت‌ها یکسان.
+///
+/// در کنترل است نه در دیتابیسِ هر شرکت، چون حقیقتِ مشترک است: اپراتورِ
+/// پلتفرم یک‌بار واردش می‌کند و همهٔ شرکت‌ها همان را می‌خوانند. ضریبِ
+/// اختصاصیِ یک شرکت (قراردادِ خاص) همچنان در جدولِ `tariffs`ِ خودش می‌نشیند
+/// و بر سراسری مقدم است. مبالغ «تومان» و عددِ صحیح‌اند.
+model CentralTariff {
+  id     Int    @id @default(autoincrement())
+  year   String // سالِ شمسی
+  /// private | public | nonprofit | charity | military
+  sector String
+
+  professional Int
+  technical    Int
+  anesthesia   Int
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([year, sector])
+  @@map("central_tariffs")
+}
+
 model PlatformAuditEvent {
   id         String   @id @default(uuid())
   actorHash  String?  @map("actor_hash")

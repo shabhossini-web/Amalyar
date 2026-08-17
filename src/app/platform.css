@@ -157,6 +157,23 @@
 .pa-job-foot button { padding: 6px 8px; border-radius: 8px; color: #fda4af; background: rgba(251, 113, 133, .08); }
 .pa-empty { padding: 24px; text-align: center; color: #817aa2; font-size: 13px; }
 
+/* تعرفه‌های سراسری */
+.pa-tariff-form {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;
+  margin-bottom: 14px;
+}
+.pa-tariff-form input, .pa-tariff-form select {
+  width: 100%; padding: 10px 12px; border-radius: 11px; font: inherit; font-size: 12.5px;
+  color: #e8e4f8; background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+}
+.pa-tariff-form button {
+  cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; border: 0;
+  padding: 10px 14px; border-radius: 11px; color: #fff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+}
+.pa-tariff-form button:disabled { opacity: .55; cursor: default; }
+.pa-tariffs .pa-job-foot button { color: #c084fc; background: rgba(var(--brand-2-rgb), .13); }
+
 .pa-danger {
   font-size: 10px; padding: 7px 11px; border-radius: 9px; color: #fda4af;
   background: rgba(251, 113, 133, .09); border: 1px solid rgba(251, 113, 133, .24) !important;

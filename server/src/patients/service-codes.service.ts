@@ -2,16 +2,18 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { ControlPrismaService } from '../tenant/control-prisma.service';
 import { textSearchOr } from '../common/search';
 import { toEnDigits } from '../common/identity';
 
 /** بخش‌های تعرفه‌ای — ضریبِ ریالی برای هرکدام جدا تعیین می‌شود. */
-export const SECTORS = ['private', 'public', 'nonprofit', 'charity'] as const;
+export const SECTORS = ['private', 'public', 'nonprofit', 'charity', 'military'] as const;
 export const SECTOR_LABELS: Record<string, string> = {
   private: 'خصوصی',
   public: 'دولتی',
   nonprofit: 'عمومی غیردولتی',
   charity: 'خیریه',
+  military: 'نیروهای مسلح',
 };
 
 type SeedFile = { version: string; fields: string[]; rows: any[][] };
@@ -28,7 +30,10 @@ export class ServiceCodesService {
   private readonly log = new Logger(ServiceCodesService.name);
   private seed: SeedFile | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private control: ControlPrismaService,
+  ) {}
 
   /** فایل یک‌بار خوانده و در حافظه می‌ماند — ۶۰۰۰ ردیف، چند مگابایت. */
   private load(): SeedFile {
@@ -138,9 +143,46 @@ export class ServiceCodesService {
 
   // ───────────────────────── تعرفه ─────────────────────────
 
+  /**
+   * ضرایبِ سراسری از دیتابیسِ کنترل — سالی یک‌بار توسطِ اپراتورِ پلتفرم
+   * وارد می‌شوند و همهٔ شرکت‌ها همان را می‌خوانند.
+   *
+   * ⚠️ نبودِ جدول (نصبی که هنوز migrationِ کنترل را نگرفته) یا نبودِ خودِ
+   * کنترل نباید تعرفه را بشکند — فهرستِ خالی برمی‌گردد و ضریبِ محلی (اگر
+   * هست) کار را جلو می‌برد.
+   */
+  private async centralTariffs() {
+    try {
+      return await this.control.centralTariff.findMany({
+        where: { active: true },
+        orderBy: [{ year: 'desc' }, { sector: 'asc' }],
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * فهرستِ ادغام‌شده: سراسری + اختصاصیِ همین شرکت.
+   * برای یک (سال، بخش) اگر ردیفِ محلی هست، همان مقدم است — شرکتی که خودش
+   * عدد وارد کرده (قراردادِ خاص) نباید با به‌روزرسانیِ مرکزی بی‌صدا عوض شود.
+   */
   async tariffs() {
-    const rows = await this.prisma.tariff.findMany({ orderBy: [{ year: 'desc' }, { sector: 'asc' }] });
-    return rows.map((t) => ({ ...t, sectorLabel: SECTOR_LABELS[t.sector] ?? t.sector }));
+    const [locals, centrals] = await Promise.all([
+      this.prisma.tariff.findMany({ orderBy: [{ year: 'desc' }, { sector: 'asc' }] }),
+      this.centralTariffs(),
+    ]);
+    const localKeys = new Set(locals.map((t) => `${t.year}|${t.sector}`));
+    const shape = (t: any, source: 'local' | 'central') => ({
+      id: t.id, year: t.year, sector: t.sector,
+      professional: t.professional, technical: t.technical, anesthesia: t.anesthesia,
+      active: t.active, source,
+      sectorLabel: SECTOR_LABELS[t.sector] ?? t.sector,
+    });
+    return [
+      ...locals.map((t) => shape(t, 'local')),
+      ...centrals.filter((t) => !localKeys.has(`${t.year}|${t.sector}`)).map((t) => shape(t, 'central')),
+    ].sort((a, b) => (a.year === b.year ? a.sector.localeCompare(b.sector) : b.year.localeCompare(a.year)));
   }
 
   async setTariff(dto: { year: string; sector: string; professional: number; technical: number; anesthesia: number }) {
@@ -168,10 +210,17 @@ export class ServiceCodesService {
     const service = await this.prisma.serviceCode.findUnique({ where: { code } });
     if (!service) throw new BadRequestException('کدِ خدمت پیدا نشد');
 
-    const tariff = await this.prisma.tariff.findFirst({
-      where: { sector, active: true, ...(year ? { year } : {}) },
-      orderBy: { year: 'desc' },
-    });
+    // اول ضریبِ اختصاصیِ شرکت، بعد سراسری — همان تقدمی که در `tariffs()` است.
+    let tariff: { year: string; sector: string; professional: number; technical: number; anesthesia: number } | null =
+      await this.prisma.tariff.findFirst({
+        where: { sector, active: true, ...(year ? { year } : {}) },
+        orderBy: { year: 'desc' },
+      });
+    if (!tariff) {
+      tariff = (await this.centralTariffs())
+        .filter((t) => t.sector === sector && (!year || t.year === year))
+        .sort((a, b) => b.year.localeCompare(a.year))[0] ?? null;
+    }
     if (!tariff) return { code, title: service.title, price: null, tariff: null };
 
     // هزارم‌واحد × تومان‌به‌ازای‌واحد ÷ ۱۰۰۰

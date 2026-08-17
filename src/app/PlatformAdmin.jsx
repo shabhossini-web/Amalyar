@@ -69,6 +69,12 @@ const TENANT_STATUS = {
 
 const faDate = (value) => value ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
 const faNum = (value) => String(value ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+const toEn = (value) => String(value ?? '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[^0-9]/g, '');
+
+/** بخش‌های تعرفه‌ای — باید با SECTORS سمتِ سرور یکی بماند. */
+const TARIFF_SECTORS = {
+  private: 'خصوصی', public: 'دولتی', nonprofit: 'عمومی غیردولتی', charity: 'خیریه', military: 'نیروهای مسلح',
+};
 
 /**
  * دامنه‌های یک شرکت، با سازگاری با پاسخِ قدیمیِ سرور که فقط `hostname` داشت.
@@ -529,6 +535,8 @@ export default function PlatformAdmin() {
             </div>
           </section>
 
+          <TariffsPanel busy={busy} onNotice={setNotice} />
+
           {snapshot.deletions.length > 0 && (
             <section className="pa-card pa-jobs">
               <div className="pa-section-title">
@@ -625,5 +633,90 @@ export default function PlatformAdmin() {
         )}
       </AnimatePresence>
     </main>
+  );
+}
+
+/**
+ * تعرفه‌های سراسریِ سالانه — یک‌بار این‌جا وارد می‌شوند و **همهٔ** شرکت‌ها
+ * همان را می‌خوانند. ضریبِ اختصاصی‌ای که شرکتی خودش در تنظیماتش گذاشته،
+ * برای همان شرکت مقدم می‌ماند.
+ */
+function TariffsPanel({ busy: parentBusy, onNotice }) {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [tf, setTf] = useState({ year: '', sector: 'private', professional: '', technical: '', anesthesia: '' });
+  const set = (k) => (e) => setTf((s) => ({ ...s, [k]: e.target.value }));
+
+  const load = () => platformApi('/tariffs').then(setRows).catch(() => setRows([]));
+  useEffect(() => { load(); }, []);
+
+  const save = async (event) => {
+    event.preventDefault();
+    if (busy || parentBusy) return;
+    const year = toEn(tf.year);
+    if (!/^\d{4}$/.test(year)) { onNotice('سالِ تعرفه باید چهار رقم باشد (مثلاً ۱۴۰۵).'); return; }
+    setBusy(true);
+    try {
+      await platformApi('/tariffs', {
+        method: 'POST', csrf: true,
+        body: {
+          year, sector: tf.sector,
+          professional: Number(toEn(tf.professional) || 0),
+          technical: Number(toEn(tf.technical) || 0),
+          anesthesia: Number(toEn(tf.anesthesia) || 0),
+        },
+      });
+      setTf({ year: '', sector: 'private', professional: '', technical: '', anesthesia: '' });
+      onNotice('ضریبِ سراسری ذخیره شد — همهٔ شرکت‌ها از همین می‌خوانند.');
+      await load();
+    } catch (error) {
+      onNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="pa-card pa-jobs pa-tariffs">
+      <div className="pa-section-title">
+        <span>{rows?.length ?? '…'}</span>
+        <div>
+          <h2>تعرفه‌های سراسری</h2>
+          <p>ضریبِ ریالیِ کتابِ ارزش نسبی — سالی یک‌بار، برای همهٔ شرکت‌ها؛ ضریبِ اختصاصیِ خودِ شرکت (اگر گذاشته باشد) مقدم است.</p>
+        </div>
+      </div>
+
+      <form className="pa-tariff-form" onSubmit={save}>
+        <input value={tf.year} onChange={set('year')} dir="ltr" inputMode="numeric" placeholder="سال (۱۴۰۵)" required />
+        <select value={tf.sector} onChange={set('sector')}>
+          {Object.entries(TARIFF_SECTORS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+        <input value={tf.professional} onChange={set('professional')} dir="ltr" inputMode="numeric" placeholder="حرفه‌ای (تومان)" required />
+        <input value={tf.technical} onChange={set('technical')} dir="ltr" inputMode="numeric" placeholder="فنی (تومان)" required />
+        <input value={tf.anesthesia} onChange={set('anesthesia')} dir="ltr" inputMode="numeric" placeholder="بیهوشی (تومان)" required />
+        <button disabled={busy || parentBusy}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button>
+      </form>
+
+      <div className="pa-job-grid">
+        {rows !== null && rows.length === 0 && <div className="pa-empty">هنوز تعرفه‌ای ثبت نشده است.</div>}
+        {(rows ?? []).map((t) => (
+          <article key={t.id} className="pa-job">
+            <div className="pa-job-top"><b>{faNum(t.year)} — {t.sectorLabel}</b></div>
+            <small>
+              حرفه‌ای {faNum(Number(t.professional).toLocaleString('en-US'))}
+              {' · '}فنی {faNum(Number(t.technical).toLocaleString('en-US'))}
+              {' · '}بیهوشی {faNum(Number(t.anesthesia).toLocaleString('en-US'))}
+            </small>
+            <div className="pa-job-foot">
+              <span>{faDate(t.updatedAt)}</span>
+              <button type="button" disabled={busy} onClick={() => setTf({
+                year: t.year, sector: t.sector,
+                professional: String(t.professional), technical: String(t.technical), anesthesia: String(t.anesthesia),
+              })}>ویرایش</button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }

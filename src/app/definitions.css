@@ -185,6 +185,13 @@
   background: #fff; border: 1px solid rgba(255, 255, 255, .18);
 }
 .st-letterhead-preview img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; }
+/* منبعِ ضریبِ تعرفه — سراسری (مرکزی) یا اختصاصیِ خودِ شرکت. */
+.st-tsrc {
+  font-style: normal; font-size: 9.5px; font-weight: 700; margin-inline-start: 7px;
+  padding: 2px 8px; border-radius: 99px; vertical-align: 2px;
+  color: #93c5fd; background: rgba(96, 165, 250, .12); border: 1px solid rgba(96, 165, 250, .3);
+}
+.st-tsrc.own { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .32); }
 @media (max-width: 560px) { .st-file { flex-basis: 100%; } .st-import .df-save { flex: 1; } }
 .df-save:disabled { opacity: .45; cursor: not-allowed; }
 .st-report { margin-bottom: 18px; }

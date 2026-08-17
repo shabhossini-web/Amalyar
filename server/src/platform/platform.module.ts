@@ -19,7 +19,8 @@ import {
 } from '@nestjs/common';
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
-import { IsOptional, IsString, Length, Matches } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
+import { SECTORS, SECTOR_LABELS } from '../patients/service-codes.service';
 import { RateLimitService } from '../common/rate-limit.service';
 import { sanitizeWebOtpHost } from '../common/webotp';
 import { SmsService } from '../sms/sms.service';
@@ -110,6 +111,27 @@ class DeleteTenantDto {
   @IsString()
   @Length(3, 40)
   confirmSlug!: string;
+}
+
+class CentralTariffDto {
+  @IsString()
+  @Matches(/^\d{4}$/, { message: 'سال باید چهار رقمِ شمسی باشد' })
+  year!: string;
+
+  @IsIn(SECTORS as unknown as string[], { message: 'بخشِ تعرفه نامعتبر است' })
+  sector!: string;
+
+  @IsInt({ message: 'ضریبِ حرفه‌ای باید عددِ صحیح باشد' })
+  @Min(0)
+  professional!: number;
+
+  @IsInt({ message: 'ضریبِ فنی باید عددِ صحیح باشد' })
+  @Min(0)
+  technical!: number;
+
+  @IsInt({ message: 'ضریبِ بیهوشی باید عددِ صحیح باشد' })
+  @Min(0)
+  anesthesia!: number;
 }
 
 /** دامنهٔ کدِ حذف به شناسهٔ همان شرکت گره می‌خورد. */
@@ -642,12 +664,51 @@ export class PlatformProvisioningService {
   }
 }
 
+/**
+ * تعرفه‌های سراسری — سالی یک‌بار، برای همهٔ شرکت‌ها.
+ *
+ * این‌جا (پنلِ پلتفرم) ویرایش می‌شوند چون حقیقتِ مشترک‌اند؛ هر شرکت فقط
+ * می‌خواندشان (`service-codes/tariffs`) و اگر قراردادِ خاصی دارد ضریبِ
+ * محلیِ خودش را روی همان صفحهٔ تنظیماتش می‌گذارد که مقدم است.
+ */
+@Injectable()
+class PlatformTariffsService {
+  constructor(private readonly control: ControlPrismaService) {}
+
+  async list() {
+    const rows = await this.control.centralTariff.findMany({
+      orderBy: [{ year: 'desc' }, { sector: 'asc' }],
+    });
+    return rows.map((t) => ({ ...t, sectorLabel: SECTOR_LABELS[t.sector] ?? t.sector }));
+  }
+
+  async set(dto: CentralTariffDto, actorHash: string, ipHash: string) {
+    const row = await this.control.centralTariff.upsert({
+      where: { year_sector: { year: dto.year, sector: dto.sector } },
+      create: { ...dto },
+      update: { professional: dto.professional, technical: dto.technical, anesthesia: dto.anesthesia, active: true },
+    });
+    await this.control.platformAuditEvent.create({
+      data: {
+        actorHash,
+        action: 'platform.tariff.set',
+        targetType: 'central_tariff',
+        targetId: String(row.id),
+        ipHash,
+        metadata: { year: dto.year, sector: dto.sector, professional: dto.professional, technical: dto.technical, anesthesia: dto.anesthesia },
+      },
+    });
+    return { ...row, sectorLabel: SECTOR_LABELS[row.sector] ?? row.sector };
+  }
+}
+
 @Controller('platform')
 export class PlatformController {
   constructor(
     private readonly auth: PlatformAuthService,
     private readonly provisioning: PlatformProvisioningService,
     private readonly migrator: TenantMigratorService,
+    private readonly tariffs: PlatformTariffsService,
   ) {}
 
   @Get('auth/options')
@@ -739,6 +800,20 @@ export class PlatformController {
     return this.provisioning.retry(id, session.phoneHash, this.auth.ipHash(requestIp(req)));
   }
 
+  /** تعرفه‌های سراسریِ سالانه — همهٔ شرکت‌ها از همین می‌خوانند. */
+  @Get('tariffs')
+  @UseGuards(PlatformSessionGuard)
+  listTariffs() {
+    return this.tariffs.list();
+  }
+
+  @Post('tariffs')
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  setTariff(@Body() dto: CentralTariffDto, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.tariffs.set(dto, session.phoneHash, this.auth.ipHash(requestIp(req)));
+  }
+
   /** مرحلهٔ ۱ حذف: ارسالِ کدِ تأیید به مدیرِ واردشده (کدِ ورود نیست). */
   @Post('tenants/:id/deletion-otp')
   @HttpCode(200)
@@ -775,6 +850,7 @@ export class PlatformController {
     PlatformSessionGuard,
     PlatformCsrfGuard,
     PlatformProvisioningService,
+    PlatformTariffsService,
   ],
 })
 export class PlatformModule {}
