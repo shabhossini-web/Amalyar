@@ -121,7 +121,8 @@ try {
     await page.waitForTimeout(2200);
     await page.locator('[role="tab"]:has-text("شرح‌ها"), button:has-text("شرح‌ها")').first().click();
     await page.waitForTimeout(1200);
-    const aiBtn = page.locator('.rc-ai');
+    /* از #50 دو دکمهٔ دستیار هست (ساخت‌یافته + ادامه) — این‌جا فقط اولی. */
+    const aiBtn = page.locator('.rc-ai:not(.rc-ai-cont)');
     ok(await aiBtn.count() === 1, '**دکمهٔ دستیار دیده می‌شود (چون پیکربندی شده)**');
     const raw = 'زخم تمیز بود، پانسمان عوض شد';
     await page.fill('.rc-upload textarea', raw);

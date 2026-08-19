@@ -121,3 +121,42 @@ export async function apiBlobUrl(path) {
   if (!res.ok) throw new ApiError('فایل در دسترس نیست', res.status);
   return URL.createObjectURL(await res.blob());
 }
+
+/**
+ * POSTِ استریمی (SSE) — برای دستیارِ AI: رویدادهای `data: {d}` تکه‌تکه به
+ * `onChunk` می‌رسند تا متن زنده نوشته شود؛ `{error}` وسطِ راه یعنی استریم
+ * برید و همان پیامِ سرور پرتاب می‌شود؛ `[DONE]` پایانِ سالم.
+ *
+ * ⚠️ EventSource نیست چون هدرِ ورود می‌خواهد و بدنهٔ POST — fetchِ خام با
+ * خواندنِ ReadableStream همین کار را بدونِ وابستگی می‌کند.
+ */
+export async function apiStream(path, body, onChunk) {
+  const headers = { 'Content-Type': 'application/json' };
+  const tok = getToken();
+  if (tok) headers.Authorization = `Bearer ${tok}`;
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!res.ok || !res.body) {
+    const j = await res.json().catch(() => null);
+    throw new ApiError(j?.message ?? 'خطای سرور', res.status);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const evt = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      const line = evt.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      const data = line.slice(6);
+      if (data === '[DONE]') return;
+      const j = JSON.parse(data);
+      if (j.error) throw new ApiError(j.error, 502);
+      if (j.d) onChunk(j.d);
+    }
+  }
+}

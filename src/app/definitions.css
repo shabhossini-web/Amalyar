@@ -401,3 +401,13 @@
 .rc-jmain { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-bottom: 14px; }
 .rc-jmain b { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .rc-jmain small { font-size: 11.5px; color: #8f88b5; }
+
+/* دکمهٔ دستیارِ AI در شیتِ قالب‌های شرح. */
+.df-ai {
+  margin-top: 2px; padding: 10px 15px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 800; color: var(--brand-2);
+  background: rgba(var(--brand-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .45); border-radius: 11px;
+  transition: background .15s;
+}
+.df-ai:hover { background: rgba(var(--brand-rgb), .18); }
+.df-ai:disabled { opacity: .55; cursor: default; }

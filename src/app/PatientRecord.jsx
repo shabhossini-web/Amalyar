@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
+import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
@@ -525,22 +525,32 @@ function NotesTab({ rec, reload, toast }) {
   }, []);
 
   /**
-   * تایپِ خام → پیش‌نویسِ ساخت‌یافته با دستیار. متن فقط در ادیتور عوض می‌شود؛
-   * تا «ثبت» زده نشود چیزی در پرونده نمی‌نشیند، و متنِ خام هم برای برگشت
-   * نگه داشته می‌شود — پیش‌نویسِ بد نباید نوشتهٔ پزشک را بخورد.
+   * دستیارِ AI روی ادیتور — **زنده** (SSE): متن همان‌طور که نوشته می‌شود
+   * دیده می‌شود، نه بعد از انتظارِ کور. دو حالت: structure (تایپِ خام →
+   * ساخت‌یافته؛ ادیتور خالی می‌شود و پیش‌نویس تکه‌تکه می‌نشیند) و continue
+   * («ادامه بنویس» — به انتهای متنِ موجود اضافه می‌شود). متنِ خام برای
+   * برگشت نگه داشته می‌شود و خطای وسطِ راه همان را برمی‌گرداند — پیش‌نویسِ
+   * نیمه نباید نوشتهٔ پزشک را بخورد. تا «ثبت» زده نشود چیزی در پرونده نمی‌نشیند.
    */
-  const aiDraft = async () => {
+  const aiDraft = async (mode) => {
     if (!body.trim()) { toast('اول متنِ خام را بنویسید، بعد دستیار ساخت‌یافته‌اش کند', true); return; }
-    setAiBusy(true);
+    setAiBusy(mode);
+    const raw = body;
     try {
-      const r = await api('/ai/note-draft', {
-        method: 'POST',
-        body: { patientId: rec.id, kind, text: body, ...(visitId ? { visitId: +visitId } : {}) },
-      });
-      setRawBody(body);
-      setBody(r.text);
-      toast('پیش‌نویسِ ساخت‌یافته آماده شد — پیش از ثبت مرورش کنید');
-    } catch (e) { toast(e.message, true); } finally { setAiBusy(false); }
+      setRawBody(raw);
+      if (mode === 'structure') setBody('');
+      else setBody((b) => (!b || b.endsWith('\n') ? b : `${b}\n`));
+      await apiStream(
+        '/ai/note-draft/stream',
+        { patientId: rec.id, kind, mode, text: raw, ...(visitId ? { visitId: +visitId } : {}) },
+        (d) => setBody((b) => b + d),
+      );
+      toast(mode === 'structure' ? 'پیش‌نویسِ ساخت‌یافته آماده شد — پیش از ثبت مرورش کنید' : 'ادامه نوشته شد — مرورش کنید');
+    } catch (e) {
+      setBody(raw);
+      setRawBody(null);
+      toast(e.message, true);
+    } finally { setAiBusy(false); }
   };
 
   useEffect(() => {
@@ -686,8 +696,13 @@ function NotesTab({ rec, reload, toast }) {
         </label>
         <div className="rc-notebar">
           {aiOn && (
-            <button type="button" className="rc-ai" onClick={aiDraft} disabled={busy || aiBusy}>
-              {aiBusy ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن — دستیارِ AI'}
+            <button type="button" className="rc-ai" onClick={() => aiDraft('structure')} disabled={busy || !!aiBusy}>
+              {aiBusy === 'structure' ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن — دستیارِ AI'}
+            </button>
+          )}
+          {aiOn && (
+            <button type="button" className="rc-ai rc-ai-cont" onClick={() => aiDraft('continue')} disabled={busy || !!aiBusy}>
+              {aiBusy === 'continue' ? 'در حالِ ادامه…' : 'ادامه بنویس'}
             </button>
           )}
           {rawBody !== null && (

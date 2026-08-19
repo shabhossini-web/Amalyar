@@ -107,6 +107,7 @@ const SECTIONS = [
     key: 'note-templates',
     label: 'قالب‌های شرح',
     path: '/note-templates',
+    ai: true,
     title: (r) => r.title,
     sub: (r) => [
       ({ history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری', discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره' })[r.kind] ?? r.kind,
@@ -664,6 +665,38 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
   const [busy, setBusy] = useState(false);
   /* گزینه‌های پویا (optionsFrom) — مثلِ نوعِ عمل/تشخیص برای قالبِ شرح. */
   const [dynOpts, setDynOpts] = useState({});
+  /* دستیارِ AI (فقط بخش‌های ai-دار) — پیشنهادِ متنِ قالب از روی شرح‌های موجود. */
+  const [aiOn, setAiOn] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+
+  useEffect(() => {
+    if (!section.ai) return undefined;
+    let on = true;
+    api('/ai/status').then((r) => { if (on) setAiOn(!!r?.enabled); }).catch(() => {});
+    return () => { on = false; };
+  }, [section]);
+
+  /**
+   * «پیشنهادِ متن با دستیار» — سرور از شرح‌های واقعیِ همین مطب (همان نوع و
+   * هدف) قالبِ بازمصرف‌شونده می‌سازد؛ متن فقط در فرم می‌نشیند و ذخیره
+   * همچنان دستِ ادمین است. عنوانِ خالی هم از پیشنهاد پر می‌شود.
+   */
+  const aiTemplate = async () => {
+    if (!form.kind) { onError('اول «نوعِ شرح» را انتخاب کنید'); return; }
+    setAiBusy(true);
+    try {
+      const r = await api('/ai/template-draft', {
+        method: 'POST',
+        body: {
+          kind: form.kind,
+          procedureTypeId: Number(toEnDigits(String(form.procedureTypeId ?? '0')).replace(/[^0-9]/g, '') || 0) || undefined,
+          diagnosisId: Number(toEnDigits(String(form.diagnosisId ?? '0')).replace(/[^0-9]/g, '') || 0) || undefined,
+          topicId: Number(toEnDigits(String(form.topicId ?? '0')).replace(/[^0-9]/g, '') || 0) || undefined,
+        },
+      });
+      setForm((f) => ({ ...f, body: r.body, title: String(f.title ?? '').trim() ? f.title : r.title }));
+    } catch (e) { onError(e.message); } finally { setAiBusy(false); }
+  };
 
   useEffect(() => {
     const dyn = (section.fields ?? []).filter((f) => f.optionsFrom);
@@ -771,6 +804,11 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
                 {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}
               </label>
             ))}
+            {section.ai && aiOn && (
+              <button type="button" className="df-ai" onClick={aiTemplate} disabled={busy || aiBusy}>
+                {aiBusy ? 'دستیار در حالِ ساختنِ قالب…' : 'پیشنهادِ متن با دستیارِ AI (از شرح‌های موجود)'}
+              </button>
+            )}
           </div>
         )}
       </div>
