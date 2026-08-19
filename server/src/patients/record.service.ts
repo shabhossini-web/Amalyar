@@ -4,6 +4,7 @@ import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
+import { textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
 
@@ -19,7 +20,7 @@ export const DOCUMENT_CATEGORIES = [
 ] as const;
 
 /** انواعِ شرحِ بالینی — منطبق بر چرخهٔ مطب → عمل → پس از عمل. */
-export const NOTE_KINDS = ['visit', 'op', 'progress', 'discharge', 'consult'] as const;
+export const NOTE_KINDS = ['history', 'visit', 'op', 'progress', 'discharge', 'consult'] as const;
 
 /**
  * حداکثرِ حجمِ مدرک. تصویربرداری بزرگ است، ولی بی‌سقف یعنی یک آپلود می‌تواند
@@ -643,6 +644,103 @@ export class RecordService {
       authorName: n.authorName, createdAt: n.createdAt,
       /// وجودِ replacesId یعنی این نسخهٔ ویرایش‌شده است — کاربر باید بداند.
       edited: n.replacesId != null,
+    }));
+  }
+
+  /**
+   * قالب‌های شرحِ مناسبِ این لحظه — برای پیشنهاد در ادیتورِ شرح.
+   *
+   * بدونِ مراجعهٔ انتخاب‌شده فقط قالب‌های **عمومی** (بی‌هدف) می‌آیند؛ با
+   * مراجعه، قالب‌های گره‌خورده به نوعِ عمل/تشخیص/موضوعِ همان مراجعه هم —
+   * و اختصاصی‌ها جلوتر می‌نشینند چون مربوط‌ترند.
+   */
+  async noteTemplates(patientId: number, user: any, kind: string, visitId?: number) {
+    await this.assertAccess(patientId, user);
+    if (!this.canReadClinical(user)) throw new ForbiddenException('اجازهٔ خواندنِ شرح‌های بالینی را ندارید');
+    if (!NOTE_KINDS.includes(kind as any)) throw new BadRequestException('نوعِ شرح نامعتبر است');
+
+    let v: { procedureTypeId: number | null; diagnosisId: number | null; topicId: number | null } | null = null;
+    if (visitId != null) {
+      v = await this.prisma.visit.findFirst({
+        where: { id: visitId, patientId },
+        select: { procedureTypeId: true, diagnosisId: true, topicId: true },
+      });
+      if (!v) throw new BadRequestException('مراجعهٔ انتخابی برای این بیمار نیست');
+    }
+
+    const generic = { procedureTypeId: null, diagnosisId: null, topicId: null };
+    const or: any[] = [generic];
+    if (v?.procedureTypeId) or.push({ procedureTypeId: v.procedureTypeId });
+    if (v?.diagnosisId) or.push({ diagnosisId: v.diagnosisId });
+    if (v?.topicId) or.push({ topicId: v.topicId });
+
+    const rows = await this.prisma.noteTemplate.findMany({
+      where: { kind, active: true, OR: or },
+      orderBy: [{ title: 'asc' }],
+      select: { id: true, title: true, body: true, procedureTypeId: true, diagnosisId: true, topicId: true },
+    });
+    const specific = (t: any) => t.procedureTypeId !== null || t.diagnosisId !== null || t.topicId !== null;
+    return rows
+      .sort((a, b) => Number(specific(b)) - Number(specific(a)))
+      .map((t) => ({ id: t.id, title: t.title, body: t.body, specific: specific(t) }));
+  }
+
+  /**
+   * جستجوی بالینی بینِ همهٔ پرونده‌ها — «همهٔ شرح‌عمل‌های فلان عمل» و مانندش.
+   *
+   * فیلترهای عمل/تشخیص/موضوع روی **مراجعهٔ** شرح می‌نشینند؛ پس شرحِ بی‌مراجعه
+   * (مثل شرحِ حالِ سطحِ پرونده) فقط وقتی می‌آید که هیچ‌کدام از آن سه فیلتر
+   * فعال نباشد. فقط نسخهٔ جاریِ هر شرح (replacedAt = null) شمرده می‌شود.
+   */
+  async searchNotes(user: any, f: {
+    kind?: string; procedureTypeId?: number; diagnosisId?: number; topicId?: number; t?: string; take?: number;
+  }) {
+    if (!this.canReadClinical(user)) throw new ForbiddenException('اجازهٔ خواندنِ شرح‌های بالینی را ندارید');
+    const where: any = { replacedAt: null };
+    if (f.kind) {
+      if (!NOTE_KINDS.includes(f.kind as any)) throw new BadRequestException('نوعِ شرح نامعتبر است');
+      where.kind = f.kind;
+    }
+    const visitFilter: any = {};
+    if (f.procedureTypeId) visitFilter.procedureTypeId = f.procedureTypeId;
+    if (f.diagnosisId) visitFilter.diagnosisId = f.diagnosisId;
+    if (f.topicId) visitFilter.topicId = f.topicId;
+    if (Object.keys(visitFilter).length) where.visit = visitFilter;
+    const term = (f.t ?? '').trim();
+    if (term) where.OR = textSearchOr(term, ['body']);
+
+    const rows = await this.prisma.clinicalNote.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(1, f.take ?? 50), 100),
+      select: {
+        id: true, kind: true, body: true, authorName: true, createdAt: true, patientId: true,
+        patient: { select: { id: true, code: true, firstName: true, lastName: true } },
+        visit: {
+          select: {
+            id: true, seq: true, opDate: true, kind: true, opType: true,
+            procedureType: { select: { name: true } },
+            diagnosis: { select: { title: true } },
+            topic: { select: { name: true } },
+          },
+        },
+      },
+    });
+    return rows.map((n) => ({
+      id: n.id,
+      kind: n.kind,
+      snippet: n.body.length > 300 ? n.body.slice(0, 300) + '…' : n.body,
+      authorName: n.authorName,
+      createdAt: n.createdAt,
+      patientId: n.patientId,
+      patientCode: n.patient?.code ?? null,
+      patientName: n.patient ? `${n.patient.firstName} ${n.patient.lastName}` : null,
+      visitId: n.visit?.id ?? null,
+      visitCode: n.visit && n.patient ? `${n.patient.code}-V${n.visit.seq}` : null,
+      opDate: n.visit?.opDate ?? null,
+      procedureName: n.visit?.procedureType?.name ?? n.visit?.opType ?? null,
+      diagnosisTitle: n.visit?.diagnosis?.title ?? null,
+      topicName: n.visit?.topic?.name ?? null,
     }));
   }
 

@@ -13,6 +13,7 @@ import {
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DefinitionsService } from './definitions.service';
+import { NOTE_KINDS } from './record.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -110,6 +111,38 @@ class TopicPatchDto {
 }
 
 /** کدِ داخلیِ مطب — جراحی/خدمتِ داخلِ مطب با کد و مبلغِ خودِ مطب. */
+class NoteTemplateCreateDto {
+  @IsIn(NOTE_KINDS as unknown as string[], { message: 'نوعِ شرح نامعتبر است' })
+  kind!: string;
+
+  @IsString({ message: 'عنوان را وارد کنید' }) @MinLength(2, { message: 'عنوان کوتاه است' }) @MaxLength(120)
+  title!: string;
+
+  @IsString({ message: 'متنِ قالب خالی است' }) @MinLength(2, { message: 'متنِ قالب کوتاه است' }) @MaxLength(20000)
+  body!: string;
+
+  /// «۰» = بی‌هدف (عمومی) — قراردادِ Min(0)ِ همین مخزن.
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) procedureTypeId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) diagnosisId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) topicId?: number;
+}
+
+class NoteTemplatePatchDto {
+  @IsOptional() @IsIn(NOTE_KINDS as unknown as string[], { message: 'نوعِ شرح نامعتبر است' })
+  kind?: string;
+
+  @IsOptional() @IsString() @MinLength(2, { message: 'عنوان کوتاه است' }) @MaxLength(120)
+  title?: string;
+
+  @IsOptional() @IsString() @MinLength(2, { message: 'متنِ قالب کوتاه است' }) @MaxLength(20000)
+  body?: string;
+
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) procedureTypeId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) diagnosisId?: number;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(0) topicId?: number;
+  @IsOptional() @IsBoolean() active?: boolean;
+}
+
 class InternalCodeCreateDto {
   @Matches(/^[A-Za-z0-9-]{1,20}$/, { message: 'کد فقط حرف/رقمِ لاتین و خط تیره (حداکثر ۲۰)' })
   code!: string;
@@ -399,6 +432,31 @@ export class DefinitionsController {
   @Delete('internal-codes/:id')
   delInternalCode(@Param('id', ParseIntPipe) id: number) {
     return this.defs.deleteInternalCode(id);
+  }
+
+  /// قالب‌های شرحِ بالینی — تبِ «قالب‌های شرح» در تعریف‌های پایه.
+  @RequirePermissions('definitions.read')
+  @Get('note-templates')
+  noteTemplates() {
+    return this.defs.listNoteTemplates();
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Post('note-templates')
+  addNoteTemplate(@Body() dto: NoteTemplateCreateDto) {
+    return this.defs.createNoteTemplate(dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Patch('note-templates/:id')
+  patchNoteTemplate(@Param('id', ParseIntPipe) id: number, @Body() dto: NoteTemplatePatchDto) {
+    return this.defs.updateNoteTemplate(id, dto);
+  }
+
+  @RequirePermissions('definitions.manage')
+  @Delete('note-templates/:id')
+  delNoteTemplate(@Param('id', ParseIntPipe) id: number) {
+    return this.defs.deleteNoteTemplate(id);
   }
 
   @RequirePermissions('definitions.read')

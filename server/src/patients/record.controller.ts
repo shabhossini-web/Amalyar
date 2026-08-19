@@ -1,6 +1,6 @@
 import {
   Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post,
-  Res, UploadedFile, UseGuards, UseInterceptors,
+  Query, Res, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -98,6 +98,40 @@ export class RecordController {
   }
 
   // ── شرح‌های بالینی ──
+
+  /** جستجوی بالینی بینِ همهٔ پرونده‌ها.
+      ⚠️ باید **قبل از** `:id/notes` اعلام شود وگرنه «notes» به‌عنوانِ :id
+      تعبیر می‌شود و ParseIntPipe با ۴۰۰ می‌شکندش. */
+  @RequirePermissions('patients.clinical.read')
+  @Get('notes/search')
+  searchNotes(
+    @CurrentUser() user: any,
+    @Query('kind') kind?: string,
+    @Query('procedureTypeId') procedureTypeId?: string,
+    @Query('diagnosisId') diagnosisId?: string,
+    @Query('topicId') topicId?: string,
+    @Query('t') t?: string,
+  ) {
+    return this.record.searchNotes(user, {
+      kind: kind || undefined,
+      procedureTypeId: procedureTypeId ? Number(procedureTypeId) : undefined,
+      diagnosisId: diagnosisId ? Number(diagnosisId) : undefined,
+      topicId: topicId ? Number(topicId) : undefined,
+      t,
+    });
+  }
+
+  /** قالب‌های شرحِ مناسبِ این بیمار/مراجعه — خوراکِ پیشنهاد در ادیتور. */
+  @RequirePermissions('patients.clinical.read')
+  @Get(':id/note-templates')
+  noteTemplates(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: any,
+    @Query('kind') kind?: string,
+    @Query('visitId') visitId?: string,
+  ) {
+    return this.record.noteTemplates(id, user, kind ?? 'visit', visitId ? Number(visitId) : undefined);
+  }
 
   @RequirePermissions('patients.clinical.read')
   @Get(':id/notes')

@@ -104,6 +104,30 @@ const SECTIONS = [
     ],
   },
   {
+    key: 'note-templates',
+    label: 'قالب‌های شرح',
+    path: '/note-templates',
+    title: (r) => r.title,
+    sub: (r) => [
+      ({ history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری', discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره' })[r.kind] ?? r.kind,
+      r.procedureTypeName, r.diagnosisTitle, r.topicName,
+    ].filter(Boolean).join(' · '),
+    uses: (r) => (r.active === false ? 'غیرفعال' : ''),
+    empty: 'هنوز قالبی نیست — مثلاً «شرحِ عملِ بلفاروپلاستی» یا «شرحِ حالِ اولیه»',
+    hint: 'قالبِ آماده مثل HIS: هنگامِ نوشتنِ شرح در پرونده، قالب‌های هم‌نوع پیشنهاد می‌شوند. قالبِ بی‌هدف عمومی است؛ قالبِ گره‌خورده به عمل/تشخیص/موضوع فقط برای مراجعهٔ منطبق می‌آید و جلوتر می‌نشیند.',
+    fields: [
+      { key: 'kind', label: 'نوعِ شرح *', options: [
+        { v: 'history', l: 'شرحِ حال' }, { v: 'visit', l: 'شرحِ ویزیت' }, { v: 'op', l: 'شرحِ عمل' },
+        { v: 'progress', l: 'سیرِ بیماری' }, { v: 'discharge', l: 'خلاصهٔ ترخیص' }, { v: 'consult', l: 'مشاوره' },
+      ] },
+      { key: 'title', label: 'عنوانِ قالب *', required: true },
+      { key: 'procedureTypeId', label: 'نوعِ عمل (اختیاری)', optionsFrom: '/procedure-types' },
+      { key: 'diagnosisId', label: 'تشخیص (اختیاری)', optionsFrom: '/diagnoses' },
+      { key: 'topicId', label: 'موضوعِ ویزیت (اختیاری)', optionsFrom: '/visit-topics' },
+      { key: 'body', label: 'متنِ قالب *', textarea: true, required: true, rows: 8 },
+    ],
+  },
+  {
     key: 'items',
     label: 'کالاها',
     path: '/items',
@@ -638,6 +662,19 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
   });
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  /* گزینه‌های پویا (optionsFrom) — مثلِ نوعِ عمل/تشخیص برای قالبِ شرح. */
+  const [dynOpts, setDynOpts] = useState({});
+
+  useEffect(() => {
+    const dyn = (section.fields ?? []).filter((f) => f.optionsFrom);
+    if (!dyn.length) return undefined;
+    let on = true;
+    Promise.all(dyn.map((f) => api(f.optionsFrom)
+      .then((rows) => [f.key, (rows ?? []).map((r) => ({ v: String(r.id), l: r.name ?? r.title ?? String(r.id) }))])
+      .catch(() => [f.key, []])))
+      .then((pairs) => { if (on) setDynOpts(Object.fromEntries(pairs)); });
+    return () => { on = false; };
+  }, [section]);
 
   const setField = (k) => (ev) => setForm((f) => ({ ...f, [k]: ev.target.value }));
 
@@ -667,7 +704,7 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
          ...(section.extra ?? []).map((f) => f.key)]
       : (section.fields ?? []).map((f) => f.key);
     // فیلدِ عددی (مبلغ) قبل از ارسال نرمال می‌شود — ارقامِ فارسی و جداکننده مجازند.
-    const numKeys = (section.fields ?? []).filter((f) => f.num).map((f) => f.key);
+    const numKeys = (section.fields ?? []).filter((f) => f.num || f.optionsFrom).map((f) => f.key);
     const body = {};
     for (const k of keys) {
       if (form[k] === undefined) continue;
@@ -723,13 +760,13 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
             {(section.fields ?? []).map((f) => (
               <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
                 <span>{f.label}</span>
-                {f.options ? (
-                  <select value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy}>
-                    <option value="">— انتخاب کنید —</option>
-                    {f.options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+                {f.options || f.optionsFrom ? (
+                  <select value={String(form[f.key] ?? '')} onChange={setField(f.key)} disabled={busy}>
+                    <option value={f.optionsFrom ? '0' : ''}>{f.optionsFrom ? '— عمومی (همه) —' : '— انتخاب کنید —'}</option>
+                    {(f.options ?? dynOpts[f.key] ?? []).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
                   </select>
                 ) : f.textarea
-                  ? <textarea rows={2} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
+                  ? <textarea rows={f.rows ?? 2} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
                   : <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />}
                 {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}
               </label>

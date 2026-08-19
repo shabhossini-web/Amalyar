@@ -225,3 +225,14 @@
   color: #a9a1d8; background: rgba(255, 255, 255, 0.03);
 }
 .rc-doc-open:hover { color: #e5e0ff; border-color: color-mix(in srgb, var(--brand, #7c6cf0) 45%, transparent); }
+
+/* قالب‌های آمادهٔ شرح — چیپ بالای ادیتور؛ اختصاصی‌ها با رینگِ برند جدا می‌شوند. */
+.rc-tpls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.rc-tpls small { font-size: 11px; color: var(--text3); }
+.rc-tpl {
+  padding: 5px 12px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--text2);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px;
+  transition: color .15s, border-color .15s;
+}
+.rc-tpl:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
+.rc-tpl.sp { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .45); background: rgba(var(--brand-rgb), .1); }

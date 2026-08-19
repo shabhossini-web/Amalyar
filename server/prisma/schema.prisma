@@ -238,6 +238,7 @@ model Tariff {
 /// دلیل: گزارش‌گیری و تحلیلِ خودکار روی متنِ آزاد ممکن نیست؛ «دیسککتومی» و
 /// «دیسکتومی» و «Discectomy» سه چیزِ متفاوت می‌شوند.
 model ProcedureType {
+  noteTemplates NoteTemplate[]
   id    Int     @id @default(autoincrement())
   name  String  @unique
   code  String? // کدِ داخلی/ملی
@@ -280,6 +281,7 @@ model ProcedureType {
 /// موضوع در مرحلهٔ بعد به برنامهٔ کاری وصل می‌شود («شنبه‌ها ویزیتِ اولیه») تا
 /// بیمار در هر روز فقط موضوعِ همان روز را ببیند. طراحی: `docs/BOOKING.md`.
 model VisitTopic {
+  noteTemplates NoteTemplate[]
   id   Int    @id @default(autoincrement())
   name String @unique
   /// توکنِ رنگ (نه هگز) — همان قرارِ `FormDef.color`، تا با تمِ برند بخواند.
@@ -528,6 +530,7 @@ model StockTransfer {
 
 /// تشخیص — همان استدلالِ ProcedureType. icdCode برای نگاشتِ بعدی به ICD-10.
 model Diagnosis {
+  noteTemplates NoteTemplate[]
   id        Int      @id @default(autoincrement())
   title     String   @unique
   icdCode   String?  @map("icd_code")
@@ -583,6 +586,35 @@ model Letter {
 
   @@index([createdAt])
   @@map("letters")
+}
+
+/// قالبِ شرحِ بالینی (HIS-گونه) — متنِ آماده برای شرحِ حال/ویزیت/عمل و… .
+///
+/// هدف‌گیری اختیاری است: قالبِ بی‌هدف «عمومی» است و برای هر بیماری پیشنهاد
+/// می‌شود؛ قالبِ گره‌خورده به نوعِ عمل/تشخیص/موضوع فقط وقتی می‌آید که
+/// مراجعهٔ انتخاب‌شده همان را داشته باشد — و در پیشنهادها **جلوتر** از
+/// عمومی‌ها می‌نشیند (اختصاصی‌تر = مربوط‌تر). `SetNull` چون حذفِ تعریف نباید
+/// قالب را ببرد؛ قالب عمومی می‌شود، نه ناپدید.
+model NoteTemplate {
+  id    Int    @id @default(autoincrement())
+  /// همان واژگانِ ClinicalNote.kind: history | visit | op | progress | discharge | consult
+  kind  String
+  title String
+  body  String
+
+  procedureType   ProcedureType? @relation(fields: [procedureTypeId], references: [id], onDelete: SetNull)
+  procedureTypeId Int?           @map("procedure_type_id")
+  diagnosis       Diagnosis?     @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
+  diagnosisId     Int?           @map("diagnosis_id")
+  topic           VisitTopic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  topicId         Int?           @map("topic_id")
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([kind, active])
+  @@map("note_templates")
 }
 
 /// لینکِ دائمیِ ثبت‌نام — نشانی‌ای که شرکت در بیو و کانالش می‌گذارد.

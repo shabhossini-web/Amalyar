@@ -18,7 +18,7 @@ const CATEGORIES = {
   consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت', other: 'متفرقه',
 };
 const NOTE_KINDS = {
-  visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری',
+  history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری',
   discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره',
 };
 const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -511,6 +511,17 @@ function NotesTab({ rec, reload, toast }) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(null); // {id, body}
   const [history, setHistory] = useState(null);
+  /* قالب‌های آمادهٔ همین نوع/مراجعه — HIS-گونه؛ از تعریف‌های پایه می‌آیند. */
+  const [tpls, setTpls] = useState([]);
+
+  useEffect(() => {
+    if (kind === 'form') { setTpls([]); return undefined; }
+    let on = true;
+    api(`/patients/${rec.id}/note-templates?kind=${kind}${visitId ? `&visitId=${visitId}` : ''}`)
+      .then((r) => { if (on) setTpls(Array.isArray(r) ? r : []); })
+      .catch(() => { if (on) setTpls([]); });
+    return () => { on = false; };
+  }, [rec.id, kind, visitId]);
 
   /**
    * ثبتِ شرح — و بعد **اثباتِ** اینکه واقعاً در پرونده نشسته.
@@ -627,6 +638,20 @@ function NotesTab({ rec, reload, toast }) {
             </select>
           </label>
         </div>
+        {tpls.length > 0 && (
+          <div className="rc-tpls" aria-label="قالب‌های آماده">
+            <small>قالبِ آماده:</small>
+            {tpls.map((t) => (
+              <button
+                key={t.id} type="button" className={`rc-tpl${t.specific ? ' sp' : ''}`}
+                title={t.specific ? 'اختصاصیِ همین عمل/تشخیص/موضوع' : 'قالبِ عمومی'}
+                onClick={() => setBody((b) => (b.trim() ? `${b}\n\n${t.body}` : t.body))}
+              >
+                {t.title}
+              </button>
+            ))}
+          </div>
+        )}
         <label className="pf-field"><span>متن</span>
           <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} placeholder="یافته‌ها، سیرِ بیماری، توصیه‌ها…" />
         </label>

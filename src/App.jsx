@@ -26,6 +26,7 @@ import IntakeAdmin from './app/Intake.jsx';
 import Crm from './app/Crm.jsx';
 import Reminders from './app/Reminders.jsx';
 import Letters from './app/Letters.jsx';
+import NotesSearch from './app/NotesSearch.jsx';
 import Gate from './app/Gate.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
@@ -91,6 +92,7 @@ export default function App() {
           {/* دفترِ یادآوری‌ها — زیرِ featureِ داشبورد؛ داده‌اش از همان مراجعات است. */}
           <Route path="/app/reminders" element={<Protected><Gate feature="dashboard"><Reminders /></Gate></Protected>} />
           <Route path="/app/letters" element={<Protected><Letters /></Protected>} />
+          <Route path="/app/notes" element={<Protected><Gate feature="dashboard"><NotesSearch /></Gate></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />

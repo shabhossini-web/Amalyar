@@ -4,6 +4,7 @@ import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
 import { LEVEL } from '../common/levels';
 import { buildPersonPatch, PersonInput } from '../common/person';
+import { NOTE_KINDS } from './record.service';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
 
@@ -508,6 +509,96 @@ export class DefinitionsService {
     }
     await this.prisma.internalCode.delete({ where: { id } });
     return { ok: true, deactivated: false };
+  }
+
+
+  // ────────────────────── قالب‌های شرحِ بالینی ──────────────────────
+
+  /** فهرستِ قالب‌ها — با نامِ هدف‌ها تا فهرستِ تعریف‌ها خوانا باشد. */
+  async listNoteTemplates() {
+    const rows = await this.prisma.noteTemplate.findMany({
+      orderBy: [{ kind: 'asc' }, { title: 'asc' }],
+      include: {
+        procedureType: { select: { name: true } },
+        diagnosis: { select: { title: true } },
+        topic: { select: { name: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id, kind: r.kind, title: r.title, body: r.body, active: r.active,
+      procedureTypeId: r.procedureTypeId, diagnosisId: r.diagnosisId, topicId: r.topicId,
+      procedureTypeName: r.procedureType?.name ?? null,
+      diagnosisTitle: r.diagnosis?.title ?? null,
+      topicName: r.topic?.name ?? null,
+    }));
+  }
+
+  /** «۰» یعنی بی‌هدف (عمومی) — همان قراردادِ Min(0)ِ بقیهٔ DTOها. */
+  private async noteTemplateRefs(dto: { procedureTypeId?: number; diagnosisId?: number; topicId?: number }) {
+    const out: any = {};
+    if (dto.procedureTypeId !== undefined) {
+      if (dto.procedureTypeId > 0
+        && !(await this.prisma.procedureType.findUnique({ where: { id: dto.procedureTypeId }, select: { id: true } }))) {
+        throw new BadRequestException('نوعِ عملِ انتخابی یافت نشد');
+      }
+      out.procedureTypeId = dto.procedureTypeId > 0 ? dto.procedureTypeId : null;
+    }
+    if (dto.diagnosisId !== undefined) {
+      if (dto.diagnosisId > 0
+        && !(await this.prisma.diagnosis.findUnique({ where: { id: dto.diagnosisId }, select: { id: true } }))) {
+        throw new BadRequestException('تشخیصِ انتخابی یافت نشد');
+      }
+      out.diagnosisId = dto.diagnosisId > 0 ? dto.diagnosisId : null;
+    }
+    if (dto.topicId !== undefined) {
+      if (dto.topicId > 0
+        && !(await this.prisma.visitTopic.findUnique({ where: { id: dto.topicId }, select: { id: true } }))) {
+        throw new BadRequestException('موضوعِ انتخابی یافت نشد');
+      }
+      out.topicId = dto.topicId > 0 ? dto.topicId : null;
+    }
+    return out;
+  }
+
+  async createNoteTemplate(dto: {
+    kind: string; title: string; body: string;
+    procedureTypeId?: number; diagnosisId?: number; topicId?: number;
+  }) {
+    if (!NOTE_KINDS.includes(dto.kind as any)) throw new BadRequestException('نوعِ شرح نامعتبر است');
+    const refs = await this.noteTemplateRefs(dto);
+    return this.prisma.noteTemplate.create({
+      data: { kind: dto.kind, title: dto.title.trim(), body: dto.body, ...refs },
+    });
+  }
+
+  async updateNoteTemplate(id: number, dto: {
+    kind?: string; title?: string; body?: string; active?: boolean;
+    procedureTypeId?: number; diagnosisId?: number; topicId?: number;
+  }) {
+    const row = await this.prisma.noteTemplate.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('قالب یافت نشد');
+    if (dto.kind !== undefined && !NOTE_KINDS.includes(dto.kind as any)) {
+      throw new BadRequestException('نوعِ شرح نامعتبر است');
+    }
+    const refs = await this.noteTemplateRefs(dto);
+    return this.prisma.noteTemplate.update({
+      where: { id },
+      data: {
+        ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
+        ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+        ...(dto.body !== undefined ? { body: dto.body } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+        ...refs,
+      },
+    });
+  }
+
+  /** قالب سند نیست — حذفِ سخت مجاز است؛ شرح‌های نوشته‌شده متنِ خودشان را دارند. */
+  async deleteNoteTemplate(id: number) {
+    const row = await this.prisma.noteTemplate.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('قالب یافت نشد');
+    await this.prisma.noteTemplate.delete({ where: { id } });
+    return { ok: true };
   }
 
 
