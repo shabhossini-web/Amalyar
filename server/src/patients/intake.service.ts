@@ -15,6 +15,7 @@ import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { AvailabilityService } from './availability.service';
+import { jalaliMonthRange, toJalali } from '../common/jalali';
 
 /** سال و ماهِ شمسیِ یک تاریخ — برای گرفتنِ تقویمِ همان ماه (قانون ۱۴). */
 function jalaliYm(d: Date): [number, number] {
@@ -1239,11 +1240,215 @@ export class IntakeService {
       }))
       .sort((a, b) => b.count - a.count);
 
+    /* روندِ ماه‌به‌ماهِ شمسی — ۱۲ ماهِ اخیر: حجمِ ثبت‌نام (همهٔ ارسال‌ها، هر
+       فرمی) و میانگینِ رضایت (فیلدهای rating فرم‌های زیرپرونده، فقط پرشده‌ها).
+       بازه‌بندی با هستهٔ کانونیِ `toJalali` است نه یک تقویمِ موازیِ دیگر. */
+    const [cy, cm] = toJalali(new Date());
+    const months: { jy: number; jm: number }[] = [];
+    for (let i = 11; i >= 0; i -= 1) {
+      let jy = cy;
+      let jm = cm - i;
+      while (jm < 1) { jm += 12; jy -= 1; }
+      months.push({ jy, jm });
+    }
+    const rangeStart = jalaliMonthRange(months[0].jy, months[0].jm)[0];
+    const rangeEnd = jalaliMonthRange(months[11].jy, months[11].jm)[1];
+    const ratingKeys = new Map<number, string[]>();
+    for (const f of forms) {
+      const keys = f.fields.filter((fd) => fd.type === 'rating').map((fd) => fd.key);
+      if (keys.length) ratingKeys.set(f.id, keys);
+    }
+    const trendSubs = await this.prisma.intakeSubmission.findMany({
+      where: { createdAt: { gte: rangeStart, lt: rangeEnd } },
+      select: { formId: true, status: true, createdAt: true, data: true },
+    });
+    const idxOf = new Map(months.map((m, i) => [`${m.jy}/${m.jm}`, i] as const));
+    const buckets = months.map((m) => ({ jy: m.jy, jm: m.jm, total: 0, filled: 0, ratingSum: 0, ratingCount: 0 }));
+    for (const s of trendSubs) {
+      const [jy, jm] = toJalali(s.createdAt);
+      const i = idxOf.get(`${jy}/${jm}`);
+      if (i === undefined) continue;
+      const b = buckets[i];
+      b.total += 1;
+      const isFilled = s.status === 'pending_approval' || s.status === 'approved';
+      if (isFilled) b.filled += 1;
+      const keys = s.formId !== null && isFilled ? ratingKeys.get(s.formId) : undefined;
+      for (const k of keys ?? []) {
+        const n = Number((s.data as any)?.[k]);
+        if (Number.isFinite(n) && n > 0) { b.ratingSum += n; b.ratingCount += 1; }
+      }
+    }
+    const trend = buckets.map(({ ratingSum, ratingCount, ...b }) => ({
+      ...b,
+      ratingCount,
+      ratingAvg: ratingCount ? Math.round((ratingSum / ratingCount) * 100) / 100 : null,
+    }));
+
     return {
       forms: formStats,
       referrals,
       patientsTotal: refRows.reduce((a, r) => a + r._count._all, 0),
+      trend,
     };
+  }
+
+  /**
+   * بیمارانِ «پیگیری‌نشده» — عملِ انجام‌شده که هیچ فرمِ پیگیریِ **پرشده‌ای**
+   * بعد از تاریخِ عمل ندارد.
+   *
+   * این فهرست کارِ امروزِ منشی است، نه آرشیو: فقط عمل‌های یک سالِ اخیر و با
+   * سقفِ صریح. «پرشده» یعنی pending_approval | approved — فرمِ باز (pending_fill)
+   * پیگیری نیست، فقط لینکی است که هنوز جواب نگرفته؛ جدا گزارش می‌شود تا منشی
+   * بداند تماسِ یادآوری لازم است نه ارسالِ دوباره.
+   */
+  async unfollowed() {
+    const fuForms = await this.prisma.formDef.findMany({
+      where: { scope: 'record', followUp: { in: ['general', 'procedure', 'diagnosis'] } },
+      select: { id: true },
+    });
+    /* fail-soft (همان قرارِ نوبت‌دهی): نصبی که فرمِ پیگیری تعریف نکرده،
+       فهرستِ «همه پیگیری‌نشده» نمی‌گیرد — می‌گوید قابلیت روشن نیست. */
+    if (!fuForms.length) return { enabled: false, checked: 0, followed: 0, rows: [] };
+    const fids = fuForms.map((f) => f.id);
+
+    const now = new Date();
+    const yearAgo = new Date(now.getTime() - 365 * 864e5);
+    const visits = await this.prisma.visit.findMany({
+      where: {
+        kind: 'surgery',
+        opStatus: 'done',
+        opDate: { lt: now, gte: yearAgo },
+        patient: { deletedAt: null },
+      },
+      orderBy: { opDate: 'desc' },
+      take: 300,
+      select: {
+        id: true, opDate: true, opType: true,
+        procedureType: { select: { name: true } },
+        patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true } },
+      },
+    });
+    const pids = [...new Set(visits.map((v) => v.patient.id))];
+    const vids = visits.map((v) => v.id);
+    const subs = pids.length
+      ? await this.prisma.intakeSubmission.findMany({
+          where: { patientId: { in: pids }, formId: { in: fids } },
+          select: { patientId: true, status: true, createdAt: true },
+        })
+      : [];
+    const rems = vids.length
+      ? await this.prisma.reminder.findMany({
+          where: { visitId: { in: vids }, kind: 'follow_up' },
+          select: { visitId: true, status: true },
+        })
+      : [];
+    const remByVisit = new Map<number, string[]>();
+    for (const r of rems) {
+      const list = remByVisit.get(r.visitId!) ?? [];
+      if (!list.length) remByVisit.set(r.visitId!, list);
+      list.push(r.status);
+    }
+
+    let followed = 0;
+    const rows: any[] = [];
+    for (const v of visits) {
+      const op = v.opDate!;
+      const mine = subs.filter((s) => s.patientId === v.patient.id && s.createdAt >= op);
+      if (mine.some((s) => s.status === 'pending_approval' || s.status === 'approved')) { followed += 1; continue; }
+      const rs = remByVisit.get(v.id) ?? [];
+      rows.push({
+        visitId: v.id,
+        patientId: v.patient.id,
+        code: v.patient.code,
+        name: `${v.patient.firstName} ${v.patient.lastName}`,
+        phone: v.patient.phone,
+        opDate: op,
+        procedure: v.procedureType?.name ?? v.opType ?? null,
+        daysSince: Math.floor((now.getTime() - op.getTime()) / 864e5),
+        sms: rs.includes('sent') ? 'sent' : rs.includes('pending') ? 'pending' : 'none',
+        openForm: mine.some((s) => s.status === 'pending_fill'),
+      });
+    }
+    return { enabled: true, checked: visits.length, followed, rows };
+  }
+
+  // ── خروجیِ CSV ─────────────────────────────────────────────────────
+
+  /** یک خانهٔ CSV — نقل‌قول‌گذاریِ امن. */
+  private csvCell(v: unknown): string {
+    const s = v === null || v === undefined ? '' : String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  /* BOM تا اکسل UTF-8 را فارسی بخواند — بدونش هر ستون «Ø¨ÛŒ» می‌شود. */
+  private csvOf(rows: unknown[][]): string {
+    return '\uFEFF' + rows.map((r) => r.map((c) => this.csvCell(c)).join(',')).join('\r\n') + '\r\n';
+  }
+
+  private jalaliStr(d: Date | null | undefined): string {
+    if (!d) return '';
+    const [jy, jm, jd] = toJalali(d);
+    return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+  }
+
+  /**
+   * CSVِ پاسخ‌های پرشدهٔ یک فرمِ زیرپرونده — همان داده‌ای که صفحهٔ CRM
+   * تحلیل می‌کند، سطربه‌سطر برای اکسل. برچسبِ گزینه‌ها از خودِ فیلد می‌آید
+   * (نه مقدارِ خام) تا CSV همان چیزی باشد که ادمین در صفحه می‌بیند.
+   */
+  async analyticsCsv(formId: number) {
+    const form = await this.prisma.formDef.findUnique({
+      where: { id: formId },
+      select: {
+        id: true, key: true, scope: true,
+        fields: {
+          where: { active: true },
+          orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }],
+          select: { key: true, label: true, type: true, options: true },
+        },
+      },
+    });
+    if (!form || form.scope !== 'record') throw new NotFoundException('فرمِ زیرپرونده پیدا نشد');
+    const subs = await this.prisma.intakeSubmission.findMany({
+      where: { formId, status: { in: ['pending_approval', 'approved'] } },
+      orderBy: { id: 'desc' },
+      take: 2000,
+      select: {
+        status: true, createdAt: true, data: true,
+        patient: { select: { code: true, firstName: true, lastName: true, phone: true } },
+      },
+    });
+    const valOf = (fd: { type: string; options: unknown }, v: unknown): string => {
+      if (v === undefined || v === null || v === '') return '';
+      if (fd.type === 'bool') return v === true || v === 'true' || v === '1' ? 'بله' : 'خیر';
+      const opts = Array.isArray(fd.options) ? (fd.options as any[]) : [];
+      const label = (one: unknown) => opts.find((o) => String(o?.v) === String(one))?.l ?? String(one);
+      if (Array.isArray(v)) return v.map(label).join('؛ ');
+      if (fd.type === 'select' || fd.type === 'multiselect') return label(v);
+      return String(v);
+    };
+    const head = ['کدِ پرونده', 'بیمار', 'تلفن', 'تاریخ', 'وضعیت', ...form.fields.map((f) => f.label)];
+    const rows = subs.map((s) => [
+      s.patient?.code ?? '',
+      s.patient ? `${s.patient.firstName} ${s.patient.lastName}` : '',
+      s.patient?.phone ?? '',
+      this.jalaliStr(s.createdAt),
+      s.status === 'approved' ? 'تأییدشده' : 'در انتظارِ تأیید',
+      ...form.fields.map((fd) => valOf(fd, (s.data as any)?.[fd.key])),
+    ]);
+    return { filename: `crm-${form.key}.csv`, csv: this.csvOf([head, ...rows]) };
+  }
+
+  /** CSVِ فهرستِ پیگیری‌نشده‌ها — همان unfollowed()، برای اکسل. */
+  async unfollowedCsv() {
+    const u = await this.unfollowed();
+    const smsFa: Record<string, string> = { sent: 'فرستاده‌شده', pending: 'در صف', none: 'نرفته' };
+    const head = ['کدِ پرونده', 'بیمار', 'تلفن', 'تاریخِ عمل', 'روزِ گذشته', 'نوعِ عمل', 'پیامکِ پیگیری', 'فرمِ باز'];
+    const rows = u.rows.map((r: any) => [
+      r.code ?? '', r.name, r.phone ?? '', this.jalaliStr(r.opDate), r.daysSince,
+      r.procedure ?? '', smsFa[r.sms] ?? r.sms, r.openForm ? 'بله' : 'خیر',
+    ]);
+    return { filename: 'crm-unfollowed.csv', csv: this.csvOf([head, ...rows]) };
   }
 
   // ── صفِ تأیید (ادمین) ─────────────────────────────────────────────

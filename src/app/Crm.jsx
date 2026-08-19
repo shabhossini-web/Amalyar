@@ -1,14 +1,106 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { api } from '../lib/api.js';
-import { faDate } from '../lib/jalali.js';
+import { api, apiBlobUrl } from '../lib/api.js';
+import { faDate, J_MONTHS } from '../lib/jalali.js';
 import './crm.css';
 import { Alert, Back, Chart, Star } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
+
+/** دانلودِ CSV با هدرِ ورود — لینکِ ساده توکن ندارد و ۴۰۱ می‌خورد. */
+async function downloadCsv(path, fallbackName, onErr) {
+  try {
+    const url = await apiBlobUrl(path);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fallbackName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  } catch (e) {
+    onErr?.(e.message);
+  }
+}
+
+/**
+ * روندِ ماهانه — ۱۲ ماهِ شمسیِ اخیر: ستونِ حجمِ ثبت‌نام (کل + پرشده) و
+ * میانگینِ رضایتِ همان ماه بالای ستون. همهٔ عددها از سرور می‌آیند (قاعدهٔ ۱۵)؛
+ * این‌جا فقط ارتفاعِ نسبی حساب می‌شود که خاصیتِ رسم است نه داده.
+ */
+function TrendCard({ trend }) {
+  const peak = Math.max(1, ...trend.map((m) => m.total));
+  const any = trend.some((m) => m.total > 0);
+  return (
+    <>
+      {!any && <div className="crm-empty">در ۱۲ ماهِ اخیر هنوز ثبت‌نامی نیست.</div>}
+      {any && (
+        <>
+          <div className="crm-months">
+            {trend.map((m) => (
+              <div
+                key={`${m.jy}-${m.jm}`} className="crm-mbar"
+                title={`${J_MONTHS[m.jm - 1]} ${faNum(m.jy).replace(/٬/g, '')} — ${faNum(m.total)} ثبت‌نام، ${faNum(m.filled)} پرشده${m.ratingAvg !== null ? `، رضایت ${faNum(m.ratingAvg)}` : ''}`}
+              >
+                <em className="crm-mrt">
+                  {m.ratingAvg !== null && <><Star width="8" height="8" /> {faNum(m.ratingAvg)}</>}
+                </em>
+                <div className="crm-mstack">
+                  <i className="t" style={{ height: `${(m.total / peak) * 100}%` }} />
+                  <i className="f" style={{ height: `${(m.filled / peak) * 100}%` }} />
+                </div>
+                <span>{J_MONTHS[m.jm - 1].slice(0, 3)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="crm-legend">
+            <i className="t" /> ثبت‌نام <i className="f" /> پرشده
+            <b className="crm-mrt"><Star width="9" height="9" /></b> میانگینِ رضایتِ ماه
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+const SMS_FA = { sent: 'پیامک رفته', pending: 'پیامک در صف', none: 'بی‌پیامک' };
+
+/** فهرستِ عمل‌های انجام‌شده بدونِ فرمِ پیگیریِ پرشده — کارِ امروزِ منشی. */
+function UnfollowedCard({ unf }) {
+  if (!unf.enabled) {
+    return (
+      <div className="crm-empty">
+        فرمِ پیگیری هنوز تعریف نشده — در فرم‌ساز به یک فرمِ زیرپرونده «نقشِ پیگیری» بدهید تا این فهرست روشن شود.
+      </div>
+    );
+  }
+  return (
+    <>
+      {unf.rows.length === 0 ? (
+        <div className="crm-empty">همهٔ عمل‌های انجام‌شدهٔ یک سالِ اخیر فرمِ پیگیریِ پرشده دارند.</div>
+      ) : (
+        <div className="crm-unf">
+          {unf.rows.map((r) => (
+            <article key={r.visitId} className="crm-unf-row">
+              <Link to={`/app/patients/${r.patientId}`} className="crm-unf-name">
+                <b>{r.name}</b>
+                {r.code && <span>{r.code}</span>}
+              </Link>
+              <span className="crm-unf-op">
+                {faDate(r.opDate)} · {faNum(r.daysSince)} روز پیش{r.procedure ? ` · ${r.procedure}` : ''}
+              </span>
+              <span className={`crm-chip u-${r.sms}`}>{SMS_FA[r.sms] ?? r.sms}</span>
+              {r.openForm && <span className="crm-chip u-open">فرمِ باز، بی‌پاسخ</span>}
+            </article>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
 
 /** نوارِ افقیِ یک گزینه — سهمش از کلِ پاسخ‌ها. */
 function Bar({ label, count, total, tone }) {
@@ -85,12 +177,14 @@ const STATUS_FA = {
  */
 export default function Crm() {
   const [data, setData] = useState(null);
+  const [unf, setUnf] = useState(null);
   const [err, setErr] = useState('');
   const row = useStagger();
 
   useEffect(() => { document.title = 'عمل‌یار — تحلیل و CRM'; }, []);
   useEffect(() => {
     api('/intake/analytics').then(setData).catch((e) => setErr(e.message));
+    api('/intake/unfollowed').then(setUnf).catch((e) => setErr(e.message));
   }, []);
 
   return (
@@ -123,6 +217,40 @@ export default function Crm() {
             </div>
           </motion.section>
 
+          {/* روندِ ماهانه — حجمِ ثبت‌نام و رضایت، ۱۲ ماهِ شمسیِ اخیر */}
+          {Array.isArray(data.trend) && (
+            <motion.section {...row(1)} className="crm-card">
+              <header className="crm-card-head">
+                <b>روندِ ماهانه</b>
+                <small>۱۲ ماهِ اخیر — ثبت‌نام و رضایت</small>
+              </header>
+              <TrendCard trend={data.trend} />
+            </motion.section>
+          )}
+
+          {/* پیگیریِ پس از عمل — عمل‌های انجام‌شده بدونِ فرمِ پرشده */}
+          {unf && (
+            <motion.section {...row(2)} className="crm-card">
+              <header className="crm-card-head">
+                <b>پیگیریِ پس از عمل — انجام‌نشده</b>
+                {unf.enabled && (
+                  <small>
+                    {faNum(unf.rows.length)} بی‌پیگیری از {faNum(unf.checked)} عملِ انجام‌شدهٔ یک سالِ اخیر
+                  </small>
+                )}
+                {unf.enabled && unf.rows.length > 0 && (
+                  <button
+                    type="button" className="crm-csv"
+                    onClick={() => downloadCsv('/intake/unfollowed/csv', 'crm-unfollowed.csv', setErr)}
+                  >
+                    خروجیِ CSV
+                  </button>
+                )}
+              </header>
+              <UnfollowedCard unf={unf} />
+            </motion.section>
+          )}
+
           {data.forms.length === 0 && (
             <div className="crm-empty">
               هنوز فرمِ زیرپرونده‌ای (نظرسنجی/پرسش‌نامه) ساخته نشده — از فرم‌ساز یک فرم با محدودهٔ «زیرپرونده» بسازید.
@@ -130,11 +258,19 @@ export default function Crm() {
           )}
 
           {data.forms.map((f, i) => (
-            <motion.section {...row(i + 1)} className="crm-card" key={f.id}>
+            <motion.section {...row(i + 3)} className="crm-card" key={f.id}>
               <header className="crm-card-head">
                 <span className="crm-dot" style={{ background: f.color || 'var(--brand-2)' }} aria-hidden="true" />
                 <b>{f.title}</b>
                 {!f.active && <em className="crm-off">خاموش</em>}
+                {f.filled > 0 && (
+                  <button
+                    type="button" className="crm-csv"
+                    onClick={() => downloadCsv(`/intake/analytics/csv?formId=${f.id}`, `crm-${f.id}.csv`, setErr)}
+                  >
+                    CSV
+                  </button>
+                )}
                 <small>
                   {faNum(f.filled)} پرشده از {faNum(f.total)} ارسال
                   {f.direct > 0 ? ` · ${faNum(f.direct)} ارسالِ مستقیم` : ''}

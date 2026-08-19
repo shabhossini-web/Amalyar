@@ -1,7 +1,8 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors,
+  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import { IsBoolean, IsInt, IsObject, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -292,11 +293,38 @@ export class IntakeController {
     return this.intake.sendToPatient(dto.patientId, dto.formId, user);
   }
 
-  /** تحلیلِ فرم‌های زیرپرونده + کانالِ آشنایی — خوراکِ صفحهٔ CRM. */
+  /** تحلیلِ فرم‌های زیرپرونده + کانالِ آشنایی + روندِ ماهانه — خوراکِ صفحهٔ CRM. */
   @RequirePermissions('intake.read')
   @Get('analytics')
   analytics() {
     return this.intake.analytics();
+  }
+
+  /** CSVِ پاسخ‌های پرشدهٔ یک فرمِ زیرپرونده. */
+  @RequirePermissions('intake.read')
+  @Get('analytics/csv')
+  async analyticsCsv(@Query('formId', ParseIntPipe) formId: number, @Res() res: Response) {
+    const { filename, csv } = await this.intake.analyticsCsv(formId);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  }
+
+  /** بیمارانِ عمل‌شده‌ای که فرمِ پیگیریِ پرشده ندارند. */
+  @RequirePermissions('intake.read')
+  @Get('unfollowed')
+  unfollowed() {
+    return this.intake.unfollowed();
+  }
+
+  /** همان فهرست، CSV. */
+  @RequirePermissions('intake.read')
+  @Get('unfollowed/csv')
+  async unfollowedCsv(@Res() res: Response) {
+    const { filename, csv } = await this.intake.unfollowedCsv();
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
   }
 
   @RequirePermissions('intake.read')
