@@ -558,6 +558,33 @@ model InternalCode {
   @@map("internal_codes")
 }
 
+/// نامهٔ اداری — سندِ رسمیِ چاپ‌شونده روی سربرگِ شرکت.
+///
+/// شماره («سالِ شمسی/شماره») هنگامِ ساخت تخصیص می‌یابد و **هرگز عوض نمی‌شود** —
+/// نامه‌ای که شماره‌اش بعد از صدور عوض شود سندِ اداری نیست. حذف مجاز است
+/// (سطحِ ۵ به بالا) و در audit ثبت می‌شود؛ شمارهٔ حذف‌شده دوباره استفاده
+/// نمی‌شود مگر آخرینِ سال باشد — سوراخِ شماره بهتر از شمارهٔ دوبار‌مصرف است.
+model Letter {
+  id Int @id @default(autoincrement())
+
+  /// شمارهٔ رسمی — «1405/12»؛ یکتا، شمارنده هر سال از یک.
+  no String @unique
+
+  recipient String
+  subject   String
+  body      String
+
+  /// متنِ کوتاهِ «پیوست:» — خالی یعنی «ندارد».
+  attachment String?
+
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([createdAt])
+  @@map("letters")
+}
+
 /// لینکِ دائمیِ ثبت‌نام — نشانی‌ای که شرکت در بیو و کانالش می‌گذارد.
 ///
 /// ⚠️ **دائمی است و به بیمار گره نمی‌خورد.** هر بار که کسی رویش می‌زند یک

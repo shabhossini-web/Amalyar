@@ -316,3 +316,53 @@ ${pays}
 }
 
 const PAY_METHODS = { cash: 'نقدی', card: 'کارت‌خوان', transfer: 'انتقال', cheque: 'چک', insurance: 'بیمه' };
+
+/**
+ * چاپِ نامهٔ اداری — روی سربرگِ تمام‌بومِ شرکت اگر آپلود شده، وگرنه هویتِ
+ * متنیِ برند بالا می‌نشیند (همان قرارِ فاکتورِ رسمی). بلوکِ شماره/تاریخ/پیوست
+ * مثل نامه‌های اداری بالا-چپ است؛ متن با `pre-wrap` همان‌طور که تایپ شده
+ * چاپ می‌شود و امضا پایین-چپ.
+ */
+export function printLetter({ letter, brand, letterheadUrl }) {
+  const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const lh = typeof letterheadUrl === 'string' && letterheadUrl.startsWith('data:image/') ? letterheadUrl : null;
+  const html = `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+<title>نامهٔ ${esc(jToFa(letter.no))}</title><style>
+  @page { size: A4; margin: ${lh ? '0' : '18mm'}; }
+  body { font-family: Vazirmatn, Tahoma, sans-serif; color: #111; font-size: 12pt; line-height: 2.1;${lh ? ' margin: 0; padding: 46mm 20mm 30mm;' : ''} }
+  .lh-bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -1; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  header.brand { border-bottom: 2px solid #333; padding-bottom: 6px; margin-bottom: 10mm; }
+  header.brand h1 { font-size: 15pt; margin: 0; }
+  header.brand .sub { font-size: 9.5pt; color: #555; }
+  .meta { float: left; text-align: right; font-size: 10.5pt; line-height: 1.9; }
+  .to { clear: none; margin: 0 0 2mm; }
+  .subj { margin: 0 0 8mm; }
+  .body { white-space: pre-wrap; text-align: justify; min-height: 90mm; }
+  .sign { margin-top: 16mm; margin-inline-start: auto; width: max-content; text-align: center; font-size: 11pt; }
+  .sign b { display: block; margin-bottom: 14mm; }
+</style></head><body>
+${lh ? `<img class="lh-bg" src="${lh}" alt="">` : `<header class="brand">
+  <h1>${esc(brand?.legalName || brand?.name || 'عمل‌یار')}</h1>
+  ${brand?.phone ? `<div class="sub">تلفن: ${esc(jToFa(brand.phone))}</div>` : ''}
+  ${brand?.address ? `<div class="sub">${esc(brand.address)}</div>` : ''}
+</header>`}
+<div class="meta">
+  شماره: <span dir="ltr">${esc(jToFa(letter.no))}</span><br>
+  تاریخ: ${esc(faDate(letter.createdAt))}<br>
+  پیوست: ${esc(letter.attachment || 'ندارد')}
+</div>
+<p class="to"><b>به:</b> ${esc(letter.recipient)}</p>
+<p class="subj"><b>موضوع:</b> ${esc(letter.subject)}</p>
+<div class="body">${esc(letter.body)}</div>
+<div class="sign"><b>${esc(brand?.legalName || brand?.name || '')}</b>مهر و امضا</div>
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) return false;
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 350);
+  return true;
+}

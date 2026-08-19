@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PatientsController } from './patients.controller';
+import { LettersController } from './letters.controller';
+import { LettersService } from './letters.service';
 import { PatientsService } from './patients.service';
 import { DefinitionsController } from './definitions.controller';
 import { DefinitionsService } from './definitions.service';
@@ -58,12 +60,12 @@ import { PermissionGuard } from '../auth/permission.guard';
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, AvailabilityController, AppointmentsController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
-    SummaryController, PublicSummaryController,
+    SummaryController, PublicSummaryController, LettersController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, PermissionGuard,
+    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, PermissionGuard,
   ],
 })
 export class PatientsModule {}
