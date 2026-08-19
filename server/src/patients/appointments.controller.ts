@@ -36,6 +36,16 @@ export class AppointmentsController {
     return this.svc.day(date);
   }
 
+  /** پیشنهادِ نوبت برای «ویزیتِ بعدی» — وضعیتِ روز + نوبتِ فعالِ خودِ بیمار. */
+  @Get('suggest')
+  suggest(
+    @Query('patientId', ParseIntPipe) patientId: number,
+    @Query('date') date: string,
+    @Query('topicId') topicId?: string,
+  ) {
+    return this.svc.suggest(patientId, date, topicId ? Number(topicId) : undefined);
+  }
+
   @Post()
   walkIn(@Body() dto: WalkInDto, @CurrentUser() user: any) {
     return this.svc.walkIn(dto, user);

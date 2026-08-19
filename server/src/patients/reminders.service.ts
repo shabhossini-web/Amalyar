@@ -84,7 +84,16 @@ export class RemindersService {
         data: { status: 'cancelled' },
       });
       if (v.nextVisitDate) {
-        const dueAt = this.dueOn(v.nextVisitDate, -cfg.nextVisitDays, hour);
+        /* اگر همان روز نوبتِ فعال دارد (مسیرِ «از همان ثبت، پیشنهادِ نوبت»)،
+           یادآوریِ نوبت خودش می‌رود و این یکی دوبله می‌شد — کاشته نمی‌شود. */
+        const hasAppt = await this.prisma.appointment.findFirst({
+          where: {
+            patientId: v.patientId, date: v.nextVisitDate,
+            status: { in: ['held', 'confirmed', 'arrived', 'done'] },
+          },
+          select: { id: true },
+        });
+        const dueAt = hasAppt ? null : this.dueOn(v.nextVisitDate, -cfg.nextVisitDays, hour);
         if (dueAt) {
           await this.prisma.reminder.create({
             data: {

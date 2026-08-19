@@ -1319,6 +1319,114 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
   );
 }
 
+/**
+ * «از همان ثبت، پیشنهادِ نوبت» — بعد از ذخیرهٔ ویزیتی که «ویزیتِ بعدی» دارد،
+ * همان‌جا نوبتِ واقعیِ همان روز پیشنهاد می‌شود. از **همان مسیرِ** نوبتِ
+ * حضوری (`POST /appointments`) می‌گذرد: ظرفیت و اسلات و یادآوری‌ها سرِ
+ * جای خودشان — این پنجره فقط راهِ رسیدن را کوتاه می‌کند.
+ *
+ * حالت‌ها همه از پاسخِ `suggest` سرور می‌آیند (قاعدهٔ ۱۵): نوبتِ موجودِ
+ * همان روز، روزِ بسته/پر، حالتِ ظرفیتی (یک دکمه) یا اسلاتی (انتخابِ ساعت).
+ */
+function NextVisitBook({ data, onClose, onToast }) {
+  const { visit, sug, day } = data;
+  const [startMin, setStartMin] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [booked, setBooked] = useState(null);
+  const dateFa = faDate(day);
+  const freeSlots = (sug.slots ?? []).filter((s) => !s.taken);
+
+  const book = async () => {
+    setBusy(true);
+    try {
+      const appt = await api('/appointments', {
+        method: 'POST',
+        body: {
+          patientId: visit.patientId,
+          date: day,
+          ...(sug.mode === 'slot' ? { startMin } : {}),
+          ...(visit.topicId ? { topicId: visit.topicId } : {}),
+          note: 'ویزیتِ بعدی — از فرمِ مراجعه',
+        },
+      });
+      setBooked(appt);
+    } catch (e) {
+      onToast(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Overlay backdrop="db-overlay" panel="glass db-sheet db-nvb" from="bottom" onClose={onClose}>
+      <header className="db-sheet-head">
+        <b><Calendar width="16" height="16" /> نوبت برای ویزیتِ بعدی</b>
+        <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+      </header>
+
+      {booked ? (
+        <div className="db-nvb-done">
+          <p>
+            نوبتِ <b>{dateFa}</b> ثبت شد ✓
+            {booked.time ? <> — ساعتِ <b>{booked.time}</b></> : booked.seq ? <> — شمارهٔ صف <b>{faNum(booked.seq)}</b></> : null}
+          </p>
+          <em>یادآوریِ پیامکیِ نوبت، عصرِ روزِ قبل خودکار می‌رود.</em>
+          <button type="button" className="db-nvb-main" onClick={onClose}>بستن</button>
+        </div>
+      ) : sug.existing ? (
+        <div className="db-nvb-done">
+          <p>
+            این بیمار برای <b>{dateFa}</b> از قبل نوبت دارد
+            {sug.existing.time ? <> — ساعتِ <b>{sug.existing.time}</b></> : sug.existing.seq ? <> — شمارهٔ صف <b>{faNum(sug.existing.seq)}</b></> : null}
+            {' '}({sug.existing.statusLabel}).
+          </p>
+          <button type="button" className="db-nvb-main" onClick={onClose}>باشه</button>
+        </div>
+      ) : !sug.open ? (
+        <div className="db-nvb-done">
+          <p>
+            <b>{dateFa}</b> در برنامهٔ کاری {sug.closed ? 'تعطیل اعلام شده' : sug.free === 0 && sug.mode !== 'none' ? 'جای آزاد ندارد' : 'باز نیست'}.
+          </p>
+          <em>می‌توانید از صفحهٔ «برنامهٔ کاری» روز را باز کنید، یا تاریخِ ویزیتِ بعدی را عوض کنید.</em>
+          <button type="button" className="db-nvb-main" onClick={onClose}>باشه</button>
+        </div>
+      ) : (
+        <div className="db-nvb-body">
+          <p>
+            برای <b>{visit.fullName}</b> در <b>{dateFa}</b>
+            {sug.mode === 'capacity'
+              ? <> نوبت ثبت شود؟ ({faNum(sug.free)} جای آزاد)</>
+              : <> کدام ساعت؟</>}
+          </p>
+          {sug.mode === 'slot' && (
+            <div className="db-nvb-slots" role="radiogroup" aria-label="ساعتِ نوبت">
+              {freeSlots.map((s) => (
+                <button
+                  key={s.startMin} type="button"
+                  className={`db-nvb-slot${startMin === s.startMin ? ' on' : ''}`}
+                  onClick={() => setStartMin(s.startMin)}
+                >
+                  <Clock width="12" height="12" /> {s.time}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="db-nvb-actions">
+            <button type="button" className="db-nvb-ghost" onClick={onClose}>حالا نه</button>
+            <button
+              type="button" className="db-nvb-main"
+              disabled={busy || (sug.mode === 'slot' && startMin === null)}
+              onClick={book}
+            >
+              {busy ? 'در حالِ ثبت…' : 'ثبتِ نوبت'}
+            </button>
+          </div>
+        </div>
+      )}
+    </Overlay>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   // brandName برای سربرگِ برگهٔ چاپ لازم است، پس کلِ config خوانده می‌شود نه فقط واژگان.
@@ -1337,6 +1445,7 @@ export default function Dashboard() {
   const [pageSize, setPageSize] = useState(50);
   const [meta, setMeta] = useState(EMPTY_META);
   const [modal, setModal] = useState(null); // null | {} | {visit}
+  const [nvBook, setNvBook] = useState(null); // پیشنهادِ نوبتِ «ویزیتِ بعدی» بعد از ذخیره
   const [billing, setBilling] = useState(null); // مراجعه‌ای که صورت‌حسابش باز است
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
@@ -1526,9 +1635,31 @@ export default function Dashboard() {
   const kindsPresent = stats.kinds ?? [];
   const showKindFilter = kind !== 'all' || kindsPresent.length > 1;
 
+  /**
+   * «از همان ثبت، پیشنهادِ نوبت»: اگر ویزیتِ ذخیره‌شده «ویزیتِ بعدیِ»
+   * امروز-به-بعد دارد، وضعیتِ آن روز از سرور پرسیده و پنجرهٔ پیشنهاد باز
+   * می‌شود. ساکت می‌ماند وقتی: برنامهٔ کاری اصلاً تعریف نشده (fail-soft)،
+   * فیچرِ تقویم خاموش است (۴۰۳)، یا خطای شبکه — پیشنهاد نباید ذخیره را خراب کند.
+   */
+  const maybeOfferBooking = async (saved) => {
+    if (!saved?.nextVisitDate || !saved?.patientId) return;
+    const day = String(saved.nextVisitDate).slice(0, 10);
+    if (day < new Date().toISOString().slice(0, 10)) return;
+    try {
+      const sug = await api(
+        `/appointments/suggest?patientId=${saved.patientId}&date=${day}${saved.topicId ? `&topicId=${saved.topicId}` : ''}`,
+      );
+      if (!sug.scheduled && !sug.existing) return;
+      setNvBook({ visit: saved, sug, day });
+    } catch {
+      /* پیشنهاد اختیاری است — بی‌صدا رد می‌شویم. */
+    }
+  };
+
   const onSaved = (saved, wasEdit) => {
     setModal(null);
     load(qRef.current, status, kind);
+    maybeOfferBooking(saved);
     if (wasEdit) { setToast(`${t.visit} ویرایش شد ✓`); return; }
 
     // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی
@@ -1761,6 +1892,16 @@ export default function Dashboard() {
             visit={billing}
             onClose={() => setBilling(null)}
             onChanged={() => load(qRef.current, status, kind)}
+            onToast={setToast}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {nvBook && (
+          <NextVisitBook
+            data={nvBook}
+            onClose={() => setNvBook(null)}
             onToast={setToast}
           />
         )}

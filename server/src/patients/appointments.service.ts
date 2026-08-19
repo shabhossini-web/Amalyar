@@ -89,6 +89,49 @@ export class AppointmentsService {
   }
 
   /**
+   * «از همان ثبت، پیشنهادِ نوبت» — وضعیتِ یک روز برای نوبت‌گرفتنِ یک بیمار:
+   * باز/بسته، حالت (اسلات/ظرفیت)، جاهای آزاد، و نوبتِ **فعالِ خودِ بیمار**
+   * در همان روز (یعنی «دوباره نگیر»). خوراکِ پرامپتی که بعد از ذخیرهٔ
+   * ویزیتِ دارای «ویزیتِ بعدی» باز می‌شود.
+   *
+   * `mode: 'none'` یعنی برای آن روز اصلاً قاعده‌ای نیست — نصبی که از
+   * برنامهٔ کاری استفاده نمی‌کند همین را می‌گیرد و کلاینت پرامپت را
+   * نشان نمی‌دهد (همان fail-softِ نوبت‌دهی).
+   */
+  async suggest(patientId: number, date: string, topicId?: number) {
+    const patient = await this.prisma.patient.findUnique({ where: { id: patientId }, select: { id: true } });
+    if (!patient) throw new NotFoundException('پرونده پیدا نشد');
+    const d = new Date(`${date}T00:00:00.000Z`);
+    if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخ نامعتبر است');
+
+    const existing = await this.prisma.appointment.findFirst({
+      where: { patientId, date: d, status: { in: ['held', 'confirmed', 'arrived', 'done'] } },
+      orderBy: { id: 'asc' },
+      include: AppointmentsService.INCLUDE,
+    });
+    const [jy, jm] = AppointmentsService.jalaliYm(d);
+    const cal = await this.availability.month(jy, jm, { topicId });
+    const day = cal.days.find((x: any) => x.date === date) ?? null;
+    /* همان قاعدهٔ walkIn: وجودِ حتی یک پنجرهٔ اسلاتی یعنی انتخابِ ساعت لازم است. */
+    const slots = (day?.windows ?? []).filter((w: any) => w.mode === 'slot').flatMap((w: any) => w.slots);
+    /* نصبی که اصلاً برنامهٔ کاری ندارد باید ساکت بماند (fail-soft)؛ نصبی که
+       دارد ولی این روزش باز نیست باید **بگوید** — این دو بدونِ scheduled از
+       بیرون یکسان دیده می‌شدند. */
+    const scheduled = (await this.prisma.availabilityRule.count({ where: { active: true } })) > 0;
+    return {
+      date,
+      scheduled,
+      open: !!day?.open,
+      past: !!day?.past,
+      closed: !!day?.closed,
+      free: day?.free ?? 0,
+      mode: slots.length ? 'slot' : ((day?.windows ?? []).length ? 'capacity' : 'none'),
+      slots,
+      existing: existing ? this.view(existing) : null,
+    };
+  }
+
+  /**
    * نوبتِ حضوری — منشی برای بیمارِ موجود می‌گیرد.
    *
    * ⚠️ از همان مسیرِ ظرفیتِ بیمار عبور می‌کند: روزِ بسته یا پر برای منشی هم
@@ -132,6 +175,13 @@ export class AppointmentsService {
       });
       /* یادآوریِ «نوبتِ فردا» — عصرِ روزِ قبل. */
       await this.reminders.syncAppointment(appt.id);
+      /* اگر این نوبت همان «ویزیتِ بعدیِ» ثبت‌شده روی یک مراجعه است، یادآوریِ
+         next_visit دوبله می‌شد (هم «ویزیتِ بعدی نزدیک است» هم «نوبتِ فردا») —
+         نسخهٔ نوبت‌دار دقیق‌تر است (ساعت دارد)، آن یکی خاموش می‌شود. */
+      await this.prisma.reminder.updateMany({
+        where: { patientId: dto.patientId, kind: 'next_visit', status: 'pending', visit: { nextVisitDate: d } },
+        data: { status: 'cancelled' },
+      });
       return this.view(appt);
     } catch (e: any) {
       if (e?.code === 'P2002') throw new BadRequestException('همین حالا کسی این نوبت را گرفت');
@@ -181,6 +231,16 @@ export class AppointmentsService {
     });
     /* لغو/نیامد → یادآوری باطل؛ برگشت به قطعی → دوباره کاشته می‌شود. */
     await this.reminders.syncAppointment(id);
+    /* قرینهٔ خاموشیِ walkIn: نوبتی که «ویزیتِ بعدی» را پوشش می‌داد اگر لغو یا
+       نیامد شود، بیمار نباید بی‌یادآور بماند — next_visit همان مراجعه‌ها
+       دوباره هم‌گام می‌شود (خودش می‌سنجد نوبتِ فعالِ دیگری هست یا نه). */
+    if ((status === 'cancelled' || status === 'noshow') && row.patientId !== null) {
+      const covered = await this.prisma.visit.findMany({
+        where: { patientId: row.patientId, nextVisitDate: row.date },
+        select: { id: true },
+      });
+      for (const v of covered) await this.reminders.syncNextVisit(v.id);
+    }
     return this.view(updated);
   }
 
