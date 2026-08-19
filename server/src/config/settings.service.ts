@@ -197,6 +197,16 @@ export class SettingsService {
     };
   }
 
+  /** پیکربندیِ دستیارِ AI — یا enabled:false اگر ناقص است (fail-soft). */
+  async ai() {
+    const rows = await this.rows();
+    const get = (k: string) => String(parse(SETTING_BY_KEY.get(k)!, rows.get(k))).trim();
+    const baseUrl = get('ai_base_url').replace(/\/+$/, '');
+    const apiKey = get('ai_api_key');
+    const model = get('ai_model');
+    return { enabled: !!(baseUrl && apiKey && model), baseUrl, apiKey, model };
+  }
+
   /** سربرگِ آپلودشده — یا null اگر شرکتی هنوز سربرگ نگذاشته. */
   async letterhead(): Promise<{ sha256: string; mime: string } | null> {
     const rows = await this.rows();

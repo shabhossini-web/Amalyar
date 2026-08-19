@@ -14,6 +14,7 @@ import { PlatformModule } from './platform/platform.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { StorageModule } from './storage/storage.module';
 import { TenantConfigModule } from './config/config.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { TenantConfigModule } from './config/config.module';
     FeaturesModule,
     TenantConfigModule,
     PatientsModule,
+    AiModule,
     ImportModule,
     PlatformModule,
     RemindersModule,

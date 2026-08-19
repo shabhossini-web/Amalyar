@@ -513,6 +513,35 @@ function NotesTab({ rec, reload, toast }) {
   const [history, setHistory] = useState(null);
   /* قالب‌های آمادهٔ همین نوع/مراجعه — HIS-گونه؛ از تعریف‌های پایه می‌آیند. */
   const [tpls, setTpls] = useState([]);
+  /* دستیارِ AI — فقط وقتی در تنظیماتِ شرکت پیکربندی شده باشد دیده می‌شود. */
+  const [aiOn, setAiOn] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [rawBody, setRawBody] = useState(null); // متنِ خامِ قبل از ساخت‌یافته‌کردن — برای برگرداندن
+
+  useEffect(() => {
+    let on = true;
+    api('/ai/status').then((r) => { if (on) setAiOn(!!r?.enabled); }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+
+  /**
+   * تایپِ خام → پیش‌نویسِ ساخت‌یافته با دستیار. متن فقط در ادیتور عوض می‌شود؛
+   * تا «ثبت» زده نشود چیزی در پرونده نمی‌نشیند، و متنِ خام هم برای برگشت
+   * نگه داشته می‌شود — پیش‌نویسِ بد نباید نوشتهٔ پزشک را بخورد.
+   */
+  const aiDraft = async () => {
+    if (!body.trim()) { toast('اول متنِ خام را بنویسید، بعد دستیار ساخت‌یافته‌اش کند', true); return; }
+    setAiBusy(true);
+    try {
+      const r = await api('/ai/note-draft', {
+        method: 'POST',
+        body: { patientId: rec.id, kind, text: body, ...(visitId ? { visitId: +visitId } : {}) },
+      });
+      setRawBody(body);
+      setBody(r.text);
+      toast('پیش‌نویسِ ساخت‌یافته آماده شد — پیش از ثبت مرورش کنید');
+    } catch (e) { toast(e.message, true); } finally { setAiBusy(false); }
+  };
 
   useEffect(() => {
     if (kind === 'form') { setTpls([]); return undefined; }
@@ -655,11 +684,23 @@ function NotesTab({ rec, reload, toast }) {
         <label className="pf-field"><span>متن</span>
           <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} placeholder="یافته‌ها، سیرِ بیماری، توصیه‌ها…" />
         </label>
-        <button className="df-save rc-save" onClick={add} disabled={busy}>
-          {/* نوع در متنِ دکمه می‌آید تا وقتی چیپ بالا از چشم افتاده، کاربر
-              نداند دارد چه چیزی ثبت می‌کند. */}
-          <Plus width="15" height="15" /> ثبتِ {NOTE_KINDS[kind]}
-        </button>
+        <div className="rc-notebar">
+          {aiOn && (
+            <button type="button" className="rc-ai" onClick={aiDraft} disabled={busy || aiBusy}>
+              {aiBusy ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن — دستیارِ AI'}
+            </button>
+          )}
+          {rawBody !== null && (
+            <button type="button" className="rc-ai-undo" onClick={() => { setBody(rawBody); setRawBody(null); }}>
+              برگرداندنِ متنِ خام
+            </button>
+          )}
+          <button className="df-save rc-save" onClick={add} disabled={busy || aiBusy}>
+            {/* نوع در متنِ دکمه می‌آید تا وقتی چیپ بالا از چشم افتاده، کاربر
+                نداند دارد چه چیزی ثبت می‌کند. */}
+            <Plus width="15" height="15" /> ثبتِ {NOTE_KINDS[kind]}
+          </button>
+        </div>
       </div>
       )}
 

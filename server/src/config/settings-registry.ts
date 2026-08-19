@@ -56,6 +56,11 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
     label: 'پیامک‌ها و زمان‌بندی',
     hint: 'متن و زمانِ همهٔ پیامک‌هایی که برای بیمار می‌رود. نامِ برند خودکار اولِ هر پیامک می‌آید. جای‌گیرها: {date} تاریخِ شمسی، {time} ساعت، {topic} موضوع، {title} نامِ فرم، {link} لینک — جای‌گیرِ ساعت و موضوع خودشان جداکننده دارند.',
   },
+  {
+    key: 'ai',
+    label: 'دستیارِ هوشِ مصنوعی',
+    hint: 'برای شرح‌نویسیِ ساخت‌یافته. هر سرویسِ سازگار با OpenAI (chat/completions) کار می‌کند — نشانیِ پایه، کلید و نامِ مدل را از ارائه‌دهنده بگیرید. تا وقتی پیکربندی نشده، دکمهٔ دستیار در پرونده دیده نمی‌شود.',
+  },
 ];
 
 export const SETTINGS: SettingDef[] = [
@@ -176,6 +181,22 @@ export const SETTINGS: SettingDef[] = [
     hint: 'روزهای ارسال روی خودِ نوعِ عمل تنظیم می‌شود (تعریف‌های پایه — «روزهای پیگیری»).',
     group: 'sms', type: 'textarea', default: 'پیگیریِ پس از عمل — لطفاً وضعیتِ خود را در این فرم ثبت کنید:\n{link}', maxLength: 500,
   },
+  // ── دستیارِ هوشِ مصنوعی ─────────────────────────────────────
+  {
+    key: 'ai_base_url', label: 'نشانیِ پایهٔ API',
+    hint: 'مثلاً https://api.openai.com/v1 یا نشانیِ گیت‌ویِ داخلی — تا /v1 (بدونِ /chat/completions).',
+    group: 'ai', type: 'text', default: '', maxLength: 200, ltr: true,
+  },
+  {
+    key: 'ai_api_key', label: 'کلیدِ API',
+    group: 'ai', type: 'text', default: '', maxLength: 300, ltr: true,
+  },
+  {
+    key: 'ai_model', label: 'نامِ مدل',
+    hint: 'مثلاً gpt-4o-mini یا claude-sonnet-5 — هر مدلی که ارائه‌دهنده‌تان می‌دهد.',
+    group: 'ai', type: 'text', default: '', maxLength: 80, ltr: true,
+  },
+
   // ── سربرگ (با آپلود پر می‌شوند؛ در صفحه پنهان‌اند) ─────────────
   {
     key: 'letterhead_sha', label: 'سربرگ — شناسهٔ فایل',
