@@ -1,0 +1,14 @@
+
+/* راهنمای دستیارِ هوشمند — تاشو داخلِ گروهِ AI. */
+.st-aiguide { margin: 4px 0 12px; }
+.st-aiguide-btn {
+  padding: 8px 14px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--brand-2);
+  background: rgba(var(--brand-rgb), .08); border: 1px dashed rgba(var(--brand-2-rgb), .4); border-radius: 11px;
+}
+.st-aiguide-body {
+  margin-top: 8px; padding: 12px 14px; border-radius: 13px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
+}
+.st-aiguide-body p { font-size: 12.5px; line-height: 2; color: var(--text2); margin-bottom: 8px; }
+.st-aiguide-body p:last-child { margin-bottom: 0; }
+.st-aiguide-body b { color: var(--text1); }

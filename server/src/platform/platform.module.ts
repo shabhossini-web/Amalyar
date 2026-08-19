@@ -19,7 +19,7 @@ import {
 } from '@nestjs/common';
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
-import { IsIn, IsInt, IsOptional, IsString, Length, Matches, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, MaxLength, Min } from 'class-validator';
 import { SECTORS, SECTOR_LABELS } from '../patients/service-codes.service';
 import { RateLimitService } from '../common/rate-limit.service';
 import { sanitizeWebOtpHost } from '../common/webotp';
@@ -132,6 +132,26 @@ class CentralTariffDto {
   @IsInt({ message: 'ضریبِ بیهوشی باید عددِ صحیح باشد' })
   @Min(0)
   anesthesia!: number;
+}
+
+class CentralAiDto {
+  @IsIn(['avalai', 'gapgpt', 'custom'], { message: 'ارائه‌دهنده نامعتبر است' })
+  provider!: string;
+
+  @IsString() @MaxLength(200)
+  baseUrl!: string;
+
+  @IsString() @MaxLength(300)
+  apiKey!: string;
+
+  @IsString() @MaxLength(80) modelChat!: string;
+  @IsOptional() @IsString() @MaxLength(80) modelVision?: string;
+  @IsOptional() @IsString() @MaxLength(80) modelStt?: string;
+  @IsOptional() @IsString() @MaxLength(80) modelTts?: string;
+  @IsOptional() @IsString() @MaxLength(80) modelImage?: string;
+
+  @IsBoolean()
+  enabled!: boolean;
 }
 
 /** دامنهٔ کدِ حذف به شناسهٔ همان شرکت گره می‌خورد. */
@@ -702,6 +722,71 @@ class PlatformTariffsService {
   }
 }
 
+/**
+ * پیکربندیِ مرکزیِ هوشِ مصنوعی — «مادر»: یک ردیفِ singleton در کنترل.
+ * همهٔ شرکت‌ها پیش‌فرض اعتبار و مدلِ هر قابلیت را از همین می‌خوانند
+ * (`settings.ai()` هر شرکت fallback به این دارد)؛ شرکتِ دارای تنظیمِ خودش
+ * مقدم است. کلید فقط این‌جا نگه داشته می‌شود و **هرگز** به شرکت‌ها
+ * برنمی‌گردد — سرورِ هر شرکت خودش با آن تماس می‌گیرد.
+ */
+@Injectable()
+class PlatformAiService {
+  constructor(private readonly control: ControlPrismaService) {}
+
+  private view(row: any) {
+    return {
+      provider: row?.provider ?? 'custom',
+      baseUrl: row?.baseUrl ?? '',
+      /* کلید ماسکه برمی‌گردد — پنل فقط باید بداند «هست یا نه». */
+      apiKeySet: !!row?.apiKey,
+      modelChat: row?.modelChat ?? '',
+      modelVision: row?.modelVision ?? '',
+      modelStt: row?.modelStt ?? '',
+      modelTts: row?.modelTts ?? '',
+      modelImage: row?.modelImage ?? '',
+      enabled: row?.enabled ?? false,
+      updatedAt: row?.updatedAt ?? null,
+    };
+  }
+
+  async get() {
+    const row = await this.control.centralAiConfig.findUnique({ where: { id: 1 } }).catch(() => null);
+    return this.view(row);
+  }
+
+  async set(dto: CentralAiDto, actorHash: string, ipHash: string) {
+    const data = {
+      provider: dto.provider,
+      baseUrl: dto.baseUrl.trim().replace(/\/+$/, ''),
+      modelChat: dto.modelChat.trim(),
+      modelVision: (dto.modelVision ?? '').trim(),
+      modelStt: (dto.modelStt ?? '').trim(),
+      modelTts: (dto.modelTts ?? '').trim(),
+      modelImage: (dto.modelImage ?? '').trim(),
+      enabled: dto.enabled,
+      /* کلیدِ خالی یعنی «دست نزن» — پنل کلید را نمی‌بیند که echo کند. */
+      ...(dto.apiKey.trim() ? { apiKey: dto.apiKey.trim() } : {}),
+    };
+    const row = await this.control.centralAiConfig.upsert({
+      where: { id: 1 },
+      create: { id: 1, apiKey: dto.apiKey.trim(), ...data },
+      update: data,
+    });
+    await this.control.platformAuditEvent.create({
+      data: {
+        actorHash,
+        action: 'platform.ai.set',
+        targetType: 'central_ai_config',
+        targetId: '1',
+        ipHash,
+        /* عمداً بدونِ کلید — کلید در audit هم نمی‌نشیند. */
+        metadata: { provider: dto.provider, baseUrl: data.baseUrl, modelChat: data.modelChat, enabled: dto.enabled },
+      },
+    });
+    return this.view(row);
+  }
+}
+
 @Controller('platform')
 export class PlatformController {
   constructor(
@@ -709,6 +794,7 @@ export class PlatformController {
     private readonly provisioning: PlatformProvisioningService,
     private readonly migrator: TenantMigratorService,
     private readonly tariffs: PlatformTariffsService,
+    private readonly centralAi: PlatformAiService,
   ) {}
 
   @Get('auth/options')
@@ -814,6 +900,20 @@ export class PlatformController {
     return this.tariffs.set(dto, session.phoneHash, this.auth.ipHash(requestIp(req)));
   }
 
+  /** هوشِ مصنوعیِ مرکزی — شرکت‌ها پیش‌فرض از همین می‌خوانند. */
+  @Get('ai')
+  @UseGuards(PlatformSessionGuard)
+  getAi() {
+    return this.centralAi.get();
+  }
+
+  @Post('ai')
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  setAi(@Body() dto: CentralAiDto, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.centralAi.set(dto, session.phoneHash, this.auth.ipHash(requestIp(req)));
+  }
+
   /** مرحلهٔ ۱ حذف: ارسالِ کدِ تأیید به مدیرِ واردشده (کدِ ورود نیست). */
   @Post('tenants/:id/deletion-otp')
   @HttpCode(200)
@@ -850,7 +950,7 @@ export class PlatformController {
     PlatformSessionGuard,
     PlatformCsrfGuard,
     PlatformProvisioningService,
-    PlatformTariffsService,
+    PlatformTariffsService, PlatformAiService,
   ],
 })
 export class PlatformModule {}

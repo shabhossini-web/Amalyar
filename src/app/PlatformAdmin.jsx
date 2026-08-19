@@ -536,6 +536,7 @@ export default function PlatformAdmin() {
           </section>
 
           <TariffsPanel busy={busy} onNotice={setNotice} />
+          <CentralAiPanel busy={busy} onNotice={setNotice} />
 
           {snapshot.deletions.length > 0 && (
             <section className="pa-card pa-jobs">
@@ -717,6 +718,109 @@ function TariffsPanel({ busy: parentBusy, onNotice }) {
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+
+/** پیش‌تنظیمِ ارائه‌دهنده‌ها — فقط UX؛ حقیقتِ اجرا همان baseUrl است. */
+const AI_PROVIDERS = {
+  avalai: { label: 'AvalAI (اول‌ای‌آی)', baseUrl: 'https://api.avalai.ir/v1' },
+  gapgpt: { label: 'GapGPT (گپ‌جی‌پی‌تی)', baseUrl: 'https://api.gapgpt.app/v1' },
+  custom: { label: 'سفارشی', baseUrl: '' },
+};
+
+/**
+ * هوشِ مصنوعیِ مرکزی («مادر») — همهٔ شرکت‌ها به‌صورتِ پیش‌فرض اعتبار و
+ * مدلِ هر قابلیت را از همین می‌خوانند؛ تنظیمِ خودِ شرکت مقدم است. کلید
+ * هرگز برنمی‌گردد (فقط «ثبت شده» دیده می‌شود) و خالی‌گذاشتنش یعنی «دست نزن».
+ */
+function CentralAiPanel({ busy: parentBusy, onNotice }) {
+  const [cfg, setCfg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [f, setF] = useState({
+    provider: 'avalai', baseUrl: AI_PROVIDERS.avalai.baseUrl, apiKey: '',
+    modelChat: '', modelVision: '', modelStt: '', modelTts: '', modelImage: '', enabled: true,
+  });
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+
+  const load = () => platformApi('/ai').then((r) => {
+    setCfg(r);
+    setF((s) => ({
+      ...s,
+      provider: r.provider || 'avalai',
+      baseUrl: r.baseUrl || AI_PROVIDERS[r.provider]?.baseUrl || '',
+      modelChat: r.modelChat, modelVision: r.modelVision, modelStt: r.modelStt,
+      modelTts: r.modelTts, modelImage: r.modelImage,
+      enabled: r.enabled,
+    }));
+  }).catch(() => setCfg({}));
+  useEffect(() => { load(); }, []);
+
+  const pickProvider = (e) => {
+    const provider = e.target.value;
+    setF((s) => ({ ...s, provider, baseUrl: AI_PROVIDERS[provider]?.baseUrl || s.baseUrl }));
+  };
+
+  const save = async (event) => {
+    event.preventDefault();
+    if (busy || parentBusy) return;
+    setBusy(true);
+    try {
+      await platformApi('/ai', {
+        method: 'POST', csrf: true,
+        body: {
+          provider: f.provider,
+          baseUrl: f.baseUrl.trim(),
+          apiKey: f.apiKey.trim(), // خالی = کلیدِ قبلی بماند
+          modelChat: f.modelChat.trim(),
+          modelVision: f.modelVision.trim(),
+          modelStt: f.modelStt.trim(),
+          modelTts: f.modelTts.trim(),
+          modelImage: f.modelImage.trim(),
+          enabled: !!f.enabled,
+        },
+      });
+      setF((s) => ({ ...s, apiKey: '' }));
+      onNotice('هوشِ مصنوعیِ مرکزی ذخیره شد — شرکت‌های بدونِ تنظیمِ اختصاصی از همین می‌خوانند.');
+      await load();
+    } catch (error) {
+      onNotice(error.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="pa-card pa-jobs pa-ai">
+      <div className="pa-section-title">
+        <span>{cfg ? (cfg.enabled ? 'روشن' : 'خاموش') : '…'}</span>
+        <div>
+          <h2>هوشِ مصنوعیِ مرکزی</h2>
+          <p>
+            اعتبار و مدلِ هر قابلیت برای همهٔ شرکت‌ها — شرکتی که در تنظیماتِ خودش مقدار گذاشته، همان مقدم است.
+            {cfg?.apiKeySet ? ' کلید: ثبت شده (برای تعویض، کلیدِ تازه بنویسید).' : ' کلید: هنوز ثبت نشده.'}
+          </p>
+        </div>
+      </div>
+
+      <form className="pa-tariff-form pa-ai-form" onSubmit={save}>
+        <select value={f.provider} onChange={pickProvider} aria-label="ارائه‌دهنده">
+          {Object.entries(AI_PROVIDERS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <input value={f.baseUrl} onChange={set('baseUrl')} dir="ltr" placeholder="نشانیِ پایه (تا /v1)" required />
+        <input value={f.apiKey} onChange={set('apiKey')} dir="ltr" placeholder={cfg?.apiKeySet ? 'کلید — خالی یعنی همان قبلی' : 'کلیدِ API'} />
+        <input value={f.modelChat} onChange={set('modelChat')} dir="ltr" placeholder="مدلِ گفتگو (gpt-4o-mini)" required />
+        <input value={f.modelVision} onChange={set('modelVision')} dir="ltr" placeholder="مدلِ تحلیلِ عکس" />
+        <input value={f.modelStt} onChange={set('modelStt')} dir="ltr" placeholder="گفتار به متن (whisper-1)" />
+        <input value={f.modelTts} onChange={set('modelTts')} dir="ltr" placeholder="متن به گفتار (tts-1)" />
+        <input value={f.modelImage} onChange={set('modelImage')} dir="ltr" placeholder="تصویرسازی" />
+        <label className="pa-ai-toggle">
+          <input type="checkbox" checked={!!f.enabled} onChange={(e) => setF((s) => ({ ...s, enabled: e.target.checked }))} />
+          فعال برای همهٔ شرکت‌ها
+        </label>
+        <button disabled={busy || parentBusy}>{busy ? 'در حال ذخیره…' : 'ذخیره'}</button>
+      </form>
     </section>
   );
 }

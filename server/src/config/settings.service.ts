@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ControlPrismaService } from '../tenant/control-prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { TenantContext } from '../tenant/tenant-context';
 import {
@@ -26,6 +27,7 @@ export class SettingsService {
     private prisma: PrismaService,
     private audit: AuditService,
     private tenants: TenantContext,
+    private control: ControlPrismaService,
   ) {}
 
   private tenantKey(): string {
@@ -197,14 +199,55 @@ export class SettingsService {
     };
   }
 
-  /** پیکربندیِ دستیارِ AI — یا enabled:false اگر ناقص است (fail-soft). */
+  /**
+   * پیکربندیِ دستیارِ AI با **وراثت از مادر**: هر فیلدِ خالیِ شرکت از
+   * پیکربندیِ مرکزیِ کنترل (پنلِ پلتفرم) خوانده می‌شود — شرکت‌های زیرِ یک
+   * نصب بدونِ هیچ تنظیمی از مدل‌ها و اعتبارِ مادر استفاده می‌کنند و هر
+   * چیزی که خودشان بنویسند مقدم است. مدل به تفکیکِ قابلیت (گفتگو/تحلیلِ
+   * عکس/گفتار→متن/متن→گفتار/تصویرسازی). نبودِ کنترل = fallbackِ ساکت.
+   */
   async ai() {
     const rows = await this.rows();
     const get = (k: string) => String(parse(SETTING_BY_KEY.get(k)!, rows.get(k))).trim();
-    const baseUrl = get('ai_base_url').replace(/\/+$/, '');
-    const apiKey = get('ai_api_key');
-    const model = get('ai_model');
-    return { enabled: !!(baseUrl && apiKey && model), baseUrl, apiKey, model };
+
+    let central: any = null;
+    try {
+      central = await this.control.centralAiConfig.findUnique({ where: { id: 1 } });
+      if (central && !central.enabled) central = null;
+    } catch { central = null; }
+
+    const tenantBase = get('ai_base_url').replace(/\/+$/, '');
+    const tenantKey = get('ai_api_key');
+    /* اعتبار یک‌جا وراثت می‌شود: base و key جفت‌اند — نیمِ تننتی + نیمِ
+       مرکزی یعنی کلیدِ یک سرویس به سرویسِ دیگر برود. */
+    const useTenantCreds = !!(tenantBase && tenantKey);
+    const baseUrl = useTenantCreds ? tenantBase : String(central?.baseUrl ?? '').replace(/\/+$/, '');
+    const apiKey = useTenantCreds ? tenantKey : String(central?.apiKey ?? '');
+
+    const pick = (tenantVal: string, centralVal: unknown) => tenantVal || String(centralVal ?? '').trim();
+    const models = {
+      chat: pick(get('ai_model'), central?.modelChat),
+      vision: pick(get('ai_model_vision'), central?.modelVision),
+      stt: pick(get('ai_model_stt'), central?.modelStt),
+      tts: pick(get('ai_model_tts'), central?.modelTts),
+      image: pick(get('ai_model_image'), central?.modelImage),
+    };
+    const prompts = {
+      note: get('ai_prompt_note'),
+      template: get('ai_prompt_template'),
+      assistant: get('ai_prompt_assistant'),
+    };
+    const enabled = !!(baseUrl && apiKey && models.chat);
+    return {
+      enabled,
+      baseUrl,
+      apiKey,
+      /* سازگاری با مصرف‌کننده‌های قدیمی: model = مدلِ گفتگو. */
+      model: models.chat,
+      models,
+      prompts,
+      source: !enabled ? 'off' : useTenantCreds ? 'tenant' : 'central',
+    };
   }
 
   /** سربرگِ آپلودشده — یا null اگر شرکتی هنوز سربرگ نگذاشته. */

@@ -232,3 +232,12 @@
   .pa-modal { padding: 22px 18px; }
   .pa-row { flex-wrap: wrap; }
 }
+
+/* هوشِ مصنوعیِ مرکزی */
+.pa-ai-form { flex-wrap: wrap; }
+.pa-ai-form input, .pa-ai-form select { min-width: 150px; }
+.pa-ai-toggle {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--text2); cursor: pointer;
+}
+.pa-ai-toggle input { width: 15px; height: 15px; accent-color: var(--brand-2); cursor: pointer; }

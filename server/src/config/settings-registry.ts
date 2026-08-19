@@ -59,7 +59,7 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
   {
     key: 'ai',
     label: 'دستیارِ هوشِ مصنوعی',
-    hint: 'برای شرح‌نویسیِ ساخت‌یافته. هر سرویسِ سازگار با OpenAI (chat/completions) کار می‌کند — نشانیِ پایه، کلید و نامِ مدل را از ارائه‌دهنده بگیرید. تا وقتی پیکربندی نشده، دکمهٔ دستیار در پرونده دیده نمی‌شود.',
+    hint: 'هر سرویسِ سازگار با OpenAI کار می‌کند (AvalAI، GapGPT، …). همهٔ فیلدهای خالی از پیکربندیِ مرکزیِ سامانه («مادر») خوانده می‌شوند — یعنی اگر مدیرِ پلتفرم آن‌جا را پر کرده باشد، این‌جا لازم نیست چیزی بنویسید؛ هر چه این‌جا بنویسید بر مرکزی مقدم است.',
   },
 ];
 
@@ -192,9 +192,42 @@ export const SETTINGS: SettingDef[] = [
     group: 'ai', type: 'text', default: '', maxLength: 300, ltr: true,
   },
   {
-    key: 'ai_model', label: 'نامِ مدل',
-    hint: 'مثلاً gpt-4o-mini یا claude-sonnet-5 — هر مدلی که ارائه‌دهنده‌تان می‌دهد.',
+    key: 'ai_model', label: 'مدلِ گفتگو (متن)',
+    hint: 'مثلاً gpt-4o-mini یا claude-sonnet-5 — خالی = مدلِ مرکزی.',
     group: 'ai', type: 'text', default: '', maxLength: 80, ltr: true,
+  },
+  {
+    key: 'ai_model_vision', label: 'مدلِ تحلیلِ عکس',
+    hint: 'خالی = مدلِ مرکزی. برای قابلیت‌های آیندهٔ تحلیلِ تصویر.',
+    group: 'ai', type: 'text', default: '', maxLength: 80, ltr: true,
+  },
+  {
+    key: 'ai_model_stt', label: 'مدلِ گفتار به متن (ویسپر)',
+    hint: 'مثلاً whisper-1 — خالی = مدلِ مرکزی.',
+    group: 'ai', type: 'text', default: '', maxLength: 80, ltr: true,
+  },
+  {
+    key: 'ai_model_tts', label: 'مدلِ متن به گفتار',
+    group: 'ai', type: 'text', default: '', maxLength: 80, ltr: true,
+  },
+  {
+    key: 'ai_model_image', label: 'مدلِ تصویرسازی',
+    group: 'ai', type: 'text', default: '', maxLength: 80, ltr: true,
+  },
+  {
+    key: 'ai_prompt_note', label: 'دستورِ اختصاصیِ شرکت — شرح‌نویسی',
+    hint: 'اختیاری. به دستورِ دستیارِ شرح‌نویسی اضافه می‌شود؛ مثلاً «همیشه توصیه‌های پس از عمل را جدا بیاور».',
+    group: 'ai', type: 'textarea', default: '', maxLength: 2000,
+  },
+  {
+    key: 'ai_prompt_template', label: 'دستورِ اختصاصیِ شرکت — قالب‌ساز',
+    hint: 'اختیاری. به دستورِ قالب‌سازِ خودکار اضافه می‌شود.',
+    group: 'ai', type: 'textarea', default: '', maxLength: 2000,
+  },
+  {
+    key: 'ai_prompt_assistant', label: 'دستورِ اختصاصیِ شرکت — دستیارِ مدیریت',
+    hint: 'اختیاری. به دستورِ دستیارِ کلیِ مدیریت اضافه می‌شود.',
+    group: 'ai', type: 'textarea', default: '', maxLength: 2000,
   },
 
   // ── سربرگ (با آپلود پر می‌شوند؛ در صفحه پنهان‌اند) ─────────────

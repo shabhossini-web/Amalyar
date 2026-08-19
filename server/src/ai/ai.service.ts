@@ -10,7 +10,7 @@ const KIND_FA: Record<string, string> = {
   progress: 'سیرِ بیماری', discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره',
 };
 
-type AiCfg = { baseUrl: string; apiKey: string; model: string };
+type AiCfg = { baseUrl: string; apiKey: string; model: string; models: { chat: string; vision: string; stt: string; tts: string; image: string }; prompts: { note: string; template: string; assistant: string } };
 type DraftDto = { patientId: number; visitId?: number; kind: string; text: string; mode?: string };
 
 /**
@@ -50,7 +50,12 @@ export class AiService {
   async status(user: any) {
     this.assertClinical(user);
     const cfg = await this.settings.ai();
-    return { enabled: cfg.enabled, model: cfg.enabled ? cfg.model : null };
+    return {
+      enabled: cfg.enabled,
+      model: cfg.enabled ? cfg.models.chat : null,
+      /* «tenant» = تنظیمِ خودِ شرکت؛ «central» = وراثت از مادر. */
+      source: (cfg as any).source ?? (cfg.enabled ? 'tenant' : 'off'),
+    };
   }
 
   /**
@@ -128,7 +133,9 @@ export class AiService {
         '- اگر شرح کامل به‌نظر می‌رسد، فقط جمع‌بندی/توصیه‌های پایانی را تکمیل کن.',
         '- خروجی فقط متنِ ادامه باشد — بدونِ مقدمه.',
         styleBlock,
-      ]).filter(Boolean).join('\n');
+      ])
+      .concat(cfg.prompts?.note ? [`دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.note}`] : [])
+      .filter(Boolean).join('\n');
 
     const userMsg = [
       visitCtx ? `بافتار: ${visitCtx}` : '',
@@ -144,7 +151,7 @@ export class AiService {
    */
   async noteDraft(user: any, dto: DraftDto) {
     const { cfg, system, userMsg } = await this.draftPrompt(user, dto);
-    const out = await this.chat(cfg, system, userMsg);
+    const out = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, userMsg);
     return { text: out };
   }
 
@@ -170,7 +177,7 @@ export class AiService {
         signal: ctl.signal,
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
         body: JSON.stringify({
-          model: cfg.model,
+          model: cfg.models.chat,
           temperature: 0.3,
           max_tokens: 1500,
           stream: true,
@@ -288,16 +295,17 @@ export class AiService {
       examples.length
         ? `ساختار را از شرح‌های واقعیِ همین کلینیک دربیاور (سرفصل‌های مشترکشان را نگه دار):\n${examples.map((e, i) => `— نمونهٔ ${i + 1}:\n${e.body.slice(0, 1000)}`).join('\n')}`
         : 'شرحِ قبلی‌ای در کار نیست — قالبِ استانداردِ رایج برای این نوع سند را بساز.',
+      cfg.prompts?.template ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.template}` : '',
     ].filter(Boolean).join('\n');
     const userMsg = targets.length ? `قالب برای:\n${targets.join('\n')}` : `قالبِ عمومی برای «${kindFa}».`;
 
-    const body = await this.chat(cfg, system, userMsg);
+    const body = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, userMsg);
     const title = [`قالبِ ${kindFa}`, ...targets.map((t) => t.split(': ')[1])].filter(Boolean).join(' — ');
     return { title, body, grounded: examples.length };
   }
 
   /** یک تماسِ chat/completions — با مهلتِ صریح و خطای قابلِ‌فهم. */
-  private async chat(cfg: AiCfg, system: string, user: string): Promise<string> {
+  private async chat(cfg: { baseUrl: string; apiKey: string; model: string }, system: string, user: string): Promise<string> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 60_000);
     try {

@@ -127,6 +127,30 @@ model CentralTariff {
   @@map("central_tariffs")
 }
 
+/// پیکربندیِ مرکزیِ هوشِ مصنوعی — «مادر». همهٔ شرکت‌ها به‌صورتِ پیش‌فرض
+/// اعتبار (base/key) و مدلِ هر قابلیت را از همین می‌خوانند؛ شرکتی که در
+/// تنظیماتِ خودش مقدار گذاشته، همان مقدم است. مدل به تفکیکِ قابلیت است
+/// (گفتگو/تحلیلِ عکس/گفتار→متن/متن→گفتار/تصویرسازی) چون ارائه‌دهنده‌ها
+/// برای هر کار مدلِ جدا می‌دهند. provider فقط پیش‌تنظیمِ UI است
+/// (avalai | gapgpt | custom) — حقیقتِ اجرا base_url است.
+model CentralAiConfig {
+  id       Int    @id @default(1)
+  provider String @default("custom")
+  baseUrl  String @default("") @map("base_url")
+  apiKey   String @default("") @map("api_key")
+
+  modelChat   String @default("") @map("model_chat")
+  modelVision String @default("") @map("model_vision")
+  modelStt    String @default("") @map("model_stt")
+  modelTts    String @default("") @map("model_tts")
+  modelImage  String @default("") @map("model_image")
+
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("central_ai_config")
+}
+
 model PlatformAuditEvent {
   id         String   @id @default(uuid())
   actorHash  String?  @map("actor_hash")
