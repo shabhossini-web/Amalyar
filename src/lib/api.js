@@ -160,3 +160,45 @@ export async function apiStream(path, body, onChunk) {
     }
   }
 }
+
+/**
+ * اشتراکِ SSE با GET (چتِ سازمانی) — رویدادهای JSON به `onEvent` می‌رسند.
+ * تابعِ برگشتی اتصال را می‌بندد (برای unmount). قطعِ شبکه با تأخیرِ کوتاه
+ * دوباره وصل می‌شود — قطعیِ استریم فقط «دیرتر فهمیدن» است، نه گم‌شدنِ پیام.
+ */
+export function apiEvents(path, onEvent) {
+  let stopped = false;
+  let ctl = null;
+
+  const connect = async () => {
+    while (!stopped) {
+      ctl = new AbortController();
+      try {
+        const headers = {};
+        const tok = getToken();
+        if (tok) headers.Authorization = `Bearer ${tok}`;
+        const res = await fetch(`${BASE}${path}`, { headers, signal: ctl.signal });
+        if (!res.ok || !res.body) throw new Error(String(res.status));
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let i;
+          while ((i = buf.indexOf('\n\n')) >= 0) {
+            const evt = buf.slice(0, i);
+            buf = buf.slice(i + 2);
+            const line = evt.split('\n').find((l) => l.startsWith('data: '));
+            if (!line) continue;
+            try { onEvent(JSON.parse(line.slice(6))); } catch { /* ضربان/ناقص */ }
+          }
+        }
+      } catch { /* قطع شد — دوباره وصل می‌شویم */ }
+      if (!stopped) await new Promise((r) => setTimeout(r, 4000));
+    }
+  };
+  connect();
+  return () => { stopped = true; ctl?.abort(); };
+}

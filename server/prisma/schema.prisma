@@ -58,6 +58,7 @@ model Account {
   sessions    Session[]
   credentials WebauthnCredential[]
   techVisits  Visit[]              @relation("VisitTech")
+  chatMemberships ChatMember[]
 
   /// نقشِ شغلی — doctor | secretary | nurse | assistant. جدا از `level`:
   /// سطح می‌گوید «چقدر می‌بینی»، نقش می‌گوید «کدام بخشِ فرم مالِ توست».
@@ -615,6 +616,58 @@ model NoteTemplate {
 
   @@index([kind, active])
   @@map("note_templates")
+}
+
+/// کانالِ چتِ سازمانی — dm (دونفره) یا group (گروه).
+///
+/// dm با کلیدِ «dm:کوچک‌تر:بزرگ‌تر» یکتا می‌شود: دو نفر همیشه **یک** گفتگو
+/// دارند و «گفتگوی تازه» با نفرِ تکراری همان قبلی را باز می‌کند — قفلِ
+/// همزمانی هم همان قیدِ یکتاست، نه «اول بخوان بعد بساز».
+model ChatChannel {
+  id          Int      @id @default(autoincrement())
+  kind        String   @default("dm")
+  name        String?
+  dmKey       String?  @unique @map("dm_key")
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  members  ChatMember[]
+  messages ChatMessage[]
+
+  @@map("chat_channels")
+}
+
+model ChatMember {
+  id        Int         @id @default(autoincrement())
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId Int         @map("channel_id")
+  account   Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId Int         @map("account_id")
+
+  /// آخرین پیامِ خوانده — «نخوانده» مشتقِ همین است، نه ستونِ شمارنده که از
+  /// واقعیت عقب بماند.
+  lastReadId Int      @default(0) @map("last_read_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([channelId, accountId])
+  @@index([accountId])
+  @@map("chat_members")
+}
+
+model ChatMessage {
+  id        Int         @id @default(autoincrement())
+  channel   ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId Int         @map("channel_id")
+
+  authorId   Int    @map("author_id")
+  /// عکسِ لحظهٔ نگارش — نویسنده باید معلوم بماند حتی اگر حسابش حذف شود.
+  authorName String @map("author_name")
+  body       String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([channelId, id])
+  @@map("chat_messages")
 }
 
 /// لینکِ دائمیِ ثبت‌نام — نشانی‌ای که شرکت در بیو و کانالش می‌گذارد.

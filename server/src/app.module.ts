@@ -15,6 +15,7 @@ import { RemindersModule } from './reminders/reminders.module';
 import { StorageModule } from './storage/storage.module';
 import { TenantConfigModule } from './config/config.module';
 import { AiModule } from './ai/ai.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AiModule } from './ai/ai.module';
     TenantConfigModule,
     PatientsModule,
     AiModule,
+    ChatModule,
     ImportModule,
     PlatformModule,
     RemindersModule,

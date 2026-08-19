@@ -14,7 +14,7 @@ import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispat
 const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: true, min: 5, to: '/app/dashboard' };
 const DAILY = [
   { key: 'formgen', label: 'ثبت‌نامِ بیماران', icon: Form, ready: true, min: 5, to: '/app/intake' },
-  { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: false, min: 2 },
+  { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: true, min: 2, to: '/app/chat' },
 ];
 const TOOLS = [
   /* CRM زیرِ همان featureِ formgen (feature override): تفکیکِ مجوز وقتی معنا

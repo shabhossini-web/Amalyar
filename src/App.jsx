@@ -28,6 +28,7 @@ import Reminders from './app/Reminders.jsx';
 import Letters from './app/Letters.jsx';
 import NotesSearch from './app/NotesSearch.jsx';
 import Assistant from './app/Assistant.jsx';
+import Chat from './app/Chat.jsx';
 import Gate from './app/Gate.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
@@ -95,6 +96,7 @@ export default function App() {
           <Route path="/app/letters" element={<Protected><Letters /></Protected>} />
           <Route path="/app/notes" element={<Protected><Gate feature="dashboard"><NotesSearch /></Gate></Protected>} />
           <Route path="/app/assistant" element={<Protected><Assistant /></Protected>} />
+          <Route path="/app/chat" element={<Protected><Chat /></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />
