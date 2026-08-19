@@ -68,6 +68,20 @@ export class AiController {
     return this.ai.assistantStream(user, dto?.messages, res);
   }
 
+  /** خلاصهٔ پرونده برای ارجاع — متن برمی‌گردد؛ ثبتش با خودِ پزشک. */
+  @Post('record-summary')
+  recordSummary(@Body() dto: { patientId?: number }, @CurrentUser() user: any) {
+    const pid = Number(dto?.patientId ?? 0);
+    return this.ai.recordSummary(user, pid);
+  }
+
+  /** پیشنهادِ کدِ خدمت از شرحِ همین مراجعه — فقط کدهای واقعاً موجود. */
+  @Post('suggest-codes')
+  suggestCodes(@Body() dto: { visitId?: number }, @CurrentUser() user: any) {
+    const vid = Number(dto?.visitId ?? 0);
+    return this.ai.suggestCodes(user, vid);
+  }
+
   /** ساختِ خودکارِ قالبِ شرح از روی شرح‌های موجودِ مطب. */
   @Post('template-draft')
   templateDraft(@Body() dto: TemplateDraftDto, @CurrentUser() user: any) {

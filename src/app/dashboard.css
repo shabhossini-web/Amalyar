@@ -839,3 +839,19 @@ a.db-defbtn { text-decoration: none; }
   background: none; border: 1px solid rgba(255, 255, 255, .16); border-radius: 12px;
 }
 .db-nvb-done .db-nvb-main { margin-block-start: 4px; }
+
+/* پیشنهادِ کد از شرح (AI) در صورت‌حساب. */
+.bl-ai { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.bl-ai-btn {
+  padding: 6px 12px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 800; color: var(--brand-2);
+  background: rgba(var(--brand-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .45); border-radius: 99px;
+}
+.bl-ai-btn:disabled { opacity: .55; cursor: default; }
+.bl-ai-none { font-style: normal; font-size: 11px; color: var(--text3); }
+.bl-ai-chip {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+  padding: 5px 11px; cursor: pointer; font: inherit; font-size: 11.5px; color: var(--text2);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px;
+}
+.bl-ai-chip:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
+.bl-ai-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 230px; }

@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../config/settings.service';
 import { LEVEL } from '../common/levels';
 import { NOTE_KINDS } from '../patients/record.service';
+import { ServiceCodesService } from '../patients/service-codes.service';
 
 const KIND_FA: Record<string, string> = {
   history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل',
@@ -31,6 +32,7 @@ export class AiService {
   constructor(
     private prisma: PrismaService,
     private settings: SettingsService,
+    private serviceCodes: ServiceCodesService,
   ) {}
 
   private assertClinical(user: any) {
@@ -397,6 +399,122 @@ export class AiService {
       this.log.warn(`assistantContext ناقص ماند: ${e?.message ?? e}`);
     }
     return lines.join('\n') || '—';
+  }
+
+  /**
+   * خلاصهٔ پرونده برای ارجاع (#53) — از مراجعه‌ها و شرح‌های جاریِ همان
+   * بیمار، یک خلاصهٔ حرفه‌ایِ ارجاع می‌سازد. کمینه‌سازیِ هویت: نام/شماره/کدِ
+   * ملی نمی‌رود — فقط سن و جنسیت و دادهٔ بالینی؛ در متنِ خروجی هم «بیمار»
+   * خطاب می‌شود. ذخیره نمی‌کند — متن برمی‌گردد و ثبتش (مثلاً به‌عنوانِ
+   * «مشاوره») با خودِ پزشک است.
+   */
+  async recordSummary(user: any, patientId: number) {
+    this.assertClinical(user);
+    const cfg = await this.cfgOrThrow();
+    const patient = await this.prisma.patient.findUnique({
+      where: { id: patientId },
+      select: { id: true, birthDate: true, gender: true },
+    });
+    if (!patient) throw new BadRequestException('پرونده پیدا نشد');
+
+    const visits = await this.prisma.visit.findMany({
+      where: { patientId },
+      orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
+      take: 10,
+      select: {
+        kind: true, opDate: true, opStatus: true, opType: true, nextVisitDate: true,
+        procedureType: { select: { name: true } },
+        diagnosis: { select: { title: true } },
+        topic: { select: { name: true } },
+      },
+    });
+    const notes = await this.prisma.clinicalNote.findMany({
+      where: { patientId, replacedAt: null },
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      select: { kind: true, body: true, createdAt: true },
+    });
+    if (!visits.length && !notes.length) throw new BadRequestException('پرونده هنوز چیزی برای خلاصه‌کردن ندارد');
+
+    const age = patient.birthDate
+      ? Math.floor((Date.now() - new Date(patient.birthDate).getTime()) / (365.25 * 864e5))
+      : null;
+    const gender = patient.gender === 'male' ? 'مرد' : patient.gender === 'female' ? 'زن' : null;
+
+    const dataBlock = [
+      [age ? `سن: ${age}` : '', gender ? `جنسیت: ${gender}` : ''].filter(Boolean).join('؛ '),
+      'مراجعه‌ها (تازه‌ترین اول):',
+      ...visits.map((v) => `- ${v.opDate ? v.opDate.toISOString().slice(0, 10) : 'بی‌تاریخ'} | ${v.procedureType?.name ?? v.opType ?? v.kind}${v.diagnosis?.title ? ` | تشخیص: ${v.diagnosis.title}` : ''}${v.topic?.name ? ` | ${v.topic.name}` : ''} | وضعیت: ${v.opStatus}`),
+      'شرح‌های جاری:',
+      ...notes.map((n) => `— [${KIND_FA[n.kind] ?? n.kind}] ${n.body.slice(0, 800)}`),
+    ].filter(Boolean).join('\n');
+
+    const system = [
+      'تو دستیارِ مستندسازیِ بالینی هستی. از داده‌های زیر یک **خلاصهٔ ارجاعِ** حرفه‌ایِ فارسی بساز — برای همکارِ پزشکی که این بیمار را نمی‌شناسد.',
+      'قاعده‌ها:',
+      '- ساختار: معرفیِ کوتاه (سن/جنسیت)، سیرِ بیماری و اقداماتِ انجام‌شده به ترتیبِ زمان، وضعیتِ فعلی، و نکته‌های لازم برای ادامهٔ درمان.',
+      '- بیمار را فقط «بیمار» خطاب کن — نام نبر.',
+      '- فقط از همین داده‌ها؛ هیچ یافته‌ای اختراع نکن. تاریخ‌ها را همان‌طور که هست بیاور.',
+      '- خروجی فقط متنِ خلاصه باشد.',
+      cfg.prompts?.note ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.note}` : '',
+    ].filter(Boolean).join('\n');
+
+    const text = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, dataBlock);
+    return { text };
+  }
+
+  /**
+   * پیشنهادِ کدِ خدمت از متنِ شرح (#53) — نامزدها فقط کدهای **واقعاً موجود**اند
+   * (کدهای داخلیِ مطب + نتیجهٔ جستجوی کتاب با نامِ عمل)؛ هر کدی که مدل بگوید
+   * ولی در نامزدها نباشد دور ریخته می‌شود — پیشنهادِ ساختگی به فاکتور راه ندارد.
+   */
+  async suggestCodes(user: any, visitId: number) {
+    this.assertClinical(user);
+    const cfg = await this.cfgOrThrow();
+    const visit = await this.prisma.visit.findUnique({
+      where: { id: visitId },
+      select: {
+        id: true, opType: true,
+        procedureType: { select: { name: true } },
+        clinicalNotes: {
+          where: { replacedAt: null },
+          orderBy: { createdAt: 'desc' },
+          take: 4,
+          select: { kind: true, body: true },
+        },
+      },
+    });
+    if (!visit) throw new BadRequestException('مراجعه پیدا نشد');
+    const noteText = visit.clinicalNotes.map((n) => n.body).join('\n').slice(0, 5000);
+    if (!noteText.trim()) throw new BadRequestException('این مراجعه هنوز شرحی ندارد که از آن کد پیشنهاد شود');
+
+    const internal = await this.prisma.internalCode.findMany({
+      where: { active: true },
+      take: 100,
+      select: { code: true, name: true, price: true },
+    });
+    const procName = visit.procedureType?.name ?? visit.opType ?? '';
+    const book = procName ? await this.serviceCodes.search(procName, 20).catch(() => []) : [];
+
+    const candidates = [
+      ...internal.map((c) => ({ code: c.code, title: c.name, codeSystem: 'internal' as const, price: c.price })),
+      ...(book as any[]).map((c) => ({ code: String(c.code), title: c.title ?? '', codeSystem: 'book' as const, price: null })),
+    ];
+    if (!candidates.length) throw new BadRequestException('نه کدِ داخلی تعریف شده نه کدی از کتاب پیدا شد');
+
+    const system = [
+      'تو دستیارِ صورت‌حسابِ یک کلینیک هستی. از شرحِ انجام‌شده، کدهای خدمتِ مناسب را فقط از فهرستِ نامزدها انتخاب کن.',
+      '- فقط کدهایی که واقعاً با کارِ انجام‌شده می‌خوانند؛ حدسِ اضافه نزن.',
+      '- خروجی: هر کد در یک خط، فقط خودِ کد. اگر هیچ‌کدام نمی‌خواند بنویس: هیچ.',
+      'نامزدها:',
+      ...candidates.map((c) => `${c.code} — ${c.title}${c.codeSystem === 'internal' ? ' (داخلی)' : ''}`),
+    ].join('\n');
+    const userMsg = `${procName ? `نوعِ عمل: ${procName}\n` : ''}شرح:\n${noteText}`;
+
+    const reply = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, userMsg);
+    /* اعتبارسنجیِ سخت: فقط نامزدهایی که کدشان در جواب آمده — توهم حذف. */
+    const suggestions = candidates.filter((c) => reply.includes(c.code)).slice(0, 8);
+    return { suggestions, raw: undefined };
   }
 
   /** یک تماسِ chat/completions — با مهلتِ صریح و خطای قابلِ‌فهم. */

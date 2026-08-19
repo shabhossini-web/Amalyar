@@ -868,6 +868,9 @@ export default function PatientRecord() {
             {rec.phone && ` · ${faNum(rec.phone)}`}
           </p>
         </div>
+        {rec.clinicalVisible && (
+          <RefSummary rec={rec} toast={say} />
+        )}
       </header>
 
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
@@ -902,5 +905,72 @@ export default function PatientRecord() {
         </button>
       )}
     </div>
+  );
+}
+
+
+/**
+ * خلاصهٔ ارجاع با دستیارِ AI (#53) — از مراجعه‌ها و شرح‌های همین پرونده،
+ * متنِ ارجاع می‌سازد. فقط نمایش/کپی/ثبتِ اختیاری به‌عنوانِ «مشاوره» — تا
+ * دکمهٔ ثبت زده نشود چیزی در پرونده نمی‌نشیند. دکمه فقط وقتی دستیار
+ * پیکربندی شده دیده می‌شود.
+ */
+function RefSummary({ rec, toast }) {
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [text, setText] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    api('/ai/status').then((r) => { if (alive) setOn(!!r?.enabled); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const make = async () => {
+    setBusy(true);
+    try {
+      const r = await api('/ai/record-summary', { method: 'POST', body: { patientId: rec.id } });
+      setText(r.text);
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
+  };
+
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); toast('کپی شد ✓'); }
+    catch { toast('کپی نشد — دستی انتخاب کنید', true); }
+  };
+
+  const saveAsConsult = async () => {
+    setBusy(true);
+    try {
+      await api(`/patients/${rec.id}/notes`, { method: 'POST', body: { kind: 'consult', body: text } });
+      toast('به‌عنوانِ «مشاوره» در پرونده ثبت شد ✓');
+      setText(null);
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
+  };
+
+  if (!on) return null;
+  return (
+    <>
+      <button type="button" className="rc-refsum-btn" onClick={make} disabled={busy}>
+        {busy && text === null ? 'در حالِ خلاصه‌سازی…' : 'خلاصهٔ ارجاع (AI)'}
+      </button>
+      <AnimatePresence>
+        {text !== null && (
+          <Overlay backdrop="rc-refsum-bg" panel="glass rc-refsum" as="section" onClose={() => setText(null)} role="dialog" aria-label="خلاصهٔ ارجاع">
+            <header>
+              <b>خلاصهٔ ارجاع — پیش‌نویسِ دستیار</b>
+              <button type="button" onClick={() => setText(null)} aria-label="بستن"><Close width="17" height="17" /></button>
+            </header>
+            <div className="rc-refsum-body">{text}</div>
+            <footer>
+              <button type="button" className="rc-refsum-ghost" onClick={copy}>کپی</button>
+              <button type="button" className="rc-refsum-main" disabled={busy} onClick={saveAsConsult}>
+                ثبت به‌عنوانِ «مشاوره» در پرونده
+              </button>
+            </footer>
+          </Overlay>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

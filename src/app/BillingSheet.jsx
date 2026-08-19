@@ -53,11 +53,29 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   /* سربرگ پیشاپیش گرفته می‌شود تا کلیکِ «چاپ» sync بماند — window.openِ بعد از
      await را مسدودکنندهٔ پاپ‌آپ می‌گیرد. */
   const [letterheadUrl, setLetterheadUrl] = useState(null);
+  /* پیشنهادِ کد از شرح — فقط وقتی دستیارِ AI پیکربندی شده. */
+  const [aiOn, setAiOn] = useState(false);
+  const [sugg, setSugg] = useState(null); // null = هنوز نخواسته
+  const [suggBusy, setSuggBusy] = useState(false);
   useEffect(() => {
     api('/bank-accounts').then(setBanks).catch(() => setBanks([]));
     api('/partners').then((r) => setPartners(r.filter((x) => x.active))).catch(() => setPartners([]));
+    api('/ai/status').then((r) => setAiOn(!!r?.enabled)).catch(() => {});
     apiDataUrl('/settings/letterhead').then(setLetterheadUrl);
   }, []);
+
+  /**
+   * پیشنهادِ کد از شرحِ همین مراجعه (#53) — سرور فقط کدهای واقعاً موجود را
+   * برمی‌گرداند؛ کلیک روی پیشنهاد همان جستجوی همیشگی را با آن کد پر می‌کند
+   * تا مسیرِ فی/تعرفه دست‌نخورده بماند — پیشنهاد میان‌بر است، نه مسیرِ دوم.
+   */
+  const suggest = async () => {
+    setSuggBusy(true);
+    try {
+      const r = await api('/ai/suggest-codes', { method: 'POST', body: { visitId: visit.id } });
+      setSugg(r.suggestions ?? []);
+    } catch (e) { onToast(e.message); } finally { setSuggBusy(false); }
+  };
 
   const load = useCallback(async () => {
     try { setData(await api(`/visits/${visit.id}/billing`)); }
@@ -267,6 +285,25 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                       ? 'نام، برند یا کدِ کالا — مثلاً پیچ پدیکولار'
                       : 'کد یا شرحِ خدمت — مثلاً ۹۰۱۳۰۰ یا مانیتورینگ'}
                   />
+                  {aiOn && c.kind !== 'item' && (
+                    <div className="bl-ai">
+                      <button type="button" className="bl-ai-btn" onClick={suggest} disabled={suggBusy}>
+                        {suggBusy ? 'دستیار در حالِ خواندنِ شرح…' : 'پیشنهادِ کد از شرح (AI)'}
+                      </button>
+                      {sugg && sugg.length === 0 && <em className="bl-ai-none">پیشنهادی از شرح درنیامد</em>}
+                      {sugg && sugg.map((g) => (
+                        <button
+                          type="button" key={`${g.codeSystem}-${g.code}`} className="bl-ai-chip"
+                          title={g.title}
+                          onClick={() => setCodeQ(g.code)}
+                        >
+                          <b dir="ltr">{g.code}</b>
+                          {g.codeSystem === 'internal' && <em className="bl-internal-tag">داخلی</em>}
+                          <span>{g.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {c.serviceCode && (
                     <i className="bl-picked">
                       کدِ انتخاب‌شده: <b dir="ltr">{c.serviceCode}</b>

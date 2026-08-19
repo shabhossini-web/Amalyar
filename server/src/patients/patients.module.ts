@@ -67,5 +67,7 @@ import { PermissionGuard } from '../auth/permission.guard';
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, PermissionGuard,
   ],
+  /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */
+  exports: [ServiceCodesService],
 })
 export class PatientsModule {}
