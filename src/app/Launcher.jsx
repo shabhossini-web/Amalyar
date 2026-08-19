@@ -29,6 +29,7 @@ const TOOLS = [
   { key: 'dispatch', label: 'چینشِ نیروها', icon: Dispatch, tint: 'amber', ready: true, min: 4, to: '/app/dispatch' },
   { key: 'letter', label: 'نامهٔ اداری', icon: Mail, tint: 'blue', ready: true, min: 5, to: '/app/letters' },
   { key: 'notes', feature: 'dashboard', label: 'جستجوی بالینی', icon: Book, tint: 'teal', ready: true, min: 3, to: '/app/notes' },
+  { key: 'assistant', label: 'دستیارِ هوشمند', icon: Wave, tint: 'violet', ready: true, min: 5, to: '/app/assistant' },
   { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: true, min: 2, to: '/app/tech' },
   { key: 'transport', label: 'پرتالِ حمل‌ونقل', icon: Truck, tint: 'amber', ready: true, min: 2, to: '/app/transport' },
   { key: 'inventory', label: 'انبار', icon: Box, tint: 'green', ready: true, min: 3, to: '/app/inventory' },

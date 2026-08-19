@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
@@ -52,10 +52,20 @@ export class AiController {
     return this.ai.noteDraft(user, dto);
   }
 
-  /** همان پیش‌نویس، زنده (SSE) — رویدادها: {d}، {error}، و [DONE]. */
+  /** همان پیش‌نویس، زنده (SSE) — رویدادها: {d}، {error}، و [DONE].
+      ⚠️ SSE باید 200 باشد؛ پیش‌فرضِ POSTِ Nest (۲۰۱) بعضی کلاینت‌های
+      event-stream را می‌رنجاند. */
+  @HttpCode(200)
   @Post('note-draft/stream')
   noteDraftStream(@Body() dto: NoteDraftDto, @CurrentUser() user: any, @Res() res: Response) {
     return this.ai.noteDraftStream(user, dto, res);
+  }
+
+  /** دستیارِ مدیریت — چتِ استریمی؛ سطحِ ۵+ داخلِ سرویس چک می‌شود. */
+  @HttpCode(200)
+  @Post('assistant')
+  assistant(@Body() dto: any, @CurrentUser() user: any, @Res() res: Response) {
+    return this.ai.assistantStream(user, dto?.messages, res);
   }
 
   /** ساختِ خودکارِ قالبِ شرح از روی شرح‌های موجودِ مطب. */

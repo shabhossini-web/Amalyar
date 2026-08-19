@@ -166,7 +166,22 @@ export class AiService {
    */
   async noteDraftStream(user: any, dto: DraftDto, res: Response) {
     const { cfg, system, userMsg } = await this.draftPrompt(user, dto);
+    return this.streamCompletion(cfg, [
+      { role: 'system', content: system },
+      { role: 'user', content: userMsg },
+    ], res);
+  }
 
+  /**
+   * هستهٔ مشترکِ استریم — پیش‌نویسِ شرح و دستیارِ مدیریت هر دو از همین
+   * می‌گذرند: upstream با stream:true، پروکسیِ SSE، fallbackِ بدونِ استریم،
+   * و خطای پیش از شروع به‌شکلِ HTTPِ عادی.
+   */
+  private async streamCompletion(
+    cfg: AiCfg,
+    messages: { role: string; content: string }[],
+    res: Response,
+  ) {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 120_000);
     res.on('close', () => ctl.abort());
@@ -181,10 +196,7 @@ export class AiService {
           temperature: 0.3,
           max_tokens: 1500,
           stream: true,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: userMsg },
-          ],
+          messages,
         }),
       });
     } catch (e: any) {
@@ -302,6 +314,89 @@ export class AiService {
     const body = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, userMsg);
     const title = [`قالبِ ${kindFa}`, ...targets.map((t) => t.split(': ')[1])].filter(Boolean).join(' — ');
     return { title, body, grounded: examples.length };
+  }
+
+  /**
+   * دستیارِ مدیریت (#52) — چتِ استریمی برای مدیر (سطحِ ۵+): مشاورِ
+   * نرم‌افزار (نقشهٔ صفحه‌ها و مسیرها) + آگاه از وضعیتِ لحظه‌ایِ سامانه
+   * (صفِ تاییدِ فرم‌ها، نوبت‌های امروز، عمل‌های بی‌وضعیت). مسیرها را به
+   * شکلِ /app/... می‌گوید تا کلاینت لینکِ کلیک‌شدنی کند — **هیچ اقدامی را
+   * خودش انجام نمی‌دهد**؛ راه را نشان می‌دهد و داده را جلوی چشم می‌آورد.
+   */
+  async assistantStream(user: any, rawMessages: unknown, res: Response) {
+    if ((user?.level ?? 0) < LEVEL.ADMIN) {
+      throw new ForbiddenException('دستیارِ مدیریت فقط برای ادمین به بالاست');
+    }
+    const cfg = await this.cfgOrThrow();
+
+    const msgs = (Array.isArray(rawMessages) ? rawMessages : [])
+      .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+      .slice(-20)
+      .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
+    if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
+      throw new BadRequestException('پیامی برای دستیار نیست');
+    }
+
+    const system = [
+      'تو «دستیارِ هوشمندِ» سامانهٔ مدیریتِ کلینیک هستی و با مدیرِ آن حرف می‌زنی. فارسی، مختصر و کاربردی جواب بده.',
+      'وقتی کاری عملی خواسته شد (تاییدِ فرم، جستجو، ثبتِ نوبت…)، دادهٔ مربوط را از «وضعیتِ لحظه‌ای» بگو و مسیرِ صفحهٔ انجامش را دقیقاً به شکلِ /app/... بنویس — کلاینت آن را لینکِ کلیک‌شدنی می‌کند. خودت هیچ تغییری در داده نمی‌دهی.',
+      'اگر چیزی را نمی‌دانی یا در وضعیتِ لحظه‌ای نیست، صادقانه بگو و مسیرِ صفحهٔ مربوط را بده.',
+      '',
+      'نقشهٔ نرم‌افزار (مشاورِ نرم‌افزار از روی همین جواب بده):',
+      '- /app/dashboard — داشبورد: ثبت و جستجوی مراجعه‌ها، وضعیتِ عمل، صورت‌حساب و چاپِ فاکتور (رسمی/غیررسمی)، خروجیِ CSV.',
+      '- /app/intake — ثبت‌نامِ بیماران: لینک‌های ثبت‌نام، **صفِ تاییدِ فرم‌ها** (تایید/رد)، کدهای تخفیف.',
+      '- /app/calendar — تقویمِ شمسی + میزِ پذیرش: نوبت‌های روز، چرخهٔ حضور، «شروعِ ویزیت».',
+      '- /app/schedule — برنامهٔ کاری: روزها و ساعت‌های باز، اسلات/ظرفیت، تعطیلی.',
+      '- /app/reminders — دفترِ یادآوری‌ها: پیامک‌های در صف/رفته و ارسالِ سررسیده‌ها.',
+      '- /app/accounting — حسابداری: قرارداد، تسویه، هزینه، خزانه، گزارشِ مالی.',
+      '- /app/crm — تحلیل و CRM: نظرسنجی‌ها، روندِ ماهانه، بیمارانِ پیگیری‌نشده، CSV.',
+      '- /app/notes — جستجوی بالینی: جستجو در همهٔ شرح‌ها با نوع/عمل/تشخیص/متن.',
+      '- /app/letters — نامهٔ اداری: صدور با شمارهٔ خودکار و چاپ روی سربرگ.',
+      '- /app/definitions — تعریف‌های پایه: جراح/بیمارستان/نوعِ عمل/تشخیص/قالب‌های شرح/کدهای داخلی و… .',
+      '- /app/users — کاربران و سطحِ دسترسی. /app/settings — تنظیماتِ شرکت (پیامک‌ها، سربرگ، دستیارِ AI).',
+      '- /app/patients/شناسه — پروندهٔ بیمار: مراجعه‌ها، مدارک، شرح‌ها (با دستیارِ شرح‌نویسی).',
+      '',
+      `وضعیتِ لحظه‌ایِ سامانه:\n${await this.assistantContext()}`,
+      cfg.prompts?.assistant ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.assistant}` : '',
+    ].filter(Boolean).join('\n');
+
+    return this.streamCompletion(cfg, [{ role: 'system', content: system }, ...msgs], res);
+  }
+
+  /** وضعیتِ لحظه‌ای — فقط چیزی که مدیر خودش هم در صفحه‌ها می‌بیند؛ کمینه و بدونِ شمارهٔ تماس. */
+  private async assistantContext(): Promise<string> {
+    const lines: string[] = [];
+    try {
+      const pending = await this.prisma.intakeSubmission.findMany({
+        where: { status: 'pending_approval' },
+        orderBy: { id: 'desc' },
+        take: 8,
+        select: {
+          id: true, amount: true, createdAt: true,
+          patient: { select: { firstName: true, lastName: true, code: true } },
+        },
+      });
+      lines.push(`فرم‌های منتظرِ تایید: ${pending.length}${pending.length ? ' — ' + pending.map((x) =>
+        `${x.patient ? `${x.patient.firstName} ${x.patient.lastName}` : 'بی‌نام'}${x.patient?.code ? ` (${x.patient.code})` : ''}`).join('، ') : ''}`);
+
+      const today = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z');
+      const appts = await this.prisma.appointment.findMany({
+        where: { date: today, status: { in: ['held', 'confirmed', 'arrived'] } },
+        orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }],
+        take: 12,
+        select: { startMin: true, seq: true, status: true, patient: { select: { firstName: true, lastName: true } } },
+      });
+      lines.push(`نوبت‌های امروز: ${appts.length}${appts.length ? ' — ' + appts.map((a) =>
+        `${a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : 'بی‌نام'}${a.startMin != null ? ` ساعتِ ${Math.floor(a.startMin / 60)}:${String(a.startMin % 60).padStart(2, '0')}` : a.seq ? ` صف ${a.seq}` : ''}`).join('، ') : ''}`);
+
+      const overdue = await this.prisma.visit.count({
+        where: { kind: 'surgery', opStatus: 'pending', opDate: { lt: new Date() } },
+      });
+      lines.push(`عمل‌های گذشته ولی بی‌وضعیت (انجام شد/لغو نخورده): ${overdue}`);
+    } catch (e: any) {
+      this.log.warn(`assistantContext ناقص ماند: ${e?.message ?? e}`);
+    }
+    return lines.join('\n') || '—';
   }
 
   /** یک تماسِ chat/completions — با مهلتِ صریح و خطای قابلِ‌فهم. */
