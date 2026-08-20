@@ -402,6 +402,54 @@ export class AiService {
   }
 
   /**
+   * پیش‌نویسِ مراقبتِ پس از عمل (#55) — با اشراف به همین مراجعه: نوعِ عمل،
+   * تشخیص، شرحِ عمل، و قالبِ عمومیِ همان نوعِ عمل به‌عنوانِ پایه. خروجی متنِ
+   * پیامک‌پذیرِ خطاب به بیمار است؛ فقط پیش‌نویس — تا جراح ذخیره نکند چیزی
+   * نمی‌رود.
+   */
+  async careDraft(user: any, visitId: number) {
+    this.assertClinical(user);
+    const cfg = await this.cfgOrThrow();
+    const visit = await this.prisma.visit.findUnique({
+      where: { id: visitId },
+      select: {
+        id: true, opType: true, postOpCare: true,
+        procedureType: { select: { name: true, postOpCare: true } },
+        diagnosis: { select: { title: true } },
+        clinicalNotes: {
+          where: { replacedAt: null, kind: 'op' },
+          orderBy: { createdAt: 'desc' },
+          take: 2,
+          select: { body: true },
+        },
+      },
+    });
+    if (!visit) throw new BadRequestException('مراجعه پیدا نشد');
+
+    const procName = visit.procedureType?.name ?? visit.opType ?? '';
+    const base = visit.procedureType?.postOpCare?.trim();
+    const opText = visit.clinicalNotes.map((n) => n.body).join('\n').slice(0, 4000);
+
+    const system = [
+      'تو دستیارِ بالینی هستی. متنِ «مراقبت‌های پس از عمل» را برای پیامک به **خودِ بیمار** بنویس — فارسیِ ساده، محترمانه، جمله‌های کوتاه و عملی.',
+      'قاعده‌ها:',
+      '- فقط توصیه‌های مرتبط با همین عمل و همین شرح؛ داروی مشخص یا دوز اختراع نکن — اگر در شرح نیامده، «طبقِ دستورِ پزشک» بنویس.',
+      '- سقفِ حدودِ ۶۰۰ نویسه؛ فهرست‌وار با خطِ جدا.',
+      '- خروجی فقط متنِ مراقبت باشد، بدونِ مقدمه.',
+      base ? `قالبِ عمومیِ همین نوعِ عمل (پایه بگیر و با شرح شخصی‌سازی کن):\n${base}` : '',
+      cfg.prompts?.note ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.note}` : '',
+    ].filter(Boolean).join('\n');
+    const userMsg = [
+      procName ? `نوعِ عمل: ${procName}` : '',
+      visit.diagnosis?.title ? `تشخیص: ${visit.diagnosis.title}` : '',
+      opText ? `شرحِ عمل:\n${opText}` : 'شرحِ عمل هنوز ثبت نشده.',
+    ].filter(Boolean).join('\n');
+
+    const text = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, userMsg);
+    return { text };
+  }
+
+  /**
    * خلاصهٔ پرونده برای ارجاع (#53) — از مراجعه‌ها و شرح‌های جاریِ همان
    * بیمار، یک خلاصهٔ حرفه‌ایِ ارجاع می‌سازد. کمینه‌سازیِ هویت: نام/شماره/کدِ
    * ملی نمی‌رود — فقط سن و جنسیت و دادهٔ بالینی؛ در متنِ خروجی هم «بیمار»

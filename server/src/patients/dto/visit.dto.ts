@@ -130,6 +130,13 @@ export class CreateVisitDto {
   @IsISO8601({}, { message: 'تاریخِ ویزیتِ بعدی نامعتبر است' })
   nextVisitDate?: string;
 
+  /// پیگیریِ اختصاصیِ همین بیمار — خالی = قالب/روزهای نوعِ عمل.
+  @IsOptional() @IsString() @MaxLength(2000, { message: 'متنِ مراقبت طولانی است' })
+  postOpCare?: string;
+
+  @IsOptional() @IsString() @MaxLength(60, { message: 'روزهای پیگیری طولانی است' })
+  followUpDays?: string;
+
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
   /// تا یک regex در دو جا تکرار نشود.
@@ -275,6 +282,15 @@ export class UpdateVisitDto {
   @ValidateIf((o) => o.nextVisitDate !== null && o.nextVisitDate !== '')
   @IsISO8601({}, { message: 'تاریخِ ویزیتِ بعدی نامعتبر است' })
   nextVisitDate?: string | null;
+
+  /// پیگیریِ اختصاصی — رشتهٔ خالی/null یعنی «برگرد به قالبِ نوعِ عمل».
+  @IsOptional() @ValidateIf((o) => o.postOpCare !== null)
+  @IsString() @MaxLength(2000, { message: 'متنِ مراقبت طولانی است' })
+  postOpCare?: string | null;
+
+  @IsOptional() @ValidateIf((o) => o.followUpDays !== null)
+  @IsString() @MaxLength(60, { message: 'روزهای پیگیری طولانی است' })
+  followUpDays?: string | null;
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

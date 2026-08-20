@@ -68,6 +68,12 @@ export class AiController {
     return this.ai.assistantStream(user, dto?.messages, res);
   }
 
+  /** پیش‌نویسِ مراقبتِ پس از عمل — با اشراف به همین مراجعه. */
+  @Post('care-draft')
+  careDraft(@Body() dto: { visitId?: number }, @CurrentUser() user: any) {
+    return this.ai.careDraft(user, Number(dto?.visitId ?? 0));
+  }
+
   /** خلاصهٔ پرونده برای ارجاع — متن برمی‌گردد؛ ثبتش با خودِ پزشک. */
   @Post('record-summary')
   recordSummary(@Body() dto: { patientId?: number }, @CurrentUser() user: any) {

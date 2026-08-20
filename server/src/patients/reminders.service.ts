@@ -60,6 +60,7 @@ export class RemindersService {
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
           opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
+          postOpCare: true, followUpDays: true,
           procedureType: { select: { preOpCare: true, postOpCare: true, followUpDays: true } },
           patient: {
             select: {
@@ -115,7 +116,8 @@ export class RemindersService {
         /* فرمِ پیگیریِ پس از عمل — روزها از خودِ نوعِ عمل (تعریف‌های پایه).
            لینکِ فرم همین‌جا آماده می‌شود تا متنِ ثبت‌شده در دفتر کامل باشد؛
            پیامکِ مراقبتِ بعد از عمل هم همان لینک را ضمیمه می‌کند. */
-        const followDays = RemindersService.parseDays(v.procedureType?.followUpDays);
+        /* اختصاصیِ همین مراجعه مقدم است — جراح بعد از عمل همان‌جا تعیین می‌کند. */
+        const followDays = RemindersService.parseDays(v.followUpDays ?? v.procedureType?.followUpDays);
         /* خطای ساختِ لینک (مثلاً نبودِ tenant context) نباید یادآوریِ عمل و
            مراقبت‌ها را قربانی کند — بدونِ لینک ادامه می‌دهیم و لاگ می‌ماند. */
         const followUrl = followDays.length
@@ -154,7 +156,7 @@ export class RemindersService {
             });
           }
         }
-        const post = v.procedureType?.postOpCare?.trim();
+        const post = (v.postOpCare ?? v.procedureType?.postOpCare)?.trim();
         if (post) {
           const postDue = this.dueOn(v.opDate, cfg.postOpDays, hour);
           if (postDue) {

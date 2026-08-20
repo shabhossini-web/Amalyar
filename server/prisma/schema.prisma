@@ -1228,6 +1228,12 @@ model Visit {
   topicId Int?        @map("topic_id")
 
   opDate   DateTime? @map("op_date") // تاریخِ عمل
+
+  /// پیگیریِ **اختصاصیِ همین بیمار** — جراح بعد از عمل همان‌جا تعیین می‌کند؛
+  /// خالی = قالب/روزهای نوعِ عمل (تعریف‌های پایه). override است نه کپی:
+  /// تغییرِ بعدیِ قالبِ عمومی روی بیمارانی که متنِ اختصاصی دارند اثر نمی‌کند.
+  postOpCare    String? @map("post_op_care")
+  followUpDays  String? @map("follow_up_days")
   opStatus String    @default("pending") @map("op_status") // pending | done | cancelled
 
   /// توکنِ لینکِ عمومیِ «خلاصهٔ ویزیت» — تنبل ساخته می‌شود، اولین باری که

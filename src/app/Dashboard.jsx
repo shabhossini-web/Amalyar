@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth.jsx';
-import { api } from '../lib/api.js';
+import { api, apiStream } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime } from '../lib/time.js';
@@ -241,12 +241,63 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     amount: '', // مبلغِ توافقی — فقط هنگامِ ساخت
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
     nextVisitDateJ: initial?.nextVisitDate ? isoToJStr(initial.nextVisitDate) : '',
+    postOpCare: initial?.postOpCare ?? '',
+    followUpDays: initial?.followUpDays ?? '',
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
     techArriveTime: initial?.techArriveTime || '',
     notes: initial?.notes || '',
   }));
   const [busy, setBusy] = useState(false);
+  /* دستیارِ AI روی خودِ فرمِ عمل — فقط در ویرایش (پرونده و مراجعه معلوم‌اند). */
+  const [aiOn, setAiOn] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false); // false | 'structure' | 'continue' | 'care'
+  const [rawReport, setRawReport] = useState(null);
+
+  useEffect(() => {
+    if (!initial?.id) return undefined;
+    let on = true;
+    api('/ai/status').then((r) => { if (on) setAiOn(!!r?.enabled); }).catch(() => {});
+    return () => { on = false; };
+  }, [initial?.id]);
+
+  /** ساخت‌یافته/ادامهٔ شرحِ عمل — همان دستیارِ زندهٔ پرونده، همین‌جا روی فرم. */
+  const aiReport = async (mode) => {
+    if (!f.opReport.trim()) { onToast('اول شرح را بنویسید، بعد دستیار', true); return; }
+    setAiBusy(mode);
+    const raw = f.opReport;
+    try {
+      setRawReport(raw);
+      if (mode === 'structure') setF((s2) => ({ ...s2, opReport: '' }));
+      await apiStream(
+        '/ai/note-draft/stream',
+        { patientId: initial.patientId, visitId: initial.id, kind: 'op', mode, text: raw },
+        (d) => setF((s2) => ({ ...s2, opReport: s2.opReport + d })),
+      );
+    } catch (e) {
+      setF((s2) => ({ ...s2, opReport: raw }));
+      setRawReport(null);
+      onToast(e.message);
+    } finally { setAiBusy(false); }
+  };
+
+  /** پیش‌نویسِ مراقبتِ پس از عمل — با اشراف به پرونده/تشخیص/شرحِ همین مراجعه. */
+  const aiCare = async () => {
+    setAiBusy('care');
+    try {
+      const r = await api('/ai/care-draft', { method: 'POST', body: { visitId: initial.id } });
+      setF((s2) => ({ ...s2, postOpCare: r.text }));
+    } catch (e) { onToast(e.message); } finally { setAiBusy(false); }
+  };
+  /* روزهای پیگیری — آینهٔ parseDays سرور: ارقامِ فارسی/هر جداکننده‌ای، فقط ۱..۳۶۵. */
+  const parseFollowDays = (raw) => [...new Set(toEnDigits(raw || '').split(/[^0-9]+/)
+    .map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 365))].sort((a, b) => a - b);
+  const followList = parseFollowDays(f.followUpDays);
+  const toggleFollowDay = (d) => setF((s2) => {
+    const cur = parseFollowDays(s2.followUpDays);
+    const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b);
+    return { ...s2, followUpDays: next.join(',') };
+  });
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const formDuration = durationMin(f.opStartTime, f.opEndTime);
 
@@ -433,6 +484,9 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       opDate,
       /* پاک‌کردن در ویرایش با null — پزشکِ منصرف باید بتواند برش دارد. */
       nextVisitDate: f.nextVisitDateJ.trim() ? nextVisitDate : (editing ? null : undefined),
+      /* پیگیریِ اختصاصیِ همین بیمار — خالی یعنی «برگرد به قالبِ نوعِ عمل». */
+      postOpCare: f.postOpCare.trim() || (editing ? '' : undefined),
+      followUpDays: toEnDigits(f.followUpDays).trim() || (editing ? '' : undefined),
       // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
       // منظورش «پاکش کن» است، نه «دست نزن».
       opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
@@ -611,9 +665,25 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   /* شرحِ عمل هم حالا ردیفِ کاتالوگ دارد؛ روی نوعی مثلِ «ویزیت» که عمل ندارد
      خاموش است و برچسبش را سوپرادمین می‌تواند مثلاً «شرحِ معاینه» کند. */
   if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: (
-    <label className="db-field"><span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
+    <div className="db-field db-report">
+      <span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
       <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
-    </label>) };
+      {editing && aiOn && (
+        <div className="db-aibar">
+          <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiReport('structure')}>
+            {aiBusy === 'structure' ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن'}
+          </button>
+          <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiReport('continue')}>
+            {aiBusy === 'continue' ? 'در حالِ ادامه…' : 'ادامه بنویس'}
+          </button>
+          {rawReport !== null && (
+            <button type="button" className="db-aighost" onClick={() => { setF((s2) => ({ ...s2, opReport: rawReport })); setRawReport(null); }}>
+              برگرداندنِ متنِ خام
+            </button>
+          )}
+        </div>
+      )}
+    </div>) };
   /* «دو هفتهٔ دیگر بیاید» — روی خودِ فرم، تا پزشک وسطِ ویزیت ثبتش کند؛
      پایهٔ فازِ یادآوری‌ها. */
   if (fd.isOn('nextVisitDate')) builtinNodes.nextVisitDate = { wide: true, el: (
@@ -894,6 +964,57 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </div>
       )}
       </div>
+
+      {/* ── پیگیری و مراقبتِ پس از عمل — در ادامهٔ خودِ فرم ──
+          جراح همان‌جا که شرح را ثبت می‌کند برنامهٔ بعدش را هم می‌چیند:
+          متنِ مراقبت + روزهای پیامکِ پیگیری، اختصاصیِ همین بیمار.
+          خالی = قالب/روزهای «نوعِ عمل» (تعریف‌های پایه). با ذخیره،
+          یادآوری‌ها خودکار برنامه‌ریزی می‌شوند (reminders.syncNextVisit). */}
+      {f.kind === 'surgery' && (
+        <div className="db-postop">
+          <h4>پیگیری و مراقبتِ پس از عمل</h4>
+          <p className="db-hint">
+            با ذخیرهٔ فرم، پیامک‌ها خودکار زمان‌بندی می‌شوند: متنِ مراقبت فردایِ عمل
+            و فرمِ پیگیری در روزهای انتخابی. خالی بگذارید تا قالب و روزهای «نوعِ عمل» اجرا شود.
+          </p>
+          <div className="db-followdays">
+            <span>پیامکِ پیگیری چند روز بعد از عمل برود؟</span>
+            <div className="db-daychips">
+              {[7, 30, 90].map((d) => (
+                <button
+                  key={d} type="button"
+                  className={followList.includes(d) ? 'db-daychip on' : 'db-daychip'}
+                  aria-pressed={followList.includes(d)}
+                  onClick={() => toggleFollowDay(d)}
+                >روزِ {Number(d).toLocaleString('fa-IR')}</button>
+              ))}
+              <input
+                dir="ltr" inputMode="numeric" className="db-dayinput"
+                value={f.followUpDays} onChange={set('followUpDays')}
+                placeholder="۷,۳۰,۹۰" aria-label="روزهای پیگیری (دلخواه)"
+              />
+            </div>
+          </div>
+          <label className="db-field"><span>مراقبت‌های بعد از عمل — متنِ پیامک به بیمار</span>
+            <textarea rows={3} value={f.postOpCare} onChange={set('postOpCare')}
+                      placeholder="خالی = قالبِ نوعِ عمل" />
+          </label>
+          {editing && aiOn && (
+            <div className="db-aibar">
+              <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={aiCare}>
+                {aiBusy === 'care' ? 'دستیار در حالِ نوشتن…' : 'پیش‌نویسِ مراقبت با دستیار (از پرونده)'}
+              </button>
+            </div>
+          )}
+          <p className="db-postop-plan">
+            {followList.length
+              ? `پیگیری: روزهای ${followList.map((d) => Number(d).toLocaleString('fa-IR')).join('، ')} پس از عمل (اختصاصیِ همین بیمار)`
+              : 'پیگیری: طبقِ روزهای تعریف‌شده در نوعِ عمل'}
+            {' · '}
+            {f.postOpCare.trim() ? 'متنِ مراقبت: اختصاصیِ همین بیمار' : 'متنِ مراقبت: قالبِ نوعِ عمل'}
+          </p>
+        </div>
+      )}
 
       <button className="db-submit" type="submit" disabled={busy}>
         {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
