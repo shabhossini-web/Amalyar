@@ -65,6 +65,7 @@ try {
   await send(`/forms/${fuForm.id}`, 'PATCH', { followUp: 'general' });
   const proc = (await send('/procedure-types', 'POST', {
     name: `عملِ ${tag}`, followUpDays: '۷,۳۰', postOpCare: 'پانسمان را خشک نگه دارید.',
+    preOpCare: 'از نیمه‌شب ناشتا باشید.',
   })).json;
   trash.procs.push(proc.id);
   const diag = (await send('/diagnoses', 'POST', { title: `تشخیصِ ${tag}` })).json;
@@ -141,6 +142,33 @@ try {
   await send(`/visits/${visit2.id}`, 'PATCH', { followUpDays: ',' });
   ok(fuCount(visit2.id) === 0, 'جداکنندهٔ خالی نه موج می‌سازد نه «بلافاصله»');
 
+  console.log('\n۴ج) مراقبتِ قبل از عمل: قالب، سپس override');
+  const preText = (id) => sql(`SELECT replace(text, E'\\n', ' ') FROM reminders WHERE visit_id=${id} AND kind='pre_op_care' AND status='pending'`);
+  const opFuture = new Date(Date.now() + 10 * 24 * 3600 * 1000);
+  const v3 = (await send('/visits', 'POST', {
+    kind: 'surgery', firstName: 'بیمارِ', lastName: 'قبل‌ازعمل', phone: '09120000957',
+    opDate: opFuture.toISOString(), procedureTypeId: proc.id, surgeonId: surgeon.id, hospitalId: hospital.id,
+  })).json;
+  trash.visits.push(v3.id);
+  ok(preText(v3.id).includes('ناشتا'), '**قالبِ قبل از عمل از نوعِ عمل کاشته شد**');
+  const p3 = await send(`/visits/${v3.id}`, 'PATCH', { preOpCare: `ناشتاییِ اختصاصیِ ${tag}` });
+  ok(p3.status === 200 && p3.json?.preOpCare === `ناشتاییِ اختصاصیِ ${tag}`, 'preOpCare در نما برگشت');
+  const pt3 = preText(v3.id);
+  ok(pt3.includes(`ناشتاییِ اختصاصیِ ${tag}`) && !pt3.includes('نیمه‌شب'),
+    '**override مراقبتِ قبل از عمل مقدم است**');
+  await send(`/visits/${v3.id}`, 'PATCH', { preOpCare: '' });
+  ok(preText(v3.id).includes('ناشتا'), '**خالی = بازگشت به قالبِ نوعِ عمل**');
+
+  console.log('\n۴د) پیش‌فرض‌ها و زمان‌بندی برای نمایش در فرم');
+  const procList = (await send('/procedure-types', 'GET')).json;
+  const mine = (procList ?? []).find((x) => x.id === proc.id);
+  ok(!!mine && mine.preOpCare?.includes('ناشتا') && mine.postOpCare?.includes('پانسمان') && !!mine.followUpDays,
+    '**فهرستِ نوعِ عمل قالب‌ها را می‌دهد (فرم پیش‌فرض را نشان می‌دهد)**');
+  const tm = await send('/care-plan/timing', 'GET');
+  ok(tm.status === 200 && Number.isFinite(tm.json?.preOpDays) && Number.isFinite(tm.json?.postOpDays)
+    && Number.isFinite(tm.json?.nextVisitDays) && Number.isFinite(tm.json?.hour),
+    `**زمان‌بندیِ ارسال برای نمایش برمی‌گردد** (${JSON.stringify(tm.json)})`);
+
   console.log('\n۵) /ai/care-draft — پیش‌نویسِ مراقبت از پرونده');
   await setAi({ ai_base_url: 'http://127.0.0.1:3199/v1', ai_api_key: `key-${tag}`, ai_model: 'mock-1' });
   await send(`/patients/${visit.patientId}/notes`, 'POST', {
@@ -176,7 +204,7 @@ try {
     await page.waitForTimeout(2500);
     const sect = page.locator('.db-postop');
     ok(await sect.count() === 1, '**بخشِ «پیگیری و مراقبتِ پس از عمل» در ادامهٔ فرم هست**');
-    ok((await sect.locator('h4').innerText()).includes('پس از عمل'), 'عنوانِ بخش درست است');
+    ok((await sect.locator('h4').innerText()).includes('برنامهٔ مراقبت و پیگیری'), 'عنوانِ بخش درست است');
 
     /* چیپِ روزها ↔ ورودیِ آزاد هم‌گام‌اند. */
     const dayInput = sect.locator('.db-dayinput');
@@ -188,6 +216,24 @@ try {
     ok((await dayInput.inputValue()) === '7', 'کلیکِ دوباره چیپ را برمی‌دارد');
     ok((await sect.locator('.db-postop-plan').innerText()).includes('۷'),
       'خطِ برنامه روزِ انتخابی را می‌گوید');
+
+    /* پیش‌فرضِ نوعِ عمل باید **دیده** شود — نه اینکه کاربر حدس بزند. */
+    const defaults = sect.locator('.db-default');
+    ok(await defaults.count() === 2, `پیش‌فرضِ قبل و بعد از عمل نشان داده شد (${await defaults.count()})`);
+    ok((await defaults.first().innerText()).includes('ناشتا'), '**متنِ پیش‌فرضِ قبل از عمل روی فرم است**');
+    ok(await sect.locator('.db-nodefault').count() === 0, 'چون نوعِ عمل قالب دارد، هشدارِ «تعریف نشده» نیست');
+    /* زمانِ ارسال کنارِ عنوان نوشته می‌شود. */
+    ok((await sect.locator('.db-carehead').first().innerText()).includes('ارسال:'),
+      '**زمانِ ارسال کنارِ عنوان صریح گفته شده**');
+    /* «استفاده و ویرایش» پیش‌فرض را داخلِ کادر می‌ریزد تا جراح تغییرش دهد. */
+    await defaults.first().locator('button').click();
+    ok((await sect.locator('.db-careblock').first().locator('textarea').inputValue()).includes('ناشتا'),
+      '**«استفاده و ویرایش» پیش‌فرض را در کادر گذاشت**');
+    /* ویزیتِ بعدی داخلِ همین بخش است و در فرم دوبار نیامده. */
+    ok(await sect.locator('.jd-wrap, .jdate, input[placeholder="۱۴۰۵/۰۵/۱۰"]').count() >= 1,
+      'تاریخِ اولین مراجعهٔ بعد از عمل داخلِ همین بخش است');
+    ok(await page.locator('input[placeholder="۱۴۰۵/۰۵/۱۰"]').count() === 1,
+      '**ورودیِ ویزیتِ بعدی فقط یک‌بار در فرم هست (بدونِ تکرار)**');
 
     /* تایپِ آزاد ↔ چیپ‌ها: هر عددِ تایپ‌شده چیپِ انتخاب‌شدهٔ خودش را می‌سازد. */
     await dayInput.fill('1,3');
@@ -204,8 +250,8 @@ try {
     const immBtn = sect.locator('.db-daychip').filter({ hasText: /^بلافاصله بعد از ثبت$/ });
     ok(await immBtn.count() === 1, 'گزینهٔ زمانِ ارسالِ مراقبت هست');
     await immBtn.click();
-    ok((await sect.locator('.db-postop-plan').innerText()).includes('بلافاصله بعد از ثبت'),
-      'خطِ برنامه زمانِ مراقبت را می‌گوید');
+    ok((await sect.locator('.db-careblock').nth(1).locator('.db-carehead i').innerText()).includes('بلافاصله بعد از ثبت'),
+      '**نشانِ زمانِ ارسال با انتخابِ «بلافاصله» عوض شد**');
 
     /* دستیار: پیش‌نویسِ مراقبت. */
     mockReply = `- کمپرسِ سرد ۲۰ دقیقه. [مرورگر ${tag}]`;
@@ -213,7 +259,7 @@ try {
     ok(await careBtn.count() === 1, 'دکمهٔ دستیارِ مراقبت هست (aiOn)');
     await careBtn.click();
     await page.waitForTimeout(1800);
-    ok((await sect.locator('textarea').inputValue()).includes(`[مرورگر ${tag}]`),
+    ok((await sect.locator('.db-careblock').nth(1).locator('textarea').inputValue()).includes(`[مرورگر ${tag}]`),
       '**دستیار متنِ مراقبت را نوشت**');
 
     /* همان «ساخت‌یافته کن/ادامه بنویس» روی شرحِ داخلِ فرم. */
@@ -251,12 +297,16 @@ try {
   sql(`DELETE FROM clinical_notes WHERE patient_id IN (SELECT id FROM patients WHERE phone='${PHONE}')`);
   sql(`DELETE FROM intake_submissions WHERE patient_id IN (SELECT id FROM patients WHERE phone='${PHONE}')`);
   for (const id of trash.visits) await send(`/visits/${id}`, 'DELETE').catch(() => {});
+  /* ⚠️ نقشِ «پیگیریِ عمومی» را **قبل از حذف** برمی‌داریم: اگر حذف به هر دلیل
+     شکست بخورد (پاسخِ ثبت‌شده و…)، فرمِ رهاشده پایهٔ پیگیریِ سوئیت‌های دیگر
+     می‌شود و آن‌ها را بی‌ربط قرمز می‌کند. */
+  for (const id of trash.forms) await send(`/forms/${id}`, 'PATCH', { followUp: null }).catch(() => {});
   for (const id of trash.forms) await send(`/forms/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.procs) await send(`/procedure-types/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.diags) await send(`/diagnoses/${id}`, 'DELETE').catch(() => {});
-  sql(`DELETE FROM reminders WHERE patient_id IN (SELECT id FROM patients WHERE phone='09120000956')`);
+  sql(`DELETE FROM reminders WHERE patient_id IN (SELECT id FROM patients WHERE phone IN ('09120000956','09120000957'))`);
   sql(`DELETE FROM intake_submissions WHERE patient_id IN (SELECT id FROM patients WHERE phone='09120000956')`);
-  sql(`DELETE FROM patients WHERE phone IN ('${PHONE}','09120000956') AND id NOT IN (SELECT patient_id FROM visits)`);
+  sql(`DELETE FROM patients WHERE phone IN ('${PHONE}','09120000956','09120000957') AND id NOT IN (SELECT patient_id FROM visits)`);
 }
 
 console.log(`\nنتیجه: ${pass} سبز، ${fail} قرمز`);

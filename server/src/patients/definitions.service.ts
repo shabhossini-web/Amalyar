@@ -279,7 +279,12 @@ export class DefinitionsService {
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
       include: { _count: { select: { visits: true } } },
     });
-    return rows.map((r) => ({ id: r.id, name: r.name, code: r.code, notes: r.notes, active: r.active, visitCount: r._count.visits }));
+    /* قالبِ مراقبت و روزهای پیگیری هم برمی‌گردند: فرمِ عمل باید **پیش‌فرضِ
+       همین نوعِ عمل** را به جراح نشان دهد، نه اینکه خالی بماند و او حدس بزند. */
+    return rows.map((r) => ({
+      id: r.id, name: r.name, code: r.code, notes: r.notes, active: r.active, visitCount: r._count.visits,
+      preOpCare: r.preOpCare, postOpCare: r.postOpCare, followUpDays: r.followUpDays,
+    }));
   }
 
   /**

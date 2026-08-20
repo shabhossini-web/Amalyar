@@ -13,6 +13,7 @@ import {
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DefinitionsService } from './definitions.service';
+import { SettingsService } from '../config/settings.service';
 import { NOTE_KINDS } from './record.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
@@ -266,7 +267,24 @@ export class ItemPatchDto extends ItemCreateDto {
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('dashboard')
 export class DefinitionsController {
-  constructor(private defs: DefinitionsService) {}
+  constructor(private defs: DefinitionsService, private settings: SettingsService) {}
+
+  /**
+   * زمان‌بندیِ پیام‌های مراقبت/پیگیری — فرمِ عمل باید **صریح بگوید** هر
+   * پیام کِی می‌رود («یک روز قبل از عمل، ساعتِ ۱۰»)، نه اینکه جراح حدس بزند
+   * یا مجبور شود تنظیماتِ شرکت را باز کند. فقط زمان‌بندی است، نه متن.
+   */
+  @RequirePermissions('definitions.read')
+  @Get('care-plan/timing')
+  async carePlanTiming() {
+    const sms = await this.settings.sms();
+    return {
+      preOpDays: sms.preOpDays,
+      postOpDays: sms.postOpDays,
+      nextVisitDays: sms.nextVisitDays,
+      hour: sms.reminderHour,
+    };
+  }
 
   @RequirePermissions('definitions.read')
   @Get('surgeons')

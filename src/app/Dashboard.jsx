@@ -245,6 +245,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     postOpCare: initial?.postOpCare ?? '',
     followUpDays: initial?.followUpDays ?? '',
     postOpImmediate: initial?.postOpImmediate ?? false,
+    preOpCare: initial?.preOpCare ?? '',
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
     techArriveTime: initial?.techArriveTime || '',
@@ -324,6 +325,23 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
   const parseFollowDays = (raw) => [...new Set(toEnDigits(raw || '').split(/[^0-9]+/)
     .map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 365))].sort((a, b) => a - b);
   const followList = parseFollowDays(f.followUpDays);
+  /* زمان‌بندیِ پیام‌ها از تنظیماتِ شرکت — تا فرم **صریح** بگوید هر پیام کِی
+     می‌رود، نه اینکه جراح حدس بزند. نبودش فقط یعنی جملهٔ کلی‌تر. */
+  const [timing, setTiming] = useState(null);
+  useEffect(() => {
+    let on = true;
+    api('/care-plan/timing').then((r) => { if (on) setTiming(r); }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+  /* پیش‌فرضِ همین نوعِ عمل (تعریف‌های پایه) — منبعِ «چه چیزی خودکار اجرا می‌شود». */
+  const procRow = defs.procedures.find((p) => p.id === f.procedureTypeId) ?? null;
+  const procDefaults = {
+    name: procRow?.name ?? (f.opType || ''),
+    preOpCare: procRow?.preOpCare ?? '',
+    postOpCare: procRow?.postOpCare ?? '',
+    followUpDays: procRow?.followUpDays ?? '',
+    has: !!(procRow?.preOpCare || procRow?.postOpCare || procRow?.followUpDays),
+  };
   const toggleFollowDay = (d) => setF((s2) => {
     const cur = parseFollowDays(s2.followUpDays);
     const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b);
@@ -519,6 +537,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       postOpCare: f.postOpCare.trim() || (editing ? '' : undefined),
       followUpDays: toEnDigits(f.followUpDays).trim() || (editing ? '' : undefined),
       postOpImmediate: !!f.postOpImmediate,
+      preOpCare: f.preOpCare.trim() || (editing ? '' : undefined),
       // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
       // منظورش «پاکش کن» است، نه «دست نزن».
       opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
@@ -738,7 +757,9 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     </div>) };
   /* «دو هفتهٔ دیگر بیاید» — روی خودِ فرم، تا پزشک وسطِ ویزیت ثبتش کند؛
      پایهٔ فازِ یادآوری‌ها. */
-  if (fd.isOn('nextVisitDate')) builtinNodes.nextVisitDate = { wide: true, el: (
+  /* ⚠️ در فرمِ عمل، «ویزیتِ بعدی» داخلِ بخشِ برنامهٔ مراقبت رندر می‌شود؛
+     این‌جا رد می‌شود تا دو ورودیِ هم‌ارز روی یک state نباشد. */
+  if (fd.isOn('nextVisitDate') && f.kind !== 'surgery') builtinNodes.nextVisitDate = { wide: true, el: (
     <JDate
       label={<>{fd.labelOf('nextVisitDate', 'ویزیتِ بعدی')} (شمسی){star(fd.requiredOf('nextVisitDate'))}</>}
       value={f.nextVisitDateJ}
@@ -1033,25 +1054,106 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       )}
       </div>
 
-      {/* ── پیگیری و مراقبتِ پس از عمل — در ادامهٔ خودِ فرم ──
-          جراح همان‌جا که شرح را ثبت می‌کند برنامهٔ بعدش را هم می‌چیند:
-          متنِ مراقبت + روزهای پیامکِ پیگیری، اختصاصیِ همین بیمار.
-          خالی = قالب/روزهای «نوعِ عمل» (تعریف‌های پایه). با ذخیره،
-          یادآوری‌ها خودکار برنامه‌ریزی می‌شوند (reminders.syncNextVisit). */}
+      {/* ── برنامهٔ مراقبت و پیگیری — در ادامهٔ خودِ فرمِ عمل ──
+          جراح همان‌جا که شرح را می‌نویسد برنامهٔ بعد را هم می‌بندد. قاعدهٔ
+          کلیدی: **پیش‌فرضِ نوعِ عمل همیشه دیده می‌شود** — خالی‌گذاشتن یعنی
+          «همان پیش‌فرض اجرا شود»، و نوشتن یعنی «فقط برای همین بیمار این».
+          اگر نوعِ عمل هنوز قالبی ندارد (روزهای اولِ راه‌اندازی)، به‌جای
+          سکوت، صریح گفته می‌شود و راهِ ثبتِ دائمی‌اش نشان داده می‌شود. */}
       {f.kind === 'surgery' && (
         <div className="db-postop">
-          <h4>پیگیری و مراقبتِ پس از عمل</h4>
-          <p className="db-hint">
-            با ذخیرهٔ فرم، پیامک‌ها خودکار زمان‌بندی می‌شوند: متنِ مراقبت و فرمِ
-            پیگیری در روزهای انتخابی — روزِ ۰ یعنی بلافاصله بعد از عمل. خالی
-            بگذارید تا قالب و روزهای «نوعِ عمل» اجرا شود.
-          </p>
-          <div className="db-followdays">
-            <span>پیامکِ پیگیری چند روز بعد از عمل برود؟</span>
+          <h4>برنامهٔ مراقبت و پیگیری</h4>
+          {procDefaults.has ? (
+            <p className="db-hint">
+              پیش‌فرضِ «{procDefaults.name}» پایین نشان داده شده. هر کادر را خالی بگذارید
+              تا همان پیش‌فرض برای این بیمار اجرا شود؛ اگر بنویسید، فقط در همین مراجعه جایگزین می‌شود.
+            </p>
+          ) : (
+            <div className="db-nodefault">
+              <b>برای {procDefaults.name ? `«${procDefaults.name}»` : 'این عمل'} هنوز مراقبت و زمان‌بندیِ پیگیری تعریف نشده.</b>
+              <span>
+                هرچه این‌جا بنویسید فقط برای همین بیمار اجرا می‌شود. برای اینکه دفعهٔ بعد
+                خودکار بیاید، همان را در «تعریف‌های پایه ← نوعِ عمل» ثبت کنید.
+              </span>
+            </div>
+          )}
+
+          {/* ── مراقبتِ قبل از عمل ── */}
+          <div className="db-careblock">
+            <div className="db-carehead">
+              <span>مراقبت‌های قبل از عمل — پیامک به بیمار</span>
+              <i>{timing ? `ارسال: ${faNum(timing.preOpDays)} روز قبل از عمل، ساعتِ ${faNum(timing.hour)}` : 'ارسال: پیش از عمل'}</i>
+            </div>
+            {procDefaults.preOpCare && (
+              <div className="db-default">
+                <p>{procDefaults.preOpCare}</p>
+                <button type="button" onClick={() => setF((s2) => ({ ...s2, preOpCare: procDefaults.preOpCare }))}>
+                  استفاده و ویرایش
+                </button>
+              </div>
+            )}
+            <textarea rows={2} value={f.preOpCare} onChange={set('preOpCare')}
+                      placeholder={procDefaults.preOpCare ? 'خالی = همان پیش‌فرضِ بالا' : 'خالی = پیامی نمی‌رود'} />
+          </div>
+
+          {/* ── مراقبتِ بعد از عمل ── */}
+          <div className="db-careblock">
+            <div className="db-carehead">
+              <span>مراقبت‌های بعد از عمل — پیامک به بیمار</span>
+              <i>{f.postOpImmediate
+                ? 'ارسال: بلافاصله بعد از ثبتِ فرم'
+                : timing ? `ارسال: ${faNum(timing.postOpDays)} روز بعد از عمل، ساعتِ ${faNum(timing.hour)}` : 'ارسال: بعد از عمل'}</i>
+            </div>
+            {procDefaults.postOpCare && (
+              <div className="db-default">
+                <p>{procDefaults.postOpCare}</p>
+                <button type="button" onClick={() => setF((s2) => ({ ...s2, postOpCare: procDefaults.postOpCare }))}>
+                  استفاده و ویرایش
+                </button>
+              </div>
+            )}
+            <textarea rows={3} value={f.postOpCare} onChange={set('postOpCare')}
+                      placeholder={procDefaults.postOpCare ? 'خالی = همان پیش‌فرضِ بالا' : 'خالی = پیامی نمی‌رود'} />
+            {(sttOn || (editing && aiOn)) && (
+              <div className="db-aibar">
+                {sttOn && (
+                  <VoiceInput
+                    disabled={busy || !!aiBusy}
+                    onText={(txt) => setF((s2) => ({ ...s2, postOpCare: s2.postOpCare.trim() ? `${s2.postOpCare}\n${txt}` : txt }))}
+                    onErr={(m) => onToast(m)}
+                  />
+                )}
+                {editing && aiOn && (
+                  <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={aiCare}>
+                    {aiBusy === 'care' ? 'دستیار در حالِ نوشتن…' : 'پیش‌نویسِ مراقبت با دستیار (از پرونده)'}
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="db-daychips db-whenchips">
+              {[{ v: false, l: 'فردایِ عمل' }, { v: true, l: 'بلافاصله بعد از ثبت' }].map((o) => (
+                <button
+                  key={String(o.v)} type="button"
+                  className={f.postOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
+                  aria-pressed={f.postOpImmediate === o.v}
+                  onClick={() => setF((s2) => ({ ...s2, postOpImmediate: o.v }))}
+                >{o.l}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── روزهای فرمِ پیگیری ── */}
+          <div className="db-careblock">
+            <div className="db-carehead">
+              <span>فرمِ پیگیری چند روز بعد از عمل برود؟</span>
+              <i>{procDefaults.followUpDays
+                ? `پیش‌فرضِ نوعِ عمل: ${procDefaults.followUpDays.split(/[^0-9۰-۹]+/).filter(Boolean).map((d) => faNum(d)).join('، ')}`
+                : 'برای این عمل پیش‌فرضی تعریف نشده'}</i>
+            </div>
             <div className="db-daychips">
-              {/* چیپ‌ها = پیش‌فرض‌ها + هر عددی که در ورودی تایپ شده — تایپ و
-                  انتخاب یک فهرست‌اند، نه دو دنیای جدا. روزِ ۰ = بلافاصله. */}
-              {[...new Set([0, 7, 30, 90, ...followList])].sort((a, b) => a - b).map((d) => (
+              {/* چیپ‌ها = پیش‌فرض‌ها + روزهای نوعِ عمل + هر عددی که تایپ شده. */}
+              {[...new Set([0, 7, 30, 90, ...parseFollowDays(procDefaults.followUpDays), ...followList])]
+                .sort((a, b) => a - b).map((d) => (
                 <button
                   key={d} type="button"
                   className={followList.includes(d) ? 'db-daychip on' : 'db-daychip'}
@@ -1066,51 +1168,32 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
               />
             </div>
           </div>
-          <label className="db-field"><span>مراقبت‌های بعد از عمل — متنِ پیامک به بیمار</span>
-            <textarea rows={3} value={f.postOpCare} onChange={set('postOpCare')}
-                      placeholder="خالی = قالبِ نوعِ عمل" />
-          </label>
-          <div className="db-followdays">
-            <span>پیامکِ مراقبت کی برود؟</span>
-            <div className="db-daychips">
-              {[
-                { v: false, l: 'فردایِ عمل' },
-                { v: true, l: 'بلافاصله بعد از ثبت' },
-              ].map((o) => (
-                <button
-                  key={String(o.v)} type="button"
-                  className={f.postOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
-                  aria-pressed={f.postOpImmediate === o.v}
-                  onClick={() => setF((s2) => ({ ...s2, postOpImmediate: o.v }))}
-                >{o.l}</button>
-              ))}
+
+          {/* ── اولین مراجعهٔ بعد از عمل ── */}
+          <div className="db-careblock">
+            <div className="db-carehead">
+              <span>اولین مراجعهٔ بعد از عمل (ویزیتِ پست‌آپ)</span>
+              <i>{timing ? `یادآوری: ${faNum(timing.nextVisitDays)} روز قبل از همان تاریخ` : 'یادآوری پیش از موعد'}</i>
             </div>
+            <JDate
+              value={f.nextVisitDateJ}
+              onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
+              placeholder="۱۴۰۵/۰۵/۱۰"
+            />
           </div>
-          {(sttOn || (editing && aiOn)) && (
-            <div className="db-aibar">
-              {sttOn && (
-                <VoiceInput
-                  disabled={busy || !!aiBusy}
-                  onText={(txt) => setF((s2) => ({ ...s2, postOpCare: s2.postOpCare.trim() ? `${s2.postOpCare}\n${txt}` : txt }))}
-                  onErr={(m) => onToast(m)}
-                />
-              )}
-              {editing && aiOn && (
-                <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={aiCare}>
-                  {aiBusy === 'care' ? 'دستیار در حالِ نوشتن…' : 'پیش‌نویسِ مراقبت با دستیار (از پرونده)'}
-                </button>
-              )}
-            </div>
-          )}
+
           <p className="db-postop-plan">
             {followList.length
               ? `پیگیری: ${followList.map((d) => (d === 0 ? 'بلافاصله' : `روزِ ${Number(d).toLocaleString('fa-IR')}`)).join('، ')} (اختصاصیِ همین بیمار)`
-              : 'پیگیری: طبقِ روزهای تعریف‌شده در نوعِ عمل'}
+              : procDefaults.followUpDays ? 'پیگیری: طبقِ روزهای نوعِ عمل' : 'پیگیری: فرمی ارسال نمی‌شود'}
             {' · '}
-            {`متنِ مراقبت: ${f.postOpCare.trim() ? 'اختصاصیِ همین بیمار' : 'قالبِ نوعِ عمل'}، ${f.postOpImmediate ? 'بلافاصله بعد از ثبت' : 'فردایِ عمل'}`}
+            {`مراقبتِ بعد: ${f.postOpCare.trim() ? 'متنِ همین فرم' : procDefaults.postOpCare ? 'قالبِ نوعِ عمل' : 'ارسال نمی‌شود'}`}
+            {' · '}
+            {`مراقبتِ قبل: ${f.preOpCare.trim() ? 'متنِ همین فرم' : procDefaults.preOpCare ? 'قالبِ نوعِ عمل' : 'ارسال نمی‌شود'}`}
           </p>
         </div>
       )}
+
 
       <button className="db-submit" type="submit" disabled={busy}>
         {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}

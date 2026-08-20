@@ -142,6 +142,10 @@ export class CreateVisitDto {
   @IsOptional() @IsBoolean({ message: 'زمانِ ارسالِ مراقبت نامعتبر است' })
   postOpImmediate?: boolean;
 
+  /// مراقبتِ قبل از عمل — خالی = قالبِ نوعِ عمل.
+  @IsOptional() @IsString() @MaxLength(2000, { message: 'متنِ مراقبتِ قبل از عمل طولانی است' })
+  preOpCare?: string;
+
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
   /// تا یک regex در دو جا تکرار نشود.
@@ -299,6 +303,10 @@ export class UpdateVisitDto {
 
   @IsOptional() @IsBoolean({ message: 'زمانِ ارسالِ مراقبت نامعتبر است' })
   postOpImmediate?: boolean;
+
+  @IsOptional() @ValidateIf((o) => o.preOpCare !== null)
+  @IsString() @MaxLength(2000, { message: 'متنِ مراقبتِ قبل از عمل طولانی است' })
+  preOpCare?: string | null;
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

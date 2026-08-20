@@ -60,7 +60,7 @@ export class RemindersService {
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
           opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
-          postOpCare: true, followUpDays: true, postOpImmediate: true,
+          postOpCare: true, followUpDays: true, postOpImmediate: true, preOpCare: true,
           procedureType: { select: { preOpCare: true, postOpCare: true, followUpDays: true } },
           patient: {
             select: {
@@ -165,7 +165,8 @@ export class RemindersService {
             },
           });
         }
-        const pre = v.procedureType?.preOpCare?.trim();
+        /* اختصاصیِ همین مراجعه مقدم است — همان قاعدهٔ مراقبتِ بعد از عمل. */
+        const pre = (v.preOpCare ?? v.procedureType?.preOpCare)?.trim();
         if (pre) {
           const preDue = this.dueOn(v.opDate, -cfg.preOpDays, hour);
           if (preDue) {
