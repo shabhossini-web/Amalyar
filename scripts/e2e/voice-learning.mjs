@@ -197,6 +197,10 @@ try {
     await page.waitForTimeout(2500);
     const bodyVal = await page.locator('.rc-upload textarea').inputValue();
     ok(bodyVal.includes(`[${tag}]`), '**صدا ضبط، ویسپر، و متن در ادیتور نشست (اندروید/آیفون یک مسیر)**');
+    /* فرمتِ آپلودِ مرورگر: WAVِ کامل — نه webmِ بی‌هدر که گیت‌وی‌ها رد می‌کردند. */
+    const uiCap = sttCaps[sttCaps.length - 1];
+    ok(uiCap.body.includes('voice.wav') && uiCap.body.includes('RIFF') && uiCap.body.includes('WAVEfmt'),
+      '**ضبطِ مرورگر WAVِ استاندارد است (هدرِ RIFF کامل)**');
 
     /* ب) یادگیری: پیش‌نویسِ دستیار + اصلاحِ دستی + ثبت → ردیفِ ai_feedback. */
     sql(`DELETE FROM ai_feedback`);
