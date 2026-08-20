@@ -244,6 +244,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     nextVisitDateJ: initial?.nextVisitDate ? isoToJStr(initial.nextVisitDate) : '',
     postOpCare: initial?.postOpCare ?? '',
     followUpDays: initial?.followUpDays ?? '',
+    postOpImmediate: initial?.postOpImmediate ?? false,
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
     techArriveTime: initial?.techArriveTime || '',
@@ -318,9 +319,10 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       onToast('فیلدها از دیکته پر شدند — پیش از ادامه مرورشان کنید');
     } catch (e) { onToast(e.message); } finally { setAiBusy(false); }
   };
-  /* روزهای پیگیری — آینهٔ parseDays سرور: ارقامِ فارسی/هر جداکننده‌ای، فقط ۱..۳۶۵. */
+  /* روزهای پیگیری — آینهٔ parseDays سرور: ارقامِ فارسی/هر جداکننده‌ای، ۰..۳۶۵
+     (روزِ ۰ = بلافاصله بعد از عمل). */
   const parseFollowDays = (raw) => [...new Set(toEnDigits(raw || '').split(/[^0-9]+/)
-    .map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n >= 1 && n <= 365))].sort((a, b) => a - b);
+    .map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n >= 0 && n <= 365))].sort((a, b) => a - b);
   const followList = parseFollowDays(f.followUpDays);
   const toggleFollowDay = (d) => setF((s2) => {
     const cur = parseFollowDays(s2.followUpDays);
@@ -516,6 +518,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       /* پیگیریِ اختصاصیِ همین بیمار — خالی یعنی «برگرد به قالبِ نوعِ عمل». */
       postOpCare: f.postOpCare.trim() || (editing ? '' : undefined),
       followUpDays: toEnDigits(f.followUpDays).trim() || (editing ? '' : undefined),
+      postOpImmediate: !!f.postOpImmediate,
       // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
       // منظورش «پاکش کن» است، نه «دست نزن».
       opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
@@ -1039,24 +1042,27 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         <div className="db-postop">
           <h4>پیگیری و مراقبتِ پس از عمل</h4>
           <p className="db-hint">
-            با ذخیرهٔ فرم، پیامک‌ها خودکار زمان‌بندی می‌شوند: متنِ مراقبت فردایِ عمل
-            و فرمِ پیگیری در روزهای انتخابی. خالی بگذارید تا قالب و روزهای «نوعِ عمل» اجرا شود.
+            با ذخیرهٔ فرم، پیامک‌ها خودکار زمان‌بندی می‌شوند: متنِ مراقبت و فرمِ
+            پیگیری در روزهای انتخابی — روزِ ۰ یعنی بلافاصله بعد از عمل. خالی
+            بگذارید تا قالب و روزهای «نوعِ عمل» اجرا شود.
           </p>
           <div className="db-followdays">
             <span>پیامکِ پیگیری چند روز بعد از عمل برود؟</span>
             <div className="db-daychips">
-              {[7, 30, 90].map((d) => (
+              {/* چیپ‌ها = پیش‌فرض‌ها + هر عددی که در ورودی تایپ شده — تایپ و
+                  انتخاب یک فهرست‌اند، نه دو دنیای جدا. روزِ ۰ = بلافاصله. */}
+              {[...new Set([0, 7, 30, 90, ...followList])].sort((a, b) => a - b).map((d) => (
                 <button
                   key={d} type="button"
                   className={followList.includes(d) ? 'db-daychip on' : 'db-daychip'}
                   aria-pressed={followList.includes(d)}
                   onClick={() => toggleFollowDay(d)}
-                >روزِ {Number(d).toLocaleString('fa-IR')}</button>
+                >{d === 0 ? 'بلافاصله' : `روزِ ${Number(d).toLocaleString('fa-IR')}`}</button>
               ))}
               <input
                 dir="ltr" inputMode="numeric" className="db-dayinput"
                 value={f.followUpDays} onChange={set('followUpDays')}
-                placeholder="۷,۳۰,۹۰" aria-label="روزهای پیگیری (دلخواه)"
+                placeholder="مثلاً ۰,۷,۳۰" aria-label="روزهای پیگیری (دلخواه)"
               />
             </div>
           </div>
@@ -1064,6 +1070,22 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             <textarea rows={3} value={f.postOpCare} onChange={set('postOpCare')}
                       placeholder="خالی = قالبِ نوعِ عمل" />
           </label>
+          <div className="db-followdays">
+            <span>پیامکِ مراقبت کی برود؟</span>
+            <div className="db-daychips">
+              {[
+                { v: false, l: 'فردایِ عمل' },
+                { v: true, l: 'بلافاصله بعد از ثبت' },
+              ].map((o) => (
+                <button
+                  key={String(o.v)} type="button"
+                  className={f.postOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
+                  aria-pressed={f.postOpImmediate === o.v}
+                  onClick={() => setF((s2) => ({ ...s2, postOpImmediate: o.v }))}
+                >{o.l}</button>
+              ))}
+            </div>
+          </div>
           {(sttOn || (editing && aiOn)) && (
             <div className="db-aibar">
               {sttOn && (
@@ -1082,10 +1104,10 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           )}
           <p className="db-postop-plan">
             {followList.length
-              ? `پیگیری: روزهای ${followList.map((d) => Number(d).toLocaleString('fa-IR')).join('، ')} پس از عمل (اختصاصیِ همین بیمار)`
+              ? `پیگیری: ${followList.map((d) => (d === 0 ? 'بلافاصله' : `روزِ ${Number(d).toLocaleString('fa-IR')}`)).join('، ')} (اختصاصیِ همین بیمار)`
               : 'پیگیری: طبقِ روزهای تعریف‌شده در نوعِ عمل'}
             {' · '}
-            {f.postOpCare.trim() ? 'متنِ مراقبت: اختصاصیِ همین بیمار' : 'متنِ مراقبت: قالبِ نوعِ عمل'}
+            {`متنِ مراقبت: ${f.postOpCare.trim() ? 'اختصاصیِ همین بیمار' : 'قالبِ نوعِ عمل'}، ${f.postOpImmediate ? 'بلافاصله بعد از ثبت' : 'فردایِ عمل'}`}
           </p>
         </div>
       )}

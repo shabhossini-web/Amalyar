@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsISO8601,
@@ -136,6 +137,10 @@ export class CreateVisitDto {
 
   @IsOptional() @IsString() @MaxLength(60, { message: 'روزهای پیگیری طولانی است' })
   followUpDays?: string;
+
+  /// پیامکِ مراقبت بلافاصله بعد از ثبت برود، نه فردای عمل.
+  @IsOptional() @IsBoolean({ message: 'زمانِ ارسالِ مراقبت نامعتبر است' })
+  postOpImmediate?: boolean;
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
@@ -291,6 +296,9 @@ export class UpdateVisitDto {
   @IsOptional() @ValidateIf((o) => o.followUpDays !== null)
   @IsString() @MaxLength(60, { message: 'روزهای پیگیری طولانی است' })
   followUpDays?: string | null;
+
+  @IsOptional() @IsBoolean({ message: 'زمانِ ارسالِ مراقبت نامعتبر است' })
+  postOpImmediate?: boolean;
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

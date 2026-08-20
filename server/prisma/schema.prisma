@@ -1233,6 +1233,8 @@ model Visit {
   /// خالی = قالب/روزهای نوعِ عمل (تعریف‌های پایه). override است نه کپی:
   /// تغییرِ بعدیِ قالبِ عمومی روی بیمارانی که متنِ اختصاصی دارند اثر نمی‌کند.
   postOpCare    String? @map("post_op_care")
+  /// پیامکِ مراقبت بلافاصله بعد از ثبتِ فرم برود، نه فردای عمل
+  postOpImmediate Boolean @default(false) @map("post_op_immediate")
   followUpDays  String? @map("follow_up_days")
   opStatus String    @default("pending") @map("op_status") // pending | done | cancelled
 

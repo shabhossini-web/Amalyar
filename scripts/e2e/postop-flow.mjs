@@ -113,6 +113,34 @@ try {
     `ارقامِ فارسیِ override هم خوانده می‌شود (${fuFirst(visit.id)})`);
   await send(`/visits/${visit.id}`, 'PATCH', { followUpDays: '' });
 
+  console.log('\n۴ب) روزِ ۰ و «بلافاصله بعد از ثبت» + گاردِ ضدتکرار');
+  const P2 = '09120000956';
+  const visit2 = (await send('/visits', 'POST', {
+    kind: 'surgery', firstName: 'بیمارِ', lastName: 'بلافاصله', phone: P2,
+    opDate: new Date().toISOString(), procedureTypeId: proc.id,
+    surgeonId: surgeon.id, hospitalId: hospital.id,
+  })).json;
+  trash.visits.push(visit2.id);
+  await send(`/visits/${visit2.id}`, 'PATCH', { followUpDays: '0,7' });
+  const immFu = () => Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit2.id} AND kind='follow_up' AND status='pending' AND due_at <= now() + interval '2 minutes'`));
+  ok(fuCount(visit2.id) === 2 && immFu() === 1,
+    `**روزِ ۰ = موجِ «همین حالا» + موجِ روزِ ۷** (${fuCount(visit2.id)}/${immFu()})`);
+  const p2i = await send(`/visits/${visit2.id}`, 'PATCH', { postOpImmediate: true });
+  ok(p2i.status === 200 && p2i.json?.postOpImmediate === true, 'postOpImmediate در نما برگشت');
+  const immPost = () => Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit2.id} AND kind='post_op_care' AND status='pending' AND due_at <= now() + interval '2 minutes'`));
+  ok(immPost() === 1, '**پیامکِ مراقبت بلافاصله بعد از ثبت در صف است**');
+
+  /* پیام‌های فوری «رفتند» — ویرایشِ بعدی نباید دوباره بفرستدشان. */
+  sql(`UPDATE reminders SET status='sent', sent_at=now() WHERE visit_id=${visit2.id} AND status='pending' AND due_at <= now() + interval '2 minutes' AND kind IN ('follow_up','post_op_care')`);
+  await send(`/visits/${visit2.id}`, 'PATCH', { followUpDays: '0,7' });
+  ok(immFu() === 0 && fuCount(visit2.id) === 1,
+    '**ویرایشِ دوباره موجِ رفته را تکرار نمی‌کند (فقط روزِ ۷ می‌ماند)**');
+  ok(immPost() === 0, '**مراقبتِ ارسال‌شده هم با ویرایش دوباره نمی‌رود**');
+
+  /* جداکنندهٔ تنها («,») نباید روزِ ۰ جا بزند — گاردِ Number('')===0. */
+  await send(`/visits/${visit2.id}`, 'PATCH', { followUpDays: ',' });
+  ok(fuCount(visit2.id) === 0, 'جداکنندهٔ خالی نه موج می‌سازد نه «بلافاصله»');
+
   console.log('\n۵) /ai/care-draft — پیش‌نویسِ مراقبت از پرونده');
   await setAi({ ai_base_url: 'http://127.0.0.1:3199/v1', ai_api_key: `key-${tag}`, ai_model: 'mock-1' });
   await send(`/patients/${visit.patientId}/notes`, 'POST', {
@@ -161,6 +189,24 @@ try {
     ok((await sect.locator('.db-postop-plan').innerText()).includes('۷'),
       'خطِ برنامه روزِ انتخابی را می‌گوید');
 
+    /* تایپِ آزاد ↔ چیپ‌ها: هر عددِ تایپ‌شده چیپِ انتخاب‌شدهٔ خودش را می‌سازد. */
+    await dayInput.fill('1,3');
+    const chip1 = sect.locator('.db-daychip').filter({ hasText: /^روزِ ۱$/ });
+    const chip3 = sect.locator('.db-daychip').filter({ hasText: /^روزِ ۳$/ });
+    ok(await chip1.count() === 1 && (await chip1.getAttribute('class')).includes('on')
+      && await chip3.count() === 1 && (await chip3.getAttribute('class')).includes('on'),
+      '**عددهای تایپ‌شده چیپِ انتخاب‌شده شدند (۱ و ۳)**');
+    await sect.locator('.db-daychip').filter({ hasText: /^بلافاصله$/ }).click();
+    ok((await dayInput.inputValue()) === '0,1,3', '**چیپِ «بلافاصله» = روزِ ۰**');
+    await chip3.click();
+    ok((await dayInput.inputValue()) === '0,1', 'برداشتنِ چیپِ تایپ‌شده از ورودی هم حذف می‌کند');
+    /* زمانِ ارسالِ مراقبت — پیش‌فرض فردای عمل، انتخابِ «بلافاصله بعد از ثبت». */
+    const immBtn = sect.locator('.db-daychip').filter({ hasText: /^بلافاصله بعد از ثبت$/ });
+    ok(await immBtn.count() === 1, 'گزینهٔ زمانِ ارسالِ مراقبت هست');
+    await immBtn.click();
+    ok((await sect.locator('.db-postop-plan').innerText()).includes('بلافاصله بعد از ثبت'),
+      'خطِ برنامه زمانِ مراقبت را می‌گوید');
+
     /* دستیار: پیش‌نویسِ مراقبت. */
     mockReply = `- کمپرسِ سرد ۲۰ دقیقه. [مرورگر ${tag}]`;
     const careBtn = sect.locator('.db-aibtn');
@@ -186,10 +232,13 @@ try {
     await page.waitForTimeout(2500);
     const savedDays = sql(`SELECT follow_up_days FROM visits WHERE id=${visit.id}`);
     const savedCare = sql(`SELECT post_op_care FROM visits WHERE id=${visit.id}`);
-    ok(savedDays === '7', `**ذخیرهٔ فرم روزها را نشاند** (${savedDays})`);
+    ok(savedDays === '0,1', `**ذخیرهٔ فرم روزها را نشاند** (${savedDays})`);
+    ok(sql(`SELECT post_op_immediate FROM visits WHERE id=${visit.id}`) === 't',
+      '**«بلافاصله بعد از ثبت» ذخیره شد**');
     ok((savedCare ?? '').includes(`[مرورگر ${tag}]`), '**ذخیرهٔ فرم متنِ مراقبت را نشاند**');
-    ok(fuCount(visit.id) === 1 && fuFirst(visit.id) === plusDays(op, 7),
-      '**یادآوری‌ها با مقادیرِ فرم دوباره کاشته شدند**');
+    /* عمل دو روزِ دیگر است → موجِ ۰ = روزِ عمل (در ساعتِ ارسال)، موجِ ۱ فردایش. */
+    ok(fuCount(visit.id) === 2 && fuFirst(visit.id) === plusDays(op, 0),
+      '**یادآوری‌ها با مقادیرِ فرم دوباره کاشته شدند (۰ و ۱)**');
     ok(postText(visit.id).includes(`[مرورگر ${tag}]`), 'پیامکِ مراقبت همان متنِ فرم است');
     ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
   } finally {
@@ -205,7 +254,9 @@ try {
   for (const id of trash.forms) await send(`/forms/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.procs) await send(`/procedure-types/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.diags) await send(`/diagnoses/${id}`, 'DELETE').catch(() => {});
-  sql(`DELETE FROM patients WHERE phone='${PHONE}' AND id NOT IN (SELECT patient_id FROM visits)`);
+  sql(`DELETE FROM reminders WHERE patient_id IN (SELECT id FROM patients WHERE phone='09120000956')`);
+  sql(`DELETE FROM intake_submissions WHERE patient_id IN (SELECT id FROM patients WHERE phone='09120000956')`);
+  sql(`DELETE FROM patients WHERE phone IN ('${PHONE}','09120000956') AND id NOT IN (SELECT patient_id FROM visits)`);
 }
 
 console.log(`\nنتیجه: ${pass} سبز، ${fail} قرمز`);

@@ -40,7 +40,7 @@ export class RemindersService {
     const due = new Date(base + offsetDays * 24 * 3600_000 + hourUtc * 3600_000);
     if (due.getTime() > Date.now()) return due;
     const eventEnd = base + 24 * 3600_000; // تا پایانِ روزِ رویداد
-    return eventEnd > Date.now() || offsetDays > 0 ? new Date(Date.now() + 60_000) : null;
+    return eventEnd > Date.now() || offsetDays >= 0 ? new Date(Date.now() + 60_000) : null;
   }
 
   /** ساعتِ تهران → ساعتِ UTC برای dueOn. */
@@ -60,7 +60,7 @@ export class RemindersService {
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
           opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
-          postOpCare: true, followUpDays: true,
+          postOpCare: true, followUpDays: true, postOpImmediate: true,
           procedureType: { select: { preOpCare: true, postOpCare: true, followUpDays: true } },
           patient: {
             select: {
@@ -118,6 +118,23 @@ export class RemindersService {
            پیامکِ مراقبتِ بعد از عمل هم همان لینک را ضمیمه می‌کند. */
         /* اختصاصیِ همین مراجعه مقدم است — جراح بعد از عمل همان‌جا تعیین می‌کند. */
         const followDays = RemindersService.parseDays(v.followUpDays ?? v.procedureType?.followUpDays);
+        /* ⚠️ cancel-then-create فقط pendingها را لغو می‌کند؛ موعدی که به
+           «همین حالا» فروکش کرده (روزِ ۰، ثبتِ دیرهنگام، ویرایشِ بعد از
+           ارسال) اگر قبلاً یک نسخهٔ sent داشته باشد نباید دوباره برود —
+           وگرنه هر ویرایشِ فرم یک پیامکِ تکراری می‌شد. */
+        const collapsed = (d: Date) => d.getTime() <= Date.now() + 90_000;
+        const sentCount = async (kind: string) => this.prisma.reminder.count({
+          where: { visitId, kind, status: 'sent' },
+        });
+        const sentFollow = await sentCount('follow_up');
+        const sentPost = await sentCount('post_op_care');
+        /* «بلافاصله» یعنی واقعاً همین حالا — نه صبرکردن تا ساعتِ ارسالِ روزانه.
+           برای عملِ آینده ولی معنایش «روزِ عمل» است (در ساعتِ ارسال). */
+        const opDate = v.opDate as Date;
+        const immediateDue = (): Date | null => {
+          const opStart = Date.UTC(opDate.getUTCFullYear(), opDate.getUTCMonth(), opDate.getUTCDate());
+          return opStart <= Date.now() ? new Date(Date.now() + 60_000) : this.dueOn(opDate, 0, hour);
+        };
         /* خطای ساختِ لینک (مثلاً نبودِ tenant context) نباید یادآوریِ عمل و
            مراقبت‌ها را قربانی کند — بدونِ لینک ادامه می‌دهیم و لاگ می‌ماند. */
         const followUrl = followDays.length
@@ -128,8 +145,9 @@ export class RemindersService {
           : null;
         if (followUrl) {
           for (const day of followDays) {
-            const due = this.dueOn(v.opDate, day, hour);
+            const due = day === 0 ? immediateDue() : this.dueOn(v.opDate, day, hour);
             if (!due) continue;
+            if (collapsed(due) && sentFollow > 0) continue; // موجِ گذشته قبلاً رفته
             await this.prisma.reminder.create({
               data: {
                 patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone,
@@ -158,8 +176,10 @@ export class RemindersService {
         }
         const post = (v.postOpCare ?? v.procedureType?.postOpCare)?.trim();
         if (post) {
-          const postDue = this.dueOn(v.opDate, cfg.postOpDays, hour);
-          if (postDue) {
+          /* «بلافاصله بعد از ثبت» = روزِ ۰ (اگر روزِ عمل رسیده، dueOn خودش
+             به «همین حالا» فرومی‌کاهد)؛ وگرنه فردای عمل (postOpDays). */
+          const postDue = v.postOpImmediate ? immediateDue() : this.dueOn(v.opDate, cfg.postOpDays, hour);
+          if (postDue && !(collapsed(postDue) && sentPost > 0)) {
             await this.prisma.reminder.create({
               data: {
                 patientId: v.patientId, visitId, kind: 'post_op_care', dueAt: postDue, phone,
@@ -180,8 +200,9 @@ export class RemindersService {
   static parseDays(raw?: string | null): number[] {
     if (!raw?.trim()) return [];
     const days = toEnDigits(raw).split(/[^0-9]+/)
+      .filter((x) => x !== '') // Number('') === 0 — رشتهٔ خالی نباید «بلافاصله» جا بزند
       .map((x) => Number(x))
-      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 365);
+      .filter((n) => Number.isInteger(n) && n >= 0 && n <= 365);
     return [...new Set(days)].sort((a, b) => a - b);
   }
 
