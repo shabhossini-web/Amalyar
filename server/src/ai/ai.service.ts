@@ -5,6 +5,7 @@ import { SettingsService } from '../config/settings.service';
 import { LEVEL } from '../common/levels';
 import { NOTE_KINDS } from '../patients/record.service';
 import { ServiceCodesService } from '../patients/service-codes.service';
+import { textSearchOr } from '../common/search';
 
 const KIND_FA: Record<string, string> = {
   history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل',
@@ -681,6 +682,132 @@ export class AiService {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * دستیارِ جستجوی بالینی — پرسشِ زبانِ طبیعی («بیمارانی که کمرا پورتِ ۵ یا
+   * بیشتر…»، «چند درصد گرسپر داشتند؟») روی شرح‌های همهٔ پرونده‌ها.
+   *
+   * دو مرحله: (۱) مدل پرسش را به «طرحِ جستجو» ترجمه می‌کند — کلیدواژه‌ها با
+   * مترادف/املاهای رایج، نوعِ شرح، حالتِ فهرست/آمار؛ (۲) سرور نامزدها را با
+   * همان جستجوی متنیِ کانونی می‌کشد و مدل فقط **شماره‌ی** شرح‌های منطبق را
+   * برمی‌گرداند. اعداد (صورت/مخرج/درصد) همه سمتِ سرورند — مدل عدد نمی‌سازد.
+   * کمینه‌سازی: به مدل فقط متنِ شرح‌های شماره‌دار می‌رسد؛ نه نام، نه کد، نه
+   * شماره‌ای از بیمار.
+   */
+  async notesQuery(user: any, dto: { question?: string }) {
+    this.assertClinical(user);
+    const question = (dto.question ?? '').trim();
+    if (!question) throw new BadRequestException('پرسشی ننوشته‌اید');
+    const cfg = await this.cfgOrThrow();
+    const chatCfg = { baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat };
+    const fa = (n: number) => n.toLocaleString('fa-IR');
+    const parseJson = (reply: string): any => {
+      const m = reply.match(/\{[\s\S]*\}/);
+      if (!m) throw new BadGatewayException('پاسخِ دستیار قابلِ خواندن نبود');
+      try { return JSON.parse(m[0]); } catch { throw new BadGatewayException('پاسخِ دستیار قابلِ خواندن نبود'); }
+    };
+
+    /* مرحلهٔ ۱: پرسش → طرحِ جستجو. */
+    const planSys = [
+      'تو مترجمِ پرسشِ بالینی به «طرحِ جستجو» هستی. از پرسشِ کاربر فقط یک JSON با این شکل بساز:',
+      '{"keywords":["..."],"kind":null,"mode":"list","criterion":"..."}',
+      '- keywords: ۲ تا ۸ کلیدواژهٔ کوتاه برای پیداکردنِ شرح‌های نامزد در جستجوی متنی — حتماً مترادف‌ها و املاهای رایجِ فارسی و انگلیسیِ همان اصطلاح را هم بیاور (مثلاً «گرسپر، گراسپر, grasper»). شرطِ عددی را در کلیدواژه نیاور؛ فقط خودِ اصطلاح.',
+      `- kind: اگر پرسش دربارهٔ نوعِ شرحِ مشخصی است یکی از (${NOTE_KINDS.join(' | ')})، وگرنه null.`,
+      '- mode: اگر پرسش آماری است (چند درصد؟ چند نفر؟ چندتا؟) "stats"، وگرنه "list".',
+      '- criterion: خودِ شرط، به فارسیِ دقیق و کامل، برای داوریِ تک‌تکِ شرح‌ها (مثلاً «کمرا پورتِ ۵ یا بزرگ‌تر استفاده شده باشد»).',
+      'خروجی فقط JSON — بدونِ توضیح.',
+    ].join('\n');
+    const plan = parseJson(await this.chat(chatCfg, planSys, question));
+    const keywords: string[] = (Array.isArray(plan.keywords) ? plan.keywords : [])
+      .filter((k: unknown): k is string => typeof k === 'string' && k.trim().length > 0)
+      .map((k: string) => k.trim().slice(0, 60))
+      .slice(0, 8);
+    if (!keywords.length) throw new BadGatewayException('دستیار کلیدواژه‌ای از پرسش درنیاورد — پرسش را دقیق‌تر بنویسید');
+    const kind = NOTE_KINDS.includes(plan.kind) ? (plan.kind as string) : undefined;
+    const mode: 'list' | 'stats' = plan.mode === 'stats' ? 'stats' : 'list';
+    const criterion = typeof plan.criterion === 'string' && plan.criterion.trim() ? plan.criterion.trim() : question;
+
+    /* نامزدها — سقف‌دار؛ سقف در پاسخ اعلام می‌شود تا «همه را دیدم» جا نزند. */
+    const CAND = 60;
+    const candidates = await this.prisma.clinicalNote.findMany({
+      where: {
+        replacedAt: null,
+        ...(kind ? { kind } : {}),
+        OR: keywords.flatMap((k) => textSearchOr(k, ['body'])),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: CAND,
+      select: {
+        id: true, kind: true, body: true, patientId: true, createdAt: true,
+        patient: { select: { code: true, firstName: true, lastName: true } },
+        visit: { select: { seq: true } },
+      },
+    });
+    /* مخرجِ آمار: کلِ بیمارانی که اصلاً شرحی (از همان نوع، اگر معلوم است) دارند. */
+    const total = mode === 'stats'
+      ? (await this.prisma.clinicalNote.findMany({
+        where: { replacedAt: null, ...(kind ? { kind } : {}) },
+        distinct: ['patientId'], select: { patientId: true },
+      })).length
+      : 0;
+
+    if (!candidates.length) {
+      return {
+        answer: 'با این کلیدواژه‌ها شرحی پیدا نشد — اصطلاحِ دیگری را امتحان کنید.',
+        mode, keywords, criterion,
+        stats: mode === 'stats' ? { matched: 0, total, percent: 0 } : null,
+        matches: [], scanned: 0, capped: false,
+      };
+    }
+
+    /* مرحلهٔ ۲: داوریِ شرط روی نامزدهای شماره‌دار — بدونِ هویتِ بیمار. */
+    const judgeSys = [
+      'شرح‌های بالینیِ شماره‌دار را بخوان و فقط شماره‌هایی که **قطعاً با شرط می‌خوانند** را برگردان.',
+      'قاعده‌ها:',
+      '- نفی یعنی نامنطبق: «بدونِ گرسپر» یا «استفاده نشد» انتخاب نمی‌شود.',
+      '- شرطِ عددی را دقیق بسنج (۵ یا بیشتر یعنی ۵ هم قبول است).',
+      '- اگر مطمئن نیستی، آن شماره را نیاور.',
+      'خروجی فقط JSON: {"matches":[1,4],"summary":"یک جملهٔ کوتاه دربارهٔ یافته‌ها"}',
+    ].join('\n');
+    const judgeUser = [
+      `شرط: ${criterion}`,
+      ...candidates.map((c, i) => `— شرحِ ${i + 1} (${KIND_FA[c.kind] ?? c.kind}):\n${c.body.slice(0, 500)}`),
+    ].join('\n\n');
+    const judged = parseJson(await this.chat(chatCfg, judgeSys, judgeUser));
+    const picked = (Array.isArray(judged.matches) ? judged.matches : [])
+      .map((n: unknown) => Number(n))
+      .filter((n: number) => Number.isInteger(n) && n >= 1 && n <= candidates.length);
+    const chosen = [...new Set(picked)].map((n) => candidates[(n as number) - 1]);
+    const patientIds = [...new Set(chosen.map((c) => c.patientId))];
+    const summary = typeof judged.summary === 'string' ? judged.summary.trim().slice(0, 300) : '';
+
+    const capped = candidates.length === CAND;
+    const stats = mode === 'stats'
+      ? { matched: patientIds.length, total, percent: total ? Math.round((patientIds.length / total) * 100) : 0 }
+      : null;
+    /* اعداد را سرور می‌گوید؛ جمله‌بندیِ مدل فقط چاشنی است. */
+    const answer = [
+      stats
+        ? `${fa(stats.matched)} از ${fa(stats.total)} بیمار (${fa(stats.percent)}٪) با این شرط می‌خوانند.`
+        : `${fa(patientIds.length)} بیمار (${fa(chosen.length)} شرح) با این شرط پیدا شد.`,
+      summary,
+      capped ? `(داوری از میانِ ${fa(CAND)} شرحِ نامزدِ اخیر — برای پوششِ کامل، پرسش را محدودتر کنید.)` : '',
+    ].filter(Boolean).join(' ');
+
+    return {
+      answer, mode, keywords, criterion, stats,
+      matches: chosen.slice(0, 30).map((c) => ({
+        noteId: c.id,
+        patientId: c.patientId,
+        patientName: `${c.patient?.firstName ?? ''} ${c.patient?.lastName ?? ''}`.trim() || null,
+        patientCode: c.patient?.code ?? null,
+        visitCode: c.visit && c.patient?.code ? `${c.patient.code}-V${c.visit.seq}` : null,
+        kind: c.kind,
+        snippet: c.body.slice(0, 200),
+      })),
+      scanned: candidates.length, capped,
+    };
   }
 
   /**

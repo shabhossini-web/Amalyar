@@ -65,3 +65,33 @@
   .ns-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ns-card-head small { flex-basis: 100%; margin-inline-start: 0; }
 }
+
+/* ── دستیارِ AI روی جستجوی بالینی ── */
+.ns-ai {
+  margin-bottom: 14px; padding: 12px 14px;
+  background: rgba(var(--brand-rgb), .05);
+  border: 1px solid rgba(var(--brand-2-rgb), .22); border-radius: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.ns-ai-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.ns-ai-row input {
+  flex: 1 1 240px; min-width: 0; padding: 10px 14px; font: inherit; font-size: 13px; color: var(--text);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 12px;
+}
+.ns-ai-row input:focus { outline: none; border-color: rgba(var(--brand-2-rgb), .6); }
+.ns-ai-ask {
+  padding: 9px 18px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); border: 0; border-radius: 99px;
+}
+.ns-ai-ask:disabled { opacity: .55; cursor: default; }
+.ns-ai-out { display: flex; flex-direction: column; gap: 10px; }
+.ns-ai-answer { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.9; }
+.ns-ai-meter {
+  height: 8px; border-radius: 99px; overflow: hidden;
+  background: rgba(255, 255, 255, .08);
+}
+.ns-ai-meter i {
+  display: block; height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--brand-2), var(--brand-mid));
+}
+.ns-ai-hit { margin: 0; }

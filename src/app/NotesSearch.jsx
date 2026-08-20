@@ -8,6 +8,7 @@ import { useStagger } from '../ui/stagger.js';
 import './launcher.css'; /* lx-toast */
 import './notes-search.css';
 import { Alert, Back, Book, Search } from '../ui/icons.jsx';
+import VoiceInput from '../ui/VoiceInput.jsx';
 
 const KINDS = [
   { id: 'history', name: 'شرحِ حال' },
@@ -32,6 +33,27 @@ export default function NotesSearch() {
   const row = useStagger();
   const tRef = useRef(0);
   const reqRef = useRef(0);
+  /* دستیارِ AI — پرسشِ زبانِ طبیعی روی همهٔ شرح‌ها (+ آمار). */
+  const [aiOn, setAiOn] = useState(false);
+  const [sttOn, setSttOn] = useState(false);
+  const [q, setQ] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiRes, setAiRes] = useState(null);
+  const [aiErr, setAiErr] = useState('');
+
+  useEffect(() => {
+    let on = true;
+    api('/ai/status').then((r) => { if (on) { setAiOn(!!r?.enabled); setSttOn(!!r?.stt); } }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+
+  const ask = async () => {
+    if (!q.trim() || aiBusy) return;
+    setAiBusy(true); setAiErr(''); setAiRes(null);
+    try {
+      setAiRes(await api('/ai/notes-query', { method: 'POST', body: { question: q.trim() } }));
+    } catch (e) { setAiErr(e.message); } finally { setAiBusy(false); }
+  };
 
   useEffect(() => { document.title = 'عمل‌یار — جستجوی بالینی'; }, []);
   useEffect(() => {
@@ -79,6 +101,55 @@ export default function NotesSearch() {
         <h1><Book width="20" height="20" /> جستجوی بالینی</h1>
         <p>جستجو در همهٔ شرح‌های پرونده‌ها — با نوعِ شرح، نوعِ عمل، تشخیص، موضوع و متن.</p>
       </header>
+
+      {aiOn && (
+        <section className="ns-ai" aria-label="دستیارِ جستجوی بالینی">
+          <div className="ns-ai-row">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') ask(); }}
+              placeholder="از دستیار بپرسید… مثلاً: چند درصدِ بیماران گرسپر داشتند؟"
+              aria-label="پرسش از دستیار"
+            />
+            {sttOn && (
+              <VoiceInput
+                label="بپرس با صدا"
+                disabled={aiBusy}
+                onText={(t2) => setQ((cur) => (cur.trim() ? `${cur} ${t2}` : t2))}
+                onErr={(m) => setAiErr(m)}
+              />
+            )}
+            <button type="button" className="ns-ai-ask" onClick={ask} disabled={aiBusy || !q.trim()}>
+              {aiBusy ? 'دستیار در حالِ گشتن…' : 'بپرس'}
+            </button>
+          </div>
+          {aiErr && <div className="ns-err"><Alert width="15" height="15" /> {aiErr}</div>}
+          {aiRes && (
+            <div className="ns-ai-out">
+              <p className="ns-ai-answer">{aiRes.answer}</p>
+              {aiRes.stats && aiRes.stats.total > 0 && (
+                <div className="ns-ai-meter" role="img" aria-label={`${aiRes.stats.percent}٪`}>
+                  <i style={{ width: `${Math.min(100, aiRes.stats.percent)}%` }} />
+                </div>
+              )}
+              {(aiRes.matches ?? []).map((m) => (
+                <article className="ns-card ns-ai-hit" key={m.noteId}>
+                  <header className="ns-card-head">
+                    <span className="ns-kind">{KIND_FA[m.kind] ?? m.kind}</span>
+                    <Link to={`/app/patients/${m.patientId}`} className="ns-patient">
+                      <b>{m.patientName ?? 'بی‌نام'}</b>
+                      {m.patientCode && <span>{m.patientCode}</span>}
+                    </Link>
+                    {m.visitCode && <small>{m.visitCode}</small>}
+                  </header>
+                  <p className="ns-body">{m.snippet}</p>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="ns-filters">
         <Pick label="نوعِ شرح" placeholder="نوعِ شرح: همه" value={f.kind} options={KINDS} onChange={(v) => change({ kind: v })} />

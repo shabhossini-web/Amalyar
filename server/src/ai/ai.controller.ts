@@ -108,6 +108,13 @@ export class AiController {
     return this.ai.transcribe(user, file);
   }
 
+  /** دستیارِ جستجوی بالینی — پرسشِ زبانِ طبیعی روی شرح‌ها (+آمار). */
+  @HttpCode(200)
+  @Post('notes-query')
+  notesQuery(@Body() dto: { question?: string }, @CurrentUser() user: any) {
+    return this.ai.notesQuery(user, dto ?? {});
+  }
+
   /** تحلیلِ دیکتهٔ ثبتِ بیمارِ جدید → فیلدهای پیشنهادی. */
   @HttpCode(200)
   @Post('parse-patient')
