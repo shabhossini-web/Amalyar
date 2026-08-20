@@ -29,6 +29,7 @@ const sql = (q) => execSync(`psql "${DB}" -qtA`, { input: q }).toString().trim()
 const tag = 'vl' + randomBytes(3).toString('hex');
 let mockReply = 'جواب';
 let mockSttText = 'متنِ ویسپر';
+let sttMode = 'ok'; // ok | strict | fail
 const chatCaps = [];   // بدنه‌های chat/completions
 const sttCaps = [];    // {url, auth, type, body} برای audio/transcriptions
 const mock = http.createServer((req, res) => {
@@ -37,12 +38,19 @@ const mock = http.createServer((req, res) => {
   req.on('end', () => {
     const buf = Buffer.concat(chunks);
     if (req.url.includes('/audio/transcriptions')) {
+      const body = buf.toString('latin1');
       sttCaps.push({
         url: req.url,
         auth: req.headers.authorization ?? '',
         type: req.headers['content-type'] ?? '',
-        body: buf.toString('latin1'),
+        body,
       });
+      /* strict: گیت‌وی‌ای که فیلدِ language را نمی‌شناسد؛ fail: همیشه 400. */
+      if (sttMode === 'fail' || (sttMode === 'strict' && body.includes('language'))) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message: sttMode === 'fail' ? 'invalid whisper model [x]' : 'Unknown parameter: language' } }));
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ text: mockSttText }));
       return;
@@ -95,6 +103,23 @@ try {
   const noFile = await fetch(API + '/ai/transcribe', { method: 'POST', headers: { Authorization: A.Authorization }, body: new FormData() })
     .then((r) => r.status);
   ok(noFile === 400, `بی‌فایل 400 (${noFile})`);
+
+  /* گیت‌ویِ سخت‌گیر: فیلدهای اختیاری را 400 می‌کند → تلاشِ دومِ حداقلی. */
+  sttMode = 'strict';
+  const before = sttCaps.length;
+  const tr2 = await sendAudio();
+  ok(tr2.status === 200 && tr2.json?.text === mockSttText,
+    `**گیت‌ویِ سخت‌گیر: با فرمِ حداقلی دوباره و موفق** (${tr2.status})`);
+  ok(sttCaps.length === before + 2 && sttCaps[sttCaps.length - 1].body.includes('model')
+    && !sttCaps[sttCaps.length - 1].body.includes('language'),
+    'تلاشِ دوم بدونِ فیلدهای اختیاری رفته');
+
+  /* شکستِ واقعی: پیامِ خودِ گیت‌وی باید به کاربر برسد تا قابلِ عیب‌یابی باشد. */
+  sttMode = 'fail';
+  const tr3 = await sendAudio();
+  ok(tr3.status === 502 && (tr3.json?.message ?? '').includes('invalid whisper model'),
+    `**پیامِ خودِ گیت‌وی در خطا هست** (${(tr3.json?.message ?? '').slice(0, 80)})`);
+  sttMode = 'ok';
 
   console.log('\n۲) parse-patient — دیکته → فیلدها + پرامپتِ اختصاصی');
   await setAi({ ai_prompt_voice: `قاعدهٔ صوتیِ ${tag}` });

@@ -627,25 +627,48 @@ export class AiService {
     if (!file?.buffer?.length) throw new BadRequestException('فایلِ صدا نرسید');
 
     const name = file.originalname || (file.mimetype?.includes('mp4') ? 'voice.m4a' : 'voice.webm');
-    const form = new FormData();
-    form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype || 'audio/webm' }), name);
-    form.append('model', cfg.models.stt);
-    form.append('language', 'fa');
-    form.append('response_format', 'json');
+    /* پسوندِ ";codecs=opus" را بعضی گیت‌وی‌ها به‌عنوانِ content-typeِ پارت رد می‌کنند. */
+    const partType = (file.mimetype || 'audio/webm').split(';')[0].trim();
 
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 120_000);
-    try {
-      const res = await fetch(`${cfg.baseUrl}/audio/transcriptions`, {
+    /* گیت‌وی‌های سازگار با OpenAI همه یک‌جور سخت‌گیر نیستند: بعضی فیلدهای
+       اختیاری (language/response_format) را نمی‌شناسند و 400 می‌دهند. اول
+       درخواستِ کامل؛ اگر 400/415/422 گرفت، یک‌بار با فرمِ حداقلی
+       (فقط file + model) دوباره. */
+    const post = (minimal: boolean) => {
+      const form = new FormData();
+      form.append('file', new Blob([new Uint8Array(file.buffer)], { type: partType }), name);
+      form.append('model', cfg.models.stt);
+      if (!minimal) {
+        form.append('language', 'fa');
+        form.append('response_format', 'json');
+      }
+      return fetch(`${cfg.baseUrl}/audio/transcriptions`, {
         method: 'POST',
         signal: ctl.signal,
         headers: { Authorization: `Bearer ${cfg.apiKey}` },
         body: form,
       });
+    };
+    try {
+      let res = await post(false);
+      if (!res.ok && [400, 415, 422].includes(res.status)) {
+        const body = await res.text().catch(() => '');
+        this.log.warn(`STT ${res.status} (فرمِ کامل): ${body.slice(0, 300)} — تلاشِ دوباره با فرمِ حداقلی`);
+        res = await post(true);
+      }
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         this.log.warn(`STT ${res.status}: ${body.slice(0, 300)}`);
-        throw new BadGatewayException(`سرویسِ گفتار به متن پاسخ نداد (${res.status}) — مدل و کلید را بررسی کنید`);
+        /* پیامِ خودِ گیت‌وی به کاربر می‌رسد — بدونش «۴۰۰» قابلِ عیب‌یابی نیست
+           (نامِ مدلِ اشتباه؟ کلید؟ فرمتِ صدا؟). */
+        let detail = '';
+        try { const j: any = JSON.parse(body); detail = j?.error?.message ?? j?.message ?? ''; } catch { detail = body; }
+        detail = String(detail || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+        throw new BadGatewayException(
+          `سرویسِ گفتار به متن پاسخ نداد (${res.status})${detail ? ` — پیامِ سرویس: ${detail}` : ''} — مدلِ ویسپر و کلید را بررسی کنید`,
+        );
       }
       const json: any = await res.json().catch(() => null);
       const text = typeof json?.text === 'string' ? json.text.trim() : '';
