@@ -10,6 +10,7 @@ import ProfileMenu from './ProfileMenu.jsx';
 import { useConfig, useTerms } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
+import VoiceInput from '../ui/VoiceInput.jsx';
 import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
@@ -249,17 +250,20 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     notes: initial?.notes || '',
   }));
   const [busy, setBusy] = useState(false);
-  /* دستیارِ AI روی خودِ فرمِ عمل — فقط در ویرایش (پرونده و مراجعه معلوم‌اند). */
+  /* دستیارِ AI روی خودِ فرمِ عمل — دکمه‌های شرح/مراقبت فقط در ویرایش
+     (پرونده و مراجعه معلوم‌اند)؛ دیکتهٔ صوتی در ساخت هم هست. */
   const [aiOn, setAiOn] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false); // false | 'structure' | 'continue' | 'care'
+  const [sttOn, setSttOn] = useState(false); // دستیارِ صوتی — با مدلِ گفتار-به-متن
+  const [aiBusy, setAiBusy] = useState(false); // false | 'structure' | 'continue' | 'care' | 'dictate'
   const [rawReport, setRawReport] = useState(null);
+  /* آخرین پیش‌نویس‌های دستیار روی همین فرم — برای «یادگیری از اصلاحِ دستی». */
+  const aiDraftsRef = useRef({});
 
   useEffect(() => {
-    if (!initial?.id) return undefined;
     let on = true;
-    api('/ai/status').then((r) => { if (on) setAiOn(!!r?.enabled); }).catch(() => {});
+    api('/ai/status').then((r) => { if (on) { setAiOn(!!r?.enabled); setSttOn(!!r?.stt); } }).catch(() => {});
     return () => { on = false; };
-  }, [initial?.id]);
+  }, []);
 
   /** ساخت‌یافته/ادامهٔ شرحِ عمل — همان دستیارِ زندهٔ پرونده، همین‌جا روی فرم. */
   const aiReport = async (mode) => {
@@ -274,6 +278,8 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         { patientId: initial.patientId, visitId: initial.id, kind: 'op', mode, text: raw },
         (d) => setF((s2) => ({ ...s2, opReport: s2.opReport + d })),
       );
+      /* متنِ کامل، همان‌طور که دستیار تحویل داد — مبنای «یادگیری از اصلاح». */
+      setF((s2) => { aiDraftsRef.current.op = s2.opReport; return s2; });
     } catch (e) {
       setF((s2) => ({ ...s2, opReport: raw }));
       setRawReport(null);
@@ -286,7 +292,30 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     setAiBusy('care');
     try {
       const r = await api('/ai/care-draft', { method: 'POST', body: { visitId: initial.id } });
+      aiDraftsRef.current.care = r.text;
       setF((s2) => ({ ...s2, postOpCare: r.text }));
+    } catch (e) { onToast(e.message); } finally { setAiBusy(false); }
+  };
+
+  /**
+   * دیکتهٔ بیمارِ جدید — متنِ ویسپرشده را دستیارِ متنی تحلیل می‌کند و
+   * فیلدهای گامِ اول را پر می‌کند؛ فقط فیلدهای خالی پر می‌شوند تا تایپِ
+   * دستیِ کاربر خورده نشود. تا «ثبت» زده نشود چیزی ذخیره نمی‌شود.
+   */
+  const dictatePatient = async (text) => {
+    setAiBusy('dictate');
+    try {
+      const r = await api('/ai/parse-patient', { method: 'POST', body: { text } });
+      const fields = r?.fields ?? {};
+      setF((s2) => ({
+        ...s2,
+        firstName: s2.firstName.trim() ? s2.firstName : (fields.firstName || s2.firstName),
+        lastName: s2.lastName.trim() ? s2.lastName : (fields.lastName || s2.lastName),
+        phone: s2.phone.trim() ? s2.phone : (fields.phone || s2.phone),
+        nationalId: s2.nationalId.trim() ? s2.nationalId : (fields.nationalId || s2.nationalId),
+        notes: fields.notes ? (s2.notes.trim() ? `${s2.notes}\n${fields.notes}` : fields.notes) : s2.notes,
+      }));
+      onToast('فیلدها از دیکته پر شدند — پیش از ادامه مرورشان کنید');
     } catch (e) { onToast(e.message); } finally { setAiBusy(false); }
   };
   /* روزهای پیگیری — آینهٔ parseDays سرور: ارقامِ فارسی/هر جداکننده‌ای، فقط ۱..۳۶۵. */
@@ -542,6 +571,17 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
           },
         });
       }
+      /* یادگیری از اصلاحِ دستی: متنِ ذخیره‌شده با پیش‌نویسِ دستیار فرق دارد؟
+         جفتش بی‌سروصدا ثبت می‌شود تا پیش‌نویس‌های بعدی سلیقهٔ کاربر را
+         رعایت کنند؛ شکستش نباید ذخیرهٔ موفق را خراب کند. */
+      const fb = aiDraftsRef.current;
+      if (fb.op?.trim() && f.opReport.trim() && fb.op.trim() !== f.opReport.trim()) {
+        api('/ai/feedback', { method: 'POST', body: { kind: 'op', draft: fb.op.trim(), final: f.opReport.trim() } }).catch(() => {});
+      }
+      if (fb.care?.trim() && f.postOpCare.trim() && fb.care.trim() !== f.postOpCare.trim()) {
+        api('/ai/feedback', { method: 'POST', body: { kind: 'care', draft: fb.care.trim(), final: f.postOpCare.trim() } }).catch(() => {});
+      }
+      aiDraftsRef.current = {};
       onSaved(saved, editing);
     } catch (err) {
       onToast(err.message);
@@ -668,8 +708,16 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     <div className="db-field db-report">
       <span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
       <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
-      {editing && aiOn && (
+      {(sttOn || (editing && aiOn)) && (
         <div className="db-aibar">
+          {sttOn && (
+            <VoiceInput
+              disabled={busy || !!aiBusy}
+              onText={(txt) => setF((s2) => ({ ...s2, opReport: s2.opReport.trim() ? `${s2.opReport}\n${txt}` : txt }))}
+              onErr={(m) => onToast(m)}
+            />
+          )}
+          {editing && aiOn && (<>
           <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiReport('structure')}>
             {aiBusy === 'structure' ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن'}
           </button>
@@ -681,6 +729,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
               برگرداندنِ متنِ خام
             </button>
           )}
+          </>)}
         </div>
       )}
     </div>) };
@@ -815,6 +864,22 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </div>
       ) : (
         <>
+          {/* دیکتهٔ بیمارِ جدید — ضبط → ویسپر → تحلیلِ دستیار → پرشدنِ فیلدها. */}
+          {sttOn && !editing && (
+            <div className="db-dictate">
+              <VoiceInput
+                label="دیکتهٔ بیمارِ جدید"
+                disabled={busy || !!aiBusy}
+                onText={dictatePatient}
+                onErr={(m) => onToast(m)}
+              />
+              <small className="db-hint">
+                {aiBusy === 'dictate'
+                  ? 'دستیار در حالِ تحلیلِ دیکته…'
+                  : 'مثلاً بگویید: «علی رضایی، ۰۹۱۲…، کد ملی…، شکایت از…» — دستیار فیلدها را پر می‌کند.'}
+              </small>
+            </div>
+          )}
           <div className="db-grid2">
             {/* ⚠️ `required` فقط وقتی که این گام **دیده می‌شود**. کادرِ
                 اجباریِ پنهان، submit را با «An invalid form control is not
@@ -999,11 +1064,20 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
             <textarea rows={3} value={f.postOpCare} onChange={set('postOpCare')}
                       placeholder="خالی = قالبِ نوعِ عمل" />
           </label>
-          {editing && aiOn && (
+          {(sttOn || (editing && aiOn)) && (
             <div className="db-aibar">
-              <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={aiCare}>
-                {aiBusy === 'care' ? 'دستیار در حالِ نوشتن…' : 'پیش‌نویسِ مراقبت با دستیار (از پرونده)'}
-              </button>
+              {sttOn && (
+                <VoiceInput
+                  disabled={busy || !!aiBusy}
+                  onText={(txt) => setF((s2) => ({ ...s2, postOpCare: s2.postOpCare.trim() ? `${s2.postOpCare}\n${txt}` : txt }))}
+                  onErr={(m) => onToast(m)}
+                />
+              )}
+              {editing && aiOn && (
+                <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={aiCare}>
+                  {aiBusy === 'care' ? 'دستیار در حالِ نوشتن…' : 'پیش‌نویسِ مراقبت با دستیار (از پرونده)'}
+                </button>
+              )}
             </div>
           )}
           <p className="db-postop-plan">

@@ -2289,3 +2289,19 @@ model Reminder {
   @@index([visitId, kind])
   @@map("reminders")
 }
+
+/// اصلاح‌های دستیِ کاربر روی پیش‌نویس‌های دستیار — «یادگیری» یعنی retrieval:
+/// چند نمونهٔ اخیرِ (پیش‌نویس ← نهایی) به promptهای بعدی برمی‌گردد تا سلیقهٔ
+/// همین کلینیک رعایت شود. نه fine-tune، نه ارسالِ داده به جایی برای آموزش.
+model AiFeedback {
+  id    Int    @id @default(autoincrement())
+  /// نوعِ شرح (history|visit|op|…) یا 'care' برای متنِ مراقبت
+  kind  String
+  draft String
+  final String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([kind, createdAt])
+  @@map("ai_feedback")
+}

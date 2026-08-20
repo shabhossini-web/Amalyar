@@ -11,6 +11,7 @@ import './record.css';
 import { Alert, Back, Close, Download, LinkIcon, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import VoiceInput from '../ui/VoiceInput.jsx';
 
 
 const CATEGORIES = {
@@ -515,12 +516,16 @@ function NotesTab({ rec, reload, toast }) {
   const [tpls, setTpls] = useState([]);
   /* دستیارِ AI — فقط وقتی در تنظیماتِ شرکت پیکربندی شده باشد دیده می‌شود. */
   const [aiOn, setAiOn] = useState(false);
+  const [sttOn, setSttOn] = useState(false); // دستیارِ صوتی — فقط با مدلِ گفتار-به-متن
   const [aiBusy, setAiBusy] = useState(false);
   const [rawBody, setRawBody] = useState(null); // متنِ خامِ قبل از ساخت‌یافته‌کردن — برای برگرداندن
+  /* آخرین پیش‌نویسِ کاملِ دستیار — اگر کاربر پیش از ثبت دستی اصلاحش کند،
+     جفتِ (پیش‌نویس، نهایی) برای «یادگیری» فرستاده می‌شود. */
+  const lastDraftRef = useRef(null);
 
   useEffect(() => {
     let on = true;
-    api('/ai/status').then((r) => { if (on) setAiOn(!!r?.enabled); }).catch(() => {});
+    api('/ai/status').then((r) => { if (on) { setAiOn(!!r?.enabled); setSttOn(!!r?.stt); } }).catch(() => {});
     return () => { on = false; };
   }, []);
 
@@ -545,6 +550,8 @@ function NotesTab({ rec, reload, toast }) {
         { patientId: rec.id, kind, mode, text: raw, ...(visitId ? { visitId: +visitId } : {}) },
         (d) => setBody((b) => b + d),
       );
+      /* متنِ کامل، همان‌طور که دستیار تحویل داد — مبنای تشخیصِ اصلاحِ دستی. */
+      setBody((b) => { lastDraftRef.current = b; return b; });
       toast(mode === 'structure' ? 'پیش‌نویسِ ساخت‌یافته آماده شد — پیش از ثبت مرورش کنید' : 'ادامه نوشته شد — مرورش کنید');
     } catch (e) {
       setBody(raw);
@@ -597,6 +604,14 @@ function NotesTab({ rec, reload, toast }) {
         );
         return;
       }
+      /* یادگیری از اصلاحِ دستی: اگر متنِ ثبت‌شده با پیش‌نویسِ دستیار فرق
+         دارد، جفتش بی‌سروصدا می‌رود تا پیش‌نویس‌های بعدی سلیقهٔ کاربر را
+         رعایت کنند. شکستِ این تماس نباید ثبتِ موفق را خراب کند. */
+      const draft = lastDraftRef.current;
+      if (draft && draft.trim() && draft.trim() !== body.trim()) {
+        api('/ai/feedback', { method: 'POST', body: { kind, draft: draft.trim(), final: body.trim() } }).catch(() => {});
+      }
+      lastDraftRef.current = null;
       setBody(''); setVisitId('');
       toast('شرح ثبت شد ✓');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
@@ -695,6 +710,13 @@ function NotesTab({ rec, reload, toast }) {
           <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} placeholder="یافته‌ها، سیرِ بیماری، توصیه‌ها…" />
         </label>
         <div className="rc-notebar">
+          {sttOn && (
+            <VoiceInput
+              disabled={busy || !!aiBusy}
+              onText={(t) => setBody((b) => (b.trim() ? `${b}\n${t}` : t))}
+              onErr={(m) => toast(m, true)}
+            />
+          )}
           {aiOn && (
             <button type="button" className="rc-ai" onClick={() => aiDraft('structure')} disabled={busy || !!aiBusy}>
               {aiBusy === 'structure' ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن — دستیارِ AI'}

@@ -891,3 +891,12 @@ a.db-defbtn { text-decoration: none; }
   background: none; border: 1px dashed rgba(255, 255, 255, .25); border-radius: 99px;
 }
 .db-aighost:hover { color: var(--text2); }
+
+/* دیکتهٔ بیمارِ جدید — نوارِ دستیارِ صوتی بالای گامِ اول. */
+.db-dictate {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 12px; padding: 10px 12px;
+  background: rgba(var(--brand-rgb), .05);
+  border: 1px dashed rgba(var(--brand-2-rgb), .35); border-radius: 14px;
+}
+.db-dictate .db-hint { margin: 0; }

@@ -236,6 +236,7 @@ export class SettingsService {
       note: get('ai_prompt_note'),
       template: get('ai_prompt_template'),
       assistant: get('ai_prompt_assistant'),
+      voice: get('ai_prompt_voice'),
     };
     const enabled = !!(baseUrl && apiKey && models.chat);
     return {

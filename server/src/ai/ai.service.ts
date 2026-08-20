@@ -11,7 +11,7 @@ const KIND_FA: Record<string, string> = {
   progress: 'سیرِ بیماری', discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره',
 };
 
-type AiCfg = { baseUrl: string; apiKey: string; model: string; models: { chat: string; vision: string; stt: string; tts: string; image: string }; prompts: { note: string; template: string; assistant: string } };
+type AiCfg = { baseUrl: string; apiKey: string; model: string; models: { chat: string; vision: string; stt: string; tts: string; image: string }; prompts: { note: string; template: string; assistant: string; voice: string } };
 type DraftDto = { patientId: number; visitId?: number; kind: string; text: string; mode?: string };
 
 /**
@@ -55,6 +55,8 @@ export class AiService {
     return {
       enabled: cfg.enabled,
       model: cfg.enabled ? cfg.models.chat : null,
+      /* دستیارِ صوتی فقط وقتی مدلِ گفتار-به-متن هم معلوم است. */
+      stt: cfg.enabled && !!cfg.models.stt,
       /* «tenant» = تنظیمِ خودِ شرکت؛ «central» = وراثت از مادر. */
       source: (cfg as any).source ?? (cfg.enabled ? 'tenant' : 'off'),
     };
@@ -137,6 +139,7 @@ export class AiService {
         styleBlock,
       ])
       .concat(cfg.prompts?.note ? [`دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.note}`] : [])
+      .concat(await this.feedbackBlock(dto.kind))
       .filter(Boolean).join('\n');
 
     const userMsg = [
@@ -438,6 +441,7 @@ export class AiService {
       '- خروجی فقط متنِ مراقبت باشد، بدونِ مقدمه.',
       base ? `قالبِ عمومیِ همین نوعِ عمل (پایه بگیر و با شرح شخصی‌سازی کن):\n${base}` : '',
       cfg.prompts?.note ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.note}` : '',
+      ...(await this.feedbackBlock('care')),
     ].filter(Boolean).join('\n');
     const userMsg = [
       procName ? `نوعِ عمل: ${procName}` : '',
@@ -563,6 +567,136 @@ export class AiService {
     /* اعتبارسنجیِ سخت: فقط نامزدهایی که کدشان در جواب آمده — توهم حذف. */
     const suggestions = candidates.filter((c) => reply.includes(c.code)).slice(0, 8);
     return { suggestions, raw: undefined };
+  }
+
+  /**
+   * «یادگیری از اصلاح‌های کاربر» — چند نمونهٔ اخیرِ (پیش‌نویسِ دستیار ←
+   * متنِ نهاییِ ویرایش‌شده) از همین کلینیک، به‌عنوانِ راهنمای سلیقه در
+   * prompt. retrieval است، نه آموزشِ مدل؛ هیچ داده‌ای برای «یادگیری» به
+   * سرویسِ بیرونی سپرده نمی‌شود — فقط همراهِ همان درخواست می‌رود.
+   */
+  private async feedbackBlock(kind: string): Promise<string[]> {
+    const rows = await this.prisma.aiFeedback.findMany({
+      where: { kind },
+      orderBy: { createdAt: 'desc' },
+      take: 2,
+      select: { draft: true, final: true },
+    }).catch(() => []);
+    if (!rows.length) return [];
+    const cut = (s: string) => s.trim().slice(0, 700);
+    return [[
+      'کاربر پیش‌نویس‌های قبلی را این‌طور اصلاح کرده — این سلیقه را رعایت کن:',
+      ...rows.map((r, i) => `— اصلاحِ ${i + 1}:\nپیش‌نویسِ دستیار:\n${cut(r.draft)}\nنسخهٔ نهاییِ کاربر:\n${cut(r.final)}`),
+    ].join('\n')];
+  }
+
+  /**
+   * ثبتِ یک جفتِ (پیش‌نویس، نهایی) وقتی کاربر متنِ دستیار را دستی اصلاح
+   * کرده و ذخیره زده. متنِ یکسان سیگنالی ندارد و نگه داشته نمی‌شود؛ دفتر
+   * به ۱۰۰ ردیفِ اخیر هرس می‌شود تا بی‌انتها نروید.
+   */
+  async feedback(user: any, dto: { kind?: string; draft?: string; final?: string }) {
+    this.assertClinical(user);
+    const kind = (dto.kind ?? '').trim();
+    const draft = (dto.draft ?? '').trim();
+    const final = (dto.final ?? '').trim();
+    if (!kind || kind.length > 30) throw new BadRequestException('نوعِ بازخورد نامعتبر است');
+    if (!draft || !final) throw new BadRequestException('پیش‌نویس و متنِ نهایی هر دو لازم‌اند');
+    if (draft === final) return { saved: false };
+    await this.prisma.aiFeedback.create({
+      data: { kind, draft: draft.slice(0, 8000), final: final.slice(0, 8000) },
+    });
+    const extra = await this.prisma.aiFeedback.findMany({
+      orderBy: { createdAt: 'desc' }, skip: 100, select: { id: true },
+    });
+    if (extra.length) await this.prisma.aiFeedback.deleteMany({ where: { id: { in: extra.map((x) => x.id) } } });
+    return { saved: true };
+  }
+
+  /**
+   * گفتار → متن (ویسپر) — فایلِ ضبط‌شدهٔ مرورگر به `audio/transcriptions`ِ
+   * همان گیت‌وی می‌رود. ضبط سمتِ کلاینت با MediaRecorder است تا اندروید و
+   * آیفون رفتارِ یکسان داشته باشند (نه SpeechRecognition مرورگر).
+   */
+  async transcribe(user: any, file?: { buffer: Buffer; mimetype?: string; originalname?: string; size?: number }) {
+    this.assertClinical(user);
+    const cfg = await this.cfgOrThrow();
+    if (!cfg.models.stt) {
+      throw new BadRequestException('مدلِ گفتار به متن تنظیم نشده — تنظیماتِ شرکت، بخشِ «دستیارِ هوشِ مصنوعی»');
+    }
+    if (!file?.buffer?.length) throw new BadRequestException('فایلِ صدا نرسید');
+
+    const name = file.originalname || (file.mimetype?.includes('mp4') ? 'voice.m4a' : 'voice.webm');
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(file.buffer)], { type: file.mimetype || 'audio/webm' }), name);
+    form.append('model', cfg.models.stt);
+    form.append('language', 'fa');
+    form.append('response_format', 'json');
+
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 120_000);
+    try {
+      const res = await fetch(`${cfg.baseUrl}/audio/transcriptions`, {
+        method: 'POST',
+        signal: ctl.signal,
+        headers: { Authorization: `Bearer ${cfg.apiKey}` },
+        body: form,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        this.log.warn(`STT ${res.status}: ${body.slice(0, 300)}`);
+        throw new BadGatewayException(`سرویسِ گفتار به متن پاسخ نداد (${res.status}) — مدل و کلید را بررسی کنید`);
+      }
+      const json: any = await res.json().catch(() => null);
+      const text = typeof json?.text === 'string' ? json.text.trim() : '';
+      if (!text) throw new BadGatewayException('متنی از سرویسِ گفتار به متن برنگشت');
+      return { text };
+    } catch (e: any) {
+      if (e instanceof BadGatewayException) throw e;
+      this.log.warn(`STT fetch شکست خورد: ${e?.message ?? e}`);
+      throw new BadGatewayException('دسترسی به سرویسِ گفتار به متن برقرار نشد — نشانیِ پایه و شبکه را بررسی کنید');
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * تحلیلِ دیکتهٔ «ثبتِ بیمارِ جدید» — متنِ ویسپر‌شده را دستیارِ متنی به
+   * فیلدهای فرم تبدیل می‌کند (قابلِ پرامپت با `ai_prompt_voice`). فقط
+   * پیشنهاد است؛ تا کاربر ذخیره نزند چیزی ثبت نمی‌شود.
+   */
+  async parsePatient(user: any, dto: { text?: string }) {
+    this.assertClinical(user);
+    const text = (dto.text ?? '').trim();
+    if (!text) throw new BadRequestException('متنی برای تحلیل نیست');
+    const cfg = await this.cfgOrThrow();
+
+    const system = [
+      'تو دستیارِ پذیرشِ یک کلینیک هستی. از متنِ دیکته‌شدهٔ فارسی، فیلدهای بیمارِ جدید را استخراج کن.',
+      'خروجی فقط یک شیءِ JSON با همین کلیدها باشد (کلیدِ بی‌مقدار را نیاور):',
+      '{"firstName":"","lastName":"","phone":"","nationalId":"","notes":""}',
+      '- phone و nationalId را با ارقامِ لاتین (0-9) بنویس؛ شمارهٔ موبایل با 09 شروع می‌شود.',
+      '- هرچه به فیلدها نخورد (شرحِ شکایت، توضیح) را در notes بگذار.',
+      '- هیچ چیزی اختراع نکن؛ فقط از خودِ متن.',
+      cfg.prompts?.voice ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.voice}` : '',
+    ].filter(Boolean).join('\n');
+
+    const reply = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, text.slice(0, 4000));
+    /* مدل گاهی JSON را داخلِ ``` می‌پیچد — اولین { تا آخرین } را برمی‌داریم. */
+    const m = reply.match(/\{[\s\S]*\}/);
+    if (!m) throw new BadGatewayException('پاسخِ دستیار قابلِ خواندن نبود');
+    let parsed: any;
+    try { parsed = JSON.parse(m[0]); } catch { throw new BadGatewayException('پاسخِ دستیار قابلِ خواندن نبود'); }
+    const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+    return {
+      fields: {
+        firstName: str(parsed.firstName, 80),
+        lastName: str(parsed.lastName, 80),
+        phone: str(parsed.phone, 20).replace(/[^0-9+]/g, ''),
+        nationalId: str(parsed.nationalId, 12).replace(/[^0-9]/g, ''),
+        notes: str(parsed.notes, 2000),
+      },
+    };
   }
 
   /** یک تماسِ chat/completions — با مهلتِ صریح و خطای قابلِ‌فهم. */

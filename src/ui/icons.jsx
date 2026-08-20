@@ -258,3 +258,17 @@ export const LinkIcon = (p) => (
     <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
   </Svg>
 );
+
+/** میکروفون — دستیارِ صوتی (ضبط با MediaRecorder). */
+export const Mic = (p) => (
+  <Svg {...p}>
+    <rect x="9" y="3" width="6" height="11" rx="3" />
+    <path d="M5 11a7 7 0 0 0 14 0" />
+    <path d="M12 18v3" />
+  </Svg>
+);
+
+/** مربعِ توقف — پایانِ ضبطِ صدا. */
+export const StopRec = (p) => (
+  <Svg {...p}><rect x="6" y="6" width="12" height="12" rx="2" /></Svg>
+);

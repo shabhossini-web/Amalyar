@@ -1,4 +1,5 @@
-import { Body, Controller, Get, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
@@ -97,5 +98,27 @@ export class AiController {
       diagnosisId: dto.diagnosisId || undefined,
       topicId: dto.topicId || undefined,
     });
+  }
+
+  /** گفتار → متن (ویسپر). فایلِ ضبطِ MediaRecorder — حداکثر ۱۵MB. */
+  @HttpCode(200)
+  @Post('transcribe')
+  @UseInterceptors(FileInterceptor('audio', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  transcribe(@UploadedFile() file: any, @CurrentUser() user: any) {
+    return this.ai.transcribe(user, file);
+  }
+
+  /** تحلیلِ دیکتهٔ ثبتِ بیمارِ جدید → فیلدهای پیشنهادی. */
+  @HttpCode(200)
+  @Post('parse-patient')
+  parsePatient(@Body() dto: { text?: string }, @CurrentUser() user: any) {
+    return this.ai.parsePatient(user, dto ?? {});
+  }
+
+  /** ثبتِ اصلاحِ دستیِ کاربر روی پیش‌نویسِ دستیار (یادگیریِ retrieval). */
+  @HttpCode(200)
+  @Post('feedback')
+  feedback(@Body() dto: { kind?: string; draft?: string; final?: string }, @CurrentUser() user: any) {
+    return this.ai.feedback(user, dto ?? {});
   }
 }
