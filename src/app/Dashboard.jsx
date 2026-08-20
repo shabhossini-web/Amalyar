@@ -28,6 +28,16 @@ import { useStagger } from '../ui/stagger.js';
 
 
 /** فیلترهای پیشرفته‌ای که مستقیم به query سرور می‌روند. */
+/** تصمیمِ درمانیِ ویزیت — همان فهرستِ سرور (DECISIONS در visit.dto). */
+const DECISIONS = [
+  { v: 'surgery', l: 'کاندیدای جراحی', hint: 'بعد از ذخیره، فرمِ عملِ همین بیمار باز می‌شود' },
+  { v: 'conservative', l: 'درمانِ محافظه‌کارانه', hint: 'ویزیتِ بعدی با موضوعِ پیگیریِ درمان' },
+  { v: 'lab', l: 'درخواستِ آزمایش' },
+  { v: 'imaging', l: 'درخواستِ عکس‌برداری' },
+  { v: 'consult', l: 'مشاوره' },
+  { v: 'referral', l: 'ارجاع' },
+];
+
 const ADV_IDS = ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'];
 const EMPTY_ADV = { surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '', diagnosisId: '', fromJ: '', toJ: '', owing: false };
 const EMPTY_META = { total: 0, pages: 1, stats: { total: 0, pending: 0, today: 0, due: 0, kinds: [] } };
@@ -201,13 +211,15 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
 }
 
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
-function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) {
+function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
   const t = useTerms();
   const editing = !!initial?.id;
-  const [mode, setMode] = useState('new'); // new | existing
+  /* prefill = ادامهٔ یک تصمیم («کاندیدای جراحی» در ویزیتِ قبلی): پرونده از
+     قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم. */
+  const [mode, setMode] = useState(prefill?.patientId ? 'existing' : 'new');
   const [pQuery, setPQuery] = useState('');
   const [pResults, setPResults] = useState([]);
-  const [picked, setPicked] = useState(null);
+  const [picked, setPicked] = useState(prefill?.patientId ? { id: prefill.patientId, fullName: prefill.patientName ?? '' } : null);
 
   /**
    * گام‌های ثبتِ تازه: ۱ پرونده → ۲ نوعِ فرم → ۳ پرکردن.
@@ -220,11 +232,11 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
    * ⚠️ در **ویرایش** هیچ گامی نیست: پرونده از قبل معلوم است و کاربر آمده یک
    * فیلد را درست کند، نه اینکه سه‌بار «بعدی» بزند.
    */
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(prefill?.patientId ? 3 : 1);
   const [stepErr, setStepErr] = useState('');
 
   const [f, setF] = useState(() => ({
-    kind: initial?.kind || 'surgery',
+    kind: initial?.kind || prefill?.kind || 'surgery',
     firstName: initial?.firstName || '',
     lastName: initial?.lastName || '',
     phone: initial?.phone || '',
@@ -246,6 +258,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     followUpDays: initial?.followUpDays ?? '',
     postOpImmediate: initial?.postOpImmediate ?? false,
     preOpCare: initial?.preOpCare ?? '',
+    decisions: initial?.decisions ?? [],
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
     techArriveTime: initial?.techArriveTime || '',
@@ -348,6 +361,16 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
     return { ...s2, followUpDays: next.join(',') };
   });
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  /* تصمیمِ درمانی — چندتایی است چون یک ویزیت می‌تواند هم آزمایش بدهد هم
+     مشاوره بخواهد. «کاندیدای جراحی» موضوعِ همین ویزیت را هم پره‌آپ می‌کند:
+     همان ویزیت است که تبدیل به ویزیتِ قبل از عمل شده. */
+  const preOpTopicId = defs.topics.find((tp) => tp.name.includes('پره‌آپ'))?.id ?? null;
+  const toggleDecision = (v) => setF((s2) => {
+    const on = s2.decisions.includes(v);
+    const decisions = on ? s2.decisions.filter((x) => x !== v) : [...s2.decisions, v];
+    const topicId = !on && v === 'surgery' && preOpTopicId && !s2.topicId ? preOpTopicId : s2.topicId;
+    return { ...s2, decisions, topicId };
+  });
   const formDuration = durationMin(f.opStartTime, f.opEndTime);
 
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
@@ -538,6 +561,7 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
       followUpDays: toEnDigits(f.followUpDays).trim() || (editing ? '' : undefined),
       postOpImmediate: !!f.postOpImmediate,
       preOpCare: f.preOpCare.trim() || (editing ? '' : undefined),
+      decisions: f.decisions,
       // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
       // منظورش «پاکش کن» است، نه «دست نزن».
       opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
@@ -604,7 +628,12 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         api('/ai/feedback', { method: 'POST', body: { kind: 'care', draft: fb.care.trim(), final: f.postOpCare.trim() } }).catch(() => {});
       }
       aiDraftsRef.current = {};
-      onSaved(saved, editing);
+      /* ⚠️ فرمِ عمل فقط وقتی باز می‌شود که تصمیم **در همین ذخیره تازه**
+         گرفته شده باشد — وگرنه هر بار ویرایشِ یک ویزیتِ پره‌آپِ قدیمی هم
+         یک فرمِ عملِ ناخواسته باز می‌کرد. */
+      const hadSurgery = (initial?.decisions ?? []).includes('surgery');
+      const newSurgery = f.decisions.includes('surgery') && f.kind !== 'surgery' && !hadSurgery;
+      onSaved(saved, editing, { openSurgery: newSurgery });
     } catch (err) {
       onToast(err.message);
     } finally {
@@ -1053,6 +1082,40 @@ function VisitForm({ initial, defs, onDefsChanged, onClose, onSaved, onToast }) 
         </div>
       )}
       </div>
+
+      {/* ── تصمیمِ درمانی — انتهای فرمِ ویزیت ──
+          «بیمار آمد، معاینه شد، حالا چه؟» تا امروز جوابش جایی ثبت نمی‌شد و
+          مرحلهٔ بعد در ذهنِ پزشک می‌ماند. این ردیف همان تصمیم را روی خودِ
+          مراجعه می‌نشاند (چندتایی، چون یک ویزیت می‌تواند هم آزمایش بدهد هم
+          مشاوره بخواهد) و مسیرِ بعدی را از همان‌جا باز می‌کند. */}
+      {f.kind !== 'surgery' && (
+        <div className="db-decide">
+          <h4>تصمیمِ درمانیِ این ویزیت</h4>
+          <p className="db-hint">
+            چند مورد هم می‌تواند انتخاب شود. تصمیم روی همین مراجعه ثبت می‌شود تا
+            در پرونده و گزارش‌ها دیده شود.
+          </p>
+          <div className="db-daychips">
+            {DECISIONS.map((d) => (
+              <button
+                key={d.v} type="button"
+                className={f.decisions.includes(d.v) ? 'db-daychip on' : 'db-daychip'}
+                aria-pressed={f.decisions.includes(d.v)}
+                onClick={() => toggleDecision(d.v)}
+              >{d.l}</button>
+            ))}
+          </div>
+          {DECISIONS.filter((d) => d.hint && f.decisions.includes(d.v)).map((d) => (
+            <p key={d.v} className="db-decide-hint">{d.l}: {d.hint}</p>
+          ))}
+          {f.decisions.some((d) => ['lab', 'imaging', 'consult', 'referral'].includes(d)) && (
+            <p className="db-decide-hint">
+              فرمِ درخواست/ارجاعِ این تصمیم‌ها در نسخهٔ بعد به همین‌جا وصل می‌شود؛ فعلاً
+              تصمیم ثبت می‌شود تا در پرونده و گزارش بماند.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ── برنامهٔ مراقبت و پیگیری — در ادامهٔ خودِ فرمِ عمل ──
           جراح همان‌جا که شرح را می‌نویسد برنامهٔ بعد را هم می‌بندد. قاعدهٔ
@@ -1956,10 +2019,18 @@ export default function Dashboard() {
     }
   };
 
-  const onSaved = (saved, wasEdit) => {
+  const onSaved = (saved, wasEdit, opts) => {
     setModal(null);
     load(qRef.current, status, kind);
     maybeOfferBooking(saved);
+    /* «کاندیدای جراحی» یعنی همین‌جا کار تمام نشده: فرمِ عملِ همان بیمار
+       بلافاصله باز می‌شود تا نوبت و اطلاعاتِ عمل در همان نشست ثبت شود —
+       نه اینکه کاربر خودش دنبالِ دکمهٔ «مراجعهٔ تازه» بگردد. */
+    if (opts?.openSurgery) {
+      setToast('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+      setTimeout(() => setModal({ prefill: { patientId: saved.patientId, patientName: saved.patientName, kind: 'surgery' } }), 400);
+      return;
+    }
     if (wasEdit) { setToast(`${t.visit} ویرایش شد ✓`); return; }
 
     // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی
@@ -2176,6 +2247,7 @@ export default function Dashboard() {
         {modal && (
           <VisitForm
             initial={modal.visit}
+            prefill={modal.prefill}
             defs={defs}
             onDefsChanged={loadDefs}
             onClose={() => setModal(null)}

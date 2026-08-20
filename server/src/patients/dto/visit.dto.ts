@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -31,6 +32,8 @@ import { PAYERS } from '../settlement.service';
  * می‌سازد. همان دلیلِ اعتبارسنجیِ اجباری‌بودن.
  */
 export const VISIT_KINDS = ['surgery', 'clinic', 'followup', 'consult'] as const;
+/** تصمیمِ درمانیِ ویزیت — پایهٔ ردیفِ تصمیم در فرم و گزارش‌گیری. */
+export const DECISIONS = ['surgery', 'conservative', 'referral', 'consult', 'lab', 'imaging'] as const;
 
 /// ثبتِ مراجعه — یا patientId (بیمارِ موجود) یا نام/نام‌خانوادگی (بیمارِ جدید)
 export class CreateVisitDto {
@@ -145,6 +148,10 @@ export class CreateVisitDto {
   /// مراقبتِ قبل از عمل — خالی = قالبِ نوعِ عمل.
   @IsOptional() @IsString() @MaxLength(2000, { message: 'متنِ مراقبتِ قبل از عمل طولانی است' })
   preOpCare?: string;
+
+  /// تصمیمِ درمانیِ ویزیت — چندتایی؛ مقدارهای مجاز در DECISIONS.
+  @IsOptional() @IsArray() @IsIn(DECISIONS, { each: true, message: 'تصمیمِ درمانی نامعتبر است' })
+  decisions?: string[];
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
@@ -307,6 +314,10 @@ export class UpdateVisitDto {
   @IsOptional() @ValidateIf((o) => o.preOpCare !== null)
   @IsString() @MaxLength(2000, { message: 'متنِ مراقبتِ قبل از عمل طولانی است' })
   preOpCare?: string | null;
+
+  /// تصمیمِ درمانیِ ویزیت — چندتایی؛ مقدارهای مجاز در DECISIONS.
+  @IsOptional() @IsArray() @IsIn(DECISIONS, { each: true, message: 'تصمیمِ درمانی نامعتبر است' })
+  decisions?: string[];
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

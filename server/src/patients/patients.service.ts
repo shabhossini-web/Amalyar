@@ -70,6 +70,7 @@ function enrich(v: any, kinds?: KindMap) {
     followUpDays: v.followUpDays ?? null,
     postOpImmediate: v.postOpImmediate ?? false,
     preOpCare: v.preOpCare ?? null,
+    decisions: v.decisions ?? [],
     opStatus: v.opStatus,
     opStartTime: v.opStartTime,
     opEndTime: v.opEndTime,
@@ -943,6 +944,7 @@ export class PatientsService {
           followUpDays: dto.followUpDays?.trim() || null,
           postOpImmediate: dto.postOpImmediate ?? false,
           preOpCare: dto.preOpCare?.trim() || null,
+          decisions: dto.decisions ?? [],
           ...timePatch(dto),
           notes: dto.notes || null,
           /* پاسخِ فیلدهای دلخواه. `{}` و نه null: ستون NOT NULL است و کدِ
@@ -1048,6 +1050,7 @@ export class PatientsService {
       if (dto.followUpDays !== undefined) visitPatch.followUpDays = dto.followUpDays?.trim() || null;
       if (dto.postOpImmediate !== undefined) visitPatch.postOpImmediate = !!dto.postOpImmediate;
       if (dto.preOpCare !== undefined) visitPatch.preOpCare = dto.preOpCare?.trim() || null;
+      if (dto.decisions !== undefined) visitPatch.decisions = dto.decisions ?? [];
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
       // طرفِ حساب و استثنای سهمِ جراح — فیلدهای مالیِ سبک که روی خودِ مراجعه‌اند.
       if (dto.payer !== undefined) visitPatch.payer = dto.payer;

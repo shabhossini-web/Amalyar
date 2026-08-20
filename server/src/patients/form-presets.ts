@@ -226,6 +226,8 @@ const CLINIC_SURGERY: PresetForm = {
   ],
 };
 
+/** ⚠️ بازنشسته — از PRESETS برداشته شد؛ فقط برای نصب‌های قدیمی مستند می‌ماند. */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CLINIC_FOLLOWUP: PresetForm = {
   key: 'visit.followup',
   title: 'فرمِ پیگیری',
@@ -314,5 +316,8 @@ const SURVEY: PresetForm = {
 export const PRESETS: Record<VerticalKey, PresetForm[]> = {
   ionm: [OPERATION, INTAKE, SURVEY],
   implant: [OPERATION],
-  clinic: [CLINIC_VISIT, CLINIC_SURGERY, CLINIC_FOLLOWUP, INTAKE, SURVEY],
+  /* ⚠️ «فرمِ پیگیری» عمداً نیست: پیگیری یک **موضوعِ ویزیت** است نه نوعِ
+     جدای مراجعه — داشتنِ هر دو، کاربر را سرِ دوراهیِ بی‌معنی می‌گذاشت.
+     تعریفش برای نصب‌های قدیمی می‌ماند (غیرفعال)، تا مراجعاتشان خوانده شود. */
+  clinic: [CLINIC_VISIT, CLINIC_SURGERY, INTAKE, SURVEY],
 };
