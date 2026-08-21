@@ -946,3 +946,11 @@ a.db-defbtn { text-decoration: none; }
 .db-decide h4 { margin: 0; font-size: 13.5px; font-weight: 800; color: var(--brand-2); }
 .db-decide .db-hint { margin: 0; }
 .db-decide-hint { margin: 0; font-size: 11.5px; line-height: 1.9; color: var(--text3); }
+
+/* اسکلتِ ردیفِ نوع — تا نیامدنِ فهرستِ واقعی، جای دکمه‌ها نبض می‌زند. */
+.db-kindrow-loading span {
+  display: inline-block; width: 96px; height: 34px; border-radius: 12px;
+  background: rgba(255, 255, 255, .06); animation: db-kpulse 1.1s ease-in-out infinite;
+}
+.db-kindrow-loading span + span { animation-delay: .2s; }
+@keyframes db-kpulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }

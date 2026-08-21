@@ -384,6 +384,14 @@ export class DefinitionsService {
     return { ok: true, deactivated: false, visitCount: 0 };
   }
 
+  /** آیا فرمی با نقشِ پیگیری تعریف شده؟ بدونِ آن، موجِ پیگیری لینکی ندارد و نمی‌رود. */
+  async followUpFormReady() {
+    const row = await this.prisma.formDef.findFirst({
+      where: { followUp: { not: null }, active: true }, select: { id: true },
+    });
+    return !!row;
+  }
+
   async createProcedureType(dto: { name: string; code?: string; notes?: string; preOpCare?: string; postOpCare?: string; followUpDays?: string }) {
     await this.uniqueName('procedureType', 'name', dto.name);
     return this.prisma.procedureType.create({

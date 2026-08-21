@@ -283,6 +283,8 @@ export class DefinitionsController {
       postOpDays: sms.postOpDays,
       nextVisitDays: sms.nextVisitDays,
       hour: sms.reminderHour,
+      /* بدونِ فرمِ پیگیری، روزهای انتخابی بی‌اثرند — فرم باید صریح بگوید. */
+      followUpFormReady: await this.defs.followUpFormReady(),
     };
   }
 

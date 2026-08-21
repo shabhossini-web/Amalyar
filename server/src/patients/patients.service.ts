@@ -71,6 +71,7 @@ function enrich(v: any, kinds?: KindMap) {
     postOpImmediate: v.postOpImmediate ?? false,
     preOpCare: v.preOpCare ?? null,
     decisions: v.decisions ?? [],
+    followOfVisitId: v.followOfVisitId ?? null,
     opStatus: v.opStatus,
     opStartTime: v.opStartTime,
     opEndTime: v.opEndTime,
@@ -241,6 +242,73 @@ export class PatientsService {
     private forms: FormsService,
       private reminders: RemindersService,
   ) {}
+
+  /**
+   * ویزیتِ پست‌آپِ خودکار — «اولین مراجعهٔ بعد از عمل» یک مراجعهٔ **مستقل**
+   * است، نه فقط یک تاریخ روی کارتِ عمل: باید در داشبورد/تقویم دیده شود و
+   * پرونده‌اش همان‌جا نوشته شود (خواستهٔ صریحِ محصول).
+   *
+   * قاعده‌ها:
+   * - فقط برای عملِ لغونشدهٔ دارای nextVisitDate؛ به‌ازای هر عمل یک فرزند.
+   * - تغییرِ تاریخِ ویزیتِ بعدی → تاریخِ فرزندِ pending هم جابه‌جا می‌شود؛
+   *   فرزندی که done شده دست نمی‌خورد (سندِ اتفاق‌افتاده است).
+   * - پاک‌شدنِ تاریخ یا لغوِ عمل → فرزندِ pending لغو می‌شود.
+   * - پیامک‌ها همان مسیرِ همیشگی‌اند (یادآوریِ next_visit روی خودِ عمل)؛
+   *   فرزند nextVisitDate ندارد پس یادآوریِ دوباره نمی‌کارد.
+   */
+  private async syncPostOpVisit(visitId: number) {
+    try {
+      const v = await this.prisma.visit.findUnique({
+        where: { id: visitId },
+        select: { id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true },
+      });
+      if (!v || v.kind !== 'surgery') return;
+      const child = await this.prisma.visit.findFirst({
+        where: { followOfVisitId: v.id }, orderBy: { id: 'asc' },
+        select: { id: true, opDate: true, opStatus: true },
+      });
+      const wantDate = v.opStatus === 'cancelled' ? null : v.nextVisitDate;
+      if (!wantDate) {
+        if (child && child.opStatus === 'pending') {
+          await this.prisma.visit.update({ where: { id: child.id }, data: { opStatus: 'cancelled' } });
+        }
+        return;
+      }
+      if (child) {
+        if (child.opStatus === 'done') return;
+        const patch: Record<string, unknown> = {};
+        if (child.opDate?.getTime() !== wantDate.getTime()) patch.opDate = wantDate;
+        if (child.opStatus === 'cancelled') patch.opStatus = 'pending';
+        if (Object.keys(patch).length) {
+          await this.prisma.visit.update({ where: { id: child.id }, data: patch });
+        }
+        return;
+      }
+      /* نوعِ فرمِ فرزند: ویزیتِ غیرجراحیِ همین نصب — ترجیح clinic. نصبی که
+         فقط فرمِ عمل دارد فرزند نمی‌سازد (فرمی برای دیدنش نیست). */
+      const defs = await this.prisma.formDef.findMany({
+        where: { scope: 'visit', active: true, visitKind: { not: null } },
+        select: { visitKind: true },
+      });
+      const nonSurgery = defs.map((d) => d.visitKind).filter((k): k is string => !!k && k !== 'surgery');
+      const kind = nonSurgery.includes('clinic') ? 'clinic' : nonSurgery[0];
+      if (!kind) return;
+      const topic = await this.prisma.visitTopic.findFirst({
+        where: { active: true, name: { contains: 'پست‌آپ' } }, select: { id: true },
+      });
+      const last = await this.prisma.visit.aggregate({ where: { patientId: v.patientId }, _max: { seq: true } });
+      await this.prisma.visit.create({
+        data: {
+          patientId: v.patientId, seq: (last._max.seq ?? 0) + 1, kind,
+          opDate: wantDate, opStatus: 'pending',
+          topicId: topic?.id ?? null, followOfVisitId: v.id,
+        },
+      });
+    } catch (e) {
+      /* ثبتِ عمل نباید قربانیِ ویزیتِ خودکار شود — مثلِ قاعدهٔ یادآوری‌ها. */
+      console.warn(`syncPostOpVisit(${visitId}) شکست خورد:`, e instanceof Error ? e.message : e);
+    }
+  }
 
   private scopedVisitWhere(user: any, where: any = {}) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return { ...where };
@@ -992,6 +1060,7 @@ export class PatientsService {
     await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
     /* یادآوریِ «ویزیتِ بعدی» — خطایش بلعیده می‌شود؛ ثبتِ مراجعه مقدم است. */
     await this.reminders.syncNextVisit(v.id);
+    await this.syncPostOpVisit(v.id);
     return result;
   }
 
@@ -1097,6 +1166,7 @@ export class PatientsService {
     await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v, kinds), after: result });
     /* ویرایش ممکن است تاریخِ ویزیتِ بعدی یا شمارهٔ بیمار را عوض کرده باشد. */
     await this.reminders.syncNextVisit(id);
+    await this.syncPostOpVisit(id);
     return result;
   }
 
@@ -1111,6 +1181,7 @@ export class PatientsService {
     });
     /* لغوِ عمل باید یادآوریِ «عملِ پیشِ‌رو» را هم باطل کند. */
     await this.reminders.syncNextVisit(id);
+    await this.syncPostOpVisit(id);
     return enrich(updated, await this.forms.kindMap());
   }
 

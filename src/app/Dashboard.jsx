@@ -376,6 +376,13 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
      فیلدهای دلخواهی که سوپرادمین ساخته. */
   const fd = useFormDef(f.kind);
+  /* پشتیبانِ هاردکدِ نوع‌ها فقط بعد از مهلتِ بی‌پاسخی — نه در اولین رندر. */
+  const [kindsWaited, setKindsWaited] = useState(false);
+  useEffect(() => {
+    if (fd.kinds !== null) return undefined;
+    const t2 = setTimeout(() => setKindsWaited(true), 4000);
+    return () => clearTimeout(t2);
+  }, [fd.kinds]);
   /* «هر کس قسمتِ خودش را پر کند» — نقشِ شغلیِ کاربرِ جاری. قفل و برچسب فقط
      نمایش‌اند؛ اجرای واقعی سمتِ سرور است. سوپرادمین (سطح ۶) بیرون از قاعده
      است: برچسبِ بخش‌ها را می‌بیند ولی هیچ فیلدی برایش قفل نمی‌شود — یک نفر
@@ -1006,6 +1013,16 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
       {/* جعبهٔ خنثیِ خط‌چین — تا ردیفِ انتخابِ نوع از کارتِ رنگیِ خودِ فرم
           (پایین) جدا دیده شود؛ گزارشِ کاربر: «رنگ‌ها قاطی می‌شد». */}
       <div className="db-kindbox">
+        {/* ⚠️ تا پاسخِ سرور نیامده، هیچ فهرستی رندر نمی‌شود — گزارشِ میدانی:
+            فهرستِ پشتیبانِ هاردکد (عمل/ویزیت/پیگیری/مشاوره) یک لحظه دیده
+            می‌شد و بعد جای خودش را به فهرستِ واقعی می‌داد؛ کاربر فکر می‌کرد
+            «با مدلِ اشتباه باز شد». پشتیبان فقط بعد از چند ثانیه بی‌پاسخی
+            برمی‌گردد تا قطعیِ کاملِ شبکه هم فرم را قفل نکند. */}
+        {fd.kinds === null && !kindsWaited ? (
+          <div className="db-kindrow db-kindrow-loading" aria-hidden="true">
+            <span /><span />
+          </div>
+        ) : (
         <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
           {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
             .map((k) => (
@@ -1020,6 +1037,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
             >{k.title}</button>
           ))}
         </div>
+        )}
       </div>
 
       </>)}
@@ -1207,6 +1225,15 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
 
           {/* ── روزهای فرمِ پیگیری ── */}
           <div className="db-careblock">
+            {timing && timing.followUpFormReady === false && (
+              <div className="db-nodefault">
+                <b>فرمِ پیگیری هنوز در فرم‌ساز ساخته نشده.</b>
+                <span>
+                  موجِ پیگیری «لینکِ فرم» است؛ تا در فرم‌ساز یک فرم با نقشِ «پیگیریِ
+                  عمومی» نسازید، روزهای انتخابیِ پایین ارسال نمی‌شوند.
+                </span>
+              </div>
+            )}
             <div className="db-carehead">
               <span>فرمِ پیگیری چند روز بعد از عمل برود؟</span>
               <i>{procDefaults.followUpDays
@@ -1246,9 +1273,11 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
           </div>
 
           <p className="db-postop-plan">
-            {followList.length
-              ? `پیگیری: ${followList.map((d) => (d === 0 ? 'بلافاصله' : `روزِ ${Number(d).toLocaleString('fa-IR')}`)).join('، ')} (اختصاصیِ همین بیمار)`
-              : procDefaults.followUpDays ? 'پیگیری: طبقِ روزهای نوعِ عمل' : 'پیگیری: فرمی ارسال نمی‌شود'}
+            {timing && timing.followUpFormReady === false
+              ? 'پیگیری: ارسال نمی‌شود (فرمِ پیگیری تعریف نشده)'
+              : followList.length
+                ? `پیگیری: ${followList.map((d) => (d === 0 ? 'بلافاصله' : `روزِ ${Number(d).toLocaleString('fa-IR')}`)).join('، ')} (اختصاصیِ همین بیمار)`
+                : procDefaults.followUpDays ? 'پیگیری: طبقِ روزهای نوعِ عمل' : 'پیگیری: فرمی ارسال نمی‌شود'}
             {' · '}
             {`مراقبتِ بعد: ${f.postOpCare.trim() ? 'متنِ همین فرم' : procDefaults.postOpCare ? 'قالبِ نوعِ عمل' : 'ارسال نمی‌شود'}`}
             {' · '}

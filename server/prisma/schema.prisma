@@ -1235,6 +1235,14 @@ model Visit {
   /// تصمیمِ درمانیِ این ویزیت — چندتایی (آزمایش + مشاوره هم‌زمان ممکن است):
   /// surgery | conservative | referral | consult | lab | imaging
   decisions     String[] @default([])
+
+  /// ویزیتِ پست‌آپِ خودکار: این مراجعه «اولین مراجعهٔ بعد از» کدام عمل است؟
+  /// حذفِ عمل، این را مستقل می‌کند (SetNull) — نه اینکه ویزیت را ببرد.
+  followOfVisitId Int?    @map("follow_of_visit_id")
+  followOf        Visit?  @relation("PostOpChain", fields: [followOfVisitId], references: [id], onDelete: SetNull)
+  followers       Visit[] @relation("PostOpChain")
+
+  @@index([followOfVisitId])
   /// مراقبتِ قبل از عمل — اختصاصیِ همین بیمار؛ خالی = قالبِ نوعِ عمل
   preOpCare     String? @map("pre_op_care")
   postOpCare    String? @map("post_op_care")

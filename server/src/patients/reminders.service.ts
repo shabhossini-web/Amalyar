@@ -120,14 +120,15 @@ export class RemindersService {
         const followDays = RemindersService.parseDays(v.followUpDays ?? v.procedureType?.followUpDays);
         /* ⚠️ cancel-then-create فقط pendingها را لغو می‌کند؛ موعدی که به
            «همین حالا» فروکش کرده (روزِ ۰، ثبتِ دیرهنگام، ویرایشِ بعد از
-           ارسال) اگر قبلاً یک نسخهٔ sent داشته باشد نباید دوباره برود —
-           وگرنه هر ویرایشِ فرم یک پیامکِ تکراری می‌شد. */
+           ارسال) اگر قبلاً **همین متن** رفته باشد نباید دوباره برود — وگرنه
+           هر ویرایشِ فرم پیامکِ تکراری می‌شد. مقایسه با متن است، نه فقط نوع:
+           جراح که متنِ مراقبت را عوض می‌کند یا تاریخِ عمل جابه‌جا می‌شود،
+           پیامِ **تازه** باید برود (گزارشِ میدانی: نسخهٔ قبلیِ این گارد
+           متنِ اصلاح‌شده را هم بلاک می‌کرد و بیمار پیامِ کهنه را داشت). */
         const collapsed = (d: Date) => d.getTime() <= Date.now() + 90_000;
-        const sentCount = async (kind: string) => this.prisma.reminder.count({
-          where: { visitId, kind, status: 'sent' },
-        });
-        const sentFollow = await sentCount('follow_up');
-        const sentPost = await sentCount('post_op_care');
+        const sentSame = async (kind: string, text: string) => (await this.prisma.reminder.count({
+          where: { visitId, kind, status: 'sent', text },
+        })) > 0;
         /* «بلافاصله» یعنی واقعاً همین حالا — نه صبرکردن تا ساعتِ ارسالِ روزانه.
            برای عملِ آینده ولی معنایش «روزِ عمل» است (در ساعتِ ارسال). */
         const opDate = v.opDate as Date;
@@ -144,34 +145,38 @@ export class RemindersService {
           })
           : null;
         if (followUrl) {
+          const fuText = `${prefix}${renderSms(cfg.followUpText, { link: followUrl })}`;
+          const fuSent = await sentSame('follow_up', fuText);
           for (const day of followDays) {
             const due = day === 0 ? immediateDue() : this.dueOn(v.opDate, day, hour);
             if (!due) continue;
-            if (collapsed(due) && sentFollow > 0) continue; // موجِ گذشته قبلاً رفته
+            if (collapsed(due) && fuSent) continue; // همین لینک قبلاً رفته
             await this.prisma.reminder.create({
-              data: {
-                patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone,
-                text: `${prefix}${renderSms(cfg.followUpText, { link: followUrl })}`,
-              },
+              data: { patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone, text: fuText },
             });
           }
         }
         const dueAt = this.dueOn(v.opDate, -cfg.surgeryDays, hour);
         if (dueAt) {
-          await this.prisma.reminder.create({
-            data: {
-              patientId: v.patientId, visitId, kind: 'surgery', dueAt, phone,
-              text: `${prefix}${renderSms(cfg.surgeryText, { date: faDateStr(v.opDate) })}`,
-            },
-          });
+          /* گزارشِ میدانی: عملِ همان‌روز ثبت‌شده هر بار ویرایش، دوباره
+             «یادآوریِ عمل» می‌فرستاد — موعد به «حالا» فرومی‌کاهد و قبلی sent
+             است، پس cancel-then-create نمی‌گرفتش. متنِ یکسان = نرفتن؛
+             تاریخِ عوض‌شده متنِ تازه دارد و درست است که برود. */
+          const sgText = `${prefix}${renderSms(cfg.surgeryText, { date: faDateStr(v.opDate) })}`;
+          if (!(collapsed(dueAt) && await sentSame('surgery', sgText))) {
+            await this.prisma.reminder.create({
+              data: { patientId: v.patientId, visitId, kind: 'surgery', dueAt, phone, text: sgText },
+            });
+          }
         }
         /* اختصاصیِ همین مراجعه مقدم است — همان قاعدهٔ مراقبتِ بعد از عمل. */
         const pre = (v.preOpCare ?? v.procedureType?.preOpCare)?.trim();
         if (pre) {
           const preDue = this.dueOn(v.opDate, -cfg.preOpDays, hour);
-          if (preDue) {
+          const preText = `${prefix}${pre}`;
+          if (preDue && !(collapsed(preDue) && await sentSame('pre_op_care', preText))) {
             await this.prisma.reminder.create({
-              data: { patientId: v.patientId, visitId, kind: 'pre_op_care', dueAt: preDue, phone, text: `${prefix}${pre}` },
+              data: { patientId: v.patientId, visitId, kind: 'pre_op_care', dueAt: preDue, phone, text: preText },
             });
           }
         }
@@ -180,13 +185,14 @@ export class RemindersService {
           /* «بلافاصله بعد از ثبت» = روزِ ۰ (اگر روزِ عمل رسیده، dueOn خودش
              به «همین حالا» فرومی‌کاهد)؛ وگرنه فردای عمل (postOpDays). */
           const postDue = v.postOpImmediate ? immediateDue() : this.dueOn(v.opDate, cfg.postOpDays, hour);
-          if (postDue && !(collapsed(postDue) && sentPost > 0)) {
+          const postText = `${prefix}${post}${followUrl ? `\n${followUrl}` : ''}`;
+          if (postDue && !(collapsed(postDue) && await sentSame('post_op_care', postText))) {
             await this.prisma.reminder.create({
               data: {
                 patientId: v.patientId, visitId, kind: 'post_op_care', dueAt: postDue, phone,
                 /* لینکِ فرمِ پیگیری ضمیمهٔ همین پیامِ مراقبت — «پیامِ روزِ بعد =
                    متنِ مراقبت + لینکِ فرم» (docs/BOOKING.md). */
-                text: `${prefix}${post}${followUrl ? `\n${followUrl}` : ''}`,
+                text: postText,
               },
             });
           }
