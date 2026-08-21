@@ -528,6 +528,7 @@ fallback دیده می‌شد؛ با یک کلیک در فرم‌ساز برمی
 | ۱۲ | رفعِ npm audit بدون `--force` | ❌ باز | ۲ مورد high: `react-router`, `react-router-dom` — **هر دو `fixAvailable=true`** |
 | ۱۳ | PgBouncer / سقفِ connection | ❌ باز | فقط در سند؛ در کد هیچ |
 | ۱۴ | object storage برای سلفی | ❌ باز | صفر ارجاع به s3/minio در کد |
+| ۱۸ | دسترسیِ `amalyar.com` از بیرونِ ایران | ❌ باز | زونِ آروان ۲۴٪ کوئریِ تازه را `SERVFAIL` می‌دهد و TTL=۱۲۰ آن را تشدید می‌کند — سنجه‌ها و راه‌حل‌ها در `docs/CLAUDE_HANDOFF.md` §«با VPN باز نمی‌شود» |
 | ۷، ۱۱، ۱۵، ۱۶، ۱۷ | انتقالِ worker · بکاپِ per-tenant · مهاجرتِ DB · چرخشِ `JWT_SECRET` · ریهرسال | ⏳ عملیاتی | از ریپو قابلِ تأیید نیست — سمتِ Coolify |
 
 ### ماژول‌های ناقص (`ROADMAP.md` 🟡) — همه تأیید شد که واقعاً نیستند
