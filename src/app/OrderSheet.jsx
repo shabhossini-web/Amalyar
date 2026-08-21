@@ -8,11 +8,12 @@
  */
 import { useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { api } from '../lib/api.js';
+import { api, apiUpload } from '../lib/api.js';
 import { jStrToIso, isoToJStr } from '../lib/jalali.js';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
+import FileDrop from '../ui/FileDrop.jsx';
 import './orders.css';
 
 /** پنلِ روتینِ آزمایش — استاندارد و کامل، تیک‌خور. */
@@ -198,9 +199,23 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
               </label>
             </div>
           )}
-          <p className="db-decide-hint">
-            عکسِ جوابْ در پروندهٔ بیمار، تبِ «مدارک» بارگذاری می‌شود تا در تاریخچه بماند.
-          </p>
+          {/* عکسِ جواب همان‌جا بارگذاری می‌شود و در «مدارکِ» پرونده می‌نشیند —
+              با دستهٔ درست، تا بعداً در تاریخچه پیدا شود. چندصفحه‌ای هم هست. */}
+          <span className="od-label">عکسِ جواب — چند صفحه هم می‌شود</span>
+          <FileDrop
+            accept="image/*,.pdf"
+            maxMb={25}
+            hint="عکس یا PDFِ جواب — در «مدارکِ» پرونده ثبت می‌شود"
+            onUpload={async (file) => {
+              const fd = new FormData();
+              fd.append('file', file);
+              fd.append('category', kind === 'imaging' ? 'imaging' : kind === 'lab' ? 'lab' : 'report');
+              fd.append('title', `${meta.fa}${f.specialty ? ` — ${f.specialty}` : ''}`);
+              if (visitId) fd.append('visitId', String(visitId));
+              await apiUpload(`/patients/${patientId}/documents`, fd);
+            }}
+            onAllDone={() => onToast('عکسِ جواب در مدارکِ پرونده ثبت شد ✓')}
+          />
         </div>
       )}
 

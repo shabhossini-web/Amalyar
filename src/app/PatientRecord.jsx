@@ -12,6 +12,7 @@ import { Alert, Back, Close, Download, LinkIcon, Lock, Pencil, Plus, Trash } fro
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
+import FileDrop from '../ui/FileDrop.jsx';
 
 
 const CATEGORIES = {
@@ -336,31 +337,23 @@ function DocsTab({ rec, reload, toast }) {
   const fileRef = useRef(null);
   const [filter, setFilter] = useState('all');
 
+  /* ⚠️ فقط «چه چیزی فرستاده شود» این‌جاست؛ صف، پیش‌نمایش، خطای تک‌فایل و
+     تلاشِ دوباره کارِ `FileDrop`ِ مشترک است. خطا **پرتاب** می‌شود تا همان
+     فایل در فهرست قرمز شود، نه اینکه toast بیاید و معلوم نباشد کدام. */
   const upload = async (file) => {
     if (!file) return;
     let takenAt;
     if (takenJ.trim()) {
       takenAt = jStrToIso(takenJ);
-      if (!takenAt) { toast('تاریخِ مدرک نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)', true); return; }
+      if (!takenAt) throw new Error('تاریخِ مدرک نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)');
     }
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('category', cat);
-      if (title.trim()) fd.append('title', title.trim());
-      if (visitId) fd.append('visitId', visitId);
-      if (takenAt) fd.append('takenAt', takenAt);
-      await apiUpload(`/patients/${rec.id}/documents`, fd);
-      setTitle(''); setTakenJ(''); setVisitId('');
-      if (fileRef.current) fileRef.current.value = '';
-      await reload();
-      toast('مدرک اضافه شد ✓');
-    } catch (e) {
-      toast(e.message, true);
-    } finally {
-      setBusy(false);
-    }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('category', cat);
+    if (title.trim()) fd.append('title', title.trim());
+    if (visitId) fd.append('visitId', visitId);
+    if (takenAt) fd.append('takenAt', takenAt);
+    await apiUpload(`/patients/${rec.id}/documents`, fd);
   };
 
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
@@ -430,16 +423,17 @@ function DocsTab({ rec, reload, toast }) {
         </div>
         {/* inputِ نیتیو «Choose File» انگلیسی نشان می‌دهد و در رابطِ فارسی وصله است؛
             پس پنهانش می‌کنیم و خودِ label ناحیهٔ کلیک/رها‌کردن می‌شود. */}
-        <label
-          className={`rc-drop${drag ? ' on' : ''}${busy ? ' busy' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files?.[0]); }}
-        >
-          <input ref={fileRef} type="file" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} />
-          <b>{busy ? 'در حال آپلود…' : 'انتخاب یا رهاکردنِ فایل'}</b>
-          <small>عکس، PDF یا هر مدرکِ دیگر — تا {faNum(25)} مگابایت</small>
-        </label>
+        <FileDrop
+          accept="image/*,.pdf"
+          maxMb={25}
+          hint={`عکس، PDF یا هر مدرکِ دیگر — تا ${faNum(25)} مگابایت`}
+          onUpload={upload}
+          onAllDone={async () => {
+            setTitle(''); setTakenJ(''); setVisitId('');
+            await reload();
+            toast('مدارک اضافه شدند ✓');
+          }}
+        />
         {/* لینک به‌جای فایل: MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود. */}
         <div className="rc-linkrow">
           <LinkIcon width="15" height="15" />
