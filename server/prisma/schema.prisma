@@ -1245,6 +1245,9 @@ model Visit {
   @@index([followOfVisitId])
   /// مراقبتِ قبل از عمل — اختصاصیِ همین بیمار؛ خالی = قالبِ نوعِ عمل
   preOpCare     String? @map("pre_op_care")
+  /// مراقبتِ قبل از عمل **علاوه بر** موعدِ مقرر، همین حالا هم برود
+  /// (ثبتِ چندروز‌قبل: بیمار باید فوراً بداند، ولی یادآوریِ نزدیکِ عمل هم لازم است)
+  preOpImmediate Boolean @default(false) @map("pre_op_immediate")
   postOpCare    String? @map("post_op_care")
   /// پیامکِ مراقبت بلافاصله بعد از ثبتِ فرم برود، نه فردای عمل
   postOpImmediate Boolean @default(false) @map("post_op_immediate")

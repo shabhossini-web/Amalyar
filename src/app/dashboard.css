@@ -954,3 +954,8 @@ a.db-defbtn { text-decoration: none; }
 }
 .db-kindrow-loading span + span { animation-delay: .2s; }
 @keyframes db-kpulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+
+/* پنلِ برنامهٔ پیام‌ها در فرمِ ویزیت — هم‌خانوادهٔ برنامهٔ مراقبتِ فرمِ عمل. */
+.db-msgplan { gap: 6px; }
+.db-msgplan .db-postop-plan { font-size: 12px; line-height: 2; color: var(--text2); }
+.db-msgplan .db-postop-plan b { color: var(--brand-2); }

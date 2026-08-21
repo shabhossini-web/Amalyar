@@ -60,7 +60,7 @@ export class RemindersService {
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
           opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
-          postOpCare: true, followUpDays: true, postOpImmediate: true, preOpCare: true,
+          postOpCare: true, followUpDays: true, postOpImmediate: true, preOpCare: true, preOpImmediate: true,
           procedureType: { select: { preOpCare: true, postOpCare: true, followUpDays: true } },
           patient: {
             select: {
@@ -172,11 +172,21 @@ export class RemindersService {
         /* اختصاصیِ همین مراجعه مقدم است — همان قاعدهٔ مراقبتِ بعد از عمل. */
         const pre = (v.preOpCare ?? v.procedureType?.preOpCare)?.trim();
         if (pre) {
-          const preDue = this.dueOn(v.opDate, -cfg.preOpDays, hour);
           const preText = `${prefix}${pre}`;
-          if (preDue && !(collapsed(preDue) && await sentSame('pre_op_care', preText))) {
+          const preDue = this.dueOn(v.opDate, -cfg.preOpDays, hour);
+          /* ⚠️ «به‌محضِ ثبت» در مراقبتِ **قبل** از عمل جایگزینِ موعدِ مقرر
+             نیست، مکمّلِ آن است: بیمارِ ثبت‌شده چندروز قبل باید همان لحظه
+             دستورها را بگیرد و نزدیکِ عمل هم یادآوری شود. (برعکسِ مراقبتِ
+             بعد از عمل که «بلافاصله» جایگزینِ فردای عمل است.) */
+          const dues: Date[] = [];
+          if (v.preOpImmediate) dues.push(new Date(Date.now() + 60_000));
+          /* موعدِ مقرری که خودش به «حالا» فروکش کرده، تکرارِ همان پیامِ فوری
+             است — دوباره کاشته نمی‌شود. */
+          if (preDue && !(dues.length && collapsed(preDue))) dues.push(preDue);
+          for (const due of dues) {
+            if (collapsed(due) && await sentSame('pre_op_care', preText)) continue;
             await this.prisma.reminder.create({
-              data: { patientId: v.patientId, visitId, kind: 'pre_op_care', dueAt: preDue, phone, text: preText },
+              data: { patientId: v.patientId, visitId, kind: 'pre_op_care', dueAt: due, phone, text: preText },
             });
           }
         }

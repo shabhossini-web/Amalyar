@@ -70,6 +70,7 @@ function enrich(v: any, kinds?: KindMap) {
     followUpDays: v.followUpDays ?? null,
     postOpImmediate: v.postOpImmediate ?? false,
     preOpCare: v.preOpCare ?? null,
+    preOpImmediate: v.preOpImmediate ?? false,
     decisions: v.decisions ?? [],
     followOfVisitId: v.followOfVisitId ?? null,
     opStatus: v.opStatus,
@@ -1012,6 +1013,7 @@ export class PatientsService {
           followUpDays: dto.followUpDays?.trim() || null,
           postOpImmediate: dto.postOpImmediate ?? false,
           preOpCare: dto.preOpCare?.trim() || null,
+          preOpImmediate: dto.preOpImmediate ?? false,
           decisions: dto.decisions ?? [],
           ...timePatch(dto),
           notes: dto.notes || null,
@@ -1119,6 +1121,7 @@ export class PatientsService {
       if (dto.followUpDays !== undefined) visitPatch.followUpDays = dto.followUpDays?.trim() || null;
       if (dto.postOpImmediate !== undefined) visitPatch.postOpImmediate = !!dto.postOpImmediate;
       if (dto.preOpCare !== undefined) visitPatch.preOpCare = dto.preOpCare?.trim() || null;
+      if (dto.preOpImmediate !== undefined) visitPatch.preOpImmediate = !!dto.preOpImmediate;
       if (dto.decisions !== undefined) visitPatch.decisions = dto.decisions ?? [];
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
       // طرفِ حساب و استثنای سهمِ جراح — فیلدهای مالیِ سبک که روی خودِ مراجعه‌اند.

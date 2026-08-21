@@ -258,6 +258,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
     followUpDays: initial?.followUpDays ?? '',
     postOpImmediate: initial?.postOpImmediate ?? false,
     preOpCare: initial?.preOpCare ?? '',
+    preOpImmediate: initial?.preOpImmediate ?? false,
     decisions: initial?.decisions ?? [],
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
@@ -347,6 +348,25 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
     return () => { on = false; };
   }, []);
   /* پیش‌فرضِ همین نوعِ عمل (تعریف‌های پایه) — منبعِ «چه چیزی خودکار اجرا می‌شود». */
+  /* ⚠️ «عمل برای فرداست یا همین امروز؟» — پاسخش هم پیش‌فرضِ ارسال را عوض
+     می‌کند هم متنِ راهنما را. ثبتِ چندروزقبل: بیمار باید همان لحظه دستورهای
+     قبل از عمل را بگیرد. ثبتِ همان‌روز: دیگر «قبل از عمل»ی نمانده. */
+  const opDayDelta = (() => {
+    const iso = jStrToIso(f.opDateJ);
+    if (!iso) return null;
+    const d = new Date(iso);
+    const day = (x) => Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate());
+    const now = new Date();
+    return Math.round((day(d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
+  })();
+  const opIsToday = opDayDelta === 0;
+  /* پیش‌فرض فقط تا وقتی کاربر خودش دست نزده — بعدش انتخابِ او حاکم است. */
+  const preTouched = useRef(false);
+  useEffect(() => {
+    if (editing || preTouched.current || opDayDelta === null) return;
+    setF((s2) => (s2.preOpImmediate === opDayDelta > 0 ? s2 : { ...s2, preOpImmediate: opDayDelta > 0 }));
+  }, [opDayDelta, editing]);
+
   const procRow = defs.procedures.find((p) => p.id === f.procedureTypeId) ?? null;
   const procDefaults = {
     name: procRow?.name ?? (f.opType || ''),
@@ -568,6 +588,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
       followUpDays: toEnDigits(f.followUpDays).trim() || (editing ? '' : undefined),
       postOpImmediate: !!f.postOpImmediate,
       preOpCare: f.preOpCare.trim() || (editing ? '' : undefined),
+      preOpImmediate: !!f.preOpImmediate,
       decisions: f.decisions,
       // رشتهٔ خالی فرستاده می‌شود نه undefined: کاربر که ساعت را پاک می‌کند
       // منظورش «پاکش کن» است، نه «دست نزن».
@@ -1101,6 +1122,29 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
       )}
       </div>
 
+      {/* ── برنامهٔ پیام‌ها — انتهای فرمِ ویزیت ──
+          گزارشِ کاربر: «پایینِ فرم‌های ویزیت هم نمایش بده چه پیامکی چه وقت
+          ارسال می‌شود». تا امروز فقط فرمِ عمل این را می‌گفت و کاربرِ فرمِ
+          ویزیت نمی‌دانست ذخیره‌اش چه پیامی می‌فرستد — و «فرستاد یا نه؟»
+          سؤالی بود که فقط با دیدنِ گوشیِ بیمار جواب می‌گرفت. */}
+      {f.kind !== 'surgery' && (
+        <div className="db-postop db-msgplan">
+          <h4>برنامهٔ پیام‌ها</h4>
+          {f.nextVisitDateJ.trim() ? (
+            <p className="db-postop-plan">
+              یادآوریِ ویزیتِ بعدی برای <b>{f.nextVisitDateJ}</b> در صف می‌نشیند
+              {timing ? ` — ${faNum(timing.nextVisitDays)} روز قبل، ساعتِ ${faNum(timing.hour)}` : ''}.
+              اگر برای همان روز نوبتِ فعال ثبت شود، یادآوریِ نوبت جای این یکی را می‌گیرد تا پیامِ دوتایی نرود.
+            </p>
+          ) : (
+            <p className="db-postop-plan">
+              تاریخِ ویزیتِ بعدی خالی است، پس پیامی زمان‌بندی نمی‌شود. برای یادآوریِ خودکار،
+              «ویزیتِ بعدی» را در همین فرم پر کنید.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── تصمیمِ درمانی — انتهای فرمِ ویزیت ──
           «بیمار آمد، معاینه شد، حالا چه؟» تا امروز جوابش جایی ثبت نمی‌شد و
           مرحلهٔ بعد در ذهنِ پزشک می‌ماند. این ردیف همان تصمیم را روی خودِ
@@ -1163,8 +1207,16 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
           <div className="db-careblock">
             <div className="db-carehead">
               <span>مراقبت‌های قبل از عمل — پیامک به بیمار</span>
-              <i>{timing ? `ارسال: ${faNum(timing.preOpDays)} روز قبل از عمل، ساعتِ ${faNum(timing.hour)}` : 'ارسال: پیش از عمل'}</i>
+              <i>{[
+                f.preOpImmediate ? 'به‌محضِ ثبت' : null,
+                timing ? `${faNum(timing.preOpDays)} روز قبل از عمل، ساعتِ ${faNum(timing.hour)}` : 'پیش از عمل',
+              ].filter(Boolean).join(' + ')}</i>
             </div>
+            {opIsToday && (
+              <p className="db-decide-hint">
+                عملْ همین امروز است — معمولاً دیگر پیامِ «قبل از عمل» لازم نیست؛ اگر لازم است، «به‌محضِ ثبت» را بزنید.
+              </p>
+            )}
             {procDefaults.preOpCare && (
               <div className="db-default">
                 <p>{procDefaults.preOpCare}</p>
@@ -1175,6 +1227,18 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
             )}
             <textarea rows={2} value={f.preOpCare} onChange={set('preOpCare')}
                       placeholder={procDefaults.preOpCare ? 'خالی = همان پیش‌فرضِ بالا' : 'خالی = پیامی نمی‌رود'} />
+            {/* ⚠️ این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
+                آن است — برعکسِ مراقبتِ بعد از عمل. */}
+            <div className="db-daychips db-whenchips">
+              {[{ v: false, l: 'فقط طبقِ زمان‌بندی' }, { v: true, l: 'به‌محضِ ثبت + زمان‌بندی' }].map((o) => (
+                <button
+                  key={String(o.v)} type="button"
+                  className={!!f.preOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
+                  aria-pressed={!!f.preOpImmediate === o.v}
+                  onClick={() => { preTouched.current = true; setF((s2) => ({ ...s2, preOpImmediate: o.v })); }}
+                >{o.l}</button>
+              ))}
+            </div>
           </div>
 
           {/* ── مراقبتِ بعد از عمل ── */}
@@ -1282,6 +1346,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
             {`مراقبتِ بعد: ${f.postOpCare.trim() ? 'متنِ همین فرم' : procDefaults.postOpCare ? 'قالبِ نوعِ عمل' : 'ارسال نمی‌شود'}`}
             {' · '}
             {`مراقبتِ قبل: ${f.preOpCare.trim() ? 'متنِ همین فرم' : procDefaults.preOpCare ? 'قالبِ نوعِ عمل' : 'ارسال نمی‌شود'}`}
+            {(f.preOpCare.trim() || procDefaults.preOpCare) ? (f.preOpImmediate ? '، به‌محضِ ثبت + موعدِ مقرر' : '، موعدِ مقرر') : ''}
           </p>
         </div>
       )}

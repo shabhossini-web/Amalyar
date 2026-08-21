@@ -149,6 +149,10 @@ export class CreateVisitDto {
   @IsOptional() @IsString() @MaxLength(2000, { message: 'متنِ مراقبتِ قبل از عمل طولانی است' })
   preOpCare?: string;
 
+  /// مراقبتِ قبل از عمل، علاوه بر موعدِ مقرر، همین حالا هم برود.
+  @IsOptional() @IsBoolean({ message: 'زمانِ ارسالِ مراقبتِ قبل از عمل نامعتبر است' })
+  preOpImmediate?: boolean;
+
   /// تصمیمِ درمانیِ ویزیت — چندتایی؛ مقدارهای مجاز در DECISIONS.
   @IsOptional() @IsArray() @IsIn(DECISIONS, { each: true, message: 'تصمیمِ درمانی نامعتبر است' })
   decisions?: string[];
@@ -314,6 +318,10 @@ export class UpdateVisitDto {
   @IsOptional() @ValidateIf((o) => o.preOpCare !== null)
   @IsString() @MaxLength(2000, { message: 'متنِ مراقبتِ قبل از عمل طولانی است' })
   preOpCare?: string | null;
+
+  /// مراقبتِ قبل از عمل، علاوه بر موعدِ مقرر، همین حالا هم برود.
+  @IsOptional() @IsBoolean({ message: 'زمانِ ارسالِ مراقبتِ قبل از عمل نامعتبر است' })
+  preOpImmediate?: boolean;
 
   /// تصمیمِ درمانیِ ویزیت — چندتایی؛ مقدارهای مجاز در DECISIONS.
   @IsOptional() @IsArray() @IsIn(DECISIONS, { each: true, message: 'تصمیمِ درمانی نامعتبر است' })
