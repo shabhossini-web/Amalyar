@@ -920,6 +920,8 @@ export class FormsService {
  */
 function isImageRef(v: any): boolean {
   if (typeof v === 'string') return v.trim() !== '';
+  /* از #66 کادرِ عکس **چندتایی** است: آرایهٔ خالی یعنی هیچ عکسی نگذاشته. */
+  if (Array.isArray(v)) return v.some((x) => isImageRef(x));
   return !!(v && typeof v === 'object' && (v.id || v.url));
 }
 

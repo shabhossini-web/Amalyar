@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
@@ -256,9 +257,24 @@ function Form() {
     fd.append('file', file);
     const fresh = await apiUpload(`/public/intake/form/${token}/image/${encodeURIComponent(field.key)}`, fd);
     setD(fresh);
+    /* از #۶۶ مقدارِ فیلد آرایه است؛ به کادر **همان موردِ تازه** برگردانده
+       می‌شود (قراردادش یک ref است) ولی مقدارِ ذخیره‌شده همانی است که سرور
+       گفته — منبعِ حقیقت سرور است، نه حدسِ مرورگر. */
     const ref = fresh?.data?.[field.key];
-    setVals((s) => ({ ...s, [field.key]: ref }));
-    return ref ?? {};
+    const listNow = Array.isArray(ref) ? ref : ref ? [ref] : [];
+    setVals((s) => ({ ...s, [field.key]: listNow }));
+    return listNow[listNow.length - 1] ?? {};
+  };
+
+  /** برداشتنِ یک عکس از همان کادر — سمتِ سرور هم پاک شود. */
+  const removeImage = async (ref, field) => {
+    const fresh = await api(
+      `/public/intake/form/${token}/image/${encodeURIComponent(field.key)}/${ref.id}`,
+      { auth: false, method: 'DELETE' },
+    );
+    setD(fresh);
+    const v = fresh?.data?.[field.key];
+    setVals((s) => ({ ...s, [field.key]: Array.isArray(v) ? v : v ? [v] : [] }));
   };
 
   const applyCode = async () => {
@@ -267,14 +283,17 @@ function Form() {
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
+  /* ⚠️ خطا **پرتاب** می‌شود تا همان فایل در فهرستِ کادر قرمز شود؛ پیامِ
+     سراسری معلوم نمی‌کرد کدام فیش نرفته. */
   const sendReceipt = async (file) => {
-    if (!file) return;
-    setErr(''); setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      setD(await apiUpload(`/public/intake/form/${token}/receipt`, fd));
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+    const fd = new FormData();
+    fd.append('file', file);
+    setD(await apiUpload(`/public/intake/form/${token}/receipt`, fd));
+  };
+  const removeReceipt = async (docId) => {
+    setErr('');
+    try { setD(await api(`/public/intake/form/${token}/receipt/${docId}`, { auth: false, method: 'DELETE' })); }
+    catch (e) { setErr(e.message); }
   };
 
   if (err && !d) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
@@ -342,6 +361,7 @@ function Form() {
               disabled={busy}
               payment={payInfo}
               onUpload={uploadImage}
+              onRemove={removeImage}
             />
             <div className="ik-nav">
               {page > 1 && (
@@ -420,11 +440,26 @@ function Form() {
               <Alert width="15" height="15" /> شمارهٔ حسابی تنظیم نشده — پیش از واریز با ما تماس بگیرید.
             </p>
           )}
-          <input ref={fileRef} type="file" hidden accept="image/*,application/pdf"
-                 onChange={(e) => { sendReceipt(e.target.files?.[0]); e.target.value = ''; }} />
-          <button type="button" className="ik-go" disabled={busy} onClick={() => fileRef.current?.click()}>
-            <Upload width="16" height="16" /> {busy ? 'در حال ارسال…' : 'آپلودِ فیشِ واریزی'}
-          </button>
+          {/* فیش هم چندتایی است: دو قسط، یا عکسِ ناخوانا که دوباره فرستاده
+              می‌شود. کادر همان کادرِ مشترکِ سامانه است. */}
+          <FileDrop
+            accept="image/*,application/pdf"
+            maxMb={8}
+            disabled={busy}
+            label="آپلودِ فیشِ واریزی"
+            hint="عکس یا PDFِ فیش — تا ۸ مگابایت؛ چند فیش هم می‌شود گذاشت"
+            onUpload={sendReceipt}
+          />
+          {(d.data?.receiptDocumentIds ?? (d.data?.receiptDocumentId ? [d.data.receiptDocumentId] : [])).length > 0 && (
+            <div className="ik-receipts">
+              {(d.data?.receiptDocumentIds ?? [d.data.receiptDocumentId]).map((id, i) => (
+                <span className="ik-receipt-row" key={id}>
+                  <b>فیشِ {i + 1}</b>
+                  <button type="button" onClick={() => removeReceipt(id)}>حذف</button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

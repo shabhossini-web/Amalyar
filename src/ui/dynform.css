@@ -49,3 +49,6 @@
 .dyn-star-btn.on { color: #fbbf24; }
 .dyn-star-btn:hover:not(:disabled) { transform: scale(1.12); }
 .dyn-star-btn:disabled { cursor: default; }
+
+/* فهرستِ چندعکسیِ کادرِ عکس. */
+.dyn-img-list { display: flex; flex-direction: column; gap: 5px; }

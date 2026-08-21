@@ -142,7 +142,11 @@ console.log('\n۶) آپلودِ عکس روی باکسِ عکس');
 
   const good = await send('xray');
   ok('عکس روی فیلدِ image پذیرفته شد', good.status < 300, 'status=' + good.status);
-  ok('ارجاع در data نشست', !!good.json?.data?.xray?.id, JSON.stringify(good.json?.data?.xray));
+  /* از #۶۶ کادرِ عکس چندتایی است: مقدار آرایه‌ای از ارجاع‌هاست (رکوردهای
+     قدیمی هنوز شیءِ تکی‌اند و همان هم پذیرفته می‌شود). */
+  const xr = good.json?.data?.xray;
+  const xrFirst = Array.isArray(xr) ? xr[0] : xr;
+  ok('ارجاع در data نشست', !!xrFirst?.id, JSON.stringify(xr));
   ok('نشانیِ عمومی برنمی‌گردد (مدرک پشتِ guard می‌ماند)',
     good.json?.data?.xray?.url === undefined, JSON.stringify(good.json?.data?.xray));
 

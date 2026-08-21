@@ -225,6 +225,22 @@ export class PublicIntakeController {
   image(@Param('token') token: string, @Param('field') field: string, @UploadedFile() file: any) {
     return this.intake.attachImage(token, field, file);
   }
+
+  /** برداشتنِ یک عکس از همان کادر — بیمار عکسِ اشتباه را بردارد. */
+  @Delete('form/:token/image/:field/:docId')
+  unimage(
+    @Param('token') token: string,
+    @Param('field') field: string,
+    @Param('docId', ParseIntPipe) docId: number,
+  ) {
+    return this.intake.detachImage(token, field, docId);
+  }
+
+  /** برداشتنِ یکی از فیش‌های واریزی. */
+  @Delete('form/:token/receipt/:docId')
+  unreceipt(@Param('token') token: string, @Param('docId', ParseIntPipe) docId: number) {
+    return this.intake.detachReceipt(token, docId);
+  }
 }
 
 /** صفِ تأیید و مدیریتِ لینک‌ها — ماژولِ `formgen`. */

@@ -60,6 +60,8 @@ export default function DynForm({
    * نه یک دکمهٔ مرده که کلیک می‌خورد و هیچ اتفاقی نمی‌افتد.
    */
   onUpload,
+  /** حذفِ یک عکسِ آپلودشده سمتِ سرور (کادرهای چندعکسی). */
+  onRemove,
   /**
    * شماره‌های باکسِ `payment` — `{ bank, holder, accountNumber, cardNumber, iban }`.
    *
@@ -95,6 +97,7 @@ export default function DynForm({
             disabled={disabled || locked}
             lookups={lookups}
             onUpload={onUpload}
+            onRemove={onRemove}
             payment={payment}
           />
 
@@ -108,7 +111,7 @@ export default function DynForm({
   );
 }
 
-function Input({ field: f, value, set, disabled, lookups, onUpload, payment }) {
+function Input({ field: f, value, set, disabled, lookups, onUpload, onRemove, payment }) {
   const v = value ?? '';
   const common = { disabled, placeholder: f.placeholder || undefined };
 
@@ -163,7 +166,7 @@ function Input({ field: f, value, set, disabled, lookups, onUpload, payment }) {
       return <Rating value={Number(v) || 0} set={set} disabled={disabled} />;
 
     case 'image':
-      return <ImageBox field={f} value={value} set={set} disabled={disabled} onUpload={onUpload} />;
+      return <ImageBox field={f} value={value} set={set} disabled={disabled} onUpload={onUpload} onRemove={onRemove} />;
 
     case 'payment':
       return <PaymentBox info={payment} />;
@@ -255,29 +258,53 @@ function Rating({ value, set, disabled }) {
  * فهرستِ مراجعات همان چند مگابایت را هم می‌کشد. فایل جای خودش می‌رود و
  * فرم فقط نشانی‌اش را نگه می‌دارد.
  */
-function ImageBox({ field: f, value, set, disabled, onUpload }) {
+function ImageBox({ field: f, value, set, disabled, onUpload, onRemove }) {
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  const ref = value && typeof value === 'object' ? value : value ? { url: String(value) } : null;
+  /* ⚠️ مقدار از #۶۶ **آرایه** است. رکوردهای قدیمی شیءِ تکی (یا رشتهٔ URL)
+     دارند و همین‌جا به آرایهٔ یک‌عضوی خوانده می‌شوند — فرم‌های پرشدهٔ قبلی
+     نباید خالی دیده شوند. */
+  const list = Array.isArray(value)
+    ? value.filter(Boolean)
+    : value && typeof value === 'object' ? [value]
+      : value ? [{ url: String(value) }] : [];
   const off = disabled || busy || !onUpload;
+  const max = 10;
 
   const pick = async (e) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     /* ⚠️ ورودی همیشه خالی می‌شود، حتی وقتی آپلود شکست می‌خورد: بدونِ این،
        انتخابِ **دوباره‌ی همان فایل** رویدادی نمی‌سازد (مقدار عوض نشده) و
        کاربر فکر می‌کند دکمه خراب است. */
     e.target.value = '';
-    if (!file || !onUpload) return;
+    if (!files.length || !onUpload) return;
     setErr('');
     setBusy(true);
-    try {
-      const r = await onUpload(file, f);
-      set(r?.id || r?.url ? { id: r.id, url: r.url, name: r.name ?? file.name } : null);
-    } catch (ex) {
-      setErr(ex?.message || 'آپلود انجام نشد');
-    } finally { setBusy(false); }
+    /* ترتیبی، نه موازی — و خطای یک فایل بقیه را زمین نمی‌زند. */
+    const added = [];
+    for (const file of files) {
+      if (list.length + added.length >= max) { setErr(`حداکثر ${max} فایل`); break; }
+      try {
+        const r = await onUpload(file, f);
+        if (r?.id || r?.url) added.push({ id: r.id, url: r.url, name: r.name ?? file.name });
+      } catch (ex) {
+        setErr(ex?.message || 'آپلود انجام نشد');
+      }
+    }
+    if (added.length) set([...list, ...added]);
+    setBusy(false);
+  };
+
+  const drop = async (i) => {
+    const gone = list[i];
+    /* حذف سمتِ سرور هم انجام شود (اگر مسیرش را والد داده) وگرنه ارجاعِ
+       یتیم در فرم می‌ماند و بعداً «عکس هست ولی نیست» می‌شود. */
+    if (gone?.id && onRemove) {
+      try { await onRemove(gone, f); } catch (ex) { setErr(ex?.message || 'حذف نشد'); return; }
+    }
+    set(list.filter((_, j) => j !== i));
   };
 
   return (
@@ -288,25 +315,32 @@ function ImageBox({ field: f, value, set, disabled, onUpload }) {
           عنوانِ فیلد** عکسِ پیوست‌شده را پاک می‌کرد.
           ⚠️ `accept` روی اندروید دوربین را هم پیشنهاد می‌دهد و روی سافاری
           «انتخاب از کتابخانه» را — همان چیزی که بیمار لازم دارد. */}
-      <input ref={input} type="file" accept="image/*" hidden onChange={pick} disabled={off} />
+      <input ref={input} type="file" accept="image/*" multiple hidden onChange={pick} disabled={off} />
 
-      {ref && (
-        <span className="dyn-img-has">
-          {ref.url
-            ? <img src={ref.url} alt={ref.name || f.label} />
-            : <Camera width="20" height="20" />}
-          <b>{ref.name || 'پیوست شد'}</b>
-          <button type="button" onClick={() => set(null)} disabled={disabled || busy} aria-label="حذفِ عکس">
-            <Trash width="14" height="14" />
-          </button>
+      {list.length > 0 && (
+        <span className="dyn-img-list">
+          {list.map((ref, i) => (
+            <span className="dyn-img-has" key={ref.id ?? ref.url ?? i}>
+              {ref.url
+                ? <img src={ref.url} alt={ref.name || f.label} />
+                : <Camera width="20" height="20" />}
+              <b>{ref.name || `عکسِ ${i + 1}`}</b>
+              <button type="button" onClick={() => drop(i)} disabled={disabled || busy} aria-label="حذفِ عکس">
+                <Trash width="14" height="14" />
+              </button>
+            </span>
+          ))}
         </span>
       )}
 
-      {!ref && (
+      {onUpload && list.length < max && (
         <button type="button" className="dyn-img-pick" onClick={() => input.current?.click()} disabled={off}>
           <Camera width="16" height="16" />
-          {busy ? 'در حال آپلود…' : 'انتخابِ عکس'}
+          {busy ? 'در حال آپلود…' : list.length ? 'افزودنِ عکسِ دیگر' : 'انتخابِ عکس'}
         </button>
+      )}
+      {onUpload && list.length > 0 && (
+        <em className="dyn-note">چند عکس با هم یا یکی‌یکی — همه در همین کادر می‌مانند.</em>
       )}
 
       {!onUpload && <em className="dyn-note">این کادر در فرمِ بیمار پر می‌شود.</em>}
@@ -390,7 +424,9 @@ export function dynErrors(fields, values, myRole = null) {
       (Array.isArray(v) && v.length === 0) ||
       (f.type === 'rating' && !Number(v)) ||
       /* عکس یک ارجاع است (`{id,url,name}`) نه رشته — آبجکتِ خالی «پر» نیست. */
-      (f.type === 'image' && !(typeof v === 'string' ? v.trim() : v?.id || v?.url));
+      (f.type === 'image' && !(typeof v === 'string' ? v.trim()
+        : Array.isArray(v) ? v.some((x) => x?.id || x?.url)
+          : v?.id || v?.url));
     if (empty) e[f.key] = `«${f.label}» را کامل کنید`;
   }
   return e;
