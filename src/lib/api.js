@@ -11,6 +11,15 @@ export const setToken = (t, remember = true) => {
   if (t) (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t);
 };
 
+/**
+ * نشانیِ کاملِ یک مسیرِ API — برای `src` تصویر و هر جایی که `fetch` نیست.
+ *
+ * ⚠️ لازم است چون در توسعه API روی مبدأِ دیگری است (`VITE_API_BASE`)؛ نشانیِ
+ * نسبی آن‌جا به سرورِ ویت می‌خورد و ۴۰۴ می‌گیرد. مقدارِ خالی → همان خالی، تا
+ * `<img src>` با رشتهٔ بی‌معنی پر نشود.
+ */
+export const apiUrl = (path) => (path ? `${BASE}${path}` : path);
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);

@@ -3,6 +3,7 @@ import ErrorBoundary from './app/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './app/auth.jsx';
 import { ConfigProvider } from './app/config.jsx';
 import Landing from './pages/Landing.jsx';
+import { TenantSite } from './pages/TenantLanding.jsx';
 import Intake from './pages/Intake.jsx';
 import Survey from './pages/Survey.jsx';
 import VisitSummary from './pages/VisitSummary.jsx';
@@ -32,6 +33,7 @@ import Chat from './app/Chat.jsx';
 import Gate from './app/Gate.jsx';
 import PatientRecord from './app/PatientRecord.jsx';
 import Settings from './app/Settings.jsx';
+import Site from './app/Site.jsx';
 import PlatformAdmin from './app/PlatformAdmin.jsx';
 /* دکمه‌های سه‌بعدی + کفِ تاچ‌تارگت — سراسری، بعد از CSSهای صفحه‌ها تا برنده شود. */
 import './ui/press.css';
@@ -46,7 +48,10 @@ function TenantAwareRoot() {
   const tenantMode =
     forced === 'true' ||
     (forced !== 'false' && typeof window !== 'undefined' && !MARKETING_HOSTS.has(window.location.hostname));
-  return tenantMode ? <Navigate to="/login" replace /> : <Landing />;
+  if (!tenantMode) return <Landing />;
+  /* ریشهٔ دامنهٔ شرکت: اگر سایتِ معرفی روشن باشد همان را نشان بده، وگرنه —
+     مثلِ همیشه — فرمِ ورود. تصمیم با سرور است (`/public/site`)، نه با کلاینت. */
+  return <TenantSite fallback={<Navigate to="/login" replace />} />;
 }
 
 function Protected({ children }) {
@@ -98,6 +103,7 @@ export default function App() {
           <Route path="/app/assistant" element={<Protected><Assistant /></Protected>} />
           <Route path="/app/chat" element={<Protected><Chat /></Protected>} />
           <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
+          <Route path="/app/site" element={<Protected><Gate feature="site"><Site /></Gate></Protected>} />
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />
         </Routes>

@@ -5,7 +5,7 @@ import { useAuth } from './auth.jsx';
 import { useConfig } from './config.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
-import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Form, Gear, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
+import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Form, Gear, Grid, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
 
 /* ── آیکون‌های خطی (lucide-style، stroke=currentColor) ── */
 
@@ -37,6 +37,7 @@ const TOOLS = [
   { key: 'forms', label: 'فرم‌ساز', icon: Book, tint: 'violet', ready: true, min: 6, to: '/app/forms' },
   { key: 'users', label: 'کاربران', icon: Users, tint: 'violet', ready: true, min: 6, to: '/app/users' },
   { key: 'access', label: 'سطوحِ دسترسی', icon: Lock, tint: 'blue', ready: true, min: 6, to: '/app/access' },
+  { key: 'site', label: 'سایتِ معرفی', icon: Grid, tint: 'blue', ready: true, min: 5, to: '/app/site' },
   { key: 'settings', label: 'تنظیماتِ شرکت', icon: Gear, tint: 'amber', ready: true, min: 6, to: '/app/settings' },
 ];
 

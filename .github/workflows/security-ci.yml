@@ -2675,3 +2675,77 @@ jobs:
           }
           console.log('money+acl ok');
           "
+
+      # سایتِ عمومیِ شرکت تنها جایی است که محتوا **بیرونِ** دیوارِ لاگین منتشر
+      # می‌شود. سه مرزش را هیچ تایپ‌چکی نمی‌گیرد و هر سه باگِ خاموش می‌سازند:
+      # صفحه‌ای که ناخواسته منتشر شود، هویتِ مالیاتی که لو برود، و تصویری که
+      # پس از خاموش‌کردنِ بخش همچنان قابلِ دانلود بماند.
+      - name: Verify the tenant public site stays fail-closed
+        run: |
+          node -e "
+          const fs = require('fs');
+          const read = (p) => fs.readFileSync(p, 'utf8');
+          /* ⚠️ کامنت‌ها پیش از هر تطبیق برداشته می‌شوند — همان تلهٔ بندهای بالا:
+             نثرِ توضیحیِ خودِ فایل بارها به‌جای کد سنجیده شده است. */
+          const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+          const ctrl = code(read('server/src/site/site.controller.ts'));
+          const svc  = code(read('server/src/site/site.service.ts'));
+          const reg  = read('server/src/auth/access-registry.ts');
+
+          // ① کنترلرِ عمومی باید بی‌گارد باشد و کنترلرِ ویرایش با هر سه گارد.
+          const pubStart = ctrl.indexOf(\"@Controller('public/site')\");
+          const pubEnd = ctrl.indexOf(\"@Controller('site')\", pubStart);
+          if (pubStart < 0 || pubEnd < 0) { console.error('کنترلرهای سایت پیدا نشدند'); process.exit(1); }
+          if (/UseGuards/.test(ctrl.slice(pubStart, pubEnd))) {
+            console.error('کنترلرِ عمومیِ سایت نباید گارد داشته باشد — بازدیدکننده لاگین ندارد'); process.exit(1);
+          }
+          if (!/@UseGuards\(JwtAuthGuard, FeatureGuard, PermissionGuard\)[\s\S]{0,120}export class SiteController/.test(ctrl)) {
+            console.error('کنترلرِ ویرایشِ سایت باید پشتِ هر سه گارد باشد'); process.exit(1);
+          }
+          for (const m of ctrl.matchAll(/RequirePermissions\('([^']+)'\)/g)) {
+            if (!reg.includes(\"key: '\" + m[1] + \"'\")) {
+              console.error('مجوزِ ' + m[1] + ' در access-registry نیست'); process.exit(1);
+            }
+          }
+
+          /* ② ⚠️ **پیش‌فرضِ انتشار باید خاموش بماند.** این ماژول روی نصب‌هایی
+             می‌نشیند که همین حالا کار می‌کنند و ریشهٔ دامنه‌شان به فرمِ ورود
+             می‌رود؛ پیش‌فرضِ روشن یعنی سایتِ همهٔ شرکت‌ها با متنِ نمونه بالا
+             بیاید بی‌آنکه کسی خواسته باشد. */
+          const pub = svc.slice(svc.indexOf('private async published('), svc.indexOf('private async sections('));
+          if (!/=== '1'/.test(pub)) {
+            console.error('نبودِ ردیفِ انتشار باید «منتشرنشده» معنا شود'); process.exit(1);
+          }
+          const view = svc.slice(svc.indexOf('async publicView('), svc.indexOf('async adminView('));
+          if (!/published \?/.test(view)) {
+            console.error('publicView باید پرچمِ انتشار را اعمال کند'); process.exit(1);
+          }
+
+          /* ③ هویتِ مالیاتی مالِ فاکتورِ رسمی است، نه صفحه‌ای که هر کسی بازش
+             می‌کند. \`settings.brand()\` هر دو را دارد، پس گلچین اجباری است. */
+          for (const leak of ['nationalId', 'econCode']) {
+            if (view.includes(leak)) { console.error('publicViewِ سایت نباید ' + leak + ' بدهد'); process.exit(1); }
+          }
+
+          /* ④ تصویرِ قلمی که غیرفعال شده یا بخشش خاموش است نباید استریم شود،
+             وگرنه «خاموش‌کردن» فقط یعنی «از صفحه بردار»، نه «منتشر نکن». */
+          if (!/isPubliclyVisible/.test(ctrl)) {
+            console.error('استریمِ عمومیِ تصویر باید دیده‌شدنِ قلم را بسنجد'); process.exit(1);
+          }
+          if (!/if \(!\(await this.published\(\)\)\) return false;/.test(svc)) {
+            console.error('isPubliclyVisible باید پرچمِ انتشار را هم ببیند'); process.exit(1);
+          }
+
+          /* ⑤ نشانیِ تصویر بر پایهٔ **شناسهٔ قلم** است نه sha؛ اندپوینتی که هر
+             shaیی را بدهد یعنی هر فایلِ همان شرکت — از جمله مدرکِ بیمار — با
+             حدسِ sha از بیرون خواندنی است. */
+          if (/items\/\\\$\{id\}\/image/.test(svc) === false) {
+            console.error('نشانیِ تصویر باید از شناسهٔ قلم ساخته شود'); process.exit(1);
+          }
+
+          // ⑥ صفحهٔ ویرایش پشتِ دروازه باشد تا تایپِ مستقیمِ نشانی صفحهٔ خالی ندهد.
+          if (!/Gate feature=\"site\"/.test(read('src/App.jsx'))) {
+            console.error('صفحهٔ سایت پشتِ Gate نیست'); process.exit(1);
+          }
+          console.log('tenant public site ok');
+          "
