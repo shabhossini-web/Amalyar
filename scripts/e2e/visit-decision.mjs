@@ -94,7 +94,9 @@ try {
     await page.waitForTimeout(2500);
     const dec = page.locator('.db-decide');
     ok(await dec.count() === 1, '**ردیفِ تصمیم در فرمِ ویزیت هست**');
-    const chips = dec.locator('.db-daychip');
+    /* ردیفِ اولِ چیپ‌ها = خودِ تصمیم‌ها؛ ردیفِ دومِ داخلِ همین بخش از #64
+       دکمه‌های «+ افزودنِ سفارش» است و جزوِ تصمیم‌ها شمرده نمی‌شود. */
+    const chips = dec.locator('.db-daychips').first().locator('.db-daychip');
     ok(await chips.count() === 6, `شش تصمیم نشان داده شد (${await chips.count()})`);
     await chips.filter({ hasText: 'کاندیدای جراحی' }).click();
     await page.waitForTimeout(500);

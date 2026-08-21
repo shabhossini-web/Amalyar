@@ -11,6 +11,7 @@ import { useConfig, useTerms } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
+import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
@@ -361,6 +362,16 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
   })();
   const opIsToday = opDayDelta === 0;
   /* پیش‌فرض فقط تا وقتی کاربر خودش دست نزده — بعدش انتخابِ او حاکم است. */
+  /* سفارش‌های همین مراجعه (آزمایش/عکس/مشاوره/ارجاع) — چیپِ تصمیم فقط
+     «ثبتِ تصمیم» نیست: فرمش را همان‌جا باز می‌کند و ارسال می‌کند. */
+  const [orders, setOrders] = useState([]);
+  const [orderSheet, setOrderSheet] = useState(null); // {kind, order?}
+  const loadOrders = useCallback(() => {
+    if (!initial?.id) return;
+    api(`/orders?visitId=${initial.id}`).then((r) => setOrders(Array.isArray(r) ? r : [])).catch(() => {});
+  }, [initial?.id]);
+  useEffect(() => { loadOrders(); }, [loadOrders]);
+
   const preTouched = useRef(false);
   useEffect(() => {
     if (editing || preTouched.current || opDayDelta === null) return;
@@ -1163,18 +1174,45 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
                 key={d.v} type="button"
                 className={f.decisions.includes(d.v) ? 'db-daychip on' : 'db-daychip'}
                 aria-pressed={f.decisions.includes(d.v)}
-                onClick={() => toggleDecision(d.v)}
+                onClick={() => {
+                  toggleDecision(d.v);
+                  /* ⚠️ فرمِ سفارش فقط وقتی باز می‌شود که تصمیم **تازه** زده
+                     شده و مراجعه ذخیره‌شده است (سفارش به visitId نیاز دارد). */
+                  if (ORDER_META[d.v] && !f.decisions.includes(d.v)) {
+                    if (initial?.id) setOrderSheet({ kind: d.v });
+                    else onToast('اول مراجعه را ذخیره کنید، بعد فرمِ درخواست باز می‌شود');
+                  }
+                }}
               >{d.l}</button>
             ))}
           </div>
           {DECISIONS.filter((d) => d.hint && f.decisions.includes(d.v)).map((d) => (
             <p key={d.v} className="db-decide-hint">{d.l}: {d.hint}</p>
           ))}
-          {f.decisions.some((d) => ['lab', 'imaging', 'consult', 'referral'].includes(d)) && (
+          {!initial?.id && f.decisions.some((d) => ORDER_META[d]) && (
             <p className="db-decide-hint">
-              فرمِ درخواست/ارجاعِ این تصمیم‌ها در نسخهٔ بعد به همین‌جا وصل می‌شود؛ فعلاً
-              تصمیم ثبت می‌شود تا در پرونده و گزارش بماند.
+              فرمِ درخواست بعد از ذخیرهٔ همین مراجعه باز می‌شود (هر سفارش زیرِ مراجعهٔ خودش می‌نشیند).
             </p>
+          )}
+          {initial?.id && (
+            <div className="db-orders">
+              {orders.map((o) => (
+                <div className="db-order" key={`${o.kind}-${o.id}`}>
+                  <b>{o.kindFa}</b>
+                  <span>{o.summary}</span>
+                  <i className={o.status}>
+                    {o.status === 'answered' ? 'پاسخ ثبت شد' : o.status === 'sent' ? 'برای بیمار رفت' : 'ثبت‌شده'}
+                  </i>
+                  <button type="button" onClick={() => setOrderSheet({ kind: o.kind, order: o })}>باز کردن</button>
+                </div>
+              ))}
+              <div className="db-daychips">
+                {Object.entries(ORDER_META).map(([k, m]) => (
+                  <button key={k} type="button" className="db-daychip"
+                          onClick={() => setOrderSheet({ kind: k })}>+ {m.fa}</button>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -1351,6 +1389,19 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
         </div>
       )}
 
+
+      {/* میزبان همیشه سوار است و خودش presence را می‌گرداند (OrderSheet.jsx). */}
+      <OrderSheet
+        open={!!orderSheet}
+        key={orderSheet ? `${orderSheet.kind}-${orderSheet.order?.id ?? 'new'}` : 'none'}
+        kind={orderSheet?.kind}
+        order={orderSheet?.order}
+        patientId={initial?.patientId}
+        visitId={initial?.id}
+        onClose={() => setOrderSheet(null)}
+        onSaved={loadOrders}
+        onToast={onToast}
+      />
 
       <button className="db-submit" type="submit" disabled={busy}>
         {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}

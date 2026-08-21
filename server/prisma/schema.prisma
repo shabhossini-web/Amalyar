@@ -947,6 +947,10 @@ model AuditEvent {
 /// `patients.clinical.read`. سرویس دو نمای متفاوت می‌سازد، نه یک نما با فیلدهای
 /// خالی — چیزی که کاربر اجازه‌اش را ندارد اصلاً از DB بیرون نمی‌آید.
 model Patient {
+  labOrders      LabOrder[]
+  imagingOrders  ImagingOrder[]
+  consultOrders  ConsultOrder[]
+  referralOrders ReferralOrder[]
   id         Int       @id @default(autoincrement())
   code       String    @unique // AM-0001
   /// ردِ منبع برای دادهٔ وارد‌شده از سامانهٔ قبلی — «malekteb:patient_profiles:۴۲».
@@ -1188,6 +1192,10 @@ model ClinicalNote {
 /// مراجعه (Visit) — واحدِ اصلیِ کار: عمل/خدمت برای یک بیمار
 /// ⚠️ همهٔ مبالغ «تومان» و عددِ صحیح‌اند (قانونِ تک‌واحدی — درسِ ملک‌طب)
 model Visit {
+  labOrders      LabOrder[]
+  imagingOrders  ImagingOrder[]
+  consultOrders  ConsultOrder[]
+  referralOrders ReferralOrder[]
   id        Int     @id @default(autoincrement())
   patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
   patientId Int     @map("patient_id")
@@ -2322,4 +2330,101 @@ model AiFeedback {
 
   @@index([kind, createdAt])
   @@map("ai_feedback")
+}
+
+/// ── سفارش‌های بالینیِ زیرِ ویزیت ──────────────────────────────────────
+/// چهار موجودیتِ جدا چون فیلدهایشان واقعاً فرق دارد (تیک‌های آزمایش در
+/// برابرِ مودالیتهٔ تصویربرداری در برابرِ تخصصِ مشاور)؛ ولی چرخه‌شان یکی
+/// است: ثبت → لینک برای بیمار → پاسخ → نشستن زیرِ همان ویزیت.
+model LabOrder {
+  id        Int      @id @default(autoincrement())
+  patientId Int      @map("patient_id")
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  /// حذفِ مراجعه سفارش را نمی‌برد — سندِ پرونده است (SetNull).
+  visitId   Int?     @map("visit_id")
+  visit     Visit?   @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  tests     String[] @default([])
+  note      String?
+  dueDate   DateTime? @map("due_date")
+  token     String   @unique
+  /// draft | sent | answered
+  status    String   @default("draft")
+  sentAt    DateTime? @map("sent_at")
+  resultText String?  @map("result_text")
+  resultLink String?  @map("result_link")
+  resultUser String?  @map("result_user")
+  resultPass String?  @map("result_pass")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("lab_orders")
+}
+
+model ImagingOrder {
+  id        Int      @id @default(autoincrement())
+  patientId Int      @map("patient_id")
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visitId   Int?     @map("visit_id")
+  visit     Visit?   @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  modalities String[] @default([])
+  region    String?
+  note      String?
+  dueDate   DateTime? @map("due_date")
+  token     String   @unique
+  status    String   @default("draft")
+  sentAt    DateTime? @map("sent_at")
+  resultText String?  @map("result_text")
+  resultLink String?  @map("result_link")
+  resultUser String?  @map("result_user")
+  resultPass String?  @map("result_pass")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("imaging_orders")
+}
+
+model ConsultOrder {
+  id        Int      @id @default(autoincrement())
+  patientId Int      @map("patient_id")
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visitId   Int?     @map("visit_id")
+  visit     Visit?   @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  specialty  String?
+  doctorName String? @map("doctor_name")
+  note       String?
+  token      String  @unique
+  status     String  @default("draft")
+  sentAt     DateTime? @map("sent_at")
+  answerText String? @map("answer_text")
+  answerLink String? @map("answer_link")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("consult_orders")
+}
+
+model ReferralOrder {
+  id        Int      @id @default(autoincrement())
+  patientId Int      @map("patient_id")
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  visitId   Int?     @map("visit_id")
+  visit     Visit?   @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  specialty  String?
+  doctorName String? @map("doctor_name")
+  note       String?
+  token      String  @unique
+  status     String  @default("draft")
+  sentAt     DateTime? @map("sent_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([visitId])
+  @@map("referral_orders")
 }

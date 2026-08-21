@@ -4,6 +4,8 @@ import { LettersController } from './letters.controller';
 import { LettersService } from './letters.service';
 import { PatientsService } from './patients.service';
 import { DefinitionsController } from './definitions.controller';
+import { OrdersController, PublicOrdersController } from './orders.controller';
+import { OrdersService } from './orders.service';
 import { DefinitionsService } from './definitions.service';
 import { PlacesService } from './places.service';
 import { PlacesController } from './places.controller';
@@ -60,12 +62,12 @@ import { PermissionGuard } from '../auth/permission.guard';
     PatientsController, BillingController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, AvailabilityController, AppointmentsController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
-    SummaryController, PublicSummaryController, LettersController,
+    SummaryController, PublicSummaryController, LettersController, OrdersController, PublicOrdersController,
   ],
   providers: [
     PatientsService, DefinitionsService, RecordService, BillingService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, PermissionGuard,
+    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */
   exports: [ServiceCodesService],
