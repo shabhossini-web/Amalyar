@@ -7,6 +7,7 @@
  * پوسته عوض می‌شوند.
  */
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiUpload } from '../lib/api.js';
 import { jStrToIso, isoToJStr } from '../lib/jalali.js';
@@ -41,10 +42,12 @@ export const ORDER_META = {
  * AnimatePresence هنوز هست و انیمیشنِ خروج واقعاً اجرا می‌شود.
  */
 export default function OrderSheetHost({ open, ...rest }) {
-  return (
+  // بیرونِ شیتِ ویزیت: transform/backdrop-filter و overflow والد، fixed را می‌بُرند.
+  return createPortal(
     <AnimatePresence>
-      {open && <OrderSheet {...rest} />}
-    </AnimatePresence>
+      {open && <OrderSheet key={`${rest.kind}-${rest.order?.id ?? 'new'}`} {...rest} />}
+    </AnimatePresence>,
+    document.body,
   );
 }
 
@@ -112,10 +115,11 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
   };
 
   return (
-    <Overlay onClose={onClose} backdrop="od-bg" panel="glass od-sheet">
+    <Overlay onClose={onClose} closable={!busy} backdrop="od-bg" panel="glass od-sheet"
+      role="dialog" aria-modal="true" aria-label={meta.fa}>
       <div className="od-head">
         <h3>{meta.fa}</h3>
-        <button type="button" className="db-x" onClick={onClose} aria-label="بستن">×</button>
+        <button type="button" className="db-x" disabled={busy} onClick={onClose} aria-label="بستن">×</button>
       </div>
 
       {kind === 'lab' && (

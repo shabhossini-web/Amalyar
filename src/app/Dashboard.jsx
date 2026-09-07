@@ -287,16 +287,16 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
     if (!f.opReport.trim()) { onToast('اول شرح را بنویسید، بعد دستیار', true); return; }
     setAiBusy(mode);
     const raw = f.opReport;
+    let draft = mode === 'continue' ? raw.replace(/\n?$/, '\n') : '';
     try {
       setRawReport(raw);
-      if (mode === 'structure') setF((s2) => ({ ...s2, opReport: '' }));
       await apiStream(
         '/ai/note-draft/stream',
         { patientId: initial.patientId, visitId: initial.id, kind: 'op', mode, text: raw },
-        (d) => setF((s2) => ({ ...s2, opReport: s2.opReport + d })),
+        (d) => { draft += d; setF((s2) => ({ ...s2, opReport: draft })); },
       );
       /* متنِ کامل، همان‌طور که دستیار تحویل داد — مبنای «یادگیری از اصلاح». */
-      setF((s2) => { aiDraftsRef.current.op = s2.opReport; return s2; });
+      aiDraftsRef.current.op = draft;
     } catch (e) {
       setF((s2) => ({ ...s2, opReport: raw }));
       setRawReport(null);
@@ -523,7 +523,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
 
   const submit = async (e) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || aiBusy) return;
     /* ⚠️ Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
        زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
        کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
@@ -797,7 +797,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
   if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: (
     <div className="db-field db-report">
       <span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
-      <textarea rows={3} value={f.opReport} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
+      <textarea rows={3} value={f.opReport} readOnly={!!aiBusy} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
       {(sttOn || (editing && aiOn)) && (
         <div className="db-aibar">
           {sttOn && (
@@ -815,7 +815,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
             {aiBusy === 'continue' ? 'در حالِ ادامه…' : 'ادامه بنویس'}
           </button>
           {rawReport !== null && (
-            <button type="button" className="db-aighost" onClick={() => { setF((s2) => ({ ...s2, opReport: rawReport })); setRawReport(null); }}>
+            <button type="button" className="db-aighost" disabled={!!aiBusy} onClick={() => { setF((s2) => ({ ...s2, opReport: rawReport })); setRawReport(null); }}>
               برگرداندنِ متنِ خام
             </button>
           )}
@@ -1393,7 +1393,6 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
       {/* میزبان همیشه سوار است و خودش presence را می‌گرداند (OrderSheet.jsx). */}
       <OrderSheet
         open={!!orderSheet}
-        key={orderSheet ? `${orderSheet.kind}-${orderSheet.order?.id ?? 'new'}` : 'none'}
         kind={orderSheet?.kind}
         order={orderSheet?.order}
         patientId={initial?.patientId}
@@ -1403,7 +1402,7 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
         onToast={onToast}
       />
 
-      <button className="db-submit" type="submit" disabled={busy}>
+      <button className="db-submit" type="submit" disabled={busy || !!aiBusy}>
         {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
       </button>
       </>)}

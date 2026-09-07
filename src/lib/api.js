@@ -134,30 +134,55 @@ export async function apiStream(path, body, onChunk) {
   const headers = { 'Content-Type': 'application/json' };
   const tok = getToken();
   if (tok) headers.Authorization = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  } catch {
+    throw new ApiError('اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.', 0);
+  }
   if (!res.ok || !res.body) {
+    if (res.status === 401 && tok) window.dispatchEvent(new CustomEvent('amalyar:unauthorized'));
     const j = await res.json().catch(() => null);
-    throw new ApiError(j?.message ?? 'خطای سرور', res.status);
+    const m = j?.message;
+    throw new ApiError(Array.isArray(m) ? m.join('، ') : m || 'خطای سرور', res.status);
   }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    let i;
-    while ((i = buf.indexOf('\n\n')) >= 0) {
-      const evt = buf.slice(0, i);
-      buf = buf.slice(i + 2);
-      const line = evt.split('\n').find((l) => l.startsWith('data: '));
-      if (!line) continue;
-      const data = line.slice(6);
-      if (data === '[DONE]') return;
-      const j = JSON.parse(data);
-      if (j.error) throw new ApiError(j.error, 502);
-      if (j.d) onChunk(j.d);
+  let hasText = false;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) throw new ApiError('پاسخِ دستیار کامل دریافت نشد — دوباره تلاش کنید', 502);
+      buf += dec.decode(value, { stream: true });
+      let boundary;
+      // SSE با LF و CRLF معتبر است؛ مرز ممکن است بین دو بسته بشکند.
+      while ((boundary = /\r?\n\r?\n/.exec(buf))) {
+        const evt = buf.slice(0, boundary.index);
+        buf = buf.slice(boundary.index + boundary[0].length);
+        const data = evt.split(/\r?\n/).filter((l) => l.startsWith('data:'))
+          .map((l) => l.slice(5).replace(/^ /, '')).join('\n');
+        if (!data) continue;
+        if (data === '[DONE]') {
+          if (!hasText) throw new ApiError('پاسخِ سرویسِ هوشِ مصنوعی خالی بود — متنِ قبلی حفظ شد', 502);
+          return;
+        }
+        let j;
+        try { j = JSON.parse(data); }
+        catch { throw new ApiError('پاسخِ دستیار نامعتبر بود — دوباره تلاش کنید', 502); }
+        if (j.error) throw new ApiError(typeof j.error === 'string' ? j.error : 'خطای سرویسِ هوشِ مصنوعی', 502);
+        if (typeof j.d === 'string' && j.d) {
+          hasText ||= !!j.d.trim();
+          onChunk(j.d);
+        }
+      }
     }
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError('ارتباط با دستیار قطع شد — دوباره تلاش کنید', 0);
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 }
 

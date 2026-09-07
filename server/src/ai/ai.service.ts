@@ -230,11 +230,13 @@ export class AiService {
         const json: any = await upstream.json();
         const out = json?.choices?.[0]?.message?.content;
         if (typeof out === 'string' && out.trim()) emit({ d: out.trim() });
-        else emit({ error: 'پاسخِ سرویسِ هوشِ مصنوعی خالی بود' });
+        else throw new Error('empty AI response');
       } else {
         const decoder = new TextDecoder('utf-8');
         let buf = '';
-        for await (const chunk of upstream.body as any) {
+        let hasText = false;
+        let completed = false;
+        stream: for await (const chunk of upstream.body as any) {
           buf += decoder.decode(chunk, { stream: true });
           let i;
           while ((i = buf.indexOf('\n')) >= 0) {
@@ -242,14 +244,20 @@ export class AiService {
             buf = buf.slice(i + 1);
             if (!line.startsWith('data:')) continue;
             const data = line.slice(5).trim();
-            if (data === '[DONE]') { buf = ''; break; }
-            try {
-              const j = JSON.parse(data);
-              const d = j?.choices?.[0]?.delta?.content;
-              if (typeof d === 'string' && d) emit({ d });
-            } catch { /* خطِ نیمه یا keep-alive — رد می‌شویم */ }
+            if (data === '[DONE]') { completed = true; break stream; }
+            // خطِ کاملِ نامعتبر یا خطای گیت‌وی نباید به موفقیتِ خالی تبدیل شود.
+            const j = JSON.parse(data);
+            if (j.error) throw new Error('AI provider returned a stream error');
+            const choice = j?.choices?.[0];
+            if (choice?.finish_reason === 'length' || choice?.finish_reason === 'content_filter') {
+              throw new Error('AI response was not completed');
+            }
+            if (choice?.finish_reason === 'stop') completed = true;
+            const d = choice?.delta?.content;
+            if (typeof d === 'string' && d) { hasText ||= !!d.trim(); emit({ d }); }
           }
         }
+        if (!hasText || !completed) throw new Error('empty or incomplete AI stream');
       }
       res.write('data: [DONE]\n\n');
     } catch (e: any) {

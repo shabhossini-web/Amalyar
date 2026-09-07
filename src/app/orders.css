@@ -1,10 +1,20 @@
 /* ── فرمِ سفارشِ بالینی ── */
-.od-bg { position: fixed; inset: 0; z-index: 60; background: rgba(4, 6, 20, .72); backdrop-filter: blur(4px); }
-.od-sheet {
-  position: fixed; z-index: 61; inset-block: 4vh; inset-inline: 50% auto; transform: translateX(50%);
-  width: min(680px, 94vw); max-height: 92vh; overflow-y: auto;
+.od-bg {
+  position: fixed; inset: 0; z-index: 90; height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(4, 6, 20, .72); backdrop-filter: blur(4px);
+}
+/* وسط‌چین با flex، نه transform که انیمیشن بازنویسی‌اش می‌کند.
+   specificity از glass بیشتر است تا ترتیبِ import اسکرول را خاموش نکند. */
+.glass.od-sheet {
+  position: relative; width: 100%; max-width: 680px; max-height: 100%; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain; cursor: default;
+  background: var(--bg2);
   display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 20px;
 }
+.od-sheet > * { flex-shrink: 0; }
 .od-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .od-head h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--brand-2); }
 .od-block { display: flex; flex-direction: column; gap: 8px; }

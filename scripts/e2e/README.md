@@ -34,6 +34,18 @@ npm run build && node dist/main.js
 
 ## اجرا
 
+رگرسیونِ نمایش سفارش و دریافت شرح AI (بدون دادهٔ واقعی):
+
+```bash
+cd server && npm run build && cd ..
+node scripts/e2e/ai-stream-contract.mjs
+E2E_CHROME=/path/to/chromium node scripts/e2e/orders-ai-ui.mjs
+```
+
+اولی AiService و کلاینت واقعی را به provider مصنوعی روی HTTP محلی وصل می‌کند.
+دومی Vite را روی 5199 راه می‌اندازد و UI واقعی را با API fixture در موبایل و
+دسکتاپ می‌سنجد. پورت 5199 باید آزاد باشد؛ آزمون‌ها جای تأیید مدل واقعیِ نصب را نمی‌گیرند.
+
 ```bash
 node scripts/e2e/forms-api.mjs        # رنگ، صفحه، دو نوعِ تازه، مهاجرتِ scope
 node scripts/e2e/forms-validate.mjs   # اجباری‌بودن از مسیرِ واقعیِ ثبتِ مراجعه
