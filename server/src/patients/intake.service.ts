@@ -29,6 +29,8 @@ function jalaliYm(d: Date): [number, number] {
 
 /** سقفِ فیشِ واریزی — عکسِ گوشی، نه اسکنِ آرشیوی. */
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
+/** سقفِ تعدادِ فایل در هر کادرِ عکس (و فیش) — نه بی‌نهایت، نه یکی. */
+const MAX_FIELD_IMAGES = 10;
 const RECEIPT_MIME = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/;
 
 /** روزهای اعتبارِ یک ثبت‌نامِ نیمه‌کاره. */
@@ -939,7 +941,37 @@ export class IntakeService {
       },
     });
 
-    const data = { ...(row.data as any), [fieldKey]: { id: doc.id, name: doc.fileName } };
+    /* ⚠️ مقدارِ فیلدِ عکس **آرایه** است، نه یک شیء: بیمار معمولاً چند صفحه
+       دارد (پشت و روی کارت، دو صفحهٔ جواب). رکوردهای قدیمی شیءِ تکی‌اند و
+       همان‌جا به آرایهٔ یک‌عضوی تبدیل می‌شوند — بی‌مهاجرتِ جدا و بی‌شکستنِ
+       فرم‌های پرشدهٔ موجود. */
+    const prev = (row.data as any)?.[fieldKey];
+    const list = Array.isArray(prev) ? [...prev] : (prev && typeof prev === 'object' && prev.id ? [prev] : []);
+    if (list.length >= MAX_FIELD_IMAGES) {
+      throw new BadRequestException(`برای این کادر حداکثر ${MAX_FIELD_IMAGES} فایل می‌شود گذاشت`);
+    }
+    list.push({ id: doc.id, name: doc.fileName });
+    const data = { ...(row.data as any), [fieldKey]: list };
+    await this.prisma.intakeSubmission.update({ where: { id: row.id }, data: { data } });
+    return this.publicView(token);
+  }
+
+  /**
+   * برداشتنِ یک عکس از کادر — بیمار عکسِ اشتباه را باید بتواند بردارد،
+   * وگرنه تنها راهش «همه را از نو» بود.
+   *
+   * ⚠️ خودِ `Document` پاک نمی‌شود، فقط ارجاعش از فرم برداشته می‌شود:
+   * فایلِ آپلودشده سندِ پرونده است و حذفش کارِ ادمین است نه لینکِ عمومی.
+   */
+  async detachImage(token: string, fieldKey: string, docId: number) {
+    const row = await this.expireIfDue(token);
+    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+    }
+    const prev = (row.data as any)?.[fieldKey];
+    const list = Array.isArray(prev) ? prev : (prev && typeof prev === 'object' && prev.id ? [prev] : []);
+    const next = list.filter((x: any) => Number(x?.id) !== Number(docId));
+    const data = { ...(row.data as any), [fieldKey]: next };
     await this.prisma.intakeSubmission.update({ where: { id: row.id }, data: { data } });
     return this.publicView(token);
   }
@@ -952,7 +984,12 @@ export class IntakeService {
    */
   async attachReceipt(token: string, file: { originalname: string; mimetype: string; buffer: Buffer; size: number }) {
     const row = await this.expireIfDue(token);
-    if (row.status !== 'pending_payment') throw new BadRequestException('ابتدا اطلاعاتِ عمل را کامل کنید');
+    /* ⚠️ `pending_approval` هم پذیرفته می‌شود: بیمار که فیشِ اول را فرستاده،
+       باید بتواند فیشِ دوم (قسطِ دوم، یا جایگزینِ عکسِ ناخوانا) را هم بگذارد.
+       تا دیروز همان‌جا رد می‌شد با پیامِ بی‌ربطِ «اطلاعاتِ عمل را کامل کنید». */
+    if (!['pending_payment', 'pending_approval'].includes(row.status)) {
+      throw new BadRequestException('ابتدا اطلاعاتِ عمل را کامل کنید');
+    }
     if (!row.patientId) throw new BadRequestException('این فرم پرونده‌ای ندارد');
     if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
     if (file.size > MAX_RECEIPT_BYTES) throw new BadRequestException('حجمِ فایل بیش از ۸ مگابایت است');
@@ -975,10 +1012,41 @@ export class IntakeService {
         uploadedById: null,
       },
     });
-    const data = { ...(row.data as any), receiptDocumentId: doc.id };
+    /* ⚠️ `receiptDocumentId` (تکی) عمداً می‌ماند و **اولین** فیش است: همهٔ
+       خواننده‌های موجود (تأیید، ساختِ مراجعه، پرونده) رویش بنا شده‌اند.
+       فیش‌های بعدی در `receiptDocumentIds` جمع می‌شوند — بیمار که دو قسط
+       واریز کرده یا عکسش ناخوانا بوده، باید بتواند دومی را هم بگذارد. */
+    const prevIds: number[] = Array.isArray((row.data as any)?.receiptDocumentIds)
+      ? (row.data as any).receiptDocumentIds.map(Number).filter(Boolean)
+      : ((row.data as any)?.receiptDocumentId ? [Number((row.data as any).receiptDocumentId)] : []);
+    if (prevIds.length >= MAX_FIELD_IMAGES) {
+      throw new BadRequestException(`حداکثر ${MAX_FIELD_IMAGES} فیش می‌شود گذاشت`);
+    }
+    const ids = [...prevIds, doc.id];
+    const data = { ...(row.data as any), receiptDocumentId: ids[0], receiptDocumentIds: ids };
     await this.prisma.intakeSubmission.update({
       where: { id: row.id },
       data: { data, status: 'pending_approval' },
+    });
+    return this.publicView(token);
+  }
+
+  /** برداشتنِ یکی از فیش‌ها — تا وقتی فرم تأیید نشده. */
+  async detachReceipt(token: string, docId: number) {
+    const row = await this.expireIfDue(token);
+    if (!['pending_payment', 'pending_approval'].includes(row.status)) {
+      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+    }
+    const prevIds: number[] = Array.isArray((row.data as any)?.receiptDocumentIds)
+      ? (row.data as any).receiptDocumentIds.map(Number).filter(Boolean)
+      : ((row.data as any)?.receiptDocumentId ? [Number((row.data as any).receiptDocumentId)] : []);
+    const ids = prevIds.filter((x) => x !== Number(docId));
+    const data = { ...(row.data as any), receiptDocumentId: ids[0] ?? null, receiptDocumentIds: ids };
+    /* آخرین فیش که برداشته شد، فرم به «در انتظارِ فیش» برمی‌گردد — وگرنه در
+       صفِ تأیید می‌ماند بی‌آنکه چیزی برای تأیید باشد. */
+    await this.prisma.intakeSubmission.update({
+      where: { id: row.id },
+      data: { data, status: ids.length ? row.status : 'pending_payment' },
     });
     return this.publicView(token);
   }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
+import FileDrop from '../ui/FileDrop.jsx';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
@@ -169,11 +170,13 @@ export default function Dispatch() {
   const removeStop = (id) => guard(() => api(`/routes/stops/${id}`, { method: 'DELETE' }));
   const removeRun = (id) => guard(() => api(`/routes/${id}`, { method: 'DELETE' }), 'مسیر حذف شد');
   const detach = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers/${tid}`, { method: 'DELETE' }));
-  const addProof = (stopId, file) => guard(async () => {
+  /* رسیدِ تحویل چندتاست (عکسِ بار، امضا، فاکتور) — صف را کادرِ مشترک می‌برد
+     و خطا **پرتاب** می‌شود تا همان فایل در فهرست قرمز شود. */
+  const addProof = async (stopId, file) => {
     const fd = new FormData();
     fd.append('file', file);
     await apiUpload(`/routes/stops/${stopId}/proofs`, fd);
-  }, 'رسید ثبت شد ✓');
+  };
 
   const addTo = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers`, { method: 'POST', body: { transferIds: [tid] } }), 'بار به توقف اضافه شد ✓');
   const move = (run, i, dir) => {
@@ -451,16 +454,15 @@ export default function Dispatch() {
                             {proofUrls[pr.id] ? <img src={proofUrls[pr.id]} alt="" /> : <i>…</i>}
                           </a>
                         ))}
-                        <label className={`dp-upload${busy ? ' off' : ''}`}>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            disabled={busy}
-                            onChange={(e) => { if (e.target.files?.[0]) addProof(st.id, e.target.files[0]); e.target.value = ''; }}
-                          />
-                          + رسیدِ تحویل
-                        </label>
+                        <FileDrop
+                          variant="button"
+                          accept="image/*"
+                          capture="environment"
+                          disabled={busy}
+                          label="+ رسیدِ تحویل"
+                          onUpload={(file) => addProof(st.id, file)}
+                          onAllDone={() => { refresh(); setToast("رسید ثبت شد ✓"); }}
+                        />
                         {st.handedTo && <span className="dp-handed">تحویل به: {st.handedTo}</span>}
                       </div>
 

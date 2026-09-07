@@ -28,6 +28,7 @@ import Crm from './app/Crm.jsx';
 import Reminders from './app/Reminders.jsx';
 import Letters from './app/Letters.jsx';
 import NotesSearch from './app/NotesSearch.jsx';
+import OrderPublic from './app/OrderPublic.jsx';
 import Assistant from './app/Assistant.jsx';
 import Chat from './app/Chat.jsx';
 import Gate from './app/Gate.jsx';
@@ -78,6 +79,8 @@ export default function App() {
           <Route path="/v/:token" element={<VisitSummary />} />
           {/* پروندهٔ الکترونیکِ بیمار — لینکِ دائمی؛ عمومی با توکن. */}
           <Route path="/p/:token" element={<Portal />} />
+          {/* سفارشِ بالینی — چیزی که بیمار از لینکِ پیامک باز می‌کند. */}
+          <Route path="/o/:token" element={<OrderPublic />} />
           <Route path="/platform-admin" element={<PlatformAdmin />} />
           <Route path="/app" element={<Protected><Launcher /></Protected>} />
           <Route path="/app/dashboard" element={<Protected><Gate feature="dashboard"><Dashboard /></Gate></Protected>} />

@@ -172,9 +172,20 @@ export class RecordService {
       const rows = defined
         .map((f) => ({ key: f.key, label: f.label, value: vals[f.key] }))
         .concat(Object.keys(vals).filter((k) => !seen.has(k)).map((k) => ({ key: k, label: k, value: vals[k] })));
+      /* ⚠️ ارجاعِ عکس شیء (یا از #۶۶ آرایه) است؛ `String()` رویش
+         «[object Object]» می‌داد. خوانا نوشته می‌شود و شمارش هم می‌آید. */
+      const show = (v: any): string => {
+        if (Array.isArray(v)) {
+          const names = v.map((x) => (x && typeof x === 'object' ? x.name : x)).filter(Boolean);
+          return names.length ? `${names.length} فایل: ${names.join('، ')}` : '';
+        }
+        if (v && typeof v === 'object') return v.name || v.url || (v.id ? 'فایلِ پیوست' : '');
+        return String(v);
+      };
       return rows
-        .filter((r) => r.value !== null && r.value !== undefined && String(r.value).trim() !== '')
-        .map((r) => ({ key: r.key, label: r.label, value: String(r.value) }));
+        .map((r) => ({ ...r, value: r.value === null || r.value === undefined ? '' : show(r.value) }))
+        .filter((r) => r.value.trim() !== '')
+        .map((r) => ({ key: r.key, label: r.label, value: r.value }));
     };
 
     /**

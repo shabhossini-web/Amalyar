@@ -166,20 +166,48 @@ async function signup(phone, username, password) {
 
   // آکاردئونِ پرسش‌ها
   const faqItem = page.locator('.tl-faq-item').first();
+  /* ⚠️ **اول مثلِ کاربر بیاورش وسطِ دید، بعد کلیک کن.** `click()`ِ پلی‌رایت
+     المان را دقیقاً لبهٔ پایین می‌گذارد — داخلِ همان ۱۲٪ که `rootMargin` عمداً
+     کنار گذاشته — و ناظر شلیک نمی‌کند. کاربر هرگز آن‌جا کلیک نمی‌کند چون
+     چیزی نمی‌بیند؛ پس آن حالت رفتارِ محصول نیست، artifactِ ابزار است.
+     (پرشِ لنگرِ سربرگ جدا سنجیده شد: بخش را در top≈۱۰۰ می‌گذارد و سالم است.) */
+  await faqItem.scrollIntoViewIfNeeded();
+  await faqItem.evaluate((e) => e.scrollIntoView({ block: 'center' }));
+  await page.waitForFunction(
+    () => document.querySelector('.tl-faq-item')?.hasAttribute('data-tl-in'),
+    null, { timeout: 5000 },
+  );
   await page.locator('.tl-faq-q').first().click();
   await page.waitForTimeout(500);
   ok('آکاردئونِ پرسش باز می‌شود', await page.locator('.tl-faq-item.tl-open').count() === 1);
   /* ⚠️ **پرسشِ بازشده باید دیده بماند.** نشانهٔ reveal یک‌بار کلاس بود و
-     رندرِ دوباره‌ی React پاکش می‌کرد؛ کاربر روی پرسش می‌زد و پرسش محو می‌شد. */
-  ok('پرسشِ بازشده محو نمی‌شود', await faqItem.evaluate((e) => getComputedStyle(e).opacity) === '1',
-    `opacity=${await faqItem.evaluate((e) => getComputedStyle(e).opacity)}`);
+     رندرِ دوباره‌ی React پاکش می‌کرد؛ کاربر روی پرسش می‌زد و پرسش محو می‌شد.
+     سنجه **خودِ نشانه** است نه opacity: کلیکْ المان را داخلِ دید می‌آورد و
+     یک گذارِ ۰٫۸ ثانیه‌ای شروع می‌شود، پس خواندنِ opacity در لحظه عددِ
+     وسطِ انیمیشن می‌دهد و سنجه را لغزنده می‌کند (همین‌جا ۰٫۰۰۶ خواند). */
+  ok('نشانهٔ reveal پس از رندرِ دوبارهٔ React می‌ماند',
+    await faqItem.evaluate((e) => e.hasAttribute('data-tl-in')));
+  const faqOpacity = await faqItem
+    .evaluate((e) => new Promise((r) => {
+      const t = setTimeout(() => r(getComputedStyle(e).opacity), 1500);
+      const tick = () => {
+        if (getComputedStyle(e).opacity === '1') { clearTimeout(t); r('1'); } else requestAnimationFrame(tick);
+      };
+      tick();
+    }));
+  ok('پرسشِ بازشده محو نمی‌شود', faqOpacity === '1', `opacity=${faqOpacity}`);
   ok('پاسخ پس از باز شدن ارتفاع دارد',
     await page.locator('.tl-faq-item.tl-open .tl-faq-a').evaluate((e) => e.getBoundingClientRect().height) > 10);
 
   // اسکرولِ کامل تا همهٔ بخش‌ها reveal شوند و اسکرین‌شات واقعی باشد
   await page.evaluate(async () => {
+    /* ⚠️ `behavior: 'instant'` اجباری است: `index.css` سراسری
+       `html { scroll-behavior: smooth }` دارد، پس `scrollTo`ِ ساده انیمیشن
+       می‌شود و حلقه زودتر از رسیدنِ صفحه تمام می‌شود — بخش‌های میانی هرگز
+       داخلِ دید نمی‌آیند و ناظر شلیک نمی‌کند. */
+    window.scrollTo({ top: 0, behavior: 'instant' });
     for (let y = 0; y < document.body.scrollHeight; y += 400) {
-      window.scrollTo(0, y);
+      window.scrollTo({ top: y, behavior: 'instant' });
       await new Promise((r) => setTimeout(r, 60));
     }
   });
@@ -196,7 +224,7 @@ async function signup(phone, username, password) {
     shown: document.querySelectorAll('.tl-reveal[data-tl-in]').length,
   }));
   ok('همهٔ بخش‌ها پس از اسکرول دیده می‌شوند', allShown, `${revealed.shown}/${revealed.total}`);
-  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await page.waitForTimeout(400);
   await page.screenshot({ path: process.env.E2E_SHOTS ? process.env.E2E_SHOTS + '/site-landing.png' : '/tmp/shot-landing.png', fullPage: true });
 
@@ -208,8 +236,9 @@ async function signup(phone, username, password) {
   const overflow = await m.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok('موبایل: اسکرولِ افقی ندارد', overflow <= 1, `overflow=${overflow}px`);
   await m.evaluate(async () => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
     for (let y = 0; y < document.body.scrollHeight; y += 300) {
-      window.scrollTo(0, y);
+      window.scrollTo({ top: y, behavior: 'instant' });
       await new Promise((r) => setTimeout(r, 50));
     }
   });
@@ -219,7 +248,7 @@ async function signup(phone, username, password) {
       null, { timeout: 6000 },
     ).then(() => true).catch(() => false);
   ok('موبایل: همهٔ بخش‌ها دیده می‌شوند', mShown);
-  await m.evaluate(() => window.scrollTo(0, 0));
+  await m.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await m.waitForTimeout(400);
   await m.screenshot({ path: process.env.E2E_SHOTS ? process.env.E2E_SHOTS + '/site-landing-mobile.png' : '/tmp/shot-landing-mobile.png', fullPage: true });
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, toEnDigits } from '../lib/jalali.js';
 import './tech.css';
@@ -167,27 +168,21 @@ export default function Tech() {
 
 /** آپلودِ گزارشِ عمل — یک دکمه، بدونِ شیت: کارشناس فایل را همان‌جا می‌دهد. */
 function ReportButton({ visit, onDone, onError }) {
-  const ref = useRef(null);
-  const [busy, setBusy] = useState(false);
+  /* ⚠️ گزارشِ عمل معمولاً **چند صفحه** است؛ تا دیروز هر صفحه یک رفت‌وبرگشتِ
+     کامل بود. حالا همان کادرِ مشترک صف را می‌گرداند. */
   const send = async (file) => {
-    if (!file) return;
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      await apiUpload(`/tech/visits/${visit.id}/report`, fd);
-      onDone('گزارشِ عمل ثبت شد ✓');
-    } catch (e) { onError(e.message); } finally { setBusy(false); }
+    const fd = new FormData();
+    fd.append('file', file);
+    await apiUpload(`/tech/visits/${visit.id}/report`, fd);
   };
   return (
-    <>
-      <input ref={ref} type="file" hidden accept="image/*,application/pdf"
-             onChange={(e) => { send(e.target.files?.[0]); e.target.value = ''; }} />
-      <button type="button" className={`tk-report${visit.reportAt ? ' on' : ''}`} disabled={busy}
-              onClick={() => ref.current?.click()}>
-        {busy ? 'در حال ارسال…' : visit.reportAt ? `گزارش ثبت شده — ${faDate(visit.reportAt)}` : 'آپلودِ گزارشِ عمل'}
-      </button>
-    </>
+    <FileDrop
+      variant="button"
+      accept="image/*,application/pdf"
+      label={visit.reportAt ? `گزارش ثبت شده — ${faDate(visit.reportAt)} · افزودنِ صفحه` : 'آپلودِ گزارشِ عمل'}
+      onUpload={send}
+      onAllDone={() => onDone('گزارشِ عمل ثبت شد ✓')}
+    />
   );
 }
 

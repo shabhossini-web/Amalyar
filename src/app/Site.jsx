@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { api, apiUrl, getToken } from '../lib/api.js';
+import { api, apiUpload, apiUrl } from '../lib/api.js';
 import ProfileMenu from './ProfileMenu.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -89,19 +89,19 @@ const KINDS = {
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
 
-/** آپلودِ تصویر — `api()` فقط JSON می‌فرستد، پس این‌جا `fetch`ِ خودمان. */
-async function uploadImage(itemId, slot, file) {
+/**
+ * آپلودِ تصویر — از `apiUpload`ِ مشترک، نه `fetch`ِ محلی.
+ *
+ * ⚠️ نسخهٔ اول `fetch`ِ خودش را داشت چون `api()` فقط JSON می‌فرستد؛ بعد
+ * `apiUpload` به `lib/api.js` اضافه شد که همان کار را می‌کند **به‌علاوهٔ**
+ * رویدادِ ۴۰۱ (خروجِ خودکارِ سشنِ باطل‌شده). دو مسیرِ آپلود یعنی یکی‌شان
+ * روزی این رفتار را نداشته باشد.
+ */
+const uploadImage = (itemId, slot, file) => {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch(apiUrl(`/site/items/${itemId}/image${slot === 2 ? '2' : ''}`), {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${getToken()}` },
-    body: fd,
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.message || 'آپلودِ تصویر ناموفق بود');
-  return data;
-}
+  return apiUpload(`/site/items/${itemId}/image${slot === 2 ? '2' : ''}`, fd);
+};
 
 function ItemSheet({ kind, row, onClose, onSaved, onToast }) {
   const def = KINDS[kind];

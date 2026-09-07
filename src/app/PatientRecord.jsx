@@ -12,6 +12,7 @@ import { Alert, Back, Close, Download, LinkIcon, Lock, Pencil, Plus, Trash } fro
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
+import FileDrop from '../ui/FileDrop.jsx';
 
 
 const CATEGORIES = {
@@ -336,31 +337,23 @@ function DocsTab({ rec, reload, toast }) {
   const fileRef = useRef(null);
   const [filter, setFilter] = useState('all');
 
+  /* ⚠️ فقط «چه چیزی فرستاده شود» این‌جاست؛ صف، پیش‌نمایش، خطای تک‌فایل و
+     تلاشِ دوباره کارِ `FileDrop`ِ مشترک است. خطا **پرتاب** می‌شود تا همان
+     فایل در فهرست قرمز شود، نه اینکه toast بیاید و معلوم نباشد کدام. */
   const upload = async (file) => {
     if (!file) return;
     let takenAt;
     if (takenJ.trim()) {
       takenAt = jStrToIso(takenJ);
-      if (!takenAt) { toast('تاریخِ مدرک نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)', true); return; }
+      if (!takenAt) throw new Error('تاریخِ مدرک نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)');
     }
-    setBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('category', cat);
-      if (title.trim()) fd.append('title', title.trim());
-      if (visitId) fd.append('visitId', visitId);
-      if (takenAt) fd.append('takenAt', takenAt);
-      await apiUpload(`/patients/${rec.id}/documents`, fd);
-      setTitle(''); setTakenJ(''); setVisitId('');
-      if (fileRef.current) fileRef.current.value = '';
-      await reload();
-      toast('مدرک اضافه شد ✓');
-    } catch (e) {
-      toast(e.message, true);
-    } finally {
-      setBusy(false);
-    }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('category', cat);
+    if (title.trim()) fd.append('title', title.trim());
+    if (visitId) fd.append('visitId', visitId);
+    if (takenAt) fd.append('takenAt', takenAt);
+    await apiUpload(`/patients/${rec.id}/documents`, fd);
   };
 
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
@@ -430,16 +423,17 @@ function DocsTab({ rec, reload, toast }) {
         </div>
         {/* inputِ نیتیو «Choose File» انگلیسی نشان می‌دهد و در رابطِ فارسی وصله است؛
             پس پنهانش می‌کنیم و خودِ label ناحیهٔ کلیک/رها‌کردن می‌شود. */}
-        <label
-          className={`rc-drop${drag ? ' on' : ''}${busy ? ' busy' : ''}`}
-          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-          onDragLeave={() => setDrag(false)}
-          onDrop={(e) => { e.preventDefault(); setDrag(false); upload(e.dataTransfer.files?.[0]); }}
-        >
-          <input ref={fileRef} type="file" disabled={busy} onChange={(e) => upload(e.target.files?.[0])} />
-          <b>{busy ? 'در حال آپلود…' : 'انتخاب یا رهاکردنِ فایل'}</b>
-          <small>عکس، PDF یا هر مدرکِ دیگر — تا {faNum(25)} مگابایت</small>
-        </label>
+        <FileDrop
+          accept="image/*,.pdf"
+          maxMb={25}
+          hint={`عکس، PDF یا هر مدرکِ دیگر — تا ${faNum(25)} مگابایت`}
+          onUpload={upload}
+          onAllDone={async () => {
+            setTitle(''); setTakenJ(''); setVisitId('');
+            await reload();
+            toast('مدارک اضافه شدند ✓');
+          }}
+        />
         {/* لینک به‌جای فایل: MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود. */}
         <div className="rc-linkrow">
           <LinkIcon width="15" height="15" />
@@ -541,17 +535,16 @@ function NotesTab({ rec, reload, toast }) {
     if (!body.trim()) { toast('اول متنِ خام را بنویسید، بعد دستیار ساخت‌یافته‌اش کند', true); return; }
     setAiBusy(mode);
     const raw = body;
+    let draft = mode === 'continue' ? raw.replace(/\n?$/, '\n') : '';
     try {
       setRawBody(raw);
-      if (mode === 'structure') setBody('');
-      else setBody((b) => (!b || b.endsWith('\n') ? b : `${b}\n`));
       await apiStream(
         '/ai/note-draft/stream',
         { patientId: rec.id, kind, mode, text: raw, ...(visitId ? { visitId: +visitId } : {}) },
-        (d) => setBody((b) => b + d),
+        (d) => { draft += d; setBody(draft); },
       );
       /* متنِ کامل، همان‌طور که دستیار تحویل داد — مبنای تشخیصِ اصلاحِ دستی. */
-      setBody((b) => { lastDraftRef.current = b; return b; });
+      lastDraftRef.current = draft;
       toast(mode === 'structure' ? 'پیش‌نویسِ ساخت‌یافته آماده شد — پیش از ثبت مرورش کنید' : 'ادامه نوشته شد — مرورش کنید');
     } catch (e) {
       setBody(raw);
@@ -663,6 +656,7 @@ function NotesTab({ rec, reload, toast }) {
             type="button"
             role="radio"
             aria-checked={kind === k}
+            disabled={!!aiBusy}
             className={kind === k ? 'on' : ''}
             onClick={() => setKind(k)}
           >
@@ -675,6 +669,7 @@ function NotesTab({ rec, reload, toast }) {
           type="button"
           role="radio"
           aria-checked={kind === 'form'}
+          disabled={!!aiBusy}
           className={kind === 'form' ? 'on' : ''}
           onClick={() => setKind('form')}
         >
@@ -686,7 +681,7 @@ function NotesTab({ rec, reload, toast }) {
       <div className="rc-upload">
         <div className="pf-row2">
           <label className="pf-field"><span>مربوط به مراجعه</span>
-            <select value={visitId} onChange={(e) => setVisitId(e.target.value)}>
+            <select value={visitId} disabled={!!aiBusy} onChange={(e) => setVisitId(e.target.value)}>
               <option value="">— کلِ پرونده —</option>
               {rec.visits.map((v) => <option key={v.id} value={v.id}>{v.code}</option>)}
             </select>
@@ -698,6 +693,7 @@ function NotesTab({ rec, reload, toast }) {
             {tpls.map((t) => (
               <button
                 key={t.id} type="button" className={`rc-tpl${t.specific ? ' sp' : ''}`}
+                disabled={!!aiBusy}
                 title={t.specific ? 'اختصاصیِ همین عمل/تشخیص/موضوع' : 'قالبِ عمومی'}
                 onClick={() => setBody((b) => (b.trim() ? `${b}\n\n${t.body}` : t.body))}
               >
@@ -707,7 +703,7 @@ function NotesTab({ rec, reload, toast }) {
           </div>
         )}
         <label className="pf-field"><span>متن</span>
-          <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} placeholder="یافته‌ها، سیرِ بیماری، توصیه‌ها…" />
+          <textarea rows={4} value={body} readOnly={!!aiBusy} onChange={(e) => setBody(e.target.value)} placeholder="یافته‌ها، سیرِ بیماری، توصیه‌ها…" />
         </label>
         <div className="rc-notebar">
           {sttOn && (
@@ -728,7 +724,7 @@ function NotesTab({ rec, reload, toast }) {
             </button>
           )}
           {rawBody !== null && (
-            <button type="button" className="rc-ai-undo" onClick={() => { setBody(rawBody); setRawBody(null); }}>
+            <button type="button" className="rc-ai-undo" disabled={!!aiBusy} onClick={() => { setBody(rawBody); setRawBody(null); }}>
               برگرداندنِ متنِ خام
             </button>
           )}

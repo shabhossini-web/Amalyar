@@ -1,0 +1,80 @@
+/* ── فرمِ سفارشِ بالینی ── */
+.od-bg {
+  position: fixed; inset: 0; z-index: 90; height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: rgba(4, 6, 20, .72); backdrop-filter: blur(4px);
+}
+/* وسط‌چین با flex، نه transform که انیمیشن بازنویسی‌اش می‌کند.
+   specificity از glass بیشتر است تا ترتیبِ import اسکرول را خاموش نکند. */
+.glass.od-sheet {
+  position: relative; width: 100%; max-width: 680px; max-height: 100%; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain; cursor: default;
+  background: var(--bg2);
+  display: flex; flex-direction: column; gap: 12px; padding: 18px 20px; border-radius: 20px;
+}
+.od-sheet > * { flex-shrink: 0; }
+.od-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.od-head h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--brand-2); }
+.od-block { display: flex; flex-direction: column; gap: 8px; }
+.od-label { font-size: 12.5px; font-weight: 700; color: var(--text2); }
+.od-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.od-chip {
+  padding: 6px 12px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 600; color: var(--text2);
+  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px;
+}
+.od-chip.on { color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); border-color: transparent; }
+.od-result {
+  padding: 12px; background: rgba(255, 255, 255, .03);
+  border: 1px solid rgba(255, 255, 255, .09); border-radius: 14px;
+}
+.od-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.od-send {
+  flex: 1 1 220px; padding: 12px 18px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); border: 0; border-radius: 14px;
+}
+.od-save {
+  padding: 12px 18px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
+  background: none; border: 1px solid rgba(255, 255, 255, .18); border-radius: 14px;
+}
+.od-send:disabled, .od-save:disabled { opacity: .55; cursor: default; }
+
+/* فهرستِ سفارش‌های همین مراجعه، زیرِ ردیفِ تصمیم. */
+.db-orders { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.db-order {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  padding: 8px 11px; background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px;
+}
+.db-order b { font-size: 12px; color: var(--brand-2); }
+.db-order span { flex: 1; min-width: 120px; font-size: 11.5px; color: var(--text2); }
+.db-order i {
+  font-style: normal; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
+  color: var(--text3); background: rgba(255, 255, 255, .07);
+}
+.db-order i.sent { color: #38bdf8; background: rgba(56, 189, 248, .14); }
+.db-order i.answered { color: #34d399; background: rgba(52, 211, 153, .14); }
+.db-order button {
+  padding: 5px 11px; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; color: var(--brand-2);
+  background: none; border: 1px solid rgba(var(--brand-2-rgb), .4); border-radius: 99px;
+}
+
+/* ── صفحهٔ عمومیِ سفارش (بیمار) ── */
+.op-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.op-card {
+  width: min(560px, 100%); display: flex; flex-direction: column; gap: 10px;
+  padding: 22px; border-radius: 20px;
+  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .12);
+}
+.op-clinic { font-size: 11.5px; font-weight: 700; color: var(--brand-2); }
+.op-card h1 { margin: 0; font-size: 17px; font-weight: 800; color: var(--text); }
+.op-card h2 { margin: 0; font-size: 13.5px; font-weight: 800; color: var(--brand-2); }
+.op-summary { margin: 0; font-size: 13.5px; line-height: 2; color: var(--text); }
+.op-note { margin: 0; font-size: 12.5px; line-height: 2; color: var(--text2); white-space: pre-wrap; }
+.op-due { margin: 0; font-size: 12.5px; color: var(--text2); }
+.op-due b { color: var(--brand-2); }
+.op-hint { margin: 0; font-size: 11.5px; color: var(--text3); }
+.op-answer { display: flex; flex-direction: column; gap: 9px; margin-top: 8px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .1); }
+.op-ok { margin: 8px 0 0; font-size: 13px; font-weight: 700; color: #34d399; }
+.op-err, .op-err-line { color: #f87171; font-size: 12.5px; }
