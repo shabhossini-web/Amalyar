@@ -17,7 +17,7 @@ try {
     const hospitals = [{ id: 1, name: 'بیمارستان اول', active: true }];
     const banks = [{ id: 1, ownerName: 'شرکت رسمی', bankName: 'تست', classification: 'formal', active: true }];
     let form = { id: 1, key: 'visit.surgery', title: 'عمل', scope: 'visit', visitKind: 'surgery', color: 'violet', active: true, pages: 1, fields: [{ id: 11, key: 'sharedNote', label: 'شرح مشترک', type: 'textarea', role: 'doctor', roles: ['doctor'], roleLabel: 'پزشک', active: true, page: 1, sort: 10, options: [] }] };
-    const visit = { id: 1, patientId: 1, firstName: 'تست', lastName: 'محلی', code: 'AM-001', seq: 1, kind: 'clinic', amount: 0, paid: 0, due: 0, opReport: '', decisions: [] };
+    let visit = { id: 1, patientId: 1, firstName: 'تست', lastName: 'محلی', code: 'AM-001', seq: 1, kind: 'clinic', total: 30000000, paid: 30000000, due: 0, opDate: '2026-09-10', opReport: '', decisions: [] };
     let bill = { charges: [], payments: [], total: 0, paid: 0, due: 0, pricingModel: 'coded', tariffSector: 'public', invoiceType: null, invoiceBankAccount: null };
     let aiReply = { text: 'متن مرتب پیشنهادی' };
     await ctx.route('**/api/**', async (route) => {
@@ -35,10 +35,11 @@ try {
       else if (path === '/partners') body = [{ id: 2, name: 'شریک تست', active: true }];
       else if (path === '/forms/fields/11') { form = { ...form, fields: [{ ...form.fields[0], ...payload, role: payload.roles?.[0] ?? null }] }; body = form; }
       else if (path === '/forms') body = [form];
-      else if (path === '/forms/visit-kinds') body = [{ key: 'clinic', kind: 'clinic', title: 'ویزیت' }];
+      else if (path === '/forms/visit-kinds') body = [{ key: 'clinic', kind: 'clinic', title: 'ویزیت' }, { key: 'surgery', kind: 'surgery', title: 'عمل' }];
       else if (path.startsWith('/forms/visit.')) body = { fields: [
         { key: 'amount', builtin: true, active: true, required: true, type: 'money', label: 'مبلغ (تومان)' },
-        { key: 'notes', builtin: true, active: true, label: 'یادداشت' },
+        { key: 'opDate', builtin: true, active: true, required: true, type: 'date', label: 'تاریخ عمل' },
+        { key: 'notes', builtin: true, active: true, required: true, label: 'یادداشت' },
       ] };
       else if (path === '/ai/status') body = { enabled: true, stt: true };
       else if (path === '/ai/text-draft') { await delay(150); body = aiReply; }
@@ -46,7 +47,7 @@ try {
       else if (path === '/visits/1/billing') body = bill;
       else if (path === '/visits/1/billing/invoice-account') { bill = { ...bill, invoiceType: payload.invoiceType, invoiceBankAccount: banks.find((b) => b.id === payload.bankAccountId) }; body = bill; }
       else if (path === '/settings/letterhead') return route.fulfill({ status: 404, body: '' });
-      else if (path === '/visits/1') body = visit;
+      else if (path === '/visits/1') { if (method === 'PATCH') visit = { ...visit, ...payload }; body = visit; }
       else if (path === '/visits') body = { rows: [visit], total: 1, pages: 1, stats: { total: 1, kinds: [] } };
       else if (path === '/care-plan/timing') body = {};
       else if (path === '/reports/financial') return route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"داده گزارش در این آزمون لازم نیست"}' });
@@ -109,6 +110,37 @@ try {
     await page.getByRole('button', { name: 'ذخیرهٔ تغییرات', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.db-sheet'));
     check(writes.some((w) => w.path === '/visits/1' && w.body.notes?.includes('متن دیکته آزمایشی')), 'paid visit edit saves when amount is required but managed by billing');
+    for (const state of [
+      { kind: 'surgery', total: 30000000, paid: 30000000, due: 0 },
+      { kind: 'clinic', total: 25000000, paid: 10000000, due: 15000000 },
+      { kind: 'surgery', total: 40000000, paid: 10000000, due: 30000000, pricingModel: 'global', globalAmount: 40000000 },
+      { kind: 'clinic', total: 0, paid: 0, due: 0 },
+    ]) {
+      visit = { ...visit, ...state };
+      const beforeWrites = writes.length;
+      await page.goto(`${base}/app/dashboard?patient=1`);
+      const sheet = page.locator('.db-sheet');
+      await sheet.getByLabel('وضعیت مالی ثبت‌شده').waitFor();
+      check((await sheet.getByLabel('وضعیت مالی ثبت‌شده').innerText()).includes(state.total.toLocaleString('fa-IR')), `edit shows server invoice total ${state.total}`);
+      const date = sheet.locator('.db-builtins .jd-row input').first();
+      await date.fill('۱۴۰۵/۰۶/۲۰'); await date.blur();
+      await sheet.getByRole('button', { name: 'ذخیرهٔ تغییرات', exact: true }).click();
+      await sheet.waitFor({ state: 'detached' });
+      assert.equal(visit.opDate, '2026-09-11');
+      const saved = writes.slice(beforeWrites).find((w) => w.path === '/visits/1');
+      assert.ok(saved); assert.equal(Object.hasOwn(saved.body, 'amount'), false);
+      assert.equal(writes.slice(beforeWrites).filter((w) => /payment|charge|billing/.test(w.path)).length, 0);
+      check(true, `date edit persists without financial writes (${state.kind}, ${state.total})`);
+      await page.goto(`${base}/app/dashboard?patient=1`);
+      await sheet.getByLabel('وضعیت مالی ثبت‌شده').waitFor();
+      check(await sheet.locator('.db-builtins .jd-row input').first().inputValue() === '1405/06/20', 'saved date survives reopening');
+    }
+    const noteField = page.locator('.db-sheet .assisted-text > textarea').first();
+    await noteField.fill('');
+    const writesBeforeRequired = writes.length;
+    await page.getByRole('button', { name: 'ذخیرهٔ تغییرات', exact: true }).click();
+    await page.getByText('«یادداشت» را کامل کنید', { exact: true }).waitFor();
+    check(!writes.slice(writesBeforeRequired).some((w) => w.path === '/visits/1'), 'required clinical fields still block empty edits');
     await page.goto(`${base}/app/dashboard`);
     await page.getByTitle('صورت‌حساب', { exact: true }).click();
     const billingPanel = page.locator('.bl-sheet'); await billingPanel.waitFor();

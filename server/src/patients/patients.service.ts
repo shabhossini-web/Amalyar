@@ -906,6 +906,24 @@ export class PatientsService {
     await this.forms.assertValid(`visit.${kind}`, values);
   }
 
+  private async assertEditFormValid(v: any, dto: UpdateVisitDto) {
+    const current = enrich(v);
+    const kind = dto.kind ?? v.kind;
+    let form;
+    try { form = await this.forms.byKey(`visit.${kind}`); }
+    catch (e) { if (e instanceof NotFoundException) return; throw e; }
+    // PATCH فقط فیلدهای ارسال‌شده را می‌سنجد؛ بخشِ تکمیل‌نشدهٔ نقشِ دیگر
+    // نباید تغییر تاریخ را قفل کند. مبلغ همیشه از summarize دفتر مالی می‌آید،
+    // شامل تخفیف و مدل گلوبال؛ مقدار ادعایی کلاینت منبع مالی نیست.
+    const keys = new Set([...Object.keys(dto), ...Object.keys(dto.extra ?? {}), 'amount']);
+    const values = {
+      ...current.extra, ...dto.extra, ...current, ...dto,
+      amount: current.total,
+    };
+    const r = this.forms.validateFields(form.fields.filter((f) => keys.has(f.key)), values);
+    if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
+  }
+
   /**
    * ثبتِ مراجعه.
    *
@@ -1095,6 +1113,8 @@ export class PatientsService {
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     await this.assertRoleOwnership((dto as any).kind ?? v.kind, dto, user, v as any);
+    if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
+    await this.assertEditFormValid(v, dto);
 
     const patientPatch: any = {};
     if (dto.firstName !== undefined) patientPatch.firstName = dto.firstName;

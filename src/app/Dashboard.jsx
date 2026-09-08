@@ -571,15 +571,12 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
       procedureTypeId: f.procedureTypeId, diagnosisId: f.diagnosisId, topicId: f.topicId,
       opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
-      nextVisitDate: f.nextVisitDateJ, notes: f.notes, amount: f.amount,
+      nextVisitDate: f.nextVisitDateJ, notes: f.notes,
+      // در ویرایش همان جمعِ محاسبه‌شدهٔ صورت‌حساب مبنای اعتبارسنجی است.
+      amount: editing ? initial.total : f.amount,
     };
-    /* مبلغ در ویرایش ورودی ندارد: بعد از ساخت، قلمِ خدمت و پرداخت‌ها فقط از
-       صورت‌حساب مدیریت می‌شوند. سنجیدنِ مقدارِ خالیِ پنهان، ذخیرهٔ هر تغییر
-       درمانی را روی مراجعهٔ دارای مبلغِ اجباری ناممکن می‌کرد. */
     const eBuiltin = dynErrors(
-      (fd.def?.fields ?? []).filter((x) =>
-        x.builtin && x.key in builtinVals && !(editing && x.key === 'amount'),
-      ),
+      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals),
       builtinVals,
       myRole,
     );
@@ -847,6 +844,12 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
       <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
              placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
     </label>) };
+  if (editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
+    <div className="db-field db-financial-context" aria-label="وضعیت مالی ثبت‌شده">
+      <span>{fd.labelOf('amount', 'مبلغ')} — صورت‌حساب</span>
+      <p>مبلغ: {initial.total == null ? '—' : faNum(initial.total)} تومان · پرداخت‌شده: {initial.paid == null ? '—' : faNum(initial.paid)} تومان · مانده: {initial.due == null ? '—' : faNum(initial.due)} تومان</p>
+      <small className="db-hint">اصلاح مبلغ و پرداخت‌ها از صورت‌حساب انجام می‌شود. تغییر تاریخ و اطلاعات مراجعه، پرداخت قبلی را تغییر نمی‌دهد.</small>
+    </div>) };
   if (fd.isOn('notes')) builtinNodes.notes = { wide: true, el: (
     <label className="db-field"><span>{fd.labelOf('notes', 'یادداشت')}{star(fd.requiredOf('notes'))}</span>
       <AssistedTextarea disabled={busy || !!aiBusy} rows={2} value={f.notes} onChange={set('notes')} />
