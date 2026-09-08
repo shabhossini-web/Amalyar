@@ -36,7 +36,10 @@ try {
       else if (path === '/forms/fields/11') { form = { ...form, fields: [{ ...form.fields[0], ...payload, role: payload.roles?.[0] ?? null }] }; body = form; }
       else if (path === '/forms') body = [form];
       else if (path === '/forms/visit-kinds') body = [{ key: 'clinic', kind: 'clinic', title: 'ویزیت' }];
-      else if (path.startsWith('/forms/visit.')) body = { fields: [{ key: 'notes', builtin: true, active: true, label: 'یادداشت' }] };
+      else if (path.startsWith('/forms/visit.')) body = { fields: [
+        { key: 'amount', builtin: true, active: true, required: true, type: 'money', label: 'مبلغ (تومان)' },
+        { key: 'notes', builtin: true, active: true, label: 'یادداشت' },
+      ] };
       else if (path === '/ai/status') body = { enabled: true, stt: true };
       else if (path === '/ai/text-draft') { await delay(150); body = aiReply; }
       else if (path === '/ai/transcribe') body = { text: 'متن دیکته آزمایشی' };
@@ -103,6 +106,9 @@ try {
     await editor.getByRole('button', { name: 'پایانِ ضبط', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.db-sheet .assisted-text > textarea')?.value.includes('متن دیکته آزمایشی'));
     check((await source.inputValue()).startsWith('ویرایش در زمان انتظار\n'), 'voice appends to current text without losing edits');
+    await page.getByRole('button', { name: 'ذخیرهٔ تغییرات', exact: true }).click();
+    await page.waitForFunction(() => !document.querySelector('.db-sheet'));
+    check(writes.some((w) => w.path === '/visits/1' && w.body.notes?.includes('متن دیکته آزمایشی')), 'paid visit edit saves when amount is required but managed by billing');
     await page.goto(`${base}/app/dashboard`);
     await page.getByTitle('صورت‌حساب', { exact: true }).click();
     const billingPanel = page.locator('.bl-sheet'); await billingPanel.waitFor();

@@ -573,8 +573,13 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
       opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
       nextVisitDate: f.nextVisitDateJ, notes: f.notes, amount: f.amount,
     };
+    /* مبلغ در ویرایش ورودی ندارد: بعد از ساخت، قلمِ خدمت و پرداخت‌ها فقط از
+       صورت‌حساب مدیریت می‌شوند. سنجیدنِ مقدارِ خالیِ پنهان، ذخیرهٔ هر تغییر
+       درمانی را روی مراجعهٔ دارای مبلغِ اجباری ناممکن می‌کرد. */
     const eBuiltin = dynErrors(
-      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals),
+      (fd.def?.fields ?? []).filter((x) =>
+        x.builtin && x.key in builtinVals && !(editing && x.key === 'amount'),
+      ),
       builtinVals,
       myRole,
     );
