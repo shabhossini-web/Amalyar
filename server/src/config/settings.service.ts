@@ -276,4 +276,17 @@ export class SettingsService {
       color: get('brand_color') || '#7c3aed',
     };
   }
+
+  async invoiceTemplate(variant: string) {
+    const brand = await this.brand();
+    return {
+      title: await this.text('invoice_title'), prefix: await this.text('invoice_prefix'),
+      letterhead: variant === 'formal' ? await this.letterhead() : null,
+      brand: { ...brand, name: '', legalName: await this.text(variant === 'formal' ? 'invoice_formal_name' : 'invoice_informal_name') || brand.legalName,
+        registration: await this.text('invoice_registration'), postal: await this.text('invoice_postal'), website: await this.text('invoice_website') },
+      notes: await this.text('invoice_notes'), signatures: (await this.text('invoice_signatures')).split('\n').map(s => s.trim()).filter(Boolean).slice(0, 6),
+      showPayments: await this.bool('invoice_show_payments'),
+      top: await this.num('invoice_letterhead_top'), bottom: await this.num('invoice_letterhead_bottom'),
+    };
+  }
 }

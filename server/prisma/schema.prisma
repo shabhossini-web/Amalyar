@@ -1112,6 +1112,8 @@ model Charge {
   unitPrice   Int     @map("unit_price") // تومان
   /// quantity × unitPrice، ذخیره‌شده تا تغییرِ بعدیِ قیمت، فاکتورِ قدیمی را عوض نکند.
   amount      Int // تومان (علامت‌دار)
+  /// Server-calculated professional/technical tariff snapshot for IONM services.
+  neuroDetail Json? @map("neuro_detail")
 
   notes       String?
   createdById Int?     @map("created_by_id")
@@ -1193,6 +1195,7 @@ model ClinicalNote {
 /// مراجعه (Visit) — واحدِ اصلیِ کار: عمل/خدمت برای یک بیمار
 /// ⚠️ همهٔ مبالغ «تومان» و عددِ صحیح‌اند (قانونِ تک‌واحدی — درسِ ملک‌طب)
 model Visit {
+  invoices       InvoiceDocument[]
   labOrders      LabOrder[]
   imagingOrders  ImagingOrder[]
   consultOrders  ConsultOrder[]
@@ -1368,6 +1371,23 @@ model Visit {
   /// نوبتی که این مراجعه از آن ساخته شد — یک‌به‌یک.
   appointment Appointment?
   reminders Reminder[]
+}
+
+/// Issued versions are immutable; a later version supersedes, never rewrites, one.
+model InvoiceDocument {
+  id           Int      @id @default(autoincrement())
+  visitId      Int      @map("visit_id")
+  visit        Visit    @relation(fields: [visitId], references: [id], onDelete: Restrict)
+  variant      String
+  number       String   @unique
+  fingerprint  String
+  snapshot     Json
+  createdById  Int?     @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  supersededAt DateTime? @map("superseded_at")
+
+  @@index([visitId, variant, id])
+  @@map("invoice_documents")
 }
 
 /// کدهای یکبارمصرفِ ثبت‌نام/تأیید موبایل

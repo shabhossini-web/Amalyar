@@ -555,6 +555,20 @@ a.db-ico { text-decoration: none; }
 .bl-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; }
 
 .bl-list { display: grid; gap: 8px; max-height: 260px; overflow-y: auto; }
+.bl-section-title { margin: 8px 0; font-size: 15px; }
+.bl-charge-list { max-height: none; overflow: visible; }
+.bl-charge-list .bl-row { flex-wrap: wrap; }
+.bl-charge-list .bl-row-main { flex-basis: 45%; overflow-wrap: anywhere; }
+.bl-del.bl-charge-del { width: auto; min-width: 94px; height: 44px; display: flex; justify-content: center; gap: 5px; padding: 8px; }
+.bl-invoice-panel { display: grid; gap: 14px; min-width: 0; }
+.bl-invoice-panel details > summary { cursor: pointer; padding: 8px 0; }
+.bl-invoice-panel details[open] > * + * { margin-top: 12px; }
+.bl-neuro-preview { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--brand); border-radius: 12px; }
+.bl-error { color: #fda4af; padding: 12px; border: 1px solid currentColor; border-radius: 12px; }
+.bl-issued-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.1); }
+.bl-issued-row > span { flex: 1; min-width: 160px; }
+.bl-sheet fieldset.db-field { min-width: 0; margin: 0; padding: 14px; border: 1px solid rgba(var(--brand-soft-rgb),.2); border-radius: 14px; display: grid; gap: 10px; }
+.bl-sheet .db-modetabs { flex-wrap: wrap; }
 .bl-row {
   display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 13px;
   background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);

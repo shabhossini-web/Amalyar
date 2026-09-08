@@ -1215,6 +1215,10 @@ export class PatientsService {
     const v = await this.prisma.visit.findUnique({ where: { id } });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+      if (await tx.invoiceDocument.count({ where: { visitId: id } })) {
+        throw new BadRequestException('برای این مراجعه فاکتور صادر شده است؛ برای حفظ سوابق مالی، مراجعه را لغو کنید');
+      }
       await tx.visit.delete({ where: { id } });
       const left = await tx.visit.count({ where: { patientId: v.patientId } });
       if (left === 0) {

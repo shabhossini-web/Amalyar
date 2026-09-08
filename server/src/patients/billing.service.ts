@@ -151,6 +151,7 @@ export class BillingService {
     visitId: number,
     dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; codeSystem?: string; itemId?: number; lotId?: number; stockEffect?: string },
     user: any,
+    neuroDetail?: Record<string, any>,
   ) {
     await this.assertVisit(visitId, user);
     const kind = dto.kind ?? 'service';
@@ -211,6 +212,7 @@ export class BillingService {
         itemId: dto.itemId ?? null,
         notes: dto.notes?.trim() || null,
         createdById: user?.id ?? null,
+        ...(neuroDetail ? { neuroDetail } : {}),
       },
     });
 

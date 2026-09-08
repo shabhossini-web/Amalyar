@@ -2682,6 +2682,9 @@ jobs:
       - name: Verify paid intake, multi-role forms, bank invoices and follow-up integration
         run: node scripts/e2e/intake-finance-roles.mjs
 
+      - name: Verify neuromonitoring tariffs and immutable invoice issuance
+        run: node scripts/e2e/neuromonitoring-invoice.mjs
+
       # دو مرزی که هیچ تایپ‌چکی نمی‌گیرد و هر دو یک‌بار شکسته بودند:
       # حسابی که مدیر برای دیگری می‌سازد باید قابلِ تحویل‌گرفتن بماند، و
       # اطلاعاتِ حسابِ بانکی نباید از گاردِ حسابداری بیرون بزند.
