@@ -1627,9 +1627,16 @@ export class IntakeService {
     /* نوبتِ رزروشدهٔ همین ثبت‌نام — تاریخ و ساعتِ مراجعه از این‌جا می‌آید. */
     const held = await this.prisma.appointment.findUnique({ where: { submissionId: id } });
 
+    const payable = Math.max(0, row.amount - row.discountAmount);
+    const pay = dto.registerPayment !== false && payable > 0;
+    const paidAmount = dto.paidAmount ?? payable;
+    // خطای حساب یا دوره مالی باید پیش از ساخت مراجعه و تأیید رخ دهد.
+    if (makesVisit && pay) await this.billing.assertIntakePayment({ amount: paidAmount, bankAccountId: dto.bankAccountId });
+
     const visit = makesVisit
       ? await this.patients.createVisit({
         patientId: row.patientId,
+        amount: row.amount,
         /* ⚠️ نوبتِ بیمار **منبعِ تاریخ** است، نه یک یادداشتِ جانبی. اگر
            `opDate` از نوبت نمی‌آمد، مراجعه‌ای ساخته می‌شد که تاریخش با
            نوبتِ گرفته‌شده فرق دارد — و آن‌وقت تقویمِ مطب و برگهٔ بیمار دو
@@ -1702,13 +1709,7 @@ export class IntakeService {
      * راهِ درست «ثبت نکردن» نبود، «پرسیدنِ حسابِ مقصد» بود: ادمین در همان
      * لحظه فیش را جلوی چشمش دارد، پس می‌تواند بگوید پول کجا نشسته.
      */
-    if (row.amount > 0) {
-      await this.billing.addCharge(visit.id, {
-        kind: 'service',
-        title: d.procedure || 'خدمتِ ثبت‌شده در فرمِ ثبت‌نام',
-        unitPrice: row.amount,
-      }, user);
-    }
+    // قلمِ خدمت در تراکنشِ createVisit ثبت شده؛ این‌جا دوباره ساخته نمی‌شود.
     if (row.discountAmount > 0) {
       await this.billing.addCharge(visit.id, {
         kind: 'discount',
@@ -1720,11 +1721,9 @@ export class IntakeService {
     if (d.receiptDocumentId) {
       await this.prisma.document.updateMany({ where: { id: Number(d.receiptDocumentId) }, data: { visitId: visit.id } });
     }
-    const payable = Math.max(0, row.amount - row.discountAmount);
-    const pay = dto.registerPayment !== false && payable > 0;
     if (pay) {
       await this.billing.addPayment(visit.id, {
-        amount: Math.max(1, Number(dto.paidAmount) || payable),
+        amount: paidAmount,
         // فیشِ واریزی یعنی انتقالِ بانکی؛ روشِ دیگر را ادمین بعداً در
         // صفحهٔ حسابداری اصلاح می‌کند.
         method: 'transfer',
@@ -1735,7 +1734,7 @@ export class IntakeService {
 
     await this.audit.record({
       actorId: user?.id, action: 'intake.approve', entityType: 'intake_submission', entityId: id,
-      after: { visitId: visit.id, charged: row.amount, discount: row.discountAmount, paid: pay ? payable : 0 },
+      after: { visitId: visit.id, charged: row.amount, discount: row.discountAmount, paid: pay ? paidAmount : 0 },
     });
     /* لحظهٔ «رسمی‌شدنِ» بیمار: لینکِ پروندهٔ الکترونیک خودکار پیامک می‌شود —
        راهِ ارتباطیِ دائمیِ ما با او از همین‌جا شروع می‌شود. best-effort:

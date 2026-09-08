@@ -208,7 +208,7 @@ export function printInvoice({ visit, billing, brand, letterheadUrl, variant = '
   const fa = (n) => Number(n || 0).toLocaleString('fa-IR');
   /* غیررسمی = صورت‌حسابِ دستِ بیمار: بدونِ سربرگِ رسمی و بدونِ هویتِ مالیاتی.
      رسمی = سندِ حسابداری/بیمارستان: سربرگ + شناسهٔ ملی و کدِ اقتصادی. */
-  const official = variant !== 'informal';
+  const official = billing.invoiceType ? billing.invoiceType === 'formal' : variant !== 'informal';
   /* با سربرگ، هویتِ متنیِ شرکت چاپ نمی‌شود — خودِ سربرگ نام و نشان را دارد و
      دوبار چاپ‌شدنش سند را خراب می‌کند. صفحه تمام‌بوم می‌شود (حاشیهٔ صفر) تا
      تصویرِ سربرگ تا لبهٔ کاغذ برسد؛ محتوا با paddingِ بدنه جای خودش می‌ماند. */
@@ -303,6 +303,7 @@ ${lh ? `<img class="lh-bg" src="${lh}" alt="">` : ''}
   </tfoot>
 </table>
 ${pays}
+${billing.invoiceBankAccount ? `<p>حساب دریافت: ${esc([billing.invoiceBankAccount.ownerName, billing.invoiceBankAccount.bankName, billing.invoiceBankAccount.accountNumber, billing.invoiceBankAccount.iban].filter(Boolean).join(' · '))}</p>` : ''}
 <div class="sign"><div>مهر و امضای صادرکننده</div><div>امضای دریافت‌کننده</div></div>
 </body></html>`;
 

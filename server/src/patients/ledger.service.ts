@@ -73,6 +73,7 @@ export class LedgerService {
     const row = await this.prisma.bankAccount.create({
       data: {
         ownerName,
+        classification: dto.classification ?? 'unclassified',
         bankName: text(dto.bankName), cardNumber: text(dto.cardNumber), iban: text(dto.iban),
         accountNumber: text(dto.accountNumber),
         partnerId: dto.partnerId ? Number(dto.partnerId) : null,
@@ -98,6 +99,11 @@ export class LedgerService {
     const row = await this.prisma.bankAccount.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('حساب یافت نشد');
     const data: any = {};
+    if (dto.classification !== undefined) {
+      if (!["formal", "informal", "unclassified"].includes(dto.classification)) throw new BadRequestException("نوع حساب نامعتبر است");
+      if (dto.classification !== row.classification && await this.prisma.visit.count({ where: { invoiceBankAccountId: id } })) throw new BadRequestException("نوع حساب به فاکتور متصل است؛ حساب دیگری تعریف کنید");
+      data.classification = dto.classification;
+    }
     if (dto.ownerName !== undefined) {
       const ownerName = String(dto.ownerName ?? '').trim();
       if (ownerName.length < 2) throw new BadRequestException('نامِ صاحبِ حساب کوتاه است');

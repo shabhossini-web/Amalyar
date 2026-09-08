@@ -200,17 +200,18 @@ export class DefinitionsService {
       include: { _count: { select: { visits: true } } },
     });
     return rows.map((h) => ({
-      id: h.id, name: h.name, city: h.city, address: h.address, phone: h.phone,
+      id: h.id, sector: h.sector, name: h.name, city: h.city, address: h.address, phone: h.phone,
       contactName: h.contactName, contactPhone: h.contactPhone, notes: h.notes,
       active: h.active, visitCount: h._count.visits,
     }));
   }
 
-  async createHospital(dto: { name: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string }) {
+  async createHospital(dto: { sector?: string; name: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string }) {
     await this.hospitalDupCheck(dto.name);
     return this.prisma.hospital.create({
       data: {
         name: dto.name.trim(),
+        sector: dto.sector ?? 'private',
         city: dto.city?.trim() || null,
         address: dto.address?.trim() || null,
         phone: dto.phone?.trim() || null,
@@ -223,7 +224,7 @@ export class DefinitionsService {
 
   async updateHospital(
     id: number,
-    dto: { name?: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string; active?: boolean },
+    dto: { sector?: string; name?: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string; active?: boolean },
   ) {
     const h = await this.prisma.hospital.findUnique({ where: { id } });
     if (!h) throw new NotFoundException('بیمارستان یافت نشد');
@@ -231,6 +232,7 @@ export class DefinitionsService {
     const updated = await this.prisma.hospital.update({
       where: { id },
       data: {
+        ...(dto.sector !== undefined ? { sector: dto.sector } : {}),
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.city !== undefined ? { city: dto.city?.trim() || null } : {}),
         ...(dto.address !== undefined ? { address: dto.address?.trim() || null } : {}),

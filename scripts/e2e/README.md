@@ -96,3 +96,15 @@ node scripts/e2e/platform-domains.mjs # پنلِ پلتفرم هیچ دامنه�
   اختلافِ قبل و بعد شمرده می‌شود.
 - ورودها محدودشده‌اند (۱۲ بار در ۱۵ دقیقه به‌ازای هر IP). اگر ۴۲۹ گرفتید،
   سرور را ری‌استارت کنید — سطل‌ها در حافظه‌اند.
+
+
+### Paid intake, roles, invoice accounts and narrative assistance
+
+After both builds, run each scenario suite twice locally before publishing:
+
+```sh
+node scripts/e2e/intake-finance-roles.mjs
+E2E_CHROME=/path/to/chromium node scripts/e2e/intake-assistance-ui.mjs
+```
+
+The integration suite uses disposable PGlite PostgreSQL through its wire protocol and the generated Prisma client. It applies every tenant migration and calls the actual services; no production database or SMS is used. Test dependencies are development dependencies. The UI suite starts its own Vite server, uses responsive Chromium, mocked API responses, and fake microphone input. It checks explicit review/apply, stale and empty AI responses, voice append, quick definitions and retained payment state. Continue to run `orders-ai-ui.mjs` and `ai-stream-contract.mjs` for the earlier regressions.

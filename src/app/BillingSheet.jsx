@@ -64,6 +64,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     apiDataUrl('/settings/letterhead').then(setLetterheadUrl);
   }, []);
 
+  useEffect(() => {
+    if (data?.invoiceBankAccount?.id) setP((s) => ({ ...s, bankAccountId: String(data.invoiceBankAccount.id) }));
+  }, [data?.invoiceBankAccount?.id]);
+
   /**
    * پیشنهادِ کد از شرحِ همین مراجعه (#53) — سرور فقط کدهای واقعاً موجود را
    * برمی‌گرداند؛ کلیک روی پیشنهاد همان جستجوی همیشگی را با آن کد پر می‌کند
@@ -155,7 +159,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     setInternalHits([]);
     setC((s) => ({ ...s, title: hit.title, serviceCode: hit.code, codeSystem: 'book' }));
     try {
-      const priced = await api(`/service-codes/price?code=${hit.code}`);
+      const priced = await api(`/service-codes/price?code=${hit.code}&sector=${data?.tariffSector ?? 'private'}`);
       if (priced.price != null) setC((s) => ({ ...s, unitPrice: String(priced.price) }));
       else onToast('ضریبِ ریالیِ تعرفه تعریف نشده — مبلغ را دستی وارد کنید');
     } catch { /* قیمت اختیاری است */ }
@@ -412,13 +416,14 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                 <button type="button" className="db-submit bl-btn" onClick={addCharge} disabled={busy}>
                   <Plus width="15" height="15" /> افزودنِ قلم
                 </button>
+                <InvoiceAccount data={data} banks={banks} visitId={visit.id} onSaved={setData} onToast={onToast} />
                 {/* فاکتورِ رسمی سندِ مالیاتی است (سربرگ + هویتِ حقوقی)؛
                     غیررسمی همان صورت‌حساب برای دستِ بیمار، بدونِ هویتِ رسمی. */}
-                <button type="button" className="bl-mini bl-inv"
+                <button type="button" className="bl-mini bl-inv" disabled={data.invoiceType === 'informal'}
                   onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand, letterheadUrl })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
                   چاپِ فاکتورِ رسمی
                 </button>
-                <button type="button" className="bl-mini"
+                <button type="button" className="bl-mini" disabled={data.invoiceType === 'formal'}
                   onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand, variant: 'informal' })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
                   چاپِ فاکتورِ غیررسمی
                 </button>
@@ -483,7 +488,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                     <label className="db-field"><span>به کدام حساب</span>
                       <select value={p.bankAccountId} onChange={(e) => setP((s) => ({ ...s, bankAccountId: e.target.value }))}>
                         <option value="">—</option>
-                        {banks.map((b) => <option key={b.id} value={b.id}>{b.ownerName}{b.bankName ? ` · ${b.bankName}` : ''}</option>)}
+                        {banks.filter((b) => !data.invoiceBankAccount || b.id === data.invoiceBankAccount.id).map((b) => <option key={b.id} value={b.id}>{b.ownerName}{b.bankName ? ` · ${b.bankName}` : ''}</option>)}
                       </select>
                     </label>
                   )}
@@ -821,4 +826,29 @@ function Reconcile({ rec }) {
       )}
     </div>
   );
+}
+
+function InvoiceAccount({ data, banks, visitId, onSaved, onToast }) {
+  const [type, setType] = useState(data.invoiceType ?? '');
+  const [bankId, setBankId] = useState(data.invoiceBankAccount?.id ?? '');
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try {
+      onSaved(await api(`/visits/${visitId}/billing/invoice-account`, { method: 'POST', body: { invoiceType: type, bankAccountId: Number(bankId) } }));
+      onToast('نوع فاکتور و حساب دریافت ذخیره شد');
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+  return <fieldset className="db-field" disabled={busy}>
+    <legend>نوع فاکتور و حساب دریافت</legend>
+    <select aria-label="نوع فاکتور" value={type} onChange={(e) => { setType(e.target.value); setBankId(''); }}>
+      <option value="">انتخاب کنید</option><option value="formal">رسمی</option><option value="informal">غیررسمی</option>
+    </select>
+    <select aria-label="حساب فاکتور" value={bankId} onChange={(e) => setBankId(e.target.value)}>
+      <option value="">حساب هم‌نوع فاکتور را انتخاب کنید</option>
+      {banks.filter((b) => b.classification === type).map((b) => <option key={b.id} value={b.id}>{b.ownerName} · {b.bankName}</option>)}
+    </select>
+    <button type="button" className="bl-mini" disabled={!type || !bankId || busy} onClick={save}>ثبت اتصال حساب</button>
+    {data.invoiceBankAccount && <small>حساب ثبت‌شده: {data.invoiceBankAccount.ownerName} · {data.invoiceType === 'formal' ? 'رسمی' : 'غیررسمی'}</small>}
+  </fieldset>;
 }

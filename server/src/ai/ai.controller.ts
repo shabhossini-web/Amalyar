@@ -8,6 +8,12 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { AiService } from './ai.service';
 import { NOTE_KINDS } from '../patients/record.service';
 
+class TextDraftDto {
+  @IsString() @MinLength(2) @MaxLength(12000) text!: string;
+  @IsIn(['structure', 'continue']) mode!: string;
+  @IsOptional() @IsString() @MaxLength(160) purpose?: string;
+}
+
 class NoteDraftDto {
   @Type(() => Number) @IsInt({ message: 'پرونده را انتخاب کنید' })
   patientId!: number;
@@ -46,6 +52,11 @@ export class AiController {
   @Get('status')
   status(@CurrentUser() user: any) {
     return this.ai.status(user);
+  }
+
+  @Post('text-draft')
+  textDraft(@Body() dto: TextDraftDto, @CurrentUser() user: any) {
+    return this.ai.textDraft(user, dto);
   }
 
   @Post('note-draft')

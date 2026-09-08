@@ -8,4 +8,9 @@ export const JOB_ROLES = [
   { v: 'secretary', l: 'منشی' },
   { v: 'nurse', l: 'پرستار' },
   { v: 'assistant', l: 'دستیار' },
+  { v: 'technician', l: 'کارشناس' },
 ];
+
+export function fieldRoles(field) {
+  return Array.isArray(field?.roles) && field.roles.length ? field.roles : field?.role ? [field.role] : [];
+}

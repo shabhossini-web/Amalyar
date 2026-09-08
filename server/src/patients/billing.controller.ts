@@ -10,6 +10,11 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { BillingService } from './billing.service';
 import { ChargeCreateDto, PaymentCreateDto } from './dto/billing.dto';
 
+class InvoiceAccountDto {
+  @IsIn(['formal', 'informal'], { message: 'نوع فاکتور نامعتبر است' }) invoiceType!: string;
+  @Type(() => Number) @IsInt() @Min(1) bankAccountId!: number;
+}
+
 class PricingDto {
   @IsIn(['coded', 'global'], { message: 'مدلِ قیمت‌گذاری نامعتبر است' })
   pricingModel!: string;
@@ -37,6 +42,12 @@ export class BillingController {
   @Get(':id/billing')
   get(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.billing.get(id, user);
+  }
+
+  @RequirePermissions('billing.write')
+  @Post(':id/billing/invoice-account')
+  setInvoiceAccount(@Param('id', ParseIntPipe) id: number, @Body() dto: InvoiceAccountDto, @CurrentUser() user: any) {
+    return this.billing.setInvoiceAccount(id, dto, user);
   }
 
   /** مدلِ قیمت‌گذاری: coded (جمعِ اقلام) یا global (مبلغِ کلِ توافقی). */

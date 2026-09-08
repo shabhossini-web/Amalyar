@@ -9,6 +9,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { LevelGuard } from '../auth/level.guard';
 import { MinLevel } from '../auth/min-level.decorator';
+import { JOB_ROLE_KEYS } from '../common/job-roles';
 import { LEVEL } from '../common/levels';
 
 class FormPatchDto {
@@ -43,6 +44,7 @@ class FieldCreateDto {
   @IsOptional() @IsString() @MaxLength(160) hint?: string;
   @IsOptional() @IsString() @MaxLength(80) placeholder?: string;
   @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
+  @IsOptional() @IsArray() @IsIn(JOB_ROLE_KEYS, { each: true, message: 'نقش نامعتبر است' }) roles?: string[];
   @IsOptional() @IsString() @MaxLength(20) role?: string;
 }
 
@@ -55,6 +57,7 @@ class FieldPatchDto {
   @IsOptional() @IsString() @MaxLength(160) hint?: string;
   @IsOptional() @IsString() @MaxLength(80) placeholder?: string;
   @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @IsArray() @IsIn(JOB_ROLE_KEYS, { each: true, message: 'نقش نامعتبر است' }) roles?: string[];
   @IsOptional() @IsString() @MaxLength(20) role?: string | null;
   @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
 }
@@ -113,6 +116,10 @@ export class FormsController {
   byKey(@Param('key') key: string) {
     return this.forms.byKey(key);
   }
+
+  @RequirePermissions('forms.manage')
+  @Post('forms/install-followup')
+  installFollowUp() { return this.forms.installFollowUp(); }
 
   /** فرمِ تازه = نوعِ تازه‌ی مراجعه. مطب مسیرِ خودش را خودش می‌چیند. */
   @RequirePermissions('forms.manage')

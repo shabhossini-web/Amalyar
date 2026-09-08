@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
-import { jobRoleLabel } from '../common/job-roles';
+import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
@@ -906,6 +906,24 @@ export class PatientsService {
     await this.forms.assertValid(`visit.${kind}`, values);
   }
 
+  private async assertEditFormValid(v: any, dto: UpdateVisitDto) {
+    const current = enrich(v);
+    const kind = dto.kind ?? v.kind;
+    let form;
+    try { form = await this.forms.byKey(`visit.${kind}`); }
+    catch (e) { if (e instanceof NotFoundException) return; throw e; }
+    // PATCH فقط فیلدهای ارسال‌شده را می‌سنجد؛ بخشِ تکمیل‌نشدهٔ نقشِ دیگر
+    // نباید تغییر تاریخ را قفل کند. مبلغ همیشه از summarize دفتر مالی می‌آید،
+    // شامل تخفیف و مدل گلوبال؛ مقدار ادعایی کلاینت منبع مالی نیست.
+    const keys = new Set([...Object.keys(dto), ...Object.keys(dto.extra ?? {}), 'amount']);
+    const values = {
+      ...current.extra, ...dto.extra, ...current, ...dto,
+      amount: current.total,
+    };
+    const r = this.forms.validateFields(form.fields.filter((f) => keys.has(f.key)), values);
+    if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
+  }
+
   /**
    * ثبتِ مراجعه.
    *
@@ -941,7 +959,7 @@ export class PatientsService {
     if (!kind) return;
     const form = await this.prisma.formDef.findFirst({
       where: { scope: 'visit', visitKind: kind },
-      select: { fields: { where: { role: { not: null } }, select: { key: true, label: true, role: true } } },
+      select: { fields: { select: { key: true, label: true, role: true, roles: true } } },
     });
     if (!form || form.fields.length === 0) return;
 
@@ -952,7 +970,8 @@ export class PatientsService {
     };
     const curExtra = (current?.extra && typeof current.extra === 'object') ? current.extra as Record<string, any> : {};
     for (const f of form.fields) {
-      if (f.role === myRole) continue;
+      const roles = fieldRoles(f);
+      if (!roles.length || roles.includes(myRole)) continue;
       const inExtra = dto.extra && Object.prototype.hasOwnProperty.call(dto.extra, f.key);
       const inRoot = Object.prototype.hasOwnProperty.call(dto, f.key);
       if (!inExtra && !inRoot) continue;
@@ -962,7 +981,7 @@ export class PatientsService {
          خالی می‌فرستد و آن «نوشتن» نیست. */
       if (norm(next) === norm(prev ?? '')) continue;
       throw new BadRequestException(
-        `«${f.label}» بخشِ ${jobRoleLabel(f.role)} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
+        `«${f.label}» بخشِ ${roles.map(jobRoleLabel).join("، ")} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
       );
     }
   }
@@ -1094,6 +1113,8 @@ export class PatientsService {
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     await this.assertRoleOwnership((dto as any).kind ?? v.kind, dto, user, v as any);
+    if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
+    await this.assertEditFormValid(v, dto);
 
     const patientPatch: any = {};
     if (dto.firstName !== undefined) patientPatch.firstName = dto.firstName;

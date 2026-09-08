@@ -361,7 +361,7 @@ function Expenses({ onToast }) {
 function Banks({ onToast }) {
   const [rows, setRows] = useState([]);
   const [partners, setPartners] = useState([]);
-  const [f, setF] = useState({ ownerName: '', bankName: '', cardNumber: '', accountNumber: '', iban: '', partnerId: '', showOnIntake: false });
+  const [f, setF] = useState({ ownerName: '', bankName: '', cardNumber: '', accountNumber: '', iban: '', partnerId: '', classification: 'unclassified', showOnIntake: false });
   const [busy, setBusy] = useState(false);
   /* شناسهٔ حسابی که شماره‌هایش در حالِ ویرایش است — تا امروز هیچ راهی برای
      اصلاحِ یک حسابِ ثبت‌شده نبود و کاربر با ساختنِ حسابِ تکراری «درستش می‌کرد». */
@@ -386,10 +386,11 @@ function Banks({ onToast }) {
           cardNumber: f.cardNumber.trim() || undefined, iban: f.iban.trim() || undefined,
           accountNumber: f.accountNumber.trim() || undefined,
           partnerId: f.partnerId ? Number(f.partnerId) : undefined,
+          classification: f.classification,
           showOnIntake: f.showOnIntake,
         },
       });
-      setF({ ownerName: '', bankName: '', cardNumber: '', accountNumber: '', iban: '', partnerId: '', showOnIntake: false });
+      setF({ ownerName: '', bankName: '', cardNumber: '', accountNumber: '', iban: '', partnerId: '', classification: 'unclassified', showOnIntake: false });
       await load(); onToast('حساب اضافه شد ✓');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
@@ -415,12 +416,13 @@ function Banks({ onToast }) {
           <label className="ac-field"><span>شبا</span>
             <input dir="ltr" value={f.iban} onChange={(e) => setF((s) => ({ ...s, iban: e.target.value }))} placeholder="IR..." />
           </label>
-          <label className="ac-field"><span>حسابِ شخصیِ کدام شریک</span>
+          <label className="ac-field"><span>مالک حساب: شرکت یا شریک</span>
             <select value={f.partnerId} onChange={(e) => setF((s) => ({ ...s, partnerId: e.target.value }))}>
               <option value="">حسابِ شرکت</option>
               {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
+          <AccountClassification value={f.classification} onChange={(v) => setF((s) => ({ ...s, classification: v }))} disabled={busy} />
         </div>
         {/* ⚠️ تنها کلیدی که یک شمارهٔ حساب را روی نشانیِ **عمومی** می‌برد.
             پیش‌فرض خاموش است تا حسابِ شخصیِ شریک اتفاقی بیرون نرود. */}
@@ -442,12 +444,12 @@ function Banks({ onToast }) {
               {/* هر سه شماره، چون هر کدام کاربردِ متفاوتی دارد و «یکی‌شان کافی
                   است» یعنی ادمین نمی‌فهمد کدام یکی جا مانده. */}
               <small dir="ltr">{[b.accountNumber, b.cardNumber, b.iban].filter(Boolean).join(' · ') || '—'}</small>
-              {b.partner && <small>حسابِ شخصیِ {b.partner.name}</small>}
+              <small>{b.partner ? `حساب شریک: ${b.partner.name}` : 'حساب شرکت'} · {ACCOUNT_CLASS[b.classification] ?? ACCOUNT_CLASS.unclassified}</small>
             </div>
 
             {editing === b.id ? (
               <AccountEdit
-                row={b}
+                row={b} partners={partners}
                 busy={busy}
                 onCancel={() => setEditing(null)}
                 onSave={async (body) => {
@@ -497,8 +499,10 @@ function Banks({ onToast }) {
  * ⚠️ «نمایش روی فرمِ بیمار» عمداً این‌جا نیست: آن دروازهٔ افشای عمومی است و
  * endpointِ ممیزی‌شدهٔ خودش را دارد.
  */
-function AccountEdit({ row, busy, onCancel, onSave }) {
+function AccountEdit({ row, partners, busy, onCancel, onSave }) {
   const [e, setE] = useState({
+    partnerId: row.partnerId ?? '',
+    classification: row.classification ?? 'unclassified',
     ownerName: row.ownerName ?? '',
     bankName: row.bankName ?? '',
     cardNumber: row.cardNumber ?? '',
@@ -525,9 +529,18 @@ function AccountEdit({ row, busy, onCancel, onSave }) {
         <label className="ac-field"><span>شبا</span>
           <input dir="ltr" value={e.iban} onChange={set('iban')} disabled={busy} placeholder="IR..." />
         </label>
+        <label className="ac-field"><span>مالک حساب: شرکت یا شریک</span>
+          <select value={e.partnerId} onChange={set('partnerId')} disabled={busy}>
+            <option value="">حساب شرکت</option>
+            {partners.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        </label>
+        <AccountClassification value={e.classification} onChange={(v) => setE((s) => ({ ...s, classification: v }))} disabled={busy} />
       </div>
       <div className="ac-editacts">
         <button type="button" className="ac-submit" disabled={busy} onClick={() => onSave({
+          partnerId: e.partnerId ? Number(e.partnerId) : null,
+          classification: e.classification,
           ownerName: e.ownerName.trim(),
           /* رشته‌ی خالی فرستاده می‌شود نه حذف‌شده: «پاکش کن» یک خواستهٔ واقعی
              است و سرور `text()` آن را به `null` تبدیل می‌کند. */
@@ -936,4 +949,13 @@ function Breakdown({ title, rows }) {
       ))}
     </div>
   );
+}
+
+const ACCOUNT_CLASS = { unclassified: 'تعیین‌نشده', formal: 'رسمی', informal: 'غیررسمی' };
+function AccountClassification({ value, onChange, disabled }) {
+  return <label className="ac-field"><span>نوع حساب برای فاکتور</span>
+    <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      {Object.entries(ACCOUNT_CLASS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  </label>;
 }

@@ -10,10 +10,15 @@ export const JOB_ROLES: Record<string, string> = {
   secretary: 'منشی',
   nurse: 'پرستار',
   assistant: 'دستیار',
+  technician: 'کارشناس',
 };
 
 export const JOB_ROLE_KEYS = Object.keys(JOB_ROLES);
 
 export function jobRoleLabel(key: string | null | undefined): string | null {
   return key ? JOB_ROLES[key] ?? key : null;
+}
+
+export function fieldRoles(field: { roles?: unknown; role?: string | null } | null | undefined) {
+  return Array.isArray(field?.roles) && field.roles.length ? field.roles : field?.role ? [field.role] : [];
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
-import { JOB_ROLES } from '../lib/job-roles.js';
+import { JOB_ROLES, fieldRoles } from '../lib/job-roles.js';
 import { useConfig } from './config.jsx';
 import './definitions.css';
 import './formbuilder.css';
@@ -119,11 +119,14 @@ export default function FormBuilder() {
     apply(() => api(`/forms/fields/${field.id}`, { method: 'DELETE' }), 'حذف شد');
 
   /** بخشِ نقشِ فیلد — «این فیلد مالِ کیست». خالی = عمومی. */
-  const setFieldRole = (field, role) =>
-    apply(
-      () => api(`/forms/fields/${field.id}`, { method: 'PATCH', body: { role: role || null } }),
-      role ? `«${field.label}» بخشِ ${JOB_ROLES.find((r) => r.v === role)?.l ?? role} شد` : `«${field.label}» عمومی شد`,
+  const setFieldRoles = (field, roles) => {
+    if (busy) return;
+    setForms((list) => list.map((f) => ({ ...f, fields: f.fields.map((x) => x.id === field.id ? { ...x, roles, role: roles[0] ?? null } : x) })));
+    return apply(
+      () => api(`/forms/fields/${field.id}`, { method: 'PATCH', body: { roles } }),
+      `نقش‌های «${field.label}» ذخیره شد`,
     );
+  };
 
   /** رنگِ کارتِ فرم. رشته‌ی خالی یعنی «برگرد به خودکار». */
   const setColor = (color) =>
@@ -195,6 +198,14 @@ export default function FormBuilder() {
 
         {forms?.length > 0 && (
           <>
+            <button type="button" className="df-ghost" disabled={busy} onClick={async () => {
+              setBusy(true);
+              try {
+                const installed = await api('/forms/install-followup', { method: 'POST', body: {} });
+                setForms(await api('/forms')); setTab(installed.key);
+                setToast('فرم پیگیری آماده است؛ پس از بازبینی روشن کنید و روزهای ارسال را در نوع عمل تعریف کنید.');
+              } catch (e) { setToast(e.message); } finally { setBusy(false); }
+            }}>آماده‌سازی فرم پیگیری خودکار</button>
             <div className="fb-tabrow">
               <Tabs
                 variant="scroll"
@@ -278,16 +289,14 @@ export default function FormBuilder() {
                         {/* بخشِ نقش — «هر کس قسمتِ خودش را پر کند». روی فیلدِ
                             هسته‌ای هم می‌نشیند: «تاریخ مالِ منشی» به‌اندازهٔ
                             «شرحِ معاینه مالِ پزشک» معنا دارد. */}
-                        <select
-                          className="fb-role"
-                          value={f.role ?? ''}
-                          disabled={busy}
-                          onChange={(e) => setFieldRole(f, e.target.value)}
-                          title="این فیلد بخشِ کدام نقش است؟"
-                        >
-                          <option value="">— عمومی —</option>
-                          {JOB_ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
-                        </select>
+                        <fieldset className="fb-role-choices" disabled={busy}>
+                          <legend>نقش‌های مجاز برای تکمیل (بدون انتخاب: عمومی)</legend>
+                          {JOB_ROLES.map((r) => <label key={r.v}>
+                            <input type="checkbox" checked={fieldRoles(f).includes(r.v)}
+                              onChange={(e) => setFieldRoles(f, e.target.checked ? [...fieldRoles(f), r.v] : fieldRoles(f).filter((v) => v !== r.v))} />
+                            {r.l}
+                          </label>)}
+                        </fieldset>
                         <button type="button" className="df-act" disabled={busy} onClick={() => setEditing({ formId: form.id, field: f })} aria-label="ویرایش">
                           <Pencil width="15" height="15" />
                         </button>

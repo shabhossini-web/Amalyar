@@ -138,23 +138,19 @@ export class RemindersService {
         };
         /* خطای ساختِ لینک (مثلاً نبودِ tenant context) نباید یادآوریِ عمل و
            مراقبت‌ها را قربانی کند — بدونِ لینک ادامه می‌دهیم و لاگ می‌ماند. */
-        const followUrl = followDays.length
-          ? await this.followUpUrl(v, followDays).catch((e) => {
-            this.log.warn(`لینکِ پیگیریِ visit ${visitId} ساخته نشد: ${e instanceof Error ? e.message : e}`);
+        let followUrl: string | null = null;
+        for (const day of followDays) {
+          const url = await this.followUpUrl(v, [day]).catch((e) => {
+            this.log.warn(`لینک پیگیری visit ${visitId} ساخته نشد: ${e instanceof Error ? e.message : e}`);
             return null;
-          })
-          : null;
-        if (followUrl) {
-          const fuText = `${prefix}${renderSms(cfg.followUpText, { link: followUrl })}`;
-          const fuSent = await sentSame('follow_up', fuText);
-          for (const day of followDays) {
-            const due = day === 0 ? immediateDue() : this.dueOn(v.opDate, day, hour);
-            if (!due) continue;
-            if (collapsed(due) && fuSent) continue; // همین لینک قبلاً رفته
-            await this.prisma.reminder.create({
-              data: { patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone, text: fuText },
-            });
-          }
+          });
+          if (!url) continue;
+          followUrl ??= url;
+          const due = day === 0 ? immediateDue() : this.dueOn(v.opDate, day, hour);
+          if (!due) continue;
+          const fuText = `${prefix}${renderSms(cfg.followUpText, { link: url })}`;
+          if (collapsed(due) && await sentSame('follow_up', fuText)) continue;
+          await this.prisma.reminder.create({ data: { patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone, text: fuText } });
         }
         const dueAt = this.dueOn(v.opDate, -cfg.surgeryDays, hour);
         if (dueAt) {
@@ -234,7 +230,7 @@ export class RemindersService {
    */
   private async followUpUrl(
     v: {
-      patientId: number; opDate: Date | null; procedureTypeId: number | null; diagnosisId: number | null;
+      id: number; patientId: number; opDate: Date | null; procedureTypeId: number | null; diagnosisId: number | null;
       patient: {
         firstName: string; lastName: string; phone: string | null;
         nationalId: string | null; birthDate: Date | null; address: string | null;
@@ -264,17 +260,21 @@ export class RemindersService {
     const expiresAt = new Date(Math.max(Date.now(), opMs + lastDay * 24 * 3600_000) + 14 * 24 * 3600_000);
 
     const open = await this.prisma.intakeSubmission.findFirst({
-      where: { patientId: v.patientId, formId: base.id, linkId: null, status: { in: ['pending_fill', 'pending_payment'] } },
+      where: { patientId: v.patientId, formId: base.id, linkId: null, AND: [
+        { data: { path: ['followUpVisitId'], equals: v.id } },
+        { data: { path: ['followUpDay'], equals: days[0] } },
+        { data: { path: ['followUpOpDate'], equals: v.opDate?.toISOString() ?? '' } },
+      ] },
       orderBy: { id: 'desc' },
     });
     const row = open
-      ? await this.prisma.intakeSubmission.update({
+      ? (['pending_fill', 'pending_payment'].includes(open.status) ? await this.prisma.intakeSubmission.update({
         where: { id: open.id },
         data: {
           extraFormIds,
           expiresAt: open.expiresAt && open.expiresAt > expiresAt ? open.expiresAt : expiresAt,
         },
-      })
+      }) : open)
       : await this.prisma.intakeSubmission.create({
         data: {
           token: randomBytes(18).toString('base64url'),
@@ -285,6 +285,7 @@ export class RemindersService {
           status: 'pending_fill',
           extraFormIds,
           data: {
+            followUpVisitId: v.id, followUpDay: days[0], followUpOpDate: v.opDate?.toISOString() ?? '',
             firstName: v.patient?.firstName, lastName: v.patient?.lastName,
             nationalId: v.patient?.nationalId ?? null, phone: v.patient?.phone ?? null,
             address: v.patient?.address ?? null,

@@ -39,7 +39,29 @@ export class BillingService {
     const scoped = (user?.level ?? 0) < LEVEL.SUPERVISOR;
     const visit = await this.prisma.visit.findFirst({
       where: { id: visitId, ...(scoped ? { techId: user?.id ?? -1 } : {}) },
-      select: { id: true, patientId: true, pricingModel: true, globalAmount: true },
+      select: {
+        id: true, patientId: true, pricingModel: true, globalAmount: true,
+        invoiceType: true, invoiceBankAccountId: true,
+        /**
+         * ⚠️ **فیلدها صریح انتخاب می‌شوند، نه `invoiceBankAccount: true`.**
+         *
+         * `true` کلِ ردیف را می‌آورد و `billing.get` عیناً برش می‌گرداند —
+         * شاملِ `cardNumber`، `notes`، `partnerId` و `showOnIntake`. ولی این
+         * پاسخ پشتِ `billing.read` (سطحِ سوپروایزر) است در حالی که خودِ
+         * `/bank-accounts` پشتِ `accounting.read` (سطحِ ادمین) است: یعنی
+         * سوپروایزری که ماژولِ حسابداری برایش بسته است، شمارهٔ کارت و شبا را
+         * از این مسیر می‌گرفت.
+         *
+         * این پنج قلم همان‌هایی‌اند که کلاینت واقعاً مصرف می‌کند: شناسه برای
+         * قفلِ سلکت، و چهارتای دیگر برای سربرگِ «حساب دریافت» روی فاکتورِ
+         * چاپی (`exports.js`). قلمِ ششمی اضافه نکنید مگر مصرف‌کننده‌اش را
+         * نشان دهید.
+         */
+        invoiceBankAccount: {
+          select: { id: true, ownerName: true, bankName: true, accountNumber: true, iban: true },
+        },
+        hospital: { select: { sector: true } },
+      },
     });
     if (!visit) throw new NotFoundException('مراجعه پیدا نشد');
     return visit;
@@ -74,6 +96,9 @@ export class BillingService {
     );
     return {
       ...summarize(charges, payments, visit),
+      invoiceType: visit.invoiceType,
+      invoiceBankAccount: visit.invoiceBankAccount,
+      tariffSector: visit.hospital?.sector ?? 'private',
       pricingModel: visit.pricingModel,
       globalAmount: visit.globalAmount,
       charges: charges.map((c) => ({ ...c, lot: lotOf.get(c.id) ?? null })),
@@ -88,6 +113,20 @@ export class BillingService {
    * «گلوبال» بدونِ مبلغ پذیرفته نمی‌شود: مدلی که مبنایش مبلغِ توافقی است ولی
    * مبلغ ندارد، در عمل همان coded است و فقط کاربر را گیج می‌کند.
    */
+  async setInvoiceAccount(visitId: number, dto: { invoiceType: string; bankAccountId: number }, user: any) {
+    const before = await this.assertVisit(visitId, user);
+    if (!['formal', 'informal'].includes(dto.invoiceType)) throw new BadRequestException('نوع فاکتور نامعتبر است');
+    const bank = await this.prisma.bankAccount.findFirst({ where: { id: dto.bankAccountId, active: true } });
+    if (!bank || bank.classification !== dto.invoiceType) throw new BadRequestException('حساب باید فعال و هم‌نوع فاکتور باشد');
+    const mismatched = await this.prisma.payment.count({ where: { visitId, bankAccountId: { not: bank.id } } });
+    if (mismatched) throw new BadRequestException('پرداخت ثبت‌شده به حساب دیگری متصل است؛ ابتدا انتساب پرداخت را بررسی کنید');
+    const after = { invoiceType: dto.invoiceType, invoiceBankAccountId: bank.id };
+    await this.prisma.visit.update({ where: { id: visitId }, data: after });
+    await this.audit.record({ actorId: user?.id, action: 'billing.invoice-account', entityType: 'visit', entityId: visitId,
+      before: { invoiceType: before.invoiceType, invoiceBankAccountId: before.invoiceBankAccountId }, after });
+    return this.get(visitId, user);
+  }
+
   async setPricing(visitId: number, dto: { pricingModel?: string; globalAmount?: number | null }, user: any) {
     const before = await this.assertVisit(visitId, user);
     const model = dto.pricingModel ?? 'coded';
@@ -240,12 +279,27 @@ export class BillingService {
     return { ok: true, returnedToStock: returnStock };
   }
 
+  async assertIntakePayment(dto: { amount: number; bankAccountId?: number }) {
+    if (!Number.isInteger(dto.amount) || dto.amount <= 0) throw new BadRequestException('مبلغ پرداخت باید عدد صحیح مثبت باشد');
+    if (dto.bankAccountId && !await this.prisma.bankAccount.findFirst({ where: { id: dto.bankAccountId, active: true } })) {
+      throw new BadRequestException('حساب دریافت فعال نیست یا پیدا نشد');
+    }
+    await this.treasury.assertOpen(new Date());
+  }
+
   async addPayment(
     visitId: number,
     dto: { amount?: number; method?: string; paidAt?: string; reference?: string; notes?: string; bankAccountId?: number; receivedById?: number },
     user: any,
   ) {
-    await this.assertVisit(visitId, user);
+    const visit = await this.assertVisit(visitId, user);
+    if (visit.invoiceBankAccountId && dto.bankAccountId !== visit.invoiceBankAccountId) {
+      throw new BadRequestException('حساب دریافت باید همان حساب متصل به فاکتور باشد');
+    }
+    if (dto.bankAccountId) {
+      const bank = await this.prisma.bankAccount.findFirst({ where: { id: dto.bankAccountId, active: true } });
+      if (!bank || (visit.invoiceType && bank.classification !== visit.invoiceType)) throw new BadRequestException('حساب دریافت با نوع فاکتور سازگار نیست');
+    }
     const method = dto.method ?? 'cash';
     if (!PAYMENT_METHODS.includes(method as any)) throw new BadRequestException('روشِ پرداخت نامعتبر است');
 

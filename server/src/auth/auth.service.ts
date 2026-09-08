@@ -24,6 +24,21 @@ const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 type AccountWithPerson = Account & { person: Person };
 const WITH_PERSON = { person: true } as const;
 
+/**
+ * حسابی که مدیر برای شخصِ دیگری ساخته و آن شخص هنوز مالکش نشده.
+ *
+ * ⚠️ **این تنها تعریفِ «تصاحب‌نشده» در سامانه است.** نگهبانِ ورود، نگهبانِ
+ * درخواستِ کد، و مسیرِ تصاحب هر سه از همین می‌خوانند؛ سه شرطِ جدا یعنی روزی
+ * یکی‌شان عقب بماند و همان یکی درِ باز شود.
+ *
+ * سنجه `passwordHash`ِ خالی است: مدیر رمزی نمی‌داند تا به کارشناس بدهد، پس
+ * حساب تا وقتی صاحبش با کدِ پیامکی آن را برندارد رمزِ قابلِ‌استفاده ندارد.
+ * (نسخهٔ قبلی یک هشِ **تصادفی** می‌گذاشت — حسابی که نه کسی می‌توانست واردش
+ * شود و نه ثبت‌نامِ دوباره قبولش می‌کرد: شماره برای همیشه قفل می‌شد.)
+ */
+export const isUnclaimedAccount = (a: { passwordHash?: string | null } | null | undefined): boolean =>
+  !!a && !a.passwordHash;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -53,9 +68,14 @@ export class AuthService {
      */
     const exists = await this.prisma.person.findUnique({
       where: { phone },
-      include: { account: { select: { id: true } } },
+      include: { account: { select: { id: true, passwordHash: true } } },
     });
-    if (exists?.account) throw new BadRequestException('این شماره قبلاً ثبت شده است');
+    /* ⚠️ «تکراری» فقط حسابِ **تصاحب‌شده** است. حسابی که مدیر برای این شماره
+       ساخته و هنوز رمز ندارد باید بتواند کد بگیرد — وگرنه همان کارشناسی که
+       مدیر برایش حساب ساخته، هرگز نمی‌تواند وارد شود. */
+    if (exists?.account && !isUnclaimedAccount(exists.account)) {
+      throw new BadRequestException('این شماره قبلاً ثبت شده است');
+    }
 
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone, purpose: 'signup', createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
@@ -137,9 +157,41 @@ export class AuthService {
       // هویت وصل می‌شود، نه یک Personِ دومِ هم‌شماره.
       const known = await tx.person.findUnique({
         where: { phone },
-        include: { account: { select: { id: true } } },
+        include: { account: { select: { id: true, passwordHash: true } } },
       });
-      if (known?.account) throw new BadRequestException('این شماره قبلاً ثبت شده است');
+      if (known?.account && !isUnclaimedAccount(known.account)) {
+        throw new BadRequestException('این شماره قبلاً ثبت شده است');
+      }
+
+      /**
+       * **تصاحبِ حسابی که مدیر از قبل ساخته** (کارشناسِ افزوده‌شده در تأییدِ
+       * ثبت‌نام). کدِ پیامکی ثابت کرده این شماره مالِ همین شخص است و حساب هم
+       * برای همین شماره ساخته شده بود؛ پس مالکِ درست همین است.
+       *
+       * ⚠️ **سطح و وضعیت دست‌نخورده می‌مانند.** آن‌ها را مدیر تعیین کرده؛
+       * اگر تصاحب سطح می‌داد یا bootstrap را روشن می‌کرد، هر کس با یک شمارهٔ
+       * از پیش ثبت‌شده می‌توانست سطحِ خودش را بالا ببرد. تصاحب فقط سه چیز
+       * اضافه می‌کند: نامِ کاربری، رمز، و سلفی.
+       */
+      if (known?.account) {
+        const claimed = await tx.account.update({
+          where: { id: known.account.id },
+          data: {
+            username: dto.username.trim(),
+            passwordHash,
+            person: { update: { photo: dto.selfie } },
+          },
+          include: WITH_PERSON,
+        });
+        await tx.auditEvent.create({
+          data: {
+            actorId: claimed.id, action: 'account.claim', entityType: 'account',
+            entityId: String(claimed.id),
+            afterJson: { username: claimed.username, level: claimed.level },
+          },
+        });
+        return { account: claimed, bootstrap: false, claimed: true };
+      }
 
       const bootstrap =
         (await tx.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
@@ -168,11 +220,23 @@ export class AuthService {
         },
         include: WITH_PERSON,
       });
-      return { account, bootstrap };
+      return { account, bootstrap, claimed: false };
     });
 
-    if (result.bootstrap) {
-      return { pending: false, bootstrap: true, ...(await this.issue(result.account, meta)) };
+    /**
+     * ⚠️ سنجه **وضعیتِ خودِ حساب** است، نه `bootstrap`.
+     *
+     * حسابِ تصاحب‌شده را مدیر از قبل تأیید کرده و `active` است؛ اگر مثلِ
+     * ثبت‌نامِ معمولی `pending` برمی‌گشت، کارشناس صفحهٔ «در انتظارِ تأییدِ
+     * مدیر» را می‌دید و برای تأییدی منتظر می‌ماند که قبلاً انجام شده.
+     */
+    if (result.account.status === 'active') {
+      return {
+        pending: false,
+        bootstrap: result.bootstrap,
+        claimed: result.claimed,
+        ...(await this.issue(result.account, meta)),
+      };
     }
     return { pending: true, user: this.publicUser(result.account) };
   }
@@ -188,6 +252,12 @@ export class AuthService {
       include: WITH_PERSON,
     });
     if (!account) throw new UnauthorizedException('نام کاربری یا رمز عبور اشتباه است');
+    /* ⚠️ حسابِ تصاحب‌نشده رمزِ معتبر ندارد و نباید داشته باشد. `bcrypt.compare`
+       با هشِ خالی هم false می‌دهد، ولی شرطِ صریح این را از یک جزئیاتِ
+       کتابخانه به یک **قاعدهٔ اعلام‌شده** تبدیل می‌کند. */
+    if (isUnclaimedAccount(account)) {
+      throw new UnauthorizedException('این حساب هنوز فعال نشده؛ با ثبت‌نام و کدِ پیامکی آن را تحویل بگیرید');
+    }
     const ok = await bcrypt.compare(dto.password, account.passwordHash);
     if (!ok) throw new UnauthorizedException('نام کاربری یا رمز عبور اشتباه است');
 
