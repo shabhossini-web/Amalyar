@@ -39,7 +39,29 @@ export class BillingService {
     const scoped = (user?.level ?? 0) < LEVEL.SUPERVISOR;
     const visit = await this.prisma.visit.findFirst({
       where: { id: visitId, ...(scoped ? { techId: user?.id ?? -1 } : {}) },
-      select: { id: true, patientId: true, pricingModel: true, globalAmount: true, invoiceType: true, invoiceBankAccountId: true, invoiceBankAccount: true, hospital: { select: { sector: true } } },
+      select: {
+        id: true, patientId: true, pricingModel: true, globalAmount: true,
+        invoiceType: true, invoiceBankAccountId: true,
+        /**
+         * ⚠️ **فیلدها صریح انتخاب می‌شوند، نه `invoiceBankAccount: true`.**
+         *
+         * `true` کلِ ردیف را می‌آورد و `billing.get` عیناً برش می‌گرداند —
+         * شاملِ `cardNumber`، `notes`، `partnerId` و `showOnIntake`. ولی این
+         * پاسخ پشتِ `billing.read` (سطحِ سوپروایزر) است در حالی که خودِ
+         * `/bank-accounts` پشتِ `accounting.read` (سطحِ ادمین) است: یعنی
+         * سوپروایزری که ماژولِ حسابداری برایش بسته است، شمارهٔ کارت و شبا را
+         * از این مسیر می‌گرفت.
+         *
+         * این پنج قلم همان‌هایی‌اند که کلاینت واقعاً مصرف می‌کند: شناسه برای
+         * قفلِ سلکت، و چهارتای دیگر برای سربرگِ «حساب دریافت» روی فاکتورِ
+         * چاپی (`exports.js`). قلمِ ششمی اضافه نکنید مگر مصرف‌کننده‌اش را
+         * نشان دهید.
+         */
+        invoiceBankAccount: {
+          select: { id: true, ownerName: true, bankName: true, accountNumber: true, iban: true },
+        },
+        hospital: { select: { sector: true } },
+      },
     });
     if (!visit) throw new NotFoundException('مراجعه پیدا نشد');
     return visit;

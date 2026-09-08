@@ -2681,3 +2681,72 @@ jobs:
 
       - name: Verify paid intake, multi-role forms, bank invoices and follow-up integration
         run: node scripts/e2e/intake-finance-roles.mjs
+
+      # دو مرزی که هیچ تایپ‌چکی نمی‌گیرد و هر دو یک‌بار شکسته بودند:
+      # حسابی که مدیر برای دیگری می‌سازد باید قابلِ تحویل‌گرفتن بماند، و
+      # اطلاعاتِ حسابِ بانکی نباید از گاردِ حسابداری بیرون بزند.
+      #
+      # ⚠️ در متنِ این گام backtick نگذارید: داخلِ رشتهٔ دوتاییِ node -e،
+      # پوسته آن را دستور می‌خواند و گام با «command not found» می‌شکند.
+      - name: Verify admin-created accounts stay claimable and bank details stay scoped
+        run: |
+          node -e "
+          const fs = require('fs');
+          const read = (p) => fs.readFileSync(p, 'utf8');
+          /* کامنت‌ها اول برداشته می‌شوند — نثرِ توضیحیِ خودِ فایل بارها
+             به‌جای کد سنجیده شده است. */
+          const code = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+          const acc = code(read('server/src/accounts/accounts.service.ts'));
+          const auth = code(read('server/src/auth/auth.service.ts'));
+          const bill = code(read('server/src/patients/billing.service.ts'));
+
+          /* حسابِ ساخته‌شده توسطِ مدیر نباید رمزِ غیرقابلِ‌دانستن بگیرد. هشِ
+             تصادفی یعنی حسابی که نه صاحبش می‌تواند واردش شود (بازیابیِ رمز
+             وجود ندارد) و نه ثبت‌نامِ دوباره قبولش می‌کند — شماره تا ویرایشِ
+             دستیِ دیتابیس قفل می‌ماند. */
+          const tech = acc.slice(acc.indexOf('async createTechnician('), acc.indexOf('async list('));
+          if (/randomBytes|bcrypt\.hash/.test(tech)) {
+            console.error('حسابِ کارشناس نباید رمزِ تصادفی بگیرد؛ باید تصاحب‌نشده بماند'); process.exit(1);
+          }
+          if (!/passwordHash = ''/.test(tech)) {
+            console.error('حسابِ کارشناس باید با passwordHashِ خالی ساخته شود'); process.exit(1);
+          }
+
+          // تعریفِ تصاحب‌نشده یکی است و هر سه مصرف‌کننده از همان می‌خوانند.
+          if (!/export const isUnclaimedAccount/.test(auth)) {
+            console.error('تعریفِ isUnclaimedAccount نیست'); process.exit(1);
+          }
+          const uses = (auth.match(/isUnclaimedAccount\(/g) || []).length;
+          if (uses < 3) {
+            console.error('گاردِ ورود، درخواستِ کد و مسیرِ تصاحب هر سه باید از isUnclaimedAccount بخوانند (یافت: ' + uses + ')');
+            process.exit(1);
+          }
+
+          /* تصاحب نباید سطح یا وضعیت بدهد — وگرنه هر کس با یک شمارهٔ از پیش
+             ثبت‌شده سطحِ خودش را بالا می‌برد. */
+          const claim = auth.slice(auth.indexOf('if (known?.account) {'), auth.indexOf('const bootstrap ='));
+          /* ⚠️ سنجه فقط شیءِ data (چیزی که **نوشته** می‌شود) است، نه کلِ بلوک:
+             رکوردِ audit همان‌جا سطح را می‌خوانَد تا ثبتش کند، و بندِ اول
+             همان خواندن را نوشتن حساب کرد و بی‌دلیل قرمز شد. */
+          const dataStart = claim.indexOf('data: {');
+          const written = dataStart < 0 ? '' : claim.slice(dataStart, claim.indexOf('include:', dataStart));
+          if (!dataStart) { console.error('شیءِ data در مسیرِ تصاحب پیدا نشد'); process.exit(1); }
+          for (const forbidden of ['level:', 'status:', 'jobRole:', 'approvedAt:']) {
+            if (written.includes(forbidden)) {
+              console.error('مسیرِ تصاحب نباید ' + forbidden + ' را بنویسد'); process.exit(1);
+            }
+          }
+
+          /* اطلاعاتِ حسابِ بانکی: billing.read سطحِ سوپروایزر است ولی مسیرِ
+             bank-accounts سطحِ ادمین. selectِ باز یعنی شمارهٔ کارت از گاردِ
+             حسابداری رد می‌شود. */
+          if (/invoiceBankAccount: true/.test(bill)) {
+            console.error('صورت‌حساب باید فیلدهای حسابِ بانکی را صریح انتخاب کند، نه کلِ ردیف'); process.exit(1);
+          }
+          for (const leak of ['cardNumber', 'partnerId', 'showOnIntake']) {
+            if (bill.includes(leak)) {
+              console.error('قلمِ ' + leak + ' نباید در پاسخِ صورت‌حساب باشد'); process.exit(1);
+            }
+          }
+          console.log('account claim + bank scope ok');
+          "

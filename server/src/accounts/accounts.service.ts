@@ -1,5 +1,3 @@
-import * as bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
@@ -21,7 +19,20 @@ export class AccountsService {
       { phone: String(person.phone) }, ...(person.nationalId ? [{ nationalId: String(person.nationalId) }] : []),
     ] } });
     if (exists) throw new BadRequestException('این شخص قبلاً ثبت شده است؛ حساب موجود را از کاربران انتخاب یا تأیید کنید');
-    const passwordHash = await bcrypt.hash(randomBytes(32).toString('base64url'), 12);
+    /**
+     * ⚠️ **رمزِ خالی، نه رمزِ تصادفی.**
+     *
+     * نسخهٔ اول یک هشِ تصادفیِ ۳۲بایتی می‌گذاشت. نتیجه‌اش حسابی بود که هیچ‌کس
+     * — از جمله خودِ کارشناس — نمی‌توانست واردش شود: رمز را کسی نمی‌دانست،
+     * مسیرِ بازیابیِ رمز وجود ندارد، و ثبت‌نامِ دوباره با «این شماره قبلاً ثبت
+     * شده است» رد می‌شد. یعنی آن شمارهٔ موبایل تا **ویرایشِ دستیِ دیتابیس**
+     * غیرقابلِ‌استفاده می‌ماند.
+     *
+     * رشتهٔ خالی یعنی «تصاحب‌نشده» (`isUnclaimedAccount`): ورود بسته است، ولی
+     * صاحبِ شماره با همان ثبت‌نامِ عادی و کدِ پیامکی حساب را تحویل می‌گیرد و
+     * سطح و وضعیتی که مدیر داده دست‌نخورده می‌ماند.
+     */
+    const passwordHash = '';
     const row = await this.prisma.$transaction(async (tx) => {
       const account = await tx.account.create({ data: {
         person: { create: person as any }, passwordHash, level: LEVEL.TECH,
