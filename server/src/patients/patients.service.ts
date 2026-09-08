@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
-import { jobRoleLabel } from '../common/job-roles';
+import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
@@ -941,7 +941,7 @@ export class PatientsService {
     if (!kind) return;
     const form = await this.prisma.formDef.findFirst({
       where: { scope: 'visit', visitKind: kind },
-      select: { fields: { where: { role: { not: null } }, select: { key: true, label: true, role: true } } },
+      select: { fields: { select: { key: true, label: true, role: true, roles: true } } },
     });
     if (!form || form.fields.length === 0) return;
 
@@ -952,7 +952,8 @@ export class PatientsService {
     };
     const curExtra = (current?.extra && typeof current.extra === 'object') ? current.extra as Record<string, any> : {};
     for (const f of form.fields) {
-      if (f.role === myRole) continue;
+      const roles = fieldRoles(f);
+      if (!roles.length || roles.includes(myRole)) continue;
       const inExtra = dto.extra && Object.prototype.hasOwnProperty.call(dto.extra, f.key);
       const inRoot = Object.prototype.hasOwnProperty.call(dto, f.key);
       if (!inExtra && !inRoot) continue;
@@ -962,7 +963,7 @@ export class PatientsService {
          خالی می‌فرستد و آن «نوشتن» نیست. */
       if (norm(next) === norm(prev ?? '')) continue;
       throw new BadRequestException(
-        `«${f.label}» بخشِ ${jobRoleLabel(f.role)} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
+        `«${f.label}» بخشِ ${roles.map(jobRoleLabel).join("، ")} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
       );
     }
   }

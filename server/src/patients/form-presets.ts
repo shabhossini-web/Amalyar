@@ -306,6 +306,22 @@ const SURVEY: PresetForm = {
   ],
 };
 
+/** زیرپروندهٔ پیگیری؛ با نوع مراجعهٔ followup متفاوت است. */
+export const POSTOP_FOLLOWUP: PresetForm = {
+  key: 'record.postop-followup', title: 'پیگیری پس از عمل', scope: 'record',
+  hint: 'پاسخ‌ها برای بررسی تیم درمان ثبت می‌شوند. این فرم جای تماس ضروری با مرکز درمانی نیست.',
+  fields: [
+    { key: 'generalCondition', label: 'وضعیت کلی نسبت به روز قبل', type: 'select', required: true,
+      options: [{ v: 'better', l: 'بهتر' }, { v: 'same', l: 'بدون تغییر' }, { v: 'worse', l: 'بدتر' }] },
+    { key: 'symptoms', label: 'علائم یا تغییرات جدید را شرح دهید', type: 'textarea', required: true, hint: 'اگر علامت تازه‌ای ندارید بنویسید ندارم.' },
+    { key: 'careQuestions', label: 'پرسش درباره دستورهای مراقبتی داده‌شده', type: 'textarea' },
+    { key: 'medicationQuestions', label: 'مشکل یا پرسش درباره داروهای تجویزشده', type: 'textarea' },
+    { key: 'contactRequested', label: 'درخواست تماس از تیم درمان دارم', type: 'bool' },
+    { key: 'contactTime', label: 'زمان مناسب تماس', type: 'text' },
+    { key: 'otherNotes', label: 'توضیحات دیگر', type: 'textarea' },
+  ],
+};
+
 /**
  * فرم‌هایی که یک حوزه با آن‌ها شروع می‌کند.
  *

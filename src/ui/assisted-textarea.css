@@ -1,0 +1,6 @@
+.assisted-text, .assisted-proposal { display: flex; flex-direction: column; gap: 8px; min-width: 0; width: 100%; }
+.assisted-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.assisted-actions button { color: inherit; background: transparent; border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 11px; cursor: pointer; }
+.assisted-actions button:disabled { opacity: .5; cursor: default; }
+.assisted-actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.assisted-proposal { padding: 10px; border: 1px solid var(--card-border); border-radius: 10px; box-sizing: border-box; }

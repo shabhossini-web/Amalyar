@@ -1,3 +1,5 @@
+import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
@@ -11,6 +13,25 @@ export class AccountsService {
     private prisma: PrismaService,
     private auth: AuthService,
   ) {}
+
+  async createTechnician(dto: PersonInput, actorId: number) {
+    const person = buildPersonPatch(dto, true);
+    if (!person.phone) throw new BadRequestException('شماره همراه کارشناس برای ورود لازم است');
+    const exists = await this.prisma.person.findFirst({ where: { OR: [
+      { phone: String(person.phone) }, ...(person.nationalId ? [{ nationalId: String(person.nationalId) }] : []),
+    ] } });
+    if (exists) throw new BadRequestException('این شخص قبلاً ثبت شده است؛ حساب موجود را از کاربران انتخاب یا تأیید کنید');
+    const passwordHash = await bcrypt.hash(randomBytes(32).toString('base64url'), 12);
+    const row = await this.prisma.$transaction(async (tx) => {
+      const account = await tx.account.create({ data: {
+        person: { create: person as any }, passwordHash, level: LEVEL.TECH,
+        jobRole: 'technician', status: 'active', approvedAt: new Date(), approvedById: actorId,
+      }, include: { person: true } });
+      await tx.auditEvent.create({ data: { actorId, action: 'account.technician.create', entityType: 'account', entityId: String(account.id), afterJson: { level: LEVEL.TECH, jobRole: 'technician' } } });
+      return account;
+    });
+    return this.auth.publicUser(row);
+  }
 
   async list(status?: string) {
     const rows = await this.prisma.account.findMany({

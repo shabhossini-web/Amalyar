@@ -1,3 +1,4 @@
+import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 /**
  * فرمِ سفارشِ بالینی — آزمایش، تصویربرداری، مشاوره، ارجاع.
  *
@@ -6,14 +7,13 @@
  * می‌گیرد و همه‌جا همان را می‌بیند؛ فیلدهای اختصاصیِ هر نوع داخلِ همین
  * پوسته عوض می‌شوند.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiUpload } from '../lib/api.js';
 import { jStrToIso, isoToJStr } from '../lib/jalali.js';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
-import VoiceInput from '../ui/VoiceInput.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
 import './orders.css';
 
@@ -67,12 +67,6 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
     resultPass: order?.resultPass ?? '',
   }));
   const [busy, setBusy] = useState(false);
-  const [sttOn, setSttOn] = useState(false);
-  useEffect(() => {
-    let on = true;
-    api('/ai/status').then((r) => { if (on) setSttOn(!!r?.stt); }).catch(() => {});
-    return () => { on = false; };
-  }, []);
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const toggle = (k, v) => setF((s) => ({
     ...s, [k]: s[k].includes(v) ? s[k].filter((x) => x !== v) : [...s[k], v],
@@ -167,17 +161,9 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       )}
 
       <label className="db-field"><span>{kind === 'referral' ? 'متنِ ارجاع' : 'توضیح برای بیمار / آزمایشگاه'}</span>
-        <textarea rows={3} value={f.note} onChange={set('note')} />
+        <AssistedTextarea disabled={busy} rows={3} value={f.note} onChange={set('note')} />
       </label>
-      {sttOn && (
-        <div className="db-aibar">
-          <VoiceInput
-            disabled={busy}
-            onText={(t) => setF((s) => ({ ...s, note: s.note.trim() ? `${s.note}\n${t}` : t }))}
-            onErr={(m) => onToast(m)}
-          />
-        </div>
-      )}
+
 
       {meta.hasDue && (
         <JDate label="مهلتِ انجام و ارسالِ پاسخ" value={f.dueJ}
@@ -188,7 +174,7 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
         <div className="od-block od-result">
           <span className="od-label">پاسخ — اگر رسیده</span>
           <label className="db-field"><span>متنِ پاسخ</span>
-            <textarea rows={2} value={f.resultText} onChange={set('resultText')} placeholder="خلاصهٔ جواب" />
+            <AssistedTextarea disabled={busy} rows={2} value={f.resultText} onChange={set('resultText')} placeholder="خلاصهٔ جواب" />
           </label>
           <label className="db-field"><span>لینکِ پاسخ</span>
             <input dir="ltr" value={f.resultLink} onChange={set('resultLink')} placeholder="https://…" />

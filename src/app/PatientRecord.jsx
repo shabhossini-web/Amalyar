@@ -1,3 +1,4 @@
+import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
@@ -149,9 +150,9 @@ function ProfileTab({ rec, onSave, toast }) {
             </label>
             <label className="pf-field"><span>نشانی</span><input value={f.address} onChange={set('address')} /></label>
           </div>
-          <label className="pf-field"><span>حساسیت‌ها</span><textarea rows={2} value={f.allergies} onChange={set('allergies')} placeholder="دارو، غذا، ماده بی‌هوشی…" /></label>
-          <label className="pf-field"><span>بیماری‌های زمینه‌ای</span><textarea rows={2} value={f.chronicConditions} onChange={set('chronicConditions')} /></label>
-          <label className="pf-field"><span>داروهای مصرفی</span><textarea rows={2} value={f.medications} onChange={set('medications')} /></label>
+          <label className="pf-field"><span>حساسیت‌ها</span><AssistedTextarea disabled={busy} rows={2} value={f.allergies} onChange={set('allergies')} placeholder="دارو، غذا، ماده بی‌هوشی…" /></label>
+          <label className="pf-field"><span>بیماری‌های زمینه‌ای</span><AssistedTextarea disabled={busy} rows={2} value={f.chronicConditions} onChange={set('chronicConditions')} /></label>
+          <label className="pf-field"><span>داروهای مصرفی</span><AssistedTextarea disabled={busy} rows={2} value={f.medications} onChange={set('medications')} /></label>
 
           <h3 className="rc-h3">بیمه</h3>
           <div className="pf-row2">
@@ -166,7 +167,7 @@ function ProfileTab({ rec, onSave, toast }) {
             <label className="pf-field"><span>شماره</span><input dir="ltr" inputMode="numeric" value={f.emergencyPhone} onChange={set('emergencyPhone')} /></label>
           </div>
           <label className="pf-field"><span>نسبت</span><input value={f.emergencyRelation} onChange={set('emergencyRelation')} placeholder="همسر، فرزند، …" /></label>
-          <label className="pf-field"><span>یادداشت</span><textarea rows={2} value={f.notes} onChange={set('notes')} /></label>
+          <label className="pf-field"><span>یادداشت</span><AssistedTextarea disabled={busy} rows={2} value={f.notes} onChange={set('notes')} /></label>
         </>
       ) : (
         <div className="rc-locked"><Lock width="15" height="15" /> اطلاعاتِ بالینی این پرونده در سطحِ دسترسیِ شما نیست.</div>
@@ -787,7 +788,7 @@ function NotesTab({ rec, reload, toast }) {
             <div className="df-sheet-body">
               <div className="df-note">متنِ قبلی پاک نمی‌شود — نسخهٔ تازه‌ای ثبت می‌شود و نسخهٔ قبلی در تاریخچه می‌ماند.</div>
               <label className="pf-field"><span>متن</span>
-                <textarea rows={7} value={editing.body} onChange={(e) => setEditing((s) => ({ ...s, body: e.target.value }))} />
+                <AssistedTextarea disabled={busy} rows={7} value={editing.body} onChange={(e) => setEditing((s) => ({ ...s, body: e.target.value }))} />
               </label>
             </div>
             <div className="df-sheet-foot">

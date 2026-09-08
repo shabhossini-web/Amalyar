@@ -2238,11 +2238,14 @@ jobs:
 
           // ③ مبلغ باید وارد **دفتر** شود. تا دیروز amountِ ثبت‌نام هیچ‌جا
           //    نمی‌رفت و مراجعهٔ تأییدشده صفر تومان بود.
-          // ⚠️ وجودِ **قلمِ خدمت با خودِ مبلغ** سنجیده می‌شود، نه صرفِ وجودِ
-          //    addCharge: قلمِ تخفیف هم همان تابع را صدا می‌زند و نسخهٔ اولِ
-          //    نگهبان با حذفِ قلمِ خدمت هم سبز می‌ماند.
-          if (!/kind: 'service'[\s\S]{0,200}unitPrice: row\.amount/.test(svc)) {
-            console.error('تأیید باید مبلغِ ثبت‌نام را به‌شکلِ قلمِ خدمت در فاکتور بنشاند'); process.exit(1);
+          // مبلغ به مسیر مشترک اعتبارسنجی و قلم اولیه می‌رود؛ آزمون یکپارچه
+          // مبلغ واقعی، تخفیف و نبود قلم تکراری را هم روی دیتابیس می‌سنجد.
+          const patients = read('server/src/patients/patients.service.ts');
+          if (!/patients\.createVisit\(\{[\s\S]{0,120}amount: row\.amount/.test(svc) || !/tx\.charge\.create/.test(patients)) {
+            console.error('تأیید باید مبلغ را به اعتبارسنجی و قلم اولیه createVisit برساند'); process.exit(1);
+          }
+          if (/kind: 'service'[\s\S]{0,200}unitPrice: row\.amount/.test(svc)) {
+            console.error('قلم اولیه در createVisit ثبت شده؛ تأیید نباید دوباره آن را بسازد'); process.exit(1);
           }
           // ④ تخفیف **قلمِ جدا** بماند؛ خالص‌کردنِ عدد یعنی گم‌شدنِ اطلاعات.
           if (!/kind: 'discount'/.test(svc)) {
@@ -2675,3 +2678,6 @@ jobs:
           }
           console.log('money+acl ok');
           "
+
+      - name: Verify paid intake, multi-role forms, bank invoices and follow-up integration
+        run: node scripts/e2e/intake-finance-roles.mjs

@@ -1,3 +1,5 @@
+import AssistedTextarea from '../ui/AssistedTextarea.jsx';
+import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -56,6 +58,7 @@ const SECTIONS = [
     empty: 'هنوز بیمارستانی تعریف نشده',
     fields: [
       { key: 'name', label: 'نام مرکز *', required: true },
+      { key: 'sector', label: 'نوع بیمارستان / تعرفه', options: [{ v: 'private', l: 'خصوصی' }, { v: 'public', l: 'دولتی' }, { v: 'nonprofit', l: 'عمومی غیردولتی' }, { v: 'charity', l: 'خیریه' }, { v: 'military', l: 'نیروهای مسلح' }] },
       { key: 'city', label: 'شهر' },
       { key: 'address', label: 'آدرس' },
       { key: 'phone', label: 'تلفن', dir: 'ltr' },
@@ -204,7 +207,7 @@ const SECTIONS = [
 
 export default function Definitions() {
   const stagger = useStagger();
-  const [tab, setTab] = useState('surgeons');
+  const [tab, setTab] = useState(() => { const key = new URLSearchParams(window.location.search).get('section'); return SECTIONS.some((s) => s.key === key) ? key : 'surgeons'; });
   const [merging, setMerging] = useState(false);
   const [parts, setParts] = useState(null); // کالایی که محتویاتش باز است
   const [needsFor, setNeedsFor] = useState(null); // نوعِ عملی که الگوی اقلامش باز است
@@ -650,14 +653,14 @@ function NameMerge({ onToast }) {
 }
 
 /** فرمِ افزودن/ویرایش — برای بخشِ «شخص‌دار» از کامپوننتِ مشترک استفاده می‌کند. */
-function EditSheet({ section, row, onClose, onSaved, onError }) {
+function EditSheet({ section, row, onClose, onSaved, onError, quick = false }) {
   const isNew = !row.id;
   /* فیلدِ فهرستی (مثلِ املاهای یک محل) در فرم به‌شکلِ متنِ جداشده با «،»
      ویرایش می‌شود و هنگامِ ارسال دوباره آرایه می‌شود — چون آرایه ورودیِ
      قابلِ‌تایپ ندارد و ساختنِ ویرایشگرِ چندتایی برای یک فیلد صرف نمی‌کند. */
   const listKeys = (section.fields ?? []).filter((f) => f.list).map((f) => f.key);
   const [form, setForm] = useState(() => {
-    const f = { ...row };
+    const f = { ...(section.key === 'hospitals' ? { sector: 'private' } : {}), ...row };
     for (const k of listKeys) if (Array.isArray(f[k])) f[k] = f[k].join('، ');
     return f;
   });
@@ -750,9 +753,8 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
 
     setBusy(true);
     try {
-      if (isNew) await api(section.path, { method: 'POST', body });
-      else await api(`${section.path}/${row.id}`, { method: 'PATCH', body });
-      await onSaved(isNew ? 'اضافه شد ✓' : 'ذخیره شد ✓');
+      const saved = isNew ? await api(section.path, { method: 'POST', body }) : await api(`${section.path}/${row.id}`, { method: 'PATCH', body });
+      await onSaved(isNew ? 'اضافه شد ✓' : 'ذخیره شد ✓', saved);
     } catch (e) {
       onError(e.message);
     } finally {
@@ -761,7 +763,7 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
   };
 
   return (
-    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+    <Overlay backdrop={quick ? "df-overlay df-quick-overlay" : "df-overlay"} panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
       <header className="df-sheet-head">
         <b>{isNew ? `افزودن به ${section.label}` : 'ویرایش'}</b>
         <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
@@ -799,7 +801,7 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
                     {(f.options ?? dynOpts[f.key] ?? []).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
                   </select>
                 ) : f.textarea
-                  ? <textarea rows={f.rows ?? 2} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
+                  ? <AssistedTextarea rows={f.rows ?? 2} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />
                   : <input type="text" dir={f.dir || 'rtl'} value={form[f.key] ?? ''} onChange={setField(f.key)} disabled={busy} />}
                 {errors[f.key] && <em className="pf-err">{errors[f.key]}</em>}
               </label>
@@ -819,4 +821,16 @@ function EditSheet({ section, row, onClose, onSaved, onError }) {
       </footer>
     </Overlay>
   );
+}
+
+export function QuickDefinitionEditor({ sectionKey, onClose, onSaved }) {
+  const [error, setError] = useState('');
+  const section = sectionKey === 'techs'
+    ? { key: 'techs', path: '/accounts/technicians', label: 'کارشناسان', person: true, extra: [] }
+    : SECTIONS.find((s) => s.key === sectionKey);
+  if (!section) return null;
+  return createPortal(<div>
+    <EditSheet quick section={section} row={{}} onClose={onClose} onSaved={onSaved} onError={setError} />
+    {error && <div className="df-quick-error" role="alert" onClick={() => setError('')}>{error}</div>}
+  </div>, document.body);
 }

@@ -35,6 +35,11 @@ class StaffProfileDto {
 export class AccountsController {
   constructor(private accounts: AccountsService) {}
 
+  @Post('technicians')
+  createTechnician(@Body() dto: StaffProfileDto, @CurrentUser() user: any) {
+    return this.accounts.createTechnician(dto, user.id);
+  }
+
   @Get()
   list(@Query('status') status?: string) {
     return this.accounts.list(status);

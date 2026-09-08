@@ -1,3 +1,5 @@
+import { QuickDefinitionEditor } from './Definitions.jsx';
+import { useAuth } from './auth.jsx';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -336,6 +338,8 @@ function ReceiptZoom({ url, onClose }) {
 
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
 function ApproveSheet({ row, onClose, onDone, onZoom }) {
+  const { user: me } = useAuth();
+  const [quick, setQuick] = useState(null);
   const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [], banks: [] });
   const [f, setF] = useState({
     surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '',
@@ -348,15 +352,17 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    Promise.all([
-      api('/surgeons').catch(() => []),
-      api('/hospitals').catch(() => []),
-      api('/techs').catch(() => []),
-      api('/procedure-types').catch(() => []),
-      api('/bank-accounts').catch(() => []),
-    ]).then(([surgeons, hospitals, techs, types, banks]) => setRefs({ surgeons, hospitals, techs, types, banks }));
+  const loadRefs = useCallback(async () => {
+    const [surgeons, hospitals, techs, types, banks] = await Promise.all([
+      api('/surgeons'), api('/hospitals'), api('/techs'), api('/procedure-types'), api('/bank-accounts').catch(() => []),
+    ]);
+    setRefs({ surgeons, hospitals, techs, types, banks });
   }, []);
+  useEffect(() => {
+    const reload = () => loadRefs().catch((e) => setErr(e.message));
+    reload(); window.addEventListener('focus', reload);
+    return () => window.removeEventListener('focus', reload);
+  }, [loadRefs]);
 
   const save = async () => {
     setBusy(true); setErr('');
@@ -381,15 +387,6 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
-  const Sel = ({ k, label, list, name = 'name' }) => (
-    <label className="ia-field">
-      <span>{label}</span>
-      <select value={f[k]} disabled={busy} onChange={(e) => setF((s) => ({ ...s, [k]: e.target.value }))}>
-        <option value="">— انتخاب —</option>
-        {list.map((o) => <option key={o.id} value={o.id}>{o[name] ?? o.displayName}</option>)}
-      </select>
-    </label>
-  );
 
   return (
     <Overlay backdrop="ia-overlay" panel="ia-sheet" as="section" onClose={onClose} closable={!busy}>
@@ -425,10 +422,10 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
         <Receipt documentId={row.data?.receiptDocumentId} onOpen={onZoom} />
         {row.makesVisit !== false && (
         <div className="ia-grid">
-          <Sel k="surgeonId" label="جراح" list={refs.surgeons} />
-          <Sel k="hospitalId" label="بیمارستان" list={refs.hospitals} />
-          <Sel k="techId" label="کارشناس" list={refs.techs} name="displayName" />
-          <Sel k="procedureTypeId" label="نوعِ عمل" list={refs.types} />
+          <ApprovalSelect field="surgeonId" section="surgeons" label="جراح" list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />
+          <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />
+          <ApprovalSelect field="techId" section="techs" label="کارشناس" list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />
+          <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />
           <JDate className="ia-field" label="تاریخِ عمل" value={f.opDate}
                  onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />
           <TimePick className="ia-field" label="ساعتِ عمل" value={f.opStartTime}
@@ -465,6 +462,9 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
             : row.makesVisit === false ? 'تأیید و ثبت در پرونده' : 'تأیید و ساختِ مراجعه'}
         </button>
       </div>
+      {quick && <QuickDefinitionEditor sectionKey={quick.section} onClose={() => setQuick(null)} onSaved={async (_message, saved) => {
+        setF((s) => ({ ...s, [quick.field]: String(saved.id) })); setQuick(null); await loadRefs();
+      }} />}
     </Overlay>
   );
 }
@@ -646,4 +646,17 @@ function LinkSheet({ initial, onClose, onDone }) {
       </div>
     </Overlay>
   );
+}
+
+function ApprovalSelect({ field, section, label, list, value, busy, onChange, onAdd }) {
+  return <div className="ia-field">
+    <div className="ia-definition-head"><label htmlFor={`approve-${field}`}>{label}</label>
+      {onAdd && <button type="button" disabled={busy} onClick={() => onAdd({ field, section })} aria-label={`افزودن ${label}`}><Plus width="16" height="16" /></button>}
+      <Link to={section === 'techs' ? '/app/users' : `/app/definitions?section=${section}`} target="_blank" rel="noopener noreferrer">تعریف پایه</Link>
+    </div>
+    <select id={`approve-${field}`} value={value} disabled={busy} onChange={(e) => onChange(e.target.value)}>
+      <option value="">— انتخاب —</option>
+      {list.filter((r) => r.active !== false).map((r) => <option key={r.id} value={r.id}>{r.name ?? r.displayName}</option>)}
+    </select>
+  </div>;
 }

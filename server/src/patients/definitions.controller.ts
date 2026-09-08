@@ -1,3 +1,4 @@
+import { SECTORS } from './service-codes.service';
 import {
   Body,
   Controller,
@@ -187,6 +188,7 @@ class DiagnosisPatchDto {
 }
 
 class HospitalCreateDto {
+  @IsOptional() @IsIn(SECTORS, { message: 'نوع بیمارستان نامعتبر است' }) sector?: string;
   @IsString({ message: 'نام را وارد کنید' })
   @MinLength(2, { message: 'نام کوتاه است' })
   @MaxLength(80, { message: 'نام طولانی است' })
@@ -201,6 +203,7 @@ class HospitalCreateDto {
 }
 
 class HospitalPatchDto {
+  @IsOptional() @IsIn(SECTORS, { message: 'نوع بیمارستان نامعتبر است' }) sector?: string;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
   @IsOptional() @IsString() @MaxLength(40) city?: string;
   @IsOptional() @IsString() @MaxLength(200) address?: string;

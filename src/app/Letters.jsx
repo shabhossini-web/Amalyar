@@ -1,3 +1,4 @@
+import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -190,7 +191,7 @@ function LetterSheet({ initial, onClose, onSaved, onDeleted, onPrint, onToast })
         <input value={f.subject} onChange={set('subject')} placeholder="موضوعِ نامه" />
       </label>
       <label className="lt-field"><span>متنِ نامه</span>
-        <textarea value={f.body} onChange={set('body')} rows="10" placeholder="با سلام و احترام؛&#10;…" />
+        <AssistedTextarea disabled={busy} value={f.body} onChange={set('body')} rows="10" placeholder="با سلام و احترام؛&#10;…" />
       </label>
       <label className="lt-field"><span>پیوست (اختیاری)</span>
         <input value={f.attachment} onChange={set('attachment')} placeholder="مثلاً «تصویرِ قرارداد» — خالی یعنی ندارد" />

@@ -20,9 +20,11 @@
     "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.39.5",
     "globals": "^17.9.0",
+    "pglite-server": "^0.1.5",
     "vite": "^5.4.11"
   }
 }

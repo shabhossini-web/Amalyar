@@ -1,7 +1,8 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsIn, IsBoolean, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 
 export class BankAccountDto {
+  @IsOptional() @IsIn(['formal', 'informal', 'unclassified'], { message: 'نوع حساب نامعتبر است' }) classification?: string;
   @IsString() @MinLength(2, { message: 'نامِ صاحبِ حساب کوتاه است' }) @MaxLength(80)
   ownerName!: string;
 
@@ -36,6 +37,7 @@ export class BankAccountDto {
  * یک ویرایشِ معمولی یعنی روزی کسی ناخواسته حسابی را روی اینترنت می‌برد.
  */
 export class BankAccountPatchDto {
+  @IsOptional() @IsIn(['formal', 'informal', 'unclassified'], { message: 'نوع حساب نامعتبر است' }) classification?: string;
   @IsOptional() @IsString() @MinLength(2, { message: 'نامِ صاحبِ حساب کوتاه است' }) @MaxLength(80)
   ownerName?: string;
 

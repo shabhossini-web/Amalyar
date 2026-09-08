@@ -1,3 +1,5 @@
+import AssistedTextarea from './AssistedTextarea.jsx';
+import { fieldRoles } from '../lib/job-roles.js';
 import { useRef, useState } from 'react';
 import JDate from '../app/JDate.jsx';
 import TimePick from './TimePick.jsx';
@@ -26,6 +28,7 @@ import { Bank, Camera, Check, Copy, Star, Trash } from './icons.jsx';
  * والد مقدارِ کاربر را می‌بازد.
  */
 export default function DynForm({
+  assistance = false,
   fields = [],
   values = {},
   errors = {},
@@ -77,7 +80,7 @@ export default function DynForm({
   return (
     <div className="pf dyn">
       {fields.filter((f) => f.active !== false).map((f) => {
-        const locked = !!(f.role && myRole && f.role !== myRole);
+        const locked = !!(fieldRoles(f).length && myRole && !fieldRoles(f).includes(myRole));
         return (
         <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}${locked ? ' dyn-locked' : ''}`}>
           <span>
@@ -91,6 +94,7 @@ export default function DynForm({
           </span>
 
           <Input
+            assistance={assistance}
             field={f}
             value={values[f.key]}
             set={(v) => set(f.key, v)}
@@ -111,12 +115,13 @@ export default function DynForm({
   );
 }
 
-function Input({ field: f, value, set, disabled, lookups, onUpload, onRemove, payment }) {
+function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, onRemove, payment }) {
   const v = value ?? '';
   const common = { disabled, placeholder: f.placeholder || undefined };
 
   switch (f.type) {
     case 'textarea':
+      if (assistance) return <AssistedTextarea purpose={f.label} rows={3} dir="auto" value={v} onChange={(e) => set(e.target.value)} {...common} />;
       return <textarea rows={3} dir="auto" value={v} onChange={(e) => set(e.target.value)} {...common} />;
 
     /* ⚠️ عدد و مبلغ هر دو `inputMode="numeric"` و `toEnDigits` می‌گیرند: کاربرِ
@@ -412,7 +417,7 @@ export function dynErrors(fields, values, myRole = null) {
     /* فیلدِ اجباریِ بخشِ دیگر نباید ذخیرهٔ این نقش را قفل کند: منشی که فرم
        را می‌بندد مسئولِ «شرحِ معاینه»ی پزشک نیست. سرور هم همین‌طور رفتار
        می‌کند (assertRoleOwnership فقط تغییر را می‌سنجد، نه خالی‌بودن را). */
-    if (f.role && myRole && f.role !== myRole) continue;
+    if (fieldRoles(f).length && myRole && !fieldRoles(f).includes(myRole)) continue;
     /* ⚠️ باکسِ پرداخت مقدار ندارد — شماره‌ها از لینک می‌آیند و فیش endpointِ
        خودش را دارد. `VALUELESS_TYPES` سمتِ سرور همین است؛ اگر این دو از هم
        جدا می‌شدند، یکی خطا می‌داد و دیگری نه. */

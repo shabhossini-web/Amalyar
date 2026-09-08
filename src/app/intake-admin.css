@@ -219,3 +219,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 .ia-cardel:hover { color: #fb7185; border-color: rgba(251, 113, 133, 0.4); }
+
+.ia-definition-head { display: flex; align-items: center; gap: 8px; }
+.ia-definition-head a { margin-inline-start: auto; font-size: 11px; color: var(--text1); }
+.ia-definition-head button { display: inline-flex; padding: 5px; border: 1px solid var(--card-border); border-radius: 8px; background: transparent; color: inherit; }

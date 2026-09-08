@@ -116,6 +116,7 @@ model ProcedureTypeItem {
 }
 
 model Hospital {
+  sector String @default("private")
   id           Int      @id @default(autoincrement())
   name         String
   city         String?
@@ -1278,6 +1279,9 @@ model Visit {
   /// - `coded`: جمعِ اقلام (کدهای عمل × تعرفه + مصرفی‌ها) = مبلغِ فاکتور
   /// - `global`: مبلغِ کلِ توافقی (`globalAmount`) مبناست؛ اقلام و کدها فقط
   ///   برای نمایش/چاپ ثبت می‌شوند و جمعشان ملاک نیست.
+  invoiceType String? @map("invoice_type")
+  invoiceBankAccountId Int? @map("invoice_bank_account_id")
+  invoiceBankAccount BankAccount? @relation("InvoiceBank", fields: [invoiceBankAccountId], references: [id], onDelete: Restrict)
   pricingModel String @default("coded") @map("pricing_model")
   /// مبلغِ کلِ توافقی به تومان — فقط وقتی pricingModel = global معنا دارد.
   globalAmount Int?   @map("global_amount")
@@ -1495,6 +1499,8 @@ model ShareEntry {
 
 /// حسابِ بانکیِ شرکت یا شریک — مقصدِ دریافت و مبدأ پرداخت.
 model BankAccount {
+  classification String @default("unclassified")
+  invoices Visit[] @relation("InvoiceBank")
   id         Int      @id @default(autoincrement())
   ownerName  String   @map("owner_name")
   bankName   String?  @map("bank_name")
@@ -2022,6 +2028,7 @@ model FormField {
   /// `null` = عمومی، همه می‌نویسند. اجرای واقعی سمتِ سرور است
   /// (`assertRoleOwnership`)؛ رنگ و قفلِ کلاینت فقط نمایشِ همان است.
   role String?
+  roles String[] @default([])
 
   /// `text | textarea | number | money | select | multiselect | date | time |
   ///  bool | phone | rating | image | payment`

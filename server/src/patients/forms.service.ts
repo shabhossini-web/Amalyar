@@ -1,9 +1,9 @@
-import { JOB_ROLE_KEYS, jobRoleLabel } from '../common/job-roles';
+import { JOB_ROLE_KEYS, jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, POSTOP_FOLLOWUP, PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
 
 /**
  * موتورِ فرم — «چه چیزی پرسیده می‌شود» و «چه چیزی اجباری است».
@@ -89,10 +89,14 @@ function normColor(v: any): string | null {
 }
 
 /** صفحهٔ سالم: عددِ صحیحِ ۱ تا `MAX_PAGE`. هر چیزِ دیگری → صفحهٔ ۱. */
-/** بخشِ نقش — فقط نقش‌های شناخته‌شده؛ هرچیزِ دیگر یعنی «عمومی». */
-function normRole(v: unknown): string | null {
-  const r = String(v ?? '').trim();
-  return JOB_ROLE_KEYS.includes(r) ? r : null;
+/** نقش ناشناخته رد می‌شود؛ فقط مجموعه خالی به معنی عمومی است. */
+function normRoles(dto: any): { role: string | null; roles: string[] } {
+  const input = dto.roles !== undefined ? dto.roles : dto.role ? [dto.role] : [];
+  if (!Array.isArray(input) || input.some((r) => !JOB_ROLE_KEYS.includes(r))) {
+    throw new BadRequestException('نقش نامعتبر است');
+  }
+  const roles = [...new Set<string>(input)];
+  return { roles, role: roles[0] ?? null };
 }
 
 function normPage(v: any): number {
@@ -284,7 +288,8 @@ export class FormsService {
       /* بخشِ نقش + برچسبِ فارسی‌اش — مشتقِ سرور (قانون ۱۵)، تا کلاینت نگاشتِ
          خودش را نسازد. */
       role: x.role ?? null,
-      roleLabel: jobRoleLabel(x.role),
+      roles: fieldRoles(x),
+      roleLabel: fieldRoles(x).map(jobRoleLabel).join('، ') || null,
       hint: x.hint, placeholder: x.placeholder,
       sort: x.sort, page: x.page ?? 1, builtin: x.builtin, active: x.active,
     }));
@@ -455,6 +460,25 @@ export class FormsService {
     }
   }
 
+  /** نصب پیشنهادی پیگیری؛ تعریف موجود حفظ و قالب تازه برای بازبینی خاموش می‌ماند. */
+  async installFollowUp() {
+    // تعریف عمومی موجود، حتی اگر خاموش باشد، مرجع است و بازنویسی نمی‌شود.
+    const existing = await this.prisma.formDef.findFirst({ where: { scope: 'record', followUp: 'general' } });
+    if (existing) return this.byKey(existing.key);
+    const sameKey = await this.prisma.formDef.findUnique({ where: { key: POSTOP_FOLLOWUP.key } });
+    if (sameKey) return this.byKey(sameKey.key);
+    await this.prisma.formDef.create({ data: {
+      key: POSTOP_FOLLOWUP.key, title: POSTOP_FOLLOWUP.title, scope: 'record',
+      hint: POSTOP_FOLLOWUP.hint, followUp: 'general', active: false,
+      color: await this.freeColor(POSTOP_FOLLOWUP.key, 'record'),
+      fields: { create: POSTOP_FOLLOWUP.fields.map((f, i) => ({
+        key: f.key, label: f.label, type: f.type ?? 'text', required: f.required ?? false,
+        options: (f.options ?? []) as any, hint: f.hint, sort: (i + 1) * 10,
+      })) },
+    } });
+    return this.byKey(POSTOP_FOLLOWUP.key);
+  }
+
   /**
    * بازگرداندن به قالبِ حوزه — عمداً **صریح و ویرانگر**.
    *
@@ -595,7 +619,7 @@ export class FormsService {
         placeholder: dto.placeholder?.trim() || null,
         sort: (last?.sort ?? 0) + 10,
         builtin: false,
-        role: normRole(dto.role),
+        ...normRoles(dto),
       },
     });
     await this.compactPages(formId);
@@ -648,7 +672,7 @@ export class FormsService {
         ...(dto.page !== undefined ? { page: normPage(dto.page) } : {}),
         /* بخشِ نقش روی فیلدِ هسته‌ای هم می‌نشیند: «تاریخِ عمل مالِ منشی است»
            به‌اندازهٔ «شرحِ معاینه مالِ پزشک است» معنا دارد. */
-        ...(dto.role !== undefined ? { role: normRole(dto.role) } : {}),
+        ...(dto.role !== undefined || dto.roles !== undefined ? normRoles(dto) : {}),
       },
     });
     if (dto.page !== undefined) await this.compactPages(row.formId);
