@@ -4,7 +4,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsObject, IsOptional, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -122,7 +122,14 @@ class SendFormDto {
   formId!: number;
 }
 
+class RequiredItemDto {
+  @IsInt() @Min(1) itemId!: number;
+  @IsInt() @Min(1) @Max(10000) quantity!: number;
+  @IsOptional() @IsString() @MaxLength(1000) notes?: string;
+}
 class ApproveDto {
+  @IsOptional() @IsObject() extra?: Record<string, any>;
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => RequiredItemDto) requiredItems?: RequiredItemDto[];
   @IsOptional() @Type(() => Number) @IsInt() surgeonId?: number;
   @IsOptional() @Type(() => Number) @IsInt() hospitalId?: number;
   @IsOptional() @Type(() => Number) @IsInt() techId?: number;

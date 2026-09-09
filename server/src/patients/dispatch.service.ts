@@ -158,13 +158,14 @@ export class DispatchService {
      * چیزی می‌خواهد که در بار نیست). کسری فقط وقتی معنا دارد که الگو تعریف
      * شده باشد — نبودِ الگو یعنی «نمی‌دانیم»، نه «چیزی لازم نیست».
      */
-    const needs = v.procedureType?.needs ?? [];
-    const loadedIds = new Set(
-      v.stockTransfers.flatMap((t: any) => t.movements.map((m: any) => m.lot?.itemId).filter(Boolean)),
-    );
+    const needs = Array.isArray(v.requiredItems) ? v.requiredItems : v.procedureType?.needs ?? [];
+    const loaded = new Map<number, number>();
+    for (const transfer of v.stockTransfers) for (const move of transfer.movements) {
+      if (move.location === transfer.toLocation && move.lot?.itemId) loaded.set(move.lot.itemId, (loaded.get(move.lot.itemId) ?? 0) + move.quantity);
+    }
     const missing = needs
-      .filter((n: any) => !loadedIds.has(n.itemId))
-      .map((n: any) => ({ itemId: n.itemId, name: [n.item.name, n.item.size].filter(Boolean).join(' '), quantity: n.quantity }));
+      .filter((n: any) => (loaded.get(n.itemId) ?? 0) < n.quantity)
+      .map((n: any) => ({ itemId: n.itemId, name: n.name ?? [n.item.name, n.item.size].filter(Boolean).join(' '), quantity: n.quantity - (loaded.get(n.itemId) ?? 0) }));
 
     return {
       id: v.id,
@@ -173,6 +174,8 @@ export class DispatchService {
       noCargo: v.stockTransfers.length === 0,
       /// الگو چیزی می‌خواهد که در بار نیست.
       missingNeeds: missing,
+      requiredItems: needs.map((n: any) => ({ itemId: n.itemId, name: n.name ?? [n.item?.name, n.item?.size].filter(Boolean).join(' '), quantity: n.quantity, notes: n.notes ?? '' })),
+      surgeonInstructions: v.surgeonInstructions ?? '',
       fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
       opStatus: v.opStatus,
       opStartTime: v.opStartTime,

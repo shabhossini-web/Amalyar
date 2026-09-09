@@ -30,6 +30,8 @@ export type KindMap = Map<string, { title: string; color: string }>;
 function enrich(v: any, kinds?: KindMap) {
   const k = v.kind ? kinds?.get(v.kind) : undefined;
   return {
+    requiredItems: v.requiredItems ?? null,
+    surgeonInstructions: v.surgeonInstructions ?? null,
     id: v.id,
     patientId: v.patientId,
     kind: v.kind,
@@ -986,7 +988,7 @@ export class PatientsService {
     }
   }
 
-  async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean }) {
+  async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[] }) {
     const userId: number | undefined = user?.id;
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
@@ -1020,6 +1022,7 @@ export class PatientsService {
       const seq = (max._max.seq ?? 0) + 1;
       const visit = await tx.visit.create({
         data: {
+          ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
           patientId,
           seq,
           kind: dto.kind || 'surgery',

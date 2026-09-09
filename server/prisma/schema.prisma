@@ -1195,6 +1195,9 @@ model ClinicalNote {
 /// مراجعه (Visit) — واحدِ اصلیِ کار: عمل/خدمت برای یک بیمار
 /// ⚠️ همهٔ مبالغ «تومان» و عددِ صحیح‌اند (قانونِ تک‌واحدی — درسِ ملک‌طب)
 model Visit {
+  /// Patient-specific plan, not consumption or invoice charges. Null uses procedure defaults.
+  requiredItems Json? @map("required_items")
+  surgeonInstructions String? @map("surgeon_instructions")
   invoices       InvoiceDocument[]
   labOrders      LabOrder[]
   imagingOrders  ImagingOrder[]

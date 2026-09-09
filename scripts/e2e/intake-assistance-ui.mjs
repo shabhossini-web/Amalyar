@@ -28,7 +28,7 @@ try {
       if (path === '/auth/me') body = { id: 1, level: 6, firstName: 'تست', lastName: 'مدیر', status: 'active' };
       else if (path === '/config') body = { vertical: 'clinic', brand: {} };
       else if (path === '/features') body = ['dashboard', 'formgen', 'accounting', 'definitions'].map((key) => ({ key, allowed: true }));
-      else if (path === '/intake/submissions') body = [{ id: 1, token: 'fixture', patientId: 1, amount: 30000000, payable: 30000000, status: 'pending_approval', makesVisit: true, data: { firstName: 'تست', lastName: 'پرداخت' } }];
+      else if (path === '/intake/submissions') body = [{ id: 1, token: 'fixture', patientId: 1, amount: 30000000, payable: 30000000, workflow: 'ionm', approvalKind: 'surgery', status: 'pending_approval', makesVisit: true, data: { firstName: 'تست', lastName: 'پرداخت' } }];
       else if (path.endsWith('/approve')) body = { ok: true, visitId: 1, visitCode: 'AM-001-V1' };
       else if (path === '/hospitals') { if (method === 'POST') { body = { ...payload, id: 51, active: true }; hospitals.push(body); } else body = hospitals; }
       else if (path === '/bank-accounts') { if (method === 'POST') { body = { ...payload, id: 52, active: true }; banks.push(body); } else body = banks; }
@@ -37,6 +37,7 @@ try {
       else if (path === '/forms') body = [form];
       else if (path === '/forms/visit-kinds') body = [{ key: 'clinic', kind: 'clinic', title: 'ویزیت' }, { key: 'surgery', kind: 'surgery', title: 'عمل' }];
       else if (path.startsWith('/forms/visit.')) body = { fields: [
+        ...(path.endsWith('surgery') ? ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId'].map(key => ({ key, active: true, builtin: true, required: false })) : []),
         { key: 'amount', builtin: true, active: true, required: true, type: 'money', label: 'مبلغ (تومان)' },
         { key: 'opDate', builtin: true, active: true, required: true, type: 'date', label: 'تاریخ عمل' },
         { key: 'notes', builtin: true, active: true, required: true, label: 'یادداشت' },

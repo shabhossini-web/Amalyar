@@ -57,6 +57,7 @@ export default function FormBuilder() {
   const { verticalLabel } = useConfig();
   const [forms, setForms] = useState(null);
   const [tab, setTab] = useState('');
+  const [scopeFilter, setScopeFilter] = useState('all');
   const [editing, setEditing] = useState(null); // {formId, field} — field={} یعنی جدید
   const [resetting, setResetting] = useState(false);
   const [newForm, setNewForm] = useState(false);
@@ -202,17 +203,22 @@ export default function FormBuilder() {
               setBusy(true);
               try {
                 const installed = await api('/forms/install-followup', { method: 'POST', body: {} });
-                setForms(await api('/forms')); setTab(installed.key);
+                setForms(await api('/forms')); setScopeFilter('record'); setTab(installed.key);
                 setToast('فرم پیگیری آماده است؛ پس از بازبینی روشن کنید و روزهای ارسال را در نوع عمل تعریف کنید.');
               } catch (e) { setToast(e.message); } finally { setBusy(false); }
             }}>آماده‌سازی فرم پیگیری خودکار</button>
+            <Tabs label="کاربرد فرم" value={scopeFilter} onChange={scope => {
+              setScopeFilter(scope);
+              const candidates = forms.filter(f => scope === 'all' || f.scope === scope);
+              setTab(cur => candidates.some(f => f.key === cur) ? cur : candidates[0]?.key ?? '');
+            }} items={[{ key: 'all', label: 'همه' }, { key: 'intake', label: 'ثبت‌نام مراجع' }, { key: 'visit', label: 'مراجعه و درمان' }, { key: 'record', label: 'پیگیری و زیرپرونده' }]} />
             <div className="fb-tabrow">
               <Tabs
                 variant="scroll"
                 label="فرم‌ها"
                 value={tab}
                 onChange={setTab}
-                items={forms.map((f) => ({ key: f.key, label: f.title }))}
+                items={forms.filter(f => scopeFilter === 'all' || f.scope === scopeFilter).map((f) => ({ key: f.key, label: f.title }))}
               />
               {/* ⚠️ ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
                   مسیرش «ویزیت → درمان → پیگیری» است، «درمان» را خودش
@@ -365,7 +371,7 @@ export default function FormBuilder() {
             onCreated={(fresh) => {
               setNewForm(false);
               setForms((list) => [...list, fresh]);
-              setTab(fresh.key);
+              setScopeFilter('all'); setTab(fresh.key);
               setToast('فرم ساخته شد ✓');
             }}
           />

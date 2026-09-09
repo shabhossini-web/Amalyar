@@ -1,5 +1,8 @@
 import { QuickDefinitionEditor } from './Definitions.jsx';
 import { useAuth } from './auth.jsx';
+import { useConfig } from './config.jsx';
+import RequiredItems from './RequiredItems.jsx';
+import DynForm from '../ui/DynForm.jsx';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -298,7 +301,7 @@ export default function IntakeAdmin() {
  * ⚠️ URLِ عمومیِ ثابت برای فیش عمداً نداریم: لینکِ فوروارد‌شده یعنی هر کسی
  * مدرکِ مالیِ بیمار را ببیند.
  */
-function Receipt({ documentId, onOpen }) {
+function Receipt({ documentId, onOpen, label = 'فیشِ واریزی', fileName = '' }) {
   const [url, setUrl] = useState(null);
   const [bad, setBad] = useState(false);
 
@@ -318,10 +321,11 @@ function Receipt({ documentId, onOpen }) {
   if (bad) return <p className="ia-note warn"><Alert width="13" height="13" /> فیش باز نشد</p>;
   if (!url) return <p className="ia-note">در حال بازکردنِ فیش…</p>;
 
+  if (/\.pdf$/i.test(fileName)) return <a href={url} target="_blank" rel="noopener noreferrer" className="bl-mini">بازکردن {label} (PDF)</a>;
   return (
     <button type="button" className="ia-receipt" onClick={() => onOpen(url)} title="بزرگ‌نمایی">
-      <img src={url} alt="فیشِ واریزی" />
-      <span><Search width="13" height="13" /> فیشِ واریزی — برای بزرگ‌نمایی بزنید</span>
+      <img src={url} alt={label} />
+      <span><Search width="13" height="13" /> {label} — برای بزرگ‌نمایی بزنید</span>
     </button>
   );
 }
@@ -339,6 +343,12 @@ function ReceiptZoom({ url, onClose }) {
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
 function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const { user: me } = useAuth();
+  const { vertical } = useConfig();
+  const workflow = row.workflow || vertical;
+  const targetKind = row.approvalKind || (workflow === 'clinic' ? 'clinic' : 'surgery');
+  const [fields, setFields] = useState(null), [requiredItems, setRequiredItems] = useState([]), [itemsTouched, setItemsTouched] = useState(false);
+  const [extra, setExtra] = useState(row.data ?? {});
+  const visible = key => fields ? fields.some(f => f.key === key && f.active !== false) : targetKind !== 'clinic' || ['surgeonId', 'opDate', 'opStartTime'].includes(key);
   const [quick, setQuick] = useState(null);
   const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [], banks: [] });
   const [f, setF] = useState({
@@ -353,11 +363,20 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const [err, setErr] = useState('');
 
   const loadRefs = useCallback(async () => {
-    const [surgeons, hospitals, techs, types, banks] = await Promise.all([
-      api('/surgeons'), api('/hospitals'), api('/techs'), api('/procedure-types'), api('/bank-accounts').catch(() => []),
-    ]);
-    setRefs({ surgeons, hospitals, techs, types, banks });
+    const keys = ['surgeons', 'hospitals', 'techs', 'types', 'banks'];
+    const paths = ['/surgeons', '/hospitals', '/techs', '/procedure-types', '/bank-accounts'];
+    const results = await Promise.allSettled(paths.map(path => api(path)));
+    setRefs(Object.fromEntries(results.map((r, i) => [keys[i], r.status === 'fulfilled' ? r.value : []])));
+    const failed = results.flatMap((r, i) => r.status === 'rejected' ? [['جراحان', 'بیمارستان‌ها', 'کارشناسان', 'انواع عمل', 'حساب‌ها'][i]] : []);
+    if (failed.length) setErr(`دریافت ${failed.join('، ')} انجام نشد؛ بقیهٔ انتخابگرها قابل استفاده‌اند.`);
   }, []);
+  useEffect(() => { let live = true; api(`/forms/visit.${targetKind}`).then(form => { if (live) setFields(form.fields || []); }).catch(() => { if (live) setFields(null); }); return () => { live = false; }; }, [targetKind]);
+  useEffect(() => {
+    if (workflow !== 'implant' || !f.procedureTypeId || itemsTouched) return;
+    let live = true;
+    api(`/procedure-types/${f.procedureTypeId}/needs`).then(rows => { if (live) setRequiredItems(rows); }).catch(e => { if (live) setErr(e.message); });
+    return () => { live = false; };
+  }, [workflow, f.procedureTypeId, itemsTouched]);
   useEffect(() => {
     const reload = () => loadRefs().catch((e) => setErr(e.message));
     reload(); window.addEventListener('focus', reload);
@@ -379,6 +398,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           opStartTime: f.opStartTime || undefined,
           registerPayment: f.registerPayment,
           bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
+          extra: Object.fromEntries((fields ?? []).filter(field => !field.builtin && field.active !== false).map(field => [field.key, extra[field.key]])),
+          ...(workflow === 'implant' ? { requiredItems: requiredItems.map(({ itemId, quantity, notes }) => ({ itemId, quantity, notes: notes || '' })) } : {}),
         },
       });
       /* ⚠️ پیام از **پاسخِ سرور** ساخته می‌شود نه از حدس: فرمِ زیرپرونده
@@ -420,22 +441,25 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
             پنلی که `transform` دارد نسبت به همان پنل جا می‌گیرد، نه صفحه —
             همان تلهٔ آشنای شیت‌های تودرتو. */}
         <Receipt documentId={row.data?.receiptDocumentId} onOpen={onZoom} />
+        {(Array.isArray(row.data?.prescription) ? row.data.prescription : row.data?.prescription?.id ? [row.data.prescription] : []).map(doc => <Receipt key={doc.id} documentId={doc.id} fileName={doc.name} onOpen={onZoom} label="دستور جراح" />)}
         {row.makesVisit !== false && (
         <div className="ia-grid">
-          <ApprovalSelect field="surgeonId" section="surgeons" label="جراح" list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />
-          <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />
-          <ApprovalSelect field="techId" section="techs" label="کارشناس" list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />
-          <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />
-          <JDate className="ia-field" label="تاریخِ عمل" value={f.opDate}
-                 onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />
-          <TimePick className="ia-field" label="ساعتِ عمل" value={f.opStartTime}
-                    onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />
+          {visible('surgeonId') && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
+          {visible('hospitalId') && <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
+          {visible('techId') && <ApprovalSelect field="techId" section="techs" label="کارشناس" list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
+          {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />}
+          {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}
+                 onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />}
+          {visible('opStartTime') && <TimePick className="ia-field" label={targetKind === 'clinic' ? 'ساعت مراجعه' : 'ساعتِ عمل'} value={f.opStartTime}
+                    onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />}
         </div>
         )}
+        {row.makesVisit !== false && workflow === 'implant' && <RequiredItems value={requiredItems} onChange={rows => { setItemsTouched(true); setRequiredItems(rows); }} disabled={busy} />}
+        {row.makesVisit !== false && fields?.some(field => !field.builtin && field.active !== false) && <DynForm assistance fields={fields.filter(field => !field.builtin && field.active !== false)} values={extra} onChange={setExtra} disabled={busy} myRole={me?.level >= 6 ? null : me?.jobRole} />}
         {/* ⚠️ ثبتِ پرداخت همین‌جاست چون همین‌جا فیش جلوی چشمِ ادمین است و
             می‌داند پول کجا نشسته. نسخهٔ اول پرداخت ثبت نمی‌کرد و نتیجه‌اش
             مراجعهٔ تأییدشده‌ای بود که کلِ مبلغش «مانده» می‌ماند. */}
-        {row.makesVisit !== false && (
+        {row.makesVisit !== false && (row.payable ?? row.amount) > 0 && (
         <div className="ia-pay">
           <label className="ia-check">
             <input type="checkbox" checked={f.registerPayment} disabled={busy}
@@ -560,7 +584,10 @@ function LinkSheet({ initial, onClose, onDone }) {
         /* ⚠️ فقط هنگامِ **ساخت**: در ویرایش، فرمِ همان لینک از قبل ست شده و
            این خط رویش می‌نوشت — یعنی بازکردنِ شیتِ ویرایش، بی‌آنکه کاربر
            چیزی بزند، فرمِ لینک را عوض می‌کرد. */
-        if (!editing && d.forms?.length === 1) setFormId(String(d.forms[0].id));
+        if (!editing) {
+          const preferred = d.forms?.find(f => f.recommended) ?? (d.forms?.length === 1 ? d.forms[0] : null);
+          if (preferred) setFormId(String(preferred.id));
+        }
       })
       .catch(() => { if (alive) setOpts({ forms: [], banks: [] }); });
     return () => { alive = false; };

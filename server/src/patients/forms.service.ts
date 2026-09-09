@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, POSTOP_FOLLOWUP, PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
 
 /**
  * موتورِ فرم — «چه چیزی پرسیده می‌شود» و «چه چیزی اجباری است».
@@ -318,15 +318,41 @@ export class FormsService {
   private async ensureSeeded() {
     const n = await this.prisma.formDef.count();
     if (n > 0) {
+      await this.ensureRegistrationPreset();
       await this.backfillColors();
       return this.backfillVisitBuiltins();
     }
     const vertical = await this.config.vertical();
     await this.seedFrom(PRESETS[vertical] ?? []);
+    await this.ensureRegistrationPreset();
     /* قالب‌ها عمداً کاتالوگِ کامل ندارند (سندِ خوانا ماندن مهم‌تر است)؛
        تکمیلشان کارِ همین backfill است تا نصبِ تازه و نصبِ قدیمی یک مسیر
        داشته باشند. */
     return this.backfillVisitBuiltins();
+  }
+
+  async workflow() { return this.config.vertical(); }
+
+  async defaultVisitKind() {
+    const vertical = await this.config.vertical();
+    const kinds = await this.visitKinds();
+    const preferred = vertical === 'clinic' ? 'clinic' : 'surgery';
+    return kinds.find(k => k.kind === preferred)?.kind ?? kinds[0]?.kind ?? preferred;
+  }
+
+  /** One additive installation per profile. Never restore a deliberately deleted form. */
+  private async ensureRegistrationPreset() {
+    const vertical = await this.config.vertical();
+    const key = { ionm: 'registration_ionm_installed', implant: 'registration_implant_installed', clinic: 'registration_clinic_installed' }[vertical];
+    if ((await this.prisma.setting.findUnique({ where: { key } }))?.value === 'true') return;
+    const preset = REGISTRATION_PRESETS[vertical];
+    await this.prisma.$transaction(async tx => {
+      await tx.formDef.upsert({ where: { key: preset.key }, update: {}, create: {
+        key: preset.key, title: preset.title, scope: preset.scope, visitKind: preset.visitKind, hint: preset.hint,
+        fields: { create: preset.fields.map((f, i) => ({ key: f.key, label: f.label, type: f.type ?? 'text', required: f.required ?? false, builtin: f.builtin ?? false, hint: f.hint, options: f.options ?? [], sort: (i + 1) * 10 })) },
+      } });
+      await tx.setting.upsert({ where: { key }, create: { key, value: 'true' }, update: { value: 'true' } });
+    });
   }
 
   /**

@@ -47,6 +47,7 @@ export class FeaturesService {
    */
   async forUser(user: any) {
     const rows = await this.list();
+    const corporate = (await this.prisma.setting.findUnique({ where: { key: 'vertical' } }))?.value !== 'clinic';
     const level = user?.level ?? 0;
     /* ⚠️ سوپرادمین **همهٔ** پنل‌ها را می‌بیند — همان قاعدهٔ گاردها (عبورِ
        بی‌قیدِ سطح ۶) و همان انتظارِ کاربر از ملک‌طب: یک نفر باید کلِ چرخه را
@@ -54,13 +55,13 @@ export class FeaturesService {
        سوپرادمین را هم پنهان می‌کرد در حالی که خودِ endpointها برایش باز بودند
        — لانچر و سرور دو حرفِ متفاوت می‌زدند. */
     if (level >= LEVEL.SUPER_ADMIN) {
-      return rows.map((r) => ({ ...r, allowed: true, reason: null }));
+      return rows.map((r) => ({ ...r, allowed: r.key !== 'surgeon' || corporate, reason: r.key === 'surgeon' && !corporate ? 'پزشک مطب از داشبورد مدیریت استفاده می‌کند' : null }));
     }
     const eligible = await this.eligibility(user);
     const jobRole = user?.jobRole ?? '';
     return rows.map((r) => {
       const byLevel = level >= r.minLevel;
-      const byRole = eligible[r.key] ?? true;
+      const byRole = (eligible[r.key] ?? true) && (r.key !== 'surgeon' || corporate);
       /* قیدِ نقشِ ماتریس — AND با سطح؛ آرایهٔ خالی یعنی بدونِ قید. */
       const byJobRole = !r.roles.length || r.roles.includes(jobRole);
       return {
@@ -92,6 +93,7 @@ export class FeaturesService {
       ? await this.prisma.transportStaff.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } })
       : null;
     const level = account?.level ?? user?.level ?? 0;
+    const surgeon = account?.personId ? await this.prisma.surgeon.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } }) : null;
     // بازهٔ سطحی که `listTechs` «کارشناس» می‌داند — تعریفِ دومِ «چه کسی
     // کارشناس است» یعنی روزی لانچر و فهرستِ چینش دو جوابِ متفاوت بدهند.
     const inTechBand = level >= LEVEL.TECH && level <= LEVEL.SUPERVISOR;
@@ -109,7 +111,8 @@ export class FeaturesService {
     return {
       // پرتالِ راننده بدونِ رکوردِ نیرو صفحهٔ خطاست — حتی برای سوپرادمین.
       transport: !!staff,
-      tech: inTechBand && (!staff || hasTechVisits),
+      surgeon: !!surgeon,
+      tech: inTechBand && (!staff || hasTechVisits) && (!surgeon || hasTechVisits),
     };
   }
 

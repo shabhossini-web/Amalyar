@@ -7,6 +7,8 @@ import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
+import { REGISTRATION_PRESETS } from './form-presets';
+import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
 import { RemindersService } from './reminders.service';
@@ -160,20 +162,24 @@ export class IntakeService {
    * است و این صفحه مجوزِ `intake.*` دارد.
    */
   async formsForLinks() {
+    await this.forms.list();
+    const vertical = await this.forms.workflow();
+    const recommendedKey = REGISTRATION_PRESETS[vertical].key;
     const rows = await this.prisma.formDef.findMany({
-      where: { active: true },
+      where: { active: true, key: { notIn: Object.values(REGISTRATION_PRESETS).map(f => f.key).filter(k => k !== recommendedKey) } },
       orderBy: [{ scope: 'asc' }, { id: 'asc' }],
       select: {
-        id: true, title: true, color: true, scope: true, visitKind: true,
-        fields: { where: { type: 'payment' }, select: { id: true } },
+        id: true, key: true, title: true, color: true, scope: true, visitKind: true,
+        fields: { where: { type: 'payment', active: true }, select: { id: true } },
       },
     });
     return rows.map((f) => ({
+      recommended: f.key === recommendedKey,
       id: f.id, title: f.title, color: f.color, scope: f.scope, visitKind: f.visitKind,
       hasPayment: f.fields.length > 0,
       /* پرشدنش مراجعه می‌سازد؟ `record` نمی‌سازد و همین تفاوتِ اصلی است. */
       makesVisit: f.scope !== 'record',
-    }));
+    })).sort((a, b) => Number(b.recommended) - Number(a.recommended));
   }
 
   /**
@@ -1521,6 +1527,8 @@ export class IntakeService {
 
   // ── صفِ تأیید (ادمین) ─────────────────────────────────────────────
   async list(status?: string) {
+    const workflow = await this.forms.workflow();
+    const defaultKind = await this.forms.defaultVisitKind();
     const where = status && status !== 'all' ? { status } : {};
     const rows = await this.prisma.intakeSubmission.findMany({
       where,
@@ -1533,10 +1541,11 @@ export class IntakeService {
         /* فرمِ **همین ثبت‌نام** (عکسِ لحظه‌ای)، نه فرمِ فعلیِ لینک: پنلِ تأیید
            باید بگوید این ثبت‌نام چه می‌سازد، و آن از روی همان فرمی معلوم
            می‌شود که بیمار پر کرده. */
-        form: { select: { title: true, scope: true, color: true } },
+        form: { select: { title: true, scope: true, color: true, visitKind: true } },
       },
     });
     return rows.map((r) => ({
+      workflow, approvalKind: r.form?.visitKind || defaultKind,
       id: r.id,
       token: r.token,
       status: r.status,
@@ -1589,6 +1598,8 @@ export class IntakeService {
       opDate?: string; opStartTime?: string; note?: string;
       /// ثبتِ پرداختِ همان فیش — پیش‌فرض روشن، ولی حسابِ مقصد را ادمین می‌گوید.
       registerPayment?: boolean; bankAccountId?: number; paidAmount?: number;
+      requiredItems?: RequiredItemInput[];
+      extra?: Record<string, any>;
     },
     user: any,
   ) {
@@ -1623,6 +1634,18 @@ export class IntakeService {
        می‌ماند. `visitId` خالی می‌ماند و دفترِ مالی هم دست نمی‌خورد (لینکِ چنین
        فرمی اصلاً نمی‌تواند مبلغ داشته باشد؛ `assertRecordFormHasNoAmount`). */
     const makesVisit = form?.scope !== 'record';
+    const workflow = await this.forms.workflow();
+    const approvalKind = form?.visitKind || await this.forms.defaultVisitKind();
+    if (makesVisit && dto.extra) {
+      const target = await this.forms.forVisitKind(approvalKind);
+      for (const field of target?.fields ?? []) {
+        if (!field.builtin && field.active && Object.prototype.hasOwnProperty.call(dto.extra, field.key)) extra[field.key] = dto.extra[field.key];
+      }
+    }
+    const requirements = makesVisit && workflow === 'implant'
+      ? dto.requiredItems !== undefined ? await resolveRequirements(this.prisma, dto.requiredItems) : await procedureRequirements(this.prisma, dto.procedureTypeId)
+      : undefined;
+    if (makesVisit && workflow === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
 
     /* نوبتِ رزروشدهٔ همین ثبت‌نام — تاریخ و ساعتِ مراجعه از این‌جا می‌آید. */
     const held = await this.prisma.appointment.findUnique({ where: { submissionId: id } });
@@ -1642,9 +1665,8 @@ export class IntakeService {
            نوبتِ گرفته‌شده فرق دارد — و آن‌وقت تقویمِ مطب و برگهٔ بیمار دو
            چیزِ متفاوت می‌گفتند. اولویت با انتخابِ صریحِ ادمین است. */
         ...(held ? { topicId: held.topicId ?? undefined } : {}),
-        /* `visitKind` فقط روی فرمِ `visit` پر است؛ فرمِ `intake` نوعِ مراجعه
-           ندارد و همان پیش‌فرضِ `createVisit` را می‌گیرد. */
-        kind: form?.visitKind || undefined,
+        // نوع صریح فرم مقدم است؛ لینک‌های قدیمی از پیش‌فرض حوزه استفاده می‌کنند.
+        kind: approvalKind,
         surgeonId: dto.surgeonId,
         hospitalId: dto.hospitalId,
         techId: dto.techId,
@@ -1654,7 +1676,7 @@ export class IntakeService {
         opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
         notes: d.patientNotes ?? undefined,
         ...(Object.keys(extra).length ? { extra } : {}),
-      } as any, user)
+      } as any, user, { requirements })
       : null;
 
     /* ⚠️ نوبت این‌جا **قطعی** می‌شود، نه هنگامِ رزرو: `held` یعنی «جا نگه
@@ -1717,9 +1739,12 @@ export class IntakeService {
         unitPrice: row.discountAmount,
       }, user);
     }
-    // فیشِ واریزی حالا صاحبِ مراجعه دارد — تا امروز فقط به پرونده وصل بود.
-    if (d.receiptDocumentId) {
-      await this.prisma.document.updateMany({ where: { id: Number(d.receiptDocumentId) }, data: { visitId: visit.id } });
+    // Only attach this patient's unassigned uploads; never move another visit's document.
+    const receipts = Array.isArray(d.receiptDocumentIds) ? d.receiptDocumentIds : [d.receiptDocumentId];
+    const prescriptions = Array.isArray(d.prescription) ? d.prescription : [d.prescription];
+    const documentIds = [...receipts, ...prescriptions.map((p: any) => p?.id)].map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
+    if (documentIds.length) {
+      await this.prisma.document.updateMany({ where: { id: { in: documentIds }, patientId: row.patientId, visitId: null }, data: { visitId: visit.id } });
     }
     if (pay) {
       await this.billing.addPayment(visit.id, {

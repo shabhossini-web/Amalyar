@@ -19,6 +19,8 @@ import { BillingController } from './billing.controller';
 import { BillingService } from './billing.service';
 import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
+import { SurgeonPortalController } from './surgeon-portal.controller';
+import { SurgeonPortalService } from './surgeon-portal.service';
 import { ServiceCodesController } from './service-codes.controller';
 import { ServiceCodesService } from './service-codes.service';
 import { RecordController } from './record.controller';
@@ -61,13 +63,13 @@ import { PermissionGuard } from '../auth/permission.guard';
   // ⚠️ ترتیب مهم است: PatientsController مسیرِ `patients` (جستجو) را دارد و
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [
-    PatientsController, BillingController, InvoicesController, VisitStockController, ServiceCodesController,
+    PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, AvailabilityController, AppointmentsController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
     SummaryController, PublicSummaryController, LettersController, OrdersController, PublicOrdersController,
   ],
   providers: [
-    PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService,
+    PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,
   ],

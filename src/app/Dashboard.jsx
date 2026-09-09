@@ -882,6 +882,12 @@ function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, on
         <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
 
+      {editing && (initial.surgeonInstructions || initial.requiredItems?.length > 0) && <details className="sp-card">
+        <summary>دستور جراح و اقلام موردنیاز</summary>
+        {initial.surgeonInstructions && <p style={{ whiteSpace: 'pre-wrap' }}>{initial.surgeonInstructions}</p>}
+        {initial.requiredItems?.map(item => <p key={item.itemId}>{item.name} × {faNum(item.quantity)}{item.notes ? ` — ${item.notes}` : ''}</p>)}
+        <Link to="/app/surgeon" target="_blank" rel="noopener noreferrer">بررسی و اصلاح در پرتال جراح</Link>
+      </details>}
       {/* نشانگرِ گام — کاربر باید بداند کجای کار است و چند قدم مانده. */}
       {!editing && (
         <ol className="db-steps" aria-label="گام‌های ثبت">

@@ -65,6 +65,9 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
 ];
 
 export const SETTINGS: SettingDef[] = [
+  { key: 'registration_ionm_installed', label: 'قالب ثبت‌نام نورو', group: 'identity', type: 'bool', default: false, hidden: true },
+  { key: 'registration_implant_installed', label: 'قالب ثبت‌نام ایمپلنت', group: 'identity', type: 'bool', default: false, hidden: true },
+  { key: 'registration_clinic_installed', label: 'قالب ثبت‌نام مطب', group: 'identity', type: 'bool', default: false, hidden: true },
   { key: 'invoice_title', label: 'عنوان فاکتور', group: 'invoice', type: 'text', default: 'صورتحساب خدمات', maxLength: 120 },
   { key: 'invoice_prefix', label: 'پیشوند شماره فاکتور', hint: 'شمارهٔ ترتیبی خودکار بعد از این متن می‌آید.', group: 'invoice', type: 'text', default: '', maxLength: 20 },
   { key: 'invoice_formal_name', label: 'نام صادرکنندهٔ رسمی', hint: 'خالی = نام حقوقی شرکت در هویت شرکت. نام سامانه چاپ نمی‌شود.', group: 'invoice', type: 'text', default: '', maxLength: 120 },
