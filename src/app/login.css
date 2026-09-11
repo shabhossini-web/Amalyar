@@ -190,7 +190,6 @@
 .lg-bio:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* loading fallback (route guard) */
-.lx-boot { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; background: var(--bg); color: var(--text2); font-family: 'Vazirmatn', system-ui, sans-serif; font-size: 14px; }
 
 @media (prefers-reduced-motion: reduce) {
   .lg-btn { transition: none; }

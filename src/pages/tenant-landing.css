@@ -1,0 +1,325 @@
+/* ==========================================================================
+   سایتِ عمومیِ شرکت (لندینگِ tenant)
+   چیدمان و حسِ بصری از قالبِ «آیلین کاشت» آمده — شیشه، نئون، گویِ محو،
+   ظاهرشدن با اسکرول — ولی **رنگ از برندِ همان شرکت** خوانده می‌شود.
+
+   ⚠️ همه‌چیز زیرِ `.tl` است. صفحهٔ عمومی و صفحه‌های /app در یک باندلِ واحد
+   لود می‌شوند؛ کلاسِ بی‌پیشوندی مثلِ `.btn` یا `.section` روزی دکمه‌های
+   داشبورد را هم عوض می‌کرد.
+
+   ⚠️ توکن‌های رنگ **مشتقِ برندند**: `--tl-neon` از `--brand-2` که
+   `lib/brand-palette.js` روی <html> می‌نشاند. رنگِ ثابت این‌جا یعنی رنگی که
+   شرکت در تنظیمات انتخاب کرده روی سایتش دیده نشود.
+   ========================================================================== */
+
+.tl {
+  /* هندسه */
+  --tl-r-sm: 14px;
+  --tl-r-md: 20px;
+  --tl-r-lg: 28px;
+  --tl-pill: 999px;
+  --tl-gutter: clamp(18px, 4vw, 44px);
+  --tl-maxw: 1180px;
+  --tl-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tl-ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+  --tl-t: 0.42s;
+  --tl-head-h: 74px;
+
+  /* رنگ — همه از خانوادهٔ برند + سایانِ ثابتِ عمل‌یار */
+  --tl-neon: var(--brand-2);
+  --tl-neon-rgb: var(--brand-2-rgb);
+  --tl-accent: var(--cyan);
+  --tl-ink: var(--text1);
+  --tl-ink-soft: var(--text2);
+  --tl-ink-mute: var(--text3);
+  --tl-line: rgba(var(--brand-rgb), 0.18);
+  --tl-line-strong: rgba(var(--brand-rgb), 0.34);
+  --tl-glass: rgba(255, 255, 255, 0.045);
+  --tl-glass-2: rgba(255, 255, 255, 0.075);
+  --tl-grad: linear-gradient(120deg, var(--tl-neon), var(--tl-accent));
+  --tl-grad-soft: linear-gradient(140deg, rgba(var(--tl-neon-rgb), 0.16), rgba(0, 229, 255, 0.08));
+  --tl-glow: 0 0 0 1px rgba(var(--tl-neon-rgb), 0.22), 0 18px 60px -18px rgba(var(--tl-neon-rgb), 0.55);
+  --tl-glow-soft: 0 14px 48px -22px rgba(var(--tl-neon-rgb), 0.5);
+  --tl-shadow: 0 28px 70px -30px rgba(0, 0, 0, 0.9);
+
+  color: var(--tl-ink);
+  background: var(--bg);
+  min-height: 100vh;
+  line-height: 1.85;
+  overflow-x: hidden;
+}
+
+.tl h1, .tl h2, .tl h3, .tl h4 { line-height: 1.35; margin: 0 0 0.55em; font-weight: 800; letter-spacing: -0.01em; }
+.tl p { margin: 0 0 1em; }
+.tl img { max-width: 100%; display: block; }
+.tl a { color: inherit; text-decoration: none; }
+.tl-container { width: min(100% - var(--tl-gutter) * 2, var(--tl-maxw)); margin-inline: auto; }
+.tl-section { padding-block: clamp(56px, 8vw, 116px); position: relative; }
+.tl-head { text-align: center; max-width: 720px; margin: 0 auto clamp(30px, 5vw, 56px); }
+.tl-head h2 { font-size: clamp(1.6rem, 3.4vw, 2.7rem); }
+.tl-head p { color: var(--tl-ink-soft); font-size: 1.01rem; }
+
+/* ── پس‌زمینهٔ محیطی ─────────────────────────────────────────── */
+.tl-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.tl-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, var(--tl-line) 1px, transparent 0);
+  background-size: 44px 44px; opacity: 0.5;
+  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 75%);
+}
+.tl-orb { position: absolute; border-radius: 50%; filter: blur(90px); opacity: 0.6; will-change: transform; }
+.tl-orb.tl-o1 { width: 46vw; height: 46vw; background: rgba(var(--brand-rgb), 0.42); top: -14vw; inset-inline-start: -8vw; animation: tl-float1 22s var(--tl-ease-io) infinite; }
+.tl-orb.tl-o2 { width: 38vw; height: 38vw; background: rgba(0, 229, 255, 0.22); top: 32vh; inset-inline-end: -10vw; animation: tl-float2 27s var(--tl-ease-io) infinite; }
+.tl-orb.tl-o3 { width: 52vw; height: 52vw; background: rgba(var(--brand-dark-rgb), 0.4); top: 110vh; inset-inline-start: 20vw; animation: tl-float1 31s var(--tl-ease-io) infinite reverse; }
+@keyframes tl-float1 { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(6vw, 7vh, 0) scale(1.14); } }
+@keyframes tl-float2 { 0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); } 50% { transform: translate3d(-7vw, -5vh, 0) scale(0.9); } }
+.tl-main, .tl-header, .tl-footer { position: relative; z-index: 1; }
+
+/* ── شیشه ───────────────────────────────────────────────────── */
+.tl-glass {
+  background: var(--tl-glass);
+  border: 1px solid var(--tl-line);
+  border-radius: var(--tl-r-lg);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: var(--tl-shadow);
+  position: relative;
+}
+.tl-glass::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: linear-gradient(150deg, rgba(var(--tl-neon-rgb), 0.42), transparent 42%, transparent 60%, rgba(0, 229, 255, 0.26));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0.55; transition: opacity var(--tl-t);
+}
+.tl-glass:hover::before { opacity: 1; }
+
+/* ── دکمه‌ها ─────────────────────────────────────────────────── */
+.tl-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.55em;
+  padding: 0.92em 1.7em; border: 0; border-radius: var(--tl-pill); cursor: pointer;
+  font-weight: 700; font-size: 0.96rem; font-family: inherit; position: relative;
+  color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+  box-shadow: var(--tl-glow-soft); white-space: nowrap;
+  transition: transform var(--tl-t) var(--tl-ease), box-shadow var(--tl-t);
+}
+.tl-btn:hover { transform: translateY(-3px) scale(1.02); box-shadow: var(--tl-glow); }
+.tl-btn:active { transform: translateY(-1px) scale(0.99); }
+.tl-btn svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.tl-btn.tl-ghost {
+  background: var(--tl-glass-2); color: var(--tl-ink);
+  border: 1px solid var(--tl-line-strong); box-shadow: none; backdrop-filter: blur(14px);
+}
+.tl-btn.tl-ghost:hover { border-color: var(--tl-neon); box-shadow: var(--tl-glow-soft); }
+.tl-btn.tl-lg { padding: 1.06em 2.1em; font-size: 1.02rem; }
+.tl-btn.tl-sm { padding: 0.6em 1.15em; font-size: 0.85rem; }
+.tl :focus-visible { outline: 2px solid var(--tl-accent); outline-offset: 3px; border-radius: 6px; }
+
+/* ── سربرگِ چسبان ───────────────────────────────────────────── */
+.tl-header {
+  position: fixed; inset-inline: 0; top: 0; z-index: 40; height: var(--tl-head-h);
+  display: flex; align-items: center; border-bottom: 1px solid transparent;
+  transition: height var(--tl-t) var(--tl-ease), background var(--tl-t), border-color var(--tl-t);
+}
+.tl-header.tl-scrolled {
+  height: 62px; border-bottom-color: var(--tl-line);
+  background: rgba(7, 5, 26, 0.78);
+  backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
+}
+.tl-header .tl-container { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.tl-logo { display: flex; align-items: center; gap: 0.6rem; font-weight: 800; font-size: 1.05rem; }
+.tl-logo svg { width: 34px; height: 34px; flex: 0 0 auto; }
+.tl-nav { display: flex; align-items: center; gap: 1.4rem; }
+.tl-nav a { font-size: 0.9rem; color: var(--tl-ink-soft); transition: color var(--tl-t); }
+.tl-nav a:hover { color: var(--tl-ink); }
+
+/* ── سرصفحه ─────────────────────────────────────────────────── */
+.tl-hero { padding-top: calc(var(--tl-head-h) + clamp(38px, 7vw, 82px)); padding-bottom: clamp(46px, 7vw, 90px); }
+.tl-hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: clamp(28px, 4vw, 56px); align-items: center; }
+.tl-hero h1 { font-size: clamp(2.1rem, 5.6vw, 4.1rem); line-height: 1.14; letter-spacing: -0.03em; margin-bottom: 0.5em; }
+.tl-grad-text { background: linear-gradient(120deg, var(--tl-accent), var(--brand)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tl-sub { color: var(--tl-ink-soft); font-size: clamp(1rem, 1.3vw, 1.12rem); max-width: 52ch; margin-bottom: 1.9rem; white-space: pre-line; }
+.tl-cta { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+.tl-eyebrow {
+  display: inline-flex; align-items: center; gap: 0.55rem; margin-bottom: 1.2rem;
+  padding: 0.42em 1.05em; border-radius: var(--tl-pill);
+  background: var(--tl-glass); border: 1px solid var(--tl-line-strong);
+  font-size: 0.82rem; font-weight: 700; color: var(--tl-ink-soft);
+}
+.tl-eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--tl-accent); box-shadow: 0 0 12px var(--tl-accent); }
+
+.tl-hero-card { padding: 14px; border-radius: var(--tl-r-lg); }
+.tl-hero-card .tl-ba, .tl-hero-card img { border-radius: var(--tl-r-md); }
+.tl-hero-ph {
+  aspect-ratio: 4 / 3; border-radius: var(--tl-r-md); display: grid; place-items: center;
+  background: var(--tl-grad-soft); border: 1px solid var(--tl-line);
+}
+.tl-hero-ph svg { width: 84px; height: 84px; color: rgba(var(--tl-neon-rgb), 0.5); }
+
+/* ── نوارِ نکته‌ها ───────────────────────────────────────────── */
+.tl-marquee { overflow: hidden; border-block: 1px solid var(--tl-line); padding-block: 1rem; background: var(--tl-glass); position: relative; z-index: 1; }
+.tl-marquee-track { display: flex; gap: 3.2rem; width: max-content; animation: tl-marquee 34s linear infinite; }
+.tl-marquee:hover .tl-marquee-track { animation-play-state: paused; }
+.tl-marquee span { display: flex; align-items: center; gap: 0.55rem; font-size: 0.88rem; font-weight: 700; color: var(--tl-ink-soft); white-space: nowrap; }
+.tl-marquee svg { width: 16px; height: 16px; color: var(--tl-accent); flex: 0 0 auto; }
+/* RTL: نوار باید به همان سمتی برود که متن می‌رود، وگرنه «برعکس» دیده می‌شود. */
+@keyframes tl-marquee { from { transform: translateX(0); } to { transform: translateX(50%); } }
+
+/* ── اعداد ──────────────────────────────────────────────────── */
+.tl-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(12px, 2vw, 20px); }
+.tl-stat { padding: clamp(18px, 2.4vw, 30px); text-align: center; border-radius: var(--tl-r-lg); }
+.tl-stat b { display: block; font-size: clamp(1.8rem, 3.4vw, 2.8rem); font-weight: 900; line-height: 1; background: var(--tl-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tl-stat span { font-size: 0.85rem; color: var(--tl-ink-soft); }
+
+/* ── خدمات (بنتو) ───────────────────────────────────────────── */
+.tl-bento { display: grid; grid-template-columns: repeat(6, 1fr); gap: clamp(14px, 1.8vw, 20px); }
+.tl-svc {
+  grid-column: span 2; padding: clamp(20px, 2.5vw, 32px); border-radius: var(--tl-r-lg);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: transform var(--tl-t) var(--tl-ease), border-color var(--tl-t);
+}
+.tl-svc:hover { transform: translateY(-8px); border-color: var(--tl-line-strong); }
+.tl-svc-ic {
+  width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center; margin-bottom: 1rem;
+  background: var(--tl-grad-soft); border: 1px solid var(--tl-line-strong); color: var(--tl-neon);
+}
+.tl-svc-ic svg { width: 25px; height: 25px; }
+.tl-svc h3 { font-size: clamp(1.1rem, 1.9vw, 1.42rem); margin-bottom: 0.35rem; }
+.tl-svc p { color: var(--tl-ink-soft); font-size: 0.92rem; margin: 0; }
+
+/* ── نمونه‌کارها + اسلایدرِ قبل/بعد ──────────────────────────── */
+.tl-gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(288px, 1fr)); gap: clamp(14px, 2vw, 22px); }
+.tl-gal-item { border-radius: var(--tl-r-lg); overflow: hidden; }
+.tl-ba { position: relative; aspect-ratio: 4 / 3; overflow: hidden; cursor: ew-resize; user-select: none; touch-action: pan-y; }
+.tl-ba img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* لایهٔ «بعد» دقیقاً روی «قبل» می‌نشیند و با clip-path باز می‌شود، تا هر دو
+   تصویر هم‌اندازه بمانند و رفتار در RTL و LTR یکی باشد. */
+.tl-ba-after { position: absolute; inset: 0; overflow: hidden; }
+.tl-ba-handle { position: absolute; top: 0; bottom: 0; width: 3px; background: var(--tl-accent); box-shadow: 0 0 18px var(--tl-accent); z-index: 3; pointer-events: none; }
+.tl-ba-handle::after {
+  content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 34px; height: 34px; border-radius: 50%; background: var(--tl-accent);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.6);
+}
+/* دو مثلثِ کشیده‌شده با بوردرِ **فیزیکی** — نه گلیفِ متنی («⇄» ممنوع است) و
+   نه بوردرِ منطقی، که در RTL قرینه می‌شود. */
+.tl-ba-handle i {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 4; width: 34px; height: 34px; display: block;
+}
+.tl-ba-handle i::before, .tl-ba-handle i::after {
+  content: ''; position: absolute; top: 50%; margin-top: -4px;
+  border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+}
+.tl-ba-handle i::before { left: 7px; border-right: 6px solid var(--bg); }
+.tl-ba-handle i::after { right: 7px; border-left: 6px solid var(--bg); }
+.tl-ba-tag {
+  position: absolute; bottom: 12px; z-index: 4; padding: 0.3em 0.85em; border-radius: var(--tl-pill);
+  font-size: 0.72rem; font-weight: 700; background: rgba(7, 5, 26, 0.72); border: 1px solid var(--tl-line-strong);
+  backdrop-filter: blur(8px);
+}
+/* فیزیکی: برچسبِ «قبل» همیشه سمتِ همان تصویری است که clip نگهش داشته. */
+.tl-ba-tag.tl-before { left: 12px; }
+.tl-ba-tag.tl-after { right: 12px; color: var(--tl-accent); border-color: var(--tl-accent); }
+.tl-gal-cap { padding: 0.9rem 1.1rem; font-size: 0.88rem; color: var(--tl-ink-soft); }
+
+/* ── مسیرِ مراجعه ───────────────────────────────────────────── */
+.tl-timeline { position: relative; display: grid; gap: clamp(16px, 2.4vw, 26px); }
+.tl-timeline::before {
+  content: ''; position: absolute; inset-block: 22px; inset-inline-start: 27px; width: 2px;
+  background: linear-gradient(var(--tl-neon), var(--tl-accent), transparent); opacity: 0.35;
+}
+.tl-tl-item { display: grid; grid-template-columns: 56px 1fr; gap: clamp(14px, 2vw, 22px); align-items: start; position: relative; }
+.tl-tl-num {
+  width: 56px; height: 56px; border-radius: 20px; display: grid; place-items: center;
+  font-weight: 900; font-size: 1.1rem; background: var(--bg2); border: 1px solid var(--tl-line-strong);
+  color: var(--tl-neon); position: relative; z-index: 2; transition: all var(--tl-t) var(--tl-ease);
+}
+.tl-tl-item:hover .tl-tl-num { background: var(--tl-grad); color: var(--bg); transform: scale(1.09); box-shadow: var(--tl-glow); }
+.tl-tl-body { padding: clamp(15px, 2.2vw, 24px); border-radius: var(--tl-r-md); }
+.tl-tl-body h3 { font-size: 1.05rem; margin-bottom: 0.3rem; }
+.tl-tl-body p { margin: 0; color: var(--tl-ink-soft); font-size: 0.9rem; }
+
+/* ── تیمِ درمان ─────────────────────────────────────────────── */
+.tl-docs { display: grid; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); gap: clamp(16px, 2vw, 24px); }
+.tl-doc { padding: clamp(18px, 2.5vw, 28px); border-radius: var(--tl-r-lg); text-align: center; }
+.tl-doc-photo { width: 116px; height: 116px; margin: 0 auto 1rem; border-radius: 50%; background: var(--tl-grad); padding: 3px; }
+.tl-doc-photo img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.tl-doc-ph { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; background: var(--bg2); font-size: 1.9rem; font-weight: 900; color: var(--tl-neon); }
+.tl-doc h3 { font-size: 1.04rem; margin-bottom: 0.15rem; }
+.tl-doc .tl-role { color: var(--tl-neon); font-size: 0.83rem; font-weight: 700; margin-bottom: 0.6rem; }
+.tl-doc p { font-size: 0.86rem; color: var(--tl-ink-soft); margin: 0; }
+
+/* ── نظرِ مراجعان ───────────────────────────────────────────── */
+.tl-testis { display: grid; grid-template-columns: repeat(auto-fit, minmax(276px, 1fr)); gap: clamp(16px, 2vw, 22px); }
+.tl-testi { padding: clamp(18px, 2.5vw, 28px); border-radius: var(--tl-r-lg); }
+.tl-testi > p { font-size: 0.94rem; color: var(--tl-ink-soft); margin-bottom: 1.1rem; }
+.tl-testi-who { display: flex; align-items: center; gap: 0.75rem; }
+.tl-avatar { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--tl-grad-soft); border: 1px solid var(--tl-line-strong); color: var(--tl-neon); flex: 0 0 auto; }
+.tl-testi-who b { display: block; font-size: 0.9rem; }
+.tl-testi-who small { color: var(--tl-ink-mute); font-size: 0.76rem; }
+
+/* ── پرسش‌های پرتکرار ───────────────────────────────────────── */
+.tl-faq { max-width: 840px; margin-inline: auto; display: grid; gap: 0.7rem; }
+.tl-faq-item { border-radius: var(--tl-r-md); overflow: hidden; }
+.tl-faq-q {
+  width: 100%; text-align: start; background: none; border: 0; cursor: pointer; color: inherit; font-family: inherit;
+  padding: 1.1rem 1.3rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  font-weight: 700; font-size: 0.98rem;
+}
+.tl-faq-q .tl-chev { flex: 0 0 auto; color: var(--tl-accent); transition: transform var(--tl-t) var(--tl-ease); }
+.tl-faq-item.tl-open .tl-faq-q .tl-chev { transform: rotate(180deg); }
+.tl-faq-a { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--tl-t) var(--tl-ease); }
+.tl-faq-item.tl-open .tl-faq-a { grid-template-rows: 1fr; }
+.tl-faq-a > div { overflow: hidden; }
+.tl-faq-a p { padding: 0 1.3rem 1.25rem; color: var(--tl-ink-soft); font-size: 0.91rem; margin: 0; white-space: pre-line; }
+
+/* ── تماس ───────────────────────────────────────────────────── */
+.tl-contact { padding: clamp(26px, 4vw, 52px); border-radius: var(--tl-r-lg); text-align: center; background: var(--tl-grad-soft); }
+.tl-contact h2 { font-size: clamp(1.5rem, 3.2vw, 2.4rem); }
+.tl-contact p { color: var(--tl-ink-soft); max-width: 56ch; margin-inline: auto; }
+.tl-contact-rows { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem 2rem; margin: 1.6rem 0; }
+.tl-contact-rows a, .tl-contact-rows span { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.92rem; color: var(--tl-ink-soft); }
+.tl-contact-rows svg { width: 18px; height: 18px; color: var(--tl-accent); flex: 0 0 auto; }
+.tl-contact-rows b { color: var(--tl-ink); font-weight: 700; }
+
+/* ── پاصفحه ─────────────────────────────────────────────────── */
+.tl-footer { border-top: 1px solid var(--tl-line); background: var(--bg2); margin-top: clamp(40px, 6vw, 80px); }
+.tl-footer-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1.6rem; }
+.tl-footer p { margin: 0; color: var(--tl-ink-soft); font-size: 0.85rem; }
+.tl-footer a { color: var(--tl-ink-soft); font-size: 0.85rem; }
+.tl-footer a:hover { color: var(--tl-accent); }
+
+/* ── ظاهرشدن با اسکرول ──────────────────────────────────────── */
+/* ⚠️ **پنهان‌شدن فقط وقتی که جاوااسکریپت زنده است.** کلاسِ `tl-js` را خودِ
+   کامپوننت بعد از mount می‌گذارد؛ تا آن لحظه (و برای هر خزنده یا مرورگرِ
+   بی‌JS) کلِ متن دیده می‌شود. این صفحهٔ بازاریابیِ شرکت است — متنی که پشتِ
+   `opacity: 0` بماند و ناظرش هرگز نیاید، یعنی صفحهٔ سفید. */
+.tl-js .tl-reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.8s var(--tl-ease), transform 0.8s var(--tl-ease); }
+.tl-js .tl-reveal[data-tl-in] { opacity: 1; transform: none; }
+@media print { .tl-js .tl-reveal { opacity: 1; transform: none; } }
+.tl-d1 { transition-delay: 0.08s; } .tl-d2 { transition-delay: 0.16s; }
+.tl-d3 { transition-delay: 0.24s; } .tl-d4 { transition-delay: 0.32s; }
+
+/* ── واکنش‌گرا ──────────────────────────────────────────────── */
+@media (max-width: 1080px) {
+  .tl-hero-grid { grid-template-columns: 1fr; }
+  .tl-hero-card { width: 100%; max-width: 520px; margin-inline: auto; }
+  .tl-svc { grid-column: span 3; }
+}
+@media (max-width: 860px) {
+  .tl-nav { display: none; }
+  .tl-stats { grid-template-columns: repeat(2, 1fr); }
+  .tl-svc { grid-column: span 6; }
+}
+@media (max-width: 560px) {
+  .tl { --tl-head-h: 62px; }
+  .tl-timeline::before { display: none; }
+  .tl-tl-item { grid-template-columns: 44px 1fr; }
+  .tl-tl-num { width: 44px; height: 44px; border-radius: 15px; font-size: 0.95rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tl *, .tl *::before, .tl *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .tl-js .tl-reveal { opacity: 1; transform: none; }
+}

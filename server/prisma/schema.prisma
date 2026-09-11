@@ -2493,3 +2493,83 @@ model ReferralOrder {
   @@index([visitId])
   @@map("referral_orders")
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+//  سایتِ عمومیِ شرکت (لندینگِ tenant)
+//
+//  هر شرکت روی دامنهٔ خودش یک صفحهٔ معرفی دارد. تا امروز ریشهٔ دامنه مستقیم
+//  به فرمِ ورود می‌پرید؛ یعنی مراجعه‌کننده‌ای که نشانیِ کلینیک را می‌زد، به
+//  جای معرفیِ کلینیک یک فرمِ لاگین می‌دید.
+//
+//  ⚠️ سه جدول، نه هشت‌تا. آیتم‌های محتوا (خدمت، پزشک، نظر، پرسش، گالری)
+//  ساختارِ یکسانی دارند — عنوان، متن، تصویر، ترتیب — و تفاوتشان فقط در
+//  «کدام قلم را نشان بده» است. جدولِ جدا برای هرکدام یعنی پنج CRUD، پنج
+//  گارد و پنج فرمِ ادمین برای داده‌ای که یک شکل دارد.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// متنِ ویرایش‌شدنیِ صفحه — کلید از کد، مقدار از کاربر.
+///
+/// ⚠️ **پیش‌فرض در کد است، نه در دیتابیس.** کلیدی که ردیف ندارد، متنِ
+/// پیش‌فرضِ `SITE_BLOCKS` را می‌گیرد؛ پس یک شرکتِ تازه از همان لحظهٔ اول
+/// صفحه‌ای کامل دارد و لازم نیست کسی ده‌ها فیلد را پر کند تا سایتش سرِ پا
+/// شود. seedِ ردیف‌های خالی همان کار را می‌کرد، ولی آن‌وقت متنِ پیش‌فرض در
+/// دو جا می‌ماند و نسخهٔ بعدی فقط یکی‌شان را عوض می‌کرد.
+model SiteBlock {
+  key       String   @id
+  value     String
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("site_blocks")
+}
+
+/// روشن/خاموش و ترتیبِ بخش‌های صفحه.
+///
+/// ⚠️ بخشْ حذف نمی‌شود، خاموش می‌شود — همان قاعدهٔ `featurePlanFor`: شرکتی
+/// که گالری را خاموش کرده و بعد پشیمان شده، نباید عکس‌هایش رفته باشد.
+model SiteSection {
+  key       String   @id
+  enabled   Boolean  @default(true)
+  sort      Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("site_sections")
+}
+
+/// یک قلمِ محتوا روی صفحه.
+///
+/// نگاشتِ قلم‌ها به `kind` (تفسیرِ ستون‌ها در `site/site.registry.ts` است تا
+/// یک جا بماند):
+///   service     — title=نامِ خدمت، body=توضیح، icon=آیکونِ خطی
+///   stat        — title=عدد، subtitle=برچسب
+///   gallery     — title=شرح، image=قبل، image2=بعد (اگر خالی: تک‌عکس)
+///   doctor      — title=نام، subtitle=تخصص، body=معرفی، image=عکس
+///   testimonial — title=نامِ فرد، subtitle=توضیحِ کوتاه، body=متنِ نظر
+///   faq         — title=پرسش، body=پاسخ
+///   process     — title=عنوانِ گام، body=توضیح
+model SiteItem {
+  id       Int     @id @default(autoincrement())
+  kind     String
+  title    String
+  subtitle String?
+  body     String?
+
+  /// sha256 در `StorageService` (per-tenant، content-addressed) + نوعِ فایل.
+  /// ⚠️ خودِ تصویر از `/public/site/items/:id/image` سرو می‌شود نه از sha؛
+  /// اندپوینتی که هر shaیی را بدهد، یعنی هر فایلِ همان شرکت — از جمله فیشِ
+  /// بیمار — با حدسِ sha از بیرون قابلِ خواندن است.
+  imageSha   String? @map("image_sha")
+  imageMime  String? @map("image_mime")
+  image2Sha  String? @map("image2_sha")
+  image2Mime String? @map("image2_mime")
+
+  /// کلیدِ آیکونِ خطی از `src/ui/icons.jsx` — فقط برای خدمات و گام‌ها.
+  icon   String?
+  active Boolean @default(true)
+  sort   Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([kind, active, sort])
+  @@map("site_items")
+}

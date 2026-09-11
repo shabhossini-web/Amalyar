@@ -16,6 +16,7 @@ import { StorageModule } from './storage/storage.module';
 import { TenantConfigModule } from './config/config.module';
 import { AiModule } from './ai/ai.module';
 import { ChatModule } from './chat/chat.module';
+import { SiteModule } from './site/site.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ChatModule } from './chat/chat.module';
     PatientsModule,
     AiModule,
     ChatModule,
+    SiteModule,
     ImportModule,
     PlatformModule,
     RemindersModule,

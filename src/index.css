@@ -382,6 +382,13 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   .cta-box::after { animation: none; }
 }
+
+
+/* پردهٔ بارگذاری — تا آمدنِ چانکِ صفحه.
+   ⚠️ عمداً این‌جا (CSSِ ورودی) است نه در `login.css`: از وقتی مسیرها lazy
+   شده‌اند، این کلاس **پیش از** رسیدنِ CSSِ هر صفحه روی صفحه است؛ اگر در
+   استایلِ یک صفحهٔ lazy می‌ماند، کاربر یک متنِ بی‌استایلِ سفید می‌دید. */
+.lx-boot { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; background: var(--bg); color: var(--text2); font-family: 'Vazirmatn', system-ui, sans-serif; font-size: 14px; }
 .version-notice { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 100000; display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 16px; border: 1px solid #9c77db; border-radius: 14px; background: #211436; color: #fff; box-shadow: 0 8px 35px #0007; font-family: inherit; }
 .version-notice button { background: #823dd2; color: white; border: 0; border-radius: 9px; padding: 9px 14px; font: inherit; cursor: pointer; }
 @media print { .version-notice { display: none; } }
@@ -390,3 +397,4 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 
 .nv-con > label { grid-column: 1 / -1; display: grid; gap: .5rem; min-width: 0; }
 .nv-con > label select { width: 100%; max-width: 100%; background: var(--bg3); color: var(--text1); border: 1px solid var(--card-border); border-radius: 12px; padding: .6rem; }
+

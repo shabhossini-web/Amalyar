@@ -113,6 +113,11 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.ADMIN,
   },
   {
+    key: 'site', label: 'سایتِ معرفیِ شرکت', group: 'modules',
+    hint: 'صفحهٔ عمومیِ روی دامنهٔ خودِ شرکت — چیزی که مراجعه‌کننده پیش از هر ورودی می‌بیند. خاموش که باشد، ریشهٔ دامنه مثلِ قبل به فرمِ ورود می‌رود.',
+    defaultLevel: LEVEL.ADMIN,
+  },
+  {
     key: 'tech', label: 'پنلِ کارشناسی', group: 'modules',
     hint: 'دفترِ کارِ خودِ کارشناس. عمداً سطحِ پایینی دارد: کارشناس نباید برای دیدنِ کارِ فردایش به داشبوردِ مدیریت دسترسی بگیرد.',
     defaultLevel: LEVEL.TECH,
@@ -280,6 +285,18 @@ export const PERMISSIONS: AccessDef[] = [
        کاربران را عوض می‌کند. */
     key: 'forms.manage', label: 'ویرایشِ فرم‌ها', group: 'system',
     hint: 'افزودن و حذفِ فیلد، اجباری‌کردن، و ترتیب.',
+    defaultLevel: LEVEL.SUPER_ADMIN,
+  },
+  {
+    key: 'site.read', label: 'دیدنِ محتوای سایتِ معرفی', group: 'system',
+    hint: 'متن‌ها، خدمات، تصاویر و پرسش‌های صفحهٔ عمومی.',
+    defaultLevel: LEVEL.ADMIN,
+  },
+  {
+    /* ⚠️ نوشتن عمداً یک پله بالاتر از خواندن است: این تنها جایی در سامانه
+       است که متنِ نوشته‌شده **بیرون** از دیوارِ لاگین منتشر می‌شود. */
+    key: 'site.manage', label: 'ویرایشِ سایتِ معرفی', group: 'system',
+    hint: 'هر تغییری این‌جا بلافاصله روی صفحهٔ عمومیِ شرکت دیده می‌شود.',
     defaultLevel: LEVEL.SUPER_ADMIN,
   },
   {
