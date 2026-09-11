@@ -36,7 +36,17 @@ for (const loc of ['/_seo/head', '/robots.txt', '/sitemap.xml']) {
   const block = ngx.slice(i, ngx.indexOf('\n  }', i));
   if (!block.includes('proxy_set_header Host $host;')) die('مسیرِ ' + loc + ' باید Host را دست‌نخورده بفرستد');
   if (!block.includes('X-Forwarded-Proto')) die('مسیرِ ' + loc + ' باید طرحِ بیرونی را بفرستد');
+  /* ⚠️ باگِ واقعیِ روی سرور: `rewrite` مقدارِ `$uri` را عوض می‌کند، پس هر
+     locationی که rewrite دارد و fallback می‌خواهد باید مسیرِ اصلی را **پیش
+     از** rewrite در متغیرِ خودش نگه دارد. بدونِ این، fallback دنبالِ مسیرِ
+     API روی دیسک می‌گشت و ۴۰۴ خامِ nginx می‌داد. */
+  if (block.includes('@seo_static') && block.indexOf('set $seo_file') > block.indexOf('rewrite ^'))
+    die('مسیرِ ' + loc + ' باید پیش از rewrite مقدارِ $seo_file را ست کند');
 }
+const fallback = ngx.slice(ngx.indexOf('location @seo_static'), ngx.indexOf('\n  }', ngx.indexOf('location @seo_static')));
+if (/try_files\s+\$uri/.test(fallback))
+  die('fallbackِ ایستا نباید به $uri تکیه کند — rewrite عوضش کرده؛ از $seo_file استفاده کن');
+if (!fallback.includes('try_files $seo_file')) die('fallbackِ ایستا باید از $seo_file بخواند');
 const dockerfile = read('Dockerfile');
 if (!dockerfile.includes('/etc/nginx/templates/')) die('Dockerfile قالبِ nginx را کپی نمی‌کند');
 if (!/ENV API_UPSTREAM=/.test(dockerfile)) die('Dockerfile پیش‌فرضِ API_UPSTREAM را ندارد');

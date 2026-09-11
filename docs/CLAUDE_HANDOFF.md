@@ -887,6 +887,39 @@ curl -s https://<دامنهٔ شرکت>/sitemap.xml
 
 اگر `<title>` هنوز «عمل‌یار …» بود یعنی `API_UPSTREAM` به بک‌اند نمی‌رسد.
 
+### ⚠️ باگِ fallback که روی سرور دیده شد — ۱۴۰۵/۰۶/۲۰
+
+اولین تستِ `https://<tenant>/robots.txt` روی production یک **۴۰۴ خامِ nginx**
+داد، نه پاسخِ بک‌اند و نه فایلِ ایستا. علت در خودِ کانفیگ بود:
+
+```nginx
+rewrite ^ /api/public/site/robots.txt break;   # ← $uri را عوض می‌کند
+location @seo_static { try_files $uri =404; }  # ← دنبالِ همان مسیرِ API روی دیسک
+```
+
+`rewrite` مقدارِ `$uri` را تغییر می‌دهد، پس fallback به‌جای `/robots.txt` دنبالِ
+`/api/public/site/robots.txt` روی دیسک می‌گشت. حالا مسیرِ اصلی **پیش از**
+rewrite در `$seo_file` ذخیره می‌شود و `verify-seo-surface.js` هم همین را
+می‌سنجد (روی هر دو شکلِ نقض قرمز شد).
+
+هم‌زمان هدرِ `X-Seo-Source` اضافه شد تا از بیرون معلوم باشد پاسخ از کدام مسیر
+آمده:
+
+```bash
+curl -sI https://<دامنه>/robots.txt | grep -i x-seo-source
+# backend → از API آمده   ·   static → فایلِ public/   ·   نبودِ هدر → هیچ‌کدام
+```
+
+**تشخیصِ اینکه بک‌اند در دسترس است یا نه** (مستقل از nginx) — این نشانی از
+Traefik مستقیم به بک‌اند می‌رود:
+
+```
+https://<دامنه>/api/public/site/robots.txt
+```
+
+- پاسخِ robots → بک‌اند و resolveِ tenant سالم‌اند؛ مشکل فقط `API_UPSTREAM` است.
+- «شرکت برای این دامنه یافت نشد» → آن دامنه در `tenant_domains` ثبت نشده.
+
 **نکتهٔ عملیاتیِ جدا:** `nginx.conf` حذف شد و جایش `nginx.conf.template` آمد
 (ایمیجِ nginx با envsubst پردازشش می‌کند). هر تغییرِ آیندهٔ کانفیگ باید روی
 قالب باشد.
