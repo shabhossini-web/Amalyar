@@ -55,7 +55,12 @@ export default function Chat() {
       if (curRef.current?.id === ev.channelId) pullNew(ev.channelId);
       else loadChannels();
     });
-    return stop;
+    // Worker/bot messages can be committed by another API instance. Poll only
+    // visible windows as a fallback to tenant-scoped SSE.
+    const sync = () => { if (!document.hidden) { loadChannels(); if (curRef.current) pullNew(curRef.current.id).catch(() => {}); } };
+    const timer = setInterval(sync, 15000);
+    window.addEventListener('focus', sync);
+    return () => { stop(); clearInterval(timer); window.removeEventListener('focus', sync); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }); }, [msgs]);

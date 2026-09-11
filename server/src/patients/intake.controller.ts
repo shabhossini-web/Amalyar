@@ -31,6 +31,7 @@ class RegisterDto {
 }
 
 class FillDto {
+  @IsOptional() @IsInt() @Min(0) hospitalId?: number;
   @IsOptional() @IsString() @MaxLength(200) procedure?: string;
   @IsOptional() @IsString() @MaxLength(100) surgeonName?: string;
   @IsOptional() @IsString() @MaxLength(150) hospitalName?: string;
@@ -160,6 +161,8 @@ class NoteDto {
 @Controller('public/intake')
 export class PublicIntakeController {
   constructor(private intake: IntakeService) {}
+  @Get('form/:token/hospitals')
+  hospitals(@Param('token') token: string, @Query('q') q?: string) { return this.intake.publicHospitals(token, q); }
 
   @Get('link/:token')
   link(@Param('token') token: string) {
@@ -379,6 +382,10 @@ export class IntakeController {
   deleteSubmission(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.intake.deleteSubmission(id, user);
   }
+
+  @RequirePermissions('intake.review')
+  @Get('submissions/:id/hospital')
+  hospital(@Param('id', ParseIntPipe) id: number) { return this.intake.approvalHospital(id); }
 
   @RequirePermissions('intake.review')
   @Post('submissions/:id/approve')

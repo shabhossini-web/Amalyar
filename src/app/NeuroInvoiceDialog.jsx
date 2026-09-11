@@ -31,6 +31,8 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
   const [year, setYear] = useState('');
   const [owner, setOwner] = useState('company');
   const [cons, setCons] = useState([]);
+  const [stockQuery, setStockQuery] = useState(''), [stock, setStock] = useState([]), [stockError, setStockError] = useState(''), [stockOpen, setStockOpen] = useState(false), [returnUnusedStock, setReturnUnusedStock] = useState(false);
+  useEffect(() => { if (!stockOpen) return; let alive = true; const t = setTimeout(() => api(`/stock/lots?q=${encodeURIComponent(stockQuery)}`).then(d => { if (alive) { setStock(d); setStockError(''); } }).catch(e => { if (alive) setStockError(e.message); }), 250); return () => { alive = false; clearTimeout(t); }; }, [stockQuery, stockOpen]);
   const [draft, setDraft] = useState({ name: '', irc: '', qty: '1' });
   const [quote, setQuote] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -39,6 +41,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
   const openedWith = useRef(billing);
 
   useEffect(() => {
+    setQuote(null);
     let live = true;
     api(`${root}/neuro-catalog`)
       .then((c) => {
@@ -53,7 +56,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
         setHours(String(existing[0]?.neuroDetail?.hours ?? c.hours ?? ''));
         setYear(String(c.year ?? ''));
         setOwner(existing[0]?.neuroDetail?.deviceOwner ?? c.deviceOwner ?? 'company');
-        const used = charges.filter((x) => x.neuroDetail?.consumable).map((x) => ({ name: x.title, irc: x.neuroDetail.irc ?? '', qty: x.quantity }));
+        const used = charges.filter((x) => x.neuroDetail?.consumable).map((x) => ({ name: x.title, irc: x.neuroDetail.irc ?? '', qty: x.quantity, chargeId: x.id, itemId: x.itemId ?? undefined, lotId: x.neuroDetail.lotId ?? undefined, stockEffect: x.stockEffect ?? 'virtual' }));
         setCons(used.length ? used : c.consumables ?? []);
         setCat(c);
       })
@@ -67,6 +70,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
 
   /* جمعِ زنده — با هر تغییرِ تیک/مدت/سال/مالک، از سرور (debounce). */
   useEffect(() => {
+    setQuote(null);
     if (!cat || !ids.length || h < 1 || !/^\d{4}$/.test(y)) { setQuote(null); return undefined; }
     let live = true;
     const t = setTimeout(() => {
@@ -79,19 +83,22 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
 
   const toggle = (id) => setSel((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const setQty = (i, qty) => setCons((l) => l.map((x, j) => (j === i ? { ...x, qty } : x)));
-  const payloadCons = () => cons.map((c) => ({ name: c.name, irc: c.irc || '', qty: int(c.qty, 1, 999) }));
+  const payloadCons = () => cons.map((c) => ({ ...c, name: c.name, irc: c.irc || '', qty: int(c.qty, 1, 999) }));
 
   const apply = async (thenIssue) => {
     if (!ids.length) { onToast('دستِ‌کم یک خدمت انتخاب کنید'); return; }
     if (h < 1) { onToast('مدتِ قابلِ صورتحساب را وارد کنید'); return; }
+    const printWindow = thenIssue ? window.open('', '_blank') : null;
+    if (thenIssue && !printWindow) { setErr('برای چاپ، اجازهٔ بازشدن پنجره را بدهید'); return; }
+    if (printWindow) printWindow.document.body.textContent = 'در حال آماده‌سازی فاکتور…';
     setBusy(true); setErr('');
     try {
-      await api(`${root}/neuro-apply`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, consumables: payloadCons() } });
+      await api(`${root}/neuro-apply`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, consumables: payloadCons(), returnUnusedStock } });
       await reload();
       onToast(`${fa(ids.length)} خدمت و ${fa(cons.length)} مصرفی روی صورت‌حساب نشست ✓`);
       onClose();
-      if (thenIssue) onIssue?.();
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+      if (thenIssue) onIssue?.(printWindow);
+    } catch (e) { printWindow?.close(); setErr(e.message); } finally { setBusy(false); }
   };
 
   /** پیش‌فرضِ شرکت = همین انتخاب. فقط سوپرادمین (تنظیماتِ شرکت). */
@@ -100,7 +107,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
     try {
       await api('/settings', { method: 'PATCH', body: { values: {
         invoice_neuro_defaults: ids.join(','),
-        invoice_neuro_consumables: payloadCons().map((c) => `${c.name} | ${c.irc} | ${c.qty}`).join('\n'),
+        invoice_neuro_consumables: JSON.stringify(payloadCons().map(({ chargeId, lotId, ...c }) => c)),
       } } });
       onToast('پیش‌فرضِ شرکت ذخیره شد ✓ — از این به بعد همین‌ها تیک دارند');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
@@ -154,10 +161,19 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
           </div>
 
           <h4 className="nv-h">اقلامِ مصرفی <small>روی فاکتور چاپ می‌شود، بدونِ مبلغ</small></h4>
+          <p className="db-hint">برای اقلام انبار، «فقط فاکتور» یا «کاهش موجودی» را انتخاب کنید. پیش‌فرض مصرفی از کاتالوگ حفظ می‌شود؛ لات مصرف را برای هر مراجعه انتخاب کنید.</p>
+          <button type="button" className="bl-mini" onClick={() => setStockOpen(v => !v)} disabled={busy}>انتخاب مصرفی از انبار</button>
+          {stockOpen && <div className="nv-cons"><label>جستجوی نام، لات یا سریال<input value={stockQuery} onChange={e => setStockQuery(e.target.value)} /></label>
+            {stockError && <p role="alert">{stockError}</p>}
+            {stock.slice(0, 30).map(l => <button className="bl-mini" type="button" disabled={busy} key={l.id} onClick={() => {
+              setCons(rows => { const same = rows.findIndex(c => c.lotId === l.id); if (same >= 0) return rows.map((c, i) => i === same ? { ...c, qty: int(c.qty, 1, 999) + 1 } : c); const at = rows.findIndex(c => c.itemId === l.itemId && !c.lotId); return at >= 0 ? rows.map((c, i) => i === at ? { ...c, lotId: l.id } : c) : [...rows, { name: l.itemName, itemId: l.itemId, lotId: l.id, qty: 1, irc: '', stockEffect: 'virtual' }]; });
+            }}>{l.itemName} · {l.lotNo || l.serialNo || `لات ${l.id}`} · موجودی {fa(l.quantity)} — انتخاب</button>)}
+          </div>}
           <div className="nv-cons">
             {cons.map((c, i) => (
               <div key={`${c.name}-${i}`} className="nv-con">
                 <div><b>{c.name}</b>{c.irc && <small dir="ltr">IRC {c.irc}</small>}</div>
+                {c.itemId && <label>اثر انبار<select aria-label={`اثر انبار ${c.name}`} disabled={busy} value={c.stockEffect ?? 'virtual'} onChange={e => setCons(rows => rows.map((x, j) => j === i ? { ...x, stockEffect: e.target.value } : x))}><option value="virtual">فقط درج در فاکتور</option><option value="consumed">کاهش موجودی انبار</option></select><small>{c.lotId ? `لات انتخابی: ${c.lotId}` : 'لات را از انتخاب مصرفی انبار مشخص کنید'}</small></label>}
                 <span className="nv-step">
                   <button type="button" aria-label={`کمتر ${c.name}`} disabled={busy} onClick={() => setQty(i, Math.max(1, int(c.qty, 1, 999) - 1))}>−</button>
                   <input dir="ltr" inputMode="numeric" aria-label={`تعداد ${c.name}`} value={c.qty} onChange={(e) => setQty(i, e.target.value)} />
@@ -177,6 +193,8 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
             </div>
           </div>
 
+          <label className="db-hint"><input type="checkbox" checked={returnUnusedStock} disabled={busy} onChange={e => setReturnUnusedStock(e.target.checked)} /> مقدار حذف‌شده یا کاهش‌یافته واقعاً مصرف نشده و به موجودی برگردد</label>
+          <p className="db-hint">بدون این انتخاب، حذف یا کاهش قلم فقط فاکتور را اصلاح می‌کند و مصرف قبلی در دفتر انبار باقی می‌ماند.</p>
           <div className="nv-foot">
             <div className="nv-total"><span>جمعِ خدمات</span><b>{quote ? `${fmtMoney(quote.total)} تومان` : '—'}</b></div>
             {user?.level >= 6 && (

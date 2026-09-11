@@ -65,6 +65,10 @@ export class RoutesController {
     return this.routes.briefing(id);
   }
 
+  @RequirePermissions('patients.update', 'patients.read_all')
+  @Post(':id/notify')
+  notify(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) { return this.routes.notify(id, user); }
+
   @RequirePermissions('patients.update')
   @Post()
   create(@Body() dto: RunCreateDto, @CurrentUser() user: any) {

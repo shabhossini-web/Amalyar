@@ -12,11 +12,12 @@ import react from '@vitejs/plugin-react';
  * از `Date` استفاده می‌کند نه از git sha: در ساختِ داکرِ Coolify مخزنِ git
  * لزوماً در دسترس نیست، ولی ساعت همیشه هست.
  */
+const buildId = new Date().toISOString();
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), { name: 'build-version', generateBundle() { this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ buildId }) }); } }],
   define: {
     __BUILD_ID__: JSON.stringify(
-      new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
+      buildId,
     ),
   },
   build: {

@@ -12,7 +12,7 @@ try {
   for (let i = 0; i < 80; i++) { if (await fetch(base).then(r => r.ok).catch(() => false)) break; await delay(100); }
   browser = await chromium.launch({ executablePath: process.env.E2E_CHROME, args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
-    const ctx = await browser.newContext({ viewport, locale: 'fa-IR', serviceWorkers: 'block' });
+    const ctx = await browser.newContext({ viewport, reducedMotion: 'reduce', locale: 'fa-IR', serviceWorkers: 'block' });
     await ctx.addInitScript(() => {
       const open = window.open.bind(window);
       window.open = (...args) => { const w = open(...args); if (w) w.print = () => { w.__printed = true; }; return w; };
@@ -104,14 +104,14 @@ try {
     await dlg.getByRole('button', { name: 'ثبتِ خدمات روی صورت‌حساب', exact: true }).click();
     await dlg.waitFor({ state: 'detached' });
     const sent = writes.find(w => w.path.endsWith('neuro-apply')).payload;
-    assert.deepEqual(Object.keys(sent).sort(), ['consumables', 'deviceOwner', 'hours', 'items', 'year']);
+    assert.deepEqual(Object.keys(sent).sort(), ['consumables', 'deviceOwner', 'hours', 'items', 'returnUnusedStock', 'year']);
     assert.deepEqual(sent.items, ['901290:EMG', '901325:MEP', '901300:Monitoring']);
     assert.deepEqual(sent.consumables, [{ name: 'Electrode', irc: '9449874222229990', qty: 41 }]);
     check(true, 'browser submits selection, duration and consumables — never financial totals');
     check(!writes.some(w => w.path.endsWith('neuro-service')), 'one bulk request instead of one call per service');
     await sheet.getByText('EMG · MEP · Monitoring', { exact: false }).waitFor();
     check(true, 'panel summarises what is on the invoice after applying');
-    await page.screenshot({ path: `../invoice-builder-${viewport.width}.png`, fullPage: true });
+    await page.screenshot({ path: `../invoice-builder-${viewport.width}.png`, fullPage: true, animations: 'disabled', timeout: 30000 });
 
     const popupWait = page.waitForEvent('popup');
     await sheet.getByRole('button', { name: 'صدور و چاپ فاکتور رسمی', exact: true }).click();
@@ -124,7 +124,7 @@ try {
     check(text.includes('توضیحات اختصاصی شرکت') && text.includes('مهر شرکت') && text.includes('به حروف'), 'company template notes, signatures and words are printed');
     await popup.waitForFunction(() => document.fonts.check('10px InvoiceFa', 'فاکتور'), null, { timeout: 10000 });
     check(true, 'local Persian font is ready');
-    await popup.screenshot({ path: `../invoice-print-${viewport.width}.png`, fullPage: true });
+    await popup.screenshot({ path: `../invoice-print-${viewport.width}.png`, fullPage: true, animations: 'disabled', timeout: 30000 });
     if (hasTool('pdfinfo') && hasTool('pdftotext')) {
       const longDoc = structuredClone(doc); longDoc.snapshot.billing.charges = Array.from({ length: 90 }, (_, i) => ({ ...bill.charges[0], title: `خدمت ردیف ${i + 1}` }));
       longDoc.snapshot.template.notes = 'END-OF-INVOICE';

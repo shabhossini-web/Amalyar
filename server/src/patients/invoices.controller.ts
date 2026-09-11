@@ -1,7 +1,7 @@
 import { Body, Controller, Get, NotFoundException, Param, ParseIntPipe, Post, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { StorageService } from '../storage/storage.service';
-import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
+import { ArrayMinSize, IsBoolean, IsArray, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -24,6 +24,7 @@ class NeuroQuoteDto {
   @IsIn(['company', 'hospital']) deviceOwner!: string;
 }
 class NeuroApplyDto extends NeuroQuoteDto {
+  @IsOptional() @IsBoolean() returnUnusedStock?: boolean;
   /** `{name, irc?, qty}` — شکلِ دقیق در سرویس سنجیده می‌شود. */
   @IsOptional() @IsArray() consumables?: unknown[];
 }

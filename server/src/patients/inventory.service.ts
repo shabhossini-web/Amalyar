@@ -330,7 +330,7 @@ export class InventoryService {
     user: any,
     tx?: any,
   ) {
-    const homeName = await this.home();
+    const homeName = tx ? (await tx.setting.findUnique({ where: { key: 'home_location' } }))?.value?.trim() || HOME_FALLBACK : await this.home();
     const run = async (db: any) => {
       const locked = await db.$queryRaw<{ id: number; serial_no: string | null; expires_at: Date | null; location: string | null }[]>`
         SELECT id, serial_no, expires_at, location FROM stock_lots WHERE id = ${lotId} FOR UPDATE`;
@@ -374,11 +374,35 @@ export class InventoryService {
     // یا «دوجا» می‌شود؛ پس تراکنشِ بیرونی پذیرفته می‌شود.
     const row = tx ? await run(tx) : await this.prisma.$transaction(run);
 
-    await this.audit.record({
-      actorId: user?.id, action: `stock.${kind}`, entityType: 'stock_movement', entityId: row.id,
-      after: { lotId, quantity: signedQty, location: row.location, visitId: extra.visitId ?? null, chargeId: extra.chargeId ?? null, transferId: extra.transferId ?? null },
-    });
-    return { ok: true, movementId: row.id, quantity: await this.balance(lotId) };
+    const after = { lotId, quantity: signedQty, location: row.location, visitId: extra.visitId ?? null, chargeId: extra.chargeId ?? null, transferId: extra.transferId ?? null };
+    if (tx) await tx.auditEvent.create({ data: { actorId: user?.id, action: `stock.${kind}`, entityType: 'stock_movement', entityId: String(row.id), afterJson: after } });
+    else await this.audit.record({ actorId: user?.id, action: `stock.${kind}`, entityType: 'stock_movement', entityId: row.id, after });
+    const sum = await (tx ?? this.prisma).stockMovement.aggregate({ where: { lotId }, _sum: { quantity: true } });
+    return { ok: true, movementId: row.id, quantity: sum._sum.quantity ?? 0 };
+  }
+
+  /** Set an invoice line's cumulative consumption, in the invoice transaction. Saving again consumes no more. */
+  async setChargeConsumption(tx: any, lotId: number | null, quantity: number, visitId: number, chargeId: number, user: any, returnUnused: boolean) {
+    const movements = await tx.stockMovement.findMany({ where: { chargeId, kind: { in: ['out', 'return'] } }, orderBy: { id: 'asc' } });
+    const groups = new Map<string, any>();
+    for (const m of movements) { const key = `${m.lotId}:${m.location ?? ''}:${m.transferId ?? ''}`; const g = groups.get(key) ?? { ...m, used: 0 }; g.used -= m.quantity; groups.set(key, g); }
+    const previous = [...groups.values()].filter(g => g.used > 0);
+    if (previous.some(g => g.lotId !== lotId) && lotId && quantity && !returnUnused) throw new BadRequestException('برای عوض کردن لات مصرف‌شده ابتدا برگشت کالای مصرف‌نشده را مشخص کنید');
+    let remaining = previous.filter(g => g.lotId === lotId).reduce((n, g) => n + g.used, 0);
+    for (const g of previous) {
+      const extra = g.lotId === lotId ? Math.max(0, remaining - quantity) : g.used;
+      if (returnUnused && extra > 0) {
+        const amount = Math.min(g.used, extra);
+        await this.move(g.lotId, 'return', amount, { visitId, chargeId, location: g.location, transferId: g.transferId, reason: 'برگشت کالای مصرف‌نشده از اصلاح فاکتور' }, user, tx);
+        if (g.lotId === lotId) remaining -= amount;
+      }
+    }
+    const delta = quantity - remaining;
+    if (lotId && delta > 0) {
+      const visit = await tx.visit.findUniqueOrThrow({ where: { id: visitId }, select: { seq: true, patient: { select: { code: true } } } });
+      const transfer = await tx.stockTransfer.findFirst({ where: { visitId, status: { not: 'closed' }, movements: { some: { lotId } } }, orderBy: { id: 'desc' }, select: { id: true, toLocation: true } });
+      await this.move(lotId, 'out', -delta, { visitId, chargeId, visitCode: `${visit.patient.code}-V${visit.seq}`, location: transfer?.toLocation, transferId: transfer?.id, reason: 'مصرف فاکتور نورومانیتورینگ' }, user, tx);
+    }
   }
 
   async balance(lotId: number) {
@@ -398,7 +422,7 @@ export class InventoryService {
   async sendTransfer(
     dto: {
       toLocation?: string; fromLocation?: string; hospitalId?: number; visitId?: number; notes?: string;
-      plannedFor?: string; windowFrom?: string; windowTo?: string; force?: boolean;
+      plannedFor?: string; windowFrom?: string; windowTo?: string; force?: boolean; planOnly?: boolean;
       lines?: { lotId: number; quantity: number }[];
     },
     user: any,
@@ -458,7 +482,7 @@ export class InventoryService {
     if (from === to) throw new BadRequestException('مبدأ و مقصد یکی است');
 
     // حوالهٔ روزِ آینده فقط **تعهد** است؛ دفتر وقتی می‌خورد که بار برود.
-    const future = startOfDay(plannedFor) > startOfDay(new Date());
+    const future = dto.planOnly === true || startOfDay(plannedFor) > startOfDay(new Date());
     const status = future ? 'planned' : 'sent';
 
     const transfer = await this.prisma.$transaction(async (tx) => {

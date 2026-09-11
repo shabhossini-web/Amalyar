@@ -1,3 +1,4 @@
+import { canAccess } from '../auth/access-check';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -262,23 +263,14 @@ export class BillingService {
     if (!row) throw new NotFoundException('قلمِ صورت‌حساب پیدا نشد');
     await this.assertVisit(row.visitId, user);
 
-    if (returnStock) {
-      // کالا با حرکتِ جبرانی برمی‌گردد، نه با پاک‌کردنِ حرکتِ مصرف: دفترِ انبار
-      // فقط اضافه می‌شود، وگرنه «چه وقت چه شد» از بین می‌رود.
-      const moves = await this.prisma.stockMovement.findMany({ where: { chargeId } });
-      const net = moves.reduce((s, m) => s + m.quantity, 0); // خروج منفی است
-      if (net < 0) {
-        await this.inventory.returnToStock(
-          { lotId: moves.find((m) => m.kind === 'out')!.lotId, quantity: -net, visitId: row.visitId, chargeId, reason: 'کالا مصرف نشد — حذفِ قلمِ فاکتور' },
-          user,
-        );
-      }
-    }
-
-    await this.prisma.charge.delete({ where: { id: chargeId } });
-    await this.audit.record({
-      actorId: user?.id, action: 'charge.delete', entityType: 'charge', entityId: chargeId,
-      before: row, after: { returnedToStock: returnStock },
+    if (returnStock && !await canAccess(this.prisma, user, 'inventory', ['inventory.write'])) throw new BadRequestException('اجازه برگشت موجودی انبار ندارید');
+    await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${row.visitId} FOR UPDATE`;
+      const current = await tx.charge.findUnique({ where: { id: chargeId } });
+      if (!current) throw new NotFoundException('قلم قبلاً حذف شده است');
+      if (returnStock) await this.inventory.setChargeConsumption(tx, null, 0, row.visitId, chargeId, user, true);
+      await tx.charge.delete({ where: { id: chargeId } });
+      await tx.auditEvent.create({ data: { actorId: user?.id, action: 'charge.delete', entityType: 'charge', entityId: String(chargeId), beforeJson: JSON.parse(JSON.stringify(current)), afterJson: { returnedToStock: returnStock } } });
     });
     return { ok: true, returnedToStock: returnStock };
   }

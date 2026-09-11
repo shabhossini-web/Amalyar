@@ -40,7 +40,7 @@ export class SmsService {
     phone: string,
     text: string,
     opts: { skipLagho?: boolean } = {},
-  ): Promise<{ sent: boolean; stub: boolean }> {
+  ): Promise<{ sent: boolean; stub: boolean; providerId?: string }> {
     const apiKey = process.env.MELI_API_KEY;
     const from = process.env.MELI_FROM;
     const to = this.normalize(phone);
@@ -63,14 +63,13 @@ export class SmsService {
     try {
       res = await fetch(
         `https://console.melipayamak.com/api/send/advanced/${encodeURIComponent(apiKey)}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body },
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(20_000) },
       );
     } catch {
       this.log.error('ارتباط با سرویس ملی‌پیامک برقرار نشد');
-      if (process.env.NODE_ENV === 'production') {
-        throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
-      }
-      return { sent: false, stub: false };
+      const error = new ServiceUnavailableException('نتیجه ارتباط با سرویس پیامک مشخص نشد');
+      (error as any).smsOutcome = 'unknown';
+      throw error;
     }
 
     const data: any = await res.json().catch(() => null);
@@ -82,6 +81,6 @@ export class SmsService {
         throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
       }
     }
-    return { sent: ok, stub: false };
+    return { sent: ok, stub: false, ...(ok ? { providerId: String(recIds[0]) } : {}) };
   }
 }

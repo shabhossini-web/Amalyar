@@ -988,7 +988,7 @@ export class PatientsService {
     }
   }
 
-  async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[] }) {
+  async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
     const userId: number | undefined = user?.id;
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
@@ -1000,7 +1000,12 @@ export class PatientsService {
        ویزیتی را شروع کند مگر همهٔ فیلدهای اجباریِ پزشک را هم خودش بداند —
        یعنی هرگز. ستاره‌ها در مسیرهای ثبتِ کامل (داشبورد/فرمِ عمومی) سرِ
        جایشان‌اند؛ این پرچم فقط از `startVisit` می‌آید. */
-    if (!opts?.skipFormValidation) await this.assertFormValid(dto);
+    if (opts?.intakeIonm) {
+      if (!dto.surgeonId || !await this.prisma.surgeon.findFirst({ where: { id: dto.surgeonId, active: true } })) throw new BadRequestException('جراح را از تعاریف پایه انتخاب کنید');
+      const form = await this.forms.forVisitKind(dto.kind || 'surgery');
+      const check = this.forms.validateFields((form?.fields ?? []).map(f => ({ ...f, required: false })), { ...(dto as any).extra, ...pickBuiltin(dto) });
+      if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
+    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;

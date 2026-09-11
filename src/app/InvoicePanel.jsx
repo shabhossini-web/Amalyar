@@ -14,9 +14,9 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
   const root = `/visits/${visit.id}/invoices`;
   const refresh = useCallback(async () => setInfo(await api(root)), [root]);
   useEffect(() => { refresh().catch(e => setError(e.message)); }, [refresh]);
-  const print = async (documentId) => {
+  const print = async (documentId, preparedWindow) => {
     // Open synchronously in the click event so mobile browsers permit the print window.
-    const w = window.open('', '_blank');
+    const w = preparedWindow ?? window.open('', '_blank');
     if (!w) { setError('برای چاپ، اجازهٔ بازشدن پنجره را بدهید'); return; }
     w.document.body.textContent = 'در حال آماده‌سازی فاکتور…';
     setBusy(true); setError('');
@@ -57,7 +57,7 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
         <NeuroInvoiceDialog
           visit={visit} billing={billing} onToast={onToast} reload={reload}
           onClose={() => setPicker(false)}
-          onIssue={() => print()}
+          onIssue={w => print(undefined, w)}
         />
       )}
     </AnimatePresence>

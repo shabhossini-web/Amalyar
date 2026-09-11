@@ -172,6 +172,11 @@ export const PERMISSIONS: AccessDef[] = [
     defaultLevel: LEVEL.SUPERVISOR,
   },
   {
+    key: 'visits.claim', label: 'پذیرشِ مراجعهٔ آزاد در بیمارستان محل خدمت', group: 'patients',
+    hint: 'فقط در بیمارستان و روزی که مدیر حضور کارشناس را ثبت کرده است.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
     key: 'visits.times', label: 'ثبتِ ساعتِ شروع و پایانِ عمل', group: 'patients',
     hint: 'کارِ کسی است که سرِ عمل حاضر است. عمداً از «ویرایشِ مراجعه» جدا مانده تا این اجازه، اجازهٔ دست‌زدن به مالی نشود.',
     defaultLevel: LEVEL.TECH,

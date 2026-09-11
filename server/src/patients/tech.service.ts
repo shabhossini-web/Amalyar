@@ -4,6 +4,7 @@ import { LEVEL } from '../common/levels';
 import { PatientsService } from './patients.service';
 import { RecordService } from './record.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { HospitalDutiesService } from './hospital-duties.service';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -37,6 +38,7 @@ export class TechService {
     private prisma: PrismaService,
     private patients: PatientsService,
     private record: RecordService,
+    private duties: HospitalDutiesService,
   ) {}
 
   private range(scope: AgendaScope): [Date, Date] {
@@ -88,8 +90,16 @@ export class TechService {
         },
       },
     });
-    return { scope, from, to, visits: rows.map((v) => this.shape(v)) };
+    const duties = scope === 'past' ? [] : await this.prisma.hospitalDuty.findMany({ where: { techId: user?.id ?? -1, date: { gte: from, lt: to }, tech: { status: 'active' } }, include: { hospital: { select: { name: true } } }, orderBy: [{ date: 'asc' }, { arriveTime: 'asc' }] });
+    const pool = duties.length ? await this.prisma.visit.findMany({
+      where: { techId: null, opStatus: 'pending', patient: { deletedAt: null }, OR: duties.map(d => ({ hospitalId: d.hospitalId, opDate: { gte: d.date, lt: new Date(d.date.getTime() + DAY) } })) },
+      select: { id: true, seq: true, opDate: true, opStartTime: true, hospitalId: true, patient: { select: { code: true, firstName: true, lastName: true } }, procedureType: { select: { name: true } } },
+      orderBy: [{ opDate: 'asc' }, { opStartTime: 'asc' }],
+    }) : [];
+    return { scope, from, to, visits: rows.map((v) => this.shape(v)), hospitals: duties.map(d => ({ id: d.id, hospitalId: d.hospitalId, name: d.hospital.name, date: d.date, arriveTime: d.arriveTime, openVisits: pool.filter(v => v.hospitalId === d.hospitalId && v.opDate!.toISOString().slice(0, 10) === d.date.toISOString().slice(0, 10)).map(v => ({ id: v.id, name: `${v.patient.firstName} ${v.patient.lastName}`.trim(), code: `${v.patient.code}-V${v.seq}`, opStartTime: v.opStartTime, procedure: v.procedureType?.name })) })) };
   }
+
+  async claim(id: number, user: any) { return this.duties.assign(id, user.id, user, true); }
 
   /** تنها شکلی که پنلِ کارشناسی می‌شناسد — هیچ عددِ مالی‌ای در آن نیست. */
   private shape(v: any) {

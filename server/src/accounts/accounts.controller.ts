@@ -28,12 +28,20 @@ class StaffProfileDto {
   @IsOptional() @IsInt({ message: 'دستمزد باید عدد باشد' }) @Min(0) fee?: number;
 }
 
+class TemporaryAccountDto extends StaffProfileDto {
+  @IsInt() level!: number;
+  @IsString() @MaxLength(30) jobRole!: string;
+  @IsOptional() @Matches(/^[a-zA-Z0-9_.-]{3,40}$/, { message: 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد باشد' }) username?: string;
+}
+
 // مدیریتِ کاربران — فقط سوپرادمین (سطح ۶)
 @Controller('accounts')
 @UseGuards(JwtAuthGuard, LevelGuard)
 @MinLevel(LEVEL.SUPER_ADMIN)
 export class AccountsController {
   constructor(private accounts: AccountsService) {}
+  @Post('temporary')
+  temporary(@Body() dto: TemporaryAccountDto, @CurrentUser() user: any) { return this.accounts.createTemporary(dto, user.id); }
 
   @Post('technicians')
   createTechnician(@Body() dto: StaffProfileDto, @CurrentUser() user: any) {

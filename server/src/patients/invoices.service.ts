@@ -1,10 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../config/settings.service';
 import { BillingService, summarize } from './billing.service';
 import { ServiceCodesService } from './service-codes.service';
 import { durationOf } from './patients.service';
+import { InventoryService } from './inventory.service';
+import { canAccess } from '../auth/access-check';
 import { LEVEL } from '../common/levels';
 
 /**
@@ -27,10 +29,11 @@ export const NEURO_CATALOG: { id: string; code: string; label: string }[] = [
 const NEURO_BY_ID = new Map(NEURO_CATALOG.map((s) => [s.id, s]));
 
 type NeuroBulk = { items: unknown; hours: number; year: string; deviceOwner: string };
-type Consumable = { name: string; irc: string; qty: number };
+type Consumable = { name: string; irc: string; qty: number; itemId?: number; lotId?: number; chargeId?: number; stockEffect?: 'virtual' | 'consumed' };
 
 /** تنظیمِ «مصرفی‌های پرتکرار»: هر خط `نام | IRC | تعداد`. خطِ خراب نادیده می‌شود، نه خطا. */
 function parseConsumables(text: string): Consumable[] {
+  if (text.trim().startsWith('[')) { try { return normalizeConsumables(JSON.parse(text)); } catch { return []; } }
   return text.split('\n').map((line) => line.split('|').map((s) => s.trim()))
     .filter((p) => p[0])
     .map((p) => ({ name: p[0].slice(0, 120), irc: (p[1] ?? '').replace(/\D/g, '').slice(0, 40), qty: Math.max(1, Math.min(999, parseInt(p[2] ?? '1', 10) || 1)) }));
@@ -47,13 +50,16 @@ function normalizeConsumables(input: unknown): Consumable[] {
     if (!name || name.length > 120) throw new BadRequestException('نامِ کالای مصرفی خالی یا بلند است');
     if (irc.length > 40) throw new BadRequestException('کد IRC بلندتر از حد است');
     if (!Number.isInteger(qty) || qty < 1 || qty > 999) throw new BadRequestException(`تعدادِ «${name}» باید عددِ صحیحِ ۱ تا ۹۹۹ باشد`);
-    return { name, irc, qty };
+    const ids: any = {};
+    for (const key of ['itemId', 'lotId', 'chargeId']) if (raw[key] != null) { if (!Number.isInteger(raw[key]) || raw[key] < 1) throw new BadRequestException('شناسه کالای مصرفی نامعتبر است'); ids[key] = raw[key]; }
+    if (raw.stockEffect != null && !['virtual', 'consumed'].includes(raw.stockEffect)) throw new BadRequestException('نوع اثر انبار نامعتبر است');
+    return { name, irc, qty, ...ids, stockEffect: raw.stockEffect ?? 'virtual' };
   });
 }
 
 @Injectable()
 export class InvoicesService {
-  constructor(private prisma: PrismaService, private billing: BillingService, private codes: ServiceCodesService, private settings: SettingsService) {}
+  constructor(private prisma: PrismaService, private billing: BillingService, private codes: ServiceCodesService, private settings: SettingsService, private inventory: InventoryService) {}
 
   private async visit(id: number, user: any) {
     const v = await this.prisma.visit.findFirst({ where: { id, ...((user?.level ?? 0) < LEVEL.SUPERVISOR ? { techId: user?.id ?? -1 } : {}) }, include: { hospital: true } });
@@ -140,21 +146,45 @@ export class InvoicesService {
    * خدمات و مصرفی‌های نوروی قبلی می‌روند و انتخابِ تازه می‌نشیند. اقلامِ
    * غیرنورو (کالای انبار، تخفیف، خدمتِ دستی) دست‌نخورده می‌مانند.
    * قیمت‌گیری **پیش از هر حذفی** است تا خطای تعرفه فاکتور را نیمه‌کاره نکند.
-   * مصرفی‌ها قلمِ کالای بی‌مبلغ‌اند (هزینه در خدمت است) و از انبار کم نمی‌شوند.
+   * مصرفی‌ها بدون مبلغ‌اند (هزینه در خدمت است)؛ اثر انبار انتخابی و مصرف هر قلم تجمعی است.
    */
-  async apply(id: number, dto: NeuroBulk & { consumables?: unknown }, user: any) {
+  async apply(id: number, dto: NeuroBulk & { consumables?: unknown; returnUnusedStock?: boolean }, user: any) {
     const q = await this.quote(id, dto, user);
     const consumables = normalizeConsumables(dto.consumables);
-    const existing = await this.prisma.charge.findMany({ where: { visitId: id }, orderBy: { id: 'asc' } });
-    for (const c of existing) if (c.neuroDetail) await this.billing.removeCharge(c.id, user, false);
-    for (const it of q.items) {
-      const { id: _serviceId, label, ...detail } = it;
-      const title = detail.title && detail.title !== label ? `${label} — ${detail.title}` : label;
-      await this.billing.addCharge(id, { kind: 'service', title, serviceCode: detail.code, codeSystem: 'book', quantity: 1, unitPrice: detail.total }, user, { ...detail, label });
-    }
-    for (const c of consumables) {
-      await this.billing.addCharge(id, { kind: 'item', title: c.name, quantity: c.qty, unitPrice: 0, stockEffect: 'virtual', notes: c.irc || undefined }, user, { consumable: true, irc: c.irc, qty: c.qty });
-    }
+    const selectedLots = consumables.flatMap(c => c.lotId ? [c.lotId] : []);
+    if (new Set(selectedLots).size !== selectedLots.length) throw new BadRequestException('هر لات را یک بار انتخاب و تعداد آن را اصلاح کنید');
+    const mayConsume = await canAccess(this.prisma, user, 'inventory', ['inventory.write']);
+    if ((consumables.some(c => c.stockEffect === 'consumed') || dto.returnUnusedStock) && !mayConsume) throw new ForbiddenException('اجازه ثبت مصرف یا برگشت انبار ندارید');
+    await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+      const existing = await tx.charge.findMany({ where: { visitId: id } });
+      const previousCons = existing.filter(c => (c.neuroDetail as any)?.consumable);
+      const oldIds = existing.filter(c => c.neuroDetail && !(c.neuroDetail as any)?.consumable).map(c => c.id);
+      await tx.charge.deleteMany({ where: { id: { in: oldIds } } });
+      for (const it of q.items) {
+        const { id: _serviceId, label, ...detail } = it;
+        const title = detail.title && detail.title !== label ? `${label} — ${detail.title}` : label;
+        await tx.charge.create({ data: { visitId: id, kind: 'service', title, serviceCode: detail.code, codeSystem: 'book', quantity: 1, unitPrice: detail.total, amount: detail.total, stockEffect: 'virtual', createdById: user.id, neuroDetail: { ...detail, label } } });
+      }
+      const retained = new Set<number>();
+      for (const c of consumables) {
+        const before = c.chargeId ? previousCons.find(x => x.id === c.chargeId) : c.lotId ? previousCons.find(x => !retained.has(x.id) && (x.neuroDetail as any)?.lotId === c.lotId) : undefined;
+        if (c.chargeId && (!before || retained.has(c.chargeId))) throw new BadRequestException('قلم فاکتور تغییر کرده؛ صورت‌حساب را دوباره باز کنید');
+        let itemId = c.itemId ?? null, name = c.name;
+        if (itemId) { const item = await tx.item.findFirst({ where: { id: itemId, active: true } }); if (!item) throw new BadRequestException('کالای انتخابی فعال نیست'); name = [item.name, item.size].filter(Boolean).join(' '); }
+        if (c.stockEffect === 'consumed' && !c.lotId) throw new BadRequestException(`لات انبار «${name}» را انتخاب کنید`);
+        if (c.lotId) { const lot = await tx.stockLot.findFirst({ where: { id: c.lotId, item: { active: true } } }); if (!lot || (itemId && lot.itemId !== itemId)) throw new BadRequestException('لات با کالای انتخابی یکسان نیست'); itemId = lot.itemId; }
+        const data = { kind: 'item', title: name, quantity: c.qty, unitPrice: 0, amount: 0, itemId, stockEffect: c.stockEffect ?? 'virtual', notes: c.irc || null, neuroDetail: { consumable: true, irc: c.irc, qty: c.qty, lotId: c.lotId ?? null } };
+        const row = before ? await tx.charge.update({ where: { id: before.id }, data }) : await tx.charge.create({ data: { ...data, visitId: id, createdById: user.id } });
+        retained.add(row.id);
+        if (c.stockEffect === 'consumed' || dto.returnUnusedStock) await this.inventory.setChargeConsumption(tx, c.lotId ?? null, c.stockEffect === 'consumed' ? c.qty : 0, id, row.id, user, dto.returnUnusedStock === true);
+      }
+      for (const old of previousCons.filter(c => !retained.has(c.id))) {
+        if (dto.returnUnusedStock) await this.inventory.setChargeConsumption(tx, null, 0, id, old.id, user, true);
+        await tx.charge.delete({ where: { id: old.id } });
+      }
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'invoice.neuro.apply', entityType: 'visit', entityId: String(id), beforeJson: { chargeIds: oldIds }, afterJson: { services: q.items.map(it => it.id), consumables, total: q.total } } });
+    }, { timeout: 15000 });
     return { applied: q.items.length, consumables: consumables.length, total: q.total, billing: await this.billing.get(id, user) };
   }
 

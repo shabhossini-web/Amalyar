@@ -158,6 +158,14 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('phone/request-otp')
+  requestPhone(@CurrentUser() user: any, @Req() req: Request) { return this.auth.requestPhoneVerification(user, req.ip ?? 'unknown'); }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('phone/verify-otp')
+  verifyPhone(@CurrentUser() user: any, @Body() dto: VerifyOtpDto, @Req() req: Request) { return this.auth.verifyPhone(user, dto, req.ip ?? 'unknown'); }
+
+  @UseGuards(JwtAuthGuard)
   @Post('change-password')
   changePassword(@CurrentUser() user: any, @Body() dto: ChangePasswordDto) {
     return this.auth.changePassword(user.id, dto.current, dto.next);

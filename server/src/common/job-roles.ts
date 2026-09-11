@@ -11,6 +11,8 @@ export const JOB_ROLES: Record<string, string> = {
   nurse: 'پرستار',
   assistant: 'دستیار',
   technician: 'کارشناس',
+  driver: 'راننده',
+  courier: 'پیک',
 };
 
 export const JOB_ROLE_KEYS = Object.keys(JOB_ROLES);

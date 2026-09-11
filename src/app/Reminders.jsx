@@ -10,13 +10,16 @@ import { useStagger } from '../ui/stagger.js';
 
 const KIND_FA = {
   next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ‌رو', appointment: 'نوبت',
-  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل', notice: 'اطلاع‌رسانی',
+  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل', notice: 'اطلاع‌رسانی', dispatch: 'ابلاغ برنامه روز',
 };
-const STATUS_FA = { pending: 'در صف', sent: 'رفت', failed: 'نرفت' };
+const STATUS_FA = { pending: 'در صف', sending: 'در حال ارسال', sent: 'ارسال ثبت شد', failed: 'ارسال ناموفق', uncertain: 'نتیجه ارسال نامشخص', simulated: 'آزمایشی؛ ارسال نشده' };
+const DELIVERY_FA = { unknown: 'رسیدن به گوشی هنوز تأیید نشده', delivered: 'رسیده به گوشی', not_delivered: 'نرسیده به گوشی', not_sent: 'ارسال نشده', stored: 'در پیام‌رسان ثبت شده؛ هنوز خوانده نشده', read: 'خوانده شده' };
 const TABS = [
+  { key: 'all', label: 'همه' },
   { key: 'pending', label: 'در صف' },
   { key: 'sent', label: 'رفته' },
   { key: 'failed', label: 'نرفته' },
+  { key: 'uncertain', label: 'نامشخص' },
 ];
 
 /**
@@ -28,7 +31,7 @@ export default function Reminders() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
-  const [tab, setTab] = useState('pending');
+  const [tab, setTab] = useState('all');
   const [busy, setBusy] = useState(false);
   const { user } = useAuth();
   const row = useStagger();
@@ -56,8 +59,8 @@ export default function Reminders() {
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
 
-  const shown = (rows ?? []).filter((r) => r.status === tab);
-  const count = (k) => (rows ?? []).filter((r) => r.status === k).length;
+  const shown = (rows ?? []).filter((r) => tab === 'all' || r.status === tab);
+  const count = (k) => (rows ?? []).filter((r) => k === 'all' || r.status === k).length;
 
   return (
     <div className="rm">
@@ -66,7 +69,7 @@ export default function Reminders() {
         <Link to="/app" className="rm-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
           <h1><Clock width="20" height="20" /> یادآوری‌ها</h1>
-          <p>هر پیامی که برای بیماران برنامه‌ریزی یا فرستاده شده — ارسالِ خودکار هر چند دقیقه.</p>
+          <p>پیام‌های بیماران و ابلاغ کارشناسان؛ پیامک و ربات اطلاع‌رسانی. پذیرش پیامک توسط سرویس به معنی رسیدن آن به گوشی نیست.</p>
         </div>
       </header>
 
@@ -99,6 +102,8 @@ export default function Reminders() {
             <div className="rm-row-head">
               <b>{KIND_FA[r.kind] ?? r.kind}</b>
               {r.patientName && <span>{r.patientName}</span>}
+              {r.recipientName && <span>{r.recipientName}</span>}
+              <span>{r.channel === 'chat' ? 'پیام‌رسان داخلی' : 'پیامک'}</span>
               {r.visitCode && <em dir="ltr">{r.visitCode}</em>}
               <small>
                 {r.status === 'pending' ? `موعد: ${faDate(r.dueAt)}` : faDate(r.sentAt ?? r.dueAt)}
@@ -107,6 +112,7 @@ export default function Reminders() {
               <i className={`rm-tag s-${r.status}`}>{STATUS_FA[r.status] ?? r.status}</i>
             </div>
             <p className="rm-text">{r.text}</p>
+            {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}
             {r.error && <p className="rm-fail">علت: {r.error}</p>}
           </motion.article>
         ))}

@@ -28,6 +28,8 @@ export class SurgeonPortalController {
   constructor(private portal: SurgeonPortalService, private storage: StorageService) {}
   @Get('visits') @RequirePermissions('surgeon.read')
   list(@CurrentUser() user: any, @Query('q') q?: string, @Query('page') page?: string) { return this.portal.list(user, q, Number(page)); }
+  @Get('finances') @RequirePermissions('surgeon.read')
+  finances(@CurrentUser() user: any, @Query('surgeonId') surgeonId?: string, @Query('page') page?: string) { return this.portal.finances(user, Number(surgeonId), Number(page) || 1); }
   @Get('items') @RequirePermissions('surgeon.read')
   items(@CurrentUser() user: any, @Query('q') q?: string) { return this.portal.items(user, q); }
   @Patch('visits/:id/instructions') @RequirePermissions('surgeon.write')

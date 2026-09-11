@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+import { RemindersService } from './reminders.service';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -49,6 +51,7 @@ export class RoutesService {
     private ledger: LedgerService,
     private settings: SettingsService,
     private places: PlacesService,
+    private reminders: RemindersService,
   ) {}
 
   private static readonly STOP_INCLUDE = {
@@ -747,6 +750,18 @@ export class RoutesService {
    * بداند چه چیزی، کجا، ساعتِ چند — نه اینکه برای کیست. قاعده در **سرویس**
    * اعمال می‌شود نه در UI، تا کانالِ بعدی (بله/پیامک) دورش نزند.
    */
+  async notify(runId: number, user: any) {
+    const run = await this.prisma.transportRun.findUnique({ where: { id: runId }, include: { staff: { include: { person: { include: { account: true } } } }, stops: { select: { id: true } } } });
+    if (!run || !run.staff.active || !run.stops.length) throw new BadRequestException('مسیر و نیروی فعال با حداقل یک توقف لازم است');
+    const account = run.staff.person.account;
+    if (!account || account.status !== 'active') throw new BadRequestException('برای نیروی حمل از مدیریت کاربران حساب فعال بسازید؛ شماره حساب و تعریف نیروی حمل باید یکسان باشد');
+    const { text } = await this.briefing(runId);
+    const key = `transport:${runId}:${account.id}:${createHash('sha256').update(text).digest('hex')}`;
+    const queued = await this.reminders.queueStaffNotice(account.id, `${run.staff.person.firstName} ${run.staff.person.lastName}`, text, key, user);
+    await this.reminders.sweep([queued.smsId]);
+    return { ok: true, reminderId: queued.smsId, message: 'ابلاغ در پیام‌رسان ثبت شد؛ وضعیت پیامک را در دفتر یادآوری‌ها ببینید' };
+  }
+
   async briefing(runId: number) {
     const r = await this.prisma.transportRun.findUnique({
       where: { id: runId },

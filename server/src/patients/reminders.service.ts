@@ -7,6 +7,7 @@ import { TenantContext } from '../tenant/tenant-context';
 import { toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
+import { sendReminders } from '../reminders/send-reminders';
 
 /**
  * یادآوری‌ها — نسخهٔ ۱: «ویزیتِ بعدی» (docs/BOOKING.md، فازِ یادآوری‌ها).
@@ -338,9 +339,28 @@ export class RemindersService {
   }
 
   /** فهرست برای ادمین — pendingهای پیشِ‌رو + آخرین ارسال‌شده‌ها. */
+  async queueStaffNotice(accountId: number, name: string, text: string, key: string, user: any) {
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.prisma.$transaction(async tx => {
+        const recipient = await tx.account.findFirst({ where: { id: accountId, status: 'active', systemKey: null }, include: { person: { select: { phone: true } } } });
+        if (!recipient) throw new Error('حساب کارشناس فعال نیست');
+        const sms = await tx.reminder.upsert({ where: { dedupeKey: `${key}:sms` }, update: {}, create: { kind: 'dispatch', channel: 'sms', dedupeKey: `${key}:sms`, recipientAccountId: accountId, recipientName: name, phone: recipient.person.phone, text, dueAt: new Date() } });
+        if (!await tx.reminder.findUnique({ where: { dedupeKey: `${key}:chat` } })) {
+          const bot = await tx.account.upsert({ where: { systemKey: 'notification-bot' }, update: {}, create: { systemKey: 'notification-bot', status: 'disabled', level: 1, passwordHash: 'non-login-system-account', person: { create: { firstName: 'ربات', lastName: 'اطلاع‌رسانی' } } } });
+          const dmKey = `dm:${Math.min(bot.id, accountId)}:${Math.max(bot.id, accountId)}`;
+          const channel = await tx.chatChannel.upsert({ where: { dmKey }, update: {}, create: { kind: 'dm', dmKey, createdById: bot.id, members: { create: [{ accountId: bot.id }, { accountId }] } } });
+          const message = await tx.chatMessage.create({ data: { channelId: channel.id, authorId: bot.id, authorName: 'ربات اطلاع‌رسانی', body: text } });
+          await tx.reminder.create({ data: { kind: 'dispatch', channel: 'chat', dedupeKey: `${key}:chat`, recipientAccountId: accountId, recipientName: name, chatMessageId: message.id, text, dueAt: new Date(), sentAt: new Date(), status: 'sent', deliveryStatus: 'stored' } });
+          await tx.auditEvent.create({ data: { actorId: user.id, action: 'dispatch.program.send', entityType: 'account', entityId: String(accountId), afterJson: { reminderId: sms.id, messageId: message.id } } });
+        }
+        return { smsId: sms.id };
+      }); } catch (e: any) { if (attempt < 2 && ['P2002', 'P2034'].includes(e.code)) continue; throw e; }
+    }
+  }
+
   async list() {
     const rows = await this.prisma.reminder.findMany({
-      where: { status: { in: ['pending', 'sent', 'failed'] } },
+      where: { status: { not: 'cancelled' } },
       orderBy: [{ status: 'asc' }, { dueAt: 'desc' }],
       take: 100,
       include: {
@@ -348,7 +368,11 @@ export class RemindersService {
         visit: { select: { seq: true } },
       },
     });
+    const chatIds = rows.flatMap(r => r.chatMessageId ? [r.chatMessageId] : []);
+    const chatMessages = chatIds.length ? await this.prisma.chatMessage.findMany({ where: { id: { in: chatIds } }, include: { channel: { include: { members: true } } } }) : [];
     return rows.map((r) => ({
+      channel: r.channel, recipientName: r.recipientName, providerId: r.providerId,
+      deliveryStatus: r.channel === 'chat' && chatMessages.find(m => m.id === r.chatMessageId)?.channel.members.some(m => m.accountId === r.recipientAccountId && m.lastReadId >= (r.chatMessageId ?? Infinity)) ? 'read' : r.deliveryStatus,
       id: r.id,
       kind: r.kind,
       status: r.status,
@@ -367,32 +391,5 @@ export class RemindersService {
    * دستی. ادعا اتمی است (updateMany با شرطِ status) تا دو sweep هم‌زمان یک
    * پیام را دوبار نفرستند.
    */
-  async sweep() {
-    const due = await this.prisma.reminder.findMany({
-      where: { status: 'pending', dueAt: { lte: new Date() } },
-      orderBy: { dueAt: 'asc' },
-      take: 25,
-    });
-    let sent = 0, failed = 0, skipped = 0;
-    for (const r of due) {
-      const claimed = await this.prisma.reminder.updateMany({
-        where: { id: r.id, status: 'pending' },
-        data: { status: 'sent', sentAt: new Date() },
-      });
-      if (!claimed.count) { skipped += 1; continue; }
-      try {
-        if (!r.phone) throw new Error('شماره‌ای ثبت نشده');
-        const res = await this.sms.send(r.phone, r.text);
-        if (!res.sent && !res.stub) throw new Error('سرویسِ پیامک نپذیرفت');
-        sent += 1;
-      } catch (e) {
-        failed += 1;
-        await this.prisma.reminder.update({
-          where: { id: r.id },
-          data: { status: 'failed', error: String(e instanceof Error ? e.message : e).slice(0, 300) },
-        }).catch(() => undefined);
-      }
-    }
-    return { due: due.length, sent, failed, skipped };
-  }
+  async sweep(ids?: number[]) { return sendReminders(this.prisma, this.sms, ids); }
 }

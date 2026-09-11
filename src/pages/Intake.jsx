@@ -8,6 +8,7 @@ import Mark from '../components/Mark.jsx';
 import './intake.css';
 import { Alert, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
+import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -212,7 +213,7 @@ function Form() {
        تا دیروز `f` خام فرستاده می‌شد، یعنی «۱۴۰۵/۰۵/۱۴» به سرور می‌رسید و
        سرور آن را سالِ ۱۴۰۵ **میلادی** می‌فهمید — و مراجعه بی‌سروصدا شش قرن
        عقب ثبت می‌شد. هیچ خطایی نمی‌داد؛ فقط از تقویم و گزارش‌ها غیب می‌شد. */
-    const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '', values: vals };
+    const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '', values: vals, hospitalId: vals.hospitalId };
     try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body })); }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -353,8 +354,9 @@ function Form() {
             {d.form.pages > 1 && (
               <p className="ik-pages">صفحهٔ {faNum(page)} از {faNum(d.form.pages)}</p>
             )}
+            {d.form.fields.some(x => x.key === 'hospitalName' && (x.page ?? 1) === page) && <HospitalLookup token={token} value={vals.hospitalName ?? ''} onChange={(name, id) => setVals(s => ({ ...s, hospitalName: name, hospitalId: id }))} disabled={busy} error={vErr.hospitalName} />}
             <DynForm
-              fields={d.form.fields.filter((x) => (x.page ?? 1) === page)}
+              fields={d.form.fields.filter((x) => (x.page ?? 1) === page && x.key !== 'hospitalName')}
               values={vals}
               errors={vErr}
               onChange={setVals}
@@ -384,7 +386,7 @@ function Form() {
             <div className="ik-grid">
               <Field label="نوعِ عمل" value={f.procedure} onChange={set('procedure')} disabled={busy} />
               <Field label="نامِ جراح" value={f.surgeonName} onChange={set('surgeonName')} disabled={busy} />
-              <Field label="بیمارستان" value={f.hospitalName} onChange={set('hospitalName')} disabled={busy} />
+              <HospitalLookup token={token} value={f.hospitalName} onChange={(name, id) => { setF(s => ({ ...s, hospitalName: name })); setVals(s => ({ ...s, hospitalId: id })); }} disabled={busy} />
               <JDate className="ik-field" label="تاریخِ عمل" value={f.opDate}
                      onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />
             </div>

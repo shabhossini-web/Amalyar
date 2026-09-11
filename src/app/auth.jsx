@@ -295,6 +295,7 @@ export function AuthProvider({ children }) {
         setUser,
       }}
     >
+      {user?.verificationDueAt && !user.phoneVerifiedAt && <div className="account-verification-notice" role="status">حساب شما موقت است؛ پیش از پایان هفت روز <a href="/app/profile">شماره را تأیید و پروفایل را تکمیل کنید</a>.</div>}
       {children}
     </AuthCtx.Provider>
   );

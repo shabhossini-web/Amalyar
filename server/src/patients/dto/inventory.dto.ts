@@ -79,6 +79,7 @@ export class TransferLineDto {
  * انبارِ همیشگی می‌فرستد نباید مجبور باشد اسمش را تایپ کند.
  */
 export class TransferSendDto {
+  @IsOptional() @IsBoolean() planOnly?: boolean;
   @IsString() @MinLength(2, { message: 'مقصد را وارد کنید' }) @MaxLength(80, { message: 'نامِ مقصد طولانی است' })
   toLocation!: string;
 

@@ -4,6 +4,9 @@ import { AuthService } from '../auth/auth.service';
 import { LEVEL } from '../common/levels';
 import { JOB_ROLE_KEYS } from '../common/job-roles';
 import { buildPersonPatch, PersonInput } from '../common/person';
+import * as bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
+import { expireProvisional, verificationDeadline } from './provisional';
 
 @Injectable()
 export class AccountsService {
@@ -11,6 +14,26 @@ export class AccountsService {
     private prisma: PrismaService,
     private auth: AuthService,
   ) {}
+
+  async createTemporary(dto: PersonInput & { level: number; jobRole: string; username?: string }, actorId: number) {
+    const person = buildPersonPatch(dto, true);
+    if (!person.phone) throw new BadRequestException('شماره همراه برای تأیید نهایی لازم است');
+    if (!Number.isInteger(dto.level) || dto.level < 1 || dto.level > 6 || !JOB_ROLE_KEYS.includes(dto.jobRole)) throw new BadRequestException('سطح یا نقش نامعتبر است');
+    const temporaryPassword = randomBytes(12).toString('base64url');
+    const passwordHash = await bcrypt.hash(temporaryPassword, 12);
+    const account = await this.prisma.$transaction(async tx => {
+      const existing = await tx.person.findUnique({ where: { phone: String(person.phone) }, include: { account: true } });
+      if (existing?.account) throw new BadRequestException('این شماره حساب دارد؛ حساب موجود را ویرایش کنید');
+      const username = dto.username?.trim() || `staff-${randomBytes(5).toString('hex')}`;
+      const row = await tx.account.create({ data: { ...(existing ? { personId: existing.id } : { person: { create: person as any } }), username, passwordHash, level: dto.level, jobRole: dto.jobRole, status: 'active', verificationDueAt: verificationDeadline(), approvedById: actorId, approvedAt: new Date() }, include: { person: true } });
+      const vertical = await tx.setting.findUnique({ where: { key: 'vertical' } });
+      if (dto.jobRole === 'doctor' && ['ionm', 'implant'].includes(vertical?.value ?? '')) await tx.surgeon.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId } });
+      if (['driver', 'courier'].includes(dto.jobRole)) await tx.transportStaff.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId, role: dto.jobRole } });
+      await tx.auditEvent.create({ data: { actorId, action: 'account.temporary.create', entityType: 'account', entityId: String(row.id), afterJson: { level: row.level, jobRole: row.jobRole, verificationDueAt: row.verificationDueAt } } });
+      return row;
+    });
+    return { account: this.auth.publicUser(account), temporaryPassword };
+  }
 
   async createTechnician(dto: PersonInput, actorId: number) {
     const person = buildPersonPatch(dto, true);
@@ -36,7 +59,7 @@ export class AccountsService {
     const row = await this.prisma.$transaction(async (tx) => {
       const account = await tx.account.create({ data: {
         person: { create: person as any }, passwordHash, level: LEVEL.TECH,
-        jobRole: 'technician', status: 'active', approvedAt: new Date(), approvedById: actorId,
+        jobRole: 'technician', status: 'active', approvedAt: new Date(), approvedById: actorId, verificationDueAt: verificationDeadline(),
       }, include: { person: true } });
       await tx.auditEvent.create({ data: { actorId, action: 'account.technician.create', entityType: 'account', entityId: String(account.id), afterJson: { level: LEVEL.TECH, jobRole: 'technician' } } });
       return account;
@@ -45,8 +68,9 @@ export class AccountsService {
   }
 
   async list(status?: string) {
+    await expireProvisional(this.prisma);
     const rows = await this.prisma.account.findMany({
-      where: status ? { status } : {},
+      where: { systemKey: null, ...(status ? { status } : {}) },
       orderBy: { createdAt: 'desc' },
       include: { person: true },
     });
@@ -58,7 +82,8 @@ export class AccountsService {
       throw new BadRequestException('سطح نامعتبر است');
     }
     const acc = await this.prisma.account.findUnique({ where: { id } });
-    if (!acc) throw new NotFoundException('حساب یافت نشد');
+    if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
+    if (!acc.phoneVerifiedAt && acc.verificationDueAt && acc.verificationDueAt <= new Date()) throw new BadRequestException('ابتدا صاحب حساب باید شماره را با ثبت‌نام و کد پیامکی تأیید کند');
     const updated = await this.prisma.account.update({
       where: { id },
       data: { status: 'active', level, approvedById: approverId, approvedAt: new Date() },
@@ -69,7 +94,7 @@ export class AccountsService {
 
   async reject(id: number) {
     const acc = await this.prisma.account.findUnique({ where: { id } });
-    if (!acc) throw new NotFoundException('حساب یافت نشد');
+    if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
     const updated = await this.prisma.account.update({
       where: { id },
       data: { status: 'rejected' },
@@ -84,6 +109,8 @@ export class AccountsService {
       throw new BadRequestException('نقشِ شغلی نامعتبر است');
     }
     void actorId;
+    const target = await this.prisma.account.findUnique({ where: { id } });
+    if (!target || target.systemKey) throw new NotFoundException('حساب یافت نشد');
     const acc = await this.prisma.account.update({
       where: { id },
       data: { jobRole },
@@ -100,7 +127,7 @@ export class AccountsService {
       throw new BadRequestException('نمی‌توانید سطحِ حسابِ خودتان را تغییر دهید');
     }
     const acc = await this.prisma.account.findUnique({ where: { id } });
-    if (!acc) throw new NotFoundException('حساب یافت نشد');
+    if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
     // سیستم هرگز نباید بدونِ سوپرادمینِ فعال بماند
     if (acc.level === LEVEL.SUPER_ADMIN && level < LEVEL.SUPER_ADMIN && acc.status === 'active') {
       const others = await this.prisma.account.count({
@@ -121,7 +148,7 @@ export class AccountsService {
   /// پروفایلِ کاملِ یک حساب — برای صفحهٔ ویرایشِ سوپرادمین.
   async get(id: number) {
     const acc = await this.prisma.account.findUnique({ where: { id }, include: { person: true } });
-    if (!acc) throw new NotFoundException('حساب یافت نشد');
+    if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
     const p = acc.person;
     return {
       ...this.auth.publicUser(acc),
@@ -146,13 +173,16 @@ export class AccountsService {
    * خودِ کاربر قابلِ تغییر باشند.
    */
   async updateProfile(id: number, dto: PersonInput & { fee?: number | null }) {
-    const acc = await this.prisma.account.findUnique({ where: { id } });
-    if (!acc) throw new NotFoundException('حساب یافت نشد');
+    const acc = await this.prisma.account.findUnique({ where: { id }, include: { person: true } });
+    if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
 
     const personPatch = buildPersonPatch(dto, false);
+    const phoneChanged = personPatch.phone !== undefined && personPatch.phone !== acc.person.phone;
+    if (phoneChanged && !personPatch.phone) throw new BadRequestException('حساب کاربری باید شماره همراه داشته باشد');
     await this.prisma.account.update({
       where: { id },
       data: {
+        ...(phoneChanged ? { phoneVerifiedAt: null, verificationDueAt: verificationDeadline() } : {}),
         ...(dto.fee !== undefined ? { fee: dto.fee === null ? null : Math.max(0, Math.trunc(dto.fee)) } : {}),
         ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
       },

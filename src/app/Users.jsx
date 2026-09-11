@@ -118,6 +118,36 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
   );
 }
 
+function TemporaryAccountSheet({ onClose, onSaved }) {
+  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
+  const [level, setLevel] = useState(2), [jobRole, setRole] = useState('technician');
+  const [busy, setBusy] = useState(false), [errors, setErrors] = useState({}), [message, setMessage] = useState(''), [result, setResult] = useState(null);
+  const save = async () => {
+    const next = personErrors(form); if (!form.phone) next.phone = 'شماره همراه لازم است'; setErrors(next);
+    if (Object.keys(next).length || busy) return;
+    setBusy(true); setMessage('');
+    try { const body = { level, jobRole }; for (const k of ['firstName', 'lastName', 'phone', 'nationalId', 'email', 'city', 'address', 'iban', 'notes']) if (form[k]) body[k] = form[k];
+      setResult(await api('/accounts/temporary', { method: 'POST', body })); await onSaved();
+    } catch (e) { setMessage(e.message); } finally { setBusy(false); }
+  };
+  return <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+    <header className="df-sheet-head"><b>ساخت حساب موقت</b><button className="df-x" onClick={onClose} disabled={busy} aria-label="بستن"><Close size={16} /></button></header>
+    <div className="df-sheet-body">
+      {result ? <><p>حساب ساخته شد. این رمز فقط همین بار نمایش داده می‌شود؛ اطلاعات ورود را به صاحب حساب تحویل دهید.</p>
+        <p>نام کاربری: <b dir="ltr">{result.account.username}</b></p><p>رمز اولیه: <b dir="ltr">{result.temporaryPassword}</b></p>
+        <p>مهلت تأیید شماره: {faDate(result.account.verificationDueAt)}. شخص پس از ورود از «پروفایل من» شماره را با کد پیامکی تأیید و مشخصات و رمز خود را تکمیل کند. بعد از مهلت، حساب تأییدنشده غیرفعال می‌شود.</p>
+      </> : <><p>حساب بلافاصله قابل ورود است. صاحب شماره هفت روز برای تأیید پیامکی و تکمیل پروفایل فرصت دارد. مشخصات افراد موجود در تعاریف پایه حفظ می‌شود.</p>
+        <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
+        <label className="pf-field"><span>سطح دسترسی</span><select value={level} onChange={e => setLevel(+e.target.value)} disabled={busy}>{LEVELS.map(l => <option key={l.v} value={l.v}>{l.l}</option>)}</select></label>
+        <label className="pf-field"><span>نقش شغلی</span><select value={jobRole} onChange={e => setRole(e.target.value)} disabled={busy}>{JOB_ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></label>
+        {['driver', 'courier'].includes(jobRole) && <p>حساب به نیروی حمل‌ونقل متصل می‌شود و مسیرها و ابلاغ‌ها در پرتال حمل‌ونقل قابل مشاهده خواهند بود.</p>}
+        {jobRole === 'doctor' && <p>در شرکت‌های نورومانیتورینگ و ایمپلنت، حساب پزشک به جراح در تعاریف پایه و پرتال او متصل می‌شود.</p>}
+      </>}
+      {message && <p role="alert">{message}</p>}
+    </div><footer className="df-sheet-foot"><button className="df-ghost" disabled={busy} onClick={onClose}>بستن</button>{!result && <button className="df-save" disabled={busy} onClick={save}>{busy ? 'در حال ساخت…' : 'ساخت حساب'}</button>}</footer>
+  </Overlay>;
+}
+
 export default function Users() {
   const stagger = useStagger();
   const { user } = useAuth();
@@ -128,6 +158,7 @@ export default function Users() {
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
   const [profileId, setProfileId] = useState(0);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => { document.title = 'عمل‌یار — مدیریت کاربران'; }, []);
   useEffect(() => {
@@ -218,6 +249,7 @@ export default function Users() {
           <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
+        <button className="us-btn ok" onClick={() => setCreating(true)}>+ ساخت حساب موقت</button>
         <Tabs
           variant="inset"
           className="us-tabs"
@@ -281,6 +313,7 @@ export default function Users() {
                     <b>{row.displayName}{row.id === user.id && <i className="us-you">شما</i>}</b>
                     <span dir="ltr">@{row.username}</span>
                   </div>
+                  {row.verificationDueAt && !row.phoneVerifiedAt && <small>تأیید شماره تا {faDate(row.verificationDueAt)}</small>}
                   <span className={`us-status ${row.status}`}>{STATUS_FA[row.status] || row.status}</span>
                 </div>
                 <div className="us-actions">
@@ -334,6 +367,7 @@ export default function Users() {
       </div>
 
       <AnimatePresence>
+        {creating && <TemporaryAccountSheet onClose={() => setCreating(false)} onSaved={load} />}
         {profileId > 0 && (
           <ProfileSheet
             id={profileId}
