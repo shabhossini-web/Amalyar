@@ -865,8 +865,15 @@ cp /root/proxy-good.yml /data/coolify/proxy/docker-compose.yml && \
 
 اپِ فرانت حالا یک متغیرِ محیطی می‌خواهد:
 
+`API_UPSTREAM` **دو مقدارِ معتبر** دارد:
+
+| مقدار | کِی | نکته |
+|---|---|---|
+| `http://<نامِ کانتینرِ بک‌اند>:3001` | وقتی هر دو اپ روی یک شبکهٔ داکرند | سریع‌تر (بدونِ TLS، بدونِ عبور از پراکسی). نیاز به «Connect To Predefined Network» روی هر دو اپ + نامِ قطعی (Custom Container Name یا Consistent Container Names) |
+| `https://api.amalyar.com` | وقتی شبکهٔ مشترک ندارند | **هیچ پیکربندیِ شبکه‌ای نمی‌خواهد.** درخواست از همان پراکسیِ بیرونی رد می‌شود؛ چون `Host` دست‌نخورده می‌ماند به tenantِ درست می‌رسد. `proxy_ssl_server_name on` در قالب هست وگرنه دست‌دادنِ TLS بی‌صدا می‌شکست |
+
 ```
-API_UPSTREAM=http://<نامِ سرویسِ بک‌اند در همان شبکهٔ داکر>:3001
+API_UPSTREAM=https://api.amalyar.com
 ```
 
 پیش‌فرضِ `Dockerfile` مقدارِ `http://amalyar-api:3001` است. اگر نامِ سرویس چیزِ

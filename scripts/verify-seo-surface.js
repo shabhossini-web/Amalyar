@@ -36,6 +36,10 @@ for (const loc of ['/_seo/head', '/robots.txt', '/sitemap.xml']) {
   const block = ngx.slice(i, ngx.indexOf('\n  }', i));
   if (!block.includes('proxy_set_header Host $host;')) die('مسیرِ ' + loc + ' باید Host را دست‌نخورده بفرستد');
   if (!block.includes('X-Forwarded-Proto')) die('مسیرِ ' + loc + ' باید طرحِ بیرونی را بفرستد');
+  /* `API_UPSTREAM` می‌تواند نشانیِ https باشد (وقتی دو کانتینر شبکهٔ مشترک
+     ندارند). بدونِ SNI پراکسیِ بیرونی نمی‌داند کدام گواهی را بدهد و دست‌دادنِ
+     TLS بی‌صدا می‌شکند. */
+  if (!block.includes('proxy_ssl_server_name on;')) die('مسیرِ ' + loc + ' برای upstreamِ https به SNI نیاز دارد');
   /* ⚠️ باگِ واقعیِ روی سرور: `rewrite` مقدارِ `$uri` را عوض می‌کند، پس هر
      locationی که rewrite دارد و fallback می‌خواهد باید مسیرِ اصلی را **پیش
      از** rewrite در متغیرِ خودش نگه دارد. بدونِ این، fallback دنبالِ مسیرِ

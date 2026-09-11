@@ -31,6 +31,14 @@ server {
   # resolve می‌کند و اگر بک‌اند آن لحظه بالا نباشد کلِ کانتینرِ فرانت بالا
   # نمی‌آید. با متغیر، resolve به زمانِ درخواست می‌افتد؛ شکستش فقط یک ۵۰۲ روی
   # همان زیرمسیر است و صفحه سرِ جایش می‌ماند.
+  #
+  # دو مقدارِ معتبر دارد:
+  #   ۱. نامِ کانتینرِ بک‌اند روی شبکهٔ مشترکِ داکر — `http://<نام>:3001`
+  #      سریع‌تر است (بدونِ TLS و بدونِ عبور از پراکسی) ولی هر دو اپ باید روی
+  #      یک شبکهٔ داکر باشند.
+  #   ۲. نشانیِ عمومیِ API — `https://api.amalyar.com`
+  #      هیچ پیکربندیِ شبکه‌ای نمی‌خواهد: درخواست از همان پراکسیِ بیرونی رد
+  #      می‌شود و چون `Host` دست‌نخورده می‌ماند، به tenantِ درست می‌رسد.
   set $api_root "${API_UPSTREAM}";
 
   # /api معمولاً پیش از رسیدن به این کانتینر توسط Traefik به بک‌اند می‌رود.
@@ -58,6 +66,7 @@ server {
     proxy_pass $api_root;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_ssl_server_name on;
     proxy_connect_timeout 2s;
     proxy_read_timeout 3s;
   }
@@ -74,6 +83,7 @@ server {
     proxy_pass $api_root;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_ssl_server_name on;
     proxy_connect_timeout 2s;
     proxy_read_timeout 3s;
     proxy_intercept_errors on;
@@ -87,6 +97,7 @@ server {
     proxy_pass $api_root;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_ssl_server_name on;
     proxy_connect_timeout 2s;
     proxy_read_timeout 3s;
     proxy_intercept_errors on;
