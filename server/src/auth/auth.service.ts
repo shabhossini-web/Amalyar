@@ -202,6 +202,7 @@ export class AuthService {
           username: dto.username.trim(),
           passwordHash,
           level: bootstrap ? LEVEL.SUPER_ADMIN : LEVEL.VIEWER,
+          ...(bootstrap && (await tx.setting.findUnique({ where: { key: 'vertical' } }))?.value === 'clinic' ? { jobRole: 'doctor' } : {}),
           status: bootstrap ? 'active' : 'pending',
           person: known
             ? {

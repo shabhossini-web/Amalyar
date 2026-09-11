@@ -275,7 +275,7 @@ export function printInvoice({ visit, billing, brand, letterheadUrl, variant = '
 ${lh ? `<img class="lh-bg" src="${lh}" alt="">` : ''}
 <header>
   ${lh ? '<div></div>' : `<div>
-    <h1>${esc(brand?.legalName || brand?.name || 'عمل‌یار')}</h1>
+    <h1>${esc(brand?.legalName || brand?.name || '')}</h1>
     ${idLine ? `<div class="sub">${idLine}</div>` : ''}
     ${brand?.address ? `<div class="sub">${esc(brand.address)}</div>` : ''}
   </div>`}

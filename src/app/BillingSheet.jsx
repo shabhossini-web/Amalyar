@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { api, apiDataUrl } from '../lib/api.js';
+import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import { toEnDigits } from '../lib/identity.js';
-import { printInvoice } from './exports.js';
+import InvoicePanel from './InvoicePanel.jsx';
 import { useConfig } from './config.jsx';
 import { Alert, Close, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
@@ -50,9 +50,6 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
   /// خطا نمی‌دهیم و فیلدها ساده پنهان می‌مانند.
   const [banks, setBanks] = useState([]);
   const [partners, setPartners] = useState([]);
-  /* سربرگ پیشاپیش گرفته می‌شود تا کلیکِ «چاپ» sync بماند — window.openِ بعد از
-     await را مسدودکنندهٔ پاپ‌آپ می‌گیرد. */
-  const [letterheadUrl, setLetterheadUrl] = useState(null);
   /* پیشنهادِ کد از شرح — فقط وقتی دستیارِ AI پیکربندی شده. */
   const [aiOn, setAiOn] = useState(false);
   const [sugg, setSugg] = useState(null); // null = هنوز نخواسته
@@ -61,7 +58,6 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
     api('/bank-accounts').then(setBanks).catch(() => setBanks([]));
     api('/partners').then((r) => setPartners(r.filter((x) => x.active))).catch(() => setPartners([]));
     api('/ai/status').then((r) => setAiOn(!!r?.enabled)).catch(() => {});
-    apiDataUrl('/settings/letterhead').then(setLetterheadUrl);
   }, []);
 
   useEffect(() => {
@@ -264,16 +260,58 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
             items={[
               { key: 'charges', label: `اقلام (${data.charges.length.toLocaleString('fa-IR')})` },
               { key: 'payments', label: `پرداخت‌ها (${data.payments.length.toLocaleString('fa-IR')})` },
+              { key: 'invoice', label: 'صدور فاکتور' },
               /* تسویه همین‌جاست نه در صفحهٔ حسابداری: پولِ این بیمار است، و
                  کاربر برای دیدنِ تقسیمش نباید صفحه عوض کند. */
               { key: 'split', label: 'تسویه' },
             ]}
           />
 
-          {tab === 'split' ? (
+          {tab === 'invoice' ? (
+            <>
+              <InvoiceAccount data={data} banks={banks} visitId={visit.id} onSaved={setData} onToast={onToast} />
+              <InvoicePanel visit={visit} billing={data} neuro={cfg.vertical === 'ionm'} onToast={onToast} reload={async () => { await load(); onChanged?.(); }} />
+            </>
+          ) : tab === 'split' ? (
             <Settlement visitId={visit.id} onToast={onToast} onChanged={onChanged} />
           ) : tab === 'charges' ? (
             <>
+              <h3 className="bl-section-title">اقلام ثبت‌شده · تومان</h3>
+              {data.charges.length === 0 ? <div className="us-empty">قلمی ثبت نشده است</div> : (
+                <div className="bl-list bl-charge-list">
+                  {data.charges.map((row) => (
+                    <div key={row.id} className="bl-row">
+                      <span className={`bl-tag t-${row.kind}`}>{CHARGE_KINDS[row.kind] ?? row.kind}</span>
+                      <div className="bl-row-main">
+                        <b>{row.title}</b>
+                        {(row.quantity > 1 || row.serviceCode || row.lot) && (
+                          <small>
+                            {row.serviceCode && <span dir="ltr">{row.serviceCode}</span>}
+                            {row.codeSystem === 'internal' && <em className="bl-internal-tag"> داخلی</em>}
+                            {row.quantity > 1 && `${row.serviceCode ? ' · ' : ''}${money(row.quantity)} × ${money(row.unitPrice)}`}
+                            {row.lot && (
+                              <i className="bl-lot">
+                                {row.lot.serialNo ? 'سریال ' : 'لات '}
+                                <span dir="ltr">{row.lot.serialNo || row.lot.lotNo || `#${row.lot.lotId}`}</span>
+                              </i>
+                            )}
+                          </small>
+                        )}
+                      </div>
+                      <b className={`bl-amount${row.amount < 0 ? ' neg' : ''}`}>{money(row.amount)}</b>
+                      {/* قلمی که کالا از انبار برده، مستقیم حذف نمی‌شود: اول باید
+                          معلوم شود کالا واقعاً مصرف شده یا نه. سرور هم بدونِ
+                          پرچمِ صریح چیزی به انبار برنمی‌گرداند. */}
+                      <button
+                        type="button" className="bl-del bl-charge-del" aria-label={`حذف قلم ${row.title}`} disabled={busy}
+                        onClick={() => (row.lot ? setDelRow(row) : remove(`/visits/charges/${row.id}`, 'قلم'))}
+                      >
+                        <Trash width="14" height="14" /> حذف قلم
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="bl-add">
                 {/* جستجوی کتابِ ارزش نسبی: کد و عنوان و فی یک‌جا می‌آیند،
                     تا کاربر نه کد را حفظ کند نه فی را دستی حساب کند. */}
@@ -416,54 +454,9 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                 <button type="button" className="db-submit bl-btn" onClick={addCharge} disabled={busy}>
                   <Plus width="15" height="15" /> افزودنِ قلم
                 </button>
-                <InvoiceAccount data={data} banks={banks} visitId={visit.id} onSaved={setData} onToast={onToast} />
-                {/* فاکتورِ رسمی سندِ مالیاتی است (سربرگ + هویتِ حقوقی)؛
-                    غیررسمی همان صورت‌حساب برای دستِ بیمار، بدونِ هویتِ رسمی. */}
-                <button type="button" className="bl-mini bl-inv" disabled={data.invoiceType === 'informal'}
-                  onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand, letterheadUrl })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
-                  چاپِ فاکتورِ رسمی
-                </button>
-                <button type="button" className="bl-mini" disabled={data.invoiceType === 'formal'}
-                  onClick={() => { if (!printInvoice({ visit, billing: data, brand: cfg.brand, variant: 'informal' })) onToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را بدهید'); }}>
-                  چاپِ فاکتورِ غیررسمی
-                </button>
+                <button type="button" className="bl-mini" onClick={() => setTab('invoice')}>ادامه به صدور فاکتور</button>
               </div>
 
-              {data.charges.length === 0 ? <div className="us-empty">قلمی ثبت نشده است</div> : (
-                <div className="bl-list">
-                  {data.charges.map((row) => (
-                    <div key={row.id} className="bl-row">
-                      <span className={`bl-tag t-${row.kind}`}>{CHARGE_KINDS[row.kind] ?? row.kind}</span>
-                      <div className="bl-row-main">
-                        <b>{row.title}</b>
-                        {(row.quantity > 1 || row.serviceCode || row.lot) && (
-                          <small>
-                            {row.serviceCode && <span dir="ltr">{row.serviceCode}</span>}
-                            {row.codeSystem === 'internal' && <em className="bl-internal-tag"> داخلی</em>}
-                            {row.quantity > 1 && `${row.serviceCode ? ' · ' : ''}${money(row.quantity)} × ${money(row.unitPrice)}`}
-                            {row.lot && (
-                              <i className="bl-lot">
-                                {row.lot.serialNo ? 'سریال ' : 'لات '}
-                                <span dir="ltr">{row.lot.serialNo || row.lot.lotNo || `#${row.lot.lotId}`}</span>
-                              </i>
-                            )}
-                          </small>
-                        )}
-                      </div>
-                      <b className={`bl-amount${row.amount < 0 ? ' neg' : ''}`}>{money(row.amount)}</b>
-                      {/* قلمی که کالا از انبار برده، مستقیم حذف نمی‌شود: اول باید
-                          معلوم شود کالا واقعاً مصرف شده یا نه. سرور هم بدونِ
-                          پرچمِ صریح چیزی به انبار برنمی‌گرداند. */}
-                      <button
-                        type="button" className="bl-del" disabled={busy}
-                        onClick={() => (row.lot ? setDelRow(row) : remove(`/visits/charges/${row.id}`, 'قلم'))}
-                      >
-                        <Trash width="14" height="14" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <Reconcile rec={data.reconcile} />
             </>

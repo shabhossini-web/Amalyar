@@ -28,7 +28,7 @@ try {
       if (path === '/auth/me') body = { id: 1, level: 6, firstName: 'تست', lastName: 'مدیر', status: 'active' };
       else if (path === '/config') body = { vertical: 'clinic', brand: {} };
       else if (path === '/features') body = ['dashboard', 'formgen', 'accounting', 'definitions'].map((key) => ({ key, allowed: true }));
-      else if (path === '/intake/submissions') body = [{ id: 1, token: 'fixture', patientId: 1, amount: 30000000, payable: 30000000, status: 'pending_approval', makesVisit: true, data: { firstName: 'تست', lastName: 'پرداخت' } }];
+      else if (path === '/intake/submissions') body = [{ id: 1, token: 'fixture', patientId: 1, amount: 30000000, payable: 30000000, workflow: 'ionm', approvalKind: 'surgery', status: 'pending_approval', makesVisit: true, data: { firstName: 'تست', lastName: 'پرداخت' } }];
       else if (path.endsWith('/approve')) body = { ok: true, visitId: 1, visitCode: 'AM-001-V1' };
       else if (path === '/hospitals') { if (method === 'POST') { body = { ...payload, id: 51, active: true }; hospitals.push(body); } else body = hospitals; }
       else if (path === '/bank-accounts') { if (method === 'POST') { body = { ...payload, id: 52, active: true }; banks.push(body); } else body = banks; }
@@ -37,6 +37,7 @@ try {
       else if (path === '/forms') body = [form];
       else if (path === '/forms/visit-kinds') body = [{ key: 'clinic', kind: 'clinic', title: 'ویزیت' }, { key: 'surgery', kind: 'surgery', title: 'عمل' }];
       else if (path.startsWith('/forms/visit.')) body = { fields: [
+        ...(path.endsWith('surgery') ? ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId'].map(key => ({ key, active: true, builtin: true, required: false })) : []),
         { key: 'amount', builtin: true, active: true, required: true, type: 'money', label: 'مبلغ (تومان)' },
         { key: 'opDate', builtin: true, active: true, required: true, type: 'date', label: 'تاریخ عمل' },
         { key: 'notes', builtin: true, active: true, required: true, label: 'یادداشت' },
@@ -45,6 +46,7 @@ try {
       else if (path === '/ai/text-draft') { await delay(150); body = aiReply; }
       else if (path === '/ai/transcribe') body = { text: 'متن دیکته آزمایشی' };
       else if (path === '/visits/1/billing') body = bill;
+      else if (path === '/visits/1/invoices') body = { year: '1405', hours: null, documents: [] };
       else if (path === '/visits/1/billing/invoice-account') { bill = { ...bill, invoiceType: payload.invoiceType, invoiceBankAccount: banks.find((b) => b.id === payload.bankAccountId) }; body = bill; }
       else if (path === '/settings/letterhead') return route.fulfill({ status: 404, body: '' });
       else if (path === '/visits/1') { if (method === 'PATCH') visit = { ...visit, ...payload }; body = visit; }
@@ -144,17 +146,13 @@ try {
     await page.goto(`${base}/app/dashboard`);
     await page.getByTitle('صورت‌حساب', { exact: true }).click();
     const billingPanel = page.locator('.bl-sheet'); await billingPanel.waitFor();
+    await billingPanel.getByRole('tab', { name: 'صدور فاکتور', exact: true }).click();
     await billingPanel.getByLabel('نوع فاکتور', { exact: true }).selectOption('formal');
     await billingPanel.getByLabel('حساب فاکتور', { exact: true }).selectOption('1');
     await billingPanel.getByRole('button', { name: 'ثبت اتصال حساب', exact: true }).click();
     await billingPanel.getByText('حساب ثبت‌شده:', { exact: false }).waitFor();
-    check(await billingPanel.getByRole('button', { name: 'چاپِ فاکتورِ غیررسمی', exact: true }).isDisabled(), 'formal invoice cannot be printed using informal action');
-    const popupReady = page.waitForEvent('popup');
-    await billingPanel.getByRole('button', { name: 'چاپِ فاکتورِ رسمی', exact: true }).click();
-    const printPage = await popupReady;
-    await printPage.waitForLoadState('domcontentloaded');
-    check((await printPage.locator('body').innerText()).includes('شرکت رسمی'), 'printed invoice includes the persisted receiving account');
-    await printPage.close();
+    check(await billingPanel.getByRole('button', { name: 'صدور و چاپ فاکتور غیررسمی', exact: true }).count() === 0, 'formal invoice cannot be issued using informal action');
+    check(await billingPanel.getByRole('button', { name: 'صدور و چاپ فاکتور رسمی', exact: true }).isDisabled(), 'empty invoice cannot be issued; print content tested by neuromonitoring-invoice-ui');
     await billingPanel.getByRole('tab', { name: /پرداخت‌ها/ }).click();
     check(await billingPanel.locator('select').filter({ has: page.locator('option[value="1"]') }).last().inputValue() === '1', 'linked invoice bank preselected for receipt');
     await page.goto(`${base}/app/accounting`);

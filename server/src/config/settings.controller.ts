@@ -87,8 +87,8 @@ export class SettingsController {
     const lh = await this.settings.letterhead();
     if (!lh) return { ok: true };
     await this.settings.update({ letterhead_sha: '', letterhead_mime: '' }, user);
-    /* فایل sha-addressed است و تنها مصرف‌کننده‌اش خودِ سربرگ — پس پاک می‌کنیم. */
-    await this.storage.remove(lh.sha256).catch(() => undefined);
+    // Issued invoices retain their content-addressed letterhead. Removing the
+    // current setting must not invalidate those historical documents.
     return { ok: true };
   }
 }

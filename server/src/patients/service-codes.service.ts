@@ -208,7 +208,7 @@ export class ServiceCodesService {
   async priceOf(code: string, year?: string, sector = 'private') {
     await this.ensureImported();
     const service = await this.prisma.serviceCode.findUnique({ where: { code } });
-    if (!service) throw new BadRequestException('کدِ خدمت پیدا نشد');
+    if (!service || !service.active) throw new BadRequestException('کدِ خدمت پیدا نشد یا غیرفعال است');
 
     // اول ضریبِ اختصاصیِ شرکت، بعد سراسری — همان تقدمی که در `tariffs()` است.
     let tariff: { year: string; sector: string; professional: number; technical: number; anesthesia: number } | null =
@@ -231,6 +231,8 @@ export class ServiceCodesService {
       code,
       title: service.title,
       price,
+      coefficients: { professional: (service.rvuProfessional ?? 0) / 1000, technical: (service.rvuTechnical ?? 0) / 1000 },
+      factors: { professional: tariff.professional, technical: tariff.technical },
       breakdown: {
         professional: part(service.rvuProfessional, tariff.professional),
         technical: part(service.rvuTechnical, tariff.technical),

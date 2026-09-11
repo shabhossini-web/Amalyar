@@ -15,7 +15,7 @@ export const VERTICALS = {
   ionm: {
     label: 'نورومانیتورینگ حین عمل',
     // انبار اینجا هم هست: الکترود و سوزنِ یک‌بارمصرف هم لات و تاریخِ انقضا دارند.
-    features: { dashboard: 5, calendar: 4, dispatch: 4, tech: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, inventory: 3, site: 5, users: 6 },
+    features: { dashboard: 5, calendar: 4, dispatch: 4, tech: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, inventory: 3, site: 5, users: 6 },
   },
   /** تأمین‌کنندهٔ ست و ایمپلنت — واحدِ کار همان مراجعه است، با قلم‌های کالا. */
   implant: {
@@ -23,7 +23,7 @@ export const VERTICALS = {
     // چینشِ کارشناس معنا ندارد؛ در عوض انبار و فاکتور مهم است. برای این حوزه
     // انبار هستهٔ کار است نه جانبی — ردیابیِ سریالِ ایمپلنت الزامِ فراخوان است،
     // پس از سطحِ کارشناس باز می‌شود.
-    features: { dashboard: 5, calendar: 4, accounting: 4, messenger: 2, letter: 5, inventory: 2, site: 5, users: 6 },
+    features: { dashboard: 5, calendar: 4, surgeon: 2, accounting: 4, messenger: 2, formgen: 5, letter: 5, inventory: 2, site: 5, users: 6 },
   },
   /** مطب و تیمِ جراحی — از ویزیت تا عمل تا پیگیری. */
   clinic: {

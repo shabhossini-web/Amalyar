@@ -284,6 +284,31 @@ const INTAKE: PresetForm = {
   ],
 };
 
+/** Public registration is a separate workflow from the team's clinical visit form. */
+export const REGISTRATION_PRESETS: Record<VerticalKey, PresetForm> = {
+  ionm: {
+    ...INTAKE, key: 'intake.ionm', title: 'ثبت‌نام خدمات نورومانیتورینگ', visitKind: 'surgery',
+    hint: 'مشخصات بیمار، اطلاعات عمل و فیش؛ پس از بررسی شرکت، مراجعه ثبت می‌شود.',
+    fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)),
+      { key: 'surgeonName', label: 'نام جراح', required: true }, { key: 'hospitalName', label: 'بیمارستان', required: true },
+      { key: 'procedure', label: 'نوع عمل' }, { key: 'opDate', label: 'تاریخ عمل', type: 'date', required: true },
+      { key: 'patientNotes', label: 'توضیحات بیمار', type: 'textarea' }, { key: 'pay', label: 'پرداخت و فیش واریزی', type: 'payment' }],
+  },
+  implant: {
+    ...INTAKE, key: 'intake.implant', title: 'ثبت‌نام تأمین تجهیزات و ایمپلنت', visitKind: 'surgery',
+    hint: 'دستور جراح و اطلاعات عمل را بفرستید؛ شرکت، اقلام و تعداد موردنیاز را پیش از تأیید بررسی می‌کند.',
+    fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)),
+      { key: 'surgeonName', label: 'نام جراح', required: true }, { key: 'hospitalName', label: 'بیمارستان', required: true },
+      { key: 'procedure', label: 'نوع عمل' }, { key: 'opDate', label: 'تاریخ عمل', type: 'date' },
+      { key: 'prescription', label: 'تصویر دستور جراح', type: 'image', required: true },
+      { key: 'patientNotes', label: 'شرح دستور و توضیحات', type: 'textarea' },
+      { key: 'pay', label: 'پرداخت و فیش واریزی', type: 'payment' }],
+  },
+  clinic: { ...INTAKE, key: 'intake.clinic', title: 'ثبت‌نام مطب و درخواست ویزیت', visitKind: 'clinic',
+    hint: 'ثبت‌نام اولیه و درخواست ویزیت؛ فرم عمل از مسیر جداگانهٔ مطب انتخاب می‌شود.',
+    fields: [...INTAKE.fields, { key: 'chiefComplaint', label: 'علت مراجعه', type: 'textarea', required: true }, { key: 'patientNotes', label: 'توضیحات تکمیلی', type: 'textarea' }] },
+};
+
 /**
  * نظرسنجی — سؤال‌ها کاملاً قابلِ ویرایش، ولی با یک شروعِ معقول.
  *
@@ -325,15 +350,13 @@ export const POSTOP_FOLLOWUP: PresetForm = {
 /**
  * فرم‌هایی که یک حوزه با آن‌ها شروع می‌کند.
  *
- * ⚠️ `implant` عمداً `formgen` ندارد (به `verticals.ts` نگاه کن) پس فرمِ
- * ثبت‌نام و نظرسنجی نمی‌گیرد — ساختنِ فرمی که هیچ صفحه‌ای نشانش نمی‌دهد یعنی
- * ردیفی در دیتابیس که کاربر پیدایش نمی‌کند و ما بعداً سرش گیج می‌شویم.
+ * هر حوزه ثبت‌نام مستقل دارد؛ فرم‌های بالینی مطب و الگوهای سفارشی حفظ می‌شوند.
  */
 export const PRESETS: Record<VerticalKey, PresetForm[]> = {
-  ionm: [OPERATION, INTAKE, SURVEY],
-  implant: [OPERATION],
+  ionm: [OPERATION, REGISTRATION_PRESETS.ionm, SURVEY],
+  implant: [OPERATION, REGISTRATION_PRESETS.implant],
   /* ⚠️ «فرمِ پیگیری» عمداً نیست: پیگیری یک **موضوعِ ویزیت** است نه نوعِ
      جدای مراجعه — داشتنِ هر دو، کاربر را سرِ دوراهیِ بی‌معنی می‌گذاشت.
      تعریفش برای نصب‌های قدیمی می‌ماند (غیرفعال)، تا مراجعاتشان خوانده شود. */
-  clinic: [CLINIC_VISIT, CLINIC_SURGERY, INTAKE, SURVEY],
+  clinic: [CLINIC_VISIT, CLINIC_SURGERY, REGISTRATION_PRESETS.clinic, SURVEY],
 };

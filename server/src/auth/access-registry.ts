@@ -81,6 +81,7 @@ export const ACCESS_GROUPS: AccessGroup[] = [
  * `enabled` بعداً اهرمِ لایسنس/پلنِ SaaS هم می‌شود.
  */
 export const FEATURES: AccessDef[] = [
+  { key: 'surgeon', label: 'پرتال جراح', group: 'modules', defaultLevel: LEVEL.TECH, hint: 'مراجعات و دستورهای جراح مرتبط با حساب در شرکت‌های نورو و ایمپلنت.' },
   {
     key: 'dashboard', label: 'داشبورد مدیریت', group: 'modules',
     hint: 'ثبت و پیگیریِ مراجعات، مالیِ پایه و گزارش‌ها.',
@@ -144,6 +145,8 @@ export const FEATURES: AccessDef[] = [
 
 /** مجوزهای ریزدانهٔ عملیات. */
 export const PERMISSIONS: AccessDef[] = [
+  { key: 'surgeon.read', label: 'دیدن مراجعات خود در پرتال جراح', group: 'patients', defaultLevel: LEVEL.TECH },
+  { key: 'surgeon.write', label: 'ثبت دستور و اقلام موردنیاز مراجعات خود', group: 'patients', defaultLevel: LEVEL.TECH },
   {
     key: 'transport.own', label: 'دیدنِ مسیرِ خود و ثبتِ تحویل', group: 'inventory',
     hint: 'راننده و پیک: مسیرِ امروزِ خودشان، بارِ هر توقف، و ثبتِ آن‌که واقعاً تحویل گرفت.',

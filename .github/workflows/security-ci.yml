@@ -4,7 +4,9 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [agent/security-permissions-hardening]
+    # main هم اضافه شد: تا پیش از این هر کامیتِ مستقیم روی main هیچ نگهبانی
+    # نمی‌دید (STATUS.md — ریشهٔ پنهان‌ماندنِ چند خرابی). شاخهٔ قدیمی نگه داشته شد.
+    branches: [main, agent/security-permissions-hardening]
 
 permissions:
   contents: read
@@ -12,7 +14,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # ۶۲ گام + دو npm ci + دو بیلد؛ ۱۵ دقیقه روی رانرِ کند به timeoutِ کاذب می‌رسید
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -2681,6 +2684,12 @@ jobs:
 
       - name: Verify paid intake, multi-role forms, bank invoices and follow-up integration
         run: node scripts/e2e/intake-finance-roles.mjs
+
+      - name: Verify neuromonitoring tariffs and immutable invoice issuance
+        run: node scripts/e2e/neuromonitoring-invoice.mjs
+
+      - name: Verify profile registration, requirements and surgeon scope
+        run: node scripts/e2e/profile-workflows.mjs
 
       # دو مرزی که هیچ تایپ‌چکی نمی‌گیرد و هر دو یک‌بار شکسته بودند:
       # حسابی که مدیر برای دیگری می‌سازد باید قابلِ تحویل‌گرفتن بماند، و

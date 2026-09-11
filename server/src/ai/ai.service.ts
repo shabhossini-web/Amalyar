@@ -42,6 +42,22 @@ export class AiService {
     }
   }
 
+  /** Text-only assistance for an assigned corporate surgeon; no access to clinical tools or other visits. */
+  private async assertTextAccess(user: any) {
+    if ((user?.level ?? 0) >= LEVEL.TECH_ADMIN) return;
+    const account = await this.prisma.account.findUnique({ where: { id: user?.id ?? -1 }, select: { personId: true, status: true } });
+    const vertical = await this.prisma.setting.findUnique({ where: { key: 'vertical' } });
+    const feature = await this.prisma.feature.findUnique({ where: { key: 'surgeon' } });
+    const permission = await this.prisma.permission.findUnique({ where: { key: 'surgeon.write' } });
+    const roles = Array.isArray(feature?.roles) ? feature.roles as string[] : [];
+    const allowed = account?.status === 'active' && ['ionm', 'implant'].includes(vertical?.value || 'ionm')
+      && feature?.enabled !== false && permission?.enabled !== false
+      && (user?.level ?? 0) >= Math.max(feature?.minLevel ?? LEVEL.TECH, permission?.minLevel ?? LEVEL.TECH)
+      && (!roles.length || roles.includes(user?.jobRole ?? ''));
+    const surgeon = allowed ? await this.prisma.surgeon.findFirst({ where: { personId: account!.personId, active: true }, select: { id: true } }) : null;
+    if (!surgeon) throw new ForbiddenException('اجازهٔ استفاده از دستیارِ متنی را ندارید');
+  }
+
   private async cfgOrThrow(): Promise<AiCfg> {
     const cfg = await this.settings.ai();
     if (!cfg.enabled) {
@@ -51,7 +67,7 @@ export class AiService {
   }
 
   async status(user: any) {
-    this.assertClinical(user);
+    await this.assertTextAccess(user);
     const cfg = await this.settings.ai();
     return {
       enabled: cfg.enabled,
@@ -156,7 +172,7 @@ export class AiService {
    * متنِ برگشتی فقط پیش‌نویس است — تا پزشک «ثبت» نزند چیزی در پرونده نمی‌نشیند.
    */
   async textDraft(user: any, dto: { text: string; mode: string; purpose?: string }) {
-    this.assertClinical(user);
+    await this.assertTextAccess(user);
     const cfg = await this.cfgOrThrow();
     const source = String(dto.text ?? '').trim();
     if (source.length < 2 || source.length > 12000) throw new BadRequestException('متن باید بین ۲ تا ۱۲۰۰۰ حرف باشد');
@@ -643,7 +659,7 @@ export class AiService {
    * آیفون رفتارِ یکسان داشته باشند (نه SpeechRecognition مرورگر).
    */
   async transcribe(user: any, file?: { buffer: Buffer; mimetype?: string; originalname?: string; size?: number }) {
-    this.assertClinical(user);
+    await this.assertTextAccess(user);
     const cfg = await this.cfgOrThrow();
     if (!cfg.models.stt) {
       throw new BadRequestException('مدلِ گفتار به متن تنظیم نشده — تنظیماتِ شرکت، بخشِ «دستیارِ هوشِ مصنوعی»');

@@ -288,6 +288,10 @@ export default function Dispatch() {
               </div>
             </header>
 
+            {(v.surgeonInstructions || v.requiredItems?.length > 0) && <details className="dp-instructions"><summary>دستور جراح و اقلام موردنیاز</summary>
+              {v.surgeonInstructions && <p style={{ whiteSpace: 'pre-wrap' }}>{v.surgeonInstructions}</p>}
+              {v.requiredItems?.map(n => <p key={n.itemId}>{n.name} × {faNum(n.quantity)}{n.notes ? ` — ${n.notes}` : ''}</p>)}
+            </details>}
             <div className="dp-pick">
               <label>
                 <span>کارشناس</span>

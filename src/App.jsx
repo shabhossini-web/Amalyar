@@ -8,6 +8,7 @@ import Intake from './pages/Intake.jsx';
 import Survey from './pages/Survey.jsx';
 import VisitSummary from './pages/VisitSummary.jsx';
 import Portal from './pages/Portal.jsx';
+import SurgeonPortal from './app/SurgeonPortal.jsx';
 import Launcher from './app/Launcher.jsx';
 import Login from './app/Login.jsx';
 import Users from './app/Users.jsx';
@@ -68,6 +69,7 @@ export default function App() {
       <AuthProvider>
         <ConfigProvider>
         <Routes>
+          <Route path="/app/surgeon" element={<Protected><Gate feature="surgeon"><SurgeonPortal /></Gate></Protected>} />
           <Route path="/" element={<TenantAwareRoot />} />
           <Route path="/login" element={<Login />} />
           {/* ⚠️ عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. */}
