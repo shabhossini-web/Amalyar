@@ -2777,3 +2777,6 @@ jobs:
 
       - name: Verify company operations, provisional expiry, surgeon finance and atomic inventory invoices
         run: node scripts/e2e/company-operations.mjs
+
+      - name: Verify isolated test accounts sharing one phone
+        run: node scripts/e2e/test-accounts.mjs

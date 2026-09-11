@@ -80,3 +80,7 @@
 .us-switch input:disabled + .us-track { opacity: .45; cursor: default; }
 .us-switch input:focus-visible + .us-track { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
+
+.us-test-toggle { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; color: var(--text1); }
+.us-test-toggle input { width: 18px; height: 18px; flex: 0 0 18px; accent-color: var(--brand); }
+.us-test-toggle input:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 4px; }

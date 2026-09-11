@@ -10,6 +10,7 @@ const slim = (u) => ({
   id: u.id,
   displayName: u.displayName,
   username: u.username,
+  isTestAccount: !!u.isTestAccount,
   phone: u.phone,
   level: u.level,
   levelName: u.levelName,

@@ -13,6 +13,7 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fa-IR', reducedMotion: 'reduce', serviceWorkers: 'block' });
   let user = { id: 1, level: 6, status: 'active', firstName: 'مدیر', lastName: 'تست', username: 'manager', phone: '09120000001' };
   const writes = [], errors = [];
+  let testingEnabled = false;
   const hospital = { id: 1, name: 'بیمارستان تست', active: true };
   const technician = { id: 2, displayName: 'کارشناس تست', active: true };
   await ctx.route('**/api/**', async route => {
@@ -23,7 +24,8 @@ try {
     if (path === '/auth/me') body = user;
     else if (path === '/config') body = { vertical: 'ionm', brand: { name: 'شرکت تست' } };
     else if (path === '/features') body = ['users', 'surgeon', 'dashboard', 'dispatch', 'inventory', 'calendar'].map(key => ({ key, allowed: true }));
-    else if (path === '/accounts/temporary') body = { account: { ...user, username: 'temporary-fixture', verificationDueAt: '2026-09-18T00:00:00Z' }, temporaryPassword: 'ONE-TIME-FIXTURE' };
+    else if (path === '/accounts/testing-mode') { if (method === 'POST') testingEnabled = payload.enabled; body = { enabled: testingEnabled, disabled: 2 }; }
+    else if (path === '/accounts/temporary') body = { account: { ...user, username: payload?.username || 'temporary-fixture', isTestAccount: !!payload?.testAccount, verificationDueAt: '2026-09-18T00:00:00Z' }, temporaryPassword: 'ONE-TIME-FIXTURE' };
     else if (path === '/auth/phone/request-otp') body = { ok: true };
     else if (path === '/auth/phone/verify-otp') { user = { ...user, phoneVerifiedAt: new Date().toISOString() }; body = user; }
     else if (path === '/surgeon/visits') body = { rows: [], page: 1, pages: 1, total: 0, workflow: 'ionm' };
@@ -52,6 +54,24 @@ try {
   const created = writes.find(w => w.path === '/accounts/temporary');
   assert.equal(created.payload.phone, '09120000009'); assert.equal(created.payload.level, 2);
   pass('manager creates provisional account on mobile and sees one-time credentials');
+  await page.goto(`${base}/app/users`);
+  await page.getByRole('button', { name: 'فعال‌کردن ساخت حساب آزمایشی', exact: true }).click();
+  await page.getByRole('button', { name: '+ ساخت حساب موقت', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'حساب آزمایشی با شماره مشترک' }).check();
+  await page.getByLabel('نام کاربری (الزامی)', { exact: true }).fill('test-doctor');
+  await page.getByLabel('نام *', { exact: true }).fill('پزشک');
+  await page.getByLabel('نام خانوادگی *', { exact: true }).fill('آزمایشی');
+  await page.getByLabel('موبایل', { exact: true }).fill(user.phone);
+  await page.getByLabel(/نقش شغلی/).selectOption('doctor');
+  await page.getByRole('button', { name: 'ساخت حساب', exact: true }).click();
+  await page.getByText('test-doctor', { exact: true }).waitFor();
+  const testWrite = writes.filter(w => w.path === '/accounts/temporary').at(-1).payload;
+  assert.equal(testWrite.testAccount, true); assert.equal(testWrite.phone, user.phone); assert.equal(testWrite.username, 'test-doctor');
+  await page.goto(`${base}/app/users`);
+  await page.getByRole('button', { name: 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' }).click();
+  await page.getByRole('button', { name: 'فعال‌کردن ساخت حساب آزمایشی' }).waitFor();
+  assert.equal(writes.filter(w => w.path === '/accounts/testing-mode').at(-1).payload.enabled, false);
+  pass('mobile admin enables shared-phone tests, creates independent username and ends testing');
   user = { ...user, level: 2, verificationDueAt: '2026-09-18', phoneVerifiedAt: null };
   await page.goto(`${base}/app/profile`);
   await page.getByRole('button', { name: 'دریافت کد پیامکی' }).click();

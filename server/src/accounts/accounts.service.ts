@@ -5,8 +5,9 @@ import { LEVEL } from '../common/levels';
 import { JOB_ROLE_KEYS } from '../common/job-roles';
 import { buildPersonPatch, PersonInput } from '../common/person';
 import * as bcrypt from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { expireProvisional, verificationDeadline } from './provisional';
+import { isTestAccount, requireTestAdministrator, testAccountsEnabled, TEST_ACCOUNTS_KEY } from './test-accounts';
 
 @Injectable()
 export class AccountsService {
@@ -15,31 +16,57 @@ export class AccountsService {
     private auth: AuthService,
   ) {}
 
-  async createTemporary(dto: PersonInput & { level: number; jobRole: string; username?: string }, actorId: number) {
+  async createTemporary(dto: PersonInput & { level: number; jobRole: string; username?: string; testAccount?: boolean }, actorId: number) {
     const person = buildPersonPatch(dto, true);
     if (!person.phone) throw new BadRequestException('شماره همراه برای تأیید نهایی لازم است');
     if (!Number.isInteger(dto.level) || dto.level < 1 || dto.level > 6 || !JOB_ROLE_KEYS.includes(dto.jobRole)) throw new BadRequestException('سطح یا نقش نامعتبر است');
     const temporaryPassword = randomBytes(12).toString('base64url');
     const passwordHash = await bcrypt.hash(temporaryPassword, 12);
     const account = await this.prisma.$transaction(async tx => {
-      const existing = await tx.person.findUnique({ where: { phone: String(person.phone) }, include: { account: true } });
+      if (dto.testAccount) {
+        await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(73190522)');
+        await requireTestAdministrator(tx, actorId);
+        if (!await testAccountsEnabled(tx)) throw new BadRequestException('ابتدا حالت ساخت حساب آزمایشی را روشن کنید');
+        if (!dto.username || !/^(?=.*[a-zA-Z])[a-zA-Z0-9_.-]{3,40}$/.test(dto.username)) throw new BadRequestException('نام کاربری آزمایشی باید ۳ تا ۴۰ کاراکتر و شامل حرف لاتین باشد');
+      }
+      const existing = dto.testAccount ? null : await tx.person.findUnique({ where: { phone_phoneScope: { phone: String(person.phone), phoneScope: 'primary' } }, include: { account: true } });
       if (existing?.account) throw new BadRequestException('این شماره حساب دارد؛ حساب موجود را ویرایش کنید');
       const username = dto.username?.trim() || `staff-${randomBytes(5).toString('hex')}`;
+      if (await tx.account.findUnique({ where: { username } })) throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
+      if (dto.testAccount) (person as any).phoneScope = `test:${randomUUID()}`;
       const row = await tx.account.create({ data: { ...(existing ? { personId: existing.id } : { person: { create: person as any } }), username, passwordHash, level: dto.level, jobRole: dto.jobRole, status: 'active', verificationDueAt: verificationDeadline(), approvedById: actorId, approvedAt: new Date() }, include: { person: true } });
       const vertical = await tx.setting.findUnique({ where: { key: 'vertical' } });
       if (dto.jobRole === 'doctor' && ['ionm', 'implant'].includes(vertical?.value ?? '')) await tx.surgeon.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId } });
       if (['driver', 'courier'].includes(dto.jobRole)) await tx.transportStaff.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId, role: dto.jobRole } });
-      await tx.auditEvent.create({ data: { actorId, action: 'account.temporary.create', entityType: 'account', entityId: String(row.id), afterJson: { level: row.level, jobRole: row.jobRole, verificationDueAt: row.verificationDueAt } } });
+      await tx.auditEvent.create({ data: { actorId, action: 'account.temporary.create', entityType: 'account', entityId: String(row.id), afterJson: { level: row.level, jobRole: row.jobRole, verificationDueAt: row.verificationDueAt, testAccount: !!dto.testAccount } } });
       return row;
     });
     return { account: this.auth.publicUser(account), temporaryPassword };
+  }
+
+  async testingMode() { return { enabled: await testAccountsEnabled(this.prisma) }; }
+
+  async setTestingMode(enabled: boolean, actorId: number) {
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(73190522)');
+      await requireTestAdministrator(tx, actorId);
+      await tx.setting.upsert({ where: { key: TEST_ACCOUNTS_KEY }, create: { key: TEST_ACCOUNTS_KEY, value: String(enabled) }, update: { value: String(enabled) } });
+      let disabled = 0;
+      if (!enabled) {
+        const where = { person: { phoneScope: { not: 'primary' } } };
+        disabled = (await tx.account.updateMany({ where: { ...where, status: 'active' }, data: { status: 'disabled' } })).count;
+        await tx.session.updateMany({ where: { account: where, revokedAt: null }, data: { revokedAt: new Date() } });
+      }
+      await tx.auditEvent.create({ data: { actorId, action: 'account.testing.mode', entityType: 'setting', entityId: TEST_ACCOUNTS_KEY, afterJson: { enabled, disabled } } });
+      return { enabled, disabled };
+    });
   }
 
   async createTechnician(dto: PersonInput, actorId: number) {
     const person = buildPersonPatch(dto, true);
     if (!person.phone) throw new BadRequestException('شماره همراه کارشناس برای ورود لازم است');
     const exists = await this.prisma.person.findFirst({ where: { OR: [
-      { phone: String(person.phone) }, ...(person.nationalId ? [{ nationalId: String(person.nationalId) }] : []),
+      { phone: String(person.phone), phoneScope: 'primary' }, ...(person.nationalId ? [{ nationalId: String(person.nationalId) }] : []),
     ] } });
     if (exists) throw new BadRequestException('این شخص قبلاً ثبت شده است؛ حساب موجود را از کاربران انتخاب یا تأیید کنید');
     /**
@@ -81,8 +108,9 @@ export class AccountsService {
     if (level < LEVEL.VIEWER || level > LEVEL.SUPER_ADMIN) {
       throw new BadRequestException('سطح نامعتبر است');
     }
-    const acc = await this.prisma.account.findUnique({ where: { id } });
+    const acc = await this.prisma.account.findUnique({ where: { id }, include: { person: true } });
     if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
+    if (isTestAccount(acc)) { await requireTestAdministrator(this.prisma, approverId); if (!await testAccountsEnabled(this.prisma)) throw new BadRequestException('حالت آزمایشی خاموش است'); }
     if (!acc.phoneVerifiedAt && acc.verificationDueAt && acc.verificationDueAt <= new Date()) throw new BadRequestException('ابتدا صاحب حساب باید شماره را با ثبت‌نام و کد پیامکی تأیید کند');
     const updated = await this.prisma.account.update({
       where: { id },
@@ -131,7 +159,7 @@ export class AccountsService {
     // سیستم هرگز نباید بدونِ سوپرادمینِ فعال بماند
     if (acc.level === LEVEL.SUPER_ADMIN && level < LEVEL.SUPER_ADMIN && acc.status === 'active') {
       const others = await this.prisma.account.count({
-        where: { level: LEVEL.SUPER_ADMIN, status: 'active', id: { not: id } },
+        where: { level: LEVEL.SUPER_ADMIN, status: 'active', id: { not: id }, person: { phoneScope: 'primary' } },
       });
       if (others === 0) {
         throw new BadRequestException('این آخرین سوپرادمینِ فعال است؛ ابتدا سوپرادمینِ دیگری تعیین کنید');

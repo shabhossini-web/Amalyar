@@ -133,6 +133,7 @@ export default function Profile() {
           </div>
 
           <div className="pf-facts">
+            {user.isTestAccount && <p>حساب آزمایشی با پروفایل مستقل؛ برای ورود از نام کاربری استفاده کنید. کد تأیید این حساب فقط در همین پروفایل معتبر است.</p>}
             <div className="pf-fact"><span>نام کاربری</span><b dir="ltr">@{user.username}</b></div>
             <div className="pf-fact"><span>موبایل</span><b dir="ltr">{user.phone}</b></div>
             <div className="pf-fact"><span>سطحِ دسترسی</span><b>{user.levelName}</b></div>

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 import { AccountsService } from './accounts.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LevelGuard } from '../auth/level.guard';
@@ -28,7 +28,10 @@ class StaffProfileDto {
   @IsOptional() @IsInt({ message: 'دستمزد باید عدد باشد' }) @Min(0) fee?: number;
 }
 
+class TestingModeDto { @IsBoolean() enabled!: boolean; }
+
 class TemporaryAccountDto extends StaffProfileDto {
+  @IsOptional() @IsBoolean() testAccount?: boolean;
   @IsInt() level!: number;
   @IsString() @MaxLength(30) jobRole!: string;
   @IsOptional() @Matches(/^[a-zA-Z0-9_.-]{3,40}$/, { message: 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد باشد' }) username?: string;
@@ -40,6 +43,12 @@ class TemporaryAccountDto extends StaffProfileDto {
 @MinLevel(LEVEL.SUPER_ADMIN)
 export class AccountsController {
   constructor(private accounts: AccountsService) {}
+  @Get('testing-mode')
+  testingMode() { return this.accounts.testingMode(); }
+
+  @Post('testing-mode')
+  setTestingMode(@Body() dto: TestingModeDto, @CurrentUser() user: any) { return this.accounts.setTestingMode(dto.enabled, user.id); }
+
   @Post('temporary')
   temporary(@Body() dto: TemporaryAccountDto, @CurrentUser() user: any) { return this.accounts.createTemporary(dto, user.id); }
 

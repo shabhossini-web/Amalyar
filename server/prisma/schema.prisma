@@ -21,7 +21,9 @@ model Person {
   firstName  String    @map("first_name")
   lastName   String    @map("last_name")
   nationalId String?   @unique @map("national_id")
-  phone      String?   @unique
+  phone      String?
+  // Normal identities retain database-enforced phone uniqueness; test profiles have independent scopes.
+  phoneScope String    @default("primary") @map("phone_scope")
   email      String?
   birthDate  DateTime? @map("birth_date")
   photo      String? // dataURL (فعلاً؛ بعداً object-storage)
@@ -36,6 +38,7 @@ model Person {
   surgeon   Surgeon?
   transport TransportStaff?
 
+  @@unique([phone, phoneScope])
   @@index([lastName, firstName])
   @@map("people")
 }
