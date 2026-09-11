@@ -275,6 +275,7 @@ class HospitalDirectoryImportDto {
   @IsOptional() @IsIn(SECTORS) sector?: string;
   @IsOptional() @IsInt() @Min(1) localId?: number;
   @IsOptional() @IsBoolean() fillMissing?: boolean;
+  @IsOptional() @IsBoolean() applySector?: boolean;
 }
 
 @Controller()

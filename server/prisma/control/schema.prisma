@@ -170,6 +170,8 @@ model PlatformAuditEvent {
 model CentralHospital {
   id String @id @default(cuid())
   sourceKey String @unique @map("source_key")
+  sectorReview Json? @map("sector_review")
+  sectorRevision Int @default(0) @map("sector_revision")
   name String
   province String?
   city String?

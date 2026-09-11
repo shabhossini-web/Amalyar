@@ -3,10 +3,12 @@ import { randomUUID } from 'crypto';
 import { ControlPrismaService } from '../tenant/control-prisma.service';
 import { SECTORS } from '../patients/service-codes.service';
 import seed from './hospitals.seed.json';
+import sectorReviews from './hospital-sector-review.json';
+const reviews = new Map<string, any>(sectorReviews.map(r => [r.id, r]));
 import { toEnDigits } from '../common/identity';
 
 export const hospitalText = (s: any) => toEnDigits(String(s ?? '')).replace(/ي/g, 'ی').replace(/ك/g, 'ک').replace(/[\u064b-\u065f\u200c]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-export const hospitalSnapshot = (h: any) => ({ name: h.name, province: h.province, city: h.city, address: h.address, phone: h.phone, sector: h.sector, updatedAt: new Date(h.updatedAt).toISOString() });
+export const hospitalSnapshot = (h: any) => ({ name: h.name, province: h.province, city: h.city, address: h.address, phone: h.phone, sector: h.sector, sectorReview: h.sectorReview ?? null, updatedAt: new Date(h.updatedAt).toISOString() });
 const nullable = (v: any, max: number) => { if (v == null || v === '') return null; if (typeof v !== 'string' || v.length > max) throw new BadRequestException('متن فیلد نامعتبر یا بیش از حد طولانی است'); return v.trim() || null; };
 export function directoryRow(dto: any) {
   const name = nullable(dto.name, 180); if (!name || name.length < 2) throw new BadRequestException('نام بیمارستان را کامل کنید');
@@ -24,7 +26,19 @@ export class HospitalDirectoryService implements OnModuleInit {
   async onModuleInit() {
     // Bundled public facts are inserted once. Operator edits are never overwritten by deployment.
     if (!seed.length) return;
-    await this.control.centralHospital.createMany({ data: seed.map((row: any) => ({ id: row.id, sourceKey: row.id, ...directoryRow(row) })), skipDuplicates: true });
+    await this.control.centralHospital.createMany({ data: seed.map((row: any) => ({ id: row.id, sourceKey: row.id, ...directoryRow(row), sectorReview: reviews.get(row.id), sectorRevision: reviews.get(row.id)?.revision ?? 0 })), skipDuplicates: true });
+    // Upgrade deployed seeds once. Contacts and deliberate operator choices remain independent.
+    const stale = await this.control.centralHospital.findMany({ where: { sourceKey: { in: [...reviews.keys()] }, sectorRevision: { lt: 1 } } });
+    if (stale.length) await this.control.$transaction(async tx => {
+      const applied: any[] = [];
+      for (const old of stale) {
+        const review = reviews.get(old.sourceKey);
+        const sector = old.sector === review.previousSector ? review.sector : old.sector;
+        const result = await tx.centralHospital.updateMany({ where: { id: old.id, updatedAt: old.updatedAt, sectorRevision: old.sectorRevision }, data: { sector, sectorReview: review, sectorRevision: review.revision } });
+        if (result.count) applied.push({ id: old.id, before: old.sector, after: sector, suggested: review.sector });
+      }
+      if (applied.length) await tx.platformAuditEvent.create({ data: { actorHash: 'system:hospital-sector-review', ipHash: 'system', action: 'platform.hospital.sector_review', targetType: 'central_hospital', targetId: 'review:1', metadata: { revision: 1, applied } } });
+    }, { timeout: 30000 });
   }
   async list(query: any = {}, admin = false) {
     const page = Math.max(1, Math.min(10000, Math.trunc(Number(query.page) || 1)));
@@ -44,8 +58,13 @@ export class HospitalDirectoryService implements OnModuleInit {
     const data = directoryRow(dto);
     if (data.checkedAt && !Number.isFinite(data.checkedAt.getTime())) throw new BadRequestException('تاریخ بررسی نامعتبر است');
     return this.control.$transaction(async tx => {
+      if (dto.id && dto.confirmSector === true) {
+        const old = await tx.centralHospital.findUnique({ where: { id: dto.id } });
+        if (!old || !data.sector) throw new BadRequestException('بیمارستان و نوع تعرفه را انتخاب کنید');
+        if (old.sectorReview) (data as any).sectorReview = { ...(old.sectorReview as any), requiresConfirmation: false, confirmedSector: data.sector, confirmedAt: new Date().toISOString(), confirmedBy: actorHash };
+      }
       const row = dto.id ? await tx.centralHospital.update({ where: { id: dto.id }, data }) : await tx.centralHospital.create({ data: { ...data, sourceKey: `manual:${randomUUID()}` } });
-      await tx.platformAuditEvent.create({ data: { actorHash, ipHash, action: 'platform.hospital.save', targetType: 'central_hospital', targetId: row.id, metadata: { name: row.name, active: row.active, verified: row.verified } } });
+      await tx.platformAuditEvent.create({ data: { actorHash, ipHash, action: 'platform.hospital.save', targetType: 'central_hospital', targetId: row.id, metadata: { name: row.name, active: row.active, verified: row.verified, sector: row.sector, confirmSector: dto.confirmSector === true } } });
       return row;
     });
   }

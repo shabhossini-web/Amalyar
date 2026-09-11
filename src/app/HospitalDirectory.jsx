@@ -18,8 +18,8 @@ export default function HospitalDirectory({ platformApi, onChanged = () => {} })
   };
   useEffect(() => { let alive = true; const t = setTimeout(() => { load(() => alive).catch(e => { if (alive) setError(e.message); }); }, 250); return () => { alive = false; clearTimeout(t); }; }, [q, province, city, page, central, filterSector]);
   const run = async fn => { if (busy) return; setBusy(true); setError(''); setMessage(''); try { await fn(); await load(); await onChanged(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
-  const importRows = (ids, localId, fillMissing = false) => run(async () => {
-    const result = await api('/hospitals/directory/import', { method: 'POST', body: { ids, ...(sector ? { sector } : {}), ...(localId ? { localId: Number(localId) } : {}), fillMissing } });
+  const importRows = (ids, localId, fillMissing = false, applySector = false) => run(async () => {
+    const result = await api('/hospitals/directory/import', { method: 'POST', body: { ids, ...(sector ? { sector } : {}), ...(localId ? { localId: Number(localId) } : {}), fillMissing, applySector } });
     setMessage(`${result.created} افزوده شد؛ ${result.linked} مورد متصل بود یا متصل شد. ${result.pending ? `${result.pending} مورد نیاز به تعیین نوع تعرفه یا اتصال به تعریف موجود دارد.` : ''}`);
   });
   const save = event => { event.preventDefault(); run(async () => { await platformApi('/hospitals', { method: 'POST', csrf: true, body: form }); setForm(null); setMessage('اطلاعات مرکزی ذخیره شد؛ ویرایش‌های شرکت‌ها حفظ می‌شود.'); }); };
@@ -32,7 +32,7 @@ export default function HospitalDirectory({ platformApi, onChanged = () => {} })
       <label>استان<select aria-label="استان" value={province} onChange={e => { setProvince(e.target.value); setPage(1); }}><option value="">همه استان‌ها</option>{!data?.provinces?.some(p => p.name === 'تهران') && <option value="تهران">تهران</option>}{data?.provinces?.filter(p => p.name).map(p => <option key={p.name}>{p.name}</option>)}</select></label>
       <label>شهر<input value={city} onChange={e => { setCity(e.target.value); setPage(1); }} placeholder="همه شهرها" /></label>
       <label>فیلتر نوع بیمارستان<select aria-label="فیلتر نوع بیمارستان" value={filterSector} onChange={e => { setFilterSector(e.target.value); setPage(1); }}><option value="">همه انواع</option>{Object.entries(sectors).map(([k,v]) => <option key={k} value={k}>{v}</option>)}<option value="unknown">نوع نامشخص</option></select></label>
-      {central ? <button type="button" disabled={busy} onClick={() => setForm({ ...blank })}>افزودن بیمارستان مرکزی</button> : <><label>تعرفه موارد بدون نوع<select value={sector} onChange={e => setSector(e.target.value)}><option value="">انتخاب کنید</option>{Object.entries(sectors).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label><button disabled={busy || !selected.length} onClick={() => importRows(selected)}>دریافت انتخاب‌شده‌ها ({selected.length})</button></>}
+      {central ? <button type="button" disabled={busy} onClick={() => setForm({ ...blank })}>افزودن بیمارستان مرکزی</button> : <><label>تعرفه موارد مبهم یا بدون نوع<select value={sector} onChange={e => setSector(e.target.value)}><option value="">انتخاب کنید</option>{Object.entries(sectors).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label><button disabled={busy || !selected.length} onClick={() => importRows(selected)}>دریافت انتخاب‌شده‌ها ({selected.length})</button></>}
     </div>
     {form && central && <form className="df-directory-form" onSubmit={save}>
       <h3>{form.id ? 'ویرایش بیمارستان مرکزی' : 'بیمارستان جدید'}</h3>
@@ -40,18 +40,29 @@ export default function HospitalDirectory({ platformApi, onChanged = () => {} })
       <label>نوع بیمارستان<select value={form.sector || ''} onChange={e => setForm(f => ({ ...f, sector: e.target.value }))}><option value="">نیازمند بررسی</option>{Object.entries(sectors).map(([k,v]) => <option key={k} value={k}>{v}</option>)}</select></label>
       <label><input type="checkbox" checked={!!form.verified} onChange={e => setForm(f => ({ ...f, verified: e.target.checked }))} /> اطلاعات تماس با منبع بررسی شده</label>
       <label><input type="checkbox" checked={!!form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} /> قابل دریافت برای شرکت‌ها</label>
+      {form.sectorReview?.requiresConfirmation && <label><input type="checkbox" checked={!!form.confirmSector} onChange={e => setForm(f => ({ ...f, confirmSector: e.target.checked }))} /> نوع تعرفه را با پروانه یا قرارداد مرکز تطبیق و تأیید کردم</label>}
       <button disabled={busy}>ذخیره بیمارستان مرکزی</button><button type="button" disabled={busy} onClick={() => setForm(null)}>انصراف</button>
     </form>}
     {!central && <button className="df-directory-select" disabled={busy || !data?.rows?.some(h => !h.localId && !h.candidates?.length)} onClick={() => setSelected(data.rows.filter(h => !h.localId && !h.candidates?.length).map(h => h.id))}>انتخاب موارد جدید این صفحه</button>}
-    {!central && <p>مورد مشابه به‌صورت خودکار ادغام نمی‌شود؛ تعریف موجود را انتخاب و متصل کنید. «تکمیل فیلدهای خالی» فقط استان، شهر، تلفن و آدرس خالی را پر می‌کند.</p>}
+    {!central && <p>مورد مشابه به‌صورت خودکار ادغام نمی‌شود؛ تعریف موجود را انتخاب و متصل کنید. «تکمیل فیلدهای خالی» فقط استان، شهر، تلفن و آدرس خالی را پر می‌کند. تغییر نوع تعرفه شرکت فقط با دکمه «اعمال نوع تعرفه» انجام می‌شود؛ فاکتورهای صادرشده حفظ می‌شوند.</p>}
     {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
     <div className="df-directory-list">
       {data?.rows?.map(h => <article key={h.id} className="df-directory-row">
         <div><b>{h.name}</b><small>{[h.province, h.city, sectors[h.sector] || 'نوع تعرفه نیازمند بررسی'].filter(Boolean).join(' · ')}</small></div>
         <p>{h.address || 'آدرس نیازمند تکمیل'}</p><p dir="ltr">{h.phone || 'تلفن نیازمند تکمیل'}</p>
         <small>{h.checkedAt && `بررسی منبع: ${new Date(h.checkedAt).toLocaleDateString('fa-IR')} · `}{h.verified ? 'اطلاعات تماس بررسی‌شده' : 'نیازمند بررسی اطلاعات تماس'}{!h.active ? ' · غیرفعال در فهرست مرکزی' : ''}</small>
+        {h.sectorReview && <div className="df-directory-sector">
+          <small>مالک / وابستگی: {h.sectorReview.owner}</small>
+          <small>بررسی نوع: {h.sectorReview.sourceKind === 'primary' ? 'منبع رسمی مرکز یا متولی' : 'منبع ثانویه'} · {h.sectorReview.reviewedAt}</small>
+          <p>{h.sectorReview.note}</p>
+          {h.sectorReview.sector !== h.sector && <small>نوع پیشنهادی منبع: {sectors[h.sectorReview.sector]}؛ نوع ثبت‌شده مدیر: {sectors[h.sector] || 'نامشخص'}</small>}
+          {h.sectorReview.requiresConfirmation && <p>نوع تعرفه نیازمند تأیید پروانه یا قرارداد است؛ از انتخاب‌گر «تعرفه موارد مبهم» تعیین کنید.</p>}
+          <a href={h.sectorReview.sourceUrl} target="_blank" rel="noreferrer">منبع بررسی نوع بیمارستان</a>
+        </div>}
         {h.sourceUrl && <a href={h.sourceUrl} target="_blank" rel="noreferrer">منبع: {h.sourceName || 'مشاهده'}</a>}
-        {central ? <button disabled={busy} onClick={() => setForm({ ...h })}>ویرایش {h.name}</button> : h.localId ? <><span>در تعاریف شرکت ثبت شده</span><button disabled={busy} onClick={() => importRows([h.id], null, true)}>تکمیل فیلدهای خالی {h.name}</button></> : h.candidates?.length ? <><label>تعریف موجود برای {h.name}<select value={links[h.id] || ''} onChange={e => setLinks(l => ({ ...l, [h.id]: e.target.value }))}><option value="">انتخاب کنید</option>{h.candidates.map(c => <option key={c.id} value={c.id}>{c.name} {c.city}</option>)}</select></label><button disabled={busy || !links[h.id]} onClick={() => importRows([h.id], links[h.id])}>اتصال به تعریف موجود</button></> : <label><input type="checkbox" checked={selected.includes(h.id)} disabled={busy} onChange={e => setSelected(a => e.target.checked ? [...a, h.id] : a.filter(id => id !== h.id))} /> دریافت {h.name}</label>}
+        {central ? <button disabled={busy} onClick={() => setForm({ ...h })}>ویرایش {h.name}</button> : h.localId ? <><span>در تعاریف شرکت ثبت شده · تعرفه شرکت: {sectors[h.localSector] || 'نامشخص'}</span>
+          {(h.localSector !== h.sector || h.sectorReview?.requiresConfirmation) && <button disabled={busy || (h.sectorReview?.requiresConfirmation && !sector)} onClick={() => importRows([h.id], null, false, true)}>اعمال نوع تعرفه {sectors[h.sectorReview?.requiresConfirmation ? sector : h.sector] || 'انتخابی'} برای {h.name}</button>}
+          <button disabled={busy} onClick={() => importRows([h.id], null, true)}>تکمیل فیلدهای خالی {h.name}</button></> : h.candidates?.length ? <><label>تعریف موجود برای {h.name}<select value={links[h.id] || ''} onChange={e => setLinks(l => ({ ...l, [h.id]: e.target.value }))}><option value="">انتخاب کنید</option>{h.candidates.map(c => <option key={c.id} value={c.id}>{c.name} {c.city}</option>)}</select></label><button disabled={busy || !links[h.id]} onClick={() => importRows([h.id], links[h.id])}>اتصال به تعریف موجود</button></> : <label><input type="checkbox" checked={selected.includes(h.id)} disabled={busy} onChange={e => setSelected(a => e.target.checked ? [...a, h.id] : a.filter(id => id !== h.id))} /> دریافت {h.name}</label>}
       </article>)}
       {data && !data.rows?.length && <p>موردی پیدا نشد؛ فیلترها را تغییر دهید.</p>}
     </div>

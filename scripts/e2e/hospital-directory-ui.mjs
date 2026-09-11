@@ -13,7 +13,8 @@ try {
   await ctx.addCookies([{ name: 'amalyar_csrf', value: 'fixture-tenant', url: base }, { name: 'amalyar_platform_csrf', value: 'fixture-platform', url: base }]);
   const writes = [], errors = [], searches = [];
   const row = { id: 'fixture-one', name: 'بیمارستان نمونه', province: 'تهران', city: 'تهران', address: 'خیابان نمونه', phone: '02112345678', sector: 'private', active: true, sourceUrl: 'https://example.org', sourceName: 'منبع تست', verified: true, candidates: [] };
-  let linked = false;
+  let linked = false, localSector = 'charity';
+  row.sectorReview = { owner: 'متولی تست', sourceUrl: 'https://example.org/ownership', sourceKind: 'primary', sector: 'private', note: 'یادداشت بررسی نوع', reviewedAt: '2026-09-11', requiresConfirmation: false };
   await ctx.route('**/api/**', async route => {
     const req = route.request(), u = new URL(req.url()), path = u.pathname.replace(/^\/api/, ''), method = req.method();
     const payload = method !== 'GET' && req.headers()['content-type']?.includes('application/json') ? req.postDataJSON() : null;
@@ -29,8 +30,8 @@ try {
       searches.push(u.search);
       const q = u.searchParams.get('q');
       if (q === 'قدیمی') await delay(900);
-      body = { rows: [{ ...row, name: q === 'جدید' ? 'بیمارستان جدید' : row.name, localId: linked ? 12 : null }], total: 1, page: 1, pages: 1, provinces: [{ name: 'تهران', count: 1 }], coverage: { total: 1, verified: 1 } };
-    } else if (path === '/hospitals/directory/import') { linked = true; body = { created: payload.fillMissing ? 0 : 1, linked: payload.fillMissing ? 1 : 0, pending: 0 }; }
+      body = { rows: [{ ...row, name: q === 'جدید' ? 'بیمارستان جدید' : row.name, localId: linked ? 12 : null, localSector }], total: 1, page: 1, pages: 1, provinces: [{ name: 'تهران', count: 1 }], coverage: { total: 1, verified: 1 } };
+    } else if (path === '/hospitals/directory/import') { linked = true; if (payload.applySector) localSector = payload.sector || row.sector; body = { created: payload.fillMissing ? 0 : 1, linked: payload.fillMissing ? 1 : 0, pending: 0 }; }
     else if (path === '/platform/hospitals') body = { ...row, ...payload };
     await route.fulfill({ json: body });
   });
@@ -47,11 +48,28 @@ try {
   await page.getByRole('button', { name: 'تکمیل فیلدهای خالی بیمارستان نمونه' }).click();
   await delay(300); assert.equal(writes.filter(w => w.path === '/hospitals/directory/import').at(-1).payload.fillMissing, true);
   console.log('PASS: mobile tenant import and explicit fill-empty request, with CSRF');
+  await page.getByText('مالک / وابستگی: متولی تست').waitFor();
+  await page.getByRole('button', { name: 'اعمال نوع تعرفه خصوصی برای بیمارستان نمونه' }).click();
+  await delay(350);
+  assert.equal(writes.filter(w => w.path === '/hospitals/directory/import').at(-1).payload.applySector, true);
+  assert.equal(writes.filter(w => w.path === '/hospitals/directory/import').at(-1).payload.fillMissing, false);
+  console.log('PASS: ownership source is visible and changing the local tariff is an explicit action');
+  row.sectorReview.requiresConfirmation = true;
+  await page.reload();
+  await page.getByText('دریافت از فهرست مرکزی بیمارستان‌ها', { exact: true }).click();
+  const confirmButton = page.getByRole('button', { name: /اعمال نوع تعرفه/ });
+  await confirmButton.waitFor(); assert.equal(await confirmButton.isDisabled(), true);
+  await page.getByLabel(/تعرفه موارد مبهم یا بدون نوع/).selectOption('military');
+  await confirmButton.click(); await delay(350);
+  assert.equal(writes.filter(w => w.path === '/hospitals/directory/import').at(-1).payload.sector, 'military');
+  console.log('PASS: conflicting source cannot apply a tariff until the manager chooses a contract group');
+  row.sectorReview.requiresConfirmation = false;
   await page.getByLabel('نام یا نشانی', { exact: true }).fill('قدیمی'); await delay(350);
   await page.getByLabel('نام یا نشانی', { exact: true }).fill('جدید'); await delay(1250);
   assert.equal(await page.locator('.df-directory-row b').innerText(), 'بیمارستان جدید');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
   console.log('PASS: older search cannot replace latest result; no mobile horizontal overflow');
+  row.sectorReview.requiresConfirmation = true;
   await page.goto(`${base}/platform-admin`);
   await page.getByRole('button', { name: 'افزودن بیمارستان مرکزی', exact: true }).click();
   await page.locator('.df-directory-form').getByLabel('نام', { exact: true }).fill('بیمارستان مرکزی تست');
@@ -62,4 +80,12 @@ try {
   assert.equal(saved.payload.name, 'بیمارستان مرکزی تست'); assert.equal(saved.csrf, 'fixture-platform');
   assert.deepEqual(errors, []);
   console.log('PASS: central operator creates hospital using platform CSRF; no React errors');
+  await page.getByRole('button', { name: 'ویرایش بیمارستان نمونه', exact: true }).click();
+  await page.getByLabel('نوع تعرفه را با پروانه یا قرارداد مرکز تطبیق و تأیید کردم').check();
+  await page.getByRole('button', { name: 'ذخیره بیمارستان مرکزی', exact: true }).click();
+  await delay(350);
+  assert.equal(writes.filter(w => w.path === '/platform/hospitals').at(-1).payload.confirmSector, true);
+  assert.equal(writes.filter(w => w.path === '/platform/hospitals').at(-1).csrf, 'fixture-platform');
+  assert.deepEqual(errors, []);
+  console.log('PASS: platform confirmation is explicit and protected by platform CSRF');
 } finally { await browser?.close(); vite.kill('SIGTERM'); }
