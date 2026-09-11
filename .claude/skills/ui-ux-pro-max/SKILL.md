@@ -1,8 +1,86 @@
 ---
 name: ui-ux-pro-max
-description: "UI/UX design intelligence. 67 styles, 96 palettes, 57 font pairings, 25 charts, 13 stacks (React, Next.js, Vue, Svelte, SwiftUI, React Native, Flutter, Tailwind, shadcn/ui). Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, check UI/UX code. Projects: website, landing page, dashboard, admin panel, e-commerce, SaaS, portfolio, blog, mobile app, .html, .tsx, .vue, .svelte. Elements: button, modal, navbar, sidebar, card, table, form, chart. Styles: glassmorphism, claymorphism, minimalism, brutalism, neumorphism, bento grid, dark mode, responsive, skeuomorphism, flat design. Topics: color palette, accessibility, animation, layout, typography, font pairing, spacing, hover, shadow, gradient. Integrations: shadcn/ui MCP for component search and examples."
+description: "UI/UX design intelligence سفارشی‌شده برای عمل‌یار. 67 styles, 96 palettes, 57 font pairings, 25 charts — همه تابعِ سیستم طراحیِ خودِ پروژه. Actions: plan, build, create, design, implement, review, fix, improve, optimize, enhance, refactor, check UI/UX code. Projects: dashboard, admin panel, SaaS, landing page, .jsx, .tsx. Elements: button, modal, navbar, sidebar, card, table, form, chart, tabs, file upload, date/time picker. Styles: glassmorphism, minimalism, bento grid, dark mode, responsive. Topics: color palette, accessibility, animation, layout, typography, spacing, hover, shadow, gradient, RTL."
 ---
-# UI/UX Pro Max - Design Intelligence
+# UI/UX Pro Max — سفارشی‌شده برای عمل‌یار
+
+> ⚠️ **این یک کتابخانهٔ عمومی است، نه منبعِ حقیقت.** عمل‌یار سیستمِ طراحیِ خودش
+> را دارد و قوانینش قفل‌شده‌اند. قبل از استفاده از **هر** توصیهٔ این فایل،
+> بخشِ «قیدهای عمل‌یار» را اعمال کن.
+
+## ۰. قیدهای عمل‌یار — اول این‌ها، بعد بقیهٔ فایل
+
+**ترتیبِ تقدم:** حرفِ کاربر → `CLAUDE.md` → اسکیلِ `amalyar-design` → این کتابخانه.
+اگر این فایل چیزی گفت که با سه‌تای بالا می‌جنگد، **آن‌ها برنده‌اند**.
+
+### چیزهایی که از قبل هست — از نو نساز
+
+`src/ui/` لایهٔ primitive پروژه است. اگر کامپوننتی این‌جا هست، **حتماً** از آن
+استفاده کن؛ ساختنِ نسخهٔ موازی یعنی دو رفتارِ متفاوت در یک اپ:
+
+| نیاز | کامپوننتِ موجود |
+|---|---|
+| مودال / شیت / بک‌دراپ | `Overlay` |
+| تب | `Tabs` |
+| دراپ‌داون / انتخابگر | `Pick` |
+| آپلودِ فایل و چندعکسی | `FileDrop` |
+| انتخابِ ساعت | `TimePick` |
+| فرمِ داینامیک + اعتبارسنجی | `DynForm` + `dynErrors` |
+| ورودیِ متنِ کمک‌شده با AI | `AssistedTextarea` |
+| ورودیِ صوتی | `VoiceInput` |
+| آیکون (~۵۰ عدد) | `src/ui/icons.jsx` — `Back`, `Plus`, `Search`, `Trash`, `Doctor`, `Hospital`, `Scalpel`… |
+| تیک/ضربدرِ انیمیشنی | `icons-motion.jsx` — `DrawCheck`, `DrawCross` |
+
+**آیکون:** اول `icons.jsx` را بگرد. نبود، آیکونِ SVGِ خطیِ تازه **همان‌جا** اضافه
+کن (`stroke=currentColor`, `strokeWidth≈1.9`) — نه inline در صفحه. ایموجی ممنوع (قانون ۷).
+
+### پالت — انتخاب نکن، استفاده کن
+
+۹۶ پالتِ این کتابخانه برای عمل‌یار **بی‌ربط**اند. پروژه ۳۳ توکن در
+`src/index.css` دارد و رنگِ برند از تنظیماتِ tenant می‌آید:
+
+- سطح/متن: `--bg` `--bg2` `--bg3` `--card` `--card-border` `--text1` `--text2` `--text3`
+- برند: `--brand` `--brand-2` `--brand-soft` `--brand-mid` `--brand-dark` (+ جفتِ `-rgb` هرکدام)
+- معنایی: `--green` `--amber` `--cyan`
+- دسته‌بندی: `--kind-violet` `--kind-teal` `--kind-amber` `--kind-rose` `--kind-sky`
+  `--kind-lime` `--kind-fuchsia` `--kind-slate` — **فقط** برای تفکیکِ نوع/دسته،
+  نه تزئین
+
+```css
+background: rgba(var(--brand-rgb), .12);   /* ✅ شفافیت با جفتِ rgb */
+background: rgba(124, 58, 237, .12);       /* ❌ عددِ خام — با برندِ tenant نمی‌چرخد */
+```
+
+### تایپوگرافی — انتخاب نکن
+
+۵۷ جفتِ فونتِ این کتابخانه بی‌ربط‌اند. فونت **Vazirmatn** است و `line-height`
+بدنه `1.85` — فارسی به آن نیاز دارد، کمترش نکن. جفت‌کردنِ فونتِ لاتین پیشنهاد نده.
+
+### سبک — انتخاب نکن
+
+از ۶۷ سبک، عمل‌یار یکی را انتخاب کرده: **گلس‌مورفیسمِ تاریک** با
+`glass` + `glass-glow` (قانون ۱۰ و ۱۶). `--radius: 18px`, `--radius-sm: 12px`.
+هیچ سبکِ دیگری (brutalism, neumorphism, claymorphism…) پیشنهاد نده.
+**حالتِ روشن وجود ندارد** و ساخته نمی‌شود.
+
+### RTL — تلهٔ واقعی
+
+توصیه‌های «logical properties» این کتابخانه را برای **رسمِ شکل** (تیک/فلش/مثلث)
+اعمال نکن: بوردرِ **فیزیکی** بنویس، وگرنه قرینه می‌شود (قانون ۹، باگِ واقعی).
+برای **چیدمان** (padding/margin/gap) برعکس — منطقی درست است.
+عدد/کد/شماره با `dir="ltr"`.
+
+### چیزهایی که هنوز از این کتابخانه ارزش دارند
+
+- **دسترس‌پذیری** (§۱) — کنتراست، focus ring، aria-label، ترتیبِ تب
+- **لمس و تعامل** (§۲) — هدفِ ۴۴×۴۴، دکمهٔ غیرفعال حین async، خطای نزدیکِ مشکل
+- **کارایی** (§۳) و **چیدمانِ ریسپانسیو** (§۴)
+- **نمودارها** (§۸) — نوعِ نمودار و خوانایی؛ ولی رنگ‌ها از توکن‌های بالا
+- الگوهای تعاملِ خاصِ استک (React)
+
+---
+
+## بقیهٔ کتابخانه (عمومی)
 
 Comprehensive design guide for web and mobile applications. Contains 67 styles, 96 color palettes, 57 font pairings, 99 UX guidelines, and 25 chart types across 13 technology stacks. Searchable database with priority-based recommendations.
 
