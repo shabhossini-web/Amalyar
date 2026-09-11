@@ -865,8 +865,15 @@ cp /root/proxy-good.yml /data/coolify/proxy/docker-compose.yml && \
 
 اپِ فرانت حالا یک متغیرِ محیطی می‌خواهد:
 
+`API_UPSTREAM` **دو مقدارِ معتبر** دارد:
+
+| مقدار | کِی | نکته |
+|---|---|---|
+| `http://<نامِ کانتینرِ بک‌اند>:3001` | وقتی هر دو اپ روی یک شبکهٔ داکرند | سریع‌تر (بدونِ TLS، بدونِ عبور از پراکسی). نیاز به «Connect To Predefined Network» روی هر دو اپ + نامِ قطعی (Custom Container Name یا Consistent Container Names) |
+| `https://api.amalyar.com` | وقتی شبکهٔ مشترک ندارند | **هیچ پیکربندیِ شبکه‌ای نمی‌خواهد.** درخواست از همان پراکسیِ بیرونی رد می‌شود؛ چون `Host` دست‌نخورده می‌ماند به tenantِ درست می‌رسد. `proxy_ssl_server_name on` در قالب هست وگرنه دست‌دادنِ TLS بی‌صدا می‌شکست |
+
 ```
-API_UPSTREAM=http://<نامِ سرویسِ بک‌اند در همان شبکهٔ داکر>:3001
+API_UPSTREAM=https://api.amalyar.com
 ```
 
 پیش‌فرضِ `Dockerfile` مقدارِ `http://amalyar-api:3001` است. اگر نامِ سرویس چیزِ
@@ -886,6 +893,39 @@ curl -s https://<دامنهٔ شرکت>/sitemap.xml
 ```
 
 اگر `<title>` هنوز «عمل‌یار …» بود یعنی `API_UPSTREAM` به بک‌اند نمی‌رسد.
+
+### ⚠️ باگِ fallback که روی سرور دیده شد — ۱۴۰۵/۰۶/۲۰
+
+اولین تستِ `https://<tenant>/robots.txt` روی production یک **۴۰۴ خامِ nginx**
+داد، نه پاسخِ بک‌اند و نه فایلِ ایستا. علت در خودِ کانفیگ بود:
+
+```nginx
+rewrite ^ /api/public/site/robots.txt break;   # ← $uri را عوض می‌کند
+location @seo_static { try_files $uri =404; }  # ← دنبالِ همان مسیرِ API روی دیسک
+```
+
+`rewrite` مقدارِ `$uri` را تغییر می‌دهد، پس fallback به‌جای `/robots.txt` دنبالِ
+`/api/public/site/robots.txt` روی دیسک می‌گشت. حالا مسیرِ اصلی **پیش از**
+rewrite در `$seo_file` ذخیره می‌شود و `verify-seo-surface.js` هم همین را
+می‌سنجد (روی هر دو شکلِ نقض قرمز شد).
+
+هم‌زمان هدرِ `X-Seo-Source` اضافه شد تا از بیرون معلوم باشد پاسخ از کدام مسیر
+آمده:
+
+```bash
+curl -sI https://<دامنه>/robots.txt | grep -i x-seo-source
+# backend → از API آمده   ·   static → فایلِ public/   ·   نبودِ هدر → هیچ‌کدام
+```
+
+**تشخیصِ اینکه بک‌اند در دسترس است یا نه** (مستقل از nginx) — این نشانی از
+Traefik مستقیم به بک‌اند می‌رود:
+
+```
+https://<دامنه>/api/public/site/robots.txt
+```
+
+- پاسخِ robots → بک‌اند و resolveِ tenant سالم‌اند؛ مشکل فقط `API_UPSTREAM` است.
+- «شرکت برای این دامنه یافت نشد» → آن دامنه در `tenant_domains` ثبت نشده.
 
 **نکتهٔ عملیاتیِ جدا:** `nginx.conf` حذف شد و جایش `nginx.conf.template` آمد
 (ایمیجِ nginx با envsubst پردازشش می‌کند). هر تغییرِ آیندهٔ کانفیگ باید روی

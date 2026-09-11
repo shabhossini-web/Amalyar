@@ -31,6 +31,14 @@ server {
   # resolve می‌کند و اگر بک‌اند آن لحظه بالا نباشد کلِ کانتینرِ فرانت بالا
   # نمی‌آید. با متغیر، resolve به زمانِ درخواست می‌افتد؛ شکستش فقط یک ۵۰۲ روی
   # همان زیرمسیر است و صفحه سرِ جایش می‌ماند.
+  #
+  # دو مقدارِ معتبر دارد:
+  #   ۱. نامِ کانتینرِ بک‌اند روی شبکهٔ مشترکِ داکر — `http://<نام>:3001`
+  #      سریع‌تر است (بدونِ TLS و بدونِ عبور از پراکسی) ولی هر دو اپ باید روی
+  #      یک شبکهٔ داکر باشند.
+  #   ۲. نشانیِ عمومیِ API — `https://api.amalyar.com`
+  #      هیچ پیکربندیِ شبکه‌ای نمی‌خواهد: درخواست از همان پراکسیِ بیرونی رد
+  #      می‌شود و چون `Host` دست‌نخورده می‌ماند، به tenantِ درست می‌رسد.
   set $api_root "${API_UPSTREAM}";
 
   # /api معمولاً پیش از رسیدن به این کانتینر توسط Traefik به بک‌اند می‌رود.
@@ -58,6 +66,7 @@ server {
     proxy_pass $api_root;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_ssl_server_name on;
     proxy_connect_timeout 2s;
     proxy_read_timeout 3s;
   }
@@ -65,31 +74,42 @@ server {
   # robots و sitemap از همان بک‌اند می‌آیند تا per-tenant باشند؛ اگر بک‌اند
   # نرسید یا این میزبان اصلاً tenant نبود (مثلاً amalyar.com)، فایلِ ایستا.
   location = /robots.txt {
+    # ⚠️ مسیرِ اصلی **پیش از** rewrite ذخیره می‌شود. `rewrite` خودِ `$uri` را
+    # عوض می‌کند، پس در fallback دیگر `/robots.txt` نیست بلکه مسیرِ APIست —
+    # و `try_files $uri` دنبالِ فایلی می‌گشت که وجود ندارد و ۴۰۴ می‌داد.
+    # این دقیقاً همان چیزی بود که روی سرور دیده شد.
+    set $seo_file /robots.txt;
     rewrite ^ /api/public/site/robots.txt break;
     proxy_pass $api_root;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_ssl_server_name on;
     proxy_connect_timeout 2s;
     proxy_read_timeout 3s;
     proxy_intercept_errors on;
     error_page 400 404 500 502 503 504 = @seo_static;
+    add_header X-Seo-Source "backend" always;
   }
 
   location = /sitemap.xml {
+    set $seo_file /sitemap.xml;
     rewrite ^ /api/public/site/sitemap.xml break;
     proxy_pass $api_root;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_ssl_server_name on;
     proxy_connect_timeout 2s;
     proxy_read_timeout 3s;
     proxy_intercept_errors on;
     error_page 400 404 500 502 503 504 = @seo_static;
+    add_header X-Seo-Source "backend" always;
   }
 
   location @seo_static {
-    # $uri این‌جا هنوز /robots.txt یا /sitemap.xml است — نسخهٔ ایستای
-    # سایتِ بازاریابی که در public/ کامیت شده.
-    try_files $uri =404;
+    # نسخهٔ ایستای سایتِ بازاریابی که در public/ کامیت شده. مسیر از
+    # `$seo_file` می‌آید نه `$uri` — دلیلش بالای همان location نوشته شده.
+    add_header X-Seo-Source "static" always;
+    try_files $seo_file =404;
   }
   # ──────────────────────────────────────────────────────────────────
 
