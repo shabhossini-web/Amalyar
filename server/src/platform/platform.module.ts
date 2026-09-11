@@ -1,3 +1,5 @@
+import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
+import { HospitalDirectoryService } from '../catalog/hospital-directory.service';
 import { TenantMigratorService } from '../tenant/tenant-migrator.service';
 import {
   Body,
@@ -13,6 +15,7 @@ import {
   Param,
   Post,
   Req,
+  Query,
   Res,
   UnauthorizedException,
   UseGuards,
@@ -795,6 +798,7 @@ export class PlatformController {
     private readonly migrator: TenantMigratorService,
     private readonly tariffs: PlatformTariffsService,
     private readonly centralAi: PlatformAiService,
+    private readonly hospitals: HospitalDirectoryService,
   ) {}
 
   @Get('auth/options')
@@ -886,6 +890,17 @@ export class PlatformController {
     return this.provisioning.retry(id, session.phoneHash, this.auth.ipHash(requestIp(req)));
   }
 
+  @Get('hospitals')
+  @UseGuards(PlatformSessionGuard)
+  listHospitals(@Query() query: any) { return this.hospitals.list(query, true); }
+
+  @Post('hospitals')
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  saveHospital(@Body() dto: Record<string, unknown>, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.hospitals.save(dto, session.phoneHash, this.auth.ipHash(requestIp(req)));
+  }
+
   /** تعرفه‌های سراسریِ سالانه — همهٔ شرکت‌ها از همین می‌خوانند. */
   @Get('tariffs')
   @UseGuards(PlatformSessionGuard)
@@ -943,6 +958,7 @@ export class PlatformController {
 }
 
 @Module({
+  imports: [HospitalDirectoryModule],
   controllers: [PlatformController],
   providers: [
     RateLimitService,

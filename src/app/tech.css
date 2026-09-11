@@ -166,3 +166,6 @@
   .tk-card { padding: 11px; }
   .tk-acts { flex-direction: column; }
 }
+/* Hospital roster offers only the unassigned visits in the operator's duty. */
+.tk-open-visit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #ffffff20; }
+.tk-open-visit small { display: block; opacity: .7; margin-top: 6px; }

@@ -27,7 +27,15 @@ npx prisma migrate deploy --schema prisma/schema.prisma
 npm run build && node dist/main.js
 ```
 
-فرانت: `VITE_API_BASE=http://localhost:3101/api npx vite --port 5199 --host 127.0.0.1`
+فرانت: `VITE_API_BASE=http://127.0.0.1:3101/api npx vite --port 5199 --host 127.0.0.1`
+
+> ⚠️ **هاستِ API و UI باید یکی باشد** (هر دو `127.0.0.1`، نه یکی `localhost`).
+> نشست از کوکیِ HttpOnly با `SameSite=Lax` می‌آید؛ مرورگر کوکیِ `localhost` را
+> برای صفحه‌ای روی `127.0.0.1` نمی‌فرستد و همهٔ آزمون‌های مرورگریِ سرورِ زنده به
+> `/login` می‌افتند. آزمون‌ها بعد از ورودِ Node، کوکی را با
+> `browserLogin(page, login.accessToken)` از `scripts/e2e/lib/browser-login.mjs`
+> در مرورگر می‌نشانند — نه توکن در localStorage (که اپ دیگر نمی‌خواند).
+> سنجهٔ HTTPِ خودِ کوکی/CSRF/چندحسابی: `node scripts/e2e/cookie-auth.mjs`.
 
 کاربر: از مسیرِ `auth/signup/*` یک سوپرادمین با `admin` / `test1234` بسازید.
 کدِ OTP در پاسخ برنمی‌گردد و در `otp_codes` به‌شکلِ sha256 ذخیره می‌شود.

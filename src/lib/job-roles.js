@@ -9,6 +9,8 @@ export const JOB_ROLES = [
   { v: 'nurse', l: 'پرستار' },
   { v: 'assistant', l: 'دستیار' },
   { v: 'technician', l: 'کارشناس' },
+  { v: 'driver', l: 'راننده' },
+  { v: 'courier', l: 'پیک' },
 ];
 
 export function fieldRoles(field) {

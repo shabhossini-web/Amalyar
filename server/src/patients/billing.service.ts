@@ -1,3 +1,4 @@
+import { canAccess } from '../auth/access-check';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -23,6 +24,8 @@ export const STOCK_EFFECTS = ['consumed', 'virtual', 'hospital'] as const;
 
 /** روشِ پرداخت — فهرستِ بسته تا گزارشِ روشِ دریافت معنا داشته باشد. */
 export const PAYMENT_METHODS = ['cash', 'card', 'transfer', 'cheque', 'insurance'] as const;
+/// روش‌هایی که پول واقعاً واردِ یک حسابِ بانکی می‌شود — فقط این‌ها به «حسابِ فاکتور» مقیدند.
+export const BANK_ROUTED_METHODS = ['card', 'transfer', 'cheque'] as const;
 
 /**
  * مالیِ مراجعه.
@@ -260,23 +263,14 @@ export class BillingService {
     if (!row) throw new NotFoundException('قلمِ صورت‌حساب پیدا نشد');
     await this.assertVisit(row.visitId, user);
 
-    if (returnStock) {
-      // کالا با حرکتِ جبرانی برمی‌گردد، نه با پاک‌کردنِ حرکتِ مصرف: دفترِ انبار
-      // فقط اضافه می‌شود، وگرنه «چه وقت چه شد» از بین می‌رود.
-      const moves = await this.prisma.stockMovement.findMany({ where: { chargeId } });
-      const net = moves.reduce((s, m) => s + m.quantity, 0); // خروج منفی است
-      if (net < 0) {
-        await this.inventory.returnToStock(
-          { lotId: moves.find((m) => m.kind === 'out')!.lotId, quantity: -net, visitId: row.visitId, chargeId, reason: 'کالا مصرف نشد — حذفِ قلمِ فاکتور' },
-          user,
-        );
-      }
-    }
-
-    await this.prisma.charge.delete({ where: { id: chargeId } });
-    await this.audit.record({
-      actorId: user?.id, action: 'charge.delete', entityType: 'charge', entityId: chargeId,
-      before: row, after: { returnedToStock: returnStock },
+    if (returnStock && !await canAccess(this.prisma, user, 'inventory', ['inventory.write'])) throw new BadRequestException('اجازه برگشت موجودی انبار ندارید');
+    await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${row.visitId} FOR UPDATE`;
+      const current = await tx.charge.findUnique({ where: { id: chargeId } });
+      if (!current) throw new NotFoundException('قلم قبلاً حذف شده است');
+      if (returnStock) await this.inventory.setChargeConsumption(tx, null, 0, row.visitId, chargeId, user, true);
+      await tx.charge.delete({ where: { id: chargeId } });
+      await tx.auditEvent.create({ data: { actorId: user?.id, action: 'charge.delete', entityType: 'charge', entityId: String(chargeId), beforeJson: JSON.parse(JSON.stringify(current)), afterJson: { returnedToStock: returnStock } } });
     });
     return { ok: true, returnedToStock: returnStock };
   }
@@ -295,15 +289,29 @@ export class BillingService {
     user: any,
   ) {
     const visit = await this.assertVisit(visitId, user);
-    if (visit.invoiceBankAccountId && dto.bankAccountId !== visit.invoiceBankAccountId) {
-      throw new BadRequestException('حساب دریافت باید همان حساب متصل به فاکتور باشد');
+    const method = dto.method ?? 'cash';
+    if (!PAYMENT_METHODS.includes(method as any)) throw new BadRequestException('روشِ پرداخت نامعتبر است');
+    /**
+     * قیدِ «حسابِ فاکتور» فقط برای پولی معنا دارد که **از مسیرِ بانک** می‌آید
+     * (کارت‌خوان/انتقال/چک): آن پول باید به همان حسابی برسد که فاکتور رویش
+     * صادر شده. پرداختِ نقدی و بیمه اصلاً حسابِ بانکی ندارند — تا پیش از این
+     * همان قید روی نقدی هم اعمال می‌شد و «حسابِ دریافت: —» با فاکتورِ متصل
+     * ۴۰۰ می‌داد، یعنی ثبتِ پولِ نقدی برای فاکتورِ رسمی ناممکن بود.
+     * حسابِ ناهم‌خوان اما با هر روشی رد می‌شود — نه فقط برای بانکی‌ها.
+     */
+    if (visit.invoiceBankAccountId) {
+      const routed = BANK_ROUTED_METHODS.includes(method as any);
+      if (routed && dto.bankAccountId !== visit.invoiceBankAccountId) {
+        throw new BadRequestException('برای پرداختِ کارتی/انتقال/چک، حساب دریافت باید همان حساب متصل به فاکتور باشد');
+      }
+      if (!routed && dto.bankAccountId && dto.bankAccountId !== visit.invoiceBankAccountId) {
+        throw new BadRequestException('حساب دریافت باید همان حساب متصل به فاکتور باشد');
+      }
     }
     if (dto.bankAccountId) {
       const bank = await this.prisma.bankAccount.findFirst({ where: { id: dto.bankAccountId, active: true } });
       if (!bank || (visit.invoiceType && bank.classification !== visit.invoiceType)) throw new BadRequestException('حساب دریافت با نوع فاکتور سازگار نیست');
     }
-    const method = dto.method ?? 'cash';
-    if (!PAYMENT_METHODS.includes(method as any)) throw new BadRequestException('روشِ پرداخت نامعتبر است');
 
     const amount = dto.amount ?? 0;
     if (!Number.isInteger(amount) || amount <= 0) throw new BadRequestException('مبلغِ پرداخت باید عددِ مثبت باشد');

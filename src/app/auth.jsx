@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { api, getToken, setToken } from '../lib/api.js';
+import { api } from '../lib/api.js';
 import {
   getAccounts,
   upsertAccount,
+  replaceAccounts,
   removeAccount,
   updateAccountUser,
   clearAccounts,
@@ -28,6 +29,24 @@ const addCredId = (id) => {
   localStorage.setItem(CRED_KEY, JSON.stringify([...s]));
 };
 
+// باقی‌ماندهٔ نسخهٔ توکن‌دار — یک‌بار پاک می‌شود تا توکنِ کهنه در storage نماند.
+const LEGACY_TOKEN_KEY = 'amalyar_token';
+const dropLegacyToken = () => {
+  try {
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    sessionStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    /* — */
+  }
+};
+
+/**
+ * AuthProvider — نشست در **کوکیِ HttpOnly** است (`server/src/auth/session-cookie.ts`).
+ *
+ * کلاینت هیچ توکنی ندارد و نمی‌خواهد: ورود → سرور کوکی می‌گذارد؛ `/auth/me`
+ * می‌گوید کی هستیم؛ سوییچ و خروج هم سمتِ سرور روی مجموعهٔ نشست‌های همین
+ * مرورگر انجام می‌شود. `accountsStore` فقط کشِ نمایشیِ منوی چندحسابی است.
+ */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,28 +54,29 @@ export function AuthProvider({ children }) {
   const [accountsVersion, setAccountsVersion] = useState(0);
   const bump = () => setAccountsVersion((v) => v + 1);
 
+  /** فهرستِ زندهٔ سرور → کشِ محلی. خطای شبکه → کشِ قبلی می‌ماند. */
+  const syncAccounts = useCallback(async () => {
+    try {
+      const list = await api('/auth/accounts', { quiet401: true });
+      replaceAccounts(list);
+    } catch {
+      /* آفلاین یا نشستِ موقت — کشِ فعلی کافی است */
+    }
+    bump();
+  }, []);
+
   useEffect(() => {
     let alive = true;
+    dropLegacyToken();
     (async () => {
-      if (!getToken()) {
-        setLoading(false);
-        return;
-      }
       try {
-        const me = await api('/auth/me');
-        if (alive) {
-          setUser(me);
-          // مهاجرت: توکنِ ماندگارِ قدیمی که هنوز در لیستِ چندحسابی نیست → اضافه شود
-          const tok = localStorage.getItem('amalyar_token');
-          if (tok && !getAccounts().some((a) => a.user.id === me.id)) {
-            upsertAccount(tok, me);
-          } else {
-            updateAccountUser(me.id, me); // پروفایلِ ذخیره‌شده تازه بماند
-          }
-          bump();
-        }
+        const me = await api('/auth/me', { quiet401: true });
+        if (!alive) return;
+        setUser(me);
+        updateAccountUser(me.id, me); // پروفایلِ ذخیره‌شده تازه بماند
+        await syncAccounts();
       } catch {
-        setToken(null);
+        /* وارد نشده‌ایم — صفحهٔ ورود */
       } finally {
         if (alive) setLoading(false);
       }
@@ -64,7 +84,35 @@ export function AuthProvider({ children }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [syncAccounts]);
+
+  /** به حسابِ زندهٔ بعدیِ مجموعه برو؛ نبود → خروجِ کامل. خروجی: کاربرِ فعال یا null */
+  const fallbackToNext = useCallback(async () => {
+    let list = [];
+    try {
+      list = await api('/auth/accounts', { quiet401: true });
+    } catch {
+      /* ۴۰۱ یعنی نشستِ فعال هم مرده؛ از کشِ محلی امتحان می‌کنیم */
+      list = getAccounts().map((a) => a.user);
+    }
+    for (const a of list) {
+      if (a.id === user?.id) continue;
+      try {
+        const me = await api('/auth/switch', { method: 'POST', body: { accountId: a.id }, quiet401: true });
+        setUser(me);
+        updateAccountUser(me.id, me);
+        await syncAccounts();
+        return me;
+      } catch (e) {
+        if (e?.status === 401 || e?.status === 403) removeAccount(a.id);
+        else return null; // شبکه قطع → دست نزن
+      }
+    }
+    clearAccounts();
+    setUser(null);
+    bump();
+    return null;
+  }, [user, syncAccounts]);
 
   // سشنِ فعال وسطِ کار مُرد (۴۰۱ سراسری از api.js) → حسابِ مرده حذف،
   // پرش به حسابِ زندهٔ بعدی وگرنه خروج به /login — به‌جای گیرکردنِ اپ
@@ -74,50 +122,32 @@ export function AuthProvider({ children }) {
       if (recovering) return;
       recovering = true;
       try {
-        const deadTok = getToken();
         try {
-          await api('/auth/me'); // شاید گذرا بود (ری‌استارتِ سرور)
+          await api('/auth/me', { quiet401: true }); // شاید گذرا بود (ری‌استارتِ سرور)
           return;
         } catch (e) {
           if (e?.status !== 401) return; // خطای شبکه → دست نزن
         }
-        const accs = getAccounts();
-        const dead = accs.find((a) => a.token === deadTok);
-        if (dead) removeAccount(dead.user.id);
-        for (const a of getAccounts()) {
-          try {
-            const me = await api('/auth/me', { token: a.token });
-            setToken(a.token, true);
-            setUser(me);
-            updateAccountUser(me.id, me);
-            bump();
-            return;
-          } catch (e) {
-            if (e?.status === 401 || e?.status === 403) removeAccount(a.user.id);
-            else return; // شبکه قطع → بعداً
-          }
-        }
-        setToken(null);
-        setUser(null);
-        bump();
+        if (user) removeAccount(user.id);
+        await fallbackToNext();
       } finally {
         recovering = false;
       }
     };
     window.addEventListener('amalyar:unauthorized', onUnauthorized);
     return () => window.removeEventListener('amalyar:unauthorized', onUnauthorized);
-  }, []);
+  }, [user, fallbackToNext]);
 
-  const adopt = (accessToken, u, remember) => {
-    setToken(accessToken, remember);
-    if (remember) upsertAccount(accessToken, u); // فقط ورودهای ماندگار در لیستِ چندحسابی
+  /** بعد از ورودِ موفق — سرور کوکی را گذاشته؛ این‌جا فقط state و کشِ منو. */
+  const adopt = (u, remember) => {
+    if (remember) upsertAccount(u); // فقط ورودهای ماندگار در لیستِ چندحسابی
     setUser(u);
     bump();
   };
 
   const login = useCallback(async (identifier, password, remember = true) => {
-    const r = await api('/auth/login', { method: 'POST', body: { identifier, password }, auth: false });
-    adopt(r.accessToken, r.user, remember);
+    const r = await api('/auth/login', { method: 'POST', body: { identifier, password, remember } });
+    adopt(r.user, remember);
     return r.user;
   }, []);
 
@@ -127,12 +157,11 @@ export function AuthProvider({ children }) {
     const { options, challengeToken } = await api('/auth/webauthn/login/options', {
       method: 'POST',
       body: { credIds: getCredIds() },
-      auth: false,
     });
     const response = await startAuthentication({ optionsJSON: options });
-    const r = await api('/auth/webauthn/login/verify', { method: 'POST', body: { response, challengeToken }, auth: false });
+    const r = await api('/auth/webauthn/login/verify', { method: 'POST', body: { response, challengeToken, remember: true } });
     addCredId(response?.id);
-    adopt(r.accessToken, r.user, true);
+    adopt(r.user, true);
     return r.user;
   }, []);
 
@@ -148,33 +177,27 @@ export function AuthProvider({ children }) {
 
   // مرحلهٔ ۱ ثبت‌نام — ارسالِ کدِ یکبارمصرف به موبایل
   const requestOtp = useCallback(
-    (phone) => api('/auth/signup/request-otp', { method: 'POST', body: { phone }, auth: false }),
+    (phone) => api('/auth/signup/request-otp', { method: 'POST', body: { phone } }),
     [],
   );
 
   // مرحلهٔ ۲ — تأییدِ کد → توکنِ کوتاه‌عمرِ ثبت‌نام
   const verifyOtp = useCallback(
-    (phone, code) =>
-      api('/auth/signup/verify-otp', { method: 'POST', body: { phone, code }, auth: false }),
+    (phone, code) => api('/auth/signup/verify-otp', { method: 'POST', body: { phone, code } }),
     [],
   );
 
   // مرحلهٔ ۳ — تکمیلِ پروفایل. اگر اولین حساب باشد خودکار وارد می‌شود.
   const completeSignup = useCallback(async (payload) => {
-    const r = await api('/auth/signup/complete', { method: 'POST', body: payload, auth: false });
-    if (r.accessToken) adopt(r.accessToken, r.user, true);
+    const r = await api('/auth/signup/complete', { method: 'POST', body: payload });
+    if (r.accessToken) adopt(r.user, true);
     return r; // { pending, bootstrap?, user, accessToken? }
   }, []);
 
-  /** سوییچ به حسابِ دیگری از لیست؛ اگر سشنش مرده بود از لیست حذف می‌شود.
-   * ⚠️ اول با توکنِ صریح اعتبارسنجی، بعد فعال‌سازی — تا اگر مقصد مرده بود،
-   * توکنِ فعالِ صفحه هرگز عوض نشود و درخواست‌های موازی ۴۰۱ نگیرند. */
+  /** سوییچ به حسابِ دیگری از لیست — سمتِ سرور؛ اگر نشستش مرده بود از لیست حذف می‌شود. */
   const switchAccount = useCallback(async (id) => {
-    const acc = getAccounts().find((a) => a.user.id === id);
-    if (!acc) throw new Error('حساب یافت نشد');
     try {
-      const me = await api('/auth/me', { token: acc.token });
-      setToken(acc.token, true);
+      const me = await api('/auth/switch', { method: 'POST', body: { accountId: id }, quiet401: true });
       setUser(me);
       updateAccountUser(id, me);
       bump();
@@ -192,57 +215,39 @@ export function AuthProvider({ children }) {
   /** خروجِ تکی از یک حساب (فعال یا غیرفعال). خروجی: id حسابِ فعالِ بعدی یا null */
   const logoutAccount = useCallback(
     async (id) => {
-      const acc = getAccounts().find((a) => a.user.id === id);
-      if (acc) {
-        try {
-          await api('/auth/logout', { method: 'POST', token: acc.token });
-        } catch {
-          /* سشنِ سرور شاید قبلاً مرده باشد */
-        }
-        removeAccount(id);
+      let r = null;
+      try {
+        r = await api('/auth/logout', { method: 'POST', body: id !== user?.id ? { accountId: id } : {}, quiet401: true });
+      } catch {
+        /* نشستِ سرور شاید قبلاً مرده باشد */
       }
-      if (user?.id === id) {
-        // حسابِ فعال خارج شد → سوییچ به بعدی یا خروجِ کامل
-        const next = getAccounts()[0];
-        if (next) {
-          setToken(next.token, true);
-          try {
-            const me = await api('/auth/me');
-            setUser(me);
-            updateAccountUser(me.id, me);
-            bump();
-            return me.id;
-          } catch {
-            removeAccount(next.user.id);
-          }
-        }
-        setToken(null);
-        setUser(null);
+      removeAccount(id);
+      if (user?.id !== id) {
         bump();
-        return null;
+        return user?.id ?? null;
       }
+      // حسابِ فعال خارج شد → سرور یا حسابِ بعدی را فعال کرده یا کوکی‌ها را پاک
+      if (r?.next) {
+        setUser(r.next);
+        updateAccountUser(r.next.id, r.next);
+        bump();
+        return r.next.id;
+      }
+      setUser(null);
       bump();
-      return user?.id ?? null;
+      return null;
     },
     [user],
   );
 
   /** خروج از همهٔ حساب‌ها (سشن‌های سرور هم باطل می‌شوند) */
   const logoutAll = useCallback(async () => {
-    const accs = getAccounts();
-    await Promise.allSettled(
-      accs.map((a) => api('/auth/logout', { method: 'POST', token: a.token })),
-    );
-    // سشنِ موقتِ خارج از لیست (ورودِ بدونِ «به خاطر بسپار»)
-    if (getToken() && !accs.some((a) => a.token === getToken())) {
-      try {
-        await api('/auth/logout', { method: 'POST' });
-      } catch {
-        /* — */
-      }
+    try {
+      await api('/auth/logout-all', { method: 'POST', quiet401: true });
+    } catch {
+      /* — */
     }
     clearAccounts();
-    setToken(null);
     setUser(null);
     bump();
   }, []);
@@ -264,7 +269,6 @@ export function AuthProvider({ children }) {
   /** خروجِ سادهٔ حسابِ جاری (میان‌بر) */
   const logout = useCallback(async () => {
     if (user) return logoutAccount(user.id);
-    setToken(null);
     setUser(null);
     bump();
     return null;
@@ -291,6 +295,7 @@ export function AuthProvider({ children }) {
         setUser,
       }}
     >
+      {user?.verificationDueAt && !user.phoneVerifiedAt && <div className="account-verification-notice" role="status">حساب شما موقت است؛ پیش از پایان هفت روز <a href="/app/profile">شماره را تأیید و پروفایل را تکمیل کنید</a>.</div>}
       {children}
     </AuthCtx.Provider>
   );

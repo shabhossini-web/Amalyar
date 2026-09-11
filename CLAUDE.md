@@ -61,7 +61,7 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
    - هر دو: سطح از DB خوانده می‌شود، سوپرادمین همیشه عبور، منبعِ حقیقت DBِ **همان tenant** است. هرگز کلیدِ سطح در UI/کد هاردکد نشود.
 4. **ماژولِ جدید = برشِ عمودی + این چک‌لیست:** کلیدِ ماژول در `FEATURE_DEFAULTS` + کلیدهای عملیات در `PERMISSION_DEFAULTS` (بک‌اند) + `FEATURE_FA` (Users.jsx) + آیتمِ لانچر با `min` fallback → صفحهٔ `/app/<key>` با هدرِ استاندارد → گاردِ `JwtAuthGuard + FeatureGuard + PermissionGuard` + `@Feature` (کلاس) و `@RequirePermissions` (متد) روی API → **object-authz** (کاربرِ زیرِ سوپروایزر فقط دادهٔ منتسب به خودش) → تستِ e2e.
 5. **`ProfileMenu` بالای هر صفحهٔ /app** (چیپِ سلفی+نام+سطح؛ دراپ‌داونِ چندحسابی). حسابِ خودت→`/app/profile`، بقیه→سوییچ.
-6. **چندحسابی:** `src/lib/accountsStore.js`. فقط ورودِ «مرا به خاطر بسپار» ماندگار می‌شود (localStorage)؛ بدونِ تیک → sessionStorage و خارج از لیست.
+6. **چندحسابی و نشست:** احراز با **کوکیِ HttpOnly** (`server/src/auth/session-cookie.ts`) — هیچ توکنی در storage نیست؛ درخواستِ تغییردهنده نشانِ CSRF (`X-CSRF-Token` از کوکیِ `amalyar_csrf`) می‌خواهد و `src/lib/api.js` خودش می‌گذارد. مجموعهٔ حساب‌های «مرا به خاطر بسپار» سمتِ سرور در کوکیِ امضاشدهٔ دوم است؛ سوییچ/خروج با `/auth/switch`، `/auth/logout`، `/auth/logout-all`. `src/lib/accountsStore.js` فقط کاشِ نمایشیِ فهرست است. بدونِ تیک → کوکیِ نشستِ مرورگر و خارج از لیست. e2e مرورگری: `scripts/e2e/lib/browser-login.mjs` (نه توکن در localStorage).
 7. **آیکون فقط SVGِ خطی** (stroke=currentColor, strokeWidth≈1.9). ایموجی/گلیفِ متنی (↩ ← ؟ …) ممنوع.
 8. **زبانِ خطاها فارسی** — پیامِ validation در DTOها و Exceptionها فارسی باشد.
 9. **RTL:** برای اشکالِ CSS (تیک/فلش) **بوردرِ فیزیکی** نه منطقی (باگِ واقعی: تیکِ قرینه). اعداد/کد/یوزرنیم با `dir="ltr"`.

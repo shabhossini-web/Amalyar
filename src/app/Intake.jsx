@@ -348,6 +348,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const targetKind = row.approvalKind || (workflow === 'clinic' ? 'clinic' : 'surgery');
   const [fields, setFields] = useState(null), [requiredItems, setRequiredItems] = useState([]), [itemsTouched, setItemsTouched] = useState(false);
   const [extra, setExtra] = useState(row.data ?? {});
+  const [hospitalMatch, setHospitalMatch] = useState(null);
+  useEffect(() => { let live = true; api(`/intake/submissions/${row.id}/hospital`).then(h => { if (live && h?.id) { setHospitalMatch(h); setF(s => s.hospitalId ? s : { ...s, hospitalId: String(h.id) }); } }).catch(() => {}); return () => { live = false; }; }, [row.id]);
   const visible = key => fields ? fields.some(f => f.key === key && f.active !== false) : targetKind !== 'clinic' || ['surgeonId', 'opDate', 'opStartTime'].includes(key);
   const [quick, setQuick] = useState(null);
   const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [], banks: [] });
@@ -444,9 +446,10 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
         {(Array.isArray(row.data?.prescription) ? row.data.prescription : row.data?.prescription?.id ? [row.data.prescription] : []).map(doc => <Receipt key={doc.id} documentId={doc.id} fileName={doc.name} onOpen={onZoom} label="دستور جراح" />)}
         {row.makesVisit !== false && (
         <div className="ia-grid">
-          {visible('surgeonId') && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
+          {hospitalMatch && <p className="ia-note">بیمارستان {hospitalMatch.source === 'suggested' ? 'پیشنهادی بر اساس نوشته بیمار؛ بررسی کنید' : 'ثبت‌شده بیمار'}: {hospitalMatch.name}</p>}
+          {(visible('surgeonId') || workflow === 'ionm') && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : workflow === 'ionm' ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
           {visible('hospitalId') && <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
-          {visible('techId') && <ApprovalSelect field="techId" section="techs" label="کارشناس" list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
+          {visible('techId') && <ApprovalSelect field="techId" section="techs" label={workflow === 'ionm' ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
           {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />}
           {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}
                  onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />}

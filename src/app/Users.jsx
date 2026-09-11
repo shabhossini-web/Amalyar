@@ -118,6 +118,42 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
   );
 }
 
+function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
+  const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
+  const [testAccount, setTestAccount] = useState(false), [username, setUsername] = useState('');
+  const [level, setLevel] = useState(2), [jobRole, setRole] = useState('technician');
+  const [busy, setBusy] = useState(false), [errors, setErrors] = useState({}), [message, setMessage] = useState(''), [result, setResult] = useState(null);
+  const save = async () => {
+    const next = personErrors(form); if (!form.phone) next.phone = 'شماره همراه لازم است'; if (testAccount && !/^(?=.*[a-zA-Z])[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = '۳ تا ۴۰ کاراکتر، شامل حرف لاتین؛ مثل test-doctor';
+    else if (username && !/^[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد باشد';
+    setErrors(next);
+    if (Object.keys(next).length || busy) return;
+    setBusy(true); setMessage('');
+    try { const body = { level, jobRole, ...(testAccount ? { testAccount: true } : {}), ...(username ? { username } : {}) }; for (const k of ['firstName', 'lastName', 'phone', 'nationalId', 'email', 'city', 'address', 'iban', 'notes']) if (form[k]) body[k] = form[k];
+      setResult(await api('/accounts/temporary', { method: 'POST', body })); await onSaved();
+    } catch (e) { setMessage(e.message); } finally { setBusy(false); }
+  };
+  return <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+    <header className="df-sheet-head"><b>ساخت حساب موقت</b><button className="df-x" onClick={onClose} disabled={busy} aria-label="بستن"><Close size={16} /></button></header>
+    <div className="df-sheet-body">
+      {result ? <><p>حساب ساخته شد. این رمز فقط همین بار نمایش داده می‌شود؛ اطلاعات ورود را به صاحب حساب تحویل دهید.</p>
+        <p>{result.account.isTestAccount ? 'حساب آزمایشی؛ ورود فقط با نام کاربری. ' : ''}نام کاربری: <b dir="ltr">{result.account.username}</b></p><p>رمز اولیه: <b dir="ltr">{result.temporaryPassword}</b></p>
+        <p>مهلت تأیید شماره: {faDate(result.account.verificationDueAt)}. شخص پس از ورود از «پروفایل من» شماره را با کد پیامکی تأیید و مشخصات و رمز خود را تکمیل کند. بعد از مهلت، حساب تأییدنشده غیرفعال می‌شود.</p>
+      </> : <>{testingEnabled && <label className="us-test-toggle"><input type="checkbox" checked={testAccount} onChange={e => setTestAccount(e.target.checked)} disabled={busy} /><span>حساب آزمایشی با شماره مشترک</span></label>}
+        {testAccount && <p>پروفایل جدید و مستقل با همین شماره ساخته می‌شود. ورود فقط با نام کاربری است. کد ملی تکراری وارد نکنید؛ این فیلد اختیاری است. حساب آزمایشی به داده‌های همین شرکت طبق نقش انتخابی دسترسی دارد.</p>}
+        <label className="pf-field"><span>نام کاربری {testAccount ? '(الزامی)' : '(اختیاری)'}</span><input dir="ltr" autoComplete="off" value={username} maxLength={40} onChange={e => setUsername(e.target.value.trim())} disabled={busy} placeholder="test-doctor" />{errors.username && <em role="alert">{errors.username}</em>}</label>
+        <p>حساب بلافاصله قابل ورود است. صاحب شماره هفت روز برای تأیید پیامکی و تکمیل پروفایل فرصت دارد. مشخصات افراد موجود در تعاریف پایه حفظ می‌شود.</p>
+        <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
+        <label className="pf-field"><span>سطح دسترسی</span><select value={level} onChange={e => setLevel(+e.target.value)} disabled={busy}>{LEVELS.map(l => <option key={l.v} value={l.v}>{l.l}</option>)}</select></label>
+        <label className="pf-field"><span>نقش شغلی</span><select value={jobRole} onChange={e => setRole(e.target.value)} disabled={busy}>{JOB_ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></label>
+        {['driver', 'courier'].includes(jobRole) && <p>حساب به نیروی حمل‌ونقل متصل می‌شود و مسیرها و ابلاغ‌ها در پرتال حمل‌ونقل قابل مشاهده خواهند بود.</p>}
+        {jobRole === 'doctor' && <p>در شرکت‌های نورومانیتورینگ و ایمپلنت، حساب پزشک به جراح در تعاریف پایه و پرتال او متصل می‌شود.</p>}
+      </>}
+      {message && <p role="alert">{message}</p>}
+    </div><footer className="df-sheet-foot"><button className="df-ghost" disabled={busy} onClick={onClose}>بستن</button>{!result && <button className="df-save" disabled={busy} onClick={save}>{busy ? 'در حال ساخت…' : 'ساخت حساب'}</button>}</footer>
+  </Overlay>;
+}
+
 export default function Users() {
   const stagger = useStagger();
   const { user } = useAuth();
@@ -128,6 +164,8 @@ export default function Users() {
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
   const [profileId, setProfileId] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const [testingEnabled, setTestingEnabled] = useState(false), [modeBusy, setModeBusy] = useState(false);
 
   useEffect(() => { document.title = 'عمل‌یار — مدیریت کاربران'; }, []);
   useEffect(() => {
@@ -138,7 +176,8 @@ export default function Users() {
 
   const load = useCallback(async () => {
     try {
-      const [p, a] = await Promise.all([api('/accounts/pending'), api('/accounts')]);
+      const [p, a, mode] = await Promise.all([api('/accounts/pending'), api('/accounts'), api('/accounts/testing-mode')]);
+      setTestingEnabled(mode.enabled === true);
       setPending(p);
       setAll(a);
     } catch (e) {
@@ -148,6 +187,13 @@ export default function Users() {
   useEffect(() => { load(); }, [load]);
 
   if (user && user.level < 6) return <Navigate to="/app" replace />;
+
+  const toggleTesting = async () => {
+    if (modeBusy) return;
+    setModeBusy(true);
+    try { const result = await api('/accounts/testing-mode', { method: 'POST', body: { enabled: !testingEnabled } }); await load(); setToast(result.enabled ? 'ساخت حساب آزمایشی فعال شد' : `${result.disabled} حساب آزمایشی غیرفعال شد`); }
+    catch (e) { setToast(e.message); } finally { setModeBusy(false); }
+  };
 
   const approve = async (row) => {
     const level = levelSel[row.id] ?? 2;
@@ -218,6 +264,8 @@ export default function Users() {
           <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
+        {!user?.isTestAccount && <section className="glass us-card"><b>تست نقش‌ها با یک شماره</b><p>حالت آزمایشی را روشن کنید، سپس در «ساخت حساب موقت» گزینهٔ شماره مشترک و نام کاربری مستقل را انتخاب کنید. از منوی حساب، «افزودن حساب» و جابه‌جایی بین نقش‌ها استفاده کنید.</p><p>پایان تست همهٔ حساب‌های آزمایشی و نشست‌هایشان را غیرفعال می‌کند؛ اطلاعات ثبت‌شده حذف نمی‌شود. روشن‌کردن دوباره، حساب‌های قبلی را خودکار فعال نمی‌کند.</p><button className="us-btn" disabled={modeBusy} onClick={toggleTesting}>{modeBusy ? 'در حال ثبت…' : testingEnabled ? 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' : 'فعال‌کردن ساخت حساب آزمایشی'}</button></section>}
+        <button className="us-btn ok" onClick={() => setCreating(true)}>+ ساخت حساب موقت</button>
         <Tabs
           variant="inset"
           className="us-tabs"
@@ -278,9 +326,10 @@ export default function Users() {
                 <div className="us-row">
                   <Avatar row={row} />
                   <div className="us-meta">
-                    <b>{row.displayName}{row.id === user.id && <i className="us-you">شما</i>}</b>
+                    <b>{row.isTestAccount && <i className="us-you">آزمایشی</i>}{row.displayName}{row.id === user.id && <i className="us-you">شما</i>}</b>
                     <span dir="ltr">@{row.username}</span>
                   </div>
+                  {row.verificationDueAt && !row.phoneVerifiedAt && <small>تأیید شماره تا {faDate(row.verificationDueAt)}</small>}
                   <span className={`us-status ${row.status}`}>{STATUS_FA[row.status] || row.status}</span>
                 </div>
                 <div className="us-actions">
@@ -334,6 +383,7 @@ export default function Users() {
       </div>
 
       <AnimatePresence>
+        {creating && <TemporaryAccountSheet testingEnabled={testingEnabled && !user?.isTestAccount} onClose={() => setCreating(false)} onSaved={load} />}
         {profileId > 0 && (
           <ProfileSheet
             id={profileId}

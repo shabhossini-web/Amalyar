@@ -6,6 +6,7 @@
  * سبز است هیچ چیزی را نگه نمی‌دارد.
  */
 import { chromium } from 'playwright-core';
+import { browserLogin } from './lib/browser-login.mjs';
 
 const UI = 'http://127.0.0.1:5199';
 const API = 'http://localhost:3101/api';
@@ -43,7 +44,7 @@ if (!login.accessToken) { console.error('ورود نشد'); process.exit(1); }
 }
 
 await page.goto(UI + '/', { waitUntil: 'domcontentloaded' });
-await page.evaluate((t) => localStorage.setItem('amalyar_token', t), login.accessToken);
+await browserLogin(page, login.accessToken);
 
 await page.goto(UI + '/app/forms', { waitUntil: 'networkidle' });
 await page.waitForTimeout(1200);

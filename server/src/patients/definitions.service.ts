@@ -200,18 +200,19 @@ export class DefinitionsService {
       include: { _count: { select: { visits: true } } },
     });
     return rows.map((h) => ({
-      id: h.id, sector: h.sector, name: h.name, city: h.city, address: h.address, phone: h.phone,
+      id: h.id, centralId: h.centralId, province: h.province, sector: h.sector, name: h.name, city: h.city, address: h.address, phone: h.phone,
       contactName: h.contactName, contactPhone: h.contactPhone, notes: h.notes,
       active: h.active, visitCount: h._count.visits,
     }));
   }
 
-  async createHospital(dto: { sector?: string; name: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string }) {
+  async createHospital(dto: { province?: string; sector?: string; name: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string }) {
     await this.hospitalDupCheck(dto.name);
     return this.prisma.hospital.create({
       data: {
         name: dto.name.trim(),
         sector: dto.sector ?? 'private',
+        province: dto.province?.trim() || null,
         city: dto.city?.trim() || null,
         address: dto.address?.trim() || null,
         phone: dto.phone?.trim() || null,
@@ -224,7 +225,7 @@ export class DefinitionsService {
 
   async updateHospital(
     id: number,
-    dto: { sector?: string; name?: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string; active?: boolean },
+    dto: { province?: string; sector?: string; name?: string; city?: string; address?: string; phone?: string; contactName?: string; contactPhone?: string; notes?: string; active?: boolean },
   ) {
     const h = await this.prisma.hospital.findUnique({ where: { id } });
     if (!h) throw new NotFoundException('بیمارستان یافت نشد');
@@ -233,6 +234,7 @@ export class DefinitionsService {
       where: { id },
       data: {
         ...(dto.sector !== undefined ? { sector: dto.sector } : {}),
+        ...(dto.province !== undefined ? { province: dto.province?.trim() || null } : {}),
         ...(dto.name ? { name: dto.name.trim() } : {}),
         ...(dto.city !== undefined ? { city: dto.city?.trim() || null } : {}),
         ...(dto.address !== undefined ? { address: dto.address?.trim() || null } : {}),

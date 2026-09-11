@@ -21,7 +21,9 @@ model Person {
   firstName  String    @map("first_name")
   lastName   String    @map("last_name")
   nationalId String?   @unique @map("national_id")
-  phone      String?   @unique
+  phone      String?
+  // Normal identities retain database-enforced phone uniqueness; test profiles have independent scopes.
+  phoneScope String    @default("primary") @map("phone_scope")
   email      String?
   birthDate  DateTime? @map("birth_date")
   photo      String? // dataURL (فعلاً؛ بعداً object-storage)
@@ -36,6 +38,7 @@ model Person {
   surgeon   Surgeon?
   transport TransportStaff?
 
+  @@unique([phone, phoneScope])
   @@index([lastName, firstName])
   @@map("people")
 }
@@ -43,6 +46,10 @@ model Person {
 /// نقشِ «کاربرِ سامانه» — فقط اعتبارنامه و سطحِ دسترسی. هویت در Person است.
 /// سطوح: 1=بازدید 2=کارشناس 3=کارشناس‌ادمین 4=سوپروایزر 5=ادمین 6=سوپرادمین
 model Account {
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  verificationDueAt DateTime? @map("verification_due_at")
+  systemKey String? @unique @map("system_key")
+  hospitalDuties HospitalDuty[]
   id           Int       @id @default(autoincrement())
   person       Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
   personId     Int       @unique @map("person_id")
@@ -70,6 +77,7 @@ model Account {
   availabilityExceptions AvailabilityException[] @relation("AvailabilityExceptionDoctor")
   appointments           Appointment[]           @relation("AppointmentDoctor")
 
+  @@index([verificationDueAt])
   @@map("accounts")
 }
 
@@ -116,6 +124,10 @@ model ProcedureTypeItem {
 }
 
 model Hospital {
+  centralId String? @unique @map("central_id")
+  centralSnapshot Json? @map("central_snapshot")
+  province String?
+  duties HospitalDuty[]
   sector String @default("private")
   id           Int      @id @default(autoincrement())
   name         String
@@ -2314,6 +2326,14 @@ model Appointment {
 /// شمارهٔ تازه ساخته می‌شود (syncNextVisitReminder).
 model Reminder {
   id Int @id @default(autoincrement())
+  channel String @default("sms")
+  dedupeKey String? @unique @map("dedupe_key")
+  recipientAccountId Int? @map("recipient_account_id")
+  recipientName String? @map("recipient_name")
+  chatMessageId Int? @map("chat_message_id")
+  providerId String? @map("provider_id")
+  deliveryStatus String @default("unknown") @map("delivery_status")
+  attemptedAt DateTime? @map("attempted_at")
 
   patient   Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
   patientId Int?     @map("patient_id")
@@ -2344,6 +2364,21 @@ model Reminder {
   @@index([status, dueAt])
   @@index([visitId, kind])
   @@map("reminders")
+}
+
+model HospitalDuty {
+  id Int @id @default(autoincrement())
+  date DateTime @db.Date
+  hospitalId Int @map("hospital_id")
+  hospital Hospital @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  techId Int @map("tech_id")
+  tech Account @relation(fields: [techId], references: [id], onDelete: Restrict)
+  arriveTime String @map("arrive_time")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([date, hospitalId, techId])
+  @@index([techId, date])
+  @@map("hospital_duties")
 }
 
 /// اصلاح‌های دستیِ کاربر روی پیش‌نویس‌های دستیار — «یادگیری» یعنی retrieval:

@@ -120,7 +120,7 @@ export default function ProfileMenu({ onToast }) {
         <Avatar u={user} size={34} />
         <span className="pm-chip-meta">
           <b>{user.displayName}</b>
-          <small>{user.levelName}</small>
+          <small>{user.levelName}{user.isTestAccount ? ' · آزمایشی' : ''}</small>
         </span>
         <span className={`pm-caret${open ? ' up' : ''}`}><Caret width="15" height="15" /></span>
       </button>
@@ -148,7 +148,7 @@ export default function ProfileMenu({ onToast }) {
                     <Avatar u={a.user} size={36} />
                     <span className="pm-acc-meta">
                       <b>{a.user.displayName}</b>
-                      <small>{a.user.levelName}{a.ephemeral ? ' · موقت' : ''}</small>
+                      <small>{a.user.levelName}{a.user.isTestAccount ? ' · آزمایشی' : ''}{a.ephemeral ? ' · موقت' : ''}</small>
                     </span>
                     {a.user.id === user.id && <span className="pm-active-mark"><Check width="15" height="15" /></span>}
                   </button>

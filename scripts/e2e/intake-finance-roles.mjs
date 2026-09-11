@@ -102,6 +102,14 @@ try {
   await assert.rejects(() => billing.addPayment(approved.visitId, { amount: 1000, bankAccountId: informal.id }, user));
   await assert.rejects(() => ledger.patchAccount(bank.id, { classification: 'informal' }, user));
   ok('invoice/account matching enforced on server and linked account type protected');
+  // پولِ نقدی حسابِ بانکی ندارد؛ قیدِ «همان حسابِ فاکتور» فقط برای مسیرِ بانکی است.
+  const cashPay = await billing.addPayment(approved.visitId, { amount: 1000, method: 'cash' }, user);
+  assert.equal(cashPay.bankAccountId, null);
+  await assert.rejects(() => billing.addPayment(approved.visitId, { amount: 1000, method: 'transfer' }, user), /کارتی|حساب/);
+  await assert.rejects(() => billing.addPayment(approved.visitId, { amount: 1000, method: 'card', bankAccountId: informal.id }, user));
+  await assert.rejects(() => billing.addPayment(approved.visitId, { amount: 1000, method: 'cash', bankAccountId: informal.id }, user));
+  assert.equal((await billing.addPayment(approved.visitId, { amount: 500, method: 'card', bankAccountId: bank.id }, user)).bankAccountId, bank.id);
+  ok('cash on an invoice-linked visit needs no bank account; card/transfer/cheque must use the linked account; a mismatched account is refused for every method');
   const field = await prisma.formField.findFirst({ where: { formId: form.id, key: 'sharedNote' } });
   await forms.patchField(field.id, { roles: ['secretary', 'technician'] });
   const def = await forms.byKey('visit.surgery');

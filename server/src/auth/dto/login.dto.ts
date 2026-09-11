@@ -1,4 +1,4 @@
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class LoginDto {
   @IsString()
@@ -10,4 +10,9 @@ export class LoginDto {
   @MinLength(1)
   @MaxLength(128)
   password: string;
+
+  /** «مرا به خاطر بسپار» — کوکیِ ماندگار و عضویت در مجموعهٔ چندحسابی؛ پیش‌فرض true. */
+  @IsOptional()
+  @IsBoolean()
+  remember?: boolean;
 }

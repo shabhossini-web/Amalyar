@@ -1,15 +1,32 @@
 // کلاینتِ سادهٔ API برای بک‌اندِ عمل‌یار
+//
+// ⚠️ احراز با **کوکیِ HttpOnly** است، نه توکن در storage: مرورگر خودش کوکی را
+// می‌فرستد (`credentials: 'include'`) و جاوااسکریپت هیچ توکنی در دست ندارد که
+// با XSS لو برود. برای درخواست‌های تغییردهنده، نشانِ CSRF از کوکیِ خواندنی
+// در هدرِ `X-CSRF-Token` تکرار می‌شود (double-submit) — سایتِ دیگری آن کوکی را
+// نمی‌بیند. (`server/src/auth/session-cookie.ts`)
 const SAME_ORIGIN_API = typeof window === 'undefined' ? '/api' : `${window.location.origin}/api`;
 const BASE = (import.meta.env.VITE_API_BASE || SAME_ORIGIN_API).replace(/\/$/, '');
-const TOKEN_KEY = 'amalyar_token';
+const CSRF_COOKIE = 'amalyar_csrf';
 
-// «مرا به خاطر بسپار»: تیک‌خورده → localStorage (ماندگار)؛ بدونِ تیک → sessionStorage (تا بستنِ مرورگر)
-export const getToken = () => sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
-export const setToken = (t, remember = true) => {
-  localStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
-  if (t) (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, t);
+const readCookie = (name) => {
+  try {
+    const hit = document.cookie.split(';').map((s) => s.trim()).find((s) => s.startsWith(`${name}=`));
+    return hit ? decodeURIComponent(hit.slice(name.length + 1)) : null;
+  } catch {
+    return null;
+  }
 };
+const mutating = (method) => !['GET', 'HEAD', 'OPTIONS'].includes(String(method).toUpperCase());
+
+/** هدرهای احراز: فقط نشانِ CSRF برای درخواستِ تغییردهنده — توکنی وجود ندارد که فرستاده شود. */
+function authHeaders(method, headers = {}) {
+  if (mutating(method)) {
+    const csrf = readCookie(CSRF_COOKIE);
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+  return headers;
+}
 
 /**
  * نشانیِ کاملِ یک مسیرِ API — برای `src` تصویر و هر جایی که `fetch` نیست.
@@ -28,41 +45,52 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(path, { method = 'GET', body, auth = true, token } = {}) {
-  const headers = {};
+const parseBody = async (res) => {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+};
+
+const messageOf = (data, status) => {
+  const m = data && typeof data === 'object' ? data.message : null;
+  return Array.isArray(m) ? m.join('، ') : m || `خطای سرور (${status})`;
+};
+
+/** سشنِ فعال وسطِ کار مُرد (revoke/انقضا) → رویدادِ سراسری تا AuthProvider بازیابی کند. */
+const announceUnauthorized = (path, quiet) => {
+  if (quiet || path.startsWith('/auth/')) return;
+  window.dispatchEvent(new CustomEvent('amalyar:unauthorized'));
+};
+
+/**
+ * @param {string} path
+ * @param {{method?: string, body?: any, quiet401?: boolean}} [opts]
+ *   quiet401 — برای کاوش‌های خودِ AuthProvider که ۴۰۱ برایشان جواب است نه حادثه.
+ */
+export async function api(path, { method = 'GET', body, quiet401 = false } = {}) {
+  const headers = authHeaders(method);
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const tok = token ?? getToken(); // token صریح: برای عملیات روی حسابِ غیرفعال (خروجِ تکی)
-  if (auth && tok) headers.Authorization = `Bearer ${tok}`;
 
   let res;
   try {
     res = await fetch(`${BASE}${path}`, {
       method,
       headers,
+      credentials: 'include',
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
     throw new ApiError('اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.', 0);
   }
 
-  let data = null;
-  const text = await res.text();
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = text;
-    }
-  }
-
+  const data = await parseBody(res);
   if (!res.ok) {
-    // سشنِ فعال وسطِ کار مُرد (revoke/انقضا) → رویدادِ سراسری تا AuthProvider بازیابی کند
-    if (res.status === 401 && auth && !token && tok) {
-      window.dispatchEvent(new CustomEvent('amalyar:unauthorized'));
-    }
-    const m = data && typeof data === 'object' ? data.message : null;
-    const msg = Array.isArray(m) ? m.join('، ') : m || `خطای سرور (${res.status})`;
-    throw new ApiError(msg, res.status);
+    if (res.status === 401) announceUnauthorized(path, quiet401);
+    throw new ApiError(messageOf(data, res.status), res.status);
   }
   return data;
 }
@@ -72,43 +100,27 @@ export async function api(path, { method = 'GET', body, auth = true, token } = {
  * `multipart/form-data` را با boundary بسازد و دست‌کاریِ ما آن را خراب می‌کند.
  */
 export async function apiUpload(path, formData) {
-  const headers = {};
-  const tok = getToken();
-  if (tok) headers.Authorization = `Bearer ${tok}`;
-
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: formData });
+    res = await fetch(`${BASE}${path}`, { method: 'POST', headers: authHeaders('POST'), credentials: 'include', body: formData });
   } catch {
     throw new ApiError('اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.', 0);
   }
-  const text = await res.text();
-  let data = null;
-  if (text) { try { data = JSON.parse(text); } catch { data = text; } }
+  const data = await parseBody(res);
   if (!res.ok) {
-    if (res.status === 401 && tok) window.dispatchEvent(new CustomEvent('amalyar:unauthorized'));
-    const m = data && typeof data === 'object' ? data.message : null;
-    throw new ApiError(Array.isArray(m) ? m.join('، ') : m || `خطای سرور (${res.status})`, res.status);
+    if (res.status === 401) announceUnauthorized(path, false);
+    throw new ApiError(messageOf(data, res.status), res.status);
   }
   return data;
 }
 
 /**
- * فایلِ محافظت‌شده را به‌شکلِ blob URL می‌گیرد.
- *
- * لازم است چون مدارک پشتِ هدرِ Authorization‌اند و `<img src>` هدر نمی‌فرستد.
- * ⚠️ فراخوان باید URL را با `URL.revokeObjectURL` آزاد کند وگرنه حافظه نشت می‌کند.
- */
-/**
  * فایلِ محافظت‌شده به‌شکلِ data URL — برای جاسازی در سندِ چاپیِ پنجرهٔ جدا،
  * جایی که blob URLِ پنجرهٔ مادر قابلِ‌اتکا نیست. نبودِ فایل، null است نه خطا.
  */
 export async function apiDataUrl(path) {
-  const headers = {};
-  const tok = getToken();
-  if (tok) headers.Authorization = `Bearer ${tok}`;
   try {
-    const res = await fetch(`${BASE}${path}`, { headers });
+    const res = await fetch(`${BASE}${path}`, { credentials: 'include' });
     if (!res.ok) return null;
     const blob = await res.blob();
     return await new Promise((resolve) => {
@@ -122,11 +134,15 @@ export async function apiDataUrl(path) {
   }
 }
 
+/**
+ * فایلِ محافظت‌شده را به‌شکلِ blob URL می‌گیرد.
+ *
+ * هنوز لازم است: مدارک پشتِ احرازند و بعضی جاها (پیش‌نمایشِ داخلِ اپ) کنترلِ
+ * خطا و آزادسازیِ حافظه می‌خواهند. ⚠️ فراخوان باید URL را با
+ * `URL.revokeObjectURL` آزاد کند وگرنه حافظه نشت می‌کند.
+ */
 export async function apiBlobUrl(path) {
-  const headers = {};
-  const tok = getToken();
-  if (tok) headers.Authorization = `Bearer ${tok}`;
-  const res = await fetch(`${BASE}${path}`, { headers });
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include' });
   if (!res.ok) throw new ApiError('فایل در دسترس نیست', res.status);
   return URL.createObjectURL(await res.blob());
 }
@@ -136,21 +152,19 @@ export async function apiBlobUrl(path) {
  * `onChunk` می‌رسند تا متن زنده نوشته شود؛ `{error}` وسطِ راه یعنی استریم
  * برید و همان پیامِ سرور پرتاب می‌شود؛ `[DONE]` پایانِ سالم.
  *
- * ⚠️ EventSource نیست چون هدرِ ورود می‌خواهد و بدنهٔ POST — fetchِ خام با
- * خواندنِ ReadableStream همین کار را بدونِ وابستگی می‌کند.
+ * ⚠️ EventSource نیست چون بدنهٔ POST می‌خواهد — fetchِ خام با خواندنِ
+ * ReadableStream همین کار را بدونِ وابستگی می‌کند.
  */
 export async function apiStream(path, body, onChunk) {
-  const headers = { 'Content-Type': 'application/json' };
-  const tok = getToken();
-  if (tok) headers.Authorization = `Bearer ${tok}`;
+  const headers = authHeaders('POST', { 'Content-Type': 'application/json' });
   let res;
   try {
-    res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+    res = await fetch(`${BASE}${path}`, { method: 'POST', headers, credentials: 'include', body: JSON.stringify(body) });
   } catch {
     throw new ApiError('اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.', 0);
   }
   if (!res.ok || !res.body) {
-    if (res.status === 401 && tok) window.dispatchEvent(new CustomEvent('amalyar:unauthorized'));
+    if (res.status === 401) announceUnauthorized(path, false);
     const j = await res.json().catch(() => null);
     const m = j?.message;
     throw new ApiError(Array.isArray(m) ? m.join('، ') : m || 'خطای سرور', res.status);
@@ -208,10 +222,7 @@ export function apiEvents(path, onEvent) {
     while (!stopped) {
       ctl = new AbortController();
       try {
-        const headers = {};
-        const tok = getToken();
-        if (tok) headers.Authorization = `Bearer ${tok}`;
-        const res = await fetch(`${BASE}${path}`, { headers, signal: ctl.signal });
+        const res = await fetch(`${BASE}${path}`, { credentials: 'include', signal: ctl.signal });
         if (!res.ok || !res.body) throw new Error(String(res.status));
         const reader = res.body.getReader();
         const dec = new TextDecoder();

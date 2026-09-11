@@ -12,7 +12,6 @@ try {
   browser = await chromium.launch({ executablePath: process.env.E2E_CHROME ?? '/tmp/chromium', args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const ctx = await browser.newContext({ viewport, locale: 'fa-IR', serviceWorkers: 'block', permissions: ['microphone'] });
-    await ctx.addInitScript(() => localStorage.setItem('amalyar_token', 'test-only'));
     const writes = [], errors = [];
     const hospitals = [{ id: 1, name: 'بیمارستان اول', active: true }];
     const banks = [{ id: 1, ownerName: 'شرکت رسمی', bankName: 'تست', classification: 'formal', active: true }];

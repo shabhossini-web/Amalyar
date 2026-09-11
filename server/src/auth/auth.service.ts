@@ -11,8 +11,11 @@ import { jobRoleLabel } from '../common/job-roles';
 import { LEVEL, levelName } from '../common/levels';
 import { RateLimitService } from '../common/rate-limit.service';
 import { TenantContext } from '../tenant/tenant-context';
+import type { Request, Response } from 'express';
+import { expireProvisional, expireProvisionalInTransaction, isProvisional } from '../accounts/provisional';
+import { isTestAccount, testAccountsEnabled } from '../accounts/test-accounts';
+import { MAX_SET, SESSION_SET_COOKIE, SESSION_TTL_DAYS, SetEntry, cookieBase, readCookie } from './session-cookie';
 
-const SESSION_TTL_DAYS = 30;
 const MAX_SESSIONS = 10;
 const OTP_TTL_MS = 5 * 60_000;
 const OTP_RESEND_MS = 60_000;
@@ -67,24 +70,28 @@ export class AuthService {
      * روی داشتنِ حساب است، نه روی وجودِ شخص.
      */
     const exists = await this.prisma.person.findUnique({
-      where: { phone },
-      include: { account: { select: { id: true, passwordHash: true } } },
+      where: { phone_phoneScope: { phone, phoneScope: 'primary' } },
+      include: { account: { select: { id: true, passwordHash: true, verificationDueAt: true, phoneVerifiedAt: true } } },
     });
     /* ⚠️ «تکراری» فقط حسابِ **تصاحب‌شده** است. حسابی که مدیر برای این شماره
        ساخته و هنوز رمز ندارد باید بتواند کد بگیرد — وگرنه همان کارشناسی که
        مدیر برایش حساب ساخته، هرگز نمی‌تواند وارد شود. */
-    if (exists?.account && !isUnclaimedAccount(exists.account)) {
+    if (exists?.account && !isUnclaimedAccount(exists.account) && !isProvisional(exists.account)) {
       throw new BadRequestException('این شماره قبلاً ثبت شده است');
     }
 
+    return this.sendPhoneOtp(phone, 'signup');
+  }
+
+  private async sendPhoneOtp(phone: string, purpose: string) {
     const recent = await this.prisma.otpCode.findFirst({
-      where: { phone, purpose: 'signup', createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
+      where: { phone, purpose, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
     });
     if (recent) throw new BadRequestException('کمی صبر کنید و دوباره تلاش کنید');
 
     const code = String(randomInt(100000, 1000000)); // ۶ رقمی
     const otp = await this.prisma.otpCode.create({
-      data: { phone, codeHash: sha256(code), purpose: 'signup', expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     try {
       // هاستِ WebOTP باید میزبانِ همان شرکت باشد، وگرنه مرورگر کد را اتوفیل نمی‌کند
@@ -108,10 +115,16 @@ export class AuthService {
 
   // ── ثبت‌نام: مرحلهٔ ۲ — تأییدِ کد → توکنِ کوتاه‌عمرِ ثبت‌نام ──
   async verifySignupOtp(dto: { phone: string; code: string }, ip = 'unknown') {
+    await this.consumePhoneOtp(dto, 'signup', ip);
+    const signupToken = await this.jwt.signAsync({ phone: dto.phone, purpose: 'signup' }, { expiresIn: '15m' });
+    return { ok: true, signupToken };
+  }
+
+  private async consumePhoneOtp(dto: { phone: string; code: string }, purpose: string, ip: string) {
     this.rateLimit.hit(`otp-verify:ip:${ip}`, 20, 15 * 60_000);
     this.rateLimit.hit(`otp-verify:phone:${dto.phone}`, 8, 15 * 60_000);
     const otp = await this.prisma.otpCode.findFirst({
-      where: { phone: dto.phone, purpose: 'signup', consumedAt: null },
+      where: { phone: dto.phone, purpose, consumedAt: null },
       orderBy: { createdAt: 'desc' },
     });
     if (!otp) throw new BadRequestException('برای این شماره کدی صادر نشده است');
@@ -122,14 +135,28 @@ export class AuthService {
       await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
       throw new BadRequestException('کد تأیید اشتباه است');
     }
-    await this.prisma.otpCode.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
+    const consumed = await this.prisma.otpCode.updateMany({ where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
+    if (!consumed.count) throw new BadRequestException('کد قبلاً استفاده شده یا منقضی است');
 
-    // ۱۵ دقیقه فرصت برای تکمیلِ پروفایل
-    const signupToken = await this.jwt.signAsync(
-      { phone: dto.phone, purpose: 'signup' },
-      { expiresIn: '15m' },
-    );
-    return { ok: true, signupToken };
+  }
+
+  async requestPhoneVerification(user: any, ip: string) {
+    if (!isProvisional(user)) throw new BadRequestException('حساب نیازی به تأیید موقت ندارد');
+    if (isTestAccount(user)) {
+      this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
+      this.rateLimit.hit(`otp:phone:${user.person.phone}`, 3, 15 * 60_000);
+      return this.sendPhoneOtp(user.person.phone, `test-account:${user.id}`);
+    }
+    return this.requestSignupOtp(user.person.phone, ip);
+  }
+
+  async verifyPhone(user: any, dto: { phone: string; code: string }, ip: string) {
+    if (!isProvisional(user) || dto.phone !== user.person.phone) throw new BadRequestException('شماره باید با شماره حساب شما یکسان باشد');
+    if (isTestAccount(user)) await this.consumePhoneOtp(dto, `test-account:${user.id}`, ip);
+    else await this.verifySignupOtp(dto, ip);
+    const changed = await this.prisma.account.updateMany({ where: { id: user.id, status: 'active', phoneVerifiedAt: null, verificationDueAt: { gt: new Date() }, person: { phone: dto.phone } }, data: { phoneVerifiedAt: new Date() } });
+    if (!changed.count) { await expireProvisional(this.prisma, user.id); throw new BadRequestException('مهلت تأیید تمام شده یا مشخصات حساب تغییر کرده است'); }
+    return this.publicUser(await this.prisma.account.findUniqueOrThrow({ where: { id: user.id }, include: WITH_PERSON }));
   }
 
   // ── ثبت‌نام: مرحلهٔ ۳ — تکمیلِ پروفایل و ساختِ حساب ─────────
@@ -150,16 +177,17 @@ export class AuthService {
       // یک قفل سراسری کوتاه، ثبت‌نام هم‌زمان را از ساخت دو سوپرادمین بازمی‌دارد.
       await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(73190521)');
 
-      if (await tx.account.findUnique({ where: { username: dto.username } })) {
+      const usernameOwner = await tx.account.findUnique({ where: { username: dto.username }, include: { person: true } });
+      if (usernameOwner && !(isProvisional(usernameOwner) && !isTestAccount(usernameOwner) && usernameOwner.person.phone === phone)) {
         throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
       }
       // شخصی که از قبل هست ولی حساب ندارد (راننده/پیکِ تعریف‌شده) به همان
       // هویت وصل می‌شود، نه یک Personِ دومِ هم‌شماره.
       const known = await tx.person.findUnique({
-        where: { phone },
-        include: { account: { select: { id: true, passwordHash: true } } },
+        where: { phone_phoneScope: { phone, phoneScope: 'primary' } },
+        include: { account: { select: { id: true, passwordHash: true, verificationDueAt: true, phoneVerifiedAt: true } } },
       });
-      if (known?.account && !isUnclaimedAccount(known.account)) {
+      if (known?.account && !isUnclaimedAccount(known.account) && !isProvisional(known.account)) {
         throw new BadRequestException('این شماره قبلاً ثبت شده است');
       }
 
@@ -174,11 +202,13 @@ export class AuthService {
        * اضافه می‌کند: نامِ کاربری، رمز، و سلفی.
        */
       if (known?.account) {
+        await expireProvisionalInTransaction(tx, known.account.id);
         const claimed = await tx.account.update({
           where: { id: known.account.id },
           data: {
             username: dto.username.trim(),
             passwordHash,
+            phoneVerifiedAt: new Date(),
             person: { update: { photo: dto.selfie } },
           },
           include: WITH_PERSON,
@@ -201,6 +231,7 @@ export class AuthService {
         data: {
           username: dto.username.trim(),
           passwordHash,
+          phoneVerifiedAt: new Date(),
           level: bootstrap ? LEVEL.SUPER_ADMIN : LEVEL.VIEWER,
           ...(bootstrap && (await tx.setting.findUnique({ where: { key: 'vertical' } }))?.value === 'clinic' ? { jobRole: 'doctor' } : {}),
           status: bootstrap ? 'active' : 'pending',
@@ -249,10 +280,12 @@ export class AuthService {
     const id = dto.identifier.trim();
     // ورود با نام کاربری (روی Account) یا موبایل (روی Person).
     const account = await this.prisma.account.findFirst({
-      where: { OR: [{ username: id }, { person: { phone: id } }] },
+      where: { OR: [{ username: id }, { person: { phone: id, phoneScope: 'primary' } }] },
       include: WITH_PERSON,
     });
     if (!account) throw new UnauthorizedException('نام کاربری یا رمز عبور اشتباه است');
+    if (isTestAccount(account) && !await testAccountsEnabled(this.prisma)) throw new UnauthorizedException('حالت آزمایشی خاموش است');
+    if (isProvisional(account) && account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, account.id); throw new UnauthorizedException('مهلت هفت‌روزه تأیید شماره تمام شده؛ حساب غیرفعال است'); }
     /* ⚠️ حسابِ تصاحب‌نشده رمزِ معتبر ندارد و نباید داشته باشد. `bcrypt.compare`
        با هشِ خالی هم false می‌دهد، ولی شرطِ صریح این را از یک جزئیاتِ
        کتابخانه به یک **قاعدهٔ اعلام‌شده** تبدیل می‌کند. */
@@ -270,6 +303,8 @@ export class AuthService {
   }
 
   async issue(account: AccountWithPerson, meta: { ua?: string; ip?: string }) {
+    if (isTestAccount(account) && !await testAccountsEnabled(this.prisma)) throw new UnauthorizedException('حالت آزمایشی خاموش است');
+    if (isProvisional(account) && account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, account.id); throw new UnauthorizedException('مهلت تأیید شماره تمام شده؛ حساب غیرفعال است'); }
     const active = await this.prisma.session.findMany({
       where: { accountId: account.id, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'asc' },
@@ -296,7 +331,8 @@ export class AuthService {
       { sub: account.id, sid: session.id, level: account.level, tid: this.tenantContext.require().tenantId },
       { expiresIn: `${SESSION_TTL_DAYS}d` },
     );
-    return { accessToken, user: this.publicUser(account) };
+    // `sid` هم برمی‌گردد تا کنترلر بتواند نشستِ تازه را به مجموعهٔ چندحسابیِ کوکی اضافه کند.
+    return { accessToken, sid: session.id, user: this.publicUser(account) };
   }
 
   async validateSession(sid: string, sub: number) {
@@ -305,7 +341,9 @@ export class AuthService {
       include: { account: { include: WITH_PERSON } },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
+    if (isTestAccount(session.account) && !await testAccountsEnabled(this.prisma)) return null;
     if (session.accountId !== sub || session.account.status !== 'active') return null;
+    if (isProvisional(session.account) && session.account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, sub); return null; }
     return session.account;
   }
 
@@ -350,6 +388,62 @@ export class AuthService {
     return { ok: true };
   }
 
+  async revokeMany(sids: string[]) {
+    if (!sids.length) return;
+    await this.prisma.session.updateMany({ where: { id: { in: sids }, revokedAt: null }, data: { revokedAt: new Date() } });
+  }
+
+  // ── چندحسابی با کوکی (قانون ۶) ─────────────────────────────
+  //
+  // مجموعهٔ نشست‌های «مرا به خاطر بسپار»ِ این مرورگر، به‌شکلِ JWTِ امضاشده در یک
+  // کوکیِ HttpOnly. کلاینت فقط شناسهٔ حساب را می‌فرستد؛ توکنِ هیچ حسابی را ندارد.
+
+  /** خواندنِ مجموعه — کوکیِ نامعتبر/منقضی/از tenantِ دیگر = مجموعهٔ خالی، نه خطا. */
+  async readSessionSet(req: Request): Promise<SetEntry[]> {
+    const raw = readCookie(req, SESSION_SET_COOKIE);
+    if (!raw) return [];
+    try {
+      const p: any = await this.jwt.verifyAsync(raw);
+      if (p?.tid !== this.tenantContext.require().tenantId || !Array.isArray(p.s)) return [];
+      return p.s
+        .filter((e: any) => e && typeof e.sid === 'string' && Number.isInteger(e.sub))
+        .map((e: any) => ({ sid: e.sid, sub: e.sub }))
+        .slice(0, MAX_SET);
+    } catch {
+      return [];
+    }
+  }
+
+  async writeSessionSet(res: Response, entries: SetEntry[]) {
+    if (!entries.length) {
+      res.clearCookie(SESSION_SET_COOKIE, { path: '/' });
+      return;
+    }
+    const token = await this.jwt.signAsync(
+      { s: entries.slice(0, MAX_SET), tid: this.tenantContext.require().tenantId },
+      { expiresIn: `${SESSION_TTL_DAYS}d` },
+    );
+    res.cookie(SESSION_SET_COOKIE, token, { httpOnly: true, ...cookieBase(true) });
+  }
+
+  /** فقط نشست‌های زنده — مرده‌ها (باطل/منقضی/حسابِ غیرفعال) کنار می‌روند. */
+  async liveSet(entries: SetEntry[]) {
+    const out: { entry: SetEntry; account: AccountWithPerson }[] = [];
+    for (const entry of entries) {
+      const account = await this.validateSession(entry.sid, entry.sub);
+      if (account) out.push({ entry, account });
+    }
+    return out;
+  }
+
+  /** توکنِ تازه برای نشستِ موجود — سوییچ؛ نشست همان است، فقط کوکیِ فعال عوض می‌شود. */
+  tokenFor(sid: string, account: AccountWithPerson) {
+    return this.jwt.signAsync(
+      { sub: account.id, sid, level: account.level, tid: this.tenantContext.require().tenantId },
+      { expiresIn: `${SESSION_TTL_DAYS}d` },
+    );
+  }
+
   /// شکلِ عمومیِ کاربر برای کلاینت. قرارداد بیرونی عمداً همان قبلی نگه داشته شد
   /// (firstName/lastName/phone/selfie) تا جابه‌جاییِ داخلیِ فیلدها به فرانت نشت نکند.
   publicUser(a: AccountWithPerson) {
@@ -358,6 +452,9 @@ export class AuthService {
       [p?.firstName, p?.lastName].filter(Boolean).join(' ').trim() || a.username || p?.phone || 'کاربر';
     return {
       id: a.id,
+      isTestAccount: isTestAccount(a),
+      phoneVerifiedAt: a.phoneVerifiedAt,
+      verificationDueAt: a.verificationDueAt,
       personId: a.personId,
       firstName: p?.firstName ?? null,
       lastName: p?.lastName ?? null,

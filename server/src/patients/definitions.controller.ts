@@ -1,3 +1,5 @@
+import { TenantHospitalDirectoryService } from './hospital-directory.service';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { SECTORS } from './service-codes.service';
 import {
   Body,
@@ -11,7 +13,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DefinitionsService } from './definitions.service';
 import { SettingsService } from '../config/settings.service';
@@ -188,26 +190,28 @@ class DiagnosisPatchDto {
 }
 
 class HospitalCreateDto {
+  @IsOptional() @IsString() @MaxLength(80) province?: string;
   @IsOptional() @IsIn(SECTORS, { message: 'نوع بیمارستان نامعتبر است' }) sector?: string;
   @IsString({ message: 'نام را وارد کنید' })
   @MinLength(2, { message: 'نام کوتاه است' })
-  @MaxLength(80, { message: 'نام طولانی است' })
+  @MaxLength(180, { message: 'نام طولانی است' })
   name!: string;
 
-  @IsOptional() @IsString() @MaxLength(40) city?: string;
-  @IsOptional() @IsString() @MaxLength(200) address?: string;
-  @IsOptional() @IsString() @MaxLength(20) phone?: string;
+  @IsOptional() @IsString() @MaxLength(80) city?: string;
+  @IsOptional() @IsString() @MaxLength(600) address?: string;
+  @IsOptional() @IsString() @MaxLength(100) phone?: string;
   @IsOptional() @IsString() @MaxLength(60) contactName?: string;
   @IsOptional() @IsString() @MaxLength(20) contactPhone?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
 }
 
 class HospitalPatchDto {
+  @IsOptional() @IsString() @MaxLength(80) province?: string;
   @IsOptional() @IsIn(SECTORS, { message: 'نوع بیمارستان نامعتبر است' }) sector?: string;
-  @IsOptional() @IsString() @MinLength(2) @MaxLength(80) name?: string;
-  @IsOptional() @IsString() @MaxLength(40) city?: string;
-  @IsOptional() @IsString() @MaxLength(200) address?: string;
-  @IsOptional() @IsString() @MaxLength(20) phone?: string;
+  @IsOptional() @IsString() @MinLength(2) @MaxLength(180) name?: string;
+  @IsOptional() @IsString() @MaxLength(80) city?: string;
+  @IsOptional() @IsString() @MaxLength(600) address?: string;
+  @IsOptional() @IsString() @MaxLength(100) phone?: string;
   @IsOptional() @IsString() @MaxLength(60) contactName?: string;
   @IsOptional() @IsString() @MaxLength(20) contactPhone?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
@@ -266,11 +270,18 @@ export class ItemPatchDto extends ItemCreateDto {
   @IsOptional() @IsBoolean() active?: boolean;
 }
 
+class HospitalDirectoryImportDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(200) @IsString({ each: true }) ids!: string[];
+  @IsOptional() @IsIn(SECTORS) sector?: string;
+  @IsOptional() @IsInt() @Min(1) localId?: number;
+  @IsOptional() @IsBoolean() fillMissing?: boolean;
+}
+
 @Controller()
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('dashboard')
 export class DefinitionsController {
-  constructor(private defs: DefinitionsService, private settings: SettingsService) {}
+  constructor(private defs: DefinitionsService, private settings: SettingsService, private directory: TenantHospitalDirectoryService) {}
 
   /**
    * زمان‌بندیِ پیام‌های مراقبت/پیگیری — فرمِ عمل باید **صریح بگوید** هر
@@ -314,6 +325,14 @@ export class DefinitionsController {
   delSurgeon(@Param('id', ParseIntPipe) id: number) {
     return this.defs.deleteSurgeon(id);
   }
+
+  @RequirePermissions('definitions.read')
+  @Get('hospitals/directory')
+  directoryList(@Query() query: any) { return this.directory.list(query); }
+
+  @RequirePermissions('definitions.manage')
+  @Post('hospitals/directory/import')
+  directoryImport(@Body() dto: HospitalDirectoryImportDto, @CurrentUser() user: any) { return this.directory.load(dto, user.id); }
 
   @RequirePermissions('definitions.read')
   @Get('hospitals')

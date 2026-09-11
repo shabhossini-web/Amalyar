@@ -3,7 +3,7 @@
  * - داراییِ هم‌مبدأ (assets/آیکون/فونت): cache-first (نامِ فایل‌ها هش‌دارند)
  * - API هم‌مبدأ روی /api است و Service Worker اصلاً آن را intercept نمی‌کند
  */
-const CACHE = 'amalyar-shell-v8';
+const CACHE = 'amalyar-shell-v9';
 const STATIC = ['/icon-192.png', '/icon-512.png', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -26,10 +26,8 @@ self.addEventListener('activate', (e) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
-      // صفحه‌های بازِ گیرکرده روی نسخهٔ قدیمی را خودکار تازه کن
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((cs) => cs.forEach((c) => { try { c.navigate(c.url); } catch { /* — */ } })),
+      // Never navigate an open form: the user accepts the update banner.
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -39,6 +37,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return;
+  if (url.pathname === '/version.json') return;
 
   // ناوبریِ SPA — network-first (بدونِ کشِ HTTP تا HTMLِ کهنه سرو نشود)، آفلاین → شِل
   if (req.mode === 'navigate') {

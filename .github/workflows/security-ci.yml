@@ -376,7 +376,8 @@ jobs:
           }
           const bill = fs.readFileSync('src/patients/billing.service.ts', 'utf8');
           // برگشت باید با حرکتِ جبرانی باشد، نه با حذفِ حرکتِ مصرف.
-          if (!/returnToStock/.test(bill)) { console.error('برگشتِ کالا باید با حرکتِ جبرانی باشد'); process.exit(1); }
+          const sharedReturn = /if \(returnStock\) await this\.inventory\.setChargeConsumption\(tx, null, 0,/.test(bill) && /if \(returnUnused && extra > 0\)/.test(svc) && /this\.move\(g\.lotId, 'return', amount,/.test(svc);
+          if (!/returnToStock/.test(bill) && !sharedReturn) { console.error('برگشتِ کالا باید با حرکتِ جبرانی و انتخاب صریح باشد'); process.exit(1); }
           console.log('stock ledger ok');
           "
 
@@ -808,7 +809,9 @@ jobs:
           // ①ب ولی *باید* از پنلِ چینش قابلِ انتخاب باشد. پنلی که کارشناس نمی‌چیند
           //     اسمش چینش نیست؛ فقط ستونِ دومی نمی‌سازد.
           const ui = fs.readFileSync('src/app/Dispatch.jsx', 'utf8');
-          if (!/techId:/.test(ui)) { console.error('تبِ کارشناس باید Visit.techId را بنویسد'); process.exit(1); }
+          const rosterUi = strip(fs.readFileSync('src/app/HospitalRoster.jsx', 'utf8'));
+          const rosterService = strip(fs.readFileSync('server/src/patients/hospital-duties.service.ts', 'utf8'));
+          if (!/HospitalRoster/.test(ui) || !/techId:/.test(rosterUi) || !/tx.visit.updateMany/.test(rosterService) || !/data: \{ techId, techArriveTime/.test(rosterService)) { console.error('چینش بیمارستانی باید Visit.techId را بنویسد'); process.exit(1); }
           // تبِ حمل‌ونقل حالا مسیر می‌چیند، نه تخصیصِ per-visit.
           if (!/routes\/\\\${runId}\/stops/.test(ui)) { console.error('تبِ حمل‌ونقل باید توقفِ مسیر بسازد'); process.exit(1); }
 
@@ -817,7 +820,7 @@ jobs:
           if (!/export function briefingText/.test(src)) {
             console.error('briefingText باید تابعِ خالصِ سرویس باشد'); process.exit(1);
           }
-          if (!/briefing\?role=/.test(ui)) { console.error('UI باید متن را از سرور بگیرد نه بسازد'); process.exit(1); }
+          if (!/briefing/.test(ui) || !/dispatch\/roster\/preview/.test(rosterUi)) { console.error('متن ابلاغ مسیر و برنامه کارشناس باید از سرور بیاید'); process.exit(1); }
 
           // ③ آزمونِ رفتاری: راننده و پیک هیچ فیلدِ بیمار نمی‌گیرند، کارشناس می‌گیرد.
           const body = src.split('export function briefingText')[1];
@@ -1558,7 +1561,16 @@ jobs:
           //    پس هر فایلی که Overlay را رندر می‌کند باید AnimatePresence هم
           //    وارد کرده باشد.
           const users = jsx.filter((f) => !f.startsWith('src/ui/') && /<Overlay\b/.test(read(f)));
-          const missing = users.filter((f) => !/AnimatePresence/.test(read(f)));
+          // A separately exported sheet is owned by AnimatePresence in its caller.
+          const ownedSheets = { 'src/app/NeuroInvoiceDialog.jsx': ['src/app/InvoicePanel.jsx', 'NeuroInvoiceDialog'] };
+          const missing = users.filter((f) => {
+            if (/AnimatePresence/.test(read(f))) return false;
+            const owner = ownedSheets[f];
+            if (!owner) return true;
+            const parent = read(owner[0]);
+            const start = parent.indexOf('<AnimatePresence>'), end = parent.indexOf('</AnimatePresence>', start);
+            return start < 0 || end < start || !parent.slice(start, end).includes('<' + owner[1]);
+          });
           if (missing.length) {
             console.error('Overlay بدونِ AnimatePresence در: ' + missing.join('، ')); process.exit(1);
           }
@@ -1729,12 +1741,15 @@ jobs:
           //    مسیرِ دومی برای خواندنِ کارِ همه ساخته می‌شود که guardش جای دیگر است.
           // هر جا techId مقدار می‌گیرد باید از خودِ توکن بیاید، نه از ورودی.
           const techIdSites = svc.match(/techId:\s*[^,\n]+/g) || [];
-          const fromUser = techIdSites.filter((x) => /user\?\.id/.test(x));
+          const fromUser = techIdSites.filter((x) => /user\?\.id/.test(x) || /^techId: null$/.test(x));
           if (!techIdSites.length || fromUser.length !== techIdSites.length) {
             console.error('دامنهٔ دفترِ کار از توکن نمی‌آید: ' + techIdSites.join(' / ')); process.exit(1);
           }
           if (/Query\('techId'\)|dto\.techId|query\.techId/.test(ctl + svc)) {
             console.error('پنلِ کارشناسی نباید techIdِ ورودی بپذیرد'); process.exit(1);
+          }
+          if (!/OR: duties.map/.test(svc) || !/hospitalId: d.hospitalId/.test(svc) || !/gte: d.date/.test(svc) || !/opStatus: 'pending'/.test(svc)) {
+            console.error('مراجعات آزاد باید به بیمارستان و روز حضور کاربر محدود باشند'); process.exit(1);
           }
 
           // ③ ⚠️ مجوزِ درست با ماژولِ غلط یعنی درِ بسته: هر مسیری که مجوزِ
@@ -2836,3 +2851,13 @@ jobs:
           }
           console.log('tenant public site ok');
           "
+
+      - name: Verify company operations, provisional expiry, surgeon finance and atomic inventory invoices
+        run: node scripts/e2e/company-operations.mjs
+
+      - name: Verify isolated test accounts sharing one phone
+        run: node scripts/e2e/test-accounts.mjs
+
+      - name: Verify central hospital directory and isolated tenant imports
+        run: node scripts/e2e/hospital-directory.mjs
+

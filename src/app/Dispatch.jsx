@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import FileDrop from '../ui/FileDrop.jsx';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
@@ -10,7 +10,7 @@ import { Alert, ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money,
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
-import { useStagger } from '../ui/stagger.js';
+import HospitalRoster from './HospitalRoster.jsx';
 import { badTime, normTime } from '../lib/time.js';
 import { usePlaces } from '../lib/places.js';
 
@@ -34,7 +34,6 @@ const timeOk = (v) => !badTime(v);
  * نمی‌گیرد» باید یک‌جا اعمال شود تا کانالِ بعدی (بله/پیامک) دورش نزند.
  */
 export default function Dispatch() {
-  const row = useStagger();
   const [ty, tm, td] = jToday();
   const [tab, setTab] = useState('tech');
   const [ym, setYm] = useState({ y: ty, m: tm });
@@ -134,18 +133,6 @@ export default function Dispatch() {
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
 
-  /* کارشناس روی خودِ مراجعه نوشته می‌شود (`Visit.techId`) نه در جدولِ تخصیص —
-     همان ستونی که تسویه، گزارش و دامنهٔ دسترسیِ کارشناس از آن می‌خوانند. */
-  const setTech = (visitId, techId) =>
-    guard(() => api(`/visits/${visitId}`, { method: 'PATCH', body: { techId: techId ? Number(techId) : null } }),
-      techId ? 'کارشناس ثبت شد ✓' : 'کارشناس برداشته شد');
-
-  const setTime = (visitId, field, value) => {
-    const v = normTime(value);
-    if (!timeOk(v)) { setToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return undefined; }
-    return guard(() => api(`/visits/${visitId}/times`, { method: 'PATCH', body: { [field]: v } }), 'ساعت ثبت شد ✓');
-  };
-
   const createRun = () =>
     newRun && guard(async () => {
       await api('/routes', { method: 'POST', body: { staffId: Number(newRun), runDate: onIso } });
@@ -187,20 +174,12 @@ export default function Dispatch() {
     return guard(() => api(`/routes/${run.id}/reorder`, { method: 'POST', body: { stopIds: ids } }));
   };
 
-  const openBrief = async (visitId, role) => {
-    setBrief({ role, text: '' });
-    try {
-      const d = await api(`/dispatch/visits/${visitId}/briefing?role=${role}`);
-      setBrief({ role, text: d.text, roleLabel: d.roleLabel });
-    } catch (e) { setToast(e.message); setBrief(null); }
-  };
-
   /** ابلاغِ **کلِ مسیر** — یک پیام برای کلِ روزِ راننده، نه N پیامِ جدا. */
   const openRunBrief = async (run) => {
     setBrief({ role: 'run', text: '' });
     try {
       const d = await api(`/routes/${run.id}/briefing`);
-      setBrief({ role: 'run', text: d.text, roleLabel: `مسیرِ ${run.staff.name}` });
+      setBrief({ role: 'run', runId: run.id, text: d.text, roleLabel: `مسیرِ ${run.staff.name}` });
     } catch (e) { setToast(e.message); setBrief(null); }
   };
 
@@ -276,37 +255,9 @@ export default function Dispatch() {
 
       <section className="dp-day">
         <b>{faNum(day)} {J_MONTHS[ym.m - 1]}</b>
-        {visits.length === 0 && <div className="dp-empty">عملی برای این روز ثبت نشده</div>}
+        {tab === 'transport' && visits.length === 0 && <div className="dp-empty">عملی برای این روز ثبت نشده</div>}
 
-        {tab === 'tech' && visits.map((v, i) => (
-          <motion.article key={v.id} {...row(i)} className={`dp-card${v.tech ? '' : ' gap'}`}>
-            <header>
-              <span className="dp-time" dir="ltr">{v.opStartTime || '—'}</span>
-              <div className="dp-title">
-                <b>{v.fullName} <i dir="ltr">{v.code}</i></b>
-                <small>{[v.hospital?.name, v.procedureName, v.surgeonName].filter(Boolean).join(' · ') || '—'}</small>
-              </div>
-            </header>
-
-            {(v.surgeonInstructions || v.requiredItems?.length > 0) && <details className="dp-instructions"><summary>دستور جراح و اقلام موردنیاز</summary>
-              {v.surgeonInstructions && <p style={{ whiteSpace: 'pre-wrap' }}>{v.surgeonInstructions}</p>}
-              {v.requiredItems?.map(n => <p key={n.itemId}>{n.name} × {faNum(n.quantity)}{n.notes ? ` — ${n.notes}` : ''}</p>)}
-            </details>}
-            <div className="dp-pick">
-              <label>
-                <span>کارشناس</span>
-                <select value={v.tech?.id ?? ''} disabled={busy} onChange={(e) => setTech(v.id, e.target.value)}>
-                  <option value="">— تعیین‌نشده —</option>
-                  {techs.map((t) => <option key={t.id} value={t.id}>{t.displayName}</option>)}
-                </select>
-              </label>
-              <TimeBox label="ساعتِ حضور" value={v.techArriveTime} disabled={busy} onSave={(x) => setTime(v.id, 'techArriveTime', x)} />
-              {v.tech && (
-                <button type="button" className="dp-brief-btn" onClick={() => openBrief(v.id, 'tech')}><Send size={14} /> متنِ ابلاغ</button>
-              )}
-            </div>
-          </motion.article>
-        ))}
+        {tab === 'tech' && <HospitalRoster key={onIso} date={onIso} techs={techs} hospitals={hospitals} onChanged={refresh} />}
 
         {tab === 'transport' && (
           <div className="dp-routes">
@@ -391,6 +342,7 @@ export default function Dispatch() {
               </div>
             )}
 
+            <EquipmentPlan hospitals={hospitals} onIso={onIso} onSaved={loadRoutes} />
             <div className="dp-newrun">
               <label>
                 <span>مسیرِ تازه برای</span>
@@ -531,6 +483,8 @@ export default function Dispatch() {
               {brief.role !== 'tech' && (
                 <span className="dp-privacy">راننده و پیک هیچ اطلاعاتِ بیماری دریافت نمی‌کنند.</span>
               )}
+              {brief.runId && <button type="button" className="dp-copy" disabled={busy || !brief.text} onClick={() => guard(async () => { const r = await api(`/routes/${brief.runId}/notify`, { method: 'POST', body: {} }); setToast(r.message); setBrief(null); })}>ارسال ابلاغ به پیامک و ربات</button>}
+              <Link to="/app/reminders">وضعیت ارسال‌ها</Link>
               <button type="button" className="dp-copy" disabled={!brief.text} onClick={() => copy(brief.text)}>
                 <Copy width="15" height="15" /> کپیِ متن
               </button>
@@ -744,4 +698,28 @@ function RunCost({ run, busy, onClose, onSave }) {
       </footer>
     </Overlay>
   );
+}
+
+function EquipmentPlan({ hospitals, onIso, onSaved }) {
+  const [hospitalId, setHospital] = useState(''), [q, setQ] = useState(''), [lots, setLots] = useState([]), [selected, setSelected] = useState({}), [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [open, setOpen] = useState(false);
+  useEffect(() => { if (!open) return; let alive = true; const t = setTimeout(() => api(`/stock/lots?q=${encodeURIComponent(q)}&inStock=1`).then(rows => { if (alive) setLots(rows); }).catch(e => { if (alive) setMessage(e.message); }), 250); return () => { alive = false; clearTimeout(t); }; }, [q, open]);
+  const plan = async () => {
+    setBusy(true); setMessage('');
+    try { const hospital = hospitals.find(h => String(h.id) === hospitalId);
+      const lines = Object.entries(selected).map(([id, row]) => ({ lotId: Number(id), quantity: Number(row.quantity) }));
+      if (lines.some(l => !Number.isInteger(l.quantity) || l.quantity < 1)) throw new Error('تعداد هر وسیله باید عدد صحیح مثبت باشد');
+      const result = await api('/stock/transfers', { method: 'POST', body: { hospitalId: Number(hospitalId), toLocation: hospital.name, plannedFor: onIso, planOnly: true, lines } });
+      setSelected({}); setMessage(`حواله ${result.code ?? ''} برنامه‌ریزی شد. اکنون در مسیر راننده، توقف همین بیمارستان را اضافه و این حواله را به بار آن وصل کنید. موجودی هنگام ارسال واقعی حواله جابه‌جا می‌شود.`); await onSaved();
+    } catch (e) { setMessage(e.message); } finally { setBusy(false); }
+  };
+  return <section className="dp-newrun"><button className="dp-brief-btn" type="button" onClick={() => setOpen(v => !v)}>انتخاب تجهیزات برای بیمارستان</button>
+    {open && <div><p>۱. بیمارستان و تجهیزات را انتخاب کنید. ۲. حواله را به توقف مسیر نیرو وصل کنید. ۳. متن برنامه را بازبینی و ابلاغ کنید.</p>
+      <label>بیمارستان<select aria-label="بیمارستان" value={hospitalId} disabled={busy} onChange={e => setHospital(e.target.value)}><option value="">انتخاب بیمارستان</option>{hospitals.filter(h => h.active !== false).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
+      <label>جستجوی وسیله یا سریال<input value={q} disabled={busy} onChange={e => setQ(e.target.value)} /></label>
+      {lots.slice(0, 30).map(l => <label key={l.id}><input type="checkbox" checked={!!selected[l.id]} disabled={busy || l.expired} onChange={e => setSelected(prev => { const n = { ...prev }; if (e.target.checked) n[l.id] = { name: l.itemName, quantity: 1 }; else delete n[l.id]; return n; })} />{l.itemName} · {l.serialNo || l.lotNo} · موجودی {faNum(l.quantity)}</label>)}
+      {Object.entries(selected).map(([id, row]) => <label key={id}>{row.name}<input inputMode="numeric" value={row.quantity} disabled={busy} onChange={e => setSelected(prev => ({ ...prev, [id]: { ...prev[id], quantity: toEnDigits(e.target.value) } }))} /><button type="button" disabled={busy} onClick={() => setSelected(prev => { const n = { ...prev }; delete n[id]; return n; })}>حذف</button></label>)}
+      <button className="dp-brief-btn" disabled={busy || !hospitalId || !Object.keys(selected).length} onClick={plan}>ثبت حواله برنامه‌ریزی‌شده</button>
+      <p role="status">{message}</p>
+    </div>}
+  </section>;
 }

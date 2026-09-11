@@ -48,7 +48,7 @@ server {
   location = / {
     ssi on;
     ssi_silent_errors on;
-    add_header Cache-Control "no-cache";
+    add_header Cache-Control "no-cache, must-revalidate" always;
     try_files /index.html =404;
   }
 
@@ -94,8 +94,14 @@ server {
   # ──────────────────────────────────────────────────────────────────
 
   location / {
+    add_header Cache-Control "no-cache, must-revalidate" always;
     try_files $uri $uri/ /index.html;
   }
+
+  # شِل و نسخه هیچ‌وقت کش نمی‌شوند: کاربری که روی نسخهٔ قدیمی گیر کرده باید با
+  # یک رفرش بیرون بیاید، وگرنه به دارایی‌های هش‌دارِ حذف‌شده اشاره می‌کند.
+  location = /version.json { add_header Cache-Control "no-store" always; }
+  location = /sw.js { add_header Cache-Control "no-cache, must-revalidate" always; }
 
   location /assets/ {
     expires 1y;

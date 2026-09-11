@@ -1,0 +1,18 @@
+.df-directory { border: 1px solid var(--card-border); border-radius: var(--radius); padding: 18px; margin: 18px 0; background: var(--card); }
+.df-directory p, .df-directory small { color: var(--text2); }
+.df-directory-tools, .df-directory-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 12px 0; }
+.df-directory-tools label, .df-directory-form label { display: grid; gap: 6px; flex: 1 1 160px; }
+.df-directory-tools input, .df-directory-tools select, .df-directory-form input:not([type=checkbox]), .df-directory-form select, .df-directory-row select { width: 100%; min-height: 44px; border: 1px solid var(--card-border); border-radius: 10px; padding: 8px; color: var(--text1); background: var(--bg2); }
+.df-directory-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 12px; }
+.df-directory-row { display: flex; flex-direction: column; align-items: stretch; gap: 8px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; overflow-wrap: anywhere; }
+.df-directory-row small { display: block; }
+.df-directory-row p { margin: 0; }
+.df-directory-row button, .df-directory-tools button, .df-directory-form button { min-height: 44px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--bg3); color: var(--text1); padding: 8px 12px; cursor: pointer; }
+.df-directory-row input[type=checkbox], .df-directory-form input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--brand); }
+.df-directory-row :focus-visible, .df-directory-tools :focus-visible, .df-directory-form :focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+
+.df-directory-disclosure summary { cursor: pointer; padding: 14px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); }
+.df-directory-select { min-height: 44px; background: var(--bg3); color: var(--text1); border: 1px solid var(--card-border); border-radius: 10px; padding: 8px 12px; }
+.df-directory button:disabled { opacity: .55; cursor: default; }
+.df-directory-select:focus-visible, .df-directory-disclosure summary:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .df-directory *, .df-directory-disclosure * { animation: none; transition: none; } }

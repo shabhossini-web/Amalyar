@@ -8,6 +8,7 @@ import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
 import { REGISTRATION_PRESETS } from './form-presets';
+import { hospitalOptions, matchIntakeHospital } from './intake-hospitals';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
@@ -776,7 +777,7 @@ export class IntakeService {
     token: string,
     dto: {
       procedure?: string; surgeonName?: string; hospitalName?: string; opDate?: string; notes?: string;
-      values?: Record<string, any>;
+      values?: Record<string, any>; hospitalId?: number;
     },
   ) {
     const row = await this.expireIfDue(token);
@@ -785,6 +786,11 @@ export class IntakeService {
     }
 
     const data: Record<string, any> = { ...(row.data as any) };
+    if (dto.hospitalId !== undefined) {
+      const selected = dto.hospitalId > 0 ? await this.prisma.hospital.findFirst({ where: { id: dto.hospitalId, active: true } }) : null;
+      if (dto.hospitalId > 0 && !selected) throw new BadRequestException('بیمارستان انتخاب‌شده فعال نیست');
+      data.hospitalId = selected?.id ?? null;
+    }
     const fixed: [keyof typeof dto, string, number][] = [
       ['procedure', 'procedure', 200],
       ['surgeonName', 'surgeonName', 100],
@@ -1526,6 +1532,17 @@ export class IntakeService {
   }
 
   // ── صفِ تأیید (ادمین) ─────────────────────────────────────────────
+  async publicHospitals(token: string, q = '') {
+    await this.expireIfDue(token);
+    return hospitalOptions(this.prisma, q);
+  }
+
+  async approvalHospital(id: number) {
+    const row = await this.prisma.intakeSubmission.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('ثبت‌نام پیدا نشد');
+    return matchIntakeHospital(this.prisma, row.data);
+  }
+
   async list(status?: string) {
     const workflow = await this.forms.workflow();
     const defaultKind = await this.forms.defaultVisitKind();
@@ -1635,6 +1652,7 @@ export class IntakeService {
        فرمی اصلاً نمی‌تواند مبلغ داشته باشد؛ `assertRecordFormHasNoAmount`). */
     const makesVisit = form?.scope !== 'record';
     const workflow = await this.forms.workflow();
+    const matchedHospital = dto.hospitalId ? null : await matchIntakeHospital(this.prisma, d);
     const approvalKind = form?.visitKind || await this.forms.defaultVisitKind();
     if (makesVisit && dto.extra) {
       const target = await this.forms.forVisitKind(approvalKind);
@@ -1668,7 +1686,8 @@ export class IntakeService {
         // نوع صریح فرم مقدم است؛ لینک‌های قدیمی از پیش‌فرض حوزه استفاده می‌کنند.
         kind: approvalKind,
         surgeonId: dto.surgeonId,
-        hospitalId: dto.hospitalId,
+        hospitalId: dto.hospitalId ?? matchedHospital?.id,
+        hospitalName: d.hospitalName ?? undefined,
         techId: dto.techId,
         procedureTypeId: dto.procedureTypeId,
         opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
@@ -1676,7 +1695,7 @@ export class IntakeService {
         opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
         notes: d.patientNotes ?? undefined,
         ...(Object.keys(extra).length ? { extra } : {}),
-      } as any, user, { requirements })
+      } as any, user, { requirements, intakeIonm: workflow === 'ionm' })
       : null;
 
     /* ⚠️ نوبت این‌جا **قطعی** می‌شود، نه هنگامِ رزرو: `held` یعنی «جا نگه

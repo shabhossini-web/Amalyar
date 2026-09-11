@@ -7,11 +7,13 @@ import '@fontsource/vazirmatn/700.css';
 import '@fontsource/vazirmatn/900.css';
 import './index.css';
 import App from './App.jsx';
+import VersionNotice from './ui/VersionNotice.jsx';
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
       <App />
+      <VersionNotice />
     </BrowserRouter>
   </React.StrictMode>
 );

@@ -14,6 +14,7 @@
  * متغیرها: `E2E_API` (پیش‌فرض 3009) و `E2E_WEB` (پیش‌فرض 5173).
  */
 import { chromium } from 'playwright-core';
+import { browserLogin } from './lib/browser-login.mjs';
 
 const API = process.env.E2E_API ?? 'http://127.0.0.1:3009/api';
 const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:5173';
@@ -256,8 +257,10 @@ async function signup(phone, username, password) {
   const app = await ctx.newPage();
   const appErrors = [];
   app.on('pageerror', (e) => appErrors.push(String(e)));
-  await app.goto(WEB + '/login', { waitUntil: 'networkidle' });
-  await app.evaluate((t) => localStorage.setItem('amalyar_token', t), token);
+  /* ⚠️ نشست دیگر در localStorage نیست — کوکیِ HttpOnly + CSRF است. کمک‌تابعِ
+     مشترک همان کوکی‌ها را از توکنِ ورودِ سمتِ Node می‌سازد (ورودِ دوم سطلِ
+     محدودیتِ ورود را می‌سوزاند). */
+  await browserLogin(app, token, { ui: WEB });
   await app.goto(WEB + '/app/site', { waitUntil: 'networkidle' });
   await app.waitForSelector('.st-publish', { timeout: 8000 }).catch(() => {});
   ok('ویرایشگر باز می‌شود', await app.locator('.st-publish').count() > 0, app.url());

@@ -973,3 +973,51 @@ a.db-defbtn { text-decoration: none; }
 .db-msgplan { gap: 6px; }
 .db-msgplan .db-postop-plan { font-size: 12px; line-height: 2; color: var(--text2); }
 .db-msgplan .db-postop-plan b { color: var(--brand-2); }
+
+/* ── فاکتورِ نورومانیتورینگ — پاپ‌آپِ یک‌جا (الگوی ملک‌طب) ── */
+.nv-launch { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+@media (max-width: 640px) { .nv-launch { grid-template-columns: 1fr; } }
+.nv-launch-sum b { display: block; font-size: 13.5px; }
+.nv-launch-sum small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
+.nv-sheet { gap: 12px; }
+.nv-params { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 640px) { .nv-params { grid-template-columns: 1fr; } }
+.nv-h { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 0; font-size: 14px; }
+.nv-h small { font-size: 11px; color: var(--text3); font-weight: 500; }
+.nv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.nv-svc {
+  display: grid; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
+  min-height: 56px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  transition: border-color .2s, background .2s;
+}
+.nv-svc.on { background: rgba(var(--brand-rgb), .12); border-color: rgba(var(--brand-2-rgb), .55); }
+.nv-svc input { grid-row: 1 / span 3; width: 18px; height: 18px; accent-color: var(--brand); cursor: pointer; }
+.nv-svc b { font-size: 14px; font-weight: 800; }
+.nv-svc small { font-size: 10.5px; color: var(--text3); }
+.nv-svc i { grid-column: 2; font-style: normal; font-size: 11px; color: var(--cyan); font-variant-numeric: tabular-nums; }
+.nv-step {
+  display: inline-grid; grid-template-columns: 40px 1fr 40px; align-items: stretch; min-width: 132px;
+  border-radius: 10px; overflow: hidden; border: 1px solid rgba(var(--brand-soft-rgb), .2); background: rgba(255, 255, 255, .04);
+}
+.nv-step button { min-height: 44px; font: inherit; font-size: 18px; color: var(--text1); background: rgba(255, 255, 255, .04); border: 0; cursor: pointer; }
+.nv-step button:focus-visible, .nv-svc:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.nv-step input { min-width: 0; text-align: center; font: inherit; font-size: 14px; color: var(--text1); background: transparent; border: 0; }
+.nv-cons { display: grid; gap: 8px; }
+.nv-con {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
+  padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+}
+.nv-con b { font-size: 13px; }
+.nv-con small { display: block; font-size: 10.5px; color: var(--text3); }
+.nv-con.nv-add { grid-template-columns: 1.4fr 1fr 80px auto; }
+@media (max-width: 640px) { .nv-con.nv-add { grid-template-columns: 1fr 1fr; } }
+.nv-con.nv-add input {
+  min-width: 0; padding: 9px 10px; border-radius: 10px; font: inherit; font-size: 13px;
+  color: var(--text1); background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+}
+.nv-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .08); }
+.nv-total { flex: 1 1 160px; display: flex; flex-direction: column; }
+.nv-total span { font-size: 10.5px; color: var(--text3); }
+.nv-total b { font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .nv-svc { transition: none; } }

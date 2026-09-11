@@ -8,11 +8,14 @@ import './launcher.css';
 import './users.css';
 import './login.css';
 import './profile.css';
+import { api } from '../lib/api.js';
+import { toEnDigits } from '../lib/identity.js';
+import { faDate } from '../lib/jalali.js';
 import { Back, User } from '../ui/icons.jsx';
 
 
 export default function Profile() {
-  const { user, updateProfile, changePassword } = useAuth();
+  const { user, updateProfile, changePassword, setUser } = useAuth();
   const [toast, setToast] = useState('');
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
@@ -23,6 +26,13 @@ export default function Profile() {
   const [newPw, setNewPw] = useState('');
   const [savingPw, setSavingPw] = useState(false);
   const [pwErr, setPwErr] = useState('');
+  const [phoneCode, setPhoneCode] = useState(''), [phoneBusy, setPhoneBusy] = useState(false), [phoneMessage, setPhoneMessage] = useState('');
+  const verifyPhone = async (confirm) => {
+    setPhoneBusy(true); setPhoneMessage('');
+    try { if (confirm) { const me = await api('/auth/phone/verify-otp', { method: 'POST', body: { phone: user.phone, code: phoneCode } }); setUser(me); setPhoneMessage('شماره تأیید شد؛ مشخصات و رمز خود را هم تکمیل کنید'); }
+      else { await api('/auth/phone/request-otp', { method: 'POST', body: {} }); setPhoneMessage('کد به شماره حساب شما ارسال شد'); }
+    } catch (e) { setPhoneMessage(e.message); } finally { setPhoneBusy(false); }
+  };
 
   useEffect(() => { document.title = 'عمل‌یار — پروفایل من'; }, []);
   useEffect(() => {
@@ -89,6 +99,13 @@ export default function Profile() {
           <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
+        {user.verificationDueAt && !user.phoneVerifiedAt && <section className="glass us-card pf-card"><h2 className="pf-h2">تأیید حساب موقت</h2>
+          <p>شماره {user.phone} را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>
+          <button className="us-btn" disabled={phoneBusy} onClick={() => verifyPhone(false)}>دریافت کد پیامکی</button>
+          <label className="lg-field"><span>کد تأیید</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={phoneCode} onChange={e => setPhoneCode(toEnDigits(e.target.value).replace(/[^0-9]/g, ''))} /></label>
+          <button className="lg-btn" disabled={phoneBusy || phoneCode.length < 5} onClick={() => verifyPhone(true)}>تأیید شماره</button>
+        </section>}
+        {phoneMessage && <p role="status">{phoneMessage}</p>}
         {/* ── مشخصات ── */}
         <form className="glass us-card pf-card" onSubmit={saveProfile}>
           <div className="pf-avatar-wrap">
@@ -116,6 +133,7 @@ export default function Profile() {
           </div>
 
           <div className="pf-facts">
+            {user.isTestAccount && <p>حساب آزمایشی با پروفایل مستقل؛ برای ورود از نام کاربری استفاده کنید. کد تأیید این حساب فقط در همین پروفایل معتبر است.</p>}
             <div className="pf-fact"><span>نام کاربری</span><b dir="ltr">@{user.username}</b></div>
             <div className="pf-fact"><span>موبایل</span><b dir="ltr">{user.phone}</b></div>
             <div className="pf-fact"><span>سطحِ دسترسی</span><b>{user.levelName}</b></div>

@@ -288,3 +288,19 @@
 .dp-costsum b { font-size: 14px; }
 
 @media (max-width: 520px) { .dp-costbody { grid-template-columns: 1fr; } }
+
+/* Hospital/day roster stays readable on phones. */
+.hospital-roster { display: grid; gap: 16px; }
+.hospital-roster > p { color: var(--text2); line-height: 1.9; }
+.roster-hospital h2, .roster-preview h2 { font-size: 18px; margin: 0 0 16px; }
+.roster-duty-list, .roster-visits { display: grid; gap: 12px; }
+.roster-duty, .roster-visit { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 0; border-bottom: 1px solid var(--card-border); }
+.roster-duty label, .roster-visit label, .roster-extra { display: grid; gap: 6px; min-width: 0; flex: 1 1 160px; }
+.roster-duty b, .roster-visit > div { flex: 1 1 160px; }
+.roster-visit small { display: block; margin-top: 6px; opacity: .7; }
+.hospital-roster select { min-width: 0; max-width: 100%; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--bg3); color: inherit; }
+.roster-duty button { border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; background: var(--card); color: inherit; cursor: pointer; }
+.roster-duty button:disabled { opacity: .4; cursor: default; }
+.roster-send { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+.roster-preview details { padding: 12px; border-bottom: 1px solid var(--card-border); }
+.roster-preview p { line-height: 1.9; }

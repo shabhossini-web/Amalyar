@@ -41,6 +41,7 @@ export default function Tech() {
   const [toast, setToast] = useState('');
   const [usageFor, setUsageFor] = useState(null); // {visit, transfer}
   const [timesFor, setTimesFor] = useState(null); // visit
+  const [claiming, setClaiming] = useState(null);
   const row = useStagger();
 
   useEffect(() => { document.title = 'عمل‌یار — پنلِ کارشناسی'; }, []);
@@ -58,6 +59,12 @@ export default function Tech() {
   useEffect(() => { load(scope); }, [load, scope]);
 
   const visits = data?.visits ?? [];
+  const claim = async (id) => {
+    setClaiming(id);
+    try { await api(`/tech/visits/${id}/claim`, { method: 'POST' }); setToast('مراجعه به نام شما ثبت شد'); }
+    catch (e) { setToast(e.message); }
+    finally { await load(scope); setClaiming(null); }
+  };
 
   return (
     <div className="tk">
@@ -75,6 +82,12 @@ export default function Tech() {
       {err && <div className="tk-err"><Alert width="15" height="15" /> {err}</div>}
 
       <div className="tk-list">
+        {(data?.hospitals ?? []).map(h => <section className="tk-card" key={h.id}>
+          <header><div className="tk-title"><b>{h.name}</b><small>{faDate(h.date)} · حضور شما: {time(h.arriveTime)}</small></div></header>
+          <p>بیماران احتمالی — هنوز به کارشناس تخصیص داده نشده‌اند</p>
+          {h.openVisits.length === 0 && <p>مراجعه آزادی در این بیمارستان نیست.</p>}
+          {h.openVisits.map(v => <div className="tk-open-visit" key={v.id}><div><b>{v.name}</b><small>{v.procedure || ''} · {time(v.opStartTime)}</small></div><button className="tk-ghost" disabled={claiming !== null} onClick={() => claim(v.id)}>{claiming === v.id ? 'در حال ثبت…' : 'پذیرش این مراجعه'}</button></div>)}
+        </section>)}
         {!data && !err && <div className="tk-empty">در حال بارگذاری…</div>}
         {data && visits.length === 0 && (
           <div className="tk-empty">

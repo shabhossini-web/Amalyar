@@ -23,11 +23,15 @@ export function issuedInvoiceHtml(doc, letterheadUrl = null, fonts = [fontRegula
   const { visit: v, billing: b, template: t } = doc.snapshot;
   const brand = t.brand, formal = doc.variant === 'formal', global = b.pricingModel === 'global';
   const neuro = b.charges.some(c => c.neuroDetail);
+  // مصرفی‌های نورو (الکترود…) قلمِ بی‌مبلغ‌اند و مثلِ ملک‌طب در جدولِ جدای
+  // «اقلامِ استفاده‌شده» چاپ می‌شوند، نه لای خدمات با مبلغِ صفر.
+  const consumables = neuro ? b.charges.filter(c => c.neuroDetail?.consumable) : [];
+  const lines = neuro ? b.charges.filter(c => !c.neuroDetail?.consumable) : b.charges;
   const lh = formal && /^data:image\/(png|jpeg|webp);base64,/.test(letterheadUrl ?? '') ? letterheadUrl : null;
   const top = lh ? Math.min(65, Math.max(10, Number(t.top) || 42)) : 14;
   const bottom = lh ? Math.min(45, Math.max(10, Number(t.bottom) || 24)) : 14;
   const cols = neuro ? (global ? 5 : 8) : (global ? 3 : 5);
-  const rows = b.charges.map((c, index) => {
+  const rows = lines.map((c, index) => {
     const d = c.neuroDetail;
     if (neuro && d) return ['professional', 'technical'].map((part, p) => `<tr>
       ${cell(fmtMoney(index + 1))}${cell(`${c.serviceCode || ''} · ${c.title}`)}${number(d.hours)}${cell(p ? 'فنی' : 'حرفه‌ای')}${number(d.coefficients[part])}
@@ -38,6 +42,7 @@ export function issuedInvoiceHtml(doc, letterheadUrl = null, fonts = [fontRegula
   }).join('');
   const identity = [brand.phone && `تلفن: ${brand.phone}`, formal && brand.nationalId && `شناسه ملی: ${brand.nationalId}`, formal && brand.econCode && `کد اقتصادی: ${brand.econCode}`, formal && brand.registration && `شماره ثبت: ${brand.registration}`, brand.postal && `کد پستی: ${brand.postal}`, brand.website].filter(Boolean).map(esc).join(' · ');
   const pays = t.showPayments && b.payments.length ? `<h2>ریز پرداخت‌ها (تومان)</h2><table><thead><tr><th>تاریخ</th><th>روش</th><th>پیگیری</th><th>مبلغ</th></tr></thead><tbody>${b.payments.map(p => `<tr>${cell(faDate(p.paidAt))}${cell(({ cash: 'نقدی', card: 'کارت‌خوان', transfer: 'انتقال', cheque: 'چک', insurance: 'بیمه' })[p.method] ?? p.method)}${cell(p.reference)}${number(p.amount)}</tr>`).join('')}</tbody></table>` : '';
+  const consTable = consumables.length ? `<h2>نوع و تعداد اقلام استفاده‌شده</h2><table class="consumables"><thead><tr><th>ردیف</th><th>کالا</th><th>کد IRC</th><th>تعداد</th></tr></thead><tbody>${consumables.map((c, i) => `<tr>${cell(fmtMoney(i + 1))}${cell(c.title)}<td class="num">${esc(c.neuroDetail?.irc || c.notes || '—')}</td>${number(c.quantity)}</tr>`).join('')}</tbody></table>` : '';
   return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><title>فاکتور ${esc(doc.number)}</title>
   <style>
     @font-face { font-family: InvoiceFa; src: url('${esc(new URL(fonts[0], import.meta.url).href)}') format('woff2'); font-weight: 400; }
@@ -74,6 +79,7 @@ export function issuedInvoiceHtml(doc, letterheadUrl = null, fonts = [fontRegula
   ${v.opStartTime ? `<br>شروع: ${esc(v.opStartTime)} · پایان: ${esc(v.opEndTime || '—')}` : ''}</div>
   <h2>اقلام و خدمات · مبالغ به تومان</h2>
   <table><thead><tr><th>ردیف</th><th>کد و شرح خدمت / کالا</th><th>${neuro ? 'ساعت / تعداد' : 'تعداد'}</th>${neuro ? '<th>سهم</th><th>ارزش نسبی</th>' : ''}${global ? '' : `<th>${neuro ? 'ضریب / فی واحد' : 'فی واحد'}</th><th>مبلغ</th>${neuro ? '<th>مالک دستگاه</th>' : ''}`}</tr></thead><tbody>${rows || `<tr><td colspan="${cols}">قلمی ثبت نشده است</td></tr>`}</tbody></table>
+  ${consTable}
   <div class="totals"><b>${global ? 'مبلغ کل توافقی' : 'جمع کل'}: ${esc(fmtMoney(b.total))} تومان</b><br>به حروف: ${esc(numToWordsFa(b.total))} تومان<br>پرداخت‌شده: ${esc(fmtMoney(b.paid))} تومان · ${b.due < 0 ? 'بستانکاری' : 'مانده'}: ${esc(fmtMoney(Math.abs(b.due)))} تومان</div>
   ${pays}
   ${b.invoiceBankAccount ? `<p class="meta">حساب دریافت: ${esc([b.invoiceBankAccount.ownerName, b.invoiceBankAccount.bankName, b.invoiceBankAccount.accountNumber, b.invoiceBankAccount.iban].filter(Boolean).join(' · '))}</p>` : ''}

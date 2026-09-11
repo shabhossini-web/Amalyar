@@ -1,3 +1,5 @@
+import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
+import { TenantHospitalDirectoryService } from './hospital-directory.service';
 import { Module } from '@nestjs/common';
 import { PatientsController } from './patients.controller';
 import { LettersController } from './letters.controller';
@@ -58,17 +60,23 @@ import { SummaryController, PublicSummaryController } from './summary.controller
 import { RemindersService } from './reminders.service';
 import { PortalService } from './portal.service';
 import { PermissionGuard } from '../auth/permission.guard';
+import { HospitalDutiesController } from './hospital-duties.controller';
+import { HospitalDutiesService } from './hospital-duties.service';
 
 @Module({
+  imports: [HospitalDirectoryModule],
   // ⚠️ ترتیب مهم است: PatientsController مسیرِ `patients` (جستجو) را دارد و
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [
+    HospitalDutiesController,
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, AvailabilityController, AppointmentsController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
     SummaryController, PublicSummaryController, LettersController, OrdersController, PublicOrdersController,
   ],
   providers: [
+    TenantHospitalDirectoryService,
+    HospitalDutiesService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,

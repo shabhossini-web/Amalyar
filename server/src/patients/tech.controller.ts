@@ -26,6 +26,8 @@ const SCOPES: AgendaScope[] = ['today', 'upcoming', 'past'];
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('tech')
 export class TechController {
+  @Post('visits/:id/claim') @RequirePermissions('visits.claim')
+  claim(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) { return this.tech.claim(id, user); }
   constructor(private tech: TechService) {}
 
   @RequirePermissions('patients.read')

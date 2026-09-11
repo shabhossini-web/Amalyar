@@ -1,4 +1,4 @@
-import { IsArray, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsObject, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class WebauthnLoginOptionsDto {
   @IsOptional()
@@ -18,4 +18,9 @@ export class WebauthnVerifyDto {
   @IsOptional()
   @IsString()
   name?: string;
+
+  /** فقط در ورود معنا دارد — کوکیِ ماندگار؛ پیش‌فرض true. */
+  @IsOptional()
+  @IsBoolean()
+  remember?: boolean;
 }

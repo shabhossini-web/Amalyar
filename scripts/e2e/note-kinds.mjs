@@ -10,6 +10,7 @@
  * فیلتر کند و هم نوعِ شرحِ تازه را تعیین کند.
  */
 import { chromium } from 'playwright-core';
+import { browserLogin } from './lib/browser-login.mjs';
 
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
@@ -72,7 +73,7 @@ const errs = [];
 p.on('pageerror', (e) => errs.push(String(e)));
 try {
   await p.goto(UI + '/', { waitUntil: 'domcontentloaded' });
-  await p.evaluate((t) => localStorage.setItem('amalyar_token', t), login.accessToken);
+  await browserLogin(p, login.accessToken);
   await p.goto(UI + `/app/patients/${pid}`, { waitUntil: 'networkidle' });
   await p.waitForTimeout(1500);
   await p.locator('.ui-tabs button', { hasText: 'شرح‌ها' }).click();
