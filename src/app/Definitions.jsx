@@ -1,3 +1,4 @@
+import HospitalDirectory from './HospitalDirectory.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -58,6 +59,7 @@ const SECTIONS = [
     empty: 'هنوز بیمارستانی تعریف نشده',
     fields: [
       { key: 'name', label: 'نام مرکز *', required: true },
+      { key: 'province', label: 'استان' },
       { key: 'sector', label: 'نوع بیمارستان / تعرفه', options: [{ v: 'private', l: 'خصوصی' }, { v: 'public', l: 'دولتی' }, { v: 'nonprofit', l: 'عمومی غیردولتی' }, { v: 'charity', l: 'خیریه' }, { v: 'military', l: 'نیروهای مسلح' }] },
       { key: 'city', label: 'شهر' },
       { key: 'address', label: 'آدرس' },
@@ -286,6 +288,7 @@ export default function Definitions() {
       <>
       {section.hint && <p className="df-note">{section.hint}</p>}
 
+      {tab === 'hospitals' && <details className="df-directory-disclosure"><summary>دریافت از فهرست مرکزی بیمارستان‌ها</summary><HospitalDirectory onChanged={load} /></details>}
       <div className="df-toolbar">
         <button type="button" className="df-add" onClick={() => setEditing({})}>
           <Plus width="16" height="16" /> افزودن

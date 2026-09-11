@@ -165,3 +165,26 @@ model PlatformAuditEvent {
   @@index([actorHash, createdAt])
   @@map("platform_audit_events")
 }
+
+/// Public hospital directory; no tenant contacts, patients or private notes belong here.
+model CentralHospital {
+  id String @id @default(cuid())
+  sourceKey String @unique @map("source_key")
+  name String
+  province String?
+  city String?
+  address String?
+  phone String?
+  sector String?
+  website String?
+  sourceUrl String? @map("source_url")
+  sourceName String? @map("source_name")
+  checkedAt DateTime? @map("checked_at")
+  verified Boolean @default(false)
+  active Boolean @default(true)
+  searchText String @map("search_text")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@index([province, city])
+  @@map("central_hospitals")
+}

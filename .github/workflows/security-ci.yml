@@ -2780,3 +2780,6 @@ jobs:
 
       - name: Verify isolated test accounts sharing one phone
         run: node scripts/e2e/test-accounts.mjs
+
+      - name: Verify central hospital directory and isolated tenant imports
+        run: node scripts/e2e/hospital-directory.mjs

@@ -124,6 +124,9 @@ model ProcedureTypeItem {
 }
 
 model Hospital {
+  centralId String? @unique @map("central_id")
+  centralSnapshot Json? @map("central_snapshot")
+  province String?
   duties HospitalDuty[]
   sector String @default("private")
   id           Int      @id @default(autoincrement())

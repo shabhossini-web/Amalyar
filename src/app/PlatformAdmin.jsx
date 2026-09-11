@@ -1,3 +1,4 @@
+import HospitalDirectory from './HospitalDirectory.jsx';
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import Mark from '../components/Mark.jsx';
@@ -535,6 +536,7 @@ export default function PlatformAdmin() {
             </div>
           </section>
 
+          <HospitalDirectory platformApi={platformApi} />
           <TariffsPanel busy={busy} onNotice={setNotice} />
           <CentralAiPanel busy={busy} onNotice={setNotice} />
 
