@@ -6,6 +6,7 @@
  *   عنوانش نامِ فرمِ انتخاب‌شده را می‌گوید
  */
 import { chromium } from 'playwright-core';
+import { browserLogin } from './lib/browser-login.mjs';
 
 const BASE = 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
@@ -24,7 +25,7 @@ page.on('pageerror', (e) => errors.push(String(e)));
 
 try {
   await page.goto(BASE + '/', { waitUntil: 'domcontentloaded' });
-  await page.evaluate((t) => localStorage.setItem('amalyar_token', t), login.accessToken);
+  await browserLogin(page, login.accessToken);
   await page.goto(BASE + '/app/dashboard', { waitUntil: 'networkidle' });
   await page.waitForTimeout(1800);
 

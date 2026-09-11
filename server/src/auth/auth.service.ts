@@ -11,8 +11,9 @@ import { jobRoleLabel } from '../common/job-roles';
 import { LEVEL, levelName } from '../common/levels';
 import { RateLimitService } from '../common/rate-limit.service';
 import { TenantContext } from '../tenant/tenant-context';
+import type { Request, Response } from 'express';
+import { MAX_SET, SESSION_SET_COOKIE, SESSION_TTL_DAYS, SetEntry, cookieBase, readCookie } from './session-cookie';
 
-const SESSION_TTL_DAYS = 30;
 const MAX_SESSIONS = 10;
 const OTP_TTL_MS = 5 * 60_000;
 const OTP_RESEND_MS = 60_000;
@@ -296,7 +297,8 @@ export class AuthService {
       { sub: account.id, sid: session.id, level: account.level, tid: this.tenantContext.require().tenantId },
       { expiresIn: `${SESSION_TTL_DAYS}d` },
     );
-    return { accessToken, user: this.publicUser(account) };
+    // `sid` هم برمی‌گردد تا کنترلر بتواند نشستِ تازه را به مجموعهٔ چندحسابیِ کوکی اضافه کند.
+    return { accessToken, sid: session.id, user: this.publicUser(account) };
   }
 
   async validateSession(sid: string, sub: number) {
@@ -348,6 +350,62 @@ export class AuthService {
   async logout(sid: string) {
     await this.prisma.session.updateMany({ where: { id: sid, revokedAt: null }, data: { revokedAt: new Date() } });
     return { ok: true };
+  }
+
+  async revokeMany(sids: string[]) {
+    if (!sids.length) return;
+    await this.prisma.session.updateMany({ where: { id: { in: sids }, revokedAt: null }, data: { revokedAt: new Date() } });
+  }
+
+  // ── چندحسابی با کوکی (قانون ۶) ─────────────────────────────
+  //
+  // مجموعهٔ نشست‌های «مرا به خاطر بسپار»ِ این مرورگر، به‌شکلِ JWTِ امضاشده در یک
+  // کوکیِ HttpOnly. کلاینت فقط شناسهٔ حساب را می‌فرستد؛ توکنِ هیچ حسابی را ندارد.
+
+  /** خواندنِ مجموعه — کوکیِ نامعتبر/منقضی/از tenantِ دیگر = مجموعهٔ خالی، نه خطا. */
+  async readSessionSet(req: Request): Promise<SetEntry[]> {
+    const raw = readCookie(req, SESSION_SET_COOKIE);
+    if (!raw) return [];
+    try {
+      const p: any = await this.jwt.verifyAsync(raw);
+      if (p?.tid !== this.tenantContext.require().tenantId || !Array.isArray(p.s)) return [];
+      return p.s
+        .filter((e: any) => e && typeof e.sid === 'string' && Number.isInteger(e.sub))
+        .map((e: any) => ({ sid: e.sid, sub: e.sub }))
+        .slice(0, MAX_SET);
+    } catch {
+      return [];
+    }
+  }
+
+  async writeSessionSet(res: Response, entries: SetEntry[]) {
+    if (!entries.length) {
+      res.clearCookie(SESSION_SET_COOKIE, { path: '/' });
+      return;
+    }
+    const token = await this.jwt.signAsync(
+      { s: entries.slice(0, MAX_SET), tid: this.tenantContext.require().tenantId },
+      { expiresIn: `${SESSION_TTL_DAYS}d` },
+    );
+    res.cookie(SESSION_SET_COOKIE, token, { httpOnly: true, ...cookieBase(true) });
+  }
+
+  /** فقط نشست‌های زنده — مرده‌ها (باطل/منقضی/حسابِ غیرفعال) کنار می‌روند. */
+  async liveSet(entries: SetEntry[]) {
+    const out: { entry: SetEntry; account: AccountWithPerson }[] = [];
+    for (const entry of entries) {
+      const account = await this.validateSession(entry.sid, entry.sub);
+      if (account) out.push({ entry, account });
+    }
+    return out;
+  }
+
+  /** توکنِ تازه برای نشستِ موجود — سوییچ؛ نشست همان است، فقط کوکیِ فعال عوض می‌شود. */
+  tokenFor(sid: string, account: AccountWithPerson) {
+    return this.jwt.signAsync(
+      { sub: account.id, sid, level: account.level, tid: this.tenantContext.require().tenantId },
+      { expiresIn: `${SESSION_TTL_DAYS}d` },
+    );
   }
 
   /// شکلِ عمومیِ کاربر برای کلاینت. قرارداد بیرونی عمداً همان قبلی نگه داشته شد

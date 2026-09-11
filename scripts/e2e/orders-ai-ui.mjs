@@ -18,7 +18,6 @@ try {
   browser = await chromium.launch({ executablePath: process.env.E2E_CHROME ?? '/tmp/chromium', args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const context = await browser.newContext({ viewport, locale: 'fa-IR', serviceWorkers: 'block' });
-    await context.addInitScript(() => localStorage.setItem('amalyar_token', 'test-only'));
     await context.route('**/api/**', async (route) => {
       const req = route.request(), path = new URL(req.url()).pathname.replace(/^\/api/, '');
       if (req.method() !== 'GET') writes.push({ path, body: req.postData() });

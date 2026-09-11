@@ -12,7 +12,6 @@ try {
   browser = await chromium.launch({ executablePath: process.env.E2E_CHROME ?? '/tmp/chromium', args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) for (const profile of ['ionm', 'implant', 'clinic']) {
     const ctx = await browser.newContext({ viewport, locale: 'fa-IR', serviceWorkers: 'block' });
-    await ctx.addInitScript(() => localStorage.setItem('amalyar_token', 'test-only'));
     const writes = [], errors = [];
     const kind = profile === 'clinic' ? 'clinic' : 'surgery';
     const fields = (profile === 'clinic' ? ['surgeonId', 'opDate'] : ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'opDate']).map(key => ({ key, active: true, builtin: true }));
