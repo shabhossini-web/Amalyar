@@ -1,7 +1,7 @@
 import { Body, Controller, Get, NotFoundException, Param, ParseIntPipe, Post, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { StorageService } from '../storage/storage.service';
-import { IsIn, IsInt, IsString, Matches, Max, Min } from 'class-validator';
+import { ArrayMinSize, IsArray, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -16,6 +16,17 @@ class NeuroServiceDto {
   @IsString() @Matches(/^\d{4}$/) year!: string;
   @IsIn(['company', 'hospital']) deviceOwner!: string;
 }
+/** پاپ‌آپِ یک‌جا: چند خدمت با یک مدت/سال/مالک. `items` = شناسه‌های «کد:نام» از neuro-catalog. */
+class NeuroQuoteDto {
+  @IsArray() @ArrayMinSize(1) @IsString({ each: true }) items!: string[];
+  @IsInt() @Min(1) @Max(72) hours!: number;
+  @IsString() @Matches(/^\d{4}$/) year!: string;
+  @IsIn(['company', 'hospital']) deviceOwner!: string;
+}
+class NeuroApplyDto extends NeuroQuoteDto {
+  /** `{name, irc?, qty}` — شکلِ دقیق در سرویس سنجیده می‌شود. */
+  @IsOptional() @IsArray() consumables?: unknown[];
+}
 class IssueInvoiceDto { @IsIn(['formal', 'informal']) variant!: string; }
 
 @Controller('visits/:id/invoices')
@@ -25,6 +36,13 @@ export class InvoicesController {
   constructor(private invoices: InvoicesService, private storage: StorageService) {}
   @Get() @RequirePermissions('billing.read')
   list(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) { return this.invoices.list(id, user); }
+  // ⚠️ پیش از `:documentId` اعلام شده؛ وگرنه ParseIntPipe روی «neuro-catalog» ۴۰۰ می‌داد.
+  @Get('neuro-catalog') @RequirePermissions('billing.read')
+  catalog(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) { return this.invoices.catalog(id, user); }
+  @Post('neuro-quote') @RequirePermissions('billing.read')
+  quote(@Param('id', ParseIntPipe) id: number, @Body() dto: NeuroQuoteDto, @CurrentUser() user: any) { return this.invoices.quote(id, dto, user); }
+  @Post('neuro-apply') @RequirePermissions('billing.write')
+  apply(@Param('id', ParseIntPipe) id: number, @Body() dto: NeuroApplyDto, @CurrentUser() user: any) { return this.invoices.apply(id, dto, user); }
   @Post('neuro-preview') @RequirePermissions('billing.read')
   price(@Param('id', ParseIntPipe) id: number, @Body() dto: NeuroServiceDto, @CurrentUser() user: any) { return this.invoices.price(id, dto, user); }
   @Post('neuro-service') @RequirePermissions('billing.write')

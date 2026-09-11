@@ -80,6 +80,10 @@ export const SETTINGS: SettingDef[] = [
   { key: 'invoice_show_payments', label: 'نمایش ریز پرداخت‌ها', group: 'invoice', type: 'bool', default: true },
   { key: 'invoice_letterhead_top', label: 'فضای بالای سربرگ (میلی‌متر)', group: 'invoice', type: 'number', default: 42, min: 10, max: 65 },
   { key: 'invoice_letterhead_bottom', label: 'فضای پایین سربرگ (میلی‌متر)', group: 'invoice', type: 'number', default: 24, min: 10, max: 45 },
+  /* فاکتورِ نورومانیتورینگ — الگوی ملک‌طب: یک پاپ‌آپ، همهٔ خدمات با تیکِ پیش‌فرض، مصرفی‌های پرتکرار.
+     هر شرکت پیش‌فرضِ خودش را دارد؛ از خودِ پاپ‌آپ («ذخیره به‌عنوانِ پیش‌فرضِ شرکت») هم پر می‌شود. */
+  { key: 'invoice_neuro_defaults', label: 'خدماتِ نورومانیتورینگِ پیش‌فرضِ فاکتور', hint: 'شناسه‌های «کد:نام» که در پاپ‌آپِ صدور از قبل تیک دارند، با کاما. ساده‌ترین راه: در پاپ‌آپ انتخاب کنید و «ذخیره به‌عنوانِ پیش‌فرضِ شرکت» را بزنید.', group: 'invoice', type: 'text', default: '901290:EMG,901325:MEP,901320:SEP,901300:Monitoring', maxLength: 400, ltr: true },
+  { key: 'invoice_neuro_consumables', label: 'مصرفی‌های پرتکرارِ فاکتورِ نورومانیتورینگ', hint: 'هر خط یک کالا: نام | کد IRC | تعدادِ پیش‌فرض. روی فاکتور در جدولِ «اقلامِ استفاده‌شده» چاپ می‌شود، بدونِ مبلغ (هزینه‌شان در خدمت است).', group: 'invoice', type: 'textarea', default: 'Electrode | 9449874222229990 | 40', maxLength: 2000 },
   // ── هویتِ شرکت ────────────────────────────────────────────────
   {
     key: 'brand_name',
