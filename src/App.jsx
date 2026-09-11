@@ -1,42 +1,50 @@
+/* ⚠️ هر صفحه یک چانکِ جدا است (`lazy`)، نه یک باندلِ واحد.
+   تا دیروز `App.jsx` هر ۳۸ صفحه را ثابت import می‌کرد، یعنی بازدیدکننده‌ای که
+   فقط لندینگ یا فرمِ ورود را باز می‌کرد حسابداری و انبار و چینش و دستیارِ
+   هوشِ مصنوعی را هم دانلود می‌کرد: از ۸۴۸ kB باندل، ۴۳۲ kB کدی بود که آن صفحه
+   هرگز اجرا نمی‌کرد. اندازه‌گیری‌شده روی همین کامیت: ورودی ۳۰۸ → ۱۳۷ kB فشرده،
+   و «تا دیده‌شدنِ محتوا» روی ۴G ایران ۸٫۰ → ۵٫۲ ثانیه.
+   افزودنِ صفحهٔ تازه هم باید `lazy` باشد، وگرنه بی‌سروصدا به ورودی برمی‌گردد. */
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ErrorBoundary from './app/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './app/auth.jsx';
 import { ConfigProvider } from './app/config.jsx';
-import Landing from './pages/Landing.jsx';
-import { TenantSite } from './pages/TenantLanding.jsx';
-import Intake from './pages/Intake.jsx';
-import Survey from './pages/Survey.jsx';
-import VisitSummary from './pages/VisitSummary.jsx';
-import Portal from './pages/Portal.jsx';
-import SurgeonPortal from './app/SurgeonPortal.jsx';
-import Launcher from './app/Launcher.jsx';
-import Login from './app/Login.jsx';
-import Users from './app/Users.jsx';
-import Access from './app/Access.jsx';
-import Profile from './app/Profile.jsx';
-import Dashboard from './app/Dashboard.jsx';
-import Definitions from './app/Definitions.jsx';
-import FormBuilder from './app/FormBuilder.jsx';
-import Inventory from './app/Inventory.jsx';
-import Accounting from './app/Accounting.jsx';
-import Calendar from './app/Calendar.jsx';
-import Schedule from './app/Schedule.jsx';
-import Dispatch from './app/Dispatch.jsx';
-import Tech from './app/Tech.jsx';
-import Transport from './app/Transport.jsx';
-import IntakeAdmin from './app/Intake.jsx';
-import Crm from './app/Crm.jsx';
-import Reminders from './app/Reminders.jsx';
-import Letters from './app/Letters.jsx';
-import NotesSearch from './app/NotesSearch.jsx';
-import OrderPublic from './app/OrderPublic.jsx';
-import Assistant from './app/Assistant.jsx';
-import Chat from './app/Chat.jsx';
+const Landing = lazy(() => import('./pages/Landing.jsx'));
+const TenantSite = lazy(() => import('./pages/TenantLanding.jsx').then((m) => ({ default: m.TenantSite })));
+const Intake = lazy(() => import('./pages/Intake.jsx'));
+const Survey = lazy(() => import('./pages/Survey.jsx'));
+const VisitSummary = lazy(() => import('./pages/VisitSummary.jsx'));
+const Portal = lazy(() => import('./pages/Portal.jsx'));
+const SurgeonPortal = lazy(() => import('./app/SurgeonPortal.jsx'));
+const Launcher = lazy(() => import('./app/Launcher.jsx'));
+const Login = lazy(() => import('./app/Login.jsx'));
+const Users = lazy(() => import('./app/Users.jsx'));
+const Access = lazy(() => import('./app/Access.jsx'));
+const Profile = lazy(() => import('./app/Profile.jsx'));
+const Dashboard = lazy(() => import('./app/Dashboard.jsx'));
+const Definitions = lazy(() => import('./app/Definitions.jsx'));
+const FormBuilder = lazy(() => import('./app/FormBuilder.jsx'));
+const Inventory = lazy(() => import('./app/Inventory.jsx'));
+const Accounting = lazy(() => import('./app/Accounting.jsx'));
+const Calendar = lazy(() => import('./app/Calendar.jsx'));
+const Schedule = lazy(() => import('./app/Schedule.jsx'));
+const Dispatch = lazy(() => import('./app/Dispatch.jsx'));
+const Tech = lazy(() => import('./app/Tech.jsx'));
+const Transport = lazy(() => import('./app/Transport.jsx'));
+const IntakeAdmin = lazy(() => import('./app/Intake.jsx'));
+const Crm = lazy(() => import('./app/Crm.jsx'));
+const Reminders = lazy(() => import('./app/Reminders.jsx'));
+const Letters = lazy(() => import('./app/Letters.jsx'));
+const NotesSearch = lazy(() => import('./app/NotesSearch.jsx'));
+const OrderPublic = lazy(() => import('./app/OrderPublic.jsx'));
+const Assistant = lazy(() => import('./app/Assistant.jsx'));
+const Chat = lazy(() => import('./app/Chat.jsx'));
 import Gate from './app/Gate.jsx';
-import PatientRecord from './app/PatientRecord.jsx';
-import Settings from './app/Settings.jsx';
-import Site from './app/Site.jsx';
-import PlatformAdmin from './app/PlatformAdmin.jsx';
+const PatientRecord = lazy(() => import('./app/PatientRecord.jsx'));
+const Settings = lazy(() => import('./app/Settings.jsx'));
+const Site = lazy(() => import('./app/Site.jsx'));
+const PlatformAdmin = lazy(() => import('./app/PlatformAdmin.jsx'));
 /* دکمه‌های سه‌بعدی + کفِ تاچ‌تارگت — سراسری، بعد از CSSهای صفحه‌ها تا برنده شود. */
 import './ui/press.css';
 
@@ -68,6 +76,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <ConfigProvider>
+        <Suspense fallback={<div className="lx-boot">در حال بارگذاری…</div>}>
         <Routes>
           <Route path="/app/surgeon" element={<Protected><Gate feature="surgeon"><SurgeonPortal /></Gate></Protected>} />
           <Route path="/" element={<TenantAwareRoot />} />
@@ -112,6 +121,7 @@ export default function App() {
           <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
           <Route path="/app/profile" element={<Protected><Profile /></Protected>} />
         </Routes>
+        </Suspense>
         </ConfigProvider>
       </AuthProvider>
     </ErrorBoundary>

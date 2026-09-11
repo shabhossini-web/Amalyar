@@ -2764,6 +2764,9 @@ jobs:
       # می‌شود. سه مرزش را هیچ تایپ‌چکی نمی‌گیرد و هر سه باگِ خاموش می‌سازند:
       # صفحه‌ای که ناخواسته منتشر شود، هویتِ مالیاتی که لو برود، و تصویری که
       # پس از خاموش‌کردنِ بخش همچنان قابلِ دانلود بماند.
+      - name: Verify the tenant SEO surface reaches crawlers
+        run: node scripts/verify-seo-surface.js
+
       - name: Verify the tenant public site stays fail-closed
         run: |
           node -e "

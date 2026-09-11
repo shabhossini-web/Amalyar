@@ -119,10 +119,13 @@ export class SiteService {
     for (const k of kinds) items[k] = [];
     for (const r of rows) items[r.kind]?.push(this.toPublic(r));
 
+    const enabled = on.length > 0;
     return {
       /* منتشرنشده یا بی‌بخش یعنی «این شرکت سایت ندارد» — کلاینت با همین
          تصمیم می‌گیرد ریشهٔ دامنه را مثلِ قبل به فرمِ ورود بفرستد. */
-      enabled: on.length > 0,
+      enabled,
+      /* هویتِ برند حتی پیش از انتشار هم بیرون می‌رود — همان چیزی است که
+         `api/branding` بی‌احراز می‌دهد و صفحهٔ ورود رویش سوار است. */
       brand: {
         name: brand.name,
         legalName: brand.legalName,
@@ -130,7 +133,10 @@ export class SiteService {
         address: brand.address,
         color: brand.color,
       },
-      blocks,
+      /* ⚠️ متن و محتوا فقط **پس از انتشار**. تا دیروز `blocks` بی‌قید برمی‌گشت،
+         یعنی پیش‌نویسِ صفحه‌ای که شرکت هنوز منتشرش نکرده بود با یک درخواستِ
+         ساده خواندنی بود. «منتشرنشده» باید یعنی «هیچ‌چیزِ عمومی». */
+      blocks: enabled ? blocks : {},
       sections: on.map((s) => ({ key: s.key, kind: s.kind })),
       items,
     };

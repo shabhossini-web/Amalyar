@@ -1,0 +1,109 @@
+# ⚠️ این فایل **قالب** است، نه کانفیگِ نهایی.
+# ایمیجِ nginx:alpine هر چیزی در /etc/nginx/templates/*.template را با envsubst
+# پردازش می‌کند و در conf.d می‌گذارد. تنها متغیرِ محیطی‌اش API_UPSTREAM است که
+# در Dockerfile پیش‌فرض دارد، پس نبودنش کانتینر را زمین نمی‌زند.
+
+# طرحِ واقعیِ درخواست: پشتِ Traefik کانکشنِ داخلی http است و فقط این هدر
+# می‌داند بیرون https بوده. بدونش canonical و og:url با http ساخته می‌شوند.
+map $http_x_forwarded_proto $fwd_proto {
+  default $http_x_forwarded_proto;
+  ""      $scheme;
+}
+
+server {
+  listen 80;
+  listen [::]:80;
+  server_name _;
+
+  root /usr/share/nginx/html;
+  index index.html;
+
+  gzip on;
+  gzip_vary on;
+  gzip_min_length 1024;
+  gzip_proxied any;
+  gzip_types text/plain text/css text/javascript application/javascript application/json image/svg+xml application/xml font/woff2;
+
+  # DNSِ داخلیِ داکر. لازم است چون نشانیِ بک‌اند در proxy_pass یک **متغیر** است.
+  resolver 127.0.0.11 valid=10s ipv6=off;
+
+  # ⚠️ چرا متغیر و نه نشانیِ ثابت: nginx نامِ upstreamِ ثابت را هنگامِ **استارت**
+  # resolve می‌کند و اگر بک‌اند آن لحظه بالا نباشد کلِ کانتینرِ فرانت بالا
+  # نمی‌آید. با متغیر، resolve به زمانِ درخواست می‌افتد؛ شکستش فقط یک ۵۰۲ روی
+  # همان زیرمسیر است و صفحه سرِ جایش می‌ماند.
+  set $api_root "${API_UPSTREAM}";
+
+  # /api معمولاً پیش از رسیدن به این کانتینر توسط Traefik به بک‌اند می‌رود.
+  # اگر آن مسیر خراب باشد و درخواست این‌جا بیفتد، بسته می‌مانیم — نه اینکه
+  # HTMLِ اپ را با ۲۰۰ به‌جای پاسخِ API برگردانیم.
+  location = /api { return 503; }
+  location ^~ /api/ { return 503; }
+
+  # ── سئو ───────────────────────────────────────────────────────────
+  # ریشهٔ دامنه تنها جایی است که SSI لازم دارد: سایتِ معرفیِ شرکت همان‌جاست.
+  # خزندهٔ پیش‌نمایشِ لینک (واتساپ/تلگرام/ایتا/بله) JS اجرا نمی‌کند، پس بدونِ
+  # این تزریق عنوانِ هر شرکت «عمل‌یار» دیده می‌شد.
+  # ssi_silent_errors: بک‌اندِ در دسترس‌نبودن باید قطعه را خالی کند، نه اینکه
+  # پیامِ خطای nginx را وسطِ <head> چاپ کند.
+  location = / {
+    ssi on;
+    ssi_silent_errors on;
+    add_header Cache-Control "no-cache";
+    try_files /index.html =404;
+  }
+
+  location = /_seo/head {
+    internal;
+    rewrite ^ /api/public/site/head break;
+    proxy_pass $api_root;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_connect_timeout 2s;
+    proxy_read_timeout 3s;
+  }
+
+  # robots و sitemap از همان بک‌اند می‌آیند تا per-tenant باشند؛ اگر بک‌اند
+  # نرسید یا این میزبان اصلاً tenant نبود (مثلاً amalyar.com)، فایلِ ایستا.
+  location = /robots.txt {
+    rewrite ^ /api/public/site/robots.txt break;
+    proxy_pass $api_root;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_connect_timeout 2s;
+    proxy_read_timeout 3s;
+    proxy_intercept_errors on;
+    error_page 400 404 500 502 503 504 = @seo_static;
+  }
+
+  location = /sitemap.xml {
+    rewrite ^ /api/public/site/sitemap.xml break;
+    proxy_pass $api_root;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $fwd_proto;
+    proxy_connect_timeout 2s;
+    proxy_read_timeout 3s;
+    proxy_intercept_errors on;
+    error_page 400 404 500 502 503 504 = @seo_static;
+  }
+
+  location @seo_static {
+    # $uri این‌جا هنوز /robots.txt یا /sitemap.xml است — نسخهٔ ایستای
+    # سایتِ بازاریابی که در public/ کامیت شده.
+    try_files $uri =404;
+  }
+  # ──────────────────────────────────────────────────────────────────
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+
+  location /assets/ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+
+  location ~* \.(?:woff2?|ttf|eot|svg|png|jpe?g|webp|gif|ico)$ {
+    expires 30d;
+    add_header Cache-Control "public";
+  }
+}

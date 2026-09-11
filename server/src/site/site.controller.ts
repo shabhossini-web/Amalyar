@@ -1,9 +1,9 @@
 import {
   BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, ParseIntPipe,
-  Patch, Post, Res, UploadedFile, UseGuards, UseInterceptors,
+  Patch, Post, Req, Res, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import {
   IsArray, IsBoolean, IsInt, IsObject, IsNotEmptyObject, IsOptional, IsString, MaxLength, MinLength, ValidateNested,
 } from 'class-validator';
@@ -16,9 +16,28 @@ import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { StorageService } from '../storage/storage.service';
 import { SiteService } from './site.service';
+import { SeoService } from './seo.service';
 
 const IMAGE_MIME = /^image\/(png|jpeg|webp|avif)$/;
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/**
+ * میزبانِ همین درخواست — مبنای canonical و og:url.
+ *
+ * ⚠️ همان Hostی است که middleware با آن tenant را حل کرده (قانونِ ۱۸)، پس
+ * تا این‌جا اعتبارش سنجیده شده. با این حال الفبا را تنگ می‌گیریم: یک Hostِ
+ * عجیب مستقیم داخلِ `href` می‌نشیند و نباید بتواند از attribute بیرون بزند.
+ */
+const hostOf = (req: Request): string => {
+  const raw = String(req.headers.host ?? '').trim().toLowerCase();
+  return /^[a-z0-9.\-]+(:\d{1,5})?$/.test(raw) ? raw : '';
+};
+
+/** پشتِ Traefik کانکشن http است؛ طرحِ واقعی را فقط هدرِ forwarded می‌داند. */
+const protoOf = (req: Request): string => {
+  const fwd = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim().toLowerCase();
+  return fwd === 'https' || fwd === 'http' ? fwd : req.protocol === 'https' ? 'https' : 'http';
+};
 
 class BlocksDto {
   @IsObject({ message: 'بدنهٔ درخواست نامعتبر است' })
@@ -67,11 +86,38 @@ class ItemPatchDto {
  */
 @Controller('public/site')
 export class PublicSiteController {
-  constructor(private site: SiteService, private storage: StorageService) {}
+  constructor(private site: SiteService, private storage: StorageService, private seo: SeoService) {}
 
   @Get()
   view() {
     return this.site.publicView();
+  }
+
+  /**
+   * قطعهٔ `<head>` برای خزنده‌ها — nginx با SSI اول‌ترین چیزِ `<head>` می‌کندش.
+   *
+   * ⚠️ نوعِ پاسخ `text/html` است ولی **سند نیست**: چند تگ. اگر روزی کسی
+   * وسوسه شد این را یک صفحهٔ کامل کند، همان لحظه دو `<html>` تودرتو می‌شود.
+   */
+  @Get('head')
+  async head(@Req() req: Request, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    res.send(await this.seo.head(hostOf(req), protoOf(req)));
+  }
+
+  @Get('robots.txt')
+  async robots(@Req() req: Request, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(await this.seo.robots(hostOf(req), protoOf(req)));
+  }
+
+  @Get('sitemap.xml')
+  async sitemap(@Req() req: Request, @Res() res: Response) {
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(await this.seo.sitemap(hostOf(req), protoOf(req)));
   }
 
   @Get('items/:id/image')

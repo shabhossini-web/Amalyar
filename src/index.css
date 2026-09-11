@@ -382,3 +382,9 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   .cta-box::after { animation: none; }
 }
+
+/* پردهٔ بارگذاری — تا آمدنِ چانکِ صفحه.
+   ⚠️ عمداً این‌جا (CSSِ ورودی) است نه در `login.css`: از وقتی مسیرها lazy
+   شده‌اند، این کلاس **پیش از** رسیدنِ CSSِ هر صفحه روی صفحه است؛ اگر در
+   استایلِ یک صفحهٔ lazy می‌ماند، کاربر یک متنِ بی‌استایلِ سفید می‌دید. */
+.lx-boot { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; background: var(--bg); color: var(--text2); font-family: 'Vazirmatn', system-ui, sans-serif; font-size: 14px; }

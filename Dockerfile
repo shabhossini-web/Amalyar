@@ -18,7 +18,12 @@ RUN npm run build
 # ── serve stage ──────────────────────────────────────────────
 FROM nginx:alpine
 RUN rm -rf /usr/share/nginx/html/* && rm -f /etc/nginx/conf.d/default.conf
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# ⚠️ قالب، نه کانفیگ: entrypointِ ایمیج با envsubst پردازشش می‌کند تا نشانیِ
+# بک‌اند در زمانِ اجرا تزریق شود. تزریقِ سئوی هر tenant از همین‌جا می‌گذرد.
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+# نامِ سرویسِ بک‌اند در همان شبکهٔ داکر. Coolify می‌تواند override کند؛ اگر
+# اشتباه باشد فقط تزریقِ سئو خالی می‌ماند (SSI بی‌صدا) و سایت سرِ جایش است.
+ENV API_UPSTREAM=http://amalyar-api:3001
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

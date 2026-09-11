@@ -1,0 +1,16 @@
+# سایتِ بازاریابیِ عمل‌یار (amalyar.com).
+# ⚠️ دامنهٔ هر شرکت robots خودش را از بک‌اند می‌گیرد (`/api/public/site/robots.txt`)؛
+# این فایل فقط وقتی سرو می‌شود که آن مسیر در دسترس نباشد یا میزبان tenant نباشد.
+User-agent: *
+Allow: /
+Disallow: /app
+Disallow: /api
+Disallow: /login
+Disallow: /r/
+Disallow: /f/
+Disallow: /s/
+Disallow: /v/
+Disallow: /p/
+Disallow: /o/
+
+Sitemap: https://amalyar.com/sitemap.xml
