@@ -412,7 +412,7 @@ Follow-up: برای ساخت هم‌زمان visit، unique constraint مانع 
 3. Frontend resource، دامنه‌های Alpha/Beta، Healthcheck و onboarding فقط از UI کامل و `Running (healthy)` تأیید شده‌اند.
 4. تست خودکار قطعی جداسازی به CI اضافه شد و run 226 سبز شد: JWT با `tid` شرکت دیگر 401 می‌شود و Prisma برای Tenantهای متفاوت client/Database route جدا انتخاب می‌کند.
 5. تست زنده داده در هر دو جهت پاس و هر دو رکورد ساختگی پاک‌سازی شدند. Platform Admin، provisioning queue/Worker و UI پیاده‌سازی شدند و CI run 274 سبز است؛ مرحله بعد پیکربندی سه resource/route لازم در Coolify staging است.
-6. انتقال auth از localStorage به HttpOnly Secure cookie + CSRF با تصمیم درباره UX چندحسابی.
+6. ✅ **انجام شد (`56e7646`، 2026-09-11)** — نشست با کوکیِ `amalyar_session` (HttpOnly, SameSite=Lax, Secure در production) + CSRF double-submit (`amalyar_csrf` ↔ `X-CSRF-Token`)؛ `server/src/auth/session-cookie.ts`. تصمیمِ UX چندحسابی: مجموعهٔ نشست‌های «مرا به خاطر بسپار» سمتِ سرور در کوکیِ HttpOnlyِ امضاشدهٔ `amalyar_sessions`؛ سوییچ با `/auth/switch`. Bearer فقط برای کلاینتِ غیرمرورگری. نکتهٔ دیپلوی: فرانت و `/api` همان origin اند (tenant host) — کوکی host-only است و بینِ tenantها مشترک نمی‌شود. سنجه: `scripts/e2e/cookie-auth.mjs`.
 7. انتقال نهایی `PROVISIONING_DATABASE_URL` از Backend به Worker اختصاصی پس از سبز شدن Worker در Coolify.
 8. Redis rate limit پیش از چند replica.
 9. permission management API/UI و seed صریح.
