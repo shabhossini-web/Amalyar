@@ -2861,3 +2861,7 @@ jobs:
       - name: Verify central hospital directory and isolated tenant imports
         run: node scripts/e2e/hospital-directory.mjs
 
+      # ⚠️ ته فایل، طبقِ بندِ ۵ خودِ AGENTS.md: هر سه بارِ قبلی که این فایل
+      # کانفلیکت خورد، از نوعِ «هر دو وسط اضافه کرده‌اند» بود.
+      - name: Verify agent claims do not overlap
+        run: node scripts/verify-claims.js
