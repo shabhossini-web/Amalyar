@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Amalyar proposed agent definition v1 — structure only, grants are server-owned",
+  "description": "Proposed contract, not a deployed API. A valid document requests capabilities; it grants none. Tenant identity, secrets, actor, revision, lifecycle status and effective grants are server-owned and rejected in this input.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "key",
+    "name",
+    "objective",
+    "instructions",
+    "modelConnectionKey",
+    "requestedToolIds",
+    "requestedAutonomy",
+    "requestedLimits",
+    "handoffs"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "instructions": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16000
+    },
+    "modelConnectionKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "description": "Reference to an existing approved connection; never an API key, URL or grant."
+    },
+    "requestedToolIds": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+      },
+      "description": "Exact requested registry IDs. Server verifies registration, feature policy, actor scope and grants at activation and each execution."
+    },
+    "requestedAutonomy": {
+      "enum": [
+        "assist",
+        "draft",
+        "execute"
+      ],
+      "description": "Requested behavior only; execution requires independent effective authorization."
+    },
+    "requestedLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxSteps",
+        "maxDelegationDepth",
+        "maxRunSeconds",
+        "maxTokens"
+      ],
+      "properties": {
+        "maxSteps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "maxDelegationDepth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "maxRunSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200000
+        }
+      },
+      "description": "Protocol upper bounds are not an entitlement; platform, tenant and delegated policy can lower every bound."
+    },
+    "handoffs": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 100,
+        "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+      },
+      "description": "Requested target profiles; each handoff is reauthorized and cannot expand the caller authority."
+    }
+  }
+}

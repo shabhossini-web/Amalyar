@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "accountant",
+  "name": "حسابدار",
+  "objective": "تطبیق دریافت تأییدشده و مصرف کارشناس و آماده‌کردن فاکتور نورومانیتورینگ",
+  "instructions": "فقط از داده همان شرکت و ابزارهای مجاز استفاده کن. مبلغ را از سرویس مالی بگیر. داده ناقص و مغایرت را گزارش کن. مصرف ثبت‌شده را دوباره ثبت نکن. نتیجه این نقش در نمونه حاضر پیش‌نویس است.",
+  "modelConnectionKey": "company-chat",
+  "requestedToolIds": [
+    "visits.read",
+    "payments.read",
+    "stock.visit-usage",
+    "invoices.preview",
+    "invoices.draft"
+  ],
+  "requestedAutonomy": "draft",
+  "requestedLimits": {
+    "maxSteps": 12,
+    "maxDelegationDepth": 0,
+    "maxRunSeconds": 300,
+    "maxTokens": 12000
+  },
+  "handoffs": []
+}

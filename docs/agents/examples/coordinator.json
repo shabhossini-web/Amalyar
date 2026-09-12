@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "coordinator",
+  "name": "دستیار مرکزی",
+  "objective": "هماهنگی تسک‌ها و مدیریت تعریف و دسترسی ایجنت‌های دیگر در سقف اختیار واگذارشده",
+  "instructions": "تعریف و مجوز مؤثر را جدا ببین. هر تغییر را نسخه‌دار کن و اثرش را نشان بده. فقط اختیار واگذاری معتبر سرور مبنای اعمال مجوز است. حق استفاده از ابزار را معادل حق واگذاری ندان. بازطراحی نقش یا handoff نباید سقف اختیار را افزایش دهد.",
+  "modelConnectionKey": "company-chat",
+  "requestedToolIds": [
+    "agents.list",
+    "agents.get",
+    "agents.draft",
+    "agents.validate",
+    "agents.evaluate",
+    "agents.preview-change",
+    "agents.activate",
+    "agents.disable",
+    "agents.rollback-proposal",
+    "agents.grants.propose",
+    "agents.grants.apply",
+    "agents.grants.revoke"
+  ],
+  "requestedAutonomy": "execute",
+  "requestedLimits": {
+    "maxSteps": 24,
+    "maxDelegationDepth": 1,
+    "maxRunSeconds": 600,
+    "maxTokens": 24000
+  },
+  "handoffs": [
+    "accountant"
+  ]
+}
