@@ -1,2 +1,24 @@
-# Amalyar
-management of medical services in the operationroom or drs office to the end of operation and post ops 
+# عمل‌یار
+
+SaaSِ مدیریتِ شرکت‌های خدمات و تجهیزاتِ جراحی — از پذیرشِ بیمار تا پس از عمل.
+مالتی‌تننت (دیتابیس به‌ازای هر شرکت)، React + Vite روی NestJS + PostgreSQL.
+
+## از کجا شروع کنم
+
+| می‌خواهم… | بخوان |
+|---|---|
+| بدانم پروژه الان کجاست | [`STATUS.md`](STATUS.md) |
+| کد بزنم | [`CLAUDE.md`](CLAUDE.md) — قوانینِ قفل‌شده و ساختارِ فایل‌ها |
+| بدانم چه ماژول‌هایی در راه است | [`ROADMAP.md`](ROADMAP.md) |
+| سرور/دیپلوی/Coolify | [`docs/CLAUDE_HANDOFF.md`](docs/CLAUDE_HANDOFF.md) |
+| معماریِ مالتی‌تننت | [`docs/database-per-tenant.md`](docs/database-per-tenant.md) |
+
+## اگر ایجنتی
+
+چند ایجنت هم‌زمان روی این مخزن کار می‌کنند و هیچ‌کدام دیگری را نمی‌بیند.
+**[`AGENTS.md`](AGENTS.md)** را قبل از شروع بخوان — پروتکلِ هم‌زیستی، کلیمِ
+مسیرها در `.sync/`، و اینکه چه چیزی خودکار است.
+
+## اجرای محلی
+
+بخشِ «توسعهٔ محلی» در [`CLAUDE.md`](CLAUDE.md).
