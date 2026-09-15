@@ -8,16 +8,10 @@ import { textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
 
-/** دسته‌های مدرک — فهرستِ بسته، تا گزارش‌گیری روی متنِ آزاد نیفتد. */
-export const DOCUMENT_CATEGORIES = [
-  'lab', // آزمایش
-  'imaging', // تصویربرداری (MRI/CT/رادیولوژی)
-  'report', // گزارشِ عمل/مانیتورینگ
-  'consent', // رضایت‌نامه
-  'identity', // مدرکِ شناسایی
-  'receipt', // فیشِ پرداخت
-  'other',
-] as const;
+/* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
+   re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
+import { DOCUMENT_CATEGORIES } from './document-categories';
+export { DOCUMENT_CATEGORIES };
 
 /** انواعِ شرحِ بالینی — منطبق بر چرخهٔ مطب → عمل → پس از عمل. */
 export const NOTE_KINDS = ['history', 'visit', 'op', 'progress', 'discharge', 'consult'] as const;
@@ -176,10 +170,12 @@ export class RecordService {
          «[object Object]» می‌داد. خوانا نوشته می‌شود و شمارش هم می‌آید. */
       const show = (v: any): string => {
         if (Array.isArray(v)) {
-          const names = v.map((x) => (x && typeof x === 'object' ? x.name : x)).filter(Boolean);
-          return names.length ? `${names.length} فایل: ${names.join('، ')}` : '';
+          /* باکسِ لینک: `{url,title}` بدونِ id — با عنوان یا خودِ نشانی خوانده می‌شود. */
+          const isLink = v.length > 0 && v.every((x) => x && typeof x === 'object' && x.url && !x.id);
+          const names = v.map((x) => (x && typeof x === 'object' ? (x.name || x.title || x.url) : x)).filter(Boolean);
+          return names.length ? `${names.length} ${isLink ? 'لینک' : 'فایل'}: ${names.join('، ')}` : '';
         }
-        if (v && typeof v === 'object') return v.name || v.url || (v.id ? 'فایلِ پیوست' : '');
+        if (v && typeof v === 'object') return v.name || v.title || v.url || (v.id ? 'فایلِ پیوست' : '');
         return String(v);
       };
       return rows
@@ -491,6 +487,9 @@ export class RecordService {
       /// مدرکِ لینکی: کلاینت به‌جای دانلود، همین نشانی را باز می‌کند.
       externalUrl: d.externalUrl,
       isLink: !!d.externalUrl,
+      /// ورودِ پورتالِ لینک — زیرِ همان لینک نشان داده می‌شود.
+      externalUser: d.externalUser,
+      externalPass: d.externalPass,
     }));
   }
 
@@ -504,7 +503,7 @@ export class RecordService {
    */
   async addDocumentLink(
     patientId: number,
-    dto: { url?: string; category?: string; title?: string; visitId?: number; takenAt?: string },
+    dto: { url?: string; category?: string; title?: string; visitId?: number; takenAt?: string; user?: string; pass?: string },
     user: any,
   ) {
     await this.assertAccess(patientId, user);
@@ -543,6 +542,8 @@ export class RecordService {
         size: 0,
         sha256: '',
         externalUrl: url.toString().slice(0, 2000),
+        externalUser: dto.user?.trim().slice(0, 120) || null,
+        externalPass: dto.pass?.trim().slice(0, 120) || null,
         takenAt,
         uploadedById: user?.id ?? null,
       },

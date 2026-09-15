@@ -15,6 +15,14 @@ note: چیزی در دست نیست
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۶/۲۴ · **باکسِ لینکِ MRI/CT/آزمایش + مدارکِ پزشکیِ فرم در پرونده.** نوعِ
+  فیلدِ `links` (DynForm + FIELD_TYPES)، `FormField.docCategory`،
+  `Document.externalUser/externalPass`، `link-documents.ts` (لینکِ فرم → مدرکِ
+  لینکیِ مراجعه)، دو باکسِ پیش‌فرض روی فرمِ ویزیتِ مطب + backfill برای نصب‌های
+  موجود. e2e: `links-box.mjs`.
+  ⚠️ قراردادِ تازه: نوعِ فیلدِ جدید = `FIELD_TYPES` + `case` در DynForm + DTOِ
+  `FieldCreateDto/FieldPatchDto` (whitelist) + `view()`ِ forms.service.
+
 - ۱۴۰۵/۰۶/۲۴ · **رگرسیونِ CSS بعد از lazy‌شدنِ مسیرها.** فرمِ عمومیِ بیمار
   (`/f/:token`) بی‌استایل شده بود: `.pf-field` فقط در `definitions.css` بود که
   صفحهٔ عمومی ایمپورتش نمی‌کند. پوستهٔ فیلد (`.pf-*`, `.db-field`) به

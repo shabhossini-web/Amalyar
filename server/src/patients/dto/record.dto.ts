@@ -80,6 +80,13 @@ export class DocumentLinkDto {
   @IsOptional() @IsString() @MaxLength(120, { message: 'عنوان طولانی است' })
   title?: string;
 
+  /* ورودِ پورتالِ پکس/آزمایشگاه — همکارِ بعدی باید بتواند لینک را باز کند. */
+  @IsOptional() @IsString() @MaxLength(120, { message: 'نامِ کاربری طولانی است' })
+  user?: string;
+
+  @IsOptional() @IsString() @MaxLength(120, { message: 'رمز طولانی است' })
+  pass?: string;
+
   @IsOptional() @Type(() => Number) @IsInt({ message: 'مراجعهٔ انتخابی نامعتبر است' })
   visitId?: number;
 

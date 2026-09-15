@@ -8,6 +8,8 @@ import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
 import { REGISTRATION_PRESETS } from './form-presets';
+import { normalizeLinks } from './forms.service';
+import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital } from './intake-hospitals';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
@@ -726,6 +728,8 @@ export class IntakeService {
       .map((x) => ({
         key: x.key, label: x.label, type: x.type, required: x.required,
         options: x.options ?? [], hint: x.hint, placeholder: x.placeholder, page: x.page,
+        /* دستهٔ پیش‌فرضِ مدرکِ باکسِ عکس/لینک — کلاینت پیلِ نوعِ لینک را با آن پیش‌فرض می‌کند. */
+        docCategory: x.docCategory ?? null,
       }));
     const fields = publicFields(f.fields);
 
@@ -815,6 +819,11 @@ export class IntakeService {
       );
       for (const [k, v] of Object.entries(dto.values)) {
         if (writable.has(k)) data[k] = typeof v === 'string' ? text(v, 2000) : v;
+      }
+      /* باکسِ لینک: URLِ http(s)ِ معتبر، سقفِ ۱۰، متن‌ها بریده — همان قاعدهٔ
+         `Visit.extra`. لینکِ `javascript:` روی صفحهٔ پرونده کلیک‌شدنی می‌شود. */
+      for (const fl of form.fields) {
+        if (fl.type === 'links' && data[fl.key] !== undefined && data[fl.key] !== null) data[fl.key] = normalizeLinks(data[fl.key], fl.label);
       }
       /* ⚠️ همان قاعدهٔ ستارهٔ فرم‌ساز، ولی فقط روی فیلدهایی که بیمار **می‌بیند**.
          نسخهٔ اول کلِ فرم را می‌سنجید و روی فرمِ مراجعه شکست: `createForm` یک
@@ -944,7 +953,8 @@ export class IntakeService {
     const doc = await this.prisma.document.create({
       data: {
         patientId: row.patientId,
-        category: 'other',
+        /* دستهٔ فیلد (تصویربرداری/آزمایش…) — تا MRIِ فرم زیرِ «متفرقه» دفن نشود. */
+        category: (fld as any).docCategory ?? 'other',
         title: fld.label,
         fileName: file.originalname?.slice(0, 200) || 'image',
         mimeType: file.mimetype,
@@ -1724,6 +1734,12 @@ export class IntakeService {
     /* از این‌جا به بعد فقط مسیرِ مراجعه معنی دارد. `return`ِ زودهنگام تا
        بندهای مالیِ پایین مجبور نباشند هر خط `visit!` بنویسند. */
     if (!visit) {
+      /* لینک‌های فرمِ زیرپرونده هم مدرکِ لینکی می‌شوند (بی‌مراجعه، روی خودِ
+         پرونده). فرمِ مراجعه‌ساز همین را از مسیرِ `createVisit` می‌گیرد. */
+      if (row.formId && row.patientId) {
+        const linkFields = await this.prisma.formField.findMany({ where: { formId: row.formId, type: 'links' } });
+        await syncLinkDocuments(this.prisma, { patientId: row.patientId, visitId: null, fields: linkFields, values: d ?? {}, actorId: user?.id ?? null });
+      }
       await this.audit.record({
         actorId: user?.id, action: 'intake.approve.record', entityType: 'intake_submission', entityId: id,
         after: { patientId: row.patientId, formKey: form?.key },
@@ -1760,8 +1776,13 @@ export class IntakeService {
     }
     // Only attach this patient's unassigned uploads; never move another visit's document.
     const receipts = Array.isArray(d.receiptDocumentIds) ? d.receiptDocumentIds : [d.receiptDocumentId];
-    const prescriptions = Array.isArray(d.prescription) ? d.prescription : [d.prescription];
-    const documentIds = [...receipts, ...prescriptions.map((p: any) => p?.id)].map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
+    /* **همهٔ** باکس‌های عکسِ فرم، نه فقط «دستورِ جراح»: عکسِ MRI/CTِ فرمِ ویزیت هم
+       باید به همین مراجعه بچسبد، وگرنه در پرونده مدرکِ بی‌مراجعه می‌ماند. */
+    const imageKeys = row.formId
+      ? (await this.prisma.formField.findMany({ where: { formId: row.formId, type: 'image' }, select: { key: true } })).map((f) => f.key)
+      : [];
+    const imageRefs = [...new Set([...imageKeys, 'prescription'])].flatMap((k) => (Array.isArray(d[k]) ? d[k] : [d[k]]));
+    const documentIds = [...receipts, ...imageRefs.map((p: any) => p?.id)].map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
     if (documentIds.length) {
       await this.prisma.document.updateMany({ where: { id: { in: documentIds }, patientId: row.patientId, visitId: null }, data: { visitId: visit.id } });
     }

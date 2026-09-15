@@ -6,7 +6,7 @@ import TimePick from './TimePick.jsx';
 import Pick from './Pick.jsx';
 import './dynform.css';
 import { toEnDigits } from '../lib/identity.js';
-import { Bank, Camera, Check, Copy, Star, Trash } from './icons.jsx';
+import { Bank, Camera, Check, Copy, LinkIcon, Star, Trash } from './icons.jsx';
 
 /**
  * رندرِ فرم از روی **تعریف**، نه JSX.
@@ -172,6 +172,9 @@ function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, 
 
     case 'image':
       return <ImageBox field={f} value={value} set={set} disabled={disabled} onUpload={onUpload} onRemove={onRemove} />;
+
+    case 'links':
+      return <LinksBox field={f} value={value} set={set} disabled={disabled} />;
 
     case 'payment':
       return <PaymentBox info={payment} />;
@@ -403,6 +406,88 @@ function PaymentBox({ info }) {
 }
 
 /**
+ * باکسِ لینک — فهرستِ لینک‌های MRI/CT/آزمایش با نامِ کاربری/رمزِ اختیاریِ پورتال.
+ *
+ * مقدار: `[{ url, title, user, pass, kind }]` — همان شکلی که سرور
+ * (`normalizeLinks`) ذخیره می‌کند و هنگامِ ثبتِ مراجعه هر ردیفش **مدرکِ لینکیِ**
+ * پرونده می‌شود (`link-documents.ts`). `kind` دستهٔ همان لینک در تبِ مدارک
+ * است و پیش‌فرضش از دستهٔ خودِ فیلد (`docCategory`) می‌آید.
+ *
+ * ⚠️ چرا لینک متنِ بلند نیست: مطبِ واقعی «لینکِ تصاویر و آزمایش‌ها» را با یک
+ * textarea ساخته بود — لینکِ داخلِ متن نه کلیک‌شدنی است، نه رمزِ پورتال جایی
+ * دارد، نه به مدارکِ پرونده می‌رسد.
+ *
+ * کنترل‌شده مثلِ بقیهٔ DynForm: هیچ stateای این‌جا نیست. ردیفِ بی‌نشانی را
+ * سرور بی‌صدا حذف می‌کند، پس «افزودنِ لینک» و بعد پشیمان‌شدن خطا نمی‌سازد.
+ */
+const LINK_KINDS = [['imaging', 'تصویربرداری'], ['lab', 'آزمایش'], ['other', 'سایر']];
+const MAX_LINKS = 10;
+function LinksBox({ field: f, value, set, disabled }) {
+  const list = Array.isArray(value) ? value
+    : value && typeof value === 'object' ? [value]
+      : value ? [{ url: String(value) }] : [];
+  const defKind = LINK_KINDS.some(([k]) => k === f.docCategory) ? f.docCategory : 'other';
+  const patch = (i, p) => set(list.map((it, j) => (j === i ? { ...it, ...p } : it)));
+  const add = () => set([...list, { url: '', title: '', user: '', pass: '', kind: defKind }]);
+  const drop = (i) => set(list.filter((_, j) => j !== i));
+
+  return (
+    <span className="dyn-links">
+      {list.map((it, i) => {
+        const kind = LINK_KINDS.some(([k]) => k === it.kind) ? it.kind : defKind;
+        return (
+          <span className="dyn-link" key={i}>
+            <span className="dyn-link-row">
+              {/* ⚠️ `type="url"` فقط کیبوردِ نشانی را روی موبایل می‌آورد؛ سنجشِ واقعی
+                  سمتِ سرور است (http/https). `dir="ltr"` چون نشانی لاتین است. */}
+              <input
+                type="url" inputMode="url" dir="ltr" autoComplete="off"
+                value={it.url ?? ''} placeholder="https://…" disabled={disabled}
+                onChange={(e) => patch(i, { url: e.target.value })} aria-label={`لینکِ ${i + 1}`}
+              />
+              <button type="button" className="dyn-link-del" onClick={() => drop(i)} disabled={disabled} aria-label="حذفِ لینک">
+                <Trash width="14" height="14" />
+              </button>
+            </span>
+            <input
+              type="text" dir="auto" value={it.title ?? ''} placeholder="عنوان — مثلاً MRI کمر (اختیاری)"
+              disabled={disabled} onChange={(e) => patch(i, { title: e.target.value })} aria-label="عنوانِ لینک"
+            />
+            <span className="dyn-link-kinds" role="radiogroup" aria-label="نوعِ مدرک">
+              {LINK_KINDS.map(([k, l]) => (
+                <button
+                  key={k} type="button" role="radio" aria-checked={kind === k} disabled={disabled}
+                  className={`dyn-pill${kind === k ? ' on' : ''}`} onClick={() => patch(i, { kind: k })}
+                >
+                  {l}
+                </button>
+              ))}
+            </span>
+            {/* ورودِ پورتال — متنِ ساده و نه password: همکارِ بعدی باید بتواند بخواندش. */}
+            <span className="dyn-link-cred">
+              <input
+                type="text" dir="ltr" autoComplete="off" value={it.user ?? ''} placeholder="نامِ کاربری (اگر لازم است)"
+                disabled={disabled} onChange={(e) => patch(i, { user: e.target.value })} aria-label="نامِ کاربریِ لینک"
+              />
+              <input
+                type="text" dir="ltr" autoComplete="off" value={it.pass ?? ''} placeholder="رمز"
+                disabled={disabled} onChange={(e) => patch(i, { pass: e.target.value })} aria-label="رمزِ لینک"
+              />
+            </span>
+          </span>
+        );
+      })}
+      {list.length < MAX_LINKS && (
+        <button type="button" className="dyn-img-pick" onClick={add} disabled={disabled}>
+          <LinkIcon width="16" height="16" />
+          {list.length ? 'افزودنِ لینکِ دیگر' : 'افزودنِ لینک'}
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
  * اعتبارسنجیِ کلاینت — **همان قاعده‌ی سرور**، فقط زودتر.
  *
  * ⚠️ این جایگزینِ اعتبارسنجیِ سرور نیست و نباید باشد: کلاینت را می‌شود دور زد.
@@ -413,7 +498,14 @@ function PaymentBox({ info }) {
 export function dynErrors(fields, values, myRole = null) {
   const e = {};
   for (const f of fields ?? []) {
-    if (f.active === false || !f.required) continue;
+    if (f.active === false) continue;
+    /* باکسِ لینک: نشانیِ بدونِ http/https حتی وقتی فیلد اختیاری است خطاست —
+       همان قاعدهٔ `normalizeLinks`ِ سرور؛ ردیفِ خالی خطا نیست (سرور حذفش می‌کند). */
+    if (f.type === 'links' && Array.isArray(values?.[f.key])) {
+      const bad = values[f.key].find((x) => typeof x?.url === 'string' && x.url.trim() && !/^https?:\/\/\S+$/i.test(x.url.trim()));
+      if (bad) { e[f.key] = `«${f.label}»: نشانی باید با http یا https شروع شود`; continue; }
+    }
+    if (!f.required) continue;
     /* فیلدِ اجباریِ بخشِ دیگر نباید ذخیرهٔ این نقش را قفل کند: منشی که فرم
        را می‌بندد مسئولِ «شرحِ معاینه»ی پزشک نیست. سرور هم همین‌طور رفتار
        می‌کند (assertRoleOwnership فقط تغییر را می‌سنجد، نه خالی‌بودن را). */
@@ -431,7 +523,11 @@ export function dynErrors(fields, values, myRole = null) {
       /* عکس یک ارجاع است (`{id,url,name}`) نه رشته — آبجکتِ خالی «پر» نیست. */
       (f.type === 'image' && !(typeof v === 'string' ? v.trim()
         : Array.isArray(v) ? v.some((x) => x?.id || x?.url)
-          : v?.id || v?.url));
+          : v?.id || v?.url)) ||
+      /* لینک: دستِ‌کم یک ردیف با نشانی. */
+      (f.type === 'links' && !(typeof v === 'string' ? v.trim()
+        : Array.isArray(v) ? v.some((x) => typeof x?.url === 'string' && x.url.trim())
+          : typeof v?.url === 'string' && v.url.trim()));
     if (empty) e[f.key] = `«${f.label}» را کامل کنید`;
   }
   return e;

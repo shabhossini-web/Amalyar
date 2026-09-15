@@ -151,8 +151,9 @@ jobs:
             console.error('extra باید با پاسخ‌های موجود ادغام شود، نه جایگزینِ کامل');
             process.exit(1);
           }
-          if (!/extra: \(dto as any\)\.extra \?\? \{\}/.test(src)) {
-            console.error('createVisit دیگر extra را نمی‌نویسد');
+          /* extraIn همان dto.extra است پس از normalizeExtra (باکسِ لینک): نوشتنِ extra باید بماند و از dto.extra بیاید. */
+          if (!/extra: (?:\(dto as any\)\.extra|extraIn) \?\? \{\}/.test(src) || !/const extraIn = await this\.forms\.normalizeExtra\([^)]*\(dto as any\)\.extra\)/.test(src)) {
+            console.error('createVisit دیگر extra را نمی‌نویسد (یا extraIn از dto.extra نمی‌آید)');
             process.exit(1);
           }
           console.log('custom form answers survive a visit edit');

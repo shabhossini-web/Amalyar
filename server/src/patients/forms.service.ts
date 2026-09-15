@@ -3,7 +3,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
+import { DOCUMENT_CATEGORIES } from './document-categories';
 
 /**
  * موتورِ فرم — «چه چیزی پرسیده می‌شود» و «چه چیزی اجباری است».
@@ -20,9 +21,11 @@ import { BUILTIN_VISIT_KEYS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, Pre
  * می‌شود — جایی که تعریفِ فرم در دسترس است.
  */
 
+/* `links` = فهرستِ لینک‌های MRI/CT/آزمایش با نامِ کاربری/رمزِ اختیاری (`normalizeLinks`).
+   ⚠️ داخلِ خودِ آرایه کامنت نگذارید: نگهبانِ CI آرایه را با split(',') می‌خواند. */
 export const FIELD_TYPES = [
   'text', 'textarea', 'number', 'money', 'select', 'multiselect',
-  'date', 'time', 'bool', 'phone', 'rating', 'image', 'payment',
+  'date', 'time', 'bool', 'phone', 'rating', 'image', 'payment', 'links',
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
@@ -291,6 +294,8 @@ export class FormsService {
       roles: fieldRoles(x),
       roleLabel: fieldRoles(x).map(jobRoleLabel).join('، ') || null,
       hint: x.hint, placeholder: x.placeholder,
+      /* دستهٔ مدرکِ باکسِ عکس/لینک — فرم‌ساز نشانش می‌دهد، DynForm پیلِ نوعِ لینک را با آن پیش‌فرض می‌کند. */
+      docCategory: x.docCategory ?? null,
       sort: x.sort, page: x.page ?? 1, builtin: x.builtin, active: x.active,
     }));
     return {
@@ -320,7 +325,8 @@ export class FormsService {
     if (n > 0) {
       await this.ensureRegistrationPreset();
       await this.backfillColors();
-      return this.backfillVisitBuiltins();
+      await this.backfillVisitBuiltins();
+      return this.backfillClinicMedia();
     }
     const vertical = await this.config.vertical();
     await this.seedFrom(PRESETS[vertical] ?? []);
@@ -328,7 +334,8 @@ export class FormsService {
     /* قالب‌ها عمداً کاتالوگِ کامل ندارند (سندِ خوانا ماندن مهم‌تر است)؛
        تکمیلشان کارِ همین backfill است تا نصبِ تازه و نصبِ قدیمی یک مسیر
        داشته باشند. */
-    return this.backfillVisitBuiltins();
+    await this.backfillVisitBuiltins();
+    return this.backfillClinicMedia();
   }
 
   async workflow() { return this.config.vertical(); }
@@ -442,6 +449,57 @@ export class FormsService {
     }
   }
 
+  /**
+   * باکس‌های مدارکِ پزشکی روی فرمِ ویزیتِ مطبِ نصب‌های **موجود**.
+   *
+   * ⚠️ قالب فقط هنگامِ seed خوانده می‌شود، پس مطبی که دیروز نصب شده «تصاویرِ
+   * پزشکی» و «لینکِ تصاویر و آزمایش‌ها» را نمی‌دید و خودش یک باکسِ عکس و یک متنِ
+   * بلند برای لینک می‌ساخت (نصبِ واقعی). idempotent مثلِ `backfillVisitBuiltins`:
+   * اگر فیلدی با همان کلید (روشن یا خاموش) یا فیلدی از **همان نوع** در فرم
+   * باشد، دست نمی‌زند — باکسِ عکسِ خودساختهٔ مطب دوتا نمی‌شود. پس «نمی‌خواهمش»
+   * یعنی خاموشش کنید نه حذف؛ ردیفِ حذف‌شده در بوتِ بعدی برمی‌گردد. فقط فرمِ
+   * `visit.clinic` (کلیدِ قالبِ مطب)؛ نورومانیتورینگ/تجهیزات این باکس‌ها را
+   * در فرمِ ثبت‌نامِ خودشان دارند.
+   */
+  private async backfillClinicMedia() {
+    const form = await this.prisma.formDef.findUnique({
+      where: { key: 'visit.clinic' },
+      select: { id: true, fields: { select: { key: true, type: true, sort: true } } },
+    });
+    if (!form) return;
+    const keys = new Set(form.fields.map((f) => f.key));
+    const types = new Set(form.fields.map((f) => f.type));
+    const missing = CLINIC_MEDIA_FIELDS.filter((c) => !keys.has(c.key) && !types.has(c.type ?? 'text'));
+    if (!missing.length) return;
+    let sort = Math.max(0, ...form.fields.map((f) => f.sort ?? 0));
+    await this.prisma.formField.createMany({
+      data: missing.map((c) => ({
+        formId: form.id, key: c.key, label: c.label, type: c.type ?? 'text',
+        required: false, builtin: false, hint: c.hint ?? null, placeholder: c.placeholder ?? null,
+        docCategory: normDocCategory(c.docCategory), page: 1, sort: (sort += 10),
+      })),
+    });
+  }
+
+  /**
+   * مقدارِ باکس‌های لینکِ فرمِ مراجعه را نرمال می‌کند — پیش از نوشتن در
+   * `Visit.extra`: URLِ http(s)ِ معتبر، سقفِ ۱۰، متن‌ها بریده. فیلدهای دیگر دست
+   * نمی‌خورند. یک‌بار این‌جا، نه در هر خواننده‌ای که بعداً به `extra` می‌رسد.
+   *
+   * ⚠️ **بدونِ کوئری** — تعریفِ فرم را صداکننده می‌دهد. نسخهٔ اول خودش
+   * `forVisitKind` می‌زد و از داخلِ تراکنشِ تعاملیِ `updateVisit` صدا زده می‌شد؛
+   * کوئریِ بیرونِ tx داخلِ tx روی PGliteِ CI (یک اتصال) قفل می‌کرد و تراکنشِ
+   * ۵ ثانیه‌ای منقضی می‌شد. تعریف را پیش از تراکنش بگیرید، این را هر جا.
+   */
+  normalizeExtra(fields: { key: string; type?: string | null; label: string }[], extra: Record<string, any> | undefined) {
+    if (!extra || typeof extra !== 'object') return extra;
+    const out: Record<string, any> = { ...extra };
+    for (const f of fields ?? []) {
+      if (f.type === 'links' && out[f.key] !== undefined && out[f.key] !== null) out[f.key] = normalizeLinks(out[f.key], f.label);
+    }
+    return out;
+  }
+
   /** رنگِ آزادِ **همان محدوده** — دلیلِ محدوده‌ای‌بودن در `pickColor`. */
   private async freeColor(fullKey: string, scope: string): Promise<string> {
     const rows = await this.prisma.formDef.findMany({ where: { scope }, select: { color: true } });
@@ -478,6 +536,7 @@ export class FormsService {
               required: x.required ?? false, builtin: x.builtin ?? false,
               options: (x.options ?? []) as any,
               hint: x.hint ?? null, placeholder: x.placeholder ?? null,
+              docCategory: normDocCategory(x.docCategory),
               sort: (i + 1) * 10, page: normPage(x.page),
             })),
           },
@@ -643,6 +702,7 @@ export class FormsService {
         options: normOptions(dto.options, type),
         hint: dto.hint?.trim() || null,
         placeholder: dto.placeholder?.trim() || null,
+        docCategory: normDocCategory(dto.docCategory),
         sort: (last?.sort ?? 0) + 10,
         builtin: false,
         ...normRoles(dto),
@@ -692,6 +752,8 @@ export class FormsService {
         ...(dto.options !== undefined ? { options: normOptions(dto.options, type) } : {}),
         ...(dto.hint !== undefined ? { hint: dto.hint?.trim() || null } : {}),
         ...(dto.placeholder !== undefined ? { placeholder: dto.placeholder?.trim() || null } : {}),
+        /* دستهٔ مدرکِ باکسِ عکس/لینک — «تصویربرداری» به‌جای «متفرقه». */
+        ...(dto.docCategory !== undefined ? { docCategory: normDocCategory(dto.docCategory) } : {}),
         ...(dto.sort !== undefined ? { sort: Number(dto.sort) || 0 } : {}),
         /* ⚠️ صفحه روی فیلدِ هسته‌ای هم عوض می‌شود: چینش کارِ سوپرادمین است و
            قفلِ builtin فقط دربارهٔ `key` و `type` است، نه جای فیلد. */
@@ -917,7 +979,14 @@ export class FormsService {
          `active` فیلتر کرده (مثلِ نمای عمومیِ فرم) اصلاً این کلید را نمی‌فرستد،
          و `!undefined` یعنی **همه‌چیز رد شود** — اعتبارسنجی‌ای که بی‌صدا هیچ
          چیزی را نمی‌سنجد. همان قراردادِ `DynForm`. */
-      if (f.active === false || !f.required) continue;
+      if (f.active === false) continue;
+      /* باکسِ لینک: نشانیِ خراب حتی وقتی فیلد اختیاری است رد می‌شود — لینکِ
+         `javascript:` یا بدونِ https روی صفحهٔ پرونده کلیک‌شدنی می‌شود. */
+      if (f.type === 'links' && values?.[f.key] !== undefined && values?.[f.key] !== null) {
+        const problem = linksProblem(values[f.key], f.label);
+        if (problem) { errors[f.key] = problem; continue; }
+      }
+      if (!f.required) continue;
       /* ⚠️ عکس و پرداخت مقدارشان در `values` نمی‌نشیند — فایل به `Document`
          می‌رود و شماره‌های حساب از لینک خوانده می‌شوند. ستاره‌ی رویشان اگر
          این‌جا سنجیده می‌شد، فرمی می‌ساخت که هیچ‌وقت ذخیره نمی‌شود. */
@@ -931,7 +1000,8 @@ export class FormsService {
         /* ⚠️ عکس یک **ارجاع** است، نه رشته. آبجکتِ خالی «پر» حساب می‌شد اگر
            فقط `null` را می‌سنجیدیم — و فرمی که آپلودش نیمه‌کاره مانده بی‌صدا
            ذخیره می‌شد. */
-        (f.type === 'image' && !isImageRef(v));
+        (f.type === 'image' && !isImageRef(v)) ||
+        (f.type === 'links' && !hasLinkRef(v));
       if (empty) errors[f.key] = `«${f.label}» را کامل کنید`;
     }
     return { ok: Object.keys(errors).length === 0, errors };
@@ -968,6 +1038,60 @@ export class FormsService {
  * و مسیرِ داشبورد آبجکتِ کامل — تحمیلِ یک شکل یعنی یکی از دو مسیر بی‌صدا
  * «خالی» خوانده می‌شود.
  */
+/** یک لینک هست؟ — همان معنایِ «پر بودن» برای ستارهٔ باکسِ لینک. */
+function hasLinkRef(v: any): boolean {
+  if (typeof v === 'string') return v.trim() !== '';
+  if (Array.isArray(v)) return v.some((x) => hasLinkRef(x));
+  return !!(v && typeof v === 'object' && typeof v.url === 'string' && v.url.trim() !== '');
+}
+
+/** سقفِ لینک‌های یک باکس — همان ۱۰ِ باکسِ عکس. */
+export const MAX_FIELD_LINKS = 10;
+
+export type LinkItem = { url: string; title: string | null; user: string | null; pass: string | null; kind: string | null };
+
+/**
+ * مقدارِ باکسِ لینک را نرمال می‌کند یا با ۴۰۰ (پیامِ فارسی) رد می‌کند.
+ *
+ * شکلِ ذخیره: `[{ url, title, user, pass, kind }]`. `kind` دستهٔ مدرکِ همان
+ * لینک در پرونده است (تصویربرداری/آزمایش/…) و اگر نیامده باشد از دستهٔ فیلد
+ * می‌آید. ردیفِ بدونِ نشانی بی‌صدا حذف می‌شود (ردیفِ خالیِ نیمه‌کاره خطا نیست).
+ *
+ * ⚠️ فقط `http(s)`: `javascript:`/`file:`/`data:` روی صفحهٔ پرونده کلیک‌شدنی
+ * می‌شود — همان قاعدهٔ `addDocumentLink`.
+ */
+export function normalizeLinks(v: any, label = 'لینک'): LinkItem[] {
+  const list = Array.isArray(v) ? v : v === undefined || v === null || v === '' ? [] : [v];
+  const out: LinkItem[] = [];
+  const clip = (x: any, n: number) => { const t = typeof x === 'string' ? x.trim() : ''; return t ? t.slice(0, n) : null; };
+  for (const item of list) {
+    const raw = typeof item === 'string' ? item : item && typeof item === 'object' ? item.url : '';
+    const urlText = typeof raw === 'string' ? raw.trim() : '';
+    if (!urlText) continue;
+    let url: URL;
+    try { url = new URL(urlText); } catch { throw new BadRequestException(`«${label}»: نشانی معتبر نیست — کاملش را با https بگذارید`); }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new BadRequestException(`«${label}»: فقط لینکِ http/https پذیرفته می‌شود`);
+    const o = item && typeof item === 'object' ? item : {};
+    const kind = typeof o.kind === 'string' && (DOCUMENT_CATEGORIES as readonly string[]).includes(o.kind) ? o.kind : null;
+    out.push({ url: url.toString().slice(0, 2000), title: clip(o.title, 120), user: clip(o.user, 120), pass: clip(o.pass, 120), kind });
+    if (out.length > MAX_FIELD_LINKS) throw new BadRequestException(`«${label}»: حداکثر ${MAX_FIELD_LINKS} لینک`);
+  }
+  return out;
+}
+
+/** همان `normalizeLinks`، ولی به‌جای پرتاب، پیامِ خطا (یا null) — برای گزارشِ اعتبارسنجی. */
+function linksProblem(v: any, label: string): string | null {
+  try { normalizeLinks(v, label); return null; } catch (e: any) { return e?.message ?? 'نشانی معتبر نیست'; }
+}
+
+/** دستهٔ مدرکِ باکسِ عکس/لینک — از فهرستِ بسته، وگرنه `null` (متفرقه). */
+function normDocCategory(x: any): string | null {
+  if (x === undefined || x === null || x === '') return null;
+  const s = String(x).trim();
+  if (!(DOCUMENT_CATEGORIES as readonly string[]).includes(s)) throw new BadRequestException('دستهٔ مدرک نامعتبر است');
+  return s;
+}
+
 function isImageRef(v: any): boolean {
   if (typeof v === 'string') return v.trim() !== '';
   /* از #66 کادرِ عکس **چندتایی** است: آرایهٔ خالی یعنی هیچ عکسی نگذاشته. */
