@@ -2378,7 +2378,9 @@ jobs:
           const svc  = fs.readFileSync('server/src/patients/survey.service.ts', 'utf8');
           const ctrl = fs.readFileSync('server/src/patients/survey.controller.ts', 'utf8');
           const reg  = fs.readFileSync('server/src/auth/access-registry.ts', 'utf8');
-          const css  = fs.readFileSync('src/app/definitions.css', 'utf8');
+          /* کنترل‌های DynForm از قانون ۲۱ به بعد همراهِ خودِ کامپوننت‌اند
+             (src/ui/dynform.css)، نه در CSSِ صفحهٔ تعریف‌ها. */
+          const css  = fs.readFileSync('src/ui/dynform.css', 'utf8');
 
           /* ⚠️ کامنت‌ها قبل از هر تطبیق برداشته می‌شوند. بندِ اول همین‌جا **گاز
              دروغین** داد: کامنتِ خودِ کنترلر توضیح می‌داد چرا \`@UseGuards\`
