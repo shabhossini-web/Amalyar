@@ -2865,3 +2865,8 @@ jobs:
       # کانفلیکت خورد، از نوعِ «هر دو وسط اضافه کرده‌اند» بود.
       - name: Verify agent claims do not overlap
         run: node scripts/verify-claims.js
+
+      # هر صفحهٔ lazy باید CSSِ کلاس‌هایی که استفاده می‌کند خودش بیاورد —
+      # فرمِ عمومیِ بیمار یک‌بار بی‌صدا بی‌استایل شد (قانون ۲۱).
+      - name: Verify every lazy chunk ships the CSS it uses
+        run: node scripts/verify-css-chunks.js

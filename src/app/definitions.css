@@ -101,23 +101,8 @@
 .df-save { color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
 .df-sheet-foot button:disabled { opacity: .5; cursor: not-allowed; }
 
-/* ── فیلدهای شخص (PersonFields) ── */
-.pf { display: grid; gap: 12px; }
-.pf-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.pf-field { display: block; }
-.pf-field > span { display: block; font-size: 11px; color: #c7c2df; margin-bottom: 6px; }
-.pf-field input, .pf-field textarea {
-  width: 100%; border-radius: 11px; padding: 12px 13px; font: inherit; font-size: 13px;
-  color: #fff; outline: none; resize: vertical;
-  background: rgba(3, 2, 18, .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
-}
-.pf-field input { height: 46px; }
-.pf-field input:focus, .pf-field textarea:focus {
-  border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(var(--brand-2-rgb), .12);
-}
-.pf-field.bad input, .pf-field.bad textarea { border-color: #fb7185; }
-.pf-err { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #fda4af; }
-.pf-hint { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #7d76a0; }
+/* ── فیلدهای شخص (PersonFields) ── پوستهٔ پایهٔ `.pf*` در `src/index.css`
+   است (مشترکِ همهٔ چانک‌ها، قانون ۲۱). این‌جا فقط override می‌نشیند. */
 
 .df-toast {
   position: fixed; inset-inline: 16px; bottom: 18px; z-index: 60; margin: auto;
@@ -130,7 +115,6 @@
 @media (max-width: 620px) {
   .df { padding: 14px 12px 60px; }
   .df-head { flex-direction: column; gap: 10px; }
-  .pf-row2 { grid-template-columns: 1fr; }
   .df-uses { display: none; }
 }
 
@@ -274,112 +258,9 @@
 .st-knobsave .df-save { padding: 9px 20px; border-radius: 11px; font-size: 13px; border: 0; cursor: pointer; }
 .st-knobsave .st-load { padding: 9px 16px; }
 
-/* ── فرمِ داده‌محور (DynForm) ─────────────────────────────────────────────
-   کلاس‌های `pf-*` را به ارث می‌برد و فقط نوع‌های تازه را اضافه می‌کند. */
-
-/* ستاره‌ی اجباری — همان رنگی که در فرم‌ساز دیده می‌شود، تا کاربر بین دو صفحه
-   یک زبان ببیند. */
-.dyn-star { color: #f87171; font-style: normal; font-weight: 900; }
-
-/* ⚠️ همه‌ی این کنترل‌ها با پیشوندِ `.dyn` نوشته می‌شوند، نه تنها.
-   دلیل: `.pf-field > span { display: block }` بالاتر در همین فایل هست و
-   وزنش (۰,۱,۱) از یک کلاسِ تنها (۰,۱,۰) بیشتر است. این کنترل‌ها `<span>` و
-   فرزندِ مستقیمِ `.pf-field`اند، پس `display: flex`شان بی‌صدا بازنویسی می‌شد
-   و ستاره‌های امتیاز **زیرِ هم** می‌افتادند. هیچ آزمونِ APIای این را
-   نمی‌گرفت؛ فقط با نگاه‌کردن به عکسِ صفحه پیدا شد. */
-.dyn .dyn-bool { display: flex; align-items: center; gap: 9px; }
-.dyn-bool input { width: 18px; height: 18px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
-.dyn-bool i { font-style: normal; font-size: 13px; color: var(--muted, #b7b0d8); }
-
-.dyn .dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
-.dyn-pill {
-  cursor: pointer; font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 99px;
-  color: var(--muted, #b7b0d8); background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .12); transition: color .15s, background .15s, border-color .15s;
-}
-.dyn-pill.on { color: #fff; background: rgba(167, 139, 250, .2); border-color: rgba(167, 139, 250, .5); }
-
-.dyn .dyn-rate { display: flex; gap: 4px; align-items: center; }
-.dyn-star-btn {
-  cursor: pointer; background: transparent; border: none; padding: 2px;
-  display: grid; place-items: center; line-height: 1;
-  color: rgba(255, 255, 255, .18); transition: color .12s, transform .12s;
-}
-.dyn-star-btn.on { color: #fbbf24; }
-.dyn-star-btn:hover:not(:disabled) { transform: scale(1.12); }
-.dyn-star-btn:disabled { cursor: default; }
-
-/* تایم‌پیکر داخلِ فرمِ داده‌محور باید مثل بقیه‌ی فیلدها بنشیند، نه با حاشیه‌ی
-   خودش — `db-field`ِ پیش‌فرضش فاصله‌ی دوباره می‌ساخت. */
-.dyn .dyn-time { display: block; }
-.dyn .dyn-time > span { display: none; }
-
-/* ── باکسِ عکس ───────────────────────────────────────────────────────────
-   همان قاعده‌ی بالا: با پیشوندِ `.dyn` وگرنه `.pf-field > span` بلعش می‌کند. */
-.dyn .dyn-img { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.dyn-img-pick {
-  cursor: pointer; font-family: inherit; font-size: 12.5px;
-  display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
-  border-radius: 10px; color: var(--muted, #b7b0d8);
-  background: rgba(255, 255, 255, .05); border: 1px dashed rgba(255, 255, 255, .2);
-  transition: color .15s, background .15s, border-color .15s;
-}
-.dyn-img-pick:hover:not(:disabled) {
-  color: #fff; background: rgba(167, 139, 250, .14); border-color: rgba(167, 139, 250, .5);
-}
-.dyn-img-pick:disabled { cursor: default; opacity: .55; }
-
-.dyn-img-has {
-  display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 6px;
-  border-radius: 10px; background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .12); max-width: 100%;
-}
-/* ⚠️ اندازه‌ی ثابت + `object-fit: cover`: عکسِ موبایل ۴۰۰۰ پیکسل عرض دارد و
-   بدونِ این، یک پیوستِ ساده کلِ شیت را می‌کشد. */
-.dyn-img-has img { width: 42px; height: 42px; border-radius: 7px; object-fit: cover; display: block; }
-.dyn-img-has b {
-  font-weight: 500; font-size: 12.5px; color: var(--muted, #b7b0d8);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;
-}
-.dyn-img-has button {
-  cursor: pointer; display: grid; place-items: center; padding: 6px; border-radius: 8px;
-  color: #fca5a5; background: transparent; border: none; transition: background .15s;
-}
-.dyn-img-has button:hover:not(:disabled) { background: rgba(248, 113, 113, .15); }
-
-.dyn .dyn-note, .dyn .dyn-img .dyn-note {
-  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); opacity: .75;
-}
-
-/* ── باکسِ پرداخت ────────────────────────────────────────────────────────
-   فقط نمایش: بیمار باید شماره را ببیند و بتواند کپی کند. */
-.dyn .dyn-pay {
-  display: flex; flex-direction: column; gap: 7px; padding: 11px 13px;
-  border-radius: 12px; background: rgba(255, 255, 255, .04);
-  border: 1px solid rgba(255, 255, 255, .12);
-}
-.dyn-pay-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #fff; }
-.dyn-pay-head i { font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); }
-.dyn-pay-row { display: flex; align-items: center; gap: 8px; }
-.dyn-pay-row i {
-  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8);
-  min-width: 74px; flex-shrink: 0;
-}
-/* ⚠️ `tabular-nums` تا ارقام هم‌عرض باشند، و `isolate` چون یک عددِ لاتین
-   داخلِ بندِ راست‌به‌چپ بدونِ آن تکه‌تکه و وارونه دیده می‌شود. */
-.dyn-pay-row code {
-  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
-  font-size: 13px; letter-spacing: .04em; font-variant-numeric: tabular-nums;
-  color: #fff; direction: ltr; unicode-bidi: isolate;
-  overflow-x: auto; white-space: nowrap;
-}
-.dyn-pay-row button {
-  cursor: pointer; display: grid; place-items: center; padding: 5px; border-radius: 7px;
-  color: var(--muted, #b7b0d8); background: transparent;
-  border: 1px solid rgba(255, 255, 255, .12); transition: color .15s, background .15s;
-  margin-inline-start: auto; flex-shrink: 0;
-}
-.dyn-pay-row button:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+/* ── فرمِ داده‌محور (DynForm) ── استایلِ کنترل‌هایش همراهِ خودِ کامپوننت
+   است: `src/ui/dynform.css`. این‌جا نبود که فرمِ عمومیِ بیمار (که این فایل
+   را ایمپورت نمی‌کند) باکسِ عکس و پرداختِ بی‌استایل می‌گرفت. */
 
 /* ── مسیرِ درمان ─────────────────────────────────────────────────────────
    خطِ زمانیِ ساده: نقطه‌ها و میله‌ی رابط. عمداً بدونِ فلش و درخت — مسیر یک

@@ -9,7 +9,7 @@ import { randomBytes } from 'node:crypto';
 
 const API = 'http://localhost:3101/api';
 const BASE = 'http://127.0.0.1:5199';
-const DB = 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
+const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
 const sql = (q) => execSync(`psql "${DB}" -qtAc ${JSON.stringify(q)}`).toString().trim().split('\n')[0];

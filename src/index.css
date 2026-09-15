@@ -398,3 +398,53 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 .nv-con > label { grid-column: 1 / -1; display: grid; gap: .5rem; min-width: 0; }
 .nv-con > label select { width: 100%; max-width: 100%; background: var(--bg3); color: var(--text1); border: 1px solid var(--card-border); border-radius: 12px; padding: .6rem; }
 
+/* ── فیلدِ فرم — پوستهٔ مشترکِ همهٔ چانک‌ها ────────────────────────────────
+   ⚠️ عمداً این‌جا (CSSِ ورودی)، نه در definitions.css / dashboard.css. از وقتی
+   مسیرها lazy شده‌اند (قانون ۲۱) هر صفحه فقط CSSِ خودش را می‌گیرد؛ این دو
+   پوسته را کامپوننت‌های مشترک (DynForm، PersonFields، JDate، TimePick) و
+   صفحه‌های عمومی (فرمِ بیمار، سفارش) استفاده می‌کنند و تا دیروز از باندلِ
+   یکپارچه ارث می‌بردند — فرمِ عمومیِ بیمار بی‌استایل شد: برچسب و باکس روی
+   هم افتادند و input سفیدِ خامِ مرورگر شد (اسکرین‌شاتِ کاربر، اندروید).
+   نگهبان: `scripts/verify-css-chunks.js`. صفحه‌ها می‌توانند رویش override
+   بگذارند؛ این فقط کفِ مشترک است. */
+.pf { display: grid; gap: 12px; }
+.pf-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pf-field { display: block; }
+.pf-field > span { display: block; font-size: 11px; color: #c7c2df; margin-bottom: 6px; }
+.pf-field input, .pf-field textarea {
+  width: 100%; border-radius: 11px; padding: 12px 13px; font: inherit; font-size: 13px;
+  color: #fff; outline: none; resize: vertical;
+  background: rgba(3, 2, 18, .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
+}
+.pf-field input { height: 46px; }
+.pf-field input:focus, .pf-field textarea:focus {
+  border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(var(--brand-2-rgb), .12);
+}
+.pf-field.bad input, .pf-field.bad textarea { border-color: #fb7185; }
+.pf-err { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #fda4af; }
+.pf-hint { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #7d76a0; }
+@media (max-width: 620px) { .pf-row2 { grid-template-columns: 1fr; } }
+
+.db-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+/* هر خانهٔ شبکه یک wrapper دارد؛ بدونِ این، فیلدِ داخلش عرضِ خودش را می‌گیرد
+   نه عرضِ خانه را. */
+.db-grid2 > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.db-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--text2); }
+.db-field small { font-weight: 600; color: var(--text3); }
+.db-field input, .db-field textarea {
+  font-family: inherit; font-size: 14px; color: var(--text1);
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 11px; padding: 10px 12px; outline: none; width: 100%;
+  transition: border-color .15s;
+}
+.db-field input:focus, .db-field textarea:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
+.db-field textarea { resize: vertical; }
+.db-field select {
+  font-family: inherit; font-size: 14px; color: var(--text1); width: 100%;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 11px; padding: 10px 12px; outline: none; appearance: none;
+}
+.db-field select:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
+.db-field select option { background: #141033; color: #f2f0fc; }
+.db-field.bad input { border-color: rgba(251, 113, 133, 0.7); }
+@media (max-width: 430px) { .db-grid2 { grid-template-columns: 1fr; } }
