@@ -11,6 +11,7 @@ import { toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { FormsService } from './forms.service';
+import { syncLinkDocuments } from './link-documents';
 import { summarize } from './billing.service';
 
 /**
@@ -1007,6 +1008,10 @@ export class PatientsService {
       if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
     } else if (!opts?.skipFormValidation) await this.assertFormValid(dto);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
+    /* باکس‌های لینکِ فرم: نرمال‌شده می‌نشینند (URLِ معتبر، سقف، برش) و هر لینک
+       مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. */
+    const extraIn = await this.forms.normalizeExtra(dto.kind || 'surgery', (dto as any).extra);
+    const formFields = (await this.forms.forVisitKind(dto.kind || 'surgery'))?.fields ?? [];
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
@@ -1046,11 +1051,12 @@ export class PatientsService {
           notes: dto.notes || null,
           /* پاسخِ فیلدهای دلخواه. `{}` و نه null: ستون NOT NULL است و کدِ
              خواننده نباید مجبور باشد هر بار nullish-check بزند. */
-          extra: (dto as any).extra ?? {},
+          extra: extraIn ?? {},
           createdById: userId ?? null,
         },
         include: INCLUDE_PATIENT,
       });
+      await syncLinkDocuments(tx, { patientId, visitId: visit.id, fields: formFields as any, values: extraIn ?? {}, actorId: userId ?? null });
       /**
        * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
        *
@@ -1182,7 +1188,14 @@ export class PatientsService {
          ادغام می‌شود، نه جایگزین: یک PATCHِ جزئی — یا فرمی که فیلدی از آن
          حذف شده — نباید پاسخ‌های قبلی را از پرونده پاک کند. */
       if (dto.extra !== undefined) {
-        visitPatch.extra = { ...((v.extra as Record<string, any>) ?? {}), ...dto.extra };
+        const kindNow = dto.kind ?? v.kind ?? 'surgery';
+        const extraIn = await this.forms.normalizeExtra(kindNow, dto.extra);
+        visitPatch.extra = { ...((v.extra as Record<string, any>) ?? {}), ...extraIn };
+        /* لینکِ تازه در فرم → مدرکِ لینکیِ پرونده؛ حذفِ لینک مدرک را پاک نمی‌کند. */
+        await syncLinkDocuments(tx, {
+          patientId: v.patientId, visitId: id, fields: ((await this.forms.forVisitKind(kindNow))?.fields ?? []) as any,
+          values: extraIn ?? {}, actorId: user?.id ?? null,
+        });
       }
 
       if (Object.keys(patientPatch).length) {

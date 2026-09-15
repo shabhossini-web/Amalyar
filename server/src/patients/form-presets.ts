@@ -27,6 +27,8 @@ export type PresetField = {
   options?: { v: string; l: string }[];
   /** صفحهٔ چینش. نیامدنش یعنی صفحهٔ ۱ — قالب‌های امروز همه تک‌صفحه‌اند. */
   page?: number;
+  /** دستهٔ مدرکی که باکسِ `image`/`links` در پرونده می‌سازد (`DOCUMENT_CATEGORIES`). */
+  docCategory?: string;
 };
 
 export type PresetForm = {
@@ -154,6 +156,26 @@ const OPERATION: PresetForm = {
  * کدامشان با یک کلیک حذف یا اختیاری می‌شود. هدف این است که مشتریِ تازه با
  * صفحه‌ی خالی روبه‌رو نشود، نه اینکه سلیقه‌ی ما را بپذیرد.
  */
+/**
+ * باکس‌های مدارکِ پزشکیِ فرمِ ویزیت — عکس‌های MRI/CT و لینک‌های پکس/آزمایشگاه.
+ *
+ * ⚠️ چرا پیش‌فرض‌اند: مطبِ واقعی همین دو را خودش با یک باکسِ عکس و یک «متنِ
+ * بلند برای لینک» ساخته بود (اسکرین‌شاتِ کاربر) — لینکِ داخلِ متنِ بلند نه
+ * کلیک‌شدنی است، نه رمزِ پورتال جایی دارد، نه به مدارکِ پرونده می‌رسد.
+ * ⚠️ جدا export شده چون `backfillClinicMedia` همین دو را به فرمِ ویزیتِ نصب‌های
+ * موجود اضافه می‌کند؛ قالب فقط برای نصبِ تازه خوانده می‌شود.
+ */
+export const CLINIC_MEDIA_FIELDS: PresetField[] = [
+  {
+    key: 'imaging', label: 'تصاویرِ پزشکی (MRI، CT، رادیولوژی…)', type: 'image', docCategory: 'imaging',
+    hint: 'چند عکس با هم یا یکی‌یکی — در پرونده زیرِ «تصویربرداری» می‌نشیند',
+  },
+  {
+    key: 'imagingLinks', label: 'لینکِ تصاویر و آزمایش‌ها', type: 'links', docCategory: 'imaging',
+    hint: 'لینکِ پکس، درایو یا سایتِ آزمایشگاه؛ اگر ورود می‌خواهد، نامِ کاربری و رمزش را زیرِ همان لینک بنویسید',
+  },
+];
+
 const CLINIC_VISIT: PresetForm = {
   key: 'visit.clinic',
   title: 'فرمِ ویزیت',
@@ -170,6 +192,7 @@ const CLINIC_VISIT: PresetForm = {
     { ...CORE.topic },
     { key: 'chiefComplaint', label: 'شکایتِ اصلی', type: 'textarea', required: true, placeholder: 'به زبانِ خودِ بیمار' },
     { key: 'historyDuration', label: 'مدتِ علائم', type: 'text', placeholder: 'مثلاً ۳ ماه' },
+    ...CLINIC_MEDIA_FIELDS,
     { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' },
     { ...CORE.diagnosis },
     {

@@ -9,7 +9,7 @@ import './launcher.css';
 import './definitions.css';
 import JDate from './JDate.jsx';
 import './record.css';
-import { Alert, Back, Close, Download, LinkIcon, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import { Alert, Back, Check, Close, Copy, Download, LinkIcon, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
@@ -360,6 +360,10 @@ function DocsTab({ rec, reload, toast }) {
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
      فایلش را کسی ندارد؛ دسته/عنوان/تاریخ از همان فیلدهای بالا می‌آید. */
   const [linkUrl, setLinkUrl] = useState('');
+  /* ورودِ پورتالِ لینک (پکس/آزمایشگاه) — پشتِ یک قفل، چون بیشترِ لینک‌ها لازمش ندارند. */
+  const [linkAuth, setLinkAuth] = useState(false);
+  const [linkUser, setLinkUser] = useState('');
+  const [linkPass, setLinkPass] = useState('');
   const addLink = async () => {
     const url = linkUrl.trim();
     if (!url) return;
@@ -378,9 +382,11 @@ function DocsTab({ rec, reload, toast }) {
           ...(title.trim() ? { title: title.trim() } : {}),
           ...(visitId ? { visitId: Number(visitId) } : {}),
           ...(takenAt ? { takenAt } : {}),
+          ...(linkAuth && linkUser.trim() ? { user: linkUser.trim() } : {}),
+          ...(linkAuth && linkPass.trim() ? { pass: linkPass.trim() } : {}),
         },
       });
-      setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId('');
+      setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId(''); setLinkUser(''); setLinkPass(''); setLinkAuth(false);
       await reload();
       toast('لینک ثبت شد ✓');
     } catch (e) {
@@ -446,10 +452,22 @@ function DocsTab({ rec, reload, toast }) {
             disabled={busy}
             onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }}
           />
+          <button
+            type="button" className={`rc-linkauth${linkAuth ? ' on' : ''}`} title="نامِ کاربری و رمزِ پورتال"
+            aria-pressed={linkAuth} onClick={() => setLinkAuth((v) => !v)} disabled={busy}
+          >
+            <Lock width="14" height="14" />
+          </button>
           <button type="button" className="df-save" disabled={busy || !linkUrl.trim()} onClick={addLink}>
             ثبتِ لینک
           </button>
         </div>
+        {linkAuth && (
+          <div className="rc-linkcred">
+            <input dir="ltr" autoComplete="off" value={linkUser} onChange={(e) => setLinkUser(e.target.value)} placeholder="نامِ کاربری" disabled={busy} />
+            <input dir="ltr" autoComplete="off" value={linkPass} onChange={(e) => setLinkPass(e.target.value)} placeholder="رمز" disabled={busy} />
+          </div>
+        )}
       </div>
 
       {present.length > 1 && (
@@ -474,6 +492,7 @@ function DocsTab({ rec, reload, toast }) {
                 <b>{d.title || d.fileName}</b>
                 <small>{CATEGORIES[d.category] ?? d.category} · {d.isLink ? 'لینک' : fmtSize(d.size)}{d.takenAt ? ` · ${faDate(d.takenAt)}` : ''}</small>
                 {d.visitId && <small className="rc-doc-visit">{rec.visits.find((v) => v.id === d.visitId)?.code}</small>}
+                {d.isLink && (d.externalUser || d.externalPass) && <DocCred user={d.externalUser} pass={d.externalPass} />}
               </div>
               <div className="df-acts">
                 {d.isLink ? (
@@ -491,6 +510,39 @@ function DocsTab({ rec, reload, toast }) {
         </div>
       )}
     </>
+  );
+}
+
+/** ورودِ پورتالِ مدرکِ لینکی — با کپیِ یک‌ضرب، چون همکار همین را می‌خواهد نه خواندنِ حرف‌به‌حرف. */
+function DocCred({ user, pass }) {
+  const [copied, setCopied] = useState('');
+  const copy = async (what, text) => {
+    try {
+      await navigator.clipboard.writeText(String(text));
+      setCopied(what);
+      setTimeout(() => setCopied(''), 1600);
+    } catch { /* بدونِ HTTPS یا با ردِ کاربر کار نمی‌کند — متن خوانا هست. */ }
+  };
+  return (
+    <small className="rc-doc-cred">
+      <Lock width="11" height="11" />
+      {user && (
+        <>
+          <code dir="ltr">{user}</code>
+          <button type="button" onClick={() => copy('user', user)} aria-label="کپیِ نامِ کاربری">
+            {copied === 'user' ? <Check width="11" height="11" /> : <Copy width="11" height="11" />}
+          </button>
+        </>
+      )}
+      {pass && (
+        <>
+          <code dir="ltr">{pass}</code>
+          <button type="button" onClick={() => copy('pass', pass)} aria-label="کپیِ رمز">
+            {copied === 'pass' ? <Check width="11" height="11" /> : <Copy width="11" height="11" />}
+          </button>
+        </>
+      )}
+    </small>
   );
 }
 

@@ -42,9 +42,12 @@ const TYPES = [
   { v: 'phone', l: 'موبایل' },
   { v: 'rating', l: 'امتیاز (۱ تا ۵)' },
   { v: 'image', l: 'باکسِ عکس' },
+  { v: 'links', l: 'باکسِ لینک (MRI/CT/آزمایش)' },
   { v: 'payment', l: 'باکسِ پرداخت' },
 ];
 const typeLabel = (v) => TYPES.find((t) => t.v === v)?.l ?? v;
+/* دسته‌های مدرکِ پرونده برای باکسِ عکس/لینک — همان `DOCUMENT_CATEGORIES` سرور؛ «متفرقه» = خالی. */
+const DOC_CATEGORIES = { imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت' };
 
 /**
  * ⚠️ `survey` هنوز در نگاشت هست هرچند دیگر ساخته نمی‌شود: نصبی که مهاجرت روی
@@ -532,6 +535,7 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
     hint: field.hint ?? '',
     placeholder: field.placeholder ?? '',
     page: String(field.page ?? 1),
+    docCategory: field.docCategory ?? '',
     /* گزینه‌ها به‌شکلِ متنِ چندخطی ویرایش می‌شوند — سریع‌ترین راه برای کاربر.
        سرور هر دو شکل (متن و آرایه) را می‌پذیرد. */
     options: (field.options ?? []).map((o) => (o.v === o.l ? o.l : `${o.v}=${o.l}`)).join('\n'),
@@ -543,6 +547,9 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
   /* باکسِ پرداخت مقدار نمی‌گیرد، پس نه «اجباری» دارد نه راهنمای داخلِ کادر. */
   const isPayment = form.type === 'payment';
   const isImage = form.type === 'image';
+  const isLinks = form.type === 'links';
+  /* دستهٔ مدرک فقط برای کادرهایی که چیزی به تبِ مدارکِ پرونده می‌فرستند. */
+  const hasDocCategory = isImage || isLinks;
 
   const save = async () => {
     if (busy) return;
@@ -567,6 +574,7 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
         hint: form.hint,
         placeholder: form.placeholder,
         page: Number(toEnDigits(form.page)) || 1,
+        ...(hasDocCategory ? { docCategory: form.docCategory || null } : {}),
         ...(hasOptions ? { options: form.options } : {}),
         /* نوع فقط برای فیلدِ تازه یا دلخواه فرستاده می‌شود. سرور فرستادنِ همان
            نوعِ فعلی روی فیلدِ هسته‌ای را هم می‌پذیرد، ولی نفرستادنش صریح‌تر است. */
@@ -626,6 +634,19 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
             می‌شود و در فرم فقط نشانی‌اش می‌ماند — پس فرم سنگین نمی‌شود.
           </p>
         )}
+        {isLinks && (
+          <p className="fb-note">
+            بیمار یا پزشک <b>لینک</b>های MRI/CT/آزمایش را می‌گذارد (تا ۱۰ تا)، با
+            نامِ کاربری و رمزِ اختیاریِ پورتال. هر لینک هنگامِ ثبتِ مراجعه یک
+            <b> مدرکِ لینکی</b> در تبِ مدارکِ پرونده می‌شود.
+          </p>
+        )}
+        {hasDocCategory && fld('docCategory', 'دستهٔ مدرک در پرونده', (
+          <select value={form.docCategory} onChange={set('docCategory')} disabled={busy}>
+            <option value="">متفرقه</option>
+            {Object.entries(DOC_CATEGORIES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+        ), 'عکس یا لینکِ این کادر زیرِ همین دسته در تبِ «مدارک» می‌نشیند — مثلاً تصویربرداری.')}
         {isPayment && (
           <p className="fb-note">
             شمارهٔ حساب و کارت و شبا <b>این‌جا نوشته نمی‌شوند</b>: هنگامِ ساختِ

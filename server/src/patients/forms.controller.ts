@@ -4,6 +4,7 @@ import {
 import { IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { FormsService, FIELD_TYPES, FORM_COLORS, FORM_SCOPES } from './forms.service';
+import { DOCUMENT_CATEGORIES } from './document-categories';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
@@ -46,6 +47,9 @@ class FieldCreateDto {
   @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
   @IsOptional() @IsArray() @IsIn(JOB_ROLE_KEYS, { each: true, message: 'نقش نامعتبر است' }) roles?: string[];
   @IsOptional() @IsString() @MaxLength(20) role?: string;
+  /* دستهٔ مدرکِ باکسِ عکس/لینک در پرونده — null یعنی «متفرقه». ⚠️ باید این‌جا
+     اعلام شود وگرنه `whitelist`ِ ValidationPipe بی‌صدا دورش می‌ریزد. */
+  @IsOptional() @IsIn(DOCUMENT_CATEGORIES as unknown as string[], { message: 'دستهٔ مدرک نامعتبر است' }) docCategory?: string | null;
 }
 
 class FieldPatchDto {
@@ -60,6 +64,7 @@ class FieldPatchDto {
   @IsOptional() @IsArray() @IsIn(JOB_ROLE_KEYS, { each: true, message: 'نقش نامعتبر است' }) roles?: string[];
   @IsOptional() @IsString() @MaxLength(20) role?: string | null;
   @IsOptional() @IsInt() @Min(1) @Max(20) page?: number;
+  @IsOptional() @IsIn(DOCUMENT_CATEGORIES as unknown as string[], { message: 'دستهٔ مدرک نامعتبر است' }) docCategory?: string | null;
 }
 
 class ReorderDto {

@@ -218,6 +218,31 @@
 }
 .rc-linkrow input::placeholder { color: #6d6796; direction: rtl; text-align: right; }
 .rc-linkrow .df-save { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+/* قفلِ «ورودِ پورتال» کنارِ لینک + دو کادرِ نامِ کاربری/رمز زیرش. */
+.rc-linkauth {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 9px; cursor: pointer;
+  color: #a9a1d8; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rc-linkauth.on { color: #fff; background: rgba(var(--brand-soft-rgb), .22); border-color: rgba(var(--brand-soft-rgb), .55); }
+.rc-linkcred { display: flex; gap: 6px; margin-top: 6px; }
+.rc-linkcred input {
+  flex: 1; min-width: 0; height: 38px; padding: 8px 10px; border-radius: 10px; outline: none;
+  font: inherit; font-size: 12.5px; color: #e5e0ff; direction: ltr;
+  background: rgba(3, 2, 18, .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
+}
+.rc-linkcred input::placeholder { color: #6d6796; direction: rtl; text-align: right; }
+/* ورودِ پورتال زیرِ مدرکِ لینکی — با دکمهٔ کپی. */
+.rc-doc-cred { display: flex !important; align-items: center; flex-wrap: wrap; gap: 5px; color: #a9a1d8 !important; }
+.rc-doc-cred code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 11px; color: #e5e0ff;
+  direction: ltr; unicode-bidi: isolate;
+}
+.rc-doc-cred button {
+  cursor: pointer; display: grid; place-items: center; padding: 3px; border-radius: 6px;
+  color: #a9a1d8; background: transparent; border: 1px solid rgba(255, 255, 255, .12);
+}
+.rc-doc-cred button:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 .rc-doc-open {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 9px;
