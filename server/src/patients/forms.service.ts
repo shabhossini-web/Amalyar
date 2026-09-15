@@ -485,12 +485,16 @@ export class FormsService {
    * مقدارِ باکس‌های لینکِ فرمِ مراجعه را نرمال می‌کند — پیش از نوشتن در
    * `Visit.extra`: URLِ http(s)ِ معتبر، سقفِ ۱۰، متن‌ها بریده. فیلدهای دیگر دست
    * نمی‌خورند. یک‌بار این‌جا، نه در هر خواننده‌ای که بعداً به `extra` می‌رسد.
+   *
+   * ⚠️ **بدونِ کوئری** — تعریفِ فرم را صداکننده می‌دهد. نسخهٔ اول خودش
+   * `forVisitKind` می‌زد و از داخلِ تراکنشِ تعاملیِ `updateVisit` صدا زده می‌شد؛
+   * کوئریِ بیرونِ tx داخلِ tx روی PGliteِ CI (یک اتصال) قفل می‌کرد و تراکنشِ
+   * ۵ ثانیه‌ای منقضی می‌شد. تعریف را پیش از تراکنش بگیرید، این را هر جا.
    */
-  async normalizeExtra(kind: string, extra: Record<string, any> | undefined) {
+  normalizeExtra(fields: { key: string; type?: string | null; label: string }[], extra: Record<string, any> | undefined) {
     if (!extra || typeof extra !== 'object') return extra;
-    const form = await this.forVisitKind(kind);
     const out: Record<string, any> = { ...extra };
-    for (const f of form?.fields ?? []) {
+    for (const f of fields ?? []) {
       if (f.type === 'links' && out[f.key] !== undefined && out[f.key] !== null) out[f.key] = normalizeLinks(out[f.key], f.label);
     }
     return out;

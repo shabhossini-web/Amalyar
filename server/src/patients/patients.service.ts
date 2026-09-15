@@ -1009,9 +1009,10 @@ export class PatientsService {
     } else if (!opts?.skipFormValidation) await this.assertFormValid(dto);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     /* باکس‌های لینکِ فرم: نرمال‌شده می‌نشینند (URLِ معتبر، سقف، برش) و هر لینک
-       مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. */
-    const extraIn = await this.forms.normalizeExtra(dto.kind || 'surgery', (dto as any).extra);
+       مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. تعریفِ فرم **پیش از**
+       تراکنش خوانده می‌شود؛ داخلِ tx فقط نوشتن. */
     const formFields = (await this.forms.forVisitKind(dto.kind || 'surgery'))?.fields ?? [];
+    const extraIn = await this.forms.normalizeExtra(formFields, (dto as any).extra);
     const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
@@ -1129,6 +1130,12 @@ export class PatientsService {
     await this.assertRoleOwnership((dto as any).kind ?? v.kind, dto, user, v as any);
     if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
     await this.assertEditFormValid(v, dto);
+    /* باکس‌های لینک: تعریفِ فرم و نرمال‌سازی **پیش از** تراکنش — کوئریِ بیرونِ tx
+       داخلِ تراکنشِ تعاملی روی PGliteِ CI (یک اتصال) قفل می‌کرد و تراکنشِ ۵ ثانیه‌ای
+       منقضی می‌شد (intake-finance-roles). داخلِ tx فقط نوشتنِ مدرک‌ها می‌ماند. */
+    const kindNow = dto.kind ?? v.kind ?? 'surgery';
+    const linkFields = dto.extra !== undefined ? ((await this.forms.forVisitKind(kindNow))?.fields ?? []) : [];
+    const extraIn = dto.extra !== undefined ? await this.forms.normalizeExtra(linkFields, dto.extra) : undefined;
 
     const patientPatch: any = {};
     if (dto.firstName !== undefined) patientPatch.firstName = dto.firstName;
@@ -1188,14 +1195,9 @@ export class PatientsService {
          ادغام می‌شود، نه جایگزین: یک PATCHِ جزئی — یا فرمی که فیلدی از آن
          حذف شده — نباید پاسخ‌های قبلی را از پرونده پاک کند. */
       if (dto.extra !== undefined) {
-        const kindNow = dto.kind ?? v.kind ?? 'surgery';
-        const extraIn = await this.forms.normalizeExtra(kindNow, dto.extra);
         visitPatch.extra = { ...((v.extra as Record<string, any>) ?? {}), ...extraIn };
         /* لینکِ تازه در فرم → مدرکِ لینکیِ پرونده؛ حذفِ لینک مدرک را پاک نمی‌کند. */
-        await syncLinkDocuments(tx, {
-          patientId: v.patientId, visitId: id, fields: ((await this.forms.forVisitKind(kindNow))?.fields ?? []) as any,
-          values: extraIn ?? {}, actorId: user?.id ?? null,
-        });
+        await syncLinkDocuments(tx, { patientId: v.patientId, visitId: id, fields: linkFields as any, values: extraIn ?? {}, actorId: user?.id ?? null });
       }
 
       if (Object.keys(patientPatch).length) {
