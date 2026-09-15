@@ -21,11 +21,11 @@ import { DOCUMENT_CATEGORIES } from './document-categories';
  * می‌شود — جایی که تعریفِ فرم در دسترس است.
  */
 
+/* `links` = فهرستِ لینک‌های MRI/CT/آزمایش با نامِ کاربری/رمزِ اختیاری (`normalizeLinks`).
+   ⚠️ داخلِ خودِ آرایه کامنت نگذارید: نگهبانِ CI آرایه را با split(',') می‌خواند. */
 export const FIELD_TYPES = [
   'text', 'textarea', 'number', 'money', 'select', 'multiselect',
-  'date', 'time', 'bool', 'phone', 'rating', 'image', 'payment',
-  /* فهرستِ لینک‌های MRI/CT/آزمایش با نامِ کاربری/رمزِ اختیاری — `normalizeLinks`. */
-  'links',
+  'date', 'time', 'bool', 'phone', 'rating', 'image', 'payment', 'links',
 ] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 
