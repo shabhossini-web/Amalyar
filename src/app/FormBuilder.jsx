@@ -6,6 +6,7 @@ import { JOB_ROLES, fieldRoles } from '../lib/job-roles.js';
 import { useConfig } from './config.jsx';
 import './definitions.css';
 import './formbuilder.css';
+import './launcher.css'; // شِلِ استانداردِ صفحه (lx-*) + glass
 import { ArrowDown, ArrowUp, Back, Close, Eye, EyeOff, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import { COLOR_KEYS, FORM_COLORS } from '../lib/formColor.js';
 import { toEnDigits } from '../lib/identity.js';

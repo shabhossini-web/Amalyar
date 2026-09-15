@@ -1,12 +1,24 @@
 /**
- * پایهٔ ظاهرِ کنترل‌های DynForm — همراهِ خودِ کامپوننت بار می‌شود.
+ * ظاهرِ کنترل‌های DynForm — **همراهِ خودِ کامپوننت** بار می‌شود.
  *
- * ⚠️ چرا این‌جا و نه در CSS صفحه: DynForm در داشبورد، پرونده **و فرمِ عمومیِ
- * بیمار** رندر می‌شود. استایلِ `.pf-field select` فقط در `record.css` بود؛
- * صفحهٔ عمومی که آن را ایمپورت نمی‌کند، selectِ سفیدِ پیش‌فرضِ مرورگر را وسطِ
- * فرمِ تیره می‌گذاشت (اسکرین‌شاتِ کاربر، اندروید). صفحه‌ها می‌توانند رویش
- * override بگذارند؛ این فقط کفِ مشترک است.
+ * ⚠️ چرا این‌جا و نه در CSSِ صفحه: DynForm در داشبورد، پرونده، نظرسنجی **و
+ * فرمِ عمومیِ بیمار** رندر می‌شود. تا پیش از lazy‌شدنِ مسیرها (قانون ۲۱) همهٔ
+ * CSSها در یک باندل بودند و فرمِ عمومی از `definitions.css` که هرگز ایمپورتش
+ * نمی‌کرد ارث می‌برد؛ بعد از آن، باکسِ عکس، پرداخت و ستارهٔ اجباری روی صفحهٔ
+ * بیمار بی‌استایل شدند. پوستهٔ پایهٔ خودِ فیلد (`.pf-field`) در `src/index.css`
+ * است؛ این فایل فقط کنترل‌های خاصِ DynForm را دارد. صفحه‌ها می‌توانند رویش
+ * override بگذارند؛ این کفِ مشترک است.
+ *
+ * ⚠️ همهٔ این کنترل‌ها با پیشوندِ `.dyn` نوشته می‌شوند، نه تنها. دلیل:
+ * `.pf-field > span { display: block }` وزنش (۰,۱,۱) از یک کلاسِ تنها (۰,۱,۰)
+ * بیشتر است. این کنترل‌ها `<span>` و فرزندِ مستقیمِ `.pf-field`اند، پس
+ * `display: flex`شان بی‌صدا بازنویسی می‌شد و ستاره‌های امتیاز **زیرِ هم**
+ * می‌افتادند. هیچ آزمونِ APIای این را نمی‌گرفت؛ فقط با نگاه‌کردن به عکسِ صفحه
+ * پیدا شد.
  */
+
+/* select — بدونِ این، مرورگر کنترلِ سفیدِ پیش‌فرض را وسطِ فرمِ تیره می‌گذاشت
+   (اسکرین‌شاتِ کاربر، اندروید). */
 .pf-field select {
   width: 100%; min-height: 46px; border-radius: 11px; padding: 0 13px; font: inherit; font-size: 13px;
   color: #fff; outline: none; appearance: none; -webkit-appearance: none; cursor: pointer;
@@ -21,12 +33,25 @@
 .pf-field select option { background: #141033; color: #f2f0fc; }
 .pf-field select:disabled { opacity: .6; cursor: default; }
 
-/* ── کنترل‌های مشترکِ DynForm — پیل، بله/خیر، ستاره ──────────────────────
-   ⚠️ این‌ها این‌جا هستند نه فقط در definitions.css: DynForm در **فرمِ عمومیِ
-   بیمار** هم رندر می‌شود که definitions.css را ایمپورت نمی‌کند — پیلِ
-   multiselect و بله/خیر آن‌جا دکمهٔ خامِ مرورگر می‌شدند (اسکرین‌شاتِ کاربر،
-   «ما را به دیگران معرفی می‌کنید؟»). پیشوندِ `.dyn` برای بردن از
-   `.pf-field > span { display:block }`. */
+/* ستارهٔ اجباری — همان رنگی که در فرم‌ساز دیده می‌شود، تا کاربر بین دو صفحه
+   یک زبان ببیند. */
+.dyn-star { color: #f87171; font-style: normal; font-weight: 900; }
+
+/* برچسبِ بخشِ نقش («هر کس قسمتِ خودش را پر کند») و فیلدِ قفل‌شده. */
+.dyn-role {
+  margin-inline-start: 6px; font-style: normal; font-size: 9.5px; font-weight: 700;
+  padding: 2px 7px; border-radius: 99px; vertical-align: 1px;
+  color: rgb(var(--brand-2-rgb)); background: rgba(var(--brand-2-rgb), .1);
+  border: 1px solid rgba(var(--brand-2-rgb), .28);
+}
+.dyn-role.off { color: var(--text3); background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
+.dyn-locked { opacity: .72; }
+
+/* ── بله/خیر، چندگزینه‌ای، امتیاز ─────────────────────────────────────── */
+.dyn .dyn-bool { display: flex; align-items: center; gap: 9px; }
+.dyn-bool input { width: 18px; height: 18px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
+.dyn-bool i { font-style: normal; font-size: 13px; color: var(--muted, #b7b0d8); }
+
 .dyn .dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
 .dyn-pill {
   cursor: pointer; font-family: inherit; font-size: 12.5px; padding: 8px 16px; border-radius: 99px;
@@ -50,5 +75,75 @@
 .dyn-star-btn:hover:not(:disabled) { transform: scale(1.12); }
 .dyn-star-btn:disabled { cursor: default; }
 
+/* تایم‌پیکر داخلِ فرمِ داده‌محور باید مثل بقیهٔ فیلدها بنشیند، نه با حاشیهٔ
+   خودش — `db-field`ِ پیش‌فرضش فاصلهٔ دوباره می‌ساخت. */
+.dyn .dyn-time { display: block; }
+.dyn .dyn-time > span { display: none; }
+
+/* ── باکسِ عکس ─────────────────────────────────────────────────────────── */
+.dyn .dyn-img { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dyn-img-pick {
+  cursor: pointer; font-family: inherit; font-size: 12.5px;
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
+  border-radius: 10px; color: var(--muted, #b7b0d8);
+  background: rgba(255, 255, 255, .05); border: 1px dashed rgba(255, 255, 255, .2);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.dyn-img-pick:hover:not(:disabled) {
+  color: #fff; background: rgba(var(--brand-soft-rgb), .14); border-color: rgba(var(--brand-soft-rgb), .5);
+}
+.dyn-img-pick:disabled { cursor: default; opacity: .55; }
+
+.dyn-img-has {
+  display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 6px;
+  border-radius: 10px; background: rgba(255, 255, 255, .05);
+  border: 1px solid rgba(255, 255, 255, .12); max-width: 100%;
+}
+/* ⚠️ اندازهٔ ثابت + `object-fit: cover`: عکسِ موبایل ۴۰۰۰ پیکسل عرض دارد و
+   بدونِ این، یک پیوستِ ساده کلِ شیت را می‌کشد. */
+.dyn-img-has img { width: 42px; height: 42px; border-radius: 7px; object-fit: cover; display: block; }
+.dyn-img-has b {
+  font-weight: 500; font-size: 12.5px; color: var(--muted, #b7b0d8);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;
+}
+.dyn-img-has button {
+  cursor: pointer; display: grid; place-items: center; padding: 6px; border-radius: 8px;
+  color: #fca5a5; background: transparent; border: none; transition: background .15s;
+}
+.dyn-img-has button:hover:not(:disabled) { background: rgba(248, 113, 113, .15); }
 /* فهرستِ چندعکسیِ کادرِ عکس. */
 .dyn-img-list { display: flex; flex-direction: column; gap: 5px; }
+
+.dyn .dyn-note, .dyn .dyn-img .dyn-note {
+  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); opacity: .75;
+}
+
+/* ── باکسِ پرداخت ──────────────────────────────────────────────────────────
+   فقط نمایش: بیمار باید شماره را ببیند و بتواند کپی کند. */
+.dyn .dyn-pay {
+  display: flex; flex-direction: column; gap: 7px; padding: 11px 13px;
+  border-radius: 12px; background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .12);
+}
+.dyn-pay-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #fff; }
+.dyn-pay-head i { font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); }
+.dyn-pay-row { display: flex; align-items: center; gap: 8px; }
+.dyn-pay-row i {
+  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8);
+  min-width: 74px; flex-shrink: 0;
+}
+/* ⚠️ `tabular-nums` تا ارقام هم‌عرض باشند، و `isolate` چون یک عددِ لاتین
+   داخلِ بندِ راست‌به‌چپ بدونِ آن تکه‌تکه و وارونه دیده می‌شود. */
+.dyn-pay-row code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+  font-size: 13px; letter-spacing: .04em; font-variant-numeric: tabular-nums;
+  color: #fff; direction: ltr; unicode-bidi: isolate;
+  overflow-x: auto; white-space: nowrap;
+}
+.dyn-pay-row button {
+  cursor: pointer; display: grid; place-items: center; padding: 5px; border-radius: 7px;
+  color: var(--muted, #b7b0d8); background: transparent;
+  border: 1px solid rgba(255, 255, 255, .12); transition: color .15s, background .15s;
+  margin-inline-start: auto; flex-shrink: 0;
+}
+.dyn-pay-row button:hover { color: #fff; background: rgba(255, 255, 255, .08); }

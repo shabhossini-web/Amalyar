@@ -9,6 +9,9 @@ import RequiredItems from './RequiredItems.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import './surgeon-portal.css';
+import './launcher.css';
+import './dashboard.css';
+import './intake-admin.css'; // پایهٔ db-*/bl-*/ia-* که تا پیش از lazy‌شدنِ مسیرها از باندلِ مشترک می‌آمد
 
 export default function SurgeonPortal() {
   const { user } = useAuth();

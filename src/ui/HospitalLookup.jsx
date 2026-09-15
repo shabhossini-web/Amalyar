@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import './hospital-lookup.css';
 
 export default function HospitalLookup({ token, value = '', onChange, disabled, error }) {
   const [options, setOptions] = useState([]), [warning, setWarning] = useState('');

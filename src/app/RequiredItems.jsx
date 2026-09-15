@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/identity.js';
 import { Plus, Trash } from '../ui/icons.jsx';
+import './surgeon-portal.css'; // ri-*
+import './intake-admin.css'; // ia-field
 
 /** Operational requirements; choosing a product never consumes stock or creates a charge. */
 export default function RequiredItems({ value, onChange, disabled, endpoint = '/items' }) {

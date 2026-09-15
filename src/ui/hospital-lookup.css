@@ -1,0 +1,20 @@
+/* جست‌وجوی بیمارستان — کامپوننتِ مشترکِ فرمِ عمومیِ بیمار و پنلِ پذیرش.
+   ⚠️ پوسته‌اش همراهِ خودش می‌آید: `.ia-field` مالِ intake-admin.css و `.bl-mini`
+   مالِ dashboard.css است و فرمِ عمومیِ بیمار هیچ‌کدام را ایمپورت نمی‌کند —
+   بعد از lazy‌شدنِ مسیرها فیلدِ بیمارستان روی صفحهٔ بیمار بی‌استایل شد.
+   پیشوندِ `.hospital-lookup` وزنِ بیشتری از CSSِ صفحه دارد تا همه‌جا یک شکل
+   باشد، نه تابعِ این‌که کدام صفحه چه چیزی ایمپورت کرده. */
+.hospital-lookup .ia-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
+.hospital-lookup .ia-field input {
+  font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 10px;
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .14); outline: none;
+  width: 100%;
+}
+.hospital-lookup .ia-field input:focus { border-color: rgba(var(--brand-2-rgb), .6); }
+/* پیشنهادها به‌شکلِ چیپ؛ وقتی چیزی نیست جا نگیرد. */
+.hospital-lookup .bl-code-hits { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.hospital-lookup .bl-code-hits:empty { display: none; }
+.hospital-lookup .bl-mini {
+  padding: 10px 14px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
+  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
+}

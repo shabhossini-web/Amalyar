@@ -6,6 +6,7 @@ import { termsFor } from '../lib/terms.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
+import './settings.css';
 import { Back, Check } from '../ui/icons.jsx';
 
 

@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
+import './dashboard.css'; // bl-mini / db-hint
 import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Eye, Form, Hospital, Pencil, Plus, Search, Send, Trash } from '../ui/icons.jsx';
 import { group3, numToWordsFa, parseMoney } from '../lib/money.js';
 import Tabs from '../ui/Tabs.jsx';

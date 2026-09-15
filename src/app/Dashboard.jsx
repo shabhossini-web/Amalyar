@@ -19,6 +19,7 @@ import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
+import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
 import { Arrive, Back, Book, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
