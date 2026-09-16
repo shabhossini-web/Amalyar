@@ -4,7 +4,6 @@ import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useConfig } from './config.jsx';
-import ProfileMenu from './ProfileMenu.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import Tabs from '../ui/Tabs.jsx';
@@ -31,7 +30,7 @@ export default function SurgeonPortal() {
     } catch (e) { setError(e.message); } finally { setGrantBusy(false); }
   };
   return <main className="sp-page">
-    <header className="sp-head"><ProfileMenu /><h1>پرتال جراح</h1><Link to="/app">لانچر</Link></header>
+    <header className="sp-head"><h1>پرتال جراح</h1><Link to="/app">لانچر</Link></header>
     <p>این پرتال برای پزشکان همکار شرکت است: بیماران خود، گزارش عمل، دستور تیم و بیلان سهم و پرداخت خود را اینجا می‌بینید. پزشک صاحب مطب از داشبورد مطب استفاده می‌کند.</p>
     <Tabs value={tab} onChange={setTab} label="بخش‌های پرتال جراح" items={[{ key: 'visits', label: 'بیماران و دستورها' }, { key: 'finances', label: user?.level >= 6 ? 'بیلان جراح' : 'بیلان مالی من' }]} />
     <p>{verticalLabel} · {user?.level >= 6 ? 'نمای مدیر برای بررسی مراجعات جراحان' : 'مراجعات ارجاع‌شده به نام شما، گزارش‌ها و دستورهای تیم جراحی'}</p>

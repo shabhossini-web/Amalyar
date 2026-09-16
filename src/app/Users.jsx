@@ -12,7 +12,6 @@ import { toEnDigits } from '../lib/identity.js';
    توسعه. همین کرش صفحهٔ کاربران را روی error boundary می‌انداخت. */
 import { faDate } from '../lib/jalali.js';
 import './definitions.css';
-import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
 import './users.css';
 import { Back, Check, Close, User } from '../ui/icons.jsx';
@@ -261,7 +260,6 @@ export default function Users() {
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
           <h1>مدیریت کاربران</h1>
-          <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
         {!user?.isTestAccount && <section className="glass us-card"><b>تست نقش‌ها با یک شماره</b><p>حالت آزمایشی را روشن کنید، سپس در «ساخت حساب موقت» گزینهٔ شماره مشترک و نام کاربری مستقل را انتخاب کنید. از منوی حساب، «افزودن حساب» و جابه‌جایی بین نقش‌ها استفاده کنید.</p><p>پایان تست همهٔ حساب‌های آزمایشی و نشست‌هایشان را غیرفعال می‌کند؛ اطلاعات ثبت‌شده حذف نمی‌شود. روشن‌کردن دوباره، حساب‌های قبلی را خودکار فعال نمی‌کند.</p><button className="us-btn" disabled={modeBusy} onClick={toggleTesting}>{modeBusy ? 'در حال ثبت…' : testingEnabled ? 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' : 'فعال‌کردن ساخت حساب آزمایشی'}</button></section>}

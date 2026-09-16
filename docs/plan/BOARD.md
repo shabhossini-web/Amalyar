@@ -8,7 +8,7 @@
 | لِین | ایجنت | مسیرهایی که می‌نویسد | چرا این تقسیم |
 |---|---|---|---|
 | **الف — صحتِ بک‌اند** | `gpt` | `server/src/patients/{intake,orders,appointments,patients,forms,record,reminders,portal}.service.ts` · `server/src/reminders/` · `server/src/sms/` · `server/src/scripts/` · `server/src/config/settings-registry.ts` · `schema.prisma` (ته فایل) · `scripts/e2e/` (فایل‌های خودش) | یافته‌ها با `file:line` مشخص‌اند و e2e‌پذیرند؛ به رابط دست نمی‌زند، پس با دو لِینِ دیگر برخورد ندارد |
-| **ب — سطوحِ بیمار و اصلاح‌های سریعِ UI** | `claude-fable` (واگذارشده از `claude-opus`، ۱۴۰۵/۰۶/۲۵ — وضعیت در `lanes/claude-fable.md`) | `src/pages/` · `src/app/{OrderPublic,Reminders,FormBuilder,Launcher}.jsx` · `src/ui/` · `src/index.css` · `src/lib/terms.js` · `src/app/*.css` مربوطه | فرانتِ عمومی و کامپوننت‌های مشترک؛ به `Dashboard.jsx`/`PatientRecord.jsx` دست نمی‌زند |
+| **ب — سطوحِ بیمار و اصلاح‌های سریعِ UI** | `claude-fable-b` (نشستِ دومِ Fable؛ واگذارشده از `claude-opus`، ۱۴۰۵/۰۶/۲۵ — وضعیت در `lanes/claude-fable-b.md`) | `src/pages/` · `src/app/{OrderPublic,Reminders,FormBuilder,Launcher}.jsx` · `src/ui/` · `src/index.css` · `src/lib/terms.js` · `src/app/*.css` مربوطه | فرانتِ عمومی و کامپوننت‌های مشترک؛ به `Dashboard.jsx`/`PatientRecord.jsx` دست نمی‌زند |
 | **ج — لایهٔ کار، پوسته، امروز** | `claude-fable` | `server/src/work/` · `src/app/{Shell,Today,FrontDesk,PatientRecord,VisitWorkspace}.jsx` · `Dashboard.jsx` (فقط استخراجِ `VisitForm`) · `App.jsx` · `docs/plan/CONTRACTS.md` | قراردادِ WorkItem را همین لِین طراحی کرده و باید یک‌دست بماند |
 
 ## ترتیبِ بسته‌ها در هر لِین
@@ -28,7 +28,7 @@
 | ۱۰ | **W1.10** اسکریپتِ کشفِ دادهٔ ناقص + صفِ تطبیق | همهٔ بالا | |
 | ۱۱ | **W1.2** پاسخِ سفارش ← Document + وضعیتِ بررسی + کارِ «بررسیِ نتیجه» | **W2.1 لند شده باشد** (`WorkService.upsert`) | تا W2.1 نیامده: Document و وضعیتِ سفارش را بساز و جای ساختِ کار `// W2.1: emit review_result` بگذار |
 
-### ب (`claude-fable` — واگذارشده از `claude-opus`، ۱۴۰۵/۰۶/۲۵)
+### ب (`claude-fable-b` — نشستِ دومِ Fable، واگذارشده از `claude-opus`، ۱۴۰۵/۰۶/۲۵)
 | ترتیب | بسته | وابستگی |
 |---|---|---|
 | ۱ | **W0.1** استپر از `makesVisit/payable` | — |

@@ -272,3 +272,8 @@ export const Mic = (p) => (
 export const StopRec = (p) => (
   <Svg {...p}><rect x="6" y="6" width="12" height="12" rx="2" /></Svg>
 );
+
+/** زنگِ کارها — پوستهٔ سراسری (W2.4). */
+export const Bell = (p) => (
+  <Svg {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21a2 2 0 0 0 4 0" /></Svg>
+);
