@@ -2228,7 +2228,7 @@ export default function Dashboard() {
       <div className="lx-grid" aria-hidden="true" />
       <div className="lx-shell us-shell db-shell">
         <header className="us-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
+          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
           <h1>داشبورد مدیریت</h1>
         </header>
 

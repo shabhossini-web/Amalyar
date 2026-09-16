@@ -85,7 +85,7 @@ export default function Settings() {
     <div className="df">
       <div className="df-bg" />
       <header className="df-head">
-        <Link className="df-back" to="/app"><Back width="14" height="14" /> لانچر</Link>
+        <Link className="df-back" to="/app"><Back width="14" height="14" /> سامانه</Link>
         <div>
           <h1>تنظیماتِ شرکت</h1>
           <p>حوزهٔ کاری تعیین می‌کند کاربر چه کلماتی ببیند و کدام ماژول‌ها فعال باشند.</p>

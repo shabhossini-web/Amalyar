@@ -18,7 +18,7 @@ const Avatar = ({ u, size = 32 }) => (
 /**
  * کامپوننتِ استانداردِ پروفایل — بالای هر صفحهٔ سامانه.
  * چیپ (سلفی + نام + سطح) → دراپ‌داون: حساب‌های فعال (سوییچ/خروجِ تکی)،
- * افزودن حساب، بازگشت به لانچر، اثر انگشت، خروج از همه.
+ * افزودن حساب، بازگشت به صفحهٔ نخست، اثر انگشت، خروج از همه.
  */
 export default function ProfileMenu({ onToast }) {
   const { user, accountsVersion, switchAccount, logoutAccount, logoutAll, webauthnRegister } = useAuth();
@@ -106,7 +106,9 @@ export default function ProfileMenu({ onToast }) {
       setOpen(false);
     });
 
-  const onLauncher = pathname === '/app';
+  /* صفحهٔ نخست از W2.3 «امروز» است (لانچر به `/app/tools` رفت) — روی خودِ آن،
+     دکمهٔ «بازگشت» معنایی ندارد. */
+  const onHome = pathname === '/app';
 
   return (
     <div className="pm" ref={ref}>
@@ -172,10 +174,10 @@ export default function ProfileMenu({ onToast }) {
               <Plus width="17" height="17" /> افزودن حساب کاربری
             </button>
 
-            {!onLauncher && (
+            {!onHome && (
               <button className="pm-item" role="menuitem" disabled={busy}
                 onClick={() => { setOpen(false); navigate('/app'); }}>
-                <Grid width="17" height="17" /> بازگشت به لانچر
+                <Grid width="17" height="17" /> صفحهٔ امروز
               </button>
             )}
 
