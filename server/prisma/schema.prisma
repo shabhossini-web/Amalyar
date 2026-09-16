@@ -796,6 +796,9 @@ model IntakeSubmission {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
+  /// W1.6: تعریفِ زمان ثبت پاسخ؛ پس از اولین ثبت تغییر نمی‌کند.
+  schemaSnapshot Json? @map("schema_snapshot")
+
   @@map("intake_submissions")
 }
 
@@ -2126,6 +2129,9 @@ model FormField {
 
   @@unique([formId, key])
   @@index([formId, page, sort])
+  /// W1.6: حذف از فرم زنده، حفظ در تاریخچه.
+  deletedAt DateTime? @map("deleted_at")
+
   @@map("form_fields")
 }
 

@@ -162,7 +162,7 @@ export function pickColor(fullKey: string, taken: Set<string>): string {
  * می‌خواهد و `readonly` را رد می‌کند.
  */
 const FIELD_ORDER = {
-  fields: { orderBy: [{ page: 'asc' as const }, { sort: 'asc' as const }, { id: 'asc' as const }] },
+  fields: { where: { deletedAt: null }, orderBy: [{ page: 'asc' as const }, { sort: 'asc' as const }, { id: 'asc' as const }] },
 };
 
 @Injectable()
@@ -285,7 +285,7 @@ export class FormsService {
    * «این فرم چند صفحه است» را بداند، باید همان `Math.max` را تکرار کند.
    */
   private view(f: any) {
-    const fields = (f.fields ?? []).map((x: any) => ({
+    const fields = (f.fields ?? []).filter((x: any) => !x.deletedAt).map((x: any) => ({
       id: x.id, key: x.key, label: x.label, type: x.type,
       required: x.required, options: x.options ?? [],
       /* بخشِ نقش + برچسبِ فارسی‌اش — مشتقِ سرور (قانون ۱۵)، تا کلاینت نگاشتِ
@@ -683,7 +683,7 @@ export class FormsService {
        همان شماره‌ها را دوباره نشان می‌داد و بیمار فکر می‌کرد باید دو بار
        واریز کند. */
     if (type === 'payment') {
-      const has = await this.prisma.formField.count({ where: { formId, type: 'payment' } });
+      const has = await this.prisma.formField.count({ where: { formId, type: 'payment', deletedAt: null } });
       if (has > 0) throw new BadRequestException('هر فرم فقط یک باکسِ پرداخت دارد');
     }
 
@@ -726,7 +726,7 @@ export class FormsService {
    */
   async patchField(id: number, dto: any) {
     const row = await this.prisma.formField.findUnique({ where: { id }, include: { form: true } });
-    if (!row) throw new NotFoundException('فیلد پیدا نشد');
+    if (!row || row.deletedAt) throw new NotFoundException('فیلد پیدا نشد');
 
     if (dto.type && !FIELD_TYPES.includes(dto.type)) throw new BadRequestException('نوعِ فیلد نامعتبر است');
     if (row.builtin && dto.type && dto.type !== row.type) {
@@ -736,7 +736,7 @@ export class FormsService {
        دومی بسازد. `id: { not: row.id }` تا ذخیرهٔ دوبارهٔ خودش خطا ندهد. */
     if (dto.type === 'payment' && row.type !== 'payment') {
       const has = await this.prisma.formField.count({
-        where: { formId: row.formId, type: 'payment', id: { not: row.id } },
+        where: { formId: row.formId, type: 'payment', deletedAt: null, id: { not: row.id } },
       });
       if (has > 0) throw new BadRequestException('هر فرم فقط یک باکسِ پرداخت دارد');
     }
@@ -770,11 +770,11 @@ export class FormsService {
   /** حذف — فقط فیلدِ دلخواه. هسته‌ای فقط خاموش می‌شود. */
   async removeField(id: number) {
     const row = await this.prisma.formField.findUnique({ where: { id }, include: { form: true } });
-    if (!row) throw new NotFoundException('فیلد پیدا نشد');
+    if (!row || row.deletedAt) throw new NotFoundException('فیلد پیدا نشد');
     if (row.builtin) {
       throw new BadRequestException('فیلدِ هسته‌ای حذف نمی‌شود — می‌توانید خاموشش کنید');
     }
-    await this.prisma.formField.delete({ where: { id } });
+    await this.prisma.formField.update({ where: { id }, data: { active: false, deletedAt: new Date() } });
     /* حذفِ تنها فیلدِ یک صفحه، آن صفحه را خالی می‌گذارد — یعنی همان شکافی که
        `compactPages` وجود دارد تا نگذارد بماند. */
     await this.compactPages(row.formId);
@@ -801,7 +801,7 @@ export class FormsService {
     if (!form) throw new NotFoundException('فرم پیدا نشد');
 
     const rows = await this.prisma.formField.findMany({
-      where: { formId }, select: { id: true, page: true },
+      where: { formId, deletedAt: null }, select: { id: true, page: true },
     });
     const pageOf = new Map(rows.map((r) => [r.id, r.page]));
     const nth = new Map<number, number>();
@@ -827,7 +827,7 @@ export class FormsService {
    */
   private async compactPages(formId: number) {
     const rows = await this.prisma.formField.findMany({
-      where: { formId },
+      where: { formId, deletedAt: null },
       select: { id: true, page: true },
       orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }],
     });
@@ -920,26 +920,50 @@ export class FormsService {
    * در فهرستِ ادمین. حالا FKِ `Restrict` هم آخرین سد است، ولی سدِ اول همین‌جاست
    * چون فقط این‌جا می‌شود پیامِ فارسیِ درست داد.
    */
-  private async formUsage(row: { id: number; visitKind: string | null }) {
-    const [visits, links] = await Promise.all([
-      row.visitKind ? this.prisma.visit.count({ where: { kind: row.visitKind } }) : Promise.resolve(0),
-      this.prisma.intakeLink.count({ where: { formId: row.id } }),
+  /** تعریفِ تاریخی؛ فرم‌های اختصاصی هم با اولویت فرم اصلی و کلید یکتا. */
+  async schemaSnapshot(formId: number | null, extraFormIds: number[] = []) {
+    const ids = [...new Set([formId, ...extraFormIds].filter((id): id is number => id != null))];
+    if (!ids.length) return [];
+    const rows = await this.prisma.formDef.findMany({
+      where: { id: { in: ids } },
+      include: { fields: { where: { builtin: false }, orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }] } },
+    });
+    const seen = new Set<string>();
+    const fields: any[] = [];
+    for (const id of ids) {
+      for (const f of rows.find((row) => row.id === id)?.fields ?? []) {
+        if (seen.has(f.key)) continue;
+        seen.add(f.key);
+        fields.push({ key: f.key, label: f.label, type: f.type, options: f.options,
+          page: f.page, roles: f.roles, docCategory: f.docCategory });
+      }
+    }
+    return fields;
+  }
+
+  private async formUsage(row: { id: number; visitKind: string | null }, db: Prisma.TransactionClient = this.prisma) {
+    const [visits, links, submissions] = await Promise.all([
+      row.visitKind ? db.visit.count({ where: { kind: row.visitKind } }) : Promise.resolve(0),
+      db.intakeLink.count({ where: { formId: row.id } }),
+      db.intakeSubmission.count({ where: { OR: [{ formId: row.id }, { extraFormIds: { has: row.id } }] } }),
     ]);
-    return { visits, links, total: visits + links };
+    return { visits, links, submissions, total: visits + links + submissions };
   }
 
   async removeForm(id: number) {
-    const row = await this.prisma.formDef.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('فرم پیدا نشد');
-    const { visits, links, total } = await this.formUsage(row);
-    if (total > 0) {
-      await this.prisma.formDef.update({ where: { id }, data: { active: false } });
-      /* `used` برای سازگاری با کلاینتِ فعلی می‌ماند؛ `visits`/`links` تازه‌اند
-         تا پیام بتواند بگوید **چرا** حذف نشد. */
-      return { ok: true, deactivated: true, used: total, visits, links };
-    }
-    await this.prisma.formDef.delete({ where: { id } });
-    return { ok: true, deactivated: false, used: 0, visits: 0, links: 0 };
+    return this.prisma.$transaction(async (tx) => {
+      const row = await tx.formDef.findUnique({ where: { id } });
+      if (!row) throw new NotFoundException('فرم پیدا نشد');
+      const { visits, links, submissions, total } = await this.formUsage(row, tx);
+      if (total > 0) {
+        await tx.formDef.update({ where: { id }, data: { active: false } });
+        /* `used` برای سازگاری با کلاینتِ فعلی می‌ماند؛ `visits`/`links` تازه‌اند
+           تا پیام بتواند بگوید **چرا** حذف نشد. */
+        return { ok: true, deactivated: true, used: total, visits, links, submissions };
+      }
+      await tx.formDef.delete({ where: { id } });
+      return { ok: true, deactivated: false, used: 0, visits: 0, links: 0, submissions: 0 };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   // ── اعتبارسنجی و تفکیکِ مقادیر ────────────────────────────────────────────
