@@ -60,7 +60,8 @@ const block = (sel) => {
   if (i < 0) return null;
   return idx.slice(i, idx.indexOf('\n}', i));
 };
-const MUST = ['--bg', '--bg2', '--text1', '--text2', '--text3', '--veil-rgb', '--sheen-rgb', '--shadow-card', '--cyan'];
+const MUST = ['--bg', '--bg2', '--text1', '--text2', '--text3', '--veil-rgb', '--sheen-rgb', '--shadow-card',
+  '--cyan', '--green-text', '--amber-text', '--brand-text'];
 for (const sel of [':root {', ':root[data-theme="light"] {', '.theme-dark {']) {
   const b = block(sel);
   if (!b) { bad.push(`src/index.css — بلوکِ ${sel} پیدا نشد`); continue; }
