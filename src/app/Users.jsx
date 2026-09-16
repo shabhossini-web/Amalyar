@@ -258,7 +258,7 @@ export default function Users() {
 
       <div className="lx-shell us-shell">
         <header className="us-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
+          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
           <h1>مدیریت کاربران</h1>
         </header>
 

@@ -194,7 +194,7 @@ export default function FormBuilder() {
 
       <div className="lx-shell">
         <header className="df-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
+          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
           <h1>فرم‌ساز</h1>
         </header>
 

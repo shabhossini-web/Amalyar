@@ -30,10 +30,10 @@ export default function Shell() {
     return () => clearTimeout(t);
   }, [toast]);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
-  /* لانچر هنوز منوی پروفایلِ خودش را دارد (لِینِ ب مالکِ آن فایل است؛ W2.3 جایگزینش
-     می‌کند). تا آن روز، این‌جا دو تا نشود. */
+  /* صفحهٔ «همهٔ ابزارها» (لانچر) منوی پروفایلِ خودش را دارد — این‌جا دو تا نشود.
+     از W2.3 نشانی‌اش `/app/tools` است و `/app` خودش صفحهٔ «امروز» است. */
   const { pathname } = useLocation();
-  const launcher = pathname === '/app' || pathname === '/app/';
+  const launcher = pathname === '/app/tools' || pathname === '/app/tools/';
 
   return (
     <>

@@ -2678,11 +2678,20 @@ jobs:
            * است — همان اشتباه یک‌بار سرِ «ریال» هم رخ داد.
            */
           const code = (src) => src.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/\\/\\/[^\\n]*/g, '');
-          const lx = code(read('src/app/Launcher.jsx'));
-          if (/lvl >= min\\b/.test(lx) || /f\\?\\.minLevel/.test(lx)) {
-            console.error('لانچر نباید خودش سطح را حساب کند — allowedِ سرور'); process.exit(1);
+          /* از W2.3 کاتالوگِ کاشی‌ها و گیتشان در `src/app/tools.jsx` است و هم
+             لانچر (`/app/tools`) و هم کشوی صفحهٔ «امروز» از همان می‌خوانند —
+             پس سنجهٔ مثبت همان‌جاست و سنجهٔ منفی روی **هر دو**. */
+          const surfaces = { 'src/app/tools.jsx': true, 'src/app/Launcher.jsx': false };
+          for (const [file, mustRead] of Object.entries(surfaces)) {
+            const lx = code(read(file));
+            if (/lvl >= min\\b/.test(lx) || /f\\?\\.minLevel/.test(lx)) {
+              console.error(`${file} نباید خودش سطح را حساب کند — allowedِ سرور`); process.exit(1);
+            }
+            if (mustRead && !/f\\.allowed/.test(lx)) { console.error(`${file} باید allowed را بخواند`); process.exit(1); }
           }
-          if (!/f\\.allowed/.test(lx)) { console.error('لانچر باید allowed را بخواند'); process.exit(1); }
+          if (/const (HERO|TOOLS|DAILY) =/.test(code(read('src/app/Launcher.jsx')))) {
+            console.error('کاتالوگِ کاشی‌ها فقط در src/app/tools.jsx — دو نسخه یعنی ماژولی که در یکی هست و در دیگری نیست'); process.exit(1);
+          }
 
           // ⑤ سطح به‌تنهایی راننده را از کارشناس جدا نمی‌کند — هر دو سطح ۲اند.
           if (!/TransportStaff|transportStaff/.test(fsvc) || !/!staff \\|\\| hasTechVisits/.test(fsvc)) {

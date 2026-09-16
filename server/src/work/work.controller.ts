@@ -7,6 +7,7 @@ import { Feature } from '../auth/feature.decorator';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { WorkService, type WorkAction, type WorkScope } from './work.service';
+import { TodayService } from './today.service';
 
 class CreateWorkDto {
   @IsString() @MaxLength(160) title!: string;
@@ -35,7 +36,13 @@ const SCOPES: WorkScope[] = ['inbox', 'mine', 'role', 'patient', 'all'];
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('work')
 export class WorkController {
-  constructor(private work: WorkService) {}
+  constructor(private work: WorkService, private todaySvc: TodayService) {}
+
+  /** صفحهٔ «امروز» (W2.3) — کارها + عمل‌ها + نوبت‌های امروز در یک درخواست، هر بخش جدا گیت‌شده. */
+  @Get('today') @RequirePermissions('work.read')
+  today(@CurrentUser() user: any) {
+    return this.todaySvc.today(user);
+  }
 
   @Get() @RequirePermissions('work.read')
   list(

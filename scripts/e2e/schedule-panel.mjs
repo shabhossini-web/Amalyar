@@ -45,13 +45,17 @@ try {
   await p.goto(UI + '/', { waitUntil: 'domcontentloaded' });
   await browserLogin(p, login.accessToken);
 
-  console.log('۱) از لانچر می‌شود به برنامهٔ کاری رسید');
+  console.log('۱) از صفحهٔ نخست می‌شود به برنامهٔ کاری رسید');
   await p.goto(UI + '/app', { waitUntil: 'networkidle' });
   await p.waitForTimeout(1200);
-  /* کاشی‌های لانچر `<button>`اند نه `<a>` (ناوبری با روتر)، پس با متن پیدا
-     می‌شود نه با href — همان تفاوتی که اولین اجرای این آزمون رویش قرمز شد. */
-  const tile = p.locator('.lx-tile, button', { hasText: 'برنامهٔ کاری' }).first();
-  ok(await tile.count() > 0, 'کاشیِ «برنامهٔ کاری» در لانچر هست');
+  /* از W2.3 صفحهٔ نخست «امروز» است و کاشی‌ها در کشوی «همهٔ ابزارها» — همان
+     مسیری که کاربر واقعاً طی می‌کند. (نمای کامل هنوز روی `/app/tools` است.) */
+  await p.locator('.td-tools-btn').click();
+  await p.waitForSelector('.td-drawer', { timeout: 5000 });
+  /* کاشی‌ها `<button>`اند نه `<a>` (ناوبری با روتر)، پس با متن پیدا می‌شود نه
+     با href — همان تفاوتی که اولین اجرای این آزمون رویش قرمز شد. */
+  const tile = p.locator('.td-tile, .lx-tile, button', { hasText: 'برنامهٔ کاری' }).first();
+  ok(await tile.count() > 0, 'کاشیِ «برنامهٔ کاری» در کشوی ابزارها هست');
   await tile.click();
   await p.waitForTimeout(1600);
   ok(/\/app\/schedule/.test(p.url()), `صفحه باز شد (${p.url().split('/app')[1]})`);
