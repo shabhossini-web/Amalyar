@@ -82,6 +82,6 @@ import { HospitalDutiesService } from './hospital-duties.service';
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */
-  exports: [ServiceCodesService],
+  exports: [ServiceCodesService, PatientsService],
 })
 export class PatientsModule {}

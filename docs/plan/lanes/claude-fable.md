@@ -5,8 +5,8 @@
 | ترتیب | بسته | وضعیت | شاخه | کامیتِ مرج | یادداشت |
 |---|---|---|---|---|---|
 | ۰ | سندِ بازبینی + `docs/plan/` (این پوشه) | ✅ | `claude/quirky-volta-uyuznl` | PR #11 (`6b76cd1`) | روی `main` است |
-| ۱ | W2.1 WorkItem + DomainEvent + `/work` + permissionها | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `CONTRACTS.md` §۱–۲ · e2e: `scripts/e2e/w2-1-work-layer.mjs` (۲۲/۲۲، دو بار) |
-| ۲ | W2.4 پوستهٔ سراسری + جستجوی بیمار + زنگِ اعلان | ⬜ | `claude/w2-4-shell` | | |
+| ۱ | W2.1 WorkItem + DomainEvent + `/work` + permissionها | ✅ | `claude/quirky-volta-uyuznl` | PR #12 (`8c3f234`) | `CONTRACTS.md` §۱–۲ · e2e: `scripts/e2e/w2-1-work-layer.mjs` (۲۲/۲۲) |
+| ۲ | W2.4 پوستهٔ سراسری + جستجوی بیمار + زنگِ اعلان + صفحهٔ «کارهای من» | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `CONTRACTS.md` §۱۰ · e2e: `scripts/e2e/w2-4-shell.mjs` (۱۷/۱۷، دو بار) |
 | ۳ | W2.2 تولیدکننده‌های کار (emit در سرویس‌ها) | ⬜ | `claude/w2-2-work-producers` | | یک خط `emit` در سرویس‌های لِینِ الف، با اعلام |
 | ۴ | W2.3 صفحهٔ «امروز» + خلاصهٔ صبح | ⬜ | `claude/w2-3-today` | | `DECISIONS.md` #۲ |
 | ۵ | W2.5 نمای استثنای مدیر | ⬜ | `claude/w2-5-exceptions` | | |

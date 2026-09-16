@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
-import ProfileMenu from './ProfileMenu.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
 import PasswordInput from './PasswordInput.jsx';
 import './launcher.css';
@@ -96,7 +95,6 @@ export default function Profile() {
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
           <h1>پروفایل من</h1>
-          <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
         {user.verificationDueAt && !user.phoneVerifiedAt && <section className="glass us-card pf-card"><h2 className="pf-h2">تأیید حساب موقت</h2>

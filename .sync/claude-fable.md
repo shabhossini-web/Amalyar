@@ -4,25 +4,40 @@ status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-16
 paths:
-  - docs/plan/
-  - docs/UX_WORKFLOW_AUDIT_2026-09-16.md
+  - docs/plan/CONTRACTS.md
+  - docs/plan/lanes/claude-fable.md
   - server/src/work/
+  - server/src/search/
   - server/src/app.module.ts
-  - server/src/reminders/reminders-worker.service.ts
-  - server/src/auth/access-registry.ts
-  - server/src/config/verticals.ts
-  - scripts/e2e/w2-1-work-layer.mjs
-note: لِینِ ج — سندِ بازبینی + تابلوی کار لند می‌شود، بعد W2.1 (WorkItem/DomainEvent) روی claude/w2-1-work-layer
+  - server/src/patients/patients.module.ts
+  - src/App.jsx
+  - src/app/Shell.jsx
+  - src/app/shell.css
+  - src/app/GlobalSearch.jsx
+  - src/app/WorkBell.jsx
+  - src/app/WorkRow.jsx
+  - src/app/WorkList.jsx
+  - src/app/work.css
+  - src/app/Dashboard.jsx
+  - src/app/Profile.jsx
+  - src/app/Site.jsx
+  - src/app/SurgeonPortal.jsx
+  - src/app/Users.jsx
+  - public/sw.js
+  - scripts/e2e/w2-4-shell.mjs
+note: لِینِ ج — W2.4 پوستهٔ سراسری (نوارِ بالا + جستجوی بیمار Ctrl+K + زنگِ کارها + صفحهٔ کارهای من)؛ W2.1 لند شده (PR #12)
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W2.4 — `ProfileMenu` از این به بعد فقط در `Shell.jsx` رندر می‌شود** (روی همهٔ صفحاتِ `/app`، جز لانچر که فعلاً خودش دارد). صفحهٔ تازه نباید `ProfileMenu` بگذارد؛ از پنج صفحه برداشته شد. مسیرهای `/app/*` در `App.jsx` زیرِ یک layout-route (`<Route element={<Protected><Shell/></Protected>}>`) هستند — مسیرِ تازه را **داخلِ همان بلوک** اضافه کن، نه بیرونش. `GET /search/patients?q=` (Feature `work`) جایگزینِ جستجوی سراسری است.
 - ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۶/۲۵ · PR #12 · `8c3f234` · **W2.1 لایهٔ کار** روی `main`: `WorkItem`/`DomainEvent`، `/work`، ۲۶ قاعدهٔ رویداد←کار، پردازشگر در workerِ یادآوری، feature `work` + مجوزها؛ e2e ۲۲/۲۲.
 - ۱۴۰۵/۰۶/۲۵ · PR #11 · `6b76cd1` · **پوشهٔ `docs/plan/` + سندِ بازبینی روی `main`.** از این‌جا به بعد هر ایجنت لِینِ خودش را از `docs/plan/lanes/<خودش>.md` می‌گیرد.
 
 - ۱۴۰۵/۰۶/۲۵ · `b548faa` · **بازبینیِ تکمیلیِ مسیرها و UX + نقشهٔ اصلاح** (`docs/UX_WORKFLOW_AUDIT_2026-09-16.md`) و پوشهٔ هماهنگیِ `docs/plan/` (BOARD، CONTRACTS، DECISIONS، lanes، BRIEF_GPT). سه لِین: الف=`gpt` (صحتِ بک‌اند)، ب=`claude-opus` (سطوحِ بیمار/UI)، ج=`claude-fable` (لایهٔ کار/پوسته/امروز).

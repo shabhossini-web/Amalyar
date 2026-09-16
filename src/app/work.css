@@ -1,0 +1,81 @@
+/* لایهٔ کار در رابط (W2.4): زنگ، کشو، ردیفِ کار، صفحهٔ «کارهای من». */
+.wb { position: relative; }
+.wb-btn {
+  position: relative; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
+  color: var(--text2); border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05);
+  transition: color .2s, border-color .2s, background .2s;
+}
+.wb-btn:hover, .wb-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); outline: none; }
+.wb-btn.hot { color: var(--amber); }
+.wb-badge {
+  position: absolute; top: -6px; inset-inline-end: -6px; min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 99px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800;
+  display: grid; place-items: center; border: 2px solid var(--bg);
+}
+.wb-btn.hot .wb-badge { background: #b45309; }
+.wb-menu {
+  position: absolute; top: calc(100% + 8px); inset-inline-end: 0; z-index: 90;
+  width: min(420px, calc(100vw - 32px)); background: #120c2c; color: var(--text1);
+  border: 1px solid rgba(var(--brand-2-rgb), 0.4); border-radius: 18px; padding: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+.wb-head { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.wb-head b { font-size: 14px; }
+.wb-counts { font-size: 12px; color: var(--text2); }
+.wb-counts em { color: var(--amber); font-style: normal; font-weight: 700; }
+.wb-empty { padding: 18px 10px; color: var(--text3); font-size: 13px; text-align: center; }
+.wb-all { display: block; text-align: center; padding: 10px; color: var(--brand-2); font-weight: 700; font-size: 13px; text-decoration: none; border-top: 1px solid rgba(255,255,255,.08); margin-top: 4px; }
+.wb-all:hover, .wb-all:focus-visible { color: var(--cyan); outline: none; }
+
+.wk-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.wk-list.compact { max-height: 48vh; overflow-y: auto; padding: 6px 2px; }
+.wk-row {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09);
+}
+.wk-row.overdue { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.06); }
+.wk-row.blocked { opacity: .8; }
+.wk-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wk-type { font-size: 11px; color: var(--brand-2); font-weight: 700; }
+.wk-title { font-size: 14px; font-weight: 700; color: var(--text1); }
+.wk-meta { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--text2); }
+.wk-patient { color: var(--cyan); text-decoration: none; font-weight: 700; }
+.wk-patient:hover { text-decoration: underline; }
+.wk-due.hot { color: var(--amber); font-weight: 700; }
+.wk-blocked { color: var(--text3); }
+.wk-note { font-size: 12px; color: var(--text3); white-space: pre-wrap; }
+.wk-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
+.wk-btn {
+  font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 10px; color: var(--text2);
+  border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.04); white-space: nowrap;
+}
+.wk-btn:hover:not(:disabled), .wk-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); outline: none; }
+.wk-btn.primary { background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); color: #fff; border-color: transparent; }
+.wk-btn:disabled { opacity: .5; cursor: default; }
+
+/* صفحهٔ کارهای من */
+.wk-page { max-width: 820px; margin: 0 auto; padding: 18px 16px 60px; color: var(--text1); min-height: 60vh; }
+.wk-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.wk-head h1 { font-size: 20px; font-weight: 900; }
+.wk-back {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--text2); text-decoration: none;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 99px; padding: 7px 15px 7px 13px;
+}
+.wk-back:hover { color: var(--cyan); border-color: rgba(0, 229, 255, .4); }
+.wk-new { display: flex; gap: 8px; margin-bottom: 14px; }
+.wk-new input, .wk-new select {
+  font: inherit; font-size: 13.5px; color: var(--text1); background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 8px 12px; outline: none;
+}
+.wk-new input { flex: 1 1 auto; min-width: 0; }
+.wk-new input:focus, .wk-new select:focus { border-color: rgba(var(--brand-2-rgb), 0.55); }
+.wk-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.wk-tabs button { font-size: 12.5px; font-weight: 700; color: var(--text2); padding: 6px 12px; border-radius: 99px; border: 1px solid rgba(255,255,255,.12); }
+.wk-tabs button.on { color: #fff; background: rgba(var(--brand-rgb), 0.35); border-color: rgba(var(--brand-2-rgb), 0.6); }
+.wk-count { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
+.wk-empty { padding: 30px 12px; text-align: center; color: var(--text3); }
+@media (max-width: 560px) {
+  .wk-row { flex-direction: column; }
+  .wk-actions { flex-direction: row; }
+  .wk-new { flex-wrap: wrap; }
+}

@@ -18,6 +18,7 @@ import { AiModule } from './ai/ai.module';
 import { ChatModule } from './chat/chat.module';
 import { SiteModule } from './site/site.module';
 import { WorkModule } from './work/work.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { WorkModule } from './work/work.module';
     PlatformModule,
     RemindersModule,
     WorkModule,
+    SearchModule,
   ],
   controllers: [AppController],
 })
