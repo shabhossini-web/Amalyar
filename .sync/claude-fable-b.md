@@ -1,14 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: active
+status: idle
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-16
 paths:
-  - src/app/FormBuilder.jsx
-  - src/app/formbuilder.css
-  - scripts/e2e/w3-5-formbuilder.mjs
-  - docs/plan/lanes/claude-fable-b.md
-note: لِینِ ب — W3.5 (فرم‌ساز) روی claude/quirky-johnson-ynzr4y. W0.1/W0.2 (PR #15) و W0.6 (PR #16) لند شد؛ W0.5/W0.7 منتظرِ لِینِ الف (W0.8/W1.9)؛ W3.7/W3.6 با کلیمِ فعالِ لِینِ ج (icons.jsx, shell.css) و بازطراحیِ لانچر در W2.3 برخورد دارند — سؤال در lanes/claude-fable-b.md. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
+note: لِینِ ب — چیزی در دست نیست. W0.1/W0.2 (PR #15) و W0.6 (PR #16) لند شد؛ W0.5/W0.7 منتظرِ لِینِ الف (W0.8/W1.9)؛ W3.7/W3.6 با کلیمِ فعالِ لِینِ ج (icons.jsx, shell.css) و بازطراحیِ لانچر در W2.3 برخورد دارند — سؤال در lanes/claude-fable-b.md. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
@@ -33,6 +29,10 @@ note: لِینِ ب — W3.5 (فرم‌ساز) روی claude/quirky-johnson-ynzr
   (Vite + مرورگرِ واقعی + API ساختگی، بدونِ سرور و دیتابیس).
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۶/۲۵ · PR #19 · `572e747` · **W3.5 فرم‌ساز** — ماتریسِ نقشِ یک‌جا به‌جای ۱۰۵ چک‌باکسِ
+  پخش‌شده در ردیف‌ها، ردیفِ یک‌طبقه، پنلِ کناریِ دسکتاپ، پیش‌نمایش با همان `DynForm`.
+  ارتفاعِ قالبِ ویزیت در موبایل ۵۱۵۱px ← ۱۷۹۵px. e2e ۳۱/۳۱.
 
 - ۱۴۰۵/۰۶/۲۵ · PR #16 · `2ced34c` · **W0.6** — Escape/focus-trap/بازگشتِ فوکوس و `role="dialog"` در `Overlay`، roving tabindex و کلیدهای جهت در `Tabs`؛ e2e `w0-6-a11y.mjs` ۱۷/۱۷.
 
