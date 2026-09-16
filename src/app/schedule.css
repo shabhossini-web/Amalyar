@@ -21,7 +21,7 @@
 
 .sc-card {
   margin-bottom: 16px; padding: 14px; border-radius: 16px;
-  background: rgba(10, 7, 26, .5); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .sc-title { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .sc-title h2 { margin: 0; font-size: 15px; font-weight: 800; }
@@ -44,7 +44,7 @@
 .sc-field input {
   font-family: inherit; font-size: 13px; color: var(--text);
   padding: 10px 11px; border-radius: 10px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .sc-field select:focus-visible,
 .sc-field input:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 1px; }
@@ -55,7 +55,7 @@
   display: grid; gap: 3px; text-align: start; cursor: pointer;
   font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
   padding: 10px 11px; border-radius: 11px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .sc-modes button i { font-style: normal; font-size: 10.5px; font-weight: 400; color: var(--text3); }
 .sc-modes button.on {
@@ -66,7 +66,7 @@
 .sc-chips button {
   font-family: inherit; font-size: 11.5px; cursor: pointer; color: var(--text2);
   padding: 6px 11px; border-radius: 99px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .sc-chips button.on { color: #fff; background: rgba(var(--brand-2-rgb), .2); border-color: rgba(var(--brand-2-rgb), .5); }
 
@@ -82,7 +82,7 @@
 .sc-week { display: grid; gap: 8px; }
 .sc-day {
   display: grid; gap: 6px; padding: 9px 11px; border-radius: 12px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .1);
+  background: rgba(var(--veil-rgb), .025); border: 1px solid rgba(var(--brand-soft-rgb), .1);
 }
 .sc-day > b { font-size: 12.5px; font-weight: 800; }
 .sc-day > small { font-size: 11px; color: var(--text3); }
@@ -98,7 +98,7 @@
 .sc-tools button {
   font-family: inherit; font-size: 10.5px; cursor: pointer; color: var(--text2);
   padding: 5px 9px; border-radius: 8px;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .sc-tools button.del { display: grid; place-items: center; padding: 5px 7px; }
 .sc-tools button.del:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .45); }
@@ -112,7 +112,7 @@
 
 .sc-detail {
   display: grid; gap: 8px; margin-top: 12px; padding: 11px 12px; border-radius: 12px;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .12);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 .sc-detail > b { font-size: 13px; }
 .sc-detail > small { font-size: 11.5px; color: var(--text3); }
@@ -127,12 +127,12 @@
 /* اشغال خط‌خورده و کم‌رنگ — «نمی‌شود گرفت» باید در یک نگاه پیدا باشد. */
 .sc-slots span.taken {
   color: var(--text3); text-decoration: line-through;
-  background: rgba(255, 255, 255, .04); border-color: rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .04); border-color: rgba(var(--veil-rgb), .1);
 }
 .sc-mini {
   justify-self: start; font-family: inherit; font-size: 11.5px; cursor: pointer; color: var(--text2);
   padding: 7px 12px; border-radius: 9px;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .sc-mini:hover { color: var(--cyan); }
 

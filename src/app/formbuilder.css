@@ -1,7 +1,7 @@
 /* فرم‌ساز — روی پایه‌ی `definitions.css` سوار است و فقط تفاوت‌ها را می‌نویسد. */
 
 .fb-lead { margin: 0 0 14px; font-size: 13px; line-height: 2; color: var(--muted, #b7b0d8); max-width: 620px; }
-.fb-lead b { color: var(--fg, #f2f0fc); }
+.fb-lead b { color: var(--fg, var(--text1)); }
 
 .fb-meta { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; flex-wrap: wrap; }
 .fb-chip {
@@ -9,13 +9,13 @@
   color: var(--brand-2, #a78bfa); background: rgba(167, 139, 250, .12);
   border: 1px solid rgba(167, 139, 250, .3);
 }
-.fb-chip.ghost { color: #9aa2c0; background: rgba(255, 255, 255, .04); border-color: rgba(255, 255, 255, .12); }
+.fb-chip.ghost { color: var(--text2); background: rgba(var(--veil-rgb), .04); border-color: rgba(var(--veil-rgb), .12); }
 /* ⚠️ فقط **اولین** شمارنده به لبه چسبیده می‌شود. با آمدنِ «N صفحه» دو
    `.fb-count` کنارِ هم افتادند و اگر هر دو `margin-inline-start: auto`
    می‌گرفتند، بینشان یک شکافِ کشسان می‌افتاد و دو عدد به دو گوشه پرت می‌شدند. */
-.fb-count { font-size: 11px; color: #8f88b5; }
+.fb-count { font-size: 11px; color: var(--text3); }
 .fb-count:first-of-type { margin-inline-start: auto; }
-.fb-hint { margin: 0 0 10px; font-size: 12px; color: #8f88b5; }
+.fb-hint { margin: 0 0 10px; font-size: 12px; color: var(--text3); }
 
 /* نشانِ صفحه روی ردیفِ فیلد — فقط در فرمِ چندصفحه‌ای دیده می‌شود. */
 .fb-page {
@@ -27,16 +27,16 @@
 .fb-followup {
   display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
   margin: 4px 0 10px; padding: 10px 12px; border-radius: 13px;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .fb-followup label { display: grid; gap: 4px; }
-.fb-followup label span { font-size: 10.5px; font-weight: 700; color: var(--text3, #8f88b5); }
+.fb-followup label span { font-size: 10.5px; font-weight: 700; color: var(--text3, var(--text3)); }
 .fb-followup select {
   font: inherit; font-size: 12px; padding: 7px 10px; border-radius: 10px;
-  color: var(--text1, #f2f0fc); background: rgba(255, 255, 255, .05);
+  color: var(--text1, var(--text1)); background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
-.fb-followup small { flex-basis: 100%; font-size: 10.5px; line-height: 1.9; color: var(--text3, #8f88b5); }
+.fb-followup small { flex-basis: 100%; font-size: 10.5px; line-height: 1.9; color: var(--text3, var(--text3)); }
 
 /* ── انتخابگرِ رنگِ کارت ────────────────────────────────────────────────── */
 .fb-colors { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
@@ -49,15 +49,15 @@
   transition: border-color .15s, transform .12s;
 }
 .fb-color:hover:not(:disabled) { transform: scale(1.14); }
-.fb-color.on { border-color: var(--fg, #f2f0fc); }
-.fb-color:focus-visible { border-color: var(--fg, #f2f0fc); }
+.fb-color.on { border-color: var(--fg, var(--text1)); }
+.fb-color:focus-visible { border-color: var(--fg, var(--text1)); }
 .fb-color:disabled { cursor: default; opacity: .5; }
 .fb-color.auto {
   width: auto; height: 20px; padding: 0 9px; font-family: inherit; font-size: 10px; font-weight: 800;
-  color: #8f88b5; background: rgba(255, 255, 255, .05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+  color: var(--text3); background: rgba(var(--veil-rgb), .05);
+  box-shadow: inset 0 0 0 1px rgba(var(--veil-rgb), .12);
 }
-.fb-color.auto.on { color: var(--fg, #f2f0fc); border-color: var(--fg, #f2f0fc); }
+.fb-color.auto.on { color: var(--fg, var(--text1)); border-color: var(--fg, var(--text1)); }
 
 /* حرکت اختیاری است، نه بخشی از معنی — کاربری که کاهشِ حرکت خواسته، نباید
    برای فهمیدنِ رنگِ انتخاب‌شده به بزرگ‌شدنِ سوآچ تکیه کند. */
@@ -73,15 +73,15 @@
 .fb-order { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
 .fb-order button {
   width: 22px; height: 18px; display: grid; place-items: center; cursor: pointer;
-  color: #8f88b5; background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .1); border-radius: 6px;
+  color: var(--text3); background: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .1); border-radius: 6px;
 }
-.fb-order button:hover:not(:disabled) { color: var(--fg, #f2f0fc); background: rgba(255, 255, 255, .1); }
+.fb-order button:hover:not(:disabled) { color: var(--fg, var(--text1)); background: rgba(var(--veil-rgb), .1); }
 .fb-order button:disabled { opacity: .3; cursor: default; }
 
 .fb-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fb-main b { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 4px; }
-.fb-main > span { font-size: 11px; color: #8f88b5; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fb-main > span { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 /* ستاره‌ی قرمز — همان نشانی که کاربرِ فرم هم می‌بیند، تا فرم‌ساز و فرم یک زبان
    داشته باشند. */
@@ -89,41 +89,41 @@
 
 .fb-tag {
   font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
-  color: #9aa2c0; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .fb-tag.core { color: #7dd3fc; background: rgba(56, 189, 248, .1); border-color: rgba(56, 189, 248, .3); }
-.fb-tag.off { color: #fbbf24; background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .3); }
+.fb-tag.off { color: var(--amber-text); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .3); }
 
-.fb-opts { font-size: 10.5px; color: #6f679a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fb-opts { font-size: 10.5px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .fb-acts { display: flex; align-items: center; gap: 5px; flex: 0 0 auto; }
 /* ⚠️ دکمه‌های آیکونیِ ردیف تا امروز **هیچ استایلی نداشتند**: قاعدهٔ مشترک
    `.df-acts button` است (جمع) و این‌جا ظرف `.fb-acts` است، پس مرورگر دکمهٔ خامِ
    خودش را می‌کشید — اندازه‌شان تابعِ SVG بود و هدفِ لمس زیرِ استانداردِ ۳۲px. */
 .fb-acts .df-act {
   width: 33px; height: 33px; display: grid; place-items: center; border-radius: 9px;
-  cursor: pointer; color: #cfc9e8; background: rgba(255, 255, 255, .05);
+  cursor: pointer; color: var(--text1); background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
-.fb-acts .df-act:hover:not(:disabled) { color: var(--fg, #f2f0fc); background: rgba(255, 255, 255, .1); }
+.fb-acts .df-act:hover:not(:disabled) { color: var(--fg, var(--text1)); background: rgba(var(--veil-rgb), .1); }
 .fb-acts .df-act:disabled { opacity: .45; cursor: default; }
 
 /* کلیدِ اجباری — پرتکرارترین کار، پس بزرگ‌ترین و روشن‌ترین دکمه‌ی ردیف. */
 .fb-req {
   display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
   font-family: inherit; font-size: 11px; font-weight: 800; padding: 5px 10px; border-radius: 9px;
-  color: #8f88b5; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text3); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .12);
   transition: color .15s, background .15s, border-color .15s;
 }
 .fb-req span { font-size: 13px; line-height: 1; }
 .fb-req em { font-style: normal; }
-.fb-req:hover:not(:disabled) { color: var(--fg, #f2f0fc); border-color: rgba(255, 255, 255, .25); }
+.fb-req:hover:not(:disabled) { color: var(--fg, var(--text1)); border-color: rgba(var(--veil-rgb), .25); }
 .fb-req.on { color: #fca5a5; background: rgba(248, 113, 113, .12); border-color: rgba(248, 113, 113, .4); }
 .fb-req:disabled { opacity: .5; cursor: default; }
 
 .fb-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 .fb-reset {
   margin-inline-start: auto; cursor: pointer; font-family: inherit; font-size: 12px;
-  color: #8f88b5; background: transparent; border: 1px solid rgba(255, 255, 255, .14);
+  color: var(--text3); background: transparent; border: 1px solid rgba(var(--veil-rgb), .14);
   border-radius: 10px; padding: 8px 14px;
 }
 .fb-reset:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
@@ -141,7 +141,7 @@
 .fb-check {
   display: flex; align-items: center; gap: 9px; cursor: pointer;
   font-size: 13px; padding: 10px 12px; border-radius: 11px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .fb-check input { width: 17px; height: 17px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
 
@@ -188,7 +188,7 @@
 }
 .fb-delform {
   cursor: pointer; font-family: inherit; font-size: 12px;
-  color: #8f88b5; background: transparent; border: 1px solid rgba(255, 255, 255, .14);
+  color: var(--text3); background: transparent; border: 1px solid rgba(var(--veil-rgb), .14);
   border-radius: 10px; padding: 8px 14px;
 }
 .fb-delform:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
@@ -201,11 +201,11 @@
 /* ── بخش‌های تاشو: ماتریسِ نقش و پیش‌نمایش ──────────────────────────────── */
 .fb-fold {
   margin: 0 0 10px; border-radius: 13px; overflow: hidden;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .fb-fold > summary {
   cursor: pointer; padding: 10px 13px; font-size: 12px; font-weight: 800;
-  color: var(--text2, #cfc9e8); list-style: none;
+  color: var(--text2, var(--text1)); list-style: none;
 }
 /* مثلثِ پیش‌فرضِ مرورگر در سافاری و کروم دو شکلِ متفاوت دارد؛ نشانِ خودمان
    با CSS کشیده می‌شود تا در هر سه پلتفرم یکی باشد و با RTL هم بچرخد. */
@@ -217,8 +217,8 @@
 }
 .fb-fold[open] > summary::before { transform: rotate(-45deg) translate(-2px, -2px); }
 .fb-fold > summary:focus-visible { outline: 2px solid rgba(var(--brand-soft-rgb), .6); outline-offset: -2px; }
-.fb-fold-note { margin: 0 13px 10px; font-size: 11px; line-height: 1.9; color: #8f88b5; }
-.fb-fold-note b { color: var(--fg, #f2f0fc); }
+.fb-fold-note { margin: 0 13px 10px; font-size: 11px; line-height: 1.9; color: var(--text3); }
+.fb-fold-note b { color: var(--fg, var(--text1)); }
 
 /* جدولِ فیلد × نقش. روی موبایل افقی اسکرول می‌شود — فشردنِ هفت ستون در ۳۹۰
    پیکسل یا ستون‌ها را ناخوانا می‌کند یا صفحه را افقی می‌شکند. */
@@ -226,19 +226,19 @@
 .fb-matrix table { border-collapse: collapse; width: 100%; font-size: 11.5px; }
 .fb-matrix th, .fb-matrix td { padding: 6px 8px; text-align: center; white-space: nowrap; }
 .fb-matrix thead th {
-  font-size: 10.5px; font-weight: 800; color: #8f88b5;
-  border-bottom: 1px solid rgba(255, 255, 255, .12);
+  font-size: 10.5px; font-weight: 800; color: var(--text3);
+  border-bottom: 1px solid rgba(var(--veil-rgb), .12);
 }
 .fb-matrix tbody th {
-  text-align: start; font-weight: 700; color: var(--text1, #f2f0fc);
-  position: sticky; inset-inline-start: 0; background: rgba(18, 13, 49, .96);
+  text-align: start; font-weight: 700; color: var(--text1, var(--text1));
+  position: sticky; inset-inline-start: 0; background: rgba(var(--surface-rgb), .96);
 }
 .fb-matrix tbody th i {
   font-style: normal; font-size: 9.5px; font-weight: 800; margin-inline-start: 6px;
   padding: 1px 7px; border-radius: 99px;
-  color: #9aa2c0; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
 }
-.fb-matrix tbody tr + tr th, .fb-matrix tbody tr + tr td { border-top: 1px solid rgba(255, 255, 255, .06); }
+.fb-matrix tbody tr + tr th, .fb-matrix tbody tr + tr td { border-top: 1px solid rgba(var(--veil-rgb), .06); }
 .fb-matrix input { width: 16px; height: 16px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
 .fb-matrix input:disabled { cursor: default; opacity: .5; }
 

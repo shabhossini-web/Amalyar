@@ -10,8 +10,11 @@ import CTA from '../components/CTA.jsx';
 import Footer from '../components/Footer.jsx';
 
 export default function Landing() {
+  /* ⚠️ لفافِ `theme-dark`: لندینگ ویترینِ محصول است و باید در هر تمی همان
+     شیشه و نئونِ طراحی‌شده را نشان دهد (§۴.۸). کاربری که در اپ تمِ روشن را
+     انتخاب کرده و «بازگشت به صفحهٔ نخست» می‌زند نباید لندینگِ سفیدِ نیم‌کاره ببیند. */
   return (
-    <>
+    <div className="theme-dark">
       <Background />
       <Nav />
       <main>
@@ -24,6 +27,6 @@ export default function Landing() {
         <CTA />
       </main>
       <Footer />
-    </>
+    </div>
   );
 }

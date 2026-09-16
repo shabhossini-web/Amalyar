@@ -21,10 +21,10 @@
 /* glass primitive (خودکفا، مستقل از launcher.css) */
 .lg .glass {
   position: relative; isolation: isolate; overflow: hidden; --mx: 50%; --my: 30%;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--veil-rgb), 0.05);
   -webkit-backdrop-filter: blur(20px) saturate(150%); backdrop-filter: blur(20px) saturate(150%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 24px 60px rgba(4, 2, 16, 0.5);
+  border: 1px solid rgba(var(--veil-rgb), 0.12);
+  box-shadow: inset 0 1px 0 rgba(var(--veil-rgb), 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.2), 0 24px 60px rgba(var(--surface-rgb), 0.5);
 }
 .lg .glass-glow {
   position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
@@ -55,7 +55,7 @@
 .lg-field > span { font-size: 12px; font-weight: 700; color: var(--text2); padding-inline-start: 2px; }
 .lg-field input {
   width: 100%; font-family: inherit; font-size: 15px; color: var(--text1);
-  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(var(--veil-rgb), 0.12);
   border-radius: 13px; padding: 12px 14px; transition: border-color .2s, box-shadow .2s, background .2s;
 }
 .lg-field input::placeholder { color: var(--text3); }
@@ -68,7 +68,7 @@
   margin-top: 6px; font-family: inherit; font-size: 15px; font-weight: 800; color: #fff; cursor: pointer;
   border: none; border-radius: 13px; padding: 13px;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
-  box-shadow: 0 8px 24px rgba(var(--brand-rgb), 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  box-shadow: 0 8px 24px rgba(var(--brand-rgb), 0.45), inset 0 1px 0 rgba(var(--veil-rgb), 0.22);
   transition: transform .15s, box-shadow .2s, opacity .2s;
 }
 .lg-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(var(--brand-rgb), 0.55); }
@@ -89,7 +89,7 @@
 .lg-note-badge { font-size: 12px; font-weight: 700; color: #fb923c; background: rgba(249,115,22,.12); border: 1px solid rgba(249,115,22,.3); border-radius: 12px; padding: 9px 12px; text-align: center; }
 .lg-devcode { font-size: 12.5px; color: #7ef0ff; background: rgba(0,229,255,.08); border: 1px solid rgba(0,229,255,.28); border-radius: 12px; padding: 9px 12px; text-align: center; }
 .lg-devcode b { font-family: var(--mono); font-size: 15px; letter-spacing: 2px; }
-.lg-verified { font-size: 12.5px; font-weight: 700; color: #5eead4; background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.3); border-radius: 12px; padding: 9px 12px; text-align: center; }
+.lg-verified { font-size: 12.5px; font-weight: 700; color: var(--green-text); background: rgba(52,211,153,.1); border: 1px solid rgba(52,211,153,.3); border-radius: 12px; padding: 9px 12px; text-align: center; }
 
 /* ── ورودیِ کدِ یکبارمصرف (۶ باکسِ انیمیشنی) ── */
 .otp { display: flex; justify-content: center; cursor: text; padding: 4px 0 2px; }
@@ -104,7 +104,7 @@
   width: 44px; height: 56px; border-radius: 14px;
   display: grid; place-items: center; position: relative;
   font-family: var(--mono); font-size: 24px; font-weight: 800; color: var(--text1);
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(var(--veil-rgb), 0.13);
   transition: border-color .2s, box-shadow .2s, background .2s;
 }
 .otp-box.filled { border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.12); }
@@ -133,11 +133,11 @@
 
 /* selfie */
 .selfie { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.selfie-frame { width: 150px; height: 150px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,.35); border: 2px solid rgba(var(--brand-2-rgb),.5); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 8px 24px rgba(var(--brand-rgb),.3); display: grid; place-items: center; }
+.selfie-frame { width: 150px; height: 150px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,.35); border: 2px solid rgba(var(--brand-2-rgb),.5); box-shadow: inset 0 0 0 1px rgba(var(--veil-rgb), .08), 0 8px 24px rgba(var(--brand-rgb),.3); display: grid; place-items: center; }
 .selfie-frame img, .selfie-video { width: 100%; height: 100%; object-fit: cover; }
 .selfie-video { transform: scaleX(-1); }
 .selfie-start { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: none; color: var(--brand-2); font-family: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 10px; }
-.selfie-shot { width: 54px; height: 54px; border-radius: 50%; cursor: pointer; border: 3px solid rgba(255,255,255,.85); background: rgba(255,255,255,.15); display: grid; place-items: center; transition: transform .12s; }
+.selfie-shot { width: 54px; height: 54px; border-radius: 50%; cursor: pointer; border: 3px solid rgba(var(--veil-rgb), .85); background: rgba(var(--veil-rgb), .15); display: grid; place-items: center; transition: transform .12s; }
 .selfie-shot span { width: 40px; height: 40px; border-radius: 50%; background: #fff; }
 .selfie-shot:active { transform: scale(.92); }
 .selfie-link { background: none; border: none; color: var(--cyan); font-family: inherit; font-size: 12px; cursor: pointer; }
@@ -157,14 +157,14 @@
   width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer;
   background: none; border: none; color: var(--text3); border-radius: 9px; transition: color .2s, background .2s;
 }
-.pw-eye:hover { color: var(--text1); background: rgba(255, 255, 255, 0.07); }
+.pw-eye:hover { color: var(--text1); background: rgba(var(--veil-rgb), 0.07); }
 
 /* remember me */
 .lg-remember { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; user-select: none; padding: 2px; }
 .lg-remember input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .lg-check {
   width: 19px; height: 19px; border-radius: 6px; flex: 0 0 auto; position: relative;
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.2); transition: background .18s, border-color .18s;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(var(--veil-rgb), 0.2); transition: background .18s, border-color .18s;
 }
 .lg-check::after {
   content: ''; position: absolute; inset: 0; margin: auto; width: 10px; height: 6px;
@@ -178,7 +178,7 @@
 
 /* divider + biometric */
 .lg-divider { display: flex; align-items: center; gap: 12px; color: var(--text3); font-size: 12px; margin: 2px 0; }
-.lg-divider::before, .lg-divider::after { content: ''; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.1); }
+.lg-divider::before, .lg-divider::after { content: ''; flex: 1; height: 1px; background: rgba(var(--veil-rgb), 0.1); }
 .lg-bio {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   font-family: inherit; font-size: 14px; font-weight: 700; color: var(--cyan); cursor: pointer;

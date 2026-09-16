@@ -22,7 +22,7 @@
 .pf-field select {
   width: 100%; min-height: 46px; border-radius: 11px; padding: 0 13px; font: inherit; font-size: 13px;
   color: #fff; outline: none; appearance: none; -webkit-appearance: none; cursor: pointer;
-  background-color: rgba(3, 2, 18, .6);
+  background-color: rgba(var(--surface-rgb), .6);
   border: 1px solid rgba(var(--brand-soft-rgb), .26);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b8b3d6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -30,7 +30,7 @@
   padding-inline-start: 32px;
 }
 .pf-field select:focus { border-color: var(--brand-2); }
-.pf-field select option { background: #141033; color: #f2f0fc; }
+.pf-field select option { background: var(--bg3); color: var(--text1); }
 .pf-field select:disabled { opacity: .6; cursor: default; }
 
 /* ستارهٔ اجباری — همان رنگی که در فرم‌ساز دیده می‌شود، تا کاربر بین دو صفحه
@@ -44,7 +44,7 @@
   color: rgb(var(--brand-2-rgb)); background: rgba(var(--brand-2-rgb), .1);
   border: 1px solid rgba(var(--brand-2-rgb), .28);
 }
-.dyn-role.off { color: var(--text3); background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
+.dyn-role.off { color: var(--text3); background: rgba(var(--veil-rgb), .04); border-color: rgba(var(--veil-rgb), .12); }
 .dyn-locked { opacity: .72; }
 
 /* ── بله/خیر، چندگزینه‌ای، امتیاز ─────────────────────────────────────── */
@@ -55,8 +55,8 @@
 .dyn .dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
 .dyn-pill {
   cursor: pointer; font-family: inherit; font-size: 12.5px; padding: 8px 16px; border-radius: 99px;
-  color: var(--muted, #b7b0d8); background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .14); transition: color .15s, background .15s, border-color .15s;
+  color: var(--muted, #b7b0d8); background: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .14); transition: color .15s, background .15s, border-color .15s;
 }
 .dyn-pill.on {
   color: #fff; background: rgba(var(--brand-soft-rgb), .22);
@@ -69,9 +69,9 @@
 .dyn-star-btn {
   cursor: pointer; background: transparent; border: none; padding: 2px;
   display: grid; place-items: center; line-height: 1;
-  color: rgba(255, 255, 255, .18); transition: color .12s, transform .12s;
+  color: rgba(var(--veil-rgb), .18); transition: color .12s, transform .12s;
 }
-.dyn-star-btn.on { color: #fbbf24; }
+.dyn-star-btn.on { color: var(--amber-text); }
 .dyn-star-btn:hover:not(:disabled) { transform: scale(1.12); }
 .dyn-star-btn:disabled { cursor: default; }
 
@@ -86,7 +86,7 @@
   cursor: pointer; font-family: inherit; font-size: 12.5px;
   display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
   border-radius: 10px; color: var(--muted, #b7b0d8);
-  background: rgba(255, 255, 255, .05); border: 1px dashed rgba(255, 255, 255, .2);
+  background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--veil-rgb), .2);
   transition: color .15s, background .15s, border-color .15s;
 }
 .dyn-img-pick:hover:not(:disabled) {
@@ -96,8 +96,8 @@
 
 .dyn-img-has {
   display: inline-flex; align-items: center; gap: 9px; padding: 6px 10px 6px 6px;
-  border-radius: 10px; background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .12); max-width: 100%;
+  border-radius: 10px; background: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .12); max-width: 100%;
 }
 /* ⚠️ اندازهٔ ثابت + `object-fit: cover`: عکسِ موبایل ۴۰۰۰ پیکسل عرض دارد و
    بدونِ این، یک پیوستِ ساده کلِ شیت را می‌کشد. */
@@ -122,8 +122,8 @@
    فقط نمایش: بیمار باید شماره را ببیند و بتواند کپی کند. */
 .dyn .dyn-pay {
   display: flex; flex-direction: column; gap: 7px; padding: 11px 13px;
-  border-radius: 12px; background: rgba(255, 255, 255, .04);
-  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px; background: rgba(var(--veil-rgb), .04);
+  border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .dyn-pay-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #fff; }
 .dyn-pay-head i { font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); }
@@ -143,18 +143,18 @@
 .dyn-pay-row button {
   cursor: pointer; display: grid; place-items: center; padding: 5px; border-radius: 7px;
   color: var(--muted, #b7b0d8); background: transparent;
-  border: 1px solid rgba(255, 255, 255, .12); transition: color .15s, background .15s;
+  border: 1px solid rgba(var(--veil-rgb), .12); transition: color .15s, background .15s;
   margin-inline-start: auto; flex-shrink: 0;
 }
-.dyn-pay-row button:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+.dyn-pay-row button:hover { color: #fff; background: rgba(var(--veil-rgb), .08); }
 
 /* ── باکسِ لینک ──────────────────────────────────────────────────────────
    هر لینک یک کارت: نشانی + حذف، عنوان، نوعِ مدرک (پیل)، و ورودِ پورتال. */
 .dyn .dyn-links { display: flex; flex-direction: column; gap: 8px; }
 .dyn-link {
   display: flex; flex-direction: column; gap: 6px; padding: 9px 10px;
-  border-radius: 12px; background: rgba(255, 255, 255, .04);
-  border: 1px solid rgba(255, 255, 255, .12);
+  border-radius: 12px; background: rgba(var(--veil-rgb), .04);
+  border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .dyn-link-row { display: flex; align-items: center; gap: 6px; }
 .dyn-link-row input { flex: 1; min-width: 0; }
@@ -163,7 +163,7 @@
 .dyn-link input { height: 40px; padding: 8px 11px; font-size: 12.5px; }
 .dyn-link-del {
   cursor: pointer; display: grid; place-items: center; flex-shrink: 0; padding: 7px; border-radius: 9px;
-  color: #fca5a5; background: transparent; border: 1px solid rgba(255, 255, 255, .12); transition: background .15s;
+  color: #fca5a5; background: transparent; border: 1px solid rgba(var(--veil-rgb), .12); transition: background .15s;
 }
 .dyn-link-del:hover:not(:disabled) { background: rgba(248, 113, 113, .15); }
 .dyn-link-kinds { display: flex; flex-wrap: wrap; gap: 6px; }

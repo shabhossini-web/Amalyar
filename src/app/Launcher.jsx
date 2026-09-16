@@ -66,7 +66,8 @@ export default function Launcher() {
   }, [lvl]);
 
   return (
-    <div className="lx">
+    /* `theme-dark`: لانچر ویترین است و شیشه و نئونش را در هر تمی نگه می‌دارد (§۴.۸). */
+    <div className="lx theme-dark">
       <div className="lx-bg" aria-hidden="true" />
       <div className="lx-orbs" aria-hidden="true">
         <span className="orb o1" /><span className="orb o2" /><span className="orb o3" />

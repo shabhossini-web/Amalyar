@@ -12,7 +12,7 @@
 .tp-row .tp-input { flex: 1; min-width: 0; width: 100%; font-family: inherit; text-align: center; }
 .tp-btn {
   flex: 0 0 auto; display: grid; place-items: center; width: 40px; cursor: pointer;
-  color: var(--text2); background: rgba(255, 255, 255, .06);
+  color: var(--text2); background: rgba(var(--veil-rgb), .06);
   border: 1px solid rgba(var(--brand-soft-rgb), .25); border-radius: 11px;
 }
 .tp-btn:hover:not(:disabled) { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
@@ -26,14 +26,14 @@
    z-index هم‌ترازِ تقویم (۹۰): هر دو از داخلِ شیت باز می‌شوند و باید رویش بیایند. */
 .tp-overlay {
   position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px;
-  background: rgba(6, 3, 20, .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  background: rgba(var(--surface-rgb), .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 /* ورود/خروج در `ui/Overlay.jsx` — اینجا @keyframes نگذارید. */
 .tp-panel {
   width: min(340px, 100%); max-height: min(560px, 88vh);
   display: flex; flex-direction: column; overflow: hidden;
   border-radius: 20px; color: var(--text1); font-family: inherit;
-  background: #150f36; border: 1px solid rgba(var(--brand-soft-rgb), .32);
+  background: var(--bg3); border: 1px solid rgba(var(--brand-soft-rgb), .32);
   box-shadow: 0 26px 70px rgba(0, 0, 0, .65);
 }
 
@@ -44,7 +44,7 @@
 .tp-head b { font-size: 13.5px; font-weight: 800; }
 .tp-x {
   display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer;
-  color: var(--text2); background: rgba(255, 255, 255, .06);
+  color: var(--text2); background: rgba(var(--veil-rgb), .06);
   border: 1px solid rgba(var(--brand-soft-rgb), .2); border-radius: 9px;
 }
 .tp-x:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
@@ -61,7 +61,7 @@
   flex: 1; padding: 10px; border-radius: 11px; cursor: pointer; font: inherit; font-size: 12.5px;
 }
 .tp-ghost {
-  color: #fda4af; background: rgba(255, 255, 255, .04); border: 1px solid rgba(251, 113, 133, .28);
+  color: #fda4af; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(251, 113, 133, .28);
 }
 .tp-now {
   color: #fff; font-weight: 800; border: 0;
@@ -105,7 +105,7 @@
 .tp-band {
   position: absolute; inset-inline: 0; inset-block-start: 50%; height: 42px;
   transform: translateY(-50%); pointer-events: none; z-index: 1;
-  border-radius: 11px; background: rgba(255, 255, 255, .05);
+  border-radius: 11px; background: rgba(var(--veil-rgb), .05);
   border-block: 1px solid rgba(var(--brand-2-rgb), .45);
 }
 
