@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { FormsService } from './forms.service';
+import { EventsService } from '../work/events.service';
 
 /**
  * نظرسنجیِ پس از مراجعه و کانالِ آشناییِ بیمار.
@@ -28,6 +29,7 @@ export class SurveyService {
   constructor(
     private prisma: PrismaService,
     private forms: FormsService,
+    private events: EventsService,
   ) {}
 
   /** توکنِ لینک — همان طولِ توکنِ ثبت‌نام، تا حدس‌زدنی نباشد. */
@@ -253,6 +255,11 @@ export class SurveyService {
         status: 'answered',
         answeredAt: new Date(),
       },
+    });
+    /* W2.2: پاسخِ فرمِ پیگیری ← کارِ «بررسیِ پاسخ» برای پزشک و بستنِ «پیگیریِ بی‌پاسخ». */
+    await this.events.emit({
+      type: 'form.answered', patientId: inv.patientId, visitId: inv.visitId ?? null,
+      refType: 'survey_invite', refId: inv.id, payload: { overall: Number.isFinite(overall) ? overall : null },
     });
     return { ok: true };
   }

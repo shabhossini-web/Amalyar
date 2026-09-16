@@ -20,7 +20,8 @@ try {
   const forms = new (cls('patients/forms.service', 'FormsService'))(prisma, config);
   const audit = new (cls('audit/audit.service', 'AuditService'))(prisma);
   const reminders = { syncNextVisit: async () => {}, syncAppointment: async () => {} };
-  const patients = new (cls('patients/patients.service', 'PatientsService'))(prisma, audit, forms, reminders);
+  const events = new (cls('work/events.service', 'EventsService'))(prisma); // W2.2: outboxِ رویداد — همان سرویسِ واقعی
+  const patients = new (cls('patients/patients.service', 'PatientsService'))(prisma, audit, forms, reminders, events);
   const treasury = new (cls('patients/treasury.service', 'TreasuryService'))(prisma, audit);
   const billing = new (cls('patients/billing.service', 'BillingService'))(prisma, audit, {}, treasury);
   const intake = new (cls('patients/intake.service', 'IntakeService'))(prisma, audit, patients, {}, billing, {}, forms, {}, { require: () => ({ hostname: 'fixture.test' }) }, {}, { sendSms: async () => {} }, reminders, {});

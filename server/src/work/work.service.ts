@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
+import { detectStaleWork } from './work-detectors';
 import { closeWork, processDomainEvents, upsertWork } from './work-processor';
 import type { WorkUpsert } from './work-rules';
 
@@ -189,7 +190,8 @@ export class WorkService {
   }
 
   async process(user: any) {
-    const res = await processDomainEvents(this.prisma);
+    const detected = await detectStaleWork(this.prisma);
+    const res = { ...(await processDomainEvents(this.prisma)), detected };
     await this.audit.record({ actorId: user?.id ?? null, action: 'work.process', entityType: 'domain_event', entityId: 0, after: res });
     return res;
   }

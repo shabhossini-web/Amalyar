@@ -6,8 +6,8 @@
 |---|---|---|---|---|---|
 | ۰ | سندِ بازبینی + `docs/plan/` (این پوشه) | ✅ | `claude/quirky-volta-uyuznl` | PR #11 (`6b76cd1`) | روی `main` است |
 | ۱ | W2.1 WorkItem + DomainEvent + `/work` + permissionها | ✅ | `claude/quirky-volta-uyuznl` | PR #12 (`8c3f234`) | `CONTRACTS.md` §۱–۲ · e2e: `scripts/e2e/w2-1-work-layer.mjs` (۲۲/۲۲) |
-| ۲ | W2.4 پوستهٔ سراسری + جستجوی بیمار + زنگِ اعلان + صفحهٔ «کارهای من» | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `CONTRACTS.md` §۱۰ · e2e: `scripts/e2e/w2-4-shell.mjs` (۱۷/۱۷، دو بار) |
-| ۳ | W2.2 تولیدکننده‌های کار (emit در سرویس‌ها) | ⬜ | `claude/w2-2-work-producers` | | یک خط `emit` در سرویس‌های لِینِ الف، با اعلام |
+| ۲ | W2.4 پوستهٔ سراسری + جستجوی بیمار + زنگِ اعلان + صفحهٔ «کارهای من» | ✅ | `claude/quirky-volta-uyuznl` | PR #14 (`291f255`) | `CONTRACTS.md` §۱۰ · e2e: `scripts/e2e/w2-4-shell.mjs` (۱۷/۱۷، دو بار) |
+| ۳ | W2.2 تولیدکننده‌های کار (emit در ۷ سرویس + آشکارسازِ حالت‌های بیات) | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `CONTRACTS.md` §۲ (کاتالوگِ رویداد) · e2e: `scripts/e2e/w2-2-work-producers.mjs` (۳۲/۳۲) · **intake.service.ts دست نخورد** — چهار emitِ ثبت‌نام را GPT می‌گذارد (یادداشت پایین) |
 | ۴ | W2.3 صفحهٔ «امروز» + خلاصهٔ صبح | ⬜ | `claude/w2-3-today` | | `DECISIONS.md` #۲ |
 | ۵ | W2.5 نمای استثنای مدیر | ⬜ | `claude/w2-5-exceptions` | | |
 | ۶ | W3.1 پروندهٔ زنده | ⬜ | `claude/w3-1-live-record` | | پس از W1.2 |
@@ -27,4 +27,5 @@
   برگرداند، صفحهٔ بیمار بدونِ تغییر درست حرف می‌زند؛ تا آن روز `answered`ِ بولی کافی است.
 - (از لِینِ ب) متنِ رو به بیمار از این به بعد فقط از `PATIENT` در `src/lib/terms.js` می‌آید (بندِ ۶ بخشِ ۷ سند).
 - **GPT:** کلیمِ `docs/plan/` محدود شد (PR #14)؛ `lanes/gpt.md` آزاد است — PR #13 را از draft خارج کن.
+- **GPT (W2.2، در فایلِ کلیمِ خودت `intake.service.ts`):** `EventsService` را تزریق کن (`WorkModule` در `PatientsModule` هست) و چهار `emit` بگذار — دقیقاً با این `ref` تا با قواعدِ `work-rules.ts` جفت شوند: `fill()` وقتی وضعیت `pending_approval`/`pending_payment` شد → `intake.submitted {patientId, refType:'intake_submission', refId: row.id}`؛ `approve()` تهِ کار → `intake.approved {patientId, visitId, refType:'intake_submission', refId}` و اگر `held` بود `appointment.confirmed {appointmentId: held.id, patientId, visitId}`؛ شکستِ نیمه‌کارهٔ approve → `intake.approve_failed {…, payload:{error}}`؛ `reject()` → `intake.rejected`؛ `book()` → `appointment.held {appointmentId: appt.id, patientId, refType:'intake_submission', refId: row.id, payload:{date}}`. و در W1.2: `order.reviewed`/`order.needs_action` با همان `refType: <kind>_order, refId` که `order.answered` دارد (وگرنه کارِ باز بسته نمی‌شود).
 - **W2.4 (PR #14):** `ProfileMenu` فقط در `Shell.jsx`؛ مسیرِ تازهٔ `/app/*` داخلِ layout-routeِ `App.jsx`؛ `GET /search/patients` برای جستجوی سراسری (`CONTRACTS.md` §۱۰).

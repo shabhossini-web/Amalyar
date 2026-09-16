@@ -22,7 +22,8 @@ try {
   const audit = new (cls('audit/audit.service', 'AuditService'))(prisma);
   const forms = new (cls('patients/forms.service', 'FormsService'))(prisma, { vertical: async () => 'clinic' });
   const reminders = { syncNextVisit: async () => {}, syncAppointment: async () => {} };
-  const patients = new (cls('patients/patients.service', 'PatientsService'))(prisma, audit, forms, reminders);
+  const events = new (cls('work/events.service', 'EventsService'))(prisma); // W2.2: outboxِ رویداد — همان سرویسِ واقعی
+  const patients = new (cls('patients/patients.service', 'PatientsService'))(prisma, audit, forms, reminders, events);
   const treasury = new (cls('patients/treasury.service', 'TreasuryService'))(prisma, audit);
   const billing = new (cls('patients/billing.service', 'BillingService'))(prisma, audit, {}, treasury);
   const ledger = new (cls('patients/ledger.service', 'LedgerService'))(prisma, audit, treasury);
