@@ -93,7 +93,7 @@ export class RecordService {
     // ⚠️ نامِ آرایه عمداً `clinicalNotes` است، نه `notes`: خودِ بیمار یک فیلدِ متنیِ
     // `notes` دارد و اگر هم‌نام شوند، spread آن را با آرایه می‌پوشاند و ذخیرهٔ
     // پروفایل با «notes must be a string» می‌شکند. (همین باگ یک‌بار رخ داد.)
-    const [visits, documents, clinicalNotes, kindDefs, attachedForms] = await Promise.all([
+    const [visits, documents, clinicalNotes, kindDefs, attachedForms, submissions] = await Promise.all([
       this.prisma.visit.findMany({
         where: { patientId },
         include: {
@@ -123,6 +123,10 @@ export class RecordService {
         },
       }),
       this.listAttachedForms(patientId, clinical),
+      this.prisma.intakeSubmission.findMany({
+        where: { patientId, visitId: { not: null } },
+        select: { visitId: true, schemaSnapshot: true },
+      }),
     ]);
     /* ⚠️ فرمِ **خاموش** هم خوانده می‌شود (بدونِ `active: true`): مراجعاتِ قدیمی
        با نوعی که دیگر استفاده نمی‌شود باید همچنان نامِ درست را نشان بدهند،
@@ -142,9 +146,20 @@ export class RecordService {
       kindTitles[d.visitKind] = d.title;
       kindColors[d.visitKind] = d.color || colorForKey(d.key);
       kindFields[d.visitKind] = (d.fields ?? [])
-        .filter((f) => !f.builtin && f.active !== false)
+        .filter((f) => !f.builtin)
         .map((f) => ({ key: f.key, label: f.label, type: f.type }));
     }
+
+    const snapshotByVisit = new Map(submissions
+      .filter((s) => Array.isArray(s.schemaSnapshot))
+      .map((s) => [s.visitId, s.schemaSnapshot as any[]]));
+    const fieldsForVisit = (id: number, kind: string | null) => {
+      const live = kind ? kindFields[kind] ?? [] : [];
+      const snapshot = snapshotByVisit.get(id);
+      if (!snapshot) return live;
+      const keys = new Set(snapshot.map((f) => f.key));
+      return [...snapshot, ...live.filter((f) => !keys.has(f.key))];
+    };
 
     /**
      * پاسخ‌های فرمِ یک مراجعه، **برچسب‌خورده و مرتب** — مشتقِ سمتِ سرور (قانون ۱۵).
@@ -159,9 +174,9 @@ export class RecordService {
      * چیزی نمی‌گوید. فیلدی که از فرم حذف شده ولی پاسخش مانده هم — با کلیدِ
      * خودش — می‌آید: دادهٔ ثبت‌شده نباید با ویرایشِ فرم از پرونده غیب شود.
      */
-    const answersOf = (kind: string | null, extra: any) => {
+    const answersOf = (id: number, kind: string | null, extra: any) => {
       const vals = (extra && typeof extra === 'object') ? extra as Record<string, any> : {};
-      const defined = kind ? kindFields[kind] ?? [] : [];
+      const defined = fieldsForVisit(id, kind);
       const seen = new Set(defined.map((f) => f.key));
       const rows = defined
         .map((f) => ({ key: f.key, label: f.label, value: vals[f.key] }))
@@ -204,7 +219,7 @@ export class RecordService {
       .flatMap((v) => {
         const code = `${patient.code}-V${v.seq}`;
         const vals = (v.extra && typeof v.extra === 'object') ? v.extra as Record<string, any> : {};
-        const rows = (v.kind ? kindFields[v.kind] ?? [] : [])
+        const rows = fieldsForVisit(v.id, v.kind)
           .filter(isTextField)
           .map((f) => ({ label: f.label, body: vals[f.key] }))
           .filter((r) => typeof r.body === 'string' && r.body.trim() !== '')
@@ -249,7 +264,7 @@ export class RecordService {
         notes: v.notes,
         extra: v.extra ?? {},
         /* پاسخ‌های فرم — همان چیزی که پزشک نوشته، با برچسبِ خودش. */
-        answers: answersOf(v.kind, v.extra),
+        answers: answersOf(v.id, v.kind, v.extra),
         /* ⚠️ `null` وقتی این نوع فرمی ندارد — کلاینت آن‌وقت به کلید برمی‌گردد.
            «عمل» نامیدنِ نوعِ ناشناخته دروغ است. */
         kindTitle: v.kind ? kindTitles[v.kind] ?? null : null,
@@ -445,7 +460,7 @@ export class RecordService {
       const data = (r.data ?? {}) as Record<string, any>;
       const ownFields = r.form?.fields ?? [];
       const seen = new Set(ownFields.map((f) => f.key));
-      const mergedFields = [
+      const mergedFields: any[] = Array.isArray(r.schemaSnapshot) ? r.schemaSnapshot : [
         ...ownFields,
         ...(r.extraFormIds ?? []).flatMap((id) => (extraFieldsOf.get(id) ?? []).filter((f) => !seen.has(f.key))),
       ];
