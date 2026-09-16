@@ -18,46 +18,22 @@ paths:
   - src/app/WorkRow.jsx
   - src/app/WorkList.jsx
   - src/app/work.css
-  - src/app/Dashboard.jsx
-  - src/app/Profile.jsx
-  - src/app/Site.jsx
-  - src/app/SurgeonPortal.jsx
-  - src/app/Users.jsx
   - public/sw.js
-  - src/ui/icons.jsx
   - scripts/e2e/w2-4-shell.mjs
-  - server/src/patients/orders.service.ts
-  - server/src/patients/survey.service.ts
-  - server/src/patients/appointments.service.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/invoices.service.ts
-  - server/src/patients/inventory.service.ts
-  - server/src/patients/tech.service.ts
-  - server/src/reminders/send-reminders.ts
-  - server/src/reminders/reminders-worker.service.ts
   - scripts/e2e/w2-2-work-producers.mjs
-  - scripts/e2e/company-operations.mjs
-  - scripts/e2e/intake-finance-roles.mjs
-  - scripts/e2e/profile-workflows.mjs
-  - scripts/e2e/neuromonitoring-invoice.mjs
   - scripts/e2e/w2-3-today.mjs
-  - server/src/features/features.module.ts
+  - scripts/e2e/w2-5-exceptions.mjs
   - src/app/Today.jsx
   - src/app/today.css
   - src/app/tools.jsx
-  - src/app/Launcher.jsx
-  - .github/workflows/security-ci.yml
-  - scripts/e2e/schedule-panel.mjs
-  - src/app/ProfileMenu.jsx
-  - src/app/Settings.jsx
-  - src/app/FormBuilder.jsx
-note: لِینِ ج — W2.3 صفحهٔ «امروز» (`/app`؛ لانچر به `/app/tools`). W2.1/W2.2/W2.4 لند شده‌اند. `src/app/Launcher.jsx` و `src/ui/icons.jsx` تا لندِ W2.3 کلیمِ این لِین‌اند (W3.7 لِینِ ب بعدش آزاد می‌شود). intake.service.ts (کلیمِ GPT) دست نخورده.
+note: لِینِ ج — W2.5 نمای استثنای مدیر روی صفحهٔ «امروز». W2.1/W2.2/W2.3/W2.4 لند شده‌اند. **`src/app/Launcher.jsx` و `src/ui/icons.jsx` آزاد شدند — لِینِ ب می‌تواند W3.7 را بردارد** (آیکون را روی `src/app/tools.jsx` اعمال کند، نه لانچر).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W2.5 — نمای استثنا روی همان `GET /work/today` نشست**، نه endpointِ تازه: یک درخواست برای کلِ صفحهٔ «امروز». `sections.exceptions` فقط از سوپروایزر به بالا و برای بقیه `exceptions: null`. چهار ردیف در `CONTRACTS.md` §۱۱.
 - ۱۴۰۵/۰۶/۲۵ · **W2.3 — `/app` دیگر لانچر نیست، «امروز» است؛ لانچر روی `/app/tools`.** کاتالوگِ کاشی‌ها از `Launcher.jsx` به `src/app/tools.jsx` رفت و **تنها منبع** است: ماژولِ تازه = یک ردیف آن‌جا، وگرنه در کشوی «همهٔ ابزارها» هست و در لانچر نیست (یا برعکس). `Shell.jsx` دیگر `/app` را استثنا نمی‌کند، `/app/tools` را. قرارداد: `CONTRACTS.md` §۱۱ (`GET /work/today` + `sections`).
 - ۱۴۰۵/۰۶/۲۵ · **W2.3 — واژهٔ «لانچر» از دکمه‌های بازگشت برداشته شد.** شش صفحه (`Dashboard`، `FormBuilder`، `Profile`، `Users`، `Settings`، `ProfileMenu`) به `/app` لینک می‌دادند با برچسبِ «لانچر»؛ حالا `/app` صفحهٔ «امروز» است، پس برچسب «سامانه» / «صفحهٔ امروز» شد. `FormBuilder.jsx` (W3.5 لِینِ ب) فقط همین یک برچسب عوض شد.
 - ۱۴۰۵/۰۶/۲۵ · **W2.3 — `scripts/e2e/schedule-panel.mjs` مسیرش عوض شد:** از `/app` اول کشوی «همهٔ ابزارها» باز می‌شود و بعد کاشی. هر e2eای که از صفحهٔ نخست به یک ماژول می‌رسد همین مسیر را دارد (این تست در فهرستِ CI نیست، پس با دست پیدا شد).

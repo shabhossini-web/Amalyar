@@ -49,7 +49,10 @@ export class TodayService {
     } catch { /* fail-soft: بخش‌های دیگر خالی می‌مانند */ }
 
     const seesVisits = can('dashboard') || can('tech');
-    const [counts, items, visits, appointments, intakePending] = await Promise.all([
+    /* نمای استثنا (W2.5) فقط از سوپروایزر به بالا: این بخش دربارهٔ **کارِ دیگران**
+       است — چیزی که از دستِ تیم افتاده — نه کارِ خودِ کاربر. */
+    const seesExceptions = level >= LEVEL.SUPERVISOR;
+    const [counts, items, visits, appointments, intakePending, exceptions] = await Promise.all([
       this.work.counts(user),
       this.work.list(user, { scope: 'inbox', limit: 8 }),
       seesVisits ? this.visitsToday(user, level, start, end) : Promise.resolve([]),
@@ -57,6 +60,7 @@ export class TodayService {
       can('formgen')
         ? this.prisma.intakeSubmission.count({ where: { status: 'pending_approval' } })
         : Promise.resolve(0),
+      seesExceptions ? this.exceptions(now) : Promise.resolve(null),
     ]);
 
     /* «کارِ بعدی» = نزدیک‌ترین چیزی که ساعت دارد — عمل یا نوبت، هرکدام زودتر. */
@@ -79,8 +83,93 @@ export class TodayService {
       work: items,
       visits,
       appointments,
-      sections: { visits: seesVisits, appointments: can('calendar'), intake: can('formgen') },
+      exceptions,
+      sections: { visits: seesVisits, appointments: can('calendar'), intake: can('formgen'), exceptions: seesExceptions },
     };
+  }
+
+  /**
+   * **نمای استثنا** (W2.5) — چهار چیزی که هیچ‌کس خبردار نمی‌شود چون هیچ‌کس مسئولش نیست.
+   *
+   * معیارِ پذیرشِ سند: «هیچ کارِ باز بدونِ مسئول > ۲۴ ساعت نماند». این نما همان
+   * را دیدنی می‌کند، به‌علاوهٔ سه شکافِ دیگر که لایهٔ کار خودش نمی‌بیند:
+   *
+   * | ردیف | یعنی چه | چرا خطرناک است |
+   * |---|---|---|
+   * | `unowned` | کارِ باز که هیچ‌کس برنداشته و از ۲۴ ساعت گذشته | در صفِ نقش مانده و همه فکر می‌کنند مالِ دیگری است |
+   * | `stuckEvents` | رویدادِ پردازش‌نشدهٔ قدیمی‌تر از یک ساعت | pipelineِ رویداد←کار ایستاده؛ **هیچ کارِ تازه‌ای ساخته نمی‌شود** |
+   * | `unreviewed` | نتیجهٔ سفارش که ۴۸ ساعت است پاسخ آمده و بررسی نشده | بیمار منتظرِ تصمیم است و کسی نمی‌داند |
+   * | `halfApproved` | ثبت‌نامِ `approved` بدونِ مراجعه | تأیید نیمه‌کاره مانده (D04) — پول گرفته شده، پرونده نیست |
+   *
+   * فقط **خواندنی** و سقف‌دار (۵ نمونه از هر ردیف)؛ عددِ کل جدا می‌آید تا «۵ تا»
+   * با «۵۰ تا» اشتباه نشود.
+   */
+  private async exceptions(now: Date) {
+    const ago = (h: number) => new Date(now.getTime() - h * 3600_000);
+    const NOT_PATIENT = { OR: [{ ownerRole: null }, { ownerRole: { not: 'patient' } }] };
+    const unownedWhere = {
+      AND: [{ state: { in: ['open', 'blocked'] } }, NOT_PATIENT, { ownerAccountId: null }, { createdAt: { lt: ago(24) } }],
+    };
+    const stuckWhere = { processedAt: null, at: { lt: ago(1) } };
+    const halfWhere = { status: 'approved', visitId: null };
+
+    const [unownedCount, unowned, stuckCount, stuck, halfCount, half] = await Promise.all([
+      this.prisma.workItem.count({ where: unownedWhere }),
+      this.prisma.workItem.findMany({
+        where: unownedWhere, orderBy: { createdAt: 'asc' }, take: 5,
+        select: { id: true, type: true, title: true, ownerRole: true, dueAt: true, createdAt: true, patientId: true },
+      }),
+      this.prisma.domainEvent.count({ where: stuckWhere }),
+      this.prisma.domainEvent.findMany({
+        where: stuckWhere, orderBy: { at: 'asc' }, take: 5,
+        select: { id: true, type: true, at: true, patientId: true, visitId: true },
+      }),
+      this.prisma.intakeSubmission.count({ where: halfWhere }),
+      this.prisma.intakeSubmission.findMany({
+        where: halfWhere, orderBy: { reviewedAt: 'desc' }, take: 5,
+        select: { id: true, patientId: true, amount: true, reviewedAt: true, createdAt: true },
+      }),
+    ]);
+
+    const unreviewed = await this.unreviewedOrders(ago(48));
+
+    return {
+      unowned: { count: unownedCount, items: unowned },
+      stuckEvents: { count: stuckCount, items: stuck },
+      unreviewed,
+      halfApproved: { count: halfCount, items: half },
+    };
+  }
+
+  /**
+   * نتیجه‌هایی که آمده‌اند و بررسی نشده‌اند.
+   *
+   * ⚠️ روی **خودِ سفارش** حساب می‌شود نه روی کارِ باز: اگر کارِ `review_result`
+   * به هر دلیلی ساخته نشده باشد (همان `stuckEvents` بالا)، دقیقاً همان موردی است
+   * که باید دیده شود — نمایی که فقط کارها را بشمارد، شکافِ خودش را نمی‌بیند.
+   */
+  private async unreviewedOrders(before: Date) {
+    /* `any` مثلِ `OrdersService.table()`: سه مدلِ هم‌شکل، ولی TypeScript اجتماعِ
+       delegateهای Prisma را قابلِ فراخوانی نمی‌داند. */
+    const kinds: { key: string; table: any; fa: string }[] = [
+      { key: 'lab_order', table: this.prisma.labOrder, fa: 'آزمایش' },
+      { key: 'imaging_order', table: this.prisma.imagingOrder, fa: 'تصویربرداری' },
+      { key: 'consult_order', table: this.prisma.consultOrder, fa: 'مشاوره' },
+    ];
+    const where = { status: 'answered', updatedAt: { lt: before } };
+    let count = 0;
+    const items: any[] = [];
+    for (const k of kinds) {
+      count += await k.table.count({ where });
+      if (items.length < 5) {
+        const rows = await k.table.findMany({
+          where, orderBy: { updatedAt: 'asc' }, take: 5 - items.length,
+          select: { id: true, patientId: true, visitId: true, updatedAt: true },
+        });
+        items.push(...rows.map((r: any) => ({ ...r, refType: k.key, kindFa: k.fa })));
+      }
+    }
+    return { count, items };
   }
 
   /** عمل‌های امروز — دامنهٔ دید مثلِ خودِ فهرستِ مراجعات: زیرِ سوپروایزر فقط مالِ خودش. */
