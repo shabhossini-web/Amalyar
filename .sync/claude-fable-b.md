@@ -1,16 +1,26 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: idle
+status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-16
 paths:
-note: لِینِ ب — W0.1/W0.2 (PR #15) و W0.6 (PR #16) لند شد. بسته‌های باز: W0.5/W0.7 منتظرِ لِینِ الف (W0.8/W1.9)؛ W3.7 با کلیمِ فعالِ لِینِ ج روی icons.jsx و بازطراحیِ لانچر در W2.3 برخورد دارد؛ بعدیِ بی‌مانع W3.6. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
+  - src/app/FormBuilder.jsx
+  - src/app/formbuilder.css
+  - scripts/e2e/w3-5-formbuilder.mjs
+  - docs/plan/lanes/claude-fable-b.md
+note: لِینِ ب — W3.5 (فرم‌ساز) روی claude/quirky-johnson-ynzr4y. W0.1/W0.2 (PR #15) و W0.6 (PR #16) لند شد؛ W0.5/W0.7 منتظرِ لِینِ الف (W0.8/W1.9)؛ W3.7/W3.6 با کلیمِ فعالِ لِینِ ج (icons.jsx, shell.css) و بازطراحیِ لانچر در W2.3 برخورد دارند — سؤال در lanes/claude-fable-b.md. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W3.5 — نقشِ فیلد دیگر از خودِ ردیف تیک نمی‌خورد.** تیک‌زدن فقط در
+  ماتریسِ یک‌جای بالای فهرست است؛ ردیف نقش‌ها را فقط **نشان** می‌دهد. نویسندهٔ داده
+  همان `PATCH /forms/fields/:id {roles}` قبلی است (یک مسیر، نه دو). کلاسِ تازهٔ
+  `fb-side` روی پنلِ `Overlay` = پنلِ کناریِ دسکتاپ؛ هر صفحهٔ دیگری هم بخواهد،
+  همین کلاس کافی است. `.fb-acts .df-act` تا امروز بی‌استایل بود (قاعدهٔ مشترک
+  `.df-acts button` است) — حالا در `formbuilder.css` اندازه می‌گیرد.
 - ۱۴۰۵/۰۶/۲۵ · **W0.6 رفتارِ تازه در `src/ui/Overlay.jsx` و `Tabs.jsx` (برای همهٔ مصرف‌کننده‌ها):**
   هر پوشش با Escape بسته می‌شود (فقط بالاترین لایه، با قیدِ `closable`)، Tab داخلِ پنل
   می‌چرخد، فوکوس روی پنل می‌آید و به بازکننده برمی‌گردد، `role="dialog"`/`aria-modal`/
