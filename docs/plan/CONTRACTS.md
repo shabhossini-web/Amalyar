@@ -56,7 +56,9 @@ model WorkItem {
   - `GET /work?scope=mine|role|patient|all&patientId=&state=&type=&due=today|overdue|week` — object-authz: زیرِ سوپروایزر فقط کارِ خودش/نقشش و بیمارانِ منتسبش.
   - `PATCH /work/:id` body `{action:'done'|'block'|'assign'|'snooze'|'cancel', outcome?, reason?, accountId?, until?}`.
   - `GET /work/counts` → `{mine, role, overdue}` برای زنگِ اعلان.
-- دسترسی: Feature `work` (پیش‌فرض سطح ۲، برای همه روشن) + Permission `work.read` (۲) و `work.write` (۲). سطحِ ۱ (بازدید) فقط `work.read` روی خودش.
+- دسترسی: Feature `work` (پیش‌فرض سطح ۲، در هر سه حوزه) + Permission `work.read` (۲)، `work.write` (۲)، `work.assign` (۴ — واگذاری به دیگران و `scope=all`)، `work.process` (۶ — اجرای دستیِ پردازشگر).
+- **پیاده‌شده در W2.1** (`server/src/work/`): `GET /work?scope=inbox|mine|role|patient|all` (پیش‌فرض `inbox` = من ∪ صفِ نقشِ من؛ کارِ `ownerRole='patient'` در صفِ کارکنان نمی‌آید)، `GET /work/counts` → `{mine, role, overdue, total}`، `POST /work` (کارِ دستی؛ کلیدش یکتا به‌ازای هر ساخت)، `PATCH /work/:id` با `action ∈ done|block|assign|snooze|cancel|reopen`، `POST /work/process` (آزمون/عیب‌یابی). خروجیِ فهرست با `patient {id,code,fullName,phone}` و `overdue` سمتِ سرور enrich می‌شود.
+- **قواعدِ رویداد ← کار** در `server/src/work/work-rules.ts` (خالص). W2.2 فقط `emit` را در سرویس‌ها می‌گذارد؛ قاعدهٔ تازه = یک ردیف در `RULES` + سنجه در e2e.
 
 ## §۲ `DomainEvent` — outbox (W2.1 می‌سازد؛ همه `emit` می‌کنند)
 
@@ -84,7 +86,7 @@ model DomainEvent {
 ```
 
 - `EventsService.emit(event, tx)` — **داخلِ همان تراکنشِ** نوشتنِ اصلی. تا W2.1 لند نشده، لِینِ الف در نقطه‌های زیر فقط کامنتِ `// W2.1: emit <type>` می‌گذارد و W2.2 آن‌ها را به `emit` تبدیل می‌کند.
-- پردازشگر (در همان worker یادآوری‌ها، هر ۶۰ ثانیه): رویدادهای `processedAt IS NULL` → قواعدِ W2.2 → `WorkService.upsert` → `processedAt`. رویداد هم‌زمان منبعِ analytics (W4.4) است؛ پاک نمی‌شود.
+- پردازشگر `processDomainEvents(client)` (`work-processor.ts`) در همان sweepِ workerِ یادآوری‌ها اجرا می‌شود (کادنس = `REMINDERS_INTERVAL_MS`، پیش‌فرض ۵ دقیقه، کفِ ۶۰ ثانیه): رویدادهای `processedAt IS NULL` → `work-rules.ts` → `upsertWork`/`closeWork` → `processedAt`. رویداد پاک نمی‌شود (منبعِ analytics، W4.4). برای پاسخِ فوری، سرویسِ صادرکننده می‌تواند پس از commit خودش `WorkService.upsert` را هم صدا بزند؛ پردازشگر به‌خاطرِ idempotency دومی نمی‌سازد.
 
 ## §۳ `Appointment.forVisitId` — نوبتی که برای یک مراجعهٔ مشخص گرفته شده (W1.5 می‌سازد؛ W3.3، W3.4 مصرف می‌کنند)
 

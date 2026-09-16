@@ -5,6 +5,7 @@ import { decryptDatabaseUrl } from '../tenant/tenant-crypto';
 import { SmsService } from '../sms/sms.service';
 import { sendReminders } from './send-reminders';
 import { expireProvisional } from '../accounts/provisional';
+import { processDomainEvents } from '../work/work-processor';
 
 /**
  * workerِ یادآوری‌ها — هر چند دقیقه، pendingهای سررسیدهٔ **همهٔ شرکت‌ها**.
@@ -70,6 +71,9 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
       await expireProvisional(client);
       const result = await sendReminders(client, this.sms);
       if (result.due) this.log.log(`${slug}: ${result.sent}/${result.due} یادآوری فرستاده شد`);
+      /* لایهٔ کار (W2.1): رویدادهای پردازش‌نشده ← کار. همان sweep، همان client. */
+      const work = await processDomainEvents(client);
+      if (work.events) this.log.log(`${slug}: ${work.events} رویداد ← ${work.created} کارِ تازه، ${work.closed} بسته`);
     } catch (e: any) {
       // جدولِ reminders هنوز migrate نشده (شرکتِ عقب‌مانده) — sweep بعدی.
       const msg = String(e?.message ?? '');
