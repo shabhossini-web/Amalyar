@@ -1,10 +1,13 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: -
-since: 2026-09-15
+status: active
+branch: claude/quirky-volta-uyuznl
+since: 2026-09-16
 paths:
-note: چیزی در دست نیست
+  - docs/plan/
+  - docs/UX_WORKFLOW_AUDIT_2026-09-16.md
+  - server/src/work/
+note: لِینِ ج — سندِ بازبینی + تابلوی کار لند می‌شود، بعد W2.1 (WorkItem/DomainEvent) روی claude/w2-1-work-layer
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
@@ -14,6 +17,8 @@ note: چیزی در دست نیست
 - (چیزی ثبت نشده)
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۶/۲۵ · `b548faa` · **بازبینیِ تکمیلیِ مسیرها و UX + نقشهٔ اصلاح** (`docs/UX_WORKFLOW_AUDIT_2026-09-16.md`) و پوشهٔ هماهنگیِ `docs/plan/` (BOARD، CONTRACTS، DECISIONS، lanes، BRIEF_GPT). سه لِین: الف=`gpt` (صحتِ بک‌اند)، ب=`claude-opus` (سطوحِ بیمار/UI)، ج=`claude-fable` (لایهٔ کار/پوسته/امروز).
 
 - ۱۴۰۵/۰۶/۲۴ · **باکسِ لینکِ MRI/CT/آزمایش + مدارکِ پزشکیِ فرم در پرونده.** نوعِ
   فیلدِ `links` (DynForm + FIELD_TYPES)، `FormField.docCategory`،

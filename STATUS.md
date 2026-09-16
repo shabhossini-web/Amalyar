@@ -935,3 +935,11 @@ fallback دیده می‌شد؛ با یک کلیک در فرم‌ساز برمی
   روی نصبِ مشتری اثری ندارد.
 - آزمونِ e2e: `playwright-core` + `/opt/pw-browsers/chromium`؛ اثر انگشت با
   `CDP WebAuthn.addVirtualAuthenticator`.
+
+---
+
+## نقشهٔ اصلاح پیش از فازِ ایجنتیک — ۱۴۰۵/۰۶/۲۵
+
+- **سند:** `docs/UX_WORKFLOW_AUDIT_2026-09-16.md` — راستی‌آزماییِ ده یافتهٔ گزارشِ ChatGPT روی `2b803415` (همه تأیید)، چهار باگِ تازه (N1 حذف‌شدنیِ فرمِ پیگیریِ پاسخ‌دار، N2 مسابقهٔ `startVisit`، N3 `kinds[0]`، N4 dedupe/retry یادآوری)، یافته‌های UX/زیرساخت/برند، تجربهٔ هدف با مدلِ `WorkItem`، و **چهل بستهٔ کار در شش موج**.
+- **اجرا:** `docs/plan/` — `BOARD.md` (سه لِین)، `CONTRACTS.md` (شکلِ مشترکِ داده/API)، `DECISIONS.md` (شش تصمیمِ مالک با پیش‌فرض)، `lanes/<agent>.md` (وضعیتِ زنده)، `BRIEF_GPT.md`.
+- **کجا هستیم:** شاخهٔ `claude/quirky-volta-uyuznl`؛ هنوز روی `main` نیست. اولین بسته‌های هر لِین: الف=W1.6، ب=W0.1، ج=W2.1.
