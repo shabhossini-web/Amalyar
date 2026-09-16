@@ -89,6 +89,7 @@ node scripts/e2e/platform-domains.mjs # پنلِ پلتفرم هیچ دامنه�
 ```bash
 node scripts/e2e/w0-1-intake-steps.mjs # W0.1 — استپر و پیام‌های فرمِ بیمار از makesVisit/payable
 node scripts/e2e/w0-2-labels.mjs       # W0.2 — برچسبِ follow_up + پیامِ پایانِ سفارش از وضعیتِ مسیر
+node scripts/e2e/w0-6-a11y.mjs         # W0.6 — Escape/focus-trap/بازگشتِ فوکوس در Overlay، کلیدهای جهت در Tabs
 ```
 
 ### پیش‌نیازِ `tenant-isolation.mjs`

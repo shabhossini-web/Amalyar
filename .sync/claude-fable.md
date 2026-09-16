@@ -4,24 +4,22 @@ status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-16
 paths:
-  - src/pages/Intake.jsx
-  - src/lib/terms.js
-  - src/app/OrderPublic.jsx
-  - src/app/Reminders.jsx
-  - src/app/orders.css
-  - scripts/e2e/lib/mock-ui.mjs
-  - scripts/e2e/w0-1-intake-steps.mjs
-  - scripts/e2e/w0-2-labels.mjs
+  - src/ui/Overlay.jsx
+  - src/ui/Tabs.jsx
+  - scripts/e2e/w0-6-a11y.mjs
   - docs/plan/lanes/claude-fable.md
-  - docs/plan/lanes/claude-opus.md
-  - docs/plan/BOARD.md
-note: لِینِ ب (واگذارشده از claude-opus) — W0.1 + W0.2 روی claude/quirky-johnson-ynzr4y؛ بعدش W0.6، و در لِینِ ج W2.4
+note: لِینِ ب — W0.6 (Escape/focus-trap/کلیدهای جهت در src/ui) روی claude/quirky-johnson-ynzr4y؛ W0.1/W0.2 لند شد (PR #15)؛ بعدش W3.7، و در لِینِ ج W2.4
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W0.6 رفتارِ تازه در `src/ui/Overlay.jsx` و `Tabs.jsx` (برای همهٔ مصرف‌کننده‌ها):**
+  هر پوشش با Escape بسته می‌شود (فقط بالاترین لایه، با قیدِ `closable`)، Tab داخلِ پنل
+  می‌چرخد، فوکوس روی پنل می‌آید و به بازکننده برمی‌گردد، `role="dialog"`/`aria-modal`/
+  `tabIndex=-1` پیش‌فرضِ پنل است. تب‌ها roving tabindex + فلش/Home/End دارند. مصرف‌کننده
+  چیزی اضافه نمی‌کند؛ اگر پنل `onKeyDown` خودش را دارد همچنان صدا زده می‌شود.
 - ۱۴۰۵/۰۶/۲۵ · **W0.1/W0.2 قراردادِ تازه، نه شکست:** واژه‌نامهٔ متنِ رو به بیمار `PATIENT` در
   `src/lib/terms.js` — هر صفحهٔ عمومیِ تازه (W3.4 پرتال) متنِ وضعیتش را از همین‌جا بردارد، نه
   رشتهٔ هاردکد در JSX. صفحهٔ `/o` وضعیتِ سفارش را طبقِ `CONTRACTS.md` §۴ می‌خواند و فقط در
@@ -30,6 +28,9 @@ note: لِینِ ب (واگذارشده از claude-opus) — W0.1 + W0.2 روی
 - ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۶/۲۵ · PR #15 · `7c527e7` · **لِینِ ب واگذار شد + W0.1/W0.2** (واژه‌نامهٔ بیمار،
+  استپرِ فرمِ عمومی از وضعیتِ مسیر، برچسبِ follow_up، پیامِ پایانِ سفارش) — مرجِ خودکار.
 
 - ۱۴۰۵/۰۶/۲۵ · PR #12 · `8c3f234` · **W2.1 لایهٔ کار** (WorkItem/DomainEvent، `/work`، قواعدِ
   رویداد←کار، پردازشگر) — مرجِ خودکار پس از سبزشدنِ CI.
