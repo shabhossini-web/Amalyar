@@ -4,22 +4,22 @@ status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-16
 paths:
-  - src/pages/Intake.jsx
-  - src/lib/terms.js
-  - src/app/OrderPublic.jsx
-  - src/app/Reminders.jsx
-  - src/app/orders.css
-  - scripts/e2e/lib/mock-ui.mjs
-  - scripts/e2e/w0-1-intake-steps.mjs
-  - scripts/e2e/w0-2-labels.mjs
+  - src/ui/Overlay.jsx
+  - src/ui/Tabs.jsx
+  - scripts/e2e/w0-6-a11y.mjs
   - docs/plan/lanes/claude-fable-b.md
-note: لِینِ ب (واگذارشده از claude-opus) — W0.1 + W0.2 لند شد (PR #15)؛ بعدی W0.6. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
+note: لِینِ ب — W0.6 (Escape/focus-trap/کلیدهای جهت در src/ui) روی claude/quirky-johnson-ynzr4y، PR #16؛ W0.1/W0.2 لند شد (PR #15)؛ بعدش W3.7. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W0.6 رفتارِ تازه در `src/ui/Overlay.jsx` و `Tabs.jsx` (برای همهٔ مصرف‌کننده‌ها):**
+  هر پوشش با Escape بسته می‌شود (فقط بالاترین لایه، با قیدِ `closable`)، Tab داخلِ پنل
+  می‌چرخد، فوکوس روی پنل می‌آید و به بازکننده برمی‌گردد، `role="dialog"`/`aria-modal`/
+  `tabIndex=-1` پیش‌فرضِ پنل است. تب‌ها roving tabindex + فلش/Home/End دارند. مصرف‌کننده
+  چیزی اضافه نمی‌کند؛ اگر پنل `onKeyDown` خودش را دارد همچنان صدا زده می‌شود.
 - ۱۴۰۵/۰۶/۲۵ · **W0.1/W0.2 قراردادِ تازه، نه شکست:** واژه‌نامهٔ متنِ رو به بیمار `PATIENT` در
   `src/lib/terms.js` — هر صفحهٔ عمومیِ تازه (W3.4 پرتال) متنِ وضعیتش را از همین‌جا بردارد، نه
   رشتهٔ هاردکد در JSX. صفحهٔ `/o` وضعیتِ سفارش را طبقِ `CONTRACTS.md` §۴ می‌خواند و فقط در

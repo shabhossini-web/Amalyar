@@ -76,8 +76,31 @@ export default function Tabs({
     return () => ro.disconnect();
   }, [measure, sig]);
 
+  /* کلیدهای جهت + roving tabindex (W0.6): فقط تبِ فعال در زنجیرهٔ Tab است و
+     Home/End/فلش‌ها بینِ تب‌ها می‌گردند — الگوی WAI-ARIA برای tablist، وگرنه
+     کاربرِ صفحه‌کلید باید از روی تک‌تکِ تب‌ها Tab می‌زد. در RTL فلشِ چپ «بعدی»
+     است چون تبِ بعدی سمتِ چپ نشسته؛ جهت از خودِ نوار خوانده می‌شود نه از یک
+     ثابت. انتخاب با خودِ حرکت انجام می‌شود (فعال‌سازیِ خودکار). */
+  const activeIdx = items.findIndex((i) => i.key === value);
+  const onKeyDown = (e) => {
+    const n = items.length;
+    if (!n || !['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+    const rtl = getComputedStyle(navRef.current).direction === 'rtl';
+    let next;
+    if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = n - 1;
+    else {
+      const forward = (e.key === 'ArrowLeft') === rtl;
+      next = activeIdx < 0 ? (forward ? 0 : n - 1) : (activeIdx + (forward ? 1 : -1) + n) % n;
+    }
+    e.preventDefault();
+    const key = items[next].key;
+    if (key !== value) onChange(key);
+    navRef.current?.querySelectorAll('button[role="tab"]')[next]?.focus();
+  };
+
   return (
-    <nav ref={navRef} className={`ui-tabs ui-tabs-${variant} ui-tone-${tone} ${className}`} role="tablist" aria-label={label}>
+    <nav ref={navRef} className={`ui-tabs ui-tabs-${variant} ui-tone-${tone} ${className}`} role="tablist" aria-label={label} onKeyDown={onKeyDown}>
       {box && (
         <motion.span
           className="ui-tab-pill"
@@ -91,7 +114,7 @@ export default function Tabs({
           transition={still ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
         />
       )}
-      {items.map((it) => {
+      {items.map((it, i) => {
         const on = it.key === value;
         const Icon = it.icon;
         return (
@@ -100,6 +123,8 @@ export default function Tabs({
             type="button"
             role="tab"
             aria-selected={on}
+            /* اگر هیچ تبی فعال نیست، اولی در زنجیره می‌ماند تا نوار از دسترس نیفتد. */
+            tabIndex={on || (activeIdx < 0 && i === 0) ? 0 : -1}
             className={on ? 'on' : ''}
             onClick={() => onChange(it.key)}
           >
