@@ -16,6 +16,8 @@ const Intake = lazy(() => import('./pages/Intake.jsx'));
 const Survey = lazy(() => import('./pages/Survey.jsx'));
 const VisitSummary = lazy(() => import('./pages/VisitSummary.jsx'));
 const Portal = lazy(() => import('./pages/Portal.jsx'));
+const Shell = lazy(() => import('./app/Shell.jsx'));
+const WorkList = lazy(() => import('./app/WorkList.jsx'));
 const SurgeonPortal = lazy(() => import('./app/SurgeonPortal.jsx'));
 const Launcher = lazy(() => import('./app/Launcher.jsx'));
 const Login = lazy(() => import('./app/Login.jsx'));
@@ -78,7 +80,6 @@ export default function App() {
         <ConfigProvider>
         <Suspense fallback={<div className="lx-boot">در حال بارگذاری…</div>}>
         <Routes>
-          <Route path="/app/surgeon" element={<Protected><Gate feature="surgeon"><SurgeonPortal /></Gate></Protected>} />
           <Route path="/" element={<TenantAwareRoot />} />
           <Route path="/login" element={<Login />} />
           {/* ⚠️ عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. */}
@@ -93,33 +94,38 @@ export default function App() {
           {/* سفارشِ بالینی — چیزی که بیمار از لینکِ پیامک باز می‌کند. */}
           <Route path="/o/:token" element={<OrderPublic />} />
           <Route path="/platform-admin" element={<PlatformAdmin />} />
-          <Route path="/app" element={<Protected><Launcher /></Protected>} />
-          <Route path="/app/dashboard" element={<Protected><Gate feature="dashboard"><Dashboard /></Gate></Protected>} />
-          <Route path="/app/users" element={<Protected><Gate feature="users"><Users /></Gate></Protected>} />
-          <Route path="/app/access" element={<Protected><Gate feature="access"><Access /></Gate></Protected>} />
-          <Route path="/app/definitions" element={<Protected><Definitions /></Protected>} />
-          <Route path="/app/forms" element={<Protected><FormBuilder /></Protected>} />
-          <Route path="/app/inventory" element={<Protected><Gate feature="inventory"><Inventory /></Gate></Protected>} />
-          <Route path="/app/accounting" element={<Protected><Gate feature="accounting"><Accounting /></Gate></Protected>} />
-          <Route path="/app/calendar" element={<Protected><Gate feature="calendar"><Calendar /></Gate></Protected>} />
-          <Route path="/app/schedule" element={<Protected><Gate feature="calendar"><Schedule /></Gate></Protected>} />
-          <Route path="/app/dispatch" element={<Protected><Gate feature="dispatch"><Dispatch /></Gate></Protected>} />
-          <Route path="/app/tech" element={<Protected><Gate feature="tech"><Tech /></Gate></Protected>} />
-          <Route path="/app/transport" element={<Protected><Gate feature="transport"><Transport /></Gate></Protected>} />
-          <Route path="/app/intake" element={<Protected><Gate feature="formgen"><IntakeAdmin /></Gate></Protected>} />
+          {/* پوستهٔ سراسری (W2.4): یک نوارِ ثابت بالای همهٔ صفحاتِ سامانه — Shell خودش lazy است. */}
+          <Route element={<Protected><Shell /></Protected>}>
+            <Route path="/app/surgeon" element={<Gate feature="surgeon"><SurgeonPortal /></Gate>} />
+            <Route path="/app" element={<Launcher />} />
+            <Route path="/app/dashboard" element={<Gate feature="dashboard"><Dashboard /></Gate>} />
+            <Route path="/app/users" element={<Gate feature="users"><Users /></Gate>} />
+            <Route path="/app/access" element={<Gate feature="access"><Access /></Gate>} />
+            <Route path="/app/definitions" element={<Definitions />} />
+            <Route path="/app/forms" element={<FormBuilder />} />
+            <Route path="/app/inventory" element={<Gate feature="inventory"><Inventory /></Gate>} />
+            <Route path="/app/accounting" element={<Gate feature="accounting"><Accounting /></Gate>} />
+            <Route path="/app/calendar" element={<Gate feature="calendar"><Calendar /></Gate>} />
+            <Route path="/app/schedule" element={<Gate feature="calendar"><Schedule /></Gate>} />
+            <Route path="/app/dispatch" element={<Gate feature="dispatch"><Dispatch /></Gate>} />
+            <Route path="/app/tech" element={<Gate feature="tech"><Tech /></Gate>} />
+            <Route path="/app/transport" element={<Gate feature="transport"><Transport /></Gate>} />
+            <Route path="/app/intake" element={<Gate feature="formgen"><IntakeAdmin /></Gate>} />
+            <Route path="/app/crm" element={<Gate feature="formgen"><Crm /></Gate>} />
+            <Route path="/app/reminders" element={<Gate feature="dashboard"><Reminders /></Gate>} />
+            <Route path="/app/letters" element={<Letters />} />
+            <Route path="/app/notes" element={<Gate feature="dashboard"><NotesSearch /></Gate>} />
+            <Route path="/app/assistant" element={<Assistant />} />
+            <Route path="/app/chat" element={<Chat />} />
+            <Route path="/app/patients/:id" element={<PatientRecord />} />
+            <Route path="/app/site" element={<Gate feature="site"><Site /></Gate>} />
+            <Route path="/app/settings" element={<Settings />} />
+            <Route path="/app/profile" element={<Profile />} />
+            <Route path="/app/work" element={<Gate feature="work"><WorkList /></Gate>} />
+          </Route>
           {/* CRM زیرِ همان featureِ formgen: داده‌اش تماماً از ثبت‌نام‌ها می‌آید
               و مجوزِ تازه در ماتریسِ دسترسی یعنی یک ردیفِ پیکربندی برای هر نصب. */}
-          <Route path="/app/crm" element={<Protected><Gate feature="formgen"><Crm /></Gate></Protected>} />
           {/* دفترِ یادآوری‌ها — زیرِ featureِ داشبورد؛ داده‌اش از همان مراجعات است. */}
-          <Route path="/app/reminders" element={<Protected><Gate feature="dashboard"><Reminders /></Gate></Protected>} />
-          <Route path="/app/letters" element={<Protected><Letters /></Protected>} />
-          <Route path="/app/notes" element={<Protected><Gate feature="dashboard"><NotesSearch /></Gate></Protected>} />
-          <Route path="/app/assistant" element={<Protected><Assistant /></Protected>} />
-          <Route path="/app/chat" element={<Protected><Chat /></Protected>} />
-          <Route path="/app/patients/:id" element={<Protected><PatientRecord /></Protected>} />
-          <Route path="/app/site" element={<Protected><Gate feature="site"><Site /></Gate></Protected>} />
-          <Route path="/app/settings" element={<Protected><Settings /></Protected>} />
-          <Route path="/app/profile" element={<Protected><Profile /></Protected>} />
         </Routes>
         </Suspense>
         </ConfigProvider>

@@ -26,9 +26,14 @@ export function browserApiBase(ui = process.env.E2E_UI ?? 'http://127.0.0.1:5199
 /** کوکی‌های نشست را برای هاستِ API در همان contextِ صفحه می‌نشاند. */
 export async function browserLogin(page, accessToken, { ui } = {}) {
   if (!accessToken) throw new Error('browserLogin: توکن خالی است — ورودِ سمتِ Node انجام نشده');
-  const url = browserApiBase(ui) + '/';
+  /* ⚠️ کوکی روی **ریشهٔ** مبدأِ API (`/`) می‌نشیند، نه روی `/api/`: سرور هم با
+     path=/ می‌فرستد. با path=/api/، صفحهٔ UI در `/app/…` کوکیِ CSRF را در
+     `document.cookie` نمی‌دید و هر درخواستِ تغییردهنده ۴۰۳ می‌گرفت — باگِ
+     واقعی که با e2eِ پوستهٔ سراسری (W2.4) لو رفت. */
+  const url = new URL(browserApiBase(ui));
+  url.pathname = '/';
   await page.context().addCookies([
-    { name: SESSION_COOKIE, value: accessToken, url, httpOnly: true, sameSite: 'Lax' },
-    { name: CSRF_COOKIE, value: `e2e-${Date.now().toString(36)}`, url, httpOnly: false, sameSite: 'Lax' },
+    { name: SESSION_COOKIE, value: accessToken, url: url.toString(), httpOnly: true, sameSite: 'Lax' },
+    { name: CSRF_COOKIE, value: `e2e-${Date.now().toString(36)}`, url: url.toString(), httpOnly: false, sameSite: 'Lax' },
   ]);
 }

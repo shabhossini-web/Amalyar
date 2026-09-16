@@ -137,3 +137,13 @@ retry: `uncertain` تا ۳ بار با backoff ۵/۱۵/۴۵ دقیقه، بعد 
 ## §۹ گیتِ مراقبتِ پس از عمل (W1.7) — پیش‌فرضِ `DECISIONS.md` #۱
 
 `post_op_care` و `follow_up` فقط وقتی `opStatus === 'done'` کاشته می‌شوند. اگر `opDate + 1d` گذشت و هنوز `pending` است: `emit('visit.unconfirmed')` ← کارِ `confirm_surgery_done` برای کارشناسِ مراجعه (fallback: `ownerRole='technician'`). `surgery` و `pre_op_care` مثلِ امروز (`!== 'cancelled'`).
+
+## §۱۰ پوستهٔ سراسری (W2.4 — پیاده‌شده)
+
+- همهٔ مسیرهای `/app/*` در `src/App.jsx` زیرِ یک layout-route هستند: `<Route element={<Protected><Shell /></Protected>}>`. **مسیرِ تازه را داخلِ همین بلوک اضافه کن**، نه بیرونش؛ وگرنه نوارِ بالا، جستجو و زنگ را ندارد.
+- `ProfileMenu` فقط در `Shell.jsx` رندر می‌شود (روی لانچر فعلاً خودِ لانچر دارد و پوسته تکرار نمی‌کند). صفحه‌ها `ProfileMenu` نمی‌گذارند.
+- جستجوی سراسری: `GET /search/patients?q=` (Feature `work` + `patients.read`؛ همان `searchPatients` با object-authz). میان‌برها: `Ctrl/⌘+K` و `/` بیرونِ فیلد. نتیجه به `/app/patients/:id` می‌رود.
+- زنگِ کارها: `GET /work/counts` هر ۶۰ ثانیه + با برگشتِ تب + با رویدادِ `window` به نامِ `amalyar:work-changed` (`WORK_CHANGED` در `WorkBell.jsx`). **هر جایی که کاری را عوض می‌کند** این رویداد را dispatch کند تا شمارنده تازه شود. ۴۰۳ = ماژول خاموش → زنگ رندر نمی‌شود.
+- ردیفِ کار یک کامپوننت است (`WorkRow.jsx`) و برچسبِ فارسیِ نوعِ کار (`TYPE_FA`) همان‌جاست؛ نوعِ تازه در `work-rules.ts` = یک ردیفِ برچسب این‌جا.
+- صفحهٔ `/app/work` («کارهای من») فهرستِ کامل + کارِ دستی است؛ صفحهٔ «امروز» (W2.3) روی همین می‌نشیند.
+- e2eِ مرورگری با `scripts/e2e/lib/browser-login.mjs`: کوکی‌ها روی **ریشهٔ** مبدأِ API (`path=/`) می‌نشینند (اصلاح‌شده در W2.4؛ قبلاً `/api/` بود و هر درخواستِ تغییردهندهٔ مرورگری ۴۰۳ می‌گرفت).

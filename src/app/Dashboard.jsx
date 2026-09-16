@@ -7,7 +7,6 @@ import { api, apiStream } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime } from '../lib/time.js';
-import ProfileMenu from './ProfileMenu.jsx';
 import { useConfig, useTerms } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
@@ -2231,7 +2230,6 @@ export default function Dashboard() {
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
           <h1>داشبورد مدیریت</h1>
-          <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
         </header>
 
         {!denied && (<>
