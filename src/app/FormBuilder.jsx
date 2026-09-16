@@ -13,6 +13,7 @@ import { toEnDigits } from '../lib/identity.js';
 import { toFa } from '../lib/utils.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import DynForm from '../ui/DynForm.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 /**
@@ -56,6 +57,9 @@ const DOC_CATEGORIES = { imaging: 'تصویربرداری', lab: 'آزمایش',
  */
 const SCOPE_FA = { visit: 'مراجعه', record: 'زیرپرونده', intake: 'ثبت‌نام', survey: 'زیرپرونده' };
 
+/** نامِ فارسیِ نقش‌های یک فیلد — خالی یعنی «عمومی» (همه پر می‌کنند). */
+const roleNamesOf = (field) => fieldRoles(field).map((v) => JOB_ROLES.find((r) => r.v === v)?.l ?? v);
+
 export default function FormBuilder() {
   const stagger = useStagger();
   const { verticalLabel } = useConfig();
@@ -68,6 +72,9 @@ export default function FormBuilder() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
+  /* مقادیرِ پیش‌نمایش — فقط در همین صفحه زندگی می‌کنند و هیچ‌جا ذخیره نمی‌شوند. */
+  const [preview, setPreview] = useState({});
+  const [previewPage, setPreviewPage] = useState(1);
 
   useEffect(() => { document.title = 'عمل‌یار — فرم‌ساز'; }, []);
   useEffect(() => {
@@ -252,6 +259,84 @@ export default function FormBuilder() {
                 )}
                 {form.hint && <p className="fb-hint">{form.hint}</p>}
 
+                {/* ⚠️ **ماتریسِ نقش‌ها یک‌جاست، نه تکرارشده در هر ردیف.**
+                    تا دیروز هر ردیف یک fieldset با هفت چک‌باکس داشت؛ روی فرمِ
+                    ویزیت (۱۵ فیلد) یعنی ۱۰۵ چک‌باکس و صفحه‌ای که در موبایل از
+                    سه هزار پیکسل رد می‌شد و پیداکردنِ «چه کسی چه چیزی را پر
+                    می‌کند» ناممکن بود. یک جدولِ فیلد × نقش همان داده را در یک
+                    نگاه می‌دهد و ردیف‌ها فشرده می‌مانند (§۴.۷ سندِ بازبینی).
+                    بسته است تا ارتفاعِ صفحه را برنگرداند. */}
+                <details className="fb-fold fb-matrix">
+                  <summary>ماتریسِ نقش‌ها — چه کسی کدام فیلد را پر می‌کند</summary>
+                  <p className="fb-fold-note">
+                    بدونِ هیچ تیک، فیلد <b>عمومی</b> است و همه می‌توانند پرش کنند.
+                    با تیک‌خوردن، فقط همان نقش‌ها کادر را باز می‌بینند و بقیه فقط‌خواندنی.
+                  </p>
+                  <div className="fb-matrix-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th scope="col">فیلد</th>
+                          {JOB_ROLES.map((r) => <th key={r.v} scope="col">{r.l}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.fields.map((f) => {
+                          const roles = fieldRoles(f);
+                          return (
+                            <tr key={f.id} className={roles.length ? '' : 'all'}>
+                              <th scope="row">
+                                {f.label}
+                                {!roles.length && <i>عمومی</i>}
+                              </th>
+                              {JOB_ROLES.map((r) => (
+                                <td key={r.v}>
+                                  <input
+                                    type="checkbox"
+                                    disabled={busy}
+                                    checked={roles.includes(r.v)}
+                                    aria-label={`${f.label} — ${r.l}`}
+                                    onChange={(e) => setFieldRoles(f, e.target.checked
+                                      ? [...roles, r.v]
+                                      : roles.filter((v) => v !== r.v))}
+                                  />
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+
+                {/* پیش‌نمایشِ زنده — همان `DynForm`ی که کاربرِ نهایی می‌بیند، نه
+                    یک بازسازیِ دوم. فرم‌سازِ دومی ساخته نمی‌شود (§۴.۷)، پس هر
+                    نوعِ فیلدِ تازه همین‌جا هم خودش را نشان می‌دهد.
+                    مقادیر جایی ذخیره نمی‌شوند و آپلود در دسترس نیست. */}
+                <details className="fb-fold fb-preview">
+                  <summary>پیش‌نمایشِ زنده</summary>
+                  <p className="fb-fold-note">
+                    همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.
+                  </p>
+                  {form.pages > 1 && (
+                    <Tabs
+                      variant="inset"
+                      label="صفحهٔ پیش‌نمایش"
+                      value={String(Math.min(previewPage, form.pages))}
+                      onChange={(k) => setPreviewPage(Number(k))}
+                      items={Array.from({ length: form.pages }, (_, i) => ({ key: String(i + 1), label: `صفحهٔ ${toFa(i + 1)}` }))}
+                    />
+                  )}
+                  <DynForm
+                    fields={form.fields.filter((f) => f.active !== false
+                      && (form.pages > 1 ? (f.page ?? 1) === Math.min(previewPage, form.pages) : true))}
+                    values={preview}
+                    errors={{}}
+                    onChange={setPreview}
+                  />
+                </details>
+
                 <div className="fb-list">
                   {form.fields.map((f, i) => (
                     <motion.article key={f.id} {...stagger(i)} className={`glass fb-row${f.active ? '' : ' off'}`}>
@@ -270,11 +355,14 @@ export default function FormBuilder() {
                         </b>
                         <span>
                           {typeLabel(f.type)}
-                          {f.builtin ? <i className="fb-tag core">هسته‌ای</i> : <i className="fb-tag">دلخواه</i>}
+                          {f.builtin ? <i className="fb-tag core">هسته‌ای</i> : <i className="fb-tag custom">دلخواه</i>}
                           {/* نشانِ صفحه فقط وقتی فرم چندصفحه‌ای است — روی فرمِ
                               تک‌صفحه‌ای «صفحهٔ ۱» روی هر ردیف فقط شلوغی است. */}
                           {form.pages > 1 && <i className="fb-page">صفحهٔ {toFa(f.page ?? 1)}</i>}
-                          {f.role && <i className="fb-tag role">بخشِ {f.roleLabel ?? f.role}</i>}
+                          {/* نقش‌ها این‌جا فقط **خوانده** می‌شوند؛ تیک‌زدنشان کارِ ماتریسِ بالاست. */}
+                          {roleNamesOf(f).length > 0 && (
+                            <i className="fb-tag role">بخشِ {roleNamesOf(f).join('، ')}</i>
+                          )}
                           {!f.active && <i className="fb-tag off">خاموش</i>}
                         </span>
                         {f.options?.length > 0 && (
@@ -292,21 +380,14 @@ export default function FormBuilder() {
                           disabled={busy}
                           onClick={() => toggleRequired(f)}
                           aria-pressed={f.required}
+                          aria-label="اجباری"
                           title={f.required ? 'اجباری — برای اختیاری‌کردن بزنید' : 'اختیاری — برای اجباری‌کردن بزنید'}
                         >
-                          <span aria-hidden="true">*</span> اجباری
+                          {/* برچسب عنصرِ خودش را دارد تا در موبایل جمع شود و فقط
+                              ستاره بماند؛ معنی‌اش در aria-label و title می‌ماند. */}
+                          <span aria-hidden="true">*</span>
+                          <em>اجباری</em>
                         </button>
-                        {/* بخشِ نقش — «هر کس قسمتِ خودش را پر کند». روی فیلدِ
-                            هسته‌ای هم می‌نشیند: «تاریخ مالِ منشی» به‌اندازهٔ
-                            «شرحِ معاینه مالِ پزشک» معنا دارد. */}
-                        <fieldset className="fb-role-choices" disabled={busy}>
-                          <legend>نقش‌های مجاز برای تکمیل (بدون انتخاب: عمومی)</legend>
-                          {JOB_ROLES.map((r) => <label key={r.v}>
-                            <input type="checkbox" checked={fieldRoles(f).includes(r.v)}
-                              onChange={(e) => setFieldRoles(f, e.target.checked ? [...fieldRoles(f), r.v] : fieldRoles(f).filter((v) => v !== r.v))} />
-                            {r.l}
-                          </label>)}
-                        </fieldset>
                         <button type="button" className="df-act" disabled={busy} onClick={() => setEditing({ formId: form.id, field: f })} aria-label="ویرایش">
                           <Pencil width="15" height="15" />
                         </button>
@@ -600,7 +681,11 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
   );
 
   return (
-    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+    /* ⚠️ روی دسکتاپ **پنلِ کناری** است نه مودالِ وسط (§۴.۷): تنظیمِ یک فیلد
+       کاری است که کنارِ فهرست انجام می‌شود، و مودالِ وسط همان فهرستی را می‌پوشاند
+       که کاربر دارد با آن مقایسه می‌کند. در موبایل همان شیتِ همیشگی می‌ماند —
+       صفحهٔ باریک جایی برای دو ستون ندارد. کلِ تفاوت در CSS است. */
+    <Overlay backdrop="df-overlay" panel="df-sheet fb-side" as="section" onClose={onClose} closable={!busy}>
       <header className="df-sheet-head">
         <b>{isNew ? 'فیلدِ تازه' : field.builtin ? `ویرایشِ «${field.label}» (هسته‌ای)` : `ویرایشِ «${field.label}»`}</b>
         <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
