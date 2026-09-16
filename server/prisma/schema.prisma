@@ -2584,3 +2584,69 @@ model SiteItem {
   @@index([kind, active, sort])
   @@map("site_items")
 }
+
+/// ───────────────────────── لایهٔ کار (W2.1) ─────────────────────────
+/// «کار» = تعهدی با مسئول و مهلت، با ارجاعِ صریح به موجودیتِ منبع. قراردادِ دقیق:
+/// `docs/plan/CONTRACTS.md` §۱. عمداً بدونِ relation تا مدل‌های دیگر دست نخورند
+/// (append-only)؛ خواننده‌ها بیمار/مراجعه را جداگانه enrich می‌کنند.
+model WorkItem {
+  id Int @id @default(autoincrement())
+  /// review_result · review_form · approve_intake · repair_intake · call_patient · confirm_appointment ·
+  /// confirm_surgery_done · complete_report · confirm_usage · issue_invoice · resend_sms ·
+  /// follow_up_unanswered · fill_form · upload_result · pick_slot · manual
+  type String
+  /// open · blocked · done · cancelled · expired
+  state String @default("open")
+  /// human · assistant_suggests · assistant_auto_approve · assistant_auto — نردبانِ مجری (§۴.۱ سندِ بازبینی)
+  performer String @default("human")
+  priority  Int    @default(0)
+  dueAt     DateTime? @map("due_at")
+  /// jobRole (doctor/secretary/nurse/assistant/technician/driver/courier) یا 'patient' یا 'system'
+  ownerRole      String? @map("owner_role")
+  ownerAccountId Int?    @map("owner_account_id")
+  patientId      Int?    @map("patient_id")
+  visitId        Int?    @map("visit_id")
+  appointmentId  Int?    @map("appointment_id")
+  /// ارجاعِ آزاد: lab_order | imaging_order | consult_order | referral_order | intake_submission | invoice | reminder | visit
+  refType String? @map("ref_type")
+  refId   Int?    @map("ref_id")
+  title   String
+  note    String?
+  outcome Json?
+  blockedReason  String?   @map("blocked_reason")
+  sourceEventId  Int?      @map("source_event_id")
+  idempotencyKey String    @unique @map("idempotency_key")
+  createdById    Int?      @map("created_by_id")
+  completedById  Int?      @map("completed_by_id")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([state, ownerRole, dueAt])
+  @@index([state, ownerAccountId, dueAt])
+  @@index([patientId])
+  @@index([refType, refId])
+  @@map("work_items")
+}
+
+/// outbox: هر نوشتنِ حساس یک رویداد در **همان تراکنش** (`EventsService.emit`).
+/// پردازشگر (worker) رویدادِ پردازش‌نشده را به کار تبدیل می‌کند؛ ردیف پاک نمی‌شود
+/// چون منبعِ analytics (W4.4) هم هست. قرارداد: `docs/plan/CONTRACTS.md` §۲.
+model DomainEvent {
+  id Int @id @default(autoincrement())
+  type          String
+  patientId     Int?      @map("patient_id")
+  visitId       Int?      @map("visit_id")
+  appointmentId Int?      @map("appointment_id")
+  refType       String?   @map("ref_type")
+  refId         Int?      @map("ref_id")
+  payload       Json?
+  actorId       Int?      @map("actor_id")
+  at            DateTime  @default(now())
+  processedAt   DateTime? @map("processed_at")
+
+  @@index([processedAt])
+  @@index([type, at])
+  @@index([patientId])
+  @@map("domain_events")
+}

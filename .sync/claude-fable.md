@@ -7,6 +7,11 @@ paths:
   - docs/plan/
   - docs/UX_WORKFLOW_AUDIT_2026-09-16.md
   - server/src/work/
+  - server/src/app.module.ts
+  - server/src/reminders/reminders-worker.service.ts
+  - server/src/auth/access-registry.ts
+  - server/src/config/verticals.ts
+  - scripts/e2e/w2-1-work-layer.mjs
 note: لِینِ ج — سندِ بازبینی + تابلوی کار لند می‌شود، بعد W2.1 (WorkItem/DomainEvent) روی claude/w2-1-work-layer
 <!-- claim:end -->
 
@@ -14,9 +19,11 @@ note: لِینِ ج — سندِ بازبینی + تابلوی کار لند م�
 
 ## قراردادهایی که شکستم
 
-- (چیزی ثبت نشده)
+- ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۶/۲۵ · PR #11 · `6b76cd1` · **پوشهٔ `docs/plan/` + سندِ بازبینی روی `main`.** از این‌جا به بعد هر ایجنت لِینِ خودش را از `docs/plan/lanes/<خودش>.md` می‌گیرد.
 
 - ۱۴۰۵/۰۶/۲۵ · `b548faa` · **بازبینیِ تکمیلیِ مسیرها و UX + نقشهٔ اصلاح** (`docs/UX_WORKFLOW_AUDIT_2026-09-16.md`) و پوشهٔ هماهنگیِ `docs/plan/` (BOARD، CONTRACTS، DECISIONS، lanes، BRIEF_GPT). سه لِین: الف=`gpt` (صحتِ بک‌اند)، ب=`claude-opus` (سطوحِ بیمار/UI)، ج=`claude-fable` (لایهٔ کار/پوسته/امروز).
 

@@ -17,6 +17,7 @@ import { TenantConfigModule } from './config/config.module';
 import { AiModule } from './ai/ai.module';
 import { ChatModule } from './chat/chat.module';
 import { SiteModule } from './site/site.module';
+import { WorkModule } from './work/work.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { SiteModule } from './site/site.module';
     ImportModule,
     PlatformModule,
     RemindersModule,
+    WorkModule,
   ],
   controllers: [AppController],
 })

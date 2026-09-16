@@ -72,6 +72,11 @@ export const ACCESS_GROUPS: AccessGroup[] = [
     key: 'system',
     label: 'تعاریف و سامانه',
   },
+  {
+    key: 'work',
+    label: 'کارها و پیگیری',
+    hint: 'صفِ کارِ هر نقش: نتیجهٔ نیازمندِ بررسی، ثبت‌نامِ در انتظار، تماس با بیمار، گزارشِ ناقص… هر کار مسئول و مهلت دارد.',
+  },
 ];
 
 /**
@@ -140,6 +145,11 @@ export const FEATURES: AccessDef[] = [
     key: 'access', label: 'سطوحِ دسترسی', group: 'modules',
     hint: 'همین صفحه. قفل است — صفحه‌ای که دسترسی‌ها را عوض می‌کند نمی‌تواند خودش را برای سطحِ پایین‌تر باز کند.',
     defaultLevel: LEVEL.SUPER_ADMIN, locked: true,
+  },
+  {
+    key: 'work', label: 'کارهای من', group: 'modules',
+    hint: 'صفِ کارِ هر نفر و هر نقش (لایهٔ کار). عمداً از سطحِ کارشناس باز است: هر کسی که کاری به نامش می‌خورد باید آن را ببیند.',
+    defaultLevel: LEVEL.TECH,
   },
 ];
 
@@ -318,6 +328,11 @@ export const PERMISSIONS: AccessDef[] = [
     hint: 'کلِ دیتابیسِ شرکت را دست می‌زند.',
     defaultLevel: LEVEL.SUPER_ADMIN,
   },
+  /* ── لایهٔ کار (W2.1) ── */
+  { key: 'work.read', label: 'دیدنِ کارهای خود و نقشِ خود', group: 'work', defaultLevel: LEVEL.TECH },
+  { key: 'work.write', label: 'انجام، توقف و ساختنِ کارِ دستی', group: 'work', defaultLevel: LEVEL.TECH },
+  { key: 'work.assign', label: 'واگذاریِ کار به دیگران و دیدنِ همهٔ کارها', group: 'work', hint: 'سوپروایزر و بالاتر: کارِ بی‌مسئول را به کسی می‌دهد و صفِ همه را می‌بیند.', defaultLevel: LEVEL.SUPERVISOR },
+  { key: 'work.process', label: 'اجرای دستیِ پردازشگرِ رویدادها', group: 'work', hint: 'فقط برای آزمون و عیب‌یابی؛ worker همین را خودکار انجام می‌دهد.', defaultLevel: LEVEL.SUPER_ADMIN },
 ];
 
 /**
