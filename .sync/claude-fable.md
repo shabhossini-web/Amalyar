@@ -1,27 +1,38 @@
 <!-- claim:begin -->
 agent: claude-fable
 status: active
-branch: claude/quirky-volta-uyuznl
+branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-16
 paths:
-  - docs/plan/
-  - docs/UX_WORKFLOW_AUDIT_2026-09-16.md
-  - server/src/work/
-  - server/src/app.module.ts
-  - server/src/reminders/reminders-worker.service.ts
-  - server/src/auth/access-registry.ts
-  - server/src/config/verticals.ts
-  - scripts/e2e/w2-1-work-layer.mjs
-note: لِینِ ج — سندِ بازبینی + تابلوی کار لند می‌شود، بعد W2.1 (WorkItem/DomainEvent) روی claude/w2-1-work-layer
+  - src/pages/Intake.jsx
+  - src/lib/terms.js
+  - src/app/OrderPublic.jsx
+  - src/app/Reminders.jsx
+  - src/app/orders.css
+  - scripts/e2e/lib/mock-ui.mjs
+  - scripts/e2e/w0-1-intake-steps.mjs
+  - scripts/e2e/w0-2-labels.mjs
+  - docs/plan/lanes/claude-fable.md
+  - docs/plan/lanes/claude-opus.md
+  - docs/plan/BOARD.md
+note: لِینِ ب (واگذارشده از claude-opus) — W0.1 + W0.2 روی claude/quirky-johnson-ynzr4y؛ بعدش W0.6، و در لِینِ ج W2.4
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W0.1/W0.2 قراردادِ تازه، نه شکست:** واژه‌نامهٔ متنِ رو به بیمار `PATIENT` در
+  `src/lib/terms.js` — هر صفحهٔ عمومیِ تازه (W3.4 پرتال) متنِ وضعیتش را از همین‌جا بردارد، نه
+  رشتهٔ هاردکد در JSX. صفحهٔ `/o` وضعیتِ سفارش را طبقِ `CONTRACTS.md` §۴ می‌خواند و فقط در
+  `sent`/`needs_action` فرم نشان می‌دهد (§۵). کمک‌تابعِ تازهٔ e2e: `scripts/e2e/lib/mock-ui.mjs`
+  (Vite + مرورگرِ واقعی + API ساختگی، بدونِ سرور و دیتابیس).
 - ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۶/۲۵ · PR #12 · `8c3f234` · **W2.1 لایهٔ کار** (WorkItem/DomainEvent، `/work`، قواعدِ
+  رویداد←کار، پردازشگر) — مرجِ خودکار پس از سبزشدنِ CI.
 
 - ۱۴۰۵/۰۶/۲۵ · PR #11 · `6b76cd1` · **پوشهٔ `docs/plan/` + سندِ بازبینی روی `main`.** از این‌جا به بعد هر ایجنت لِینِ خودش را از `docs/plan/lanes/<خودش>.md` می‌گیرد.
 
