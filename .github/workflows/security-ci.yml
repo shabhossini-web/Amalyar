@@ -169,7 +169,10 @@ jobs:
           const patients= fs.readFileSync('src/patients/patients.service.ts', 'utf8');
           const record  = fs.readFileSync('src/patients/record.service.ts', 'utf8');
           const schema  = fs.readFileSync('prisma/schema.prisma', 'utf8');
-          const ui      = fs.readFileSync('../src/app/Dashboard.jsx', 'utf8');
+          /* از W3.2 واژگانِ نوعِ مراجعه در `visit-kinds.js` است، نه `Dashboard.jsx`:
+             فرمِ ویزیت به فایلِ خودش رفت و هر دو از همان‌جا می‌خوانند. نگهبان
+             دنبالِ کد آمد، وگرنه روی فایلی می‌ایستاد که دیگر برچسبی ندارد. */
+          const ui      = fs.readFileSync('../src/app/visit-kinds.js', 'utf8');
 
           /* ⚠️ این نگهبان **جای نگهبانِ قبلی** نشسته که فهرستِ نوع‌ها را بسته
              نگه می‌داشت. آن قاعده عمداً کنار گذاشته شد: مسیرِ درمان جایگشتِ
@@ -211,6 +214,13 @@ jobs:
           }
           if (/KINDS\[k\] \?\? KINDS\.surgery/.test(ui)) {
             console.error('نوعِ ناشناخته نباید «عمل» خوانده شود — برچسبِ حدسی دروغ می‌گوید'); process.exit(1);
+          }
+          /* و برچسب‌ها نباید دوباره در صفحه‌ها کپی شوند: دو نسخه یعنی روزی نوعِ
+             تازه در یکی فارسی بیاید و در دیگری کلیدِ خامِ انگلیسی. */
+          for (const f of ['../src/app/Dashboard.jsx', '../src/app/VisitForm.jsx']) {
+            if (/const KINDS = \{/.test(fs.readFileSync(f, 'utf8'))) {
+              console.error('KINDS فقط در src/app/visit-kinds.js — نسخهٔ دوم در ' + f); process.exit(1);
+            }
           }
           // ⑥ مسیرِ درمان باید **مشتق** بماند. ستونِ گرهِ والد یعنی کاربری که
           //    گره‌زدن را فراموش کند، مسیرش تکه‌تکه می‌شود.

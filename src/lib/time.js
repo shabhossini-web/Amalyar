@@ -88,3 +88,20 @@ export function durationMin(start, end) {
   const d = b - a;
   return d < 0 ? d + 1440 : d;
 }
+
+/**
+ * «۳ ساعت و ۲۵ دقیقه» — صفرِ بی‌معنی («۰ ساعت») نشان داده نمی‌شود.
+ *
+ * از W3.2 این‌جاست، نه در `Dashboard.jsx`: هم فهرستِ مراجعات و هم فرمِ ویزیت
+ * (که به فایلِ خودش رفت) مدتِ عمل را همین‌طور می‌نویسند؛ دو نسخه یعنی روزی
+ * یکی «۰ ساعت» بنویسد و دیگری ننویسد.
+ */
+export function faDuration(min) {
+  if (min == null) return '';
+  const fa = (n) => Number(n || 0).toLocaleString('fa-IR');
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (!h) return `${fa(m)} دقیقه`;
+  if (!m) return `${fa(h)} ساعت`;
+  return `${fa(h)} ساعت و ${fa(m)} دقیقه`;
+}
