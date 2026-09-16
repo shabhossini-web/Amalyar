@@ -5,6 +5,7 @@ import { SettingsService } from '../config/settings.service';
 import { SmsService } from '../sms/sms.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { toEnDigits } from '../common/identity';
 
 /** چهار نوعِ سفارشِ بالینی — کلیدِ مسیر و جدول. */
@@ -34,6 +35,7 @@ export class OrdersService {
     private sms: SmsService,
     private tenant: TenantContext,
     private audit: AuditService,
+    private events: EventsService,
   ) {}
 
   /* delegateِ prisma برای هر نوع. تایپِ اجتماعِ چهار delegate در Prisma
@@ -185,13 +187,21 @@ export class OrdersService {
     const text = `${prefix}${FA[kind]}:\n${this.summary(kind, row)}\n${url}`;
     const res = await this.sms.send(to, text);
     await this.table(kind).update({ where: { id }, data: { status: row.status === 'answered' ? 'answered' : 'sent', sentAt: new Date() } });
-    await this.prisma.reminder.create({
+    const rem = await this.prisma.reminder.create({
       data: {
         patientId: row.patientId, visitId: row.visitId ?? null, kind: 'notice',
         dueAt: new Date(), phone: to, text,
         status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date(),
       },
-    }).catch(() => undefined);
+    }).catch(() => null);
+    /* W2.2: پیامکی که همین‌جا نرفت ← کارِ «ارسالِ دوباره» برای منشی (work-rules: sms.failed). */
+    if (!res.sent && !res.stub) {
+      await this.events.emit({
+        type: 'sms.failed', patientId: row.patientId, visitId: row.visitId ?? null, actorId: user?.id ?? null,
+        ...(rem ? { refType: 'reminder', refId: rem.id } : { refType: `${kind}_order`, refId: id }),
+        payload: { kind: 'notice', error: 'سرویس پیامک ارسال را نپذیرفت' },
+      });
+    }
     await this.audit.record({
       actorId: user?.id, action: `order.${kind}.send`, entityType: `${kind}_order`, entityId: id,
       after: { to, sent: res.sent, stub: res.stub },
@@ -235,6 +245,11 @@ export class OrdersService {
         };
       data.status = 'answered';
       await this.table(kind).update({ where: { id: row.id }, data });
+      /* W2.2: پاسخِ بیمار ← کارِ «بررسیِ نتیجه» برای پزشک (work-rules: order.answered). */
+      await this.events.emit({
+        type: 'order.answered', patientId: row.patientId, visitId: row.visitId ?? null,
+        refType: `${kind}_order`, refId: row.id, payload: { again: row.status === 'answered' },
+      });
       return { ok: true };
     }
     throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');

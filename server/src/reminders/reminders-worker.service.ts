@@ -6,6 +6,7 @@ import { SmsService } from '../sms/sms.service';
 import { sendReminders } from './send-reminders';
 import { expireProvisional } from '../accounts/provisional';
 import { processDomainEvents } from '../work/work-processor';
+import { detectStaleWork } from '../work/work-detectors';
 
 /**
  * workerِ یادآوری‌ها — هر چند دقیقه، pendingهای سررسیدهٔ **همهٔ شرکت‌ها**.
@@ -72,6 +73,8 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
       const result = await sendReminders(client, this.sms);
       if (result.due) this.log.log(`${slug}: ${result.sent}/${result.due} یادآوری فرستاده شد`);
       /* لایهٔ کار (W2.1): رویدادهای پردازش‌نشده ← کار. همان sweep، همان client. */
+      /* W2.2: حالت‌های بیات (عملِ بی‌وضعیت، گزارشِ نیامده، مصرفِ تأییدنشده، فرمِ بی‌پاسخ) ← رویداد. */
+      await detectStaleWork(client);
       const work = await processDomainEvents(client);
       if (work.events) this.log.log(`${slug}: ${work.events} رویداد ← ${work.created} کارِ تازه، ${work.closed} بسته`);
     } catch (e: any) {

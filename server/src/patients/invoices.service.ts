@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsService } from '../work/events.service';
 import { SettingsService } from '../config/settings.service';
 import { BillingService, summarize } from './billing.service';
 import { ServiceCodesService } from './service-codes.service';
@@ -59,7 +60,7 @@ function normalizeConsumables(input: unknown): Consumable[] {
 
 @Injectable()
 export class InvoicesService {
-  constructor(private prisma: PrismaService, private billing: BillingService, private codes: ServiceCodesService, private settings: SettingsService, private inventory: InventoryService) {}
+  constructor(private prisma: PrismaService, private billing: BillingService, private codes: ServiceCodesService, private settings: SettingsService, private inventory: InventoryService, private events: EventsService) {}
 
   private async visit(id: number, user: any) {
     const v = await this.prisma.visit.findFirst({ where: { id, ...((user?.level ?? 0) < LEVEL.SUPERVISOR ? { techId: user?.id ?? -1 } : {}) }, include: { hospital: true } });
@@ -230,6 +231,9 @@ export class InvoicesService {
           const doc = await tx.invoiceDocument.create({ data: { id: serial.id, visitId: id, variant, number, fingerprint, snapshot, createdById: user?.id ?? null } });
           await tx.invoiceDocument.updateMany({ where: { visitId: id, variant, supersededAt: null, id: { not: doc.id } }, data: { supersededAt: doc.createdAt } });
           await tx.auditEvent.create({ data: { actorId: user?.id ?? null, action: 'invoice.issue', entityType: 'visit', entityId: String(id), afterJson: { invoiceId: doc.id, number, total: totals.total, replacedId: latest?.id ?? null } } });
+          /* W2.2: صدور ← بستنِ «صدورِ فاکتور» (work-rules: invoice.issued). refِ رویداد = مراجعه، مثلِ invoice.ready. */
+          await this.events.emit({ type: 'invoice.issued', visitId: id, patientId: v.patientId, actorId: user?.id ?? null,
+            payload: { invoiceId: doc.id, number, total: totals.total, variant } }, tx);
           return doc;
         }, { isolationLevel: 'Serializable', timeout: 15000 });
       } catch (error) {

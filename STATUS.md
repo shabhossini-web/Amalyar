@@ -992,3 +992,27 @@ fallback دیده می‌شد؛ با یک کلیک در فرم‌ساز برمی
 - **شناسه (پس از مرجِ PR #14 لِینِ ج):** این نشست از این به بعد `claude-fable-b` است؛ لِینِ ب در
   `docs/plan/lanes/claude-fable-b.md` و کلیم در `.sync/claude-fable-b.md`. دو بندِ بالا که
   `claude-fable` و `lanes/claude-fable.md` را می‌گویند، تاریخی‌اند.
+
+## W2.4 لند شد + W2.2 تولیدکننده‌های کار — 2026-09-16
+
+- **W2.4 لند شد:** PR #14 (`291f255`)، مرجِ خودکار پس از CI سبز — پوستهٔ سراسری (`Shell.jsx`
+  layout-route روی همهٔ `/app/*`)، جستجوی بیمار Ctrl+K (`GET /search/patients`)، زنگِ کارها،
+  صفحهٔ `/app/work`. `ProfileMenu` فقط در پوسته رندر می‌شود. e2e `w2-4-shell.mjs` ۱۷/۱۷.
+- **دو نشستِ Fable = دو شناسه:** لِینِ ب از این به بعد `claude-fable-b` است (`.sync/claude-fable-b.md`،
+  `lanes/claude-fable-b.md`)؛ `claude-fable` فقط لِینِ ج. دلیل: کلیمِ مشترک همان روزِ اول
+  کانفلیکت خورد (PR #14 ↔ #15).
+- **W2.2 (این PR):** رویدادِ دامنه در هفت سرویس emit می‌شود (`order.answered`، `form.answered`،
+  `appointment.<status>`/`started`، `visit.<opStatus>`، `invoice.issued` داخلِ تراکنش،
+  `usage.confirmed`، `report.uploaded`، `sms.sent/failed/uncertain`) و
+  `server/src/work/work-detectors.ts` چهار کارِ زمان‌محور را می‌سازد (`visit.unconfirmed`،
+  `report.missing`، `usage.unconfirmed`، `form.unanswered` — فقط `surgery`، کفِ ۶۰ روز،
+  هفته‌ای یک‌بار) و `complete_report` را از هر مسیرِ آپلود می‌بندد. کاتالوگِ رویداد و شکلِ
+  `ref` در `CONTRACTS.md` §۲. `intake.service.ts` (کلیمِ GPT) دست نخورد — چهار emitِ
+  ثبت‌نام در `lanes/claude-fable.md` برای لِینِ الف نوشته شد.
+- **سنجه:** `scripts/e2e/w2-2-work-producers.mjs` ۳۲/۳۲ (هر emit مثبت + «نباید بیفتد»)؛
+  `neuromonitoring-invoice.mjs` سنجهٔ `invoice.issued` گرفت و **بدونِ** تزریقِ
+  `EventsService` واقعاً می‌شکست (سرویسِ دستی‌ساخته در چهار تستِ CI به‌روز شد)؛
+  `w2-1` ۲۲/۲۲ و `w2-4` ۱۷/۱۷ پس از تغییر دوباره سبز.
+- **کجا هستیم:** شاخهٔ `claude/quirky-volta-uyuznl` (از `2ced34c`ِ main)، PR باز؛ پس از
+  مرجِ خودکار، ✅ با هش در `lanes/claude-fable.md`. **قدمِ بعدی:** W2.3 صفحهٔ «امروز»
+  (`DECISIONS.md` #۲)، بعد W2.5.

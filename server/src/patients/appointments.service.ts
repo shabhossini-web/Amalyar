@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { PatientsService } from './patients.service';
 import { FormsService } from './forms.service';
 import { AvailabilityService } from './availability.service';
@@ -45,6 +46,7 @@ export class AppointmentsService {
     private forms: FormsService,
     private availability: AvailabilityService,
     private reminders: RemindersService,
+    private events: EventsService,
   ) {}
 
   private view(a: any) {
@@ -229,6 +231,11 @@ export class AppointmentsService {
       actorId: user?.id, action: 'appointment.status', entityType: 'appointment', entityId: id,
       before: { status: row.status }, after: { status },
     });
+    /* W2.2: noshow ← «تماس با غایب»؛ confirmed/cancelled ← بستنِ «تأییدِ نوبت» (work-rules). */
+    await this.events.emit({
+      type: `appointment.${status}`, appointmentId: id, patientId: row.patientId ?? null, visitId: row.visitId ?? null,
+      actorId: user?.id ?? null, payload: { from: row.status, date: row.date },
+    });
     /* لغو/نیامد → یادآوری باطل؛ برگشت به قطعی → دوباره کاشته می‌شود. */
     await this.reminders.syncAppointment(id);
     /* قرینهٔ خاموشیِ walkIn: نوبتی که «ویزیتِ بعدی» را پوشش می‌داد اگر لغو یا
@@ -284,6 +291,9 @@ export class AppointmentsService {
     await this.audit.record({
       actorId: user?.id, action: 'appointment.start_visit', entityType: 'appointment', entityId: id,
       after: { visitId: visit.id },
+    });
+    await this.events.emit({
+      type: 'appointment.started', appointmentId: id, patientId: row.patientId, visitId: visit.id, actorId: user?.id ?? null,
     });
     return { visitId: visit.id, made: true };
   }

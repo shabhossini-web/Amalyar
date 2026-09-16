@@ -86,6 +86,26 @@ model DomainEvent {
 ```
 
 - `EventsService.emit(event, tx)` — **داخلِ همان تراکنشِ** نوشتنِ اصلی. تا W2.1 لند نشده، لِینِ الف در نقطه‌های زیر فقط کامنتِ `// W2.1: emit <type>` می‌گذارد و W2.2 آن‌ها را به `emit` تبدیل می‌کند.
+- **کاتالوگِ رویدادها و تولیدکننده‌ها (W2.2).** `ref` یعنی کلیدی که کارِ باز با آن بسته می‌شود؛ **رویدادِ بازکننده و بستنده باید همان `ref` را داشته باشند.**
+
+| رویداد | کجا emit می‌شود | ref |
+|---|---|---|
+| `order.answered` | `orders.service.publicAnswer` | `refType = <kind>_order, refId` (lab/imaging/consult) |
+| `order.reviewed` · `order.needs_action` | W1.2 (لِینِ الف) | همان `ref`ِ بالا |
+| `form.answered` | `survey.service.submit` | `survey_invite:id` |
+| `form.unanswered` | آشکارساز (۳ روز بی‌پاسخ، منقضی‌نشده) | `survey_invite:id` |
+| `intake.submitted` · `intake.approved` · `intake.rejected` · `intake.approve_failed` | `intake.service` (لِینِ الف، W2.2-ب) | `intake_submission:id` |
+| `appointment.held` | `intake.service.book` (لِینِ الف) | `appointmentId` |
+| `appointment.confirmed/arrived/noshow/cancelled/done` | `appointments.service.setStatus` (هر گذار) + `intake.approve` (confirmed) | `appointmentId` |
+| `appointment.started` | `appointments.service.startVisit` | `appointmentId` (+`visitId` تازه) |
+| `visit.done` · `visit.cancelled` · `visit.pending` | `patients.service.setStatus` (فقط وقتی وضعیت عوض شود) | `visitId` |
+| `visit.unconfirmed` · `report.missing` · `usage.unconfirmed` | آشکارساز (`work-detectors.ts`؛ فقط `surgery`، کفِ ۶۰ روز، هفته‌ای یک‌بار) — `payload.techId` کار را به نامِ کارشناس می‌کند | `visitId` |
+| `report.uploaded` | `tech.service.uploadReport` + آشکارسازِ بستن (سندِ `report` از هر مسیر) | `visitId` |
+| `usage.confirmed` | `inventory.service.recordUsage` (وقتی حواله مراجعه دارد) | `visitId` |
+| `invoice.issued` | `invoices.service.issue` (داخلِ همان تراکنش) | `visitId` |
+| `sms.sent` · `sms.failed` · `sms.uncertain` | `send-reminders.ts` (+ `orders.service.send` برای ارسالِ مستقیم) | `reminder:id` |
+
+- آشکارساز در `POST /work/process` و در sweepِ worker **قبل از** پردازشگر اجرا می‌شود.
 - پردازشگر `processDomainEvents(client)` (`work-processor.ts`) در همان sweepِ workerِ یادآوری‌ها اجرا می‌شود (کادنس = `REMINDERS_INTERVAL_MS`، پیش‌فرض ۵ دقیقه، کفِ ۶۰ ثانیه): رویدادهای `processedAt IS NULL` → `work-rules.ts` → `upsertWork`/`closeWork` → `processedAt`. رویداد پاک نمی‌شود (منبعِ analytics، W4.4). برای پاسخِ فوری، سرویسِ صادرکننده می‌تواند پس از commit خودش `WorkService.upsert` را هم صدا بزند؛ پردازشگر به‌خاطرِ idempotency دومی نمی‌سازد.
 
 ## §۳ `Appointment.forVisitId` — نوبتی که برای یک مراجعهٔ مشخص گرفته شده (W1.5 می‌سازد؛ W3.3، W3.4 مصرف می‌کنند)
