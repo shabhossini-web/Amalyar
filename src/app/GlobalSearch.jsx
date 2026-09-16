@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import Overlay from '../ui/Overlay.jsx';
 import { api } from '../lib/api.js';
 import { Close, Search } from '../ui/icons.jsx';
 
@@ -13,6 +15,7 @@ const isTyping = (el) => {
  * پالتِ جستجوی بیمار — از هر صفحه: Ctrl/⌘+K، یا `/` وقتی در فیلدی نیستی.
  * نتیجه از `GET /search/patients` (همان object-authzِ سرور: زیرِ سوپروایزر فقط
  * بیمارانِ خودش). Enter پرونده را باز می‌کند؛ Escape می‌بندد؛ فوکوس داخلِ جعبه می‌ماند.
+ * روی `Overlay`ِ مشترک سوار است تا خروجش هم مثلِ بقیهٔ شیت‌ها انیمیشن داشته باشد.
  */
 export default function GlobalSearch({ open, onOpen, onClose }) {
   const [q, setQ] = useState('');
@@ -71,51 +74,52 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
     navigate(`/app/patients/${p.id}`);
   }, [navigate, onClose]);
 
-  if (!open) return null;
-
   const onKeyDown = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, Math.max(rows.length - 1, 0))); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, Math.max(rows.length - 1, 0))); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); }
     else if (e.key === 'Enter') { e.preventDefault(); go(rows[idx]); }
     else if (e.key === 'Tab') { e.preventDefault(); inputRef.current?.focus(); }
   };
 
   return (
-    <div className="gs-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="gs-panel" role="dialog" aria-modal="true" aria-label="جستجوی بیمار" onKeyDown={onKeyDown}>
-        <div className="gs-input-row">
-          <Search width="18" height="18" aria-hidden="true" />
-          <input
-            ref={inputRef} id="gs-input" className="gs-input" value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="نام، کدِ پرونده، موبایل یا کدِ ملی…" autoComplete="off" spellCheck={false}
-            role="combobox" aria-expanded={rows.length > 0} aria-controls="gs-list"
-            aria-activedescendant={rows[idx] ? `gs-opt-${rows[idx].id}` : undefined}
-          />
-          {busy && <span className="gs-busy" aria-hidden="true" />}
-          <button type="button" className="gs-close" onClick={onClose} aria-label="بستن"><Close width="16" height="16" /></button>
-        </div>
-        <ul id="gs-list" className="gs-list" role="listbox" aria-label="نتایج">
-          {rows.map((p, i) => (
-            <li
-              key={p.id} id={`gs-opt-${p.id}`} role="option" aria-selected={i === idx} className={i === idx ? 'on' : ''}
-              onMouseEnter={() => setIdx(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => go(p)}
-            >
-              <span className="gs-name">{p.fullName}</span>
-              <span className="gs-meta">
-                <code dir="ltr">{p.code}</code>
-                {p.phone && <span dir="ltr">{p.phone}</span>}
-                <span>{faNum(p.visitCount)} مراجعه</span>
-              </span>
-            </li>
-          ))}
-          {q.trim().length < 2 && (
-            <li className="gs-hint">دستِ‌کم دو حرف بنویسید · <kbd>↑</kbd><kbd>↓</kbd> انتخاب · <kbd>Enter</kbd> بازکردنِ پرونده · <kbd>Esc</kbd> بستن</li>
-          )}
-          {!busy && q.trim().length >= 2 && rows.length === 0 && !err && <li className="gs-empty">بیماری با این مشخصات پیدا نشد</li>}
-          {err && <li className="gs-empty">{err}</li>}
-        </ul>
-      </div>
-    </div>
+    <AnimatePresence>
+      {open && (
+        <Overlay backdrop="gs-overlay" panel="gs-panel" onClose={onClose} role="dialog" aria-modal="true" aria-label="جستجوی بیمار" onKeyDown={onKeyDown}>
+          <div className="gs-input-row">
+            <Search width="18" height="18" aria-hidden="true" />
+            {/* autoFocus: فوکوس همان لحظهٔ mount (هم‌زمان با commit)، نه بعد از یک تیک —
+                وگرنه پالت باز است ولی تایپ به صفحهٔ زیرش می‌رود. */}
+            <input
+              ref={inputRef} id="gs-input" className="gs-input" value={q} onChange={(e) => setQ(e.target.value)} autoFocus
+              placeholder="نام، کدِ پرونده، موبایل یا کدِ ملی…" autoComplete="off" spellCheck={false}
+              role="combobox" aria-expanded={rows.length > 0} aria-controls="gs-list"
+              aria-activedescendant={rows[idx] ? `gs-opt-${rows[idx].id}` : undefined}
+            />
+            {busy && <span className="gs-busy" aria-hidden="true" />}
+            <button type="button" className="gs-close" onClick={onClose} aria-label="بستن"><Close width="16" height="16" /></button>
+          </div>
+          <ul id="gs-list" className="gs-list" role="listbox" aria-label="نتایج">
+            {rows.map((p, i) => (
+              <li
+                key={p.id} id={`gs-opt-${p.id}`} role="option" aria-selected={i === idx} className={i === idx ? 'on' : ''}
+                onMouseEnter={() => setIdx(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => go(p)}
+              >
+                <span className="gs-name">{p.fullName}</span>
+                <span className="gs-meta">
+                  <code dir="ltr">{p.code}</code>
+                  {p.phone && <span dir="ltr">{p.phone}</span>}
+                  <span>{faNum(p.visitCount)} مراجعه</span>
+                </span>
+              </li>
+            ))}
+            {q.trim().length < 2 && (
+              <li className="gs-hint">دستِ‌کم دو حرف بنویسید · <kbd>↑</kbd><kbd>↓</kbd> انتخاب · <kbd>Enter</kbd> بازکردنِ پرونده · <kbd>Esc</kbd> بستن</li>
+            )}
+            {!busy && q.trim().length >= 2 && rows.length === 0 && !err && <li className="gs-empty">بیماری با این مشخصات پیدا نشد</li>}
+            {err && <li className="gs-empty">{err}</li>}
+          </ul>
+        </Overlay>
+      )}
+    </AnimatePresence>
   );
 }

@@ -5,6 +5,7 @@ import { useAuth } from './auth.jsx';
 import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { Back } from '../ui/icons.jsx';
+import Tabs from '../ui/Tabs.jsx';
 import './shell.css';
 import './work.css';
 
@@ -90,11 +91,10 @@ export default function WorkList() {
         <button type="submit" className="wk-btn primary" disabled={!title.trim()}>ثبت</button>
       </form>
 
-      <nav className="wk-tabs" role="tablist" aria-label="دامنه">
-        {[...SCOPES, ...(supervisor ? [{ key: 'all', label: 'همهٔ کارها' }] : [])].map((s) => (
-          <button key={s.key} type="button" role="tab" aria-selected={scope === s.key} className={scope === s.key ? 'on' : ''} onClick={() => setScope(s.key)}>{s.label}</button>
-        ))}
-      </nav>
+      <Tabs
+        variant="scroll" className="wk-tabs" label="دامنه" value={scope} onChange={setScope}
+        items={[...SCOPES, ...(supervisor ? [{ key: 'all', label: 'همهٔ کارها' }] : [])]}
+      />
 
       {rows === null && <div className="wk-empty">در حال بارگذاری…</div>}
       {rows && rows.length === 0 && <div className="wk-empty">کاری در این دامنه نیست ✓</div>}

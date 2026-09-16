@@ -2,17 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import WorkRow from './WorkRow.jsx';
+import { Bell } from '../ui/icons.jsx';
 import './work.css';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
-
-/* آیکونِ خطیِ زنگ — همان قراردادِ `src/ui/icons.jsx` (stroke=currentColor)؛ این‌جا
-   محلی است تا فایلِ آیکون‌ها (لِینِ ب) دست نخورد. W3.7 می‌تواند منتقلش کند. */
-const Bell = (p) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" width="20" height="20" aria-hidden="true" {...p}>
-    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21a2 2 0 0 0 4 0" />
-  </svg>
-);
 
 /** رویدادی که هر جای اپ بعد از تغییرِ یک کار می‌فرستد تا شمارنده تازه شود. */
 export const WORK_CHANGED = 'amalyar:work-changed';
@@ -83,7 +76,7 @@ export default function WorkBell({ onToast }) {
         aria-label={total ? `کارها: ${faNum(total)}${overdue ? `، ${faNum(overdue)} عقب‌افتاده` : ''}` : 'کارها'}
         aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}
       >
-        <Bell />
+        <Bell width="20" height="20" />
         {total > 0 && <span className="wb-badge" data-count={total}>{faNum(total)}</span>}
       </button>
       {open && (

@@ -52,7 +52,8 @@ try {
   console.log('\n۲) جستجوی سراسری');
   await page.keyboard.press('Control+K');
   await page.waitForSelector('#gs-input', { timeout: 5000 });
-  ok(await page.locator('#gs-input').evaluate((el) => el === document.activeElement), 'Ctrl+K پالت را باز می‌کند و فوکوس داخلِ آن است');
+  const focused = await page.waitForFunction(() => document.activeElement?.id === 'gs-input', null, { timeout: 3000 }).then(() => true).catch(() => false);
+  ok(focused, 'Ctrl+K پالت را باز می‌کند و فوکوس داخلِ آن است');
   await page.keyboard.type(`پوسته‌${tag}`);
   await page.waitForSelector('#gs-list li[role="option"]', { timeout: 8000 });
   const names = await page.locator('#gs-list li[role="option"] .gs-name').allTextContents();
@@ -60,11 +61,13 @@ try {
   await page.keyboard.press('Enter');
   await page.waitForURL(`**/app/patients/${patientId}`, { timeout: 8000 });
   ok(page.url().endsWith(`/app/patients/${patientId}`), 'Enter پروندهٔ همان بیمار را باز کرد');
-  ok(await page.locator('#gs-input').count() === 0, 'و پالت بسته شد');
+  await page.waitForSelector('#gs-input', { state: 'detached', timeout: 5000 });
+  ok(await page.locator('#gs-input').count() === 0, 'و پالت بسته شد (با انیمیشنِ خروج)');
   await page.keyboard.press('/');
   await page.waitForSelector('#gs-input', { timeout: 5000 });
   ok(true, '«/» بیرونِ فیلد پالت را باز می‌کند');
   await page.keyboard.press('Escape');
+  await page.waitForSelector('#gs-input', { state: 'detached', timeout: 5000 });
   ok(await page.locator('#gs-input').count() === 0, 'Escape می‌بندد');
   await page.goto(UI + '/app/work', { waitUntil: 'networkidle' });
   await page.focus('#wk-new-title');
