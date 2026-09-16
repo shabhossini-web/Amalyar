@@ -1,14 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: active
+status: idle
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-16
 paths:
-  - src/ui/Overlay.jsx
-  - src/ui/Tabs.jsx
-  - scripts/e2e/w0-6-a11y.mjs
-  - docs/plan/lanes/claude-fable-b.md
-note: لِینِ ب — W0.6 (Escape/focus-trap/کلیدهای جهت در src/ui) روی claude/quirky-johnson-ynzr4y، PR #16؛ W0.1/W0.2 لند شد (PR #15)؛ بعدش W3.7. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
+note: لِینِ ب — W0.1/W0.2 (PR #15) و W0.6 (PR #16) لند شد. بسته‌های باز: W0.5/W0.7 منتظرِ لِینِ الف (W0.8/W1.9)؛ W3.7 با کلیمِ فعالِ لِینِ ج روی icons.jsx و بازطراحیِ لانچر در W2.3 برخورد دارد؛ بعدیِ بی‌مانع W3.6. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
@@ -27,6 +23,8 @@ note: لِینِ ب — W0.6 (Escape/focus-trap/کلیدهای جهت در src/u
   (Vite + مرورگرِ واقعی + API ساختگی، بدونِ سرور و دیتابیس).
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۶/۲۵ · PR #16 · `2ced34c` · **W0.6** — Escape/focus-trap/بازگشتِ فوکوس و `role="dialog"` در `Overlay`، roving tabindex و کلیدهای جهت در `Tabs`؛ e2e `w0-6-a11y.mjs` ۱۷/۱۷.
 
 - ۱۴۰۵/۰۶/۲۵ · PR #15 · `afa824b` · **W0.1 + W0.2** — استپر و پیام‌های فرمِ بیمار از وضعیتِ مسیر، برچسبِ `follow_up`، پیامِ پایانِ سفارش، واژه‌نامهٔ `PATIENT` در `terms.js`، کمک‌تابعِ `lib/mock-ui.mjs`.
 
