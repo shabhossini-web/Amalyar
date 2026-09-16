@@ -9,9 +9,9 @@
 | ۲ | W2.4 پوستهٔ سراسری + جستجوی بیمار + زنگِ اعلان + صفحهٔ «کارهای من» | ✅ | `claude/quirky-volta-uyuznl` | PR #14 (`291f255`) | `CONTRACTS.md` §۱۰ · e2e: `scripts/e2e/w2-4-shell.mjs` (۱۷/۱۷، دو بار) |
 | ۳ | W2.2 تولیدکننده‌های کار (emit در ۷ سرویس + آشکارسازِ حالت‌های بیات) | ✅ | `claude/quirky-volta-uyuznl` | PR #18 (`8d8997b`) | `CONTRACTS.md` §۲ (کاتالوگِ رویداد) · e2e: `scripts/e2e/w2-2-work-producers.mjs` (۳۲/۳۲) · **intake.service.ts دست نخورد** — چهار emitِ ثبت‌نام را GPT می‌گذارد (یادداشت پایین) |
 | ۴ | W2.3 صفحهٔ «امروز» + خلاصهٔ صبح | ✅ | `claude/quirky-volta-uyuznl` | PR #21 (`aec89c3`) | `DECISIONS.md` #۲ (پیش‌فرض: جایگزینِ لانچر) · `CONTRACTS.md` §۱۱ · e2e: `scripts/e2e/w2-3-today.mjs` (۲۱/۲۱) |
-| ۵ | W2.5 نمای استثنای مدیر | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `CONTRACTS.md` §۱۱ · e2e: `scripts/e2e/w2-5-exceptions.mjs` (۱۷/۱۷) |
+| ۵ | W2.5 نمای استثنای مدیر | ✅ | `claude/quirky-volta-uyuznl` | PR #22 (`f8da7bd`) | `CONTRACTS.md` §۱۱ · e2e: `scripts/e2e/w2-5-exceptions.mjs` (۱۷/۱۷) |
 | ۶ | W3.1 پروندهٔ زنده | ⬜ | `claude/w3-1-live-record` | | پس از W1.2 |
-| ۷ | W3.2 فضای کارِ ویزیت (اول استخراجِ `VisitForm`) | ⬜ | `claude/w3-2-visit-workspace` | | |
+| ۷ | W3.2 فضای کارِ ویزیت — **گامِ ۱: استخراجِ `VisitForm`** | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `Dashboard.jsx` ۲۴۳۶ → ۱۱۱۲ خط (معیارِ سند: <۱۲۰۰). گامِ ۲ (فضای کار + مراجعهٔ پیش‌نویس) جدا می‌آید |
 | ۸ | W3.3 میزِ پذیرشِ روز | ⬜ | `claude/w3-3-front-desk` | | پس از W1.5 |
 | ۹ | W3.8 یکی‌کردنِ منبعِ ساعت/کارشناس + پیشنهادِ جراح/عمل در تأیید | ⬜ | `claude/w3-8-single-source` | | |
 | بعد | W4.1 / W4.2 مسیرِ درمان · W5.1–W5.4 دستیار درونِ کارها | ⬜ | | | |
@@ -20,6 +20,7 @@
 - (خالی)
 
 ## یادداشت برای لِین‌های دیگر
+- **W3.2 گامِ ۱ (PR باز):** فرمِ ثبت/ویرایشِ مراجعه از `Dashboard.jsx` به `src/app/VisitForm.jsx` رفت (بدونِ تغییرِ رفتار). واژگانِ نوعِ مراجعه حالا در `src/app/visit-kinds.js` (`KINDS` / `kindOf`) و `faDuration` در `src/lib/time.js` است — **هر دو تک‌منبع**؛ اگر جایی نوعِ تازه یا قالبِ مدت لازم شد، همان‌جا. `DefSelect` با فرم رفت چون فقط همان استفاده‌اش می‌کند.
 - W2.1 لند شد (PR #12، `8c3f234`): `WorkService.upsert` برای W1.2 (لِینِ الف) آماده است.
 - (از لِینِ ب) **لِینِ الف (W0.8 / W1.2):** صفحهٔ بیمارِ `/o` حالا `status`ِ سفارش را طبقِ `CONTRACTS.md` §۴
   می‌خواند (`answered / in_review / reviewed / needs_action`) و فقط در `sent`/`needs_action` فرمِ
