@@ -10,10 +10,16 @@ import { useStagger } from '../ui/stagger.js';
 
 const KIND_FA = {
   next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ‌رو', appointment: 'نوبت',
-  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل', notice: 'اطلاع‌رسانی', dispatch: 'ابلاغ برنامه روز',
+  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل', follow_up: 'فرمِ پیگیری',
+  notice: 'اطلاع‌رسانی', dispatch: 'ابلاغ برنامه روز',
 };
 const STATUS_FA = { pending: 'در صف', sending: 'در حال ارسال', sent: 'ارسال ثبت شد', failed: 'ارسال ناموفق', uncertain: 'نتیجه ارسال نامشخص', simulated: 'آزمایشی؛ ارسال نشده' };
 const DELIVERY_FA = { unknown: 'رسیدن به گوشی هنوز تأیید نشده', delivered: 'رسیده به گوشی', not_delivered: 'نرسیده به گوشی', not_sent: 'ارسال نشده', stored: 'در پیام‌رسان ثبت شده؛ هنوز خوانده نشده', read: 'خوانده شده' };
+/* ⚠️ کلیدِ خام هرگز روی صفحه نمی‌آید (W0.2): `follow_up` ماه‌ها به‌شکلِ «follow_up»
+   دیده می‌شد چون این نگاشت جا مانده بود. نوعِ تازهٔ سرور = یک ردیف این‌جا؛ تا آن
+   روز برچسبِ عام + خودِ کلید در title، تا نه دروغ بگوید نه کد نشان دهد. */
+const kindFa = (k) => KIND_FA[k] ?? 'یادآوری';
+const statusFa = (s) => STATUS_FA[s] ?? 'وضعیتِ نامشخص';
 const TABS = [
   { key: 'all', label: 'همه' },
   { key: 'pending', label: 'در صف' },
@@ -100,7 +106,7 @@ export default function Reminders() {
         {shown.map((r, i) => (
           <motion.article key={r.id} {...row(i)} className={`rm-row st-${r.status}`}>
             <div className="rm-row-head">
-              <b>{KIND_FA[r.kind] ?? r.kind}</b>
+              <b title={r.kind}>{kindFa(r.kind)}</b>
               {r.patientName && <span>{r.patientName}</span>}
               {r.recipientName && <span>{r.recipientName}</span>}
               <span>{r.channel === 'chat' ? 'پیام‌رسان داخلی' : 'پیامک'}</span>
@@ -109,7 +115,7 @@ export default function Reminders() {
                 {r.status === 'pending' ? `موعد: ${faDate(r.dueAt)}` : faDate(r.sentAt ?? r.dueAt)}
                 {r.phone ? ` · ${String(r.phone).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}` : ''}
               </small>
-              <i className={`rm-tag s-${r.status}`}>{STATUS_FA[r.status] ?? r.status}</i>
+              <i className={`rm-tag s-${r.status}`} title={r.status}>{statusFa(r.status)}</i>
             </div>
             <p className="rm-text">{r.text}</p>
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}

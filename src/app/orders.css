@@ -78,3 +78,9 @@
 .op-answer { display: flex; flex-direction: column; gap: 9px; margin-top: 8px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .1); }
 .op-ok { margin: 8px 0 0; font-size: 13px; font-weight: 700; color: #34d399; }
 .op-err, .op-err-line { color: #f87171; font-size: 12.5px; }
+
+/* پیامِ وضعیتِ مسیرِ سفارش روی صفحهٔ بیمار (W0.2): متن از واژه‌نامهٔ بیمار،
+   آیکون به‌جای نویسهٔ «✓»، و رنگ از وضعیت — «دوباره بفرست» کهربایی است نه سبز. */
+.op-ok { display: flex; align-items: center; gap: 6px; }
+.op-ok svg { flex: 0 0 auto; }
+.op-ok.st-needs_action { color: #fbbf24; }

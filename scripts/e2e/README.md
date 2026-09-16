@@ -84,6 +84,13 @@ node scripts/e2e/tenant-isolation.mjs # دو تنانتِ واقعی، دو دی
 node scripts/e2e/platform-domains.mjs # پنلِ پلتفرم هیچ دامنه‌ای را پنهان نمی‌کند
 ```
 
+آزمون‌های رابطِ **بدونِ سرور** (Vite + مرورگرِ واقعی + API ساختگی، `lib/mock-ui.mjs`؛ فقط `E2E_CHROME`):
+
+```bash
+node scripts/e2e/w0-1-intake-steps.mjs # W0.1 — استپر و پیام‌های فرمِ بیمار از makesVisit/payable
+node scripts/e2e/w0-2-labels.mjs       # W0.2 — برچسبِ follow_up + پیامِ پایانِ سفارش از وضعیتِ مسیر
+```
+
 ### پیش‌نیازِ `tenant-isolation.mjs`
 
 این یکی برخلافِ بقیه به **دو تنانتِ واقعی** نیاز دارد، چون ادعایش دربارهٔ
