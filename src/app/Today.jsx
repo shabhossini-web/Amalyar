@@ -5,9 +5,10 @@ import Overlay from '../ui/Overlay.jsx';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import WorkRow from './WorkRow.jsx';
+import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
-import { ArrowStart, Calendar, Close, Grid, Scalpel } from '../ui/icons.jsx';
+import { Alert, ArrowStart, Calendar, Close, Grid, Scalpel } from '../ui/icons.jsx';
 import './launcher.css';
 import './shell.css';
 import './work.css';
@@ -175,6 +176,10 @@ export default function Today() {
         </section>
       )}
 
+      {data?.sections.exceptions && data.exceptions && (
+        <ExceptionsPanel ex={data.exceptions} />
+      )}
+
       <AnimatePresence>
         {toolsOpen && (
           <Overlay backdrop="td-overlay" panel="td-drawer" from="bottom" onClose={() => setToolsOpen(false)} role="dialog" aria-modal="true" aria-label="همهٔ ابزارها">
@@ -198,5 +203,86 @@ export default function Today() {
 
       {toast && <div className="sh-toast" role="status">{toast}</div>}
     </div>
+  );
+}
+
+const REF_FA = {
+  lab_order: 'آزمایش', imaging_order: 'تصویربرداری', consult_order: 'مشاوره',
+};
+/* نامِ نقش فارسی نوشته می‌شود؛ `secretary` روی صفحهٔ مدیر یعنی کلیدِ خامِ پایگاه‌داده. */
+const ROLE_FA = Object.fromEntries(JOB_ROLES.map((r) => [r.v, r.l]));
+const hoursSince = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 3600e3));
+
+/**
+ * **نمای استثنا** (W2.5) — فقط برای سوپروایزر و بالاتر.
+ *
+ * چهار شکافی که هیچ‌کس خبردار نمی‌شود چون هیچ‌کس مسئولشان نیست. عمداً **پایینِ**
+ * صفحه است: کارِ خودِ کاربر اول می‌آید، این نما دربارهٔ کارِ تیم است.
+ *
+ * ⚠️ وقتی هر چهار ردیف صفرند، کلِ بخش رندر **نمی‌شود** — نمای استثنا که همیشه
+ * روی صفحه باشد دیگر استثنا نیست و چشم از رویش رد می‌شود.
+ */
+function ExceptionsPanel({ ex }) {
+  const rows = [
+    {
+      key: 'unowned', count: ex.unowned.count, title: 'کارِ بی‌مسئول (بیش از ۲۴ ساعت)',
+      hint: 'در صفِ نقش مانده و کسی برنداشته',
+      /* خودِ عنوانِ کار کافی است — `TYPE_FA` همان جمله را دوباره می‌گوید و ردیف را می‌بُرد. */
+      line: (w) => w.title,
+      meta: (w) => `${faNum(hoursSince(w.createdAt))} ساعت${w.ownerRole ? ` · صفِ ${ROLE_FA[w.ownerRole] ?? w.ownerRole}` : ''}`,
+      to: () => '/app/work',
+    },
+    {
+      key: 'stuckEvents', count: ex.stuckEvents.count, title: 'رویدادِ پردازش‌نشده',
+      hint: 'زنجیرهٔ رویداد ← کار ایستاده؛ تا رفع نشود هیچ کارِ تازه‌ای ساخته نمی‌شود',
+      line: (e) => e.type,
+      meta: (e) => `${faNum(hoursSince(e.at))} ساعت`,
+      to: () => null,
+    },
+    {
+      key: 'unreviewed', count: ex.unreviewed.count, title: 'نتیجهٔ بررسی‌نشده (بیش از ۴۸ ساعت)',
+      hint: 'پاسخ آمده و تصمیمی ثبت نشده',
+      line: (o) => REF_FA[o.refType] ?? o.kindFa ?? 'سفارش',
+      meta: (o) => `${faNum(hoursSince(o.updatedAt))} ساعت`,
+      to: (o) => (o.patientId ? `/app/patients/${o.patientId}` : null),
+    },
+    {
+      key: 'halfApproved', count: ex.halfApproved.count, title: 'تأییدِ نیمه‌کارهٔ ثبت‌نام',
+      hint: 'ثبت‌نام تأیید شده ولی مراجعه‌ای ساخته نشده',
+      line: () => 'ثبت‌نامِ تأییدشده بدونِ مراجعه',
+      meta: (i) => (i.reviewedAt ? `${faNum(hoursSince(i.reviewedAt))} ساعت` : ''),
+      to: () => '/app/intake',
+    },
+  ].filter((r) => r.count > 0);
+
+  if (!rows.length) return null;
+
+  return (
+    <section className="td-sec td-ex" aria-labelledby="td-ex-h">
+      <div className="td-sec-head">
+        <h2 id="td-ex-h"><Alert width="16" height="16" aria-hidden="true" /> از دستِ تیم افتاده</h2>
+      </div>
+      <ul className="td-ex-list">
+        {rows.map((r) => (
+          <li key={r.key} className="td-ex-card">
+            <div className="td-ex-top">
+              <b className="td-ex-count">{faNum(r.count)}</b>
+              <span className="td-ex-title">{r.title}</span>
+            </div>
+            <p className="td-ex-hint">{r.hint}</p>
+            <ul className="td-ex-items">
+              {(ex[r.key].items ?? []).map((it) => {
+                const to = r.to(it);
+                const body = <><span className="td-ex-line">{r.line(it)}</span><span className="td-ex-meta">{r.meta(it)}</span></>;
+                return <li key={`${r.key}-${it.id}`}>{to ? <Link to={to}>{body}</Link> : body}</li>;
+              })}
+            </ul>
+            {r.count > (ex[r.key].items ?? []).length && (
+              <p className="td-ex-more">و {faNum(r.count - (ex[r.key].items ?? []).length)} موردِ دیگر</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
