@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsService } from '../work/events.service';
 import { LEVEL } from '../common/levels';
 import { PatientsService } from './patients.service';
 import { RecordService } from './record.service';
@@ -39,6 +40,7 @@ export class TechService {
     private patients: PatientsService,
     private record: RecordService,
     private duties: HospitalDutiesService,
+    private events: EventsService,
   ) {}
 
   private range(scope: AgendaScope): [Date, Date] {
@@ -177,6 +179,8 @@ export class TechService {
       { category: 'report', visitId: id, title: 'گزارشِ عمل' },
       user,
     );
+    /* W2.2: گزارش آمد ← بستنِ «گزارشِ عمل بارگذاری نشده» (work-rules: report.uploaded). */
+    await this.events.emit({ type: 'report.uploaded', visitId: id, patientId: v.patientId, actorId: user?.id ?? null });
     return this.one(id, user);
   }
 

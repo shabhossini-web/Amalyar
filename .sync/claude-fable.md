@@ -26,13 +26,29 @@ paths:
   - public/sw.js
   - src/ui/icons.jsx
   - scripts/e2e/w2-4-shell.mjs
-note: لِینِ ج — W2.4 پوستهٔ سراسری (نوارِ بالا + جستجوی بیمار Ctrl+K + زنگِ کارها + صفحهٔ کارهای من)؛ W2.1 لند شده (PR #12)
+  - server/src/patients/orders.service.ts
+  - server/src/patients/survey.service.ts
+  - server/src/patients/appointments.service.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/invoices.service.ts
+  - server/src/patients/inventory.service.ts
+  - server/src/patients/tech.service.ts
+  - server/src/reminders/send-reminders.ts
+  - server/src/reminders/reminders-worker.service.ts
+  - scripts/e2e/w2-2-work-producers.mjs
+  - scripts/e2e/company-operations.mjs
+  - scripts/e2e/intake-finance-roles.mjs
+  - scripts/e2e/profile-workflows.mjs
+  - scripts/e2e/neuromonitoring-invoice.mjs
+note: لِینِ ج — W2.2 تولیدکننده‌های کار (emit در ۷ سرویس + آشکارسازِ حالت‌های بیات)؛ W2.4 لند شده (PR #14، `291f255`)؛ W2.1 لند شده (PR #12). intake.service.ts (کلیمِ GPT) دست نخورد — emitهایش برای GPT مشخص شده.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W2.2 — `EventsService` به سازندهٔ ۷ سرویس اضافه شد (همیشه آخرین پارامتر):** `OrdersService`، `SurveyService`، `AppointmentsService`، `PatientsService`، `InvoicesService`، `InventoryService` (قبل از `routes`)، `TechService`. `PatientsModule` حالا `WorkModule` را import می‌کند. **تستی که سرویس را دستی می‌سازد باید `new EventsService(prisma)` را بدهد** — چهار تستِ CI (`company-operations`، `intake-finance-roles`، `profile-workflows`، `neuromonitoring-invoice`) به‌روز شدند؛ stubِ `{}` کافی نیست چون `issue()`/`setStatus()` واقعاً `emit` می‌زنند. `send-reminders.ts` بدونِ DI است و مستقیم `client.domainEvent.create` می‌زند (داخلِ try). فهرستِ کاملِ رویدادها و شکلِ `ref` در `CONTRACTS.md` §۲.
+- ۱۴۰۵/۰۶/۲۵ · **W2.2 — `POST /work/process` و sweepِ worker اول `detectStaleWork` را می‌زنند** (`server/src/work/work-detectors.ts`): چهار کارِ زمان‌محور (`visit.unconfirmed`، `report.missing`، `usage.unconfirmed`، `form.unanswered`) و بستنِ `complete_report` از هر مسیرِ آپلود. فقط `kind='surgery'`، کفِ ۶۰ روز، هر ref هفته‌ای یک رویداد.
 - ۱۴۰۵/۰۶/۲۵ · **دو نشستِ هم‌زمانِ یک مدل = دو شناسه.** نشستِ لِینِ ب از این به بعد `claude-fable-b` است (`.sync/claude-fable-b.md` + `docs/plan/lanes/claude-fable-b.md`)؛ این فایل و `lanes/claude-fable.md` فقط لِینِ ج (این نشست). دلیل: کلیمِ مشترک در همان روزِ اول کانفلیکت خورد (PR #14 ↔ #15).
 - ۱۴۰۵/۰۶/۲۵ · **W2.4 — آیکونِ `Bell` به تهِ `src/ui/icons.jsx` اضافه شد** (نگهبانِ CI هیچ `<svg>` بیرونِ `src/ui/` را نمی‌پذیرد؛ لِینِ ب: فقط همان چند خطِ آخر).
 - ۱۴۰۵/۰۶/۲۵ · **W2.4 — `ProfileMenu` از این به بعد فقط در `Shell.jsx` رندر می‌شود** (روی همهٔ صفحاتِ `/app`، جز لانچر که فعلاً خودش دارد). صفحهٔ تازه نباید `ProfileMenu` بگذارد؛ از پنج صفحه برداشته شد. مسیرهای `/app/*` در `App.jsx` زیرِ یک layout-route (`<Route element={<Protected><Shell/></Protected>}>`) هستند — مسیرِ تازه را **داخلِ همان بلوک** اضافه کن، نه بیرونش. `GET /search/patients?q=` (Feature `work`) جایگزینِ جستجوی سراسری است.
@@ -40,6 +56,8 @@ note: لِینِ ج — W2.4 پوستهٔ سراسری (نوارِ بالا + ج
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۶/۲۵ · PR #14 · `291f255` · **W2.4 پوستهٔ سراسری** روی `main`: `Shell.jsx` (layout-route)، جستجوی بیمار Ctrl+K، زنگِ کارها، `/app/work`، `GET /search/patients`؛ e2e ۱۷/۱۷.
+- (در PR) **W2.2 تولیدکننده‌های کار** — e2e `scripts/e2e/w2-2-work-producers.mjs` ۳۲/۳۲ + سنجهٔ `invoice.issued` در `neuromonitoring-invoice.mjs`.
 - ۱۴۰۵/۰۶/۲۵ · PR #12 · `8c3f234` · **W2.1 لایهٔ کار** روی `main`: `WorkItem`/`DomainEvent`، `/work`، ۲۶ قاعدهٔ رویداد←کار، پردازشگر در workerِ یادآوری، feature `work` + مجوزها؛ e2e ۲۲/۲۲.
 - ۱۴۰۵/۰۶/۲۵ · PR #11 · `6b76cd1` · **پوشهٔ `docs/plan/` + سندِ بازبینی روی `main`.** از این‌جا به بعد هر ایجنت لِینِ خودش را از `docs/plan/lanes/<خودش>.md` می‌گیرد.
 

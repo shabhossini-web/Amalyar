@@ -22,8 +22,9 @@ try {
   const control = { centralTariff: { findMany: async () => [{ year: '1405', sector: 'public', professional: 900, technical: 800, anesthesia: 0, active: true }] } };
   const settings = new (cls('config/settings.service', 'SettingsService'))(prisma, audit, { require: () => ({ tenantId: 'fixture-company' }) }, control);
   const codes = new (cls('patients/service-codes.service', 'ServiceCodesService'))(prisma, control);
-  const inventory = new (cls('patients/inventory.service', 'InventoryService'))(prisma, audit, { conflicts: async () => [], consignedElsewhere: async () => [] }, settings, {}, {});
-  const invoices = new (cls('patients/invoices.service', 'InvoicesService'))(prisma, billing, codes, settings, inventory);
+  const events = new (cls('work/events.service', 'EventsService'))(prisma); // W2.2: outboxِ رویداد — همان سرویسِ واقعی
+  const inventory = new (cls('patients/inventory.service', 'InventoryService'))(prisma, audit, { conflicts: async () => [], consignedElsewhere: async () => [] }, settings, {}, events, {});
+  const invoices = new (cls('patients/invoices.service', 'InvoicesService'))(prisma, billing, codes, settings, inventory, events);
   const user = await prisma.account.create({ data: { username: 'invoice-fixture', passwordHash: 'not-a-login', level: 6, person: { create: { firstName: 'مدیر', lastName: 'آزمایشی' } } } });
   const patient = await prisma.patient.create({ data: { code: 'AM-LOCAL', firstName: 'بیمار', lastName: 'آزمایشی' } });
   const hospital = await prisma.hospital.create({ data: { name: 'مرکز دولتی', sector: 'public' } });
@@ -49,7 +50,7 @@ try {
   const beforeCharges = await prisma.charge.findMany({ orderBy: { id: 'asc' } });
   const beforeMoves = await prisma.stockMovement.findMany({ orderBy: { id: 'asc' } });
   const failing = new Proxy(prisma, { get(target, key) { if (key !== '$transaction') return target[key]; return (fn, opts) => target.$transaction(tx => fn(new Proxy(tx, { get(t, k) { if (k !== 'auditEvent') return t[k]; return new Proxy(t.auditEvent, { get(model, method) { if (method !== 'create') return model[method]; return args => { if (args.data.action === 'invoice.neuro.apply') throw Error('injected late failure'); return model.create(args); }; } }); } })), opts); } });
-  const failingInvoices = new (cls('patients/invoices.service', 'InvoicesService'))(failing, billing, codes, settings, inventory);
+  const failingInvoices = new (cls('patients/invoices.service', 'InvoicesService'))(failing, billing, codes, settings, inventory, events);
   await assert.rejects(() => failingInvoices.apply(v.id, { ...bulk, consumables: [{ ...saved, qty: 5 }] }, user), /injected late failure/);
   assert.deepEqual(await prisma.charge.findMany({ orderBy: { id: 'asc' } }), beforeCharges);
   assert.deepEqual(await prisma.stockMovement.findMany({ orderBy: { id: 'asc' } }), beforeMoves);

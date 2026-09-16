@@ -1,4 +1,5 @@
 import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
+import { WorkModule } from '../work/work.module';
 import { TenantHospitalDirectoryService } from './hospital-directory.service';
 import { Module } from '@nestjs/common';
 import { PatientsController } from './patients.controller';
@@ -64,7 +65,7 @@ import { HospitalDutiesController } from './hospital-duties.controller';
 import { HospitalDutiesService } from './hospital-duties.service';
 
 @Module({
-  imports: [HospitalDirectoryModule],
+  imports: [HospitalDirectoryModule, WorkModule],
   // ⚠️ ترتیب مهم است: PatientsController مسیرِ `patients` (جستجو) را دارد و
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [

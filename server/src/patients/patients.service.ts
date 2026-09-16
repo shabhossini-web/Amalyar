@@ -10,6 +10,7 @@ import { actorName } from '../common/person';
 import { toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { FormsService } from './forms.service';
 import { syncLinkDocuments } from './link-documents';
 import { summarize } from './billing.service';
@@ -245,6 +246,7 @@ export class PatientsService {
     private audit: AuditService,
     private forms: FormsService,
       private reminders: RemindersService,
+    private events: EventsService,
   ) {}
 
   /**
@@ -1227,6 +1229,13 @@ export class PatientsService {
       include: INCLUDE_PATIENT,
     });
     /* لغوِ عمل باید یادآوریِ «عملِ پیشِ‌رو» را هم باطل کند. */
+    /* W2.2: done/cancelled کارهای بازِ همین عمل را می‌بندند (work-rules: visit.done / visit.cancelled). */
+    if (v.opStatus !== opStatus) {
+      await this.events.emit({
+        type: `visit.${opStatus}`, visitId: id, patientId: v.patientId, actorId: user?.id ?? null,
+        payload: { from: v.opStatus, techId: v.techId ?? null },
+      });
+    }
     await this.reminders.syncNextVisit(id);
     await this.syncPostOpVisit(id);
     return enrich(updated, await this.forms.kindMap());

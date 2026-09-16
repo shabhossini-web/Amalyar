@@ -22,7 +22,8 @@ try {
   const control = { centralTariff: { findMany: async () => [{ year: '1405', sector: 'public', professional: 900, technical: 800, anesthesia: 0, active: true }] } };
   const settings = new (cls('config/settings.service', 'SettingsService'))(prisma, audit, { require: () => ({ tenantId: 'fixture-company' }) }, control);
   const codes = new (cls('patients/service-codes.service', 'ServiceCodesService'))(prisma, control);
-  const invoices = new (cls('patients/invoices.service', 'InvoicesService'))(prisma, billing, codes, settings);
+  const events = new (cls('work/events.service', 'EventsService'))(prisma); // W2.2: outboxِ رویداد — همان سرویسِ واقعی
+  const invoices = new (cls('patients/invoices.service', 'InvoicesService'))(prisma, billing, codes, settings, undefined, events);
   const user = await prisma.account.create({ data: { username: 'invoice-fixture', passwordHash: 'not-a-login', level: 6, person: { create: { firstName: 'مدیر', lastName: 'آزمایشی' } } } });
   const patient = await prisma.patient.create({ data: { code: 'AM-LOCAL', firstName: 'بیمار', lastName: 'آزمایشی' } });
   const hospital = await prisma.hospital.create({ data: { name: 'مرکز دولتی', sector: 'public' } });
@@ -57,9 +58,12 @@ try {
   assert.deepEqual(Object.keys(first.snapshot.billing.invoiceBankAccount).sort(), ['accountNumber', 'bankName', 'iban', 'id', 'ownerName']);
   assert.equal((await invoices.issue(v.id, 'formal', user)).id, first.id);
   assert.equal(await prisma.invoiceDocument.count(), 1);
+  const issuedEvents = () => prisma.domainEvent.count({ where: { type: 'invoice.issued', visitId: v.id } });
+  assert.equal(await issuedEvents(), 1);
   pass('settled invoice issued and repeat click returns the same serial');
   const concurrent = await Promise.all([invoices.issue(v.id, 'formal', user), invoices.issue(v.id, 'formal', user)]);
   assert.equal(concurrent[0].id, concurrent[1].id);
+  assert.equal(await issuedEvents(), 1);
   pass('concurrent issuance is idempotent');
   const extra = await billing.addCharge(v.id, { title: 'قلم اضافه', unitPrice: 1000 }, user);
   const second = await invoices.issue(v.id, 'formal', user);
@@ -67,6 +71,9 @@ try {
   assert.ok((await invoices.document(v.id, first.id, user)).supersededAt);
   assert.deepEqual((await invoices.document(v.id, first.id, user)).snapshot, first.snapshot);
   pass('new issue supersedes while retaining immutable old financial snapshot');
+  assert.equal(await issuedEvents(), 2);
+  assert.equal((await prisma.domainEvent.findFirst({ where: { type: 'invoice.issued', visitId: v.id }, orderBy: { id: 'desc' } })).payload.invoiceId, second.id);
+  pass('W2.2: invoice.issued emitted once per new version inside the issuing transaction, never for the idempotent repeat');
   await billing.removeCharge(extra.id, user);
   assert.deepEqual(await prisma.payment.findUnique({ where: { id: payment.id } }), payment);
   assert.equal((await billing.get(v.id, user)).due, 0);
