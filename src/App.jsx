@@ -20,6 +20,7 @@ const Shell = lazy(() => import('./app/Shell.jsx'));
 const WorkList = lazy(() => import('./app/WorkList.jsx'));
 const SurgeonPortal = lazy(() => import('./app/SurgeonPortal.jsx'));
 const Launcher = lazy(() => import('./app/Launcher.jsx'));
+const Today = lazy(() => import('./app/Today.jsx'));
 const Login = lazy(() => import('./app/Login.jsx'));
 const Users = lazy(() => import('./app/Users.jsx'));
 const Access = lazy(() => import('./app/Access.jsx'));
@@ -97,7 +98,9 @@ export default function App() {
           {/* پوستهٔ سراسری (W2.4): یک نوارِ ثابت بالای همهٔ صفحاتِ سامانه — Shell خودش lazy است. */}
           <Route element={<Protected><Shell /></Protected>}>
             <Route path="/app/surgeon" element={<Gate feature="surgeon"><SurgeonPortal /></Gate>} />
-            <Route path="/app" element={<Launcher />} />
+            {/* W2.3 (`DECISIONS.md` #۲): صفحهٔ نخست «امروز» است؛ کاشی‌ها در کشوی «همهٔ ابزارها» و نمای کاملشان روی `/app/tools`. */}
+            <Route path="/app" element={<Today />} />
+            <Route path="/app/tools" element={<Launcher />} />
             <Route path="/app/dashboard" element={<Gate feature="dashboard"><Dashboard /></Gate>} />
             <Route path="/app/users" element={<Gate feature="users"><Users /></Gate>} />
             <Route path="/app/access" element={<Gate feature="access"><Access /></Gate>} />

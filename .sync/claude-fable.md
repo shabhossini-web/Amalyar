@@ -40,13 +40,22 @@ paths:
   - scripts/e2e/intake-finance-roles.mjs
   - scripts/e2e/profile-workflows.mjs
   - scripts/e2e/neuromonitoring-invoice.mjs
-note: لِینِ ج — W2.2 تولیدکننده‌های کار (emit در ۷ سرویس + آشکارسازِ حالت‌های بیات)؛ W2.4 لند شده (PR #14، `291f255`)؛ W2.1 لند شده (PR #12). intake.service.ts (کلیمِ GPT) دست نخورد — emitهایش برای GPT مشخص شده.
+  - scripts/e2e/w2-3-today.mjs
+  - server/src/features/features.module.ts
+  - src/app/Today.jsx
+  - src/app/today.css
+  - src/app/tools.jsx
+  - src/app/Launcher.jsx
+  - .github/workflows/security-ci.yml
+note: لِینِ ج — W2.3 صفحهٔ «امروز» (`/app`؛ لانچر به `/app/tools`). W2.1/W2.2/W2.4 لند شده‌اند. `src/app/Launcher.jsx` و `src/ui/icons.jsx` تا لندِ W2.3 کلیمِ این لِین‌اند (W3.7 لِینِ ب بعدش آزاد می‌شود). intake.service.ts (کلیمِ GPT) دست نخورده.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W2.3 — `/app` دیگر لانچر نیست، «امروز» است؛ لانچر روی `/app/tools`.** کاتالوگِ کاشی‌ها از `Launcher.jsx` به `src/app/tools.jsx` رفت و **تنها منبع** است: ماژولِ تازه = یک ردیف آن‌جا، وگرنه در کشوی «همهٔ ابزارها» هست و در لانچر نیست (یا برعکس). `Shell.jsx` دیگر `/app` را استثنا نمی‌کند، `/app/tools` را. قرارداد: `CONTRACTS.md` §۱۱ (`GET /work/today` + `sections`).
+- ۱۴۰۵/۰۶/۲۵ · **W2.3 — نگهبانِ CI «لانچر باید `allowed` را بخواند» به `src/app/tools.jsx` منتقل شد** (چون منطق آن‌جا رفت)؛ سنجهٔ منفی روی **هر دو** فایل ماند و یک سنجهٔ تازه اضافه شد: کاتالوگ نباید دوباره در `Launcher.jsx` تعریف شود. نگهبان دنبالِ کد آمد، ضعیف‌تر نشد.
 - ۱۴۰۵/۰۶/۲۵ · **W2.2 — `EventsService` به سازندهٔ ۷ سرویس اضافه شد (همیشه آخرین پارامتر):** `OrdersService`، `SurveyService`، `AppointmentsService`، `PatientsService`، `InvoicesService`، `InventoryService` (قبل از `routes`)، `TechService`. `PatientsModule` حالا `WorkModule` را import می‌کند. **تستی که سرویس را دستی می‌سازد باید `new EventsService(prisma)` را بدهد** — چهار تستِ CI (`company-operations`، `intake-finance-roles`، `profile-workflows`، `neuromonitoring-invoice`) به‌روز شدند؛ stubِ `{}` کافی نیست چون `issue()`/`setStatus()` واقعاً `emit` می‌زنند. `send-reminders.ts` بدونِ DI است و مستقیم `client.domainEvent.create` می‌زند (داخلِ try). فهرستِ کاملِ رویدادها و شکلِ `ref` در `CONTRACTS.md` §۲.
 - ۱۴۰۵/۰۶/۲۵ · **W2.2 — `POST /work/process` و sweepِ worker اول `detectStaleWork` را می‌زنند** (`server/src/work/work-detectors.ts`): چهار کارِ زمان‌محور (`visit.unconfirmed`، `report.missing`، `usage.unconfirmed`، `form.unanswered`) و بستنِ `complete_report` از هر مسیرِ آپلود. فقط `kind='surgery'`، کفِ ۶۰ روز، هر ref هفته‌ای یک رویداد.
 - ۱۴۰۵/۰۶/۲۵ · **دو نشستِ هم‌زمانِ یک مدل = دو شناسه.** نشستِ لِینِ ب از این به بعد `claude-fable-b` است (`.sync/claude-fable-b.md` + `docs/plan/lanes/claude-fable-b.md`)؛ این فایل و `lanes/claude-fable.md` فقط لِینِ ج (این نشست). دلیل: کلیمِ مشترک در همان روزِ اول کانفلیکت خورد (PR #14 ↔ #15).
@@ -57,7 +66,8 @@ note: لِینِ ج — W2.2 تولیدکننده‌های کار (emit در ۷ 
 ## اخیراً لند شد
 
 - ۱۴۰۵/۰۶/۲۵ · PR #14 · `291f255` · **W2.4 پوستهٔ سراسری** روی `main`: `Shell.jsx` (layout-route)، جستجوی بیمار Ctrl+K، زنگِ کارها، `/app/work`، `GET /search/patients`؛ e2e ۱۷/۱۷.
-- (در PR) **W2.2 تولیدکننده‌های کار** — e2e `scripts/e2e/w2-2-work-producers.mjs` ۳۲/۳۲ + سنجهٔ `invoice.issued` در `neuromonitoring-invoice.mjs`.
+- (در PR) **W2.3 صفحهٔ «امروز»** — `/app` = امروز، لانچر به `/app/tools`؛ e2e `scripts/e2e/w2-3-today.mjs` ۲۱/۲۱ (دو بار) + اسکرین‌شاتِ دسکتاپ/موبایل/کشو.
+- ۱۴۰۵/۰۶/۲۵ · PR #18 · `8d8997b` · **W2.2 تولیدکننده‌های کار** روی `main` — emit در ۷ سرویس + `work-detectors.ts`؛ e2e ۳۲/۳۲ + سنجهٔ `invoice.issued`.
 - ۱۴۰۵/۰۶/۲۵ · PR #12 · `8c3f234` · **W2.1 لایهٔ کار** روی `main`: `WorkItem`/`DomainEvent`، `/work`، ۲۶ قاعدهٔ رویداد←کار، پردازشگر در workerِ یادآوری، feature `work` + مجوزها؛ e2e ۲۲/۲۲.
 - ۱۴۰۵/۰۶/۲۵ · PR #11 · `6b76cd1` · **پوشهٔ `docs/plan/` + سندِ بازبینی روی `main`.** از این‌جا به بعد هر ایجنت لِینِ خودش را از `docs/plan/lanes/<خودش>.md` می‌گیرد.
 

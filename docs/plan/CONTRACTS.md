@@ -161,9 +161,29 @@ retry: `uncertain` تا ۳ بار با backoff ۵/۱۵/۴۵ دقیقه، بعد 
 ## §۱۰ پوستهٔ سراسری (W2.4 — پیاده‌شده)
 
 - همهٔ مسیرهای `/app/*` در `src/App.jsx` زیرِ یک layout-route هستند: `<Route element={<Protected><Shell /></Protected>}>`. **مسیرِ تازه را داخلِ همین بلوک اضافه کن**، نه بیرونش؛ وگرنه نوارِ بالا، جستجو و زنگ را ندارد.
-- `ProfileMenu` فقط در `Shell.jsx` رندر می‌شود (روی لانچر فعلاً خودِ لانچر دارد و پوسته تکرار نمی‌کند). صفحه‌ها `ProfileMenu` نمی‌گذارند.
+- `ProfileMenu` فقط در `Shell.jsx` رندر می‌شود (روی صفحهٔ «همهٔ ابزارها» = لانچر، خودِ لانچر دارد و پوسته تکرار نمی‌کند). صفحه‌ها `ProfileMenu` نمی‌گذارند.
 - جستجوی سراسری: `GET /search/patients?q=` (Feature `work` + `patients.read`؛ همان `searchPatients` با object-authz). میان‌برها: `Ctrl/⌘+K` و `/` بیرونِ فیلد. نتیجه به `/app/patients/:id` می‌رود.
 - زنگِ کارها: `GET /work/counts` هر ۶۰ ثانیه + با برگشتِ تب + با رویدادِ `window` به نامِ `amalyar:work-changed` (`WORK_CHANGED` در `WorkBell.jsx`). **هر جایی که کاری را عوض می‌کند** این رویداد را dispatch کند تا شمارنده تازه شود. ۴۰۳ = ماژول خاموش → زنگ رندر نمی‌شود.
 - ردیفِ کار یک کامپوننت است (`WorkRow.jsx`) و برچسبِ فارسیِ نوعِ کار (`TYPE_FA`) همان‌جاست؛ نوعِ تازه در `work-rules.ts` = یک ردیفِ برچسب این‌جا.
 - صفحهٔ `/app/work` («کارهای من») فهرستِ کامل + کارِ دستی است؛ صفحهٔ «امروز» (W2.3) روی همین می‌نشیند.
 - e2eِ مرورگری با `scripts/e2e/lib/browser-login.mjs`: کوکی‌ها روی **ریشهٔ** مبدأِ API (`path=/`) می‌نشینند (اصلاح‌شده در W2.4؛ قبلاً `/api/` بود و هر درخواستِ تغییردهندهٔ مرورگری ۴۰۳ می‌گرفت).
+
+## §۱۱ صفحهٔ «امروز» (W2.3 — پیاده‌شده) — پیش‌فرضِ `DECISIONS.md` #۲
+
+- **`/app` = «امروز»** (`src/app/Today.jsx`). لانچر به **`/app/tools`** رفت و «همهٔ ابزارها» نام گرفت؛ همان کاشی‌ها در **کشوی** صفحهٔ امروز هم هستند.
+- **کاتالوگِ کاشی‌ها تک‌منبع شد:** `src/app/tools.jsx` (`HERO` / `DAILY` / `TOOLS` + هوکِ `useAllowedTools()` + `track`). ماژولِ تازه = **یک ردیف در همین فایل**، نه دو جا. `min` فقط fallbackِ پیش از رسیدنِ `/features` است؛ تصمیم از `allowed`ِ سرور می‌آید (قانونِ ۳).
+- **`GET /work/today`** (Feature `work` + `work.read`) همه‌چیزِ صفحه را در یک درخواست می‌دهد:
+
+```jsonc
+{
+  "brief": { "work": 3, "overdue": 1, "visits": 3, "appointments": 2, "intakePending": 0, "nextAt": "08:00" },
+  "work":  [ /* همان شکلِ GET /work?scope=inbox، هشت‌تای اول */ ],
+  "visits": [ { "id", "patientId", "code", "fullName", "kind", "opStartTime", "opStatus", "hospitalName", "surgeonName" } ],
+  "appointments": [ { "id", "time", "seq", "status", "visitId", "patientId", "fullName", "topic" } ],
+  "sections": { "visits": true, "appointments": true, "intake": false }
+}
+```
+
+- **هر بخش جدا گیت می‌شود** و `sections` می‌گوید کدام را اصلاً رندر کنیم — نه ۴۰۳ برای کلِ صفحه. گیت از `FeaturesService.forUser` می‌آید (همان چیزی که لانچر می‌خواند): `visits` ← `dashboard` یا `tech`، `appointments` ← `calendar`، `intake` ← `formgen`. دامنهٔ دیدِ عمل‌ها مثلِ فهرستِ مراجعات است: زیرِ سوپروایزر فقط `techId` خودش.
+- **هیچ عددی سمتِ کلاینت حساب نمی‌شود** (قانونِ ۱۵): `brief` آماده می‌آید. تنها چیزی که کلاینت می‌سازد سلامِ صبح/شب است، از ساعتِ **دستگاه**.
+- بخشِ «نمای استثنای مدیر» (W2.5) روی همین صفحه اضافه می‌شود؛ کلیدِ تازه در `sections` + بخشِ تازه در همین پاسخ.
