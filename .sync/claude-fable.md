@@ -35,11 +35,19 @@ paths:
   - src/lib/time.js
   - server/src/patients/prep.service.ts
   - server/src/patients/live.service.ts
+  - server/src/patients/frontdesk.service.ts
+  - server/src/patients/appointments.service.ts
+  - server/src/patients/appointments.controller.ts
+  - server/src/auth/access-registry.ts
+  - src/app/FrontDesk.jsx
+  - src/app/frontdesk.css
+  - src/app/Calendar.jsx
+  - scripts/e2e/w3-3-front-desk.mjs
   - server/src/patients/patients.controller.ts
   - src/app/dashboard.css
   - scripts/e2e/w3-2-prep-card.mjs
   - .github/workflows/security-ci.yml
-note: لِینِ ج — **W3.1 با PR #33 (`f09ce54`) لند شد** (۶۳ سنجهٔ e2e). بستهٔ بعدی W3.3 میزِ پذیرش است (W1.5 لند شده، پس آزاد است)؛ کلیمِ تازه‌اش هنگامِ شروع نوشته می‌شود. سه فایلِ بیرونِ کلیم لازم شد و پایین اعلام شده‌اند: `src/index.css` و `src/app/definitions.css` (هر دو در کلیمِ **idle** لِینِ ب) و `src/app/today.css` (خودمان). شروعِ اولیه (`src/app/PatientRecord.jsx` + `record.css`). W3.2 گامِ ۲ در PR #28. لِینِ الف W1.5/W1.6 را لند کرد؛ W1.2 (وضعیت‌های سفارش) هنوز نیامده و W3.1 طوری نوشته می‌شود که بدونِ بازنویسی با آن جفت شود. `record.service.ts` کلیمِ کسی نیست ولی GPT تازه در W1.6 عوضش کرده — اگر لازم شد، اول اعلام. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
+note: لِینِ ج — **W3.3 میزِ پذیرشِ روز شروع شد** (§۴.۵؛ `FrontDesk.jsx` + `frontdesk.service.ts` + سطحِ دسترسیِ منشی). `appointments.*` و `access-registry.ts` کلیمِ کسی نبودند — اگر لِینِ دیگری خواستشان، اعلام کند. **W3.1 با PR #33 (`f09ce54`) لند شد** (۶۳ سنجهٔ e2e). بستهٔ بعدی W3.3 میزِ پذیرش است (W1.5 لند شده، پس آزاد است)؛ کلیمِ تازه‌اش هنگامِ شروع نوشته می‌شود. سه فایلِ بیرونِ کلیم لازم شد و پایین اعلام شده‌اند: `src/index.css` و `src/app/definitions.css` (هر دو در کلیمِ **idle** لِینِ ب) و `src/app/today.css` (خودمان). شروعِ اولیه (`src/app/PatientRecord.jsx` + `record.css`). W3.2 گامِ ۲ در PR #28. لِینِ الف W1.5/W1.6 را لند کرد؛ W1.2 (وضعیت‌های سفارش) هنوز نیامده و W3.1 طوری نوشته می‌شود که بدونِ بازنویسی با آن جفت شود. `record.service.ts` کلیمِ کسی نیست ولی GPT تازه در W1.6 عوضش کرده — اگر لازم شد، اول اعلام. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
