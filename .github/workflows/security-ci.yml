@@ -2971,3 +2971,14 @@ jobs:
       # Appending after review must also never erase the recorded decision.
       - name: Verify public answer-file upload, its guards and the append path (W0.8)
         run: node scripts/e2e/w0-8-upload-local.mjs
+
+      # ⚠️ W1.10: every earlier package in this lane stopped the bug from
+      # recurring but left the rows created before it alone -- "repairing the
+      # old data is W1.10" was written into STATUS five times. The repair must
+      # re-run the SAME forward functions (syncLinkDocuments, answerDocuments,
+      # upsertWork), which are all idempotent, rather than bespoke UPDATEs that
+      # would drift from the real path. And what cannot be repaired without
+      # guessing -- which operation an old follow-up answer belongs to -- is
+      # queued for a human, never guessed into the data as if it were fact.
+      - name: Verify the historical-data scan repairs, queues and never guesses (W1.10)
+        run: node scripts/e2e/w1-10-repair-local.mjs

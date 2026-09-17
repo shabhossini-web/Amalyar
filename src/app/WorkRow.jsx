@@ -1,12 +1,19 @@
 import { Link } from 'react-router-dom';
 import { faDate } from '../lib/jalali.js';
 
-/** برچسبِ فارسیِ نوعِ کار — کلیدها همان `work-rules.ts`. */
+/**
+ * برچسبِ فارسیِ نوعِ کار — کلیدها همان `work-rules.ts`.
+ *
+ * ⚠️ `repair_data` تنها کلیدی است که از `work-rules.ts` نمی‌آید: اسکنِ W1.10
+ * مستقیم `upsertWork` را صدا می‌زند (رویدادی در کار نیست). اگر روزی قاعده‌اش
+ * هم اضافه شد، همین کلید می‌ماند.
+ */
 export const TYPE_FA = {
   review_result: 'بررسیِ نتیجه', review_form: 'بررسیِ فرم', approve_intake: 'تأییدِ ثبت‌نام', repair_intake: 'تأییدِ نیمه‌کاره',
   call_patient: 'تماس با بیمار', confirm_appointment: 'تأییدِ نوبت', confirm_surgery_done: 'وضعیتِ عمل',
   complete_report: 'گزارشِ عمل', confirm_usage: 'تأییدِ مصرف', issue_invoice: 'صدورِ فاکتور', resend_sms: 'پیامک',
   follow_up_unanswered: 'پیگیریِ بی‌پاسخ', fill_form: 'فرم', upload_result: 'ارسالِ نتیجه', pick_slot: 'انتخابِ زمان', manual: 'یادداشت',
+  repair_data: 'تطبیقِ دادهٔ ناقص',
 };
 
 const tomorrow9 = () => {
