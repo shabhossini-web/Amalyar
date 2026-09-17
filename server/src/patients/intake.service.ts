@@ -906,21 +906,25 @@ export class IntakeService {
     const free = payable === 0 && !hasPaymentBox;
     const direct = free && meta?.scope === 'record' && form !== null;
 
-    await this.prisma.intakeSubmission.update({
-      where: { id: row.id },
-      data: {
-        data,
-        schemaSnapshot: row.schemaSnapshot ?? form?.fields ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds),
-        status: direct ? 'approved' : free ? 'pending_approval' : 'pending_payment',
-        ...(direct ? { reviewedAt: new Date() } : {}),
-      },
-    });
-    if (direct) {
-      await this.audit.record({
-        actorId: null, action: 'intake.approve.auto', entityType: 'intake_submission', entityId: row.id,
-        after: { patientId: row.patientId, formKey: meta?.key ?? null },
+    const schemaSnapshot = row.schemaSnapshot ?? form?.fields ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds);
+    await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.intakeSubmission.update({
+        where: { id: row.id },
+        data: { data, schemaSnapshot, status: direct ? 'approved' : free ? 'pending_approval' : 'pending_payment',
+          ...(direct ? { reviewedAt: new Date() } : {}) },
       });
-    }
+      await this.events.emit({ type: 'intake.submitted', refType: 'intake_submission', refId: row.id,
+        patientId: saved.patientId, visitId: saved.visitId }, tx);
+      if (direct) {
+        // تأیید خودکار هم باید کارِ بازشده با submitted را با همان ref ببندد.
+        await this.events.emit({ type: 'intake.approved', refType: 'intake_submission', refId: row.id,
+          patientId: saved.patientId, visitId: saved.visitId }, tx);
+        await this.audit.record({
+          actorId: null, action: 'intake.approve.auto', entityType: 'intake_submission', entityId: row.id,
+          after: { patientId: row.patientId, formKey: meta?.key ?? null },
+        }, tx);
+      }
+    });
     return this.publicView(token);
   }
 
@@ -1692,134 +1696,160 @@ export class IntakeService {
     // خطای حساب یا دوره مالی باید پیش از ساخت مراجعه و تأیید رخ دهد.
     if (makesVisit && pay) await this.billing.assertIntakePayment({ amount: paidAmount, bankAccountId: dto.bankAccountId });
 
-    const visit = makesVisit
-      ? await this.patients.createVisit({
-        patientId: row.patientId,
-        amount: row.amount,
-        /* ⚠️ نوبتِ بیمار **منبعِ تاریخ** است، نه یک یادداشتِ جانبی. اگر
-           `opDate` از نوبت نمی‌آمد، مراجعه‌ای ساخته می‌شد که تاریخش با
-           نوبتِ گرفته‌شده فرق دارد — و آن‌وقت تقویمِ مطب و برگهٔ بیمار دو
-           چیزِ متفاوت می‌گفتند. اولویت با انتخابِ صریحِ ادمین است. */
-        ...(held ? { topicId: held.topicId ?? undefined } : {}),
-        // نوع صریح فرم مقدم است؛ لینک‌های قدیمی از پیش‌فرض حوزه استفاده می‌کنند.
-        kind: approvalKind,
-        surgeonId: dto.surgeonId,
-        hospitalId: dto.hospitalId ?? matchedHospital?.id,
-        hospitalName: d.hospitalName ?? undefined,
-        techId: dto.techId,
-        procedureTypeId: dto.procedureTypeId,
-        opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
-        opDate: dto.opDate ?? held?.date?.toISOString() ?? d.opDate ?? undefined,
-        opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
-        notes: d.patientNotes ?? undefined,
-        ...(Object.keys(extra).length ? { extra } : {}),
-      } as any, user, { requirements, intakeIonm: workflow === 'ionm' })
-      : null;
+    let partial = false;
+    let partialVisitId: number | null = null;
+    try {
+      const visit = makesVisit
+        ? await this.patients.createVisit({
+          patientId: row.patientId,
+          amount: row.amount,
+          /* ⚠️ نوبتِ بیمار **منبعِ تاریخ** است، نه یک یادداشتِ جانبی. اگر
+             `opDate` از نوبت نمی‌آمد، مراجعه‌ای ساخته می‌شد که تاریخش با
+             نوبتِ گرفته‌شده فرق دارد — و آن‌وقت تقویمِ مطب و برگهٔ بیمار دو
+             چیزِ متفاوت می‌گفتند. اولویت با انتخابِ صریحِ ادمین است. */
+          ...(held ? { topicId: held.topicId ?? undefined } : {}),
+          // نوع صریح فرم مقدم است؛ لینک‌های قدیمی از پیش‌فرض حوزه استفاده می‌کنند.
+          kind: approvalKind,
+          surgeonId: dto.surgeonId,
+          hospitalId: dto.hospitalId ?? matchedHospital?.id,
+          hospitalName: d.hospitalName ?? undefined,
+          techId: dto.techId,
+          procedureTypeId: dto.procedureTypeId,
+          opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
+          opDate: dto.opDate ?? held?.date?.toISOString() ?? d.opDate ?? undefined,
+          opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
+          notes: d.patientNotes ?? undefined,
+          ...(Object.keys(extra).length ? { extra } : {}),
+        } as any, user, { requirements, intakeIonm: workflow === 'ionm' })
+        : null;
+      partial = !!visit;
+      partialVisitId = visit?.id ?? null;
 
-    /* ⚠️ نوبت این‌جا **قطعی** می‌شود، نه هنگامِ رزرو: `held` یعنی «جا نگه
-       داشته شده تا پرداخت دیده شود». همین جدایی است که بعداً اجازه می‌دهد
-       درگاهِ آنلاین فقط یک منبعِ تأییدِ دیگر باشد. */
-    if (held) {
-      await this.prisma.appointment.update({
-        where: { id: held.id },
-        data: { status: 'confirmed', visitId: visit?.id ?? null, patientId: row.patientId ?? null },
-      });
-      /* قطعی‌شدن: یادآوریِ نوبت با patientId و وضعیتِ تازه دوباره کاشته می‌شود. */
-      await this.reminders.syncAppointment(held.id);
-    }
 
-    await this.prisma.intakeSubmission.update({
-      where: { id },
-      data: {
-        status: 'approved',
-        schemaSnapshot: row.schemaSnapshot ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds),
-        visitId: visit?.id ?? null,
-        reviewNote: text(dto.note, 300),
-        reviewedById: user?.id ?? null,
-        reviewedAt: new Date(),
-      },
-    });
-
-    /* از این‌جا به بعد فقط مسیرِ مراجعه معنی دارد. `return`ِ زودهنگام تا
-       بندهای مالیِ پایین مجبور نباشند هر خط `visit!` بنویسند. */
-    if (!visit) {
-      /* لینک‌های فرمِ زیرپرونده هم مدرکِ لینکی می‌شوند (بی‌مراجعه، روی خودِ
-         پرونده). فرمِ مراجعه‌ساز همین را از مسیرِ `createVisit` می‌گیرد. */
-      if (row.formId && row.patientId) {
-        const linkFields = await this.prisma.formField.findMany({ where: { formId: row.formId, type: 'links' } });
-        await syncLinkDocuments(this.prisma, { patientId: row.patientId, visitId: null, fields: linkFields, values: d ?? {}, actorId: user?.id ?? null });
+      /* ⚠️ نوبت این‌جا **قطعی** می‌شود، نه هنگامِ رزرو: `held` یعنی «جا نگه
+         داشته شده تا پرداخت دیده شود». همین جدایی است که بعداً اجازه می‌دهد
+         درگاهِ آنلاین فقط یک منبعِ تأییدِ دیگر باشد. */
+      if (held) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.appointment.update({
+            where: { id: held.id },
+            data: { status: 'confirmed', visitId: visit?.id ?? null, patientId: row.patientId ?? null },
+          });
+          await this.events.emit({ type: 'appointment.confirmed', appointmentId: held.id,
+            patientId: row.patientId, visitId: visit?.id ?? null, actorId: user?.id ?? null }, tx);
+        });
+        partial = true;
+        /* قطعی‌شدن: یادآوریِ نوبت با patientId و وضعیتِ تازه دوباره کاشته می‌شود. */
+        await this.reminders.syncAppointment(held.id);
       }
-      await this.audit.record({
-        actorId: user?.id, action: 'intake.approve.record', entityType: 'intake_submission', entityId: id,
-        after: { patientId: row.patientId, formKey: form?.key },
+
+      const approvalSnapshot = row.schemaSnapshot ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds);
+      await this.prisma.$transaction(async (tx) => {
+      const approved = await tx.intakeSubmission.update({
+        where: { id },
+        data: {
+          status: 'approved',
+          schemaSnapshot: approvalSnapshot,
+          visitId: visit?.id ?? null,
+          reviewNote: text(dto.note, 300),
+          reviewedById: user?.id ?? null,
+          reviewedAt: new Date(),
+        },
       });
-      return { ok: true, madeVisit: false, patientId: row.patientId, patientCode: row.patient?.code ?? null };
+
+        await this.events.emit({ type: 'intake.approved', refType: 'intake_submission', refId: id,
+          patientId: approved.patientId, visitId: approved.visitId, actorId: user?.id ?? null }, tx);
+      });
+      partial = true;
+
+      /* از این‌جا به بعد فقط مسیرِ مراجعه معنی دارد. `return`ِ زودهنگام تا
+         بندهای مالیِ پایین مجبور نباشند هر خط `visit!` بنویسند. */
+      if (!visit) {
+        /* لینک‌های فرمِ زیرپرونده هم مدرکِ لینکی می‌شوند (بی‌مراجعه، روی خودِ
+           پرونده). فرمِ مراجعه‌ساز همین را از مسیرِ `createVisit` می‌گیرد. */
+        if (row.formId && row.patientId) {
+          const linkFields = await this.prisma.formField.findMany({ where: { formId: row.formId, type: 'links' } });
+          await syncLinkDocuments(this.prisma, { patientId: row.patientId, visitId: null, fields: linkFields, values: d ?? {}, actorId: user?.id ?? null });
+        }
+        await this.audit.record({
+          actorId: user?.id, action: 'intake.approve.record', entityType: 'intake_submission', entityId: id,
+          after: { patientId: row.patientId, formKey: form?.key },
+        });
+        return { ok: true, madeVisit: false, patientId: row.patientId, patientCode: row.patient?.code ?? null };
+      }
+
+      /**
+       * ⚠️ مبلغ باید **وارد دفتر** شود، وگرنه مراجعهٔ تأییدشده صفر تومان است و
+       * گزارشِ مالی بی‌سروصدا کم می‌شود. تا دیروز `amount`ِ ثبت‌نام هیچ‌جا
+       * نمی‌رفت و همین یک شکافِ واقعی بود.
+       *
+       * تخفیف **قلمِ جدا** می‌شود نه کسر از مبلغِ خدمت: فاکتور باید نشان دهد
+       * مبلغِ اصلی چه بود و چقدر تخفیف خورد؛ عددِ خالص‌شده همان اطلاعات را
+       * برای همیشه گم می‌کند. علامتِ منفی را خودِ `addCharge` می‌گذارد.
+       *
+       * ⚠️ **پرداخت هم ثبت می‌شود، ولی حسابِ مقصد را ادمین می‌گوید.**
+       *
+       * نسخهٔ اول عمداً پرداخت ثبت نمی‌کرد تا خزانه با حسابِ نامعلوم آلوده
+       * نشود — ولی نتیجه‌اش این بود که هر مراجعهٔ تأییدشده کلِ مبلغش «مانده»
+       * می‌ماند و در فیلترِ «فقط بدهکار» و گزارشِ مالی بدهکار به‌نظر می‌رسید،
+       * در حالی که بیمار پولش را داده و ادمین همین حالا فیشش را دیده.
+       *
+       * راهِ درست «ثبت نکردن» نبود، «پرسیدنِ حسابِ مقصد» بود: ادمین در همان
+       * لحظه فیش را جلوی چشمش دارد، پس می‌تواند بگوید پول کجا نشسته.
+       */
+      // قلمِ خدمت در تراکنشِ createVisit ثبت شده؛ این‌جا دوباره ساخته نمی‌شود.
+      if (row.discountAmount > 0) {
+        await this.billing.addCharge(visit.id, {
+          kind: 'discount',
+          title: `کدِ تخفیف ${row.discountCode ?? ''}`.trim(),
+          unitPrice: row.discountAmount,
+        }, user);
+      }
+      // Only attach this patient's unassigned uploads; never move another visit's document.
+      const receipts = Array.isArray(d.receiptDocumentIds) ? d.receiptDocumentIds : [d.receiptDocumentId];
+      /* **همهٔ** باکس‌های عکسِ فرم، نه فقط «دستورِ جراح»: عکسِ MRI/CTِ فرمِ ویزیت هم
+         باید به همین مراجعه بچسبد، وگرنه در پرونده مدرکِ بی‌مراجعه می‌ماند. */
+      const imageKeys = row.formId
+        ? (await this.prisma.formField.findMany({ where: { formId: row.formId, type: 'image' }, select: { key: true } })).map((f) => f.key)
+        : [];
+      const imageRefs = [...new Set([...imageKeys, 'prescription'])].flatMap((k) => (Array.isArray(d[k]) ? d[k] : [d[k]]));
+      const documentIds = [...receipts, ...imageRefs.map((p: any) => p?.id)].map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
+      if (documentIds.length) {
+        await this.prisma.document.updateMany({ where: { id: { in: documentIds }, patientId: row.patientId, visitId: null }, data: { visitId: visit.id } });
+      }
+      if (pay) {
+        await this.billing.addPayment(visit.id, {
+          amount: paidAmount,
+          // فیشِ واریزی یعنی انتقالِ بانکی؛ روشِ دیگر را ادمین بعداً در
+          // صفحهٔ حسابداری اصلاح می‌کند.
+          method: 'transfer',
+          bankAccountId: dto.bankAccountId,
+          reference: `ثبت‌نامِ ${row.token.slice(0, 8)}`,
+        }, user);
+      }
+
+      await this.audit.record({
+        actorId: user?.id, action: 'intake.approve', entityType: 'intake_submission', entityId: id,
+        after: { visitId: visit.id, charged: row.amount, discount: row.discountAmount, paid: pay ? paidAmount : 0 },
+      });
+      /* لحظهٔ «رسمی‌شدنِ» بیمار: لینکِ پروندهٔ الکترونیک خودکار پیامک می‌شود —
+         راهِ ارتباطیِ دائمیِ ما با او از همین‌جا شروع می‌شود. best-effort:
+         نبودِ شماره یا خطای پیامک نباید تأیید را بشکند. */
+      if (row.patientId) {
+        await this.portal.sendSms(row.patientId, user).catch(() => undefined);
+      }
+      // ⚠️ کدِ مراجعه از خروجیِ `createVisit` می‌آید نه ساختِ دستیِ
+      //    `code + '-V' + seq`: قالبِ کد یک جا تعریف شده و ساختنش این‌جا یعنی
+      //    اولین تغییرِ قالب، دو شکلِ متفاوت در دو صفحه.
+      return { ok: true, visitId: visit.id, visitCode: (visit as any).code };
+    } catch (error) {
+      // W1.4 این چند commit را یکی می‌کند؛ تا آن زمان شکست نیمه‌کاره کارِ رسیدگی دارد.
+      if (partial) await this.events.emit({ type: 'intake.approve_failed', refType: 'intake_submission', refId: id,
+        patientId: row.patientId, visitId: partialVisitId, actorId: user?.id ?? null,
+        payload: { error: 'تأیید ثبت‌نام کامل نشد؛ مراجعه، مدارک و پرداخت را بررسی کنید' } });
+      throw error;
     }
 
-    /**
-     * ⚠️ مبلغ باید **وارد دفتر** شود، وگرنه مراجعهٔ تأییدشده صفر تومان است و
-     * گزارشِ مالی بی‌سروصدا کم می‌شود. تا دیروز `amount`ِ ثبت‌نام هیچ‌جا
-     * نمی‌رفت و همین یک شکافِ واقعی بود.
-     *
-     * تخفیف **قلمِ جدا** می‌شود نه کسر از مبلغِ خدمت: فاکتور باید نشان دهد
-     * مبلغِ اصلی چه بود و چقدر تخفیف خورد؛ عددِ خالص‌شده همان اطلاعات را
-     * برای همیشه گم می‌کند. علامتِ منفی را خودِ `addCharge` می‌گذارد.
-     *
-     * ⚠️ **پرداخت هم ثبت می‌شود، ولی حسابِ مقصد را ادمین می‌گوید.**
-     *
-     * نسخهٔ اول عمداً پرداخت ثبت نمی‌کرد تا خزانه با حسابِ نامعلوم آلوده
-     * نشود — ولی نتیجه‌اش این بود که هر مراجعهٔ تأییدشده کلِ مبلغش «مانده»
-     * می‌ماند و در فیلترِ «فقط بدهکار» و گزارشِ مالی بدهکار به‌نظر می‌رسید،
-     * در حالی که بیمار پولش را داده و ادمین همین حالا فیشش را دیده.
-     *
-     * راهِ درست «ثبت نکردن» نبود، «پرسیدنِ حسابِ مقصد» بود: ادمین در همان
-     * لحظه فیش را جلوی چشمش دارد، پس می‌تواند بگوید پول کجا نشسته.
-     */
-    // قلمِ خدمت در تراکنشِ createVisit ثبت شده؛ این‌جا دوباره ساخته نمی‌شود.
-    if (row.discountAmount > 0) {
-      await this.billing.addCharge(visit.id, {
-        kind: 'discount',
-        title: `کدِ تخفیف ${row.discountCode ?? ''}`.trim(),
-        unitPrice: row.discountAmount,
-      }, user);
-    }
-    // Only attach this patient's unassigned uploads; never move another visit's document.
-    const receipts = Array.isArray(d.receiptDocumentIds) ? d.receiptDocumentIds : [d.receiptDocumentId];
-    /* **همهٔ** باکس‌های عکسِ فرم، نه فقط «دستورِ جراح»: عکسِ MRI/CTِ فرمِ ویزیت هم
-       باید به همین مراجعه بچسبد، وگرنه در پرونده مدرکِ بی‌مراجعه می‌ماند. */
-    const imageKeys = row.formId
-      ? (await this.prisma.formField.findMany({ where: { formId: row.formId, type: 'image' }, select: { key: true } })).map((f) => f.key)
-      : [];
-    const imageRefs = [...new Set([...imageKeys, 'prescription'])].flatMap((k) => (Array.isArray(d[k]) ? d[k] : [d[k]]));
-    const documentIds = [...receipts, ...imageRefs.map((p: any) => p?.id)].map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
-    if (documentIds.length) {
-      await this.prisma.document.updateMany({ where: { id: { in: documentIds }, patientId: row.patientId, visitId: null }, data: { visitId: visit.id } });
-    }
-    if (pay) {
-      await this.billing.addPayment(visit.id, {
-        amount: paidAmount,
-        // فیشِ واریزی یعنی انتقالِ بانکی؛ روشِ دیگر را ادمین بعداً در
-        // صفحهٔ حسابداری اصلاح می‌کند.
-        method: 'transfer',
-        bankAccountId: dto.bankAccountId,
-        reference: `ثبت‌نامِ ${row.token.slice(0, 8)}`,
-      }, user);
-    }
-
-    await this.audit.record({
-      actorId: user?.id, action: 'intake.approve', entityType: 'intake_submission', entityId: id,
-      after: { visitId: visit.id, charged: row.amount, discount: row.discountAmount, paid: pay ? paidAmount : 0 },
-    });
-    /* لحظهٔ «رسمی‌شدنِ» بیمار: لینکِ پروندهٔ الکترونیک خودکار پیامک می‌شود —
-       راهِ ارتباطیِ دائمیِ ما با او از همین‌جا شروع می‌شود. best-effort:
-       نبودِ شماره یا خطای پیامک نباید تأیید را بشکند. */
-    if (row.patientId) {
-      await this.portal.sendSms(row.patientId, user).catch(() => undefined);
-    }
-    // ⚠️ کدِ مراجعه از خروجیِ `createVisit` می‌آید نه ساختِ دستیِ
-    //    `code + '-V' + seq`: قالبِ کد یک جا تعریف شده و ساختنش این‌جا یعنی
-    //    اولین تغییرِ قالب، دو شکلِ متفاوت در دو صفحه.
-    return { ok: true, visitId: visit.id, visitCode: (visit as any).code };
   }
 
   /** رد — با دلیل، چون بیمار همان را می‌بیند. */
@@ -1839,22 +1869,24 @@ export class IntakeService {
     }
     const note = text(dto.note, 300);
     if (!note) throw new BadRequestException('دلیلِ رد را بنویسید — بیمار همین را می‌بیند');
-    await this.prisma.intakeSubmission.update({
-      where: { id },
-      data: { status: 'rejected', reviewNote: note, reviewedById: user?.id ?? null, reviewedAt: new Date() },
+    const rejAppts = await this.prisma.$transaction(async (tx) => {
+      const rejected = await tx.intakeSubmission.update({
+        where: { id }, data: { status: 'rejected', reviewNote: note, reviewedById: user?.id ?? null, reviewedAt: new Date() },
+      });
+      await this.events.emit({ type: 'intake.rejected', refType: 'intake_submission', refId: id,
+        patientId: rejected.patientId, visitId: rejected.visitId, actorId: user?.id ?? null }, tx);
+      const appointments = await tx.appointment.findMany({
+        where: { submissionId: id, status: { in: ['held', 'confirmed'] } },
+      });
+      await tx.appointment.updateMany({
+        where: { submissionId: id, status: { in: ['held', 'confirmed'] } }, data: { status: 'cancelled' },
+      });
+      for (const a of appointments) await this.events.emit({ type: 'appointment.cancelled', appointmentId: a.id,
+        patientId: a.patientId, visitId: a.visitId, actorId: user?.id ?? null }, tx);
+      await this.audit.record({ actorId: user?.id, action: 'intake.reject', entityType: 'intake_submission', entityId: id, after: { note } }, tx);
+      return appointments;
     });
-    /* ⚠️ نوبتِ ثبت‌نامِ ردشده باید **آزاد** شود. بدونِ این، هر ردکردن یک جای
-       سوخته در تقویم می‌گذاشت که هیچ‌کس نمی‌توانست بگیردش و هیچ‌کس هم
-       نمی‌دانست چرا. */
-    const rejAppts = await this.prisma.appointment.findMany({
-      where: { submissionId: id, status: { in: ['held', 'confirmed'] } }, select: { id: true },
-    });
-    await this.prisma.appointment.updateMany({
-      where: { submissionId: id, status: { in: ['held', 'confirmed'] } },
-      data: { status: 'cancelled' },
-    });
-    for (const a2 of rejAppts) await this.reminders.syncAppointment(a2.id);
-    await this.audit.record({ actorId: user?.id, action: 'intake.reject', entityType: 'intake_submission', entityId: id, after: { note } });
+    for (const a of rejAppts) await this.reminders.syncAppointment(a.id);
     return { ok: true };
   }
 
