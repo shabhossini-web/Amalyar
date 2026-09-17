@@ -1,6 +1,7 @@
 import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
 import { WorkModule } from '../work/work.module';
 import { PrepService } from './prep.service';
+import { LiveService } from './live.service';
 import { TenantHospitalDirectoryService } from './hospital-directory.service';
 import { Module } from '@nestjs/common';
 import { PatientsController } from './patients.controller';
@@ -80,6 +81,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     TenantHospitalDirectoryService,
     HospitalDutiesService,
     PrepService,
+    LiveService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,

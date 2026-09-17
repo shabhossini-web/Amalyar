@@ -5,6 +5,7 @@ import { LEVEL } from '../common/levels';
 import { detectStaleWork } from './work-detectors';
 import { closeWork, processDomainEvents, upsertWork } from './work-processor';
 import type { WorkUpsert } from './work-rules';
+import { OWNER_ROLE_FA } from './work-rules';
 
 export type WorkScope = 'inbox' | 'mine' | 'role' | 'patient' | 'all';
 export type WorkAction = 'done' | 'block' | 'assign' | 'snooze' | 'cancel' | 'reopen';
@@ -93,6 +94,9 @@ export class WorkService {
       ...r,
       patient: r.patientId ? byId.get(r.patientId) ?? null : null,
       overdue: !!r.dueAt && OPEN.includes(r.state) && new Date(r.dueAt).getTime() < now,
+      /* برچسبِ مالک هم مشتقِ سرور است (قانون ۱۵): هر رابطی که خودش نگاشت
+         داشته باشد، روزی که نقشِ تازه‌ای صادر شود کلیدِ خامِ انگلیسی چاپ می‌کند. */
+      ownerRoleFa: r.ownerRole ? OWNER_ROLE_FA[r.ownerRole] ?? r.ownerRole : null,
     }));
   }
 

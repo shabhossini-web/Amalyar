@@ -1,6 +1,6 @@
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { api, apiStream } from '../lib/api.js';
@@ -704,9 +704,20 @@ export default function Dashboard() {
      دیوار باز می‌شد. حالا شیتِ ویرایشِ همان مراجعه باز می‌شود؛ پایهٔ
      مرحلهٔ ۵ نوبت‌دهی (کلیک روی نوبت ← فرمِ ویزیت) هم همین است. */
   const deepRef = useRef(false);
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
     if (deepRef.current) return;
     deepRef.current = true;
+    /* «مراجعهٔ جدید» از پروندهٔ زنده (W3.1): بیمار در `state` می‌آید نه در
+       کوئری — نامِ بیمار نباید در URL و تاریخچهٔ مرورگر بنشیند. `replace`
+       می‌زنیم تا back به یک شیتِ دوباره‌باز نرسد. */
+    const pre = location.state?.prefill;
+    if (pre?.patientId) {
+      setModal({ prefill: pre });
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
     const vid = Number(new URLSearchParams(window.location.search).get('patient'));
     if (!vid) return;
     api(`/visits/${vid}`)
@@ -747,8 +758,22 @@ export default function Dashboard() {
     [visitKinds],
   );
 
-  // سوییچِ حساب وسطِ فرم/شیتِ باز → بسته شود
-  useEffect(() => { setModal(null); }, [user?.id]);
+  /* سوییچِ حساب وسطِ فرم/شیتِ باز → بسته شود.
+     ⚠️ **اجرای اولِ مونت باید رد شود.** این افکت بعد از افکتِ دیپ‌لینک اجرا
+     می‌شود و شیتی را که همان لحظه باز شده بود می‌بست — یعنی «مراجعهٔ جدید»ِ
+     پروندهٔ زنده کاربر را به داشبوردِ خالی می‌برد. مسیرِ `?patient=` این را
+     نداشت چون `setModal`ِ آن **بعد** از یک fetch اتفاق می‌افتد و از افکت‌های
+     مونت جلو می‌افتد؛ یعنی باگ فقط برای مسیرِ همگام دیده می‌شد. */
+  const switchRef = useRef(undefined);
+  useEffect(() => {
+    const prev = switchRef.current;
+    switchRef.current = user?.id;
+    /* ⚠️ «شناسه عوض شد» را باید با شناسهٔ قبلی سنجید، نه با یک پرچمِ بولی:
+       `user.id` در اولین رندر هنوز تعریف نشده و یک تیک بعد می‌نشیند، پس
+       پرچمِ بولی همان بارِ دوم را «سوییچِ حساب» می‌فهمید و شیت را می‌بست. */
+    if (prev === undefined || prev === user?.id) return;
+    setModal(null);
+  }, [user?.id]);
 
   // آمار از سرور می‌آید و کلِ نتیجهٔ فیلترشده را می‌شمارد، نه صفحهٔ جاری را.
   const stats = meta.stats;

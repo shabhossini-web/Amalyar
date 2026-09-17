@@ -1,16 +1,23 @@
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
+import { fmtMoney } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
 import JDate from './JDate.jsx';
+import './work.css';
 import './record.css';
-import { Alert, Back, Check, Close, Copy, Download, LinkIcon, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import {
+  Alert, Back, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
+  Money, Pencil, Phone, Plus, Send, Trash,
+} from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import WorkRow from './WorkRow.jsx';
+import { WORK_CHANGED } from './WorkBell.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
@@ -873,12 +880,258 @@ function NotesTab({ rec, reload, toast }) {
   );
 }
 
+
+/* ══════════════ پروندهٔ زنده (W3.1، §۴.۳ سند) ══════════════
+
+   چهار پرسشی که تا دیروز هیچ صفحه‌ای جواب نمی‌داد: **الان کجاییم · چه شده ·
+   چه مانده · نوبتِ کیست**. تبِ پیش‌فرضِ «خلاصه» یک فرمِ ویرایشِ ۱۹ فیلدی بود؛
+   کسی که پرونده را باز می‌کرد اول باید یک فرم را می‌خواند تا بفهمد چه خبر است.
+
+   حالا پاسخ بالاست و تب‌ها ثانویه‌اند. داده از `GET /patients/:id/live` می‌آید
+   که همه‌چیزش **مشتقِ سرور** است (قانون ۱۵) — این‌جا هیچ فرمولی نیست. */
+
+/** نگاشتِ نوعِ ردیفِ خطِ زمان به آیکون و برچسب — تک‌منبع. */
+const TL_META = {
+  visit: { Icon: Doctor, fa: 'مراجعه' },
+  appointment: { Icon: Calendar, fa: 'نوبت' },
+  order: { Icon: Form, fa: 'سفارش' },
+  document: { Icon: Book, fa: 'مدرک' },
+  note: { Icon: Pencil, fa: 'شرح' },
+  reminder: { Icon: Send, fa: 'یادآوری' },
+};
+
+/**
+ * نوارِ «الان کجاییم» — شش گام که سرور از خودِ داده مشتق کرده است.
+ *
+ * ⚠️ گامِ `skipped` **محو** می‌شود و حذف نمی‌شود: «این بیمار نوبت نگرفت» خودش
+ * یک واقعیت است؛ اگر گام را برداریم، نوار برای هر بیمار شکلِ دیگری دارد و
+ * دیگر نمی‌شود با یک نگاه فهمید کجای مسیریم.
+ */
+function StageBar({ stage }) {
+  if (!stage?.steps?.length) return null;
+  return (
+    <section className="rc-stage" aria-label="الان کجاییم">
+      <p className="rc-stage-now">
+        {/* ⚠️ متنِ سرور از `faNum` رد می‌شود: شمارش‌ها («۲ نتیجه…») آن‌جا عددِ
+            لاتین‌اند و کلِ صفحه فارسی است. قالبِ **پول** این‌جا نمی‌آید — آن
+            `fmtMoney` است و به همین دلیل سرور هیچ مبلغی را متن نمی‌کند. */}
+        <b>الان کجاییم:</b> {faNum(stage.title)}
+        {stage.detail && <i> — {faNum(stage.detail)}</i>}
+      </p>
+      <ol className="rc-steps">
+        {stage.steps.map((s) => (
+          <li key={s.key} className={`rc-step is-${s.state}`}>
+            <span className="rc-step-dot" aria-hidden="true">
+              {s.state === 'done' ? <Check width="11" height="11" /> : null}
+            </span>
+            <span className="rc-step-txt">
+              <b>{s.title}</b>
+              {s.detail && <i>{faNum(s.detail)}</i>}
+              {s.at && <time dateTime={s.at}>{faDate(s.at)}</time>}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/**
+ * «چه مانده» — کارِ بعدی، نوبتِ پیشِ رو، نتیجه‌های بازِ منتظرِ بررسی، و ماندهٔ مالی.
+ *
+ * ⚠️ کارت وقتی هیچ‌کدام نیست **اصلاً رندر نمی‌شود**. یک کارتِ «چیزی نمانده» در
+ * هر بار بازکردنِ پرونده فقط فضای بالای صفحه را می‌خورد و چشم یاد می‌گیرد
+ * نادیده‌اش بگیرد — همان روزی که واقعاً کاری باشد هم دیده نمی‌شود.
+ */
+function NextUp({ live, onGo, onActed, toast }) {
+  const [busy, setBusy] = useState(0);
+  const w = live.nextWork;
+  const appt = live.upcoming?.[0] ?? null;
+  const review = (live.openOrders ?? []).filter((o) => o.awaitingReview);
+  const due = live.billing?.due > 0 ? live.billing.due : 0;
+  if (!w && !appt && !review.length && !due) return null;
+
+  /* ⚠️ همان مسیرِ صفحهٔ «امروز»: `PATCH /work/:id` + رویدادِ `WORK_CHANGED` تا
+     زنگِ بالای پوسته هم تازه شود. کارتِ کارِ بعدی بدونِ دکمه فقط خبررسان است و
+     §۴.۳ بندِ ۳ صریحاً «دکمهٔ اصلی» می‌خواهد. */
+  const act = async (item, action, body = {}) => {
+    setBusy(item.id);
+    try {
+      await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
+      window.dispatchEvent(new Event(WORK_CHANGED));
+      toast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
+      onActed();
+    } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
+  };
+
+  return (
+    <section className="rc-next" aria-label="چه مانده">
+      {w && (
+        <article className={`rc-next-main${w.overdue ? ' is-late' : ''}`}>
+          <h3><Clock width="13" height="13" /> کارِ بعدی</h3>
+          {/* ردیفِ کار از `WorkRow` می‌آید تا نوعِ کار، مالک و دکمه‌ها با زنگِ
+              اعلان و صفحهٔ «کارهای من» یکی بمانند — نه نسخهٔ سومِ همان کارت. */}
+          <ul className="wk-list">
+            <WorkRow w={w} onAct={act} busy={busy} compact />
+          </ul>
+          <p className="rc-next-meta">
+            <span>{w.ownerAccountId ? 'واگذارشده' : w.ownerRoleFa ? `به‌عهدهٔ ${w.ownerRoleFa}` : 'بی‌مسئول'}</span>
+            {live.counts.work > 1 && (
+              <Link to="/app/work" className="rc-next-more">{faNum(live.counts.work - 1)} کارِ دیگر</Link>
+            )}
+          </p>
+        </article>
+      )}
+      <div className="rc-next-side">
+        {appt && (
+          <p className="rc-chip"><Calendar width="13" height="13" />
+            نوبتِ بعدی: <b>{faDate(appt.date)}{appt.time ? ` — ${faNum(appt.time)}` : ''}</b>
+            <i>{appt.statusFa}{appt.doctorName ? ` · ${appt.doctorName}` : ''}</i>
+          </p>
+        )}
+        {review.length > 0 && (
+          <p className="rc-chip is-warn"><Alert size={13} />
+            <b>{faNum(review.length)} نتیجه</b> آمده و بررسی نشده
+            <i>{review.map((o) => o.kindFa).join('، ')}</i>
+          </p>
+        )}
+        {due > 0 && (
+          <button type="button" className="rc-chip is-money" onClick={() => onGo('visits')}>
+            <Money width="13" height="13" /> ماندهٔ مالی: <b>{fmtMoney(due)}</b>
+            <i>از {fmtMoney(live.billing.total)} — {faNum(live.billing.paidPct)}٪ پرداخت شده</i>
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * خطِ زمانِ واحد — مراجعه، نوبت، سفارش، مدرک، شرح، یادآوری در یک ستون.
+ *
+ * ⚠️ هر ردیفی که به جایی می‌رود **کلیک‌پذیر** است و ردیفی که نمی‌رود، نه.
+ * دکمه‌نمایی که کاری نمی‌کند از نبودنِ دکمه بدتر است (باگِ واقعیِ همین ریپو:
+ * لینکِ «بازکردن در داشبورد» که هیچ‌کاری نمی‌کرد).
+ */
+function Timeline({ live, onGo }) {
+  const [all, setAll] = useState(false);
+  const tl = live.timeline;
+  if (!tl?.items?.length) return null;
+  const items = all ? tl.items : tl.items.slice(0, 12);
+
+  return (
+    <section className="rc-tl" aria-label="خطِ زمانِ پرونده">
+      <h3>چه شده</h3>
+      <ol>
+        {items.map((it) => {
+          const meta = TL_META[it.type] ?? TL_META.document;
+          const inner = (
+            <>
+              <span className="rc-tl-ico" style={it.color ? { '--k': `var(--kind-${it.color})` } : undefined}>
+                <meta.Icon width="13" height="13" />
+              </span>
+              <span className="rc-tl-body">
+                {/* نوعِ شرح داده است نه برچسب؛ نگاشتِ فارسی‌اش همین بالا در
+                    `NOTE_KINDS` هست و دو نسخه‌کردنش فقط واگرایی می‌آورد. */}
+                <b>{it.type === 'note' ? (NOTE_KINDS[it.title] ?? it.title) : it.title}</b>
+                {it.detail && <i>{faNum(it.detail)}</i>}
+              </span>
+              <span className="rc-tl-side">
+                {it.stateFa && <em className={`rc-tl-state is-${it.state ?? 'none'}`}>{faNum(it.stateFa)}</em>}
+                <time dateTime={it.at}>{faDate(it.at)}</time>
+              </span>
+            </>
+          );
+          /* مقصد: مراجعه‌دار → فرمِ همان مراجعه؛ مدرک/شرح → تبِ خودش؛ بقیه بی‌لینک. */
+          if (it.visitId) {
+            return <li key={it.id} className="rc-tl-row is-link"><Link to={`/app/dashboard?patient=${it.visitId}`}>{inner}</Link></li>;
+          }
+          if (it.type === 'document' || it.type === 'note') {
+            return (
+              <li key={it.id} className="rc-tl-row is-link">
+                <button type="button" onClick={() => onGo(it.type === 'document' ? 'docs' : 'notes')}>{inner}</button>
+              </li>
+            );
+          }
+          return <li key={it.id} className="rc-tl-row"><div>{inner}</div></li>;
+        })}
+      </ol>
+      {tl.items.length > 12 && (
+        <button type="button" className="rc-tl-more" onClick={() => setAll(!all)}>
+          {all ? 'کوتاه کن' : `${faNum(tl.items.length - 12)} رویدادِ قدیمی‌تر`}
+        </button>
+      )}
+      {/* ⚠️ بریدنِ بی‌صدا ممنوع: اگر سرور سقف زده، صفحه باید بگوید — و متنش
+          نباید با دکمهٔ «رویدادِ قدیمی‌تر» تناقض داشته باشد: آن دکمه همین
+          فهرست را باز می‌کند، این جمله می‌گوید خودِ فهرست همه‌چیز نیست. */}
+      {tl.truncated && (
+        <p className="rc-tl-cut">{faNum(tl.total)} رویدادِ اخیر خوانده شده؛ قدیمی‌تر از این‌ها در فهرست نیست.</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * اقدام‌های همیشه‌دردسترس (§۴.۳ بندِ ۵).
+ *
+ * ⚠️ فقط اقدام‌هایی که **واقعاً کار می‌کنند**: مراجعهٔ جدید (با پیش‌پرشدنِ
+ * بیمار)، ویرایشِ مشخصات، لینکِ پرونده، پیامکِ لینک، و تماس. نوبت‌دهیِ
+ * بیمارمحور هنوز endpointِ خودش را ندارد (W3.3) و دکمه‌ای که به صفحهٔ
+ * بی‌خبر از بیمار می‌رود، در نمی‌زند — به دیوار می‌زند.
+ */
+function RecordActions({ rec, onEdit, toast }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState('');
+
+  const portalLink = async () => {
+    setBusy('link');
+    try {
+      const r = await api(`/patients/${rec.id}/portal-link`, { method: 'POST' });
+      /* clipboard در http یا بدونِ اجازه throw می‌کند — آن‌وقت دستِ‌کم خودِ
+         نشانی نشان داده می‌شود تا کاربر دستی بردارد. */
+      try { await navigator.clipboard.writeText(r.url); toast('لینکِ پرونده کپی شد'); }
+      catch { toast(r.url); }
+    } catch (e) { toast(e.message, true); } finally { setBusy(''); }
+  };
+
+  const portalSms = async () => {
+    setBusy('sms');
+    try { await api(`/patients/${rec.id}/portal-sms`, { method: 'POST' }); toast('لینک برای بیمار پیامک شد'); }
+    catch (e) { toast(e.message, true); } finally { setBusy(''); }
+  };
+
+  return (
+    <div className="rc-actions">
+      <button
+        type="button" className="rc-act is-main"
+        /* ⚠️ نام از `state` رد می‌شود نه از کوئری: نامِ بیمار در URL و در
+           تاریخچهٔ مرورگر می‌ماند و جای خوبی برایش نیست. */
+        onClick={() => navigate('/app/dashboard', { state: { prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } } })}
+      ><Plus width="13" height="13" /> مراجعهٔ جدید</button>
+      <button type="button" className="rc-act" onClick={onEdit}><Pencil width="13" height="13" /> ویرایشِ مشخصات</button>
+      <button type="button" className="rc-act" onClick={portalLink} disabled={busy === 'link'}>
+        <LinkIcon width="13" height="13" /> {busy === 'link' ? 'یک لحظه…' : 'لینکِ پرونده'}
+      </button>
+      <button type="button" className="rc-act" onClick={portalSms} disabled={busy === 'sms'}>
+        <Send width="13" height="13" /> {busy === 'sms' ? 'در حالِ ارسال…' : 'پیامکِ لینک'}
+      </button>
+      {rec.phone && <a className="rc-act" href={`tel:${rec.phone}`}><Phone width="13" height="13" /> تماس</a>}
+    </div>
+  );
+}
+
 /* ══════════════ صفحه ══════════════ */
 export default function PatientRecord() {
   const { id } = useParams();
   const [rec, setRec] = useState(null);
+  /* لایهٔ «پاسخ» — جدا از بایگانی و **موازی** با آن. اگر نیامد (سطحِ پایین‌تر،
+     خطای شبکه) صفحه با تب‌ها سرِ جایش کار می‌کند؛ پاسخ اضافه است نه شرط. */
+  const [live, setLive] = useState(null);
   const [err, setErr] = useState('');
-  const [tab, setTab] = useState('profile');
+  /* ⚠️ تبِ پیش‌فرض دیگر فرمِ ویرایش نیست. هویت و «چه مانده» و خطِ زمان بالای
+     صفحه‌اند؛ تب‌ها بایگانی‌اند و بایگانی با «مراجعات» شروع می‌شود. */
+  const [tab, setTab] = useState('visits');
+  const tabsRef = useRef(null);
   /* ⚠️ **شکست باید از موفقیت قابلِ تشخیص باشد.**
      تا دیروز toast فقط یک رشته بود و خطا با موفقیت یک شکل داشت: همان قابِ
      بنفش، ۲٫۲ ثانیه، بعد رفت. یعنی اگر ثبتِ شرح ۴۰۳ یا ۵۰۰ می‌گرفت، کاربر
@@ -898,11 +1151,28 @@ export default function PatientRecord() {
 
   /* پروندهٔ تازه **برگردانده** می‌شود، نه فقط در state نشانده: فراخوان باید
      بتواند بلافاصله بسنجد که نوشته‌اش واقعاً در پرونده نشسته یا نه. */
-  const load = useCallback(async () => {
-    try { const fresh = await api(`/patients/${id}/record`); setRec(fresh); setErr(''); return fresh; }
-    catch (e) { setErr(e.message); return null; }
+  const loadLive = useCallback(() => {
+    api(`/patients/${id}/live`).then(setLive).catch(() => setLive(null));
   }, [id]);
+
+  const load = useCallback(async () => {
+    try {
+      const fresh = await api(`/patients/${id}/record`);
+      setRec(fresh); setErr('');
+      /* هر نوشتنی در پرونده (مدرک، شرح، مشخصات) می‌تواند مرحله و خطِ زمان را
+         عوض کند، پس «پاسخ» هم با همان `load` تازه می‌شود — وگرنه نوار یک
+         حقیقتِ کهنه نشان می‌دهد. */
+      loadLive();
+      return fresh;
+    } catch (e) { setErr(e.message); return null; }
+  }, [id, loadLive]);
   useEffect(() => { load(); }, [load]);
+
+  /* رفتن به یک تب از بیرونِ نوار (خطِ زمان، کارتِ مالی، دکمهٔ ویرایش). */
+  const goTab = useCallback((k) => {
+    setTab(k);
+    tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   useEffect(() => {
     document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
@@ -914,7 +1184,9 @@ export default function PatientRecord() {
   if (!rec) return <div className="df"><div className="df-bg" /><div className="df-empty">در حال بارگذاری…</div></div>;
 
   const TABS = [
-    ['profile', 'خلاصه'],
+    /* «خلاصه» نامِ درستی نبود: این تب یک فرمِ ویرایشِ کامل است و خلاصه حالا
+       بالای صفحه است. اسمِ درست، انتظارِ درست. */
+    ['profile', 'مشخصات'],
     ['visits', `مراجعات (${faNum(rec.counts.visits)})`],
     ...(rec.counts.visits > 1 ? [['journey', 'مسیرِ درمان']] : []),
     ['docs', `مدارک (${faNum(rec.counts.documents)})`],
@@ -947,6 +1219,23 @@ export default function PatientRecord() {
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
       {rec.allergies && <div className="rc-alert"><Alert size={13} /> حساسیت: {rec.allergies}</div>}
 
+      {/* کارتِ هویت **فقط‌خواندنی** است و ویرایش یک اقدام (§۴.۳ بندِ ۱). */}
+      {(rec.insurer || rec.bloodType || rec.chronicConditions || rec.medications) && (
+        <dl className="rc-id">
+          {rec.bloodType && <div><dt>گروهِ خونی</dt><dd dir="ltr">{rec.bloodType}</dd></div>}
+          {rec.insurer && <div><dt>بیمه</dt><dd>{rec.insurer}{rec.insuranceNo ? ` — ${faNum(rec.insuranceNo)}` : ''}</dd></div>}
+          {rec.chronicConditions && <div><dt>بیماریِ زمینه‌ای</dt><dd>{rec.chronicConditions}</dd></div>}
+          {rec.medications && <div><dt>داروها</dt><dd>{rec.medications}</dd></div>}
+        </dl>
+      )}
+
+      <RecordActions rec={rec} onEdit={() => goTab('profile')} toast={say} />
+
+      {live && <StageBar stage={live.stage} />}
+      {live && <NextUp live={live} onGo={goTab} onActed={loadLive} toast={say} />}
+      {live && <Timeline live={live} onGo={goTab} />}
+
+      <div ref={tabsRef} />
       <Tabs
         label="بخش‌های پرونده"
         variant="scroll"

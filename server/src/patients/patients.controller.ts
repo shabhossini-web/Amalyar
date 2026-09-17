@@ -19,13 +19,25 @@ import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CreateVisitDto, UpdateVisitDto, VisitStatusDto, VisitTimesDto } from './dto/visit.dto';
 import { PrepService } from './prep.service';
+import { LiveService } from './live.service';
 
 // مدیریتِ بیماران/مراجعات — دسترسی داینامیک از جدولِ features (کلیدِ dashboard)
 @Controller()
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('dashboard')
 export class PatientsController {
-  constructor(private patients: PatientsService, private prep: PrepService) {}
+  constructor(private patients: PatientsService, private prep: PrepService, private live: LiveService) {}
+
+  /**
+   * **پروندهٔ زنده** (W3.1) — «الان کجاییم / چه شده / چه مانده / نوبتِ کیست».
+   *
+   * جدا از `GET /patients/:id/record` است و نه جایگزینش: آن یکی بایگانیِ
+   * تب‌هاست، این یکی پاسخِ صفحه. صفحه هر دو را موازی می‌گیرد.
+   */
+  @Get('patients/:id/live') @RequirePermissions('patients.read')
+  liveRecord(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.live.forPatient(id, user);
+  }
 
   /** کارتِ آماده‌سازیِ ویزیت (W3.2) — آنچه باید پیش از دیدنِ بیمار دانست. */
   @Get('visits/:id/prep') @RequirePermissions('patients.read')
