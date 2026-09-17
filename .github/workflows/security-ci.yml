@@ -2982,3 +2982,13 @@ jobs:
       # queued for a human, never guessed into the data as if it were fact.
       - name: Verify the historical-data scan repairs, queues and never guesses (W1.10)
         run: node scripts/e2e/w1-10-repair-local.mjs
+
+      # ⚠️ W0.5: a lab result is usually just a photo of a sheet, and the
+      # patient's order page had no way to send one -- and its submit button
+      # refused an answer with no text or link. Two separate defects met here:
+      # .od-send carried `flex: 1 1 220px`, a rule written for the staff action
+      # ROW, and the public page's .op-answer is a flex COLUMN -- so the 220px
+      # became the button's HEIGHT. A shared layout rule must name where it
+      # applies, or it means something else in the next container.
+      - name: Verify the public order page uploads files and its button is sane (W0.5)
+        run: node scripts/e2e/w0-5-order-upload-ui.mjs
