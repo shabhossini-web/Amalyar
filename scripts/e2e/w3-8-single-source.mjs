@@ -40,7 +40,7 @@ const CHROME = process.env.E2E_CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-
 const SHOTS = process.env.E2E_SHOTS ?? 'docs/plan/shots';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
-const sql = (q) => execSync(`psql "${DB}" -qtA`, { input: q }).toString().trim().split('\n')[0];
+const sql = (q) => execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1`, { input: q }).toString().trim().split('\n')[0];
 const num = (q) => Number(sql(q));
 const okStatus = (s) => s >= 200 && s < 300;
 
