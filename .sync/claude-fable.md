@@ -1,80 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-16
-paths:
-  - docs/plan/CONTRACTS.md
-  - docs/plan/lanes/claude-fable.md
-  - server/src/work/
-  - server/src/search/
-  - server/src/app.module.ts
-  - server/src/patients/patients.module.ts
-  - src/App.jsx
-  - src/app/Shell.jsx
-  - src/app/shell.css
-  - src/app/GlobalSearch.jsx
-  - src/app/WorkBell.jsx
-  - src/app/WorkRow.jsx
-  - src/app/WorkList.jsx
-  - src/app/work.css
-  - public/sw.js
-  - scripts/e2e/w2-4-shell.mjs
-  - scripts/e2e/w2-2-work-producers.mjs
-  - scripts/e2e/w2-3-today.mjs
-  - src/app/PatientRecord.jsx
-  - src/app/record.css
-  - scripts/e2e/w3-1-live-record.mjs
-  - scripts/e2e/w2-5-exceptions.mjs
-  - src/app/Today.jsx
-  - src/app/today.css
-  - src/app/tools.jsx
-  - src/app/Dashboard.jsx
-  - src/app/VisitForm.jsx
-  - src/app/visit-kinds.js
-  - src/lib/time.js
-  - server/src/patients/prep.service.ts
-  - server/src/patients/live.service.ts
-  - server/src/patients/frontdesk.service.ts
-  - server/src/patients/appointments.service.ts
-  - server/src/patients/appointments.controller.ts
-  - server/src/auth/access-registry.ts
-  - src/app/FrontDesk.jsx
-  - src/app/frontdesk.css
-  - src/app/Calendar.jsx
-  - scripts/e2e/w3-3-front-desk.mjs
-  - scripts/e2e/appointments-day.mjs
-  - src/app/visit-defs.js
-  - src/lib/terms.js
-  - scripts/e2e/booking-flow.mjs
-  - server/src/common/cancel-reasons.ts
-  - server/src/config/config.service.ts
-  - server/src/patients/frontdesk.controller.ts
-  - src/ui/CancelReason.jsx
-  - src/ui/cancel-reason.css
-  - docs/plan/DECISIONS.md
-  - STATUS.md
-  - server/src/patients/hospital-duties.service.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/dto/visit.dto.ts
-  - server/src/patients/intake.service.ts
-  - server/src/patients/intake-hospitals.ts
-  - server/src/common/name-match.ts
-  - src/app/Intake.jsx
-  - src/app/Tech.jsx
-  - src/app/HospitalRoster.jsx
-  - scripts/e2e/w3-8-single-source.mjs
-  - server/src/patients/form-presets.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/intake.controller.ts
-  - src/app/VisitForm.jsx
-  - server/src/patients/dto/visit.dto.ts
-  - scripts/e2e/w3-cancel-reason.mjs
-  - server/src/patients/patients.controller.ts
-  - src/app/dashboard.css
-  - scripts/e2e/w3-2-prep-card.mjs
-  - .github/workflows/security-ci.yml
-note: لِینِ ج — **W3.8 تمام شد** (e2e ۴۱/۴۱، سرور + مرورگر). بسته‌های این لِین همه لند شده‌اند. پیش‌تر: **W3.8 شروع شد** (U7 یکی‌کردنِ منبعِ ساعت/کارشناس + U3 پیشنهادِ جراح/عمل در تأیید). تصمیمِ مالک ۱۴۰۵/۰۶/۲۶: انتساب در فرم خودکار در برنامهٔ چینش می‌نشیند، و ساعتِ حضور **فقط** از برنامهٔ چینش می‌آید (فرمِ مراجعه و شیتِ کارشناس دیگر نمی‌نویسند). پیش‌تر: **بستهٔ «دلیلِ لغو» لند شد** (PR #43، `63128c0`). (e2e ۶۱/۶۱؛ سرور + رابط + هر دو نوعِ لغو). بعدی: W3.8. پیش‌تر: (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶: فهرستِ بسته برای بیمار + یادداشتِ داخلی؛ هر دو نوعِ لغو). W3.3 در PR #40. **W3.3 میزِ پذیرشِ روز ساخته شد** (۲۸ سنجه، CI سبز)؛ آمادهٔ مرج. بستهٔ بعدی: «دلیلِ لغو» (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶) سپس W3.8. شروعِ اولیه (§۴.۵؛ `FrontDesk.jsx` + `frontdesk.service.ts` + سطحِ دسترسیِ منشی). `appointments.*` و `access-registry.ts` کلیمِ کسی نبودند — اگر لِینِ دیگری خواستشان، اعلام کند. **W3.1 با PR #33 (`f09ce54`) لند شد** (۶۳ سنجهٔ e2e). بستهٔ بعدی W3.3 میزِ پذیرش است (W1.5 لند شده، پس آزاد است)؛ کلیمِ تازه‌اش هنگامِ شروع نوشته می‌شود. سه فایلِ بیرونِ کلیم لازم شد و پایین اعلام شده‌اند: `src/index.css` و `src/app/definitions.css` (هر دو در کلیمِ **idle** لِینِ ب) و `src/app/today.css` (خودمان). شروعِ اولیه (`src/app/PatientRecord.jsx` + `record.css`). W3.2 گامِ ۲ در PR #28. لِینِ الف W1.5/W1.6 را لند کرد؛ W1.2 (وضعیت‌های سفارش) هنوز نیامده و W3.1 طوری نوشته می‌شود که بدونِ بازنویسی با آن جفت شود. `record.service.ts` کلیمِ کسی نیست ولی GPT تازه در W1.6 عوضش کرده — اگر لازم شد، اول اعلام. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
+paths: []
+note: لِینِ ج — **همهٔ بسته‌هایش لند شدند و کلیم آزاد است.** W2.1–W2.5 · W3.1 (PR #33) · W3.2 گام‌های ۱–۲ (PR #23، #28) · W3.3 (PR #40) · دلیلِ لغو (PR #43) · W3.8 (PR #45، `c19c281`). باقی‌مانده و **آزاد برای هر لِین**: W3.2 گامِ ۳ (مراجعهٔ پیش‌نویس) که به یک تصمیم گره خورده — `PATCH` سفارش الان `visitId` نمی‌پذیرد. دو بدهیِ اعلام‌شده در `STATUS.md`: `import.service.ts` هنوز مستقیم `techArriveTime` می‌نویسد، و لغوِ آبشاریِ ویزیتِ پیگیری بی‌دلیل می‌ماند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
@@ -272,6 +202,15 @@ note: لِینِ ج — **W3.8 تمام شد** (e2e ۴۱/۴۱، سرور + مر�
 - ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۶/۲۶ · PR #45 · `c19c281` · **W3.8 یک بار ورود، یک منبع** — `syncVisitDuty()`
+  تنها نویسندهٔ ساعتِ حضور (U7) + تطبیقِ جراح و نوعِ عمل در تأییدِ ثبت‌نام (U3)؛
+  e2e ۴۱/۴۱ سرور و مرورگر. یک باگِ برچسب («ثبت‌شده بیمار» روی مچِ ماشین) فقط با
+  اسکرین‌شات پیدا شد.
+- ۱۴۰۵/۰۶/۲۶ · PR #43 · `63128c0` · **دلیلِ لغو** — فهرستِ بسته + یادداشتِ داخلی،
+  هر دو نوعِ لغو، پیامکِ اطلاع به بیمار؛ e2e ۶۱/۶۱.
+- ۱۴۰۵/۰۶/۲۶ · PR #40 · `970b040` · **W3.3 میزِ پذیرشِ روز** — تختهٔ پنج‌ستونی،
+  فیچرِ `frontdesk` در سطحِ منشی، جداشدنِ «شروع» از «بازکردن»؛ e2e ۲۸/۲۸.
 
 - ۱۴۰۵/۰۶/۲۶ · PR #33 · `f09ce54` · **W3.1 پروندهٔ زنده** روی `main` — `GET /patients/:id/live`، نوارِ مرحله، خطِ زمانِ واحد، کارتِ کارِ بعدی؛ e2e ۶۳/۶۳. بازبینیِ متخاصم هشت یافته داد و هر هشت رفع شدند (سه گیتِ ماژول، دو باگِ مالی، سقفِ سفارش، دو نقطهٔ نامرئیِ تمِ روشن).
 
