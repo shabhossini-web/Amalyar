@@ -645,7 +645,7 @@ export default function Dashboard() {
   const qRef = useRef(q);
   qRef.current = q;
 
-  useEffect(() => { document.title = 'عمل‌یار — داشبورد مدیریت'; }, []);
+  useEffect(() => { document.title = 'عمل‌یار — بیماران'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     // پیامِ «کدام پرونده، چندمین مراجعه» بلند است؛ ۲۲۰۰ms برای خواندنش کم بود.
@@ -930,7 +930,9 @@ export default function Dashboard() {
       <div className="lx-shell us-shell db-shell">
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>داشبورد مدیریت</h1>
+          {/* نام با کاشیِ لانچر یکی است (W3.7/B3): کاربر روی «بیماران» می‌زند
+              و باید به صفحه‌ای با همان نام برسد. */}
+          <h1>بیماران</h1>
         </header>
 
         {!denied && (<>

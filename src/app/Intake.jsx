@@ -55,7 +55,7 @@ export default function IntakeAdmin() {
   const [zoom, setZoom] = useState(null); // نشانیِ blobِ فیشِ در حالِ بزرگ‌نمایی
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — ثبت‌نامِ بیماران'; }, []);
+  useEffect(() => { document.title = 'عمل‌یار — پذیرش'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2400);
@@ -124,7 +124,7 @@ export default function IntakeAdmin() {
       <header className="ia-head">
         <Link to="/app" className="ia-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
-          <h1>ثبت‌نامِ بیماران</h1>
+          <h1>پذیرش</h1>
           <p>فرم‌هایی که بیماران از لینکِ عمومی پر کرده‌اند. تا تأیید نشوند، مراجعه‌ای ساخته نمی‌شود.</p>
         </div>
       </header>

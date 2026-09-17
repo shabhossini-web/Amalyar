@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth.jsx';
-import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Form, Gear, Grid, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
+import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Truck, Users, Wave } from '../ui/icons.jsx';
 
 /**
  * کاتالوگِ ابزارها — **تنها** جای تعریفِ کاشی‌ها.
@@ -11,12 +11,23 @@ import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Fo
  *
  * `min` = حداقلِ سطح (۱ بازدید … ۶ سوپرادمین) و فقط **fallback** است تا پیش از
  * رسیدنِ پاسخِ `/features` کاشی‌ها نپرند؛ تصمیمِ واقعی از سرور می‌آید (`allowed`).
+ *
+ * ⚠️ **قانون (W3.7): هیچ آیکونی برای دو ماژول.** تا دیروز `Wave` سه کاشی را
+ * می‌پوشاند (جراح، دستیار، کارشناس)، `Book` سه‌تا و `Chart`/`Clock` دوتا —
+ * یعنی بازشناسیِ بصری صفر و کاربر هر بار مجبور به **خواندن**. آیکونِ تازه در
+ * `src/ui/icons.jsx` ساخته می‌شود، نه با قرض‌گرفتن از کاشیِ دیگر.
+ * نگهبانِ ماشینی: `node scripts/verify-module-icons.js`.
+ *
+ * ⚠️ **نام بر پایهٔ کارِ کاربر، نه نامِ ابزار** (یافتهٔ B3 سندِ بازبینی):
+ * «داشبورد مدیریت» → «بیماران»، «ثبت‌نامِ بیماران» → «پذیرش». واژه‌هایی مثل
+ * «پرتال» و «پنل» می‌گویند این *چه ابزاری است*، نه اینکه کاربر **چه کاری**
+ * می‌کند.
  */
-export const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: true, min: 5, to: '/app/dashboard' };
+export const HERO = { key: 'dashboard', label: 'بیماران', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Patients, ready: true, min: 5, to: '/app/dashboard' };
 
 export const DAILY = [
-  { key: 'surgeon', label: 'پرتال جراح', icon: Wave, ready: true, min: 2, to: '/app/surgeon' },
-  { key: 'formgen', label: 'ثبت‌نامِ بیماران', icon: Form, ready: true, min: 5, to: '/app/intake' },
+  { key: 'surgeon', label: 'پرتال جراح', icon: Doctor, ready: true, min: 2, to: '/app/surgeon' },
+  { key: 'formgen', label: 'پذیرش', icon: Form, ready: true, min: 5, to: '/app/intake' },
   { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: true, min: 2, to: '/app/chat' },
 ];
 
@@ -29,19 +40,19 @@ export const TOOLS = [
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
   /* برنامهٔ کاری — `docs/BOOKING.md`. کنارِ تقویم می‌نشیند چون هم‌خانواده‌اند:
      یکی می‌گوید چه شد، آن یکی می‌گوید چه وقتی می‌شود. */
-  { key: 'schedule', label: 'برنامهٔ کاری', icon: Clock, tint: 'green', ready: true, min: 5, to: '/app/schedule' },
+  { key: 'schedule', label: 'برنامهٔ کاری', icon: Slots, tint: 'green', ready: true, min: 5, to: '/app/schedule' },
   { key: 'dispatch', label: 'چینشِ نیروها', icon: Dispatch, tint: 'amber', ready: true, min: 4, to: '/app/dispatch' },
   { key: 'letter', label: 'نامهٔ اداری', icon: Mail, tint: 'blue', ready: true, min: 5, to: '/app/letters' },
-  { key: 'notes', feature: 'dashboard', label: 'جستجوی بالینی', icon: Book, tint: 'teal', ready: true, min: 3, to: '/app/notes' },
-  { key: 'assistant', label: 'دستیارِ هوشمند', icon: Wave, tint: 'violet', ready: true, min: 5, to: '/app/assistant' },
+  { key: 'notes', feature: 'dashboard', label: 'جستجوی بالینی', icon: NoteSearch, tint: 'teal', ready: true, min: 3, to: '/app/notes' },
+  { key: 'assistant', label: 'دستیارِ هوشمند', icon: Sparkle, tint: 'violet', ready: true, min: 5, to: '/app/assistant' },
   { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: true, min: 2, to: '/app/tech' },
-  { key: 'transport', label: 'پرتالِ حمل‌ونقل', icon: Truck, tint: 'amber', ready: true, min: 2, to: '/app/transport' },
+  { key: 'transport', label: 'حمل‌ونقل', icon: Truck, tint: 'amber', ready: true, min: 2, to: '/app/transport' },
   { key: 'inventory', label: 'انبار', icon: Box, tint: 'green', ready: true, min: 3, to: '/app/inventory' },
-  { key: 'definitions', label: 'تعاریف پایه', icon: Book, tint: 'teal', ready: true, min: 5, to: '/app/definitions' },
-  { key: 'forms', label: 'فرم‌ساز', icon: Book, tint: 'violet', ready: true, min: 6, to: '/app/forms' },
+  { key: 'definitions', label: 'تعاریف پایه', icon: Tag, tint: 'teal', ready: true, min: 5, to: '/app/definitions' },
+  { key: 'forms', label: 'فرم‌ساز', icon: FormEdit, tint: 'violet', ready: true, min: 6, to: '/app/forms' },
   { key: 'users', label: 'کاربران', icon: Users, tint: 'violet', ready: true, min: 6, to: '/app/users' },
   { key: 'access', label: 'سطوحِ دسترسی', icon: Lock, tint: 'blue', ready: true, min: 6, to: '/app/access' },
-  { key: 'site', label: 'سایتِ معرفی', icon: Grid, tint: 'blue', ready: true, min: 5, to: '/app/site' },
+  { key: 'site', label: 'سایتِ معرفی', icon: Globe, tint: 'blue', ready: true, min: 5, to: '/app/site' },
   { key: 'settings', label: 'تنظیماتِ شرکت', icon: Gear, tint: 'amber', ready: true, min: 6, to: '/app/settings' },
 ];
 
