@@ -93,7 +93,7 @@ try {
   ok(new URL(page.url()).pathname === '/app', '**نباید بیفتد:** Escape می‌بندد ولی صفحه را عوض نمی‌کند');
   await page.locator('.td-tools-btn').click();
   await page.waitForSelector('.td-drawer', { timeout: 5000 });
-  await page.locator('.td-tile', { hasText: 'داشبورد مدیریت' }).click();
+  await page.locator('.td-tile', { hasText: 'بیماران' }).click();
   await page.waitForURL('**/app/dashboard', { timeout: 8000 });
   ok(new URL(page.url()).pathname === '/app/dashboard', 'کاشیِ کشو به همان صفحه می‌برد');
 

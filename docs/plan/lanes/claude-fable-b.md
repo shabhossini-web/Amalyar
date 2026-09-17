@@ -10,7 +10,7 @@
 | ۳ | W0.5 آپلودِ فایل در `/o` + اندازهٔ دکمه (فرانت) | ⬜ | `claude/w0-5-order-upload-ui` | | endpoint از لِینِ الف (W0.8) |
 | ۴ | W0.6 Escape / focus-trap / کلیدهای جهت در `src/ui/` | ✅ | `claude/quirky-johnson-ynzr4y` | PR #16 (`2ced34c`) | فقط `Overlay.jsx` و `Tabs.jsx` · e2e: `scripts/e2e/w0-6-a11y.mjs` (۱۷/۱۷، دو بار؛ روی نسخهٔ قبلی ۵ قرمز + timeout) |
 | ۵ | W0.7 اقدامِ per-row یادآوری (فرانت) | ⬜ | `claude/w0-7-reminder-actions-ui` | | سرور از W1.9 |
-| ۶ | W3.7 آیکونِ یکتا + نام‌گذاری + واژه‌نامه | ⬜ | `claude/w3-7-icons-naming` | | |
+| ۶ | W3.7 آیکونِ یکتا + نام‌گذاری + واژه‌نامه | 🟡 | `claude/quirky-johnson-ynzr4y` | PR (باز) | U14/U15/B2/B3 · ۲۲ ماژول، ۲۲ آیکونِ یکتا (۸ تازه) · «داشبورد مدیریت»→«بیماران»، «ثبت‌نامِ بیماران»→«پذیرش» (عنوانِ صفحه هم با کاشی یکی شد) · `FLOW` + `visitStart`/`visitOpen` در `terms.js` · e2e: `scripts/e2e/w3-7-icons-naming.mjs` (۳۳/۳۳، دو بار) · نگهبان: `scripts/verify-module-icons.js` · اسکرین‌شات: `docs/plan/shots/w3-7-tools.png` |
 | ۷ | W3.6 تمِ روشنِ بالینی | ✅ | `claude/quirky-johnson-ynzr4y` | PR #24 (`4443759`) | `DECISIONS.md` #۳ · `data-theme`/`data-density` روی `<html>` از `src/lib/theme.js` · پیش‌فرضِ `clinic` روشن، انتخابِ کاربر مقدم · ویترین با `.theme-dark` تیره می‌ماند · e2e: `scripts/e2e/w3-6-light-theme.mjs` (۲۹/۲۹، دو بار) · نگهبان: `scripts/verify-theme-tokens.js` · اسکرین‌شاتِ هر دو تم: `docs/plan/shots/w3-6-{light,dark}.png` |
 | ۸ | W3.5 فرم‌ساز | ✅ | `claude/quirky-johnson-ynzr4y` | PR #19 (`572e747`) | §۴.۷ · e2e: `scripts/e2e/w3-5-formbuilder.mjs` (۳۱/۳۱، دو بار؛ روی نسخهٔ قبلی ۶ قرمز + timeout) · ارتفاعِ قالبِ ویزیت در موبایل ۵۱۵۱px ← ۱۷۹۵px |
 | ۹ | W3.4 لینکِ واحدِ بیمار + نیمهٔ UIِ draft (W1.8) | ⬜ | `claude/w3-4-patient-link` | | `DECISIONS.md` #۵ |
@@ -39,6 +39,16 @@
   `var(--brand-dark)`، همان گامِ CI «رنگِ برند یک تنظیم است» گرفتش.)
 
 ## یادداشت برای لِین‌های دیگر
+
+- **آیکونِ ماژول‌ها از W3.7 یکتاست و نگهبان دارد** (`node scripts/verify-module-icons.js`):
+  ماژولِ تازه آیکونِ **خودش** را در `src/ui/icons.jsx` می‌گیرد، از کاشیِ دیگری قرض
+  نمی‌گیرد. و **نامِ کاشی باید با عنوانِ `<h1>` همان صفحه یکی باشد** — رنیمِ
+  نیمه‌کاره (کاشی «بیماران»، صفحه «داشبورد مدیریت») از نامِ ابزارمحورِ قبلی بدتر
+  است؛ سنجهٔ ۶ سوییتِ W3.7 همین را می‌گیرد.
+- **واژهٔ حوزه‌ای را هاردکد نکنید.** «ویزیت» واژهٔ حوزهٔ **مطب** است نه واژهٔ عمومی؛
+  از `useTerms()` بخوانید (`t.visit`, `t.visitStart`, `t.visitOpen`). «نوبت» و «کار»
+  در هر سه حوزه یکی‌اند و در `FLOW` تعریف شده‌اند — تفاوتِ این سه مفهوم در سرِ
+  `src/lib/terms.js` مستند است.
 
 - **از W3.6 به بعد اپ دو تم دارد و رنگِ خام در CSS ممنوع است** (قانونِ ۲۳ `CLAUDE.md`):
   لایهٔ کم‌آلفا `rgba(var(--veil-rgb), α)`، سطحِ مات `rgba(var(--surface-rgb), α)`،
