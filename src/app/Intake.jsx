@@ -349,8 +349,32 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const targetKind = row.approvalKind || (workflow === 'clinic' ? 'clinic' : 'surgery');
   const [fields, setFields] = useState(null), [requiredItems, setRequiredItems] = useState([]), [itemsTouched, setItemsTouched] = useState(false);
   const [extra, setExtra] = useState(row.data ?? {});
-  const [hospitalMatch, setHospitalMatch] = useState(null);
-  useEffect(() => { let live = true; api(`/intake/submissions/${row.id}/hospital`).then(h => { if (live && h?.id) { setHospitalMatch(h); setF(s => s.hospitalId ? s : { ...s, hospitalId: String(h.id) }); } }).catch(() => {}); return () => { live = false; }; }, [row.id]);
+  /**
+   * ارجاع‌های پیشنهادی از روی متنی که بیمار نوشته (W3.8/U3).
+   *
+   * ⚠️ تا امروز فقط **بیمارستان** پیشنهاد می‌شد و ادمین جراح و نوعِ عمل را از
+   * روی متنِ بیمار **دوباره** انتخاب می‌کرد — یک فرم، دو بار ورود. و اگر
+   * انتخاب نمی‌کرد، متنِ آزاد روی مراجعه می‌ماند و بعداً «یکسان‌سازیِ نام‌ها»
+   * لازم می‌شد.
+   *
+   * ⚠️ فقط جای **خالی** را پر می‌کند (`s.<key> ? s : …`): اگر کاربر همین حالا
+   * چیزی انتخاب کرده، پاسخِ دیررسِ سرور نباید انتخابش را عوض کند.
+   */
+  const [match, setMatch] = useState({});
+  useEffect(() => {
+    let live = true;
+    api(`/intake/submissions/${row.id}/refs`).then(r => {
+      if (!live || !r) return;
+      setMatch(r);
+      setF(s => ({
+        ...s,
+        hospitalId: s.hospitalId || (r.hospital?.id ? String(r.hospital.id) : s.hospitalId),
+        surgeonId: s.surgeonId || (r.surgeon?.id ? String(r.surgeon.id) : s.surgeonId),
+        procedureTypeId: s.procedureTypeId || (r.procedure?.id ? String(r.procedure.id) : s.procedureTypeId),
+      }));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [row.id]);
   const visible = key => fields ? fields.some(f => f.key === key && f.active !== false) : targetKind !== 'clinic' || ['surgeonId', 'opDate', 'opStartTime'].includes(key);
   const [quick, setQuick] = useState(null);
   const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [], banks: [] });
@@ -447,7 +471,29 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
         {(Array.isArray(row.data?.prescription) ? row.data.prescription : row.data?.prescription?.id ? [row.data.prescription] : []).map(doc => <Receipt key={doc.id} documentId={doc.id} fileName={doc.name} onOpen={onZoom} label="دستور جراح" />)}
         {row.makesVisit !== false && (
         <div className="ia-grid">
-          {hospitalMatch && <p className="ia-note">بیمارستان {hospitalMatch.source === 'suggested' ? 'پیشنهادی بر اساس نوشته بیمار؛ بررسی کنید' : 'ثبت‌شده بیمار'}: {hospitalMatch.name}</p>}
+          {/* ⚠️ **سه** حالت، نه دو تا — و این یکی با نگاه‌کردن به صفحه پیدا شد:
+              نسخهٔ قبلی هرچه «پیشنهادی» نبود را «ثبت‌شده بیمار» می‌خواند. برای
+              بیمارستان بی‌ضرر بود چون بیمار واقعاً کشویی دارد و `selected`
+              می‌شود؛ ولی جراح و نوعِ عمل کشویی ندارند، پس حالتِ رایجشان
+              `exact` است — یعنی **ماشین** متن را دقیق مچ کرده، نه اینکه بیمار
+              انتخابش کرده باشد. آن برچسب به کاربر می‌گفت به حدس به‌اندازهٔ
+              انتخابِ خودِ بیمار اعتماد کن.
+              ⚠️ و هر یادداشت به دیده‌شدنِ **کنترلِ خودش** گره خورده: یادداشت
+              دربارهٔ فیلدی که در این فرم وجود ندارد، هم اضافه است هم گمراه‌کننده
+              (متنِ خامِ بیمار بالای همین پنل هست). */}
+          {[
+            ['hospital', 'بیمارستان', visible('hospitalId')],
+            /* برچسبِ یادداشت باید با برچسبِ **کنترلِ خودش** یکی باشد: در حوزهٔ
+               مطب کنترل «پزشک» است و یادداشتِ «جراح» کنارش یعنی دو چیزِ متفاوت. */
+            ['surgeon', targetKind === 'clinic' ? 'پزشک' : 'جراح', visible('surgeonId') || workflow === 'ionm'],
+            ['procedure', 'نوعِ عمل', visible('procedureTypeId')],
+          ].map(([k, label, on]) => on && match[k] && (
+            <p key={k} className="ia-note">
+              {label} {{
+                selected: 'ثبت‌شدهٔ خودِ بیمار',
+                suggested: 'پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید',
+              }[match[k].source] ?? 'مطابقِ دقیقِ نوشتهٔ بیمار'}: {match[k].name}
+            </p>))}
           {(visible('surgeonId') || workflow === 'ionm') && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : workflow === 'ionm' ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
           {visible('hospitalId') && <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
           {visible('techId') && <ApprovalSelect field="techId" section="techs" label={workflow === 'ionm' ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}

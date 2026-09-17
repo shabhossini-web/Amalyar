@@ -443,7 +443,8 @@ export class FormsService {
           formId: f.id, key: c.key, label: c.label, type: c.type,
           builtin: true, required: false, sort: (sort += 10),
           active:
-            (c.key === 'techArriveTime' && activeKeys.has('techId')) ||
+            /* ⚠️ قاعدهٔ «`techId` روشن → `techArriveTime` هم روشن» با W3.8/U7 رفت:
+               ساعتِ حضور دیگر فیلدِ فرم نیست. */
             (c.key === 'opReport' && activeKeys.has('opStartTime')) ||
             (bare && (c.key === 'amount' || c.key === 'notes')),
         })),

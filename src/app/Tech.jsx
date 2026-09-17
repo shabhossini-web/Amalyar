@@ -327,10 +327,15 @@ function UsageSheet({ transferId, onClose, onToast }) {
   );
 }
 
-/** ساعتِ واقعی — حضور، شروع و پایان. */
+/**
+ * ساعتِ واقعیِ عمل — شروع و پایان.
+ *
+ * ⚠️ «ساعتِ حضورِ شما» عمداً این‌جا نیست (W3.8/U7، تصمیمِ مالک ۱۴۰۵/۰۶/۲۶):
+ * حضور مالِ «کارشناس در آن بیمارستان در آن روز» است، نه مالِ یک بیمار، و از
+ * برنامهٔ چینش می‌آید. وقتی سه جا می‌نوشتندش، سه جا واگرا می‌شد.
+ */
 function TimesSheet({ visit, onClose, onSaved }) {
   const [f, setF] = useState({
-    techArriveTime: visit.techArriveTime ?? '',
     opStartTime: visit.opStartTime ?? '',
     opEndTime: visit.opEndTime ?? '',
   });
@@ -356,7 +361,7 @@ function TimesSheet({ visit, onClose, onSaved }) {
         <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <div className="tk-sheet-body">
-        {[['techArriveTime', 'ساعتِ حضورِ شما'], ['opStartTime', 'شروعِ عمل'], ['opEndTime', 'پایانِ عمل']].map(([k, label]) => (
+        {[['opStartTime', 'شروعِ عمل'], ['opEndTime', 'پایانِ عمل']].map(([k, label]) => (
           <TimePick
             key={k}
             className="tk-field"

@@ -167,9 +167,9 @@ export class CreateVisitDto {
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   opEndTime?: string;
 
-  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
-  techArriveTime?: string;
-
+  /* ⚠️ `techArriveTime` عمداً نیست (W3.8/U7): ساعتِ حضور از برنامهٔ چینش
+     (`hospital_duties`) می‌آید و تنها نویسنده‌اش `syncVisitDuty()` است.
+     `whitelist`ِ ValidationPipe مقدارِ کلاینتِ قدیمی را بی‌صدا دور می‌ریزد. */
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   cargoDueTime?: string;
 
@@ -338,9 +338,6 @@ export class UpdateVisitDto {
   opEndTime?: string;
 
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
-  techArriveTime?: string;
-
-  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   cargoDueTime?: string;
 
   @IsOptional()
@@ -370,9 +367,6 @@ export class VisitTimesDto {
 
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   opEndTime?: string;
-
-  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
-  techArriveTime?: string;
 
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   cargoDueTime?: string;

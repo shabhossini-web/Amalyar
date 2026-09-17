@@ -160,7 +160,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     decisions: initial?.decisions ?? [],
     opStartTime: initial?.opStartTime || '',
     opEndTime: initial?.opEndTime || '',
-    techArriveTime: initial?.techArriveTime || '',
     notes: initial?.notes || '',
   }));
   const [busy, setBusy] = useState(false);
@@ -452,7 +451,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     const times = {
       opStartTime: normTime(f.opStartTime),
       opEndTime: normTime(f.opEndTime),
-      techArriveTime: normTime(f.techArriveTime),
     };
     const badKey = Object.entries(times).find(([, v]) => badTime(v));
     if (badKey) { onToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
@@ -512,7 +510,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       // منظورش «پاکش کن» است، نه «دست نزن».
       opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
       opEndTime: editing || times.opEndTime ? times.opEndTime : undefined,
-      techArriveTime: editing || times.techArriveTime ? times.techArriveTime : undefined,
       notes: f.notes.trim() || undefined,
     };
     /* ⚠️ فیلدِ بخشِ نقشِ دیگر اصلاً فرستاده نمی‌شود — نه مقدارِ قفل‌شده‌اش.
@@ -605,7 +602,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    */
   const BUILTIN_ORDER = [
     'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId',
-    'opDate', 'opStartTime', 'opEndTime', 'techArriveTime', 'opReport', 'nextVisitDate',
+    'opDate', 'opStartTime', 'opEndTime', 'opReport', 'nextVisitDate',
     'amount', 'notes',
   ];
 
@@ -698,7 +695,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         <p className="db-hint db-durhint">مدتِ {kindOf(f.kind).label}: {faDuration(formDuration)}</p>
       )}
     </>) };
-  if (fd.isOn('techArriveTime')) builtinNodes.techArriveTime = { el: timeNode('techArriveTime', `حضورِ ${t.tech}`) };
   /* شرحِ عمل هم حالا ردیفِ کاتالوگ دارد؛ روی نوعی مثلِ «ویزیت» که عمل ندارد
      خاموش است و برچسبش را سوپرادمین می‌تواند مثلاً «شرحِ معاینه» کند. */
   if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: (

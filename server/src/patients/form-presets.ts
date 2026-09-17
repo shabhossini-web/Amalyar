@@ -64,7 +64,10 @@ export type PresetForm = {
 export const BUILTIN_VISIT_KEYS = new Set([
   'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
   'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount',
-  'payer', 'kind', 'techArriveTime', 'topicId', 'nextVisitDate',
+  'payer', 'kind', 'topicId', 'nextVisitDate',
+  /* ⚠️ `techArriveTime` عمداً نیست (W3.8/U7): فرمِ مراجعه دیگر ساعتِ حضور
+     نمی‌گیرد — از برنامهٔ چینش می‌آید. فیلدی که در فرم‌ساز روشن شود ولی
+     چیزی ننویسد، بدترین نوعِ فیلد است: کاربر پُرش می‌کند و بی‌صدا گم می‌شود. */
 ]);
 
 /**
@@ -97,7 +100,6 @@ export const VISIT_BUILTIN_CATALOG: { key: string; label: string; type: string }
   { key: 'topicId', label: 'موضوعِ ویزیت', type: 'select' },
   { key: 'opStartTime', label: 'ساعتِ شروع', type: 'time' },
   { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time' },
-  { key: 'techArriveTime', label: 'حضورِ کارشناس', type: 'time' },
   { key: 'opReport', label: 'شرحِ عمل', type: 'textarea' },
   /* «دو هفتهٔ دیگر بیاید» — ستونِ واقعی، پایهٔ فازِ یادآوری‌ها. */
   { key: 'nextVisitDate', label: 'ویزیتِ بعدی', type: 'date' },
