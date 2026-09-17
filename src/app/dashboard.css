@@ -1007,18 +1007,20 @@ a.db-defbtn { text-decoration: none; }
 .db-prep {
   display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px;
   padding: 11px 13px; border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.12);
 }
 .db-prep-id { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text2); }
 .db-prep-id b { font-size: 15px; color: var(--text1); }
 .db-prep-id span { font-variant-numeric: tabular-nums; }
-.db-prep-blood { padding: 1px 7px; border-radius: 99px; color: #fca5a5; border: 1px solid rgba(248, 113, 113, 0.4); font-weight: 700; }
+/* گروهِ خونی یک **واقعیتِ هویتی** است نه هشدار؛ قرمز این‌جا زنگِ خطرِ دروغین
+   می‌سازد و در تمِ روشن هم روی سفید خوانده نمی‌شود. خنثی و پررنگ کافی است. */
+.db-prep-blood { padding: 1px 7px; border-radius: 99px; color: var(--text1); border: 1px solid rgba(var(--veil-rgb), 0.22); font-weight: 700; }
 /* کهربا = «بخوان»، همان زبانی که لایهٔ کار برای عقب‌افتادگی دارد. */
 .db-prep-risk { list-style: none; display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 11px; background: rgba(251, 191, 36, 0.09); border: 1px solid rgba(251, 191, 36, 0.4); }
 .db-prep-risk li { font-size: 12.5px; color: var(--text1); line-height: 1.8; }
-.db-prep-risk b { color: var(--amber); }
+.db-prep-risk b { color: var(--amber-text); }
 .db-prep-rows { display: flex; flex-wrap: wrap; gap: 8px; }
-.db-prep-hot { font-size: 12px; font-weight: 700; color: var(--amber); padding: 3px 9px; border-radius: 99px; border: 1px solid rgba(251, 191, 36, 0.35); }
+.db-prep-hot { font-size: 12px; font-weight: 700; color: var(--amber-text); padding: 3px 9px; border-radius: 99px; border: 1px solid rgba(251, 191, 36, 0.35); }
 .db-prep-more > summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--brand-2); }
 .db-prep-more > summary:hover, .db-prep-more > summary:focus-visible { color: var(--cyan); outline: none; }
 .db-prep-notes, .db-prep-orders, .db-prep-visits { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
@@ -1029,4 +1031,4 @@ a.db-defbtn { text-decoration: none; }
 .db-prep-orders li, .db-prep-visits li { display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--text3); }
 .db-prep-orders b, .db-prep-visits b { color: var(--text2); }
 .db-prep-orders i { font-style: normal; }
-.db-prep-orders i.answered { color: var(--amber); font-weight: 700; }
+.db-prep-orders i.answered { color: var(--amber-text); font-weight: 700; }
