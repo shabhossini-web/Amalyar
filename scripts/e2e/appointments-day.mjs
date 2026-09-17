@@ -11,6 +11,7 @@
  */
 import { chromium } from 'playwright-core';
 import { browserLogin } from './lib/browser-login.mjs';
+import { TERMS } from '../../src/lib/terms.js';
 
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
@@ -174,7 +175,16 @@ try {
     ok(deskText.includes('حضوری ' + tag), 'نامِ بیمار روی صفحه است');
     ok(/انجام شد/.test(deskText), `و وضعیتش («انجام شد» بعد از چرخهٔ کامل)`);
     const openBtn = desk.locator('.cal-appt-go').first();
-    ok(/بازکردنِ ویزیت/.test(await openBtn.innerText()), 'نوبتِ ویزیت‌دار «بازکردنِ ویزیت» می‌گوید نه «شروع»');
+    /* ⚠️ این برچسب از W3.7 به `useTerms()` رفت، پس دیگر «ویزیت» نیست مگر در
+       حوزهٔ مطب — این سنجه رشتهٔ حوزهٔ مطب را هاردکد داشت و با لندشدنِ W3.7
+       **بی‌صدا** قرمز شد (این فایل در فهرستِ CI نیست). حالا از خودِ واژه‌نامه
+       خوانده می‌شود: ادعای واقعیِ سنجه «بازکردن می‌گوید نه شروع» است، نه
+       اینکه واژهٔ کدام حوزه را می‌گوید. */
+    const label = await openBtn.innerText();
+    const opens = Object.values(TERMS).map((t) => t.visitOpen);
+    const starts = Object.values(TERMS).map((t) => t.visitStart);
+    ok(opens.some((w) => label.includes(w)) && !starts.some((w) => label.includes(w)),
+      `نوبتِ ویزیت‌دار «بازکردن» می‌گوید نه «شروع» (${label.trim()})`);
     await openBtn.click();
     await p.waitForTimeout(2500);
     ok(/\/app\/dashboard\?patient=/.test(p.url()), `به داشبورد رفت (${p.url().split('/app')[1]})`);
