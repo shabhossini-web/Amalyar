@@ -6,7 +6,9 @@
  * - «نباید بیفتد»: شرحِ جایگزین‌شده · مدرکِ حذف‌شده · سفارشِ بررسی‌شده در «باز» ·
  *   مبلغِ اقلام روی مراجعهٔ توافقی · شرحِ بالینی برای کاربرِ بی‌دسترسی · پروندهٔ کارشناسِ دیگر ·
  *   **سفارشِ بالینی برای سطحی که `/orders` به او نمی‌دهد** · بریدنِ بی‌صدای یک منبع ·
- *   کلیدِ خامِ نقش در رابطِ فارسی · متنِ نامرئی در تمِ روشن
+ *   کلیدِ خامِ نقش در رابطِ فارسی · متنِ نامرئی در تمِ روشن · **دورزدنِ گیتِ ماژولِ
+ *   تقویم/کار** · پنهان‌شدنِ سفارشِ باز زیرِ سقف · ماندهٔ ابدیِ مراجعهٔ لغوشده ·
+ *   پوشیده‌شدنِ بدهی با اضافه‌پرداختِ مراجعهٔ دیگر
  * - سازگاری با W1.2: وضعیتِ `in_review` از همین حالا «بازِ» شمرده می‌شود
  */
 import { chromium } from 'playwright-core';
@@ -34,6 +36,7 @@ const send = (p, m, b) => fetch(API + p, { method: m, headers: A, body: b ? JSON
   .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = 'lv' + randomBytes(3).toString('hex');
+let made = null, tl = null;   // حسابِ آزمایشیِ سطح‌۲ + توکنش — بخشِ ۸ هم لازمش دارد
 const trash = { visits: [], forms: [], accounts: [] };
 let pid = -1;
 
@@ -144,13 +147,13 @@ try {
      موقتاً پایین می‌آید و در `finally` برمی‌گردد. بدونِ این کار تست فقط
      گاردِ بیرونی را می‌سنجید و خیالمان راحت می‌شد که دامنهٔ دید تست شده. */
   sql(`UPDATE features SET min_level=2 WHERE key='dashboard'`);
-  const made = (await send('/accounts/temporary', 'POST', {
+  made = (await send('/accounts/temporary', 'POST', {
     firstName: 'کارشناسِ', lastName: `بیرونی ${tag}`, phone: '0912' + String(Math.floor(1e6 + Math.random() * 9e6)),
     level: 2, jobRole: 'technician', username: `l${tag}`,
   })).json;
   if (made?.account?.id) {
     trash.accounts.push(made.account.id);
-    const tl = await fetch(API + '/auth/login', {
+    tl = await fetch(API + '/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ identifier: `l${tag}`, password: made.temporaryPassword }),
     }).then((r) => r.json());
@@ -178,7 +181,77 @@ try {
   } else { ok(false, 'حسابِ آزمایشی ساخته نشد'); }
   sql(`UPDATE features SET min_level=5 WHERE key='dashboard'`);
 
+
+  console.log('\n۸) قواعدی که بازبینیِ متخاصم پیدا کرد');
+
+  /* ۸-۱ گیتِ ماژول: نوبت‌ها پشتِ Feature('calendar') و کارها پشتِ Feature('work').
+     کنترلرِ آن‌ها این‌جا در کار نیست، پس گیت باید صریح زده شده باشد. */
+  /* ⚠️ گیت با حسابِ **سوپرادمین** سنجیده نمی‌شود: قانون ۳ می‌گوید سوپرادمین
+     همیشه عبور می‌کند (`canAccess` خطِ ۴). پس همان کارشناسِ سطح‌۲ بخشِ ۵ را
+     برمی‌داریم — تنها حالتی که گیت واقعاً حرفی برای گفتن دارد. */
+  sql(`UPDATE features SET enabled=false WHERE key='calendar'`);
+  sql(`UPDATE features SET enabled=false WHERE key='work'`);
+  sql(`UPDATE features SET min_level=2 WHERE key='dashboard'`);
+  sql(`UPDATE visits SET tech_id=${made?.account?.id ?? -1} WHERE id=${v1.id}`);
+  const gated = await fetch(`${API}/patients/${pid}/live`, { headers: { Authorization: 'Bearer ' + tl?.accessToken } }).then((r) => r.json());
+  ok(gated.apptVisible === false && gated.upcoming.length === 0
+    && !gated.timeline.items.some((i) => i.type === 'appointment'),
+    '**نباید بیفتد:** نوبت‌ها بدونِ ماژولِ تقویم از این در بیرون بروند');
+  ok(gated.stage.steps.find((x) => x.key === 'appointment').state === 'skipped'
+    && /ماژول/.test(gated.stage.steps.find((x) => x.key === 'appointment').detail),
+    'گامِ نوبت می‌گوید ماژول باز نیست، نه «نوبتی نگرفته»');
+  ok(gated.workVisible === false && gated.nextWork === null && gated.work.length === 0,
+    '**نباید بیفتد:** کارها بدونِ ماژولِ کار از این در بیرون بروند');
+  sql(`UPDATE features SET enabled=true WHERE key IN ('calendar','work')`);
+  sql(`UPDATE features SET min_level=5 WHERE key='dashboard'`);
+  sql(`UPDATE visits SET tech_id=NULL WHERE id=${v1.id}`);
+  /* و وقتی ماژول‌ها باز باشند همان حساب باید داده را ببیند — وگرنه سنجهٔ بالا
+     می‌توانست با یک ۴۰۳ ساده هم سبز شود.
+     ⚠️ سقفِ سطحِ `calendar` در seed چهار است، پس برای این کنترل باید **هم**
+     `enabled` برگردد و **هم** سطح پایین بیاید؛ وگرنه کنترل به دلیلِ دیگری
+     قرمز می‌ماند و چیزی را که باید اثبات کند اثبات نمی‌کند. */
+  sql(`UPDATE features SET min_level=2 WHERE key IN ('dashboard','calendar','work')`);
+  sql(`UPDATE visits SET tech_id=${made?.account?.id ?? -1} WHERE id=${v1.id}`);
+  const ungated = await fetch(`${API}/patients/${pid}/live`, { headers: { Authorization: 'Bearer ' + tl?.accessToken } }).then((r) => r.json());
+  ok(ungated.apptVisible === true && ungated.upcoming.length === 1 && ungated.workVisible === true,
+    `با بازبودنِ ماژول، همان حساب نوبت و کار را می‌بیند (سنجهٔ بالا با ۴۰۳ سبز نشده) — appt=${ungated.apptVisible} work=${ungated.workVisible}`);
+  sql(`UPDATE features SET min_level=5 WHERE key='dashboard'`);
+  sql(`UPDATE features SET min_level=4 WHERE key='calendar'`);
+  sql(`UPDATE features SET min_level=2 WHERE key='work'`);
+  sql(`UPDATE visits SET tech_id=NULL WHERE id=${v1.id}`);
+
+  /* ۸-۲ سقفِ سفارش نباید سفارشِ **باز** را پنهان کند. ۲۱ آزمایشِ بسته می‌سازیم
+     که تازه‌تر از سفارشِ بازِ تصویربرداری‌اند — یعنی بدترین حالت. */
+  sql(`INSERT INTO lab_orders(patient_id, visit_id, tests, token, status, created_at, updated_at)
+       SELECT ${pid}, ${v1.id}, ARRAY['CBC'], '${tag}t' || g, 'reviewed', now(), now()
+       FROM generate_series(1, 21) g`);
+  const capped = (await send(`/patients/${pid}/live`, 'GET')).json;
+  ok(capped.openOrders.some((o) => o.kind === 'imaging' && o.id === oOpen.id),
+    '**نباید بیفتد:** سفارشِ باز زیرِ سقفِ ۲۱ سفارشِ بستهٔ تازه‌تر گم شود');
+  ok(capped.openOrders.some((o) => o.kind === 'consult'),
+    'سفارشِ بازِ نوعِ دیگر هم مانده (ترتیبِ خام «اول همهٔ آزمایش‌ها» نیست)');
+  sql(`DELETE FROM lab_orders WHERE token LIKE '${tag}t%'`);
+
+  /* ۸-۳ مراجعهٔ لغوشده ماندهٔ ابدی نمی‌سازد. */
+  const vCan = (await send('/visits', 'POST', { kind: tag, patientId: pid, opDate: new Date().toISOString() })).json;
+  trash.visits.push(vCan.id);
+  await send(`/visits/${vCan.id}/charges`, 'POST', { title: 'لغوشده', unitPrice: 7000000 });
+  const beforeCancel = (await send(`/patients/${pid}/live`, 'GET')).json.billing.due;
+  sql(`UPDATE visits SET op_status='cancelled' WHERE id=${vCan.id}`);
+  const afterCancel = (await send(`/patients/${pid}/live`, 'GET')).json.billing;
+  ok(afterCancel.due === beforeCancel - 7000000,
+    `**نباید بیفتد:** قلمِ مراجعهٔ لغوشده تا ابد در مانده بماند (${beforeCancel} → ${afterCancel.due})`);
+
+  /* ۸-۴ اضافه‌پرداختِ یک مراجعه نباید بدهیِ مراجعهٔ دیگر را بپوشاند — همان
+     تلهٔ مستندِ `visitStats` («مانده باید در سطحِ مراجعه صفر شود»). */
+  sql(`INSERT INTO payments(visit_id, amount, method, paid_at, created_at) VALUES (${v1.id}, 9000000, 'cash', now(), now())`);
+  const netted = (await send(`/patients/${pid}/live`, 'GET')).json.billing;
+  ok(netted.due === 500000,
+    `**نباید بیفتد:** اضافه‌پرداختِ یک مراجعه بدهیِ مراجعهٔ دیگر را بپوشاند (مانده=${netted.due}، انتظار ۵۰۰۰۰۰)`);
+  ok(netted.paid > netted.total, 'پرداختی و جمعِ کل دست‌نخورده می‌مانند (فقط مانده کف می‌خورد)');
+
   console.log('\n۶) روی صفحه');
+
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1180, height: 1500 } });
   const errors = [];
@@ -287,7 +360,13 @@ try {
       'فرمِ مراجعهٔ جدید با همان بیمار پیش‌پر شد');
   } finally { await browser.close().catch(() => {}); }
 } finally {
+  /* ⚠️ پرچم‌های ماژول **در هر مسیرِ خروج** برمی‌گردند: تستی که سقفِ دسترسی را
+     پایین بگذارد و بمیرد، نصبِ محلی را باز رها می‌کند و تستِ بعدی بی‌دلیل سبز
+     می‌شود. */
   sql(`UPDATE features SET min_level=5 WHERE key='dashboard'`);
+  sql(`UPDATE features SET enabled=true WHERE key IN ('calendar','work')`);
+  sql(`UPDATE features SET min_level=4 WHERE key='calendar'`);
+  sql(`UPDATE features SET min_level=2 WHERE key='work'`);
   if (pid > 0) {
     sql(`DELETE FROM work_items WHERE patient_id=${pid}`);
     sql(`DELETE FROM reminders WHERE patient_id=${pid}`);
@@ -295,6 +374,7 @@ try {
     sql(`DELETE FROM documents WHERE patient_id=${pid}`);
     sql(`DELETE FROM clinical_notes WHERE patient_id=${pid}`);
     for (const t of ['imaging_orders', 'lab_orders', 'consult_orders', 'referral_orders']) sql(`DELETE FROM ${t} WHERE patient_id=${pid}`);
+    sql(`DELETE FROM payments WHERE visit_id IN (SELECT id FROM visits WHERE patient_id=${pid})`);
   }
   for (const v of trash.visits.reverse()) await send(`/visits/${v}`, 'DELETE').catch(() => {});
   for (const f of trash.forms) await send(`/forms/${f}`, 'DELETE').catch(() => {});

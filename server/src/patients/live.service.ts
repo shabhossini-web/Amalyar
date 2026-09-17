@@ -5,6 +5,7 @@ import { WorkService } from '../work/work.service';
 import { summarize } from './billing.service';
 import { colorForKey } from './forms.service';
 import { APPT_LABELS } from './appointments.service';
+import { canAccess } from '../auth/access-check';
 
 /**
  * سفارشِ باز = نتیجه‌ای که یا نیامده یا آمده و هنوز بسته نشده.
@@ -132,6 +133,16 @@ export class LiveService {
        چیزی را می‌دید که `/orders` به او نمی‌دهد. دو دروازه برای یک داده = یکی‌شان
        بی‌اثر. */
     const ordersVisible = clinical;
+    /* ⚠️ **هر بخشی که از ماژولِ دیگری می‌خواند، گیتِ همان ماژول را می‌خواهد**
+       (قانون ۳). نوبت‌ها پشتِ `@Feature('calendar')` و کارها پشتِ
+       `@Feature('work')` + `work.read` هستند؛ این‌جا کنترلرِ آن‌ها در کار نیست،
+       پس گیت باید صریح زده شود — دقیقاً همان کاری که `today.service.ts` با
+       `FeaturesService.forUser` و `billing.service.ts` با `canAccess` می‌کنند.
+       بدونش نصبی که پلنش تقویم/کار ندارد، همان داده را از این در می‌گرفت. */
+    const [apptVisible, workVisible] = await Promise.all([
+      canAccess(this.prisma, user, 'calendar', []),
+      canAccess(this.prisma, user, 'work', ['work.read']),
+    ]);
     const now = new Date();
     const today = new Date(now); today.setHours(0, 0, 0, 0);
 
@@ -147,7 +158,7 @@ export class LiveService {
           payments: { select: { amount: true } },
         },
       }),
-      this.prisma.appointment.findMany({
+      apptVisible ? this.prisma.appointment.findMany({
         where: { patientId },
         orderBy: [{ date: 'desc' }, { startMin: 'desc' }],
         take: CAP.appointments + 1,
@@ -157,7 +168,7 @@ export class LiveService {
           topic: { select: { name: true, color: true } },
           doctor: { select: { person: { select: { firstName: true, lastName: true } } } },
         },
-      }),
+      }) : Promise.resolve([] as any[]),
       ordersVisible ? this.orders(patientId) : Promise.resolve([] as any[]),
       this.prisma.document.findMany({
         where: { patientId, deletedAt: null },
@@ -192,7 +203,10 @@ export class LiveService {
     const documentsC = trim(documents, CAP.documents);
     const notesC = trim(notes, CAP.notes);
     const remindersC = trim(reminders, CAP.reminders);
-    const ordersC = trim(orders, CAP.orders);
+    /* سفارش‌ها سقفشان را **داخلِ** `orders()` می‌خورند (بازها هرگز حذف نمی‌شوند)،
+       پس این‌جا فقط سرریز اعلام می‌شود و دوباره بریده نمی‌شود. */
+    const ordersC = orders;
+    if (orders.length >= CAP.orders) capped = true;
 
     const kindTitle: Record<string, string> = {};
     const kindColor: Record<string, string> = {};
@@ -206,7 +220,7 @@ export class LiveService {
 
     /* کارهای باز از همان لایهٔ کار می‌آید، نه کوئریِ محلی: مالک، موعد، و
        «عقب‌افتاده» آن‌جا حساب می‌شوند و دو نسخه‌شان یعنی دو حقیقت. */
-    const work = await this.work.list(user, { scope: 'patient', patientId, limit: 20 });
+    const work = workVisible ? await this.work.list(user, { scope: 'patient', patientId, limit: 20 }) : [];
 
     const billing = this.billing(visits);
     const cycle = visits[0] ?? null;
@@ -220,8 +234,8 @@ export class LiveService {
       patient: { id: patient.id, code: patient.code, fullName: `${patient.firstName} ${patient.lastName}`.trim() },
       clinicalVisible: clinical,
       /* «خالی» را از «اجازه نداری» جدا می‌کند — وگرنه منشی فکر می‌کند سفارشی نیست. */
-      ordersVisible,
-      stage: this.stage({ patient, visits, cycle, appointments: appointmentsC, upcoming, orders: ordersC, openOrders, billing, kindTitle, today, ordersVisible }),
+      ordersVisible, apptVisible, workVisible,
+      stage: this.stage({ patient, visits, cycle, appointments: appointmentsC, upcoming, orders: ordersC, openOrders, billing, kindTitle, today, ordersVisible, apptVisible }),
       /* «کارِ بعدی» = بالاترین کارِ باز. بقیه هم می‌آیند تا کارت بتواند بگوید
          «۳ کارِ دیگر» بی‌آنکه درخواستِ دوم بزند. */
       nextWork: work[0] ?? null,
@@ -256,7 +270,7 @@ export class LiveService {
    * خودشان را در کارتِ «کارِ بعدی» دارند.
    */
   private stage(x: any): { key: string | null; title: string; detail: string | null; steps: Step[] } {
-    const { patient, visits, cycle, appointments, upcoming, orders, openOrders, billing, kindTitle, today, ordersVisible } = x;
+    const { patient, visits, cycle, appointments, upcoming, orders, openOrders, billing, kindTitle, today, ordersVisible, apptVisible } = x;
     const steps: Step[] = [];
     const add = (key: string, title: string, state: Step['state'], detail: string | null, at: Date | null = null) =>
       steps.push({ key, title, state, detail, at });
@@ -266,7 +280,9 @@ export class LiveService {
     /* نوبت: «رد شد» وقتی بیمار اصلاً نوبت نگرفته ولی مراجعه دارد — مراجعهٔ
        حضوری حالتِ عادی است، نه گامِ ناتمام. */
     const pastAppt = appointments.find((a: any) => a.status === 'done' || a.status === 'arrived' || a.visitId);
-    if (upcoming.length) {
+    if (!apptVisible) {
+      add('appointment', 'نوبت', 'skipped', 'ماژولِ نوبت‌دهی برای این حساب باز نیست', null);
+    } else if (upcoming.length) {
       add('appointment', 'نوبت', cycle && cycle.opStatus === 'pending' ? 'done' : 'current',
         `${upcoming.length} نوبتِ پیشِ رو`, upcoming[0].date);
     } else if (pastAppt) {
@@ -419,15 +435,35 @@ export class LiveService {
    * اقلامِ همهٔ مراجعات در یک `summarize` مبلغِ توافقی را نادیده می‌گرفت.
    */
   private billing(visits: any[]) {
-    let total = 0, itemsTotal = 0, paid = 0;
+    let total = 0, itemsTotal = 0, paid = 0, due = 0;
     for (const v of visits) {
+      /* ⚠️ مراجعهٔ **لغوشده** پول نمی‌خواهد. `setStatus` فقط `opStatus` را عوض
+         می‌کند و قلم‌ها سرِ جایشان می‌مانند؛ حذفِ مراجعهٔ فاکتوردار هم عمداً
+         ممنوع است و کاربر را به «لغو» می‌فرستد. پس بدونِ این شرط، هر لغوِ
+         فاکتوردار یک ماندهٔ **ابدی** روی پرونده می‌گذاشت که داشبورد نشان
+         نمی‌دهد (`visitStats` همان `opStatus: { not: 'cancelled' }` را دارد). */
+      if (v.opStatus === 'cancelled') continue;
       const s = summarize(v.charges, v.payments, v);
       total += s.total; itemsTotal += s.itemsTotal; paid += s.paid;
+      /* ⚠️ مانده **به‌ازای هر مراجعه** کف می‌خورد و بعد جمع می‌شود، نه
+         `total - paid`. همان تلهٔ مستندِ `visitStats`: اضافه‌پرداختِ یک مراجعه
+         بدهیِ مراجعهٔ دیگر را می‌پوشاند و گامِ «تسویه» دروغِ «تسویه شد» می‌گفت. */
+      due += Math.max(0, s.due);
     }
     const paidPct = total > 0 ? Math.min(100, Math.max(0, Math.round((paid / total) * 100))) : 0;
-    return { total, itemsTotal, paid, due: total - paid, paidPct };
+    return { total, itemsTotal, paid, due, paidPct };
   }
 
+  /**
+   * ⚠️ چهار کوئریِ جدا در **یک آرایه** می‌ریزند، پس ترتیبِ خام «همهٔ آزمایش‌ها،
+   * بعد همهٔ تصویربرداری‌ها…» است نه زمانی. بدونِ مرتب‌سازی، `trim(…, ۲۰)`
+   * بیمارِ ۲۱-آزمایشی را طوری می‌برید که **هر** سفارشِ تصویربرداری/مشاوره/ارجاع
+   * دور ریخته شود — یعنی «۱ نتیجه آمده و بررسی نشده» بی‌صدا ناپدید می‌شد.
+   *
+   * ⚠️ و سقف هم نباید سفارشِ **باز** را پنهان کند: بازها کم‌اند و کارِ همین
+   * حالا؛ بسته‌ها تاریخچه‌اند. پس بازها کامل می‌مانند و سقف فقط دنبالهٔ بسته‌ها
+   * را می‌برد.
+   */
   private async orders(patientId: number) {
     const out: any[] = [];
     for (const k of ORDER_KINDS) {
@@ -440,7 +476,12 @@ export class LiveService {
         ...r, kind: k.key, kindFa: k.fa, summary: LiveService.orderSummary(k.key, r),
       })));
     }
-    return out;
+    const when = (o: any) => new Date(o.sentAt ?? o.createdAt).getTime();
+    out.sort((a, b) => when(b) - when(a));
+    const open = out.filter((o) => OPEN_ORDER.includes(o.status));
+    const closed = out.filter((o) => !OPEN_ORDER.includes(o.status));
+    return [...open, ...closed.slice(0, Math.max(0, CAP.orders - open.length))]
+      .sort((a, b) => when(b) - when(a));
   }
 
   private order(o: any, code: string, visits: any[]) {
