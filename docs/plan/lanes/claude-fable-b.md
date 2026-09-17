@@ -70,7 +70,14 @@
   شدن روی بازکننده می‌نشیند، و `role="dialog"` + `aria-modal` پیش‌فرض است. مصرف‌کننده چیزی
   اضافه نمی‌کند؛ شیتی که **نباید** با Escape بسته شود همان `closable={false}` را دارد. تب‌ها
   roving tabindex دارند (فقط تبِ فعال در زنجیرهٔ Tab).
-- **پیشینِ W0.6 و ربطی به آن ندارد:** `scripts/e2e/intake-assistance-ui.mjs` روی `main` در سنجهٔ
-  «superadmin can add technician inside approval» قرمز است (fixtureی که با شیتِ تأییدِ
-  `src/app/Intake.jsx` ناهم‌خوان شده؛ دکمه‌ای با آن نام دیگر نیست). هر که آن شیت را دست می‌زند،
-  اول همین را راست کند.
+- **پیشینِ W0.6 و ربطی به آن ندارد — و تشخیصِ قبلیِ همین یادداشت غلط بود.** پیش‌تر این‌جا نوشته
+  بودم `scripts/e2e/intake-assistance-ui.mjs` روی سنجهٔ «superadmin can add technician inside
+  approval» قرمز است. در سوییپِ ۱۴۰۵/۰۶/۲۷ معلوم شد اصلاً به آن سنجه نمی‌رسد: سوییت مسیرِ
+  مرورگر را `/tmp/chromium` **هاردکد** کرده و در کانتینرِ استاندارد همان‌جا می‌میرد
+  (`executable doesn't exist`). همین بلا سرِ `profile-workflows-ui.mjs` و `orders-ai-ui.mjs`
+  هم آمده. هر سه **در CI اجرا نمی‌شوند** (`grep intake-assistance .github/workflows/` خالی
+  است)، پس سبزیِ CI دربارهٔ آن‌ها چیزی نمی‌گوید و کسی هم متوجه نشده.
+  درمانش یک خط است: مثلِ هفت سوییتِ تازه از `scripts/e2e/lib/mock-ui.mjs` (`launch()`) استفاده
+  کنند که `/opt/pw-browsers/chromium` را می‌شناسد. در کلیمِ هیچ لِینی نیستند؛ هر که زودتر
+  رسید بردارد — ولی **اول اجرا کن بعد باور کن**، چون تا وقتی لانچ نمی‌شود معلوم نیست پشتِ آن
+  خطا چند سنجهٔ واقعیِ قرمز هست.
