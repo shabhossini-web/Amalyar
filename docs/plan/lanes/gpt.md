@@ -16,7 +16,7 @@
 | ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ✅ | `agent/w1-4-approve-atomic` | a88a7a4 | PR #41؛ security-ci، ۸۳ سناریو و ۳۳ رگرسیون سبز |
 | ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D01 · تطبیق از `data.followUpVisitId` (نه `patientId + createdAt`) · موعدِ نرسیده جدا شمرده می‌شود (`waiting`) · `capped`/`total`/`limit` در خروجی · e2e: `scripts/e2e/w1-1-unfollowed-local.mjs` (۲۰/۲۰، دو رگرسیونِ عمدی قرمزش کرد) |
 | ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D07 · `DECISIONS.md` #۱ · پوششِ متن با تنظیمِ تازهٔ `sms_care_unconfirmed_text` (خالی = خاموش) · فقط `post_op_care`/`follow_up`، نه پیام‌های پیش از عمل · e2e: `scripts/e2e/w1-7-postop-local.mjs` (۱۷/۱۷، دو رگرسیونِ عمدی قرمزش کرد) |
-| ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ⬜ | `agent/w1-3-approve-path` | | D03a |
+| ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D03a · `commitAnswers()` که هر دو مسیر صدایش می‌زنند · عکس چیزی برای attach نداشت (توضیح پایین) · e2e: `scripts/e2e/w1-3-approve-local.mjs` (۱۴/۱۴، دو رگرسیونِ عمدی قرمزش کرد) |
 | ۷ | W1.8 `POST …/draft` (سرور) — نیمهٔ UI با لِینِ ب | ⬜ | `agent/w1-8-intake-draft` | | D09 · `CONTRACTS.md` §۶ |
 | ۸ | W1.9 `dedupeKey` همهٔ kindها + retry/backoff + پیامکِ per-tenant | ⬜ | `agent/w1-9-reminder-idempotency` | | N4, A3 · `DECISIONS.md` #۴ |
 | ۹ | W0.3 dedupeِ «پیش‌رو» در `portal.service.ts` (سرور) | ⬜ | `agent/w0-3-portal-dedupe` | | لینکی‌کردنِ متن با لِینِ ب |
@@ -108,3 +108,25 @@
   پوشش نمی‌گیرند · کارِ `confirm_surgery_done` سرِ جایش است. این چهارتا کدِ تازه
   نخواستند، ولی حالا سنجه دارند تا بی‌صدا نشکنند.
 - **باقیِ لِین:** W1.3 · W1.8 · W1.9 · W0.3 · W0.4 · W0.8 · W1.10.
+
+## تحویلِ W1.3 — انجام‌شده توسطِ لِینِ ب (۱۴۰۵/۰۶/۲۷)
+
+- **ریشه (D03a):** فرمِ زیرپرونده دو مسیرِ تأیید دارد. مسیرِ دستیِ `approve()`
+  ‏`syncLinkDocuments` را صدا می‌زند؛ شاخهٔ `direct` در **`fill()`** (فرمِ رایگانِ
+  زیرپرونده که همان لحظهٔ ارسال `approved` می‌شود) نمی‌زد. پس لینکِ MRI/آزمایشی که
+  بیمار در باکسِ `links` گذاشته بود هرگز **مدرکِ پرونده** نمی‌شد.
+- **و جبران‌پذیر نبود:** `approve()` فقط ردیفِ `pending_approval` را می‌پذیرد و
+  ردیفِ خودکارتأییدشده `approvalResult` هم ندارد، پس نه replay می‌شود نه دوباره
+  تأیید. لینک برای همیشه فقط در `data` می‌ماند.
+- **راه‌حل:** `commitAnswers()` — یک گامِ نام‌دار که **هر دو** مسیر صدایش می‌زنند.
+  اگر فردا عارضهٔ جانبیِ تازه‌ای به «پاسخ تصویب شد» اضافه شود، همان‌جا اضافه
+  می‌شود و دو مسیر دوباره از هم دور نمی‌افتند.
+- **«attachِ عکس» کارِ تازه‌ای نداشت و ادعا نشد.** `attachImage` همان لحظهٔ آپلود
+  `Document` را با دستهٔ درست می‌سازد، و فرمِ زیرپرونده مراجعه‌ای ندارد که عکس
+  بخواهد به آن وصل شود (`makesVisit = scope !== 'record'`). این در کامنتِ
+  `commitAnswers` هم نوشته شد تا نفرِ بعدی دنبالش نگردد.
+- 🔴 **دادهٔ گذشته با این اصلاح درست نمی‌شود.** هر لینکی که تا امروز از مسیرِ
+  `direct` آمده همان‌جا مانده و این بسته فقط جلوی تکرارش را می‌گیرد. ترمیمِ
+  گذشته کارِ **W1.10** است (اسکریپتِ کشفِ دادهٔ ناقص) — عمداً این‌جا انجام نشد تا
+  بسته پهن نشود، ولی اگر نصبِ زنده لینکِ ازدست‌رفته دارد باید جلو بیفتد.
+- **باقیِ لِین:** W1.8 · W1.9 · W0.3 · W0.4 · W0.8 · W1.10.

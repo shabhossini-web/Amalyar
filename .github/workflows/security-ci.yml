@@ -2915,3 +2915,11 @@ jobs:
       # surgeon marks it done. Messages sent BEFORE the op are never hedged.
       - name: Verify hedged after-care text until the operation is confirmed (W1.7)
         run: node scripts/e2e/w1-7-postop-local.mjs
+
+      # ⚠️ W1.3/D03a: a free record-scope form is approved inline by fill(),
+      # which skipped syncLinkDocuments entirely, so the patient's MRI link
+      # never became a record document. approve() only accepts
+      # pending_approval rows, so such a row could never be repaired. Both
+      # paths now go through one commitAnswers step.
+      - name: Verify both approval paths turn form links into documents (W1.3)
+        run: node scripts/e2e/w1-3-approve-local.mjs

@@ -918,6 +918,13 @@ export class IntakeService {
       await this.events.emit({ type: 'intake.submitted', refType: 'intake_submission', refId: row.id,
         patientId: saved.patientId, visitId: saved.visitId }, tx);
       if (direct) {
+        /* W1.3: همان گامی که `approve()` دستی اجرا می‌کند — وگرنه لینکِ فرم
+           هرگز مدرکِ پرونده نمی‌شود و چون این ردیف دیگر `pending_approval`
+           نیست، از مسیرِ دستی هم قابلِ جبران نبود. */
+        await this.commitAnswers(tx, {
+          patientId: saved.patientId, visitId: saved.visitId,
+          fields: form?.fields, data, actorId: null,
+        });
         // تأیید خودکار هم باید کارِ بازشده با submitted را با همان ref ببندد.
         await this.events.emit({ type: 'intake.approved', refType: 'intake_submission', refId: row.id,
           patientId: saved.patientId, visitId: saved.visitId }, tx);
@@ -928,6 +935,53 @@ export class IntakeService {
       }
     });
     return this.publicView(token);
+  }
+
+  /**
+   * گامِ مشترکِ «تصویبِ پاسخ» — W1.3/D03a.
+   *
+   * ⚠️ **چرا این تابع وجود دارد، با اینکه یک خط است.** فرمِ زیرپرونده دو مسیرِ
+   * تأیید دارد که سال‌ها از هم دور شدند:
+   *
+   * | مسیر | کِی |
+   * |---|---|
+   * | `approve()` | ادمین دستی تأیید می‌کند |
+   * | شاخهٔ `direct` در `submit()` | فرمِ **رایگانِ** زیرپرونده، همان لحظهٔ ارسال |
+   *
+   * مسیرِ دوم ردیف را مستقیم `approved` می‌کرد و `syncLinkDocuments` را صدا
+   * نمی‌زد. نتیجه: لینکی که بیمار در باکسِ `links` گذاشته بود (MRI، جوابِ
+   * آزمایش) هرگز **مدرکِ پرونده** نمی‌شد و در تبِ مدارک دیده نمی‌شد.
+   *
+   * و برگشت‌پذیر هم نبود: `approve()` فقط ردیفِ `pending_approval` را می‌پذیرد،
+   * پس ردیفِ خودکارتأییدشده دیگر هیچ‌وقت از آن مسیر رد نمی‌شد. لینک برای همیشه
+   * فقط در `data` می‌ماند.
+   *
+   * پس هر عارضهٔ جانبیِ «پاسخ تصویب شد» از این‌جا می‌گذرد. اگر فردا چیزِ
+   * تازه‌ای اضافه شد (دسته‌بندیِ عکس، اعلان، …) همین‌جا اضافه شود تا دو مسیر
+   * دوباره از هم دور نیفتند.
+   *
+   * عکس‌ها عمداً این‌جا نیستند: `attachImage` همان لحظهٔ آپلود `Document` را
+   * با دستهٔ درست می‌سازد، و فرمِ زیرپرونده مراجعه‌ای ندارد که بخواهند به آن
+   * وصل شوند. چیزی برای attach کردن نمانده.
+   */
+  private async commitAnswers(
+    tx: any,
+    opts: {
+      patientId: number | null;
+      visitId: number | null;
+      fields: { key: string; type?: string | null; label: string; docCategory?: string | null }[] | undefined;
+      data: Record<string, any>;
+      actorId: number | null;
+    },
+  ) {
+    if (!opts.patientId) return;
+    await syncLinkDocuments(tx, {
+      patientId: opts.patientId,
+      visitId: opts.visitId,
+      fields: (opts.fields ?? []).filter((f) => f.type === 'links'),
+      values: opts.data ?? {},
+      actorId: opts.actorId,
+    });
   }
 
   /**
@@ -1907,7 +1961,7 @@ export class IntakeService {
           if (pay) await this.billing.addPayment(visit.id, { amount: paidAmount, method: 'transfer',
             bankAccountId: dto.bankAccountId, reference: `ثبت‌نام ${row.token.slice(0, 8)}` }, user, tx);
         } else {
-          await syncLinkDocuments(tx, { patientId: row.patientId!, visitId: null, fields: fields.filter(f => f.type === 'links'), values: d, actorId: user?.id ?? null });
+          await this.commitAnswers(tx, { patientId: row.patientId, visitId: null, fields, data: d, actorId: user?.id ?? null });
         }
         if (appointment) {
           const status = appointment.status === 'held' ? 'confirmed' : appointment.status;
