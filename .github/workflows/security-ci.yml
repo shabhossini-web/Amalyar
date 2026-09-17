@@ -2898,3 +2898,11 @@ jobs:
 
       - name: Verify atomic intake approval, idempotency and committed SMS queue (W1.4)
         run: node scripts/e2e/w1-4-approve-local.mjs
+
+      # ⚠️ W1.1/D01: the follow-up row is created when the VISIT is registered,
+      # which for a planned operation is BEFORE its opDate. Matching answers by
+      # patientId + createdAt therefore reported every planned operation as
+      # unfollowed, and let one answer cover two operations. The exact key was
+      # in the same JSON all along (data.followUpVisitId / followUpDay).
+      - name: Verify follow-up matching by exact key, per due date and cap notice (W1.1)
+        run: node scripts/e2e/w1-1-unfollowed-local.mjs
