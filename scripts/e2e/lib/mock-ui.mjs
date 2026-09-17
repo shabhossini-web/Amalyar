@@ -10,11 +10,32 @@
  * `undefined` برگرداند، ۴۰۱ می‌گیرد — پس مسیرِ فراموش‌شده به‌جای «صفحهٔ سالم با
  * دادهٔ تصادفی» یک خطای دیدنی می‌دهد.
  */
+import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
 
-export const CHROME = process.env.E2E_CHROME ?? '/opt/pw-browsers/chromium';
+/**
+ * مسیرِ مرورگر — **هر محیطی جای دیگری داردش.**
+ *
+ * ⚠️ مسیرِ ثابتِ `/opt/pw-browsers/chromium` فقط مالِ کانتینرِ توسعه است. روی
+ * رانرِ گیت‌هاب وجود ندارد و لانچ با پیامِ `executable doesn't exist` می‌میرد —
+ * پیش از اینکه حتی یک سنجه اجرا شود. (همان تله‌ای که سه سوییتِ قدیمیِ
+ * `intake-assistance-ui` / `profile-workflows-ui` / `orders-ai-ui` خورده‌اند و
+ * چون در CI نیستند کسی ندید.)
+ *
+ * پس نامزدها به ترتیب سنجیده می‌شوند و اگر **هیچ‌کدام** نبود مسیر اصلاً پاس
+ * داده نمی‌شود: آن‌وقت خودِ playwright-core از `~/.cache/ms-playwright`
+ * پیدایش می‌کند — همان جایی که `playwright install chromium` می‌گذاردش.
+ */
+const CHROME_CANDIDATES = [
+  process.env.E2E_CHROME,
+  '/opt/pw-browsers/chromium',
+  '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+].filter(Boolean);
+export const CHROME = CHROME_CANDIDATES.find((c) => { try { return fs.existsSync(c); } catch { return false; } }) ?? null;
 
 export async function startVite(port) {
   const base = `http://127.0.0.1:${port}`;
@@ -30,7 +51,7 @@ export async function startVite(port) {
 }
 
 export const launch = () => chromium.launch({
-  executablePath: CHROME,
+  ...(CHROME ? { executablePath: CHROME } : {}),
   args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
 });
 
