@@ -16,6 +16,7 @@ import {
   Money, Pencil, Phone, Plus, Send, Trash,
 } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import { useTerms } from './config.jsx';
 import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -890,6 +891,12 @@ function NotesTab({ rec, reload, toast }) {
    حالا پاسخ بالاست و تب‌ها ثانویه‌اند. داده از `GET /patients/:id/live` می‌آید
    که همه‌چیزش **مشتقِ سرور** است (قانون ۱۵) — این‌جا هیچ فرمولی نیست. */
 
+/**
+ * جای خالیِ واژهٔ حوزه‌ای را پُر می‌کند (قانون ۲۴). سرور `{visit}` می‌فرستد چون
+ * واژه‌نامه فقط یک نسخه دارد و آن `src/lib/terms.js` است.
+ */
+const withTerm = (str, t) => (str ? String(str).replaceAll('{visit}', t.visit).replaceAll('{visits}', t.visits) : str);
+
 /** نگاشتِ نوعِ ردیفِ خطِ زمان به آیکون و برچسب — تک‌منبع. */
 const TL_META = {
   visit: { Icon: Doctor, fa: 'مراجعه' },
@@ -907,7 +914,7 @@ const TL_META = {
  * یک واقعیت است؛ اگر گام را برداریم، نوار برای هر بیمار شکلِ دیگری دارد و
  * دیگر نمی‌شود با یک نگاه فهمید کجای مسیریم.
  */
-function StageBar({ stage }) {
+function StageBar({ stage, t }) {
   if (!stage?.steps?.length) return null;
   return (
     <section className="rc-stage" aria-label="الان کجاییم">
@@ -915,8 +922,8 @@ function StageBar({ stage }) {
         {/* ⚠️ متنِ سرور از `faNum` رد می‌شود: شمارش‌ها («۲ نتیجه…») آن‌جا عددِ
             لاتین‌اند و کلِ صفحه فارسی است. قالبِ **پول** این‌جا نمی‌آید — آن
             `fmtMoney` است و به همین دلیل سرور هیچ مبلغی را متن نمی‌کند. */}
-        <b>الان کجاییم:</b> {faNum(stage.title)}
-        {stage.detail && <i> — {faNum(stage.detail)}</i>}
+        <b>الان کجاییم:</b> {faNum(withTerm(stage.title, t))}
+        {stage.detail && <i> — {faNum(withTerm(stage.detail, t))}</i>}
       </p>
       <ol className="rc-steps">
         {stage.steps.map((s) => (
@@ -925,8 +932,8 @@ function StageBar({ stage }) {
               {s.state === 'done' ? <Check width="11" height="11" /> : null}
             </span>
             <span className="rc-step-txt">
-              <b>{s.title}</b>
-              {s.detail && <i>{faNum(s.detail)}</i>}
+              <b>{withTerm(s.title, t)}</b>
+              {s.detail && <i>{faNum(withTerm(s.detail, t))}</i>}
               {s.at && <time dateTime={s.at}>{faDate(s.at)}</time>}
             </span>
           </li>
@@ -1013,7 +1020,7 @@ function NextUp({ live, onGo, onActed, toast }) {
  * دکمه‌نمایی که کاری نمی‌کند از نبودنِ دکمه بدتر است (باگِ واقعیِ همین ریپو:
  * لینکِ «بازکردن در داشبورد» که هیچ‌کاری نمی‌کرد).
  */
-function Timeline({ live, onGo }) {
+function Timeline({ live, onGo, t }) {
   const [all, setAll] = useState(false);
   const tl = live.timeline;
   if (!tl?.items?.length) return null;
@@ -1033,7 +1040,7 @@ function Timeline({ live, onGo }) {
               <span className="rc-tl-body">
                 {/* نوعِ شرح داده است نه برچسب؛ نگاشتِ فارسی‌اش همین بالا در
                     `NOTE_KINDS` هست و دو نسخه‌کردنش فقط واگرایی می‌آورد. */}
-                <b>{it.type === 'note' ? (NOTE_KINDS[it.title] ?? it.title) : it.title}</b>
+                <b>{it.type === 'note' ? (NOTE_KINDS[it.title] ?? it.title) : withTerm(it.title, t)}</b>
                 {it.detail && <i>{faNum(it.detail)}</i>}
               </span>
               <span className="rc-tl-side">
@@ -1079,7 +1086,7 @@ function Timeline({ live, onGo }) {
  * بیمارمحور هنوز endpointِ خودش را ندارد (W3.3) و دکمه‌ای که به صفحهٔ
  * بی‌خبر از بیمار می‌رود، در نمی‌زند — به دیوار می‌زند.
  */
-function RecordActions({ rec, onEdit, toast }) {
+function RecordActions({ rec, onEdit, toast, t }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState('');
 
@@ -1107,7 +1114,7 @@ function RecordActions({ rec, onEdit, toast }) {
         /* ⚠️ نام از `state` رد می‌شود نه از کوئری: نامِ بیمار در URL و در
            تاریخچهٔ مرورگر می‌ماند و جای خوبی برایش نیست. */
         onClick={() => navigate('/app/dashboard', { state: { prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } } })}
-      ><Plus width="13" height="13" /> مراجعهٔ جدید</button>
+      ><Plus width="13" height="13" /> {t.visitNew}</button>
       <button type="button" className="rc-act" onClick={onEdit}><Pencil width="13" height="13" /> ویرایشِ مشخصات</button>
       <button type="button" className="rc-act" onClick={portalLink} disabled={busy === 'link'}>
         <LinkIcon width="13" height="13" /> {busy === 'link' ? 'یک لحظه…' : 'لینکِ پرونده'}
@@ -1123,6 +1130,7 @@ function RecordActions({ rec, onEdit, toast }) {
 /* ══════════════ صفحه ══════════════ */
 export default function PatientRecord() {
   const { id } = useParams();
+  const t = useTerms();
   const [rec, setRec] = useState(null);
   /* لایهٔ «پاسخ» — جدا از بایگانی و **موازی** با آن. اگر نیامد (سطحِ پایین‌تر،
      خطای شبکه) صفحه با تب‌ها سرِ جایش کار می‌کند؛ پاسخ اضافه است نه شرط. */
@@ -1187,7 +1195,7 @@ export default function PatientRecord() {
     /* «خلاصه» نامِ درستی نبود: این تب یک فرمِ ویرایشِ کامل است و خلاصه حالا
        بالای صفحه است. اسمِ درست، انتظارِ درست. */
     ['profile', 'مشخصات'],
-    ['visits', `مراجعات (${faNum(rec.counts.visits)})`],
+    ['visits', `${t.visits} (${faNum(rec.counts.visits)})`],
     ...(rec.counts.visits > 1 ? [['journey', 'مسیرِ درمان']] : []),
     ['docs', `مدارک (${faNum(rec.counts.documents)})`],
     /* فقط وقتی چیزی هست: تبِ همیشه‌خالی، فضای نوارِ تب را می‌گیرد و هیچ
@@ -1229,11 +1237,11 @@ export default function PatientRecord() {
         </dl>
       )}
 
-      <RecordActions rec={rec} onEdit={() => goTab('profile')} toast={say} />
+      <RecordActions rec={rec} onEdit={() => goTab('profile')} toast={say} t={t} />
 
-      {live && <StageBar stage={live.stage} />}
+      {live && <StageBar stage={live.stage} t={t} />}
       {live && <NextUp live={live} onGo={goTab} onActed={loadLive} toast={say} />}
-      {live && <Timeline live={live} onGo={goTab} />}
+      {live && <Timeline live={live} onGo={goTab} t={t} />}
 
       <div ref={tabsRef} />
       <Tabs

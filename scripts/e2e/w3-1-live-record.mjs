@@ -96,6 +96,8 @@ try {
     '**نباید بیفتد:** گامِ ردشده از نوار حذف شود (شکلِ نوار باید برای همه یکی بماند)');
   ok(live.stage.steps[0].state === 'done' && live.stage.steps.find((s) => s.key === 'visit').state !== 'todo',
     'گام‌های گذشته «انجام‌شده»اند');
+  /* قانون ۲۴: واژهٔ حوزه‌ای جای خالی است و کلاینت پُرش می‌کند. */
+  ok(JSON.stringify(live.stage).includes('{visit}'), 'سرور واژهٔ حوزه‌ای را جای خالی می‌گذارد، نه هاردکد');
 
   console.log('\n۲) چه مانده');
   ok(live.nextWork?.id === wk, 'کارِ بعدی همان کارِ باز است');
@@ -189,6 +191,11 @@ try {
     await page.waitForSelector('.rc-stage', { timeout: 15000 });
 
     ok(await page.locator('.rc-step.is-current').count() === 1, 'روی صفحه هم دقیقاً یک گام روشن است');
+    const body = await page.locator('.df').innerText();
+    ok(!body.includes('{visit}'),
+      '**نباید بیفتد:** جای خالیِ واژه (`{visit}`) خام روی صفحه دیده شود');
+    ok(/مراجع/.test(await page.locator('.rc-stage').innerText()),
+      'واژهٔ حوزه از `useTerms()` پُر شد (حوزهٔ پیش‌فرض: مراجعه)');
     ok(await page.locator('.rc-id').count() === 1 && await page.locator('.rc-id input, .rc-id select').count() === 0,
       '**نباید بیفتد:** کارتِ هویت فیلدِ ویرایش داشته باشد (هویت فقط‌خواندنی است)');
     ok(await page.locator('.rc-next-main').count() === 1 && /بررسیِ نتیجهٔ MRI/.test(await page.locator('.rc-next-main').innerText()),

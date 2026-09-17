@@ -76,6 +76,14 @@ type TimelineItem = {
 };
 
 /**
+ * ⚠️ **واژهٔ حوزه‌ای هاردکد نمی‌شود** (قانون ۲۴): «مراجعه» در نصبِ تجهیزات «عمل»
+ * و در مطب «ویزیت» است. سرور منطق را می‌سازد و واژه را **جای خالی** می‌گذارد؛
+ * کلاینت با `useTerms()` پُرش می‌کند. دو نسخه از واژه‌نامه (یکی این‌جا، یکی
+ * `src/lib/terms.js`) یعنی همان forkِ هر حوزه که قانون ۲۴ جلویش را گرفته.
+ */
+const V = '{visit}';
+
+/**
  * **پروندهٔ زنده** (W3.1، §۴.۳ سند) — لایه‌ای که به چهار پرسش جواب می‌دهد:
  * الان کجاییم · چه شده · چه مانده · نوبتِ کیست.
  *
@@ -194,7 +202,7 @@ export class LiveService {
       kindColor[d.visitKind] = d.color || colorForKey(d.key);
     }
     const vLabel = (v: { kind: string | null; seq: number }) =>
-      `${kindTitle[v.kind ?? ''] ?? 'مراجعه'} ${patient.code}-V${v.seq}`;
+      `${kindTitle[v.kind ?? ''] ?? V} ${patient.code}-V${v.seq}`;
 
     /* کارهای باز از همان لایهٔ کار می‌آید، نه کوئریِ محلی: مالک، موعد، و
        «عقب‌افتاده» آن‌جا حساب می‌شوند و دو نسخه‌شان یعنی دو حقیقت. */
@@ -270,14 +278,14 @@ export class LiveService {
     }
 
     if (!cycle) {
-      add('visit', 'مراجعه', 'todo', 'هنوز مراجعه‌ای ثبت نشده', null);
+      add('visit', V, 'todo', `هنوز ${V}ای ثبت نشده`, null);
     } else if (cycle.opStatus === 'done') {
-      add('visit', 'مراجعه', 'done', kindTitle[cycle.kind ?? ''] ?? 'انجام شد', cycle.opDate ?? cycle.createdAt);
+      add('visit', V, 'done', kindTitle[cycle.kind ?? ''] ?? 'انجام شد', cycle.opDate ?? cycle.createdAt);
     } else if (cycle.opStatus === 'cancelled') {
-      add('visit', 'مراجعه', 'skipped', 'آخرین مراجعه لغو شد', cycle.opDate ?? cycle.createdAt);
+      add('visit', V, 'skipped', `آخرین ${V} لغو شد`, cycle.opDate ?? cycle.createdAt);
     } else {
-      add('visit', 'مراجعه', 'current',
-        `${kindTitle[cycle.kind ?? ''] ?? 'مراجعه'} در انتظار`, cycle.opDate ?? cycle.createdAt);
+      add('visit', V, 'current',
+        `${kindTitle[cycle.kind ?? ''] ?? V} در انتظار`, cycle.opDate ?? cycle.createdAt);
     }
 
     /* بی‌دسترسی ≠ بی‌سفارش: گام رد می‌شود ولی متنش دروغ نمی‌گوید. */
@@ -297,7 +305,7 @@ export class LiveService {
     const nextDate: Date | null = cycle?.nextVisitDate ?? null;
     const followDone = cycle ? visits.some((v: any) => v.followOfVisitId === cycle.id) : false;
     if (!nextDate) add('followUp', 'پیگیری', 'skipped', 'تاریخِ پیگیری ثبت نشده', null);
-    else if (followDone) add('followUp', 'پیگیری', 'done', 'مراجعهٔ پیگیری ثبت شد', nextDate);
+    else if (followDone) add('followUp', 'پیگیری', 'done', `${V}ِ پیگیری ثبت شد`, nextDate);
     else if (nextDate < today) add('followUp', 'پیگیری', 'current', 'موعدِ پیگیری گذشته است', nextDate);
     else add('followUp', 'پیگیری', 'todo', 'پیگیریِ پیشِ رو', nextDate);
 
