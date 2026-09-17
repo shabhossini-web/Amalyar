@@ -153,7 +153,7 @@ try {
   const p7 = await process_();
   const w7 = work('confirm_usage', `visit:${visit.id}`);
   ok((p7?.detected?.usageUnconfirmed ?? 0) >= 1 && w7?.state === 'open' && w7.owner_role === 'technician' && w7.owner_account_id === me, 'حوالهٔ بازِ عملِ گذشته ← کارِ «تأییدِ مصرف» به نامِ کارشناس');
-  await send(`/visits/${visit.id}/status`, 'PATCH', { opStatus: 'cancelled' });
+  await send(`/visits/${visit.id}/status`, 'PATCH', { opStatus: 'cancelled', cancelReason: 'other' });
   await process_();
   ok(events('visit.cancelled', `visit_id=${visit.id}`) === 1 && work('confirm_usage', `visit:${visit.id}`)?.state === 'done', 'لغوِ عمل کارِ «تأییدِ مصرف» را بست');
 } finally {

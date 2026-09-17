@@ -119,7 +119,7 @@ try {
   ok(Number(cnt2) === 2, 'هم‌گام‌سازیِ دوباره باز هم دو موج (نه انباشت)');
   const subs = sql(`SELECT count(*) FROM intake_submissions WHERE patient_id=${visit.patientId} AND form_id=${gen.id}`);
   ok(Number(subs) === 2, '**فرمِ پرشده می‌ماند و موجِ بعدی فرمِ تازه می‌گیرد**');
-  await send(`/visits/${visit.id}/status`, 'PATCH', { opStatus: 'cancelled' });
+  await send(`/visits/${visit.id}/status`, 'PATCH', { opStatus: 'cancelled', cancelReason: 'other' });
   const afterCancel = sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending'`);
   ok(Number(afterCancel) === 0, 'لغوِ عمل، پیگیری‌ها را باطل می‌کند');
 } finally {

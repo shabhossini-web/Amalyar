@@ -115,7 +115,7 @@ try {
   ok(Number(sql(`SELECT count(*) FROM visits WHERE follow_of_visit_id=${v2.id}`)) === 1 && childRow().endsWith('|pending'),
     'برگشتِ تاریخ همان ردیف را زنده کرد');
   /* لغوِ خودِ عمل → فرزند هم لغو. */
-  await send(`/visits/${v2.id}/status`, 'PATCH', { opStatus: 'cancelled' });
+  await send(`/visits/${v2.id}/status`, 'PATCH', { opStatus: 'cancelled', cancelReason: 'other' });
   ok(childRow().endsWith('|cancelled'), '**لغوِ عمل، ویزیتِ پست‌آپ را هم لغو می‌کند**');
 
   console.log('\n۵) مرورگر — بدونِ فلاشِ فهرستِ اشتباه + هشدارِ فرمِ پیگیری');

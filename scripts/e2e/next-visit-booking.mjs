@@ -111,7 +111,7 @@ try {
   ok(b3.status === 400, `walkIn هم روزِ پر را رد می‌کند (${b3.status})`);
 
   console.log('\n۴) لغو ← یادآوریِ ویزیتِ بعدی برمی‌گردد');
-  await send(`/appointments/${b1.json.id}/status`, 'POST', { status: 'cancelled' });
+  await send(`/appointments/${b1.json.id}/status`, 'POST', { status: 'cancelled', cancelReason: 'other' });
   ok(Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${vA.id} AND kind='next_visit' AND status='pending'`)) === 1,
     '**لغوِ نوبت، next_visit را دوباره می‌کارد**');
   sug = await get(`/appointments/suggest?patientId=${vA.patientId}&date=${iso(D7)}`);
@@ -146,7 +146,7 @@ try {
 
   console.log('\n۸) مرورگر — از فرمِ ویزیت تا نوبت');
   /* D7 الان پر است (b2 + b4) — یکی آزاد می‌شود تا پنجرهٔ مرورگر «جای آزاد» ببیند. */
-  await send(`/appointments/${b4.json.id}/status`, 'POST', { status: 'cancelled' });
+  await send(`/appointments/${b4.json.id}/status`, 'POST', { status: 'cancelled', cancelReason: 'other' });
   const vD = await mkVisit('مرورگری', '09120000804', null);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true });
   const page = await browser.newPage({ viewport: { width: 1100, height: 800 } });
