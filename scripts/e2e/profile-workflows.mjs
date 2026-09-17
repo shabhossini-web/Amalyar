@@ -24,7 +24,7 @@ try {
   const patients = new (cls('patients/patients.service', 'PatientsService'))(prisma, audit, forms, reminders, events);
   const treasury = new (cls('patients/treasury.service', 'TreasuryService'))(prisma, audit);
   const billing = new (cls('patients/billing.service', 'BillingService'))(prisma, audit, {}, treasury);
-  const intake = new (cls('patients/intake.service', 'IntakeService'))(prisma, audit, patients, {}, billing, {}, forms, {}, { require: () => ({ hostname: 'fixture.test' }) }, {}, { sendSms: async () => {} }, reminders, {}, events);
+  const intake = new (cls('patients/intake.service', 'IntakeService'))(prisma, audit, patients, {}, billing, {}, forms, {}, { require: () => ({ hostname: 'fixture.test' }) }, {}, new (cls('patients/portal.service', 'PortalService'))(prisma, audit, {}, { brand: async () => ({}), sms: async () => ({ portalText: '{link}' }) }, { require: () => ({ hostname: 'fixture.test' }) }), reminders, {}, events);
   const portal = new (cls('patients/surgeon-portal.service', 'SurgeonPortalService'))(prisma, config, audit);
   const dispatch = new (cls('patients/dispatch.service', 'DispatchService'))(prisma, audit);
   const admin = await prisma.account.create({ data: { passwordHash: 'fixture', level: 6, status: 'active', person: { create: { firstName: 'مدیر', lastName: 'تست' } } } });

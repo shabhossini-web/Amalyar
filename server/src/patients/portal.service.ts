@@ -78,6 +78,31 @@ export class PortalService {
     return { ...res, to, url };
   }
 
+  /** Prepare settings before the transaction; persist one SMS in the existing durable sender queue. */
+  async prepareApprovalNotice() {
+    const brand = await this.settings.brand();
+    const cfg = await this.settings.sms();
+    const hostname = this.tenant.require().hostname;
+    return async (tx: any, patientId: number, visitId: number, submissionId: number, actorId: number | null) => {
+      await tx.$queryRaw`SELECT id FROM patients WHERE id = ${patientId} FOR UPDATE`;
+      const patient = await tx.patient.findFirst({ where: { id: patientId, deletedAt: null } });
+      if (!patient) throw new NotFoundException('پرونده پیدا نشد');
+      const phone = toEnDigits(String(patient.phone ?? '')).replace(/[^0-9]/g, '');
+      if (!/^09\d{9}$/.test(phone)) return null;
+      const token = patient.portalToken || randomBytes(18).toString('base64url');
+      if (!patient.portalToken) await tx.patient.update({ where: { id: patientId }, data: { portalToken: token } });
+      const link = `https://${hostname}/p/${token}`;
+      const text = `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.portalText, { link })}`;
+      const dedupeKey = `intake_approved:${submissionId}`;
+      const reminder = await tx.reminder.upsert({ where: { dedupeKey }, update: {}, create: {
+        patientId, visitId, kind: 'notice', dueAt: new Date(), phone, text, status: 'pending', dedupeKey,
+      } });
+      await this.audit.record({ actorId, action: 'patient.portal.sms_queued', entityType: 'patient', entityId: patientId,
+        after: { reminderId: reminder.id, submissionId } }, tx);
+      return reminder.id;
+    };
+  }
+
   async publicView(token: string) {
     const p = await this.prisma.patient.findFirst({
       where: { portalToken: token, deletedAt: null },

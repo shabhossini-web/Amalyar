@@ -54,7 +54,7 @@ export class RemindersService {
    * cancel-then-create و نه ویرایش: تاریخچهٔ «قرار بود کی بفرستیم» می‌ماند.
    * خطا بلعیده می‌شود ولی لاگ می‌شود — ثبتِ مراجعه نباید قربانیِ یادآوری شود.
    */
-  async syncNextVisit(visitId: number) {
+  async syncNextVisit(visitId: number, strict = false) {
     try {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
@@ -143,6 +143,7 @@ export class RemindersService {
         for (const day of followDays) {
           const url = await this.followUpUrl(v, [day]).catch((e) => {
             this.log.warn(`لینک پیگیری visit ${visitId} ساخته نشد: ${e instanceof Error ? e.message : e}`);
+            if (strict) throw e;
             return null;
           });
           if (!url) continue;
@@ -207,6 +208,7 @@ export class RemindersService {
       }
     } catch (e) {
       this.log.error(`syncNextVisit(${visitId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
+      if (strict) throw e;
     }
   }
 
@@ -302,7 +304,7 @@ export class RemindersService {
    * هم‌گام‌سازیِ یادآوریِ یک **نوبت** — گرفتن/جابه‌جایی/لغو.
    * موعد: عصرِ روزِ قبل (~۱۷:۰۰ تهران) تا بیمار برای فردایش برنامه بریزد.
    */
-  async syncAppointment(appointmentId: number) {
+  async syncAppointment(appointmentId: number, strict = false) {
     try {
       const a = await this.prisma.appointment.findUnique({
         where: { id: appointmentId },
@@ -335,6 +337,7 @@ export class RemindersService {
       });
     } catch (e) {
       this.log.error(`syncAppointment(${appointmentId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
+      if (strict) throw e;
     }
   }
 

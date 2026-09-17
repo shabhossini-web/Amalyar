@@ -29,7 +29,7 @@ try {
   const ledger = new (cls('patients/ledger.service', 'LedgerService'))(prisma, audit, treasury);
   const defs = new (cls('patients/definitions.service', 'DefinitionsService'))(prisma);
   const tenant = { require: () => ({ hostname: 'clinic.example.test' }) };
-  const intake = new (cls('patients/intake.service', 'IntakeService'))(prisma, audit, patients, {}, billing, {}, forms, {}, tenant, {}, { sendSms: async () => {} }, reminders, {}, events);
+  const intake = new (cls('patients/intake.service', 'IntakeService'))(prisma, audit, patients, {}, billing, {}, forms, {}, tenant, {}, new (cls('patients/portal.service', 'PortalService'))(prisma, audit, {}, { brand: async () => ({}), sms: async () => ({ portalText: '{link}' }) }, tenant), reminders, {}, events);
   const user = await prisma.account.create({ data: { username: 'fixture-admin', passwordHash: 'not-a-login', level: 6, status: 'active', person: { create: { firstName: 'تست', lastName: 'محلی' } } } });
   const patient = await prisma.patient.create({ data: { code: 'AM-TEST', firstName: 'بیمار', lastName: 'آزمایشی' } });
   // A real required amount field reproduces the reported approval validation.
@@ -50,7 +50,7 @@ try {
   assert.equal(bill.charges.length, 1); assert.equal(bill.charges[0].amount, 30000000);
   assert.equal(bill.payments.length, 1); assert.equal(bill.payments[0].amount, 30000000); assert.equal(bill.due, 0);
   assert.equal(bill.tariffSector, 'public'); ok('30M paid approval succeeds, charges once, records payment, hospital supplies tariff sector');
-  await assert.rejects(() => intake.approve(first.id, {}, user));
+  assert.deepEqual(await intake.approve(first.id, {}, user), approved);
   assert.equal(await prisma.charge.count({ where: { visitId: approved.visitId } }), 1); ok('repeat approval cannot duplicate amounts');
   const unpaid = await submission();
   const unpaidVisit = await intake.approve(unpaid.id, { registerPayment: false }, user);

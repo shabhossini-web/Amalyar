@@ -2197,10 +2197,10 @@ jobs:
             if (view.includes(leak)) { console.error('publicView دارد ' + leak + ' را لو می‌دهد'); process.exit(1); }
           }
 
-          // ⑤ تأیید باید از همان createVisitِ موجود بگذرد. مسیرِ دومِ ساختِ
+          // ⑤ تأیید باید از prepareVisitCreation مشترک با createVisit بگذرد. مسیرِ دومِ ساختِ
           //    مراجعه یعنی روزی یکی‌شان seq یا audit را جا می‌اندازد.
-          if (!/this\.patients\.createVisit\(/.test(svc)) {
-            console.error('تأیید باید از createVisitِ موجود مراجعه بسازد'); process.exit(1);
+          if (!/this\.patients\.prepareVisitCreation\(/.test(svc)) {
+            console.error('تأیید باید از prepareVisitCreation مشترک مراجعه بسازد'); process.exit(1);
           }
           if (/prisma\.visit\.create\(/.test(svc)) {
             console.error('intake نباید مستقیم Visit بسازد'); process.exit(1);
@@ -2270,8 +2270,8 @@ jobs:
           // مبلغ به مسیر مشترک اعتبارسنجی و قلم اولیه می‌رود؛ آزمون یکپارچه
           // مبلغ واقعی، تخفیف و نبود قلم تکراری را هم روی دیتابیس می‌سنجد.
           const patients = read('server/src/patients/patients.service.ts');
-          if (!/patients\.createVisit\(\{[\s\S]{0,120}amount: row\.amount/.test(svc) || !/tx\.charge\.create/.test(patients)) {
-            console.error('تأیید باید مبلغ را به اعتبارسنجی و قلم اولیه createVisit برساند'); process.exit(1);
+          if (!/patients\.prepareVisitCreation\(\{[\s\S]{0,120}amount: row\.amount/.test(svc) || !/tx\.charge\.create/.test(patients)) {
+            console.error('تأیید باید مبلغ را به اعتبارسنجی و قلم اولیه مسیر مشترک برساند'); process.exit(1);
           }
           if (/kind: 'service'[\s\S]{0,200}unitPrice: row\.amount/.test(svc)) {
             console.error('قلم اولیه در createVisit ثبت شده؛ تأیید نباید دوباره آن را بسازد'); process.exit(1);
@@ -2895,3 +2895,6 @@ jobs:
 
       - name: Verify atomic clinical order answers and review lifecycle (W1.2)
         run: node scripts/e2e/w1-2-order-review-local.mjs
+
+      - name: Verify atomic intake approval, idempotency and committed SMS queue (W1.4)
+        run: node scripts/e2e/w1-4-approve-local.mjs
