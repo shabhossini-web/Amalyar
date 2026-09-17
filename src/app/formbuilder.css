@@ -117,7 +117,7 @@
 .fb-req span { font-size: 13px; line-height: 1; }
 .fb-req em { font-style: normal; }
 .fb-req:hover:not(:disabled) { color: var(--fg, var(--text1)); border-color: rgba(var(--veil-rgb), .25); }
-.fb-req.on { color: #fca5a5; background: rgba(248, 113, 113, .12); border-color: rgba(248, 113, 113, .4); }
+.fb-req.on { color: var(--red-text); background: rgba(248, 113, 113, .12); border-color: rgba(248, 113, 113, .4); }
 .fb-req:disabled { opacity: .5; cursor: default; }
 
 .fb-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
@@ -126,7 +126,7 @@
   color: var(--text3); background: transparent; border: 1px solid rgba(var(--veil-rgb), .14);
   border-radius: 10px; padding: 8px 14px;
 }
-.fb-reset:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
+.fb-reset:hover { color: var(--red-text); border-color: rgba(248, 113, 113, .4); }
 
 .fb-warn { font-size: 13px; line-height: 2; color: #fcd34d; margin: 0; }
 .fb-warn b { color: #fff; }
@@ -146,7 +146,7 @@
 .fb-check input { width: 17px; height: 17px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
 
 .df-save.danger { background: linear-gradient(135deg, #ef4444, #b91c1c); }
-.df-act.danger:hover { color: #fca5a5; }
+.df-act.danger:hover { color: var(--red-text); }
 
 @media (max-width: 560px) {
   /* ⚠️ **ردیف یک‌طبقه می‌ماند** (§۴.۷ «ردیفِ فشرده»). نسخهٔ قبلی سه طبقه بود —
@@ -191,7 +191,7 @@
   color: var(--text3); background: transparent; border: 1px solid rgba(var(--veil-rgb), .14);
   border-radius: 10px; padding: 8px 14px;
 }
-.fb-delform:hover { color: #fca5a5; border-color: rgba(248, 113, 113, .4); }
+.fb-delform:hover { color: var(--red-text); border-color: rgba(248, 113, 113, .4); }
 
 /* بخشِ نقشِ فیلد — «هر کس قسمتِ خودش را پر کند».
    ⚠️ روی ردیف فقط **نشانِ خواندنی** است؛ تیک‌زدن کارِ ماتریسِ یک‌جای بالاست

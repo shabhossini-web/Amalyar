@@ -135,7 +135,7 @@
 .ac-note { color: rgba(var(--veil-rgb), .4) !important; }
 .ac-off {
   padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25);
 }
 
 /* ── ویرایشِ درجای شماره‌های حساب ──
@@ -172,7 +172,7 @@
 .ac-ppct { width: 74px; text-align: center; }
 .ac-pc { color: rgba(var(--veil-rgb), .5); font-size: 12px; }
 .ac-pcolor { width: 42px; height: 38px; padding: 3px; }
-.ac-prm { width: 32px; height: 34px; border-radius: 10px; cursor: pointer; color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25); }
+.ac-prm { width: 32px; height: 34px; border-radius: 10px; cursor: pointer; color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25); }
 .ac-prm:disabled { opacity: .35; cursor: default; }
 .ac-padd {
   padding: 9px 13px; margin-block-end: 12px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
@@ -199,7 +199,7 @@
 /* چک */
 .ac-chq { display: flex; gap: 6px; }
 .ac-chq button { padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
-.ac-chq button.warn { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+.ac-chq button.warn { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .ac-soon { font-style: normal; color: #fcd34d; }
 
 /* گزارشِ مالی */

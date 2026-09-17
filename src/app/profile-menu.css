@@ -48,7 +48,7 @@
   display: grid; place-items: center; cursor: pointer; color: var(--text3);
   background: none; border: none; border-radius: 9px; transition: color .15s, background .15s;
 }
-.pm-acc-out:hover:not(:disabled) { color: #fca5a5; background: rgba(248, 113, 113, 0.1); }
+.pm-acc-out:hover:not(:disabled) { color: var(--red-text); background: rgba(248, 113, 113, 0.1); }
 
 .pm-sep { height: 1px; background: rgba(var(--veil-rgb), 0.08); margin: 5px 6px; }
 
@@ -62,8 +62,8 @@
 .pm-item:hover:not(:disabled) { background: rgba(var(--veil-rgb), 0.06); }
 .pm-item:disabled { opacity: .55; cursor: default; }
 .pm-item svg { color: var(--text2); flex: 0 0 auto; }
-.pm-item.danger { color: #fca5a5; }
-.pm-item.danger svg { color: #fca5a5; }
+.pm-item.danger { color: var(--red-text); }
+.pm-item.danger svg { color: var(--red-text); }
 .pm-item:focus-visible, .pm-acc-main:focus-visible, .pm-acc-out:focus-visible, .pm-chip:focus-visible {
   outline: 2px solid var(--cyan); outline-offset: 2px;
 }

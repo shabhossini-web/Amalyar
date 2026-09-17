@@ -224,7 +224,7 @@
 .db-tools { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
 .db-st-pending { color: var(--amber-text); background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); }
 .db-st-done { color: var(--green-text); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
-.db-st-cancelled { color: #fca5a5; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
+.db-st-cancelled { color: var(--red-text); background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
 
 .db-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text2); }
 .db-facts span { display: inline-flex; align-items: center; gap: 5px; }
@@ -261,7 +261,7 @@
    بیاید، وگرنه در ردیفِ آیکون‌ها یک خطِ بی‌ربط دیده می‌شود. */
 a.db-ico { text-decoration: none; }
 .db-ico:hover:not(:disabled) { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
-.db-ico.del:hover:not(:disabled) { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); }
+.db-ico.del:hover:not(:disabled) { color: var(--red-text); border-color: rgba(248, 113, 113, 0.45); }
 .db-ico.del.arm { width: auto; padding: 0 10px; color: #fff; background: #dc2626; border-color: #dc2626; }
 .db-ico:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
@@ -292,7 +292,7 @@ a.db-ico { text-decoration: none; }
   color: var(--text2); background: rgba(var(--veil-rgb), 0.06);
   border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 10px;
 }
-.db-x:hover { color: #fca5a5; border-color: rgba(248, 113, 113, 0.4); }
+.db-x:hover { color: var(--red-text); border-color: rgba(248, 113, 113, 0.4); }
 
 .db-modetabs { margin: 0; }
 
@@ -351,7 +351,7 @@ a.db-ico { text-decoration: none; }
   border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 8px;
 }
 .db-def-acts button:hover { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
-.db-def-acts button.danger:hover { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); }
+.db-def-acts button.danger:hover { color: var(--red-text); border-color: rgba(248, 113, 113, 0.45); }
 .db-words { font-style: normal; font-size: 11px; color: var(--cyan); min-height: 15px; font-weight: 600; }
 
 .db-daterow { display: flex; gap: 8px; }
@@ -629,7 +629,7 @@ a.db-ico { text-decoration: none; }
 .bl-rec-g ul { margin: 6px 0 0; padding-inline-start: 18px; }
 .bl-rec-g li { font-size: 11.5px; line-height: 1.9; color: rgba(var(--veil-rgb), .84); }
 .bl-rec-g li i { font-style: normal; color: #c4b5fd; }
-.bl-rec-g li em { font-style: normal; color: #fca5a5; }
+.bl-rec-g li em { font-style: normal; color: var(--red-text); }
 .bl-rec-g li small { color: rgba(var(--veil-rgb), .5); }
 
 /* سؤالِ حذفِ قلمِ مصرفی */
@@ -728,7 +728,7 @@ a.db-defbtn { text-decoration: none; }
 .bl-share.total { background: rgba(var(--brand-rgb), .14); border-color: rgba(var(--brand-rgb), .3); }
 .bl-share.p-surgeon i { color: #93c5fd; }
 .bl-share.p-tech i    { color: #6ee7b7; }
-.bl-share.p-cost i    { color: #fca5a5; }
+.bl-share.p-cost i    { color: var(--red-text); }
 .bl-share.p-partner i { color: #c4b5fd; }
 
 .bl-stale { font-size: 11.5px; line-height: 1.9; color: #fcd34d; margin: 0 0 12px; }

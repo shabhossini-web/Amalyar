@@ -18,7 +18,7 @@
 .rm-err {
   display: flex; align-items: center; gap: 7px; max-width: 880px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .rm-empty {
   max-width: 880px; margin: 0 auto; padding: 26px 16px; text-align: center;
@@ -68,9 +68,9 @@
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .rm-tag.s-sent { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
-.rm-tag.s-failed { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+.rm-tag.s-failed { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .rm-text { margin-top: 6px; font-size: 12.5px; line-height: 1.8; color: var(--text2); white-space: pre-wrap; }
-.rm-fail { margin-top: 4px; font-size: 11px; color: #fca5a5; }
+.rm-fail { margin-top: 4px; font-size: 11px; color: var(--red-text); }
 
 .rm-toast {
   position: fixed; inset-inline: 0; bottom: 18px; margin-inline: auto; width: fit-content;

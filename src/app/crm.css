@@ -18,7 +18,7 @@
 .crm-err {
   display: flex; align-items: center; gap: 7px; max-width: 880px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .crm-empty {
   max-width: 880px; margin: 0 auto 12px; padding: 22px 16px; text-align: center;
@@ -48,7 +48,7 @@
 }
 .crm-chip.s-pending_approval { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
 .crm-chip.s-approved { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
-.crm-chip.s-rejected, .crm-chip.s-expired { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+.crm-chip.s-rejected, .crm-chip.s-expired { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 
 /* ── یک فیلدِ تحلیل‌شده ── */
 .crm-field { padding: 10px 0; border-top: 1px solid rgba(var(--veil-rgb), .07); }
@@ -126,7 +126,7 @@
 .crm-unf-name span { font-size: 10.5px; color: var(--text3); }
 .crm-unf-name:hover b { color: var(--brand-2); }
 .crm-unf-op { margin-inline-start: auto; font-size: 11px; color: var(--text2); }
-.crm-chip.u-none { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+.crm-chip.u-none { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .crm-chip.u-pending { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
 .crm-chip.u-sent { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
 .crm-chip.u-open { color: #a5b4fc; background: rgba(129, 140, 248, .12); border-color: rgba(165, 180, 252, .35); }

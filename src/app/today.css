@@ -61,7 +61,7 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 /* وضعیت با **بوردر + رنگِ متن** حمل می‌شود، نه فقط یک لایهٔ کم‌آلفا روی زمینهٔ تیره. */
 .td-tag.op-done, .td-tag.appt-done, .td-tag.appt-arrived { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(6, 56, 42, 0.55); }
 .td-tag.appt-noshow { color: var(--amber); border-color: rgba(251, 191, 36, 0.5); background: rgba(58, 39, 8, 0.6); }
-.td-tag.op-cancelled, .td-tag.appt-cancelled { color: #fca5a5; border-color: rgba(248, 113, 113, 0.4); background: rgba(60, 12, 12, 0.5); }
+.td-tag.op-cancelled, .td-tag.appt-cancelled { color: var(--red-text); border-color: rgba(248, 113, 113, 0.4); background: rgba(60, 12, 12, 0.5); }
 .td-item.appt-cancelled { opacity: .62; }
 
 /* کشوی «همهٔ ابزارها» — از لبهٔ پایین، مثلِ شیت‌های دیگرِ سامانه. */
