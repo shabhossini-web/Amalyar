@@ -21,7 +21,7 @@ const DB = process.env.E2E_DB ?? 'postgresql://amalyar:amalyar@localhost:5432/am
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
-const sql = (q) => execSync(`psql "${DB}" -qtA`, { input: q }).toString().trim().split('\n')[0];
+const sql = (q) => execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1`, { input: q }).toString().trim().split('\n')[0];
 const num = (q) => Number(sql(q));
 
 const login = await fetch(API + '/auth/login', {

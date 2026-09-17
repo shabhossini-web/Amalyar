@@ -13,7 +13,7 @@ const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const DB = process.env.E2E_DB ?? 'postgresql://amalyar:amalyar@localhost:5432/amalyar_t1';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
-const sql = (q) => execSync(`psql "${DB}" -qtA`, { input: q }).toString().trim().split('\n')[0];
+const sql = (q) => execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1`, { input: q }).toString().trim().split('\n')[0];
 
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -66,9 +66,24 @@ try {
   const p2 = (await send('/work/process', 'POST')).json;
   ok(p2.closed >= 1, 'order.reviewed کارِ بررسی را بست');
   ok(sql(`SELECT state FROM work_items WHERE idempotency_key='${key}'`) === 'done', 'وضعیت done');
-  emit('order.answered'); // رویدادِ دیرآمده/تکراری بعد از بستن
+  /* ⚠️ **قرارداد این‌جا با W1.2 عوض شد و این سنجه جا مانده بود** (تا امروز روی
+     `main` قرمز بود و چون این سوئیت در CI نیست کسی ندید — سومین بار برای این
+     الگو): `order.answered` حالا عمداً `reopen: true` دارد، چون پاسخِ **تازهٔ**
+     بیمار بعد از بررسی یعنی چیزی هست که دوباره باید دیده شود. پس رویدادِ
+     تازه‌تر **باید** باز کند؛ آنچه نباید بیفتد **replay** است. */
+  const replayId = Number(sql(`SELECT id FROM domain_events WHERE visit_id=${visit.id} AND type='order.answered' ORDER BY id ASC LIMIT 1`));
+  sql(`UPDATE domain_events SET processed_at=NULL WHERE id=${replayId}`);
   await send('/work/process', 'POST');
-  ok(sql(`SELECT state FROM work_items WHERE idempotency_key='${key}'`) === 'done' && cnt() === 1, '**نباید بیفتد:** رویدادِ تکراری کارِ بسته را دوباره باز نمی‌کند و دومی نمی‌سازد');
+  const stReplay = sql(`SELECT state FROM work_items WHERE idempotency_key='${key}'`), nReplay = cnt();
+  ok(stReplay === 'done' && nReplay === 1,
+    `**نباید بیفتد:** پردازشِ دوبارهٔ همان رویداد کارِ بسته را باز کند یا دومی بسازد (state=${stReplay}, count=${nReplay})`);
+
+  /* و رویِ دیگرِ همان قرارداد — پاسخِ تازه **باید** بررسی را دوباره باز کند،
+     وگرنه نتیجهٔ دومِ بیمار هیچ‌وقت دیده نمی‌شود. سنجهٔ مثبت کنارِ منفی. */
+  emit('order.answered');
+  await send('/work/process', 'POST');
+  const stNew = sql(`SELECT state FROM work_items WHERE idempotency_key='${key}'`);
+  ok(stNew === 'open' && cnt() === 1, `پاسخِ تازه همان کار را دوباره باز می‌کند، نه کارِ دوم (state=${stNew})`);
 
   console.log('\n۴) کارِ خودِ بیمار در صفِ کارکنان نمی‌آید');
   emit('order.needs_action', '{"reason":"عکس ناخوانا"}');
