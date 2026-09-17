@@ -1,25 +1,10 @@
 <!-- claim:begin -->
 agent: gpt
-status: active
-branch: agent/w1-4-approve-atomic
+status: idle
+branch: main
 since: 2026-09-17
-paths:
-  - server/src/patients/intake.service.ts
-  - server/src/patients/intake.controller.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/billing.service.ts
-  - server/src/patients/treasury.service.ts
-  - server/src/patients/portal.service.ts
-  - server/src/patients/reminders.service.ts
-  - server/prisma/schema.prisma
-  - server/prisma/migrations/20260917140000_intake_approval/
-  - scripts/e2e/w1-4-approve-atomic.mjs
-  - scripts/e2e/w1-4-approve-local.mjs
-  - scripts/e2e/w2-2b-intake-events.mjs
-  - scripts/e2e/intake-finance-roles.mjs
-  - scripts/e2e/profile-workflows.mjs
-  - docs/plan/lanes/gpt.md
-note: W1.2/PR38 و تحویل PR39 لند شد؛ W1.4 شروع شد: تراکنش واحد، مصرف forVisitId، idempotency و پیام از outbox. appointments در کلیم ج دست نمی‌خورد.
+paths: []
+note: W1.4 در PR41 / a88a7a4 مرج شد؛ security-ci کامل سبز. کلیم آزاد؛ بسته بعد W1.1 است.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
@@ -62,6 +47,8 @@ note: W1.2/PR38 و تحویل PR39 لند شد؛ W1.4 شروع شد: تراکن�
 - قدم بعد: W1.4 (تأیید اتمیک و مصرف forVisitId). emitهای intake در W2.2-ب تکمیل شدند؛ order.reviewed/needs_action در W1.2 می‌مانند.
 
 ## اخیراً لند شد
+
+- 2026-09-17 · PR #41 · `a88a7a4` · W1.4؛ CI 35214820200 کامل سبز، ۸۳ سناریوی تأیید/رویداد/نوبت و ۳۳ رگرسیون مالی/گردش‌کار. کلیم آزاد شد.
 
 - 2026-09-17 · PR #29 · 6edbce1 · W2.2-ب؛ پنج emit باقی‌ماندهٔ intake/confirmed با ref ثابت؛ CI سبز، ۱۸ سناریو + ۱۷ مالی + ۱۶ گردش‌کار سبز.
 
@@ -111,3 +98,9 @@ note: W1.2/PR38 و تحویل PR39 لند شد؛ W1.4 شروع شد: تراکن�
 - آمادهٔ PR: ۸۱ سناریو در runner W1.4 (۳۷ جدید، ۱۸ رویداد، ۲۶ نوبت) + ۱۷ مالی + ۱۶ گردش‌کار سبز؛ build هر دو سمت، tenant/claims و سنجه‌های تغییرکردهٔ CI سبز.
 
 - بازبینی پیش از مرج: reminder sync و syncPostOpVisit خطا را می‌بلعیدند؛ پارامتر اختیاری strict فقط برای after-commit تأیید اضافه شد تا کار بازیابی با خطای داخلی زود بسته نشود. callers قبلی همان رفتار پیشین را دارند؛ reminders.service.ts آزاد بود و کلیم شد.
+
+## تحویل نهایی W1.4 — PR #41 / a88a7a4
+- تأیید، مالی، سند، وضعیت و outbox یک tx؛ retry پاسخ ذخیره‌شده و forVisitId همان مراجعه را برمی‌گرداند. پیام پورتال پس از commit از صف ارسال می‌شود.
+- حالت strict فقط در همگام‌سازیِ پس از تأیید، خطاهای درونی را به کار بازیابی می‌رساند؛ تأیید موفق به شکست پرداخت تبدیل نمی‌شود. ویرایش دیررس فیش/پاسخ تأیید را باز نمی‌کند.
+- CI نهایی 35214820200 سبز؛ ۳۹ W1.4 + ۱۸ W2.2-ب + ۲۶ W1.5 = ۸۳؛ مالی ۱۷ و گردش‌کار ۱۶ نیز سبز. محدودیت PGlite تک‌اتصالی و عدم بررسی سلامت دیپلوی در STATUS باقی است.
+- بعدی W1.1؛ هم‌زمان PR #40 / 970b040 لند شد: W3.3 و اصلاح halfWhere اکنون روی main هستند؛ بسته دلیل لغو دیگر منتظر W3.3 نیست. بسته دلیل لغو پس از W3.3 و تصمیم‌های مراقبت/کانال بدون تغییر حفظ شدند.

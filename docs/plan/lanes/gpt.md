@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|
 | ۱ | W1.6 اسنپ‌شاتِ فرم + حذفِ نرمِ فیلد + `formUsage` با submission + منعِ حذفِ فرمِ پاسخ‌دار | ✅ | `agent/w1-6-form-snapshot` | ccaa792 | PR #13؛ security-ci و ۲۴ سناریو سبز |
 | ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | ✅ | `agent/w1-5-appointment-visit-link` | 508cb4b | PR #26؛ security-ci، ۲۶ سناریو و ۱۷ رگرسیون سبز |
-| ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | 🟡 | `agent/w1-4-approve-atomic` | | D04 |
+| ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ✅ | `agent/w1-4-approve-atomic` | a88a7a4 | PR #41؛ security-ci، ۸۳ سناریو و ۳۳ رگرسیون سبز |
 | ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ⬜ | `agent/w1-1-unfollowed-match` | | D01 |
 | ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ⬜ | `agent/w1-7-postop-gate` | | D07 · `DECISIONS.md` #۱ |
 | ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ⬜ | `agent/w1-3-approve-path` | | D03a |
@@ -50,3 +50,5 @@
 - همگام‌سازی پس از commit رویداد پایدار و کار repair_intake با شرح دقیق دارد؛ به‌معنی شکست پرداخت نیست. اسکن/ترمیم داده‌های قدیمی همچنان W1.10 است.
 - سنجش محلی: ۸۱ سناریوی W1.4/W2.2-ب/W1.5 و ۳۳ رگرسیون مالی/گردش‌کار، build هر دو سمت و نگهبان tenant/claims سبز. PR آمادهٔ CI است؛ محدودیت چند اتصال PostgreSQL در STATUS و کلیم ثبت است.
 - بازبینی نهایی W1.4: حالت strict همگام‌سازی بعد از تأیید خطاهای بلعیده‌شدهٔ یادآوری/فرزند را به مسیر بازیابی می‌رساند؛ آزمون خطای درونیِ تنظیمات برای مراجعه و نوبت، بازماندن کار بازیابی را ثابت می‌کند.
+
+- تحویل نهایی W1.4: PR #41 / `a88a7a4` روی main؛ CI نهایی 35214820200 کامل سبز. کلیم آزاد؛ W1.1 بسته بعدی است. گزارش‌های «در انتظار» بالا مربوط به پیش از مرج‌اند. W3.3 و اصلاح halfWhere نیز با PR #40 / 970b040 در همین main لند شده‌اند؛ وابستگی بسته دلیل لغو رفع شد. سلامت دیپلوی مستقلاً سنجیده نشده.
