@@ -1,6 +1,6 @@
 /* حسابداری — همان زبانِ بصریِ انبار و تعاریف */
 .ac {
-  min-height: 100vh; background: #07051a; color: #f4f1ff;
+  min-height: 100vh; background: var(--bg); color: #f4f1ff;
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
 }
 .ac * { box-sizing: border-box; }
@@ -15,12 +15,12 @@
 .ac-head { display: flex; align-items: flex-start; gap: 14px; max-width: 940px; margin: 0 auto 18px; }
 .ac-back {
   display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  color: #cfc9e8; text-decoration: none; font-size: 12px;
+  color: var(--text1); text-decoration: none; font-size: 12px;
   padding: 9px 13px; border-radius: 11px;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
 }
 .ac-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
-.ac-head p { margin: 0; font-size: 12px; color: #9a93bb; line-height: 1.9; }
+.ac-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
 
 .ac-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
@@ -28,13 +28,13 @@
 }
 .ac-search {
   flex: 1 1 240px; min-width: 0; padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 13px;
-  color: #f4f1ff; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: #f4f1ff; background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .ac-search::placeholder { color: #6f688d; }
 .ac-filters { display: flex; gap: 5px; }
 .ac-filters button {
   padding: 10px 14px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
-  color: #b7b0d4; background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  color: #b7b0d4; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .ac-filters button.on { color: #fff; font-weight: 800; border-color: transparent; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
 /* ⚠️ این‌جا قبلاً یک قاعدهٔ دکمه‌مانند برای `.ac-add` بود (inline-flex +
@@ -46,11 +46,11 @@
 .ac-list { display: grid; gap: 9px; max-width: 940px; margin: 0 auto; }
 .ac-empty {
   padding: 26px 16px; text-align: center; font-size: 12.5px; color: #8f88af;
-  border-radius: 15px; background: rgba(18, 13, 49, .55); border: 1px dashed rgba(var(--brand-soft-rgb), .2);
+  border-radius: 15px; background: rgba(var(--surface-rgb), .55); border: 1px dashed rgba(var(--brand-soft-rgb), .2);
 }
 .ac-row {
   display: flex; align-items: center; gap: 12px; padding: 13px 15px; border-radius: 15px;
-  background: rgba(18, 13, 49, .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--surface-rgb), .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .ac-row.zero { opacity: .55; }
 .ac-row.exp { border-color: rgba(251, 113, 133, .32); }
@@ -60,8 +60,8 @@
   background: rgba(var(--brand-soft-rgb), .12); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .ac-qty b { display: block; font-size: 17px; line-height: 1.2; }
-.ac-qty span { font-size: 10px; color: #9a93bb; }
-.ac-row.zero .ac-qty { background: rgba(255, 255, 255, .04); }
+.ac-qty span { font-size: 10px; color: var(--text3); }
+.ac-row.zero .ac-qty { background: rgba(var(--veil-rgb), .04); }
 
 .ac-row-main { min-width: 0; flex: 1; }
 .ac-row-main b { display: block; font-size: 13.5px; }
@@ -70,10 +70,10 @@
 .ac-expired { color: #fda4af; font-weight: 700; }
 
 .ac-field { display: block; position: relative; }
-.ac-field > span { display: block; margin-bottom: 5px; font-size: 11px; color: #9a93bb; }
+.ac-field > span { display: block; margin-bottom: 5px; font-size: 11px; color: var(--text3); }
 .ac-field input {
   width: 100%; padding: 11px 13px; border-radius: 11px; font: inherit; font-size: 13px;
-  color: #f4f1ff; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: #f4f1ff; background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .ac-field input::placeholder { color: #6f688d; font-size: 12px; }
 
@@ -85,12 +85,12 @@
 .ac-toast {
   position: fixed; inset-inline: 0; bottom: 22px; z-index: 80; width: fit-content; max-width: 90vw;
   margin: 0 auto; padding: 12px 20px; border-radius: 13px; font-size: 12.5px;
-  background: rgba(18, 13, 49, .96); border: 1px solid rgba(var(--brand-soft-rgb), .3);
+  background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .3);
   box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
 }
 
 /* ── حواله‌ها ── */
-.ac-note { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.9; color: rgba(255, 255, 255, .6); }
+.ac-note { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.9; color: rgba(var(--veil-rgb), .6); }
 .ac-tr .ac-qty b { font-size: 15px; }
 .ac-tag { padding: 1px 8px; border-radius: 8px; font-size: 10px; }
 .ac-tag.s-sent     { color: #93c5fd; background: rgba(59, 130, 246, .12); }
@@ -103,16 +103,16 @@
 .ac-add, .ac-list { max-width: 940px; margin: 0 auto 16px; }
 .ac-add {
   padding: 16px; border-radius: 18px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ac-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-block-end: 10px; }
 .ac-field { display: block; font-size: 11.5px; }
-.ac-field > span { display: block; margin-block-end: 5px; color: rgba(255, 255, 255, .62); }
+.ac-field > span { display: block; margin-block-end: 5px; color: rgba(var(--veil-rgb), .62); }
 .ac-field input, .ac-field select {
   width: 100%; padding: 10px; border-radius: 11px; font: inherit; font-size: 13px;
-  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .14);
+  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .14);
 }
-.ac-hint { font-size: 11.5px; line-height: 2; color: rgba(255, 255, 255, .55); margin: 0 0 12px; }
+.ac-hint { font-size: 11.5px; line-height: 2; color: rgba(var(--veil-rgb), .55); margin: 0 0 12px; }
 .ac-hint b { color: #c4b5fd; }
 .ac-submit {
   width: 100%; padding: 12px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
@@ -123,16 +123,16 @@
 
 .ac-row {
   display: flex; align-items: center; gap: 13px; padding: 13px 15px; margin-block-end: 9px;
-  border-radius: 15px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 15px; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
 }
 .ac-row.off { opacity: .5; }
 .ac-val { min-width: 82px; text-align: center; }
 .ac-val b { display: block; font-size: 17px; color: #c4b5fd; }
-.ac-val span { font-size: 10px; color: rgba(255, 255, 255, .45); }
+.ac-val span { font-size: 10px; color: rgba(var(--veil-rgb), .45); }
 .ac-row-main { flex: 1; min-width: 0; }
 .ac-row-main b { display: block; font-size: 13.5px; }
-.ac-row-main small { display: block; font-size: 11px; color: rgba(255, 255, 255, .55); line-height: 1.9; }
-.ac-note { color: rgba(255, 255, 255, .4) !important; }
+.ac-row-main small { display: block; font-size: 11px; color: rgba(var(--veil-rgb), .55); line-height: 1.9; }
+.ac-note { color: rgba(var(--veil-rgb), .4) !important; }
 .ac-off {
   padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
   color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25);
@@ -147,17 +147,17 @@
 .ac-edit {
   display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
   padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
-  color: rgba(255, 255, 255, .72); background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .14);
+  color: rgba(var(--veil-rgb), .72); background: rgba(var(--veil-rgb), .06);
+  border: 1px solid rgba(var(--veil-rgb), .14);
 }
-.ac-edit:hover:not(:disabled) { color: #fff; background: rgba(255, 255, 255, .1); }
+.ac-edit:hover:not(:disabled) { color: #fff; background: rgba(var(--veil-rgb), .1); }
 .ac-edit:disabled { opacity: .5; cursor: default; }
 .ac-editbox { flex: 1 1 100%; margin-block-start: 4px; }
 .ac-editacts { display: flex; gap: 8px; margin-block-start: 9px; }
 .ac-editacts .ac-submit { width: auto; padding: 9px 18px; }
 .ac-ghost {
   padding: 9px 16px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
-  color: rgba(255, 255, 255, .7); background: transparent; border: 1px solid rgba(255, 255, 255, .16);
+  color: rgba(var(--veil-rgb), .7); background: transparent; border: 1px solid rgba(var(--veil-rgb), .16);
 }
 .ac-ghost:disabled { opacity: .5; cursor: default; }
 
@@ -166,11 +166,11 @@
 .ac-pname { flex: 1 1 140px; }
 .ac-prow input {
   padding: 10px; border-radius: 11px; font: inherit; font-size: 13px;
-  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .14);
+  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ac-pname { flex: 1; }
 .ac-ppct { width: 74px; text-align: center; }
-.ac-pc { color: rgba(255, 255, 255, .5); font-size: 12px; }
+.ac-pc { color: rgba(var(--veil-rgb), .5); font-size: 12px; }
 .ac-pcolor { width: 42px; height: 38px; padding: 3px; }
 .ac-prm { width: 32px; height: 34px; border-radius: 10px; cursor: pointer; color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25); }
 .ac-prm:disabled { opacity: .35; cursor: default; }
@@ -183,18 +183,18 @@
 .ac-total.ok { color: #6ee7b7; }
 
 .ac-pair { display: flex; align-items: center; gap: 10px; padding: 12px; margin-block-end: 8px; border-radius: 13px; background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .25); font-size: 13px; }
-.ac-pair span { color: rgba(255, 255, 255, .5); font-size: 11px; }
+.ac-pair span { color: rgba(var(--veil-rgb), .5); font-size: 11px; }
 .ac-pair i { flex: 1; font-style: normal; font-weight: 800; color: #fcd34d; text-align: end; }
 .ac-mini { padding: 8px 12px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
 
 /* خزانه */
 .ac-tre { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-block-end: 10px; }
-.ac-tre div { padding: 13px; border-radius: 14px; background: rgba(255, 255, 255, .04); text-align: center; }
+.ac-tre div { padding: 13px; border-radius: 14px; background: rgba(var(--veil-rgb), .04); text-align: center; }
 .ac-tre .big { background: rgba(var(--brand-rgb), .14); border: 1px solid rgba(var(--brand-rgb), .3); }
 .ac-tre b { display: block; font-size: 19px; font-weight: 900; }
 .ac-tre .in { color: #6ee7b7; }
 .ac-tre .out { color: #fcd34d; }
-.ac-tre span { font-size: 10.5px; color: rgba(255, 255, 255, .55); }
+.ac-tre span { font-size: 10.5px; color: rgba(var(--veil-rgb), .55); }
 
 /* چک */
 .ac-chq { display: flex; gap: 6px; }
@@ -204,7 +204,7 @@
 
 /* گزارشِ مالی */
 .ac-rep { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-block-start: 12px; }
-.ac-rep .due { color: #fbbf24; }
+.ac-rep .due { color: var(--amber-text); }
 /* ⚠️ پیش‌دریافت رنگِ خودش را دارد و عمداً **نه سبزِ درآمد است نه زردِ بدهکاری**:
    پولی است که رسیده (پس بد نیست) ولی هنوز مالِ شرکت نیست (پس خوب هم نیست). */
 .ac-rep .wait { color: #a5b4fc; }
@@ -215,8 +215,8 @@
 .ac-bar i { flex: 1; max-width: 16px; border-radius: 4px 4px 0 0; min-height: 2px; }
 .ac-bar i.rev, .ac-legend i.rev { background: linear-gradient(180deg, var(--brand-2), var(--brand-mid)); }
 .ac-bar i.exp, .ac-legend i.exp { background: linear-gradient(180deg, #fbbf24, #b45309); }
-.ac-bar span { font-size: 10px; color: rgba(255, 255, 255, .5); }
-.ac-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(255, 255, 255, .55); margin-block-start: 8px; }
+.ac-bar span { font-size: 10px; color: rgba(var(--veil-rgb), .5); }
+.ac-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(var(--veil-rgb), .55); margin-block-start: 8px; }
 .ac-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
 
 /* کلیدِ «روی فرمِ بیمار» — تنها راهِ عمومی‌شدنِ یک شمارهٔ حساب. */

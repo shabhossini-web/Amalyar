@@ -3,7 +3,7 @@
    قابلِ کش شدن. حالا مثل بقیهٔ صفحه‌ها فایلِ جداست. */
 .pa {
   min-height: 100vh; padding: 24px; position: relative; overflow: hidden;
-  background: #07051a; color: #f4f1ff; font-family: Vazirmatn, system-ui, sans-serif;
+  background: var(--bg); color: #f4f1ff; font-family: Vazirmatn, system-ui, sans-serif;
 }
 .pa * { box-sizing: border-box; }
 .pa-glow { position: fixed; border-radius: 50%; filter: blur(110px); pointer-events: none; opacity: .28; }
@@ -12,7 +12,7 @@
 
 .pa-shell { width: min(1120px, 100%); margin: auto; position: relative; }
 .pa-card {
-  background: rgba(18, 13, 49, .86); border: 1px solid rgba(var(--brand-soft-rgb), .28);
+  background: rgba(var(--surface-rgb), .86); border: 1px solid rgba(var(--brand-soft-rgb), .28);
   border-radius: 24px; box-shadow: 0 24px 80px rgba(0, 0, 0, .38); backdrop-filter: blur(18px);
 }
 
@@ -30,10 +30,10 @@
 .pa-sub { color: #aaa3ca; font-size: 14px; line-height: 2; margin: 0 auto 24px; max-width: 370px; }
 
 .pa form { display: grid; gap: 10px; text-align: right; }
-.pa label { font-size: 12px; color: #c7c2df; margin-top: 5px; }
+.pa label { font-size: 12px; color: var(--text2); margin-top: 5px; }
 .pa input, .pa select {
   width: 100%; height: 52px; border-radius: 13px; padding: 0 15px; font: inherit; outline: none;
-  color: #fff; background: rgba(3, 2, 18, .62); border: 1px solid rgba(var(--brand-soft-rgb), .3);
+  color: #fff; background: rgba(var(--surface-rgb), .62); border: 1px solid rgba(var(--brand-soft-rgb), .3);
 }
 .pa input:focus, .pa select:focus { border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(var(--brand-2-rgb), .12); }
 .pa-identity {
@@ -69,7 +69,7 @@
 .pa-head h1 { margin: 2px 0; }
 .pa-logout, .pa-refresh {
   flex-shrink: 0; padding: 10px 15px; border-radius: 12px; color: #ddd7f5;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .24) !important;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24) !important;
 }
 .pa-wide { margin: 0 0 18px; }
 
@@ -85,7 +85,7 @@
 .pa-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .pa-stat {
   padding: 15px 17px; border-radius: 16px;
-  background: rgba(18, 13, 49, .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  background: rgba(var(--surface-rgb), .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .pa-stat b { display: block; font-size: 26px; font-weight: 900; line-height: 1.2; }
 .pa-stat small { display: block; margin-top: 3px; font-size: 11px; color: #8982aa; }
@@ -108,7 +108,7 @@
 .pa-row {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 14px; border-radius: 14px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);
+  background: rgba(var(--veil-rgb), .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 .pa-row b, .pa-row small { display: block; }
 .pa-row small { color: #817aa2; font-size: 10px; margin-top: 4px; }
@@ -129,11 +129,11 @@
   background: rgba(103, 232, 249, .07); border: 1px solid rgba(103, 232, 249, .16);
 }
 .pa-hosts .pa-host.on { background: rgba(103, 232, 249, .14); border-color: rgba(103, 232, 249, .34); }
-.pa-shared { color: #fbbf24 !important; }
+.pa-shared { color: var(--amber-text) !important; }
 
 .pa-badge {
   font-size: 10px; padding: 5px 10px; border-radius: 99px; white-space: nowrap;
-  color: #fbbf24; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .22);
+  color: var(--amber-text); background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .22);
 }
 .pa-badge.ok   { color: #34d399; background: rgba(52, 211, 153, .1);  border-color: rgba(52, 211, 153, .22); }
 .pa-badge.run  { color: #22d3ee; background: rgba(34, 211, 238, .1);  border-color: rgba(34, 211, 238, .22); }
@@ -143,7 +143,7 @@
 .pa-job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .pa-job {
   padding: 15px; border-radius: 15px;
-  background: rgba(255, 255, 255, .02); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  background: rgba(var(--veil-rgb), .02); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .pa-job-top { display: flex; justify-content: space-between; gap: 8px; }
 .pa-job code, .pa-job small {
@@ -164,7 +164,7 @@
 }
 .pa-tariff-form input, .pa-tariff-form select {
   width: 100%; padding: 10px 12px; border-radius: 11px; font: inherit; font-size: 12.5px;
-  color: #e8e4f8; background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+  color: #e8e4f8; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .pa-tariff-form button {
   cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; border: 0;
@@ -183,7 +183,7 @@
 /* ── مودالِ حذف ── */
 .pa-modal-bg {
   position: fixed; inset: 0; z-index: 50; padding: 18px; overflow: auto;
-  background: rgba(4, 2, 15, .76); backdrop-filter: blur(6px);
+  background: rgba(var(--surface-rgb), .76); backdrop-filter: blur(6px);
   display: grid; place-items: center;
 }
 .pa-modal { width: min(430px, 100%); padding: 28px; text-align: center; }
@@ -194,20 +194,20 @@
   border-radius: 16px; font-size: 28px; font-weight: 900; color: #fb7185;
   background: rgba(251, 113, 133, .12); border: 1px solid rgba(251, 113, 133, .3);
 }
-.pa-modal label { display: block; text-align: right; font-size: 12px; color: #c7c2df; margin-bottom: 7px; }
+.pa-modal label { display: block; text-align: right; font-size: 12px; color: var(--text2); margin-bottom: 7px; }
 .pa-modal input {
   width: 100%; height: 50px; padding: 0 15px; border-radius: 13px; font: inherit; outline: none;
   color: #fff; text-align: center; letter-spacing: 2px;
-  background: rgba(3, 2, 18, .62); border: 1px solid rgba(251, 113, 133, .28);
+  background: rgba(var(--surface-rgb), .62); border: 1px solid rgba(251, 113, 133, .28);
 }
 .pa-modal input:focus { border-color: #fb7185; box-shadow: 0 0 0 3px rgba(251, 113, 133, .12); }
 .pa-echo {
   margin-bottom: 9px; padding: 9px; border-radius: 10px; font-size: 13px; color: #d7d1f2; user-select: all;
-  background: rgba(255, 255, 255, .04); border: 1px dashed rgba(var(--brand-soft-rgb), .28);
+  background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(var(--brand-soft-rgb), .28);
 }
 .pa-modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
 .pa-modal-actions button { height: 48px; border-radius: 12px; font-weight: 800; }
-.pa-ghost { color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .24) !important; }
+.pa-ghost { color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24) !important; }
 .pa-danger-btn { color: #fff; background: linear-gradient(135deg, #f43f5e, #9f1239); }
 .pa-danger-btn:disabled { opacity: .42; }
 .pa-modal-err {

@@ -7,7 +7,13 @@ import '@fontsource/vazirmatn/700.css';
 import '@fontsource/vazirmatn/900.css';
 import './index.css';
 import App from './App.jsx';
+/* ⚠️ **پیش از رندر** اعمال می‌شود، نه در یک افکت: اگر منتظرِ اولین رندر می‌ماند،
+   کاربرِ تمِ روشن یک فریمِ کاملِ تیره می‌دید و بعد صفحه سفید می‌شد. */
+import { applyTheme, applyDensity, resolveTheme, resolveDensity } from './lib/theme.js';
 import VersionNotice from './ui/VersionNotice.jsx';
+
+applyTheme(resolveTheme(null));
+applyDensity(resolveDensity());
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>

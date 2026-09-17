@@ -8,7 +8,7 @@
 .sp-report { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.9; }
 .sp-pagination { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .ri-editor { min-width: 0; margin: 12px 0; padding: 12px; border: 1px solid rgba(var(--brand-soft-rgb),.25); border-radius: 14px; display: grid; gap: 12px; }
-.ri-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(70px,1fr); gap: 10px; border-top: 1px solid rgba(255,255,255,.12); padding-top: 12px; }
+.ri-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(70px,1fr); gap: 10px; border-top: 1px solid rgba(var(--veil-rgb), .12); padding-top: 12px; }
 .ri-row select, .ri-row input { width: 100%; min-width: 0; }
 .ri-delete { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid #fda4af66; border-radius: 12px; background: transparent; color: #fda4af; cursor: pointer; }
 .ri-editor .bl-mini { display: flex; gap: 8px; justify-content: center; }

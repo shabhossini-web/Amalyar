@@ -277,3 +277,16 @@ export const StopRec = (p) => (
 export const Bell = (p) => (
   <Svg {...p}><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10 21a2 2 0 0 0 4 0" /></Svg>
 );
+
+/** خورشید — تمِ روشن (W3.6). */
+export const Sun = (p) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+  </Svg>
+);
+
+/** ماه — تمِ تیره (W3.6). */
+export const Moon = (p) => (
+  <Svg {...p}><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10Z" /></Svg>
+);

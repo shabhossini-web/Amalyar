@@ -13,8 +13,8 @@
 .db-stat:hover { transform: none; }
 .db-stat b { font-size: 18px; font-weight: 900; }
 .db-stat span { font-size: 10.5px; color: var(--text2); font-weight: 600; }
-.db-stat-due b { color: #fbbf24; }
-.db-stat-today b { color: #5eead4; }
+.db-stat-due b { color: var(--amber-text); }
+.db-stat-today b { color: var(--green-text); }
 
 /* نوارِ ابزار: سرچ + افزودن.
    ⚠️ روی موبایل wrap می‌شود — بدونِ آن، دکمهٔ «افزودن» در عرضِ تنگ از لبهٔ
@@ -24,7 +24,7 @@
 .db-add { min-height: 42px; }
 .db-search {
   flex: 1; display: flex; align-items: center; gap: 8px;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.12);
   border-radius: 13px; padding: 0 12px; color: var(--text2);
 }
 .db-search:focus-within { border-color: rgba(var(--brand-2-rgb), 0.6); }
@@ -63,7 +63,7 @@
    (db-formcard) قاطی نشود. */
 .db-kindbox {
   padding: 10px; border-radius: 14px;
-  background: rgba(255, 255, 255, .02); border: 1px dashed rgba(255, 255, 255, .16);
+  background: rgba(var(--veil-rgb), .02); border: 1px dashed rgba(var(--veil-rgb), .16);
 }
 .db-kindbox .db-kindrow { margin-bottom: 0; }
 
@@ -72,7 +72,7 @@
   display: flex; flex-direction: column; gap: 12px;
   padding: 12px; border-radius: 14px;
   background: rgba(var(--brand-soft-rgb), .05);
-  border: 1px solid rgba(255, 255, 255, .08);
+  border: 1px solid rgba(var(--veil-rgb), .08);
   border-inline-start: 3px solid rgb(var(--k, var(--brand-soft-rgb)));
 }
 
@@ -82,7 +82,7 @@
 .db-kindrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
 .db-kindrow button {
   flex: 1 1 90px; padding: 9px 6px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #b7b0d4; background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  color: #b7b0d4; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .db-kindrow button.on {
   color: #fff; font-weight: 800; border-color: transparent;
@@ -101,7 +101,7 @@
    **بی‌رنگ** می‌ماند. رنگ از `--k` می‌آید که سرور تعیینش کرده. */
 .db-kindtag {
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
-  color: #c9c2e4; background: rgba(255, 255, 255, .06); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 /* ⚠️ سلکتور از **کارت** می‌آید نه از خودِ برچسب. تا دیروز `--k` روی همان
    `<span>` inline بود و قاعده `[style*="--k"]` روی خودش می‌نشست؛ با انتقالِ
@@ -123,7 +123,7 @@
 .db-card {
   display: flex; flex-direction: column; gap: 10px;
   border-radius: 20px; padding: 10px;
-  background: rgba(255, 255, 255, .022);
+  background: rgba(var(--veil-rgb), .022);
   border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 
@@ -131,7 +131,7 @@
   position: relative; overflow: hidden; isolation: isolate;
   display: flex; flex-direction: column; gap: 9px;
   border-radius: 15px; padding: 14px 15px;
-  background: rgba(10, 7, 26, .55);
+  background: rgba(var(--surface-rgb), .55);
   border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 /* لبهٔ رنگی فقط در بالا-ابتدای کارت (در RTL: بالا-راست) — قرینهٔ طرحِ مرجع
@@ -206,7 +206,7 @@
 .db-prog { display: flex; flex-direction: column; gap: 5px; margin-block-start: 2px; }
 .db-prog-head { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; color: var(--text2); }
 .db-prog-head b { font-size: 13.5px; font-weight: 800; color: rgb(var(--k, var(--brand-2-rgb))); }
-.db-prog-bar { block-size: 6px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.db-prog-bar { block-size: 6px; border-radius: 99px; background: rgba(var(--veil-rgb), .08); overflow: hidden; }
 .db-prog-bar i {
   display: block; block-size: 100%; border-radius: 99px;
   background: rgb(var(--k, var(--brand-2-rgb)));
@@ -214,7 +214,7 @@
 }
 @media (prefers-reduced-motion: reduce) { .db-prog-bar i { transition: none; } }
 .db-prog small { font-size: 11px; color: var(--text3); }
-.db-prog small.ok { color: #5eead4; }
+.db-prog small.ok { color: var(--green-text); }
 
 /* ردیفِ کنش‌ها — بیرونِ پنل، مثلِ طرحِ مرجع */
 .db-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-inline: 4px; }
@@ -222,8 +222,8 @@
 /* در عرضِ کم کلِ گروه به خطِ دوم می‌رود و به لبهٔ پایانی می‌چسبد — دو دستهٔ
    تمیز، نه یک دکمهٔ سرگردان. */
 .db-tools { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
-.db-st-pending { color: #fbbf24; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); }
-.db-st-done { color: #5eead4; background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
+.db-st-pending { color: var(--amber-text); background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); }
+.db-st-done { color: var(--green-text); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
 .db-st-cancelled { color: #fca5a5; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
 
 .db-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text2); }
@@ -232,19 +232,19 @@
 
 .db-money {
   display: flex; gap: 8px; font-size: 11.5px; color: var(--text2);
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.08);
   border-radius: 11px; padding: 8px 10px;
 }
 .db-money span { flex: 1; display: flex; flex-direction: column; gap: 2px; text-align: center; }
 .db-money b { font-size: 13.5px; font-weight: 800; color: var(--text1); }
-.db-money b.ok { color: #5eead4; }
-.db-money b.due { color: #fbbf24; }
+.db-money b.ok { color: var(--green-text); }
+.db-money b.due { color: var(--amber-text); }
 
 .db-statuspick { flex: 1; display: flex; gap: 6px; }
 .db-statuspick button {
   flex: 1; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
-  color: var(--text3); background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 9px; padding: 6px 4px;
+  color: var(--text3); background: rgba(var(--veil-rgb), 0.04);
+  border: 1px solid rgba(var(--veil-rgb), 0.1); border-radius: 9px; padding: 6px 4px;
   transition: color .15s, border-color .15s, background .15s;
 }
 .db-statuspick button:hover:not(:disabled) { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.5); }
@@ -253,8 +253,8 @@
 .db-ico {
   flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px;
   font-family: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer;
-  color: var(--text2); background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 9px;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.05);
+  border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 9px;
   transition: color .15s, border-color .15s, background .15s, width .15s;
 }
 /* یکی از ابزارها یک `<a>` است (پرونده) نه دکمه — زیرخطِ پیش‌فرضِ لینک نباید
@@ -272,13 +272,13 @@ a.db-ico { text-decoration: none; }
    سوار می‌شود و حرکت می‌پرد. */
 .db-overlay {
   position: fixed; inset: 0; z-index: 60; display: flex; align-items: flex-end; justify-content: center;
-  background: rgba(8, 4, 24, 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  background: rgba(var(--surface-rgb), 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .db-sheet {
   width: 100%; max-width: 560px; max-height: 92dvh; overflow-y: auto; cursor: default;
   border-radius: 22px 22px 0 0; padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 18px);
   display: flex; flex-direction: column; gap: 12px;
-  background: rgba(22, 16, 46, 0.92);
+  background: rgba(var(--surface-rgb), 0.92);
 }
 @media (min-width: 640px) {
   .db-overlay { align-items: center; padding: 20px; }
@@ -289,8 +289,8 @@ a.db-ico { text-decoration: none; }
 .db-sheet-head b { font-size: 16px; font-weight: 900; }
 .db-x {
   display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer;
-  color: var(--text2); background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.06);
+  border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 10px;
 }
 .db-x:hover { color: #fca5a5; border-color: rgba(248, 113, 113, 0.4); }
 
@@ -308,8 +308,8 @@ a.db-ico { text-decoration: none; }
 .db-selrow select, .db-selrow .pk-btn { flex: 1; min-width: 0; }
 .db-addmini {
   flex: 0 0 auto; display: grid; place-items: center; width: 40px; cursor: pointer;
-  color: var(--text2); background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.13); border-radius: 11px;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.05);
+  border: 1px solid rgba(var(--veil-rgb), 0.13); border-radius: 11px;
 }
 .db-addmini:hover { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
 
@@ -317,7 +317,7 @@ a.db-ico { text-decoration: none; }
 .db-quickadd { display: flex; gap: 7px; }
 .db-quickadd input {
   flex: 1; min-width: 0; font-family: inherit; font-size: 14px; color: var(--text1);
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(var(--brand-2-rgb), 0.5);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--brand-2-rgb), 0.5);
   border-radius: 11px; padding: 10px 12px; outline: none;
 }
 .db-quickadd button {
@@ -326,13 +326,13 @@ a.db-ico { text-decoration: none; }
   border: none; border-radius: 11px; padding: 0 14px;
 }
 .db-quickadd button:disabled { opacity: .55; cursor: default; }
-.db-quickadd button.ghost { color: var(--text2); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.13); }
+.db-quickadd button.ghost { color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.13); }
 
 /* فهرستِ تعریف‌ها */
 .db-defs { display: flex; flex-direction: column; gap: 7px; max-height: 46dvh; overflow-y: auto; }
 .db-def {
   display: flex; align-items: center; gap: 10px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.1);
   border-radius: 12px; padding: 9px 12px; font-size: 13.5px;
 }
 .db-def.off { opacity: .55; }
@@ -341,14 +341,14 @@ a.db-ico { text-decoration: none; }
 .db-def small { font-size: 11px; color: var(--text3); flex: 0 0 auto; }
 .db-def-edit {
   flex: 1; min-width: 0; font-family: inherit; font-size: 13.5px; color: var(--text1);
-  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(var(--brand-2-rgb), 0.55);
+  background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--brand-2-rgb), 0.55);
   border-radius: 9px; padding: 6px 10px; outline: none;
 }
 .db-def-acts { display: flex; gap: 5px; flex: 0 0 auto; }
 .db-def-acts button {
   display: grid; place-items: center; width: 28px; height: 28px; cursor: pointer;
-  font-size: 11px; color: var(--text2); background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px;
+  font-size: 11px; color: var(--text2); background: rgba(var(--veil-rgb), 0.05);
+  border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 8px;
 }
 .db-def-acts button:hover { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
 .db-def-acts button.danger:hover { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); }
@@ -358,8 +358,8 @@ a.db-ico { text-decoration: none; }
 .db-daterow input { flex: 1; }
 .db-today {
   font-family: inherit; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap;
-  color: var(--text1); background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 11px; padding: 0 13px;
+  color: var(--text1); background: rgba(var(--veil-rgb), 0.07);
+  border: 1px solid rgba(var(--veil-rgb), 0.14); border-radius: 11px; padding: 0 13px;
 }
 .db-today:hover { border-color: rgba(var(--brand-2-rgb), 0.55); }
 
@@ -367,7 +367,7 @@ a.db-ico { text-decoration: none; }
 .db-psearch { display: flex; flex-direction: column; gap: 8px; }
 .db-psearch > input {
   font-family: inherit; font-size: 14px; color: var(--text1);
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.13);
   border-radius: 11px; padding: 10px 12px; outline: none;
 }
 .db-psearch > input:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
@@ -375,7 +375,7 @@ a.db-ico { text-decoration: none; }
 .db-plist button {
   display: flex; align-items: center; gap: 10px; text-align: right; cursor: pointer;
   font-family: inherit; font-size: 13px; color: var(--text1);
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.1);
   border-radius: 11px; padding: 9px 12px;
 }
 .db-plist button:hover { border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.1); }
@@ -408,7 +408,7 @@ a.db-ico { text-decoration: none; }
 .db-nidmatch > span { color: #fef3c7; }
 .db-nidmatch button {
   margin-inline-start: auto; font-family: inherit; font-size: 11.5px; font-weight: 800;
-  cursor: pointer; color: #0b0820; background: #fbbf24; border: none;
+  cursor: pointer; color: var(--ink-bright); background: #fbbf24; border: none;
   border-radius: 9px; padding: 6px 12px;
 }
 .db-hint.bad { color: #fda4af; font-weight: 700; }
@@ -428,14 +428,14 @@ a.db-ico { text-decoration: none; }
 .db-steps button {
   width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
   font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-  padding: 8px 4px; border-radius: 11px; color: #7d77a3;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  padding: 8px 4px; border-radius: 11px; color: var(--text3);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 /* گامِ جلوتر کلیک‌پذیر نیست — پرشِ رو به جلو یعنی دور زدنِ اعتبارسنجیِ گام. */
 .db-steps button:disabled { cursor: default; }
 .db-steps i {
   display: grid; place-items: center; inline-size: 18px; block-size: 18px; border-radius: 50%;
-  font-style: normal; font-size: 10.5px; background: rgba(255, 255, 255, .07);
+  font-style: normal; font-size: 10.5px; background: rgba(var(--veil-rgb), .07);
 }
 .db-steps .on button {
   color: #fff; border-color: transparent;
@@ -451,7 +451,7 @@ a.db-ico { text-decoration: none; }
 .db-stepback {
   font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer;
   padding: 13px 20px; border-radius: 13px; color: #b7b0d4;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .db-stepback:hover { color: #fff; }
 /* خطای گام کنارِ خودِ دکمه می‌نشیند، نه در toast: toast می‌رود و کاربر با یک
@@ -493,12 +493,12 @@ a.db-ico { text-decoration: none; }
 .bl-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .bl-summary > div {
   padding: 13px 14px; border-radius: 14px; text-align: center;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .bl-summary b { display: block; font-size: 19px; font-weight: 900; line-height: 1.25; }
 .bl-summary span { display: block; margin-top: 3px; font-size: 10.5px; color: var(--text3); }
 .bl-summary .bl-due  { background: rgba(251, 191, 36, .08);  border-color: rgba(251, 191, 36, .3); }
-.bl-summary .bl-due b { color: #fbbf24; }
+.bl-summary .bl-due b { color: var(--amber-text); }
 /* اضافه‌پرداخت خطا نیست ولی باید به چشم بیاید — معمولاً یعنی جایی اشتباه ثبت شده. */
 .bl-summary .bl-over { background: rgba(34, 211, 238, .08); border-color: rgba(34, 211, 238, .3); }
 .bl-summary .bl-over b { color: #22d3ee; }
@@ -513,9 +513,9 @@ a.db-ico { text-decoration: none; }
 .bl-pricing {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 10px 12px; border-radius: 13px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  background: rgba(var(--veil-rgb), .025); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
-.bl-pricing-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 99px; background: rgba(255, 255, 255, .05); }
+.bl-pricing-tabs { display: inline-flex; gap: 4px; padding: 3px; border-radius: 99px; background: rgba(var(--veil-rgb), .05); }
 .bl-pricing-tabs button {
   cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 800; border: 0;
   padding: 6px 14px; border-radius: 99px; color: var(--text2); background: transparent;
@@ -523,13 +523,13 @@ a.db-ico { text-decoration: none; }
 .bl-pricing-tabs button.on { color: #fff; background: rgba(var(--brand-soft-rgb), .3); }
 .bl-pricing input {
   flex: 1 1 150px; min-width: 0; padding: 8px 12px; border-radius: 10px; font: inherit; font-size: 12.5px;
-  color: var(--text1); background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: var(--text1); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .bl-pricing-note { flex-basis: 100%; font-size: 10.5px; color: var(--text3); }
 
 .bl-add {
   display: grid; gap: 10px; padding: 14px; border-radius: 15px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  background: rgba(var(--veil-rgb), .025); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .bl-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; }
 
@@ -544,13 +544,13 @@ a.db-ico { text-decoration: none; }
 .bl-invoice-panel details[open] > * + * { margin-top: 12px; }
 .bl-neuro-preview { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--brand); border-radius: 12px; }
 .bl-error { color: #fda4af; padding: 12px; border: 1px solid currentColor; border-radius: 12px; }
-.bl-issued-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.1); }
+.bl-issued-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(var(--veil-rgb), .1); }
 .bl-issued-row > span { flex: 1; min-width: 160px; }
 .bl-sheet fieldset.db-field { min-width: 0; margin: 0; padding: 14px; border: 1px solid rgba(var(--brand-soft-rgb),.2); border-radius: 14px; display: grid; gap: 10px; }
 .bl-sheet .db-modetabs { flex-wrap: wrap; }
 .bl-row {
   display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 13px;
-  background: rgba(255, 255, 255, .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);
+  background: rgba(var(--veil-rgb), .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 .bl-row-main { min-width: 0; flex: 1; }
 .bl-row-main b { display: block; font-size: 13px; }
@@ -594,7 +594,7 @@ a.db-ico { text-decoration: none; }
   position: absolute; z-index: 5; inset-inline: 0; top: 100%; margin-top: 4px;
   max-height: 230px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
   padding: 6px; border-radius: 12px;
-  background: rgba(18, 13, 49, .98); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  background: rgba(var(--surface-rgb), .98); border: 1px solid rgba(var(--brand-soft-rgb), .35);
   box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
 }
 .bl-hits button {
@@ -615,10 +615,10 @@ a.db-ico { text-decoration: none; }
   background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .25);
 }
 
-.bl-warn { color: #fbbf24; margin: 4px 0 0; }
+.bl-warn { color: var(--amber-text); margin: 4px 0 0; }
 
 /* مغایرتِ فاکتور در برابرِ مصرف — نه خطا، نمای واقعیت */
-.bl-rec { margin-block-start: 14px; padding-block-start: 12px; border-block-start: 1px dashed rgba(255, 255, 255, .12); }
+.bl-rec { margin-block-start: 14px; padding-block-start: 12px; border-block-start: 1px dashed rgba(var(--veil-rgb), .12); }
 .bl-rec > b { display: block; font-size: 12px; color: #a5b4fc; margin-block-end: 8px; }
 .bl-rec-g { margin-block-end: 9px; }
 .bl-rec-g > span {
@@ -627,23 +627,23 @@ a.db-ico { text-decoration: none; }
 }
 .bl-rec-g.warn > span { color: #fcd34d; background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .25); }
 .bl-rec-g ul { margin: 6px 0 0; padding-inline-start: 18px; }
-.bl-rec-g li { font-size: 11.5px; line-height: 1.9; color: rgba(255, 255, 255, .84); }
+.bl-rec-g li { font-size: 11.5px; line-height: 1.9; color: rgba(var(--veil-rgb), .84); }
 .bl-rec-g li i { font-style: normal; color: #c4b5fd; }
 .bl-rec-g li em { font-style: normal; color: #fca5a5; }
-.bl-rec-g li small { color: rgba(255, 255, 255, .5); }
+.bl-rec-g li small { color: rgba(var(--veil-rgb), .5); }
 
 /* سؤالِ حذفِ قلمِ مصرفی */
 .bl-ask-wrap { z-index: 95; }
 .bl-ask { width: min(420px, 92vw); padding: 20px; border-radius: 18px; text-align: center; }
 .bl-ask > b { display: block; font-size: 14px; margin-block-end: 6px; }
-.bl-ask > p { font-size: 12.5px; line-height: 2; color: rgba(255, 255, 255, .78); margin: 0 0 14px; }
+.bl-ask > p { font-size: 12.5px; line-height: 2; color: rgba(var(--veil-rgb), .78); margin: 0 0 14px; }
 .bl-ask .db-submit { width: 100%; margin-block-end: 8px; }
 .bl-ask-alt, .bl-ask-cancel {
   width: 100%; padding: 10px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
+  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
 .bl-ask-alt { margin-block-end: 8px; color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
-.bl-ask-cancel { color: rgba(255, 255, 255, .55); background: none; border-color: transparent; }
+.bl-ask-cancel { color: rgba(var(--veil-rgb), .55); background: none; border-color: transparent; }
 
 /* ── جستجوی پیشرفته، سورت و صفحه‌بندی ── */
 .db-advbtn { position: relative; }
@@ -652,34 +652,34 @@ a.db-ico { text-decoration: none; }
   position: absolute; inset-block-start: -5px; inset-inline-end: -5px;
   min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px;
   font-style: normal; font-size: 10px; font-weight: 800; line-height: 16px; text-align: center;
-  color: #0b0820; background: #fbbf24;
+  color: var(--ink-bright); background: #fbbf24;
 }
 
 .db-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
 .db-chips button {
   display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 10px;
-  font: inherit; font-size: 11.5px; cursor: pointer; color: #ddd6fe;
+  font: inherit; font-size: 11.5px; cursor: pointer; color: var(--brand-text);
   background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-soft-rgb), .3);
 }
 .db-chips .db-chip-clear { color: #fda4af; background: none; border-color: rgba(251, 113, 133, .3); }
 
 .db-sortbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 11px 0 2px; }
-.db-sortbar label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #9a93bb; }
+.db-sortbar label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text3); }
 .db-sortbar select {
   padding: 7px 10px; border-radius: 10px; font: inherit; font-size: 12px; color: var(--text1);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .db-dir {
   width: 30px; height: 30px; border-radius: 9px; font: inherit; font-size: 14px; cursor: pointer;
-  color: #ddd6fe; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+  color: var(--brand-text); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .db-count { margin-inline-start: auto; font-size: 11px; color: #837ca5; }
 .db-psize { flex-shrink: 0; }
 
-.db-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; font-size: 12px; color: #9a93bb; }
+.db-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; font-size: 12px; color: var(--text3); }
 .db-pager button {
   padding: 9px 16px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #ddd6fe; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+  color: var(--brand-text); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .db-pager button:disabled { opacity: .35; cursor: not-allowed; }
 
@@ -688,14 +688,14 @@ a.db-ico { text-decoration: none; }
 .db-quickdates { display: flex; flex-wrap: wrap; gap: 6px; }
 .db-quickdates button {
   padding: 8px 13px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
-  color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .db-hint-bad { color: #fda4af; font-size: 11.5px; margin: 0; }
 .db-sheet-foot { display: flex; gap: 9px; justify-content: flex-end; margin-top: 14px; }
 .db-sheet-foot .db-submit { padding: 11px 24px; font-size: 13px; }
 .db-ghost {
   padding: 11px 18px; border-radius: 12px; font: inherit; font-size: 13px; cursor: pointer;
-  color: #cfc9e8; background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 
 /* ساعتِ عمل در فرم */
@@ -711,7 +711,7 @@ a.db-defbtn { text-decoration: none; }
 .bl-split { padding-block-start: 4px; }
 .bl-warns { margin-block-end: 12px; }
 .bl-warns p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.9; color: #fcd34d; }
-.bl-splithead { font-size: 11.5px; color: rgba(255, 255, 255, .55); margin-block-end: 10px; }
+.bl-splithead { font-size: 11.5px; color: rgba(var(--veil-rgb), .55); margin-block-end: 10px; }
 .bl-vtag { display: inline-block; padding: 2px 9px; margin-inline-end: 7px; border-radius: 8px; font-size: 10.5px; }
 .bl-vtag.draft { color: #fcd34d; background: rgba(251, 191, 36, .12); }
 .bl-vtag.final { color: #6ee7b7; background: rgba(52, 211, 153, .12); }
@@ -719,11 +719,11 @@ a.db-defbtn { text-decoration: none; }
 .bl-shares { display: flex; flex-direction: column; gap: 6px; margin-block-end: 12px; }
 .bl-share {
   display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 12px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08); font-size: 12px;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .08); font-size: 12px;
 }
 .bl-share b { min-width: 108px; }
-.bl-share b small { display: block; font-size: 10px; color: rgba(255, 255, 255, .5); font-weight: 400; }
-.bl-share span { flex: 1; font-size: 10.5px; color: rgba(255, 255, 255, .45); }
+.bl-share b small { display: block; font-size: 10px; color: rgba(var(--veil-rgb), .5); font-weight: 400; }
+.bl-share span { flex: 1; font-size: 10.5px; color: rgba(var(--veil-rgb), .45); }
 .bl-share i { font-style: normal; font-weight: 700; }
 .bl-share.total { background: rgba(var(--brand-rgb), .14); border-color: rgba(var(--brand-rgb), .3); }
 .bl-share.p-surgeon i { color: #93c5fd; }
@@ -736,16 +736,16 @@ a.db-defbtn { text-decoration: none; }
 .bl-splitacts .db-submit { flex: 1; }
 .bl-mini {
   padding: 10px 14px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #fff; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .16);
+  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
 .bl-mini.warn { flex: 1; color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
 
 /* پرداختِ سهم داخلِ تبِ تسویه */
-.bl-payouts { margin-block-end: 12px; padding-block-start: 10px; border-block-start: 1px dashed rgba(255, 255, 255, .12); }
+.bl-payouts { margin-block-end: 12px; padding-block-start: 10px; border-block-start: 1px dashed rgba(var(--veil-rgb), .12); }
 .bl-payouts > b { display: block; font-size: 12px; color: #a5b4fc; margin-block-end: 8px; }
-.bl-po { display: flex; align-items: center; gap: 10px; padding: 8px 11px; margin-block-end: 6px; border-radius: 11px; background: rgba(255, 255, 255, .04); font-size: 12px; }
+.bl-po { display: flex; align-items: center; gap: 10px; padding: 8px 11px; margin-block-end: 6px; border-radius: 11px; background: rgba(var(--veil-rgb), .04); font-size: 12px; }
 .bl-po > span { flex: 1; }
-.bl-po i { font-style: normal; font-size: 11px; color: rgba(255, 255, 255, .55); }
+.bl-po i { font-style: normal; font-size: 11px; color: rgba(var(--veil-rgb), .55); }
 .bl-po em { font-style: normal; font-size: 11px; color: #6ee7b7; }
 .bl-po.done { opacity: .65; }
 .bl-po button { padding: 6px 11px; border-radius: 9px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
@@ -760,7 +760,7 @@ a.db-defbtn { text-decoration: none; }
    همین شرکت است. */
 .db-extra {
   margin-top: 6px; padding: 12px; border-radius: 14px;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--veil-rgb), .09);
 }
 .db-extra h4 {
   margin: 0 0 4px; font-size: 12.5px; font-weight: 800; color: var(--brand-2, #a78bfa);
@@ -777,7 +777,7 @@ a.db-defbtn { text-decoration: none; }
 .db-rolebox > legend {
   padding: 0 7px; font-size: 10.5px; font-weight: 700; color: rgb(var(--brand-2-rgb));
 }
-.db-rolebox.locked { border-style: solid; border-color: rgba(255, 255, 255, .14); background: rgba(255, 255, 255, .02); opacity: .75; }
+.db-rolebox.locked { border-style: solid; border-color: rgba(var(--veil-rgb), .14); background: rgba(var(--veil-rgb), .02); opacity: .75; }
 .db-rolebox.locked > legend { color: var(--text3); }
 
 /* ── منوی ارسالِ فرم از کارت ─────────────────────────────────────── */
@@ -786,7 +786,7 @@ a.db-defbtn { text-decoration: none; }
   position: absolute; bottom: calc(100% + 8px); inset-inline-end: 0; z-index: 41;
   min-width: 210px; padding: 10px; border-radius: 16px;
   display: grid; gap: 4px;
-  background: rgba(16, 12, 40, 0.97);
+  background: rgba(var(--surface-rgb), 0.97);
   border: 1px solid rgba(var(--brand-soft-rgb), 0.35);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
 }
@@ -812,7 +812,7 @@ a.db-defbtn { text-decoration: none; }
 .db-nvb-slot {
   display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; cursor: pointer;
   font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 99px;
   transition: color .15s, border-color .15s, background .15s;
 }
 .db-nvb-slot:hover { border-color: rgba(var(--brand-2-rgb), .5); }
@@ -829,7 +829,7 @@ a.db-defbtn { text-decoration: none; }
 .db-nvb-main:disabled { opacity: .5; cursor: default; }
 .db-nvb-ghost {
   padding: 10px 16px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
-  background: none; border: 1px solid rgba(255, 255, 255, .16); border-radius: 12px;
+  background: none; border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 12px;
 }
 .db-nvb-done .db-nvb-main { margin-block-start: 4px; }
 
@@ -844,7 +844,7 @@ a.db-defbtn { text-decoration: none; }
 .bl-ai-chip {
   display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
   padding: 5px 11px; cursor: pointer; font: inherit; font-size: 11.5px; color: var(--text2);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 99px;
 }
 .bl-ai-chip:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
 .bl-ai-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 230px; }
@@ -863,7 +863,7 @@ a.db-defbtn { text-decoration: none; }
 .db-daychips { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
 .db-daychip {
   padding: 7px 14px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--text2);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .16); border-radius: 99px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 99px;
 }
 .db-daychip.on {
   color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
@@ -881,7 +881,7 @@ a.db-defbtn { text-decoration: none; }
 .db-aibtn:disabled { opacity: .55; cursor: default; }
 .db-aighost {
   padding: 6px 12px; cursor: pointer; font: inherit; font-size: 11.5px; color: var(--text3);
-  background: none; border: 1px dashed rgba(255, 255, 255, .25); border-radius: 99px;
+  background: none; border: 1px dashed rgba(var(--veil-rgb), .25); border-radius: 99px;
 }
 .db-aighost:hover { color: var(--text2); }
 
@@ -897,8 +897,8 @@ a.db-defbtn { text-decoration: none; }
 /* ── بلوکِ مراقبت: عنوان + زمان‌بندی + پیش‌فرضِ نوعِ عمل ── */
 .db-careblock {
   display: flex; flex-direction: column; gap: 7px;
-  padding: 10px 12px; background: rgba(255, 255, 255, .03);
-  border: 1px solid rgba(255, 255, 255, .09); border-radius: 13px;
+  padding: 10px 12px; background: rgba(var(--veil-rgb), .03);
+  border: 1px solid rgba(var(--veil-rgb), .09); border-radius: 13px;
 }
 .db-carehead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
 .db-carehead > span { font-size: 12.5px; font-weight: 700; color: var(--text2); }
@@ -925,7 +925,7 @@ a.db-defbtn { text-decoration: none; }
   padding: 10px 12px; background: rgba(245, 158, 11, .08);
   border: 1px solid rgba(245, 158, 11, .3); border-radius: 12px;
 }
-.db-nodefault b { font-size: 12px; color: #fbbf24; }
+.db-nodefault b { font-size: 12px; color: var(--amber-text); }
 .db-nodefault span { font-size: 11.5px; line-height: 1.9; color: var(--text3); }
 .db-whenchips { margin-top: 2px; }
 
@@ -943,7 +943,7 @@ a.db-defbtn { text-decoration: none; }
 /* اسکلتِ ردیفِ نوع — تا نیامدنِ فهرستِ واقعی، جای دکمه‌ها نبض می‌زند. */
 .db-kindrow-loading span {
   display: inline-block; width: 96px; height: 34px; border-radius: 12px;
-  background: rgba(255, 255, 255, .06); animation: db-kpulse 1.1s ease-in-out infinite;
+  background: rgba(var(--veil-rgb), .06); animation: db-kpulse 1.1s ease-in-out infinite;
 }
 .db-kindrow-loading span + span { animation-delay: .2s; }
 @keyframes db-kpulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
@@ -967,7 +967,7 @@ a.db-defbtn { text-decoration: none; }
 .nv-svc {
   display: grid; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center;
   min-height: 56px; padding: 10px 12px; border-radius: 12px; cursor: pointer;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
   transition: border-color .2s, background .2s;
 }
 .nv-svc.on { background: rgba(var(--brand-rgb), .12); border-color: rgba(var(--brand-2-rgb), .55); }
@@ -977,15 +977,15 @@ a.db-defbtn { text-decoration: none; }
 .nv-svc i { grid-column: 2; font-style: normal; font-size: 11px; color: var(--cyan); font-variant-numeric: tabular-nums; }
 .nv-step {
   display: inline-grid; grid-template-columns: 40px 1fr 40px; align-items: stretch; min-width: 132px;
-  border-radius: 10px; overflow: hidden; border: 1px solid rgba(var(--brand-soft-rgb), .2); background: rgba(255, 255, 255, .04);
+  border-radius: 10px; overflow: hidden; border: 1px solid rgba(var(--brand-soft-rgb), .2); background: rgba(var(--veil-rgb), .04);
 }
-.nv-step button { min-height: 44px; font: inherit; font-size: 18px; color: var(--text1); background: rgba(255, 255, 255, .04); border: 0; cursor: pointer; }
+.nv-step button { min-height: 44px; font: inherit; font-size: 18px; color: var(--text1); background: rgba(var(--veil-rgb), .04); border: 0; cursor: pointer; }
 .nv-step button:focus-visible, .nv-svc:focus-within { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .nv-step input { min-width: 0; text-align: center; font: inherit; font-size: 14px; color: var(--text1); background: transparent; border: 0; }
 .nv-cons { display: grid; gap: 8px; }
 .nv-con {
   display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center;
-  padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  padding: 8px 12px; border-radius: 12px; background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .nv-con b { font-size: 13px; }
 .nv-con small { display: block; font-size: 10.5px; color: var(--text3); }
@@ -993,9 +993,9 @@ a.db-defbtn { text-decoration: none; }
 @media (max-width: 640px) { .nv-con.nv-add { grid-template-columns: 1fr 1fr; } }
 .nv-con.nv-add input {
   min-width: 0; padding: 9px 10px; border-radius: 10px; font: inherit; font-size: 13px;
-  color: var(--text1); background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: var(--text1); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
-.nv-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, .08); }
+.nv-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 6px; border-top: 1px solid rgba(var(--veil-rgb), .08); }
 .nv-total { flex: 1 1 160px; display: flex; flex-direction: column; }
 .nv-total span { font-size: 10.5px; color: var(--text3); }
 .nv-total b { font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }

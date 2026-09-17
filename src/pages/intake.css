@@ -14,7 +14,7 @@
 
 .ik-card {
   width: min(560px, 100%); display: grid; gap: 13px; padding: 18px 16px 20px;
-  border-radius: 20px; background: rgba(255, 255, 255, .05);
+  border-radius: 20px; background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .ik-head { display: flex; align-items: center; gap: 10px; }
@@ -32,12 +32,12 @@
 .ik-steps li {
   flex: 1; display: flex; align-items: center; gap: 6px; padding: 8px 9px;
   border-radius: 12px; font-size: 11px; color: var(--text3);
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .08);
 }
 .ik-steps i {
   display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto;
   border-radius: 99px; font-style: normal; font-size: 10.5px; font-weight: 800;
-  background: rgba(255, 255, 255, .08);
+  background: rgba(var(--veil-rgb), .08);
 }
 .ik-steps li.now { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .5); }
 .ik-steps li.now i { color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
@@ -50,7 +50,7 @@
 .ik-field > span { font-size: 11.5px; }
 .ik-field input, .ik-field textarea {
   font: inherit; font-size: 13.5px; color: var(--text1); padding: 10px 11px; border-radius: 11px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .14); outline: none;
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
   width: 100%;
 }
 .ik-field input:focus, .ik-field textarea:focus { border-color: rgba(var(--brand-2-rgb), .6); }
@@ -61,8 +61,8 @@
 .ik-field select {
   width: 100%;
   appearance: none; -webkit-appearance: none;
-  background-color: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .14);
+  background-color: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .14);
   border-radius: 12px;
   color: var(--text1);
   font-family: inherit; font-size: 15px;
@@ -75,19 +75,19 @@
   transition: border-color .2s;
 }
 .ik-field select:focus { border-color: rgba(var(--brand-2-rgb), .6); outline: none; }
-.ik-field select option { background: #14103a; color: var(--text1); }
+.ik-field select option { background: var(--bg3); color: var(--text1); }
 .ik-field textarea { resize: vertical; }
 
 .ik-cap {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 10px 12px; border-radius: 13px; font-size: 12px; color: var(--text2);
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ik-cap b { font-size: 14px; color: var(--text1); }
 .ik-cap input {
   font: inherit; width: 70px; margin-inline-start: auto; text-align: center;
   font-size: 14px; color: var(--text1); padding: 8px; border-radius: 10px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .16); outline: none;
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .16); outline: none;
 }
 
 .ik-go {
@@ -97,8 +97,8 @@
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 .ik-go.ghost {
-  color: var(--text1); background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .14);
+  color: var(--text1); background: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ik-go:disabled { opacity: .55; cursor: not-allowed; }
 
@@ -107,7 +107,7 @@
   display: flex; align-items: center; gap: 7px; padding: 10px 12px; border-radius: 12px;
   font-size: 12.5px; line-height: 1.9;
 }
-.ik-note { color: var(--text2); background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1); }
+.ik-note { color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1); }
 .ik-good { color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .32); }
 .ik-bad { color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .32); }
 .ik-warn { color: #fcd34d; background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35); }
@@ -123,13 +123,13 @@
 .ik-code input {
   flex: 1; font: inherit; font-size: 13px; color: var(--text1); padding: 10px 11px;
   border-radius: 11px; background: rgba(0, 0, 0, .3);
-  border: 1px solid rgba(255, 255, 255, .14); outline: none;
+  border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
 }
 .ik-code input:focus { border-color: rgba(var(--brand-2-rgb), .6); }
 .ik-code button {
   font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 0 16px;
   border-radius: 11px; color: var(--text1);
-  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .16);
 }
 .ik-code button:disabled { opacity: .45; cursor: not-allowed; }
 .ik-off { font-style: normal; font-size: 11.5px; color: #6ee7b7; }
@@ -137,7 +137,7 @@
 /* ── شمارهٔ حسابِ واریز ── */
 .ik-pay-to {
   display: grid; gap: 8px; padding: 11px 12px; border-radius: 13px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .11);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .11);
 }
 .ik-pay-to > b { font-size: 12.5px; }
 .ik-acc { display: grid; gap: 6px; }
@@ -145,13 +145,13 @@
 .ik-copy {
   display: flex; align-items: center; gap: 9px; width: 100%; cursor: pointer;
   font: inherit; text-align: start; padding: 9px 11px; border-radius: 11px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ik-copy span { font-size: 11px; color: var(--text3); flex: 0 0 auto; }
 .ik-copy b { flex: 1; font-size: 14.5px; font-weight: 800; letter-spacing: .5px; color: var(--text1); }
 .ik-copy i {
   flex: 0 0 auto; font-style: normal; font-size: 11px; padding: 3px 9px; border-radius: 8px;
-  color: var(--text2); background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .13);
+  color: var(--text2); background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .13);
 }
 .ik-copy.ok { border-color: rgba(52, 211, 153, .45); }
 .ik-copy.ok i { color: #6ee7b7; background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .35); }
@@ -159,8 +159,8 @@
 /* ── فرمِ ساخته‌شده روی صفحهٔ بیمار ──
    ⚠️ `.dyn`ِ مشترک استایلِ خودش را از `definitions.css` می‌گیرد؛ این‌جا فقط
    چیزهایی است که مالِ همین صفحه است. */
-.ik-hint { margin: 0 0 10px; font-size: 12px; line-height: 2; color: rgba(255, 255, 255, .6); }
-.ik-pages { margin: 0 0 8px; font-size: 11.5px; color: rgba(255, 255, 255, .5); }
+.ik-hint { margin: 0 0 10px; font-size: 12px; line-height: 2; color: rgba(var(--veil-rgb), .6); }
+.ik-pages { margin: 0 0 8px; font-size: 11.5px; color: rgba(var(--veil-rgb), .5); }
 /* ⚠️ روی موبایل ستونی: دو دکمهٔ «قبلی/بعدی» کنارِ هم در عرضِ ۳۲۰ پیکسل
    آن‌قدر باریک می‌شوند که زدنشان با انگشت سخت است. */
 .ik-nav { display: flex; gap: 9px; margin-block-start: 12px; }
@@ -183,7 +183,7 @@
 .ik-book-topics button {
   font-family: inherit; font-size: 12px; cursor: pointer; color: var(--text2);
   padding: 7px 13px; border-radius: 99px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .ik-book-topics button.on { color: #fff; background: rgba(var(--brand-2-rgb), .22); border-color: rgba(var(--brand-2-rgb), .55); }
 
@@ -198,11 +198,11 @@
 /* روزی که جا دارد، شماره‌اش هم زنده است — روزِ بسته کم‌رنگ می‌ماند. */
 .jg.compact .jg-cell:has(.ik-cell.open) { border-color: rgba(var(--brand-soft-rgb), .28); background: rgba(var(--brand-rgb), .07); }
 .jg.compact .jg-cell:has(.ik-cell.open) .jg-num { color: #efeaff; }
-.jg.compact .jg-cell.sel .ik-dot { background: #fff; box-shadow: 0 0 8px rgba(255, 255, 255, .9); }
+.jg.compact .jg-cell.sel .ik-dot { background: #fff; box-shadow: 0 0 8px rgba(var(--veil-rgb), .9); }
 
 .ik-book-day {
   display: grid; gap: 7px; padding: 11px 12px; border-radius: 12px;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .ik-book-day > b { font-size: 13px; }
 .ik-book-day > small { font-size: 11.5px; color: var(--text3); }
@@ -217,7 +217,7 @@
 /* اشغال: خط‌خورده و کم‌رنگ — «نمی‌شود گرفت» باید در یک نگاه پیدا باشد. */
 .ik-slots button:disabled {
   cursor: default; color: var(--text3); text-decoration: line-through;
-  background: rgba(255, 255, 255, .03); border-color: rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .03); border-color: rgba(var(--veil-rgb), .1);
 }
 .ik-book-go {
   justify-self: start; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; color: #fff;
@@ -230,8 +230,8 @@
 .ik-receipts { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
 .ik-receipt-row {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 7px 11px; background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px;
+  padding: 7px 11px; background: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .12); border-radius: 10px;
 }
 .ik-receipt-row b { font-size: 12px; color: var(--text2); }
 .ik-receipt-row button {

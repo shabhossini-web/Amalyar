@@ -8,12 +8,12 @@
 .pk-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; min-width: 0; cursor: pointer; text-align: start;
-  font-family: inherit; font-size: 14px; color: var(--text1, #f2f0fc);
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
+  font-family: inherit; font-size: 14px; color: var(--text1, var(--text1));
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.13);
   border-radius: 11px; padding: 10px 12px; transition: border-color .15s;
 }
 .pk-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pk-btn.empty span { color: var(--text3, #8f88b5); font-weight: 600; }
+.pk-btn.empty span { color: var(--text3, var(--text3)); font-weight: 600; }
 .pk-btn:focus-visible { outline: none; border-color: rgba(var(--brand-2-rgb, 167, 139, 250), .65); }
 .pk-btn:disabled { opacity: .5; cursor: not-allowed; }
 .pk-caret {
@@ -24,28 +24,28 @@
 
 .pk-overlay {
   position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px;
-  background: rgba(6, 3, 20, .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  background: rgba(var(--surface-rgb), .72); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 /* ورود/خروج در `ui/Overlay.jsx` — اینجا @keyframes نگذارید. */
 .pk-panel {
   width: min(380px, 100%); max-height: min(560px, 82vh);
   display: flex; flex-direction: column; gap: 10px; padding: 14px;
-  border-radius: 20px; color: var(--text1, #f2f0fc); font-family: inherit;
-  background: #150f36; border: 1px solid rgba(var(--brand-soft-rgb, 167, 139, 250), .32);
+  border-radius: 20px; color: var(--text1, var(--text1)); font-family: inherit;
+  background: var(--bg3); border: 1px solid rgba(var(--brand-soft-rgb, 167, 139, 250), .32);
   box-shadow: 0 26px 70px rgba(0, 0, 0, .65);
 }
 .pk-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .pk-head b { font-size: 14px; font-weight: 800; }
 .pk-x {
   display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer;
-  color: var(--text2, #b7b0d8); background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .12); border-radius: 9px;
+  color: var(--text2, #b7b0d8); background: rgba(var(--veil-rgb), .06);
+  border: 1px solid rgba(var(--veil-rgb), .12); border-radius: 9px;
 }
-.pk-x:hover { color: var(--text1, #f2f0fc); }
+.pk-x:hover { color: var(--text1, var(--text1)); }
 
 .pk-search {
-  font-family: inherit; font-size: 13.5px; color: var(--text1, #f2f0fc); width: 100%;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.13);
+  font-family: inherit; font-size: 13.5px; color: var(--text1, var(--text1)); width: 100%;
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.13);
   border-radius: 11px; padding: 9px 12px; outline: none;
 }
 .pk-search:focus { border-color: rgba(var(--brand-2-rgb, 167, 139, 250), .65); }
@@ -53,13 +53,13 @@
 .pk-list { overflow-y: auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
 .pk-item {
   cursor: pointer; font-family: inherit; font-size: 13.5px; text-align: start;
-  color: var(--text1, #f2f0fc); background: rgba(255, 255, 255, .03);
+  color: var(--text1, var(--text1)); background: rgba(var(--veil-rgb), .03);
   border: 1px solid transparent; border-radius: 10px; padding: 10px 12px;
 }
-.pk-item:hover { background: rgba(255, 255, 255, .08); }
+.pk-item:hover { background: rgba(var(--veil-rgb), .08); }
 .pk-item.on {
   color: #fff; background: rgba(var(--brand-soft-rgb, 167, 139, 250), .22);
   border-color: rgba(var(--brand-soft-rgb, 167, 139, 250), .5); font-weight: 800;
 }
-.pk-clear { color: var(--text3, #8f88b5); font-weight: 600; }
-.pk-none { padding: 18px; text-align: center; font-size: 12.5px; color: var(--text3, #8f88b5); }
+.pk-clear { color: var(--text3, var(--text3)); font-weight: 600; }
+.pk-none { padding: 18px; text-align: center; font-size: 12.5px; color: var(--text3, var(--text3)); }

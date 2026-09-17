@@ -34,8 +34,8 @@
   --tl-ink-mute: var(--text3);
   --tl-line: rgba(var(--brand-rgb), 0.18);
   --tl-line-strong: rgba(var(--brand-rgb), 0.34);
-  --tl-glass: rgba(255, 255, 255, 0.045);
-  --tl-glass-2: rgba(255, 255, 255, 0.075);
+  --tl-glass: rgba(var(--veil-rgb), 0.045);
+  --tl-glass-2: rgba(var(--veil-rgb), 0.075);
   --tl-grad: linear-gradient(120deg, var(--tl-neon), var(--tl-accent));
   --tl-grad-soft: linear-gradient(140deg, rgba(var(--tl-neon-rgb), 0.16), rgba(0, 229, 255, 0.08));
   --tl-glow: 0 0 0 1px rgba(var(--tl-neon-rgb), 0.22), 0 18px 60px -18px rgba(var(--tl-neon-rgb), 0.55);
@@ -124,7 +124,7 @@
 }
 .tl-header.tl-scrolled {
   height: 62px; border-bottom-color: var(--tl-line);
-  background: rgba(7, 5, 26, 0.78);
+  background: rgba(var(--surface-rgb), 0.78);
   backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
 }
 .tl-header .tl-container { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
@@ -216,7 +216,7 @@
 .tl-ba-handle i::after { right: 7px; border-left: 6px solid var(--bg); }
 .tl-ba-tag {
   position: absolute; bottom: 12px; z-index: 4; padding: 0.3em 0.85em; border-radius: var(--tl-pill);
-  font-size: 0.72rem; font-weight: 700; background: rgba(7, 5, 26, 0.72); border: 1px solid var(--tl-line-strong);
+  font-size: 0.72rem; font-weight: 700; background: rgba(var(--surface-rgb), 0.72); border: 1px solid var(--tl-line-strong);
   backdrop-filter: blur(8px);
 }
 /* فیزیکی: برچسبِ «قبل» همیشه سمتِ همان تصویری است که clip نگهش داشته. */

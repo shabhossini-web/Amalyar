@@ -2,7 +2,7 @@
 .wb { position: relative; }
 .wb-btn {
   position: relative; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
-  color: var(--text2); border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05);
+  color: var(--text2); border: 1px solid rgba(var(--veil-rgb), 0.12); background: rgba(var(--veil-rgb), 0.05);
   transition: color .2s, border-color .2s, background .2s;
 }
 .wb-btn:hover, .wb-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); outline: none; }
@@ -15,23 +15,23 @@
 .wb-btn.hot .wb-badge { background: #b45309; }
 .wb-menu {
   position: absolute; top: calc(100% + 8px); inset-inline-end: 0; z-index: 90;
-  width: min(420px, calc(100vw - 32px)); background: #120c2c; color: var(--text1);
+  width: min(420px, calc(100vw - 32px)); background: var(--bg3); color: var(--text1);
   border: 1px solid rgba(var(--brand-2-rgb), 0.4); border-radius: 18px; padding: 8px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
 }
-.wb-head { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.wb-head { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; border-bottom: 1px solid rgba(var(--veil-rgb), .08); }
 .wb-head b { font-size: 14px; }
 .wb-counts { font-size: 12px; color: var(--text2); }
 .wb-counts em { color: var(--amber); font-style: normal; font-weight: 700; }
 .wb-empty { padding: 18px 10px; color: var(--text3); font-size: 13px; text-align: center; }
-.wb-all { display: block; text-align: center; padding: 10px; color: var(--brand-2); font-weight: 700; font-size: 13px; text-decoration: none; border-top: 1px solid rgba(255,255,255,.08); margin-top: 4px; }
+.wb-all { display: block; text-align: center; padding: 10px; color: var(--brand-2); font-weight: 700; font-size: 13px; text-decoration: none; border-top: 1px solid rgba(var(--veil-rgb), .08); margin-top: 4px; }
 .wb-all:hover, .wb-all:focus-visible { color: var(--cyan); outline: none; }
 
 .wk-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .wk-list.compact { max-height: 48vh; overflow-y: auto; padding: 6px 2px; }
 .wk-row {
   display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.09);
 }
 .wk-row.overdue { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.06); }
 .wk-row.blocked { opacity: .8; }
@@ -47,7 +47,7 @@
 .wk-actions { display: flex; flex-direction: column; gap: 6px; flex: 0 0 auto; }
 .wk-btn {
   font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 10px; color: var(--text2);
-  border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.04); white-space: nowrap;
+  border: 1px solid rgba(var(--veil-rgb), 0.14); background: rgba(var(--veil-rgb), 0.04); white-space: nowrap;
 }
 .wk-btn:hover:not(:disabled), .wk-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); outline: none; }
 .wk-btn.primary { background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); color: #fff; border-color: transparent; }
@@ -59,13 +59,13 @@
 .wk-head h1 { font-size: 20px; font-weight: 900; }
 .wk-back {
   display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--text2); text-decoration: none;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 99px; padding: 7px 15px 7px 13px;
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 99px; padding: 7px 15px 7px 13px;
 }
 .wk-back:hover { color: var(--cyan); border-color: rgba(0, 229, 255, .4); }
 .wk-new { display: flex; gap: 8px; margin-bottom: 14px; }
 .wk-new input, .wk-new select {
-  font: inherit; font-size: 13.5px; color: var(--text1); background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 8px 12px; outline: none;
+  font: inherit; font-size: 13.5px; color: var(--text1); background: rgba(var(--veil-rgb), 0.05);
+  border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 12px; padding: 8px 12px; outline: none;
 }
 .wk-new input { flex: 1 1 auto; min-width: 0; }
 .wk-new input:focus, .wk-new select:focus { border-color: rgba(var(--brand-2-rgb), 0.55); }
