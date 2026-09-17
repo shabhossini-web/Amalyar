@@ -4,20 +4,18 @@ status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-17
 paths:
-  - server/src/patients/repair.service.ts
-  - server/src/patients/repair.controller.ts
-  - server/src/patients/orders.service.ts
-  - server/src/patients/patients.module.ts
-  - src/app/WorkRow.jsx
-  - scripts/e2e/w1-10-repair-scan.mjs
+  - src/app/OrderPublic.jsx
+  - src/app/orders.css
+  - scripts/e2e/w0-5-order-upload-ui.mjs
   - docs/plan/lanes/claude-fable-b.md
 note: >-
   لِینِ ب **لِینِ الف را هم برداشت** — مالک گفت `gpt` دو روز نیست. کلیمِ `gpt` آزاد بود.
   لند شد: **W1.1** (#48) · **W1.7** (#49) · **W1.3** (#51) · **W1.8** (#52) ·
   **W1.9** (#53) · **W0.4 + W0.3** (#55).
-  **W0.8** هم لند شد (#56) و **W0.5 لِینِ ب آزاد شد**.
-  الان: **W1.10** (اسکنِ دادهٔ ناقص + صفِ تطبیق) — آخرین ردیفِ تابلوی الف.
-  بعدش برمی‌گردم به لِینِ خودم: W0.5 · W0.7.
+  **لِینِ الف تمام شد** — W1.1 (#48) · W1.7 (#49) · W1.3 (#51) · W1.8 (#52) ·
+  W1.9 (#53) · W0.4+W0.3 (#55) · W0.8 (#56) · W1.10 (#57).
+  برگشتم به لِینِ خودم: الان **W0.5** (آپلودِ فایلِ پاسخ روی `/o` + اندازهٔ دکمه)،
+  بعدش **W0.7**.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
