@@ -2951,3 +2951,11 @@ jobs:
       # uncertain send returns to the queue after 5/15/45 minutes.
       - name: Verify reminder dedupe keys and delivery retry (W1.9)
         run: node scripts/e2e/w1-9-reminder-local.mjs
+
+      # ⚠️ W0.4/D03b: a links box stores {url,title} and an image box stores
+      # {id,name}. The attached-forms path sent the raw value and the client
+      # did faNum(v.join('، ')) on it -- so the page literally showed
+      # [object Object]. Even when readable, nothing was openable. The server
+      # now returns readable text AND openable parts from one shaper.
+      - name: Verify form answers render openable and never [object Object] (W0.4)
+        run: node scripts/e2e/w0-4-answer-render.mjs

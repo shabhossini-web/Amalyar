@@ -43,6 +43,54 @@ const CLINICAL_FIELDS = {
   emergencyName: true, emergencyPhone: true, emergencyRelation: true, notes: true,
 } as const;
 
+/**
+ * یک پاسخِ فرم → **متنِ خوانا + قطعاتِ بازشدنی** (W0.4/D03b).
+ *
+ * ⚠️ چرا فقط متن کافی نبود: باکسِ لینک `{url,title}` و باکسِ عکس `{id,name}`
+ * ذخیره می‌کنند. `String()` رویشان «[object Object]» می‌داد، و حتی وقتی
+ * خوانا نوشته می‌شدند بیمار/پزشک **نمی‌توانست بازشان کند** — نشانیِ MRI روی
+ * صفحه بود ولی کلیک نمی‌شد و عکسِ پیوست فقط یک اسم بود.
+ *
+ * پس هر پاسخ دو چیز برمی‌گرداند: `text` برای هر مصرف‌کننده‌ای که رشته
+ * می‌خواهد (CSV، تبِ شرح‌ها، جستجو) و `items` برای رابط تا `<a>` یا دکمهٔ
+ * بازکردنِ مدرک بسازد. هیچ مصرف‌کننده‌ای مجبور نیست شکلِ خامِ JSON را بفهمد.
+ *
+ * ⚠️ `docId` به‌جای نشانی برمی‌گردد: مدرکِ پزشکی پشتِ همان گاردهای پرونده
+ * می‌ماند و کلاینت با `/patients/documents/:id/file` بازش می‌کند.
+ */
+export function answerParts(v: any): {
+  text: string;
+  items: { kind: 'link' | 'doc'; title: string; url?: string; docId?: number }[];
+} {
+  const items: { kind: 'link' | 'doc'; title: string; url?: string; docId?: number }[] = [];
+  const one = (x: any): string => {
+    if (x && typeof x === 'object') {
+      if (x.url && !x.id) {
+        const title = String(x.title || x.url);
+        items.push({ kind: 'link', title, url: String(x.url) });
+        return title;
+      }
+      if (x.id) {
+        const title = String(x.name || x.title || 'فایلِ پیوست');
+        items.push({ kind: 'doc', title, docId: Number(x.id) });
+        return title;
+      }
+      return String(x.name || x.title || x.url || '');
+    }
+    if (typeof x === 'boolean') return x ? 'بله' : 'خیر';
+    return x === null || x === undefined ? '' : String(x);
+  };
+  if (Array.isArray(v)) {
+    const names = v.map(one).filter((t) => t !== '');
+    if (!names.length) return { text: '', items: [] };
+    /* شمارش می‌ماند چون در فهرستِ فشرده مفید است؛ ولی حالا قطعاتش هم می‌آیند. */
+    const kinds = items.length && items.every((i) => i.kind === 'link') ? 'لینک'
+      : items.length && items.every((i) => i.kind === 'doc') ? 'فایل' : null;
+    return { text: kinds ? `${names.length} ${kinds}: ${names.join('، ')}` : names.join('، '), items };
+  }
+  return { text: one(v), items };
+}
+
 @Injectable()
 export class RecordService {
   constructor(
@@ -182,22 +230,12 @@ export class RecordService {
       const rows = defined
         .map((f) => ({ key: f.key, label: f.label, value: vals[f.key] }))
         .concat(Object.keys(vals).filter((k) => !seen.has(k)).map((k) => ({ key: k, label: k, value: vals[k] })));
-      /* ⚠️ ارجاعِ عکس شیء (یا از #۶۶ آرایه) است؛ `String()` رویش
-         «[object Object]» می‌داد. خوانا نوشته می‌شود و شمارش هم می‌آید. */
-      const show = (v: any): string => {
-        if (Array.isArray(v)) {
-          /* باکسِ لینک: `{url,title}` بدونِ id — با عنوان یا خودِ نشانی خوانده می‌شود. */
-          const isLink = v.length > 0 && v.every((x) => x && typeof x === 'object' && x.url && !x.id);
-          const names = v.map((x) => (x && typeof x === 'object' ? (x.name || x.title || x.url) : x)).filter(Boolean);
-          return names.length ? `${names.length} ${isLink ? 'لینک' : 'فایل'}: ${names.join('، ')}` : '';
-        }
-        if (v && typeof v === 'object') return v.name || v.title || v.url || (v.id ? 'فایلِ پیوست' : '');
-        return String(v);
-      };
+      /* W0.4: شکل‌دهی از `answerParts` می‌آید — همان تابعی که فرم‌های چسبیده
+         هم استفاده می‌کنند، تا دو مسیر دوباره از هم دور نیفتند. */
       return rows
-        .map((r) => ({ ...r, value: r.value === null || r.value === undefined ? '' : show(r.value) }))
-        .filter((r) => r.value.trim() !== '')
-        .map((r) => ({ key: r.key, label: r.label, value: r.value }));
+        .map((r) => ({ ...r, ...answerParts(r.value ?? '') }))
+        .filter((r) => r.text.trim() !== '')
+        .map((r) => ({ key: r.key, label: r.label, value: r.text, items: r.items }));
     };
 
     /**
@@ -477,10 +515,15 @@ export class RecordService {
         locked: !clinical,
         answers: clinical
           ? mergedFields
-            .map((f) => ({ key: f.key, label: f.label, type: f.type, value: data[f.key] }))
+            /* ⚠️ W0.4: مقدارِ **خام** فرستاده می‌شد و کلاینت رویش `join('، ')`
+               می‌زد — یعنی آرایهٔ `{id,name}`ِ عکس یا `{url,title}`ِ لینک روی
+               صفحه «[object Object]» می‌شد. حالا همان شکل‌دهندهٔ سرور
+               (`answerParts`) هم متنِ خوانا می‌دهد هم قطعاتِ بازشدنی. */
+            .map((f) => ({ key: f.key, label: f.label, type: f.type, raw: data[f.key], ...answerParts(data[f.key] ?? '') }))
             /* فیلدِ بی‌پاسخ ردیفِ خالی نمی‌سازد — فرمِ ده‌فیلدی که بیمار سه‌تا
                پر کرده، نباید هفت خطِ «—» نشان دهد. */
-            .filter((a) => a.value !== undefined && a.value !== null && a.value !== '')
+            .filter((a) => a.text.trim() !== '')
+            .map((a) => ({ key: a.key, label: a.label, type: a.type, value: a.text, items: a.items }))
           : [],
       };
     });

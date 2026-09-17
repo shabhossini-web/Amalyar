@@ -196,14 +196,45 @@ function ProfileTab({ rec, onSave, toast }) {
  * zipکردنی نیست: اگر کلاینت تعریفِ فرم را جدا می‌گرفت، روزی که فیلدی حذف شود
  * پاسخِ یتیم زیرِ برچسبِ فیلدِ بعدی می‌نشست — و هیچ‌کس نمی‌فهمید.
  */
-/** مقدارِ پاسخ به متنِ خواندنی — ارقام فارسی، آرایه با «،»، بولی به بله/خیر. */
+/** مقدارِ پاسخ به متنِ خواندنی — ارقام فارسی، بولی به بله/خیر. */
 function answerText(v) {
   if (typeof v === 'boolean') return v ? 'بله' : 'خیر';
-  if (Array.isArray(v)) return faNum(v.join('، '));
-  return faNum(String(v));
+  return faNum(String(v ?? ''));
 }
 
-function FormsTab({ rec }) {
+/**
+ * پاسخِ یک فیلد — W0.4/D03b.
+ *
+ * ⚠️ این‌جا قبلاً `faNum(v.join('، '))` بود و روی آرایهٔ `{id,name}`ِ عکس یا
+ * `{url,title}`ِ لینک «[object Object]» می‌داد. حالا سرور خودش هم متنِ خوانا
+ * می‌دهد هم `items`ِ بازشدنی (همان `answerParts`).
+ *
+ * ⚠️ لینکِ بیرونی `rel="noopener noreferrer"` می‌گیرد و مدرک با `openDoc`
+ * باز می‌شود، نه با نشانیِ مستقیم: فایلِ پزشکی پشتِ گاردهای پرونده می‌ماند.
+ * اگر سرور `items` نداد (نسخهٔ قدیمی)، همان متن نشان داده می‌شود.
+ */
+function AnswerValue({ answer, onErr }) {
+  const items = answer.items ?? [];
+  if (!items.length) return <>{answerText(answer.value)}</>;
+  return (
+    <span className="rc-ans-items">
+      {items.map((it, i) => (
+        <Fragment key={`${it.kind}-${it.url ?? it.docId}-${i}`}>
+          {i > 0 && '، '}
+          {it.kind === 'link' ? (
+            <a href={it.url} target="_blank" rel="noopener noreferrer" dir="ltr">{it.title}</a>
+          ) : (
+            <button type="button" className="rc-ans-doc" onClick={() => openDoc({ id: it.docId }, onErr)}>
+              {it.title}
+            </button>
+          )}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+function FormsTab({ rec, onErr }) {
   const rows = rec.attachedForms ?? [];
   if (!rows.length) return <div className="df-empty">فرمی به این پرونده نچسبیده است</div>;
   return (
@@ -233,7 +264,7 @@ function FormsTab({ rec }) {
                       در اسکرین‌شات دیدمش — «۲۰ مرداد ۱۴۰۵» فارسی بود و
                       امتیاز کنارش `5`. `bool` هم عدد نیست ولی «بله/خیر»
                       خواناتر از `true` است. */}
-                  <dd>{answerText(a.value)}</dd>
+                  <dd><AnswerValue answer={a} onErr={onErr} /></dd>
                 </Fragment>
               ))}
             </dl>
@@ -244,7 +275,7 @@ function FormsTab({ rec }) {
   );
 }
 
-function VisitsTab({ rec }) {
+function VisitsTab({ rec, onErr }) {
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
     <div className="df-list">
@@ -273,7 +304,7 @@ function VisitsTab({ rec }) {
                 {v.answers.map((a) => (
                   <div key={a.key}>
                     <dt>{a.label}</dt>
-                    <dd>{a.value}</dd>
+                    <dd><AnswerValue answer={a} onErr={onErr} /></dd>
                   </div>
                 ))}
               </dl>
@@ -1330,10 +1361,10 @@ export default function PatientRecord() {
 
       <div className="rc-body">
         {tab === 'profile' && <ProfileTab key={rec.updatedAt} rec={rec} onSave={save} toast={say} />}
-        {tab === 'visits' && <VisitsTab rec={rec} />}
+        {tab === 'visits' && <VisitsTab rec={rec} onErr={(m) => say(m, true)} />}
         {tab === 'journey' && <JourneyTab rec={rec} />}
         {tab === 'docs' && <DocsTab rec={rec} reload={load} toast={say} />}
-        {tab === 'forms' && <FormsTab rec={rec} />}
+        {tab === 'forms' && <FormsTab rec={rec} onErr={(m) => say(m, true)} />}
         {tab === 'notes' && <NotesTab rec={rec} reload={load} toast={say} />}
       </div>
 
