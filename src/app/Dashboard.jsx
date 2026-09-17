@@ -12,6 +12,7 @@ import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
 import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
+import { useVisitDefs } from './visit-defs.js';
 import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
@@ -641,7 +642,10 @@ export default function Dashboard() {
   const [busyId, setBusyId] = useState(0);
   const [toast, setToast] = useState('');
   const [denied, setDenied] = useState(false);
-  const [defs, setDefs] = useState({ surgeons: [], hospitals: [], techs: [], procedures: [], diagnoses: [], topics: [] });
+  /* ⚠️ داشبورد defs را **همیشه** لازم دارد (فیلترِ پیشرفته و چیپ‌های فعال از
+     همین می‌خوانند، نه فقط فرمِ مراجعه)، پس `true`. میزِ پذیرش همان هوک را با
+     `false` می‌گیرد و تا بازشدنِ فرم چیزی نمی‌خواند. */
+  const { defs, reload: loadDefs } = useVisitDefs(true, user?.id);
   const qRef = useRef(q);
   qRef.current = q;
 
@@ -682,21 +686,6 @@ export default function Dashboard() {
       });
   }, []);
 
-  const loadDefs = useCallback(async () => {
-    try {
-      const [surgeons, hospitals, techs, procedures, diagnoses, topics] = await Promise.all([
-        api('/surgeons'),
-        api('/hospitals'),
-        api('/techs'),
-        api('/procedure-types'),
-        api('/diagnoses'),
-        api('/visit-topics'),
-      ]);
-      setDefs({ surgeons, hospitals, techs, procedures, diagnoses, topics });
-    } catch {
-      /* دسترسی نداشته باشد، denied از load اصلی می‌آید */
-    }
-  }, []);
 
   /* دیپ‌لینکِ ?patient=<visitId> — تقویم و نوتیف به همین‌جا لینک می‌دهند.
      ⚠️ تا امروز این پارامتر **هیچ‌جا خوانده نمی‌شد**: لینکِ «بازکردن در
@@ -742,7 +731,6 @@ export default function Dashboard() {
     setPage(1);
   }, [q, status, kind, adv, sort, dir, pageSize]);
 
-  useEffect(() => { loadDefs(); }, [loadDefs, user?.id]);
 
   /* نوع‌های مراجعه — برای برچسبِ فیلتر. کارتِ مراجعه به این نیازی ندارد
      (`kindTitle`/`kindColor` را سرور در خودِ ردیف می‌فرستد)؛ این فقط برای

@@ -111,7 +111,20 @@ export class TodayService {
       AND: [{ state: { in: ['open', 'blocked'] } }, NOT_PATIENT, { ownerAccountId: null }, { createdAt: { lt: ago(24) } }],
     };
     const stuckWhere = { processedAt: null, at: { lt: ago(1) } };
-    const halfWhere = { status: 'approved', visitId: null };
+    /* ⚠️ «تأییدِ نیمه‌کاره» = تأیید شد ولی مراجعه ساخته نشد. ولی فرمِ
+       **زیرپرونده** (`scope='record'`: نظرسنجی، فرمِ تکمیلی) عمداً مراجعه
+       نمی‌سازد — قاعدهٔ خودِ مخزن در پنج جا `makesVisit = scope !== 'record'`
+       است. بدونِ این استثنا هر پاسخِ **سالمِ** زیرپرونده یک هشدارِ دروغین در
+       نمای استثنای مدیر می‌شد، و نمای استثنا معیارِ تصمیم است: اگر کسی به
+       «۴۰ تأییدِ نیمه‌کاره» اعتماد کند و «درستشان کن» بزند، دادهٔ سالم را خراب
+       می‌کند. (گزارشِ لِینِ الف، ۱۴۰۵/۰۶/۲۶.)
+       ⚠️ `form: null` (فرمِ حذف‌شده) عمداً **می‌ماند**: همان‌جا هم پیش‌فرضِ
+       `makesVisit` روشن است (`intake.service.ts:1609`). */
+    const halfWhere = {
+      status: 'approved',
+      visitId: null,
+      OR: [{ form: null }, { form: { scope: { not: 'record' } } }],
+    };
 
     const [unownedCount, unowned, stuckCount, stuck, halfCount, half] = await Promise.all([
       this.prisma.workItem.count({ where: unownedWhere }),
