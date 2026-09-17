@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth.jsx';
-import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Truck, Users, Wave , Arrive } from '../ui/icons.jsx';
+import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Truck, Users, Wave , Arrive, Pathway } from '../ui/icons.jsx';
 
 /**
  * کاتالوگِ ابزارها — **تنها** جای تعریفِ کاشی‌ها.
@@ -39,6 +39,9 @@ export const TOOLS = [
   { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
   /* میزِ پذیرش — پایین‌ترین سطحِ کاری، چون منشی بیمار را می‌پذیرد. */
   { key: 'frontdesk', label: 'میزِ پذیرش', icon: Arrive, tint: 'cyan', ready: true, min: 2, to: '/app/frontdesk' },
+  /* نامِ کاشی = عنوانِ صفحه (قانون ۲۴). «مسیرِ درمان» نه «الگوها»: کاربر
+     دنبالِ مسیرِ بیمار می‌گردد، نه دنبالِ ابزارِ ساختِ الگو. */
+  { key: 'pathway', label: 'مسیرِ درمان', icon: Pathway, tint: 'violet', ready: true, min: 2, to: '/app/pathways' },
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
   /* برنامهٔ کاری — `docs/BOOKING.md`. کنارِ تقویم می‌نشیند چون هم‌خانواده‌اند:
      یکی می‌گوید چه شد، آن یکی می‌گوید چه وقتی می‌شود. */
