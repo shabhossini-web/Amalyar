@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -88,5 +88,25 @@ export class SummaryController {
   @Post('reminders/sweep')
   sweep() {
     return this.reminders.sweep();
+  }
+
+  /**
+   * اقدامِ تک‌ردیفی (W0.7/U10) — تا امروز تنها اهرم «sweepِ همه» بود.
+   *
+   * ⚠️ سطحش عمداً **سوپرادمین نیست** (برخلافِ sweep): sweep کلِ صف را تکان
+   * می‌دهد، ولی «این یکی را دوباره بفرست» کارِ روزمرهٔ همان کسی است که دفتر را
+   * می‌بیند. گاردِ واقعی در سرویس است: پیامِ **فرستاده‌شده** نه دوباره می‌رود
+   * نه لغو می‌شود.
+   */
+  @RequirePermissions('patients.write')
+  @Post('reminders/:id/retry')
+  retryOne(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.reminders.retry(id, user);
+  }
+
+  @RequirePermissions('patients.write')
+  @Post('reminders/:id/cancel')
+  cancelOne(@Param('id', ParseIntPipe) id: number, @Body() dto: any, @CurrentUser() user: any) {
+    return this.reminders.cancel(id, user, typeof dto?.reason === 'string' ? dto.reason : undefined);
   }
 }

@@ -4,9 +4,12 @@ status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-17
 paths:
-  - src/app/OrderPublic.jsx
-  - src/app/orders.css
-  - scripts/e2e/w0-5-order-upload-ui.mjs
+  - src/app/Reminders.jsx
+  - src/app/reminders.css
+  - server/src/patients/reminders.service.ts
+  - server/src/patients/summary.controller.ts
+  - scripts/e2e/w0-7-reminder-actions.mjs
+  - scripts/e2e/w0-7-reminder-actions-ui.mjs
   - docs/plan/lanes/claude-fable-b.md
 note: >-
   لِینِ ب **لِینِ الف را هم برداشت** — مالک گفت `gpt` دو روز نیست. کلیمِ `gpt` آزاد بود.
@@ -14,8 +17,8 @@ note: >-
   **W1.9** (#53) · **W0.4 + W0.3** (#55).
   **لِینِ الف تمام شد** — W1.1 (#48) · W1.7 (#49) · W1.3 (#51) · W1.8 (#52) ·
   W1.9 (#53) · W0.4+W0.3 (#55) · W0.8 (#56) · W1.10 (#57).
-  برگشتم به لِینِ خودم: الان **W0.5** (آپلودِ فایلِ پاسخ روی `/o` + اندازهٔ دکمه)،
-  بعدش **W0.7**.
+  برگشتم به لِینِ خودم: **W0.5** لند شد (#58)، الان **W0.7** (اقدامِ تک‌ردیفیِ
+  یادآوری) — **آخرین ردیفِ هر دو لِین**.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
