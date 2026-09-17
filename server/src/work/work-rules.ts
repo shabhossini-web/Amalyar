@@ -72,6 +72,25 @@ function refOf(e: DomainEventLike): { refType: string; refId: number } | null {
   return null;
 }
 
+/**
+ * برچسبِ فارسیِ **مالکِ** کار — کلیدها دقیقاً همان‌هایی‌اند که `RULES` پایین
+ * `ownerRole` می‌دهد.
+ *
+ * ⚠️ چرا این‌جا و نه در کلاینت: نسخهٔ کلاینتی‌اش `admin` را نداشت (که همین فایل
+ * صادرش می‌کند) و در عوض سه نقشِ هرگز-صادرنشده داشت — یعنی رابطِ فارسی کلیدِ
+ * خامِ `admin` را چاپ می‌کرد. برچسب کنارِ جایی می‌ماند که کلید ساخته می‌شود.
+ *
+ * ⚠️ و چرا `JOB_ROLES` کافی نیست: آن مجموعهٔ نقشِ **کارکنان** است و نه `admin`
+ * دارد نه `patient` — دو مالکی که لایهٔ کار واقعاً می‌سازد.
+ */
+export const OWNER_ROLE_FA: Record<string, string> = {
+  admin: 'مدیر',
+  doctor: 'پزشک',
+  secretary: 'منشی',
+  technician: 'کارشناس',
+  patient: 'خودِ بیمار',
+};
+
 const key = (type: string, ref: { refType: string; refId: number }) => `${type}:${ref.refType}:${ref.refId}`;
 
 function base(e: DomainEventLike, type: string, ref: { refType: string; refId: number }): Omit<WorkUpsert, 'title'> {

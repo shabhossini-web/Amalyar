@@ -28,7 +28,7 @@
 /* هشدارِ حساسیت — باید از همه‌چیز بیشتر به چشم بیاید */
 .rc-alert {
   max-width: 900px; margin: 0 auto 12px; padding: 11px 15px; border-radius: 12px;
-  font-size: 13px; font-weight: 800; color: #fecaca;
+  font-size: 13px; font-weight: 800; color: var(--red-text);
   background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .45);
 }
 
@@ -309,4 +309,173 @@
 .rc-refsum-ghost {
   padding: 10px 16px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
   background: none; border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 12px;
+}
+
+/* ══════════════ پروندهٔ زنده (W3.1، §۴.۳) ══════════════
+   ⚠️ هر لایهٔ کم‌آلفا با `--veil-rgb` / `--surface-rgb` نوشته می‌شود (قانون ۲۳):
+   `rgba(255,255,255,.05)` در تمِ روشن نامرئی است و نگهبانِ تم هم ردش می‌کند. */
+
+.rc-id,
+.rc-actions,
+.rc-stage,
+.rc-next,
+.rc-tl { max-width: 900px; margin-inline: auto; }
+
+/* ── کارتِ هویت: فقط‌خواندنی، ویرایش یک اقدام است ── */
+.rc-id {
+  display: flex; flex-wrap: wrap; gap: 7px 10px; margin-block: 0 12px;
+}
+.rc-id > div {
+  display: flex; align-items: baseline; gap: 6px; padding: 6px 11px; border-radius: 10px;
+  background: rgba(var(--surface-rgb), .45); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+}
+.rc-id dt { font-size: 11px; color: var(--text3); }
+.rc-id dd { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--text1); }
+
+/* ── اقدام‌های همیشه‌دردسترس ── */
+.rc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.rc-act {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 13px;
+  border-radius: 10px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  color: var(--text1); text-decoration: none;
+  background: rgba(var(--surface-rgb), .55); border: 1px solid rgba(var(--brand-soft-rgb), .28);
+  transition: border-color .15s, background .15s;
+}
+.rc-act:hover:not(:disabled) { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .16); }
+.rc-act:disabled { opacity: .55; cursor: default; }
+/* ⚠️ مرکّبِ دکمهٔ گرادیانِ برند **سفید** است، در هر دو تم — همان چیزی که
+   `.wk-btn.primary`، `.df-save`، `.df-add` و بقیه می‌زنند و `index.css` هم
+   صریح مجازش کرده. `--ink-bright` مرکّبِ پُرکنندهٔ **روشن** (کهربا/سایان) است،
+   نه گرادیانِ تیرهٔ برند؛ گذاشتنش این‌جا یعنی متنِ تیره روی بنفشِ تیره. */
+.rc-act.is-main {
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent;
+}
+.rc-act:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ── نوارِ «الان کجاییم» ── */
+.rc-stage {
+  padding: 13px 15px; border-radius: 14px; margin-bottom: 12px;
+  background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--brand-soft-rgb), .24);
+}
+.rc-stage-now { margin: 0 0 11px; font-size: 13px; color: var(--text1); }
+.rc-stage-now b { color: var(--brand-text); font-weight: 800; }
+.rc-stage-now i { font-style: normal; color: var(--text2); }
+
+.rc-steps { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; }
+.rc-step { display: flex; align-items: flex-start; gap: 7px; flex: 1 1 130px; min-width: 130px; }
+.rc-step-dot {
+  flex: none; width: 17px; height: 17px; margin-top: 1px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-bright); background: rgba(var(--veil-rgb), .1);
+  border: 1.5px solid rgba(var(--veil-rgb), .25);
+}
+.rc-step-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rc-step-txt b { font-size: 12.5px; font-weight: 800; color: var(--text2); }
+.rc-step-txt i { font-style: normal; font-size: 11px; color: var(--text3); }
+.rc-step-txt time { font-size: 10.5px; color: var(--text3); }
+
+.rc-step.is-done .rc-step-dot { background: var(--green); border-color: var(--green); }
+.rc-step.is-done .rc-step-txt b { color: var(--green-text); }
+/* گامِ جاری تنها نقطهٔ روشنِ نوار است — اگر چند گام روشن باشند، نوار دیگر به
+   «الان کجاییم» جواب نمی‌دهد. */
+.rc-step.is-current .rc-step-dot { background: var(--brand-2); border-color: var(--brand-2); box-shadow: 0 0 0 4px rgba(var(--brand-2-rgb), .22); }
+.rc-step.is-current .rc-step-txt b { color: var(--text1); }
+.rc-step.is-current .rc-step-txt i { color: var(--amber-text); }
+/* ⚠️ گامِ ردشده محو می‌شود ولی **حذف نمی‌شود**: شکلِ نوار باید برای همهٔ
+   بیمارها یکی بماند، وگرنه مقایسه با یک نگاه ممکن نیست. */
+.rc-step.is-skipped { opacity: .42; }
+
+/* ── «چه مانده» ── */
+.rc-next { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; margin-bottom: 12px; }
+.rc-next-main {
+  padding: 13px 15px; border-radius: 14px;
+  background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-2-rgb), .34);
+}
+.rc-next-main.is-late { background: rgba(239, 68, 68, .12); border-color: rgba(248, 113, 113, .45); }
+.rc-next-main h3 {
+  display: flex; align-items: center; gap: 6px; margin: 0 0 7px;
+  font-size: 11px; font-weight: 800; letter-spacing: .02em; color: var(--text3);
+}
+.rc-next-title { margin: 0 0 6px; font-size: 14px; font-weight: 800; color: var(--text1); }
+.rc-next-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 0; font-size: 11.5px; color: var(--text3); }
+
+/* ⚠️ `WorkRow` قابِ خودش را دارد (`work.css`)؛ داخلِ کارتِ «کارِ بعدی» می‌شود
+   کارت-در-کارت و چشم دو مرز می‌بیند برای یک چیز. قاب این‌جا برداشته می‌شود،
+   نه در `work.css` — آن‌جا زنگِ اعلان و «کارهای من» به همان قاب نیاز دارند. */
+.rc-next-main .wk-list { margin: 0; padding: 0; list-style: none; }
+.rc-next-main .wk-row { background: none; border: none; box-shadow: none; padding: 0; }
+/* نامِ بیمار داخلِ **پروندهٔ خودِ همان بیمار** فقط تکرار است. */
+.rc-next-main .wk-patient { display: none; }
+.rc-next-more { color: var(--cyan); text-decoration: none; }
+.rc-next-more:hover { text-decoration: underline; }
+.rc-next-block {
+  display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--amber-text);
+}
+
+.rc-next-side { display: flex; flex-direction: column; gap: 8px; }
+.rc-chip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px;
+  padding: 9px 12px; border-radius: 12px; font: inherit; font-size: 12px; text-align: start;
+  color: var(--text2); background: rgba(var(--surface-rgb), .5);
+  border: 1px solid rgba(var(--brand-soft-rgb), .24);
+}
+.rc-chip b { color: var(--text1); font-weight: 800; }
+.rc-chip i { flex-basis: 100%; font-style: normal; font-size: 11px; color: var(--text3); }
+.rc-chip.is-warn { border-color: rgba(var(--brand-soft-rgb), .24); color: var(--amber-text); }
+.rc-chip.is-warn b { color: var(--amber-text); }
+.rc-chip.is-money { cursor: pointer; }
+.rc-chip.is-money:hover { border-color: var(--brand-2); }
+.rc-chip:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ── خطِ زمان ── */
+.rc-tl { margin-bottom: 16px; }
+.rc-tl > h3 { margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .02em; color: var(--text3); }
+.rc-tl ol { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.rc-tl-row > a,
+.rc-tl-row > button,
+.rc-tl-row > div {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 11px;
+  font: inherit; text-align: start; text-decoration: none; color: inherit;
+  background: rgba(var(--surface-rgb), .42); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+}
+.rc-tl-row.is-link > a,
+.rc-tl-row.is-link > button { cursor: pointer; transition: border-color .15s, background .15s; }
+.rc-tl-row.is-link > a:hover,
+.rc-tl-row.is-link > button:hover { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .14); }
+.rc-tl-row.is-link > a:focus-visible,
+.rc-tl-row.is-link > button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+.rc-tl-ico {
+  flex: none; width: 26px; height: 26px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .26);
+}
+.rc-tl-ico[style*="--k"] { color: rgb(var(--k)); background: rgba(var(--k), .14); border-color: rgba(var(--k), .34); }
+.rc-tl-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.rc-tl-body b { font-size: 12.5px; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; }
+.rc-tl-body i { font-style: normal; font-size: 11px; color: var(--text3); overflow-wrap: anywhere; }
+.rc-tl-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.rc-tl-side time { font-size: 10.5px; color: var(--text3); }
+.rc-tl-state { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--text2); }
+.rc-tl-state.is-done { color: var(--green-text); }
+.rc-tl-state.is-answered,
+.rc-tl-state.is-pending,
+.rc-tl-state.is-sent { color: var(--amber-text); }
+.rc-tl-state.is-cancelled { color: var(--text3); }
+
+.rc-tl-more {
+  margin-top: 7px; height: 32px; width: 100%; border-radius: 10px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--text2);
+  background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
+}
+.rc-tl-more:hover { color: var(--text1); border-color: var(--brand-2); }
+.rc-tl-cut { margin: 6px 0 0; font-size: 11px; color: var(--text3); }
+
+@media (max-width: 720px) {
+  .rc-next { grid-template-columns: 1fr; }
+  .rc-step { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rc-act, .rc-tl-row.is-link > a, .rc-tl-row.is-link > button { transition: none; }
 }

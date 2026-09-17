@@ -34,7 +34,7 @@
 .td-chips li.td-link a { display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 99px; color: inherit; text-decoration: none; }
 .td-chips li.td-link a:hover, .td-chips li.td-link a:focus-visible { color: var(--text1); outline: none; }
 .td-chips li.td-link a b { color: var(--brand-2); }
-.td-err { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: #fecaca; background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.4); }
+.td-err { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: var(--red-text); background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.4); }
 
 .td-sec { display: flex; flex-direction: column; gap: 10px; }
 .td-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
