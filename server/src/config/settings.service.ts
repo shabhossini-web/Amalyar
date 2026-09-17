@@ -196,6 +196,7 @@ export class SettingsService {
       summaryText: String(get('sms_summary_text')),
       formSendText: String(get('sms_form_send_text')),
       followUpText: String(get('sms_follow_up_text')),
+      careUnconfirmedText: String(get('sms_care_unconfirmed_text')),
     };
   }
 

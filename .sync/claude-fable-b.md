@@ -4,16 +4,17 @@ status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-17
 paths:
-  - server/src/patients/intake.service.ts
-  - server/src/patients/intake.controller.ts
-  - src/app/Crm.jsx
+  - server/src/patients/reminders.service.ts
+  - server/src/config/settings-registry.ts
+  - server/src/config/settings.service.ts
   - docs/plan/lanes/claude-fable-b.md
 note: >-
   لِینِ ب **لِینِ الف را هم برداشت** — مالک گفت `gpt` دو روز نیست و از جایی که رسیده
-  ادامه دهم. کلیمِ `gpt` آزاد بود (`status: idle`, `paths: []`) پس هم‌پوشانی نیست.
-  الان: **W1.1** (تطبیقِ پیگیری با followUpVisitId + گزارشِ per-موعد + اعلامِ سقف — D01).
-  ترتیبِ تابلوی الف بعدش: W1.7 · W1.3 · W1.8 · W1.9 · W0.3 · W0.4 · W0.8 · W1.10.
-  W1.8/W0.8/W1.9 مسدودکنندهٔ خودِ لِینِ ب هم هستند، پس با رسیدن به آن‌ها دو لِین باز می‌شود.
+  ادامه دهم. کلیمِ `gpt` آزاد بود (`status: idle`, `paths: []`).
+  **W1.1 لند شد** (PR #48، `3bc0b1e`). الان: **W1.7** (دو قالبِ مراقبت برای
+  ثبت‌شده/ثبت‌نشده — D07 و `DECISIONS.md` #۱).
+  ترتیبِ بعدیِ تابلوی الف: W1.3 · W1.8 · W1.9 · W0.3 · W0.4 · W0.8 · W1.10.
+  W1.8/W0.8/W1.9 مسدودکنندهٔ خودِ لِینِ ب هم هستند.
   بسته‌های لِینِ ب همه لند شده‌اند: W0.1/W0.2 (#15) · W0.6 (#16) · W3.5 (#19) · W3.6 (#24) · W3.7 (#31) · W3.4 بخشِ آزاد (#36).
 <!-- claim:end -->
 

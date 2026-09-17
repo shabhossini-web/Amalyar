@@ -15,7 +15,7 @@
 | ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | ✅ | `agent/w1-5-appointment-visit-link` | 508cb4b | PR #26؛ security-ci، ۲۶ سناریو و ۱۷ رگرسیون سبز |
 | ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ✅ | `agent/w1-4-approve-atomic` | a88a7a4 | PR #41؛ security-ci، ۸۳ سناریو و ۳۳ رگرسیون سبز |
 | ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D01 · تطبیق از `data.followUpVisitId` (نه `patientId + createdAt`) · موعدِ نرسیده جدا شمرده می‌شود (`waiting`) · `capped`/`total`/`limit` در خروجی · e2e: `scripts/e2e/w1-1-unfollowed-local.mjs` (۲۰/۲۰، دو رگرسیونِ عمدی قرمزش کرد) |
-| ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ⬜ | `agent/w1-7-postop-gate` | | D07 · `DECISIONS.md` #۱ |
+| ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D07 · `DECISIONS.md` #۱ · پوششِ متن با تنظیمِ تازهٔ `sms_care_unconfirmed_text` (خالی = خاموش) · فقط `post_op_care`/`follow_up`، نه پیام‌های پیش از عمل · e2e: `scripts/e2e/w1-7-postop-local.mjs` (۱۷/۱۷، دو رگرسیونِ عمدی قرمزش کرد) |
 | ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ⬜ | `agent/w1-3-approve-path` | | D03a |
 | ۷ | W1.8 `POST …/draft` (سرور) — نیمهٔ UI با لِینِ ب | ⬜ | `agent/w1-8-intake-draft` | | D09 · `CONTRACTS.md` §۶ |
 | ۸ | W1.9 `dedupeKey` همهٔ kindها + retry/backoff + پیامکِ per-tenant | ⬜ | `agent/w1-9-reminder-idempotency` | | N4, A3 · `DECISIONS.md` #۴ |
@@ -84,3 +84,27 @@
   `verify-theme-tokens` ندیده بودشان چون فهرستِ هگزهایش بسته است.
   اسکرین‌شاتِ هر دو تم: `docs/plan/shots/w1-1-crm-{light,dark}.png`.
 - **باقیِ لِین دست‌نخورده:** W1.7 · W1.3 · W1.8 · W1.9 · W0.3 · W0.4 · W0.8 · W1.10.
+
+## تحویلِ W1.7 — انجام‌شده توسطِ لِینِ ب (۱۴۰۵/۰۶/۲۷)
+
+- **ریشه (D07):** `post_op_care` و `follow_up` زیرِ شرطِ
+  `kind==='surgery' && opDate && opStatus !== 'cancelled'` کاشته می‌شوند، یعنی برای
+  عملی که هنوز انجام نشده هم. `opStatus` تا وقتی کسی **دستی** ثبتش نکند `pending`
+  می‌ماند و موعدِ این دو پیام بعد از تاریخِ عمل است — پس بیمارِ موکول‌شده دستورِ
+  «بعد از عمل» می‌گرفت.
+- **پیش‌فرضِ سند اجرا نشد.** سند می‌گفت «عملِ pending با تاریخِ گذشته پیامِ پس از عمل
+  نکارد»؛ ولی `DECISIONS.md` #۱ (تصمیمِ مالک) این را رد کرده: پیام برود، متنش دوشاخه
+  باشد. نفرستادن، بیماری را که عملش انجام شده و فقط کسی وضعیت را ثبت نکرده،
+  **بی‌دستور** می‌گذارد. تصمیمِ مالک اجرا شد، نه متنِ تابلو.
+- **تنظیمِ تازه:** `sms_care_unconfirmed_text` با جای‌گیرِ `{care}`. یک ردیف در
+  `settings-registry.ts` — نه migration، نه تغییرِ UI (صفحه از همان فهرست ساخته
+  می‌شود). **کادرِ خالی = متنِ عادی**، برای کلینیکی که این هشدار را نمی‌خواهد.
+- **ارتقا خودکار است.** متن هنگامِ **کاشت** تعیین می‌شود (چون `sendReminders` فقط
+  `row.text` را می‌فرستد)، ولی `setStatus` خودش `syncNextVisit` را صدا می‌زند — پس
+  لحظه‌ای که جراح «انجام شد» می‌زند، موعدهای **نرفته** لغو و با متنِ عادی دوباره
+  کاشته می‌شوند. پیامِ **رفته** دست نمی‌خورد.
+- **آنچه از قبل درست بود و حالا قفل شد:** لغو موعدهای مراقبت/پیگیری را می‌بندد ·
+  تعویق موعدِ قبلی را `cancelled` می‌کند نه حذف (تاریخچه) · پیام‌های **پیش** از عمل
+  پوشش نمی‌گیرند · کارِ `confirm_surgery_done` سرِ جایش است. این چهارتا کدِ تازه
+  نخواستند، ولی حالا سنجه دارند تا بی‌صدا نشکنند.
+- **باقیِ لِین:** W1.3 · W1.8 · W1.9 · W0.3 · W0.4 · W0.8 · W1.10.
