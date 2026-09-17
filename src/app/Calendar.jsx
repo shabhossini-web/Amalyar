@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
+import { useTerms } from './config.jsx';
+import { FLOW } from '../lib/terms.js';
 import './calendar.css';
 import { ChevronEnd, Clock } from '../ui/icons.jsx';
 
@@ -18,6 +20,10 @@ const KIND_TAG = { surgery: '', clinic: 'ویزیت', followup: 'پیگیری', 
  * می‌کند و همان‌جاست که کاربر به فهرست برمی‌گردد.
  */
 export default function Calendar() {
+  /* ⚠️ «ویزیت» واژهٔ حوزهٔ **مطب** است، نه واژهٔ عمومی. تا W3.7 این صفحه آن را
+     هاردکد داشت، پس نصبِ نورومانیتورینگ («مراجعه») و تجهیزات («عمل») هم روی
+     دکمهٔ میزِ پذیرش «ویزیت» می‌دید (یافتهٔ U15). */
+  const t = useTerms();
   const navigate = useNavigate();
   const [busyAppt, setBusyAppt] = useState(0);
   const [err2, setErr2] = useState('');
@@ -86,7 +92,7 @@ export default function Calendar() {
                 {cell.counts.cancelled > 0 && <i className="c" title="لغو">{faNum(cell.counts.cancelled)}</i>}
               </div>
               {cell.counts.appointments > 0 && (
-                <div className="cal-appt-dot" title="نوبت‌ها"><Clock width="9" height="9" /> {faNum(cell.counts.appointments)}</div>
+                <div className="cal-appt-dot" title={FLOW.appointments}><Clock width="9" height="9" /> {faNum(cell.counts.appointments)}</div>
               )}
               <div className="cal-names">
                 {cell.visits.slice(0, 2).map((v) => (
@@ -110,6 +116,9 @@ export default function Calendar() {
             نرم‌افزارهای مطب دارند، ولی دکمه‌ها از ماشینِ وضعیتِ سرور می‌آیند. */}
         {(picked?.appointments ?? []).length > 0 && (
           <div className="cal-appts">
+            {/* ⚠️ عمداً رشتهٔ کامل، نه `{FLOW.appointments}ی …`: چسباندنِ پسوند به واژهٔ
+                واژه‌نامه اگر روزی «نوبت‌ها» به «نوبت» عوض شود «نوبتی این روز»
+                می‌سازد. واژه‌نامه برای **یکی‌بودنِ مفهوم** است، نه صرفِ فارسی. */}
             <small className="cal-appts-title">نوبت‌های این روز</small>
             {picked.appointments.map((a) => (
               <article key={`ap${a.id}`} className={`cal-appt st-${a.status}`}>
@@ -129,7 +138,7 @@ export default function Calendar() {
                   {a.status !== 'cancelled' && a.status !== 'noshow' && (
                     <button type="button" className="cal-appt-go" disabled={busyAppt === a.id}
                             onClick={() => startVisit(a)}>
-                      {a.visitId ? 'بازکردنِ ویزیت' : 'شروعِ ویزیت'}
+                      {a.visitId ? t.visitOpen : t.visitStart}
                     </button>
                   )}
                   {a.next.filter((s) => s !== 'done').map((s) => (

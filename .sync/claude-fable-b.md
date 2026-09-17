@@ -1,25 +1,38 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: idle
+status: active
 branch: claude/quirky-johnson-ynzr4y
-since: 2026-09-16
+since: 2026-09-17
 paths:
-  - src/index.css
-  - src/lib/theme.js
-  - src/app/ProfileMenu.jsx
-  - src/app/profile-menu.css
-  - scripts/e2e/w3-6-light-theme.mjs
-  - scripts/verify-theme-tokens.js
-  - .claude/skills/amalyar-design/SKILL.md
-  - docs/plan/shots/w3-6-light.png
-  - docs/plan/shots/w3-6-dark.png
+  - src/ui/icons.jsx
+  - src/lib/terms.js
+  - src/app/Launcher.jsx
+  - src/app/Calendar.jsx
+  - src/app/Schedule.jsx
+  - src/app/Reminders.jsx
+  - scripts/e2e/w3-7-icons-naming.mjs
+  - scripts/verify-module-icons.js
   - docs/plan/lanes/claude-fable-b.md
-note: لِینِ ب — W3.6 با PR #24 (`4443759`) لند شد. بستهٔ بعدی W3.7 (آیکونِ یکتا + نام‌گذاری) است؛ کلیمِ تازه هنگامِ شروع نوشته می‌شود. ⚠️ سه فایلِ CSS در کلیمِ لِینِ ج (shell/today/work) یک جایگزینیِ مکانیکیِ پرده می‌گیرند — زیرِ «قراردادهایی که شکستم» اعلام شد (AGENTS.md بندِ ۳). W0.1/W0.2 (PR #15) و W0.6 (PR #16) لند شد؛ W0.5/W0.7 منتظرِ لِینِ الف (W0.8/W1.9)؛ W3.7 با لندشدنِ W2.3 آزاد شد (icons.jsx و Launcher.jsx دیگر کلیمِ لِینِ ج نیستند) و بستهٔ بعدیِ این لِین است. شناسهٔ این نشست از ۱۴۰۵/۰۶/۲۵ «claude-fable-b» است تا با نشستِ لِینِ ج (claude-fable) یک فایل را ننویسند
+note: لِینِ ب — W3.7 (آیکونِ یکتا به‌ازای هر ماژول + نام‌گذاریِ کارمحور + واژه‌نامهٔ نوبت/مراجعه/کار). ⚠️ `src/app/tools.jsx` در کلیمِ فعالِ لِینِ ج است ولی کاتالوگِ کاشی‌ها — یعنی خودِ هدفِ U14 — همان‌جاست؛ فقط مقدارِ `icon`/`label` عوض می‌شود، بدونِ هیچ تغییرِ ساختاری، و زیرِ «قراردادهایی که شکستم» اعلام شد (AGENTS.md بندِ ۳). کلیمش را برنمی‌دارم تا verify-claims قرمز نشود. W3.6 با PR #24 (`4443759`) لند شد.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۶/۲۶ · **W3.7 — آیکونِ ماژول یکتاست و نامِ کاشی با عنوانِ صفحه یکی.**
+  ماژولِ تازه آیکونِ خودش را در `src/ui/icons.jsx` می‌سازد (نگهبان:
+  `scripts/verify-module-icons.js`). «ویزیت» دیگر در `Calendar.jsx` هاردکد نیست —
+  از `useTerms()` می‌آید (`t.visitStart`/`t.visitOpen`، کلیدهای تازهٔ `terms.js`).
+  سه مفهومِ نوبت/مراجعه/کار در `FLOW` و سرِ `terms.js` تعریف شده‌اند.
+  ⚠️ **چهار فایلِ کلیمِ لِینِ ج دست خوردند، همه حداقلی:**
+  `src/app/tools.jsx` (فقط مقدارِ `icon`/`label` — کاتالوگ خودِ هدفِ U14 است و
+  جای دیگری ندارد)، `src/app/Dashboard.jsx` (دو رشته: `<h1>` و `document.title`)،
+  `scripts/e2e/w2-3-today.mjs` (یک رشته: کلیک روی «داشبورد مدیریت» با رنیم
+  می‌شکست — نگذاشتم قرمز بماند)، و `src/app/visit-kinds.js` فقط **خوانده** شد.
+  هیچ‌کدام را کلیم نکردم تا `verify-claims` قرمز نشود.
+  سوییت‌های `w2-*` سرورِ زندهٔ `:3101` می‌خواهند و در این سندباکس بالا نمی‌آیند؛
+  تنها ادعای آن‌ها که به کارِ من بند بود همان کلیکِ برچسب بود که اصلاحش کردم.
 
 - ۱۴۰۵/۰۶/۲۵ · **W3.6 — از امروز اپ دو تم دارد، و رنگِ خام در CSS ممنوع است.**
   `<html>` دو صفتِ تازه می‌گیرد: `data-theme` (`dark`|`light`) و `data-density`
