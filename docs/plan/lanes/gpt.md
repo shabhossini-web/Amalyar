@@ -9,7 +9,7 @@
 | ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | ✅ | `agent/w1-5-appointment-visit-link` | 508cb4b | PR #26؛ security-ci، ۲۶ سناریو و ۱۷ رگرسیون سبز |
 | ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ⬜ | `agent/w1-4-approve-atomic` | | D04 |
 | ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ⬜ | `agent/w1-1-unfollowed-match` | | D01 |
-| ۵ | W1.7 گیتِ `done` برای `post_op_care/follow_up` + بازتنظیم با تاریخچه | ⬜ | `agent/w1-7-postop-gate` | | D07 · `DECISIONS.md` #۱ |
+| ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ⬜ | `agent/w1-7-postop-gate` | | D07 · `DECISIONS.md` #۱ |
 | ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ⬜ | `agent/w1-3-approve-path` | | D03a |
 | ۷ | W1.8 `POST …/draft` (سرور) — نیمهٔ UI با لِینِ ب | ⬜ | `agent/w1-8-intake-draft` | | D09 · `CONTRACTS.md` §۶ |
 | ۸ | W1.9 `dedupeKey` همهٔ kindها + retry/backoff + پیامکِ per-tenant | ⬜ | `agent/w1-9-reminder-idempotency` | | N4, A3 · `DECISIONS.md` #۴ |
@@ -17,7 +17,7 @@
 | ۱۰ | W0.4 رندرِ پاسخِ فرم‌های زیرپرونده با `answersOf.show()` (سرور + خواندن در `PatientRecord.jsx` فقط همان تابع) | ⬜ | `agent/w0-4-answer-render` | | D03b |
 | ۱۱ | W0.8 گاردِ وضعیتِ `publicAnswer` + endpointِ آپلودِ فایلِ پاسخ | ⬜ | `agent/w0-8-order-answer-guard` | | `CONTRACTS.md` §۴–۵ |
 | ۱۲ | W1.10 اسکریپتِ کشفِ دادهٔ ناقص + صفِ تطبیق | ⬜ | `agent/w1-10-repair-scan` | | |
-| ۱۳ | W1.2 پاسخِ سفارش ← Document + وضعیتِ بررسی + کارِ «بررسیِ نتیجه» | ⬜ | `agent/w1-2-order-review` | | **پس از W2.1** · `CONTRACTS.md` §۱, §۴ |
+| ۰ (اولویت جدید) | W1.2 پاسخِ سفارش ← Document + وضعیتِ بررسی + کارِ «بررسیِ نتیجه» | 🟡 | `agent/w1-2-order-review` | | **پس از W2.1** · `CONTRACTS.md` §۱, §۴ |
 
 ## سؤال از مالک
 - (خالی)
@@ -35,3 +35,9 @@
 - ✅ `agent/w2-2b-intake-events` · PR #29 · `6edbce1`: پنج emit باقی‌مانده مرج شد؛ تأیید خودکار هم approved می‌فرستد و رد ثبت‌نام cancelled نوبت را صادر می‌کند. ۱۸ سناریوی ref/outbox/processor + ۱۷ رگرسیون مالی + ۱۶ گردش‌کار سبز. W1.4 هنوز اتمیک‌سازی کامل approve و مصرف held.forVisitId را انجام می‌دهد.
 
 - تحویل به لِین ج (2026-09-17): PR #28 هنگام این بررسی mergeable_state=dirty داشت؛ لطفاً پیش از ادامه روی main تازه rebase شود. هیچ تغییری در شاخه یا فایل کلیم لِین ج نداده‌ام.
+
+## اولویت و تصمیم‌های جدید مالک — 2026-09-17
+- W1.2 پیش از W1.4؛ W3.1 لند شده و وضعیت‌های in_review/needs_action باز هستند.
+- پس از W3.3: بسته دلیل لغو مراجعه و نوبت؛ دلیل عمومی از فهرست بسته + یادداشت صرفاً داخلی؛ فقط پیام لغو تازه، ابطال یادآوری syncAppointment موجود است.
+- W1.7 مطابق تصمیم ۱ دوشاخه است، confirm_surgery_done حفظ می‌شود. بله سپس تلگرام، با multipart روی relay از روز اول.
+- استثنای scope=record در halfWhere توسط لِین ج بسته و پذیرفته شده است.

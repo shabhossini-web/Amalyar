@@ -2892,3 +2892,6 @@ jobs:
       # فرمِ عمومیِ بیمار یک‌بار بی‌صدا بی‌استایل شد (قانون ۲۱).
       - name: Verify every lazy chunk ships the CSS it uses
         run: node scripts/verify-css-chunks.js
+
+      - name: Verify atomic clinical order answers and review lifecycle (W1.2)
+        run: node scripts/e2e/w1-2-order-review-local.mjs

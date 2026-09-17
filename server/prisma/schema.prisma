@@ -1090,6 +1090,12 @@ model Document {
   @@index([visitId])
   @@index([sha256])
   @@map("documents")
+  /// Immutable order answer; links/files are referenced, never copied.
+  refType String? @map("ref_type")
+  refId Int? @map("ref_id")
+  contentText String? @map("content_text")
+  @@index([refType, refId])
+
 }
 
 /// قلمِ صورت‌حساب.
@@ -2448,6 +2454,10 @@ model LabOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("lab_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+
 }
 
 model ImagingOrder {
@@ -2473,6 +2483,10 @@ model ImagingOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("imaging_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+
 }
 
 model ConsultOrder {
@@ -2495,6 +2509,10 @@ model ConsultOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("consult_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+
 }
 
 model ReferralOrder {
@@ -2515,6 +2533,12 @@ model ReferralOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("referral_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  answerText String? @map("answer_text")
+  answerLink String? @map("answer_link")
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────

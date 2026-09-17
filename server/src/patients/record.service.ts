@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Readable } from 'node:stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
@@ -495,6 +496,7 @@ export class RecordService {
     });
     return rows.map((d) => ({
       id: d.id, patientId: d.patientId, visitId: d.visitId, category: d.category,
+      refType: d.refType, refId: d.refId, contentText: d.contentText,
       title: d.title, fileName: d.fileName, mimeType: d.mimeType, size: d.size,
       takenAt: d.takenAt, createdAt: d.createdAt,
       /// نوعِ محتوا برای کلاینت: عکس را inline نشان می‌دهد، بقیه را دانلود.
@@ -629,6 +631,7 @@ export class RecordService {
     await this.assertAccess(doc.patientId, user);
     // مدرکِ لینکی فایلی روی دیسک ندارد — کلاینت باید خودِ لینک را باز کند.
     if (doc.externalUrl) throw new BadRequestException('این مدرک لینکی است — خودِ لینک را باز کنید');
+    if (doc.contentText !== null) return { doc, stream: Readable.from([Buffer.from(doc.contentText)]) };
     if (!(await this.storage.exists(doc.sha256))) throw new NotFoundException('فایلِ این مدرک روی سرور نیست');
     return { doc, stream: this.storage.stream(doc.sha256) };
   }
