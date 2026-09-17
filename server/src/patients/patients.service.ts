@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
@@ -992,6 +993,14 @@ export class PatientsService {
   }
 
   async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
+    const create = await this.prepareVisitCreation(dto, user, opts);
+    const result = await this.prisma.$transaction(create);
+    await this.afterVisitCreation(result.id);
+    return result;
+  }
+
+  /** اعتبارسنجی بیرون از تراکنش؛ تمامِ نوشتن‌ها با همان txِ فراخواننده. */
+  async prepareVisitCreation(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
     const userId: number | undefined = user?.id;
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
@@ -1015,7 +1024,8 @@ export class PatientsService {
        تراکنش خوانده می‌شود؛ داخلِ tx فقط نوشتن. */
     const formFields = (await this.forms.forVisitKind(dto.kind || 'surgery'))?.fields ?? [];
     const extraIn = await this.forms.normalizeExtra(formFields, (dto as any).extra);
-    const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
+    const kinds = await this.forms.kindMap();
+    return async (tx: Prisma.TransactionClient) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
       if (patientId) {
@@ -1030,6 +1040,8 @@ export class PatientsService {
         patientId = r.patientId;
         patientStatus = r.patientStatus;
       }
+      // شمارهٔ مراجعه برای همین بیمار در مسیرهای هم‌زمان تکرار نشود.
+      await tx.$queryRaw`SELECT id FROM patients WHERE id = ${patientId} FOR UPDATE`;
       const refs = await this.resolveRefs(tx, dto);
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
       const seq = (max._max.seq ?? 0) + 1;
@@ -1088,18 +1100,32 @@ export class PatientsService {
           take: 1,
         });
       }
-      return { visit, patientStatus };
+      const result = { ...enrich(visit, kinds), patientStatus };
+      await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: visit.id, after: result }, tx);
+      return result;
+    };
+  }
+
+  /** فقط پس از commit؛ خطای تراکنش نباید یادآوری یا مراجعهٔ پست‌آپ بسازد. */
+  async afterVisitCreation(visitId: number) {
+    await this.reminders.syncNextVisit(visitId);
+    await this.syncPostOpVisit(visitId);
+  }
+
+  /** فقط ارجاعِ صریحِ فرزندِ یک والد با همین موعد؛ نام/موضوع ملاک نیست. */
+  async appointmentTarget(tx: Prisma.TransactionClient, patientId: number | null, date: Date) {
+    if (!patientId) return null;
+    const children = await tx.visit.findMany({
+      where: {
+        patientId, opStatus: { not: 'cancelled' },
+        followOf: { is: { patientId, nextVisitDate: date, opStatus: { not: 'cancelled' } } },
+      },
+      select: { id: true }, orderBy: { id: 'asc' }, take: 2,
     });
-    /* ⚠️ نگاشتِ نوع‌ها این‌جا هم لازم است، نه فقط در فهرست: داشبورد پاسخِ ثبت
-       را مستقیم به فهرستش اضافه می‌کند. بدونِ نگاشت، کارتِ تازه‌ساخته‌شده
-       **بی‌رنگ و بی‌عنوان** می‌نشست تا وقتی کاربر صفحه را تازه کند — و چون
-       بعد از تازه‌سازی درست می‌شد، کسی باور نمی‌کرد باگ است. */
-    const result = { ...enrich(v, await this.forms.kindMap()), patientStatus };
-    await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
-    /* یادآوریِ «ویزیتِ بعدی» — خطایش بلعیده می‌شود؛ ثبتِ مراجعه مقدم است. */
-    await this.reminders.syncNextVisit(v.id);
-    await this.syncPostOpVisit(v.id);
-    return result;
+    if (children.length > 1) {
+      throw new BadRequestException('برای این روز چند مراجعهٔ پیگیری وجود دارد؛ ابتدا موعد مراجعهٔ موردنظر را در پرونده مشخص کنید');
+    }
+    return children[0]?.id ?? null;
   }
 
   /**

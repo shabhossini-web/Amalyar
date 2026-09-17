@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { PatientsService } from './patients.service';
 import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
@@ -106,6 +107,7 @@ export class IntakeService {
     private portal: PortalService,
     private reminders: RemindersService,
     private settings: SettingsService,
+    private events: EventsService,
   ) {}
 
   private token() {
@@ -551,28 +553,33 @@ export class IntakeService {
       if (!free) throw new BadRequestException('این ساعت دیگر آزاد نیست — ساعتِ دیگری انتخاب کنید');
     }
 
-    const prev = await this.prisma.appointment.findUnique({ where: { submissionId: row.id } });
-    const data = {
-      patientId: row.patientId ?? null,
-      /* ⚠️ موضوع **حفظ** می‌شود اگر این درخواست چیزی نگوید. بیمار که فقط
-         ساعتش را جابه‌جا می‌کند، انتظار ندارد موضوعِ انتخابی‌اش پاک شود —
-         و اگر پاک می‌شد، مراجعهٔ ساخته‌شده بی‌موضوع می‌ماند بی‌آنکه کسی
-         بفهمد کجا گم شد. همان قرارِ ادغامِ `extra` در ویرایشِ مراجعه. */
-      topicId: dto.topicId ?? prev?.topicId ?? null,
-      date,
-      startMin: slotMode ? dto.startMin ?? null : null,
-      status: 'held',
-      submissionId: row.id,
-    };
     try {
-      /* یک ثبت‌نام یک نوبت دارد: تغییرِ انتخاب باید همان رکورد را جابه‌جا
-         کند، نه نوبتِ دومی بسازد که تا ابد جا اشغال می‌کند. */
-      const appt = prev
-        ? await this.prisma.appointment.update({ where: { id: prev.id }, data })
-        : await this.prisma.appointment.create({ data });
-      await this.audit.record({
-        actorId: null, action: 'appointment.hold', entityType: 'appointment', entityId: appt.id,
-        after: { date: dto.date, startMin: data.startMin, submissionId: row.id },
+      const appt = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM intake_submissions WHERE id = ${row.id} FOR UPDATE`;
+        const current = await tx.intakeSubmission.findUnique({ where: { id: row.id } });
+        if (!current || !['pending_fill', 'pending_payment'].includes(current.status)) {
+          throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+        }
+        const prev = await tx.appointment.findUnique({ where: { submissionId: row.id } });
+        if (prev?.visitId) throw new BadRequestException('ویزیتِ این نوبت شروع شده و زمانِ آن از فرمِ بیمار قابل تغییر نیست');
+        const data = {
+          patientId: current.patientId ?? null,
+          // جابه‌جاییِ روز، ارجاعِ هدف را هم دوباره تعیین می‌کند؛ ارجاعِ قبلی باقی نمی‌ماند.
+          forVisitId: await this.patients.appointmentTarget(tx, current.patientId, date),
+          topicId: dto.topicId ?? prev?.topicId ?? null,
+          date, startMin: slotMode ? dto.startMin ?? null : null,
+          status: 'held', submissionId: row.id,
+        };
+        const held = prev
+          ? await tx.appointment.update({ where: { id: prev.id }, data })
+          : await tx.appointment.create({ data });
+        await this.audit.record({
+          actorId: null, action: 'appointment.hold', entityType: 'appointment', entityId: held.id,
+          after: { date: dto.date, startMin: data.startMin, submissionId: row.id, forVisitId: held.forVisitId },
+        }, tx);
+        await this.events.emit({ type: 'appointment.held', appointmentId: held.id,
+          patientId: held.patientId, visitId: held.forVisitId, payload: { date } }, tx);
+        return held;
       });
       /* یادآوریِ «نوبتِ فردا» — همین‌جا که نوبت گرفته/جابه‌جا شد. */
       await this.reminders.syncAppointment(appt.id);

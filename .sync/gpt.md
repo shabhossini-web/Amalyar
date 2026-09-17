@@ -1,18 +1,20 @@
 <!-- claim:begin -->
 agent: gpt
 status: active
-branch: agent/w1-6-form-snapshot
-since: 2026-09-16
+branch: agent/w1-5-appointment-visit-link
+since: 2026-09-17
 paths:
+  - server/src/patients/appointments.service.ts
+  - server/src/patients/patients.service.ts
   - server/src/patients/forms.service.ts
   - server/src/patients/intake.service.ts
-  - server/src/patients/record.service.ts
+  - server/src/audit/audit.service.ts
   - server/prisma/schema.prisma
-  - server/prisma/migrations/20260916140000_form_snapshot/
-  - scripts/e2e/w1-6-form-snapshot.mjs
+  - server/prisma/migrations/20260916235900_appointment_for_visit/
+  - scripts/e2e/w1-5-appointment-visit-link.mjs
   - docs/plan/lanes/gpt.md
   - STATUS.md
-note: W1.6 — rebase روی f8da7bd انجام شد؛ ثبت وضعیت، اعتبارسنجی دوباره و آماده‌سازی PR #13 برای مرج خودکار.
+note: W1.6 در ccaa792 مرج شد؛ W1.5 اتصال نوبت به مراجعهٔ پیگیری، شروع تراکنشی و appointment.held.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
@@ -20,6 +22,10 @@ note: W1.6 — rebase روی f8da7bd انجام شد؛ ثبت وضعیت، اع�
 > صاحبش خودش می‌نویسد.
 
 ## قراردادهایی که شکستم
+
+- W1.5 / آزمون هم‌زمان: خواندن فرم در startVisit دو backfill موازی می‌سازد. forms.service.ts برای skipDuplicates در دو backfill کاتالوگ کلیم شد؛ تعریف موجود بازنویسی نمی‌شود.
+
+- W1.5: فیلد forVisitId و رابطهٔ معکوس طبق CONTRACTS §۳ در انتهای مدل‌ها اضافه می‌شود. AuditService.record پارامتر اختیاری tx می‌گیرد (استثنای محدود خارج از لِین، مسیر آزاد) تا audit و داده اتمیک باشند. prepareVisitCreation در PatientsService مسیر مشترک ساخت را برای تراکنش نوبت آماده می‌کند؛ قرارداد HTTP ساخت مراجعه عوض نمی‌شود. EventsService آخرین وابستگی IntakeService می‌شود؛ book آن را با tx صدا می‌زند.
 
 - 2026-09-16 · W1.6: طبق CONTRACTS §۷، schemaSnapshot و deletedAt به انتهای مدل‌های موجود افزوده می‌شوند (استثنای لازم نسبت به فقط انتهای فایل). used شامل submission اصلی و extraFormIds خواهد شد؛ کلید حذف‌شده قابل استفاده مجدد نیست. نسخهٔ کاری از GitHub API با تطبیق دقیق هش tree/commit همگام شد؛ git fetch مستقیم در این محیط احراز ندارد.
 
@@ -36,16 +42,18 @@ note: W1.6 — rebase روی f8da7bd انجام شد؛ ثبت وضعیت، اع�
   `main.jsx` سوار است؛ `sw.js` هم `CACHE` را به `v9` برد و دیگر صفحهٔ باز را
   خودکار ناوبری نمی‌کند.
 
-## وضعیت بستهٔ جاری — W1.6
+## وضعیت بستهٔ جاری — W1.5
 
-- شاخه: `agent/w1-6-form-snapshot` · PR #13؛ هنوز مرج نشده.
-- پیاده شد: snapshot در fill/approve، backfill پاسخ‌های قبلی، حذف نرم سؤال و حذف آن از فرم زنده، حفظ برچسب در پرونده و مراجعه، شمارش submission اصلی و extraFormIds، منع حذف فرم پاسخ‌دار (غیرفعال‌سازی)، حذف فرم در تراکنش Serializable.
-- آزمون: `scripts/e2e/w1-6-form-snapshot.mjs` — ۲۴ سناریو سبز روی HTTP واقعی Nest + Prisma + PostgreSQLِ PGlite محلی. در harness محلی فقط seed دایرکتوری ملی بیمارستان (نامرتبط با این بسته) غیرفعال بود؛ APIها و سرویس‌های فرم/پرونده mock نشدند. build هر دو سمت، شش نگهبان مرتبط security-ci و verify-claims سبز.
-- محدودیت: برچسب/تعریفی که پیش از این migration حذف سخت شده قابل بازسازی قطعی نیست. snapshotِ backfill بهترین تعریف موجود در زمان مهاجرت است. هم‌زمانی با PostgreSQL مستقل آزموده نشده است.
-- مانع قبلی رفع شد؛ بیلد هر دو سمت و هر ۲۴ سناریو پس از rebase روی f8da7bd نیز سبز شدند؛ PR #13 آمادهٔ خروج از draft است. W1.5 بستهٔ بعد است.
-- برای Opus: خروجی حذف فرم اکنون `submissions` دارد و `used` مجموع مراجعه/لینک/پاسخ است. متن FormBuilder «به‌دلیل N مراجعه» باید به «N استفادهٔ ثبت‌شده» تغییر کند؛ UI را این لِین تغییر نداده است.
+- شاخه: `agent/w1-5-appointment-visit-link`؛ پس از W1.6 / ccaa792 آغاز شد.
+- پیاده شد: `forVisitId` در walkIn/book، اتصال همان فرزند در startVisit با حفظ وضعیت/پاسخ‌ها، قفل ردیف نوبت، ساخت مشترک مراجعه و audit/outbox در همان تراکنش، اولویت clinic و منع fallback جراحی، رد پیگیری مبهم و مراجعهٔ بیمار دیگر، پاک‌کردن ارجاع قدیمی هنگام جابه‌جایی رزرو.
+- `appointment.held` در book و `appointment.started` در startVisit با همان appointmentIdِ CONTRACTS §۲ ثبت می‌شوند. آزمون پردازشگر ثابت کرد کار تأیید باز و سپس با همان ref بسته می‌شود.
+- آزمون: ۲۶ سناریوی W1.5 (HTTP واقعی Nest/Prisma، PGlite)، شامل دو درخواست هم‌زمان، rollback و retry؛ ۱۷ سناریوی موجود intake-finance-roles نیز سبز. build هر دو سمت سبز.
+- محدودیت آزمون: پایگاه محلی PGlite با یک اتصال Prisma است؛ رقابت چند اتصال مستقل PostgreSQL آزموده نشده. فقط برای سناریوی rollback، خطای outbox از طریق وابستگی EventsService تزریق شد؛ تمام queryها، قفل و تراکنش واقعی بودند. seed نامرتبط دایرکتوری بیمارستان در harness غیرفعال است.
+- قدم بعد پس از مرج: W1.4، همراه intake.submitted/approved/rejected/approve_failed و appointment.confirmed. order.reviewed/needs_action در W1.2 می‌مانند.
 
 ## اخیراً لند شد
+
+- 2026-09-16 · PR #13 · ccaa792 · W1.6؛ security-ci سبز، ۲۴ سناریو و بیلد هر دو سمت سبز. کلیم W1.6 آزاد و کلیم مستقل W1.5 فعال شد.
 
 - `cd812ad` · بازبینیِ ۱۸۱ گروهِ مالکیتِ بیمارستان + اتصال به دسته‌های تعرفه
 - `d0d19c7` · دایرکتوریِ بیمارستان‌های تهران + importِ جداشدهٔ هر tenant
