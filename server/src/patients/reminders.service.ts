@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { cancelSms, type CancelKind } from '../common/cancel-reasons';
 import { SmsService } from '../sms/sms.service';
@@ -21,6 +21,35 @@ import { sendReminders } from '../reminders/send-reminders';
  * ثابت است نه تنظیم؛ تنظیم‌شدنی‌کردنش وقتی ارزش دارد که اولین مشتری
  * واقعاً چیزِ دیگری بخواهد — تا آن روز، یک knob کمتر.
  */
+/** یادآوری‌هایی که `syncNextVisit` برنامه‌ریزی‌شان می‌کند — و فقط همین‌ها را هرس می‌کند. */
+const PLANNED_KINDS = ['next_visit', 'surgery', 'pre_op_care', 'post_op_care', 'follow_up'];
+
+/** روزِ موعد به `YYYY-MM-DD`ِ UTC — کلید نباید با ساعتِ ارسال عوض شود. */
+const dueDay = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * کلیدِ یکتای یک یادآوری — W1.9، قراردادِ §۸.
+ *
+ * `${kind}:${visit|appointment}:${روزِ موعد}:${۸ رقمِ اولِ sha256(متن)}`
+ *
+ * ⚠️ **چرا متن هم در کلید هست.** بدونِ آن، جابه‌جاییِ متنِ مراقبت یا تاریخِ
+ * عمل «همان یادآوری» به‌حساب می‌آمد و پیامِ **تازه** هرگز نمی‌رفت؛ بیمار
+ * دستورِ کهنه را داشت. با متن در کلید، پیامِ عوض‌شده کلیدِ تازه می‌گیرد و
+ * کاشته می‌شود، و پیامِ دست‌نخورده همان ردیفِ قبلی می‌ماند — چه `pending`
+ * باشد چه `sent`. همین دومی جای `sentSame`ِ دستی را می‌گیرد.
+ */
+export function reminderKey(
+  kind: string,
+  ref: { visitId?: number | null; appointmentId?: number | null },
+  dueAt: Date,
+  text: string,
+): string {
+  const scope = ref.visitId != null ? String(ref.visitId)
+    : ref.appointmentId != null ? `a${ref.appointmentId}`
+      : 'x';
+  return `${kind}:${scope}:${dueDay(dueAt)}:${createHash('sha256').update(text).digest('hex').slice(0, 8)}`;
+}
+
 @Injectable()
 export class RemindersService {
   private readonly log = new Logger('Reminders');
@@ -81,11 +110,44 @@ export class RemindersService {
       const cfg = await this.settings.sms();
       const hour = RemindersService.utcHour(cfg.reminderHour);
 
+      /**
+       * W1.9/§۸ — **برنامه‌ریزی، نه لغو-و-ساخت.**
+       *
+       * تا امروز هر بار که این تابع صدا زده می‌شد (هر ویرایشِ مراجعه، هر
+       * تغییرِ وضعیت) همهٔ یادآوری‌های `pending` لغو و از نو ساخته می‌شدند.
+       * سه عارضه داشت: شناسهٔ ردیف هر بار عوض می‌شد، دفترِ یادآوری‌ها پر از
+       * ردیفِ `cancelled`ِ بی‌معنی می‌شد، و برای اینکه پیامی که **قبلاً رفته**
+       * دوباره نرود باید با کوئریِ دستیِ `sentSame` متن را مقایسه می‌کردیم.
+       *
+       * حالا هر یادآوری کلیدِ یکتای خودش را دارد (`reminderKey`) و مسیر این است:
+       * ۱) برنامهٔ تازه ساخته می‌شود؛ ۲) هر موردش **upsert** می‌شود — ردیفِ
+       * موجود با همان کلید دست نمی‌خورد، چه `pending` باشد چه `sent`؛
+       * ۳) در پایان فقط ردیف‌هایی لغو می‌شوند که کلیدشان **در برنامهٔ تازه
+       * نیست**.
+       *
+       * پس پیامِ دست‌نخورده همان ردیفِ قبلی می‌ماند و پیامِ عوض‌شده (متن یا
+       * تاریخ) کلیدِ تازه می‌گیرد و کاشته می‌شود — همان رفتاری که `sentSame`
+       * دستی می‌ساخت، این بار از خودِ کلید.
+       */
+      const planned = new Set<string>();
+      const plan = async (
+        kind: string,
+        dueAt: Date,
+        text: string,
+        extra: Record<string, unknown> = {},
+      ) => {
+        const dedupeKey = reminderKey(kind, { visitId }, dueAt, text);
+        planned.add(dedupeKey);
+        await this.prisma.reminder.upsert({
+          where: { dedupeKey },
+          /* عمداً خالی: ردیفِ موجود همان است که می‌خواستیم؛ دست‌زدن به موعدش
+             یعنی پیامِ رفته را دوباره بفرستیم یا موعدِ در جریان را بلغزانیم. */
+          update: {},
+          create: { patientId: v.patientId, visitId, kind, dueAt, phone, text, dedupeKey, ...extra },
+        });
+      };
+
       /* «ویزیتِ بعدی» */
-      await this.prisma.reminder.updateMany({
-        where: { visitId, kind: 'next_visit', status: 'pending' },
-        data: { status: 'cancelled' },
-      });
       if (v.nextVisitDate) {
         /* اگر همان روز نوبتِ فعال دارد (مسیرِ «از همان ثبت، پیشنهادِ نوبت»)،
            یادآوریِ نوبت خودش می‌رود و این یکی دوبله می‌شد — کاشته نمی‌شود. */
@@ -98,22 +160,13 @@ export class RemindersService {
         });
         const dueAt = hasAppt ? null : this.dueOn(v.nextVisitDate, -cfg.nextVisitDays, hour);
         if (dueAt) {
-          await this.prisma.reminder.create({
-            data: {
-              patientId: v.patientId, visitId, kind: 'next_visit', dueAt, phone,
-              text: `${prefix}${renderSms(cfg.nextVisitText, { date: faDateStr(v.nextVisitDate) })}`,
-            },
-          });
+          await plan('next_visit', dueAt, `${prefix}${renderSms(cfg.nextVisitText, { date: faDateStr(v.nextVisitDate) })}`);
         }
       }
 
       /* «عملِ پیشِ‌رو» + مراقبتِ قبل/بعدِ عمل — فقط جراحیِ لغونشدهٔ تاریخ‌دار.
          متنِ مراقبت از قالبِ **نوعِ عمل** می‌آید (تعریف‌های پایه)؛ قالبِ خالی
          یعنی برای این نوع پیامی نمی‌رود. */
-      await this.prisma.reminder.updateMany({
-        where: { visitId, kind: { in: ['surgery', 'pre_op_care', 'post_op_care', 'follow_up'] }, status: 'pending' },
-        data: { status: 'cancelled' },
-      });
       if (v.kind === 'surgery' && v.opDate && v.opStatus !== 'cancelled') {
         /* فرمِ پیگیریِ پس از عمل — روزها از خودِ نوعِ عمل (تعریف‌های پایه).
            لینکِ فرم همین‌جا آماده می‌شود تا متنِ ثبت‌شده در دفتر کامل باشد؛
@@ -154,9 +207,10 @@ export class RemindersService {
           const wrap = (cfg.careUnconfirmedText ?? '').trim();
           return wrap ? renderSms(wrap, { care: body }) : body;
         };
-        const sentSame = async (kind: string, text: string) => (await this.prisma.reminder.count({
-          where: { visitId, kind, status: 'sent', text },
-        })) > 0;
+        /* `sentSame` این‌جا بود و با W1.9 برداشته شد: جلوگیری از پیامِ تکراری
+           حالا کارِ خودِ `dedupeKey` است — همان متن + همان موعد = همان کلید =
+           همان ردیف، چه `pending` باشد چه `sent`. کوئریِ دستی هم یک درخواستِ
+           اضافه بود هم فقط `sent` را می‌دید. */
         /* «بلافاصله» یعنی واقعاً همین حالا — نه صبرکردن تا ساعتِ ارسالِ روزانه.
            برای عملِ آینده ولی معنایش «روزِ عمل» است (در ساعتِ ارسال). */
         const opDate = v.opDate as Date;
@@ -178,8 +232,7 @@ export class RemindersService {
           const due = day === 0 ? immediateDue() : this.dueOn(v.opDate, day, hour);
           if (!due) continue;
           const fuText = `${prefix}${careText(renderSms(cfg.followUpText, { link: url }))}`;
-          if (collapsed(due) && await sentSame('follow_up', fuText)) continue;
-          await this.prisma.reminder.create({ data: { patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone, text: fuText } });
+          await plan('follow_up', due, fuText);
         }
         const dueAt = this.dueOn(v.opDate, -cfg.surgeryDays, hour);
         if (dueAt) {
@@ -188,11 +241,7 @@ export class RemindersService {
              است، پس cancel-then-create نمی‌گرفتش. متنِ یکسان = نرفتن؛
              تاریخِ عوض‌شده متنِ تازه دارد و درست است که برود. */
           const sgText = `${prefix}${renderSms(cfg.surgeryText, { date: faDateStr(v.opDate) })}`;
-          if (!(collapsed(dueAt) && await sentSame('surgery', sgText))) {
-            await this.prisma.reminder.create({
-              data: { patientId: v.patientId, visitId, kind: 'surgery', dueAt, phone, text: sgText },
-            });
-          }
+          await plan('surgery', dueAt, sgText);
         }
         /* اختصاصیِ همین مراجعه مقدم است — همان قاعدهٔ مراقبتِ بعد از عمل. */
         const pre = (v.preOpCare ?? v.procedureType?.preOpCare)?.trim();
@@ -208,12 +257,7 @@ export class RemindersService {
           /* موعدِ مقرری که خودش به «حالا» فروکش کرده، تکرارِ همان پیامِ فوری
              است — دوباره کاشته نمی‌شود. */
           if (preDue && !(dues.length && collapsed(preDue))) dues.push(preDue);
-          for (const due of dues) {
-            if (collapsed(due) && await sentSame('pre_op_care', preText)) continue;
-            await this.prisma.reminder.create({
-              data: { patientId: v.patientId, visitId, kind: 'pre_op_care', dueAt: due, phone, text: preText },
-            });
-          }
+          for (const due of dues) await plan('pre_op_care', due, preText);
         }
         const post = (v.postOpCare ?? v.procedureType?.postOpCare)?.trim();
         if (post) {
@@ -221,18 +265,27 @@ export class RemindersService {
              به «همین حالا» فرومی‌کاهد)؛ وگرنه فردای عمل (postOpDays). */
           const postDue = v.postOpImmediate ? immediateDue() : this.dueOn(v.opDate, cfg.postOpDays, hour);
           const postText = `${prefix}${careText(`${post}${followUrl ? `\n${followUrl}` : ''}`)}`;
-          if (postDue && !(collapsed(postDue) && await sentSame('post_op_care', postText))) {
-            await this.prisma.reminder.create({
-              data: {
-                patientId: v.patientId, visitId, kind: 'post_op_care', dueAt: postDue, phone,
-                /* لینکِ فرمِ پیگیری ضمیمهٔ همین پیامِ مراقبت — «پیامِ روزِ بعد =
-                   متنِ مراقبت + لینکِ فرم» (docs/BOOKING.md). */
-                text: postText,
-              },
-            });
-          }
+          /* لینکِ فرمِ پیگیری ضمیمهٔ همین پیامِ مراقبت — «پیامِ روزِ بعد =
+             متنِ مراقبت + لینکِ فرم» (docs/BOOKING.md). */
+          if (postDue) await plan('post_op_care', postDue, postText);
         }
       }
+
+      /**
+       * هرس — فقط آنچه در برنامهٔ تازه **نیست**.
+       *
+       * ⚠️ `dedupeKey: null` صریح لازم است: ردیف‌های پیش از W1.9 کلید ندارند و
+       * در SQL شرطِ `NOT (dedupe_key IN (…))` روی `NULL` نتیجه‌اش `NULL` است،
+       * یعنی آن ردیف **match نمی‌شود** و برای همیشه `pending` می‌ماند. با
+       * `OR` صریح، یادآوریِ کهنه هم درست لغو می‌شود.
+       */
+      const prune = { visitId, kind: { in: PLANNED_KINDS }, status: 'pending' };
+      await this.prisma.reminder.updateMany({
+        where: planned.size
+          ? { ...prune, OR: [{ dedupeKey: null }, { dedupeKey: { notIn: [...planned] } }] }
+          : prune,
+        data: { status: 'cancelled' },
+      });
     } catch (e) {
       this.log.error(`syncNextVisit(${visitId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
       if (strict) throw e;
