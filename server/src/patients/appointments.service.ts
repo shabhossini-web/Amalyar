@@ -24,6 +24,36 @@ export const APPT_LABELS: Record<string, string> = {
  * انجام شده دوباره در صفِ پذیرش سبز می‌شد. برگشتِ عمدی (`arrived` → `confirmed`)
  * مجاز است چون منشی گاهی اشتباهی «رسید» می‌زند.
  */
+/**
+ * برچسبِ **اقدام** — با `APPT_LABELS` یکی نیست و نباید یکی شود.
+ * `APPT_LABELS` می‌گوید «الان کجاست» («در مطب»)، این می‌گوید «اگر بزنی چه می‌شود»
+ * («رسید»). میزِ پذیرش دکمه است، پس فعل می‌خواهد نه صفت.
+ */
+export const APPT_ACTIONS: Record<string, string> = {
+  held: 'برگشت به انتظار',
+  confirmed: 'قطعی شد',
+  arrived: 'رسید',
+  done: 'تمام شد',
+  noshow: 'نیامد',
+  cancelled: 'لغو',
+};
+
+/**
+ * ستونِ میزِ پذیرش — مشتقِ سرور (قانون ۱۵) و تک‌منبع.
+ *
+ * ⚠️ **«در جریان» هرگز از `visitId != null` به‌تنهایی مشتق نمی‌شود.**
+ * `intake.service.ts:1736` هنگامِ تأییدِ ثبت‌نام روی نوبتِ **`confirmed`** هم
+ * `visitId` می‌نویسد — بیمار هنوز خانه است. ملاک، وضعیتِ نوبت است و `visitId`
+ * فقط داخلِ `arrived` تفکیک می‌کند.
+ */
+export function apptLane(status: string, visitId: number | null): string {
+  if (status === 'arrived') return visitId ? 'inVisit' : 'present';
+  if (status === 'done') return 'finished';
+  if (status === 'noshow') return 'absent';
+  if (status === 'cancelled') return 'cancelled';
+  return 'booked';   // held | confirmed
+}
+
 export const APPT_TRANSITIONS: Record<string, string[]> = {
   held: ['confirmed', 'cancelled'],
   confirmed: ['arrived', 'noshow', 'cancelled'],
@@ -49,7 +79,7 @@ export class AppointmentsService {
     private events: EventsService,
   ) {}
 
-  private view(a: any) {
+  view(a: any) {
     return {
       id: a.id,
       date: a.date.toISOString().slice(0, 10),
@@ -71,6 +101,12 @@ export class AppointmentsService {
       /* گذارهای مجاز هم مشتقِ سرورند: دکمه‌های میزِ پذیرش از همین ساخته
          می‌شوند، نه از یک کپیِ کلاینتیِ ماشینِ وضعیت. */
       next: APPT_TRANSITIONS[a.status] ?? [],
+      /* دکمه‌های میز: هر گذارِ مجاز با فعلِ خودش. برچسب این‌جا ساخته می‌شود تا
+         نگاشتِ کلاینتیِ دوم (مثلِ آنکه در `Calendar.jsx` بود) لازم نشود. */
+      nextOptions: (APPT_TRANSITIONS[a.status] ?? []).map((st) => ({
+        status: st, label: APPT_ACTIONS[st] ?? st,
+      })),
+      lane: apptLane(a.status, a.visitId ?? null),
     };
   }
 

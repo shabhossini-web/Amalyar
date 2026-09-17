@@ -2,6 +2,8 @@ import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
 import { WorkModule } from '../work/work.module';
 import { PrepService } from './prep.service';
 import { LiveService } from './live.service';
+import { FrontDeskService } from './frontdesk.service';
+import { FrontDeskController } from './frontdesk.controller';
 import { TenantHospitalDirectoryService } from './hospital-directory.service';
 import { Module } from '@nestjs/common';
 import { PatientsController } from './patients.controller';
@@ -71,6 +73,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
   // ⚠️ ترتیب مهم است: PatientsController مسیرِ `patients` (جستجو) را دارد و
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [
+    FrontDeskController,
     HospitalDutiesController,
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
@@ -82,6 +85,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     HospitalDutiesService,
     PrepService,
     LiveService,
+    FrontDeskService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,

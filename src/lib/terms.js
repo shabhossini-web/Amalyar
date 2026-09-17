@@ -18,6 +18,8 @@ const BASE = {
      تجهیزات هم دیده می‌شد. */
   visitStart: 'شروعِ مراجعه',
   visitOpen: 'بازکردنِ مراجعه',
+  /* ستونِ سومِ میزِ پذیرش (W3.3). «در ویزیت» فقط برای مطب درست است. */
+  visitInProgress: 'مراجعهٔ در جریان',
   record: 'پرونده',
   tech: 'کارشناس',
   techs: 'کارشناسان',
@@ -42,6 +44,7 @@ export const TERMS = {
     visitOne: 'ثبتِ عمل',
     visitStart: 'شروعِ عمل',
     visitOpen: 'بازکردنِ عمل',
+    visitInProgress: 'عملِ در جریان',
     tech: 'نمایندهٔ فنی',
     techs: 'نمایندگانِ فنی',
     searchHint: 'جستجوی بیمار، جراح، بیمارستان…',
@@ -56,6 +59,7 @@ export const TERMS = {
     visitOne: 'ثبتِ ویزیت',
     visitStart: 'شروعِ ویزیت',
     visitOpen: 'بازکردنِ ویزیت',
+    visitInProgress: 'ویزیتِ در جریان',
     tech: 'دستیار',
     techs: 'دستیاران',
     searchHint: 'جستجوی بیمار، پزشک، مرکز…',

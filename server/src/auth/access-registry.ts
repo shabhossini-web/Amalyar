@@ -110,6 +110,17 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.SUPERVISOR,
   },
   {
+    /* میزِ پذیرشِ روز (§۴.۵) — **عمداً سطحِ کارشناس/منشی**، نه سوپروایزر.
+       کسی که بیمار را می‌پذیرد پایین‌ترین سطحِ کاری است؛ اگر این کاشی سطحِ
+       `calendar` را بگیرد، منشی اصلاً نمی‌تواند بیمار را «رسید» بزند و کلِ
+       بسته بی‌مصرف می‌شود. ⚠️ و دلیلِ اینکه کنترلرِ جدا دارد نه گیتِ پایین‌ترِ
+       `calendar`: پایین‌آوردنِ `calendar` کلِ تقویمِ عمل‌ها و قواعدِ برنامهٔ
+       کاری را هم سطحِ ۲ می‌کرد. */
+    key: 'frontdesk', label: 'میزِ پذیرش', group: 'modules',
+    hint: 'پذیرشِ بیمارانِ امروز: رسید، شروعِ مراجعه، نوبتِ حضوری.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
     key: 'dispatch', label: 'چینشِ نیروها', group: 'modules',
     defaultLevel: LEVEL.SUPERVISOR,
   },
@@ -176,6 +187,30 @@ export const PERMISSIONS: AccessDef[] = [
   {
     key: 'patients.create', label: 'ثبتِ مراجعهٔ تازه', group: 'patients',
     defaultLevel: LEVEL.TECH_ADMIN,
+  },
+  /* ── میزِ پذیرش ─────────────────────────────────────────────
+     ⚠️ این‌ها **مجوزِ عملیات**اند نه ماژول (قانون ۳): دیدنِ تختهٔ روز با
+     عوض‌کردنِ وضعیتِ بیمار یکی نیست، و نصبی که می‌خواهد منشی فقط ببیند باید
+     بتواند بدونِ خاموش‌کردنِ کلِ کاشی این کار را بکند. */
+  {
+    key: 'frontdesk.read', label: 'دیدنِ میزِ پذیرش', group: 'patients',
+    hint: 'تختهٔ بیمارانِ امروز و وضعیتشان.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'frontdesk.status', label: 'تغییرِ وضعیتِ پذیرش', group: 'patients',
+    hint: 'رسید / نیامد / تمام شد / لغو روی نوبتِ امروز.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'frontdesk.start', label: 'شروعِ مراجعه از میز', group: 'patients',
+    hint: 'بازکردنِ فرمِ مراجعه برای بیمارِ حاضر.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'frontdesk.walkin', label: 'نوبتِ حضوری', group: 'patients',
+    hint: 'گرفتنِ نوبت برای بیمارِ سرِ میز — از همان مسیرِ ظرفیت.',
+    defaultLevel: LEVEL.TECH,
   },
   {
     key: 'patients.update', label: 'ویرایشِ مراجعه', group: 'patients',

@@ -151,7 +151,7 @@ try {
   const mine = (subs.rows ?? subs).find((x) => x.token === tok1);
   ok(!!mine, 'ثبت‌نام در صفِ تأیید هست');
   const okRes = await send(`/intake/submissions/${mine.id}/approve`, 'POST', {});
-  ok(okRes.status < 300, `تأیید شد (${okRes.status})`);
+  ok(okRes.status < 300, `تأیید شد (${okRes.status})${okRes.status >= 300 ? ' — ' + JSON.stringify(okRes.json)?.slice(0, 300) : ''}`);
   if (okRes.json?.visitId) trash.visits = [...(trash.visits ?? []), okRes.json.visitId];
   const visit = await get(`/visits/${(await get('/visits')).rows?.[0]?.id ?? 0}`).catch(() => null);
   void visit;
