@@ -25,6 +25,7 @@ export interface DomainEventLike {
 }
 
 export interface WorkUpsert {
+  reopen?: boolean;
   type: string;
   title: string;
   ownerRole?: string | null;
@@ -122,20 +123,22 @@ const none: RuleOutcome = { upserts: [], closes: [] };
  */
 export const RULES: Record<string, Rule> = {
   /* ── سفارش‌های بالینی (D02) ── */
-  'order.answered': (e, ref) => upsert({
+  'order.answered': (e, ref) => ({ upserts: [{
     ...base(e, 'review_result', ref),
     title: `بررسیِ نتیجهٔ ${ORDER_FA[ref.refType] ?? 'سفارش'}`,
     ownerRole: 'doctor',
     ownerAccountId: e.payload?.doctorId ?? null,
     dueAt: inDays(1, e.at),
     priority: 2,
-  }),
-  'order.reviewed': (_e, ref) => close(ref, 'review_result'),
+    reopen: true,
+  }], closes: [{ ...ref, type: 'upload_result' }] }),
+  'order.reviewed': (_e, ref) => close(ref, 'review_result', 'upload_result'),
   'order.needs_action': (e, ref) => ({
     upserts: [{
       ...base(e, 'upload_result', ref),
       title: `ارسالِ دوبارهٔ نتیجهٔ ${ORDER_FA[ref.refType] ?? 'سفارش'}`,
       ownerRole: 'patient',
+      reopen: true,
       dueAt: inDays(3, e.at),
       note: e.payload?.reason ?? null,
     }],

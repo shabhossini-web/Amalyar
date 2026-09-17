@@ -34,10 +34,13 @@ export async function upsertWork(client: any, u: WorkUpsert, opts: { reopen?: bo
       return { row: await client.workItem.findUnique({ where: { idempotencyKey: u.idempotencyKey } }), created: false };
     }
   }
-  if (['done', 'cancelled', 'expired'].includes(existing.state) && !opts.reopen) return { row: existing, created: false };
+  // A replay of the same (or an older) event must not reopen a completed task.
+  const reopen = opts.reopen && (!u.sourceEventId || !existing.sourceEventId || u.sourceEventId > existing.sourceEventId);
+  if (u.sourceEventId && existing.sourceEventId && u.sourceEventId < existing.sourceEventId) return { row: existing, created: false };
+  if (['done', 'cancelled', 'expired'].includes(existing.state) && !reopen) return { row: existing, created: false };
   const row = await client.workItem.update({
     where: { id: existing.id },
-    data: { ...fields, ...(opts.reopen ? { state: 'open', completedAt: null, completedById: null } : {}) },
+    data: { ...fields, ...(reopen ? { state: 'open', completedAt: null, completedById: null, outcome: null } : {}) },
   });
   return { row, created: false };
 }
@@ -62,7 +65,7 @@ export async function processDomainEvents(client: any, opts: { limit?: number } 
     const out = rulesFor(e);
     for (const c of out.closes) closed += await closeWork(client, c, e.actorId ?? null);
     for (const u of out.upserts) {
-      const r = await upsertWork(client, u);
+      const r = await upsertWork(client, u, { reopen: u.reopen });
       if (r.created) created++; else touched++;
     }
     await client.domainEvent.update({ where: { id: e.id }, data: { processedAt: new Date() } });

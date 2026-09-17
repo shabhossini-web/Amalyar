@@ -1,10 +1,18 @@
 <!-- claim:begin -->
 agent: gpt
-status: idle
-branch: agent/gpt-close-intake-events
+status: active
+branch: agent/w1-2-order-review
 since: 2026-09-17
-paths: []
-note: W1.6=ccaa792، W1.5=508cb4b، W2.2-ب=6edbce1 مرج شدند؛ کلیم آزاد، قدم بعد W1.4.
+paths:
+  - server/src/patients/orders.service.ts
+  - server/src/patients/orders.controller.ts
+  - server/src/patients/record.service.ts
+  - server/prisma/schema.prisma
+  - server/prisma/migrations/20260917120000_order_review/
+  - scripts/e2e/w1-2-order-review.mjs
+  - scripts/e2e/w1-2-order-review-local.mjs
+  - docs/plan/lanes/gpt.md
+note: درخواست مالک: W1.2 پیش از W1.4؛ همگام با main=d4bc6a0 و W3.1. دلیل لغو پس از W3.3؛ تصمیم ۱ دوشاخه و تصمیم ۶ بله سپس تلگرام/relay multipart.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
@@ -12,6 +20,9 @@ note: W1.6=ccaa792، W1.5=508cb4b، W2.2-ب=6edbce1 مرج شدند؛ کلیم �
 > صاحبش خودش می‌نویسد.
 
 ## قراردادهایی که شکستم
+
+- W1.2: endpoint جدید review در orders.controller.ts (خارج از فهرست service ولی آزاد). ستون‌های review و refType/refId طبق §۴ به ته مدل‌ها افزوده می‌شوند. برای بستن حلقه ارسال مجدد، تغییر حداقلی work-rules/work-processor و ثبت قرارداد در CONTRACTS لازم است؛ این سه فایل در کلیم ج هستند، استثنای محدود اعلام می‌شود و کلیم دیگری تغییر نمی‌کند. UI پرونده و appointments در این بسته دست نمی‌خورند.
+- تصمیم‌های مالک 2026-09-17: W1.7 گیت done نیست؛ done متن عادی، pending با تاریخ گذشته متن شرطی، cancelled بدون مراقبت و با پیام لغو مستقل. confirm_surgery_done حفظ می‌شود. بسته دلیل لغو پس از W3.3: دلیل عمومی از فهرست بسته + یادداشت فقط داخلی، شامل نوبت؛ syncAppointment ابطال یادآوری را دارد. کانال دوم بله سپس تلگرام با multipart از relay از روز اول.
 
 - W2.2-ب: پنج رویداد باقی‌مانده intake/confirmed همین نشست در PR مستقل متصل می‌شوند (تکمیل درخواست مالک). وضعیت‌ها و refهای CONTRACTS §۲ عوض نمی‌شوند. دو fixture قدیمی که IntakeService را دستی می‌سازند EventsService واقعی می‌گیرند؛ شکست نیمه‌کاره رویداد بازیابی می‌سازد، اتمیک‌سازی کامل همچنان W1.4 است.
 
@@ -64,3 +75,10 @@ note: W1.6=ccaa792، W1.5=508cb4b، W2.2-ب=6edbce1 مرج شدند؛ کلیم �
 - آزمون: ۱۸ سناریوی واقعی API/Prisma/پردازشگر + ۱۷ مالی + ۱۶ گردش‌کار سبز؛ برای دو سناریوی شکست فقط وابستگی پرداخت/outbox عمداً خطا می‌دهد. باقی مسیر واقعی است. بیلد هر دو سمت سبز.
 
 - تحویل لِین ج: PR #28 در بررسی 2026-09-17 dirty بود و نیاز به rebase روی main تازه داشت. ارتباط و یادداشت‌های forVisitId/استثنای record فقط در فایل‌های مخزن ثبت شدند.
+
+## تحویل W1.2 به لِین‌های دیگر
+- اولویت جدید مالک اعمال شد: W1.2 پیش از W1.4. سه تصمیم تازه در ابتدای فایل و lanes/gpt ثبت است.
+- API بررسی: POST /orders/:kind/:id/review با status و reviewNote. خواندن سفارش documents[] دارد؛ W3.1 بدون تغییر UI وضعیت‌های باز را می‌خواند. کنترل‌های رابطِ تصمیم‌گیری باید همین endpoint را مصرف کنند؛ در این بسته UI در کلیم ج دست نخورده است.
+- استثناهای محدود در فایل‌های کلیم ج: CONTRACTS فقط §۹ و شرح W1.2؛ work-rules/processor فقط چرخهٔ پاسخ مجدد و reopen با sourceEventId. appointments و access-registry دست نخورده‌اند.
+- publicAnswer برای جلوگیری از بازنویسی از حالا 409 می‌دهد؛ تکمیل append و آپلود عمومی با W0.8 است. اتصال فایل موجود از طریق documentIds فایل/Document دوم نمی‌سازد.
+- گیت CI: یک گام فقط در انتهای security-ci.yml برای اجرای W1.2 با Nest/Prisma/PGlite موقت اضافه می‌شود؛ استثنای محدود فایل کلیم ج. runner مستقل در scripts/e2e/w1-2-order-review-local.mjs است.

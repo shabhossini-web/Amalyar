@@ -154,9 +154,9 @@ model DomainEvent {
 `Reminder.dedupeKey = ${kind}:${visitId ?? 'a' + appointmentId}:${dueDate(YYYY-MM-DD)}:${sha256(text).slice(0,8)}` برای همهٔ kindها (تا امروز فقط `dispatch`). `syncNextVisit` به‌جای cancel-then-create، `upsert` روی همین کلید می‌کند و فقط ردیف‌هایی را لغو می‌کند که کلیدشان در برنامهٔ تازه نیست.
 retry: `uncertain` تا ۳ بار با backoff ۵/۱۵/۴۵ دقیقه، بعد `failed` + `emit('sms.failed')`.
 
-## §۹ گیتِ مراقبتِ پس از عمل (W1.7) — پیش‌فرضِ `DECISIONS.md` #۱
+## §۹ مراقبتِ پس از عمل (W1.7) — تصمیمِ مالک در `DECISIONS.md` #۱
 
-`post_op_care` و `follow_up` فقط وقتی `opStatus === 'done'` کاشته می‌شوند. اگر `opDate + 1d` گذشت و هنوز `pending` است: `emit('visit.unconfirmed')` ← کارِ `confirm_surgery_done` برای کارشناسِ مراجعه (fallback: `ownerRole='technician'`). `surgery` و `pre_op_care` مثلِ امروز (`!== 'cancelled'`).
+`post_op_care` و `follow_up` گیتِ `done` ندارند: done متن عادی؛ pending با تاریخ گذشته متن دوشاخهٔ «اگر عمل انجام شده مراقبت‌ها…؛ اگر انجام نشده یا موکول شده با پزشک در ارتباط باشید». cancelled مراقبت نمی‌گیرد؛ پیام لغو بستهٔ مستقل پس از W3.3 است. اگر `opDate + 1d` گذشت و هنوز `pending` است: `emit('visit.unconfirmed')` ← کارِ `confirm_surgery_done` همچنان ساخته می‌شود. پیام جایگزین ثبت وضعیت نیست. `surgery` و `pre_op_care` مثلِ امروز (`!== 'cancelled'`).
 
 ## §۱۰ پوستهٔ سراسری (W2.4 — پیاده‌شده)
 
@@ -278,3 +278,13 @@ retry: `uncertain` تا ۳ بار با backoff ۵/۱۵/۴۵ دقیقه، بعد 
 11. **قالبِ پول از سرور نمی‌آید.** هیچ مبلغی در متنِ سرور رشته نمی‌شود؛ کلاینت
    `fmtMoney` می‌زند (قانون ۱۳). در عوض متنِ سرور در رابط از `faNum` رد می‌شود
    تا شمارش‌ها («۲ نتیجه…») عددِ لاتین نمانند.
+
+## W1.2 — قرارداد اجرایی پاسخ و بررسی (2026-09-17)
+
+- `POST /orders/:kind/:id/review` با `{status: 'in_review'|'reviewed'|'needs_action', reviewNote?}`؛ تصمیم نهایی یادداشت می‌خواهد. فقط از answered/in_review؛ تکرار همان تصمیم بی‌اثر است. `reviewNote/reviewedById/reviewedAt` روی هر چهار مدل ثبت می‌شوند.
+- فهرست و نتیجهٔ نوشتن سفارش `documents[]` می‌دهد؛ هر Document با `refType=<kind>_order/refId` به همان سفارش متصل است. متن در `contentText` و از مسیر دانلود فعلی خواندنی است؛ لینک همان externalUrl است. متن/لینک قبلی بازنویسی نمی‌شود.
+- ایجاد/ویرایش کارکنان می‌تواند `documentIds` بدهد (حداکثر ۵ شناسهٔ یکتا): فقط مدرک همان بیمار و همان مراجعه که به سفارش دیگری متصل نیست. ردیف/فایل کپی نمی‌شود. آپلود عمومی جدید همچنان W0.8/W0.5 است؛ این بسته endpoint عمومی آپلود اضافه نمی‌کند.
+- پاسخ، مدارک، audit و رویداد outbox در همان تراکنش و زیر قفل سفارش هستند. publicAnswer در sent/needs_action می‌پذیرد؛ تکرار بدون append اکنون 409 است. مسیر append/آپلود عمومی §۵ در W0.8 تکمیل می‌شود.
+- order.answered کار review_result را برای حساب فعال جراح مراجعه (Person مشترک) یا صف doctor می‌سازد و upload_result را می‌بندد. تصمیم needs_action کار بیمار را باز می‌کند؛ پاسخ بعدی همان review_result را باز می‌کند. `WorkUpsert.reopen` فقط با sourceEventId تازه بازگشایی می‌کند؛ replay همان رویداد کار انجام‌شده را باز نمی‌کند.
+- خواندن/نوشتن سفارش علاوه بر کف بالینی قبلی، از Feature dashboard و مجوزهای patients.read/patients.update عبور می‌کند؛ دامنهٔ بیمار برای زیر سوپروایزر همان انتساب techId است. تنظیم نقش/سطح این مجوزها در DB شرکت معتبر است.
+- ارسال مجدد لینک وضعیت reviewed/in_review/needs_action را به sent برنمی‌گرداند؛ سفارش پاسخ‌دار حذف نمی‌شود. بازیابی سفارش‌های قدیمیِ فاقد Document در W1.10 باقی است.
