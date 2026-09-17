@@ -80,7 +80,10 @@ function UnfollowedCard({ unf }) {
   return (
     <>
       {unf.rows.length === 0 ? (
-        <div className="crm-empty">همهٔ عمل‌های انجام‌شدهٔ یک سالِ اخیر فرمِ پیگیریِ پرشده دارند.</div>
+        <div className="crm-empty">
+          هیچ موعدِ پیگیریِ رسیده‌ای بی‌پاسخ نمانده.
+          {unf.waiting > 0 && ` (${faNum(unf.waiting)} عمل موعدِ پیگیری‌اش هنوز نرسیده.)`}
+        </div>
       ) : (
         <div className="crm-unf">
           {unf.rows.map((r) => (
@@ -92,6 +95,16 @@ function UnfollowedCard({ unf }) {
               <span className="crm-unf-op">
                 {faDate(r.opDate)} · {faNum(r.daysSince)} روز پیش{r.procedure ? ` · ${r.procedure}` : ''}
               </span>
+              {/* W1.1: کدام موعد بی‌پاسخ است — بدونِ این، منشی نمی‌داند دربارهٔ چه تماس بگیرد. */}
+              {r.pendingDays?.length > 0 && (
+                <span className="crm-chip u-day">
+                  موعدِ بی‌پاسخ: {r.pendingDays.map((d) => `روزِ ${faNum(d)}`).join('، ')}
+                </span>
+              )}
+              {r.days?.length === 0 && <span className="crm-chip u-day">فرمِ پیگیری ساخته نشده</span>}
+              {r.answeredDays?.length > 0 && (
+                <span className="crm-chip u-done">پاسخ‌گرفته: {r.answeredDays.map((d) => `روزِ ${faNum(d)}`).join('، ')}</span>
+              )}
               <span className={`crm-chip u-${r.sms}`}>{SMS_FA[r.sms] ?? r.sms}</span>
               {r.openForm && <span className="crm-chip u-open">فرمِ باز، بی‌پاسخ</span>}
             </article>
@@ -236,6 +249,10 @@ export default function Crm() {
                 {unf.enabled && (
                   <small>
                     {faNum(unf.rows.length)} بی‌پیگیری از {faNum(unf.checked)} عملِ انجام‌شدهٔ یک سالِ اخیر
+                    {unf.followed > 0 && ` · ${faNum(unf.followed)} پیگیری‌شده`}
+                    {unf.waiting > 0 && ` · ${faNum(unf.waiting)} موعدش نرسیده`}
+                    {/* W1.1: سقف باید دیده شود — وگرنه «۳۰۰ عمل» مثلِ کلِ عمل‌ها خوانده می‌شود. */}
+                    {unf.capped && ` — تازه‌ترین ${faNum(unf.limit)} از ${faNum(unf.total)}`}
                   </small>
                 )}
                 {unf.enabled && unf.rows.length > 0 && (

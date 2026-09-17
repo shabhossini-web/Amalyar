@@ -127,9 +127,18 @@
 .crm-unf-name:hover b { color: var(--brand-2); }
 .crm-unf-op { margin-inline-start: auto; font-size: 11px; color: var(--text2); }
 .crm-chip.u-none { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
-.crm-chip.u-pending { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
-.crm-chip.u-sent { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
-.crm-chip.u-open { color: #a5b4fc; background: rgba(129, 140, 248, .12); border-color: rgba(165, 180, 252, .35); }
+/* ⚠️ این سه هگزِ خام بودند و در تمِ روشن **خوانده نمی‌شدند** (نعناییِ کم‌رنگ و
+   زردِ پریده روی سفید). از پیش از W3.6 مانده بودند و نگهبانِ `verify-theme-tokens`
+   ندیدشان چون فهرستِ هگزهایش بسته است. `.u-none` را لِینِ ج در W3.1 درست کرده
+   بود؛ این سه هم به همان الگو رسیدند. تمِ تیره فقط یک پله جابه‌جا می‌شود. */
+.crm-chip.u-pending { color: var(--amber-text); background: rgba(var(--kind-amber), .12); border-color: rgba(var(--kind-amber), .4); }
+.crm-chip.u-sent { color: var(--green-text); background: rgba(var(--kind-lime), .12); border-color: rgba(var(--kind-lime), .35); }
+.crm-chip.u-open { color: var(--brand-text); background: rgba(var(--kind-violet), .12); border-color: rgba(var(--kind-violet), .35); }
+/* W1.1 — موعدِ پیگیری. کهربا = کاری که مانده، سبز = جواب گرفته.
+   توکن‌های `--kind-*` هر دو تم را دارند (قانونِ ۲۳)، برخلافِ چیپ‌های بالا که
+   هگزِ خام‌اند و از پیش از W3.6 مانده‌اند. */
+.crm-chip.u-day { color: var(--amber-text); background: rgba(var(--kind-amber), .12); border-color: rgba(var(--kind-amber), .38); }
+.crm-chip.u-done { color: var(--green-text); background: rgba(var(--kind-teal), .12); border-color: rgba(var(--kind-teal), .38); }
 
 @media (max-width: 480px) {
   .crm-bar { grid-template-columns: 1fr auto; }

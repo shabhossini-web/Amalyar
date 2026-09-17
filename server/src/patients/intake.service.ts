@@ -42,6 +42,10 @@ const RECEIPT_MIME = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/;
 /** روزهای اعتبارِ یک ثبت‌نامِ نیمه‌کاره. */
 const TTL_DAYS = 14;
 
+/** سقفِ فهرستِ «پیگیری‌نشده» — فهرستِ کارِ امروزِ منشی است، نه آرشیو.
+    خروجی `capped` و `total` را هم می‌دهد تا بریدگی **دیده شود** (W1.1). */
+const UNFOLLOWED_LIMIT = 300;
+
 export const INTAKE_STATUSES = [
   'pending_fill', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'expired',
 ] as const;
@@ -1399,13 +1403,37 @@ export class IntakeService {
   }
 
   /**
-   * بیمارانِ «پیگیری‌نشده» — عملِ انجام‌شده که هیچ فرمِ پیگیریِ **پرشده‌ای**
-   * بعد از تاریخِ عمل ندارد.
+   * بیمارانِ «پیگیری‌نشده» — عملِ انجام‌شده‌ای که **موعدِ پیگیری‌اش رسیده** و
+   * فرمِ همان موعد هنوز پر نشده.
    *
    * این فهرست کارِ امروزِ منشی است، نه آرشیو: فقط عمل‌های یک سالِ اخیر و با
    * سقفِ صریح. «پرشده» یعنی pending_approval | approved — فرمِ باز (pending_fill)
    * پیگیری نیست، فقط لینکی است که هنوز جواب نگرفته؛ جدا گزارش می‌شود تا منشی
    * بداند تماسِ یادآوری لازم است نه ارسالِ دوباره.
+   *
+   * ### W1.1 — چرا تطبیق با تاریخ غلط بود (D01)
+   *
+   * نسخهٔ قبلی پاسخ را با `patientId` و `createdAt >= opDate` به عمل می‌چسباند.
+   * ولی ردیفِ فرمِ پیگیری هنگامِ **ثبتِ مراجعه** ساخته می‌شود
+   * (`patients.service` → `reminders.syncVisit` → `followUpUrl`)، که برای هر
+   * عملِ از‌پیش‌برنامه‌ریزی‌شده **پیش از** تاریخِ عمل است. پس پاسخِ کاملِ بیمار
+   * هم `createdAt < opDate` داشت و عمل «پیگیری‌نشده» شمرده می‌شد — نه استثنا،
+   * بلکه **حالتِ عادیِ** هر عملِ برنامه‌ریزی‌شده.
+   *
+   * کلیدِ دقیق از اول در همان JSON بود و فقط خوانده نمی‌شد:
+   * `data.followUpVisitId` (کدام عمل) و `data.followUpDay` (کدام موعد).
+   * چون `followUpUrl` به‌ازای **هر روزِ پیگیری یک ردیف** می‌سازد، گزارش حالا
+   * می‌گوید کدام موعد جواب گرفته و کدام نه.
+   *
+   * سه چیزِ دیگر که از همین تغییر می‌آیند:
+   *
+   * - **موعدِ نرسیده «پیگیری‌نشده» نیست.** عملِ دیروز با پیگیریِ روزِ هفتم
+   *   امروز کاری ندارد؛ قبلاً در همین فهرست می‌نشست و تماسِ بی‌مورد می‌ساخت.
+   *   جدا شمرده می‌شود (`waiting`) تا از قلم هم نیفتد.
+   * - **یک پاسخ، دو عمل.** تطبیق با `patientId` تنها یعنی پاسخِ عملِ الف،
+   *   عملِ ب را هم «پیگیری‌شده» نشان می‌داد. حالا کلید دقیق است.
+   * - **سقف دیده می‌شود.** `take` بی‌صدا بود و `checked` مثلِ «کلِ عمل‌ها»
+   *   خوانده می‌شد؛ حالا `total` و `capped` هم می‌آیند.
    */
   async unfollowed() {
     const fuForms = await this.prisma.formDef.findMany({
@@ -1414,20 +1442,24 @@ export class IntakeService {
     });
     /* fail-soft (همان قرارِ نوبت‌دهی): نصبی که فرمِ پیگیری تعریف نکرده،
        فهرستِ «همه پیگیری‌نشده» نمی‌گیرد — می‌گوید قابلیت روشن نیست. */
-    if (!fuForms.length) return { enabled: false, checked: 0, followed: 0, rows: [] };
+    if (!fuForms.length) {
+      return { enabled: false, checked: 0, total: 0, capped: false, limit: UNFOLLOWED_LIMIT, followed: 0, waiting: 0, rows: [] };
+    }
     const fids = fuForms.map((f) => f.id);
 
     const now = new Date();
     const yearAgo = new Date(now.getTime() - 365 * 864e5);
+    const scope = {
+      kind: 'surgery',
+      opStatus: 'done',
+      opDate: { lt: now, gte: yearAgo },
+      patient: { deletedAt: null },
+    };
+    const total = await this.prisma.visit.count({ where: scope });
     const visits = await this.prisma.visit.findMany({
-      where: {
-        kind: 'surgery',
-        opStatus: 'done',
-        opDate: { lt: now, gte: yearAgo },
-        patient: { deletedAt: null },
-      },
+      where: scope,
       orderBy: { opDate: 'desc' },
-      take: 300,
+      take: UNFOLLOWED_LIMIT,
       select: {
         id: true, opDate: true, opType: true,
         procedureType: { select: { name: true } },
@@ -1436,10 +1468,14 @@ export class IntakeService {
     });
     const pids = [...new Set(visits.map((v) => v.patient.id))];
     const vids = visits.map((v) => v.id);
+    const inWindow = new Set(vids);
+    /* `data` لازم است چون کلیدِ تطبیق داخلِ همان JSON است و Prisma نمی‌تواند
+       یک مسیرِ JSON را با فهرستی از شناسه‌ها فیلتر کند. دامنه بسته است
+       (فرم‌های پیگیریِ حداکثر ۳۰۰ بیمار)، پس فیلترِ نهایی این‌جا انجام می‌شود. */
     const subs = pids.length
       ? await this.prisma.intakeSubmission.findMany({
           where: { patientId: { in: pids }, formId: { in: fids } },
-          select: { patientId: true, status: true, createdAt: true },
+          select: { patientId: true, status: true, createdAt: true, updatedAt: true, reviewedAt: true, data: true },
         })
       : [];
     const rems = vids.length
@@ -1455,12 +1491,79 @@ export class IntakeService {
       list.push(r.status);
     }
 
+    type FollowSub = {
+      patientId: number | null; status: string; day: number | null;
+      createdAt: Date; answeredAt: Date | null;
+    };
+    const ANSWERED = new Set(['pending_approval', 'approved']);
+    const byVisit = new Map<number, FollowSub[]>();
+    const put = (vid: number, sub: FollowSub) => {
+      const list = byVisit.get(vid);
+      if (list) list.push(sub); else byVisit.set(vid, [sub]);
+    };
+    /* فرمی که ادمین دستی فرستاده کلیدِ مراجعه ندارد؛ پایین‌تر به نزدیک‌ترین
+       عملِ پیش از خودش نسبت داده می‌شود. */
+    const loose: FollowSub[] = [];
+    for (const s of subs) {
+      const d = (s.data ?? {}) as Record<string, unknown>;
+      const vid = typeof d.followUpVisitId === 'number' ? d.followUpVisitId : null;
+      const sub: FollowSub = {
+        patientId: s.patientId,
+        status: s.status,
+        day: typeof d.followUpDay === 'number' ? d.followUpDay : null,
+        createdAt: s.createdAt,
+        /* «کِی جواب داد» — نه `createdAt`، چون آن لحظهٔ **ساختِ لینک** است و
+           برای عملِ برنامه‌ریزی‌شده پیش از خودِ عمل می‌افتد. مسیرِ تأییدِ
+           خودکارِ فرمِ زیرپرونده `reviewedAt` می‌گذارد؛ اگر هنوز تأیید نشده،
+           آخرین نوشتن روی ردیف همان لحظهٔ پرکردن است. */
+        answeredAt: ANSWERED.has(s.status) ? (s.reviewedAt ?? s.updatedAt) : null,
+      };
+      if (vid === null) loose.push(sub);
+      else if (inWindow.has(vid)) put(vid, sub);
+      /* vid که در پنجره نیست مالِ عملِ دیگری است — عمداً دور ریخته می‌شود. */
+    }
+
+    /* دور ریختنِ فرمِ دستی یعنی پیگیریِ واقعی دیده نشود، و چسباندنش به همهٔ
+       عمل‌های بیمار همان باگِ «یک پاسخ، دو عمل» است. پس به **نزدیک‌ترین عملِ
+       پیش از خودش** نسبت داده می‌شود — تنها عملی که آن پاسخ می‌تواند دربارهٔ
+       آن باشد. `visits` بر پایهٔ `opDate` نزولی است، پس اولین تطبیق نزدیک‌ترین است. */
+    if (loose.length) {
+      const byPatient = new Map<number, typeof visits>();
+      for (const v of visits) {
+        const list = byPatient.get(v.patient.id);
+        if (list) list.push(v); else byPatient.set(v.patient.id, [v]);
+      }
+      for (const sub of loose) {
+        if (sub.patientId === null) continue;
+        const host = (byPatient.get(sub.patientId) ?? []).find((v) => v.opDate! <= sub.createdAt);
+        if (host) put(host.id, sub);
+      }
+    }
+
     let followed = 0;
+    let waiting = 0;
     const rows: any[] = [];
     for (const v of visits) {
       const op = v.opDate!;
-      const mine = subs.filter((s) => s.patientId === v.patient.id && s.createdAt >= op);
-      if (mine.some((s) => s.status === 'pending_approval' || s.status === 'approved')) { followed += 1; continue; }
+      const mine = (byVisit.get(v.id) ?? []).slice().sort((a, b) => (a.day ?? -1) - (b.day ?? -1));
+      const days = mine.map((s) => ({
+        day: s.day,
+        answered: ANSWERED.has(s.status),
+        answeredAt: s.answeredAt,
+        /* فرمِ دستی موعد ندارد؛ «رسیده» فرض می‌شود چون همین حالا فرستاده شده. */
+        due: s.day === null ? true : op.getTime() + s.day * 864e5 <= now.getTime(),
+        open: s.status === 'pending_fill',
+      }));
+      const pending = days.filter((d) => d.due && !d.answered);
+
+      /* هیچ ردیفی نیست: فرمِ پیگیری بعد از عمل تعریف شده، یا ساختِ لینک شکسته.
+         این واقعاً «پیگیری‌نشده» است و باید دیده شود. */
+      if (days.length && !pending.length) {
+        if (days.some((d) => d.answered)) followed += 1;
+        else waiting += 1;   // همهٔ موعدها هنوز نرسیده‌اند — امروز کاری ندارد
+        continue;
+      }
+
       const rs = remByVisit.get(v.id) ?? [];
       rows.push({
         visitId: v.id,
@@ -1472,10 +1575,22 @@ export class IntakeService {
         procedure: v.procedureType?.name ?? v.opType ?? null,
         daysSince: Math.floor((now.getTime() - op.getTime()) / 864e5),
         sms: rs.includes('sent') ? 'sent' : rs.includes('pending') ? 'pending' : 'none',
-        openForm: mine.some((s) => s.status === 'pending_fill'),
+        openForm: days.some((d) => d.open),
+        days,
+        pendingDays: pending.map((d) => d.day).filter((d): d is number => d !== null),
+        answeredDays: days.filter((d) => d.answered).map((d) => d.day).filter((d): d is number => d !== null),
       });
     }
-    return { enabled: true, checked: visits.length, followed, rows };
+    return {
+      enabled: true,
+      checked: visits.length,
+      total,
+      capped: total > visits.length,
+      limit: UNFOLLOWED_LIMIT,
+      followed,
+      waiting,
+      rows,
+    };
   }
 
   // ── خروجیِ CSV ─────────────────────────────────────────────────────
@@ -1549,10 +1664,15 @@ export class IntakeService {
   async unfollowedCsv() {
     const u = await this.unfollowed();
     const smsFa: Record<string, string> = { sent: 'فرستاده‌شده', pending: 'در صف', none: 'نرفته' };
-    const head = ['کدِ پرونده', 'بیمار', 'تلفن', 'تاریخِ عمل', 'روزِ گذشته', 'نوعِ عمل', 'پیامکِ پیگیری', 'فرمِ باز'];
+    /* W1.1: موعد هم می‌آید — «پیگیری‌نشده» بدونِ اینکه بگوید کدام موعد،
+       به منشی نمی‌گوید دربارهٔ چه تماس بگیرد. «—» یعنی اصلاً ردیفی ساخته نشده. */
+    const dayList = (v: number[]) => (v.length ? v.map((d) => `روزِ ${d}`).join(' · ') : '—');
+    const head = ['کدِ پرونده', 'بیمار', 'تلفن', 'تاریخِ عمل', 'روزِ گذشته', 'نوعِ عمل',
+      'موعدِ بی‌پاسخ', 'موعدِ پاسخ‌گرفته', 'پیامکِ پیگیری', 'فرمِ باز'];
     const rows = u.rows.map((r: any) => [
       r.code ?? '', r.name, r.phone ?? '', this.jalaliStr(r.opDate), r.daysSince,
-      r.procedure ?? '', smsFa[r.sms] ?? r.sms, r.openForm ? 'بله' : 'خیر',
+      r.procedure ?? '', dayList(r.pendingDays ?? []), dayList(r.answeredDays ?? []),
+      smsFa[r.sms] ?? r.sms, r.openForm ? 'بله' : 'خیر',
     ]);
     return { filename: 'crm-unfollowed.csv', csv: this.csvOf([head, ...rows]) };
   }
