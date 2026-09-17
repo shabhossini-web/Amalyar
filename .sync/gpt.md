@@ -1,20 +1,10 @@
 <!-- claim:begin -->
 agent: gpt
-status: active
-branch: agent/w1-5-appointment-visit-link
+status: idle
+branch: agent/gpt-close-w16-w15
 since: 2026-09-17
-paths:
-  - server/src/patients/appointments.service.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/intake.service.ts
-  - server/src/audit/audit.service.ts
-  - server/prisma/schema.prisma
-  - server/prisma/migrations/20260916235900_appointment_for_visit/
-  - scripts/e2e/w1-5-appointment-visit-link.mjs
-  - docs/plan/lanes/gpt.md
-  - STATUS.md
-note: W1.6 در ccaa792 مرج شد؛ W1.5 اتصال نوبت به مراجعهٔ پیگیری، شروع تراکنشی و appointment.held.
+paths: []
+note: W1.6=ccaa792 و W1.5=508cb4b مرج شدند؛ کلیم آزاد، قدم بعد W1.4.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
@@ -42,16 +32,18 @@ note: W1.6 در ccaa792 مرج شد؛ W1.5 اتصال نوبت به مراجعه
   `main.jsx` سوار است؛ `sw.js` هم `CACHE` را به `v9` برد و دیگر صفحهٔ باز را
   خودکار ناوبری نمی‌کند.
 
-## وضعیت بستهٔ جاری — W1.5
+## وضعیت پایان نشست — W1.6 و W1.5 مرج شدند
 
-- شاخه: `agent/w1-5-appointment-visit-link`؛ پس از W1.6 / ccaa792 آغاز شد.
+- W1.5: PR #26 / `508cb4b`؛ security-ci کامل سبز و مرج خودکار انجام شد. W1.6: PR #13 / `ccaa792`.
 - پیاده شد: `forVisitId` در walkIn/book، اتصال همان فرزند در startVisit با حفظ وضعیت/پاسخ‌ها، قفل ردیف نوبت، ساخت مشترک مراجعه و audit/outbox در همان تراکنش، اولویت clinic و منع fallback جراحی، رد پیگیری مبهم و مراجعهٔ بیمار دیگر، پاک‌کردن ارجاع قدیمی هنگام جابه‌جایی رزرو.
 - `appointment.held` در book و `appointment.started` در startVisit با همان appointmentIdِ CONTRACTS §۲ ثبت می‌شوند. آزمون پردازشگر ثابت کرد کار تأیید باز و سپس با همان ref بسته می‌شود.
 - آزمون: ۲۶ سناریوی W1.5 (HTTP واقعی Nest/Prisma، PGlite)، شامل دو درخواست هم‌زمان، rollback و retry؛ ۱۷ سناریوی موجود intake-finance-roles نیز سبز. build هر دو سمت سبز.
 - محدودیت آزمون: پایگاه محلی PGlite با یک اتصال Prisma است؛ رقابت چند اتصال مستقل PostgreSQL آزموده نشده. فقط برای سناریوی rollback، خطای outbox از طریق وابستگی EventsService تزریق شد؛ تمام queryها، قفل و تراکنش واقعی بودند. seed نامرتبط دایرکتوری بیمارستان در harness غیرفعال است.
-- قدم بعد پس از مرج: W1.4، همراه intake.submitted/approved/rejected/approve_failed و appointment.confirmed. order.reviewed/needs_action در W1.2 می‌مانند.
+- قدم بعد: W1.4، همراه intake.submitted/approved/rejected/approve_failed و appointment.confirmed. order.reviewed/needs_action در W1.2 می‌مانند.
 
 ## اخیراً لند شد
+
+- 2026-09-17 · PR #26 · 508cb4b · W1.5؛ security-ci سبز، ۲۶ سناریوی نوبت و ۱۷ رگرسیون سبز. کلیم آزاد شد.
 
 - 2026-09-16 · PR #13 · ccaa792 · W1.6؛ security-ci سبز، ۲۴ سناریو و بیلد هر دو سمت سبز. کلیم W1.6 آزاد و کلیم مستقل W1.5 فعال شد.
 
@@ -59,3 +51,5 @@ note: W1.6 در ccaa792 مرج شد؛ W1.5 اتصال نوبت به مراجعه
 - `d0d19c7` · دایرکتوریِ بیمارستان‌های تهران + importِ جداشدهٔ هر tenant
 - `f48a427` · حساب‌های آزمایشیِ هم‌شماره
 - `0eeee1c` · مالیِ جراح، حساب‌های موقت، چینشِ بیمارستان، فاکتورِ اتمیکِ انبار
+
+- یادداشت W1.4: approve فعلی هنوز forVisitId نوبت را مصرف نمی‌کند؛ همراه اتمیک‌سازی باید همان مراجعهٔ هدف را به‌روز کند. جزئیات در lanes/gpt.md ثبت شد؛ تغییرهای مشترک فقط از فایل‌های مخزن اعلام شدند.

@@ -6,7 +6,7 @@
 | ترتیب | بسته | وضعیت | شاخه | کامیتِ مرج | یادداشت |
 |---|---|---|---|---|---|
 | ۱ | W1.6 اسنپ‌شاتِ فرم + حذفِ نرمِ فیلد + `formUsage` با submission + منعِ حذفِ فرمِ پاسخ‌دار | ✅ | `agent/w1-6-form-snapshot` | ccaa792 | PR #13؛ security-ci و ۲۴ سناریو سبز |
-| ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | 🟡 | `agent/w1-5-appointment-visit-link` | | D05, N2, N3؛ ۲۶ سناریو و ۱۷ رگرسیون سبز؛ آمادهٔ PR |
+| ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | ✅ | `agent/w1-5-appointment-visit-link` | 508cb4b | PR #26؛ security-ci، ۲۶ سناریو و ۱۷ رگرسیون سبز |
 | ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ⬜ | `agent/w1-4-approve-atomic` | | D04 |
 | ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ⬜ | `agent/w1-1-unfollowed-match` | | D01 |
 | ۵ | W1.7 گیتِ `done` برای `post_op_care/follow_up` + بازتنظیم با تاریخچه | ⬜ | `agent/w1-7-postop-gate` | | D07 · `DECISIONS.md` #۱ |
@@ -28,3 +28,5 @@
 - برای لِین ج: شرط `halfWhere` در `today.service.ts` پاسخ سالمِ فرمِ `scope=record` را هم تأیید نیمه‌کاره می‌شمارد؛ این فرم عمداً visitId ندارد. لطفاً فرم‌های زیرپرونده را از این استثنا کنار بگذارید. W1.4 مسیر مراجعه‌ساز را اتمیک می‌کند.
 
 - W1.5 برای لِین ج: خروجی day/suggest/walkIn اکنون forVisitId دارد. شروع پیگیری همان شناسهٔ فرزند را با made:false می‌دهد؛ مصرف‌کننده نباید از made:false نتیجه بگیرد که نوبت شروع نشده. مرحلهٔ بالینی و پاسخ‌ها حفظ می‌شوند.
+
+- تحویل W1.4: approve فعلی هنوز held.forVisitId را مصرف نمی‌کند و createVisit می‌زند؛ در اتمیک‌سازی، مراجعهٔ هدف باید با دادهٔ پاسخ به‌روز شود تا مسیر «رزرو بیمار ← تأیید» هم مراجعهٔ دوم نسازد. این باگ در مسیر startVisit بسته شده، ولی approve هنوز بستهٔ بعد است.
