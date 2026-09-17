@@ -2,6 +2,7 @@ import {
   Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards,
 } from '@nestjs/common';
 import { IsIn, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import { CANCEL_REASON_KEYS } from '../common/cancel-reasons';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -19,6 +20,14 @@ class WalkInDto {
 class StatusDto {
   @IsIn(['held', 'confirmed', 'arrived', 'done', 'noshow', 'cancelled'], { message: 'وضعیت نامعتبر است' })
   status!: string;
+
+  /* دلیلِ لغو — اجباریِ مشروط؛ خودِ اجبار در سرویس چک می‌شود. */
+  @IsOptional() @IsIn(CANCEL_REASON_KEYS, { message: 'دلیلِ لغو نامعتبر است' })
+  cancelReason?: string;
+
+  /** یادداشتِ داخلی — هرگز برای بیمار فرستاده نمی‌شود. */
+  @IsOptional() @IsString() @MaxLength(400)
+  cancelNote?: string;
 }
 
 /**
@@ -53,7 +62,7 @@ export class AppointmentsController {
 
   @Post(':id/status')
   setStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: StatusDto, @CurrentUser() user: any) {
-    return this.svc.setStatus(id, dto.status, user);
+    return this.svc.setStatus(id, dto.status, user, { reason: dto.cancelReason, note: dto.cancelNote });
   }
 
   @Post(':id/visit')

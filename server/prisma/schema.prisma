@@ -1297,6 +1297,12 @@ model Visit {
   followUpDays  String? @map("follow_up_days")
   opStatus String    @default("pending") @map("op_status") // pending | done | cancelled
 
+  /// دلیلِ لغو — کلیدی از `CANCEL_REASONS` (مجموعهٔ بسته در کد، نه جدول).
+  /// ⚠️ این متن **به دستِ بیمار می‌رسد**؛ یادداشتِ داخلی ستونِ جداست.
+  cancelReason String? @map("cancel_reason")
+  /// یادداشتِ داخلیِ لغو — فقط کارکنان. هرگز فرستاده نمی‌شود.
+  cancelNote   String? @map("cancel_note")
+
   /// توکنِ لینکِ عمومیِ «خلاصهٔ ویزیت» — تنبل ساخته می‌شود، اولین باری که
   /// ادمین خلاصه را باز می‌کند یا برای بیمار می‌فرستد. صفحهٔ عمومی هیچ
   /// عددِ مالی‌ای ندارد؛ همان قاعدهٔ توکنِ فرمِ بیمار.
@@ -2334,6 +2340,9 @@ model Appointment {
   visitId Int?   @unique @map("visit_id")
 
   note      String?
+  /// همان دو ستونِ `Visit` — لغوِ نوبت هم لغو است و دلیلِ خودش را می‌خواهد.
+  cancelReason String? @map("cancel_reason")
+  cancelNote   String? @map("cancel_note")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { cancelSms, type CancelKind } from '../common/cancel-reasons';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
@@ -342,6 +343,45 @@ export class RemindersService {
   }
 
   /** فهرست برای ادمین — pendingهای پیشِ‌رو + آخرین ارسال‌شده‌ها. */
+  /**
+   * **پیامِ لغو به بیمار** (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶).
+   *
+   * ⚠️ این‌جا می‌نشیند و نه در دو سرویسِ لغو، چون هر دو (`PatientsService` و
+   * `AppointmentsService`) از قبل همین سرویس را تزریق کرده‌اند و این تنها
+   * جایی است که هم `sms` دارد هم `settings`. دو کپی یعنی روزی متنِ لغوِ نوبت
+   * و مراجعه از هم واگرا شوند.
+   *
+   * ⚠️ **هرگز درخواست را نمی‌شکند.** لغو باید انجام شود حتی اگر پیامک نرود؛
+   * نتیجه در همان دفترِ یادآوری‌ها (`kind: 'notice'`) با وضعیتِ `failed`
+   * می‌نشیند تا دیده شود، نه اینکه بی‌صدا گم شود.
+   *
+   * ⚠️ یادداشتِ داخلی **هرگز** به این تابع نمی‌رسد — امضا فقط `reasonKey`
+   * می‌گیرد. اگر روزی کسی خواست متنِ آزاد بفرستد، باید امضا را عوض کند و
+   * همان‌جا این کامنت را ببیند.
+   */
+  async notifyCancelled(
+    kind: CancelKind,
+    patientId: number | null,
+    reasonKey: string,
+    opts: { when?: string | null } = {},
+  ) {
+    try {
+      if (!patientId) return;
+      const p = await this.prisma.patient.findUnique({ where: { id: patientId }, select: { phone: true } });
+      const to = String(p?.phone ?? '').replace(/[^0-9]/g, '');
+      if (!/^09\d{9}$/.test(to)) return;
+      const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
+      const text = cancelSms(kind, reasonKey, { brand: brand?.name ?? null, when: opts.when ?? null });
+      const res = await this.sms.send(to, text);
+      await this.prisma.reminder.create({
+        data: {
+          patientId, kind: 'notice', dueAt: new Date(), phone: to, text,
+          status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date(),
+        },
+      }).catch(() => undefined);
+    } catch { /* لغو نباید به‌خاطرِ پیامک بشکند */ }
+  }
+
   async queueStaffNotice(accountId: number, name: string, text: string, key: string, user: any) {
     for (let attempt = 0; ; attempt++) {
       try { return await this.prisma.$transaction(async tx => {

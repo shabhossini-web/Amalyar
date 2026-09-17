@@ -5,6 +5,7 @@ import { EventsService } from '../work/events.service';
 import { PatientsService } from './patients.service';
 import { FormsService } from './forms.service';
 import { AvailabilityService } from './availability.service';
+import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { RemindersService } from './reminders.service';
 
 /** برچسب‌های فارسیِ وضعیتِ نوبت — مشتقِ سرور (قانون ۱۵). */
@@ -257,9 +258,16 @@ export class AppointmentsService {
   }
 
   /** گذارِ وضعیت — فقط گذارهای اعلام‌شده. */
-  async setStatus(id: number, status: string, user: any) {
+  async setStatus(id: number, status: string, user: any, cancel?: { reason?: string; note?: string }) {
     const row = await this.prisma.appointment.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('نوبت پیدا نشد');
+    /* ⚠️ همان قاعدهٔ لغوِ مراجعه — و لغوِ نوبت **هم** مشمول است (تصمیمِ مالک):
+       نوبت‌ها یادآوریِ روزِ قبل دارند، پس بیمارِ بی‌خبر منتظرِ پیامی می‌ماند
+       که دیگر نمی‌آید. */
+    const cancelling = status === 'cancelled' && row.status !== 'cancelled';
+    if (cancelling && !CANCEL_REASONS[cancel?.reason ?? '']) {
+      throw new BadRequestException('دلیلِ لغو را از فهرست انتخاب کنید');
+    }
     const allowed = APPT_TRANSITIONS[row.status] ?? [];
     if (!allowed.includes(status)) {
       throw new BadRequestException(
@@ -267,7 +275,13 @@ export class AppointmentsService {
       );
     }
     const updated = await this.prisma.appointment.update({
-      where: { id }, data: { status }, include: AppointmentsService.INCLUDE,
+      where: { id },
+      data: {
+        status,
+        ...(cancelling ? { cancelReason: cancel!.reason, cancelNote: cancel?.note ?? null } : {}),
+        ...(row.status === 'cancelled' && status !== 'cancelled' ? { cancelReason: null, cancelNote: null } : {}),
+      },
+      include: AppointmentsService.INCLUDE,
     });
     await this.audit.record({
       actorId: user?.id, action: 'appointment.status', entityType: 'appointment', entityId: id,
@@ -278,8 +292,14 @@ export class AppointmentsService {
       type: `appointment.${status}`, appointmentId: id, patientId: row.patientId ?? null, visitId: row.visitId ?? null,
       actorId: user?.id ?? null, payload: { from: row.status, date: row.date },
     });
-    /* لغو/نیامد → یادآوری باطل؛ برگشت به قطعی → دوباره کاشته می‌شود. */
+    /* لغو/نیامد → یادآوری باطل؛ برگشت به قطعی → دوباره کاشته می‌شود.
+       ⚠️ این **از قبل** کار می‌کرد؛ آنچه نبود خبردادن به بیمار بود. */
     await this.reminders.syncAppointment(id);
+    if (cancelling) {
+      await this.reminders.notifyCancelled('appointment', row.patientId, cancel!.reason!, {
+        when: row.date.toISOString().slice(0, 10),
+      });
+    }
     /* قرینهٔ خاموشیِ walkIn: نوبتی که «ویزیتِ بعدی» را پوشش می‌داد اگر لغو یا
        نیامد شود، بیمار نباید بی‌یادآور بماند — next_visit همان مراجعه‌ها
        دوباره هم‌گام می‌شود (خودش می‌سنجد نوبتِ فعالِ دیگری هست یا نه). */

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import { useTerms } from './config.jsx';
 import { FLOW } from '../lib/terms.js';
+import CancelReason from '../ui/CancelReason.jsx';
 import './calendar.css';
 import { ChevronEnd, Clock } from '../ui/icons.jsx';
 
@@ -26,6 +28,7 @@ export default function Calendar() {
   const t = useTerms();
   const navigate = useNavigate();
   const [busyAppt, setBusyAppt] = useState(0);
+  const [cancelAsk, setCancelAsk] = useState(null); // نوبتی که دلیلِ لغوش پرسیده می‌شود
   const [err2, setErr2] = useState('');
   const [ty, tm, td] = jToday();
   const [ym, setYm] = useState({ y: ty, m: tm });
@@ -47,10 +50,17 @@ export default function Calendar() {
 
   /* میزِ پذیرش — گذارِ وضعیتِ نوبت. دکمه‌ها از `next`ِ خودِ سرور ساخته
      می‌شوند، نه از کپیِ کلاینتیِ ماشینِ وضعیت. */
-  const setApptStatus = async (a, status) => {
+  const runApptStatus = async (a, status, cancel) => {
     setBusyAppt(a.id); setErr2('');
-    try { await api(`/appointments/${a.id}/status`, { method: 'POST', body: { status } }); await load(ym.y, ym.m); }
-    catch (e) { setErr2(e.message); } finally { setBusyAppt(0); }
+    try { await api(`/appointments/${a.id}/status`, { method: 'POST', body: { status, ...cancel } }); await load(ym.y, ym.m); }
+    finally { setBusyAppt(0); }
+  };
+
+  /* لغو دلیل می‌خواهد و بیمار پیامک می‌گیرد (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶) — سرور
+     هم بدونِ دلیل ۴۰۰ می‌دهد، پس این پنجره تنها راهِ لغو است. */
+  const setApptStatus = (a, status) => {
+    if (status === 'cancelled') { setCancelAsk(a); return; }
+    runApptStatus(a, status).catch((e) => setErr2(e.message));
   };
 
   /* شروعِ ویزیت — مراجعه از خودِ نوبت ساخته (یا پیدا) می‌شود و فرمش باز. */
@@ -185,6 +195,20 @@ export default function Calendar() {
           </article>
         ))}
       </section>
+
+      <AnimatePresence>
+        {cancelAsk && (
+          <CancelReason
+            kind="appointment"
+            what={cancelAsk.fullName}
+            onClose={() => setCancelAsk(null)}
+            onConfirm={async (c) => {
+              await runApptStatus(cancelAsk, 'cancelled', c);
+              setCancelAsk(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
