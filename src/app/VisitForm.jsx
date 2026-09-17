@@ -263,6 +263,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      «ثبتِ تصمیم» نیست: فرمش را همان‌جا باز می‌کند و ارسال می‌کند. */
   const [orders, setOrders] = useState([]);
   const [orderSheet, setOrderSheet] = useState(null); // {kind, order?}
+  /* کارتِ آماده‌سازی (W3.2) — یک درخواست، فقط برای مراجعهٔ ذخیره‌شده. */
+  const [prep, setPrep] = useState(null);
+  useEffect(() => {
+    if (!initial?.id) return;
+    let on = true;
+    api(`/visits/${initial.id}/prep`).then((r) => { if (on) setPrep(r); }).catch(() => {});
+    return () => { on = false; };
+  }, [initial?.id]);
   const loadOrders = useCallback(() => {
     if (!initial?.id) return;
     api(`/orders?visitId=${initial.id}`).then((r) => setOrders(Array.isArray(r) ? r : [])).catch(() => {});
@@ -777,6 +785,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
         <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
+
+      {editing && prep && <PrepCard prep={prep} />}
 
       {editing && (initial.surgeonInstructions || initial.requiredItems?.length > 0) && <details className="sp-card">
         <summary>دستور جراح و اقلام موردنیاز</summary>
@@ -1328,5 +1338,90 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         </>
       )}
     </Overlay>
+  );
+}
+
+const NOTE_FA = { visit: 'شرحِ ویزیت', op: 'شرحِ عمل', followup: 'پیگیری', consult: 'مشاوره' };
+const ORDER_STATUS_FA = { sent: 'منتظرِ پاسخ', answered: 'پاسخ آمده' };
+
+/**
+ * **کارتِ آماده‌سازیِ ویزیت** (W3.2، §۴.۴ سند) — آنچه باید *پیش از* دیدنِ بیمار دانست.
+ *
+ * تا امروز این چند تکه در چند صفحه پخش بود: حساسیت و داروی بیمار در پرونده،
+ * شرحِ ویزیتِ قبلی در تبِ دیگر، نتیجهٔ در انتظار در بخشِ سفارش‌ها، و ماندهٔ مالی
+ * در صورت‌حساب. کسی که وقت ندارد هیچ‌کدام را باز نمی‌کند — و «حساسیت به
+ * پنی‌سیلین» چیزی است که نباید دیده نشود.
+ *
+ * ⚠️ **هشدارِ بالینی باز است، بقیه بسته.** اگر همه‌چیز باز باشد، فرم زیرِ یک
+ * دیوارِ متن دفن می‌شود؛ اگر همه بسته باشد، حساسیت دیده نمی‌شود.
+ * ⚠️ هیچ عددی این‌جا حساب نمی‌شود: مانده، سن و کوتاه‌شدنِ متن از سرور می‌آیند.
+ */
+function PrepCard({ prep }) {
+  const p = prep.patient;
+  const risky = [
+    p.allergies && { k: 'allergies', l: 'حساسیت', v: p.allergies },
+    p.chronicConditions && { k: 'chronic', l: 'بیماریِ زمینه‌ای', v: p.chronicConditions },
+    p.medications && { k: 'meds', l: 'داروها', v: p.medications },
+  ].filter(Boolean);
+  const answered = prep.pendingResults.filter((o) => o.status === 'answered').length;
+  const due = prep.billing.due;
+
+  return (
+    <section className="db-prep" aria-label="آماده‌سازیِ ویزیت">
+      <div className="db-prep-id">
+        <b>{p.fullName}</b>
+        <span dir="ltr">{p.code}</span>
+        {p.age != null && <span>{faNum(p.age)} ساله</span>}
+        {p.bloodType && <span className="db-prep-blood">{p.bloodType}</span>}
+        {p.insurer && <span>{p.insurer}</span>}
+      </div>
+
+      {risky.length > 0 && (
+        <ul className="db-prep-risk">
+          {risky.map((r) => <li key={r.k}><b>{r.l}:</b> {r.v}</li>)}
+        </ul>
+      )}
+
+      <div className="db-prep-rows">
+        {answered > 0 && (
+          <span className="db-prep-hot">{faNum(answered)} نتیجهٔ پاسخ‌آمده منتظرِ بررسی</span>
+        )}
+        {due > 0 && <span className="db-prep-hot">ماندهٔ مالی: {faNum(due)}</span>}
+      </div>
+
+      {(prep.notes.length > 0 || prep.pendingResults.length > 0 || prep.prevVisits.length > 0) && (
+        <details className="db-prep-more">
+          <summary>سابقهٔ کوتاه</summary>
+          {prep.notes.length > 0 && (
+            <ul className="db-prep-notes">
+              {prep.notes.map((n) => (
+                <li key={n.id}>
+                  <b>{NOTE_FA[n.kind] ?? n.kind}</b>
+                  <i>{n.authorName || ''}</i>
+                  <p>{n.excerpt}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {prep.pendingResults.length > 0 && (
+            <ul className="db-prep-orders">
+              {prep.pendingResults.map((o) => (
+                <li key={`${o.kind}-${o.id}`}>
+                  <b>{o.kindFa}</b>
+                  <i className={o.status}>{ORDER_STATUS_FA[o.status] ?? o.status}</i>
+                </li>
+              ))}
+            </ul>
+          )}
+          {prep.prevVisits.length > 0 && (
+            <ul className="db-prep-visits">
+              {prep.prevVisits.map((v) => (
+                <li key={v.id}><b>{kindOf(v.kind).label}</b><span dir="ltr">{v.code}</span></li>
+              ))}
+            </ul>
+          )}
+        </details>
+      )}
+    </section>
   );
 }

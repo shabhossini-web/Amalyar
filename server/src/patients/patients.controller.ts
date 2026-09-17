@@ -18,13 +18,20 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { CreateVisitDto, UpdateVisitDto, VisitStatusDto, VisitTimesDto } from './dto/visit.dto';
+import { PrepService } from './prep.service';
 
 // مدیریتِ بیماران/مراجعات — دسترسی داینامیک از جدولِ features (کلیدِ dashboard)
 @Controller()
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('dashboard')
 export class PatientsController {
-  constructor(private patients: PatientsService) {}
+  constructor(private patients: PatientsService, private prep: PrepService) {}
+
+  /** کارتِ آماده‌سازیِ ویزیت (W3.2) — آنچه باید پیش از دیدنِ بیمار دانست. */
+  @Get('visits/:id/prep') @RequirePermissions('patients.read')
+  prepFor(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.prep.forVisit(id, user);
+  }
 
   /**
    * فهرستِ مراجعات. همهٔ پارامترها اختیاری‌اند، پس `/visits` خالی همان رفتارِ

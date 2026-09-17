@@ -30,14 +30,19 @@ paths:
   - src/app/VisitForm.jsx
   - src/app/visit-kinds.js
   - src/lib/time.js
+  - server/src/patients/prep.service.ts
+  - server/src/patients/patients.controller.ts
+  - src/app/dashboard.css
+  - scripts/e2e/w3-2-prep-card.mjs
   - .github/workflows/security-ci.yml
-note: لِینِ ج — W3.2 گامِ ۱: استخراجِ `VisitForm` از `Dashboard.jsx`. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
+note: لِینِ ج — W3.2 گامِ ۲: کارتِ آماده‌سازیِ ویزیت (`GET /visits/:id/prep`). گامِ ۱ (استخراجِ `VisitForm`) لند شد. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
 
+- ۱۴۰۵/۰۶/۲۵ · **W3.2 گامِ ۲ — `GET /visits/:id/prep`** (`server/src/patients/prep.service.ts`): هویت + هشدارهای بالینی + سابقهٔ کوتاه + نتیجه‌های در انتظار + ماندهٔ مالی، در یک درخواست. دامنهٔ دید همان فهرستِ مراجعات (زیرِ سوپروایزر فقط `techId` خودش) چون دادهٔ بالینیِ حساس دارد. `record.service.ts` (کلیمِ GPT) دست نخورد — سرویسِ تازه جداست.
 - ۱۴۰۵/۰۶/۲۵ · **W3.2 — نگهبانِ «برچسبِ پشتیبانِ نوعِ مراجعه» به `visit-kinds.js` منتقل شد** (چون برچسب‌ها آن‌جا رفتند) و یک سنجهٔ تازه گرفت: `KINDS` نباید دوباره در `Dashboard.jsx` یا `VisitForm.jsx` تعریف شود. دنبالِ کد آمد، ضعیف‌تر نشد.
 - ۱۴۰۵/۰۶/۲۵ · **W3.2 گامِ ۱ — `VisitForm` از `Dashboard.jsx` بیرون آمد** (`src/app/VisitForm.jsx`، بدونِ تغییرِ رفتار؛ ۲۴۳۶ → ۱۱۱۲ خط). `DefSelect` با آن رفت. دو چیزِ مشترک تک‌منبع شدند: واژگانِ نوعِ مراجعه در `src/app/visit-kinds.js` (`KINDS`/`kindOf`) و `faDuration` در `src/lib/time.js` — هر کس نوعِ تازه یا قالبِ مدت خواست، همان‌جا.
 - ۱۴۰۵/۰۶/۲۵ · **W2.5 — نمای استثنا روی همان `GET /work/today` نشست**، نه endpointِ تازه: یک درخواست برای کلِ صفحهٔ «امروز». `sections.exceptions` فقط از سوپروایزر به بالا و برای بقیه `exceptions: null`. چهار ردیف در `CONTRACTS.md` §۱۱.
@@ -54,6 +59,7 @@ note: لِینِ ج — W3.2 گامِ ۱: استخراجِ `VisitForm` از `Das
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۶/۲۵ · PR #23 · `4044c85` · **W3.2 گامِ ۱** روی `main`: `VisitForm` به فایلِ خودش، `Dashboard.jsx` ۲۴۳۶ → ۱۱۱۲ خط، `visit-kinds.js` و `faDuration` تک‌منبع.
 - ۱۴۰۵/۰۶/۲۵ · PR #22 · `f8da7bd` · **W2.5 نمای استثنای مدیر** روی `main` — با این، W2.1 تا W2.5 کامل شد.
 - ۱۴۰۵/۰۶/۲۵ · PR #14 · `291f255` · **W2.4 پوستهٔ سراسری** روی `main`: `Shell.jsx` (layout-route)، جستجوی بیمار Ctrl+K، زنگِ کارها، `/app/work`، `GET /search/patients`؛ e2e ۱۷/۱۷.
 - (در PR) **W2.3 صفحهٔ «امروز»** — `/app` = امروز، لانچر به `/app/tools`؛ e2e `scripts/e2e/w2-3-today.mjs` ۲۱/۲۱ (دو بار) + اسکرین‌شاتِ دسکتاپ/موبایل/کشو.

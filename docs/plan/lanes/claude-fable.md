@@ -11,7 +11,9 @@
 | ۴ | W2.3 صفحهٔ «امروز» + خلاصهٔ صبح | ✅ | `claude/quirky-volta-uyuznl` | PR #21 (`aec89c3`) | `DECISIONS.md` #۲ (پیش‌فرض: جایگزینِ لانچر) · `CONTRACTS.md` §۱۱ · e2e: `scripts/e2e/w2-3-today.mjs` (۲۱/۲۱) |
 | ۵ | W2.5 نمای استثنای مدیر | ✅ | `claude/quirky-volta-uyuznl` | PR #22 (`f8da7bd`) | `CONTRACTS.md` §۱۱ · e2e: `scripts/e2e/w2-5-exceptions.mjs` (۱۷/۱۷) |
 | ۶ | W3.1 پروندهٔ زنده | ⬜ | `claude/w3-1-live-record` | | پس از W1.2 |
-| ۷ | W3.2 فضای کارِ ویزیت — **گامِ ۱: استخراجِ `VisitForm`** | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `Dashboard.jsx` ۲۴۳۶ → ۱۱۱۲ خط (معیارِ سند: <۱۲۰۰). گامِ ۲ (فضای کار + مراجعهٔ پیش‌نویس) جدا می‌آید |
+| ۷ | W3.2 گامِ ۱: استخراجِ `VisitForm` | ✅ | `claude/quirky-volta-uyuznl` | PR #23 (`4044c85`) | `Dashboard.jsx` ۲۴۳۶ → ۱۱۱۲ خط (معیارِ سند: <۱۲۰۰) |
+| ۷ب | W3.2 گامِ ۲: کارتِ آماده‌سازیِ ویزیت (§۴.۴ «پیش از ویزیت») | 🟡 | `claude/quirky-volta-uyuznl` | PR باز | `GET /visits/:id/prep` · e2e: `scripts/e2e/w3-2-prep-card.mjs` (۱۸/۱۸) |
+| ۷ج | W3.2 گامِ ۳: مراجعهٔ پیش‌نویس (سفارش پیش از ذخیره) | ⬜ | | | معیارِ پذیرشِ باقی‌ماندهٔ سند. نیاز به تصمیم: سفارشِ بی‌مراجعه روی پرونده بنشیند و هنگامِ ذخیره وصل شود (`PATCH` سفارش الان `visitId` را نمی‌پذیرد) |
 | ۸ | W3.3 میزِ پذیرشِ روز | ⬜ | `claude/w3-3-front-desk` | | پس از W1.5 |
 | ۹ | W3.8 یکی‌کردنِ منبعِ ساعت/کارشناس + پیشنهادِ جراح/عمل در تأیید | ⬜ | `claude/w3-8-single-source` | | |
 | بعد | W4.1 / W4.2 مسیرِ درمان · W5.1–W5.4 دستیار درونِ کارها | ⬜ | | | |
