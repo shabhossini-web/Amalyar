@@ -66,6 +66,8 @@ import { RemindersService } from './reminders.service';
 import { PortalService } from './portal.service';
 import { PermissionGuard } from '../auth/permission.guard';
 import { RateLimitService } from '../common/rate-limit.service';
+import { RepairController } from './repair.controller';
+import { RepairService } from './repair.service';
 import { HospitalDutiesController } from './hospital-duties.controller';
 import { HospitalDutiesService } from './hospital-duties.service';
 
@@ -79,7 +81,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, AvailabilityController, AppointmentsController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
-    SummaryController, PublicSummaryController, LettersController, OrdersController, PublicOrdersController,
+    SummaryController, PublicSummaryController, LettersController, OrdersController, PublicOrdersController, RepairController,
   ],
   providers: [
     TenantHospitalDirectoryService,
@@ -89,7 +91,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     FrontDeskService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RateLimitService, PermissionGuard,
+    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RepairService, RateLimitService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */
   exports: [ServiceCodesService, PatientsService],

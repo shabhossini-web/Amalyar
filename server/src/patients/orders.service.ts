@@ -117,6 +117,24 @@ export class OrdersService {
     return made;
   }
 
+  /**
+   * W1.10 — ترمیمِ سفارشِ **قدیمی** که پیش از W1.2 پاسخ گرفته و مدرک ندارد.
+   *
+   * ⚠️ عمداً همان `answerDocuments`ِ رو به جلو را می‌دواند، نه یک نسخهٔ دومِ
+   * ترمیمی: آن یکی روی محتوای متن/لینک dedupe می‌کند، پس دوباره‌دواندنش
+   * بی‌خطر است و دو مسیر هیچ‌وقت از هم دور نمی‌افتند.
+   *
+   * وضعیت و تصمیمِ بررسی دست نمی‌خورند — این ترمیمِ **مدرکِ گم‌شده** است،
+   * نه ثبتِ دوبارهٔ پاسخ.
+   */
+  repairAnswerDocuments(kind: OrderKind, row: any, tx: any = this.prisma): Promise<number> {
+    const data = kind === 'consult' || kind === 'referral'
+      ? { answerText: row.answerText ?? null, answerLink: row.answerLink ?? null }
+      : { resultText: row.resultText ?? null, resultLink: row.resultLink ?? null,
+        resultUser: row.resultUser ?? null, resultPass: row.resultPass ?? null };
+    return this.answerDocuments(kind, row, data, tx, null);
+  }
+
   private async answered(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null) {
     await this.answerDocuments(kind, row, data, tx, actorId);
     const fresh = await this.table(kind, tx).update({ where: { id: row.id }, data: {
