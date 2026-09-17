@@ -11,7 +11,7 @@
 | ۴ | W0.6 Escape / focus-trap / کلیدهای جهت در `src/ui/` | ✅ | `claude/quirky-johnson-ynzr4y` | PR #16 (`2ced34c`) | فقط `Overlay.jsx` و `Tabs.jsx` · e2e: `scripts/e2e/w0-6-a11y.mjs` (۱۷/۱۷، دو بار؛ روی نسخهٔ قبلی ۵ قرمز + timeout) |
 | ۵ | W0.7 اقدامِ per-row یادآوری (فرانت) | ⬜ | `claude/w0-7-reminder-actions-ui` | | سرور از W1.9 |
 | ۶ | W3.7 آیکونِ یکتا + نام‌گذاری + واژه‌نامه | ⬜ | `claude/w3-7-icons-naming` | | |
-| ۷ | W3.6 تمِ روشنِ بالینی | 🟡 | `claude/quirky-johnson-ynzr4y` | PR #24 (باز) | `DECISIONS.md` #۳ · `data-theme`/`data-density` روی `<html>` از `src/lib/theme.js` · پیش‌فرضِ `clinic` روشن، انتخابِ کاربر مقدم · ویترین با `.theme-dark` تیره می‌ماند · e2e: `scripts/e2e/w3-6-light-theme.mjs` (۲۹/۲۹، دو بار) · نگهبان: `scripts/verify-theme-tokens.js` · اسکرین‌شاتِ هر دو تم: `docs/plan/shots/w3-6-{light,dark}.png` |
+| ۷ | W3.6 تمِ روشنِ بالینی | ✅ | `claude/quirky-johnson-ynzr4y` | PR #24 (`4443759`) | `DECISIONS.md` #۳ · `data-theme`/`data-density` روی `<html>` از `src/lib/theme.js` · پیش‌فرضِ `clinic` روشن، انتخابِ کاربر مقدم · ویترین با `.theme-dark` تیره می‌ماند · e2e: `scripts/e2e/w3-6-light-theme.mjs` (۲۹/۲۹، دو بار) · نگهبان: `scripts/verify-theme-tokens.js` · اسکرین‌شاتِ هر دو تم: `docs/plan/shots/w3-6-{light,dark}.png` |
 | ۸ | W3.5 فرم‌ساز | ✅ | `claude/quirky-johnson-ynzr4y` | PR #19 (`572e747`) | §۴.۷ · e2e: `scripts/e2e/w3-5-formbuilder.mjs` (۳۱/۳۱، دو بار؛ روی نسخهٔ قبلی ۶ قرمز + timeout) · ارتفاعِ قالبِ ویزیت در موبایل ۵۱۵۱px ← ۱۷۹۵px |
 | ۹ | W3.4 لینکِ واحدِ بیمار + نیمهٔ UIِ draft (W1.8) | ⬜ | `claude/w3-4-patient-link` | | `DECISIONS.md` #۵ |
 | بعد | W4.3 ویزاردِ راه‌اندازی · W4.4 KPI | ⬜ | | | پس از W2.1 |
