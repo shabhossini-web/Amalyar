@@ -2942,3 +2942,12 @@ jobs:
 
       - name: Verify draft resume, indicator and no browser storage (W1.8 UI)
         run: node scripts/e2e/w1-8-draft-ui.mjs
+
+      # ⚠️ W1.9/§8: syncNextVisit cancelled and recreated every pending
+      # reminder on each call, and 'uncertain' was effectively terminal --
+      # sendReminders only picks up 'pending', so a message whose outcome was
+      # unknown was never retried and just sat there. Now every reminder has a
+      # dedupe key, only rows outside the new plan are cancelled, and an
+      # uncertain send returns to the queue after 5/15/45 minutes.
+      - name: Verify reminder dedupe keys and delivery retry (W1.9)
+        run: node scripts/e2e/w1-9-reminder-local.mjs

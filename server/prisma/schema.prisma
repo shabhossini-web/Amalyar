@@ -2381,6 +2381,10 @@ model Reminder {
   providerId String? @map("provider_id")
   deliveryStatus String @default("unknown") @map("delivery_status")
   attemptedAt DateTime? @map("attempted_at")
+  /// W1.9 — چند بار تلاشِ ارسال شده. `uncertain` تا سه بار با مکثِ ۵/۱۵/۴۵
+  /// دقیقه دوباره امتحان می‌شود و بعد `failed` می‌گیرد؛ بدونِ این ستون
+  /// «چندمین تلاش» دانستنی نبود و `uncertain` عملاً وضعیتِ **نهایی** بود.
+  attempts Int @default(0)
 
   patient   Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
   patientId Int?     @map("patient_id")
