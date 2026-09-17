@@ -84,7 +84,7 @@ try {
   ok(acnt('pending') === 1, 'یادآوریِ نوبت کاشته شد');
   ok(sql(`SELECT text FROM reminders WHERE appointment_id=${appt.id} AND status='pending'`).includes('یادآوری نوبت'),
     'با متنِ نوبت');
-  await send(`/appointments/${appt.id}/status`, 'POST', { status: 'cancelled' });
+  await send(`/appointments/${appt.id}/status`, 'POST', { status: 'cancelled', cancelReason: 'other' });
   ok(acnt('pending') === 0 && acnt('cancelled') === 1, '**لغوِ نوبت یادآوری را باطل می‌کند**');
 } finally {
   sql(`DELETE FROM reminders WHERE patient_id IN (SELECT id FROM patients WHERE last_name='مراقبت')`);

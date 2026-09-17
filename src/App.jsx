@@ -46,6 +46,7 @@ const Assistant = lazy(() => import('./app/Assistant.jsx'));
 const Chat = lazy(() => import('./app/Chat.jsx'));
 import Gate from './app/Gate.jsx';
 const PatientRecord = lazy(() => import('./app/PatientRecord.jsx'));
+const Pathways = lazy(() => import('./app/Pathways.jsx'));
 const Settings = lazy(() => import('./app/Settings.jsx'));
 const Site = lazy(() => import('./app/Site.jsx'));
 const PlatformAdmin = lazy(() => import('./app/PlatformAdmin.jsx'));
@@ -123,6 +124,7 @@ export default function App() {
             <Route path="/app/assistant" element={<Assistant />} />
             <Route path="/app/chat" element={<Chat />} />
             <Route path="/app/patients/:id" element={<PatientRecord />} />
+            <Route path="/app/pathways" element={<Gate feature="pathway"><Pathways /></Gate>} />
             <Route path="/app/site" element={<Gate feature="site"><Site /></Gate>} />
             <Route path="/app/settings" element={<Settings />} />
             <Route path="/app/profile" element={<Profile />} />

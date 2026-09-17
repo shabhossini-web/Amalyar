@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { LEVEL } from '../common/levels';
 import { jobRoleLabel } from '../common/job-roles';
 import { PATHWAY_TEMPLATES, validateSteps, type PathwayStepDef } from './pathway.registry';
@@ -25,7 +26,7 @@ const STEP_FA: Record<string, string> = { pending: 'در انتظار', done: '�
  */
 @Injectable()
 export class PathwayService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private events: EventsService) {}
 
   /**
    * الگوهای آمادهٔ کد را یک‌بار روی این نصب می‌نشاند.
@@ -352,8 +353,16 @@ export class PathwayService {
     if (!Object.keys(data).length) throw new BadRequestException('چیزی برای ثبت نیامده است');
 
     await this.prisma.episodeStep.update({ where: { id: stepId }, data });
-    /* گامی که بسته شد دیگر پیامِ یادآوری‌اش موضوعیت ندارد. */
-    if (data.status && data.status !== 'pending') await this.cancelNotices({ stepId });
+    /* گامی که بسته شد دیگر پیامِ یادآوری‌اش موضوعیت ندارد — و کارِ پیگیریِ
+       «عدمِ پاسخ»ش هم باید بسته شود، وگرنه در صفِ کارها می‌ماند و کسی دنبالِ
+       گامی می‌گردد که انجام شده. */
+    if (data.status && data.status !== 'pending') {
+      await this.cancelNotices({ stepId });
+      await this.events.emit({
+        type: 'pathway.step_closed', patientId: step.episode.patientId,
+        visitId: step.episode.visitId ?? null, refType: 'pathway_step', refId: stepId,
+      }).catch(() => undefined);
+    }
     await this.audit.record({
       actorId: user?.id, action: 'pathway.step', entityType: 'episode_step', entityId: stepId,
       before: { status: step.status, dueAt: step.dueAt, ownerId: step.ownerId }, after: data,
@@ -376,6 +385,20 @@ export class PathwayService {
     await this.prisma.episode.update({ where: { id: episodeId }, data: { status, closedAt: new Date() } });
     /* ⚠️ دورهٔ بسته نباید فردا به بیمار پیام بدهد — چه تمام شده باشد چه لغو. */
     await this.cancelNotices({ episodeId });
+    /* ⚠️ گام همان‌طور «باز» می‌ماند (قاعدهٔ بالا) ولی **کارِ پیگیری‌اش** باید
+       بسته شود: `patchStep` روی دورهٔ بسته ۴۰۳ می‌دهد، پس کارِ بازمانده کاری
+       است که مسئولش از هیچ راهی نمی‌تواند تمامش کند. فقط گام‌هایی که اصلاً
+       می‌توانستند کار بسازند (`escalateDays > 0`) رویداد می‌گیرند. */
+    const stranded = await this.prisma.episodeStep.findMany({
+      where: { episodeId, status: 'pending', escalateDays: { not: null, gt: 0 } },
+      select: { id: true },
+    });
+    for (const s of stranded) {
+      await this.events.emit({
+        type: 'pathway.step_closed', patientId: e.patientId, visitId: e.visitId ?? null,
+        refType: 'pathway_step', refId: s.id,
+      }).catch(() => undefined);
+    }
     await this.audit.record({
       actorId: user?.id, action: 'pathway.close', entityType: 'episode', entityId: episodeId,
       before: { status: e.status }, after: { status },

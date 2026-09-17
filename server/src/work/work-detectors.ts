@@ -57,6 +57,7 @@ async function guard(fn: () => Promise<number>): Promise<number> {
 
 export type DetectResult = {
   unconfirmed: number; reportMissing: number; usageUnconfirmed: number; formUnanswered: number; reportUploaded: number;
+  pathwayOverdue: number;
 };
 
 export async function detectStaleWork(client: any, now: Date = new Date()): Promise<DetectResult> {
@@ -132,5 +133,37 @@ export async function detectStaleWork(client: any, now: Date = new Date()): Prom
     return rows.length;
   });
 
-  return { unconfirmed, reportMissing, usageUnconfirmed, formUnanswered, reportUploaded };
+  /**
+   * «عدمِ پاسخ»ِ مسیرِ درمان (W4.2): گامی که `escalate_days` روز از موعدش
+   * گذشته و هنوز باز است.
+   *
+   * ⚠️ کفِ ۶۰ روزه این‌جا هم اعمال می‌شود (`floor`): نصبی که دوره‌های قدیمیِ
+   * نیمه‌کاره دارد نباید در اولین sweep صدها کارِ پیگیری بسازد.
+   * ⚠️ فقط دورهٔ **فعال**: گامِ بازِ دوره‌ای که بسته شده، عمداً باز مانده و
+   * کارِ پیگیری ندارد (قاعدهٔ «بستنِ دوره گام‌ها را انجام‌شده نمی‌کند»).
+   */
+  const pathwayOverdue = await guard(async () => {
+    const rows = await client.episodeStep.findMany({
+      where: {
+        status: 'pending',
+        escalateDays: { not: null, gt: 0 },
+        dueAt: { lt: today, gte: floor },
+        episode: { status: 'active', patient: { deletedAt: null } },
+      },
+      select: {
+        id: true, title: true, ownerRole: true, dueAt: true, escalateDays: true,
+        episode: { select: { patientId: true, visitId: true } },
+      },
+      orderBy: { dueAt: 'asc' }, take: 200,
+    });
+    const ripe = rows.filter((s: any) =>
+      s.dueAt.getTime() + s.escalateDays * DAY <= now.getTime());
+    return emitOnce(client, 'pathway.step_overdue', ripe.map((s: any) => ({
+      patientId: s.episode.patientId, visitId: s.episode.visitId ?? null,
+      refType: 'pathway_step', refId: s.id,
+      payload: { title: s.title, ownerRole: s.ownerRole ?? null },
+    })), since);
+  });
+
+  return { unconfirmed, reportMissing, usageUnconfirmed, formUnanswered, reportUploaded, pathwayOverdue };
 }

@@ -159,6 +159,21 @@ export const RULES: Record<string, Rule> = {
     priority: 2,
   }),
 
+  /* ── مسیرِ درمان (W4.2) ──
+     «عدمِ پاسخ»: گامی که `escalateDays` روز بعد از موعدش هنوز باز است.
+     ⚠️ مسئولِ کار **همان نقشِ گام** است، نه یک نقشِ ثابت: گامِ «مراقبتِ پس از
+     عمل» مالِ پرستار است و گامِ «ویزیتِ پیگیری» مالِ پزشک؛ فرستادنِ هر دو به
+     یک صف یعنی یکی‌شان همیشه در صفِ اشتباه بماند. */
+  'pathway.step_overdue': (e, ref) => upsert({
+    ...base(e, 'pathway_step', ref),
+    title: `پیگیریِ مرحلهٔ «${String(e.payload?.title ?? 'مسیرِ درمان')}»`,
+    ownerRole: (e.payload?.ownerRole as string) ?? null,
+    dueAt: e.at ?? new Date(),
+    priority: 2,
+  }),
+  /* گامی که بالاخره بسته شد، کارِ پیگیری‌اش را هم می‌بندد. */
+  'pathway.step_closed': (_e, ref) => close(ref, 'pathway_step'),
+
   /* ── ثبت‌نام (D04) ── */
   'intake.submitted': (e, ref) => upsert({
     ...base(e, 'approve_intake', ref),
