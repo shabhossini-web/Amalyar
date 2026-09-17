@@ -1,18 +1,10 @@
 <!-- claim:begin -->
 agent: gpt
-status: active
+status: idle
 branch: agent/w1-2-order-review
 since: 2026-09-17
-paths:
-  - server/src/patients/orders.service.ts
-  - server/src/patients/orders.controller.ts
-  - server/src/patients/record.service.ts
-  - server/prisma/schema.prisma
-  - server/prisma/migrations/20260917120000_order_review/
-  - scripts/e2e/w1-2-order-review.mjs
-  - scripts/e2e/w1-2-order-review-local.mjs
-  - docs/plan/lanes/gpt.md
-note: درخواست مالک: W1.2 پیش از W1.4؛ همگام با main=d4bc6a0 و W3.1. دلیل لغو پس از W3.3؛ تصمیم ۱ دوشاخه و تصمیم ۶ بله سپس تلگرام/relay multipart.
+paths: []
+note: W1.2 مرج شد: PR #38 / 3865b60؛ security-ci و ۶۷ سناریو سبز. قدم بعد W1.4؛ دلیل لغو پس از W3.3؛ تصمیم‌های ۱ و ۶ جدید مبنا هستند.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
@@ -82,3 +74,9 @@ note: درخواست مالک: W1.2 پیش از W1.4؛ همگام با main=d4bc
 - استثناهای محدود در فایل‌های کلیم ج: CONTRACTS فقط §۹ و شرح W1.2؛ work-rules/processor فقط چرخهٔ پاسخ مجدد و reopen با sourceEventId. appointments و access-registry دست نخورده‌اند.
 - publicAnswer برای جلوگیری از بازنویسی از حالا 409 می‌دهد؛ تکمیل append و آپلود عمومی با W0.8 است. اتصال فایل موجود از طریق documentIds فایل/Document دوم نمی‌سازد.
 - گیت CI: یک گام فقط در انتهای security-ci.yml برای اجرای W1.2 با Nest/Prisma/PGlite موقت اضافه می‌شود؛ استثنای محدود فایل کلیم ج. runner مستقل در scripts/e2e/w1-2-order-review-local.mjs است.
+
+## تحویل نهایی W1.2 — PR #38 / 3865b60
+- CI کامل سبز (run 35210061124) و ۶۷ سناریوی HTTP/Prisma/PGlite. W1.2 روی main است؛ کلیم آزاد شد.
+- پاسخ ← Document ارجاع‌دار + audit/outbox اتمیک، بررسی چهار نوع سفارش، بازگشایی همان کار پس از پاسخ جدید. W3.1 در in_review/needs_action باز می‌ماند.
+- endpoint و خروجی documents در CONTRACTS ثبت است. UI بررسی برای مصرف endpoint تحویل لِین ج؛ آپلود/append عمومی همچنان W0.8/W0.5 و ترمیم تاریخی W1.10.
+- W1.4 شروع نشده. دلیل لغو پس از W3.3؛ مراقبت شرطی و confirm_surgery_done و بله سپس تلگرام/relay multipart بدون تغییر تصمیم حفظ شدند.
