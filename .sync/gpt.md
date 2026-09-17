@@ -1,16 +1,10 @@
 <!-- claim:begin -->
 agent: gpt
-status: active
-branch: agent/w2-2b-intake-events
+status: idle
+branch: agent/gpt-close-intake-events
 since: 2026-09-17
-paths:
-  - server/src/patients/intake.service.ts
-  - scripts/e2e/w2-2b-intake-events.mjs
-  - scripts/e2e/intake-finance-roles.mjs
-  - scripts/e2e/profile-workflows.mjs
-  - docs/plan/lanes/gpt.md
-  - STATUS.md
-note: تکمیل پنج emit درخواستی intake/confirmed با ref ثابت؛ W1.4 بعداً اتمیک‌سازی کامل را انجام می‌دهد.
+paths: []
+note: W1.6=ccaa792، W1.5=508cb4b، W2.2-ب=6edbce1 مرج شدند؛ کلیم آزاد، قدم بعد W1.4.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
@@ -51,6 +45,8 @@ note: تکمیل پنج emit درخواستی intake/confirmed با ref ثابت
 
 ## اخیراً لند شد
 
+- 2026-09-17 · PR #29 · 6edbce1 · W2.2-ب؛ پنج emit باقی‌ماندهٔ intake/confirmed با ref ثابت؛ CI سبز، ۱۸ سناریو + ۱۷ مالی + ۱۶ گردش‌کار سبز.
+
 - 2026-09-17 · PR #26 · 508cb4b · W1.5؛ security-ci سبز، ۲۶ سناریوی نوبت و ۱۷ رگرسیون سبز. کلیم آزاد شد.
 
 - 2026-09-16 · PR #13 · ccaa792 · W1.6؛ security-ci سبز، ۲۴ سناریو و بیلد هر دو سمت سبز. کلیم W1.6 آزاد و کلیم مستقل W1.5 فعال شد.
@@ -62,7 +58,9 @@ note: تکمیل پنج emit درخواستی intake/confirmed با ref ثابت
 
 - یادداشت W1.4: approve فعلی هنوز forVisitId نوبت را مصرف نمی‌کند؛ همراه اتمیک‌سازی باید همان مراجعهٔ هدف را به‌روز کند. جزئیات در lanes/gpt.md ثبت شد؛ تغییرهای مشترک فقط از فایل‌های مخزن اعلام شدند.
 
-## تحویل W2.2-ب — تکمیل درخواست رویدادها
+## W2.2-ب مرج شد — PR #29 / 6edbce1
 - fill: submitted و در تأیید خودکار approved؛ approve: approved و confirmed؛ reject: rejected و cancelled نوبت. هر وضعیت و رویدادش با یک tx نوشته می‌شوند.
 - خطای پس از نوشتن در approve: approve_failed با همان intake_submission:id و مراجعهٔ ساخته‌شده. شکستِ اعتبارسنجی پیش از نوشتن، رویداد نیمه‌کاره نمی‌سازد. کل approve هنوز چند commit دارد؛ W1.4 این بدهی را می‌بندد.
 - آزمون: ۱۸ سناریوی واقعی API/Prisma/پردازشگر + ۱۷ مالی + ۱۶ گردش‌کار سبز؛ برای دو سناریوی شکست فقط وابستگی پرداخت/outbox عمداً خطا می‌دهد. باقی مسیر واقعی است. بیلد هر دو سمت سبز.
+
+- تحویل لِین ج: PR #28 در بررسی 2026-09-17 dirty بود و نیاز به rebase روی main تازه داشت. ارتباط و یادداشت‌های forVisitId/استثنای record فقط در فایل‌های مخزن ثبت شدند.
