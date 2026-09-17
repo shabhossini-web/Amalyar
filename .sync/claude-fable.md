@@ -22,6 +22,9 @@ paths:
   - scripts/e2e/w2-4-shell.mjs
   - scripts/e2e/w2-2-work-producers.mjs
   - scripts/e2e/w2-3-today.mjs
+  - src/app/PatientRecord.jsx
+  - src/app/record.css
+  - scripts/e2e/w3-1-live-record.mjs
   - scripts/e2e/w2-5-exceptions.mjs
   - src/app/Today.jsx
   - src/app/today.css
@@ -35,7 +38,7 @@ paths:
   - src/app/dashboard.css
   - scripts/e2e/w3-2-prep-card.mjs
   - .github/workflows/security-ci.yml
-note: لِینِ ج — W3.2 گامِ ۲: کارتِ آماده‌سازیِ ویزیت (`GET /visits/:id/prep`). گامِ ۱ (استخراجِ `VisitForm`) لند شد. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
+note: لِینِ ج — **W3.1 پروندهٔ زنده** شروع شد (`src/app/PatientRecord.jsx` + `record.css`). W3.2 گامِ ۲ در PR #28. لِینِ الف W1.5/W1.6 را لند کرد؛ W1.2 (وضعیت‌های سفارش) هنوز نیامده و W3.1 طوری نوشته می‌شود که بدونِ بازنویسی با آن جفت شود. `record.service.ts` کلیمِ کسی نیست ولی GPT تازه در W1.6 عوضش کرده — اگر لازم شد، اول اعلام. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
