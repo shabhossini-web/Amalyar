@@ -87,10 +87,22 @@ try {
   const subOk = num(`INSERT INTO intake_submissions(token, status, amount, discount_amount, data, expires_at, patient_id, visit_id, reviewed_at, created_at, updated_at)
     VALUES ('${tag}full', 'approved', 0, 0, '{}'::jsonb, now()+interval '10 days', ${pid}, ${visit.id}, now(), now(), now()) RETURNING id`);
   trash.subs.push(subOk);
+  /* فرمِ **زیرپرونده** (`scope='record'`) عمداً مراجعه نمی‌سازد — قاعدهٔ خودِ
+     مخزن `makesVisit = scope !== 'record'`. پاسخِ سالمِ آن نباید استثنا شمرده
+     شود، وگرنه نمای مدیر پر از هشدارِ دروغین می‌شود. */
+  const recForm = (await send('/forms', 'POST', { key: `${tag}rec`, title: `زیرپروندهٔ ${tag}`, scope: 'record' })).json;
+  trash.forms = trash.forms ?? [];
+  if (recForm?.id) trash.forms.push(recForm.id);
+  const subRec = num(`INSERT INTO intake_submissions(token, status, amount, discount_amount, data, expires_at, patient_id, form_id, reviewed_at, created_at, updated_at)
+    VALUES ('${tag}rec', 'approved', 0, 0, '{}'::jsonb, now()+interval '10 days', ${pid}, ${recForm?.id ?? 'NULL'}, now(), now(), now()) RETURNING id`);
+  trash.subs.push(subRec);
+
   const t4 = await today();
   const half = t4.exceptions.halfApproved;
   ok(half.count === before.halfApproved + 1 && half.items.some((i) => i.id === sub), 'ثبت‌نامِ تأییدشدهٔ بدونِ مراجعه دیده شد');
   ok(!half.items.some((i) => i.id === subOk), '**نباید بیفتد:** ثبت‌نامِ تأییدشده‌ای که مراجعه دارد استثنا نیست');
+  ok(!half.items.some((i) => i.id === subRec),
+    '**نباید بیفتد:** پاسخِ سالمِ فرمِ زیرپرونده «تأییدِ نیمه‌کاره» شمرده شود (گزارشِ لِینِ الف)');
 
   console.log('\n۵) روی صفحه');
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
@@ -148,7 +160,7 @@ try {
     sql(`DELETE FROM intake_submissions WHERE visit_id=${v}`);
     await send(`/visits/${v}`, 'DELETE').catch(() => {});
   }
-  for (const f of trash.forms) await send(`/forms/${f}`, 'DELETE').catch(() => {});
+  for (const f of (trash.forms ?? [])) await send(`/forms/${f}`, 'DELETE').catch(() => {});
   for (const id of trash.accounts) {
     sql(`DELETE FROM account_sessions WHERE account_id=${id}`);
     sql(`DELETE FROM accounts WHERE id=${id}`);
