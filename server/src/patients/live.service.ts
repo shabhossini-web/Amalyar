@@ -450,7 +450,12 @@ export class LiveService {
          بدهیِ مراجعهٔ دیگر را می‌پوشاند و گامِ «تسویه» دروغِ «تسویه شد» می‌گفت. */
       due += Math.max(0, s.due);
     }
-    const paidPct = total > 0 ? Math.min(100, Math.max(0, Math.round((paid / total) * 100))) : 0;
+    /* ⚠️ درصد از **همان مانده** مشتق می‌شود، نه از `paid / total`.
+       با کفِ per-visit، اضافه‌پرداختِ یک مراجعه `paid` را از `total` بالاتر
+       می‌برد و درصد روی ۱۰۰ می‌چسبید در حالی که مانده‌ای باقی بود — کارت
+       می‌گفت «۵۰۰٬۰۰۰ مانده — ۱۰۰٪ پرداخت شده». (این با `summarize().paidPct`
+       که تک‌مراجعه است فرق دارد و عمداً؛ آن‌جا چنین تناقضی ممکن نیست.) */
+    const paidPct = total > 0 ? Math.min(100, Math.max(0, Math.round(((total - due) / total) * 100))) : 0;
     return { total, itemsTotal, paid, due, paidPct };
   }
 

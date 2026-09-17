@@ -967,7 +967,7 @@ function NextUp({ live, onGo, onActed, toast }) {
       await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
       window.dispatchEvent(new Event(WORK_CHANGED));
       toast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
-      onActed();
+      await onActed();
     } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
   };
 
@@ -1159,9 +1159,14 @@ export default function PatientRecord() {
 
   /* پروندهٔ تازه **برگردانده** می‌شود، نه فقط در state نشانده: فراخوان باید
      بتواند بلافاصله بسنجد که نوشته‌اش واقعاً در پرونده نشسته یا نه. */
-  const loadLive = useCallback(() => {
-    api(`/patients/${id}/live`).then(setLive).catch(() => setLive(null));
-  }, [id]);
+  /* ⚠️ **برمی‌گرداند**: کارتِ «کارِ بعدی» تا نشستنِ نسخهٔ تازه باید دکمه را
+     قفل نگه دارد، وگرنه کاربر «انجام شد» را دو بار می‌زند و کارِ بسته‌شده
+     دوباره بسته می‌شود. (`Today` و زنگ ردیف را محلی برمی‌دارند؛ این‌جا کلِ
+     پرونده تازه می‌شود، پس انتظار لازم است.) */
+  const loadLive = useCallback(
+    () => api(`/patients/${id}/live`).then(setLive).catch(() => setLive(null)),
+    [id],
+  );
 
   const load = useCallback(async () => {
     try {

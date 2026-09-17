@@ -249,6 +249,8 @@ try {
   ok(netted.due === 500000,
     `**نباید بیفتد:** اضافه‌پرداختِ یک مراجعه بدهیِ مراجعهٔ دیگر را بپوشاند (مانده=${netted.due}، انتظار ۵۰۰۰۰۰)`);
   ok(netted.paid > netted.total, 'پرداختی و جمعِ کل دست‌نخورده می‌مانند (فقط مانده کف می‌خورد)');
+  ok(netted.paidPct < 100,
+    `**نباید بیفتد:** کارت هم‌زمان «مانده دارد» و «۱۰۰٪ پرداخت شده» بگوید (٪${netted.paidPct} با ماندهٔ ${netted.due})`);
 
   console.log('\n۶) روی صفحه');
 
@@ -339,10 +341,43 @@ try {
         const a = lum(getComputedStyle(el).color), b = lum(bgOf(el));
         return Math.round(((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) * 100) / 100;
       };
-      return { name: ratio(document.querySelector('.df-head h1')), alert: ratio(document.querySelector('.rc-alert')) };
+      /* دکمهٔ گرادیانِ برند: زمینه‌اش گرادیان است نه رنگِ ساده، پس `bgOf` آن را
+         شفاف می‌بیند و به کارتِ پشتش می‌رسد. رنگِ میانیِ گرادیان را می‌سنجیم.
+         ⚠️ مقدارِ خامِ توکن **هگز** است (`#7c3aed`) و با regexِ عدد خوانده
+         نمی‌شود — نسخهٔ اولِ همین تابع ارقامِ داخلِ هگز را عدد گرفت و کنتراستِ
+         بی‌معنی ۱٫۳۸ داد. پس می‌گذاریم خودِ مرورگر حلش کند. */
+      const probe = (v) => {
+        const el = document.createElement('span');
+        el.style.cssText = `position:absolute;opacity:0;background-color:${v}`;
+        document.body.appendChild(el);
+        const c = getComputedStyle(el).backgroundColor;
+        el.remove();
+        return rgba(c);
+      };
+      const brandMid = () => {
+        const a = probe('var(--brand)'), b = probe('var(--brand-2)');
+        return [0, 1, 2].map((i) => (a[i] + b[i]) / 2);
+      };
+      const onBrand = (el) => {
+        if (!el) return null;
+        const t = lum(getComputedStyle(el).color);
+        const g = lum(`rgb(${brandMid().join(',')})`);
+        return Math.round(((Math.max(t, g) + 0.05) / (Math.min(t, g) + 0.05)) * 100) / 100;
+      };
+      return {
+        name: ratio(document.querySelector('.df-head h1')),
+        alert: ratio(document.querySelector('.rc-alert')),
+        cta: onBrand(document.querySelector('.rc-act.is-main')),
+        kindIcon: ratio(document.querySelector('.rc-tl-ico[style*="--k"]')),
+      };
     });
     ok(contrast.name >= 4.5, `**نباید بیفتد:** نامِ بیمار در تمِ روشن محو شود (کنتراست ${contrast.name})`);
     ok(contrast.alert >= 4.5, `**نباید بیفتد:** هشدارِ حساسیت در تمِ روشن محو شود (کنتراست ${contrast.alert})`);
+    /* آیکون و متنِ دکمه شکل‌اند نه متنِ بدنه، پس کفِ ۳:۱ (معیارِ WCAG برای
+       اجزای غیرمتنی و متنِ درشت) — نه ۴٫۵. */
+    ok(contrast.cta >= 3, `**نباید بیفتد:** متنِ دکمهٔ اصلی روی گرادیانِ برند محو شود (کنتراست ${contrast.cta})`);
+    ok(contrast.kindIcon === null || contrast.kindIcon >= 3,
+      `**نباید بیفتد:** آیکونِ نوعِ مراجعه در تمِ روشن محو شود (کنتراست ${contrast.kindIcon})`);
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
 
     ok(errors.length === 0, `بدونِ خطای جاوااسکریپت و بدونِ پاسخِ ≥۴۰۰ (${errors.length})${errors.length ? ' — ' + errors[0].slice(0, 160) : ''}`);

@@ -343,8 +343,12 @@
 }
 .rc-act:hover:not(:disabled) { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .16); }
 .rc-act:disabled { opacity: .55; cursor: default; }
+/* ⚠️ مرکّبِ دکمهٔ گرادیانِ برند **سفید** است، در هر دو تم — همان چیزی که
+   `.wk-btn.primary`، `.df-save`، `.df-add` و بقیه می‌زنند و `index.css` هم
+   صریح مجازش کرده. `--ink-bright` مرکّبِ پُرکنندهٔ **روشن** (کهربا/سایان) است،
+   نه گرادیانِ تیرهٔ برند؛ گذاشتنش این‌جا یعنی متنِ تیره روی بنفشِ تیره. */
 .rc-act.is-main {
-  color: var(--ink-bright);
+  color: #fff;
   background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent;
 }
 .rc-act:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
