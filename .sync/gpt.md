@@ -10,6 +10,7 @@ paths:
   - server/src/patients/billing.service.ts
   - server/src/patients/treasury.service.ts
   - server/src/patients/portal.service.ts
+  - server/src/patients/reminders.service.ts
   - server/prisma/schema.prisma
   - server/prisma/migrations/20260917140000_intake_approval/
   - scripts/e2e/w1-4-approve-atomic.mjs
@@ -108,3 +109,5 @@ note: W1.2/PR38 و تحویل PR39 لند شد؛ W1.4 شروع شد: تراکن�
 
 - استثنای ضروری CI: دو سنجهٔ قدیمی نام متد createVisit را به prepareVisitCreation مشترک با آن به‌روز می‌کنند؛ منع ساخت مستقیم Visit و الزام عبور مبلغ از همان مسیر حفظ است. گام e2e جدید فقط به ته فایل افزوده شد.
 - آمادهٔ PR: ۸۱ سناریو در runner W1.4 (۳۷ جدید، ۱۸ رویداد، ۲۶ نوبت) + ۱۷ مالی + ۱۶ گردش‌کار سبز؛ build هر دو سمت، tenant/claims و سنجه‌های تغییرکردهٔ CI سبز.
+
+- بازبینی پیش از مرج: reminder sync و syncPostOpVisit خطا را می‌بلعیدند؛ پارامتر اختیاری strict فقط برای after-commit تأیید اضافه شد تا کار بازیابی با خطای داخلی زود بسته نشود. callers قبلی همان رفتار پیشین را دارند؛ reminders.service.ts آزاد بود و کلیم شد.

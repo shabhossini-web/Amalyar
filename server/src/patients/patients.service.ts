@@ -263,7 +263,7 @@ export class PatientsService {
    * - پیامک‌ها همان مسیرِ همیشگی‌اند (یادآوریِ next_visit روی خودِ عمل)؛
    *   فرزند nextVisitDate ندارد پس یادآوریِ دوباره نمی‌کارد.
    */
-  private async syncPostOpVisit(visitId: number) {
+  private async syncPostOpVisit(visitId: number, strict = false) {
     try {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
@@ -314,6 +314,7 @@ export class PatientsService {
     } catch (e) {
       /* ثبتِ عمل نباید قربانیِ ویزیتِ خودکار شود — مثلِ قاعدهٔ یادآوری‌ها. */
       console.warn(`syncPostOpVisit(${visitId}) شکست خورد:`, e instanceof Error ? e.message : e);
+      if (strict) throw e;
     }
   }
 
@@ -1124,9 +1125,9 @@ export class PatientsService {
   }
 
   /** فقط پس از commit؛ خطای تراکنش نباید یادآوری یا مراجعهٔ پست‌آپ بسازد. */
-  async afterVisitCreation(visitId: number) {
-    await this.reminders.syncNextVisit(visitId);
-    await this.syncPostOpVisit(visitId);
+  async afterVisitCreation(visitId: number, strict = false) {
+    await this.reminders.syncNextVisit(visitId, strict);
+    await this.syncPostOpVisit(visitId, strict);
   }
 
   /** فقط ارجاعِ صریحِ فرزندِ یک والد با همین موعد؛ نام/موضوع ملاک نیست. */

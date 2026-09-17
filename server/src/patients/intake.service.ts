@@ -1809,8 +1809,8 @@ export class IntakeService {
     }
     if (fresh && (committedVisitId || appointmentId)) {
       try {
-        if (committedVisitId) await this.patients.afterVisitCreation(committedVisitId);
-        if (appointmentId) await this.reminders.syncAppointment(appointmentId);
+        if (committedVisitId) await this.patients.afterVisitCreation(committedVisitId, true);
+        if (appointmentId) await this.reminders.syncAppointment(appointmentId, true);
         await this.events.emit({ type: 'intake.approval_synced', refType: 'intake_submission', refId: id,
           patientId: row.patientId, visitId: committedVisitId, actorId: user?.id ?? null });
       } catch {

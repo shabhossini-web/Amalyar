@@ -7,6 +7,7 @@ const { IntakeService } = require('./dist/patients/intake.service');
 const { BillingService } = require('./dist/patients/billing.service');
 const { EventsService } = require('./dist/work/events.service');
 const { PatientsService } = require('./dist/patients/patients.service');
+const { SettingsService } = require('./dist/config/settings.service');
 const { SmsService } = require('./dist/sms/sms.service');
 const { processDomainEvents } = require('./dist/work/work-processor');
 const { sendReminders } = require('./dist/reminders/send-reminders');
@@ -34,6 +35,7 @@ export async function runApprovalTests(app) {
   const intake = app.get(IntakeService);
   const expire = intake.expireIfDue.bind(intake);
   let releaseEdit;
+  const settings = app.get(SettingsService), smsSettings = settings.sms.bind(settings);
   const billing = app.get(BillingService), events = app.get(EventsService), sms = app.get(SmsService), patients = app.get(PatientsService);
   const addPayment = billing.addPayment.bind(billing), emit = events.emit.bind(events), send = sms.send.bind(sms), after = patients.afterVisitCreation.bind(patients);
   let sentDuringApproval = 0;
@@ -141,16 +143,25 @@ export async function runApprovalTests(app) {
     ok((await approve(reusedKey.id, { idempotencyKey: 'approval-' + tag })).status === 409, 'key cannot be reused across submissions');
     ok(await db.visit.count({ where: { patientId: patient.id } }) === total, 'key collision creates no visit');
     const sync = await sub({ amount: 0, discountAmount: 0 });
-    patients.afterVisitCreation = async () => { throw Error('sync offline'); };
+    let settingsReads = 0;
+    settings.sms = async () => { if (++settingsReads > 1) throw Error('sync settings offline'); return smsSettings(); };
     ok((await approve(sync.id)).status === 201, 'post-commit outage does not report failed payment');
-    patients.afterVisitCreation = after;
+    settings.sms = smsSettings;
     await processDomainEvents(db);
     const repair = await db.workItem.findUnique({ where: { idempotencyKey: `repair_intake:intake_submission:${sync.id}` } });
     ok(repair?.state === 'open' && repair.title.includes('همگام'), 'post-commit outage remains visible as synchronization work');
+    const apptSync = await sub({ amount: 0, discountAmount: 0 });
+    await db.appointment.create({ data: { submissionId: apptSync.id, patientId: patient.id, date: new Date(Date.now() + 7 * 86400000), status: 'held' } });
+    settingsReads = 0;
+    settings.sms = async () => { if (++settingsReads > 2) throw Error('appointment sync settings offline'); return smsSettings(); };
+    ok((await approve(apptSync.id)).status === 201, 'appointment sync outage preserves committed approval');
+    settings.sms = smsSettings;
+    await processDomainEvents(db);
+    ok((await db.workItem.findUnique({ where: { idempotencyKey: `repair_intake:intake_submission:${apptSync.id}` } }))?.state === 'open', 'error inside appointment sync keeps recovery work open');
     ok((await api(`/intake/submissions/${s.id}/reject`, { note: 'رد دیرهنگام' })).status >= 400, 'completed approval cannot be rejected');
     console.log(`W1.4: ${count} checks passed`);
   } finally {
-    releaseEdit?.(); intake.expireIfDue = expire;
+    releaseEdit?.(); intake.expireIfDue = expire; settings.sms = smsSettings;
     billing.addPayment = addPayment; events.emit = emit; sms.send = send; patients.afterVisitCreation = after;
     await db.$disconnect();
   }
