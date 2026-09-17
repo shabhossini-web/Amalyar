@@ -384,9 +384,10 @@ export class IntakeController {
     return this.intake.deleteSubmission(id, user);
   }
 
+  /// ارجاع‌های پیشنهادی از روی متنی که بیمار نوشته — بیمارستان، جراح، نوعِ عمل.
   @RequirePermissions('intake.review')
-  @Get('submissions/:id/hospital')
-  hospital(@Param('id', ParseIntPipe) id: number) { return this.intake.approvalHospital(id); }
+  @Get('submissions/:id/refs')
+  refs(@Param('id', ParseIntPipe) id: number) { return this.intake.approvalRefs(id); }
 
   @RequirePermissions('intake.review')
   @Post('submissions/:id/approve')

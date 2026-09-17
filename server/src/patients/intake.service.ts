@@ -11,7 +11,7 @@ import { FormsService, FORM_SCOPES } from './forms.service';
 import { REGISTRATION_PRESETS } from './form-presets';
 import { normalizeLinks } from './forms.service';
 import { syncLinkDocuments } from './link-documents';
-import { hospitalOptions, matchIntakeHospital } from './intake-hospitals';
+import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
@@ -1563,10 +1563,19 @@ export class IntakeService {
     return hospitalOptions(this.prisma, q);
   }
 
-  async approvalHospital(id: number) {
+  /**
+   * ارجاع‌های پیشنهادیِ یک ثبت‌نام: بیمارستان، **جراح**، **نوعِ عمل** (W3.8/U3).
+   *
+   * ⚠️ یک endpoint برای هر سه، نه سه تا: رابط هر سه را در یک لحظه می‌خواهد و
+   * سه مسیرِ هم‌شکل یعنی سه جایی که آستانه‌شان می‌تواند واگرا شود.
+   *
+   * ⚠️ این فقط **پیشنهاد** است. اعمالش با کاربر است که مقدارِ پرشده را در فرم
+   * می‌بیند — سرور جراح و نوعِ عمل را خودکار نمی‌چسباند (شرحش در `intake-match.ts`).
+   */
+  async approvalRefs(id: number) {
     const row = await this.prisma.intakeSubmission.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('ثبت‌نام پیدا نشد');
-    return matchIntakeHospital(this.prisma, row.data);
+    return matchIntakeRefs(this.prisma, row.data);
   }
 
   async list(status?: string) {
