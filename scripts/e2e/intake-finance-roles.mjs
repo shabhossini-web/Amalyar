@@ -29,7 +29,7 @@ try {
   const ledger = new (cls('patients/ledger.service', 'LedgerService'))(prisma, audit, treasury);
   const defs = new (cls('patients/definitions.service', 'DefinitionsService'))(prisma);
   const tenant = { require: () => ({ hostname: 'clinic.example.test' }) };
-  const intake = new (cls('patients/intake.service', 'IntakeService'))(prisma, audit, patients, {}, billing, {}, forms, {}, tenant, {}, { sendSms: async () => {} }, reminders, {});
+  const intake = new (cls('patients/intake.service', 'IntakeService'))(prisma, audit, patients, {}, billing, {}, forms, {}, tenant, {}, { sendSms: async () => {} }, reminders, {}, events);
   const user = await prisma.account.create({ data: { username: 'fixture-admin', passwordHash: 'not-a-login', level: 6, status: 'active', person: { create: { firstName: 'تست', lastName: 'محلی' } } } });
   const patient = await prisma.patient.create({ data: { code: 'AM-TEST', firstName: 'بیمار', lastName: 'آزمایشی' } });
   // A real required amount field reproduces the reported approval validation.

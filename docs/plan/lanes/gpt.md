@@ -24,9 +24,14 @@
 
 ## یادداشت برای لِین‌های دیگر
 - W1.6: `submissions` به خروجی حذف فرم افزوده شده؛ `used` مجموع مراجعه/لینک/پاسخ (شامل extraFormIds) است. متن FormBuilder باید «استفادهٔ ثبت‌شده» بگوید، نه فقط «مراجعه». هیچ UI در این بسته ویرایش نشده.
-- کاتالوگ W2.2 دریافت شد. `appointment.held` در book همراه W1.5؛ `intake.submitted/approved/rejected/approve_failed` و `appointment.confirmed` همراه W1.4؛ `order.reviewed/needs_action` همراه W1.2. refها دقیقاً مطابق CONTRACTS §۲ می‌مانند.
+- W2.2: `appointment.held` در W1.5 مرج شد؛ پنج emitِ `intake.submitted/approved/rejected/approve_failed` و `appointment.confirmed` در تکمیل W2.2-ب پیاده و آزموده شد. refها دقیقاً مطابق CONTRACTS §۲ هستند. `order.reviewed/needs_action` همچنان در W1.2 است.
 - برای لِین ج: شرط `halfWhere` در `today.service.ts` پاسخ سالمِ فرمِ `scope=record` را هم تأیید نیمه‌کاره می‌شمارد؛ این فرم عمداً visitId ندارد. لطفاً فرم‌های زیرپرونده را از این استثنا کنار بگذارید. W1.4 مسیر مراجعه‌ساز را اتمیک می‌کند.
 
 - W1.5 برای لِین ج: خروجی day/suggest/walkIn اکنون forVisitId دارد. شروع پیگیری همان شناسهٔ فرزند را با made:false می‌دهد؛ مصرف‌کننده نباید از made:false نتیجه بگیرد که نوبت شروع نشده. مرحلهٔ بالینی و پاسخ‌ها حفظ می‌شوند.
 
 - تحویل W1.4: approve فعلی هنوز held.forVisitId را مصرف نمی‌کند و createVisit می‌زند؛ در اتمیک‌سازی، مراجعهٔ هدف باید با دادهٔ پاسخ به‌روز شود تا مسیر «رزرو بیمار ← تأیید» هم مراجعهٔ دوم نسازد. این باگ در مسیر startVisit بسته شده، ولی approve هنوز بستهٔ بعد است.
+
+## تکمیل تولیدکننده‌های W2.2 — درخواست مستقیم مالک
+- ✅ `agent/w2-2b-intake-events` · PR #29 · `6edbce1`: پنج emit باقی‌مانده مرج شد؛ تأیید خودکار هم approved می‌فرستد و رد ثبت‌نام cancelled نوبت را صادر می‌کند. ۱۸ سناریوی ref/outbox/processor + ۱۷ رگرسیون مالی + ۱۶ گردش‌کار سبز. W1.4 هنوز اتمیک‌سازی کامل approve و مصرف held.forVisitId را انجام می‌دهد.
+
+- تحویل به لِین ج (2026-09-17): PR #28 هنگام این بررسی mergeable_state=dirty داشت؛ لطفاً پیش از ادامه روی main تازه rebase شود. هیچ تغییری در شاخه یا فایل کلیم لِین ج نداده‌ام.
