@@ -437,6 +437,8 @@ export class FormsService {
       const bare = f.fields.filter((x) => x.builtin).length <= 1;
       let sort = Math.max(0, ...f.fields.map((x) => x.sort ?? 0));
       await this.prisma.formField.createMany({
+        // خواندن هم‌زمان فرم نباید backfill تکراری بسازد.
+        skipDuplicates: true,
         data: missing.map((c) => ({
           formId: f.id, key: c.key, label: c.label, type: c.type,
           builtin: true, required: false, sort: (sort += 10),
@@ -473,6 +475,8 @@ export class FormsService {
     if (!missing.length) return;
     let sort = Math.max(0, ...form.fields.map((f) => f.sort ?? 0));
     await this.prisma.formField.createMany({
+        // خواندن هم‌زمان فرم نباید backfill تکراری بسازد.
+        skipDuplicates: true,
       data: missing.map((c) => ({
         formId: form.id, key: c.key, label: c.label, type: c.type ?? 'text',
         required: false, builtin: false, hint: c.hint ?? null, placeholder: c.placeholder ?? null,

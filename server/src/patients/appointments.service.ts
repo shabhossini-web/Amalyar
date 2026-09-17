@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -67,6 +67,7 @@ export class AppointmentsService {
       topicName: a.topic?.name ?? null,
       topicColor: a.topic?.color ?? null,
       visitId: a.visitId,
+      forVisitId: a.forVisitId,
       /* گذارهای مجاز هم مشتقِ سرورند: دکمه‌های میزِ پذیرش از همین ساخته
          می‌شوند، نه از یک کپیِ کلاینتیِ ماشینِ وضعیت. */
       next: APPT_TRANSITIONS[a.status] ?? [],
@@ -158,22 +159,27 @@ export class AppointmentsService {
     }
 
     try {
-      const appt = await this.prisma.appointment.create({
-        data: {
-          patientId: dto.patientId,
-          topicId: dto.topicId ?? null,
-          date: d,
-          startMin: slotMode ? dto.startMin ?? null : null,
-          seq: slotMode ? null : await this.nextSeq(d),
-          /* حضوری از قبل پولش را نداده که منتظرِ تأیید بماند — مستقیم قطعی. */
-          status: 'confirmed',
-          note: dto.note?.trim() || null,
-        },
-        include: AppointmentsService.INCLUDE,
-      });
-      await this.audit.record({
-        actorId: user?.id, action: 'appointment.walkin', entityType: 'appointment', entityId: appt.id,
-        after: { patientId: dto.patientId, date: dto.date, startMin: appt.startMin },
+      const seq = slotMode ? null : await this.nextSeq(d);
+      const appt = await this.prisma.$transaction(async (tx) => {
+        const appt = await tx.appointment.create({
+          data: {
+            patientId: dto.patientId,
+            forVisitId: await this.patients.appointmentTarget(tx, dto.patientId, d),
+            topicId: dto.topicId ?? null,
+            date: d,
+            startMin: slotMode ? dto.startMin ?? null : null,
+            seq: slotMode ? null : seq,
+            /* حضوری از قبل پولش را نداده که منتظرِ تأیید بماند — مستقیم قطعی. */
+            status: 'confirmed',
+            note: dto.note?.trim() || null,
+          },
+          include: AppointmentsService.INCLUDE,
+        });
+        await this.audit.record({
+          actorId: user?.id, action: 'appointment.walkin', entityType: 'appointment', entityId: appt.id,
+          after: { patientId: dto.patientId, date: dto.date, startMin: appt.startMin, forVisitId: appt.forVisitId },
+        }, tx);
+        return appt;
       });
       /* یادآوریِ «نوبتِ فردا» — عصرِ روزِ قبل. */
       await this.reminders.syncAppointment(appt.id);
@@ -259,42 +265,64 @@ export class AppointmentsService {
    * کلیک مراجعهٔ دوم نمی‌سازد — `visitId` یک‌به‌یک است.
    */
   async startVisit(id: number, user: any) {
-    const row = await this.prisma.appointment.findUnique({
-      where: { id },
-      include: { visit: { select: { id: true } } },
-    });
-    if (!row) throw new NotFoundException('نوبت پیدا نشد');
-    if (row.status === 'cancelled') throw new BadRequestException('نوبتِ لغوشده ویزیت نمی‌شود');
-    if (row.visitId) return { visitId: row.visitId, made: false };
-    if (!row.patientId) {
-      throw new BadRequestException('این نوبت هنوز به پرونده‌ای وصل نیست — اول ثبت‌نامش تأیید شود');
+    // تعریف و اعتبارسنجیِ فرم بیرون از tx؛ داخل قفل هیچ queryِ اتصال دیگری نداریم.
+    const source = await this.prisma.appointment.findUnique({ where: { id } });
+    if (!source) throw new NotFoundException('نوبت پیدا نشد');
+    let create: Awaited<ReturnType<PatientsService['prepareVisitCreation']>> | undefined;
+    if (!source.visitId && !source.forVisitId && source.patientId && source.status !== 'cancelled') {
+      const kinds = await this.forms.visitKinds();
+      const kind = kinds.find((k) => k.kind === 'clinic')?.kind ?? kinds.find((k) => k.kind !== 'surgery')?.kind;
+      if (!kind) throw new BadRequestException('فرمِ ویزیتِ غیرجراحی تعریف نشده است؛ ابتدا در فرم‌ساز یک فرمِ ویزیت فعال کنید');
+      create = await this.patients.prepareVisitCreation({
+        patientId: source.patientId, kind, topicId: source.topicId ?? undefined,
+        opDate: source.date.toISOString(),
+        opStartTime: source.startMin != null ? AvailabilityService.minToHHMM(source.startMin) : undefined,
+      } as any, user, { skipFormValidation: true });
     }
 
-    /* نوعِ فرم: اولین نوعِ فعالِ فرمِ مراجعه. عمداً حدسِ «جراحی» نمی‌زنیم —
-       نصبِ مطب اصلاً جراحی ندارد. */
-    const kinds = await this.forms.visitKinds();
-    const kind = kinds[0]?.kind;
-    if (!kind) throw new BadRequestException('هیچ فرمِ مراجعه‌ای تعریف نشده است');
-
-    const visit = await this.patients.createVisit({
-      patientId: row.patientId,
-      kind,
-      topicId: row.topicId ?? undefined,
-      opDate: row.date.toISOString(),
-      opStartTime: row.startMin != null ? AvailabilityService.minToHHMM(row.startMin) : undefined,
-    } as any, user, { skipFormValidation: true });
-
-    await this.prisma.appointment.update({
-      where: { id },
-      data: { visitId: visit.id, ...(row.status === 'confirmed' ? { status: 'arrived' } : {}) },
-    });
-    await this.audit.record({
-      actorId: user?.id, action: 'appointment.start_visit', entityType: 'appointment', entityId: id,
-      after: { visitId: visit.id },
-    });
-    await this.events.emit({
-      type: 'appointment.started', appointmentId: id, patientId: row.patientId, visitId: visit.id, actorId: user?.id ?? null,
-    });
-    return { visitId: visit.id, made: true };
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${id} FOR UPDATE`;
+        const row = await tx.appointment.findUnique({ where: { id } });
+        if (!row) throw new NotFoundException('نوبت پیدا نشد');
+        if (row.status === 'cancelled') throw new BadRequestException('نوبتِ لغوشده ویزیت نمی‌شود');
+        if (row.visitId) return { visitId: row.visitId, made: false };
+        if (!row.patientId) throw new BadRequestException('این نوبت هنوز به پرونده‌ای وصل نیست — اول ثبت‌نامش تأیید شود');
+        if (row.patientId !== source.patientId || row.forVisitId !== source.forVisitId
+          || row.topicId !== source.topicId || row.startMin !== source.startMin || +row.date !== +source.date) {
+          throw new ConflictException('نوبت هم‌زمان تغییر کرده است؛ صفحه را تازه کنید و دوباره شروع کنید');
+        }
+        let visitId: number;
+        if (row.forVisitId) {
+          const target = await tx.visit.findUnique({ where: { id: row.forVisitId } });
+          if (!target || target.patientId !== row.patientId) throw new BadRequestException('مراجعهٔ هدف به پروندهٔ این بیمار تعلق ندارد');
+          const linked = await tx.appointment.findUnique({ where: { visitId: target.id }, select: { id: true } });
+          if (linked) throw new BadRequestException('این مراجعه از نوبتِ دیگری شروع شده است؛ همان نوبت را باز کنید');
+          // تاریخِ حضور واقعی؛ وضعیتِ بالینی و تمام پاسخ‌های پیگیری حفظ می‌شوند.
+          const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+          await tx.visit.update({ where: { id: target.id }, data: { opDate: today } });
+          visitId = target.id;
+        } else {
+          if (!create) throw new ConflictException('اطلاعاتِ نوبت تغییر کرده است؛ دوباره تلاش کنید');
+          visitId = (await create(tx)).id;
+        }
+        await tx.appointment.update({
+          where: { id }, data: { visitId, ...(row.status === 'confirmed' ? { status: 'arrived' } : {}) },
+        });
+        await this.audit.record({
+          actorId: user?.id, action: 'appointment.start_visit', entityType: 'appointment', entityId: id,
+          after: { visitId, forVisitId: row.forVisitId },
+        }, tx);
+        await this.events.emit({
+          type: 'appointment.started', appointmentId: id, patientId: row.patientId, visitId, actorId: user?.id ?? null,
+        }, tx);
+        return { visitId, made: !row.forVisitId };
+      });
+      if (result.made) await this.patients.afterVisitCreation(result.visitId);
+      return result;
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new ConflictException('این مراجعه هم‌زمان به نوبتِ دیگری وصل شد؛ صفحه را تازه کنید');
+      throw e;
+    }
   }
 }

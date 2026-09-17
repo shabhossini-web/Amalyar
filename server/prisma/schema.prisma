@@ -1393,6 +1393,8 @@ model Visit {
   /// نوبتی که این مراجعه از آن ساخته شد — یک‌به‌یک.
   appointment Appointment?
   reminders Reminder[]
+  appointmentsFor Appointment[] @relation("AppointmentForVisit")
+
 }
 
 /// Issued versions are immutable; a later version supersedes, never rewrites, one.
@@ -2331,6 +2333,10 @@ model Appointment {
   @@unique([doctorId, date, startMin])
   @@index([date, status])
   @@map("appointments")
+  /// مراجعهٔ هدفِ این نوبت، مستقل از شروع شدنِ ویزیت.
+  forVisit Visit? @relation("AppointmentForVisit", fields: [forVisitId], references: [id], onDelete: SetNull)
+  forVisitId Int? @map("for_visit_id")
+
 }
 
 /// یادآوریِ برنامه‌ریزی‌شده — دفترِ ارسال، نه صف: هر ردیف یک پیامکِ قرار است

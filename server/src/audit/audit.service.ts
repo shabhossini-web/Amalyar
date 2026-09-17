@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -14,8 +15,8 @@ export class AuditService {
     after?: unknown;
     ip?: string;
     userAgent?: string;
-  }) {
-    await this.prisma.auditEvent.create({
+  }, tx?: Prisma.TransactionClient) {
+    await (tx ?? this.prisma).auditEvent.create({
       data: {
         actorId: event.actorId ?? null,
         action: event.action,
