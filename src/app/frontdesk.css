@@ -1,0 +1,94 @@
+/* میزِ پذیرشِ روز (W3.3، §۴.۵) — اولین تختهٔ ستونیِ مخزن.
+   ⚠️ هر لایهٔ کم‌آلفا با `--veil-rgb`/`--surface-rgb` (قانون ۲۳). */
+
+.fd { min-height: 100vh; background: var(--bg); color: var(--text1); padding: 20px 16px 64px; position: relative; overflow-x: hidden; }
+.fd * { box-sizing: border-box; }
+
+.fd-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto 14px; }
+.fd-head h1 { display: flex; align-items: center; gap: 8px; font-size: clamp(20px, 3.5vw, 26px); margin: 0; }
+.fd-head p { margin: 3px 0 0; font-size: 12px; color: var(--text3); }
+.fd-head > div:first-child { margin-inline-end: auto; }
+.fd-today {
+  height: 38px; padding: 0 14px; border-radius: 10px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--text1); background: rgba(var(--surface-rgb), .55); border: 1px solid rgba(var(--brand-soft-rgb), .28);
+}
+.fd-today:hover { border-color: var(--brand-2); }
+
+.fd-note, .fd-err {
+  max-width: 1400px; margin: 0 auto 12px; padding: 11px 15px; border-radius: 12px; font-size: 13px;
+}
+.fd-note { color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--brand-soft-rgb), .3); }
+.fd-err { color: var(--red-text); background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .45); }
+
+.fd-sum { display: flex; flex-wrap: wrap; gap: 6px 16px; max-width: 1400px; margin: 0 auto 12px; font-size: 12px; color: var(--text3); }
+.fd-sum b { color: var(--text1); font-weight: 800; }
+.fd-cancel-chip {
+  font: inherit; font-size: 11.5px; padding: 2px 10px; border-radius: 99px; cursor: pointer;
+  color: var(--text3); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
+}
+.fd-cancel-chip.on { color: var(--text1); border-color: var(--brand-2); }
+
+/* ── تخته ── */
+.fd-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; max-width: 1400px; margin: 0 auto; align-items: start; }
+.fd-lane { min-width: 0; padding: 10px; border-radius: 14px; background: rgba(var(--surface-rgb), .38); border: 1px solid rgba(var(--brand-soft-rgb), .2); }
+.fd-lane h2 {
+  display: flex; align-items: center; gap: 7px; margin: 0 0 8px;
+  font-size: 12px; font-weight: 800; color: var(--text2);
+}
+.fd-lane h2 em {
+  font-style: normal; font-size: 11px; padding: 1px 8px; border-radius: 99px;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .16);
+}
+.fd-lane ul { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.fd-empty { font-size: 12px; color: var(--text3); text-align: center; padding: 10px 0; }
+
+/* ── کارت ── */
+.fd-card {
+  padding: 9px 11px; border-radius: 11px;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+}
+.fd-card.busy { opacity: .6; }
+.fd-card-top { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.fd-card-top b { font-size: 13px; font-weight: 800; color: var(--text1); overflow-wrap: anywhere; }
+.fd-when { font-size: 11px; font-weight: 700; color: var(--brand-text); }
+.fd-code { font-size: 10.5px; color: var(--text3); }
+.fd-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px; font-size: 11px; color: var(--text3); }
+.fd-topic { padding: 1px 8px; border-radius: 99px; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .22); }
+.fd-topic[style*="--k"] { color: rgb(var(--k)); background: rgba(var(--k), .13); border-color: rgba(var(--k), .34); }
+.fd-tel { display: inline-flex; align-items: center; gap: 3px; color: var(--cyan); text-decoration: none; }
+.fd-tel:hover { text-decoration: underline; }
+.fd-money { display: flex; align-items: center; gap: 5px; margin: 6px 0 0; font-size: 11.5px; color: var(--amber-text); }
+.fd-money b { font-weight: 800; }
+
+.fd-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.fd-btn {
+  height: 28px; padding: 0 10px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700;
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .26);
+}
+.fd-btn:hover:not(:disabled) { color: var(--text1); border-color: var(--brand-2); }
+.fd-btn:disabled { opacity: .5; cursor: default; }
+.fd-btn.primary { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; }
+.fd-btn.danger { color: var(--red-text); }
+.fd-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+.fd-cancelled { max-width: 1400px; margin: 12px auto 0; }
+.fd-cancelled h2 { font-size: 12px; font-weight: 800; color: var(--text3); margin: 0 0 8px; }
+.fd-cancelled ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.fd-cut { max-width: 1400px; margin: 10px auto 0; font-size: 11.5px; color: var(--text3); }
+
+.fd-toast {
+  position: fixed; inset-inline-start: 50%; transform: translateX(50%); bottom: 22px; z-index: 60;
+  padding: 10px 18px; border-radius: 12px; font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--ink-bright); background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: 0;
+  box-shadow: var(--shadow-card);
+}
+
+/* موبایل: تخته یک ستون می‌شود و تب‌ها ستونِ فعال را انتخاب می‌کنند. */
+.fd-tabs { display: none; max-width: 1400px; margin: 0 auto 10px; }
+@media (max-width: 860px) {
+  .fd-tabs { display: block; }
+  .fd-board { grid-template-columns: 1fr; }
+  .fd-lane { display: none; }
+  .fd-lane.on { display: block; }
+  .fd-lane h2 { display: none; }
+}

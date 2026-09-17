@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth.jsx';
-import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Truck, Users, Wave } from '../ui/icons.jsx';
+import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Truck, Users, Wave , Arrive } from '../ui/icons.jsx';
 
 /**
  * کاتالوگِ ابزارها — **تنها** جای تعریفِ کاشی‌ها.
@@ -37,6 +37,8 @@ export const TOOLS = [
   { key: 'crm', feature: 'formgen', label: 'تحلیل و CRM', icon: Chart, tint: 'blue', ready: true, min: 5, to: '/app/crm' },
   { key: 'reminders', feature: 'dashboard', label: 'یادآوری‌ها', icon: Clock, tint: 'teal', ready: true, min: 5, to: '/app/reminders' },
   { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
+  /* میزِ پذیرش — پایین‌ترین سطحِ کاری، چون منشی بیمار را می‌پذیرد. */
+  { key: 'frontdesk', label: 'میزِ پذیرش', icon: Arrive, tint: 'cyan', ready: true, min: 2, to: '/app/frontdesk' },
   { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
   /* برنامهٔ کاری — `docs/BOOKING.md`. کنارِ تقویم می‌نشیند چون هم‌خانواده‌اند:
      یکی می‌گوید چه شد، آن یکی می‌گوید چه وقتی می‌شود. */
