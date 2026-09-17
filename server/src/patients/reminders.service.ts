@@ -128,6 +128,32 @@ export class RemindersService {
            پیامِ **تازه** باید برود (گزارشِ میدانی: نسخهٔ قبلیِ این گارد
            متنِ اصلاح‌شده را هم بلاک می‌کرد و بیمار پیامِ کهنه را داشت). */
         const collapsed = (d: Date) => d.getTime() <= Date.now() + 90_000;
+        /**
+         * W1.7/D07 — پیامِ **پس از** عمل وقتی هنوز «انجام شد» ثبت نشده.
+         *
+         * مراقبتِ بعد از عمل و فرمِ پیگیری برای عملی کاشته می‌شوند که ممکن است
+         * اصلاً انجام نشده باشد: `opStatus` تا وقتی کسی دستی ثبتش نکند
+         * `pending` می‌ماند، و موعدِ این دو پیام بعد از تاریخِ عمل است. پس
+         * بیمارِ موکول‌شده دستورِ «بعد از عمل» می‌گرفت.
+         *
+         * پیش‌فرضِ سند «نگه‌داشتنِ پیام تا تأیید» بود؛ **مالک آن را رد کرد**
+         * (`DECISIONS.md` #۱): پیام برود ولی متنش دوشاخه باشد. بیمارِ واقعی
+         * ممکن است عملش انجام شده و فقط کسی وضعیت را ثبت نکرده باشد —
+         * نفرستادن او را بی‌دستور می‌گذارد.
+         *
+         * متن هنگامِ **کاشت** تعیین می‌شود نه هنگامِ ارسال (`sendReminders`
+         * فقط `row.text` را می‌فرستد). ولی `setStatus` خودش `syncNextVisit`
+         * را صدا می‌زند، پس لحظه‌ای که جراح «انجام شد» می‌زند موعدهای
+         * نرفته لغو و با متنِ عادی دوباره کاشته می‌شوند.
+         *
+         * کادرِ خالی در تنظیمات = همان متنِ عادی (کلینیکی که این هشدار را
+         * نمی‌خواهد نباید مجبور باشد).
+         */
+        const careText = (body: string) => {
+          if (v.opStatus === 'done') return body;
+          const wrap = (cfg.careUnconfirmedText ?? '').trim();
+          return wrap ? renderSms(wrap, { care: body }) : body;
+        };
         const sentSame = async (kind: string, text: string) => (await this.prisma.reminder.count({
           where: { visitId, kind, status: 'sent', text },
         })) > 0;
@@ -151,7 +177,7 @@ export class RemindersService {
           followUrl ??= url;
           const due = day === 0 ? immediateDue() : this.dueOn(v.opDate, day, hour);
           if (!due) continue;
-          const fuText = `${prefix}${renderSms(cfg.followUpText, { link: url })}`;
+          const fuText = `${prefix}${careText(renderSms(cfg.followUpText, { link: url }))}`;
           if (collapsed(due) && await sentSame('follow_up', fuText)) continue;
           await this.prisma.reminder.create({ data: { patientId: v.patientId, visitId, kind: 'follow_up', dueAt: due, phone, text: fuText } });
         }
@@ -194,7 +220,7 @@ export class RemindersService {
           /* «بلافاصله بعد از ثبت» = روزِ ۰ (اگر روزِ عمل رسیده، dueOn خودش
              به «همین حالا» فرومی‌کاهد)؛ وگرنه فردای عمل (postOpDays). */
           const postDue = v.postOpImmediate ? immediateDue() : this.dueOn(v.opDate, cfg.postOpDays, hour);
-          const postText = `${prefix}${post}${followUrl ? `\n${followUrl}` : ''}`;
+          const postText = `${prefix}${careText(`${post}${followUrl ? `\n${followUrl}` : ''}`)}`;
           if (postDue && !(collapsed(postDue) && await sentSame('post_op_care', postText))) {
             await this.prisma.reminder.create({
               data: {

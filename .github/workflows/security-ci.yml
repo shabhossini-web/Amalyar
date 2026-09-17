@@ -2906,3 +2906,12 @@ jobs:
       # in the same JSON all along (data.followUpVisitId / followUpDay).
       - name: Verify follow-up matching by exact key, per due date and cap notice (W1.1)
         run: node scripts/e2e/w1-1-unfollowed-local.mjs
+
+      # ⚠️ W1.7/D07: post-op care and the follow-up form are planted for an
+      # operation nobody has confirmed happened — opStatus stays 'pending'
+      # until someone records it, so a postponed patient got after-care
+      # instructions. Per DECISIONS #1 the message still goes, with hedged
+      # wording, and is re-planted with the normal text the moment the
+      # surgeon marks it done. Messages sent BEFORE the op are never hedged.
+      - name: Verify hedged after-care text until the operation is confirmed (W1.7)
+        run: node scripts/e2e/w1-7-postop-local.mjs
