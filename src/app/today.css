@@ -13,7 +13,7 @@
 .td-chips li {
   display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 99px;
   font-size: 13px; color: var(--text2);
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.10);
 }
 .td-chips li b { font-size: 15px; font-weight: 800; color: var(--text1); }
 /* عقب‌افتادگی تنها چیزی است که رنگ می‌گیرد — اگر همه‌چیز برجسته باشد، هیچ‌چیز نیست. */
@@ -29,7 +29,7 @@
 }
 .td-tools-btn:hover, .td-tools-btn:focus-visible { background: rgba(var(--brand-rgb), 0.24); border-color: var(--brand-2); outline: none; }
 
-.td-note { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: var(--text2); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.12); }
+.td-note { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: var(--text2); background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.12); }
 .td-chips li.td-link { padding: 0; }
 .td-chips li.td-link a { display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 99px; color: inherit; text-decoration: none; }
 .td-chips li.td-link a:hover, .td-chips li.td-link a:focus-visible { color: var(--text1); outline: none; }
@@ -41,13 +41,13 @@
 .td-sec-head h2 { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 800; color: var(--text1); }
 .td-more { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--brand-2); text-decoration: none; }
 .td-more:hover, .td-more:focus-visible { color: var(--cyan); outline: none; }
-.td-empty, .td-skel { padding: 14px; border-radius: 14px; font-size: 13px; color: var(--text3); text-align: center; background: rgba(255, 255, 255, 0.03); border: 1px dashed rgba(255, 255, 255, 0.10); }
+.td-empty, .td-skel { padding: 14px; border-radius: 14px; font-size: 13px; color: var(--text3); text-align: center; background: rgba(var(--veil-rgb), 0.03); border: 1px dashed rgba(var(--veil-rgb), 0.10); }
 
 .td-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .td-item {
   display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px;
   padding: 9px 12px; border-radius: 13px;
-  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.09);
 }
 .td-time { font-size: 13px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
 .td-name { grid-column: 2; font-size: 14px; font-weight: 700; color: var(--text1); text-decoration: none; }
@@ -56,7 +56,7 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 .td-sub { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-tag {
   grid-column: 3; grid-row: 1 / span 2; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700;
-  color: var(--text2); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.12);
 }
 /* وضعیت با **بوردر + رنگِ متن** حمل می‌شود، نه فقط یک لایهٔ کم‌آلفا روی زمینهٔ تیره. */
 .td-tag.op-done, .td-tag.appt-done, .td-tag.appt-arrived { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(6, 56, 42, 0.55); }
@@ -65,17 +65,17 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 .td-item.appt-cancelled { opacity: .62; }
 
 /* کشوی «همهٔ ابزارها» — از لبهٔ پایین، مثلِ شیت‌های دیگرِ سامانه. */
-.td-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(4, 2, 16, 0.7); backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center; }
+.td-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(var(--surface-rgb), 0.7); backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center; }
 .td-drawer {
   width: min(880px, 100%); max-height: 86vh; overflow-y: auto;
-  background: #120c2c; color: var(--text1);
+  background: var(--bg3); color: var(--text1);
   border: 1px solid rgba(var(--brand-2-rgb), 0.35); border-bottom: none;
   border-radius: 22px 22px 0 0; padding: 14px 16px 22px;
   box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.55);
 }
 .td-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .td-drawer-head h2 { font-size: 15px; font-weight: 800; }
-.td-x { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--text2); border: 1px solid rgba(255, 255, 255, 0.12); }
+.td-x { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--text2); border: 1px solid rgba(var(--veil-rgb), 0.12); }
 .td-x:hover, .td-x:focus-visible { color: var(--text1); border-color: var(--brand-2); outline: none; }
 
 .td-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 9px; }

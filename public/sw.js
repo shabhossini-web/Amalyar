@@ -3,7 +3,7 @@
  * - داراییِ هم‌مبدأ (assets/آیکون/فونت): cache-first (نامِ فایل‌ها هش‌دارند)
  * - API هم‌مبدأ روی /api است و Service Worker اصلاً آن را intercept نمی‌کند
  */
-const CACHE = 'amalyar-shell-v11';
+const CACHE = 'amalyar-shell-v12';
 const STATIC = ['/icon-192.png', '/icon-512.png', '/favicon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {

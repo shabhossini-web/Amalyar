@@ -724,10 +724,10 @@ export class IntakeService {
          نه خودِ بیمار پیش از آمدن. همین فیلتر سدِ نوشتن هم هست — `fill` فقط
          کلیدهای همین نما را می‌پذیرد، پس بیمار نمی‌تواند مقداری در بخشِ
          پزشک جا بگذارد. روی نصبِ واقعی دیده شد. */
-      .filter((x) => !x.builtin && x.active && !x.role)
+      .filter((x) => !x.builtin && x.active && !x.deletedAt && !x.role)
       .map((x) => ({
         key: x.key, label: x.label, type: x.type, required: x.required,
-        options: x.options ?? [], hint: x.hint, placeholder: x.placeholder, page: x.page,
+        options: x.options ?? [], hint: x.hint, placeholder: x.placeholder, page: x.page, roles: x.roles ?? [],
         /* دستهٔ پیش‌فرضِ مدرکِ باکسِ عکس/لینک — کلاینت پیلِ نوعِ لینک را با آن پیش‌فرض می‌کند. */
         docCategory: x.docCategory ?? null,
       }));
@@ -903,6 +903,7 @@ export class IntakeService {
       where: { id: row.id },
       data: {
         data,
+        schemaSnapshot: row.schemaSnapshot ?? form?.fields ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds),
         status: direct ? 'approved' : free ? 'pending_approval' : 'pending_payment',
         ...(direct ? { reviewedAt: new Date() } : {}),
       },
@@ -1724,6 +1725,7 @@ export class IntakeService {
       where: { id },
       data: {
         status: 'approved',
+        schemaSnapshot: row.schemaSnapshot ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds),
         visitId: visit?.id ?? null,
         reviewNote: text(dto.note, 300),
         reviewedById: user?.id ?? null,

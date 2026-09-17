@@ -5,7 +5,7 @@
 
 | ترتیب | بسته | وضعیت | شاخه | کامیتِ مرج | یادداشت |
 |---|---|---|---|---|---|
-| ۱ | W1.6 اسنپ‌شاتِ فرم + حذفِ نرمِ فیلد + `formUsage` با submission + منعِ حذفِ فرمِ پاسخ‌دار | ⬜ | `agent/w1-6-form-snapshot` | | N1 — اول از همه |
+| ۱ | W1.6 اسنپ‌شاتِ فرم + حذفِ نرمِ فیلد + `formUsage` با submission + منعِ حذفِ فرمِ پاسخ‌دار | 🟡 | `agent/w1-6-form-snapshot` | PR #13 | پیاده شد؛ ۲۴ سناریو سبز؛ rebase روی f8da7bd، در انتظار CI و مرج |
 | ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | ⬜ | `agent/w1-5-appointment-visit-link` | | D05, N2, N3 |
 | ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ⬜ | `agent/w1-4-approve-atomic` | | D04 |
 | ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ⬜ | `agent/w1-1-unfollowed-match` | | D01 |
@@ -23,4 +23,6 @@
 - (خالی)
 
 ## یادداشت برای لِین‌های دیگر
-- (خالی)
+- W1.6: `submissions` به خروجی حذف فرم افزوده شده؛ `used` مجموع مراجعه/لینک/پاسخ (شامل extraFormIds) است. متن FormBuilder باید «استفادهٔ ثبت‌شده» بگوید، نه فقط «مراجعه». هیچ UI در این بسته ویرایش نشده.
+- کاتالوگ W2.2 دریافت شد. `appointment.held` در book همراه W1.5؛ `intake.submitted/approved/rejected/approve_failed` و `appointment.confirmed` همراه W1.4؛ `order.reviewed/needs_action` همراه W1.2. refها دقیقاً مطابق CONTRACTS §۲ می‌مانند.
+- برای لِین ج: شرط `halfWhere` در `today.service.ts` پاسخ سالمِ فرمِ `scope=record` را هم تأیید نیمه‌کاره می‌شمارد؛ این فرم عمداً visitId ندارد. لطفاً فرم‌های زیرپرونده را از این استثنا کنار بگذارید. W1.4 مسیر مراجعه‌ساز را اتمیک می‌کند.

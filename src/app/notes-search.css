@@ -24,7 +24,7 @@
   grid-column: 1 / -1;
   display: flex; align-items: center; gap: 8px;
   padding: 9px 13px; border-radius: 13px; color: var(--text3);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .ns-q input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text1); background: none; border: 0; outline: none; }
 
@@ -36,12 +36,12 @@
 .ns-empty {
   max-width: 860px; margin: 0 auto 12px; padding: 26px 16px; text-align: center;
   font-size: 13px; color: var(--text3);
-  border: 1px dashed rgba(255, 255, 255, .12); border-radius: 16px;
+  border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 .ns-card {
   max-width: 860px; margin: 0 auto 10px; padding: 12px 14px; border-radius: 15px;
-  background: rgba(255, 255, 255, .045); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .ns-card-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 6px; }
 .ns-kind {
@@ -57,7 +57,7 @@
 .ns-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
 .ns-tags i {
   font-style: normal; font-size: 10.5px; padding: 2px 9px; border-radius: 99px;
-  color: var(--text2); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .ns-body { font-size: 12.5px; line-height: 1.9; color: var(--text2); white-space: pre-wrap; }
 
@@ -76,7 +76,7 @@
 .ns-ai-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ns-ai-row input {
   flex: 1 1 240px; min-width: 0; padding: 10px 14px; font: inherit; font-size: 13px; color: var(--text);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 12px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 12px;
 }
 .ns-ai-row input:focus { outline: none; border-color: rgba(var(--brand-2-rgb), .6); }
 .ns-ai-ask {
@@ -88,7 +88,7 @@
 .ns-ai-answer { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.9; }
 .ns-ai-meter {
   height: 8px; border-radius: 99px; overflow: hidden;
-  background: rgba(255, 255, 255, .08);
+  background: rgba(var(--veil-rgb), .08);
 }
 .ns-ai-meter i {
   display: block; height: 100%; border-radius: 99px;

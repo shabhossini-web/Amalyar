@@ -49,7 +49,7 @@
   align-self: flex-start;
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12.5px; font-weight: 700; color: var(--text2);
-  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.12);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   border-radius: 99px; padding: 7px 15px 7px 13px; text-decoration: none;
   transition: color .2s, border-color .2s, background .2s;
@@ -78,14 +78,17 @@
   position: relative; isolation: isolate; overflow: hidden;
   font-family: inherit; cursor: pointer; color: inherit;
   --mx: 50%; --my: 50%;
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(var(--veil-rgb), 0.045);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   backdrop-filter: blur(18px) saturate(150%);
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(var(--veil-rgb), 0.11);
+  /* ⚠️ «نور از بالا» با تم برعکس نمی‌شود: لبهٔ بالا بازتابِ نور است و باید در
+     **هر دو** تم سفید بماند. اگر از `--veil-rgb` می‌آمد، در تمِ روشن سیاه می‌شد و
+     کارت به‌جای برجسته، فرورفته دیده می‌شد. */
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 1px 0 rgba(var(--sheen-rgb), 0.14),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-    0 12px 36px rgba(4, 2, 16, 0.42);
+    var(--shadow-card);
   transition: transform .2s cubic-bezier(.2,.7,.2,1), border-color .25s, box-shadow .25s;
 }
 /* pointer-following spotlight glow (اسپاتلایت) */
@@ -94,7 +97,7 @@
   opacity: 0; transition: opacity .3s;
   background: radial-gradient(220px circle at var(--mx) var(--my), rgba(var(--brand-rgb), 0.30), rgba(0, 229, 255, 0.10) 42%, transparent 68%);
 }
-.glass:hover { transform: translateY(-3px); border-color: rgba(var(--brand-2-rgb), 0.55); box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 18px 46px rgba(var(--brand-rgb), 0.28); }
+.glass:hover { transform: translateY(-3px); border-color: rgba(var(--brand-2-rgb), 0.55); box-shadow: inset 0 1px 0 rgba(var(--sheen-rgb), 0.2), 0 18px 46px rgba(var(--brand-rgb), 0.28); }
 .glass:hover .glass-glow { opacity: 1; }
 .glass:active { transform: translateY(-1px) scale(.995); }
 .glass:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
@@ -109,7 +112,7 @@
   color: #fff; background: linear-gradient(135deg, rgba(var(--brand-2-rgb), 0.38), rgba(76, 29, 149, 0.30));
   border: 1px solid rgba(var(--brand-2-rgb), 0.5);
   -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%);
-  box-shadow: 0 0 18px rgba(var(--brand-rgb), .35), inset 0 1px 0 rgba(255,255,255,.22);
+  box-shadow: 0 0 18px rgba(var(--brand-rgb), .35), inset 0 1px 0 rgba(var(--veil-rgb), .22);
 }
 .lx-hero-body { flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .lx-hero-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
@@ -120,7 +123,7 @@
 /* animated sheen sweep on the hero glass */
 .shine::after {
   content: ''; position: absolute; top: 0; bottom: 0; width: 45%; z-index: 1; pointer-events: none;
-  background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  background: linear-gradient(105deg, transparent, rgba(var(--veil-rgb), 0.12), transparent);
   transform: translateX(-160%) skewX(-18deg);
   animation: sheen 5.5s ease-in-out 1.2s infinite;
 }
@@ -134,7 +137,7 @@
   color: #e5ddff; background: linear-gradient(135deg, rgba(var(--brand-rgb), .26), rgba(76, 29, 149, .18));
   border: 1px solid rgba(var(--brand-2-rgb), .4);
   -webkit-backdrop-filter: blur(9px) saturate(150%); backdrop-filter: blur(9px) saturate(150%);
-  box-shadow: 0 0 14px rgba(var(--brand-rgb), .2), inset 0 1px 0 rgba(255,255,255,.15);
+  box-shadow: 0 0 14px rgba(var(--brand-rgb), .2), inset 0 1px 0 rgba(var(--veil-rgb), .15);
 }
 .lx-card-title { font-size: 14.5px; font-weight: 700; }
 
@@ -149,11 +152,11 @@
 .lx-tile-label { font-size: 12px; font-weight: 600; color: var(--text1); text-align: center; line-height: 1.4; }
 
 /* تینت‌های شیشه‌ای — کم‌آلفا مثل لانچرِ ملک‌طب؛ پس‌زمینه از پشت رد می‌شود */
-.tint-violet { background: linear-gradient(135deg, rgba(60, 30, 110, .40), rgba(var(--brand-rgb), .40)); border: 1px solid rgba(var(--brand-rgb), .45); box-shadow: 0 0 14px rgba(var(--brand-rgb), .22), inset 0 1px 0 rgba(255,255,255,.16); }
-.tint-green  { background: linear-gradient(135deg, rgba(0, 80, 60, .35), rgba(0, 180, 110, .35)); border: 1px solid rgba(0, 255, 170, .28); box-shadow: 0 0 14px rgba(0, 200, 130, .18), inset 0 1px 0 rgba(255,255,255,.16); }
-.tint-amber  { background: linear-gradient(135deg, rgba(120, 60, 0, .35), rgba(200, 120, 0, .35)); border: 1px solid rgba(245, 158, 11, .38); box-shadow: 0 0 14px rgba(245, 158, 11, .18), inset 0 1px 0 rgba(255,255,255,.16); }
-.tint-blue   { background: linear-gradient(135deg, rgba(0, 40, 90, .35), rgba(0, 90, 160, .35)); border: 1px solid rgba(59, 130, 246, .38); box-shadow: 0 0 14px rgba(59, 130, 246, .18), inset 0 1px 0 rgba(255,255,255,.16); }
-.tint-teal   { background: linear-gradient(135deg, rgba(0, 80, 50, .35), rgba(0, 160, 120, .35)); border: 1px solid rgba(0, 229, 255, .32); box-shadow: 0 0 14px rgba(0, 229, 255, .18), inset 0 1px 0 rgba(255,255,255,.16); }
+.tint-violet { background: linear-gradient(135deg, rgba(60, 30, 110, .40), rgba(var(--brand-rgb), .40)); border: 1px solid rgba(var(--brand-rgb), .45); box-shadow: 0 0 14px rgba(var(--brand-rgb), .22), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
+.tint-green  { background: linear-gradient(135deg, rgba(0, 80, 60, .35), rgba(0, 180, 110, .35)); border: 1px solid rgba(0, 255, 170, .28); box-shadow: 0 0 14px rgba(0, 200, 130, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
+.tint-amber  { background: linear-gradient(135deg, rgba(120, 60, 0, .35), rgba(200, 120, 0, .35)); border: 1px solid rgba(245, 158, 11, .38); box-shadow: 0 0 14px rgba(245, 158, 11, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
+.tint-blue   { background: linear-gradient(135deg, rgba(0, 40, 90, .35), rgba(0, 90, 160, .35)); border: 1px solid rgba(59, 130, 246, .38); box-shadow: 0 0 14px rgba(59, 130, 246, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
+.tint-teal   { background: linear-gradient(135deg, rgba(0, 80, 50, .35), rgba(0, 160, 120, .35)); border: 1px solid rgba(0, 229, 255, .32); box-shadow: 0 0 14px rgba(0, 229, 255, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
 
 /* نشانِ تعدادِ در‌انتظار روی تایلِ کاربران */
 .lx-badge {
@@ -173,7 +176,7 @@
 .lx-userbar { display: flex; align-items: center; gap: 8px; }
 .lx-user { display: inline-flex; align-items: center; gap: 10px; border-radius: 99px; padding: 6px 8px 6px 13px; }
 .lx-avatar { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 800; overflow: hidden;
-  background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.25); flex: 0 0 auto; }
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); color: #fff; box-shadow: inset 0 1px 0 rgba(var(--veil-rgb), .25); flex: 0 0 auto; }
 .lx-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .lx-user-meta { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.25; }
 .lx-user-name { font-size: 13.5px; font-weight: 700; }
@@ -220,7 +223,7 @@
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(18px);
   background: rgba(var(--brand-rgb), 0.92); color: #fff; font-weight: 700; font-size: 13px;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.15);
+  border: 1px solid rgba(var(--veil-rgb), 0.15);
   padding: 10px 18px; border-radius: 99px; box-shadow: 0 12px 34px rgba(var(--brand-rgb), .5);
   opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; z-index: 60;
 }

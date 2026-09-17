@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from './auth.jsx';
 import { getAccounts } from '../lib/accountsStore.js';
 import './profile-menu.css';
-import { Caret, Check, Fingerprint, Grid, LogOut, Plus, User } from '../ui/icons.jsx';
+import { Caret, Check, Fingerprint, Grid, LogOut, Moon, Plus, Sun, User } from '../ui/icons.jsx';
+import { setTheme, setDensity } from '../lib/theme.js';
 
 
 const Avatar = ({ u, size = 32 }) => (
@@ -28,6 +29,16 @@ export default function ProfileMenu({ onToast }) {
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
   const toast = (m) => onToast?.(m);
+  /* ⚠️ حالتِ تم از **خودِ DOM** خوانده می‌شود، نه از یک state موازی: منبعِ حقیقت
+     صفتِ `data-theme` روی `<html>` است که `main.jsx` و `config.jsx` هم آن را
+     می‌نویسند. اگر این‌جا نسخهٔ خودش را نگه می‌داشت، پیش‌فرضِ حوزه که بعد از
+     رسیدنِ `/config` اعمال می‌شود در این منو دیده نمی‌شد. */
+  const [pref, setPref] = useState(() => ({ theme: 'dark', density: 'cozy' }));
+  useEffect(() => {
+    if (!open) return;
+    const d = document.documentElement.dataset;
+    setPref({ theme: d.theme === 'light' ? 'light' : 'dark', density: d.density === 'compact' ? 'compact' : 'cozy' });
+  }, [open]);
 
   const accounts = useMemo(() => {
     const list = getAccounts();
@@ -186,6 +197,35 @@ export default function ProfileMenu({ onToast }) {
                 <Fingerprint width="17" height="17" /> فعال‌سازی ورود با اثر انگشت
               </button>
             )}
+
+            <div className="pm-sep" />
+
+            {/* نمایش — تم و چگالی (W3.6). منو **بسته نمی‌شود**: کاربر معمولاً هر دو
+                را پشتِ هم امتحان می‌کند و بستنِ منو بعد از هر کلیک یعنی سه بار
+                بازکردنِ دوباره. */}
+            <div className="pm-prefs">
+              <span className="pm-prefs-t">نمایش</span>
+              <div className="pm-seg" role="group" aria-label="تمِ رابط">
+                <button type="button" aria-pressed={pref.theme === 'light'}
+                  className={pref.theme === 'light' ? 'on' : ''}
+                  onClick={() => setPref((s) => ({ ...s, theme: setTheme('light') }))}>
+                  <Sun width="14" height="14" /> روشن
+                </button>
+                <button type="button" aria-pressed={pref.theme === 'dark'}
+                  className={pref.theme === 'dark' ? 'on' : ''}
+                  onClick={() => setPref((s) => ({ ...s, theme: setTheme('dark') }))}>
+                  <Moon width="14" height="14" /> تیره
+                </button>
+              </div>
+              <div className="pm-seg" role="group" aria-label="چگالیِ نمایش">
+                <button type="button" aria-pressed={pref.density === 'cozy'}
+                  className={pref.density === 'cozy' ? 'on' : ''}
+                  onClick={() => setPref((s) => ({ ...s, density: setDensity('cozy') }))}>عادی</button>
+                <button type="button" aria-pressed={pref.density === 'compact'}
+                  className={pref.density === 'compact' ? 'on' : ''}
+                  onClick={() => setPref((s) => ({ ...s, density: setDensity('compact') }))}>فشرده</button>
+              </div>
+            </div>
 
             <div className="pm-sep" />
 
