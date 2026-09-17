@@ -1,6 +1,7 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards,
+  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LevelGuard } from '../auth/level.guard';
 import { MinLevel } from '../auth/min-level.decorator';
@@ -77,5 +78,20 @@ export class PublicOrdersController {
   @Post(':token/answer')
   answer(@Param('token') token: string, @Body() dto: any) {
     return this.orders.publicAnswer(token, dto);
+  }
+
+  /**
+   * فایلِ جوابِ بیمار (قرارداد §۵). جوابِ آزمایش معمولاً یک عکس یا PDF است و
+   * تا امروز هیچ راهی نداشت جز اینکه بیمار جایی آپلود کند و **لینکش** را
+   * بفرستد — یعنی مدرکِ پزشکی روی سرورِ یک غریبه.
+   *
+   * ⚠️ سقفِ `fileSize` این‌جا فقط ترمزِ زودهنگامِ multipart است تا بافرِ بزرگ
+   * اصلاً ساخته نشود؛ سنجهٔ واقعیِ حجم و نوع در سرویس است، چون کنترلر
+   * تنها لایه نیست و نباید باشد.
+   */
+  @Post(':token/files')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  upload(@Param('token') token: string, @UploadedFile() file: any) {
+    return this.orders.publicUpload(token, file);
   }
 }

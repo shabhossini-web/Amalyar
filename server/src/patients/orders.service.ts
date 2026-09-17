@@ -8,10 +8,21 @@ import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
+import { sniffMime } from '../common/file-type';
+import { RateLimitService } from '../common/rate-limit.service';
+import { StorageService } from '../storage/storage.service';
 
 /** چهار نوعِ سفارشِ بالینی — کلیدِ مسیر و جدول. */
 export const ORDER_KINDS = ['lab', 'imaging', 'consult', 'referral'] as const;
 export type OrderKind = (typeof ORDER_KINDS)[number];
+
+/** وضعیت‌هایی که «پاسخ رسیده» — پس از این‌ها فقط افزودن معنا دارد، نه پاسخِ تازه. */
+const ANSWERED_STATUSES = ['answered', 'in_review', 'reviewed'];
+/** قرارداد §۵ — سقفِ فایلِ پاسخ به‌ازای هر سفارش و حجمِ هر فایل. */
+const MAX_ANSWER_FILES = 5;
+const MAX_ANSWER_BYTES = 10 * 1024 * 1024;
+/* پیامِ رو به بیمار ارقامِ فارسی می‌گیرد — عددِ لاتین وسطِ جملهٔ فارسی غلط می‌نشیند. */
+const faNum = (n: number) => String(n).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[+d]);
 
 const FA: Record<OrderKind, string> = {
   lab: 'درخواستِ آزمایش',
@@ -37,6 +48,8 @@ export class OrdersService {
     private tenant: TenantContext,
     private audit: AuditService,
     private events: EventsService,
+    private storage: StorageService,
+    private rateLimit: RateLimitService,
   ) {}
 
   /* delegateِ prisma برای هر نوع. تایپِ اجتماعِ چهار delegate در Prisma
@@ -78,6 +91,7 @@ export class OrdersService {
 
   /** An answer and its immutable record documents share the order lock and outbox transaction. */
   private async answerDocuments(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null) {
+    let made = 0;
     const category = kind === 'lab' ? 'lab' : kind === 'imaging' ? 'imaging' : 'report';
     const text = data.resultText ?? data.answerText;
     const link = data.resultLink ?? data.answerLink;
@@ -92,6 +106,7 @@ export class OrdersService {
         ...(type === 'text' ? { contentText: value } : { externalUrl: value,
           externalUser: data.resultUser ?? null, externalPass: data.resultPass ?? null }) };
       if (await tx.document.findFirst({ where })) continue;
+      made += 1;
       await tx.document.create({ data: { ...where, visitId: row.visitId, category,
         title: `پاسخ ${FA[kind]}`, fileName: type === 'text' ? `${kind}-${row.id}.txt` : new URL(value).hostname,
         mimeType: type === 'text' ? 'text/plain; charset=utf-8' : 'text/uri-list',
@@ -99,6 +114,7 @@ export class OrdersService {
         sha256: type === 'text' ? createHash('sha256').update(value).digest('hex') : '', uploadedById: actorId,
       } });
     }
+    return made;
   }
 
   private async answered(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null) {
@@ -355,7 +371,20 @@ export class OrdersService {
     throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
   }
 
-  /** ثبتِ پاسخ توسطِ خودِ بیمار (لینک/متنِ جواب). */
+  /**
+   * ثبتِ پاسخ توسطِ خودِ بیمار (لینک/متن/فایلِ جواب).
+   *
+   * ⚠️ **فایل هم خودش یک پاسخِ کامل است.** جوابِ آزمایش معمولاً فقط یک عکس یا
+   * PDF است و متنی ندارد؛ تا دیروز اگر بیمار فقط فایل می‌گذاشت این‌جا
+   * «متن یا لینکِ پاسخ را وارد کنید» می‌گرفت و مجبور می‌شد چیزی بنویسد.
+   * پس شرطِ خالی‌نبودن حالا مدارکِ پیوست‌شده را هم می‌بیند.
+   *
+   * ⚠️ **`append` وضعیت و تصمیمِ بررسی را دست نمی‌زند** (قرارداد §۵): بیمار که
+   * بعد از بررسیِ پزشک صفحهٔ دومِ جواب را می‌فرستد، نباید `reviewNote` و
+   * `reviewedAt`ِ ثبت‌شده را پاک کند — آن تصمیم روی موادِ همان‌موقع گرفته شده و
+   * سندِ پرونده است. فقط مدرکِ تازه ساخته می‌شود و یک رویداد می‌رود تا کارِ
+   * بررسی دوباره باز شود.
+   */
   async publicAnswer(token: string, dto: any) {
     for (const kind of ORDER_KINDS) {
       const row = await this.table(kind).findUnique({ where: { token } });
@@ -364,18 +393,113 @@ export class OrdersService {
       const str = (v: unknown, max = 2000) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
       const text = str(dto?.text);
       const link = str(dto?.link, 500);
-      if (!text && !link) throw new BadRequestException('متن یا لینکِ پاسخ را وارد کنید');
+      const append = dto?.append === true;
       return this.prisma.$transaction(async tx => {
         const current = await this.locked(kind, row.id, tx);
         if (!await tx.patient.findFirst({ where: { id: current.patientId, deletedAt: null }, select: { id: true } })) throw new NotFoundException('پرونده پیدا نشد');
-        if (!['sent', 'needs_action'].includes(current.status)) throw new ConflictException('پاسخ قبلاً ثبت شده یا سفارش آماده پاسخ نیست');
+        const files = await this.fileCount(kind, current, tx);
+        if (!text && !link && !files) throw new BadRequestException('متن، لینک یا فایلِ پاسخ را بفرستید');
         const data: any = kind === 'consult' ? { answerText: text || null, answerLink: link || null }
           : { resultText: text || null, resultLink: link || null,
             resultUser: str(dto?.user, 120) || null, resultPass: str(dto?.pass, 120) || null };
-        await this.answered(kind, current, data, tx, null);
-        return { ok: true };
+
+        if (['sent', 'needs_action'].includes(current.status)) {
+          await this.answered(kind, current, data, tx, null);
+          return { ok: true, status: 'answered' };
+        }
+        if (!append) throw new ConflictException('پاسخ قبلاً ثبت شده یا سفارش آماده پاسخ نیست');
+        if (!ANSWERED_STATUSES.includes(current.status)) throw new ConflictException('این سفارش آماده پاسخ نیست');
+
+        /* افزودنِ متن/لینکِ تازه — مدرکِ تکراری دوباره ساخته نمی‌شود، پس
+           دوبار زدنِ همان دکمه کارِ بررسی را الکی باز نمی‌کند. */
+        const made = await this.answerDocuments(kind, current, data, tx, null);
+        if (!made) throw new BadRequestException('چیزی برای افزودن نیست — همین پاسخ قبلاً ثبت شده');
+        await this.reopenReview(kind, current, tx, `order.${kind}.appended`, { added: made });
+        return { ok: true, status: current.status, appended: made };
       });
     }
     throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
+  }
+
+  /**
+   * آپلودِ فایلِ پاسخ از صفحهٔ عمومیِ بیمار (قرارداد §۵).
+   *
+   * ⚠️ مسیرش زیرِ همان `public/order`ِ موجود است نه یک پیشوندِ تازه — یک سطحِ
+   * عمومی برای یک چیز.
+   *
+   * سه گاردی که هرکدام جلوی یک سوءاستفادهٔ مشخص را می‌گیرند:
+   * ۱. نوع از **بایت‌های فایل** سنجیده می‌شود (`sniffMime`)، نه از هدرِ کلاینت —
+   *    مسیرِ دانلود همان `mimeType` را در `Content-Type` می‌گذارد و برای عکس
+   *    `inline` می‌دهد، پس دروغِ کلاینت یعنی هرچه او بخواهد در مرورگرِ کارکنان.
+   * ۲. سقفِ ۵ فایل به‌ازای هر سفارش، وگرنه این نشانیِ بی‌احراز یک انبارِ آزاد است.
+   * ۳. `draft` رد می‌شود: توکنِ سفارشی که هنوز برای بیمار نرفته نباید فایل بگیرد.
+   *
+   * ⚠️ فایل همین‌جا به سفارش **وصل** می‌شود (`refType`/`refId`) ولی وضعیت را جلو
+   * نمی‌برد: بیمار سه صفحهٔ جواب را جدا آپلود می‌کند و یک‌بار «ثبت» می‌زند —
+   * یک گذارِ وضعیت، نه سه تا. تنها استثنا سفارشِ **پاسخ‌داده‌شده** است که دیگر
+   * مرحلهٔ «ثبت» ندارد؛ آن‌جا خودِ فایل افزودن است و کارِ بررسی را باز می‌کند.
+   */
+  async publicUpload(token: string, file: { originalname?: string; mimetype?: string; buffer?: Buffer; size?: number }) {
+    for (const kind of ORDER_KINDS) {
+      const row = await this.table(kind).findUnique({ where: { token } });
+      if (!row) continue;
+      if (kind === 'referral') throw new BadRequestException('برای نامهٔ ارجاع پاسخی ثبت نمی‌شود');
+      this.rateLimit.hit(`order-upload:${token}`, MAX_ANSWER_FILES * 4, 15 * 60_000);
+
+      if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
+      if ((file.size ?? file.buffer.length) > MAX_ANSWER_BYTES) {
+        throw new BadRequestException(`حجمِ فایل بیش از ${faNum(MAX_ANSWER_BYTES / 1024 / 1024)} مگابایت است`);
+      }
+      const mime = sniffMime(file.buffer);
+      if (!mime) throw new BadRequestException('فقط عکس (JPG/PNG/WebP/HEIC) یا PDF بفرستید');
+
+      const { sha256, size } = await this.storage.save(file.buffer);
+      return this.prisma.$transaction(async tx => {
+        const current = await this.locked(kind, row.id, tx);
+        if (!await tx.patient.findFirst({ where: { id: current.patientId, deletedAt: null }, select: { id: true } })) throw new NotFoundException('پرونده پیدا نشد');
+        if (current.status === 'draft') throw new ConflictException('این سفارش هنوز برای شما ارسال نشده است');
+        if (await this.fileCount(kind, current, tx) >= MAX_ANSWER_FILES) {
+          throw new BadRequestException(`برای هر درخواست حداکثر ${faNum(MAX_ANSWER_FILES)} فایل می‌شود فرستاد`);
+        }
+        const doc = await tx.document.create({ data: {
+          patientId: current.patientId, visitId: current.visitId,
+          refType: `${kind}_order`, refId: current.id,
+          category: kind === 'lab' ? 'lab' : kind === 'imaging' ? 'imaging' : 'report',
+          title: `پاسخ ${FA[kind]}`,
+          fileName: (file.originalname || '').slice(0, 200) || 'file',
+          mimeType: mime, sha256, size,
+        } });
+        if (ANSWERED_STATUSES.includes(current.status)) {
+          await this.reopenReview(kind, current, tx, `order.${kind}.appended`, { documentId: doc.id });
+        } else {
+          await this.audit.record({ actorId: null, action: `order.${kind}.file`, entityType: `${kind}_order`,
+            entityId: current.id, after: { documentId: doc.id, size } }, tx);
+        }
+        return { id: doc.id, name: doc.fileName, size: doc.size };
+      });
+    }
+    throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
+  }
+
+  /** شمارِ فایل‌های پیوستِ یک سفارش — متن و لینک فایل نیستند، پس در سقف نمی‌آیند. */
+  private fileCount(kind: OrderKind, row: any, tx: any): Promise<number> {
+    return tx.document.count({ where: { refType: `${kind}_order`, refId: row.id,
+      patientId: row.patientId, deletedAt: null, contentText: null, externalUrl: null } });
+  }
+
+  /**
+   * موادِ تازه روی سفارشی که قبلاً پاسخ داده شده: وضعیت و `reviewNote` دست
+   * نمی‌خورند، ولی `order.answered` می‌رود تا کارِ بررسی دوباره باز شود.
+   */
+  private async reopenReview(kind: OrderKind, row: any, tx: any, action: string, after: any) {
+    const visit = row.visitId ? await tx.visit.findUnique({ where: { id: row.visitId },
+      select: { surgeon: { select: { person: { select: { account: { select: { id: true, status: true } } } } } } } }) : null;
+    const doctor = visit?.surgeon?.person?.account;
+    await this.events.emit({ type: 'order.answered', patientId: row.patientId, visitId: row.visitId,
+      refType: `${kind}_order`, refId: row.id, actorId: null,
+      payload: { doctorId: doctor?.status === 'active' ? doctor.id : null, again: true },
+    }, tx);
+    await this.audit.record({ actorId: null, action, entityType: `${kind}_order`,
+      entityId: row.id, before: { status: row.status }, after }, tx);
   }
 }
