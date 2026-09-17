@@ -85,15 +85,15 @@ try {
   const patients = new (cls('patients/patients.service', 'PatientsService'))(db, audit, forms, reminders, events);
   const failingBilling = { assertIntakePayment: async () => {}, addPayment: async () => { throw new Error('fixture payment failure'); } };
   const makeIntake = emitter => new (cls('patients/intake.service', 'IntakeService'))(db, audit, patients, {}, failingBilling, {}, forms, {},
-    { require: () => ({ hostname: 'localhost' }) }, {}, { sendSms: async () => {} }, reminders, {}, emitter);
+    { require: () => ({ hostname: 'localhost' }) }, {}, new (cls('patients/portal.service', 'PortalService'))(db, audit, {}, { brand: async () => ({}), sms: async () => ({ portalText: '{link}' }) }, { require: () => ({ hostname: 'localhost' }) }), reminders, {}, emitter);
   const actor = await db.account.findUnique({ where: { username: process.env.E2E_USER ?? 'admin' } });
   const partial = await sub(clinic.id, 'pending_approval', 100);
   await assert.rejects(() => makeIntake(events).approve(partial.id, {}, actor), /fixture payment failure/);
   const saved = await db.intakeSubmission.findUnique({ where: { id: partial.id } });
   const failure = (await intakeEvents(partial.id)).find(e => e.type === 'intake.approve_failed');
-  ok(saved.visitId && failure?.visitId === saved.visitId, 'شکست پرداخت پس از نوشتن، رویداد نیمه‌کاره با همان مراجعه دارد');
+  ok(saved.status === 'pending_approval' && !saved.visitId && !failure, 'شکست پرداخت همه تأیید را rollback می‌کند و رویداد نیمه‌کاره ندارد');
   await processDomainEvents(db);
-  ok((await work('repair_intake', 'intake_submission', partial.id))?.state === 'open', 'شکست نیمه‌کاره کارِ رسیدگی مدیر را باز می‌کند');
+  ok(!(await work('repair_intake', 'intake_submission', partial.id)), 'تأیید rollbackشده کارِ نیمه‌کاره کاذب نمی‌سازد');
   const invalid = await sub(clinic.id);
   await assert.rejects(() => makeIntake(events).approve(invalid.id, {}, actor));
   ok((await intakeEvents(invalid.id)).length === 0, 'رد اعتبارسنجی پیش از نوشتن رویداد نیمه‌کاره نمی‌سازد');

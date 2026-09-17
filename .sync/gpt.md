@@ -1,10 +1,24 @@
 <!-- claim:begin -->
 agent: gpt
-status: idle
-branch: agent/w1-2-order-review
+status: active
+branch: agent/w1-4-approve-atomic
 since: 2026-09-17
-paths: []
-note: W1.2 مرج شد: PR #38 / 3865b60؛ security-ci و ۶۷ سناریو سبز. قدم بعد W1.4؛ دلیل لغو پس از W3.3؛ تصمیم‌های ۱ و ۶ جدید مبنا هستند.
+paths:
+  - server/src/patients/intake.service.ts
+  - server/src/patients/intake.controller.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/billing.service.ts
+  - server/src/patients/treasury.service.ts
+  - server/src/patients/portal.service.ts
+  - server/prisma/schema.prisma
+  - server/prisma/migrations/20260917140000_intake_approval/
+  - scripts/e2e/w1-4-approve-atomic.mjs
+  - scripts/e2e/w1-4-approve-local.mjs
+  - scripts/e2e/w2-2b-intake-events.mjs
+  - scripts/e2e/intake-finance-roles.mjs
+  - scripts/e2e/profile-workflows.mjs
+  - docs/plan/lanes/gpt.md
+note: W1.2/PR38 و تحویل PR39 لند شد؛ W1.4 شروع شد: تراکنش واحد، مصرف forVisitId، idempotency و پیام از outbox. appointments در کلیم ج دست نمی‌خورد.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
@@ -80,3 +94,17 @@ note: W1.2 مرج شد: PR #38 / 3865b60؛ security-ci و ۶۷ سناریو سب
 - پاسخ ← Document ارجاع‌دار + audit/outbox اتمیک، بررسی چهار نوع سفارش، بازگشایی همان کار پس از پاسخ جدید. W3.1 در in_review/needs_action باز می‌ماند.
 - endpoint و خروجی documents در CONTRACTS ثبت است. UI بررسی برای مصرف endpoint تحویل لِین ج؛ آپلود/append عمومی همچنان W0.8/W0.5 و ترمیم تاریخی W1.10.
 - W1.4 شروع نشده. دلیل لغو پس از W3.3؛ مراقبت شرطی و confirm_surgery_done و بله سپس تلگرام/relay multipart بدون تغییر تصمیم حفظ شدند.
+
+## شروع W1.4 — 2026-09-17
+- main=30c66d2؛ PR39 مرج و W1.2 بسته شد. PortalService در کلیم idle ب است؛ فقط آماده‌سازی پیامِ صف‌شده اضافه می‌شود، publicView دست نمی‌خورد.
+- BillingService.addCharge/addPayment و Treasury.assertOpen پارامتر اختیاری tx می‌گیرند. prepareVisitCreation همان tx را برای به‌روزرسانی مراجعه موجود هم مصرف می‌کند.
+- دو استثنای محدود در فایل‌های کلیم ج: شرح قرارداد W1.4 در CONTRACTS و یک گام ته CI. schema ستون‌های انتهای مدل IntakeSubmission طبق قرارداد جدید دارد.
+
+- دو fixture قدیمی مالی/گردش‌کار PortalService واقعی برای صف پیام می‌گیرند؛ سنجه قدیمی W2.2 درباره تأیید نیمه‌کاره به rollback کامل تغییر می‌کند. work-rules (کلیم ج) دو رویداد کوچک برای آشکارکردن همگام‌سازی پس از commit می‌گیرد؛ بدون ادعای ناقص‌بودن پرداخت.
+- تأیید هم‌زمان مهلت انتظار ۱۰ ثانیه و سقف تراکنش ۱۵ ثانیه دارد؛ مهلت پیش‌فرض ۲ ثانیهٔ Prisma در آزمون تک‌اتصالی پیش از آزادشدن اتصال تمام می‌شد. همهٔ queryهای مالی همچنان همان tx هستند.
+- ویرایش‌های عمومی و returnForFix با نسخهٔ status/updatedAt ثبت می‌شوند؛ ویرایش دیررس نمی‌تواند تأیید موفق را باز کند. حذف/انقضا نیز پیش از تغییر نوبت نسخهٔ ثبت‌نام را کنترل می‌کنند. آزمون مکث عمدی پس از خواندن فیش، تأیید و سپس ادامهٔ ویرایش 409 می‌گیرد.
+- halfWhere: اصلاح scope=record روی شاخهٔ ج `claude/quirky-volta-uyuznl` مستقیم در کد تأیید شد؛ main=30c66d2 هنوز آن را ندارد. همان تحویل ج حفظ است و today.service.ts در این بسته ویرایش نمی‌شود.
+- محدودیت سنجش: PGlite با یک اتصال است؛ دو درخواست HTTP هم‌زمان سنجیده می‌شوند، نه چند اتصال مستقل PostgreSQL. PGlite-server هنگام نقض عمدی unique در tx اتصال را قطع کرد؛ برخورد کلید موجود اکنون پیش از آماده‌سازی شناسایی می‌شود و قید unique همچنان نگهبان رقابت واقعی است. رقابت دو ثبت‌نام مستقل بر سر یک کلید باید روی PostgreSQL بومی هم سنجیده شود.
+
+- استثنای ضروری CI: دو سنجهٔ قدیمی نام متد createVisit را به prepareVisitCreation مشترک با آن به‌روز می‌کنند؛ منع ساخت مستقیم Visit و الزام عبور مبلغ از همان مسیر حفظ است. گام e2e جدید فقط به ته فایل افزوده شد.
+- آمادهٔ PR: ۸۱ سناریو در runner W1.4 (۳۷ جدید، ۱۸ رویداد، ۲۶ نوبت) + ۱۷ مالی + ۱۶ گردش‌کار سبز؛ build هر دو سمت، tenant/claims و سنجه‌های تغییرکردهٔ CI سبز.

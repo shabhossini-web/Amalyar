@@ -1025,7 +1025,7 @@ export class PatientsService {
     const formFields = (await this.forms.forVisitKind(dto.kind || 'surgery'))?.fields ?? [];
     const extraIn = await this.forms.normalizeExtra(formFields, (dto as any).extra);
     const kinds = await this.forms.kindMap();
-    return async (tx: Prisma.TransactionClient) => {
+    return async (tx: Prisma.TransactionClient, targetVisitId?: number) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
       if (patientId) {
@@ -1043,9 +1043,23 @@ export class PatientsService {
       // شمارهٔ مراجعه برای همین بیمار در مسیرهای هم‌زمان تکرار نشود.
       await tx.$queryRaw`SELECT id FROM patients WHERE id = ${patientId} FOR UPDATE`;
       const refs = await this.resolveRefs(tx, dto);
+      let target: any = null;
+      if (targetVisitId) {
+        await tx.$queryRaw`SELECT id FROM visits WHERE id = ${targetVisitId} FOR UPDATE`;
+        target = await tx.visit.findFirst({ where: { id: targetVisitId, patientId } });
+        if (!target || target.opStatus === 'cancelled') throw new BadRequestException('مراجعهٔ هدف معتبر نیست یا لغو شده است');
+      }
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
       const seq = (max._max.seq ?? 0) + 1;
-      const visit = await tx.visit.create({
+      const visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
+        ...refs,
+        ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
+        ...(dto.opType !== undefined && refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
+        ...(dto.opDate !== undefined ? { opDate: toDateValue(dto.opDate) ?? null } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes || null } : {}),
+        ...timePatch(dto),
+        extra: { ...(target.extra as any ?? {}), ...(extraIn as any ?? {}) },
+      }, include: INCLUDE_PATIENT }) : await tx.visit.create({
         data: {
           ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
           patientId,
@@ -1083,7 +1097,10 @@ export class PatientsService {
        * نه، دقیقاً همان مراجعهٔ صفرتومانی است که این تغییر برای حذفش آمده.
        */
       const charge = Math.trunc(Number(dto.amount) || 0);
-      if (charge > 0) {
+      const existingServices = target ? await tx.charge.aggregate({ where: { visitId: target.id, kind: 'service' }, _sum: { amount: true } }) : null;
+      const existingAmount = existingServices?._sum.amount ?? 0;
+      if (target && charge > 0 && existingAmount > 0 && existingAmount !== charge) throw new BadRequestException('مبلغ مراجعهٔ موجود با ثبت‌نام متفاوت است؛ ابتدا مبلغ را بررسی کنید');
+      if (charge > 0 && !existingAmount) {
         const title = (refs.opType || dto.opType?.trim() || 'خدمتِ ثبت‌شده').slice(0, 120);
         await tx.charge.create({
           data: {
@@ -1101,7 +1118,7 @@ export class PatientsService {
         });
       }
       const result = { ...enrich(visit, kinds), patientStatus };
-      await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: visit.id, after: result }, tx);
+      await this.audit.record({ actorId: userId, action: target ? 'visit.intake_update' : 'visit.create', entityType: 'visit', entityId: visit.id, after: result }, tx);
       return result;
     };
   }

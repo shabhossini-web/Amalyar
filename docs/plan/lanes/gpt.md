@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|
 | ۱ | W1.6 اسنپ‌شاتِ فرم + حذفِ نرمِ فیلد + `formUsage` با submission + منعِ حذفِ فرمِ پاسخ‌دار | ✅ | `agent/w1-6-form-snapshot` | ccaa792 | PR #13؛ security-ci و ۲۴ سناریو سبز |
 | ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | ✅ | `agent/w1-5-appointment-visit-link` | 508cb4b | PR #26؛ security-ci، ۲۶ سناریو و ۱۷ رگرسیون سبز |
-| ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ⬜ | `agent/w1-4-approve-atomic` | | D04 |
+| ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | 🟡 | `agent/w1-4-approve-atomic` | | D04 |
 | ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ⬜ | `agent/w1-1-unfollowed-match` | | D01 |
 | ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ⬜ | `agent/w1-7-postop-gate` | | D07 · `DECISIONS.md` #۱ |
 | ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ⬜ | `agent/w1-3-approve-path` | | D03a |
@@ -43,3 +43,9 @@
 - استثنای scope=record در halfWhere توسط لِین ج بسته و پذیرفته شده است.
 
 - تحویل نهایی W1.2: PR #38 / `3865b60`؛ هر چهار نوع سفارش و دو چرخه نیاز به اقدام/پاسخ مجدد آزموده شد. کلیم آزاد؛ W1.4 بستهٔ بعدی است. endpoint بررسی و قیدهای مدارک در CONTRACTS ثبت شده‌اند.
+
+## تحویل W1.4 — در دست آزمون/مرج
+- approve یک tx برای مراجعه، مالی، سند، ثبت‌نام/نوبت، audit و صف پیام دارد؛ کلید تکرار و پاسخ ذخیره می‌شود. forVisitId همان مراجعه را به‌روز می‌کند. قرارداد §۱۰.
+- تأیید نیمه‌کارهٔ تاریخی از نمای W2.5 می‌آید؛ اصلاح scope=record روی شاخهٔ ج `claude/quirky-volta-uyuznl` در کد تأیید شد، هنوز روی main=30c66d2 نیست. هیچ تغییر موازی در today.service.ts داده نشد.
+- همگام‌سازی پس از commit رویداد پایدار و کار repair_intake با شرح دقیق دارد؛ به‌معنی شکست پرداخت نیست. اسکن/ترمیم داده‌های قدیمی همچنان W1.10 است.
+- سنجش محلی: ۸۱ سناریوی W1.4/W2.2-ب/W1.5 و ۳۳ رگرسیون مالی/گردش‌کار، build هر دو سمت و نگهبان tenant/claims سبز. PR آمادهٔ CI است؛ محدودیت چند اتصال PostgreSQL در STATUS و کلیم ثبت است.

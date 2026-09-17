@@ -129,6 +129,7 @@ class RequiredItemDto {
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 class ApproveDto {
+  @IsOptional() @IsString({ message: 'کلید تکرار درخواست باید متن باشد' }) @MaxLength(120, { message: 'کلید تکرار درخواست بیش از حد طولانی است' }) idempotencyKey?: string;
   @IsOptional() @IsObject() extra?: Record<string, any>;
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => RequiredItemDto) requiredItems?: RequiredItemDto[];
   @IsOptional() @Type(() => Number) @IsInt() surgeonId?: number;

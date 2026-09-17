@@ -800,6 +800,9 @@ model IntakeSubmission {
   schemaSnapshot Json? @map("schema_snapshot")
 
   @@map("intake_submissions")
+  approvalKey String? @unique @map("approval_key")
+  approvalResult Json? @map("approval_result")
+
 }
 
 /// کدِ تخفیفِ ثبت‌نام.

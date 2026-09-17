@@ -177,6 +177,13 @@ export const RULES: Record<string, Rule> = {
     priority: 3,
     note: e.payload?.error ?? null,
   }),
+  'intake.approval_sync_pending': (e, ref) => upsert({
+    ...base(e, 'repair_intake', ref),
+    title: 'همگام‌سازی یادآوری‌های پس از تأیید ثبت‌نام',
+    ownerRole: 'admin', dueAt: e.at ?? new Date(), priority: 2,
+    note: 'تأیید و پرداخت ثبت شده‌اند؛ یادآوری نوبت و برنامه مراجعه را بررسی کنید.',
+  }),
+  'intake.approval_synced': (_e, ref) => close(ref, 'repair_intake'),
 
   /* ── نوبت‌ها ── */
   'appointment.held': (e, ref) => upsert({
