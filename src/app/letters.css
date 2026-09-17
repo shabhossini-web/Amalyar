@@ -32,7 +32,7 @@
 .lt-err {
   display: flex; align-items: center; gap: 7px; max-width: 780px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .lt-empty {
   max-width: 780px; margin: 0 auto 12px; padding: 26px 16px; text-align: center;
@@ -97,8 +97,8 @@
   font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
   background: none; border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 12px;
 }
-.lt-del { color: #fca5a5; border-color: rgba(248, 113, 113, .35); }
-.lt-delask { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #fca5a5; }
+.lt-del { color: var(--red-text); border-color: rgba(248, 113, 113, .35); }
+.lt-delask { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--red-text); }
 .lt-delask button {
   padding: 7px 12px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--text1);
   background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 10px;

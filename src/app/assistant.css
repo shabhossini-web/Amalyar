@@ -43,7 +43,7 @@
   background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
   border-start-end-radius: 4px;
 }
-.as-msg.err .as-bubble { color: #fca5a5; border-color: rgba(248, 113, 113, .35); }
+.as-msg.err .as-bubble { color: var(--red-text); border-color: rgba(248, 113, 113, .35); }
 .as-link { color: var(--brand-2); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
 .as-inputbar {

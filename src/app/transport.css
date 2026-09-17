@@ -22,7 +22,7 @@
 .tr-err {
   display: flex; align-items: center; gap: 7px; max-width: 940px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 
 .tr-sum {
@@ -89,7 +89,7 @@
 .tr-left b { font-weight: 800; }
 .tr-none {
   display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 11px;
-  font-size: 12px; color: #fca5a5;
+  font-size: 12px; color: var(--red-text);
   background: rgba(248, 113, 113, .09); border: 1px solid rgba(248, 113, 113, .28);
 }
 

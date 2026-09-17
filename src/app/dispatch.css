@@ -23,7 +23,7 @@
 .dp-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
 .dp-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
 .dp-gapnote { font-style: normal; color: var(--amber-text); }
-.dp-err { max-width: 940px; margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }
+.dp-err { max-width: 940px; margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }
 
 /* تب‌ها */
 
@@ -78,7 +78,7 @@
   color: inherit; background: none; border: none; opacity: .7;
 }
 .dp-chip button:hover { opacity: 1; }
-.dp-chip button.x { color: #fca5a5; }
+.dp-chip button.x { color: var(--red-text); }
 
 .dp-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block-start: 10px; }
 .dp-pick label { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(var(--veil-rgb), .5); }
@@ -178,9 +178,9 @@
   background: rgba(248, 113, 113, .09); border: 1px solid rgba(248, 113, 113, .38);
 }
 .dp-nocargo > b {
-  font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; color: #fca5a5;
+  font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; color: var(--red-text);
 }
-.dp-chip.bad { color: #fca5a5; border-color: rgba(248, 113, 113, .38); background: rgba(248, 113, 113, .1); }
+.dp-chip.bad { color: var(--red-text); border-color: rgba(248, 113, 113, .38); background: rgba(248, 113, 113, .1); }
 
 /* ── جمع‌آوریِ بی‌راننده ── */
 .dp-loose.orphan { width: 100%; }
@@ -214,7 +214,7 @@
 .dp-runmeta { flex: 1; font-size: 11px; color: rgba(var(--veil-rgb), .45); }
 .dp-runx {
   font: inherit; font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 8px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .26);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .26);
 }
 
 .dp-stops { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 9px; }
@@ -237,7 +237,7 @@
   color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .dp-stophead button:disabled { opacity: .35; cursor: default; }
-.dp-stophead button.x { color: #fca5a5; }
+.dp-stophead button.x { color: var(--red-text); }
 .dp-stophead button.dp-doneon { color: #86efac; border-color: rgba(52, 211, 153, .4); }
 
 .dp-addstop {

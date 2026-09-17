@@ -40,7 +40,7 @@ const GREY = /#(f2f0fc|cfc9e8|b8b3d6|9aa2c0|8f88b5|7d77a3|6f679a|c7c2df|7d76a0|9
    `#fbbf24` به‌عنوانِ زمینهٔ چیپ در هر دو تم درست است (مرکّبش `--ink-bright`
    می‌شود). پس الگو به `color:` مقید است، وگرنه نگهبان پُرکننده‌های سالم را
    قرمز می‌کند و اولین واکنش «خاموشش کن» می‌شود. */
-const TEXT_ONLY = /color:\s*#(5eead4|fbbf24|ddd6fe)\b/i;
+const TEXT_ONLY = /color:\s*#(5eead4|fbbf24|ddd6fe|fca5a5|fecaca)\b/i;
 for (const f of css) {
   /* ⚠️ `index.css` استثناست: **تعریفِ** خودِ توکن‌ها آن‌جاست و باید hex باشد. */
   if (f === 'src/index.css') continue;
@@ -48,7 +48,7 @@ for (const f of css) {
     const m = line.match(GREY);
     if (m) bad.push(`${f}:${i + 1} — خاکستریِ ثابتِ ${m[0]}؛ var(--text1|2|3) بنویسید`);
     const t = line.match(TEXT_ONLY);
-    if (t) bad.push(`${f}:${i + 1} — شدتِ معناییِ خام ${t[0]}؛ var(--green-text|--amber-text|--brand-text) بنویسید`);
+    if (t) bad.push(`${f}:${i + 1} — شدتِ معناییِ خام ${t[0]}؛ var(--green-text|--amber-text|--brand-text|--red-text) بنویسید`);
   });
 }
 
@@ -61,7 +61,7 @@ const block = (sel) => {
   return idx.slice(i, idx.indexOf('\n}', i));
 };
 const MUST = ['--bg', '--bg2', '--text1', '--text2', '--text3', '--veil-rgb', '--sheen-rgb', '--shadow-card',
-  '--cyan', '--green-text', '--amber-text', '--brand-text'];
+  '--cyan', '--green-text', '--amber-text', '--brand-text', '--red-text'];
 for (const sel of [':root {', ':root[data-theme="light"] {', '.theme-dark {']) {
   const b = block(sel);
   if (!b) { bad.push(`src/index.css — بلوکِ ${sel} پیدا نشد`); continue; }

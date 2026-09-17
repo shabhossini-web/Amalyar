@@ -33,7 +33,7 @@
 .us-status { font-size: 11px; font-weight: 800; border-radius: 99px; padding: 3px 10px; flex: 0 0 auto; }
 .us-status.active { color: var(--green-text); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
 .us-status.pending { color: var(--amber-text); background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); }
-.us-status.rejected, .us-status.disabled { color: #fca5a5; background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
+.us-status.rejected, .us-status.disabled { color: var(--red-text); background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
 
 .us-actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .us-levelpick { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; color: var(--text2); }
@@ -55,7 +55,7 @@
 .us-btn:disabled { opacity: .55; cursor: default; }
 .us-btn.ok { color: #052e22; background: linear-gradient(135deg, #34d399, #0d9488); border: none; box-shadow: 0 6px 18px rgba(52, 211, 153, 0.3); }
 .us-btn.ok:hover:not(:disabled) { transform: translateY(-1px); }
-.us-btn.no { color: #fca5a5; background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.35); }
+.us-btn.no { color: var(--red-text); background: rgba(248, 113, 113, 0.08); border: 1px solid rgba(248, 113, 113, 0.35); }
 .us-btn.no:hover:not(:disabled) { background: rgba(248, 113, 113, 0.16); }
 .us-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .us-reset { align-self: center; margin-top: 4px; }

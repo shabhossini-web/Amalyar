@@ -108,7 +108,7 @@
 }
 .dyn-img-has button {
   cursor: pointer; display: grid; place-items: center; padding: 6px; border-radius: 8px;
-  color: #fca5a5; background: transparent; border: none; transition: background .15s;
+  color: var(--red-text); background: transparent; border: none; transition: background .15s;
 }
 .dyn-img-has button:hover:not(:disabled) { background: rgba(248, 113, 113, .15); }
 /* فهرستِ چندعکسیِ کادرِ عکس. */
@@ -163,7 +163,7 @@
 .dyn-link input { height: 40px; padding: 8px 11px; font-size: 12.5px; }
 .dyn-link-del {
   cursor: pointer; display: grid; place-items: center; flex-shrink: 0; padding: 7px; border-radius: 9px;
-  color: #fca5a5; background: transparent; border: 1px solid rgba(var(--veil-rgb), .12); transition: background .15s;
+  color: var(--red-text); background: transparent; border: 1px solid rgba(var(--veil-rgb), .12); transition: background .15s;
 }
 .dyn-link-del:hover:not(:disabled) { background: rgba(248, 113, 113, .15); }
 .dyn-link-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
