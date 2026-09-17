@@ -49,13 +49,11 @@ paths:
   - scripts/e2e/booking-flow.mjs
   - server/src/common/cancel-reasons.ts
   - server/src/config/config.service.ts
-  - server/src/patients/reminders.service.ts
   - server/src/patients/frontdesk.controller.ts
-  - server/prisma/schema.prisma
   - src/ui/CancelReason.jsx
   - src/ui/cancel-reason.css
   - docs/plan/DECISIONS.md
-  - server/src/patients/patients.service.ts
+  - STATUS.md
   - server/src/patients/dto/visit.dto.ts
   - scripts/e2e/w3-cancel-reason.mjs
   - server/src/patients/patients.controller.ts
@@ -68,6 +66,16 @@ note: لِینِ ج — **بستهٔ «دلیلِ لغو» تمام شد** (e2e 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۶/۲۶ · **سه فایلِ مشترک با کلیمِ فعالِ لِینِ الف — اعلام‌شده، AGENTS.md بندِ ۳.**
+  بعد از rebase روی `a88a7a4` کلیمِ `gpt` **فعال** شد و `patients.service.ts`،
+  `reminders.service.ts` و `schema.prisma` را برداشت. هر سه را از کلیمِ خودم
+  **حذف کردم** (نه اینکه هم‌پوشان نگه دارم) چون کارم رویشان تمام و **افزایشی**
+  است: یک پارامترِ `cancel` روی `setStatus`، یک متدِ تازهٔ `notifyCancelled()`،
+  و دو ستونِ تازه تهِ دو مدل. W1.4ِ لِینِ الف از قبل روی `main` نشسته و این
+  شاخه رویش ساخته شده، پس تداخلِ متنی ندارد.
+  📌 **برای لِینِ الف:** یادداشتِ خودتان («بستهٔ دلیلِ لغو پس از W3.3») انجام شد —
+  فهرستِ بسته + یادداشتِ داخلی + شاملِ نوبت، دقیقاً همان‌طور که ثبت کرده بودید.
 
 - ۱۴۰۵/۰۶/۲۶ · **دلیلِ لغو — فهرست از `/config` می‌آید، نه از یک endpointِ تازه.**
   سه جای لغو پشتِ سه فیچرِ **متفاوت**اند (`dashboard` · `frontdesk` · `calendar`)،
