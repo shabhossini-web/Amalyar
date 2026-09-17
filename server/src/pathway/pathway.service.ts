@@ -163,16 +163,106 @@ export class PathwayService {
           create: steps.map((s, i) => ({
             key: s.key, title: s.title, seq: (i + 1) * 10,
             ownerRole: s.ownerRole ?? null, notes: s.hint ?? null,
+            notify: s.notify ?? null, escalateDays: s.escalateDays ?? null,
             dueAt: new Date(anchorAt!.getTime() + s.offsetDays * DAY),
           })),
         },
       },
+      include: { steps: true },
     });
+    await this.seedNotices(episode.id, patient.id);
     await this.audit.record({
       actorId: user?.id, action: 'pathway.start', entityType: 'episode', entityId: episode.id,
       after: { patientId: patient.id, template: template.key, version: version.version, steps: steps.length },
     });
     return this.view(episode.id, user);
+  }
+
+  /**
+   * یادآوریِ بیمار برای گام‌هایی که متنِ پیامک دارند.
+   *
+   * ⚠️ از دفترِ **موجودِ** `reminders` استفاده می‌کند، نه زمان‌بندِ تازه: sweepِ
+   * فعلی هر ردیفِ `pending` که موعدش رسیده را می‌فرستد. یک ماشینِ ارسالِ دوم
+   * یعنی دو جا برای «چرا این پیامک رفت؟».
+   *
+   * ⚠️ **موعدِ گذشته پیام نمی‌سازد.** دوره‌ای که با تاریخِ عقب‌افتاده شروع شود
+   * (ثبتِ دیرهنگام، مبدأِ عملِ هفتهٔ پیش) وگرنه همان لحظه رگباری از پیام‌های
+   * کهنه برای بیمار می‌فرستاد — همان تله‌ای که `collapsed()` در
+   * `reminders.service.ts` برای عملِ گذشته گرفته است.
+   *
+   * ⚠️ شماره‌ای که نیست، پیامی ندارد — و این خطا نیست: دوره برای بیمارِ
+   * بی‌شماره هم معنا دارد، فقط پیامش نمی‌رود.
+   */
+  private async seedNotices(episodeId: number, patientId: number) {
+    const patient = await this.prisma.patient.findUnique({ where: { id: patientId }, select: { phone: true } });
+    const phone = String(patient?.phone ?? '').replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(phone)) return;
+    const steps = await this.prisma.episodeStep.findMany({
+      where: { episodeId, notify: { not: null }, status: 'pending' },
+      select: { id: true, notify: true, dueAt: true },
+    });
+    for (const st of steps) {
+      if (!st.dueAt || st.dueAt.getTime() <= Date.now()) continue;
+      try {
+        const r = await this.prisma.reminder.create({
+          data: { patientId, kind: 'notice', dueAt: st.dueAt, phone, text: st.notify!, status: 'pending' },
+        });
+        await this.prisma.episodeStep.update({ where: { id: st.id }, data: { reminderId: r.id } });
+      } catch { /* یک گامِ بی‌یادآوری نباید کلِ شروعِ دوره را بشکند */ }
+    }
+  }
+
+  /**
+   * گامی که بسته شد (انجام/رد) یا دوره‌ای که بسته شد، یادآوریِ **نفرستادهٔ**
+   * خودش را باطل می‌کند.
+   *
+   * ⚠️ فقط `pending`: یادآوریِ **فرستاده‌شده** دست نمی‌خورد — سندِ چیزی است که
+   * واقعاً رفته، و «باطل» کردنش یعنی دفترِ پیام‌ها دروغ بگوید.
+   */
+  private async cancelNotices(where: { episodeId?: number; stepId?: number }) {
+    const steps = await this.prisma.episodeStep.findMany({
+      where: {
+        ...(where.stepId ? { id: where.stepId } : {}),
+        ...(where.episodeId ? { episodeId: where.episodeId } : {}),
+        reminderId: { not: null },
+      },
+      select: { reminderId: true },
+    });
+    const ids = steps.map((s) => s.reminderId!).filter(Boolean);
+    if (!ids.length) return;
+    await this.prisma.reminder.updateMany({
+      where: { id: { in: ids }, status: 'pending' }, data: { status: 'cancelled' },
+    }).catch(() => undefined);
+  }
+
+  /**
+   * **آزمونِ الگو با بیمارِ ساختگی** (معیارِ پذیرشِ W4.2: «بیازماید»).
+   *
+   * ⚠️ هیچ‌چیز نمی‌نویسد — نه دوره، نه یادآوری. مدیر باید بتواند پیش از
+   * اعمال ببیند چه تاریخ‌هایی درمی‌آید و چه پیامی به دستِ بیمار می‌رسد،
+   * بدونِ اینکه یک بیمارِ واقعی پیام بگیرد.
+   */
+  preview(rawSteps: unknown, anchor?: string) {
+    const parsed = validateSteps(rawSteps);
+    if (!parsed.ok) throw new BadRequestException(parsed.error);
+    let at = anchor ? new Date(anchor) : new Date();
+    if (!Number.isFinite(at.getTime())) at = new Date();
+    at = new Date(`${at.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const now = Date.now();
+    return {
+      anchor: at,
+      steps: parsed.steps.map((s, i) => {
+        const dueAt = new Date(at.getTime() + s.offsetDays * DAY);
+        return {
+          seq: (i + 1) * 10, key: s.key, title: s.title, dueAt,
+          ownerRole: s.ownerRole ?? null, ownerRoleFa: jobRoleLabel(s.ownerRole ?? null),
+          notify: s.notify ?? null,
+          /* صریح می‌گوید کدام پیام **نمی‌رود** — همان قاعدهٔ موعدِ گذشته. */
+          notifySends: !!s.notify && dueAt.getTime() > now,
+          escalateDays: s.escalateDays ?? null,
+        };
+      }),
+    };
   }
 
   /** آبجکتِ غنی‌شده — برچسب و شمارش سمتِ سرور (قانون ۱۵). */
@@ -183,7 +273,7 @@ export class PathwayService {
       ownerId: s.ownerId,
       ownerName: s.owner ? `${s.owner.person.firstName} ${s.owner.person.lastName}`.trim() : null,
       dueAt: s.dueAt, status: s.status, statusFa: STEP_FA[s.status] ?? s.status,
-      doneAt: s.doneAt, notes: s.notes,
+      doneAt: s.doneAt, notes: s.notes, notify: s.notify, escalateDays: s.escalateDays,
     }));
     const done = steps.filter((s: any) => s.status === 'done').length;
     const open = steps.filter((s: any) => s.status === 'pending');
@@ -262,6 +352,8 @@ export class PathwayService {
     if (!Object.keys(data).length) throw new BadRequestException('چیزی برای ثبت نیامده است');
 
     await this.prisma.episodeStep.update({ where: { id: stepId }, data });
+    /* گامی که بسته شد دیگر پیامِ یادآوری‌اش موضوعیت ندارد. */
+    if (data.status && data.status !== 'pending') await this.cancelNotices({ stepId });
     await this.audit.record({
       actorId: user?.id, action: 'pathway.step', entityType: 'episode_step', entityId: stepId,
       before: { status: step.status, dueAt: step.dueAt, ownerId: step.ownerId }, after: data,
@@ -282,6 +374,8 @@ export class PathwayService {
     if (!e) throw new NotFoundException('دوره پیدا نشد');
     await this.assertPatient(e.patientId, user);
     await this.prisma.episode.update({ where: { id: episodeId }, data: { status, closedAt: new Date() } });
+    /* ⚠️ دورهٔ بسته نباید فردا به بیمار پیام بدهد — چه تمام شده باشد چه لغو. */
+    await this.cancelNotices({ episodeId });
     await this.audit.record({
       actorId: user?.id, action: 'pathway.close', entityType: 'episode', entityId: episodeId,
       before: { status: e.status }, after: { status },

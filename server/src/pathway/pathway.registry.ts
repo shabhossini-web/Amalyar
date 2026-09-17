@@ -31,6 +31,19 @@ export interface PathwayStepDef {
   offsetDays: number;
   ownerRole?: StepOwnerRole;
   hint?: string;
+  /**
+   * متنِ پیامکِ بیمار در موعدِ همین گام. خالی = پیامی نمی‌رود.
+   *
+   * ⚠️ این متن **واقعاً فرستاده می‌شود** — هنگامِ شروعِ دوره یک ردیفِ
+   * `Reminder` با همان موعد ساخته می‌شود و sweepِ موجود می‌فرستدش. پس فیلدِ
+   * تزئینی نیست و همان دقتی را می‌خواهد که هر متنِ رو به بیمار.
+   */
+  notify?: string;
+  /**
+   * «عدمِ پاسخ» — اگر گام این‌قدر روز بعد از موعد هنوز باز باشد، کارِ پیگیری
+   * ساخته می‌شود. صفر/خالی = بی‌خیال.
+   */
+  escalateDays?: number;
 }
 
 export interface PathwayTemplateDef {
@@ -68,11 +81,14 @@ export const PATHWAY_TEMPLATES: PathwayTemplateDef[] = [
     notes: 'مبدأ = تاریخِ عمل. گام‌های آماده‌سازی عددِ منفی دارند.',
     steps: [
       { key: 'consent', title: 'هماهنگی و رضایتِ بیمار', offsetDays: -7, ownerRole: 'secretary' },
-      { key: 'pre_op', title: 'مراقبتِ پیش از عمل', offsetDays: -1, ownerRole: 'nurse' },
+      {
+        key: 'pre_op', title: 'مراقبتِ پیش از عمل', offsetDays: -1, ownerRole: 'nurse',
+        notify: 'فردا روزِ عملِ شماست. از نیمه‌شب چیزی نخورید و ننوشید و داروهای همیشگی را طبقِ دستورِ پزشک مصرف کنید.',
+      },
       { key: 'op', title: 'روزِ عمل — حضورِ کارشناس', offsetDays: 0, ownerRole: 'technician' },
       { key: 'report', title: 'گزارشِ حینِ عمل', offsetDays: 1, ownerRole: 'technician' },
       { key: 'post_op', title: 'مراقبتِ پس از عمل', offsetDays: 2, ownerRole: 'nurse' },
-      { key: 'followup', title: 'ویزیتِ پیگیری', offsetDays: 30, ownerRole: 'doctor' },
+      { key: 'followup', title: 'ویزیتِ پیگیری', offsetDays: 30, ownerRole: 'doctor', escalateDays: 7 },
     ],
   },
   {
@@ -132,7 +148,20 @@ export function validateSteps(raw: unknown): { ok: true; steps: PathwayStepDef[]
     }
     const ownerRole = (s as any).ownerRole ? String((s as any).ownerRole) : undefined;
     const hint = (s as any).hint ? String((s as any).hint).slice(0, 300) : undefined;
-    steps.push({ key, title, offsetDays: offset, ownerRole: ownerRole as StepOwnerRole | undefined, hint });
+    /* ⚠️ متنِ پیامک **به دستِ بیمار می‌رسد**، پس کرانِ طولش سخت‌گیر است و
+       خالی یعنی «پیامی نمی‌رود» — نه رشتهٔ تهی که بعداً پیامکِ خالی بفرستد. */
+    const notifyRaw = String((s as any).notify ?? '').trim();
+    if (notifyRaw.length > 400) return { ok: false, error: `${at}: متنِ پیامک از ۴۰۰ نویسه بیشتر است` };
+    const escalateRaw = (s as any).escalateDays;
+    const escalate = escalateRaw === undefined || escalateRaw === null || escalateRaw === '' ? 0 : Number(escalateRaw);
+    if (!Number.isInteger(escalate) || escalate < 0 || escalate > 365) {
+      return { ok: false, error: `${at}: «عدمِ پاسخ» باید عددِ صحیحِ ۰ تا ۳۶۵ روز باشد` };
+    }
+    steps.push({
+      key, title, offsetDays: offset, ownerRole: ownerRole as StepOwnerRole | undefined, hint,
+      ...(notifyRaw ? { notify: notifyRaw } : {}),
+      ...(escalate ? { escalateDays: escalate } : {}),
+    });
   }
   return { ok: true, steps };
 }

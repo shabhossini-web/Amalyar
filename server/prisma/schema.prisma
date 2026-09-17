@@ -2817,6 +2817,14 @@ model EpisodeStep {
   doneAt DateTime? @map("done_at")
   notes  String?
 
+  /// متنِ پیامکِ بیمار در موعدِ همین گام — کپی‌شده از نسخه، قابلِ ویرایش برای
+  /// همین بیمار. خالی یعنی پیامی نمی‌رود.
+  notify String?
+  /// یادآوریِ ساخته‌شده برای همین گام — تا با انجام/رد شدنِ گام باطل شود.
+  reminderId Int? @map("reminder_id")
+  /// «عدمِ پاسخ»: چند روز بعد از موعد، اگر هنوز باز بود، کارِ پیگیری ساخته شود.
+  escalateDays Int? @map("escalate_days")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 

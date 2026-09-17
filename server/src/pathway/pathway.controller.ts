@@ -13,6 +13,14 @@ class PublishDto {
   steps!: unknown[];
 }
 
+class PreviewDto {
+  @IsArray({ message: 'مرحله‌ها باید فهرست باشند' })
+  steps!: unknown[];
+
+  /** مبدأِ فرضیِ آزمون — پیش‌فرض امروز. */
+  @IsOptional() @IsString() anchor?: string;
+}
+
 class StartDto {
   @IsInt({ message: 'پرونده را انتخاب کنید' }) patientId!: number;
   @IsInt({ message: 'الگو را انتخاب کنید' }) templateId!: number;
@@ -56,6 +64,17 @@ export class PathwayController {
   @Post('templates/:id/publish') @RequirePermissions('pathway.manage')
   publish(@Param('id', ParseIntPipe) id: number, @Body() dto: PublishDto, @CurrentUser() user: any) {
     return this.svc.publish(id, dto.steps, user);
+  }
+
+  /**
+   * آزمونِ الگو با بیمارِ ساختگی — «بیازماید» در معیارِ پذیرشِ W4.2.
+   *
+   * ⚠️ `@Post` است چون بدنه می‌گیرد، ولی **هیچ‌چیز نمی‌نویسد**؛ مجوزش هم
+   * همان `pathway.manage` است چون فقط کسی که الگو می‌سازد لازمش دارد.
+   */
+  @Post('preview') @RequirePermissions('pathway.manage')
+  preview(@Body() dto: PreviewDto) {
+    return this.svc.preview(dto.steps, dto.anchor);
   }
 
   /** دوره‌های یک بیمار — کارتِ پروندهٔ زنده همین را می‌خواند. */
