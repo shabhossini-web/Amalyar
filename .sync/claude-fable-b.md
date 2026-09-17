@@ -4,24 +4,32 @@ status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-17
 paths:
-  - server/src/patients/intake.service.ts
-  - server/src/patients/intake.controller.ts
-  - server/src/patients/reminders.service.ts
-  - server/src/reminders/send-reminders.ts
-  - src/pages/Intake.jsx
-  - src/pages/intake.css
+  - server/src/patients/record.service.ts
+  - scripts/e2e/w0-4-answer-render.mjs
   - docs/plan/lanes/claude-fable-b.md
 note: >-
   لِینِ ب **لِینِ الف را هم برداشت** — مالک گفت `gpt` دو روز نیست. کلیمِ `gpt` آزاد بود.
-  لند شد: **W1.1** (#48) · **W1.7** (#49) · **W1.3** (#51) · **W1.8** (#52، شاملِ بخشِ
-  پیش‌نویسِ W3.4 لِینِ ب). الان: **W1.9** (کلیدِ یکتای یادآوری + تلاشِ دوباره).
-  ترتیبِ بعدیِ تابلوی الف: W0.3 · W0.4 · W0.8 · W1.10.
+  لند شد: **W1.1** (#48) · **W1.7** (#49) · **W1.3** (#51) · **W1.8** (#52) · **W1.9** (#53).
+  **W0.3** بدونِ کار بسته شد (هر دو نیمه‌اش در W3.4/PR #36 لند شده بود).
+  الان: **W0.4** (رندرِ پاسخِ لینک/فایل در پرونده).
+  ترتیبِ بعدیِ تابلوی الف: W0.8 · W1.10.
   W0.8 هنوز مسدودکنندهٔ لِینِ ب است (آپلودِ فایلِ پاسخ).
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۶/۲۷ · **W0.4 — `src/app/PatientRecord.jsx` و `src/app/record.css`، بدونِ کلیم.**
+  هر دو در کلیمِ فعالِ لِینِ ج هستند و نگهبان درست جلویم را گرفت، پس **کلیمشان
+  نکردم**. ولی W0.4 خودِ رندرِ پاسخ در همان صفحه است و جای دیگری ندارد. تغییر
+  افزایشی است: یک کامپوننتِ تازهٔ `AnswerValue` + یک `onErr` روی `FormsTab`/`VisitsTab`،
+  و در CSS فقط دو قاعدهٔ تازه در **انتهای** فایل (`.rc-ans-items a`, `.rc-ans-doc`).
+  هیچ قاعده یا رفتارِ موجودی عوض نشد، پس در مرج اتحادِ دو طرف می‌شود.
+  ⚠️ **قراردادِ تازه برای همه:** پاسخِ فرم دیگر رشتهٔ خام نیست — `answersOf` و
+  `attachedForms.answers` کنارِ `value` یک `items[]` هم می‌دهند
+  (`{kind:'link'|'doc', title, url?, docId?}`). هر مصرف‌کنندهٔ تازه باید `items` را
+  بچیند و **خودش پارس نکند** (قانونِ ۱۵). تکِ منبع: `answerParts()` در `record.service.ts`.
 
 - ۱۴۰۵/۰۶/۲۷ · **`server/prisma/schema.prisma` — یک ستون، بدونِ کلیم.** W1.9 به
   `Reminder.attempts` نیاز داشت (بدونش `uncertain` وضعیتِ نهایی می‌ماند). این فایل

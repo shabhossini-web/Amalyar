@@ -539,3 +539,19 @@
   .rc-path-step { flex-wrap: wrap; }
   .rc-path-when { width: auto; display: flex; gap: 6px; align-items: baseline; }
 }
+
+/* W0.4 — قطعاتِ بازشدنیِ پاسخِ فرم: لینکِ بیرونی و مدرکِ پرونده.
+   دکمهٔ مدرک عمداً دکمه است نه `<a href>`: فایل پشتِ گاردهای پرونده باز
+   می‌شود (`openDoc`)، نه با نشانیِ مستقیم. ظاهرش مثلِ لینک است تا کاربر
+   فرقِ بی‌مورد نبیند. */
+.rc-ans-items a,
+.rc-ans-doc {
+  color: var(--cyan); text-decoration: none; border-bottom: 1px dashed currentColor;
+}
+.rc-ans-doc {
+  background: none; border: 0; border-bottom: 1px dashed currentColor;
+  padding: 0; font: inherit; cursor: pointer;
+}
+.rc-ans-items a:hover, .rc-ans-doc:hover { color: var(--brand-2); }
+.rc-ans-items a:focus-visible,
+.rc-ans-doc:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 3px; }
