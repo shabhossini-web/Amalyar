@@ -160,7 +160,14 @@
    ⚠️ `.dyn`ِ مشترک استایلِ خودش را از `definitions.css` می‌گیرد؛ این‌جا فقط
    چیزهایی است که مالِ همین صفحه است. */
 .ik-hint { margin: 0 0 10px; font-size: 12px; line-height: 2; color: rgba(var(--veil-rgb), .6); }
-.ik-pages { margin: 0 0 8px; font-size: 11.5px; color: rgba(var(--veil-rgb), .5); }
+.ik-pages { margin: 0; font-size: 11.5px; color: rgba(var(--veil-rgb), .5); }
+/* W1.8 — نشانگرِ پیش‌نویس کنارِ شمارهٔ صفحه. رنگ‌ها از توکن‌های دوتمی (قانونِ ۲۳). */
+.ik-pagerow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; }
+.ik-draft { font-size: 11px; margin-inline-start: auto; transition: color .25s cubic-bezier(.2,.7,.2,1); }
+.ik-draft.saving { color: var(--text3); }
+.ik-draft.saved { color: var(--green-text); }
+.ik-draft.offline { color: var(--amber-text); }
+@media (prefers-reduced-motion: reduce) { .ik-draft { transition: none; } }
 /* ⚠️ روی موبایل ستونی: دو دکمهٔ «قبلی/بعدی» کنارِ هم در عرضِ ۳۲۰ پیکسل
    آن‌قدر باریک می‌شوند که زدنشان با انگشت سخت است. */
 .ik-nav { display: flex; gap: 9px; margin-block-start: 12px; }

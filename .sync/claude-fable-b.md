@@ -5,17 +5,18 @@ branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-17
 paths:
   - server/src/patients/intake.service.ts
+  - server/src/patients/intake.controller.ts
   - server/src/patients/reminders.service.ts
-  - server/src/config/settings-registry.ts
-  - server/src/config/settings.service.ts
+  - src/pages/Intake.jsx
+  - src/pages/intake.css
   - docs/plan/lanes/claude-fable-b.md
 note: >-
   لِینِ ب **لِینِ الف را هم برداشت** — مالک گفت `gpt` دو روز نیست و از جایی که رسیده
   ادامه دهم. کلیمِ `gpt` آزاد بود (`status: idle`, `paths: []`).
-  لند شد: **W1.1** (PR #48) · **W1.7** (PR #49) · **W1.3** (همین PR).
-  ترتیبِ بعدیِ تابلوی الف: W1.8 · W1.9 · W0.3 · W0.4 · W0.8 · W1.10 —
-  سه‌تای اولِ این‌ها مسدودکنندهٔ خودِ لِینِ ب هم هستند.
-  بسته‌های لِینِ ب همه لند شده‌اند: W0.1/W0.2 (#15) · W0.6 (#16) · W3.5 (#19) · W3.6 (#24) · W3.7 (#31) · W3.4 بخشِ آزاد (#36).
+  لند شد: **W1.1** (#48) · **W1.7** (#49) · **W1.3** (#51). الان: **W1.8** — که
+  نیمهٔ رابطش همان بخشِ پیش‌نویسِ باقی‌ماندهٔ **W3.4 لِینِ ب** است، پس هر دو با هم بسته شدند.
+  ترتیبِ بعدیِ تابلوی الف: W1.9 · W0.3 · W0.4 · W0.8 · W1.10.
+  W0.8/W1.9 هنوز مسدودکنندهٔ لِینِ ب‌اند (آپلودِ فایلِ پاسخ و اقدامِ per-row یادآوری).
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.

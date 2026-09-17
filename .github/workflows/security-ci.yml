@@ -2923,3 +2923,16 @@ jobs:
       # paths now go through one commitAnswers step.
       - name: Verify both approval paths turn form links into documents (W1.3)
         run: node scripts/e2e/w1-3-approve-local.mjs
+
+      # ⚠️ W1.8/D09: the only way to store a patient's answers was fill(),
+      # which advances status — so a half-filled multi-page form could not be
+      # saved at all and a refresh (or a dropped mobile connection) lost every
+      # typed word. draft() merges into data and never touches status.
+      - name: Verify the public form draft never advances status (W1.8)
+        run: node scripts/e2e/w1-8-draft-local.mjs
+
+      # The UI half of the same contract (§6): resume on the saved page, show
+      # the save state, and keep nothing in browser storage — the form holds
+      # medical answers and is filled on shared phones.
+      - name: Verify draft resume, indicator and no browser storage (W1.8 UI)
+        run: node scripts/e2e/w1-8-draft-ui.mjs

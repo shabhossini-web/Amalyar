@@ -938,6 +938,57 @@ export class IntakeService {
   }
 
   /**
+   * پیش‌نویسِ فرمِ چندصفحه‌ای — W1.8/D09، قراردادِ §۶.
+   *
+   * ⚠️ **چرا `fill` نمی‌توانست این کار را بکند.** تنها راهِ ذخیرهٔ پاسخِ بیمار
+   * `fill()` بود و آن `status` را جلو می‌برد (`pending_approval` یا
+   * `pending_payment`). یعنی «ذخیرهٔ موقتِ صفحهٔ ۲» ممکن نبود: یا همه‌چیز
+   * ثبتِ نهایی می‌شد یا هیچ. نتیجه‌اش این بود که رفرشِ وسطِ فرم — یا فقط
+   * قطعِ لحظه‌ایِ اینترنت روی موبایل — همهٔ متنِ تایپ‌شده را می‌برد.
+   *
+   * پس این endpoint فقط `data` را merge می‌کند و `status` را **دست نمی‌زند**.
+   *
+   * سه تفاوتِ عمدی با `fill`:
+   *
+   * 1. **اعتبارسنجیِ فیلدهای اجباری اجرا نمی‌شود.** پیش‌نویس طبقِ تعریف ناقص
+   *    است؛ سنجشِ «این کادر خالی است» سرِ ثبتِ نهایی معنی دارد، نه وسطِ تایپ.
+   * 2. **لینک نرمال‌سازی نمی‌شود.** `normalizeLinks` روی نشانیِ ناقص **پرتاب**
+   *    می‌کند، و بیمار وسطِ تایپِ یک آدرس فوکوس را رها می‌کند — یعنی هر
+   *    ذخیرهٔ خودکار ۴۰۰ می‌گرفت. `fill` سرِ ثبتِ نهایی نرمال می‌کند و تنها
+   *    راهِ رسیدن به تأیید هم همان است، پس مقدارِ خامِ پیش‌نویس به پرونده نمی‌رسد.
+   * 3. **`_page` از `values` نمی‌آید، فیلدِ جداست.** لیستِ سفیدِ کلیدها فقط
+   *    فیلدهای خودِ فرم را می‌پذیرد (و باید هم بپذیرد — وگرنه یک POSTِ دست‌ساز
+   *    هر کلیدی را در `data` می‌نشاند). پس شمارهٔ صفحه ورودیِ typed خودش را
+   *    دارد و سرور `data._page` را می‌نویسد؛ همان چیزی که فرانت می‌خواند.
+   *
+   * ⚠️ **بدهی:** قرارداد می‌گوید «rate-limit مثلِ `fill`» و `fill` هیچ ندارد —
+   * پروژه اصلاً throttler ندارد. ولی این endpoint روی هر blur صدا زده می‌شود،
+   * پس ترافیکش از `fill` خیلی بیشتر است. افزودنِ throttlerِ سراسری بیرونِ این
+   * بسته است و در `STATUS.md` ثبت شد.
+   */
+  async draft(token: string, dto: { values?: Record<string, any>; page?: number }) {
+    const row = await this.expireIfDue(token);
+    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+    }
+    const data: Record<string, any> = { ...(row.data as any) };
+    const form = await this.formView(row.formId, row.extraFormIds ?? []);
+    if (form && dto.values) {
+      /* همان لیستِ سفیدِ `fill`: `payment` مقدار ندارد و ارجاعِ `image` را فقط
+         مسیرِ آپلود می‌نویسد — وگرنه بیمار می‌توانست id مدرکِ دیگری را جا بزند. */
+      const writable = new Set(
+        form.fields.filter((x) => x.type !== 'payment' && x.type !== 'image').map((x) => x.key),
+      );
+      for (const [k, v] of Object.entries(dto.values)) {
+        if (writable.has(k)) data[k] = typeof v === 'string' ? text(v, 2000) : v;
+      }
+    }
+    if (typeof dto.page === 'number' && dto.page >= 1) data._page = dto.page;
+    const saved = await this.updateSubmissionVersion(row, { data });
+    return { savedAt: saved.updatedAt };
+  }
+
+  /**
    * گامِ مشترکِ «تصویبِ پاسخ» — W1.3/D03a.
    *
    * ⚠️ **چرا این تابع وجود دارد، با اینکه یک خط است.** فرمِ زیرپرونده دو مسیرِ
