@@ -65,6 +65,7 @@ import { SummaryController, PublicSummaryController } from './summary.controller
 import { RemindersService } from './reminders.service';
 import { PortalService } from './portal.service';
 import { PermissionGuard } from '../auth/permission.guard';
+import { RateLimitService } from '../common/rate-limit.service';
 import { HospitalDutiesController } from './hospital-duties.controller';
 import { HospitalDutiesService } from './hospital-duties.service';
 
@@ -88,7 +89,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     FrontDeskService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,
+    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RateLimitService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */
   exports: [ServiceCodesService, PatientsService],

@@ -2959,3 +2959,15 @@ jobs:
       # now returns readable text AND openable parts from one shaper.
       - name: Verify form answers render openable and never [object Object] (W0.4)
         run: node scripts/e2e/w0-4-answer-render.mjs
+
+      # ⚠️ W0.8/CONTRACTS §5: a lab result is usually just a photo or a PDF,
+      # and the public order page had no way to send one -- the patient had
+      # to upload it to some stranger's site and paste the LINK, and if they
+      # had only a file, publicAnswer refused with "enter text or a link".
+      # The new upload endpoint is public and unauthenticated, so the type is
+      # decided by the file's own magic bytes, never by the multipart header:
+      # the download route echoes the stored mimeType into Content-Type and
+      # serves images inline, so a client's lie would reach staff browsers.
+      # Appending after review must also never erase the recorded decision.
+      - name: Verify public answer-file upload, its guards and the append path (W0.8)
+        run: node scripts/e2e/w0-8-upload-local.mjs
