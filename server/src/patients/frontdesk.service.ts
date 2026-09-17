@@ -88,8 +88,8 @@ export class FrontDeskService {
     return out;
   }
 
-  setStatus(id: number, status: string, user: any) {
-    return this.appts.setStatus(id, status, user);
+  setStatus(id: number, status: string, user: any, cancel?: { reason?: string; note?: string }) {
+    return this.appts.setStatus(id, status, user, cancel);
   }
 
   walkIn(dto: any, user: any) {

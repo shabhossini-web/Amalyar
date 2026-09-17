@@ -16,6 +16,7 @@ import { useVisitDefs } from './visit-defs.js';
 import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import { downloadCsv, printVisits, visitsToCsv } from './exports.js';
+import CancelReason from '../ui/CancelReason.jsx';
 import './launcher.css';
 import './users.css';
 import './dashboard.css';
@@ -640,6 +641,7 @@ export default function Dashboard() {
   const [nvBook, setNvBook] = useState(null); // پیشنهادِ نوبتِ «ویزیتِ بعدی» بعد از ذخیره
   const [billing, setBilling] = useState(null); // مراجعه‌ای که صورت‌حسابش باز است
   const [busyId, setBusyId] = useState(0);
+  const [cancelAsk, setCancelAsk] = useState(null); // مراجعه‌ای که دلیلِ لغوش پرسیده می‌شود
   const [toast, setToast] = useState('');
   const [denied, setDenied] = useState(false);
   /* ⚠️ داشبورد defs را **همیشه** لازم دارد (فیلترِ پیشرفته و چیپ‌های فعال از
@@ -886,16 +888,28 @@ export default function Dashboard() {
     }[saved.patientStatus] ?? `${t.visit} ${saved.code} ثبت شد ✓`);
   };
 
-  const onStatus = async (v, st) => {
+  /* نوشتنِ وضعیت — **می‌اندازد**، نمی‌بلعد: پنجرهٔ دلیلِ لغو باید خطا را
+     داخلِ خودش نشان دهد، وگرنه توست زیرِ پوشش می‌ماند و کاربر فکر می‌کند
+     دکمه کار نکرد. */
+  const runStatus = async (v, st, cancel) => {
     setBusyId(v.id);
     try {
-      const fresh = await api(`/visits/${v.id}/status`, { method: 'PATCH', body: { opStatus: st } });
+      const fresh = await api(`/visits/${v.id}/status`, { method: 'PATCH', body: { opStatus: st, ...cancel } });
       setVisits((rows) => rows.map((r) => (r.id === v.id ? fresh : r)));
-    } catch (e) {
-      setToast(e.message);
     } finally {
       setBusyId(0);
     }
+  };
+
+  /**
+   * ⚠️ لغو بی‌سؤال ثبت نمی‌شود (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶): سرور هم بدونِ دلیل
+   * ۴۰۰ می‌دهد، پس این پنجره فقط ادبِ رابط نیست — تنها راهِ لغو است.
+   * شرطِ `!== 'cancelled'` لازم است چون دکمهٔ وضعیتِ فعلی غیرفعال است ولی
+   * مسیرهای دیگر (deep link، کیبورد) می‌توانند دوباره همان را بفرستند.
+   */
+  const onStatus = (v, st) => {
+    if (st === 'cancelled' && v.opStatus !== 'cancelled') { setCancelAsk(v); return; }
+    runStatus(v, st).catch((e) => setToast(e.message));
   };
 
   const onDelete = async (v) => {
@@ -1117,6 +1131,21 @@ export default function Dashboard() {
             data={nvBook}
             onClose={() => setNvBook(null)}
             onToast={setToast}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {cancelAsk && (
+          <CancelReason
+            kind="visit"
+            what={`${cancelAsk.code} — ${cancelAsk.fullName}`}
+            onClose={() => setCancelAsk(null)}
+            onConfirm={async (c) => {
+              await runStatus(cancelAsk, 'cancelled', c);
+              setCancelAsk(null);
+              setToast('لغو ثبت شد و به بیمار اطلاع داده شد ✓');
+            }}
           />
         )}
       </AnimatePresence>

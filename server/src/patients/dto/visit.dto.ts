@@ -1,3 +1,4 @@
+import { CANCEL_REASON_KEYS } from '../../common/cancel-reasons';
 import {
   IsArray,
   IsBoolean,
@@ -380,4 +381,13 @@ export class VisitTimesDto {
 export class VisitStatusDto {
   @IsIn(['pending', 'done', 'cancelled'], { message: 'وضعیت نامعتبر است' })
   opStatus!: string;
+
+  /* ⚠️ اجباریِ **مشروط**: فقط هنگامِ لغو. `IsIn` این‌جا شکلِ ورودی را می‌سنجد و
+     خودِ اجباری‌بودن در سرویس چک می‌شود، چون به `opStatus` وابسته است. */
+  @IsOptional() @IsIn(CANCEL_REASON_KEYS, { message: 'دلیلِ لغو نامعتبر است' })
+  cancelReason?: string;
+
+  /** یادداشتِ داخلی — هرگز برای بیمار فرستاده نمی‌شود. */
+  @IsOptional() @IsString() @MaxLength(400)
+  cancelNote?: string;
 }

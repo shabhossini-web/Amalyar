@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
+import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
@@ -1263,15 +1264,33 @@ export class PatientsService {
     return result;
   }
 
-  async setStatus(id: number, opStatus: string, user?: any) {
+  async setStatus(id: number, opStatus: string, user?: any, cancel?: { reason?: string; note?: string }) {
     await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id } });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    /* ⚠️ دلیلِ لغو **اجباری** است (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶) و از مجموعهٔ بستهٔ
+       `CANCEL_REASONS` می‌آید، نه متنِ آزاد: متنش به دستِ بیمار می‌رسد.
+       یادداشتِ داخلی اختیاری است و هرگز فرستاده نمی‌شود. */
+    const cancelling = opStatus === 'cancelled' && v.opStatus !== 'cancelled';
+    if (cancelling && !CANCEL_REASONS[cancel?.reason ?? '']) {
+      throw new BadRequestException('دلیلِ لغو را از فهرست انتخاب کنید');
+    }
     const updated = await this.prisma.visit.update({
       where: { id },
-      data: { opStatus },
+      data: {
+        opStatus,
+        ...(cancelling ? { cancelReason: cancel!.reason, cancelNote: cancel?.note ?? null } : {}),
+        /* برگشت از لغو، دلیل را هم پاک می‌کند — وگرنه مراجعهٔ زنده دلیلِ لغوِ
+           کهنه را با خودش حمل می‌کند و گزارشِ بعدی دروغ می‌گوید. */
+        ...(v.opStatus === 'cancelled' && opStatus !== 'cancelled' ? { cancelReason: null, cancelNote: null } : {}),
+      },
       include: INCLUDE_PATIENT,
     });
+    if (cancelling) {
+      await this.reminders.notifyCancelled('visit', v.patientId, cancel!.reason!, {
+        when: v.opDate ? v.opDate.toISOString().slice(0, 10) : null,
+      });
+    }
     /* لغوِ عمل باید یادآوریِ «عملِ پیشِ‌رو» را هم باطل کند. */
     /* W2.2: done/cancelled کارهای بازِ همین عمل را می‌بندند (work-rules: visit.done / visit.cancelled). */
     if (v.opStatus !== opStatus) {

@@ -91,7 +91,7 @@ export class PatientsController {
   @RequirePermissions('patients.status')
   @Patch('visits/:id/status')
   setStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: VisitStatusDto, @CurrentUser() user: any) {
-    return this.patients.setStatus(id, dto.opStatus, user);
+    return this.patients.setStatus(id, dto.opStatus, user, { reason: dto.cancelReason, note: dto.cancelNote });
   }
 
   @RequirePermissions('patients.delete')

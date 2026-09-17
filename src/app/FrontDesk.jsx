@@ -10,6 +10,7 @@ import VisitForm from './VisitForm.jsx';
 import JDate from './JDate.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import { Arrive, Money, Phone } from '../ui/icons.jsx';
+import CancelReason from '../ui/CancelReason.jsx';
 import './launcher.css';
 import './definitions.css';
 import './frontdesk.css';
@@ -39,6 +40,7 @@ export default function FrontDesk() {
   const [busy, setBusy] = useState(0);
   const [toast, setToast] = useState('');
   const [sheet, setSheet] = useState(null);      // { visit }
+  const [cancelAsk, setCancelAsk] = useState(null); // نوبتی که دلیلِ لغوش پرسیده می‌شود
   const [lane, setLane] = useState('booked');    // فقط موبایل
   const [showCancelled, setShowCancelled] = useState(false);
 
@@ -57,8 +59,10 @@ export default function FrontDesk() {
   /* ⚠️ وقتی شیت باز است تازه‌سازی **متوقف** می‌شود: با فرمی که کاربر در حالِ
      تایپ در آن است نباید جنگید. و روی برگشتن به تب هم یک‌بار تازه می‌شود،
      چون میز ساعت‌ها باز می‌ماند. */
+  /* ⚠️ پنجرهٔ دلیلِ لغو هم «باز» حساب می‌شود: تازه‌سازی ردیف‌ها را از نو
+     می‌سازد و یادداشتی که کاربر در حالِ نوشتنش است زیرِ دستش عوض می‌شود. */
   const sheetRef = useRef(sheet);
-  sheetRef.current = sheet;
+  sheetRef.current = sheet || cancelAsk;
   useEffect(() => {
     const tick = () => { if (!sheetRef.current && document.visibilityState === 'visible') load(); };
     const id = setInterval(tick, POLL_MS);
@@ -79,13 +83,20 @@ export default function FrontDesk() {
     load();
   };
 
-  const act = async (row, status) => {
+  /* می‌اندازد، نمی‌بلعد — پنجرهٔ دلیلِ لغو خودش خطا را نشان می‌دهد. */
+  const run = async (row, status, cancel) => {
     setBusy(row.id);
     try {
-      await api(`/frontdesk/appointments/${row.id}/status`, { method: 'POST', body: { status } });
-      setToast('ثبت شد ✓');
+      await api(`/frontdesk/appointments/${row.id}/status`, { method: 'POST', body: { status, ...cancel } });
       after();
-    } catch (e) { setToast(e?.message || 'انجام نشد'); } finally { setBusy(0); }
+    } finally { setBusy(0); }
+  };
+
+  /* لغوِ نوبت هم دلیل می‌خواهد: نوبت یادآوریِ روزِ قبل دارد، پس بیمارِ بی‌خبر
+     منتظرِ پیامی می‌ماند که دیگر نمی‌آید (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶). */
+  const act = (row, status) => {
+    if (status === 'cancelled') { setCancelAsk(row); return; }
+    run(row, status).then(() => setToast('ثبت شد ✓')).catch((e) => setToast(e?.message || 'انجام نشد'));
   };
 
   /* «شروع» و «بازکردن» دو چیزند: اولی وضعیت را جلو می‌برد، دومی فقط فرم را
@@ -189,6 +200,21 @@ export default function FrontDesk() {
             onClose={() => setSheet(null)}
             onSaved={() => { setSheet(null); after(); }}
             onToast={setToast}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {cancelAsk && (
+          <CancelReason
+            kind="appointment"
+            what={cancelAsk.fullName}
+            onClose={() => setCancelAsk(null)}
+            onConfirm={async (c) => {
+              await run(cancelAsk, 'cancelled', c);
+              setCancelAsk(null);
+              setToast('لغو ثبت شد و به بیمار اطلاع داده شد ✓');
+            }}
           />
         )}
       </AnimatePresence>
