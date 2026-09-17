@@ -1086,6 +1086,76 @@ function Timeline({ live, onGo, t }) {
  * بیمارمحور هنوز endpointِ خودش را ندارد (W3.3) و دکمه‌ای که به صفحهٔ
  * بی‌خبر از بیمار می‌رود، در نمی‌زند — به دیوار می‌زند.
  */
+/**
+ * **دورهٔ درمان** (W4.1) — «بیمارِ دوره‌دار مراحلش را با مسئول و موعد ببیند».
+ *
+ * ⚠️ فقط وقتی دیده می‌شود که دوره‌ای وجود داشته باشد. ماژولِ `pathway` روی
+ * نصب روشن است ولی تا کسی دوره‌ای **شروع** نکند این بخش اصلاً رندر نمی‌شود —
+ * نصبی که امروز کار می‌کند نباید یک‌شبه یک کارتِ خالیِ تازه ببیند.
+ *
+ * ⚠️ ۴۰۳ (ماژول خاموش یا بی‌مجوز) **سکوت** است نه خطا: مسیرِ درمان بخشِ
+ * اختیاریِ پرونده است و کاربری که دسترسی ندارد نباید بنرِ قرمز ببیند.
+ */
+function Pathway({ patientId, toast }) {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(0);
+  const load = useCallback(
+    () => api(`/pathway/episodes?patientId=${patientId}`).then(setRows).catch(() => setRows([])),
+    [patientId],
+  );
+  useEffect(() => { load(); }, [load]);
+  if (!rows?.length) return null;
+
+  const mark = async (step, status) => {
+    setBusy(step.id);
+    try {
+      await api(`/pathway/steps/${step.id}`, { method: 'PATCH', body: { status } });
+      toast(status === 'done' ? 'مرحله انجام شد ✓' : 'مرحله رد شد');
+      await load();
+    } catch (e) { toast(e?.message || 'ثبت نشد', true); } finally { setBusy(0); }
+  };
+
+  return (
+    <>
+      {rows.map((ep) => (
+        <section key={ep.id} className="rc-path" aria-label={`دورهٔ ${ep.title}`}>
+          <header className="rc-path-head">
+            <b>{ep.title}</b>
+            <span className={`rc-path-st st-${ep.status}`}>{ep.statusFa}</span>
+            {/* درصد از سرور می‌آید (قانون ۱۵)؛ رابط فرمولی حساب نمی‌کند. */}
+            <small>{faNum(ep.counts.done)} از {faNum(ep.counts.total)} مرحله</small>
+          </header>
+          <div className="rc-path-bar" role="img"
+               aria-label={`${faNum(ep.percent)} درصدِ دوره انجام شده`}>
+            <i style={{ width: `${ep.percent}%` }} />
+          </div>
+          <ol className="rc-path-steps">
+            {ep.steps.map((st) => (
+              <li key={st.id} className={`rc-path-step st-${st.status}`}>
+                <div className="rc-path-when">
+                  {st.dueAt ? <b>{faDate(st.dueAt)}</b> : <b className="none">—</b>}
+                  {/* «مسئول» یعنی نقش، مگر شخصِ مشخصی تعیین شده باشد. */}
+                  <small>{st.ownerName || st.ownerRoleFa || '—'}</small>
+                </div>
+                <div className="rc-path-main">
+                  <b>{st.title}</b>
+                  {st.notes && <small>{st.notes}</small>}
+                </div>
+                {ep.status === 'active' && st.status === 'pending' ? (
+                  <div className="rc-path-acts">
+                    <button type="button" disabled={busy === st.id} onClick={() => mark(st, 'done')}>انجام شد</button>
+                    <button type="button" className="ghost" disabled={busy === st.id} onClick={() => mark(st, 'skipped')}>رد</button>
+                  </div>
+                ) : <span className="rc-path-tag">{st.statusFa}</span>}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </>
+  );
+}
+
 function RecordActions({ rec, onEdit, toast, t }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState('');
@@ -1247,6 +1317,7 @@ export default function PatientRecord() {
       {live && <StageBar stage={live.stage} t={t} />}
       {live && <NextUp live={live} onGo={goTab} onActed={loadLive} toast={say} />}
       {live && <Timeline live={live} onGo={goTab} t={t} />}
+      <Pathway patientId={rec.id} toast={say} />
 
       <div ref={tabsRef} />
       <Tabs
