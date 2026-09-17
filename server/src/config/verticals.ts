@@ -15,7 +15,7 @@ export const VERTICALS = {
   ionm: {
     label: 'نورومانیتورینگ حین عمل',
     // انبار اینجا هم هست: الکترود و سوزنِ یک‌بارمصرف هم لات و تاریخِ انقضا دارند.
-    features: { dashboard: 5, calendar: 4, dispatch: 4, tech: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, inventory: 3, site: 5, users: 6, work: 2 },
+    features: { dashboard: 5, calendar: 4, frontdesk: 2, dispatch: 4, tech: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, inventory: 3, site: 5, users: 6, work: 2, pathway: 2 },
   },
   /** تأمین‌کنندهٔ ست و ایمپلنت — واحدِ کار همان مراجعه است، با قلم‌های کالا. */
   implant: {
@@ -23,12 +23,12 @@ export const VERTICALS = {
     // چینشِ کارشناس معنا ندارد؛ در عوض انبار و فاکتور مهم است. برای این حوزه
     // انبار هستهٔ کار است نه جانبی — ردیابیِ سریالِ ایمپلنت الزامِ فراخوان است،
     // پس از سطحِ کارشناس باز می‌شود.
-    features: { dashboard: 5, calendar: 4, surgeon: 2, accounting: 4, messenger: 2, formgen: 5, letter: 5, inventory: 2, site: 5, users: 6, work: 2 },
+    features: { dashboard: 5, calendar: 4, frontdesk: 2, surgeon: 2, accounting: 4, messenger: 2, formgen: 5, letter: 5, inventory: 2, site: 5, users: 6, work: 2, pathway: 2 },
   },
   /** مطب و تیمِ جراحی — از ویزیت تا عمل تا پیگیری. */
   clinic: {
     label: 'مطب و تیمِ جراحی',
-    features: { dashboard: 4, calendar: 3, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, work: 2 },
+    features: { dashboard: 4, calendar: 3, frontdesk: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, work: 2, pathway: 2 },
   },
 } as const;
 
@@ -44,6 +44,12 @@ export const isVertical = (value: unknown): value is VerticalKey =>
  *
  * ماژولی که در فهرستِ حوزه نیست خاموش می‌شود — نه اینکه سطحش بالا برود. تفاوتش
  * مهم است: خاموش یعنی «این محصول این را ندارد»، سطحِ بالا یعنی «دسترسی نداری».
+ *
+ * ⚠️ **پس هر ماژولِ تازه باید این‌جا هم بیاید، وگرنه سوییچِ حوزه بی‌صدا
+ * خاموشش می‌کند.** `frontdesk` (W3.3) دقیقاً همین را خورده بود: در
+ * `access-registry` ثبت شده بود ولی در هیچ‌کدام از سه حوزه نبود، پس اولین
+ * تغییرِ حوزه میزِ پذیرش را از روی لانچر برمی‌داشت و هیچ خطایی هم نمی‌داد.
+ * با W4.1 هم خودش اضافه شد هم `pathway`.
  */
 export function featurePlanFor(vertical: VerticalKey): Record<string, { minLevel: number; enabled: boolean }> {
   const plan = VERTICALS[vertical].features as Record<string, number>;

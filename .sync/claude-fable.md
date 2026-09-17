@@ -1,10 +1,22 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
+status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-16
-paths: []
-note: لِینِ ج — **همهٔ بسته‌هایش لند شدند و کلیم آزاد است.** W2.1–W2.5 · W3.1 (PR #33) · W3.2 گام‌های ۱–۲ (PR #23، #28) · W3.3 (PR #40) · دلیلِ لغو (PR #43) · W3.8 (PR #45، `c19c281`). باقی‌مانده و **آزاد برای هر لِین**: W3.2 گامِ ۳ (مراجعهٔ پیش‌نویس) که به یک تصمیم گره خورده — `PATCH` سفارش الان `visitId` نمی‌پذیرد. دو بدهیِ اعلام‌شده در `STATUS.md`: `import.service.ts` هنوز مستقیم `techArriveTime` می‌نویسد، و لغوِ آبشاریِ ویزیتِ پیگیری بی‌دلیل می‌ماند.
+paths:
+  - server/src/pathway/
+  - server/prisma/schema.prisma
+  - server/src/auth/access-registry.ts
+  - server/src/app.module.ts
+  - src/app/PatientRecord.jsx
+  - src/app/record.css
+  - src/app/tools.jsx
+  - src/App.jsx
+  - docs/plan/CONTRACTS.md
+  - docs/plan/lanes/claude-fable.md
+  - STATUS.md
+  - scripts/e2e/w4-1-pathway.mjs
+note: لِینِ ج — **W4.1 مسیرِ درمان شروع شد** (تابلو: ردیفِ «بعد» همین لِین). A4 با کد تأیید شد: کلِ اتوماسیونِ مسیر `syncPostOpVisit` + کاشتِ یادآوری است و هر دو قفلِ `kind==='surgery'`اند؛ مطب/IVF/فیزیوتراپی هیچ مسیری ندارند. (یک ارجاعِ سند بیات بود: substringِ «پست‌آپ» در `intake.service.ts` دیگر وجود ندارد.) **پیش‌فرض خاموش** — نصبی که امروز کار می‌کند نباید یک‌شبه رفتارش عوض شود. پیش‌تر: همهٔ بسته‌های W2/W3 لند شدند (PR #12…#46).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

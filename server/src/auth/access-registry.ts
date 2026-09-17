@@ -121,6 +121,14 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.TECH,
   },
   {
+    /* ⚠️ خواندن از سطحِ **کارشناس** باز است چون گام‌های دوره همان کاری است که
+       خودِ کارشناس انجام می‌دهد؛ ولی انتشارِ الگو مجوزِ جدا دارد (`pathway.manage`)
+       چون الگو روی بیمارانِ **بعدی** اثر می‌گذارد نه یک پرونده. */
+    key: 'pathway', label: 'مسیرِ درمان', group: 'modules',
+    hint: 'دورهٔ خدمت با مرحله، مسئول و موعد — برای نصب‌های ویزیت‌محور و دوره‌ای.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
     key: 'dispatch', label: 'چینشِ نیروها', group: 'modules',
     defaultLevel: LEVEL.SUPERVISOR,
   },
@@ -192,6 +200,25 @@ export const PERMISSIONS: AccessDef[] = [
      ⚠️ این‌ها **مجوزِ عملیات**اند نه ماژول (قانون ۳): دیدنِ تختهٔ روز با
      عوض‌کردنِ وضعیتِ بیمار یکی نیست، و نصبی که می‌خواهد منشی فقط ببیند باید
      بتواند بدونِ خاموش‌کردنِ کلِ کاشی این کار را بکند. */
+  {
+    key: 'pathway.read', label: 'دیدنِ مسیرِ درمان', group: 'patients',
+    hint: 'دوره‌های بیمار، مرحله‌ها، مسئول و موعد.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'pathway.step', label: 'ثبتِ مرحلهٔ مسیر', group: 'patients',
+    hint: 'انجام‌شده/رد‌شده کردنِ مرحله و جابه‌جاییِ موعدِ همان بیمار.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'pathway.start', label: 'شروع و بستنِ دورهٔ درمان', group: 'patients',
+    defaultLevel: LEVEL.TECH_ADMIN,
+  },
+  {
+    key: 'pathway.manage', label: 'انتشارِ الگوی مسیر', group: 'patients',
+    hint: 'الگو روی بیمارانِ بعدی اثر می‌گذارد، نه یک پرونده — پس سطحِ مدیر.',
+    defaultLevel: LEVEL.ADMIN,
+  },
   {
     key: 'frontdesk.read', label: 'دیدنِ میزِ پذیرش', group: 'patients',
     hint: 'تختهٔ بیمارانِ امروز و وضعیتشان.',
