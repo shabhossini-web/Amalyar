@@ -54,13 +54,23 @@ paths:
   - src/ui/cancel-reason.css
   - docs/plan/DECISIONS.md
   - STATUS.md
+  - server/src/patients/hospital-duties.service.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/dto/visit.dto.ts
+  - server/src/patients/intake.service.ts
+  - server/src/patients/intake-hospitals.ts
+  - server/src/common/name-match.ts
+  - src/app/Intake.jsx
+  - src/app/Tech.jsx
+  - src/app/HospitalRoster.jsx
+  - scripts/e2e/w3-8-single-source.mjs
   - server/src/patients/dto/visit.dto.ts
   - scripts/e2e/w3-cancel-reason.mjs
   - server/src/patients/patients.controller.ts
   - src/app/dashboard.css
   - scripts/e2e/w3-2-prep-card.mjs
   - .github/workflows/security-ci.yml
-note: لِینِ ج — **بستهٔ «دلیلِ لغو» تمام شد** (e2e ۶۱/۶۱؛ سرور + رابط + هر دو نوعِ لغو). بعدی: W3.8. پیش‌تر: (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶: فهرستِ بسته برای بیمار + یادداشتِ داخلی؛ هر دو نوعِ لغو). W3.3 در PR #40. **W3.3 میزِ پذیرشِ روز ساخته شد** (۲۸ سنجه، CI سبز)؛ آمادهٔ مرج. بستهٔ بعدی: «دلیلِ لغو» (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶) سپس W3.8. شروعِ اولیه (§۴.۵؛ `FrontDesk.jsx` + `frontdesk.service.ts` + سطحِ دسترسیِ منشی). `appointments.*` و `access-registry.ts` کلیمِ کسی نبودند — اگر لِینِ دیگری خواستشان، اعلام کند. **W3.1 با PR #33 (`f09ce54`) لند شد** (۶۳ سنجهٔ e2e). بستهٔ بعدی W3.3 میزِ پذیرش است (W1.5 لند شده، پس آزاد است)؛ کلیمِ تازه‌اش هنگامِ شروع نوشته می‌شود. سه فایلِ بیرونِ کلیم لازم شد و پایین اعلام شده‌اند: `src/index.css` و `src/app/definitions.css` (هر دو در کلیمِ **idle** لِینِ ب) و `src/app/today.css` (خودمان). شروعِ اولیه (`src/app/PatientRecord.jsx` + `record.css`). W3.2 گامِ ۲ در PR #28. لِینِ الف W1.5/W1.6 را لند کرد؛ W1.2 (وضعیت‌های سفارش) هنوز نیامده و W3.1 طوری نوشته می‌شود که بدونِ بازنویسی با آن جفت شود. `record.service.ts` کلیمِ کسی نیست ولی GPT تازه در W1.6 عوضش کرده — اگر لازم شد، اول اعلام. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
+note: لِینِ ج — **W3.8 شروع شد** (U7 یکی‌کردنِ منبعِ ساعت/کارشناس + U3 پیشنهادِ جراح/عمل در تأیید). تصمیمِ مالک ۱۴۰۵/۰۶/۲۶: انتساب در فرم خودکار در برنامهٔ چینش می‌نشیند، و ساعتِ حضور **فقط** از برنامهٔ چینش می‌آید (فرمِ مراجعه و شیتِ کارشناس دیگر نمی‌نویسند). پیش‌تر: **بستهٔ «دلیلِ لغو» لند شد** (PR #43، `63128c0`). (e2e ۶۱/۶۱؛ سرور + رابط + هر دو نوعِ لغو). بعدی: W3.8. پیش‌تر: (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶: فهرستِ بسته برای بیمار + یادداشتِ داخلی؛ هر دو نوعِ لغو). W3.3 در PR #40. **W3.3 میزِ پذیرشِ روز ساخته شد** (۲۸ سنجه، CI سبز)؛ آمادهٔ مرج. بستهٔ بعدی: «دلیلِ لغو» (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶) سپس W3.8. شروعِ اولیه (§۴.۵؛ `FrontDesk.jsx` + `frontdesk.service.ts` + سطحِ دسترسیِ منشی). `appointments.*` و `access-registry.ts` کلیمِ کسی نبودند — اگر لِینِ دیگری خواستشان، اعلام کند. **W3.1 با PR #33 (`f09ce54`) لند شد** (۶۳ سنجهٔ e2e). بستهٔ بعدی W3.3 میزِ پذیرش است (W1.5 لند شده، پس آزاد است)؛ کلیمِ تازه‌اش هنگامِ شروع نوشته می‌شود. سه فایلِ بیرونِ کلیم لازم شد و پایین اعلام شده‌اند: `src/index.css` و `src/app/definitions.css` (هر دو در کلیمِ **idle** لِینِ ب) و `src/app/today.css` (خودمان). شروعِ اولیه (`src/app/PatientRecord.jsx` + `record.css`). W3.2 گامِ ۲ در PR #28. لِینِ الف W1.5/W1.6 را لند کرد؛ W1.2 (وضعیت‌های سفارش) هنوز نیامده و W3.1 طوری نوشته می‌شود که بدونِ بازنویسی با آن جفت شود. `record.service.ts` کلیمِ کسی نیست ولی GPT تازه در W1.6 عوضش کرده — اگر لازم شد، اول اعلام. W2.1–W2.5 همه لند شده‌اند. `Launcher.jsx` و `src/ui/icons.jsx` آزادند (W3.7 لِینِ ب). لِینِ الف هنوز شروع نکرده، پس W3.1/W3.3 که به W1.2/W1.5 گره خورده‌اند منتظرند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

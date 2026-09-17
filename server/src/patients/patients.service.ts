@@ -5,6 +5,7 @@ import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
+import { syncVisitDuty } from './hospital-duties.service';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
@@ -147,10 +148,15 @@ export function durationOf(start?: string | null, end?: string | null): number |
  */
 function timePatch(dto: any): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+  /* ⚠️ `techArriveTime` عمداً این‌جا **نیست** (W3.8/U7، تصمیمِ مالک ۱۴۰۵/۰۶/۲۶).
+     ساعتِ حضور مالِ «کارشناس در آن بیمارستان در آن روز» است، نه مالِ یک بیمار،
+     پس تنها نویسنده‌اش `syncVisitDuty()` است و از `hospital_duties` می‌آید.
+     تا امروز از همین‌جا هم نوشته می‌شد (فرمِ مراجعه و شیتِ ساعتِ کارشناس) و
+     با برنامهٔ چینش واگرا می‌شد. `whitelist`ِ ValidationPipe مقدارِ کلاینتِ
+     قدیمی را بی‌صدا دور می‌ریزد، پس دیپلویِ غلتان چیزی نمی‌شکند. */
   const map = {
     opStartTime: 'ساعتِ شروع',
     opEndTime: 'ساعتِ پایان',
-    techArriveTime: 'ساعتِ حضورِ کارشناس',
     cargoDueTime: 'ساعتِ تحویلِ بار',
   } as const;
   for (const [key, label] of Object.entries(map)) {
@@ -1053,7 +1059,7 @@ export class PatientsService {
       }
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
       const seq = (max._max.seq ?? 0) + 1;
-      const visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
+      let visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
         ...refs,
         ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
         ...(dto.opType !== undefined && refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
@@ -1087,6 +1093,14 @@ export class PatientsService {
         },
         include: INCLUDE_PATIENT,
       });
+      /* ساعتِ حضور از برنامهٔ چینش می‌آید، نه از فرم — و اگر کارشناسی انتخاب
+         شده که آن روز در برنامهٔ آن بیمارستان نیست، همین‌جا در برنامه می‌نشیند
+         (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶). داخلِ همین تراکنش، تا انتساب و ردیفِ حضورش
+         هرگز از هم جدا نیفتند. */
+      const arrive = await syncVisitDuty(tx, visit);
+      if (arrive !== visit.techArriveTime) {
+        visit = await tx.visit.update({ where: { id: visit.id }, data: { techArriveTime: arrive }, include: INCLUDE_PATIENT });
+      }
       await syncLinkDocuments(tx, { patientId, visitId: visit.id, fields: formFields as any, values: extraIn ?? {}, actorId: userId ?? null });
       /**
        * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
@@ -1164,7 +1178,7 @@ export class PatientsService {
     const result = enrich(updated, await this.forms.kindMap());
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: id,
-      before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, techArriveTime: before?.techArriveTime, cargoDueTime: before?.cargoDueTime },
+      before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, cargoDueTime: before?.cargoDueTime },
       after: patch,
     });
     return result;
@@ -1253,6 +1267,20 @@ export class PatientsService {
       if (dto.opReport !== undefined) {
         await this.setOpReport(tx, { id, patientId: v.patientId }, dto.opReport, user);
       }
+      /* ساعتِ حضور مشتقِ برنامهٔ چینش است (W3.8/U7): با مقادیرِ **نهایی** پس از
+         این ویرایش سنجیده می‌شود، نه با مقادیرِ قبلی — وگرنه تغییرِ بیمارستان یا
+         تاریخ در همین ویرایش، ردیفِ حضورِ روزِ قبل را نگاه می‌کرد.
+         ⚠️ نتیجه **همیشه** نوشته می‌شود، حتی `null`: برداشتنِ کارشناس باید
+         ساعتِ حضورش را هم ببرد، وگرنه ساعتِ یتیم روی کارت می‌ماند. همین کار
+         رکوردهای واگرای قدیمی را هم با اولین ذخیره درست می‌کند. */
+      const pick = <T,>(patched: T | undefined, current: T): T => (patched === undefined ? current : patched);
+      visitPatch.techArriveTime = await syncVisitDuty(tx, {
+        id,
+        techId: pick(visitPatch.techId, v.techId),
+        hospitalId: pick(visitPatch.hospitalId, v.hospitalId),
+        opDate: pick(visitPatch.opDate, v.opDate),
+        opStartTime: pick(visitPatch.opStartTime, v.opStartTime),
+      });
       return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_PATIENT });
     });
     const kinds = await this.forms.kindMap();

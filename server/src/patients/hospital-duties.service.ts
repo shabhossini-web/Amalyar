@@ -14,6 +14,43 @@ export function scheduleDate(raw: string) {
 const range = (date: Date) => ({ gte: date, lt: new Date(date.getTime() + 86400000) });
 const fullName = (p: any) => `${p.firstName} ${p.lastName}`.trim();
 
+/**
+ * **تنها نویسندهٔ `visit.techArriveTime`** (W3.8 / U7، تصمیمِ مالک ۱۴۰۵/۰۶/۲۶).
+ *
+ * ساعتِ حضور مالِ «آن کارشناس، در آن بیمارستان، در آن روز» است — نه مالِ یک
+ * بیمار. پس یک‌بار در `hospital_duties` ثبت می‌شود و از همان‌جا روی مراجعه
+ * می‌نشیند. تا امروز سه جا مستقل می‌نوشتندش (فرمِ مراجعه، شیتِ ساعتِ کارشناس،
+ * برنامهٔ چینش) و واگرا می‌شدند؛ نشانه‌اش همان گزینهٔ «— هنوز در برنامه حضور
+ * نیست» در تابلوی چینش بود: مراجعه کارشناس داشت، برنامه نداشت.
+ *
+ * ⚠️ این تابع **داخلِ همان تراکنشی** صدا زده می‌شود که خودِ مراجعه را می‌نویسد
+ * (`tx`)، نه بعدش: انتسابِ کارشناس و ردیفِ حضورش یا هر دو می‌نشینند یا هیچ‌کدام.
+ *
+ * ⚠️ و ردیفِ **موجود** را بازنویسی نمی‌کند: اگر ادمین در تابلوی چینش ساعتِ
+ * حضور را ۰۷:۰۰ گذاشته، ثبتِ یک بیمارِ ۰۹:۰۰ نباید آن را عقب ببرد. برنامه
+ * حرفِ آخر را می‌زند، مراجعه فقط از آن می‌خواند.
+ *
+ * ⚠️ وقتی هیچ ساعتی برای ساختنِ ردیف نیست (مراجعهٔ بدونِ ساعتِ عمل)، انتساب
+ * **رد نمی‌شود**: کارشناس می‌نشیند و ردیفِ حضور ساخته نمی‌شود. فرم هرگز
+ * به‌خاطرِ این قاعده شکست نمی‌خورد؛ همان گزینهٔ «هنوز در برنامه حضور نیست»
+ * تابلو این شکافِ باقی‌مانده را نشان می‌دهد تا کسی پُرش کند.
+ */
+export async function syncVisitDuty(
+  tx: any,
+  visit: { id: number; techId: number | null; hospitalId: number | null; opDate: Date | null; opStartTime: string | null },
+): Promise<string | null> {
+  if (!visit.techId || !visit.hospitalId || !visit.opDate) return null;
+  const date = new Date(`${visit.opDate.toISOString().slice(0, 10)}T00:00:00.000Z`);
+  const key = { date_hospitalId_techId: { date, hospitalId: visit.hospitalId, techId: visit.techId } };
+  const existing = await tx.hospitalDuty.findUnique({ where: key });
+  if (existing) return existing.arriveTime;
+  if (!visit.opStartTime) return null;
+  const duty = await tx.hospitalDuty.create({
+    data: { date, hospitalId: visit.hospitalId, techId: visit.techId, arriveTime: visit.opStartTime },
+  });
+  return duty.arriveTime;
+}
+
 @Injectable()
 export class HospitalDutiesService {
   constructor(private prisma: PrismaService, private reminders: RemindersService) {}
