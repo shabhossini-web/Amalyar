@@ -186,6 +186,13 @@ function Form() {
   const [page, setPage] = useState(1);
   const [code, setCode] = useState('');
   const fileRef = useRef(null);
+  /* W1.8 — پیش‌نویس. `idle` | `saving` | `saved` | `offline`.
+     ⚠️ هیچ‌چیز در `localStorage` نمی‌نشیند (قرارداد §۶): این فرم دادهٔ پزشکیِ
+     بیمار را دارد و مرورگرِ مشترک/عمومی همان‌جا لو می‌دهدش. تنها جای ذخیره
+     خودِ سرور است. */
+  const [draftState, setDraftState] = useState('idle');
+  const draftTimer = useRef(null);
+  const draftSeq = useRef(0);
 
   useEffect(() => { document.title = 'فرمِ مراجعه'; }, []);
   const load = useCallback(async () => {
@@ -213,9 +220,46 @@ function Form() {
           return next;
         });
       }
+      /* W1.8: همان صفحه‌ای که بیمار رویش بود، نه صفحهٔ یک. `_page` را سرور
+         نگه داشته (قرارداد §۶) — مقدارِ بیرون از بازه نادیده گرفته می‌شود تا
+         دادهٔ خراب صفحهٔ خالی نسازد. */
+      const savedPage = Number(r.data?._page);
+      const pageCount = r.form?.pages ?? 1;
+      if (Number.isInteger(savedPage) && savedPage >= 1 && savedPage <= pageCount) setPage(savedPage);
     } catch (e) { setErr(e.message); }
   }, [token]);
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * ذخیرهٔ پیش‌نویس روی سرور — W1.8.
+   *
+   * ⚠️ «توکنِ ذخیره» لازم است چون دو ذخیره می‌توانند از هم سبقت بگیرند: پاسخِ
+   * دیررسِ ذخیرهٔ قبلی نباید «ذخیره شد» را روی ذخیرهٔ در جریان بنشاند و بیمار
+   * را مطمئن کند در حالی که آخرین تایپش هنوز نرفته.
+   *
+   * شکستِ ذخیره **هرگز** فرم را نمی‌شکند: بیمار به تایپ ادامه می‌دهد و ثبتِ
+   * نهایی مسیرِ خودش را دارد؛ فقط نشانگر می‌گوید اتصال قطع است.
+   */
+  const saveDraft = useCallback(async (nextPage) => {
+    const seq = ++draftSeq.current;
+    setDraftState('saving');
+    try {
+      await api(`/public/intake/form/${token}/draft`, {
+        method: 'POST', auth: false,
+        body: { values: vals, ...(nextPage ? { page: nextPage } : {}) },
+      });
+      if (seq === draftSeq.current) setDraftState('saved');
+    } catch {
+      if (seq === draftSeq.current) setDraftState('offline');
+    }
+  }, [token, vals]);
+
+  /* روی blur، با مکثِ ۱٫۵ ثانیه (قرارداد §۶) — نه به‌ازای هر حرف. */
+  const draftSoon = useCallback(() => {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => saveDraft(), 1500);
+  }, [saveDraft]);
+  useEffect(() => () => clearTimeout(draftTimer.current), []);
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
@@ -260,7 +304,12 @@ function Form() {
     const e = dynErrors(here, vals);
     setVErr(e);
     if (Object.keys(e).length) return;
-    setPage((p) => p + 1);
+    const next = page + 1;
+    setPage(next);
+    /* ذخیره **با** شمارهٔ صفحهٔ تازه: رفرشِ بعدی باید همان‌جا برگردد نه یک
+       صفحه عقب‌تر. مکثِ blur لغو می‌شود تا دو ذخیرهٔ پشت‌سرهم نرود. */
+    clearTimeout(draftTimer.current);
+    saveDraft(next);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -384,10 +433,24 @@ function Form() {
         d.form?.fields?.length ? (
           <>
             {d.form.hint && <p className="ik-hint">{d.form.hint}</p>}
-            {d.form.pages > 1 && (
-              <p className="ik-pages">صفحهٔ {faNum(page)} از {faNum(d.form.pages)}</p>
-            )}
+            <div className="ik-pagerow">
+              {d.form.pages > 1 && (
+                <p className="ik-pages">صفحهٔ {faNum(page)} از {faNum(d.form.pages)}</p>
+              )}
+              {/* W1.8 — بیمار باید **ببیند** که نوشته‌اش جایی رفته. بدونِ این،
+                  ذخیرهٔ خودکار از نبودش قابلِ تشخیص نیست. */}
+              {draftState !== 'idle' && (
+                <span className={`ik-draft ${draftState}`} role="status" aria-live="polite">
+                  {draftState === 'saving' ? 'در حالِ ذخیره…'
+                    : draftState === 'saved' ? 'ذخیره شد'
+                      : 'اتصال قطع است — تا وصل شدن این صفحه را نبندید'}
+                </span>
+              )}
+            </div>
             {d.form.fields.some(x => x.key === 'hospitalName' && (x.page ?? 1) === page) && <HospitalLookup token={token} value={vals.hospitalName ?? ''} onChange={(name, id) => setVals(s => ({ ...s, hospitalName: name, hospitalId: id }))} disabled={busy} error={vErr.hospitalName} />}
+            {/* ذخیرهٔ خودکار روی blur. `onBlur` در ری‌اکت **حباب می‌کند**، پس
+                این یک لایه کافی است و `DynForm`ِ مشترک دست نمی‌خورد. */}
+            <div onBlur={draftSoon}>
             <DynForm
               fields={d.form.fields.filter((x) => (x.page ?? 1) === page && x.key !== 'hospitalName')}
               values={vals}
@@ -398,6 +461,7 @@ function Form() {
               onUpload={uploadImage}
               onRemove={removeImage}
             />
+            </div>
             <div className="ik-nav">
               {page > 1 && (
                 <button type="button" className="ik-go ghost" disabled={busy}

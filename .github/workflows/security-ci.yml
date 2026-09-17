@@ -2923,3 +2923,22 @@ jobs:
       # paths now go through one commitAnswers step.
       - name: Verify both approval paths turn form links into documents (W1.3)
         run: node scripts/e2e/w1-3-approve-local.mjs
+
+      # ⚠️ W1.8/D09: the only way to store a patient's answers was fill(),
+      # which advances status — so a half-filled multi-page form could not be
+      # saved at all and a refresh (or a dropped mobile connection) lost every
+      # typed word. draft() merges into data and never touches status.
+      - name: Verify the public form draft never advances status (W1.8)
+        run: node scripts/e2e/w1-8-draft-local.mjs
+
+      # The UI half of the same contract (§6): resume on the saved page, show
+      # the save state, and keep nothing in browser storage — the form holds
+      # medical answers and is filled on shared phones.
+      # The runner has no browser and playwright-core ships none, so this is
+      # the first browser suite this workflow can actually run. Pinned to the
+      # playwright-core version in package.json so the protocol matches.
+      - name: Install chromium for the browser suite
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
+
+      - name: Verify draft resume, indicator and no browser storage (W1.8 UI)
+        run: node scripts/e2e/w1-8-draft-ui.mjs
