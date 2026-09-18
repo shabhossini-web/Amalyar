@@ -12,6 +12,8 @@
  *   - پاسخِ پیگیریِ بی‌`followUpVisitId` **در صف** بنشیند، نه ترمیمِ حدسی
  *   - اجرای دوباره چیزی را دوبرابر نکند (هر سه تابع idempotentاند)
  *   - ردیفی که خودکار درست نشد به صف برود، نه اینکه بی‌صدا رد شود
+ *   - **workerِ یادآوری خودش ترمیم را بدواند** — بدهیِ «ابزار هست، کسی اجرا نکرد»
+ *   - و فقط **یک‌بار در هر پروسه**، نه هر sweep
  *  نباید بیفتد (⚠️ سنجهٔ منفی — درسِ «۶۳ هشدارِ دروغین»):
  *   - فرمی که لینکش **از قبل** مدرک دارد گزارش شود
  *   - سفارشی که مدرکش هست، یا اصلاً پاسخی ندارد، گزارش شود
@@ -28,15 +30,15 @@ const { PrismaClient } = require('@prisma/client');
 const DB = process.env.E2E_DB;
 if (!DB || !['localhost', '127.0.0.1'].includes(new URL(DB).hostname)) throw new Error('فقط محیط محلی جداگانه');
 const db = new PrismaClient({ datasources: { db: { url: DB } } });
-const { RepairService } = require('./dist/patients/repair.service');
-const { OrdersService } = require('./dist/patients/orders.service');
+const { repairScan, repairRun } = require('./dist/patients/repair-core');
+const { RemindersWorkerService } = require('./dist/reminders/reminders-worker.service');
 
 let count = 0;
 const ok = (v, label) => { assert.ok(v, label); console.log('PASS ' + ++count + ' ' + label); };
 const tag = 'rep' + randomBytes(4).toString('hex');
-const audit = { record: async () => {} };
-const orders = new OrdersService(db, {}, {}, {}, audit, { emit: async () => {} });
-const repair = new RepairService(db, audit, orders);
+/* ⚠️ هسته **خالص** است: نه Nest، نه DI، نه tenant-context — فقط یک client.
+   دقیقاً همان چیزی که workerِ یادآوری در اختیار دارد، و همین آن را اجراشدنی کرد. */
+const repair = { scan: (l) => repairScan(db, l), run: (_a, l) => repairRun(db, l) };
 
 const of = (findings, check, id) => findings.filter((f) => f.check === check && f.id === id);
 const docsOf = (pid) => db.document.count({ where: { patientId: pid, deletedAt: null } });
@@ -156,6 +158,44 @@ try {
   ok(res7.failed.some((f) => f.id === badLink.id), 'ترمیمش شکست خورد و **گزارش** شد');
   ok(!!(await db.workItem.findFirst({ where: { refType: 'lab_order', refId: badLink.id, type: 'repair_data' } })),
     '⚠️ و به صف رفت تا آدم ببیندش — وگرنه «۰ خطا» گزارش می‌شد بی‌آنکه چیزی ترمیم شده باشد');
+
+  console.log('\n۸) workerِ یادآوری خودش ترمیم را می‌دواند (بدهیِ «هیچ‌کس اجرایش نکرد»)');
+  const control = { tenant: { findMany: async () => [{ slug: tag, databaseUrlEncrypted: 'x' }] } };
+  const sms = { send: async () => ({ sent: true }) };
+  const worker = new RemindersWorkerService(control, sms);
+  const LATE = 'https://pacs.example.com/late-' + tag;
+  const AGAIN = 'https://pacs.example.com/again-' + tag;
+  const docByUrl = (u) => db.document.count({ where: { patientId: pid, externalUrl: u, deletedAt: null } });
+
+  await sub(linkForm.id, { mri: [{ url: LATE }] });
+  /* ⚠️ عمداً **`sweepTenant`** صدا زده می‌شود نه `repairOnce`.
+     نسخهٔ اولِ همین سنجه مستقیم `repairOnce` را صدا می‌زد «تا نویزِ بقیهٔ sweep
+     نباشد» — و رگرسیونِ عمدی نشان داد که با آن میان‌بر، **برداشتنِ کاملِ فراخوانی
+     از `sweepTenant` هم سبز می‌ماند**. یعنی دقیقاً همان چیزی که این بسته باید
+     ثابت کند (اینکه worker خودش می‌دواندش) سنجیده نمی‌شد. خودِ سیم‌کشی موضوعِ
+     آزمون است، پس مسیرِ واقعی باید بدود. */
+  await worker.sweepTenant(DB, tag);
+  ok((await docByUrl(LATE)) === 1,
+    '⚠️ worker بدونِ هیچ دخالتِ انسانی ترمیم کرد — ابزاری که به یادِ کسی بند باشد اجرا نمی‌شود');
+
+  console.log('\n۹) یک‌بار در هر پروسه، نه هر sweep');
+  const again = await sub(linkForm.id, { mri: [{ url: AGAIN }] });
+  await worker.sweepTenant(DB, tag);
+  ok((await docByUrl(AGAIN)) === 0,
+    'sweepِ دومِ همان پروسه دوباره اسکن نکرد — اسکنِ هر پنج دقیقه تا ابد بارِ بی‌دلیل است');
+  ok(of((await repair.scan()).findings, 'form_links_missing', again.id).length === 1,
+    'و آن ایراد هنوز پیدا می‌شود — یعنی «اسکن نشد»، نه «از دست رفت»');
+
+  console.log('\n۱۰) خاموشیِ صریح، و شکستی که sweep را نمی‌شکند');
+  process.env.REPAIR_DISABLED = '1';
+  await new RemindersWorkerService(control, sms).sweepTenant(DB, tag + 'off');
+  ok((await docByUrl(AGAIN)) === 0, 'با REPAIR_DISABLED=1 هیچ ترمیمی نشد');
+  delete process.env.REPAIR_DISABLED;
+
+  let threw = false;
+  const dead = { intakeSubmission: { findMany: async () => { throw new Error('دیتابیس رفت'); } } };
+  try { await new RemindersWorkerService(control, {}).repairOnce(dead, tag + 'dead'); } catch { threw = true; }
+  ok(!threw, '⚠️ شکستِ ترمیم پرتاب نمی‌کند — یادآوری کارِ حساس به زمان است، ترمیمِ گذشته نیست');
 
   console.log(`\n✅ ${count}/${count}`);
 } finally {
