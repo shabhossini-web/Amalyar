@@ -1,24 +1,17 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: active
+status: idle
 branch: claude/quirky-johnson-ynzr4y
-since: 2026-09-17
-paths:
-  - src/app/Reminders.jsx
-  - src/app/reminders.css
-  - server/src/patients/reminders.service.ts
-  - server/src/patients/summary.controller.ts
-  - scripts/e2e/w0-7-reminder-actions.mjs
-  - scripts/e2e/w0-7-reminder-actions-ui.mjs
-  - docs/plan/lanes/claude-fable-b.md
+since: 2026-09-18
+paths: []
 note: >-
-  لِینِ ب **لِینِ الف را هم برداشت** — مالک گفت `gpt` دو روز نیست. کلیمِ `gpt` آزاد بود.
-  لند شد: **W1.1** (#48) · **W1.7** (#49) · **W1.3** (#51) · **W1.8** (#52) ·
-  **W1.9** (#53) · **W0.4 + W0.3** (#55).
-  **لِینِ الف تمام شد** — W1.1 (#48) · W1.7 (#49) · W1.3 (#51) · W1.8 (#52) ·
-  W1.9 (#53) · W0.4+W0.3 (#55) · W0.8 (#56) · W1.10 (#57).
-  برگشتم به لِینِ خودم: **W0.5** لند شد (#58)، الان **W0.7** (اقدامِ تک‌ردیفیِ
-  یادآوری) — **آخرین ردیفِ هر دو لِین**.
+  ✅ **هر دو لِینِ الف و ب تمام شدند.** لِینِ ب کلِ ردیف‌های لِینِ الف را هم
+  برداشت چون `gpt` دو روز نبود. آخرین لند: W0.7 (#59).
+  کلیم آزاد است — هیچ مسیری قفل نیست.
+  بدهی‌های ثبت‌شده در `STATUS.md`: زمانِ ~۲۵ دقیقه‌ایِ `security-ci` ·
+  نبودِ runnerِ محلی برای گام‌های inlineِ `node -e` · سوییت‌های مرورگریِ قدیمیِ
+  خارج از CI · `attachImage` که هنوز به mimetypeِ کلاینت اعتماد می‌کند ·
+  `draft` بدونِ rate-limit · `--brand-text` در تمِ تیره.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
