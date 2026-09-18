@@ -125,3 +125,47 @@ E2E_CHROME=/path/to/chromium node scripts/e2e/intake-assistance-ui.mjs
 ```
 
 The integration suite uses disposable PGlite PostgreSQL through its wire protocol and the generated Prisma client. It applies every tenant migration and calls the actual services; no production database or SMS is used. Test dependencies are development dependencies. The UI suite starts its own Vite server, uses responsive Chromium, mocked API responses, and fake microphone input. It checks explicit review/apply, stale and empty AI responses, voice append, quick definitions and retained payment state. Continue to run `orders-ai-ui.mjs` and `ai-stream-contract.mjs` for the earlier regressions.
+
+---
+
+## راه‌اندازیِ خودکارِ محیط — `bootstrap-env.mjs`
+
+همان مراحلِ بالا (دو مهاجرت + ردیفِ تنانت با DSNِ رمزشده + کاربرِ سوپرادمین) در
+یک دستور و **idempotent**. جای «ردیفِ تنانت را دستی بساز» و «از مسیرِ signup یک
+سوپرادمین بساز» را می‌گیرد:
+
+```bash
+CONTROL_DATABASE_URL=postgresql://amalyar:amalyar@localhost:5432/e2e_ctl \
+DATABASE_URL=postgresql://amalyar:amalyar@localhost:5432/e2e_t1 \
+TENANT_DATABASE_ENCRYPTION_KEY="<base64 ۳۲ بایتی>" \
+node scripts/e2e/bootstrap-env.mjs
+```
+
+رمزنگاریِ DSN از **همان** `encryptDatabaseUrl`ِ سرور خوانده می‌شود، نه یک
+پیاده‌سازیِ دوم که می‌تواند واگرا شود.
+
+### ⚠️ از دیتابیسِ **تازه** شروع کن — نه از دیتابیسِ همیشگیِ توسعه
+
+> **درسِ واقعی (۱۴۰۵/۰۶/۲۷):** سه سنجهٔ `follow-up` و یکی از `portal` روی
+> دیتابیسِ درازعمرِ توسعه قرمز بودند و مدتی به‌جای «باگِ محصول» تشخیص داده
+> شدند — حتی یک بار به‌اشتباه در `reminders.service.ts` «رفع» شد و بازپخشِ
+> محلیِ CI جلویش را گرفت. روی دیتابیسِ **تازه** هر دو سبزِ کامل‌اند:
+> `follow-up` **۲۱/۰** (سه بار پشتِ هم) و `portal` **۱۸/۰**.
+>
+> ریشه‌اش این است که این خانواده یک دیتابیسِ **مشترک** را می‌گیرد و اجرای
+> ناتمامِ قبلی ردیف جا می‌گذارد. مثلاً `followUpUrl` با `orderBy: id asc`
+> قدیمی‌ترین فرمِ `followUp='general'` را برمی‌دارد، پس اجرای تازه به فرمِ
+> بیاتِ اجرای قبلی می‌چسبد و شمارشِ سوییت صفر می‌شود.
+
+### آنچه برای بردنِ این خانواده به CI باقی است
+
+- `postop-visit.mjs` و `next-visit-booking.mjs` نشانیِ UI را **هاردکد** کرده‌اند
+  (`http://127.0.0.1:5199`) و `E2E_UI` را نمی‌خوانند.
+- بعضی سوییت‌ها تعریف‌های از‌پیش‌موجود (بیمارستان/نوعِ عمل) را فرض می‌گیرند و
+  روی دیتابیسِ تازه در مرحلهٔ آماده‌سازی می‌شکنند — یا باید خودشان بسازند یا
+  seed بخواهند. (`postop-visit` حتی کوئریِ `IN (,)` می‌سازد وقتی چیزی ساخته نشده.)
+- سطلِ ورود **۸ بار در ۱۵ دقیقه به‌ازای هر نامِ کاربری** است و هر سوییت یک ورود
+  می‌زند؛ بیش از ۸ سوییت پشتِ هم روی یک پروسهٔ سرور با `ورود نشد` می‌افتد.
+  در CI باید بینِ دسته‌ها سرور دوباره بالا بیاید.
+- قاعدهٔ هم‌هاست‌بودنِ API و UI (بالا ↑) در CI هم باید رعایت شود؛ یک‌بار همین
+  `localhost` در برابرِ `127.0.0.1` همهٔ سوییت‌های مرورگری را به `/login` انداخت.
