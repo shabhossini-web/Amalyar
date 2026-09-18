@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { cancelSms, type CancelKind } from '../common/cancel-reasons';
@@ -9,6 +9,7 @@ import { toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 import { sendReminders } from '../reminders/send-reminders';
+import { AuditService } from '../audit/audit.service';
 
 /**
  * یادآوری‌ها — نسخهٔ ۱: «ویزیتِ بعدی» (docs/BOOKING.md، فازِ یادآوری‌ها).
@@ -59,6 +60,10 @@ export class RemindersService {
     private sms: SmsService,
     private settings: SettingsService,
     private tenant: TenantContext,
+    /* ⚠️ اختیاری چون سه سوییتِ e2e این سرویس را **مستقیم** می‌سازند
+       (`new RemindersService(db, sms, settings, tenant)`) و پارامترِ اجباریِ
+       تازه بی‌صدا `undefined` می‌شد. Nest خودش همیشه پاسش می‌دهد. */
+    private audit?: AuditService,
   ) {}
 
   /**
@@ -514,4 +519,53 @@ export class RemindersService {
    * پیام را دوبار نفرستند.
    */
   async sweep(ids?: number[]) { return sendReminders(this.prisma, this.sms, ids); }
+
+  /**
+   * ── اقدامِ تک‌ردیفی روی دفترِ یادآوری‌ها (W0.7/U10) ──────────────────────
+   *
+   * تا امروز تنها اهرمِ مدیر «sweepِ همه» بود: یک پیامِ شکست‌خورده را نمی‌شد
+   * جدا دوباره فرستاد و یک پیامِ اشتباه را نمی‌شد جلویش را گرفت — یا همه، یا هیچ.
+   *
+   * 🔴 **`sent` نه ارسالِ دوباره می‌گیرد نه لغو.** پیام واقعاً به گوشیِ بیمار
+   * رفته: «ارسالِ دوباره» یعنی پیامکِ دومِ سردرگم‌کننده، و «لغو» یعنی دفترِ
+   * پیام‌ها دربارهٔ چیزی که رخ داده دروغ بگوید. همان قاعده‌ای که مسیرِ درمان
+   * (W4.2) هم دارد: نفرستاده باطل می‌شود، فرستاده هرگز.
+   */
+  private static RETRYABLE = ['failed', 'uncertain', 'simulated'];
+  private static CANCELLABLE = ['pending', 'uncertain', 'failed'];
+
+  private async act(id: number, from: string[], what: string) {
+    const row = await this.prisma.reminder.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('یادآوری پیدا نشد');
+    if (!from.includes(row.status)) {
+      throw new ConflictException(row.status === 'sent'
+        ? `این پیام ارسال شده است و ${what} ندارد`
+        : `یادآوری در وضعیتِ «${row.status}» ${what} نمی‌شود`);
+    }
+    return row;
+  }
+
+  /** دوباره در صف — شمارندهٔ تلاش صفر می‌شود چون این تصمیمِ یک آدم است، نه backoff. */
+  async retry(id: number, user: any) {
+    const row = await this.act(id, RemindersService.RETRYABLE, 'ارسالِ دوباره');
+    await this.prisma.reminder.update({
+      where: { id },
+      data: { status: 'pending', attempts: 0, dueAt: new Date(), error: null, sentAt: null },
+    });
+    const res = await sendReminders(this.prisma, this.sms, [id]);
+    await this.audit?.record({ actorId: user?.id ?? null, action: 'reminder.retry',
+      entityType: 'reminder', entityId: id, before: { status: row.status }, after: res });
+    return this.prisma.reminder.findUnique({ where: { id } });
+  }
+
+  async cancel(id: number, user: any, reason?: string) {
+    const row = await this.act(id, RemindersService.CANCELLABLE, 'لغو');
+    const fresh = await this.prisma.reminder.update({
+      where: { id },
+      data: { status: 'cancelled', error: (reason ?? '').trim().slice(0, 300) || null },
+    });
+    await this.audit?.record({ actorId: user?.id ?? null, action: 'reminder.cancel',
+      entityType: 'reminder', entityId: id, before: { status: row.status }, after: { status: 'cancelled', reason: reason ?? null } });
+    return fresh;
+  }
 }

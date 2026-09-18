@@ -79,3 +79,20 @@
   opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 60;
 }
 .rm-toast.on { opacity: 1; }
+
+/* اقدامِ تک‌ردیفی (W0.7) — فقط روی ردیفی که سرور هم اجازه‌اش را می‌دهد.
+   ردیفِ «رفته» عمداً هیچ دکمه‌ای ندارد: پیام واقعاً رفته است. */
+.rm-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.rm-act {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 7px 12px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700;
+  color: var(--brand-2); background: rgba(var(--brand-rgb), .1);
+  border: 1px solid rgba(var(--brand-rgb), .3); border-radius: 10px;
+  transition: background .25s cubic-bezier(.2, .7, .2, 1);
+}
+.rm-act:hover:not(:disabled) { background: rgba(var(--brand-rgb), .18); }
+.rm-act-off { color: var(--text2); background: none; border-color: rgba(var(--veil-rgb), .18); }
+.rm-act-off:hover:not(:disabled) { background: rgba(var(--veil-rgb), .07); }
+.rm-act:disabled { opacity: .5; cursor: default; }
+.rm-act:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .rm-act { transition: none; } }

@@ -2992,3 +2992,16 @@ jobs:
       # applies, or it means something else in the next container.
       - name: Verify the public order page uploads files and its button is sane (W0.5)
         run: node scripts/e2e/w0-5-order-upload-ui.mjs
+
+      # ⚠️ W0.7/U10: the only lever an admin had over the reminder ledger was
+      # "sweep everything" -- one failed message could not be resent on its own
+      # and one wrong message could not be stopped. The guard that matters is
+      # the negative one: a message whose status is 'sent' really did reach the
+      # patient's phone, so resending it means a second confusing SMS to a real
+      # person, and cancelling it means the ledger lying about something that
+      # happened. Both are refused, on the server and in the UI.
+      - name: Verify per-row reminder actions never touch a sent message (W0.7)
+        run: node scripts/e2e/w0-7-actions-local.mjs
+
+      - name: Verify the reminder ledger only offers allowed row actions (W0.7 UI)
+        run: node scripts/e2e/w0-7-reminder-actions-ui.mjs
