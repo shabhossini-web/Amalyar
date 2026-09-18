@@ -1,17 +1,19 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: idle
+status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-18
-paths: []
+paths:
+  - server/src/patients/repair-core.ts
+  - server/src/patients/repair.service.ts
+  - server/src/patients/orders.service.ts
+  - server/src/reminders/reminders-worker.service.ts
+  - scripts/e2e/w1-10-repair-scan.mjs
+  - docs/plan/lanes/claude-fable-b.md
 note: >-
-  ✅ **هر دو لِینِ الف و ب تمام شدند.** لِینِ ب کلِ ردیف‌های لِینِ الف را هم
-  برداشت چون `gpt` دو روز نبود. آخرین لند: W0.7 (#59).
-  کلیم آزاد است — هیچ مسیری قفل نیست.
-  بدهی‌های ثبت‌شده در `STATUS.md`: زمانِ ~۲۵ دقیقه‌ایِ `security-ci` ·
-  نبودِ runnerِ محلی برای گام‌های inlineِ `node -e` · سوییت‌های مرورگریِ قدیمیِ
-  خارج از CI · `attachImage` که هنوز به mimetypeِ کلاینت اعتماد می‌کند ·
-  `draft` بدونِ rate-limit · `--brand-text` در تمِ تیره.
+  پی‌گیریِ W1.10: ابزارِ ترمیم ساخته شده بود ولی **هیچ‌کس اجرایش نکرده بود** —
+  یعنی ردیف‌های خرابِ تاریخی هنوز خراب‌اند. حالا خودِ worker می‌دواندش.
+  (`server/src/reminders/` قلمروِ تابلوییِ لِینِ الف است ولی کلیمش آزاد و idle است.)
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.

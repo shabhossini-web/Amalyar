@@ -32,6 +32,51 @@ const FA: Record<OrderKind, string> = {
 };
 
 /**
+ * ساختِ مدرکِ پاسخِ سفارش — **تابعِ خالص روی هر clientِ Prisma**.
+ *
+ * ⚠️ عمداً از کلاس بیرون آمد (پی‌گیریِ W1.10): ترمیمِ دادهٔ تاریخی باید از
+ * **همین** تابع بگذرد، و ترمیم در workerی اجرا می‌شود که Nest و DIِ
+ * tenant-scoped ندارد — فقط یک `PrismaClient`ِ کوتاه‌عمر. اگر به‌جایش در
+ * هستهٔ ترمیم کپی می‌شد، همان چیزی می‌شد که قانونِ مرکزیِ W1.10 منع می‌کند:
+ * دو نسخه که روزی از هم واگرا می‌شوند.
+ *
+ * idempotent است — مدرکِ هم‌محتوا دوباره ساخته نمی‌شود، پس دوباره‌دواندنش بی‌خطر.
+ */
+export async function answerDocuments(
+  kind: OrderKind, row: any, data: any, tx: any, actorId: number | null,
+): Promise<number> {
+  let made = 0;
+  const category = kind === 'lab' ? 'lab' : kind === 'imaging' ? 'imaging' : 'report';
+  const text = data.resultText ?? data.answerText;
+  const link = data.resultLink ?? data.answerLink;
+  if (link) {
+    let url: URL;
+    try { url = new URL(link); } catch { throw new BadRequestException('نشانی پاسخ معتبر نیست'); }
+    if (!['https:', 'http:'].includes(url.protocol)) throw new BadRequestException('فقط لینک http/https پذیرفته می‌شود');
+  }
+  for (const [type, value] of [['text', text], ['link', link]] as const) {
+    if (!value) continue;
+    const where = { patientId: row.patientId, refType: `${kind}_order`, refId: row.id, deletedAt: null,
+      ...(type === 'text' ? { contentText: value } : { externalUrl: value,
+        externalUser: data.resultUser ?? null, externalPass: data.resultPass ?? null }) };
+    if (await tx.document.findFirst({ where })) continue;
+    made += 1;
+    await tx.document.create({ data: { ...where, visitId: row.visitId, category,
+      title: `پاسخ ${FA[kind]}`, fileName: type === 'text' ? `${kind}-${row.id}.txt` : new URL(value).hostname,
+      mimeType: type === 'text' ? 'text/plain; charset=utf-8' : 'text/uri-list',
+      size: type === 'text' ? Buffer.byteLength(value) : 0,
+      sha256: type === 'text' ? createHash('sha256').update(value).digest('hex') : '', uploadedById: actorId,
+    } });
+  }
+  return made;
+}
+
+/** delegateِ Prisma برای هر نوعِ سفارش — هستهٔ ترمیم هم همین نگاشت را لازم دارد. */
+export const ORDER_DELEGATE: Record<OrderKind, string> = {
+  lab: 'labOrder', imaging: 'imagingOrder', consult: 'consultOrder', referral: 'referralOrder',
+};
+
+/**
  * سفارش‌های بالینیِ زیرِ ویزیت.
  *
  * ⚠️ چهار **موجودیتِ جدا** (خواستهٔ صریحِ محصول) چون فیلدهاشان واقعاً فرق
@@ -90,49 +135,8 @@ export class OrdersService {
   }
 
   /** An answer and its immutable record documents share the order lock and outbox transaction. */
-  private async answerDocuments(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null) {
-    let made = 0;
-    const category = kind === 'lab' ? 'lab' : kind === 'imaging' ? 'imaging' : 'report';
-    const text = data.resultText ?? data.answerText;
-    const link = data.resultLink ?? data.answerLink;
-    if (link) {
-      let url: URL;
-      try { url = new URL(link); } catch { throw new BadRequestException('نشانی پاسخ معتبر نیست'); }
-      if (!['https:', 'http:'].includes(url.protocol)) throw new BadRequestException('فقط لینک http/https پذیرفته می‌شود');
-    }
-    for (const [type, value] of [['text', text], ['link', link]] as const) {
-      if (!value) continue;
-      const where = { patientId: row.patientId, refType: `${kind}_order`, refId: row.id, deletedAt: null,
-        ...(type === 'text' ? { contentText: value } : { externalUrl: value,
-          externalUser: data.resultUser ?? null, externalPass: data.resultPass ?? null }) };
-      if (await tx.document.findFirst({ where })) continue;
-      made += 1;
-      await tx.document.create({ data: { ...where, visitId: row.visitId, category,
-        title: `پاسخ ${FA[kind]}`, fileName: type === 'text' ? `${kind}-${row.id}.txt` : new URL(value).hostname,
-        mimeType: type === 'text' ? 'text/plain; charset=utf-8' : 'text/uri-list',
-        size: type === 'text' ? Buffer.byteLength(value) : 0,
-        sha256: type === 'text' ? createHash('sha256').update(value).digest('hex') : '', uploadedById: actorId,
-      } });
-    }
-    return made;
-  }
-
-  /**
-   * W1.10 — ترمیمِ سفارشِ **قدیمی** که پیش از W1.2 پاسخ گرفته و مدرک ندارد.
-   *
-   * ⚠️ عمداً همان `answerDocuments`ِ رو به جلو را می‌دواند، نه یک نسخهٔ دومِ
-   * ترمیمی: آن یکی روی محتوای متن/لینک dedupe می‌کند، پس دوباره‌دواندنش
-   * بی‌خطر است و دو مسیر هیچ‌وقت از هم دور نمی‌افتند.
-   *
-   * وضعیت و تصمیمِ بررسی دست نمی‌خورند — این ترمیمِ **مدرکِ گم‌شده** است،
-   * نه ثبتِ دوبارهٔ پاسخ.
-   */
-  repairAnswerDocuments(kind: OrderKind, row: any, tx: any = this.prisma): Promise<number> {
-    const data = kind === 'consult' || kind === 'referral'
-      ? { answerText: row.answerText ?? null, answerLink: row.answerLink ?? null }
-      : { resultText: row.resultText ?? null, resultLink: row.resultLink ?? null,
-        resultUser: row.resultUser ?? null, resultPass: row.resultPass ?? null };
-    return this.answerDocuments(kind, row, data, tx, null);
+  private answerDocuments(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null) {
+    return answerDocuments(kind, row, data, tx, actorId);
   }
 
   private async answered(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null) {
