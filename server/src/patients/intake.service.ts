@@ -22,6 +22,8 @@ import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { AvailabilityService } from './availability.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { sniffMime } from '../common/file-type';
+import { RateLimitService } from '../common/rate-limit.service';
 
 /** سال و ماهِ شمسیِ یک تاریخ — برای گرفتنِ تقویمِ همان ماه (قانون ۱۴). */
 function jalaliYm(d: Date): [number, number] {
@@ -38,6 +40,28 @@ const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
 /** سقفِ تعدادِ فایل در هر کادرِ عکس (و فیش) — نه بی‌نهایت، نه یکی. */
 const MAX_FIELD_IMAGES = 10;
 const RECEIPT_MIME = /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/;
+
+/**
+ * نوعی که برای فایلِ آپلودیِ یک نشانیِ **عمومی** ذخیره می‌شود — از بایت‌ها،
+ * نه از هدرِ کلاینت.
+ *
+ * ⚠️ کامنتِ قبلیِ همین دو مسیر می‌گفت «نوعِ فایل روی سرور سنجیده می‌شود»،
+ * ولی چیزی که سنجیده می‌شد `file.mimetype` بود — همان رشته‌ای که **فرستنده**
+ * در `multipart` نوشته. مقدارش هم ذخیره می‌شد و `record.controller`
+ * عیناً در `Content-Type` می‌گذارد و برای `image/*` هم `inline` می‌دهد؛ یعنی
+ * حرفِ یک آپلودکنندهٔ بی‌احراز مستقیم به مرورگرِ کارکنان می‌رسید. همان قاعده‌ای
+ * که W0.8 برای آپلودِ پاسخِ سفارش نوشت این‌جا جا افتاده بود.
+ *
+ * ⚠️ **عمداً سخت‌گیرتر از W0.8 نیست.** آن‌جا امضای ناشناس رد می‌شود؛ این‌جا
+ * فایل پذیرفته و نوعش `application/octet-stream` ذخیره می‌شود. دلیلش دامنهٔ
+ * خرابی است، نه سلیقه: مسیرِ W0.8 تازه‌ساز بود، ولی این دو مسیر فیش و مدرکِ
+ * **هر بیمارِ امروز** را می‌گیرند و یک HEICِ با برندِ ناشناس نباید ثبت‌نامِ
+ * کسی را قفل کند. ثابتِ اصلی سرِ جایش می‌ماند: هیچ‌وقت ادعای کلاینت ذخیره
+ * نمی‌شود. بهایش فقط این است که چنان فایلی به‌جای پیش‌نمایش، دانلود می‌شود.
+ */
+function storedMime(file: { mimetype?: string; buffer: Buffer }): string {
+  return sniffMime(file.buffer) ?? 'application/octet-stream';
+}
 
 /** روزهای اعتبارِ یک ثبت‌نامِ نیمه‌کاره. */
 const TTL_DAYS = 14;
@@ -112,6 +136,7 @@ export class IntakeService {
     private reminders: RemindersService,
     private settings: SettingsService,
     private events: EventsService,
+    private rateLimit: RateLimitService,
   ) {}
 
   private token() {
@@ -934,6 +959,13 @@ export class IntakeService {
         }, tx);
       }
     });
+    /* فرمِ پیگیریِ پس از عمل: حالا که پاسخ گرفته، موج‌های بعدیِ همان عمل باید
+       فرمِ **تازه** بگیرند (`syncNextVisit` فرمِ پرشده را بین موج‌ها مشترک
+       نمی‌گذارد). بدونِ این فراخوانی، متنِ پیامکِ روزِ ۳۰ تا اولین ویرایشِ
+       دستیِ مراجعه همان لینکِ پرشده را داشت و بیمار به فرمِ بسته می‌رسید.
+       غیرِ strict و بعد از commit: پاسخِ بیمار قربانیِ یادآوری نمی‌شود. */
+    const fuVisit = (row.data as any)?.followUpVisitId;
+    if (typeof fuVisit === 'number') await this.reminders.syncNextVisit(fuVisit);
     return this.publicView(token);
   }
 
@@ -967,6 +999,21 @@ export class IntakeService {
    * بسته است و در `STATUS.md` ثبت شد.
    */
   async draft(token: string, dto: { values?: Record<string, any>; page?: number }) {
+    /**
+     * ⚠️ نشانیِ **عمومی و بی‌احراز** که در هر فراخوانی در دیتابیس می‌نویسد —
+     * پس نرخ‌گیر دارد. (یادداشتِ W1.8 نوشته بود «پروژه throttler ندارد»؛
+     * غلط بود و خودِ همان لِین بعداً تصحیحش کرد: `RateLimitService` هست و
+     * `auth`، `platform` و آپلودِ پاسخِ سفارش استفاده‌اش می‌کنند.)
+     *
+     * سقف از **مصرفِ واقعی** آمده نه از حدس: `src/pages/Intake.jsx` ذخیره را
+     * با debounceِ ۱٫۵ ثانیه و روی `blur` می‌زند، و پرکردنِ یک فرمِ کامل چند
+     * ده ذخیره است. ۳۰۰ در ربع‌ساعت (~۲۰ در دقیقه) با فاصلهٔ زیاد بالاتر از
+     * آن می‌ماند و در عمل فقط جلوی توکنِ لورفته را می‌گیرد.
+     *
+     * کلید خودِ توکن است (نه IP): توکن مالِ یک بیمار است و بیمارِ پشتِ
+     * NATِ موبایل نباید بابتِ دیگری جریمه شود.
+     */
+    this.rateLimit.hit(`intake-draft:${token}`, 300, 15 * 60_000);
     const row = await this.expireIfDue(token);
     if (!['pending_fill', 'pending_payment'].includes(row.status)) {
       throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
@@ -1065,7 +1112,8 @@ export class IntakeService {
 
     if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
     if (file.size > MAX_RECEIPT_BYTES) throw new BadRequestException('حجمِ فایل بیش از ۸ مگابایت است');
-    // نوعِ فایل روی سرور سنجیده می‌شود؛ `accept`ِ HTML فقط پنجره را محدود می‌کند.
+    /* مثلِ `attachReceipt`: این تست روی **ادعای** کلاینت است و فقط صافیِ
+       اول؛ نوعِ ذخیره‌شده را `storedMime` از بایت‌ها می‌سازد. */
     if (!RECEIPT_MIME.test(file.mimetype || '')) throw new BadRequestException('فقط عکس یا PDF بفرستید');
 
     const { sha256, size } = await this.storage.save(file.buffer);
@@ -1076,7 +1124,7 @@ export class IntakeService {
         category: (fld as any).docCategory ?? 'other',
         title: fld.label,
         fileName: file.originalname?.slice(0, 200) || 'image',
-        mimeType: file.mimetype,
+        mimeType: storedMime(file),
         sha256,
         size,
       },
@@ -1134,8 +1182,8 @@ export class IntakeService {
     if (!row.patientId) throw new BadRequestException('این فرم پرونده‌ای ندارد');
     if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
     if (file.size > MAX_RECEIPT_BYTES) throw new BadRequestException('حجمِ فایل بیش از ۸ مگابایت است');
-    // ⚠️ نوعِ فایل روی سرور سنجیده می‌شود: این نشانی عمومی است و `accept`ِ
-    //    ورودیِ HTML فقط پنجرهٔ انتخابِ فایل را محدود می‌کند، نه درخواست را.
+    /* ادعای کلاینت فقط **صافیِ اول** است — پیامِ خطای زودهنگام و مهربان
+       می‌دهد؛ چیزی که ذخیره می‌شود از `storedMime` می‌آید، نه از این‌جا. */
     if (!RECEIPT_MIME.test(file.mimetype || '')) throw new BadRequestException('فقط عکس یا PDF بفرستید');
 
     const { sha256, size } = await this.storage.save(file.buffer);
@@ -1145,7 +1193,7 @@ export class IntakeService {
         category: 'receipt',
         title: 'فیشِ واریزیِ ثبت‌نام',
         fileName: (file.originalname || 'receipt').slice(0, 200),
-        mimeType: file.mimetype || 'application/octet-stream',
+        mimeType: storedMime(file),
         size,
         sha256,
         // ⚠️ `uploadedById` خالی است و درست هم همین است: بیمار کاربرِ سامانه

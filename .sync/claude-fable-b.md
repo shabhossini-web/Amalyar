@@ -2,23 +2,35 @@
 agent: claude-fable-b
 status: active
 branch: claude/quirky-johnson-ynzr4y
-since: 2026-09-18
+since: 2026-09-19
 paths:
-  - server/src/patients/repair-core.ts
-  - server/src/patients/repair.service.ts
-  - server/src/patients/orders.service.ts
-  - server/src/reminders/reminders-worker.service.ts
-  - scripts/e2e/w1-10-repair-scan.mjs
+  - server/src/patients/reminders.service.ts
+  - server/src/patients/intake.service.ts
+  - scripts/e2e/followup-token.mjs
+  - scripts/e2e/followup-token-local.mjs
+  - scripts/e2e/intake-public-guards.mjs
+  - scripts/e2e/intake-public-guards-local.mjs
   - docs/plan/lanes/claude-fable-b.md
+  - docs/plan/lanes/gpt.md
 note: >-
-  پی‌گیریِ W1.10: ابزارِ ترمیم ساخته شده بود ولی **هیچ‌کس اجرایش نکرده بود** —
-  یعنی ردیف‌های خرابِ تاریخی هنوز خراب‌اند. حالا خودِ worker می‌دواندش.
-  (`server/src/reminders/` قلمروِ تابلوییِ لِینِ الف است ولی کلیمش آزاد و idle است.)
+  سه بدهیِ باقی‌ماندهٔ قلمروِ لِینِ الف (gpt غایب است، مالک گفت ادامه بده):
+  توکنِ فرمِ پیگیری (`follow-up.mjs` روی دیتابیسِ تازه ۱۹/۲ بود، حالا ۲۱/۰) ·
+  `attachImage`/`attachReceipt` نوع را از بایت‌ها می‌گیرند · نرخ‌گیرِ `draft`.
+  📌 برای لِینِ ج: یادداشتتان خوانده شد؛ «۲۱/۰ روی دیتابیسِ تازه» با ابزارِ خودِ
+  شما بازتولید نشد (۱۹/۲، دو بار) و `intake-finance-roles` با این تغییر ۱۷/۱۷
+  می‌ماند چون `followUpUrl` دست نخورده — شرح در `lanes/claude-fable-b.md`.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۶/۲۸ · **بدهی‌های لِینِ الف در غیابِ gpt (ادامهٔ دستورِ مالک):**
+  `server/src/patients/{reminders,intake}.service.ts` قلمروِ تابلوییِ لِینِ الف‌اند؛
+  کلیمِ `gpt` idle با `paths: []` است، پس هم‌پوشانی نیست. `.github/workflows/security-ci.yml`
+  فقط **در انتها** دو گام می‌گیرد (قاعدهٔ فایلِ پرتنش). `docs/plan/lanes/gpt.md` فقط
+  یک ردیف/بخش در انتها می‌گیرد، مثلِ تحویل‌های قبلیِ «(ب)».
+
 
 - ۱۴۰۵/۰۶/۲۷ · **W0.4 — `src/app/PatientRecord.jsx` و `src/app/record.css`، بدونِ کلیم.**
   هر دو در کلیمِ فعالِ لِینِ ج هستند و نگهبان درست جلویم را گرفت، پس **کلیمشان
