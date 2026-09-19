@@ -1,10 +1,12 @@
 <!-- claim:begin -->
 agent: gpt
-status: idle
-branch: main
-since: 2026-09-17
-paths: []
-note: W1.4 در PR41 / a88a7a4 مرج شد؛ security-ci کامل سبز. کلیم آزاد؛ بسته بعد W1.1 است.
+status: active
+branch: agent/gpt-lane-coordination-20260919
+since: 2026-09-19
+paths:
+  - .sync/gpt.md
+  - docs/plan/lanes/gpt.md
+note: بررسی تحویل لِین‌های ب و ج به درخواست مالک؛ فقط هماهنگی و ثبت هش مرج‌ها، بدون تغییر کد محصول.
 <!-- claim:end -->
 
 > این فایل را **فقط ChatGPT/Codex** ویرایش می‌کند. ردیف‌های زیر را `claude-opus`
