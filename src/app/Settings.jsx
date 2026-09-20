@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { useConfig } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
-import { toEnDigits } from '../lib/identity.js';
+import { randomNationalId, toEnDigits } from '../lib/identity.js';
+import { useAuth } from './auth.jsx';
 import './launcher.css';
 import './definitions.css';
 import './settings.css';
@@ -24,6 +25,7 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
  */
 export default function Settings() {
   const { vertical, verticals, error: configError, reload } = useConfig();
+  const { user: me } = useAuth();
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -199,7 +201,39 @@ export default function Settings() {
 
       <ImportPanel onToast={setToast} />
 
+      {me?.level >= 6 && <TestDataPanel onToast={setToast} />}
+
       {toast && <div className="df-toast">{toast}</div>}
+    </div>
+  );
+}
+
+/**
+ * 🧪 دادهٔ آزمایشی — **موقت** (خواستهٔ مالک، ۱۴۰۵/۰۶/۲۹): برای ثبتِ بیمارِ تستی
+ * کدِ ملیِ تصادفیِ معتبر می‌دهد تا اعتبارسنجیِ فرم‌ها رد شود. فقط سوپرادمین.
+ * همان مولد در فرمِ مراجعه هم کنارِ کدِ ملی هست (`db-nidtest`).
+ */
+function TestDataPanel({ onToast }) {
+  const [nid, setNid] = useState('');
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(nid); onToast('کپی شد ✓'); } catch { onToast(nid); }
+  };
+  return (
+    <div className="st-brand st-testdata">
+      <h3 className="st-h3">🧪 دادهٔ آزمایشی (موقت)</h3>
+      <div className="df-note">
+        فقط برای ثبتِ بیمارِ تستی. کد تصادفی و از نظرِ رقمِ کنترلی معتبر است؛ متعلق به کسی نیست
+        ولی ممکن است تصادفاً با یک کدِ واقعی یکی باشد — روی بیمارِ واقعی استفاده نکنید.
+      </div>
+      <div className="st-testrow">
+        <button type="button" className="df-save" onClick={() => setNid(randomNationalId())}>تولیدِ کدِ ملیِ آزمایشی</button>
+        {nid && (
+          <>
+            <code dir="ltr" className="st-nid">{nid}</code>
+            <button type="button" className="st-load" onClick={copy}>کپی</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

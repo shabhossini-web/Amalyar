@@ -1,0 +1,8 @@
+/* بندانگشتیِ مدرک — مشترکِ پرونده و شیتِ سفارش. رنگ فقط از توکن (قانون ۲۳). */
+.dt-thumb {
+  display: block; width: 84px; height: 84px; object-fit: cover; border-radius: 10px;
+  background: rgba(var(--veil-rgb), .06);
+}
+.dt-thumb-ph { animation: dt-pulse 1.2s ease-in-out infinite; }
+@keyframes dt-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .dt-thumb-ph { animation: none; } }

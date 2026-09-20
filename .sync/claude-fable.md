@@ -1,16 +1,32 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
+status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-20
-paths: []
+paths:
+  - src/ui/DocThumb.jsx
+  - src/ui/doc-thumb.css
+  - src/app/OrderSheet.jsx
+  - src/app/orders.css
+  - src/app/PatientRecord.jsx
+  - src/app/VisitForm.jsx
+  - src/app/dashboard.css
+  - src/app/Settings.jsx
+  - src/app/settings.css
+  - src/lib/identity.js
+  - server/src/ai/ai.service.ts
+  - server/src/common/jalali.ts
+  - scripts/e2e/order-review-sheet.mjs
+  - scripts/e2e/ci-live.txt
+  - docs/plan/lanes/claude-fable.md
+  - STATUS.md
 note: >-
-  ✅ **لِینِ ج بسته است.** آخرین لند: #70 (`26f39b6`) — حفرهٔ W1.9 (به نیابت از
-  لِینِ الف، دستورِ مالک): لغوِ **سیستمی** کلیدِ یادآوری را آزاد می‌کند
-  (`dedupeKey = null`)، لغوِ **دستی** (W0.7) نه؛ پنج سوییتِ بیرون‌مانده به
-  `ci-live.txt` برگشتند (۹۷ → ۱۰۲) و مسابقهٔ بارگذاریِ بی‌کوکی (۴۰۱ در کنسول) در
-  سه سوییتِ مرورگری بسته شد. قبلش #66 (`7a2f2c8`) — همهٔ سوییت‌ها زیرِ CI.
-  کلیم آزاد است — هیچ مسیری قفل نیست.
+  🔧 **بازخوردِ مالک ۱۴۰۵/۰۶/۲۹ — بستهٔ ۱ (باگ‌ها):** شیتِ سفارش عکس/متن/لینکِ پاسخِ
+  بیمار را نشان می‌دهد و دکمهٔ «بررسی شد / ناقص است» دارد (endpointِ review تا
+  امروز هیچ دکمه‌ای نداشت)؛ خلاصهٔ ارجاعِ AI تاریخِ شمسی می‌گیرد و می‌دهد
+  (`jalalizeDates`)؛ مولدِ کدِ ملیِ آزمایشی (موقت، سوپرادمین) در فرمِ مراجعه و
+  تنظیمات. بسته‌های بعدی (پاپ‌آپ‌های پرونده، صفحهٔ امروز، تب‌های فرمِ عمل،
+  مدلِ مطب/پرتالِ جراح) هرکدام PRِ جدا؛ مسیرهای هر بسته همین‌جا تازه می‌شود.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
