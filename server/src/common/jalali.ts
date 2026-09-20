@@ -143,6 +143,26 @@ export function toJalali(date: Date): [number, number, number] {
 }
 
 /**
+ * تاریخِ میلادیِ ISO در **متنِ آزاد** (۲۰۲۶-۰۹-۰۱) → شمسی با ارقامِ فارسی (۱۴۰۵/۰۶/۱۰).
+ *
+ * برای خروجیِ مدلِ زبانی: حتی وقتی ورودی شمسی است، مدل گاهی به میلادی
+ * برمی‌گردد (گزارشِ مالک روی خلاصهٔ ارجاع، ۱۴۰۵/۰۶/۲۹). فقط سال‌های
+ * ۱۹۰۰–۲۰۹۹ گرفته می‌شوند تا کدِ ملی، شمارهٔ فاکتور و تاریخِ شمسیِ خودِ
+ * متن دست نخورد؛ ماه/روزِ نامعتبر همان‌طور می‌ماند.
+ */
+export function jalalizeDates(text: string): string {
+  const fa = (n: number, w = 2) => String(n).padStart(w, '0').replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[+x]);
+  return String(text ?? '').replace(/(?<!\d)((?:19|20)\d{2})[-/](\d{1,2})[-/](\d{1,2})(?!\d)/g, (m, y, mo, d) => {
+    const mm = Number(mo), dd = Number(d);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return m;
+    const date = new Date(Date.UTC(Number(y), mm - 1, dd));
+    if (Number.isNaN(date.getTime()) || date.getUTCMonth() !== mm - 1) return m;
+    const [jy, jm, jd] = toJalali(date);
+    return `${fa(jy, 4)}/${fa(jm)}/${fa(jd)}`;
+  });
+}
+
+/**
  * بازهٔ میلادیِ یک ماهِ شمسی: `[شروع, پایان]` — هر دو نیمه‌شبِ UTC، پایان
  * **ابتدای روزِ اولِ ماهِ بعد** (بازهٔ نیم‌باز).
  *

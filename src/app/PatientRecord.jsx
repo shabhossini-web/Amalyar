@@ -2,7 +2,8 @@ import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
+import { api, apiStream, apiUpload } from '../lib/api.js';
+import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
@@ -50,38 +51,6 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
 const fmtSize = (b) => (b < 1024 ? `${faNum(b)} بایت`
   : b < 1024 * 1024 ? `${faNum((b / 1024).toFixed(0))} کیلوبایت`
   : `${faNum((b / 1024 / 1024).toFixed(1))} مگابایت`);
-
-/* ── پیش‌نمایشِ عکس: فایل پشتِ توکن است، پس باید blob گرفته شود ── */
-function DocThumb({ id, alt }) {
-  const [url, setUrl] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    let made = null;
-    apiBlobUrl(`/patients/documents/${id}/file`)
-      .then((u) => { if (alive) { made = u; setUrl(u); } else URL.revokeObjectURL(u); })
-      .catch(() => {});
-    // بدونِ revoke، هر بار بازکردنِ پرونده یک blob در حافظه جا می‌گذارد.
-    return () => { alive = false; if (made) URL.revokeObjectURL(made); };
-  }, [id]);
-  return url ? <img className="rc-thumb" src={url} alt={alt} /> : <div className="rc-thumb rc-thumb-ph" />;
-}
-
-/* ── دانلود/بازکردنِ مدرک با توکن ── */
-async function openDoc(doc, onErr) {
-  try {
-    const url = await apiBlobUrl(`/patients/documents/${doc.id}/file`);
-    const a = document.createElement('a');
-    a.href = url;
-    if (!doc.isImage) a.download = doc.fileName;
-    else a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  } catch (e) {
-    onErr(e.message);
-  }
-}
 
 /* ══════════════ تبِ خلاصه/پروفایل ══════════════ */
 function ProfileTab({ rec, onSave, toast }) {
@@ -525,7 +494,7 @@ function DocsTab({ rec, reload, toast }) {
               {d.isLink
                 ? <div className="rc-thumb rc-thumb-file"><LinkIcon width="16" height="16" /></div>
                 : d.isImage
-                  ? <DocThumb id={d.id} alt={d.title || d.fileName} />
+                  ? <DocThumb id={d.id} alt={d.title || d.fileName} className="rc-thumb" />
                   : <div className="rc-thumb rc-thumb-file">{(d.fileName.split('.').pop() || '?').slice(0, 4)}</div>}
               <div className="rc-doc-main">
                 <b>{d.title || d.fileName}</b>

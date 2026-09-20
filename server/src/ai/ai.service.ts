@@ -8,6 +8,8 @@ import { ServiceCodesService } from '../patients/service-codes.service';
 import { ASSISTANT_GUIDE } from './assistant-knowledge';
 import { canAccess } from '../auth/access-check';
 import { textSearchOr } from '../common/search';
+import { jalalizeDates } from '../common/jalali';
+import { faDateStr } from '../patients/summary.service';
 
 const KIND_FA: Record<string, string> = {
   history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل',
@@ -518,9 +520,11 @@ export class AiService {
     const dataBlock = [
       [age ? `سن: ${age}` : '', gender ? `جنسیت: ${gender}` : ''].filter(Boolean).join('؛ '),
       'مراجعه‌ها (تازه‌ترین اول):',
-      ...visits.map((v) => `- ${v.opDate ? v.opDate.toISOString().slice(0, 10) : 'بی‌تاریخ'} | ${v.procedureType?.name ?? v.opType ?? v.kind}${v.diagnosis?.title ? ` | تشخیص: ${v.diagnosis.title}` : ''}${v.topic?.name ? ` | ${v.topic.name}` : ''} | وضعیت: ${v.opStatus}`),
+      /* ⚠️ تاریخ **شمسی** می‌رود، نه ISO: مدل هرچه بگیرد همان را برمی‌گرداند و
+         خلاصه‌ای با «۲۰۲۶-۰۹-۰۱» برای پزشکِ ایرانی خام است (گزارشِ مالک). */
+      ...visits.map((v) => `- ${v.opDate ? faDateStr(v.opDate) : 'بی‌تاریخ'} | ${v.procedureType?.name ?? v.opType ?? v.kind}${v.diagnosis?.title ? ` | تشخیص: ${v.diagnosis.title}` : ''}${v.topic?.name ? ` | ${v.topic.name}` : ''} | وضعیت: ${v.opStatus}`),
       'شرح‌های جاری:',
-      ...notes.map((n) => `— [${KIND_FA[n.kind] ?? n.kind}] ${n.body.slice(0, 800)}`),
+      ...notes.map((n) => `— [${KIND_FA[n.kind] ?? n.kind}] ${faDateStr(n.createdAt)}: ${n.body.slice(0, 800)}`),
     ].filter(Boolean).join('\n');
 
     const system = [
@@ -528,13 +532,14 @@ export class AiService {
       'قاعده‌ها:',
       '- ساختار: معرفیِ کوتاه (سن/جنسیت)، سیرِ بیماری و اقداماتِ انجام‌شده به ترتیبِ زمان، وضعیتِ فعلی، و نکته‌های لازم برای ادامهٔ درمان.',
       '- بیمار را فقط «بیمار» خطاب کن — نام نبر.',
-      '- فقط از همین داده‌ها؛ هیچ یافته‌ای اختراع نکن. تاریخ‌ها را همان‌طور که هست بیاور.',
+      '- فقط از همین داده‌ها؛ هیچ یافته‌ای اختراع نکن. تاریخ‌ها را همان‌طور که هست (شمسی) بیاور و به میلادی برنگردان.',
       '- خروجی فقط متنِ خلاصه باشد.',
       cfg.prompts?.note ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.note}` : '',
     ].filter(Boolean).join('\n');
 
     const text = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, dataBlock);
-    return { text };
+    /* تورِ ایمنی: اگر مدل باز هم تاریخِ میلادی نوشت، همین‌جا شمسی می‌شود. */
+    return { text: jalalizeDates(text) };
   }
 
   /**

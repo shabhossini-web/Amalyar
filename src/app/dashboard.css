@@ -1032,3 +1032,9 @@ a.db-defbtn { text-decoration: none; }
 .db-prep-orders b, .db-prep-visits b { color: var(--text2); }
 .db-prep-orders i { font-style: normal; }
 .db-prep-orders i.answered { color: var(--amber-text); font-weight: 700; }
+
+/* 🧪 کدِ ملیِ آزمایشی — دکمهٔ کوچکِ کنارِ برچسب (موقت، فقط سوپرادمین) */
+.db-nidtest {
+  margin-inline-start: 8px; padding: 1px 8px; font: inherit; font-size: 10.5px; font-weight: 700; cursor: pointer;
+  color: var(--amber-text); background: rgba(var(--veil-rgb), .06); border: 1px dashed rgba(var(--veil-rgb), .25); border-radius: 99px;
+}

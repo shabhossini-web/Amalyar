@@ -107,3 +107,28 @@
 }
 .op-send:focus-visible, .op-more:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .op-send, .op-more { transition: none; } }
+
+/* ── پاسخِ بیمار در شیت + وضعیت + تصمیمِ بررسی ── */
+.od-status { margin: 0; font-size: 12.5px; color: var(--text2); }
+.od-status b { color: var(--text); }
+.od-status.st-answered b, .od-status.st-needs_action b { color: var(--amber-text); }
+.od-status.st-reviewed b { color: var(--green-text); }
+.od-docs { display: flex; flex-direction: column; gap: 6px; }
+.od-doc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.od-doc { display: flex; flex-direction: column; gap: 4px; max-width: 220px; }
+.od-doc small { font-size: 11px; color: var(--text2); }
+.od-doc-thumb {
+  padding: 0; overflow: hidden; cursor: zoom-in; background: none;
+  border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 12px;
+}
+.od-doc-thumb .dt-thumb { width: 112px; height: 112px; }
+.od-doc-text { margin: 0; white-space: pre-wrap; font-size: 12.5px; }
+.od-doc-link, .od-doc-file {
+  padding: 0; border: 0; background: none; cursor: pointer; text-align: start; word-break: break-all;
+  font: inherit; font-size: 12px; color: var(--cyan);
+}
+.od-review {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 10px;
+  border-top: 1px dashed rgba(var(--veil-rgb), .14);
+}
+.od-warn { color: var(--amber-text); }

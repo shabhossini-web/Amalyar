@@ -5,7 +5,7 @@ import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useAuth } from './auth.jsx';
 import { api, apiStream } from '../lib/api.js';
 import { isoToJStr, jStrToIso } from '../lib/jalali.js';
-import { isValidNationalId, toEnDigits } from '../lib/identity.js';
+import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
 import { useTerms } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
@@ -904,7 +904,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             <label className="db-field"><span>موبایل</span>
               <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
             </label>
-            <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی</span>
+            <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی
+              {/* موقت — بیمارِ آزمایشی (خواستهٔ مالک): کدِ تصادفیِ معتبر تا
+                  اعتبارسنجی رد شود. فقط سوپرادمین می‌بیند. */}
+              {me?.level >= 6 && !editing && (
+                <button type="button" className="db-nidtest" title="فقط برای بیمارِ آزمایشی — کدِ تصادفیِ معتبر (موقت)"
+                  onClick={() => setF((s) => ({ ...s, nationalId: randomNationalId() }))}>کدِ آزمایشی</button>
+              )}
+            </span>
               <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')} placeholder="کلیدِ پرونده — اختیاری" />
               {nidBad && <small className="db-hint bad">کد ملی معتبر نیست</small>}
             </label>

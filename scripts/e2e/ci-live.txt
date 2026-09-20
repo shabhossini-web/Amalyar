@@ -47,6 +47,7 @@ links-box
 multi-image
 next-visit-booking
 note-kinds
+order-review-sheet
 org-chat
 pick-ui
 platform-domains

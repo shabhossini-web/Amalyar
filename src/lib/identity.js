@@ -23,6 +23,20 @@ export function isValidNationalId(value) {
   return r < 2 ? check === r : check === 11 - r;
 }
 
+/**
+ * کدِ ملیِ **آزمایشی** — تصادفی ولی با رقمِ کنترلیِ معتبر، تا اعتبارسنجیِ همین
+ * فایل و سرور رد شود. فقط برای بیمارِ تستی (خواستهٔ مالک، ۱۴۰۵/۰۶/۲۹؛ موقت).
+ * ⚠️ متعلق به کسی نیست ولی می‌تواند تصادفاً با یک کدِ واقعی یکی باشد.
+ */
+export function randomNationalId() {
+  let digits;
+  do { digits = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)); }
+  while (digits.every((d) => d === digits[0]));
+  const sum = digits.reduce((acc, d, i) => acc + d * (10 - i), 0);
+  const r = sum % 11;
+  return `${digits.join('')}${r < 2 ? r : 11 - r}`;
+}
+
 /** شبا: IR + ۲۴ رقم، با آزمونِ mod-97 استانداردِ IBAN. */
 export function isValidIban(value) {
   const raw = toEnDigits(value).replace(/\s+/g, '').toUpperCase();
