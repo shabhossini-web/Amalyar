@@ -42,8 +42,14 @@ try {
   /* ⚠️ نوعِ مراجعه را **خودمان** می‌سازیم: `startVisit` نوعِ `clinic` را می‌خواهد و
      اگر نباشد اولین نوعِ غیرِ `surgery` را برمی‌دارد — که محلی یک نوعِ یتیم است.
      تکیه به حالتِ محیط یعنی تستی که روی ماشینِ دیگری چیزِ دیگری می‌سنجد. */
-  const kindForm = (await send('/forms', 'POST', { key: `clinic-${tag}`, title: `ویزیتِ ${tag}`, scope: 'visit', visitKind: 'clinic' })).json;
-  if (kindForm?.id) trash.forms.push(kindForm.id);
+  /* `visitKind` از **کلید** مشتق می‌شود (`FormCreateDto` فیلدِ visitKind ندارد):
+     کلیدِ `clinic-xxx` نوعِ `clinic-xxx` می‌ساخت نه `clinic`، و سوییت فقط وقتی سبز بود
+     که نوعِ `clinic` از سوییتِ دیگری به‌جا مانده باشد. */
+  const kinds = (await send('/forms/visit-kinds', 'GET')).json;
+  if (!Array.isArray(kinds) || !kinds.some((k) => k.kind === 'clinic')) {
+    const kindForm = (await send('/forms', 'POST', { key: 'clinic', title: `ویزیتِ ${tag}`, scope: 'visit' })).json;
+    if (kindForm?.id) trash.forms.push(kindForm.id);
+  }
 
   const v0 = (await send('/visits', 'POST', {
     kind: 'clinic', firstName: 'مریمِ', lastName: `پذیرش${tag}`, phone: '09120000916',

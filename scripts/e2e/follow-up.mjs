@@ -75,18 +75,23 @@ try {
   ok(Number(fu) === 2, `دو یادآوریِ پیگیری کاشته شد (${fu})`);
   /* متنِ پیامک چندخطی است — داخلِ SQL تخت می‌شود تا psql خطی‌اش نکند. */
   const texts = execSync(`psql "${DB}" -qtA`, { input: `SELECT replace(text, E'\\n', ' ') FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending' ORDER BY due_at` }).toString().trim().split('\n');
-  const token = texts[0]?.match(/\/f\/([A-Za-z0-9_-]+)/)?.[1];
+  /* قرارداد: هر موج لینکِ **خودش** را دارد (`followUpUrl(v, [day])` به‌ازای هر
+     روز) — همان که `intake-finance-roles.mjs` در CI با `day0 !== day7` می‌سنجد.
+     نسخهٔ قبلیِ این سنجه یک توکنِ مشترک می‌خواست و در برابرِ CI قرمز بود. */
+  const tokens = texts.map((t) => t.match(/\/f\/([A-Za-z0-9_-]+)/)?.[1]);
+  const token = tokens[0];
   ok(!!token, '**متنِ یادآوری لینکِ فرم دارد**');
-  ok(texts.length === 2 && texts.every((t) => t.includes(`/f/${token}`)), 'هر دو موج همان یک توکن را دارند');
+  ok(texts.length === 2 && tokens.every(Boolean) && tokens[0] !== tokens[1], 'هر موج لینکِ خودش را دارد (توکنِ جدا به‌ازای هر روز)');
   const day7 = sql(`SELECT to_char(min(due_at), 'YYYY-MM-DD') FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending'`);
   ok(day7 === new Date(op.getTime() + 7 * 864e5).toISOString().slice(0, 10), `موجِ اول = عمل + ۷ روز (${day7})`);
   const postText = sql(`SELECT replace(text, E'\\n', ' ') FROM reminders WHERE visit_id=${visit.id} AND kind='post_op_care' AND status='pending'`);
   ok(postText.includes('پانسمان') && postText.includes(`/f/${token}`), '**مراقبتِ بعد از عمل هم لینکِ پیگیری را ضمیمه دارد**');
 
-  /* هم‌گام‌سازیِ دوباره پیش از پرشدن: فرمِ باز دوباره استفاده می‌شود، نه نسخهٔ دوم. */
+  /* هم‌گام‌سازیِ دوباره پیش از پرشدن: فرمِ بازِ هر موج دوباره استفاده می‌شود،
+     نه نسخهٔ سوم و چهارم — یعنی همچنان دو submission (یکی به‌ازای هر موج). */
   await send(`/visits/${visit.id}`, 'PATCH', { opDate: op.toISOString() });
-  ok(Number(sql(`SELECT count(*) FROM intake_submissions WHERE patient_id=${visit.patientId} AND form_id=${gen.id}`)) === 1,
-    '**هم‌گام‌سازیِ دوباره همان توکنِ باز را نگه می‌دارد (نه انباشت)**');
+  ok(Number(sql(`SELECT count(*) FROM intake_submissions WHERE patient_id=${visit.patientId} AND form_id=${gen.id}`)) === 2,
+    '**هم‌گام‌سازیِ دوباره همان توکن‌های باز را نگه می‌دارد (دو موج، نه انباشت)**');
 
   console.log('\n۳) یک توکن، دو بخش (عمومی + اختصاصی)');
   const view = (await pub(`/public/intake/form/${token}`)).json;

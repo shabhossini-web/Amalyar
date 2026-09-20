@@ -93,28 +93,39 @@ try {
   const srv = await get(`/availability/month?year=${jy}&month=${jm}`);
   const srvOpen = srv.days.filter((d) => d.open).length;
   const openCells = await p.locator('.sc-cell.open').count();
-  ok(srvOpen > 0, `سرور ${srvOpen} روزِ باز می‌شمارد`);
+  /* ⚠️ «شنبه‌ای در ماه مانده؟» به روزِ اجرا بسته است: در دو-سه روزِ آخرِ ماه
+     (مثلِ ۱۴۰۵/۰۶/۲۹ که یک‌شنبه بود و ماه سه‌شنبه تمام می‌شد) هیچ شنبهٔ آینده‌ای
+     در ماه نیست و «۰ روزِ باز» درست است. ادعا: شمارِ سرور = شنبه‌های آینده،
+     و صفحه دقیقاً همان را نشان می‌دهد. سنجه‌های نیازمندِ خانهٔ باز فقط وقتی
+     می‌دوند که خانه‌ای باشد. */
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const futureSats = srv.days.filter((d) => d.weekday === 0 && d.date >= todayIso).length;
+  ok(srvOpen === futureSats, `سرور ${srvOpen} روزِ باز می‌شمارد (= شنبه‌های ماندهٔ ماه: ${futureSats})`);
   ok(openCells === srvOpen, `**صفحه هم دقیقاً همان ${srvOpen} روز را باز نشان می‌دهد** (${openCells})`);
-  const anyOpen = p.locator('.jg-cell', { has: p.locator('.sc-cell.open') }).first();
-  await anyOpen.click();
-  await p.waitForTimeout(800);
-  const detail = await p.locator('.sc-detail').innerText();
-  ok(/شنبه/.test(detail), `جزئیاتِ روز نامِ شنبه را می‌گوید («${detail.split('\n')[0]}»)`);
-  ok(await p.locator('.sc-slots span').count() === 12, `۱۲ خانهٔ ساعت کشیده شد (${await p.locator('.sc-slots span').count()})`);
+  if (srvOpen > 0) {
+    const anyOpen = p.locator('.jg-cell', { has: p.locator('.sc-cell.open') }).first();
+    await anyOpen.click();
+    await p.waitForTimeout(800);
+    const detail = await p.locator('.sc-detail').innerText();
+    ok(/شنبه/.test(detail), `جزئیاتِ روز نامِ شنبه را می‌گوید («${detail.split('\n')[0]}»)`);
+    ok(await p.locator('.sc-slots span').count() === 12, `۱۲ خانهٔ ساعت کشیده شد (${await p.locator('.sc-slots span').count()})`);
 
-  console.log('\n۵) تعطیل‌کردنِ یک روز فقط همان روز را می‌بندد');
-  const openBefore = await p.locator('.sc-cell.open').count();
-  await p.locator('.sc-mini', { hasText: 'تعطیل‌کردنِ این روز' }).click();
-  await p.waitForTimeout(1800);
-  ok(await p.locator('.sc-cell.shut').count() === 1, 'یک روز تعطیل شد');
-  ok(await p.locator('.sc-cell.open').count() === openBefore - 1,
-    `**و بقیهٔ شنبه‌ها باز ماندند** (${openBefore} → ${await p.locator('.sc-cell.open').count()})`);
+    console.log('\n۵) تعطیل‌کردنِ یک روز فقط همان روز را می‌بندد');
+    const openBefore = await p.locator('.sc-cell.open').count();
+    await p.locator('.sc-mini', { hasText: 'تعطیل‌کردنِ این روز' }).click();
+    await p.waitForTimeout(1800);
+    ok(await p.locator('.sc-cell.shut').count() === 1, 'یک روز تعطیل شد');
+    ok(await p.locator('.sc-cell.open').count() === openBefore - 1,
+      `**و بقیهٔ شنبه‌ها باز ماندند** (${openBefore} → ${await p.locator('.sc-cell.open').count()})`);
 
-  console.log('\n۶) برداشتنِ تعطیلی روز را برمی‌گرداند');
-  await p.locator('.sc-mini', { hasText: 'برداشتنِ تعطیلی' }).click();
-  await p.waitForTimeout(1800);
-  ok(await p.locator('.sc-cell.shut').count() === 0, 'تعطیلی برداشته شد');
-  ok(await p.locator('.sc-cell.open').count() === openBefore, 'و شمارِ روزهای باز به قبل برگشت');
+    console.log('\n۶) برداشتنِ تعطیلی روز را برمی‌گرداند');
+    await p.locator('.sc-mini', { hasText: 'برداشتنِ تعطیلی' }).click();
+    await p.waitForTimeout(1800);
+    ok(await p.locator('.sc-cell.shut').count() === 0, 'تعطیلی برداشته شد');
+    ok(await p.locator('.sc-cell.open').count() === openBefore, 'و شمارِ روزهای باز به قبل برگشت');
+  } else {
+    console.log('  ↷ بندهای ۴ (جزئیات)، ۵ و ۶ رد شدند: شنبه‌ای در ماه نمانده');
+  }
 
   console.log('\n۷) حالتِ ظرفیتی هم از همان فرم ساخته می‌شود');
   await p.locator('.sc-add').click();

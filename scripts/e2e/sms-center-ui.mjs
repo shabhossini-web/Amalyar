@@ -28,7 +28,8 @@ try {
   await page.waitForURL('**/app**', { timeout: 15000 });
 
   console.log('۱) لانچر');
-  await page.goto(BASE + '/app');
+  /* W3.7: `/app` صفحهٔ «امروز» است و لانچرِ کاشی‌ها (با نامِ شرکت) به `/app/tools` رفت. */
+  await page.goto(BASE + '/app/tools');
   await page.waitForTimeout(1500);
   ok(await page.locator('.lx-company:has-text("کلینیکِ آزمون")').count() === 1,
     '**نامِ شرکت زیرِ نشانِ عمل‌یار دیده می‌شود**');

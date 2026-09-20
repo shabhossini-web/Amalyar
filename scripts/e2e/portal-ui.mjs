@@ -34,12 +34,14 @@ await page.goto(`${BASE}/p/${link.token}`);
 await page.waitForTimeout(2200);
 const text = await page.evaluate(() => document.body.innerText);
 ok(text.includes('بیمارِ چشمی'), 'نامِ بیمار در سربرگ');
-ok(await page.locator('.po-tabs button').count() === 4, 'چهار بخش: پیشِ‌رو/مراجعات/عمل‌ها/پیام‌ها');
+/* «کارهای شما» (W0/§۴.۶) بخشِ اول شد؛ بخش‌ها را با برچسب می‌گیریم نه با شماره. */
+const tabsText = await page.locator('.po-tabs').innerText();
+ok(['پیشِ‌رو', 'مراجعات', 'عمل‌ها', 'پیام‌ها'].every((t) => tabsText.includes(t)), 'بخش‌ها: پیشِ‌رو/مراجعات/عمل‌ها/پیام‌ها');
 ok(text.includes('ویزیتِ بعدی'), 'ویزیتِ بعدی در «پیشِ‌رو»');
-await page.locator('.po-tabs button').nth(1).click();
+await page.locator('.po-tabs button', { hasText: 'مراجعات' }).click();
 await page.waitForTimeout(400);
 ok(await page.locator('a.po-row').count() >= 1, 'ردیفِ مراجعه لینک‌دار است (به خلاصه)');
-await page.locator('.po-tabs button').nth(3).click();
+await page.locator('.po-tabs button', { hasText: 'پیام‌ها' }).click();
 await page.waitForTimeout(400);
 ok(await page.locator('.po-notice').count() >= 1, 'فیدِ پیام‌ها پر است (یادآوریِ برنامه‌ریزی‌شده)');
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -111,10 +111,15 @@ try {
   ok(r1.status === 200 && r1.text === REPLY.join(''), '**جوابِ استریمی کامل رسید**');
   const req = captured[captured.length - 1];
   const sys = req?.body?.messages?.[0]?.content ?? '';
-  ok(sys.includes('/app/intake') && sys.includes('صفِ تاییدِ فرم‌ها'), '**نقشهٔ نرم‌افزار (مشاور) در prompt است**');
-  ok(sys.includes('بیمارِ منتظرِتایید'), '**صفِ تایید با نامِ بیمار در وضعیتِ لحظه‌ای است**');
-  ok(sys.includes('نوبت‌های امروز: 1') || sys.includes('صف 77'), `نوبتِ امروز در وضعیت است`);
-  ok(/بی‌وضعیت.*: [1-9]/.test(sys), 'عملِ گذشتهٔ بی‌وضعیت شمرده شد');
+  /* نقشهٔ نرم‌افزار از `assistant-knowledge.ts` می‌آید (متنش با ماژول‌ها
+     نسخه‌بندی می‌شود)؛ وضعیتِ لحظه‌ای هم دیگر متنِ آزاد با نام و نوبت نیست —
+     یک JSONِ **کمینه** است: شمارنده‌ها + نتیجهٔ جستجوی مجاز. نام و شمارهٔ
+     بیمار به سرویسِ بیرونی نمی‌رود (همان قاعده‌ای که `ai-assistant.mjs`
+     صریحاً می‌سنجد)، پس سنجهٔ «نامِ بیمار در prompt» حالا باید **منفی** باشد. */
+  ok(sys.includes('/app/intake') && sys.includes('صف تأیید'), '**نقشهٔ نرم‌افزار (مشاور) در prompt است**');
+  ok(/"pendingForms":\s*[1-9]/.test(sys), '**صفِ تایید (شمارنده) در وضعیتِ لحظه‌ای است**');
+  ok(!sys.includes('منتظرِتایید'), 'نامِ بیمار به سرویسِ بیرونی نمی‌رود (کمینه‌سازی)');
+  ok(/"pendingSurgeries":\s*[1-9]/.test(sys), 'عملِ گذشتهٔ بی‌وضعیت شمرده شد');
   ok(sys.includes(`«چشم» شروع کن ${tag}`), '**دستورِ اختصاصیِ شرکت در prompt است**');
   ok(req?.body?.messages?.length === 2 && req.body.messages[1].role === 'user', 'تاریخچه درست می‌رود');
 
@@ -157,7 +162,8 @@ try {
     await page.click('button[type="submit"]');
     await page.waitForURL('**/app**', { timeout: 15000 });
 
-    await page.goto(BASE + '/app');
+    /* W3.7: `/app` صفحهٔ «امروز» است و لانچرِ کاشی‌ها به `/app/tools` رفت. */
+    await page.goto(BASE + '/app/tools');
     await page.waitForTimeout(1500);
     const tile = page.locator('a:has-text("دستیارِ هوشمند"), button:has-text("دستیارِ هوشمند")').first();
     ok(await tile.count() === 1, 'کاشیِ لانچر هست');

@@ -1,0 +1,110 @@
+# سوییت‌های «سرورِ زنده» که جابِ live در security-ci.yml می‌دواند — یک نام در هر خط.
+# رانر: scripts/e2e/run-live.mjs (هر سوییت دیتابیس و سرورِ تازه می‌گیرد؛ چهار شارد به‌نوبت از این فهرست).
+# سوییتِ تازه = یک خط این‌جا. سوییت‌های خودکفا (مرورگر + APIِ ساختگی) گامِ مستقیمِ جابِ build اند، نه این فهرست.
+#
+# ⛔ عمداً نیستند — همه یک ریشه دارند و در کلیمِ لِینِ ب (`reminders.service.ts`، `plan()`):
+#    ردیفِ لغوشده با همان dedupeKey دوباره زنده نمی‌شود (upsert با update:{}). شرح در .sync/claude-fable.md و STATUS.md.
+#    next-visit-booking — لغوِ نوبت باید next_visit را دوباره بکارد
+#    portal — برگشتِ وضعیت از cancelled باید یادآوریِ عمل را دوباره بکارد
+#    postop-flow — پاک‌کردنِ override باید موج‌های قالبِ نوعِ عمل را برگرداند
+#    postop-visit — متنِ اصلاح‌شدهٔ مراقبت باید پیامِ تازه بگیرد
+#    summary-reminders — پاک‌کردن و دوباره‌گذاشتنِ تاریخِ ویزیتِ بعدی باید یادآوری را دوباره بکارد
+#    بعد از رفع، همین پنج نام را به فهرست برگردانید.
+
+access-roles
+ai-admin-assistant
+ai-assistant
+ai-assistant2
+ai-central
+ai-notes-query
+ai-suggest
+appointments-day
+approve-kind
+availability
+booking-flow
+card-targets
+care-reminders
+central-tariffs-ui
+central-tariffs
+clinical-notes
+clinical-orders
+cookie-auth
+crm-plus-ui
+crm-plus
+crm-send-ui
+dashboard-kind
+file-drop
+follow-up-ui
+follow-up
+forms-api
+forms-boxes
+forms-builder
+forms-validate
+free-form
+intake-guards
+internal-codes-ui
+internal-codes
+invoice-models-ui
+invoice-models
+kind-fields
+letters
+link-actions
+link-builder
+link-form
+links-box
+multi-image
+note-kinds
+org-chat
+pick-ui
+platform-domains
+portal-ui
+preop-immediate
+public-form
+record-direct
+record-forms
+record-texts
+reminders-ui
+role-fields
+schedule-panel
+send-delete-crm
+settings-config
+sms-center-ui
+sms-center
+summary-ui
+technician-claim
+tenant-isolation
+tenant-seo
+tenant-site
+visit-decision
+visit-extra
+visit-form-sections
+visit-next
+visit-topic
+voice-learning
+w0-7-reminder-actions
+w0-8-order-upload
+w1-1-unfollowed-match
+w1-10-repair-scan
+w1-2-order-review
+w1-3-approve-path
+w1-4-approve-atomic
+w1-5-appointment-visit-link
+w1-6-form-snapshot
+w1-7-postop-gate
+w1-8-intake-draft
+w1-9-reminder-idempotency
+w2-1-work-layer
+w2-2-work-producers
+w2-2b-intake-events
+w2-3-today
+w2-4-shell
+w2-5-exceptions
+w3-1-live-record
+w3-2-prep-card
+w3-3-front-desk
+w3-8-single-source
+w3-cancel-reason
+w4-1-pathway
+w4-2-pathway-notify
+w4-2-pathway-wizard
+yesno-ui

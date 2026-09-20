@@ -24,7 +24,16 @@ const tag = 'yn' + randomBytes(3).toString('hex');
 const form = await fetch(API + '/forms', { method: 'POST', headers: A, body: JSON.stringify({ key: tag, title: 'نظرسنجیِ چشمی', scope: 'record' }) }).then((r) => r.json());
 await fetch(`${API}/forms/${form.id}/fields`, { method: 'POST', headers: A, body: JSON.stringify({ key: 'refer', label: 'ما را به دیگران معرفی می‌کنید؟', type: 'bool', required: true }) });
 await fetch(`${API}/forms/${form.id}/fields`, { method: 'POST', headers: A, body: JSON.stringify({ key: 'score', label: 'رضایتِ کلی', type: 'rating' }) });
-const patientId = Number(sql("SELECT id FROM patients WHERE phone ~ '^09' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1"));
+/* بیمار از خودِ سوییت، نه «آخرین بیمارِ دیتابیس»: روی دیتابیسِ تازه بیماری نیست
+   و `/intake/send` بدونِ بیمار توکن نمی‌دهد. */
+const j = (path, init) => fetch(API + path, { headers: A, ...init }).then((r) => r.json());
+const [kinds, surgeons, hospitals] = await Promise.all([j('/forms/visit-kinds'), j('/surgeons'), j('/hospitals')]);
+const fixture = await j('/visits', { method: 'POST', body: JSON.stringify({
+  kind: kinds[0]?.kind, firstName: 'بیمارِ', lastName: 'بله‌خیر', phone: '09120000914',
+  surgeonId: (surgeons.rows ?? surgeons)[0]?.id, hospitalId: (hospitals.rows ?? hospitals)[0]?.id,
+  opDate: new Date().toISOString(),
+}) });
+const patientId = fixture?.patientId;
 const sent = await fetch(API + '/intake/send', { method: 'POST', headers: A, body: JSON.stringify({ patientId, formId: form.id }) }).then((r) => r.json());
 console.log('توکن:', sent.token);
 
@@ -66,6 +75,7 @@ await browser.close();
 const subId = sql(`SELECT id FROM intake_submissions WHERE token='${sent.token}'`);
 if (subId) await fetch(`${API}/intake/submissions/${subId}`, { method: 'DELETE', headers: A });
 await fetch(`${API}/forms/${form.id}`, { method: 'DELETE', headers: A });
+if (fixture?.id) await fetch(`${API}/visits/${fixture.id}`, { method: 'DELETE', headers: A }).catch(() => {});
 
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);
 process.exit(fail ? 1 : 0);
