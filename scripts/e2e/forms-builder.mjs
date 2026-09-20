@@ -43,7 +43,12 @@ if (!login.accessToken) { console.error('ورود نشد'); process.exit(1); }
   }
 }
 
-await page.goto(UI + '/', { waitUntil: 'domcontentloaded' });
+/* کوکیِ نشست **پیش از** اولین ناوبری. `AuthProvider` روی هر بارگذاری همان لحظه
+   `/auth/me` و `/config` را می‌زند و بی‌کوکی ۴۰۱ می‌گیرد؛ مرورگر آن را «Failed to
+   load resource: 401» در کنسول می‌نویسد و سنجهٔ «بدونِ خطای جاوااسکریپت» (که از
+   همین‌جا گوش می‌دهد) قرمز می‌شد. ناوبریِ بی‌کوکیِ «/» یادگارِ دورهٔ توکن در
+   localStorage بود؛ با کوکیِ HttpOnly لازم نیست و فقط یک مسابقه می‌ساخت که روی
+   Viteِ گرمِ CI باخته می‌شد (پاسخ ~۵۰ms بعد از DOMContentLoaded می‌رسید). */
 await browserLogin(page, login.accessToken);
 
 await page.goto(UI + '/app/forms', { waitUntil: 'networkidle' });

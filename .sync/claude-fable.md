@@ -10,6 +10,9 @@ paths:
   - scripts/e2e/README.md
   - scripts/e2e/postop-visit.mjs
   - scripts/e2e/summary-reminders.mjs
+  - scripts/e2e/link-builder.mjs
+  - scripts/e2e/forms-boxes.mjs
+  - scripts/e2e/forms-builder.mjs
   - docs/plan/CONTRACTS.md
   - docs/plan/lanes/claude-fable.md
   - STATUS.md
@@ -19,6 +22,7 @@ note: >-
   **سیستمی** (هرسِ `syncNextVisit`، خاموشیِ `next_visit` هنگامِ رزرو) کلید را آزاد
   می‌کند (`dedupeKey = null`)، لغوِ **دستی** (W0.7) کلید را نگه می‌دارد. بدونِ
   migration (ستون nullable است). پنج سوییتِ بیرون‌مانده به `ci-live.txt` برمی‌گردند.
+  ضمناً مسابقهٔ بارگذاریِ بی‌کوکی (۴۰۱ در کنسول) در سه سوییتِ مرورگری بسته شد.
   آخرین لند: #66 (`7a2f2c8`) + #69 (`eb15188`).
 <!-- claim:end -->
 
