@@ -6,6 +6,7 @@ import { SmsService } from '../sms/sms.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
+import { closeWork } from '../work/work-processor';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { sniffMime } from '../common/file-type';
@@ -193,6 +194,13 @@ export class OrdersService {
       if (status !== 'in_review') await this.events.emit({ type: `order.${status}`, patientId: row.patientId,
         visitId: row.visitId, refType: `${kind}_order`, refId: id, actorId: user.id,
         payload: status === 'needs_action' ? { reason: note } : undefined }, tx);
+      /* کارِ «بررسیِ نتیجه» **همین‌جا** بسته می‌شود، نه با پردازشگرِ یک دقیقهٔ بعد:
+         همان چیزی است که قاعدهٔ `order.reviewed` / `order.needs_action` می‌بندد
+         (`work-rules.ts`) و پردازشگر بعداً روی کارِ بسته no-op است. دلیلش صفحهٔ
+         «امروز» است — کاربر از همان ردیفِ کار «بررسی شد» می‌زند و اگر ردیف تا
+         یک دقیقه بماند، فکر می‌کند ثبت نشده و دوباره می‌زند (بازخوردِ مالک:
+         هشداری که کلیک شد باید همان لحظه جواب بگیرد). */
+      if (status !== 'in_review') await closeWork(tx, { refType: `${kind}_order`, refId: id, type: 'review_result' }, user.id);
       await this.audit.record({ actorId: user.id, action: `order.${kind}.${status}`, entityType: `${kind}_order`,
         entityId: id, before: { status: row.status }, after: { status, reviewNote: note } }, tx);
       return this.withDocuments(kind, fresh, tx);

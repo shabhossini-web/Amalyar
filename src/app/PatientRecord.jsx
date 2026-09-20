@@ -4,10 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiStream, apiUpload } from '../lib/api.js';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
-import { useAuth } from './auth.jsx';
-import VisitForm from './VisitForm.jsx';
-import OrderSheet from './OrderSheet.jsx';
-import { useVisitDefs } from './visit-defs.js';
+import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
@@ -56,15 +53,6 @@ const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', can
  * برای نوعِ سفارشی‌ای که در `KINDS` نیست، و روی برچسب به‌صورتِ tooltip می‌ماند.
  */
 const kindLabel = (k, defs) => (KINDS[k] ? kindOf(k).label : (defs?.[k] ?? k ?? '—'));
-
-/** مقصدِ یک کار: سفارشِ زیرِ بررسی یا مراجعه‌ای که کار به آن گره خورده. */
-const workTarget = (w) => {
-  const m = /^(lab|imaging|consult|referral)_order$/.exec(w?.refType ?? '');
-  if (m && w.refId) return { type: 'order', kind: m[1], id: w.refId };
-  if (w?.refType === 'visit' && w.refId) return { type: 'visit', id: w.refId };
-  if (w?.visitId) return { type: 'visit', id: w.visitId };
-  return null;
-};
 
 /** مقصدِ یک ردیفِ خطِ زمان — پاپ‌آپِ **خودش**، نه فرمِ کلی (بازخوردِ مالک). */
 const tlTarget = (it) => {
@@ -1260,11 +1248,6 @@ export default function PatientRecord() {
      صفحه‌اند؛ تب‌ها بایگانی‌اند و بایگانی با «مراجعات» شروع می‌شود. */
   const [tab, setTab] = useState('visits');
   const tabsRef = useRef(null);
-  const { user } = useAuth();
-  /* پاپ‌آپِ جاری: { type: 'visit'|'order'|'reminder'|'appointment', … } — فقط یکی در هر لحظه. */
-  const [pop, setPop] = useState(null);
-  /* تعریف‌های فرمِ مراجعه تنبل‌اند: تا فرم باز نشود شش فهرست خوانده نمی‌شود. */
-  const { defs, reload: loadDefs } = useVisitDefs(pop?.type === 'visit', user?.id);
   /* ⚠️ **شکست باید از موفقیت قابلِ تشخیص باشد.**
      تا دیروز toast فقط یک رشته بود و خطا با موفقیت یک شکل داشت: همان قابِ
      بنفش، ۲٫۲ ثانیه، بعد رفت. یعنی اگر ثبتِ شرح ۴۰۳ یا ۵۰۰ می‌گرفت، کاربر
@@ -1312,32 +1295,11 @@ export default function PatientRecord() {
     tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
-  /**
-   * بازکردنِ پاپ‌آپِ یک چیز از هر جای صفحه (خطِ زمان، کارتِ «چه مانده»، تبِ مراجعات).
-   *
-   * ⚠️ دادهٔ کامل همین‌جا خوانده می‌شود، نه از ردیفِ خلاصهٔ خطِ زمان: شیتِ
-   * سفارش مدرک‌های پاسخ را می‌خواهد و فرمِ مراجعه کلِ رکورد را. خطا toastِ
-   * قرمز است، نه پاپ‌آپِ خالی.
-   */
-  const openThing = useCallback(async (spec) => {
-    try {
-      if (spec.type === 'visit') {
-        const v = await api(`/visits/${spec.id}`);
-        setPop({ type: 'visit', visit: v });
-      } else if (spec.type === 'order') {
-        const list = await api(`/orders?patientId=${id}`);
-        const o = (Array.isArray(list) ? list : []).find((x) => x.kind === spec.kind && x.id === spec.id);
-        if (!o) throw new Error('سفارش پیدا نشد');
-        setPop({ type: 'order', kind: spec.kind, order: o });
-      } else if (spec.type === 'reminder') {
-        const rows = await api(`/reminders?patientId=${id}`).catch(() => []);
-        setPop({ type: 'reminder', row: (Array.isArray(rows) ? rows : []).find((x) => x.id === spec.id) ?? null, item: spec.item });
-      } else if (spec.type === 'appointment') {
-        setPop({ type: 'appointment', id: spec.id, item: spec.item });
-      }
-    } catch (e) { say(e.message, true); }
-  }, [id, say]);
-  const closePop = useCallback(() => setPop(null), []);
+  /* پاپ‌آپِ یک چیز از هر جای صفحه (خطِ زمان، کارتِ «چه مانده»، تبِ مراجعات) —
+     همان ماژولِ مشترکِ «امروز» و «کارهای من» (`thing-popups.jsx`): دادهٔ کامل
+     همان‌جا خوانده می‌شود، و هر ثبتی «پاسخ» را تازه می‌کند. */
+  const things = useThings({ patientId: Number(id), onChanged: loadLive, toast: say });
+  const openThing = things.open;
 
   useEffect(() => {
     document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
@@ -1398,7 +1360,7 @@ export default function PatientRecord() {
 
       <RecordActions
         rec={rec} onEdit={() => goTab('profile')} toast={say} t={t}
-        onNew={() => setPop({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } })}
+        onNew={() => things.show({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } })}
       />
 
       {live && <StageBar stage={live.stage} t={t} />}
@@ -1425,44 +1387,19 @@ export default function PatientRecord() {
       </div>
 
       {/* ── پاپ‌آپ‌ها: هر چیزی در همین صفحه باز می‌شود ── */}
-      <AnimatePresence>
-        {pop?.type === 'visit' && (
-          <VisitForm
-            initial={pop.visit}
-            prefill={pop.prefill}
-            defs={defs}
-            onDefsChanged={loadDefs}
-            onClose={closePop}
-            onSaved={(saved, wasEdit, opts) => {
-              setPop(null);
-              load();
-              /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
-              if (opts?.openSurgery) {
-                say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
-                setTimeout(() => setPop({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } }), 400);
-                return;
-              }
-              say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
-            }}
-            onToast={(m) => say(m)}
-          />
-        )}
-      </AnimatePresence>
-      {/* میزبانِ شیتِ سفارش همیشه سوار است و خودش presence را می‌گرداند. */}
-      <OrderSheet
-        open={pop?.type === 'order'}
-        kind={pop?.kind}
-        order={pop?.order}
-        patientId={rec.id}
-        visitId={pop?.order?.visitId ?? undefined}
-        onClose={closePop}
-        onSaved={loadLive}
-        onToast={(m) => say(m)}
+      <ThingPopups
+        things={things}
+        onVisitSaved={(saved, wasEdit, opts) => {
+          load();
+          /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
+          if (opts?.openSurgery) {
+            say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+            setTimeout(() => things.show({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } }), 400);
+            return;
+          }
+          say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
+        }}
       />
-      <AnimatePresence>
-        {pop?.type === 'reminder' && <ReminderPop row={pop.row} item={pop.item} onClose={closePop} onActed={loadLive} toast={say} />}
-        {pop?.type === 'appointment' && <ApptPop id={pop.id} item={pop.item} onClose={closePop} onActed={loadLive} toast={say} />}
-      </AnimatePresence>
 
       {toast && (
         <button
@@ -1479,116 +1416,6 @@ export default function PatientRecord() {
   );
 }
 
-
-/* ══════════════ پاپ‌آپ‌های خطِ زمان ══════════════ */
-const REM_KIND_FA = {
-  next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ رو', pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل',
-  follow_up: 'فرمِ پیگیری', notice: 'اطلاعیه', dispatch: 'ابلاغِ کارشناس', appointment: 'نوبت',
-};
-const REM_STATUS_FA = {
-  pending: 'در صف', sending: 'در حالِ ارسال', sent: 'فرستاده شد', simulated: 'آزمایشی — فرستاده نشد',
-  failed: 'ناموفق', uncertain: 'نتیجه نامعلوم', cancelled: 'لغو شد',
-};
-/* همان دو فهرستِ صفحهٔ یادآوری‌ها (W0.7): فرستاده‌شده نه دوباره می‌رود نه لغو می‌شود. */
-const REM_RETRYABLE = ['failed', 'uncertain', 'simulated'];
-const REM_CANCELLABLE = ['pending', 'uncertain', 'failed'];
-
-/**
- * پاپ‌آپِ یک یادآوری — متنِ کامل، وضعیت، علتِ نرفتن، و همان دو اقدامِ دفترِ
- * یادآوری‌ها (ارسالِ دوباره / لغو). `row` از `/reminders?patientId=` می‌آید؛ اگر
- * نیامد (دسترسی)، ردیفِ خلاصهٔ خطِ زمان کافی است تا پاپ‌آپ خالی نماند.
- */
-function ReminderPop({ row, item, onClose, onActed, toast }) {
-  const [busy, setBusy] = useState(false);
-  const r = row ?? { id: item?.refId, status: item?.state, text: item?.detail, dueAt: item?.at, sentAt: null, kind: null, phone: null, error: null };
-  const act = async (what) => {
-    setBusy(true);
-    try {
-      await api(`/reminders/${r.id}/${what}`, { method: 'POST', ...(what === 'cancel' ? { body: { reason: 'لغو از پروندهٔ بیمار' } } : {}) });
-      toast(what === 'retry' ? 'دوباره در صف نشست ✓' : 'پیام لغو شد ✓');
-      await onActed();
-      onClose();
-    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
-  };
-  return (
-    <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-reminder" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label="یادآوری">
-      <header>
-        <Send width="15" height="15" />
-        <b>یادآوری{r.kind ? ` — ${REM_KIND_FA[r.kind] ?? r.kind}` : ''}</b>
-        <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
-      </header>
-      <p className="rc-pop-text">{r.text || '—'}</p>
-      <dl>
-        <dt>وضعیت</dt><dd><em className={`rc-tl-state is-${r.status ?? 'none'}`}>{REM_STATUS_FA[r.status] ?? r.status ?? '—'}</em></dd>
-        {(r.sentAt || r.dueAt) && <><dt>{r.status === 'pending' ? 'موعد' : 'زمان'}</dt><dd>{faDate(r.sentAt ?? r.dueAt)}</dd></>}
-        {r.phone && <><dt>گیرنده</dt><dd dir="ltr">{faNum(r.phone)}</dd></>}
-        {r.error && <><dt>علت</dt><dd className="rc-pop-err">{r.error}</dd></>}
-      </dl>
-      {(REM_RETRYABLE.includes(r.status) || REM_CANCELLABLE.includes(r.status)) && (
-        <div className="rc-pop-acts">
-          {REM_RETRYABLE.includes(r.status) && <button type="button" className="rc-refsum-main" disabled={busy} onClick={() => act('retry')}>ارسالِ دوباره</button>}
-          {REM_CANCELLABLE.includes(r.status) && <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => act('cancel')}>لغوِ این پیام</button>}
-        </div>
-      )}
-    </Overlay>
-  );
-}
-
-const APPT_STATUS_FA = { held: 'در انتظارِ پرداخت', confirmed: 'قطعی', arrived: 'در مطب', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو شد' };
-/* همان کلیدهای `CANCEL_REASONS` سرور — دلیلِ لغو به بیمار پیامک می‌شود. */
-const APPT_CANCEL = { doctor: 'تعویقِ پزشک', patient: 'درخواستِ بیمار', clinical: 'شرایطِ بالینی', hospital: 'مشکلِ بیمارستان', other: 'سایر' };
-
-/** پاپ‌آپِ یک نوبت — جزئیات + تغییرِ وضعیت (همان `POST /appointments/:id/status` میزِ پذیرش). */
-function ApptPop({ id, item, onClose, onActed, toast }) {
-  const [busy, setBusy] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [reason, setReason] = useState('patient');
-  const st = item?.state;
-  const open = !['done', 'cancelled', 'noshow'].includes(st);
-  const set = async (status, extra = {}) => {
-    setBusy(true);
-    try {
-      await api(`/appointments/${id}/status`, { method: 'POST', body: { status, ...extra } });
-      toast('وضعیتِ نوبت ثبت شد ✓');
-      await onActed();
-      onClose();
-    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
-  };
-  return (
-    <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-appt" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label="نوبت">
-      <header>
-        <Calendar width="15" height="15" />
-        <b>{item?.title ?? 'نوبت'}</b>
-        <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
-      </header>
-      <dl>
-        {item?.at && <><dt>تاریخ</dt><dd>{faDate(item.at)}{item.detail ? ` · ${faNum(item.detail)}` : ''}</dd></>}
-        <dt>وضعیت</dt><dd><em className={`rc-tl-state is-${st ?? 'none'}`}>{APPT_STATUS_FA[st] ?? item?.stateFa ?? '—'}</em></dd>
-      </dl>
-      {open && !cancelling && (
-        <div className="rc-pop-acts">
-          {st !== 'confirmed' && st !== 'arrived' && <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => set('confirmed')}>قطعی شد</button>}
-          {st !== 'arrived' && <button type="button" className="rc-refsum-main" disabled={busy} onClick={() => set('arrived')}>بیمار رسید</button>}
-          <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => set('noshow')}>نیامد</button>
-          <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => setCancelling(true)}>لغوِ نوبت…</button>
-        </div>
-      )}
-      {open && cancelling && (
-        <div className="rc-pop-field">
-          <span>دلیلِ لغو — به بیمار پیامک می‌شود</span>
-          <select value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}>
-            {Object.entries(APPT_CANCEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
-          <div className="rc-pop-acts">
-            <button type="button" className="rc-refsum-main" disabled={busy} onClick={() => set('cancelled', { cancelReason: reason })}>لغوِ نوبت</button>
-            <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => setCancelling(false)}>انصراف</button>
-          </div>
-        </div>
-      )}
-      <Link to="/app/schedule" className="rc-pop-link">بازکردن در برنامهٔ نوبت‌ها</Link>
-    </Overlay>
-  );
-}
 
 /**
  * خلاصهٔ ارجاع با دستیارِ AI (#53) — از مراجعه‌ها و شرح‌های همین پرونده،

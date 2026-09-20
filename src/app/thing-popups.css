@@ -1,0 +1,48 @@
+/* پاپ‌آپ‌های «همان چیز» (یادآوری، نوبت) — مشترکِ پرونده، «امروز» و «کارهای من»
+   (قانون ۲۱: کامپوننتِ مشترک با CSSِ خودش). نامِ کلاس‌ها `rc-pop*` مانده تا
+   سنجه‌های مرورگری و حافظهٔ چشمِ کاربر عوض نشود. هر لایهٔ کم‌آلفا با
+   `--veil-rgb` / `--surface-rgb` (قانون ۲۳). */
+.rc-pop-bg {
+  position: fixed; inset: 0; z-index: 85; display: grid; place-items: center;
+  padding: 16px; background: rgba(var(--surface-rgb), .66);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+.rc-pop { width: min(560px, 100%); max-height: 86dvh; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; }
+.rc-pop header { display: flex; align-items: center; gap: 8px; }
+.rc-pop header b { font-size: 14.5px; }
+.rc-pop header button { margin-inline-start: auto; display: inline-flex; padding: 5px; cursor: pointer; color: var(--text2); background: none; border: 0; }
+.rc-pop-text {
+  margin: 0; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 2; white-space: pre-wrap;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
+}
+.rc-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
+.rc-pop dt { color: var(--text3); }
+.rc-pop dd { margin: 0; }
+.rc-pop-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.rc-pop-err { color: var(--red-text); }
+.rc-pop-field { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.rc-pop-field select {
+  font: inherit; padding: 8px 10px; border-radius: 10px; color: inherit;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.rc-pop-link { align-self: flex-start; font-size: 12px; color: var(--brand-2); }
+
+/* دکمه‌های پاپ‌آپ — همان دو قالبِ اصلی/شبحِ سراسرِ پرونده */
+.rc-pop-main {
+  padding: 10px 18px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); border: 0; border-radius: 12px;
+}
+.rc-pop-ghost {
+  padding: 10px 16px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
+  background: none; border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 12px;
+}
+.rc-pop-main:disabled, .rc-pop-ghost:disabled { opacity: .55; cursor: default; }
+.rc-pop-main:focus-visible, .rc-pop-ghost:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* وضعیت با رنگِ متن حمل می‌شود (نه لایهٔ کم‌آلفا روی زمینهٔ تیره) */
+.rc-pop-state { font-style: normal; font-size: 12px; font-weight: 700; color: var(--text2); }
+.rc-pop-state.is-done, .rc-pop-state.is-sent, .rc-pop-state.is-confirmed, .rc-pop-state.is-arrived { color: var(--green-text); }
+.rc-pop-state.is-pending, .rc-pop-state.is-sending, .rc-pop-state.is-uncertain,
+.rc-pop-state.is-simulated, .rc-pop-state.is-held, .rc-pop-state.is-answered { color: var(--amber-text); }
+.rc-pop-state.is-failed { color: var(--red-text); }
+.rc-pop-state.is-cancelled, .rc-pop-state.is-noshow { color: var(--text3); }

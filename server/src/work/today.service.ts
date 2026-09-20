@@ -4,6 +4,7 @@ import { FeaturesService } from '../features/features.service';
 import { LEVEL } from '../common/levels';
 import { AvailabilityService } from '../patients/availability.service';
 import { WorkService } from './work.service';
+import { canAccess } from '../auth/access-check';
 
 /**
  * صفحهٔ «امروز» (W2.3) — یک پاسخ برای «الان چه کار کنم؟».
@@ -52,7 +53,7 @@ export class TodayService {
     /* نمای استثنا (W2.5) فقط از سوپروایزر به بالا: این بخش دربارهٔ **کارِ دیگران**
        است — چیزی که از دستِ تیم افتاده — نه کارِ خودِ کاربر. */
     const seesExceptions = level >= LEVEL.SUPERVISOR;
-    const [counts, items, visits, appointments, intakePending, exceptions] = await Promise.all([
+    const [counts, items, visits, appointments, intakePending, exceptions, canProcess] = await Promise.all([
       this.work.counts(user),
       this.work.list(user, { scope: 'inbox', limit: 8 }),
       seesVisits ? this.visitsToday(user, level, start, end) : Promise.resolve([]),
@@ -61,6 +62,10 @@ export class TodayService {
         ? this.prisma.intakeSubmission.count({ where: { status: 'pending_approval' } })
         : Promise.resolve(0),
       seesExceptions ? this.exceptions(now) : Promise.resolve(null),
+      /* «پردازشِ صف» روی کارتِ رویدادِ گیرکرده — سرور تصمیم می‌گیرد (قانونِ ۳): مجوزِ
+         `work.process` (پیش‌فرض سوپرادمین)، نه حدسِ سطح در رابط. بیرونِ `exceptions`
+         می‌ماند تا آن شیء همگن (`{count, items}`) بماند. */
+      seesExceptions ? canAccess(this.prisma, user, 'work', ['work.process']).catch(() => false) : Promise.resolve(false),
     ]);
 
     /* «کارِ بعدی» = نزدیک‌ترین چیزی که ساعت دارد — عمل یا نوبت، هرکدام زودتر. */
@@ -84,6 +89,7 @@ export class TodayService {
       visits,
       appointments,
       exceptions,
+      canProcess,
       sections: { visits: seesVisits, appointments: can('calendar'), intake: can('formgen'), exceptions: seesExceptions },
     };
   }
@@ -103,6 +109,10 @@ export class TodayService {
    *
    * فقط **خواندنی** و سقف‌دار (۵ نمونه از هر ردیف)؛ عددِ کل جدا می‌آید تا «۵ تا»
    * با «۵۰ تا» اشتباه نشود.
+   *
+   * هر نمونه **می‌گوید مالِ کیست و به چه چیزی گره خورده** (`patient`, `refType/refId`,
+   * `kind`): مالک دید هشدارِ «نتیجهٔ بررسی‌نشده» فقط یک عدد و یک ساعت بود و معلوم
+   * نبود کدام بیمار — هشداری که نگوید مالِ چیست، کلیک‌شدنی هم نیست.
    */
   private async exceptions(now: Date) {
     const ago = (h: number) => new Date(now.getTime() - h * 3600_000);
@@ -130,7 +140,10 @@ export class TodayService {
       this.prisma.workItem.count({ where: unownedWhere }),
       this.prisma.workItem.findMany({
         where: unownedWhere, orderBy: { createdAt: 'asc' }, take: 5,
-        select: { id: true, type: true, title: true, ownerRole: true, dueAt: true, createdAt: true, patientId: true },
+        select: {
+          id: true, type: true, title: true, ownerRole: true, dueAt: true, createdAt: true,
+          patientId: true, visitId: true, refType: true, refId: true,
+        },
       }),
       this.prisma.domainEvent.count({ where: stuckWhere }),
       this.prisma.domainEvent.findMany({
@@ -140,18 +153,39 @@ export class TodayService {
       this.prisma.intakeSubmission.count({ where: halfWhere }),
       this.prisma.intakeSubmission.findMany({
         where: halfWhere, orderBy: { reviewedAt: 'desc' }, take: 5,
-        select: { id: true, patientId: true, amount: true, reviewedAt: true, createdAt: true },
+        select: {
+          id: true, patientId: true, amount: true, reviewedAt: true, createdAt: true,
+          patient: { select: { id: true, code: true, firstName: true, lastName: true } },
+        },
       }),
     ]);
 
-    const unreviewed = await this.unreviewedOrders(ago(48));
+    const [unreviewed, byPatient] = await Promise.all([
+      this.unreviewedOrders(ago(48)),
+      this.patientsById([...unowned.map((w) => w.patientId), ...stuck.map((e) => e.patientId)]),
+    ]);
 
     return {
-      unowned: { count: unownedCount, items: unowned },
-      stuckEvents: { count: stuckCount, items: stuck },
+      unowned: { count: unownedCount, items: unowned.map((w) => ({ ...w, patient: byPatient.get(w.patientId ?? -1) ?? null })) },
+      stuckEvents: { count: stuckCount, items: stuck.map((e) => ({ ...e, patient: byPatient.get(e.patientId ?? -1) ?? null })) },
       unreviewed,
-      halfApproved: { count: halfCount, items: half },
+      halfApproved: { count: halfCount, items: half.map(({ patient, ...i }) => ({ ...i, patient: TodayService.person(patient) })) },
     };
+  }
+
+  /** نمایهٔ کوتاهِ بیمار برای هر نمونهٔ استثنا — همان شکلی که ردیفِ کار می‌دهد. */
+  private static person(p: { id: number; code: string; firstName: string | null; lastName: string | null } | null | undefined) {
+    return p ? { id: p.id, code: p.code, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() } : null;
+  }
+
+  /** `WorkItem` و `DomainEvent` رابطهٔ Prisma به بیمار ندارند؛ یک کوئری برای همه. */
+  private async patientsById(ids: (number | null | undefined)[]) {
+    const uniq = [...new Set(ids.filter((x): x is number => !!x))];
+    if (!uniq.length) return new Map<number, ReturnType<typeof TodayService.person>>();
+    const rows = await this.prisma.patient.findMany({
+      where: { id: { in: uniq } }, select: { id: true, code: true, firstName: true, lastName: true },
+    });
+    return new Map(rows.map((p) => [p.id, TodayService.person(p)]));
   }
 
   /**
@@ -177,9 +211,14 @@ export class TodayService {
       if (items.length < 5) {
         const rows = await k.table.findMany({
           where, orderBy: { updatedAt: 'asc' }, take: 5 - items.length,
-          select: { id: true, patientId: true, visitId: true, updatedAt: true },
+          select: {
+            id: true, patientId: true, visitId: true, updatedAt: true,
+            patient: { select: { id: true, code: true, firstName: true, lastName: true } },
+          },
         });
-        items.push(...rows.map((r: any) => ({ ...r, refType: k.key, kindFa: k.fa })));
+        items.push(...rows.map(({ patient, ...r }: any) => ({
+          ...r, refType: k.key, kind: k.key.replace(/_order$/, ''), kindFa: k.fa, patient: TodayService.person(patient),
+        })));
       }
     }
     return { count, items };

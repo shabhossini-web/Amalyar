@@ -5,6 +5,7 @@ import Overlay from '../ui/Overlay.jsx';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import WorkRow from './WorkRow.jsx';
+import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
@@ -60,6 +61,26 @@ export default function Today() {
       .catch((e) => setErr({ message: e?.message || 'بارگذاری نشد', status: e?.status ?? 0 }));
   }, []);
   useEffect(() => { load(); }, [load]);
+  /* پاپ‌آپِ «همان چیز» (سفارش/مراجعه) از ردیفِ کار و از نمای استثنا — بازخوردِ
+     مالک: هشدار باید بگوید مالِ چیست و با کلیک بازِ شود و از همان‌جا انجام شود.
+     بعد از هر ثبت، صفحه و زنگِ پوسته با هم تازه می‌شوند. */
+  const things = useThings({
+    onChanged: () => { load(); window.dispatchEvent(new Event(WORK_CHANGED)); },
+    toast: (m) => setToast(m),
+  });
+  const [busyProc, setBusyProc] = useState(false);
+  /* «پردازشِ صف» برای رویدادِ گیرکرده — همان `POST /work/process` که worker می‌زند؛
+     دکمه فقط وقتی هست که سرور `canProcess` داده (مجوزِ `work.process`) — بیرونِ
+     `exceptions`، که همیشه فقط `{count, items}` است. */
+  const processQueue = async () => {
+    setBusyProc(true);
+    try {
+      const r = await api('/work/process', { method: 'POST' });
+      setToast(`صف پردازش شد ✓ (${faNum(r?.processed ?? 0)} رویداد)`);
+      load();
+      window.dispatchEvent(new Event(WORK_CHANGED));
+    } catch (e) { setToast(e?.message || 'پردازش نشد'); } finally { setBusyProc(false); }
+  };
   /* کاری که از زنگِ پوسته بسته شود باید همین‌جا هم برود. */
   useEffect(() => {
     const h = () => load();
@@ -129,7 +150,13 @@ export default function Today() {
         </div>
         {data == null ? <p className="td-skel">در حالِ بارگذاری…</p>
           : data.work.length === 0 ? <p className="td-empty">کارِ بازی ندارید.</p>
-            : <ul className="wk-list">{data.work.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact />)}</ul>}
+            : (
+              <ul className="wk-list">
+                {data.work.map((w) => (
+                  <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact onOpen={workTarget(w) ? () => things.open(workTarget(w)) : undefined} />
+                ))}
+              </ul>
+            )}
       </section>
 
       {data?.sections.visits && (
@@ -177,7 +204,7 @@ export default function Today() {
       )}
 
       {data?.sections.exceptions && data.exceptions && (
-        <ExceptionsPanel ex={data.exceptions} />
+        <ExceptionsPanel ex={data.exceptions} onOpen={things.open} onProcess={data.canProcess ? processQueue : null} busyProc={busyProc} />
       )}
 
       <AnimatePresence>
@@ -201,6 +228,7 @@ export default function Today() {
         )}
       </AnimatePresence>
 
+      <ThingPopups things={things} />
       {toast && <div className="sh-toast" role="status">{toast}</div>}
     </div>
   );
@@ -221,8 +249,15 @@ const hoursSince = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso).g
  *
  * ⚠️ وقتی هر چهار ردیف صفرند، کلِ بخش رندر **نمی‌شود** — نمای استثنا که همیشه
  * روی صفحه باشد دیگر استثنا نیست و چشم از رویش رد می‌شود.
+ *
+ * هر نمونه **نامِ بیمار** را می‌گوید و اگر مقصدی دارد (سفارش، مراجعه) دکمه است و
+ * پاپ‌آپِ همان چیز را باز می‌کند؛ وگرنه به پرونده/صفحهٔ مربوط لینک می‌دهد.
+ * تا دیروز «نتیجهٔ بررسی‌نشده» فقط «آزمایش · ۷۲ ساعت» بود — نه معلوم بود کدام
+ * بیمار، نه از همین‌جا می‌شد بررسی‌اش کرد (بازخوردِ مالک).
  */
-function ExceptionsPanel({ ex }) {
+function ExceptionsPanel({ ex, onOpen, onProcess, busyProc }) {
+  const who = (it) => it.patient?.fullName || '';
+  const patientTo = (it) => ((it.patient?.id ?? it.patientId) ? `/app/patients/${it.patient?.id ?? it.patientId}` : null);
   const rows = [
     {
       key: 'unowned', count: ex.unowned.count, title: 'کارِ بی‌مسئول (بیش از ۲۴ ساعت)',
@@ -230,27 +265,32 @@ function ExceptionsPanel({ ex }) {
       /* خودِ عنوانِ کار کافی است — `TYPE_FA` همان جمله را دوباره می‌گوید و ردیف را می‌بُرد. */
       line: (w) => w.title,
       meta: (w) => `${faNum(hoursSince(w.createdAt))} ساعت${w.ownerRole ? ` · صفِ ${ROLE_FA[w.ownerRole] ?? w.ownerRole}` : ''}`,
-      to: () => '/app/work',
+      open: (w) => workTarget(w),
+      to: (w) => patientTo(w) ?? '/app/work',
     },
     {
       key: 'stuckEvents', count: ex.stuckEvents.count, title: 'رویدادِ پردازش‌نشده',
       hint: 'زنجیرهٔ رویداد ← کار ایستاده؛ تا رفع نشود هیچ کارِ تازه‌ای ساخته نمی‌شود',
       line: (e) => e.type,
       meta: (e) => `${faNum(hoursSince(e.at))} ساعت`,
-      to: () => null,
+      open: () => null,
+      to: patientTo,
+      action: onProcess ? { label: busyProc ? 'در حالِ پردازش…' : 'پردازشِ صف', run: onProcess } : null,
     },
     {
       key: 'unreviewed', count: ex.unreviewed.count, title: 'نتیجهٔ بررسی‌نشده (بیش از ۴۸ ساعت)',
       hint: 'پاسخ آمده و تصمیمی ثبت نشده',
-      line: (o) => REF_FA[o.refType] ?? o.kindFa ?? 'سفارش',
+      line: (o) => `${REF_FA[o.refType] ?? o.kindFa ?? 'سفارش'} — نتیجه آمده`,
       meta: (o) => `${faNum(hoursSince(o.updatedAt))} ساعت`,
-      to: (o) => (o.patientId ? `/app/patients/${o.patientId}` : null),
+      open: (o) => ({ type: 'order', kind: o.kind ?? String(o.refType ?? '').replace(/_order$/, ''), id: o.id, patientId: o.patient?.id ?? o.patientId }),
+      to: patientTo,
     },
     {
       key: 'halfApproved', count: ex.halfApproved.count, title: 'تأییدِ نیمه‌کارهٔ ثبت‌نام',
       hint: 'ثبت‌نام تأیید شده ولی مراجعه‌ای ساخته نشده',
       line: () => 'ثبت‌نامِ تأییدشده بدونِ مراجعه',
       meta: (i) => (i.reviewedAt ? `${faNum(hoursSince(i.reviewedAt))} ساعت` : ''),
+      open: () => null,
       to: () => '/app/intake',
     },
   ].filter((r) => r.count > 0);
@@ -272,13 +312,30 @@ function ExceptionsPanel({ ex }) {
             <p className="td-ex-hint">{r.hint}</p>
             <ul className="td-ex-items">
               {(ex[r.key].items ?? []).map((it) => {
-                const to = r.to(it);
-                const body = <><span className="td-ex-line">{r.line(it)}</span><span className="td-ex-meta">{r.meta(it)}</span></>;
-                return <li key={`${r.key}-${it.id}`}>{to ? <Link to={to}>{body}</Link> : body}</li>;
+                const spec = r.open(it);
+                const to = spec ? null : r.to(it);
+                const name = who(it);
+                const body = (
+                  <>
+                    <span className="td-ex-line">{r.line(it)}</span>
+                    {name && <span className="td-ex-who">{name}</span>}
+                    <span className="td-ex-meta">{r.meta(it)}</span>
+                  </>
+                );
+                return (
+                  <li key={`${r.key}-${it.id}`}>
+                    {spec
+                      ? <button type="button" className="td-ex-btn" onClick={() => onOpen(spec)}>{body}</button>
+                      : to ? <Link to={to}>{body}</Link> : body}
+                  </li>
+                );
               })}
             </ul>
             {r.count > (ex[r.key].items ?? []).length && (
               <p className="td-ex-more">و {faNum(r.count - (ex[r.key].items ?? []).length)} موردِ دیگر</p>
+            )}
+            {r.action && (
+              <button type="button" className="td-ex-act" disabled={busyProc} onClick={r.action.run}>{r.action.label}</button>
             )}
           </li>
         ))}
