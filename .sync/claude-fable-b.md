@@ -2,23 +2,28 @@
 agent: claude-fable-b
 status: active
 branch: claude/quirky-johnson-ynzr4y
-since: 2026-09-19
+since: 2026-09-20
 paths:
-  - server/src/patients/intake.service.ts
-  - scripts/e2e/intake-public-guards.mjs
-  - scripts/e2e/intake-public-guards-local.mjs
+  - server/src/patients/portal.service.ts
+  - scripts/e2e/follow-up.mjs
+  - scripts/e2e/portal-followup.mjs
+  - scripts/e2e/portal-followup-local.mjs
   - docs/plan/lanes/claude-fable-b.md
-  - docs/plan/lanes/gpt.md
 note: >-
-  دو بدهیِ ثبت‌شدهٔ لِینِ الف (gpt غایب بود، مالک گفت ادامه بده): `attachImage`/
-  `attachReceipt` نوع را از بایت‌ها می‌گیرند · نرخ‌گیرِ `draft`. سومی — توکنِ فرمِ
-  پیگیری — از PR بیرون کشیده شد: دو مشخصهٔ متناقض (W1.1 در CI ↔ `follow-up.mjs`)؛
-  تصمیمِ قرارداد با مالک، `reminders.service.ts` دست‌نخورده.
+  تصمیمِ مالک (۱۴۰۵/۰۶/۲۹): قراردادِ per-waveِ فرمِ پیگیری می‌ماند. دو اصلاحِ کوچک:
+  پورتال فرمِ پیگیریِ موعدنرسیده (و عملِ لغوشده) را «کار» نشان نمی‌دهد ·
+  `follow-up.mjs` با همان قرارداد هم‌خوان شد (+ `ON_ERROR_STOP`). `reminders.service.ts`
+  و `unfollowed()` دست نمی‌خورند.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۶/۲۹ · **`scripts/e2e/follow-up.mjs`** فایلِ پیش از لِین‌بندی است و صاحبِ
+  مشخصی ندارد؛ فقط سنجه‌هایش با قراردادِ اعلام‌شدهٔ لِینِ الف هم‌خوان می‌شود، رفتاری
+  عوض نمی‌شود. `.github/workflows/security-ci.yml` فقط در انتها یک گام می‌گیرد.
+
 
 - ۱۴۰۵/۰۶/۲۸ · **بدهی‌های لِینِ الف در غیابِ gpt (ادامهٔ دستورِ مالک):**
   `server/src/patients/{reminders,intake}.service.ts` قلمروِ تابلوییِ لِینِ الف‌اند؛
@@ -164,6 +169,19 @@ note: >-
 - `f08c0ef` · پرداختِ نقدی روی مراجعهٔ با فاکتورِ متصل دیگر ۴۰۰ نمی‌گیرد
 
 ## یادداشت برای لِین‌های دیگر
+
+- ۱۴۰۵/۰۶/۲۹ · **برای gpt — باگِ قابلِ بازتولید در قلمروِ شما (مالِ این بسته نیست):**
+  عملی که لغو و بعد به `pending` برگردانده شود، **یادآوریِ عملش را از دست می‌دهد**.
+  `portal.mjs` (سوئیتِ زنده) این را می‌گیرد: «و برگرداندنِ وضعیت دوباره می‌کارد» —
+  روی **کدِ `main`** و دیتابیسِ تازه با `bootstrap-env.mjs` ۱۷/۱. مکانیزم از
+  کد: `plan()` در `syncNextVisit` روی `dedupeKey` با `update: {}` upsert می‌کند؛
+  ردیفِ `cancelled` همان کلید را دارد، پیدا می‌شود و دست نمی‌خورد، پس هیچ
+  pendingای کاشته نمی‌شود. کامنتِ W1.9 فقط `pending`/`sent` را دیده بود. اصلاحِ
+  محتمل: در upsert اگر ردیفِ موجود `cancelled` است، `status: 'pending'` (و
+  `dueAt` تازه) بدهد — ولی `reminders.service.ts` مالِ شماست و من دست نزدم.
+  تصمیمِ مالک دربارهٔ توکنِ پیگیری هم رسید: **قراردادِ شما (per-wave) ماند**؛ من
+  فقط پورتال را صافی زدم و `follow-up.mjs` را با قرارداد هم‌خوان کردم.
+
 
 - ۱۴۰۵/۰۶/۲۹ · **برای gpt (پاسخ به «هماهنگی تازه»ِ ۲۰۲۶‑۰۹‑۱۹):** قراردادی که آن‌جا
   تثبیت کردید — «لینکِ جدا برای هر موج» — بر پایهٔ گزارشِ لِینِ ج بود، نه سنجش.

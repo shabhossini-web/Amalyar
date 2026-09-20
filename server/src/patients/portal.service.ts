@@ -152,7 +152,9 @@ export class PortalService {
       this.prisma.intakeSubmission.findMany({
         where: { patientId: p.id, status: { in: ['pending_fill', 'pending_payment'] } },
         orderBy: { id: 'desc' },
-        select: { token: true, status: true, amount: true },
+        /* `data` فقط برای دو کلیدِ فرمِ پیگیری (`followUpVisitId`/`followUpDay`) —
+           پایین ↓ تصمیم می‌گیرد کدام فرمِ پیگیری **امروز** کارِ بیمار است. */
+        select: { token: true, status: true, amount: true, data: true },
       }),
       this.prisma.surveyInvite.findMany({
         where: { patientId: p.id, status: 'pending' },
@@ -210,8 +212,33 @@ export class PortalService {
     });
     const listOf = (xs: string[] | null | undefined) => (xs ?? []).filter(Boolean).join('، ');
 
+    /**
+     * فرمِ پیگیریِ پس از عمل فقط وقتی «کار» است که موعدش رسیده باشد.
+     *
+     * قراردادِ لِینِ الف (W1.1/D01): به‌ازای هر موعدِ پیگیری (روزِ ۱، ۷، ۳۰) یک
+     * ردیفِ `intakeSubmission` با کلیدِ `followUpVisitId`/`followUpDay` **از همان
+     * لحظهٔ ثبتِ مراجعه** ساخته می‌شود، چون متنِ پیامکِ هر موج لینکش را همان موقع
+     * لازم دارد. ولی این‌جا همهٔ `pending_fill`ها «تکمیلِ فرم» نشان داده می‌شدند —
+     * یعنی بیمارِ با پیگیریِ «۱،۷،۳۰» پیش از خودِ عمل سه کارِ باز می‌دید و برای
+     * موجی که هنوز نیامده فرم پر می‌کرد. مالک قرارداد را نگه داشت و این صافی را
+     * خواست (۱۴۰۵/۰۶/۲۹).
+     *
+     * قاعده: فرمِ پیگیری فقط از **روزِ موعدش** (تاریخِ عمل + روز) کار است، و فرمِ
+     * عملِ **لغوشده** هیچ‌وقت. هر چیزِ دیگری — ثبت‌نامِ عادی، فرمی که مراجعه‌اش
+     * پیدا نشد یا تاریخِ عمل ندارد — مثلِ قبل نشان داده می‌شود: صافی فقط چیزی را
+     * پنهان می‌کند که **قطعاً** هنوز کارِ بیمار نیست، نه چیزی که نمی‌شناسد.
+     */
+    const dueToday = (i: { data: unknown }) => {
+      const d = i.data as { followUpVisitId?: unknown; followUpDay?: unknown } | null;
+      if (typeof d?.followUpVisitId !== 'number' || typeof d?.followUpDay !== 'number') return true;
+      const v = visits.find((x) => x.id === d.followUpVisitId);
+      if (!v?.opDate) return true;
+      if (v.opStatus === 'cancelled') return false;
+      return v.opDate.getTime() + d.followUpDay * 864e5 <= Date.now();
+    };
+
     const tasks = [
-      ...intakes.map((i) => ({
+      ...intakes.filter(dueToday).map((i) => ({
         kind: 'intake' as const,
         label: i.status === 'pending_payment' ? 'بارگذاریِ فیشِ واریزی' : 'تکمیلِ فرم',
         detail: i.status === 'pending_payment' && i.amount > 0
