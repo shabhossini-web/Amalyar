@@ -2,7 +2,9 @@
 
 > فقط `gpt` این فایل را ویرایش می‌کند. وضعیت: ⬜ نشده · 🟡 در دست · ✅ مرج‌شده (با هش) · ⛔ مسدود (با دلیل).
 >
-> ⚠️ **۱۴۰۵/۰۶/۲۷ — این لِین موقتاً دستِ `claude-fable-b` است.** مالک گفت `gpt` دو
+> **به‌روزرسانی 2026-09-19: همه ردیف‌های جدول الف مرج شده‌اند؛ GPT فعلاً idle است.**
+>
+> سابقهٔ تحویل: **۱۴۰۵/۰۶/۲۷ — این لِین موقتاً دستِ `claude-fable-b` بود.** مالک گفت `gpt` دو
 > روز نیست و کار از همان‌جا که رسیده ادامه پیدا کند. کلیمِ `gpt` هنگامِ تحویل
 > `idle` با `paths: []` بود، پس هم‌پوشانی نبود. ردیف‌هایی که در این مدت بسته
 > می‌شوند با «(ب)» علامت می‌خورند تا وقتی `gpt` برگشت بداند چه چیزی دستِ او
@@ -14,15 +16,15 @@
 | ۱ | W1.6 اسنپ‌شاتِ فرم + حذفِ نرمِ فیلد + `formUsage` با submission + منعِ حذفِ فرمِ پاسخ‌دار | ✅ | `agent/w1-6-form-snapshot` | ccaa792 | PR #13؛ security-ci و ۲۴ سناریو سبز |
 | ۲ | W1.5 `Appointment.forVisitId` + `startVisit` تراکنشی/قفل‌دار + نوعِ درست | ✅ | `agent/w1-5-appointment-visit-link` | 508cb4b | PR #26؛ security-ci، ۲۶ سناریو و ۱۷ رگرسیون سبز |
 | ۳ | W1.4 `approve()` در یک تراکنش + idempotencyKey + پیامک پس از commit + نمای نیمه‌کاره‌ها | ✅ | `agent/w1-4-approve-atomic` | a88a7a4 | PR #41؛ security-ci، ۸۳ سناریو و ۳۳ رگرسیون سبز |
-| ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D01 · تطبیق از `data.followUpVisitId` (نه `patientId + createdAt`) · موعدِ نرسیده جدا شمرده می‌شود (`waiting`) · `capped`/`total`/`limit` در خروجی · e2e: `scripts/e2e/w1-1-unfollowed-local.mjs` (۲۰/۲۰، دو رگرسیونِ عمدی قرمزش کرد) |
-| ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D07 · `DECISIONS.md` #۱ · پوششِ متن با تنظیمِ تازهٔ `sms_care_unconfirmed_text` (خالی = خاموش) · فقط `post_op_care`/`follow_up`، نه پیام‌های پیش از عمل · e2e: `scripts/e2e/w1-7-postop-local.mjs` (۱۷/۱۷، دو رگرسیونِ عمدی قرمزش کرد) |
-| ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D03a · `commitAnswers()` که هر دو مسیر صدایش می‌زنند · عکس چیزی برای attach نداشت (توضیح پایین) · e2e: `scripts/e2e/w1-3-approve-local.mjs` (۱۴/۱۴، دو رگرسیونِ عمدی قرمزش کرد) |
-| ۷ | W1.8 `POST …/draft` (سرور) — نیمهٔ UI با لِینِ ب | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D09 · `CONTRACTS.md` §۶ · **هر دو نیمه با هم** (سرور + رابط)، چون endpointِ بی‌رابط معیارِ پذیرش را نمی‌دهد · e2e: `w1-8-draft-local.mjs` (۱۹/۱۹) + `w1-8-draft-ui.mjs` (۱۴/۱۴)، دو رگرسیونِ عمدی |
-| ۸ | W1.9 `dedupeKey` همهٔ kindها + retry/backoff + پیامکِ per-tenant | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | N4, A3 · قراردادِ §۸ · `reminderKey()` + upsert + هرسِ انتخابی · retry ۵/۱۵/۴۵ روی `uncertain` · migration: ستونِ `attempts` · e2e: `w1-9-reminder-local.mjs` (۲۰/۲۰، دو رگرسیونِ عمدی) |
-| ۹ | W0.3 dedupeِ «پیش‌رو» در `portal.service.ts` (سرور) | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | PR #36 | **قبلاً در W3.4 لند شده بود** — هر دو نیمه‌اش. ساخته نشد، سنجیده و بسته شد (توضیح پایین) |
-| ۱۰ | W0.4 رندرِ پاسخِ فرم‌های زیرپرونده با `answersOf.show()` (سرور + خواندن در `PatientRecord.jsx` فقط همان تابع) | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | D03b · `answerParts()` مشترک: متنِ خوانا + قطعاتِ **بازشدنی** · e2e: `w0-4-answer-render.mjs` (۱۶/۱۶، دو رگرسیونِ عمدی) |
-| ۱۱ | W0.8 گاردِ وضعیتِ `publicAnswer` + endpointِ آپلودِ فایلِ پاسخ | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | `CONTRACTS.md` §۴–۵ · گارد از قبل در W1.2 بود؛ این بسته آپلود + مسیرِ `append` · نوع از **بایت‌ها** · e2e: `w0-8-upload-local.mjs` (۳۲/۳۲، سه رگرسیونِ عمدی) |
-| ۱۲ | W1.10 اسکریپتِ کشفِ دادهٔ ناقص + صفِ تطبیق | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | ترمیم = دوباره‌دواندنِ **همان تابعِ رو به جلو** (هر سه idempotent) · سه چک، حدس ممنوع · e2e: `w1-10-repair-local.mjs` (۲۳/۲۳، سه رگرسیونِ عمدی) |
+| ۴ | W1.1 `unfollowed` با `followUpVisitId/followUpDay/reviewedAt`، per-موعد، اعلامِ سقف | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `6302597` (PR #48) | D01 · تطبیق از `data.followUpVisitId` (نه `patientId + createdAt`) · موعدِ نرسیده جدا شمرده می‌شود (`waiting`) · `capped`/`total`/`limit` در خروجی · e2e: `scripts/e2e/w1-1-unfollowed-local.mjs` (۲۰/۲۰، دو رگرسیونِ عمدی قرمزش کرد) |
+| ۵ | W1.7 دو قالب مراقبت برای done/pending و منع مراقبت cancelled + بازتنظیم با تاریخچه | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `3113a93` (PR #49) | D07 · `DECISIONS.md` #۱ · پوششِ متن با تنظیمِ تازهٔ `sms_care_unconfirmed_text` (خالی = خاموش) · فقط `post_op_care`/`follow_up`، نه پیام‌های پیش از عمل · e2e: `scripts/e2e/w1-7-postop-local.mjs` (۱۷/۱۷، دو رگرسیونِ عمدی قرمزش کرد) |
+| ۶ | W1.3 مسیرِ مشترکِ تصویب با `syncLinkDocuments` و attachِ عکس | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `e819902` (PR #51) | D03a · `commitAnswers()` که هر دو مسیر صدایش می‌زنند · عکس چیزی برای attach نداشت (توضیح پایین) · e2e: `scripts/e2e/w1-3-approve-local.mjs` (۱۴/۱۴، دو رگرسیونِ عمدی قرمزش کرد) |
+| ۷ | W1.8 `POST …/draft` (سرور) — نیمهٔ UI با لِینِ ب | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `54154ab` (PR #52) | D09 · `CONTRACTS.md` §۶ · **هر دو نیمه با هم** (سرور + رابط)، چون endpointِ بی‌رابط معیارِ پذیرش را نمی‌دهد · e2e: `w1-8-draft-local.mjs` (۱۹/۱۹) + `w1-8-draft-ui.mjs` (۱۴/۱۴)، دو رگرسیونِ عمدی |
+| ۸ | W1.9 `dedupeKey` همهٔ kindها + retry/backoff + پیامکِ per-tenant | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `14ef16d` (PR #54) | N4, A3 · قراردادِ §۸ · `reminderKey()` + upsert + هرسِ انتخابی · retry ۵/۱۵/۴۵ روی `uncertain` · migration: ستونِ `attempts` · e2e: `w1-9-reminder-local.mjs` (۲۰/۲۰، دو رگرسیونِ عمدی) |
+| ۹ | W0.3 dedupeِ «پیش‌رو» در `portal.service.ts` (سرور) | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `211426f` (PR #36) | **قبلاً در W3.4 لند شده بود** — هر دو نیمه‌اش. ساخته نشد، سنجیده و بسته شد (توضیح پایین) |
+| ۱۰ | W0.4 رندرِ پاسخِ فرم‌های زیرپرونده با `answersOf.show()` (سرور + خواندن در `PatientRecord.jsx` فقط همان تابع) | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `19fc8d2` (PR #55) | D03b · `answerParts()` مشترک: متنِ خوانا + قطعاتِ **بازشدنی** · e2e: `w0-4-answer-render.mjs` (۱۶/۱۶، دو رگرسیونِ عمدی) |
+| ۱۱ | W0.8 گاردِ وضعیتِ `publicAnswer` + endpointِ آپلودِ فایلِ پاسخ | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `081b263` (PR #56) | `CONTRACTS.md` §۴–۵ · گارد از قبل در W1.2 بود؛ این بسته آپلود + مسیرِ `append` · نوع از **بایت‌ها** · e2e: `w0-8-upload-local.mjs` (۳۲/۳۲، سه رگرسیونِ عمدی) |
+| ۱۲ | W1.10 اسکریپتِ کشفِ دادهٔ ناقص + صفِ تطبیق | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | `fe4e151` (PR #57) | ترمیم = دوباره‌دواندنِ **همان تابعِ رو به جلو** (هر سه idempotent) · سه چک، حدس ممنوع · e2e: `w1-10-repair-local.mjs` (۲۳/۲۳، سه رگرسیونِ عمدی) |
 | ۰ (اولویت جدید) | W1.2 پاسخِ سفارش ← Document + وضعیتِ بررسی + کارِ «بررسیِ نتیجه» | ✅ | `agent/w1-2-order-review` | 3865b60 | PR #38؛ security-ci و ۶۷ سناریو سبز؛ پیش از W1.4 طبق درخواست مالک |
 | ۱۳ | بدهی‌های ثبت‌شدهٔ خودِ لِین: توکنِ فرمِ پیگیری (`follow-up.mjs`) · `attachImage`/`attachReceipt` از بایت‌ها (بدهیِ W0.8) · نرخ‌گیرِ `draft` (بدهیِ W1.8) | ✅ (ب) | `claude/quirky-johnson-ynzr4y` | | شرح در `lanes/claude-fable-b.md` («بدهی‌های لِینِ الف») · e2e: `followup-token-local.mjs` ۳۷/۳۷ + `intake-public-guards-local.mjs` ۱۵/۱۵، هر دو در CI |
 
@@ -293,9 +295,9 @@
 
 | چک | ریشه | اقدام |
 |---|---|---|
-| `form_links_missing` | W1.3/D03a — شاخهٔ `direct` در `fill()` هرگز `syncLinkDocuments` نزد | ترمیمِ خودکار |
-| `order_answer_no_document` | W1.2 — صریحاً به W1.10 حواله شده بود | ترمیمِ خودکار |
-| `followup_unattributed` | W1.1/D01 — پاسخِ بی‌`followUpVisitId` | **صف**، نه حدس |
+| `form_links_missing` | W1.3/D03a — شاخهٔ `direct` در `fill()` هرگز `syncLinkDocuments` نزد | ترمیمِ خودکار || `e819902` (PR #51) 
+| `order_answer_no_document` | W1.2 — صریحاً به W1.10 حواله شده بود | ترمیمِ خودکار || `fe4e151` (PR #57) 
+| `followup_unattributed` | W1.1/D01 — پاسخِ بی‌`followUpVisitId` | **صف**، نه حدس || `6302597` (PR #48) 
 
 ### چهار تصمیم
 
@@ -333,6 +335,15 @@
 - **لِینِ الف تمام شد.** برمی‌گردم به لِینِ خودم: W0.5 (رابطِ آپلودِ فایلِ پاسخ،
   که تازه با W0.8 آزاد شد) · W0.7.
 
+
+## هماهنگی تازه با لِین‌های ب و ج — 2026-09-19
+
+- به درخواست مالک، main در `b1297d3`، جدول هر سه لِین، فایل‌های کلیم و مرج‌های GitHub بررسی شد. تمام ردیف‌های جدول لِین الف مرج شده‌اند؛ «بعدی W1.1» و دیگر عبارت‌های انتظار در گزارش‌های قدیمی پایین، وضعیت جاری نیستند. این بررسی تأیید وضعیت تحویل است، نه ممیزی دوباره تمام کد یا تأیید سلامت نصب واقعی.
+- **برای لِین ب:** تحویل W1.1 (#48)، W1.7 (#49)، W1.3 (#51)، W1.8 (#52)، W1.9 (#54)، W0.4 (#55)، W0.8 (#56)، W1.10 (#57) و پی‌گیری خودکار ترمیم (#62) دریافت شد. W0.3 از قبل در #36 بود. هش‌های واقعی در جدول خودم تکمیل شد؛ هیچ‌کدام دوباره شروع نمی‌شوند. کلیم شما روی main هنوز active مربوط به #62 است؛ لطفاً اگر کار تازه‌ای در این مسیرها ندارید، در فایل خودتان آزادش کنید.
+- **برای لِین ج:** W3.3، دلیل لغو، W3.8، W4.1 و دو گام W4.2 مرج شده‌اند. PR #63 در زمان بررسی باز بود. اصلاح تشخیص follow-up در سرشاخه `63293ff` خوانده شد: طبق گزارش آزمون شما سه قرمز از دیتابیس قدیمی بوده، نه دلیل تغییر قرارداد توکن. لینک جدا برای هر موج و پایداری فرم پرشده حفظ می‌شود؛ GPT برای این گزارش اصلاح موازی reminders انجام نمی‌دهد.
+- **پی‌گیری مشترک:** اجرای واقعی ترمیم W1.10 پس از دیپلوی نیازمند شاهد لاگ worker است؛ مرج #62 به‌تنهایی اثبات ترمیم داده زنده نیست. لطفاً لِین ب نتیجه اجرا/خطا را در فایل خودش ثبت کند. لِین ج نتیجه نهایی #63 و مالک ادامهٔ اتصال سوئیت‌های سرور زنده به CI را در فایل خودش ثبت کند.
+- **خارج از بسته‌های بسته‌شدهٔ الف:** W3.2 گام ۳ و W5.1–W5.4 هنوز در جدول ج بازند؛ بدهی‌های آزمون/امنیت ثبت‌شده هم کار خودبه‌خودی GPT محسوب نمی‌شوند. اگر نیاز مشخصی از الف دارید، شناسه بسته، مسیرهای آزاد و معیار پذیرش را در فایل خودتان بنویسید تا بدون تداخل تعیین تکلیف شود.
+- GPT در پایان این هماهنگی `idle` و `paths: []` است. از مالک فعلاً چیزی لازم نیست؛ پاسخی از لِین‌ها هنوز دریافت نشده است.
 
 ## تحویلِ بدهی‌های باقی‌ماندهٔ لِین — انجام‌شده توسطِ لِینِ ب (۱۴۰۵/۰۶/۲۸)
 

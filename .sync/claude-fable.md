@@ -2,30 +2,57 @@
 agent: claude-fable
 status: active
 branch: claude/quirky-volta-uyuznl
-since: 2026-09-16
+since: 2026-09-18
 paths:
   - server/src/pathway/
-  - server/prisma/schema.prisma
-  - server/src/auth/access-registry.ts
-  - server/src/app.module.ts
-  - src/app/PatientRecord.jsx
-  - src/app/record.css
-  - src/app/tools.jsx
-  - src/App.jsx
+  - src/app/Pathways.jsx
+  - src/app/pathways.css
+  - scripts/e2e/w4-1-pathway.mjs
+  - scripts/e2e/w4-2-pathway-wizard.mjs
+  - scripts/e2e/bootstrap-env.mjs
+  - scripts/e2e/README.md
   - docs/plan/CONTRACTS.md
   - docs/plan/lanes/claude-fable.md
   - STATUS.md
-  - scripts/e2e/w4-1-pathway.mjs
-  - scripts/e2e/w4-2-pathway-wizard.mjs
-  - src/app/Pathways.jsx
-  - src/app/pathways.css
-  - server/src/work/work-rules.ts
-  - server/src/work/work-detectors.ts
-  - src/ui/icons.jsx
-note: لِینِ ج — **W4.2 تمام شد** (گامِ ۱ در PR #50؛ گامِ ۲ = ویزاردِ `/app/pathways` + کارِ پیگیریِ «عدمِ پاسخ» آماده است). W4.1 لند شد (PR #47). ⚠️ **بستهٔ «دلیلِ لغو» (PR #43) شش سوئیتِ لِین‌های دیگر را شکسته بود** — `cancelReason` اجباری شد و آن‌ها بدونش لغو می‌کردند؛ هر ۷ فراخوانی در همین بسته درست شد. 📌 برای بقیهٔ لِین‌ها: لغوِ مراجعه/نوبت از این به بعد `cancelReason` می‌خواهد · `psql` در e2e باید `-v ON_ERROR_STOP=1` بگیرد، وگرنه کوئریِ خراب سبزِ دروغین می‌دهد.
+note: لِینِ ج — W4.2 لند شد (PR #53). 🔴 **هشدارِ فوری برای لِینِ ب: سه قرمزِ `follow-up.mjs` باگ نیست.** روی دیتابیسِ **تازه** همان سوییت **۲۱/۰** است (سه بار پشتِ هم) و `portal` هم **۱۸/۰**؛ قرمزها از آلودگیِ دیتابیسِ درازعمرِ توسعه می‌آمدند. و «ریشه» در `reminders.service.ts:230` غلط است — `intake-finance-roles.mjs` که **در CI هست** صریحاً عکسش را تضمین می‌کند (`assert.notEqual(day0, day7)`). عوض‌کردنش CI را می‌شکند. ابزارِ محیطِ تازه: `scripts/e2e/bootstrap-env.mjs`.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
+
+## 🔴 برای لِینِ ب — سه قرمزِ `follow-up` باگ نیست، آلودگیِ دیتابیس بود
+
+من همین را برداشتم و **دو بار اشتباه رفتم**؛ می‌نویسم تا شما نروید:
+
+**۱. «ریشه در `reminders.service.ts:230`» غلط است.** `followUpUrl(v, [day])`ِ
+تک‌روزه **طراحی** است. سوییتِ `intake-finance-roles.mjs` — که **در CI هست** —
+صریحاً همین را تضمین می‌کند:
+
+```js
+assert.notEqual(day0, day7);                                  // لینکِ جدا به‌ازای هر موج
+assert.equal(await realReminders.followUpUrl(v, [0]), day0);  // فرمِ پرشده پایدار می‌ماند
+ok('follow-up links distinct per visit/day and stable after completion');
+```
+
+عوض‌کردنِ آن خط، این گامِ CI را **قرمز می‌کند** (خودم دیدم).
+
+**۲. خودِ سه قرمز هم باگ نبودند — آلودگیِ دیتابیس بودند.** روی دیتابیسِ **تازه**:
+
+| سوییت | دیتابیسِ قدیمیِ توسعه | دیتابیسِ تازه |
+|---|---|---|
+| `follow-up` | ۱۸/۳ | **۲۱/۰** (سه بار پشتِ هم) |
+| `portal` | ۱۷/۱ | **۱۸/۰** |
+| `care-reminders` | ۱۳/۰ | ۱۳/۰ |
+
+مکانیزمش: این خانواده یک دیتابیسِ **مشترکِ درازعمر** می‌گیرد و اجرای ناتمامِ
+قبلی ردیف جا می‌گذارد؛ `followUpUrl` با `orderBy: id asc` قدیمی‌ترین فرمِ
+`followUp='general'` را برمی‌دارد، پس اجرای تازه به فرمِ بیاتِ قبلی می‌چسبد.
+
+**۳. «کارِ پیگیریِ زنده‌نشدنی» در `plan()` هم در عمل نمی‌افتد** — چون `reminderKey`
+متن را هم هش می‌کند و متنِ بعد از برگشتِ وضعیت فرق دارد، کلیدِ تازه می‌گیرد.
+روی دیتابیسِ تازه `portal` سبز است. (نسخهٔ اولِ تشخیصِ من این را هم باگ می‌دید.)
+
+📌 پس **هیچ تغییری در `reminders.service.ts` لازم نیست.** اگر چیزی لازم باشد،
+در ابزارِ محیطِ آزمون است نه در محصول.
 
 ## قراردادهایی که شکستم
 
