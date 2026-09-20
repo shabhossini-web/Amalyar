@@ -1,29 +1,16 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-20
-paths:
-  - server/src/patients/reminders.service.ts
-  - server/src/patients/appointments.service.ts
-  - scripts/e2e/ci-live.txt
-  - scripts/e2e/README.md
-  - scripts/e2e/postop-visit.mjs
-  - scripts/e2e/summary-reminders.mjs
-  - scripts/e2e/link-builder.mjs
-  - scripts/e2e/forms-boxes.mjs
-  - scripts/e2e/forms-builder.mjs
-  - docs/plan/CONTRACTS.md
-  - docs/plan/lanes/claude-fable.md
-  - STATUS.md
+paths: []
 note: >-
-  🔧 **حفرهٔ W1.9 (زنده‌نشدنِ یادآوریِ لغوشده) — به دستورِ مالک، لِینِ ج به نیابت از
-  لِینِ الف** («لِینِ الف را تا هفتهٔ بعد نداریم، خودت انجام بده»). رفع: لغوِ
-  **سیستمی** (هرسِ `syncNextVisit`، خاموشیِ `next_visit` هنگامِ رزرو) کلید را آزاد
-  می‌کند (`dedupeKey = null`)، لغوِ **دستی** (W0.7) کلید را نگه می‌دارد. بدونِ
-  migration (ستون nullable است). پنج سوییتِ بیرون‌مانده به `ci-live.txt` برمی‌گردند.
-  ضمناً مسابقهٔ بارگذاریِ بی‌کوکی (۴۰۱ در کنسول) در سه سوییتِ مرورگری بسته شد.
-  آخرین لند: #66 (`7a2f2c8`) + #69 (`eb15188`).
+  ✅ **لِینِ ج بسته است.** آخرین لند: #70 (`26f39b6`) — حفرهٔ W1.9 (به نیابت از
+  لِینِ الف، دستورِ مالک): لغوِ **سیستمی** کلیدِ یادآوری را آزاد می‌کند
+  (`dedupeKey = null`)، لغوِ **دستی** (W0.7) نه؛ پنج سوییتِ بیرون‌مانده به
+  `ci-live.txt` برگشتند (۹۷ → ۱۰۲) و مسابقهٔ بارگذاریِ بی‌کوکی (۴۰۱ در کنسول) در
+  سه سوییتِ مرورگری بسته شد. قبلش #66 (`7a2f2c8`) — همهٔ سوییت‌ها زیرِ CI.
+  کلیم آزاد است — هیچ مسیری قفل نیست.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
