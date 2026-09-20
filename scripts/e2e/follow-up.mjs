@@ -2,9 +2,13 @@
  * اتوماسیونِ پیگیریِ پس از عمل:
  * - نوعِ عمل با «روزهای پیگیری» (ارقامِ فارسی) → دو یادآوریِ follow_up با لینکِ /f/
  * - بخشِ عمومی + اختصاصیِ عمل + اختصاصیِ تشخیص = **یک** توکن؛ فیلدهای اختصاصی صفحه‌های بعدی
- * - پیامکِ مراقبتِ بعد از عمل هم همان لینک را ضمیمه دارد
+ * - **هر موج فرم و لینکِ خودش را دارد** (قراردادِ لِینِ الف، W1.1/D01: یک ردیف به‌ازای هر موعد
+ *   با کلیدِ `followUpVisitId`/`followUpDay`؛ گزارشِ «پیگیری‌نشده» روی همین بنا شده). نسخهٔ قبلیِ
+ *   این سوئیت «یک توکن برای همهٔ موج‌ها» را می‌سنجید که با کدِ `main` هرگز نمی‌خواند
+ *   (۱۹/۲ روی دیتابیسِ تازه) — ۱۴۰۵/۰۶/۲۹ با قرارداد هم‌خوان شد.
+ * - پیامکِ مراقبتِ بعد از عمل لینکِ **موجِ اول** را ضمیمه دارد
  * - پرکردنِ فرم پاسخِ هر دو بخش را در یک submission می‌نشاند و پرونده هر دو را با برچسبِ درست می‌خواند
- * - هم‌گام‌سازیِ دوباره همان توکن را نگه می‌دارد؛ لغوِ عمل پیگیری را باطل می‌کند
+ * - هم‌گام‌سازیِ دوباره ردیفِ تازه نمی‌سازد (نه انباشت)؛ لغوِ عمل پیگیری را باطل می‌کند
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -13,7 +17,7 @@ const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
-const sql = (q) => execSync(`psql "${DB}" -qtA`, { input: q }).toString().trim().split('\n')[0];
+const sql = (q) => execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1`, { input: q }).toString().trim().split('\n')[0];
 
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -74,24 +78,22 @@ try {
   const fu = sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending'`);
   ok(Number(fu) === 2, `دو یادآوریِ پیگیری کاشته شد (${fu})`);
   /* متنِ پیامک چندخطی است — داخلِ SQL تخت می‌شود تا psql خطی‌اش نکند. */
-  const texts = execSync(`psql "${DB}" -qtA`, { input: `SELECT replace(text, E'\\n', ' ') FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending' ORDER BY due_at` }).toString().trim().split('\n');
-  /* قرارداد: هر موج لینکِ **خودش** را دارد (`followUpUrl(v, [day])` به‌ازای هر
-     روز) — همان که `intake-finance-roles.mjs` در CI با `day0 !== day7` می‌سنجد.
-     نسخهٔ قبلیِ این سنجه یک توکنِ مشترک می‌خواست و در برابرِ CI قرمز بود. */
-  const tokens = texts.map((t) => t.match(/\/f\/([A-Za-z0-9_-]+)/)?.[1]);
-  const token = tokens[0];
+  const texts = execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1`, { input: `SELECT replace(text, E'\\n', ' ') FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending' ORDER BY due_at` }).toString().trim().split('\n');
+  const token = texts[0]?.match(/\/f\/([A-Za-z0-9_-]+)/)?.[1];
   ok(!!token, '**متنِ یادآوری لینکِ فرم دارد**');
-  ok(texts.length === 2 && tokens.every(Boolean) && tokens[0] !== tokens[1], 'هر موج لینکِ خودش را دارد (توکنِ جدا به‌ازای هر روز)');
+  const token2 = texts[1]?.match(/\/f\/([A-Za-z0-9_-]+)/)?.[1];
+  ok(texts.length === 2 && !!token2 && token2 !== token, '**هر موج لینکِ خودش را دارد** (قراردادِ per-wave)');
   const day7 = sql(`SELECT to_char(min(due_at), 'YYYY-MM-DD') FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending'`);
   ok(day7 === new Date(op.getTime() + 7 * 864e5).toISOString().slice(0, 10), `موجِ اول = عمل + ۷ روز (${day7})`);
   const postText = sql(`SELECT replace(text, E'\\n', ' ') FROM reminders WHERE visit_id=${visit.id} AND kind='post_op_care' AND status='pending'`);
   ok(postText.includes('پانسمان') && postText.includes(`/f/${token}`), '**مراقبتِ بعد از عمل هم لینکِ پیگیری را ضمیمه دارد**');
 
-  /* هم‌گام‌سازیِ دوباره پیش از پرشدن: فرمِ بازِ هر موج دوباره استفاده می‌شود،
-     نه نسخهٔ سوم و چهارم — یعنی همچنان دو submission (یکی به‌ازای هر موج). */
+  /* یک ردیف به‌ازای هر موعد — و هم‌گام‌سازیِ دوباره پیش از پرشدن همان دو را نگه می‌دارد، نه نسخهٔ سوم. */
+  ok(Number(sql(`SELECT count(*) FROM intake_submissions WHERE patient_id=${visit.patientId} AND form_id=${gen.id}`)) === 2,
+    '**دو موعد، دو ردیفِ فرم** (کلیدِ `followUpDay`)');
   await send(`/visits/${visit.id}`, 'PATCH', { opDate: op.toISOString() });
   ok(Number(sql(`SELECT count(*) FROM intake_submissions WHERE patient_id=${visit.patientId} AND form_id=${gen.id}`)) === 2,
-    '**هم‌گام‌سازیِ دوباره همان توکن‌های باز را نگه می‌دارد (دو موج، نه انباشت)**');
+    '**هم‌گام‌سازیِ دوباره همان ردیف‌های باز را نگه می‌دارد (نه انباشت)**');
 
   console.log('\n۳) یک توکن، دو بخش (عمومی + اختصاصی)');
   const view = (await pub(`/public/intake/form/${token}`)).json;
@@ -118,12 +120,14 @@ try {
     '**پاسخ‌های بخش‌های اختصاصی با برچسبِ خودشان در پرونده خوانده می‌شوند**');
 
   console.log('\n۵) هم‌گام‌سازی بعد از پرشدن و لغو');
-  /* فرمِ پرشده سندِ پرونده است؛ موجِ بعدی باید فرمِ **تازه** بگیرد. */
+  /* فرمِ پرشده سندِ پرونده است و پایدار می‌ماند؛ موجِ دوم فرمِ خودش را از قبل دارد — ردیفِ تازه‌ای ساخته نمی‌شود. */
   await send(`/visits/${visit.id}`, 'PATCH', { opDate: op.toISOString() });
   const cnt2 = sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending'`);
   ok(Number(cnt2) === 2, 'هم‌گام‌سازیِ دوباره باز هم دو موج (نه انباشت)');
   const subs = sql(`SELECT count(*) FROM intake_submissions WHERE patient_id=${visit.patientId} AND form_id=${gen.id}`);
-  ok(Number(subs) === 2, '**فرمِ پرشده می‌ماند و موجِ بعدی فرمِ تازه می‌گیرد**');
+  ok(Number(subs) === 2, '**فرمِ پرشده می‌ماند و موجِ دوم همان فرمِ خودش را دارد (ردیفِ تازه نه)**');
+  const filledStill = sql(`SELECT status FROM intake_submissions WHERE token='${token}'`);
+  ok(filledStill === 'approved', '**پاسخِ ثبت‌شده با هم‌گام‌سازی پاک/بازنشانی نمی‌شود**');
   await send(`/visits/${visit.id}/status`, 'PATCH', { opStatus: 'cancelled', cancelReason: 'other' });
   const afterCancel = sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending'`);
   ok(Number(afterCancel) === 0, 'لغوِ عمل، پیگیری‌ها را باطل می‌کند');
