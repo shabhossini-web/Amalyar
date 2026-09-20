@@ -205,6 +205,11 @@ try {
     const sect = page.locator('.db-postop');
     ok(await sect.count() === 1, '**بخشِ «پیگیری و مراقبتِ پس از عمل» در ادامهٔ فرم هست**');
     ok((await sect.locator('h4').innerText()).includes('برنامهٔ مراقبت و پیگیری'), 'عنوانِ بخش درست است');
+    /* از بستهٔ ۴ (بازخوردِ مالک) سه مرحله سه تب‌اند: قبل / حین / بعد از عمل. عملِ آینده روی «قبل» باز می‌شود. */
+    const tab = (name) => sect.locator('.ui-tabs button', { hasText: name }).click();
+    ok(await sect.locator('.ui-tabs button').count() === 3, '**سه تبِ مرحله (قبل/حین/بعد از عمل)**');
+    ok((await sect.locator('.ui-tabs button[aria-selected="true"]').innerText()).includes('قبل از عمل'), 'عملِ آینده روی تبِ «قبل از عمل» باز می‌شود');
+    await tab('بعد از عمل');
 
     /* چیپِ روزها ↔ ورودیِ آزاد هم‌گام‌اند. */
     const dayInput = sect.locator('.db-dayinput');
@@ -217,10 +222,11 @@ try {
     ok((await sect.locator('.db-postop-plan').innerText()).includes('۷'),
       'خطِ برنامه روزِ انتخابی را می‌گوید');
 
-    /* پیش‌فرضِ نوعِ عمل باید **دیده** شود — نه اینکه کاربر حدس بزند. */
+    /* پیش‌فرضِ نوعِ عمل باید **دیده** شود — نه اینکه کاربر حدس بزند؛ هر مرحله در تبِ خودش. */
+    ok((await sect.locator('.db-default').innerText()).includes('پانسمان'), '**پیش‌فرضِ بعد از عمل در تبِ «بعد از عمل» است**');
+    await tab('قبل از عمل');
     const defaults = sect.locator('.db-default');
-    ok(await defaults.count() === 2, `پیش‌فرضِ قبل و بعد از عمل نشان داده شد (${await defaults.count()})`);
-    ok((await defaults.first().innerText()).includes('ناشتا'), '**متنِ پیش‌فرضِ قبل از عمل روی فرم است**');
+    ok(await defaults.count() === 1 && (await defaults.first().innerText()).includes('ناشتا'), '**متنِ پیش‌فرضِ قبل از عمل در تبِ «قبل از عمل» است**');
     ok(await sect.locator('.db-nodefault').count() === 0, 'چون نوعِ عمل قالب دارد، هشدارِ «تعریف نشده» نیست');
     /* زمانِ ارسال کنارِ عنوان نوشته می‌شود. */
     /* نشانِ زمان کنارِ عنوان — از #63 پیشوندِ «ارسال:» ندارد و خودِ زمان را
@@ -231,7 +237,8 @@ try {
     await defaults.first().locator('button').click();
     ok((await sect.locator('.db-careblock').first().locator('textarea').inputValue()).includes('ناشتا'),
       '**«استفاده و ویرایش» پیش‌فرض را در کادر گذاشت**');
-    /* ویزیتِ بعدی داخلِ همین بخش است و در فرم دوبار نیامده. */
+    /* ویزیتِ بعدی داخلِ همین بخش (تبِ «بعد از عمل») است و در فرم دوبار نیامده. */
+    await tab('بعد از عمل');
     ok(await sect.locator('.jd-wrap, .jdate, input[placeholder="۱۴۰۵/۰۵/۱۰"]').count() >= 1,
       'تاریخِ اولین مراجعهٔ بعد از عمل داخلِ همین بخش است');
     ok(await page.locator('input[placeholder="۱۴۰۵/۰۵/۱۰"]').count() === 1,
@@ -252,7 +259,7 @@ try {
     const immBtn = sect.locator('.db-daychip').filter({ hasText: /^بلافاصله بعد از ثبت$/ });
     ok(await immBtn.count() === 1, 'گزینهٔ زمانِ ارسالِ مراقبت هست');
     await immBtn.click();
-    ok((await sect.locator('.db-careblock').nth(1).locator('.db-carehead i').innerText()).includes('بلافاصله بعد از ثبت'),
+    ok((await sect.locator('.db-careblock').first().locator('.db-carehead i').innerText()).includes('بلافاصله بعد از ثبت'),
       '**نشانِ زمانِ ارسال با انتخابِ «بلافاصله» عوض شد**');
 
     /* دستیار: پیش‌نویسِ مراقبت. */
@@ -261,10 +268,11 @@ try {
     ok(await careBtn.count() === 1, 'دکمهٔ دستیارِ مراقبت هست (aiOn)');
     await careBtn.click();
     await page.waitForTimeout(1800);
-    ok((await sect.locator('.db-careblock').nth(1).locator('textarea').inputValue()).includes(`[مرورگر ${tag}]`),
+    ok((await sect.locator('.db-careblock').first().locator('textarea').inputValue()).includes(`[مرورگر ${tag}]`),
       '**دستیار متنِ مراقبت را نوشت**');
 
-    /* همان «ساخت‌یافته کن/ادامه بنویس» روی شرحِ داخلِ فرم. */
+    /* همان «ساخت‌یافته کن/ادامه بنویس» روی شرحِ داخلِ فرم — شرح حالا در تبِ «حین عمل» است. */
+    await tab('حین عمل');
     const rep = page.locator('.db-report');
     await rep.locator('textarea').fill(`شرحِ خام برای بازنویسی ${tag}`);
     const structBtn = rep.locator('.db-aibtn', { hasText: 'ساخت‌یافته' });
