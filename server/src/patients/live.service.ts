@@ -40,6 +40,12 @@ const ORDER_STATUS_FA: Record<string, string> = {
   needs_action: 'نتیجه ناقص — دوباره لازم است',
 };
 
+/** وضعیتِ یادآوری — کلیدِ خامِ `failed`/`cancelled` روی صفحهٔ فارسی نمی‌نشیند. */
+const REMINDER_STATUS_FA: Record<string, string> = {
+  pending: 'در صف', sending: 'در حالِ ارسال', sent: 'فرستاده شد', simulated: 'آزمایشی — فرستاده نشد',
+  failed: 'ناموفق', uncertain: 'نتیجه نامعلوم', cancelled: 'لغو شد',
+};
+
 const OP_STATUS_FA: Record<string, string> = {
   pending: 'در انتظار',
   done: 'انجام شد',
@@ -58,6 +64,9 @@ type Step = {
   state: 'done' | 'current' | 'todo' | 'skipped';
   detail: string | null;
   at: Date | null;
+  /** فقط گامِ «مراجعه»: نوعِ آخرین دوره (surgery/clinic/…) تا کلاینت «عمل جراحی»
+      و «ویزیت» را از هم جدا بنویسد — نه واژهٔ حوزه برای هر دو (گزارشِ مالک). */
+  kind?: string | null;
 };
 
 type TimelineItem = {
@@ -74,6 +83,10 @@ type TimelineItem = {
   refType: string | null;
   refId: number | null;
   color: string | null;
+  /** فقط ردیفِ مراجعه: نوع و کد جدا می‌آیند تا برچسبِ نوع (عمل جراحی/ویزیت) سمتِ
+      کلاینت ساخته شود و `title` (عنوانِ فرم + کد) برای سازگاری بماند. */
+  kind?: string | null;
+  code?: string | null;
 };
 
 /**
@@ -272,8 +285,8 @@ export class LiveService {
   private stage(x: any): { key: string | null; title: string; detail: string | null; steps: Step[] } {
     const { patient, visits, cycle, appointments, upcoming, orders, openOrders, billing, kindTitle, today, ordersVisible, apptVisible } = x;
     const steps: Step[] = [];
-    const add = (key: string, title: string, state: Step['state'], detail: string | null, at: Date | null = null) =>
-      steps.push({ key, title, state, detail, at });
+    const add = (key: string, title: string, state: Step['state'], detail: string | null, at: Date | null = null, kind: string | null = null) =>
+      steps.push({ key, title, state, detail, at, ...(kind ? { kind } : {}) });
 
     add('intake', 'ثبت‌نام', 'done', 'پرونده ساخته شد', patient.createdAt);
 
@@ -293,15 +306,18 @@ export class LiveService {
       add('appointment', 'نوبت', 'current', 'هنوز نوبتی گرفته نشده', null);
     }
 
+    /* ⚠️ عنوانِ گام واژهٔ حوزه است ولی **نوعِ** دوره هم می‌رود: در مطب «عملِ
+       جراحی» و «ویزیت» هر دو Visit اند و نوار تا دیروز برای هر دو «ویزیت»
+       می‌نوشت (اسکرین‌شاتِ مالک). کلاینت با `kind` برچسبِ درست را می‌گذارد. */
     if (!cycle) {
       add('visit', V, 'todo', `هنوز ${V}ای ثبت نشده`, null);
     } else if (cycle.opStatus === 'done') {
-      add('visit', V, 'done', kindTitle[cycle.kind ?? ''] ?? 'انجام شد', cycle.opDate ?? cycle.createdAt);
+      add('visit', V, 'done', kindTitle[cycle.kind ?? ''] ?? 'انجام شد', cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
     } else if (cycle.opStatus === 'cancelled') {
-      add('visit', V, 'skipped', `آخرین ${V} لغو شد`, cycle.opDate ?? cycle.createdAt);
+      add('visit', V, 'skipped', `آخرین ${V} لغو شد`, cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
     } else {
       add('visit', V, 'current',
-        `${kindTitle[cycle.kind ?? ''] ?? V} در انتظار`, cycle.opDate ?? cycle.createdAt);
+        `${kindTitle[cycle.kind ?? ''] ?? V} در انتظار`, cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
     }
 
     /* بی‌دسترسی ≠ بی‌سفارش: گام رد می‌شود ولی متنش دروغ نمی‌گوید. */
@@ -357,7 +373,7 @@ export class LiveService {
    * می‌گوید «همین بود» در حالی که نبود.
    */
   private timeline(x: any): { items: TimelineItem[]; truncated: boolean; total: number } {
-    const { visits, appointments, orders, documents, notes, reminders, kindColor, vLabel, capped } = x;
+    const { patient, visits, appointments, orders, documents, notes, reminders, kindColor, vLabel, capped } = x;
     const items: TimelineItem[] = [];
 
     for (const v of visits) {
@@ -367,6 +383,7 @@ export class LiveService {
         detail: [v.surgeonName, v.hospitalName].filter(Boolean).join(' · ') || null,
         state: v.opStatus, stateFa: OP_STATUS_FA[v.opStatus] ?? v.opStatus,
         visitId: v.id, refType: 'visit', refId: v.id, color: kindColor[v.kind ?? ''] ?? null,
+        kind: v.kind ?? null, code: `${patient.code}-V${v.seq}`,
       });
     }
     for (const a of appointments) {
@@ -414,7 +431,7 @@ export class LiveService {
       items.push({
         id: `reminder:${r.id}`, at: r.sentAt ?? r.dueAt, type: 'reminder',
         title: 'یادآوری', detail: LiveService.excerpt(r.text, 90),
-        state: r.status, stateFa: r.status === 'sent' ? 'فرستاده شد' : r.status === 'pending' ? 'در صف' : r.status,
+        state: r.status, stateFa: REMINDER_STATUS_FA[r.status] ?? r.status,
         visitId: r.visitId ?? null, refType: 'reminder', refId: r.id, color: null,
       });
     }

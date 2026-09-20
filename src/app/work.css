@@ -77,3 +77,11 @@
   .wk-actions { flex-direction: row; }
   .wk-new { flex-wrap: wrap; }
 }
+
+/* عنوانِ کارِ مقصددار — دکمه‌ای که پاپ‌آپِ سفارش/مراجعه را باز می‌کند */
+.wk-open {
+  padding: 0; cursor: pointer; font: inherit; color: inherit; text-align: start; background: none; border: 0;
+  text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px;
+}
+.wk-open:hover { color: var(--brand-2); }
+.wk-open:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 4px; }

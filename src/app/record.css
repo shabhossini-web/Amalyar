@@ -555,3 +555,40 @@
 .rc-ans-items a:hover, .rc-ans-doc:hover { color: var(--brand-2); }
 .rc-ans-items a:focus-visible,
 .rc-ans-doc:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 3px; }
+
+/* ── پاپ‌آپ‌های پرونده (بازخوردِ مالک: هر ردیف پاپ‌آپِ خودش، نه فرمِ کلی) ── */
+.rc-visit-btn { display: block; width: 100%; margin: 0; padding: 0; cursor: pointer; font: inherit; color: inherit; text-align: start; background: none; border: 0; }
+.rc-visit-btn:hover b > span[dir="ltr"] { color: var(--brand-2); text-decoration: underline dotted; text-underline-offset: 3px; }
+.rc-visit-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 6px; }
+.rc-chip-list { flex-direction: column; align-items: stretch; gap: 6px; }
+.rc-chip-list > span { display: flex; align-items: center; gap: 6px; }
+.rc-chip-list button {
+  padding: 7px 10px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--amber-text); text-align: start;
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(251, 191, 36, .35); border-radius: 10px;
+}
+.rc-chip-list button:hover { background: rgba(251, 191, 36, .14); }
+.rc-chip-list button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.rc-pop-bg {
+  position: fixed; inset: 0; z-index: 85; display: grid; place-items: center;
+  padding: 16px; background: rgba(var(--surface-rgb), .66);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+.rc-pop { width: min(560px, 100%); max-height: 86dvh; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border-radius: 18px; }
+.rc-pop header { display: flex; align-items: center; gap: 8px; }
+.rc-pop header b { font-size: 14.5px; }
+.rc-pop header button { margin-inline-start: auto; display: inline-flex; padding: 5px; cursor: pointer; color: var(--text2); background: none; border: 0; }
+.rc-pop-text {
+  margin: 0; padding: 12px 14px; border-radius: 12px; font-size: 13px; line-height: 2; white-space: pre-wrap;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
+}
+.rc-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
+.rc-pop dt { color: var(--text3); }
+.rc-pop dd { margin: 0; }
+.rc-pop-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.rc-pop-err { color: var(--red-text); }
+.rc-pop-field { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.rc-pop-field select {
+  font: inherit; padding: 8px 10px; border-radius: 10px; color: inherit;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.rc-pop-link { align-self: flex-start; font-size: 12px; color: var(--brand-2); }

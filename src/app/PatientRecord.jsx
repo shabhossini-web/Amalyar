@@ -1,9 +1,14 @@
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiStream, apiUpload } from '../lib/api.js';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
+import { useAuth } from './auth.jsx';
+import VisitForm from './VisitForm.jsx';
+import OrderSheet from './OrderSheet.jsx';
+import { useVisitDefs } from './visit-defs.js';
+import { KINDS, kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
@@ -44,8 +49,35 @@ const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', can
  * ناشناخته با **کلیدِ خودش** نشان داده می‌شود نه با «عمل»: برچسبِ حدسی
  * دروغ می‌گوید.
  */
-const VISIT_KINDS = { surgery: 'عمل', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره' };
-const kindLabel = (k, defs) => defs?.[k] ?? VISIT_KINDS[k] ?? k ?? '—';
+/**
+ * ⚠️ نوعِ **شناخته‌شده** با نامِ خودش می‌آید (عمل جراحی / ویزیت / پیگیری /
+ * مشاوره)، نه با عنوانِ فرمش: مالک دید همهٔ مراجعه‌ها «فرمِ جراحی» و نوارِ مرحله
+ * برای عمل هم «ویزیت» نوشته‌اند — عمل جراحی اسمش عمل جراحی است. عنوانِ فرم فقط
+ * برای نوعِ سفارشی‌ای که در `KINDS` نیست، و روی برچسب به‌صورتِ tooltip می‌ماند.
+ */
+const kindLabel = (k, defs) => (KINDS[k] ? kindOf(k).label : (defs?.[k] ?? k ?? '—'));
+
+/** مقصدِ یک کار: سفارشِ زیرِ بررسی یا مراجعه‌ای که کار به آن گره خورده. */
+const workTarget = (w) => {
+  const m = /^(lab|imaging|consult|referral)_order$/.exec(w?.refType ?? '');
+  if (m && w.refId) return { type: 'order', kind: m[1], id: w.refId };
+  if (w?.refType === 'visit' && w.refId) return { type: 'visit', id: w.refId };
+  if (w?.visitId) return { type: 'visit', id: w.visitId };
+  return null;
+};
+
+/** مقصدِ یک ردیفِ خطِ زمان — پاپ‌آپِ **خودش**، نه فرمِ کلی (بازخوردِ مالک). */
+const tlTarget = (it) => {
+  if (it.type === 'visit' && it.refId) return { type: 'visit', id: it.refId };
+  if (it.type === 'order') {
+    const m = /^(\w+)Order$/.exec(it.refType ?? '');
+    if (m && it.refId) return { type: 'order', kind: m[1], id: it.refId };
+  }
+  if (it.type === 'reminder' && it.refId) return { type: 'reminder', id: it.refId, item: it };
+  if (it.type === 'appointment' && it.refId) return { type: 'appointment', id: it.refId, item: it };
+  if (it.visitId) return { type: 'visit', id: it.visitId };
+  return null;
+};
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 const fmtSize = (b) => (b < 1024 ? `${faNum(b)} بایت`
@@ -244,20 +276,24 @@ function FormsTab({ rec, onErr }) {
   );
 }
 
-function VisitsTab({ rec, onErr }) {
+function VisitsTab({ rec, onErr, onOpen }) {
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
     <div className="df-list">
       {rec.visits.map((v) => (
         <div key={v.id} className="df-row">
           <div className="df-row-main">
-            <b>
-              <span dir="ltr">{v.code}</span>
-              <i className="rc-kind" style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined}>
-                {v.kindTitle || kindLabel(v.kind, rec.kindTitles)}
-              </i>
-              {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
-            </b>
+            {/* سرآیندِ کارت دکمه است: مراجعه در **همین صفحه** پاپ‌آپ می‌شود، نه با
+                پرش به داشبورد (بازخوردِ مالک: «تو پرونده رو مراجعه‌ها بزنیم پاپ‌آپ باز شه»). */}
+            <button type="button" className="rc-visit-btn" onClick={() => onOpen({ type: 'visit', id: v.id })} title="بازکردنِ فرمِ این مراجعه">
+              <b>
+                <span dir="ltr">{v.code}</span>
+                <i className="rc-kind" style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined} title={v.kindTitle || undefined}>
+                  {kindLabel(v.kind, rec.kindTitles)}
+                </i>
+                {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
+              </b>
+            </button>
             <small>
               {[v.surgeonName && `جراح: ${v.surgeonName}`, v.hospitalName, v.techName && `کارشناس: ${v.techName}`,
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}
@@ -914,15 +950,19 @@ const TL_META = {
  * یک واقعیت است؛ اگر گام را برداریم، نوار برای هر بیمار شکلِ دیگری دارد و
  * دیگر نمی‌شود با یک نگاه فهمید کجای مسیریم.
  */
+/** عنوانِ گامِ «مراجعه» از نوعِ دوره (عمل جراحی / ویزیت)؛ بقیهٔ گام‌ها واژهٔ حوزه. */
+const stepTitle = (s, t) => (s.key === 'visit' && s.kind && KINDS[s.kind] ? kindOf(s.kind).label : withTerm(s.title, t));
+
 function StageBar({ stage, t }) {
   if (!stage?.steps?.length) return null;
+  const cur = stage.key ? stage.steps.find((s) => s.key === stage.key) : null;
   return (
     <section className="rc-stage" aria-label="الان کجاییم">
       <p className="rc-stage-now">
         {/* ⚠️ متنِ سرور از `faNum` رد می‌شود: شمارش‌ها («۲ نتیجه…») آن‌جا عددِ
             لاتین‌اند و کلِ صفحه فارسی است. قالبِ **پول** این‌جا نمی‌آید — آن
             `fmtMoney` است و به همین دلیل سرور هیچ مبلغی را متن نمی‌کند. */}
-        <b>الان کجاییم:</b> {faNum(withTerm(stage.title, t))}
+        <b>الان کجاییم:</b> {faNum(cur ? stepTitle(cur, t) : withTerm(stage.title, t))}
         {stage.detail && <i> — {faNum(withTerm(stage.detail, t))}</i>}
       </p>
       <ol className="rc-steps">
@@ -932,7 +972,7 @@ function StageBar({ stage, t }) {
               {s.state === 'done' ? <Check width="11" height="11" /> : null}
             </span>
             <span className="rc-step-txt">
-              <b>{withTerm(s.title, t)}</b>
+              <b>{stepTitle(s, t)}</b>
               {s.detail && <i>{faNum(withTerm(s.detail, t))}</i>}
               {s.at && <time dateTime={s.at}>{faDate(s.at)}</time>}
             </span>
@@ -950,7 +990,7 @@ function StageBar({ stage, t }) {
  * هر بار بازکردنِ پرونده فقط فضای بالای صفحه را می‌خورد و چشم یاد می‌گیرد
  * نادیده‌اش بگیرد — همان روزی که واقعاً کاری باشد هم دیده نمی‌شود.
  */
-function NextUp({ live, onGo, onActed, toast }) {
+function NextUp({ live, onGo, onActed, toast, onOpen }) {
   const [busy, setBusy] = useState(0);
   const w = live.nextWork;
   const appt = live.upcoming?.[0] ?? null;
@@ -979,7 +1019,7 @@ function NextUp({ live, onGo, onActed, toast }) {
           {/* ردیفِ کار از `WorkRow` می‌آید تا نوعِ کار، مالک و دکمه‌ها با زنگِ
               اعلان و صفحهٔ «کارهای من» یکی بمانند — نه نسخهٔ سومِ همان کارت. */}
           <ul className="wk-list">
-            <WorkRow w={w} onAct={act} busy={busy} compact />
+            <WorkRow w={w} onAct={act} busy={busy} compact onOpen={workTarget(w) ? () => onOpen(workTarget(w)) : undefined} />
           </ul>
           <p className="rc-next-meta">
             <span>{w.ownerAccountId ? 'واگذارشده' : w.ownerRoleFa ? `به‌عهدهٔ ${w.ownerRoleFa}` : 'بی‌مسئول'}</span>
@@ -997,10 +1037,16 @@ function NextUp({ live, onGo, onActed, toast }) {
           </p>
         )}
         {review.length > 0 && (
-          <p className="rc-chip is-warn"><Alert size={13} />
-            <b>{faNum(review.length)} نتیجه</b> آمده و بررسی نشده
-            <i>{review.map((o) => o.kindFa).join('، ')}</i>
-          </p>
+          /* هر نتیجه یک دکمه: هشدار باید بگوید **کدام** سفارش و با کلیک شیتِ همان
+             سفارش (با پاسخِ بیمار و دکمهٔ بررسی) باز شود — نه فقط یک شمارنده. */
+          <div className="rc-chip is-warn rc-chip-list" role="group" aria-label="نتیجه‌های بررسی‌نشده">
+            <span><Alert size={13} /> <b>{faNum(review.length)} نتیجه</b> آمده و بررسی نشده — برای بررسی بزنید</span>
+            {review.map((o) => (
+              <button key={`${o.kind}-${o.id}`} type="button" onClick={() => onOpen({ type: 'order', kind: o.kind, id: o.id })}>
+                {o.kindFa}{o.summary ? ` — ${o.summary}` : ''}{o.visitCode ? ` · ${o.visitCode}` : ''}
+              </button>
+            ))}
+          </div>
         )}
         {due > 0 && (
           <button type="button" className="rc-chip is-money" onClick={() => onGo('visits')}>
@@ -1020,7 +1066,7 @@ function NextUp({ live, onGo, onActed, toast }) {
  * دکمه‌نمایی که کاری نمی‌کند از نبودنِ دکمه بدتر است (باگِ واقعیِ همین ریپو:
  * لینکِ «بازکردن در داشبورد» که هیچ‌کاری نمی‌کرد).
  */
-function Timeline({ live, onGo, t }) {
+function Timeline({ live, onGo, t, onOpen }) {
   const [all, setAll] = useState(false);
   const tl = live.timeline;
   if (!tl?.items?.length) return null;
@@ -1040,7 +1086,12 @@ function Timeline({ live, onGo, t }) {
               <span className="rc-tl-body">
                 {/* نوعِ شرح داده است نه برچسب؛ نگاشتِ فارسی‌اش همین بالا در
                     `NOTE_KINDS` هست و دو نسخه‌کردنش فقط واگرایی می‌آورد. */}
-                <b>{it.type === 'note' ? (NOTE_KINDS[it.title] ?? it.title) : withTerm(it.title, t)}</b>
+                <b>
+                  {it.type === 'note' ? (NOTE_KINDS[it.title] ?? it.title)
+                    : it.type === 'visit' && it.kind && KINDS[it.kind]
+                      ? <>{kindOf(it.kind).label} <span dir="ltr">{it.code ?? ''}</span></>
+                      : withTerm(it.title, t)}
+                </b>
                 {it.detail && <i>{faNum(it.detail)}</i>}
               </span>
               <span className="rc-tl-side">
@@ -1049,9 +1100,12 @@ function Timeline({ live, onGo, t }) {
               </span>
             </>
           );
-          /* مقصد: مراجعه‌دار → فرمِ همان مراجعه؛ مدرک/شرح → تبِ خودش؛ بقیه بی‌لینک. */
-          if (it.visitId) {
-            return <li key={it.id} className="rc-tl-row is-link"><Link to={`/app/dashboard?patient=${it.visitId}`}>{inner}</Link></li>;
+          /* مقصد: پاپ‌آپِ **خودِ** ردیف (مراجعه، سفارش، یادآوری، نوبت)؛ مدرک/شرح →
+             تبِ خودش؛ بقیه بی‌لینک. تا دیروز هر ردیفِ مراجعه‌دار به فرمِ کلیِ
+             داشبورد می‌پرید (بازخوردِ مالک). */
+          const target = tlTarget(it);
+          if (target) {
+            return <li key={it.id} className="rc-tl-row is-link"><button type="button" onClick={() => onOpen(target)}>{inner}</button></li>;
           }
           if (it.type === 'document' || it.type === 'note') {
             return (
@@ -1156,8 +1210,7 @@ function Pathway({ patientId, toast }) {
   );
 }
 
-function RecordActions({ rec, onEdit, toast, t }) {
-  const navigate = useNavigate();
+function RecordActions({ rec, onEdit, onNew, toast, t }) {
   const [busy, setBusy] = useState('');
 
   const portalLink = async () => {
@@ -1179,12 +1232,9 @@ function RecordActions({ rec, onEdit, toast, t }) {
 
   return (
     <div className="rc-actions">
-      <button
-        type="button" className="rc-act is-main"
-        /* ⚠️ نام از `state` رد می‌شود نه از کوئری: نامِ بیمار در URL و در
-           تاریخچهٔ مرورگر می‌ماند و جای خوبی برایش نیست. */
-        onClick={() => navigate('/app/dashboard', { state: { prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } } })}
-      ><Plus width="13" height="13" /> {t.visitNew}</button>
+      {/* فرم در **همین صفحه** پاپ‌آپ می‌شود؛ تا دیروز به داشبورد می‌پرید و پرونده
+          از دست می‌رفت (بازخوردِ مالک). */}
+      <button type="button" className="rc-act is-main" onClick={onNew}><Plus width="13" height="13" /> {t.visitNew}</button>
       <button type="button" className="rc-act" onClick={onEdit}><Pencil width="13" height="13" /> ویرایشِ مشخصات</button>
       <button type="button" className="rc-act" onClick={portalLink} disabled={busy === 'link'}>
         <LinkIcon width="13" height="13" /> {busy === 'link' ? 'یک لحظه…' : 'لینکِ پرونده'}
@@ -1210,6 +1260,11 @@ export default function PatientRecord() {
      صفحه‌اند؛ تب‌ها بایگانی‌اند و بایگانی با «مراجعات» شروع می‌شود. */
   const [tab, setTab] = useState('visits');
   const tabsRef = useRef(null);
+  const { user } = useAuth();
+  /* پاپ‌آپِ جاری: { type: 'visit'|'order'|'reminder'|'appointment', … } — فقط یکی در هر لحظه. */
+  const [pop, setPop] = useState(null);
+  /* تعریف‌های فرمِ مراجعه تنبل‌اند: تا فرم باز نشود شش فهرست خوانده نمی‌شود. */
+  const { defs, reload: loadDefs } = useVisitDefs(pop?.type === 'visit', user?.id);
   /* ⚠️ **شکست باید از موفقیت قابلِ تشخیص باشد.**
      تا دیروز toast فقط یک رشته بود و خطا با موفقیت یک شکل داشت: همان قابِ
      بنفش، ۲٫۲ ثانیه، بعد رفت. یعنی اگر ثبتِ شرح ۴۰۳ یا ۵۰۰ می‌گرفت، کاربر
@@ -1257,6 +1312,33 @@ export default function PatientRecord() {
     tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
+  /**
+   * بازکردنِ پاپ‌آپِ یک چیز از هر جای صفحه (خطِ زمان، کارتِ «چه مانده»، تبِ مراجعات).
+   *
+   * ⚠️ دادهٔ کامل همین‌جا خوانده می‌شود، نه از ردیفِ خلاصهٔ خطِ زمان: شیتِ
+   * سفارش مدرک‌های پاسخ را می‌خواهد و فرمِ مراجعه کلِ رکورد را. خطا toastِ
+   * قرمز است، نه پاپ‌آپِ خالی.
+   */
+  const openThing = useCallback(async (spec) => {
+    try {
+      if (spec.type === 'visit') {
+        const v = await api(`/visits/${spec.id}`);
+        setPop({ type: 'visit', visit: v });
+      } else if (spec.type === 'order') {
+        const list = await api(`/orders?patientId=${id}`);
+        const o = (Array.isArray(list) ? list : []).find((x) => x.kind === spec.kind && x.id === spec.id);
+        if (!o) throw new Error('سفارش پیدا نشد');
+        setPop({ type: 'order', kind: spec.kind, order: o });
+      } else if (spec.type === 'reminder') {
+        const rows = await api(`/reminders?patientId=${id}`).catch(() => []);
+        setPop({ type: 'reminder', row: (Array.isArray(rows) ? rows : []).find((x) => x.id === spec.id) ?? null, item: spec.item });
+      } else if (spec.type === 'appointment') {
+        setPop({ type: 'appointment', id: spec.id, item: spec.item });
+      }
+    } catch (e) { say(e.message, true); }
+  }, [id, say]);
+  const closePop = useCallback(() => setPop(null), []);
+
   useEffect(() => {
     document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
   }, [rec]);
@@ -1270,7 +1352,9 @@ export default function PatientRecord() {
     /* «خلاصه» نامِ درستی نبود: این تب یک فرمِ ویرایشِ کامل است و خلاصه حالا
        بالای صفحه است. اسمِ درست، انتظارِ درست. */
     ['profile', 'مشخصات'],
-    ['visits', `${t.visits} (${faNum(rec.counts.visits)})`],
+    /* واژهٔ **خنثی**: این فهرست عمل و ویزیت را با هم دارد و هر کارت نوعِ خودش را
+       می‌گوید؛ «ویزیت‌ها» برای مطبی که عملِ جراحی هم ثبت می‌کند دروغ بود (مالک). */
+    ['visits', `مراجعه‌ها (${faNum(rec.counts.visits)})`],
     ...(rec.counts.visits > 1 ? [['journey', 'مسیرِ درمان']] : []),
     ['docs', `مدارک (${faNum(rec.counts.documents)})`],
     /* فقط وقتی چیزی هست: تبِ همیشه‌خالی، فضای نوارِ تب را می‌گیرد و هیچ
@@ -1312,11 +1396,14 @@ export default function PatientRecord() {
         </dl>
       )}
 
-      <RecordActions rec={rec} onEdit={() => goTab('profile')} toast={say} t={t} />
+      <RecordActions
+        rec={rec} onEdit={() => goTab('profile')} toast={say} t={t}
+        onNew={() => setPop({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } })}
+      />
 
       {live && <StageBar stage={live.stage} t={t} />}
-      {live && <NextUp live={live} onGo={goTab} onActed={loadLive} toast={say} />}
-      {live && <Timeline live={live} onGo={goTab} t={t} />}
+      {live && <NextUp live={live} onGo={goTab} onActed={loadLive} toast={say} onOpen={openThing} />}
+      {live && <Timeline live={live} onGo={goTab} t={t} onOpen={openThing} />}
       <Pathway patientId={rec.id} toast={say} />
 
       <div ref={tabsRef} />
@@ -1330,12 +1417,52 @@ export default function PatientRecord() {
 
       <div className="rc-body">
         {tab === 'profile' && <ProfileTab key={rec.updatedAt} rec={rec} onSave={save} toast={say} />}
-        {tab === 'visits' && <VisitsTab rec={rec} onErr={(m) => say(m, true)} />}
+        {tab === 'visits' && <VisitsTab rec={rec} onErr={(m) => say(m, true)} onOpen={openThing} />}
         {tab === 'journey' && <JourneyTab rec={rec} />}
         {tab === 'docs' && <DocsTab rec={rec} reload={load} toast={say} />}
         {tab === 'forms' && <FormsTab rec={rec} onErr={(m) => say(m, true)} />}
         {tab === 'notes' && <NotesTab rec={rec} reload={load} toast={say} />}
       </div>
+
+      {/* ── پاپ‌آپ‌ها: هر چیزی در همین صفحه باز می‌شود ── */}
+      <AnimatePresence>
+        {pop?.type === 'visit' && (
+          <VisitForm
+            initial={pop.visit}
+            prefill={pop.prefill}
+            defs={defs}
+            onDefsChanged={loadDefs}
+            onClose={closePop}
+            onSaved={(saved, wasEdit, opts) => {
+              setPop(null);
+              load();
+              /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
+              if (opts?.openSurgery) {
+                say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+                setTimeout(() => setPop({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } }), 400);
+                return;
+              }
+              say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
+            }}
+            onToast={(m) => say(m)}
+          />
+        )}
+      </AnimatePresence>
+      {/* میزبانِ شیتِ سفارش همیشه سوار است و خودش presence را می‌گرداند. */}
+      <OrderSheet
+        open={pop?.type === 'order'}
+        kind={pop?.kind}
+        order={pop?.order}
+        patientId={rec.id}
+        visitId={pop?.order?.visitId ?? undefined}
+        onClose={closePop}
+        onSaved={loadLive}
+        onToast={(m) => say(m)}
+      />
+      <AnimatePresence>
+        {pop?.type === 'reminder' && <ReminderPop row={pop.row} item={pop.item} onClose={closePop} onActed={loadLive} toast={say} />}
+        {pop?.type === 'appointment' && <ApptPop id={pop.id} item={pop.item} onClose={closePop} onActed={loadLive} toast={say} />}
+      </AnimatePresence>
 
       {toast && (
         <button
@@ -1352,6 +1479,116 @@ export default function PatientRecord() {
   );
 }
 
+
+/* ══════════════ پاپ‌آپ‌های خطِ زمان ══════════════ */
+const REM_KIND_FA = {
+  next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ رو', pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل',
+  follow_up: 'فرمِ پیگیری', notice: 'اطلاعیه', dispatch: 'ابلاغِ کارشناس', appointment: 'نوبت',
+};
+const REM_STATUS_FA = {
+  pending: 'در صف', sending: 'در حالِ ارسال', sent: 'فرستاده شد', simulated: 'آزمایشی — فرستاده نشد',
+  failed: 'ناموفق', uncertain: 'نتیجه نامعلوم', cancelled: 'لغو شد',
+};
+/* همان دو فهرستِ صفحهٔ یادآوری‌ها (W0.7): فرستاده‌شده نه دوباره می‌رود نه لغو می‌شود. */
+const REM_RETRYABLE = ['failed', 'uncertain', 'simulated'];
+const REM_CANCELLABLE = ['pending', 'uncertain', 'failed'];
+
+/**
+ * پاپ‌آپِ یک یادآوری — متنِ کامل، وضعیت، علتِ نرفتن، و همان دو اقدامِ دفترِ
+ * یادآوری‌ها (ارسالِ دوباره / لغو). `row` از `/reminders?patientId=` می‌آید؛ اگر
+ * نیامد (دسترسی)، ردیفِ خلاصهٔ خطِ زمان کافی است تا پاپ‌آپ خالی نماند.
+ */
+function ReminderPop({ row, item, onClose, onActed, toast }) {
+  const [busy, setBusy] = useState(false);
+  const r = row ?? { id: item?.refId, status: item?.state, text: item?.detail, dueAt: item?.at, sentAt: null, kind: null, phone: null, error: null };
+  const act = async (what) => {
+    setBusy(true);
+    try {
+      await api(`/reminders/${r.id}/${what}`, { method: 'POST', ...(what === 'cancel' ? { body: { reason: 'لغو از پروندهٔ بیمار' } } : {}) });
+      toast(what === 'retry' ? 'دوباره در صف نشست ✓' : 'پیام لغو شد ✓');
+      await onActed();
+      onClose();
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
+  };
+  return (
+    <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-reminder" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label="یادآوری">
+      <header>
+        <Send width="15" height="15" />
+        <b>یادآوری{r.kind ? ` — ${REM_KIND_FA[r.kind] ?? r.kind}` : ''}</b>
+        <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      <p className="rc-pop-text">{r.text || '—'}</p>
+      <dl>
+        <dt>وضعیت</dt><dd><em className={`rc-tl-state is-${r.status ?? 'none'}`}>{REM_STATUS_FA[r.status] ?? r.status ?? '—'}</em></dd>
+        {(r.sentAt || r.dueAt) && <><dt>{r.status === 'pending' ? 'موعد' : 'زمان'}</dt><dd>{faDate(r.sentAt ?? r.dueAt)}</dd></>}
+        {r.phone && <><dt>گیرنده</dt><dd dir="ltr">{faNum(r.phone)}</dd></>}
+        {r.error && <><dt>علت</dt><dd className="rc-pop-err">{r.error}</dd></>}
+      </dl>
+      {(REM_RETRYABLE.includes(r.status) || REM_CANCELLABLE.includes(r.status)) && (
+        <div className="rc-pop-acts">
+          {REM_RETRYABLE.includes(r.status) && <button type="button" className="rc-refsum-main" disabled={busy} onClick={() => act('retry')}>ارسالِ دوباره</button>}
+          {REM_CANCELLABLE.includes(r.status) && <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => act('cancel')}>لغوِ این پیام</button>}
+        </div>
+      )}
+    </Overlay>
+  );
+}
+
+const APPT_STATUS_FA = { held: 'در انتظارِ پرداخت', confirmed: 'قطعی', arrived: 'در مطب', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو شد' };
+/* همان کلیدهای `CANCEL_REASONS` سرور — دلیلِ لغو به بیمار پیامک می‌شود. */
+const APPT_CANCEL = { doctor: 'تعویقِ پزشک', patient: 'درخواستِ بیمار', clinical: 'شرایطِ بالینی', hospital: 'مشکلِ بیمارستان', other: 'سایر' };
+
+/** پاپ‌آپِ یک نوبت — جزئیات + تغییرِ وضعیت (همان `POST /appointments/:id/status` میزِ پذیرش). */
+function ApptPop({ id, item, onClose, onActed, toast }) {
+  const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [reason, setReason] = useState('patient');
+  const st = item?.state;
+  const open = !['done', 'cancelled', 'noshow'].includes(st);
+  const set = async (status, extra = {}) => {
+    setBusy(true);
+    try {
+      await api(`/appointments/${id}/status`, { method: 'POST', body: { status, ...extra } });
+      toast('وضعیتِ نوبت ثبت شد ✓');
+      await onActed();
+      onClose();
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
+  };
+  return (
+    <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-appt" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label="نوبت">
+      <header>
+        <Calendar width="15" height="15" />
+        <b>{item?.title ?? 'نوبت'}</b>
+        <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      <dl>
+        {item?.at && <><dt>تاریخ</dt><dd>{faDate(item.at)}{item.detail ? ` · ${faNum(item.detail)}` : ''}</dd></>}
+        <dt>وضعیت</dt><dd><em className={`rc-tl-state is-${st ?? 'none'}`}>{APPT_STATUS_FA[st] ?? item?.stateFa ?? '—'}</em></dd>
+      </dl>
+      {open && !cancelling && (
+        <div className="rc-pop-acts">
+          {st !== 'confirmed' && st !== 'arrived' && <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => set('confirmed')}>قطعی شد</button>}
+          {st !== 'arrived' && <button type="button" className="rc-refsum-main" disabled={busy} onClick={() => set('arrived')}>بیمار رسید</button>}
+          <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => set('noshow')}>نیامد</button>
+          <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => setCancelling(true)}>لغوِ نوبت…</button>
+        </div>
+      )}
+      {open && cancelling && (
+        <div className="rc-pop-field">
+          <span>دلیلِ لغو — به بیمار پیامک می‌شود</span>
+          <select value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}>
+            {Object.entries(APPT_CANCEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+          <div className="rc-pop-acts">
+            <button type="button" className="rc-refsum-main" disabled={busy} onClick={() => set('cancelled', { cancelReason: reason })}>لغوِ نوبت</button>
+            <button type="button" className="rc-refsum-ghost" disabled={busy} onClick={() => setCancelling(false)}>انصراف</button>
+          </div>
+        </div>
+      )}
+      <Link to="/app/schedule" className="rc-pop-link">بازکردن در برنامهٔ نوبت‌ها</Link>
+    </Overlay>
+  );
+}
 
 /**
  * خلاصهٔ ارجاع با دستیارِ AI (#53) — از مراجعه‌ها و شرح‌های همین پرونده،

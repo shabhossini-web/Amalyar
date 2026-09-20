@@ -59,6 +59,7 @@ preop-immediate
 public-form
 record-direct
 record-forms
+record-popups
 record-texts
 reminders-ui
 role-fields

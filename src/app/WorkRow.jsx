@@ -27,13 +27,18 @@ const tomorrow9 = () => {
  * یک ردیفِ کار — در زنگِ اعلان و صفحهٔ «کارهای من» یکی است.
  * `overdue` و نامِ بیمار از سرور می‌آید (قانونِ ۱۵)؛ این‌جا فقط رندر.
  */
-export default function WorkRow({ w, onAct, busy, compact = false }) {
+export default function WorkRow({ w, onAct, busy, compact = false, onOpen }) {
   const due = w.dueAt ? faDate(w.dueAt) : '';
   return (
     <li className={`wk-row${w.overdue ? ' overdue' : ''}${w.state === 'blocked' ? ' blocked' : ''}`} data-work-id={w.id}>
       <div className="wk-main">
         <span className="wk-type">{TYPE_FA[w.type] ?? w.type}</span>
-        <span className="wk-title">{w.title}</span>
+        {/* عنوانِ کار وقتی **مقصد** دارد (سفارش، مراجعه) دکمه است و پاپ‌آپِ خودش را
+            باز می‌کند — «انجام شد» بدونِ دیدنِ خودِ چیز، امضای کور است (بازخوردِ
+            مالک: هر هشدار باید بگوید مالِ چیست و با کلیک بازِ شود). */}
+        {onOpen
+          ? <button type="button" className="wk-title wk-open" onClick={() => onOpen(w)}>{w.title}</button>
+          : <span className="wk-title">{w.title}</span>}
         <span className="wk-meta">
           {w.patient && <Link to={`/app/patients/${w.patient.id}`} className="wk-patient">{w.patient.fullName}</Link>}
           {due && <span className={`wk-due${w.overdue ? ' hot' : ''}`}>{w.overdue ? 'عقب‌افتاده · ' : 'تا '}{due}</span>}
