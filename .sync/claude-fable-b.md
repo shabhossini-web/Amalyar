@@ -1,19 +1,16 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: active
+status: idle
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-20
-paths:
-  - server/src/patients/portal.service.ts
-  - scripts/e2e/follow-up.mjs
-  - scripts/e2e/portal-followup.mjs
-  - scripts/e2e/portal-followup-local.mjs
-  - docs/plan/lanes/claude-fable-b.md
+paths: []
 note: >-
-  تصمیمِ مالک (۱۴۰۵/۰۶/۲۹): قراردادِ per-waveِ فرمِ پیگیری می‌ماند. دو اصلاحِ کوچک:
-  پورتال فرمِ پیگیریِ موعدنرسیده (و عملِ لغوشده) را «کار» نشان نمی‌دهد ·
-  `follow-up.mjs` با همان قرارداد هم‌خوان شد (+ `ON_ERROR_STOP`). `reminders.service.ts`
-  و `unfollowed()` دست نمی‌خورند.
+  ✅ **لِینِ ب بسته است؛ بدهی‌های لِینِ الف هم (به نیابت) تا آخرین ردیف.** آخرین
+  لند: #67 (`40d9a40`) — پورتال فرمِ پیگیری را فقط از روزِ موعدش «کار» نشان می‌دهد +
+  `follow-up.mjs` با قراردادِ per-wave. قبلش #65 — نوعِ فایلِ آپلودِ عمومی از بایت‌ها +
+  نرخ‌گیرِ `draft`. کلیم آزاد است — هیچ مسیری قفل نیست.
+  🔴 یک یافته برای لِینِ الف پایینِ همین فایل («یادداشت برای لِین‌های دیگر») منتظر
+  است: یادآوریِ لغوشده با برگرداندنِ وضعیت زنده نمی‌شود (W1.9، `plan()` با `update: {}`).
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
