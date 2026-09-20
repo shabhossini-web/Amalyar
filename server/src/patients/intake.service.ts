@@ -959,13 +959,6 @@ export class IntakeService {
         }, tx);
       }
     });
-    /* فرمِ پیگیریِ پس از عمل: حالا که پاسخ گرفته، موج‌های بعدیِ همان عمل باید
-       فرمِ **تازه** بگیرند (`syncNextVisit` فرمِ پرشده را بین موج‌ها مشترک
-       نمی‌گذارد). بدونِ این فراخوانی، متنِ پیامکِ روزِ ۳۰ تا اولین ویرایشِ
-       دستیِ مراجعه همان لینکِ پرشده را داشت و بیمار به فرمِ بسته می‌رسید.
-       غیرِ strict و بعد از commit: پاسخِ بیمار قربانیِ یادآوری نمی‌شود. */
-    const fuVisit = (row.data as any)?.followUpVisitId;
-    if (typeof fuVisit === 'number') await this.reminders.syncNextVisit(fuVisit);
     return this.publicView(token);
   }
 

@@ -3006,19 +3006,6 @@ jobs:
       - name: Verify the reminder ledger only offers allowed row actions (W0.7 UI)
         run: node scripts/e2e/w0-7-reminder-actions-ui.mjs
 
-      # ⚠️ Follow-up form token: `follow-up.mjs` (live-server family, not in
-      # CI) had two checks red for months on a FRESH database -- each wave got
-      # its own form and token, so the patient saw a different link in every
-      # SMS. The rule has two halves and both bit for real: one open form is
-      # shared by all waves, and once the patient has filled it the remaining
-      # waves get a fresh form (a filled form no longer accepts answers, so the
-      # day-30 SMS would have linked to a dead end). `fill()` itself re-syncs,
-      # so this does not wait for an admin edit. `intake-finance-roles` above
-      # still guards `followUpUrl` unchanged: distinct per day, stable after
-      # completion.
-      - name: Verify one follow-up form is shared until filled, then renewed
-        run: node scripts/e2e/followup-token-local.mjs
-
       # ⚠️ Public intake guards (two debts the backend lane had recorded but
       # never closed): the stored mimeType of a receipt or form image came from
       # the client's multipart header and was echoed into Content-Type (inline

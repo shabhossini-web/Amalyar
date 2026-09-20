@@ -22,18 +22,6 @@ import { AuditService } from '../audit/audit.service';
  * ثابت است نه تنظیم؛ تنظیم‌شدنی‌کردنش وقتی ارزش دارد که اولین مشتری
  * واقعاً چیزِ دیگری بخواهد — تا آن روز، یک knob کمتر.
  */
-/** برشی از Visit که فرمِ پیگیری به آن نیاز دارد (`followUpRow` / `followUpUrl`). */
-type FollowUpVisit = {
-  id: number; patientId: number; opDate: Date | null; procedureTypeId: number | null; diagnosisId: number | null;
-  patient: {
-    firstName: string; lastName: string; phone: string | null;
-    nationalId: string | null; birthDate: Date | null; address: string | null;
-  } | null;
-};
-
-/** وضعیت‌هایی که فرمِ پیگیری هنوز در آن‌ها **پاسخ نگرفته** و می‌تواند بینِ موج‌ها مشترک بماند. */
-const FOLLOW_UP_OPEN = ['pending_fill', 'pending_payment'];
-
 /** یادآوری‌هایی که `syncNextVisit` برنامه‌ریزی‌شان می‌کند — و فقط همین‌ها را هرس می‌کند. */
 const PLANNED_KINDS = ['next_visit', 'surgery', 'pre_op_care', 'post_op_care', 'follow_up'];
 
@@ -235,53 +223,17 @@ export class RemindersService {
           const opStart = Date.UTC(opDate.getUTCFullYear(), opDate.getUTCMonth(), opDate.getUTCDate());
           return opStart <= Date.now() ? new Date(Date.now() + 60_000) : this.dueOn(opDate, 0, hour);
         };
-        /**
-         * فرمِ پیگیری — **یک توکن برای همهٔ موج‌ها تا وقتی باز است؛ فرمِ پرشده
-         * بسته می‌ماند و موج‌های بعدش فرمِ تازه می‌گیرند.**
-         *
-         * دو نیمهٔ این قاعده هرکدام یک شکستِ واقعی را می‌بندند:
-         *
-         * - نسخهٔ قبلی `followUpUrl` را داخلِ حلقه با `[day]` صدا می‌زد. آن
-         *   تابع کلیدِ هویتِ فرم را از `days[0]` می‌سازد، پس هر موج فرم و
-         *   **توکنِ خودش** را می‌گرفت: بیمار به‌جای یک لینکِ ماندگار در هر
-         *   پیامک لینکِ تازه می‌دید و پرونده به‌ازای هر موج یک فرمِ نیمه‌پر
-         *   داشت (روی دیتابیسِ تازه سنجیده شد — نه آلودگی، رفتار).
-         * - ولی «یک توکن» مطلق هم غلط است: فرمی که بیمار در روزِ ۷ پر کرده
-         *   `approved` است و دیگر پاسخ نمی‌گیرد؛ اگر پیامکِ روزِ ۳۰ همان را
-         *   لینک بدهد، پیگیریِ روزِ ۳۰ **قابلِ ثبت نیست**. پس بعد از پرشدن،
-         *   موج‌های باقی‌مانده با کلیدِ اولین روزِ خودشان فرمِ تازه می‌گیرند.
-         *
-         * `followUpRow` دست نخورده همان قراردادِ `followUpUrl` است که CI رویش
-         * قفل است؛ فقط این‌جا وضعیتِ ردیف خوانده می‌شود. نصب‌های موجود مهاجرت
-         * نمی‌خواهند: ردیف‌های per-waveِ قدیمی با همین کلیدها دوباره پیدا می‌شوند.
-         */
-        const linkByDay = new Map<number, string>();
-        try {
-          let rest = followDays;
-          while (rest.length) {
-            const row = await this.followUpRow(v, rest);
-            if (!row) break;
-            const url = this.followUpLink(row);
-            if (FOLLOW_UP_OPEN.includes(row.status)) {
-              for (const d of rest) linkByDay.set(d, url);
-              break;
-            }
-            linkByDay.set(rest[0], url);
-            rest = rest.slice(1);
-          }
-        } catch (e) {
-          /* خطای ساختِ لینک (مثلاً نبودِ tenant context) نباید یادآوریِ عمل و
-             مراقبت‌ها را قربانی کند — بدونِ لینک ادامه می‌دهیم و لاگ می‌ماند. */
-          this.log.warn(`لینک پیگیری visit ${visitId} ساخته نشد: ${e instanceof Error ? e.message : e}`);
-          if (strict) throw e;
-        }
-        /* پیامِ مراقبتِ بعد از عمل لینکِ **اولین** موج را ضمیمه می‌کند. */
-        const followUrl = linkByDay.get(followDays[0]) ?? null;
-        /* `dedupeKey` موعد را هم دارد (`reminderKey` → `dueDay`)، پس دو موج با
-           متنِ یکسان در دو روزِ متفاوت دو ردیفِ جدا می‌مانند. */
+        /* خطای ساختِ لینک (مثلاً نبودِ tenant context) نباید یادآوریِ عمل و
+           مراقبت‌ها را قربانی کند — بدونِ لینک ادامه می‌دهیم و لاگ می‌ماند. */
+        let followUrl: string | null = null;
         for (const day of followDays) {
-          const url = linkByDay.get(day);
+          const url = await this.followUpUrl(v, [day]).catch((e) => {
+            this.log.warn(`لینک پیگیری visit ${visitId} ساخته نشد: ${e instanceof Error ? e.message : e}`);
+            if (strict) throw e;
+            return null;
+          });
           if (!url) continue;
+          followUrl ??= url;
           const due = day === 0 ? immediateDue() : this.dueOn(v.opDate, day, hour);
           if (!due) continue;
           const fuText = `${prefix}${careText(renderSms(cfg.followUpText, { link: url }))}`;
@@ -364,23 +316,16 @@ export class RemindersService {
    * `sendToPatient`)، پس هم‌گام‌سازی‌های مکرر ردیفِ نیمه‌کاره نمی‌کارند؛
    * اعتبارش تا آخرین موعدِ پیگیری + ۱۴ روز تمدید می‌شود.
    */
-  private async followUpUrl(v: FollowUpVisit, days: number[]): Promise<string | null> {
-    const row = await this.followUpRow(v, days);
-    return row ? this.followUpLink(row) : null;
-  }
-
-  private followUpLink(row: { token: string }): string {
-    return `https://${this.tenant.require().hostname}/f/${row.token}`;
-  }
-
-  /**
-   * ردیفِ `intakeSubmission`ِ فرمِ پیگیری برای این دسته از روزها — همان قراردادِ
-   * `followUpUrl` (که `intake-finance-roles.mjs` در CI رویش قفل است: لینکِ جدا
-   * به‌ازای هر `days[0]`ِ متفاوت، و پایداری پس از پرشدن)، فقط **خودِ ردیف** را
-   * برمی‌گرداند تا `syncNextVisit` بتواند وضعیتش را ببیند: فرمِ باز برای همهٔ
-   * موج‌های باقی‌مانده مشترک است، فرمِ پرشده فقط مالِ روزِ خودش.
-   */
-  private async followUpRow(v: FollowUpVisit, days: number[]): Promise<{ token: string; status: string } | null> {
+  private async followUpUrl(
+    v: {
+      id: number; patientId: number; opDate: Date | null; procedureTypeId: number | null; diagnosisId: number | null;
+      patient: {
+        firstName: string; lastName: string; phone: string | null;
+        nationalId: string | null; birthDate: Date | null; address: string | null;
+      } | null;
+    },
+    days: number[],
+  ): Promise<string | null> {
     const forms = await this.prisma.formDef.findMany({
       where: {
         active: true, scope: 'record',
@@ -437,7 +382,7 @@ export class RemindersService {
           expiresAt,
         },
       });
-    return row;
+    return `https://${this.tenant.require().hostname}/f/${row.token}`;
   }
 
   /**
