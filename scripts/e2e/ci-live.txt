@@ -2,14 +2,6 @@
 # رانر: scripts/e2e/run-live.mjs (هر سوییت دیتابیس و سرورِ تازه می‌گیرد؛ چهار شارد به‌نوبت از این فهرست).
 # سوییتِ تازه = یک خط این‌جا. سوییت‌های خودکفا (مرورگر + APIِ ساختگی) گامِ مستقیمِ جابِ build اند، نه این فهرست.
 #
-# ⛔ عمداً نیستند — همه یک ریشه دارند و در کلیمِ لِینِ ب (`reminders.service.ts`، `plan()`):
-#    ردیفِ لغوشده با همان dedupeKey دوباره زنده نمی‌شود (upsert با update:{}). شرح در .sync/claude-fable.md و STATUS.md.
-#    next-visit-booking — لغوِ نوبت باید next_visit را دوباره بکارد
-#    portal — برگشتِ وضعیت از cancelled باید یادآوریِ عمل را دوباره بکارد
-#    postop-flow — پاک‌کردنِ override باید موج‌های قالبِ نوعِ عمل را برگرداند
-#    postop-visit — متنِ اصلاح‌شدهٔ مراقبت باید پیامِ تازه بگیرد
-#    summary-reminders — پاک‌کردن و دوباره‌گذاشتنِ تاریخِ ویزیتِ بعدی باید یادآوری را دوباره بکارد
-#    بعد از رفع، همین پنج نام را به فهرست برگردانید.
 
 access-roles
 ai-admin-assistant
@@ -53,11 +45,15 @@ link-builder
 link-form
 links-box
 multi-image
+next-visit-booking
 note-kinds
 org-chat
 pick-ui
 platform-domains
+portal
 portal-ui
+postop-flow
+postop-visit
 preop-immediate
 public-form
 record-direct
@@ -70,6 +66,7 @@ send-delete-crm
 settings-config
 sms-center-ui
 sms-center
+summary-reminders
 summary-ui
 technician-claim
 tenant-isolation

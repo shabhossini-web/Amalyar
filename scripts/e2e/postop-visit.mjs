@@ -73,7 +73,11 @@ try {
   await send(`/visits/${v1.id}`, 'PATCH', { postOpCare: `مراقبتِ الفِ ${tag}` });
   ok(postPend() === 0, '**متنِ یکسانِ رفته دوباره در صف نمی‌نشیند**');
   await send(`/visits/${v1.id}`, 'PATCH', { postOpCare: `مراقبتِ اصلاح‌شدهٔ ${tag}` });
-  ok(postPend() === 1 && sql(`SELECT text FROM reminders WHERE visit_id=${v1.id} AND kind='post_op_care' AND status='pending'`).includes('اصلاح‌شده'),
+  /* متنِ ثبت‌شده چندخطی است: پوششِ D07 («اگر عملِ شما انجام شده…») **پیش از**
+     خودِ مراقبت می‌آید و `sql()` فقط خطِ اول را برمی‌گرداند — پس شرطِ متن در
+     خودِ SQL سنجیده می‌شود، نه روی خطِ اول. */
+  ok(postPend() === 1
+    && Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${v1.id} AND kind='post_op_care' AND status='pending' AND text LIKE '%اصلاح‌شده%'`)) === 1,
     '**متنِ اصلاح‌شده پیامِ تازه می‌گیرد (باگِ میدانی)**');
 
   const sgPend = () => Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${v1.id} AND kind='surgery' AND status='pending'`));

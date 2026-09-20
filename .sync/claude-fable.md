@@ -1,24 +1,44 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
+status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-20
-paths: []
+paths:
+  - server/src/patients/reminders.service.ts
+  - server/src/patients/appointments.service.ts
+  - scripts/e2e/ci-live.txt
+  - scripts/e2e/README.md
+  - scripts/e2e/postop-visit.mjs
+  - scripts/e2e/summary-reminders.mjs
+  - scripts/e2e/link-builder.mjs
+  - scripts/e2e/forms-boxes.mjs
+  - scripts/e2e/forms-builder.mjs
+  - docs/plan/CONTRACTS.md
+  - docs/plan/lanes/claude-fable.md
+  - STATUS.md
 note: >-
-  ✅ **لِینِ ج بسته است.** آخرین لند: #66 (`7a2f2c8`) — همهٔ سوییت‌های e2e زیرِ CI:
-  جابِ `live` (Postgresِ سرویس + `bootstrap-env` + رانرِ `run-live.mjs`، هر سوییت
-  دیتابیس و سرورِ تازه، ۴ شارد) روی `ci-live.txt` (۹۷ سوییت) + ۱۴ سوییتِ خودکفا
-  گامِ مستقیم؛ اولین رانِ واقعی (۵۲۶) همه سبز. کلیم آزاد است.
-  🔴 پنج سوییت عمداً بیرونِ manifest‌اند (`next-visit-booking` · `portal` ·
-  `postop-flow` · `postop-visit` · `summary-reminders`) — همان حفرهٔ W1.9 که لِینِ ب
-  هم مستقلاً یافت و به **لِینِ الف** سپرد (`plan()` ردیفِ `cancelled`ِ هم‌کلید را
-  زنده نمی‌کند). شرحِ سازوکار و گزینه‌ها پایینِ همین فایل؛ بعد از رفع، پنج خط به
-  `ci-live.txt` برگردد.
+  🔧 **حفرهٔ W1.9 (زنده‌نشدنِ یادآوریِ لغوشده) — به دستورِ مالک، لِینِ ج به نیابت از
+  لِینِ الف** («لِینِ الف را تا هفتهٔ بعد نداریم، خودت انجام بده»). رفع: لغوِ
+  **سیستمی** (هرسِ `syncNextVisit`، خاموشیِ `next_visit` هنگامِ رزرو) کلید را آزاد
+  می‌کند (`dedupeKey = null`)، لغوِ **دستی** (W0.7) کلید را نگه می‌دارد. بدونِ
+  migration (ستون nullable است). پنج سوییتِ بیرون‌مانده به `ci-live.txt` برمی‌گردند.
+  ضمناً مسابقهٔ بارگذاریِ بی‌کوکی (۴۰۱ در کنسول) در سه سوییتِ مرورگری بسته شد.
+  آخرین لند: #66 (`7a2f2c8`) + #69 (`eb15188`).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
-## 🔴 برای لِینِ الف (لِینِ ب بسته شد و همین را به الف سپرد) — سه قرمزِ `follow-up` باگ نیست، ولی حفرهٔ W1.9 واقعی است
+## ✅ بسته شد (۱۴۰۵/۰۶/۲۹، لِینِ ج به نیابت از الف) — حفرهٔ W1.9: لغوِ سیستمی کلید را آزاد می‌کند
+
+مالک گفت لِینِ الف تا هفتهٔ بعد نیست و خودم انجام بدهم. رفع همان گزینهٔ دومِ
+بندِ ۳ِ پایین است: هرسِ `syncNextVisit` و خاموشیِ `next_visit` در رزروِ نوبت با
+`data: { status: 'cancelled', dedupeKey: null }` کلید را آزاد می‌کنند؛ `cancel()`ِ
+دستی (W0.7) دست‌نخورده است و کلید را نگه می‌دارد. بدونِ migration. پنج سوییت به
+`ci-live.txt` برگشتند؛ `postop-visit` §۳ و `summary-reminders` §۴ سنجهٔ بیات
+داشتند (متنِ چندخطی / sweep در حالتِ stub) و با محصول هم‌گام شدند. بندهای زیر
+تاریخچه‌اند و برای مرجع می‌مانند.
+
+## 🔴 (تاریخچه) برای لِینِ الف (لِینِ ب بسته شد و همین را به الف سپرد) — سه قرمزِ `follow-up` باگ نیست، ولی حفرهٔ W1.9 واقعی است
 
 من همین را برداشتم و **دو بار اشتباه رفتم**؛ می‌نویسم تا شما نروید:
 

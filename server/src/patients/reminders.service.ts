@@ -284,12 +284,26 @@ export class RemindersService {
        * یعنی آن ردیف **match نمی‌شود** و برای همیشه `pending` می‌ماند. با
        * `OR` صریح، یادآوریِ کهنه هم درست لغو می‌شود.
        */
+      /**
+       * ⚠️ لغوِ **سیستمی** کلیدش را آزاد می‌کند (`dedupeKey: null`)، لغوِ **دستی**
+       * (W0.7، `cancel()`) نه. چرا: `upsert` بالا با `update: {}` ردیفِ موجودِ
+       * هم‌کلید را دست نمی‌زند — درست برای `pending` و `sent`، ولی برای ردیفی
+       * که همین هرس لغو کرده بود یعنی «هرگز دوباره کاشته نمی‌شود»: لغوِ عمل و
+       * برگشت به `pending`، لغوِ نوبتی که ویزیتِ بعدی را پوشش می‌داد، پاک‌کردنِ
+       * overrideِ مراقبت، دوباره‌گذاشتنِ تاریخِ ویزیتِ بعدی — همه بی‌یادآور
+       * می‌ماندند چون متن و موعد همان قبلی است و همان کلید به ردیفِ `cancelled`
+       * می‌خورد (پنج سوییتِ زنده همین را قرمز می‌کردند). با آزادشدنِ کلید،
+       * برنامهٔ تازه ردیفِ تازه می‌کارد و ردیفِ لغوشده به‌عنوانِ سابقه می‌ماند.
+       * ردیفی که **آدم** لغو کرده کلیدش را نگه می‌دارد تا هم‌گام‌سازیِ بعدی
+       * تصمیمِ او را بی‌صدا برنگرداند؛ پیامِ عوض‌شده (متن/تاریخ) کلیدِ تازه دارد
+       * و طبقِ معمول کاشته می‌شود.
+       */
       const prune = { visitId, kind: { in: PLANNED_KINDS }, status: 'pending' };
       await this.prisma.reminder.updateMany({
         where: planned.size
           ? { ...prune, OR: [{ dedupeKey: null }, { dedupeKey: { notIn: [...planned] } }] }
           : prune,
-        data: { status: 'cancelled' },
+        data: { status: 'cancelled', dedupeKey: null },
       });
     } catch (e) {
       this.log.error(`syncNextVisit(${visitId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
