@@ -1,39 +1,24 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-20
-paths:
-  - server/src/pathway/
-  - src/app/Pathways.jsx
-  - src/app/pathways.css
-  - src/app/VisitForm.jsx
-  - .github/workflows/security-ci.yml
-  - scripts/e2e/run-live.mjs
-  - scripts/e2e/ci-live.txt
-  - scripts/e2e/bootstrap-env.mjs
-  - scripts/e2e/README.md
-  - scripts/e2e/w4-1-pathway.mjs
-  - scripts/e2e/w4-2-pathway-wizard.mjs
-  - scripts/e2e/ai-admin-assistant.mjs
-  - scripts/e2e/central-tariffs.mjs
-  - scripts/e2e/clinical-notes.mjs
-  - scripts/e2e/crm-send-ui.mjs
-  - scripts/e2e/intake-assistance-ui.mjs
-  - scripts/e2e/invoice-models-ui.mjs
-  - scripts/e2e/kind-fields.mjs
-  - scripts/e2e/letters.mjs
-  - scripts/e2e/org-chat.mjs
-  - scripts/e2e/reminders-ui.mjs
-  - docs/plan/CONTRACTS.md
-  - docs/plan/lanes/claude-fable.md
-  - STATUS.md
-note: لِینِ ج — بستهٔ «همهٔ سوییت‌ها در CI»: جابِ `live` در `security-ci.yml` (Postgresِ سرویس + `bootstrap-env` + رانرِ `run-live.mjs` با ۴ شارد) + ۱۴ سوییتِ خودکفا گامِ مستقیم. سوییت‌های بیات با محصول هم‌گام شدند (لانچر → `/app/tools`، JSONِ کمینهٔ دستیار، ۴۰۴ پلتفرم، دکمهٔ واحدِ فاکتور، کاتالوگ از dist). ⚠️ `reminders.service.ts` دست نخورده — یادداشتِ پایین برای لِینِ ب سرِ جایش است.
+paths: []
+note: >-
+  ✅ **لِینِ ج بسته است.** آخرین لند: #66 (`7a2f2c8`) — همهٔ سوییت‌های e2e زیرِ CI:
+  جابِ `live` (Postgresِ سرویس + `bootstrap-env` + رانرِ `run-live.mjs`، هر سوییت
+  دیتابیس و سرورِ تازه، ۴ شارد) روی `ci-live.txt` (۹۷ سوییت) + ۱۴ سوییتِ خودکفا
+  گامِ مستقیم؛ اولین رانِ واقعی (۵۲۶) همه سبز. کلیم آزاد است.
+  🔴 پنج سوییت عمداً بیرونِ manifest‌اند (`next-visit-booking` · `portal` ·
+  `postop-flow` · `postop-visit` · `summary-reminders`) — همان حفرهٔ W1.9 که لِینِ ب
+  هم مستقلاً یافت و به **لِینِ الف** سپرد (`plan()` ردیفِ `cancelled`ِ هم‌کلید را
+  زنده نمی‌کند). شرحِ سازوکار و گزینه‌ها پایینِ همین فایل؛ بعد از رفع، پنج خط به
+  `ci-live.txt` برگردد.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
 
-## 🔴 برای لِینِ ب — سه قرمزِ `follow-up` باگ نیست، آلودگیِ دیتابیس بود
+## 🔴 برای لِینِ الف (لِینِ ب بسته شد و همین را به الف سپرد) — سه قرمزِ `follow-up` باگ نیست، ولی حفرهٔ W1.9 واقعی است
 
 من همین را برداشتم و **دو بار اشتباه رفتم**؛ می‌نویسم تا شما نروید:
 
