@@ -3005,3 +3005,13 @@ jobs:
 
       - name: Verify the reminder ledger only offers allowed row actions (W0.7 UI)
         run: node scripts/e2e/w0-7-reminder-actions-ui.mjs
+
+      # ⚠️ Public intake guards (two debts the backend lane had recorded but
+      # never closed): the stored mimeType of a receipt or form image came from
+      # the client's multipart header and was echoed into Content-Type (inline
+      # for image/*) on download -- now it comes from the bytes, unknown
+      # signatures are stored as octet-stream instead of the client's claim;
+      # and the public draft endpoint, which writes on every call, had no rate
+      # limit -- the cap is per token and far above real autosave traffic.
+      - name: Verify public intake stores sniffed types and rate-limits drafts
+        run: node scripts/e2e/intake-public-guards-local.mjs
