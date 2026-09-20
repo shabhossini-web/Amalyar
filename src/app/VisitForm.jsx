@@ -1352,15 +1352,21 @@ const ORDER_STATUS_FA = { sent: 'منتظرِ پاسخ', answered: 'پاسخ آ�
  * دیوارِ متن دفن می‌شود؛ اگر همه بسته باشد، حساسیت دیده نمی‌شود.
  * ⚠️ هیچ عددی این‌جا حساب نمی‌شود: مانده، سن و کوتاه‌شدنِ متن از سرور می‌آیند.
  */
-function PrepCard({ prep }) {
-  const p = prep.patient;
+function PrepCard({ prep: raw }) {
+  /* ⚠️ سرورِ واقعی همیشه هر پنج بخش را می‌فرستد، ولی پاسخِ ناقص (fixtureِ
+     آزمون، یا لحظه‌ای که endpoint چیزی ندارد) نباید کلِ فرمِ مراجعه را
+     بیندازد — `orders-ai-ui` همین را گرفت: «Cannot read properties of
+     undefined (reading 'allergies')» و صفحهٔ سفید. یک‌بار این‌جا نرمال می‌شود
+     تا هر خواندنِ `prep.*` پایین‌تر بی‌خطر بماند. */
+  const prep = { patient: {}, notes: [], pendingResults: [], prevVisits: [], billing: {}, ...(raw ?? {}) };
+  const p = prep.patient ?? {};
   const risky = [
     p.allergies && { k: 'allergies', l: 'حساسیت', v: p.allergies },
     p.chronicConditions && { k: 'chronic', l: 'بیماریِ زمینه‌ای', v: p.chronicConditions },
     p.medications && { k: 'meds', l: 'داروها', v: p.medications },
   ].filter(Boolean);
   const answered = prep.pendingResults.filter((o) => o.status === 'answered').length;
-  const due = prep.billing.due;
+  const due = prep.billing?.due;
 
   return (
     <section className="db-prep" aria-label="آماده‌سازیِ ویزیت">

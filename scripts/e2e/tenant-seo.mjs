@@ -12,11 +12,16 @@
  *
  * پیش‌نیازها: `scripts/e2e/README.md`. متغیرها: `E2E_API` (پیش‌فرض 3009).
  */
+import { execSync } from 'node:child_process';
 import http from 'node:http';
 import fs from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const API = process.env.E2E_API ?? 'http://127.0.0.1:3009/api';
+/* قراردادِ این سوییت «اولین حسابِ سیستم سوپرادمین می‌شود» است، پس جدولِ حساب‌ها
+   باید خالی باشد. زیرِ رانر (`E2E_DB` ست است) دیتابیس تازه ولی با ادمینِ bootstrap
+   است؛ این‌جا خالی می‌شود و بعدش دور ریخته می‌شود. */
+if (process.env.E2E_DB) execSync(`psql "${process.env.E2E_DB}" -v ON_ERROR_STOP=1 -qc "TRUNCATE accounts CASCADE"`);
 
 /**
  * درخواستِ خام با `Host` دلخواه.

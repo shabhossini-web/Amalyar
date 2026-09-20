@@ -14,8 +14,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # ۶۲ گام + دو npm ci + دو بیلد؛ ۱۵ دقیقه روی رانرِ کند به timeoutِ کاذب می‌رسید
-    timeout-minutes: 30
+    # ۶۲ گام + دو npm ci + دو بیلد؛ ۱۵ دقیقه روی رانرِ کند به timeoutِ کاذب می‌رسید.
+    # +۱۴ سوییتِ مرورگریِ خودکفا (انتهای همین جاب) → ۴۵.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -2940,6 +2941,20 @@ jobs:
       - name: Install chromium for the browser suite
         run: npx --yes playwright@1.61.1 install --with-deps chromium
 
+      # ⚠️ ۳۱ سوییت `executablePath: '/opt/pw-browsers/chromium'` را هاردکد
+      # کرده‌اند و ۱۴ تای دیگر آن را پیش‌فرضِ `E2E_CHROME` گرفته‌اند — مسیرِ
+      # کانتینرِ توسعه، که روی رانر نیست. به‌جای دست‌زدن به ۵۸ فایلِ سه لِین،
+      # همان مسیرها را به chromiumِ نصب‌شدهٔ playwright سیم‌لینک می‌کنیم.
+      - name: Expose chromium where the suites expect it
+        run: |
+          CHROME="$(find ~/.cache/ms-playwright -type f -name chrome -path '*chromium-*' | head -1)"
+          test -x "$CHROME" || { echo "chromium پیدا نشد"; exit 1; }
+          sudo mkdir -p /opt/pw-browsers/chromium-1194/chrome-linux
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium-1194/chrome-linux/chrome
+          sudo ln -sfn "$CHROME" /tmp/chromium
+          echo "E2E_CHROME=$CHROME" >> "$GITHUB_ENV"
+
       - name: Verify draft resume, indicator and no browser storage (W1.8 UI)
         run: node scripts/e2e/w1-8-draft-ui.mjs
 
@@ -3027,3 +3042,128 @@ jobs:
       # what is certainly not yet the patient's work.
       - name: Verify the portal lists a follow-up form only from its due day
         run: node scripts/e2e/portal-followup-local.mjs
+      # ── سوییت‌های خودکفا: مرورگرِ واقعی + APIِ ساختگی (fixture) ──────────
+      # Vite را خودشان بالا می‌آورند و سرور/دیتابیس نمی‌خواهند؛ تا امروز
+      # بیرونِ CI بودند و چهار تایشان بیات شده بود (ماتریسِ نقشِ W3.5، برچسبِ
+      # کارشناس در ionm، `PrepCard` روی prepِ ناقص). مرورگر از گامِ «Install
+      # chromium» بالا و مسیرش از `E2E_CHROME`ِ گامِ «Expose chromium» می‌آید.
+      - name: Verify the AI stream contract against the compiled service
+        run: node scripts/e2e/ai-stream-contract.mjs
+      - name: Verify intake approval, quick definitions and assisted text (UI)
+        run: node scripts/e2e/intake-assistance-ui.mjs
+      - name: Verify the order review and prep card (UI)
+        run: node scripts/e2e/orders-ai-ui.mjs
+      - name: Verify company operations screens (UI)
+        run: node scripts/e2e/company-operations-ui.mjs
+      - name: Verify the hospital directory (UI)
+        run: node scripts/e2e/hospital-directory-ui.mjs
+      - name: Verify the neuromonitoring invoice dialog (UI)
+        run: node scripts/e2e/neuromonitoring-invoice-ui.mjs
+      - name: Verify profile workflows (UI)
+        run: node scripts/e2e/profile-workflows-ui.mjs
+      - name: Verify intake steps (W0.1 UI)
+        run: node scripts/e2e/w0-1-intake-steps.mjs
+      - name: Verify labels (W0.2 UI)
+        run: node scripts/e2e/w0-2-labels.mjs
+      - name: Verify accessibility basics (W0.6 UI)
+        run: node scripts/e2e/w0-6-a11y.mjs
+      - name: Verify the patient link (W3.4 UI)
+        run: node scripts/e2e/w3-4-patient-link.mjs
+      - name: Verify the form builder role matrix (W3.5 UI)
+        run: node scripts/e2e/w3-5-formbuilder.mjs
+      - name: Verify the light theme (W3.6 UI)
+        run: node scripts/e2e/w3-6-light-theme.mjs
+      - name: Verify module icons and naming (W3.7 UI)
+        run: node scripts/e2e/w3-7-icons-naming.mjs
+
+  # ══════════════════════════════════════════════════════════════════════
+  # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی
+  # یک دیتابیسِ مشترکِ دستی‌ساخته می‌دویدند: نتیجه‌شان نویز بود و سنجه‌های
+  # بیات (لانچرِ جابه‌جاشده، متنِ عوض‌شده، قراردادِ تازه) فقط با اجرای تصادفی
+  # پیدا می‌شدند. اینجا: Postgresِ سرویس + محیطِ تازه با `bootstrap-env.mjs`
+  # + رانرِ `run-live.mjs` که سطلِ ورودِ ۸‌تایی را با بالاآوردنِ دوبارهٔ
+  # سرور بین دسته‌ها دور می‌زند و سوییتِ افتاده را از بقیه جدا می‌کند.
+  # فهرست در `scripts/e2e/ci-live.txt`؛ سوییتِ تازه = یک خط آن‌جا.
+  # چهار شاردِ موازی تا کلِ فهرست ~۲۰ دقیقه بماند نه ۸۰. `automerge` کلِ
+  # workflow را می‌سنجد، پس این جاب هم مرج را نگه می‌دارد.
+  # ══════════════════════════════════════════════════════════════════════
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: tenant_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant_ci?schema=public
+      CONTROL_DATABASE_URL: postgresql://ci:ci@localhost:5432/control_ci?schema=public
+      E2E_TENANT2_DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant2_ci?schema=public
+      TENANT_DATABASE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
+      DEFAULT_TENANT_SLUG: t1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Frontend install
+        run: npm ci
+      - name: Backend install
+        working-directory: server
+        run: npm ci
+      - name: Backend build
+        working-directory: server
+        run: npm run build
+
+      # همان نسخهٔ جابِ build؛ playwright-core خودش مرورگر ندارد.
+      - name: Install chromium
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
+
+      # ⚠️ ۳۱ سوییت `executablePath: '/opt/pw-browsers/chromium'` را هاردکد
+      # کرده‌اند و ۱۴ تای دیگر آن را پیش‌فرضِ `E2E_CHROME` گرفته‌اند — مسیرِ
+      # کانتینرِ توسعه، که روی رانر نیست. به‌جای دست‌زدن به ۵۸ فایلِ سه لِین،
+      # همان مسیرها را به chromiumِ نصب‌شدهٔ playwright سیم‌لینک می‌کنیم؛ در
+      # سندباکس هم `/opt/pw-browsers/chromium` خودش سیم‌لینک است.
+      - name: Expose chromium where the suites expect it
+        run: |
+          CHROME="$(find ~/.cache/ms-playwright -type f -name chrome -path '*chromium-*' | head -1)"
+          test -x "$CHROME" || { echo "chromium پیدا نشد"; exit 1; }
+          sudo mkdir -p /opt/pw-browsers/chromium-1194/chrome-linux
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium-1194/chrome-linux/chrome
+          sudo ln -sfn "$CHROME" /tmp/chromium
+          echo "E2E_CHROME=$CHROME" >> "$GITHUB_ENV"
+
+      # سوییت‌ها با `psql` مستقیم در دیتابیس می‌خوانند/می‌نویسند (`E2E_DB`).
+      - name: Databases for the control plane and the second tenant
+        run: |
+          command -v psql >/dev/null || sudo apt-get install -y --no-install-recommends postgresql-client >/dev/null
+          psql "postgresql://ci:ci@localhost:5432/tenant_ci" -v ON_ERROR_STOP=1 -c "CREATE DATABASE control_ci" -c "CREATE DATABASE tenant2_ci"
+
+      - name: Bootstrap a fresh environment
+        run: node scripts/e2e/bootstrap-env.mjs
+
+      - name: Run shard ${{ matrix.shard }} of the live manifest
+        run: node scripts/e2e/run-live.mjs --manifest scripts/e2e/ci-live.txt --shard ${{ matrix.shard }}/4 --log-dir .e2e-logs
+
+      - name: Keep the logs when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-live-logs-shard-${{ matrix.shard }}
+          path: .e2e-logs/
+          if-no-files-found: ignore

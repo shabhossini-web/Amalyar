@@ -140,7 +140,8 @@ try {
     ok(tx.includes('برش، هموستاز'), '**کلیکِ قالب متن را در ادیتور می‌نشاند**');
 
     /* صفحهٔ جستجوی بالینی */
-    await page.goto(BASE + '/app');
+    /* W3.7: `/app` صفحهٔ «امروز» است و لانچرِ کاشی‌ها به `/app/tools` رفت. */
+    await page.goto(BASE + '/app/tools');
     await page.waitForTimeout(1500);
     const tile = page.locator('a:has-text("جستجوی بالینی"), button:has-text("جستجوی بالینی")').first();
     ok(await tile.count() === 1, 'کاشیِ لانچر هست');

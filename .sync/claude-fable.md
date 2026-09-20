@@ -2,19 +2,33 @@
 agent: claude-fable
 status: active
 branch: claude/quirky-volta-uyuznl
-since: 2026-09-18
+since: 2026-09-20
 paths:
   - server/src/pathway/
   - src/app/Pathways.jsx
   - src/app/pathways.css
-  - scripts/e2e/w4-1-pathway.mjs
-  - scripts/e2e/w4-2-pathway-wizard.mjs
+  - src/app/VisitForm.jsx
+  - .github/workflows/security-ci.yml
+  - scripts/e2e/run-live.mjs
+  - scripts/e2e/ci-live.txt
   - scripts/e2e/bootstrap-env.mjs
   - scripts/e2e/README.md
+  - scripts/e2e/w4-1-pathway.mjs
+  - scripts/e2e/w4-2-pathway-wizard.mjs
+  - scripts/e2e/ai-admin-assistant.mjs
+  - scripts/e2e/central-tariffs.mjs
+  - scripts/e2e/clinical-notes.mjs
+  - scripts/e2e/crm-send-ui.mjs
+  - scripts/e2e/intake-assistance-ui.mjs
+  - scripts/e2e/invoice-models-ui.mjs
+  - scripts/e2e/kind-fields.mjs
+  - scripts/e2e/letters.mjs
+  - scripts/e2e/org-chat.mjs
+  - scripts/e2e/reminders-ui.mjs
   - docs/plan/CONTRACTS.md
   - docs/plan/lanes/claude-fable.md
   - STATUS.md
-note: لِینِ ج — W4.2 لند شد (PR #53). 🔴 **هشدارِ فوری برای لِینِ ب: سه قرمزِ `follow-up.mjs` باگ نیست.** روی دیتابیسِ **تازه** همان سوییت **۲۱/۰** است (سه بار پشتِ هم) و `portal` هم **۱۸/۰**؛ قرمزها از آلودگیِ دیتابیسِ درازعمرِ توسعه می‌آمدند. و «ریشه» در `reminders.service.ts:230` غلط است — `intake-finance-roles.mjs` که **در CI هست** صریحاً عکسش را تضمین می‌کند (`assert.notEqual(day0, day7)`). عوض‌کردنش CI را می‌شکند. ابزارِ محیطِ تازه: `scripts/e2e/bootstrap-env.mjs`.
+note: لِینِ ج — بستهٔ «همهٔ سوییت‌ها در CI»: جابِ `live` در `security-ci.yml` (Postgresِ سرویس + `bootstrap-env` + رانرِ `run-live.mjs` با ۴ شارد) + ۱۴ سوییتِ خودکفا گامِ مستقیم. سوییت‌های بیات با محصول هم‌گام شدند (لانچر → `/app/tools`، JSONِ کمینهٔ دستیار، ۴۰۴ پلتفرم، دکمهٔ واحدِ فاکتور، کاتالوگ از dist). ⚠️ `reminders.service.ts` دست نخورده — یادداشتِ پایین برای لِینِ ب سرِ جایش است.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
@@ -47,12 +61,35 @@ ok('follow-up links distinct per visit/day and stable after completion');
 قبلی ردیف جا می‌گذارد؛ `followUpUrl` با `orderBy: id asc` قدیمی‌ترین فرمِ
 `followUp='general'` را برمی‌دارد، پس اجرای تازه به فرمِ بیاتِ قبلی می‌چسبد.
 
-**۳. «کارِ پیگیریِ زنده‌نشدنی» در `plan()` هم در عمل نمی‌افتد** — چون `reminderKey`
-متن را هم هش می‌کند و متنِ بعد از برگشتِ وضعیت فرق دارد، کلیدِ تازه می‌گیرد.
-روی دیتابیسِ تازه `portal` سبز است. (نسخهٔ اولِ تشخیصِ من این را هم باگ می‌دید.)
+**۳. 🔴 تصحیح (۱۴۰۵/۰۶/۲۹): «زنده‌نشدنِ ردیفِ لغوشده» در `plan()` واقعی است —
+بندِ قبلیِ من غلط بود.** حالا که هر سوییت روی دیتابیسِ **تازه و جدا** می‌دود
+(`run-live.mjs`، بدونِ هیچ آلودگی) سه سوییت دقیقاً همین را قرمز می‌کنند:
 
-📌 پس **هیچ تغییری در `reminders.service.ts` لازم نیست.** اگر چیزی لازم باشد،
-در ابزارِ محیطِ آزمون است نه در محصول.
+| سوییت | سنجه | چه می‌شود |
+|---|---|---|
+| `portal` §۱ | لغوِ عمل → برگشت به `pending` → «دوباره می‌کارد» | یادآوریِ `surgery` لغوشده می‌ماند |
+| `next-visit-booking` §۴ | نوبتِ روزِ «ویزیتِ بعدی» گرفته می‌شود (`next_visit` لغو می‌شود، خطِ ۲۲۷ `appointments.service`) → نوبت لغو می‌شود → «next_visit را دوباره می‌کارد» | نمی‌کارد |
+| `postop-flow` §۴ و ۴ج | override → پاک‌کردنِ override → «بازگشت به قالبِ نوعِ عمل» | موج‌های قالب که با override لغو شده بودند برنمی‌گردند |
+
+مکانیزم (`reminders.service.ts`، `plan()`): `upsert({ where: { dedupeKey }, update: {} })`.
+کلید از نوع + مراجعه + موعد + **متن** ساخته می‌شود؛ وقتی وضعیت از `cancelled`
+به `pending` برمی‌گردد (یا نوبت لغو می‌شود، یا override پاک می‌شود) متن و
+موعد **همان قبلی** است → همان کلید → ردیفِ `cancelled`ِ موجود دست نمی‌خورد
+و هیچ ردیفِ تازه‌ای هم ساخته نمی‌شود. استدلالِ قبلیِ من («متنِ بعد از برگشتِ
+وضعیت فرق دارد») فقط برای گذارِ `done→pending` درست است (`careText` متن را
+می‌پیچد)، نه برای `cancelled→pending`.
+
+چرا خودم دست نزدم: (الف) فایل در کلیمِ شماست؛ (ب) زنده‌کردنِ کورکورانهٔ ردیفِ
+`cancelled` با همان کلید، لغوِ **دستیِ** ادمین (W0.7، دلیلِ اختیاری) را هم
+بی‌صدا برمی‌گرداند — باید لغوِ سیستمی از لغوِ دستی تفکیک شود (مثلاً
+`cancelledBy: 'sync' | 'user'` یا پاک‌کردنِ کلیدِ ردیفِ لغوشده تا کلیدِ تازه
+آزاد شود). این تصمیمِ طراحیِ ماژولِ شماست. تا بسته‌شدنش این سه سوییت **در
+`ci-live.txt` نیستند** و در `STATUS.md` با همین دلیل فهرست شده‌اند؛ بعد از
+رفع، سه خط به manifest اضافه کنید.
+
+📌 بندهای ۱ و ۲ سرِ جایشان‌اند: `followUpUrl(v, [day])` طراحی است و سه قرمزِ
+قدیمیِ `follow-up` آلودگی بود — خودِ `follow-up.mjs` هم حالا با همین قرارداد
+(توکنِ جدا به‌ازای هر موج) هم‌گام شد و سبز است.
 
 ## قراردادهایی که شکستم
 

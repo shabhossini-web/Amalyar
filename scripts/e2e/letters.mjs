@@ -96,7 +96,8 @@ try {
     await page.click('button[type="submit"]');
     await page.waitForURL('**/app**', { timeout: 15000 });
 
-    await page.goto(BASE + '/app');
+    /* W3.7: `/app` صفحهٔ «امروز» است و لانچرِ کاشی‌ها به `/app/tools` رفت. */
+    await page.goto(BASE + '/app/tools');
     await page.waitForTimeout(1800);
     const tile = page.locator('a:has-text("نامهٔ اداری"), button:has-text("نامهٔ اداری")').first();
     ok(await tile.count() === 1, 'کاشیِ لانچر روشن شد');

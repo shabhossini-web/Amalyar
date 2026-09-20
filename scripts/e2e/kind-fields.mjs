@@ -31,10 +31,12 @@ const A = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + login
 /* کلید از pid تا بارِ دوم به فرمِ اجرای قبلی نخورد؛ فرمِ بی‌استفاده در پایان
    حذفِ سخت می‌شود، پس بارِ دوم هم تمیز شروع می‌کنیم. */
 const tag = 'kf' + String(process.pid).slice(-5);
-const CATALOG = [
-  'opDate', 'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
-  'opStartTime', 'opEndTime', 'techArriveTime', 'opReport', 'amount', 'notes',
-];
+/* کاتالوگ از **خودِ سرور** (بیلدِ dist)، نه یک نسخهٔ دوم: نسخهٔ دستی یک‌بار
+   با `techArriveTime` (که W3.8 از فرمِ مراجعه برداشت) و بی `topicId`/`nextVisitDate`
+   بیات شد و سوییت — که در CI نبود — ماه‌ها قرمز ماند. */
+import { createRequire } from 'node:module';
+const { VISIT_BUILTIN_CATALOG } = createRequire(import.meta.url)('../../server/dist/patients/form-presets.js');
+const CATALOG = VISIT_BUILTIN_CATALOG.map((f) => f.key);
 
 /* گرم‌کردن: seedِ قالب‌ها تنبل است و با اولین **خواندن** اجرا می‌شود. اگر
    اولین تماسِ یک دیتابیسِ بکر POST باشد، جدول دیگر خالی نیست و قالب‌ها هرگز

@@ -52,8 +52,13 @@ try {
   ok(await page.locator('.bl-pricing-tabs button.on:has-text("گلوبال")').count() === 1, '**گلوبال فعال نشان داده می‌شود**');
   ok(await page.locator('.bl-summary span:has-text("مبلغِ کل (گلوبال)")').count() === 1, 'برچسبِ جمعِ کل «گلوبال» شد');
   ok(await page.locator('.bl-pricing-note').count() === 1, 'یادداشتِ تفاوتِ جمعِ اقلام دیده می‌شود');
-  ok(await page.locator('button:has-text("چاپِ فاکتورِ رسمی")').count() === 1, 'دکمهٔ چاپِ رسمی');
-  ok(await page.locator('button:has-text("چاپِ فاکتورِ غیررسمی")').count() === 1, '**دکمهٔ چاپِ غیررسمی**');
+  /* دو دکمهٔ چاپِ رسمی/غیررسمی به **یک** دکمهٔ «صدور و چاپ فاکتور <نوعِ
+     انتخاب‌شده>» تبدیل شد (InvoicePanel): نوع از حسابِ دریافت می‌آید، نه از
+     دکمه. */
+  /* صدور در تبِ «صدور فاکتور»ِ همان صورت‌حساب نشسته (Tabs)؛ تبِ پیش‌فرض «اقلام» است. */
+  await page.locator('.db-modetabs button', { hasText: 'صدور فاکتور' }).click();
+  await page.waitForTimeout(600);
+  ok(await page.locator('button:has-text("صدور و چاپ فاکتور")').count() === 1, '**دکمهٔ صدور و چاپِ فاکتور هست**');
   ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
 } finally {
   await browser.close();

@@ -36,7 +36,7 @@ const send = (p, method, body) => fetch(API + p, { method, headers: A, body: bod
   .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = Math.random().toString(36).slice(2, 7);
-const trash = { rules: [], topics: [], visits: [], appts: [], patients: [] };
+const trash = { rules: [], topics: [], visits: [], appts: [], patients: [], forms: [] };
 
 /* پاک‌سازیِ اولیه — قاعده و نوبتِ اجرای مرده نباید ماه را شلوغ کند. */
 for (const r of await get('/availability/rules')) await fetch(API + `/availability/rules/${r.id}`, { method: 'DELETE', headers: A });
@@ -57,6 +57,12 @@ try {
   const [kinds, sur, hos] = await Promise.all([
     get('/forms/visit-kinds'), get('/surgeons'), get('/hospitals'),
   ]);
+  /* «شروعِ ویزیت» (بندِ ۶) نوعِ غیرجراحی می‌خواهد؛ قالبِ ionm فقط «عمل» دارد.
+     اگر نیست یکی می‌سازیم و آخرِ کار پاک می‌کنیم — همان الگوی postop-visit. */
+  if (!kinds.some((k) => k.kind !== 'surgery')) {
+    const cf = (await send('/forms', 'POST', { key: 'clinic', title: 'فرمِ ویزیت', scope: 'visit' })).json;
+    if (cf?.id) trash.forms.push(cf.id);
+  }
   const seed = (await send('/visits', 'POST', {
     kind: kinds[0]?.kind, firstName: 'بیمارِ', lastName: `حضوری ${tag}`,
     surgeonId: (sur.rows ?? sur)[0]?.id, hospitalId: (hos.rows ?? hos)[0]?.id,
@@ -200,5 +206,6 @@ try {
   for (const id of trash.visits) await fetch(API + `/visits/${id}`, { method: 'DELETE', headers: A });
   for (const id of trash.rules) await fetch(API + `/availability/rules/${id}`, { method: 'DELETE', headers: A });
   for (const id of trash.topics) await fetch(API + `/visit-topics/${id}`, { method: 'DELETE', headers: A });
+  for (const id of trash.forms) await fetch(API + `/forms/${id}`, { method: 'DELETE', headers: A });
 }
 process.exit(fail ? 1 : 0);
