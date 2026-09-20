@@ -203,13 +203,16 @@ node scripts/e2e/run-live.mjs --manifest scripts/e2e/ci-live.txt      # یا: --
 `127.0.0.2`، با ردیفِ `tenant_domains`)؛ تنانتِ اول هم دامنهٔ `clinic.localhost`
 را دارد تا `tenant-seo` مسیرِ nginx (Host + X-Forwarded-Proto) را بسنجد.
 
-**پنج سوییت عمداً در `ci-live.txt` نیستند** — `next-visit-booking` · `portal` ·
-`postop-flow` · `postop-visit` · `summary-reminders`. همه یک ریشه دارند:
-`plan()` در `reminders.service.ts` ردیفِ `cancelled` با همان `dedupeKey` را دوباره
-زنده نمی‌کند (`upsert` با `update: {}`)، پس هر «برگشت» (لغوِ نوبت، برگشتِ وضعیت،
-پاک‌کردنِ override، دوباره‌گذاشتنِ تاریخ) بی‌اثر می‌ماند. فایل در کلیمِ لِینِ ب است؛
-شرحِ سازوکار و گزینه‌های رفع در `.sync/claude-fable.md`. بعد از رفع، پنج خط به
-manifest برمی‌گردد.
+**حفرهٔ W1.9 که پنج سوییت را بیرونِ manifest نگه داشته بود بسته شد** (لِینِ ج به
+نیابت از لِینِ الف، به دستورِ مالک): لغوِ **سیستمی** (هرسِ `syncNextVisit`،
+خاموشیِ `next_visit` هنگامِ رزروِ نوبت) کلیدِ ردیف را آزاد می‌کند (`dedupeKey = null`)
+تا برنامهٔ بعدی با همان متن و موعد ردیفِ تازه بکارد؛ لغوِ **دستی** (W0.7) کلید را
+نگه می‌دارد. `next-visit-booking` · `portal` · `postop-flow` · `postop-visit` ·
+`summary-reminders` به manifest برگشتند. دو سنجهٔ دیگر در همان سوییت‌ها بیات
+بودند و با محصول هم‌گام شدند، نه برعکس: متنِ مراقبت چندخطی است (پوششِ D07 پیش از
+آن می‌آید) و `sql()`ِ سوییت فقط خطِ اول را می‌دهد → شرطِ متن در خودِ SQL؛ و بدونِ
+credentialِ پیامک sweep «stub را ارسال نمی‌شمارد» → ردیف `simulated`/`skipped`
+است نه `sent`.
 
 **سنجه‌ای که در CI بیات شد را با محصول هم‌گام کن، نه برعکس** — و اگر محصول
 عمداً عوض شده، دلیل را در همان سوییت بنویس. نمونه‌های این بسته: لانچر به

@@ -223,9 +223,12 @@ export class AppointmentsService {
       /* اگر این نوبت همان «ویزیتِ بعدیِ» ثبت‌شده روی یک مراجعه است، یادآوریِ
          next_visit دوبله می‌شد (هم «ویزیتِ بعدی نزدیک است» هم «نوبتِ فردا») —
          نسخهٔ نوبت‌دار دقیق‌تر است (ساعت دارد)، آن یکی خاموش می‌شود. */
+      /* لغوِ سیستمی کلید را آزاد می‌کند (قاعدهٔ هرسِ `syncNextVisit`): اگر همین
+         نوبت لغو یا «نیامد» شود، `syncNextVisit` باید بتواند همان یادآوری را با
+         همان متن و موعد دوباره بکارد — با کلیدِ اشغال‌شده به ردیفِ لغوشده می‌خورد. */
       await this.prisma.reminder.updateMany({
         where: { patientId: dto.patientId, kind: 'next_visit', status: 'pending', visit: { nextVisitDate: d } },
-        data: { status: 'cancelled' },
+        data: { status: 'cancelled', dedupeKey: null },
       });
       return this.view(appt);
     } catch (e: any) {

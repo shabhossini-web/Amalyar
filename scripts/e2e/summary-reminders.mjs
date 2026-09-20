@@ -4,7 +4,8 @@
  *   داخلی و هیچ عددِ مالی‌ای در آن نیست؛ بازکردنِ دوباره همان توکن را می‌دهد
  * - پیامکِ خلاصه به شمارهٔ خودِ پرونده
  * - دفترِ یادآوری: ثبتِ nextVisitDate → pending؛ تغییرش → قبلی cancelled؛
- *   پاک‌کردنش → همه cancelled؛ sweep سررسیده‌ها را sent می‌کند
+ *   پاک‌کردنش → همه cancelled؛ sweep سررسیده‌ها را می‌برد (با credential `sent`؛
+ *   بدونِ آن — CI و توسعه — سرویس stub است و ردیف `simulated` می‌شود، نه `sent`)
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -94,11 +95,16 @@ try {
   await send(`/visits/${visit.id}`, 'PATCH', { nextVisitDate: nextIso });
   sql(`UPDATE reminders SET due_at = now() - interval '1 minute' WHERE visit_id=${visit.id} AND status='pending'`);
   const sw = (await send('/reminders/sweep', 'POST')).json;
-  ok(sw?.sent >= 1, `sweep فرستاد (${JSON.stringify(sw)})`);
+  /* بدونِ credentialِ پیامک (CI، توسعه) سرویس stub است و sweep «stub را ارسال
+     نمی‌شمارد» (`send-reminders.ts`): ردیف `simulated` می‌شود و در شمارنده‌ها
+     `skipped`؛ با credentialِ واقعی `sent`. هر دو یعنی سررسیده برداشته شد و
+     `failed` باید صفر بماند. */
+  ok(sw?.due >= 1 && sw?.failed === 0 && (sw?.sent ?? 0) + (sw?.skipped ?? 0) >= 1,
+    `sweep سررسیده را برداشت (${JSON.stringify(sw)})`);
   /* فقط خودِ یادآوری — پیامکِ خلاصهٔ گامِ ۲ هم به‌عنوانِ notice با وضعیتِ
      sent در دفتر ثبت می‌شود (پروندهٔ الکترونیک) و نباید این را کج کند. */
-  ok(Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='next_visit' AND status='sent'`)) === 1,
-    'وضعیتِ یادآوری sent شد');
+  ok(Number(sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='next_visit' AND status IN ('sent','simulated')`)) === 1,
+    'وضعیتِ یادآوری sent/simulated شد — دیگر pending نیست');
   const sw2 = (await send('/reminders/sweep', 'POST')).json;
   ok((sw2?.due ?? 0) === 0, 'sweepِ دوم چیزی برای فرستادن ندارد — دوباره‌فرستی نیست');
 } finally {
