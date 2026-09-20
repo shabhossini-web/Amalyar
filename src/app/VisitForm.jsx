@@ -905,7 +905,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
             </label>
             <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی
-              {/* 🧪 موقت — بیمارِ آزمایشی (خواستهٔ مالک): کدِ تصادفیِ معتبر تا
+              {/* موقت — بیمارِ آزمایشی (خواستهٔ مالک): کدِ تصادفیِ معتبر تا
                   اعتبارسنجی رد شود. فقط سوپرادمین می‌بیند. */}
               {me?.level >= 6 && !editing && (
                 <button type="button" className="db-nidtest" title="فقط برای بیمارِ آزمایشی — کدِ تصادفیِ معتبر (موقت)"
