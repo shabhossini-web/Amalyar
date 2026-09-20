@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -75,8 +75,8 @@ export class SummaryController {
   /** دفترِ یادآوری‌ها — چه چیزی کی می‌رود / رفت / نرفت. */
   @RequirePermissions('patients.read')
   @Get('reminders')
-  list() {
-    return this.reminders.list();
+  list(@Query('patientId') patientId?: string) {
+    return this.reminders.list(patientId ? Number(patientId) : undefined);
   }
 
   /**

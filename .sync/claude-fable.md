@@ -17,6 +17,15 @@ paths:
   - server/src/ai/ai.service.ts
   - server/src/common/jalali.ts
   - scripts/e2e/order-review-sheet.mjs
+  - scripts/e2e/record-popups.mjs
+  - scripts/e2e/w3-1-live-record.mjs
+  - src/app/WorkRow.jsx
+  - src/app/work.css
+  - src/app/record.css
+  - src/app/visit-kinds.js
+  - server/src/patients/live.service.ts
+  - server/src/patients/reminders.service.ts
+  - server/src/patients/summary.controller.ts
   - scripts/e2e/ci-live.txt
   - docs/plan/lanes/claude-fable.md
   - STATUS.md

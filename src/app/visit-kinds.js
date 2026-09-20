@@ -10,7 +10,7 @@
  * حذف شده.
  */
 export const KINDS = {
-  surgery:  { label: 'عمل',     date: 'تاریخِ عمل',   pending: 'در انتظار عمل' },
+  surgery:  { label: 'عمل جراحی', date: 'تاریخِ عمل',   pending: 'در انتظار عمل' },
   clinic:   { label: 'ویزیت',   date: 'تاریخِ ویزیت', pending: 'در انتظار ویزیت' },
   followup: { label: 'پیگیری',  date: 'تاریخِ پیگیری', pending: 'در انتظار پیگیری' },
   consult:  { label: 'مشاوره',  date: 'تاریخِ مشاوره', pending: 'در انتظار مشاوره' },

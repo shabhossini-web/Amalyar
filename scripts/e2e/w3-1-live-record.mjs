@@ -284,9 +284,14 @@ try {
     ok(/به‌عهدهٔ پزشک/.test(await page.locator('.rc-next-main').innerText()),
       'مالکِ کار فارسی نوشته شده');
     ok(await page.locator('.rc-tl-row').count() >= 6, 'خطِ زمان رندر شد');
-    ok(await page.locator('.rc-tl-row.is-link a[href*="/app/dashboard?patient="]').count() > 0, 'ردیفِ مراجعه‌دار به فرمِ همان مراجعه لینک دارد');
-    const dead = page.locator('.rc-tl-row:not(.is-link)');
-    ok(await dead.count() > 0 && await dead.first().locator('a, button').count() === 0,
+    /* بازخوردِ مالک ۱۴۰۵/۰۶/۲۹: ردیفِ مراجعه‌دار دیگر به فرمِ **کلیِ** داشبورد
+       نمی‌پرد؛ پاپ‌آپِ خودِ همان چیز را در همین صفحه باز می‌کند (سناریوی کامل در
+       `record-popups.mjs`). این‌جا فقط: لینکِ داشبورد نیست و ردیف دکمهٔ واقعی است. */
+    ok(await page.locator('.rc-tl-row.is-link a[href*="/app/dashboard?patient="]').count() === 0
+      && await page.locator('.rc-tl-row.is-link button').count() > 0,
+      'ردیفِ مراجعه‌دار پاپ‌آپِ خودش را باز می‌کند، نه لینک به فرمِ کلیِ داشبورد');
+    /* هر ردیف یا مقصد دارد (is-link + دکمه) یا هیچ دکمه‌نمایی ندارد — «در به دیوار» ممنوع. */
+    ok(await page.locator('.rc-tl-row:not(.is-link) a, .rc-tl-row:not(.is-link) button').count() === 0,
       '**نباید بیفتد:** ردیفِ بی‌مقصد دکمه‌نما باشد (در به دیوار)');
 
     /* تب‌ها ثانویه‌اند: پیش‌فرض دیگر فرمِ ویرایش نیست. */
@@ -297,7 +302,8 @@ try {
     await page.waitForTimeout(250);
     ok(/ذخیرهٔ پرونده/.test(await page.locator('.rc-body').innerText()), 'ویرایش یک اقدام است و با تبِ «مشخصات» باز می‌شود');
 
-    await page.getByRole('tab', { name: /مراجعات/ }).click();
+    /* تبِ فهرست واژهٔ خنثی گرفت («مراجعه‌ها»): عمل و ویزیت را با هم دارد و هر کارت نوعِ خودش را می‌گوید. */
+    await page.getByRole('tab', { name: /مراجعه‌ها/ }).click();
     await page.waitForTimeout(200);
     execSync(`mkdir -p ${SHOTS}`);
     await page.screenshot({ path: `${SHOTS}/w3-1-live-dark.png`, fullPage: false });
@@ -383,11 +389,15 @@ try {
     ok(errors.length === 0, `بدونِ خطای جاوااسکریپت و بدونِ پاسخِ ≥۴۰۰ (${errors.length})${errors.length ? ' — ' + errors[0].slice(0, 160) : ''}`);
 
     console.log('\n۷) اقدامِ «مراجعهٔ جدید»');
+    /* بازخوردِ مالک ۱۴۰۵/۰۶/۲۹: فرم در **همین صفحه** پاپ‌آپ می‌شود، نه با پرش به
+       داشبورد — پرونده زیرِ فرم می‌ماند و URL دست نمی‌خورد. */
+    const before = page.url();
     await page.locator('.rc-act.is-main').click();
-    await page.waitForURL(/\/app\/dashboard/, { timeout: 10000 });
-    await page.waitForTimeout(700);
-    ok(!/patient=/.test(page.url()), '**نباید بیفتد:** نامِ بیمار یا شناسه‌اش در URL بنشیند (از router state می‌رود)');
-    ok(await page.locator('.db-steps').count() === 1, 'شیتِ مراجعهٔ جدید باز شد');
+    await page.locator('.db-sheet').waitFor({ timeout: 10000 });
+    await page.waitForTimeout(500);
+    ok(page.url() === before && !/patient=/.test(page.url()),
+      '**نباید بیفتد:** صفحه عوض شود یا نامِ بیمار/شناسه‌اش در URL بنشیند');
+    ok(await page.locator('.db-steps').count() === 1, 'شیتِ مراجعهٔ جدید در همین صفحه باز شد');
     /* پیش‌پرشده یعنی از گامِ ۳ شروع می‌کند؛ برای دیدنِ چیپِ بیمار به گامِ ۱ برمی‌گردیم. */
     await page.locator('.db-steps li button').first().click();
     await page.waitForTimeout(250);

@@ -499,9 +499,14 @@ export class RemindersService {
     }
   }
 
-  async list() {
+  /**
+   * دفترِ یادآوری‌ها. با `patientId` **همهٔ** ردیف‌های همان پرونده می‌آید — لغوشده‌ها
+   * هم — چون پاپ‌آپِ خطِ زمانِ پرونده باید بگوید «چرا نرفت»؛ بدونِ آن، فهرستِ
+   * سراسریِ مدیر است که لغوشده‌ها را نشان نمی‌دهد.
+   */
+  async list(patientId?: number) {
     const rows = await this.prisma.reminder.findMany({
-      where: { status: { not: 'cancelled' } },
+      where: patientId ? { patientId } : { status: { not: 'cancelled' } },
       orderBy: [{ status: 'asc' }, { dueAt: 'desc' }],
       take: 100,
       include: {
