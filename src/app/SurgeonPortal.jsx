@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
+import { fmtMoney } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { useConfig } from './config.jsx';
 import { HERO, useAllowedTools } from './tools.jsx';
@@ -22,6 +23,10 @@ import './work.css'; // ردیفِ کار (`.wk-*`) در «امروزِ من»
 const faNum = (n) => String(n ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 const APPT_FA = { held: 'رزرو', confirmed: 'قطعی', arrived: 'رسید', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو' };
 const OP_FA = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو' };
+/* ⚠️ ساعت هم عدد است: بقیهٔ میز فارسی بود و فقط «۰۸:۳۰» لاتین می‌ماند — در
+   اسکرین‌شات مثلِ وصلهٔ زبانِ دیگر می‌زد. `faNum` روی `null` رشتهٔ خالی می‌دهد،
+   پس سه‌راههٔ ساعت/شماره/خط‌تیره دست‌نخورده می‌مانَد. */
+const faTime = (t) => (t ? faNum(t) : null);
 const ORDER_STATE_FA = { answered: 'نتیجه آمده', in_review: 'در حالِ بررسی' };
 
 /**
@@ -76,7 +81,10 @@ export default function SurgeonPortal() {
     } catch (e) { setError(e.message); } finally { setGrantBusy(false); }
   };
 
-  const financesLabel = admin ? 'بیلان جراح' : 'بیلان مالی من';
+  /* صاحبِ مطبی که خودش پزشک است (`jobRole = 'doctor'`): میز مالِ خودش است،
+     پس نه زیرنویسِ «نمای مدیر» درست است نه برچسبِ «بیلانِ جراح». */
+  const ownDesk = user?.jobRole === 'doctor';
+  const financesLabel = admin && !ownDesk ? 'بیلان جراح' : 'بیلان مالی من';
   const items = clinic
     ? [{ key: 'today', label: 'امروزِ من' }, { key: 'visits', label: 'بیمارانِ من' }, { key: 'results', label: 'نتایجِ رسیده' }, { key: 'finances', label: financesLabel }]
     : [{ key: 'visits', label: 'بیماران و دستورها' }, { key: 'finances', label: financesLabel }];
@@ -84,18 +92,13 @@ export default function SurgeonPortal() {
   return (
     <main className="sp-page">
       <header className="sp-head"><h1>{t.portal}</h1><Link to="/app">سامانه</Link></header>
+      {/* ⚠️ «نمای مدیر برای بررسی مراجعاتِ پزشکان» برای صاحبِ مطب **غلط** بود: او
+          خودش پزشکِ همین میز است، نه ناظرِ پزشکانِ دیگر. مطبِ تک‌پزشکه از روی
+          `jobRole` شناخته می‌شود، نه از روی سطح. */}
       <p className="sp-hint">
-        {verticalLabel} · {admin ? 'نمای مدیر برای بررسی مراجعاتِ پزشکان' : t.portalHint}
+        {verticalLabel} · {admin && !ownDesk ? 'نمای مدیر برای بررسی مراجعاتِ پزشکان' : t.portalHint}
       </p>
       <Tabs className="sp-tabs" value={tab} onChange={choose} label={`بخش‌های ${t.portal}`} items={items} />
-      {admin && (
-        <details className="sp-card"><summary>فعال‌سازی حساب جراح از تعاریف پایه</summary>
-          <label className="ia-field"><span>جراح</span><select value={surgeonId} onChange={(e) => setSurgeonId(e.target.value)}><option value="">انتخاب جراح</option>{surgeons.filter((s) => s.active !== false).map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
-          <button className="bl-mini" disabled={!surgeonId || grantBusy} type="button" onClick={grant}>آماده‌سازی حساب پرتال</button>
-          <Link to="/app/definitions?section=surgeons">تعریف یا اصلاح مشخصات جراح</Link>
-          {notice && <p role="status">{notice}</p>}
-        </details>
-      )}
       {error && <p className="bl-error" role="alert">{error}</p>}
       {clinic && !admin && !access.loading && !access.open && (
         <p className="sp-hint sp-hint-ro" role="note">این میز فقط‌خواندنی است: برای ثبت و ویرایشِ مراجعه و بررسیِ نتیجه از همین‌جا، دسترسیِ «{HERO.label}» لازم است — از مدیرِ سامانه بخواهید.</p>
@@ -104,6 +107,16 @@ export default function SurgeonPortal() {
       {tab === 'visits' && <VisitsPane clinic={clinic} things={things} reloadRef={reloadRef} access={access} />}
       {tab === 'results' && <ResultsPane things={things} reloadRef={reloadRef} access={access} />}
       {tab === 'finances' && <SurgeonFinances admin={admin} surgeons={surgeons} />}
+      {/* ⚠️ **زیرِ کارِ روز، نه بالای آن.** این یک کارِ راه‌اندازیِ یک‌باره است و
+          بالای صفحه بودنش یعنی پزشک هر روز اول آن را می‌دید و بعد بیمارانش را. */}
+      {admin && (
+        <details className="sp-card sp-setup"><summary>فعال‌سازی حساب جراح از تعاریف پایه</summary>
+          <label className="ia-field"><span>جراح</span><select value={surgeonId} onChange={(e) => setSurgeonId(e.target.value)}><option value="">انتخاب جراح</option>{surgeons.filter((s) => s.active !== false).map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
+          <button className="bl-mini" disabled={!surgeonId || grantBusy} type="button" onClick={grant}>آماده‌سازی حساب پرتال</button>
+          <Link to="/app/definitions?section=surgeons">تعریف یا اصلاح مشخصات جراح</Link>
+          {notice && <p role="status">{notice}</p>}
+        </details>
+      )}
       <ThingPopups things={things} />
       {toast && <div className="sh-toast" role="status">{toast}</div>}
     </main>
@@ -158,39 +171,66 @@ function DoctorToday({ things, reloadRef, toast, access }) {
 
   if (err) return <p className="bl-error" role="alert">{err}</p>;
   if (!data || access.loading) return <p className="sp-empty">در حالِ بارگذاری…</p>;
+  const sum = data.summary ?? {};
+  const money = sum.money ?? { total: 0, paid: 0, due: 0 };
+  /* ⚠️ **ردیفِ کاری که نتیجه‌اش همین بالا فهرست شده دوباره نشان داده نمی‌شود.**
+     هر نتیجهٔ رسیده یک `WorkItem`ِ `review_result` هم می‌سازد، پس «نتایجِ رسیده» و
+     «کارهای من» عیناً یک چیز را دو بار می‌گفتند (چهار نتیجه = هشت ردیف). ردیفِ
+     نتیجه مفیدتر است چون پاپ‌آپِ تصمیم را باز می‌کند؛ ردیفِ کار فقط «انجام شد».
+     بقیهٔ کارها (یادآوری، ویزیتِ بعدی، …) دست‌نخورده می‌مانند. */
+  const shownOrders = new Set((data.unreviewed ?? []).map((o) => `${o.kind}-${o.id}`));
+  const openWork = Array.isArray(work)
+    ? work.filter((w) => { const tgt = workTarget(w); return !(tgt?.type === 'order' && shownOrders.has(`${tgt.kind}-${tgt.id}`)); })
+    : work;
   return (
     <>
-      <section className="sp-sec" aria-labelledby="sp-appt-h">
-        <h2 id="sp-appt-h">نوبت‌های امروز</h2>
-        {data.appointments.length === 0 ? <p className="sp-empty">امروز نوبتی ندارید.</p> : (
-          <ul className="sp-rows">
-            {data.appointments.map((a) => (
-              <li key={a.id}>
-                <Row open={access.appt ? () => openAppt(a) : null} data-appt-id={a.id}>
-                  <span className="sp-row-time">{a.time || (a.seq != null ? `شمارهٔ ${faNum(a.seq)}` : '—')}</span>
-                  <span className="sp-row-name">{a.patient?.fullName ?? 'ثبت‌نامِ تکمیل‌نشده'}</span>
-                  <span className="sp-row-sub">{a.topic || ''}</span>
-                  <span className="sp-row-tag">{APPT_FA[a.status] ?? a.status}</span>
-                </Row>
-              </li>
-            ))}
-          </ul>
+      {/* نوارِ خلاصه — «اطلاعاتِ لازم دمِ دست» (بازخوردِ مالک ۱۴۰۵/۰۶/۳۰). هیچ
+          عددی این‌جا حساب نمی‌شود؛ همه از `summary`ِ سرور می‌آیند (قانونِ ۱۵). */}
+      <ul className="sp-sum" aria-label="خلاصهٔ امروز">
+        <li><b>{faNum(sum.appointments ?? 0)}</b> نوبت</li>
+        <li className={sum.present ? 'hot' : ''}><b>{faNum(sum.present ?? 0)}</b> در مطب</li>
+        <li><b>{faNum(sum.visits ?? 0)}</b> مراجعه</li>
+        <li className={sum.unreviewed ? 'hot' : ''}><b>{faNum(sum.unreviewed ?? 0)}</b> نتیجهٔ منتظر</li>
+        {money.total > 0 && (
+          <li className="sp-sum-money">
+            صورت‌حسابِ امروز <b>{fmtMoney(money.total)}</b>
+            {money.due > 0 ? <> · مانده <b className="due">{fmtMoney(money.due)}</b></> : <> · تسویه</>} تومان
+          </li>
         )}
-      </section>
-      <section className="sp-sec" aria-labelledby="sp-visits-h">
-        <h2 id="sp-visits-h">مراجعه‌های امروز</h2>
-        {data.visits.length === 0 ? <p className="sp-empty">امروز مراجعه‌ای به نامِ شما ثبت نشده.</p> : (
+      </ul>
+      <section className="sp-sec" aria-labelledby="sp-day-h">
+        <h2 id="sp-day-h">برنامهٔ امروز</h2>
+        {(data.day ?? []).length === 0 ? <p className="sp-empty">امروز نوبت یا مراجعه‌ای به نامِ شما نیست.</p> : (
           <ul className="sp-rows">
-            {data.visits.map((v) => (
-              <li key={v.id}>
-                <Row open={access.open ? () => openVisit(v) : null} data-visit-id={v.id}>
-                  <span className="sp-row-time">{v.opStartTime || '—'}</span>
-                  <span className="sp-row-name">{v.patient?.fullName} <span className="sp-kind">{kindOf(v.kind).label}</span></span>
-                  <span className="sp-row-sub">{[v.topic, v.hospital, v.code].filter(Boolean).join(' · ')}</span>
-                  <span className="sp-row-tag">{OP_FA[v.opStatus] ?? v.opStatus}</span>
-                </Row>
-              </li>
-            ))}
+            {data.day.map((r) => {
+              /* ردیف بازکردنیِ **مراجعه** است اگر مراجعه دارد، وگرنه نوبت. */
+              const open = r.visitId && access.open ? () => openVisit({ id: r.visitId, patientId: r.patientId })
+                : r.apptId && access.appt ? () => openAppt({ id: r.apptId, topic: r.topic, date: data.now, time: r.time, seq: r.seq, status: r.apptStatus })
+                  : null;
+              const due = r.billing?.due ?? 0;
+              return (
+                <li key={r.key}>
+                  <Row open={open} data-day-key={r.key} data-visit-id={r.visitId ?? undefined} data-appt-id={r.apptId ?? undefined}>
+                    <span className="sp-row-time">{faTime(r.time) || (r.seq != null ? `شمارهٔ ${faNum(r.seq)}` : '—')}</span>
+                    <span className="sp-row-name">
+                      {r.patient?.fullName ?? 'ثبت‌نامِ تکمیل‌نشده'}
+                      {r.kind && <span className="sp-kind">{kindOf(r.kind).label}</span>}
+                    </span>
+                    {/* ⚠️ مبلغ **بیرونِ** بخشِ کوتاه‌شونده است: روی عرضِ گوشی
+                        `text-overflow: ellipsis` اول همان چیزی را می‌برید که
+                        پزشک بیشتر لازمش دارد («… مانده ۴۰۰٬۰۰۰ تو…»). */}
+                    <span className="sp-row-sub">
+                      <span className="sp-row-meta">{[r.topic, r.hospital, r.code].filter(Boolean).join(' · ') || (r.visitId ? '' : 'هنوز مراجعه‌ای ثبت نشده')}</span>
+                      {due > 0 && <span className="sp-due">مانده {fmtMoney(due)} تومان</span>}
+                    </span>
+                    <span className="sp-row-tags">
+                      {r.apptStatusFa && <span className={`sp-row-tag${r.apptStatus === 'arrived' ? ' hot' : ''}`}>{r.apptStatusFa}</span>}
+                      {r.opStatusFa && <span className="sp-row-tag">{r.opStatusFa}</span>}
+                    </span>
+                  </Row>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
@@ -213,11 +253,11 @@ function DoctorToday({ things, reloadRef, toast, access }) {
       </section>
       <section className="sp-sec" aria-labelledby="sp-work-h">
         <h2 id="sp-work-h">کارهای من</h2>
-        {work === null ? <p className="sp-empty">در حالِ بارگذاری…</p>
-          : work === 'forbidden' ? <p className="sp-empty">صفِ کارها برای حسابِ شما باز نیست.</p>
-            : work === 'error' ? <p className="sp-empty">فهرستِ کارها نیامد؛ صفحه را تازه کنید.</p>
-              : work.length === 0 ? <p className="sp-empty">کارِ بازی ندارید.</p>
-                : <ul className="wk-list">{work.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact onOpen={access.open && workTarget(w) ? () => things.open(workTarget(w)) : undefined} />)}</ul>}
+        {openWork === null ? <p className="sp-empty">در حالِ بارگذاری…</p>
+          : openWork === 'forbidden' ? <p className="sp-empty">صفِ کارها برای حسابِ شما باز نیست.</p>
+            : openWork === 'error' ? <p className="sp-empty">فهرستِ کارها نیامد؛ صفحه را تازه کنید.</p>
+              : openWork.length === 0 ? <p className="sp-empty">{shownOrders.size ? 'جز نتیجه‌های بالا، کارِ بازِ دیگری ندارید.' : 'کارِ بازی ندارید.'}</p>
+                : <ul className="wk-list">{openWork.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact onOpen={access.open && workTarget(w) ? () => things.open(workTarget(w)) : undefined} />)}</ul>}
       </section>
     </>
   );

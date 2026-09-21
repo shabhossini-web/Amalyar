@@ -105,4 +105,36 @@ if (bad) {
   console.error('یا اگر پوستهٔ مشترکِ چند چانک است، به src/index.css ببر (مثلِ .pf-field و .db-field).');
   process.exit(1);
 }
-console.log(`css chunks ok — ${roots.length} chunk root(s), entry css = ${entryCss.size} file(s)`);
+
+// ── چکِ دوم: **ریشهٔ کوتاه فقط یک مالک دارد** ──
+//
+// 🔴 باگِ واقعی (۱۴۰۵/۰۶/۳۰): `src/ui/filedrop.css` هم `.fd` داشت و
+// `src/app/frontdesk.css` هم. چون هر دو روی میزِ پذیرش لود می‌شوند (فرمِ مراجعه
+// کامپوننتِ آپلود را می‌آورد)، ریشهٔ **صفحه** `display:flex; flex-direction:column`
+// کامپوننتِ آپلود را می‌گرفت: هدرِ میز به‌جای هم‌عرضِ تخته، ۶۶۰ پیکسل و وسطِ صفحه
+// می‌شد و `.fd-btn` هم دو تعریفِ رقیب داشت. نه بیلد می‌گرفتش نه هیچ سنجهٔ APIای —
+// فقط با اندازه‌گیریِ `getBoundingClientRect` در مرورگر پیدا شد.
+//
+// قاعده: انتخاب‌گری که **فقط** یک کلاسِ ≤۴ کاراکتری است یک «فضای نام» است و باید
+// در دقیقاً یک فایل تعریف شود. `src/ui/press.css` عمداً مستثناست: آن فایل کلاسِ
+// دکمه‌های فایل‌های دیگر را فهرست می‌کند تا افکتِ فشار بگیرند، نه اینکه مالکشان باشد.
+const NS_EXEMPT = new Set(['src/ui/press.css'].map((f) => path.normalize(f)));
+const owners = new Map(); // ریشه → [فایل‌ها]
+for (const f of cssFiles) {
+  if (NS_EXEMPT.has(path.normalize(f))) continue;
+  const text = stripCss(fs.readFileSync(f, 'utf8'));
+  for (const m of text.matchAll(/(?:^|[},])\s*([^{}@/][^{}]*?)\s*\{/g)) {
+    for (const one of m[1].split(',')) {
+      const hit = /^\.([a-z][a-z0-9-]{0,3})$/.exec(one.trim());
+      if (hit) owners.set(hit[1], [...new Set([...(owners.get(hit[1]) ?? []), f])]);
+    }
+  }
+}
+const clashes = [...owners].filter(([, fs2]) => fs2.length > 1);
+if (clashes.length) {
+  for (const [name, fs2] of clashes) console.error(`✘ ریشهٔ «.${name}» در ${fs2.length} فایل تعریف شده: ${fs2.join(' · ')}`);
+  console.error('\nریشهٔ کوتاه = فضای نامِ یک صفحه/کامپوننت. یکی از دو طرف باید پیشوندِ بلندتر بگیرد');
+  console.error('(نمونه: کامپوننتِ آپلود از `fd-` به `fdrop-` رفت تا میزِ پذیرش `fd-` را نگه دارد).');
+  process.exit(1);
+}
+console.log(`css chunks ok — ${roots.length} chunk root(s), entry css = ${entryCss.size} file(s), ${owners.size} namespace root(s)`);

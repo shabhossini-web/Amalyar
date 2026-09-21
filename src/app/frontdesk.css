@@ -92,3 +92,20 @@
   .fd-lane.on { display: block; }
   .fd-lane h2 { display: none; }
 }
+
+/* ── جستجوی تخته و بدهیِ قبلی (بستهٔ ۳الف) ── */
+.fd-find {
+  display: flex; align-items: center; gap: 7px; min-width: 0; flex: 0 1 250px;
+  padding: 0 11px; height: 38px; border-radius: 10px;
+  background: rgba(var(--surface-rgb), .55); border: 1px solid rgba(var(--veil-rgb), .14);
+  color: var(--text3);
+}
+.fd-find:focus-within { border-color: rgba(var(--brand-2-rgb), .55); color: var(--text2); }
+.fd-find input { flex: 1; min-width: 0; padding: 0; font: inherit; font-size: 13px; color: var(--text1); background: none; border: 0; outline: none; }
+.fd-find-x { display: flex; align-items: center; padding: 4px; color: var(--text3); background: none; border: 0; cursor: pointer; }
+.fd-find-x:hover { color: var(--text1); }
+
+/* بدهیِ مراجعه‌های دیگر — هم‌شکلِ «مانده» ولی کهربایی، چون کارِ همین لحظهٔ منشی است */
+.fd-debt { color: var(--amber-text); }
+.fd-debt b { color: var(--amber); }
+.fd-debt span { font-size: 11px; color: var(--text3); }

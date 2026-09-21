@@ -28,10 +28,13 @@
 .sp-row:hover, .sp-row:focus-visible { border-color: rgba(var(--brand-2-rgb), .55); outline: none; }
 .sp-row-time { font-size: 13px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
 .sp-row-name { grid-column: 2; font-size: 14px; font-weight: 700; color: var(--text1); }
-.sp-row-sub { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-row-sub { grid-column: 2; grid-row: 2; display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 12px; color: var(--text3); }
+.sp-row-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp-row-tag { grid-column: 3; grid-row: 1 / span 2; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12); }
 .sp-row-tag.hot { color: var(--amber); border-color: rgba(251, 191, 36, .5); }
-.sp-kind { font-size: 11px; font-weight: 700; color: var(--brand-2); }
+/* ⚠️ فاصله با **CSS**، نه با یک فاصلهٔ متنی در JSX: وقتی `<span>` به خطِ بعد
+   می‌رود JSX فاصله را حذف می‌کند و «مریم احمدیویزیت» چاپ می‌شود (همین یک‌بار شد). */
+.sp-kind { font-size: 11px; font-weight: 700; color: var(--brand-2); margin-inline-start: 6px; }
 .sp-open { padding: 0; cursor: pointer; font: inherit; color: inherit; text-align: start; background: none; border: 0; text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px; }
 .sp-open:hover { color: var(--brand-2); }
 .sp-open:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 4px; }
@@ -57,3 +60,29 @@
   border-color: rgba(var(--veil-rgb), .18);
 }
 .sp-page .bl-mini { color: var(--text1); }
+
+/* ── نوارِ خلاصهٔ امروز (بستهٔ ۳الف) ──
+   ⚠️ عددها را سرور می‌دهد؛ این‌جا فقط چیده می‌شوند. `flex-wrap` لازم است چون
+   روی عرضِ گوشی پنج چیپ در یک خط جا نمی‌شود و بدونِ آن نوار افقی اسکرول می‌خورد. */
+.sp-sum { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0 0 16px; padding: 0; }
+.sp-sum li {
+  display: flex; align-items: center; gap: 5px; padding: 6px 11px; border-radius: 99px;
+  font-size: 12.5px; color: var(--text2);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .11);
+}
+.sp-sum li b { font-size: 14px; font-weight: 800; color: var(--text1); font-variant-numeric: tabular-nums; }
+.sp-sum li.hot { color: var(--amber-text); border-color: rgba(251, 191, 36, .45); }
+.sp-sum li.hot b { color: var(--amber); }
+.sp-sum-money { margin-inline-start: auto; }
+.sp-sum-money b.due { color: var(--amber); }
+
+/* دو برچسب کنارِ هم (وضعیتِ نوبت + وضعیتِ مراجعه) روی یک ردیفِ ادغام‌شده */
+.sp-row-tags { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.sp-row-tags .sp-row-tag { grid-column: auto; grid-row: auto; }
+/* مبلغ هرگز کوتاه نمی‌شود — متنِ کنارش کوتاه می‌شود. */
+.sp-due { flex: 0 0 auto; color: var(--amber-text); font-weight: 700; white-space: nowrap; }
+.sp-due::before { content: '·'; margin-inline-end: 6px; color: var(--text3); font-weight: 400; }
+.sp-row-meta:empty + .sp-due::before { content: none; }
+
+/* کارِ راه‌اندازیِ یک‌باره — زیرِ کارِ روز و کم‌رنگ‌تر از آن */
+.sp-setup { margin-top: 28px; opacity: .85; }
