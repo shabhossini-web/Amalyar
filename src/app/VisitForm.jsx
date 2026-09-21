@@ -257,6 +257,21 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return Math.round((day(d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
   })();
   const opIsToday = opDayDelta === 0;
+  /* تب‌های مرحلهٔ عمل (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹): پایینِ فرمِ عمل سه بخشِ
+     «قبل / حین / بعد از عمل» به‌جای یک ستونِ شلوغ. تبِ آغازین از **زمانِ عمل**
+     می‌آید — ثبتِ تازه یا عملِ آینده: قبل؛ همین امروز: حین؛ گذشته: تا شرح نوشته
+     نشده حین، بعدش بعد. فقط یک‌بار در باز شدن حساب می‌شود تا تایپِ شرح
+     تب را زیرِ دستِ کاربر عوض نکند. */
+  const [phase, setPhase] = useState(() => {
+    if (!initial?.id || !initial?.opDate) return 'pre';
+    const d = new Date(initial.opDate);
+    const now = new Date();
+    const delta = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+      - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
+    if (delta > 0) return 'pre';
+    if (delta === 0) return 'intra';
+    return (initial.opReport || '').trim() ? 'post' : 'intra';
+  });
   /* پیش‌فرض فقط تا وقتی کاربر خودش دست نزده — بعدش انتخابِ او حاکم است. */
   /* سفارش‌های همین مراجعه (آزمایش/عکس/مشاوره/ارجاع) — چیپِ تصمیم فقط
      «ثبتِ تصمیم» نیست: فرمش را همان‌جا باز می‌کند و ارسال می‌کند. */
@@ -605,6 +620,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     'opDate', 'opStartTime', 'opEndTime', 'opReport', 'nextVisitDate',
     'amount', 'notes',
   ];
+  /* فیلدهای «حینِ عمل» — در فرمِ عمل داخلِ تبِ خودشان می‌نشینند، نه در کارتِ بالا. */
+  const INTRA_KEYS = ['opStartTime', 'opEndTime', 'opReport'];
 
   /**
    * هر فیلدِ هسته‌ای یک گرهِ نام‌دار.
@@ -771,6 +788,30 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       </fieldset>) };
   }
 
+
+  /* سفارش‌های همین مراجعه — در فرمِ ویزیت زیرِ تصمیم، در فرمِ عمل داخلِ تبِ
+     «قبل از عمل» (آزمایش/تصویربرداریِ پیش از عمل — تا دیروز از فرمِ عمل اصلاً
+     قابلِ ثبت نبود؛ یافتهٔ جانبیِ بستهٔ ۱). فقط برای مراجعهٔ ذخیره‌شده. */
+  const ordersBlock = initial?.id ? (
+            <div className="db-orders">
+              {orders.map((o) => (
+                <div className="db-order" key={`${o.kind}-${o.id}`}>
+                  <b>{o.kindFa}</b>
+                  <span>{o.summary}</span>
+                  <i className={o.status}>
+                    {o.status === 'answered' ? 'پاسخ ثبت شد' : o.status === 'sent' ? 'برای بیمار رفت' : 'ثبت‌شده'}
+                  </i>
+                  <button type="button" onClick={() => setOrderSheet({ kind: o.kind, order: o })}>باز کردن</button>
+                </div>
+              ))}
+              <div className="db-daychips">
+                {Object.entries(ORDER_META).map(([k, m]) => (
+                  <button key={k} type="button" className="db-daychip"
+                          onClick={() => setOrderSheet({ kind: k })}>+ {m.fa}</button>
+                ))}
+              </div>
+            </div>
+  ) : null;
 
   /* فرمِ انتخاب‌شده — برای عنوان و رنگِ بخشِ «فرم» (تمایز از ردیفِ نوع‌ها). */
   const kindMeta = (fd.kinds ?? []).find((k) => k.kind === f.kind) ?? null;
@@ -1019,7 +1060,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           جابه‌جاشان کند؛ اگر مثل قبل JSXِ درجا بودند، ترتیبِ فرم‌ساز هیچ
           اثری نداشت. `wide` یعنی تمامِ عرضِ ردیف را بگیرد. */}
       <div className="db-grid2 db-builtins">
-        {fd.orderBuiltins(BUILTIN_ORDER).map((key) => {
+        {fd.orderBuiltins(BUILTIN_ORDER).filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key))).map((key) => {
           const node = builtinNodes[key];
           if (!node) return null;
           return (
@@ -1118,26 +1159,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               فرمِ درخواست بعد از ذخیرهٔ همین مراجعه باز می‌شود (هر سفارش زیرِ مراجعهٔ خودش می‌نشیند).
             </p>
           )}
-          {initial?.id && (
-            <div className="db-orders">
-              {orders.map((o) => (
-                <div className="db-order" key={`${o.kind}-${o.id}`}>
-                  <b>{o.kindFa}</b>
-                  <span>{o.summary}</span>
-                  <i className={o.status}>
-                    {o.status === 'answered' ? 'پاسخ ثبت شد' : o.status === 'sent' ? 'برای بیمار رفت' : 'ثبت‌شده'}
-                  </i>
-                  <button type="button" onClick={() => setOrderSheet({ kind: o.kind, order: o })}>باز کردن</button>
-                </div>
-              ))}
-              <div className="db-daychips">
-                {Object.entries(ORDER_META).map(([k, m]) => (
-                  <button key={k} type="button" className="db-daychip"
-                          onClick={() => setOrderSheet({ kind: k })}>+ {m.fa}</button>
-                ))}
-              </div>
-            </div>
-          )}
+          {ordersBlock}
         </div>
       )}
 
@@ -1165,6 +1187,22 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
           )}
 
+
+          {/* ── سه مرحله، سه تب (بازخوردِ مالک: «قبل/حین/بعد از عمل به‌صورتِ تبِ جدا؛
+              الان خیلی شلوغ است»). فقط تبِ فعال رندر می‌شود؛ مقدارها در `f` می‌مانند،
+              پس جابه‌جایی چیزی را پاک نمی‌کند و «ذخیره» هر سه را با هم می‌فرستد.
+              خطِ برنامه (پایین) بیرونِ تب‌هاست تا خلاصهٔ هر سه همیشه دیده شود. */}
+          <Tabs
+            variant="inset"
+            className="db-phasetabs"
+            label="مرحلهٔ عمل"
+            value={phase}
+            onChange={setPhase}
+            items={[{ key: 'pre', label: 'قبل از عمل' }, { key: 'intra', label: 'حین عمل' }, { key: 'post', label: 'بعد از عمل' }]}
+          />
+
+          {phase === 'pre' && (
+          <div className="db-phase" data-phase="pre">
           {/* ── مراقبتِ قبل از عمل ── */}
           <div className="db-careblock">
             <div className="db-carehead">
@@ -1203,6 +1241,36 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
           </div>
 
+          <div className="db-careblock">
+            <div className="db-carehead">
+              <span>درخواست‌های پیش از عمل — آزمایش، تصویربرداری، مشاوره</span>
+              {!initial?.id && <i>بعد از ذخیره</i>}
+            </div>
+            {initial?.id
+              ? ordersBlock
+              : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
+          </div>
+          </div>
+          )}
+
+          {phase === 'intra' && (
+          <div className="db-phase" data-phase="intra">
+            {INTRA_KEYS.some((k) => builtinNodes[k]) ? (
+              <div className="db-grid2 db-builtins">
+                {INTRA_KEYS.map((key) => {
+                  const node = builtinNodes[key];
+                  if (!node) return null;
+                  return <div key={key} className={node.wide ? 'db-span2' : undefined}>{node.el}</div>;
+                })}
+              </div>
+            ) : (
+              <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
+            )}
+          </div>
+          )}
+
+          {phase === 'post' && (
+          <div className="db-phase" data-phase="post">
           {/* ── مراقبتِ بعد از عمل ── */}
           <div className="db-careblock">
             <div className="db-carehead">
@@ -1290,6 +1358,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               placeholder="۱۴۰۵/۰۵/۱۰"
             />
           </div>
+
+          </div>
+          )}
 
           <p className="db-postop-plan">
             {timing && timing.followUpFormReady === false

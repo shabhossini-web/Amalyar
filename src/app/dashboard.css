@@ -1038,3 +1038,10 @@ a.db-defbtn { text-decoration: none; }
   margin-inline-start: 8px; padding: 1px 8px; font: inherit; font-size: 10.5px; font-weight: 700; cursor: pointer;
   color: var(--amber-text); background: rgba(var(--veil-rgb), .06); border: 1px dashed rgba(var(--veil-rgb), .25); border-radius: 99px;
 }
+
+/* ── تب‌های مرحلهٔ عمل — قبل / حین / بعد (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹) ──
+   نوارِ تب از `Tabs` (تک‌منبع)؛ این‌جا فقط چیدمانِ پنلِ هر مرحله. */
+.db-phasetabs { margin: 2px 0 4px; }
+.db-phase { display: flex; flex-direction: column; gap: 10px; }
+.db-phase .db-builtins { margin: 0; }
+.db-phase .db-orders { margin-top: 0; }

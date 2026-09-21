@@ -107,3 +107,4 @@ w4-2-pathway-notify
 w4-2-pathway-wizard
 yesno-ui
 today-popups
+surgery-phase-tabs
