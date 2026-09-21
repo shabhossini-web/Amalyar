@@ -7,8 +7,12 @@
 }
 .st-aiguide-body {
   margin-top: 8px; padding: 12px 14px; border-radius: 13px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
 }
 .st-aiguide-body p { font-size: 12.5px; line-height: 2; color: var(--text2); margin-bottom: 8px; }
 .st-aiguide-body p:last-child { margin-bottom: 0; }
 .st-aiguide-body b { color: var(--text1); }
+
+/* 🧪 دادهٔ آزمایشی (موقت) */
+.st-testrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.st-nid { font-size: 15px; letter-spacing: .08em; padding: 6px 10px; border-radius: 8px; background: rgba(var(--veil-rgb), .06); }

@@ -24,7 +24,7 @@
 .as-starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
 .as-starters button {
   padding: 8px 14px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--text2);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 99px;
 }
 .as-starters button:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
 
@@ -40,16 +40,16 @@
   border-start-start-radius: 4px;
 }
 .as-msg.assistant .as-bubble {
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
   border-start-end-radius: 4px;
 }
-.as-msg.err .as-bubble { color: #fca5a5; border-color: rgba(248, 113, 113, .35); }
+.as-msg.err .as-bubble { color: var(--red-text); border-color: rgba(248, 113, 113, .35); }
 .as-link { color: var(--brand-2); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
 .as-inputbar {
   display: flex; gap: 8px; max-width: 760px; width: 100%; margin: 0 auto;
   padding: 10px; border-radius: 16px;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .as-inputbar input { flex: 1; min-width: 0; font: inherit; font-size: 13.5px; color: var(--text1); background: none; border: 0; outline: none; padding: 4px 6px; }
 .as-inputbar button {

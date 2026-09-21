@@ -26,13 +26,13 @@
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  color: rgba(255, 255, 255, .68);
-  background: rgba(255, 255, 255, .05);
-  border: 1px solid rgba(255, 255, 255, .12);
+  color: rgba(var(--veil-rgb), .68);
+  background: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .12);
   /* رنگ transition دارد ولی پس‌زمینه نه — پس‌زمینه کارِ قرص است. */
   transition: color .18s ease, border-color .18s ease;
 }
-.ui-tabs button:hover { color: rgba(255, 255, 255, .9); }
+.ui-tabs button:hover { color: rgba(var(--veil-rgb), .9); }
 /* قرص **پشتِ** دکمه‌ها می‌نشیند (ترتیبِ DOM)، پس دکمهٔ فعال باید پس‌زمینهٔ
    خودش را کنار بگذارد وگرنه یک پردهٔ سفید روی گرادیان می‌ماند. */
 .ui-tabs button.on { color: #fff; border-color: transparent; background: transparent; }
@@ -85,7 +85,7 @@
   padding: 5px;
   border-radius: 14px;
   background: rgba(0, 0, 0, .25);
-  border: 1px solid rgba(255, 255, 255, .1);
+  border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ui-tabs-inset button {
   padding: 9px;
@@ -110,12 +110,5 @@
   .ui-tabs button { padding: 10px 8px; font-size: 12px; }
 }
 
-/* برچسبِ بخشِ نقش روی فیلدِ فرمِ داینامیک («هر کس قسمتِ خودش را پر کند») */
-.dyn-role {
-  margin-inline-start: 6px; font-style: normal; font-size: 9.5px; font-weight: 700;
-  padding: 2px 7px; border-radius: 99px; vertical-align: 1px;
-  color: rgb(var(--brand-2-rgb)); background: rgba(var(--brand-2-rgb), .1);
-  border: 1px solid rgba(var(--brand-2-rgb), .28);
-}
-.dyn-role.off { color: var(--text3); background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
-.dyn-locked { opacity: .72; }
+/* برچسبِ بخشِ نقش (`.dyn-role`) و `.dyn-locked` در `src/ui/dynform.css` — همراهِ
+   خودِ DynForm، چون این فایل را فقط Tabs ایمپورت می‌کند. */

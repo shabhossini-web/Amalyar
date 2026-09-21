@@ -1,8 +1,25 @@
 import { chromium } from 'playwright-core';
 
 const BASE = 'http://127.0.0.1:5199';
+const API = process.env.E2E_API ?? 'http://127.0.0.1:3101/api';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
+
+/* روی دیتابیسِ تازه هیچ کارتی نیست؛ سوییت مراجعهٔ خودش را می‌سازد و آخرِ کار
+   پاک می‌کند — نه اینکه به مراجعاتِ اجرای قبلی تکیه کند (که در CI وجود ندارند). */
+const auth = await fetch(API + '/auth/login', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ identifier: 'admin', password: 'test1234' }),
+}).then((r) => r.json());
+const H = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + auth.accessToken };
+const j = (path, init) => fetch(API + path, { headers: H, ...init }).then((r) => r.json());
+const [kinds, surgeons, hospitals] = await Promise.all([j('/forms/visit-kinds'), j('/surgeons'), j('/hospitals')]);
+const fixture = await j('/visits', { method: 'POST', body: JSON.stringify({
+  kind: kinds[0]?.kind, firstName: 'بیمارِ', lastName: 'ارسالِ فرم',
+  surgeonId: (surgeons.rows ?? surgeons)[0]?.id, hospitalId: (hospitals.rows ?? hospitals)[0]?.id,
+  opDate: new Date().toISOString(),
+}) });
+if (!fixture?.id) { console.error('مراجعهٔ نمونه ساخته نشد:', JSON.stringify(fixture)); process.exit(1); }
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true });
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -27,9 +44,10 @@ for (let i = 0; i < 8 && !logged; i++) {
 ok(logged, 'ورود انجام شد');
 
 // ۱) لانچر — کاشیِ CRM
-await page.goto(BASE + '/app');
+/* W3.7: `/app` صفحهٔ «امروز» است و لانچرِ کاشی‌ها به `/app/tools` رفت. */
+await page.goto(BASE + '/app/tools');
 await page.waitForTimeout(1200);
-const crmTile = await page.locator('button:has-text("تحلیل و CRM")').count();
+const crmTile = await page.locator('a:has-text("تحلیل و CRM"), button:has-text("تحلیل و CRM")').count();
 ok(crmTile >= 1, 'کاشیِ «تحلیل و CRM» در لانچر هست');
 
 // ۲) صفحهٔ CRM
@@ -82,5 +100,6 @@ if (cardel > 0) {
 ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'هیچ خطای JSای در کنسول نیست');
 
 await browser.close();
+await fetch(API + '/visits/' + fixture.id, { method: 'DELETE', headers: H }).catch(() => {});
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);
 process.exit(fail ? 1 : 0);

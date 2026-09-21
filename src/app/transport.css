@@ -22,7 +22,7 @@
 .tr-err {
   display: flex; align-items: center; gap: 7px; max-width: 940px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 
 .tr-sum {
@@ -31,7 +31,7 @@
 }
 .tr-sum div {
   display: grid; gap: 2px; padding: 9px; text-align: center; border-radius: 12px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .08);
 }
 .tr-sum b { font-size: 16px; font-weight: 900; }
 .tr-sum span { font-size: 10.5px; color: var(--text3); }
@@ -40,13 +40,13 @@
 .tr-list { display: grid; gap: 11px; max-width: 940px; margin: 0 auto; }
 .tr-empty {
   padding: 26px 16px; text-align: center; font-size: 13px; color: var(--text3);
-  border: 1px dashed rgba(255, 255, 255, .12); border-radius: 16px;
+  border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 /* ── کارتِ توقف ── */
 .tr-card {
   display: grid; gap: 9px; padding: 13px;
-  border-radius: 17px; background: rgba(255, 255, 255, .045);
+  border-radius: 17px; background: rgba(var(--veil-rgb), .045);
   border: 1px solid rgba(var(--brand-soft-rgb), .17);
 }
 /* جمع‌آوری از تحویل به رنگ جدا می‌شود: راننده در یک نگاه بداند می‌برد یا می‌آورد. */
@@ -66,7 +66,7 @@
 .tr-tag {
   flex: 0 0 auto; font-style: normal; font-size: 10.5px; font-weight: 700;
   padding: 3px 9px; border-radius: 99px;
-  color: var(--text2); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .tr-tag.ok { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
 
@@ -76,7 +76,7 @@
 .tr-cargo { display: grid; gap: 8px; }
 .tr-bag {
   display: grid; gap: 7px; padding: 10px;
-  border-radius: 13px; background: rgba(0, 0, 0, .22); border: 1px solid rgba(255, 255, 255, .07);
+  border-radius: 13px; background: rgba(0, 0, 0, .22); border: 1px solid rgba(var(--veil-rgb), .07);
 }
 .tr-bag-head { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .tr-bag-head b { display: inline-flex; align-items: center; gap: 5px; }
@@ -89,7 +89,7 @@
 .tr-left b { font-weight: 800; }
 .tr-none {
   display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 11px;
-  font-size: 12px; color: #fca5a5;
+  font-size: 12px; color: var(--red-text);
   background: rgba(248, 113, 113, .09); border: 1px solid rgba(248, 113, 113, .28);
 }
 
@@ -104,7 +104,7 @@
 .tr-call {
   display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px;
   border-radius: 99px; font-size: 11.5px; text-decoration: none;
-  color: var(--text1); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .13);
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13);
 }
 .tr-call:hover { border-color: rgba(var(--brand-2-rgb), .5); }
 .tr-call.off { opacity: .6; }
@@ -122,42 +122,42 @@
 /* ── شیت (ورود/خروج از ui/Overlay.jsx) ── */
 .tr-overlay {
   position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 14px;
-  background: rgba(4, 2, 16, .74); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  background: rgba(var(--surface-rgb), .74); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .tr-sheet {
   width: min(440px, 100%); max-height: 90dvh; overflow-y: auto; border-radius: 19px;
-  background: #150f36; border: 1px solid rgba(var(--brand-soft-rgb), .28);
+  background: var(--bg3); border: 1px solid rgba(var(--brand-soft-rgb), .28);
 }
 .tr-sheet-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 13px 15px; border-block-end: 1px solid rgba(255, 255, 255, .08);
+  padding: 13px 15px; border-block-end: 1px solid rgba(var(--veil-rgb), .08);
 }
 .tr-sheet-head b { font-size: 13.5px; }
 .tr-x {
   display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer;
-  color: var(--text2); background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .12); border-radius: 9px;
+  color: var(--text2); background: rgba(var(--veil-rgb), .06);
+  border: 1px solid rgba(var(--veil-rgb), .12); border-radius: 9px;
 }
 .tr-sheet-body { display: grid; gap: 10px; padding: 14px 15px 16px; }
 .tr-hint { font-size: 12px; color: var(--text3); }
 .tr-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
 .tr-field input {
   font: inherit; font-size: 13px; color: var(--text1); padding: 9px 11px; border-radius: 10px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .14); outline: none;
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
 }
 .tr-field input:focus { border-color: rgba(var(--brand-2-rgb), .6); }
 
 .tr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .tr-chip {
   font: inherit; font-size: 11.5px; cursor: pointer; padding: 6px 11px; border-radius: 99px;
-  color: var(--text2); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .13);
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13);
 }
 .tr-chip.on { color: #fff; background: rgba(var(--brand-2-rgb), .3); border-color: rgba(var(--brand-2-rgb), .6); }
 
 .tr-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(22, 16, 46, .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .tr-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }

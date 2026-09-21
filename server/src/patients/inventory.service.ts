@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { AssetsService, windowOf } from './assets.service';
 import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
 import { SettingsService } from '../config/settings.service';
@@ -11,6 +12,7 @@ import { PlacesService } from './places.service';
 // فراخوان‌های موجود نشکنند.
 export { balanceByLocation, balanceOf, HOME_FALLBACK };
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere } from '../common/own-scope';
 import { digitVariants, textSearchOr } from '../common/search';
 
 /** نوعِ حرکتِ انبار. علامت را سرویس تعیین می‌کند، نه کاربر. */
@@ -64,6 +66,7 @@ export class InventoryService {
     private assets: AssetsService,
     private settings: SettingsService,
     private places: PlacesService,
+    private events: EventsService,
     // ⚠️ حلقهٔ وابستگی: مسیرها هم انبار را می‌خواهند. `forwardRef` در ماژول
     //    حلش می‌کند — بدونِ آن Nest هنگامِ بالا آمدن گیر می‌کند.
     @Inject(forwardRef(() => RoutesService)) private routes: RoutesService,
@@ -742,6 +745,10 @@ export class InventoryService {
       actorId: user?.id, action: 'stock.transfer.usage', entityType: 'stock_transfer', entityId: id,
       after: { changes },
     });
+    /* W2.2: ثبتِ مصرف ← بستنِ «تأییدِ مصرفِ سرِ عمل» (work-rules: usage.confirmed؛ ref = مراجعه). */
+    if (t.visitId) {
+      await this.events.emit({ type: 'usage.confirmed', visitId: t.visitId, actorId: user?.id ?? null, payload: { transferId: id, changes } });
+    }
     return this.transfer(id, user);
   }
 
@@ -753,7 +760,7 @@ export class InventoryService {
    */
   private transferScope(user: any) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return {};
-    return { visit: { techId: user?.id ?? -1 } };
+    return { visit: ownVisitWhere(user) };
   }
 
   private async assertTransfer(id: number, user: any) {

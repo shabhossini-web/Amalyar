@@ -1,16 +1,22 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
+import { CANCEL_REASONS } from '../common/cancel-reasons';
+import { syncVisitDuty } from './hospital-duties.service';
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere, scopedPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { FormsService } from './forms.service';
+import { syncLinkDocuments } from './link-documents';
 import { summarize } from './billing.service';
 
 /**
@@ -143,10 +149,15 @@ export function durationOf(start?: string | null, end?: string | null): number |
  */
 function timePatch(dto: any): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+  /* ⚠️ `techArriveTime` عمداً این‌جا **نیست** (W3.8/U7، تصمیمِ مالک ۱۴۰۵/۰۶/۲۶).
+     ساعتِ حضور مالِ «کارشناس در آن بیمارستان در آن روز» است، نه مالِ یک بیمار،
+     پس تنها نویسنده‌اش `syncVisitDuty()` است و از `hospital_duties` می‌آید.
+     تا امروز از همین‌جا هم نوشته می‌شد (فرمِ مراجعه و شیتِ ساعتِ کارشناس) و
+     با برنامهٔ چینش واگرا می‌شد. `whitelist`ِ ValidationPipe مقدارِ کلاینتِ
+     قدیمی را بی‌صدا دور می‌ریزد، پس دیپلویِ غلتان چیزی نمی‌شکند. */
   const map = {
     opStartTime: 'ساعتِ شروع',
     opEndTime: 'ساعتِ پایان',
-    techArriveTime: 'ساعتِ حضورِ کارشناس',
     cargoDueTime: 'ساعتِ تحویلِ بار',
   } as const;
   for (const [key, label] of Object.entries(map)) {
@@ -244,6 +255,7 @@ export class PatientsService {
     private audit: AuditService,
     private forms: FormsService,
       private reminders: RemindersService,
+    private events: EventsService,
   ) {}
 
   /**
@@ -259,7 +271,7 @@ export class PatientsService {
    * - پیامک‌ها همان مسیرِ همیشگی‌اند (یادآوریِ next_visit روی خودِ عمل)؛
    *   فرزند nextVisitDate ندارد پس یادآوریِ دوباره نمی‌کارد.
    */
-  private async syncPostOpVisit(visitId: number) {
+  private async syncPostOpVisit(visitId: number, strict = false) {
     try {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
@@ -310,12 +322,14 @@ export class PatientsService {
     } catch (e) {
       /* ثبتِ عمل نباید قربانیِ ویزیتِ خودکار شود — مثلِ قاعدهٔ یادآوری‌ها. */
       console.warn(`syncPostOpVisit(${visitId}) شکست خورد:`, e instanceof Error ? e.message : e);
+      if (strict) throw e;
     }
   }
 
   private scopedVisitWhere(user: any, where: any = {}) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return { ...where };
-    return { ...where, techId: user?.id ?? -1 };
+    /* `AND` نه spread: جستجوی آزاد خودش `OR` دارد و شرطِ «خودش» هم ممکن است `OR` باشد. */
+    return { AND: [where, ownVisitWhere(user)] };
   }
 
   private async assertVisitAccess(id: number, user: any) {
@@ -649,7 +663,7 @@ export class PatientsService {
     if (!p || p.deletedAt) return { found: false };
 
     if ((user?.level ?? 0) < LEVEL.SUPERVISOR) {
-      const mine = await this.prisma.visit.count({ where: { patientId: p.id, techId: user?.id ?? -1 } });
+      const mine = await this.prisma.visit.count({ where: { patientId: p.id, ...ownVisitWhere(user) } });
       if (!mine) return { found: true, restricted: true };
     }
     return {
@@ -687,7 +701,7 @@ export class PatientsService {
       where: {
         ...where,
         deletedAt: null,
-        ...((user?.level ?? 0) < LEVEL.SUPERVISOR ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+        ...scopedPatientWhere(user),
       },
       orderBy: { id: 'desc' },
       take: 20,
@@ -989,6 +1003,14 @@ export class PatientsService {
   }
 
   async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
+    const create = await this.prepareVisitCreation(dto, user, opts);
+    const result = await this.prisma.$transaction(create);
+    await this.afterVisitCreation(result.id);
+    return result;
+  }
+
+  /** اعتبارسنجی بیرون از تراکنش؛ تمامِ نوشتن‌ها با همان txِ فراخواننده. */
+  async prepareVisitCreation(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
     const userId: number | undefined = user?.id;
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
@@ -1007,7 +1029,13 @@ export class PatientsService {
       if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
     } else if (!opts?.skipFormValidation) await this.assertFormValid(dto);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
-    const { visit: v, patientStatus } = await this.prisma.$transaction(async (tx) => {
+    /* باکس‌های لینکِ فرم: نرمال‌شده می‌نشینند (URLِ معتبر، سقف، برش) و هر لینک
+       مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. تعریفِ فرم **پیش از**
+       تراکنش خوانده می‌شود؛ داخلِ tx فقط نوشتن. */
+    const formFields = (await this.forms.forVisitKind(dto.kind || 'surgery'))?.fields ?? [];
+    const extraIn = await this.forms.normalizeExtra(formFields, (dto as any).extra);
+    const kinds = await this.forms.kindMap();
+    return async (tx: Prisma.TransactionClient, targetVisitId?: number) => {
       let patientId = dto.patientId;
       let patientStatus: 'existing' | 'matched' | 'restored' | 'new' = 'existing';
       if (patientId) {
@@ -1022,10 +1050,26 @@ export class PatientsService {
         patientId = r.patientId;
         patientStatus = r.patientStatus;
       }
+      // شمارهٔ مراجعه برای همین بیمار در مسیرهای هم‌زمان تکرار نشود.
+      await tx.$queryRaw`SELECT id FROM patients WHERE id = ${patientId} FOR UPDATE`;
       const refs = await this.resolveRefs(tx, dto);
+      let target: any = null;
+      if (targetVisitId) {
+        await tx.$queryRaw`SELECT id FROM visits WHERE id = ${targetVisitId} FOR UPDATE`;
+        target = await tx.visit.findFirst({ where: { id: targetVisitId, patientId } });
+        if (!target || target.opStatus === 'cancelled') throw new BadRequestException('مراجعهٔ هدف معتبر نیست یا لغو شده است');
+      }
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
       const seq = (max._max.seq ?? 0) + 1;
-      const visit = await tx.visit.create({
+      let visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
+        ...refs,
+        ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
+        ...(dto.opType !== undefined && refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
+        ...(dto.opDate !== undefined ? { opDate: toDateValue(dto.opDate) ?? null } : {}),
+        ...(dto.notes !== undefined ? { notes: dto.notes || null } : {}),
+        ...timePatch(dto),
+        extra: { ...(target.extra as any ?? {}), ...(extraIn as any ?? {}) },
+      }, include: INCLUDE_PATIENT }) : await tx.visit.create({
         data: {
           ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
           patientId,
@@ -1046,11 +1090,20 @@ export class PatientsService {
           notes: dto.notes || null,
           /* پاسخِ فیلدهای دلخواه. `{}` و نه null: ستون NOT NULL است و کدِ
              خواننده نباید مجبور باشد هر بار nullish-check بزند. */
-          extra: (dto as any).extra ?? {},
+          extra: extraIn ?? {},
           createdById: userId ?? null,
         },
         include: INCLUDE_PATIENT,
       });
+      /* ساعتِ حضور از برنامهٔ چینش می‌آید، نه از فرم — و اگر کارشناسی انتخاب
+         شده که آن روز در برنامهٔ آن بیمارستان نیست، همین‌جا در برنامه می‌نشیند
+         (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶). داخلِ همین تراکنش، تا انتساب و ردیفِ حضورش
+         هرگز از هم جدا نیفتند. */
+      const arrive = await syncVisitDuty(tx, visit);
+      if (arrive !== visit.techArriveTime) {
+        visit = await tx.visit.update({ where: { id: visit.id }, data: { techArriveTime: arrive }, include: INCLUDE_PATIENT });
+      }
+      await syncLinkDocuments(tx, { patientId, visitId: visit.id, fields: formFields as any, values: extraIn ?? {}, actorId: userId ?? null });
       /**
        * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
        *
@@ -1062,7 +1115,10 @@ export class PatientsService {
        * نه، دقیقاً همان مراجعهٔ صفرتومانی است که این تغییر برای حذفش آمده.
        */
       const charge = Math.trunc(Number(dto.amount) || 0);
-      if (charge > 0) {
+      const existingServices = target ? await tx.charge.aggregate({ where: { visitId: target.id, kind: 'service' }, _sum: { amount: true } }) : null;
+      const existingAmount = existingServices?._sum.amount ?? 0;
+      if (target && charge > 0 && existingAmount > 0 && existingAmount !== charge) throw new BadRequestException('مبلغ مراجعهٔ موجود با ثبت‌نام متفاوت است؛ ابتدا مبلغ را بررسی کنید');
+      if (charge > 0 && !existingAmount) {
         const title = (refs.opType || dto.opType?.trim() || 'خدمتِ ثبت‌شده').slice(0, 120);
         await tx.charge.create({
           data: {
@@ -1079,18 +1135,32 @@ export class PatientsService {
           take: 1,
         });
       }
-      return { visit, patientStatus };
+      const result = { ...enrich(visit, kinds), patientStatus };
+      await this.audit.record({ actorId: userId, action: target ? 'visit.intake_update' : 'visit.create', entityType: 'visit', entityId: visit.id, after: result }, tx);
+      return result;
+    };
+  }
+
+  /** فقط پس از commit؛ خطای تراکنش نباید یادآوری یا مراجعهٔ پست‌آپ بسازد. */
+  async afterVisitCreation(visitId: number, strict = false) {
+    await this.reminders.syncNextVisit(visitId, strict);
+    await this.syncPostOpVisit(visitId, strict);
+  }
+
+  /** فقط ارجاعِ صریحِ فرزندِ یک والد با همین موعد؛ نام/موضوع ملاک نیست. */
+  async appointmentTarget(tx: Prisma.TransactionClient, patientId: number | null, date: Date) {
+    if (!patientId) return null;
+    const children = await tx.visit.findMany({
+      where: {
+        patientId, opStatus: { not: 'cancelled' },
+        followOf: { is: { patientId, nextVisitDate: date, opStatus: { not: 'cancelled' } } },
+      },
+      select: { id: true }, orderBy: { id: 'asc' }, take: 2,
     });
-    /* ⚠️ نگاشتِ نوع‌ها این‌جا هم لازم است، نه فقط در فهرست: داشبورد پاسخِ ثبت
-       را مستقیم به فهرستش اضافه می‌کند. بدونِ نگاشت، کارتِ تازه‌ساخته‌شده
-       **بی‌رنگ و بی‌عنوان** می‌نشست تا وقتی کاربر صفحه را تازه کند — و چون
-       بعد از تازه‌سازی درست می‌شد، کسی باور نمی‌کرد باگ است. */
-    const result = { ...enrich(v, await this.forms.kindMap()), patientStatus };
-    await this.audit.record({ actorId: userId, action: 'visit.create', entityType: 'visit', entityId: v.id, after: result });
-    /* یادآوریِ «ویزیتِ بعدی» — خطایش بلعیده می‌شود؛ ثبتِ مراجعه مقدم است. */
-    await this.reminders.syncNextVisit(v.id);
-    await this.syncPostOpVisit(v.id);
-    return result;
+    if (children.length > 1) {
+      throw new BadRequestException('برای این روز چند مراجعهٔ پیگیری وجود دارد؛ ابتدا موعد مراجعهٔ موردنظر را در پرونده مشخص کنید');
+    }
+    return children[0]?.id ?? null;
   }
 
   /**
@@ -1110,7 +1180,7 @@ export class PatientsService {
     const result = enrich(updated, await this.forms.kindMap());
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: id,
-      before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, techArriveTime: before?.techArriveTime, cargoDueTime: before?.cargoDueTime },
+      before: { opStartTime: before?.opStartTime, opEndTime: before?.opEndTime, cargoDueTime: before?.cargoDueTime },
       after: patch,
     });
     return result;
@@ -1123,6 +1193,12 @@ export class PatientsService {
     await this.assertRoleOwnership((dto as any).kind ?? v.kind, dto, user, v as any);
     if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
     await this.assertEditFormValid(v, dto);
+    /* باکس‌های لینک: تعریفِ فرم و نرمال‌سازی **پیش از** تراکنش — کوئریِ بیرونِ tx
+       داخلِ تراکنشِ تعاملی روی PGliteِ CI (یک اتصال) قفل می‌کرد و تراکنشِ ۵ ثانیه‌ای
+       منقضی می‌شد (intake-finance-roles). داخلِ tx فقط نوشتنِ مدرک‌ها می‌ماند. */
+    const kindNow = dto.kind ?? v.kind ?? 'surgery';
+    const linkFields = dto.extra !== undefined ? ((await this.forms.forVisitKind(kindNow))?.fields ?? []) : [];
+    const extraIn = dto.extra !== undefined ? await this.forms.normalizeExtra(linkFields, dto.extra) : undefined;
 
     const patientPatch: any = {};
     if (dto.firstName !== undefined) patientPatch.firstName = dto.firstName;
@@ -1182,7 +1258,9 @@ export class PatientsService {
          ادغام می‌شود، نه جایگزین: یک PATCHِ جزئی — یا فرمی که فیلدی از آن
          حذف شده — نباید پاسخ‌های قبلی را از پرونده پاک کند. */
       if (dto.extra !== undefined) {
-        visitPatch.extra = { ...((v.extra as Record<string, any>) ?? {}), ...dto.extra };
+        visitPatch.extra = { ...((v.extra as Record<string, any>) ?? {}), ...extraIn };
+        /* لینکِ تازه در فرم → مدرکِ لینکیِ پرونده؛ حذفِ لینک مدرک را پاک نمی‌کند. */
+        await syncLinkDocuments(tx, { patientId: v.patientId, visitId: id, fields: linkFields as any, values: extraIn ?? {}, actorId: user?.id ?? null });
       }
 
       if (Object.keys(patientPatch).length) {
@@ -1191,6 +1269,20 @@ export class PatientsService {
       if (dto.opReport !== undefined) {
         await this.setOpReport(tx, { id, patientId: v.patientId }, dto.opReport, user);
       }
+      /* ساعتِ حضور مشتقِ برنامهٔ چینش است (W3.8/U7): با مقادیرِ **نهایی** پس از
+         این ویرایش سنجیده می‌شود، نه با مقادیرِ قبلی — وگرنه تغییرِ بیمارستان یا
+         تاریخ در همین ویرایش، ردیفِ حضورِ روزِ قبل را نگاه می‌کرد.
+         ⚠️ نتیجه **همیشه** نوشته می‌شود، حتی `null`: برداشتنِ کارشناس باید
+         ساعتِ حضورش را هم ببرد، وگرنه ساعتِ یتیم روی کارت می‌ماند. همین کار
+         رکوردهای واگرای قدیمی را هم با اولین ذخیره درست می‌کند. */
+      const pick = <T,>(patched: T | undefined, current: T): T => (patched === undefined ? current : patched);
+      visitPatch.techArriveTime = await syncVisitDuty(tx, {
+        id,
+        techId: pick(visitPatch.techId, v.techId),
+        hospitalId: pick(visitPatch.hospitalId, v.hospitalId),
+        opDate: pick(visitPatch.opDate, v.opDate),
+        opStartTime: pick(visitPatch.opStartTime, v.opStartTime),
+      });
       return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_PATIENT });
     });
     const kinds = await this.forms.kindMap();
@@ -1202,16 +1294,41 @@ export class PatientsService {
     return result;
   }
 
-  async setStatus(id: number, opStatus: string, user?: any) {
+  async setStatus(id: number, opStatus: string, user?: any, cancel?: { reason?: string; note?: string }) {
     await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id } });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    /* ⚠️ دلیلِ لغو **اجباری** است (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶) و از مجموعهٔ بستهٔ
+       `CANCEL_REASONS` می‌آید، نه متنِ آزاد: متنش به دستِ بیمار می‌رسد.
+       یادداشتِ داخلی اختیاری است و هرگز فرستاده نمی‌شود. */
+    const cancelling = opStatus === 'cancelled' && v.opStatus !== 'cancelled';
+    if (cancelling && !CANCEL_REASONS[cancel?.reason ?? '']) {
+      throw new BadRequestException('دلیلِ لغو را از فهرست انتخاب کنید');
+    }
     const updated = await this.prisma.visit.update({
       where: { id },
-      data: { opStatus },
+      data: {
+        opStatus,
+        ...(cancelling ? { cancelReason: cancel!.reason, cancelNote: cancel?.note ?? null } : {}),
+        /* برگشت از لغو، دلیل را هم پاک می‌کند — وگرنه مراجعهٔ زنده دلیلِ لغوِ
+           کهنه را با خودش حمل می‌کند و گزارشِ بعدی دروغ می‌گوید. */
+        ...(v.opStatus === 'cancelled' && opStatus !== 'cancelled' ? { cancelReason: null, cancelNote: null } : {}),
+      },
       include: INCLUDE_PATIENT,
     });
+    if (cancelling) {
+      await this.reminders.notifyCancelled('visit', v.patientId, cancel!.reason!, {
+        when: v.opDate ? v.opDate.toISOString().slice(0, 10) : null,
+      });
+    }
     /* لغوِ عمل باید یادآوریِ «عملِ پیشِ‌رو» را هم باطل کند. */
+    /* W2.2: done/cancelled کارهای بازِ همین عمل را می‌بندند (work-rules: visit.done / visit.cancelled). */
+    if (v.opStatus !== opStatus) {
+      await this.events.emit({
+        type: `visit.${opStatus}`, visitId: id, patientId: v.patientId, actorId: user?.id ?? null,
+        payload: { from: v.opStatus, techId: v.techId ?? null },
+      });
+    }
     await this.reminders.syncNextVisit(id);
     await this.syncPostOpVisit(id);
     return enrich(updated, await this.forms.kindMap());

@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { canAccess } from '../auth/access-check';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -5,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { InventoryService } from './inventory.service';
 import { TreasuryService } from './treasury.service';
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere } from '../common/own-scope';
 
 /** نوعِ قلمِ صورت‌حساب. discount همیشه مبلغِ منفی می‌سازد. */
 export const CHARGE_KINDS = ['service', 'item', 'discount'] as const;
@@ -38,10 +40,10 @@ export class BillingService {
   constructor(private prisma: PrismaService, private audit: AuditService, private inventory: InventoryService, private treasury: TreasuryService) {}
 
   /** همان قاعدهٔ scope که برای مراجعه داریم؛ کارشناس فقط مراجعاتِ خودش. */
-  private async assertVisit(visitId: number, user: any) {
+  private async assertVisit(visitId: number, user: any, db: any = this.prisma) {
     const scoped = (user?.level ?? 0) < LEVEL.SUPERVISOR;
-    const visit = await this.prisma.visit.findFirst({
-      where: { id: visitId, ...(scoped ? { techId: user?.id ?? -1 } : {}) },
+    const visit = await db.visit.findFirst({
+      where: { id: visitId, ...(scoped ? ownVisitWhere(user) : {}) },
       select: {
         id: true, patientId: true, pricingModel: true, globalAmount: true,
         invoiceType: true, invoiceBankAccountId: true,
@@ -155,8 +157,11 @@ export class BillingService {
     dto: { kind?: string; title?: string; quantity?: number; unitPrice?: number; notes?: string; serviceCode?: string; codeSystem?: string; itemId?: number; lotId?: number; stockEffect?: string },
     user: any,
     neuroDetail?: Record<string, any>,
+    tx?: Prisma.TransactionClient,
   ) {
-    await this.assertVisit(visitId, user);
+    const db = tx ?? this.prisma;
+    if (tx && dto.lotId) throw new BadRequestException('مصرف انبار از این تراکنش پشتیبانی نمی‌شود');
+    await this.assertVisit(visitId, user, db);
     const kind = dto.kind ?? 'service';
     if (!CHARGE_KINDS.includes(kind as any)) throw new BadRequestException('نوعِ قلم نامعتبر است');
 
@@ -171,7 +176,7 @@ export class BillingService {
         throw new BadRequestException('کدِ کتابِ ارزش نسبی باید ۴ تا ۸ رقم باشد');
       }
       if (codeSystem === 'internal') {
-        const def = await this.prisma.internalCode.findFirst({
+        const def = await db.internalCode.findFirst({
           where: { code: { equals: serviceCode, mode: 'insensitive' }, active: true },
         });
         if (!def) throw new BadRequestException('کدِ داخلی تعریف نشده یا غیرفعال است — اول در تعاریف پایه ثبتش کنید');
@@ -208,7 +213,7 @@ export class BillingService {
     const magnitude = quantity * unitPrice;
     const amount = kind === 'discount' ? -magnitude : magnitude;
 
-    const row = await this.prisma.charge.create({
+    const row = await db.charge.create({
       data: {
         visitId, kind, title, quantity, unitPrice, amount, stockEffect,
         serviceCode, codeSystem,
@@ -229,7 +234,7 @@ export class BillingService {
           user,
         );
       } catch (err) {
-        await this.prisma.charge.delete({ where: { id: row.id } });
+        await db.charge.delete({ where: { id: row.id } });
         throw err;
       }
     }
@@ -237,7 +242,7 @@ export class BillingService {
     await this.audit.record({
       actorId: user?.id, action: 'charge.create', entityType: 'charge', entityId: row.id,
       after: { visitId, title, amount, serviceCode: dto.serviceCode ?? null },
-    });
+    }, tx);
     return row;
   }
 
@@ -287,8 +292,10 @@ export class BillingService {
     visitId: number,
     dto: { amount?: number; method?: string; paidAt?: string; reference?: string; notes?: string; bankAccountId?: number; receivedById?: number },
     user: any,
+    tx?: Prisma.TransactionClient,
   ) {
-    const visit = await this.assertVisit(visitId, user);
+    const db = tx ?? this.prisma;
+    const visit = await this.assertVisit(visitId, user, db);
     const method = dto.method ?? 'cash';
     if (!PAYMENT_METHODS.includes(method as any)) throw new BadRequestException('روشِ پرداخت نامعتبر است');
     /**
@@ -309,7 +316,7 @@ export class BillingService {
       }
     }
     if (dto.bankAccountId) {
-      const bank = await this.prisma.bankAccount.findFirst({ where: { id: dto.bankAccountId, active: true } });
+      const bank = await db.bankAccount.findFirst({ where: { id: dto.bankAccountId, active: true } });
       if (!bank || (visit.invoiceType && bank.classification !== visit.invoiceType)) throw new BadRequestException('حساب دریافت با نوع فاکتور سازگار نیست');
     }
 
@@ -323,9 +330,9 @@ export class BillingService {
       paidAt = d;
     }
     // قفلِ دورهٔ مالی: سندی با تاریخِ داخلِ سالِ بسته‌شده نوشته نمی‌شود.
-    await this.treasury.assertOpen(paidAt);
+    await this.treasury.assertOpen(paidAt, tx);
 
-    const row = await this.prisma.payment.create({
+    const row = await db.payment.create({
       data: {
         visitId, amount, method, paidAt,
         bankAccountId: dto.bankAccountId ?? null,
@@ -339,7 +346,7 @@ export class BillingService {
     await this.audit.record({
       actorId: user?.id, action: 'payment.create', entityType: 'payment', entityId: row.id,
       after: { visitId, amount, method },
-    });
+    }, tx);
     return row;
   }
 

@@ -3,8 +3,8 @@
 .fd-drop {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 18px 14px; cursor: pointer; text-align: center;
-  background: rgba(255, 255, 255, .04);
-  border: 1px dashed rgba(255, 255, 255, .22); border-radius: 16px;
+  background: rgba(var(--veil-rgb), .04);
+  border: 1px dashed rgba(var(--veil-rgb), .22); border-radius: 16px;
   transition: border-color .15s, background .15s;
 }
 .fd-drop.on { border-color: rgba(var(--brand-2-rgb), .7); background: rgba(var(--brand-rgb), .09); }
@@ -19,14 +19,14 @@
 .fd-list { display: flex; flex-direction: column; gap: 6px; }
 .fd-item {
   display: flex; align-items: center; gap: 9px; padding: 7px 9px;
-  background: rgba(255, 255, 255, .04);
-  border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px;
+  background: rgba(var(--veil-rgb), .04);
+  border: 1px solid rgba(var(--veil-rgb), .1); border-radius: 12px;
 }
 .fd-item.done { border-color: rgba(52, 211, 153, .35); }
 .fd-item.error { border-color: rgba(248, 113, 113, .45); }
 .fd-thumb {
   flex: none; width: 38px; height: 38px; object-fit: cover; border-radius: 9px;
-  background: rgba(255, 255, 255, .06);
+  background: rgba(var(--veil-rgb), .06);
 }
 .fd-doc { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--text3); }
 .fd-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -49,7 +49,7 @@
 .fd-x {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; cursor: pointer; color: var(--text3);
-  background: none; border: 1px solid rgba(255, 255, 255, .14); border-radius: 9px;
+  background: none; border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 9px;
 }
 .fd-x:hover { color: #f87171; border-color: rgba(248, 113, 113, .4); }
 

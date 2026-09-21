@@ -11,10 +11,10 @@
 .pf-field select {
   width: 100%; height: 46px; border-radius: 11px; padding: 0 13px; font: inherit; font-size: 13px;
   color: #fff; outline: none; appearance: none; cursor: pointer;
-  background: rgba(3, 2, 18, .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
 }
 .pf-field select:focus { border-color: var(--brand-2); }
-.pf-field select option { background: #141033; color: #f2f0fc; }
+.pf-field select option { background: var(--bg3); color: var(--text1); }
 .pf-field input[readonly] { opacity: .65; cursor: default; }
 
 .rc-save { height: 48px; margin-top: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
@@ -22,13 +22,13 @@
 .rc-locked {
   display: flex; align-items: center; gap: 8px; padding: 13px 15px; border-radius: 12px;
   font-size: 12.5px; color: #cbd5e1;
-  background: rgba(255, 255, 255, .04); border: 1px dashed rgba(148, 163, 184, .35);
+  background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(148, 163, 184, .35);
 }
 
 /* هشدارِ حساسیت — باید از همه‌چیز بیشتر به چشم بیاید */
 .rc-alert {
   max-width: 900px; margin: 0 auto 12px; padding: 11px 15px; border-radius: 12px;
-  font-size: 13px; font-weight: 800; color: #fecaca;
+  font-size: 13px; font-weight: 800; color: var(--red-text);
   background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .45);
 }
 
@@ -58,15 +58,15 @@
 .rc-form-ans dd { margin: 0; color: var(--text1); overflow-wrap: anywhere; }
 .rc-form-lock {
   font-size: 12px; color: var(--text3);
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .16);
   border-radius: 10px; padding: 8px 10px;
 }
 
 .rc-st {
   flex-shrink: 0; font-size: 10.5px; font-weight: 700; border-radius: 99px; padding: 4px 10px; white-space: nowrap;
 }
-.rc-st-pending   { color: #fbbf24; background: rgba(251, 191, 36, .1);  border: 1px solid rgba(251, 191, 36, .35); }
-.rc-st-done      { color: #5eead4; background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .35); }
+.rc-st-pending   { color: var(--amber-text); background: rgba(251, 191, 36, .1);  border: 1px solid rgba(251, 191, 36, .35); }
+.rc-st-done      { color: var(--green-text); background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .35); }
 .rc-st-cancelled { color: #fda4af; background: rgba(251, 113, 133, .1); border: 1px solid rgba(251, 113, 133, .35); }
 
 /* ── آپلود / فرمِ افزودن ── */
@@ -79,7 +79,7 @@
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 12px; border-radius: 11px; cursor: pointer;
   font: inherit; font-size: 12.5px; font-weight: 600; color: #b7b0d4;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
   transition: color .15s, border-color .15s, background .15s;
 }
 .rc-kindrow button:hover { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .45); }
@@ -98,13 +98,13 @@
 
 .rc-upload {
   display: grid; gap: 12px; margin-bottom: 14px; padding: 15px; border-radius: 16px;
-  background: rgba(18, 13, 49, .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  background: rgba(var(--surface-rgb), .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 /* ناحیهٔ انتخاب/رهاکردنِ فایل — inputِ نیتیو پنهان است */
 .rc-drop {
   display: grid; place-items: center; gap: 4px; cursor: pointer; text-align: center;
   padding: 20px 14px; border-radius: 13px; transition: border-color .15s, background .15s;
-  background: rgba(3, 2, 18, .5); border: 1.5px dashed rgba(var(--brand-soft-rgb), .4);
+  background: rgba(var(--surface-rgb), .5); border: 1.5px dashed rgba(var(--brand-soft-rgb), .4);
 }
 .rc-drop input { display: none; }
 .rc-drop b { font-size: 13px; font-weight: 800; color: #d8d2f5; }
@@ -117,7 +117,7 @@
 .rc-docs { display: grid; gap: 9px; }
 .rc-doc {
   display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 15px;
-  background: rgba(18, 13, 49, .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--surface-rgb), .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .rc-doc-main { min-width: 0; flex: 1; }
 .rc-doc-main b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -126,7 +126,7 @@
 
 .rc-thumb {
   width: 52px; height: 52px; flex-shrink: 0; border-radius: 11px; object-fit: cover;
-  background: rgba(3, 2, 18, .6); border: 1px solid rgba(var(--brand-soft-rgb), .25);
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .25);
 }
 .rc-thumb-ph { animation: rc-pulse 1.4s ease-in-out infinite; }
 @keyframes rc-pulse { 0%, 100% { opacity: .35; } 50% { opacity: .7; } }
@@ -138,7 +138,7 @@
 /* ── شرح‌ها ── */
 .rc-note {
   padding: 13px 15px; border-radius: 15px;
-  background: rgba(18, 13, 49, .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  background: rgba(var(--surface-rgb), .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .rc-note-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
 .rc-note-head b { font-size: 12.5px; color: #c4b5fd; }
@@ -148,21 +148,21 @@
   background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
 .rc-edited {
-  font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; color: #fbbf24;
+  font: inherit; font-size: 10px; font-weight: 700; cursor: pointer; color: var(--amber-text);
   border-radius: 8px; padding: 3px 8px;
   background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .3);
 }
 .rc-note-edit {
   margin-inline-start: auto; width: 28px; height: 28px; display: grid; place-items: center;
-  border-radius: 8px; cursor: pointer; color: #cfc9e8;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  border-radius: 8px; cursor: pointer; color: var(--text1);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .rc-note-body { margin: 0; font-size: 13px; line-height: 2; color: #e6e2f7; white-space: pre-wrap; }
 
 .rc-history { display: grid; gap: 10px; max-height: 60vh; overflow-y: auto; }
 .rc-hrow {
   padding: 11px 13px; border-radius: 12px;
-  background: rgba(255, 255, 255, .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
 .rc-hrow.on { border-color: rgba(52, 211, 153, .4); background: rgba(52, 211, 153, .07); }
 .rc-hrow small { display: block; margin-bottom: 6px; font-size: 10.5px; color: #8f88af; }
@@ -189,7 +189,7 @@
   border-color: rgba(248, 113, 113, .55);
   box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
 }
-.df-toast.bad i { font-style: normal; font-size: 11px; color: #fca5a5; }
+.df-toast.bad i { font-style: normal; font-size: 11px; color: var(--red-text); }
 .df-toast:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* ── پاسخ‌های فرمِ مراجعه، داخلِ پرونده ──
@@ -218,11 +218,36 @@
 }
 .rc-linkrow input::placeholder { color: #6d6796; direction: rtl; text-align: right; }
 .rc-linkrow .df-save { padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+/* قفلِ «ورودِ پورتال» کنارِ لینک + دو کادرِ نامِ کاربری/رمز زیرش. */
+.rc-linkauth {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 9px; cursor: pointer;
+  color: #a9a1d8; background: rgba(var(--veil-rgb), 0.03); border: 1px solid rgba(var(--veil-rgb), 0.08);
+}
+.rc-linkauth.on { color: #fff; background: rgba(var(--brand-soft-rgb), .22); border-color: rgba(var(--brand-soft-rgb), .55); }
+.rc-linkcred { display: flex; gap: 6px; margin-top: 6px; }
+.rc-linkcred input {
+  flex: 1; min-width: 0; height: 38px; padding: 8px 10px; border-radius: 10px; outline: none;
+  font: inherit; font-size: 12.5px; color: #e5e0ff; direction: ltr;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
+}
+.rc-linkcred input::placeholder { color: #6d6796; direction: rtl; text-align: right; }
+/* ورودِ پورتال زیرِ مدرکِ لینکی — با دکمهٔ کپی. */
+.rc-doc-cred { display: flex !important; align-items: center; flex-wrap: wrap; gap: 5px; color: #a9a1d8 !important; }
+.rc-doc-cred code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 11px; color: #e5e0ff;
+  direction: ltr; unicode-bidi: isolate;
+}
+.rc-doc-cred button {
+  cursor: pointer; display: grid; place-items: center; padding: 3px; border-radius: 6px;
+  color: #a9a1d8; background: transparent; border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.rc-doc-cred button:hover { color: #fff; background: rgba(var(--veil-rgb), .08); }
 .rc-doc-open {
   display: inline-flex; align-items: center; justify-content: center;
   width: 30px; height: 30px; border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #a9a1d8; background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(var(--veil-rgb), 0.08);
+  color: #a9a1d8; background: rgba(var(--veil-rgb), 0.03);
 }
 .rc-doc-open:hover { color: #e5e0ff; border-color: color-mix(in srgb, var(--brand, #7c6cf0) 45%, transparent); }
 
@@ -231,7 +256,7 @@
 .rc-tpls small { font-size: 11px; color: var(--text3); }
 .rc-tpl {
   padding: 5px 12px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--text2);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 99px;
   transition: color .15s, border-color .15s;
 }
 .rc-tpl:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
@@ -250,7 +275,7 @@
 .rc-ai:disabled { opacity: .55; cursor: default; }
 .rc-ai-undo {
   padding: 9px 13px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--text2);
-  background: none; border: 1px solid rgba(255, 255, 255, .16); border-radius: 11px;
+  background: none; border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 11px;
 }
 
 /* خلاصهٔ ارجاع با دستیار — دکمهٔ هدر + مودالِ متن. */
@@ -264,7 +289,7 @@
 .rc-refsum-btn:disabled { opacity: .55; cursor: default; }
 .rc-refsum-bg {
   position: fixed; inset: 0; z-index: 85; display: grid; place-items: center;
-  padding: 16px; background: rgba(8, 5, 24, .66);
+  padding: 16px; background: rgba(var(--surface-rgb), .66);
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
 }
 .rc-refsum { width: min(680px, 100%); max-height: 86dvh; display: flex; flex-direction: column; padding: 16px; border-radius: 18px; }
@@ -274,7 +299,7 @@
 .rc-refsum-body {
   flex: 1; overflow: auto; padding: 12px 14px; border-radius: 12px;
   font-size: 13px; line-height: 2.1; white-space: pre-wrap;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
 }
 .rc-refsum footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .rc-refsum-main {
@@ -283,5 +308,264 @@
 }
 .rc-refsum-ghost {
   padding: 10px 16px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
-  background: none; border: 1px solid rgba(255, 255, 255, .16); border-radius: 12px;
+  background: none; border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 12px;
 }
+
+/* ══════════════ پروندهٔ زنده (W3.1، §۴.۳) ══════════════
+   ⚠️ هر لایهٔ کم‌آلفا با `--veil-rgb` / `--surface-rgb` نوشته می‌شود (قانون ۲۳):
+   `rgba(255,255,255,.05)` در تمِ روشن نامرئی است و نگهبانِ تم هم ردش می‌کند. */
+
+.rc-id,
+.rc-actions,
+/* عرضِ محتوای صفحه **یک** جا تعریف می‌شود؛ بخشِ تازه باید همین‌جا اضافه شود،
+   وگرنه تنها بخشی است که تا لبهٔ صفحه کش می‌آید (W4.1 همین را خورد و فقط با
+   اسکرین‌شات دیده شد). */
+.rc-stage,
+.rc-next,
+.rc-path,
+.rc-tl { max-width: 900px; margin-inline: auto; }
+
+/* ── کارتِ هویت: فقط‌خواندنی، ویرایش یک اقدام است ── */
+.rc-id {
+  display: flex; flex-wrap: wrap; gap: 7px 10px; margin-block: 0 12px;
+}
+.rc-id > div {
+  display: flex; align-items: baseline; gap: 6px; padding: 6px 11px; border-radius: 10px;
+  background: rgba(var(--surface-rgb), .45); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+}
+.rc-id dt { font-size: 11px; color: var(--text3); }
+.rc-id dd { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--text1); }
+
+/* ── اقدام‌های همیشه‌دردسترس ── */
+.rc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.rc-act {
+  display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 13px;
+  border-radius: 10px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  color: var(--text1); text-decoration: none;
+  background: rgba(var(--surface-rgb), .55); border: 1px solid rgba(var(--brand-soft-rgb), .28);
+  transition: border-color .15s, background .15s;
+}
+.rc-act:hover:not(:disabled) { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .16); }
+.rc-act:disabled { opacity: .55; cursor: default; }
+/* ⚠️ مرکّبِ دکمهٔ گرادیانِ برند **سفید** است، در هر دو تم — همان چیزی که
+   `.wk-btn.primary`، `.df-save`، `.df-add` و بقیه می‌زنند و `index.css` هم
+   صریح مجازش کرده. `--ink-bright` مرکّبِ پُرکنندهٔ **روشن** (کهربا/سایان) است،
+   نه گرادیانِ تیرهٔ برند؛ گذاشتنش این‌جا یعنی متنِ تیره روی بنفشِ تیره. */
+.rc-act.is-main {
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent;
+}
+.rc-act:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ── نوارِ «الان کجاییم» ── */
+.rc-stage {
+  padding: 13px 15px; border-radius: 14px; margin-bottom: 12px;
+  background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--brand-soft-rgb), .24);
+}
+.rc-stage-now { margin: 0 0 11px; font-size: 13px; color: var(--text1); }
+.rc-stage-now b { color: var(--brand-text); font-weight: 800; }
+.rc-stage-now i { font-style: normal; color: var(--text2); }
+
+.rc-steps { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; }
+.rc-step { display: flex; align-items: flex-start; gap: 7px; flex: 1 1 130px; min-width: 130px; }
+.rc-step-dot {
+  flex: none; width: 17px; height: 17px; margin-top: 1px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--ink-bright); background: rgba(var(--veil-rgb), .1);
+  border: 1.5px solid rgba(var(--veil-rgb), .25);
+}
+.rc-step-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rc-step-txt b { font-size: 12.5px; font-weight: 800; color: var(--text2); }
+.rc-step-txt i { font-style: normal; font-size: 11px; color: var(--text3); }
+.rc-step-txt time { font-size: 10.5px; color: var(--text3); }
+
+.rc-step.is-done .rc-step-dot { background: var(--green); border-color: var(--green); }
+.rc-step.is-done .rc-step-txt b { color: var(--green-text); }
+/* گامِ جاری تنها نقطهٔ روشنِ نوار است — اگر چند گام روشن باشند، نوار دیگر به
+   «الان کجاییم» جواب نمی‌دهد. */
+.rc-step.is-current .rc-step-dot { background: var(--brand-2); border-color: var(--brand-2); box-shadow: 0 0 0 4px rgba(var(--brand-2-rgb), .22); }
+.rc-step.is-current .rc-step-txt b { color: var(--text1); }
+.rc-step.is-current .rc-step-txt i { color: var(--amber-text); }
+/* ⚠️ گامِ ردشده محو می‌شود ولی **حذف نمی‌شود**: شکلِ نوار باید برای همهٔ
+   بیمارها یکی بماند، وگرنه مقایسه با یک نگاه ممکن نیست. */
+.rc-step.is-skipped { opacity: .42; }
+
+/* ── «چه مانده» ── */
+.rc-next { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; margin-bottom: 12px; }
+.rc-next-main {
+  padding: 13px 15px; border-radius: 14px;
+  background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-2-rgb), .34);
+}
+.rc-next-main.is-late { background: rgba(239, 68, 68, .12); border-color: rgba(248, 113, 113, .45); }
+.rc-next-main h3 {
+  display: flex; align-items: center; gap: 6px; margin: 0 0 7px;
+  font-size: 11px; font-weight: 800; letter-spacing: .02em; color: var(--text3);
+}
+.rc-next-title { margin: 0 0 6px; font-size: 14px; font-weight: 800; color: var(--text1); }
+.rc-next-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 6px 0 0; font-size: 11.5px; color: var(--text3); }
+
+/* ⚠️ `WorkRow` قابِ خودش را دارد (`work.css`)؛ داخلِ کارتِ «کارِ بعدی» می‌شود
+   کارت-در-کارت و چشم دو مرز می‌بیند برای یک چیز. قاب این‌جا برداشته می‌شود،
+   نه در `work.css` — آن‌جا زنگِ اعلان و «کارهای من» به همان قاب نیاز دارند. */
+.rc-next-main .wk-list { margin: 0; padding: 0; list-style: none; }
+.rc-next-main .wk-row { background: none; border: none; box-shadow: none; padding: 0; }
+/* نامِ بیمار داخلِ **پروندهٔ خودِ همان بیمار** فقط تکرار است. */
+.rc-next-main .wk-patient { display: none; }
+.rc-next-more { color: var(--cyan); text-decoration: none; }
+.rc-next-more:hover { text-decoration: underline; }
+.rc-next-block {
+  display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--amber-text);
+}
+
+.rc-next-side { display: flex; flex-direction: column; gap: 8px; }
+.rc-chip {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px;
+  padding: 9px 12px; border-radius: 12px; font: inherit; font-size: 12px; text-align: start;
+  color: var(--text2); background: rgba(var(--surface-rgb), .5);
+  border: 1px solid rgba(var(--brand-soft-rgb), .24);
+}
+.rc-chip b { color: var(--text1); font-weight: 800; }
+.rc-chip i { flex-basis: 100%; font-style: normal; font-size: 11px; color: var(--text3); }
+.rc-chip.is-warn { border-color: rgba(var(--brand-soft-rgb), .24); color: var(--amber-text); }
+.rc-chip.is-warn b { color: var(--amber-text); }
+.rc-chip.is-money { cursor: pointer; }
+.rc-chip.is-money:hover { border-color: var(--brand-2); }
+.rc-chip:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ── خطِ زمان ── */
+.rc-tl { margin-bottom: 16px; }
+.rc-tl > h3 { margin: 0 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .02em; color: var(--text3); }
+.rc-tl ol { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.rc-tl-row > a,
+.rc-tl-row > button,
+.rc-tl-row > div {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 11px;
+  font: inherit; text-align: start; text-decoration: none; color: inherit;
+  background: rgba(var(--surface-rgb), .42); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+}
+.rc-tl-row.is-link > a,
+.rc-tl-row.is-link > button { cursor: pointer; transition: border-color .15s, background .15s; }
+.rc-tl-row.is-link > a:hover,
+.rc-tl-row.is-link > button:hover { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .14); }
+.rc-tl-row.is-link > a:focus-visible,
+.rc-tl-row.is-link > button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+.rc-tl-ico {
+  flex: none; width: 26px; height: 26px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .26);
+}
+.rc-tl-ico[style*="--k"] { color: rgb(var(--k)); background: rgba(var(--k), .14); border-color: rgba(var(--k), .34); }
+.rc-tl-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.rc-tl-body b { font-size: 12.5px; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; }
+.rc-tl-body i { font-style: normal; font-size: 11px; color: var(--text3); overflow-wrap: anywhere; }
+.rc-tl-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.rc-tl-side time { font-size: 10.5px; color: var(--text3); }
+.rc-tl-state { font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--text2); }
+.rc-tl-state.is-done { color: var(--green-text); }
+.rc-tl-state.is-answered,
+.rc-tl-state.is-pending,
+.rc-tl-state.is-sent { color: var(--amber-text); }
+.rc-tl-state.is-cancelled { color: var(--text3); }
+
+.rc-tl-more {
+  margin-top: 7px; height: 32px; width: 100%; border-radius: 10px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--text2);
+  background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
+}
+.rc-tl-more:hover { color: var(--text1); border-color: var(--brand-2); }
+.rc-tl-cut { margin: 6px 0 0; font-size: 11px; color: var(--text3); }
+
+@media (max-width: 720px) {
+  .rc-next { grid-template-columns: 1fr; }
+  .rc-step { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rc-act, .rc-tl-row.is-link > a, .rc-tl-row.is-link > button { transition: none; }
+}
+
+/* ── دورهٔ درمان (W4.1) ────────────────────────────────────────────────────
+   ⚠️ هیچ رنگِ خامی: زمینه و پرده با `--surface-rgb`/`--veil-rgb` که با تم
+   می‌چرخند (قانون ۲۳)، و شدتِ معنایی از توکن‌های متنی. */
+.rc-path {
+  margin-top: var(--gap); margin-bottom: 12px; padding: var(--pad-card); border-radius: 16px;
+  background: rgba(var(--surface-rgb), 0.55);
+  border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+.rc-path-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rc-path-head b { font-size: 14px; font-weight: 800; color: var(--text1); }
+.rc-path-head small { margin-inline-start: auto; font-size: 12px; color: var(--text2); }
+.rc-path-st {
+  font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.07);
+  border: 1px solid rgba(var(--veil-rgb), 0.14);
+}
+.rc-path-st.st-done { color: var(--green-text); border-color: rgba(52, 211, 153, 0.45); }
+.rc-path-st.st-cancelled { color: var(--red-text); border-color: rgba(248, 113, 113, 0.4); }
+
+/* نوارِ پیشرفت — عرض از `percent`ِ سرور می‌آید، نه فرمولِ رابط. */
+.rc-path-bar {
+  height: 6px; margin: 9px 0 10px; border-radius: 999px; overflow: hidden;
+  background: rgba(var(--veil-rgb), 0.1);
+}
+.rc-path-bar i { display: block; height: 100%; background: var(--brand-2); transition: width .25s; }
+
+.rc-path-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.rc-path-step {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px;
+  background: rgba(var(--veil-rgb), 0.04);
+  /* ⚠️ بوردرِ **فیزیکی** (قانون ۹): در RTL نشانهٔ مرحله باید سمتِ راست باشد. */
+  border-right: 2px solid rgba(var(--veil-rgb), 0.14);
+}
+.rc-path-step.st-done { border-right-color: var(--green); }
+.rc-path-step.st-skipped { opacity: .62; }
+.rc-path-when { flex: none; width: 92px; display: grid; gap: 2px; }
+.rc-path-when b { font-size: 12.5px; color: var(--text1); }
+.rc-path-when b.none { color: var(--text3); }
+.rc-path-when small { font-size: 11px; color: var(--text3); }
+.rc-path-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.rc-path-main b { font-size: 13px; font-weight: 700; color: var(--text1); }
+.rc-path-main small { font-size: 11.5px; color: var(--text2); }
+.rc-path-acts { display: flex; gap: 6px; flex: none; }
+.rc-path-acts button {
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  padding: 6px 11px; border-radius: 10px; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.08); border: 1px solid rgba(var(--veil-rgb), 0.16);
+}
+.rc-path-acts button.ghost { color: var(--text2); background: transparent; }
+.rc-path-acts button:disabled { opacity: .5; cursor: default; }
+.rc-path-tag { flex: none; font-size: 11.5px; color: var(--text2); }
+@media (max-width: 520px) {
+  .rc-path-step { flex-wrap: wrap; }
+  .rc-path-when { width: auto; display: flex; gap: 6px; align-items: baseline; }
+}
+
+/* W0.4 — قطعاتِ بازشدنیِ پاسخِ فرم: لینکِ بیرونی و مدرکِ پرونده.
+   دکمهٔ مدرک عمداً دکمه است نه `<a href>`: فایل پشتِ گاردهای پرونده باز
+   می‌شود (`openDoc`)، نه با نشانیِ مستقیم. ظاهرش مثلِ لینک است تا کاربر
+   فرقِ بی‌مورد نبیند. */
+.rc-ans-items a,
+.rc-ans-doc {
+  color: var(--cyan); text-decoration: none; border-bottom: 1px dashed currentColor;
+}
+.rc-ans-doc {
+  background: none; border: 0; border-bottom: 1px dashed currentColor;
+  padding: 0; font: inherit; cursor: pointer;
+}
+.rc-ans-items a:hover, .rc-ans-doc:hover { color: var(--brand-2); }
+.rc-ans-items a:focus-visible,
+.rc-ans-doc:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 3px; }
+
+/* ── پاپ‌آپ‌های پرونده (بازخوردِ مالک: هر ردیف پاپ‌آپِ خودش، نه فرمِ کلی) ── */
+.rc-visit-btn { display: block; width: 100%; margin: 0; padding: 0; cursor: pointer; font: inherit; color: inherit; text-align: start; background: none; border: 0; }
+.rc-visit-btn:hover b > span[dir="ltr"] { color: var(--brand-2); text-decoration: underline dotted; text-underline-offset: 3px; }
+.rc-visit-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 6px; }
+.rc-chip-list { flex-direction: column; align-items: stretch; gap: 6px; }
+.rc-chip-list > span { display: flex; align-items: center; gap: 6px; }
+.rc-chip-list button {
+  padding: 7px 10px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--amber-text); text-align: start;
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(251, 191, 36, .35); border-radius: 10px;
+}
+.rc-chip-list button:hover { background: rgba(251, 191, 36, .14); }
+.rc-chip-list button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+/* پاپ‌آپ‌های یادآوری/نوبت (`.rc-pop*`) به `thing-popups.css` رفتند — مشترکِ پرونده، «امروز» و «کارهای من». */

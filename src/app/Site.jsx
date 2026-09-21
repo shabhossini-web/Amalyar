@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiUpload, apiUrl } from '../lib/api.js';
-import ProfileMenu from './ProfileMenu.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -342,7 +341,6 @@ export default function Site() {
           <h1>سایتِ معرفی</h1>
           <p>صفحه‌ای که روی دامنهٔ خودِ شرکت دیده می‌شود — پیش از هر ورودی.</p>
         </div>
-        <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
       </header>
 
       {/* ── وضعیتِ انتشار ── */}

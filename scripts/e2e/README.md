@@ -84,6 +84,15 @@ node scripts/e2e/tenant-isolation.mjs # دو تنانتِ واقعی، دو دی
 node scripts/e2e/platform-domains.mjs # پنلِ پلتفرم هیچ دامنه‌ای را پنهان نمی‌کند
 ```
 
+آزمون‌های رابطِ **بدونِ سرور** (Vite + مرورگرِ واقعی + API ساختگی، `lib/mock-ui.mjs`؛ فقط `E2E_CHROME`):
+
+```bash
+node scripts/e2e/w0-1-intake-steps.mjs # W0.1 — استپر و پیام‌های فرمِ بیمار از makesVisit/payable
+node scripts/e2e/w0-2-labels.mjs       # W0.2 — برچسبِ follow_up + پیامِ پایانِ سفارش از وضعیتِ مسیر
+node scripts/e2e/w0-6-a11y.mjs         # W0.6 — Escape/focus-trap/بازگشتِ فوکوس در Overlay، کلیدهای جهت در Tabs
+node scripts/e2e/w3-5-formbuilder.mjs  # W3.5 — ردیفِ فشرده، ماتریسِ نقش، پنلِ کناری، پیش‌نمایش (ارتفاعِ موبایل)
+```
+
 ### پیش‌نیازِ `tenant-isolation.mjs`
 
 این یکی برخلافِ بقیه به **دو تنانتِ واقعی** نیاز دارد، چون ادعایش دربارهٔ
@@ -116,3 +125,105 @@ E2E_CHROME=/path/to/chromium node scripts/e2e/intake-assistance-ui.mjs
 ```
 
 The integration suite uses disposable PGlite PostgreSQL through its wire protocol and the generated Prisma client. It applies every tenant migration and calls the actual services; no production database or SMS is used. Test dependencies are development dependencies. The UI suite starts its own Vite server, uses responsive Chromium, mocked API responses, and fake microphone input. It checks explicit review/apply, stale and empty AI responses, voice append, quick definitions and retained payment state. Continue to run `orders-ai-ui.mjs` and `ai-stream-contract.mjs` for the earlier regressions.
+
+---
+
+## راه‌اندازیِ خودکارِ محیط — `bootstrap-env.mjs`
+
+همان مراحلِ بالا (دو مهاجرت + ردیفِ تنانت با DSNِ رمزشده + کاربرِ سوپرادمین) در
+یک دستور و **idempotent**. جای «ردیفِ تنانت را دستی بساز» و «از مسیرِ signup یک
+سوپرادمین بساز» را می‌گیرد:
+
+```bash
+CONTROL_DATABASE_URL=postgresql://amalyar:amalyar@localhost:5432/e2e_ctl \
+DATABASE_URL=postgresql://amalyar:amalyar@localhost:5432/e2e_t1 \
+TENANT_DATABASE_ENCRYPTION_KEY="<base64 ۳۲ بایتی>" \
+node scripts/e2e/bootstrap-env.mjs
+```
+
+رمزنگاریِ DSN از **همان** `encryptDatabaseUrl`ِ سرور خوانده می‌شود، نه یک
+پیاده‌سازیِ دوم که می‌تواند واگرا شود.
+
+### ⚠️ از دیتابیسِ **تازه** شروع کن — نه از دیتابیسِ همیشگیِ توسعه
+
+> **درسِ واقعی (۱۴۰۵/۰۶/۲۷):** سه سنجهٔ `follow-up` و یکی از `portal` روی
+> دیتابیسِ درازعمرِ توسعه قرمز بودند و مدتی به‌جای «باگِ محصول» تشخیص داده
+> شدند — حتی یک بار به‌اشتباه در `reminders.service.ts` «رفع» شد و بازپخشِ
+> محلیِ CI جلویش را گرفت. روی دیتابیسِ **تازه** هر دو سبزِ کامل‌اند:
+> `follow-up` **۲۱/۰** (سه بار پشتِ هم) و `portal` **۱۸/۰**.
+>
+> ریشه‌اش این است که این خانواده یک دیتابیسِ **مشترک** را می‌گیرد و اجرای
+> ناتمامِ قبلی ردیف جا می‌گذارد. مثلاً `followUpUrl` با `orderBy: id asc`
+> قدیمی‌ترین فرمِ `followUp='general'` را برمی‌دارد، پس اجرای تازه به فرمِ
+> بیاتِ اجرای قبلی می‌چسبد و شمارشِ سوییت صفر می‌شود.
+
+### در CI — جابِ `live` در `security-ci.yml` (`run-live.mjs` + `ci-live.txt`)
+
+این خانواده حالا در CI می‌دود: جابِ **`live`** (چهار شاردِ موازی) یک Postgresِ
+سرویس بالا می‌آورد، با `bootstrap-env.mjs` محیطِ تازه می‌سازد و رانرِ
+`scripts/e2e/run-live.mjs` سوییت‌های `scripts/e2e/ci-live.txt` را می‌دواند.
+**سوییتِ تازه = یک خط در `ci-live.txt`** (خودکفاهای مرورگری با APIِ ساختگی
+گامِ مستقیمِ جابِ `build`اند، نه این فهرست). `automerge` کلِ workflow را
+می‌سنجد، پس قرمزِ این جاب مرج را نگه می‌دارد.
+
+```bash
+# همان چیزی که CI می‌زند — محلی، با دیتابیسِ تازه:
+DATABASE_URL=… CONTROL_DATABASE_URL=… [E2E_TENANT2_DATABASE_URL=…] \
+TENANT_DATABASE_ENCRYPTION_KEY=… JWT_SECRET=… node scripts/e2e/bootstrap-env.mjs
+node scripts/e2e/run-live.mjs --manifest scripts/e2e/ci-live.txt      # یا: --all · follow-up portal · --resume
+```
+
+چهار چیزی که رانر به‌خاطرِ باگ‌های واقعی انجام می‌دهد — و اگر کسی «ساده‌ترش»
+کند برمی‌گردند:
+
+- **سرور هر `--batch` سوییت از نو بالا می‌آید.** سطلِ ورود (۱۲ به‌ازای IP،
+  ۸ به‌ازای نامِ کاربری در ۱۵ دقیقه) در حافظهٔ پروسه است؛ بیش از ۸ ورود روی
+  یک پروسه = `ورود نشد`. سوییتی که با همین نشانه افتاد، یک بار روی سرورِ تازه
+  دوباره اجرا می‌شود.
+- **پورت‌ها ثابت‌اند: API روی `127.0.0.1:3101`، Vite روی `127.0.0.1:5199`.**
+  ۱۸ سوییت این دو نشانی را هاردکد کرده‌اند، و کوکیِ `SameSite=Lax` هم‌هاست‌بودنِ
+  UI و API را می‌خواهد. Vite بین سوییت‌ها نمی‌میرد؛ فقط API. Vite با
+  `VITE_TENANT_UI=true` بالا می‌آید تا ریشه مثلِ هاستِ یک شرکت رفتار کند
+  (سایتِ شرکت یا `/login`)، نه لندینگِ بازاریابی.
+- **پیش از دستهٔ اول، seedهای تنبل گرم می‌شوند** (ورود + `GET /forms`،
+  `/forms/visit-kinds`، `/features` روی هر دو میزبان). قالب‌های فرم فقط وقتی
+  «هیچ فرمی نیست» و با اولین **خواندن** seed می‌شوند (`ensureSeeded`)؛ در
+  اولین اجرای CI، اولین تماسِ دیتابیسِ بکر یک POST بود و **~۲۰ سوییت** با
+  «فرمِ جراحی نیست» / `survey` نیست / نوعِ پیش‌فرضِ عوض‌شده قرمز شدند.
+- **سوییتِ افتاده بقیه را قرمز نمی‌کند.** پیش از هر سوییت زنده‌بودنِ سرور
+  سنجیده می‌شود و stderrِ هر نسلِ سرور در `api-<n>.log` می‌ماند. (نسخهٔ اولِ
+  رانر تایمرِ `SIGKILL`ِ توقف را پاک نمی‌کرد و سرورِ دستهٔ **بعدی** را ۵ ثانیه
+  بعد از شروع می‌کشت — اولین سوییتِ درازِ هر دسته با «other side closed»
+  می‌افتاد و لاگی هم نمی‌ماند.)
+
+روی رانرِ گیت‌هاب `/opt/pw-browsers/chromium` وجود ندارد؛ گامِ «Expose chromium»
+همان مسیرها را به chromiumِ نصب‌شدهٔ playwright سیم‌لینک می‌کند و `E2E_CHROME`
+را ست می‌کند — به‌جای دست‌زدن به ۵۸ فایلِ سه لِین. `tenant-isolation.mjs` تنانتِ
+دومش را از `E2E_TENANT2_DATABASE_URL`ِ bootstrap می‌گیرد (`uitest2` روی
+`127.0.0.2`، با ردیفِ `tenant_domains`)؛ تنانتِ اول هم دامنهٔ `clinic.localhost`
+را دارد تا `tenant-seo` مسیرِ nginx (Host + X-Forwarded-Proto) را بسنجد.
+
+**حفرهٔ W1.9 که پنج سوییت را بیرونِ manifest نگه داشته بود بسته شد** (لِینِ ج به
+نیابت از لِینِ الف، به دستورِ مالک): لغوِ **سیستمی** (هرسِ `syncNextVisit`،
+خاموشیِ `next_visit` هنگامِ رزروِ نوبت) کلیدِ ردیف را آزاد می‌کند (`dedupeKey = null`)
+تا برنامهٔ بعدی با همان متن و موعد ردیفِ تازه بکارد؛ لغوِ **دستی** (W0.7) کلید را
+نگه می‌دارد. `next-visit-booking` · `portal` · `postop-flow` · `postop-visit` ·
+`summary-reminders` به manifest برگشتند. دو سنجهٔ دیگر در همان سوییت‌ها بیات
+بودند و با محصول هم‌گام شدند، نه برعکس: متنِ مراقبت چندخطی است (پوششِ D07 پیش از
+آن می‌آید) و `sql()`ِ سوییت فقط خطِ اول را می‌دهد → شرطِ متن در خودِ SQL؛ و بدونِ
+credentialِ پیامک sweep «stub را ارسال نمی‌شمارد» → ردیف `simulated`/`skipped`
+است نه `sent`.
+
+**در سوییتِ مرورگری، کوکیِ نشست را پیش از اولین ناوبری بنشان** (`browserLogin`
+قبل از هر `page.goto`). `AuthProvider` روی هر بارگذاری همان لحظه `/auth/me` و
+`/config` را می‌زند؛ بی‌کوکی ۴۰۱ می‌گیرد و مرورگر «Failed to load resource: 401»
+را در کنسول می‌نویسد — اگر شنوندهٔ کنسول از اول وصل باشد، سنجهٔ «بدونِ خطای
+جاوااسکریپت» بسته به سرعتِ Vite گاهی قرمز می‌شود (شاردِ ۳ در اولین رانِ #70،
+`link-builder`). ناوبریِ بی‌کوکیِ «/» یادگارِ توکن در localStorage است و لازم نیست.
+
+**سنجه‌ای که در CI بیات شد را با محصول هم‌گام کن، نه برعکس** — و اگر محصول
+عمداً عوض شده، دلیل را در همان سوییت بنویس. نمونه‌های این بسته: لانچر به
+`/app/tools` رفت (W3.7) و شش سوییت هنوز `/app` را می‌گشتند؛ وضعیتِ لحظه‌ایِ
+دستیارِ مدیریت JSONِ کمینه شد (نام بیمار نمی‌رود) و `ai-admin-assistant`
+هنوز نام می‌خواست؛ ماتریسِ نقشِ W3.5؛ دکمهٔ واحدِ «صدور و چاپ فاکتور»؛ کاتالوگِ
+فیلدهای `kind-fields` که حالا از `server/dist` خوانده می‌شود نه یک نسخهٔ دوم.

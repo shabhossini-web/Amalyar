@@ -1,0 +1,136 @@
+/* صفحهٔ «امروز» (W2.3) — صفحهٔ نخستِ سامانه. کاشی‌های کشو از `launcher.css`
+   (`.glass`, `.glass-glow`, `.tint-*`) استفاده می‌کنند و همان‌جا تعریف شده‌اند؛
+   این فایل فقط چیدمانِ خودِ صفحه است (قانونِ ۲۱). */
+.td {
+  max-width: 980px; margin: 0 auto; padding: 18px 16px 60px;
+  display: flex; flex-direction: column; gap: 18px;
+}
+
+.td-head { display: flex; flex-direction: column; gap: 12px; }
+.td-hello { font-size: 22px; font-weight: 800; color: var(--text1); }
+
+.td-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; }
+.td-chips li {
+  display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 99px;
+  font-size: 13px; color: var(--text2);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.10);
+}
+.td-chips li b { font-size: 15px; font-weight: 800; color: var(--text1); }
+/* عقب‌افتادگی تنها چیزی است که رنگ می‌گیرد — اگر همه‌چیز برجسته باشد، هیچ‌چیز نیست. */
+.td-chips li.hot { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.08); }
+.td-chips li.hot b, .td-chips li.hot em { color: var(--amber); font-style: normal; }
+.td-chips li.td-next b { color: var(--cyan); }
+
+.td-tools-btn {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 14px; border-radius: 12px; font-size: 13.5px; font-weight: 700; color: var(--text1);
+  background: rgba(var(--brand-rgb), 0.14); border: 1px solid rgba(var(--brand-2-rgb), 0.42);
+  transition: background .2s, border-color .2s;
+}
+.td-tools-btn:hover, .td-tools-btn:focus-visible { background: rgba(var(--brand-rgb), 0.24); border-color: var(--brand-2); outline: none; }
+
+.td-note { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: var(--text2); background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.12); }
+.td-chips li.td-link { padding: 0; }
+.td-chips li.td-link a { display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 99px; color: inherit; text-decoration: none; }
+.td-chips li.td-link a:hover, .td-chips li.td-link a:focus-visible { color: var(--text1); outline: none; }
+.td-chips li.td-link a b { color: var(--brand-2); }
+.td-err { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: var(--red-text); background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.4); }
+
+.td-sec { display: flex; flex-direction: column; gap: 10px; }
+.td-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.td-sec-head h2 { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 800; color: var(--text1); }
+.td-more { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--brand-2); text-decoration: none; }
+.td-more:hover, .td-more:focus-visible { color: var(--cyan); outline: none; }
+.td-empty, .td-skel { padding: 14px; border-radius: 14px; font-size: 13px; color: var(--text3); text-align: center; background: rgba(var(--veil-rgb), 0.03); border: 1px dashed rgba(var(--veil-rgb), 0.10); }
+
+.td-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.td-item {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px;
+  padding: 9px 12px; border-radius: 13px;
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.09);
+}
+.td-time { font-size: 13px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
+.td-name { grid-column: 2; font-size: 14px; font-weight: 700; color: var(--text1); text-decoration: none; }
+a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none; }
+.td-name.muted { color: var(--text3); font-weight: 600; }
+.td-sub { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-tag {
+  grid-column: 3; grid-row: 1 / span 2; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+/* وضعیت با **بوردر + رنگِ متن** حمل می‌شود، نه فقط یک لایهٔ کم‌آلفا روی زمینهٔ تیره. */
+.td-tag.op-done, .td-tag.appt-done, .td-tag.appt-arrived { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(6, 56, 42, 0.55); }
+.td-tag.appt-noshow { color: var(--amber); border-color: rgba(251, 191, 36, 0.5); background: rgba(58, 39, 8, 0.6); }
+.td-tag.op-cancelled, .td-tag.appt-cancelled { color: var(--red-text); border-color: rgba(248, 113, 113, 0.4); background: rgba(60, 12, 12, 0.5); }
+.td-item.appt-cancelled { opacity: .62; }
+
+/* کشوی «همهٔ ابزارها» — از لبهٔ پایین، مثلِ شیت‌های دیگرِ سامانه. */
+.td-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(var(--surface-rgb), 0.7); backdrop-filter: blur(3px); display: flex; align-items: flex-end; justify-content: center; }
+.td-drawer {
+  width: min(880px, 100%); max-height: 86vh; overflow-y: auto;
+  background: var(--bg3); color: var(--text1);
+  border: 1px solid rgba(var(--brand-2-rgb), 0.35); border-bottom: none;
+  border-radius: 22px 22px 0 0; padding: 14px 16px 22px;
+  box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.55);
+}
+.td-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.td-drawer-head h2 { font-size: 15px; font-weight: 800; }
+.td-x { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--text2); border: 1px solid rgba(var(--veil-rgb), 0.12); }
+.td-x:hover, .td-x:focus-visible { color: var(--text1); border-color: var(--brand-2); outline: none; }
+
+.td-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 9px; }
+.td-tile {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px 8px; border-radius: 16px; text-align: center;
+}
+.td-tile-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; color: var(--text1); }
+.td-tile-label { font-size: 12px; font-weight: 700; color: var(--text2); line-height: 1.5; }
+.td-tile:hover .td-tile-label, .td-tile:focus-visible .td-tile-label { color: var(--text1); }
+
+@media (max-width: 560px) {
+  .td { padding: 14px 12px 60px; gap: 15px; }
+  .td-hello { font-size: 19px; }
+  .td-item { grid-template-columns: 54px minmax(0, 1fr) auto; }
+  .td-tiles { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+}
+
+/* نمای استثنای مدیر (W2.5) — پایینِ صفحه، فقط وقتی چیزی برای گفتن هست.
+   کهربا رنگِ «عقب‌افتاده» در سراسرِ لایهٔ کار است؛ همان‌جا می‌ماند. */
+.td-ex-list { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.td-ex-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 15px;
+  background: rgba(251, 191, 36, 0.06); border: 1px solid rgba(251, 191, 36, 0.35);
+}
+.td-ex-top { display: flex; align-items: baseline; gap: 8px; }
+.td-ex-count { font-size: 19px; font-weight: 800; color: var(--amber); font-variant-numeric: tabular-nums; }
+.td-ex-title { font-size: 13.5px; font-weight: 700; color: var(--text1); }
+.td-ex-hint { font-size: 12px; color: var(--text3); line-height: 1.7; }
+.td-ex-items { list-style: none; display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
+.td-ex-items li, .td-ex-items a {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: 12.5px; color: var(--text2); text-decoration: none; padding: 3px 0;
+}
+.td-ex-items a:hover, .td-ex-items a:focus-visible { color: var(--text1); outline: none; }
+.td-ex-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-ex-meta { flex: 0 0 auto; font-size: 11.5px; color: var(--amber); font-variant-numeric: tabular-nums; }
+.td-ex-more { font-size: 11.5px; color: var(--text3); }
+
+/* هر نمونهٔ استثنا می‌گوید مالِ کیست (`.td-ex-who`) و اگر مقصدی دارد دکمه است و
+   پاپ‌آپِ خودش را باز می‌کند (`.td-ex-btn`) — بازخوردِ مالک: هشدارِ بی‌نام و
+   بی‌کلیک، هشدار نیست. */
+.td-ex-line { flex: 1 1 auto; min-width: 0; }
+.td-ex-who { flex: 0 1 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--cyan); }
+.td-ex-items .td-ex-btn {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 3px 0; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--text2); text-align: start;
+  background: none; border: 0;
+}
+.td-ex-items .td-ex-btn .td-ex-line { text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px; }
+.td-ex-items .td-ex-btn:hover, .td-ex-items .td-ex-btn:focus-visible { color: var(--text1); outline: none; }
+.td-ex-items .td-ex-btn:hover .td-ex-line { color: var(--brand-2); }
+.td-ex-act {
+  align-self: flex-start; margin-top: 4px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--amber); background: none; border: 1px solid rgba(251, 191, 36, .45); border-radius: 10px;
+}
+.td-ex-act:hover:not(:disabled), .td-ex-act:focus-visible { background: rgba(251, 191, 36, .12); outline: none; }
+.td-ex-act:disabled { opacity: .5; cursor: default; }

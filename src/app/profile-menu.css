@@ -15,7 +15,7 @@
 .pm-avatar {
   flex: 0 0 auto; border-radius: 50%; overflow: hidden; display: grid; place-items: center; color: #e6ddff;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: inset 0 1px 0 rgba(var(--veil-rgb), 0.25);
 }
 .pm-avatar img { width: 100%; height: 100%; object-fit: cover; }
 
@@ -25,7 +25,7 @@
   border-radius: 18px; padding: 8px;
   display: flex; flex-direction: column; gap: 2px;
   cursor: default;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 24px 60px rgba(4, 2, 16, 0.6);
+  box-shadow: inset 0 1px 0 rgba(var(--veil-rgb), 0.14), 0 24px 60px rgba(var(--surface-rgb), 0.6);
 }
 .pm-menu:hover { transform: none; }
 
@@ -38,7 +38,7 @@
   background: none; border: none; border-radius: 13px; padding: 8px 9px;
   transition: background .15s;
 }
-.pm-acc-main:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+.pm-acc-main:hover:not(:disabled) { background: rgba(var(--veil-rgb), 0.06); }
 .pm-acc-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
 .pm-acc-meta b { font-size: 13.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pm-acc-meta small { font-size: 11px; color: var(--text3); font-weight: 600; }
@@ -48,9 +48,9 @@
   display: grid; place-items: center; cursor: pointer; color: var(--text3);
   background: none; border: none; border-radius: 9px; transition: color .15s, background .15s;
 }
-.pm-acc-out:hover:not(:disabled) { color: #fca5a5; background: rgba(248, 113, 113, 0.1); }
+.pm-acc-out:hover:not(:disabled) { color: var(--red-text); background: rgba(248, 113, 113, 0.1); }
 
-.pm-sep { height: 1px; background: rgba(255, 255, 255, 0.08); margin: 5px 6px; }
+.pm-sep { height: 1px; background: rgba(var(--veil-rgb), 0.08); margin: 5px 6px; }
 
 .pm-item {
   display: flex; align-items: center; gap: 11px;
@@ -59,11 +59,11 @@
   background: none; border: none; border-radius: 12px; padding: 10px 11px;
   transition: background .15s;
 }
-.pm-item:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); }
+.pm-item:hover:not(:disabled) { background: rgba(var(--veil-rgb), 0.06); }
 .pm-item:disabled { opacity: .55; cursor: default; }
 .pm-item svg { color: var(--text2); flex: 0 0 auto; }
-.pm-item.danger { color: #fca5a5; }
-.pm-item.danger svg { color: #fca5a5; }
+.pm-item.danger { color: var(--red-text); }
+.pm-item.danger svg { color: var(--red-text); }
 .pm-item:focus-visible, .pm-acc-main:focus-visible, .pm-acc-out:focus-visible, .pm-chip:focus-visible {
   outline: 2px solid var(--cyan); outline-offset: 2px;
 }
@@ -71,3 +71,29 @@
 @media (prefers-reduced-motion: reduce) {
   .pm-caret { transition: none; }
 }
+
+/* ── ترجیحاتِ نمایش: تم و چگالی (W3.6) ─────────────────────────────────────
+   کنترلِ قطعه‌ای (segmented) و نه سوییچِ دوحالته: «روشن/تیره» دو گزینهٔ هم‌وزن‌اند
+   و سوییچ یکی را به «خاموش» تنزل می‌دهد. با برچسبِ متنی، نه فقط آیکون. */
+.pm-prefs { display: grid; gap: 7px; padding: 9px 10px; }
+.pm-prefs-t { font-size: 10.5px; font-weight: 800; color: var(--text3); }
+.pm-seg {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px;
+  padding: 3px; border-radius: 11px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.pm-seg button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  padding: 7px 6px; border-radius: 9px; border: 1px solid transparent;
+  color: var(--text2); background: none;
+  transition: color .18s, background .18s, border-color .18s;
+}
+.pm-seg button:hover { color: var(--text1); }
+.pm-seg button.on {
+  color: var(--text1);
+  background: rgba(var(--brand-rgb), .18);
+  border-color: rgba(var(--brand-2-rgb), .45);
+}
+.pm-seg button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .pm-seg button { transition: none; } }

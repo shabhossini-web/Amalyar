@@ -37,7 +37,12 @@ for (const l of (await api('/intake/links')).json.filter((x) => /^\[la]/.test(x.
 }
 
 const forms = (await api('/intake/link-options')).json.forms ?? [];
-const plainForm = forms.find((f) => !f.hasPayment);
+/* فرمِ «زیرپرونده» (`makesVisit: false`) مبلغ نمی‌پذیرد — قاعدهٔ سرور: مراجعه‌ای
+   نمی‌سازد، پس مبلغش جایی در دفترِ مالی نمی‌نشیند. برای سنجیدنِ «مبلغ و فرم با هم
+   عوض می‌شوند» فرمِ مراجعه‌ایِ بدونِ پرداخت لازم است؛ روی نصبِ تازه (فقط قالب‌ها)
+   چنین فرمی نیست، پس با فرمِ زیرپرونده مبلغ صفر سنجیده می‌شود. */
+const plainForm = forms.find((f) => !f.hasPayment && f.makesVisit) ?? forms.find((f) => !f.hasPayment);
+const editAmount = plainForm && !plainForm.makesVisit ? 0 : 480000;
 
 console.log('\n۱) لینکِ آزمون ساخته می‌شود');
 let link = null;
@@ -53,7 +58,7 @@ console.log('\n۲) ویرایش: عنوان، مبلغ و فرم عوض می‌�
 {
   const patched = await api(`/intake/links/${link.id}`, {
     method: 'PATCH',
-    body: { title: '[la] لینکِ ویرایش‌شده', amount: 480000, ...(plainForm ? { formId: plainForm.id } : {}) },
+    body: { title: '[la] لینکِ ویرایش‌شده', amount: editAmount, ...(plainForm ? { formId: plainForm.id } : {}) },
   });
   ok('ویرایش پذیرفته شد', patched.status < 300, patched.status + ' ' + patched.text.slice(0, 160));
 
@@ -62,7 +67,7 @@ console.log('\n۲) ویرایش: عنوان، مبلغ و فرم عوض می‌�
      فقط پاسخِ PATCH را می‌سنجد سبز می‌ماند و کاربر تغییر را نمی‌بیند. */
   const row = (await api('/intake/links')).json.find((x) => x.id === link.id);
   ok('عنوانِ تازه در فهرست است', row?.title === '[la] لینکِ ویرایش‌شده', 'title=' + row?.title);
-  ok('مبلغِ تازه در فهرست است', row?.amount === 480000, 'amount=' + row?.amount);
+  ok('مبلغِ تازه در فهرست است', row?.amount === editAmount, `amount=${row?.amount} انتظار=${editAmount}`);
   if (plainForm) {
     ok('فرمِ انتخاب‌شده در فهرست است', row?.formTitle === plainForm.title,
       `formTitle=${row?.formTitle} انتظار=${plainForm.title}`);

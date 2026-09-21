@@ -7,6 +7,7 @@ import JDate from '../app/JDate.jsx';
 import Mark from '../components/Mark.jsx';
 import './intake.css';
 import { Alert, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
+import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
@@ -137,12 +138,41 @@ function Register() {
   );
 }
 
-/* ── گامِ ۲: اطلاعاتِ عمل + فیش ─────────────────────────────────── */
-const STEPS = [
-  { key: 'pending_fill', label: 'اطلاعاتِ عمل' },
-  { key: 'pending_payment', label: 'فیشِ واریزی' },
-  { key: 'pending_approval', label: 'بررسیِ ما' },
-];
+/* ── گامِ ۲: اطلاعاتِ مراجعه + فیش ──────────────────────────────── */
+
+/** شناسهٔ فیش‌های این ثبت‌نام — `receiptDocumentIds` (چندتایی) با سازگاریِ عقب‌روِ کلیدِ تکی. */
+const receiptsOf = (d) => {
+  const ids = d?.data?.receiptDocumentIds;
+  if (Array.isArray(ids)) return ids.filter(Boolean);
+  return d?.data?.receiptDocumentId ? [d.data.receiptDocumentId] : [];
+};
+
+/**
+ * مرحله‌های نوارِ بالای فرم — از **وضعیتِ واقعیِ مسیر** که سرور می‌فرستد، نه یک
+ * فهرستِ ثابت.
+ *
+ * ⚠️ تا دیروز سه مرحلهٔ ثابت بود («اطلاعاتِ عمل ← فیشِ واریزی ← بررسیِ ما») برای
+ * هر فرمی: نظرسنجیِ رایگان هم «فیش» را نشان می‌داد و بعدش تیک می‌خورد — یعنی
+ * بیمار فیشی را «انجام‌شده» می‌دید که هرگز نفرستاده بود (D10a).
+ *
+ * قاعدهٔ «فیش لازم است» همان قاعدهٔ `fill()` سرور است: مبلغِ قابلِ پرداخت صفر
+ * نیست، یا فرم کادرِ پرداخت دارد (خطای پیکربندی که عمداً فیش می‌خواهد). وضعیتِ
+ * خودِ ثبت‌نام هم شمرده می‌شود تا ثبت‌نامی که همین حالا در مرحلهٔ فیش است —
+ * مثلاً تخفیف مبلغش را صفر کرده — مرحله‌اش گم نشود. فرمِ زیرپروندهٔ رایگان
+ * صفِ بررسی هم ندارد (سرور مستقیم تأیید می‌کند)، پس مرحلهٔ آخرش «ثبت شد» است.
+ */
+function stepsFor(d) {
+  const S = PATIENT.intake.step;
+  const makesVisit = d.makesVisit !== false;
+  const hasPaymentBox = !!d.form?.fields?.some((x) => x.type === 'payment');
+  const needsReceipt = (d.payable ?? d.amount ?? 0) > 0 || hasPaymentBox
+    || d.status === 'pending_payment' || receiptsOf(d).length > 0;
+  const needsReview = makesVisit || needsReceipt || d.status === 'pending_approval';
+  const steps = [{ key: 'pending_fill', label: makesVisit ? S.fill : S.answer }];
+  if (needsReceipt) steps.push({ key: 'pending_payment', label: S.receipt });
+  steps.push(needsReview ? { key: 'pending_approval', label: S.review } : { key: 'approved', label: S.saved });
+  return steps;
+}
 
 function Form() {
   const { token } = useParams();
@@ -156,6 +186,13 @@ function Form() {
   const [page, setPage] = useState(1);
   const [code, setCode] = useState('');
   const fileRef = useRef(null);
+  /* W1.8 — پیش‌نویس. `idle` | `saving` | `saved` | `offline`.
+     ⚠️ هیچ‌چیز در `localStorage` نمی‌نشیند (قرارداد §۶): این فرم دادهٔ پزشکیِ
+     بیمار را دارد و مرورگرِ مشترک/عمومی همان‌جا لو می‌دهدش. تنها جای ذخیره
+     خودِ سرور است. */
+  const [draftState, setDraftState] = useState('idle');
+  const draftTimer = useRef(null);
+  const draftSeq = useRef(0);
 
   useEffect(() => { document.title = 'فرمِ مراجعه'; }, []);
   const load = useCallback(async () => {
@@ -183,9 +220,46 @@ function Form() {
           return next;
         });
       }
+      /* W1.8: همان صفحه‌ای که بیمار رویش بود، نه صفحهٔ یک. `_page` را سرور
+         نگه داشته (قرارداد §۶) — مقدارِ بیرون از بازه نادیده گرفته می‌شود تا
+         دادهٔ خراب صفحهٔ خالی نسازد. */
+      const savedPage = Number(r.data?._page);
+      const pageCount = r.form?.pages ?? 1;
+      if (Number.isInteger(savedPage) && savedPage >= 1 && savedPage <= pageCount) setPage(savedPage);
     } catch (e) { setErr(e.message); }
   }, [token]);
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * ذخیرهٔ پیش‌نویس روی سرور — W1.8.
+   *
+   * ⚠️ «توکنِ ذخیره» لازم است چون دو ذخیره می‌توانند از هم سبقت بگیرند: پاسخِ
+   * دیررسِ ذخیرهٔ قبلی نباید «ذخیره شد» را روی ذخیرهٔ در جریان بنشاند و بیمار
+   * را مطمئن کند در حالی که آخرین تایپش هنوز نرفته.
+   *
+   * شکستِ ذخیره **هرگز** فرم را نمی‌شکند: بیمار به تایپ ادامه می‌دهد و ثبتِ
+   * نهایی مسیرِ خودش را دارد؛ فقط نشانگر می‌گوید اتصال قطع است.
+   */
+  const saveDraft = useCallback(async (nextPage) => {
+    const seq = ++draftSeq.current;
+    setDraftState('saving');
+    try {
+      await api(`/public/intake/form/${token}/draft`, {
+        method: 'POST', auth: false,
+        body: { values: vals, ...(nextPage ? { page: nextPage } : {}) },
+      });
+      if (seq === draftSeq.current) setDraftState('saved');
+    } catch {
+      if (seq === draftSeq.current) setDraftState('offline');
+    }
+  }, [token, vals]);
+
+  /* روی blur، با مکثِ ۱٫۵ ثانیه (قرارداد §۶) — نه به‌ازای هر حرف. */
+  const draftSoon = useCallback(() => {
+    clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => saveDraft(), 1500);
+  }, [saveDraft]);
+  useEffect(() => () => clearTimeout(draftTimer.current), []);
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
@@ -230,7 +304,12 @@ function Form() {
     const e = dynErrors(here, vals);
     setVErr(e);
     if (Object.keys(e).length) return;
-    setPage((p) => p + 1);
+    const next = page + 1;
+    setPage(next);
+    /* ذخیره **با** شمارهٔ صفحهٔ تازه: رفرشِ بعدی باید همان‌جا برگردد نه یک
+       صفحه عقب‌تر. مکثِ blur لغو می‌شود تا دو ذخیرهٔ پشت‌سرهم نرود. */
+    clearTimeout(draftTimer.current);
+    saveDraft(next);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -300,17 +379,23 @@ function Form() {
   if (err && !d) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
   if (!d) return <Shell><p className="ik-note">در حال بارگذاری…</p></Shell>;
 
-  const stepIdx = STEPS.findIndex((s) => s.key === d.status);
   const done = d.status === 'approved';
   const rejected = d.status === 'rejected';
   const expired = d.status === 'expired';
+  const makesVisit = d.makesVisit !== false;
+  const receipts = receiptsOf(d);
+  const steps = stepsFor(d);
+  /* «تأییدشده» یعنی همهٔ مرحله‌ها پشتِ سر است — نه یک مرحلهٔ جاریِ دیگر. */
+  const stepIdx = done ? steps.length : steps.findIndex((s) => s.key === d.status);
+  const T = PATIENT.intake;
 
   return (
     <Shell title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}>
-      {/* نوارِ مرحله — بیمار باید بداند کجای کار است و چه چیزی مانده. */}
-      {!done && !rejected && !expired && (
+      {/* نوارِ مرحله — بیمار باید بداند کجای کار است و چه چیزی مانده؛ و در
+          پایان، اینکه چیزی نمانده. مرحله‌ها از وضعیتِ همین فرم ساخته می‌شوند. */}
+      {!rejected && !expired && (
         <ol className="ik-steps">
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <li key={s.key} className={i < stepIdx ? 'ok' : i === stepIdx ? 'now' : ''}>
               <i>{i < stepIdx ? <CheckCircle width="13" height="13" /> : faNum(i + 1)}</i>{s.label}
             </li>
@@ -324,15 +409,12 @@ function Form() {
 
       {done && (
         <p className="ik-good">
-          {/* نظرسنجی/فرمِ زیرپرونده مراجعه نمی‌سازد و کسی تماس نمی‌گیرد —
-              وعدهٔ تماسِ الکی بدتر از بی‌پیامی است. پرچم از سرور می‌آید. */}
-          <CheckCircle width="16" height="16" /> {d.makesVisit === false
-            ? 'پاسخِ شما ثبت شد — سپاس‌گزاریم.'
-            : 'ثبت‌نامِ شما تأیید شد. برای هماهنگیِ نهایی با شما تماس می‌گیریم.'}
+          {/* پرچمِ «مراجعه می‌سازد» از سرور می‌آید؛ متن از واژه‌نامهٔ بیمار. */}
+          <CheckCircle width="16" height="16" /> {makesVisit ? T.approved.visit : T.approved.record}
         </p>
       )}
-      {rejected && <p className="ik-bad"><Alert width="16" height="16" /> {d.reviewNote || 'این ثبت‌نام تأیید نشد.'}</p>}
-      {expired && <p className="ik-bad"><Clock width="16" height="16" /> مهلتِ این فرم تمام شده — دوباره از لینکِ ثبت‌نام شروع کنید.</p>}
+      {rejected && <p className="ik-bad"><Alert width="16" height="16" /> {d.reviewNote || T.rejected}</p>}
+      {expired && <p className="ik-bad"><Clock width="16" height="16" /> {T.expired}</p>}
 
       {/* ⚠️ **فرمِ ساخته‌شده جایگزینِ فیلدهای هاردکد می‌شود، نه اضافه بر آن.**
           اگر هر دو رندر می‌شدند، بیمار «نوعِ عمل» را دو بار می‌دید — یک بار
@@ -351,10 +433,24 @@ function Form() {
         d.form?.fields?.length ? (
           <>
             {d.form.hint && <p className="ik-hint">{d.form.hint}</p>}
-            {d.form.pages > 1 && (
-              <p className="ik-pages">صفحهٔ {faNum(page)} از {faNum(d.form.pages)}</p>
-            )}
+            <div className="ik-pagerow">
+              {d.form.pages > 1 && (
+                <p className="ik-pages">صفحهٔ {faNum(page)} از {faNum(d.form.pages)}</p>
+              )}
+              {/* W1.8 — بیمار باید **ببیند** که نوشته‌اش جایی رفته. بدونِ این،
+                  ذخیرهٔ خودکار از نبودش قابلِ تشخیص نیست. */}
+              {draftState !== 'idle' && (
+                <span className={`ik-draft ${draftState}`} role="status" aria-live="polite">
+                  {draftState === 'saving' ? 'در حالِ ذخیره…'
+                    : draftState === 'saved' ? 'ذخیره شد'
+                      : 'اتصال قطع است — تا وصل شدن این صفحه را نبندید'}
+                </span>
+              )}
+            </div>
             {d.form.fields.some(x => x.key === 'hospitalName' && (x.page ?? 1) === page) && <HospitalLookup token={token} value={vals.hospitalName ?? ''} onChange={(name, id) => setVals(s => ({ ...s, hospitalName: name, hospitalId: id }))} disabled={busy} error={vErr.hospitalName} />}
+            {/* ذخیرهٔ خودکار روی blur. `onBlur` در ری‌اکت **حباب می‌کند**، پس
+                این یک لایه کافی است و `DynForm`ِ مشترک دست نمی‌خورد. */}
+            <div onBlur={draftSoon}>
             <DynForm
               fields={d.form.fields.filter((x) => (x.page ?? 1) === page && x.key !== 'hospitalName')}
               values={vals}
@@ -365,6 +461,7 @@ function Form() {
               onUpload={uploadImage}
               onRemove={removeImage}
             />
+            </div>
             <div className="ik-nav">
               {page > 1 && (
                 <button type="button" className="ik-go ghost" disabled={busy}
@@ -376,7 +473,7 @@ function Form() {
                 <button type="button" className="ik-go" disabled={busy} onClick={nextPage}>بعدی</button>
               ) : (
                 <button type="button" className="ik-go ghost" disabled={busy} onClick={saveForm}>
-                  {busy ? 'در حال ذخیره…' : 'ذخیرهٔ اطلاعات'}
+                  {busy ? 'در حال ذخیره…' : makesVisit ? T.submit.visit : T.submit.record}
                 </button>
               )}
             </div>
@@ -395,7 +492,7 @@ function Form() {
               <textarea rows={2} value={f.notes} onChange={set('notes')} disabled={busy} />
             </label>
             <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
-              {busy ? 'در حال ذخیره…' : 'ذخیرهٔ اطلاعات'}
+              {busy ? 'در حال ذخیره…' : makesVisit ? T.submit.visit : T.submit.record}
             </button>
           </>
         )
@@ -452,9 +549,9 @@ function Form() {
             hint="عکس یا PDFِ فیش — تا ۸ مگابایت؛ چند فیش هم می‌شود گذاشت"
             onUpload={sendReceipt}
           />
-          {(d.data?.receiptDocumentIds ?? (d.data?.receiptDocumentId ? [d.data.receiptDocumentId] : [])).length > 0 && (
+          {receipts.length > 0 && (
             <div className="ik-receipts">
-              {(d.data?.receiptDocumentIds ?? [d.data.receiptDocumentId]).map((id, i) => (
+              {receipts.map((id, i) => (
                 <span className="ik-receipt-row" key={id}>
                   <b>فیشِ {i + 1}</b>
                   <button type="button" onClick={() => removeReceipt(id)}>حذف</button>
@@ -469,9 +566,7 @@ function Form() {
         <p className="ik-note">
           {/* ⚠️ فرمِ رایگان فیش ندارد — «فیشِ شما دریافت شد» برای آن دروغ است
               و بیمار را دنبالِ فیشی می‌فرستد که هرگز نفرستاده. */}
-          <Clock width="15" height="15" /> {d.data?.receiptDocumentId
-            ? 'فیشِ شما دریافت شد و در حالِ بررسی است. نتیجه از همین صفحه قابلِ پیگیری است.'
-            : 'اطلاعاتِ شما ثبت شد و در حالِ بررسی است. نتیجه از همین صفحه قابلِ پیگیری است.'}
+          <Clock width="15" height="15" /> {receipts.length ? T.review.withReceipt : T.review.noReceipt}
         </p>
       )}
 

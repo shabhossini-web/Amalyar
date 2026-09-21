@@ -1,0 +1,106 @@
+/* مسیرِ درمان — ویزاردِ ساختِ الگو (W4.2).
+   ⚠️ پوستهٔ مشترک (`db-field`) از `src/index.css` می‌آید و همین‌جا ایمپورت
+   نمی‌شود؛ بقیه این‌جاست چون این صفحه چانکِ خودش است (قانون ۲۱).
+   ⚠️ هیچ رنگِ خامی: همه از توکن‌هایی که با تم می‌چرخند (قانون ۲۳). */
+.pw { position: relative; min-height: 100dvh; padding: 0 16px 40px; }
+.pw-bg {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(1200px 600px at 80% -10%, rgba(var(--brand-2-rgb), 0.16), transparent 60%);
+}
+.pw-head { max-width: 900px; margin: 0 auto; padding: 18px 0 12px; }
+.pw-back { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text2); text-decoration: none; }
+.pw-back:hover { color: var(--text1); }
+.pw-head h1 { margin: 8px 0 4px; font-size: 20px; font-weight: 900; color: var(--text1); }
+.pw-head p { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
+
+.pw-err { max-width: 900px; margin: 0 auto 10px; font-size: 12.5px; color: var(--red-text); }
+.pw-empty, .pw-hint { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
+.pw-warn { margin: 6px 0 0; font-size: 12.5px; color: var(--amber-text); }
+
+.pw-list { max-width: 900px; margin: 0 auto; display: grid; gap: 8px; }
+.pw-card {
+  display: flex; align-items: center; gap: 10px; padding: var(--pad-card); border-radius: 14px;
+  background: rgba(var(--surface-rgb), 0.55); border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+.pw-card-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.pw-card-main b { font-size: 14px; font-weight: 800; color: var(--text1); }
+.pw-card-main small { font-size: 12px; color: var(--text2); }
+.pw-card-main .pw-meta { color: var(--text3); }
+
+.pw-btn, .pw-ghost {
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; flex: none;
+  padding: 9px 14px; border-radius: 11px; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.08); border: 1px solid rgba(var(--veil-rgb), 0.16);
+}
+.pw-ghost { color: var(--text2); background: transparent; }
+.pw-btn.primary { color: #fff; background: var(--brand-2); border-color: transparent; }
+.pw-btn:disabled, .pw-ghost:disabled { opacity: 0.5; cursor: default; }
+
+.pw-wiz { max-width: 900px; margin: 0 auto; display: grid; gap: 10px; }
+.pw-wiz-head { display: flex; align-items: center; gap: 10px; }
+.pw-wiz-head b { flex: 1; font-size: 15px; font-weight: 800; color: var(--text1); }
+.pw-wiz-body {
+  padding: var(--pad-card); border-radius: 14px; min-height: 180px;
+  background: rgba(var(--surface-rgb), 0.55); border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+.pw-wiz-foot { display: flex; gap: 8px; justify-content: space-between; }
+
+.pw-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pw-step {
+  display: flex; gap: 10px; padding: 10px; border-radius: 12px;
+  background: rgba(var(--veil-rgb), 0.04);
+  /* بوردرِ فیزیکی — در RTL شمارهٔ مرحله سمتِ راست است (قانون ۹). */
+  border-right: 2px solid rgba(var(--brand-2-rgb), 0.45);
+}
+.pw-step-no {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12px; font-weight: 800; color: var(--text2); background: rgba(var(--veil-rgb), 0.08);
+}
+.pw-step-fields { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.pw-step-title { font-size: 13px; font-weight: 700; color: var(--text1); }
+.pw-step-acts { flex: none; display: flex; flex-direction: column; gap: 4px; }
+.pw-step-acts button {
+  font: inherit; font-size: 12px; cursor: pointer; width: 28px; height: 24px; border-radius: 8px;
+  display: grid; place-items: center; color: var(--text2);
+  background: rgba(var(--veil-rgb), 0.07); border: 1px solid rgba(var(--veil-rgb), 0.14);
+}
+.pw-step-acts button.danger { color: var(--red-text); }
+.pw-step-acts button:disabled { opacity: 0.4; cursor: default; }
+.pw-add {
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px; border-radius: 12px; color: var(--text2);
+  background: transparent; border: 1px dashed rgba(var(--veil-rgb), 0.22);
+}
+
+.pw-prev { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.pw-prev li {
+  display: flex; gap: 10px; padding: 9px 10px; border-radius: 11px;
+  background: rgba(var(--veil-rgb), 0.04); border-right: 2px solid rgba(var(--veil-rgb), 0.14);
+}
+.pw-prev-when { flex: none; width: 96px; display: grid; gap: 2px; }
+.pw-prev-when b { font-size: 12.5px; color: var(--text1); }
+.pw-prev-when small { font-size: 11px; color: var(--text3); }
+.pw-prev-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.pw-prev-main b { font-size: 13px; font-weight: 700; color: var(--text1); }
+.pw-prev-main small { font-size: 11.5px; line-height: 1.8; color: var(--text2); }
+/* پیامی که می‌رود و پیامی که نمی‌رود نباید هم‌شکل باشند. */
+/* ⚠️ آیکونِ درونِ خطِ متن این‌جا کار نمی‌کند: `src/index.css` سراسری
+   `img, svg { display: block }` دارد، پس آیکون می‌افتد سطرِ خودش. تفاوت را
+   رنگ **و واژه** حمل می‌کنند — واژه لازم است چون رنگ به‌تنهایی برای
+   کوررنگ‌ها چیزی نمی‌گوید. */
+.pw-prev-main small.sends { color: var(--green-text); }
+.pw-prev-main small.silent { color: var(--amber-text); }
+
+.pw-apply { display: grid; gap: 10px; justify-items: start; }
+
+.pw-toast {
+  position: fixed; inset-inline: 0; bottom: 18px; margin-inline: auto; width: max-content; max-width: 90vw;
+  font: inherit; font-size: 13px; cursor: pointer; padding: 10px 16px; border-radius: 12px;
+  color: var(--text1); background: rgba(var(--surface-rgb), 0.95);
+  border: 1px solid rgba(var(--veil-rgb), 0.16); box-shadow: var(--shadow-card);
+}
+@media (max-width: 560px) {
+  .pw-prev-when { width: auto; display: flex; gap: 6px; align-items: baseline; }
+  .pw-step { flex-wrap: wrap; }
+}

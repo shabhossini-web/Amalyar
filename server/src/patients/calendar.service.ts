@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
-import { LEVEL } from '../common/levels';
+import { scopedVisitWhere } from '../common/own-scope';
 import { APPT_LABELS, APPT_TRANSITIONS } from './appointments.service';
 
 /**
@@ -25,7 +25,7 @@ export class CalendarService {
     const [from, to] = jalaliMonthRange(jy, jm);
 
     // کارشناس فقط عمل‌های خودش را می‌بیند — همان قاعدهٔ فهرستِ مراجعات.
-    const scoped = (user?.level ?? 0) < LEVEL.SUPERVISOR ? { techId: user?.id ?? -1 } : {};
+    const scoped = scopedVisitWhere(user);
 
     const rows = await this.prisma.visit.findMany({
       where: { ...scoped, opDate: { gte: from, lt: to } },

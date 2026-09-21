@@ -1,4 +1,9 @@
 import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
+import { WorkModule } from '../work/work.module';
+import { PrepService } from './prep.service';
+import { LiveService } from './live.service';
+import { FrontDeskService } from './frontdesk.service';
+import { FrontDeskController } from './frontdesk.controller';
 import { TenantHospitalDirectoryService } from './hospital-directory.service';
 import { Module } from '@nestjs/common';
 import { PatientsController } from './patients.controller';
@@ -60,28 +65,35 @@ import { SummaryController, PublicSummaryController } from './summary.controller
 import { RemindersService } from './reminders.service';
 import { PortalService } from './portal.service';
 import { PermissionGuard } from '../auth/permission.guard';
+import { RateLimitService } from '../common/rate-limit.service';
+import { RepairController } from './repair.controller';
+import { RepairService } from './repair.service';
 import { HospitalDutiesController } from './hospital-duties.controller';
 import { HospitalDutiesService } from './hospital-duties.service';
 
 @Module({
-  imports: [HospitalDirectoryModule],
+  imports: [HospitalDirectoryModule, WorkModule],
   // ⚠️ ترتیب مهم است: PatientsController مسیرِ `patients` (جستجو) را دارد و
   // RecordController مسیرهای `patients/:id/...` را؛ Nest به ترتیبِ ثبت تطبیق می‌دهد.
   controllers: [
+    FrontDeskController,
     HospitalDutiesController,
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, AvailabilityController, AppointmentsController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
-    SummaryController, PublicSummaryController, LettersController, OrdersController, PublicOrdersController,
+    SummaryController, PublicSummaryController, LettersController, OrdersController, PublicOrdersController, RepairController,
   ],
   providers: [
     TenantHospitalDirectoryService,
     HospitalDutiesService,
+    PrepService,
+    LiveService,
+    FrontDeskService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
-    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, PermissionGuard,
+    CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RepairService, RateLimitService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */
-  exports: [ServiceCodesService],
+  exports: [ServiceCodesService, PatientsService],
 })
 export class PatientsModule {}

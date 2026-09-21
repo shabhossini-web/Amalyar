@@ -18,34 +18,34 @@
 .ia-err {
   display: flex; align-items: center; gap: 7px; max-width: 980px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 
 /* ── لینک‌های عمومی ── */
 .ia-links {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   max-width: 980px; margin: 0 auto 12px; padding: 11px 13px; border-radius: 14px;
-  background: rgba(255, 255, 255, .04); border: 1px dashed rgba(255, 255, 255, .14);
+  background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(var(--veil-rgb), .14);
 }
 .ia-links > b { font-size: 12.5px; }
 .ia-link {
   display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px;
   border-radius: 99px; font-size: 11.5px;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(var(--brand-soft-rgb), .3);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .3);
 }
 .ia-link.off { opacity: .5; }
 .ia-link em, .ia-link i { font-style: normal; font-size: 10.5px; color: var(--text3); }
 /* نشانِ فرم و حساب روی ردیفِ لینک — تا دو لینک از هم قابلِ تفکیک باشند. */
 .ia-chip {
   display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 99px;
-  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 /* حسابی که دیگر روی فرمِ بیمار نشان داده نمی‌شود — ادمین باید ببیند، وگرنه
    یک نامِ حساب روی ردیف است و هیچ شماره‌ای روی فرم. */
-.ia-chip.warn { color: #fbbf24; background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .3); }
+.ia-chip.warn { color: var(--amber-text); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .3); }
 .ia-link button {
   font: inherit; font-size: 10.5px; cursor: pointer; padding: 2px 7px; border-radius: 8px;
-  color: var(--text2); background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .13);
+  color: var(--text2); background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .13);
   display: inline-flex; align-items: center;
 }
 .ia-link button:hover { color: var(--brand-2); }
@@ -53,7 +53,7 @@
    را بگیرد وگرنه در ردیفِ کنشْ ناهماهنگ می‌نشیند. */
 .ia-linkbtn {
   font: inherit; font-size: 10.5px; cursor: pointer; padding: 2px 7px; border-radius: 8px;
-  color: var(--text2); background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .13);
+  color: var(--text2); background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .13);
   display: inline-flex; align-items: center;
 }
 .ia-linkbtn:hover { color: var(--brand-2); }
@@ -67,11 +67,11 @@
 .ia-list { display: grid; gap: 10px; max-width: 980px; margin: 12px auto 0; }
 .ia-empty {
   padding: 26px 16px; text-align: center; font-size: 13px; color: var(--text3);
-  border: 1px dashed rgba(255, 255, 255, .12); border-radius: 16px;
+  border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 .ia-card {
   display: grid; gap: 8px; padding: 13px; border-radius: 17px;
-  background: rgba(255, 255, 255, .045); border: 1px solid rgba(var(--brand-soft-rgb), .17);
+  background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .17);
 }
 .ia-card.st-pending_approval { border-color: rgba(251, 191, 36, .4); }
 .ia-card.st-approved { opacity: .72; border-color: rgba(52, 211, 153, .3); }
@@ -82,11 +82,11 @@
 .ia-title small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
 .ia-tag {
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
-  color: var(--text2); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .ia-tag.s-pending_approval { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
 .ia-tag.s-approved { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
-.ia-tag.s-rejected { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+.ia-tag.s-rejected { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .ia-amount { flex: 0 0 auto; font-size: 12px; font-weight: 800; }
 
 .ia-facts { display: flex; flex-wrap: wrap; gap: 5px 13px; font-size: 12px; color: var(--text2); }
@@ -97,7 +97,7 @@
 .ia-note {
   display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 11px;
   font-size: 12px; line-height: 1.9; color: var(--text2);
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
 }
 .ia-note.warn { color: #fcd34d; background: rgba(245, 158, 11, .09); border-color: rgba(251, 191, 36, .3); }
 .ia-note.ok { color: #6ee7b7; background: rgba(52, 211, 153, .09); border-color: rgba(52, 211, 153, .3); }
@@ -107,39 +107,39 @@
   font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; border-radius: 11px; padding: 10px 14px;
 }
 .ia-ok { flex: 1; min-width: 180px; color: #fff; border: 0; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
-.ia-ghost { color: var(--text1); background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .13); }
-.ia-no { color: #fca5a5; background: rgba(248, 113, 113, .08); border: 1px solid rgba(248, 113, 113, .3); }
+.ia-ghost { color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13); }
+.ia-no { color: var(--red-text); background: rgba(248, 113, 113, .08); border: 1px solid rgba(248, 113, 113, .3); }
 .ia-ok:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── شیت ── */
 .ia-overlay {
   position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 14px;
-  background: rgba(4, 2, 16, .74); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  background: rgba(var(--surface-rgb), .74); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .ia-sheet {
   width: min(560px, 100%); max-height: 90dvh; overflow-y: auto; border-radius: 19px;
-  background: #150f36; border: 1px solid rgba(var(--brand-soft-rgb), .28);
+  background: var(--bg3); border: 1px solid rgba(var(--brand-soft-rgb), .28);
 }
 .ia-sheet.sm { width: min(400px, 100%); }
 .ia-sheet-head {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 13px 15px; border-block-end: 1px solid rgba(255, 255, 255, .08);
+  padding: 13px 15px; border-block-end: 1px solid rgba(var(--veil-rgb), .08);
 }
 .ia-sheet-head b { font-size: 13.5px; }
 .ia-x {
   display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer;
-  color: var(--text2); background: rgba(255, 255, 255, .06);
-  border: 1px solid rgba(255, 255, 255, .12); border-radius: 9px;
+  color: var(--text2); background: rgba(var(--veil-rgb), .06);
+  border: 1px solid rgba(var(--veil-rgb), .12); border-radius: 9px;
 }
 .ia-sheet-body { display: grid; gap: 10px; padding: 14px 15px 16px; }
 .ia-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .ia-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
 .ia-field input, .ia-field select {
   font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 10px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(255, 255, 255, .14); outline: none;
+  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
   width: 100%;
 }
-.ia-field select option { background: #14103a; }
+.ia-field select option { background: var(--bg3); }
 .ia-field input:focus, .ia-field select:focus { border-color: rgba(var(--brand-2-rgb), .6); }
 /* راهنمای زیرِ فیلد و «به‌حروف»ِ مبلغ — قانون ۱۳ می‌گوید هر ورودیِ مبلغ باید
    عددش را به حروف هم نشان بدهد، چون یک صفرِ اضافه در رقم دیده نمی‌شود. */
@@ -149,7 +149,7 @@
 .ia-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(22, 16, 46, .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .ia-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
@@ -171,7 +171,7 @@
 .ia-receipt {
   display: grid; gap: 6px; padding: 8px; cursor: zoom-in; text-align: start;
   border-radius: 13px; background: rgba(0, 0, 0, .25);
-  border: 1px solid rgba(255, 255, 255, .1);
+  border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ia-receipt img {
   width: 100%; max-height: 220px; object-fit: contain; border-radius: 9px;
@@ -186,7 +186,7 @@
 .ia-money {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
   padding: 9px 11px; border-radius: 12px; font-size: 12px; color: var(--text2);
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ia-money b { color: var(--text1); font-weight: 800; }
 .ia-money .off { color: #6ee7b7; }
@@ -215,8 +215,8 @@
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; border-radius: 999px;
-  color: #8f88af; background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #8f88af; background: rgba(var(--veil-rgb), 0.04);
+  border: 1px solid rgba(var(--veil-rgb), 0.08);
 }
 .ia-cardel:hover { color: #fb7185; border-color: rgba(251, 113, 133, 0.4); }
 

@@ -72,6 +72,11 @@ export const ACCESS_GROUPS: AccessGroup[] = [
     key: 'system',
     label: 'تعاریف و سامانه',
   },
+  {
+    key: 'work',
+    label: 'کارها و پیگیری',
+    hint: 'صفِ کارِ هر نقش: نتیجهٔ نیازمندِ بررسی، ثبت‌نامِ در انتظار، تماس با بیمار، گزارشِ ناقص… هر کار مسئول و مهلت دارد.',
+  },
 ];
 
 /**
@@ -103,6 +108,25 @@ export const FEATURES: AccessDef[] = [
   {
     key: 'calendar', label: 'تقویمِ عمل‌ها', group: 'modules',
     defaultLevel: LEVEL.SUPERVISOR,
+  },
+  {
+    /* میزِ پذیرشِ روز (§۴.۵) — **عمداً سطحِ کارشناس/منشی**، نه سوپروایزر.
+       کسی که بیمار را می‌پذیرد پایین‌ترین سطحِ کاری است؛ اگر این کاشی سطحِ
+       `calendar` را بگیرد، منشی اصلاً نمی‌تواند بیمار را «رسید» بزند و کلِ
+       بسته بی‌مصرف می‌شود. ⚠️ و دلیلِ اینکه کنترلرِ جدا دارد نه گیتِ پایین‌ترِ
+       `calendar`: پایین‌آوردنِ `calendar` کلِ تقویمِ عمل‌ها و قواعدِ برنامهٔ
+       کاری را هم سطحِ ۲ می‌کرد. */
+    key: 'frontdesk', label: 'میزِ پذیرش', group: 'modules',
+    hint: 'پذیرشِ بیمارانِ امروز: رسید، شروعِ مراجعه، نوبتِ حضوری.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    /* ⚠️ خواندن از سطحِ **کارشناس** باز است چون گام‌های دوره همان کاری است که
+       خودِ کارشناس انجام می‌دهد؛ ولی انتشارِ الگو مجوزِ جدا دارد (`pathway.manage`)
+       چون الگو روی بیمارانِ **بعدی** اثر می‌گذارد نه یک پرونده. */
+    key: 'pathway', label: 'مسیرِ درمان', group: 'modules',
+    hint: 'دورهٔ خدمت با مرحله، مسئول و موعد — برای نصب‌های ویزیت‌محور و دوره‌ای.',
+    defaultLevel: LEVEL.TECH,
   },
   {
     key: 'dispatch', label: 'چینشِ نیروها', group: 'modules',
@@ -141,6 +165,11 @@ export const FEATURES: AccessDef[] = [
     hint: 'همین صفحه. قفل است — صفحه‌ای که دسترسی‌ها را عوض می‌کند نمی‌تواند خودش را برای سطحِ پایین‌تر باز کند.',
     defaultLevel: LEVEL.SUPER_ADMIN, locked: true,
   },
+  {
+    key: 'work', label: 'کارهای من', group: 'modules',
+    hint: 'صفِ کارِ هر نفر و هر نقش (لایهٔ کار). عمداً از سطحِ کارشناس باز است: هر کسی که کاری به نامش می‌خورد باید آن را ببیند.',
+    defaultLevel: LEVEL.TECH,
+  },
 ];
 
 /** مجوزهای ریزدانهٔ عملیات. */
@@ -166,6 +195,49 @@ export const PERMISSIONS: AccessDef[] = [
   {
     key: 'patients.create', label: 'ثبتِ مراجعهٔ تازه', group: 'patients',
     defaultLevel: LEVEL.TECH_ADMIN,
+  },
+  /* ── میزِ پذیرش ─────────────────────────────────────────────
+     ⚠️ این‌ها **مجوزِ عملیات**اند نه ماژول (قانون ۳): دیدنِ تختهٔ روز با
+     عوض‌کردنِ وضعیتِ بیمار یکی نیست، و نصبی که می‌خواهد منشی فقط ببیند باید
+     بتواند بدونِ خاموش‌کردنِ کلِ کاشی این کار را بکند. */
+  {
+    key: 'pathway.read', label: 'دیدنِ مسیرِ درمان', group: 'patients',
+    hint: 'دوره‌های بیمار، مرحله‌ها، مسئول و موعد.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'pathway.step', label: 'ثبتِ مرحلهٔ مسیر', group: 'patients',
+    hint: 'انجام‌شده/رد‌شده کردنِ مرحله و جابه‌جاییِ موعدِ همان بیمار.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'pathway.start', label: 'شروع و بستنِ دورهٔ درمان', group: 'patients',
+    defaultLevel: LEVEL.TECH_ADMIN,
+  },
+  {
+    key: 'pathway.manage', label: 'انتشارِ الگوی مسیر', group: 'patients',
+    hint: 'الگو روی بیمارانِ بعدی اثر می‌گذارد، نه یک پرونده — پس سطحِ مدیر.',
+    defaultLevel: LEVEL.ADMIN,
+  },
+  {
+    key: 'frontdesk.read', label: 'دیدنِ میزِ پذیرش', group: 'patients',
+    hint: 'تختهٔ بیمارانِ امروز و وضعیتشان.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'frontdesk.status', label: 'تغییرِ وضعیتِ پذیرش', group: 'patients',
+    hint: 'رسید / نیامد / تمام شد / لغو روی نوبتِ امروز.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'frontdesk.start', label: 'شروعِ مراجعه از میز', group: 'patients',
+    hint: 'بازکردنِ فرمِ مراجعه برای بیمارِ حاضر.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'frontdesk.walkin', label: 'نوبتِ حضوری', group: 'patients',
+    hint: 'گرفتنِ نوبت برای بیمارِ سرِ میز — از همان مسیرِ ظرفیت.',
+    defaultLevel: LEVEL.TECH,
   },
   {
     key: 'patients.update', label: 'ویرایشِ مراجعه', group: 'patients',
@@ -318,6 +390,11 @@ export const PERMISSIONS: AccessDef[] = [
     hint: 'کلِ دیتابیسِ شرکت را دست می‌زند.',
     defaultLevel: LEVEL.SUPER_ADMIN,
   },
+  /* ── لایهٔ کار (W2.1) ── */
+  { key: 'work.read', label: 'دیدنِ کارهای خود و نقشِ خود', group: 'work', defaultLevel: LEVEL.TECH },
+  { key: 'work.write', label: 'انجام، توقف و ساختنِ کارِ دستی', group: 'work', defaultLevel: LEVEL.TECH },
+  { key: 'work.assign', label: 'واگذاریِ کار به دیگران و دیدنِ همهٔ کارها', group: 'work', hint: 'سوپروایزر و بالاتر: کارِ بی‌مسئول را به کسی می‌دهد و صفِ همه را می‌بیند.', defaultLevel: LEVEL.SUPERVISOR },
+  { key: 'work.process', label: 'اجرای دستیِ پردازشگرِ رویدادها', group: 'work', hint: 'فقط برای آزمون و عیب‌یابی؛ worker همین را خودکار انجام می‌دهد.', defaultLevel: LEVEL.SUPER_ADMIN },
 ];
 
 /**

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
 import { SettingsService } from './settings.service';
+import { CANCEL_REASONS, cancelSms } from '../common/cancel-reasons';
 
 const KEY_VERTICAL = 'vertical';
 
@@ -32,12 +33,41 @@ export class ConfigService {
     return {
       vertical,
       verticalLabel: VERTICALS[vertical].label,
+      /// نوعِ پیش‌فرضِ مراجعهٔ تازه — از حوزه (مطب: ویزیت)؛ کلاینت hardcode نمی‌کند.
+      defaultKind: VERTICALS[vertical].defaultKind,
       brandName: brand.name,
       /// هویتِ کاملِ شرکت برای سربرگ و فاکتور — یک منبع، تا هر چاپ‌گر خودش
       /// از تنظیمات نچیندش و یکی‌شان از قلم نیفتد.
       brand,
       /// فهرست برای صفحهٔ تنظیمات؛ کلاینت نباید این‌ها را hardcode کند.
       verticals: Object.entries(VERTICALS).map(([key, v]) => ({ key, label: v.label })),
+      /**
+       * دلیل‌های لغو — مجموعهٔ بستهٔ `common/cancel-reasons.ts`.
+       *
+       * ⚠️ چرا این‌جا و نه کنارِ خودِ لغو: سه جای لغو (داشبورد، میزِ پذیرش،
+       * تقویم) پشتِ سه فیچرِ **متفاوت**اند. هر endpointای که پشتِ یکی از آن سه
+       * بنشیند برای دو تای دیگر ۴۰۳ می‌دهد، و سه endpointِ هم‌محتوا یعنی سه
+       * جایی که می‌توانند واگرا شوند. `/config` تنها چیزی است که هر کاربرِ
+       * واردشده می‌خواند.
+       *
+       * ⚠️ `sms` **همان جمله‌ای است که واقعاً می‌رود** (بدونِ سربرگ و تاریخ)،
+       * چون از همان `cancelSms()` ساخته می‌شود که پیام را می‌سازد. اگر کلاینت
+       * متنِ نمونه را خودش می‌نوشت، اولین تغییرِ متنِ پیامک آن را به دروغ
+       * تبدیل می‌کرد — و دروغش را کسی نمی‌دید، چون پیش‌نمایش را کارمند می‌بیند
+       * و پیامک را بیمار.
+       *
+       * ⚠️ متنِ `patient` عمداً **خام فرستاده نمی‌شود**: تکه‌ای مثل «به درخواستِ
+       * خودتان» بیرون از جمله معنا ندارد و کارمند آن را «چیزی که بیمار
+       * می‌گیرد» می‌خواند.
+       */
+      cancelReasons: Object.entries(CANCEL_REASONS).map(([key, r]) => ({
+        key,
+        label: r.label,
+        sms: {
+          visit: cancelSms('visit', key, {}),
+          appointment: cancelSms('appointment', key, {}),
+        },
+      })),
     };
   }
 

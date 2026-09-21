@@ -44,7 +44,12 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 200)); });
 
-await page.goto(UI + '/', { waitUntil: 'domcontentloaded' });
+/* کوکیِ نشست **پیش از** اولین ناوبری. `AuthProvider` روی هر بارگذاری همان لحظه
+   `/auth/me` و `/config` را می‌زند و بی‌کوکی ۴۰۱ می‌گیرد؛ مرورگر آن را «Failed to
+   load resource: 401» در کنسول می‌نویسد و سنجهٔ «بدونِ خطای جاوااسکریپت» (که از
+   همین‌جا گوش می‌دهد) قرمز می‌شد. ناوبریِ بی‌کوکیِ «/» یادگارِ دورهٔ توکن در
+   localStorage بود؛ با کوکیِ HttpOnly لازم نیست و فقط یک مسابقه می‌ساخت که روی
+   Viteِ گرمِ CI باخته می‌شد (پاسخ ~۵۰ms بعد از DOMContentLoaded می‌رسید). */
 await browserLogin(page, login.accessToken);
 await page.goto(UI + '/app/dashboard', { waitUntil: 'networkidle' });
 await page.waitForTimeout(1500);
@@ -72,9 +77,10 @@ console.log('\n۲) باکسِ عکس رندر می‌شود');
 {
   const n = await page.locator('.dyn-img').count();
   ok('کادرِ عکس روی صفحه هست', n === 1, 'n=' + n);
-  ok('دکمهٔ «انتخابِ عکس» هست', await page.locator('.dyn-img-pick').count() === 1);
-  // بدونِ `onUpload` باید غیرفعال و با توضیح باشد — نه یک دکمهٔ مرده.
-  ok('بدونِ آپلودکننده غیرفعال است', await page.locator('.dyn-img-pick').isDisabled());
+  // بدونِ `onUpload` (شیتِ داشبورد آپلودکننده ندارد) از #۶۶ به بعد اصلاً دکمه‌ای
+  // رندر نمی‌شود — فقط توضیح. تا قبل از آن «دکمهٔ غیرفعال» انتظار می‌رفت و این
+  // سنجه از همان زمان بی‌صدا قرمز بود (سوئیتِ سرورِ زنده، خارج از CI).
+  ok('بدونِ آپلودکننده دکمهٔ «انتخابِ عکس» نیست — نه یک دکمهٔ مرده', await page.locator('.dyn-img-pick').count() === 0);
   const note = await page.locator('.dyn-img .dyn-note').textContent().catch(() => '');
   ok('توضیح داده شده که کجا پر می‌شود', /فرمِ بیمار/.test(note || ''), note);
   // ورودیِ فایل باید **اولین** المانِ قابلِ برچسب باشد تا کلیکِ برچسب حذف نکند

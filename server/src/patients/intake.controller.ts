@@ -30,6 +30,21 @@ class RegisterDto {
   @Type(() => Number) @IsInt() captchaAnswer!: number;
 }
 
+/**
+ * پیش‌نویسِ فرم — عمداً هیچ فیلدِ ثابتی ندارد (نه `opDate`، نه `hospitalId`…):
+ * آن‌ها را `fill` سرِ ثبتِ نهایی می‌گیرد. این‌جا فقط پاسخِ کادرهای فرم و
+ * شمارهٔ صفحه‌ای که بیمار رویش بوده.
+ */
+class DraftDto {
+  @IsOptional() @IsObject({ message: 'پاسخ‌های فرم نامعتبر است' }) values?: Record<string, any>;
+  /**
+   * شمارهٔ آخرین صفحهٔ دیده‌شده. **در `values` نمی‌آید** چون سرویس فقط کلیدهای
+   * خودِ فرم را می‌نویسد و `_page` کلیدِ فرم نیست؛ ورودیِ typed جداگانه هم
+   * یعنی عددِ بی‌معنی (منفی، رشته، ۱۰۰۰) اصلاً به سرویس نمی‌رسد.
+   */
+  @IsOptional() @IsInt() @Min(1) @Max(50) page?: number;
+}
+
 class FillDto {
   @IsOptional() @IsInt() @Min(0) hospitalId?: number;
   @IsOptional() @IsString() @MaxLength(200) procedure?: string;
@@ -129,6 +144,7 @@ class RequiredItemDto {
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 class ApproveDto {
+  @IsOptional() @IsString({ message: 'کلید تکرار درخواست باید متن باشد' }) @MaxLength(120, { message: 'کلید تکرار درخواست بیش از حد طولانی است' }) idempotencyKey?: string;
   @IsOptional() @IsObject() extra?: Record<string, any>;
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => RequiredItemDto) requiredItems?: RequiredItemDto[];
   @IsOptional() @Type(() => Number) @IsInt() surgeonId?: number;
@@ -182,6 +198,12 @@ export class PublicIntakeController {
   @Post('form/:token/fill')
   fill(@Param('token') token: string, @Body() dto: FillDto) {
     return this.intake.fill(token, dto);
+  }
+
+  /** پیش‌نویس — `data` را merge می‌کند و `status` را دست نمی‌زند (W1.8، قرارداد §۶). */
+  @Post('form/:token/draft')
+  draft(@Param('token') token: string, @Body() dto: DraftDto) {
+    return this.intake.draft(token, dto);
   }
 
   /* ── نوبت‌دهی: عمومی و فقط با توکن، چون بیمار حساب ندارد ── */
@@ -383,9 +405,10 @@ export class IntakeController {
     return this.intake.deleteSubmission(id, user);
   }
 
+  /// ارجاع‌های پیشنهادی از روی متنی که بیمار نوشته — بیمارستان، جراح، نوعِ عمل.
   @RequirePermissions('intake.review')
-  @Get('submissions/:id/hospital')
-  hospital(@Param('id', ParseIntPipe) id: number) { return this.intake.approvalHospital(id); }
+  @Get('submissions/:id/refs')
+  refs(@Param('id', ParseIntPipe) id: number) { return this.intake.approvalRefs(id); }
 
   @RequirePermissions('intake.review')
   @Post('submissions/:id/approve')

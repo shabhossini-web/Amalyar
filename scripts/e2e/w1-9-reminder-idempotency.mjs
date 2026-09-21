@@ -1,0 +1,170 @@
+/**
+ * W1.9 — کلیدِ یکتای یادآوری + تلاشِ دوباره (N4/A3، قراردادِ §۸).
+ * Real Prisma. Only run against an isolated local database.
+ *
+ * دو یافته:
+ *
+ * **N4 —** `syncNextVisit` هر بار همهٔ یادآوری‌های `pending` را لغو و از نو
+ * می‌ساخت. یعنی هر ویرایشِ مراجعه شناسهٔ ردیف‌ها را عوض می‌کرد، دفتر پر از
+ * `cancelled`ِ بی‌معنی می‌شد، و جلوگیری از پیامِ تکراری به یک کوئریِ دستیِ
+ * مقایسهٔ متن (`sentSame`) بند بود که فقط `sent` را می‌دید.
+ *
+ * **A3 —** وضعیتِ `uncertain` عملاً **نهایی** بود: `sendReminders` فقط
+ * `pending` را برمی‌دارد، پس پیامی که نتیجه‌اش نامعلوم مانده بود هیچ‌وقت
+ * دوباره امتحان نمی‌شد و بی‌سروصدا می‌ماند.
+ *
+ *  باید بیفتد:
+ *   - همگام‌سازیِ دوباره **همان ردیف** را نگه دارد، نه ردیفِ تازه
+ *   - تغییرِ تاریخ یا متن، ردیفِ تازه بسازد و قبلی را لغو کند
+ *   - `uncertain` با مکثِ ۵/۱۵/۴۵ دقیقه برگردد به صف
+ *   - بعد از سه تلاشِ دوباره `failed` شود و `sms.failed` صادر شود
+ *  نباید بیفتد:
+ *   - پیامِ **رفته** دوباره کاشته یا لغو شود
+ *   - یادآوریِ کهنهٔ بی‌کلید برای همیشه `pending` بماند (تلهٔ NULL در SQL)
+ *   - یادآوریِ مراجعهٔ دیگر یا kindِ بیرونِ برنامه هرس شود
+ */
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+import { createRequire } from 'node:module';
+const require = createRequire(new URL('../../server/package.json', import.meta.url));
+const { PrismaClient } = require('@prisma/client');
+const { RemindersService, reminderKey } = require('./dist/patients/reminders.service');
+const { SettingsService } = require('./dist/config/settings.service');
+const { sendReminders } = require('./dist/reminders/send-reminders');
+
+const DB = process.env.E2E_DB;
+if (!DB || !['localhost', '127.0.0.1'].includes(new URL(DB).hostname)) throw new Error('فقط محیط محلی جداگانه');
+const db = new PrismaClient({ datasources: { db: { url: DB } } });
+const tag = 'rem' + randomBytes(4).toString('hex');
+
+let count = 0;
+const ok = (v, label) => { assert.ok(v, label); console.log('PASS ' + ++count + ' ' + label); };
+const DAY = 864e5;
+const tenantStub = { require: () => ({ tenantId: tag, hostname: 'localhost' }) };
+const settings = new SettingsService(db, { record: async () => {} }, tenantStub, {});
+const reminders = new RemindersService(db, { send: async () => ({ ok: true }) }, settings, tenantStub);
+
+const made = { patients: [], forms: [] };
+const rowsOf = (visitId, kind) => db.reminder.findMany({ where: { visitId, ...(kind ? { kind } : {}) }, orderBy: { id: 'asc' } });
+
+try {
+  made.forms.push((await db.formDef.create({
+    data: { key: tag + 'fu', title: 'پیگیری', scope: 'record', followUp: 'general', active: true },
+  })).id);
+  const pid = (await db.patient.create({ data: { code: tag, firstName: 'بیمار', lastName: 'یادآوری', phone: '09120000000' } })).id;
+  made.patients.push(pid);
+  const v = await db.visit.create({
+    data: { patientId: pid, seq: 1, kind: 'surgery', opStatus: 'pending',
+      opDate: new Date(Date.now() + 5 * DAY), followUpDays: '7', postOpCare: 'مراقبت الف', preOpCare: 'ناشتا' },
+  });
+
+  console.log('\n۱) کلید پایدار است — همگام‌سازیِ دوباره ردیفِ تازه نمی‌سازد');
+  await reminders.syncNextVisit(v.id);
+  const first = await rowsOf(v.id);
+  ok(first.length > 0 && first.every((r) => r.dedupeKey),
+    `همهٔ یادآوری‌ها کلید گرفتند (${first.length} ردیف)`);
+  ok(first.some((r) => r.kind === 'post_op_care') && first.some((r) => r.kind === 'follow_up'),
+    'هر دو نوعِ پس از عمل برنامه‌ریزی شدند');
+  await reminders.syncNextVisit(v.id);
+  const second = await rowsOf(v.id);
+  ok(second.length === first.length && second.every((r) => r.status === 'pending'),
+    `**باید بیفتد:** بارِ دوم هیچ ردیفی اضافه یا لغو نشد (${first.length} → ${second.length})`);
+  ok(second.map((r) => r.id).join(',') === first.map((r) => r.id).join(','),
+    '**باید بیفتد:** شناسهٔ ردیف‌ها هم عوض نشد — همان ردیف، نه ردیفِ تازه');
+
+  console.log('\n۲) کلید از فرمولِ قرارداد ساخته می‌شود');
+  const post = first.find((r) => r.kind === 'post_op_care');
+  ok(post.dedupeKey === reminderKey('post_op_care', { visitId: v.id }, post.dueAt, post.text),
+    'کلیدِ ذخیره‌شده با `reminderKey(kind, visit, موعد, متن)` یکی است');
+  ok(post.dedupeKey.startsWith(`post_op_care:${v.id}:`), `شکلِ کلید (${post.dedupeKey})`);
+
+  console.log('\n۳) تغییرِ متن ردیفِ تازه می‌سازد و قبلی را لغو می‌کند');
+  await db.visit.update({ where: { id: v.id }, data: { postOpCare: 'مراقبتِ بازنویسی‌شده' } });
+  await reminders.syncNextVisit(v.id);
+  const posts = await rowsOf(v.id, 'post_op_care');
+  ok(posts.length === 2, `دو ردیف شد (${posts.length})`);
+  ok(posts.find((r) => r.id === post.id)?.status === 'cancelled',
+    '**باید بیفتد:** ردیفِ متنِ قدیمی لغو شد — تاریخچه ماند، حذف نشد');
+  ok(posts.find((r) => r.id !== post.id)?.status === 'pending', 'ردیفِ متنِ تازه در صف است');
+
+  console.log('\n۴) نباید بیفتد — پیامِ رفته نه لغو می‌شود نه دوباره کاشته');
+  const live = (await rowsOf(v.id, 'post_op_care')).find((r) => r.status === 'pending');
+  await db.reminder.update({ where: { id: live.id }, data: { status: 'sent', sentAt: new Date() } });
+  await reminders.syncNextVisit(v.id);
+  const after = await rowsOf(v.id, 'post_op_care');
+  ok(after.find((r) => r.id === live.id)?.status === 'sent',
+    '**نباید بیفتد:** ردیفِ فرستاده‌شده دست‌نخورده ماند');
+  ok(after.length === 2,
+    `**نباید بیفتد:** با همان متن ردیفِ تکراری ساخته نشد (${after.length}) — کارِ کلید، نه \`sentSame\``);
+
+  console.log('\n۵) نباید بیفتد — تلهٔ NULL: یادآوریِ کهنهٔ بی‌کلید باید هرس شود');
+  const legacy = await db.reminder.create({
+    data: { patientId: pid, visitId: v.id, kind: 'surgery', dueAt: new Date(Date.now() + DAY),
+      phone: '09120000000', text: 'یادآوریِ کهنه از پیش از W1.9', status: 'pending' },
+  });
+  ok(legacy.dedupeKey === null, 'ردیفِ کهنه واقعاً بی‌کلید است');
+  await reminders.syncNextVisit(v.id);
+  ok((await db.reminder.findUnique({ where: { id: legacy.id } })).status === 'cancelled',
+    '**نباید بیفتد:** `NOT IN` روی NULL ردیفِ کهنه را جا نگذاشت — لغو شد');
+
+  console.log('\n۶) نباید بیفتد — مراجعهٔ دیگر و kindِ بیرونِ برنامه هرس نمی‌شوند');
+  const other = await db.visit.create({ data: { patientId: pid, seq: 2, kind: 'surgery', opStatus: 'pending', opDate: new Date(Date.now() + 9 * DAY), postOpCare: 'مراقبتِ دوم' } });
+  await reminders.syncNextVisit(other.id);
+  const otherBefore = (await rowsOf(other.id)).filter((r) => r.status === 'pending').length;
+  const notice = await db.reminder.create({
+    data: { patientId: pid, visitId: v.id, kind: 'notice', dueAt: new Date(), phone: '09120000000',
+      text: 'اعلانِ بیرونِ برنامه', status: 'pending', dedupeKey: tag + 'notice' },
+  });
+  await reminders.syncNextVisit(v.id);
+  ok((await rowsOf(other.id)).filter((r) => r.status === 'pending').length === otherBefore,
+    '**نباید بیفتد:** یادآوری‌های مراجعهٔ دیگر دست نخوردند');
+  ok((await db.reminder.findUnique({ where: { id: notice.id } })).status === 'pending',
+    '**نباید بیفتد:** kindِ بیرونِ برنامه (`notice`) هرس نشد');
+
+  console.log('\n۷) تلاشِ دوباره با مکثِ ۵ / ۱۵ / ۴۵ دقیقه');
+  const flaky = await db.reminder.create({
+    data: { patientId: pid, kind: 'notice', dueAt: new Date(Date.now() - 60000), phone: '09120000000',
+      text: tag + ' پیامِ نامعلوم', status: 'pending', dedupeKey: tag + 'flaky' },
+  });
+  const unknownSms = { send: async () => { const e = new Error('پاسخِ نامعلوم'); e.smsOutcome = 'unknown'; throw e; } };
+  const waits = [];
+  for (let i = 1; i <= 4; i++) {
+    /* ⚠️ فقط **ساعت** جلو برده می‌شود، نه وضعیت. نسخهٔ اولِ همین حلقه خودش
+       `uncertain` را به `pending` برمی‌گرداند و در عمل همان مکانیزمی را که
+       باید بسنجد دور می‌زد: با برداشتنِ صفِ بازگشت از `sendReminders` هم سبز
+       می‌ماند. حالا بازگرداندنِ ردیف به صف کارِ خودِ تابع است. */
+    await db.reminder.updateMany({ where: { id: flaky.id }, data: { dueAt: new Date(Date.now() - 1000) } });
+    await sendReminders(db, unknownSms, [flaky.id]);
+    const r = await db.reminder.findUnique({ where: { id: flaky.id } });
+    waits.push({ attempts: r.attempts, status: r.status, inMin: Math.round((r.dueAt.getTime() - Date.now()) / 60000) });
+  }
+  ok(waits.slice(0, 3).every((w) => w.status === 'uncertain'),
+    `سه تلاشِ اول در حالتِ نامعلوم ماندند (${waits.map((w) => w.status).join('، ')})`);
+  ok(waits.slice(0, 3).map((w) => w.inMin).join(',') === '5,15,45',
+    `**باید بیفتد:** مکث‌ها ۵ / ۱۵ / ۴۵ دقیقه شدند (${waits.slice(0, 3).map((w) => w.inMin).join('، ')})`);
+  ok(waits[3].status === 'failed' && waits[3].attempts === 4,
+    `**باید بیفتد:** بعد از سه تلاشِ دوباره failed شد (${waits[3].status}، ${waits[3].attempts} تلاش)`);
+  const ev = await db.domainEvent.findMany({ where: { type: 'sms.failed' }, orderBy: { id: 'desc' }, take: 5 });
+  ok(ev.length > 0, 'رویدادِ `sms.failed` صادر شد — شکست دیده می‌شود، نه اینکه ساکت بماند');
+
+  console.log('\n۸) نباید بیفتد — شکستِ قطعی اصلاً تلاشِ دوباره نمی‌گیرد');
+  const hard = await db.reminder.create({
+    data: { patientId: pid, kind: 'notice', dueAt: new Date(Date.now() - 60000), phone: '09120000000',
+      text: tag + ' شکستِ قطعی', status: 'pending', dedupeKey: tag + 'hard' },
+  });
+  await sendReminders(db, { send: async () => { throw new Error('شمارهٔ نامعتبر'); } }, [hard.id]);
+  const h = await db.reminder.findUnique({ where: { id: hard.id } });
+  ok(h.status === 'failed' && h.attempts === 1,
+    `**نباید بیفتد:** خطای قطعی سه بار تکرار نشد (${h.status}، ${h.attempts} تلاش)`);
+} finally {
+  const vids = (await db.visit.findMany({ where: { patient: { code: { startsWith: tag } } }, select: { id: true } })).map((x) => x.id);
+  await db.domainEvent.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } }).catch(() => {});
+  await db.reminder.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } });
+  await db.workItem.deleteMany({ where: { visitId: { in: vids } } }).catch(() => {});
+  await db.intakeSubmission.deleteMany({ where: { OR: [{ patientId: { in: made.patients } }, { formId: { in: made.forms } }] } });
+  await db.visit.deleteMany({ where: { id: { in: vids } } });
+  await db.patient.deleteMany({ where: { code: { startsWith: tag } } });
+  await db.formDef.deleteMany({ where: { id: { in: made.forms } } });
+  await db.$disconnect();
+}
+console.log(`\nسبز: ${count}`);

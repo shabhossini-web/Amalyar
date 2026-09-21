@@ -60,7 +60,10 @@ try {
     const approval = page.locator('.ia-sheet'); await approval.waitFor();
     await page.locator('#approve-hospitalId').selectOption('1');
     await approval.locator('.ia-pay select').selectOption('1');
-    check(await approval.getByRole('button', { name: 'افزودن کارشناس', exact: true }).count() === 1, 'superadmin can add technician inside approval');
+    /* برچسبِ کارشناس در workflowِ ionm پسوند دارد («… (اختیاری؛ قابل تعیین در
+       چینش)») و این fixture ionm است؛ مچِ `exact` روی «افزودن کارشناس» همان
+       دکمه را نمی‌دید و سوییت — که در CI نبود — ماه‌ها قرمز ماند. */
+    check(await approval.getByRole('button', { name: /^افزودن کارشناس/ }).count() === 1, 'superadmin can add technician inside approval');
     await approval.getByRole('button', { name: 'افزودن بیمارستان', exact: true }).click();
     const quick = page.locator('.df-quick-overlay'); await quick.waitFor(); await delay(450);
     const box = await quick.locator('.df-sheet').boundingBox();
@@ -79,8 +82,13 @@ try {
     await page.waitForFunction(() => !document.querySelector('.ia-sheet'));
     check(writes.some((w) => w.path.endsWith('/approve') && w.body.registerPayment && w.body.bankAccountId === 1 && w.body.hospitalId === 51), 'approval transmits payment and new hospital selection');
     await page.goto(`${base}/app/forms`);
-    await page.locator('.fb-role-choices').getByLabel('منشی', { exact: true }).check();
-    await page.locator('.fb-role-choices').getByLabel('کارشناس', { exact: true }).check();
+    /* W3.5 نقش‌ها را از هر ردیف به یک ماتریسِ فیلد×نقش برد (`.fb-matrix`، بسته
+       به‌طورِ پیش‌فرض)؛ `.fb-role-choices` دیگر وجود ندارد. برچسبِ هر تیک
+       «<فیلد> — <نقش>» است. */
+    const matrix = page.locator('.fb-matrix');
+    if (!(await matrix.evaluate((el) => el.open))) await matrix.locator('summary').click();
+    await matrix.getByLabel('شرح مشترک — منشی', { exact: true }).check();
+    await matrix.getByLabel('شرح مشترک — کارشناس', { exact: true }).check();
     check(form.fields[0].roles.includes('doctor') && form.fields[0].roles.includes('secretary') && form.fields[0].roles.includes('technician'), 'form builder preserves three simultaneously selected roles');
     check(await page.getByRole('button', { name: 'آماده‌سازی فرم پیگیری خودکار' }).count() === 1, 'follow-up preset discoverable from form builder');
     await page.goto(`${base}/app/dashboard?patient=1`);

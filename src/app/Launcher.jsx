@@ -5,57 +5,17 @@ import { useAuth } from './auth.jsx';
 import { useConfig } from './config.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import './launcher.css';
-import { ArrowStart, Back, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Form, Gear, Grid, Lock, Mail, Truck, Users, Wave } from '../ui/icons.jsx';
+import { ArrowStart, Back } from '../ui/icons.jsx';
+/* کاتالوگِ کاشی‌ها از W2.3 مشترک است — صفحهٔ «امروز» هم از همین می‌خواند. */
+import { HERO, useAllowedTools, track } from './tools.jsx';
 
-/* ── آیکون‌های خطی (lucide-style، stroke=currentColor) ── */
-
-
-/* min = حداقل سطحِ دسترسی (۱ بازدید … ۶ سوپرادمین) */
-const HERO = { key: 'dashboard', label: 'داشبورد مدیریت', desc: 'ثبت بیماران، مالی، گزارش‌ها', icon: Chart, ready: true, min: 5, to: '/app/dashboard' };
-const DAILY = [
-  { key: 'surgeon', label: 'پرتال جراح', icon: Wave, ready: true, min: 2, to: '/app/surgeon' },
-  { key: 'formgen', label: 'ثبت‌نامِ بیماران', icon: Form, ready: true, min: 5, to: '/app/intake' },
-  { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: true, min: 2, to: '/app/chat' },
-];
-const TOOLS = [
-  /* CRM زیرِ همان featureِ formgen (feature override): تفکیکِ مجوز وقتی معنا
-     دارد که داده‌اش از جای دیگری بیاید — فعلاً تماماً از ثبت‌نام‌هاست. */
-  { key: 'crm', feature: 'formgen', label: 'تحلیل و CRM', icon: Chart, tint: 'blue', ready: true, min: 5, to: '/app/crm' },
-  { key: 'reminders', feature: 'dashboard', label: 'یادآوری‌ها', icon: Clock, tint: 'teal', ready: true, min: 5, to: '/app/reminders' },
-  { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
-  { key: 'calendar', label: 'تقویم عمل‌ها', icon: Calendar, tint: 'green', ready: true, min: 4, to: '/app/calendar' },
-  /* برنامهٔ کاری — `docs/BOOKING.md`. کنارِ تقویم می‌نشیند چون هم‌خانواده‌اند:
-     یکی می‌گوید چه شد، آن یکی می‌گوید چه وقتی می‌شود. */
-  { key: 'schedule', label: 'برنامهٔ کاری', icon: Clock, tint: 'green', ready: true, min: 5, to: '/app/schedule' },
-  { key: 'dispatch', label: 'چینشِ نیروها', icon: Dispatch, tint: 'amber', ready: true, min: 4, to: '/app/dispatch' },
-  { key: 'letter', label: 'نامهٔ اداری', icon: Mail, tint: 'blue', ready: true, min: 5, to: '/app/letters' },
-  { key: 'notes', feature: 'dashboard', label: 'جستجوی بالینی', icon: Book, tint: 'teal', ready: true, min: 3, to: '/app/notes' },
-  { key: 'assistant', label: 'دستیارِ هوشمند', icon: Wave, tint: 'violet', ready: true, min: 5, to: '/app/assistant' },
-  { key: 'tech', label: 'پنل کارشناسی', icon: Wave, tint: 'teal', ready: true, min: 2, to: '/app/tech' },
-  { key: 'transport', label: 'پرتالِ حمل‌ونقل', icon: Truck, tint: 'amber', ready: true, min: 2, to: '/app/transport' },
-  { key: 'inventory', label: 'انبار', icon: Box, tint: 'green', ready: true, min: 3, to: '/app/inventory' },
-  { key: 'definitions', label: 'تعاریف پایه', icon: Book, tint: 'teal', ready: true, min: 5, to: '/app/definitions' },
-  { key: 'forms', label: 'فرم‌ساز', icon: Book, tint: 'violet', ready: true, min: 6, to: '/app/forms' },
-  { key: 'users', label: 'کاربران', icon: Users, tint: 'violet', ready: true, min: 6, to: '/app/users' },
-  { key: 'access', label: 'سطوحِ دسترسی', icon: Lock, tint: 'blue', ready: true, min: 6, to: '/app/access' },
-  { key: 'site', label: 'سایتِ معرفی', icon: Grid, tint: 'blue', ready: true, min: 5, to: '/app/site' },
-  { key: 'settings', label: 'تنظیماتِ شرکت', icon: Gear, tint: 'amber', ready: true, min: 6, to: '/app/settings' },
-];
-
-/* اسپاتلایتِ دنبال‌کنندهٔ اشاره‌گر روی کارتِ شیشه‌ای */
-function track(e) {
-  const el = e.currentTarget;
-  const r = el.getBoundingClientRect();
-  el.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
-  el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
-}
 
 export default function Launcher() {
   const [toast, setToast] = useState('');
   const { user } = useAuth();
   const { brandName } = useConfig();
   const navigate = useNavigate();
-  useEffect(() => { document.title = 'عمل‌یار — سامانه'; }, []);
+  useEffect(() => { document.title = 'همهٔ ابزارها — عمل‌یار'; }, []);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(''), 1600);
@@ -65,38 +25,9 @@ export default function Launcher() {
   const soon = (label) => setToast(`«${label}» به‌زودی`);
   const open = (t) => (t.to ? navigate(t.to) : soon(t.label));
 
-  // دسترسی‌ها از سرور (قابلِ‌تنظیم توسط سوپرادمین)؛ minِ کد فقط fallback است
   const lvl = user?.level ?? 0;
-  const [features, setFeatures] = useState(null); // key → {minLevel, enabled}
-  useEffect(() => {
-    let alive = true;
-    import('../lib/api.js').then(({ api }) =>
-      api('/features')
-        .then((rows) => {
-          if (alive) setFeatures(Object.fromEntries(rows.map((r) => [r.key, r])));
-        })
-        .catch(() => {}),
-    );
-    return () => { alive = false; };
-  }, []);
-  /**
-   * ⚠️ تصمیم از **سرور** می‌آید (`allowed`)، نه از حسابِ سطح در کلاینت.
-   *
-   * تا دیروز این‌جا `lvl >= min` حساب می‌شد و صلاحیتِ نقش اصلاً دیده نمی‌شد:
-   * رانندهٔ سطح ۲ کاشیِ «پنلِ کارشناسی» را می‌دید و کارشناسِ سطح ۲ کاشیِ
-   * «پرتالِ حمل‌ونقل» را، و هر کدام که می‌زد به صفحهٔ خالی می‌رسید.
-   *
-   * `min`ِ کد فقط تا رسیدنِ پاسخِ سرور به کار می‌آید تا کاشی‌ها نپرند.
-   */
-  const allowed = (t) => {
-    const f = features?.[t.feature ?? t.key];
-    if (f) return !!f.allowed;
-    return lvl >= t.min;
-  };
-  const showHero = allowed(HERO);
-  const daily = DAILY.filter(allowed);
-  const tools = TOOLS.filter(allowed);
-  const nothing = !showHero && daily.length === 0 && tools.length === 0;
+  const { hero, daily, tools, nothing } = useAllowedTools();
+  const showHero = !!hero;
 
   // بنرِ نصبِ PWA (اندروید/کروم — beforeinstallprompt)
   const [installEvt, setInstallEvt] = useState(null);
@@ -135,7 +66,8 @@ export default function Launcher() {
   }, [lvl]);
 
   return (
-    <div className="lx">
+    /* `theme-dark`: لانچر ویترین است و شیشه و نئونش را در هر تمی نگه می‌دارد (§۴.۸). */
+    <div className="lx theme-dark">
       <div className="lx-bg" aria-hidden="true" />
       <div className="lx-orbs" aria-hidden="true">
         <span className="orb o1" /><span className="orb o2" /><span className="orb o3" />

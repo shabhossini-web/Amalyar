@@ -74,9 +74,9 @@ export class TreasuryService {
    * بی‌سروصدا رد نمی‌کند بلکه خطای گویا می‌دهد: کاربری که تاریخِ اشتباه زده باید
    * بفهمد چرا، وگرنه فکر می‌کند سامانه خراب است.
    */
-  async assertOpen(when: Date | null | undefined) {
+  async assertOpen(when: Date | null | undefined, db: any = this.prisma) {
     if (!when) return;
-    const closed = await this.prisma.fiscalYear.findFirst({
+    const closed = await db.fiscalYear.findFirst({
       where: { closedAt: { not: null }, startsAt: { lte: when }, endsAt: { gte: when } },
       select: { title: true },
     });

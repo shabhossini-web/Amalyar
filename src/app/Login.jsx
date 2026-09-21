@@ -218,7 +218,7 @@ export default function Login() {
   // دامنهٔ ناشناخته: نه فرمِ ورود، نه ثبت‌نام — فقط یک پیامِ روشن.
   if (tenantMissing) {
     return (
-      <div className="lg">
+      <div className="lg theme-dark">
         <div className="lg-bg" aria-hidden="true" />
         <div className="lg-orbs" aria-hidden="true"><span className="orb o1" /><span className="orb o2" /></div>
         <div className="glass lg-card">
@@ -244,7 +244,7 @@ export default function Login() {
   }
 
   return (
-    <div className="lg">
+    <div className="lg theme-dark">
       <div className="lg-bg" aria-hidden="true" />
       <div className="lg-orbs" aria-hidden="true"><span className="orb o1" /><span className="orb o2" /></div>
 

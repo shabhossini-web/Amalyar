@@ -3,6 +3,7 @@ import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import { DEFAULT_VERTICAL, termsFor } from '../lib/terms.js';
 import { applyBrand } from '../lib/brand-palette.js';
+import { applyTheme, resolveTheme, storedTheme } from '../lib/theme.js';
 
 const Ctx = createContext(null);
 
@@ -16,7 +17,7 @@ const Ctx = createContext(null);
  * تا وقتی پاسخ نرسیده، واژگانِ پیش‌فرض استفاده می‌شوند — نه رشتهٔ خالی.
  */
 export function ConfigProvider({ children }) {
-  const [config, setConfig] = useState({ vertical: DEFAULT_VERTICAL, brandName: null, brand: {}, verticals: [] });
+  const [config, setConfig] = useState({ vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [] });
   /**
    * خطا نگه داشته می‌شود، بلعیده نمی‌شود.
    *
@@ -40,6 +41,15 @@ export function ConfigProvider({ children }) {
        * دقیقاً همان اولین فریم است که کاربر «رنگِ برنامه» می‌خواندش.
        */
       applyBrand(fresh?.brand?.color);
+      /**
+       * پیش‌فرضِ تم از **حوزه** می‌آید (مطب روشن، بقیه تیره — `DECISIONS.md` #۳)،
+       * ولی فقط تا وقتی کاربر خودش انتخابی نکرده باشد.
+       *
+       * ⚠️ `storedTheme()` شرطِ لازم است نه تزئین: بدونش هر بار که `/config`
+       * می‌رسید، انتخابِ کاربر با پیش‌فرضِ حوزه بازنویسی می‌شد — یعنی سوییچ کار
+       * می‌کرد و یک لحظه بعد خودش برمی‌گشت.
+       */
+      if (!storedTheme()) applyTheme(resolveTheme(fresh?.vertical));
       setError(null);
       return true;
     } catch (e) {
@@ -67,7 +77,7 @@ export function ConfigProvider({ children }) {
 /** واژگان + پیکربندی. خارج از Provider هم امن است (پیش‌فرض برمی‌گردد). */
 export function useConfig() {
   return useContext(Ctx) ?? {
-    vertical: DEFAULT_VERTICAL, brandName: null, brand: {}, verticals: [], error: null,
+    vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [], error: null,
     t: termsFor(DEFAULT_VERTICAL), reload: () => {},
   };
 }

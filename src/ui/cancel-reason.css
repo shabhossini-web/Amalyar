@@ -1,0 +1,70 @@
+/* پرسشِ دلیلِ لغو — کامپوننتِ مشترکِ داشبورد، میزِ پذیرش و تقویم.
+   ⚠️ پوسته‌اش همراهِ خودش می‌آید (قانون ۲۱): سه صفحهٔ مصرف‌کننده سه چانکِ جدا
+   هستند و هیچ‌کدام CSSِ آن دو تای دیگر را ندارد. اگر این قواعد در
+   `dashboard.css` می‌نشستند، همین پنجره روی تقویم بی‌استایل باز می‌شد. */
+.cr-overlay {
+  position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(var(--surface-rgb), 0.6);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.cr-sheet {
+  width: 100%; max-width: 460px; max-height: 92dvh; overflow-y: auto; cursor: default;
+  border-radius: 22px 22px 0 0; padding: 18px 18px calc(env(safe-area-inset-bottom, 0px) + 18px);
+  display: flex; flex-direction: column; gap: 12px;
+  background: rgba(var(--surface-rgb), 0.92);
+}
+@media (min-width: 640px) {
+  .cr-overlay { align-items: center; padding: 20px; }
+  .cr-sheet { border-radius: 22px; }
+}
+
+.cr-head h3 { margin: 0; font-size: 16px; font-weight: 900; color: var(--text1); }
+.cr-what { margin: 4px 0 0; font-size: 12.5px; color: var(--text2); }
+
+.cr-reasons { display: grid; gap: 6px; }
+.cr-reason {
+  display: flex; align-items: center; gap: 9px; cursor: pointer; position: relative;
+  padding: 10px 12px; border-radius: 12px; font-size: 13.5px; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+.cr-reason.on { border-color: rgba(var(--brand-2-rgb), 0.65); background: rgba(var(--brand-2-rgb), 0.12); }
+/* ورودیِ بومی می‌ماند (صفحه‌خوان و صفحه‌کلید رایگان) ولی دیده نمی‌شود؛ نشانه را
+   خودمان می‌کشیم چون رنگِ بومی با تم نمی‌چرخد. */
+.cr-reason input { position: absolute; opacity: 0; width: 0; height: 0; }
+.cr-reason i {
+  flex: none; width: 15px; height: 15px; border-radius: 50%;
+  border: 1.6px solid rgba(var(--veil-rgb), 0.35); display: block;
+}
+.cr-reason.on i { border-color: var(--brand-2); box-shadow: inset 0 0 0 3.5px var(--brand-2); }
+.cr-reason input:focus-visible ~ i { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+/* ⚠️ کلاس، نه `:has(input:disabled)` — وب‌ویوهای قدیمیِ اندروید `:has` ندارند
+   (همان یادداشتِ `accounting.css`) و آن‌جا حالتِ «در حالِ ثبت» بی‌نشانه می‌ماند. */
+.cr-reason.off { opacity: 0.6; cursor: default; }
+
+/* پیش‌نمایشِ پیامک — نقلِ متنِ واقعی، پس مثلِ نقلِ‌قول دیده می‌شود.
+   ⚠️ بوردرِ **فیزیکی** (قانون ۹): در RTL باید سمتِ راستِ کادر باشد. */
+.cr-sms {
+  margin: 0; padding: 9px 11px; border-radius: 10px; font-size: 12.5px; line-height: 1.75;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.05);
+  border-right: 2px solid rgba(var(--brand-2-rgb), 0.6);
+}
+.cr-sms b { color: var(--text1); font-weight: 800; }
+
+.cr-note { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
+.cr-note textarea {
+  font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 10px;
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.14);
+  outline: none; resize: vertical; width: 100%;
+}
+.cr-note textarea:focus { border-color: rgba(var(--brand-2-rgb), 0.6); }
+
+.cr-err { margin: 0; font-size: 12.5px; color: var(--red-text); }
+
+.cr-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+.cr-btn {
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  padding: 10px 16px; border-radius: 12px; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.07); border: 1px solid rgba(var(--veil-rgb), 0.16);
+}
+.cr-btn.danger { color: var(--red-text); background: rgba(220, 38, 38, 0.16); border-color: rgba(220, 38, 38, 0.45); }
+.cr-btn:disabled { opacity: 0.5; cursor: default; }

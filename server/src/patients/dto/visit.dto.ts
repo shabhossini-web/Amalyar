@@ -1,3 +1,4 @@
+import { CANCEL_REASON_KEYS } from '../../common/cancel-reasons';
 import {
   IsArray,
   IsBoolean,
@@ -166,9 +167,9 @@ export class CreateVisitDto {
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   opEndTime?: string;
 
-  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
-  techArriveTime?: string;
-
+  /* ⚠️ `techArriveTime` عمداً نیست (W3.8/U7): ساعتِ حضور از برنامهٔ چینش
+     (`hospital_duties`) می‌آید و تنها نویسنده‌اش `syncVisitDuty()` است.
+     `whitelist`ِ ValidationPipe مقدارِ کلاینتِ قدیمی را بی‌صدا دور می‌ریزد. */
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   cargoDueTime?: string;
 
@@ -337,9 +338,6 @@ export class UpdateVisitDto {
   opEndTime?: string;
 
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
-  techArriveTime?: string;
-
-  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   cargoDueTime?: string;
 
   @IsOptional()
@@ -371,13 +369,19 @@ export class VisitTimesDto {
   opEndTime?: string;
 
   @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
-  techArriveTime?: string;
-
-  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
   cargoDueTime?: string;
 }
 
 export class VisitStatusDto {
   @IsIn(['pending', 'done', 'cancelled'], { message: 'وضعیت نامعتبر است' })
   opStatus!: string;
+
+  /* ⚠️ اجباریِ **مشروط**: فقط هنگامِ لغو. `IsIn` این‌جا شکلِ ورودی را می‌سنجد و
+     خودِ اجباری‌بودن در سرویس چک می‌شود، چون به `opStatus` وابسته است. */
+  @IsOptional() @IsIn(CANCEL_REASON_KEYS, { message: 'دلیلِ لغو نامعتبر است' })
+  cancelReason?: string;
+
+  /** یادداشتِ داخلی — هرگز برای بیمار فرستاده نمی‌شود. */
+  @IsOptional() @IsString() @MaxLength(400)
+  cancelNote?: string;
 }

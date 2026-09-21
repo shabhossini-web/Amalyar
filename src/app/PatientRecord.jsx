@@ -2,15 +2,26 @@ import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
+import { api, apiStream, apiUpload } from '../lib/api.js';
+import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
+import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
+import { KINDS, kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
+import { fmtMoney } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
 import JDate from './JDate.jsx';
+import './work.css';
 import './record.css';
-import { Alert, Back, Close, Download, LinkIcon, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import {
+  Alert, Back, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
+  Money, Pencil, Phone, Plus, Send, Trash,
+} from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import { useConfig } from './config.jsx';
+import WorkRow from './WorkRow.jsx';
+import { WORK_CHANGED } from './WorkBell.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
@@ -35,45 +46,31 @@ const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', can
  * ناشناخته با **کلیدِ خودش** نشان داده می‌شود نه با «عمل»: برچسبِ حدسی
  * دروغ می‌گوید.
  */
-const VISIT_KINDS = { surgery: 'عمل', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره' };
-const kindLabel = (k, defs) => defs?.[k] ?? VISIT_KINDS[k] ?? k ?? '—';
+/**
+ * ⚠️ نوعِ **شناخته‌شده** با نامِ خودش می‌آید (عمل جراحی / ویزیت / پیگیری /
+ * مشاوره)، نه با عنوانِ فرمش: مالک دید همهٔ مراجعه‌ها «فرمِ جراحی» و نوارِ مرحله
+ * برای عمل هم «ویزیت» نوشته‌اند — عمل جراحی اسمش عمل جراحی است. عنوانِ فرم فقط
+ * برای نوعِ سفارشی‌ای که در `KINDS` نیست، و روی برچسب به‌صورتِ tooltip می‌ماند.
+ */
+const kindLabel = (k, defs) => (KINDS[k] ? kindOf(k).label : (defs?.[k] ?? k ?? '—'));
+
+/** مقصدِ یک ردیفِ خطِ زمان — پاپ‌آپِ **خودش**، نه فرمِ کلی (بازخوردِ مالک). */
+const tlTarget = (it) => {
+  if (it.type === 'visit' && it.refId) return { type: 'visit', id: it.refId };
+  if (it.type === 'order') {
+    const m = /^(\w+)Order$/.exec(it.refType ?? '');
+    if (m && it.refId) return { type: 'order', kind: m[1], id: it.refId };
+  }
+  if (it.type === 'reminder' && it.refId) return { type: 'reminder', id: it.refId, item: it };
+  if (it.type === 'appointment' && it.refId) return { type: 'appointment', id: it.refId, item: it };
+  if (it.visitId) return { type: 'visit', id: it.visitId };
+  return null;
+};
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 const fmtSize = (b) => (b < 1024 ? `${faNum(b)} بایت`
   : b < 1024 * 1024 ? `${faNum((b / 1024).toFixed(0))} کیلوبایت`
   : `${faNum((b / 1024 / 1024).toFixed(1))} مگابایت`);
-
-/* ── پیش‌نمایشِ عکس: فایل پشتِ توکن است، پس باید blob گرفته شود ── */
-function DocThumb({ id, alt }) {
-  const [url, setUrl] = useState(null);
-  useEffect(() => {
-    let alive = true;
-    let made = null;
-    apiBlobUrl(`/patients/documents/${id}/file`)
-      .then((u) => { if (alive) { made = u; setUrl(u); } else URL.revokeObjectURL(u); })
-      .catch(() => {});
-    // بدونِ revoke، هر بار بازکردنِ پرونده یک blob در حافظه جا می‌گذارد.
-    return () => { alive = false; if (made) URL.revokeObjectURL(made); };
-  }, [id]);
-  return url ? <img className="rc-thumb" src={url} alt={alt} /> : <div className="rc-thumb rc-thumb-ph" />;
-}
-
-/* ── دانلود/بازکردنِ مدرک با توکن ── */
-async function openDoc(doc, onErr) {
-  try {
-    const url = await apiBlobUrl(`/patients/documents/${doc.id}/file`);
-    const a = document.createElement('a');
-    a.href = url;
-    if (!doc.isImage) a.download = doc.fileName;
-    else a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  } catch (e) {
-    onErr(e.message);
-  }
-}
 
 /* ══════════════ تبِ خلاصه/پروفایل ══════════════ */
 function ProfileTab({ rec, onSave, toast }) {
@@ -188,14 +185,45 @@ function ProfileTab({ rec, onSave, toast }) {
  * zipکردنی نیست: اگر کلاینت تعریفِ فرم را جدا می‌گرفت، روزی که فیلدی حذف شود
  * پاسخِ یتیم زیرِ برچسبِ فیلدِ بعدی می‌نشست — و هیچ‌کس نمی‌فهمید.
  */
-/** مقدارِ پاسخ به متنِ خواندنی — ارقام فارسی، آرایه با «،»، بولی به بله/خیر. */
+/** مقدارِ پاسخ به متنِ خواندنی — ارقام فارسی، بولی به بله/خیر. */
 function answerText(v) {
   if (typeof v === 'boolean') return v ? 'بله' : 'خیر';
-  if (Array.isArray(v)) return faNum(v.join('، '));
-  return faNum(String(v));
+  return faNum(String(v ?? ''));
 }
 
-function FormsTab({ rec }) {
+/**
+ * پاسخِ یک فیلد — W0.4/D03b.
+ *
+ * ⚠️ این‌جا قبلاً `faNum(v.join('، '))` بود و روی آرایهٔ `{id,name}`ِ عکس یا
+ * `{url,title}`ِ لینک «[object Object]» می‌داد. حالا سرور خودش هم متنِ خوانا
+ * می‌دهد هم `items`ِ بازشدنی (همان `answerParts`).
+ *
+ * ⚠️ لینکِ بیرونی `rel="noopener noreferrer"` می‌گیرد و مدرک با `openDoc`
+ * باز می‌شود، نه با نشانیِ مستقیم: فایلِ پزشکی پشتِ گاردهای پرونده می‌ماند.
+ * اگر سرور `items` نداد (نسخهٔ قدیمی)، همان متن نشان داده می‌شود.
+ */
+function AnswerValue({ answer, onErr }) {
+  const items = answer.items ?? [];
+  if (!items.length) return <>{answerText(answer.value)}</>;
+  return (
+    <span className="rc-ans-items">
+      {items.map((it, i) => (
+        <Fragment key={`${it.kind}-${it.url ?? it.docId}-${i}`}>
+          {i > 0 && '، '}
+          {it.kind === 'link' ? (
+            <a href={it.url} target="_blank" rel="noopener noreferrer" dir="ltr">{it.title}</a>
+          ) : (
+            <button type="button" className="rc-ans-doc" onClick={() => openDoc({ id: it.docId }, onErr)}>
+              {it.title}
+            </button>
+          )}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+function FormsTab({ rec, onErr }) {
   const rows = rec.attachedForms ?? [];
   if (!rows.length) return <div className="df-empty">فرمی به این پرونده نچسبیده است</div>;
   return (
@@ -225,7 +253,7 @@ function FormsTab({ rec }) {
                       در اسکرین‌شات دیدمش — «۲۰ مرداد ۱۴۰۵» فارسی بود و
                       امتیاز کنارش `5`. `bool` هم عدد نیست ولی «بله/خیر»
                       خواناتر از `true` است. */}
-                  <dd>{answerText(a.value)}</dd>
+                  <dd><AnswerValue answer={a} onErr={onErr} /></dd>
                 </Fragment>
               ))}
             </dl>
@@ -236,20 +264,24 @@ function FormsTab({ rec }) {
   );
 }
 
-function VisitsTab({ rec }) {
+function VisitsTab({ rec, onErr, onOpen }) {
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
     <div className="df-list">
       {rec.visits.map((v) => (
         <div key={v.id} className="df-row">
           <div className="df-row-main">
-            <b>
-              <span dir="ltr">{v.code}</span>
-              <i className="rc-kind" style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined}>
-                {v.kindTitle || kindLabel(v.kind, rec.kindTitles)}
-              </i>
-              {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
-            </b>
+            {/* سرآیندِ کارت دکمه است: مراجعه در **همین صفحه** پاپ‌آپ می‌شود، نه با
+                پرش به داشبورد (بازخوردِ مالک: «تو پرونده رو مراجعه‌ها بزنیم پاپ‌آپ باز شه»). */}
+            <button type="button" className="rc-visit-btn" onClick={() => onOpen({ type: 'visit', id: v.id })} title="بازکردنِ فرمِ این مراجعه">
+              <b>
+                <span dir="ltr">{v.code}</span>
+                <i className="rc-kind" style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined} title={v.kindTitle || undefined}>
+                  {kindLabel(v.kind, rec.kindTitles)}
+                </i>
+                {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
+              </b>
+            </button>
             <small>
               {[v.surgeonName && `جراح: ${v.surgeonName}`, v.hospitalName, v.techName && `کارشناس: ${v.techName}`,
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}
@@ -265,7 +297,7 @@ function VisitsTab({ rec }) {
                 {v.answers.map((a) => (
                   <div key={a.key}>
                     <dt>{a.label}</dt>
-                    <dd>{a.value}</dd>
+                    <dd><AnswerValue answer={a} onErr={onErr} /></dd>
                   </div>
                 ))}
               </dl>
@@ -360,6 +392,10 @@ function DocsTab({ rec, reload, toast }) {
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
      فایلش را کسی ندارد؛ دسته/عنوان/تاریخ از همان فیلدهای بالا می‌آید. */
   const [linkUrl, setLinkUrl] = useState('');
+  /* ورودِ پورتالِ لینک (پکس/آزمایشگاه) — پشتِ یک قفل، چون بیشترِ لینک‌ها لازمش ندارند. */
+  const [linkAuth, setLinkAuth] = useState(false);
+  const [linkUser, setLinkUser] = useState('');
+  const [linkPass, setLinkPass] = useState('');
   const addLink = async () => {
     const url = linkUrl.trim();
     if (!url) return;
@@ -378,9 +414,11 @@ function DocsTab({ rec, reload, toast }) {
           ...(title.trim() ? { title: title.trim() } : {}),
           ...(visitId ? { visitId: Number(visitId) } : {}),
           ...(takenAt ? { takenAt } : {}),
+          ...(linkAuth && linkUser.trim() ? { user: linkUser.trim() } : {}),
+          ...(linkAuth && linkPass.trim() ? { pass: linkPass.trim() } : {}),
         },
       });
-      setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId('');
+      setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId(''); setLinkUser(''); setLinkPass(''); setLinkAuth(false);
       await reload();
       toast('لینک ثبت شد ✓');
     } catch (e) {
@@ -446,10 +484,22 @@ function DocsTab({ rec, reload, toast }) {
             disabled={busy}
             onKeyDown={(e) => { if (e.key === 'Enter') addLink(); }}
           />
+          <button
+            type="button" className={`rc-linkauth${linkAuth ? ' on' : ''}`} title="نامِ کاربری و رمزِ پورتال"
+            aria-pressed={linkAuth} onClick={() => setLinkAuth((v) => !v)} disabled={busy}
+          >
+            <Lock width="14" height="14" />
+          </button>
           <button type="button" className="df-save" disabled={busy || !linkUrl.trim()} onClick={addLink}>
             ثبتِ لینک
           </button>
         </div>
+        {linkAuth && (
+          <div className="rc-linkcred">
+            <input dir="ltr" autoComplete="off" value={linkUser} onChange={(e) => setLinkUser(e.target.value)} placeholder="نامِ کاربری" disabled={busy} />
+            <input dir="ltr" autoComplete="off" value={linkPass} onChange={(e) => setLinkPass(e.target.value)} placeholder="رمز" disabled={busy} />
+          </div>
+        )}
       </div>
 
       {present.length > 1 && (
@@ -468,12 +518,13 @@ function DocsTab({ rec, reload, toast }) {
               {d.isLink
                 ? <div className="rc-thumb rc-thumb-file"><LinkIcon width="16" height="16" /></div>
                 : d.isImage
-                  ? <DocThumb id={d.id} alt={d.title || d.fileName} />
+                  ? <DocThumb id={d.id} alt={d.title || d.fileName} className="rc-thumb" />
                   : <div className="rc-thumb rc-thumb-file">{(d.fileName.split('.').pop() || '?').slice(0, 4)}</div>}
               <div className="rc-doc-main">
                 <b>{d.title || d.fileName}</b>
                 <small>{CATEGORIES[d.category] ?? d.category} · {d.isLink ? 'لینک' : fmtSize(d.size)}{d.takenAt ? ` · ${faDate(d.takenAt)}` : ''}</small>
                 {d.visitId && <small className="rc-doc-visit">{rec.visits.find((v) => v.id === d.visitId)?.code}</small>}
+                {d.isLink && (d.externalUser || d.externalPass) && <DocCred user={d.externalUser} pass={d.externalPass} />}
               </div>
               <div className="df-acts">
                 {d.isLink ? (
@@ -491,6 +542,39 @@ function DocsTab({ rec, reload, toast }) {
         </div>
       )}
     </>
+  );
+}
+
+/** ورودِ پورتالِ مدرکِ لینکی — با کپیِ یک‌ضرب، چون همکار همین را می‌خواهد نه خواندنِ حرف‌به‌حرف. */
+function DocCred({ user, pass }) {
+  const [copied, setCopied] = useState('');
+  const copy = async (what, text) => {
+    try {
+      await navigator.clipboard.writeText(String(text));
+      setCopied(what);
+      setTimeout(() => setCopied(''), 1600);
+    } catch { /* بدونِ HTTPS یا با ردِ کاربر کار نمی‌کند — متن خوانا هست. */ }
+  };
+  return (
+    <small className="rc-doc-cred">
+      <Lock width="11" height="11" />
+      {user && (
+        <>
+          <code dir="ltr">{user}</code>
+          <button type="button" onClick={() => copy('user', user)} aria-label="کپیِ نامِ کاربری">
+            {copied === 'user' ? <Check width="11" height="11" /> : <Copy width="11" height="11" />}
+          </button>
+        </>
+      )}
+      {pass && (
+        <>
+          <code dir="ltr">{pass}</code>
+          <button type="button" onClick={() => copy('pass', pass)} aria-label="کپیِ رمز">
+            {copied === 'pass' ? <Check width="11" height="11" /> : <Copy width="11" height="11" />}
+          </button>
+        </>
+      )}
+    </small>
   );
 }
 
@@ -821,12 +905,349 @@ function NotesTab({ rec, reload, toast }) {
   );
 }
 
+
+/* ══════════════ پروندهٔ زنده (W3.1، §۴.۳ سند) ══════════════
+
+   چهار پرسشی که تا دیروز هیچ صفحه‌ای جواب نمی‌داد: **الان کجاییم · چه شده ·
+   چه مانده · نوبتِ کیست**. تبِ پیش‌فرضِ «خلاصه» یک فرمِ ویرایشِ ۱۹ فیلدی بود؛
+   کسی که پرونده را باز می‌کرد اول باید یک فرم را می‌خواند تا بفهمد چه خبر است.
+
+   حالا پاسخ بالاست و تب‌ها ثانویه‌اند. داده از `GET /patients/:id/live` می‌آید
+   که همه‌چیزش **مشتقِ سرور** است (قانون ۱۵) — این‌جا هیچ فرمولی نیست. */
+
+/**
+ * جای خالیِ واژهٔ حوزه‌ای را پُر می‌کند (قانون ۲۴). سرور `{visit}` می‌فرستد چون
+ * واژه‌نامه فقط یک نسخه دارد و آن `src/lib/terms.js` است.
+ */
+const withTerm = (str, t) => (str ? String(str).replaceAll('{visit}', t.visit).replaceAll('{visits}', t.visits) : str);
+
+/** نگاشتِ نوعِ ردیفِ خطِ زمان به آیکون و برچسب — تک‌منبع. */
+const TL_META = {
+  visit: { Icon: Doctor, fa: 'مراجعه' },
+  appointment: { Icon: Calendar, fa: 'نوبت' },
+  order: { Icon: Form, fa: 'سفارش' },
+  document: { Icon: Book, fa: 'مدرک' },
+  note: { Icon: Pencil, fa: 'شرح' },
+  reminder: { Icon: Send, fa: 'یادآوری' },
+};
+
+/**
+ * نوارِ «الان کجاییم» — شش گام که سرور از خودِ داده مشتق کرده است.
+ *
+ * ⚠️ گامِ `skipped` **محو** می‌شود و حذف نمی‌شود: «این بیمار نوبت نگرفت» خودش
+ * یک واقعیت است؛ اگر گام را برداریم، نوار برای هر بیمار شکلِ دیگری دارد و
+ * دیگر نمی‌شود با یک نگاه فهمید کجای مسیریم.
+ */
+/** عنوانِ گامِ «مراجعه» از نوعِ دوره (عمل جراحی / ویزیت)؛ بقیهٔ گام‌ها واژهٔ حوزه. */
+const stepTitle = (s, t) => (s.key === 'visit' && s.kind && KINDS[s.kind] ? kindOf(s.kind).label : withTerm(s.title, t));
+
+function StageBar({ stage, t }) {
+  if (!stage?.steps?.length) return null;
+  const cur = stage.key ? stage.steps.find((s) => s.key === stage.key) : null;
+  return (
+    <section className="rc-stage" aria-label="الان کجاییم">
+      <p className="rc-stage-now">
+        {/* ⚠️ متنِ سرور از `faNum` رد می‌شود: شمارش‌ها («۲ نتیجه…») آن‌جا عددِ
+            لاتین‌اند و کلِ صفحه فارسی است. قالبِ **پول** این‌جا نمی‌آید — آن
+            `fmtMoney` است و به همین دلیل سرور هیچ مبلغی را متن نمی‌کند. */}
+        <b>الان کجاییم:</b> {faNum(cur ? stepTitle(cur, t) : withTerm(stage.title, t))}
+        {stage.detail && <i> — {faNum(withTerm(stage.detail, t))}</i>}
+      </p>
+      <ol className="rc-steps">
+        {stage.steps.map((s) => (
+          <li key={s.key} className={`rc-step is-${s.state}`}>
+            <span className="rc-step-dot" aria-hidden="true">
+              {s.state === 'done' ? <Check width="11" height="11" /> : null}
+            </span>
+            <span className="rc-step-txt">
+              <b>{stepTitle(s, t)}</b>
+              {s.detail && <i>{faNum(withTerm(s.detail, t))}</i>}
+              {s.at && <time dateTime={s.at}>{faDate(s.at)}</time>}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/**
+ * «چه مانده» — کارِ بعدی، نوبتِ پیشِ رو، نتیجه‌های بازِ منتظرِ بررسی، و ماندهٔ مالی.
+ *
+ * ⚠️ کارت وقتی هیچ‌کدام نیست **اصلاً رندر نمی‌شود**. یک کارتِ «چیزی نمانده» در
+ * هر بار بازکردنِ پرونده فقط فضای بالای صفحه را می‌خورد و چشم یاد می‌گیرد
+ * نادیده‌اش بگیرد — همان روزی که واقعاً کاری باشد هم دیده نمی‌شود.
+ */
+function NextUp({ live, onGo, onActed, toast, onOpen }) {
+  const [busy, setBusy] = useState(0);
+  const w = live.nextWork;
+  const appt = live.upcoming?.[0] ?? null;
+  const review = (live.openOrders ?? []).filter((o) => o.awaitingReview);
+  const due = live.billing?.due > 0 ? live.billing.due : 0;
+  if (!w && !appt && !review.length && !due) return null;
+
+  /* ⚠️ همان مسیرِ صفحهٔ «امروز»: `PATCH /work/:id` + رویدادِ `WORK_CHANGED` تا
+     زنگِ بالای پوسته هم تازه شود. کارتِ کارِ بعدی بدونِ دکمه فقط خبررسان است و
+     §۴.۳ بندِ ۳ صریحاً «دکمهٔ اصلی» می‌خواهد. */
+  const act = async (item, action, body = {}) => {
+    setBusy(item.id);
+    try {
+      await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
+      window.dispatchEvent(new Event(WORK_CHANGED));
+      toast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
+      await onActed();
+    } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
+  };
+
+  return (
+    <section className="rc-next" aria-label="چه مانده">
+      {w && (
+        <article className={`rc-next-main${w.overdue ? ' is-late' : ''}`}>
+          <h3><Clock width="13" height="13" /> کارِ بعدی</h3>
+          {/* ردیفِ کار از `WorkRow` می‌آید تا نوعِ کار، مالک و دکمه‌ها با زنگِ
+              اعلان و صفحهٔ «کارهای من» یکی بمانند — نه نسخهٔ سومِ همان کارت. */}
+          <ul className="wk-list">
+            <WorkRow w={w} onAct={act} busy={busy} compact onOpen={workTarget(w) ? () => onOpen(workTarget(w)) : undefined} />
+          </ul>
+          <p className="rc-next-meta">
+            <span>{w.ownerAccountId ? 'واگذارشده' : w.ownerRoleFa ? `به‌عهدهٔ ${w.ownerRoleFa}` : 'بی‌مسئول'}</span>
+            {live.counts.work > 1 && (
+              <Link to="/app/work" className="rc-next-more">{faNum(live.counts.work - 1)} کارِ دیگر</Link>
+            )}
+          </p>
+        </article>
+      )}
+      <div className="rc-next-side">
+        {appt && (
+          <p className="rc-chip"><Calendar width="13" height="13" />
+            نوبتِ بعدی: <b>{faDate(appt.date)}{appt.time ? ` — ${faNum(appt.time)}` : ''}</b>
+            <i>{appt.statusFa}{appt.doctorName ? ` · ${appt.doctorName}` : ''}</i>
+          </p>
+        )}
+        {review.length > 0 && (
+          /* هر نتیجه یک دکمه: هشدار باید بگوید **کدام** سفارش و با کلیک شیتِ همان
+             سفارش (با پاسخِ بیمار و دکمهٔ بررسی) باز شود — نه فقط یک شمارنده. */
+          <div className="rc-chip is-warn rc-chip-list" role="group" aria-label="نتیجه‌های بررسی‌نشده">
+            <span><Alert size={13} /> <b>{faNum(review.length)} نتیجه</b> آمده و بررسی نشده — برای بررسی بزنید</span>
+            {review.map((o) => (
+              <button key={`${o.kind}-${o.id}`} type="button" onClick={() => onOpen({ type: 'order', kind: o.kind, id: o.id })}>
+                {o.kindFa}{o.summary ? ` — ${o.summary}` : ''}{o.visitCode ? ` · ${o.visitCode}` : ''}
+              </button>
+            ))}
+          </div>
+        )}
+        {due > 0 && (
+          <button type="button" className="rc-chip is-money" onClick={() => onGo('visits')}>
+            <Money width="13" height="13" /> ماندهٔ مالی: <b>{fmtMoney(due)}</b>
+            <i>از {fmtMoney(live.billing.total)} — {faNum(live.billing.paidPct)}٪ پرداخت شده</i>
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * خطِ زمانِ واحد — مراجعه، نوبت، سفارش، مدرک، شرح، یادآوری در یک ستون.
+ *
+ * ⚠️ هر ردیفی که به جایی می‌رود **کلیک‌پذیر** است و ردیفی که نمی‌رود، نه.
+ * دکمه‌نمایی که کاری نمی‌کند از نبودنِ دکمه بدتر است (باگِ واقعیِ همین ریپو:
+ * لینکِ «بازکردن در داشبورد» که هیچ‌کاری نمی‌کرد).
+ */
+function Timeline({ live, onGo, t, onOpen }) {
+  const [all, setAll] = useState(false);
+  const tl = live.timeline;
+  if (!tl?.items?.length) return null;
+  const items = all ? tl.items : tl.items.slice(0, 12);
+
+  return (
+    <section className="rc-tl" aria-label="خطِ زمانِ پرونده">
+      <h3>چه شده</h3>
+      <ol>
+        {items.map((it) => {
+          const meta = TL_META[it.type] ?? TL_META.document;
+          const inner = (
+            <>
+              <span className="rc-tl-ico" style={it.color ? { '--k': `var(--kind-${it.color})` } : undefined}>
+                <meta.Icon width="13" height="13" />
+              </span>
+              <span className="rc-tl-body">
+                {/* نوعِ شرح داده است نه برچسب؛ نگاشتِ فارسی‌اش همین بالا در
+                    `NOTE_KINDS` هست و دو نسخه‌کردنش فقط واگرایی می‌آورد. */}
+                <b>
+                  {it.type === 'note' ? (NOTE_KINDS[it.title] ?? it.title)
+                    : it.type === 'visit' && it.kind && KINDS[it.kind]
+                      ? <>{kindOf(it.kind).label} <span dir="ltr">{it.code ?? ''}</span></>
+                      : withTerm(it.title, t)}
+                </b>
+                {it.detail && <i>{faNum(it.detail)}</i>}
+              </span>
+              <span className="rc-tl-side">
+                {it.stateFa && <em className={`rc-tl-state is-${it.state ?? 'none'}`}>{faNum(it.stateFa)}</em>}
+                <time dateTime={it.at}>{faDate(it.at)}</time>
+              </span>
+            </>
+          );
+          /* مقصد: پاپ‌آپِ **خودِ** ردیف (مراجعه، سفارش، یادآوری، نوبت)؛ مدرک/شرح →
+             تبِ خودش؛ بقیه بی‌لینک. تا دیروز هر ردیفِ مراجعه‌دار به فرمِ کلیِ
+             داشبورد می‌پرید (بازخوردِ مالک). */
+          const target = tlTarget(it);
+          if (target) {
+            return <li key={it.id} className="rc-tl-row is-link"><button type="button" onClick={() => onOpen(target)}>{inner}</button></li>;
+          }
+          if (it.type === 'document' || it.type === 'note') {
+            return (
+              <li key={it.id} className="rc-tl-row is-link">
+                <button type="button" onClick={() => onGo(it.type === 'document' ? 'docs' : 'notes')}>{inner}</button>
+              </li>
+            );
+          }
+          return <li key={it.id} className="rc-tl-row"><div>{inner}</div></li>;
+        })}
+      </ol>
+      {tl.items.length > 12 && (
+        <button type="button" className="rc-tl-more" onClick={() => setAll(!all)}>
+          {all ? 'کوتاه کن' : `${faNum(tl.items.length - 12)} رویدادِ قدیمی‌تر`}
+        </button>
+      )}
+      {/* ⚠️ بریدنِ بی‌صدا ممنوع: اگر سرور سقف زده، صفحه باید بگوید — و متنش
+          نباید با دکمهٔ «رویدادِ قدیمی‌تر» تناقض داشته باشد: آن دکمه همین
+          فهرست را باز می‌کند، این جمله می‌گوید خودِ فهرست همه‌چیز نیست. */}
+      {tl.truncated && (
+        <p className="rc-tl-cut">{faNum(tl.total)} رویدادِ اخیر خوانده شده؛ قدیمی‌تر از این‌ها در فهرست نیست.</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * اقدام‌های همیشه‌دردسترس (§۴.۳ بندِ ۵).
+ *
+ * ⚠️ فقط اقدام‌هایی که **واقعاً کار می‌کنند**: مراجعهٔ جدید (با پیش‌پرشدنِ
+ * بیمار)، ویرایشِ مشخصات، لینکِ پرونده، پیامکِ لینک، و تماس. نوبت‌دهیِ
+ * بیمارمحور هنوز endpointِ خودش را ندارد (W3.3) و دکمه‌ای که به صفحهٔ
+ * بی‌خبر از بیمار می‌رود، در نمی‌زند — به دیوار می‌زند.
+ */
+/**
+ * **دورهٔ درمان** (W4.1) — «بیمارِ دوره‌دار مراحلش را با مسئول و موعد ببیند».
+ *
+ * ⚠️ فقط وقتی دیده می‌شود که دوره‌ای وجود داشته باشد. ماژولِ `pathway` روی
+ * نصب روشن است ولی تا کسی دوره‌ای **شروع** نکند این بخش اصلاً رندر نمی‌شود —
+ * نصبی که امروز کار می‌کند نباید یک‌شبه یک کارتِ خالیِ تازه ببیند.
+ *
+ * ⚠️ ۴۰۳ (ماژول خاموش یا بی‌مجوز) **سکوت** است نه خطا: مسیرِ درمان بخشِ
+ * اختیاریِ پرونده است و کاربری که دسترسی ندارد نباید بنرِ قرمز ببیند.
+ */
+function Pathway({ patientId, toast }) {
+  const [rows, setRows] = useState(null);
+  const [busy, setBusy] = useState(0);
+  const load = useCallback(
+    () => api(`/pathway/episodes?patientId=${patientId}`).then(setRows).catch(() => setRows([])),
+    [patientId],
+  );
+  useEffect(() => { load(); }, [load]);
+  if (!rows?.length) return null;
+
+  const mark = async (step, status) => {
+    setBusy(step.id);
+    try {
+      await api(`/pathway/steps/${step.id}`, { method: 'PATCH', body: { status } });
+      toast(status === 'done' ? 'مرحله انجام شد ✓' : 'مرحله رد شد');
+      await load();
+    } catch (e) { toast(e?.message || 'ثبت نشد', true); } finally { setBusy(0); }
+  };
+
+  return (
+    <>
+      {rows.map((ep) => (
+        <section key={ep.id} className="rc-path" aria-label={`دورهٔ ${ep.title}`}>
+          <header className="rc-path-head">
+            <b>{ep.title}</b>
+            <span className={`rc-path-st st-${ep.status}`}>{ep.statusFa}</span>
+            {/* درصد از سرور می‌آید (قانون ۱۵)؛ رابط فرمولی حساب نمی‌کند. */}
+            <small>{faNum(ep.counts.done)} از {faNum(ep.counts.total)} مرحله</small>
+          </header>
+          <div className="rc-path-bar" role="img"
+               aria-label={`${faNum(ep.percent)} درصدِ دوره انجام شده`}>
+            <i style={{ width: `${ep.percent}%` }} />
+          </div>
+          <ol className="rc-path-steps">
+            {ep.steps.map((st) => (
+              <li key={st.id} className={`rc-path-step st-${st.status}`}>
+                <div className="rc-path-when">
+                  {st.dueAt ? <b>{faDate(st.dueAt)}</b> : <b className="none">—</b>}
+                  {/* «مسئول» یعنی نقش، مگر شخصِ مشخصی تعیین شده باشد. */}
+                  <small>{st.ownerName || st.ownerRoleFa || '—'}</small>
+                </div>
+                <div className="rc-path-main">
+                  <b>{st.title}</b>
+                  {st.notes && <small>{st.notes}</small>}
+                </div>
+                {ep.status === 'active' && st.status === 'pending' ? (
+                  <div className="rc-path-acts">
+                    <button type="button" disabled={busy === st.id} onClick={() => mark(st, 'done')}>انجام شد</button>
+                    <button type="button" className="ghost" disabled={busy === st.id} onClick={() => mark(st, 'skipped')}>رد</button>
+                  </div>
+                ) : <span className="rc-path-tag">{st.statusFa}</span>}
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </>
+  );
+}
+
+function RecordActions({ rec, onEdit, onNew, toast, t }) {
+  const [busy, setBusy] = useState('');
+
+  const portalLink = async () => {
+    setBusy('link');
+    try {
+      const r = await api(`/patients/${rec.id}/portal-link`, { method: 'POST' });
+      /* clipboard در http یا بدونِ اجازه throw می‌کند — آن‌وقت دستِ‌کم خودِ
+         نشانی نشان داده می‌شود تا کاربر دستی بردارد. */
+      try { await navigator.clipboard.writeText(r.url); toast('لینکِ پرونده کپی شد'); }
+      catch { toast(r.url); }
+    } catch (e) { toast(e.message, true); } finally { setBusy(''); }
+  };
+
+  const portalSms = async () => {
+    setBusy('sms');
+    try { await api(`/patients/${rec.id}/portal-sms`, { method: 'POST' }); toast('لینک برای بیمار پیامک شد'); }
+    catch (e) { toast(e.message, true); } finally { setBusy(''); }
+  };
+
+  return (
+    <div className="rc-actions">
+      {/* فرم در **همین صفحه** پاپ‌آپ می‌شود؛ تا دیروز به داشبورد می‌پرید و پرونده
+          از دست می‌رفت (بازخوردِ مالک). */}
+      <button type="button" className="rc-act is-main" onClick={onNew}><Plus width="13" height="13" /> {t.visitNew}</button>
+      <button type="button" className="rc-act" onClick={onEdit}><Pencil width="13" height="13" /> ویرایشِ مشخصات</button>
+      <button type="button" className="rc-act" onClick={portalLink} disabled={busy === 'link'}>
+        <LinkIcon width="13" height="13" /> {busy === 'link' ? 'یک لحظه…' : 'لینکِ پرونده'}
+      </button>
+      <button type="button" className="rc-act" onClick={portalSms} disabled={busy === 'sms'}>
+        <Send width="13" height="13" /> {busy === 'sms' ? 'در حالِ ارسال…' : 'پیامکِ لینک'}
+      </button>
+      {rec.phone && <a className="rc-act" href={`tel:${rec.phone}`}><Phone width="13" height="13" /> تماس</a>}
+    </div>
+  );
+}
+
 /* ══════════════ صفحه ══════════════ */
 export default function PatientRecord() {
   const { id } = useParams();
+  const { t, defaultKind = 'surgery' } = useConfig();
   const [rec, setRec] = useState(null);
+  /* لایهٔ «پاسخ» — جدا از بایگانی و **موازی** با آن. اگر نیامد (سطحِ پایین‌تر،
+     خطای شبکه) صفحه با تب‌ها سرِ جایش کار می‌کند؛ پاسخ اضافه است نه شرط. */
+  const [live, setLive] = useState(null);
   const [err, setErr] = useState('');
-  const [tab, setTab] = useState('profile');
+  /* ⚠️ تبِ پیش‌فرض دیگر فرمِ ویرایش نیست. هویت و «چه مانده» و خطِ زمان بالای
+     صفحه‌اند؛ تب‌ها بایگانی‌اند و بایگانی با «مراجعات» شروع می‌شود. */
+  const [tab, setTab] = useState('visits');
+  const tabsRef = useRef(null);
   /* ⚠️ **شکست باید از موفقیت قابلِ تشخیص باشد.**
      تا دیروز toast فقط یک رشته بود و خطا با موفقیت یک شکل داشت: همان قابِ
      بنفش، ۲٫۲ ثانیه، بعد رفت. یعنی اگر ثبتِ شرح ۴۰۳ یا ۵۰۰ می‌گرفت، کاربر
@@ -846,11 +1267,39 @@ export default function PatientRecord() {
 
   /* پروندهٔ تازه **برگردانده** می‌شود، نه فقط در state نشانده: فراخوان باید
      بتواند بلافاصله بسنجد که نوشته‌اش واقعاً در پرونده نشسته یا نه. */
+  /* ⚠️ **برمی‌گرداند**: کارتِ «کارِ بعدی» تا نشستنِ نسخهٔ تازه باید دکمه را
+     قفل نگه دارد، وگرنه کاربر «انجام شد» را دو بار می‌زند و کارِ بسته‌شده
+     دوباره بسته می‌شود. (`Today` و زنگ ردیف را محلی برمی‌دارند؛ این‌جا کلِ
+     پرونده تازه می‌شود، پس انتظار لازم است.) */
+  const loadLive = useCallback(
+    () => api(`/patients/${id}/live`).then(setLive).catch(() => setLive(null)),
+    [id],
+  );
+
   const load = useCallback(async () => {
-    try { const fresh = await api(`/patients/${id}/record`); setRec(fresh); setErr(''); return fresh; }
-    catch (e) { setErr(e.message); return null; }
-  }, [id]);
+    try {
+      const fresh = await api(`/patients/${id}/record`);
+      setRec(fresh); setErr('');
+      /* هر نوشتنی در پرونده (مدرک، شرح، مشخصات) می‌تواند مرحله و خطِ زمان را
+         عوض کند، پس «پاسخ» هم با همان `load` تازه می‌شود — وگرنه نوار یک
+         حقیقتِ کهنه نشان می‌دهد. */
+      loadLive();
+      return fresh;
+    } catch (e) { setErr(e.message); return null; }
+  }, [id, loadLive]);
   useEffect(() => { load(); }, [load]);
+
+  /* رفتن به یک تب از بیرونِ نوار (خطِ زمان، کارتِ مالی، دکمهٔ ویرایش). */
+  const goTab = useCallback((k) => {
+    setTab(k);
+    tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  /* پاپ‌آپِ یک چیز از هر جای صفحه (خطِ زمان، کارتِ «چه مانده»، تبِ مراجعات) —
+     همان ماژولِ مشترکِ «امروز» و «کارهای من» (`thing-popups.jsx`): دادهٔ کامل
+     همان‌جا خوانده می‌شود، و هر ثبتی «پاسخ» را تازه می‌کند. */
+  const things = useThings({ patientId: Number(id), onChanged: loadLive, toast: say });
+  const openThing = things.open;
 
   useEffect(() => {
     document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
@@ -862,8 +1311,12 @@ export default function PatientRecord() {
   if (!rec) return <div className="df"><div className="df-bg" /><div className="df-empty">در حال بارگذاری…</div></div>;
 
   const TABS = [
-    ['profile', 'خلاصه'],
-    ['visits', `مراجعات (${faNum(rec.counts.visits)})`],
+    /* «خلاصه» نامِ درستی نبود: این تب یک فرمِ ویرایشِ کامل است و خلاصه حالا
+       بالای صفحه است. اسمِ درست، انتظارِ درست. */
+    ['profile', 'مشخصات'],
+    /* واژهٔ **خنثی**: این فهرست عمل و ویزیت را با هم دارد و هر کارت نوعِ خودش را
+       می‌گوید؛ «ویزیت‌ها» برای مطبی که عملِ جراحی هم ثبت می‌کند دروغ بود (مالک). */
+    ['visits', `مراجعه‌ها (${faNum(rec.counts.visits)})`],
     ...(rec.counts.visits > 1 ? [['journey', 'مسیرِ درمان']] : []),
     ['docs', `مدارک (${faNum(rec.counts.documents)})`],
     /* فقط وقتی چیزی هست: تبِ همیشه‌خالی، فضای نوارِ تب را می‌گیرد و هیچ
@@ -895,6 +1348,27 @@ export default function PatientRecord() {
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
       {rec.allergies && <div className="rc-alert"><Alert size={13} /> حساسیت: {rec.allergies}</div>}
 
+      {/* کارتِ هویت **فقط‌خواندنی** است و ویرایش یک اقدام (§۴.۳ بندِ ۱). */}
+      {(rec.insurer || rec.bloodType || rec.chronicConditions || rec.medications) && (
+        <dl className="rc-id">
+          {rec.bloodType && <div><dt>گروهِ خونی</dt><dd dir="ltr">{rec.bloodType}</dd></div>}
+          {rec.insurer && <div><dt>بیمه</dt><dd>{rec.insurer}{rec.insuranceNo ? ` — ${faNum(rec.insuranceNo)}` : ''}</dd></div>}
+          {rec.chronicConditions && <div><dt>بیماریِ زمینه‌ای</dt><dd>{rec.chronicConditions}</dd></div>}
+          {rec.medications && <div><dt>داروها</dt><dd>{rec.medications}</dd></div>}
+        </dl>
+      )}
+
+      <RecordActions
+        rec={rec} onEdit={() => goTab('profile')} toast={say} t={t}
+        onNew={() => things.show({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: defaultKind } })}
+      />
+
+      {live && <StageBar stage={live.stage} t={t} />}
+      {live && <NextUp live={live} onGo={goTab} onActed={loadLive} toast={say} onOpen={openThing} />}
+      {live && <Timeline live={live} onGo={goTab} t={t} onOpen={openThing} />}
+      <Pathway patientId={rec.id} toast={say} />
+
+      <div ref={tabsRef} />
       <Tabs
         label="بخش‌های پرونده"
         variant="scroll"
@@ -905,12 +1379,27 @@ export default function PatientRecord() {
 
       <div className="rc-body">
         {tab === 'profile' && <ProfileTab key={rec.updatedAt} rec={rec} onSave={save} toast={say} />}
-        {tab === 'visits' && <VisitsTab rec={rec} />}
+        {tab === 'visits' && <VisitsTab rec={rec} onErr={(m) => say(m, true)} onOpen={openThing} />}
         {tab === 'journey' && <JourneyTab rec={rec} />}
         {tab === 'docs' && <DocsTab rec={rec} reload={load} toast={say} />}
-        {tab === 'forms' && <FormsTab rec={rec} />}
+        {tab === 'forms' && <FormsTab rec={rec} onErr={(m) => say(m, true)} />}
         {tab === 'notes' && <NotesTab rec={rec} reload={load} toast={say} />}
       </div>
+
+      {/* ── پاپ‌آپ‌ها: هر چیزی در همین صفحه باز می‌شود ── */}
+      <ThingPopups
+        things={things}
+        onVisitSaved={(saved, wasEdit, opts) => {
+          load();
+          /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
+          if (opts?.openSurgery) {
+            say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+            setTimeout(() => things.show({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } }), 400);
+            return;
+          }
+          say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
+        }}
+      />
 
       {toast && (
         <button

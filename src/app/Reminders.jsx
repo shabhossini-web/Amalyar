@@ -10,10 +10,22 @@ import { useStagger } from '../ui/stagger.js';
 
 const KIND_FA = {
   next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ‌رو', appointment: 'نوبت',
-  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل', notice: 'اطلاع‌رسانی', dispatch: 'ابلاغ برنامه روز',
+  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل', follow_up: 'فرمِ پیگیری',
+  notice: 'اطلاع‌رسانی', dispatch: 'ابلاغ برنامه روز',
 };
 const STATUS_FA = { pending: 'در صف', sending: 'در حال ارسال', sent: 'ارسال ثبت شد', failed: 'ارسال ناموفق', uncertain: 'نتیجه ارسال نامشخص', simulated: 'آزمایشی؛ ارسال نشده' };
 const DELIVERY_FA = { unknown: 'رسیدن به گوشی هنوز تأیید نشده', delivered: 'رسیده به گوشی', not_delivered: 'نرسیده به گوشی', not_sent: 'ارسال نشده', stored: 'در پیام‌رسان ثبت شده؛ هنوز خوانده نشده', read: 'خوانده شده' };
+/* ⚠️ کلیدِ خام هرگز روی صفحه نمی‌آید (W0.2): `follow_up` ماه‌ها به‌شکلِ «follow_up»
+   دیده می‌شد چون این نگاشت جا مانده بود. نوعِ تازهٔ سرور = یک ردیف این‌جا؛ تا آن
+   روز برچسبِ عام + خودِ کلید در title، تا نه دروغ بگوید نه کد نشان دهد. */
+const kindFa = (k) => KIND_FA[k] ?? 'یادآوری';
+const statusFa = (s) => STATUS_FA[s] ?? 'وضعیتِ نامشخص';
+/* اقدامِ تک‌ردیفی (W0.7/U10) — همان فهرستی که سرور هم گارد می‌کند.
+   ⚠️ `sent` در هیچ‌کدام نیست: پیام واقعاً به گوشیِ بیمار رفته، پس «دوباره»
+   یعنی پیامکِ دومِ سردرگم‌کننده و «لغو» یعنی دفتر دربارهٔ چیزی که رخ داده
+   دروغ بگوید. `sending` هم نیست چون همین حالا دستِ سرور است. */
+const RETRYABLE = ['failed', 'uncertain', 'simulated'];
+const CANCELLABLE = ['pending', 'uncertain', 'failed'];
 const TABS = [
   { key: 'all', label: 'همه' },
   { key: 'pending', label: 'در صف' },
@@ -59,6 +71,23 @@ export default function Reminders() {
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
 
+  /**
+   * ⚠️ `rowBusy` به‌ازای **هر ردیف** است، نه یک `busy`ِ مشترک: با فلگِ مشترک
+   * کلیک روی یک ردیف همهٔ دکمه‌های صفحه را خاکستری می‌کرد و کاربر نمی‌فهمید
+   * کدام کار در جریان است.
+   */
+  const [rowBusy, setRowBusy] = useState(0);
+  const act = async (r, what) => {
+    setRowBusy(r.id);
+    try {
+      const fresh = await api(`/reminders/${r.id}/${what}`, { method: 'POST' });
+      setToast(what === 'retry'
+        ? (fresh?.status === 'sent' ? 'فرستاده شد' : `دوباره در صف نشست (${statusFa(fresh?.status)})`)
+        : 'لغو شد و از دفتر برداشته شد');
+      await load();
+    } catch (e) { setToast(e.message); } finally { setRowBusy(0); }
+  };
+
   const shown = (rows ?? []).filter((r) => tab === 'all' || r.status === tab);
   const count = (k) => (rows ?? []).filter((r) => k === 'all' || r.status === k).length;
 
@@ -100,7 +129,7 @@ export default function Reminders() {
         {shown.map((r, i) => (
           <motion.article key={r.id} {...row(i)} className={`rm-row st-${r.status}`}>
             <div className="rm-row-head">
-              <b>{KIND_FA[r.kind] ?? r.kind}</b>
+              <b title={r.kind}>{kindFa(r.kind)}</b>
               {r.patientName && <span>{r.patientName}</span>}
               {r.recipientName && <span>{r.recipientName}</span>}
               <span>{r.channel === 'chat' ? 'پیام‌رسان داخلی' : 'پیامک'}</span>
@@ -109,11 +138,27 @@ export default function Reminders() {
                 {r.status === 'pending' ? `موعد: ${faDate(r.dueAt)}` : faDate(r.sentAt ?? r.dueAt)}
                 {r.phone ? ` · ${String(r.phone).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}` : ''}
               </small>
-              <i className={`rm-tag s-${r.status}`}>{STATUS_FA[r.status] ?? r.status}</i>
+              <i className={`rm-tag s-${r.status}`} title={r.status}>{statusFa(r.status)}</i>
             </div>
             <p className="rm-text">{r.text}</p>
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}
             {r.error && <p className="rm-fail">علت: {r.error}</p>}
+            {(RETRYABLE.includes(r.status) || CANCELLABLE.includes(r.status)) && (
+              <div className="rm-acts">
+                {RETRYABLE.includes(r.status) && (
+                  <button type="button" className="rm-act" disabled={rowBusy === r.id}
+                          onClick={() => act(r, 'retry')}>
+                    <Send width="13" height="13" /> ارسالِ دوباره
+                  </button>
+                )}
+                {CANCELLABLE.includes(r.status) && (
+                  <button type="button" className="rm-act rm-act-off" disabled={rowBusy === r.id}
+                          onClick={() => act(r, 'cancel')}>
+                    لغوِ این پیام
+                  </button>
+                )}
+              </div>
+            )}
           </motion.article>
         ))}
       </div>

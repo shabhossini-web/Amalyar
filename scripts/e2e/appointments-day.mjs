@@ -11,6 +11,7 @@
  */
 import { chromium } from 'playwright-core';
 import { browserLogin } from './lib/browser-login.mjs';
+import { TERMS } from '../../src/lib/terms.js';
 
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
@@ -35,7 +36,7 @@ const send = (p, method, body) => fetch(API + p, { method, headers: A, body: bod
   .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = Math.random().toString(36).slice(2, 7);
-const trash = { rules: [], topics: [], visits: [], appts: [], patients: [] };
+const trash = { rules: [], topics: [], visits: [], appts: [], patients: [], forms: [] };
 
 /* پاک‌سازیِ اولیه — قاعده و نوبتِ اجرای مرده نباید ماه را شلوغ کند. */
 for (const r of await get('/availability/rules')) await fetch(API + `/availability/rules/${r.id}`, { method: 'DELETE', headers: A });
@@ -56,6 +57,12 @@ try {
   const [kinds, sur, hos] = await Promise.all([
     get('/forms/visit-kinds'), get('/surgeons'), get('/hospitals'),
   ]);
+  /* «شروعِ ویزیت» (بندِ ۶) نوعِ غیرجراحی می‌خواهد؛ قالبِ ionm فقط «عمل» دارد.
+     اگر نیست یکی می‌سازیم و آخرِ کار پاک می‌کنیم — همان الگوی postop-visit. */
+  if (!kinds.some((k) => k.kind !== 'surgery')) {
+    const cf = (await send('/forms', 'POST', { key: 'clinic', title: 'فرمِ ویزیت', scope: 'visit' })).json;
+    if (cf?.id) trash.forms.push(cf.id);
+  }
   const seed = (await send('/visits', 'POST', {
     kind: kinds[0]?.kind, firstName: 'بیمارِ', lastName: `حضوری ${tag}`,
     surgeonId: (sur.rows ?? sur)[0]?.id, hospitalId: (hos.rows ?? hos)[0]?.id,
@@ -174,7 +181,16 @@ try {
     ok(deskText.includes('حضوری ' + tag), 'نامِ بیمار روی صفحه است');
     ok(/انجام شد/.test(deskText), `و وضعیتش («انجام شد» بعد از چرخهٔ کامل)`);
     const openBtn = desk.locator('.cal-appt-go').first();
-    ok(/بازکردنِ ویزیت/.test(await openBtn.innerText()), 'نوبتِ ویزیت‌دار «بازکردنِ ویزیت» می‌گوید نه «شروع»');
+    /* ⚠️ این برچسب از W3.7 به `useTerms()` رفت، پس دیگر «ویزیت» نیست مگر در
+       حوزهٔ مطب — این سنجه رشتهٔ حوزهٔ مطب را هاردکد داشت و با لندشدنِ W3.7
+       **بی‌صدا** قرمز شد (این فایل در فهرستِ CI نیست). حالا از خودِ واژه‌نامه
+       خوانده می‌شود: ادعای واقعیِ سنجه «بازکردن می‌گوید نه شروع» است، نه
+       اینکه واژهٔ کدام حوزه را می‌گوید. */
+    const label = await openBtn.innerText();
+    const opens = Object.values(TERMS).map((t) => t.visitOpen);
+    const starts = Object.values(TERMS).map((t) => t.visitStart);
+    ok(opens.some((w) => label.includes(w)) && !starts.some((w) => label.includes(w)),
+      `نوبتِ ویزیت‌دار «بازکردن» می‌گوید نه «شروع» (${label.trim()})`);
     await openBtn.click();
     await p.waitForTimeout(2500);
     ok(/\/app\/dashboard\?patient=/.test(p.url()), `به داشبورد رفت (${p.url().split('/app')[1]})`);
@@ -190,5 +206,6 @@ try {
   for (const id of trash.visits) await fetch(API + `/visits/${id}`, { method: 'DELETE', headers: A });
   for (const id of trash.rules) await fetch(API + `/availability/rules/${id}`, { method: 'DELETE', headers: A });
   for (const id of trash.topics) await fetch(API + `/visit-topics/${id}`, { method: 'DELETE', headers: A });
+  for (const id of trash.forms) await fetch(API + `/forms/${id}`, { method: 'DELETE', headers: A });
 }
 process.exit(fail ? 1 : 0);

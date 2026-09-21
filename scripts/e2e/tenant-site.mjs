@@ -13,10 +13,15 @@
  * پیش‌نیازها و راه‌اندازیِ محیط: `scripts/e2e/README.md`.
  * متغیرها: `E2E_API` (پیش‌فرض 3009) و `E2E_WEB` (پیش‌فرض 5173).
  */
+import { execSync } from 'node:child_process';
 import { chromium } from 'playwright-core';
 import { browserLogin } from './lib/browser-login.mjs';
 
 const API = process.env.E2E_API ?? 'http://127.0.0.1:3009/api';
+/* قراردادِ این سوییت «اولین حسابِ سیستم سوپرادمین می‌شود» است، پس جدولِ حساب‌ها
+   باید خالی باشد. زیرِ رانر (`E2E_DB` ست است) دیتابیس تازه ولی با ادمینِ bootstrap
+   است؛ این‌جا خالی می‌شود و بعدش دور ریخته می‌شود. */
+if (process.env.E2E_DB) execSync(`psql "${process.env.E2E_DB}" -v ON_ERROR_STOP=1 -qc "TRUNCATE accounts CASCADE"`);
 const WEB = process.env.E2E_WEB ?? 'http://127.0.0.1:5173';
 const results = [];
 const ok = (name, cond, extra = '') => {

@@ -31,10 +31,12 @@ const A = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + login
 /* کلید از pid تا بارِ دوم به فرمِ اجرای قبلی نخورد؛ فرمِ بی‌استفاده در پایان
    حذفِ سخت می‌شود، پس بارِ دوم هم تمیز شروع می‌کنیم. */
 const tag = 'kf' + String(process.pid).slice(-5);
-const CATALOG = [
-  'opDate', 'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
-  'opStartTime', 'opEndTime', 'techArriveTime', 'opReport', 'amount', 'notes',
-];
+/* کاتالوگ از **خودِ سرور** (بیلدِ dist)، نه یک نسخهٔ دوم: نسخهٔ دستی یک‌بار
+   با `techArriveTime` (که W3.8 از فرمِ مراجعه برداشت) و بی `topicId`/`nextVisitDate`
+   بیات شد و سوییت — که در CI نبود — ماه‌ها قرمز ماند. */
+import { createRequire } from 'node:module';
+const { VISIT_BUILTIN_CATALOG } = createRequire(import.meta.url)('../../server/dist/patients/form-presets.js');
+const CATALOG = VISIT_BUILTIN_CATALOG.map((f) => f.key);
 
 /* گرم‌کردن: seedِ قالب‌ها تنبل است و با اولین **خواندن** اجرا می‌شود. اگر
    اولین تماسِ یک دیتابیسِ بکر POST باشد، جدول دیگر خالی نیست و قالب‌ها هرگز
@@ -91,7 +93,17 @@ try {
     await p.locator(`.db-kindrow button:has-text("${kindTitle}")`).click();
     await p.locator('.db-stepnav .db-submit').click();
     await p.waitForTimeout(900);
-    const labels = await p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span').allInnerTexts();
+    const collect = () => p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span').allInnerTexts();
+    let labels = await collect();
+    /* بستهٔ ۴: فرمِ عمل مرحله‌های قبل/حین/بعد را در سه تب دارد و فقط تبِ فعال رندر می‌شود
+       (ثبتِ تازه روی «قبل» باز می‌شود)؛ برچسب‌های هر سه تب جمع می‌شوند تا «شرحِ عمل»
+       (تبِ حین) هم دیده شود. فرمِ ویزیت تب ندارد و همان یک‌بار کافی است. */
+    const phaseTabs = p.locator('.db-sheet .db-postop .ui-tabs button');
+    for (let i = 0, n = await phaseTabs.count(); i < n; i++) {
+      await phaseTabs.nth(i).click();
+      await p.waitForTimeout(200);
+      labels = labels.concat(await collect());
+    }
     const text = labels.join(' | ');
     await p.locator('.db-x').click();
     await p.waitForTimeout(900);

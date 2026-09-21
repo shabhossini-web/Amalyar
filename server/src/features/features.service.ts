@@ -47,21 +47,24 @@ export class FeaturesService {
    */
   async forUser(user: any) {
     const rows = await this.list();
-    const corporate = (await this.prisma.setting.findUnique({ where: { key: 'vertical' } }))?.value !== 'clinic';
     const level = user?.level ?? 0;
     /* ⚠️ سوپرادمین **همهٔ** پنل‌ها را می‌بیند — همان قاعدهٔ گاردها (عبورِ
        بی‌قیدِ سطح ۶) و همان انتظارِ کاربر از ملک‌طب: یک نفر باید کلِ چرخه را
        با دیدِ کامل ببیند. تا امروز صلاحیتِ نقش‌محور (راننده/کارشناس) کاشیِ
        سوپرادمین را هم پنهان می‌کرد در حالی که خودِ endpointها برایش باز بودند
        — لانچر و سرور دو حرفِ متفاوت می‌زدند. */
+    /* تا بستهٔ ۵ (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹) کاشیِ `surgeon` در مطب همین‌جا برای همه
+       خاموش می‌شد («پزشک مطب از داشبورد استفاده می‌کند»). حالا در مطب همان کاشی
+       «میزِ پزشک» است و روشن/خاموشش را فقط پلانِ حوزه (`verticals.ts`) و پیوندِ حساب
+       به تعریفِ جراح (`eligibility`) تعیین می‌کند — نه یک استثنای هاردکد. */
     if (level >= LEVEL.SUPER_ADMIN) {
-      return rows.map((r) => ({ ...r, allowed: r.key !== 'surgeon' || corporate, reason: r.key === 'surgeon' && !corporate ? 'پزشک مطب از داشبورد مدیریت استفاده می‌کند' : null }));
+      return rows.map((r) => ({ ...r, allowed: true, reason: null }));
     }
     const eligible = await this.eligibility(user);
     const jobRole = user?.jobRole ?? '';
     return rows.map((r) => {
       const byLevel = level >= r.minLevel;
-      const byRole = (eligible[r.key] ?? true) && (r.key !== 'surgeon' || corporate);
+      const byRole = eligible[r.key] ?? true;
       /* قیدِ نقشِ ماتریس — AND با سطح؛ آرایهٔ خالی یعنی بدونِ قید. */
       const byJobRole = !r.roles.length || r.roles.includes(jobRole);
       return {

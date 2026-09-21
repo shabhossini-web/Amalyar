@@ -54,6 +54,152 @@
   --radius-sm: 12px;
   --shadow-glow: 0 0 40px rgba(var(--brand-rgb), 0.25);
   --maxw: 1140px;
+
+  /* ── پردهٔ روی سطح (W3.6) ──
+     تا دیروز ۶۰۰ جای CSS نوشته بود `rgba(var(--veil-rgb), .05)` — یعنی «کمی
+     روشن‌تر از زمینه». آن عدد فقط روی زمینهٔ تیره معنی داشت؛ روی تمِ روشن همان
+     پرده نامرئی می‌شود و کارت و حاشیه و ورودی همه محو می‌شوند.
+     حالا همان‌ها `rgba(var(--veil-rgb), α)` هستند: در تمِ تیره سفید، در تمِ روشن
+     سیاه. یک توکن، و کلِ اپ با تم می‌چرخد.
+     ⚠️ `#fff`ِ خام عمداً دست نخورد: آن‌ها متنِ روی دکمهٔ گرادیانِ برندند و در هر
+     دو تم باید سفید بمانند. */
+  /* ── شدتِ **متنیِ** رنگ‌های معنایی (W3.6) ──
+     ⚠️ جدا از `--green`/`--amber`: آن‌ها رنگِ نقطه و میله‌اند (روی هر زمینه‌ای)،
+     این‌ها رنگِ **متن روی سطح**اند و باید با زمینهٔ همان تم بخوانند. در تمِ تیره
+     شدتِ روشن‌تر لازم است (`#5eead4` نه `#34d399`) و در تمِ روشن شدتِ تیره‌تر —
+     وگرنه «تسویه» و «در انتظار» روی کارتِ سفید ۱٫۴:۱ می‌شوند (سنجیده شد).
+     مقدارِ تیره **دقیقاً** همان هگزِ قبلیِ کد است، پس تمِ تیره ذره‌ای جابه‌جا نشد. */
+  --green-text: #5eead4;
+  --amber-text: #fbbf24;
+  /* قرمزِ متنی — سومینِ همان سه‌گانه. تا امروز نداشتیم و هر هشدارِ قرمز
+     (`.rc-alert` پرونده، `.td-err` امروز) هگزِ روشنِ خام می‌نوشت که در تمِ
+     روشن روی زمینهٔ کم‌آلفای قرمز عملاً **نامرئی** بود. */
+  --red-text: #fecaca;
+  /* ⚠️ بدهیِ باز: این تینت هنوز از برند مشتق نمی‌شود (پیش از W3.6 هم در پنج جای
+     `dashboard.css` همین هگز هاردکد بود؛ این بسته فقط یک‌جایش کرد). عوض‌کردنش
+     ظاهرِ تمِ تیره را جابه‌جا می‌کند، پس جدا از این PR. `brandPalette` شدتِ
+     روشن‌تر از `--brand-2` ندارد و باید اضافه شود. */
+  --brand-text: #ddd6fe;
+  /* مرکّبِ روی پُرکنندهٔ **روشنِ ثابت** (چیپِ کهربایی/سایانی). چون خودِ پُرکننده با
+     تم عوض نمی‌شود، مرکّبش هم نباید عوض شود — در هر دو تم تیره می‌ماند. */
+  --ink-bright: #16132b;
+
+  --veil-rgb: 255, 255, 255;
+  /* لبهٔ براقِ شیشه — بازتابِ نور، پس در **هر دو** تم سفید می‌ماند. */
+  --sheen-rgb: 255, 255, 255;
+  /* ── سطحِ پنل/شیت/کارت ──
+     ⚠️ جدا از `--veil-rgb`: پرده «کمی روشن‌تر از زمینه» است، ولی سطح یک
+     **پس‌زمینهٔ مات** است (شیتِ مودال، کارتِ بیمار، نوارِ بالا). تا دیروز این‌ها
+     `rgba(var(--surface-rgb), .96)` بودند — بنفشِ تیرهٔ خام. در تمِ روشن باید سفید شوند،
+     وگرنه کارتِ تیره روی صفحهٔ سفید می‌ماند و متنش خوانده نمی‌شود (اسکرین‌شاتِ
+     اولِ همین بسته دقیقاً همین را نشان داد).
+     ⚠️ `rgba(0, 0, 0, α)` عمداً تبدیل **نشد**: آن‌ها پردهٔ تاریکِ پشتِ مودال و
+     سایه‌اند و در تمِ روشن هم باید تیره بمانند. */
+  --surface-rgb: 18, 13, 49;
+  /* سایهٔ «گودی» — در تمِ روشن باید ملایم‌تر باشد وگرنه کارت کثیف به‌نظر می‌رسد. */
+  --shadow-card: 0 12px 36px rgba(var(--surface-rgb), 0.42);
+
+  /* ── چگالی (W3.6) ──
+     «فشرده» برای میزِ پذیرش که باید بیست ردیف را یک‌جا ببیند؛ «عادی» برای بقیه.
+     فقط فاصله عوض می‌شود، نه اندازهٔ قلم و نه هدفِ لمس — ریزکردنِ متن یعنی
+     ناخوانا‌شدن، و ریزکردنِ دکمه یعنی شکستنِ کفِ تاچ‌تارگتِ `press.css`. */
+  --gap: 12px;
+  --gap-lg: 18px;
+  --pad-card: 18px;
+}
+
+/* ── تمِ روشنِ بالینی (W3.6 · §۴.۸ و `DECISIONS.md` #۳) ──
+   پیش‌فرضِ حوزهٔ مطب. زمینه سفیدِ خاکستری‌زده است نه سفیدِ خالص: سفیدِ ۱۰۰٪ زیرِ
+   نورِ مانیتور خیره‌کننده است و متنِ فارسی رویش می‌لرزد.
+   ⚠️ هر توکنِ متن این‌جا با زمینه‌اش سنجیده شده و نسبتِ کنتراستش از AA (۴.۵)
+   می‌گذرد — سنجهٔ ماشینی: `scripts/e2e/w3-6-light-theme.mjs`. عددِ سلیقه‌ای
+   نگذارید؛ همان‌جا قرمز می‌شود. */
+:root[data-theme="light"] {
+  --bg: #f4f4f9;
+  --bg2: #ffffff;
+  --bg3: #eceaf4;
+  --card: rgba(var(--brand-rgb), 0.045);
+  --card-border: rgba(var(--brand-rgb), 0.20);
+  --text1: #16132b;
+  --text2: #4a4470;
+  --text3: #6b6590;
+  --veil-rgb: 0, 0, 0;
+  /* ⚠️ برخلافِ پرده، لبهٔ براق در تمِ روشن هم **سفید** می‌ماند: بازتابِ نور با
+     تم عوض نمی‌شود. صریح نوشته شده تا ارث‌بری اتفاقی به‌نظر نرسد. */
+  --sheen-rgb: 255, 255, 255;
+  --surface-rgb: 255, 255, 255;
+  --shadow-card: 0 10px 30px rgba(var(--surface-rgb), 0.10);
+  --shadow-glow: 0 0 34px rgba(var(--brand-rgb), 0.18);
+  /* ⚠️ سایان روی سفید خوانده نمی‌شود (نسبت ~۱.۷). لهجهٔ فوکوس در تمِ روشن
+     همان بنفشِ برند است؛ سایان فقط روی تیره لهجه می‌ماند. */
+  --cyan: #0369a1;
+  --green: #047857;
+  --amber: #a16207;
+  --green-text: #047857;
+  --amber-text: #a16207;
+  /* ⚠️ رنگِ **نوع** هم باید با تم بچرخد. تا امروز `--kind-*` فقط روی `:root`
+     بود و با تم نمی‌چرخید — یعنی همان خرابیِ قانونِ ۲۳، فقط از راهِ یک توکن
+     به‌جای یک هگزِ خام، و برای همین نگهبان هم نمی‌دیدش. این شدت‌ها روی زمینهٔ
+     روشن سنجیده‌اند (کفِ ۳:۱ برای شکل/آیکون)؛ شدت‌های روشن در `.theme-dark`
+     و `:root` می‌مانند تا سطوحِ همیشه‌تیره عوض نشوند. */
+  --kind-violet: 109, 40, 217;
+  --kind-teal: 15, 118, 110;
+  --kind-amber: 180, 83, 9;
+  --kind-rose: 190, 18, 60;
+  --kind-sky: 3, 105, 161;
+  --kind-lime: 77, 124, 15;
+  --kind-fuchsia: 162, 28, 175;
+  --kind-slate: 71, 85, 105;
+  --red-text: #b91c1c;
+  /* ⚠️ بنفشِ ثابت این‌جا ممنوع است (گامِ «رنگِ برند یک تنظیم است» در CI):
+     شرکتی که برندش فیروزه‌ای است نباید متنِ کنترل‌هایش بنفش بماند.
+     `--brand-dark` را `applyBrand` از روی رنگِ همان شرکت مشتق می‌کند. */
+  --brand-text: var(--brand-dark);
+}
+
+/* چگالیِ فشرده — همان توکن‌های فاصله، کوچک‌تر. */
+:root[data-density="compact"] {
+  --gap: 8px;
+  --gap-lg: 12px;
+  --pad-card: 12px;
+}
+
+/* ── ویترین همیشه تیره می‌ماند (§۴.۸) ──
+   لندینگ، ورود و لانچر شیشه و نئونشان را نگه می‌دارند. توکن‌های تیره دوباره
+   اعلام می‌شوند، پس زیرِ این کلاس هر چیزی که از توکن می‌خواند تیره می‌ماند —
+   بدونِ هیچ JSای و بدونِ چشمکِ لحظهٔ ورود. */
+.theme-dark {
+  /* شدت‌های روشنِ نوع — سطوحِ همیشه‌تیره (لندینگ، ورود، لانچر) همین‌ها را
+     می‌خواهند، مستقل از تمِ انتخابیِ کاربر. */
+  --kind-violet: 139, 92, 246;
+  --kind-teal: 20, 184, 166;
+  --kind-amber: 245, 158, 11;
+  --kind-rose: 244, 63, 94;
+  --kind-sky: 14, 165, 233;
+  --kind-lime: 132, 204, 22;
+  --kind-fuchsia: 217, 70, 239;
+  --kind-slate: 100, 116, 139;
+  --bg: #07051a;
+  --bg2: #0d0a26;
+  --bg3: #141033;
+  --card: rgba(var(--brand-rgb), 0.06);
+  --card-border: rgba(var(--brand-rgb), 0.22);
+  --text1: #f2f0fc;
+  --text2: #b8b3d6;
+  --text3: #7d77a3;
+  --veil-rgb: 255, 255, 255;
+  --sheen-rgb: 255, 255, 255;
+  --surface-rgb: 18, 13, 49;
+  --shadow-card: 0 12px 36px rgba(var(--surface-rgb), 0.42);
+  --cyan: #00e5ff;
+  --green: #34d399;
+  --amber: #fbbf24;
+  --green-text: #5eead4;
+  --amber-text: #fbbf24;
+  --red-text: #fecaca;
+  --brand-text: #ddd6fe;
+  background: var(--bg);
+  color: var(--text1);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -148,13 +294,13 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
   padding: 10px 14px 10px 18px;
   border: 1px solid var(--card-border);
   border-radius: 16px;
-  background: rgba(13, 10, 38, 0.55);
+  background: rgba(var(--surface-rgb), 0.55);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
   transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
 }
 .nav.scrolled {
-  background: rgba(9, 7, 26, 0.9);
+  background: rgba(var(--surface-rgb), 0.9);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   border-color: rgba(var(--brand-rgb), 0.35);
 }
@@ -181,7 +327,7 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 
 .mobile-menu {
   position: fixed; top: 78px; right: 16px; left: 16px; z-index: 99;
-  background: rgba(11, 8, 30, 0.97);
+  background: rgba(var(--surface-rgb), 0.97);
   border: 1px solid var(--card-border);
   border-radius: 16px; padding: 10px; overflow: hidden;
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
@@ -202,7 +348,7 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 }
 .btn-primary { background: linear-gradient(135deg, var(--brand), var(--brand-dark)); color: #fff; font-weight: 800; }
 .btn-primary:hover { box-shadow: 0 0 50px rgba(var(--brand-rgb), 0.45); transform: translateY(-2px); }
-.btn-ghost { background: rgba(255, 255, 255, 0.04); color: var(--text1); font-weight: 700; border: 1px solid var(--card-border); }
+.btn-ghost { background: rgba(var(--veil-rgb), 0.04); color: var(--text1); font-weight: 700; border: 1px solid var(--card-border); }
 .btn-ghost:hover { border-color: var(--brand); background: rgba(var(--brand-rgb), 0.1); }
 
 /* hero */
@@ -278,7 +424,7 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 @media (max-width: 640px) { .mock-body { grid-template-columns: 1fr; } }
 
 /* trust marquee */
-.trust { border-block: 1px solid rgba(var(--brand-rgb), 0.14); background: rgba(13, 10, 38, 0.5); padding: 28px 0; overflow: hidden; }
+.trust { border-block: 1px solid rgba(var(--brand-rgb), 0.14); background: rgba(var(--surface-rgb), 0.5); padding: 28px 0; overflow: hidden; }
 .trust-label { text-align: center; font-size: 12.5px; color: var(--text3); margin-bottom: 18px; }
 .marquee-mask {
   overflow: hidden;
@@ -364,7 +510,7 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 .cta-box { max-width: var(--maxw); margin: 0 auto; text-align: center; background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.2), rgba(0, 229, 255, 0.07)); border: 1px solid var(--card-border); border-radius: 26px; padding: 66px 28px; position: relative; overflow: hidden; }
 .cta-box::after {
   content: ''; position: absolute; top: -50%; left: -30%; width: 60%; height: 200%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+  background: linear-gradient(90deg, transparent, rgba(var(--veil-rgb), 0.06), transparent);
   transform: rotate(18deg); animation: shimmer 6s ease-in-out infinite;
 }
 @keyframes shimmer { 0%, 100% { transform: translateX(-40%) rotate(18deg); } 50% { transform: translateX(180%) rotate(18deg); } }
@@ -398,3 +544,53 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 .nv-con > label { grid-column: 1 / -1; display: grid; gap: .5rem; min-width: 0; }
 .nv-con > label select { width: 100%; max-width: 100%; background: var(--bg3); color: var(--text1); border: 1px solid var(--card-border); border-radius: 12px; padding: .6rem; }
 
+/* ── فیلدِ فرم — پوستهٔ مشترکِ همهٔ چانک‌ها ────────────────────────────────
+   ⚠️ عمداً این‌جا (CSSِ ورودی)، نه در definitions.css / dashboard.css. از وقتی
+   مسیرها lazy شده‌اند (قانون ۲۱) هر صفحه فقط CSSِ خودش را می‌گیرد؛ این دو
+   پوسته را کامپوننت‌های مشترک (DynForm، PersonFields، JDate، TimePick) و
+   صفحه‌های عمومی (فرمِ بیمار، سفارش) استفاده می‌کنند و تا دیروز از باندلِ
+   یکپارچه ارث می‌بردند — فرمِ عمومیِ بیمار بی‌استایل شد: برچسب و باکس روی
+   هم افتادند و input سفیدِ خامِ مرورگر شد (اسکرین‌شاتِ کاربر، اندروید).
+   نگهبان: `scripts/verify-css-chunks.js`. صفحه‌ها می‌توانند رویش override
+   بگذارند؛ این فقط کفِ مشترک است. */
+.pf { display: grid; gap: 12px; }
+.pf-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pf-field { display: block; }
+.pf-field > span { display: block; font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+.pf-field input, .pf-field textarea {
+  width: 100%; border-radius: 11px; padding: 12px 13px; font: inherit; font-size: 13px;
+  color: #fff; outline: none; resize: vertical;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
+}
+.pf-field input { height: 46px; }
+.pf-field input:focus, .pf-field textarea:focus {
+  border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(var(--brand-2-rgb), .12);
+}
+.pf-field.bad input, .pf-field.bad textarea { border-color: #fb7185; }
+.pf-err { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #fda4af; }
+.pf-hint { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: var(--text3); }
+@media (max-width: 620px) { .pf-row2 { grid-template-columns: 1fr; } }
+
+.db-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+/* هر خانهٔ شبکه یک wrapper دارد؛ بدونِ این، فیلدِ داخلش عرضِ خودش را می‌گیرد
+   نه عرضِ خانه را. */
+.db-grid2 > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.db-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--text2); }
+.db-field small { font-weight: 600; color: var(--text3); }
+.db-field input, .db-field textarea {
+  font-family: inherit; font-size: 14px; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.13);
+  border-radius: 11px; padding: 10px 12px; outline: none; width: 100%;
+  transition: border-color .15s;
+}
+.db-field input:focus, .db-field textarea:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
+.db-field textarea { resize: vertical; }
+.db-field select {
+  font-family: inherit; font-size: 14px; color: var(--text1); width: 100%;
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.13);
+  border-radius: 11px; padding: 10px 12px; outline: none; appearance: none;
+}
+.db-field select:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
+.db-field select option { background: var(--bg3); color: var(--text1); }
+.db-field.bad input { border-color: rgba(251, 113, 133, 0.7); }
+@media (max-width: 430px) { .db-grid2 { grid-template-columns: 1fr; } }

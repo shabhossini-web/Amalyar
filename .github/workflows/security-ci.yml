@@ -14,8 +14,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # ۶۲ گام + دو npm ci + دو بیلد؛ ۱۵ دقیقه روی رانرِ کند به timeoutِ کاذب می‌رسید
-    timeout-minutes: 30
+    # ۶۲ گام + دو npm ci + دو بیلد؛ ۱۵ دقیقه روی رانرِ کند به timeoutِ کاذب می‌رسید.
+    # +۱۴ سوییتِ مرورگریِ خودکفا (انتهای همین جاب) → ۴۵.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -151,8 +152,9 @@ jobs:
             console.error('extra باید با پاسخ‌های موجود ادغام شود، نه جایگزینِ کامل');
             process.exit(1);
           }
-          if (!/extra: \(dto as any\)\.extra \?\? \{\}/.test(src)) {
-            console.error('createVisit دیگر extra را نمی‌نویسد');
+          /* extraIn همان dto.extra است پس از normalizeExtra (باکسِ لینک): نوشتنِ extra باید بماند و از dto.extra بیاید. */
+          if (!/extra: (?:\(dto as any\)\.extra|extraIn) \?\? \{\}/.test(src) || !/const extraIn = await this\.forms\.normalizeExtra\([^)]*\(dto as any\)\.extra\)/.test(src)) {
+            console.error('createVisit دیگر extra را نمی‌نویسد (یا extraIn از dto.extra نمی‌آید)');
             process.exit(1);
           }
           console.log('custom form answers survive a visit edit');
@@ -168,7 +170,10 @@ jobs:
           const patients= fs.readFileSync('src/patients/patients.service.ts', 'utf8');
           const record  = fs.readFileSync('src/patients/record.service.ts', 'utf8');
           const schema  = fs.readFileSync('prisma/schema.prisma', 'utf8');
-          const ui      = fs.readFileSync('../src/app/Dashboard.jsx', 'utf8');
+          /* از W3.2 واژگانِ نوعِ مراجعه در `visit-kinds.js` است، نه `Dashboard.jsx`:
+             فرمِ ویزیت به فایلِ خودش رفت و هر دو از همان‌جا می‌خوانند. نگهبان
+             دنبالِ کد آمد، وگرنه روی فایلی می‌ایستاد که دیگر برچسبی ندارد. */
+          const ui      = fs.readFileSync('../src/app/visit-kinds.js', 'utf8');
 
           /* ⚠️ این نگهبان **جای نگهبانِ قبلی** نشسته که فهرستِ نوع‌ها را بسته
              نگه می‌داشت. آن قاعده عمداً کنار گذاشته شد: مسیرِ درمان جایگشتِ
@@ -210,6 +215,13 @@ jobs:
           }
           if (/KINDS\[k\] \?\? KINDS\.surgery/.test(ui)) {
             console.error('نوعِ ناشناخته نباید «عمل» خوانده شود — برچسبِ حدسی دروغ می‌گوید'); process.exit(1);
+          }
+          /* و برچسب‌ها نباید دوباره در صفحه‌ها کپی شوند: دو نسخه یعنی روزی نوعِ
+             تازه در یکی فارسی بیاید و در دیگری کلیدِ خامِ انگلیسی. */
+          for (const f of ['../src/app/Dashboard.jsx', '../src/app/VisitForm.jsx']) {
+            if (/const KINDS = \{/.test(fs.readFileSync(f, 'utf8'))) {
+              console.error('KINDS فقط در src/app/visit-kinds.js — نسخهٔ دوم در ' + f); process.exit(1);
+            }
           }
           // ⑥ مسیرِ درمان باید **مشتق** بماند. ستونِ گرهِ والد یعنی کاربری که
           //    گره‌زدن را فراموش کند، مسیرش تکه‌تکه می‌شود.
@@ -462,7 +474,9 @@ jobs:
           if (!/jalaliMonthRange/.test(cal)) { console.error('بازهٔ تقویم باید شمسی باشد'); process.exit(1); }
           // گروه‌بندی سمتِ سرور بماند تا تقویم و چینش یک تعریف داشته باشند.
           if (!/toJalali/.test(cal)) { console.error('گروه‌بندیِ روز باید سمتِ سرور و شمسی باشد'); process.exit(1); }
-          if (!/LEVEL.SUPERVISOR/.test(cal)) { console.error('تقویم باید scope کارشناس را رعایت کند'); process.exit(1); }
+          // از بستهٔ ۵ دامنهٔ «فقط مالِ خودش» یک‌جاست (`common/own-scope.ts`) و تقویم همان
+          // helper را صدا می‌زند، نه مقایسهٔ سطحِ دستی؛ نبودنِ helper یعنی scope گم شده.
+          if (!/scopedVisitWhere\(/.test(cal)) { console.error('تقویم باید scope کارشناس را رعایت کند (scopedVisitWhere از own-scope)'); process.exit(1); }
           const jal = fs.readFileSync('src/common/jalali.ts', 'utf8');
           const rng = jal.split('export function jalaliMonthRange')[1].split(/\n}/)[0];
           // طولِ ماه دوباره محاسبه نشود؛ «اولِ ماهِ بعد» کبیسه را خودش هندل می‌کند.
@@ -2186,10 +2200,10 @@ jobs:
             if (view.includes(leak)) { console.error('publicView دارد ' + leak + ' را لو می‌دهد'); process.exit(1); }
           }
 
-          // ⑤ تأیید باید از همان createVisitِ موجود بگذرد. مسیرِ دومِ ساختِ
+          // ⑤ تأیید باید از prepareVisitCreation مشترک با createVisit بگذرد. مسیرِ دومِ ساختِ
           //    مراجعه یعنی روزی یکی‌شان seq یا audit را جا می‌اندازد.
-          if (!/this\.patients\.createVisit\(/.test(svc)) {
-            console.error('تأیید باید از createVisitِ موجود مراجعه بسازد'); process.exit(1);
+          if (!/this\.patients\.prepareVisitCreation\(/.test(svc)) {
+            console.error('تأیید باید از prepareVisitCreation مشترک مراجعه بسازد'); process.exit(1);
           }
           if (/prisma\.visit\.create\(/.test(svc)) {
             console.error('intake نباید مستقیم Visit بسازد'); process.exit(1);
@@ -2259,8 +2273,8 @@ jobs:
           // مبلغ به مسیر مشترک اعتبارسنجی و قلم اولیه می‌رود؛ آزمون یکپارچه
           // مبلغ واقعی، تخفیف و نبود قلم تکراری را هم روی دیتابیس می‌سنجد.
           const patients = read('server/src/patients/patients.service.ts');
-          if (!/patients\.createVisit\(\{[\s\S]{0,120}amount: row\.amount/.test(svc) || !/tx\.charge\.create/.test(patients)) {
-            console.error('تأیید باید مبلغ را به اعتبارسنجی و قلم اولیه createVisit برساند'); process.exit(1);
+          if (!/patients\.prepareVisitCreation\(\{[\s\S]{0,120}amount: row\.amount/.test(svc) || !/tx\.charge\.create/.test(patients)) {
+            console.error('تأیید باید مبلغ را به اعتبارسنجی و قلم اولیه مسیر مشترک برساند'); process.exit(1);
           }
           if (/kind: 'service'[\s\S]{0,200}unitPrice: row\.amount/.test(svc)) {
             console.error('قلم اولیه در createVisit ثبت شده؛ تأیید نباید دوباره آن را بسازد'); process.exit(1);
@@ -2378,7 +2392,9 @@ jobs:
           const svc  = fs.readFileSync('server/src/patients/survey.service.ts', 'utf8');
           const ctrl = fs.readFileSync('server/src/patients/survey.controller.ts', 'utf8');
           const reg  = fs.readFileSync('server/src/auth/access-registry.ts', 'utf8');
-          const css  = fs.readFileSync('src/app/definitions.css', 'utf8');
+          /* کنترل‌های DynForm از قانون ۲۱ به بعد همراهِ خودِ کامپوننت‌اند
+             (src/ui/dynform.css)، نه در CSSِ صفحهٔ تعریف‌ها. */
+          const css  = fs.readFileSync('src/ui/dynform.css', 'utf8');
 
           /* ⚠️ کامنت‌ها قبل از هر تطبیق برداشته می‌شوند. بندِ اول همین‌جا **گاز
              دروغین** داد: کامنتِ خودِ کنترلر توضیح می‌داد چرا \`@UseGuards\`
@@ -2675,11 +2691,20 @@ jobs:
            * است — همان اشتباه یک‌بار سرِ «ریال» هم رخ داد.
            */
           const code = (src) => src.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/\\/\\/[^\\n]*/g, '');
-          const lx = code(read('src/app/Launcher.jsx'));
-          if (/lvl >= min\\b/.test(lx) || /f\\?\\.minLevel/.test(lx)) {
-            console.error('لانچر نباید خودش سطح را حساب کند — allowedِ سرور'); process.exit(1);
+          /* از W2.3 کاتالوگِ کاشی‌ها و گیتشان در `src/app/tools.jsx` است و هم
+             لانچر (`/app/tools`) و هم کشوی صفحهٔ «امروز» از همان می‌خوانند —
+             پس سنجهٔ مثبت همان‌جاست و سنجهٔ منفی روی **هر دو**. */
+          const surfaces = { 'src/app/tools.jsx': true, 'src/app/Launcher.jsx': false };
+          for (const [file, mustRead] of Object.entries(surfaces)) {
+            const lx = code(read(file));
+            if (/lvl >= min\\b/.test(lx) || /f\\?\\.minLevel/.test(lx)) {
+              console.error(`${file} نباید خودش سطح را حساب کند — allowedِ سرور`); process.exit(1);
+            }
+            if (mustRead && !/f\\.allowed/.test(lx)) { console.error(`${file} باید allowed را بخواند`); process.exit(1); }
           }
-          if (!/f\\.allowed/.test(lx)) { console.error('لانچر باید allowed را بخواند'); process.exit(1); }
+          if (/const (HERO|TOOLS|DAILY) =/.test(code(read('src/app/Launcher.jsx')))) {
+            console.error('کاتالوگِ کاشی‌ها فقط در src/app/tools.jsx — دو نسخه یعنی ماژولی که در یکی هست و در دیگری نیست'); process.exit(1);
+          }
 
           // ⑤ سطح به‌تنهایی راننده را از کارشناس جدا نمی‌کند — هر دو سطح ۲اند.
           if (!/TransportStaff|transportStaff/.test(fsvc) || !/!staff \\|\\| hasTechVisits/.test(fsvc)) {
@@ -2865,3 +2890,282 @@ jobs:
       # کانفلیکت خورد، از نوعِ «هر دو وسط اضافه کرده‌اند» بود.
       - name: Verify agent claims do not overlap
         run: node scripts/verify-claims.js
+
+      # هر صفحهٔ lazy باید CSSِ کلاس‌هایی که استفاده می‌کند خودش بیاورد —
+      # فرمِ عمومیِ بیمار یک‌بار بی‌صدا بی‌استایل شد (قانون ۲۱).
+      - name: Verify every lazy chunk ships the CSS it uses
+        run: node scripts/verify-css-chunks.js
+
+      - name: Verify atomic clinical order answers and review lifecycle (W1.2)
+        run: node scripts/e2e/w1-2-order-review-local.mjs
+
+      - name: Verify atomic intake approval, idempotency and committed SMS queue (W1.4)
+        run: node scripts/e2e/w1-4-approve-local.mjs
+
+      # ⚠️ W1.1/D01: the follow-up row is created when the VISIT is registered,
+      # which for a planned operation is BEFORE its opDate. Matching answers by
+      # patientId + createdAt therefore reported every planned operation as
+      # unfollowed, and let one answer cover two operations. The exact key was
+      # in the same JSON all along (data.followUpVisitId / followUpDay).
+      - name: Verify follow-up matching by exact key, per due date and cap notice (W1.1)
+        run: node scripts/e2e/w1-1-unfollowed-local.mjs
+
+      # ⚠️ W1.7/D07: post-op care and the follow-up form are planted for an
+      # operation nobody has confirmed happened — opStatus stays 'pending'
+      # until someone records it, so a postponed patient got after-care
+      # instructions. Per DECISIONS #1 the message still goes, with hedged
+      # wording, and is re-planted with the normal text the moment the
+      # surgeon marks it done. Messages sent BEFORE the op are never hedged.
+      - name: Verify hedged after-care text until the operation is confirmed (W1.7)
+        run: node scripts/e2e/w1-7-postop-local.mjs
+
+      # ⚠️ W1.3/D03a: a free record-scope form is approved inline by fill(),
+      # which skipped syncLinkDocuments entirely, so the patient's MRI link
+      # never became a record document. approve() only accepts
+      # pending_approval rows, so such a row could never be repaired. Both
+      # paths now go through one commitAnswers step.
+      - name: Verify both approval paths turn form links into documents (W1.3)
+        run: node scripts/e2e/w1-3-approve-local.mjs
+
+      # ⚠️ W1.8/D09: the only way to store a patient's answers was fill(),
+      # which advances status — so a half-filled multi-page form could not be
+      # saved at all and a refresh (or a dropped mobile connection) lost every
+      # typed word. draft() merges into data and never touches status.
+      - name: Verify the public form draft never advances status (W1.8)
+        run: node scripts/e2e/w1-8-draft-local.mjs
+
+      # The UI half of the same contract (§6): resume on the saved page, show
+      # the save state, and keep nothing in browser storage — the form holds
+      # medical answers and is filled on shared phones.
+      # The runner has no browser and playwright-core ships none, so this is
+      # the first browser suite this workflow can actually run. Pinned to the
+      # playwright-core version in package.json so the protocol matches.
+      - name: Install chromium for the browser suite
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
+
+      # ⚠️ ۳۱ سوییت `executablePath: '/opt/pw-browsers/chromium'` را هاردکد
+      # کرده‌اند و ۱۴ تای دیگر آن را پیش‌فرضِ `E2E_CHROME` گرفته‌اند — مسیرِ
+      # کانتینرِ توسعه، که روی رانر نیست. به‌جای دست‌زدن به ۵۸ فایلِ سه لِین،
+      # همان مسیرها را به chromiumِ نصب‌شدهٔ playwright سیم‌لینک می‌کنیم.
+      - name: Expose chromium where the suites expect it
+        run: |
+          CHROME="$(find ~/.cache/ms-playwright -type f -name chrome -path '*chromium-*' | head -1)"
+          test -x "$CHROME" || { echo "chromium پیدا نشد"; exit 1; }
+          sudo mkdir -p /opt/pw-browsers/chromium-1194/chrome-linux
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium-1194/chrome-linux/chrome
+          sudo ln -sfn "$CHROME" /tmp/chromium
+          echo "E2E_CHROME=$CHROME" >> "$GITHUB_ENV"
+
+      - name: Verify draft resume, indicator and no browser storage (W1.8 UI)
+        run: node scripts/e2e/w1-8-draft-ui.mjs
+
+      # ⚠️ W1.9/§8: syncNextVisit cancelled and recreated every pending
+      # reminder on each call, and 'uncertain' was effectively terminal --
+      # sendReminders only picks up 'pending', so a message whose outcome was
+      # unknown was never retried and just sat there. Now every reminder has a
+      # dedupe key, only rows outside the new plan are cancelled, and an
+      # uncertain send returns to the queue after 5/15/45 minutes.
+      - name: Verify reminder dedupe keys and delivery retry (W1.9)
+        run: node scripts/e2e/w1-9-reminder-local.mjs
+
+      # ⚠️ W0.4/D03b: a links box stores {url,title} and an image box stores
+      # {id,name}. The attached-forms path sent the raw value and the client
+      # did faNum(v.join('، ')) on it -- so the page literally showed
+      # [object Object]. Even when readable, nothing was openable. The server
+      # now returns readable text AND openable parts from one shaper.
+      - name: Verify form answers render openable and never [object Object] (W0.4)
+        run: node scripts/e2e/w0-4-answer-render.mjs
+
+      # ⚠️ W0.8/CONTRACTS §5: a lab result is usually just a photo or a PDF,
+      # and the public order page had no way to send one -- the patient had
+      # to upload it to some stranger's site and paste the LINK, and if they
+      # had only a file, publicAnswer refused with "enter text or a link".
+      # The new upload endpoint is public and unauthenticated, so the type is
+      # decided by the file's own magic bytes, never by the multipart header:
+      # the download route echoes the stored mimeType into Content-Type and
+      # serves images inline, so a client's lie would reach staff browsers.
+      # Appending after review must also never erase the recorded decision.
+      - name: Verify public answer-file upload, its guards and the append path (W0.8)
+        run: node scripts/e2e/w0-8-upload-local.mjs
+
+      # ⚠️ W1.10: every earlier package in this lane stopped the bug from
+      # recurring but left the rows created before it alone -- "repairing the
+      # old data is W1.10" was written into STATUS five times. The repair must
+      # re-run the SAME forward functions (syncLinkDocuments, answerDocuments,
+      # upsertWork), which are all idempotent, rather than bespoke UPDATEs that
+      # would drift from the real path. And what cannot be repaired without
+      # guessing -- which operation an old follow-up answer belongs to -- is
+      # queued for a human, never guessed into the data as if it were fact.
+      - name: Verify the historical-data scan repairs, queues and never guesses (W1.10)
+        run: node scripts/e2e/w1-10-repair-local.mjs
+
+      # ⚠️ W0.5: a lab result is usually just a photo of a sheet, and the
+      # patient's order page had no way to send one -- and its submit button
+      # refused an answer with no text or link. Two separate defects met here:
+      # .od-send carried `flex: 1 1 220px`, a rule written for the staff action
+      # ROW, and the public page's .op-answer is a flex COLUMN -- so the 220px
+      # became the button's HEIGHT. A shared layout rule must name where it
+      # applies, or it means something else in the next container.
+      - name: Verify the public order page uploads files and its button is sane (W0.5)
+        run: node scripts/e2e/w0-5-order-upload-ui.mjs
+
+      # ⚠️ W0.7/U10: the only lever an admin had over the reminder ledger was
+      # "sweep everything" -- one failed message could not be resent on its own
+      # and one wrong message could not be stopped. The guard that matters is
+      # the negative one: a message whose status is 'sent' really did reach the
+      # patient's phone, so resending it means a second confusing SMS to a real
+      # person, and cancelling it means the ledger lying about something that
+      # happened. Both are refused, on the server and in the UI.
+      - name: Verify per-row reminder actions never touch a sent message (W0.7)
+        run: node scripts/e2e/w0-7-actions-local.mjs
+
+      - name: Verify the reminder ledger only offers allowed row actions (W0.7 UI)
+        run: node scripts/e2e/w0-7-reminder-actions-ui.mjs
+
+      # ⚠️ Public intake guards (two debts the backend lane had recorded but
+      # never closed): the stored mimeType of a receipt or form image came from
+      # the client's multipart header and was echoed into Content-Type (inline
+      # for image/*) on download -- now it comes from the bytes, unknown
+      # signatures are stored as octet-stream instead of the client's claim;
+      # and the public draft endpoint, which writes on every call, had no rate
+      # limit -- the cap is per token and far above real autosave traffic.
+      - name: Verify public intake stores sniffed types and rate-limits drafts
+        run: node scripts/e2e/intake-public-guards-local.mjs
+
+      # ⚠️ Patient portal vs follow-up forms: the backend lane's contract creates
+      # one intake row per follow-up due date the moment a visit is registered
+      # (each wave's SMS needs its link then), and the portal listed every
+      # pending row as a task -- a patient with waves 1/7/30 saw three "fill the
+      # form" tasks before the operation itself. The owner kept the contract and
+      # asked for the filter instead: a follow-up form is a task only from its
+      # due day, never for a cancelled operation, and anything the filter cannot
+      # place (ordinary registration, unknown visit) still shows -- it hides only
+      # what is certainly not yet the patient's work.
+      - name: Verify the portal lists a follow-up form only from its due day
+        run: node scripts/e2e/portal-followup-local.mjs
+      # ── سوییت‌های خودکفا: مرورگرِ واقعی + APIِ ساختگی (fixture) ──────────
+      # Vite را خودشان بالا می‌آورند و سرور/دیتابیس نمی‌خواهند؛ تا امروز
+      # بیرونِ CI بودند و چهار تایشان بیات شده بود (ماتریسِ نقشِ W3.5، برچسبِ
+      # کارشناس در ionm، `PrepCard` روی prepِ ناقص). مرورگر از گامِ «Install
+      # chromium» بالا و مسیرش از `E2E_CHROME`ِ گامِ «Expose chromium» می‌آید.
+      - name: Verify the AI stream contract against the compiled service
+        run: node scripts/e2e/ai-stream-contract.mjs
+      - name: Verify intake approval, quick definitions and assisted text (UI)
+        run: node scripts/e2e/intake-assistance-ui.mjs
+      - name: Verify the order review and prep card (UI)
+        run: node scripts/e2e/orders-ai-ui.mjs
+      - name: Verify company operations screens (UI)
+        run: node scripts/e2e/company-operations-ui.mjs
+      - name: Verify the hospital directory (UI)
+        run: node scripts/e2e/hospital-directory-ui.mjs
+      - name: Verify the neuromonitoring invoice dialog (UI)
+        run: node scripts/e2e/neuromonitoring-invoice-ui.mjs
+      - name: Verify profile workflows (UI)
+        run: node scripts/e2e/profile-workflows-ui.mjs
+      - name: Verify intake steps (W0.1 UI)
+        run: node scripts/e2e/w0-1-intake-steps.mjs
+      - name: Verify labels (W0.2 UI)
+        run: node scripts/e2e/w0-2-labels.mjs
+      - name: Verify accessibility basics (W0.6 UI)
+        run: node scripts/e2e/w0-6-a11y.mjs
+      - name: Verify the patient link (W3.4 UI)
+        run: node scripts/e2e/w3-4-patient-link.mjs
+      - name: Verify the form builder role matrix (W3.5 UI)
+        run: node scripts/e2e/w3-5-formbuilder.mjs
+      - name: Verify the light theme (W3.6 UI)
+        run: node scripts/e2e/w3-6-light-theme.mjs
+      - name: Verify module icons and naming (W3.7 UI)
+        run: node scripts/e2e/w3-7-icons-naming.mjs
+
+  # ══════════════════════════════════════════════════════════════════════
+  # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی
+  # یک دیتابیسِ مشترکِ دستی‌ساخته می‌دویدند: نتیجه‌شان نویز بود و سنجه‌های
+  # بیات (لانچرِ جابه‌جاشده، متنِ عوض‌شده، قراردادِ تازه) فقط با اجرای تصادفی
+  # پیدا می‌شدند. اینجا: Postgresِ سرویس + محیطِ تازه با `bootstrap-env.mjs`
+  # + رانرِ `run-live.mjs` که سطلِ ورودِ ۸‌تایی را با بالاآوردنِ دوبارهٔ
+  # سرور بین دسته‌ها دور می‌زند و سوییتِ افتاده را از بقیه جدا می‌کند.
+  # فهرست در `scripts/e2e/ci-live.txt`؛ سوییتِ تازه = یک خط آن‌جا.
+  # چهار شاردِ موازی تا کلِ فهرست ~۲۰ دقیقه بماند نه ۸۰. `automerge` کلِ
+  # workflow را می‌سنجد، پس این جاب هم مرج را نگه می‌دارد.
+  # ══════════════════════════════════════════════════════════════════════
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: tenant_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant_ci?schema=public
+      CONTROL_DATABASE_URL: postgresql://ci:ci@localhost:5432/control_ci?schema=public
+      E2E_TENANT2_DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant2_ci?schema=public
+      TENANT_DATABASE_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
+      DEFAULT_TENANT_SLUG: t1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Frontend install
+        run: npm ci
+      - name: Backend install
+        working-directory: server
+        run: npm ci
+      - name: Backend build
+        working-directory: server
+        run: npm run build
+
+      # همان نسخهٔ جابِ build؛ playwright-core خودش مرورگر ندارد.
+      - name: Install chromium
+        run: npx --yes playwright@1.61.1 install --with-deps chromium
+
+      # ⚠️ ۳۱ سوییت `executablePath: '/opt/pw-browsers/chromium'` را هاردکد
+      # کرده‌اند و ۱۴ تای دیگر آن را پیش‌فرضِ `E2E_CHROME` گرفته‌اند — مسیرِ
+      # کانتینرِ توسعه، که روی رانر نیست. به‌جای دست‌زدن به ۵۸ فایلِ سه لِین،
+      # همان مسیرها را به chromiumِ نصب‌شدهٔ playwright سیم‌لینک می‌کنیم؛ در
+      # سندباکس هم `/opt/pw-browsers/chromium` خودش سیم‌لینک است.
+      - name: Expose chromium where the suites expect it
+        run: |
+          CHROME="$(find ~/.cache/ms-playwright -type f -name chrome -path '*chromium-*' | head -1)"
+          test -x "$CHROME" || { echo "chromium پیدا نشد"; exit 1; }
+          sudo mkdir -p /opt/pw-browsers/chromium-1194/chrome-linux
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium
+          sudo ln -sfn "$CHROME" /opt/pw-browsers/chromium-1194/chrome-linux/chrome
+          sudo ln -sfn "$CHROME" /tmp/chromium
+          echo "E2E_CHROME=$CHROME" >> "$GITHUB_ENV"
+
+      # سوییت‌ها با `psql` مستقیم در دیتابیس می‌خوانند/می‌نویسند (`E2E_DB`).
+      - name: Databases for the control plane and the second tenant
+        run: |
+          command -v psql >/dev/null || sudo apt-get install -y --no-install-recommends postgresql-client >/dev/null
+          psql "postgresql://ci:ci@localhost:5432/tenant_ci" -v ON_ERROR_STOP=1 -c "CREATE DATABASE control_ci" -c "CREATE DATABASE tenant2_ci"
+
+      - name: Bootstrap a fresh environment
+        run: node scripts/e2e/bootstrap-env.mjs
+
+      - name: Run shard ${{ matrix.shard }} of the live manifest
+        run: node scripts/e2e/run-live.mjs --manifest scripts/e2e/ci-live.txt --shard ${{ matrix.shard }}/4 --log-dir .e2e-logs
+
+      - name: Keep the logs when something fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-live-logs-shard-${{ matrix.shard }}
+          path: .e2e-logs/
+          if-no-files-found: ignore

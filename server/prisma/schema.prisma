@@ -79,6 +79,8 @@ model Account {
 
   @@index([verificationDueAt])
   @@map("accounts")
+  /// گام‌های مسیرِ درمان که مسئولشان این حساب است (W4.1).
+  pathwaySteps EpisodeStep[]
 }
 
 /// نقشِ «جراح» — هویت در Person است. اگر جراح بخواهد وارد پورتال شود، کافی است
@@ -796,7 +798,13 @@ model IntakeSubmission {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
+  /// W1.6: تعریفِ زمان ثبت پاسخ؛ پس از اولین ثبت تغییر نمی‌کند.
+  schemaSnapshot Json? @map("schema_snapshot")
+
   @@map("intake_submissions")
+  approvalKey String? @unique @map("approval_key")
+  approvalResult Json? @map("approval_result")
+
 }
 
 /// کدِ تخفیفِ ثبت‌نام.
@@ -1044,6 +1052,8 @@ model Patient {
   /// نوبت‌های این بیمار (`docs/BOOKING.md`).
   appointments Appointment[]
   reminders Reminder[]
+  /// دوره‌های خدمت — مسیرِ درمان (W4.1).
+  episodes  Episode[]
 }
 
 /// مدرکِ پزشکی — آزمایش، تصویربرداری، گزارش، رضایت‌نامه، مدرکِ هویتی…
@@ -1070,6 +1080,10 @@ model Document {
   /// وقتی پُر است فایلی روی دیسک نیست: sha256 خالی و size صفر می‌ماند و
   /// دانلود به‌جای استریم همین نشانی را برمی‌گرداند.
   externalUrl String? @map("external_url")
+  /// ورودِ پورتالِ مقصد (پکس/سایتِ آزمایشگاه) — بیمار یا پزشک کنارِ لینک می‌دهد
+  /// تا همکارِ بعدی بدونِ پرس‌وجو بازش کند. متنِ ساده، چون باید خوانده شود.
+  externalUser String? @map("external_user")
+  externalPass String? @map("external_pass")
   /// تاریخِ خودِ آزمایش/تصویربرداری، نه تاریخِ آپلود — مدرکِ پارسال ممکن است
   /// امروز آپلود شود و مرتب‌سازیِ زمانیِ پرونده باید بالینی باشد نه اداری.
   takenAt  DateTime? @map("taken_at")
@@ -1083,6 +1097,12 @@ model Document {
   @@index([visitId])
   @@index([sha256])
   @@map("documents")
+  /// Immutable order answer; links/files are referenced, never copied.
+  refType String? @map("ref_type")
+  refId Int? @map("ref_id")
+  contentText String? @map("content_text")
+  @@index([refType, refId])
+
 }
 
 /// قلمِ صورت‌حساب.
@@ -1281,6 +1301,12 @@ model Visit {
   followUpDays  String? @map("follow_up_days")
   opStatus String    @default("pending") @map("op_status") // pending | done | cancelled
 
+  /// دلیلِ لغو — کلیدی از `CANCEL_REASONS` (مجموعهٔ بسته در کد، نه جدول).
+  /// ⚠️ این متن **به دستِ بیمار می‌رسد**؛ یادداشتِ داخلی ستونِ جداست.
+  cancelReason String? @map("cancel_reason")
+  /// یادداشتِ داخلیِ لغو — فقط کارکنان. هرگز فرستاده نمی‌شود.
+  cancelNote   String? @map("cancel_note")
+
   /// توکنِ لینکِ عمومیِ «خلاصهٔ ویزیت» — تنبل ساخته می‌شود، اولین باری که
   /// ادمین خلاصه را باز می‌کند یا برای بیمار می‌فرستد. صفحهٔ عمومی هیچ
   /// عددِ مالی‌ای ندارد؛ همان قاعدهٔ توکنِ فرمِ بیمار.
@@ -1386,6 +1412,10 @@ model Visit {
   /// نوبتی که این مراجعه از آن ساخته شد — یک‌به‌یک.
   appointment Appointment?
   reminders Reminder[]
+  appointmentsFor Appointment[] @relation("AppointmentForVisit")
+
+  /// دوره‌ای که از این مراجعه شروع شد — مسیرِ درمان (W4.1).
+  episodes  Episode[]
 }
 
 /// Issued versions are immutable; a later version supersedes, never rewrites, one.
@@ -2078,7 +2108,14 @@ model FormField {
   /// وگرنه فرمی می‌ساختیم که هیچ‌وقت ذخیره نمی‌شود.
   /// `image` برعکس، یک **ارجاع** (`{id,url,name}`) ذخیره می‌کند و ستاره‌اش
   /// معنی دارد.
+  ///
+  /// `links` — فهرستِ لینک‌های MRI/CT/آزمایش با نامِ کاربری/رمزِ اختیاری؛ هر
+  /// لینک هنگامِ ذخیرهٔ مراجعه یک مدرکِ لینکیِ پرونده می‌شود (`link-documents.ts`).
   type String @default("text")
+
+  /// دستهٔ مدرکی که باکسِ `image`/`links` در پرونده می‌سازد (تصویربرداری،
+  /// آزمایش…). `null` = «متفرقه». فقط برای همین دو نوع معنی دارد.
+  docCategory String? @map("doc_category")
 
   /// همان «ستاره». تک‌منبعِ اجباری‌بودن: هم ستارهٔ کنارِ برچسب و هم ۴۰۰ِ سرور
   /// از همین یک ستون می‌آیند، تا فرم و سرور هیچ‌وقت دو نظر نداشته باشند.
@@ -2115,6 +2152,9 @@ model FormField {
 
   @@unique([formId, key])
   @@index([formId, page, sort])
+  /// W1.6: حذف از فرم زنده، حفظ در تاریخچه.
+  deletedAt DateTime? @map("deleted_at")
+
   @@map("form_fields")
 }
 
@@ -2306,6 +2346,9 @@ model Appointment {
   visitId Int?   @unique @map("visit_id")
 
   note      String?
+  /// همان دو ستونِ `Visit` — لغوِ نوبت هم لغو است و دلیلِ خودش را می‌خواهد.
+  cancelReason String? @map("cancel_reason")
+  cancelNote   String? @map("cancel_note")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -2314,6 +2357,10 @@ model Appointment {
   @@unique([doctorId, date, startMin])
   @@index([date, status])
   @@map("appointments")
+  /// مراجعهٔ هدفِ این نوبت، مستقل از شروع شدنِ ویزیت.
+  forVisit Visit? @relation("AppointmentForVisit", fields: [forVisitId], references: [id], onDelete: SetNull)
+  forVisitId Int? @map("for_visit_id")
+
 }
 
 /// یادآوریِ برنامه‌ریزی‌شده — دفترِ ارسال، نه صف: هر ردیف یک پیامکِ قرار است
@@ -2334,6 +2381,10 @@ model Reminder {
   providerId String? @map("provider_id")
   deliveryStatus String @default("unknown") @map("delivery_status")
   attemptedAt DateTime? @map("attempted_at")
+  /// W1.9 — چند بار تلاشِ ارسال شده. `uncertain` تا سه بار با مکثِ ۵/۱۵/۴۵
+  /// دقیقه دوباره امتحان می‌شود و بعد `failed` می‌گیرد؛ بدونِ این ستون
+  /// «چندمین تلاش» دانستنی نبود و `uncertain` عملاً وضعیتِ **نهایی** بود.
+  attempts Int @default(0)
 
   patient   Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
   patientId Int?     @map("patient_id")
@@ -2425,6 +2476,10 @@ model LabOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("lab_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+
 }
 
 model ImagingOrder {
@@ -2450,6 +2505,10 @@ model ImagingOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("imaging_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+
 }
 
 model ConsultOrder {
@@ -2472,6 +2531,10 @@ model ConsultOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("consult_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+
 }
 
 model ReferralOrder {
@@ -2492,6 +2555,12 @@ model ReferralOrder {
   @@index([patientId])
   @@index([visitId])
   @@map("referral_orders")
+  reviewNote String? @map("review_note")
+  reviewedById Int? @map("reviewed_by_id")
+  reviewedAt DateTime? @map("reviewed_at")
+  answerText String? @map("answer_text")
+  answerLink String? @map("answer_link")
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -2572,4 +2641,198 @@ model SiteItem {
 
   @@index([kind, active, sort])
   @@map("site_items")
+}
+
+/// ───────────────────────── لایهٔ کار (W2.1) ─────────────────────────
+/// «کار» = تعهدی با مسئول و مهلت، با ارجاعِ صریح به موجودیتِ منبع. قراردادِ دقیق:
+/// `docs/plan/CONTRACTS.md` §۱. عمداً بدونِ relation تا مدل‌های دیگر دست نخورند
+/// (append-only)؛ خواننده‌ها بیمار/مراجعه را جداگانه enrich می‌کنند.
+model WorkItem {
+  id Int @id @default(autoincrement())
+  /// review_result · review_form · approve_intake · repair_intake · call_patient · confirm_appointment ·
+  /// confirm_surgery_done · complete_report · confirm_usage · issue_invoice · resend_sms ·
+  /// follow_up_unanswered · fill_form · upload_result · pick_slot · manual
+  type String
+  /// open · blocked · done · cancelled · expired
+  state String @default("open")
+  /// human · assistant_suggests · assistant_auto_approve · assistant_auto — نردبانِ مجری (§۴.۱ سندِ بازبینی)
+  performer String @default("human")
+  priority  Int    @default(0)
+  dueAt     DateTime? @map("due_at")
+  /// jobRole (doctor/secretary/nurse/assistant/technician/driver/courier) یا 'patient' یا 'system'
+  ownerRole      String? @map("owner_role")
+  ownerAccountId Int?    @map("owner_account_id")
+  patientId      Int?    @map("patient_id")
+  visitId        Int?    @map("visit_id")
+  appointmentId  Int?    @map("appointment_id")
+  /// ارجاعِ آزاد: lab_order | imaging_order | consult_order | referral_order | intake_submission | invoice | reminder | visit
+  refType String? @map("ref_type")
+  refId   Int?    @map("ref_id")
+  title   String
+  note    String?
+  outcome Json?
+  blockedReason  String?   @map("blocked_reason")
+  sourceEventId  Int?      @map("source_event_id")
+  idempotencyKey String    @unique @map("idempotency_key")
+  createdById    Int?      @map("created_by_id")
+  completedById  Int?      @map("completed_by_id")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([state, ownerRole, dueAt])
+  @@index([state, ownerAccountId, dueAt])
+  @@index([patientId])
+  @@index([refType, refId])
+  @@map("work_items")
+}
+
+/// outbox: هر نوشتنِ حساس یک رویداد در **همان تراکنش** (`EventsService.emit`).
+/// پردازشگر (worker) رویدادِ پردازش‌نشده را به کار تبدیل می‌کند؛ ردیف پاک نمی‌شود
+/// چون منبعِ analytics (W4.4) هم هست. قرارداد: `docs/plan/CONTRACTS.md` §۲.
+model DomainEvent {
+  id Int @id @default(autoincrement())
+  type          String
+  patientId     Int?      @map("patient_id")
+  visitId       Int?      @map("visit_id")
+  appointmentId Int?      @map("appointment_id")
+  refType       String?   @map("ref_type")
+  refId         Int?      @map("ref_id")
+  payload       Json?
+  actorId       Int?      @map("actor_id")
+  at            DateTime  @default(now())
+  processedAt   DateTime? @map("processed_at")
+
+  @@index([processedAt])
+  @@index([type, at])
+  @@index([patientId])
+  @@map("domain_events")
+}
+
+// ── مسیرِ درمان (W4.1) ───────────────────────────────────────────────────
+// یافتهٔ A4: کلِ «اتوماسیونِ مسیر» امروز `syncPostOpVisit()` + کاشتِ یادآوری
+// است و هر دو قفلِ `kind === 'surgery'`اند. یعنی مطب (ویزیت‌محور)، IVF
+// (چرخه‌ای) و فیزیوتراپی (دوره‌ای) **هیچ** مسیری ندارند مگر کد عوض شود.
+//
+// ⚠️ **الگو و نمونه از هم جدا هستند، و این کلِ طرح است.** الگو نسخه‌دار است
+// و نمونه هنگامِ شروع گام‌هایش را **کپی** می‌کند. پس انتشارِ نسخهٔ تازه
+// دوره‌های در جریان را دست نمی‌زند — همان معیارِ پذیرش: «نسخهٔ جدید سابقه را
+// بازنویسی نکند». اگر گام‌ها از خودِ الگو خوانده می‌شدند، هر ویرایشِ الگو
+// تاریخچهٔ همهٔ بیمارانِ گذشته را هم عوض می‌کرد.
+//
+// ⚠️ و `EpisodeStep` **خودش** همان «برنامهٔ اختصاصیِ بیمار» است: گامِ کپی‌شده
+// قابلِ جابه‌جایی، حذف و افزودن است. جدولِ سومِ جدا (`PatientPlan`) دو منبعِ
+// حقیقت برای یک چیز می‌ساخت.
+
+/// الگوی مسیر — هویتِ ثابت. متنِ گام‌ها در نسخه‌هاست، نه این‌جا.
+model PathwayTemplate {
+  id    Int    @id @default(autoincrement())
+  /// کلیدِ پایدار؛ الگوهای آمادهٔ کد با همین کلید شناخته می‌شوند.
+  key   String @unique
+  title String
+  notes String?
+  /// حوزهٔ کاریِ پیشنهادی (clinic/ionm/implant) — فقط برای مرتب‌کردنِ فهرست.
+  vertical String?
+  active   Boolean @default(true)
+  /// الگوی آمادهٔ کد؛ حذف نمی‌شود و ویرایشش نسخهٔ تازه می‌سازد.
+  builtin  Boolean @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  versions PathwayVersion[]
+  episodes Episode[]
+
+  @@map("pathway_templates")
+}
+
+/// یک نسخهٔ منتشرشده از الگو. گام‌ها این‌جا **ثابت** می‌مانند.
+model PathwayVersion {
+  id         Int             @id @default(autoincrement())
+  template   PathwayTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId Int             @map("template_id")
+  /// شمارهٔ نسخه، از ۱ بالا می‌رود و هرگز دوباره استفاده نمی‌شود.
+  version    Int
+  /// draft | published | retired — فقط `published` قابلِ شروع است.
+  status     String          @default("draft")
+  /// آرایهٔ گام‌ها؛ شکلش در `pathway.registry.ts` تعریف شده.
+  steps      Json
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  episodes Episode[]
+
+  @@unique([templateId, version])
+  @@index([templateId, status])
+  @@map("pathway_versions")
+}
+
+/// دورهٔ خدمتِ یک بیمار — نمونه‌ای از یک نسخهٔ الگو.
+model Episode {
+  id        Int     @id @default(autoincrement())
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId Int     @map("patient_id")
+
+  template   PathwayTemplate @relation(fields: [templateId], references: [id])
+  templateId Int             @map("template_id")
+  /// نسخه‌ای که این دوره از آن کپی شد — برای «با کدام نسخه شروع شد؟».
+  version   PathwayVersion @relation(fields: [versionId], references: [id])
+  versionId Int            @map("version_id")
+
+  title  String
+  /// active | done | cancelled
+  status String @default("active")
+
+  /// مراجعه‌ای که دوره از آن شروع شد (اختیاری — دوره می‌تواند مستقل باشد).
+  visit   Visit? @relation(fields: [visitId], references: [id], onDelete: SetNull)
+  visitId Int?   @map("visit_id")
+
+  startedAt DateTime  @default(now()) @map("started_at")
+  closedAt  DateTime? @map("closed_at")
+  createdById Int?    @map("created_by_id")
+
+  steps EpisodeStep[]
+
+  @@index([patientId, status])
+  @@map("episodes")
+}
+
+/// گامِ کپی‌شدهٔ یک دوره — و **همان برنامهٔ اختصاصیِ بیمار**.
+model EpisodeStep {
+  id        Int     @id @default(autoincrement())
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  episodeId Int     @map("episode_id")
+
+  /// کلیدِ گام در الگو؛ گامِ دستیِ افزوده کلید ندارد.
+  key   String?
+  title String
+  /// ترتیبِ نمایش. عدد تا جابه‌جایی با یک UPDATE انجام شود.
+  seq   Int    @default(0)
+
+  /// نقشِ مسئول (`JOB_ROLES`) و در صورتِ تعیین، شخصِ مسئول.
+  ownerRole String? @map("owner_role")
+  owner     Account? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerId   Int?     @map("owner_id")
+
+  /// موعد — از «روزِ نسبی»ِ الگو نسبت به شروعِ دوره حساب می‌شود.
+  dueAt  DateTime? @map("due_at")
+  /// pending | done | skipped
+  status String    @default("pending")
+  doneAt DateTime? @map("done_at")
+  notes  String?
+
+  /// متنِ پیامکِ بیمار در موعدِ همین گام — کپی‌شده از نسخه، قابلِ ویرایش برای
+  /// همین بیمار. خالی یعنی پیامی نمی‌رود.
+  notify String?
+  /// یادآوریِ ساخته‌شده برای همین گام — تا با انجام/رد شدنِ گام باطل شود.
+  reminderId Int? @map("reminder_id")
+  /// «عدمِ پاسخ»: چند روز بعد از موعد، اگر هنوز باز بود، کارِ پیگیری ساخته شود.
+  escalateDays Int? @map("escalate_days")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([episodeId, seq])
+  @@index([status, dueAt])
+  @@map("episode_steps")
 }

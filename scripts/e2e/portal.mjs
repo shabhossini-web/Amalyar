@@ -58,7 +58,7 @@ try {
   ok(cnt('surgery', 'pending') === 1, 'جراحیِ آینده یک یادآوریِ pending دارد');
   ok(sql(`SELECT text FROM reminders WHERE visit_id=${v2.id} AND kind='surgery' AND status='pending'`).includes('عملِ شما'),
     'با متنِ عمل');
-  await send(`/visits/${v2.id}/status`, 'PATCH', { opStatus: 'cancelled' });
+  await send(`/visits/${v2.id}/status`, 'PATCH', { opStatus: 'cancelled', cancelReason: 'other' });
   ok(cnt('surgery', 'pending') === 0 && cnt('surgery', 'cancelled') === 1,
     '**لغوِ عمل یادآوری‌اش را باطل می‌کند**');
   await send(`/visits/${v2.id}/status`, 'PATCH', { opStatus: 'pending' });

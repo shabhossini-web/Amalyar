@@ -1,23 +1,19 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Readable } from 'node:stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
+import { ownPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
 
-/** دسته‌های مدرک — فهرستِ بسته، تا گزارش‌گیری روی متنِ آزاد نیفتد. */
-export const DOCUMENT_CATEGORIES = [
-  'lab', // آزمایش
-  'imaging', // تصویربرداری (MRI/CT/رادیولوژی)
-  'report', // گزارشِ عمل/مانیتورینگ
-  'consent', // رضایت‌نامه
-  'identity', // مدرکِ شناسایی
-  'receipt', // فیشِ پرداخت
-  'other',
-] as const;
+/* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
+   re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
+import { DOCUMENT_CATEGORIES } from './document-categories';
+export { DOCUMENT_CATEGORIES };
 
 /** انواعِ شرحِ بالینی — منطبق بر چرخهٔ مطب → عمل → پس از عمل. */
 export const NOTE_KINDS = ['history', 'visit', 'op', 'progress', 'discharge', 'consult'] as const;
@@ -48,6 +44,54 @@ const CLINICAL_FIELDS = {
   emergencyName: true, emergencyPhone: true, emergencyRelation: true, notes: true,
 } as const;
 
+/**
+ * یک پاسخِ فرم → **متنِ خوانا + قطعاتِ بازشدنی** (W0.4/D03b).
+ *
+ * ⚠️ چرا فقط متن کافی نبود: باکسِ لینک `{url,title}` و باکسِ عکس `{id,name}`
+ * ذخیره می‌کنند. `String()` رویشان «[object Object]» می‌داد، و حتی وقتی
+ * خوانا نوشته می‌شدند بیمار/پزشک **نمی‌توانست بازشان کند** — نشانیِ MRI روی
+ * صفحه بود ولی کلیک نمی‌شد و عکسِ پیوست فقط یک اسم بود.
+ *
+ * پس هر پاسخ دو چیز برمی‌گرداند: `text` برای هر مصرف‌کننده‌ای که رشته
+ * می‌خواهد (CSV، تبِ شرح‌ها، جستجو) و `items` برای رابط تا `<a>` یا دکمهٔ
+ * بازکردنِ مدرک بسازد. هیچ مصرف‌کننده‌ای مجبور نیست شکلِ خامِ JSON را بفهمد.
+ *
+ * ⚠️ `docId` به‌جای نشانی برمی‌گردد: مدرکِ پزشکی پشتِ همان گاردهای پرونده
+ * می‌ماند و کلاینت با `/patients/documents/:id/file` بازش می‌کند.
+ */
+export function answerParts(v: any): {
+  text: string;
+  items: { kind: 'link' | 'doc'; title: string; url?: string; docId?: number }[];
+} {
+  const items: { kind: 'link' | 'doc'; title: string; url?: string; docId?: number }[] = [];
+  const one = (x: any): string => {
+    if (x && typeof x === 'object') {
+      if (x.url && !x.id) {
+        const title = String(x.title || x.url);
+        items.push({ kind: 'link', title, url: String(x.url) });
+        return title;
+      }
+      if (x.id) {
+        const title = String(x.name || x.title || 'فایلِ پیوست');
+        items.push({ kind: 'doc', title, docId: Number(x.id) });
+        return title;
+      }
+      return String(x.name || x.title || x.url || '');
+    }
+    if (typeof x === 'boolean') return x ? 'بله' : 'خیر';
+    return x === null || x === undefined ? '' : String(x);
+  };
+  if (Array.isArray(v)) {
+    const names = v.map(one).filter((t) => t !== '');
+    if (!names.length) return { text: '', items: [] };
+    /* شمارش می‌ماند چون در فهرستِ فشرده مفید است؛ ولی حالا قطعاتش هم می‌آیند. */
+    const kinds = items.length && items.every((i) => i.kind === 'link') ? 'لینک'
+      : items.length && items.every((i) => i.kind === 'doc') ? 'فایل' : null;
+    return { text: kinds ? `${names.length} ${kinds}: ${names.join('، ')}` : names.join('، '), items };
+  }
+  return { text: one(v), items };
+}
+
 @Injectable()
 export class RecordService {
   constructor(
@@ -68,7 +112,7 @@ export class RecordService {
     const patient = await this.prisma.patient.findFirst({
       where: {
         id: patientId,
-        ...(scoped ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+        ...(scoped ? ownPatientWhere(user) : {}),
       },
       select: { id: true, code: true },
     });
@@ -99,7 +143,7 @@ export class RecordService {
     // ⚠️ نامِ آرایه عمداً `clinicalNotes` است، نه `notes`: خودِ بیمار یک فیلدِ متنیِ
     // `notes` دارد و اگر هم‌نام شوند، spread آن را با آرایه می‌پوشاند و ذخیرهٔ
     // پروفایل با «notes must be a string» می‌شکند. (همین باگ یک‌بار رخ داد.)
-    const [visits, documents, clinicalNotes, kindDefs, attachedForms] = await Promise.all([
+    const [visits, documents, clinicalNotes, kindDefs, attachedForms, submissions] = await Promise.all([
       this.prisma.visit.findMany({
         where: { patientId },
         include: {
@@ -129,6 +173,10 @@ export class RecordService {
         },
       }),
       this.listAttachedForms(patientId, clinical),
+      this.prisma.intakeSubmission.findMany({
+        where: { patientId, visitId: { not: null } },
+        select: { visitId: true, schemaSnapshot: true },
+      }),
     ]);
     /* ⚠️ فرمِ **خاموش** هم خوانده می‌شود (بدونِ `active: true`): مراجعاتِ قدیمی
        با نوعی که دیگر استفاده نمی‌شود باید همچنان نامِ درست را نشان بدهند،
@@ -148,9 +196,20 @@ export class RecordService {
       kindTitles[d.visitKind] = d.title;
       kindColors[d.visitKind] = d.color || colorForKey(d.key);
       kindFields[d.visitKind] = (d.fields ?? [])
-        .filter((f) => !f.builtin && f.active !== false)
+        .filter((f) => !f.builtin)
         .map((f) => ({ key: f.key, label: f.label, type: f.type }));
     }
+
+    const snapshotByVisit = new Map(submissions
+      .filter((s) => Array.isArray(s.schemaSnapshot))
+      .map((s) => [s.visitId, s.schemaSnapshot as any[]]));
+    const fieldsForVisit = (id: number, kind: string | null) => {
+      const live = kind ? kindFields[kind] ?? [] : [];
+      const snapshot = snapshotByVisit.get(id);
+      if (!snapshot) return live;
+      const keys = new Set(snapshot.map((f) => f.key));
+      return [...snapshot, ...live.filter((f) => !keys.has(f.key))];
+    };
 
     /**
      * پاسخ‌های فرمِ یک مراجعه، **برچسب‌خورده و مرتب** — مشتقِ سمتِ سرور (قانون ۱۵).
@@ -165,27 +224,19 @@ export class RecordService {
      * چیزی نمی‌گوید. فیلدی که از فرم حذف شده ولی پاسخش مانده هم — با کلیدِ
      * خودش — می‌آید: دادهٔ ثبت‌شده نباید با ویرایشِ فرم از پرونده غیب شود.
      */
-    const answersOf = (kind: string | null, extra: any) => {
+    const answersOf = (id: number, kind: string | null, extra: any) => {
       const vals = (extra && typeof extra === 'object') ? extra as Record<string, any> : {};
-      const defined = kind ? kindFields[kind] ?? [] : [];
+      const defined = fieldsForVisit(id, kind);
       const seen = new Set(defined.map((f) => f.key));
       const rows = defined
         .map((f) => ({ key: f.key, label: f.label, value: vals[f.key] }))
         .concat(Object.keys(vals).filter((k) => !seen.has(k)).map((k) => ({ key: k, label: k, value: vals[k] })));
-      /* ⚠️ ارجاعِ عکس شیء (یا از #۶۶ آرایه) است؛ `String()` رویش
-         «[object Object]» می‌داد. خوانا نوشته می‌شود و شمارش هم می‌آید. */
-      const show = (v: any): string => {
-        if (Array.isArray(v)) {
-          const names = v.map((x) => (x && typeof x === 'object' ? x.name : x)).filter(Boolean);
-          return names.length ? `${names.length} فایل: ${names.join('، ')}` : '';
-        }
-        if (v && typeof v === 'object') return v.name || v.url || (v.id ? 'فایلِ پیوست' : '');
-        return String(v);
-      };
+      /* W0.4: شکل‌دهی از `answerParts` می‌آید — همان تابعی که فرم‌های چسبیده
+         هم استفاده می‌کنند، تا دو مسیر دوباره از هم دور نیفتند. */
       return rows
-        .map((r) => ({ ...r, value: r.value === null || r.value === undefined ? '' : show(r.value) }))
-        .filter((r) => r.value.trim() !== '')
-        .map((r) => ({ key: r.key, label: r.label, value: r.value }));
+        .map((r) => ({ ...r, ...answerParts(r.value ?? '') }))
+        .filter((r) => r.text.trim() !== '')
+        .map((r) => ({ key: r.key, label: r.label, value: r.text, items: r.items }));
     };
 
     /**
@@ -208,7 +259,7 @@ export class RecordService {
       .flatMap((v) => {
         const code = `${patient.code}-V${v.seq}`;
         const vals = (v.extra && typeof v.extra === 'object') ? v.extra as Record<string, any> : {};
-        const rows = (v.kind ? kindFields[v.kind] ?? [] : [])
+        const rows = fieldsForVisit(v.id, v.kind)
           .filter(isTextField)
           .map((f) => ({ label: f.label, body: vals[f.key] }))
           .filter((r) => typeof r.body === 'string' && r.body.trim() !== '')
@@ -253,7 +304,7 @@ export class RecordService {
         notes: v.notes,
         extra: v.extra ?? {},
         /* پاسخ‌های فرم — همان چیزی که پزشک نوشته، با برچسبِ خودش. */
-        answers: answersOf(v.kind, v.extra),
+        answers: answersOf(v.id, v.kind, v.extra),
         /* ⚠️ `null` وقتی این نوع فرمی ندارد — کلاینت آن‌وقت به کلید برمی‌گردد.
            «عمل» نامیدنِ نوعِ ناشناخته دروغ است. */
         kindTitle: v.kind ? kindTitles[v.kind] ?? null : null,
@@ -449,7 +500,7 @@ export class RecordService {
       const data = (r.data ?? {}) as Record<string, any>;
       const ownFields = r.form?.fields ?? [];
       const seen = new Set(ownFields.map((f) => f.key));
-      const mergedFields = [
+      const mergedFields: any[] = Array.isArray(r.schemaSnapshot) ? r.schemaSnapshot : [
         ...ownFields,
         ...(r.extraFormIds ?? []).flatMap((id) => (extraFieldsOf.get(id) ?? []).filter((f) => !seen.has(f.key))),
       ];
@@ -465,10 +516,15 @@ export class RecordService {
         locked: !clinical,
         answers: clinical
           ? mergedFields
-            .map((f) => ({ key: f.key, label: f.label, type: f.type, value: data[f.key] }))
+            /* ⚠️ W0.4: مقدارِ **خام** فرستاده می‌شد و کلاینت رویش `join('، ')`
+               می‌زد — یعنی آرایهٔ `{id,name}`ِ عکس یا `{url,title}`ِ لینک روی
+               صفحه «[object Object]» می‌شد. حالا همان شکل‌دهندهٔ سرور
+               (`answerParts`) هم متنِ خوانا می‌دهد هم قطعاتِ بازشدنی. */
+            .map((f) => ({ key: f.key, label: f.label, type: f.type, raw: data[f.key], ...answerParts(data[f.key] ?? '') }))
             /* فیلدِ بی‌پاسخ ردیفِ خالی نمی‌سازد — فرمِ ده‌فیلدی که بیمار سه‌تا
                پر کرده، نباید هفت خطِ «—» نشان دهد. */
-            .filter((a) => a.value !== undefined && a.value !== null && a.value !== '')
+            .filter((a) => a.text.trim() !== '')
+            .map((a) => ({ key: a.key, label: a.label, type: a.type, value: a.text, items: a.items }))
           : [],
       };
     });
@@ -484,6 +540,7 @@ export class RecordService {
     });
     return rows.map((d) => ({
       id: d.id, patientId: d.patientId, visitId: d.visitId, category: d.category,
+      refType: d.refType, refId: d.refId, contentText: d.contentText,
       title: d.title, fileName: d.fileName, mimeType: d.mimeType, size: d.size,
       takenAt: d.takenAt, createdAt: d.createdAt,
       /// نوعِ محتوا برای کلاینت: عکس را inline نشان می‌دهد، بقیه را دانلود.
@@ -491,6 +548,9 @@ export class RecordService {
       /// مدرکِ لینکی: کلاینت به‌جای دانلود، همین نشانی را باز می‌کند.
       externalUrl: d.externalUrl,
       isLink: !!d.externalUrl,
+      /// ورودِ پورتالِ لینک — زیرِ همان لینک نشان داده می‌شود.
+      externalUser: d.externalUser,
+      externalPass: d.externalPass,
     }));
   }
 
@@ -504,7 +564,7 @@ export class RecordService {
    */
   async addDocumentLink(
     patientId: number,
-    dto: { url?: string; category?: string; title?: string; visitId?: number; takenAt?: string },
+    dto: { url?: string; category?: string; title?: string; visitId?: number; takenAt?: string; user?: string; pass?: string },
     user: any,
   ) {
     await this.assertAccess(patientId, user);
@@ -543,6 +603,8 @@ export class RecordService {
         size: 0,
         sha256: '',
         externalUrl: url.toString().slice(0, 2000),
+        externalUser: dto.user?.trim().slice(0, 120) || null,
+        externalPass: dto.pass?.trim().slice(0, 120) || null,
         takenAt,
         uploadedById: user?.id ?? null,
       },
@@ -613,6 +675,7 @@ export class RecordService {
     await this.assertAccess(doc.patientId, user);
     // مدرکِ لینکی فایلی روی دیسک ندارد — کلاینت باید خودِ لینک را باز کند.
     if (doc.externalUrl) throw new BadRequestException('این مدرک لینکی است — خودِ لینک را باز کنید');
+    if (doc.contentText !== null) return { doc, stream: Readable.from([Buffer.from(doc.contentText)]) };
     if (!(await this.storage.exists(doc.sha256))) throw new NotFoundException('فایلِ این مدرک روی سرور نیست');
     return { doc, stream: this.storage.stream(doc.sha256) };
   }

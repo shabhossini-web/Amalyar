@@ -6,12 +6,14 @@ import { JOB_ROLES, fieldRoles } from '../lib/job-roles.js';
 import { useConfig } from './config.jsx';
 import './definitions.css';
 import './formbuilder.css';
+import './launcher.css'; // شِلِ استانداردِ صفحه (lx-*) + glass
 import { ArrowDown, ArrowUp, Back, Close, Eye, EyeOff, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import { COLOR_KEYS, FORM_COLORS } from '../lib/formColor.js';
 import { toEnDigits } from '../lib/identity.js';
 import { toFa } from '../lib/utils.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import DynForm from '../ui/DynForm.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 /**
@@ -41,9 +43,12 @@ const TYPES = [
   { v: 'phone', l: 'موبایل' },
   { v: 'rating', l: 'امتیاز (۱ تا ۵)' },
   { v: 'image', l: 'باکسِ عکس' },
+  { v: 'links', l: 'باکسِ لینک (MRI/CT/آزمایش)' },
   { v: 'payment', l: 'باکسِ پرداخت' },
 ];
 const typeLabel = (v) => TYPES.find((t) => t.v === v)?.l ?? v;
+/* دسته‌های مدرکِ پرونده برای باکسِ عکس/لینک — همان `DOCUMENT_CATEGORIES` سرور؛ «متفرقه» = خالی. */
+const DOC_CATEGORIES = { imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت' };
 
 /**
  * ⚠️ `survey` هنوز در نگاشت هست هرچند دیگر ساخته نمی‌شود: نصبی که مهاجرت روی
@@ -51,6 +56,9 @@ const typeLabel = (v) => TYPES.find((t) => t.v === v)?.l ?? v;
  * به‌جای «زیرپرونده» رشته‌ی خامِ انگلیسی می‌دید.
  */
 const SCOPE_FA = { visit: 'مراجعه', record: 'زیرپرونده', intake: 'ثبت‌نام', survey: 'زیرپرونده' };
+
+/** نامِ فارسیِ نقش‌های یک فیلد — خالی یعنی «عمومی» (همه پر می‌کنند). */
+const roleNamesOf = (field) => fieldRoles(field).map((v) => JOB_ROLES.find((r) => r.v === v)?.l ?? v);
 
 export default function FormBuilder() {
   const stagger = useStagger();
@@ -64,6 +72,9 @@ export default function FormBuilder() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
+  /* مقادیرِ پیش‌نمایش — فقط در همین صفحه زندگی می‌کنند و هیچ‌جا ذخیره نمی‌شوند. */
+  const [preview, setPreview] = useState({});
+  const [previewPage, setPreviewPage] = useState(1);
 
   useEffect(() => { document.title = 'عمل‌یار — فرم‌ساز'; }, []);
   useEffect(() => {
@@ -183,7 +194,7 @@ export default function FormBuilder() {
 
       <div className="lx-shell">
         <header className="df-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به لانچر"><Back width="15" height="15" /> لانچر</Link>
+          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
           <h1>فرم‌ساز</h1>
         </header>
 
@@ -248,6 +259,84 @@ export default function FormBuilder() {
                 )}
                 {form.hint && <p className="fb-hint">{form.hint}</p>}
 
+                {/* ⚠️ **ماتریسِ نقش‌ها یک‌جاست، نه تکرارشده در هر ردیف.**
+                    تا دیروز هر ردیف یک fieldset با هفت چک‌باکس داشت؛ روی فرمِ
+                    ویزیت (۱۵ فیلد) یعنی ۱۰۵ چک‌باکس و صفحه‌ای که در موبایل از
+                    سه هزار پیکسل رد می‌شد و پیداکردنِ «چه کسی چه چیزی را پر
+                    می‌کند» ناممکن بود. یک جدولِ فیلد × نقش همان داده را در یک
+                    نگاه می‌دهد و ردیف‌ها فشرده می‌مانند (§۴.۷ سندِ بازبینی).
+                    بسته است تا ارتفاعِ صفحه را برنگرداند. */}
+                <details className="fb-fold fb-matrix">
+                  <summary>ماتریسِ نقش‌ها — چه کسی کدام فیلد را پر می‌کند</summary>
+                  <p className="fb-fold-note">
+                    بدونِ هیچ تیک، فیلد <b>عمومی</b> است و همه می‌توانند پرش کنند.
+                    با تیک‌خوردن، فقط همان نقش‌ها کادر را باز می‌بینند و بقیه فقط‌خواندنی.
+                  </p>
+                  <div className="fb-matrix-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th scope="col">فیلد</th>
+                          {JOB_ROLES.map((r) => <th key={r.v} scope="col">{r.l}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {form.fields.map((f) => {
+                          const roles = fieldRoles(f);
+                          return (
+                            <tr key={f.id} className={roles.length ? '' : 'all'}>
+                              <th scope="row">
+                                {f.label}
+                                {!roles.length && <i>عمومی</i>}
+                              </th>
+                              {JOB_ROLES.map((r) => (
+                                <td key={r.v}>
+                                  <input
+                                    type="checkbox"
+                                    disabled={busy}
+                                    checked={roles.includes(r.v)}
+                                    aria-label={`${f.label} — ${r.l}`}
+                                    onChange={(e) => setFieldRoles(f, e.target.checked
+                                      ? [...roles, r.v]
+                                      : roles.filter((v) => v !== r.v))}
+                                  />
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+
+                {/* پیش‌نمایشِ زنده — همان `DynForm`ی که کاربرِ نهایی می‌بیند، نه
+                    یک بازسازیِ دوم. فرم‌سازِ دومی ساخته نمی‌شود (§۴.۷)، پس هر
+                    نوعِ فیلدِ تازه همین‌جا هم خودش را نشان می‌دهد.
+                    مقادیر جایی ذخیره نمی‌شوند و آپلود در دسترس نیست. */}
+                <details className="fb-fold fb-preview">
+                  <summary>پیش‌نمایشِ زنده</summary>
+                  <p className="fb-fold-note">
+                    همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.
+                  </p>
+                  {form.pages > 1 && (
+                    <Tabs
+                      variant="inset"
+                      label="صفحهٔ پیش‌نمایش"
+                      value={String(Math.min(previewPage, form.pages))}
+                      onChange={(k) => setPreviewPage(Number(k))}
+                      items={Array.from({ length: form.pages }, (_, i) => ({ key: String(i + 1), label: `صفحهٔ ${toFa(i + 1)}` }))}
+                    />
+                  )}
+                  <DynForm
+                    fields={form.fields.filter((f) => f.active !== false
+                      && (form.pages > 1 ? (f.page ?? 1) === Math.min(previewPage, form.pages) : true))}
+                    values={preview}
+                    errors={{}}
+                    onChange={setPreview}
+                  />
+                </details>
+
                 <div className="fb-list">
                   {form.fields.map((f, i) => (
                     <motion.article key={f.id} {...stagger(i)} className={`glass fb-row${f.active ? '' : ' off'}`}>
@@ -266,11 +355,14 @@ export default function FormBuilder() {
                         </b>
                         <span>
                           {typeLabel(f.type)}
-                          {f.builtin ? <i className="fb-tag core">هسته‌ای</i> : <i className="fb-tag">دلخواه</i>}
+                          {f.builtin ? <i className="fb-tag core">هسته‌ای</i> : <i className="fb-tag custom">دلخواه</i>}
                           {/* نشانِ صفحه فقط وقتی فرم چندصفحه‌ای است — روی فرمِ
                               تک‌صفحه‌ای «صفحهٔ ۱» روی هر ردیف فقط شلوغی است. */}
                           {form.pages > 1 && <i className="fb-page">صفحهٔ {toFa(f.page ?? 1)}</i>}
-                          {f.role && <i className="fb-tag role">بخشِ {f.roleLabel ?? f.role}</i>}
+                          {/* نقش‌ها این‌جا فقط **خوانده** می‌شوند؛ تیک‌زدنشان کارِ ماتریسِ بالاست. */}
+                          {roleNamesOf(f).length > 0 && (
+                            <i className="fb-tag role">بخشِ {roleNamesOf(f).join('، ')}</i>
+                          )}
                           {!f.active && <i className="fb-tag off">خاموش</i>}
                         </span>
                         {f.options?.length > 0 && (
@@ -288,21 +380,14 @@ export default function FormBuilder() {
                           disabled={busy}
                           onClick={() => toggleRequired(f)}
                           aria-pressed={f.required}
+                          aria-label="اجباری"
                           title={f.required ? 'اجباری — برای اختیاری‌کردن بزنید' : 'اختیاری — برای اجباری‌کردن بزنید'}
                         >
-                          <span aria-hidden="true">*</span> اجباری
+                          {/* برچسب عنصرِ خودش را دارد تا در موبایل جمع شود و فقط
+                              ستاره بماند؛ معنی‌اش در aria-label و title می‌ماند. */}
+                          <span aria-hidden="true">*</span>
+                          <em>اجباری</em>
                         </button>
-                        {/* بخشِ نقش — «هر کس قسمتِ خودش را پر کند». روی فیلدِ
-                            هسته‌ای هم می‌نشیند: «تاریخ مالِ منشی» به‌اندازهٔ
-                            «شرحِ معاینه مالِ پزشک» معنا دارد. */}
-                        <fieldset className="fb-role-choices" disabled={busy}>
-                          <legend>نقش‌های مجاز برای تکمیل (بدون انتخاب: عمومی)</legend>
-                          {JOB_ROLES.map((r) => <label key={r.v}>
-                            <input type="checkbox" checked={fieldRoles(f).includes(r.v)}
-                              onChange={(e) => setFieldRoles(f, e.target.checked ? [...fieldRoles(f), r.v] : fieldRoles(f).filter((v) => v !== r.v))} />
-                            {r.l}
-                          </label>)}
-                        </fieldset>
                         <button type="button" className="df-act" disabled={busy} onClick={() => setEditing({ formId: form.id, field: f })} aria-label="ویرایش">
                           <Pencil width="15" height="15" />
                         </button>
@@ -531,6 +616,7 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
     hint: field.hint ?? '',
     placeholder: field.placeholder ?? '',
     page: String(field.page ?? 1),
+    docCategory: field.docCategory ?? '',
     /* گزینه‌ها به‌شکلِ متنِ چندخطی ویرایش می‌شوند — سریع‌ترین راه برای کاربر.
        سرور هر دو شکل (متن و آرایه) را می‌پذیرد. */
     options: (field.options ?? []).map((o) => (o.v === o.l ? o.l : `${o.v}=${o.l}`)).join('\n'),
@@ -542,6 +628,9 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
   /* باکسِ پرداخت مقدار نمی‌گیرد، پس نه «اجباری» دارد نه راهنمای داخلِ کادر. */
   const isPayment = form.type === 'payment';
   const isImage = form.type === 'image';
+  const isLinks = form.type === 'links';
+  /* دستهٔ مدرک فقط برای کادرهایی که چیزی به تبِ مدارکِ پرونده می‌فرستند. */
+  const hasDocCategory = isImage || isLinks;
 
   const save = async () => {
     if (busy) return;
@@ -566,6 +655,7 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
         hint: form.hint,
         placeholder: form.placeholder,
         page: Number(toEnDigits(form.page)) || 1,
+        ...(hasDocCategory ? { docCategory: form.docCategory || null } : {}),
         ...(hasOptions ? { options: form.options } : {}),
         /* نوع فقط برای فیلدِ تازه یا دلخواه فرستاده می‌شود. سرور فرستادنِ همان
            نوعِ فعلی روی فیلدِ هسته‌ای را هم می‌پذیرد، ولی نفرستادنش صریح‌تر است. */
@@ -591,7 +681,11 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
   );
 
   return (
-    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
+    /* ⚠️ روی دسکتاپ **پنلِ کناری** است نه مودالِ وسط (§۴.۷): تنظیمِ یک فیلد
+       کاری است که کنارِ فهرست انجام می‌شود، و مودالِ وسط همان فهرستی را می‌پوشاند
+       که کاربر دارد با آن مقایسه می‌کند. در موبایل همان شیتِ همیشگی می‌ماند —
+       صفحهٔ باریک جایی برای دو ستون ندارد. کلِ تفاوت در CSS است. */
+    <Overlay backdrop="df-overlay" panel="df-sheet fb-side" as="section" onClose={onClose} closable={!busy}>
       <header className="df-sheet-head">
         <b>{isNew ? 'فیلدِ تازه' : field.builtin ? `ویرایشِ «${field.label}» (هسته‌ای)` : `ویرایشِ «${field.label}»`}</b>
         <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
@@ -625,6 +719,19 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
             می‌شود و در فرم فقط نشانی‌اش می‌ماند — پس فرم سنگین نمی‌شود.
           </p>
         )}
+        {isLinks && (
+          <p className="fb-note">
+            بیمار یا پزشک <b>لینک</b>های MRI/CT/آزمایش را می‌گذارد (تا ۱۰ تا)، با
+            نامِ کاربری و رمزِ اختیاریِ پورتال. هر لینک هنگامِ ثبتِ مراجعه یک
+            <b> مدرکِ لینکی</b> در تبِ مدارکِ پرونده می‌شود.
+          </p>
+        )}
+        {hasDocCategory && fld('docCategory', 'دستهٔ مدرک در پرونده', (
+          <select value={form.docCategory} onChange={set('docCategory')} disabled={busy}>
+            <option value="">متفرقه</option>
+            {Object.entries(DOC_CATEGORIES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+          </select>
+        ), 'عکس یا لینکِ این کادر زیرِ همین دسته در تبِ «مدارک» می‌نشیند — مثلاً تصویربرداری.')}
         {isPayment && (
           <p className="fb-note">
             شمارهٔ حساب و کارت و شبا <b>این‌جا نوشته نمی‌شوند</b>: هنگامِ ساختِ

@@ -18,18 +18,18 @@
 .crm-err {
   display: flex; align-items: center; gap: 7px; max-width: 880px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .crm-empty {
   max-width: 880px; margin: 0 auto 12px; padding: 22px 16px; text-align: center;
   font-size: 13px; color: var(--text3);
-  border: 1px dashed rgba(255, 255, 255, .12); border-radius: 16px;
+  border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 /* ── کارتِ یک فرم / یک بخش ── */
 .crm-card {
   max-width: 880px; margin: 0 auto 12px; padding: 14px; border-radius: 17px;
-  background: rgba(255, 255, 255, .045); border: 1px solid rgba(var(--brand-soft-rgb), .17);
+  background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .17);
 }
 .crm-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 .crm-card-head b { font-size: 14.5px; }
@@ -37,21 +37,21 @@
 .crm-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 99px; }
 .crm-off {
   font-style: normal; font-size: 10.5px; padding: 2px 8px; border-radius: 99px;
-  color: var(--text3); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text3); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 
 /* چیپ‌های وضعیت — چند نفر کجای مسیرند */
 .crm-statuses { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .crm-chip {
   font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
-  color: var(--text2); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12);
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .crm-chip.s-pending_approval { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
 .crm-chip.s-approved { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
-.crm-chip.s-rejected, .crm-chip.s-expired { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+.crm-chip.s-rejected, .crm-chip.s-expired { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 
 /* ── یک فیلدِ تحلیل‌شده ── */
-.crm-field { padding: 10px 0; border-top: 1px solid rgba(255, 255, 255, .07); }
+.crm-field { padding: 10px 0; border-top: 1px solid rgba(var(--veil-rgb), .07); }
 .crm-field-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .crm-field-head b { font-size: 13px; }
 .crm-field-head small { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
@@ -65,7 +65,7 @@
 .crm-bars { display: grid; gap: 6px; }
 .crm-bar { display: grid; grid-template-columns: minmax(90px, 150px) 1fr auto; align-items: center; gap: 9px; }
 .crm-bar-label { font-size: 12px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.crm-bar-track { height: 9px; border-radius: 99px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.crm-bar-track { height: 9px; border-radius: 99px; background: rgba(var(--veil-rgb), .06); overflow: hidden; }
 .crm-bar-fill {
   display: block; height: 100%; border-radius: 99px; min-width: 2px;
   background: linear-gradient(90deg, var(--brand-2), var(--brand-mid));
@@ -79,7 +79,7 @@
 .crm-texts { display: grid; gap: 8px; margin-top: 10px; }
 .crm-texts blockquote {
   margin: 0; padding: 9px 12px; border-radius: 12px;
-  background: rgba(255, 255, 255, .04); border-inline-start: 3px solid rgba(var(--brand-soft-rgb), .5);
+  background: rgba(var(--veil-rgb), .04); border-inline-start: 3px solid rgba(var(--brand-soft-rgb), .5);
 }
 .crm-texts p { font-size: 12.5px; line-height: 1.7; white-space: pre-wrap; }
 .crm-texts footer { margin-top: 5px; font-size: 10.5px; color: var(--text3); }
@@ -97,11 +97,11 @@
 .crm-mstack i.f, .crm-legend i.f { background: linear-gradient(180deg, #34d399, #0f766e); }
 .crm-mbar > span {
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 9.5px; color: rgba(255, 255, 255, .5);
+  font-size: 9.5px; color: rgba(var(--veil-rgb), .5);
 }
 .crm-legend {
   display: flex; align-items: center; gap: 6px; margin-top: 8px;
-  font-size: 11px; color: rgba(255, 255, 255, .55);
+  font-size: 11px; color: rgba(var(--veil-rgb), .55);
 }
 .crm-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
 
@@ -109,7 +109,7 @@
 .crm-csv {
   flex: 0 0 auto; padding: 4px 11px; border-radius: 99px; cursor: pointer;
   font: inherit; font-size: 11px; font-weight: 700; color: var(--text2);
-  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
   transition: color .15s, border-color .15s;
 }
 .crm-csv:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
@@ -119,17 +119,26 @@
 .crm-unf-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 9px 12px; border-radius: 12px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .08);
 }
 .crm-unf-name { display: inline-flex; align-items: baseline; gap: 7px; text-decoration: none; color: var(--text1); }
 .crm-unf-name b { font-size: 13px; }
 .crm-unf-name span { font-size: 10.5px; color: var(--text3); }
 .crm-unf-name:hover b { color: var(--brand-2); }
 .crm-unf-op { margin-inline-start: auto; font-size: 11px; color: var(--text2); }
-.crm-chip.u-none { color: #fca5a5; background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
-.crm-chip.u-pending { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
-.crm-chip.u-sent { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
-.crm-chip.u-open { color: #a5b4fc; background: rgba(129, 140, 248, .12); border-color: rgba(165, 180, 252, .35); }
+.crm-chip.u-none { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+/* ⚠️ این سه هگزِ خام بودند و در تمِ روشن **خوانده نمی‌شدند** (نعناییِ کم‌رنگ و
+   زردِ پریده روی سفید). از پیش از W3.6 مانده بودند و نگهبانِ `verify-theme-tokens`
+   ندیدشان چون فهرستِ هگزهایش بسته است. `.u-none` را لِینِ ج در W3.1 درست کرده
+   بود؛ این سه هم به همان الگو رسیدند. تمِ تیره فقط یک پله جابه‌جا می‌شود. */
+.crm-chip.u-pending { color: var(--amber-text); background: rgba(var(--kind-amber), .12); border-color: rgba(var(--kind-amber), .4); }
+.crm-chip.u-sent { color: var(--green-text); background: rgba(var(--kind-lime), .12); border-color: rgba(var(--kind-lime), .35); }
+.crm-chip.u-open { color: var(--brand-text); background: rgba(var(--kind-violet), .12); border-color: rgba(var(--kind-violet), .35); }
+/* W1.1 — موعدِ پیگیری. کهربا = کاری که مانده، سبز = جواب گرفته.
+   توکن‌های `--kind-*` هر دو تم را دارند (قانونِ ۲۳)، برخلافِ چیپ‌های بالا که
+   هگزِ خام‌اند و از پیش از W3.6 مانده‌اند. */
+.crm-chip.u-day { color: var(--amber-text); background: rgba(var(--kind-amber), .12); border-color: rgba(var(--kind-amber), .38); }
+.crm-chip.u-done { color: var(--green-text); background: rgba(var(--kind-teal), .12); border-color: rgba(var(--kind-teal), .38); }
 
 @media (max-width: 480px) {
   .crm-bar { grid-template-columns: 1fr auto; }

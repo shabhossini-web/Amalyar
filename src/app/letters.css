@@ -25,19 +25,19 @@
 .lt-search {
   display: flex; align-items: center; gap: 8px; max-width: 780px; margin: 0 auto 12px;
   padding: 9px 13px; border-radius: 13px; color: var(--text3);
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .lt-search input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text1); background: none; border: 0; outline: none; }
 
 .lt-err {
   display: flex; align-items: center; gap: 7px; max-width: 780px; margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
-  color: #fca5a5; background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+  color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .lt-empty {
   max-width: 780px; margin: 0 auto 12px; padding: 26px 16px; text-align: center;
   font-size: 13px; color: var(--text3);
-  border: 1px dashed rgba(255, 255, 255, .12); border-radius: 16px;
+  border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 /* ردیفِ یک نامه */
@@ -47,10 +47,10 @@
 .lt-open {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;
   padding: 11px 13px; cursor: pointer; text-align: start; font: inherit; color: var(--text1);
-  background: rgba(255, 255, 255, .045); border: 1px solid rgba(var(--brand-soft-rgb), .16); border-radius: 14px;
+  background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .16); border-radius: 14px;
   transition: border-color .15s, background .15s;
 }
-.lt-open:hover { border-color: rgba(var(--brand-2-rgb), .45); background: rgba(255, 255, 255, .06); }
+.lt-open:hover { border-color: rgba(var(--brand-2-rgb), .45); background: rgba(var(--veil-rgb), .06); }
 .lt-no {
   flex: 0 0 auto; padding: 4px 10px; border-radius: 99px;
   font-size: 12px; font-weight: 800; color: var(--brand-2);
@@ -62,12 +62,12 @@
 .lt-print {
   flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 44px;
   cursor: pointer; color: var(--text2);
-  background: rgba(255, 255, 255, .045); border: 1px solid rgba(255, 255, 255, .12); border-radius: 14px;
+  background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--veil-rgb), .12); border-radius: 14px;
 }
 .lt-print:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .45); }
 
 /* شیتِ ویرایش */
-.lt-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(8, 5, 24, .66); backdrop-filter: blur(4px); }
+.lt-overlay { position: fixed; inset: 0; z-index: 80; background: rgba(var(--surface-rgb), .66); backdrop-filter: blur(4px); }
 .lt-sheet {
   position: fixed; inset-inline: 0; bottom: 0; z-index: 81; max-width: 640px; margin: 0 auto;
   max-height: 92dvh; overflow: auto; padding: 16px 16px 20px;
@@ -81,7 +81,7 @@
 .lt-field span { font-size: 12px; color: var(--text2); }
 .lt-field input, .lt-field textarea {
   font: inherit; font-size: 13.5px; color: var(--text1); padding: 10px 12px;
-  background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .14); border-radius: 12px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 12px;
   outline: none; resize: vertical;
 }
 .lt-field input:focus, .lt-field textarea:focus { border-color: rgba(var(--brand-2-rgb), .55); }
@@ -95,13 +95,13 @@
 .lt-ghost, .lt-del {
   display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; cursor: pointer;
   font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
-  background: none; border: 1px solid rgba(255, 255, 255, .16); border-radius: 12px;
+  background: none; border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 12px;
 }
-.lt-del { color: #fca5a5; border-color: rgba(248, 113, 113, .35); }
-.lt-delask { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: #fca5a5; }
+.lt-del { color: var(--red-text); border-color: rgba(248, 113, 113, .35); }
+.lt-delask { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--red-text); }
 .lt-delask button {
   padding: 7px 12px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--text1);
-  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .16); border-radius: 10px;
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 10px;
 }
 
 @media (max-width: 560px) {

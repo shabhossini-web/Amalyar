@@ -6,7 +6,7 @@
 .jg-head b { flex: 1; text-align: center; font-size: 15px; font-weight: 900; }
 .jg-head button {
   display: grid; place-items: center; width: 36px; height: 36px; cursor: pointer;
-  color: #cfc9e8; background: rgba(255, 255, 255, .05);
+  color: var(--text1); background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--brand-soft-rgb), .24); border-radius: 11px;
 }
 .jg-head button:hover { color: #fff; border-color: rgba(var(--brand-2-rgb), .6); }
@@ -15,12 +15,12 @@
 .jg-today { width: auto !important; padding: 0 12px; font: inherit; font-size: 12px; }
 
 .jg-dows { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-block-end: 6px; }
-.jg-dows span { text-align: center; font-size: 11px; color: rgba(255, 255, 255, .45); }
+.jg-dows span { text-align: center; font-size: 11px; color: rgba(var(--veil-rgb), .45); }
 
 .jg-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .jg-cell {
   min-height: 86px; padding: 6px; border-radius: 12px;
-  background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .08);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .08);
   display: flex; flex-direction: column; gap: 4px; overflow: hidden;
 }
 .jg-cell.empty { background: none; border-color: transparent; }
@@ -29,7 +29,7 @@
 .jg-cell.pick:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 2px; }
 .jg-cell.today { border-color: rgba(0, 229, 255, .5); background: rgba(0, 229, 255, .06); }
 .jg-cell.sel { border-color: transparent; box-shadow: 0 0 0 2px var(--brand-2); }
-.jg-num { font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, .75); }
+.jg-num { font-size: 12px; font-weight: 700; color: rgba(var(--veil-rgb), .75); }
 .jg-cell.today .jg-num { color: #67e8f9; }
 
 @media (max-width: 640px) {
@@ -43,19 +43,19 @@
    استخوانی می‌کرد (گزارشِ کاربر). */
 .jg.compact .jg-head { margin-block-end: 14px; }
 .jg.compact .jg-head b { font-size: 16.5px; letter-spacing: -.3px; }
-.jg.compact .jg-head button { border-radius: 999px; background: rgba(255, 255, 255, .04); }
+.jg.compact .jg-head button { border-radius: 999px; background: rgba(var(--veil-rgb), .04); }
 .jg.compact .jg-dows { gap: 4px; margin-block-end: 8px; }
-.jg.compact .jg-dows span { font-size: 10.5px; letter-spacing: 1px; color: rgba(255, 255, 255, .35); }
+.jg.compact .jg-dows span { font-size: 10.5px; letter-spacing: 1px; color: rgba(var(--veil-rgb), .35); }
 .jg.compact .jg-grid { gap: 6px; }
 .jg.compact .jg-cell {
   min-height: 0; aspect-ratio: 1; padding: 0; border-radius: 15px;
   align-items: center; justify-content: center; gap: 3px;
-  background: rgba(255, 255, 255, .025);
+  background: rgba(var(--veil-rgb), .025);
   border: 1px solid transparent;
   transition: background .18s, border-color .18s, box-shadow .2s, transform .15s;
 }
 .jg.compact .jg-cell.empty { background: none; }
-.jg.compact .jg-num { font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, .42); }
+.jg.compact .jg-num { font-size: 14px; font-weight: 700; color: rgba(var(--veil-rgb), .42); }
 .jg.compact .jg-cell.pick:hover { background: rgba(var(--brand-rgb), .12); transform: translateY(-1px); }
 /* امروز: حلقهٔ نازکِ سیان — نشانه است، نه انتخاب. */
 .jg.compact .jg-cell.today { background: rgba(0, 229, 255, .05); border-color: rgba(0, 229, 255, .35); }
@@ -67,6 +67,6 @@
   box-shadow:
     0 6px 24px -4px rgba(var(--brand-rgb), .65),
     0 2px 10px rgba(0, 229, 255, .25),
-    inset 0 1px 0 rgba(255, 255, 255, .3);
+    inset 0 1px 0 rgba(var(--veil-rgb), .3);
 }
 .jg.compact .jg-cell.sel .jg-num { color: #fff; font-weight: 900; }

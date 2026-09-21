@@ -130,7 +130,8 @@ try {
   await browserLogin(p, login.accessToken);
   await p.goto(UI + `/app/patients/${created.patientId}`, { waitUntil: 'networkidle' });
   await p.waitForTimeout(1500);
-  await p.locator('.ui-tabs button', { hasText: 'مراجعات' }).click();
+  /* تبِ فهرست از بستهٔ ۲ «مراجعه‌ها»ی خنثی است (عمل و ویزیت با هم)، نه «مراجعات». */
+  await p.locator('.ui-tabs button', { hasText: /مراجعه‌ها/ }).click();
   await p.waitForTimeout(800);
   const txt = await p.locator('.df-list').innerText();
   ok(/شرحِ معاینه/.test(txt), 'برچسبِ «شرحِ معاینه» روی صفحهٔ پرونده هست');

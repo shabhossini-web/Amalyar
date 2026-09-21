@@ -60,12 +60,14 @@ try {
 
   console.log('\n۴) پنلِ پلتفرم پشتِ نشست است');
   const g = await fetch(API + '/platform/tariffs');
-  ok(g.status === 401, `GET بدونِ نشست: ${g.status}`);
+  /* بدونِ `PLATFORM_ADMIN_ENABLED` مسیرِ پلتفرم اصلاً وجود ندارد (۴۰۴)؛ با
+     پلتفرمِ روشن و بدونِ نشست ۴۰۱. هر دو «بسته» است — همان قراردادِ ai-central. */
+  ok(g.status === 401 || g.status === 404, `GET بدونِ نشست باز نیست (${g.status})`);
   const po = await fetch(API + '/platform/tariffs', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ year: YEAR, sector: 'private', professional: 1, technical: 1, anesthesia: 1 }),
   });
-  ok(po.status === 401, `POST بدونِ نشست: ${po.status}`);
+  ok(po.status === 401 || po.status === 404, `POST بدونِ نشست باز نیست (${po.status})`);
 } finally {
   sql(DB, `DELETE FROM tariffs WHERE year='${YEAR}'`);
   sql(CTRL, `DELETE FROM central_tariffs WHERE year='${YEAR}'`);

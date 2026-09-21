@@ -11,7 +11,8 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiUpload } from '../lib/api.js';
-import { jStrToIso, isoToJStr } from '../lib/jalali.js';
+import { jStrToIso, isoToJStr, faDate } from '../lib/jalali.js';
+import { DocThumb, isImageDoc, openDoc } from '../ui/DocThumb.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
@@ -35,6 +36,59 @@ export const ORDER_META = {
   consult: { fa: 'درخواستِ مشاوره', hasDue: false, hasResult: true },
   referral: { fa: 'نامهٔ ارجاع', hasDue: false, hasResult: false },
 };
+
+/** وضعیتِ سفارش — همان واژه‌های `live.service` (CONTRACTS §۴)، نه کلیدِ خام. */
+export const ORDER_STATUS_FA = {
+  draft: 'پیش‌نویس',
+  sent: 'فرستاده شد — منتظرِ نتیجه',
+  answered: 'نتیجه آمد — بررسی نشده',
+  in_review: 'در حالِ بررسی',
+  reviewed: 'بررسی شد',
+  needs_action: 'نتیجه ناقص — دوباره لازم است',
+};
+/** سفارشی که پاسخش آمده و هنوز تصمیمی رویش ثبت نشده — همین‌جا بررسی می‌شود. */
+export const canReviewOrder = (o) => !!o?.id && ['answered', 'in_review'].includes(o.status);
+
+const faNum = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+
+/**
+ * آنچه **بیمار** فرستاده (W0.8): عکس/PDF، متن، یا لینک — همه به‌شکلِ مدرکِ
+ * پرونده با `refType=<kind>_order` ثبت می‌شوند و همراهِ سفارش می‌آیند.
+ *
+ * ⚠️ تا دیروز شیت این‌ها را **اصلاً نشان نمی‌داد**: پزشک فرمِ مشاوره را باز
+ * می‌کرد و «پاسخِ خالی» می‌دید در حالی که عکسِ بیمار در مدارکِ پرونده نشسته
+ * بود (گزارشِ مالک، ۱۴۰۵/۰۶/۲۹). پاسخی که در فرمِ خودش دیده نشود، عملاً
+ * نرسیده.
+ */
+function AnswerDocs({ docs, onToast }) {
+  return (
+    <div className="od-docs">
+      <span className="od-label">پاسخِ بیمار — {faNum(docs.length)} مورد</span>
+      <ul className="od-doc-list">
+        {docs.map((d) => (
+          <li key={d.id} className="od-doc">
+            {isImageDoc(d) ? (
+              <button type="button" className="od-doc-thumb" title="بازکردن در اندازهٔ کامل" onClick={() => openDoc(d, onToast)}>
+                <DocThumb id={d.id} alt={d.title || d.fileName} />
+              </button>
+            ) : d.contentText ? (
+              <p className="od-doc-text">{d.contentText}</p>
+            ) : d.externalUrl ? (
+              <a className="od-doc-link" href={d.externalUrl} target="_blank" rel="noopener noreferrer" dir="ltr">{d.externalUrl}</a>
+            ) : (
+              <button type="button" className="od-doc-file" onClick={() => openDoc(d, onToast)}>{d.fileName}</button>
+            )}
+            <small>
+              {d.title || d.fileName}
+              {d.createdAt ? ` · ${faDate(d.createdAt)}` : ''}
+              {d.externalUser ? ` · ورود: ${d.externalUser}${d.externalPass ? ` / ${d.externalPass}` : ''}` : ''}
+            </small>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * میزبانِ شیت — ⚠️ `AnimatePresence` **این‌جا** می‌ماند، نه در والد و نه
@@ -67,7 +121,33 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
     resultPass: order?.resultPass ?? '',
   }));
   const [busy, setBusy] = useState(false);
+  const [reviewNote, setReviewNote] = useState(order?.reviewNote ?? '');
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const reviewable = canReviewOrder(order);
+
+  /**
+   * تصمیمِ بررسی — `POST /orders/:kind/:id/review` (CONTRACTS §۴/§۵).
+   *
+   * ⚠️ تا امروز این endpoint هیچ دکمه‌ای در رابط نداشت: تنها راهِ «بررسی»
+   * زدنِ «انجام شد» روی کارِ `review_result` بود که فقط کار را می‌بست و
+   * خودِ سفارش `answered` می‌ماند — پرونده تا ابد «۲ نتیجه آمده و بررسی
+   * نشده» نشان می‌داد (اسکرین‌شاتِ مالک). حالا تصمیم روی خودِ سفارش ثبت
+   * می‌شود و رویدادِ `order.reviewed` کارِ بررسی را خودش می‌بندد.
+   */
+  const review = async (status) => {
+    const note = reviewNote.trim();
+    if (!note) {
+      onToast(status === 'reviewed' ? 'تصمیم یا یادداشتِ بررسی را بنویسید' : 'دلیلِ ناقص‌بودن را بنویسید — بیمار همان را می‌بیند');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`/orders/${kind}/${order.id}/review`, { method: 'POST', body: { status, reviewNote: note } });
+      onToast(status === 'reviewed' ? 'بررسی ثبت شد ✓' : 'ثبت شد — بیمار باید دوباره بفرستد');
+      onSaved();
+      onClose();
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
   const toggle = (k, v) => setF((s) => ({
     ...s, [k]: s[k].includes(v) ? s[k].filter((x) => x !== v) : [...s[k], v],
   }));
@@ -173,6 +253,13 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       {meta.hasResult && (
         <div className="od-block od-result">
           <span className="od-label">پاسخ — اگر رسیده</span>
+          {order?.id && (
+            <p className={`od-status st-${order.status}`}>
+              وضعیت: <b>{ORDER_STATUS_FA[order.status] ?? order.status}</b>
+              {order.reviewNote && !reviewable && <i> — {order.reviewNote}</i>}
+            </p>
+          )}
+          {(order?.documents ?? []).length > 0 && <AnswerDocs docs={order.documents} onToast={onToast} />}
           <label className="db-field"><span>متنِ پاسخ</span>
             <AssistedTextarea disabled={busy} rows={2} value={f.resultText} onChange={set('resultText')} placeholder="خلاصهٔ جواب" />
           </label>
@@ -206,6 +293,19 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
             }}
             onAllDone={() => onToast('عکسِ جواب در مدارکِ پرونده ثبت شد ✓')}
           />
+          {reviewable && (
+            <div className="od-review">
+              <span className="od-label">تصمیمِ بررسی</span>
+              <label className="db-field"><span>یادداشت / تصمیم</span>
+                <AssistedTextarea purpose="تصمیمِ بررسیِ نتیجه" disabled={busy} rows={2} value={reviewNote}
+                  onChange={(e) => setReviewNote(e.target.value)} placeholder="مثلاً: نرمال — نیاز به اقدام ندارد" />
+              </label>
+              <div className="od-actions">
+                <button type="button" className="od-send" disabled={busy} onClick={() => review('reviewed')}>بررسی شد</button>
+                <button type="button" className="od-save od-warn" disabled={busy} onClick={() => review('needs_action')}>ناقص است — دوباره بفرستد</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
