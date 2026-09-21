@@ -3,7 +3,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useAuth } from './auth.jsx';
-import { api, apiStream } from '../lib/api.js';
+import { api, apiStream, apiUpload } from '../lib/api.js';
 import { isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
@@ -11,6 +11,7 @@ import { useConfig } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
+import FileDrop from '../ui/FileDrop.jsx';
 import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import JDate from './JDate.jsx';
 import { Close, Plus } from '../ui/icons.jsx';
@@ -109,6 +110,15 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
 }
 
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
+/** برچسبِ سه مرحله — همان واژه‌های تبِ مرحله، تا بج و تب دو حرفِ متفاوت نزنند. */
+const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'بعد از عمل' };
+/* دسته‌های مدرکی که واقعاً به یک عمل گره می‌خورند. «مدرکِ شناسایی» و «فیش» عمداً
+   نیستند: آن‌ها مالِ کلِ پرونده‌اند، نه مرحلهٔ یک عمل — و از تبِ مدارکِ پرونده
+   بارگذاری می‌شوند. فهرست زیرمجموعهٔ `DOCUMENT_CATEGORIES`ِ سرور است. */
+const VISIT_DOC_CATEGORIES = {
+  imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', other: 'متفرقه',
+};
+
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
   const { t, defaultKind = 'surgery' } = useConfig();
   const editing = !!initial?.id;
@@ -826,6 +836,47 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
   ) : null;
 
+  /* ── مدارکِ همین مرحله ─────────────────────────────────────────────────
+     بازخوردِ مالک ۱۴۰۵/۰۶/۳۰: «بسته به اینکه مدارکِ هر عمل قبل یا بعد از عمل
+     است، همان‌جا باید ذخیره شود؛ وقتی مدارکِ یک عمل را می‌بینیم باید بفهمیم
+     کدام عکس و آزمایش قبل از عمل بود و کدام بعدش.»
+
+     تا دیروز مدرک فقط از تبِ «مدارک»ِ پرونده بالا می‌رفت و آن‌جا نه مرحله‌ای
+     داشت نه راهی برای فهمیدنش — MRIِ پیش از عمل و عکسِ کنترلِ بعدش دو ردیفِ
+     یکسان بودند. حالا آپلود داخلِ **همان تب** است و `visitId` و `phase` از
+     جایی می‌آیند که کاربر ایستاده، نه از یک کشویی که باید یادش بماند پرش کند.
+     دستهٔ مدرک از خودِ نوعِ فایل حدس زده نمی‌شود — کاربر انتخابش می‌کند. */
+  const [docCat, setDocCat] = useState('imaging');
+  const phaseDocs = initial?.id ? (
+    <div className="db-careblock db-phasedocs">
+      <div className="db-carehead">
+        <span>مدارکِ {PHASE_FA[phase]} — عکس، آزمایش، گزارش</span>
+        <i>در «مدارکِ» پرونده با همین برچسب ثبت می‌شود</i>
+      </div>
+      <label className="db-field db-docfield"><span>دستهٔ مدرک</span>
+        <select value={docCat} onChange={(e) => setDocCat(e.target.value)} disabled={busy}>
+          {Object.entries(VISIT_DOC_CATEGORIES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+      </label>
+      <FileDrop
+        accept="image/*,.pdf"
+        maxMb={25}
+        hint={`عکس یا PDF — با برچسبِ «${PHASE_FA[phase]}» روی همین ${t.visit} ثبت می‌شود`}
+        onUpload={async (file) => {
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('category', docCat);
+          fd.append('visitId', String(initial.id));
+          fd.append('phase', phase);
+          await apiUpload(`/patients/${initial.patientId}/documents`, fd);
+        }}
+        onAllDone={() => onToast(`مدرک با برچسبِ «${PHASE_FA[phase]}» ثبت شد ✓`)}
+      />
+    </div>
+  ) : (
+    <p className="db-decide-hint">بعد از ذخیرهٔ همین {t.visit}، مدارکِ هر مرحله از همین‌جا بارگذاری می‌شود.</p>
+  );
+
   /* فرمِ انتخاب‌شده — برای عنوان و رنگِ بخشِ «فرم» (تمایز از ردیفِ نوع‌ها). */
   const kindMeta = (fd.kinds ?? []).find((k) => k.kind === f.kind) ?? null;
 
@@ -1263,6 +1314,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               ? ordersBlock
               : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
           </div>
+
+          {phaseDocs}
           </div>
           )}
 
@@ -1279,6 +1332,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             ) : (
               <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
             )}
+
+            {phaseDocs}
           </div>
           )}
 
@@ -1372,6 +1427,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             />
           </div>
 
+          {phaseDocs}
           </div>
           )}
 

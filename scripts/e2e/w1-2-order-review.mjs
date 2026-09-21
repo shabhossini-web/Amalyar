@@ -55,7 +55,9 @@ try {
     ok(opening.data.status === 'in_review', kind + ' enters in_review');
     const liveOpen = await api(`/patients/${patientId}/live`, undefined, 'GET');
     ok(liveOpen.data.openOrders?.some(o => o.id === row.id && o.kind === kind), kind + ' in_review remains open in W3.1');
-    ok((await api(`/orders/${kind}/${row.id}/review`, { status: 'reviewed' })).status === 400, kind + ' decision required');
+    // «ناقص است» همچنان دلیل می‌خواهد — **بیمار** همان متن را می‌خواند. این چک پیش
+    // از تراکنش رد می‌شود، پس وضعیتِ سفارش را دست نمی‌زند و بقیهٔ حلقه سالم می‌ماند.
+    ok((await api(`/orders/${kind}/${row.id}/review`, { status: 'needs_action' })).status === 400, kind + ' needs_action still requires a reason');
     const reviewed = await api(`/orders/${kind}/${row.id}/review`, { status: 'reviewed', reviewNote: 'بررسی کامل' });
     ok(reviewed.data.reviewedById === admin.id && reviewed.data.reviewedAt, kind + ' records reviewer and time');
     await processDomainEvents(db);
@@ -67,6 +69,41 @@ try {
     ok(await db.domainEvent.count({ where: { refType: kind + '_order', refId: row.id } }) === n, kind + ' retry review is idempotent');
     ok((await api(`/orders/${kind}/${row.id}`, undefined, 'DELETE')).status === 409, kind + ' answered order cannot be deleted');
   }
+  /* «بررسی شد» بدونِ یادداشت باید **بگذرد**. تا دیروز ۴۰۰ می‌داد: کاربر دکمه را
+     می‌زد، یک توست می‌آمد و هیچ‌چیز ثبت نمی‌شد (گزارشِ مالک ۱۴۰۵/۰۶/۳۰). خلاصهٔ
+     جواب در خودِ سفارش نشسته؛ اجبارِ یادداشتِ دوم فقط مسیرِ بستنِ نتیجه را می‌بست.
+     روی سفارشِ **تازه** سنجیده می‌شود تا وضعیتِ سناریوهای بالا را جابه‌جا نکند. */
+  const bareOrder = (await api('/orders/lab', { patientId, visitId: visit.id })).data;
+  await api(`/orders/lab/${bareOrder.id}`, { resultText: 'نرمال بود' }, 'PATCH');
+  const bare = await api(`/orders/lab/${bareOrder.id}/review`, { status: 'reviewed' });
+  ok(bare.data?.status === 'reviewed', 'reviewed without a note is accepted');
+  ok(bare.data?.reviewNote === 'بررسی شد', 'server fills the default label so reviewNote is never empty');
+  ok(bare.data?.reviewedById === admin.id && !!bare.data?.reviewedAt, 'bare review still records reviewer and time');
+
+  /* ── مرحلهٔ مدرک (قبل/حین/بعد از عمل) ──
+     بازخوردِ مالک: «وقتی مدارکِ یک عمل را می‌بینیم باید بفهمیم کدام عکس و
+     آزمایش قبل از عمل بود و کدام بعدش». سه قاعده سنجیده می‌شود:
+     (۱) مرحله ذخیره و با برچسبِ فارسی برگردانده می‌شود،
+     (۲) بدونِ مراجعه رد می‌شود — «قبل از کدام عمل؟» جواب ندارد،
+     (۳) مقدارِ ناشناخته رد می‌شود؛ و نبودِ مرحله خطا نیست (`null` می‌ماند). */
+  const linkDoc = async (body) => api(`/patients/${patientId}/documents/link`, body);
+  const phased = await linkDoc({ url: 'https://pacs.test/mri', category: 'imaging', visitId: visit.id, phase: 'pre' });
+  ok(phased.status === 201, 'document link with a phase is accepted');
+  const afterDoc = await linkDoc({ url: 'https://pacs.test/ctrl', category: 'imaging', visitId: visit.id, phase: 'post' });
+  ok(afterDoc.status === 201, 'post-op document link accepted');
+  const noPhase = await linkDoc({ url: 'https://pacs.test/id', category: 'identity' });
+  ok(noPhase.status === 201, 'document without a phase is still accepted');
+  ok((await linkDoc({ url: 'https://pacs.test/x', category: 'lab', phase: 'pre' })).status === 400,
+     'phase without a visit is rejected — “before which operation?” has no answer');
+  ok((await linkDoc({ url: 'https://pacs.test/y', category: 'lab', visitId: visit.id, phase: 'during' })).status === 400,
+     'unknown phase value is rejected');
+  const docList = (await api(`/patients/${patientId}/documents`, undefined, 'GET')).data;
+  const pre = docList.find(d => d.id === phased.data.id);
+  const post = docList.find(d => d.id === afterDoc.data.id);
+  ok(pre?.phase === 'pre' && pre?.phaseFa === 'قبل از عمل', 'record returns phase plus its Persian label (rule 15)');
+  ok(post?.phase === 'post' && post?.phaseFa === 'بعد از عمل', 'post-op document is distinguishable from the pre-op one');
+  ok(docList.find(d => d.id === noPhase.data.id)?.phase === null, 'phaseless document stays null — never guessed as pre-op');
+
   const textDoc = (await docs('lab', lab.id)).find(d => d.contentText);
   const documentList = await api(`/patients/${patientId}/documents`, undefined, 'GET');
   ok(documentList.data.some(d => d.id === textDoc.id && d.refId === lab.id), 'same document visible in record');

@@ -1102,6 +1102,10 @@ model Document {
   refId Int? @map("ref_id")
   contentText String? @map("content_text")
   @@index([refType, refId])
+  /// مرحلهٔ مدرک نسبت به عمل: pre | intra | post. خالی = به عملِ مشخصی گره
+  /// نخورده (کارتِ شناسایی، فیش، سابقه) — و همهٔ مدارکِ پیش از این ستون.
+  phase String? @map("phase")
+  @@index([visitId, phase])
 
 }
 

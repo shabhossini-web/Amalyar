@@ -124,6 +124,21 @@
 .rc-doc-main small { display: block; margin-top: 3px; font-size: 11px; color: #8f88af; }
 .rc-doc-visit { color: #8b7ff0 !important; }
 
+/* ── بجِ مرحلهٔ مدرک (قبل/حین/بعد از عمل) ──
+   سه مرحله سه رنگ، چون معیارِ کاربر «یک نگاه» است نه خواندن. رنگ‌ها از
+   توکن‌های معناییِ `index.css` می‌آیند (قانون ۲۳) — هگزِ خام در تمِ روشن
+   روی سطحِ کم‌آلفا نامرئی می‌شود، همان درسی که `--red-text` از آن آمد. */
+.rc-doc-phase {
+  display: inline-block; margin-inline-start: 6px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; line-height: 1.7;
+  border: 1px solid currentColor; background: rgba(var(--veil-rgb), .06);
+}
+.rc-doc-phase.ph-pre { color: var(--amber-text); }
+.rc-doc-phase.ph-intra { color: var(--brand-text); }
+.rc-doc-phase.ph-post { color: var(--green-text); }
+/* ردیفِ دومِ فیلتر کمی از ردیفِ دسته فاصله بگیرد تا دو ردیف یکی به‌نظر نیایند. */
+.rc-phasefilter { margin-top: -4px; }
+
 .rc-thumb {
   width: 52px; height: 52px; flex-shrink: 0; border-radius: 11px; object-fit: cover;
   background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .25);

@@ -24,6 +24,7 @@ crm-plus-ui
 crm-plus
 crm-send-ui
 dashboard-kind
+document-phase
 file-drop
 follow-up-ui
 follow-up

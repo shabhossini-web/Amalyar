@@ -1,10 +1,17 @@
 <!-- claim:begin -->
 agent: claude-opus
-status: idle
-branch: -
-since: 2026-09-12
+status: active
+branch: claude/doc-phase-and-review-fix
+since: 2026-09-21
 paths:
-note: چیزی در دست نیست
+  - src/app/OrderSheet.jsx
+  - src/app/PatientRecord.jsx
+  - src/app/VisitForm.jsx
+  - server/src/patients/orders.service.ts
+  - server/src/patients/documents.service.ts
+  - server/src/patients/documents.controller.ts
+  - server/prisma/
+note: «بررسی شد» بدونِ یادداشت گیر می‌کرد و متنِ پاسخ را دور می‌ریخت + مرحلهٔ مدرک (قبل/حین/بعد از عمل)
 <!-- claim:end -->
 
 ## قراردادهایی که شکستم
