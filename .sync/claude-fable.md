@@ -1,69 +1,9 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-20
-paths:
-  - src/ui/DocThumb.jsx
-  - src/ui/doc-thumb.css
-  - src/app/OrderSheet.jsx
-  - src/app/orders.css
-  - src/app/PatientRecord.jsx
-  - src/app/VisitForm.jsx
-  - src/app/dashboard.css
-  - src/app/Settings.jsx
-  - src/app/settings.css
-  - src/lib/identity.js
-  - server/src/ai/ai.service.ts
-  - server/src/common/jalali.ts
-  - scripts/e2e/order-review-sheet.mjs
-  - scripts/e2e/record-popups.mjs
-  - scripts/e2e/w3-1-live-record.mjs
-  - src/app/WorkRow.jsx
-  - src/app/work.css
-  - src/app/record.css
-  - src/app/visit-kinds.js
-  - server/src/patients/live.service.ts
-  - server/src/patients/reminders.service.ts
-  - server/src/patients/summary.controller.ts
-  - scripts/e2e/ci-live.txt
-  - src/app/thing-popups.jsx
-  - src/app/thing-popups.css
-  - src/app/Today.jsx
-  - src/app/today.css
-  - src/app/WorkList.jsx
-  - server/src/work/today.service.ts
-  - server/src/work/work.service.ts
-  - server/src/patients/orders.service.ts
-  - scripts/e2e/today-popups.mjs
-  - scripts/e2e/surgery-phase-tabs.mjs
-  - scripts/e2e/postop-flow.mjs
-  - docs/plan/lanes/claude-fable.md
-  - STATUS.md
-  - server/src/common/own-scope.ts
-  - server/src/auth/auth.service.ts
-  - server/src/accounts/accounts.service.ts
-  - server/src/features/features.service.ts
-  - server/src/config/verticals.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/record.service.ts
-  - server/src/patients/calendar.service.ts
-  - server/src/patients/prep.service.ts
-  - server/src/patients/billing.service.ts
-  - server/src/patients/invoices.service.ts
-  - server/src/patients/inventory.service.ts
-  - server/src/patients/surgeon-portal.service.ts
-  - server/src/patients/surgeon-portal.controller.ts
-  - src/app/SurgeonPortal.jsx
-  - src/app/surgeon-portal.css
-  - src/app/tools.jsx
-  - src/lib/terms.js
-  - docs/plan/CLINIC.md
-  - scripts/e2e/clinic-doctor-portal.mjs
-  - scripts/e2e/profile-workflows.mjs
-  - server/prisma/migrations/20260921070000_clinic_surgeon_feature/migration.sql
-  - src/app/config.jsx
-  - server/src/config/config.service.ts
+paths: []
 note: >-
   🔧 **بازخوردِ مالک ۱۴۰۵/۰۶/۲۹ — بستهٔ ۱ (باگ‌ها):** شیتِ سفارش عکس/متن/لینکِ پاسخِ
   بیمار را نشان می‌دهد و دکمهٔ «بررسی شد / ناقص است» دارد (endpointِ review تا
@@ -78,8 +18,9 @@ note: >-
   ردشده (امروزِ من / بیمارانِ من / نتایجِ رسیده / بیلان، پاپ‌آپ‌های مشترک)،
   کاشیِ `surgeon` در مطب از پلانِ حوزه، own-scope با `surgeonId`
   (`server/src/common/own-scope.ts`)، حسابِ پزشک ↔ تعریفِ جراح در هر سه حوزه.
-  **۵ب** (PR بعدی؛ #76 در `e381d77` لند شد): واژه‌های «امروز» از واژگان، `defaultKind`
-  حوزه در `/config` برای «مراجعهٔ جدید». هرکدام PRِ جدا و پشتِ سرِ هم روی همین شاخه.
+  **۵ب** + رفعِ چهار ایرادِ بازبینی در #77 (`24c7f05`). **هر پنج بستهٔ این بازخورد
+  لند شد و لِین بسته است**؛ کلیم آزاد. باقی‌مانده فقط ۵ج در `docs/plan/CLINIC.md`
+  است (رنگِ خامِ کلاس‌های مشترک، نگهبانِ پوششِ پلانِ حوزه، ممیزیِ واژه‌های حوزه‌ای).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
