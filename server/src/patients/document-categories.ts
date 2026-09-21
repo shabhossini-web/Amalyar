@@ -15,3 +15,23 @@ export const DOCUMENT_CATEGORIES = [
   'other',
 ] as const;
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
+
+/**
+ * مرحلهٔ مدرک نسبت به **عمل** — «این عکس قبل از عمل بود یا بعدش؟»
+ *
+ * همان واژگانِ تب‌های فرمِ عمل (`VisitForm`: قبل / حین / بعد از عمل)، عمداً
+ * یکی؛ دو نام برای یک مفهوم یعنی فردا فیلتر یکی را می‌گیرد و دیگری را نه.
+ *
+ * خالی (`null`) حالتِ عادی است: مدرکی که به عملِ مشخصی گره نخورده (کارتِ
+ * شناسایی، فیش، سابقهٔ قدیمی) مرحله ندارد — و مدارکِ پیش از این تغییر هم
+ * همین‌اند، پس هیچ ردیفی با فرضِ اشتباه برچسب نمی‌خورد.
+ */
+export const DOCUMENT_PHASES = ['pre', 'intra', 'post'] as const;
+export type DocumentPhase = (typeof DOCUMENT_PHASES)[number];
+
+/** برچسبِ فارسیِ هر مرحله — همان متنی که تبِ فرمِ عمل نشان می‌دهد. */
+export const DOCUMENT_PHASE_FA: Record<string, string> = {
+  pre: 'قبل از عمل',
+  intra: 'حین عمل',
+  post: 'بعد از عمل',
+};

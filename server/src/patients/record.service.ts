@@ -12,8 +12,25 @@ import { colorForKey } from './forms.service';
 
 /* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
    re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
-import { DOCUMENT_CATEGORIES } from './document-categories';
-export { DOCUMENT_CATEGORIES };
+import { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
+export { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, DOCUMENT_PHASE_FA };
+
+/**
+ * مرحلهٔ مدرک — «قبل/حین/بعد از عمل».
+ *
+ * دو قاعده، هر دو عمدی:
+ * ۱. مرحله فقط وقتی معنی دارد که مدرک به یک **مراجعه** گره خورده باشد. مدرکی
+ *    که به کلِ پرونده چسبیده «قبل از کدام عمل؟» جواب ندارد، پس برچسب نمی‌گیرد.
+ * ۲. نبودِ مرحله خطا نیست — `null` می‌ماند. مدارکِ قبل از این ستون هم همین‌اند
+ *    و هیچ‌کدام با فرضِ اشتباه «قبل از عمل» برچسب نمی‌خورند.
+ */
+function normalizeDocPhase(phase: unknown, visitId: number | null): string | null {
+  const v = typeof phase === 'string' ? phase.trim() : '';
+  if (!v) return null;
+  if (!DOCUMENT_PHASES.includes(v as any)) throw new BadRequestException('مرحلهٔ مدرک نامعتبر است');
+  if (visitId == null) throw new BadRequestException('مرحلهٔ مدرک فقط برای مدرکی است که به یک مراجعه وصل است');
+  return v;
+}
 
 /** انواعِ شرحِ بالینی — منطبق بر چرخهٔ مطب → عمل → پس از عمل. */
 export const NOTE_KINDS = ['history', 'visit', 'op', 'progress', 'discharge', 'consult'] as const;
@@ -543,6 +560,10 @@ export class RecordService {
       refType: d.refType, refId: d.refId, contentText: d.contentText,
       title: d.title, fileName: d.fileName, mimeType: d.mimeType, size: d.size,
       takenAt: d.takenAt, createdAt: d.createdAt,
+      /// مرحله نسبت به عمل + برچسبِ فارسی‌اش — **سمتِ سرور** (قانون ۱۵)، تا
+      /// هر نمایی که مدرک را نشان می‌دهد همان واژه را بگوید.
+      phase: d.phase ?? null,
+      phaseFa: d.phase ? (DOCUMENT_PHASE_FA[d.phase] ?? null) : null,
       /// نوعِ محتوا برای کلاینت: عکس را inline نشان می‌دهد، بقیه را دانلود.
       isImage: d.mimeType.startsWith('image/'),
       /// مدرکِ لینکی: کلاینت به‌جای دانلود، همین نشانی را باز می‌کند.
@@ -606,6 +627,7 @@ export class RecordService {
         externalUser: dto.user?.trim().slice(0, 120) || null,
         externalPass: dto.pass?.trim().slice(0, 120) || null,
         takenAt,
+        phase: normalizeDocPhase((dto as any).phase, dto.visitId ?? null),
         uploadedById: user?.id ?? null,
       },
     });
@@ -619,7 +641,7 @@ export class RecordService {
   async addDocument(
     patientId: number,
     file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
-    dto: { category?: string; title?: string; visitId?: number; takenAt?: string },
+    dto: { category?: string; title?: string; visitId?: number; takenAt?: string; phase?: string },
     user: any,
   ) {
     await this.assertAccess(patientId, user);
@@ -658,6 +680,7 @@ export class RecordService {
         size,
         sha256,
         takenAt,
+        phase: normalizeDocPhase(dto.phase, dto.visitId ?? null),
         uploadedById: user?.id ?? null,
       },
     });

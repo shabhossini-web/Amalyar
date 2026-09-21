@@ -3,7 +3,7 @@ import {
   IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf,
 } from 'class-validator';
 import { EnDigits } from '../../common/validators';
-import { DOCUMENT_CATEGORIES, NOTE_KINDS } from '../record.service';
+import { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, NOTE_KINDS } from '../record.service';
 
 /** ویرایشِ پروفایلِ بیمار. کد ملی عمداً نیست — کلیدِ هویت است، نه یک فیلدِ معمولی. */
 export class PatientPatchDto {
@@ -67,6 +67,12 @@ export class DocumentUploadDto {
   @IsOptional() @ValidateIf((o) => o.takenAt !== '')
   @IsISO8601({}, { message: 'تاریخِ مدرک نامعتبر است' })
   takenAt?: string;
+
+  /* مرحلهٔ مدرک نسبت به عمل. این‌جا فقط شکلِ مقدار سنجیده می‌شود؛ اینکه بدونِ
+     `visitId` معنی ندارد در `record.service` رد می‌شود — آن‌جا تنها جایی است
+     که هر دو مسیرِ آپلود و لینک از آن رد می‌شوند. */
+  @IsOptional() @IsIn(DOCUMENT_PHASES as unknown as string[], { message: 'مرحلهٔ مدرک نامعتبر است' })
+  phase?: string;
 }
 
 /** مدرکِ لینکی — نشانیِ MRI/پاراکلینیک روی سرویسِ دیگر. sanitization در سرویس. */
@@ -93,6 +99,12 @@ export class DocumentLinkDto {
   @IsOptional() @ValidateIf((o) => o.takenAt !== '')
   @IsISO8601({}, { message: 'تاریخِ مدرک نامعتبر است' })
   takenAt?: string;
+
+  /* مرحلهٔ مدرک نسبت به عمل. این‌جا فقط شکلِ مقدار سنجیده می‌شود؛ اینکه بدونِ
+     `visitId` معنی ندارد در `record.service` رد می‌شود — آن‌جا تنها جایی است
+     که هر دو مسیرِ آپلود و لینک از آن رد می‌شوند. */
+  @IsOptional() @IsIn(DOCUMENT_PHASES as unknown as string[], { message: 'مرحلهٔ مدرک نامعتبر است' })
+  phase?: string;
 }
 
 export class NoteCreateDto {

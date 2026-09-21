@@ -31,6 +31,8 @@ const CATEGORIES = {
   lab: 'آزمایش', imaging: 'تصویربرداری', report: 'گزارش',
   consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت', other: 'متفرقه',
 };
+/** مرحلهٔ مدرک نسبت به عمل — همان سه تبِ فرمِ عمل، عمداً با همان واژه‌ها. */
+const PHASES = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'بعد از عمل' };
 const NOTE_KINDS = {
   history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری',
   discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره',
@@ -364,11 +366,15 @@ function DocsTab({ rec, reload, toast }) {
   const [cat, setCat] = useState('other');
   const [title, setTitle] = useState('');
   const [visitId, setVisitId] = useState('');
+  /* مرحله فقط وقتی معنی دارد که مراجعه انتخاب شده باشد — «قبل از کدام عمل؟»
+     برای مدرکی که به کلِ پرونده چسبیده جواب ندارد. سرور هم همین را رد می‌کند. */
+  const [phase, setPhase] = useState('');
   const [takenJ, setTakenJ] = useState('');
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
   const fileRef = useRef(null);
   const [filter, setFilter] = useState('all');
+  const [phaseFilter, setPhaseFilter] = useState('all');
 
   /* ⚠️ فقط «چه چیزی فرستاده شود» این‌جاست؛ صف، پیش‌نمایش، خطای تک‌فایل و
      تلاشِ دوباره کارِ `FileDrop`ِ مشترک است. خطا **پرتاب** می‌شود تا همان
@@ -385,6 +391,7 @@ function DocsTab({ rec, reload, toast }) {
     fd.append('category', cat);
     if (title.trim()) fd.append('title', title.trim());
     if (visitId) fd.append('visitId', visitId);
+    if (visitId && phase) fd.append('phase', phase);
     if (takenAt) fd.append('takenAt', takenAt);
     await apiUpload(`/patients/${rec.id}/documents`, fd);
   };
@@ -413,12 +420,13 @@ function DocsTab({ rec, reload, toast }) {
           category: cat,
           ...(title.trim() ? { title: title.trim() } : {}),
           ...(visitId ? { visitId: Number(visitId) } : {}),
+          ...(visitId && phase ? { phase } : {}),
           ...(takenAt ? { takenAt } : {}),
           ...(linkAuth && linkUser.trim() ? { user: linkUser.trim() } : {}),
           ...(linkAuth && linkPass.trim() ? { pass: linkPass.trim() } : {}),
         },
       });
-      setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId(''); setLinkUser(''); setLinkPass(''); setLinkAuth(false);
+      setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId(''); setPhase(''); setLinkUser(''); setLinkPass(''); setLinkAuth(false);
       await reload();
       toast('لینک ثبت شد ✓');
     } catch (e) {
@@ -436,8 +444,12 @@ function DocsTab({ rec, reload, toast }) {
     } catch (e) { toast(e.message, true); }
   };
 
-  const shown = filter === 'all' ? rec.documents : rec.documents.filter((d) => d.category === filter);
+  const shown = rec.documents.filter((d) => (filter === 'all' || d.category === filter)
+    && (phaseFilter === 'all' || (phaseFilter === 'none' ? !d.phase : d.phase === phaseFilter)));
   const present = [...new Set(rec.documents.map((d) => d.category))];
+  /* ردیفِ فیلترِ مرحله فقط وقتی می‌آید که واقعاً مدرکِ مرحله‌دار وجود داشته باشد —
+     پرونده‌ای که هیچ عملی ندارد نباید یک ردیفِ همیشه‌خالی ببیند. */
+  const phasesPresent = Object.keys(PHASES).filter((k) => rec.documents.some((d) => d.phase === k));
 
   return (
     <>
@@ -454,9 +466,17 @@ function DocsTab({ rec, reload, toast }) {
           <JDate className="pf-field" label="تاریخِ مدرک (شمسی)" value={takenJ}
             onChange={setTakenJ} placeholder="۱۴۰۵/۰۴/۲۸" hint="تاریخِ خودِ آزمایش، نه تاریخِ آپلود." />
           <label className="pf-field"><span>مربوط به مراجعه</span>
-            <select value={visitId} onChange={(e) => setVisitId(e.target.value)}>
+            <select value={visitId} onChange={(e) => { setVisitId(e.target.value); if (!e.target.value) setPhase(''); }}>
               <option value="">— کلِ پرونده —</option>
               {rec.visits.map((v) => <option key={v.id} value={v.id}>{v.code}</option>)}
+            </select>
+          </label>
+          {/* مرحله بعد از انتخابِ مراجعه ظاهر می‌شود — بدونِ مراجعه بی‌معنی است
+              و سرور هم ردش می‌کند؛ پس اصلاً نشان داده نمی‌شود. */}
+          <label className="pf-field"><span>مرحله نسبت به عمل</span>
+            <select value={phase} disabled={!visitId} onChange={(e) => setPhase(e.target.value)}>
+              <option value="">{visitId ? '— مشخص نیست —' : '— اول مراجعه را انتخاب کنید —'}</option>
+              {Object.entries(PHASES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
           </label>
         </div>
@@ -468,7 +488,7 @@ function DocsTab({ rec, reload, toast }) {
           hint={`عکس، PDF یا هر مدرکِ دیگر — تا ${faNum(25)} مگابایت`}
           onUpload={upload}
           onAllDone={async () => {
-            setTitle(''); setTakenJ(''); setVisitId('');
+            setTitle(''); setTakenJ(''); setVisitId(''); setPhase('');
             await reload();
             toast('مدارک اضافه شدند ✓');
           }}
@@ -511,6 +531,21 @@ function DocsTab({ rec, reload, toast }) {
         </div>
       )}
 
+      {/* «کدام عکس قبل از عمل بود و کدام بعدش؟» — سؤالی که تا دیروز جوابی
+          نداشت. «بدونِ مرحله» عمداً یک چیپِ جداست: مدرکِ مرحله‌نخورده باید
+          دیده شود تا برچسب بخورد، نه اینکه پشتِ فیلتر گم شود. */}
+      {phasesPresent.length > 0 && (
+        <div className="df-tabs rc-filter rc-phasefilter">
+          <button className={phaseFilter === 'all' ? 'on' : ''} onClick={() => setPhaseFilter('all')}>هر مرحله</button>
+          {phasesPresent.map((k) => (
+            <button key={k} className={phaseFilter === k ? 'on' : ''} onClick={() => setPhaseFilter(k)}>{PHASES[k]}</button>
+          ))}
+          {rec.documents.some((d) => !d.phase) && (
+            <button className={phaseFilter === 'none' ? 'on' : ''} onClick={() => setPhaseFilter('none')}>بدونِ مرحله</button>
+          )}
+        </div>
+      )}
+
       {shown.length === 0 ? <div className="df-empty">مدرکی ثبت نشده است</div> : (
         <div className="rc-docs">
           {shown.map((d) => (
@@ -523,7 +558,17 @@ function DocsTab({ rec, reload, toast }) {
               <div className="rc-doc-main">
                 <b>{d.title || d.fileName}</b>
                 <small>{CATEGORIES[d.category] ?? d.category} · {d.isLink ? 'لینک' : fmtSize(d.size)}{d.takenAt ? ` · ${faDate(d.takenAt)}` : ''}</small>
-                {d.visitId && <small className="rc-doc-visit">{rec.visits.find((v) => v.id === d.visitId)?.code}</small>}
+                {d.visitId && (
+                  <small className="rc-doc-visit">
+                    {rec.visits.find((v) => v.id === d.visitId)?.code}
+                    {/* برچسب از سرور می‌آید (`phaseFa`، قانون ۱۵)؛ `PHASES` فقط
+                        fallbackِ نصبِ قدیمی است که هنوز فیلد را برنمی‌گرداند. */}
+                    {/* ⚠️ `<span>` و نه `<b>`: قاعدهٔ `.rc-doc-main b { display:block }`
+                        با specificityِ بالاتر بر `.rc-doc-phase` غلبه می‌کند و بج
+                        یک نوارِ تمام‌عرض می‌شود (در اسکرین‌شات دیده شد، نه در تست). */}
+                    {d.phase && <span className={`rc-doc-phase ph-${d.phase}`}>{d.phaseFa ?? PHASES[d.phase]}</span>}
+                  </small>
+                )}
                 {d.isLink && (d.externalUser || d.externalPass) && <DocCred user={d.externalUser} pass={d.externalPass} />}
               </div>
               <div className="df-acts">

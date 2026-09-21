@@ -182,8 +182,15 @@ export class OrdersService {
   async review(kind: OrderKind, id: number, dto: any, user: any) {
     const status = dto?.status;
     if (!['in_review', 'reviewed', 'needs_action'].includes(status)) throw new BadRequestException('وضعیت بررسی نامعتبر است');
-    const note = typeof dto?.reviewNote === 'string' ? dto.reviewNote.trim().slice(0, 4000) : '';
-    if (status !== 'in_review' && !note) throw new BadRequestException('تصمیم یا دلیل بررسی را وارد کنید');
+    const raw = typeof dto?.reviewNote === 'string' ? dto.reviewNote.trim().slice(0, 4000) : '';
+    /* دلیلِ «ناقص است» اجباری است چون **بیمار همان را می‌خواند** و باید بداند
+       دوباره چه بفرستد. «بررسی شد» اجباری نیست: خلاصهٔ جواب در خودِ سفارش
+       (`resultText`/`answerText`) نشسته و اجبارِ یادداشتِ دوم فقط مسیر را
+       می‌بست — کاربر دکمه را می‌زد و چیزی ثبت نمی‌شد (گزارشِ مالک ۱۴۰۵/۰۶/۳۰).
+       خالی که باشد خودِ سرور برچسبِ پیش‌فرض می‌گذارد، تا `reviewNote` هیچ‌وقت
+       تهی نماند و ردِ ممیزی خوانا بماند. */
+    if (status === 'needs_action' && !raw) throw new BadRequestException('دلیلِ ناقص‌بودن را بنویسید — بیمار همان را می‌بیند');
+    const note = status === 'reviewed' ? (raw || 'بررسی شد') : raw;
     return this.prisma.$transaction(async tx => {
       const row = await this.locked(kind, id, tx);
       await this.assertAccess(row.patientId, user, tx);

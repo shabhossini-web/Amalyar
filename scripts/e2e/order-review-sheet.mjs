@@ -107,17 +107,19 @@ try {
   ok('دکمه‌های تصمیم هستند', (await page.getByRole('button', { name: 'بررسی شد', exact: true }).count()) === 1
     && (await page.getByRole('button', { name: /ناقص است/ }).count()) === 1);
 
-  await page.getByRole('button', { name: 'بررسی شد', exact: true }).click();
-  await page.waitForTimeout(600);
-  row = await byVisit();
-  ok('بدونِ یادداشت چیزی به سرور نرفت', row?.status === 'answered' && (await page.locator('.od-sheet').count()) === 1, `status=${row?.status}`);
-
-  await page.locator('.od-review textarea').fill('نرمال — نیاز به اقدام ندارد');
+  /* ⚠️ این ادعا قبلاً برعکس بود: «بدونِ یادداشت چیزی به سرور نرفت». همان رفتار
+     بود که مالک گزارشش کرد — دکمه را می‌زد، یک توستِ تیره می‌آمد و هیچ‌چیز ثبت
+     نمی‌شد. حالا خلاصهٔ جواب در خودِ شیت هست و «بررسی شد» بدونِ یادداشتِ دوم
+     باید کار کند؛ برچسبِ پیش‌فرض را سرور می‌گذارد. */
+  await page.locator('.od-result textarea').first().fill('نرمال بود');
   await page.getByRole('button', { name: 'بررسی شد', exact: true }).click();
   await page.locator('.od-sheet').waitFor({ state: 'detached', timeout: 8000 });
   row = await byVisit();
-  ok('**سفارش reviewed شد و یادداشت نشست**', row?.status === 'reviewed' && row?.reviewNote === 'نرمال — نیاز به اقدام ندارد',
+  ok('**«بررسی شد» بدونِ یادداشت کار می‌کند**', row?.status === 'reviewed' && row?.reviewNote === 'بررسی شد',
     `status=${row?.status} note=${row?.reviewNote}`);
+  /* و متنی که کاربر همان لحظه تایپ کرده بود **گم نشده**: تا دیروز `review()`
+     فقط وضعیت را می‌فرستاد و «متنِ پاسخ» با بسته‌شدنِ شیت دور ریخته می‌شد. */
+  ok('**متنِ پاسخِ تایپ‌شده هم ذخیره شد، نه فقط وضعیت**', (row?.resultText ?? '') === 'نرمال بود', `resultText=${row?.resultText}`);
 
   for (let i = 0; i < 6 && (work = await reviewWork()).some((w) => w.type === 'review_result' && ['open', 'blocked'].includes(w.state ?? 'open')); i++) await sleep(500);
   ok('کارِ بررسیِ نتیجه با رویدادِ order.reviewed بسته شد', !work.some((w) => w.type === 'review_result' && ['open', 'blocked'].includes(w.state ?? 'open')),
