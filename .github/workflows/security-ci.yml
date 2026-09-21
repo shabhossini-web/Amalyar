@@ -2550,6 +2550,55 @@ jobs:
           console.log('forms ok');
           "
 
+      - name: Verify a reserved key never reaches the record raw
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const presets = fs.readFileSync('server/src/patients/form-presets.ts', 'utf8');
+          const intake  = fs.readFileSync('server/src/patients/intake.service.ts', 'utf8');
+
+          /* ⚠️ **گاردِ addField فقط نیمی از در را می‌بندد.**
+             کلیدِ رزروشده از فرم‌ساز رد می‌شود، ولی خودِ **پریست‌ها** از آن گارد
+             رد نمی‌شوند. فیلدی که کلیدش رزرو است و builtin علامت نخورده،
+             formView (فیلترِ !x.builtin) روی صفحهٔ بیمار نشانش می‌دهد و مقدارش
+             **خام** در data می‌نشیند — همان‌جا که split() از رویش ستونِ واقعیِ
+             مراجعه را پر می‌کند.
+             باگِ واقعی (۱۴۰۵/۰۶/۳۰): یک فیلدِ date با کلیدِ opDate در پریستِ
+             ثبت‌نام؛ JDate شمسی می‌داد و کارتِ ثبت‌نام «۸ تیر ۷۸۴» نشان می‌داد.
+             نگهبانِ قبلی فقط جهتِ عکس را می‌سنجید (builtin ⇒ در فهرست باشد). */
+          const setBody = presets.match(/BUILTIN_VISIT_KEYS = new Set\(\[([^\]]*)\]/s);
+          if (!setBody) { console.error('BUILTIN_VISIT_KEYS پیدا نشد'); process.exit(1); }
+          const reserved = new Set([...setBody[1].matchAll(/'([a-zA-Z0-9_]+)'/g)].map((m) => m[1]));
+
+          /* ⚠️ دو بلوک عمداً بیرون می‌مانند: VISIT_BUILTIN_CATALOG و CORE
+             **تعریفِ خودِ فیلدهای builtin**اند و ensureVisitCatalog آن‌ها را با
+             builtin: true درج می‌کند، پس نبودِ این کلمه در متنشان ایراد نیست. */
+          const cut = (src, re) => src.replace(re, '');
+          const scan = cut(cut(presets, /VISIT_BUILTIN_CATALOG[\s\S]*?\n\];/), /const CORE = \{[\s\S]*?\} as const;/);
+
+          /* ① هر فیلدِ پریست که کلیدش رزرو است یا باید builtin باشد (پس بیمار
+                نمی‌بیندش) یا نوعش باید همان نوعی باشد که fill نرمال می‌کند. */
+          const NORMALIZED = new Set(['date']);
+          const bad = [];
+          for (const m of scan.matchAll(/\{[^{}]*key: '([a-zA-Z0-9_]+)'[^{}]*\}/g)) {
+            const [lit, key] = [m[0], m[1]];
+            if (!reserved.has(key) || /builtin: true/.test(lit)) continue;
+            const type = (lit.match(/type: '([a-z]+)'/) || [])[1] ?? 'text';
+            if (!NORMALIZED.has(type)) bad.push(key + ':' + type);
+          }
+          if (bad.length) {
+            console.error('فیلدِ پریست با کلیدِ رزروشده که نه builtin است نه نرمال می‌شود: ' + bad.join('، '));
+            process.exit(1);
+          }
+
+          /* ② و خودِ نرمال‌سازی باید سرِ جایش بماند — بدونش بندِ ① بی‌معنا است. */
+          if (!/BUILTIN_VISIT_KEYS\.has\(fl\.key\)/.test(intake) || !/toDateValue\(/.test(intake)) {
+            console.error('fill باید کلیدهای رزروشدهٔ نوعِ date را با toDateValue نرمال کند'); process.exit(1);
+          }
+          console.log('reserved keys ok');
+          "
+
       - name: Verify no undefined identifiers reach the browser
         run: npm run lint
 

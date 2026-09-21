@@ -141,10 +141,31 @@ export class AccountsService {
     void actorId;
     const target = await this.prisma.account.findUnique({ where: { id } });
     if (!target || target.systemKey) throw new NotFoundException('حساب یافت نشد');
-    const acc = await this.prisma.account.update({
-      where: { id },
-      data: { jobRole },
-      include: { person: true },
+    const acc = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.account.update({
+        where: { id },
+        data: { jobRole },
+        include: { person: true },
+      });
+      /* ⚠️ **همان قرارِ `createTemporary`: حسابِ پزشک همیشه به یک تعریفِ جراح وصل است.**
+
+         این مسیر آن را نداشت و همان تفاوت یک باگِ بی‌صدا می‌ساخت: نقشِ «پزشک»
+         از صفحهٔ کاربران ست می‌شد ولی `Surgeon`ی ساخته نمی‌شد، پس
+         `orders.service.ts` که `doctorId` را از `visit.surgeon.person.account`
+         در می‌آورد همیشه `null` می‌گرفت و کارِ «بررسیِ نتیجه» بی‌مالک در صفِ
+         نقش می‌مانْد. دو مسیر برای یک نقش یعنی روزی یکی‌شان از قلم می‌افتد —
+         و این‌جا افتاده بود.
+
+         ⚠️ برداشتنِ نقش تعریفِ جراح را **پاک نمی‌کند**: مراجعه‌های قبلی به آن
+         ارجاع دارند و حذفش تاریخچهٔ پزشکی را می‌شکند. */
+      if (jobRole === 'doctor') {
+        await tx.surgeon.upsert({
+          where: { personId: row.personId },
+          update: {},
+          create: { personId: row.personId },
+        });
+      }
+      return row;
     });
     return this.auth.publicUser(acc);
   }

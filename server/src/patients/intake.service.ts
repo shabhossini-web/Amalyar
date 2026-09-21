@@ -8,8 +8,9 @@ import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
-import { REGISTRATION_PRESETS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS } from './form-presets';
 import { normalizeLinks } from './forms.service';
+import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
@@ -855,6 +856,29 @@ export class IntakeService {
       );
       for (const [k, v] of Object.entries(dto.values)) {
         if (writable.has(k)) data[k] = typeof v === 'string' ? text(v, 2000) : v;
+      }
+      /* ⚠️ **کلیدِ رزروشده مالِ سیستم است، از هر مسیری که پر شود.**
+
+         `DynForm` برای فیلدِ `date` رشتهٔ **شمسی** می‌دهد (`JDate`)، ولی
+         `data.opDate` همه‌جا ISO خوانده می‌شود — `Intake.jsx` با `faDate` و
+         `isoToJStr` — و `split()` همان مقدار را به **ستونِ واقعیِ** مراجعه
+         می‌فرستد. حلقهٔ `values` بالا بعد از حلقهٔ `fixed` اجرا می‌شود، پس
+         مقدارِ خامِ شمسی مقدارِ تبدیل‌شدهٔ ISO را بازنویسی می‌کرد.
+
+         باگِ واقعی (۱۴۰۵/۰۶/۳۰): کارتِ ثبت‌نام «۸ تیر ۷۸۴» نشان می‌داد و کادرِ
+         تاریخِ پنلِ تأیید با `784/04/08` پیش‌پر می‌شد — چون `1405/06/28`
+         به‌عنوانِ تاریخِ **میلادی** خوانده شده بود (۱۴۰۵ − ۶۲۱ ≈ ۷۸۴). گاردِ
+         `addField` جلوی ساختنِ دستیِ فیلدی به‌نامِ `opDate` را می‌گیرد، ولی
+         خودِ پریستِ ثبت‌نام یکی دارد و گارد هیچ‌وقت به پریست‌ها نرسید.
+
+         `toDateValue` همان تشخیصِ بی‌ابهامِ «سالِ < ۱۷۰۰ یعنی شمسی» را دارد، پس
+         مقدارِ از قبل ISO دست‌نخورده می‌مانَد. کلیدِ **دلخواه** عمداً عوض
+         نمی‌شود: مقدارش در JSON می‌مانَد و `answerText` خام چاپش می‌کند، پس
+         تبدیلش نمایشِ همهٔ پاسخ‌های قبلی را خراب می‌کرد. */
+      for (const fl of form.fields) {
+        if (fl.type !== 'date' || !BUILTIN_VISIT_KEYS.has(fl.key)) continue;
+        const when = toDateValue(data[fl.key]);
+        if (when) data[fl.key] = when.toISOString().slice(0, 10);
       }
       /* باکسِ لینک: URLِ http(s)ِ معتبر، سقفِ ۱۰، متن‌ها بریده — همان قاعدهٔ
          `Visit.extra`. لینکِ `javascript:` روی صفحهٔ پرونده کلیک‌شدنی می‌شود. */
