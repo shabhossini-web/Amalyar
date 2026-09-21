@@ -106,6 +106,10 @@ try {
   const c = await mockContext(browser, handle, { viewport: { width: 1280, height: 900 } });
   const page = await c.context.newPage();
   await page.goto(vite.base + '/app/tools', { waitUntil: 'networkidle' });
+  /* ⚠️ لانچر چانکِ lazy است (قانونِ ۲۱): روی Viteِ سردِ CI، `networkidle` می‌تواند
+     پیش از سوارشدنِ چانک و رندرِ کاشی‌ها بیفتد و شمارش «۰ کاشی» بدهد (رانِ #74).
+     تا اولین کاشی نیامده، شمردن معنی ندارد؛ نیامدنش را همان سنجهٔ پایین قرمز می‌کند. */
+  await page.waitForSelector('.lx-hero-ic, .lx-card-ic, .lx-tile-ic', { timeout: 15000 }).catch(() => {});
 
   const shapes = await page.evaluate(() => {
     /* فقط آیکونِ **کاشی‌ها** — نه آیکونِ هدر/بازگشت/نصب. هر کاشی یک
