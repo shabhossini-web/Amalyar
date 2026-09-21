@@ -33,6 +33,8 @@ export class ConfigService {
     return {
       vertical,
       verticalLabel: VERTICALS[vertical].label,
+      /// نوعِ پیش‌فرضِ مراجعهٔ تازه — از حوزه (مطب: ویزیت)؛ کلاینت hardcode نمی‌کند.
+      defaultKind: VERTICALS[vertical].defaultKind,
       brandName: brand.name,
       /// هویتِ کاملِ شرکت برای سربرگ و فاکتور — یک منبع، تا هر چاپ‌گر خودش
       /// از تنظیمات نچیندش و یکی‌شان از قلم نیفتد.

@@ -7,7 +7,7 @@ import { api, apiStream } from '../lib/api.js';
 import { isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
-import { useTerms } from './config.jsx';
+import { useConfig } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
@@ -110,7 +110,7 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
 
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
-  const t = useTerms();
+  const { t, defaultKind = 'surgery' } = useConfig();
   const editing = !!initial?.id;
   /* prefill = ادامهٔ یک تصمیم («کاندیدای جراحی» در ویزیتِ قبلی): پرونده از
      قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم. */
@@ -132,9 +132,15 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    */
   const [step, setStep] = useState(prefill?.patientId ? 3 : 1);
   const [stepErr, setStepErr] = useState('');
+  /* ⚠️ `defaultKind` از `/config` می‌آید و ممکن است **بعد از** mountِ فرم برسد؛
+     چون مقدارِ اولیه یک‌بار در `useState` گرفته می‌شود، مطبِ کندشبکه فرمِ «عمل»
+     می‌گرفت بی‌آنکه چیزی بگوید. تا وقتی مراجعهٔ موجود/prefill نباشد و کاربر خودش
+     نوعی نزده باشد، پیش‌فرض با حوزه هم‌گام می‌شود. */
+  const kindTouched = useRef(false);
 
   const [f, setF] = useState(() => ({
-    kind: initial?.kind || prefill?.kind || 'surgery',
+    /* پیش‌فرضِ نوع از حوزه (`/config.defaultKind`): مطب ویزیت، بقیه عمل (بستهٔ ۵ب). */
+    kind: initial?.kind || prefill?.kind || defaultKind,
     firstName: initial?.firstName || '',
     lastName: initial?.lastName || '',
     phone: initial?.phone || '',
@@ -162,6 +168,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     opEndTime: initial?.opEndTime || '',
     notes: initial?.notes || '',
   }));
+
+  /* هم‌گامیِ پیش‌فرضِ نوع با حوزه، فقط وقتی هنوز «پیش‌فرض» است (نه ویرایش، نه
+     prefill، نه انتخابِ کاربر) — وگرنه انتخابِ کسی را زیرِ دستش عوض می‌کند. */
+  useEffect(() => {
+    if (initial?.id || initial?.kind || prefill?.kind || kindTouched.current) return;
+    setF((s) => (s.kind === defaultKind ? s : { ...s, kind: defaultKind }));
+  }, [defaultKind, initial?.id, initial?.kind, prefill?.kind]);
   const [busy, setBusy] = useState(false);
   /* دستیارِ AI روی خودِ فرمِ عمل — دکمه‌های شرح/مراقبت فقط در ویرایش
      (پرونده و مراجعه معلوم‌اند)؛ دیکتهٔ صوتی در ساخت هم هست. */
@@ -1030,7 +1043,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               aria-checked={f.kind === k.kind}
               className={f.kind === k.kind ? 'on' : ''}
               style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
-              onClick={() => setF((s) => ({ ...s, kind: k.kind }))}
+              onClick={() => { kindTouched.current = true; setF((s) => ({ ...s, kind: k.kind })); }}
             >{k.title}</button>
           ))}
         </div>

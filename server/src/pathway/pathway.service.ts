@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
-import { LEVEL } from '../common/levels';
+import { scopedPatientWhere } from '../common/own-scope';
 import { jobRoleLabel } from '../common/job-roles';
 import { PATHWAY_TEMPLATES, validateSteps, type PathwayStepDef } from './pathway.registry';
 
@@ -107,11 +107,13 @@ export class PathwayService {
    * ۴۰۴ (نه ۴۰۳) تا وجودِ پرونده هم لو نرود.
    */
   private async assertPatient(patientId: number, user: any) {
-    const scoped = (user?.level ?? 0) < LEVEL.SUPERVISOR;
     const patient = await this.prisma.patient.findFirst({
       where: {
         id: patientId, deletedAt: null,
-        ...(scoped ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+        /* ⚠️ این call-site در بستهٔ ۵ از قلم افتاده بود و روی `techId` مانده بود:
+           پزشکِ متصل به تعریفِ جراح روی **بیمارِ خودش** ۴۰۴ می‌گرفت، در حالی که
+           `pathway` در پلانِ مطب روشن است. حالا همان helperِ یک‌جا. */
+        ...scopedPatientWhere(user),
       },
       select: { id: true, code: true, firstName: true, lastName: true },
     });

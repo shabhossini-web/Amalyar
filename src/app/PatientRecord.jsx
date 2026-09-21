@@ -19,7 +19,7 @@ import {
   Money, Pencil, Phone, Plus, Send, Trash,
 } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import { useTerms } from './config.jsx';
+import { useConfig } from './config.jsx';
 import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -1238,7 +1238,7 @@ function RecordActions({ rec, onEdit, onNew, toast, t }) {
 /* ══════════════ صفحه ══════════════ */
 export default function PatientRecord() {
   const { id } = useParams();
-  const t = useTerms();
+  const { t, defaultKind = 'surgery' } = useConfig();
   const [rec, setRec] = useState(null);
   /* لایهٔ «پاسخ» — جدا از بایگانی و **موازی** با آن. اگر نیامد (سطحِ پایین‌تر،
      خطای شبکه) صفحه با تب‌ها سرِ جایش کار می‌کند؛ پاسخ اضافه است نه شرط. */
@@ -1360,7 +1360,7 @@ export default function PatientRecord() {
 
       <RecordActions
         rec={rec} onEdit={() => goTab('profile')} toast={say} t={t}
-        onNew={() => things.show({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } })}
+        onNew={() => things.show({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: defaultKind } })}
       />
 
       {live && <StageBar stage={live.stage} t={t} />}

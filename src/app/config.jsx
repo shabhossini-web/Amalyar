@@ -17,7 +17,7 @@ const Ctx = createContext(null);
  * تا وقتی پاسخ نرسیده، واژگانِ پیش‌فرض استفاده می‌شوند — نه رشتهٔ خالی.
  */
 export function ConfigProvider({ children }) {
-  const [config, setConfig] = useState({ vertical: DEFAULT_VERTICAL, brandName: null, brand: {}, verticals: [] });
+  const [config, setConfig] = useState({ vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [] });
   /**
    * خطا نگه داشته می‌شود، بلعیده نمی‌شود.
    *
@@ -77,7 +77,7 @@ export function ConfigProvider({ children }) {
 /** واژگان + پیکربندی. خارج از Provider هم امن است (پیش‌فرض برمی‌گردد). */
 export function useConfig() {
   return useContext(Ctx) ?? {
-    vertical: DEFAULT_VERTICAL, brandName: null, brand: {}, verticals: [], error: null,
+    vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [], error: null,
     t: termsFor(DEFAULT_VERTICAL), reload: () => {},
   };
 }

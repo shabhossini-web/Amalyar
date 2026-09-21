@@ -6,13 +6,18 @@
  *   - سوییچ به مطب کاشیِ `surgeon` را روشن می‌کند و `/features` دیگر آن را برای مطب هاردکد رد نمی‌کند؛
  *     ماژول‌های شرکتی (چینش/کارشناسی/انبار) در مطب خاموش می‌مانند
  *   - حسابِ پزشک (نقشِ doctor) در مطب هم به تعریفِ جراح وصل می‌شود
- *   - `GET /surgeon/today` فقط نوبت‌ها، مراجعه‌ها و نتیجه‌های همین پزشک؛ `GET /surgeon/visits` همهٔ
+ *   - `GET /surgeon/today` فقط نوبت‌ها (بدونِ اتکا به ستونی که هیچ مسیرِ واقعی‌ای پر نمی‌کند)،
+ *     مراجعه‌ها و نتیجه‌های همین پزشک؛ `GET /surgeon/visits` همهٔ
  *     نوع‌ها (ویزیت و عمل) با `patientId`/`kind`، فقط مالِ او
  *   - پزشکی که ماژولِ «بیماران» را دارد (پلانِ مطب: از سطح ۴) از خودِ میز ویزیت را باز و ذخیره
  *     می‌کند و نتیجه را بررسی می‌کند — با همان پاپ‌آپ‌های مشترک، بدونِ فرمِ تازه
  *   - حسابِ پایین‌ترِ متصل به جراح: دامنهٔ «امروز» و پرتال با `surgeonId` (own-scope)، و میزِ
  *     فقط‌خواندنی بدونِ هیچ ۴۰۳ی
  *   - کاشیِ لانچر و h1 صفحه در مطب «میزِ پزشک» است
+ *   - (۵ب) صفحهٔ «امروز» در مطب «ویزیت» می‌گوید نه «عمل»، و «مراجعهٔ جدید» با نوعِ ویزیت باز می‌شود
+ *     (`defaultKind` از `/config`، نه هاردکدِ کلاینت)
+ *   - migrationِ `clinic_surgeon_feature` روی نصبی که **از قبل** روی مطب است کاشی را روشن کند
+ *     (پلانِ حوزه فقط هنگامِ عوض‌کردنِ حوزه اعمال می‌شود — بدونِ این migration مشتریِ فعلی میز را نمی‌بیند)
  *  نباید بیفتد:
  *   - برگشت به حوزهٔ قبلی همه‌چیز را برمی‌گرداند؛ هیچ خطای JS/کنسول در هیچ‌کدام از دو میز
  */
@@ -75,8 +80,27 @@ try {
   const feats = (await send('/features')).json ?? [];
   const fSurgeon = feats.find((f) => f.key === 'surgeon');
   ok('**کاشیِ `surgeon` در مطب روشن و مجاز است** (تا دیروز برای مطب هاردکد رد می‌شد)', fSurgeon?.enabled === true && fSurgeon.minLevel === 2 && fSurgeon.allowed === true, JSON.stringify(fSurgeon));
+  const cfg = (await send('/config')).json;
+  ok('پیش‌فرضِ نوعِ «مراجعهٔ جدید» در مطب ویزیت است (`defaultKind` از سرور)', cfg?.defaultKind === 'clinic', JSON.stringify(cfg?.defaultKind));
   const corp = ['dispatch', 'tech', 'inventory'].map((k) => [k, feats.find((f) => f.key === k)?.enabled]);
   ok('ماژول‌های شرکتی در مطب خاموش‌اند (چینش / کارشناسی / انبار)', corp.every(([, e]) => e === false), JSON.stringify(corp));
+
+  /* نصبی که **پیش از** بستهٔ ۵ روی مطب رفته، `features.surgeon` را خاموش گرفته و
+     افزودنِ کلید به پلانِ کد آن را روشن نمی‌کند (پلان فقط در `setVertical` اعمال
+     می‌شود). این‌جا همان حالت ساخته می‌شود و خودِ SQLِ migration اجرا می‌شود. */
+  sql(`UPDATE features SET enabled=false WHERE key='surgeon'`);
+  const beforeMig = (await send('/features')).json?.find((f) => f.key === 'surgeon');
+  ok('بازسازیِ حالتِ نصبِ قدیمی: کاشیِ پزشک خاموش است', beforeMig?.enabled === false, JSON.stringify(beforeMig?.enabled));
+  execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1 -f server/prisma/migrations/20260921070000_clinic_surgeon_feature/migration.sql`);
+  const afterMig = (await send('/features')).json?.find((f) => f.key === 'surgeon');
+  ok('**migration کاشی را روی نصبِ مطبِ موجود روشن می‌کند** (وگرنه میز برای مشتریِ فعلی نامرئی می‌ماند)', afterMig?.enabled === true && afterMig.minLevel === 2, JSON.stringify(afterMig));
+  /* و نباید بیفتد: روی نصبِ غیرِ مطب هیچ کاری نکند. */
+  sql(`UPDATE features SET enabled=false WHERE key='surgeon'`);
+  sql(`UPDATE settings SET value='ionm' WHERE key='vertical'`);
+  execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1 -f server/prisma/migrations/20260921070000_clinic_surgeon_feature/migration.sql`);
+  ok('**نباید بیفتد:** روی نصبِ غیرِ مطب migration کاشی را روشن نمی‌کند', sql(`SELECT enabled FROM features WHERE key='surgeon'`) === 'f');
+  sql(`UPDATE settings SET value='clinic' WHERE key='vertical'`);
+  sql(`UPDATE features SET enabled=true WHERE key='surgeon'`);
 
   const d1 = await makeDoctor('d1', 'اول', 4);
   const d2 = await makeDoctor('d2', 'دوم', 4);
@@ -112,12 +136,17 @@ try {
   const o2 = await lab(v1, `${tag}-2`);
   const oOther = await lab(v2, `${tag}-other`);
   ok('سه آزمایشِ پاسخ‌داده (دو تا برای بیمارِ پزشکِ اول، یکی برای بیمارِ پزشکِ دوم)', o1.answered && o2.answered && oOther.answered);
-  const appt = (patientId, doctorId, seq) => {
-    const id = num(`INSERT INTO appointments (patient_id, doctor_id, date, seq, status, created_at, updated_at) VALUES (${patientId}, ${doctorId}, CURRENT_DATE, ${seq}, 'confirmed', now(), now()) RETURNING id`);
+  /* ⚠️ **عمداً بدونِ `doctor_id`** — دقیقاً همان‌طور که مسیرهای واقعی می‌نویسند
+     (`appointments.service.walkIn` و `intake.service` هیچ‌کدام آن ستون را پر
+     نمی‌کنند). نسخهٔ اولِ این سوییت `doctor_id` را دستی می‌گذاشت و برای همین
+     سنجه‌اش توتولوژیک بود: سرور روی همان ستون فیلتر می‌کرد و سبز می‌شد، در حالی
+     که روی نصبِ واقعی «نوبت‌های امروز» همیشه خالی بود. */
+  const appt = (patientId, seq) => {
+    const id = num(`INSERT INTO appointments (patient_id, date, seq, status, created_at, updated_at) VALUES (${patientId}, CURRENT_DATE, ${seq}, 'confirmed', now(), now()) RETURNING id`);
     trash.appts.push(id); return id;
   };
-  const a1 = appt(v1.patientId, d1.id, 91);
-  const a2 = appt(v2.patientId, d2.id, 92);
+  const a1 = appt(v1.patientId, 91);
+  const a2 = appt(v2.patientId, 92);
 
   console.log('\n۳) API — پزشکِ اول فقط مالِ خودش را می‌بیند و از میز کار می‌کند');
   const f1 = (await d1.api('/features')).json ?? [];
@@ -126,7 +155,7 @@ try {
   ok('`/surgeon/today` مراجعه‌های امروزِ او: فقط v1 (نه بیمارِ پزشکِ دیگر، نه عملِ فردا)', ids(t1?.visits).includes(v1.id) && !ids(t1?.visits).includes(v2.id) && !ids(t1?.visits).includes(v3.id) && !ids(t1?.visits).includes(v4.id), JSON.stringify(ids(t1?.visits)));
   const tv1 = t1?.visits?.find((v) => v.id === v1.id);
   ok('… با نام و نوعِ مراجعه و شناسهٔ پرونده', tv1?.patient?.fullName === `بیمارِ اول${tag}` && tv1?.kind === 'clinic' && tv1?.patientId === v1.patientId, JSON.stringify(tv1));
-  ok('نوبت‌های امروزِ او: نوبتِ خودش هست، نوبتِ پزشکِ دیگر نیست', ids(t1?.appointments).includes(a1) && !ids(t1?.appointments).includes(a2), JSON.stringify(ids(t1?.appointments)));
+  ok('**نوبتِ امروزِ بیمارِ او می‌آید** (بدونِ `doctor_id` — همان‌طور که مسیرِ واقعی می‌نویسد) و نوبتِ بیمارِ پزشکِ دیگر نمی‌آید', ids(t1?.appointments).includes(a1) && !ids(t1?.appointments).includes(a2), JSON.stringify(ids(t1?.appointments)));
   const unrev = (t1?.unreviewed ?? []).filter((o) => o.kind === 'lab').map((o) => o.id);
   ok('نتیجه‌های بررسی‌نشده: هر دو آزمایشِ بیمارِ او، نه آزمایشِ بیمارِ پزشکِ دیگر', unrev.includes(o1.id) && unrev.includes(o2.id) && !unrev.includes(oOther.id), JSON.stringify(unrev));
   const l1 = (await d1.api('/surgeon/visits')).json;
@@ -206,6 +235,26 @@ try {
   await page.waitForSelector('.lx-hero-ic, .lx-card-ic, .lx-tile-ic', { timeout: 15000 }).catch(() => {});
   ok('کاشیِ لانچر «میزِ پزشک» است، نه «پرتال جراح»', (await page.getByText('میزِ پزشک', { exact: true }).count()) >= 1 && (await page.getByText('پرتال جراح', { exact: true }).count()) === 0);
 
+  console.log('\n۵ب) واژه‌های مطب در «امروز» و پیش‌فرضِ «مراجعهٔ جدید»');
+  await page.goto(`${UI}/app`, { waitUntil: 'networkidle' });
+  await page.locator('.td-hello').waitFor({ timeout: 15000 });
+  const chips = (await page.locator('.td-chips').innerText()).replace(/\s+/g, ' ');
+  ok('چیپِ خلاصه «ویزیتِ امروز» می‌گوید، نه «عملِ امروز»', /ویزیتِ امروز/.test(chips) && !/عملِ امروز/.test(chips), chips.slice(0, 120));
+  const vsec = page.locator('.td-sec', { hasText: 'ویزیت‌های امروز' });
+  ok('بخشِ مراجعه‌های امروز «ویزیت‌های امروز» است و بیمارِ او را دارد', (await vsec.count()) === 1 && (await vsec.locator('.td-item', { hasText: `اول${tag}` }).count()) === 1, String(await page.locator('.td-sec h2').allInnerTexts()));
+  await page.goto(`${UI}/app/patients/${v1.patientId}`, { waitUntil: 'networkidle' });
+  await page.locator('.rc-actions .rc-act.is-main').waitFor({ timeout: 15000 });
+  ok('دکمهٔ پرونده «ویزیتِ جدید» است (واژگانِ مطب)', (await page.locator('.rc-actions .rc-act.is-main').innerText()).includes('ویزیتِ جدید'));
+  await page.locator('.rc-actions .rc-act.is-main').click();
+  /* از پرونده فرم با بیمارِ از پیش‌انتخاب‌شده مستقیم روی گامِ ۳ باز می‌شود (ردیفِ نوع در گامِ ۲ است)؛
+     نوع از برچسبِ تاریخ («تاریخِ ویزیت» نه «تاریخِ عمل») و نبودنِ تب‌های قبل/حین/بعد خوانده می‌شود. */
+  await page.locator('.db-sheet').waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => /تاریخِ (ویزیت|عمل)/.test(document.querySelector('.db-sheet')?.innerText ?? ''), null, { timeout: 10000 }).catch(() => {});
+  const sheetTxt = await page.locator('.db-sheet').innerText();
+  ok('**«مراجعهٔ جدید» در مطب با نوعِ ویزیت باز می‌شود، نه عمل** (برچسبِ «تاریخِ ویزیت»، بدونِ تب‌های عمل)', /تاریخِ ویزیت/.test(sheetTxt) && !/تاریخِ عمل/.test(sheetTxt) && (await page.locator('.db-sheet .db-postop .ui-tabs').count()) === 0, sheetTxt.replace(/\s+/g, ' ').slice(0, 140));
+  await page.locator('.db-sheet .db-x').first().click();
+  await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 8000 });
+
   console.log('\n۶) مرورگر — میزِ فقط‌خواندنی برای حسابِ بدونِ ماژولِ «بیماران»: هیچ ۴۰۳، هیچ دکمهٔ شکسته');
   const page3 = await newPage(d3.token);
   await page3.goto(`${UI}/app/surgeon`, { waitUntil: 'networkidle' });
@@ -232,6 +281,7 @@ try {
   const back = await send('/config/vertical', 'PATCH', { vertical: vertical0 }).catch(() => ({ status: 0 }));
   const f0 = (await send('/features')).json ?? [];
   ok('**نباید بیفتد:** برگشت به حوزهٔ قبلی — `surgeon` روشن و ماژول‌های شرکتی دوباره فعال', back.status === 200 && f0.find((f) => f.key === 'surgeon')?.enabled === true && (vertical0 !== 'ionm' || f0.find((f) => f.key === 'dispatch')?.enabled === true), `${back.status} ${vertical0}`);
+  ok('… و پیش‌فرضِ نوعِ مراجعه دوباره عمل است', vertical0 === 'clinic' || (await send('/config')).json?.defaultKind === 'surgery');
 }
 
 console.log(`\nقبول: ${pass}   رد: ${fails.length}`);

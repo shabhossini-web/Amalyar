@@ -39,7 +39,14 @@ export class SurgeonPortalService {
     const now = new Date();
     const start = new Date(now); start.setHours(0, 0, 0, 0);
     const end = new Date(start); end.setHours(23, 59, 59, 999);
-    const day = new Date(`${start.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    /* ستونِ `Appointment.date` از نوعِ `DATE` است و قراردادِ کلِ ماژول این است که
+       نیمه‌شبِ UTCِ همان روز ساخته شود (`appointments.service`).
+       ⚠️ روزِ تقویمی باید از **همان** `start`ِ محلی بیاید که پنجرهٔ مراجعه‌ها را
+       می‌سازد، نه از `toISOString()` آن: روی کانتینری که ساعتش UTC نیست،
+       نیمه‌شبِ محلی به روزِ UTCِ **قبل** ترجمه می‌شود و نوبت‌های امروز یک روز
+       عقب خوانده می‌شوند. */
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const day = new Date(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T00:00:00.000Z`);
     const person = (p: any) => (p ? { id: p.id, code: p.code, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() } : null);
     const patientSel = { select: { id: true, code: true, firstName: true, lastName: true } };
     const [visits, appointments] = await Promise.all([
@@ -49,8 +56,24 @@ export class SurgeonPortalService {
         select: { id: true, seq: true, kind: true, opStartTime: true, opStatus: true, hospitalName: true, patient: patientSel, topic: { select: { name: true } } },
       }),
       this.prisma.appointment.findMany({
-        /* نوبت به **حساب** وصل است (`doctorId`)، نه به تعریفِ جراح؛ سوپرادمین همه را می‌بیند. */
-        where: { date: day, status: { not: 'cancelled' }, ...((user?.level ?? 0) >= LEVEL.SUPER_ADMIN ? {} : { doctorId: user?.id ?? -1 }) },
+        /**
+         * ⚠️ **نوبت را با `doctorId` دامنه نده.** آن ستون در `Appointment` هست ولی
+         * هیچ مسیرِ واقعی‌ای پرش نمی‌کند: نه `appointments.service.walkIn` و نه
+         * `intake.service` (نوبتِ فرمِ بیمار) آن را می‌نویسند. نسخهٔ اولِ همین متد
+         * رویش فیلتر می‌کرد و نتیجه‌اش این بود که «نوبت‌های امروز» برای هر پزشکِ
+         * غیرِ سوپرادمین **همیشه خالی** بماند — و سوییتِ e2e هم نمی‌گرفتش چون
+         * خودش ردیف را با `doctor_id` دستی درج می‌کرد (سنجهٔ توتولوژیک).
+         *
+         * دامنهٔ درست همان قاعدهٔ بقیهٔ میز است: نوبتِ **بیمارِ من** — بیماری که
+         * دستِ‌کم یک مراجعه به نامِ این جراح دارد. `doctorId` هم اگر روزی نوشته
+         * شد سرِ جایش می‌ماند (شاخهٔ اول).
+         */
+        where: {
+          date: day, status: { not: 'cancelled' },
+          ...((user?.level ?? 0) >= LEVEL.SUPER_ADMIN
+            ? {}
+            : { OR: [{ doctorId: user?.id ?? -1 }, { patient: { visits: { some: scope } } }] }),
+        },
         orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 60,
         select: { id: true, startMin: true, seq: true, status: true, visitId: true, date: true, patient: patientSel, topic: { select: { name: true } } },
       }),
@@ -70,6 +93,11 @@ export class SurgeonPortalService {
       unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient) })));
     }
     unreviewed.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    /* سقفِ ۲۰ در هر نوع یعنی ممکن است چیزی از قلم بیفتد؛ شمارشِ واقعی برمی‌گردد
+       تا رابط بتواند «و N تای دیگر» بگوید، نه اینکه بی‌صدا کمتر نشان بدهد. */
+    const unreviewedTotal = (await Promise.all(kinds.map((k) => k.table.count({
+      where: { status: { in: ['answered', 'in_review'] }, visit: { ...scope, patient: { deletedAt: null } } },
+    })))).reduce((a: number, b: number) => a + b, 0);
     const hhmm = (m: number | null) => (m == null ? null : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
     return {
       now: now.toISOString(),
@@ -82,6 +110,7 @@ export class SurgeonPortalService {
         topic: a.topic?.name ?? null, patientId: a.patient?.id ?? null, patient: person(a.patient),
       })),
       unreviewed,
+      unreviewedTotal,
     };
   }
 

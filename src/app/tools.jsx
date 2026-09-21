@@ -80,7 +80,12 @@ export function useAllowedTools() {
     import('../lib/api.js').then(({ api }) =>
       api('/features')
         .then((rows) => { if (alive) setFeatures(Object.fromEntries(rows.map((r) => [r.key, r]))); })
-        .catch(() => {}),
+        /* ⚠️ شکستِ این درخواست باید به **پشتیبانِ `min`** برگردد، نه به انتظارِ ابدی.
+           تا دیروز `catch` خالی بود و `features` روی `null` می‌ماند؛ برای لانچر
+           بی‌اثر بود (فقط فهرست خالی می‌شد) ولی میزِ پزشک روی همین `loading`
+           رندر را نگه می‌دارد و صفحه تا ابد «در حالِ بارگذاری…» می‌ماند.
+           `{}` یعنی «پاسخی نیامد»: `allowed()` به `lvl >= t.min` برمی‌گردد. */
+        .catch(() => { if (alive) setFeatures({}); }),
     );
     return () => { alive = false; };
   }, []);
