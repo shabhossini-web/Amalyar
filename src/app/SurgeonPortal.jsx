@@ -46,7 +46,13 @@ export default function SurgeonPortal() {
   const { hero, daily, tools, loading: accessLoading } = useAllowedTools();
   const has = (key) => [hero, ...daily, ...tools].some((x) => x && x.key === key);
   const access = { loading: accessLoading, open: has('dashboard'), appt: has('calendar') };
+  /* ⚠️ تبِ آغازین را در `useState` قفل نکن: `clinic` از `/config` می‌آید و ممکن است
+     پس از اولین رندر برسد — آن‌وقت پزشکِ مطب روی «بیمارانِ من» می‌افتاد نه «امروزِ من».
+     تا وقتی کاربر خودش تبی نزده، پیش‌فرض دنبالِ حوزه می‌آید. */
   const [tab, setTab] = useState(clinic ? 'today' : 'visits');
+  const picked = useRef(false);
+  const choose = useCallback((k) => { picked.current = true; setTab(k); }, []);
+  useEffect(() => { if (!picked.current) setTab(clinic ? 'today' : 'visits'); }, [clinic]);
   const [toast, setToast] = useState('');
   const [surgeons, setSurgeons] = useState([]);
   const [surgeonId, setSurgeonId] = useState('');
@@ -81,7 +87,7 @@ export default function SurgeonPortal() {
       <p className="sp-hint">
         {verticalLabel} · {admin ? 'نمای مدیر برای بررسی مراجعاتِ پزشکان' : t.portalHint}
       </p>
-      <Tabs className="sp-tabs" value={tab} onChange={setTab} label={`بخش‌های ${t.portal}`} items={items} />
+      <Tabs className="sp-tabs" value={tab} onChange={choose} label={`بخش‌های ${t.portal}`} items={items} />
       {admin && (
         <details className="sp-card"><summary>فعال‌سازی حساب جراح از تعاریف پایه</summary>
           <label className="ia-field"><span>جراح</span><select value={surgeonId} onChange={(e) => setSurgeonId(e.target.value)}><option value="">انتخاب جراح</option>{surgeons.filter((s) => s.active !== false).map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
@@ -122,7 +128,9 @@ function DoctorToday({ things, reloadRef, toast, access }) {
   const [busy, setBusy] = useState(0);
   const load = useCallback(() => {
     api('/surgeon/today').then((r) => { setData(r); setErr(''); }).catch((e) => setErr(e.message));
-    api('/work?scope=inbox&limit=20').then((r) => setWork(Array.isArray(r) ? r : [])).catch(() => setWork([]));
+    /* ⚠️ خطا را به «کارِ بازی ندارید» ترجمه نکن — آن جمله یک **ادعا**ست. اگر
+       ماژولِ کارها برای این حساب بسته باشد (۴۰۳) یا شبکه بیفتد، باید همان را بگوید. */
+    api('/work?scope=inbox&limit=20').then((r) => setWork(Array.isArray(r) ? r : [])).catch((e) => setWork(e?.status === 403 ? 'forbidden' : 'error'));
   }, []);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { reloadRef.current = load; }, [load, reloadRef]);
@@ -136,7 +144,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
     setBusy(w.id);
     try {
       await api(`/work/${w.id}`, { method: 'PATCH', body: { action, ...body } });
-      setWork((rows) => (rows ?? []).filter((x) => x.id !== w.id));
+      setWork((rows) => (Array.isArray(rows) ? rows : []).filter((x) => x.id !== w.id));
       window.dispatchEvent(new Event(WORK_CHANGED));
       toast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
     } catch (e) { toast(e?.message || 'انجام نشد'); } finally { setBusy(0); }
@@ -206,8 +214,10 @@ function DoctorToday({ things, reloadRef, toast, access }) {
       <section className="sp-sec" aria-labelledby="sp-work-h">
         <h2 id="sp-work-h">کارهای من</h2>
         {work === null ? <p className="sp-empty">در حالِ بارگذاری…</p>
-          : work.length === 0 ? <p className="sp-empty">کارِ بازی ندارید.</p>
-            : <ul className="wk-list">{work.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact onOpen={access.open && workTarget(w) ? () => things.open(workTarget(w)) : undefined} />)}</ul>}
+          : work === 'forbidden' ? <p className="sp-empty">صفِ کارها برای حسابِ شما باز نیست.</p>
+            : work === 'error' ? <p className="sp-empty">فهرستِ کارها نیامد؛ صفحه را تازه کنید.</p>
+              : work.length === 0 ? <p className="sp-empty">کارِ بازی ندارید.</p>
+                : <ul className="wk-list">{work.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact onOpen={access.open && workTarget(w) ? () => things.open(workTarget(w)) : undefined} />)}</ul>}
       </section>
     </>
   );
@@ -284,7 +294,7 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
         : <h2>{row.fullName}</h2>}
       <span>{row.code} · {faDate(row.opDate)} · {row.hospital || 'مرکز تعیین نشده'}</span>
       <span>{clinic ? [kindOf(row.kind).label, row.topic].filter(Boolean).join(' · ') : (row.procedure || 'عمل تعیین نشده')} · {status}</span>
-      {row.report && <details><summary>گزارش ثبت‌شدهٔ عمل</summary><div className="sp-report">{row.report}</div></details>}
+      {row.report && <details><summary>گزارشِ ثبت‌شدهٔ {kindOf(row.kind).label}</summary><div className="sp-report">{row.report}</div></details>}
       {row.documents?.map((doc) => <button className="bl-mini" type="button" key={doc.id} onClick={() => document(doc)}>{doc.title || doc.fileName}</button>)}
       {clinic ? (
         <div className="sp-card-acts">

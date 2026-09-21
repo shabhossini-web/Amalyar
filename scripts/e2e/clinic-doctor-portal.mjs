@@ -6,7 +6,8 @@
  *   - سوییچ به مطب کاشیِ `surgeon` را روشن می‌کند و `/features` دیگر آن را برای مطب هاردکد رد نمی‌کند؛
  *     ماژول‌های شرکتی (چینش/کارشناسی/انبار) در مطب خاموش می‌مانند
  *   - حسابِ پزشک (نقشِ doctor) در مطب هم به تعریفِ جراح وصل می‌شود
- *   - `GET /surgeon/today` فقط نوبت‌ها، مراجعه‌ها و نتیجه‌های همین پزشک؛ `GET /surgeon/visits` همهٔ
+ *   - `GET /surgeon/today` فقط نوبت‌ها (بدونِ اتکا به ستونی که هیچ مسیرِ واقعی‌ای پر نمی‌کند)،
+ *     مراجعه‌ها و نتیجه‌های همین پزشک؛ `GET /surgeon/visits` همهٔ
  *     نوع‌ها (ویزیت و عمل) با `patientId`/`kind`، فقط مالِ او
  *   - پزشکی که ماژولِ «بیماران» را دارد (پلانِ مطب: از سطح ۴) از خودِ میز ویزیت را باز و ذخیره
  *     می‌کند و نتیجه را بررسی می‌کند — با همان پاپ‌آپ‌های مشترک، بدونِ فرمِ تازه
@@ -135,12 +136,17 @@ try {
   const o2 = await lab(v1, `${tag}-2`);
   const oOther = await lab(v2, `${tag}-other`);
   ok('سه آزمایشِ پاسخ‌داده (دو تا برای بیمارِ پزشکِ اول، یکی برای بیمارِ پزشکِ دوم)', o1.answered && o2.answered && oOther.answered);
-  const appt = (patientId, doctorId, seq) => {
-    const id = num(`INSERT INTO appointments (patient_id, doctor_id, date, seq, status, created_at, updated_at) VALUES (${patientId}, ${doctorId}, CURRENT_DATE, ${seq}, 'confirmed', now(), now()) RETURNING id`);
+  /* ⚠️ **عمداً بدونِ `doctor_id`** — دقیقاً همان‌طور که مسیرهای واقعی می‌نویسند
+     (`appointments.service.walkIn` و `intake.service` هیچ‌کدام آن ستون را پر
+     نمی‌کنند). نسخهٔ اولِ این سوییت `doctor_id` را دستی می‌گذاشت و برای همین
+     سنجه‌اش توتولوژیک بود: سرور روی همان ستون فیلتر می‌کرد و سبز می‌شد، در حالی
+     که روی نصبِ واقعی «نوبت‌های امروز» همیشه خالی بود. */
+  const appt = (patientId, seq) => {
+    const id = num(`INSERT INTO appointments (patient_id, date, seq, status, created_at, updated_at) VALUES (${patientId}, CURRENT_DATE, ${seq}, 'confirmed', now(), now()) RETURNING id`);
     trash.appts.push(id); return id;
   };
-  const a1 = appt(v1.patientId, d1.id, 91);
-  const a2 = appt(v2.patientId, d2.id, 92);
+  const a1 = appt(v1.patientId, 91);
+  const a2 = appt(v2.patientId, 92);
 
   console.log('\n۳) API — پزشکِ اول فقط مالِ خودش را می‌بیند و از میز کار می‌کند');
   const f1 = (await d1.api('/features')).json ?? [];
@@ -149,7 +155,7 @@ try {
   ok('`/surgeon/today` مراجعه‌های امروزِ او: فقط v1 (نه بیمارِ پزشکِ دیگر، نه عملِ فردا)', ids(t1?.visits).includes(v1.id) && !ids(t1?.visits).includes(v2.id) && !ids(t1?.visits).includes(v3.id) && !ids(t1?.visits).includes(v4.id), JSON.stringify(ids(t1?.visits)));
   const tv1 = t1?.visits?.find((v) => v.id === v1.id);
   ok('… با نام و نوعِ مراجعه و شناسهٔ پرونده', tv1?.patient?.fullName === `بیمارِ اول${tag}` && tv1?.kind === 'clinic' && tv1?.patientId === v1.patientId, JSON.stringify(tv1));
-  ok('نوبت‌های امروزِ او: نوبتِ خودش هست، نوبتِ پزشکِ دیگر نیست', ids(t1?.appointments).includes(a1) && !ids(t1?.appointments).includes(a2), JSON.stringify(ids(t1?.appointments)));
+  ok('**نوبتِ امروزِ بیمارِ او می‌آید** (بدونِ `doctor_id` — همان‌طور که مسیرِ واقعی می‌نویسد) و نوبتِ بیمارِ پزشکِ دیگر نمی‌آید', ids(t1?.appointments).includes(a1) && !ids(t1?.appointments).includes(a2), JSON.stringify(ids(t1?.appointments)));
   const unrev = (t1?.unreviewed ?? []).filter((o) => o.kind === 'lab').map((o) => o.id);
   ok('نتیجه‌های بررسی‌نشده: هر دو آزمایشِ بیمارِ او، نه آزمایشِ بیمارِ پزشکِ دیگر', unrev.includes(o1.id) && unrev.includes(o2.id) && !unrev.includes(oOther.id), JSON.stringify(unrev));
   const l1 = (await d1.api('/surgeon/visits')).json;

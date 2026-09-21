@@ -17,7 +17,7 @@ export const VERTICALS = {
     /** نوعِ پیش‌فرضِ «مراجعهٔ جدید» — کلیدِ فرمِ مراجعه (`visit.<kind>`). */
     defaultKind: 'surgery',
     // انبار اینجا هم هست: الکترود و سوزنِ یک‌بارمصرف هم لات و تاریخِ انقضا دارند.
-    features: { dashboard: 5, calendar: 4, frontdesk: 2, dispatch: 4, tech: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, inventory: 3, site: 5, users: 6, work: 2, pathway: 2 },
+    features: { dashboard: 5, calendar: 4, frontdesk: 2, dispatch: 4, tech: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, inventory: 3, transport: 2, site: 5, users: 6, access: 6, work: 2, pathway: 2 },
   },
   /** تأمین‌کنندهٔ ست و ایمپلنت — واحدِ کار همان مراجعه است، با قلم‌های کالا. */
   implant: {
@@ -26,7 +26,7 @@ export const VERTICALS = {
     // چینشِ کارشناس معنا ندارد؛ در عوض انبار و فاکتور مهم است. برای این حوزه
     // انبار هستهٔ کار است نه جانبی — ردیابیِ سریالِ ایمپلنت الزامِ فراخوان است،
     // پس از سطحِ کارشناس باز می‌شود.
-    features: { dashboard: 5, calendar: 4, frontdesk: 2, surgeon: 2, accounting: 4, messenger: 2, formgen: 5, letter: 5, inventory: 2, site: 5, users: 6, work: 2, pathway: 2 },
+    features: { dashboard: 5, calendar: 4, frontdesk: 2, surgeon: 2, accounting: 4, messenger: 2, formgen: 5, letter: 5, inventory: 2, transport: 2, site: 5, users: 6, access: 6, work: 2, pathway: 2 },
   },
   /** مطب و تیمِ جراحی — از ویزیت تا عمل تا پیگیری. */
   clinic: {
@@ -35,7 +35,7 @@ export const VERTICALS = {
     defaultKind: 'clinic',
     // `surgeon` = «میزِ پزشک»: پزشکِ مطب (حسابِ متصل به تعریفِ جراح) همه‌کارش را
     // از همان‌جا می‌کند — امروزِ من، بیمارانِ من، نتایجِ رسیده (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹).
-    features: { dashboard: 4, calendar: 3, frontdesk: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, work: 2, pathway: 2 },
+    features: { dashboard: 4, calendar: 3, frontdesk: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, access: 6, work: 2, pathway: 2 },
   },
 } as const;
 
@@ -59,6 +59,16 @@ export const isVertical = (value: unknown): value is VerticalKey =>
  * فقط نصب‌های تازه‌سوییچ‌شده آن را می‌گیرند و مشتریِ فعلی نه — و چون سوپرادمین
  * از گاردها بی‌قید رد می‌شود، تستِ مدیر هم سالم به‌نظر می‌رسد.
  * نمونه: `20260921070000_clinic_surgeon_feature` برای `clinic.surgeon` (بستهٔ ۵).
+ *
+ * ⚠️ **و کلیدی که در هیچ حوزه‌ای نیامده، با هر سوییچِ حوزه برای همیشه خاموش
+ * می‌شود** — حتی سوییچ به همان حوزهٔ فعلی. `access` (ماتریسِ دسترسی) و
+ * `transport` (پرتالِ راننده) دقیقاً همین را خورده بودند: در `FEATURES` ثبت
+ * بودند، در هیچ پلانی نبودند، پس اولین تغییرِ حوزه صفحهٔ «سطوحِ دسترسی» را از
+ * دسترسِ سوپرادمین درمی‌آورد — همان‌جایی که مدیر باید برود تا همین را درست کند.
+ * (`frontdesk` در W3.3 و `pathway` در W4.1 هم همین را خورده بودند.)
+ * `access` در هر سه حوزه است چون زیرساختِ مدیریت است، نه ماژولِ حوزه‌ای؛
+ * `transport` فقط جایی که بار جابه‌جا می‌شود (نه مطب) — و `eligibility()` باز
+ * هم فقط به کسی که رکوردِ نیروی حمل دارد نشانش می‌دهد.
  *
  * ⚠️ **و هر ماژولِ تازه باید این‌جا هم بیاید، وگرنه سوییچِ حوزه بی‌صدا
  * خاموشش می‌کند.** `frontdesk` (W3.3) دقیقاً همین را خورده بود: در
