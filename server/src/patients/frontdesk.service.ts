@@ -140,8 +140,13 @@ export class FrontDeskService {
     return this.appts.setStatus(id, status, user, cancel);
   }
 
+  /**
+   * نوبتِ حضوریِ **میز** — با `desk: true`، یعنی ظرفیت خبر می‌دهد و منع نمی‌کند.
+   * چراییِ کامل در `AppointmentsService.walkIn`؛ خلاصه‌اش تصمیمِ مالک است:
+   * «بیمار ممکن است بدون نوبتِ قبلی حضوری بیاید که اگر وقت بشود پذیرش می‌شود».
+   */
   walkIn(dto: any, user: any) {
-    return this.appts.walkIn(dto, user);
+    return this.appts.walkIn(dto, user, { desk: true });
   }
 
   suggest(patientId: number, date: string, topicId?: number) {

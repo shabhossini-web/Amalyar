@@ -172,13 +172,30 @@ export class AppointmentsService {
   }
 
   /**
-   * نوبتِ حضوری — منشی برای بیمارِ موجود می‌گیرد.
+   * نوبتِ حضوری — برای بیمارِ موجود.
    *
-   * ⚠️ از همان مسیرِ ظرفیتِ بیمار عبور می‌کند: روزِ بسته یا پر برای منشی هم
-   * بسته است، وگرنه «حضوری» می‌شد راهِ دورزدنِ ظرفیت و تقویم دروغ می‌گفت.
-   * (اگر روزی «فشردنِ عمدی» لازم شد، باید صریح و جدا باشد، نه پیش‌فرض.)
+   * ⚠️ **دو مصرف‌کنندهٔ متفاوت دارد و قاعده‌شان یکی نیست.**
+   *
+   * `POST /appointments` (تقویم، رزروِ برنامه‌ریزی‌شده) از همان مسیرِ ظرفیت عبور
+   * می‌کند: روزِ پر برای کارمند هم پر است، وگرنه تقویم دروغ می‌گوید و ظرفیتی
+   * که مطب تعریف کرده بی‌معنا می‌شود.
+   *
+   * `POST /frontdesk/walk-in` (`desk: true`) فرق دارد، چون **آدم جلوی میز
+   * ایستاده**. تصمیمِ مالک (۱۴۰۵/۰۶/۳۰): «بیمار ممکن است بدون نوبتِ قبلی حضوری
+   * بیاید که اگر وقت بشود پذیرش می‌شود» — یعنی قاضیِ «وقت هست یا نه» خودِ
+   * منشی است، نه یک قاعده. پس ظرفیت **خبر می‌دهد، منع نمی‌کند** و پاسخ
+   * `beyondCapacity` برمی‌گرداند تا میز همان را بگوید.
+   *
+   * ⚠️ ولی دو چیز حتی سرِ میز هم رد می‌شوند، چون قضاوت نیستند بلکه اشتباه‌اند:
+   * روزی که مطب صریحاً **تعطیل** اعلام کرده، و **اسلاتِ نام‌برده‌ای که پر است**
+   * (دوبله‌کردنِ یک ساعتِ مشخص). بیمارِ فشرده‌شده شمارهٔ صف می‌گیرد، نه اسلاتِ
+   * کسِ دیگر.
    */
-  async walkIn(dto: { patientId: number; date: string; startMin?: number; topicId?: number; note?: string }, user: any) {
+  async walkIn(
+    dto: { patientId: number; date: string; startMin?: number; topicId?: number; note?: string },
+    user: any,
+    opts: { desk?: boolean } = {},
+  ) {
     const patient = await this.prisma.patient.findUnique({ where: { id: dto.patientId }, select: { id: true } });
     if (!patient) throw new NotFoundException('پرونده پیدا نشد');
     const d = new Date(`${dto.date}T00:00:00.000Z`);
@@ -187,16 +204,27 @@ export class AppointmentsService {
     const [jy, jm] = AppointmentsService.jalaliYm(d);
     const cal = await this.availability.month(jy, jm, { topicId: dto.topicId });
     const day = cal.days.find((x: any) => x.date === dto.date);
-    if (!day || !day.open) throw new BadRequestException('این روز باز نیست یا جای آزاد ندارد');
+    if (!day) throw new BadRequestException('این روز در تقویم نیست');
+    let beyondCapacity = false;
+    if (!day.open) {
+      if (day.past) throw new BadRequestException('این روز گذشته است');
+      if (day.closed) throw new BadRequestException('این روز در برنامهٔ کاری تعطیل است');
+      if (!opts.desk) throw new BadRequestException('این روز باز نیست یا جای آزاد ندارد');
+      /* «قاعده‌ای نیست» با «قاعده هست و پر است» یکی نیست: اولی چیزی برای
+         شکستن ندارد، دومی یعنی منشی عمداً یکی بیشتر پذیرفته و باید بداند. */
+      beyondCapacity = day.windows.length > 0;
+    }
     const slotMode = day.windows.some((w: any) => w.mode === 'slot');
-    if (slotMode) {
+    /* سرِ میز، نوبتِ بی‌ساعت مجاز است و شمارهٔ صف می‌گیرد؛ از تقویم نه. */
+    const wantsSlot = slotMode && (dto.startMin != null || !opts.desk);
+    if (wantsSlot) {
       const free = day.windows.filter((w: any) => w.mode === 'slot').flatMap((w: any) => w.slots)
         .find((sl: any) => sl.startMin === dto.startMin && !sl.taken);
       if (!free) throw new BadRequestException('این ساعت آزاد نیست');
     }
 
     try {
-      const seq = slotMode ? null : await this.nextSeq(d);
+      const seq = wantsSlot ? null : await this.nextSeq(d);
       const appt = await this.prisma.$transaction(async (tx) => {
         const appt = await tx.appointment.create({
           data: {
@@ -204,8 +232,8 @@ export class AppointmentsService {
             forVisitId: await this.patients.appointmentTarget(tx, dto.patientId, d),
             topicId: dto.topicId ?? null,
             date: d,
-            startMin: slotMode ? dto.startMin ?? null : null,
-            seq: slotMode ? null : seq,
+            startMin: wantsSlot ? dto.startMin ?? null : null,
+            seq: wantsSlot ? null : seq,
             /* حضوری از قبل پولش را نداده که منتظرِ تأیید بماند — مستقیم قطعی. */
             status: 'confirmed',
             note: dto.note?.trim() || null,
@@ -230,7 +258,9 @@ export class AppointmentsService {
         where: { patientId: dto.patientId, kind: 'next_visit', status: 'pending', visit: { nextVisitDate: d } },
         data: { status: 'cancelled', dedupeKey: null },
       });
-      return this.view(appt);
+      /* `beyondCapacity` فقط خبر است، نه خطا: میز با آن می‌گوید «بیش از ظرفیتِ
+         امروز پذیرفته شد» تا منشی بداند چه کرده. */
+      return { ...this.view(appt), beyondCapacity };
     } catch (e: any) {
       if (e?.code === 'P2002') throw new BadRequestException('همین حالا کسی این نوبت را گرفت');
       throw e;

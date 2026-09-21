@@ -6,20 +6,25 @@ since: 2026-09-21
 paths:
   - src/app/Theatre.jsx
   - src/app/theatre.css
+  - src/app/FrontDesk.jsx
+  - src/app/frontdesk.css
   - src/app/tools.jsx
   - src/ui/icons.jsx
   - src/App.jsx
   - server/src/patients/theatre.controller.ts
   - server/src/patients/theatre.service.ts
+  - server/src/patients/appointments.service.ts
+  - server/src/patients/frontdesk.service.ts
   - server/src/auth/access-registry.ts
   - server/src/config/verticals.ts
 note: >-
-  بستهٔ ۳ب — **نمای اتاقِ عمل** (دستورِ مالک، بعد از کاملشدنِ ۳الف که در #84
-  لند شد). ماژولِ تازهٔ `theatre` روی `/app/theatre`: عمل‌های امروزِ اتاق،
-  کارتِ حینِ عمل (هویت + گروه خونی + هشدارِ حساسیت/دارو/بیماری زمینه‌ای، بدونِ
-  هیچ عددِ مالی)، چک‌لیستِ ایمنیِ سه‌مرحله‌ای (WHO) با ثبتِ ثبت‌کننده، و
-  شروع/پایانِ یک‌لمسی + گزارشِ عمل. جدولِ تازه `safety_checks` + migration.
-  ⚠️ افزودن به پلانِ حوزه‌ها migration جدا می‌خواهد (هشدارِ `verticals.ts`).
+  بستهٔ ۳ب + ۳ج (PR #85). **۳ب — نمای اتاقِ عمل**: ماژولِ تازهٔ `theatre` روی
+  `/app/theatre` (چک‌لیستِ ایمنیِ WHO با امضا، هشدارِ بالینی، ساعتِ یک‌لمسی،
+  بدونِ هیچ عددِ مالی) + جدولِ `safety_checks`. **۳ج — بیمارِ بدونِ نوبت**:
+  تصمیمِ مالک «اگه وقت بشه پذیرش میشه» → سرِ میز ظرفیت **خبر می‌دهد نه منع**
+  (`walkIn(..., {desk:true})`)، ولی مسیرِ تقویم دست‌نخورده سخت‌گیر مانده
+  (سنجهٔ `next-visit-booking` همین را قفل می‌کند).
+  بسته‌های ۱ (#81)، ۲ (#82) و ۳الف (#84) لند شده‌اند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
