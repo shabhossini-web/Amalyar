@@ -14,6 +14,10 @@ const OPEN = ['open', 'blocked'];
 /* ⚠️ تلهٔ NULL در SQL: `owner_role <> 'patient'` برای ردیفِ بدونِ نقش NULL می‌دهد و
    ردیف حذف می‌شود — کارِ دستیِ ادمینِ بی‌نقش از صفِ خودش غیب شد. پس صریح. */
 const NOT_PATIENT = { OR: [{ ownerRole: null }, { ownerRole: { not: 'patient' } }] };
+/* کاری که به یک سفارشِ بالینی گره خورده — فقط این‌ها ضمیمهٔ عکس دارند. */
+const ORDER_REF = /^(lab|imaging|consult|referral)_order$/;
+/* سقفِ عکس‌های ضمیمه در هر ردیف؛ شمارِ کامل جدا می‌آید تا «۴ تا» با «۱۴ تا» اشتباه نشود. */
+const ATTACH_MAX = 4;
 
 /**
  * لایهٔ کار — `docs/plan/CONTRACTS.md` §۱.
@@ -89,10 +93,28 @@ export class WorkService {
       ? await this.prisma.patient.findMany({ where: { id: { in: pids } }, select: { id: true, code: true, firstName: true, lastName: true, phone: true } })
       : [];
     const byId = new Map(patients.map((p) => [p.id, { ...p, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() }]));
+    /* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده (W0.8) کنارِ ردیف می‌آیند —
+       یک کوئری برای همهٔ ردیف‌ها، نه یکی به‌ازای هر کار. تا دیروز کارِ «بررسیِ
+       نتیجهٔ مشاوره» فقط یک عنوان بود و عکسِ بیمار پشتِ دو کلیک پنهان می‌ماند؛
+       مالک خواست همان‌جا در صفحهٔ «امروز» دیده و از همان‌جا باز شود. */
+    const refKey = (r: any) => `${r.refType}:${r.refId}`;
+    const refs = new Map<string, { refType: string; refId: number }>();
+    for (const r of rows) if (r.refId && ORDER_REF.test(r.refType ?? '')) refs.set(refKey(r), { refType: r.refType, refId: r.refId });
+    const docs = refs.size
+      ? await this.prisma.document.findMany({
+        where: { deletedAt: null, mimeType: { startsWith: 'image/' }, OR: [...refs.values()] },
+        orderBy: { id: 'asc' },
+        select: { id: true, refType: true, refId: true, title: true, fileName: true, mimeType: true, createdAt: true },
+      })
+      : [];
+    const docsByRef = new Map<string, any[]>();
+    for (const d of docs) docsByRef.set(refKey(d), [...(docsByRef.get(refKey(d)) ?? []), d]);
     const now = Date.now();
     return rows.map((r) => ({
       ...r,
       patient: r.patientId ? byId.get(r.patientId) ?? null : null,
+      attachments: (docsByRef.get(refKey(r)) ?? []).slice(0, ATTACH_MAX),
+      attachmentCount: (docsByRef.get(refKey(r)) ?? []).length,
       overdue: !!r.dueAt && OPEN.includes(r.state) && new Date(r.dueAt).getTime() < now,
       /* برچسبِ مالک هم مشتقِ سرور است (قانون ۱۵): هر رابطی که خودش نگاشت
          داشته باشد، روزی که نقشِ تازه‌ای صادر شود کلیدِ خامِ انگلیسی چاپ می‌کند. */

@@ -2,7 +2,6 @@
 # رانر: scripts/e2e/run-live.mjs (هر سوییت دیتابیس و سرورِ تازه می‌گیرد؛ چهار شارد به‌نوبت از این فهرست).
 # سوییتِ تازه = یک خط این‌جا. سوییت‌های خودکفا (مرورگر + APIِ ساختگی) گامِ مستقیمِ جابِ build اند، نه این فهرست.
 #
-
 access-roles
 ai-admin-assistant
 ai-assistant
@@ -107,3 +106,4 @@ w4-1-pathway
 w4-2-pathway-notify
 w4-2-pathway-wizard
 yesno-ui
+today-popups

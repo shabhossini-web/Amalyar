@@ -27,6 +27,15 @@ paths:
   - server/src/patients/reminders.service.ts
   - server/src/patients/summary.controller.ts
   - scripts/e2e/ci-live.txt
+  - src/app/thing-popups.jsx
+  - src/app/thing-popups.css
+  - src/app/Today.jsx
+  - src/app/today.css
+  - src/app/WorkList.jsx
+  - server/src/work/today.service.ts
+  - server/src/work/work.service.ts
+  - server/src/patients/orders.service.ts
+  - scripts/e2e/today-popups.mjs
   - docs/plan/lanes/claude-fable.md
   - STATUS.md
 note: >-
@@ -34,8 +43,10 @@ note: >-
   بیمار را نشان می‌دهد و دکمهٔ «بررسی شد / ناقص است» دارد (endpointِ review تا
   امروز هیچ دکمه‌ای نداشت)؛ خلاصهٔ ارجاعِ AI تاریخِ شمسی می‌گیرد و می‌دهد
   (`jalalizeDates`)؛ مولدِ کدِ ملیِ آزمایشی (موقت، سوپرادمین) در فرمِ مراجعه و
-  تنظیمات. بسته‌های بعدی (پاپ‌آپ‌های پرونده، صفحهٔ امروز، تب‌های فرمِ عمل،
-  مدلِ مطب/پرتالِ جراح) هرکدام PRِ جدا؛ مسیرهای هر بسته همین‌جا تازه می‌شود.
+  تنظیمات. **بستهٔ ۲** (#73): پاپ‌آپ‌های پرونده + «عمل جراحی/ویزیت». **بستهٔ ۳**
+  (در دست): صفحهٔ «امروز» — هشدارِ نام‌دار و کلیک‌پذیر با پاپ‌آپ، عکسِ مشاورهٔ
+  بیمار روی ردیفِ کار، پاپ‌آپ‌ها در ماژولِ مشترکِ `thing-popups.jsx` (پرونده،
+  امروز، کارهای من). بعدش تب‌های فرمِ عمل و مدلِ مطب/پرتالِ جراح؛ هرکدام PRِ جدا.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import WorkRow from './WorkRow.jsx';
+import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { Back } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
@@ -44,6 +45,12 @@ export default function WorkList() {
     api(`/work?${q}&limit=200`).then((r) => setRows(Array.isArray(r) ? r : [])).catch((e) => { setRows([]); setToast(e?.message || 'بارگذاری نشد'); });
   }, [scope]);
   useEffect(() => { setRows(null); load(); }, [load]);
+  /* عنوانِ کارِ مقصددار پاپ‌آپِ همان سفارش/مراجعه را باز می‌کند — همان که صفحهٔ
+     «امروز» و پرونده دارند (بازخوردِ مالک). بعد از ثبت، فهرست و زنگ تازه می‌شوند. */
+  const things = useThings({
+    onChanged: () => { load(); window.dispatchEvent(new Event(WORK_CHANGED)); },
+    toast: (m) => setToast(m),
+  });
 
   const act = async (w, action, body = {}) => {
     setBusy(w.id);
@@ -101,9 +108,14 @@ export default function WorkList() {
       {rows && rows.length > 0 && (
         <>
           <div className="wk-count">{faNum(rows.length)} کار</div>
-          <ul className="wk-list">{rows.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} />)}</ul>
+          <ul className="wk-list">
+            {rows.map((w) => (
+              <WorkRow key={w.id} w={w} onAct={act} busy={busy} onOpen={workTarget(w) ? () => things.open(workTarget(w)) : undefined} />
+            ))}
+          </ul>
         </>
       )}
+      <ThingPopups things={things} />
       {toast && <div className="sh-toast" role="status">{toast}</div>}
     </div>
   );

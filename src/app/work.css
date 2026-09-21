@@ -85,3 +85,21 @@
 }
 .wk-open:hover { color: var(--brand-2); }
 .wk-open:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 4px; }
+
+/* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده — از خودِ ردیف دیده و باز می‌شوند.
+   نبضِ جانگهدار (`dt-pulse`) از `doc-thumb.css` می‌آید که `DocThumb` خودش import می‌کند. */
+.wk-docs { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.wk-doc { display: block; padding: 0; cursor: pointer; background: none; border: 0; border-radius: 9px; }
+.wk-doc:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.wk-thumb {
+  display: block; width: 56px; height: 56px; object-fit: cover; border-radius: 9px;
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.wk-doc:hover .wk-thumb { border-color: var(--brand-2); }
+.wk-thumb-ph { animation: dt-pulse 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .wk-thumb-ph { animation: none; } }
+.wk-doc-more {
+  display: grid; place-items: center; min-width: 56px; height: 56px; border-radius: 9px;
+  font-size: 12px; font-weight: 700; color: var(--text2);
+  background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--veil-rgb), .16);
+}

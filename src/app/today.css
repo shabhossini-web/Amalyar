@@ -114,3 +114,23 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 .td-ex-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-ex-meta { flex: 0 0 auto; font-size: 11.5px; color: var(--amber); font-variant-numeric: tabular-nums; }
 .td-ex-more { font-size: 11.5px; color: var(--text3); }
+
+/* هر نمونهٔ استثنا می‌گوید مالِ کیست (`.td-ex-who`) و اگر مقصدی دارد دکمه است و
+   پاپ‌آپِ خودش را باز می‌کند (`.td-ex-btn`) — بازخوردِ مالک: هشدارِ بی‌نام و
+   بی‌کلیک، هشدار نیست. */
+.td-ex-line { flex: 1 1 auto; min-width: 0; }
+.td-ex-who { flex: 0 1 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--cyan); }
+.td-ex-items .td-ex-btn {
+  width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 3px 0; cursor: pointer; font: inherit; font-size: 12.5px; color: var(--text2); text-align: start;
+  background: none; border: 0;
+}
+.td-ex-items .td-ex-btn .td-ex-line { text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px; }
+.td-ex-items .td-ex-btn:hover, .td-ex-items .td-ex-btn:focus-visible { color: var(--text1); outline: none; }
+.td-ex-items .td-ex-btn:hover .td-ex-line { color: var(--brand-2); }
+.td-ex-act {
+  align-self: flex-start; margin-top: 4px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--amber); background: none; border: 1px solid rgba(251, 191, 36, .45); border-radius: 10px;
+}
+.td-ex-act:hover:not(:disabled), .td-ex-act:focus-visible { background: rgba(251, 191, 36, .12); outline: none; }
+.td-ex-act:disabled { opacity: .5; cursor: default; }
