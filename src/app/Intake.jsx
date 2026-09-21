@@ -375,7 +375,22 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
     }).catch(() => {});
     return () => { live = false; };
   }, [row.id]);
-  const visible = key => fields ? fields.some(f => f.key === key && f.active !== false) : targetKind !== 'clinic' || ['surgeonId', 'opDate', 'opStartTime'].includes(key);
+  /* کنترل‌هایی که **این نوعِ ثبت‌نام** در مرحلهٔ تأیید لازم دارد — از کاتالوگِ
+     سرور (`form-types.ts`)، نه از `workflow === 'ionm'` در JSX. */
+  const [ftype, setFtype] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api('/forms/types')
+      .then((list) => { if (live) setFtype((list ?? []).find((t) => t.key === `intake.${targetKind}`) ?? (list ?? []).find((t) => t.key === 'intake') ?? null); })
+      .catch(() => { if (live) setFtype(null); });
+    return () => { live = false; };
+  }, [targetKind]);
+  const needs = (key) => ftype?.approval?.includes(key) ?? false;
+  /* ⚠️ **دو منبع، با ترتیبِ روشن.** تعریفِ خودِ فرم مقدم است (ادمین در فرم‌ساز
+     کادری را خاموش کرده = نمی‌خواهدش). ولی وقتی تعریف نیامده — خطای شبکه یا
+     فرمی که هنوز ساخته نشده — دیگر به فهرستِ ثابتِ داخلِ JSX برنمی‌گردیم:
+     کاتالوگِ سرور می‌گوید این نوعِ ثبت‌نام چه کنترل‌هایی می‌خواهد. */
+  const visible = key => (fields ? fields.some(f => f.key === key && f.active !== false) : needs(key));
   const [quick, setQuick] = useState(null);
   const [refs, setRefs] = useState({ surgeons: [], hospitals: [], techs: [], types: [], banks: [] });
   const [f, setF] = useState({
@@ -485,7 +500,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
             ['hospital', 'بیمارستان', visible('hospitalId')],
             /* برچسبِ یادداشت باید با برچسبِ **کنترلِ خودش** یکی باشد: در حوزهٔ
                مطب کنترل «پزشک» است و یادداشتِ «جراح» کنارش یعنی دو چیزِ متفاوت. */
-            ['surgeon', targetKind === 'clinic' ? 'پزشک' : 'جراح', visible('surgeonId') || workflow === 'ionm'],
+            ['surgeon', targetKind === 'clinic' ? 'پزشک' : 'جراح', visible('surgeonId') || needs('surgeonId')],
             ['procedure', 'نوعِ عمل', visible('procedureTypeId')],
           ].map(([k, label, on]) => on && match[k] && (
             <p key={k} className="ia-note">
@@ -494,9 +509,9 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
                 suggested: 'پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید',
               }[match[k].source] ?? 'مطابقِ دقیقِ نوشتهٔ بیمار'}: {match[k].name}
             </p>))}
-          {(visible('surgeonId') || workflow === 'ionm') && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : workflow === 'ionm' ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
+          {(visible('surgeonId') || needs('surgeonId')) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : needs('surgeonId') ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
           {visible('hospitalId') && <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
-          {visible('techId') && <ApprovalSelect field="techId" section="techs" label={workflow === 'ionm' ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
+          {visible('techId') && <ApprovalSelect field="techId" section="techs" label={needs('techId') ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
           {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />}
           {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}
                  onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />}

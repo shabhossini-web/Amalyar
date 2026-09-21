@@ -4,21 +4,22 @@ status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-21
 paths:
-  - server/src/patients/intake.service.ts
-  - server/src/patients/form-presets.ts
-  - server/src/config/config.service.ts
-  - server/src/accounts/accounts.service.ts
-  - scripts/e2e/reserved-keys.mjs
+  - server/src/patients/form-types.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/forms.controller.ts
+  - src/app/FormBuilder.jsx
+  - src/app/Intake.jsx
+  - scripts/e2e/form-types.mjs
 note: >-
-  🔧 **بازخوردِ مالک ۱۴۰۵/۰۶/۳۰ — بستهٔ ۱ (دو باگِ ریشه‌ای).** (الف) «کارهای من»
-  روی نصبِ مطب همیشه خالی است: `auth.service.ts:236` فقط لحظهٔ ثبت‌نام حوزه را
-  می‌بیند، ولی `DEFAULT_VERTICAL='ionm'` است و مطب بعداً `clinic` می‌شود — پس
-  `jobRole`ِ بنیان‌گذار `null` می‌مانَد و صفِ نقشِ `doctor` هیچ‌وقت به او نمی‌رسد
-  (`work.service.ts:50`). (ب) «۸ تیر ۷۸۴»: `form-presets.ts:319` فیلدی با کلیدِ
-  رزروشدهٔ `opDate` و نوعِ `date` دارد که `builtin` علامت **نخورده**؛ روی صفحهٔ
-  بیمار با `JDate` رندر می‌شود (شمسی) و حلقهٔ `values` در `intake.service.ts:854`
-  مقدارِ ISOِ مسیرِ اختصاصی را بازنویسی می‌کند. نگهبانِ CI فقط جهتِ عکس را
-  می‌سنجید. تصمیمِ مالک برای فرم‌ساز: **نیمه‌بسته**.
+  🔧 **بازخوردِ ۱۴۰۵/۰۶/۳۰ — بستهٔ ۲: فرم‌سازِ «نیمه‌بسته».** کاتالوگِ نوعِ فرم
+  (`form-types.ts` + `GET /forms/types`) تنها جایی است که می‌گوید هر نوعِ فرم چه
+  نامی دارد، چه بخش‌هایی، کدام باکس‌ها مناسبش‌اند و مرحلهٔ تأییدش چه می‌خواهد.
+  فرم‌ساز پالت را گروه‌بندی می‌کند (نه فیلتر) و کارتِ فرم نامِ نوع را نشان
+  می‌دهد به‌جای «مراجعه + surgery»؛ پنلِ تأیید `approval` را می‌خواند و
+  `workflow === 'ionm'` از JSX رفت. 🔴 **درسِ همین بسته:** نسخهٔ اول باکسِ
+  پرداخت را روی فرمِ مراجعه از سرور رد می‌کرد — غلط بود، چون `resolveLinkRefs`
+  هر فرمی را به `IntakeLink` می‌بندد؛ سه سوییتِ رگرسیون همان لحظه قرمز شدند و
+  قاعده برداشته شد. بستهٔ ۱ (#81، `845b74e`) لند شده.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

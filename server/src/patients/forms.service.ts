@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { BUILTIN_VISIT_KEYS, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
+import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 
 /**
@@ -234,6 +235,18 @@ export class FormsService {
   }
 
   /** نوع‌های مراجعه‌ای که این نصب واقعاً فرم دارد — منبعِ انتخابگرِ نوع. */
+  /**
+   * کاتالوگِ نوعِ فرم — **تنها منبعِ** «هر نوعِ فرم چه باکسی می‌پذیرد، چه
+   * بخش‌هایی دارد، و مرحلهٔ تأییدش چه می‌خواهد».
+   *
+   * ⚠️ کلاینت این را می‌خوانَد و دوباره نمی‌نویسد (قانونِ ۳ و ۱۵). تا دیروز
+   * پالتِ فرم‌ساز یک آرایهٔ ثابت در JSX بود و پنلِ تأیید با `targetKind` و
+   * `workflow === 'ionm'` حدس می‌زد — دو نسخه از یک قرارداد، که واگرا شدند.
+   */
+  formTypes() {
+    return Object.values(FORM_TYPES);
+  }
+
   async visitKinds() {
     await this.ensureSeeded();
     const rows = await this.prisma.formDef.findMany({
@@ -680,6 +693,19 @@ export class FormsService {
 
     const type = String(dto.type ?? 'text');
     if (!FIELD_TYPES.includes(type as FieldType)) throw new BadRequestException('نوعِ فیلد نامعتبر است');
+    /* ⚠️ **این‌جا عمداً باکسی رد نمی‌شود — و یک‌بار اشتباه رد شد.**
+
+       نسخهٔ اولِ فرم‌سازِ «نیمه‌بسته» باکسِ پرداخت را روی فرمِ مراجعه ۴۰۰ می‌کرد،
+       با این استدلال که «پرداخت مالِ ثبت‌نام است و روی مراجعه هیچ کاری نمی‌کند».
+       **غلط بود:** `resolveLinkRefs` هر فرمی را — `visit`، `record`، `intake` —
+       به یک `IntakeLink` می‌بندد، پس هر کدامشان می‌تواند واقعاً پول بگیرد.
+       سه سوییتِ رگرسیون (`forms-api`، `forms-validate`، `forms-boxes`) همان
+       لحظه قرمز شدند و همین جلوی رفتنِ یک محدودیتِ نادرست روی سایت را گرفت.
+
+       پس کاتالوگ (`form-types.ts`) **راهنماست نه قفل**: پالتِ فرم‌ساز باکس‌های
+       مناسبِ هر نوع را اول نشان می‌دهد و بقیه را زیرِ «سایر» — ولی سرور فقط
+       قاعده‌هایی را اجرا می‌کند که بتواند اثباتشان کند (نوعِ معتبر، کلیدِ
+       غیررزرو، و «یک باکسِ پرداخت در هر فرم» که پایین‌تر است). */
     const label = String(dto.label ?? '').trim();
     if (label.length < 2) throw new BadRequestException('برچسب کوتاه است');
 

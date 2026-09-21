@@ -2599,6 +2599,44 @@ jobs:
           console.log('reserved keys ok');
           "
 
+      - name: Verify the form-type catalog has one home
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const cat     = fs.readFileSync('server/src/patients/form-types.ts', 'utf8');
+          const builder = fs.readFileSync('src/app/FormBuilder.jsx', 'utf8');
+          const intake  = fs.readFileSync('src/app/Intake.jsx', 'utf8');
+
+          /* ⚠️ **کاتالوگ یک خانه دارد.** پیش از این، پالتِ فرم‌ساز یک آرایهٔ ثابت
+             در JSX بود و پنلِ تأیید با workflow === 'ionm' حدس می‌زد — دو نسخه
+             از یک قرارداد، که واگرا شدند. حالا هر دو از GET /forms/types
+             می‌خوانند و این گام همان را قفل می‌کند. */
+          if (!/formTypes\(\)/.test(cat.length ? cat : '') && !/FORM_TYPES/.test(cat)) {
+            console.error('کاتالوگِ نوعِ فرم پیدا نشد'); process.exit(1);
+          }
+          for (const [name, src] of [['FormBuilder.jsx', builder], ['Intake.jsx', intake]]) {
+            if (!/forms\/types/.test(src)) {
+              console.error(name + ' باید کاتالوگ را از GET /forms/types بخواند'); process.exit(1);
+            }
+          }
+          /* ① استثنای حوزه‌ایِ هاردکد در پنلِ تأیید برنگردد.
+             ⚠️ روی **کد** سنجیده می‌شود نه متن: اولین نسخهٔ همین گام یادداشتی را
+             که خودش توضیحِ حذفِ آن شرط بود قرمز کرد. */
+          const code = (src) => src.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/^\\s*\\/\\/.*$/gm, '');
+          if (/workflow === 'ionm'/.test(code(intake))) {
+            console.error('استثنای هاردکدِ حوزه در پنلِ تأیید برگشت — از approval کاتالوگ استفاده کن'); process.exit(1);
+          }
+          /* ② و کاتالوگ در کلاینت دوباره نوشته نشود: برچسب‌های فارسیِ نوعِ فرم
+                فقط در همان فایلِ سرور زندگی می‌کنند. */
+          for (const label of ['ثبت‌نامِ عمل', 'فرمِ عمل', 'فرمِ ویزیت']) {
+            if (code(builder).includes(label) || code(intake).includes(label)) {
+              console.error('برچسبِ نوعِ فرم در کلاینت هاردکد شد: ' + label); process.exit(1);
+            }
+          }
+          console.log('form types ok');
+          "
+
       - name: Verify no undefined identifiers reach the browser
         run: npm run lint
 
