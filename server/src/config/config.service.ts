@@ -128,7 +128,16 @@ export class ConfigService {
           select: { id: true, jobRole: true },
         });
         if (admins.length === 1 && !admins[0].jobRole) {
-          await tx.account.update({ where: { id: admins[0].id }, data: { jobRole: 'doctor' } });
+          const row = await tx.account.update({ where: { id: admins[0].id }, data: { jobRole: 'doctor' }, select: { personId: true } });
+          /* 🔴 **نقش بدونِ تعریفِ جراح نصفِ کار است — و نصفش بدتر از هیچ است.**
+             نسخهٔ اولِ همین بلوک (بستهٔ ۱) فقط `jobRole` را می‌داد. صفِ کار درست
+             شد ولی `Surgeon`ی ساخته نشد، و کشویِ **اجباریِ** «پزشک» در فرمِ ویزیت
+             از `GET /surgeons` پر می‌شود: صاحبِ مطب می‌نشست پشتِ میزش و در فهرستِ
+             پزشکان **خودش نبود**، پس اولین ویزیتش هم ثبت نمی‌شد. `setJobRole` و
+             خودِ migration هر دو این upsert را داشتند؛ همین یک مسیر جا افتاده بود
+             — همان «دو مسیر برای یک نقش» که کامنتِ `accounts.service.ts` هشدارش
+             را می‌دهد. */
+          await tx.surgeon.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId } });
         }
       }
     });

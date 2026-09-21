@@ -118,8 +118,8 @@ export default function FileDrop({
 
   if (variant === 'button') {
     return (
-      <div className="fd fd-compact">
-        <label className={`fd-btn${busy ? ' busy' : ''}`}>
+      <div className="fdrop fdrop-compact">
+        <label className={`fdrop-btn${busy ? ' busy' : ''}`}>
           <input
             ref={inputRef} type="file" accept={accept} multiple={multiple || undefined}
             capture={capture} disabled={disabled}
@@ -128,13 +128,13 @@ export default function FileDrop({
           {busy ? 'در حالِ ارسال…' : label}
         </label>
         {items.length > 0 && (
-          <div className="fd-list">
+          <div className="fdrop-list">
             {items.map((i) => (
-              <div className={`fd-item ${i.status}`} key={i.id}>
+              <div className={`fdrop-item ${i.status}`} key={i.id}>
                 {i.url
-                  ? <img src={i.url} alt="" className="fd-thumb" />
-                  : <span className="fd-thumb fd-doc" aria-hidden="true">PDF</span>}
-                <div className="fd-meta">
+                  ? <img src={i.url} alt="" className="fdrop-thumb" />
+                  : <span className="fdrop-thumb fdrop-doc" aria-hidden="true">PDF</span>}
+                <div className="fdrop-meta">
                   <b title={i.name}>{i.name}</b>
                   <small>
                     {i.status === 'done' ? 'ارسال شد ✓'
@@ -143,13 +143,13 @@ export default function FileDrop({
                           : `در صف · ${fmtSize(i.size)}`}
                   </small>
                 </div>
-                {i.status === 'done' && <span className="fd-ok" aria-hidden="true"><Check size={14} /></span>}
-                {i.status === 'uploading' && <span className="fd-spin" aria-hidden="true" />}
+                {i.status === 'done' && <span className="fdrop-ok" aria-hidden="true"><Check size={14} /></span>}
+                {i.status === 'uploading' && <span className="fdrop-spin" aria-hidden="true" />}
                 {i.status === 'error' && (
-                  <button type="button" className="fd-retry" onClick={() => retry(i.id)}>تلاشِ دوباره</button>
+                  <button type="button" className="fdrop-retry" onClick={() => retry(i.id)}>تلاشِ دوباره</button>
                 )}
                 {i.status !== 'uploading' && (
-                  <button type="button" className="fd-x" aria-label="حذف از فهرست" onClick={() => drop(i.id)}>
+                  <button type="button" className="fdrop-x" aria-label="حذف از فهرست" onClick={() => drop(i.id)}>
                     {i.status === 'done' ? <Trash size={13} /> : <Close size={13} />}
                   </button>
                 )}
@@ -162,9 +162,9 @@ export default function FileDrop({
   }
 
   return (
-    <div className="fd">
+    <div className="fdrop">
       <label
-        className={`fd-drop${drag ? ' on' : ''}${busy ? ' busy' : ''}`}
+        className={`fdrop-drop${drag ? ' on' : ''}${busy ? ' busy' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); if (!disabled) add(e.dataTransfer.files); }}
@@ -181,20 +181,20 @@ export default function FileDrop({
         <b>{busy ? 'در حالِ ارسال…' : label}</b>
         <small>{hint || `تا ${faNum(maxMb)} مگابایت`}</small>
         {multiple && (
-          <small className="fd-tip">
+          <small className="fdrop-tip">
             چند فایل با هم، یا یکی‌یکی — هر بار که فایلِ تازه بگذارید به همین فهرست اضافه می‌شود.
           </small>
         )}
       </label>
 
       {items.length > 0 && (
-        <div className="fd-list">
+        <div className="fdrop-list">
           {items.map((i) => (
-            <div className={`fd-item ${i.status}`} key={i.id}>
+            <div className={`fdrop-item ${i.status}`} key={i.id}>
               {i.url
-                ? <img src={i.url} alt="" className="fd-thumb" />
-                : <span className="fd-thumb fd-doc" aria-hidden="true">PDF</span>}
-              <div className="fd-meta">
+                ? <img src={i.url} alt="" className="fdrop-thumb" />
+                : <span className="fdrop-thumb fdrop-doc" aria-hidden="true">PDF</span>}
+              <div className="fdrop-meta">
                 <b title={i.name}>{i.name}</b>
                 <small>
                   {i.status === 'done' ? 'ارسال شد ✓'
@@ -203,23 +203,23 @@ export default function FileDrop({
                         : `در صف · ${fmtSize(i.size)}`}
                 </small>
               </div>
-              {i.status === 'done' && <span className="fd-ok" aria-hidden="true"><Check size={14} /></span>}
-              {i.status === 'uploading' && <span className="fd-spin" aria-hidden="true" />}
+              {i.status === 'done' && <span className="fdrop-ok" aria-hidden="true"><Check size={14} /></span>}
+              {i.status === 'uploading' && <span className="fdrop-spin" aria-hidden="true" />}
               {i.status === 'error' && (
                 <>
-                  <span className="fd-bad" aria-hidden="true"><Alert size={14} /></span>
-                  <button type="button" className="fd-retry" onClick={() => retry(i.id)}>تلاشِ دوباره</button>
+                  <span className="fdrop-bad" aria-hidden="true"><Alert size={14} /></span>
+                  <button type="button" className="fdrop-retry" onClick={() => retry(i.id)}>تلاشِ دوباره</button>
                 </>
               )}
               {i.status !== 'uploading' && (
-                <button type="button" className="fd-x" aria-label="حذف از فهرست" onClick={() => drop(i.id)}>
+                <button type="button" className="fdrop-x" aria-label="حذف از فهرست" onClick={() => drop(i.id)}>
                   {i.status === 'done' ? <Trash size={13} /> : <Close size={13} />}
                 </button>
               )}
             </div>
           ))}
           {doneCount > 0 && !busy && (
-            <button type="button" className="fd-clear" onClick={clearDone}>
+            <button type="button" className="fdrop-clear" onClick={clearDone}>
               پاک‌کردنِ {faNum(doneCount)} موردِ ارسال‌شده از فهرست
             </button>
           )}

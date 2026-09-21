@@ -147,6 +147,10 @@ try {
   };
   const a1 = appt(v1.patientId, 91);
   const a2 = appt(v2.patientId, 92);
+  /* ⚠️ نوبتِ بیمارِ `v3` (عملِ **فردا**ی همین پزشک): امروز مراجعه‌ای ندارد، پس
+     روی میز ردیفِ **مستقلِ نوبت** می‌مانَد و با چیزی ادغام نمی‌شود — طرفِ دیگرِ
+     قاعدهٔ «یک بیمار، یک ردیف». */
+  const a3 = appt(v3.patientId, 93);
 
   console.log('\n۳) API — پزشکِ اول فقط مالِ خودش را می‌بیند و از میز کار می‌کند');
   const f1 = (await d1.api('/features')).json ?? [];
@@ -156,6 +160,16 @@ try {
   const tv1 = t1?.visits?.find((v) => v.id === v1.id);
   ok('… با نام و نوعِ مراجعه و شناسهٔ پرونده', tv1?.patient?.fullName === `بیمارِ اول${tag}` && tv1?.kind === 'clinic' && tv1?.patientId === v1.patientId, JSON.stringify(tv1));
   ok('**نوبتِ امروزِ بیمارِ او می‌آید** (بدونِ `doctor_id` — همان‌طور که مسیرِ واقعی می‌نویسد) و نوبتِ بیمارِ پزشکِ دیگر نمی‌آید', ids(t1?.appointments).includes(a1) && !ids(t1?.appointments).includes(a2), JSON.stringify(ids(t1?.appointments)));
+  /* ── `day` و `summary`: ادغامِ سمتِ سرور و عددهای آماده (قانونِ ۱۵) ── */
+  const dayRow = (t1?.day ?? []).find((r) => r.visitId === v1.id);
+  ok('**`day` نوبت و مراجعهٔ یک بیمار را در یک ردیف می‌دهد**', !!dayRow && dayRow.apptId === a1, JSON.stringify((t1?.day ?? []).map((r) => [r.key, r.visitId, r.apptId])));
+  ok('… با برچسبِ فارسیِ هر دو وضعیت از سرور', dayRow?.apptStatusFa === 'قطعی' && dayRow?.opStatusFa === 'در انتظار', JSON.stringify([dayRow?.apptStatusFa, dayRow?.opStatusFa]));
+  ok('**نباید بیفتد:** نوبتِ بی‌مراجعهٔ امروز با چیزی ادغام شود', (t1?.day ?? []).some((r) => r.apptId === a3 && r.visitId === null), JSON.stringify((t1?.day ?? []).filter((r) => r.apptId === a3)));
+  ok('هیچ مراجعه‌ای دو ردیف نمی‌شود', new Set((t1?.day ?? []).map((r) => r.key)).size === (t1?.day ?? []).length
+    && (t1?.day ?? []).filter((r) => r.visitId === v1.id).length === 1);
+  ok('`summary` شمارش و صورت‌حسابِ امروز را آماده می‌دهد', t1?.summary?.visits === (t1?.visits ?? []).length
+    && t1?.summary?.appointments === (t1?.appointments ?? []).length
+    && typeof t1?.summary?.money?.due === 'number', JSON.stringify(t1?.summary));
   const unrev = (t1?.unreviewed ?? []).filter((o) => o.kind === 'lab').map((o) => o.id);
   ok('نتیجه‌های بررسی‌نشده: هر دو آزمایشِ بیمارِ او، نه آزمایشِ بیمارِ پزشکِ دیگر', unrev.includes(o1.id) && unrev.includes(o2.id) && !unrev.includes(oOther.id), JSON.stringify(unrev));
   const l1 = (await d1.api('/surgeon/visits')).json;
@@ -200,8 +214,16 @@ try {
   await page.locator('.db-submit').click();
   await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 10000 });
   ok('… و «ذخیره» از میز می‌نشیند (فرم بسته شد، بدونِ خطا)', (await page.locator('.db-sheet').count()) === 0 && !errors.length, errors.slice(0, 2).join(' | '));
-  const arow = page.locator(`button.sp-row[data-appt-id="${a1}"]`);
-  ok('ردیفِ نوبتِ امروز دکمه است', (await arow.count()) === 1);
+  /* **یک بیمار، یک ردیف** (بستهٔ ۳الف): نوبت و مراجعهٔ یک نفر در یک روز یک
+     رویدادند و در یک ردیف می‌نشینند. تا پیش از این میز دو فهرستِ جدا داشت و
+     هفت بیمار چهارده ردیف می‌شدند. کلیکِ ردیفِ ادغام‌شده **فرمِ مراجعه** را باز
+     می‌کند (کارِ واقعیِ پزشک)، و وضعیتِ نوبت روی همان ردیف برچسب است. */
+  ok('**نوبت و مراجعهٔ یک بیمار در یک ردیف ادغام شده‌اند**', (await page.locator(`button.sp-row[data-visit-id="${v1.id}"][data-appt-id="${a1}"]`).count()) === 1
+    && (await page.locator(`button.sp-row[data-appt-id="${a1}"]`).count()) === 1, await vrow.innerText());
+  ok('… و وضعیتِ نوبت روی همان ردیف دیده می‌شود', (await vrow.innerText()).includes('قطعی'), await vrow.innerText());
+  /* و نوبتی که مراجعهٔ امروز ندارد ردیفِ خودش را دارد و پاپ‌آپِ نوبت را باز می‌کند. */
+  const arow = page.locator(`button.sp-row[data-appt-id="${a3}"]`);
+  ok('نوبتِ بی‌مراجعه ردیفِ مستقلِ خودش را دارد', (await arow.count()) === 1 && (await page.locator(`button.sp-row[data-appt-id="${a3}"][data-visit-id]`).count()) === 0);
   await arow.click();
   await page.locator('.rc-pop').waitFor({ timeout: 8000 });
   ok('… و پاپ‌آپِ نوبت باز می‌شود', (await page.locator('.rc-pop').innerText()).includes('نوبت'));

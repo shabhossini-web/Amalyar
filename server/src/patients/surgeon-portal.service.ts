@@ -6,6 +6,11 @@ import { verificationDeadline } from '../accounts/provisional';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
+import { summarize } from './billing.service';
+import { APPT_LABELS } from './appointments.service';
+
+/** برچسبِ وضعیتِ عمل/ویزیت — مشتقِ سرور (قانون ۱۵)، هم‌خانوادهٔ `APPT_LABELS`. */
+const OP_LABELS: Record<string, string> = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو' };
 
 @Injectable()
 export class SurgeonPortalService {
@@ -53,7 +58,13 @@ export class SurgeonPortalService {
       this.prisma.visit.findMany({
         where: { ...scope, opDate: { gte: start, lte: end }, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
         orderBy: [{ opStartTime: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 40,
-        select: { id: true, seq: true, kind: true, opStartTime: true, opStatus: true, hospitalName: true, patient: patientSel, topic: { select: { name: true } } },
+        select: {
+          id: true, seq: true, kind: true, opStartTime: true, opStatus: true, hospitalName: true, patient: patientSel, topic: { select: { name: true } },
+          /* پول هم لازم است: میزِ پزشکِ مطب باید بداند بیمارِ امروزش تسویه کرده
+             یا نه (قانونِ ۱۷ — خلاصهٔ مالیِ پایه، فقط‌خواندنی و تک‌منبع). */
+          pricingModel: true, globalAmount: true,
+          charges: { select: { amount: true } }, payments: { select: { amount: true } },
+        },
       }),
       this.prisma.appointment.findMany({
         /**
@@ -99,19 +110,88 @@ export class SurgeonPortalService {
       where: { status: { in: ['answered', 'in_review'] }, visit: { ...scope, patient: { deletedAt: null } } },
     })))).reduce((a: number, b: number) => a + b, 0);
     const hhmm = (m: number | null) => (m == null ? null : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+    const visitViews = visits.map((v) => ({
+      id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime, opStatus: v.opStatus,
+      hospital: v.hospitalName, topic: v.topic?.name ?? null, patientId: v.patient.id, patient: person(v.patient),
+      billing: summarize(v.charges, v.payments, v),
+    }));
+    const apptViews = appointments.map((a) => ({
+      id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, visitId: a.visitId, date: a.date,
+      topic: a.topic?.name ?? null, patientId: a.patient?.id ?? null, patient: person(a.patient),
+    }));
     return {
       now: now.toISOString(),
-      visits: visits.map((v) => ({
-        id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime, opStatus: v.opStatus,
-        hospital: v.hospitalName, topic: v.topic?.name ?? null, patientId: v.patient.id, patient: person(v.patient),
-      })),
-      appointments: appointments.map((a) => ({
-        id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, visitId: a.visitId, date: a.date,
-        topic: a.topic?.name ?? null, patientId: a.patient?.id ?? null, patient: person(a.patient),
-      })),
+      visits: visitViews,
+      appointments: apptViews,
+      day: SurgeonPortalService.mergeDay(visitViews, apptViews),
+      summary: {
+        appointments: apptViews.length,
+        present: apptViews.filter((a) => a.status === 'arrived').length,
+        doneAppointments: apptViews.filter((a) => a.status === 'done').length,
+        visits: visitViews.length,
+        openVisits: visitViews.filter((v) => v.opStatus === 'pending').length,
+        unreviewed: unreviewedTotal,
+        /* قانونِ ۱۳: همه تومان، عددِ صحیح. عنوانِ رابط «صورت‌حسابِ امروز» است،
+           نه «درآمدِ امروز» — این جمعِ مراجعه‌های همین روز است، نه گردشِ صندوق. */
+        money: visitViews.reduce(
+          (acc, v) => ({ total: acc.total + v.billing.total, paid: acc.paid + v.billing.paid, due: acc.due + v.billing.due }),
+          { total: 0, paid: 0, due: 0 },
+        ),
+      },
       unreviewed,
       unreviewedTotal,
     };
+  }
+
+  /**
+   * **یک بیمار، یک ردیف** — نوبت و مراجعهٔ یک نفر در یک روز یک رویدادند.
+   *
+   * 🔴 چرا این تابع نوشته شد: میز دو فهرستِ جدا نشان می‌داد («نوبت‌های امروز» و
+   * «مراجعه‌های امروز») که در مطبِ تک‌پزشک **همان آدم‌ها** بودند — هفت بیمار،
+   * چهارده ردیف. روی موبایل یعنی دو برابر اسکرول برای همان اطلاعات، و پزشک
+   * باید خودش دو فهرست را با چشم روی هم می‌گذاشت تا بفهمد «رضا کریمی رسید و
+   * مراجعه‌اش هم باز است».
+   *
+   * ⚠️ ادغام با `patientId` فقط وقتی مجاز است که برای آن بیمار **دقیقاً یک**
+   * نوبتِ بی‌مراجعه و **دقیقاً یک** مراجعهٔ بی‌نوبت مانده باشد. بیماری که صبح
+   * ویزیت شده و عصر دوباره نوبت دارد دو رویدادِ واقعی دارد؛ چسباندنشان یعنی
+   * دروغ‌گفتن دربارهٔ برنامهٔ روز. `visitId` (وقتی هست) همیشه مقدم است.
+   */
+  private static mergeDay(visits: any[], appts: any[]) {
+    const rows = visits.map((v) => ({
+      key: `v${v.id}`, visitId: v.id as number | null, patientId: v.patientId, patient: v.patient,
+      code: v.code as string | null, kind: v.kind as string | null,
+      topic: v.topic as string | null, hospital: v.hospital as string | null,
+      opStatus: v.opStatus as string | null, opStatusFa: (OP_LABELS[v.opStatus] ?? v.opStatus) as string | null,
+      billing: v.billing as { total: number; itemsTotal: number; paid: number; due: number; paidPct: number } | null,
+      time: v.opStartTime ?? null, seq: null as number | null,
+      apptId: null as number | null, apptStatus: null as string | null, apptStatusFa: null as string | null,
+    }));
+    const byVisit = new Map<number, any>(rows.map((r) => [r.visitId as number, r]));
+    const attach = (row: any, a: any) => {
+      row.apptId = a.id; row.apptStatus = a.status; row.apptStatusFa = APPT_LABELS[a.status] ?? a.status;
+      row.time = a.time ?? row.time; row.seq = a.seq ?? row.seq; row.topic = row.topic ?? a.topic;
+    };
+    /* شمارشِ نامزدها **قبل از** هر چسباندنی — وگرنه ترتیبِ حلقه تصمیم می‌گیرد. */
+    const loose = appts.filter((a) => !(a.visitId && byVisit.has(a.visitId)));
+    const freeVisits = rows.filter((r) => !appts.some((a) => a.visitId === r.visitId));
+    const count = (list: any[], pid: number | null) => list.filter((x) => x.patientId === pid).length;
+    for (const a of appts) {
+      if (a.visitId && byVisit.has(a.visitId)) { attach(byVisit.get(a.visitId), a); continue; }
+      const one = count(loose, a.patientId) === 1 && count(freeVisits, a.patientId) === 1
+        ? freeVisits.find((r) => r.patientId === a.patientId)
+        : null;
+      if (one && !one.apptId) { attach(one, a); continue; }
+      rows.push({
+        key: `a${a.id}`, visitId: null, patientId: a.patientId, patient: a.patient,
+        code: null, kind: null, topic: a.topic, hospital: null,
+        opStatus: null, opStatusFa: null, billing: null,
+        time: a.time, seq: a.seq,
+        apptId: a.id, apptStatus: a.status, apptStatusFa: APPT_LABELS[a.status] ?? a.status,
+      });
+    }
+    /* بی‌ساعت‌ها ته فهرست — نه اولِ آن (مرتب‌سازیِ خام `null` را اول می‌گذارد). */
+    return rows.sort((x, y) => (x.time ?? '99:99').localeCompare(y.time ?? '99:99') || (x.seq ?? 1e9) - (y.seq ?? 1e9) || x.key.localeCompare(y.key));
   }
 
   private async visit(id: number, user: any) {

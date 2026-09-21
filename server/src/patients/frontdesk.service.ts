@@ -41,9 +41,12 @@ export class FrontDeskService {
     const rows = await this.appts.day(date);
     const capped = rows.length > MAX_ROWS;
     const shown = capped ? rows.slice(0, MAX_ROWS) : rows;
-    const billing = await this.billingFor(shown);
+    const [billing, debt] = await Promise.all([this.billingFor(shown), this.debtFor(shown)]);
 
-    const withBilling = shown.map((r: any) => ({ ...r, billing: billing.get(r.visitId ?? r.forVisitId ?? -1) ?? null }));
+    const withBilling = shown.map((r: any) => {
+      const linked = r.visitId ?? r.forVisitId ?? -1;
+      return { ...r, billing: billing.get(linked) ?? null, debt: debt.get(r.patientId ?? -1)?.(linked) ?? null };
+    });
     const isToday = date === FrontDeskService.todayIso();
 
     return {
@@ -84,6 +87,51 @@ export class FrontDeskService {
       /* مراجعهٔ لغوشده ماندهٔ ابدی نمی‌سازد — همان قاعدهٔ `live.service.ts`. */
       if (v.opStatus === 'cancelled') { out.set(v.id, null); continue; }
       out.set(v.id, summarize(v.charges, v.payments, v));
+    }
+    return out;
+  }
+
+  /**
+   * **بدهیِ بیمار، نه بدهیِ نوبت** — ماندهٔ همهٔ مراجعه‌های دیگرِ همین بیمار.
+   *
+   * 🔴 باگِ واقعی که با نگاه‌کردن به تختهٔ یک روزِ کامل پیدا شد: چیپِ «مانده»
+   * فقط وقتی می‌آمد که نوبت به یک مراجعه **وصل** باشد (`visitId`/`forVisitId`).
+   * ولی نوبتِ تلفنی و نوبتِ روزِ بعد هیچ‌کدام مراجعه ندارند، و مراجعهٔ قبلیِ
+   * تسویه‌نشده اصلاً ردیفی روی تختهٔ امروز ندارد. نتیجه: بیمار جلوی منشی
+   * می‌ایستاد با یک‌میلیون‌و‌دویست بدهی و میز **هیچ** نشان نمی‌داد — درست همان
+   * کاری که میزِ پذیرش برایش هست.
+   *
+   * ⚠️ مراجعهٔ **وصل‌شده** از این جمع کنار گذاشته می‌شود، وگرنه همان رقم دو بار
+   * دیده می‌شود (یک‌بار «مانده»، یک‌بار «بدهیِ قبلی»). برای همین به‌جای عدد، یک
+   * تابع برمی‌گردد که شناسهٔ مراجعهٔ وصل‌شده را می‌گیرد.
+   *
+   * ⚠️ یک کوئری برای کلِ تخته — همان قاعدهٔ `billingFor`.
+   */
+  private async debtFor(rows: any[]) {
+    const out = new Map<number, (linkedVisitId: number) => { due: number; visits: number } | null>();
+    const ids = [...new Set(rows.map((r: any) => r.patientId).filter(Boolean))] as number[];
+    if (!ids.length) return out;
+    const visits = await this.prisma.visit.findMany({
+      where: { patientId: { in: ids }, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
+      select: {
+        id: true, patientId: true, pricingModel: true, globalAmount: true,
+        charges: { select: { amount: true } }, payments: { select: { amount: true } },
+      },
+    });
+    const byPatient = new Map<number, { id: number; due: number }[]>();
+    for (const v of visits) {
+      const due = summarize(v.charges, v.payments, v).due;
+      if (due <= 0) continue;
+      const list = byPatient.get(v.patientId) ?? [];
+      list.push({ id: v.id, due });
+      byPatient.set(v.patientId, list);
+    }
+    for (const [pid, list] of byPatient) {
+      out.set(pid, (linked: number) => {
+        const rest = list.filter((v) => v.id !== linked);
+        if (!rest.length) return null;
+        return { due: rest.reduce((s, v) => s + v.due, 0), visits: rest.length };
+      });
     }
     return out;
   }

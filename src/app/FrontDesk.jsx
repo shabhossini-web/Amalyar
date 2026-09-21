@@ -2,14 +2,14 @@ import { AnimatePresence } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { fmtMoney } from '../lib/money.js';
-import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
+import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useTerms } from './config.jsx';
 import { useVisitDefs } from './visit-defs.js';
 import VisitForm from './VisitForm.jsx';
 import JDate from './JDate.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import { Arrive, Money, Phone } from '../ui/icons.jsx';
+import { Arrive, Close, Money, Phone, Search } from '../ui/icons.jsx';
 import CancelReason from '../ui/CancelReason.jsx';
 import './launcher.css';
 import './definitions.css';
@@ -43,6 +43,11 @@ export default function FrontDesk() {
   const [cancelAsk, setCancelAsk] = useState(null); // نوبتی که دلیلِ لغوش پرسیده می‌شود
   const [lane, setLane] = useState('booked');    // فقط موبایل
   const [showCancelled, setShowCancelled] = useState(false);
+  /* ⚠️ فیلترِ **سمتِ کلاینت** عمدی است: تخته از قبل یک روزِ کامل را در دست دارد
+     (سقفِ ۲۰۰ ردیف)، پس رفت‌وبرگشتِ تازه فقط تأخیر اضافه می‌کرد. شمارندهٔ ستون‌ها
+     هم عمداً **کلِ روز** را می‌شمارد نه نتیجهٔ جستجو را — وگرنه منشی با یک
+     جستجوی باز فراموش می‌کند سه نفر دیگر هم منتظرند. */
+  const [q, setQ] = useState('');
 
   /* تنبل: تا شیت باز نشود، شش fetchِ تعریف‌ها نمی‌رود. */
   const { defs, reload: reloadDefs } = useVisitDefs(!!sheet, user?.id);
@@ -123,7 +128,11 @@ export default function FrontDesk() {
     );
   }
 
-  const rows = data?.rows ?? [];
+  const all = data?.rows ?? [];
+  const needle = toEnDigits(q.trim());
+  const rows = needle
+    ? all.filter((r) => `${r.fullName ?? ''} ${r.patientCode ?? ''} ${r.phone ?? ''}`.includes(needle))
+    : all;
   const lanes = data?.lanes ?? [];
 
   return (
@@ -136,6 +145,11 @@ export default function FrontDesk() {
         </div>
         <JDate value={jday} onChange={setJday} />
         <button type="button" className="fd-today" onClick={() => setJday(todayJStr())}>امروز</button>
+        <label className="fd-find">
+          <Search width="15" height="15" aria-hidden="true" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام، کدِ پرونده یا شماره" aria-label="جستجوی نام، کدِ پرونده یا شماره" />
+          {q && <button type="button" className="fd-find-x" onClick={() => setQ('')} aria-label="پاک‌کردنِ جستجو"><Close width="13" height="13" /></button>}
+        </label>
       </header>
 
       {err && err.status !== 403 && <div className="fd-err" role="alert">{err.message}</div>}
@@ -170,7 +184,7 @@ export default function FrontDesk() {
               {rows.filter((r) => r.lane === l.key).map((r) => (
                 <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} />
               ))}
-              {!rows.some((r) => r.lane === l.key) && <li className="fd-empty">—</li>}
+              {!rows.some((r) => r.lane === l.key) && <li className="fd-empty">{needle && all.some((r) => r.lane === l.key) ? 'در این ستون نتیجه‌ای نیست' : '—'}</li>}
             </ul>
           </section>
         ))}
@@ -227,6 +241,9 @@ export default function FrontDesk() {
 /** یک کارتِ بیمار روی تخته. همهٔ برچسب‌ها از سرور می‌آیند. */
 function Card({ row, t, busy, onAct, onOpen }) {
   const due = row.billing && row.billing.total > 0 ? row.billing.due : 0;
+  /* بدهیِ مراجعه‌های **دیگرِ** همین بیمار — سرور جمعش را داده و مراجعهٔ وصل‌شده
+     را کنار گذاشته، پس با `due` بالا دوبار شمرده نمی‌شود. */
+  const debt = row.debt?.due ?? 0;
   return (
     <li className={`fd-card${busy === row.id ? ' busy' : ''}`} data-appt={row.id}>
       <div className="fd-card-top">
@@ -247,6 +264,12 @@ function Card({ row, t, busy, onAct, onOpen }) {
       </div>
       {due > 0 && (
         <p className="fd-money"><Money width="12" height="12" /> مانده <b>{fmtMoney(due)}</b></p>
+      )}
+      {debt > 0 && (
+        <p className="fd-money fd-debt">
+          <Money width="12" height="12" /> بدهیِ قبلی <b>{fmtMoney(debt)}</b>
+          {row.debt.visits > 1 && <span> ({faNum(row.debt.visits)} مراجعه)</span>}
+        </p>
       )}
       <div className="fd-actions">
         {row.canStart && (

@@ -110,5 +110,6 @@ yesno-ui
 today-popups
 surgery-phase-tabs
 clinic-doctor-portal
+desk-day
 reserved-date-keys
 form-types

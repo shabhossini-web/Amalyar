@@ -1,65 +1,65 @@
 /* ── کادرِ بارگذاریِ مشترک ── */
-.fd { display: flex; flex-direction: column; gap: 9px; }
-.fd-drop {
+.fdrop { display: flex; flex-direction: column; gap: 9px; }
+.fdrop-drop {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 18px 14px; cursor: pointer; text-align: center;
   background: rgba(var(--veil-rgb), .04);
   border: 1px dashed rgba(var(--veil-rgb), .22); border-radius: 16px;
   transition: border-color .15s, background .15s;
 }
-.fd-drop.on { border-color: rgba(var(--brand-2-rgb), .7); background: rgba(var(--brand-rgb), .09); }
-.fd-drop.busy { opacity: .75; }
+.fdrop-drop.on { border-color: rgba(var(--brand-2-rgb), .7); background: rgba(var(--brand-rgb), .09); }
+.fdrop-drop.busy { opacity: .75; }
 /* inputِ نیتیو «Choose File»ِ انگلیسی نشان می‌دهد و در رابطِ فارسی وصله است. */
-.fd-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.fd-drop input:disabled { cursor: default; }
-.fd-drop b { font-size: 13px; font-weight: 800; color: var(--brand-2); }
-.fd-drop small { font-size: 11px; color: var(--text3); }
-.fd-tip { max-width: 340px; line-height: 1.8; }
+.fdrop-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.fdrop-drop input:disabled { cursor: default; }
+.fdrop-drop b { font-size: 13px; font-weight: 800; color: var(--brand-2); }
+.fdrop-drop small { font-size: 11px; color: var(--text3); }
+.fdrop-tip { max-width: 340px; line-height: 1.8; }
 
-.fd-list { display: flex; flex-direction: column; gap: 6px; }
-.fd-item {
+.fdrop-list { display: flex; flex-direction: column; gap: 6px; }
+.fdrop-item {
   display: flex; align-items: center; gap: 9px; padding: 7px 9px;
   background: rgba(var(--veil-rgb), .04);
   border: 1px solid rgba(var(--veil-rgb), .1); border-radius: 12px;
 }
-.fd-item.done { border-color: rgba(52, 211, 153, .35); }
-.fd-item.error { border-color: rgba(248, 113, 113, .45); }
-.fd-thumb {
+.fdrop-item.done { border-color: rgba(52, 211, 153, .35); }
+.fdrop-item.error { border-color: rgba(248, 113, 113, .45); }
+.fdrop-thumb {
   flex: none; width: 38px; height: 38px; object-fit: cover; border-radius: 9px;
   background: rgba(var(--veil-rgb), .06);
 }
-.fd-doc { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--text3); }
-.fd-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.fd-meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text2); }
-.fd-meta small { font-size: 10.5px; color: var(--text3); }
-.fd-item.error .fd-meta small { color: #f87171; }
-.fd-ok { color: #34d399; }
-.fd-bad { color: #f87171; }
-.fd-spin {
+.fdrop-doc { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: var(--text3); }
+.fdrop-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fdrop-meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text2); }
+.fdrop-meta small { font-size: 10.5px; color: var(--text3); }
+.fdrop-item.error .fdrop-meta small { color: #f87171; }
+.fdrop-ok { color: #34d399; }
+.fdrop-bad { color: #f87171; }
+.fdrop-spin {
   width: 14px; height: 14px; border-radius: 50%;
   border: 2px solid rgba(var(--brand-2-rgb), .3); border-top-color: var(--brand-2);
-  animation: fd-rot .8s linear infinite;
+  animation: fdrop-rot .8s linear infinite;
 }
-@keyframes fd-rot { to { transform: rotate(360deg); } }
-.fd-retry, .fd-clear {
+@keyframes fdrop-rot { to { transform: rotate(360deg); } }
+.fdrop-retry, .fdrop-clear {
   padding: 4px 10px; cursor: pointer; font: inherit; font-size: 10.5px; font-weight: 700; color: var(--brand-2);
   background: none; border: 1px solid rgba(var(--brand-2-rgb), .4); border-radius: 99px;
 }
-.fd-clear { align-self: flex-start; }
-.fd-x {
+.fdrop-clear { align-self: flex-start; }
+.fdrop-x {
   flex: none; display: inline-flex; align-items: center; justify-content: center;
   width: 26px; height: 26px; cursor: pointer; color: var(--text3);
   background: none; border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 9px;
 }
-.fd-x:hover { color: #f87171; border-color: rgba(248, 113, 113, .4); }
+.fdrop-x:hover { color: #f87171; border-color: rgba(248, 113, 113, .4); }
 
 /* حالتِ دکمهٔ فشرده — برای پنل‌های متراکم؛ صف و وضعیت همان است. */
-.fd-compact { gap: 6px; }
-.fd-btn {
+.fdrop-compact { gap: 6px; }
+.fdrop-btn {
   position: relative; display: inline-flex; align-items: center; justify-content: center;
   padding: 10px 16px; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--brand-2);
   background: rgba(var(--brand-rgb), .1);
   border: 1px solid rgba(var(--brand-2-rgb), .45); border-radius: 12px;
 }
-.fd-btn.busy { opacity: .7; }
-.fd-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.fdrop-btn.busy { opacity: .7; }
+.fdrop-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
