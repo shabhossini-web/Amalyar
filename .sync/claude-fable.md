@@ -4,25 +4,22 @@ status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-21
 paths:
-  - src/app/SurgeonPortal.jsx
-  - src/app/surgeon-portal.css
-  - src/app/FrontDesk.jsx
-  - src/app/frontdesk.css
-  - src/ui/FileDrop.jsx
-  - src/ui/filedrop.css
-  - server/src/patients/surgeon-portal.service.ts
-  - server/src/patients/frontdesk.service.ts
-  - server/src/config/config.service.ts
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
+  - src/app/tools.jsx
+  - src/ui/icons.jsx
+  - src/App.jsx
+  - server/src/patients/theatre.controller.ts
+  - server/src/patients/theatre.service.ts
+  - server/src/auth/access-registry.ts
+  - server/src/config/verticals.ts
 note: >-
-  بستهٔ ۳الف (PR #84) — **بازبینیِ دو میز با اسکرین‌شات در هر دو تم.** شش یافته:
-  نصفه‌بودنِ بستهٔ ۱ (نقشِ پزشک بدونِ تعریفِ جراح → کشویِ اجباریِ فرمِ ویزیت خالی)،
-  برخوردِ ریشهٔ `.fd` بینِ `filedrop.css` و `frontdesk.css` (هدرِ میز ۶۶۰px و وسطِ
-  صفحه؛ آپلود به `fdrop-` رفت + نگهبانِ «ریشهٔ کوتاه یک مالک دارد»)، ادغامِ
-  «یک بیمار یک ردیف» در `/surgeon/today`، حذفِ تکرارِ نتیجه↔کار، نوارِ خلاصه با
-  صورت‌حسابِ امروز، و **`debt`ِ میزِ پذیرش** (بدهیِ بیمار، نه بدهیِ نوبت).
-  سنجه: `scripts/e2e/desk-day.mjs` (منفی‌تست‌شده). بدهی: دکمهٔ «بیمارِ بدونِ نوبت»
-  (گیرِ قاعدهٔ برنامهٔ کاری)، ارقامِ لاتینِ `JDate`، `sections`ِ فرم‌ساز.
-  قدمِ بعدی: بستهٔ ۳ب — نمای اتاقِ عمل.
+  بستهٔ ۳ب — **نمای اتاقِ عمل** (دستورِ مالک، بعد از کاملشدنِ ۳الف که در #84
+  لند شد). ماژولِ تازهٔ `theatre` روی `/app/theatre`: عمل‌های امروزِ اتاق،
+  کارتِ حینِ عمل (هویت + گروه خونی + هشدارِ حساسیت/دارو/بیماری زمینه‌ای، بدونِ
+  هیچ عددِ مالی)، چک‌لیستِ ایمنیِ سه‌مرحله‌ای (WHO) با ثبتِ ثبت‌کننده، و
+  شروع/پایانِ یک‌لمسی + گزارشِ عمل. جدولِ تازه `safety_checks` + migration.
+  ⚠️ افزودن به پلانِ حوزه‌ها migration جدا می‌خواهد (هشدارِ `verticals.ts`).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

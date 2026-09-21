@@ -111,5 +111,6 @@ today-popups
 surgery-phase-tabs
 clinic-doctor-portal
 desk-day
+theatre
 reserved-date-keys
 form-types

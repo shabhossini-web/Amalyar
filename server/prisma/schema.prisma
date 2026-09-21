@@ -1420,6 +1420,40 @@ model Visit {
 
   /// دوره‌ای که از این مراجعه شروع شد — مسیرِ درمان (W4.1).
   episodes  Episode[]
+
+  /// چک‌لیستِ ایمنیِ اتاقِ عمل — سه مرحله، هر بند یک سطر (بستهٔ ۳ب).
+  safetyChecks SafetyCheck[]
+}
+
+/// **بندِ چک‌لیستِ ایمنیِ اتاقِ عمل** — یک سطر به‌ازای هر بندِ تیک‌خورده.
+///
+/// ⚠️ چرا جدول و نه یک `Json` روی `Visit`: این یک **سندِ ایمنی** است، نه یک
+/// ترجیحِ نمایشی. بندی که تیک خورده باید بگوید **چه کسی** و **کِی** — و آن دو
+/// در JSON نه قابلِ کوئری‌اند نه قابلِ ممیزی. متنِ بندها در کد است
+/// (`SAFETY_STAGES`)، پس اگر روزی بندی عوض شد، سطرهای قبلی کلیدِ خودشان را
+/// نگه می‌دارند و بازنویسی نمی‌شوند.
+///
+/// ⚠️ نامِ ثبت‌کننده **عکسِ لحظه** است (همان استدلالِ `Visit.surgeonName`):
+/// حسابِ حذف‌شده نباید بندِ امضاشده را بی‌نام کند.
+model SafetyCheck {
+  id      Int   @id @default(autoincrement())
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int   @map("visit_id")
+
+  /// signIn (پیش از بیهوشی) | timeOut (پیش از برش) | signOut (پیش از خروج)
+  stage String
+  /// کلیدِ بند در `SAFETY_STAGES` — متنش در کد است، نه این‌جا.
+  key   String
+
+  checkedById   Int?      @map("checked_by_id")
+  checkedByName String?   @map("checked_by_name")
+  checkedAt     DateTime  @default(now()) @map("checked_at")
+
+  /// یک بند در هر مرحله یک‌بار — برداشتنِ تیک سطر را **حذف** می‌کند، نه اینکه
+  /// `false` بنویسد: «تیک‌نخورده» نبودِ سند است، نه سندی که می‌گوید انجام نشد.
+  @@unique([visitId, stage, key])
+  @@index([visitId])
+  @@map("safety_checks")
 }
 
 /// Issued versions are immutable; a later version supersedes, never rewrites, one.

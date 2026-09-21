@@ -1,0 +1,142 @@
+/* نمای اتاقِ عمل (بستهٔ ۳ب) — یک عمل، یک صفحه، در لحظه.
+   ⚠️ هر لایهٔ کم‌آلفا با `--veil-rgb`/`--surface-rgb` (قانون ۲۳): این صفحه در
+   مطب روشن باز می‌شود و در بیمارستان تیره، و هیچ‌کدام نباید محو شود.
+   ⚠️ اندازه‌ها عمداً بزرگ‌ترند: خواننده‌اش دستکش دستش است و صفحه روی پایهٔ
+   کنارِ تخت، نه روی میز. کفِ هدفِ لمس ۴۴px. */
+
+.th { min-height: 100vh; padding: 20px 16px 72px; background: var(--bg); color: var(--text1); }
+.th * { box-sizing: border-box; }
+
+.th-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: 900px; margin: 0 auto 16px; }
+.th-head > div:first-child { margin-inline-end: auto; }
+.th-head h1 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: clamp(20px, 3.5vw, 26px); }
+.th-head p { margin: 3px 0 0; font-size: 12px; color: var(--text3); }
+.th-today, .th-exit {
+  display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border-radius: 11px;
+  font: inherit; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer;
+  color: var(--text1); background: rgba(var(--surface-rgb), .55); border: 1px solid rgba(var(--brand-soft-rgb), .28);
+}
+.th-today:hover, .th-exit:hover { border-color: var(--brand-2); }
+.th-exit { background: none; color: var(--brand-2); border-color: transparent; }
+
+.th-err, .th-note, .th-empty, .th-hint {
+  max-width: 900px; margin: 0 auto 12px; padding: 12px 15px; border-radius: 12px; font-size: 13px;
+}
+.th-empty, .th-note { color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--brand-soft-rgb), .3); text-align: center; }
+.th-err { color: var(--red-text); background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .45); }
+.th-hint { margin: 8px 0 0; padding: 0; font-size: 11.5px; color: var(--text3); }
+
+/* ── فهرستِ روز ── */
+.th-list { max-width: 900px; margin: 0 auto; padding: 0; list-style: none; display: grid; gap: 8px; }
+.th-item {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
+  width: 100%; min-height: 62px; padding: 12px 14px; border-radius: 14px; cursor: pointer;
+  font: inherit; color: inherit; text-align: start;
+  background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.th-item:hover, .th-item:focus-visible { border-color: rgba(var(--brand-2-rgb), .55); outline: none; }
+.th-item.busy { opacity: .6; }
+.th-item-time { grid-row: 1 / span 2; font-size: 15px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
+.th-item-name { font-size: 15px; font-weight: 800; }
+.th-item-sub { grid-column: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-item-side { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+.th-mini { display: flex; align-items: center; gap: 4px; }
+.th-mini small { margin-inline-end: 2px; font-size: 10.5px; color: var(--text3); }
+.th-mini b {
+  min-width: 34px; padding: 2px 5px; border-radius: 7px; font-size: 11px; font-weight: 700; text-align: center;
+  color: var(--text3); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
+  font-variant-numeric: tabular-nums;
+}
+.th-mini b.part { color: var(--amber-text); border-color: rgba(251, 191, 36, .45); }
+.th-mini b.full { color: var(--green-text); border-color: rgba(52, 211, 153, .45); }
+
+.th-state { padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 700; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12); }
+.th-state.is-finished { color: var(--green-text); border-color: rgba(52, 211, 153, .45); }
+.th-state.is-cancelled { color: var(--red-text); border-color: rgba(248, 113, 113, .45); }
+/* «در جریان» باید از دور هم دیده شود — این تنها ردیفی است که همین حالا زیرِ دست است. */
+.th-state.is-running { color: var(--cyan); border-color: rgba(34, 211, 238, .55); background: rgba(34, 211, 238, .1); }
+/* «ناتمام» = شروع خورده و پایان هیچ‌وقت ثبت نشده؛ کارِ کسی است که باید ببنددش. */
+.th-state.is-open { color: var(--amber-text); border-color: rgba(251, 191, 36, .5); }
+
+/* ── کارتِ حینِ عمل ── */
+.th-card { max-width: 900px; margin: 0 auto; display: grid; gap: 12px; }
+.th-card section { padding: 16px; border-radius: 16px; background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--veil-rgb), .1); }
+.th-card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 800; }
+
+.th-name { margin: 0; font-size: clamp(22px, 5vw, 30px); font-weight: 800; line-height: 1.3; }
+.th-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0; font-size: 13px; color: var(--text2); }
+.th-blood { padding: 2px 10px; border-radius: 99px; background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14); }
+.th-blood b { margin-inline-start: 5px; font-size: 15px; font-weight: 800; color: var(--text1); }
+.th-blood.none b { font-size: 12px; font-weight: 700; color: var(--amber-text); }
+.th-op { margin: 12px 0 0; font-size: 16px; font-weight: 700; color: var(--brand-2); }
+.th-team { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 8px 0 0; font-size: 12.5px; color: var(--text3); }
+.th-team b { color: var(--text1); }
+
+/* هشدارها — هر سه همیشه هستند؛ پرشده برجسته، خالی کم‌رنگ ولی دیدنی. */
+.th-alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; padding: 0 !important; background: none !important; border: 0 !important; }
+.th-alert { padding: 12px 14px; border-radius: 14px; background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(var(--veil-rgb), .16); }
+.th-alert-h { display: flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: var(--text3); }
+.th-alert p { margin: 5px 0 0; font-size: 13px; line-height: 1.75; color: var(--text3); }
+.th-alert.on p { font-size: 14.5px; font-weight: 700; color: var(--text1); }
+.th-alert.is-red { background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .55); }
+.th-alert.is-red .th-alert-h { color: var(--red-text); }
+.th-alert.is-amber { background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .45); }
+.th-alert.is-amber .th-alert-h { color: var(--amber-text); }
+
+/* ساعت */
+.th-clock { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.th-times { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-inline-end: auto; font-size: 13px; color: var(--text3); }
+.th-times b { margin-inline-start: 6px; font-size: 17px; font-weight: 800; color: var(--text1); font-variant-numeric: tabular-nums; }
+.th-elapsed { display: flex; align-items: center; gap: 5px; color: var(--cyan); }
+.th-elapsed b { color: var(--cyan); }
+.th-acts { display: flex; gap: 8px; }
+.th-btn {
+  min-height: 46px; padding: 0 20px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 800;
+  color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .3);
+}
+.th-btn:hover:not(:disabled) { border-color: var(--brand-2); }
+.th-btn.primary { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; }
+.th-btn:disabled { opacity: .45; cursor: default; }
+
+/* چک‌لیست */
+.th-stage h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.th-stage h3 em { padding: 2px 9px; border-radius: 99px; font-style: normal; font-size: 12px; font-weight: 800; color: var(--text3); background: rgba(var(--veil-rgb), .07); font-variant-numeric: tabular-nums; }
+.th-stage h3 small { flex: 1 0 100%; font-size: 11.5px; font-weight: 400; color: var(--text3); }
+.th-stage.full { border-color: rgba(52, 211, 153, .4); }
+.th-stage.full h3 em { color: var(--green-text); }
+.th-stage ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.th-check {
+  display: flex; align-items: center; gap: 11px; width: 100%; min-height: 48px; padding: 9px 12px;
+  border-radius: 12px; cursor: pointer; font: inherit; text-align: start;
+  color: var(--text2); background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--veil-rgb), .09);
+}
+.th-check:hover:not(:disabled), .th-check:focus-visible { border-color: rgba(var(--brand-2-rgb), .5); outline: none; }
+.th-check:disabled { opacity: .6; cursor: default; }
+/* ⚠️ بوردرِ **فیزیکی** نه منطقی (قانون ۹): مربعِ تیک نباید در RTL قرینه شود. */
+.th-box {
+  flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  color: transparent; background: rgba(var(--veil-rgb), .05); border: 1.5px solid rgba(var(--veil-rgb), .2);
+}
+.th-check.on { color: var(--text1); background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .45); }
+.th-check.on .th-box { color: #fff; background: var(--green, #34d399); border-color: transparent; }
+.th-label { flex: 1; font-size: 14px; line-height: 1.6; }
+.th-by { flex: 0 0 auto; font-size: 11px; color: var(--text3); }
+
+.th-box-list ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.th-box-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text2); }
+.th-box-list li b { color: var(--text1); }
+.th-box-list li em { font-style: normal; font-size: 11.5px; color: var(--text3); }
+.th-note p { margin: 0; font-size: 14px; line-height: 1.9; white-space: pre-wrap; }
+
+.th-toast {
+  position: fixed; inset-inline: 0; bottom: 18px; z-index: 40; width: max-content; max-width: 92vw; margin: 0 auto;
+  padding: 11px 18px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 13px;
+  color: var(--text1); background: rgba(var(--surface-rgb), .95); border: 1px solid rgba(var(--brand-soft-rgb), .4);
+}
+
+@media (max-width: 560px) {
+  .th-item { grid-template-columns: 54px minmax(0, 1fr); }
+  .th-item-side { grid-column: 1 / -1; grid-row: 3; flex-direction: row; align-items: center; justify-content: space-between; }
+  .th-acts { width: 100%; }
+  .th-btn { flex: 1; }
+}
