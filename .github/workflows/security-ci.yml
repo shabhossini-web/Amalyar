@@ -474,7 +474,9 @@ jobs:
           if (!/jalaliMonthRange/.test(cal)) { console.error('بازهٔ تقویم باید شمسی باشد'); process.exit(1); }
           // گروه‌بندی سمتِ سرور بماند تا تقویم و چینش یک تعریف داشته باشند.
           if (!/toJalali/.test(cal)) { console.error('گروه‌بندیِ روز باید سمتِ سرور و شمسی باشد'); process.exit(1); }
-          if (!/LEVEL.SUPERVISOR/.test(cal)) { console.error('تقویم باید scope کارشناس را رعایت کند'); process.exit(1); }
+          // از بستهٔ ۵ دامنهٔ «فقط مالِ خودش» یک‌جاست (`common/own-scope.ts`) و تقویم همان
+          // helper را صدا می‌زند، نه مقایسهٔ سطحِ دستی؛ نبودنِ helper یعنی scope گم شده.
+          if (!/scopedVisitWhere\(/.test(cal)) { console.error('تقویم باید scope کارشناس را رعایت کند (scopedVisitWhere از own-scope)'); process.exit(1); }
           const jal = fs.readFileSync('src/common/jalali.ts', 'utf8');
           const rng = jal.split('export function jalaliMonthRange')[1].split(/\n}/)[0];
           // طولِ ماه دوباره محاسبه نشود؛ «اولِ ماهِ بعد» کبیسه را خودش هندل می‌کند.
