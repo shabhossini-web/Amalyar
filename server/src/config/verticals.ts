@@ -28,7 +28,9 @@ export const VERTICALS = {
   /** مطب و تیمِ جراحی — از ویزیت تا عمل تا پیگیری. */
   clinic: {
     label: 'مطب و تیمِ جراحی',
-    features: { dashboard: 4, calendar: 3, frontdesk: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, work: 2, pathway: 2 },
+    // `surgeon` = «میزِ پزشک»: پزشکِ مطب (حسابِ متصل به تعریفِ جراح) همه‌کارش را
+    // از همان‌جا می‌کند — امروزِ من، بیمارانِ من، نتایجِ رسیده (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹).
+    features: { dashboard: 4, calendar: 3, frontdesk: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, work: 2, pathway: 2 },
   },
 } as const;
 

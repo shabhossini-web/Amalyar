@@ -7,6 +7,7 @@ import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { syncVisitDuty } from './hospital-duties.service';
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere, scopedPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
@@ -327,7 +328,8 @@ export class PatientsService {
 
   private scopedVisitWhere(user: any, where: any = {}) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return { ...where };
-    return { ...where, techId: user?.id ?? -1 };
+    /* `AND` نه spread: جستجوی آزاد خودش `OR` دارد و شرطِ «خودش» هم ممکن است `OR` باشد. */
+    return { AND: [where, ownVisitWhere(user)] };
   }
 
   private async assertVisitAccess(id: number, user: any) {
@@ -661,7 +663,7 @@ export class PatientsService {
     if (!p || p.deletedAt) return { found: false };
 
     if ((user?.level ?? 0) < LEVEL.SUPERVISOR) {
-      const mine = await this.prisma.visit.count({ where: { patientId: p.id, techId: user?.id ?? -1 } });
+      const mine = await this.prisma.visit.count({ where: { patientId: p.id, ...ownVisitWhere(user) } });
       if (!mine) return { found: true, restricted: true };
     }
     return {
@@ -699,7 +701,7 @@ export class PatientsService {
       where: {
         ...where,
         deletedAt: null,
-        ...((user?.level ?? 0) < LEVEL.SUPERVISOR ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+        ...scopedPatientWhere(user),
       },
       orderBy: { id: 'desc' },
       take: 20,

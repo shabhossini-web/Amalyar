@@ -12,3 +12,33 @@
 .ri-row select, .ri-row input { width: 100%; min-width: 0; }
 .ri-delete { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid #fda4af66; border-radius: 12px; background: transparent; color: #fda4af; cursor: pointer; }
 .ri-editor .bl-mini { display: flex; gap: 8px; justify-content: center; }
+
+/* ── میزِ پزشک (مطب، بستهٔ ۵) — امروزِ من / بیمارانِ من / نتایجِ رسیده ── */
+.sp-hint { margin: 0 0 14px; font-size: 13px; line-height: 1.9; color: var(--text2); }
+.sp-tabs { margin: 0 0 16px; }
+.sp-sec { display: flex; flex-direction: column; gap: 10px; margin: 0 0 18px; }
+.sp-sec h2 { margin: 0; font-size: 15px; font-weight: 800; color: var(--text1); }
+.sp-empty { padding: 14px; border-radius: 14px; font-size: 13px; color: var(--text3); text-align: center; background: rgba(var(--veil-rgb), .03); border: 1px dashed rgba(var(--veil-rgb), .10); }
+.sp-rows { list-style: none; display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; }
+.sp-row {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px;
+  width: 100%; padding: 9px 12px; cursor: pointer; font: inherit; color: inherit; text-align: start; border-radius: 13px;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
+}
+.sp-row:hover, .sp-row:focus-visible { border-color: rgba(var(--brand-2-rgb), .55); outline: none; }
+.sp-row-time { font-size: 13px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
+.sp-row-name { grid-column: 2; font-size: 14px; font-weight: 700; color: var(--text1); }
+.sp-row-sub { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-row-tag { grid-column: 3; grid-row: 1 / span 2; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12); }
+.sp-row-tag.hot { color: var(--amber); border-color: rgba(251, 191, 36, .5); }
+.sp-kind { font-size: 11px; font-weight: 700; color: var(--brand-2); }
+.sp-open { padding: 0; cursor: pointer; font: inherit; color: inherit; text-align: start; background: none; border: 0; text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px; }
+.sp-open:hover { color: var(--brand-2); }
+.sp-open:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 4px; }
+.sp-card-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-card-acts a { font-size: 12.5px; color: var(--brand-2); }
+@media (max-width: 560px) { .sp-row { grid-template-columns: 54px minmax(0, 1fr) auto; } }
+/* ردیفِ فقط‌خواندنی — حسابی که ماژولِ مقصد را ندارد؛ همان ظاهر بدونِ دعوت به کلیک */
+.sp-row.is-static { cursor: default; }
+.sp-row.is-static:hover { border-color: rgba(var(--veil-rgb), .09); }
+.sp-hint-ro { color: var(--amber-text); }

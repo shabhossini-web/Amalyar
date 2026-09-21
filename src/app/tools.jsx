@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth.jsx';
+import { useTerms } from './config.jsx';
 import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Truck, Users, Wave , Arrive, Pathway } from '../ui/icons.jsx';
 
 /**
@@ -71,6 +72,7 @@ export { ArrowStart };
  */
 export function useAllowedTools() {
   const { user } = useAuth();
+  const t = useTerms();
   const lvl = user?.level ?? 0;
   const [features, setFeatures] = useState(null); // key → {allowed, …}
   useEffect(() => {
@@ -89,7 +91,9 @@ export function useAllowedTools() {
     return lvl >= t.min;
   };
   const hero = allowed(HERO) ? HERO : null;
-  const daily = DAILY.filter(allowed);
+  /* نامِ کاشیِ پزشک از واژگانِ حوزه می‌آید («پرتال جراح» / «میزِ پزشک») — قانونِ ۲۴؛
+     کاتالوگِ ثابت بالا فقط پشتیبان است تا نگهبانِ آیکون‌ها بتواند بخواندش. */
+  const daily = DAILY.filter(allowed).map((x) => (x.key === 'surgeon' ? { ...x, label: t.portal } : x));
   const tools = TOOLS.filter(allowed);
   return { hero, daily, tools, loading: features === null, nothing: !hero && !daily.length && !tools.length };
 }

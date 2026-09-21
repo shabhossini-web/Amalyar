@@ -108,3 +108,4 @@ w4-2-pathway-wizard
 yesno-ui
 today-popups
 surgery-phase-tabs
+clinic-doctor-portal

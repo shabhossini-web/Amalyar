@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEVEL } from '../common/levels';
+import { ownPatientWhere } from '../common/own-scope';
 import { WorkService } from '../work/work.service';
 import { summarize } from './billing.service';
 import { colorForKey } from './forms.service';
@@ -126,7 +127,7 @@ export class LiveService {
     const patient = await this.prisma.patient.findFirst({
       where: {
         id: patientId, deletedAt: null,
-        ...(scoped ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+        ...(scoped ? ownPatientWhere(user) : {}),
       },
       select: { id: true, code: true, firstName: true, lastName: true, createdAt: true },
     });

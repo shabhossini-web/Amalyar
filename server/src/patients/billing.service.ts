@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { InventoryService } from './inventory.service';
 import { TreasuryService } from './treasury.service';
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere } from '../common/own-scope';
 
 /** نوعِ قلمِ صورت‌حساب. discount همیشه مبلغِ منفی می‌سازد. */
 export const CHARGE_KINDS = ['service', 'item', 'discount'] as const;
@@ -42,7 +43,7 @@ export class BillingService {
   private async assertVisit(visitId: number, user: any, db: any = this.prisma) {
     const scoped = (user?.level ?? 0) < LEVEL.SUPERVISOR;
     const visit = await db.visit.findFirst({
-      where: { id: visitId, ...(scoped ? { techId: user?.id ?? -1 } : {}) },
+      where: { id: visitId, ...(scoped ? ownVisitWhere(user) : {}) },
       select: {
         id: true, patientId: true, pricingModel: true, globalAmount: true,
         invoiceType: true, invoiceBankAccountId: true,

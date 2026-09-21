@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
+import { ownPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
@@ -111,7 +112,7 @@ export class RecordService {
     const patient = await this.prisma.patient.findFirst({
       where: {
         id: patientId,
-        ...(scoped ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+        ...(scoped ? ownPatientWhere(user) : {}),
       },
       select: { id: true, code: true },
     });

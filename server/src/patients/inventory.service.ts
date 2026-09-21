@@ -12,6 +12,7 @@ import { PlacesService } from './places.service';
 // فراخوان‌های موجود نشکنند.
 export { balanceByLocation, balanceOf, HOME_FALLBACK };
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere } from '../common/own-scope';
 import { digitVariants, textSearchOr } from '../common/search';
 
 /** نوعِ حرکتِ انبار. علامت را سرویس تعیین می‌کند، نه کاربر. */
@@ -759,7 +760,7 @@ export class InventoryService {
    */
   private transferScope(user: any) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return {};
-    return { visit: { techId: user?.id ?? -1 } };
+    return { visit: ownVisitWhere(user) };
   }
 
   private async assertTransfer(id: number, user: any) {
