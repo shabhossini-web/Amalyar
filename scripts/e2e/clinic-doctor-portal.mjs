@@ -13,6 +13,8 @@
  *   - حسابِ پایین‌ترِ متصل به جراح: دامنهٔ «امروز» و پرتال با `surgeonId` (own-scope)، و میزِ
  *     فقط‌خواندنی بدونِ هیچ ۴۰۳ی
  *   - کاشیِ لانچر و h1 صفحه در مطب «میزِ پزشک» است
+ *   - (۵ب) صفحهٔ «امروز» در مطب «ویزیت» می‌گوید نه «عمل»، و «مراجعهٔ جدید» با نوعِ ویزیت باز می‌شود
+ *     (`defaultKind` از `/config`، نه هاردکدِ کلاینت)
  *  نباید بیفتد:
  *   - برگشت به حوزهٔ قبلی همه‌چیز را برمی‌گرداند؛ هیچ خطای JS/کنسول در هیچ‌کدام از دو میز
  */
@@ -75,6 +77,8 @@ try {
   const feats = (await send('/features')).json ?? [];
   const fSurgeon = feats.find((f) => f.key === 'surgeon');
   ok('**کاشیِ `surgeon` در مطب روشن و مجاز است** (تا دیروز برای مطب هاردکد رد می‌شد)', fSurgeon?.enabled === true && fSurgeon.minLevel === 2 && fSurgeon.allowed === true, JSON.stringify(fSurgeon));
+  const cfg = (await send('/config')).json;
+  ok('پیش‌فرضِ نوعِ «مراجعهٔ جدید» در مطب ویزیت است (`defaultKind` از سرور)', cfg?.defaultKind === 'clinic', JSON.stringify(cfg?.defaultKind));
   const corp = ['dispatch', 'tech', 'inventory'].map((k) => [k, feats.find((f) => f.key === k)?.enabled]);
   ok('ماژول‌های شرکتی در مطب خاموش‌اند (چینش / کارشناسی / انبار)', corp.every(([, e]) => e === false), JSON.stringify(corp));
 
@@ -206,6 +210,26 @@ try {
   await page.waitForSelector('.lx-hero-ic, .lx-card-ic, .lx-tile-ic', { timeout: 15000 }).catch(() => {});
   ok('کاشیِ لانچر «میزِ پزشک» است، نه «پرتال جراح»', (await page.getByText('میزِ پزشک', { exact: true }).count()) >= 1 && (await page.getByText('پرتال جراح', { exact: true }).count()) === 0);
 
+  console.log('\n۵ب) واژه‌های مطب در «امروز» و پیش‌فرضِ «مراجعهٔ جدید»');
+  await page.goto(`${UI}/app`, { waitUntil: 'networkidle' });
+  await page.locator('.td-hello').waitFor({ timeout: 15000 });
+  const chips = (await page.locator('.td-chips').innerText()).replace(/\s+/g, ' ');
+  ok('چیپِ خلاصه «ویزیتِ امروز» می‌گوید، نه «عملِ امروز»', /ویزیتِ امروز/.test(chips) && !/عملِ امروز/.test(chips), chips.slice(0, 120));
+  const vsec = page.locator('.td-sec', { hasText: 'ویزیت‌های امروز' });
+  ok('بخشِ مراجعه‌های امروز «ویزیت‌های امروز» است و بیمارِ او را دارد', (await vsec.count()) === 1 && (await vsec.locator('.td-item', { hasText: `اول${tag}` }).count()) === 1, String(await page.locator('.td-sec h2').allInnerTexts()));
+  await page.goto(`${UI}/app/patients/${v1.patientId}`, { waitUntil: 'networkidle' });
+  await page.locator('.rc-actions .rc-act.is-main').waitFor({ timeout: 15000 });
+  ok('دکمهٔ پرونده «ویزیتِ جدید» است (واژگانِ مطب)', (await page.locator('.rc-actions .rc-act.is-main').innerText()).includes('ویزیتِ جدید'));
+  await page.locator('.rc-actions .rc-act.is-main').click();
+  /* از پرونده فرم با بیمارِ از پیش‌انتخاب‌شده مستقیم روی گامِ ۳ باز می‌شود (ردیفِ نوع در گامِ ۲ است)؛
+     نوع از برچسبِ تاریخ («تاریخِ ویزیت» نه «تاریخِ عمل») و نبودنِ تب‌های قبل/حین/بعد خوانده می‌شود. */
+  await page.locator('.db-sheet').waitFor({ timeout: 10000 });
+  await page.waitForFunction(() => /تاریخِ (ویزیت|عمل)/.test(document.querySelector('.db-sheet')?.innerText ?? ''), null, { timeout: 10000 }).catch(() => {});
+  const sheetTxt = await page.locator('.db-sheet').innerText();
+  ok('**«مراجعهٔ جدید» در مطب با نوعِ ویزیت باز می‌شود، نه عمل** (برچسبِ «تاریخِ ویزیت»، بدونِ تب‌های عمل)', /تاریخِ ویزیت/.test(sheetTxt) && !/تاریخِ عمل/.test(sheetTxt) && (await page.locator('.db-sheet .db-postop .ui-tabs').count()) === 0, sheetTxt.replace(/\s+/g, ' ').slice(0, 140));
+  await page.locator('.db-sheet .db-x').first().click();
+  await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 8000 });
+
   console.log('\n۶) مرورگر — میزِ فقط‌خواندنی برای حسابِ بدونِ ماژولِ «بیماران»: هیچ ۴۰۳، هیچ دکمهٔ شکسته');
   const page3 = await newPage(d3.token);
   await page3.goto(`${UI}/app/surgeon`, { waitUntil: 'networkidle' });
@@ -232,6 +256,7 @@ try {
   const back = await send('/config/vertical', 'PATCH', { vertical: vertical0 }).catch(() => ({ status: 0 }));
   const f0 = (await send('/features')).json ?? [];
   ok('**نباید بیفتد:** برگشت به حوزهٔ قبلی — `surgeon` روشن و ماژول‌های شرکتی دوباره فعال', back.status === 200 && f0.find((f) => f.key === 'surgeon')?.enabled === true && (vertical0 !== 'ionm' || f0.find((f) => f.key === 'dispatch')?.enabled === true), `${back.status} ${vertical0}`);
+  ok('… و پیش‌فرضِ نوعِ مراجعه دوباره عمل است', vertical0 === 'clinic' || (await send('/config')).json?.defaultKind === 'surgery');
 }
 
 console.log(`\nقبول: ${pass}   رد: ${fails.length}`);

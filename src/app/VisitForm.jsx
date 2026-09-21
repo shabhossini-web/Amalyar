@@ -7,7 +7,7 @@ import { api, apiStream } from '../lib/api.js';
 import { isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
-import { useTerms } from './config.jsx';
+import { useConfig } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
@@ -110,7 +110,7 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
 
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
-  const t = useTerms();
+  const { t, defaultKind = 'surgery' } = useConfig();
   const editing = !!initial?.id;
   /* prefill = ادامهٔ یک تصمیم («کاندیدای جراحی» در ویزیتِ قبلی): پرونده از
      قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم. */
@@ -134,7 +134,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [stepErr, setStepErr] = useState('');
 
   const [f, setF] = useState(() => ({
-    kind: initial?.kind || prefill?.kind || 'surgery',
+    /* پیش‌فرضِ نوع از حوزه (`/config.defaultKind`): مطب ویزیت، بقیه عمل (بستهٔ ۵ب). */
+    kind: initial?.kind || prefill?.kind || defaultKind,
     firstName: initial?.firstName || '',
     lastName: initial?.lastName || '',
     phone: initial?.phone || '',

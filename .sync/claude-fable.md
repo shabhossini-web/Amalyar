@@ -61,6 +61,8 @@ paths:
   - docs/plan/CLINIC.md
   - scripts/e2e/clinic-doctor-portal.mjs
   - scripts/e2e/profile-workflows.mjs
+  - src/app/config.jsx
+  - server/src/config/config.service.ts
 note: >-
   🔧 **بازخوردِ مالک ۱۴۰۵/۰۶/۲۹ — بستهٔ ۱ (باگ‌ها):** شیتِ سفارش عکس/متن/لینکِ پاسخِ
   بیمار را نشان می‌دهد و دکمهٔ «بررسی شد / ناقص است» دارد (endpointِ review تا
@@ -75,7 +77,8 @@ note: >-
   ردشده (امروزِ من / بیمارانِ من / نتایجِ رسیده / بیلان، پاپ‌آپ‌های مشترک)،
   کاشیِ `surgeon` در مطب از پلانِ حوزه، own-scope با `surgeonId`
   (`server/src/common/own-scope.ts`)، حسابِ پزشک ↔ تعریفِ جراح در هر سه حوزه.
-  هرکدام PRِ جدا و پشتِ سرِ هم روی همین شاخه.
+  **۵ب** (کامیتِ محلی، PR بعد از #76): واژه‌های «امروز» از واژگان، `defaultKind`
+  حوزه در `/config` برای «مراجعهٔ جدید». هرکدام PRِ جدا و پشتِ سرِ هم روی همین شاخه.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

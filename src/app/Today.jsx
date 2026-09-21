@@ -9,7 +9,8 @@ import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
-import { Alert, ArrowStart, Calendar, Close, Grid, Scalpel } from '../ui/icons.jsx';
+import { useConfig } from './config.jsx';
+import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Scalpel } from '../ui/icons.jsx';
 import './launcher.css';
 import './shell.css';
 import './work.css';
@@ -51,6 +52,9 @@ export default function Today() {
   const [toast, setToast] = useState('');
   const [toolsOpen, setToolsOpen] = useState(false);
   const { hero, daily, tools, nothing } = useAllowedTools();
+  /* واژهٔ حوزه از واژگان (قانونِ ۲۴): «عملِ امروز» فقط در حوزه‌های عمل؛ مطب «ویزیت» — و چاقو فقط آن‌جا که عمل است. */
+  const { t, vertical } = useConfig();
+  const VisitIcon = vertical === 'clinic' ? Diagnosis : Scalpel;
 
   useEffect(() => { document.title = 'امروز — عمل‌یار'; }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 1800); return () => clearTimeout(t); }, [toast]);
@@ -121,7 +125,7 @@ export default function Today() {
         {b && (
           <ul className="td-chips" aria-label="خلاصهٔ امروز">
             <li className={b.overdue ? 'hot' : ''}><b>{faNum(b.work)}</b> کارِ باز{b.overdue > 0 && <em> ({faNum(b.overdue)} عقب‌افتاده)</em>}</li>
-            {data.sections.visits && <li><b>{faNum(b.visits)}</b> عملِ امروز</li>}
+            {data.sections.visits && <li><b>{faNum(b.visits)}</b> {t.todayVisit}</li>}
             {data.sections.appointments && <li><b>{faNum(b.appointments)}</b> نوبتِ امروز</li>}
             {data.sections.intake && b.intakePending > 0 && (
               <li className="td-link"><Link to="/app/intake"><b>{faNum(b.intakePending)}</b> ثبت‌نامِ در انتظار</Link></li>
@@ -162,10 +166,10 @@ export default function Today() {
       {data?.sections.visits && (
         <section className="td-sec" aria-labelledby="td-visits-h">
           <div className="td-sec-head">
-            <h2 id="td-visits-h"><Scalpel width="16" height="16" aria-hidden="true" /> عمل‌های امروز</h2>
+            <h2 id="td-visits-h"><VisitIcon width="16" height="16" aria-hidden="true" /> {t.todayVisits}</h2>
             <Link to="/app/dashboard" className="td-more">فهرست <ArrowStart width="14" height="14" /></Link>
           </div>
-          {data.visits.length === 0 ? <p className="td-empty">امروز عملی ثبت نشده.</p> : (
+          {data.visits.length === 0 ? <p className="td-empty">{t.todayVisitsEmpty}</p> : (
             <ul className="td-list">
               {data.visits.map((v) => (
                 <li key={v.id} className="td-item">
