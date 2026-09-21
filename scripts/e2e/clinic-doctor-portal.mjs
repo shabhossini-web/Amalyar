@@ -15,6 +15,8 @@
  *   - کاشیِ لانچر و h1 صفحه در مطب «میزِ پزشک» است
  *   - (۵ب) صفحهٔ «امروز» در مطب «ویزیت» می‌گوید نه «عمل»، و «مراجعهٔ جدید» با نوعِ ویزیت باز می‌شود
  *     (`defaultKind` از `/config`، نه هاردکدِ کلاینت)
+ *   - migrationِ `clinic_surgeon_feature` روی نصبی که **از قبل** روی مطب است کاشی را روشن کند
+ *     (پلانِ حوزه فقط هنگامِ عوض‌کردنِ حوزه اعمال می‌شود — بدونِ این migration مشتریِ فعلی میز را نمی‌بیند)
  *  نباید بیفتد:
  *   - برگشت به حوزهٔ قبلی همه‌چیز را برمی‌گرداند؛ هیچ خطای JS/کنسول در هیچ‌کدام از دو میز
  */
@@ -81,6 +83,23 @@ try {
   ok('پیش‌فرضِ نوعِ «مراجعهٔ جدید» در مطب ویزیت است (`defaultKind` از سرور)', cfg?.defaultKind === 'clinic', JSON.stringify(cfg?.defaultKind));
   const corp = ['dispatch', 'tech', 'inventory'].map((k) => [k, feats.find((f) => f.key === k)?.enabled]);
   ok('ماژول‌های شرکتی در مطب خاموش‌اند (چینش / کارشناسی / انبار)', corp.every(([, e]) => e === false), JSON.stringify(corp));
+
+  /* نصبی که **پیش از** بستهٔ ۵ روی مطب رفته، `features.surgeon` را خاموش گرفته و
+     افزودنِ کلید به پلانِ کد آن را روشن نمی‌کند (پلان فقط در `setVertical` اعمال
+     می‌شود). این‌جا همان حالت ساخته می‌شود و خودِ SQLِ migration اجرا می‌شود. */
+  sql(`UPDATE features SET enabled=false WHERE key='surgeon'`);
+  const beforeMig = (await send('/features')).json?.find((f) => f.key === 'surgeon');
+  ok('بازسازیِ حالتِ نصبِ قدیمی: کاشیِ پزشک خاموش است', beforeMig?.enabled === false, JSON.stringify(beforeMig?.enabled));
+  execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1 -f server/prisma/migrations/20260921070000_clinic_surgeon_feature/migration.sql`);
+  const afterMig = (await send('/features')).json?.find((f) => f.key === 'surgeon');
+  ok('**migration کاشی را روی نصبِ مطبِ موجود روشن می‌کند** (وگرنه میز برای مشتریِ فعلی نامرئی می‌ماند)', afterMig?.enabled === true && afterMig.minLevel === 2, JSON.stringify(afterMig));
+  /* و نباید بیفتد: روی نصبِ غیرِ مطب هیچ کاری نکند. */
+  sql(`UPDATE features SET enabled=false WHERE key='surgeon'`);
+  sql(`UPDATE settings SET value='ionm' WHERE key='vertical'`);
+  execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1 -f server/prisma/migrations/20260921070000_clinic_surgeon_feature/migration.sql`);
+  ok('**نباید بیفتد:** روی نصبِ غیرِ مطب migration کاشی را روشن نمی‌کند', sql(`SELECT enabled FROM features WHERE key='surgeon'`) === 'f');
+  sql(`UPDATE settings SET value='clinic' WHERE key='vertical'`);
+  sql(`UPDATE features SET enabled=true WHERE key='surgeon'`);
 
   const d1 = await makeDoctor('d1', 'اول', 4);
   const d2 = await makeDoctor('d2', 'دوم', 4);

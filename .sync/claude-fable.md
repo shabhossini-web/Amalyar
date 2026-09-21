@@ -61,6 +61,7 @@ paths:
   - docs/plan/CLINIC.md
   - scripts/e2e/clinic-doctor-portal.mjs
   - scripts/e2e/profile-workflows.mjs
+  - server/prisma/migrations/20260921070000_clinic_surgeon_feature/migration.sql
   - src/app/config.jsx
   - server/src/config/config.service.ts
 note: >-
