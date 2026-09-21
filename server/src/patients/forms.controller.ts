@@ -116,6 +116,15 @@ export class FormsController {
     return this.forms.visitKinds();
   }
 
+  /* ⚠️ **پیش از `forms/:key` بماند.** Nest مسیرها را به ترتیبِ تعریف می‌سنجد و
+     `forms/:key` هر چیزی را می‌بلعد — «types» هم می‌شد یک کلیدِ فرم و ۴۰۴
+     می‌گرفت. همان تلهٔ `forms/visit-kinds` که بالاتر نشسته است. */
+  @RequirePermissions('forms.read')
+  @Get('forms/types')
+  formTypes() {
+    return this.forms.formTypes();
+  }
+
   @RequirePermissions('forms.read')
   @Get('forms/:key')
   byKey(@Param('key') key: string) {

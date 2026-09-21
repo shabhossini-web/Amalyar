@@ -111,3 +111,4 @@ today-popups
 surgery-phase-tabs
 clinic-doctor-portal
 reserved-date-keys
+form-types

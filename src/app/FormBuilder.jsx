@@ -47,6 +47,18 @@ const TYPES = [
   { v: 'payment', l: 'باکسِ پرداخت' },
 ];
 const typeLabel = (v) => TYPES.find((t) => t.v === v)?.l ?? v;
+/**
+ * نوعِ یک فرم از کاتالوگِ سرور — **همان قاعدهٔ `formTypeKey` سمتِ سرور**.
+ *
+ * ⚠️ این دو خط تنها چیزی است که از قرارداد در کلاینت تکرار می‌شود، و عمداً
+ * فقط **کلیدسازی** است نه محتوای کاتالوگ: باکس‌های مجاز، بخش‌ها و کنترل‌های
+ * تأیید همه از سرور می‌آیند. نگهبانِ CI هاردکدشدنِ خودِ فهرست‌ها را می‌گیرد.
+ */
+const formTypeOf = (types, form) => {
+  if (!types || !form) return null;
+  const k = form.visitKind ? `${form.scope}.${form.visitKind}` : form.scope;
+  return types.find((t) => t.key === k) ?? types.find((t) => t.key === form.scope) ?? null;
+};
 /* دسته‌های مدرکِ پرونده برای باکسِ عکس/لینک — همان `DOCUMENT_CATEGORIES` سرور؛ «متفرقه» = خالی. */
 const DOC_CATEGORIES = { imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت' };
 
@@ -64,6 +76,8 @@ export default function FormBuilder() {
   const stagger = useStagger();
   const { verticalLabel } = useConfig();
   const [forms, setForms] = useState(null);
+  /* کاتالوگِ نوعِ فرم — از سرور. هیچ‌کدام از فهرست‌هایش این‌جا دوباره نوشته نمی‌شود (قانونِ ۳). */
+  const [formTypes, setFormTypes] = useState(null);
   const [tab, setTab] = useState('');
   const [scopeFilter, setScopeFilter] = useState('all');
   const [editing, setEditing] = useState(null); // {formId, field} — field={} یعنی جدید
@@ -86,8 +100,15 @@ export default function FormBuilder() {
   const load = useCallback(async () => {
     setErr('');
     try {
-      const d = await api('/forms');
+      const [d, types] = await Promise.all([
+        api('/forms'),
+        /* ⚠️ شکستِ کاتالوگ نباید صفحه را بخوابانَد: `null` یعنی «نمی‌دانم»، و
+           پالت در آن حالت مثلِ دیروز همه را نشان می‌دهد. سرور به‌هرحال خودش
+           باکسِ نامجاز را رد می‌کند، پس این fallback چیزی را باز نمی‌کند. */
+        api('/forms/types').catch(() => null),
+      ]);
       setForms(d);
+      setFormTypes(types);
       /* ⚠️ تبِ فعال فقط وقتی ست می‌شود که هنوز چیزی انتخاب نشده یا تبِ فعلی
          دیگر وجود ندارد (مثلاً بعد از «بازگرداندن به قالب»). اگر هر بار ست
          می‌شد، بعد از هر ذخیره کاربر به تبِ اول پرت می‌شد. */
@@ -242,8 +263,14 @@ export default function FormBuilder() {
             {form && (
               <>
                 <div className="fb-meta">
-                  <span className="fb-chip">{SCOPE_FA[form.scope] ?? form.scope}</span>
-                  {form.visitKind && <span className="fb-chip ghost">{form.visitKind}</span>}
+                  {/* ⚠️ نامِ **نوعِ فرم** از کاتالوگِ سرور، نه دو چیپِ جداگانه.
+                      تا دیروز این‌جا «مراجعه» + کلیدِ خامِ انگلیسیِ `surgery`
+                      کنارِ هم می‌نشست و کاربر باید خودش سرِ هم می‌کرد که یعنی
+                      «فرمِ عمل» — و برای فرمِ ثبت‌نامِ نورو می‌شد «ثبت‌نام» +
+                      «surgery» که اصلاً چیزی نمی‌گفت. */}
+                  <span className="fb-chip">{formTypeOf(formTypes, form)?.label ?? SCOPE_FA[form.scope] ?? form.scope}</span>
+                  {formTypeOf(formTypes, form)?.payment === 'never' && <span className="fb-chip ghost">معمولاً بی‌پرداخت</span>}
+                  {formTypeOf(formTypes, form)?.payment === 'required' && <span className="fb-chip ghost">پرداخت‌دار</span>}
                   {/* ارقامِ فارسی — تا کنارِ «۲ صفحه» یک زبان داشته باشند. */}
                   <span className="fb-count">{toFa(form.fields.length)} فیلد</span>
                   {form.pages > 1 && <span className="fb-count">{toFa(form.pages)} صفحه</span>}
@@ -439,6 +466,7 @@ export default function FormBuilder() {
             formId={editing.formId}
             field={editing.field}
             pages={form?.pages ?? 1}
+            ftype={formTypeOf(formTypes, form)}
             onClose={() => setEditing(null)}
             onSaved={(fresh, msg) => {
               setForms((list) => list.map((f) => (f.id === fresh.id ? fresh : f)));
@@ -607,7 +635,7 @@ function FollowUpPick({ form, busy, onPick }) {
 }
 
 /** شیتِ ساخت/ویرایشِ یک فیلد. */
-function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isNew = !field.id;
+function FieldSheet({ formId, field, pages = 1, ftype = null, onClose, onSaved }) {  const isNew = !field.id;
   const [form, setForm] = useState(() => ({
     key: field.key ?? '',
     label: field.label ?? '',
@@ -708,8 +736,23 @@ function FieldSheet({ formId, field, pages = 1, onClose, onSaved }) {  const isN
         )}
 
         {(isNew || !field.builtin) && fld('type', 'نوع', (
+          /* ⚠️ گروه‌بندی، نه فیلتر. پالت باکس‌های مناسبِ این نوعِ فرم را اول
+             می‌گذارد و بقیه را زیرِ «سایر» — چون «نیمه‌بسته» یعنی راهنمایی، نه
+             قفل: هر فرمی می‌تواند به یک لینکِ ثبت‌نام بسته شود و واقعاً پول
+             بگیرد، پس بستنِ باکسی که سرور می‌پذیرد فقط کاربر را گیج می‌کند. */
           <select value={form.type} onChange={set('type')} disabled={busy}>
-            {TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+            {!ftype ? TYPES.map((t) => <option key={t.v} value={t.v}>{t.l}</option>) : (
+              <>
+                <optgroup label={`مناسبِ ${ftype.label}`}>
+                  {TYPES.filter((t) => ftype.boxes.includes(t.v)).map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                </optgroup>
+                {TYPES.some((t) => !ftype.boxes.includes(t.v)) && (
+                  <optgroup label="سایر">
+                    {TYPES.filter((t) => !ftype.boxes.includes(t.v)).map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+                  </optgroup>
+                )}
+              </>
+            )}
           </select>
         ))}
 
