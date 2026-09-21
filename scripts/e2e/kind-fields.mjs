@@ -93,7 +93,17 @@ try {
     await p.locator(`.db-kindrow button:has-text("${kindTitle}")`).click();
     await p.locator('.db-stepnav .db-submit').click();
     await p.waitForTimeout(900);
-    const labels = await p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span').allInnerTexts();
+    const collect = () => p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span').allInnerTexts();
+    let labels = await collect();
+    /* بستهٔ ۴: فرمِ عمل مرحله‌های قبل/حین/بعد را در سه تب دارد و فقط تبِ فعال رندر می‌شود
+       (ثبتِ تازه روی «قبل» باز می‌شود)؛ برچسب‌های هر سه تب جمع می‌شوند تا «شرحِ عمل»
+       (تبِ حین) هم دیده شود. فرمِ ویزیت تب ندارد و همان یک‌بار کافی است. */
+    const phaseTabs = p.locator('.db-sheet .db-postop .ui-tabs button');
+    for (let i = 0, n = await phaseTabs.count(); i < n; i++) {
+      await phaseTabs.nth(i).click();
+      await p.waitForTimeout(200);
+      labels = labels.concat(await collect());
+    }
     const text = labels.join(' | ');
     await p.locator('.db-x').click();
     await p.waitForTimeout(900);
