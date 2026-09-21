@@ -40,6 +40,27 @@ paths:
   - scripts/e2e/postop-flow.mjs
   - docs/plan/lanes/claude-fable.md
   - STATUS.md
+  - server/src/common/own-scope.ts
+  - server/src/auth/auth.service.ts
+  - server/src/accounts/accounts.service.ts
+  - server/src/features/features.service.ts
+  - server/src/config/verticals.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/record.service.ts
+  - server/src/patients/calendar.service.ts
+  - server/src/patients/prep.service.ts
+  - server/src/patients/billing.service.ts
+  - server/src/patients/invoices.service.ts
+  - server/src/patients/inventory.service.ts
+  - server/src/patients/surgeon-portal.service.ts
+  - server/src/patients/surgeon-portal.controller.ts
+  - src/app/SurgeonPortal.jsx
+  - src/app/surgeon-portal.css
+  - src/app/tools.jsx
+  - src/lib/terms.js
+  - docs/plan/CLINIC.md
+  - scripts/e2e/clinic-doctor-portal.mjs
+  - scripts/e2e/profile-workflows.mjs
 note: >-
   🔧 **بازخوردِ مالک ۱۴۰۵/۰۶/۲۹ — بستهٔ ۱ (باگ‌ها):** شیتِ سفارش عکس/متن/لینکِ پاسخِ
   بیمار را نشان می‌دهد و دکمهٔ «بررسی شد / ناقص است» دارد (endpointِ review تا
@@ -48,9 +69,13 @@ note: >-
   تنظیمات. **بستهٔ ۲** (#73): پاپ‌آپ‌های پرونده + «عمل جراحی/ویزیت». **بستهٔ ۳**
   (در دست): صفحهٔ «امروز» — هشدارِ نام‌دار و کلیک‌پذیر با پاپ‌آپ، عکسِ مشاورهٔ
   بیمار روی ردیفِ کار، پاپ‌آپ‌ها در ماژولِ مشترکِ `thing-popups.jsx` (پرونده،
-  امروز، کارهای من). **بستهٔ ۴** (در دست): فرمِ عمل — قبل/حین/بعد از عمل سه تب
-  (`Tabs`)، شرح و ساعت‌ها در «حین»، سفارشِ پیش از عمل از فرمِ عمل. بعدش مدلِ
-  مطب/پرتالِ جراح؛ هرکدام PRِ جدا و پشتِ سرِ هم روی همین شاخه.
+  امروز، کارهای من) — #74 لند شد. **بستهٔ ۴** (#75): فرمِ عمل — قبل/حین/بعد از
+  عمل سه تب (`Tabs`)، شرح و ساعت‌ها در «حین»، سفارشِ پیش از عمل از فرمِ عمل.
+  **بستهٔ ۵** (در دست، PR بعد از #75): مدلِ مطب — «میزِ پزشک» به‌جای پرتالِ
+  ردشده (امروزِ من / بیمارانِ من / نتایجِ رسیده / بیلان، پاپ‌آپ‌های مشترک)،
+  کاشیِ `surgeon` در مطب از پلانِ حوزه، own-scope با `surgeonId`
+  (`server/src/common/own-scope.ts`)، حسابِ پزشک ↔ تعریفِ جراح در هر سه حوزه.
+  هرکدام PRِ جدا و پشتِ سرِ هم روی همین شاخه.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere } from '../common/own-scope';
 import { summarize } from './billing.service';
 
 const ORDER_KINDS = [
@@ -35,7 +36,7 @@ export class PrepService {
       where: {
         id: visitId,
         patient: { deletedAt: null },
-        ...(level >= LEVEL.SUPERVISOR ? {} : { techId: user?.id ?? -1 }),
+        ...(level >= LEVEL.SUPERVISOR ? {} : ownVisitWhere(user)),
       },
       select: {
         id: true, seq: true, kind: true, opDate: true, opStatus: true, pricingModel: true, globalAmount: true,

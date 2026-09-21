@@ -344,7 +344,12 @@ export class AuthService {
     if (isTestAccount(session.account) && !await testAccountsEnabled(this.prisma)) return null;
     if (session.accountId !== sub || session.account.status !== 'active') return null;
     if (isProvisional(session.account) && session.account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, sub); return null; }
-    return session.account;
+    /* جراحِ فعالِ متصل به شخصِ همین حساب — یک‌بار این‌جا، تا object-authz (`ownVisitWhere`)
+       پزشکِ مطب را «خودش» بشمارد بی‌آنکه هر سرویس دوباره بپرسد. */
+    const surgeon = session.account.personId
+      ? await this.prisma.surgeon.findFirst({ where: { personId: session.account.personId, active: true }, select: { id: true } })
+      : null;
+    return { ...session.account, surgeonId: surgeon?.id ?? null };
   }
 
   /// پروفایل روی Person نوشته می‌شود — همان رکوردی که نقشِ جراحِ همین آدم هم از آن می‌خوانَد.

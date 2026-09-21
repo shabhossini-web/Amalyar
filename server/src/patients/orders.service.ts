@@ -8,6 +8,7 @@ import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { closeWork } from '../work/work-processor';
 import { LEVEL } from '../common/levels';
+import { scopedPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
@@ -115,7 +116,7 @@ export class OrdersService {
 
   private async assertAccess(patientId: number, user: any, db: any = this.prisma) {
     const patient = await db.patient.findFirst({ where: { id: patientId, deletedAt: null,
-      ...((user?.level ?? 0) < LEVEL.SUPERVISOR ? { visits: { some: { techId: user?.id ?? -1 } } } : {}),
+      ...scopedPatientWhere(user),
     }, select: { id: true } });
     if (!patient) throw new NotFoundException('پرونده پیدا نشد');
   }

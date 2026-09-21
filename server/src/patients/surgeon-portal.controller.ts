@@ -28,6 +28,9 @@ export class SurgeonPortalController {
   constructor(private portal: SurgeonPortalService, private storage: StorageService) {}
   @Get('visits') @RequirePermissions('surgeon.read')
   list(@CurrentUser() user: any, @Query('q') q?: string, @Query('page') page?: string) { return this.portal.list(user, q, Number(page)); }
+  /** «امروزِ من» — نوبت‌ها، مراجعه‌ها و نتیجه‌های بررسی‌نشدهٔ پزشک (بستهٔ ۵). */
+  @Get('today') @RequirePermissions('surgeon.read')
+  today(@CurrentUser() user: any) { return this.portal.today(user); }
   @Get('finances') @RequirePermissions('surgeon.read')
   finances(@CurrentUser() user: any, @Query('surgeonId') surgeonId?: string, @Query('page') page?: string) { return this.portal.finances(user, Number(surgeonId), Number(page) || 1); }
   @Get('items') @RequirePermissions('surgeon.read')

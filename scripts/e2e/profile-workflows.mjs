@@ -127,8 +127,16 @@ try {
   await prisma.surgeon.update({ where: { id: surgeon.id }, data: { active: false } });
   await assert.rejects(() => portal.list(doctor));
   pass('deleted document and inactive surgeon lose access');
-  vertical = 'clinic'; await assert.rejects(() => portal.list(admin), /مطب/);
+  /* بستهٔ ۵ (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹): مطب دیگر رد نمی‌شود — همان پرتال «میزِ پزشک» است:
+     همهٔ نوع‌ها با patientId/kind، و «امروزِ من» سه فهرستِ آماده می‌دهد. جراحِ غیرفعال همچنان بیرون است. */
+  vertical = 'clinic';
+  const clinicList = await portal.list(admin);
+  assert.equal(clinicList.workflow, 'clinic');
+  assert.ok(clinicList.rows.length >= 2 && clinicList.rows.every(v => Number.isInteger(v.patientId) && Object.hasOwn(v, 'kind')));
+  const desk = await portal.today(admin);
+  assert.ok(Array.isArray(desk.visits) && Array.isArray(desk.appointments) && Array.isArray(desk.unreviewed));
+  await assert.rejects(() => portal.list(doctor));
   assert.equal((await prisma.account.findUnique({ where: { id: doctor.id } })).level, 2);
-  pass('clinic uses dashboard; switching profile never promotes doctors to owner');
+  pass('clinic keeps the same portal as the doctor desk; switching profile never promotes doctors to owner');
   console.log(`${count} profile workflow scenarios passed`);
 } finally { if (prisma) await prisma.$disconnect(); server.close(); await db.close(); }

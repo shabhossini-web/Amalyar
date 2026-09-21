@@ -8,7 +8,7 @@ import { ServiceCodesService } from './service-codes.service';
 import { durationOf } from './patients.service';
 import { InventoryService } from './inventory.service';
 import { canAccess } from '../auth/access-check';
-import { LEVEL } from '../common/levels';
+import { scopedVisitWhere } from '../common/own-scope';
 
 /**
  * فهرستِ خدماتِ نورومانیتورینگ — همان جدولِ ملک‌طب (کدِ کتابِ ارزش نسبی + نامِ رایج).
@@ -63,7 +63,7 @@ export class InvoicesService {
   constructor(private prisma: PrismaService, private billing: BillingService, private codes: ServiceCodesService, private settings: SettingsService, private inventory: InventoryService, private events: EventsService) {}
 
   private async visit(id: number, user: any) {
-    const v = await this.prisma.visit.findFirst({ where: { id, ...((user?.level ?? 0) < LEVEL.SUPERVISOR ? { techId: user?.id ?? -1 } : {}) }, include: { hospital: true } });
+    const v = await this.prisma.visit.findFirst({ where: { id, ...scopedVisitWhere(user) }, include: { hospital: true } });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     return v;
   }

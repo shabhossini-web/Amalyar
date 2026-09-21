@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FeaturesService } from '../features/features.service';
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere } from '../common/own-scope';
 import { AvailabilityService } from '../patients/availability.service';
 import { WorkService } from './work.service';
 import { canAccess } from '../auth/access-check';
@@ -49,7 +50,10 @@ export class TodayService {
       can = (key: string) => map.get(key) === true;
     } catch { /* fail-soft: بخش‌های دیگر خالی می‌مانند */ }
 
-    const seesVisits = can('dashboard') || can('tech');
+    /* «مراجعه‌های امروز» برای هر کسی که مراجعه‌ای به نامِ خودش دارد: مدیرِ داشبورد، کارشناس،
+       و (بستهٔ ۵) پزشکِ متصل به تعریفِ جراح — `visitsToday` خودش با own-scope (techId یا
+       surgeonId) می‌بندد، پس این فقط می‌گوید بخش رندر شود یا نه. */
+    const seesVisits = can('dashboard') || can('tech') || can('surgeon');
     /* نمای استثنا (W2.5) فقط از سوپروایزر به بالا: این بخش دربارهٔ **کارِ دیگران**
        است — چیزی که از دستِ تیم افتاده — نه کارِ خودِ کاربر. */
     const seesExceptions = level >= LEVEL.SUPERVISOR;
@@ -231,7 +235,7 @@ export class TodayService {
         opDate: { gte: start, lte: end },
         opStatus: { not: 'cancelled' },
         patient: { deletedAt: null },
-        ...(level >= LEVEL.SUPERVISOR ? {} : { techId: user?.id ?? -1 }),
+        ...(level >= LEVEL.SUPERVISOR ? {} : ownVisitWhere(user)),
       },
       orderBy: [{ opStartTime: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
       take: 40,

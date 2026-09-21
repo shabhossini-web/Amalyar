@@ -11,14 +11,78 @@ import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 export class SurgeonPortalService {
   constructor(private prisma: PrismaService, private config: ConfigService, private audit: AuditService) {}
 
+  /**
+   * دامنهٔ پرتال: مراجعه‌های جراحِ متصل به همین حساب؛ سوپرادمین همه.
+   *
+   * ⚠️ تا بستهٔ ۵ (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹) مطب صریحاً رد می‌شد («پزشک از داشبورد
+   * استفاده می‌کند»). حالا در هر سه حوزه یکی است: در مطب همین پرتال «میزِ پزشک» است
+   * و همهٔ نوع‌های مراجعه (ویزیت/عمل/پیگیری) را می‌آورد، نه فقط عمل. جراح از
+   * `user.surgeonId` می‌آید (یک‌بار در `validateSession`)، با fallback به جستجو.
+   */
   private async scope(user: any) {
-    const vertical = await this.config.vertical();
-    if (!['ionm', 'implant'].includes(vertical)) throw new ForbiddenException('در مدل مطب، پزشک از داشبورد مطب استفاده می‌کند');
     if ((user?.level ?? 0) >= LEVEL.SUPER_ADMIN) return {};
+    if (Number.isInteger(user?.surgeonId) && user.surgeonId > 0) return { surgeonId: user.surgeonId as number };
     const account = await this.prisma.account.findUnique({ where: { id: user?.id ?? -1 }, select: { personId: true, status: true } });
     const surgeon = account?.status === 'active' ? await this.prisma.surgeon.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } }) : null;
     if (!surgeon) throw new ForbiddenException('حساب شما به جراح فعال در تعاریف پایه متصل نیست');
     return { surgeonId: surgeon.id };
+  }
+
+  /**
+   * «امروزِ من» — همان projectionِ صفحهٔ «امروز» ولی با دامنهٔ پزشک (قانونِ ۱۵: عددها
+   * سمتِ سرور): نوبت‌های امروزِ او، مراجعه‌های امروزش، و هر نتیجه‌ای که برای بیمارانِ
+   * او آمده و بررسی نشده (همهٔ روزها — نتیجهٔ نخوانده تاریخ نمی‌شناسد). کارهای بازِ
+   * او را رابط از `GET /work?scope=inbox` می‌گیرد که خودش به نامِ کاربر است.
+   */
+  async today(user: any) {
+    const scope = await this.scope(user);
+    const now = new Date();
+    const start = new Date(now); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setHours(23, 59, 59, 999);
+    const day = new Date(`${start.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const person = (p: any) => (p ? { id: p.id, code: p.code, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() } : null);
+    const patientSel = { select: { id: true, code: true, firstName: true, lastName: true } };
+    const [visits, appointments] = await Promise.all([
+      this.prisma.visit.findMany({
+        where: { ...scope, opDate: { gte: start, lte: end }, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
+        orderBy: [{ opStartTime: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 40,
+        select: { id: true, seq: true, kind: true, opStartTime: true, opStatus: true, hospitalName: true, patient: patientSel, topic: { select: { name: true } } },
+      }),
+      this.prisma.appointment.findMany({
+        /* نوبت به **حساب** وصل است (`doctorId`)، نه به تعریفِ جراح؛ سوپرادمین همه را می‌بیند. */
+        where: { date: day, status: { not: 'cancelled' }, ...((user?.level ?? 0) >= LEVEL.SUPER_ADMIN ? {} : { doctorId: user?.id ?? -1 }) },
+        orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 60,
+        select: { id: true, startMin: true, seq: true, status: true, visitId: true, date: true, patient: patientSel, topic: { select: { name: true } } },
+      }),
+    ]);
+    const kinds: { key: string; table: any; fa: string }[] = [
+      { key: 'lab', table: this.prisma.labOrder, fa: 'آزمایش' },
+      { key: 'imaging', table: this.prisma.imagingOrder, fa: 'تصویربرداری' },
+      { key: 'consult', table: this.prisma.consultOrder, fa: 'مشاوره' },
+    ];
+    const unreviewed: any[] = [];
+    for (const k of kinds) {
+      const rows = await k.table.findMany({
+        where: { status: { in: ['answered', 'in_review'] }, visit: { ...scope, patient: { deletedAt: null } } },
+        orderBy: { updatedAt: 'asc' }, take: 20,
+        select: { id: true, patientId: true, visitId: true, status: true, updatedAt: true, patient: patientSel },
+      });
+      unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient) })));
+    }
+    unreviewed.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    const hhmm = (m: number | null) => (m == null ? null : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
+    return {
+      now: now.toISOString(),
+      visits: visits.map((v) => ({
+        id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime, opStatus: v.opStatus,
+        hospital: v.hospitalName, topic: v.topic?.name ?? null, patientId: v.patient.id, patient: person(v.patient),
+      })),
+      appointments: appointments.map((a) => ({
+        id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, visitId: a.visitId, date: a.date,
+        topic: a.topic?.name ?? null, patientId: a.patient?.id ?? null, patient: person(a.patient),
+      })),
+      unreviewed,
+    };
   }
 
   private async visit(id: number, user: any) {
@@ -34,15 +98,16 @@ export class SurgeonPortalService {
     const where = { ...scope, patient: { deletedAt: null, ...(q ? { OR: [{ firstName: { contains: toEnDigits(q) } }, { lastName: { contains: toEnDigits(q) } }, { code: { contains: toEnDigits(q) } }] } : {}) } };
     const [rows, total] = await Promise.all([
       this.prisma.visit.findMany({ where, orderBy: [{ opDate: 'desc' }, { id: 'desc' }], take: 25, skip: (current - 1) * 25,
-        select: { id: true, seq: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true, hospitalName: true, surgeonName: true, requiredItems: true, surgeonInstructions: true,
-          patient: { select: { code: true, firstName: true, lastName: true } }, hospital: { select: { name: true } }, procedureType: { select: { name: true, needs: { where: { item: { active: true } }, select: { itemId: true, quantity: true, notes: true, item: { select: { name: true, size: true } } } } } },
+        select: { id: true, seq: true, kind: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true, hospitalName: true, surgeonName: true, requiredItems: true, surgeonInstructions: true,
+          patient: { select: { id: true, code: true, firstName: true, lastName: true } }, hospital: { select: { name: true } }, topic: { select: { name: true } }, procedureType: { select: { name: true, needs: { where: { item: { active: true } }, select: { itemId: true, quantity: true, notes: true, item: { select: { name: true, size: true } } } } } },
           surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
           clinicalNotes: { where: { kind: 'op', replacedAt: null }, select: { body: true, createdAt: true }, orderBy: { id: 'desc' }, take: 1 },
           documents: { where: { deletedAt: null, category: { in: ['report', 'op-report', 'other'] } }, select: { id: true, title: true, fileName: true }, orderBy: { id: 'desc' } },
         } }),
       this.prisma.visit.count({ where }),
     ]);
-    return { rows: rows.map(v => ({ id: v.id, code: `${v.patient.code}-V${v.seq}`, fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
+    return { rows: rows.map(v => ({ id: v.id, patientId: v.patient.id, code: `${v.patient.code}-V${v.seq}`, fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
+      kind: v.kind, topic: v.topic?.name ?? null,
       opDate: v.opDate, opStartTime: v.opStartTime, opEndTime: v.opEndTime, opStatus: v.opStatus, procedure: v.procedureType?.name ?? v.opType,
       hospital: v.hospital?.name ?? v.hospitalName, surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}` : v.surgeonName,
       requiredItems: v.requiredItems ?? v.procedureType?.needs.map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item.name, n.item.size].filter(Boolean).join(' ') })) ?? [], instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,

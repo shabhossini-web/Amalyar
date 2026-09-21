@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException, BadRequestException 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
+import { ownVisitWhere } from '../common/own-scope';
 import { detectStaleWork } from './work-detectors';
 import { closeWork, processDomainEvents, upsertWork } from './work-processor';
 import type { WorkUpsert } from './work-rules';
@@ -40,7 +41,7 @@ export class WorkService {
 
   private async canSeePatient(user: any, patientId: number) {
     if ((user?.level ?? 0) >= LEVEL.TECH_ADMIN) return true;
-    const own = await this.prisma.visit.count({ where: { patientId, techId: user?.id ?? -1 } });
+    const own = await this.prisma.visit.count({ where: { patientId, ...ownVisitWhere(user) } });
     return own > 0;
   }
 

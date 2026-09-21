@@ -35,8 +35,10 @@ export class AccountsService {
       if (await tx.account.findUnique({ where: { username } })) throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
       if (dto.testAccount) (person as any).phoneScope = `test:${randomUUID()}`;
       const row = await tx.account.create({ data: { ...(existing ? { personId: existing.id } : { person: { create: person as any } }), username, passwordHash, level: dto.level, jobRole: dto.jobRole, status: 'active', verificationDueAt: verificationDeadline(), approvedById: actorId, approvedAt: new Date() }, include: { person: true } });
-      const vertical = await tx.setting.findUnique({ where: { key: 'vertical' } });
-      if (dto.jobRole === 'doctor' && ['ionm', 'implant'].includes(vertical?.value ?? '')) await tx.surgeon.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId } });
+      /* حسابِ پزشک همیشه به یک تعریفِ جراح وصل می‌شود — در هر سه حوزه. تا بستهٔ ۵ مطب
+         عمداً جا مانده بود چون پرتال مطب را رد می‌کرد؛ حالا «میزِ پزشک» دامنه‌اش را از
+         همین پیوند می‌گیرد (`surgeonId` در `validateSession`). */
+      if (dto.jobRole === 'doctor') await tx.surgeon.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId } });
       if (['driver', 'courier'].includes(dto.jobRole)) await tx.transportStaff.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId, role: dto.jobRole } });
       await tx.auditEvent.create({ data: { actorId, action: 'account.temporary.create', entityType: 'account', entityId: String(row.id), afterJson: { level: row.level, jobRole: row.jobRole, verificationDueAt: row.verificationDueAt, testAccount: !!dto.testAccount } } });
       return row;
