@@ -42,3 +42,18 @@
 .sp-row.is-static { cursor: default; }
 .sp-row.is-static:hover { border-color: rgba(var(--veil-rgb), .09); }
 .sp-hint-ro { color: var(--amber-text); }
+
+/* ⚠️ قانونِ ۲۳ — میزِ پزشک **اولین** صفحه‌ای است که این دو کلاسِ مشترک را در تمِ
+   روشن نشان می‌دهد (حوزهٔ مطب پیش‌فرض روشن است و تا دیروز پرتال در مطب باز
+   نمی‌شد). هر دو رنگِ خام دارند: زمینهٔ `.ia-field input` از `intake-admin.css`
+   یک `rgba(0,0,0,.3)` است و متنِ `.bl-mini` از `dashboard.css` یک `#fff` —
+   در تمِ روشن یکی جعبهٔ خاکستریِ توپُر با متنِ نامرئی می‌شود و دیگری دکمهٔ
+   سفیدِ روی سفید (هر دو در اسکرین‌شات دیده شدند، نه در هیچ سنجه‌ای).
+   این‌جا با توکن بازنویسی می‌شوند تا صفحه‌های دیگر — که فعلاً فقط تیره‌اند و
+   کلیمِ لِین‌های دیگرند — دست‌نخورده بمانند؛ ریشه‌اش در ۵ج فهرست شده. */
+.sp-page .ia-field input,
+.sp-page .ia-field select {
+  background: rgba(var(--veil-rgb), .06);
+  border-color: rgba(var(--veil-rgb), .18);
+}
+.sp-page .bl-mini { color: var(--text1); }
