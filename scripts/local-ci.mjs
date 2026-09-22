@@ -29,6 +29,10 @@
  *   node scripts/local-ci.mjs --part live  # فقط سوییت‌های زندهٔ ci-live.txt
  *   node scripts/local-ci.mjs --from 40    # ادامه از گامِ ۴۰ (بعد از رفعِ یک قرمز)
  *   node scripts/local-ci.mjs --keep-db    # دیتابیس را پاک نکن (اشکال‌زدایی؛ قرمزها قابلِ‌اعتماد نیستند)
+ *   node scripts/local-ci.mjs --no-retry   # تلاشِ دوم نزن (برای دیدنِ خودِ فلیک)
+ *
+ * گامِ افتاده **یک بار** دوباره اجرا می‌شود و اگر سبز شد با برچسبِ «فلیک» در
+ * خلاصه جدا شمرده می‌شود — سبزِ تلاشِ دوم یک هشدار است، نه سبز.
  *
  * پیش‌نیاز: Postgres بالا باشد و این متغیرها ست باشند —
  *   DATABASE_URL · CONTROL_DATABASE_URL · E2E_TENANT2_DATABASE_URL
@@ -47,6 +51,7 @@ const opt = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] :
 const PART = opt('--part', 'all');
 const FROM = Number(opt('--from', 0));
 const KEEP_DB = argv.includes('--keep-db');
+const NO_RETRY = argv.includes('--no-retry');
 const LOG_DIR = resolve(root, '.e2e-logs/local-ci');
 mkdirSync(LOG_DIR, { recursive: true });
 
@@ -168,6 +173,25 @@ const localOverrides = Object.fromEntries(
   [...OPERATOR_OWNED].filter((k) => process.env[k] != null).map((k) => [k, process.env[k]]));
 
 const results = [];
+
+/**
+ * 🔴 **تلاشِ دوم برای گامِ افتاده — دیدنی، نه پنهان.**
+ *
+ * دو سوییتِ مرورگری (`tenant-site` و `company-operations-ui`) زیرِ بارِ اجرای
+ * کامل می‌افتند و تنها که اجرا شوند ۴۴/۴۴ و ۷/۷ سبزند. علتش رقابت بر سرِ
+ * منابع روی **یک** ماشین است؛ CI همین کار را بین چند رانر پخش می‌کند و به
+ * این تنگنا نمی‌خورد. هر بار تشخیصِ این قرمز از قرمزِ واقعی چند دقیقه گرفت.
+ *
+ * ⚠️ ولی تلاشِ دوم **قرمز را نمی‌بلعد**: نتیجه با برچسبِ «فلیک» می‌مانَد و در
+ * خلاصه جدا شمرده می‌شود. اگر تکرار شد، یعنی باید خودِ سوییت مقاوم شود — نه
+ * اینکه هر بار دوباره اجرا شود. «سبز در تلاشِ دوم» یک **هشدار** است، نه سبز.
+ */
+const runOnce = (step, env, cwd) => {
+  const started = Date.now();
+  const r = spawnSync('bash', ['-lc', step.run], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  return { ok: r.status === 0, r, secs: Math.round((Date.now() - started) / 1000) };
+};
+
 const runStep = (step, idx, jobEnv) => {
   const name = step.name ?? `گام ${idx}`;
   const env = {
@@ -175,18 +199,23 @@ const runStep = (step, idx, jobEnv) => {
     ...localOverrides, E2E_CHROME: CHROME, CI: '1',
   };
   const cwd = step['working-directory'] ? resolve(root, step['working-directory']) : root;
-  const started = Date.now();
-  const r = spawnSync('bash', ['-lc', step.run], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  const secs = Math.round((Date.now() - started) / 1000);
-  const okStep = r.status === 0;
-  if (!okStep) {
-    /* لاگِ کاملِ گامِ افتاده نگه داشته می‌شود: خروجیِ کوتاه‌شده در ترمینال
-       معمولاً همان خطی را می‌بُرد که علت در آن است. */
-    writeFileSync(resolve(LOG_DIR, `step-${String(idx).padStart(3, '0')}.log`),
-      `# ${name}\n# cwd=${cwd}\n\n$ ${step.run}\n\n--- stdout ---\n${r.stdout ?? ''}\n--- stderr ---\n${r.stderr ?? ''}\n`);
+  let { ok: okStep, r, secs } = runOnce(step, env, cwd);
+  let flaky = false;
+  if (!okStep && !NO_RETRY) {
+    console.log(`  ↻ تلاشِ دوم: ${name}`);
+    const again = runOnce(step, env, cwd);
+    if (again.ok) { flaky = true; okStep = true; }
+    r = again.r; secs += again.secs;
   }
-  results.push({ idx, name, ok: okStep, secs });
-  console.log(`${okStep ? '✓' : '✗'} [${String(idx).padStart(3, ' ')}] ${name}${secs > 2 ? ` (${secs}s)` : ''}`);
+  if (!okStep || flaky) {
+    /* لاگِ کاملِ گام نگه داشته می‌شود — چه افتاده باشد چه فلیک: خروجیِ
+       کوتاه‌شده در ترمینال معمولاً همان خطی را می‌بُرد که علت در آن است. */
+    writeFileSync(resolve(LOG_DIR, `step-${String(idx).padStart(3, '0')}.log`),
+      `# ${name}${flaky ? ' (فلیک — تلاشِ دوم سبز شد)' : ''}\n# cwd=${cwd}\n\n$ ${step.run}\n\n--- stdout ---\n${r.stdout ?? ''}\n--- stderr ---\n${r.stderr ?? ''}\n`);
+  }
+  results.push({ idx, name, ok: okStep, flaky, secs });
+  const mark = flaky ? '⚠' : okStep ? '✓' : '✗';
+  console.log(`${mark} [${String(idx).padStart(3, ' ')}] ${name}${flaky ? ' — فلیک، تلاشِ دوم سبز' : ''}${secs > 2 ? ` (${secs}s)` : ''}`);
   return okStep;
 };
 
@@ -232,8 +261,12 @@ if (PART === 'all' || PART === 'live') {
 }
 
 const red = results.filter((x) => !x.ok);
+const flakes = results.filter((x) => x.flaky);
 console.log(`\n${'─'.repeat(54)}`);
-console.log(`سبز: ${results.length - red.length}   قرمز: ${red.length}`);
+console.log(`سبز: ${results.length - red.length}   قرمز: ${red.length}   فلیک: ${flakes.length}`);
+if (flakes.length) {
+  console.log(`⚠ در تلاشِ دوم سبز شدند — اگر تکرار شد، خودِ سوییت باید مقاوم شود:\n${flakes.map((x) => `  [${x.idx}] ${x.name}`).join('\n')}`);
+}
 if (red.length) {
   console.log(`قرمزها:\n${red.map((x) => `  [${x.idx}] ${x.name}`).join('\n')}`);
   console.log(`لاگِ کاملِ هر گامِ افتاده: ${LOG_DIR}`);
