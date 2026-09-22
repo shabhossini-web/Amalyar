@@ -15,7 +15,7 @@ import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { FormsService } from './forms.service';
-import { BUILTIN_VISIT_KEYS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, VISIT_CATALOG_KEYS } from './form-presets';
 import { syncLinkDocuments } from './link-documents';
 import { setVisitNote, VISIT_NOTE_KINDS } from './clinical-note';
 import { OP_LABELS } from './labels';
@@ -1430,8 +1430,17 @@ function pickBuiltin(dto: any): Record<string, any> {
      تا دیروز نسخهٔ دستیِ همان فهرست این‌جا بود و مو به مو یکی بود — یعنی
      بار سوم که کسی کلیدی اضافه می‌کرد، این یکی از قلم می‌افتاد و ستارهٔ
      همان فیلد در **ثبتِ** مراجعه بی‌اثر می‌شد (در ویرایش نه، چون آن‌جا کلِ
-     `dto` اسپرد می‌شود) — یک ناهم‌خوانیِ بی‌صدا بینِ دو مسیر. */
-  for (const k of BUILTIN_VISIT_KEYS) {
+     `dto` اسپرد می‌شود) — یک ناهم‌خوانیِ بی‌صدا بینِ دو مسیر.
+
+     ⚠️ **و `VISIT_CATALOG_KEYS` هم، چون آن دو یکی نیستند.** `BUILTIN_VISIT_KEYS`
+     یعنی «کدام کلید به ستون می‌نشیند» و کاتالوگ یعنی «کدام فیلد در فرم‌ساز
+     ستاره می‌گیرد». تنها اختلافشان `opReport` است — که ستون نیست و به
+     `ClinicalNote` می‌رود — ولی همان یکی یک باگِ سخت می‌ساخت: اگر مدیر
+     «شرحِ عمل» را **اجباری** می‌کرد، مقدارش هیچ‌وقت وارد `values` نمی‌شد و
+     ثبتِ مراجعه **برای همیشه** ۴۰۰ می‌گرفت («شرحِ عمل را کامل کنید») هر چقدر
+     هم که کاربر می‌نوشت. ستاره‌ای که فیلد را برای ابد قفل کند از نبودنِ
+     ستاره بدتر است. */
+  for (const k of [...BUILTIN_VISIT_KEYS, ...VISIT_CATALOG_KEYS]) {
     if (k in dto) out[k] = dto[k];
   }
   return out;

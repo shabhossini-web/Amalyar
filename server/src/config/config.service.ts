@@ -1,5 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { APPT_LABELS, NOTE_KIND_LABELS, OP_LABELS } from '../patients/labels';
+import {
+  APPT_LABELS, NOTE_KIND_LABELS, OP_LABELS,
+  ORDER_LABELS, ORDER_KIND_LABELS, REMINDER_LABELS, REMINDER_KIND_LABELS, INTAKE_LABELS,
+} from '../patients/labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
@@ -78,6 +81,12 @@ export class ConfigService {
         visit: Object.entries(OP_LABELS).map(([key, label]) => ({ key, label })),
         appointment: Object.entries(APPT_LABELS).map(([key, label]) => ({ key, label })),
         note: Object.entries(NOTE_KIND_LABELS).map(([key, label]) => ({ key, label })),
+        /* سه خانوادهٔ دیگر که هر کدام سه تا چهار کپیِ کلاینتی داشتند. */
+        order: Object.entries(ORDER_LABELS).map(([key, label]) => ({ key, label })),
+        orderKind: Object.entries(ORDER_KIND_LABELS).map(([key, label]) => ({ key, label })),
+        reminder: Object.entries(REMINDER_LABELS).map(([key, label]) => ({ key, label })),
+        reminderKind: Object.entries(REMINDER_KIND_LABELS).map(([key, label]) => ({ key, label })),
+        intake: Object.entries(INTAKE_LABELS).map(([key, label]) => ({ key, label })),
       },
       cancelReasons: Object.entries(CANCEL_REASONS).map(([key, r]) => ({
         key,

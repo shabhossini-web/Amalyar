@@ -6,6 +6,7 @@ import { WorkService } from '../work/work.service';
 import { summarize } from './billing.service';
 import { colorForKey } from './forms.service';
 import { APPT_LABELS } from './appointments.service';
+import { ORDER_LABELS, REMINDER_LABELS, OP_LABELS } from './labels';
 import { canAccess } from '../auth/access-check';
 import { todayRangeUtc } from '../common/clinic-day';
 
@@ -33,26 +34,14 @@ const ORDER_KINDS = [
   { key: 'referral', fa: 'ارجاع' },
 ];
 
-const ORDER_STATUS_FA: Record<string, string> = {
-  draft: 'پیش‌نویس',
-  sent: 'فرستاده شد — منتظرِ نتیجه',
-  answered: 'نتیجه آمد — بررسی نشده',
-  in_review: 'در حالِ بررسی',
-  reviewed: 'بررسی شد',
-  needs_action: 'نتیجه ناقص — دوباره لازم است',
-};
-
-/** وضعیتِ یادآوری — کلیدِ خامِ `failed`/`cancelled` روی صفحهٔ فارسی نمی‌نشیند. */
-const REMINDER_STATUS_FA: Record<string, string> = {
-  pending: 'در صف', sending: 'در حالِ ارسال', sent: 'فرستاده شد', simulated: 'آزمایشی — فرستاده نشد',
-  failed: 'ناموفق', uncertain: 'نتیجه نامعلوم', cancelled: 'لغو شد',
-};
-
-const OP_STATUS_FA: Record<string, string> = {
-  pending: 'در انتظار',
-  done: 'انجام شد',
-  cancelled: 'لغو شد',
-};
+/* ⚠️ چهار نگاشت این‌جا بودند و هر چهار کپیِ دوم بودند — یکی‌شان
+   (`OP_STATUS_FA.cancelled = 'لغو شد'`) حتی با `OP_LABELS.cancelled = 'لغو'`ِ
+   خودِ سرور نمی‌خواند، یعنی یک عمل در `/visits/:id` «لغو» بود و در
+   `/patients/:id/live` «لغو شد». نگهبانِ «یک وضعیت، یک برچسب» فقط کلاینت را
+   می‌گشت، پس این یکی را ندید. خانه‌شان `labels.ts` است. */
+const ORDER_STATUS_FA = ORDER_LABELS;
+const REMINDER_STATUS_FA = REMINDER_LABELS;
+const OP_STATUS_FA = OP_LABELS;
 
 const DOC_CATEGORY_FA: Record<string, string> = {
   lab: 'آزمایش', imaging: 'تصویربرداری', report: 'گزارش', consent: 'رضایت‌نامه',
@@ -69,6 +58,8 @@ type Step = {
   /** فقط گامِ «مراجعه»: نوعِ آخرین دوره (surgery/clinic/…) تا کلاینت «عمل جراحی»
       و «ویزیت» را از هم جدا بنویسد — نه واژهٔ حوزه برای هر دو (گزارشِ مالک). */
   kind?: string | null;
+  /** نامِ همان نوع، **به زبانِ خودِ شرکت** (عنوانِ فرمش). */
+  kindFa?: string | null;
 };
 
 type TimelineItem = {
@@ -85,9 +76,11 @@ type TimelineItem = {
   refType: string | null;
   refId: number | null;
   color: string | null;
-  /** فقط ردیفِ مراجعه: نوع و کد جدا می‌آیند تا برچسبِ نوع (عمل جراحی/ویزیت) سمتِ
-      کلاینت ساخته شود و `title` (عنوانِ فرم + کد) برای سازگاری بماند. */
+  /** فقط ردیفِ مراجعه: نوع، **نامِ فارسیِ نوع** و کد جدا می‌آیند تا کلاینت کد را
+      `dir="ltr"` بگذارد و نامِ نوع را از سرور بگیرد، نه از نگاشتِ هاردکدِ خودش.
+      `title` (نامِ نوع + کد) برای سازگاری می‌ماند. */
   kind?: string | null;
+  kindFa?: string | null;
   code?: string | null;
 };
 
@@ -287,8 +280,15 @@ export class LiveService {
   private stage(x: any): { key: string | null; title: string; detail: string | null; steps: Step[] } {
     const { patient, visits, cycle, appointments, upcoming, orders, openOrders, billing, kindTitle, today, ordersVisible, apptVisible } = x;
     const steps: Step[] = [];
+    /* ⚠️ `kindFa` هم می‌رود، نه فقط `kind`. تا دیروز کلاینت از روی `kind` و یک
+       نگاشتِ **هاردکد** (`visit-kinds.js`) برچسب می‌ساخت — یعنی شرکتی که فرمش
+       را «فرمِ عمل» نامیده بود، در نوارِ مرحله «عمل جراحی» می‌دید و در خطِ زمانِ
+       همان صفحه «فرمِ عمل». نامی که مشتری گذاشته باید برنده باشد (قانونِ ۱۵). */
     const add = (key: string, title: string, state: Step['state'], detail: string | null, at: Date | null = null, kind: string | null = null) =>
-      steps.push({ key, title, state, detail, at, ...(kind ? { kind } : {}) });
+      steps.push({
+        key, title, state, detail, at,
+        ...(kind ? { kind, kindFa: kindTitle[kind] ?? null } : {}),
+      });
 
     add('intake', 'ثبت‌نام', 'done', 'پرونده ساخته شد', patient.createdAt);
 
@@ -375,7 +375,7 @@ export class LiveService {
    * می‌گوید «همین بود» در حالی که نبود.
    */
   private timeline(x: any): { items: TimelineItem[]; truncated: boolean; total: number } {
-    const { patient, visits, appointments, orders, documents, notes, reminders, kindColor, vLabel, capped } = x;
+    const { patient, visits, appointments, orders, documents, notes, reminders, kindTitle, kindColor, vLabel, capped } = x;
     const items: TimelineItem[] = [];
 
     for (const v of visits) {
@@ -385,7 +385,10 @@ export class LiveService {
         detail: [v.surgeonName, v.hospitalName].filter(Boolean).join(' · ') || null,
         state: v.opStatus, stateFa: OP_STATUS_FA[v.opStatus] ?? v.opStatus,
         visitId: v.id, refType: 'visit', refId: v.id, color: kindColor[v.kind ?? ''] ?? null,
-        kind: v.kind ?? null, code: `${patient.code}-V${v.seq}`,
+        /* `title` خودش `«نامِ نوع» + کد` است؛ `kindFa` همان را **جدا** می‌دهد تا
+           کلاینت بتواند کد را `dir="ltr"` بگذارد (قانونِ ۹) بی‌آنکه مجبور شود
+           نامِ نوع را از نگاشتِ هاردکدِ خودش بسازد. */
+        kind: v.kind ?? null, kindFa: kindTitle?.[v.kind ?? ''] ?? null, code: `${patient.code}-V${v.seq}`,
       });
     }
     for (const a of appointments) {

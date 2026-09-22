@@ -42,7 +42,10 @@ export class FrontDeskService {
   }
 
   async day(date: string) {
-    const rows = await this.appts.day(date);
+    /* ⚠️ `todayIso` داده می‌شود چون این **تختهٔ یک روز** است: ردیفِ دیروز
+       دکمهٔ شروع نمی‌گیرد. تقویم و پروندهٔ بیمار این قید را ندارند — آن‌جا
+       کاربر یک نوبتِ مشخص را انتخاب کرده، نه یک ردیف از تختهٔ امروز. */
+    const rows = await this.appts.day(date, FrontDeskService.todayIso());
     const capped = rows.length > MAX_ROWS;
     const shown = capped ? rows.slice(0, MAX_ROWS) : rows;
     const [billing, debt] = await Promise.all([this.billingFor(shown), this.debtFor(shown)]);
@@ -190,7 +193,10 @@ export class FrontDeskService {
       },
     });
     if (!row) throw new NotFoundException('نوبت پیدا نشد');
-    return this.appts.view(row);
+    /* همان قیدِ تخته: پاپ‌آپ از همین در وارد می‌شود (`/frontdesk/.../start`)،
+       پس دکمه‌اش باید دقیقاً همان چیزی را بگوید که آن در می‌پذیرد — وگرنه
+       دکمه‌ای می‌سازیم که با زدنش ۴۰۰ می‌دهد. */
+    return this.appts.view(row, FrontDeskService.todayIso());
   }
 
   /**
@@ -221,7 +227,7 @@ export class FrontDeskService {
        که `canStart` روی کارت‌ها را می‌سازد و `startVisit` هم با آن قفل است.
        نسخهٔ قبلی همین سه چک را دستی داشت و درست هم بود — ولی وقتی تقویم
        قاعدهٔ خودش را نوشت، «درست»بودنِ این یکی هیچ کمکی نکرد. */
-    const block = apptStartBlock(row);
+    const block = apptStartBlock(row, FrontDeskService.todayIso());
     if (block) throw new BadRequestException(block);
     if (row.status === 'confirmed') await this.appts.setStatus(id, 'arrived', user);
     const result = await this.appts.startVisit(id, user);

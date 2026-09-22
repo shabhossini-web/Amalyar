@@ -44,6 +44,12 @@ for (const [group, keys] of [
   ['visit', ['pending', 'done', 'cancelled']],
   ['appointment', ['held', 'confirmed', 'arrived', 'done', 'noshow', 'cancelled']],
   ['note', ['history', 'visit', 'op', 'progress', 'discharge', 'consult']],
+  /* سه خانوادهٔ بعدی هر کدام سه تا چهار کپیِ کلاینتی داشتند. */
+  ['order', ['draft', 'sent', 'answered', 'in_review', 'reviewed', 'needs_action']],
+  ['orderKind', ['lab', 'imaging', 'consult', 'referral']],
+  ['reminder', ['pending', 'sending', 'sent', 'simulated', 'failed', 'uncertain', 'cancelled']],
+  ['reminderKind', ['next_visit', 'surgery', 'appointment', 'pre_op_care', 'post_op_care', 'follow_up', 'notice', 'dispatch']],
+  ['intake', ['pending_fill', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'expired']],
 ]) {
   const rows = st[group] ?? [];
   const have = rows.map((r) => r.key);
@@ -133,6 +139,36 @@ ok(note?.kindFa === 'خلاصهٔ ترخیص', `سندِ ترخیص برچسب �
 const tpl = await get('/note-templates');
 ok(Array.isArray(tpl) && (tpl.length === 0 || tpl.every((r) => !!r.kindFa)),
   'قالب‌های شرح هم برچسبِ نوع دارند');
+
+console.log('\n۵) کپیِ دومِ **سرور** هم شمرده می‌شود');
+/* ⚠️ `OP_STATUS_FA` در `live.service` یک نگاشتِ دومِ سروری بود و با
+   `OP_LABELS` نمی‌خواند: `cancelled` آن‌جا «لغو شد» بود و این‌جا «لغو». یعنی
+   همان عمل در `/visits/:id` و در `/patients/:id/live` دو اسم داشت — و
+   نگهبانِ ایستا نمی‌دیدش چون فقط `src` را می‌گشت. */
+const liveSeen = async () => {
+  const live = await get(`/patients/${visit.patientId}/live`);
+  const one = await get(`/visits/${visit.id}`);
+  const row = (live?.timeline?.items ?? []).find((i) => i.type === 'visit' && i.refId === visit.id);
+  return { live: row?.stateFa ?? null, card: one?.opStatusFa ?? null, kindFa: row?.kindFa ?? null };
+};
+const seenLive = await liveSeen();
+ok(seenLive.live != null && seenLive.live === seenLive.card,
+  `⚠️ خطِ زمانِ پرونده و کارتِ مراجعه یک برچسب می‌دهند («${seenLive.card}»)`, JSON.stringify(seenLive));
+
+console.log('\n۶) نامِ نوعِ مراجعه هم از سرور می‌آید، نه از نگاشتِ هاردکدِ کلاینت');
+/* ⚠️ `visit-kinds.js` خودش نوشته «پشتیبان است نه منبعِ حقیقت»، ولی کلاینت
+   برای نوع‌های هسته‌ای اول همان را می‌دید — پس شرکتی که فرمش را «فرمِ عمل»
+   نامیده بود، در یک بخشِ پرونده «عمل جراحی» می‌دید و در بخشِ دیگر «فرمِ عمل». */
+const recAll = await get(`/patients/${visit.patientId}/record`);
+const recRow = (recAll?.visits ?? []).find((v) => v.id === visit.id);
+ok(seenLive.kindFa != null && recRow?.kindTitle != null && seenLive.kindFa === recRow.kindTitle,
+  `خطِ زمان و کارتِ پرونده هر دو نامِ فرمِ همین شرکت را می‌دهند («${seenLive.kindFa}»)`,
+  JSON.stringify({ timeline: seenLive.kindFa, record: recRow?.kindTitle }));
+const stage = (await get(`/patients/${visit.patientId}/live`))?.stage;
+const vStep = (stage?.steps ?? []).find((x) => x.key === 'visit');
+ok(vStep?.kind == null || vStep?.kindFa === recRow?.kindTitle,
+  'نوارِ «الان کجاییم» هم همان نام را می‌گیرد، نه «عمل جراحی»ِ هاردکد',
+  JSON.stringify({ step: vStep?.kindFa, record: recRow?.kindTitle }));
 
 console.log('\n' + '─'.repeat(50));
 console.log(`قبول: ${pass}   رد: ${fail}`);

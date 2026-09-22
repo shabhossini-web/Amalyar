@@ -60,6 +60,81 @@ export const NOTE_KIND_LABELS: Record<string, string> = {
   consult: 'مشاوره',
 };
 
+/**
+ * وضعیتِ سفارشِ بالینی (`ClinicalOrder.status`).
+ *
+ * ⚠️ چهار نسخه داشت و هر چهار فرق می‌کردند: `live.service` («فرستاده شد —
+ * منتظرِ نتیجه»)، `OrderSheet` (کپیِ همان)، `VisitForm` («منتظرِ پاسخ») و
+ * `SurgeonPortal` («نتیجه آمده»). یعنی یک آزمایش در شیتِ سفارش «نتیجه آمد —
+ * بررسی نشده» بود، در فرمِ مراجعه «پاسخ آمده» و در میزِ پزشک «نتیجه آمده».
+ */
+export const ORDER_LABELS: Record<string, string> = {
+  draft: 'پیش‌نویس',
+  sent: 'فرستاده شد — منتظرِ نتیجه',
+  answered: 'نتیجه آمد — بررسی نشده',
+  in_review: 'در حالِ بررسی',
+  reviewed: 'بررسی شد',
+  needs_action: 'نتیجه ناقص — دوباره لازم است',
+};
+
+/** نوعِ سفارش — همان کلیدهای `refType` در کارها. */
+export const ORDER_KIND_LABELS: Record<string, string> = {
+  lab: 'آزمایش',
+  imaging: 'تصویربرداری',
+  consult: 'مشاوره',
+  referral: 'ارجاع',
+};
+
+/**
+ * وضعیتِ یادآوری.
+ *
+ * ⚠️ سه نسخه داشت و **هر هفت کلید** بینشان فرق می‌کرد: دفترِ یادآوری‌ها
+ * «ارسال ثبت شد / ارسال ناموفق / نتیجه ارسال نامشخص» و پاپ‌آپ و سرور
+ * «فرستاده شد / ناموفق / نتیجه نامعلوم». و نسخهٔ دفتر `cancelled` را اصلاً
+ * نداشت، یعنی یادآوریِ لغوشده در همان صفحه «وضعیتِ نامشخص» می‌شد.
+ *
+ * واژه‌های دفتر برداشته شدند چون **دقیق‌ترند**: «ارسال ثبت شد» یعنی ما ثبتش
+ * کردیم، نه اینکه به گوشی رسید — رسیدن فیلدِ جداگانه‌ای است.
+ */
+export const REMINDER_LABELS: Record<string, string> = {
+  pending: 'در صف',
+  sending: 'در حالِ ارسال',
+  sent: 'ارسال ثبت شد',
+  simulated: 'آزمایشی — ارسال نشده',
+  failed: 'ارسالِ ناموفق',
+  uncertain: 'نتیجهٔ ارسال نامشخص',
+  cancelled: 'لغو شد',
+};
+
+/** نوعِ یادآوری (`Reminder.kind`). */
+export const REMINDER_KIND_LABELS: Record<string, string> = {
+  next_visit: 'ویزیتِ بعدی',
+  surgery: 'عملِ پیشِ‌رو',
+  appointment: 'نوبت',
+  pre_op_care: 'مراقبتِ قبل از عمل',
+  post_op_care: 'مراقبتِ بعد از عمل',
+  follow_up: 'فرمِ پیگیری',
+  notice: 'اطلاع‌رسانی',
+  dispatch: 'ابلاغِ برنامهٔ روز',
+};
+
+/**
+ * وضعیتِ ثبت‌نام (`FormToken.status`).
+ *
+ * ⚠️ سه نسخه داشت و هر سه فرق می‌کردند: سرور «در انتظارِ تکمیل»، تبِ ثبت‌نام
+ * «ناتمام»، و CRM «ناتمام» ولی با «منقضی» به‌جای «رها‌شده». یعنی یک ثبت‌نامِ
+ * رهاشده در یک صفحه «رها‌شده» بود و در صفحهٔ دیگر «منقضی» — دو واژه برای یک
+ * ردیف، بدونِ هیچ تفاوتی در داده.
+ */
+export const INTAKE_LABELS: Record<string, string> = {
+  pending_fill: 'در انتظارِ تکمیل',
+  pending_payment: 'در انتظارِ فیش',
+  pending_approval: 'در انتظارِ تأیید',
+  approved: 'تأییدشده',
+  rejected: 'رد‌شده',
+  expired: 'رها‌شده',
+};
+
 /** برچسب، وگرنه خودِ کلید — نمایشِ کلیدِ خام از نمایشِ «نامشخص» صادقانه‌تر است. */
 export const faOf = (map: Record<string, string>, key: string | null | undefined) =>
   (key == null ? null : map[key] ?? key);

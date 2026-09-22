@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../config/settings.service';
 import { LEVEL } from '../common/levels';
 import { NOTE_KINDS } from '../patients/record.service';
+import { NOTE_KIND_LABELS } from '../patients/labels';
 import { ServiceCodesService } from '../patients/service-codes.service';
 import { ASSISTANT_GUIDE } from './assistant-knowledge';
 import { canAccess } from '../auth/access-check';
@@ -11,10 +12,10 @@ import { textSearchOr } from '../common/search';
 import { jalalizeDates } from '../common/jalali';
 import { faDateStr } from '../patients/summary.service';
 
-const KIND_FA: Record<string, string> = {
-  history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل',
-  progress: 'سیرِ بیماری', discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره',
-};
+/* ⚠️ کپیِ دومِ `NOTE_KIND_LABELS` بود — و کپی‌ها همیشه عقب می‌مانند: همین فایل
+   `NOTE_KINDS` را از `record.service` می‌گیرد ولی برچسبش را خودش می‌نوشت،
+   یعنی نوعِ تازه کلیدِ خام می‌شد. */
+const KIND_FA = NOTE_KIND_LABELS;
 
 type AiCfg = { baseUrl: string; apiKey: string; model: string; models: { chat: string; vision: string; stt: string; tts: string; image: string }; prompts: { note: string; template: string; assistant: string; voice: string } };
 type DraftDto = { patientId: number; visitId?: number; kind: string; text: string; mode?: string };

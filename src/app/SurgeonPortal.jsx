@@ -4,7 +4,7 @@ import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
-import { useConfig } from './config.jsx';
+import { useConfig, useStatusMap } from './config.jsx';
 import { HERO, useAllowedTools } from './tools.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
@@ -27,7 +27,8 @@ const faNum = (n) => String(n ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
    اسکرین‌شات مثلِ وصلهٔ زبانِ دیگر می‌زد. `faNum` روی `null` رشتهٔ خالی می‌دهد،
    پس سه‌راههٔ ساعت/شماره/خط‌تیره دست‌نخورده می‌مانَد. */
 const faTime = (t) => (t ? faNum(t) : null);
-const ORDER_STATE_FA = { answered: 'نتیجه آمده', in_review: 'در حالِ بررسی' };
+/* ⚠️ نگاشتِ سومِ وضعیتِ سفارش برداشته شد — «نتیجه آمده» این‌جا در برابرِ
+   «نتیجه آمد — بررسی نشده»ی شیتِ سفارش. از `/config.statuses.order` می‌آید. */
 
 /**
  * پرتالِ پزشکِ همکار — در نورومانیتورینگ/ایمپلنت «پرتال جراح» (مراجعه‌ها، دستورِ تیم،
@@ -135,6 +136,7 @@ function Row({ open, className = '', children, ...attrs }) {
  * بازِ خودش. هیچ عددی این‌جا حساب نمی‌شود؛ `GET /surgeon/today` و `GET /work` آماده می‌دهند.
  */
 function DoctorToday({ things, reloadRef, toast, access }) {
+  const orderFa = useStatusMap('order');
   const [data, setData] = useState(null);
   const [work, setWork] = useState(null);
   const [err, setErr] = useState('');
@@ -244,7 +246,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
                   <span className="sp-row-time">{faDate(o.updatedAt)}</span>
                   <span className="sp-row-name">{o.patient?.fullName} <span className="sp-kind">{o.kindFa}</span></span>
                   <span className="sp-row-sub">{access.open ? 'برای بررسی و ثبتِ تصمیم باز کنید' : 'منتظرِ بررسی'}</span>
-                  <span className="sp-row-tag hot">{ORDER_STATE_FA[o.status] ?? o.status}</span>
+                  <span className="sp-row-tag hot">{orderFa[o.status] ?? o.status}</span>
                 </Row>
               </li>
             ))}
@@ -265,6 +267,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
 
 /** «نتایجِ رسیده» — همهٔ نتیجه‌های بررسی‌نشدهٔ بیمارانِ پزشک، نه فقط امروز. */
 function ResultsPane({ things, reloadRef, access }) {
+  const orderFa = useStatusMap('order');
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const load = useCallback(() => { api('/surgeon/today').then((r) => { setRows(r.unreviewed ?? []); setErr(''); }).catch((e) => setErr(e.message)); }, []);
@@ -281,7 +284,7 @@ function ResultsPane({ things, reloadRef, access }) {
             <span className="sp-row-time">{faDate(o.updatedAt)}</span>
             <span className="sp-row-name">{o.patient?.fullName} <span className="sp-kind">{o.kindFa}</span></span>
             <span className="sp-row-sub">{o.patient?.code}</span>
-            <span className="sp-row-tag hot">{ORDER_STATE_FA[o.status] ?? o.status}</span>
+            <span className="sp-row-tag hot">{orderFa[o.status] ?? o.status}</span>
           </Row>
         </li>
       ))}

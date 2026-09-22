@@ -1,6 +1,6 @@
 import { QuickDefinitionEditor } from './Definitions.jsx';
 import { useAuth } from './auth.jsx';
-import { useConfig } from './config.jsx';
+import { useConfig, useStatusMap } from './config.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import DynForm from '../ui/DynForm.jsx';
 import { useCallback, useEffect, useState } from 'react';
@@ -24,13 +24,11 @@ const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const faDigits = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 /* ⚠️ مبلغ‌ها تومان‌اند؛ نسخهٔ اول تقسیم بر ۱۰ می‌کرد و عددِ یک‌دهم نشان می‌داد. */
 
-const TABS = [
-  { key: 'pending_approval', label: 'در انتظارِ تأیید' },
-  { key: 'pending_payment', label: 'در انتظارِ فیش' },
-  { key: 'pending_fill', label: 'ناتمام' },
-  { key: 'approved', label: 'تأییدشده' },
-  { key: 'all', label: 'همه' },
-];
+/* ⚠️ عنوانِ تب‌ها هم از `/config.statuses.intake` می‌آید: نسخهٔ ثابتِ قبلی
+   `pending_fill` را «ناتمام» می‌گفت در حالی که سرور «در انتظارِ تکمیل»
+   می‌گوید — یعنی همان ردیف در تب و در کارتش دو نام داشت.
+   ترتیب این‌جا می‌ماند چون **ترتیبِ کارِ منشی** است، نه ترتیبِ کاتالوگ. */
+const TAB_ORDER = ['pending_approval', 'pending_payment', 'pending_fill', 'approved'];
 
 /**
  * صفِ ثبت‌نامِ بیماران.
@@ -41,6 +39,11 @@ const TABS = [
  * تأیید انتخابگرِ واقعی دارد، نه یک دکمهٔ «تأیید».
  */
 export default function IntakeAdmin() {
+  const intakeFa = useStatusMap('intake');
+  const TABS = [
+    ...TAB_ORDER.map((key) => ({ key, label: intakeFa[key] ?? key })),
+    { key: 'all', label: 'همه' },
+  ];
   const [tab, setTab] = useState('pending_approval');
   const [rows, setRows] = useState(null);
   const [links, setLinks] = useState([]);

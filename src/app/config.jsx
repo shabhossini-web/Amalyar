@@ -21,7 +21,7 @@ export function ConfigProvider({ children }) {
      می‌شوند و `cfg.statuses.note` روی `undefined` می‌ترکید. */
   const [config, setConfig] = useState({
     vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [],
-    statuses: { visit: [], appointment: [], note: [] },
+    statuses: { visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [] },
   });
   /**
    * خطا نگه داشته می‌شود، بلعیده نمی‌شود.
@@ -83,7 +83,7 @@ export function ConfigProvider({ children }) {
 export function useConfig() {
   return useContext(Ctx) ?? {
     vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [], error: null,
-    statuses: { visit: [], appointment: [], note: [] },
+    statuses: { visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [] },
     t: termsFor(DEFAULT_VERTICAL), reload: () => {},
   };
 }
@@ -99,6 +99,18 @@ export function useConfig() {
 export function useStatusList(kind) {
   const rows = useConfig().statuses?.[kind] ?? [];
   return rows;
+}
+
+/**
+ * نگاشتِ `{کلید: برچسب}`ِ یک خانوادهٔ وضعیت — برای ردیف‌هایی که برچسبشان را
+ * همراهِ خودشان نمی‌آورند (مثلِ سفارشی که از `/orders` خام می‌آید).
+ *
+ * ⚠️ `useMemo` روی خودِ آرایه: `useConfig()` با هر رندر آبجکتِ تازه نمی‌سازد،
+ * پس مرجعِ `rows` پایدار است و نگاشت یک‌بار ساخته می‌شود.
+ */
+export function useStatusMap(kind) {
+  const rows = useStatusList(kind);
+  return useMemo(() => Object.fromEntries(rows.map((r) => [r.key, r.label])), [rows]);
 }
 
 /** میان‌بر برای جایی که فقط واژه لازم است. */

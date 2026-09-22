@@ -5,7 +5,7 @@ import { AnimatePresence } from 'framer-motion';
 import { api, apiStream, apiUpload } from '../lib/api.js';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
-import { KINDS, kindOf } from './visit-kinds.js';
+import { kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
@@ -53,7 +53,17 @@ const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
  * برای عمل هم «ویزیت» نوشته‌اند — عمل جراحی اسمش عمل جراحی است. عنوانِ فرم فقط
  * برای نوعِ سفارشی‌ای که در `KINDS` نیست، و روی برچسب به‌صورتِ tooltip می‌ماند.
  */
-const kindLabel = (k, defs) => (KINDS[k] ? kindOf(k).label : (defs?.[k] ?? k ?? '—'));
+/**
+ * نامِ نوعِ مراجعه.
+ *
+ * ⚠️ ترتیب عمداً برعکسِ نسخهٔ قبلی است: **اول تعریفِ شرکت، بعد پشتیبان.**
+ * نسخهٔ قبلی برای نوع‌های هسته‌ای (`surgery`/`clinic`) اول `KINDS` را می‌دید و
+ * نامی را که شرکت روی فرمش گذاشته بود دور می‌انداخت — پس همان مراجعه در یک
+ * بخشِ همین صفحه «عمل جراحی» بود و در بخشِ دیگر «فرمِ عمل» (آن یکی
+ * `kindTitle`ِ ردیف را می‌خواند). `visit-kinds.js` خودش می‌گوید «پشتیبان است
+ * نه منبعِ حقیقت»؛ کد خلافش عمل می‌کرد.
+ */
+const kindLabel = (k, defs) => defs?.[k] || kindOf(k).label;
 
 /** مقصدِ یک ردیفِ خطِ زمان — پاپ‌آپِ **خودش**، نه فرمِ کلی (بازخوردِ مالک). */
 const tlTarget = (it) => {
@@ -278,7 +288,7 @@ function VisitsTab({ rec, onErr, onOpen }) {
               <b>
                 <span dir="ltr">{v.code}</span>
                 <i className="rc-kind" style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined} title={v.kindTitle || undefined}>
-                  {kindLabel(v.kind, rec.kindTitles)}
+                  {v.kindTitle || kindLabel(v.kind, rec.kindTitles)}
                 </i>
                 {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
               </b>
@@ -986,8 +996,14 @@ const TL_META = {
  * یک واقعیت است؛ اگر گام را برداریم، نوار برای هر بیمار شکلِ دیگری دارد و
  * دیگر نمی‌شود با یک نگاه فهمید کجای مسیریم.
  */
-/** عنوانِ گامِ «مراجعه» از نوعِ دوره (عمل جراحی / ویزیت)؛ بقیهٔ گام‌ها واژهٔ حوزه. */
-const stepTitle = (s, t) => (s.key === 'visit' && s.kind && KINDS[s.kind] ? kindOf(s.kind).label : withTerm(s.title, t));
+/**
+ * عنوانِ گامِ «مراجعه» از نوعِ دوره؛ بقیهٔ گام‌ها واژهٔ حوزه.
+ *
+ * ⚠️ نامِ نوع از **سرور** می‌آید (`kindFa` = عنوانِ فرمِ همان شرکت)، نه از
+ * `KINDS`ِ هاردکد. نسخهٔ قبلی برای هر نوعِ هسته‌ای «عمل جراحی» می‌نوشت، حتی
+ * وقتی شرکت فرمش را چیزِ دیگری نامیده بود.
+ */
+const stepTitle = (s, t) => (s.key === 'visit' && s.kindFa ? s.kindFa : withTerm(s.title, t));
 
 function StageBar({ stage, t }) {
   if (!stage?.steps?.length) return null;
@@ -1126,8 +1142,8 @@ function Timeline({ live, onGo, t, onOpen }) {
                     واگرایی می‌آورد — همان چیزی که این بسته جمعش کرد. */}
                 <b>
                   {it.type === 'note' ? (noteFa[it.title] ?? it.title)
-                    : it.type === 'visit' && it.kind && KINDS[it.kind]
-                      ? <>{kindOf(it.kind).label} <span dir="ltr">{it.code ?? ''}</span></>
+                    : it.type === 'visit' && it.kindFa
+                      ? <>{it.kindFa} <span dir="ltr">{it.code ?? ''}</span></>
                       : withTerm(it.title, t)}
                 </b>
                 {it.detail && <i>{faNum(it.detail)}</i>}

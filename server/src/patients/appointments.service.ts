@@ -66,9 +66,14 @@ export function apptLane(status: string, visitId: number | null): string {
  *   از این شرط‌ها را نداشت و مراجعه‌ای واقعی می‌ساخت.
  * - پاپ‌آپِ نوبت (پروندهٔ بیمار و میزِ پزشک) اصلاً دکمه‌ای نداشت.
  *
- * ⚠️ شرطِ «امروز» تزئینی نیست: `startVisit` وقتی نوبت `forVisitId` دارد
- * `opDate` را با **امروز** بازنویسی می‌کند، پس شروعِ نوبتِ فردا یعنی
- * جابه‌جاشدنِ بی‌صدای تاریخِ یک مراجعهٔ برنامه‌ریزی‌شده.
+ * ⚠️ **قاعدهٔ «فقط امروز» مالِ همه نیست — مالِ تختهٔ میزِ پذیرش است**، و
+ * فقط وقتی اعمال می‌شود که فراخوان `todayIso` بدهد. نسخهٔ اولِ همین تابع
+ * بی‌قیدوشرط اعمالش کرد و یک رفتارِ **عمدی** را شکست: نوبتی که برای مراجعهٔ
+ * هفتهٔ بعد گرفته شده و بیمار زودتر آمده، با «شروع» تاریخِ مراجعه‌اش امروز
+ * می‌شود — یعنی «تاریخِ حضورِ واقعی»، نه یک جابه‌جاییِ بی‌صدا. سنجهٔ
+ * `w1-5-appointment-visit-link` صریحاً همین را تضمین می‌کند (فیکسچرِ +۷ روز).
+ * چیزی که واقعاً اشتباه بود، خاموش‌نبودنِ دکمه برای وضعیتِ **نامجاز** بود
+ * (`held`ِ پول‌نداده، «نیامد»، لغوشده) — و آن این‌جا مانده.
  *
  * ⚠️ ترتیبِ چک‌ها عمدی است: **اول وضعیت، بعد تاریخ.** نوبتِ لغوشدهٔ دیروز
  * باید بگوید «لغوشده شروع نمی‌شود»، نه «فقط امروز» — علتِ اولی درست‌کردنی
@@ -76,7 +81,7 @@ export function apptLane(status: string, visitId: number | null): string {
  */
 export function apptStartBlock(
   a: { status: string; date: Date; patientId: number | null },
-  todayIso: string = clinicTodayIso(),
+  todayIso?: string,
 ): string | null {
   /* `held → confirmed` یعنی «پرداخت دیده شد» — ادعایی که باید کلیکِ عمدی
      باشد، نه اثرِ جانبیِ «شروع». */
@@ -84,10 +89,12 @@ export function apptStartBlock(
   if (a.status !== 'confirmed' && a.status !== 'arrived') {
     return `نوبتِ «${APPT_FA_MAP[a.status] ?? a.status}» شروع نمی‌شود`;
   }
-  if (a.date.toISOString().slice(0, 10) !== todayIso) {
-    return 'فقط نوبتِ همین امروز شروع می‌شود — وگرنه تاریخِ مراجعه با امروز بازنویسی می‌شد';
-  }
   if (a.patientId == null) return 'این نوبت هنوز به پرونده‌ای وصل نیست — اول ثبت‌نامش تأیید شود';
+  if (todayIso && a.date.toISOString().slice(0, 10) !== todayIso) {
+    /* تختهٔ میزِ پذیرش تختهٔ **یک روز** است؛ کلیک روی ردیفِ دیروز آن‌جا
+       اشتباه است، نه تصمیم. */
+    return 'از میزِ پذیرش فقط نوبتِ همین امروز شروع می‌شود';
+  }
   return null;
 }
 
@@ -116,10 +123,14 @@ export class AppointmentsService {
     private events: EventsService,
   ) {}
 
-  view(a: any) {
+  /**
+   * `todayIso` اختیاری است و فقط میزِ پذیرش می‌دهدش — تنها جایی که «امروز»
+   * بخشی از قاعدهٔ شروع است (بندِ `apptStartBlock`).
+   */
+  view(a: any, todayIso?: string) {
     /* یک‌بار، نه دوبار: `view` روی تختهٔ ۲۰۰ ردیفی برای هر ردیف صدا زده
        می‌شود و هر فراخوانیِ اضافه یک فرمترِ `Intl` تازه می‌ساخت. */
-    const startHint = apptStartBlock(a);
+    const startHint = apptStartBlock(a, todayIso);
     return {
       id: a.id,
       date: a.date.toISOString().slice(0, 10),
@@ -161,7 +172,7 @@ export class AppointmentsService {
   } as const;
 
   /** نوبت‌های یک روز — مرتب به ساعت، بعد شمارهٔ صف. */
-  async day(date: string) {
+  async day(date: string, todayIso?: string) {
     const d = new Date(`${date}T00:00:00.000Z`);
     if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخ نامعتبر است');
     const rows = await this.prisma.appointment.findMany({
@@ -169,7 +180,7 @@ export class AppointmentsService {
       orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
       include: AppointmentsService.INCLUDE,
     });
-    return rows.map((r) => this.view(r));
+    return rows.map((r) => this.view(r, todayIso));
   }
 
   /**

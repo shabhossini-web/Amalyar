@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
-import { useTerms } from './config.jsx';
+import { useTerms, useStatusMap } from './config.jsx';
 import VisitForm from './VisitForm.jsx';
 import OrderSheet from './OrderSheet.jsx';
 import { useVisitDefs } from './visit-defs.js';
@@ -139,14 +139,10 @@ export function ThingPopups({ things, onVisitSaved }) {
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
 /* ══════════════ یادآوری ══════════════ */
-const REM_KIND_FA = {
-  next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ رو', pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل',
-  follow_up: 'فرمِ پیگیری', notice: 'اطلاعیه', dispatch: 'ابلاغِ کارشناس', appointment: 'نوبت',
-};
-const REM_STATUS_FA = {
-  pending: 'در صف', sending: 'در حالِ ارسال', sent: 'فرستاده شد', simulated: 'آزمایشی — فرستاده نشد',
-  failed: 'ناموفق', uncertain: 'نتیجه نامعلوم', cancelled: 'لغو شد',
-};
+/* ⚠️ دو نگاشتِ فارسیِ یادآوری برداشته شدند. کپیِ دومِ دفترِ یادآوری‌ها بودند
+   و **هر هفت کلید** فرق داشت («فرستاده شد» این‌جا، «ارسال ثبت شد» آن‌جا)؛
+   نوعش هم («عملِ پیشِ رو» در برابرِ «عملِ پیشِ‌رو») با یک نیم‌فاصله واگرا
+   شده بود. حالا هر دو از `/config.statuses.reminder{,Kind}` می‌آیند. */
 /* همان دو فهرستِ صفحهٔ یادآوری‌ها (W0.7): فرستاده‌شده نه دوباره می‌رود نه لغو می‌شود. */
 const REM_RETRYABLE = ['failed', 'uncertain', 'simulated'];
 const REM_CANCELLABLE = ['pending', 'uncertain', 'failed'];
@@ -157,6 +153,8 @@ const REM_CANCELLABLE = ['pending', 'uncertain', 'failed'];
  * نیامد (دسترسی)، ردیفِ خلاصهٔ خطِ زمان کافی است تا پاپ‌آپ خالی نماند.
  */
 function ReminderPop({ row, item, onClose, onActed, toast }) {
+  const remFa = useStatusMap('reminder');
+  const remKindFa = useStatusMap('reminderKind');
   const [busy, setBusy] = useState(false);
   const r = row ?? { id: item?.refId, status: item?.state, text: item?.detail, dueAt: item?.at, sentAt: null, kind: null, phone: null, error: null };
   const act = async (what) => {
@@ -172,12 +170,12 @@ function ReminderPop({ row, item, onClose, onActed, toast }) {
     <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-reminder" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label="یادآوری">
       <header>
         <Send width="15" height="15" />
-        <b>یادآوری{r.kind ? ` — ${REM_KIND_FA[r.kind] ?? r.kind}` : ''}</b>
+        <b>یادآوری{r.kind ? ` — ${remKindFa[r.kind] ?? r.kind}` : ''}</b>
         <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <p className="rc-pop-text">{r.text || '—'}</p>
       <dl>
-        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${r.status ?? 'none'}`}>{REM_STATUS_FA[r.status] ?? r.status ?? '—'}</em></dd>
+        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${r.status ?? 'none'}`}>{remFa[r.status] ?? r.status ?? '—'}</em></dd>
         {(r.sentAt || r.dueAt) && <><dt>{r.status === 'pending' ? 'موعد' : 'زمان'}</dt><dd>{faDate(r.sentAt ?? r.dueAt)}</dd></>}
         {r.phone && <><dt>گیرنده</dt><dd dir="ltr">{faNum(r.phone)}</dd></>}
         {r.error && <><dt>علت</dt><dd className="rc-pop-err">{r.error}</dd></>}
@@ -201,7 +199,7 @@ const APPT_CANCEL = { doctor: 'تعویقِ پزشک', patient: 'درخواست�
 /**
  * **پاپ‌آپِ یک نوبت** — جزئیات + همان دکمه‌هایی که میزِ پذیرش دارد.
  *
- * 🔴 دو باگِ واقعی که این نسخه برایشان بازنویسی شد:
+ * ⚠️ دو باگِ واقعی که این نسخه برایشان بازنویسی شد:
  *
  * ۱) **دکمه‌ها کپیِ کلاینتیِ ماشینِ وضعیت بودند** و با سرور یکی نبودند. بدتر
  *    از ناهماهنگی: `open = !['done','cancelled','noshow'].includes(st)` یعنی
