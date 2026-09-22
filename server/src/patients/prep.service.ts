@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { NOTE_KIND_LABELS } from './labels';
+import { NOTE_KIND_LABELS, ORDER_LABELS } from './labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere } from '../common/own-scope';
@@ -108,7 +108,9 @@ export class PrepService {
         orderBy: { updatedAt: 'desc' }, take: 5,
         select: { id: true, status: true, updatedAt: true, visitId: true },
       });
-      out.push(...rows.map((r: any) => ({ ...r, kind: k.key, kindFa: k.fa })));
+      /* برچسب همراهِ ردیف — کارتِ آماده‌سازی پیش از رسیدنِ `/config` رندر
+         می‌شود و نباید یک لحظه کلیدِ خام نشان بدهد. */
+      out.push(...rows.map((r: any) => ({ ...r, kind: k.key, kindFa: k.fa, statusFa: ORDER_LABELS[r.status] ?? r.status })));
     }
     /* «پاسخ آمده» قبل از «فرستاده شده»: آن یکی کاری است که همین حالا می‌شود کرد. */
     return out.sort((a, b) => (a.status === b.status ? 0 : a.status === 'answered' ? -1 : 1)).slice(0, 6);

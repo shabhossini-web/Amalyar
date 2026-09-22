@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate } from '../lib/jalali.js';
+import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { useConfig, useStatusMap } from './config.jsx';
@@ -13,6 +13,7 @@ import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
+import JDate from './JDate.jsx';
 import './surgeon-portal.css';
 import './launcher.css';
 import './dashboard.css';
@@ -141,12 +142,19 @@ function DoctorToday({ things, reloadRef, toast, access }) {
   const [work, setWork] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(0);
+  /* ⚠️ میزِ پزشک تنها میزی بود که **هیچ انتخابگرِ تاریخی نداشت**: پزشک
+     نمی‌توانست برنامهٔ فردا را ببیند. بازخوردِ مالک ۱۴۰۵/۰۶/۳۱ صریحاً
+     «تقویم‌ها … تو میزِ پزشک» را نام برد. */
+  const [jday, setJday] = useState(todayJStr);
+  const iso = jStrToIso(jday) ?? '';
+  /* نشانهٔ شلوغیِ روز — همان قراردادِ میزِ پذیرش و اتاقِ عمل. */
+  const loadMarks = useCallback((y, m) => api(`/surgeon/month?year=${y}&month=${m}`), []);
   const load = useCallback(() => {
-    api('/surgeon/today').then((r) => { setData(r); setErr(''); }).catch((e) => setErr(e.message));
+    api(`/surgeon/today${iso ? `?date=${iso}` : ''}`).then((r) => { setData(r); setErr(''); }).catch((e) => setErr(e.message));
     /* ⚠️ خطا را به «کارِ بازی ندارید» ترجمه نکن — آن جمله یک **ادعا**ست. اگر
        ماژولِ کارها برای این حساب بسته باشد (۴۰۳) یا شبکه بیفتد، باید همان را بگوید. */
     api('/work?scope=inbox&limit=20').then((r) => setWork(Array.isArray(r) ? r : [])).catch((e) => setWork(e?.status === 403 ? 'forbidden' : 'error'));
-  }, []);
+  }, [iso]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { reloadRef.current = load; }, [load, reloadRef]);
   useEffect(() => {
@@ -201,8 +209,18 @@ function DoctorToday({ things, reloadRef, toast, access }) {
         )}
       </ul>
       <section className="sp-sec" aria-labelledby="sp-day-h">
-        <h2 id="sp-day-h">برنامهٔ امروز</h2>
-        {(data.day ?? []).length === 0 ? <p className="sp-empty">امروز نوبت یا مراجعه‌ای به نامِ شما نیست.</p> : (
+        <div className="sp-day-head">
+          <h2 id="sp-day-h">{data.isToday === false ? `برنامهٔ ${faDate(data.date)}` : 'برنامهٔ امروز'}</h2>
+          <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
+          {data.isToday === false && (
+            <button type="button" className="sp-today" onClick={() => setJday(todayJStr())}>امروز</button>
+          )}
+        </div>
+        {(data.day ?? []).length === 0 ? (
+          <p className="sp-empty">
+            {data.isToday === false ? 'این روز نوبت یا مراجعه‌ای به نامِ شما نیست.' : 'امروز نوبت یا مراجعه‌ای به نامِ شما نیست.'}
+          </p>
+        ) : (
           <ul className="sp-rows">
             {data.day.map((r) => {
               /* ردیف بازکردنیِ **مراجعه** است اگر مراجعه دارد، وگرنه نوبت. */
@@ -246,7 +264,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
                   <span className="sp-row-time">{faDate(o.updatedAt)}</span>
                   <span className="sp-row-name">{o.patient?.fullName} <span className="sp-kind">{o.kindFa}</span></span>
                   <span className="sp-row-sub">{access.open ? 'برای بررسی و ثبتِ تصمیم باز کنید' : 'منتظرِ بررسی'}</span>
-                  <span className="sp-row-tag hot">{orderFa[o.status] ?? o.status}</span>
+                  <span className="sp-row-tag hot">{o.statusFa ?? orderFa[o.status] ?? o.status}</span>
                 </Row>
               </li>
             ))}
@@ -284,7 +302,7 @@ function ResultsPane({ things, reloadRef, access }) {
             <span className="sp-row-time">{faDate(o.updatedAt)}</span>
             <span className="sp-row-name">{o.patient?.fullName} <span className="sp-kind">{o.kindFa}</span></span>
             <span className="sp-row-sub">{o.patient?.code}</span>
-            <span className="sp-row-tag hot">{orderFa[o.status] ?? o.status}</span>
+            <span className="sp-row-tag hot">{o.statusFa ?? orderFa[o.status] ?? o.status}</span>
           </Row>
         </li>
       ))}

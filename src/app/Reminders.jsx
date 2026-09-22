@@ -39,9 +39,13 @@ const TABS = [
  * برای مدیری است که نمی‌خواهد منتظرِ چرخهٔ بعدی بماند.
  */
 export default function Reminders() {
+  /* ⚠️ **برچسب از خودِ ردیف** (`r.kindFa`/`r.statusFa`)، و کاتالوگ فقط
+     پشتیبان. نسخهٔ اولِ این تغییر فقط `/config` را می‌خواند و یک مسابقه
+     ساخت: صفحه پیش از رسیدنِ پیکربندی رندر می‌شود، پس هر ردیف یک لحظه
+     برچسبِ عامِ «یادآوری» می‌گرفت (و اگر `/config` نمی‌آمد، برای همیشه). */
   const kindMap = useStatusMap('reminderKind');
   const statusMap = useStatusMap('reminder');
-  const kindFa = (k) => kindMap[k] ?? 'یادآوری';
+  const kindFa = (r) => r?.kindFa ?? kindMap[r?.kind] ?? 'یادآوری';
   const statusFa = (st) => statusMap[st] ?? 'وضعیتِ نامشخص';
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
@@ -85,7 +89,7 @@ export default function Reminders() {
     try {
       const fresh = await api(`/reminders/${r.id}/${what}`, { method: 'POST' });
       setToast(what === 'retry'
-        ? (fresh?.status === 'sent' ? 'فرستاده شد' : `دوباره در صف نشست (${statusFa(fresh?.status)})`)
+        ? (fresh?.status === 'sent' ? 'فرستاده شد' : `دوباره در صف نشست (${fresh?.statusFa ?? statusFa(fresh?.status)})`)
         : 'لغو شد و از دفتر برداشته شد');
       await load();
     } catch (e) { setToast(e.message); } finally { setRowBusy(0); }
@@ -132,7 +136,7 @@ export default function Reminders() {
         {shown.map((r, i) => (
           <motion.article key={r.id} {...row(i)} className={`rm-row st-${r.status}`}>
             <div className="rm-row-head">
-              <b title={r.kind}>{kindFa(r.kind)}</b>
+              <b title={r.kind}>{kindFa(r)}</b>
               {r.patientName && <span>{r.patientName}</span>}
               {r.recipientName && <span>{r.recipientName}</span>}
               <span>{r.channel === 'chat' ? 'پیام‌رسان داخلی' : 'پیامک'}</span>
@@ -141,7 +145,7 @@ export default function Reminders() {
                 {r.status === 'pending' ? `موعد: ${faDate(r.dueAt)}` : faDate(r.sentAt ?? r.dueAt)}
                 {r.phone ? ` · ${String(r.phone).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}` : ''}
               </small>
-              <i className={`rm-tag s-${r.status}`} title={r.status}>{statusFa(r.status)}</i>
+              <i className={`rm-tag s-${r.status}`} title={r.status}>{r.statusFa ?? statusFa(r.status)}</i>
             </div>
             <p className="rm-text">{r.text}</p>
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}

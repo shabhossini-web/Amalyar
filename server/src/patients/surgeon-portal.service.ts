@@ -8,7 +8,9 @@ import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { summarize } from './billing.service';
 import { APPT_LABELS, OP_LABELS } from './labels';
-import { todayRangeUtc } from '../common/clinic-day';
+import { clinicTodayIso, dayRangeUtc } from '../common/clinic-day';
+import { monthDayCounts } from './month-summary';
+import { ORDER_LABELS } from './labels';
 
 
 
@@ -39,11 +41,39 @@ export class SurgeonPortalService {
    * او آمده و بررسی نشده (همهٔ روزها — نتیجهٔ نخوانده تاریخ نمی‌شناسد). کارهای بازِ
    * او را رابط از `GET /work?scope=inbox` می‌گیرد که خودش به نامِ کاربر است.
    */
-  async today(user: any) {
+  /**
+   * شمارشِ روزهای یک ماهِ شمسی — نشانهٔ تقویمِ انتخابِ تاریخِ همین میز.
+   *
+   * ⚠️ دامنه **همان `scope`ِ خودِ پزشک** است، نه کلِ شرکت: نشانهٔ روز نباید
+   * بگوید «فردا شلوغ است» وقتی هیچ‌کدام از آن مراجعه‌ها مالِ این پزشک نیست.
+   * و نوبت‌ها با همان قاعدهٔ `today()` دامنه می‌خورند (بیمارِ من)، وگرنه دو
+   * تعریفِ متفاوت از «نوبتِ من» می‌ساختیم.
+   */
+  async month(user: any, jy: number, jm: number) {
+    const scope = await this.scope(user);
+    const mine = (user?.level ?? 0) >= LEVEL.SUPER_ADMIN
+      ? {}
+      : { OR: [{ doctorId: user?.id ?? -1 }, { patient: { visits: { some: scope } } }] };
+    return monthDayCounts(this.prisma, jy, jm, {
+      visitWhere: { ...scope, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
+      apptWhere: { status: { not: 'cancelled' }, ...mine },
+    });
+  }
+
+  /**
+   * میزِ پزشک — **یک روز**، پیش‌فرض امروز.
+   *
+   * ⚠️ `date` اختیاری اضافه شد چون میزِ پزشک تنها میزی بود که **هیچ
+   * انتخابگرِ تاریخی نداشت**: پزشک نمی‌توانست برنامهٔ فردا را ببیند و
+   * دیروز را هم نه. بازخوردِ مالک ۱۴۰۵/۰۶/۳۱ صریحاً «تقویم‌ها … تو میزِ
+   * پزشک» را نام برد.
+   */
+  async today(user: any, dateIso?: string) {
     const scope = await this.scope(user);
     const now = new Date();
     /* «امروز» به وقتِ مطب (`common/clinic-day.ts`) — نه ساعتِ کانتینر. */
-    const [start, end] = todayRangeUtc(now);
+    const iso = dateIso && /^\d{4}-\d{2}-\d{2}$/.test(dateIso) ? dateIso : clinicTodayIso(now);
+    const [start, end] = dayRangeUtc(iso);
     /* ستونِ `Appointment.date` از نوعِ `DATE` است و قراردادِ کلِ ماژول این است که
        نیمه‌شبِ UTCِ همان روز ساخته شود (`appointments.service`).
        ⚠️ حالا `start` خودش **همان** نیمه‌شبِ UTC است (`todayRangeUtc`)، پس
@@ -100,7 +130,7 @@ export class SurgeonPortalService {
         orderBy: { updatedAt: 'asc' }, take: 20,
         select: { id: true, patientId: true, visitId: true, status: true, updatedAt: true, patient: patientSel },
       });
-      unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient) })));
+      unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, statusFa: ORDER_LABELS[r.status] ?? r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient) })));
     }
     unreviewed.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
     /* سقفِ ۲۰ در هر نوع یعنی ممکن است چیزی از قلم بیفتد؛ شمارشِ واقعی برمی‌گردد
@@ -122,6 +152,10 @@ export class SurgeonPortalService {
     }));
     return {
       now: now.toISOString(),
+      /* روزِ نمایش‌داده‌شده و اینکه امروز است یا نه — تا سربرگ بتواند «امروز»
+         را از «۳ مهر» تفکیک کند بی‌آنکه خودش تاریخ را دوباره حساب کند. */
+      date: iso,
+      isToday: iso === clinicTodayIso(now),
       visits: visitViews,
       appointments: apptViews,
       day: SurgeonPortalService.mergeDay(visitViews, apptViews),

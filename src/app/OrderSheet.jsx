@@ -265,7 +265,7 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
           <span className="od-label">پاسخ — اگر رسیده</span>
           {order?.id && (
             <p className={`od-status st-${order.status}`}>
-              وضعیت: <b>{orderFa[order.status] ?? order.status}</b>
+              وضعیت: <b>{order.statusFa ?? orderFa[order.status] ?? order.status}</b>
               {order.reviewNote && !reviewable && <i> — {order.reviewNote}</i>}
             </p>
           )}

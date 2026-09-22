@@ -170,12 +170,12 @@ function ReminderPop({ row, item, onClose, onActed, toast }) {
     <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-reminder" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label="یادآوری">
       <header>
         <Send width="15" height="15" />
-        <b>یادآوری{r.kind ? ` — ${remKindFa[r.kind] ?? r.kind}` : ''}</b>
+        <b>یادآوری{r.kind ? ` — ${r.kindFa ?? remKindFa[r.kind] ?? r.kind}` : ''}</b>
         <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <p className="rc-pop-text">{r.text || '—'}</p>
       <dl>
-        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${r.status ?? 'none'}`}>{remFa[r.status] ?? r.status ?? '—'}</em></dd>
+        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${r.status ?? 'none'}`}>{r.statusFa ?? remFa[r.status] ?? r.status ?? '—'}</em></dd>
         {(r.sentAt || r.dueAt) && <><dt>{r.status === 'pending' ? 'موعد' : 'زمان'}</dt><dd>{faDate(r.sentAt ?? r.dueAt)}</dd></>}
         {r.phone && <><dt>گیرنده</dt><dd dir="ltr">{faNum(r.phone)}</dd></>}
         {r.error && <><dt>علت</dt><dd className="rc-pop-err">{r.error}</dd></>}

@@ -166,7 +166,14 @@ try {
 
     await page.goto(`${UI}/app/dashboard?q=${tag}`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.db-statuspick', { timeout: 15000 });
-    await page.locator('.db-statuspick button', { hasText: 'کنسل' }).first().click();
+    /* ⚠️ برچسبِ دکمه از `/config.statuses.visit` می‌آید، نه از یک رشتهٔ ثابت
+       این‌جا. نسخهٔ قبلی «کنسل» را می‌گشت — همان واژهٔ کلاینتیِ قدیمی که با
+       «لغو»ِ سرور نمی‌خواند و بستهٔ «یک وضعیت، یک برچسب» برش داشت. سوییتی که
+       رشته را پین کند، همان واگرایی را دوباره تثبیت می‌کند. */
+    const cancelFa = ((await send('/config')).json?.statuses?.visit ?? [])
+      .find((r) => r.key === 'cancelled')?.label;
+    ok(!!cancelFa, `برچسبِ «لغو» از /config آمد («${cancelFa}»)`);
+    await page.locator('.db-statuspick button', { hasText: cancelFa }).first().click();
     await page.waitForSelector('.cr-sheet', { timeout: 5000 });
     ok(true, 'پنجرهٔ دلیل باز شد');
     ok(await page.locator('.cr-reason').count() === list.length, 'همهٔ دلیل‌ها رندر شدند');

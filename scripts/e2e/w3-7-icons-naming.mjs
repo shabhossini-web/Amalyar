@@ -159,7 +159,15 @@ try {
      دکمه اصلاً رندر نمی‌شد — یعنی سه سنجهٔ سبز که هیچ‌چیز را نمی‌دیدند. حالا
      **وجودِ** واژهٔ درست هم ادعا می‌شود. */
   const [jy, jm, jd] = jToday();
-  const appt = { id: 7, fullName: 'بیمار آزمایشی', status: 'confirmed', statusLabel: 'قطعی', time: '10:00', seq: 1, next: ['arrived'], visitId: null, topicName: '', patientCode: 'AM-001', phone: '' };
+  /* ⚠️ `canStart`/`nextOptions` جزوِ قراردادِ ردیفِ نوبت‌اند و سرور همیشه
+     می‌فرستدشان؛ fixture بدونشان یعنی دکمه اصلاً رندر نمی‌شود و سه سنجهٔ
+     این بند دوباره چیزی را نمی‌بینند (همان تلهٔ بندِ بالا، از راهِ دیگر). */
+  const appt = {
+    id: 7, fullName: 'بیمار آزمایشی', status: 'confirmed', statusLabel: 'قطعی', time: '10:00', seq: 1,
+    next: ['arrived'], nextOptions: [{ status: 'arrived', label: 'رسید' }],
+    canStart: true, startHint: null,
+    visitId: null, topicName: '', patientCode: 'AM-001', phone: '',
+  };
   for (const [vertical, want] of [['ionm', 'شروعِ مراجعه'], ['implant', 'شروعِ عمل'], ['clinic', 'شروعِ ویزیت']]) {
     const cv = await mockContext(browser, ({ path, method }) => {
       if (path === '/config') return { vertical, brand: { color: '#7c3aed' }, verticals: [] };

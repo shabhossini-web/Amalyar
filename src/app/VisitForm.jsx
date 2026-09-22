@@ -1609,7 +1609,7 @@ function PrepCard({ prep: raw }) {
               {prep.pendingResults.map((o) => (
                 <li key={`${o.kind}-${o.id}`}>
                   <b>{o.kindFa}</b>
-                  <i className={o.status}>{orderFa[o.status] ?? o.status}</i>
+                  <i className={o.status}>{o.statusFa ?? orderFa[o.status] ?? o.status}</i>
                 </li>
               ))}
             </ul>

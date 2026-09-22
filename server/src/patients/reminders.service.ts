@@ -1,3 +1,4 @@
+import { REMINDER_KIND_LABELS, REMINDER_LABELS } from './labels';
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -521,7 +522,18 @@ export class RemindersService {
       deliveryStatus: r.channel === 'chat' && chatMessages.find(m => m.id === r.chatMessageId)?.channel.members.some(m => m.accountId === r.recipientAccountId && m.lastReadId >= (r.chatMessageId ?? Infinity)) ? 'read' : r.deliveryStatus,
       id: r.id,
       kind: r.kind,
+      /**
+       * ⚠️ **برچسب همراهِ خودِ ردیف می‌آید، نه فقط در کاتالوگِ `/config`.**
+       *
+       * نسخهٔ اولِ جمع‌کردنِ نگاشت‌ها، دفترِ یادآوری‌ها را از `/config` تغذیه
+       * کرد و یک مسابقه ساخت: صفحه پیش از رسیدنِ `/config` رندر می‌شود، پس
+       * هر ردیف یک لحظه (و اگر `/config` نمی‌آمد، برای همیشه) برچسبِ عامِ
+       * «یادآوری» می‌گرفت. قاعدهٔ `labels.ts` از اول همین را می‌گفت:
+       * کاتالوگ برای **فهرستِ گزینه‌ها** است، برچسبِ یک ردیف از خودِ ردیف.
+       */
+      kindFa: REMINDER_KIND_LABELS[r.kind] ?? null,
       status: r.status,
+      statusFa: REMINDER_LABELS[r.status] ?? null,
       dueAt: r.dueAt,
       sentAt: r.sentAt,
       phone: r.phone,

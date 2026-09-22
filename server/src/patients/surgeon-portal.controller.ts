@@ -30,7 +30,13 @@ export class SurgeonPortalController {
   list(@CurrentUser() user: any, @Query('q') q?: string, @Query('page') page?: string) { return this.portal.list(user, q, Number(page)); }
   /** «امروزِ من» — نوبت‌ها، مراجعه‌ها و نتیجه‌های بررسی‌نشدهٔ پزشک (بستهٔ ۵). */
   @Get('today') @RequirePermissions('surgeon.read')
-  today(@CurrentUser() user: any) { return this.portal.today(user); }
+  today(@CurrentUser() user: any, @Query('date') date?: string) { return this.portal.today(user, date); }
+
+  /** شمارشِ روزهای ماه — نشانهٔ تقویمِ انتخابِ تاریخ، با همان مجوزِ دیدنِ میز. */
+  @Get('month') @RequirePermissions('surgeon.read')
+  month(@CurrentUser() user: any, @Query('year') year: string, @Query('month') month: string) {
+    return this.portal.month(user, Number(year), Number(month));
+  }
   @Get('finances') @RequirePermissions('surgeon.read')
   finances(@CurrentUser() user: any, @Query('surgeonId') surgeonId?: string, @Query('page') page?: string) { return this.portal.finances(user, Number(surgeonId), Number(page) || 1); }
   @Get('items') @RequirePermissions('surgeon.read')
