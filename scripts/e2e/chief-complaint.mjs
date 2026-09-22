@@ -14,7 +14,7 @@ const USER = process.env.E2E_USER ?? 'admin';
 const PASS = process.env.E2E_PASS ?? 'test1234';
 
 let pass = 0, fail = 0;
-const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
+const ok = (c, m, d = '') => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m + (d ? ' — ' + d : '')); } };
 
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -118,6 +118,23 @@ const lone = await newVisit({
 fresh = await get(`/visits/${lone.id}`);
 ok(fresh.chiefComplaintOwn === 'کمردردِ مزمن' && fresh.chiefComplaintFrom === null,
   'ذخیره شد و ارثی علامت نخورد');
+
+console.log('\n۹) پروندهٔ بیمار — ستون‌شدن نباید شکایت را از پرونده غیب کند');
+/* 🔴 رگرسیونی که همین بسته می‌توانست بسازد: `answersOf` و تبِ شرح‌ها فقط از
+   `extra` می‌خواندند، پس مقداری که به ستون رفت از کارتِ مراجعه و از تبِ
+   «شرح‌ها» ناپدید می‌شد — دقیقاً همان چیزی که ستون‌کردن قرار بود درستش کند. */
+const rec = await get(`/patients/${visit.patientId}/record`);
+const recVisit = (rec?.visits ?? []).find((x) => x.id === visit.id);
+const recOp = (rec?.visits ?? []).find((x) => x.id === op.id);
+ok((recVisit?.answers ?? []).some((a) => a.key === 'chiefComplaint' && a.value === 'متنِ تازهٔ ویزیت'),
+  'شکایت در پاسخ‌های کارتِ ویزیتِ پرونده هست',
+  JSON.stringify((recVisit?.answers ?? []).map((a) => [a.key, a.value])));
+ok((recOp?.answers ?? []).some((a) => a.key === 'chiefComplaint' && a.value === 'متنِ تازهٔ ویزیت'),
+  '**و روی عمل هم دیده می‌شود، ارثی از همان ویزیت**',
+  JSON.stringify((recOp?.answers ?? []).map((a) => [a.key, a.value])));
+ok((rec?.visitTexts ?? []).some((t) => t.visitId === visit.id && t.body === 'متنِ تازهٔ ویزیت'),
+  'و در تبِ «شرح‌ها»ی پرونده هم می‌آید — همان مسیرِ دومی که فقط `extra` می‌خواند',
+  JSON.stringify((rec?.visitTexts ?? []).map((t) => [t.visitId, t.label])));
 
 console.log('\n' + '─'.repeat(50));
 console.log(`قبول: ${pass}   رد: ${fail}`);
