@@ -2592,15 +2592,32 @@ jobs:
           /* ① هر فیلدِ پریست که کلیدش رزرو است یا باید builtin باشد (پس بیمار
                 نمی‌بیندش) یا نوعش باید همان نوعی باشد که fill نرمال می‌کند. */
           const NORMALIZED = new Set(['date']);
+          /* ⚠️ **استثنای صریح، نه نوعِ عام.** ستونی که خودش متنِ ساده است،
+             مقدارِ خامِ بیمار دقیقاً شکلِ خودش است و تبدیلی نمی‌خواهد —
+             «علت مراجعه»ی فرمِ ثبت‌نام همین است. ولی «هر textarea امن است»
+             غلط می‌بود: `notes` هم textarea است و یادداشتِ **داخلی** است،
+             نه چیزی که بیمار پر کند. پس فهرستِ سفیدِ کوتاه و کلید‌به‌کلید،
+             و پایین برای هر کدامش اثبات می‌خواهیم که approve نوعش را
+             می‌سنجد — وگرنه این فهرست فقط راهِ فرار از نگهبان می‌شد. */
+          const RAW_TEXT_OK = new Set(['chiefComplaint']);
           const bad = [];
           for (const m of scan.matchAll(/\{[^{}]*key: '([a-zA-Z0-9_]+)'[^{}]*\}/g)) {
             const [lit, key] = [m[0], m[1]];
-            if (!reserved.has(key) || /builtin: true/.test(lit)) continue;
+            if (!reserved.has(key) || /builtin: true/.test(lit) || RAW_TEXT_OK.has(key)) continue;
             const type = (lit.match(/type: '([a-z]+)'/) || [])[1] ?? 'text';
             if (!NORMALIZED.has(type)) bad.push(key + ':' + type);
           }
           if (bad.length) {
             console.error('فیلدِ پریست با کلیدِ رزروشده که نه builtin است نه نرمال می‌شود: ' + bad.join('، '));
+            process.exit(1);
+          }
+
+          /* ①ب هر کلیدِ فهرستِ سفید باید در `approve` نوعش سنجیده شود. بدونِ
+                 این، `RAW_TEXT_OK` یک در پشتی بود: کافی بود کسی کلیدی را
+                 آن‌جا بنویسد تا نگهبان ساکت شود. */
+          const unchecked = [...RAW_TEXT_OK].filter((k) => !new RegExp(`typeof d\\.${k} === 'string'`).test(intake));
+          if (unchecked.length) {
+            console.error('کلیدِ فهرستِ سفید که approve نوعش را نمی‌سنجد: ' + unchecked.join('، '));
             process.exit(1);
           }
 
