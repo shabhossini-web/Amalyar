@@ -1,6 +1,6 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-22
 paths:
@@ -408,6 +408,17 @@ ok('follow-up links distinct per visit/day and stable after completion');
 - ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۷/۰۱ · PR #88 · `3eacdfa` · **بستهٔ ۵ — «همه یک دیتا در ویوهای مختلف»** ده
+  کامیت: وضعیتِ نوبت (`apptStartBlock` با دو لایهٔ ثابتِ داده / سیاستِ میز)، برچسب‌ها
+  (`labels.ts` تنها خانه + `kindFa`/`statusFa` همراهِ ردیف)، «امروز» (`clinic-day.ts`
+  به وقتِ مطب)، مبلغ (`visit-money.ts`، مدلِ گلوبال دیگر جا نمی‌افتد)، و نشانهٔ روز
+  روی تقویمِ همهٔ میزها + تاریخ‌چینِ میزِ پزشک. سه نگهبانِ تازه
+  (`verify-state-machine.js`، `verify-status-labels.js` بازنویسی‌شده،
+  `verify-theme-tokens.js` گسترده) و دو سوییتِ تازه (`appt-state-machine`،
+  `money-one-rule`). CI محلی: ۱۰۴/۱۰۴ گامِ ایستا + ۱۱۶/۱۱۶ سوییتِ زنده، صفر فلیک.
+  ⚠️ سهمیهٔ Actions تمام است (جاب‌ها ۵ ثانیه‌ای و بی‌لاگ می‌افتند) پس CI دستی اجرا
+  و PR دستی مرج شد — `automerge.yml` در این دوره کار نمی‌کند.
 
 - ۱۴۰۵/۰۶/۲۷ · PR #50 · `36433c8` · **W4.2 گامِ ۱** — `notify` گام از دفترِ موجودِ
   یادآوری، «عدمِ پاسخ» ذخیره، `POST /pathway/preview` بی‌نوشتن؛ e2e ۲۹/۲۹.
