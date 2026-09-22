@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useAuth } from './auth.jsx';
 import { api, apiStream, apiUpload } from '../lib/api.js';
-import { isoToJStr, jStrToIso } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
 import { useConfig } from './config.jsx';
@@ -164,6 +164,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     topicId: initial?.topicId ?? null,
     // متنِ آزاد فقط برای رکوردهای قدیمی که هنوز به نوعِ عمل وصل نشده‌اند.
     opType: initial?.procedureTypeId ? '' : initial?.opType || '',
+    /* ⚠️ `chiefComplaintOwn` و نه `chiefComplaint`: دومی مقدارِ **مشتق** است
+       (ممکن است از ویزیتِ تصمیم آمده باشد) و اگر در فرم می‌نشست، اولین
+       «ذخیره» ارث را به کپی تبدیل می‌کرد. سرور هم همین را دوباره می‌سنجد. */
+    chiefComplaint: initial?.chiefComplaintOwn ?? '',
     opReport: initial?.opReport || '',
     amount: '', // مبلغِ توافقی — فقط هنگامِ ساخت
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
@@ -533,6 +537,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       opType: f.procedureTypeId ? undefined : f.opType.trim() || undefined,
       // پاسخِ فیلدهای دلخواه — سرور خودش به ستون و JSON تقسیمشان می‌کند.
       extra,
+      /* خالی یعنی «ارث را نگه دار» (یا «بردار»، وقتی ارثی نیست) — پس در
+         ویرایش رشتهٔ خالی می‌رود نه undefined. */
+      chiefComplaint: f.chiefComplaint.trim() || (editing ? '' : undefined),
+      /* «این عمل از کدام ویزیت درآمد» — فقط هنگامِ ساخت، و فقط وقتی فرم از روی
+         یک تصمیمِ تازه باز شده باشد. پیوند است نه کپی: شکایت از همان‌جا خوانده
+         می‌شود، پس اصلاحِ ویزیت همان لحظه سرِ میزِ اتاقِ عمل هم دیده می‌شود. */
+      decidedInVisitId: editing ? undefined : (prefill?.decidedInVisitId ?? undefined),
       opReport: f.opReport.trim() || undefined,
       opDate,
       /* پاک‌کردن در ویرایش با null — پزشکِ منصرف باید بتواند برش دارد. */
@@ -628,6 +639,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const nidDigits = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
   const nidBad = nidDigits.length === 10 && !isValidNationalId(nidDigits);
 
+  /**
+   * شکایتی که از **ویزیتِ تصمیم** به ارث می‌رسد.
+   *
+   * دو منبع، چون دو لحظهٔ متفاوت: در ویرایش، سرور خودش گفته که مقدارِ نشان‌داده
+   * مشتق است (`chiefComplaintFrom`)؛ در ساختِ عملی که همین الان از روی یک
+   * تصمیم باز شده هنوز رکوردی وجود ندارد، پس از `prefill` می‌آید.
+   */
+  const inheritedComplaint = (initial?.chiefComplaintFrom ? initial.chiefComplaint : prefill?.chiefComplaint) || '';
+  const complaintSourceIso = initial?.chiefComplaintFrom?.opDate ?? prefill?.decidedInDate ?? null;
+  const complaintSourceLabel = complaintSourceIso ? `ویزیتِ ${faDate(complaintSourceIso)}` : 'ویزیتِ تصمیم';
+
   const activeSurgeons = defs.surgeons.filter((s) => s.active || s.id === f.surgeonId);
   const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
   const activeProcedures = defs.procedures.filter((p) => p.active || p.id === f.procedureTypeId);
@@ -639,7 +661,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    * تعریفِ فرم بر این مقدم است؛ این فقط می‌گوید «اگر تعریف چیزی نگفت، کجا بنشیند».
    */
   const BUILTIN_ORDER = [
-    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId',
+    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'chiefComplaint', 'topicId',
     'opDate', 'opStartTime', 'opEndTime', 'opReport', 'nextVisitDate',
     'amount', 'notes',
   ];
@@ -706,6 +728,30 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       onQuickAdd={quickAdd('diagnoses')}
       addPlaceholder="عنوانِ تشخیصِ جدید…"
     />) };
+  /**
+   * **شکایتِ اولیه** — «چرا آمده»، به زبانِ خودِ بیمار.
+   *
+   * ⚠️ وقتی این عمل از یک ویزیت درآمده، فیلد **خالی** می‌ماند و متنِ ویزیت
+   * به‌شکلِ placeholder دیده می‌شود، نه به‌شکلِ مقدار. تفاوتش جدی است: مقدار
+   * با اولین ذخیره کپی می‌شد و اصلاحِ بعدیِ ویزیت دیگر سرِ میزِ اتاقِ عمل
+   * دیده نمی‌شد. خالی‌ماندن یعنی «همان ویزیت را بخوان»، و تایپ یعنی «برای
+   * این عمل فرق دارد».
+   */
+  if (fd.isOn('chiefComplaint')) builtinNodes.chiefComplaint = { wide: true, el: (
+    <div className="db-field">
+      <span>{fd.labelOf('chiefComplaint', 'شکایتِ اولیه')}{star(fd.requiredOf('chiefComplaint'))}</span>
+      <textarea
+        rows={2}
+        value={f.chiefComplaint}
+        onChange={set('chiefComplaint')}
+        placeholder={inheritedComplaint || 'به زبانِ خودِ بیمار…'}
+      />
+      {inheritedComplaint && !f.chiefComplaint.trim() && (
+        <p className="db-hint">
+          از {complaintSourceLabel} به ارث می‌رسد — خالی بماند تا همیشه هم‌گام بماند.
+        </p>
+      )}
+    </div>) };
   /* موضوعِ ویزیت — اولیه/پست‌آپ/زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. مثلِ بقیهٔ
      تعریف‌ها افزودنِ سریع دارد تا منشی وسطِ ثبت مجبور به رفتن به «تعریف‌ها» نشود. */
   if (fd.isOn('topicId')) builtinNodes.topicId = { wide: true, el: (

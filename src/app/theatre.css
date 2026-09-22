@@ -40,15 +40,11 @@
 .th-item-name { font-size: 15px; font-weight: 800; }
 .th-item-sub { grid-column: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th-item-side { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
-.th-mini { display: flex; align-items: center; gap: 4px; }
-.th-mini small { margin-inline-end: 2px; font-size: 10.5px; color: var(--text3); }
-.th-mini b {
-  min-width: 34px; padding: 2px 5px; border-radius: 7px; font-size: 11px; font-weight: 700; text-align: center;
-  color: var(--text3); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
-  font-variant-numeric: tabular-nums;
+/* «چرا آمده» — جای شمارشِ چک‌لیست را گرفت. یک خط، بریده، ولی همیشه دیدنی. */
+.th-item-cc {
+  grid-column: 2; display: block; max-width: 100%; margin-top: 2px; font-size: 12.5px; line-height: 1.6;
+  color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.th-mini b.part { color: var(--amber-text); border-color: rgba(251, 191, 36, .45); }
-.th-mini b.full { color: var(--green-text); border-color: rgba(52, 211, 153, .45); }
 
 .th-state { padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 700; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12); }
 .th-state.is-finished { color: var(--green-text); border-color: rgba(52, 211, 153, .45); }
@@ -57,6 +53,8 @@
 .th-state.is-running { color: var(--cyan); border-color: rgba(34, 211, 238, .55); background: rgba(34, 211, 238, .1); }
 /* «ناتمام» = شروع خورده و پایان هیچ‌وقت ثبت نشده؛ کارِ کسی است که باید ببنددش. */
 .th-state.is-open { color: var(--amber-text); border-color: rgba(251, 191, 36, .5); }
+/* «ترخیص شد» پایانِ واقعیِ کارِ بیمار است — سبزِ پررنگ‌تر از «در ریکاوری». */
+.th-state.is-discharged { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .6); }
 
 /* ── کارتِ حینِ عمل ── */
 .th-card { max-width: 900px; margin: 0 auto; display: grid; gap: 12px; }
@@ -98,29 +96,66 @@
 .th-btn.primary { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; }
 .th-btn:disabled { opacity: .45; cursor: default; }
 
-/* چک‌لیست */
-.th-stage h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.th-stage h3 em { padding: 2px 9px; border-radius: 99px; font-style: normal; font-size: 12px; font-weight: 800; color: var(--text3); background: rgba(var(--veil-rgb), .07); font-variant-numeric: tabular-nums; }
-.th-stage h3 small { flex: 1 0 100%; font-size: 11.5px; font-weight: 400; color: var(--text3); }
-.th-stage.full { border-color: rgba(52, 211, 153, .4); }
-.th-stage.full h3 em { color: var(--green-text); }
-.th-stage ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.th-check {
-  display: flex; align-items: center; gap: 11px; width: 100%; min-height: 48px; padding: 9px 12px;
+/* شکایتِ اولیه — اولین چیزی که جراح می‌پرسد، پس اولین چیزی که می‌بیند. */
+.th-cc { border-style: dashed !important; }
+.th-cc p { margin: 0; font-size: 14px; line-height: 1.85; color: var(--text3); }
+.th-cc.on { border-style: solid !important; border-color: rgba(var(--brand-2-rgb), .45) !important; }
+.th-cc.on p { font-size: 16px; font-weight: 700; color: var(--text1); }
+
+/* شرحِ عمل — نوشتنی سرِ میز. */
+.th-report h3, .th-docs h3 { display: flex; align-items: center; gap: 7px; }
+.th-report textarea, .th-dialog textarea {
+  display: block; width: 100%; padding: 12px 14px; border-radius: 12px; resize: vertical;
+  font: inherit; font-size: 14.5px; line-height: 1.9;
+  color: var(--text1); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.th-report textarea:focus, .th-dialog textarea:focus { outline: none; border-color: var(--brand-2); }
+.th-report-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.th-report-bar .th-hint { margin: 0; margin-inline-end: auto; }
+
+/* مدارک — گروه‌شده به مرحله، هر کدام یک دکمهٔ بازکردن. */
+.th-docgroup + .th-docgroup { margin-top: 14px; }
+.th-docgroup h4 { margin: 0 0 7px; font-size: 12px; font-weight: 700; color: var(--text3); }
+.th-docgroup ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.th-doc {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 46px; padding: 9px 13px;
   border-radius: 12px; cursor: pointer; font: inherit; text-align: start;
-  color: var(--text2); background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--veil-rgb), .09);
+  color: var(--text1); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.th-check:hover:not(:disabled), .th-check:focus-visible { border-color: rgba(var(--brand-2-rgb), .5); outline: none; }
-.th-check:disabled { opacity: .6; cursor: default; }
-/* ⚠️ بوردرِ **فیزیکی** نه منطقی (قانون ۹): مربعِ تیک نباید در RTL قرینه شود. */
-.th-box {
-  flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
-  color: transparent; background: rgba(var(--veil-rgb), .05); border: 1.5px solid rgba(var(--veil-rgb), .2);
+.th-doc:hover:not(:disabled), .th-doc:focus-visible { border-color: var(--brand-2); outline: none; }
+.th-doc:disabled { opacity: .55; cursor: default; }
+.th-doc b { flex: 1; font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-doc em { flex: 0 0 auto; font-style: normal; font-size: 11px; color: var(--text3); }
+
+/* ترخیصِ ثبت‌شده */
+.th-discharged { border-color: rgba(52, 211, 153, .4) !important; }
+.th-discharged h3 { color: var(--green-text); }
+.th-discharged p { margin: 0; font-size: 14px; line-height: 1.9; white-space: pre-wrap; }
+
+/* پاپ‌آپِ ترخیص */
+.th-overlay {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 18px;
+  background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px);
 }
-.th-check.on { color: var(--text1); background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .45); }
-.th-check.on .th-box { color: #fff; background: var(--green, #34d399); border-color: transparent; }
-.th-label { flex: 1; font-size: 14px; line-height: 1.6; }
-.th-by { flex: 0 0 auto; font-size: 11px; color: var(--text3); }
+.th-dialog {
+  width: min(560px, 100%); max-height: 90vh; overflow: auto; padding: 18px; border-radius: 18px;
+  background: var(--surface, rgba(var(--surface-rgb), 1)); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+}
+.th-dialog-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.th-dialog-head b { margin-inline-end: auto; font-size: 16px; }
+.th-x {
+  display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
+  color: var(--text2); background: none; border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.th-x:hover { color: var(--text1); border-color: var(--brand-2); }
+.th-dialog-field span { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 700; }
+.th-dialog-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* ⚠️ استایلِ چک‌لیستِ ایمنی این‌جا بود و **پاک شد**، نه اینکه برای روزِ
+   مبادا بماند: JSXاش رفته، و CSS برای مارک‌آپی که وجود ندارد بی‌صدا می‌پوسد
+   (هیچ نگهبانی هم نمی‌بیندش). سمتِ سرور — جدولِ `safety_checks`، کاتالوگِ
+   `SAFETY_STAGES` و endpointش — سرِ جایش است؛ برگرداندنِ رابط یعنی نوشتنِ
+   دوبارهٔ همین چند کلاس کنارِ همان JSX، از تاریخچهٔ گیت. */
 
 .th-box-list ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
 .th-box-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text2); }
@@ -136,7 +171,9 @@
 
 @media (max-width: 560px) {
   .th-item { grid-template-columns: 54px minmax(0, 1fr); }
-  .th-item-side { grid-column: 1 / -1; grid-row: 3; flex-direction: row; align-items: center; justify-content: space-between; }
-  .th-acts { width: 100%; }
-  .th-btn { flex: 1; }
+  .th-item-side { grid-column: 1 / -1; grid-row: 4; flex-direction: row; align-items: center; justify-content: space-between; }
+  /* سه دکمه در یک ردیفِ ۳۲۰پیکسلی جا نمی‌شوند — می‌پیچند، و هر کدام
+     همان کفِ لمسِ ۴۴px را نگه می‌دارد. */
+  .th-acts { width: 100%; flex-wrap: wrap; }
+  .th-btn { flex: 1 1 auto; min-width: 46%; padding: 0 12px; }
 }

@@ -1439,7 +1439,11 @@ export default function PatientRecord() {
           /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
           if (opts?.openSurgery) {
             say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
-            setTimeout(() => things.show({ type: 'visit', prefill: { patientId: rec.id, patientName: rec.fullName, kind: 'surgery' } }), 400);
+            /* همان پیوندِ داشبورد — شکایتِ اولیه از ویزیتِ تصمیم مشتق می‌شود. */
+            setTimeout(() => things.show({ type: 'visit', prefill: {
+              patientId: rec.id, patientName: rec.fullName, kind: 'surgery',
+              decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
+            } }), 400);
             return;
           }
           say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);

@@ -169,6 +169,9 @@ export class RecordService {
           tech: { include: { person: true } },
           procedureType: true,
           diagnosis: true,
+          /* شکایتِ اولیهٔ عملی که از یک ویزیت درآمده، مشتق از همان ویزیت است
+             (بستهٔ ۴الف) — پرونده هم باید همان را نشان بدهد که میزِ اتاقِ عمل. */
+          decidedIn: { select: { chiefComplaint: true } },
         },
         orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { seq: 'desc' }],
       }),
@@ -241,8 +244,34 @@ export class RecordService {
      * چیزی نمی‌گوید. فیلدی که از فرم حذف شده ولی پاسخش مانده هم — با کلیدِ
      * خودش — می‌آید: دادهٔ ثبت‌شده نباید با ویرایشِ فرم از پرونده غیب شود.
      */
-    const answersOf = (id: number, kind: string | null, extra: any) => {
-      const vals = (extra && typeof extra === 'object') ? extra as Record<string, any> : {};
+    /**
+     * پاسخ‌های یک مراجعه به‌شکلِ «کلید → مقدار» — `extra` **به‌علاوهٔ** ستون‌هایی
+     * که پاسخِ فرم‌اند.
+     *
+     * ⚠️ **چرا لازم شد:** `chiefComplaint` تا دیروز کلیدِ `extra` بود و در
+     * پرونده دیده می‌شد؛ با ستون‌شدنش (بستهٔ ۴الف) بی‌صدا از پرونده غیب
+     * می‌شد — دقیقاً همان چیزی که ستون‌کردنش قرار بود درستش کند. و چون **دو**
+     * مصرف‌کننده دارد (کارتِ مراجعه و تبِ شرح‌ها)، همین‌جا یک‌جا حساب می‌شود؛
+     * نسخهٔ دوم یعنی روزی یکی‌شان از قلم بیفتد و همان غیب‌شدن نصفه تکرار شود.
+     *
+     * ⚠️ بقیهٔ ستون‌های هسته‌ای عمداً نمی‌آیند: جراح، تاریخ، تشخیص و مبلغ را
+     * خودِ کارتِ مراجعه بالاتر نشان می‌دهد. معیارِ آمدن این است که «متنی باشد
+     * که پزشک در فرم نوشته و جای دیگری خوانده نمی‌شود».
+     *
+     * ⚠️ ارث‌بری حفظ می‌شود: عملی که شکایتِ خودش را ننوشته همان ویزیتِ تصمیم
+     * را نشان می‌دهد — یک داده، چند میز.
+     */
+    const valuesOf = (v: any): Record<string, any> => {
+      const raw = (v.extra && typeof v.extra === 'object') ? v.extra as Record<string, any> : {};
+      const out: Record<string, any> = { ...raw };
+      const complaint = v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null;
+      if (complaint) out.chiefComplaint = complaint;
+      return out;
+    };
+
+    const answersOf = (v: any) => {
+      const { id, kind } = v;
+      const vals = valuesOf(v);
       const defined = fieldsForVisit(id, kind);
       const seen = new Set(defined.map((f) => f.key));
       const rows = defined
@@ -275,12 +304,25 @@ export class RecordService {
     const visitTexts = !clinical ? [] : visits
       .flatMap((v) => {
         const code = `${patient.code}-V${v.seq}`;
-        const vals = (v.extra && typeof v.extra === 'object') ? v.extra as Record<string, any> : {};
-        const rows = fieldsForVisit(v.id, v.kind)
+        const vals = valuesOf(v);
+        const defined = fieldsForVisit(v.id, v.kind);
+        const rows = defined
           .filter(isTextField)
           .map((f) => ({ label: f.label, body: vals[f.key] }))
           .filter((r) => typeof r.body === 'string' && r.body.trim() !== '')
           .map((r) => ({ visitId: v.id, code, kind: v.kind, opDate: v.opDate, label: r.label, body: String(r.body).trim() }));
+        /* ⚠️ شکایتِ اولیه **ستون** است، پس مثلِ `notes` صریح اضافه می‌شود و نه
+           از راهِ فهرستِ فیلدهای فرم. دلیلش را همین سوییت پیدا کرد: نصبی که
+           فرمش هنوز ردیفِ `chiefComplaint` ندارد (فرمِ تازه‌ساخته، پیش از
+           backfill) شکایتِ ثبت‌شده را در تبِ شرح‌ها نشان نمی‌داد — حال آنکه
+           مقدار روی ستون بود و در کارتِ مراجعه هم دیده می‌شد. ستون نباید
+           نمایانی‌اش را از پیکربندیِ فرم قرض بگیرد. */
+        if (!defined.some((f) => f.key === 'chiefComplaint') && typeof vals.chiefComplaint === 'string' && vals.chiefComplaint.trim()) {
+          rows.unshift({
+            visitId: v.id, code, kind: v.kind, opDate: v.opDate,
+            label: 'شکایتِ اولیه', body: vals.chiefComplaint.trim(),
+          });
+        }
         if (v.notes && v.notes.trim()) {
           rows.push({ visitId: v.id, code, kind: v.kind, opDate: v.opDate, label: 'یادداشتِ مراجعه', body: v.notes.trim() });
         }
@@ -321,7 +363,7 @@ export class RecordService {
         notes: v.notes,
         extra: v.extra ?? {},
         /* پاسخ‌های فرم — همان چیزی که پزشک نوشته، با برچسبِ خودش. */
-        answers: answersOf(v.id, v.kind, v.extra),
+        answers: answersOf(v),
         /* ⚠️ `null` وقتی این نوع فرمی ندارد — کلاینت آن‌وقت به کلید برمی‌گردد.
            «عمل» نامیدنِ نوعِ ناشناخته دروغ است. */
         kindTitle: v.kind ? kindTitles[v.kind] ?? null : null,

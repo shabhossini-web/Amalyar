@@ -10,13 +10,14 @@ import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
-import { actorName } from '../common/person';
 import { toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { FormsService } from './forms.service';
+import { BUILTIN_VISIT_KEYS } from './form-presets';
 import { syncLinkDocuments } from './link-documents';
+import { setVisitNote, VISIT_NOTE_KINDS } from './clinical-note';
 import { summarize } from './billing.service';
 
 /**
@@ -70,7 +71,14 @@ function enrich(v: any, kinds?: KindMap) {
     diagnosisTitle: v.diagnosis?.title ?? null,
     // شرحِ عمل حالا یک ClinicalNote است (نسخه‌دار و تغییرناپذیر)، ولی فرمِ مراجعه
     // همان یک فیلد را می‌بیند — تنها نسخهٔ جاری.
-    opReport: v.clinicalNotes?.[0]?.body ?? null,
+    /* ⚠️ `find` و نه `[0]`: از وقتی شرحِ ترخیص هم در همین آرایه می‌آید،
+       اندیسِ صفر می‌تواند سندِ دیگری باشد — و آن‌وقت شرحِ ترخیص به‌جای شرحِ
+       عمل در فرم می‌نشست، بی‌هیچ خطایی. */
+    opReport: v.clinicalNotes?.find((n: any) => n.kind === 'op')?.body ?? null,
+    /* **ترخیص: زمان از ستون، متن از سندِ بالینی** — یک منبع برای هر دو، پس
+       میزِ اتاقِ عمل و تبِ شرح‌های پرونده همان چیز را نشان می‌دهند. */
+    dischargeAt: v.dischargeAt ?? null,
+    dischargeNote: v.clinicalNotes?.find((n: any) => n.kind === 'discharge')?.body ?? null,
     opType: v.opType,
     opDate: v.opDate,
     nextVisitDate: v.nextVisitDate,
@@ -80,6 +88,18 @@ function enrich(v: any, kinds?: KindMap) {
     preOpCare: v.preOpCare ?? null,
     preOpImmediate: v.preOpImmediate ?? false,
     decisions: v.decisions ?? [],
+    /* **شکایتِ اولیه مشتق است، نه کپی** (قانونِ ۱۵). عملی که از ویزیت آمده
+       شکایتِ خودش را ندارد؛ همان ویزیت را می‌خواند. پس اصلاحِ شکایت در
+       ویزیت، همان لحظه در میزِ اتاقِ عمل هم دیده می‌شود — چیزی که کپیِ
+       زمانِ ساخت هرگز نمی‌داد.
+       `chiefComplaintOwn` برای فرم است (تا ذخیره، ارث را به کپی تبدیل نکند)
+       و `chiefComplaintFrom` برای رابط، تا بتواند منبع را نشان بدهد. */
+    chiefComplaint: v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null,
+    chiefComplaintOwn: v.chiefComplaint ?? null,
+    chiefComplaintFrom: !v.chiefComplaint && v.decidedIn?.chiefComplaint
+      ? { visitId: v.decidedIn.id, seq: v.decidedIn.seq, opDate: v.decidedIn.opDate }
+      : null,
+    decidedInVisitId: v.decidedInVisitId ?? null,
     followOfVisitId: v.followOfVisitId ?? null,
     opStatus: v.opStatus,
     opStartTime: v.opStartTime,
@@ -237,11 +257,15 @@ const INCLUDE_PATIENT = {
   topic: true,
   surgeon: { include: { person: true } },
   tech: { include: { person: true } },
-  // فقط نسخهٔ جاریِ شرحِ عمل؛ تاریخچه از مسیرِ پروندهٔ بیمار خوانده می‌شود.
+  /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط برای **مشتق‌کردنِ** شکایتِ
+     اولیه. سه ستون، نه کلِ ردیف: این include روی فهرستِ ۵۰۰تایی هم می‌دود. */
+  decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+  /* فقط نسخهٔ جاریِ شرحِ عمل و شرحِ ترخیص؛ تاریخچه از مسیرِ پروندهٔ بیمار
+     خوانده می‌شود. هر دو یک جنس‌اند (سندِ بالینیِ نسخه‌دار)، پس یک کوئری. */
   clinicalNotes: {
-    where: { kind: 'op', replacedAt: null },
+    where: { kind: { in: VISIT_NOTE_KINDS }, replacedAt: null },
     orderBy: { createdAt: 'desc' },
-    take: 1,
+    take: VISIT_NOTE_KINDS.length,
   },
   // فقط مبلغ لازم است؛ کلِ ردیف‌ها را برای فهرستِ ۵۰۰تایی نمی‌کشیم.
   charges: { select: { amount: true } },
@@ -775,29 +799,41 @@ export class PatientsService {
    * قبلی `replacedAt` می‌گیرد، هرگز بازنویسی نمی‌شود. خالی‌کردنِ فیلد یعنی
    * «این شرح دیگر جاری نیست»، نه «هیچ‌وقت نوشته نشده بود».
    */
-  private async setOpReport(tx: any, visit: { id: number; patientId: number }, body: string | null, user: any) {
-    const current = await tx.clinicalNote.findFirst({
-      where: { visitId: visit.id, kind: 'op', replacedAt: null },
-      orderBy: { createdAt: 'desc' },
+  /**
+   * ویزیتی که تصمیمِ عمل در آن گرفته شد — با سنجشِ تعلق به **همین** بیمار.
+   *
+   * ⚠️ بدونِ این سنجش، هر کاربری می‌توانست عملِ بیمارِ خودش را به ویزیتِ
+   * بیمارِ دیگری گره بزند و شکایتِ اولیهٔ او را در میزِ اتاقِ عمل بخواند —
+   * نشتِ دادهٔ بالینی از راهی که هیچ گاردی نمی‌بیندش.
+   */
+  private async resolveDecidedIn(tx: any, patientId: number, visitId: number | null | undefined) {
+    if (visitId == null) return null;
+    const row = await tx.visit.findFirst({
+      where: { id: visitId, patientId }, select: { id: true, chiefComplaint: true },
     });
-    const text = body?.trim() || null;
-    if (current?.body === text) return;
-    if (!text && !current) return;
+    if (!row) throw new BadRequestException('ویزیتِ تصمیم برای این بیمار نیست');
+    return row;
+  }
 
-    if (current) await tx.clinicalNote.update({ where: { id: current.id }, data: { replacedAt: new Date() } });
-    if (text) {
-      await tx.clinicalNote.create({
-        data: {
-          patientId: visit.patientId,
-          visitId: visit.id,
-          kind: 'op',
-          body: text,
-          authorId: user?.id ?? null,
-          authorName: actorName(user),
-          replacesId: current?.id ?? null,
-        },
-      });
-    }
+  /**
+   * شکایتِ اولیه‌ای که باید **ذخیره** شود — نه آنچه نمایش داده می‌شود.
+   *
+   * ⚠️ متنی که عینِ شکایتِ ویزیتِ تصمیم است ذخیره نمی‌شود و `null` می‌ماند، تا
+   * ارث‌بری زنده بماند. بدونِ این قاعده اولین «ذخیره»ی فرمِ عمل — که مقدارِ
+   * مشتق را همان‌طور که گرفته پس می‌فرستد — ارث را به یک کپیِ مُرده تبدیل
+   * می‌کرد و اصلاحِ بعدیِ ویزیت دیگر سرِ میز دیده نمی‌شد. قاعده عمداً سمتِ
+   * سرور است نه کلاینت: سه کلاینتِ متفاوت (فرمِ داشبورد، فرمِ عمومی، تأییدِ
+   * ثبت‌نام) این ستون را می‌نویسند و یکی‌شان قطعاً یادش می‌رفت.
+   */
+  private static ownComplaint(value: string | null | undefined, inherited: string | null | undefined) {
+    const text = typeof value === 'string' ? value.trim() : null;
+    if (!text) return null;
+    return (inherited ?? '').trim() === text ? null : text;
+  }
+
+  private async setOpReport(tx: any, visit: { id: number; patientId: number }, body: string | null, user: any) {
+    /* منطقِ نسخه‌بندی مشترک است با شرحِ ترخیص — `clinical-note.ts`. */
+    await setVisitNote(tx, visit, 'op', body, user);
   }
 
   /**
@@ -1059,10 +1095,14 @@ export class PatientsService {
         target = await tx.visit.findFirst({ where: { id: targetVisitId, patientId } });
         if (!target || target.opStatus === 'cancelled') throw new BadRequestException('مراجعهٔ هدف معتبر نیست یا لغو شده است');
       }
+      const decidedIn = await this.resolveDecidedIn(tx, patientId, dto.decidedInVisitId);
+      const complaint = PatientsService.ownComplaint(dto.chiefComplaint, decidedIn?.chiefComplaint);
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
       const seq = (max._max.seq ?? 0) + 1;
       let visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
         ...refs,
+        ...(dto.decidedInVisitId !== undefined ? { decidedInVisitId: decidedIn?.id ?? null } : {}),
+        ...(dto.chiefComplaint !== undefined ? { chiefComplaint: complaint } : {}),
         ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
         ...(dto.opType !== undefined && refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
         ...(dto.opDate !== undefined ? { opDate: toDateValue(dto.opDate) ?? null } : {}),
@@ -1086,6 +1126,8 @@ export class PatientsService {
           preOpCare: dto.preOpCare?.trim() || null,
           preOpImmediate: dto.preOpImmediate ?? false,
           decisions: dto.decisions ?? [],
+          chiefComplaint: complaint,
+          decidedInVisitId: decidedIn?.id ?? null,
           ...timePatch(dto),
           notes: dto.notes || null,
           /* پاسخِ فیلدهای دلخواه. `{}` و نه null: ستون NOT NULL است و کدِ
@@ -1130,9 +1172,12 @@ export class PatientsService {
       if (dto.opReport?.trim()) {
         await this.setOpReport(tx, visit, dto.opReport, user);
         visit.clinicalNotes = await tx.clinicalNote.findMany({
-          where: { visitId: visit.id, kind: 'op', replacedAt: null },
+          /* ⚠️ همان شرطِ `VISIT_INCLUDE` و نه فقط `op`: اگر این‌جا باریک‌تر
+             می‌ماند، هر ذخیره‌ای که شرحِ عمل داشت، شرحِ ترخیص را از پاسخ
+             حذف می‌کرد و رابط فکر می‌کرد بیمار ترخیص نشده. */
+          where: { visitId: visit.id, kind: { in: VISIT_NOTE_KINDS }, replacedAt: null },
           orderBy: { createdAt: 'desc' },
-          take: 1,
+          take: VISIT_NOTE_KINDS.length,
         });
       }
       const result = { ...enrich(visit, kinds), patientStatus };
@@ -1228,6 +1273,15 @@ export class PatientsService {
       if (dto.preOpCare !== undefined) visitPatch.preOpCare = dto.preOpCare?.trim() || null;
       if (dto.preOpImmediate !== undefined) visitPatch.preOpImmediate = !!dto.preOpImmediate;
       if (dto.decisions !== undefined) visitPatch.decisions = dto.decisions ?? [];
+      /* ⚠️ `ownComplaint` این‌جا هم لازم است و نه فقط در ساخت: فرمِ عملِ
+         ارث‌گرفته مقدارِ مشتق را نشان می‌دهد، پس هر «ذخیره»ی بی‌تغییر همان
+         متن را پس می‌فرستد. بدونِ این خط، دومین ذخیره ارث را کپی می‌کرد. */
+      if (dto.chiefComplaint !== undefined) {
+        const parent = v.decidedInVisitId
+          ? await tx.visit.findUnique({ where: { id: v.decidedInVisitId }, select: { chiefComplaint: true } })
+          : null;
+        visitPatch.chiefComplaint = PatientsService.ownComplaint(dto.chiefComplaint, parent?.chiefComplaint);
+      }
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
       // طرفِ حساب و استثنای سهمِ جراح — فیلدهای مالیِ سبک که روی خودِ مراجعه‌اند.
       if (dto.payer !== undefined) visitPatch.payer = dto.payer;
@@ -1368,11 +1422,12 @@ export class PatientsService {
  */
 function pickBuiltin(dto: any): Record<string, any> {
   const out: Record<string, any> = {};
-  for (const k of [
-    'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId',
-    'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount', 'payer', 'kind',
-    'nextVisitDate',
-  ]) {
+  /* ⚠️ فهرست از `BUILTIN_VISIT_KEYS` خوانده می‌شود، نه دوباره این‌جا نوشته.
+     تا دیروز نسخهٔ دستیِ همان فهرست این‌جا بود و مو به مو یکی بود — یعنی
+     بار سوم که کسی کلیدی اضافه می‌کرد، این یکی از قلم می‌افتاد و ستارهٔ
+     همان فیلد در **ثبتِ** مراجعه بی‌اثر می‌شد (در ویرایش نه، چون آن‌جا کلِ
+     `dto` اسپرد می‌شود) — یک ناهم‌خوانیِ بی‌صدا بینِ دو مسیر. */
+  for (const k of BUILTIN_VISIT_KEYS) {
     if (k in dto) out[k] = dto[k];
   }
   return out;

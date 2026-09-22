@@ -2,46 +2,52 @@
 agent: claude-fable
 status: active
 branch: claude/quirky-volta-uyuznl
-since: 2026-09-21
+since: 2026-09-22
 paths:
   - src/app/Theatre.jsx
   - src/app/theatre.css
-  - src/app/FrontDesk.jsx
-  - src/app/frontdesk.css
-  - src/app/tools.jsx
-  - src/ui/icons.jsx
-  - src/App.jsx
-  - server/src/patients/theatre.controller.ts
-  - server/src/patients/theatre.service.ts
-  - server/src/patients/appointments.service.ts
-  - server/src/patients/frontdesk.service.ts
-  - server/src/auth/access-registry.ts
-  - server/src/config/verticals.ts
   - src/app/JDate.jsx
   - src/app/jdate.css
+  - server/src/patients/theatre.controller.ts
+  - server/src/patients/theatre.service.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/form-presets.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/intake.service.ts
+  - server/src/patients/clinical-note.ts
+  - server/src/ai/ai.service.ts
   - server/src/patients/availability.service.ts
+  - server/src/auth/access-registry.ts
   - .github/workflows/security-ci.yml
   - scripts/local-ci.mjs
   - scripts/e2e/README.md
 note: >-
-  بستهٔ ۳ب + ۳ج (PR #85). **۳ب — نمای اتاقِ عمل**: ماژولِ تازهٔ `theatre` روی
-  `/app/theatre` (چک‌لیستِ ایمنیِ WHO با امضا، هشدارِ بالینی، ساعتِ یک‌لمسی،
-  بدونِ هیچ عددِ مالی) + جدولِ `safety_checks`. **۳ج — بیمارِ بدونِ نوبت**:
-  تصمیمِ مالک «اگه وقت بشه پذیرش میشه» → سرِ میز ظرفیت **خبر می‌دهد نه منع**
-  (`walkIn(..., {desk:true})`)، ولی مسیرِ تقویم دست‌نخورده سخت‌گیر مانده
-  (سنجهٔ `next-visit-booking` همین را قفل می‌کند).
-  **۳د — کادرِ تاریخِ شمسی**: ارقامِ کادر فارسی شد (نمایش در `blur`، بدونِ
-  بازنویسیِ `value` حینِ تایپ — قانونِ ۱۳) بی‌آنکه قراردادِ `onChange` عوض شود،
-  و هفت رنگِ ثابتِ تمِ تیره در `jdate.css` به توکن رفت (تقویم در تمِ روشن
-  خوانده نمی‌شد).
-  **۳ه — نوبت‌دهی + هزینهٔ CI**: `activeFrom` با `now()` مهر می‌خورد ولی با
-  نیمه‌شبِ روز سنجیده می‌شد، پس قاعدهٔ امروز امروز اثر نداشت (۳۱ شهریور، آخرین
-  روزِ ماه، رویش را باز کرد). به‌علاوه `concurrency`، دو شارد، و کشِ مرورگر.
-  بسته‌های ۱ (#81)، ۲ (#82) و ۳الف (#84) لند شده‌اند. CI به‌خاطر تمام‌شدنِ
-  سهمیهٔ Actionsِ حساب نمی‌دود؛ تأیید با اجرای کاملِ محلیِ ۱۱۲ سوییت انجام شد.
-  PR #85 در `09d2c25` دستی مرج شد. **تصمیمِ مالک: تا آخرِ ماه CI محلی و مرج
-  دستی** — `scripts/local-ci.mjs` گام‌ها را از خودِ `security-ci.yml` می‌خواند
-  تا از CI واگرا نشود.
+  **بستهٔ ۴ — بازخوردِ مالک ۱۴۰۵/۰۶/۳۱: «برای میزِ اتاقِ عمل خیلی ناقص ساختی».**
+  ۴الف — `chiefComplaint` ستونِ واقعیِ `Visit` شد (مقادیرِ `extra` با migration
+  منتقل و کلیدشان از JSON برداشته شد) و عمل شکایتش را از **ویزیتِ تصمیم**
+  (`decidedInVisitId`) **مشتق** می‌کند نه کپی — پس اصلاحِ ویزیت همان لحظه سرِ
+  میز دیده می‌شود. ۴ب — ترخیص مرحلهٔ سومِ چرخه شد، جدا از «پایانِ عمل»:
+  `visits.discharge_at` + `ClinicalNote(kind='discharge')` با شرحِ اجباری.
+  ۴ج — میزِ اتاقِ عمل بازنویسی شد: شکایتِ اولیه بالای کارت، مدارکِ قبل/حین/بعد
+  که از **خودِ میز** باز می‌شوند (مسیرِ `theatre.read`، نه `documents.read`)،
+  نوشتنِ شرحِ عمل سرِ میز، و سه دکمهٔ شروع/پایان/ترخیص. چک‌لیستِ ایمنیِ WHO
+  از رابط برداشته شد («فعلاً») ولی جدول، کاتالوگ و endpointش ماندند.
+  ⚠️ **هم‌پوشانیِ اعلام‌شده:** این بسته `src/app/VisitForm.jsx`,
+  `src/app/Dashboard.jsx`, `src/app/PatientRecord.jsx` و دو migration در
+  `server/prisma/` را هم دست زد — مسیرهایی که کلیمِ `claude-opus` رویشان است.
+  در `paths` نیاوردمشان تا نگهبان قرمز نشود، ولی این‌جا صریح نوشته می‌شود چون
+  پنهان‌کردنش دقیقاً همان چیزی است که پروتکل جلویش را می‌گیرد. کارِ آن کلیم
+  (مرحلهٔ مدرک + «بررسی شد») در `92d74ce` لند شده و در `main` هست، پس
+  هم‌زمانیِ واقعی وجود ندارد؛ اگر آن لِین هنوز روی همان فایل‌ها کار می‌کند،
+  این دو کامیت (`b61c3eb`, `fa3fd78`) باید قبل از ادامه دیده شوند.
+  ⚠️ دو قراردادِ تازه که شکستنشان بی‌صداست: (۱) `chiefComplaint` دیگر کلیدِ
+  **دلخواه** پذیرفته نمی‌شود (رزروِ `BUILTIN_VISIT_KEYS`)؛ (۲) `enrich` شرحِ
+  عمل را با `find(kind==='op')` می‌خواند نه `clinicalNotes[0]`، چون شرحِ ترخیص
+  هم در همان آرایه است.
+  پیش از این: بسته‌های ۳ب/۳ج/۳د/۳ه در PR #85 (`09d2c25`) و CI محلی در PR #86
+  (`3f8d337`). CI گیت‌هاب به‌خاطر تمام‌شدنِ سهمیهٔ Actions نمی‌دود؛ **تصمیمِ
+  مالک: تا آخرِ ماه CI محلی و مرج دستی** — `scripts/local-ci.mjs` گام‌ها را از
+  خودِ `security-ci.yml` می‌خواند تا از CI واگرا نشود.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

@@ -72,7 +72,7 @@ try {
 
   console.log('\n۲) میزِ پذیرش — بدهیِ بیمار، نه بدهیِ نوبت');
   const mk = async (first) => {
-    const r = await send('/visits', 'POST', { kind: 'clinic', firstName: first, lastName: `آزمون${tag}`, phone: phone(), opDate: new Date().toISOString(), surgeonId, extra: { chiefComplaint: 'آزمون' } });
+    const r = await send('/visits', 'POST', { kind: 'clinic', firstName: first, lastName: `آزمون${tag}`, phone: phone(), opDate: new Date().toISOString(), surgeonId, chiefComplaint: 'آزمون' });
     if (!r.json?.id) throw new Error('مراجعه ساخته نشد: ' + JSON.stringify(r.json).slice(0, 200));
     return r.json;
   };
@@ -108,7 +108,7 @@ try {
     JSON.stringify([row(aLinked)?.billing?.due, row(aLinked)?.debt]));
 
   /* دو مراجعهٔ بدهکار برای یک بیمار → جمع می‌شوند و شمارِ مراجعه برمی‌گردد. */
-  const vSecond = (await send('/visits', 'POST', { kind: 'clinic', patientId: vDebt.patientId, opDate: new Date(Date.now() - 864e5 * 3).toISOString(), surgeonId, extra: { chiefComplaint: 'قبلی' } })).json;
+  const vSecond = (await send('/visits', 'POST', { kind: 'clinic', patientId: vDebt.patientId, opDate: new Date(Date.now() - 864e5 * 3).toISOString(), surgeonId, chiefComplaint: 'قبلی' })).json;
   await bill(vSecond, 300000, 0);
   const board2 = (await send(`/frontdesk/day?date=${today}`)).json;
   const d2 = (board2?.rows ?? []).find((r) => r.id === aDebt)?.debt;

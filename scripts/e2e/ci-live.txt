@@ -110,6 +110,7 @@ yesno-ui
 today-popups
 surgery-phase-tabs
 clinic-doctor-portal
+chief-complaint
 desk-day
 theatre
 reserved-date-keys

@@ -158,6 +158,15 @@ export class CreateVisitDto {
   @IsOptional() @IsArray() @IsIn(DECISIONS, { each: true, message: 'تصمیمِ درمانی نامعتبر است' })
   decisions?: string[];
 
+  /// شکایتِ اولیه — «چرا آمده»، به زبانِ خودِ بیمار. ستونِ واقعی است.
+  @IsOptional() @IsString() @MaxLength(2000, { message: 'شکایتِ اولیه طولانی است' })
+  chiefComplaint?: string;
+
+  /// ویزیتی که تصمیمِ عمل در آن گرفته شد — عملِ ساخته‌شده شکایتش را از آن
+  /// **مشتق** می‌کند. تعلقش به همان بیمار در سرویس سنجیده می‌شود.
+  @IsOptional() @IsInt({ message: 'شناسهٔ ویزیتِ تصمیم نامعتبر است' })
+  decidedInVisitId?: number;
+
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم
   /// تا یک regex در دو جا تکرار نشود.
@@ -327,6 +336,12 @@ export class UpdateVisitDto {
   /// تصمیمِ درمانیِ ویزیت — چندتایی؛ مقدارهای مجاز در DECISIONS.
   @IsOptional() @IsArray() @IsIn(DECISIONS, { each: true, message: 'تصمیمِ درمانی نامعتبر است' })
   decisions?: string[];
+
+  /// شکایتِ اولیه — `null`/خالی یعنی «بردار»، و برای عملی که از ویزیت آمده
+  /// یعنی «به ارث‌بری برگرد» (سرویس عینِ متنِ ارثی را هم ذخیره نمی‌کند).
+  @IsOptional() @ValidateIf((o) => o.chiefComplaint !== null)
+  @IsString() @MaxLength(2000, { message: 'شکایتِ اولیه طولانی است' })
+  chiefComplaint?: string | null;
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

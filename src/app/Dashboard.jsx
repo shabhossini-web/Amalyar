@@ -871,7 +871,14 @@ export default function Dashboard() {
        نه اینکه کاربر خودش دنبالِ دکمهٔ «مراجعهٔ تازه» بگردد. */
     if (opts?.openSurgery) {
       setToast('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
-      setTimeout(() => setModal({ prefill: { patientId: saved.patientId, patientName: saved.patientName, kind: 'surgery' } }), 400);
+      /* ⚠️ `decidedInVisitId` یعنی عمل **به همین ویزیت گره می‌خورد**، نه اینکه
+         متنش کپی شود: شکایتِ اولیه از همان‌جا خوانده می‌شود، پس اصلاحِ بعدیِ
+         ویزیت همان لحظه در میزِ اتاقِ عمل هم دیده می‌شود. متن و تاریخ فقط
+         برای نشان‌دادنِ «از کجا می‌آید» در فرم می‌روند. */
+      setTimeout(() => setModal({ prefill: {
+        patientId: saved.patientId, patientName: saved.patientName, kind: 'surgery',
+        decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
+      } }), 400);
       return;
     }
     if (wasEdit) { setToast(`${t.visit} ویرایش شد ✓`); return; }
