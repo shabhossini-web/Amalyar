@@ -435,6 +435,19 @@ export class FormsService {
    * ندارد.
    */
   private async backfillVisitBuiltins() {
+    /* ⚠️ **ارتقای ردیفِ قدیمی، نه فقط افزودنِ ردیفِ نبوده** — و پیش از خواندنِ
+       فرم‌ها، چون `bare` پایین روی همین `builtin` حساب می‌شود.
+       کلیدی که تازه به کاتالوگ اضافه می‌شود ممکن است در نصبِ موجود از قبل یک
+       ردیفِ **دلخواه** داشته باشد (`chiefComplaint` دقیقاً همین بود). اگر
+       `builtin` نمی‌شد، کلاینت همچنان در `extra` می‌فرستادش و مقدار دوباره در
+       JSON می‌نشست — همان دو-نسخه‌ای که ستون برای حذفش ساخته شد. */
+    await this.prisma.formField.updateMany({
+      where: {
+        form: { scope: 'visit' }, builtin: false,
+        key: { in: VISIT_BUILTIN_CATALOG.map((c) => c.key) },
+      },
+      data: { builtin: true },
+    });
     const forms = await this.prisma.formDef.findMany({
       where: { scope: 'visit' },
       select: {

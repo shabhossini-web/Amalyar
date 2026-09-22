@@ -1294,6 +1294,26 @@ model Visit {
   followers       Visit[] @relation("PostOpChain")
 
   @@index([followOfVisitId])
+
+  /// **شکایتِ اولیه** — «چرا آمده»، به زبانِ خودِ بیمار.
+  ///
+  /// ⚠️ ستونِ واقعی و نه کلیدی در `extra`: تا دیروز پاسخِ همین فیلد در کیسهٔ
+  /// پاسخ‌های فرم می‌نشست، و چون هر میز فرمِ خودش را می‌خواند، شکایتی که منشی
+  /// در ویزیت ثبت کرده بود در میزِ اتاقِ عمل **دیده نمی‌شد**. دادهٔ مشترک
+  /// یعنی یک ستون، نه دو کپی.
+  chiefComplaint String? @map("chief_complaint")
+
+  /// «این عمل از کدام ویزیت درآمد؟» — ویزیتی که تصمیمِ عمل در آن گرفته شد.
+  ///
+  /// ⚠️ برعکسِ `followOfVisitId` است و نباید با آن یکی شود: آن یکی از عمل به
+  /// **بعدش** اشاره می‌کند، این یکی از عمل به **قبلش**. شکایتِ اولیهٔ عمل از
+  /// همین پیوند **مشتق** می‌شود (نه کپی)، پس اصلاحِ شکایت در ویزیت، همان لحظه
+  /// در اتاقِ عمل هم دیده می‌شود.
+  decidedInVisitId Int?    @map("decided_in_visit_id")
+  decidedIn        Visit?  @relation("SurgeryDecision", fields: [decidedInVisitId], references: [id], onDelete: SetNull)
+  decided          Visit[] @relation("SurgeryDecision")
+
+  @@index([decidedInVisitId])
   /// مراقبتِ قبل از عمل — اختصاصیِ همین بیمار؛ خالی = قالبِ نوعِ عمل
   preOpCare     String? @map("pre_op_care")
   /// مراقبتِ قبل از عمل **علاوه بر** موعدِ مقرر، همین حالا هم برود

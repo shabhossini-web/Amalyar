@@ -1981,6 +1981,10 @@ export class IntakeService {
     const RESERVED = new Set([
       'firstName', 'lastName', 'nationalId', 'phone', 'address', 'birthDate',
       'procedure', 'surgeonName', 'hospitalName', 'opDate', 'patientNotes', 'receiptDocumentId',
+      /* ⚠️ «علت مراجعه»ی فرمِ ثبت‌نام حالا ستونِ `Visit.chiefComplaint` است و
+         پایین به `createVisit` پاس می‌شود. اگر این‌جا نمی‌آمد، هم در `extra`
+         می‌ماند هم در ستون می‌نشست — دو نسخه از یک داده. */
+      'chiefComplaint',
     ]);
     const extra: Record<string, any> = {};
     for (const [k, v] of Object.entries(d ?? {})) if (!RESERVED.has(k)) extra[k] = v;
@@ -2031,6 +2035,9 @@ export class IntakeService {
           procedureTypeId: dto.procedureTypeId,
           opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
           opDate: dto.opDate ?? held?.date?.toISOString() ?? d.opDate ?? undefined,
+          /* «چرا آمده» را خودِ بیمار در ثبت‌نام نوشته — همان‌جا به ستون برود،
+             وگرنه منشی باید دوباره بپرسدش. */
+          chiefComplaint: typeof d.chiefComplaint === 'string' ? d.chiefComplaint : undefined,
           opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
           notes: d.patientNotes ?? undefined,
           ...(Object.keys(extra).length ? { extra } : {}),

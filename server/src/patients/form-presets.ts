@@ -64,7 +64,7 @@ export type PresetForm = {
 export const BUILTIN_VISIT_KEYS = new Set([
   'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
   'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount',
-  'payer', 'kind', 'topicId', 'nextVisitDate',
+  'payer', 'kind', 'topicId', 'nextVisitDate', 'chiefComplaint',
   /* ⚠️ `techArriveTime` عمداً نیست (W3.8/U7): فرمِ مراجعه دیگر ساعتِ حضور
      نمی‌گیرد — از برنامهٔ چینش می‌آید. فیلدی که در فرم‌ساز روشن شود ولی
      چیزی ننویسد، بدترین نوعِ فیلد است: کاربر پُرش می‌کند و بی‌صدا گم می‌شود. */
@@ -96,6 +96,8 @@ export const VISIT_BUILTIN_CATALOG: { key: string; label: string; type: string }
   { key: 'techId', label: 'کارشناس', type: 'select' },
   { key: 'procedureTypeId', label: 'نوعِ عمل', type: 'select' },
   { key: 'diagnosisId', label: 'تشخیص', type: 'select' },
+  /* «چرا آمده» — ستونِ واقعی شد تا هر میز همان یک داده را ببیند. */
+  { key: 'chiefComplaint', label: 'شکایتِ اولیه', type: 'textarea' },
   /* موضوعِ ویزیت — اولیه/پست‌آپ/زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. */
   { key: 'topicId', label: 'موضوعِ ویزیت', type: 'select' },
   { key: 'opStartTime', label: 'ساعتِ شروع', type: 'time' },
@@ -125,6 +127,14 @@ const CORE = {
   end: { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time', builtin: true },
   amount: { key: 'amount', label: 'مبلغ (تومان)', type: 'money', builtin: true },
   notes: { key: 'notes', label: 'توضیحات', type: 'textarea', builtin: true },
+  /* ⚠️ `builtin` شد چون ستون شد. تا دیروز فیلدِ دلخواه بود و پاسخش در
+     `Visit.extra` می‌نشست — یعنی شکایتی که در ویزیت ثبت می‌شد در اتاقِ عمل
+     دیده نمی‌شد. نصب‌های موجود با backfillِ `forms.service` به ردیفِ builtin
+     ارتقا می‌یابند و مقدارشان با مهاجرتِ SQL به ستون می‌رود. */
+  chiefComplaint: {
+    key: 'chiefComplaint', label: 'شکایتِ اولیه', type: 'textarea', builtin: true,
+    placeholder: 'به زبانِ خودِ بیمار',
+  },
   nextVisit: {
     key: 'nextVisitDate', label: 'ویزیتِ بعدی', type: 'date', builtin: true,
     hint: 'اگر بیمار باید دوباره بیاید، همین‌جا ثبت شود — پایهٔ یادآوری‌ها',
@@ -142,6 +152,7 @@ const OPERATION: PresetForm = {
     { ...CORE.surgeon, required: true },
     { ...CORE.hospital, required: true },
     { ...CORE.procedure },
+    { ...CORE.chiefComplaint },
     { ...CORE.tech },
     { ...CORE.start },
     { ...CORE.end },
@@ -192,7 +203,7 @@ const CLINIC_VISIT: PresetForm = {
        می‌کند (quick-add در خودِ فرم). نبودنش در پریست یعنی هیچ مطبی این
        فیلد را نمی‌دید — روی نصبِ واقعی گزارش شد. */
     { ...CORE.topic },
-    { key: 'chiefComplaint', label: 'شکایتِ اصلی', type: 'textarea', required: true, placeholder: 'به زبانِ خودِ بیمار' },
+    { ...CORE.chiefComplaint, required: true },
     { key: 'historyDuration', label: 'مدتِ علائم', type: 'text', placeholder: 'مثلاً ۳ ماه' },
     ...CLINIC_MEDIA_FIELDS,
     { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' },
@@ -231,6 +242,10 @@ const CLINIC_SURGERY: PresetForm = {
     { ...CORE.hospital, required: true },
     { ...CORE.procedure, required: true },
     { ...CORE.diagnosis },
+    /* ⚠️ روی فرمِ عمل هم هست، چون عملی که از ویزیت نیامده ارثی ندارد و
+       باید همین‌جا پرسیده شود. عملی که از ویزیت آمده این را خالی می‌گذارد و
+       شکایت را از همان ویزیت **مشتق** می‌کند (`decidedInVisitId`). */
+    { ...CORE.chiefComplaint },
     { ...CORE.assistant },
     { ...CORE.start },
     { ...CORE.end },

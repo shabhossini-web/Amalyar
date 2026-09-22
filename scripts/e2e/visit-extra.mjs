@@ -8,7 +8,7 @@
  *
  * نصبِ نورومانیتورینگ چیزی نمی‌دید: فرمش تقریباً همه‌اش فیلدِ هسته‌ای است
  * (جراح، بیمارستان، تاریخ، مبلغ) که ستون‌اند و درست ذخیره می‌شدند. نصبِ مطب
- * کلِ فرمش سفارشی است — «شکایتِ اصلی»، «شرحِ معاینه»، «تصمیم» — پس آن‌جا
+ * کلِ فرمش سفارشی است — «یادداشتِ شکایت»، «شرحِ معاینه»، «تصمیم» — پس آن‌جا
  * **هیچ‌چیز** ذخیره نمی‌شد. یک باگ، دو ظاهر.
  *
  * پس ادعا روی خواندنِ **بعد از** نوشتن است، نه روی پاسخِ خودِ PATCH.
@@ -42,32 +42,38 @@ await get('/forms'); // گرم‌کردنِ seedِ تنبل
 console.log('۱) نوعِ مراجعه با دو فیلدِ سفارشی — مثلِ فرمِ مطب');
 const form = (await send('/forms', 'POST', { key: tag, title: 'ویزیتِ مطب (آزمون)', scope: 'visit' })).json;
 if (!form?.id) { console.error('فرم ساخته نشد:', JSON.stringify(form)); process.exit(1); }
-await send(`/forms/${form.id}/fields`, 'POST', { key: 'chiefComplaint', label: 'شکایتِ اصلی', type: 'textarea' });
+/* ⚠️ کلیدِ این آزمون عمداً `complaintNote` است نه `chiefComplaint`:
+   شکایتِ اولیه از بستهٔ ۴الف **ستونِ واقعی** شد، پس دیگر کلیدِ دلخواه نیست.
+   همین را هم یک ردیف پایین‌تر صریح می‌سنجیم تا اگر روزی رزرو برداشته شد،
+   این آزمون بگوید کجا. */
+await send(`/forms/${form.id}/fields`, 'POST', { key: 'complaintNote', label: 'یادداشتِ شکایت', type: 'textarea' });
+const reserved = await send(`/forms/${form.id}/fields`, 'POST', { key: 'chiefComplaint', label: 'شکایتِ اولیه', type: 'textarea' });
+ok(reserved.status === 400, `کلیدِ رزروشدهٔ «chiefComplaint» به‌عنوانِ فیلدِ دلخواه رد می‌شود (${reserved.status})`);
 await send(`/forms/${form.id}/fields`, 'POST', { key: 'examNote', label: 'شرحِ معاینه', type: 'textarea' });
 const def = await get(`/forms/visit.${tag}`);
 const custom = (def.fields ?? []).filter((f) => !f.builtin).map((f) => f.key);
-ok(custom.includes('chiefComplaint') && custom.includes('examNote'), `دو فیلدِ سفارشی ساخته شد (${custom.join('، ')})`);
+ok(custom.includes('complaintNote') && custom.includes('examNote'), `دو فیلدِ سفارشی ساخته شد (${custom.join('، ')})`);
 
 console.log('\n۲) ثبتِ مراجعه با مقدارِ سفارشی');
 const created = (await send('/visits', 'POST', {
   kind: tag, firstName: 'فرمِ', lastName: 'سفارشی',
   opDate: new Date().toISOString(),
-  extra: { chiefComplaint: 'کمردردِ اولیه', examNote: 'معاینهٔ اولیه' },
+  extra: { complaintNote: 'کمردردِ اولیه', examNote: 'معاینهٔ اولیه' },
 })).json;
 if (!created?.id) { console.error('مراجعه ساخته نشد:', JSON.stringify(created)); process.exit(1); }
 let fresh = await get(`/visits/${created.id}`);
-ok(fresh.extra?.chiefComplaint === 'کمردردِ اولیه', `مقدارِ اولیه ذخیره شد («${fresh.extra?.chiefComplaint}»)`);
+ok(fresh.extra?.complaintNote === 'کمردردِ اولیه', `مقدارِ اولیه ذخیره شد («${fresh.extra?.complaintNote}»)`);
 
 console.log('\n۳) ویرایش — همان جایی که بی‌صدا دور ریخته می‌شد');
 const patched = await send(`/visits/${created.id}`, 'PATCH', {
-  extra: { chiefComplaint: 'کمردردِ تشدیدشده', examNote: 'لاسگِ راست مثبت' },
+  extra: { complaintNote: 'کمردردِ تشدیدشده', examNote: 'لاسگِ راست مثبت' },
 });
 ok(patched.status === 200, `PATCH پذیرفته شد (${patched.status})`);
 /* ⚠️ ادعا روی **خواندنِ دوباره** است، نه پاسخِ PATCH: باگِ اصلی این بود که
    پاسخ درست به‌نظر می‌رسید ولی چیزی نوشته نشده بود. */
 fresh = await get(`/visits/${created.id}`);
-ok(fresh.extra?.chiefComplaint === 'کمردردِ تشدیدشده',
-  `**شکایتِ اصلی بعد از ویرایش واقعاً عوض شد** («${fresh.extra?.chiefComplaint}»)`);
+ok(fresh.extra?.complaintNote === 'کمردردِ تشدیدشده',
+  `**یادداشتِ شکایت بعد از ویرایش واقعاً عوض شد** («${fresh.extra?.complaintNote}»)`);
 ok(fresh.extra?.examNote === 'لاسگِ راست مثبت',
   `شرحِ معاینه هم ذخیره شد («${fresh.extra?.examNote}»)`);
 
@@ -75,7 +81,7 @@ console.log('\n۴) ویرایشِ جزئی پاسخ‌های دیگر را پا�
 await send(`/visits/${created.id}`, 'PATCH', { extra: { examNote: 'بهبودِ نسبی' } });
 fresh = await get(`/visits/${created.id}`);
 ok(fresh.extra?.examNote === 'بهبودِ نسبی', 'فیلدِ ویرایش‌شده تازه است');
-ok(fresh.extra?.chiefComplaint === 'کمردردِ تشدیدشده',
+ok(fresh.extra?.complaintNote === 'کمردردِ تشدیدشده',
   'و فیلدی که در PATCH نبود دست‌نخورده ماند — ادغام، نه جایگزینی');
 
 console.log('\n۵) خالی‌کردنِ یک فیلد ممکن است (پاک‌کردن ≠ نادیده‌گرفتن)');
@@ -87,7 +93,7 @@ console.log('\n۶) ویرایشِ فیلدهای هسته‌ای هنوز کار
 await send(`/visits/${created.id}`, 'PATCH', { notes: 'یادداشتِ داخلی' });
 fresh = await get(`/visits/${created.id}`);
 ok(fresh.notes === 'یادداشتِ داخلی', 'یادداشتِ هسته‌ای ذخیره شد');
-ok(fresh.extra?.chiefComplaint === 'کمردردِ تشدیدشده',
+ok(fresh.extra?.complaintNote === 'کمردردِ تشدیدشده',
   'و PATCHِ بدونِ extra پاسخ‌های سفارشی را پاک نکرد');
 
 console.log('\n۷) پاسخ‌های فرم در **پروندهٔ بیمار** دیده می‌شوند');
@@ -95,7 +101,7 @@ console.log('\n۷) پاسخ‌های فرم در **پروندهٔ بیمار** �
    ذخیره‌شدن کافی نیست: «شرحِ معاینه»‌ای که فقط داخلِ فرمِ خودِ مراجعه بماند و
    در پرونده خوانده نشود، عملاً نوشته نشده. پرونده باید پاسخ‌ها را با
    **برچسبِ خودشان** نشان بدهد. */
-await send(`/visits/${created.id}`, 'PATCH', { extra: { examNote: 'لاسگِ راست مثبت', chiefComplaint: 'کمردردِ تشدیدشده' } });
+await send(`/visits/${created.id}`, 'PATCH', { extra: { examNote: 'لاسگِ راست مثبت', complaintNote: 'کمردردِ تشدیدشده' } });
 const rec = await get(`/patients/${created.patientId}/record`);
 const visit = (rec.visits ?? []).find((x) => x.id === created.id);
 ok(!!visit, 'مراجعه در پرونده هست');
@@ -104,14 +110,14 @@ ok(ans.length >= 2, `پاسخ‌ها در پرونده آمده‌اند (${ans.
 const exam = ans.find((a) => a.key === 'examNote');
 ok(exam?.value === 'لاسگِ راست مثبت', `**شرحِ معاینه در پرونده دیده می‌شود** («${exam?.value}»)`);
 ok(exam?.label === 'شرحِ معاینه', `و برچسبِ خودش را دارد، نه کلیدِ خام («${exam?.label}»)`);
-ok(ans[0].key === 'chiefComplaint', `ترتیب همان ترتیبِ فرم است (${ans.map((a) => a.key).join('، ')})`);
+ok(ans[0].key === 'complaintNote', `ترتیب همان ترتیبِ فرم است (${ans.map((a) => a.key).join('، ')})`);
 
 console.log('\n۸) فیلدِ بی‌پاسخ ردیفِ خالی نمی‌سازد');
 await send(`/visits/${created.id}`, 'PATCH', { extra: { examNote: '' } });
 const rec2 = await get(`/patients/${created.patientId}/record`);
 const ans2 = (rec2.visits ?? []).find((x) => x.id === created.id)?.answers ?? [];
 ok(!ans2.some((a) => a.key === 'examNote'), 'فیلدِ خالی از پرونده حذف شد');
-ok(ans2.some((a) => a.key === 'chiefComplaint'), 'و بقیه سرِ جایشان‌اند');
+ok(ans2.some((a) => a.key === 'complaintNote'), 'و بقیه سرِ جایشان‌اند');
 
 console.log('\n۹) و روی صفحهٔ پرونده واقعاً کشیده می‌شوند');
 /* ⚠️ «API برمی‌گرداند» با «پزشک می‌بیند» یکی نیست — همین تفاوت باعث شد
