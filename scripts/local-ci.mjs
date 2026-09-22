@@ -55,9 +55,39 @@ const SKIP_NAMES = [
   'Expose chromium where the suites expect it',
   'Cache the playwright browser',
   'Keep the logs when something fails',
+  /* 🔴 این یکی رد می‌شود ولی **جایگزین دارد** (`ensureDatabases` پایین‌تر):
+     دستورش `ci:ci@localhost/tenant_ci` را هاردکد کرده که فقط اسمِ سرویسِ
+     Postgresِ CI است، و `CREATE DATABASE` تکراری هم خطا می‌دهد. */
   'Databases for the control plane and the second tenant',
-  'Bootstrap a fresh environment',
 ];
+
+/**
+ * 🔴 **دیتابیس‌ها را خودِ این اسکریپت می‌سازد — درسی که با قرمزشدن گرفته شد.**
+ *
+ * نسخهٔ اول `bootstrap-env.mjs` را هم رد می‌کرد، با این فرضِ غلط که «رانر خودش
+ * محیط را می‌سازد». رانر فقط دیتابیسِ هر سوییت را از **قالب** بازمی‌سازد؛ خودِ
+ * قالب را کسِ دیگری باید ساخته باشد. تا وقتی قالبِ سالمی از اجرای قبلی مانده
+ * بود کار می‌کرد — تا لحظه‌ای که یک اجرا وسطِ کار کشته شد و قالب خراب ماند:
+ * آن‌وقت **۱۰۴ سوییت از ۱۱۲** با «ورود نشد — ۴۰۱» قرمز شدند، چون حسابِ ادمینِ
+ * seed وجود نداشت. یعنی ابزار روی محیطِ خراب «قرمزِ محصول» گزارش می‌داد.
+ *
+ * درس: جانشینِ CI باید **خودکفا** باشد. CI از رانرِ خالی شروع می‌کند؛ این هم
+ * باید بتواند.
+ */
+const ensureDatabases = () => {
+  const urls = [process.env.DATABASE_URL, process.env.CONTROL_DATABASE_URL, process.env.E2E_TENANT2_DATABASE_URL]
+    .filter(Boolean);
+  for (const u of urls) {
+    const parsed = new URL(u);
+    const name = decodeURIComponent(parsed.pathname.slice(1));
+    const admin = new URL(u); admin.pathname = '/postgres'; admin.search = '';
+    try {
+      execFileSync('psql', [admin.toString(), '-v', 'ON_ERROR_STOP=1', '-qAtc', `CREATE DATABASE "${name}"`],
+        { stdio: ['ignore', 'pipe', 'pipe'] });
+      console.log(`  + دیتابیسِ ${name} ساخته شد`);
+    } catch { /* از قبل هست — همان چیزی که می‌خواستیم */ }
+  }
+};
 
 const wf = yaml.load(readFileSync(resolve(root, '.github/workflows/security-ci.yml'), 'utf8'));
 
@@ -79,10 +109,32 @@ if (missing.length) {
   process.exit(2);
 }
 
+/**
+ * 🔴 **آدرسِ اتصال‌ها همیشه از محیطِ اجراکننده می‌آید، نه از workflow.**
+ *
+ * جابِ `live` بلوکِ `env` خودش را دارد با مقادیرِ CI
+ * (`postgresql://ci:ci@localhost:5432/control_ci`) — یعنی نامِ سرویسِ Postgresِ
+ * گیت‌هاب. نسخهٔ اول env جاب را **روی** محیطِ محلی می‌ریخت و نتیجه‌اش این شد:
+ * `P1010: User 'ci' was denied access on the database 'control_ci'`.
+ *
+ * پس این کلیدها مالِ اجراکننده‌اند و هرگز از workflow گرفته نمی‌شوند؛ بقیهٔ
+ * متغیرها (مثلِ `NODE_ENV`) از خودِ workflow می‌آیند تا رفتار همان باشد.
+ */
+const OPERATOR_OWNED = new Set([
+  'DATABASE_URL', 'CONTROL_DATABASE_URL', 'E2E_TENANT2_DATABASE_URL',
+  'TENANT_DATABASE_ENCRYPTION_KEY', 'JWT_SECRET', 'DEFAULT_TENANT_SLUG',
+  'E2E_CHROME', 'PGHOST', 'PGUSER', 'PGPASSWORD',
+]);
+const localOverrides = Object.fromEntries(
+  [...OPERATOR_OWNED].filter((k) => process.env[k] != null).map((k) => [k, process.env[k]]));
+
 const results = [];
 const runStep = (step, idx, jobEnv) => {
   const name = step.name ?? `گام ${idx}`;
-  const env = { ...process.env, ...(jobEnv ?? {}), ...(step.env ?? {}), E2E_CHROME: CHROME, CI: '1' };
+  const env = {
+    ...process.env, ...(jobEnv ?? {}), ...(step.env ?? {}),
+    ...localOverrides, E2E_CHROME: CHROME, CI: '1',
+  };
   const cwd = step['working-directory'] ? resolve(root, step['working-directory']) : root;
   const started = Date.now();
   const r = spawnSync('bash', ['-lc', step.run], { cwd, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -113,7 +165,24 @@ if (PART === 'all' || PART === 'build') {
 }
 
 if (PART === 'all' || PART === 'live') {
-  console.log('\n══ جابِ live — کلِ مانیفستِ ci-live.txt، بدونِ شارد ══\n');
+  const job = wf.jobs.live;
+  /* گامِ شارد این‌جا **جایگزین** می‌شود (یک ماشین، کلِ مانیفست)، بقیهٔ گام‌های
+     `run:` همان‌طور که در workflow هستند اجرا می‌شوند — از جمله
+     `bootstrap-env.mjs` که قالبِ دیتابیس را می‌سازد. */
+  const steps = job.steps.filter((s) => s.run && !s.uses && !SKIP_NAMES.includes(s.name)
+    && !s.name?.startsWith('Run shard'));
+  console.log(`\n══ جابِ live — ${steps.length} گامِ آماده‌سازی + کلِ مانیفستِ ci-live.txt ══\n`);
+  ensureDatabases();
+  let prepOk = true;
+  steps.forEach((s, i) => {
+    const idx = `L${i + 1}`;
+    if (!runStep(s, idx, job.env)) { prepOk = false; failed += 1; }
+  });
+  if (!prepOk) {
+    console.error('\n✗ آماده‌سازیِ محیط شکست — سوییت‌ها اجرا نمی‌شوند، وگرنه همه با «ورود نشد» قرمز می‌شوند.');
+    console.log(`لاگ: ${LOG_DIR}`);
+    process.exit(1);
+  }
   const r = spawnSync(process.execPath, [
     resolve(root, 'scripts/e2e/run-live.mjs'),
     '--manifest', resolve(root, 'scripts/e2e/ci-live.txt'),
