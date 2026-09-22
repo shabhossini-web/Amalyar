@@ -12,6 +12,7 @@ import { chromium } from 'playwright-core';
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { browserLogin } from './lib/browser-login.mjs';
+import { clinicToday } from './lib/clinic-day.mjs';
 import { jToday } from '../../src/lib/jalali.js';
 
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
@@ -34,7 +35,8 @@ const send = (p, m, b) => fetch(API + p, { method: m, headers: A, body: b ? JSON
   .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = 'fd' + randomBytes(3).toString('hex');
-const TODAY = new Date(); TODAY.setUTCHours(0, 0, 0, 0);
+/* «امروز» به وقتِ **مطب** — همان چیزی که میز «امروز» می‌داند (`lib/clinic-day.mjs`). */
+const TODAY = clinicToday();
 const ISO = TODAY.toISOString().slice(0, 10);
 const trash = { visits: [], forms: [], accounts: [] };
 let pid = -1, made = null, tl = null;

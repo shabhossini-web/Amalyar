@@ -9,6 +9,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(new URL('../../server/package.json', import.meta.url));
 const { PrismaClient } = require('@prisma/client');
 const { processDomainEvents } = require('./dist/work/work-processor');
+import { clinicToday } from './lib/clinic-day.mjs';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const DB = process.env.E2E_DB;
 if (!DB || ![DB, API].every(u => ['localhost', '127.0.0.1'].includes(new URL(u).hostname))) {
@@ -18,7 +19,8 @@ const db = new PrismaClient({ datasources: { db: { url: DB } } });
 const tag = 'w15' + randomBytes(4).toString('hex');
 const ids = { patients: [], appointments: [], forms: [], rules: [], submissions: [] };
 let savedForms = [], token = '', passed = 0;
-const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+/* «امروز» به وقتِ **مطب** — همان چیزی که سرور می‌نویسد (`lib/clinic-day.mjs`). */
+const today = clinicToday();
 const day = new Date(+today + 7 * 86400000), nextDay = new Date(+day + 86400000);
 const iso = d => d.toISOString().slice(0, 10);
 const check = (condition, title) => { assert.ok(condition, title); console.log('PASS ' + title); passed++; };

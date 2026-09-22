@@ -29,6 +29,27 @@ jobs:
     # ۶۲ گام + دو npm ci + دو بیلد؛ ۱۵ دقیقه روی رانرِ کند به timeoutِ کاذب می‌رسید.
     # +۱۴ سوییتِ مرورگریِ خودکفا (انتهای همین جاب) → ۴۵.
     timeout-minutes: 45
+    # ⚠️ **ساعتِ «مطب» در CI روی UTC است — عمدی، و این‌جا نوشته شده.**
+    #
+    # سرور «امروز» را از `common/clinic-day.ts` می‌گیرد که پیش‌فرضش
+    # `Asia/Tehran` است، ولی رانر UTC است و `jToday()`ِ کلاینت ساعتِ **محلیِ
+    # همان ماشین** را می‌خواند. بینِ ۲۰:۳۰ و ۲۴:۰۰ UTC این دو یک روز فرق
+    # دارند: هر شب یک پنجرهٔ سه‌ونیم‌ساعته که سوییت‌های روزمحور قرمز می‌شوند و
+    # صبح خودبه‌خود سبز — بدترین نوعِ فلیک، چون به کد ربطی ندارد.
+    # (۱۴۰۵/۰۶/۳۱ ساعتِ ۲۰:۴۰ UTC سه سوییت با هم افتادند.)
+    #
+    # ⚠️ **چرا `CLINIC_TZ` و نه `TZ`:** هم‌ترازکردنِ رانر با تهران هم امتحان شد
+    # و **بدتر** بود — آن‌وقت `toJalali` (که عمداً روی UTC می‌خواند، قراردادِ
+    # ذخیره‌سازی) با روزِ تهران واگرا می‌شد و سه سوییتِ دیگر می‌افتادند. ریشه‌اش
+    # این است که در آن پنجره «لحظهٔ اکنون» و «روزِ تقویمی» دو چیزند؛ مسیرهای
+    # واقعیِ محصول تاریخ را **روزِ تقویمی** می‌فرستند و به این تله نمی‌خورند،
+    # ولی fixtureها `new Date().toISOString()` می‌دهند.
+    #
+    # پس در CI هر دو طرف UTC می‌شوند و رفتارِ تهران جداگانه و قطعی سنجیده
+    # می‌شود: `clinic-day-local.mjs` مرزها را مستقیم به تابع می‌دهد و
+    # پیش‌فرضِ `Asia/Tehran` را **از خودِ سورس** می‌خواند.
+    env:
+      CLINIC_TZ: UTC
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -3264,6 +3285,8 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
+      # ساعتِ «مطب» در CI روی UTC — شرحِ کامل بالای جابِ `build`.
+      CLINIC_TZ: UTC
       DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant_ci?schema=public
       CONTROL_DATABASE_URL: postgresql://ci:ci@localhost:5432/control_ci?schema=public
       E2E_TENANT2_DATABASE_URL: postgresql://ci:ci@localhost:5432/tenant2_ci?schema=public
