@@ -340,7 +340,7 @@ function Documents({ visitId, groups }) {
 
   const open = async (doc) => {
     if (doc.url) { window.open(doc.url, '_blank', 'noopener'); return; }
-    /* 🔴 **پنجره باید پیش از `await` باز شود.** Safari (و کرومِ موبایل در
+    /* ⚠️ **پنجره باید پیش از `await` باز شود.** Safari (و کرومِ موبایل در
        بعضی حالت‌ها) `window.open` بعد از یک await را پاپ‌آپِ ناخواسته
        می‌شمارد و **بی‌صدا** بلاک می‌کند — یعنی همان مدرکی که مالک خواست
        سرِ میز باز شود، روی آیفون هیچ کاری نمی‌کرد و هیچ خطایی هم نمی‌داد.
