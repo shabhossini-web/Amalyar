@@ -75,14 +75,11 @@ export const INTAKE_STATUSES = [
   'pending_fill', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'expired',
 ] as const;
 
-export const INTAKE_LABELS: Record<string, string> = {
-  pending_fill: 'در انتظارِ تکمیل',
-  pending_payment: 'در انتظارِ فیش',
-  pending_approval: 'در انتظارِ تأیید',
-  approved: 'تأییدشده',
-  rejected: 'رد‌شده',
-  expired: 'رها‌شده',
-};
+/* ⚠️ خانه‌اش `labels.ts` است؛ این‌جا فقط دوباره export می‌شود تا ایمپورت‌های
+   موجود نشکنند و کسی وسوسه نشود نسخهٔ دوم بنویسد. تا دیروز نسخهٔ سوم در
+   `Crm.jsx` بود و «رها‌شده» را «منقضی» می‌گفت. */
+export { INTAKE_LABELS } from './labels';
+import { INTAKE_LABELS } from './labels';
 
 const text = (v: unknown, max = 200) =>
   typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;

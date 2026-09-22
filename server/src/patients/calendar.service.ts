@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { scopedVisitWhere } from '../common/own-scope';
-import { APPT_LABELS, APPT_TRANSITIONS } from './appointments.service';
+import { AppointmentsService } from './appointments.service';
 
 /**
  * تقویمِ ماهانهٔ عمل‌ها.
@@ -17,7 +17,7 @@ import { APPT_LABELS, APPT_TRANSITIONS } from './appointments.service';
  */
 @Injectable()
 export class CalendarService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private appts: AppointmentsService) {}
 
   async month(jy: number, jm: number, user?: any) {
     if (!Number.isInteger(jy) || jy < 1300 || jy > 1500) throw new BadRequestException('سالِ نامعتبر');
@@ -74,19 +74,11 @@ export class CalendarService {
     for (const a of appts) {
       const [, , jd] = toJalali(a.date);
       if (!apptDays.has(jd)) apptDays.set(jd, []);
-      apptDays.get(jd)!.push({
-        id: a.id,
-        time: a.startMin == null ? null : `${String(Math.floor(a.startMin / 60)).padStart(2, '0')}:${String(a.startMin % 60).padStart(2, '0')}`,
-        seq: a.seq,
-        status: a.status,
-        statusLabel: APPT_LABELS[a.status] ?? a.status,
-        fullName: a.patient ? `${a.patient.firstName} ${a.patient.lastName}`.trim() : 'بدونِ پرونده',
-        patientCode: a.patient?.code ?? null,
-        phone: a.patient?.phone ?? null,
-        topicName: a.topic?.name ?? null,
-        visitId: a.visitId,
-        next: APPT_TRANSITIONS[a.status] ?? [],
-      });
+      /* 🔴 ردیفِ نوبت از **همان `view()`ِ** میزِ پذیرش ساخته می‌شود، نه نگاشتِ
+         دستیِ قبلی. آن نگاشت `nextOptions` و `canStart` را نداشت، پس تقویم
+         مجبور بود دکمه‌هایش را خودش بسازد — و همان‌جا بود که «شروعِ ویزیت»
+         برای نوبتِ پول‌نداده و نوبتِ هفتهٔ آینده هم ظاهر می‌شد. */
+      apptDays.get(jd)!.push(this.appts.view(a));
     }
     const allDays = new Set([...days.keys(), ...apptDays.keys()]);
 

@@ -7,19 +7,18 @@ import { faDate } from '../lib/jalali.js';
 import './reminders.css';
 import { Alert, Back, Clock, Send } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
+import { useStatusMap } from './config.jsx';
 
-const KIND_FA = {
-  next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ‌رو', appointment: 'نوبت',
-  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل', follow_up: 'فرمِ پیگیری',
-  notice: 'اطلاع‌رسانی', dispatch: 'ابلاغ برنامه روز',
-};
-const STATUS_FA = { pending: 'در صف', sending: 'در حال ارسال', sent: 'ارسال ثبت شد', failed: 'ارسال ناموفق', uncertain: 'نتیجه ارسال نامشخص', simulated: 'آزمایشی؛ ارسال نشده' };
+/* ⚠️ «رسیدن به گوشی» **خانوادهٔ جداست** و در سرور همتا ندارد: وضعیتِ یادآوری
+   می‌گوید ما چه کردیم، این می‌گوید اپراتور چه گزارش داد. تنها مصرف‌کننده‌اش
+   همین صفحه است، پس این‌جا می‌ماند. */
 const DELIVERY_FA = { unknown: 'رسیدن به گوشی هنوز تأیید نشده', delivered: 'رسیده به گوشی', not_delivered: 'نرسیده به گوشی', not_sent: 'ارسال نشده', stored: 'در پیام‌رسان ثبت شده؛ هنوز خوانده نشده', read: 'خوانده شده' };
 /* ⚠️ کلیدِ خام هرگز روی صفحه نمی‌آید (W0.2): `follow_up` ماه‌ها به‌شکلِ «follow_up»
-   دیده می‌شد چون این نگاشت جا مانده بود. نوعِ تازهٔ سرور = یک ردیف این‌جا؛ تا آن
-   روز برچسبِ عام + خودِ کلید در title، تا نه دروغ بگوید نه کد نشان دهد. */
-const kindFa = (k) => KIND_FA[k] ?? 'یادآوری';
-const statusFa = (s) => STATUS_FA[s] ?? 'وضعیتِ نامشخص';
+   دیده می‌شد چون این نگاشت جا مانده بود. حالا نگاشت از `/config` می‌آید (نوعِ
+   تازهٔ سرور خودبه‌خود فارسی می‌شود) و اگر کلیدی نبود، برچسبِ عام + خودِ کلید
+   در title — تا نه دروغ بگوید نه کد نشان دهد.
+   و نسخهٔ قبلیِ همین‌جا `cancelled` را نداشت: یادآوریِ لغوشده «وضعیتِ نامشخص»
+   می‌شد، در حالی که پاپ‌آپش در پروندهٔ همان بیمار «لغو شد» می‌گفت. */
 /* اقدامِ تک‌ردیفی (W0.7/U10) — همان فهرستی که سرور هم گارد می‌کند.
    ⚠️ `sent` در هیچ‌کدام نیست: پیام واقعاً به گوشیِ بیمار رفته، پس «دوباره»
    یعنی پیامکِ دومِ سردرگم‌کننده و «لغو» یعنی دفتر دربارهٔ چیزی که رخ داده
@@ -40,6 +39,14 @@ const TABS = [
  * برای مدیری است که نمی‌خواهد منتظرِ چرخهٔ بعدی بماند.
  */
 export default function Reminders() {
+  /* ⚠️ **برچسب از خودِ ردیف** (`r.kindFa`/`r.statusFa`)، و کاتالوگ فقط
+     پشتیبان. نسخهٔ اولِ این تغییر فقط `/config` را می‌خواند و یک مسابقه
+     ساخت: صفحه پیش از رسیدنِ پیکربندی رندر می‌شود، پس هر ردیف یک لحظه
+     برچسبِ عامِ «یادآوری» می‌گرفت (و اگر `/config` نمی‌آمد، برای همیشه). */
+  const kindMap = useStatusMap('reminderKind');
+  const statusMap = useStatusMap('reminder');
+  const kindFa = (r) => r?.kindFa ?? kindMap[r?.kind] ?? 'یادآوری';
+  const statusFa = (st) => statusMap[st] ?? 'وضعیتِ نامشخص';
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
@@ -82,7 +89,7 @@ export default function Reminders() {
     try {
       const fresh = await api(`/reminders/${r.id}/${what}`, { method: 'POST' });
       setToast(what === 'retry'
-        ? (fresh?.status === 'sent' ? 'فرستاده شد' : `دوباره در صف نشست (${statusFa(fresh?.status)})`)
+        ? (fresh?.status === 'sent' ? 'فرستاده شد' : `دوباره در صف نشست (${fresh?.statusFa ?? statusFa(fresh?.status)})`)
         : 'لغو شد و از دفتر برداشته شد');
       await load();
     } catch (e) { setToast(e.message); } finally { setRowBusy(0); }
@@ -129,7 +136,7 @@ export default function Reminders() {
         {shown.map((r, i) => (
           <motion.article key={r.id} {...row(i)} className={`rm-row st-${r.status}`}>
             <div className="rm-row-head">
-              <b title={r.kind}>{kindFa(r.kind)}</b>
+              <b title={r.kind}>{kindFa(r)}</b>
               {r.patientName && <span>{r.patientName}</span>}
               {r.recipientName && <span>{r.recipientName}</span>}
               <span>{r.channel === 'chat' ? 'پیام‌رسان داخلی' : 'پیامک'}</span>
@@ -138,7 +145,7 @@ export default function Reminders() {
                 {r.status === 'pending' ? `موعد: ${faDate(r.dueAt)}` : faDate(r.sentAt ?? r.dueAt)}
                 {r.phone ? ` · ${String(r.phone).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}` : ''}
               </small>
-              <i className={`rm-tag s-${r.status}`} title={r.status}>{statusFa(r.status)}</i>
+              <i className={`rm-tag s-${r.status}`} title={r.status}>{r.statusFa ?? statusFa(r.status)}</i>
             </div>
             <p className="rm-text">{r.text}</p>
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}

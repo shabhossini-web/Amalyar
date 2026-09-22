@@ -6,6 +6,7 @@ import { faDate, J_MONTHS } from '../lib/jalali.js';
 import './crm.css';
 import { Alert, Back, Chart, Star } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
+import { useStatusMap } from './config.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
@@ -177,10 +178,9 @@ function FieldBlock({ f }) {
   );
 }
 
-const STATUS_FA = {
-  pending_fill: 'ناتمام', pending_payment: 'در انتظارِ فیش', pending_approval: 'در انتظارِ تأیید',
-  approved: 'تأییدشده', rejected: 'ردشده', expired: 'منقضی',
-};
+/* ⚠️ نگاشتِ سومِ وضعیتِ ثبت‌نام برداشته شد: «منقضی» می‌گفت آن‌جا که سرور
+   «رها‌شده» می‌گوید و تبِ ثبت‌نام «ناتمام» آن‌جا که سرور «در انتظارِ تکمیل».
+   یک ردیف، سه واژه. حالا از `/config.statuses.intake`. */
 
 /**
  * CRM — نسخهٔ اول: تحلیلِ فرم‌های زیرپرونده (نظرسنجی/پرسش‌نامه) + کانالِ آشنایی.
@@ -189,6 +189,7 @@ const STATUS_FA = {
  * فقط نوار می‌کشد. هر چه صفحه «بداند»، فردا با گزارشِ چاپی/CSV دو نظر پیدا می‌کرد.
  */
 export default function Crm() {
+  const intakeFa = useStatusMap('intake');
   const [data, setData] = useState(null);
   const [unf, setUnf] = useState(null);
   const [err, setErr] = useState('');
@@ -298,7 +299,7 @@ export default function Crm() {
               {f.total > 0 && (
                 <div className="crm-statuses">
                   {Object.entries(f.statuses).map(([k, n]) => (
-                    <span key={k} className={`crm-chip s-${k}`}>{STATUS_FA[k] ?? k}: {faNum(n)}</span>
+                    <span key={k} className={`crm-chip s-${k}`}>{intakeFa[k] ?? k}: {faNum(n)}</span>
                   ))}
                 </div>
               )}

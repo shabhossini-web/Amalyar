@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate } from '../lib/jalali.js';
+import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
-import { useConfig } from './config.jsx';
+import { useConfig, useStatusMap } from './config.jsx';
 import { HERO, useAllowedTools } from './tools.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
@@ -13,6 +13,7 @@ import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
+import JDate from './JDate.jsx';
 import './surgeon-portal.css';
 import './launcher.css';
 import './dashboard.css';
@@ -21,13 +22,14 @@ import './shell.css'; // `.sh-toast`
 import './work.css'; // ردیفِ کار (`.wk-*`) در «امروزِ من»
 
 const faNum = (n) => String(n ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
-const APPT_FA = { held: 'رزرو', confirmed: 'قطعی', arrived: 'رسید', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو' };
-const OP_FA = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو' };
+/* ⚠️ برچسبِ وضعیت از سرور می‌آید (`statusFa`/`opStatusFa`)، نه از نگاشتِ
+   کلاینتی — قانونِ «یک وضعیت، یک برچسب» در `server/src/patients/labels.ts`. */
 /* ⚠️ ساعت هم عدد است: بقیهٔ میز فارسی بود و فقط «۰۸:۳۰» لاتین می‌ماند — در
    اسکرین‌شات مثلِ وصلهٔ زبانِ دیگر می‌زد. `faNum` روی `null` رشتهٔ خالی می‌دهد،
    پس سه‌راههٔ ساعت/شماره/خط‌تیره دست‌نخورده می‌مانَد. */
 const faTime = (t) => (t ? faNum(t) : null);
-const ORDER_STATE_FA = { answered: 'نتیجه آمده', in_review: 'در حالِ بررسی' };
+/* ⚠️ نگاشتِ سومِ وضعیتِ سفارش برداشته شد — «نتیجه آمده» این‌جا در برابرِ
+   «نتیجه آمد — بررسی نشده»ی شیتِ سفارش. از `/config.statuses.order` می‌آید. */
 
 /**
  * پرتالِ پزشکِ همکار — در نورومانیتورینگ/ایمپلنت «پرتال جراح» (مراجعه‌ها، دستورِ تیم،
@@ -135,16 +137,39 @@ function Row({ open, className = '', children, ...attrs }) {
  * بازِ خودش. هیچ عددی این‌جا حساب نمی‌شود؛ `GET /surgeon/today` و `GET /work` آماده می‌دهند.
  */
 function DoctorToday({ things, reloadRef, toast, access }) {
+  const orderFa = useStatusMap('order');
   const [data, setData] = useState(null);
   const [work, setWork] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(0);
+  /* ⚠️ میزِ پزشک تنها میزی بود که **هیچ انتخابگرِ تاریخی نداشت**: پزشک
+     نمی‌توانست برنامهٔ فردا را ببیند. بازخوردِ مالک ۱۴۰۵/۰۶/۳۱ صریحاً
+     «تقویم‌ها … تو میزِ پزشک» را نام برد. */
+  const [jday, setJday] = useState(todayJStr);
+  const iso = jStrToIso(jday) ?? '';
+  /**
+   * نشانهٔ شلوغیِ روز — همان قراردادِ میزِ پذیرش و اتاقِ عمل.
+   *
+   * ⚠️ `JDate` **نگاشتِ `{روز: عدد}`** می‌خواهد، نه پاسخِ خامِ endpoint. نسخهٔ
+   * اولِ همین‌جا پاسخ را دست‌نخورده برگرداند و تقویم بی‌صدا بی‌نشانه ماند —
+   * چون شکستِ بارگذاریِ نشانه عمداً ساکت است، هیچ خطایی هم دیده نشد.
+   * معیارِ تأیید اسکرین‌شات بود، نه سبزبودنِ بیلد (قانونِ ۲۴).
+   *
+   * ⚠️ و جمعِ **ویزیت + نوبت**، نه یکی‌شان: میزِ پزشک هر دو را در یک فهرست
+   * نشان می‌دهد، پس نشانه هم باید همان را بشمارد.
+   */
+  const loadMarks = useCallback(async (y, m) => {
+    try {
+      const r = await api(`/surgeon/month?year=${y}&month=${m}`);
+      return Object.fromEntries((r?.days ?? []).map((d) => [d.day, (d.visits ?? 0) + (d.appointments ?? 0)]));
+    } catch { return {}; }
+  }, []);
   const load = useCallback(() => {
-    api('/surgeon/today').then((r) => { setData(r); setErr(''); }).catch((e) => setErr(e.message));
+    api(`/surgeon/today${iso ? `?date=${iso}` : ''}`).then((r) => { setData(r); setErr(''); }).catch((e) => setErr(e.message));
     /* ⚠️ خطا را به «کارِ بازی ندارید» ترجمه نکن — آن جمله یک **ادعا**ست. اگر
        ماژولِ کارها برای این حساب بسته باشد (۴۰۳) یا شبکه بیفتد، باید همان را بگوید. */
     api('/work?scope=inbox&limit=20').then((r) => setWork(Array.isArray(r) ? r : [])).catch((e) => setWork(e?.status === 403 ? 'forbidden' : 'error'));
-  }, []);
+  }, [iso]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { reloadRef.current = load; }, [load, reloadRef]);
   useEffect(() => {
@@ -165,7 +190,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
   const openVisit = (v) => things.open({ type: 'visit', id: v.id, patientId: v.patientId });
   const openAppt = (a) => things.open({
     type: 'appointment', id: a.id,
-    item: { title: `نوبت${a.topic ? ` — ${a.topic}` : ''}`, at: a.date, detail: a.time ?? (a.seq != null ? `شمارهٔ ${faNum(a.seq)}` : ''), state: a.status, stateFa: APPT_FA[a.status] ?? a.status },
+    item: { title: `نوبت${a.topic ? ` — ${a.topic}` : ''}`, at: a.date, detail: a.time ?? (a.seq != null ? `شمارهٔ ${faNum(a.seq)}` : ''), state: a.status, stateFa: a.statusFa ?? a.status },
   });
   const openOrder = (o) => things.open({ type: 'order', kind: o.kind, id: o.id, patientId: o.patientId });
 
@@ -199,8 +224,23 @@ function DoctorToday({ things, reloadRef, toast, access }) {
         )}
       </ul>
       <section className="sp-sec" aria-labelledby="sp-day-h">
-        <h2 id="sp-day-h">برنامهٔ امروز</h2>
-        {(data.day ?? []).length === 0 ? <p className="sp-empty">امروز نوبت یا مراجعه‌ای به نامِ شما نیست.</p> : (
+        <div className="sp-day-head">
+          <h2 id="sp-day-h">{data.isToday === false ? `برنامهٔ ${faDate(data.date)}` : 'برنامهٔ امروز'}</h2>
+          {/* ⚠️ انتخابگر و «امروز» یک **گروه**اند: در عرضِ موبایل عنوان به خطِ
+              خودش می‌رود و این دو با هم پایین می‌آیند. بدونِ این بسته‌بندی،
+              دکمه تنها به خطِ سوم می‌افتاد و شبیهِ سرآیندِ کارتِ زیرش می‌شد. */}
+          <div className="sp-day-pick">
+            <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
+            {data.isToday === false && (
+              <button type="button" className="sp-today" onClick={() => setJday(todayJStr())}>امروز</button>
+            )}
+          </div>
+        </div>
+        {(data.day ?? []).length === 0 ? (
+          <p className="sp-empty">
+            {data.isToday === false ? 'این روز نوبت یا مراجعه‌ای به نامِ شما نیست.' : 'امروز نوبت یا مراجعه‌ای به نامِ شما نیست.'}
+          </p>
+        ) : (
           <ul className="sp-rows">
             {data.day.map((r) => {
               /* ردیف بازکردنیِ **مراجعه** است اگر مراجعه دارد، وگرنه نوبت. */
@@ -244,7 +284,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
                   <span className="sp-row-time">{faDate(o.updatedAt)}</span>
                   <span className="sp-row-name">{o.patient?.fullName} <span className="sp-kind">{o.kindFa}</span></span>
                   <span className="sp-row-sub">{access.open ? 'برای بررسی و ثبتِ تصمیم باز کنید' : 'منتظرِ بررسی'}</span>
-                  <span className="sp-row-tag hot">{ORDER_STATE_FA[o.status] ?? o.status}</span>
+                  <span className="sp-row-tag hot">{o.statusFa ?? orderFa[o.status] ?? o.status}</span>
                 </Row>
               </li>
             ))}
@@ -265,6 +305,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
 
 /** «نتایجِ رسیده» — همهٔ نتیجه‌های بررسی‌نشدهٔ بیمارانِ پزشک، نه فقط امروز. */
 function ResultsPane({ things, reloadRef, access }) {
+  const orderFa = useStatusMap('order');
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState('');
   const load = useCallback(() => { api('/surgeon/today').then((r) => { setRows(r.unreviewed ?? []); setErr(''); }).catch((e) => setErr(e.message)); }, []);
@@ -281,7 +322,7 @@ function ResultsPane({ things, reloadRef, access }) {
             <span className="sp-row-time">{faDate(o.updatedAt)}</span>
             <span className="sp-row-name">{o.patient?.fullName} <span className="sp-kind">{o.kindFa}</span></span>
             <span className="sp-row-sub">{o.patient?.code}</span>
-            <span className="sp-row-tag hot">{ORDER_STATE_FA[o.status] ?? o.status}</span>
+            <span className="sp-row-tag hot">{o.statusFa ?? orderFa[o.status] ?? o.status}</span>
           </Row>
         </li>
       ))}
@@ -325,7 +366,7 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
     try { const url = await apiBlobUrl(`/surgeon/visits/${row.id}/documents/${doc.id}`); w.location.href = url; setTimeout(() => URL.revokeObjectURL(url), 60000); }
     catch (e) { w.close(); setMessage(e.message); }
   };
-  const status = OP_FA[row.opStatus] || row.opStatus;
+  const status = row.opStatusFa || row.opStatus;
   return (
     <article className="sp-card glass" data-visit-id={row.id}>
       {/* در مطب نامِ بیمار دکمه است و فرمِ همان مراجعه را در همین صفحه باز می‌کند (بازخوردِ مالک). */}

@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
-import { useTerms } from './config.jsx';
+import { useTerms, useStatusMap } from './config.jsx';
 import VisitForm from './VisitForm.jsx';
 import OrderSheet from './OrderSheet.jsx';
 import { useVisitDefs } from './visit-defs.js';
@@ -84,7 +84,7 @@ export function useThings({ patientId = null, onChanged, toast } = {}) {
  * (بازخوانیِ کامل + «کاندیدای جراحی») را می‌گذارد؛ بقیه پیش‌فرض را می‌گیرند.
  */
 export function ThingPopups({ things, onVisitSaved }) {
-  const { pop, close, changed, say, patientId } = things;
+  const { pop, open, close, changed, say, patientId } = things;
   const { user } = useAuth();
   const t = useTerms();
   /* تعریف‌های فرمِ مراجعه تنبل‌اند: تا فرم باز نشود شش فهرست خوانده نمی‌شود. */
@@ -123,7 +123,14 @@ export function ThingPopups({ things, onVisitSaved }) {
       />
       <AnimatePresence>
         {pop?.type === 'reminder' && <ReminderPop row={pop.row} item={pop.item} onClose={close} onActed={changed} toast={say} />}
-        {pop?.type === 'appointment' && <ApptPop id={pop.id} item={pop.item} onClose={close} onActed={changed} toast={say} />}
+        {pop?.type === 'appointment' && (
+          <ApptPop
+            id={pop.id} item={pop.item} onClose={close} onActed={changed} toast={say}
+            /* «شروعِ ویزیت» در همین پاپ‌آپ تمام می‌شود: فرمِ همان مراجعه
+               بلافاصله باز می‌شود، نه اینکه کاربر به صفحهٔ دیگری پرت شود. */
+            onStarted={(visitId, pid) => open({ type: 'visit', id: visitId, patientId: pid ?? patientId })}
+          />
+        )}
       </AnimatePresence>
     </>
   );
@@ -132,14 +139,10 @@ export function ThingPopups({ things, onVisitSaved }) {
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
 /* ══════════════ یادآوری ══════════════ */
-const REM_KIND_FA = {
-  next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ رو', pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل',
-  follow_up: 'فرمِ پیگیری', notice: 'اطلاعیه', dispatch: 'ابلاغِ کارشناس', appointment: 'نوبت',
-};
-const REM_STATUS_FA = {
-  pending: 'در صف', sending: 'در حالِ ارسال', sent: 'فرستاده شد', simulated: 'آزمایشی — فرستاده نشد',
-  failed: 'ناموفق', uncertain: 'نتیجه نامعلوم', cancelled: 'لغو شد',
-};
+/* ⚠️ دو نگاشتِ فارسیِ یادآوری برداشته شدند. کپیِ دومِ دفترِ یادآوری‌ها بودند
+   و **هر هفت کلید** فرق داشت («فرستاده شد» این‌جا، «ارسال ثبت شد» آن‌جا)؛
+   نوعش هم («عملِ پیشِ رو» در برابرِ «عملِ پیشِ‌رو») با یک نیم‌فاصله واگرا
+   شده بود. حالا هر دو از `/config.statuses.reminder{,Kind}` می‌آیند. */
 /* همان دو فهرستِ صفحهٔ یادآوری‌ها (W0.7): فرستاده‌شده نه دوباره می‌رود نه لغو می‌شود. */
 const REM_RETRYABLE = ['failed', 'uncertain', 'simulated'];
 const REM_CANCELLABLE = ['pending', 'uncertain', 'failed'];
@@ -150,6 +153,8 @@ const REM_CANCELLABLE = ['pending', 'uncertain', 'failed'];
  * نیامد (دسترسی)، ردیفِ خلاصهٔ خطِ زمان کافی است تا پاپ‌آپ خالی نماند.
  */
 function ReminderPop({ row, item, onClose, onActed, toast }) {
+  const remFa = useStatusMap('reminder');
+  const remKindFa = useStatusMap('reminderKind');
   const [busy, setBusy] = useState(false);
   const r = row ?? { id: item?.refId, status: item?.state, text: item?.detail, dueAt: item?.at, sentAt: null, kind: null, phone: null, error: null };
   const act = async (what) => {
@@ -165,12 +170,12 @@ function ReminderPop({ row, item, onClose, onActed, toast }) {
     <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-reminder" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label="یادآوری">
       <header>
         <Send width="15" height="15" />
-        <b>یادآوری{r.kind ? ` — ${REM_KIND_FA[r.kind] ?? r.kind}` : ''}</b>
+        <b>یادآوری{r.kind ? ` — ${r.kindFa ?? remKindFa[r.kind] ?? r.kind}` : ''}</b>
         <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <p className="rc-pop-text">{r.text || '—'}</p>
       <dl>
-        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${r.status ?? 'none'}`}>{REM_STATUS_FA[r.status] ?? r.status ?? '—'}</em></dd>
+        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${r.status ?? 'none'}`}>{r.statusFa ?? remFa[r.status] ?? r.status ?? '—'}</em></dd>
         {(r.sentAt || r.dueAt) && <><dt>{r.status === 'pending' ? 'موعد' : 'زمان'}</dt><dd>{faDate(r.sentAt ?? r.dueAt)}</dd></>}
         {r.phone && <><dt>گیرنده</dt><dd dir="ltr">{faNum(r.phone)}</dd></>}
         {r.error && <><dt>علت</dt><dd className="rc-pop-err">{r.error}</dd></>}
@@ -186,24 +191,67 @@ function ReminderPop({ row, item, onClose, onActed, toast }) {
 }
 
 /* ══════════════ نوبت ══════════════ */
-const APPT_STATUS_FA = { held: 'در انتظارِ پرداخت', confirmed: 'قطعی', arrived: 'در مطب', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو شد' };
+/* ⚠️ نگاشتِ محلی برداشته شد: `item.stateFa` از قبل از سرور می‌آمد و همین‌جا
+   fallback بود — یعنی کپی هیچ‌وقت لازم نبود، فقط می‌توانست واگرا شود. */
 /* همان کلیدهای `CANCEL_REASONS` سرور — دلیلِ لغو به بیمار پیامک می‌شود. */
 const APPT_CANCEL = { doctor: 'تعویقِ پزشک', patient: 'درخواستِ بیمار', clinical: 'شرایطِ بالینی', hospital: 'مشکلِ بیمارستان', other: 'سایر' };
 
-/** پاپ‌آپِ یک نوبت — جزئیات + تغییرِ وضعیت (همان `POST /appointments/:id/status` میزِ پذیرش). */
-function ApptPop({ id, item, onClose, onActed, toast }) {
+/**
+ * **پاپ‌آپِ یک نوبت** — جزئیات + همان دکمه‌هایی که میزِ پذیرش دارد.
+ *
+ * ⚠️ دو باگِ واقعی که این نسخه برایشان بازنویسی شد:
+ *
+ * ۱) **دکمه‌ها کپیِ کلاینتیِ ماشینِ وضعیت بودند** و با سرور یکی نبودند. بدتر
+ *    از ناهماهنگی: `open = !['done','cancelled','noshow'].includes(st)` یعنی
+ *    بیماری که منشی اشتباهی «نیامد» زده، از پروندهٔ بیمار و میزِ پزشک **هیچ
+ *    راهِ برگشتی** نداشت — در حالی که `APPT_TRANSITIONS.noshow = ['confirmed']`
+ *    سرور دقیقاً همان برگشت را مجاز می‌داند و میزِ پذیرش دکمه‌اش را دارد.
+ *
+ * ۲) **مسیرِ سرورش سطحِ سوپروایزر می‌خواست.** `POST /appointments/:id/status`
+ *    زیرِ `@Feature('calendar')` است؛ ولی این پاپ‌آپ از **میزِ پزشک** و
+ *    **پروندهٔ بیمار** هم باز می‌شود، جایی که کاربر سطحِ کارشناس دارد. یعنی
+ *    دکمه را می‌دید و با زدنش ۴۰۳ می‌گرفت. حالا مسیر `frontdesk` است (سطحِ
+ *    کارشناس) — همان دری که خودِ منشی از آن می‌رود.
+ *
+ * ⚠️ اگر خواندنِ نوبت نشد (نبودِ مجوز/شبکه)، **هیچ دکمه‌ای ساخته نمی‌شود** و
+ * پاپ‌آپ فقط جزئیات را نشان می‌دهد. برگرداندنِ همان کپیِ کلاینتی به‌عنوان
+ * fallback یعنی همان دو باگ از درِ پشتی برگردند.
+ */
+function ApptPop({ id, item, onClose, onActed, toast, onStarted }) {
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('patient');
-  const st = item?.state;
-  const open = !['done', 'cancelled', 'noshow'].includes(st);
+  const [row, setRow] = useState(null);
+  const t = useTerms();
+
+  /* `false` یعنی «خوانده شد و نشد» و `null` یعنی «هنوز نیامده» — دو حالتِ
+     متفاوت: اولی باید پیام بدهد، دومی باید ساکت بماند. */
+  useEffect(() => {
+    let alive = true;
+    api(`/frontdesk/appointments/${id}`)
+      .then((r) => { if (alive) setRow(r); })
+      .catch(() => { if (alive) setRow(false); });
+    return () => { alive = false; };
+  }, [id]);
+
+  const st = row?.status ?? item?.state;
+  const stFa = row?.statusLabel ?? item?.stateFa ?? st ?? '—';
   const set = async (status, extra = {}) => {
     setBusy(true);
     try {
-      await api(`/appointments/${id}/status`, { method: 'POST', body: { status, ...extra } });
+      await api(`/frontdesk/appointments/${id}/status`, { method: 'POST', body: { status, ...extra } });
       toast('وضعیتِ نوبت ثبت شد ✓');
       await onActed();
       onClose();
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
+  };
+  const start = async () => {
+    setBusy(true);
+    try {
+      const r = await api(`/frontdesk/appointments/${id}/start`, { method: 'POST' });
+      await onActed();
+      onClose();
+      onStarted?.(r.visitId, row?.patientId ?? null);
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
   return (
@@ -215,17 +263,30 @@ function ApptPop({ id, item, onClose, onActed, toast }) {
       </header>
       <dl>
         {item?.at && <><dt>تاریخ</dt><dd>{faDate(item.at)}{item.detail ? ` · ${faNum(item.detail)}` : ''}</dd></>}
-        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${st ?? 'none'}`}>{APPT_STATUS_FA[st] ?? item?.stateFa ?? '—'}</em></dd>
+        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${st ?? 'none'}`}>{stFa}</em></dd>
       </dl>
-      {open && !cancelling && (
+      {row === false && <p className="rc-pop-note">تغییرِ وضعیتِ نوبت در دسترسِ شما نیست.</p>}
+      {row && !cancelling && (
         <div className="rc-pop-acts">
-          {st !== 'confirmed' && st !== 'arrived' && <button type="button" className="rc-pop-ghost" disabled={busy} onClick={() => set('confirmed')}>قطعی شد</button>}
-          {st !== 'arrived' && <button type="button" className="rc-pop-main" disabled={busy} onClick={() => set('arrived')}>بیمار رسید</button>}
-          <button type="button" className="rc-pop-ghost" disabled={busy} onClick={() => set('noshow')}>نیامد</button>
-          <button type="button" className="rc-pop-ghost" disabled={busy} onClick={() => setCancelling(true)}>لغوِ نوبت…</button>
+          {/* ترتیب عمدی است: «شروعِ ویزیت» کارِ اصلی است، بقیه گذارِ وضعیت. */}
+          {row.visitId ? (
+            <button type="button" className="rc-pop-main" disabled={busy}
+              onClick={() => { onClose(); onStarted?.(row.visitId, row.patientId); }}>{t.visitOpen}</button>
+          ) : row.canStart ? (
+            <button type="button" className="rc-pop-main" disabled={busy} onClick={start}>{t.visitStart}</button>
+          ) : null}
+          {(row.nextOptions ?? []).map((o) => (
+            <button key={o.status} type="button" className="rc-pop-ghost" disabled={busy}
+              onClick={() => (o.status === 'cancelled' ? setCancelling(true) : set(o.status))}>
+              {o.label}
+            </button>
+          ))}
+          {!row.visitId && !row.canStart && row.startHint && (
+            <p className="rc-pop-note">{row.startHint}</p>
+          )}
         </div>
       )}
-      {open && cancelling && (
+      {row && cancelling && (
         <div className="rc-pop-field">
           <span>دلیلِ لغو — به بیمار پیامک می‌شود</span>
           <select value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}>

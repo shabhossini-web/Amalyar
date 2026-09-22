@@ -7,10 +7,12 @@ import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { summarize } from './billing.service';
-import { APPT_LABELS } from './appointments.service';
+import { APPT_LABELS, OP_LABELS } from './labels';
+import { clinicTodayIso, dayRangeUtc } from '../common/clinic-day';
+import { monthDayCounts } from './month-summary';
+import { ORDER_LABELS } from './labels';
 
-/** برچسبِ وضعیتِ عمل/ویزیت — مشتقِ سرور (قانون ۱۵)، هم‌خانوادهٔ `APPT_LABELS`. */
-const OP_LABELS: Record<string, string> = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو' };
+
 
 @Injectable()
 export class SurgeonPortalService {
@@ -39,19 +41,46 @@ export class SurgeonPortalService {
    * او آمده و بررسی نشده (همهٔ روزها — نتیجهٔ نخوانده تاریخ نمی‌شناسد). کارهای بازِ
    * او را رابط از `GET /work?scope=inbox` می‌گیرد که خودش به نامِ کاربر است.
    */
-  async today(user: any) {
+  /**
+   * شمارشِ روزهای یک ماهِ شمسی — نشانهٔ تقویمِ انتخابِ تاریخِ همین میز.
+   *
+   * ⚠️ دامنه **همان `scope`ِ خودِ پزشک** است، نه کلِ شرکت: نشانهٔ روز نباید
+   * بگوید «فردا شلوغ است» وقتی هیچ‌کدام از آن مراجعه‌ها مالِ این پزشک نیست.
+   * و نوبت‌ها با همان قاعدهٔ `today()` دامنه می‌خورند (بیمارِ من)، وگرنه دو
+   * تعریفِ متفاوت از «نوبتِ من» می‌ساختیم.
+   */
+  async month(user: any, jy: number, jm: number) {
+    const scope = await this.scope(user);
+    const mine = (user?.level ?? 0) >= LEVEL.SUPER_ADMIN
+      ? {}
+      : { OR: [{ doctorId: user?.id ?? -1 }, { patient: { visits: { some: scope } } }] };
+    return monthDayCounts(this.prisma, jy, jm, {
+      visitWhere: { ...scope, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
+      apptWhere: { status: { not: 'cancelled' }, ...mine },
+    });
+  }
+
+  /**
+   * میزِ پزشک — **یک روز**، پیش‌فرض امروز.
+   *
+   * ⚠️ `date` اختیاری اضافه شد چون میزِ پزشک تنها میزی بود که **هیچ
+   * انتخابگرِ تاریخی نداشت**: پزشک نمی‌توانست برنامهٔ فردا را ببیند و
+   * دیروز را هم نه. بازخوردِ مالک ۱۴۰۵/۰۶/۳۱ صریحاً «تقویم‌ها … تو میزِ
+   * پزشک» را نام برد.
+   */
+  async today(user: any, dateIso?: string) {
     const scope = await this.scope(user);
     const now = new Date();
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setHours(23, 59, 59, 999);
+    /* «امروز» به وقتِ مطب (`common/clinic-day.ts`) — نه ساعتِ کانتینر. */
+    const iso = dateIso && /^\d{4}-\d{2}-\d{2}$/.test(dateIso) ? dateIso : clinicTodayIso(now);
+    const [start, end] = dayRangeUtc(iso);
     /* ستونِ `Appointment.date` از نوعِ `DATE` است و قراردادِ کلِ ماژول این است که
        نیمه‌شبِ UTCِ همان روز ساخته شود (`appointments.service`).
-       ⚠️ روزِ تقویمی باید از **همان** `start`ِ محلی بیاید که پنجرهٔ مراجعه‌ها را
-       می‌سازد، نه از `toISOString()` آن: روی کانتینری که ساعتش UTC نیست،
-       نیمه‌شبِ محلی به روزِ UTCِ **قبل** ترجمه می‌شود و نوبت‌های امروز یک روز
-       عقب خوانده می‌شوند. */
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const day = new Date(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T00:00:00.000Z`);
+       ⚠️ حالا `start` خودش **همان** نیمه‌شبِ UTC است (`todayRangeUtc`)، پس
+       بازسازیِ دستیِ روز از اجزای محلی لازم نیست. نسخهٔ قبلی این کار را
+       می‌کرد تا از تلهٔ «نیمه‌شبِ محلی → روزِ UTCِ قبل» فرار کند؛ آن تله با
+       یکی‌شدنِ تعریفِ «امروز» از ریشه رفت. */
+    const day = start;
     const person = (p: any) => (p ? { id: p.id, code: p.code, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() } : null);
     const patientSel = { select: { id: true, code: true, firstName: true, lastName: true } };
     const [visits, appointments] = await Promise.all([
@@ -101,7 +130,7 @@ export class SurgeonPortalService {
         orderBy: { updatedAt: 'asc' }, take: 20,
         select: { id: true, patientId: true, visitId: true, status: true, updatedAt: true, patient: patientSel },
       });
-      unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient) })));
+      unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, statusFa: ORDER_LABELS[r.status] ?? r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient) })));
     }
     unreviewed.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
     /* سقفِ ۲۰ در هر نوع یعنی ممکن است چیزی از قلم بیفتد؛ شمارشِ واقعی برمی‌گردد
@@ -111,16 +140,22 @@ export class SurgeonPortalService {
     })))).reduce((a: number, b: number) => a + b, 0);
     const hhmm = (m: number | null) => (m == null ? null : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
     const visitViews = visits.map((v) => ({
-      id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime, opStatus: v.opStatus,
+      id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime,
+      opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       hospital: v.hospitalName, topic: v.topic?.name ?? null, patientId: v.patient.id, patient: person(v.patient),
       billing: summarize(v.charges, v.payments, v),
     }));
     const apptViews = appointments.map((a) => ({
-      id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, visitId: a.visitId, date: a.date,
+      id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, statusFa: APPT_LABELS[a.status] ?? a.status,
+      visitId: a.visitId, date: a.date,
       topic: a.topic?.name ?? null, patientId: a.patient?.id ?? null, patient: person(a.patient),
     }));
     return {
       now: now.toISOString(),
+      /* روزِ نمایش‌داده‌شده و اینکه امروز است یا نه — تا سربرگ بتواند «امروز»
+         را از «۳ مهر» تفکیک کند بی‌آنکه خودش تاریخ را دوباره حساب کند. */
+      date: iso,
+      isToday: iso === clinicTodayIso(now),
       visits: visitViews,
       appointments: apptViews,
       day: SurgeonPortalService.mergeDay(visitViews, apptViews),
@@ -217,7 +252,9 @@ export class SurgeonPortalService {
     ]);
     return { rows: rows.map(v => ({ id: v.id, patientId: v.patient.id, code: `${v.patient.code}-V${v.seq}`, fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
       kind: v.kind, topic: v.topic?.name ?? null,
-      opDate: v.opDate, opStartTime: v.opStartTime, opEndTime: v.opEndTime, opStatus: v.opStatus, procedure: v.procedureType?.name ?? v.opType,
+      opDate: v.opDate, opStartTime: v.opStartTime, opEndTime: v.opEndTime,
+      opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
+      procedure: v.procedureType?.name ?? v.opType,
       hospital: v.hospital?.name ?? v.hospitalName, surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}` : v.surgeonName,
       requiredItems: v.requiredItems ?? v.procedureType?.needs.map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item.name, n.item.size].filter(Boolean).join(' ') })) ?? [], instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
     })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical() };

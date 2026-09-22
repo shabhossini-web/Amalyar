@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { APPT_LABELS as APPT_FA_MAP } from './labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -7,16 +8,12 @@ import { FormsService } from './forms.service';
 import { AvailabilityService } from './availability.service';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { RemindersService } from './reminders.service';
+import { clinicTodayIso, dayUtc } from '../common/clinic-day';
 
 /** برچسب‌های فارسیِ وضعیتِ نوبت — مشتقِ سرور (قانون ۱۵). */
-export const APPT_LABELS: Record<string, string> = {
-  held: 'در انتظارِ پرداخت',
-  confirmed: 'قطعی',
-  arrived: 'در مطب',
-  done: 'انجام شد',
-  noshow: 'نیامد',
-  cancelled: 'لغو شد',
-};
+/* ⚠️ خانه‌اش `labels.ts` است (تنها منبعِ برچسب‌های وضعیت). این‌جا فقط دوباره
+   export می‌شود تا ایمپورت‌های موجود نشکنند و کسی وسوسه نشود نسخهٔ دوم بنویسد. */
+export { APPT_LABELS } from './labels';
 
 /**
  * گذارهای مجازِ وضعیت — ماشینِ وضعیتِ صریح، نه «هر چیزی به هر چیزی».
@@ -55,6 +52,55 @@ export function apptLane(status: string, visitId: number | null): string {
   return 'booked';   // held | confirmed
 }
 
+/**
+ * **چرا «شروعِ ویزیت» ممکن نیست — یک قاعده، یک جمله، برای دکمه و برای مجوز.**
+ *
+ * `null` یعنی مجاز است؛ رشته یعنی همان علتی که هم دکمه را خاموش می‌کند و هم
+ * اگر کسی مستقیم به API بزند ۴۰۰ می‌گیرد. **دو در، یک قفل.**
+ *
+ * ⚠️ **ولی قفل دو حلقه دارد و یکی‌شان مالِ همه نیست.**
+ *
+ * | قاعده | کجا | چرا |
+ * |---|---|---|
+ * | لغوشده/نیامد/تمام‌شده شروع نمی‌شود | **همه‌جا** | ادعایی دربارهٔ چیزی که رخ نداده |
+ * | نوبتِ بی‌پرونده شروع نمی‌شود | **همه‌جا** | مراجعه بی‌بیمار معنا ندارد |
+ * | `held` (پول‌نداده) شروع نمی‌شود | فقط **تختهٔ میزِ پذیرش** | «پرداخت دیده شد» باید کلیکِ عمدیِ «قطعی شد» باشد، و آن دکمه همان‌جا کنارِ دست است |
+ * | فقط نوبتِ **امروز** | فقط **تختهٔ میزِ پذیرش** | تخته یک‌روزه است؛ کلیک روی ردیفِ دیروز اشتباه است نه تصمیم |
+ *
+ * 🩹 **این تفکیک از دو شکستِ واقعی درآمد، نه از نظریه.** نسخهٔ اولِ این تابع
+ * هر چهار قاعده را همه‌جا اعمال کرد و دو رفتارِ **عمدی** را شکست:
+ * - نوبتی که برای مراجعهٔ هفتهٔ بعد گرفته شده و بیمار زودتر آمده: «شروع»
+ *   تاریخِ مراجعه‌اش را امروز می‌کند («تاریخِ حضورِ واقعی») —
+ *   `w1-5-appointment-visit-link` با فیکسچرِ +۷ روز تضمینش می‌کند.
+ * - نوبتِ `held`ِ ثبت‌نامِ آنلاین که ادمین از پرونده شروعش می‌کند — همان
+ *   سوییت، بندِ کارِ `confirm_appointment`.
+ *
+ * چیزی که واقعاً همه‌جا شکسته بود این‌ها بودند و مانده‌اند: تقویم برای نوبتِ
+ * **«نیامد»** هم دکمه می‌داد، مسیرِ مستقیمِ `POST /appointments/:id/visit`
+ * هیچ‌کدام از این‌ها را نداشت جز «لغو نباشد»، و پاپ‌آپِ نوبت اصلاً دکمه‌ای
+ * نداشت.
+ *
+ * ⚠️ ترتیبِ چک‌ها عمدی است: **اول وضعیت، بعد تاریخ.** نوبتِ لغوشدهٔ دیروز
+ * باید بگوید «لغوشده شروع نمی‌شود»، نه «فقط امروز» — علتِ اولی درست‌کردنی
+ * نیست و پیامِ دومی کاربر را دنبالِ نخودِ سیاه می‌فرستد.
+ */
+export function apptStartBlock(
+  a: { status: string; date: Date; patientId: number | null },
+  deskToday?: string,
+): string | null {
+  if (a.status === 'cancelled' || a.status === 'noshow' || a.status === 'done') {
+    return `نوبتِ «${APPT_FA_MAP[a.status] ?? a.status}» شروع نمی‌شود`;
+  }
+  if (a.patientId == null) return 'این نوبت هنوز به پرونده‌ای وصل نیست — اول ثبت‌نامش تأیید شود';
+  /* از این‌جا به پایین **سیاستِ تخته** است، نه ثابتِ داده. */
+  if (!deskToday) return null;
+  if (a.status === 'held') return 'اول «قطعی شد» را بزنید، بعد شروع';
+  if (a.date.toISOString().slice(0, 10) !== deskToday) {
+    return 'از میزِ پذیرش فقط نوبتِ همین امروز شروع می‌شود';
+  }
+  return null;
+}
+
 export const APPT_TRANSITIONS: Record<string, string[]> = {
   held: ['confirmed', 'cancelled'],
   confirmed: ['arrived', 'noshow', 'cancelled'],
@@ -80,7 +126,14 @@ export class AppointmentsService {
     private events: EventsService,
   ) {}
 
-  view(a: any) {
+  /**
+   * `deskToday` اختیاری است و فقط میزِ پذیرش می‌دهدش — تنها جایی که «امروز»
+   * و «پول‌نداده» بخشی از قاعدهٔ شروع‌اند (جدولِ `apptStartBlock`).
+   */
+  view(a: any, deskToday?: string) {
+    /* یک‌بار، نه دوبار: `view` روی تختهٔ ۲۰۰ ردیفی برای هر ردیف صدا زده
+       می‌شود و هر فراخوانیِ اضافه یک فرمترِ `Intl` تازه می‌ساخت. */
+    const startHint = apptStartBlock(a, deskToday);
     return {
       id: a.id,
       date: a.date.toISOString().slice(0, 10),
@@ -88,7 +141,7 @@ export class AppointmentsService {
       time: a.startMin == null ? null : AvailabilityService.minToHHMM(a.startMin),
       seq: a.seq,
       status: a.status,
-      statusLabel: APPT_LABELS[a.status] ?? a.status,
+      statusLabel: APPT_FA_MAP[a.status] ?? a.status,
       note: a.note,
       patientId: a.patientId,
       patientCode: a.patient?.code ?? null,
@@ -108,6 +161,11 @@ export class AppointmentsService {
         status: st, label: APPT_ACTIONS[st] ?? st,
       })),
       lane: apptLane(a.status, a.visitId ?? null),
+      /* «شروعِ ویزیت» هم مشتقِ سرور است — و این‌جا، کنارِ `lane` و
+         `nextOptions`، نه در یک میزِ خاص. `startHint` علتِ خاموشی را همراه
+         می‌آورد تا دکمه بی‌توضیح ناپدید نشود؛ کاربر باید بفهمد **چرا**. */
+      canStart: startHint === null,
+      startHint,
     };
   }
 
@@ -117,7 +175,7 @@ export class AppointmentsService {
   } as const;
 
   /** نوبت‌های یک روز — مرتب به ساعت، بعد شمارهٔ صف. */
-  async day(date: string) {
+  async day(date: string, deskToday?: string) {
     const d = new Date(`${date}T00:00:00.000Z`);
     if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخ نامعتبر است');
     const rows = await this.prisma.appointment.findMany({
@@ -125,7 +183,7 @@ export class AppointmentsService {
       orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
       include: AppointmentsService.INCLUDE,
     });
-    return rows.map((r) => this.view(r));
+    return rows.map((r) => this.view(r, deskToday));
   }
 
   /**
@@ -304,7 +362,7 @@ export class AppointmentsService {
     const allowed = APPT_TRANSITIONS[row.status] ?? [];
     if (!allowed.includes(status)) {
       throw new BadRequestException(
-        `از «${APPT_LABELS[row.status] ?? row.status}» نمی‌شود به «${APPT_LABELS[status] ?? status}» رفت`,
+        `از «${APPT_FA_MAP[row.status] ?? row.status}» نمی‌شود به «${APPT_FA_MAP[status] ?? status}» رفت`,
       );
     }
     const updated = await this.prisma.appointment.update({
@@ -357,6 +415,23 @@ export class AppointmentsService {
     // تعریف و اعتبارسنجیِ فرم بیرون از tx؛ داخل قفل هیچ queryِ اتصال دیگری نداریم.
     const source = await this.prisma.appointment.findUnique({ where: { id } });
     if (!source) throw new NotFoundException('نوبت پیدا نشد');
+    /**
+     * ⚠️ **درِ دوم، همان قفلِ سراسری.** این متد از دو جا صدا زده می‌شود:
+     * میزِ پذیرش (که سیاستِ تختهٔ خودش را هم اعمال می‌کند) و
+     * `POST /appointments/:id/visit` که **هیچ شرطی نداشت** جز «لغو نباشد» —
+     * پس تقویم برای نوبتِ **«نیامد»** هم دکمه می‌ساخت و آن دکمه کار می‌کرد.
+     *
+     * ⚠️ بدونِ `deskToday` صدا زده می‌شود: سیاستِ تخته (پول‌نداده + امروز)
+     * مالِ این در نیست. شروعِ نوبتِ `held`ِ ثبت‌نامِ آنلاین از پرونده، و
+     * شروعِ نوبتِ هفتهٔ بعد وقتی بیمار زودتر آمده، هر دو **عمدی**اند.
+     *
+     * ⚠️ نوبتی که از قبل `visitId` دارد مستثناست: آن «شروع» نیست، «بازکردنِ»
+     * مراجعه‌ای است که قبلاً شروع شده.
+     */
+    if (!source.visitId) {
+      const block = apptStartBlock(source);
+      if (block) throw new BadRequestException(block);
+    }
     let create: Awaited<ReturnType<PatientsService['prepareVisitCreation']>> | undefined;
     if (!source.visitId && !source.forVisitId && source.patientId && source.status !== 'cancelled') {
       const kinds = await this.forms.visitKinds();
@@ -374,9 +449,11 @@ export class AppointmentsService {
         await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${id} FOR UPDATE`;
         const row = await tx.appointment.findUnique({ where: { id } });
         if (!row) throw new NotFoundException('نوبت پیدا نشد');
-        if (row.status === 'cancelled') throw new BadRequestException('نوبتِ لغوشده ویزیت نمی‌شود');
         if (row.visitId) return { visitId: row.visitId, made: false };
-        if (!row.patientId) throw new BadRequestException('این نوبت هنوز به پرونده‌ای وصل نیست — اول ثبت‌نامش تأیید شود');
+        /* دوباره زیرِ قفل: بینِ خواندنِ `source` و گرفتنِ ردیف ممکن است کسی
+           همان نوبت را لغو کرده باشد. */
+        const locked = apptStartBlock(row);
+        if (locked) throw new BadRequestException(locked);
         if (row.patientId !== source.patientId || row.forVisitId !== source.forVisitId
           || row.topicId !== source.topicId || row.startMin !== source.startMin || +row.date !== +source.date) {
           throw new ConflictException('نوبت هم‌زمان تغییر کرده است؛ صفحه را تازه کنید و دوباره شروع کنید');
@@ -388,7 +465,7 @@ export class AppointmentsService {
           const linked = await tx.appointment.findUnique({ where: { visitId: target.id }, select: { id: true } });
           if (linked) throw new BadRequestException('این مراجعه از نوبتِ دیگری شروع شده است؛ همان نوبت را باز کنید');
           // تاریخِ حضور واقعی؛ وضعیتِ بالینی و تمام پاسخ‌های پیگیری حفظ می‌شوند.
-          const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+          const today = dayUtc(clinicTodayIso());
           await tx.visit.update({ where: { id: target.id }, data: { opDate: today } });
           visitId = target.id;
         } else {

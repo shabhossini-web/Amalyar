@@ -9,16 +9,11 @@ import './launcher.css'; /* lx-toast */
 import './notes-search.css';
 import { Alert, Back, Book, Search } from '../ui/icons.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
+import { useStatusList } from './config.jsx';
 
-const KINDS = [
-  { id: 'history', name: 'شرحِ حال' },
-  { id: 'visit', name: 'شرحِ ویزیت' },
-  { id: 'op', name: 'شرحِ عمل' },
-  { id: 'progress', name: 'سیرِ بیماری' },
-  { id: 'discharge', name: 'خلاصهٔ ترخیص' },
-  { id: 'consult', name: 'مشاوره' },
-];
-const KIND_FA = Object.fromEntries(KINDS.map((k) => [k.id, k.name]));
+/* ⚠️ فهرستِ نوع‌ها از `/config.statuses.note` می‌آید — تنها خانه‌اش
+   `server/src/patients/labels.ts` است. کپیِ ثابتِ قبلی با افزودنِ هر نوعِ
+   تازه بی‌صدا کهنه می‌شد. */
 
 /**
  * جستجوی بالینی (#48) — بینِ **همهٔ** پرونده‌ها: «همهٔ شرح‌عمل‌های فلان عمل»،
@@ -26,6 +21,10 @@ const KIND_FA = Object.fromEntries(KINDS.map((k) => [k.id, k.name]));
  * همهٔ استخراج سمتِ سرور است؛ این صفحه فقط فیلتر می‌فرستد و کارت می‌کشد.
  */
 export default function NotesSearch() {
+  /* فهرستِ کاملِ نوع‌ها برای کشویِ فیلتر (برچسبِ هر ردیف را خودش می‌آورد). */
+  const noteKinds = useStatusList('note');
+  const kindOptions = noteKinds.map((k) => ({ id: k.key, name: k.label }));
+  const kindFa = Object.fromEntries(noteKinds.map((k) => [k.key, k.label]));
   const [f, setF] = useState({ kind: null, procedureTypeId: null, diagnosisId: null, topicId: null, t: '' });
   const [defs, setDefs] = useState({ procedures: [], diagnoses: [], topics: [] });
   const [rows, setRows] = useState(null);
@@ -136,7 +135,7 @@ export default function NotesSearch() {
               {(aiRes.matches ?? []).map((m) => (
                 <article className="ns-card ns-ai-hit" key={m.noteId}>
                   <header className="ns-card-head">
-                    <span className="ns-kind">{KIND_FA[m.kind] ?? m.kind}</span>
+                    <span className="ns-kind">{m.kindFa ?? kindFa[m.kind] ?? m.kind}</span>
                     <Link to={`/app/patients/${m.patientId}`} className="ns-patient">
                       <b>{m.patientName ?? 'بی‌نام'}</b>
                       {m.patientCode && <span>{m.patientCode}</span>}
@@ -152,7 +151,7 @@ export default function NotesSearch() {
       )}
 
       <div className="ns-filters">
-        <Pick label="نوعِ شرح" placeholder="نوعِ شرح: همه" value={f.kind} options={KINDS} onChange={(v) => change({ kind: v })} />
+        <Pick label="نوعِ شرح" placeholder="نوعِ شرح: همه" value={f.kind} options={kindOptions} onChange={(v) => change({ kind: v })} />
         <Pick label="نوعِ عمل" placeholder="نوعِ عمل: همه" value={f.procedureTypeId} options={defs.procedures} onChange={(v) => change({ procedureTypeId: v })} />
         <Pick label="تشخیص" placeholder="تشخیص: همه" value={f.diagnosisId} options={defs.diagnoses} onChange={(v) => change({ diagnosisId: v })} />
         <Pick label="موضوعِ ویزیت" placeholder="موضوع: همه" value={f.topicId} options={defs.topics} onChange={(v) => change({ topicId: v })} />
@@ -174,7 +173,7 @@ export default function NotesSearch() {
       {rows && rows.map((n, i) => (
         <motion.article {...row(i)} className="ns-card" key={n.id}>
           <header className="ns-card-head">
-            <span className="ns-kind">{KIND_FA[n.kind] ?? n.kind}</span>
+            <span className="ns-kind">{n.kindFa ?? kindFa[n.kind] ?? n.kind}</span>
             <Link to={`/app/patients/${n.patientId}`} className="ns-patient">
               <b>{n.patientName ?? 'بی‌نام'}</b>
               {n.patientCode && <span>{n.patientCode}</span>}

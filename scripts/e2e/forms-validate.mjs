@@ -2,9 +2,11 @@
  * اعتبارسنجی از مسیرِ **واقعیِ نوشتن** (ثبتِ مراجعه) سنجیده می‌شود، نه از یک
  * تابعِ جدا: همان جایی که کاربر ۴۰۰ می‌گیرد.
  *
- * دو ادعا:
+ * سه ادعا:
  *  • باکسِ پرداختِ ستاره‌دار **جلوی ذخیره را نمی‌گیرد** (مقدار ندارد).
  *  • باکسِ عکسِ ستاره‌دار **می‌گیرد** تا وقتی ارجاعِ فایل نیامده.
+ *  • باکسِ **هسته‌ایِ** ستاره‌دار که ستون نیست (`opReport`) هم درست سنجیده
+ *    می‌شود — نه «همیشه خالی».
  */
 const API = 'http://localhost:3101/api';
 let TOKEN = '';
@@ -80,6 +82,43 @@ console.log('\nآبجکتِ خالی نباید «پر» حساب شود');
 {
   const r = await api('/visits', { method: 'POST', body: { ...base, extra: { scan: {} } } });
   ok('عکسِ نیمه‌کاره ({}) رد می‌شود', r.status === 400, 'status=' + r.status + ' ' + r.text.slice(0, 200));
+}
+
+/**
+ * ⚠️ **فیلدِ هسته‌ایِ اجباری که ستون نیست — ستاره‌ای که فیلد را برای ابد قفل
+ * می‌کرد.**
+ *
+ * `opReport` («شرحِ عمل») در کاتالوگِ فرم‌ساز هست (پس ستاره می‌گیرد) ولی در
+ * `BUILTIN_VISIT_KEYS` نیست، چون ستون نیست و به `ClinicalNote` می‌رود. تا
+ * دیروز `pickBuiltin` فقط `BUILTIN_VISIT_KEYS` را برمی‌داشت، یعنی مقدارش
+ * **هیچ‌وقت** وارد اعتبارسنجی نمی‌شد: مدیر که «شرحِ عمل» را اجباری می‌کرد،
+ * ثبتِ مراجعه **برای همیشه** ۴۰۰ می‌گرفت («شرحِ عمل را کامل کنید») هر چقدر
+ * هم کاربر می‌نوشت. و چون خطا درست و فارسی بود، شبیهِ باگ هم به‌نظر نمی‌رسید.
+ */
+console.log('\nفیلدِ هسته‌ایِ اجباری که ستون نیست (`opReport`)');
+{
+  const cur = (await api(`/forms/visit.${key}`)).json;
+  const rep = (cur.fields ?? []).find((f) => f.key === 'opReport');
+  ok('«شرحِ عمل» در فرم ردیفِ builtin دارد', !!rep, JSON.stringify((cur.fields ?? []).map((f) => f.key)));
+  if (rep) {
+    await api(`/forms/fields/${rep.id}`, { method: 'PATCH', body: { required: true, active: true } });
+    const withImg = { ...base, extra: { scan: { id: 7, url: '/x.jpg', name: 'x.jpg' } } };
+
+    const empty = await api('/visits', { method: 'POST', body: withImg });
+    ok('بدونِ شرحِ عمل ۴۰۰ می‌گیرد', empty.status === 400 && /شرحِ عمل/.test(empty.text),
+      'status=' + empty.status + ' ' + empty.text.slice(0, 200));
+
+    const filled = await api('/visits', { method: 'POST', body: { ...withImg, opReport: 'شرحِ کاملِ عمل.' } });
+    ok('⚠️ **نباید بیفتد:** با شرحِ عمل هم رد شود (ستارهٔ ابدی)',
+      filled.status < 300, 'status=' + filled.status + ' ' + filled.text.slice(0, 250));
+    if (filled.json?.id) {
+      const back = (await api(`/visits/${filled.json.id}`)).json;
+      ok('و شرح واقعاً ذخیره شد (از `ClinicalNote` برمی‌گردد)',
+        back?.opReport === 'شرحِ کاملِ عمل.', JSON.stringify(back?.opReport));
+      await api(`/visits/${filled.json.id}`, { method: 'DELETE' });
+    }
+    await api(`/forms/fields/${rep.id}`, { method: 'PATCH', body: { required: false } });
+  }
 }
 
 console.log('\n──────────────────────────────');

@@ -19,8 +19,33 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
 
 const KINDS = ['next_visit', 'surgery', 'appointment', 'pre_op_care', 'post_op_care', 'follow_up', 'notice', 'dispatch', 'zzz_unknown'];
+/**
+ * ⚠️ **fixture قراردادِ امروزِ سرور را می‌سازد، نه قراردادِ دیروز را.**
+ *
+ * تا دیروز کلاینت نگاشتِ فارسیِ خودش را داشت، پس ردیفِ خامِ این fixture کافی
+ * بود. حالا برچسب از سرور می‌آید — هم **همراهِ خودِ ردیف** (`kindFa`) و هم در
+ * کاتالوگِ `/config.statuses` — و fixtureِ بی‌برچسب یعنی صفحه چیزی برای
+ * نشان‌دادن ندارد و سنجه به‌دروغ قرمز می‌شود.
+ *
+ * ⚠️ `zzz_unknown`/`weird_status` عمداً **بی‌برچسب** می‌مانند: ادعای اصلیِ این
+ * بند همان است — کلیدِ ناشناخته برچسبِ عام می‌گیرد و خودِ کلید فقط در `title`.
+ */
+const KIND_FA = {
+  next_visit: 'ویزیتِ بعدی', surgery: 'عملِ پیشِ‌رو', appointment: 'نوبت',
+  pre_op_care: 'مراقبتِ قبل از عمل', post_op_care: 'مراقبتِ بعد از عمل',
+  follow_up: 'فرمِ پیگیری', notice: 'اطلاع‌رسانی', dispatch: 'ابلاغِ برنامهٔ روز',
+};
+const STATUS_FA = {
+  pending: 'در صف', sending: 'در حالِ ارسال', sent: 'ارسال ثبت شد',
+  simulated: 'آزمایشی — ارسال نشده', failed: 'ارسالِ ناموفق',
+  uncertain: 'نتیجهٔ ارسال نامشخص', cancelled: 'لغو شد',
+};
+const catalog = (m) => Object.entries(m).map(([key, label]) => ({ key, label }));
 const rows = KINDS.map((kind, i) => ({
-  id: i + 1, kind, status: kind === 'zzz_unknown' ? 'weird_status' : 'pending', channel: 'sms',
+  id: i + 1, kind, kindFa: KIND_FA[kind] ?? null,
+  status: kind === 'zzz_unknown' ? 'weird_status' : 'pending',
+  statusFa: kind === 'zzz_unknown' ? null : STATUS_FA.pending,
+  channel: 'sms',
   /* متنِ ردیف عمداً کلید را ندارد تا سنجهٔ «کلیدِ خام روی صفحه» خودِ fixture را نگیرد. */
   dueAt: '2026-09-17T08:00:00.000Z', sentAt: null, text: `پیامِ آزمایشیِ ${i + 1}`, phone: '09120000000',
   patientName: 'بیمار آزمایشی', recipientName: null, visitCode: 'AM-001-V1', deliveryStatus: null, providerId: null, error: null,
@@ -36,7 +61,10 @@ try {
   const { context, writes, errors } = await mockContext(browser, ({ path, method }) => {
     if (path === '/auth/me') return { id: 1, firstName: 'تست', lastName: 'مدیر', level: 6, status: 'active' };
     if (path === '/auth/accounts') return [];
-    if (path === '/config') return { vertical: 'clinic', brand: {}, verticals: [] };
+    if (path === '/config') return {
+      vertical: 'clinic', brand: {}, verticals: [],
+      statuses: { reminder: catalog(STATUS_FA), reminderKind: catalog(KIND_FA) },
+    };
     if (path === '/features') return [{ key: 'dashboard', allowed: true }];
     if (path === '/reminders') return rows;
     if (path === '/public/order/tok' && method === 'GET') return current;

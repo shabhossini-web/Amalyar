@@ -15,10 +15,13 @@ import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { FormsService } from './forms.service';
-import { BUILTIN_VISIT_KEYS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, VISIT_CATALOG_KEYS } from './form-presets';
+import { visitMoneyMap } from './visit-money';
 import { syncLinkDocuments } from './link-documents';
 import { setVisitNote, VISIT_NOTE_KINDS } from './clinical-note';
+import { OP_LABELS } from './labels';
 import { summarize } from './billing.service';
+import { todayRangeUtc } from '../common/clinic-day';
 
 /**
  * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
@@ -102,6 +105,10 @@ function enrich(v: any, kinds?: KindMap) {
     decidedInVisitId: v.decidedInVisitId ?? null,
     followOfVisitId: v.followOfVisitId ?? null,
     opStatus: v.opStatus,
+    /* برچسب همراهِ خودِ وضعیت می‌رود — قانونِ «یک وضعیت، یک برچسب»
+       (`labels.ts`). داشبورد و پرونده تا دیروز نگاشتِ خودشان را داشتند و
+       «تمام‌شده/کنسل» می‌نوشتند، در حالی که بقیهٔ سامانه «انجام شد/لغو». */
+    opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
     opStartTime: v.opStartTime,
     opEndTime: v.opEndTime,
     techArriveTime: v.techArriveTime,
@@ -505,27 +512,18 @@ export class PatientsService {
    * وگرنه «سورت بر مانده» بی‌سروصدا بخشی از نتیجه را حذف می‌کرد.
    */
   private async moneyOrderedIds(scoped: any, f: VisitFilter): Promise<number[]> {
-    const visits = await this.prisma.visit.findMany({
-      where: scoped,
-      select: { id: true, pricingModel: true, globalAmount: true },
-    });
-    if (!visits.length) return [];
-    const ids = visits.map((v) => v.id);
-    const [charges, payments] = await Promise.all([
-      this.prisma.charge.groupBy({ by: ['visitId'], where: { visitId: { in: ids } }, _sum: { amount: true } }),
-      this.prisma.payment.groupBy({ by: ['visitId'], where: { visitId: { in: ids } }, _sum: { amount: true } }),
-    ]);
-    const totalOf = new Map(charges.map((c) => [c.visitId, c._sum.amount ?? 0]));
-    // مدلِ گلوبال: مبلغِ توافقی جای جمعِ اقلام می‌نشیند — سورت و فیلترِ «بدهکار»
-    // باید همان عددی را ببینند که روی فاکتور است.
-    for (const v of visits) {
-      if (v.pricingModel === 'global' && v.globalAmount != null) totalOf.set(v.id, v.globalAmount);
-    }
-    const paidOf = new Map(payments.map((p) => [p.visitId, p._sum.amount ?? 0]));
+    /* همان قاعدهٔ صورت‌حساب — سورت و فیلترِ «بدهکار» باید عیناً همان عددی را
+       ببینند که روی کارت و فاکتور است (مدلِ گلوبال از جمله). */
+    /* ⚠️ `allVisits` لازم است: سورت و صفحه‌بندی روی **همهٔ** مراجعه‌های دامنه
+       انجام می‌شود و مراجعهٔ بی‌قلم هم باید در فهرست بماند — وگرنه «سورت بر
+       مانده» بی‌سروصدا بخشی از نتیجه را حذف می‌کند. */
+    const money = await visitMoneyMap(this.prisma, scoped, { allVisits: true });
+    if (!money.size) return [];
+    const ids = [...money.keys()];
 
     let rows = ids.map((id) => {
-      const total = totalOf.get(id) ?? 0;
-      return { id, total, due: Math.max(0, total - (paidOf.get(id) ?? 0)) };
+      const m = money.get(id)!;
+      return { id, total: m.total, due: Math.max(0, m.due) };
     });
     if (f.owing) rows = rows.filter((r) => r.due > 0);
 
@@ -602,27 +600,31 @@ export class PatientsService {
      */
     const and = (extra: any) => ({ ...scoped, AND: [...(scoped.AND ?? []), extra] });
     const live = and({ opStatus: { not: 'cancelled' } });
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    /* «امروز» به وقتِ مطب — یک تعریف برای کلِ سرور (`common/clinic-day.ts`). */
+    const [dayStart, dayEnd] = todayRangeUtc();
 
-    const [total, pending, today, kinds, chargeRows, payRows] = await Promise.all([
+    const [total, pending, today, kinds, money] = await Promise.all([
       this.prisma.visit.count({ where: scoped }),
       this.prisma.visit.count({ where: and({ opStatus: 'pending' }) }),
       this.prisma.visit.count({ where: { ...live, AND: [...live.AND, { opDate: { gte: dayStart, lte: dayEnd } }] } }),
       // نوع‌های موجود در کلِ نتیجه — نه فقط صفحهٔ جاری، وگرنه چیپِ «ویزیت» با
       // ورق‌زدن ظاهر و ناپدید می‌شود.
       this.prisma.visit.groupBy({ by: ['kind'], where: scoped }),
-      // به‌ازای هر مراجعه جمع می‌شود نه یک‌جا: مانده باید در سطحِ مراجعه صفر
-      // شود، وگرنه اضافه‌پرداختِ یک بیمار بدهیِ بیمارِ دیگر را می‌پوشاند.
-      this.prisma.charge.groupBy({ by: ['visitId'], where: { visit: live }, _sum: { amount: true } }),
-      this.prisma.payment.groupBy({ by: ['visitId'], where: { visit: live }, _sum: { amount: true } }),
+      /**
+       * ⚠️ **همان قاعدهٔ صورت‌حساب، نه یک جمعِ دستی.** نسخهٔ قبلی این‌جا
+       * `charge.groupBy` می‌زد و `pricingModel === 'global'` را نمی‌دید —
+       * برخلافِ `moneyOrderedIds` و `summarize`. نتیجه: مراجعهٔ با **مبلغِ
+       * توافقی** در کارتِ خودش ماندهٔ درست داشت ولی در «ماندهٔ کلِ» بالای
+       * همان صفحه اصلاً شمرده نمی‌شد؛ و چون `groupBy` فقط مراجعه‌های دارای
+       * قلم را می‌دهد، مراجعهٔ گلوبالِ بی‌قلم از تفکیکِ «طرفِ حساب» هم می‌افتاد.
+       */
+      visitMoneyMap(this.prisma, live),
     ]);
 
-    const paid = new Map(payRows.map((r) => [r.visitId, r._sum.amount ?? 0]));
-    const dueOf = (visitId: number, charged: number) => Math.max(0, charged - (paid.get(visitId) ?? 0));
-    const due = chargeRows.reduce((sum, r) => sum + dueOf(r.visitId, r._sum.amount ?? 0), 0);
+    /* ⚠️ کلمپ در سطحِ **مراجعه**: اضافه‌پرداختِ یک بیمار نباید بدهیِ بیمارِ
+       دیگر را بپوشاند. `visitMoneyMap` عمداً خام (و منفی‌پذیر) برمی‌گرداند. */
+    const dueOf = (visitId: number) => Math.max(0, money.get(visitId)?.due ?? 0);
+    const due = [...money.keys()].reduce((sum, id) => sum + dueOf(id), 0);
 
     /**
      * ماندهٔ **به تفکیکِ طرفِ حساب**.
@@ -631,20 +633,19 @@ export class PatientsService {
      * بیمارستانِ الف دو پرونده‌اند با دو تماس و دو زمان‌بندی. جمعِ سرجمعشان
      * فقط می‌گوید چقدر، نه از که.
      */
-    const owing = chargeRows.filter((r) => dueOf(r.visitId, r._sum.amount ?? 0) > 0);
+    const owing = [...money.keys()].filter((id) => dueOf(id) > 0);
     let byPayer: { key: string; label: string; due: number; count: number }[] = [];
     if (owing.length) {
       const rows = await this.prisma.visit.findMany({
-        where: { id: { in: owing.map((r) => r.visitId) } },
+        where: { id: { in: owing } },
         select: { id: true, payer: true, payerHospitalId: true, payerHospital: { select: { name: true } } },
       });
-      const chargedOf = new Map(owing.map((r) => [r.visitId, r._sum.amount ?? 0]));
       const acc = new Map<string, { label: string; due: number; count: number }>();
       for (const v of rows) {
         const key = v.payer === 'hospital' ? `hospital:${v.payerHospitalId ?? 0}` : 'patient';
         const label = v.payer === 'hospital' ? v.payerHospital?.name ?? 'بیمارستانِ نامشخص' : 'بیمار';
         const cur = acc.get(key) ?? { label, due: 0, count: 0 };
-        cur.due += dueOf(v.id, chargedOf.get(v.id) ?? 0);
+        cur.due += dueOf(v.id);
         cur.count += 1;
         acc.set(key, cur);
       }
@@ -1426,8 +1427,17 @@ function pickBuiltin(dto: any): Record<string, any> {
      تا دیروز نسخهٔ دستیِ همان فهرست این‌جا بود و مو به مو یکی بود — یعنی
      بار سوم که کسی کلیدی اضافه می‌کرد، این یکی از قلم می‌افتاد و ستارهٔ
      همان فیلد در **ثبتِ** مراجعه بی‌اثر می‌شد (در ویرایش نه، چون آن‌جا کلِ
-     `dto` اسپرد می‌شود) — یک ناهم‌خوانیِ بی‌صدا بینِ دو مسیر. */
-  for (const k of BUILTIN_VISIT_KEYS) {
+     `dto` اسپرد می‌شود) — یک ناهم‌خوانیِ بی‌صدا بینِ دو مسیر.
+
+     ⚠️ **و `VISIT_CATALOG_KEYS` هم، چون آن دو یکی نیستند.** `BUILTIN_VISIT_KEYS`
+     یعنی «کدام کلید به ستون می‌نشیند» و کاتالوگ یعنی «کدام فیلد در فرم‌ساز
+     ستاره می‌گیرد». تنها اختلافشان `opReport` است — که ستون نیست و به
+     `ClinicalNote` می‌رود — ولی همان یکی یک باگِ سخت می‌ساخت: اگر مدیر
+     «شرحِ عمل» را **اجباری** می‌کرد، مقدارش هیچ‌وقت وارد `values` نمی‌شد و
+     ثبتِ مراجعه **برای همیشه** ۴۰۰ می‌گرفت («شرحِ عمل را کامل کنید») هر چقدر
+     هم که کاربر می‌نوشت. ستاره‌ای که فیلد را برای ابد قفل کند از نبودنِ
+     ستاره بدتر است. */
+  for (const k of [...BUILTIN_VISIT_KEYS, ...VISIT_CATALOG_KEYS]) {
     if (k in dto) out[k] = dto[k];
   }
   return out;

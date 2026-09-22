@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AppointmentsService, APPT_LABELS } from './appointments.service';
+import { AppointmentsService, apptStartBlock } from './appointments.service';
 import { summarize } from './billing.service';
+import { monthDayCounts } from './month-summary';
+import { clinicTodayIso } from '../common/clinic-day';
 
 /** ترتیبِ ستون‌ها روی تخته — از چپ به راستِ جریانِ کار. */
 const LANES = [
@@ -31,14 +33,20 @@ const MAX_ROWS = 200;
 export class FrontDeskService {
   constructor(private prisma: PrismaService, private appts: AppointmentsService) {}
 
+  /* 🔴 «امروز» به وقتِ **مطب** است نه کانتینر. نسخهٔ قبلی روزِ UTC را می‌داد
+     ولی مرورگر روزِ محلی می‌فرستد؛ بینِ ۰۰:۰۰ تا ۰۳:۳۰ تهران این دو یک روز
+     فرق داشتند و `isToday` غلط می‌شد، یعنی `canStart` برای **کلِ تخته**
+     خاموش — هر شب سه ساعت و نیم، بی‌هیچ خطایی. `common/clinic-day.ts`. */
   private static todayIso() {
-    const d = new Date();
-    d.setUTCHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10);
+    return clinicTodayIso();
   }
 
   async day(date: string) {
-    const rows = await this.appts.day(date);
+    /* ⚠️ `deskToday` داده می‌شود چون این **تختهٔ یک روز** است: ردیفِ دیروز و
+       ردیفِ پول‌نداده دکمهٔ شروع نمی‌گیرند. تقویم و پروندهٔ بیمار این دو قید
+       را ندارند — آن‌جا کاربر یک نوبتِ مشخص را انتخاب کرده، نه یک ردیف از
+       تختهٔ امروز، و دکمهٔ «قطعی شد» هم کنارِ دستش نیست. */
+    const rows = await this.appts.day(date, FrontDeskService.todayIso());
     const capped = rows.length > MAX_ROWS;
     const shown = capped ? rows.slice(0, MAX_ROWS) : rows;
     const [billing, debt] = await Promise.all([this.billingFor(shown), this.debtFor(shown)]);
@@ -56,12 +64,10 @@ export class FrontDeskService {
       /* لغوشده‌ها ستون ندارند — یک عدد کنارِ تخته‌اند. ستونِ ششم برای چیزی که
          کارِ امروز نیست، فقط عرضِ چهار ستونِ دیگر را می‌خورد. */
       cancelledCount: withBilling.filter((r: any) => r.lane === 'cancelled').length,
-      rows: withBilling.map((r: any) => ({
-        ...r,
-        /* «شروع» فقط برای بیمارِ امروز که پرونده دارد و وضعیتش اجازه می‌دهد.
-           مشتقِ سرور است تا دکمه و مجوز یک حرف بزنند (قانون ۱۵). */
-        canStart: isToday && ['confirmed', 'arrived'].includes(r.status) && r.patientId != null,
-      })),
+      /* ⚠️ `canStart` این‌جا **ساخته نمی‌شود**: خانه‌اش `AppointmentsService.view()`
+         است، کنارِ `lane` و `nextOptions`. تا دیروز همین‌جا بود و هر میزِ
+         دیگری نسخهٔ خودش را نوشته بود — سه قاعده برای یک دکمه. */
+      rows: withBilling,
       truncated: capped,
       total: rows.length,
     };
@@ -154,6 +160,47 @@ export class FrontDeskService {
   }
 
   /**
+   * خلاصهٔ ماه برای **نشانهٔ روی تقویمِ انتخابِ تاریخ** — فقط شمارش.
+   *
+   * ⚠️ `CalendarService.month` این کار را نمی‌کند و نباید بکند: آن کلِ سطرها
+   * را با نامِ بیمار می‌آورد و پشتِ فیچرِ `calendar` (سطحِ سوپروایزر) است.
+   * منشی نه آن سطح را دارد نه آن حجم را لازم دارد.
+   */
+  month(year: number, month: number) {
+    /* میزِ پذیرش روزش را با **نوبت** می‌سنجد، نه با عمل. لغوشده شمرده
+       نمی‌شود — «این روز چقدر پُر است» یعنی چند نفر واقعاً می‌آیند. */
+    return monthDayCounts(this.prisma, year, month, {
+      apptWhere: { status: { not: 'cancelled' } },
+    });
+  }
+
+  /**
+   * **یک نوبت** — همان `view()`ِ تخته، برای پاپ‌آپی که از پرونده یا میزِ پزشک
+   * باز می‌شود.
+   *
+   * 🔴 چرا این‌جا و نه `GET /appointments/:id`: آن کنترلر `@Feature('calendar')`
+   * دارد که سطحش **سوپروایزر** است، و پاپ‌آپِ نوبت از میزِ پزشک و پروندهٔ
+   * بیمار هم باز می‌شود — یعنی دقیقاً همان‌جایی که کاربر سطحِ کارشناس دارد.
+   * پاپ‌آپ تا دیروز دکمه‌هایش را از کپیِ کلاینتیِ ماشینِ وضعیت می‌ساخت و به
+   * `POST /appointments/:id/status` می‌زد؛ برای آن کاربر **۴۰۳** می‌گرفت.
+   * دکمه‌ای که کار نمی‌کند از نبودنِ دکمه بدتر است.
+   */
+  async one(id: number) {
+    const row = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true } },
+        topic: { select: { id: true, name: true, color: true } },
+      },
+    });
+    if (!row) throw new NotFoundException('نوبت پیدا نشد');
+    /* همان قیدِ تخته: پاپ‌آپ از همین در وارد می‌شود (`/frontdesk/.../start`)،
+       پس دکمه‌اش باید دقیقاً همان چیزی را بگوید که آن در می‌پذیرد — وگرنه
+       دکمه‌ای می‌سازیم که با زدنش ۴۰۰ می‌دهد. */
+    return this.appts.view(row, FrontDeskService.todayIso());
+  }
+
+  /**
    * **شروعِ مراجعه از میز** — «رسید» و «شروع» در یک کلیک.
    *
    * 🔴 چرا ترکیبی است و نه صدازدنِ سادهٔ `startVisit`:
@@ -177,19 +224,13 @@ export class FrontDeskService {
       where: { id }, select: { id: true, status: true, date: true, patientId: true },
     });
     if (!row) throw new NotFoundException('نوبت پیدا نشد');
-    if (row.date.toISOString().slice(0, 10) !== FrontDeskService.todayIso()) {
-      /* `startVisit` وقتی `forVisitId` دارد `opDate` را با **امروز** بازنویسی
-         می‌کند؛ میز همان صفحه‌ای است که کسی روی ردیفِ دیروز کلیک می‌کند. */
-      throw new BadRequestException('از میزِ پذیرش فقط نوبتِ همین امروز شروع می‌شود');
-    }
-    if (row.status === 'held') {
-      /* `held → confirmed` یعنی «پرداخت دیده شد» — ادعایی که باید کلیکِ عمدی
-         باشد، نه اثرِ جانبیِ «شروع». */
-      throw new BadRequestException('اول «قطعی شد» را بزنید، بعد شروع');
-    }
-    if (row.status === 'cancelled' || row.status === 'noshow') {
-      throw new BadRequestException(`نوبتِ «${APPT_LABELS[row.status]}» شروع نمی‌شود`);
-    }
+    /* ⚠️ شرط‌ها این‌جا **نوشته نمی‌شوند**: `apptStartBlock` همان قاعده‌ای است
+       که `canStart` روی کارت‌ها را می‌سازد و `startVisit` هم با آن قفل است.
+       نسخهٔ قبلی همین سه چک را دستی داشت و درست هم بود — ولی وقتی تقویم
+       قاعدهٔ خودش را نوشت، «درست»بودنِ این یکی هیچ کمکی نکرد.
+       ⚠️ `deskToday` یعنی «سیاستِ تخته را هم اعمال کن» (پول‌نداده + امروز). */
+    const block = apptStartBlock(row, FrontDeskService.todayIso());
+    if (block) throw new BadRequestException(block);
     if (row.status === 'confirmed') await this.appts.setStatus(id, 'arrived', user);
     const result = await this.appts.startVisit(id, user);
     const fresh = await this.prisma.appointment.findUnique({

@@ -110,6 +110,9 @@ yesno-ui
 today-popups
 surgery-phase-tabs
 clinic-doctor-portal
+status-labels
+appt-state-machine
+money-one-rule
 chief-complaint
 desk-day
 theatre

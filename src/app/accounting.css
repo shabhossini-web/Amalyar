@@ -1,6 +1,6 @@
 /* حسابداری — همان زبانِ بصریِ انبار و تعاریف */
 .ac {
-  min-height: 100vh; background: var(--bg); color: #f4f1ff;
+  min-height: 100vh; background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
 }
 .ac * { box-sizing: border-box; }
@@ -28,13 +28,13 @@
 }
 .ac-search {
   flex: 1 1 240px; min-width: 0; padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 13px;
-  color: #f4f1ff; background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
-.ac-search::placeholder { color: #6f688d; }
+.ac-search::placeholder { color: var(--text3); }
 .ac-filters { display: flex; gap: 5px; }
 .ac-filters button {
   padding: 10px 14px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
-  color: #b7b0d4; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .ac-filters button.on { color: #fff; font-weight: 800; border-color: transparent; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
 /* ⚠️ این‌جا قبلاً یک قاعدهٔ دکمه‌مانند برای `.ac-add` بود (inline-flex +
@@ -45,7 +45,7 @@
 
 .ac-list { display: grid; gap: 9px; max-width: 940px; margin: 0 auto; }
 .ac-empty {
-  padding: 26px 16px; text-align: center; font-size: 12.5px; color: #8f88af;
+  padding: 26px 16px; text-align: center; font-size: 12.5px; color: var(--text3);
   border-radius: 15px; background: rgba(var(--surface-rgb), .55); border: 1px dashed rgba(var(--brand-soft-rgb), .2);
 }
 .ac-row {
@@ -65,17 +65,17 @@
 
 .ac-row-main { min-width: 0; flex: 1; }
 .ac-row-main b { display: block; font-size: 13.5px; }
-.ac-row-main small { display: block; margin-top: 4px; font-size: 11px; color: #8f88af; }
-.ac-sub2 { color: #6f688d !important; }
+.ac-row-main small { display: block; margin-top: 4px; font-size: 11px; color: var(--text3); }
+.ac-sub2 { color: var(--text3) !important; }
 .ac-expired { color: #fda4af; font-weight: 700; }
 
 .ac-field { display: block; position: relative; }
 .ac-field > span { display: block; margin-bottom: 5px; font-size: 11px; color: var(--text3); }
 .ac-field input {
   width: 100%; padding: 11px 13px; border-radius: 11px; font: inherit; font-size: 13px;
-  color: #f4f1ff; background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
-.ac-field input::placeholder { color: #6f688d; font-size: 12px; }
+.ac-field input::placeholder { color: var(--text3); font-size: 12px; }
 
 .ac-hint {
   margin: 0; padding: 10px 13px; border-radius: 11px; font-size: 11.5px; line-height: 1.9;

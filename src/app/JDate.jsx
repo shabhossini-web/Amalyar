@@ -23,6 +23,18 @@ export default function JDate({
   label, value, onChange, placeholder = '۱۴۰۵/۰۱/۰۱',
   mode = 'date', // date | birth (بازهٔ سال فرق می‌کند)
   className = 'db-field', disabled, hint,
+  /**
+   * **نشانهٔ شلوغیِ روز** — `loadMarks(year, month) => Promise<{[day]: number}>`.
+   *
+   * بازخوردِ مالک ۱۴۰۵/۰۶/۳۱: «روی تاریخ‌ها یه علامتی مثل تقویمِ عمل باشه که
+   * کاربر موقعِ انتخاب بتونه ویوِ کلی رو ببینه». تا امروز این تقویم هیچ‌چیز از
+   * روزها نمی‌دانست و کاربر کورکورانه تاریخ می‌زد.
+   *
+   * ⚠️ **تابع می‌گیرد نه داده**: تقویم ماه را عوض می‌کند و هر ماه شمارشِ
+   * خودش را می‌خواهد. و عمداً اختیاری است — صفحه‌ای که منبعِ شمارش ندارد
+   * (یا مجوزش را ندارد) باید تقویمِ بی‌نشانه بدهد، نه خطا.
+   */
+  loadMarks,
 }) {
   const [open, setOpen] = useState(false);
   /* ⚠️ **ارقامِ کادر فارسی‌اند، ولی مقدارِ بیرون‌رفته لاتین می‌مانَد.**
@@ -78,6 +90,7 @@ export default function JDate({
             value={value}
             mode={mode}
             title={label}
+            loadMarks={loadMarks}
             onPick={(v) => { onChange(v); setOpen(false); }}
             onClose={() => setOpen(false)}
           />
@@ -104,7 +117,7 @@ function normalize(v) {
  * تقویمِ ماهانه. وسطِ صفحه، روی <body> از طریق portal — تا z-indexِ شیتِ
  * والد (و overflowِ اسکرول‌بار) نتواند نصفش را ببرد.
  */
-function Calendar({ value, mode, title, onPick, onClose }) {
+function Calendar({ value, mode, title, onPick, onClose, loadMarks }) {
   const [ty, tm] = jToday();
   const picked = jParse(value);
   const [y, setY] = useState(picked ? picked[0] : mode === 'birth' ? ty - 30 : ty);
@@ -126,6 +139,25 @@ function Calendar({ value, mode, title, onPick, onClose }) {
   const days = jMonthDays(y, m);
   const lead = jDayOfWeek(y, m, 1);
   const today = jToday();
+
+  /**
+   * شمارشِ روزهای ماهِ نمایش‌داده‌شده.
+   *
+   * ⚠️ شکستِ بارگذاری **ساکت** است و تقویم بدونِ نشانه کار می‌کند: این یک
+   * کمک است نه شرطِ انتخابِ تاریخ؛ بنرِ خطا روی یک پاپ‌آپِ کوچک فقط راه را
+   * می‌بندد. ⚠️ و `alive` لازم است چون کاربر می‌تواند سریع چند ماه جلو برود
+   * و پاسخِ ماهِ قبلی روی ماهِ تازه بنشیند.
+   */
+  const [marks, setMarks] = useState(null);
+  useEffect(() => {
+    if (!loadMarks) return undefined;
+    let alive = true;
+    setMarks(null);
+    Promise.resolve(loadMarks(y, m))
+      .then((got) => { if (alive) setMarks(got ?? {}); })
+      .catch(() => { if (alive) setMarks({}); });
+    return () => { alive = false; };
+  }, [loadMarks, y, m]);
 
   const step = (delta) => {
     let nm = m + delta;
@@ -165,13 +197,18 @@ function Calendar({ value, mode, title, onPick, onClose }) {
         {Array.from({ length: days }, (_, i) => i + 1).map((d) => {
           const isToday = today[0] === y && today[1] === m && today[2] === d;
           const isSel = picked && picked[0] === y && picked[1] === m && picked[2] === d;
+          const n = marks?.[d] ?? 0;
           return (
             <button
               key={d} type="button"
-              className={`jd-day${isToday ? ' today' : ''}${isSel ? ' sel' : ''}`}
+              className={`jd-day${isToday ? ' today' : ''}${isSel ? ' sel' : ''}${n ? ' has' : ''}`}
               onClick={() => onPick(jStr(y, m, d))}
+              /* عدد در `aria-label` هم می‌آید: نشانهٔ زیرِ روز برای صفحه‌خوان
+                 هیچ معنایی ندارد. */
+              aria-label={n ? `${jToFa(d)} — ${jToFa(n)} مورد` : undefined}
             >
               {jToFa(d)}
+              {n > 0 && <i className="jd-mark" aria-hidden="true">{jToFa(n)}</i>}
             </button>
           );
         })}

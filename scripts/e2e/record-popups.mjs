@@ -2,8 +2,16 @@
  * پاپ‌آپ‌های پرونده + نامِ نوعِ مراجعه — سرورِ زنده + مرورگرِ واقعی (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹).
  *
  *  باید بیفتد:
- *   - نوارِ «الان کجاییم» برای دورهٔ عمل «عمل جراحی» بنویسد نه واژهٔ حوزه/«ویزیت»
- *   - تبِ مراجعات واژهٔ خنثی «مراجعه‌ها» باشد و هر کارت نوعِ خودش (عمل جراحی / ویزیت)
+ *   - نوارِ «الان کجاییم» نوعِ دوره را با **نامِ خودِ شرکت** بنویسد (عنوانِ فرمِ
+ *     همان نوع)، نه واژهٔ عامِ حوزه و نه یک نگاشتِ هاردکدِ کلاینتی
+ *   - تبِ مراجعات واژهٔ خنثی «مراجعه‌ها» باشد و هر کارت نوعِ خودش را بگوید —
+ *     **با همان نامی که نوارِ مرحله می‌گوید**
+ *
+ *  ⚠️ این دو ادعا قبلاً رشتهٔ ثابتِ «عمل جراحی» را می‌سنجیدند، یعنی همان
+ *  نگاشتِ هاردکدِ `visit-kinds.js` را تثبیت می‌کردند — در حالی که خودِ آن فایل
+ *  می‌گوید «پشتیبان است نه منبعِ حقیقت». نتیجه‌اش یک واگراییِ واقعی بود: همان
+ *  مراجعه در یک بخشِ این صفحه «عمل جراحی» و در بخشِ دیگرش «فرمِ عمل» (عنوانِ
+ *  فرمِ شرکت) دیده می‌شد. حالا ادعا **برابریِ دو نما** است، نه یک رشتهٔ ثابت.
  *   - کلیک روی کارتِ مراجعه فرمِ همان مراجعه را **در همین صفحه** باز کند (نه پرش به داشبورد)
  *   - «کارِ بعدی» و هر نتیجهٔ بررسی‌نشده کلیک‌پذیر باشد و شیتِ همان سفارش را با عکسِ بیمار باز کند
  *   - «بررسی شد» از همان شیت هشدار را از پرونده بردارد
@@ -65,6 +73,9 @@ ok('عملِ پیشِ رو روی همان پرونده', v2?.patientId === pid,
 const live = (await send(`/patients/${pid}/live`)).json;
 const visitStep = live?.stage?.steps?.find((s) => s.key === 'visit');
 ok('گامِ مراجعه نوعِ دوره را می‌گوید (surgery)', visitStep?.kind === 'surgery', JSON.stringify(visitStep));
+/* نامِ فارسی هم **همراهِ گام** می‌آید، تا کلاینت مجبور نشود از روی `kind` و یک
+   نگاشتِ محلی بسازدش — همان کاری که واگرایی را ساخته بود. */
+ok('و نامِ فارسیِ همان نوع را هم همراه دارد', !!visitStep?.kindFa, JSON.stringify(visitStep));
 ok('ردیفِ مراجعهٔ خطِ زمان نوع و کد دارد', live?.timeline?.items?.some((it) => it.type === 'visit' && it.kind === 'surgery' && /-V\d+$/.test(it.code ?? '')));
 const rems = (await send(`/reminders?patientId=${pid}`)).json ?? [];
 ok('دفترِ یادآوری‌ها به‌ازای بیمار فیلتر می‌شود', Array.isArray(rems) && rems.length > 0 && rems.every((r) => r.patientName), JSON.stringify(rems.map((r) => [r.kind, r.status])));
@@ -84,11 +95,26 @@ try {
   await page.locator('.rc-stage').waitFor({ timeout: 15000 });
   await page.waitForTimeout(500);
 
+  /* نامِ مرجع از خودِ سرور گرفته می‌شود، نه از حافظهٔ این فایل: هر نصبی
+     فرم‌هایش را چیزِ دیگری نامیده و ادعا باید همان را بسنجد. */
+  const defs = (await send('/forms/visit-kinds')).json ?? [];
+  const titleOf = (k) => (defs.find((d) => (d.kind ?? d.key) === k)?.title ?? null);
+  const surgeryFa = titleOf('surgery');
+  const clinicFa = titleOf('clinic');
+  ok('نوعِ عمل و ویزیت هر دو فرم (و نام) دارند', !!surgeryFa && !!clinicFa,
+    JSON.stringify(defs.map((d) => [d.kind ?? d.key, d.title])));
+
   const steps = await page.locator('.rc-step .rc-step-txt b').allInnerTexts();
-  ok('**نوارِ مرحله «عمل جراحی» می‌گوید، نه «ویزیت»/واژهٔ حوزه**', steps.includes('عمل جراحی'), steps.join(' | '));
+  ok('**نوارِ مرحله نامِ نوعِ همین شرکت را می‌گوید، نه واژهٔ عامِ حوزه**',
+    steps.includes(surgeryFa), `${steps.join(' | ')} ← انتظار: ${surgeryFa}`);
   ok('تبِ مراجعات واژهٔ خنثی دارد', (await page.getByRole('tab', { name: /مراجعه‌ها/ }).count()) === 1);
   const kindsSeen = await page.locator('.rc-kind').allInnerTexts();
-  ok('هر کارت نوعِ خودش را می‌گوید (عمل جراحی + ویزیت)', kindsSeen.includes('عمل جراحی') && kindsSeen.includes('ویزیت'), kindsSeen.join(' | '));
+  ok('هر کارت نوعِ خودش را می‌گوید — با همان نام',
+    kindsSeen.includes(surgeryFa) && kindsSeen.includes(clinicFa),
+    `${kindsSeen.join(' | ')} ← انتظار: ${surgeryFa} + ${clinicFa}`);
+  /* ⚠️ ادعای اصلی: **نوار و کارت یک چیز بگویند.** همین بود که شکسته بود. */
+  ok('⚠️ **نباید بیفتد:** نوارِ مرحله و کارتِ مراجعه دو نامِ متفاوت بدهند',
+    steps.some((t) => kindsSeen.includes(t)), `${steps.join(' | ')}  ⟷  ${kindsSeen.join(' | ')}`);
 
   console.log('\n۳) کارتِ مراجعه → فرمِ همان مراجعه در همین صفحه');
   await page.locator('.rc-visit-btn').filter({ hasText: v1.code }).first().click();

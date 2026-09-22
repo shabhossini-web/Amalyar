@@ -5,6 +5,7 @@ import { textSearchOr } from '../common/search';
 import { LEVEL } from '../common/levels';
 import { buildPersonPatch, PersonInput } from '../common/person';
 import { NOTE_KINDS } from './record.service';
+import { NOTE_KIND_LABELS } from './labels';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
 
@@ -542,7 +543,8 @@ export class DefinitionsService {
       },
     });
     return rows.map((r) => ({
-      id: r.id, kind: r.kind, title: r.title, body: r.body, active: r.active,
+      id: r.id, kind: r.kind, kindFa: NOTE_KIND_LABELS[r.kind] ?? r.kind,
+      title: r.title, body: r.body, active: r.active,
       procedureTypeId: r.procedureTypeId, diagnosisId: r.diagnosisId, topicId: r.topicId,
       procedureTypeName: r.procedureType?.name ?? null,
       diagnosisTitle: r.diagnosis?.title ?? null,

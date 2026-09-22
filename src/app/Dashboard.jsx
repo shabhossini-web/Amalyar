@@ -7,7 +7,7 @@ import { api, apiStream } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from '../lib/jalali.js';
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, faDuration, normTime } from '../lib/time.js';
-import { useConfig, useTerms } from './config.jsx';
+import { useConfig, useStatusList, useTerms } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
@@ -83,9 +83,15 @@ const jToDate = (jy, jm, jd) => {
   return new Date(g.gy, g.gm - 1, g.gd);
 };
 
-const statusLabel = (v) => (v.opStatus === 'pending' ? kindOf(v.kind).pending : STATUS_FA[v.opStatus]);
-
-const STATUS_FA = { pending: 'در انتظار', done: 'تمام‌شده', cancelled: 'کنسل' };
+/**
+ * برچسبِ وضعیتِ مراجعه.
+ *
+ * ⚠️ فقط `pending` این‌جا **عمداً** بازنویسی می‌شود، چون واژه‌اش به **نوعِ**
+ * مراجعه بسته است («در انتظارِ عمل» در برابرِ «در انتظارِ ویزیت») و سرور نوعِ
+ * حوزه را نمی‌شناسد. بقیه از خودِ ردیف می‌آیند (`opStatusFa`) — نگاشتِ
+ * کلاینتیِ قبلی «تمام‌شده/کنسل» می‌نوشت در حالی که بقیهٔ سامانه «انجام شد/لغو».
+ */
+const statusLabel = (v) => (v.opStatus === 'pending' ? kindOf(v.kind).pending : (v.opStatusFa ?? v.opStatus));
 const FILTERS = [
   { v: 'all', l: 'همه' },
   { v: 'pending', l: 'در انتظار' },
@@ -265,6 +271,9 @@ function SummaryMenu({ visitId, patientId, busy, onToast }) {
 }
 
 function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onToast }) {
+  /* فهرستِ کاملِ وضعیت‌ها از سرور (`/config`) — این‌جا لازم است چون دکمه‌های
+     گذار باید **همهٔ** گزینه‌ها را نشان دهند، نه فقط وضعیتِ همین ردیف. */
+  const statuses = useStatusList('visit');
   const row = useStagger();
   const [confirmDel, setConfirmDel] = useState(false);
   useEffect(() => {
@@ -401,7 +410,7 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
       <div className="db-foot">
         <span className={`us-status db-st-${v.opStatus}`}>{statusLabel(v)}</span>
         <div className="db-statuspick" role="group" aria-label="تغییر وضعیت">
-          {Object.entries(STATUS_FA).map(([k, l]) => (
+          {statuses.map(({ key: k, label: l }) => (
             <button
               key={k}
               type="button"
@@ -409,7 +418,7 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
               disabled={busy || v.opStatus === k}
               onClick={() => onStatus(v, k)}
             >
-              {l}
+              {k === 'pending' ? kindOf(v.kind).pending : l}
             </button>
           ))}
         </div>

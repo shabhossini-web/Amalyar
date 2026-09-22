@@ -24,6 +24,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { jToday } from '../../src/lib/jalali.js';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const DB = process.env.E2E_DB ?? 'postgresql://amalyar:amalyar@localhost:5432/amalyar_t1';
@@ -247,7 +248,23 @@ try {
     (await send(`/visits/${v.id}`)).json?.opReport?.startsWith('لامینکتومی'),
     JSON.stringify((await send(`/visits/${v.id}`)).json?.opReport).slice(0, 120));
 
-  console.log('\n۸) دامنهٔ دید — object-authz');
+  console.log('\n۸) خلاصهٔ ماه — نشانهٔ تقویمِ انتخابِ تاریخ');
+  /* 🔴 بازخوردِ مالک: «روی تاریخ‌ها یه علامتی مثل تقویمِ عمل باشه که کاربر
+     موقعِ انتخاب ویوِ کلی رو ببینه». تا دیروز انتخابگرِ تاریخ هیچ‌چیز از
+     شلوغیِ روز نمی‌دانست. */
+  sql(`UPDATE visits SET op_date=CURRENT_DATE WHERE id=${v.id}`);
+  const [jy, jm, jd] = jToday();
+  const mon = (await send(`/theatre/month?year=${jy}&month=${jm}`)).json;
+  const cell = (mon?.days ?? []).find((x) => x.day === jd);
+  ok(`خلاصهٔ ماه روزِ امروز را می‌شمارد (${JSON.stringify(cell)})`, !!cell && cell.visits >= 1,
+    JSON.stringify(mon).slice(0, 200));
+  /* فقط عدد، نه ردیف: این پاپ‌آپ نباید نامِ بیمار را به میزی برساند که شاید
+     اجازه‌اش را ندارد — و کشیدنِ صدها سطر برای چند عدد هم بیهوده است. */
+  ok('🔴 **هیچ نامِ بیماری در خلاصهٔ ماه نیست** — فقط شمارش', !JSON.stringify(mon).includes('تئاتر'));
+  const badMonth = await send(`/theatre/month?year=${jy}&month=13`);
+  ok('**نباید بیفتد:** ماهِ ۱۳ پذیرفته شود', badMonth.status === 400, String(badMonth.status));
+
+  console.log('\n۹) دامنهٔ دید — object-authz');
   const other = (await send('/accounts/temporary', 'POST', { firstName: 'کارشناسِ', lastName: `بیگانه${tag}`, phone: phone(), level: 2, jobRole: 'technician', username: `th${tag}` })).json;
   const ol = await loginAs(`th${tag}`, other.temporaryPassword);
   const oApi = call(ol.accessToken);
@@ -259,6 +276,12 @@ try {
     (await oApi(`/theatre/visits/${v.id}/check`, 'POST', { stage, key: item, checked: true })).status === 404);
   const oFile = await fetch(`${API}/theatre/visits/${v.id}/documents/${docId}/file`, { headers: { Authorization: 'Bearer ' + ol.accessToken } });
   ok('**نباید بیفتد:** مدرکِ این عمل را بگیرد', oFile.status === 404, String(oFile.status));
+  /* شمارندهٔ تقویم هم باید همان دامنه را داشته باشد، وگرنه کارشناس از روی
+     عددِ تقویم می‌فهمد اتاق آن روز چقدر شلوغ بوده. */
+  const oMon = (await oApi(`/theatre/month?year=${jy}&month=${jm}`)).json;
+  ok('**نباید بیفتد:** شمارندهٔ تقویم عمل‌های دیگران را بشمارد',
+    ((oMon?.days ?? []).find((x) => x.day === jd)?.visits ?? 0) === 0,
+    JSON.stringify(oMon).slice(0, 160));
   ok('**نباید بیفتد:** شرحِ عمل یا ترخیصش را بنویسد',
     (await oApi(`/theatre/visits/${v.id}/report`, 'POST', { body: 'نفوذ' })).status === 404
     && (await oApi(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'نفوذ' })).status === 404);

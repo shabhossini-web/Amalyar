@@ -7,7 +7,7 @@ import { api, apiStream, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
-import { useConfig } from './config.jsx';
+import { useConfig, useStatusMap } from './config.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
@@ -1530,8 +1530,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   );
 }
 
-const NOTE_FA = { visit: 'شرحِ ویزیت', op: 'شرحِ عمل', followup: 'پیگیری', consult: 'مشاوره' };
-const ORDER_STATUS_FA = { sent: 'منتظرِ پاسخ', answered: 'پاسخ آمده' };
+/* ⚠️ نگاشتِ نوعِ سند این‌جا **نبود که باشد**: نسخهٔ قبلی `discharge`،
+   `progress` و `history` را نداشت و `followup`ی داشت که اصلاً نوعِ معتبری
+   نیست — پس از روزِ افزودنِ خلاصهٔ ترخیص، کلیدِ خام روی صفحه چاپ می‌شد.
+   حالا برچسب همراهِ خودِ سند می‌آید (`kindFa`). */
+/* ⚠️ نگاشتِ وضعیتِ سفارش هم برداشته شد. این یکی بدترینشان بود: «منتظرِ پاسخ»
+   و «پاسخ آمده» در حالی که همان سفارش در شیتِ خودش «فرستاده شد — منتظرِ
+   نتیجه» و «نتیجه آمد — بررسی نشده» بود. حالا از `/config.statuses.order`. */
 
 /**
  * **کارتِ آماده‌سازیِ ویزیت** (W3.2، §۴.۴ سند) — آنچه باید *پیش از* دیدنِ بیمار دانست.
@@ -1546,6 +1551,7 @@ const ORDER_STATUS_FA = { sent: 'منتظرِ پاسخ', answered: 'پاسخ آ�
  * ⚠️ هیچ عددی این‌جا حساب نمی‌شود: مانده، سن و کوتاه‌شدنِ متن از سرور می‌آیند.
  */
 function PrepCard({ prep: raw }) {
+  const orderFa = useStatusMap('order');
   /* ⚠️ سرورِ واقعی همیشه هر پنج بخش را می‌فرستد، ولی پاسخِ ناقص (fixtureِ
      آزمون، یا لحظه‌ای که endpoint چیزی ندارد) نباید کلِ فرمِ مراجعه را
      بیندازد — `orders-ai-ui` همین را گرفت: «Cannot read properties of
@@ -1591,7 +1597,7 @@ function PrepCard({ prep: raw }) {
             <ul className="db-prep-notes">
               {prep.notes.map((n) => (
                 <li key={n.id}>
-                  <b>{NOTE_FA[n.kind] ?? n.kind}</b>
+                  <b>{n.kindFa ?? n.kind}</b>
                   <i>{n.authorName || ''}</i>
                   <p>{n.excerpt}</p>
                 </li>
@@ -1603,7 +1609,7 @@ function PrepCard({ prep: raw }) {
               {prep.pendingResults.map((o) => (
                 <li key={`${o.kind}-${o.id}`}>
                   <b>{o.kindFa}</b>
-                  <i className={o.status}>{ORDER_STATUS_FA[o.status] ?? o.status}</i>
+                  <i className={o.status}>{o.statusFa ?? orderFa[o.status] ?? o.status}</i>
                 </li>
               ))}
             </ul>

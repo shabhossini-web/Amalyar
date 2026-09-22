@@ -1,3 +1,4 @@
+import { ORDER_LABELS } from './labels';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -232,7 +233,7 @@ export class OrdersService {
   }
 
   private view(kind: OrderKind, row: any) {
-    return { ...row, kind, kindFa: FA[kind], summary: this.summary(kind, row) };
+    return { ...row, kind, kindFa: FA[kind], statusFa: ORDER_LABELS[row.status] ?? row.status, summary: this.summary(kind, row) };
   }
 
   /** فهرستِ سفارش‌های یک مراجعه — همهٔ چهار نوع با هم، تازه‌ترین اول. */

@@ -255,7 +255,11 @@ if (PART === 'all' || PART === 'live') {
     resolve(root, 'scripts/e2e/run-live.mjs'),
     '--manifest', resolve(root, 'scripts/e2e/ci-live.txt'),
     '--log-dir', resolve(LOG_DIR, 'live'),
-  ], { cwd: root, env: { ...process.env, E2E_CHROME: CHROME }, stdio: 'inherit' });
+    /* ⚠️ `job.env` این‌جا هم لازم است، نه فقط در `runStep`. کلیدهای مالِ
+       اجراکننده (اتصال‌ها) با `localOverrides` برمی‌گردند، ولی بقیه —
+       از جمله `TZ: Asia/Tehran` — باید به سوییت‌های زنده هم برسند؛ وگرنه
+       رانرِ UTC و سرورِ ساعتِ‌مطب هر شب سه‌ونیم ساعت یک روز فرق دارند. */
+  ], { cwd: root, env: { ...process.env, ...(job.env ?? {}), ...localOverrides, E2E_CHROME: CHROME }, stdio: 'inherit' });
   if (r.status !== 0) failed += 1;
   results.push({ idx: '—', name: 'run-live.mjs (کلِ مانیفست)', ok: r.status === 0, secs: 0 });
 }

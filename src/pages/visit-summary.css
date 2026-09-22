@@ -8,7 +8,7 @@
   min-height: 100dvh; display: grid; place-items: center; background: #eceaf3;
   color: #b91c1c; font-size: 14px; padding: 20px; text-align: center;
 }
-.vs-err.quiet { color: #6b7280; }
+.vs-err.quiet { color: var(--text3); }
 
 .vs-page {
   width: min(760px, 100%); background: #fff; border-radius: 14px;
@@ -21,16 +21,16 @@
   padding-bottom: 14px; border-bottom: 2px solid var(--bg3);
 }
 .vs-head h1 { font-size: 19px; font-weight: 900; }
-.vs-head small { color: #6b7280; }
+.vs-head small { color: var(--text3); }
 .vs-doc { text-align: left; }
 .vs-doc b { display: block; font-size: 13px; }
-.vs-doc small { color: #6b7280; font-size: 11px; }
+.vs-doc small { color: var(--text3); font-size: 11px; }
 
 .vs-patient {
   display: flex; align-items: baseline; gap: 10px; padding: 12px 0 4px;
 }
 .vs-patient b { font-size: 16px; }
-.vs-patient small { color: #6b7280; }
+.vs-patient small { color: var(--text3); }
 
 .vs-facts {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -38,7 +38,7 @@
   background: #f6f5fa; border-radius: 10px;
 }
 .vs-facts div { display: flex; gap: 7px; align-items: baseline; }
-.vs-facts dt { color: #6b7280; font-size: 12px; flex: 0 0 auto; }
+.vs-facts dt { color: var(--text3); font-size: 12px; flex: 0 0 auto; }
 .vs-facts dt::after { content: ':'; }
 .vs-facts dd { font-weight: 700; font-size: 13px; }
 
@@ -54,7 +54,7 @@
 .vs-next small { color: #059669; font-size: 12px; }
 
 .vs-foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #eeecf4; text-align: center; }
-.vs-foot small { color: #6b7280; font-size: 11px; }
+.vs-foot small { color: var(--text3); font-size: 11px; }
 
 .vs-actions {
   position: fixed; inset-inline: 0; bottom: 0; display: flex; justify-content: center;

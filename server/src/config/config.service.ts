@@ -1,4 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  APPT_LABELS, NOTE_KIND_LABELS, OP_LABELS,
+  ORDER_LABELS, ORDER_KIND_LABELS, REMINDER_LABELS, REMINDER_KIND_LABELS, INTAKE_LABELS,
+} from '../patients/labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
@@ -61,6 +65,29 @@ export class ConfigService {
        * خودتان» بیرون از جمله معنا ندارد و کارمند آن را «چیزی که بیمار
        * می‌گیرد» می‌خواند.
        */
+      /**
+       * **برچسبِ وضعیت‌ها — همان استدلالِ `cancelReasons`.**
+       *
+       * چند صفحه با چند فیچرِ متفاوت همین فهرست را می‌خواهند (فیلترِ داشبورد،
+       * تبِ شرح‌های پرونده، جستجوی بالینی) و `/config` تنها چیزی است که هر
+       * کاربرِ واردشده می‌خواند.
+       *
+       * ⚠️ این فهرست برای جایی است که باید **همهٔ گزینه‌ها** را بشماری (فیلتر،
+       * کشویی). برچسبِ یک ردیفِ مشخص از خودِ همان ردیف می‌آید (`opStatusFa`،
+       * `statusFa`، `kindFa`) — وگرنه دو مسیرِ برچسب‌زنی داریم و همان واگرایی
+       * که این بسته برای بستنش نوشته شد برمی‌گردد.
+       */
+      statuses: {
+        visit: Object.entries(OP_LABELS).map(([key, label]) => ({ key, label })),
+        appointment: Object.entries(APPT_LABELS).map(([key, label]) => ({ key, label })),
+        note: Object.entries(NOTE_KIND_LABELS).map(([key, label]) => ({ key, label })),
+        /* سه خانوادهٔ دیگر که هر کدام سه تا چهار کپیِ کلاینتی داشتند. */
+        order: Object.entries(ORDER_LABELS).map(([key, label]) => ({ key, label })),
+        orderKind: Object.entries(ORDER_KIND_LABELS).map(([key, label]) => ({ key, label })),
+        reminder: Object.entries(REMINDER_LABELS).map(([key, label]) => ({ key, label })),
+        reminderKind: Object.entries(REMINDER_KIND_LABELS).map(([key, label]) => ({ key, label })),
+        intake: Object.entries(INTAKE_LABELS).map(([key, label]) => ({ key, label })),
+      },
       cancelReasons: Object.entries(CANCEL_REASONS).map(([key, r]) => ({
         key,
         label: r.label,

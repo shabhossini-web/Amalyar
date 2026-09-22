@@ -137,32 +137,60 @@ export default function Calendar() {
                 </div>
                 <div className="cal-main">
                   <b>
-                    {a.fullName}
+                    {a.fullName ?? 'بدونِ پرونده'}
                     <i className={`cal-appt-st st-${a.status}`}>{a.statusLabel}</i>
                   </b>
                   <small>{[a.topicName, a.patientCode, a.phone].filter(Boolean).join(' · ') || '—'}</small>
                 </div>
                 <div className="cal-appt-acts">
                   {/* «شروعِ ویزیت» مقصدِ اصلیِ کلِ این ماژول است: نوبت ← فرمِ
-                      همان مراجعه، هر نقش بخشِ خودش. */}
-                  {a.status !== 'cancelled' && a.status !== 'noshow' && (
+                      همان مراجعه، هر نقش بخشِ خودش.
+
+                      ⚠️ شرطش از سرور می‌آید (`canStart`)، نه از یک ماشینِ
+                      وضعیتِ محلی. نسخهٔ قبلی شرطش `status !== 'cancelled' &&
+                      status !== 'noshow'` بود ولی **«نیامد» را هم دکمه
+                      می‌کرد** (شرط روی `a.status` بود و ردیف `next` داشت)، و
+                      مسیرِ سرورش هم جلویش را نمی‌گرفت.
+                      ⚠️ ولی «پول‌نداده» و «فقط امروز» این‌جا اعمال **نمی‌شوند**:
+                      آن دو سیاستِ تختهٔ یک‌روزهٔ میزِ پذیرش‌اند. ثبت‌نامِ آنلاین
+                      نوبتِ `held` می‌سازد و ادمین از همین‌جا شروعش می‌کند؛ و
+                      بیمارِ زودآمدهٔ هفتهٔ بعد مراجعه‌اش امروز ثبت می‌شود.
+
+                      ⚠️ وقتی نمی‌شود، دکمه **حذف نمی‌شود**: خاموش می‌ماند و
+                      علتش را می‌گوید. دکمهٔ ناپدید یعنی کاربر فکر کند صفحه
+                      خراب است؛ `title` روی لمس دیده نمی‌شود، پس کلیکش هم
+                      همان علت را نشان می‌دهد. */}
+                  {a.visitId ? (
                     <button type="button" className="cal-appt-go" disabled={busyAppt === a.id}
                             onClick={() => startVisit(a)}>
-                      {a.visitId ? t.visitOpen : t.visitStart}
+                      {t.visitOpen}
                     </button>
-                  )}
-                  {a.next.filter((s) => s !== 'done').map((s) => (
-                    <button key={s} type="button" className={`cal-appt-act st-${s}`} disabled={busyAppt === a.id}
-                            onClick={() => setApptStatus(a, s)}>
-                      {{ confirmed: 'قطعی', arrived: 'رسید', noshow: 'نیامد', cancelled: 'لغو' }[s] ?? s}
+                  ) : a.canStart ? (
+                    <button type="button" className="cal-appt-go" disabled={busyAppt === a.id}
+                            onClick={() => startVisit(a)}>
+                      {t.visitStart}
+                    </button>
+                  ) : a.startHint ? (
+                    <button type="button" className="cal-appt-go is-off" title={a.startHint}
+                            onClick={() => setErr2(a.startHint)}>
+                      {t.visitStart}
+                    </button>
+                  ) : null}
+                  {/* ⚠️ برچسبِ دکمه از `nextOptions`ِ سرور می‌آید. سرور همین را
+                      **برای همین‌جا** ساخته بود (کامنتِ `appointments.service`
+                      صریحاً می‌گوید «تا نگاشتِ کلاینتیِ دوم مثلِ آنکه در
+                      Calendar.jsx بود لازم نشود») ولی این صفحه هیچ‌وقت به آن
+                      منتقل نشد — نگهبانِ «یک وضعیت، یک برچسب» پیدایش کرد.
+
+                      ⚠️ و `done` دیگر جدا نیست: استثنایش یک `<button>`ِ دوم با
+                      متنِ هاردکدِ «تمام شد» ساخته بود، در حالی که
+                      `APPT_ACTIONS.done` دقیقاً همان است. */}
+                  {(a.nextOptions ?? []).map((o) => (
+                    <button key={o.status} type="button" className={`cal-appt-act st-${o.status}`} disabled={busyAppt === a.id}
+                            onClick={() => setApptStatus(a, o.status)}>
+                      {o.label}
                     </button>
                   ))}
-                  {a.next.includes('done') && (
-                    <button type="button" className="cal-appt-act st-done" disabled={busyAppt === a.id}
-                            onClick={() => setApptStatus(a, 'done')}>
-                      تمام شد
-                    </button>
-                  )}
                 </div>
               </article>
             ))}

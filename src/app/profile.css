@@ -4,7 +4,7 @@
 .pf-avatar-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .pf-avatar {
   width: 120px; height: 120px; border-radius: 50%; overflow: hidden;
-  display: grid; place-items: center; color: #e6ddff;
+  display: grid; place-items: center; color: var(--text1);
   background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
   border: 2px solid rgba(var(--brand-2-rgb), 0.5);
   box-shadow: inset 0 1px 0 rgba(var(--veil-rgb), 0.25), 0 10px 30px rgba(var(--brand-rgb), 0.3);

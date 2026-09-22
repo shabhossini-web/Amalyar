@@ -16,6 +16,7 @@ import { DocThumb, isImageDoc, openDoc } from '../ui/DocThumb.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
+import { useStatusMap } from './config.jsx';
 import './orders.css';
 
 /** پنلِ روتینِ آزمایش — استاندارد و کامل، تیک‌خور. */
@@ -37,15 +38,9 @@ export const ORDER_META = {
   referral: { fa: 'نامهٔ ارجاع', hasDue: false, hasResult: false },
 };
 
-/** وضعیتِ سفارش — همان واژه‌های `live.service` (CONTRACTS §۴)، نه کلیدِ خام. */
-export const ORDER_STATUS_FA = {
-  draft: 'پیش‌نویس',
-  sent: 'فرستاده شد — منتظرِ نتیجه',
-  answered: 'نتیجه آمد — بررسی نشده',
-  in_review: 'در حالِ بررسی',
-  reviewed: 'بررسی شد',
-  needs_action: 'نتیجه ناقص — دوباره لازم است',
-};
+/* ⚠️ نگاشتِ فارسیِ وضعیتِ سفارش برداشته شد: چهار نسخه بود و هر چهار فرق
+   داشتند («نتیجه آمد — بررسی نشده» این‌جا، «پاسخ آمده» در فرمِ مراجعه،
+   «نتیجه آمده» در میزِ پزشک). حالا از `/config.statuses.order` می‌آید. */
 /** سفارشی که پاسخش آمده و هنوز تصمیمی رویش ثبت نشده — همین‌جا بررسی می‌شود. */
 export const canReviewOrder = (o) => !!o?.id && ['answered', 'in_review'].includes(o.status);
 
@@ -107,6 +102,7 @@ export default function OrderSheetHost({ open, ...rest }) {
 
 function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast }) {
   const meta = ORDER_META[kind] ?? ORDER_META.lab;
+  const orderFa = useStatusMap('order');
   const [f, setF] = useState(() => ({
     tests: order?.tests ?? [],
     modalities: order?.modalities ?? [],
@@ -269,7 +265,7 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
           <span className="od-label">پاسخ — اگر رسیده</span>
           {order?.id && (
             <p className={`od-status st-${order.status}`}>
-              وضعیت: <b>{ORDER_STATUS_FA[order.status] ?? order.status}</b>
+              وضعیت: <b>{order.statusFa ?? orderFa[order.status] ?? order.status}</b>
               {order.reviewNote && !reviewable && <i> — {order.reviewNote}</i>}
             </p>
           )}
