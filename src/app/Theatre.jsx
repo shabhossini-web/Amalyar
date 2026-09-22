@@ -340,15 +340,33 @@ function Documents({ visitId, groups }) {
 
   const open = async (doc) => {
     if (doc.url) { window.open(doc.url, '_blank', 'noopener'); return; }
+    /* 🔴 **پنجره باید پیش از `await` باز شود.** Safari (و کرومِ موبایل در
+       بعضی حالت‌ها) `window.open` بعد از یک await را پاپ‌آپِ ناخواسته
+       می‌شمارد و **بی‌صدا** بلاک می‌کند — یعنی همان مدرکی که مالک خواست
+       سرِ میز باز شود، روی آیفون هیچ کاری نمی‌کرد و هیچ خطایی هم نمی‌داد.
+       پس اول تبِ خالی باز می‌شود و بعد نشانی‌اش گذاشته می‌شود.
+       ⚠️ `noopener` این‌جا عمداً نیست: با آن `window.open` مقدارِ `null`
+       برمی‌گرداند و دیگر نمی‌شود نشانی را ست کرد. */
+    const win = window.open('', '_blank');
     setBusyId(doc.id); setErr('');
     try {
       const url = await apiBlobUrl(`/theatre/visits/${visitId}/documents/${doc.id}/file`);
-      window.open(url, '_blank', 'noopener');
+      if (win) {
+        win.location = url;
+      } else {
+        /* پنجره بلاک شد (تنظیماتِ سخت‌گیر) — دستِ‌کم دانلود شود، نه اینکه
+           لمسِ کاربر هیچ اثری نداشته باشد. */
+        const a = document.createElement('a');
+        a.href = url; a.download = doc.title || 'document';
+        a.click();
+      }
       /* ⚠️ نشانیِ بلاب باید آزاد شود وگرنه حافظه نشت می‌کند (هشدارِ خودِ
          `apiBlobUrl`) — ولی نه فوری: تبِ تازه هنوز آن را می‌خواند. */
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (e) { setErr(e.message || 'بازکردنِ مدرک ممکن نشد'); }
-    finally { setBusyId(0); }
+    } catch (e) {
+      win?.close();
+      setErr(e.message || 'بازکردنِ مدرک ممکن نشد');
+    } finally { setBusyId(0); }
   };
 
   return (
