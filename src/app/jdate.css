@@ -1,4 +1,12 @@
-/* ورودیِ تاریخِ شمسی + تقویمِ وسطِ صفحه */
+/* ورودیِ تاریخِ شمسی + تقویمِ وسطِ صفحه
+ *
+ * ⚠️ **رنگِ متن این‌جا توکن است، نه هگزِ خام** (قانونِ ۲۳). تقویم با هفت رنگِ
+ * ثابتِ تمِ تیره نوشته شده بود و در تمِ روشن عنوانِ «انتخابِ تاریخ» و کشویی‌های
+ * ماه/سال با `#f4f1ff` روی پنلِ روشن عملاً نامرئی بودند و «پاک‌کردن» با
+ * `#fda4af` صورتیِ کم‌رنگ می‌شد. نگهبانِ `verify-theme-tokens.js` ندیدشان چون
+ * فهرستش هگزهای **مشخص** است و این‌ها سایه‌های همسایه بودند (`#f4f1ff` در برابرِ
+ * `#f2f0fc`). معیارِ تأیید اسکرین‌شات بود، نه سبزبودنِ نگهبان.
+ */
 .jd-wrap { position: relative; }
 .jd-row { display: flex; gap: 6px; align-items: stretch; }
 .jd-row input { flex: 1; min-width: 0; font-family: inherit; }
@@ -11,8 +19,8 @@
 .jd-btn:disabled { opacity: .4; cursor: not-allowed; }
 .jd-btn:focus-visible { outline: 2px solid var(--cyan, #22d3ee); outline-offset: 2px; }
 .jd-hint, .jd-err { display: block; margin-top: 4px; font-style: normal; font-size: 11px; }
-.jd-hint { color: #8f88af; }
-.jd-err { color: #fda4af; }
+.jd-hint { color: var(--text3); }
+.jd-err { color: var(--red-text); }
 
 /* ── تقویم ──
    z-index بالاتر از هر شیت/مودالِ دیگر (۶۰) — تقویم همیشه روی همه‌چیز. */
@@ -25,7 +33,7 @@
   width: min(340px, 100%); border-radius: 20px; overflow: hidden;
   background: var(--bg3); border: 1px solid rgba(var(--brand-soft-rgb), .32);
   box-shadow: 0 26px 70px rgba(0, 0, 0, .65);
-  color: #f4f1ff; font-family: inherit;
+  color: var(--text1); font-family: inherit;
 }
 
 .jd-cal-head {
@@ -51,7 +59,7 @@
 .jd-nav .jd-next svg { transform: rotate(180deg); }
 .jd-nav select {
   flex: 1; min-width: 0; padding: 8px 9px; border-radius: 10px; cursor: pointer;
-  font: inherit; font-size: 12.5px; color: #f4f1ff;
+  font: inherit; font-size: 12.5px; color: var(--text1);
   background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 
@@ -60,7 +68,7 @@
 }
 .jd-dow {
   display: grid; place-items: center; height: 26px;
-  font-style: normal; font-size: 10.5px; font-weight: 700; color: #837ca5;
+  font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--text3);
 }
 .jd-empty { height: 36px; }
 .jd-day {
@@ -69,7 +77,7 @@
   background: rgba(var(--veil-rgb), .035); border: 1px solid transparent;
 }
 .jd-day:hover { background: rgba(var(--brand-soft-rgb), .22); }
-.jd-day.today { border-color: rgba(34, 211, 238, .55); color: #67e8f9; }
+.jd-day.today { border-color: rgba(34, 211, 238, .55); color: var(--cyan); }
 .jd-day.sel {
   color: #fff; font-weight: 800; border-color: transparent;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
@@ -84,7 +92,7 @@
   flex: 1; padding: 10px; border-radius: 11px; cursor: pointer; font: inherit; font-size: 12.5px;
 }
 .jd-ghost {
-  color: #fda4af; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(251, 113, 133, .28);
+  color: var(--red-text); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(251, 113, 133, .28);
 }
 .jd-todaybtn {
   color: #fff; font-weight: 800; border: 0;
