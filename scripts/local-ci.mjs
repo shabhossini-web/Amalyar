@@ -16,8 +16,10 @@
  *   • نصبِ chromium و بسته‌هایش — سندباکس مرورگر را در `/opt/pw-browsers`
  *     دارد؛ به‌جایش همان سیم‌لینک‌هایی ساخته می‌شود که گامِ «Expose chromium»
  *     در CI می‌سازد، چون ۳۱ سوییت مسیر را هاردکد کرده‌اند.
- *   • ساختِ دیتابیس‌های CI و `bootstrap-env` — رانرِ `run-live.mjs` خودش
- *     دیتابیسِ هر سوییت را از قالب می‌سازد.
+ *   • گامِ «ساختِ دیتابیس»ِ CI — چون `ci:ci@localhost/tenant_ci` را هاردکد
+ *     کرده؛ جایگزینش `resetDatabases()` است که از `DATABASE_URL` می‌خوانَد.
+ *     ⚠️ `bootstrap-env.mjs` **اجرا می‌شود** (نسخهٔ اول ردش می‌کرد و ۱۰۴
+ *     سوییت با «ورود نشد» قرمز شدند — توضیحِ کامل کنارِ `resetDatabases`).
  *   • شاردبندی — CI کار را بین چند رانر پخش می‌کند تا زودتر تمام شود؛ این‌جا
  *     یک ماشین است، پس کلِ مانیفست یک‌جا می‌دود.
  *
@@ -26,6 +28,7 @@
  *   node scripts/local-ci.mjs --part build # فقط گام‌های جابِ build
  *   node scripts/local-ci.mjs --part live  # فقط سوییت‌های زندهٔ ci-live.txt
  *   node scripts/local-ci.mjs --from 40    # ادامه از گامِ ۴۰ (بعد از رفعِ یک قرمز)
+ *   node scripts/local-ci.mjs --keep-db    # دیتابیس را پاک نکن (اشکال‌زدایی؛ قرمزها قابلِ‌اعتماد نیستند)
  *
  * پیش‌نیاز: Postgres بالا باشد و این متغیرها ست باشند —
  *   DATABASE_URL · CONTROL_DATABASE_URL · E2E_TENANT2_DATABASE_URL
@@ -43,6 +46,7 @@ const argv = process.argv.slice(2);
 const opt = (n, d) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : d; };
 const PART = opt('--part', 'all');
 const FROM = Number(opt('--from', 0));
+const KEEP_DB = argv.includes('--keep-db');
 const LOG_DIR = resolve(root, '.e2e-logs/local-ci');
 mkdirSync(LOG_DIR, { recursive: true });
 
@@ -55,40 +59,49 @@ const SKIP_NAMES = [
   'Expose chromium where the suites expect it',
   'Cache the playwright browser',
   'Keep the logs when something fails',
-  /* 🔴 این یکی رد می‌شود ولی **جایگزین دارد** (`ensureDatabases` پایین‌تر):
+  /* 🔴 این یکی رد می‌شود ولی **جایگزین دارد** (`resetDatabases` پایین‌تر):
      دستورش `ci:ci@localhost/tenant_ci` را هاردکد کرده که فقط اسمِ سرویسِ
      Postgresِ CI است، و `CREATE DATABASE` تکراری هم خطا می‌دهد. */
   'Databases for the control plane and the second tenant',
 ];
 
 /**
- * 🔴 **دیتابیس‌ها را خودِ این اسکریپت می‌سازد — درسی که با قرمزشدن گرفته شد.**
+ * 🔴 **دیتابیس‌ها از صفر ساخته می‌شوند — دو درس که هر دو با قرمزشدن گرفته شدند.**
  *
- * نسخهٔ اول `bootstrap-env.mjs` را هم رد می‌کرد، با این فرضِ غلط که «رانر خودش
- * محیط را می‌سازد». رانر فقط دیتابیسِ هر سوییت را از **قالب** بازمی‌سازد؛ خودِ
- * قالب را کسِ دیگری باید ساخته باشد. تا وقتی قالبِ سالمی از اجرای قبلی مانده
- * بود کار می‌کرد — تا لحظه‌ای که یک اجرا وسطِ کار کشته شد و قالب خراب ماند:
- * آن‌وقت **۱۰۴ سوییت از ۱۱۲** با «ورود نشد — ۴۰۱» قرمز شدند، چون حسابِ ادمینِ
- * seed وجود نداشت. یعنی ابزار روی محیطِ خراب «قرمزِ محصول» گزارش می‌داد.
+ * ① نسخهٔ اول `bootstrap-env.mjs` را رد می‌کرد، با این فرضِ غلط که «رانر خودش
+ *    محیط را می‌سازد». رانر فقط دیتابیسِ هر سوییت را از **قالب** بازمی‌سازد؛
+ *    خودِ قالب را کسِ دیگری باید ساخته باشد. وقتی یک اجرا وسطِ کار کشته شد و
+ *    قالب خراب ماند، **۱۰۴ سوییت از ۱۱۲** با «ورود نشد — ۴۰۱» قرمز شدند.
  *
- * درس: جانشینِ CI باید **خودکفا** باشد. CI از رانرِ خالی شروع می‌کند؛ این هم
- * باید بتواند.
+ * ② نسخهٔ دوم دیتابیس را «اگر نبود بساز» می‌کرد. ولی `bootstrap-env` روی
+ *    دیتابیسِ **دست‌خورده** یک ادمینِ دوم می‌سازد و ته‌ماندهٔ اجرای قبلی سرِ
+ *    جایش می‌مانَد. نتیجه: `reserved-date-keys` گفت «سوپرادمینِ فعال: ۲» و
+ *    منطقِ بنیان‌گذار عمداً حدس نزد؛ `desk-day` گفت «جراح یافت نشد»؛
+ *    `tenant-seo` گفت سایتِ شرکت از قبل منتشر است. **چهار قرمزِ دروغین، هر
+ *    چهار از یک ریشه.**
+ *
+ * درس: جانشینِ CI باید همان **نقطهٔ شروعِ** CI را بازتولید کند. سرویسِ
+ * Postgresِ گیت‌هاب هر ران **خالی** بالا می‌آید؛ پس این هم هر بار از صفر.
+ *
+ * ⚠️ یعنی این تابع دیتابیس‌های نام‌برده در `DATABASE_URL` و دو خواهرش را
+ * **پاک می‌کند**. آن‌ها دیتابیسِ e2e‌اند و صاحبشان همین ابزار است؛ اگر لازم
+ * شد حالتِ قبلی بماند: `--keep-db` (ولی آن‌وقت قرمزها را باور نکنید).
  */
-const ensureDatabases = () => {
+const resetDatabases = () => {
   const urls = [process.env.DATABASE_URL, process.env.CONTROL_DATABASE_URL, process.env.E2E_TENANT2_DATABASE_URL]
     .filter(Boolean);
   for (const u of urls) {
-    const parsed = new URL(u);
-    const name = decodeURIComponent(parsed.pathname.slice(1));
+    const name = decodeURIComponent(new URL(u).pathname.slice(1));
     const admin = new URL(u); admin.pathname = '/postgres'; admin.search = '';
-    try {
-      execFileSync('psql', [admin.toString(), '-v', 'ON_ERROR_STOP=1', '-qAtc', `CREATE DATABASE "${name}"`],
-        { stdio: ['ignore', 'pipe', 'pipe'] });
-      console.log(`  + دیتابیسِ ${name} ساخته شد`);
-    } catch { /* از قبل هست — همان چیزی که می‌خواستیم */ }
+    const psql = (sql) => execFileSync('psql', [admin.toString(), '-v', 'ON_ERROR_STOP=1', '-qAtc', sql],
+      { stdio: ['ignore', 'pipe', 'pipe'] });
+    if (KEEP_DB) { try { psql(`CREATE DATABASE "${name}"`); } catch { /* از قبل هست */ } continue; }
+    /* `WITH (FORCE)` اتصال‌های جاماندهٔ سرورِ اجرای قبلی را می‌بندد. */
+    psql(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+    psql(`CREATE DATABASE "${name}"`);
+    console.log(`  \u21bb ${name} از صفر`);
   }
 };
-
 const wf = yaml.load(readFileSync(resolve(root, '.github/workflows/security-ci.yml'), 'utf8'));
 
 /* مرورگر را همان‌جایی بگذار که سوییت‌ها دنبالش می‌گردند — آینهٔ گامِ
@@ -101,6 +114,32 @@ if (!existsSync(CHROME)) {
 for (const p of ['/tmp/chromium']) {
   try { execFileSync('ln', ['-sfn', CHROME, p]); } catch { /* اگر نشد، سوییت‌هایی که E2E_CHROME را می‌خوانند باز هم کار می‌کنند */ }
 }
+
+/**
+ * 🔴 **دو اجرای هم‌زمان ممنوع — سومین قرمزِ دروغینِ همین ابزار.**
+ *
+ * یک‌بار سهواً دو نسخه هم‌زمان اجرا شد و نتیجه‌اش چهار گامِ قرمز بود با پیامِ
+ * `Cannot find package '@electric-sql/pglite'` — بسته‌ای که سالم نصب بود.
+ * علتش این است که `npm ci` پوشهٔ `node_modules` را **پاک و از نو** می‌سازد،
+ * پس اجرای دوم دقیقاً وسطِ همان پنجره به بسته‌ای رسید که لحظه‌ای وجود نداشت.
+ * دیتابیس‌ها هم همین‌طور: هر دو `DROP`/`CREATE` می‌کنند.
+ *
+ * تشخیصِ چنین قرمزی از قرمزِ واقعی سخت است و وقت می‌برد — پس همان اول جلویش
+ * گرفته می‌شود. قفل با `wx` باز می‌شود (اتمی)؛ اگر مانده از اجرای کشته‌شده
+ * باشد، پیام می‌گوید چه چیزی را پاک کند.
+ */
+const LOCK = resolve(LOG_DIR, 'running.lock');
+try {
+  writeFileSync(LOCK, `pid=${process.pid}\n`, { flag: 'wx' });
+} catch {
+  console.error(`✗ یک اجرای دیگر در جریان است (${LOCK}).`);
+  console.error('  دو اجرای هم‌زمان `npm ci` و دیتابیس را زیرِ پای هم می‌کشند و قرمزِ دروغین می‌سازند.');
+  console.error(`  اگر از اجرای کشته‌شده مانده: rm ${LOCK}`);
+  process.exit(2);
+}
+const unlock = () => { try { execFileSync('rm', ['-f', LOCK]); } catch { /* رفته */ } };
+process.on('exit', unlock);
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { unlock(); process.exit(130); });
 
 const REQUIRED = ['DATABASE_URL', 'CONTROL_DATABASE_URL', 'TENANT_DATABASE_ENCRYPTION_KEY', 'JWT_SECRET'];
 const missing = REQUIRED.filter((k) => !process.env[k]);
@@ -172,7 +211,7 @@ if (PART === 'all' || PART === 'live') {
   const steps = job.steps.filter((s) => s.run && !s.uses && !SKIP_NAMES.includes(s.name)
     && !s.name?.startsWith('Run shard'));
   console.log(`\n══ جابِ live — ${steps.length} گامِ آماده‌سازی + کلِ مانیفستِ ci-live.txt ══\n`);
-  ensureDatabases();
+  resetDatabases();
   let prepOk = true;
   steps.forEach((s, i) => {
     const idx = `L${i + 1}`;
