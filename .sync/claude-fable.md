@@ -21,6 +21,8 @@ paths:
   - src/app/jdate.css
   - server/src/patients/availability.service.ts
   - .github/workflows/security-ci.yml
+  - scripts/local-ci.mjs
+  - scripts/e2e/README.md
 note: >-
   بستهٔ ۳ب + ۳ج (PR #85). **۳ب — نمای اتاقِ عمل**: ماژولِ تازهٔ `theatre` روی
   `/app/theatre` (چک‌لیستِ ایمنیِ WHO با امضا، هشدارِ بالینی، ساعتِ یک‌لمسی،
@@ -37,6 +39,9 @@ note: >-
   روزِ ماه، رویش را باز کرد). به‌علاوه `concurrency`، دو شارد، و کشِ مرورگر.
   بسته‌های ۱ (#81)، ۲ (#82) و ۳الف (#84) لند شده‌اند. CI به‌خاطر تمام‌شدنِ
   سهمیهٔ Actionsِ حساب نمی‌دود؛ تأیید با اجرای کاملِ محلیِ ۱۱۲ سوییت انجام شد.
+  PR #85 در `09d2c25` دستی مرج شد. **تصمیمِ مالک: تا آخرِ ماه CI محلی و مرج
+  دستی** — `scripts/local-ci.mjs` گام‌ها را از خودِ `security-ci.yml` می‌خواند
+  تا از CI واگرا نشود.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

@@ -157,6 +157,35 @@ node scripts/e2e/bootstrap-env.mjs
 > قدیمی‌ترین فرمِ `followUp='general'` را برمی‌دارد، پس اجرای تازه به فرمِ
 > بیاتِ اجرای قبلی می‌چسبد و شمارشِ سوییت صفر می‌شود.
 
+### ⚠️ وقتی CI نمی‌دود — `scripts/local-ci.mjs`
+
+از ۱۴۰۵/۰۶/۳۱ سهمیهٔ Actionsِ حساب تمام شد و گیت‌هاب به هیچ جابی رانر نداد
+(ران ساخته می‌شد و در ۳ ثانیه با `runner_id: 0` می‌مرد). تا برگشتنِ سهمیه،
+تأییدِ هر تغییر با این اسکریپت انجام می‌شود و **مرج دستی** است.
+
+```bash
+export DATABASE_URL=…  CONTROL_DATABASE_URL=…  E2E_TENANT2_DATABASE_URL=…
+export TENANT_DATABASE_ENCRYPTION_KEY=…  JWT_SECRET=…  DEFAULT_TENANT_SLUG=t1
+export E2E_CHROME=/opt/pw-browsers/chromium     # اگر مرورگر جای دیگری است
+
+node scripts/local-ci.mjs                # همه: ۱۰۱ گامِ build + کلِ ci-live.txt
+node scripts/local-ci.mjs --part build   # فقط گام‌های جابِ build
+node scripts/local-ci.mjs --part live    # فقط سوییت‌های زنده
+node scripts/local-ci.mjs --from 40      # ادامه از گامِ ۴۰
+```
+
+🔴 **گام‌ها از خودِ `security-ci.yml` خوانده می‌شوند، نه از یک کپیِ دستی.** با
+کپی، اولین گامی که به CI اضافه می‌شد این‌جا جا می‌افتاد و اسکریپت بی‌صدا کمتر
+از CI می‌سنجید — همان تله‌ای که `--shard i/n` با مخرجِ ثابت داشت. چیزهایی که
+عمداً رد می‌شوند (`uses:`، نصبِ chromium، ساختِ دیتابیسِ CI، شاردبندی) با
+**نام** رد می‌شوند نه با شماره، چون شماره با هر گامِ تازه جابه‌جا می‌شود.
+
+لاگِ کاملِ هر گامِ افتاده در `.e2e-logs/local-ci/` می‌مانَد — خروجیِ ترمینال
+معمولاً همان خطی را می‌بُرد که علت در آن است.
+
+> ⚠️ این اسکریپت جای CI را **نمی‌گیرد**، فقط تا برگشتنِ سهمیه جانشینش است:
+> روی یک ماشین می‌دود (کندتر)، و شرایطِ رانرِ تمیزِ گیت‌هاب را بازتولید نمی‌کند.
+
 ### در CI — جابِ `live` در `security-ci.yml` (`run-live.mjs` + `ci-live.txt`)
 
 این خانواده حالا در CI می‌دود: جابِ **`live`** (دو شاردِ موازی) یک Postgresِ
