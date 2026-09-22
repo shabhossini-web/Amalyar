@@ -90,20 +90,51 @@ export default function FrontDesk() {
     load();
   };
 
-  /* می‌اندازد، نمی‌بلعد — پنجرهٔ دلیلِ لغو خودش خطا را نشان می‌دهد. */
+  /* می‌اندازد، نمی‌بلعد — پنجرهٔ دلیلِ لغو خودش خطا را نشان می‌دهد.
+     ⚠️ پاسخِ سرور برمی‌گردد چون **ستونِ مقصد** در آن است (`lane`)؛ بدونش
+     کلاینت باید خودش از وضعیت حدسش بزند، یعنی کپیِ دومِ `apptLane()`. */
   const run = async (row, status, cancel) => {
     setBusy(row.id);
     try {
-      await api(`/frontdesk/appointments/${row.id}/status`, { method: 'POST', body: { status, ...cancel } });
+      const updated = await api(`/frontdesk/appointments/${row.id}/status`, { method: 'POST', body: { status, ...cancel } });
       after();
+      return updated;
     } finally { setBusy(0); }
+  };
+
+  /* «ویزیتِ در جریان» واژهٔ حوزه است، پس از `useTerms` می‌آید نه از عنوانِ سرور. */
+  const laneTitle = (k, title) => (k === 'inVisit' ? t.visitInProgress : title);
+
+  /**
+   * **نما کارت را دنبال می‌کند.**
+   *
+   * 🔴 گزارشِ مالک: «تو میزِ منشی وقتی می‌زنیم مریض رسید، دیگه نمی‌شه زد شروعِ
+   * ویزیت و گم می‌شه». دکمه پاک نشده بود — **ستونش** عوض شده بود: روی موبایل
+   * فقط یک ستون دیده می‌شود (`.fd-lane.on`) و پیش‌فرضش «نوبت‌دار» است، پس
+   * «رسید» کارت را به «حاضر» می‌بَرد و از جلوی چشم برمی‌دارد. روی دسکتاپ چون
+   * هر پنج ستون کنارِ هم‌اند همین رفتار درست به‌نظر می‌رسید.
+   *
+   * ⚠️ ستونِ مقصد از **پاسخِ سرور** می‌آید نه از نگاشتِ کلاینتی: `apptLane()`
+   * تنها منبعِ این تصمیم است و کپیِ دومش با اولین وضعیتِ تازه واگرا می‌شد.
+   *
+   * ⚠️ «لغوشده» ستون ندارد (یک بخشِ تاشو کنارِ تخته است)، پس به‌جای عوض‌کردنِ
+   * ستون همان بخش باز می‌شود — وگرنه کاربر به ستونی فرستاده می‌شد که وجود ندارد.
+   */
+  const follow = (row, updated) => {
+    const name = row.fullName || 'بیمار';
+    const to = updated?.lane ?? null;
+    if (to === 'cancelled') { setShowCancelled(true); setToast(`${name} لغو شد — در «لغوشده‌ها»ست`); return; }
+    if (!to) { setToast('ثبت شد ✓'); return; }
+    const found = (data?.lanes ?? []).find((l) => l.key === to);
+    if (to !== lane) setLane(to);
+    setToast(found ? `${name} رفت به «${laneTitle(to, found.title)}»` : 'ثبت شد ✓');
   };
 
   /* لغوِ نوبت هم دلیل می‌خواهد: نوبت یادآوریِ روزِ قبل دارد، پس بیمارِ بی‌خبر
      منتظرِ پیامی می‌ماند که دیگر نمی‌آید (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶). */
   const act = (row, status) => {
     if (status === 'cancelled') { setCancelAsk(row); return; }
-    run(row, status).then(() => setToast('ثبت شد ✓')).catch((e) => setToast(e?.message || 'انجام نشد'));
+    run(row, status).then((updated) => follow(row, updated)).catch((e) => setToast(e?.message || 'انجام نشد'));
   };
 
   /* «شروع» و «بازکردن» دو چیزند: اولی وضعیت را جلو می‌برد، دومی فقط فرم را
@@ -111,16 +142,18 @@ export default function FrontDesk() {
   const open = async (row, advance) => {
     setBusy(row.id);
     try {
-      const visitId = advance
-        ? (await api(`/frontdesk/appointments/${row.id}/start`, { method: 'POST' })).visitId
-        : row.visitId;
+      const started = advance
+        ? await api(`/frontdesk/appointments/${row.id}/start`, { method: 'POST' })
+        : null;
+      const visitId = advance ? started.visitId : row.visitId;
       const visit = await api(`/visits/${visitId}`);
       setSheet({ visit });
-      if (advance) after();
+      /* همان قاعدهٔ `follow`: بعد از بستنِ فرم، کارت باید همان‌جا باشد که
+         کاربر انتظارش را دارد — «ویزیتِ در جریان»، نه ستونی که ترکش کرده. */
+      if (advance) { after(); follow(row, started.appointment); }
     } catch (e) { setToast(e?.message || 'باز نشد'); } finally { setBusy(0); }
   };
 
-  const laneTitle = (k, title) => (k === 'inVisit' ? t.visitInProgress : title);
 
   if (err && err.status === 403) {
     return (
@@ -247,6 +280,9 @@ export default function FrontDesk() {
             onConfirm={async (c) => {
               await run(cancelAsk, 'cancelled', c);
               setCancelAsk(null);
+              /* همان قاعدهٔ `follow`: کارت به بخشِ تاشوی «لغوشده‌ها» می‌رود، پس
+                 همان بخش باز می‌شود — وگرنه بیمار بی‌هیچ ردی از تخته می‌رفت. */
+              setShowCancelled(true);
               setToast('لغو ثبت شد و به بیمار اطلاع داده شد ✓');
             }}
           />

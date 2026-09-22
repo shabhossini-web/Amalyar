@@ -72,6 +72,10 @@ try {
   /* 🔴 همان حالتی که بن‌بست را می‌ساخت: نوبتِ **قطعیِ ثبت‌نامِ آنلاین** که
      `visitId` از قبل دارد (`intake.service.ts:1736`). */
   const aIntake = mk('confirmed', `, ${v0.id}`);
+  /* دو نوبتِ قطعیِ جدا برای سنجهٔ «کارت با رسید گم نشود» (بندِ ۸): یکی برای
+     قراردادِ API و یکی برای مرورگر — `aConf` خودش در بندِ ۷ مصرف می‌شود. */
+  const aConf2 = mk('confirmed');
+  const aConf3 = mk('confirmed');
 
   console.log('۱) تخته');
   const day = (await send(`/frontdesk/day?date=${ISO}`, 'GET')).json;
@@ -104,6 +108,13 @@ try {
   ok(started.status < 300 && started.json?.visitId === v0.id, `شروع شد و همان مراجعه برگشت (${started.status})`);
   ok(started.json?.appointment?.status === 'arrived' && started.json?.appointment?.lane === 'inVisit',
     `**نباید بیفتد:** نوبتِ \`visitId\`دار بعد از «شروع» در «نوبت‌دار» گیر کند (${started.json?.appointment?.lane})`);
+
+  /* 🔴 قراردادی که رابط رویش حساب می‌کند: پاسخِ گذار **ستونِ مقصد** را
+     می‌دهد. بدونش کلاینت باید `apptLane()` را از نو بنویسد، و همان کپیِ دوم
+     با اولین وضعیتِ تازه واگرا می‌شود. */
+  const moved = await send(`/frontdesk/appointments/${aConf2}/status`, 'POST', { status: 'arrived' });
+  ok(moved.json?.lane === 'present' && moved.json?.status === 'arrived',
+    `پاسخِ «رسید» ستونِ مقصد را برمی‌گرداند (lane=${moved.json?.lane})`);
 
   const heldStart = await send(`/frontdesk/appointments/${aHeld}/start`, 'POST');
   ok(heldStart.status === 400 && /قطعی/.test(heldStart.json?.message ?? ''),
@@ -180,6 +191,29 @@ try {
     await page.waitForTimeout(500);
     ok(await page.locator('.db-sheet').count() === 0 && await page.locator('.fd-board').count() === 1,
       'با **یک** اقدام (Escape) به میز برگشت');
+
+    /* 🔴 **کارت نباید با «رسید» گم شود** — گزارشِ مالک ۱۴۰۵/۰۶/۳۱:
+       «تو میزِ منشی وقتی می‌زنیم مریض رسید، دیگه نمی‌شه زد شروعِ ویزیت و گم
+       می‌شه». دکمه پاک نشده بود؛ روی موبایل فقط **یک ستون** دیده می‌شود و
+       کارت به ستونِ دیگری می‌رفت. سنجه عمداً روی عرضِ موبایل است — روی
+       دسکتاپ هر پنج ستون دیده می‌شوند و این باگ اصلاً بروز نمی‌کند. */
+    console.log('\n۸) موبایل: «رسید» کارت را از جلوی چشم برنمی‌دارد');
+    await page.setViewportSize({ width: 430, height: 900 });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.fd-board', { timeout: 15000 });
+    const m = page.locator(`.fd-card[data-appt="${aConf3}"]`);
+    await m.waitFor({ timeout: 8000 });
+    ok(await m.isVisible(), 'کارت در ستونِ «نوبت‌دار» دیده می‌شود');
+    await m.getByRole('button', { name: 'رسید' }).click();
+    await page.waitForTimeout(1200);
+    ok(await m.isVisible(), '**بعد از «رسید» هنوز دیده می‌شود** — نما ستونِ مقصد را باز کرد');
+    ok(await m.getByRole('button', { name: /شروعِ/ }).isVisible(),
+      '**و دکمهٔ شروعِ ویزیت روی همان کارت در دسترس است**');
+    const moveToast = await page.locator('.fd-toast').innerText().catch(() => '');
+    ok(/حاضر/.test(moveToast), `پیام می‌گوید کجا رفت («${moveToast.trim()}»)`);
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.fd-board', { timeout: 15000 });
 
     execSync(`mkdir -p ${SHOTS}`);
     await page.screenshot({ path: `${SHOTS}/w3-3-desk-dark.png` });
