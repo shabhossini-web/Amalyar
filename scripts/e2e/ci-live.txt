@@ -118,3 +118,6 @@ desk-day
 theatre
 reserved-date-keys
 form-types
+clinical-core
+vital-signs
+voice-notes

@@ -12,6 +12,7 @@ import { faDate } from '../lib/jalali.js';
 import { PATIENT } from '../lib/terms.js';
 import { Alert, CheckCircle, Clock } from '../ui/icons.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
+import VoiceNote from '../ui/VoiceNote.jsx';
 import './orders.css';
 import './launcher.css';
 
@@ -142,6 +143,15 @@ export default function OrderPublic() {
                   <label className="db-field"><span>رمز</span>
                     <input dir="ltr" value={f.pass} onChange={(e) => setF((s) => ({ ...s, pass: e.target.value }))} />
                   </label>
+                </div>
+                {/* توضیحِ صوتی (بستهٔ ۶د) — «رادیولوژیست گفت …» را بیمار با صدا
+                    می‌گوید، نه با تایپ. همان مسیرِ فایل‌ها (یکی از ۵ فایلِ سفارش). */}
+                <div className="db-field op-voice"><span>توضیحِ صوتی (اختیاری)</span>
+                  <VoiceNote
+                    disabled={busy}
+                    onSave={async (file) => { await upload(file); }}
+                  />
+                  {files > 0 && <small className="op-hint">{faNum(files)} فایل پیوست شد.</small>}
                 </div>
                 <label className="db-field"><span>توضیح (اختیاری)</span>
                   <textarea rows={3} value={f.text} onChange={(e) => setF((s) => ({ ...s, text: e.target.value }))} />

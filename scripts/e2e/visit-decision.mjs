@@ -97,7 +97,11 @@ try {
     /* ردیفِ اولِ چیپ‌ها = خودِ تصمیم‌ها؛ ردیفِ دومِ داخلِ همین بخش از #64
        دکمه‌های «+ افزودنِ سفارش» است و جزوِ تصمیم‌ها شمرده نمی‌شود. */
     const chips = dec.locator('.db-daychips').first().locator('.db-daychip');
-    ok(await chips.count() === 6, `شش تصمیم نشان داده شد (${await chips.count()})`);
+    /* ⚠️ تعداد از `/config.statuses.decision` می‌آید نه عددِ ثابت: از بستهٔ ۶الف
+       فهرستِ تصمیم‌ها سمتِ سرور است (ویزیتِ بعدی، تکمیلِ بررسی، تغییرِ سرویس،
+       بستری …) و فرم همان را رندر می‌کند. */
+    const cfgDec = ((await send('/config', 'GET')).json?.statuses?.decision ?? []).length;
+    ok(cfgDec >= 6 && await chips.count() === cfgDec, `همهٔ تصمیم‌های سرور نشان داده شد (${await chips.count()}/${cfgDec})`);
     await chips.filter({ hasText: 'کاندیدای جراحی' }).click();
     await page.waitForTimeout(500);
     ok((await dec.locator('.db-decide-hint').first().innerText()).includes('فرمِ عمل'),

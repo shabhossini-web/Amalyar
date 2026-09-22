@@ -2,7 +2,8 @@ import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { api, apiStream, apiUpload } from '../lib/api.js';
+import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
+import VoiceNote, { VoiceClip } from '../ui/VoiceNote.jsx';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
@@ -16,7 +17,7 @@ import './work.css';
 import './record.css';
 import {
   Alert, Back, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
-  Money, Pencil, Phone, Plus, Send, Trash,
+  Mic, Money, Pencil, Phone, Plus, Send, Trash,
 } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import { useConfig, useStatusList } from './config.jsx';
@@ -405,6 +406,21 @@ function DocsTab({ rec, reload, toast }) {
     await apiUpload(`/patients/${rec.id}/documents`, fd);
   };
 
+  /* توضیحِ صوتی (بستهٔ ۶د) — همان دسته/مراجعه/مرحلهٔ انتخاب‌شدهٔ بالا؛ عنوانِ
+     خالی «توضیحِ صوتی» می‌شود تا در فهرست «voice-1405….wav» دیده نشود. */
+  const uploadVoice = async (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('category', cat);
+    fd.append('title', title.trim() || 'توضیحِ صوتی');
+    if (visitId) fd.append('visitId', visitId);
+    if (visitId && phase) fd.append('phase', phase);
+    await apiUpload(`/patients/${rec.id}/documents`, fd);
+    setTitle('');
+    await reload();
+    toast('توضیحِ صوتی ثبت شد ✓');
+  };
+
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
      فایلش را کسی ندارد؛ دسته/عنوان/تاریخ از همان فیلدهای بالا می‌آید. */
   const [linkUrl, setLinkUrl] = useState('');
@@ -529,6 +545,10 @@ function DocsTab({ rec, reload, toast }) {
             <input dir="ltr" autoComplete="off" value={linkPass} onChange={(e) => setLinkPass(e.target.value)} placeholder="رمز" disabled={busy} />
           </div>
         )}
+        {/* ضبطِ صدا زیرِ لینک و فایل (بستهٔ ۶د) — مثلاً توضیحِ رادیولوژیست پشتِ تلفن. */}
+        <div className="rc-voice">
+          <VoiceNote disabled={busy} onSave={uploadVoice} />
+        </div>
       </div>
 
       {present.length > 1 && (
@@ -561,6 +581,8 @@ function DocsTab({ rec, reload, toast }) {
             <div key={d.id} className="rc-doc">
               {d.isLink
                 ? <div className="rc-thumb rc-thumb-file"><LinkIcon width="16" height="16" /></div>
+                : d.isAudio
+                  ? <div className="rc-thumb rc-thumb-file"><Mic size={16} /></div>
                 : d.isImage
                   ? <DocThumb id={d.id} alt={d.title || d.fileName} className="rc-thumb" />
                   : <div className="rc-thumb rc-thumb-file">{(d.fileName.split('.').pop() || '?').slice(0, 4)}</div>}
@@ -579,6 +601,7 @@ function DocsTab({ rec, reload, toast }) {
                   </small>
                 )}
                 {d.isLink && (d.externalUser || d.externalPass) && <DocCred user={d.externalUser} pass={d.externalPass} />}
+                {d.isAudio && <VoiceClip load={() => apiBlobUrl(`/patients/documents/${d.id}/file`)} name="پخش" />}
               </div>
               <div className="df-acts">
                 {d.isLink ? (

@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey } from './form-presets';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 
@@ -188,7 +188,8 @@ export class FormsService {
       orderBy: [{ scope: 'asc' }, { id: 'asc' }],
       include: FIELD_ORDER,
     });
-    return rows.map((f) => this.view(f));
+    const vertical = await this.config.vertical();
+    return rows.map((f) => this.view(f, vertical));
   }
 
   /** یک فرم با کلیدش — همان چیزی که رندرکننده‌ی فرم صدا می‌زند. */
@@ -199,7 +200,7 @@ export class FormsService {
       include: FIELD_ORDER,
     });
     if (!row) throw new NotFoundException('فرم پیدا نشد');
-    return this.view(row);
+    return this.view(row, await this.config.vertical());
   }
 
   /**
@@ -215,7 +216,7 @@ export class FormsService {
       where: { scope: 'visit', visitKind: kind, active: true },
       include: FIELD_ORDER,
     });
-    return row ? this.view(row) : null;
+    return row ? this.view(row, await this.config.vertical()) : null;
   }
 
   /**
@@ -297,8 +298,14 @@ export class FormsService {
    * ⚠️ `pages` هم این‌جا حساب می‌شود نه در مرورگر: هر جای دیگری که بخواهد
    * «این فرم چند صفحه است» را بداند، باید همان `Math.max` را تکرار کند.
    */
-  private view(f: any) {
+  private view(f: any, vertical?: string) {
+    /* هستهٔ ثابتِ مطب (بستهٔ ۶): فرم‌ساز ردیفِ `core` را قفل می‌کند و فرمِ
+       مراجعه بخش‌های هسته را به ترتیبِ `coreRank` می‌چیند — نه به ترتیبِ
+       `sort`، چون استانداردِ ثابت یعنی ترتیبِ ثابت. */
+    const coreList = f.scope === 'visit' && vertical === 'clinic' ? CLINIC_CORE[coreFamily(f.visitKind)] : [];
     const fields = (f.fields ?? []).filter((x: any) => !x.deletedAt).map((x: any) => ({
+      core: x.builtin && coreList.includes(x.key),
+      coreRank: x.builtin && coreList.includes(x.key) ? coreList.indexOf(x.key) : null,
       id: x.id, key: x.key, label: x.label, type: x.type,
       required: x.required, options: x.options ?? [],
       /* بخشِ نقش + برچسبِ فارسی‌اش — مشتقِ سرور (قانون ۱۵)، تا کلاینت نگاشتِ
@@ -311,6 +318,17 @@ export class FormsService {
       docCategory: x.docCategory ?? null,
       sort: x.sort, page: x.page ?? 1, builtin: x.builtin, active: x.active,
     }));
+    /* ⚠️ **ترتیبِ ثابت یعنی در فهرستِ فرم‌ساز هم ثابت.** نصبِ موجود ردیف‌های
+       هسته را با `sort`ِ پراکنده دارد (قالبِ قدیم + backfillی که ته اضافه
+       می‌کند): «کارشناس» وسطِ هسته و «تشخیص» بعد از «مبلغ» می‌نشست، و فرم‌ساز
+       ترتیبی نشان می‌داد که فرمِ واقعی نداشت. پس هسته اول و به ترتیبِ
+       `coreRank`، بقیه با همان ترتیبِ خودشان — مرتب‌سازیِ پایدار. */
+    if (coreList.length) {
+      const idx = new Map(fields.map((x: any, i: number) => [x.id, i]));
+      fields.sort((a: any, b: any) => (a.core === b.core
+        ? (a.core ? a.coreRank - b.coreRank : (idx.get(a.id) as number) - (idx.get(b.id) as number))
+        : a.core ? -1 : 1));
+    }
     return {
       id: f.id, key: f.key, title: f.title, scope: f.scope,
       visitKind: f.visitKind, hint: f.hint, active: f.active,
@@ -339,6 +357,7 @@ export class FormsService {
       await this.ensureRegistrationPreset();
       await this.backfillColors();
       await this.backfillVisitBuiltins();
+      await this.activateClinicCore();
       return this.backfillClinicMedia();
     }
     const vertical = await this.config.vertical();
@@ -348,7 +367,37 @@ export class FormsService {
        تکمیلشان کارِ همین backfill است تا نصبِ تازه و نصبِ قدیمی یک مسیر
        داشته باشند. */
     await this.backfillVisitBuiltins();
+    await this.activateClinicCore();
     return this.backfillClinicMedia();
+  }
+
+  /**
+   * **هستهٔ ثابتِ مطب همیشه روشن است** — نه یک بار، هر بار (idempotent).
+   *
+   * ⚠️ چرا «هر بار» و نه یک پرچمِ «انجام شد»: قفلِ فرم‌ساز جلوی خاموش‌کردنِ
+   * **تازه** را می‌گیرد، ولی ردیفی که پیش از این بسته خاموش شده بود (یا از
+   * `backfillVisitBuiltins` خاموش ساخته شد) باید روشن شود. چیزی که کم نیست
+   * هیچ نوشتنی ندارد.
+   */
+  private async activateClinicCore() {
+    if ((await this.config.vertical()) !== 'clinic') return;
+    /* دو کوئری، نه یکی به‌ازای هر فرم: این در هر خواندنِ فرم می‌دود. */
+    await this.prisma.formField.updateMany({
+      where: {
+        builtin: true, active: false, deletedAt: null,
+        form: { scope: 'visit', visitKind: 'surgery' },
+        key: { in: CLINIC_CORE.surgery },
+      },
+      data: { active: true },
+    });
+    await this.prisma.formField.updateMany({
+      where: {
+        builtin: true, active: false, deletedAt: null,
+        form: { scope: 'visit', OR: [{ visitKind: null }, { visitKind: { not: 'surgery' } }] },
+        key: { in: CLINIC_CORE.visit },
+      },
+      data: { active: true },
+    });
   }
 
   async workflow() { return this.config.vertical(); }
@@ -451,7 +500,7 @@ export class FormsService {
     const forms = await this.prisma.formDef.findMany({
       where: { scope: 'visit' },
       select: {
-        id: true,
+        id: true, visitKind: true,
         fields: { select: { key: true, active: true, builtin: true, sort: true } },
       },
     });
@@ -466,7 +515,10 @@ export class FormsService {
         // خواندن هم‌زمان فرم نباید backfill تکراری بسازد.
         skipDuplicates: true,
         data: missing.map((c) => ({
-          formId: f.id, key: c.key, label: c.label, type: c.type,
+          formId: f.id, key: c.key,
+          /* «یافته‌ها»ی فرمِ عمل یافته‌های **حینِ عمل** است، نه پاراکلینیک. */
+          label: c.key === 'findings' && f.visitKind === 'surgery' ? 'یافته‌های حینِ عمل' : c.label,
+          type: c.type,
           builtin: true, required: false, sort: (sort += 10),
           active:
             /* ⚠️ قاعدهٔ «`techId` روشن → `techArriveTime` هم روشن» با W3.8/U7 رفت:
@@ -698,7 +750,12 @@ export class FormsService {
     /* ⚠️ کلیدِ دلخواه نباید هم‌نامِ ستونِ واقعی باشد: `split()` کلیدهای builtin
        را به ستون می‌فرستد، پس یک فیلدِ دلخواه به‌نامِ `opDate` بی‌صدا تاریخِ
        عمل را بازنویسی می‌کرد. */
-    if (BUILTIN_VISIT_KEYS.has(key) || VISIT_CATALOG_KEYS.has(key)) {
+    /* ⚠️ فرمِ **زیرپرونده** (`record`) مراجعه نمی‌سازد و پاسخش در
+       `IntakeSubmission` می‌ماند — نه ستون می‌شود نه شرحِ بخشی. پس رزروِ
+       کلید آن‌جا فقط مانع است: از بستهٔ ۶الف `history` هم کلیدِ هسته شد و
+       فرمِ «شرحِ حال»ِ زیرپرونده دیگر نمی‌توانست فیلدِ `history` بگیرد
+       (سوییتِ record-texts همین را گرفت). */
+    if (form.scope !== 'record' && (BUILTIN_VISIT_KEYS.has(key) || VISIT_CATALOG_KEYS.has(key))) {
       throw new BadRequestException('این کلید برای فیلدهای هسته‌ای رزرو است — نامِ دیگری بگذارید');
     }
     const dup = await this.prisma.formField.findUnique({ where: { formId_key: { formId, key } } });
@@ -775,6 +832,13 @@ export class FormsService {
     if (dto.type && !FIELD_TYPES.includes(dto.type)) throw new BadRequestException('نوعِ فیلد نامعتبر است');
     if (row.builtin && dto.type && dto.type !== row.type) {
       throw new BadRequestException('نوعِ فیلدِ هسته‌ای عوض نمی‌شود — این مقدار به ستونِ خودش می‌نشیند');
+    }
+    /* هستهٔ ثابتِ مطب خاموش نمی‌شود (بستهٔ ۶) — ستاره، برچسب و نقشش آزاد است. */
+    if (dto.active === false && row.builtin && row.form.scope === 'visit'
+        && isCoreKey(await this.config.vertical(), row.form.visitKind, row.key)) {
+      throw new BadRequestException(
+        `«${row.label}» جزوِ استانداردِ ثابتِ ${coreFamily(row.form.visitKind) === 'surgery' ? 'عمل' : 'ویزیت'} است و خاموش نمی‌شود — فقط اجباری‌بودن، برچسب و بخشِ نقشش قابلِ تغییر است`,
+      );
     }
     /* همان قاعدهٔ `addField`: تبدیلِ یک فیلدِ موجود به پرداخت هم نباید باکسِ
        دومی بسازد. `id: { not: row.id }` تا ذخیرهٔ دوبارهٔ خودش خطا ندهد. */
@@ -1116,7 +1180,11 @@ function hasLinkRef(v: any): boolean {
 /** سقفِ لینک‌های یک باکس — همان ۱۰ِ باکسِ عکس. */
 export const MAX_FIELD_LINKS = 10;
 
-export type LinkItem = { url: string; title: string | null; user: string | null; pass: string | null; kind: string | null };
+export type LinkItem = {
+  url: string; title: string | null; user: string | null; pass: string | null; kind: string | null;
+  /** توضیحِ صوتیِ همین لینک — ارجاع به مدرکِ WAVِ آپلودشده (بستهٔ ۶د). */
+  voice?: { id: number; name: string | null; seconds: number | null } | null;
+};
 
 /**
  * مقدارِ باکسِ لینک را نرمال می‌کند یا با ۴۰۰ (پیامِ فارسی) رد می‌کند.
@@ -1141,7 +1209,14 @@ export function normalizeLinks(v: any, label = 'لینک'): LinkItem[] {
     if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new BadRequestException(`«${label}»: فقط لینکِ http/https پذیرفته می‌شود`);
     const o = item && typeof item === 'object' ? item : {};
     const kind = typeof o.kind === 'string' && (DOCUMENT_CATEGORIES as readonly string[]).includes(o.kind) ? o.kind : null;
-    out.push({ url: url.toString().slice(0, 2000), title: clip(o.title, 120), user: clip(o.user, 120), pass: clip(o.pass, 120), kind });
+    /* ارجاعِ صدا فقط شناسه و برچسب است؛ اینکه آن مدرک واقعاً صدای **همین**
+       بیمار باشد را `syncLinkDocuments` هنگامِ وصل‌کردن می‌سنجد. */
+    const v = o.voice && typeof o.voice === 'object' ? o.voice : null;
+    const vid = v && Number.isInteger(Number(v.id)) && Number(v.id) > 0 ? Number(v.id) : null;
+    const voice = vid
+      ? { id: vid, name: clip(v.name, 120), seconds: Number.isFinite(Number(v.seconds)) ? Math.round(Number(v.seconds)) : null }
+      : null;
+    out.push({ url: url.toString().slice(0, 2000), title: clip(o.title, 120), user: clip(o.user, 120), pass: clip(o.pass, 120), kind, ...(voice ? { voice } : {}) });
     if (out.length > MAX_FIELD_LINKS) throw new BadRequestException(`«${label}»: حداکثر ${MAX_FIELD_LINKS} لینک`);
   }
   return out;

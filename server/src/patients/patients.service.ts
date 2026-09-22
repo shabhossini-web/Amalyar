@@ -18,8 +18,13 @@ import { FormsService } from './forms.service';
 import { BUILTIN_VISIT_KEYS, VISIT_CATALOG_KEYS } from './form-presets';
 import { visitMoneyMap } from './visit-money';
 import { syncLinkDocuments } from './link-documents';
-import { setVisitNote, VISIT_NOTE_KINDS } from './clinical-note';
-import { OP_LABELS } from './labels';
+import {
+  currentNotes, noteBody, sectionsOf, SECTION_KEYS, SECTION_NOTES, setVisitNote,
+  VISIT_FULL_NOTE_KINDS, VISIT_NOTE_KINDS,
+} from './clinical-note';
+import { ANESTHESIA_LABELS, DECISION_LABELS, DISPOSITION_LABELS, OP_LABELS } from './labels';
+import { vitalsInput } from './vitals';
+import { actorName } from '../common/person';
 import { summarize } from './billing.service';
 import { todayRangeUtc } from '../common/clinic-day';
 
@@ -37,7 +42,7 @@ export type KindMap = Map<string, { title: string; color: string }>;
  * غنی‌سازیِ مراجعه — قانونِ computeVisit: فیلدهای مشتق فقط این‌جا ساخته می‌شوند
  * و کلاینت هیچ فرمولی در render ندارد. همهٔ مبالغ «تومان»اند.
  */
-function enrich(v: any, kinds?: KindMap) {
+function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
   const k = v.kind ? kinds?.get(v.kind) : undefined;
   return {
     requiredItems: v.requiredItems ?? null,
@@ -77,11 +82,20 @@ function enrich(v: any, kinds?: KindMap) {
     /* ⚠️ `find` و نه `[0]`: از وقتی شرحِ ترخیص هم در همین آرایه می‌آید،
        اندیسِ صفر می‌تواند سندِ دیگری باشد — و آن‌وقت شرحِ ترخیص به‌جای شرحِ
        عمل در فرم می‌نشست، بی‌هیچ خطایی. */
-    opReport: v.clinicalNotes?.find((n: any) => n.kind === 'op')?.body ?? null,
+    opReport: noteBody(v.clinicalNotes, 'op'),
+    /* ── بخش‌های هستهٔ ثابت (بستهٔ ۶الف) + اسنادِ ترخیص (۶ب) ──
+       فقط در نمای **کاملِ** مراجعه (`loaded`)؛ در فهرستِ سبک `undefined`
+       می‌مانند و در JSON نمی‌آیند — تا فرمِ ویرایشی که از ردیفِ فهرست باز شده
+       «خالی» را با «خوانده‌نشده» اشتباه نگیرد و با ذخیره پاکشان نکند. */
+    ...sectionsOf(v.clinicalNotes, loaded),
     /* **ترخیص: زمان از ستون، متن از سندِ بالینی** — یک منبع برای هر دو، پس
        میزِ اتاقِ عمل و تبِ شرح‌های پرونده همان چیز را نشان می‌دهند. */
     dischargeAt: v.dischargeAt ?? null,
-    dischargeNote: v.clinicalNotes?.find((n: any) => n.kind === 'discharge')?.body ?? null,
+    dischargeNote: noteBody(v.clinicalNotes, 'discharge'),
+    dischargeDisposition: v.dischargeDisposition ?? null,
+    dischargeDispositionFa: v.dischargeDisposition ? DISPOSITION_LABELS[v.dischargeDisposition] ?? v.dischargeDisposition : null,
+    anesthesia: v.anesthesia ?? null,
+    anesthesiaFa: v.anesthesia ? ANESTHESIA_LABELS[v.anesthesia] ?? v.anesthesia : null,
     opType: v.opType,
     opDate: v.opDate,
     nextVisitDate: v.nextVisitDate,
@@ -91,6 +105,8 @@ function enrich(v: any, kinds?: KindMap) {
     preOpCare: v.preOpCare ?? null,
     preOpImmediate: v.preOpImmediate ?? false,
     decisions: v.decisions ?? [],
+    /* برچسب همراهِ کلید — کلاینت نگاشتِ فارسیِ تصمیم ندارد (`labels.ts`). */
+    decisionsFa: (v.decisions ?? []).map((d: string) => DECISION_LABELS[d] ?? d),
     /* **شکایتِ اولیه مشتق است، نه کپی** (قانونِ ۱۵). عملی که از ویزیت آمده
        شکایتِ خودش را ندارد؛ همان ویزیت را می‌خواند. پس اصلاحِ شکایت در
        ویزیت، همان لحظه در میزِ اتاقِ عمل هم دیده می‌شود — چیزی که کپیِ
@@ -268,15 +284,27 @@ const INCLUDE_PATIENT = {
      اولیه. سه ستون، نه کلِ ردیف: این include روی فهرستِ ۵۰۰تایی هم می‌دود. */
   decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
   /* فقط نسخهٔ جاریِ شرحِ عمل و شرحِ ترخیص؛ تاریخچه از مسیرِ پروندهٔ بیمار
-     خوانده می‌شود. هر دو یک جنس‌اند (سندِ بالینیِ نسخه‌دار)، پس یک کوئری. */
-  clinicalNotes: {
-    where: { kind: { in: VISIT_NOTE_KINDS }, replacedAt: null },
-    orderBy: { createdAt: 'desc' },
-    take: VISIT_NOTE_KINDS.length,
-  },
+     خوانده می‌شود. هر دو یک جنس‌اند (سندِ بالینیِ نسخه‌دار)، پس یک کوئری.
+     ⚠️ `distinct` و نه `take` — توضیح در `currentNotes`. */
+  clinicalNotes: currentNotes(VISIT_NOTE_KINDS),
   // فقط مبلغ لازم است؛ کلِ ردیف‌ها را برای فهرستِ ۵۰۰تایی نمی‌کشیم.
   charges: { select: { amount: true } },
   payments: { select: { amount: true } },
+} as const;
+
+/** «تصمیم»ِ تک‌انتخابیِ قالبِ قدیمیِ مطب → کلیدِ `decisions` (همان نگاشتِ مهاجرتِ `clinical_core`). */
+const LEGACY_PLAN: Record<string, string> = {
+  conservative: 'conservative', imaging: 'imaging', lab: 'lab', surgery: 'surgery', refer: 'referral',
+};
+
+/**
+ * **نمای کاملِ یک مراجعه** — همان `INCLUDE_PATIENT` به‌اضافهٔ همهٔ بخش‌های
+ * متنیِ هسته و اسنادِ ترخیص. برای `GET /visits/:id`، ذخیره و هر جایی که
+ * یک مراجعه را باز می‌کند، نه فهرست.
+ */
+const INCLUDE_VISIT_FULL = {
+  ...INCLUDE_PATIENT,
+  clinicalNotes: currentNotes(VISIT_FULL_NOTE_KINDS),
 } as const;
 
 @Injectable()
@@ -363,7 +391,7 @@ export class PatientsService {
     return { AND: [where, ownVisitWhere(user)] };
   }
 
-  private async assertVisitAccess(id: number, user: any) {
+  async assertVisitAccess(id: number, user: any) {
     const v = await this.prisma.visit.findFirst({ where: this.scopedVisitWhere(user, { id }) });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     return v;
@@ -657,9 +685,9 @@ export class PatientsService {
 
   async getVisit(id: number, user?: any) {
     await this.assertVisitAccess(id, user);
-    const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
+    const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_VISIT_FULL });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
-    return enrich(v, await this.forms.kindMap());
+    return enrich(v, await this.forms.kindMap(), VISIT_FULL_NOTE_KINDS);
   }
 
   /**
@@ -832,9 +860,51 @@ export class PatientsService {
     return (inherited ?? '').trim() === text ? null : text;
   }
 
-  private async setOpReport(tx: any, visit: { id: number; patientId: number }, body: string | null, user: any) {
-    /* منطقِ نسخه‌بندی مشترک است با شرحِ ترخیص — `clinical-note.ts`. */
-    await setVisitNote(tx, visit, 'op', body, user);
+  /**
+   * بخش‌های متنیِ هستهٔ ثابت → اسنادِ نسخه‌دار (شرحِ عمل هم یکی از همین‌هاست).
+   *
+   * ⚠️ فقط کلیدی که در `dto` **آمده** نوشته می‌شود: PATCHِ جزئی (مثلاً فقط
+   * تاریخ) نباید معاینه را «خالی» حساب کند و نسخه‌اش را ببندد. رشتهٔ خالی
+   * یعنی «این سند دیگر جاری نیست» — همان معنای `setVisitNote`.
+   */
+  private async setSections(tx: any, visit: { id: number; patientId: number }, dto: any, user: any, creating = false) {
+    for (const key of SECTION_KEYS) {
+      const v = dto?.[key];
+      if (v === undefined || v === null) continue;
+      if (creating && !String(v).trim()) continue;
+      await setVisitNote(tx, visit, SECTION_NOTES[key], String(v), user);
+    }
+  }
+
+  /**
+   * **کلاینتِ قدیمی بخش‌های هسته را داخلِ `extra` می‌فرستد** — PWAِ کش‌شده تا
+   * بارگذاریِ بعدی همان کدِ دیروز است. بی این تبدیل، معاینه‌ای که پس از
+   * مهاجرت با کلاینتِ کهنه ذخیره شود دوباره در JSON می‌نشست و از سندِ
+   * بالینی جا می‌ماند — همان دو-نسخه‌ای که مهاجرت برای حذفش آمد.
+   *
+   * همان قراردادِ `clinical_core`: فقط مقدارِ رشته‌ای، و `refer`ِ قالبِ قدیمی
+   * همان `referral` است.
+   */
+  static liftLegacy(dto: any, currentDecisions: string[]) {
+    const extra = dto?.extra;
+    if (!extra || typeof extra !== 'object') return;
+    for (const k of SECTION_KEYS) {
+      if (typeof extra[k] !== 'string') continue;
+      if (dto[k] === undefined) dto[k] = extra[k];
+      delete extra[k];
+    }
+    if (typeof extra.anesthesia === 'string') {
+      if (dto.anesthesia === undefined && ANESTHESIA_LABELS[extra.anesthesia]) dto.anesthesia = extra.anesthesia;
+      delete extra.anesthesia;
+    }
+    const plan = typeof extra.plan === 'string' ? LEGACY_PLAN[extra.plan] : undefined;
+    if (plan) {
+      /* ادغام، نه جایگزینی: اگر همین درخواست `decisions` نداشت، پایه همان
+         تصمیم‌های فعلیِ مراجعه است — وگرنه یک PATCHِ کهنه تصمیم‌های قبلی را
+         با همین یکی بازنویسی می‌کرد. */
+      dto.decisions = [...new Set([...(dto.decisions ?? currentDecisions ?? []), plan])];
+      delete extra.plan;
+    }
   }
 
   /**
@@ -960,7 +1030,7 @@ export class PatientsService {
   }
 
   private async assertEditFormValid(v: any, dto: UpdateVisitDto) {
-    const current = enrich(v);
+    const current = enrich(v, undefined, VISIT_FULL_NOTE_KINDS);
     const kind = dto.kind ?? v.kind;
     let form;
     try { form = await this.forms.byKey(`visit.${kind}`); }
@@ -1049,6 +1119,9 @@ export class PatientsService {
   /** اعتبارسنجی بیرون از تراکنش؛ تمامِ نوشتن‌ها با همان txِ فراخواننده. */
   async prepareVisitCreation(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
     const userId: number | undefined = user?.id;
+    /* پیش از هر سنجه: کلاینتِ کهنه بخش‌های هسته را در `extra` می‌فرستد. */
+    PatientsService.liftLegacy(dto, []);
+    const vitalsRow = vitalsInput((dto as any).vitals);
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
        بی‌آن فیلد را با خوش‌رویی می‌پذیرفت — یعنی «اجباری» فقط یک نقاشی بود.
@@ -1127,6 +1200,7 @@ export class PatientsService {
           preOpCare: dto.preOpCare?.trim() || null,
           preOpImmediate: dto.preOpImmediate ?? false,
           decisions: dto.decisions ?? [],
+          anesthesia: dto.anesthesia || null,
           chiefComplaint: complaint,
           decidedInVisitId: decidedIn?.id ?? null,
           ...timePatch(dto),
@@ -1170,18 +1244,26 @@ export class PatientsService {
           },
         });
       }
-      if (dto.opReport?.trim()) {
-        await this.setOpReport(tx, visit, dto.opReport, user);
-        visit.clinicalNotes = await tx.clinicalNote.findMany({
-          /* ⚠️ همان شرطِ `VISIT_INCLUDE` و نه فقط `op`: اگر این‌جا باریک‌تر
-             می‌ماند، هر ذخیره‌ای که شرحِ عمل داشت، شرحِ ترخیص را از پاسخ
-             حذف می‌کرد و رابط فکر می‌کرد بیمار ترخیص نشده. */
-          where: { visitId: visit.id, kind: { in: VISIT_NOTE_KINDS }, replacedAt: null },
-          orderBy: { createdAt: 'desc' },
-          take: VISIT_NOTE_KINDS.length,
+      /* بخش‌های متنیِ هسته (و شرحِ عمل) → اسنادِ نسخه‌دار، داخلِ همین تراکنش. */
+      await this.setSections(tx, visit, dto, user, true);
+      /* علائمِ حیاتیِ لحظهٔ ثبت — اختیاری؛ ردیفِ کاملاً خالی ساخته نمی‌شود. */
+      if (vitalsRow) {
+        await tx.vitalSign.create({
+          data: {
+            ...vitalsRow, visitId: visit.id, patientId: visit.patientId,
+            recordedById: userId ?? null, recordedByName: actorName(user),
+          },
         });
       }
-      const result = { ...enrich(visit, kinds), patientStatus };
+      /* ⚠️ پاسخ همیشه نمای **کامل** است: فرم بعد از ذخیره همان شیء را نگه
+         می‌دارد و ویرایشِ بعدی از رویش باز می‌شود — بخشِ خوانده‌نشده یعنی
+         فرمی که معاینه را خالی نشان دهد. */
+      visit.clinicalNotes = await tx.clinicalNote.findMany({
+        where: { visitId: visit.id, ...currentNotes(VISIT_FULL_NOTE_KINDS).where },
+        orderBy: currentNotes(VISIT_FULL_NOTE_KINDS).orderBy,
+        distinct: currentNotes(VISIT_FULL_NOTE_KINDS).distinct,
+      });
+      const result = { ...enrich(visit, kinds, VISIT_FULL_NOTE_KINDS), patientStatus };
       await this.audit.record({ actorId: userId, action: target ? 'visit.intake_update' : 'visit.create', entityType: 'visit', entityId: visit.id, after: result }, tx);
       return result;
     };
@@ -1234,9 +1316,17 @@ export class PatientsService {
 
   async updateVisit(id: number, dto: UpdateVisitDto, user?: any) {
     await this.assertVisitAccess(id, user);
-    const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
+    const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_VISIT_FULL });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
-    await this.assertRoleOwnership((dto as any).kind ?? v.kind, dto, user, v as any);
+    PatientsService.liftLegacy(dto, v.decisions ?? []);
+    /* ⚠️ «مقدارِ فعلی»ِ بخش‌های هسته از اسنادِ بالینی می‌آید نه از ستون: بدونِ
+       این، منشی‌ای که فرم را بی‌تغییر ذخیره می‌کند (فرم همهٔ مقادیر را پس
+       می‌فرستد) با «معاینه بخشِ پزشک است» رد می‌شد — چون مقدارِ قبلی را
+       `undefined` می‌دید. */
+    await this.assertRoleOwnership(
+      (dto as any).kind ?? v.kind, dto, user,
+      { ...(v as any), ...sectionsOf(v.clinicalNotes, VISIT_FULL_NOTE_KINDS) },
+    );
     if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
     await this.assertEditFormValid(v, dto);
     /* باکس‌های لینک: تعریفِ فرم و نرمال‌سازی **پیش از** تراکنش — کوئریِ بیرونِ tx
@@ -1274,6 +1364,7 @@ export class PatientsService {
       if (dto.preOpCare !== undefined) visitPatch.preOpCare = dto.preOpCare?.trim() || null;
       if (dto.preOpImmediate !== undefined) visitPatch.preOpImmediate = !!dto.preOpImmediate;
       if (dto.decisions !== undefined) visitPatch.decisions = dto.decisions ?? [];
+      if (dto.anesthesia !== undefined) visitPatch.anesthesia = dto.anesthesia || null;
       /* ⚠️ `ownComplaint` این‌جا هم لازم است و نه فقط در ساخت: فرمِ عملِ
          ارث‌گرفته مقدارِ مشتق را نشان می‌دهد، پس هر «ذخیره»ی بی‌تغییر همان
          متن را پس می‌فرستد. بدونِ این خط، دومین ذخیره ارث را کپی می‌کرد. */
@@ -1321,9 +1412,8 @@ export class PatientsService {
       if (Object.keys(patientPatch).length) {
         await tx.patient.update({ where: { id: v.patientId }, data: patientPatch });
       }
-      if (dto.opReport !== undefined) {
-        await this.setOpReport(tx, { id, patientId: v.patientId }, dto.opReport, user);
-      }
+      /* شرحِ عمل و بخش‌های هسته — هر کدام فقط اگر در این PATCH آمده باشد. */
+      await this.setSections(tx, { id, patientId: v.patientId }, dto, user);
       /* ساعتِ حضور مشتقِ برنامهٔ چینش است (W3.8/U7): با مقادیرِ **نهایی** پس از
          این ویرایش سنجیده می‌شود، نه با مقادیرِ قبلی — وگرنه تغییرِ بیمارستان یا
          تاریخ در همین ویرایش، ردیفِ حضورِ روزِ قبل را نگاه می‌کرد.
@@ -1338,11 +1428,11 @@ export class PatientsService {
         opDate: pick(visitPatch.opDate, v.opDate),
         opStartTime: pick(visitPatch.opStartTime, v.opStartTime),
       });
-      return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_PATIENT });
+      return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_VISIT_FULL });
     });
     const kinds = await this.forms.kindMap();
-    const result = enrich(updated, kinds);
-    await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v, kinds), after: result });
+    const result = enrich(updated, kinds, VISIT_FULL_NOTE_KINDS);
+    await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v, kinds, VISIT_FULL_NOTE_KINDS), after: result });
     /* ویرایش ممکن است تاریخِ ویزیتِ بعدی یا شمارهٔ بیمار را عوض کرده باشد. */
     await this.reminders.syncNextVisit(id);
     await this.syncPostOpVisit(id);

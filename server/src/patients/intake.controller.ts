@@ -258,6 +258,13 @@ export class PublicIntakeController {
     return this.intake.attachImage(token, field, file);
   }
 
+  /** توضیحِ صوتیِ یک ردیفِ **باکسِ لینک** (بستهٔ ۶د) — فقط WAV، همان سقفِ ۸ مگابایت. */
+  @Post('form/:token/voice/:field')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 8 * 1024 * 1024 } }))
+  voice(@Param('token') token: string, @Param('field') field: string, @UploadedFile() file: any) {
+    return this.intake.attachVoice(token, field, file);
+  }
+
   /** برداشتنِ یک عکس از همان کادر — بیمار عکسِ اشتباه را بردارد. */
   @Delete('form/:token/image/:field/:docId')
   unimage(

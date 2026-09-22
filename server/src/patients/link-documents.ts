@@ -39,13 +39,12 @@ export async function syncLinkDocuments(
 
     const existing = await db.document.findMany({
       where: { patientId: opts.patientId, externalUrl: { in: items.map((i) => i.url) }, deletedAt: null },
-      select: { externalUrl: true },
+      select: { id: true, externalUrl: true },
     });
-    const have = new Set<string>(existing.map((e: any) => e.externalUrl));
+    const have = new Map<string, number>(existing.map((e: any) => [e.externalUrl, e.id]));
     for (const it of items) {
-      if (have.has(it.url)) continue;
-      have.add(it.url);
-      await db.document.create({
+      if (have.has(it.url)) { await attachVoice(db, opts, it, have.get(it.url)!); continue; }
+      const created = await db.document.create({
         data: {
           patientId: opts.patientId,
           visitId: opts.visitId,
@@ -62,6 +61,34 @@ export async function syncLinkDocuments(
           uploadedById: opts.actorId,
         },
       });
+      have.set(it.url, created.id);
+      await attachVoice(db, opts, it, created.id);
     }
+  }
+}
+
+/**
+ * توضیحِ صوتیِ یک لینک → زیرِ همان مدرکِ لینکی (بستهٔ ۶د).
+ *
+ * صدا پیش از ذخیرهٔ فرم آپلود شده (مدرکِ مستقلِ همان بیمار)؛ این‌جا فقط
+ * «مالِ کدام لینک است» نوشته می‌شود (`refType='document'`) و اگر هنوز به
+ * مراجعه‌ای وصل نبود، به همین مراجعه.
+ *
+ * ⚠️ شرطِ `patientId` و `audio/*` عمداً در خودِ `WHERE` است: شناسه از کلاینت
+ * می‌آید و بدونِ آن، هر کس می‌توانست صدای بیمارِ دیگری را زیرِ لینکِ خودش
+ * بکشد. `updateMany` یعنی شناسهٔ نامعتبر بی‌صدا هیچ کاری نمی‌کند.
+ */
+async function attachVoice(db: any, opts: { patientId: number; visitId: number | null }, it: any, linkDocId: number) {
+  const vid = it?.voice?.id;
+  if (!vid) return;
+  await db.document.updateMany({
+    where: { id: vid, patientId: opts.patientId, deletedAt: null, mimeType: { startsWith: 'audio/' } },
+    data: { refType: 'document', refId: linkDocId },
+  });
+  if (opts.visitId) {
+    await db.document.updateMany({
+      where: { id: vid, patientId: opts.patientId, visitId: null },
+      data: { visitId: opts.visitId },
+    });
   }
 }

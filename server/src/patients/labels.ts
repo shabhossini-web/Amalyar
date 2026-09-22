@@ -54,10 +54,87 @@ export const OP_LABELS: Record<string, string> = {
 export const NOTE_KIND_LABELS: Record<string, string> = {
   history: 'شرحِ حال',
   visit: 'شرحِ ویزیت',
+  /* ── بخش‌های هستهٔ ثابتِ مراجعه (بستهٔ ۶الف) — تا دیروز فیلدِ دلخواه در
+     `Visit.extra` بودند، یعنی همان تلهٔ شکایتِ اولیه: در میزِ دیگر دیده
+     نمی‌شدند و گزارش‌پذیر نبودند. حالا سندِ نسخه‌دارِ خودِ مراجعه‌اند. */
+  exam: 'شرحِ معاینه',
+  findings: 'یافته‌ها',
+  plan: 'طرحِ درمان',
+  rx: 'نسخه',
   op: 'شرحِ عمل',
   progress: 'سیرِ بیماری',
-  discharge: 'خلاصهٔ ترخیص',
+  /* ⚠️ `discharge` از روزِ اول «وضعیتِ بیمار هنگامِ ترخیص» را نگه می‌داشت
+     (همان متنی که پاپ‌آپ می‌پرسید) ولی «خلاصهٔ ترخیص» نام گرفته بود. حالا
+     که شرحِ ترخیص سندِ جدای خودش را دارد، دو نامِ هم‌معنا کنارِ هم فقط
+     گیج می‌کرد — برچسب همان چیزی شد که داده واقعاً هست. */
+  discharge: 'وضعیتِ هنگامِ ترخیص',
+  discharge_summary: 'شرحِ ترخیص',
+  discharge_note: 'یادداشتِ ترخیص',
   consult: 'مشاوره',
+};
+
+/**
+ * **تصمیمِ درمانیِ ویزیت** (`Visit.decisions`) — چندتایی.
+ *
+ * ⚠️ تا دیروز دو جا بود: ردیفِ «تصمیمِ درمانی» در `VisitForm` (چندانتخابی) و
+ * یک فیلدِ دلخواهِ `plan` در قالبِ مطب (تک‌انتخابی، با `refer` به‌جای
+ * `referral`). یک تصمیم، دو ذخیره‌گاه، دو واژگان — و گزارشِ «چند ویزیت به
+ * جراحی رسید» فقط یکی‌شان را می‌دید. مهاجرتِ `clinical_core` مقدارِ آن
+ * فیلد را در همین ستون ادغام کرد.
+ */
+export const DECISION_LABELS: Record<string, string> = {
+  surgery: 'کاندیدای جراحی',
+  conservative: 'درمانِ محافظه‌کارانه',
+  lab: 'درخواستِ آزمایش',
+  imaging: 'درخواستِ عکس‌برداری',
+  consult: 'مشاوره',
+  referral: 'ارجاع',
+  followup: 'ویزیتِ بعدی',
+  workup: 'تکمیلِ بررسی — تصمیمِ قطعی بعداً',
+  service: 'تغییرِ سرویس',
+  admit: 'بستری',
+};
+export const DECISION_KEYS = Object.keys(DECISION_LABELS);
+
+/** نوعِ بیهوشی (`Visit.anesthesia`) — همان چهار گزینهٔ قالبِ قدیمی، تا دادهٔ قبلی بی‌ترجمه بنشیند. */
+export const ANESTHESIA_LABELS: Record<string, string> = {
+  general: 'عمومی',
+  spinal: 'نخاعی',
+  local: 'موضعی',
+  sedation: 'سِدیشن',
+};
+export const ANESTHESIA_KEYS = Object.keys(ANESTHESIA_LABELS);
+
+/**
+ * **وضعیتِ خروج هنگامِ ترخیص** (`Visit.dischargeDisposition`).
+ *
+ * ستون است نه متن، چون رویش گزارش گرفته می‌شود («چند ترخیص با رضایتِ
+ * شخصی؟»). شرحِ جزئیات (به کجا منتقل شد، چرا با رضایتِ شخصی) در شرحِ
+ * ترخیص می‌آید، نه در گزینه‌های بیشتر.
+ */
+export const DISPOSITION_LABELS: Record<string, string> = {
+  home: 'منزل',
+  transfer: 'انتقال',
+  ama: 'با رضایتِ شخصی',
+  death: 'فوت',
+};
+export const DISPOSITION_KEYS = Object.keys(DISPOSITION_LABELS);
+
+/**
+ * **علائمِ حیاتی** — برچسبِ هر اندازه (`VitalSign`). واحد و بازهٔ مجاز در
+ * `vitals.service.ts` است؛ این‌جا فقط نامِ فارسی، تا قاعدهٔ «یک برچسب، یک
+ * خانه» این مجموعه را هم پوشش دهد.
+ */
+export const VITAL_LABELS: Record<string, string> = {
+  bp: 'فشارِ خون',
+  hr: 'نبض',
+  rr: 'تنفس',
+  temp: 'دما',
+  spo2: 'اکسیژنِ خون',
+  weight: 'وزن',
+  height: 'قد',
+  pain: 'درد',
+  bmi: 'شاخصِ تودهٔ بدن',
 };
 
 /**

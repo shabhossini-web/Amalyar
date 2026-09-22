@@ -27,7 +27,7 @@ const login = await fetch(API + '/auth/login', {
 if (!login.accessToken) { console.error('ورود نشد — سرور را ری‌استارت کنید'); process.exit(1); }
 const A = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + login.accessToken };
 
-const KINDS = { visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری', discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره' };
+const KINDS = { visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری', discharge: 'وضعیتِ هنگامِ ترخیص', consult: 'مشاوره' };
 
 /* فیکسچرِ اختصاصی — «اولین بیمارِ فهرست» می‌تواند ساختهٔ اجرای قبلی باشد و
    آن‌وقت بارِ دوم چیزِ دیگری سنجیده می‌شود. */

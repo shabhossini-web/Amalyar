@@ -1054,6 +1054,8 @@ model Patient {
   reminders Reminder[]
   /// دوره‌های خدمت — مسیرِ درمان (W4.1).
   episodes  Episode[]
+  /// علائمِ حیاتی در همهٔ مراجعات (بستهٔ ۶ج).
+  vitals    VitalSign[]
 }
 
 /// مدرکِ پزشکی — آزمایش، تصویربرداری، گزارش، رضایت‌نامه، مدرکِ هویتی…
@@ -1343,6 +1345,15 @@ model Visit {
 
   @@index([dischargeAt])
 
+  /// **وضعیتِ خروج** — `DISPOSITION_LABELS` (منزل / انتقال / با رضایتِ شخصی /
+  /// فوت). ستون است نه متن، چون رویش گزارش گرفته می‌شود؛ جزئیات در سندِ
+  /// «شرحِ ترخیص» می‌آید (بستهٔ ۶ب).
+  dischargeDisposition String? @map("discharge_disposition")
+
+  /// **نوعِ بیهوشی** — `ANESTHESIA_LABELS`. تا بستهٔ ۶الف فیلدِ دلخواهِ قالبِ
+  /// جراحیِ مطب بود و در `extra` دفن می‌شد.
+  anesthesia String?
+
   /// دلیلِ لغو — کلیدی از `CANCEL_REASONS` (مجموعهٔ بسته در کد، نه جدول).
   /// ⚠️ این متن **به دستِ بیمار می‌رسد**؛ یادداشتِ داخلی ستونِ جداست.
   cancelReason String? @map("cancel_reason")
@@ -1461,6 +1472,54 @@ model Visit {
 
   /// چک‌لیستِ ایمنیِ اتاقِ عمل — سه مرحله، هر بند یک سطر (بستهٔ ۳ب).
   safetyChecks SafetyCheck[]
+
+  /// علائمِ حیاتی — هر ردیف یک نوبتِ اندازه‌گیری (بستهٔ ۶ج).
+  vitals VitalSign[]
+}
+
+/// **علائمِ حیاتی** — یک ردیف = یک نوبتِ اندازه‌گیری (فشار، نبض، تنفس، دما،
+/// اکسیژن، وزن، قد، درد).
+///
+/// ⚠️ جدول و نه ستون روی مراجعه: یک عمل «قبل» و «بعد» دارد و ریکاوری چند بار
+/// می‌سنجد؛ ستونِ تک‌مقداری یعنی هر اندازه‌گیریِ تازه قبلی را پاک کند. و ستون‌های
+/// عددی و نه JSON، چون رویشان گزارش و نمودار گرفته می‌شود — همان قاعدهٔ
+/// «چیزی که رویش گزارش می‌گیریم ستون است».
+///
+/// ⚠️ همه اختیاری‌اند (تصمیمِ مالک: «بدونِ اجبار»)؛ ردیفِ کاملاً خالی را
+/// سرویس نمی‌پذیرد. BMI ستون نیست — مشتقِ وزن و قد است و در پاسخ ساخته می‌شود.
+///
+/// ⚠️ `patientId` کنارِ `visitId` تکراری به‌نظر می‌رسد ولی عمدی است: «روندِ فشارِ
+/// این بیمار در یک سال» نباید از مسیرِ مراجعه‌ها join بخورد.
+model VitalSign {
+  id        Int     @id @default(autoincrement())
+  visit     Visit   @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId   Int     @map("visit_id")
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId Int     @map("patient_id")
+
+  /// مرحله نسبت به عمل: pre | intra | post — خالی برای ویزیت (همان واژگانِ مدارک).
+  phase   String?
+  takenAt DateTime @default(now()) @map("taken_at")
+
+  bpSys  Int?   @map("bp_sys") // mmHg
+  bpDia  Int?   @map("bp_dia") // mmHg
+  hr     Int? // ضربان در دقیقه
+  rr     Int? // تنفس در دقیقه
+  temp   Float? // درجهٔ سانتی‌گراد
+  spo2   Int? // درصد
+  weight Float? // کیلوگرم
+  height Float? // سانتی‌متر
+  pain   Int? // ۰ تا ۱۰
+  note   String?
+
+  recordedById   Int?     @map("recorded_by_id")
+  /// عکسِ لحظهٔ ثبت — همان استدلالِ `ClinicalNote.authorName`.
+  recordedByName String?  @map("recorded_by_name")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([visitId])
+  @@index([patientId, takenAt])
+  @@map("vital_signs")
 }
 
 /// **بندِ چک‌لیستِ ایمنیِ اتاقِ عمل** — یک سطر به‌ازای هر بندِ تیک‌خورده.

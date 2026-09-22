@@ -4,7 +4,9 @@ import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere } from '../common/own-scope';
 import { actorName } from '../common/person';
-import { setVisitNote } from './clinical-note';
+import { currentNotes, noteBody, setVisitNote } from './clinical-note';
+import { ANESTHESIA_LABELS, DISPOSITION_LABELS } from './labels';
+import { vitalView } from './vitals';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { RecordService } from './record.service';
 import { monthDayCounts } from './month-summary';
@@ -187,13 +189,24 @@ export class TheatreService {
         /* شکایتِ اولیه — مشتق از ویزیتِ تصمیم اگر خودِ عمل ننوشته باشدش
            (بستهٔ ۴الف). سرِ میز باید معلوم باشد بیمار **چرا** آمده. */
         chiefComplaint: true,
-        decidedIn: { select: { chiefComplaint: true } },
-        /* شرحِ عمل و شرحِ ترخیصِ جاری — همان سندهای پرونده، نه کپی. */
+        anesthesia: true, dischargeDisposition: true,
+        diagnosis: { select: { title: true, icdCode: true } },
+        /* **ویزیتِ تصمیم** — جراح سرِ میز باید بداند بیمار با چه شرحِ حال و
+           معاینه و یافته‌ای کاندیدِ عمل شد (بستهٔ ۶الف). مشتق است، نه کپی:
+           همان اسنادِ آن ویزیت. */
+        decidedIn: {
+          select: {
+            id: true, seq: true, opDate: true, chiefComplaint: true,
+            diagnosis: { select: { title: true } },
+            clinicalNotes: { ...currentNotes(['history', 'exam', 'findings', 'plan']), select: { kind: true, body: true } },
+          },
+        },
+        /* اسنادِ جاریِ خودِ عمل — همان سندهای پرونده، نه کپی. */
         clinicalNotes: {
-          where: { kind: { in: ['op', 'discharge'] }, replacedAt: null },
-          orderBy: { createdAt: 'desc' }, take: 2,
+          ...currentNotes(['op', 'findings', 'discharge', 'discharge_summary', 'discharge_note']),
           select: { kind: true, body: true, authorName: true, createdAt: true },
         },
+        vitals: { orderBy: [{ takenAt: 'asc' }, { id: 'asc' }] },
         hospitalName: true, surgeonName: true, surgeonInstructions: true, requiredItems: true, notes: true,
         patient: {
           select: {
@@ -234,8 +247,16 @@ export class TheatreService {
         opStartTime: v.opStartTime, opEndTime: v.opEndTime, techArriveTime: v.techArriveTime,
         dischargeAt: v.dischargeAt,
         chiefComplaint: v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null,
-        opReport: v.clinicalNotes.find((n) => n.kind === 'op')?.body ?? null,
-        dischargeNote: v.clinicalNotes.find((n) => n.kind === 'discharge')?.body ?? null,
+        diagnosis: v.diagnosis?.title ?? null,
+        anesthesia: v.anesthesia ?? null,
+        anesthesiaFa: v.anesthesia ? ANESTHESIA_LABELS[v.anesthesia] ?? v.anesthesia : null,
+        opReport: noteBody(v.clinicalNotes, 'op'),
+        findings: noteBody(v.clinicalNotes, 'findings'),
+        dischargeNote: noteBody(v.clinicalNotes, 'discharge'),
+        dischargeSummary: noteBody(v.clinicalNotes, 'discharge_summary'),
+        dischargeRemark: noteBody(v.clinicalNotes, 'discharge_note'),
+        dischargeDisposition: v.dischargeDisposition ?? null,
+        dischargeDispositionFa: v.dischargeDisposition ? DISPOSITION_LABELS[v.dischargeDisposition] ?? v.dischargeDisposition : null,
         instructions: v.surgeonInstructions || null,
         notes: v.notes || null,
       },
@@ -243,6 +264,16 @@ export class TheatreService {
         id: p.id, code: p.code, fullName: `${p.firstName} ${p.lastName}`.trim(),
         age: TheatreService.age(p.birthDate), gender: p.gender, bloodType: p.bloodType || null,
       },
+      /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط‌خواندنی سرِ میز. */
+      decided: v.decidedIn ? {
+        id: v.decidedIn.id, seq: v.decidedIn.seq, opDate: v.decidedIn.opDate,
+        diagnosis: v.decidedIn.diagnosis?.title ?? null,
+        history: noteBody(v.decidedIn.clinicalNotes, 'history'),
+        exam: noteBody(v.decidedIn.clinicalNotes, 'exam'),
+        findings: noteBody(v.decidedIn.clinicalNotes, 'findings'),
+        plan: noteBody(v.decidedIn.clinicalNotes, 'plan'),
+      } : null,
+      vitals: v.vitals.map(vitalView),
       /* سه چیزی که نادیده‌گرفتنشان سرِ میز خطرِ جانی دارد — جدا برمی‌گردند تا
          رابط بتواند برجسته‌شان کند، و **همیشه** برمی‌گردند (حتی خالی) تا
          «نپرسیده‌ایم» با «نداشت» یکی نشود. */
@@ -341,7 +372,8 @@ export class TheatreService {
    * ⚠️ زدنِ دوباره **ساعت را عوض نمی‌کند** و فقط نسخهٔ تازه‌ای از شرح ثبت
    * می‌کند. همان استدلالِ `stamp`: دستِ دستکش‌دار دکمه را دوباره می‌زند.
    */
-  async discharge(visitId: number, condition: string, user: any) {
+  async discharge(visitId: number, dto: { condition: string; disposition: string; summary?: string; remark?: string }, user: any) {
+    const condition = dto.condition;
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
       select: { id: true, patientId: true, opStatus: true, opEndTime: true, dischargeAt: true },
@@ -354,13 +386,25 @@ export class TheatreService {
     const text = (condition ?? '').trim();
     if (!text) throw new BadRequestException('وضعیتِ بیمار هنگامِ ترخیص را بنویسید');
 
+    /* ⚠️ وضعیتِ خروج دوباره این‌جا سنجیده می‌شود نه فقط در DTO: این سرویس
+       تنها لایه نیست و «ترخیصِ بی‌وضعیتِ خروج» همان سطرِ بی‌گزارشی است که
+       ستون برای حذفش آمد. */
+    if (!DISPOSITION_LABELS[dto.disposition]) throw new BadRequestException('وضعیتِ خروج را انتخاب کنید');
+
     await this.prisma.$transaction(async (tx) => {
       await setVisitNote(tx, v, 'discharge', text, user);
-      if (!v.dischargeAt) await tx.visit.update({ where: { id: visitId }, data: { dischargeAt: new Date() } });
+      /* شرح و یادداشت اختیاری‌اند؛ `undefined` = دست نزن، رشتهٔ خالی = سندِ جاری را ببند. */
+      if (dto.summary !== undefined) await setVisitNote(tx, v, 'discharge_summary', dto.summary, user);
+      if (dto.remark !== undefined) await setVisitNote(tx, v, 'discharge_note', dto.remark, user);
+      await tx.visit.update({
+        where: { id: visitId },
+        data: { dischargeDisposition: dto.disposition, ...(v.dischargeAt ? {} : { dischargeAt: new Date() }) },
+      });
     });
     await this.audit.record({
       actorId: user?.id, action: v.dischargeAt ? 'visit.discharge_edit' : 'visit.discharge',
-      entityType: 'visit', entityId: visitId, after: { condition: text },
+      entityType: 'visit', entityId: visitId,
+      after: { condition: text, disposition: dto.disposition, summary: dto.summary?.trim() || null, remark: dto.remark?.trim() || null },
     });
     return this.card(visitId, user);
   }
@@ -372,16 +416,16 @@ export class TheatreService {
    * مقصدش همان `ClinicalNote(kind='op')`ِ فرمِ مراجعه است — یک سند، دو میز.
    * اگر ستونِ جدایی می‌ساختیم، شرحی که جراح این‌جا می‌نویسد در پرونده نبود.
    */
-  async setReport(visitId: number, body: string, user: any) {
+  async setReport(visitId: number, body: string, user: any, kind: 'op' | 'findings' = 'op') {
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
       select: { id: true, patientId: true, opStatus: true },
     });
     if (!v) throw new NotFoundException('عمل پیدا نشد');
     if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده شرح نمی‌گیرد');
-    await this.prisma.$transaction((tx) => setVisitNote(tx, v, 'op', body, user));
+    await this.prisma.$transaction((tx) => setVisitNote(tx, v, kind, body, user));
     await this.audit.record({
-      actorId: user?.id, action: 'visit.op_report', entityType: 'visit', entityId: visitId,
+      actorId: user?.id, action: kind === 'op' ? 'visit.op_report' : 'visit.op_findings', entityType: 'visit', entityId: visitId,
       after: { length: (body ?? '').trim().length },
     });
     return this.card(visitId, user);

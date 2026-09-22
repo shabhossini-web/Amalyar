@@ -8,6 +8,17 @@ import { TenantContext } from '../tenant/tenant-context';
 import { toEnDigits } from '../common/identity';
 import { toJalali } from '../common/jalali';
 import { renderSms } from '../common/sms-template';
+import { currentNotes, noteBody } from './clinical-note';
+
+/**
+ * بخش‌های هسته که در **خلاصهٔ بیمار** دیده می‌شوند — کلیدِ فرم → نوعِ سند.
+ *
+ * ⚠️ فقط همان سه‌تایی که پیش از بستهٔ ۶ (به‌شکلِ فیلدِ دلخواهِ بی‌نقش) به
+ * بیمار می‌رسید. شرحِ حال و یافته‌ها تازه‌اند و عمداً این‌جا نیستند: حریمِ
+ * خصوصی یعنی چیزی که دیروز داخلی بود، امروز بی‌اعلام بیرونی نشود. قاعدهٔ
+ * نقش هم سرِ جایش است — معاینه‌ای که مطب «بخشِ پزشک» کرده، دیده نمی‌شود.
+ */
+const PATIENT_SECTIONS: Record<string, string> = { exam: 'exam', planNote: 'plan', prescription: 'rx' };
 
 /** ۱۴۰۵/۰۵/۲۶ با ارقامِ فارسی — برای متنِ پیامک و صفحهٔ خلاصه. */
 export function faDateStr(d: Date): string {
@@ -104,6 +115,9 @@ export class SummaryService {
         topic: { select: { name: true } },
         diagnosis: { select: { title: true } },
         procedureType: { select: { name: true } },
+        /* بخش‌های متنیِ هسته — فقط همان سه‌تایی که پیش از بستهٔ ۶ هم به بیمار
+           می‌رسید (پایین). */
+        clinicalNotes: currentNotes(Object.values(PATIENT_SECTIONS)),
       },
     });
     if (!v) throw new NotFoundException('این لینک معتبر نیست');
@@ -114,7 +128,14 @@ export class SummaryService {
           select: {
             title: true,
             fields: {
-              where: { active: true, builtin: false, role: null, type: 'textarea' },
+              /* ⚠️ بخش‌های هسته (`PATIENT_SECTIONS`) builtin شدند ولی باید
+                 همان‌طور که دیروز به بیمار می‌رسیدند برسند — پس builtinِ آن
+                 سه کلید هم پذیرفته می‌شود؛ بقیهٔ builtinها (`notes`ِ منشی)
+                 داخلی می‌مانند. */
+              where: {
+                active: true, role: null, type: 'textarea',
+                OR: [{ builtin: false }, { key: { in: Object.keys(PATIENT_SECTIONS) } }],
+              },
               orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }],
               select: { key: true, label: true },
             },
@@ -123,7 +144,10 @@ export class SummaryService {
       : null;
     const extra = (v.extra && typeof v.extra === 'object') ? v.extra as Record<string, any> : {};
     const answers = (def?.fields ?? [])
-      .map((f) => ({ label: f.label, body: extra[f.key] }))
+      .map((f) => ({
+        label: f.label,
+        body: PATIENT_SECTIONS[f.key] ? noteBody(v.clinicalNotes, PATIENT_SECTIONS[f.key]) : extra[f.key],
+      }))
       .filter((r) => typeof r.body === 'string' && r.body.trim() !== '')
       .map((r) => ({ label: r.label, body: String(r.body).trim() }));
 

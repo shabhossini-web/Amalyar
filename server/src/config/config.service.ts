@@ -2,7 +2,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   APPT_LABELS, NOTE_KIND_LABELS, OP_LABELS,
   ORDER_LABELS, ORDER_KIND_LABELS, REMINDER_LABELS, REMINDER_KIND_LABELS, INTAKE_LABELS,
+  DECISION_LABELS, ANESTHESIA_LABELS, DISPOSITION_LABELS,
 } from '../patients/labels';
+import { vitalCatalog } from '../patients/vitals';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
@@ -87,7 +89,15 @@ export class ConfigService {
         reminder: Object.entries(REMINDER_LABELS).map(([key, label]) => ({ key, label })),
         reminderKind: Object.entries(REMINDER_KIND_LABELS).map(([key, label]) => ({ key, label })),
         intake: Object.entries(INTAKE_LABELS).map(([key, label]) => ({ key, label })),
+        /* بستهٔ ۶: تصمیمِ درمانی، نوعِ بیهوشی و وضعیتِ خروج — کشویی/دکمه‌های
+           فرم از همین می‌خوانند، نه از فهرستِ هاردکدِ کلاینت. */
+        decision: Object.entries(DECISION_LABELS).map(([key, label]) => ({ key, label })),
+        anesthesia: Object.entries(ANESTHESIA_LABELS).map(([key, label]) => ({ key, label })),
+        disposition: Object.entries(DISPOSITION_LABELS).map(([key, label]) => ({ key, label })),
       },
+      /* اندازه‌های علائمِ حیاتی با واحد و بازه — فرم همین را رندر می‌کند و سرور
+         با همین (`vitalsInput`) می‌سنجد؛ یک کاتالوگ، دو مصرف. */
+      vitals: vitalCatalog(),
       cancelReasons: Object.entries(CANCEL_REASONS).map(([key, r]) => ({
         key,
         label: r.label,

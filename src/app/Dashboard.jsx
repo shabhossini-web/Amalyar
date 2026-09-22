@@ -1086,7 +1086,14 @@ export default function Dashboard() {
               v={v}
               index={i}
               busy={busyId === v.id}
-              onEdit={(vv) => setModal({ visit: vv })}
+              /* ⚠️ ردیفِ فهرست **سبک** است (بخش‌های متنیِ هسته را ندارد)؛ فرمِ
+                 ویرایش نمای کامل را می‌خواهد، وگرنه معاینه و نسخه خالی دیده
+                 می‌شد. اگر خواندن نشد، همان ردیف — فرم خودش خالیِ «خوانده‌نشده»
+                 را از «پاک‌شده» تشخیص می‌دهد و چیزی را نمی‌بندد. */
+              onEdit={async (vv) => {
+                const full = await api(`/visits/${vv.id}`).catch(() => null);
+                setModal({ visit: full?.id ? full : vv });
+              }}
               onStatus={onStatus}
               onDelete={onDelete}
               onBilling={setBilling}

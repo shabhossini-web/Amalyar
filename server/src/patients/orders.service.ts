@@ -490,7 +490,7 @@ export class OrdersService {
         throw new BadRequestException(`حجمِ فایل بیش از ${faNum(MAX_ANSWER_BYTES / 1024 / 1024)} مگابایت است`);
       }
       const mime = sniffMime(file.buffer);
-      if (!mime) throw new BadRequestException('فقط عکس (JPG/PNG/WebP/HEIC) یا PDF بفرستید');
+      if (!mime) throw new BadRequestException('فقط عکس (JPG/PNG/WebP/HEIC)، PDF یا صدای ضبط‌شده بفرستید');
 
       const { sha256, size } = await this.storage.save(file.buffer);
       return this.prisma.$transaction(async tx => {
@@ -504,7 +504,7 @@ export class OrdersService {
           patientId: current.patientId, visitId: current.visitId,
           refType: `${kind}_order`, refId: current.id,
           category: kind === 'lab' ? 'lab' : kind === 'imaging' ? 'imaging' : 'report',
-          title: `پاسخ ${FA[kind]}`,
+          title: mime.startsWith('audio/') ? `توضیحِ صوتیِ پاسخ ${FA[kind]}` : `پاسخ ${FA[kind]}`,
           fileName: (file.originalname || '').slice(0, 200) || 'file',
           mimeType: mime, sha256, size,
         } });

@@ -1160,6 +1160,50 @@ export class IntakeService {
   }
 
   /**
+   * **توضیحِ صوتیِ یک لینک** در فرمِ عمومی (بستهٔ ۶د) — بیمار زیرِ لینکِ MRI
+   * می‌گوید «رادیولوژیست گفت …».
+   *
+   * ⚠️ همان سه گاردِ `attachImage`: فرم هنوز بازِ ویرایش، کلید واقعاً یک
+   * باکسِ **لینکِ** همین فرم، و نوع از **بایت‌ها** (فقط WAVِ ضبط‌کنندهٔ خودمان).
+   * بدونِ اینها این نشانیِ عمومی یک آپلودرِ آزاد بود.
+   *
+   * ⚠️ مقدارِ فرم این‌جا عوض نمی‌شود: ارجاعِ صدا داخلِ **همان ردیفِ لینک**
+   * می‌نشیند و ردیف را خودِ فرم ذخیره می‌کند؛ هنگامِ تأیید، `syncLinkDocuments`
+   * صدا را زیرِ مدرکِ همان لینک وصل می‌کند.
+   */
+  async attachVoice(
+    token: string,
+    fieldKey: string,
+    file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
+  ) {
+    const row = await this.expireIfDue(token);
+    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+    }
+    if (!row.patientId) throw new BadRequestException('این فرم پرونده‌ای ندارد');
+    const form = await this.formView(row.formId, row.extraFormIds ?? []);
+    const fld = form?.fields.find((x) => x.key === fieldKey && x.type === 'links');
+    if (!fld) throw new BadRequestException('این کادر صدا نمی‌گیرد');
+    if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
+    if (file.size > MAX_RECEIPT_BYTES) throw new BadRequestException('حجمِ صدا بیش از ۸ مگابایت است — کوتاه‌تر ضبط کنید');
+    if (storedMime(file) !== 'audio/wav') throw new BadRequestException('فقط صدای ضبط‌شده در همین صفحه پذیرفته می‌شود');
+
+    const { sha256, size } = await this.storage.save(file.buffer);
+    const doc = await this.prisma.document.create({
+      data: {
+        patientId: row.patientId,
+        category: (fld as any).docCategory ?? 'other',
+        title: `توضیحِ صوتی — ${fld.label}`.slice(0, 120),
+        fileName: file.originalname?.slice(0, 200) || 'voice.wav',
+        mimeType: 'audio/wav',
+        sha256,
+        size,
+      },
+    });
+    return { id: doc.id, name: doc.fileName };
+  }
+
+  /**
    * برداشتنِ یک عکس از کادر — بیمار عکسِ اشتباه را باید بتواند بردارد،
    * وگرنه تنها راهش «همه را از نو» بود.
    *

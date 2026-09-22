@@ -559,7 +559,10 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 .pf-field > span { display: block; font-size: 11px; color: var(--text2); margin-bottom: 6px; }
 .pf-field input, .pf-field textarea {
   width: 100%; border-radius: 11px; padding: 12px 13px; font: inherit; font-size: 13px;
-  color: #fff; outline: none; resize: vertical;
+  /* ⚠️ توکن، نه `#fff`: پس‌زمینه از `--surface-rgb` است و در تمِ روشن سفید
+     می‌شود، پس متنِ سفیدِ ثابت روی دستگاهی که تمِ روشن دارد (تبلتِ پذیرشِ
+     مطب) نامرئی بود — نشانیِ لینک و نامِ بیمار سفید روی سفید. */
+  color: var(--text1); outline: none; resize: vertical;
   background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
 }
 .pf-field input { height: 46px; }
@@ -567,7 +570,7 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
   border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(var(--brand-2-rgb), .12);
 }
 .pf-field.bad input, .pf-field.bad textarea { border-color: #fb7185; }
-.pf-err { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: #fda4af; }
+.pf-err { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: var(--red-text); }
 .pf-hint { display: block; margin-top: 5px; font-style: normal; font-size: 10px; color: var(--text3); }
 @media (max-width: 620px) { .pf-row2 { grid-template-columns: 1fr; } }
 
