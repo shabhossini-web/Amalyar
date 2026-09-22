@@ -1,19 +1,26 @@
 /**
- * **نمای اتاقِ عمل** (بستهٔ ۳ب) — `GET/POST /theatre/*`.
+ * **نمای اتاقِ عمل** — `GET/POST /theatre/*`.
  *
- * بازخوردِ مالک ۱۴۰۵/۰۶/۳۰: «وقتی تو اتاق عمل است راحت به اطلاعاتِ لازم دسترسی
- * داشته باشد و بتواند مدیریت کند».
+ * بازخوردِ مالک ۱۴۰۵/۰۶/۳۱ («برای میزِ اتاقِ عمل خیلی ناقص ساختی») این میز را
+ * از نو تعریف کرد: شکایتِ اولیه، مدارکِ قبل/حین/بعد که **باز شوند**، نوشتنِ
+ * شرحِ عمل، و ترخیص به‌عنوانِ مرحله‌ای جدا از پایانِ عمل. چک‌لیستِ WHO از
+ * رابط برداشته شد ولی داده و APIش ماند (توضیح در `theatre.service.ts`).
  *
  *  باید بیفتد:
- *   - فهرستِ عمل‌های روز + «کجای چک‌لیستیم» به‌صورتِ عددِ آماده (قانونِ ۱۵)
- *   - کارتِ حینِ عمل: هویت، گروه خونی، سه هشدارِ بالینی، ست، چک‌لیست
- *   - تیکِ چک‌لیست نامِ زننده را نگه می‌دارد؛ برداشتنش سطر را **حذف** می‌کند
+ *   - فهرستِ روز + کارت، با **شکایتِ اولیه** — مشتق از ویزیتِ تصمیم اگر خودِ
+ *     عمل ننوشته باشدش
+ *   - کارتِ حینِ عمل: هویت، گروه خونی، سه هشدارِ بالینی، ست
+ *   - مدارک **مرحله‌بندی‌شده** و بازشدنی از خودِ میز (نه از پروندهٔ بیمار)
+ *   - نوشتنِ شرحِ عمل سرِ میز → همان `ClinicalNote`ِ پرونده
  *   - «شروع شد» ساعتِ دیوار را می‌زند و بارِ دوم بازنویسی نمی‌کند
+ *   - ترخیص: بعد از پایان، با شرحِ اجباری، و زدنِ دوباره ساعت را عوض نمی‌کند
+ *   - تیکِ چک‌لیست (API همچنان کار می‌کند) نامِ زننده را نگه می‌دارد
  *  نباید بیفتد:
  *   - **هیچ عددِ مالی** در کارت (همان قاعدهٔ `tech.service.ts`)
- *   - «پایان» پیش از «شروع»
+ *   - «پایان» پیش از «شروع» · ترخیص پیش از «پایان» · ترخیصِ بی‌شرح
  *   - مرحله/بندِ ساختگی پذیرفته شود
- *   - کارشناسی که این عمل به نامش نیست کارت یا چک‌لیستش را ببیند
+ *   - کارشناسی که این عمل به نامش نیست کارت، مدرک یا چک‌لیستش را ببیند
+ *   - مدرکِ **عملِ دیگر** از مسیرِ این عمل باز شود
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -61,14 +68,25 @@ try {
   const v = await mk('بیمارِ');
   /* دادهٔ بالینی مستقیم روی پرونده — همان چیزی که سرِ میز خوانده می‌شود. */
   sql(`UPDATE patients SET blood_type='O+', allergies='پنی‌سیلین', medications='وارفارین' WHERE id=${v.patientId}`);
+  /* شکایتِ اولیه روی **ویزیتِ تصمیم** می‌نشیند و عمل فقط به آن گره می‌خورد —
+     همان مسیرِ واقعی (بستهٔ ۴الف). اگر ارث‌بری بشکند، همین‌جا قرمز می‌شود. */
+  const decidedIn = (await send('/visits', 'POST', {
+    kind: 'surgery', patientId: v.patientId, opDate: new Date().toISOString(), surgeonId,
+    ...(hospital ? { hospitalId: hospital.id } : {}),
+    chiefComplaint: 'ضعفِ پای چپ',
+  })).json;
+  sql(`UPDATE visits SET decided_in_visit_id=${decidedIn.id} WHERE id=${v.id}`);
+  sql(`UPDATE visits SET op_date=CURRENT_DATE - 30 WHERE id=${decidedIn.id}`);
 
   const day = (await send(`/theatre/day?date=${today}`)).json;
   const row = (day?.visits ?? []).find((x) => x.id === v.id);
   ok('عملِ امروز در فهرستِ روز هست', !!row, JSON.stringify((day?.visits ?? []).map((x) => x.id)));
-  ok('مرحله‌های چک‌لیست با عنوان و تعدادشان از سرور می‌آیند',
-    (day?.stages ?? []).length === 3 && day.stages.every((s) => s.title && s.total > 0), JSON.stringify(day?.stages));
-  ok('«کجای چک‌لیستیم» عددِ آماده است، نه آرایه',
-    (row?.checklist ?? []).length === 3 && row.checklist.every((c) => c.done === 0 && c.total > 0), JSON.stringify(row?.checklist));
+  /* 🔴 چک‌لیست از **رابط** برداشته شد، پس از payloadِ فهرستِ روز هم. اگر روزی
+     برگشت، این سنجه باید عمداً عوض شود نه اینکه بی‌صدا دوباره سبز بماند. */
+  ok('فهرستِ روز دیگر شمارشِ چک‌لیست نمی‌فرستد', !day?.stages && !row?.checklist,
+    JSON.stringify([day?.stages, row?.checklist]));
+  ok('**شکایتِ اولیه در فهرستِ روز هست** — «چرا آمده» جای عددِ چک‌لیست را گرفت',
+    row?.chiefComplaint === 'ضعفِ پای چپ', JSON.stringify(row?.chiefComplaint));
 
   console.log('\n۲) کارتِ حینِ عمل');
   const card = (await send(`/theatre/visits/${v.id}`)).json;
@@ -76,7 +94,18 @@ try {
   ok('**هر سه هشدار همیشه کلید دارند** — «نپرسیده‌ایم» با «نداشت» یکی نیست',
     card?.alerts && 'allergies' in card.alerts && 'chronicConditions' in card.alerts && 'medications' in card.alerts
     && card.alerts.allergies === 'پنی‌سیلین' && card.alerts.chronicConditions === null, JSON.stringify(card?.alerts));
-  ok('چک‌لیست با متنِ بندها می‌آید', (card?.checklist ?? []).length === 3 && card.checklist[0].items.length > 0
+  /* 🔴 ادعای مرکزیِ بستهٔ ۴: عمل شکایتِ خودش را **ننوشته**؛ از ویزیتِ تصمیم
+     می‌خواندش. اگر روزی کپی شود، اصلاحِ ویزیت این‌جا اثر نمی‌کند و پایین
+     قرمز می‌شویم. */
+  ok('**شکایتِ اولیه سرِ میز دیده می‌شود** — مشتق از ویزیتِ تصمیم',
+    card?.visit?.chiefComplaint === 'ضعفِ پای چپ'
+    && sql(`SELECT coalesce(chief_complaint,'-') FROM visits WHERE id=${v.id}`) === '-',
+    JSON.stringify(card?.visit?.chiefComplaint));
+  await send(`/visits/${decidedIn.id}`, 'PATCH', { chiefComplaint: 'ضعفِ پیش‌روندهٔ پای چپ' });
+  ok('… و اصلاحِ ویزیت همان لحظه سرِ میز دیده می‌شود',
+    (await send(`/theatre/visits/${v.id}`)).json?.visit?.chiefComplaint === 'ضعفِ پیش‌روندهٔ پای چپ');
+  ok('چک‌لیست هنوز در **کارت** می‌آید (رابط نشانش نمی‌دهد ولی API زنده است)',
+    (card?.checklist ?? []).length === 3 && card.checklist[0].items.length > 0
     && card.checklist[0].items.every((i) => typeof i.label === 'string' && i.checked === false), JSON.stringify(card?.checklist?.[0]?.items?.[0]));
   /* 🔴 ثابتِ اصلیِ این ماژول. `tech.service.ts` هم همین را دارد: دستِ دستکش‌دار
      مبلغ نمی‌بیند. اگر روزی فیلدی اضافه شد که پول می‌آورد، این‌جا قرمز می‌شود. */
@@ -91,9 +120,6 @@ try {
   const hit = (after.json?.checklist ?? []).find((s) => s.key === stage)?.items.find((i) => i.key === item);
   ok('تیک می‌نشیند و **نامِ زننده** را نگه می‌دارد', after.status < 300 && hit?.checked === true && !!hit?.by, JSON.stringify(hit));
   ok('… و در دیتابیس یک سطر است', num(`SELECT count(*) FROM safety_checks WHERE visit_id=${v.id} AND stage='${stage}' AND key='${item}'`) === 1);
-  const dayAfter = (await send(`/theatre/day?date=${today}`)).json;
-  ok('شمارندهٔ فهرستِ روز هم جلو رفت',
-    (dayAfter?.visits ?? []).find((x) => x.id === v.id)?.checklist.find((c) => c.key === stage)?.done === 1);
   /* دوبار زدنِ همان بند (دو نفر هم‌زمان) نباید دو سطر بسازد. */
   await send(`/theatre/visits/${v.id}/check`, 'POST', { stage, key: item, checked: true });
   ok('**نباید بیفتد:** تیکِ تکراری سطرِ دوم بسازد', num(`SELECT count(*) FROM safety_checks WHERE visit_id=${v.id}`) === 1);
@@ -120,8 +146,8 @@ try {
   /* 🔴 وضعیتِ اتاق از **ساعت** می‌آید نه از `opStatus`: عملی که ساعتِ شروع خورده
      «در جریان» است، هرچند `op_status` تا تسویهٔ اداری `pending` می‌ماند. در اولین
      اسکرین‌شات همین «در انتظار» نوشته بود و سرِ میز غلط خوانده می‌شد. */
-  ok('وضعیتِ اتاق بعد از پایان «تمام شد» است — حتی با `op_status = pending`',
-    fin.json?.visit?.state === 'finished' && fin.json?.visit?.stateFa === 'تمام شد'
+  ok('وضعیتِ اتاق بعد از پایان «در ریکاوری» است — حتی با `op_status = pending`',
+    fin.json?.visit?.state === 'finished' && fin.json?.visit?.stateFa === 'در ریکاوری'
     && sql(`SELECT op_status FROM visits WHERE id=${v.id}`) === 'pending',
     JSON.stringify([fin.json?.visit?.state, sql(`SELECT op_status FROM visits WHERE id=${v.id}`)]));
   sql(`UPDATE visits SET op_end_time=NULL WHERE id=${v.id}`);
@@ -145,7 +171,83 @@ try {
   ok('… و فهرستِ روز هم همین برچسب را می‌دهد',
     ((await send(`/theatre/day?date=${today}`)).json?.visits ?? []).find((x) => x.id === v.id)?.stateFa === 'در انتظار');
 
-  console.log('\n۵) دامنهٔ دید — object-authz');
+  console.log('\n۵) شرحِ عمل — نوشتنی سرِ میز، ذخیره در پروندهٔ بیمار');
+  /* ساعت‌ها را برمی‌گردانیم: بخشِ قبل عمداً به NULL بردشان تا حالت‌ها را بسنجد. */
+  sql(`UPDATE visits SET op_start_time='08:00', op_end_time='09:30' WHERE id=${v.id}`);
+  const rep = await send(`/theatre/visits/${v.id}/report`, 'POST', { body: 'لامینکتومیِ L4-L5؛ مانیتورینگ بدونِ افتِ دامنه.' });
+  ok('شرحِ عمل از میزِ اتاق نوشته می‌شود', rep.status < 300 && rep.json?.visit?.opReport?.startsWith('لامینکتومی'),
+    JSON.stringify(rep.json?.visit?.opReport ?? rep.json).slice(0, 160));
+  /* 🔴 همان سندِ پرونده، نه یک ستونِ دوم — وگرنه شرحی که جراح سرِ میز نوشته
+     در پروندهٔ بیمار نبود. */
+  ok('… و همان `ClinicalNote`ِ پرونده است، نه یک ستونِ دوم',
+    num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='op' AND replaced_at IS NULL`) === 1
+    && !!sql(`SELECT author_name FROM clinical_notes WHERE visit_id=${v.id} AND kind='op' AND replaced_at IS NULL`));
+  await send(`/theatre/visits/${v.id}/report`, 'POST', { body: 'لامینکتومیِ L4-L5؛ افتِ گذرای MEP در دقیقهٔ ۴۰.' });
+  ok('ویرایش نسخهٔ تازه می‌سازد و قبلی را بایگانی می‌کند (نه بازنویسی)',
+    num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='op'`) === 2
+    && num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='op' AND replaced_at IS NULL`) === 1);
+
+  console.log('\n۶) مدارک — مرحله‌بندی‌شده و بازشدنی از خودِ میز');
+  const upload = async (name, body, phase) => {
+    const fd = new FormData();
+    fd.append('file', new Blob([body], { type: 'text/plain' }), name);
+    fd.append('category', 'report');
+    fd.append('title', name);
+    fd.append('visitId', String(v.id));
+    if (phase) fd.append('phase', phase);
+    const r = await fetch(`${API}/patients/${v.patientId}/documents`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + login.accessToken }, body: fd,
+    });
+    return { status: r.status, json: await r.json().catch(() => null) };
+  };
+  const dPre = await upload(`pre${tag}.txt`, 'MRI پیش از عمل', 'pre');
+  const dPost = await upload(`post${tag}.txt`, 'گزارشِ پس از عمل', 'post');
+  ok('دو مدرک با مرحله ثبت شدند', dPre.status === 201 && dPost.status === 201, `${dPre.status}/${dPost.status}`);
+  const withDocs = (await send(`/theatre/visits/${v.id}`)).json;
+  const groups = withDocs?.documents ?? [];
+  ok('**مدارک مرحله‌بندی‌شده با برچسبِ فارسیِ سرور می‌آیند** (قانونِ ۱۵)',
+    groups.some((g) => g.phase === 'pre' && g.label === 'قبل از عمل')
+    && groups.some((g) => g.phase === 'post' && g.label === 'بعد از عمل'),
+    JSON.stringify(groups.map((g) => [g.phase, g.label])));
+  ok('… و ترتیبشان مسیرِ بیمار است: قبل پیش از بعد',
+    groups.findIndex((g) => g.phase === 'pre') < groups.findIndex((g) => g.phase === 'post'));
+  const docId = groups.find((g) => g.phase === 'pre')?.items?.[0]?.id;
+  const file = await fetch(`${API}/theatre/visits/${v.id}/documents/${docId}/file`, { headers: { Authorization: 'Bearer ' + login.accessToken } });
+  ok('🔴 **مدرک از خودِ میزِ اتاق باز می‌شود** — نه از پروندهٔ بیمار',
+    file.status === 200 && (await file.text()) === 'MRI پیش از عمل', String(file.status));
+  /* مدرکِ عملِ دیگر نباید از مسیرِ این عمل باز شود، وگرنه این endpoint یک
+     دورزدنِ `documents.read` برای کلِ پرونده می‌شد. */
+  const foreign = await fetch(`${API}/theatre/visits/${decidedIn.id}/documents/${docId}/file`, { headers: { Authorization: 'Bearer ' + login.accessToken } });
+  ok('**نباید بیفتد:** مدرکِ عملِ دیگر از مسیرِ این عمل باز شود', foreign.status === 404, String(foreign.status));
+
+  console.log('\n۷) ترخیص — مرحلهٔ سوم، نه مترادفِ «پایانِ عمل»');
+  sql(`UPDATE visits SET op_end_time=NULL WHERE id=${v.id}`);
+  const early2 = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار' });
+  ok('**نباید بیفتد:** ترخیص پیش از «پایانِ عمل»', early2.status === 400, String(early2.status));
+  sql(`UPDATE visits SET op_end_time='09:30' WHERE id=${v.id}`);
+  const blank = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: '   ' });
+  ok('**نباید بیفتد:** ترخیصِ بی‌شرح', blank.status === 400, String(blank.status));
+  const dis = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار، بدونِ نقصِ حرکتی، دردِ کنترل‌شده.' });
+  ok('ترخیص ثبت می‌شود و شرحش برمی‌گردد',
+    dis.status < 300 && !!dis.json?.visit?.dischargeAt && dis.json?.visit?.dischargeNote?.startsWith('هوشیار'),
+    JSON.stringify([dis.status, dis.json?.visit?.dischargeAt, dis.json?.visit?.dischargeNote]).slice(0, 180));
+  ok('… و شرحش سندِ `discharge`ِ پرونده است',
+    num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='discharge' AND replaced_at IS NULL`) === 1);
+  ok('وضعیتِ اتاق «ترخیص شد» می‌شود — جدا از «در ریکاوری»',
+    dis.json?.visit?.state === 'discharged' && dis.json?.visit?.stateFa === 'ترخیص شد',
+    JSON.stringify([dis.json?.visit?.state, dis.json?.visit?.stateFa]));
+  const at1 = sql(`SELECT discharge_at FROM visits WHERE id=${v.id}`);
+  const again = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار، با توصیهٔ فیزیوتراپی.' });
+  ok('زدنِ دوباره فقط شرح را نسخه‌بندی می‌کند و **ساعتِ ترخیص را عوض نمی‌کند**',
+    again.status < 300 && sql(`SELECT discharge_at FROM visits WHERE id=${v.id}`) === at1
+    && num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='discharge'`) === 2, at1);
+  /* 🔴 شرحِ عمل نباید قربانیِ شرحِ ترخیص شود: هر دو در یک آرایه برمی‌گردند و
+     نسخهٔ اولِ enrich با `[0]` می‌خواندشان. */
+  ok('🔴 شرحِ عمل بعد از ترخیص هنوز شرحِ عمل است، نه شرحِ ترخیص',
+    (await send(`/visits/${v.id}`)).json?.opReport?.startsWith('لامینکتومی'),
+    JSON.stringify((await send(`/visits/${v.id}`)).json?.opReport).slice(0, 120));
+
+  console.log('\n۸) دامنهٔ دید — object-authz');
   const other = (await send('/accounts/temporary', 'POST', { firstName: 'کارشناسِ', lastName: `بیگانه${tag}`, phone: phone(), level: 2, jobRole: 'technician', username: `th${tag}` })).json;
   const ol = await loginAs(`th${tag}`, other.temporaryPassword);
   const oApi = call(ol.accessToken);
@@ -155,6 +257,11 @@ try {
   ok('**نباید بیفتد:** کارتش را مستقیم بگیرد', (await oApi(`/theatre/visits/${v.id}`)).status === 404);
   ok('**نباید بیفتد:** چک‌لیستش را امضا کند',
     (await oApi(`/theatre/visits/${v.id}/check`, 'POST', { stage, key: item, checked: true })).status === 404);
+  const oFile = await fetch(`${API}/theatre/visits/${v.id}/documents/${docId}/file`, { headers: { Authorization: 'Bearer ' + ol.accessToken } });
+  ok('**نباید بیفتد:** مدرکِ این عمل را بگیرد', oFile.status === 404, String(oFile.status));
+  ok('**نباید بیفتد:** شرحِ عمل یا ترخیصش را بنویسد',
+    (await oApi(`/theatre/visits/${v.id}/report`, 'POST', { body: 'نفوذ' })).status === 404
+    && (await oApi(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'نفوذ' })).status === 404);
   /* ولی همان حساب وقتی کارشناسِ عمل شد، می‌بیند — یعنی ۴۰۴ از دامنه بود نه از گارد. */
   sql(`UPDATE visits SET tech_id=${other.account.id} WHERE id=${v.id}`);
   ok('… و به‌محضِ اینکه کارشناسِ همین عمل شد، می‌بیند', (await oApi(`/theatre/visits/${v.id}`)).status === 200);

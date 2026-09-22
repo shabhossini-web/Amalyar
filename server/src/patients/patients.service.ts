@@ -10,7 +10,6 @@ import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
-import { actorName } from '../common/person';
 import { toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
@@ -18,6 +17,7 @@ import { EventsService } from '../work/events.service';
 import { FormsService } from './forms.service';
 import { BUILTIN_VISIT_KEYS } from './form-presets';
 import { syncLinkDocuments } from './link-documents';
+import { setVisitNote, VISIT_NOTE_KINDS } from './clinical-note';
 import { summarize } from './billing.service';
 
 /**
@@ -71,7 +71,14 @@ function enrich(v: any, kinds?: KindMap) {
     diagnosisTitle: v.diagnosis?.title ?? null,
     // شرحِ عمل حالا یک ClinicalNote است (نسخه‌دار و تغییرناپذیر)، ولی فرمِ مراجعه
     // همان یک فیلد را می‌بیند — تنها نسخهٔ جاری.
-    opReport: v.clinicalNotes?.[0]?.body ?? null,
+    /* ⚠️ `find` و نه `[0]`: از وقتی شرحِ ترخیص هم در همین آرایه می‌آید،
+       اندیسِ صفر می‌تواند سندِ دیگری باشد — و آن‌وقت شرحِ ترخیص به‌جای شرحِ
+       عمل در فرم می‌نشست، بی‌هیچ خطایی. */
+    opReport: v.clinicalNotes?.find((n: any) => n.kind === 'op')?.body ?? null,
+    /* **ترخیص: زمان از ستون، متن از سندِ بالینی** — یک منبع برای هر دو، پس
+       میزِ اتاقِ عمل و تبِ شرح‌های پرونده همان چیز را نشان می‌دهند. */
+    dischargeAt: v.dischargeAt ?? null,
+    dischargeNote: v.clinicalNotes?.find((n: any) => n.kind === 'discharge')?.body ?? null,
     opType: v.opType,
     opDate: v.opDate,
     nextVisitDate: v.nextVisitDate,
@@ -253,11 +260,12 @@ const INCLUDE_PATIENT = {
   /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط برای **مشتق‌کردنِ** شکایتِ
      اولیه. سه ستون، نه کلِ ردیف: این include روی فهرستِ ۵۰۰تایی هم می‌دود. */
   decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
-  // فقط نسخهٔ جاریِ شرحِ عمل؛ تاریخچه از مسیرِ پروندهٔ بیمار خوانده می‌شود.
+  /* فقط نسخهٔ جاریِ شرحِ عمل و شرحِ ترخیص؛ تاریخچه از مسیرِ پروندهٔ بیمار
+     خوانده می‌شود. هر دو یک جنس‌اند (سندِ بالینیِ نسخه‌دار)، پس یک کوئری. */
   clinicalNotes: {
-    where: { kind: 'op', replacedAt: null },
+    where: { kind: { in: VISIT_NOTE_KINDS }, replacedAt: null },
     orderBy: { createdAt: 'desc' },
-    take: 1,
+    take: VISIT_NOTE_KINDS.length,
   },
   // فقط مبلغ لازم است؛ کلِ ردیف‌ها را برای فهرستِ ۵۰۰تایی نمی‌کشیم.
   charges: { select: { amount: true } },
@@ -824,28 +832,8 @@ export class PatientsService {
   }
 
   private async setOpReport(tx: any, visit: { id: number; patientId: number }, body: string | null, user: any) {
-    const current = await tx.clinicalNote.findFirst({
-      where: { visitId: visit.id, kind: 'op', replacedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-    const text = body?.trim() || null;
-    if (current?.body === text) return;
-    if (!text && !current) return;
-
-    if (current) await tx.clinicalNote.update({ where: { id: current.id }, data: { replacedAt: new Date() } });
-    if (text) {
-      await tx.clinicalNote.create({
-        data: {
-          patientId: visit.patientId,
-          visitId: visit.id,
-          kind: 'op',
-          body: text,
-          authorId: user?.id ?? null,
-          authorName: actorName(user),
-          replacesId: current?.id ?? null,
-        },
-      });
-    }
+    /* منطقِ نسخه‌بندی مشترک است با شرحِ ترخیص — `clinical-note.ts`. */
+    await setVisitNote(tx, visit, 'op', body, user);
   }
 
   /**
@@ -1184,9 +1172,12 @@ export class PatientsService {
       if (dto.opReport?.trim()) {
         await this.setOpReport(tx, visit, dto.opReport, user);
         visit.clinicalNotes = await tx.clinicalNote.findMany({
-          where: { visitId: visit.id, kind: 'op', replacedAt: null },
+          /* ⚠️ همان شرطِ `VISIT_INCLUDE` و نه فقط `op`: اگر این‌جا باریک‌تر
+             می‌ماند، هر ذخیره‌ای که شرحِ عمل داشت، شرحِ ترخیص را از پاسخ
+             حذف می‌کرد و رابط فکر می‌کرد بیمار ترخیص نشده. */
+          where: { visitId: visit.id, kind: { in: VISIT_NOTE_KINDS }, replacedAt: null },
           orderBy: { createdAt: 'desc' },
-          take: 1,
+          take: VISIT_NOTE_KINDS.length,
         });
       }
       const result = { ...enrich(visit, kinds), patientStatus };

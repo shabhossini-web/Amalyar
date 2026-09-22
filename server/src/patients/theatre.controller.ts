@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsString, MaxLength } from 'class-validator';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { IsBoolean, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -12,6 +13,27 @@ class CheckDto {
   @IsString() @MaxLength(30, { message: 'مرحله نامعتبر است' }) stage!: string;
   @IsString() @MaxLength(30, { message: 'بند نامعتبر است' }) key!: string;
   @IsBoolean({ message: 'وضعیتِ تیک نامعتبر است' }) checked!: boolean;
+}
+
+/**
+ * شرحِ وضعیتِ بیمار هنگامِ ترخیص — **اجباری**.
+ *
+ * ⚠️ `MinLength` دارد چون ترخیصِ بی‌شرح سطری است که می‌گوید بیمار رفت و
+ * نمی‌گوید در چه حالی؛ و همان سطر بعداً سندِ پرونده می‌شود. خودِ سرویس هم
+ * `trim` شده‌اش را دوباره می‌سنجد (کلاینت یکی نیست).
+ */
+/** شرحِ عمل — خالی مجاز است (یعنی «این شرح دیگر جاری نیست»). */
+class ReportDto {
+  @IsString({ message: 'شرحِ عمل نامعتبر است' })
+  @MaxLength(20000, { message: 'شرحِ عمل طولانی است' })
+  body!: string;
+}
+
+class DischargeDto {
+  @IsString({ message: 'وضعیتِ بیمار هنگامِ ترخیص را بنویسید' })
+  @MinLength(2, { message: 'وضعیتِ بیمار هنگامِ ترخیص را بنویسید' })
+  @MaxLength(4000, { message: 'شرحِ ترخیص طولانی است' })
+  condition!: string;
 }
 
 /**
@@ -60,5 +82,42 @@ export class TheatreController {
   @Post('visits/:id/finish')
   finish(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.theatre.stamp(id, 'finish', user);
+  }
+
+  @RequirePermissions('theatre.report')
+  @Post('visits/:id/report')
+  report(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportDto, @CurrentUser() user: any) {
+    return this.theatre.setReport(id, dto.body, user);
+  }
+
+  /**
+   * مدرکِ همین عمل. عمداً زیرِ `theatre.read` و نه `documents.read`:
+   * جراحِ داخلِ اتاق باید عکسِ MRI را ببیند بی‌آنکه دسترسیِ کلِ مدارکِ
+   * پرونده را بگیرد. دامنه‌اش هم به **همان مراجعه** بسته است.
+   */
+  @RequirePermissions('theatre.read')
+  @Get('visits/:id/documents/:documentId/file')
+  async document(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const { doc, stream } = await this.theatre.openDocument(id, documentId, user);
+    res.setHeader('Content-Type', doc.mimeType);
+    res.setHeader('Content-Length', String(doc.size));
+    res.setHeader('Content-Disposition',
+      `${doc.mimeType.startsWith('image/') ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(doc.fileName)}`);
+    // مدرکِ پزشکی نباید در کشِ میانی بنشیند — همان قاعدهٔ مسیرِ پرونده.
+    res.setHeader('Cache-Control', 'private, no-store');
+    stream.pipe(res);
+  }
+
+  /* ⚠️ مجوزِ خودش را دارد نه `visits.times`: این یکی سندِ بالینیِ امضادار
+     می‌نویسد، نه مهرِ ساعت. */
+  @RequirePermissions('theatre.discharge')
+  @Post('visits/:id/discharge')
+  discharge(@Param('id', ParseIntPipe) id: number, @Body() dto: DischargeDto, @CurrentUser() user: any) {
+    return this.theatre.discharge(id, dto.condition, user);
   }
 }

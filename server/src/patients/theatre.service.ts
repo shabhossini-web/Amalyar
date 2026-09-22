@@ -4,10 +4,20 @@ import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere } from '../common/own-scope';
 import { actorName } from '../common/person';
+import { setVisitNote } from './clinical-note';
+import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
+import { RecordService } from './record.service';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
  * یک تیمِ کوچک واقعاً بلند می‌خواند.
+ *
+ * 🔴 **از میزِ اتاقِ عمل برداشته شد** (بازخوردِ مالک ۱۴۰۵/۰۶/۳۱: «فرمِ جراحیِ
+ * ایمن رو لازم نداریم فعلاً»). ولی نه داده‌اش پاک شد نه مسیرش: جدولِ
+ * `safety_checks`، این کاتالوگ، `setCheck` و endpointش سرِ جایشان‌اند و
+ * `card()` هنوز وضعیتِ تیک‌ها را برمی‌گرداند. دلیلش «فعلاً» در همان جمله
+ * است — برگرداندنش باید یک تغییرِ **رابط** باشد، نه دوباره‌نوشتنِ متنِ WHO و
+ * یک مهاجرتِ تازه. چیزی که برداشته شد فقط رندرِ رابط و شمارشِ فهرستِ روز است.
  *
  * ⚠️ متن **در کد** است نه در دیتابیس (همان استدلالِ `site.registry.ts`): این یک
  * برگهٔ ایمنیِ استاندارد است، نه تنظیماتِ شرکت. اگر روزی قابلِ ویرایش شد، سطرهای
@@ -61,9 +71,13 @@ export const SAFETY_STAGES = [
  * شروع است. `opStatus` سرِ جایش می‌ماند (لغو و بستنِ پرونده کارِ اوست)، ولی
  * برچسبی که روی تخته دیده می‌شود از ساعت می‌آید.
  */
-const roomState = (v: { opStatus: string | null; opStartTime: string | null; opEndTime: string | null; opDate: Date | null }) => {
+const roomState = (v: { opStatus: string | null; opStartTime: string | null; opEndTime: string | null; opDate: Date | null; dischargeAt?: Date | null }) => {
   if (v.opStatus === 'cancelled') return { state: 'cancelled', stateFa: 'لغو' };
-  if (v.opEndTime) return { state: 'finished', stateFa: 'تمام شد' };
+  /* ⚠️ ترخیص **قبل از** «تمام شد» سنجیده می‌شود و نه بعدش: بیمارِ ترخیص‌شده
+     هم `opEndTime` دارد، پس ترتیبِ برعکس یعنی حالتِ ترخیص هیچ‌وقت دیده نشود.
+     همان تلهٔ `finished` که یک‌بار روی `cancelled` خورده بود. */
+  if (v.dischargeAt) return { state: 'discharged', stateFa: 'ترخیص شد' };
+  if (v.opEndTime) return { state: 'finished', stateFa: 'در ریکاوری' };
   if (!v.opStartTime) return { state: 'waiting', stateFa: 'در انتظار' };
   /* ⚠️ **ساعتِ شروعِ آینده یعنی برنامه، نه جریان.** `opStartTime` فیلدِ حینِ عمل
      است (`INTRA_KEYS` در فرم) ولی هیچ‌چیز جلوی مطبی را نمی‌گیرد که ساعتِ
@@ -104,7 +118,7 @@ const wallClock = () => {
  */
 @Injectable()
 export class TheatreService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private record: RecordService) {}
 
   private scope(user: any) {
     return (user?.level ?? 0) >= LEVEL.SUPERVISOR ? {} : ownVisitWhere(user);
@@ -123,30 +137,28 @@ export class TheatreService {
       orderBy: [{ opStartTime: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 60,
       select: {
         id: true, seq: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true,
+        dischargeAt: true, chiefComplaint: true,
+        decidedIn: { select: { chiefComplaint: true } },
         hospitalName: true, surgeonName: true,
         patient: { select: { id: true, code: true, firstName: true, lastName: true } },
         hospital: { select: { name: true } },
         procedureType: { select: { name: true } },
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
-        safetyChecks: { select: { stage: true } },
       },
     });
     return {
       date,
-      /* شمارشِ بندهای هر مرحله از خودِ کاتالوگ می‌آید، پس رابط عددِ ثابت ندارد. */
-      stages: SAFETY_STAGES.map((s) => ({ key: s.key, title: s.title, total: s.items.length })),
       visits: rows.map((v) => ({
         id: v.id, code: `${v.patient.code}-V${v.seq}`,
         patientId: v.patient.id, patient: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
         opStartTime: v.opStartTime, opEndTime: v.opEndTime, opStatus: v.opStatus,
+        dischargeAt: v.dischargeAt,
         ...roomState(v),
+        /* مشتق، نه کپی — همان قاعدهٔ `enrich` در `patients.service`. */
+        chiefComplaint: v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null,
         procedure: v.procedureType?.name ?? v.opType ?? null,
         hospital: v.hospital?.name ?? v.hospitalName ?? null,
         surgeon: TheatreService.personName(v.surgeon) ?? v.surgeonName ?? null,
-        /* «کجای چک‌لیستیم» مشتقِ سرور است تا هر کارت یک عدد بگیرد نه یک آرایه. */
-        checklist: SAFETY_STAGES.map((s) => ({
-          key: s.key, done: v.safetyChecks.filter((c) => c.stage === s.key).length, total: s.items.length,
-        })),
       })),
     };
   }
@@ -157,7 +169,17 @@ export class TheatreService {
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
       select: {
         id: true, seq: true, kind: true, opDate: true, opStatus: true, opType: true,
-        opStartTime: true, opEndTime: true, techArriveTime: true,
+        opStartTime: true, opEndTime: true, techArriveTime: true, dischargeAt: true,
+        /* شکایتِ اولیه — مشتق از ویزیتِ تصمیم اگر خودِ عمل ننوشته باشدش
+           (بستهٔ ۴الف). سرِ میز باید معلوم باشد بیمار **چرا** آمده. */
+        chiefComplaint: true,
+        decidedIn: { select: { chiefComplaint: true } },
+        /* شرحِ عمل و شرحِ ترخیصِ جاری — همان سندهای پرونده، نه کپی. */
+        clinicalNotes: {
+          where: { kind: { in: ['op', 'discharge'] }, replacedAt: null },
+          orderBy: { createdAt: 'desc' }, take: 2,
+          select: { kind: true, body: true, authorName: true, createdAt: true },
+        },
         hospitalName: true, surgeonName: true, surgeonInstructions: true, requiredItems: true, notes: true,
         patient: {
           select: {
@@ -169,7 +191,18 @@ export class TheatreService {
         procedureType: { select: { name: true, needs: { where: { item: { active: true } }, select: { quantity: true, item: { select: { name: true, size: true } } } } } },
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
         tech: { select: { person: { select: { firstName: true, lastName: true } } } },
-        documents: { where: { deletedAt: null }, orderBy: { id: 'desc' }, take: 12, select: { id: true, title: true, fileName: true, category: true, phase: true } },
+        /* ⚠️ مدارک **بیشتر** و با هر چیزی که برای بازکردنشان لازم است: تا
+           دیروز فقط نامشان می‌آمد و زیرش نوشته بود «از پروندهٔ بیمار بازش
+           کنید» — یعنی جراحِ وسطِ عمل باید از این صفحه بیرون می‌رفت و
+           دسترسیِ بالاتری هم می‌خواست. بازخوردِ مالک صریح بود: «دسترسی به
+           مدارکِ قبل و حین و بعد». */
+        documents: {
+          where: { deletedAt: null }, orderBy: { id: 'desc' }, take: 40,
+          select: {
+            id: true, title: true, fileName: true, category: true, phase: true,
+            mimeType: true, externalUrl: true, createdAt: true,
+          },
+        },
         safetyChecks: { select: { stage: true, key: true, checkedByName: true, checkedAt: true } },
       },
     });
@@ -185,6 +218,10 @@ export class TheatreService {
         surgeon: TheatreService.personName(v.surgeon) ?? v.surgeonName ?? null,
         tech: TheatreService.personName(v.tech),
         opStartTime: v.opStartTime, opEndTime: v.opEndTime, techArriveTime: v.techArriveTime,
+        dischargeAt: v.dischargeAt,
+        chiefComplaint: v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null,
+        opReport: v.clinicalNotes.find((n) => n.kind === 'op')?.body ?? null,
+        dischargeNote: v.clinicalNotes.find((n) => n.kind === 'discharge')?.body ?? null,
         instructions: v.surgeonInstructions || null,
         notes: v.notes || null,
       },
@@ -201,7 +238,13 @@ export class TheatreService {
         medications: p.medications || null,
       },
       items: TheatreService.items(v),
-      documents: v.documents,
+      /* مرحله‌بندی‌شده و با برچسبِ فارسیِ **سرور** (قانونِ ۱۵) — رابط نباید
+         نگاشتِ دومی از `pre/intra/post` داشته باشد. مدرکِ بی‌مرحله در گروهِ
+         «پرونده» می‌نشیند، نه اینکه با فرضِ اشتباه «قبل از عمل» شود. */
+      documents: TheatreService.docGroups(v.documents),
+      /* ⚠️ همچنان برمی‌گردد با اینکه رابط دیگر نشانش نمی‌دهد: `setCheck`
+         پاسخش همین کارت است و کارتِ بدونِ چک‌لیست یعنی endpointی که نتیجهٔ
+         کارِ خودش را برنمی‌گرداند. بالا ↑ دلیلِ کاملِ ماندنش. */
       checklist: SAFETY_STAGES.map((s) => ({
         key: s.key, title: s.title, hint: s.hint,
         items: s.items.map((i) => {
@@ -268,6 +311,108 @@ export class TheatreService {
       after: { [which === 'start' ? 'opStartTime' : 'opEndTime']: wallClock() },
     });
     return this.card(visitId, user);
+  }
+
+  /**
+   * **ترخیص** — مرحلهٔ سوم، بعد از «پایانِ عمل».
+   *
+   * بازخوردِ مالک: «با زدنِ ترخیص، توضیحِ وضعیت حینِ ترخیص باید پاپ‌آپ شه، پر
+   * شه، سیو شه». پس متن **اجباری** است: ترخیصِ بی‌شرح یعنی سطری که می‌گوید
+   * بیمار رفت و نمی‌گوید در چه حالی — و همان سطر بعداً سندِ پرونده می‌شود.
+   *
+   * ⚠️ متن `ClinicalNote(kind='discharge')` می‌شود، نه ستونی روی مراجعه:
+   * همان سندی که در تبِ شرح‌های پرونده دیده و ویرایش می‌شود. یک داده، چند
+   * میز — دقیقاً همان چیزی که برای شکایتِ اولیه هم خواسته شد.
+   *
+   * ⚠️ زدنِ دوباره **ساعت را عوض نمی‌کند** و فقط نسخهٔ تازه‌ای از شرح ثبت
+   * می‌کند. همان استدلالِ `stamp`: دستِ دستکش‌دار دکمه را دوباره می‌زند.
+   */
+  async discharge(visitId: number, condition: string, user: any) {
+    const v = await this.prisma.visit.findFirst({
+      where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
+      select: { id: true, patientId: true, opStatus: true, opEndTime: true, dischargeAt: true },
+    });
+    if (!v) throw new NotFoundException('عمل پیدا نشد');
+    if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده ترخیص نمی‌شود');
+    /* ترتیب معنا دارد: ترخیصِ بیماری که عملش هنوز تمام نشده یعنی یکی از این دو
+       ساعت غلط است. همان قاعدهٔ «اول شروع، بعد پایان». */
+    if (!v.opEndTime) throw new BadRequestException('اول «پایانِ عمل» را ثبت کنید');
+    const text = (condition ?? '').trim();
+    if (!text) throw new BadRequestException('وضعیتِ بیمار هنگامِ ترخیص را بنویسید');
+
+    await this.prisma.$transaction(async (tx) => {
+      await setVisitNote(tx, v, 'discharge', text, user);
+      if (!v.dischargeAt) await tx.visit.update({ where: { id: visitId }, data: { dischargeAt: new Date() } });
+    });
+    await this.audit.record({
+      actorId: user?.id, action: v.dischargeAt ? 'visit.discharge_edit' : 'visit.discharge',
+      entityType: 'visit', entityId: visitId, after: { condition: text },
+    });
+    return this.card(visitId, user);
+  }
+
+  /**
+   * **نوشتنِ شرحِ عمل سرِ میز.**
+   *
+   * بازخوردِ مالک: «زدنِ شرحِ عمل» جزوِ کارهایی است که جراح داخلِ اتاق می‌کند.
+   * مقصدش همان `ClinicalNote(kind='op')`ِ فرمِ مراجعه است — یک سند، دو میز.
+   * اگر ستونِ جدایی می‌ساختیم، شرحی که جراح این‌جا می‌نویسد در پرونده نبود.
+   */
+  async setReport(visitId: number, body: string, user: any) {
+    const v = await this.prisma.visit.findFirst({
+      where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
+      select: { id: true, patientId: true, opStatus: true },
+    });
+    if (!v) throw new NotFoundException('عمل پیدا نشد');
+    if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده شرح نمی‌گیرد');
+    await this.prisma.$transaction((tx) => setVisitNote(tx, v, 'op', body, user));
+    await this.audit.record({
+      actorId: user?.id, action: 'visit.op_report', entityType: 'visit', entityId: visitId,
+      after: { length: (body ?? '').trim().length },
+    });
+    return this.card(visitId, user);
+  }
+
+  /**
+   * بازکردنِ مدرکِ **همین عمل** از میزِ اتاق.
+   *
+   * ⚠️ چرا مسیرِ جدا و نه همان `patients/documents/:id/file`: آن یکی پشتِ
+   * `documents.read` است که سطحش از اتاقِ عمل بالاتر است. پس کارتِ عمل
+   * نامِ مدرک را نشان می‌داد ولی هیچ‌کس داخلِ اتاق نمی‌توانست بازش کند —
+   * دقیقاً شکایتِ مالک.
+   *
+   * ⚠️ دامنه دوبار بسته می‌شود: مدرک باید **به همین مراجعه** وصل باشد (نه
+   * فقط به همین بیمار)، و خودِ مراجعه باید در دامنهٔ کاربر باشد. وگرنه این
+   * مسیر یک دورزدنِ `documents.read` برای کلِ پرونده می‌شد.
+   */
+  async openDocument(visitId: number, documentId: number, user: any) {
+    const v = await this.prisma.visit.findFirst({
+      where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
+      select: { id: true },
+    });
+    if (!v) throw new NotFoundException('عمل پیدا نشد');
+    const doc = await this.prisma.document.findFirst({
+      where: { id: documentId, visitId, deletedAt: null }, select: { id: true },
+    });
+    if (!doc) throw new NotFoundException('مدرکِ این عمل پیدا نشد');
+    return this.record.openDocument(documentId, user);
+  }
+
+  /** مدارک به ترتیبِ مسیرِ بیمار: قبل ← حین ← بعد، و بی‌مرحله‌ها آخر. */
+  private static docGroups(docs: any[]) {
+    const order = [...DOCUMENT_PHASES, null] as (string | null)[];
+    return order
+      .map((phase) => ({
+        phase,
+        label: phase ? DOCUMENT_PHASE_FA[phase] : 'بدونِ مرحله',
+        items: docs.filter((d) => (d.phase ?? null) === phase).map((d) => ({
+          id: d.id, title: d.title || d.fileName, category: d.category,
+          /* مدرکِ لینکی فایل ندارد؛ رابط باید لینک را باز کند نه استریم را. */
+          url: d.externalUrl || null,
+          image: !d.externalUrl && !!d.mimeType?.startsWith('image/'),
+        })),
+      }))
+      .filter((g) => g.items.length > 0);
   }
 
   private static personName(row: { person?: { firstName: string | null; lastName: string | null } | null } | null) {
