@@ -79,6 +79,15 @@ export class FrontDeskController {
     return this.svc.walkIn(dto, user);
   }
 
+  /**
+   * یک نوبت — خوراکِ پاپ‌آپِ نوبت در پروندهٔ بیمار و میزِ پزشک.
+   * همان `frontdesk.read`: دیدنِ یک ردیف از تخته مجوزِ تازه‌ای نمی‌خواهد.
+   */
+  @Get('appointments/:id') @RequirePermissions('frontdesk.read')
+  one(@Param('id', ParseIntPipe) id: number) {
+    return this.svc.one(id);
+  }
+
   @Post('appointments/:id/status') @RequirePermissions('frontdesk.status')
   setStatus(@Param('id', ParseIntPipe) id: number, @Body() dto: DeskStatusDto, @CurrentUser() user: any) {
     return this.svc.setStatus(id, dto.status, user, { reason: dto.cancelReason, note: dto.cancelNote });

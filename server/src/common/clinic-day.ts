@@ -22,12 +22,24 @@
  */
 export const CLINIC_TZ = process.env.CLINIC_TZ || 'Asia/Tehran';
 
+/**
+ * فرمترها کش می‌شوند چون **ساختنِ `Intl` گران‌ترین کارِ این فایل است** و
+ * `clinicTodayIso()` در حلقه صدا زده می‌شود (هر ردیفِ تختهٔ میزِ پذیرش).
+ * درسِ ثبت‌شده در ملک‌طب: ~۱۲۸۰ ساختِ فرمتر برای یک صفحه، ۱۸۲ms → ۰٫۶ms.
+ */
+const FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
 /** `YYYY-MM-DD`ِ یک لحظه، به وقتِ مطب. */
 export function clinicDateIso(at: Date = new Date(), tz: string = CLINIC_TZ): string {
-  /* `en-CA` عمداً: تنها locale ای که بی‌هیچ گزینهٔ اضافه `YYYY-MM-DD` می‌دهد. */
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(at);
+  let f = FORMATTERS.get(tz);
+  if (!f) {
+    /* `en-CA` عمداً: تنها locale ای که بی‌هیچ گزینهٔ اضافه `YYYY-MM-DD` می‌دهد. */
+    f = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    FORMATTERS.set(tz, f);
+  }
+  return f.format(at);
 }
 
 /** «امروز» به وقتِ مطب — `YYYY-MM-DD`. */

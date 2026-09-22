@@ -3018,6 +3018,12 @@ jobs:
       - name: Verify one status has one label
         run: node scripts/verify-status-labels.js
 
+      # و خواهرش: یک **ماشینِ** وضعیت. تقویم قاعدهٔ «شروعِ ویزیت» را خودش
+      # نوشته بود و برای نوبتِ پول‌نداده و نوبتِ هفتهٔ آینده هم دکمه می‌داد —
+      # و مسیرِ سرورش هم شرط نداشت، پس آن دکمه واقعاً کار می‌کرد.
+      - name: Verify one appointment state machine
+        run: node scripts/verify-state-machine.js
+
       # «امروز» به وقتِ مطب، نه کانتینر: سرورِ UTC و کاربرِ تهران هر شب
       # ۳:۳۰ ساعت یک روز اختلاف داشتند و دکمهٔ «شروع» از کلِ میزِ پذیرش
       # غیب می‌شد، بی‌هیچ خطایی.

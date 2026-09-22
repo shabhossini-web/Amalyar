@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AppointmentsService, APPT_LABELS } from './appointments.service';
+import { AppointmentsService, apptStartBlock } from './appointments.service';
 import { summarize } from './billing.service';
 import { monthDayCounts } from './month-summary';
 import { clinicTodayIso } from '../common/clinic-day';
@@ -60,12 +60,10 @@ export class FrontDeskService {
       /* لغوشده‌ها ستون ندارند — یک عدد کنارِ تخته‌اند. ستونِ ششم برای چیزی که
          کارِ امروز نیست، فقط عرضِ چهار ستونِ دیگر را می‌خورد. */
       cancelledCount: withBilling.filter((r: any) => r.lane === 'cancelled').length,
-      rows: withBilling.map((r: any) => ({
-        ...r,
-        /* «شروع» فقط برای بیمارِ امروز که پرونده دارد و وضعیتش اجازه می‌دهد.
-           مشتقِ سرور است تا دکمه و مجوز یک حرف بزنند (قانون ۱۵). */
-        canStart: isToday && ['confirmed', 'arrived'].includes(r.status) && r.patientId != null,
-      })),
+      /* ⚠️ `canStart` این‌جا **ساخته نمی‌شود**: خانه‌اش `AppointmentsService.view()`
+         است، کنارِ `lane` و `nextOptions`. تا دیروز همین‌جا بود و هر میزِ
+         دیگری نسخهٔ خودش را نوشته بود — سه قاعده برای یک دکمه. */
+      rows: withBilling,
       truncated: capped,
       total: rows.length,
     };
@@ -173,6 +171,29 @@ export class FrontDeskService {
   }
 
   /**
+   * **یک نوبت** — همان `view()`ِ تخته، برای پاپ‌آپی که از پرونده یا میزِ پزشک
+   * باز می‌شود.
+   *
+   * 🔴 چرا این‌جا و نه `GET /appointments/:id`: آن کنترلر `@Feature('calendar')`
+   * دارد که سطحش **سوپروایزر** است، و پاپ‌آپِ نوبت از میزِ پزشک و پروندهٔ
+   * بیمار هم باز می‌شود — یعنی دقیقاً همان‌جایی که کاربر سطحِ کارشناس دارد.
+   * پاپ‌آپ تا دیروز دکمه‌هایش را از کپیِ کلاینتیِ ماشینِ وضعیت می‌ساخت و به
+   * `POST /appointments/:id/status` می‌زد؛ برای آن کاربر **۴۰۳** می‌گرفت.
+   * دکمه‌ای که کار نمی‌کند از نبودنِ دکمه بدتر است.
+   */
+  async one(id: number) {
+    const row = await this.prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true } },
+        topic: { select: { id: true, name: true, color: true } },
+      },
+    });
+    if (!row) throw new NotFoundException('نوبت پیدا نشد');
+    return this.appts.view(row);
+  }
+
+  /**
    * **شروعِ مراجعه از میز** — «رسید» و «شروع» در یک کلیک.
    *
    * 🔴 چرا ترکیبی است و نه صدازدنِ سادهٔ `startVisit`:
@@ -196,19 +217,12 @@ export class FrontDeskService {
       where: { id }, select: { id: true, status: true, date: true, patientId: true },
     });
     if (!row) throw new NotFoundException('نوبت پیدا نشد');
-    if (row.date.toISOString().slice(0, 10) !== FrontDeskService.todayIso()) {
-      /* `startVisit` وقتی `forVisitId` دارد `opDate` را با **امروز** بازنویسی
-         می‌کند؛ میز همان صفحه‌ای است که کسی روی ردیفِ دیروز کلیک می‌کند. */
-      throw new BadRequestException('از میزِ پذیرش فقط نوبتِ همین امروز شروع می‌شود');
-    }
-    if (row.status === 'held') {
-      /* `held → confirmed` یعنی «پرداخت دیده شد» — ادعایی که باید کلیکِ عمدی
-         باشد، نه اثرِ جانبیِ «شروع». */
-      throw new BadRequestException('اول «قطعی شد» را بزنید، بعد شروع');
-    }
-    if (row.status === 'cancelled' || row.status === 'noshow') {
-      throw new BadRequestException(`نوبتِ «${APPT_LABELS[row.status]}» شروع نمی‌شود`);
-    }
+    /* ⚠️ شرط‌ها این‌جا **نوشته نمی‌شوند**: `apptStartBlock` همان قاعده‌ای است
+       که `canStart` روی کارت‌ها را می‌سازد و `startVisit` هم با آن قفل است.
+       نسخهٔ قبلی همین سه چک را دستی داشت و درست هم بود — ولی وقتی تقویم
+       قاعدهٔ خودش را نوشت، «درست»بودنِ این یکی هیچ کمکی نکرد. */
+    const block = apptStartBlock(row);
+    if (block) throw new BadRequestException(block);
     if (row.status === 'confirmed') await this.appts.setStatus(id, 'arrived', user);
     const result = await this.appts.startVisit(id, user);
     const fresh = await this.prisma.appointment.findUnique({

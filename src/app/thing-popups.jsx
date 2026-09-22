@@ -84,7 +84,7 @@ export function useThings({ patientId = null, onChanged, toast } = {}) {
  * (بازخوانیِ کامل + «کاندیدای جراحی») را می‌گذارد؛ بقیه پیش‌فرض را می‌گیرند.
  */
 export function ThingPopups({ things, onVisitSaved }) {
-  const { pop, close, changed, say, patientId } = things;
+  const { pop, open, close, changed, say, patientId } = things;
   const { user } = useAuth();
   const t = useTerms();
   /* تعریف‌های فرمِ مراجعه تنبل‌اند: تا فرم باز نشود شش فهرست خوانده نمی‌شود. */
@@ -123,7 +123,14 @@ export function ThingPopups({ things, onVisitSaved }) {
       />
       <AnimatePresence>
         {pop?.type === 'reminder' && <ReminderPop row={pop.row} item={pop.item} onClose={close} onActed={changed} toast={say} />}
-        {pop?.type === 'appointment' && <ApptPop id={pop.id} item={pop.item} onClose={close} onActed={changed} toast={say} />}
+        {pop?.type === 'appointment' && (
+          <ApptPop
+            id={pop.id} item={pop.item} onClose={close} onActed={changed} toast={say}
+            /* «شروعِ ویزیت» در همین پاپ‌آپ تمام می‌شود: فرمِ همان مراجعه
+               بلافاصله باز می‌شود، نه اینکه کاربر به صفحهٔ دیگری پرت شود. */
+            onStarted={(visitId, pid) => open({ type: 'visit', id: visitId, patientId: pid ?? patientId })}
+          />
+        )}
       </AnimatePresence>
     </>
   );
@@ -191,20 +198,62 @@ function ReminderPop({ row, item, onClose, onActed, toast }) {
 /* همان کلیدهای `CANCEL_REASONS` سرور — دلیلِ لغو به بیمار پیامک می‌شود. */
 const APPT_CANCEL = { doctor: 'تعویقِ پزشک', patient: 'درخواستِ بیمار', clinical: 'شرایطِ بالینی', hospital: 'مشکلِ بیمارستان', other: 'سایر' };
 
-/** پاپ‌آپِ یک نوبت — جزئیات + تغییرِ وضعیت (همان `POST /appointments/:id/status` میزِ پذیرش). */
-function ApptPop({ id, item, onClose, onActed, toast }) {
+/**
+ * **پاپ‌آپِ یک نوبت** — جزئیات + همان دکمه‌هایی که میزِ پذیرش دارد.
+ *
+ * 🔴 دو باگِ واقعی که این نسخه برایشان بازنویسی شد:
+ *
+ * ۱) **دکمه‌ها کپیِ کلاینتیِ ماشینِ وضعیت بودند** و با سرور یکی نبودند. بدتر
+ *    از ناهماهنگی: `open = !['done','cancelled','noshow'].includes(st)` یعنی
+ *    بیماری که منشی اشتباهی «نیامد» زده، از پروندهٔ بیمار و میزِ پزشک **هیچ
+ *    راهِ برگشتی** نداشت — در حالی که `APPT_TRANSITIONS.noshow = ['confirmed']`
+ *    سرور دقیقاً همان برگشت را مجاز می‌داند و میزِ پذیرش دکمه‌اش را دارد.
+ *
+ * ۲) **مسیرِ سرورش سطحِ سوپروایزر می‌خواست.** `POST /appointments/:id/status`
+ *    زیرِ `@Feature('calendar')` است؛ ولی این پاپ‌آپ از **میزِ پزشک** و
+ *    **پروندهٔ بیمار** هم باز می‌شود، جایی که کاربر سطحِ کارشناس دارد. یعنی
+ *    دکمه را می‌دید و با زدنش ۴۰۳ می‌گرفت. حالا مسیر `frontdesk` است (سطحِ
+ *    کارشناس) — همان دری که خودِ منشی از آن می‌رود.
+ *
+ * ⚠️ اگر خواندنِ نوبت نشد (نبودِ مجوز/شبکه)، **هیچ دکمه‌ای ساخته نمی‌شود** و
+ * پاپ‌آپ فقط جزئیات را نشان می‌دهد. برگرداندنِ همان کپیِ کلاینتی به‌عنوان
+ * fallback یعنی همان دو باگ از درِ پشتی برگردند.
+ */
+function ApptPop({ id, item, onClose, onActed, toast, onStarted }) {
   const [busy, setBusy] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState('patient');
-  const st = item?.state;
-  const open = !['done', 'cancelled', 'noshow'].includes(st);
+  const [row, setRow] = useState(null);
+  const t = useTerms();
+
+  /* `false` یعنی «خوانده شد و نشد» و `null` یعنی «هنوز نیامده» — دو حالتِ
+     متفاوت: اولی باید پیام بدهد، دومی باید ساکت بماند. */
+  useEffect(() => {
+    let alive = true;
+    api(`/frontdesk/appointments/${id}`)
+      .then((r) => { if (alive) setRow(r); })
+      .catch(() => { if (alive) setRow(false); });
+    return () => { alive = false; };
+  }, [id]);
+
+  const st = row?.status ?? item?.state;
+  const stFa = row?.statusLabel ?? item?.stateFa ?? st ?? '—';
   const set = async (status, extra = {}) => {
     setBusy(true);
     try {
-      await api(`/appointments/${id}/status`, { method: 'POST', body: { status, ...extra } });
+      await api(`/frontdesk/appointments/${id}/status`, { method: 'POST', body: { status, ...extra } });
       toast('وضعیتِ نوبت ثبت شد ✓');
       await onActed();
       onClose();
+    } catch (e) { toast(e.message, true); } finally { setBusy(false); }
+  };
+  const start = async () => {
+    setBusy(true);
+    try {
+      const r = await api(`/frontdesk/appointments/${id}/start`, { method: 'POST' });
+      await onActed();
+      onClose();
+      onStarted?.(r.visitId, row?.patientId ?? null);
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
   return (
@@ -216,17 +265,30 @@ function ApptPop({ id, item, onClose, onActed, toast }) {
       </header>
       <dl>
         {item?.at && <><dt>تاریخ</dt><dd>{faDate(item.at)}{item.detail ? ` · ${faNum(item.detail)}` : ''}</dd></>}
-        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${st ?? 'none'}`}>{item?.stateFa ?? st ?? '—'}</em></dd>
+        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${st ?? 'none'}`}>{stFa}</em></dd>
       </dl>
-      {open && !cancelling && (
+      {row === false && <p className="rc-pop-note">تغییرِ وضعیتِ نوبت در دسترسِ شما نیست.</p>}
+      {row && !cancelling && (
         <div className="rc-pop-acts">
-          {st !== 'confirmed' && st !== 'arrived' && <button type="button" className="rc-pop-ghost" disabled={busy} onClick={() => set('confirmed')}>قطعی شد</button>}
-          {st !== 'arrived' && <button type="button" className="rc-pop-main" disabled={busy} onClick={() => set('arrived')}>بیمار رسید</button>}
-          <button type="button" className="rc-pop-ghost" disabled={busy} onClick={() => set('noshow')}>نیامد</button>
-          <button type="button" className="rc-pop-ghost" disabled={busy} onClick={() => setCancelling(true)}>لغوِ نوبت…</button>
+          {/* ترتیب عمدی است: «شروعِ ویزیت» کارِ اصلی است، بقیه گذارِ وضعیت. */}
+          {row.visitId ? (
+            <button type="button" className="rc-pop-main" disabled={busy}
+              onClick={() => { onClose(); onStarted?.(row.visitId, row.patientId); }}>{t.visitOpen}</button>
+          ) : row.canStart ? (
+            <button type="button" className="rc-pop-main" disabled={busy} onClick={start}>{t.visitStart}</button>
+          ) : null}
+          {(row.nextOptions ?? []).map((o) => (
+            <button key={o.status} type="button" className="rc-pop-ghost" disabled={busy}
+              onClick={() => (o.status === 'cancelled' ? setCancelling(true) : set(o.status))}>
+              {o.label}
+            </button>
+          ))}
+          {!row.visitId && !row.canStart && row.startHint && (
+            <p className="rc-pop-note">{row.startHint}</p>
+          )}
         </div>
       )}
-      {open && cancelling && (
+      {row && cancelling && (
         <div className="rc-pop-field">
           <span>دلیلِ لغو — به بیمار پیامک می‌شود</span>
           <select value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}>

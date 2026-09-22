@@ -52,6 +52,45 @@ export function apptLane(status: string, visitId: number | null): string {
   return 'booked';   // held | confirmed
 }
 
+/**
+ * **چرا «شروعِ ویزیت» ممکن نیست — یک قاعده، یک جمله، برای دکمه و برای مجوز.**
+ *
+ * `null` یعنی مجاز است؛ رشته یعنی همان علتی که هم دکمه را خاموش می‌کند و هم
+ * اگر کسی مستقیم به API بزند ۴۰۰ می‌گیرد. **دو در، یک قفل.**
+ *
+ * 🔴 تا دیروز سه قاعدهٔ مستقل بود و هر سه فرق داشتند:
+ * - `FrontDeskService.start()` درست بود (امروز + نه `held` + نه لغو/نیامد).
+ * - تقویم فقط `cancelled`/`noshow` را کنار می‌گذاشت، پس برای نوبتِ
+ *   **پول‌نداده** (`held`) و نوبتِ **هفتهٔ آینده** هم دکمهٔ «شروعِ ویزیت»
+ *   نشان می‌داد — و دکمه مرده نبود: `POST /appointments/:id/visit` هیچ‌کدام
+ *   از این شرط‌ها را نداشت و مراجعه‌ای واقعی می‌ساخت.
+ * - پاپ‌آپِ نوبت (پروندهٔ بیمار و میزِ پزشک) اصلاً دکمه‌ای نداشت.
+ *
+ * ⚠️ شرطِ «امروز» تزئینی نیست: `startVisit` وقتی نوبت `forVisitId` دارد
+ * `opDate` را با **امروز** بازنویسی می‌کند، پس شروعِ نوبتِ فردا یعنی
+ * جابه‌جاشدنِ بی‌صدای تاریخِ یک مراجعهٔ برنامه‌ریزی‌شده.
+ *
+ * ⚠️ ترتیبِ چک‌ها عمدی است: **اول وضعیت، بعد تاریخ.** نوبتِ لغوشدهٔ دیروز
+ * باید بگوید «لغوشده شروع نمی‌شود»، نه «فقط امروز» — علتِ اولی درست‌کردنی
+ * نیست و پیامِ دومی کاربر را دنبالِ نخودِ سیاه می‌فرستد.
+ */
+export function apptStartBlock(
+  a: { status: string; date: Date; patientId: number | null },
+  todayIso: string = clinicTodayIso(),
+): string | null {
+  /* `held → confirmed` یعنی «پرداخت دیده شد» — ادعایی که باید کلیکِ عمدی
+     باشد، نه اثرِ جانبیِ «شروع». */
+  if (a.status === 'held') return 'اول «قطعی شد» را بزنید، بعد شروع';
+  if (a.status !== 'confirmed' && a.status !== 'arrived') {
+    return `نوبتِ «${APPT_FA_MAP[a.status] ?? a.status}» شروع نمی‌شود`;
+  }
+  if (a.date.toISOString().slice(0, 10) !== todayIso) {
+    return 'فقط نوبتِ همین امروز شروع می‌شود — وگرنه تاریخِ مراجعه با امروز بازنویسی می‌شد';
+  }
+  if (a.patientId == null) return 'این نوبت هنوز به پرونده‌ای وصل نیست — اول ثبت‌نامش تأیید شود';
+  return null;
+}
+
 export const APPT_TRANSITIONS: Record<string, string[]> = {
   held: ['confirmed', 'cancelled'],
   confirmed: ['arrived', 'noshow', 'cancelled'],
@@ -78,6 +117,9 @@ export class AppointmentsService {
   ) {}
 
   view(a: any) {
+    /* یک‌بار، نه دوبار: `view` روی تختهٔ ۲۰۰ ردیفی برای هر ردیف صدا زده
+       می‌شود و هر فراخوانیِ اضافه یک فرمترِ `Intl` تازه می‌ساخت. */
+    const startHint = apptStartBlock(a);
     return {
       id: a.id,
       date: a.date.toISOString().slice(0, 10),
@@ -105,6 +147,11 @@ export class AppointmentsService {
         status: st, label: APPT_ACTIONS[st] ?? st,
       })),
       lane: apptLane(a.status, a.visitId ?? null),
+      /* «شروعِ ویزیت» هم مشتقِ سرور است — و این‌جا، کنارِ `lane` و
+         `nextOptions`، نه در یک میزِ خاص. `startHint` علتِ خاموشی را همراه
+         می‌آورد تا دکمه بی‌توضیح ناپدید نشود؛ کاربر باید بفهمد **چرا**. */
+      canStart: startHint === null,
+      startHint,
     };
   }
 
@@ -354,6 +401,19 @@ export class AppointmentsService {
     // تعریف و اعتبارسنجیِ فرم بیرون از tx؛ داخل قفل هیچ queryِ اتصال دیگری نداریم.
     const source = await this.prisma.appointment.findUnique({ where: { id } });
     if (!source) throw new NotFoundException('نوبت پیدا نشد');
+    /**
+     * 🔴 **درِ دوم، همان قفل.** این متد از دو جا صدا زده می‌شود: میزِ پذیرش
+     * (که شرط‌ها را خودش داشت) و `POST /appointments/:id/visit` که **هیچ
+     * شرطی نداشت** — فقط «لغو نباشد». پس تقویم برای نوبتِ پول‌نداده و نوبتِ
+     * هفتهٔ آینده دکمه می‌ساخت و آن دکمه کار هم می‌کرد.
+     *
+     * ⚠️ نوبتی که از قبل `visitId` دارد مستثناست: آن «شروع» نیست، «بازکردنِ»
+     * مراجعه‌ای است که قبلاً شروع شده — و باید در هر تاریخی ممکن بماند.
+     */
+    if (!source.visitId) {
+      const block = apptStartBlock(source);
+      if (block) throw new BadRequestException(block);
+    }
     let create: Awaited<ReturnType<PatientsService['prepareVisitCreation']>> | undefined;
     if (!source.visitId && !source.forVisitId && source.patientId && source.status !== 'cancelled') {
       const kinds = await this.forms.visitKinds();
@@ -371,9 +431,11 @@ export class AppointmentsService {
         await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${id} FOR UPDATE`;
         const row = await tx.appointment.findUnique({ where: { id } });
         if (!row) throw new NotFoundException('نوبت پیدا نشد');
-        if (row.status === 'cancelled') throw new BadRequestException('نوبتِ لغوشده ویزیت نمی‌شود');
         if (row.visitId) return { visitId: row.visitId, made: false };
-        if (!row.patientId) throw new BadRequestException('این نوبت هنوز به پرونده‌ای وصل نیست — اول ثبت‌نامش تأیید شود');
+        /* دوباره زیرِ قفل: بینِ خواندنِ `source` و گرفتنِ ردیف ممکن است کسی
+           همان نوبت را لغو کرده باشد. */
+        const locked = apptStartBlock(row);
+        if (locked) throw new BadRequestException(locked);
         if (row.patientId !== source.patientId || row.forVisitId !== source.forVisitId
           || row.topicId !== source.topicId || row.startMin !== source.startMin || +row.date !== +source.date) {
           throw new ConflictException('نوبت هم‌زمان تغییر کرده است؛ صفحه را تازه کنید و دوباره شروع کنید');

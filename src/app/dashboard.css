@@ -82,7 +82,7 @@
 .db-kindrow { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
 .db-kindrow button {
   flex: 1 1 90px; padding: 9px 6px; border-radius: 11px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #b7b0d4; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
+  color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .db-kindrow button.on {
   color: #fff; font-weight: 800; border-color: transparent;
@@ -450,7 +450,7 @@ a.db-ico { text-decoration: none; }
 .db-stepnav .db-submit { flex: 1; }
 .db-stepback {
   font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer;
-  padding: 13px 20px; border-radius: 13px; color: #b7b0d4;
+  padding: 13px 20px; border-radius: 13px; color: var(--text2);
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .db-stepback:hover { color: #fff; }
@@ -673,7 +673,7 @@ a.db-ico { text-decoration: none; }
   width: 30px; height: 30px; border-radius: 9px; font: inherit; font-size: 14px; cursor: pointer;
   color: var(--brand-text); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
-.db-count { margin-inline-start: auto; font-size: 11px; color: #837ca5; }
+.db-count { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
 .db-psize { flex-shrink: 0; }
 
 .db-pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 16px; font-size: 12px; color: var(--text3); }

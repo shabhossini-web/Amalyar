@@ -46,3 +46,9 @@
 .rc-pop-state.is-simulated, .rc-pop-state.is-held, .rc-pop-state.is-answered { color: var(--amber-text); }
 .rc-pop-state.is-failed { color: var(--red-text); }
 .rc-pop-state.is-cancelled, .rc-pop-state.is-noshow { color: var(--text3); }
+
+/* توضیحِ «چرا این کار الان ممکن نیست» — کنارِ دکمه‌ها، نه به‌جای‌شان. رنگِ
+   متن (نه لایهٔ کم‌آلفا) تا در هر دو تم خوانده شود (قانون ۲۳). */
+.rc-pop-note {
+  flex: 1 1 100%; margin: 2px 0 0; font-size: 11.5px; line-height: 1.7; color: var(--text3);
+}

@@ -3,7 +3,7 @@
    قابلِ کش شدن. حالا مثل بقیهٔ صفحه‌ها فایلِ جداست. */
 .pa {
   min-height: 100vh; padding: 24px; position: relative; overflow: hidden;
-  background: var(--bg); color: #f4f1ff; font-family: Vazirmatn, system-ui, sans-serif;
+  background: var(--bg); color: var(--text1); font-family: Vazirmatn, system-ui, sans-serif;
 }
 .pa * { box-sizing: border-box; }
 .pa-glow { position: fixed; border-radius: 50%; filter: blur(110px); pointer-events: none; opacity: .28; }
@@ -88,7 +88,7 @@
   background: rgba(var(--surface-rgb), .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .pa-stat b { display: block; font-size: 26px; font-weight: 900; line-height: 1.2; }
-.pa-stat small { display: block; margin-top: 3px; font-size: 11px; color: #8982aa; }
+.pa-stat small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
 .pa-stat.bad b { color: #fb7185; }
 
 /* ── چیدمانِ اصلی ── */
@@ -100,7 +100,7 @@
   font-weight: 900; color: #c084fc; background: rgba(var(--brand-2-rgb), .13);
 }
 .pa-section-title h2 { font-size: 18px; margin: 0; }
-.pa-section-title p { font-size: 11px; color: #8982aa; margin: 3px 0 0; }
+.pa-section-title p { font-size: 11px; color: var(--text3); margin: 3px 0 0; }
 .pa-section-title .pa-refresh { margin-right: auto; }
 
 .pa-hint { font-size: 10px; color: #77708f; text-align: center; }
@@ -111,7 +111,7 @@
   background: rgba(var(--veil-rgb), .025); border: 1px solid rgba(var(--brand-soft-rgb), .12);
 }
 .pa-row b, .pa-row small { display: block; }
-.pa-row small { color: #817aa2; font-size: 10px; margin-top: 4px; }
+.pa-row small { color: var(--text3); font-size: 10px; margin-top: 4px; }
 .pa-row-main { min-width: 0; }
 .pa-row-side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .pa-host {
@@ -147,15 +147,15 @@
 }
 .pa-job-top { display: flex; justify-content: space-between; gap: 8px; }
 .pa-job code, .pa-job small {
-  display: block; margin-top: 8px; font-size: 10px; color: #8f88af;
+  display: block; margin-top: 8px; font-size: 10px; color: var(--text3);
   overflow: hidden; text-overflow: ellipsis;
 }
 .pa-job-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  margin-top: 13px; font-size: 9px; color: #6f688d;
+  margin-top: 13px; font-size: 9px; color: var(--text3);
 }
 .pa-job-foot button { padding: 6px 8px; border-radius: 8px; color: #fda4af; background: rgba(251, 113, 133, .08); }
-.pa-empty { padding: 24px; text-align: center; color: #817aa2; font-size: 13px; }
+.pa-empty { padding: 24px; text-align: center; color: var(--text3); font-size: 13px; }
 
 /* تعرفه‌های سراسری */
 .pa-tariff-form {

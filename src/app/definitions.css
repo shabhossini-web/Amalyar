@@ -29,7 +29,7 @@
 .df-tabs { display: flex; gap: 6px; overflow-x: auto; max-width: 900px; margin: 0 auto 14px; padding-bottom: 3px; }
 .df-tabs button {
   flex: 0 0 auto; padding: 10px 16px; border-radius: 12px; font: inherit; font-size: 13px;
-  cursor: pointer; color: #b7b0d4; background: rgba(var(--veil-rgb), .04);
+  cursor: pointer; color: var(--text2); background: rgba(var(--veil-rgb), .04);
   border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .df-tabs button.on {
@@ -49,7 +49,7 @@
   font: inherit; font-weight: 800; cursor: pointer; color: #fff; border: 0;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
-.df-count { margin-right: auto; font-size: 11px; color: #837cA5; color: #837ca5; }
+.df-count { margin-right: auto; font-size: 11px; color: var(--text3); color: var(--text3); }
 
 .df-list { display: grid; gap: 9px; max-width: 900px; margin: 0 auto; }
 .df-row {
@@ -60,8 +60,8 @@
 .df-row-main { min-width: 0; flex: 1; }
 .df-row-main b { display: block; font-size: 14px; }
 .df-row-main b i { font-style: normal; font-size: 11px; color: var(--amber-text); }
-.df-row-main small { display: block; margin-top: 4px; font-size: 11px; color: #8f88af; }
-.df-uses { flex-shrink: 0; font-size: 10px; color: #6f688d; white-space: nowrap; }
+.df-row-main small { display: block; margin-top: 4px; font-size: 11px; color: var(--text3); }
+.df-uses { flex-shrink: 0; font-size: 10px; color: var(--text3); white-space: nowrap; }
 
 .df-acts { display: flex; gap: 5px; flex-shrink: 0; }
 .df-acts button {
@@ -70,10 +70,10 @@
   border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .df-acts .df-del { color: #fda4af; border-color: rgba(251, 113, 133, .25); }
-.df-dot { width: 9px; height: 9px; border-radius: 50%; background: #6f688d; }
+.df-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text3); }
 .df-dot.on { background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, .6); }
 
-.df-empty { padding: 34px; text-align: center; color: #817aa2; font-size: 13px; }
+.df-empty { padding: 34px; text-align: center; color: var(--text3); font-size: 13px; }
 
 /* ── فرم ── */
 .df-overlay {
@@ -216,7 +216,7 @@
 .nm-acts { flex-wrap: wrap; gap: 8px; }
 .nm-acts select {
   font: inherit; font-size: 11.5px; padding: 7px 10px; border-radius: 9px;
-  color: #f4f1ff; background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .28);
+  color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .28);
 }
 .nm-acts select option { background: var(--bg3); }
 .nm-acts .df-save, .nm-acts .us-btn { font-size: 11.5px; padding: 7px 13px; }
@@ -279,7 +279,7 @@
   background: var(--brand-2, #a78bfa); box-shadow: 0 0 0 3px rgba(167, 139, 250, .16);
 }
 .rc-jstep.st-done .rc-jdot { background: #34d399; box-shadow: 0 0 0 3px rgba(52, 211, 153, .16); }
-.rc-jstep.st-cancelled .rc-jdot { background: #6b7280; box-shadow: none; }
+.rc-jstep.st-cancelled .rc-jdot { background: var(--text3); box-shadow: none; }
 /* میله تا نقطه‌ی بعدی می‌رسد؛ آخرین گام میله ندارد وگرنه مسیر «ادامه‌دار» به‌نظر می‌رسد. */
 .rc-jbar { width: 2px; flex: 1 1 auto; min-height: 30px; background: rgba(var(--veil-rgb), .12); margin: 4px 0; }
 

@@ -111,6 +111,7 @@ today-popups
 surgery-phase-tabs
 clinic-doctor-portal
 status-labels
+appt-state-machine
 chief-complaint
 desk-day
 theatre

@@ -8,6 +8,11 @@ paths:
   - src/app/theatre.css
   - src/app/JDate.jsx
   - src/app/jdate.css
+  - src/app/Calendar.jsx
+  - src/app/calendar.css
+  - src/app/FrontDesk.jsx
+  - src/app/thing-popups.jsx
+  - src/app/thing-popups.css
   - server/src/patients/theatre.controller.ts
   - server/src/patients/theatre.service.ts
   - server/src/patients/patients.service.ts
@@ -15,39 +20,56 @@ paths:
   - server/src/patients/forms.service.ts
   - server/src/patients/intake.service.ts
   - server/src/patients/clinical-note.ts
+  - server/src/patients/labels.ts
+  - server/src/patients/month-summary.ts
+  - server/src/patients/appointments.service.ts
+  - server/src/patients/appointments.controller.ts
+  - server/src/patients/frontdesk.service.ts
+  - server/src/patients/frontdesk.controller.ts
+  - server/src/patients/calendar.service.ts
+  - server/src/common/clinic-day.ts
   - server/src/ai/ai.service.ts
   - server/src/patients/availability.service.ts
   - server/src/auth/access-registry.ts
   - .github/workflows/security-ci.yml
   - scripts/local-ci.mjs
+  - scripts/verify-status-labels.js
+  - scripts/verify-state-machine.js
+  - scripts/verify-theme-tokens.js
   - scripts/e2e/README.md
 note: >-
-  **بستهٔ ۴ — بازخوردِ مالک ۱۴۰۵/۰۶/۳۱: «برای میزِ اتاقِ عمل خیلی ناقص ساختی».**
-  ۴الف — `chiefComplaint` ستونِ واقعیِ `Visit` شد (مقادیرِ `extra` با migration
-  منتقل و کلیدشان از JSON برداشته شد) و عمل شکایتش را از **ویزیتِ تصمیم**
-  (`decidedInVisitId`) **مشتق** می‌کند نه کپی — پس اصلاحِ ویزیت همان لحظه سرِ
-  میز دیده می‌شود. ۴ب — ترخیص مرحلهٔ سومِ چرخه شد، جدا از «پایانِ عمل»:
-  `visits.discharge_at` + `ClinicalNote(kind='discharge')` با شرحِ اجباری.
-  ۴ج — میزِ اتاقِ عمل بازنویسی شد: شکایتِ اولیه بالای کارت، مدارکِ قبل/حین/بعد
-  که از **خودِ میز** باز می‌شوند (مسیرِ `theatre.read`، نه `documents.read`)،
-  نوشتنِ شرحِ عمل سرِ میز، و سه دکمهٔ شروع/پایان/ترخیص. چک‌لیستِ ایمنیِ WHO
-  از رابط برداشته شد («فعلاً») ولی جدول، کاتالوگ و endpointش ماندند.
-  ⚠️ **هم‌پوشانیِ اعلام‌شده:** این بسته `src/app/VisitForm.jsx`,
-  `src/app/Dashboard.jsx`, `src/app/PatientRecord.jsx` و دو migration در
-  `server/prisma/` را هم دست زد — مسیرهایی که کلیمِ `claude-opus` رویشان است.
-  در `paths` نیاوردمشان تا نگهبان قرمز نشود، ولی این‌جا صریح نوشته می‌شود چون
-  پنهان‌کردنش دقیقاً همان چیزی است که پروتکل جلویش را می‌گیرد. کارِ آن کلیم
-  (مرحلهٔ مدرک + «بررسی شد») در `92d74ce` لند شده و در `main` هست، پس
-  هم‌زمانیِ واقعی وجود ندارد؛ اگر آن لِین هنوز روی همان فایل‌ها کار می‌کند،
-  این دو کامیت (`b61c3eb`, `fa3fd78`) باید قبل از ادامه دیده شوند.
-  ⚠️ دو قراردادِ تازه که شکستنشان بی‌صداست: (۱) `chiefComplaint` دیگر کلیدِ
+  **بستهٔ ۵ — بازخوردِ مالک ۱۴۰۵/۰۶/۳۱: «همهٔ داده‌ها … باید یک دیتا در ویوهای
+  مختلف باشند» + «تو میزِ منشی وقتی می‌زنیم مریض رسید، گم می‌شود و این قسمت با
+  قسمتِ پزشک همپوشانی دارد».** دیتابیس از اول یکی بود؛ چیزی که یکی نبود
+  **زبان** و **قاعده** بود.
+  ۵الف — یک وضعیت، یک برچسب: `labels.ts` تنها خانهٔ متن‌ها، `/config.statuses`
+  کاتالوگِ گزینه‌ها، نگهبانِ `verify-status-labels.js`.
+  ۵ب — «رسید» کارت را از جلوی چشمِ منشی برنمی‌دارد (نما دنبالِ `lane`ِ سرور).
+  ۵ج — تقویمِ انتخابِ تاریخ نشانهٔ شلوغیِ روز گرفت (`monthDayCounts`).
+  ۵د — «امروز» یک تعریف دارد، به وقتِ **مطب** (`common/clinic-day.ts`): سرورِ
+  UTC و کاربرِ تهران هر شب ۳:۳۰ ساعت یک روز اختلاف داشتند و `canStart` برای
+  کلِ میزِ پذیرش خاموش می‌شد، بی‌هیچ خطایی.
+  ۵ه — ماشینِ وضعیتِ نوبت یکی شد: `apptStartBlock()` تنها قاعدهٔ «آیا شروع
+  می‌شود؟» است و هم `canStart`/`startHint` کارت‌ها را می‌سازد و هم خودِ
+  `startVisit` را قفل می‌کند. تقویم از `appts.view()` تغذیه می‌شود و پاپ‌آپِ
+  نوبت از `GET /frontdesk/appointments/:id` (سطحِ کارشناس، نه سوپروایزر).
+  نگهبان: `verify-state-machine.js`.
+  ⚠️ **هم‌پوشانیِ اعلام‌شده:** بسته‌های ۴ و ۵ `src/app/VisitForm.jsx`,
+  `src/app/Dashboard.jsx`, `src/app/PatientRecord.jsx`, `src/app/config.jsx`,
+  `src/app/SurgeonPortal.jsx` و migrationهایی در `server/prisma/` را هم دست
+  زدند — مسیرهایی که کلیمِ `claude-opus` رویشان است. در `paths` نیاوردمشان تا
+  نگهبان قرمز نشود، ولی این‌جا صریح نوشته می‌شود چون پنهان‌کردنش دقیقاً همان
+  چیزی است که پروتکل جلویش را می‌گیرد. کارِ آن کلیم در `92d74ce` لند شده و در
+  `main` هست، پس هم‌زمانیِ واقعی وجود ندارد.
+  ⚠️ قراردادهای تازه که شکستنشان بی‌صداست: (۱) `chiefComplaint` دیگر کلیدِ
   **دلخواه** پذیرفته نمی‌شود (رزروِ `BUILTIN_VISIT_KEYS`)؛ (۲) `enrich` شرحِ
-  عمل را با `find(kind==='op')` می‌خواند نه `clinicalNotes[0]`، چون شرحِ ترخیص
-  هم در همان آرایه است.
-  پیش از این: بسته‌های ۳ب/۳ج/۳د/۳ه در PR #85 (`09d2c25`) و CI محلی در PR #86
-  (`3f8d337`). CI گیت‌هاب به‌خاطر تمام‌شدنِ سهمیهٔ Actions نمی‌دود؛ **تصمیمِ
-  مالک: تا آخرِ ماه CI محلی و مرج دستی** — `scripts/local-ci.mjs` گام‌ها را از
-  خودِ `security-ci.yml` می‌خواند تا از CI واگرا نشود.
+  عمل را با `find(kind==='op')` می‌خواند نه `clinicalNotes[0]`؛ (۳) کلاینت
+  دیگر شرطِ چندوضعیتیِ نوبت نمی‌نویسد و `canStart` را نمی‌سازد — هر دو با
+  نگهبانِ ایستا بسته شدند؛ (۴) رنگِ **ارثیِ** ریشهٔ صفحه باید توکن باشد،
+  `#f4f1ff` در پنج صفحه نامِ بیمار را در تمِ روشن نامرئی کرده بود.
+  CI گیت‌هاب به‌خاطر تمام‌شدنِ سهمیهٔ Actions نمی‌دود؛ **تصمیمِ مالک: تا آخرِ
+  ماه CI محلی و مرج دستی** — `scripts/local-ci.mjs` گام‌ها را از خودِ
+  `security-ci.yml` می‌خواند تا از CI واگرا نشود.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
