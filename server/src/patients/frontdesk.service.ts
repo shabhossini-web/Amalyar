@@ -42,9 +42,10 @@ export class FrontDeskService {
   }
 
   async day(date: string) {
-    /* ⚠️ `todayIso` داده می‌شود چون این **تختهٔ یک روز** است: ردیفِ دیروز
-       دکمهٔ شروع نمی‌گیرد. تقویم و پروندهٔ بیمار این قید را ندارند — آن‌جا
-       کاربر یک نوبتِ مشخص را انتخاب کرده، نه یک ردیف از تختهٔ امروز. */
+    /* ⚠️ `deskToday` داده می‌شود چون این **تختهٔ یک روز** است: ردیفِ دیروز و
+       ردیفِ پول‌نداده دکمهٔ شروع نمی‌گیرند. تقویم و پروندهٔ بیمار این دو قید
+       را ندارند — آن‌جا کاربر یک نوبتِ مشخص را انتخاب کرده، نه یک ردیف از
+       تختهٔ امروز، و دکمهٔ «قطعی شد» هم کنارِ دستش نیست. */
     const rows = await this.appts.day(date, FrontDeskService.todayIso());
     const capped = rows.length > MAX_ROWS;
     const shown = capped ? rows.slice(0, MAX_ROWS) : rows;
@@ -226,7 +227,8 @@ export class FrontDeskService {
     /* ⚠️ شرط‌ها این‌جا **نوشته نمی‌شوند**: `apptStartBlock` همان قاعده‌ای است
        که `canStart` روی کارت‌ها را می‌سازد و `startVisit` هم با آن قفل است.
        نسخهٔ قبلی همین سه چک را دستی داشت و درست هم بود — ولی وقتی تقویم
-       قاعدهٔ خودش را نوشت، «درست»بودنِ این یکی هیچ کمکی نکرد. */
+       قاعدهٔ خودش را نوشت، «درست»بودنِ این یکی هیچ کمکی نکرد.
+       ⚠️ `deskToday` یعنی «سیاستِ تخته را هم اعمال کن» (پول‌نداده + امروز). */
     const block = apptStartBlock(row, FrontDeskService.todayIso());
     if (block) throw new BadRequestException(block);
     if (row.status === 'confirmed') await this.appts.setStatus(id, 'arrived', user);

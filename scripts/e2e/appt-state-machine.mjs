@@ -1,33 +1,30 @@
 /**
- * **یک ماشینِ وضعیت برای نوبت — در هر میزی که بازش می‌کنی.**
+ * **یک ماشینِ وضعیت برای نوبت — و یک خطِ روشن بینِ «ثابت» و «سیاستِ میز».**
  *
  * بازخوردِ مالک ۱۴۰۵/۰۶/۳۱: «تو میز منشی وقتی می‌زنیم مریض رسید، دیگه نمی‌شه
  * زد شروع ویزیت و گم می‌شه، و این قسمت با قسمتِ پزشک همپوشانی داره و یکسان
  * بودنِ دیتابیس‌ها واجب ه تو کلِ پروژه.»
  *
  * دیتابیس از اول یکی بود. چیزی که یکی نبود **قاعده** بود — «آیا این نوبت را
- * می‌شود شروع کرد؟» سه جا از نو نوشته شده بود و هر سه فرق داشتند:
+ * می‌شود شروع کرد؟» سه جا از نو نوشته شده بود:
  *
- *   `FrontDeskService.start()`      امروز + نه `held` + نه لغو/نیامد   ✅
- *   `Calendar.jsx`                  فقط نه لغو/نیامد                   ❌
- *   `POST /appointments/:id/visit`  فقط نه لغو                         ❌
+ *   `FrontDeskService.start()`      امروز + نه `held` + نه لغو/نیامد
+ *   `Calendar.jsx`                  نه لغو/نیامد — ولی «نیامد» را هم دکمه می‌کرد
+ *   `POST /appointments/:id/visit`  فقط «لغو نباشد»
  *
- * پس تقویم برای نوبتِ **پول‌نداده** هم دکمهٔ «شروعِ ویزیت» می‌داد، و چون
- * مسیرِ سرورش هم شرط نداشت آن دکمه واقعاً کار می‌کرد: مراجعه‌ای واقعی از
- * بیماری که هنوز پرداخت نکرده بود ساخته می‌شد.
+ * ⚠️ **و یکی‌کردنشان به‌معنای سخت‌ترین‌گیری نیست.** نسخهٔ اولِ این بسته هر
+ * چهار قاعده را همه‌جا اعمال کرد و دو رفتارِ **عمدی** را شکست (هر دو را
+ * `w1-5-appointment-visit-link` تضمین می‌کند): شروعِ نوبتِ هفتهٔ بعد وقتی
+ * بیمار زودتر آمده (تاریخِ مراجعه‌اش امروز می‌شود = «تاریخِ حضورِ واقعی»)، و
+ * شروعِ نوبتِ `held`ِ ثبت‌نامِ آنلاین از پرونده. پس دو لایه:
  *
- * ⚠️ **ولی «فقط امروز» جزوِ قاعدهٔ مشترک نیست و نباید باشد** — این را نسخهٔ
- * اولِ همین بسته اشتباه گرفت و یک رفتارِ عمدی را شکست: نوبتی که برای مراجعهٔ
- * هفتهٔ بعد گرفته شده و بیمار زودتر آمده، با «شروع» تاریخِ مراجعه‌اش امروز
- * می‌شود («تاریخِ حضورِ واقعی»)، و `w1-5-appointment-visit-link` با فیکسچرِ
- * +۷ روز دقیقاً همین را تضمین می‌کند. «فقط امروز» قاعدهٔ **تختهٔ میزِ پذیرش**
- * است، چون آن یک تختهٔ یک‌روزه است و کلیک روی ردیفِ دیروز اشتباه است نه
- * تصمیم. پس بندِ ۳ هر دو در را جدا می‌سنجد.
+ *   **ثابتِ داده (همه‌جا):** لغوشده/نیامد/تمام‌شده، و نوبتِ بی‌پرونده.
+ *   **سیاستِ تختهٔ میزِ پذیرش:** `held`، و «فقط امروز».
  *
- * ادعای این سوییت مقایسهٔ **بینِ مسیرها**ست، نه درستیِ یکی از آن‌ها: همان
- * نوبت باید در هر مسیری که میزها می‌خوانند عینِ هم جواب بدهد، و هر دری که
- * به سرور باز می‌شود همان قفل را داشته باشد. نگهبانِ ایستای
- * `verify-state-machine.js` مکملِ همین است (کلاینت قاعده‌اش را ننویسد).
+ * ادعای این سوییت دو چیز است: (۱) ثابتِ داده در **هر چهار مسیری** که میزها
+ * می‌خوانند یکی است، و (۲) سیاستِ تخته **فقط** در درِ تخته اعمال می‌شود و
+ * آن‌جا هم علتش را می‌گوید. نگهبانِ ایستای `verify-state-machine.js` مکملِ
+ * همین است (کلاینت قاعده‌اش را ننویسد).
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -96,7 +93,7 @@ try {
   ok(deskOf(aConf)?.canStart === true && deskOf(aConf)?.startHint === null,
     'نوبتِ قطعیِ امروز: شروع می‌شود و علتی ندارد');
   ok(deskOf(aHeld)?.canStart === false && /قطعی/.test(deskOf(aHeld)?.startHint ?? ''),
-    `در-انتظارِ-پرداخت نمی‌شود و **می‌گوید چرا** («${deskOf(aHeld)?.startHint}»)`);
+    `در-انتظارِ-پرداخت روی **تخته** نمی‌شود و می‌گوید چرا («${deskOf(aHeld)?.startHint}»)`);
   /* 🔴 دکمهٔ خاموشِ بی‌توضیح همان‌قدر بد است که دکمهٔ غلط: کاربر فکر می‌کند
      صفحه خراب است. `startHint` برای همین کنارِ `canStart` نشست. */
   ok(deskOf(aNo)?.canStart === false && (deskOf(aNo)?.startHint ?? '').length > 0,
@@ -130,37 +127,53 @@ try {
   ok(vals.length === 4 && new Set(vals).size === 1 && vals[0] === true,
     'نوبتِ قطعیِ امروز در هر چهار مسیر `canStart: true` است', JSON.stringify(seen));
 
-  const heldSeen = [
-    deskOf(aHeld)?.canStart,
-    (apptDay ?? []).find((r) => r.id === aHeld)?.canStart,
-    calAppts.find((r) => r.id === aHeld)?.canStart,
-    (await get(`/frontdesk/appointments/${aHeld}`))?.canStart,
+  const noSeen = [
+    deskOf(aNo)?.canStart,
+    (apptDay ?? []).find((r) => r.id === aNo)?.canStart,
+    calAppts.find((r) => r.id === aNo)?.canStart,
+    (await get(`/frontdesk/appointments/${aNo}`))?.canStart,
   ];
-  ok(heldSeen.length === 4 && heldSeen.every((v) => v === false),
-    '🔴 و نوبتِ پول‌نداده در هر چهار مسیر `false` — تقویم قبلاً این یکی را دکمه می‌کرد',
-    JSON.stringify(heldSeen));
+  /* 🔴 «نیامد» **ثابتِ داده** است: در هیچ مسیری شروع نمی‌شود. تقویم قبلاً
+     این یکی را دکمه می‌کرد و مسیرِ سرورش هم جلویش را نمی‌گرفت. */
+  ok(noSeen.filter((v) => v !== undefined).length === 4 && noSeen.every((v) => v === false),
+    '🔴 نوبتِ «نیامد» در هر چهار مسیر `false` — تقویم قبلاً دکمه‌اش می‌کرد',
+    JSON.stringify(noSeen));
+
+  /* ⚠️ این‌جا واگرایی **عمدی و نام‌دار** است، نه تصادف: `held` و «فقط امروز»
+     سیاستِ تخته‌اند، نه ثابتِ داده. */
   const soonRow = calAppts.find((r) => r.id === aSoon);
-  ok(soonRow != null && soonRow.canStart === false,
-    '🔴 نوبتِ سه روزِ آینده هم در تقویم دکمه نمی‌گیرد (تاریخِ مراجعه بازنویسی می‌شد)',
+  ok(soonRow != null && soonRow.canStart === true,
+    '**نباید بیفتد:** قیدِ یک‌روزهٔ میز به تقویم سرایت کند — بیمارِ زودآمده مراجعه‌اش امروز ثبت می‌شود',
     JSON.stringify(soonRow ?? { یافت_نشد: soonIso }));
+  ok((await get(`/frontdesk/appointments/${aSoon}`))?.canStart === false,
+    '… ولی از درِ تخته نه، و همان‌جا علتش را می‌گوید');
+  ok(deskOf(aHeld)?.canStart === false && /قطعی/.test(deskOf(aHeld)?.startHint ?? ''),
+    'پول‌نداده از **درِ تخته** شروع نمی‌شود (سیاستِ میز)',
+    JSON.stringify([deskOf(aHeld)?.canStart, deskOf(aHeld)?.startHint]));
+  ok(calAppts.find((r) => r.id === aHeld)?.canStart === true
+    && (apptDay ?? []).find((r) => r.id === aHeld)?.canStart === true,
+    '**نباید بیفتد:** سیاستِ تخته به تقویم سرایت کند — ثبت‌نامِ آنلاین `held` می‌سازد و ادمین از پرونده شروعش می‌کند',
+    JSON.stringify([calAppts.find((r) => r.id === aHeld)?.canStart, (apptDay ?? []).find((r) => r.id === aHeld)?.canStart]));
   ok(Array.isArray(calAppts.find((r) => r.id === aConf)?.nextOptions),
     'ردیفِ تقویم `nextOptions` دارد — دیگر برچسبِ اقدام را خودش نمی‌سازد');
 
-  console.log('\n۳) درِ دوم همان قفل را دارد — نه فقط دکمه خاموش است');
+  console.log('\n۳) درِ دوم همان قفلِ سراسری را دارد — نه فقط دکمه خاموش است');
   /* 🔴 دقیقاً همین بود که دکمهٔ غلطِ تقویم را از «بی‌اثر» به **خراب‌کننده**
-     تبدیل می‌کرد: مسیرِ مستقیمِ سرور هیچ‌کدام از شرط‌ها را نداشت. */
-  const heldDirect = await send(`/appointments/${aHeld}/visit`, 'POST');
-  ok(heldDirect.status === 400 && /قطعی/.test(heldDirect.json?.message ?? ''),
-    `**نباید بیفتد:** نوبتِ پول‌نداده از مسیرِ مستقیمِ API شروع شود (${heldDirect.status})`,
-    JSON.stringify(heldDirect.json));
+     تبدیل می‌کرد: مسیرِ مستقیمِ سرور فقط «لغو نباشد» را می‌سنجید. */
+  const noDirect = await send(`/appointments/${aNo}/visit`, 'POST');
+  ok(noDirect.status === 400 && /نیامد/.test(noDirect.json?.message ?? ''),
+    `**نباید بیفتد:** نوبتِ «نیامد» از مسیرِ مستقیمِ API شروع شود (${noDirect.status})`,
+    JSON.stringify(noDirect.json));
   const soonDesk = await send(`/frontdesk/appointments/${aSoon}/start`, 'POST');
   ok(soonDesk.status === 400 && /امروز/.test(soonDesk.json?.message ?? ''),
-    `**نباید بیفتد:** نوبتِ روزِ دیگر از **تختهٔ** میزِ پذیرش شروع شود (${soonDesk.status})`,
+    `سیاستِ تخته در درِ خودش اعمال می‌شود (${soonDesk.status})`,
     JSON.stringify(soonDesk.json));
+  const heldDesk = await send(`/frontdesk/appointments/${aHeld}/start`, 'POST');
+  ok(heldDesk.status === 400 && /قطعی/.test(heldDesk.json?.message ?? ''),
+    `… و پول‌نداده هم همان‌جا، با علتِ خودش (${heldDesk.status})`,
+    JSON.stringify(heldDesk.json));
   ok(sql(`SELECT date::text FROM appointments WHERE id=${aSoon}`) === soonIso,
     'و تاریخِ خودِ نوبت در هیچ مسیری دست نمی‌خورد', soonIso);
-  const noDirect = await send(`/appointments/${aNo}/visit`, 'POST');
-  ok(noDirect.status === 400, '**نباید بیفتد:** نوبتِ «نیامد» شروع شود');
 
   console.log('\n۴) پاپ‌آپِ نوبت — دکمه‌ها از سرور، و «نیامد» راهِ برگشت دارد');
   const noRow = await get(`/frontdesk/appointments/${aNo}`);
