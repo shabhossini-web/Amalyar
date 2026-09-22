@@ -129,6 +129,14 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.TECH,
   },
   {
+    /* نمای اتاقِ عمل (بستهٔ ۳ب) — **سطحِ کارشناس**، مثلِ میزِ پذیرش. کسی که
+       دستکش دستش است و چک‌لیستِ ایمنی را تیک می‌زند پایین‌ترین سطحِ کاری است؛
+       اگر این کاشی سطحِ `dashboard` را بگیرد، همان آدم اصلاً بازش نمی‌کند. */
+    key: 'theatre', label: 'اتاقِ عمل', group: 'modules',
+    hint: 'کارتِ حینِ عمل: هویت و هشدارِ بالینی، چک‌لیستِ ایمنی، ساعتِ شروع و پایان.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
     key: 'dispatch', label: 'چینشِ نیروها', group: 'modules',
     defaultLevel: LEVEL.SUPERVISOR,
   },
@@ -237,6 +245,18 @@ export const PERMISSIONS: AccessDef[] = [
   {
     key: 'frontdesk.walkin', label: 'نوبتِ حضوری', group: 'patients',
     hint: 'گرفتنِ نوبت برای بیمارِ سرِ میز — از همان مسیرِ ظرفیت.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'theatre.read', label: 'دیدنِ اتاقِ عمل', group: 'patients',
+    hint: 'عمل‌های امروزِ اتاق و کارتِ حینِ عمل — بدونِ هیچ عددِ مالی.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    /* ⚠️ جدا از «دیدن»: تیکِ چک‌لیست یک **امضا**ست و نامِ زننده‌اش ثبت می‌شود.
+       تماشاگرِ اتاق (مثلاً دانشجو با سطح ۱) باید ببیند ولی امضا نکند. */
+    key: 'theatre.checklist', label: 'تیکِ چک‌لیستِ ایمنی', group: 'patients',
+    hint: 'هر تیک با نام و ساعتِ زننده ثبت می‌شود.',
     defaultLevel: LEVEL.TECH,
   },
   {

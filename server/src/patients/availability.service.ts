@@ -254,9 +254,20 @@ export class AvailabilityService {
       const extra = extraByDay.get(key);
       const applicable = extra
         ? [{ ...extra, topics: [] as any[] }]
+        /* 🔴 **بازهٔ اعتبارِ قاعده روزشمار است، نه ساعت‌شمار.**
+           `activeFrom` پیش‌فرضش `now()` است، یعنی قاعده‌ای که امروز ساعتِ ۱۰:۳۵
+           ساخته می‌شود همان مهر را می‌خورد — و `d` نیمه‌شبِ همان روز است. با
+           مقایسهٔ خام (`10:35 <= 00:00`) **قاعده‌ای که امروز تعریف شود امروز
+           اثر ندارد**، خلافِ نیتی که چند خط بالاتر صریح نوشته شده («روزِ جاری
+           تا آخرِ شب قابلِ رزرو بماند»).
+
+           معمولاً کسی نمی‌فهمید چون فردا کار می‌کرد؛ ۳۱ شهریورِ ۱۴۰۵ رویش را
+           باز کرد: آخرین روزِ ماه، پس هیچ «فردایی» در همان ماه نبود و نمای ماه
+           **هیچ روزِ بازی** نداشت — مطبی که صبح برنامه‌اش را تعریف می‌کند،
+           صفحهٔ نوبت‌دهی‌اش تا اولِ ماهِ بعد خالی می‌مانْد. */
         : rules.filter((r) => r.weekday === weekday
-            && r.activeFrom <= d
-            && (!r.activeTo || r.activeTo >= d)
+            && AvailabilityService.midnight(r.activeFrom) <= d
+            && (!r.activeTo || AvailabilityService.midnight(r.activeTo) >= d)
             && (!opts.topicId || r.topics.length === 0 || r.topics.some((t) => t.topicId === opts.topicId)));
 
       const taken = takenByDay.get(key) ?? { count: 0, mins: new Set<number>() };

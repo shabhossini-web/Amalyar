@@ -142,7 +142,12 @@ try {
       check(true, `date edit persists without financial writes (${state.kind}, ${state.total})`);
       await page.goto(`${base}/app/dashboard?patient=1`);
       await sheet.getByLabel('وضعیت مالی ثبت‌شده').waitFor();
-      check(await sheet.locator('.db-builtins .jd-row input').first().inputValue() === '1405/06/20', 'saved date survives reopening');
+      /* کادرِ تاریخ در حالتِ **غیرِ ویرایش** ارقامش فارسی است (`JDate`): تقویم
+         روزها را فارسی می‌کشد و placeholder هم فارسی است، پس مقدارِ لاتین یعنی
+         همان ناهمخوانی برگشته. مقدارِ رفته به سرور همچنان لاتین است — بالاتر
+         با `visit.opDate === '2026-09-11'` سنجیده شد. */
+      const reopened = await sheet.locator('.db-builtins .jd-row input').first().inputValue();
+      check(reopened === '۱۴۰۵/۰۶/۲۰', `saved date survives reopening, shown in Persian digits (${reopened})`);
     }
     const noteField = page.locator('.db-sheet .assisted-text > textarea').first();
     await noteField.fill('');

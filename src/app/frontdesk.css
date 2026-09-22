@@ -109,3 +109,44 @@
 .fd-debt { color: var(--amber-text); }
 .fd-debt b { color: var(--amber); }
 .fd-debt span { font-size: 11px; color: var(--text3); }
+
+/* ── پذیرشِ بیمارِ بدونِ نوبت ── */
+.fd-walkin {
+  display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: 10px;
+  cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: 1px solid transparent;
+}
+.fd-walkin:hover { filter: brightness(1.08); }
+
+.fd-sheet { width: min(460px, 94vw); display: grid; gap: 12px; padding: 18px; border-radius: 18px; }
+.fd-sheet-head { display: flex; align-items: center; gap: 10px; }
+.fd-sheet-head h3 { flex: 1; margin: 0; font-size: 16px; }
+.fd-sheet-head button { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; cursor: pointer; color: var(--text3); background: none; border: 0; }
+.fd-sheet-head button:hover { color: var(--text1); }
+.fd-sheet-field { display: grid; gap: 5px; }
+.fd-sheet-field span { font-size: 12px; color: var(--text3); }
+.fd-sheet-field input {
+  min-height: 42px; padding: 0 12px; border-radius: 11px; font: inherit; font-size: 14px;
+  color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .18);
+}
+.fd-sheet-field input:focus { outline: none; border-color: var(--brand-2); }
+.fd-sheet-hint { margin: 0; font-size: 12px; color: var(--text3); }
+.fd-sheet-err { margin: 0; font-size: 12.5px; color: var(--red-text); }
+
+.fd-found { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; max-height: 240px; overflow: auto; }
+.fd-found button {
+  display: flex; align-items: baseline; gap: 10px; width: 100%; min-height: 44px; padding: 8px 12px;
+  border-radius: 11px; cursor: pointer; font: inherit; text-align: start;
+  color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.fd-found button:hover, .fd-found button:focus-visible { border-color: var(--brand-2); outline: none; }
+.fd-found b { font-size: 14px; color: var(--text1); }
+.fd-found span { font-size: 11.5px; color: var(--text3); }
+
+.fd-picked { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0; padding: 10px 12px; border-radius: 11px; background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .3); }
+.fd-picked b { font-size: 14px; color: var(--text1); }
+.fd-picked span { font-size: 11.5px; color: var(--text3); }
+.fd-picked button { margin-inline-start: auto; cursor: pointer; font: inherit; font-size: 12px; color: var(--brand-2); background: none; border: 0; }
+.fd-sheet-acts { display: flex; gap: 8px; }
+.fd-sheet-acts .fd-btn { flex: 1; min-height: 44px; font-size: 14px; }
+.fd-btn.primary { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; }

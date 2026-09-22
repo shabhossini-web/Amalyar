@@ -25,7 +25,30 @@ export default function JDate({
   className = 'db-field', disabled, hint,
 }) {
   const [open, setOpen] = useState(false);
-  const bad = !!value?.trim() && !jParse(value);
+  /* ⚠️ **ارقامِ کادر فارسی‌اند، ولی مقدارِ بیرون‌رفته لاتین می‌مانَد.**
+     تقویم روزها را با `jToFa` می‌کشد، placeholder و متنِ خطا هم فارسی‌اند — ولی
+     `jStr()` که با انتخابِ روز در کادر می‌نشست لاتین بود: کاربر «۳۰» را می‌زد و
+     `1405/06/30` می‌دید.
+
+     دو راهِ ساده‌تر امتحان و رد شدند، هرکدام به یک دلیلِ دیدنی:
+     ① **تبدیل در `onChange`** یعنی بازنویسیِ `value` حینِ تایپ — همان چیزی که
+        قانونِ ۱۳ ممنوع کرده (Gboardِ اندروید ارقامِ بعدی را می‌ریزد دور).
+     ② **فارسی‌کردن فقط وقتی کادر focus ندارد** یعنی متن دقیقاً هنگامِ کلیکِ
+        کاربر زیرِ نشانگر عوض می‌شود؛ `intake-assistance-ui` همان‌جا قرمز شد
+        (انتخاب پیش از `insertText` می‌پرید و متن به‌هم می‌چسبید).
+
+     پس نمایش حالتِ خودش را دارد: حینِ تایپ **دست‌نخورده** (هرچه در DOM است
+     همان در state، یعنی هیچ بازنویسی‌ای در کار نیست) و در blur — مثلِ گروه‌بندیِ
+     باکسِ مبلغ — آراسته می‌شود. `onChange` همچنان «1405/06/30»ِ لاتین می‌دهد،
+     پس هیچ مصرف‌کننده‌ای عوض نشده (مهم‌تر از همه `DynForm` که مقدار را به‌عنوانِ
+     پاسخِ بیمار ذخیره می‌کند). */
+  const [text, setText] = useState(() => jToFa(value ?? ''));
+  useEffect(() => {
+    /* فقط تغییرِ **بیرونی** (انتخاب از تقویم، بارگذاری، ریست) نمایش را عوض کند؛
+       آنچه کاربر همین حالا تایپ کرده همان است و نباید بازنویسی شود. */
+    setText((t) => (toEnDigits(t).trim() === toEnDigits(value ?? '').trim() ? t : jToFa(value ?? '')));
+  }, [value]);
+  const bad = !!text.trim() && !jParse(text);
 
   return (
     <label className={`${className} jd-wrap${bad ? ' bad' : ''}`}>
@@ -33,11 +56,11 @@ export default function JDate({
       <div className="jd-row">
         <input
           type="text" dir="ltr" inputMode="numeric"
-          value={value ?? ''}
+          value={text}
           disabled={disabled}
           placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => onChange(normalize(e.target.value))}
+          onChange={(e) => { setText(e.target.value); onChange(e.target.value); }}
+          onBlur={(e) => { const v = normalize(e.target.value); setText(jToFa(v)); onChange(v); }}
         />
         <button
           type="button" className="jd-btn" disabled={disabled}

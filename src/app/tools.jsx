@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth.jsx';
 import { useTerms } from './config.jsx';
-import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Truck, Users, Wave , Arrive, Pathway } from '../ui/icons.jsx';
+import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Theatre, Truck, Users, Wave , Arrive, Pathway } from '../ui/icons.jsx';
 
 /**
  * کاتالوگِ ابزارها — **تنها** جای تعریفِ کاشی‌ها.
@@ -40,6 +40,10 @@ export const TOOLS = [
   { key: 'accounting', label: 'حسابداری', icon: Bank, tint: 'violet', ready: true, min: 5, to: '/app/accounting' },
   /* میزِ پذیرش — پایین‌ترین سطحِ کاری، چون منشی بیمار را می‌پذیرد. */
   { key: 'frontdesk', label: 'میزِ پذیرش', icon: Arrive, tint: 'cyan', ready: true, min: 2, to: '/app/frontdesk' },
+  /* اتاقِ عمل کنارِ میزِ پذیرش می‌نشیند چون هم‌خانواده‌اند: هر دو کارِ **همین
+     امروز**اند و هر دو سطحِ کارشناس. نام «اتاقِ عمل» است نه «نمای اتاقِ عمل» —
+     نامِ کاشی همان کاری است که کاربر می‌کند، نه نامِ ابزار (قانونِ ۲۴). */
+  { key: 'theatre', label: 'اتاقِ عمل', icon: Theatre, tint: 'teal', ready: true, min: 2, to: '/app/theatre' },
   /* نامِ کاشی = عنوانِ صفحه (قانون ۲۴). «مسیرِ درمان» نه «الگوها»: کاربر
      دنبالِ مسیرِ بیمار می‌گردد، نه دنبالِ ابزارِ ساختِ الگو. */
   { key: 'pathway', label: 'مسیرِ درمان', icon: Pathway, tint: 'violet', ready: true, min: 2, to: '/app/pathways' },

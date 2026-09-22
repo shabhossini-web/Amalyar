@@ -9,7 +9,8 @@ import { useVisitDefs } from './visit-defs.js';
 import VisitForm from './VisitForm.jsx';
 import JDate from './JDate.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import { Arrive, Close, Money, Phone, Search } from '../ui/icons.jsx';
+import { Arrive, Close, Money, Phone, Plus, Search } from '../ui/icons.jsx';
+import Overlay from '../ui/Overlay.jsx';
 import CancelReason from '../ui/CancelReason.jsx';
 import './launcher.css';
 import './definitions.css';
@@ -48,6 +49,7 @@ export default function FrontDesk() {
      هم عمداً **کلِ روز** را می‌شمارد نه نتیجهٔ جستجو را — وگرنه منشی با یک
      جستجوی باز فراموش می‌کند سه نفر دیگر هم منتظرند. */
   const [q, setQ] = useState('');
+  const [walkIn, setWalkIn] = useState(false);
 
   /* تنبل: تا شیت باز نشود، شش fetchِ تعریف‌ها نمی‌رود. */
   const { defs, reload: reloadDefs } = useVisitDefs(!!sheet, user?.id);
@@ -145,6 +147,14 @@ export default function FrontDesk() {
         </div>
         <JDate value={jday} onChange={setJday} />
         <button type="button" className="fd-today" onClick={() => setJday(todayJStr())}>امروز</button>
+        {/* بیمارِ بدونِ نوبت — تصمیمِ مالک ۱۴۰۵/۰۶/۳۰: «ممکن است حضوری بیاید که
+            اگر وقت بشود پذیرش می‌شود». فقط برای **امروز**؛ حضوریِ فردا یعنی
+            نوبت، و جایش تقویم است. */}
+        {data?.isToday && (
+          <button type="button" className="fd-walkin" onClick={() => setWalkIn(true)}>
+            <Plus width="15" height="15" aria-hidden="true" /> بیمارِ بدونِ نوبت
+          </button>
+        )}
         <label className="fd-find">
           <Search width="15" height="15" aria-hidden="true" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام، کدِ پرونده یا شماره" aria-label="جستجوی نام، کدِ پرونده یا شماره" />
@@ -219,6 +229,16 @@ export default function FrontDesk() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {walkIn && (
+          <WalkInSheet
+            date={iso}
+            onClose={() => setWalkIn(false)}
+            onDone={(msg) => { setWalkIn(false); setToast(msg); after(); }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {cancelAsk && (
           <CancelReason
             kind="appointment"
@@ -235,6 +255,103 @@ export default function FrontDesk() {
 
       {toast && <button type="button" className="fd-toast" onClick={() => setToast('')}>{toast}</button>}
     </div>
+  );
+}
+
+/**
+ * **پذیرشِ بیمارِ بدونِ نوبت.**
+ *
+ * ⚠️ فقط بیمارِ **موجود** — پروندهٔ تازه از «پذیرش» ساخته می‌شود، نه از این
+ * پنجره: ساختنِ پرونده کدِ ملی و تأییدِ شماره می‌خواهد و فشردنش در یک پنجرهٔ
+ * سه‌فیلدی یعنی پرونده‌های نصفه که بعداً باید ادغام شوند.
+ *
+ * ⚠️ ظرفیت **نشان داده می‌شود ولی مانع نیست** (تصمیمِ مالک): اگر روز پر باشد،
+ * پنجره می‌گوید و اجازه می‌دهد — قاضیِ «وقت هست یا نه» منشی است. رد فقط برای
+ * دو چیز است که قضاوت نیستند: روزِ تعطیل، و اسلاتِ پرِ نام‌برده.
+ */
+function WalkInSheet({ date, onClose, onDone }) {
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const reqId = useRef(0);
+
+  /* debounce — همان قاعدهٔ سرچِ فهرست‌ها؛ رندر به‌ازای هر حرف ممنوع. */
+  useEffect(() => {
+    const t = q.trim();
+    if (t.length < 2) { setRows(null); return undefined; }
+    const id = ++reqId.current;
+    const h = setTimeout(() => {
+      api(`/search/patients?q=${encodeURIComponent(t)}`)
+        .then((r) => { if (id === reqId.current) setRows(Array.isArray(r) ? r : []); })
+        .catch((e) => { if (id === reqId.current) { setRows([]); setErr(e.message); } });
+    }, 220);
+    return () => { clearTimeout(h); };
+  }, [q]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!picked || busy) return;
+    setErr(''); setBusy(true);
+    try {
+      const r = await api('/frontdesk/walk-in', { method: 'POST', body: { patientId: picked.id, date, note: note.trim() || undefined } });
+      onDone(r?.beyondCapacity
+        ? `${picked.fullName} پذیرش شد — بیش از ظرفیتِ امروز ✓`
+        : `${picked.fullName} پذیرش شد ✓`);
+    } catch (e2) { setErr(e2?.message || 'پذیرش نشد'); setBusy(false); }
+  };
+
+  return (
+    <Overlay backdrop="cr-overlay" panel="glass fd-sheet" as="form" onClose={onClose} closable={!busy} onSubmit={submit} aria-label="بیمارِ بدونِ نوبت">
+      <header className="fd-sheet-head">
+        <h3>بیمارِ بدونِ نوبت</h3>
+        <button type="button" onClick={onClose} aria-label="بستن"><Close width="16" height="16" /></button>
+      </header>
+
+      {!picked && (
+        <>
+          <label className="fd-sheet-field">
+            <span>نام، کدِ پرونده یا شماره</span>
+            <input value={q} onChange={(ev) => setQ(ev.target.value)} autoFocus placeholder="دستِ‌کم دو حرف" />
+          </label>
+          {rows === null && <p className="fd-sheet-hint">برای یافتنِ پرونده بنویسید.</p>}
+          {rows?.length === 0 && <p className="fd-sheet-hint">پرونده‌ای پیدا نشد. پروندهٔ تازه از «پذیرش» ساخته می‌شود.</p>}
+          {rows?.length > 0 && (
+            <ul className="fd-found">
+              {rows.map((r) => (
+                <li key={r.id}>
+                  <button type="button" onClick={() => setPicked(r)}>
+                    <b>{r.fullName}</b>
+                    <span dir="ltr">{[r.code, r.phone].filter(Boolean).join(' · ')}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      {picked && (
+        <>
+          <p className="fd-picked">
+            <b>{picked.fullName}</b> <span dir="ltr">{picked.code}</span>
+            <button type="button" onClick={() => setPicked(null)}>تغییر</button>
+          </p>
+          <label className="fd-sheet-field">
+            <span>یادداشت (اختیاری)</span>
+            <input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="مثلاً: ارجاع از اورژانس" />
+          </label>
+        </>
+      )}
+
+      {err && <p className="fd-sheet-err" role="alert">{err}</p>}
+      <div className="fd-sheet-acts">
+        <button type="submit" className="fd-btn primary" disabled={!picked || busy}>{busy ? 'در حالِ ثبت…' : 'پذیرش'}</button>
+        <button type="button" className="fd-btn" onClick={onClose} disabled={busy}>انصراف</button>
+      </div>
+    </Overlay>
   );
 }
 

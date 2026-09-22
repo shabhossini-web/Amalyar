@@ -137,6 +137,26 @@ try {
     JSON.stringify(rows2.map((r) => [r.key, r.visitId, r.apptId])));
   ok('… و هر سهٔ آن‌ها ردیفِ خودشان را دارند', rows2.filter((r) => r.patientId === vDebt.patientId).length === 3,
     JSON.stringify(rows2.filter((r) => r.patientId === vDebt.patientId).map((r) => r.key)));
+  console.log('\n۴) بیمارِ بدونِ نوبت — ظرفیت خبر می‌دهد، منع نمی‌کند');
+  /* تصمیمِ مالک ۱۴۰۵/۰۶/۳۰: «بیمار ممکن است بدون نوبتِ قبلی حضوری بیاد که اگه
+     وقت بشه پذیرش میشه». تا امروز این مسیر روی نصبی که **هیچ قاعدهٔ کاری
+     تعریف نکرده** همیشه ۴۰۰ می‌گرفت («این روز باز نیست یا جای آزاد ندارد») —
+     یعنی دکمه‌اش هم اگر بود کار نمی‌کرد. */
+  const vWalk = await mk('حضوری');
+  const walk = await send('/frontdesk/walk-in', 'POST', { patientId: vWalk.patientId, date: today, note: 'ارجاع از اورژانس' });
+  if (walk.json?.id) appts.push(walk.json.id);
+  ok('**روی نصبِ بی‌قاعدهٔ کاری هم پذیرش می‌شود**', walk.status < 300 && walk.json?.status === 'confirmed',
+    `${walk.status} ${walk.json?.message ?? ''}`);
+  ok('… شمارهٔ صف می‌گیرد، نه اسلاتِ کسِ دیگر', walk.json?.seq != null && walk.json?.startMin == null, JSON.stringify([walk.json?.seq, walk.json?.startMin]));
+  ok('… و همان لحظه روی تختهٔ امروز می‌نشیند',
+    ((await send(`/frontdesk/day?date=${today}`)).json?.rows ?? []).some((r) => r.id === walk.json?.id && r.lane === 'booked'));
+  /* 🔴 ولی مسیرِ **تقویم** نباید شل شده باشد: ظرفیت آن‌جا یک اعلامِ واقعیِ مطب
+     است و اگر حضوری راهِ دورزدنش شود، تقویم دروغ می‌گوید. */
+  const viaCalendar = await send('/appointments', 'POST', { patientId: vWalk.patientId, date: today });
+  ok('**نباید بیفتد:** همین شلی به رزروِ تقویم هم برسد', viaCalendar.status === 400,
+    `${viaCalendar.status} ${viaCalendar.json?.message ?? ''}`);
+  const past = await send('/frontdesk/walk-in', 'POST', { patientId: vWalk.patientId, date: new Date(Date.now() - 3 * 864e5).toISOString().slice(0, 10) });
+  ok('**نباید بیفتد:** حضوریِ روزِ گذشته', past.status === 400, `${past.status} ${past.json?.message ?? ''}`);
 } finally {
   if (appts.length) sql(`DELETE FROM appointments WHERE id IN (${appts.join(',')})`);
   await send('/config/vertical', 'PATCH', { vertical: before });

@@ -4,25 +4,39 @@ status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-21
 paths:
-  - src/app/SurgeonPortal.jsx
-  - src/app/surgeon-portal.css
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
   - src/app/FrontDesk.jsx
   - src/app/frontdesk.css
-  - src/ui/FileDrop.jsx
-  - src/ui/filedrop.css
-  - server/src/patients/surgeon-portal.service.ts
+  - src/app/tools.jsx
+  - src/ui/icons.jsx
+  - src/App.jsx
+  - server/src/patients/theatre.controller.ts
+  - server/src/patients/theatre.service.ts
+  - server/src/patients/appointments.service.ts
   - server/src/patients/frontdesk.service.ts
-  - server/src/config/config.service.ts
+  - server/src/auth/access-registry.ts
+  - server/src/config/verticals.ts
+  - src/app/JDate.jsx
+  - src/app/jdate.css
+  - server/src/patients/availability.service.ts
+  - .github/workflows/security-ci.yml
 note: >-
-  بستهٔ ۳الف (PR #84) — **بازبینیِ دو میز با اسکرین‌شات در هر دو تم.** شش یافته:
-  نصفه‌بودنِ بستهٔ ۱ (نقشِ پزشک بدونِ تعریفِ جراح → کشویِ اجباریِ فرمِ ویزیت خالی)،
-  برخوردِ ریشهٔ `.fd` بینِ `filedrop.css` و `frontdesk.css` (هدرِ میز ۶۶۰px و وسطِ
-  صفحه؛ آپلود به `fdrop-` رفت + نگهبانِ «ریشهٔ کوتاه یک مالک دارد»)، ادغامِ
-  «یک بیمار یک ردیف» در `/surgeon/today`، حذفِ تکرارِ نتیجه↔کار، نوارِ خلاصه با
-  صورت‌حسابِ امروز، و **`debt`ِ میزِ پذیرش** (بدهیِ بیمار، نه بدهیِ نوبت).
-  سنجه: `scripts/e2e/desk-day.mjs` (منفی‌تست‌شده). بدهی: دکمهٔ «بیمارِ بدونِ نوبت»
-  (گیرِ قاعدهٔ برنامهٔ کاری)، ارقامِ لاتینِ `JDate`، `sections`ِ فرم‌ساز.
-  قدمِ بعدی: بستهٔ ۳ب — نمای اتاقِ عمل.
+  بستهٔ ۳ب + ۳ج (PR #85). **۳ب — نمای اتاقِ عمل**: ماژولِ تازهٔ `theatre` روی
+  `/app/theatre` (چک‌لیستِ ایمنیِ WHO با امضا، هشدارِ بالینی، ساعتِ یک‌لمسی،
+  بدونِ هیچ عددِ مالی) + جدولِ `safety_checks`. **۳ج — بیمارِ بدونِ نوبت**:
+  تصمیمِ مالک «اگه وقت بشه پذیرش میشه» → سرِ میز ظرفیت **خبر می‌دهد نه منع**
+  (`walkIn(..., {desk:true})`)، ولی مسیرِ تقویم دست‌نخورده سخت‌گیر مانده
+  (سنجهٔ `next-visit-booking` همین را قفل می‌کند).
+  **۳د — کادرِ تاریخِ شمسی**: ارقامِ کادر فارسی شد (نمایش در `blur`، بدونِ
+  بازنویسیِ `value` حینِ تایپ — قانونِ ۱۳) بی‌آنکه قراردادِ `onChange` عوض شود،
+  و هفت رنگِ ثابتِ تمِ تیره در `jdate.css` به توکن رفت (تقویم در تمِ روشن
+  خوانده نمی‌شد).
+  **۳ه — نوبت‌دهی + هزینهٔ CI**: `activeFrom` با `now()` مهر می‌خورد ولی با
+  نیمه‌شبِ روز سنجیده می‌شد، پس قاعدهٔ امروز امروز اثر نداشت (۳۱ شهریور، آخرین
+  روزِ ماه، رویش را باز کرد). به‌علاوه `concurrency`، دو شارد، و کشِ مرورگر.
+  بسته‌های ۱ (#81)، ۲ (#82) و ۳الف (#84) لند شده‌اند. CI به‌خاطر تمام‌شدنِ
+  سهمیهٔ Actionsِ حساب نمی‌دود؛ تأیید با اجرای کاملِ محلیِ ۱۱۲ سوییت انجام شد.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

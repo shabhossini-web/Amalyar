@@ -11,6 +11,18 @@ on:
 permissions:
   contents: read
 
+# ⚠️ **رانِ جایگزین‌شده باید بمیرد، نه اینکه تا آخر بسوزد.**
+# هر رانِ کامل ~۴۳ دقیقهٔ قابلِ‌محاسبه است (build ۲۰٫۷ + چهار شاردِ live). در
+# جریانِ کارِ ایجنت چند پوش پشتِ‌هم عادی است: شبِ ۱۴۰۵/۰۶/۳۱ چهار پوش در ۲۰
+# دقیقه چهار رانِ کامل ساخت و ~۱۲۹ دقیقه‌اش روی کامیت‌هایی سوخت که نتیجه‌شان
+# دیگر به کار نمی‌آمد. همان سهمیه بود که تمام شد و CI ده ساعت خوابید.
+#
+# ⚠️ ولی فقط روی PR کنسل می‌کنیم: رانِ `push` روی `main` باید تا آخر برود،
+# چون `automerge` و تاریخچهٔ شاخهٔ اصلی به نتیجه‌اش تکیه دارند.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -3027,8 +3039,22 @@ jobs:
       # The runner has no browser and playwright-core ships none, so this is
       # the first browser suite this workflow can actually run. Pinned to the
       # playwright-core version in package.json so the protocol matches.
+      # ⚠️ خودِ مرورگر کش می‌شود، ولی بسته‌های سیستمی نه — آن‌ها روی رانرِ تازه
+      # باید هر بار نصب شوند. پس در hit فقط `install-deps` می‌رود (چند ثانیه)
+      # و دانلودِ ~۱۲۰ مگابایتیِ chromium (۲۵ ثانیه در هر جاب، پنج جاب) می‌افتد.
+      # کلید نسخهٔ playwright را دارد؛ با بالابردنِ نسخه خودش باطل می‌شود.
+      - name: Cache the playwright browser
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-chromium-1.61.1-${{ runner.os }}
       - name: Install chromium for the browser suite
+        if: steps.pwcache.outputs.cache-hit != 'true'
         run: npx --yes playwright@1.61.1 install --with-deps chromium
+      - name: System deps for the cached chromium
+        if: steps.pwcache.outputs.cache-hit == 'true'
+        run: npx --yes playwright@1.61.1 install-deps chromium
 
       # ⚠️ ۳۱ سوییت `executablePath: '/opt/pw-browsers/chromium'` را هاردکد
       # کرده‌اند و ۱۴ تای دیگر آن را پیش‌فرضِ `E2E_CHROME` گرفته‌اند — مسیرِ
@@ -3182,7 +3208,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        # ⚠️ **دو شارد، نه چهار.** هر شارد ستاپِ کاملِ خودش را می‌پردازد
+        # (کانتینرِ postgres + دو `npm ci` + بیلدِ بک + chromium ≈ ۱٫۵ دقیقه).
+        # چهار شارد یعنی همان ستاپ چهار بار. زمانِ دیواریِ ران را `build` تعیین
+        # می‌کند (۲۰٫۷ دقیقه)، نه شاردها (۳–۵ دقیقه) — پس نصف‌کردنِ تعداد
+        # ~۳ دقیقهٔ قابلِ‌محاسبه در هر ران صرفه‌جویی می‌کند و **هیچ** تأخیری
+        # در زمانِ دیواری نمی‌سازد.
+        shard: [1, 2]
     services:
       postgres:
         image: postgres:16
@@ -3219,8 +3251,19 @@ jobs:
         run: npm run build
 
       # همان نسخهٔ جابِ build؛ playwright-core خودش مرورگر ندارد.
+      # همان کشِ جابِ build — توضیحش آن‌جاست.
+      - name: Cache the playwright browser
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-chromium-1.61.1-${{ runner.os }}
       - name: Install chromium
+        if: steps.pwcache.outputs.cache-hit != 'true'
         run: npx --yes playwright@1.61.1 install --with-deps chromium
+      - name: System deps for the cached chromium
+        if: steps.pwcache.outputs.cache-hit == 'true'
+        run: npx --yes playwright@1.61.1 install-deps chromium
 
       # ⚠️ ۳۱ سوییت `executablePath: '/opt/pw-browsers/chromium'` را هاردکد
       # کرده‌اند و ۱۴ تای دیگر آن را پیش‌فرضِ `E2E_CHROME` گرفته‌اند — مسیرِ
@@ -3247,7 +3290,10 @@ jobs:
         run: node scripts/e2e/bootstrap-env.mjs
 
       - name: Run shard ${{ matrix.shard }} of the live manifest
-        run: node scripts/e2e/run-live.mjs --manifest scripts/e2e/ci-live.txt --shard ${{ matrix.shard }}/4 --log-dir .e2e-logs
+        # ⚠️ مخرج از `strategy.job-total` می‌آید نه عددِ ثابت: با عددِ ثابت،
+        # عوض‌کردنِ ماتریس بدونِ عوض‌کردنِ این خط یعنی بخشی از سوییت‌ها
+        # **بی‌صدا اجرا نشوند** و CI همچنان سبز بماند.
+        run: node scripts/e2e/run-live.mjs --manifest scripts/e2e/ci-live.txt --shard ${{ matrix.shard }}/${{ strategy.job-total }} --log-dir .e2e-logs
 
       - name: Keep the logs when something fails
         if: failure()
