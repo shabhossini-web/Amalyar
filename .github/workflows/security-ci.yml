@@ -3018,6 +3018,12 @@ jobs:
       - name: Verify one status has one label
         run: node scripts/verify-status-labels.js
 
+      # «امروز» به وقتِ مطب، نه کانتینر: سرورِ UTC و کاربرِ تهران هر شب
+      # ۳:۳۰ ساعت یک روز اختلاف داشتند و دکمهٔ «شروع» از کلِ میزِ پذیرش
+      # غیب می‌شد، بی‌هیچ خطایی.
+      - name: Verify one definition of today
+        run: node scripts/e2e/clinic-day-local.mjs
+
       - name: Verify atomic clinical order answers and review lifecycle (W1.2)
         run: node scripts/e2e/w1-2-order-review-local.mjs
 

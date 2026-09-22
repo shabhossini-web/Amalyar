@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppointmentsService, APPT_LABELS } from './appointments.service';
 import { summarize } from './billing.service';
 import { monthDayCounts } from './month-summary';
+import { clinicTodayIso } from '../common/clinic-day';
 
 /** ترتیبِ ستون‌ها روی تخته — از چپ به راستِ جریانِ کار. */
 const LANES = [
@@ -32,10 +33,12 @@ const MAX_ROWS = 200;
 export class FrontDeskService {
   constructor(private prisma: PrismaService, private appts: AppointmentsService) {}
 
+  /* 🔴 «امروز» به وقتِ **مطب** است نه کانتینر. نسخهٔ قبلی روزِ UTC را می‌داد
+     ولی مرورگر روزِ محلی می‌فرستد؛ بینِ ۰۰:۰۰ تا ۰۳:۳۰ تهران این دو یک روز
+     فرق داشتند و `isToday` غلط می‌شد، یعنی `canStart` برای **کلِ تخته**
+     خاموش — هر شب سه ساعت و نیم، بی‌هیچ خطایی. `common/clinic-day.ts`. */
   private static todayIso() {
-    const d = new Date();
-    d.setUTCHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10);
+    return clinicTodayIso();
   }
 
   async day(date: string) {

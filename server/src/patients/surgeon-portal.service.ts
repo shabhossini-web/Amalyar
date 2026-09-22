@@ -8,6 +8,7 @@ import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { summarize } from './billing.service';
 import { APPT_LABELS, OP_LABELS } from './labels';
+import { todayRangeUtc } from '../common/clinic-day';
 
 
 
@@ -41,16 +42,15 @@ export class SurgeonPortalService {
   async today(user: any) {
     const scope = await this.scope(user);
     const now = new Date();
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setHours(23, 59, 59, 999);
+    /* «امروز» به وقتِ مطب (`common/clinic-day.ts`) — نه ساعتِ کانتینر. */
+    const [start, end] = todayRangeUtc(now);
     /* ستونِ `Appointment.date` از نوعِ `DATE` است و قراردادِ کلِ ماژول این است که
        نیمه‌شبِ UTCِ همان روز ساخته شود (`appointments.service`).
-       ⚠️ روزِ تقویمی باید از **همان** `start`ِ محلی بیاید که پنجرهٔ مراجعه‌ها را
-       می‌سازد، نه از `toISOString()` آن: روی کانتینری که ساعتش UTC نیست،
-       نیمه‌شبِ محلی به روزِ UTCِ **قبل** ترجمه می‌شود و نوبت‌های امروز یک روز
-       عقب خوانده می‌شوند. */
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const day = new Date(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T00:00:00.000Z`);
+       ⚠️ حالا `start` خودش **همان** نیمه‌شبِ UTC است (`todayRangeUtc`)، پس
+       بازسازیِ دستیِ روز از اجزای محلی لازم نیست. نسخهٔ قبلی این کار را
+       می‌کرد تا از تلهٔ «نیمه‌شبِ محلی → روزِ UTCِ قبل» فرار کند؛ آن تله با
+       یکی‌شدنِ تعریفِ «امروز» از ریشه رفت. */
+    const day = start;
     const person = (p: any) => (p ? { id: p.id, code: p.code, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() } : null);
     const patientSel = { select: { id: true, code: true, firstName: true, lastName: true } };
     const [visits, appointments] = await Promise.all([

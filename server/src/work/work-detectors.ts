@@ -23,6 +23,8 @@
  * - جدولِ نبوده (tenantِ migrate‌نشده) هر آشکارساز را جداگانه خاموش می‌کند،
  *   نه کلِ sweep را.
  */
+import { todayRangeUtc } from '../common/clinic-day';
+
 const DAY = 864e5;
 
 type Row = { patientId?: number | null; visitId?: number | null; refType?: string; refId?: number; payload?: Record<string, unknown> };
@@ -61,7 +63,7 @@ export type DetectResult = {
 };
 
 export async function detectStaleWork(client: any, now: Date = new Date()): Promise<DetectResult> {
-  const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const [today] = todayRangeUtc(now);
   const floor = new Date(today.getTime() - 60 * DAY);
   const since = new Date(now.getTime() - 7 * DAY);
   const live = { patient: { deletedAt: null } };

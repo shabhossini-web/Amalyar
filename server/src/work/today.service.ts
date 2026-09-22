@@ -7,6 +7,7 @@ import { ownVisitWhere } from '../common/own-scope';
 import { AvailabilityService } from '../patients/availability.service';
 import { WorkService } from './work.service';
 import { canAccess } from '../auth/access-check';
+import { todayRangeUtc } from '../common/clinic-day';
 
 /**
  * صفحهٔ «امروز» (W2.3) — یک پاسخ برای «الان چه کار کنم؟».
@@ -32,10 +33,9 @@ export class TodayService {
     private features: FeaturesService,
   ) {}
 
+  /* «امروز» از `clinic-day` — نه ساعتِ کانتینر. */
   private static dayBounds(now: Date): [Date, Date] {
-    const start = new Date(now); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setHours(23, 59, 59, 999);
-    return [start, end];
+    return todayRangeUtc(now);
   }
 
   async today(user: any) {
@@ -264,7 +264,9 @@ export class TodayService {
 
   /** نوبت‌های امروز — نامِ بیمار فقط برای نوبتی که به پرونده وصل شده. */
   private async appointmentsToday(start: Date) {
-    const d = new Date(`${start.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    /* `start` خودش نیمه‌شبِ UTCِ روزِ مطب است (`todayRangeUtc`) — همان
+       قراردادِ ستونِ `DATE`ِ نوبت. */
+    const d = start;
     const rows = await this.prisma.appointment.findMany({
       where: { date: d },
       orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],

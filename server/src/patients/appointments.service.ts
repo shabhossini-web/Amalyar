@@ -8,6 +8,7 @@ import { FormsService } from './forms.service';
 import { AvailabilityService } from './availability.service';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { RemindersService } from './reminders.service';
+import { clinicTodayIso, dayUtc } from '../common/clinic-day';
 
 /** برچسب‌های فارسیِ وضعیتِ نوبت — مشتقِ سرور (قانون ۱۵). */
 /* ⚠️ خانه‌اش `labels.ts` است (تنها منبعِ برچسب‌های وضعیت). این‌جا فقط دوباره
@@ -384,7 +385,7 @@ export class AppointmentsService {
           const linked = await tx.appointment.findUnique({ where: { visitId: target.id }, select: { id: true } });
           if (linked) throw new BadRequestException('این مراجعه از نوبتِ دیگری شروع شده است؛ همان نوبت را باز کنید');
           // تاریخِ حضور واقعی؛ وضعیتِ بالینی و تمام پاسخ‌های پیگیری حفظ می‌شوند.
-          const today = new Date(); today.setUTCHours(0, 0, 0, 0);
+          const today = dayUtc(clinicTodayIso());
           await tx.visit.update({ where: { id: target.id }, data: { opDate: today } });
           visitId = target.id;
         } else {

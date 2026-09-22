@@ -7,6 +7,7 @@ import { summarize } from './billing.service';
 import { colorForKey } from './forms.service';
 import { APPT_LABELS } from './appointments.service';
 import { canAccess } from '../auth/access-check';
+import { todayRangeUtc } from '../common/clinic-day';
 
 /**
  * سفارشِ باز = نتیجه‌ای که یا نیامده یا آمده و هنوز بسته نشده.
@@ -158,7 +159,7 @@ export class LiveService {
       canAccess(this.prisma, user, 'work', ['work.read']),
     ]);
     const now = new Date();
-    const today = new Date(now); today.setHours(0, 0, 0, 0);
+    const [today] = todayRangeUtc(now);
 
     const [visits, appointments, orders, documents, notes, reminders, kindDefs] = await Promise.all([
       this.prisma.visit.findMany({

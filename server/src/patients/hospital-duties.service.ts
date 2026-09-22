@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizeTime } from './patients.service';
 import { faDateStr } from './summary.service';
 import { RemindersService } from './reminders.service';
+import { clinicTodayIso } from '../common/clinic-day';
 
 export function scheduleDate(raw: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new BadRequestException('تاریخ برنامه نامعتبر است');
@@ -98,7 +99,9 @@ export class HospitalDutiesService {
       const before = await tx.visit.findFirst({ where: { id, patient: { deletedAt: null } } });
       if (!before?.hospitalId || !before.opDate) throw new BadRequestException('ابتدا بیمارستان و تاریخ مراجعه را مشخص کنید');
       if (claim && before.opStatus !== 'pending') throw new BadRequestException('این مراجعه قابل پذیرش نیست');
-      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      /* تنها جایی که از اول درست بود؛ حالا از همان تعریفِ مشترک می‌آید تا
+         عوض‌کردنِ منطقهٔ زمانی یک جا باشد نه هشت جا. */
+      const today = clinicTodayIso();
       if (claim && before.opDate.toISOString().slice(0, 10) < today) throw new BadRequestException('مراجعه روزهای گذشته قابل پذیرش نیست');
       if (claim && before.techId !== null) throw new ConflictException('این مراجعه قبلاً به کارشناس دیگری تخصیص داده شده است');
       let arriveTime: string | null = null;

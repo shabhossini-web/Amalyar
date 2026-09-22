@@ -20,6 +20,7 @@ import { syncLinkDocuments } from './link-documents';
 import { setVisitNote, VISIT_NOTE_KINDS } from './clinical-note';
 import { OP_LABELS } from './labels';
 import { summarize } from './billing.service';
+import { todayRangeUtc } from '../common/clinic-day';
 
 /**
  * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
@@ -607,10 +608,8 @@ export class PatientsService {
      */
     const and = (extra: any) => ({ ...scoped, AND: [...(scoped.AND ?? []), extra] });
     const live = and({ opStatus: { not: 'cancelled' } });
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    /* «امروز» به وقتِ مطب — یک تعریف برای کلِ سرور (`common/clinic-day.ts`). */
+    const [dayStart, dayEnd] = todayRangeUtc();
 
     const [total, pending, today, kinds, chargeRows, payRows] = await Promise.all([
       this.prisma.visit.count({ where: scoped }),
