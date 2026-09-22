@@ -77,6 +77,22 @@ try {
   const jy = Number(now.find((x) => x.type === 'year').value.replace(/[^\d]/g, ''));
   const jm = Number(now.find((x) => x.type === 'month').value);
   const cal0 = await get(`/availability/month?year=${jy}&month=${jm}`);
+  /* 🔴 **قاعده‌ای که همین حالا ساخته شد باید همین امروز اثر داشته باشد.**
+     `availability_rules.activeFrom` پیش‌فرضش `now()` است (مهرِ ساعت) ولی نمای
+     ماه هر روز را با نیمه‌شبش می‌سنجد؛ مقایسهٔ خام یعنی `10:35 <= 00:00` و
+     امروز از قلم می‌افتد — خلافِ نیتِ صریحِ خودِ سرویس («روزِ جاری تا آخرِ شب
+     قابلِ رزرو بماند»).
+
+     چرا سال‌ها دیده نشد و چرا این سنجه لازم است: تا وقتی «فردایی» در همان ماه
+     هست، `find(d => d.open)` آن را برمی‌دارد و هیچ‌کس نمی‌فهمد امروز جا افتاده.
+     ۳۱ شهریورِ ۱۴۰۵ آخرین روزِ ماه بود، فردایی نمانْد، و نمای ماه **کاملاً
+     خالی** شد: هم این سوییت هم `booking-flow` روی `undefined` افتادند و مطبی
+     که صبح برنامه‌اش را تعریف می‌کرد تا اولِ ماهِ بعد نوبت نمی‌داد. */
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayCell = cal0.days.find((d) => d.date === todayKey);
+  ok(!!todayCell?.open,
+    `**قاعدهٔ امروز، امروز اثر دارد** (${todayKey} · open=${todayCell?.open} · free=${todayCell?.free})`);
+
   const openDay = cal0.days.find((d) => d.open);
   const slots = openDay.windows[0].slots;
 
