@@ -25,29 +25,50 @@ import { summarize } from './billing.service';
  */
 export type VisitMoney = { total: number; itemsTotal: number; paid: number; due: number };
 
-export async function visitMoneyMap(prisma: any, where: any): Promise<Map<number, VisitMoney>> {
-  const visits = await prisma.visit.findMany({
-    where,
-    select: { id: true, pricingModel: true, globalAmount: true },
-  });
-  const out = new Map<number, VisitMoney>();
-  if (!visits.length) return out;
-
-  const ids = visits.map((v: any) => v.id);
-  const [charges, payments] = await Promise.all([
-    prisma.charge.groupBy({ by: ['visitId'], where: { visitId: { in: ids } }, _sum: { amount: true } }),
-    prisma.payment.groupBy({ by: ['visitId'], where: { visitId: { in: ids } }, _sum: { amount: true } }),
+/**
+ * @param opts.allVisits هر مراجعهٔ دامنه در خروجی باشد، حتی بی‌قلم و بی‌پرداخت.
+ *   سورت و صفحه‌بندی لازمش دارند (ردیفِ صفر هم باید مرتب شود)؛ آمار نه.
+ */
+export async function visitMoneyMap(
+  prisma: any,
+  where: any,
+  opts: { allVisits?: boolean } = {},
+): Promise<Map<number, VisitMoney>> {
+  /**
+   * ⚠️ **دامنه با `where` فیلتر می‌شود، نه با فهرستِ شناسه.** نسخهٔ اول همهٔ
+   * شناسه‌های دامنه را می‌خواند و بعد `{ visitId: { in: ids } }` می‌زد —
+   * برای نصبی با ده‌ها هزار مراجعه یعنی کشیدنِ کلِ فهرست در **هر** درخواستِ
+   * داشبورد. `groupBy` خودش می‌تواند روی رابطه فیلتر کند.
+   */
+  const [charges, payments, globals] = await Promise.all([
+    prisma.charge.groupBy({ by: ['visitId'], where: { visit: where }, _sum: { amount: true } }),
+    prisma.payment.groupBy({ by: ['visitId'], where: { visit: where }, _sum: { amount: true } }),
+    /* مراجعه‌های **گلوبال** جدا خوانده می‌شوند چون ممکن است هیچ قلمی نداشته
+       باشند و در هیچ‌کدام از دو `groupBy` بالا نیایند — دقیقاً همان حالتی که
+       از «ماندهٔ کل» می‌افتاد. مجموعه‌شان کوچک است. */
+    prisma.visit.findMany({
+      where: { ...where, pricingModel: 'global' },
+      select: { id: true, globalAmount: true },
+    }),
   ]);
+
   const charged = new Map<number, number>(charges.map((c: any) => [c.visitId, c._sum.amount ?? 0]));
   const paid = new Map<number, number>(payments.map((p: any) => [p.visitId, p._sum.amount ?? 0]));
+  const global = new Map<number, number | null>(globals.map((v: any) => [v.id, v.globalAmount]));
 
-  for (const v of visits) {
+  const ids = new Set<number>([...charged.keys(), ...paid.keys(), ...global.keys()]);
+  if (opts.allVisits) {
+    for (const v of await prisma.visit.findMany({ where, select: { id: true } })) ids.add(v.id);
+  }
+
+  const out = new Map<number, VisitMoney>();
+  for (const id of ids) {
     /* عمداً از خودِ `summarize` — نه بازنویسیِ فرمولش. همین بازنویسی بود که
        `visitStats` را از بقیه جدا کرد. */
-    out.set(v.id, summarize(
-      [{ amount: charged.get(v.id) ?? 0 }],
-      [{ amount: paid.get(v.id) ?? 0 }],
-      { pricingModel: v.pricingModel, globalAmount: v.globalAmount },
+    out.set(id, summarize(
+      [{ amount: charged.get(id) ?? 0 }],
+      [{ amount: paid.get(id) ?? 0 }],
+      global.has(id) ? { pricingModel: 'global', globalAmount: global.get(id) ?? null } : undefined,
     ));
   }
   return out;

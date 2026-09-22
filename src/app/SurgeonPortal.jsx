@@ -147,8 +147,23 @@ function DoctorToday({ things, reloadRef, toast, access }) {
      «تقویم‌ها … تو میزِ پزشک» را نام برد. */
   const [jday, setJday] = useState(todayJStr);
   const iso = jStrToIso(jday) ?? '';
-  /* نشانهٔ شلوغیِ روز — همان قراردادِ میزِ پذیرش و اتاقِ عمل. */
-  const loadMarks = useCallback((y, m) => api(`/surgeon/month?year=${y}&month=${m}`), []);
+  /**
+   * نشانهٔ شلوغیِ روز — همان قراردادِ میزِ پذیرش و اتاقِ عمل.
+   *
+   * ⚠️ `JDate` **نگاشتِ `{روز: عدد}`** می‌خواهد، نه پاسخِ خامِ endpoint. نسخهٔ
+   * اولِ همین‌جا پاسخ را دست‌نخورده برگرداند و تقویم بی‌صدا بی‌نشانه ماند —
+   * چون شکستِ بارگذاریِ نشانه عمداً ساکت است، هیچ خطایی هم دیده نشد.
+   * معیارِ تأیید اسکرین‌شات بود، نه سبزبودنِ بیلد (قانونِ ۲۴).
+   *
+   * ⚠️ و جمعِ **ویزیت + نوبت**، نه یکی‌شان: میزِ پزشک هر دو را در یک فهرست
+   * نشان می‌دهد، پس نشانه هم باید همان را بشمارد.
+   */
+  const loadMarks = useCallback(async (y, m) => {
+    try {
+      const r = await api(`/surgeon/month?year=${y}&month=${m}`);
+      return Object.fromEntries((r?.days ?? []).map((d) => [d.day, (d.visits ?? 0) + (d.appointments ?? 0)]));
+    } catch { return {}; }
+  }, []);
   const load = useCallback(() => {
     api(`/surgeon/today${iso ? `?date=${iso}` : ''}`).then((r) => { setData(r); setErr(''); }).catch((e) => setErr(e.message));
     /* ⚠️ خطا را به «کارِ بازی ندارید» ترجمه نکن — آن جمله یک **ادعا**ست. اگر
@@ -211,10 +226,15 @@ function DoctorToday({ things, reloadRef, toast, access }) {
       <section className="sp-sec" aria-labelledby="sp-day-h">
         <div className="sp-day-head">
           <h2 id="sp-day-h">{data.isToday === false ? `برنامهٔ ${faDate(data.date)}` : 'برنامهٔ امروز'}</h2>
-          <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
-          {data.isToday === false && (
-            <button type="button" className="sp-today" onClick={() => setJday(todayJStr())}>امروز</button>
-          )}
+          {/* ⚠️ انتخابگر و «امروز» یک **گروه**اند: در عرضِ موبایل عنوان به خطِ
+              خودش می‌رود و این دو با هم پایین می‌آیند. بدونِ این بسته‌بندی،
+              دکمه تنها به خطِ سوم می‌افتاد و شبیهِ سرآیندِ کارتِ زیرش می‌شد. */}
+          <div className="sp-day-pick">
+            <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
+            {data.isToday === false && (
+              <button type="button" className="sp-today" onClick={() => setJday(todayJStr())}>امروز</button>
+            )}
+          </div>
         </div>
         {(data.day ?? []).length === 0 ? (
           <p className="sp-empty">

@@ -514,7 +514,10 @@ export class PatientsService {
   private async moneyOrderedIds(scoped: any, f: VisitFilter): Promise<number[]> {
     /* همان قاعدهٔ صورت‌حساب — سورت و فیلترِ «بدهکار» باید عیناً همان عددی را
        ببینند که روی کارت و فاکتور است (مدلِ گلوبال از جمله). */
-    const money = await visitMoneyMap(this.prisma, scoped);
+    /* ⚠️ `allVisits` لازم است: سورت و صفحه‌بندی روی **همهٔ** مراجعه‌های دامنه
+       انجام می‌شود و مراجعهٔ بی‌قلم هم باید در فهرست بماند — وگرنه «سورت بر
+       مانده» بی‌سروصدا بخشی از نتیجه را حذف می‌کند. */
+    const money = await visitMoneyMap(this.prisma, scoped, { allVisits: true });
     if (!money.size) return [];
     const ids = [...money.keys()];
 

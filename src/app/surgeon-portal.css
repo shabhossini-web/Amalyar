@@ -22,6 +22,10 @@
    انتخابگر لهِ عنوان نشود. */
 .sp-day-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sp-day-head h2 { margin-inline-end: auto; }
+/* انتخابگر + «امروز» با هم می‌مانند و با هم می‌شکنند. `flex: 1` تا در عرضِ کم
+   کلِ خط را بگیرند و کادرِ تاریخ لهِ دکمه نشود. */
+.sp-day-pick { display: flex; align-items: stretch; gap: 8px; flex: 1 1 260px; }
+.sp-day-pick > :first-child { flex: 1; min-width: 0; }
 .sp-today {
   font-family: inherit; font-size: 11.5px; cursor: pointer; color: var(--text2);
   padding: 8px 12px; border-radius: 10px;
