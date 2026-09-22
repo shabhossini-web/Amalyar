@@ -7,6 +7,7 @@ import { actorName } from '../common/person';
 import { setVisitNote } from './clinical-note';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { RecordService } from './record.service';
+import { monthDayCounts } from './month-summary';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
@@ -161,6 +162,19 @@ export class TheatreService {
         surgeon: TheatreService.personName(v.surgeon) ?? v.surgeonName ?? null,
       })),
     };
+  }
+
+  /**
+   * شمارشِ عمل‌های هر روزِ ماه — نشانهٔ تقویمِ انتخابِ تاریخ.
+   *
+   * ⚠️ با **همان دامنهٔ** تخته (`this.scope`): کارشناسی که فقط عمل‌های خودش
+   * را می‌بیند نباید از روی شمارندهٔ تقویم بفهمد اتاق آن روز چقدر شلوغ بوده.
+   * دامنهٔ دو نما که یکی نباشد، یعنی عدد و فهرست همدیگر را تکذیب کنند.
+   */
+  month(year: number, month: number, user: any) {
+    return monthDayCounts(this.prisma, year, month, {
+      visitWhere: { ...this.scope(user), kind: 'surgery', opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
+    });
   }
 
   /** کارتِ حینِ عمل — هر چیزی که سرِ میز لازم است، در یک درخواست. */

@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AppointmentsService, APPT_LABELS } from './appointments.service';
 import { summarize } from './billing.service';
+import { monthDayCounts } from './month-summary';
 
 /** ترتیبِ ستون‌ها روی تخته — از چپ به راستِ جریانِ کار. */
 const LANES = [
@@ -151,6 +152,21 @@ export class FrontDeskService {
 
   suggest(patientId: number, date: string, topicId?: number) {
     return this.appts.suggest(patientId, date, topicId);
+  }
+
+  /**
+   * خلاصهٔ ماه برای **نشانهٔ روی تقویمِ انتخابِ تاریخ** — فقط شمارش.
+   *
+   * ⚠️ `CalendarService.month` این کار را نمی‌کند و نباید بکند: آن کلِ سطرها
+   * را با نامِ بیمار می‌آورد و پشتِ فیچرِ `calendar` (سطحِ سوپروایزر) است.
+   * منشی نه آن سطح را دارد نه آن حجم را لازم دارد.
+   */
+  month(year: number, month: number) {
+    /* میزِ پذیرش روزش را با **نوبت** می‌سنجد، نه با عمل. لغوشده شمرده
+       نمی‌شود — «این روز چقدر پُر است» یعنی چند نفر واقعاً می‌آیند. */
+    return monthDayCounts(this.prisma, year, month, {
+      apptWhere: { status: { not: 'cancelled' } },
+    });
   }
 
   /**

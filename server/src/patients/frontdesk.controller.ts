@@ -52,6 +52,18 @@ export class FrontDeskController {
     return this.svc.day(date);
   }
 
+  /**
+   * شمارشِ روزهای ماه — نشانهٔ تقویمِ انتخابِ تاریخ.
+   *
+   * ⚠️ همان مجوزِ دیدنِ تخته (`frontdesk.read`): این فقط «چند نوبت» است،
+   * نه اینکه چه کسی. اگر مجوزِ جدا می‌گرفت، نصبی که یادش می‌رفت بدهدش یک
+   * تقویمِ بی‌نشانه می‌دید بی‌هیچ خطایی.
+   */
+  @Get('month') @RequirePermissions('frontdesk.read')
+  month(@Query('year') year: string, @Query('month') month: string) {
+    return this.svc.month(Number(year), Number(month));
+  }
+
   /** پیشنهادِ نوبت برای بیمارِ سرِ میز — همان مسیرِ ظرفیتِ عادی. */
   @Get('suggest') @RequirePermissions('frontdesk.walkin')
   suggest(

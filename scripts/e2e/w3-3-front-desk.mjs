@@ -12,6 +12,7 @@ import { chromium } from 'playwright-core';
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { browserLogin } from './lib/browser-login.mjs';
+import { jToday } from '../../src/lib/jalali.js';
 
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://127.0.0.1:3101/api';
@@ -214,6 +215,25 @@ try {
     await page.setViewportSize({ width: 1400, height: 900 });
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('.fd-board', { timeout: 15000 });
+
+    /* 🔴 نشانهٔ شلوغیِ روز روی تقویمِ انتخابِ تاریخ (بازخوردِ مالک ۱۴۰۵/۰۶/۳۱):
+       «موقعِ انتخابِ تاریخ بتونه ویوِ کلی رو درست ببینه». */
+    console.log('\n۹) تقویمِ انتخابِ تاریخ نشانهٔ روز دارد');
+    const [jy, jm, jd] = jToday();
+    const mon = (await send(`/frontdesk/month?year=${jy}&month=${jm}`, 'GET')).json;
+    ok(((mon?.days ?? []).find((x) => x.day === jd)?.appointments ?? 0) >= 5,
+      `خلاصهٔ ماه نوبت‌های امروز را می‌شمارد (${JSON.stringify((mon?.days ?? []).find((x) => x.day === jd))})`);
+    ok(!JSON.stringify(mon).includes(tag), '🔴 **فقط شمارش، بدونِ نامِ بیمار**');
+    await page.locator('.jd-btn').first().click();
+    await page.waitForSelector('.jd-cal', { timeout: 8000 });
+    /* ⚠️ نشانه‌ها **بعد از** بازشدنِ تقویم می‌رسند (یک fetchِ جدا برای شمارشِ
+       ماه). خواندنِ بی‌انتظار همیشه خالی می‌داد — سنجه‌ای که همیشه قرمز است
+       به‌اندازهٔ سنجه‌ای که همیشه سبز است بی‌فایده است. */
+    await page.locator('.jd-mark').first().waitFor({ timeout: 8000 }).catch(() => {});
+    const marks = await page.locator('.jd-mark').allInnerTexts();
+    ok(marks.length >= 1, `روزِ دارای نوبت نشانه گرفت (${marks.join('، ') || '—'})`);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(400);
 
     execSync(`mkdir -p ${SHOTS}`);
     await page.screenshot({ path: `${SHOTS}/w3-3-desk-dark.png` });

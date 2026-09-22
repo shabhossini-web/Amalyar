@@ -70,12 +70,33 @@
   display: grid; place-items: center; height: 26px;
   font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--text3);
 }
-.jd-empty { height: 36px; }
+.jd-empty { height: 40px; }
+/* ⚠️ سلول کمی بلندتر شد تا نشانهٔ شلوغیِ روز زیرِ عدد جا شود بی‌آنکه خودِ
+   عدد را بالا بیندازد — بدونِ این، روزهای بی‌نشانه و نشانه‌دار دو ارتفاع
+   می‌گرفتند و شبکه می‌لرزید. */
 .jd-day {
-  height: 36px; border-radius: 10px; cursor: pointer;
+  position: relative; display: grid; place-items: center; align-content: center; gap: 1px;
+  height: 40px; border-radius: 10px; cursor: pointer;
   font: inherit; font-size: 12.5px; color: var(--brand-text);
   background: rgba(var(--veil-rgb), .035); border: 1px solid transparent;
 }
+/**
+ * **نشانهٔ شلوغیِ روز** (بازخوردِ مالک ۱۴۰۵/۰۶/۳۱).
+ *
+ * عدد است نه نقطه: «۳ عمل» و «۱ عمل» برای کسی که دارد تاریخ انتخاب می‌کند
+ * دو چیزِ متفاوت‌اند و یک نقطهٔ یکسان هر دو را یکی نشان می‌داد.
+ */
+.jd-mark {
+  display: block; min-width: 15px; padding: 0 3px; border-radius: 5px;
+  font-style: normal; font-size: 9px; font-weight: 800; line-height: 13px;
+  color: var(--brand-2); background: rgba(var(--brand-2-rgb), .16);
+}
+/* روزِ دارای برنامه باید **قبل از** خواندنِ عدد از بقیه جدا دیده شود. */
+.jd-day.has { background: rgba(var(--brand-2-rgb), .07); }
+/* ⚠️ روی روزِ انتخاب‌شده زمینه در **هر دو تم** همان گرادیانِ برند است، پس
+   چیپ باید در هر دو روشن بماند — همان دسته‌ای که قانونِ ۲۳ برای براقیِ لبهٔ
+   شیشه `--sheen-rgb` را نگه داشته، نه `--veil-rgb`ِ تم‌پذیر. */
+.jd-day.sel .jd-mark { color: var(--brand-2); background: rgba(var(--sheen-rgb), .92); }
 .jd-day:hover { background: rgba(var(--brand-soft-rgb), .22); }
 .jd-day.today { border-color: rgba(34, 211, 238, .55); color: var(--cyan); }
 .jd-day.sel {

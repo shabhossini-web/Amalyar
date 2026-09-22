@@ -60,6 +60,13 @@ export class TheatreController {
     return this.theatre.day(date, user);
   }
 
+  /* شمارشِ روزهای ماه برای نشانهٔ تقویم — همان مجوزِ دیدنِ تخته. */
+  @RequirePermissions('theatre.read')
+  @Get('month')
+  month(@Query('year') year: string, @Query('month') month: string, @CurrentUser() user: any) {
+    return this.theatre.month(Number(year), Number(month), user);
+  }
+
   @RequirePermissions('theatre.read')
   @Get('visits/:id')
   card(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {

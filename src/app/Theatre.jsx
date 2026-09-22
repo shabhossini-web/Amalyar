@@ -55,6 +55,16 @@ export default function Theatre() {
   const [discharging, setDischarging] = useState(false);
 
   const iso = jStrToIso(jday);
+
+  /* شمارشِ عمل‌های هر روزِ ماه — همان دامنه‌ای که خودِ تخته دارد.
+     `useCallback` چون `JDate` آن را در وابستگیِ افکتش می‌گذارد. */
+  const loadMarks = useCallback(async (yy, mm) => {
+    try {
+      const r = await api(`/theatre/month?year=${yy}&month=${mm}`);
+      return Object.fromEntries((r?.days ?? []).map((d) => [d.day, d.visits]));
+    } catch { return {}; }
+  }, []);
+
   useEffect(() => { document.title = 'اتاقِ عمل — عمل‌یار'; }, []);
   useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(''), 2600); return () => clearTimeout(t); }, [toast]);
 
@@ -95,7 +105,7 @@ export default function Theatre() {
           <p>{faDate(iso)}</p>
         </div>
         {!openId && <>
-          <JDate value={jday} onChange={setJday} />
+          <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
           <button type="button" className="th-today" onClick={() => setJday(todayJStr())}>امروز</button>
         </>}
         {openId && (

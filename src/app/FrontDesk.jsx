@@ -77,6 +77,23 @@ export default function FrontDesk() {
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
   }, [load]);
 
+
+  /**
+   * شمارشِ نوبت‌های هر روزِ ماه برای **نشانهٔ تقویمِ انتخابِ تاریخ**.
+   *
+   * ⚠️ `useCallback` لازم است نه تزئین: `JDate` این تابع را در وابستگیِ
+   * افکتش دارد، و تابعِ inline هر رندر هویتِ تازه می‌گیرد — یعنی یک حلقهٔ
+   * بی‌پایانِ fetch روی هر تیکِ پولینگِ میز.
+   *
+   * ⚠️ شکستش بلعیده می‌شود: نشانه کمک است، نه شرطِ انتخابِ تاریخ.
+   */
+  const loadMarks = useCallback(async (yy, mm) => {
+    try {
+      const r = await api(`/frontdesk/month?year=${yy}&month=${mm}`);
+      return Object.fromEntries((r?.days ?? []).map((d) => [d.day, d.appointments]));
+    } catch { return {}; }
+  }, []);
+
   useEffect(() => { document.title = 'میزِ پذیرش — عمل‌یار'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
@@ -178,7 +195,7 @@ export default function FrontDesk() {
           <h1><Arrive width="19" height="19" aria-hidden="true" /> میزِ پذیرش</h1>
           <p>{faDate(iso)}{data?.isToday ? ' — امروز' : ''}</p>
         </div>
-        <JDate value={jday} onChange={setJday} />
+        <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
         <button type="button" className="fd-today" onClick={() => setJday(todayJStr())}>امروز</button>
         {/* بیمارِ بدونِ نوبت — تصمیمِ مالک ۱۴۰۵/۰۶/۳۰: «ممکن است حضوری بیاید که
             اگر وقت بشود پذیرش می‌شود». فقط برای **امروز**؛ حضوریِ فردا یعنی
