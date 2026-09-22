@@ -15,6 +15,7 @@ paths:
   - server/src/patients/forms.service.ts
   - server/src/patients/intake.service.ts
   - server/src/patients/clinical-note.ts
+  - server/src/ai/ai.service.ts
   - server/src/patients/availability.service.ts
   - server/src/auth/access-registry.ts
   - .github/workflows/security-ci.yml

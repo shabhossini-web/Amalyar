@@ -555,8 +555,14 @@ export class AiService {
       select: {
         id: true, opType: true,
         procedureType: { select: { name: true } },
+        /* ⚠️ فقط **شرحِ عمل**. تا دیروز این `where` هیچ فیلترِ نوعی نداشت و
+           عملاً مشکلی نمی‌ساخت چون تنها سندِ معمولِ یک مراجعه همان شرحِ عمل
+           بود. با آمدنِ **شرحِ ترخیص** (بستهٔ ۴ب) هر عملِ ترخیص‌شده یک سندِ
+           تازه‌تر می‌گیرد، و چون ترتیب نزولی است آن یکی بالا می‌نشست: کدِ
+           عمل از روی «هوشیار، بدونِ نقصِ حرکتی» پیشنهاد می‌شد. خطایی هم در
+           کار نبود — فقط پیشنهادِ بی‌ربط. */
         clinicalNotes: {
-          where: { replacedAt: null },
+          where: { replacedAt: null, kind: 'op' },
           orderBy: { createdAt: 'desc' },
           take: 4,
           select: { kind: true, body: true },
