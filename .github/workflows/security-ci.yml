@@ -3012,6 +3012,12 @@ jobs:
       - name: Verify every lazy chunk ships the CSS it uses
         run: node scripts/verify-css-chunks.js
 
+      # یک وضعیت، یک برچسب: کلاینت نگاشتِ فارسیِ وضعیت ندارد. یک بیمار در میزِ
+      # پذیرش «در مطب» بود و در میزِ پزشک «رسید» — هیچ تستی نمی‌گرفتش چون هر
+      # صفحه به‌تنهایی درست بود (بازخوردِ مالک ۱۴۰۵/۰۶/۳۱).
+      - name: Verify one status has one label
+        run: node scripts/verify-status-labels.js
+
       - name: Verify atomic clinical order answers and review lifecycle (W1.2)
         run: node scripts/e2e/w1-2-order-review-local.mjs
 

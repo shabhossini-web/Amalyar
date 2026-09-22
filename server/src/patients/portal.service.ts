@@ -9,6 +9,7 @@ import { toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 import { AvailabilityService } from './availability.service';
+import { OP_LABELS } from './labels';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — لینکِ **دائمیِ** `/p/<token>`.
@@ -183,6 +184,11 @@ export class PortalService {
       kindTitle: v.kind ? titles.get(v.kind) ?? null : null,
       dateFa: v.opDate ? faDateStr(v.opDate) : null,
       status: v.opStatus,
+      /* ⚠️ برچسب از سرور می‌آید و نه از نگاشتِ خودِ پرتال: پرتالِ بیمار
+         احراز ندارد و `/config` را نمی‌خواند، پس تنها راهِ «یک وضعیت، یک
+         برچسب» همین است. نسخهٔ قبلیِ کلاینت `cancelled` را «لغو شد»
+         می‌نوشت و کارکنان «لغو» می‌دیدند. */
+      statusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       doctorName: v.surgeon?.person
         ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim()
         : v.surgeonName,

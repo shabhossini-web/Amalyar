@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { APPT_LABELS, OP_LABELS } from '../patients/labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { FeaturesService } from '../features/features.service';
 import { LEVEL } from '../common/levels';
@@ -253,6 +254,9 @@ export class TodayService {
       kind: v.kind,
       opStartTime: v.opStartTime,
       opStatus: v.opStatus,
+      /* برچسب از `labels.ts` می‌آید، نه از نگاشتِ کلاینتی — قانونِ «یک وضعیت،
+         یک برچسب». `Today.jsx` تا دیروز نسخهٔ خودش را داشت. */
+      opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       hospitalName: v.hospitalName,
       surgeonName: v.surgeonName,
     }));
@@ -276,6 +280,7 @@ export class TodayService {
       time: a.startMin != null ? AvailabilityService.minToHHMM(a.startMin) : null,
       seq: a.seq,
       status: a.status,
+      statusFa: APPT_LABELS[a.status] ?? a.status,
       visitId: a.visitId,
       patientId: a.patient?.id ?? null,
       /* نوبتی که هنوز به پرونده وصل نشده اسمی ندارد که این‌جا نشان داده شود؛

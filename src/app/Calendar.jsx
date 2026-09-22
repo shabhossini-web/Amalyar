@@ -151,10 +151,15 @@ export default function Calendar() {
                       {a.visitId ? t.visitOpen : t.visitStart}
                     </button>
                   )}
-                  {a.next.filter((s) => s !== 'done').map((s) => (
-                    <button key={s} type="button" className={`cal-appt-act st-${s}`} disabled={busyAppt === a.id}
-                            onClick={() => setApptStatus(a, s)}>
-                      {{ confirmed: 'قطعی', arrived: 'رسید', noshow: 'نیامد', cancelled: 'لغو' }[s] ?? s}
+                  {/* ⚠️ برچسبِ دکمه از `nextOptions`ِ سرور می‌آید. سرور همین را
+                      **برای همین‌جا** ساخته بود (کامنتِ `appointments.service`
+                      صریحاً می‌گوید «تا نگاشتِ کلاینتیِ دوم مثلِ آنکه در
+                      Calendar.jsx بود لازم نشود») ولی این صفحه هیچ‌وقت به آن
+                      منتقل نشد — نگهبانِ «یک وضعیت، یک برچسب» پیدایش کرد. */}
+                  {(a.nextOptions ?? []).filter((o) => o.status !== 'done').map((o) => (
+                    <button key={o.status} type="button" className={`cal-appt-act st-${o.status}`} disabled={busyAppt === a.id}
+                            onClick={() => setApptStatus(a, o.status)}>
+                      {o.label}
                     </button>
                   ))}
                   {a.next.includes('done') && (

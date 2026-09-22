@@ -1530,7 +1530,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   );
 }
 
-const NOTE_FA = { visit: 'شرحِ ویزیت', op: 'شرحِ عمل', followup: 'پیگیری', consult: 'مشاوره' };
+/* ⚠️ نگاشتِ نوعِ سند این‌جا **نبود که باشد**: نسخهٔ قبلی `discharge`،
+   `progress` و `history` را نداشت و `followup`ی داشت که اصلاً نوعِ معتبری
+   نیست — پس از روزِ افزودنِ خلاصهٔ ترخیص، کلیدِ خام روی صفحه چاپ می‌شد.
+   حالا برچسب همراهِ خودِ سند می‌آید (`kindFa`). */
 const ORDER_STATUS_FA = { sent: 'منتظرِ پاسخ', answered: 'پاسخ آمده' };
 
 /**
@@ -1591,7 +1594,7 @@ function PrepCard({ prep: raw }) {
             <ul className="db-prep-notes">
               {prep.notes.map((n) => (
                 <li key={n.id}>
-                  <b>{NOTE_FA[n.kind] ?? n.kind}</b>
+                  <b>{n.kindFa ?? n.kind}</b>
                   <i>{n.authorName || ''}</i>
                   <p>{n.excerpt}</p>
                 </li>

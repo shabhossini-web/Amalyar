@@ -21,8 +21,8 @@ import './shell.css'; // `.sh-toast`
 import './work.css'; // ردیفِ کار (`.wk-*`) در «امروزِ من»
 
 const faNum = (n) => String(n ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
-const APPT_FA = { held: 'رزرو', confirmed: 'قطعی', arrived: 'رسید', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو' };
-const OP_FA = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو' };
+/* ⚠️ برچسبِ وضعیت از سرور می‌آید (`statusFa`/`opStatusFa`)، نه از نگاشتِ
+   کلاینتی — قانونِ «یک وضعیت، یک برچسب» در `server/src/patients/labels.ts`. */
 /* ⚠️ ساعت هم عدد است: بقیهٔ میز فارسی بود و فقط «۰۸:۳۰» لاتین می‌ماند — در
    اسکرین‌شات مثلِ وصلهٔ زبانِ دیگر می‌زد. `faNum` روی `null` رشتهٔ خالی می‌دهد،
    پس سه‌راههٔ ساعت/شماره/خط‌تیره دست‌نخورده می‌مانَد. */
@@ -165,7 +165,7 @@ function DoctorToday({ things, reloadRef, toast, access }) {
   const openVisit = (v) => things.open({ type: 'visit', id: v.id, patientId: v.patientId });
   const openAppt = (a) => things.open({
     type: 'appointment', id: a.id,
-    item: { title: `نوبت${a.topic ? ` — ${a.topic}` : ''}`, at: a.date, detail: a.time ?? (a.seq != null ? `شمارهٔ ${faNum(a.seq)}` : ''), state: a.status, stateFa: APPT_FA[a.status] ?? a.status },
+    item: { title: `نوبت${a.topic ? ` — ${a.topic}` : ''}`, at: a.date, detail: a.time ?? (a.seq != null ? `شمارهٔ ${faNum(a.seq)}` : ''), state: a.status, stateFa: a.statusFa ?? a.status },
   });
   const openOrder = (o) => things.open({ type: 'order', kind: o.kind, id: o.id, patientId: o.patientId });
 
@@ -325,7 +325,7 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
     try { const url = await apiBlobUrl(`/surgeon/visits/${row.id}/documents/${doc.id}`); w.location.href = url; setTimeout(() => URL.revokeObjectURL(url), 60000); }
     catch (e) { w.close(); setMessage(e.message); }
   };
-  const status = OP_FA[row.opStatus] || row.opStatus;
+  const status = row.opStatusFa || row.opStatus;
   return (
     <article className="sp-card glass" data-visit-id={row.id}>
       {/* در مطب نامِ بیمار دکمه است و فرمِ همان مراجعه را در همین صفحه باز می‌کند (بازخوردِ مالک). */}

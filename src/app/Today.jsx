@@ -27,10 +27,10 @@ const tomorrow9 = () => {
    چون سرور جای دیگری است. این تنها چیزی است که این‌جا محاسبه می‌شود. */
 const greeting = (h) => (h < 5 ? 'شبِ آرام' : h < 12 ? 'صبح بخیر' : h < 17 ? 'ظهر بخیر' : h < 21 ? 'عصر بخیر' : 'شب بخیر');
 
-const APPT_FA = {
-  held: 'رزرو', confirmed: 'قطعی', arrived: 'رسید', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو',
-};
-const OP_FA = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو' };
+/* ⚠️ نگاشتِ فارسیِ وضعیت این‌جا **نیست** و نباید برگردد: سرور برچسب را همراهِ
+   خودِ ردیف می‌فرستد (`statusFa`, `opStatusFa`). نسخهٔ کلاینتیِ قبلی با سرور
+   نمی‌خواند («رسید» در برابرِ «در مطب»، «رزرو» در برابرِ «در انتظارِ پرداخت»)،
+   پس یک بیمار در دو میز دو وضعیتِ متفاوت داشت. نگهبانِ CI همین را می‌سنجد. */
 
 /**
  * صفحهٔ «امروز» (W2.3) — صفحهٔ نخستِ سامانه، به‌جای لانچر (`DECISIONS.md` #۲).
@@ -176,7 +176,7 @@ export default function Today() {
                   <span className="td-time">{v.opStartTime || '—'}</span>
                   <Link to={`/app/patients/${v.patientId}`} className="td-name">{v.fullName}</Link>
                   <span className="td-sub">{[v.surgeonName, v.hospitalName].filter(Boolean).join(' · ')}</span>
-                  <span className={`td-tag op-${v.opStatus}`}>{OP_FA[v.opStatus] ?? v.opStatus}</span>
+                  <span className={`td-tag op-${v.opStatus}`}>{v.opStatusFa ?? v.opStatus}</span>
                 </li>
               ))}
             </ul>
@@ -199,7 +199,7 @@ export default function Today() {
                     ? <Link to={`/app/patients/${a.patientId}`} className="td-name">{a.fullName}</Link>
                     : <span className="td-name muted">ثبت‌نامِ تکمیل‌نشده</span>}
                   <span className="td-sub">{a.topic || ''}</span>
-                  <span className={`td-tag appt-${a.status}`}>{APPT_FA[a.status] ?? a.status}</span>
+                  <span className={`td-tag appt-${a.status}`}>{a.statusFa ?? a.status}</span>
                 </li>
               ))}
             </ul>

@@ -18,6 +18,7 @@ import { FormsService } from './forms.service';
 import { BUILTIN_VISIT_KEYS } from './form-presets';
 import { syncLinkDocuments } from './link-documents';
 import { setVisitNote, VISIT_NOTE_KINDS } from './clinical-note';
+import { OP_LABELS } from './labels';
 import { summarize } from './billing.service';
 
 /**
@@ -102,6 +103,10 @@ function enrich(v: any, kinds?: KindMap) {
     decidedInVisitId: v.decidedInVisitId ?? null,
     followOfVisitId: v.followOfVisitId ?? null,
     opStatus: v.opStatus,
+    /* برچسب همراهِ خودِ وضعیت می‌رود — قانونِ «یک وضعیت، یک برچسب»
+       (`labels.ts`). داشبورد و پرونده تا دیروز نگاشتِ خودشان را داشتند و
+       «تمام‌شده/کنسل» می‌نوشتند، در حالی که بقیهٔ سامانه «انجام شد/لغو». */
+    opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
     opStartTime: v.opStartTime,
     opEndTime: v.opEndTime,
     techArriveTime: v.techArriveTime,

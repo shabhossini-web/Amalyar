@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { APPT_LABELS as APPT_FA_MAP } from './labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -9,14 +10,9 @@ import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { RemindersService } from './reminders.service';
 
 /** برچسب‌های فارسیِ وضعیتِ نوبت — مشتقِ سرور (قانون ۱۵). */
-export const APPT_LABELS: Record<string, string> = {
-  held: 'در انتظارِ پرداخت',
-  confirmed: 'قطعی',
-  arrived: 'در مطب',
-  done: 'انجام شد',
-  noshow: 'نیامد',
-  cancelled: 'لغو شد',
-};
+/* ⚠️ خانه‌اش `labels.ts` است (تنها منبعِ برچسب‌های وضعیت). این‌جا فقط دوباره
+   export می‌شود تا ایمپورت‌های موجود نشکنند و کسی وسوسه نشود نسخهٔ دوم بنویسد. */
+export { APPT_LABELS } from './labels';
 
 /**
  * گذارهای مجازِ وضعیت — ماشینِ وضعیتِ صریح، نه «هر چیزی به هر چیزی».
@@ -88,7 +84,7 @@ export class AppointmentsService {
       time: a.startMin == null ? null : AvailabilityService.minToHHMM(a.startMin),
       seq: a.seq,
       status: a.status,
-      statusLabel: APPT_LABELS[a.status] ?? a.status,
+      statusLabel: APPT_FA_MAP[a.status] ?? a.status,
       note: a.note,
       patientId: a.patientId,
       patientCode: a.patient?.code ?? null,
@@ -304,7 +300,7 @@ export class AppointmentsService {
     const allowed = APPT_TRANSITIONS[row.status] ?? [];
     if (!allowed.includes(status)) {
       throw new BadRequestException(
-        `از «${APPT_LABELS[row.status] ?? row.status}» نمی‌شود به «${APPT_LABELS[status] ?? status}» رفت`,
+        `از «${APPT_FA_MAP[row.status] ?? row.status}» نمی‌شود به «${APPT_FA_MAP[status] ?? status}» رفت`,
       );
     }
     const updated = await this.prisma.appointment.update({

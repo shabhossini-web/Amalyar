@@ -12,6 +12,7 @@ import { Back, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
+import { useConfig } from './config.jsx';
 
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
@@ -115,17 +116,17 @@ const SECTIONS = [
     ai: true,
     title: (r) => r.title,
     sub: (r) => [
-      ({ history: 'شرحِ حال', visit: 'شرحِ ویزیت', op: 'شرحِ عمل', progress: 'سیرِ بیماری', discharge: 'خلاصهٔ ترخیص', consult: 'مشاوره' })[r.kind] ?? r.kind,
+      /* برچسب از خودِ ردیف (`kindFa`) — نگاشتِ محلی جمع شد. */
+      r.kindFa ?? r.kind,
       r.procedureTypeName, r.diagnosisTitle, r.topicName,
     ].filter(Boolean).join(' · '),
     uses: (r) => (r.active === false ? 'غیرفعال' : ''),
     empty: 'هنوز قالبی نیست — مثلاً «شرحِ عملِ بلفاروپلاستی» یا «شرحِ حالِ اولیه»',
     hint: 'قالبِ آماده مثل HIS: هنگامِ نوشتنِ شرح در پرونده، قالب‌های هم‌نوع پیشنهاد می‌شوند. قالبِ بی‌هدف عمومی است؛ قالبِ گره‌خورده به عمل/تشخیص/موضوع فقط برای مراجعهٔ منطبق می‌آید و جلوتر می‌نشیند.',
     fields: [
-      { key: 'kind', label: 'نوعِ شرح *', options: [
-        { v: 'history', l: 'شرحِ حال' }, { v: 'visit', l: 'شرحِ ویزیت' }, { v: 'op', l: 'شرحِ عمل' },
-        { v: 'progress', l: 'سیرِ بیماری' }, { v: 'discharge', l: 'خلاصهٔ ترخیص' }, { v: 'consult', l: 'مشاوره' },
-      ] },
+      /* گزینه‌های کشویی از `/config.statuses.note` — `optionsFrom` همان مسیری
+         است که بقیهٔ فیلدها (نوعِ عمل، تشخیص، موضوع) از آن پر می‌شوند. */
+      { key: 'kind', label: 'نوعِ شرح *', optionsFrom: 'config:note' },
       { key: 'title', label: 'عنوانِ قالب *', required: true },
       { key: 'procedureTypeId', label: 'نوعِ عمل (اختیاری)', optionsFrom: '/procedure-types' },
       { key: 'diagnosisId', label: 'تشخیص (اختیاری)', optionsFrom: '/diagnoses' },
@@ -657,6 +658,9 @@ function NameMerge({ onToast }) {
 
 /** فرمِ افزودن/ویرایش — برای بخشِ «شخص‌دار» از کامپوننتِ مشترک استفاده می‌کند. */
 function EditSheet({ section, row, onClose, onSaved, onError, quick = false }) {
+  /* فهرست‌هایی که از `/config` می‌آیند (نه از یک endpointِ تعریف‌ها) — فعلاً
+     فقط نوعِ سندِ بالینی. با پیشوندِ `config:` از `optionsFrom` تفکیک می‌شوند. */
+  const cfgStatuses = useConfig().statuses ?? {};
   const isNew = !row.id;
   /* فیلدِ فهرستی (مثلِ املاهای یک محل) در فرم به‌شکلِ متنِ جداشده با «،»
      ویرایش می‌شود و هنگامِ ارسال دوباره آرایه می‌شود — چون آرایه ورودیِ
@@ -708,12 +712,15 @@ function EditSheet({ section, row, onClose, onSaved, onError, quick = false }) {
     const dyn = (section.fields ?? []).filter((f) => f.optionsFrom);
     if (!dyn.length) return undefined;
     let on = true;
-    Promise.all(dyn.map((f) => api(f.optionsFrom)
-      .then((rows) => [f.key, (rows ?? []).map((r) => ({ v: String(r.id), l: r.name ?? r.title ?? String(r.id) }))])
-      .catch(() => [f.key, []])))
+    Promise.all(dyn.map((f) => (f.optionsFrom.startsWith('config:')
+      /* کاتالوگِ سرور، نه endpointِ تعریف‌ها: شکلش `{key,label}` است نه `{id,name}`. */
+      ? Promise.resolve([f.key, (cfgStatuses[f.optionsFrom.slice('config:'.length)] ?? []).map((r) => ({ v: r.key, l: r.label }))])
+      : api(f.optionsFrom)
+        .then((rows) => [f.key, (rows ?? []).map((r) => ({ v: String(r.id), l: r.name ?? r.title ?? String(r.id) }))])
+        .catch(() => [f.key, []]))))
       .then((pairs) => { if (on) setDynOpts(Object.fromEntries(pairs)); });
     return () => { on = false; };
-  }, [section]);
+  }, [section, cfgStatuses]);
 
   const setField = (k) => (ev) => setForm((f) => ({ ...f, [k]: ev.target.value }));
 

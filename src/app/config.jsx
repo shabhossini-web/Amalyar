@@ -17,7 +17,12 @@ const Ctx = createContext(null);
  * تا وقتی پاسخ نرسیده، واژگانِ پیش‌فرض استفاده می‌شوند — نه رشتهٔ خالی.
  */
 export function ConfigProvider({ children }) {
-  const [config, setConfig] = useState({ vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [] });
+  /* ⚠️ `statuses` هم پیش‌فرضِ خالی دارد: صفحه‌ها پیش از رسیدنِ `/config` رندر
+     می‌شوند و `cfg.statuses.note` روی `undefined` می‌ترکید. */
+  const [config, setConfig] = useState({
+    vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [],
+    statuses: { visit: [], appointment: [], note: [] },
+  });
   /**
    * خطا نگه داشته می‌شود، بلعیده نمی‌شود.
    *
@@ -78,8 +83,22 @@ export function ConfigProvider({ children }) {
 export function useConfig() {
   return useContext(Ctx) ?? {
     vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [], error: null,
+    statuses: { visit: [], appointment: [], note: [] },
     t: termsFor(DEFAULT_VERTICAL), reload: () => {},
   };
+}
+
+/**
+ * **برچسبِ وضعیت‌ها از سرور** — `{ visit, appointment, note }`، هر کدام
+ * `[{key,label}]`.
+ *
+ * ⚠️ فقط برای جایی که باید **همهٔ گزینه‌ها** را بشماری (فیلتر، کشویی). برچسبِ
+ * یک ردیفِ مشخص از خودِ همان ردیف می‌آید (`opStatusFa`, `statusFa`, `kindFa`)؛
+ * دو مسیرِ برچسب‌زنی همان واگرایی را برمی‌گرداند که این‌جا بسته شد.
+ */
+export function useStatusList(kind) {
+  const rows = useConfig().statuses?.[kind] ?? [];
+  return rows;
 }
 
 /** میان‌بر برای جایی که فقط واژه لازم است. */

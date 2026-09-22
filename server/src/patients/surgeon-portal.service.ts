@@ -7,10 +7,9 @@ import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { summarize } from './billing.service';
-import { APPT_LABELS } from './appointments.service';
+import { APPT_LABELS, OP_LABELS } from './labels';
 
-/** برچسبِ وضعیتِ عمل/ویزیت — مشتقِ سرور (قانون ۱۵)، هم‌خانوادهٔ `APPT_LABELS`. */
-const OP_LABELS: Record<string, string> = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو' };
+
 
 @Injectable()
 export class SurgeonPortalService {
@@ -111,12 +110,14 @@ export class SurgeonPortalService {
     })))).reduce((a: number, b: number) => a + b, 0);
     const hhmm = (m: number | null) => (m == null ? null : `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
     const visitViews = visits.map((v) => ({
-      id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime, opStatus: v.opStatus,
+      id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime,
+      opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       hospital: v.hospitalName, topic: v.topic?.name ?? null, patientId: v.patient.id, patient: person(v.patient),
       billing: summarize(v.charges, v.payments, v),
     }));
     const apptViews = appointments.map((a) => ({
-      id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, visitId: a.visitId, date: a.date,
+      id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, statusFa: APPT_LABELS[a.status] ?? a.status,
+      visitId: a.visitId, date: a.date,
       topic: a.topic?.name ?? null, patientId: a.patient?.id ?? null, patient: person(a.patient),
     }));
     return {
@@ -217,7 +218,9 @@ export class SurgeonPortalService {
     ]);
     return { rows: rows.map(v => ({ id: v.id, patientId: v.patient.id, code: `${v.patient.code}-V${v.seq}`, fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
       kind: v.kind, topic: v.topic?.name ?? null,
-      opDate: v.opDate, opStartTime: v.opStartTime, opEndTime: v.opEndTime, opStatus: v.opStatus, procedure: v.procedureType?.name ?? v.opType,
+      opDate: v.opDate, opStartTime: v.opStartTime, opEndTime: v.opEndTime,
+      opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
+      procedure: v.procedureType?.name ?? v.opType,
       hospital: v.hospital?.name ?? v.hospitalName, surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}` : v.surgeonName,
       requiredItems: v.requiredItems ?? v.procedureType?.needs.map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item.name, n.item.size].filter(Boolean).join(' ') })) ?? [], instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
     })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical() };

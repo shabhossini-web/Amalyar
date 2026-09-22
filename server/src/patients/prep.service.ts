@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { NOTE_KIND_LABELS } from './labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere } from '../common/own-scope';
@@ -86,7 +87,8 @@ export class PrepService {
       /* متن **این‌جا** کوتاه می‌شود، نه با CSS: کارتِ آماده‌سازی خلاصه است و
          شرحِ کامل یک کلیک آن‌طرف‌تر در پرونده می‌ماند. */
       notes: notes.map((n) => ({
-        id: n.id, kind: n.kind, visitId: n.visitId, authorName: n.authorName, createdAt: n.createdAt,
+        id: n.id, kind: n.kind, kindFa: NOTE_KIND_LABELS[n.kind] ?? n.kind,
+        visitId: n.visitId, authorName: n.authorName, createdAt: n.createdAt,
         excerpt: PrepService.excerpt(n.body),
         truncated: (n.body ?? '').trim().length > 180,
       })),

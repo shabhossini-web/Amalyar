@@ -18,7 +18,9 @@ const SECTIONS = [
   { key: 'notices', label: 'پیام‌ها' },
 ];
 
-const STATUS_FA = { pending: 'در انتظار', done: 'انجام شد', cancelled: 'لغو شد' };
+/* ⚠️ برچسبِ وضعیت از سرور می‌آید (`statusFa`) — این پرتال `/config` را
+   نمی‌خواند، پس سرور همراهِ ردیف می‌فرستدش. نسخهٔ قبلی «لغو شد» می‌نوشت و
+   کارکنان «لغو» می‌دیدند. */
 
 /**
  * متنِ پیام با لینک‌های کلیک‌پذیر (نیمهٔ UIِ W0.3؛ یافتهٔ D08).
@@ -64,7 +66,7 @@ export default function Portal() {
         <b>{v.kindTitle ?? 'مراجعه'}</b>
         <small>{[v.dateFa, v.doctorName, v.procedure ?? v.topicName].filter(Boolean).join(' · ')}</small>
       </div>
-      <span className={`po-tag s-${v.status}`}>{STATUS_FA[v.status] ?? v.status}</span>
+      <span className={`po-tag s-${v.status}`}>{v.statusFa ?? v.status}</span>
     </a>
   );
 

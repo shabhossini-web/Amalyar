@@ -9,6 +9,7 @@ import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
+import { NOTE_KIND_LABELS, OP_LABELS } from './labels';
 
 /* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
    re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
@@ -355,6 +356,8 @@ export class RecordService {
         code: `${patient.code}-V${v.seq}`,
         opDate: v.opDate,
         opStatus: v.opStatus,
+        /* برچسب همراهِ وضعیت — `labels.ts`، تنها خانهٔ برچسب‌های وضعیت. */
+        opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
         surgeonName: v.surgeon ? personName(v.surgeon.person) : v.surgeonName,
         hospitalName: v.hospital?.name ?? v.hospitalName,
         techName: v.tech ? personName(v.tech.person) : null,
@@ -400,6 +403,7 @@ export class RecordService {
           code: `${patient.code}-V${v.seq}`,
           opDate: v.opDate,
           opStatus: v.opStatus,
+          opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
           title: v.procedureType?.name ?? v.opType ?? null,
           /// فاصله از مراجعهٔ قبلی — «۳۲ روز بعد» چیزی است که پزشک می‌خواهد بداند.
           daysFromPrev: null as number | null,
@@ -780,6 +784,7 @@ export class RecordService {
     });
     return rows.map((n) => ({
       id: n.id, patientId: n.patientId, visitId: n.visitId, kind: n.kind, body: n.body,
+      kindFa: NOTE_KIND_LABELS[n.kind] ?? n.kind,
       authorName: n.authorName, createdAt: n.createdAt,
       /// وجودِ replacesId یعنی این نسخهٔ ویرایش‌شده است — کاربر باید بداند.
       edited: n.replacesId != null,
@@ -868,6 +873,7 @@ export class RecordService {
     return rows.map((n) => ({
       id: n.id,
       kind: n.kind,
+      kindFa: NOTE_KIND_LABELS[n.kind] ?? n.kind,
       snippet: n.body.length > 300 ? n.body.slice(0, 300) + '…' : n.body,
       authorName: n.authorName,
       createdAt: n.createdAt,

@@ -186,7 +186,8 @@ function ReminderPop({ row, item, onClose, onActed, toast }) {
 }
 
 /* ══════════════ نوبت ══════════════ */
-const APPT_STATUS_FA = { held: 'در انتظارِ پرداخت', confirmed: 'قطعی', arrived: 'در مطب', done: 'انجام شد', noshow: 'نیامد', cancelled: 'لغو شد' };
+/* ⚠️ نگاشتِ محلی برداشته شد: `item.stateFa` از قبل از سرور می‌آمد و همین‌جا
+   fallback بود — یعنی کپی هیچ‌وقت لازم نبود، فقط می‌توانست واگرا شود. */
 /* همان کلیدهای `CANCEL_REASONS` سرور — دلیلِ لغو به بیمار پیامک می‌شود. */
 const APPT_CANCEL = { doctor: 'تعویقِ پزشک', patient: 'درخواستِ بیمار', clinical: 'شرایطِ بالینی', hospital: 'مشکلِ بیمارستان', other: 'سایر' };
 
@@ -215,7 +216,7 @@ function ApptPop({ id, item, onClose, onActed, toast }) {
       </header>
       <dl>
         {item?.at && <><dt>تاریخ</dt><dd>{faDate(item.at)}{item.detail ? ` · ${faNum(item.detail)}` : ''}</dd></>}
-        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${st ?? 'none'}`}>{APPT_STATUS_FA[st] ?? item?.stateFa ?? '—'}</em></dd>
+        <dt>وضعیت</dt><dd><em className={`rc-pop-state is-${st ?? 'none'}`}>{item?.stateFa ?? st ?? '—'}</em></dd>
       </dl>
       {open && !cancelling && (
         <div className="rc-pop-acts">

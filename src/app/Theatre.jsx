@@ -422,7 +422,7 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
           onChange={(e) => setText(e.target.value)}
         />
       </label>
-      <p className="th-hint">این متن در پروندهٔ بیمار به‌عنوانِ «شرحِ ترخیص» ثبت می‌شود و نامِ شما را می‌گیرد.</p>
+      <p className="th-hint">این متن در پروندهٔ بیمار به‌عنوانِ «خلاصهٔ ترخیص» ثبت می‌شود و نامِ شما را می‌گیرد.</p>
       <div className="th-dialog-acts">
         <button type="button" className="th-btn" onClick={onClose} disabled={busy}>انصراف</button>
         <button type="submit" className="th-btn primary" disabled={!ok || busy}>
