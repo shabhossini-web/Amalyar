@@ -12,6 +12,7 @@
  * ۴. **مدرکِ لینکی**: MRI/پاراکلینیکِ میزبانی‌شده در جای دیگر با لینک ثبت
  *    می‌شود؛ فقط http/https، و «دانلود» برایش معنی ندارد.
  */
+import { captchaFor } from './lib/captcha.mjs';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const USER = process.env.E2E_USER ?? 'admin';
 const PASS = process.env.E2E_PASS ?? 'test1234';
@@ -45,14 +46,13 @@ const send = (p, m, b, auth = true) => fetch(API + p, {
 }).then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 const get = (p) => fetch(API + p, { headers: A }).then((r) => r.json());
 
-const CAP = { captchaA: 3, captchaB: 4, captchaAnswer: 7 };
 const trash = { forms: [], visits: [], patients: [] };
 
 try {
   console.log('۱) مبلغِ کهنه از مرحلهٔ فیش نمی‌پرد');
   const mk = await send('/intake/links', 'POST', { title: 'گاردِ فیش', amount: 0 });
   const reg = await send(`/public/intake/link/${mk.json.token}/register`, 'POST',
-    { firstName: 'گاردِ', lastName: 'فیش', nationalId: NID_A, phone: '09120000411', ...CAP }, false);
+    { firstName: 'گاردِ', lastName: 'فیش', nationalId: NID_A, phone: '09120000411', ...(await captchaFor(API, mk.json.token)) }, false);
   ok(reg.status < 300, `ثبت‌نام روی لینکِ بی‌مبلغ (${reg.status})`);
   await send(`/intake/links/${mk.json.id}`, 'PATCH', { amount: 1200000 });
   const fill = await send(`/public/intake/form/${reg.json.token}/fill`, 'POST', { procedure: 'ویزیت' }, false);
@@ -71,7 +71,7 @@ try {
 
   console.log('\n۲) برخوردِ کد ملی روی فرمِ عمومی نام نشت نمی‌دهد');
   const clash = await send(`/public/intake/link/${mk.json.token}/register`, 'POST',
-    { firstName: 'غریبهٔ', lastName: 'کنجکاو', nationalId: NID_A, phone: '09120000412', ...CAP }, false);
+    { firstName: 'غریبهٔ', lastName: 'کنجکاو', nationalId: NID_A, phone: '09120000412', ...(await captchaFor(API, mk.json.token)) }, false);
   ok(clash.status === 409, `نامِ خانوادگیِ متفاوت با همان کد ملی رد شد (${clash.status})`);
   const msg = clash.json?.message ?? '';
   ok(!/فیش|گارد/.test(msg), '**نامِ صاحبِ پرونده در پیام نیست**');
@@ -90,7 +90,7 @@ try {
   console.log('\n۳) فیلدِ بخش‌دار روی فرمِ بیمار نمی‌آید');
   const mk2 = await send('/intake/links', 'POST', { title: 'گاردِ بخش', amount: 0, formId: form.id });
   const reg2 = await send(`/public/intake/link/${mk2.json.token}/register`, 'POST',
-    { firstName: 'بخشِ', lastName: 'پنهان', nationalId: NID_B, phone: '09120000413', ...CAP }, false);
+    { firstName: 'بخشِ', lastName: 'پنهان', nationalId: NID_B, phone: '09120000413', ...(await captchaFor(API, mk2.json.token)) }, false);
   const pv = await send(`/public/intake/form/${reg2.json.token}`, 'GET', null, false);
   const keys = (pv.json?.form?.fields ?? []).map((x) => x.key);
   ok(keys.includes('complaint'), 'فیلدِ عمومی روی فرمِ بیمار هست');

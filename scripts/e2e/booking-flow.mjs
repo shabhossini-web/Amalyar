@@ -12,6 +12,7 @@
  *  • نوبتِ گرفته‌شده جا را اشغال می‌کند و نفرِ دوم همان ساعت را نمی‌گیرد.
  *  • ردکردنِ ثبت‌نام جا را **آزاد** می‌کند، وگرنه تقویم پر از جای سوخته می‌شود.
  */
+import { captchaFor } from './lib/captcha.mjs';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const USER = process.env.E2E_USER ?? 'admin';
 const PASS = process.env.E2E_PASS ?? 'test1234';
@@ -60,7 +61,7 @@ for (const r of await get('/availability/rules')) {
 
 const register = async (token) => send(`/public/intake/link/${token}/register`, 'POST', {
   firstName: 'نوبتِ', lastName: `آزمون ${tag}`, nationalId: nid(seed++), phone: '09120000099',
-  captchaA: 3, captchaB: 4, captchaAnswer: 7,
+  ...(await captchaFor(API, token)),
 }, false);
 
 try {

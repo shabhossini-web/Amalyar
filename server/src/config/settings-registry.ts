@@ -55,7 +55,7 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
   {
     key: 'sms',
     label: 'پیامک‌ها و زمان‌بندی',
-    hint: 'متن و زمانِ همهٔ پیامک‌هایی که برای بیمار می‌رود. نامِ برند خودکار اولِ هر پیامک می‌آید. جای‌گیرها: {date} تاریخِ شمسی، {time} ساعت، {topic} موضوع، {title} نامِ فرم، {link} لینک — جای‌گیرِ ساعت و موضوع خودشان جداکننده دارند.',
+    hint: 'متن و زمانِ همهٔ پیامک‌هایی که برای بیمار می‌رود. نامِ برند خودکار اولِ هر پیامک می‌آید. جای‌گیرها: {date} تاریخِ شمسی، {time} ساعت، {topic} موضوع، {title} نامِ فرم، {link} لینک، {reason} دلیلِ برگشت یا رد، {stage} مرحلهٔ برگشت — جای‌گیرِ ساعت و موضوع خودشان جداکننده دارند.',
   },
   {
     key: 'intake',
@@ -212,6 +212,16 @@ export const SETTINGS: SettingDef[] = [
   {
     key: 'sms_form_send_text', label: 'متنِ پیامکِ ارسالِ فرم',
     group: 'sms', type: 'textarea', default: '{title}\n{link}', maxLength: 500,
+  },
+  {
+    key: 'sms_intake_return_text', label: 'متنِ پیامکِ برگشتِ ثبت‌نام برای اصلاح',
+    hint: 'وقتی تأییدکننده ثبت‌نام را به یک مرحله برمی‌گرداند. {stage} مرحله، {reason} دلیل، {link} لینکِ همان فرم.',
+    group: 'sms', type: 'textarea', default: 'ثبت‌نامِ شما برای اصلاح برگشت خورد ({stage}): {reason}\n{link}', maxLength: 500,
+  },
+  {
+    key: 'sms_intake_reject_text', label: 'متنِ پیامکِ ردِ ثبت‌نام',
+    hint: '{reason} دلیلِ رد — بی‌لینک، چون فرمِ ردشده دیگر پر نمی‌شود.',
+    group: 'sms', type: 'textarea', default: 'ثبت‌نامِ شما پذیرفته نشد: {reason}', maxLength: 500,
   },
   {
     key: 'sms_follow_up_text', label: 'متنِ پیامکِ فرمِ پیگیریِ پس از عمل',

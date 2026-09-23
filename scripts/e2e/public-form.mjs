@@ -8,6 +8,7 @@
  * ⚠️ سنجه‌ها روی **حالتِ برگشتیِ سرور**اند: چه چیزی واقعاً در `data` نشست، نه
  * اینکه صفحه خطا نداد.
  */
+import { captchaFor } from './lib/captcha.mjs';
 const API = 'http://localhost:3101/api';
 let TOKEN = '';
 let pass = 0;
@@ -74,7 +75,7 @@ let view;
 {
   const reg = await api(`/public/intake/link/${link.token}/register`, {
     method: 'POST', auth: false,
-    body: { firstName: 'بیمار', lastName: 'آزمون', nationalId: nid(RUN * 3 + 7), phone: '09120000021', captchaA: 2, captchaB: 3, captchaAnswer: 5 },
+    body: { firstName: 'بیمار', lastName: 'آزمون', nationalId: nid(RUN * 3 + 7), phone: '09120000021', ...(await captchaFor(API, link.token)) },
   });
   ok('ثبت‌نام انجام شد', reg.status < 300, reg.status + ' ' + reg.text.slice(0, 160));
   view = reg.json;
@@ -161,7 +162,7 @@ console.log('\n۷) لینکِ بدونِ فرم همان مسیرِ قدیمی �
   const bare = (await api('/intake/links', { method: 'POST', body: { title: '[pf] بی‌فرم', amount: 1000 } })).json;
   const reg = await api(`/public/intake/link/${bare.token}/register`, {
     method: 'POST', auth: false,
-    body: { firstName: 'بیمار', lastName: 'قدیمی', nationalId: nid(RUN * 5 + 19), phone: '09120000022', captchaA: 1, captchaB: 1, captchaAnswer: 2 },
+    body: { firstName: 'بیمار', lastName: 'قدیمی', nationalId: nid(RUN * 5 + 19), phone: '09120000022', ...(await captchaFor(API, bare.token)) },
   });
   ok('ثبت‌نام انجام شد', reg.status < 300, reg.status + ' ' + reg.text.slice(0, 140));
   ok('form برابرِ null است', reg.json?.form === null, 'form=' + JSON.stringify(reg.json?.form));

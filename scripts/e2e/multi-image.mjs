@@ -13,6 +13,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { captchaFor } from './lib/captcha.mjs';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
@@ -74,7 +75,7 @@ try {
   trash.links.push(link.id);
   const reg = await pub(`/public/intake/link/${link.token}/register`, 'POST', {
     firstName: 'بیمارِ', lastName: 'چندعکسی', nationalId: nid(Date.now() % 800000000),
-    phone: PHONE, captchaA: 2, captchaB: 3, captchaAnswer: 5,
+    phone: PHONE, ...(await captchaFor(API, link.token)),
   });
   ok(reg.status < 300, `بیمار ثبت‌نام کرد (${reg.status})`);
   const token = reg.json?.token;

@@ -260,14 +260,9 @@ export default function IntakeAdmin() {
                 <button type="button" className="ia-ok" onClick={() => setApproving(s)}>
                   {s.makesVisit === false ? 'تأیید و ثبت در پرونده' : 'تأیید و ساختِ مراجعه'}
                 </button>
-                <button type="button" className="ia-ghost" onClick={() => {
-                  const n = window.prompt('چه چیزی باید اصلاح شود؟');
-                  if (n?.trim()) act(s.id, 'return', { note: n.trim() }, 'برای اصلاح برگردانده شد');
-                }}>بازگرداندن</button>
-                <button type="button" className="ia-no" onClick={() => {
-                  const n = window.prompt('دلیلِ رد — بیمار همین را می‌بیند:');
-                  if (n?.trim()) act(s.id, 'reject', { note: n.trim() }, 'رد شد');
-                }}>رد</button>
+                {/* برگشت و رد در همان پاپ‌آپ — مرحله و دلیل آن‌جا انتخاب می‌شوند، نه با `prompt`. */}
+                <button type="button" className="ia-ghost" onClick={() => setApproving({ ...s, action: 'return' })}>بازگرداندن</button>
+                <button type="button" className="ia-no" onClick={() => setApproving({ ...s, action: 'reject' })}>رد</button>
               </footer>
             )}
 
@@ -296,6 +291,7 @@ export default function IntakeAdmin() {
             onDone={(m) => { setApproving(null); setToast(m); load(); }}
             onZoom={setZoom}
             onChanged={load}
+            initialAction={approving.action ?? 'approve'}
           />
         )}
       </AnimatePresence>
@@ -435,6 +431,68 @@ function IdentityCard({ row, who, onSaved }) {
   );
 }
 
+const RETURN_STAGE_FA = [
+  ['service', 'اطلاعاتِ خدمت', 'فرم دوباره باز می‌شود؛ فیش و مدارک می‌مانند'],
+  ['documents', 'مدارک', 'عکس‌های فرم کنار گذاشته می‌شوند تا دوباره بارگذاری شوند'],
+  ['receipt', 'فیش', 'فیش‌ها کنار گذاشته می‌شوند تا فیشِ تازه بیاید'],
+  ['all', 'همه', 'فرم، مدارک و فیش هر سه از نو'],
+];
+
+/**
+ * **برگشت برای اصلاح / رد** — داخلِ همان پاپ‌آپ، نه `prompt`ِ مرورگر.
+ *
+ * ⚠️ مالک: «مرحله باید انتخاب شود و پیام به بیمار برود». پس دکمه تا مرحله و دلیل پر نشده
+ * غیرفعال است، و نتیجه می‌گوید پیامک در صف نشست یا شمارهٔ معتبری نبود — نه یک «انجام شد»ِ
+ * کلی که پنهان کند بیمار خبردار نشده. هویت مرحله نیست: آن را کارتِ هویت همین‌جا درست می‌کند.
+ */
+function Decide({ row, mode, onCancel, onDone }) {
+  const [stage, setStage] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const returning = mode === 'return';
+  const ready = note.trim().length > 0 && (!returning || stage);
+  const send = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await api(`/intake/submissions/${row.id}/${returning ? 'return' : 'reject'}`, {
+        method: 'POST', body: returning ? { stage, note: note.trim() } : { note: note.trim() },
+      });
+      /* `skipped` = پیامکی قرار نبود برود (ردِ پاسخِ خودکارتأییدشده) — نه «شماره نبود». */
+      const sms = { queued: 'پیامک برای بیمار در صفِ ارسال است', no_phone: 'شمارهٔ معتبری برای پیامک نبود' }[r?.sms];
+      const done = returning ? 'برای اصلاح برگشت خورد' : 'رد شد';
+      onDone(sms ? `${done} — ${sms}` : done);
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  return (
+    <section className="ia-block ia-decide" aria-labelledby={`ia-decide-${row.id}`}>
+      <h3 id={`ia-decide-${row.id}`}>{returning ? 'بازگرداندن برای اصلاح' : 'ردِ ثبت‌نام'}</h3>
+      {returning && (
+        <div className="ia-stage" role="radiogroup" aria-label="کدام بخش اصلاح شود">
+          {RETURN_STAGE_FA.map(([key, label, hint]) => (
+            <button key={key} type="button" role="radio" aria-checked={stage === key} disabled={busy}
+                    className={`ia-chip${stage === key ? ' on' : ''}`} onClick={() => setStage(key)} title={hint}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {returning && stage && <p className="ia-note">{RETURN_STAGE_FA.find(([k]) => k === stage)?.[2]}</p>}
+      <label className="ia-field">
+        <span>{returning ? 'چه چیزی باید اصلاح شود؟ (بیمار همین را می‌بیند)' : 'دلیلِ رد (بیمار همین را می‌بیند)'}</span>
+        <textarea rows={3} maxLength={300} value={note} disabled={busy} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {err && <p className="ia-note warn">{err}</p>}
+      <div className="ia-acts">
+        <button type="button" className={returning ? 'ia-ok' : 'ia-no'} disabled={busy || !ready} onClick={send}>
+          {busy ? 'در حال ارسال…' : returning ? 'بازگرداندن و ارسالِ پیامک' : 'رد و ارسالِ پیامک'}
+        </button>
+        <button type="button" className="ia-ghost" disabled={busy} onClick={onCancel}>انصراف</button>
+      </div>
+    </section>
+  );
+}
+
 /** بزرگ‌نماییِ فیش — تصمیمِ مالی با تصویرِ کوچک گرفته نمی‌شود. */
 function ReceiptZoom({ url, onClose }) {
   return (
@@ -446,9 +504,11 @@ function ReceiptZoom({ url, onClose }) {
 }
 
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
-function ApproveSheet({ row, onClose, onDone, onZoom, onChanged }) {
+function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction = 'approve' }) {
   const { user: me } = useAuth();
   const cfg = useConfig();
+  /* سه تصمیمِ پاپ‌آپ (مالک، ۱۴۰۵/۰۷/۰۱): تأیید / برگشت برای اصلاح (با مرحله) / رد. */
+  const [mode, setMode] = useState(initialAction);
   /* پروندهٔ بیمار — کارتِ هویت اصلاحش می‌کند و سربرگ همان را نشان می‌دهد. */
   const [who, setWho] = useState(row.patient ?? null);
   /* مدارک از سرور (`intake-docs.ts`)؛ fallbackِ پایین فقط برای پاسخِ سرورِ قدیمی. */
@@ -581,6 +641,11 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged }) {
             **چه کاری** (خدمت: متنِ بیمار + مدارک + گره‌زدن به تعاریف)، **چه پولی**
             (پرداخت: فیش‌ها + ثبتِ پرداخت). فیش کنارِ همان تیکِ «پرداخت ثبت شود» و بالای
             دکمهٔ تأیید است — تصمیمِ مالی بدونِ دیدنِ مدرک گرفته نمی‌شود. */}
+        {row.returns?.length > 0 && (
+          <p className="ia-note warn">
+            <Alert width="13" height="13" /> {faNum(row.returns.length)} بار برای اصلاح برگشت خورده — آخرین بار «{row.returns.at(-1).stageLabel}»: {row.returns.at(-1).note}
+          </p>
+        )}
         <IdentityCard row={row} who={who} onSaved={(p) => { setWho(p); onChanged?.(); }} />
 
         <section className="ia-block" aria-labelledby={`ia-b-svc-${row.id}`}>
@@ -712,11 +777,21 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged }) {
         </section>
 
         {err && <p className="ia-note warn">{err}</p>}
-        <button type="button" className="ia-ok" disabled={busy} onClick={save}>
-          {busy
-            ? 'در حال ثبت…'
-            : row.makesVisit === false ? 'تأیید و ثبت در پرونده' : 'تأیید و ساختِ مراجعه'}
-        </button>
+        {mode === 'approve' ? (
+          <>
+            <button type="button" className="ia-ok" disabled={busy} onClick={save}>
+              {busy
+                ? 'در حال ثبت…'
+                : row.makesVisit === false ? 'تأیید و ثبت در پرونده' : 'تأیید و ساختِ مراجعه'}
+            </button>
+            <div className="ia-acts">
+              <button type="button" className="ia-ghost" disabled={busy} onClick={() => setMode('return')}>بازگرداندن برای اصلاح</button>
+              <button type="button" className="ia-no" disabled={busy} onClick={() => setMode('reject')}>رد</button>
+            </div>
+          </>
+        ) : (
+          <Decide row={row} mode={mode} onCancel={() => setMode('approve')} onDone={onDone} />
+        )}
       </div>
       {quick && <QuickDefinitionEditor sectionKey={quick.section} onClose={() => setQuick(null)} onSaved={async (_message, saved) => {
         setF((s) => ({ ...s, [quick.field]: String(saved.id) })); setQuick(null); await loadRefs();

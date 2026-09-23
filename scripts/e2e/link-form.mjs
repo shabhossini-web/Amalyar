@@ -8,6 +8,7 @@
  *
  * اجرا: `node scripts/e2e/link-form.mjs` (راه‌اندازیِ محیط در README همین پوشه).
  */
+import { captchaFor } from './lib/captcha.mjs';
 const API = 'http://localhost:3101/api';
 let TOKEN = '';
 let pass = 0;
@@ -154,7 +155,7 @@ console.log('\n۶) فرمِ عمومی شماره‌های **همین حساب**
     method: 'POST',
     body: {
       firstName: 'آزمون', lastName: 'لینک', nationalId: nid(RUN * 7 + 13), phone: '09120000011',
-      captchaA: 3, captchaB: 4, captchaAnswer: 7,
+      ...(await captchaFor(API, link.token)),
     },
   });
   // کپچا ممکن است رد شود؛ اگر شد، مستقیم از publicView استفاده نمی‌کنیم.
@@ -175,7 +176,7 @@ console.log('\n۷) fallback — لینکِ بدونِ حساب همان فهرس
   const bare = (await api('/intake/links', { method: 'POST', body: { title: '[e2e] بی‌حساب', amount: 1000 } })).json;
   const reg = await api(`/public/intake/link/${bare.token}/register`, {
     method: 'POST',
-    body: { firstName: 'آزمون', lastName: 'بی‌حساب', nationalId: nid(RUN * 11 + 29), phone: '09120000012', captchaA: 5, captchaB: 6, captchaAnswer: 11 },
+    body: { firstName: 'آزمون', lastName: 'بی‌حساب', nationalId: nid(RUN * 11 + 29), phone: '09120000012', ...(await captchaFor(API, bare.token)) },
   });
   if (reg.status < 300) {
     ok('لینکِ بدونِ حساب شماره دارد (fallback)', (reg.json.payTo?.length ?? 0) >= 1, 'n=' + reg.json.payTo?.length);
