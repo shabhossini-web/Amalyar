@@ -1,8 +1,9 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors,
+  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Req, Res, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
+import { clientIp } from '../common/client-ip';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -24,10 +25,10 @@ class RegisterDto {
   @IsOptional() @Type(() => Number) @IsInt() referralSourceId?: number;
   /// نامِ معرف، وقتی کانال «معرفیِ پزشک/بیمار» باشد.
   @IsOptional() @IsString() @MaxLength(120) referralNote?: string;
-  /// کپچا: دو عددی که به بیمار نشان داده شد، به‌علاوهٔ پاسخش.
-  @Type(() => Number) @IsInt() captchaA!: number;
-  @Type(() => Number) @IsInt() captchaB!: number;
-  @Type(() => Number) @IsInt() captchaAnswer!: number;
+  /// پرسشِ امنیتی: نشانی که سرور همراهِ تصویر داد (`GET link/:token/captcha`) + پاسخِ بیمار.
+  /// ⚠️ صفحهٔ قدیمیِ کش‌شده هنوز `captchaA/B` می‌فرستد — `whitelist` آن‌ها را دور می‌ریزد و همین پیام می‌رسد.
+  @IsString({ message: 'پرسشِ امنیتی را دوباره بگیرید — صفحه را تازه کنید' }) @MaxLength(512) captchaToken!: string;
+  @Type(() => Number) @IsInt({ message: 'پاسخِ پرسشِ امنیتی را به عدد بنویسید' }) captchaAnswer!: number;
 }
 
 /**
@@ -193,9 +194,15 @@ export class PublicIntakeController {
     return this.intake.publicLink(token);
   }
 
+  /** پرسشِ امنیتیِ تازه (تصویر + نشان) — `intake-captcha.ts`. */
+  @Get('link/:token/captcha')
+  captcha(@Param('token') token: string, @Req() req: Request) {
+    return this.intake.captcha(token, clientIp(req));
+  }
+
   @Post('link/:token/register')
-  register(@Param('token') token: string, @Body() dto: RegisterDto) {
-    return this.intake.register(token, dto);
+  register(@Param('token') token: string, @Body() dto: RegisterDto, @Req() req: Request) {
+    return this.intake.register(token, dto, clientIp(req));
   }
 
   @Get('form/:token')

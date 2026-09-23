@@ -1,4 +1,7 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -15,6 +18,7 @@ import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { serviceLabel, serviceOf } from './intake-service-of';
 import { imageRefsOf, receiptIdsOf } from './intake-docs';
+import { UsedChallenges, issueChallenge, verifyChallenge } from './intake-captcha';
 import { RETURN_STAGES, applyReturn, currentReturn, isReturnStage, returnsOf, withoutReturns } from './intake-return';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
@@ -84,6 +88,15 @@ export const INTAKE_STATUSES = [
    `Crm.jsx` بود و «رها‌شده» را «منقضی» می‌گفت. */
 export { INTAKE_LABELS } from './labels';
 import { INTAKE_LABELS } from './labels';
+
+/** نشان‌های پرسشِ امنیتیِ مصرف‌شده — یکی برای کلِ پروسه (`intake-captcha.ts`). */
+const USED_CHALLENGES = new UsedChallenges();
+/** کلیدِ نشانِ پرسش از همان رازِ سرور (`JWT_SECRET`) مشتق می‌شود؛ بی‌راز پرسشی ساخته نمی‌شود. */
+function captchaSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new ServiceUnavailableException('ثبت‌نام موقتاً در دسترس نیست');
+  return secret;
+}
 
 const text = (v: unknown, max = 200) =>
   typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
@@ -430,10 +443,26 @@ export class IntakeService {
   }
 
   /**
+   * پرسشِ امنیتیِ تازه برای صفحهٔ ثبت‌نامِ همین لینک (`intake-captcha.ts`).
+   *
+   * فقط برای لینکِ معتبر و فعال — وگرنه هر کسی بی‌لینک هم تصویر و نشان می‌گرفت — و با سقفِ
+   * نرخ، چون رسمِ هر تصویر چند ده میلی‌ثانیه CPU است.
+   */
+  async captcha(linkToken: string, ip: string) {
+    this.rateLimit.hit(`intake-captcha:${ip}`, 60, 10 * 60_000);
+    const link = await this.prisma.intakeLink.findUnique({ where: { token: linkToken }, select: { active: true } });
+    if (!link) throw new NotFoundException('این لینک معتبر نیست');
+    if (!link.active) throw new ForbiddenException('این لینک غیرفعال شده است');
+    return issueChallenge(captchaSecret(), linkToken);
+  }
+
+  /**
    * شروعِ ثبت‌نام.
    *
-   * ⚠️ کپچا **روی سرور** سنجیده می‌شود؛ اعتبارسنجیِ سمتِ کلاینت هیچ چیزی را
-   * جلوی یک اسکریپت نمی‌گیرد و این نشانی عمومی است.
+   * ⚠️ پرسشِ امنیتی را **سرور** می‌سازد و می‌سنجد (`intake-captcha.ts`)؛ تا دیروز مرورگر خودش
+   * دو عدد را انتخاب می‌کرد و یک اسکریپت با `1 + 1 = 2` رد می‌شد. ترتیب عمدی است: سقفِ نرخ
+   * (هر تلاش، حتی غلط، شمرده می‌شود) → لینک → فیلدها → پرسش → نوشتن. فیلدها **پیش از** پرسش
+   * سنجیده می‌شوند تا غلطِ کدِ ملی نشان را نسوزاند و بیمار مجبور نشود دوباره پرسش را جواب دهد.
    *
    * ⚠️ اگر همین بیمار ثبت‌نامِ ناتمامی دارد، **همان** برگردانده می‌شود نه یک
    * ردیفِ تازه — وگرنه هر بار که بیمار لینک را دوباره باز کند یک ثبت‌نامِ
@@ -441,14 +470,13 @@ export class IntakeService {
    */
   async register(
     linkToken: string,
-    dto: { firstName: string; lastName: string; nationalId: string; phone: string; birthDate?: string; address?: string; referralSourceId?: number; referralNote?: string; captchaA: number; captchaB: number; captchaAnswer: number },
+    dto: { firstName: string; lastName: string; nationalId: string; phone: string; birthDate?: string; address?: string; referralSourceId?: number; referralNote?: string; captchaToken: string; captchaAnswer: number },
+    ip = 'unknown',
   ) {
+    this.rateLimit.hit(`intake-register:${ip}`, 30, 10 * 60_000);
     const link = await this.prisma.intakeLink.findUnique({ where: { token: linkToken } });
     if (!link) throw new NotFoundException('این لینک معتبر نیست');
     if (!link.active) throw new ForbiddenException('این لینک غیرفعال شده است');
-    if (Number(dto.captchaAnswer) !== Number(dto.captchaA) + Number(dto.captchaB)) {
-      throw new BadRequestException('پاسخِ پرسشِ امنیتی درست نیست');
-    }
 
     const firstName = text(dto.firstName, 80);
     const lastName = text(dto.lastName, 80);
@@ -461,6 +489,14 @@ export class IntakeService {
        نتیجه: پرونده‌ای با کدِ ملیِ غلط که ادمین هرگز نمی‌توانست بسازد. */
     if (!isValidNationalId(nationalId)) throw new BadRequestException('کدِ ملی معتبر نیست');
     if (!/^09\d{9}$/.test(phone)) throw new BadRequestException('شمارهٔ موبایل نامعتبر است');
+    /* ⚠️ ۴۲۲ و نه ۴۰۰: صفحه از روی همین کد می‌فهمد که باید **پرسشِ تازه** بگیرد — نشان همین حالا
+       مصرف شد (درست یا غلط)، پس ارسالِ دوباره با همان نشان بی‌فایده است. */
+    const verdict = verifyChallenge(captchaSecret(), USED_CHALLENGES, linkToken, dto.captchaToken, dto.captchaAnswer);
+    if (verdict !== 'ok') {
+      throw new UnprocessableEntityException(verdict === 'wrong'
+        ? 'پاسخِ پرسشِ امنیتی درست نیست — پرسشِ تازه را جواب دهید'
+        : 'پرسشِ امنیتی منقضی شده — پرسشِ تازه را جواب دهید');
+    }
 
     const { patientId } = await this.prisma.$transaction((tx) =>
       /* ⚠️ `public: true` پیامِ برخوردِ کد ملی را بی‌نام می‌کند — این نشانی

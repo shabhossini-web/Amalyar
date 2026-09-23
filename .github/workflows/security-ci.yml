@@ -3285,6 +3285,10 @@ jobs:
         run: node scripts/e2e/intake-return-local.mjs
       - name: Verify the approval popup returns or rejects with a stage and reason and the patient sees the banner
         run: node scripts/e2e/intake-return-ui.mjs
+      - name: Verify the registration captcha is issued and checked by the server, single-use and rate limited
+        run: node scripts/e2e/intake-captcha-local.mjs
+      - name: Verify the registration page shows the server captcha image and asks a new one after a wrong answer
+        run: node scripts/e2e/intake-captcha-ui.mjs
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی

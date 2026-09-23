@@ -28,6 +28,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { captchaFor } from './lib/captcha.mjs';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const DB = process.env.E2E_DB ?? 'postgresql://amalyar:amalyar@localhost:5432/amalyar_t1';
@@ -54,7 +55,6 @@ const send = (p, m = 'GET', b, auth = true) => fetch(API + p, {
 }).then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = 'rk' + randomBytes(3).toString('hex');
-const CAP = { captchaA: 3, captchaB: 4, captchaAnswer: 7 };
 /* رقمِ کنترلیِ معتبر — ثبت‌نام کدِ ملیِ بی‌معنا را رد می‌کند. */
 const NID = '0084575646';
 const NID_B = '0012069361';
@@ -99,7 +99,7 @@ try {
 
   const link = (await send('/intake/links', 'POST', { title: 'کلیدِ رزروشده', amount: 0, formId: form.id })).json;
   const reg = await send(`/public/intake/link/${link.token}/register`, 'POST',
-    { firstName: 'کلیدِ', lastName: 'رزروشده', nationalId: NID, phone: '09120000471', ...CAP }, false);
+    { firstName: 'کلیدِ', lastName: 'رزروشده', nationalId: NID, phone: '09120000471', ...(await captchaFor(API, link.token)) }, false);
   ok('ثبت‌نامِ بیمار روی همان لینک', reg.status < 300, String(reg.status));
 
   const filled = await send(`/public/intake/form/${reg.json.token}/fill`, 'POST',
@@ -115,7 +115,7 @@ try {
      پس سنجهٔ قبلی به‌جای رفتارِ تبدیل، وضعیتِ فرم را می‌سنجید. */
   const link2 = (await send('/intake/links', 'POST', { title: 'ایزو مانْد', amount: 0, formId: form.id })).json;
   const reg2 = await send(`/public/intake/link/${link2.token}/register`, 'POST',
-    { firstName: 'ایزو', lastName: 'مانْد', nationalId: NID_B, phone: '09120000472', ...CAP }, false);
+    { firstName: 'ایزو', lastName: 'مانْد', nationalId: NID_B, phone: '09120000472', ...(await captchaFor(API, link2.token)) }, false);
   const again = await send(`/public/intake/form/${reg2.json.token}/fill`, 'POST',
     { values: { opDate: '2026-09-19' } }, false);
   ok('**مقدارِ از قبل ISO دوباره تبدیل نمی‌شود** (وگرنه هر ذخیره ۶۲۱ سال عقب می‌رفت)',

@@ -21,6 +21,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { captchaFor } from './lib/captcha.mjs';
 const require = createRequire(new URL('../../server/package.json', import.meta.url));
 const { PrismaClient } = require('@prisma/client');
 const { applyReturn, currentReturn, returnsOf } = require('./dist/patients/intake-return.js');
@@ -91,7 +92,7 @@ try {
   const phoneOf = () => '0912' + String(1000000 + (++seed % 8999999));
   async function register(phone) {
     const r = await pub(`/public/intake/link/${link.data.token}/register`, {
-      firstName: 'بیمارِ', lastName: 'برگشت', nationalId: nid(++seed * 7919), phone, birthDate: '1990-03-21', captchaA: 2, captchaB: 3, captchaAnswer: 5,
+      firstName: 'بیمارِ', lastName: 'برگشت', nationalId: nid(++seed * 7919), phone, birthDate: '1990-03-21', ...(await captchaFor(API, link.data.token)),
     });
     assert.ok(r.status < 300 && r.data?.token, msg(r));
     return r.data.token;

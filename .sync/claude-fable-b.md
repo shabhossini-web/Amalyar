@@ -71,6 +71,25 @@ paths:
   - scripts/e2e/intake-return.mjs
   - scripts/e2e/intake-return-local.mjs
   - scripts/e2e/intake-return-ui.mjs
+  - server/src/patients/intake-captcha.ts
+  - server/src/patients/captcha-glyphs.ts
+  - server/src/common/client-ip.ts
+  - scripts/e2e/lib/captcha.mjs
+  - scripts/e2e/intake-captcha.mjs
+  - scripts/e2e/intake-captcha-local.mjs
+  - scripts/e2e/intake-captcha-ui.mjs
+  - scripts/e2e/approve-kind.mjs
+  - scripts/e2e/free-form.mjs
+  - scripts/e2e/link-form.mjs
+  - scripts/e2e/links-box.mjs
+  - scripts/e2e/multi-image.mjs
+  - scripts/e2e/public-form.mjs
+  - scripts/e2e/record-direct.mjs
+  - scripts/e2e/record-forms.mjs
+  - scripts/e2e/w3-8-single-source.mjs
+  - scripts/e2e/intake-guards.mjs
+  - scripts/e2e/reserved-date-keys.mjs
+  - scripts/e2e/send-delete-crm.mjs
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
