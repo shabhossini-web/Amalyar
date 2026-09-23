@@ -55,6 +55,16 @@ paths:
   - scripts/e2e/approval-cards-local.mjs
   - scripts/e2e/approval-cards-ui.mjs
   - scripts/e2e/payment-step-ui.mjs
+  - server/src/patients/visit-requirements.ts
+  - server/src/patients/inventory.service.ts
+  - server/src/patients/inventory.controller.ts
+  - server/src/patients/theatre.service.ts
+  - src/app/RequiredItems.jsx
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
+  - src/app/surgeon-portal.css
+  - scripts/e2e/implant-rows.mjs
+  - scripts/e2e/implant-rows-ui.mjs
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
@@ -100,6 +110,11 @@ note: >-
   `field`/`label`) و `patient.birthDate` دارند؛ کلاینت دیگر `receiptDocumentId` یا `data.prescription` را
   خودش درنمی‌آورد. نمای عمومیِ فرم `paymentNote` دارد (تنظیمِ تازهٔ `intake_payment_note` در گروهِ تازهٔ
   `intake`؛ خالی = پیش‌فرض). اصلاحِ هویت در پاپ‌آپ از همان `PATCH /patients/:id` می‌رود (کدِ ملی نه).
+- ۱۴۰۵/۰۷/۰۱ · **ردیف‌های ایمپلنت:** هر ردیفِ `Visit.requiredItems` حالا `prescribedQuantity` هم دارد —
+  در تأییدِ ثبت‌نام برابرِ تعداد و **قفل**؛ ویرایشِ بعدی (پرتالِ جراح) فقط `quantity` (برنامه) را عوض
+  می‌کند، ردیفِ نسخه‌دار حذف نمی‌شود (۴۰۰)، ردیفِ افزوده‌شده بعد از تأیید `null` می‌گیرد.
+  `resolveRequirements(prisma, rows, { prescribe?, previous? })`. نمای اتاقِ عمل `prescribed` کنارِ
+  `quantity` می‌دهد. endpointِ تازهٔ `GET /stock/availability?items=` (فقط خواندن، `inventory.read`).
 - ۱۴۰۵/۰۷/۰۱ · **هارنس‌های دست‌ساز:** `FormsService`/`SurgeonPortalService` از config
   `profile()` هم می‌خواهند و `AiService` پارامترِ چهارمِ `ConfigService` دارد. پنج هارنس به‌روز شد
   (`profile-workflows`, `company-operations`, `intake-finance-roles`, `w1-5-…`, `w2-2b-…`) — هارنسِ تازه

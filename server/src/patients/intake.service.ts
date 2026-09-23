@@ -2122,7 +2122,10 @@ export class IntakeService {
       }
     }
     const requirements = service === 'implant'
-      ? dto.requiredItems !== undefined ? await resolveRequirements(this.prisma, dto.requiredItems) : await procedureRequirements(this.prisma, dto.procedureTypeId)
+      /* ⚠️ لحظهٔ تأیید لحظهٔ **نسخه** است: همین تعدادها «طبقِ نسخه» قفل می‌شوند (`visit-requirements.ts`). */
+      ? dto.requiredItems !== undefined
+        ? await resolveRequirements(this.prisma, dto.requiredItems, { prescribe: true })
+        : await procedureRequirements(this.prisma, dto.procedureTypeId, { prescribe: true })
       : undefined;
     if (service === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
 

@@ -663,7 +663,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged }) {
                       onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />}
           </div>
           )}
-          {row.makesVisit !== false && workflow === 'implant' && <RequiredItems value={requiredItems} onChange={rows => { setItemsTouched(true); setRequiredItems(rows); }} disabled={busy} />}
+          {row.makesVisit !== false && workflow === 'implant' && <RequiredItems prescribing stock value={requiredItems} onChange={rows => { setItemsTouched(true); setRequiredItems(rows); }} disabled={busy} />}
           {row.makesVisit !== false && fields?.some(field => !field.builtin && field.active !== false) && <DynForm assistance fields={fields.filter(field => !field.builtin && field.active !== false)} values={extra} onChange={setExtra} disabled={busy} myRole={me?.level >= 6 ? null : me?.jobRole} />}
         </section>
 

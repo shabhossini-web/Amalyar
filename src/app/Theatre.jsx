@@ -319,7 +319,10 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
       {items.length > 0 && (
         <section className="th-box-list" aria-label="ستِ لازم">
           <h3>ستِ لازم</h3>
-          <ul>{items.map((i, n) => <li key={`${i.name}-${n}`}><b>{i.name}</b> <span>×{faNum(i.quantity)}</span>{i.notes && <em>{i.notes}</em>}</li>)}</ul>
+          {/* «طبقِ نسخه» کنارِ برنامه (مالک): اگر برنامه با نسخه فرق دارد، تیم سرِ عمل باید ببیند. */}
+          <ul>{items.map((i, n) => <li key={`${i.name}-${n}`}><b>{i.name}</b> <span>×{faNum(i.quantity)}</span>
+            {i.prescribed != null && <small className={`th-rx${i.prescribed !== i.quantity ? ' diff' : ''}`}>طبقِ نسخه ×{faNum(i.prescribed)}</small>}
+            {i.notes && <em>{i.notes}</em>}</li>)}</ul>
         </section>
       )}
     </div>

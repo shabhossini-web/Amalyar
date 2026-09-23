@@ -3277,6 +3277,10 @@ jobs:
         run: node scripts/e2e/payment-step-ui.mjs
       - name: Verify the approval popup has identity, service and payment cards and opens from the row
         run: node scripts/e2e/approval-cards-ui.mjs
+      - name: Verify implant rows freeze the prescribed quantity at approval and only show stock
+        run: node scripts/e2e/implant-rows.mjs
+      - name: Verify the implant picker shows stock and the surgeon portal shows the locked prescription
+        run: node scripts/e2e/implant-rows-ui.mjs
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی

@@ -297,7 +297,8 @@ export class SurgeonPortalService {
   async saveInstructions(id: number, dto: { instructions: string; requiredItems?: RequiredItemInput[] }, user: any) {
     const before = await this.visit(id, user);
     const scope = await this.scope(user);
-    const requiredItems = dto.requiredItems === undefined ? undefined : await resolveRequirements(this.prisma, dto.requiredItems);
+    /* «طبقِ نسخه» از ردیف‌های فعلی حمل می‌شود — ویرایشِ جراح فقط برنامه را عوض می‌کند. */
+    const requiredItems = dto.requiredItems === undefined ? undefined : await resolveRequirements(this.prisma, dto.requiredItems, { previous: before.requiredItems });
     const after = { surgeonInstructions: dto.instructions.trim(), ...(requiredItems !== undefined ? { requiredItems } : {}) };
     await this.prisma.$transaction(async tx => {
       const result = await tx.visit.updateMany({ where: { id, ...scope, patient: { deletedAt: null } }, data: after });

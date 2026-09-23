@@ -36,6 +36,13 @@ export class InventoryController {
     });
   }
 
+  /** موجودیِ در دسترسِ چند کالا (`?items=1,2`) — انتخابگرِ اقلامِ ثبت‌نام؛ فقط نمایش، بی‌رزرو. */
+  @RequirePermissions('inventory.read')
+  @Get('availability')
+  availability(@Query('items') items?: string) {
+    return this.inv.availability(String(items ?? '').split(',').map(Number));
+  }
+
   /** لات‌های قابلِ انتخاب برای یک کالا — انتخابگرِ فاکتور از این می‌خواند. */
   @RequirePermissions('inventory.read')
   @Get('items/:itemId/lots')
