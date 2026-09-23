@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright-core';
+import { readFileSync } from 'node:fs';
 
 const base = 'http://127.0.0.1:5199';
 const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5199', '--strictPort'], { stdio: 'ignore' });
@@ -13,6 +14,13 @@ const visit = { id: 1, patientId: 1, kind: 'clinic', firstName: 'بیمار', la
 const record = { ...visit, clinicalVisible: true, visits: [visit], notes: [], clinicalNotes: [], documents: [], forms: [], visitTexts: [], counts: { visits: 1, notes: 0, documents: 0, forms: 0, notesByKind: {} } };
 let reply = 'data: {"d":"شرح ساخت‌یافته"}\r\n\r\ndata: [DONE]\r\n\r\n';
 const writes = [];
+/* ⚠️ از بستهٔ ۶الف ردیفِ تصمیم از `/config.statuses.decision` رندر می‌شود، نه از
+   فهرستِ کلاینت. فهرست از خودِ `labels.ts` خوانده می‌شود تا ماکِ این آزمون
+   کپیِ دومی نشود که روزی با سرور نخواند. */
+const decisionBody = readFileSync('server/src/patients/labels.ts', 'utf8')
+  .match(/DECISION_LABELS: Record<string, string> = \{([^}]*)\}/)?.[1] ?? '';
+const decisions = [...decisionBody.matchAll(/(\w+): '([^']+)'/g)].map((m) => ({ key: m[1], label: m[2] }));
+assert.ok(decisions.length >= 6, 'DECISION_LABELS از labels.ts خوانده نشد');
 try {
   for (let i = 0; i < 80; i++) { if (await fetch(base).then((r) => r.ok).catch(() => false)) break; await delay(100); }
   browser = await chromium.launch({ executablePath: process.env.E2E_CHROME ?? '/tmp/chromium', args: ['--no-sandbox', '--disable-dev-shm-usage', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -27,7 +35,7 @@ try {
       }
       let body = [];
       if (path === '/auth/me') body = { id: 1, firstName: 'تست', lastName: 'محلی', level: 6, status: 'active' };
-      else if (path === '/config') body = { vertical: 'clinic', brand: {} };
+      else if (path === '/config') body = { vertical: 'clinic', brand: {}, statuses: { decision: decisions } };
       else if (path === '/features') body = [{ key: 'dashboard', allowed: true }];
       else if (path === '/visits/1') body = visit;
       else if (path === '/visits') body = { rows: [visit], total: 1, pages: 1, stats: { total: 1, pending: 1, today: 0, due: 0, kinds: [] } };

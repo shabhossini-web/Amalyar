@@ -64,10 +64,11 @@ export type PresetForm = {
 export const BUILTIN_VISIT_KEYS = new Set([
   'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
   'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount',
-  'payer', 'kind', 'topicId', 'nextVisitDate', 'chiefComplaint',
-  /* بستهٔ ۶الف: نوعِ بیهوشی ستون شد — تا دیروز فیلدِ دلخواهِ قالبِ جراحیِ مطب
-     بود و در `extra` می‌نشست، پس «چند عمل با بیهوشیِ عمومی؟» جواب نداشت. */
-  'anesthesia',
+  'payer', 'kind', 'topicId', 'nextVisitDate', 'chiefComplaint', 'anesthesia',
+  /* ↑ بستهٔ ۶الف: نوعِ بیهوشی ستون شد — تا دیروز فیلدِ دلخواهِ قالبِ جراحیِ مطب
+     بود و در `extra` می‌نشست، پس «چند عمل با بیهوشیِ عمومی؟» جواب نداشت.
+     ⚠️ کامنت **بعد از** کلید است نه قبلش: نگهبانِ CI این Set را با کاما
+     می‌شکند و کامنتی که به کلیدِ بعدی بچسبد، آن کلید را نامرئی می‌کند. */
   /* ⚠️ `techArriveTime` عمداً نیست (W3.8/U7): فرمِ مراجعه دیگر ساعتِ حضور
      نمی‌گیرد — از برنامهٔ چینش می‌آید. فیلدی که در فرم‌ساز روشن شود ولی
      چیزی ننویسد، بدترین نوعِ فیلد است: کاربر پُرش می‌کند و بی‌صدا گم می‌شود. */

@@ -138,9 +138,13 @@ try {
   const started = await send(`/theatre/visits/${v.id}/start`, 'POST');
   const t1 = started.json?.visit?.opStartTime;
   ok('«شروع شد» ساعتِ دیوار را می‌زند', started.status < 300 && /^\d{2}:\d{2}$/.test(t1 ?? ''), String(t1));
-  sql(`UPDATE visits SET op_start_time='01:02' WHERE id=${v.id}`);
+  /* ⚠️ `00:00` نه یک ساعتِ دلخواه: پایین‌تر همین شروع باید «در جریان» خوانده
+     شود، و شروعِ بعد از «الان» برنامه است نه جریان. با `01:02` این سوییت هر شب
+     بین ۰۰:۰۰ و ۰۱:۰۲ قرمز می‌شد (رانِ محلیِ بستهٔ ۶ از نیمه‌شب گذشت و گرفتش).
+     `00:00` هیچ‌وقت بعد از «الانِ» همان روز نیست. */
+  sql(`UPDATE visits SET op_start_time='00:00' WHERE id=${v.id}`);
   await send(`/theatre/visits/${v.id}/start`, 'POST');
-  ok('**نباید بیفتد:** لمسِ دوباره ساعتِ ثبت‌شده را بازنویسی کند', sql(`SELECT op_start_time FROM visits WHERE id=${v.id}`) === '01:02');
+  ok('**نباید بیفتد:** لمسِ دوباره ساعتِ ثبت‌شده را بازنویسی کند', sql(`SELECT op_start_time FROM visits WHERE id=${v.id}`) === '00:00');
   const fin = await send(`/theatre/visits/${v.id}/finish`, 'POST');
   ok('«پایان» بعد از شروع می‌نشیند', fin.status < 300 && /^\d{2}:\d{2}$/.test(fin.json?.visit?.opEndTime ?? ''), String(fin.json?.visit?.opEndTime));
 
@@ -161,7 +165,7 @@ try {
   const future = (await send(`/theatre/visits/${v.id}`)).json?.visit;
   ok('**نباید بیفتد:** ساعتِ شروعِ آیندهٔ همین امروز «در جریان» خوانده شود',
     future?.state === 'waiting' || new Date().getHours() === 23, JSON.stringify([future?.state, new Date().getHours()]));
-  sql(`UPDATE visits SET op_start_time='00:01' WHERE id=${v.id}`);
+  sql(`UPDATE visits SET op_start_time='00:00' WHERE id=${v.id}`);
   ok('… ولی ساعتِ گذشتهٔ همین امروز «در جریان» است', (await send(`/theatre/visits/${v.id}`)).json?.visit?.state === 'running');
   sql(`UPDATE visits SET op_date=CURRENT_DATE - 2 WHERE id=${v.id}`);
   const past = (await send(`/theatre/day?date=${new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10)}`)).json;
