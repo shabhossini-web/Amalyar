@@ -166,6 +166,12 @@ class NoteDto {
   @IsOptional() @IsString() @MaxLength(300) note?: string;
 }
 
+/** برگشت برای اصلاح: مرحله و دلیل هر دو لازم‌اند (مالک، ۱۴۰۵/۰۷/۰۱) — بیمار هر دو را می‌بیند. */
+class ReturnDto {
+  @IsIn(['service', 'documents', 'receipt', 'all'], { message: 'مرحله‌ای را که بیمار باید اصلاح کند انتخاب کنید' }) stage!: string;
+  @IsString({ message: 'بنویسید چه چیزی باید اصلاح شود' }) @MaxLength(300) note!: string;
+}
+
 /**
  * مسیرهای **عمومیِ** فرمِ بیمار — بدونِ ورود.
  *
@@ -433,7 +439,7 @@ export class IntakeController {
 
   @RequirePermissions('intake.review')
   @Post('submissions/:id/return')
-  returnForFix(@Param('id', ParseIntPipe) id: number, @Body() dto: NoteDto, @CurrentUser() user: any) {
+  returnForFix(@Param('id', ParseIntPipe) id: number, @Body() dto: ReturnDto, @CurrentUser() user: any) {
     return this.intake.returnForFix(id, dto, user);
   }
 }

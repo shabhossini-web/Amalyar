@@ -16,5 +16,8 @@
 .hospital-lookup .bl-code-hits:empty { display: none; }
 .hospital-lookup .bl-mini {
   padding: 10px 14px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
+  color: var(--text1); background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
+/* پیامِ «فهرست باز نشد» / خطا — تا دیروز `<p>`ِ بی‌استایل بود و با قلمِ بدنه (درشت) زیرِ کادر می‌نشست. */
+.hospital-lookup > p { margin: 6px 0 0; font-size: 12px; line-height: 1.8; color: var(--text2); }
+.hospital-lookup > p[role="alert"] { color: var(--red-text); }

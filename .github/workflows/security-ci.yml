@@ -3281,6 +3281,10 @@ jobs:
         run: node scripts/e2e/implant-rows.mjs
       - name: Verify the implant picker shows stock and the surgeon portal shows the locked prescription
         run: node scripts/e2e/implant-rows-ui.mjs
+      - name: Verify returning an intake to a chosen stage sets files aside, texts the patient and times the review task
+        run: node scripts/e2e/intake-return-local.mjs
+      - name: Verify the approval popup returns or rejects with a stage and reason and the patient sees the banner
+        run: node scripts/e2e/intake-return-ui.mjs
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی

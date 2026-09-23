@@ -65,6 +65,12 @@ paths:
   - src/app/surgeon-portal.css
   - scripts/e2e/implant-rows.mjs
   - scripts/e2e/implant-rows-ui.mjs
+  - server/src/patients/intake-return.ts
+  - server/src/work/work-rules.ts
+  - server/src/common/sms-template.ts
+  - scripts/e2e/intake-return.mjs
+  - scripts/e2e/intake-return-local.mjs
+  - scripts/e2e/intake-return-ui.mjs
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ

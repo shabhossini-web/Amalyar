@@ -108,9 +108,9 @@
   font-size: 12.5px; line-height: 1.9;
 }
 .ik-note { color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1); }
-.ik-good { color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .32); }
+.ik-good { color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .32); }
 .ik-bad { color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .32); }
-.ik-warn { color: #fcd34d; background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35); }
+.ik-warn { color: var(--amber-text); background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35); }
 .ik-note svg, .ik-good svg, .ik-bad svg, .ik-warn svg { flex: 0 0 auto; }
 
 @media (max-width: 460px) {
@@ -280,3 +280,13 @@
   padding: 4px 10px; cursor: pointer; font: inherit; font-size: 11px; color: #f87171;
   background: none; border: 1px solid rgba(248, 113, 113, .4); border-radius: 99px;
 }
+
+/* ── برگشت برای اصلاح: کدام بخش، چرا، چه باید کرد ── */
+.ik-returned {
+  display: grid; gap: 4px; padding: 11px 13px; border-radius: 13px;
+  color: var(--text1); background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .4);
+}
+.ik-returned b { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--amber-text); }
+.ik-returned b svg { flex: 0 0 auto; }
+.ik-returned p { margin: 0; font-size: 13px; line-height: 1.9; }
+.ik-returned small { font-size: 11.5px; color: var(--text2); line-height: 1.8; }

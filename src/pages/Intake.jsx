@@ -418,7 +418,15 @@ function Form() {
         </ol>
       )}
 
-      {d.reviewNote && !done && (
+      {/* برگشت برای اصلاح (مالک، ۱۴۰۵/۰۷/۰۱): بیمار باید بداند **کدام بخش** و **چرا** — نه فقط
+          یک یادداشت. مرحله و راهنما از سرور (`intake-return.ts`) می‌آیند. */}
+      {d.returned ? (
+        <div className="ik-returned" role="status">
+          <b><Alert width="15" height="15" /> برای اصلاح برگشت خورد — {d.returned.stageLabel}</b>
+          <p>{d.returned.note}</p>
+          <small>{d.returned.hint}</small>
+        </div>
+      ) : d.reviewNote && !done && (
         <p className="ik-warn"><Alert width="15" height="15" /> {d.reviewNote}</p>
       )}
 

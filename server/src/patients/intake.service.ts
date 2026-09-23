@@ -15,6 +15,7 @@ import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { serviceLabel, serviceOf } from './intake-service-of';
 import { imageRefsOf, receiptIdsOf } from './intake-docs';
+import { RETURN_STAGES, applyReturn, currentReturn, isReturnStage, returnsOf, withoutReturns } from './intake-return';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
@@ -689,8 +690,10 @@ export class IntakeService {
       discountCode: row.discountCode,
       discountAmount: row.discountAmount,
       payable: Math.max(0, row.amount - row.discountAmount),
-      data: row.data,
+      data: withoutReturns(row.data),
       reviewNote: row.reviewNote,
+      /* برگشتِ جاری (مرحله، دلیل، راهنما) — تا وقتی بیمار اصلاح را نفرستاده. */
+      returned: currentReturn(row.data, row.status),
       expiresAt: row.expiresAt,
     };
   }
@@ -969,15 +972,27 @@ export class IntakeService {
     }
     const free = payable === 0 && !hasPaymentBox;
     const direct = free && meta?.scope === 'record' && form !== null;
+    /* ⚠️ فیشِ معتبرِ قبلی = ثبت‌نامی که برای اصلاحِ **خدمت یا مدارک** برگشته بود
+       (`intake-return.ts`): فیشش سرِ جایش است و بیمار نباید دوباره واریز یا آپلود کند —
+       با ثبتِ فرم مستقیم به صفِ تأیید برمی‌گردد. برگشتِ «فیش» یا «همه» فیش را کنار
+       گذاشته، پس این‌جا خالی است و مسیرِ عادیِ واریز می‌ماند. */
+    const hasReceipt = receiptIdsOf(data).length > 0;
+    const nextStatus = direct ? 'approved' : free || hasReceipt ? 'pending_approval' : 'pending_payment';
 
     const schemaSnapshot = row.schemaSnapshot ?? form?.fields ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds);
     await this.prisma.$transaction(async (tx) => {
       const saved = await this.updateSubmissionVersion(row, {
-        data, amount: row.amount, schemaSnapshot, status: direct ? 'approved' : free ? 'pending_approval' : 'pending_payment',
+        data, amount: row.amount, schemaSnapshot, status: nextStatus,
         ...(direct ? { reviewedAt: new Date() } : {}),
       }, tx);
-      await this.events.emit({ type: 'intake.submitted', refType: 'intake_submission', refId: row.id,
-        patientId: saved.patientId, visitId: saved.visitId }, tx);
+      /* ⚠️ کارِ «بررسی و تأییدِ ثبت‌نام» فقط وقتی باز می‌شود که **چیزی برای تأیید** هست:
+         فرمِ پولی تا فیش نیامده در صفِ منشی نمی‌نشیند (رویدادش را آپلودِ فیش می‌زند). تا
+         دیروز همین‌جا بی‌قید باز می‌شد و کار روزها برای ثبت‌نامی باز می‌ماند که بیمارش
+         هنوز واریز نکرده بود. */
+      if (nextStatus !== 'pending_payment') {
+        await this.events.emit({ type: 'intake.submitted', refType: 'intake_submission', refId: row.id,
+          patientId: saved.patientId, visitId: saved.visitId }, tx);
+      }
       if (direct) {
         /* W1.3: همان گامی که `approve()` دستی اجرا می‌کند — وگرنه لینکِ فرم
            هرگز مدرکِ پرونده نمی‌شود و چون این ردیف دیگر `pending_approval`
@@ -1286,7 +1301,14 @@ export class IntakeService {
     }
     const ids = [...prevIds, doc.id];
     const data = { ...(row.data as any), receiptDocumentId: ids[0], receiptDocumentIds: ids };
-    await this.updateSubmissionVersion(row, { data, status: 'pending_approval' });
+    await this.prisma.$transaction(async (tx) => {
+      const saved = await this.updateSubmissionVersion(row, { data, status: 'pending_approval' }, tx);
+      /* اولین فیش = حالا چیزی برای تأیید هست (همان رویدادی که `fill` برای فرمِ رایگان می‌زند). */
+      if (row.status !== 'pending_approval') {
+        await this.events.emit({ type: 'intake.submitted', refType: 'intake_submission', refId: row.id,
+          patientId: saved.patientId, visitId: saved.visitId }, tx);
+      }
+    });
     return this.publicView(token);
   }
 
@@ -2011,6 +2033,8 @@ export class IntakeService {
       visitId: r.visitId,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
       reviewNote: r.reviewNote,
+      /* برگشت‌های قبلی (مرحله و دلیل) — تأییدکننده ببیند این ثبت‌نام چند بار و چرا برگشته. */
+      returns: returnsOf(r.data),
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
       };
@@ -2090,7 +2114,9 @@ export class IntakeService {
       'chiefComplaint',
     ]);
     const extra: Record<string, any> = {};
-    for (const [k, v] of Object.entries(d ?? {})) if (!RESERVED.has(k)) extra[k] = v;
+    /* کلیدِ `_`دار مالِ سیستم است نه پاسخِ بیمار (`_page`، تاریخچهٔ برگشت‌ها `_returns`) —
+       هیچ فیلدِ فرمی با `_` شروع نمی‌شود (`KEY_RE`)، پس به `Visit.extra` هم نمی‌رود. */
+    for (const [k, v] of Object.entries(d ?? {})) if (!RESERVED.has(k) && !k.startsWith('_')) extra[k] = v;
 
     /* فرمِ **زیرپرونده** مراجعه نمی‌سازد — به پروندهٔ بیمار می‌چسبد و همان‌جا
        می‌ماند. `visitId` خالی می‌ماند و دفترِ مالی هم دست نمی‌خورد (لینکِ چنین
@@ -2269,6 +2295,11 @@ export class IntakeService {
     }
     const note = text(dto.note, 300);
     if (!note) throw new BadRequestException('دلیلِ رد را بنویسید — بیمار همین را می‌بیند');
+    /* پیامکِ رد (مالک: «برگشت و رد هر دو پیامک دارند»، رد بی‌لینک) — ولی نه برای حذفِ یک
+       پاسخِ خودکارتأییدشده از پرونده: آن تصمیمِ داخلیِ نگه‌داریِ پرونده است، نه پاسخ به بیمار. */
+    const notice = autoApproved ? null : await this.preparePatientNotice();
+    const rejectTemplate = autoApproved ? '' : await this.settings.textOr('sms_intake_reject_text', String(SETTING_BY_KEY.get('sms_intake_reject_text')?.default ?? ''));
+    let sms: number | null = null;
     const rejAppts = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM intake_submissions WHERE id = ${id} FOR UPDATE`;
       const current = await tx.intakeSubmission.findUnique({ where: { id } });
@@ -2289,28 +2320,89 @@ export class IntakeService {
       for (const a of appointments) await this.events.emit({ type: 'appointment.cancelled', appointmentId: a.id,
         patientId: a.patientId, visitId: a.visitId, actorId: user?.id ?? null }, tx);
       await this.audit.record({ actorId: user?.id, action: 'intake.reject', entityType: 'intake_submission', entityId: id, after: { note } }, tx);
+      if (notice) {
+        sms = await notice(tx, { patientId: current.patientId, dedupeKey: `intake_rejected:${id}`, actorId: user?.id ?? null, submissionId: id,
+          template: rejectTemplate, vars: { reason: note } });
+      }
       return appointments;
     });
     for (const a of rejAppts) await this.reminders.syncAppointment(a.id);
-    return { ok: true };
+    return { ok: true, sms: notice ? (sms ? 'queued' : 'no_phone') : 'skipped' };
   }
 
   /**
-   * برگرداندن برای اصلاح.
+   * برگرداندن برای اصلاح — **به یک مرحلهٔ مشخص**، با پیامک به بیمار (مالک، ۱۴۰۵/۰۷/۰۱).
    *
-   * ⚠️ به `pending_payment` برمی‌گردد نه `pending_fill`: فیش قبلاً آمده و
-   * پاک‌کردنش یعنی بیمار دوباره آپلود کند. یادداشتِ ادمین همان چیزی است که
-   * بیمار روی فرمش می‌بیند.
+   * مرحله‌ها و اثرشان در `intake-return.ts`: «خدمت» و «مدارک» به فرم برمی‌گردند و فیش
+   * سرِ جایش می‌ماند (با ثبتِ فرم مستقیم به صف برمی‌گردد)، «فیش» به واریز، «همه» به فرم با
+   * فیشِ کنارگذاشته. فایلِ مرحلهٔ برگشت‌خورده کنار گذاشته می‌شود، پاک نه.
+   *
+   * ⚠️ نوبتِ نگه‌داشته **لغو نمی‌شود**: اصلاحِ یک عکس دلیلِ ازدست‌دادنِ روزِ عمل نیست.
+   * ⚠️ پیامک در **همان تراکنش** در صفِ پیام‌ها می‌نشیند (مثلِ پیامکِ تأیید) تا دفترِ
+   * پیام‌ها ببیندش و ارسالِ ناموفق دوباره تلاش شود؛ نبودِ شمارهٔ معتبر برگشت را نمی‌بندد.
    */
-  async returnForFix(id: number, dto: { note?: string }, user: any) {
+  async returnForFix(id: number, dto: { note?: string; stage?: string }, user: any) {
     const row = await this.prisma.intakeSubmission.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('ثبت‌نام پیدا نشد');
     if (row.status !== 'pending_approval') throw new BadRequestException('فقط ثبت‌نامِ در انتظارِ تأیید برمی‌گردد');
+    if (!isReturnStage(dto.stage)) throw new BadRequestException('مرحله‌ای را که بیمار باید اصلاح کند انتخاب کنید');
     const note = text(dto.note, 300);
-    if (!note) throw new BadRequestException('بنویسید چه چیزی باید اصلاح شود');
-    await this.updateSubmissionVersion(row, { status: 'pending_payment', reviewNote: note, reviewedById: user?.id ?? null, reviewedAt: new Date() });
-    await this.audit.record({ actorId: user?.id, action: 'intake.return', entityType: 'intake_submission', entityId: id, after: { note } });
-    return { ok: true };
+    if (!note) throw new BadRequestException('بنویسید چه چیزی باید اصلاح شود — بیمار همین را می‌بیند');
+    const stage = dto.stage;
+    const formIds = [row.formId, ...(row.extraFormIds ?? [])].filter((x): x is number => !!x);
+    const imageKeys = formIds.length
+      ? (await this.prisma.formField.findMany({ where: { formId: { in: formIds }, type: 'image' }, select: { key: true } })).map((f) => f.key)
+      : [];
+    const { data, status } = applyReturn(row.data, stage, imageKeys, { note, at: new Date().toISOString(), by: user?.id ?? null });
+    const n = returnsOf(data).length;
+    const notice = await this.preparePatientNotice();
+    const sms = await this.prisma.$transaction(async (tx) => {
+      const saved = await this.updateSubmissionVersion(row, {
+        status, data, reviewNote: note, reviewedById: user?.id ?? null, reviewedAt: new Date(),
+      }, tx);
+      /* کارِ «بررسی و تأیید» بسته می‌شود — حالا منتظرِ بیمار است؛ ارسالِ دوباره بازش می‌کند. */
+      await this.events.emit({ type: 'intake.returned', refType: 'intake_submission', refId: id,
+        patientId: saved.patientId, visitId: saved.visitId, actorId: user?.id ?? null, payload: { stage } }, tx);
+      await this.audit.record({ actorId: user?.id, action: 'intake.return', entityType: 'intake_submission', entityId: id, after: { note, stage } }, tx);
+      return notice(tx, {
+        patientId: row.patientId, dedupeKey: `intake_returned:${id}:${n}`, actorId: user?.id ?? null, submissionId: id,
+        template: await this.settings.textOr('sms_intake_return_text', String(SETTING_BY_KEY.get('sms_intake_return_text')?.default ?? '')),
+        vars: { reason: note, stage: RETURN_STAGES[stage].label, link: this.publicFormLink(row.token) },
+      });
+    });
+    return { ok: true, status, stage, sms: sms ? 'queued' : 'no_phone' };
+  }
+
+  /** نشانیِ فرمِ بیمار روی دامنهٔ **همین** شرکت (همان مبنای لینکِ ثبت‌نام). */
+  private publicFormLink(token: string) {
+    return `https://${this.tenant.require().hostname}/f/${token}`;
+  }
+
+  /**
+   * پیامکِ بیمار در **صفِ پیام‌ها** (`reminder`، نوعِ `notice`) — داخلِ تراکنشِ فراخوان.
+   *
+   * همان الگوی پیامکِ تأیید (`portal.prepareApprovalNotice`): برند و قالب پیش از تراکنش
+   * خوانده می‌شوند، ردیف با `dedupeKey` یکتاست (تکرارِ درخواست پیامکِ دوم نمی‌سازد)، و
+   * شمارهٔ نامعتبر یعنی «پیامکی نرفت» نه خطا — برگشت و رد نباید به‌خاطرِ شماره گیر کنند.
+   */
+  private async preparePatientNotice() {
+    const brand = await this.settings.brand();
+    return async (tx: any, o: {
+      patientId: number | null; dedupeKey: string; template: string; vars: Record<string, string>;
+      actorId: number | null; submissionId: number;
+    }) => {
+      if (!o.patientId) return null;
+      const patient = await tx.patient.findFirst({ where: { id: o.patientId, deletedAt: null }, select: { phone: true } });
+      const phone = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
+      if (!/^09\d{9}$/.test(phone)) return null;
+      const body = `${brand.name ? brand.name + '\n' : ''}${renderSms(o.template, o.vars)}`;
+      const reminder = await tx.reminder.upsert({ where: { dedupeKey: o.dedupeKey }, update: {}, create: {
+        patientId: o.patientId, kind: 'notice', dueAt: new Date(), phone, text: body, status: 'pending', dedupeKey: o.dedupeKey,
+      } });
+      await this.audit.record({ actorId: o.actorId, action: 'intake.sms_queued', entityType: 'intake_submission', entityId: o.submissionId,
+        after: { reminderId: reminder.id, dedupeKey: o.dedupeKey } }, tx);
+      return reminder.id as number;
+    };
   }
 
   // ── کدِ تخفیف ─────────────────────────────────────────────────────
