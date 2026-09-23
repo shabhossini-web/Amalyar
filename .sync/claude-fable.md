@@ -1,6 +1,6 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-22
 paths:
@@ -408,6 +408,16 @@ ok('follow-up links distinct per visit/day and stable after completion');
 - ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۷/۰۱ · PR #90 · `ab03cec` · **بستهٔ ۶ — «ویزیت یک استانداردِ ثابت، عمل یک
+  استانداردِ ثابت»** — هستهٔ ثابتِ مطب (بخش‌های متنی → `ClinicalNote`، بیهوشی ستون،
+  `plan` در `decisions`، قفل و ترتیبِ ثابت در فرم‌ساز)، ترخیصِ ساختاری (وضعیتِ خروج +
+  شرح + یادداشت)، علائمِ حیاتی (`vital_signs`، اختیاری)، ضبطِ صدا زیرِ لینک‌ها و
+  مدارک (WAV از روی بایت). رفعِ جانبی: متنِ سفیدِ ثابتِ فرمِ عمومی در تمِ روشن +
+  نگهبانِ «توکنِ تعریف‌نشده». سه سوییتِ تازه (`clinical-core`، `vital-signs`،
+  `voice-notes`). CI محلی: رانِ کامل + بازاجرای گام‌های ۵۵ به بعد بعد از رفعِ سه
+  قرمز و یک مسابقهٔ قدیمی (`theatre` نیمه‌شب، `company-operations-ui`) — همه سبز؛
+  مرجِ دستی چون سهمیهٔ Actions تمام است.
 
 - ۱۴۰۵/۰۷/۰۱ · PR #88 · `3eacdfa` · **بستهٔ ۵ — «همه یک دیتا در ویوهای مختلف»** ده
   کامیت: وضعیتِ نوبت (`apptStartBlock` با دو لایهٔ ثابتِ داده / سیاستِ میز)، برچسب‌ها
