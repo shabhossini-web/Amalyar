@@ -37,7 +37,7 @@ const send = (p, m = 'GET', b) => fetch(API + p, { method: m, headers: A, body: 
   .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = 'qv' + randomBytes(3).toString('hex');
-const trash = { visits: [], accounts: [] };
+const trash = { visits: [], accounts: [], surgeons: [], hospitals: [] };
 const countMine = () => Number(sql(`SELECT count(*) FROM visits v JOIN patients p ON p.id = v.patient_id WHERE p.last_name = 'سریع${tag}'`));
 const browser = await chromium.launch({ executablePath: EXE, headless: true, args: ['--no-sandbox'] });
 const errors = [];
@@ -47,6 +47,16 @@ const watch = (page, who) => {
 };
 
 try {
+  /* اگر فرمِ این نصب جراح را اجباری کرده، دست‌کم یک جراحِ فعال باید باشد. */
+  if (!((await send('/surgeons')).json ?? []).some((x) => x.active !== false)) {
+    const sg = (await send('/surgeons', 'POST', { firstName: 'جراحِ', lastName: `ثبت‌سریع${tag}` })).json;
+    if (sg?.id) trash.surgeons.push(sg.id);
+  }
+  if (!((await send('/hospitals')).json ?? []).some((x) => x.active !== false)) {
+    const h = (await send('/hospitals', 'POST', { name: `بیمارستانِ ثبت‌سریع ${tag}` })).json;
+    if (h?.id) trash.hospitals.push(h.id);
+  }
+
   console.log('۱) سرور می‌گوید چه کسی می‌تواند');
   const me = (await send('/work/today')).json;
   ok(me?.canCreateVisit === true, 'مدیر: `canCreateVisit` روشن است');
@@ -83,12 +93,47 @@ try {
   const kindBtn = page.locator('.db-sheet .db-kindrow button').first();
   if (await kindBtn.count()) await kindBtn.click();
   await page.locator('.db-stepnav .db-submit').click();
-  await page.waitForSelector('.db-sheet .jd-wrap input', { timeout: 8000 });
-  const dateVal = faToEn(await page.locator('.db-sheet .jd-wrap input').first().inputValue());
+  /* ⚠️ `:visible`: کادرِ «تاریخِ تولد»ِ گامِ ۱ پنهان در DOM می‌ماند و اولین
+     `.jd-wrap` همان است، نه تاریخِ مراجعه. */
+  const dateInput = page.locator('.db-sheet .jd-wrap:visible input').first();
+  await dateInput.waitFor({ timeout: 8000 });
+  const dateVal = faToEn(await dateInput.inputValue());
   ok(dateVal === todayJStr(), `تاریخ از پیش «امروز» است (${dateVal} = ${todayJStr()})`);
-  const saved = page.waitForResponse((r) => r.url().endsWith('/api/visits') && r.request().method() === 'POST', { timeout: 15000 });
-  await page.locator('.db-sheet button.db-submit[type="submit"]').click();
-  const res = await saved.catch(() => null);
+  /* فیلدهای «اجباری» مالِ فرم‌سازِ هر نصب‌اند (این‌جا مثلاً «جراح»)، نه این آزمون؛
+     پس به‌جای حدس، همان پیامی که فرم می‌دهد («X را کامل کنید») خوانده و همان
+     فیلد پر می‌شود — گزینهٔ اولِ انتخابگر یا یک متنِ آزمایشی. */
+  const fillRequired = async (label) => {
+    const field = page.locator('.db-sheet label.db-field:visible', { hasText: label }).first();
+    if (await field.locator('.pk-btn').count()) {
+      await field.locator('.pk-btn').first().click();
+      await page.waitForSelector('.pk-panel', { timeout: 5000 });
+      await page.locator('.pk-panel .pk-item:not(.pk-clear)').first().click();
+      await page.waitForSelector('.pk-panel', { state: 'detached', timeout: 5000 }).catch(() => {});
+      return true;
+    }
+    const box = field.locator('input:not([type=hidden]), textarea').first();
+    if (await box.count()) { await box.fill('آزمونِ ثبتِ سریع'); return true; }
+    return false;
+  };
+  let res = null;
+  for (let attempt = 0; attempt < 5 && !res; attempt++) {
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/visits') && r.request().method() === 'POST', { timeout: 4000 });
+    await page.locator('.db-sheet button.db-submit[type="submit"]').click();
+    let need = null;
+    for (let i = 0; i < 20 && !need; i++) {
+      const t = (await page.locator('.sh-toast').allInnerTexts()).join(' ');
+      need = /«([^»]+)» را کامل کنید/.exec(t)?.[1] ?? null;
+      if (!need) {
+        const r = await Promise.race([saved.catch(() => null), page.waitForTimeout(100).then(() => undefined)]);
+        if (r) { res = r; break; }
+      }
+    }
+    if (res) break;
+    if (!need) { res = await saved.catch(() => null); break; }
+    console.log(`  · فرم «${need}» را اجباری می‌خواهد — پر می‌شود`);
+    if (!await fillRequired(need)) break;
+    await saved.catch(() => null);
+  }
   ok(res?.status() === 201 || res?.status() === 200, `ثبت شد (HTTP ${res?.status()})`);
   const body = await res?.json().catch(() => null);
   if (body?.id) trash.visits.push(body.id);
@@ -151,6 +196,8 @@ try {
 } finally {
   await browser.close().catch(() => {});
   for (const v of trash.visits) await send(`/visits/${v}`, 'DELETE').catch(() => {});
+  for (const id of trash.surgeons) await send(`/surgeons/${id}`, 'DELETE').catch(() => {});
+  for (const id of trash.hospitals) await send(`/hospitals/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.accounts) {
     sql(`DELETE FROM account_sessions WHERE account_id=${id}`);
     sql(`DELETE FROM accounts WHERE id=${id}`);
