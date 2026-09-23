@@ -26,6 +26,9 @@ paths:
   - scripts/e2e/run-live.mjs
   - scripts/e2e/op-details.mjs
   - scripts/e2e/op-details-ui.mjs
+  - server/src/work/work-detectors.ts
+  - server/src/work/work-rules.ts
+  - scripts/e2e/clinic-report-work.mjs
 note: بستهٔ ۸ (بندِ «د» HIS) — شرحِ عملِ ساخت‌یافته، سمت/سطحِ عمل، تکمیلِ ترخیص. هم‌پوشانیِ اعلام‌شده با کلیمِ بیاتِ claude-opus (مرج‌شده در #80): src/app/VisitForm.jsx، src/app/PatientRecord.jsx و server/prisma/ را هم ویرایش می‌کنم — طبقِ پیشینهٔ بستهٔ ۶ در paths نیامده‌اند.
 <!-- claim:end -->
 

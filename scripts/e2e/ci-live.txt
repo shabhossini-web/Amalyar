@@ -128,3 +128,4 @@ op-defaults
 tenant-profile
 op-details
 op-details-ui
+clinic-report-work
