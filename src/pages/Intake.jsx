@@ -399,6 +399,10 @@ function Form() {
   /* «تأییدشده» یعنی همهٔ مرحله‌ها پشتِ سر است — نه یک مرحلهٔ جاریِ دیگر. */
   const stepIdx = done ? steps.length : steps.findIndex((s) => s.key === d.status);
   const T = PATIENT.intake;
+  /* فرمی که مرحلهٔ واریز دارد «ثبت و مرحلهٔ بعد» می‌گوید (همان استپر تصمیم
+     می‌گیرد، نه یک شرطِ دوم که بتواند از آن جدا بیفتد). */
+  const paidNext = steps.some((x) => x.key === 'pending_payment');
+  const submitLabel = paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
 
   return (
     <Shell title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}>
@@ -485,7 +489,7 @@ function Form() {
                 <button type="button" className="ik-go" disabled={busy} onClick={nextPage}>بعدی</button>
               ) : (
                 <button type="button" className="ik-go ghost" disabled={busy} onClick={saveForm}>
-                  {busy ? 'در حال ذخیره…' : makesVisit ? T.submit.visit : T.submit.record}
+                  {busy ? 'در حال ذخیره…' : submitLabel}
                 </button>
               )}
             </div>
@@ -504,7 +508,7 @@ function Form() {
               <textarea rows={2} value={f.notes} onChange={set('notes')} disabled={busy} />
             </label>
             <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
-              {busy ? 'در حال ذخیره…' : makesVisit ? T.submit.visit : T.submit.record}
+              {busy ? 'در حال ذخیره…' : submitLabel}
             </button>
           </>
         )

@@ -1,21 +1,39 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: idle
+status: active
 branch: claude/quirky-johnson-ynzr4y
-since: 2026-09-20
-paths: []
+since: 2026-09-23
+paths:
+  - server/src/config/tenant-profile.ts
+  - server/src/config/config.service.ts
+  - server/src/patients/labels.ts
+  - src/app/config.jsx
+  - src/lib/profile.js
+  - src/lib/terms.js
+  - src/pages/Intake.jsx
+  - scripts/e2e/tenant-profile.mjs
+  - scripts/e2e/tenant-profile-unit.mjs
+  - scripts/e2e/w0-1-intake-steps.mjs
 note: >-
-  ✅ **لِینِ ب بسته است؛ بدهی‌های لِینِ الف هم (به نیابت) تا آخرین ردیف.** آخرین
-  لند: #67 (`40d9a40`) — پورتال فرمِ پیگیری را فقط از روزِ موعدش «کار» نشان می‌دهد +
-  `follow-up.mjs` با قراردادِ per-wave. قبلش #65 — نوعِ فایلِ آپلودِ عمومی از بایت‌ها +
-  نرخ‌گیرِ `draft`. کلیم آزاد است — هیچ مسیری قفل نیست.
-  🔴 یک یافته برای لِینِ الف پایینِ همین فایل («یادداشت برای لِین‌های دیگر») منتظر
-  است: یادآوریِ لغوشده با برگرداندنِ وضعیت زنده نمی‌شود (W1.9، `plan()` با `update: {}`).
+  بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
+  خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
+  هویت ← خدمت ← واریز ← تأیید. بستهٔ الف: پروفایل (نوع + خدمات) فقط سمتِ خواندن،
+  بی‌هیچ تغییری برای نصب‌های فعلی + واژه‌های وضعیت و دکمهٔ فرمِ پولی.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۷/۰۱ · **`GET /config`** سه فیلدِ تازه دارد: `kind` (`clinic|company`)، `services`
+  (برای شرکت دست‌کم یکی از `ionm|implant`)، `profileLabel`؛ به‌علاوهٔ `kinds` و
+  `serviceCatalog`. `vertical` سرِ جایش است و برای شرکت **خدمتِ اصلی** است — هرگز
+  `company`. خوانندهٔ تازه‌ای که «این شرکت ایمپلنت دارد؟» می‌پرسد از `services` بپرسد
+  (`src/lib/profile.js` → `hasService`)، نه از `vertical === 'implant'`.
+- ۱۴۰۵/۰۷/۰۱ · **`PATCH /config/vertical`** ردیفِ `services` را پاک می‌کند.
+- ۱۴۰۵/۰۷/۰۱ · برچسبِ وضعیتِ ثبت‌نام: `pending_fill` «در حالِ پر کردن»، `pending_payment`
+  «در انتظارِ واریز» (کلیدها همان). دکمهٔ فرمِ **پولی** «ثبت و مرحلهٔ بعد» است
+  (`T.submit.paid`)؛ فرمِ رایگان همان «ذخیرهٔ اطلاعات».
 
 - ۱۴۰۵/۰۶/۲۹ · **`scripts/e2e/follow-up.mjs`** فایلِ پیش از لِین‌بندی است و صاحبِ
   مشخصی ندارد؛ فقط سنجه‌هایش با قراردادِ اعلام‌شدهٔ لِینِ الف هم‌خوان می‌شود، رفتاری

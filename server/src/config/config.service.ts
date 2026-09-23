@@ -8,6 +8,7 @@ import { vitalCatalog } from '../patients/vitals';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
+import { KEY_SERVICES, SERVICES, SERVICE_ORDER, TENANT_KINDS, TenantProfile, profileLabel, profileOf } from './tenant-profile';
 import { SettingsService } from './settings.service';
 import { CANCEL_REASONS, cancelSms } from '../common/cancel-reasons';
 import { LEVEL } from '../common/levels';
@@ -35,11 +36,32 @@ export class ConfigService {
     return isVertical(raw) ? raw : DEFAULT_VERTICAL;
   }
 
+  /**
+   * **نوعِ نصب + بستهٔ خدمات** — منبعِ واحد برای هر کسی که می‌پرسد «مطب است یا
+   * شرکت، و این شرکت چه خدماتی دارد». قاعده در `tenant-profile.ts` است.
+   *
+   * ⚠️ خوانندهٔ تازه باید از همین بپرسد، نه از `vertical()`: برای شرکتِ
+   * دوخدمته `vertical` فقط خدمتِ اصلی است و «ایمپلنت هم دارد» را نمی‌گوید.
+   */
+  async profile(): Promise<TenantProfile> {
+    const [vertical, services] = await Promise.all([this.vertical(), this.read(KEY_SERVICES)]);
+    return profileOf(vertical, services);
+  }
+
   async get() {
-    const [vertical, brand] = await Promise.all([this.vertical(), this.settings.brand()]);
+    const [vertical, brand, profile] = await Promise.all([this.vertical(), this.settings.brand(), this.profile()]);
     return {
       vertical,
       verticalLabel: VERTICALS[vertical].label,
+      /**
+       * نوعِ نصب و بستهٔ خدمات (`tenant-profile.ts`). `vertical` برای
+       * سازگاری می‌ماند و برای شرکت همیشه خدمتِ اصلی است.
+       */
+      kind: profile.kind,
+      services: profile.services,
+      profileLabel: profileLabel(profile),
+      kinds: Object.entries(TENANT_KINDS).map(([key, v]) => ({ key, label: v.label })),
+      serviceCatalog: SERVICE_ORDER.map((key) => ({ key, label: SERVICES[key].label })),
       /// نوعِ پیش‌فرضِ مراجعهٔ تازه — از حوزه (مطب: ویزیت)؛ کلاینت hardcode نمی‌کند.
       defaultKind: VERTICALS[vertical].defaultKind,
       brandName: brand.name,
@@ -125,6 +147,11 @@ export class ConfigService {
         create: { key: KEY_VERTICAL, value },
         update: { value },
       });
+      /* ⚠️ مسیرِ قدیمیِ «تغییرِ حوزه» بستهٔ خدمات را هم به همان یک حوزه برمی‌گرداند.
+         بدونِ این، `vertical=implant` کنارِ یک `services=[ionm]`ِ جامانده
+         می‌نشست و دو منبع دو حرف می‌زدند (`profileOf` آن را کهنه می‌خواند، ولی
+         ردیفِ جامانده نباید اصلاً بماند). */
+      await tx.setting.deleteMany({ where: { key: KEY_SERVICES } });
 
       const plan = featurePlanFor(value);
       // ماژولی که در پلانِ حوزهٔ تازه نیست خاموش می‌شود، نه حذف — تا اگر شرکت

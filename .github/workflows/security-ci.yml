@@ -3259,6 +3259,8 @@ jobs:
         run: node scripts/e2e/w3-6-light-theme.mjs
       - name: Verify module icons and naming (W3.7 UI)
         run: node scripts/e2e/w3-7-icons-naming.mjs
+      - name: Verify tenant kind and services derive from one rule on both sides
+        run: node scripts/e2e/tenant-profile-unit.mjs
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی
