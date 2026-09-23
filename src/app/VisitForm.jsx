@@ -205,7 +205,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* علائمِ حیاتیِ لحظهٔ ثبت — فقط در ساخت (بعد از ذخیره هر نوبت جدا ثبت می‌شود). */
     vitals: null,
     amount: '', // مبلغِ توافقی — فقط هنگامِ ساخت
-    opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : '',
+    /* `prefill.opDateJ` — تاریخِ پیش‌فرضِ ثبتِ تازه، به همان شکلِ کادر (شمسی).
+       دکمهٔ «+» صفحهٔ «امروز» امروز را می‌دهد (همان `todayJStr` که دکمهٔ «امروز»ِ
+       خودِ کادر می‌زند)؛ کاربر عوضش می‌کند اگر مراجعه برای روزِ دیگری است. */
+    opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : (initial?.id ? '' : prefill?.opDateJ || ''),
     nextVisitDateJ: initial?.nextVisitDate ? isoToJStr(initial.nextVisitDate) : '',
     postOpCare: initial?.postOpCare ?? '',
     followUpDays: initial?.followUpDays ?? '',

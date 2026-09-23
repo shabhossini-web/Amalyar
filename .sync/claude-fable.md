@@ -36,6 +36,10 @@ paths:
   - src/pages/VisitSummary.jsx
   - scripts/e2e/multi-diagnosis.mjs
   - scripts/e2e/multi-procedure.mjs
+  - scripts/e2e/today-quick-visit.mjs
+  - src/app/Today.jsx
+  - src/app/today.css
+  - server/src/work/today.service.ts
   - scripts/e2e/run-live.mjs
   - scripts/e2e/ci-live.txt
   - .github/workflows/security-ci.yml
@@ -59,6 +63,9 @@ note: >-
   `procedureTypeId`/`diagnosisId` مراجعه‌هایی را هم می‌گیرد که آن مورد
   غیرِ اصلی‌شان است؛ حذفِ تعریفی که فقط غیرِ اصلی به کار رفته غیرفعال‌سازی
   می‌شود. دو کلیدِ تازه برای فیلدِ دلخواهِ فرم رزرو شدند.
+  **همراهِ همین شاخه (درخواستِ مالک ۱۴۰۵/۰۷/۰۱):** دکمهٔ «+» شناور روی صفحهٔ
+  «امروز» برای ثبتِ سریعِ مراجعهٔ دستی — همان `VisitForm` از میزبانِ پاپ‌آپ؛
+  `GET /work/today` کلیدِ تازهٔ `canCreateVisit` می‌دهد.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
