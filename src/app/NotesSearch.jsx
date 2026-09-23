@@ -185,10 +185,13 @@ export default function NotesSearch() {
               {n.authorName ? ` · ${n.authorName}` : ''}
             </small>
           </header>
-          {(n.procedureName || n.diagnosisTitle || n.topicName) && (
+          {/* ⚠️ `procedureName` از سرور همین حالا برچسبِ ترکیبی («A + B») است؛
+              تشخیص هم برچسبِ کاملش (همهٔ تشخیص‌ها، اصلی اول) — نتیجه‌ای که
+              به‌خاطرِ تشخیصِ دوم پیدا شده باید همان تشخیص را هم نشان بدهد. */}
+          {(n.procedureName || n.diagnosisLabel || n.diagnosisTitle || n.topicName) && (
             <div className="ns-tags">
               {n.procedureName && <i>{n.procedureName}</i>}
-              {n.diagnosisTitle && <i>{n.diagnosisTitle}</i>}
+              {(n.diagnosisLabel ?? n.diagnosisTitle) && <i>{n.diagnosisLabel ?? n.diagnosisTitle}</i>}
               {n.topicName && <i>{n.topicName}</i>}
             </div>
           )}

@@ -2,74 +2,9 @@
 agent: claude-fable
 status: idle
 branch: claude/quirky-volta-uyuznl
-since: 2026-09-22
-paths:
-  - server/src/patients/clinical-note.ts
-  - server/src/patients/labels.ts
-  - server/src/patients/form-presets.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/forms.controller.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/dto/visit.dto.ts
-  - server/src/patients/record.service.ts
-  - server/src/patients/record.controller.ts
-  - server/src/patients/summary.service.ts
-  - server/src/patients/theatre.service.ts
-  - server/src/patients/theatre.controller.ts
-  - server/src/patients/vitals.ts
-  - server/src/patients/vitals.service.ts
-  - server/src/patients/vitals.controller.ts
-  - server/src/patients/link-documents.ts
-  - server/src/patients/intake.service.ts
-  - server/src/patients/intake.controller.ts
-  - server/src/patients/patients.module.ts
-  - server/src/config/config.service.ts
-  - server/src/common/file-type.ts
-  - src/app/FormBuilder.jsx
-  - src/app/useFormDef.jsx
-  - src/app/Theatre.jsx
-  - src/app/theatre.css
-  - src/app/VitalSigns.jsx
-  - src/app/vital-signs.css
-  - src/app/OrderPublic.jsx
-  - src/ui/DynForm.jsx
-  - src/ui/VoiceInput.jsx
-  - src/ui/VoiceNote.jsx
-  - src/ui/voice.css
-  - src/ui/wav-recorder.js
-  - src/ui/dynform.css
-  - src/index.css
-  - src/pages/Intake.jsx
-  - src/app/formbuilder.css
-  - scripts/verify-status-labels.js
-  - scripts/verify-theme-tokens.js
-  - scripts/e2e/clinical-core.mjs
-  - scripts/e2e/vital-signs.mjs
-  - scripts/e2e/voice-notes.mjs
-  - scripts/e2e/theatre.mjs
-  - scripts/e2e/ci-live.txt
-note: >-
-  **بستهٔ ۶ — «ویزیت یک استانداردِ ثابت، عمل یک استانداردِ ثابت»** (تصمیمِ
-  مالک پس از بررسیِ HIS). ۶الف — بخش‌های پایه (شرحِ حال، معاینه، یافته‌ها،
-  طرحِ درمان، نسخه) از `Visit.extra` به `ClinicalNote` می‌روند و نوعِ بیهوشی
-  ستون می‌شود؛ `plan`ِ تک‌انتخابی در `decisions` ادغام می‌شود؛ بخش‌های هسته
-  در فرم‌ساز قفل‌اند ولی «اجباری‌بودن» قابلِ تنظیم می‌ماند. ۶ب — ترخیصِ
-  ساختاری (وضعیتِ خروج + شرحِ ترخیص + یادداشت). ۶ج — علائمِ حیاتی در ویزیت و
-  عمل، اختیاری. ۶د — ضبطِ صدا زیرِ لینک‌ها و مدارک.
-  ⚠️ **هم‌پوشانیِ اعلام‌شده:** این بسته `src/app/VisitForm.jsx`,
-  `src/app/PatientRecord.jsx`, `src/app/OrderSheet.jsx`,
-  `server/src/patients/orders.service.ts` و یک migration در `server/prisma/`
-  را هم می‌نویسد — مسیرهایی که کلیمِ `claude-opus` رویشان است. کارِ آن کلیم
-  (`claude/doc-phase-and-review-fix`) در `92d74ce` کامل در `main` نشسته و
-  شاخه‌اش صفر کامیت جلوتر است، پس هم‌زمانیِ واقعی نیست؛ در `paths` نیامدند تا
-  نگهبان قرمز نشود، و این‌جا صریح نوشته شد.
-  ⚠️ **رفعِ جانبیِ تمِ روشن (همین بسته):** `.pf-field input` متنِ `#fff`ِ
-  ثابت داشت — روی دستگاهی با تمِ روشن، ورودی‌های فرمِ عمومی سفید روی سفید
-  بودند. و `var(--muted, …)`/`--fg`/`--text`/`--mono` هرگز توکن نبودند.
-  نگهبانِ `verify-theme-tokens.js` حالا توکنِ تعریف‌نشده را هم می‌گیرد.
-  ⚠️ قراردادهایی که می‌شکنند: کلیدهای `exam`, `planNote`, `prescription`,
-  `history`, `findings`, `anesthesia` رزروِ هسته می‌شوند (فیلدِ دلخواه با این
-  کلیدها دیگر ساخته نمی‌شود) و مقدارشان دیگر در `Visit.extra` نیست.
+since: 2026-09-23
+paths: []
+note: بستهٔ ۷ (چند تشخیص/چند عمل) + «+»ِ امروز + پیش‌فرضِ شرحِ عمل تمام و در حالِ مرج است؛ هیچ مسیری در دست نیست.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

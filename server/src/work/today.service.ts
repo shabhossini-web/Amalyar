@@ -7,7 +7,7 @@ import { ownVisitWhere } from '../common/own-scope';
 import { AvailabilityService } from '../patients/availability.service';
 import { WorkService } from './work.service';
 import { canAccess } from '../auth/access-check';
-import { todayRangeUtc } from '../common/clinic-day';
+import { clinicTodayIso, todayRangeUtc } from '../common/clinic-day';
 
 /**
  * صفحهٔ «امروز» (W2.3) — یک پاسخ برای «الان چه کار کنم؟».
@@ -58,7 +58,7 @@ export class TodayService {
     /* نمای استثنا (W2.5) فقط از سوپروایزر به بالا: این بخش دربارهٔ **کارِ دیگران**
        است — چیزی که از دستِ تیم افتاده — نه کارِ خودِ کاربر. */
     const seesExceptions = level >= LEVEL.SUPERVISOR;
-    const [counts, items, visits, appointments, intakePending, exceptions, canProcess] = await Promise.all([
+    const [counts, items, visits, appointments, intakePending, exceptions, canProcess, canCreateVisit] = await Promise.all([
       this.work.counts(user),
       this.work.list(user, { scope: 'inbox', limit: 8 }),
       seesVisits ? this.visitsToday(user, level, start, end) : Promise.resolve([]),
@@ -71,6 +71,11 @@ export class TodayService {
          `work.process` (پیش‌فرض سوپرادمین)، نه حدسِ سطح در رابط. بیرونِ `exceptions`
          می‌ماند تا آن شیء همگن (`{count, items}`) بماند. */
       seesExceptions ? canAccess(this.prisma, user, 'work', ['work.process']).catch(() => false) : Promise.resolve(false),
+      /* دکمهٔ «+» — افزودنِ سریعِ مراجعهٔ دستی از همین صفحه (بازخوردِ مالک ۱۴۰۵/۰۷/۰۱).
+         همان دو گاردی که `POST /visits` دارد (ماژولِ `dashboard` + مجوزِ
+         `patients.create`)، نه حدسِ سطح در رابط (قانونِ ۳): دکمه‌ای که به ۴۰۳
+         می‌خورد بدتر از نبودنش است. */
+      canAccess(this.prisma, user, 'dashboard', ['patients.create']).catch(() => false),
     ]);
 
     /* «کارِ بعدی» = نزدیک‌ترین چیزی که ساعت دارد — عمل یا نوبت، هرکدام زودتر. */
@@ -95,6 +100,9 @@ export class TodayService {
       appointments,
       exceptions,
       canProcess,
+      canCreateVisit,
+      /* «امروز»ِ مطب (YYYY-MM-DD) — تاریخِ پیش‌فرضِ «+»، همان تعریفی که فهرستِ امروز با آن فیلتر می‌شود. */
+      clinicToday: clinicTodayIso(now),
       sections: { visits: seesVisits, appointments: can('calendar'), intake: can('formgen'), exceptions: seesExceptions },
     };
   }

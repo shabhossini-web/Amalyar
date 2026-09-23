@@ -30,6 +30,16 @@ class ReportDto {
   body!: string;
 }
 
+/** «افزودن به پیش‌فرض» از میزِ اتاق — نوعِ عمل از خودِ مراجعه می‌آید، نه از کاربر. */
+class OpTemplateDto {
+  @IsString({ message: 'متنِ شرح نامعتبر است' })
+  @MaxLength(20000, { message: 'متن بلندتر از سقفِ یک قالب است' })
+  body!: string;
+
+  @IsOptional() @IsString({ message: 'عنوان نامعتبر است' }) @MaxLength(120, { message: 'عنوان بلند است' })
+  title?: string;
+}
+
 class DischargeDto {
   @IsString({ message: 'وضعیتِ بیمار هنگامِ ترخیص را بنویسید' })
   @MinLength(2, { message: 'وضعیتِ بیمار هنگامِ ترخیص را بنویسید' })
@@ -107,6 +117,20 @@ export class TheatreController {
   @Post('visits/:id/report')
   report(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportDto, @CurrentUser() user: any) {
     return this.theatre.setReport(id, dto.body, user);
+  }
+
+  /* پیش‌فرض‌های شرحِ عمل (چیپ‌ها + «افزودن به پیش‌فرض») — `op-templates.ts`. */
+  @RequirePermissions('theatre.read')
+  @Get('visits/:id/op-templates')
+  opTemplates(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.theatre.opTemplates(id, user);
+  }
+
+  /* ⚠️ `theatre.report` هم: کسی که اجازهٔ نوشتنِ شرحِ عمل ندارد، شرحِ دیگری را منتشر نمی‌کند. */
+  @RequirePermissions('theatre.report', 'templates.add')
+  @Post('visits/:id/op-templates')
+  addOpTemplate(@Param('id', ParseIntPipe) id: number, @Body() dto: OpTemplateDto, @CurrentUser() user: any) {
+    return this.theatre.addOpTemplate(id, dto, user);
   }
 
   /* یافته‌های حینِ عمل — همان مجوزِ شرحِ عمل، چون همان سندنویسیِ جراح است. */

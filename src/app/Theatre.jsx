@@ -7,6 +7,7 @@ import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
 import { useStatusList } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon } from '../ui/icons.jsx';
 import './theatre.css';
 import './definitions.css';
@@ -185,6 +186,12 @@ function DayList({ day, busy, onOpen }) {
 /** کارتِ حینِ عمل. */
 function Card({ card, busy, onAct, onDischarge, onToast }) {
   const { visit: v, patient: p, alerts, items, documents } = card;
+  /* ⚠️ عمل‌ها و تشخیص‌ها از **فهرستِ سرور** خوانده می‌شوند (اصلی اول، بستهٔ
+     ۷) — نه با شکافتنِ برچسبِ «A + B» (قانونِ ۱۵). برچسب فقط وقتی به کار
+     می‌آید که سرورِ قدیمی‌تر هنوز فهرست را نفرستد (فرانت و بک‌اند جدا دیپلوی
+     می‌شوند و چند ثانیه‌ای ناهمگام‌اند). */
+  const procs = v.procedures ?? [];
+  const dxs = v.diagnoses ?? [];
   /* ⚠️ **مدتِ زنده** وقتی عمل در جریان است: سرِ میز «چقدر گذشته» را کسی از
      تفریقِ ذهنیِ دو ساعت در نمی‌آورد. تیکِ نیم‌دقیقه‌ای کافی است و فقط وقتی
      می‌زند که واقعاً در جریان باشد — نه یک تایمرِ همیشه‌روشن روی هر کارت. */
@@ -211,12 +218,25 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
             گروه خونی {p.bloodType ? <b dir="ltr">{p.bloodType}</b> : <b>ثبت نشده</b>}
           </span>
         </p>
-        <p className="th-op">{[v.procedure, v.hospital].filter(Boolean).join(' · ') || '—'}</p>
-        {(v.diagnosis || v.anesthesiaFa) && (
-          <p className="th-dx">
-            {v.diagnosis && <span>تشخیص: <b>{v.diagnosis}</b></span>}
+        {/* ⚠️ `div` نه `p`: فهرست (`ul`) داخلِ پاراگراف HTMLِ نامعتبر است و
+            مرورگر پاراگراف را پیش از فهرست می‌بندد. */}
+        <div className="th-op">
+          {procs.length > 0
+            ? <CodingList items={procs} label="عمل‌ها" />
+            : v.procedure && <span>{v.procedure}</span>}
+          {v.hospital && <span className="th-op-at">{v.hospital}</span>}
+          {!procs.length && !v.procedure && !v.hospital && <span>—</span>}
+        </div>
+        {(dxs.length > 0 || v.diagnosis || v.anesthesiaFa) && (
+          <div className="th-dx">
+            {dxs.length > 0 ? (
+              <div className={`th-dx-set${dxs.length > 1 ? ' multi' : ''}`}>
+                <span className="th-dx-h">{dxs.length > 1 ? 'تشخیص‌ها:' : 'تشخیص:'}</span>
+                <CodingList items={dxs} label="تشخیص‌ها" />
+              </div>
+            ) : v.diagnosis && <span>تشخیص: <b>{v.diagnosis}</b></span>}
             {v.anesthesiaFa && <span>بیهوشی: <b>{v.anesthesiaFa}</b></span>}
-          </p>
+          </div>
         )}
         <p className="th-team">
           {v.surgeon && <span>جراح: <b>{v.surgeon}</b></span>}
@@ -237,8 +257,18 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
       {card.decided && (
         <section className="th-decided" aria-label="ویزیتِ تصمیم">
           <h3>از ویزیتِ تصمیم{card.decided.opDate ? ` — ${faDate(card.decided.opDate)}` : ''}</h3>
+          {/* ⚠️ تشخیص‌های ویزیتِ تصمیم «تشخیصِ **پیش از** عمل»اند و عمداً با همین
+              عنوان جدا می‌آیند: به عمل ارث نمی‌رسند و کپی نمی‌شوند، چون تشخیصِ
+              پس از عمل (بالای کارت) واقعیتِ دیگری است و می‌تواند فرق کند. */}
+          {card.decided.diagnoses?.length > 0 ? (
+            <div className="th-decided-dx">
+              <b>تشخیصِ پیش از عمل</b>
+              <CodingList items={card.decided.diagnoses} label="تشخیصِ پیش از عمل" />
+            </div>
+          ) : card.decided.diagnosis && (
+            <p><b>تشخیصِ پیش از عمل</b><span>{card.decided.diagnosis}</span></p>
+          )}
           {[
-            ['تشخیص', card.decided.diagnosis],
             ['شرحِ حال', card.decided.history],
             ['یافته‌ها', card.decided.findings],
             ['معاینه', card.decided.exam],
@@ -300,11 +330,13 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
       )}
 
       <NoteBox
+        key={`findings-${v.id}`}
         visit={v} field="findings" path="/findings" actKey="findings"
         title="یافته‌های حینِ عمل" placeholder="آنچه حینِ عمل دیده شد…"
         savedMsg="یافته‌ها ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
       />
       <NoteBox
+        key={`report-${v.id}`}
         visit={v} field="opReport" path="/report" actKey="report"
         title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
         savedMsg="شرحِ عمل ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
@@ -330,6 +362,32 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
 }
 
 /**
+ * **فهرستِ تشخیص‌ها یا عمل‌ها** — همان فهرستِ آمادهٔ سرور (`procedures` /
+ * `diagnoses`؛ بستهٔ ۷).
+ *
+ * ⚠️ ترتیب رتبهٔ بالینیِ سرور است و این‌جا مرتب نمی‌شود؛ اولی همیشه اصلی است.
+ * ⚠️ نشانِ «اصلی» فقط وقتی **دو یا بیشتر** مورد هست: روی تک‌مورد هیچ خبری
+ * نمی‌دهد و فقط سطرِ سرِ میز را شلوغ می‌کند — تک‌مورد درست مثلِ دیروز دیده
+ * می‌شود.
+ * ⚠️ کدِ ICD با `dir="ltr"` (قانونِ ۹): «M51.1» در متنِ راست‌به‌چپ بی‌آن
+ * نقطه‌اش جابه‌جا می‌شود.
+ */
+function CodingList({ items, label }) {
+  const multi = items.length > 1;
+  return (
+    <ul className={`th-codes${multi ? ' multi' : ''}`} aria-label={label}>
+      {items.map((it) => (
+        <li key={`${it.rank}-${it.id ?? ''}`} className={multi && it.primary ? 'is-primary' : undefined}>
+          <span className="th-code-name">{it.name ?? it.title}</span>
+          {it.icdCode && <span className="th-code-icd" dir="ltr">{it.icdCode}</span>}
+          {multi && it.primary && <span className="th-code-primary">اصلی</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
  * **شرحِ عمل، همین‌جا.**
  *
  * ⚠️ متن در stateِ محلی می‌ماند و فقط با «ذخیره» می‌رود: ذخیرهٔ خودکار وسطِ
@@ -342,6 +400,9 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
 function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, busy, onAct, onToast }) {
   const [text, setText] = useState(visit[field] ?? '');
   const dirty = useRef(false);
+  /* «نوشتهٔ خودم»: برخلافِ `dirty` با ذخیره پاک نمی‌شود — «بنویس، ذخیره کن، بعد
+     به پیش‌فرض بیفزا» باید کار کند، ولی شرحی که میز با آن باز شده نه. */
+  const [touched, setTouched] = useState(false);
   useEffect(() => {
     if (dirty.current) return;
     setText(visit[field] ?? '');
@@ -349,15 +410,42 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
 
   const saved = (visit[field] ?? '').trim();
   const changed = text.trim() !== saved;
+
+  /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) — فقط برای شرحِ عمل ──
+     چیپ‌ها و «افزودن به پیش‌فرض» همان کامپوننتِ فرمِ عمل‌اند؛ مسیرِ سرور زیرِ
+     ماژولِ اتاق است تا جراحِ سطح ۲ که داشبورد ندارد هم برسد. عمل‌ها از مراجعهٔ
+     ذخیره‌شده (کلیدِ رشته‌ای، نه آرایهٔ تازهٔ هر رندر). */
+  const isOp = field === 'opReport';
+  const procKey = (visit.procedures ?? []).map((p) => p.id).join(',');
+  const [tpl, setTpl] = useState({ items: [], canAdd: false, procedure: null });
+  const [tplRev, setTplRev] = useState(0);
+  useEffect(() => {
+    if (!isOp) return undefined;
+    let alive = true;
+    api(`/theatre/visits/${visit.id}/op-templates`)
+      .then((r) => {
+        if (alive) setTpl({ items: Array.isArray(r?.items) ? r.items : [], canAdd: !!r?.canAdd, procedure: r?.procedure ?? null });
+      })
+      .catch(() => { if (alive) setTpl({ items: [], canAdd: false, procedure: null }); });
+    return () => { alive = false; };
+  }, [isOp, visit.id, procKey, tplRev]);
+
   return (
     <section className="th-report" aria-label={title} data-note={field}>
       <h3><Form width="15" height="15" aria-hidden="true" /> {title}</h3>
+      {isOp && (
+        <OpDefaultChips
+          items={tpl.items}
+          disabled={busy === actKey}
+          onPick={(t) => { dirty.current = true; setTouched(true); setText((cur) => withTemplate(cur, t.body)); }}
+        />
+      )}
       <textarea
         rows={field === 'opReport' ? 5 : 3}
         value={text}
         {...(field === 'opReport' ? { 'data-report': true } : { 'data-findings': true })}
         placeholder={placeholder}
-        onChange={(e) => { dirty.current = true; setText(e.target.value); }}
+        onChange={(e) => { dirty.current = true; setTouched(true); setText(e.target.value); }}
       />
       <div className="th-report-bar">
         <span className="th-hint">
@@ -372,6 +460,25 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
           }}
         >ذخیره</button>
       </div>
+      {isOp && (
+        <OpDefaultSave
+          text={text}
+          typed={touched}
+          noTarget={!procKey}
+          procedureName={tpl.procedure?.name ?? null}
+          missingHint="این عمل هنوز نوعِ عمل ندارد — در فرمِ عمل انتخابش کنید تا بشود پیش‌فرض ساخت."
+          canAdd={tpl.canAdd}
+          disabled={busy === actKey}
+          onToast={onToast}
+          onSave={async (tTitle) => {
+            const r = await api(`/theatre/visits/${visit.id}/op-templates`, {
+              method: 'POST', body: { body: text, ...(tTitle ? { title: tTitle } : {}) },
+            });
+            setTplRev((n) => n + 1);
+            return r;
+          }}
+        />
+      )}
     </section>
   );
 }

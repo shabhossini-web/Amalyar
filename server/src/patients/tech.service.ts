@@ -6,6 +6,7 @@ import { PatientsService } from './patients.service';
 import { RecordService } from './record.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { HospitalDutiesService } from './hospital-duties.service';
+import { OTHER_PX, procedureLabel } from './visit-coding';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -74,6 +75,8 @@ export class TechService {
         tech: { select: { person: { select: { firstName: true, lastName: true } } } },
         hospital: { select: { name: true, address: true } },
         procedureType: { select: { name: true } },
+        // بستهٔ ۷ج: فقط نامِ عمل‌های همزمان، برای برچسب — هیچ فیلدِ دیگری.
+        otherProcedures: OTHER_PX,
         documents: { where: { category: 'report' }, select: { id: true, createdAt: true } },
         stockTransfers: {
           where: { status: { not: 'closed' } },
@@ -95,10 +98,10 @@ export class TechService {
     const duties = scope === 'past' ? [] : await this.prisma.hospitalDuty.findMany({ where: { techId: user?.id ?? -1, date: { gte: from, lt: to }, tech: { status: 'active' } }, include: { hospital: { select: { name: true } } }, orderBy: [{ date: 'asc' }, { arriveTime: 'asc' }] });
     const pool = duties.length ? await this.prisma.visit.findMany({
       where: { techId: null, opStatus: 'pending', patient: { deletedAt: null }, OR: duties.map(d => ({ hospitalId: d.hospitalId, opDate: { gte: d.date, lt: new Date(d.date.getTime() + DAY) } })) },
-      select: { id: true, seq: true, opDate: true, opStartTime: true, hospitalId: true, patient: { select: { code: true, firstName: true, lastName: true } }, procedureType: { select: { name: true } } },
+      select: { id: true, seq: true, opDate: true, opStartTime: true, hospitalId: true, patient: { select: { code: true, firstName: true, lastName: true } }, opType: true, procedureType: { select: { name: true } }, otherProcedures: OTHER_PX },
       orderBy: [{ opDate: 'asc' }, { opStartTime: 'asc' }],
     }) : [];
-    return { scope, from, to, visits: rows.map((v) => this.shape(v)), hospitals: duties.map(d => ({ id: d.id, hospitalId: d.hospitalId, name: d.hospital.name, date: d.date, arriveTime: d.arriveTime, openVisits: pool.filter(v => v.hospitalId === d.hospitalId && v.opDate!.toISOString().slice(0, 10) === d.date.toISOString().slice(0, 10)).map(v => ({ id: v.id, name: `${v.patient.firstName} ${v.patient.lastName}`.trim(), code: `${v.patient.code}-V${v.seq}`, opStartTime: v.opStartTime, procedure: v.procedureType?.name })) })) };
+    return { scope, from, to, visits: rows.map((v) => this.shape(v)), hospitals: duties.map(d => ({ id: d.id, hospitalId: d.hospitalId, name: d.hospital.name, date: d.date, arriveTime: d.arriveTime, openVisits: pool.filter(v => v.hospitalId === d.hospitalId && v.opDate!.toISOString().slice(0, 10) === d.date.toISOString().slice(0, 10)).map(v => ({ id: v.id, name: `${v.patient.firstName} ${v.patient.lastName}`.trim(), code: `${v.patient.code}-V${v.seq}`, opStartTime: v.opStartTime, procedure: procedureLabel(v) })) })) };
   }
 
   async claim(id: number, user: any) { return this.duties.assign(id, user.id, user, true); }
@@ -126,7 +129,8 @@ export class TechService {
       surgeonName: person ? [person.firstName, person.lastName].filter(Boolean).join(' ') : v.surgeonName,
       hospitalName: v.hospital?.name ?? v.hospitalName,
       hospitalAddress: v.hospital?.address ?? null,
-      procedure: v.procedureType?.name ?? v.opType,
+      /* برچسبِ همهٔ عمل‌های جلسه (اصلی اول) — کارشناس باید بداند برای چه عمل‌هایی می‌رود. */
+      procedure: procedureLabel(v),
       reportAt: v.documents[0]?.createdAt ?? null,
       transfers: v.stockTransfers.map((t: any) => ({
         id: t.id,

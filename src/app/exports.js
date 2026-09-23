@@ -20,8 +20,11 @@ const COLUMNS = [
   { key: 'opEndTime', label: 'ساعتِ پایان' },
   { key: 'durationText', label: 'مدت' },
   { key: 'techArriveTime', label: 'حضورِ کارشناس' },
-  { key: 'procedureTypeName', label: 'نوعِ عمل' },
-  { key: 'diagnosisTitle', label: 'تشخیص' },
+  /* ⚠️ بستهٔ ۷: برچسبِ ترکیبیِ سرور («A + B»، «X، Y»)، نه فقط اصلی — خروجیِ
+     «بیمارانِ دیابتی» باید بیماریِ همراه را هم نشان دهد. تک‌مورد همان متنِ دیروز است،
+     و ردیفِ قدیمیِ بی‌تعریف هم متنِ `opType`اش را دارد (سرور همان را برمی‌گرداند). */
+  { key: 'procedureLabel', label: 'نوعِ عمل' },
+  { key: 'diagnosisLabel', label: 'تشخیص' },
   { key: 'surgeonName', label: 'جراح' },
   { key: 'hospitalName', label: 'بیمارستان' },
   { key: 'techName', label: 'کارشناس' },

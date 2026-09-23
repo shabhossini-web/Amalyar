@@ -104,6 +104,19 @@ export function ThingPopups({ things, onVisitSaved }) {
               close();
               if (onVisitSaved) { onVisitSaved(saved, wasEdit, opts); return; }
               changed();
+              /* «کاندیدای جراحی» — همان قولِ فرم («بعد از ذخیره، فرمِ عملِ همین بیمار
+                 باز می‌شود») که داشبورد و پرونده نگه می‌دارند. بی این، «+»ِ امروز ویزیتِ
+                 تصمیم را می‌بست و عملِ بعدی به آن گره نمی‌خورد (`decidedInVisitId`
+                 فقط از همین prefill می‌آید). مکث تا فرمِ قبلی پیاده شود و این یکی
+                 با وضعیتِ تازه سوار شود. */
+              if (opts?.openSurgery && saved?.id) {
+                say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+                setTimeout(() => things.show({ type: 'visit', prefill: {
+                  patientId: saved.patientId, patientName: saved.patientName, kind: 'surgery',
+                  decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
+                } }), 400);
+                return;
+              }
               say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
             }}
             onToast={(m) => say(m)}

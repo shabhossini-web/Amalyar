@@ -21,6 +21,11 @@ export function loadInvoiceFonts() {
 
 export function issuedInvoiceHtml(doc, letterheadUrl = null, fonts = [fontRegular, fontBold]) {
   const { visit: v, billing: b, template: t } = doc.snapshot;
+  // بستهٔ ۷ج — چند عمل در یک جلسه: snapshot فقط از دو عمل به بالا `procedureNames`
+  // دارد و `procedureTypeName` همیشه عملِ اصلی است؛ پس فاکتورهای صادرشدهٔ قبلی و
+  // تک‌عملی‌ها همان متنِ دیروز را چاپ می‌کنند. ⚠️ از snapshot بخوان نه از مراجعهٔ
+  // زنده — فاکتورِ صادرشده باید همان چیزی را چاپ کند که هنگامِ صدور بود.
+  const procedure = Array.isArray(v.procedureNames) && v.procedureNames.length ? v.procedureNames.join(' + ') : v.procedureTypeName;
   const brand = t.brand, formal = doc.variant === 'formal', global = b.pricingModel === 'global';
   const neuro = b.charges.some(c => c.neuroDetail);
   // مصرفی‌های نورو (الکترود…) قلمِ بی‌مبلغ‌اند و مثلِ ملک‌طب در جدولِ جدای
@@ -75,7 +80,7 @@ export function issuedInvoiceHtml(doc, letterheadUrl = null, fonts = [fontRegula
   <br>بیمار: ${esc(v.fullName)} ${v.nationalId ? `· کد ملی: ${esc(v.nationalId)}` : ''}
   <br>جراح: ${esc(v.surgeonName)} · بیمارستان: ${esc(v.hospitalName)}
   ${v.payerAddress || v.hospitalAddress ? `<br>نشانی مرکز: ${esc(v.payerAddress || v.hospitalAddress)}` : ''}
-  <br>تاریخ عمل: ${esc(faDate(v.opDate))} · نوع عمل: ${esc(v.procedureTypeName)}
+  <br>تاریخ عمل: ${esc(faDate(v.opDate))} · نوع عمل: ${esc(procedure)}
   ${v.opStartTime ? `<br>شروع: ${esc(v.opStartTime)} · پایان: ${esc(v.opEndTime || '—')}` : ''}</div>
   <h2>اقلام و خدمات · مبالغ به تومان</h2>
   <table><thead><tr><th>ردیف</th><th>کد و شرح خدمت / کالا</th><th>${neuro ? 'ساعت / تعداد' : 'تعداد'}</th>${neuro ? '<th>سهم</th><th>ارزش نسبی</th>' : ''}${global ? '' : `<th>${neuro ? 'ضریب / فی واحد' : 'فی واحد'}</th><th>مبلغ</th>${neuro ? '<th>مالک دستگاه</th>' : ''}`}</tr></thead><tbody>${rows || `<tr><td colspan="${cols}">قلمی ثبت نشده است</td></tr>`}</tbody></table>

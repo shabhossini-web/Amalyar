@@ -6,6 +6,9 @@ import { LEVEL } from '../common/levels';
 import { buildPersonPatch, PersonInput } from '../common/person';
 import { NOTE_KINDS } from './record.service';
 import { NOTE_KIND_LABELS } from './labels';
+import { AuditService } from '../audit/audit.service';
+import { canAccess } from '../auth/access-check';
+import { addOpTemplate, listOpTemplates } from './op-templates';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
 
@@ -16,7 +19,7 @@ const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier:
  */
 @Injectable()
 export class DefinitionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   private async hospitalDupCheck(name: string, exceptId?: number) {
     const row = await this.prisma.hospital.findFirst({
@@ -282,12 +285,16 @@ export class DefinitionsService {
   async listProcedureTypes() {
     const rows = await this.prisma.procedureType.findMany({
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
-      include: { _count: { select: { visits: true } } },
+      /* ⚠️ «عملِ همزمان» هم استفاده است (بستهٔ ۷) — دو مجموعه جدا از هم‌اند
+         (هیچ مراجعه‌ای یک نوع را هم اصلی و هم سایر ندارد)، پس جمعشان شمارِ
+         مراجعه‌های متمایز است. */
+      include: { _count: { select: { visits: true, otherVisitLinks: true } } },
     });
     /* قالبِ مراقبت و روزهای پیگیری هم برمی‌گردند: فرمِ عمل باید **پیش‌فرضِ
        همین نوعِ عمل** را به جراح نشان دهد، نه اینکه خالی بماند و او حدس بزند. */
     return rows.map((r) => ({
-      id: r.id, name: r.name, code: r.code, notes: r.notes, active: r.active, visitCount: r._count.visits,
+      id: r.id, name: r.name, code: r.code, notes: r.notes, active: r.active,
+      visitCount: r._count.visits + r._count.otherVisitLinks,
       preOpCare: r.preOpCare, postOpCare: r.postOpCare, followUpDays: r.followUpDays,
     }));
   }
@@ -433,9 +440,12 @@ export class DefinitionsService {
   async listDiagnoses() {
     const rows = await this.prisma.diagnosis.findMany({
       orderBy: [{ active: 'desc' }, { title: 'asc' }],
-      include: { _count: { select: { visits: true } } },
+      include: { _count: { select: { visits: true, otherVisitLinks: true } } },
     });
-    return rows.map((r) => ({ id: r.id, title: r.title, icdCode: r.icdCode, active: r.active, visitCount: r._count.visits }));
+    return rows.map((r) => ({
+      id: r.id, title: r.title, icdCode: r.icdCode, active: r.active,
+      visitCount: r._count.visits + r._count.otherVisitLinks,
+    }));
   }
 
   async createDiagnosis(dto: { title: string; icdCode?: string }) {
@@ -612,6 +622,43 @@ export class DefinitionsService {
     });
   }
 
+  /**
+   * پیش‌فرض‌های شرحِ عمل برای **فرمِ عمل** (`op-templates.ts`) — اولی اصلی — و
+   * اینکه همین کاربر اجازهٔ «افزودن به پیش‌فرض» دارد یا نه.
+   *
+   * ⚠️ `canAdd` را سرور می‌گوید (قانونِ ۳)، نه حدسِ سطح در رابط: دکمه‌ای که
+   * به ۴۰۳ بخورد بدتر از نبودنش است. ماژول همان ماژولِ این کنترلر (`dashboard`).
+   * ⚠️ نوعِ عمل از **فرم** می‌آید نه از مراجعهٔ ذخیره‌شده: فرمِ ساختِ عمل هنوز
+   * مراجعه‌ای ندارد و فرمِ ویرایش ممکن است اصلی را همین حالا عوض کرده باشد.
+   */
+  async opTemplates(idsRaw: string | undefined, user: any) {
+    const ids = String(idsRaw ?? '').split(',').map((x) => Number(x.trim()))
+      .filter((x) => Number.isInteger(x) && x > 0).slice(0, 10);
+    const [items, canAdd, pt] = await Promise.all([
+      listOpTemplates(this.prisma, ids),
+      canAccess(this.prisma, user, 'dashboard', ['templates.add']).catch(() => false),
+      ids[0] ? this.prisma.procedureType.findUnique({ where: { id: ids[0] }, select: { id: true, name: true } }) : null,
+    ]);
+    /* نامِ اصلی از سرور تا برچسبِ دکمه منتظرِ تعریف‌های تنبلِ فرم نماند. */
+    return { items, canAdd, procedure: pt ? { id: pt.id, name: pt.name } : null };
+  }
+
+  /** «افزودن به پیش‌فرض» از فرمِ عمل — یک قاعده با میزِ اتاقِ عمل (`op-templates.ts`). */
+  async addOpTemplate(dto: { procedureTypeId: number; body: string; title?: string; source?: string; visitId?: number }, user: any) {
+    const r = await addOpTemplate(this.prisma, dto);
+    if (r.created) {
+      /* منبع و مراجعه فقط برای ردگیری‌اند (کدام متنِ کدام بیمار قالب شد)، نه برای اجازه. */
+      await this.audit.record({
+        actorId: user?.id, action: 'note_template.add', entityType: 'note_template', entityId: r.template.id,
+        after: {
+          kind: 'op', procedureTypeId: dto.procedureTypeId, title: r.template.title, length: r.template.body.length,
+          via: dto.source === 'record' ? 'record' : 'form', visitId: dto.visitId ?? null,
+        },
+      });
+    }
+    return r;
+  }
+
   /** قالب سند نیست — حذفِ سخت مجاز است؛ شرح‌های نوشته‌شده متنِ خودشان را دارند. */
   async deleteNoteTemplate(id: number) {
     const row = await this.prisma.noteTemplate.findUnique({ where: { id } });
@@ -683,17 +730,31 @@ export class DefinitionsService {
 
   /// موجودیتی که در مراجعه‌ای استفاده شده حذفِ سخت نمی‌شود — غیرفعال می‌شود تا
   /// دادهٔ تاریخی نشکند. همان قاعدهٔ جراح و بیمارستان.
+  ///
+  /// ⚠️ **تشخیص/عملِ غیرِ اصلی هم «استفاده» است** (بستهٔ ۷). اگر فقط ستونِ
+  /// اصلی شمرده می‌شد، تعریفی که فقط تشخیصِ دوم بود حذفِ سخت می‌شد و آن
+  /// تشخیص بی‌صدا از تاریخچهٔ بیمار می‌پرید. FKِ جدولِ پیوند RESTRICT است، پس
+  /// حذفِ هم‌زمان با یک پیوندِ تازه P2003 می‌دهد — آن هم به غیرفعال‌سازی می‌رسد.
   private async deleteOrDeactivate(model: 'procedureType' | 'diagnosis', id: number, notFound: string) {
     const row = await (this.prisma[model] as any).findUnique({
       where: { id },
-      include: { _count: { select: { visits: true } } },
+      /* ⚠️ قالب‌های شرح هم «استفاده» حساب می‌شوند: FKِ قالب `SET NULL` است، پس
+         حذفِ سخت قالبِ اختصاصیِ یک عمل را **عمومی** می‌کرد و بالای شرحِ عملِ
+         همهٔ عمل‌های دیگر پیشنهاد می‌شد (بازبینیِ بستهٔ ۷). */
+      include: { _count: { select: { visits: true, otherVisitLinks: true, noteTemplates: true } } },
     });
     if (!row) throw new NotFoundException(notFound);
-    if (row._count.visits > 0) {
+    const deactivate = async () => {
       await (this.prisma[model] as any).update({ where: { id }, data: { active: false } });
       return { ok: true, deactivated: true };
+    };
+    if (row._count.visits + row._count.otherVisitLinks + row._count.noteTemplates > 0) return deactivate();
+    try {
+      await (this.prisma[model] as any).delete({ where: { id } });
+    } catch (e: any) {
+      if (e?.code === 'P2003') return deactivate();
+      throw e;
     }
-    await (this.prisma[model] as any).delete({ where: { id } });
     return { ok: true, deactivated: false };
   }
 }

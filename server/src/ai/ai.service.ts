@@ -13,6 +13,10 @@ import { canAccess } from '../auth/access-check';
 import { textSearchOr } from '../common/search';
 import { jalalizeDates } from '../common/jalali';
 import { faDateStr } from '../patients/summary.service';
+import {
+  OTHER_DX, OTHER_PX, diagnosisLabel, diagnosisTitles, procedureLabel, procedureNames, promptList,
+  visitHasDiagnosis, visitHasProcedure,
+} from '../patients/visit-coding';
 
 /* ⚠️ کپیِ دومِ `NOTE_KIND_LABELS` بود — و کپی‌ها همیشه عقب می‌مانند: همین فایل
    `NOTE_KINDS` را از `record.service` می‌گیرد ولی برچسبش را خودش می‌نوشت،
@@ -118,19 +122,29 @@ export class AiService {
           procedureTypeId: true, opType: true,
           procedureType: { select: { name: true } },
           diagnosis: { select: { title: true } },
+          otherProcedures: OTHER_PX,
+          otherDiagnoses: OTHER_DX,
           topic: { select: { name: true } },
         },
       });
       if (!v) throw new BadRequestException('مراجعهٔ انتخابی برای این بیمار نیست');
       procedureTypeId = v.procedureTypeId;
+      /* بستهٔ ۷ — **همهٔ** عمل‌ها و تشخیص‌ها (اصلی اول): شرحِ عملی که دو
+         اقدام در یک جلسه داشته باید هر دو را بشناسد. تک‌مورد بایت‌به‌بایت
+         همان خطِ دیروز است (`promptList`). */
+      const procs = procedureNames(v);
+      const dxs = diagnosisTitles(v);
       visitCtx = [
-        v.procedureType?.name ?? v.opType ? `نوعِ عمل/خدمت: ${v.procedureType?.name ?? v.opType}` : '',
-        v.diagnosis?.title ? `تشخیص: ${v.diagnosis.title}` : '',
+        procs.length ? `نوعِ عمل/خدمت: ${promptList(procs)}` : '',
+        dxs.length ? `تشخیص: ${promptList(dxs)}` : '',
         v.topic?.name ? `موضوعِ ویزیت: ${v.topic.name}` : '',
       ].filter(Boolean).join('؛ ');
     }
 
-    /* نمونه‌های سبک — شرح‌های جاریِ همان نوع (و همان نوعِ عمل اگر معلوم است). */
+    /* نمونه‌های سبک — شرح‌های جاریِ همان نوع (و همان نوعِ عمل اگر معلوم است).
+       ⚠️ عمداً فقط **عملِ اصلی** (برابریِ ستون، نه `visitHasProcedure`):
+       سبکِ نوشتن را عملِ اصلیِ جلسه تعیین می‌کند؛ نمونه‌ای که فقط عملِ
+       همزمانش این بوده شرحِ عملِ دیگری است. */
     const examples = await this.prisma.clinicalNote.findMany({
       where: {
         kind: dto.kind, replacedAt: null,
@@ -321,19 +335,25 @@ export class AiService {
     const cfg = await this.cfgOrThrow();
 
     const targets: string[] = [];
+    /* بستهٔ ۷ — نمونه از **هر** مراجعه‌ای که X را داشته، در هر رتبه‌ای
+       (`visitHasX` در `AND`): قالبِ شرحِ X از همهٔ جلسه‌هایی یاد می‌گیرد که X
+       در آن‌ها انجام/تشخیص داده شده، نه فقط وقتی اصلی بوده. `AND` چون خروجیِ
+       هر دو تابع یک `OR` است و دو `OR` روی یک کلید همدیگر را بازنویسی می‌کردند. */
+    const visitAnd: any[] = [];
     const visitFilter: any = {};
     if (dto.procedureTypeId) {
       const p = await this.prisma.procedureType.findUnique({ where: { id: dto.procedureTypeId }, select: { name: true } });
       if (!p) throw new BadRequestException('نوعِ عملِ انتخابی یافت نشد');
       targets.push(`نوعِ عمل: ${p.name}`);
-      visitFilter.procedureTypeId = dto.procedureTypeId;
+      visitAnd.push(visitHasProcedure(dto.procedureTypeId));
     }
     if (dto.diagnosisId) {
       const d = await this.prisma.diagnosis.findUnique({ where: { id: dto.diagnosisId }, select: { title: true } });
       if (!d) throw new BadRequestException('تشخیصِ انتخابی یافت نشد');
       targets.push(`تشخیص: ${d.title}`);
-      visitFilter.diagnosisId = dto.diagnosisId;
+      visitAnd.push(visitHasDiagnosis(dto.diagnosisId));
     }
+    if (visitAnd.length) visitFilter.AND = visitAnd;
     if (dto.topicId) {
       const t = await this.prisma.visitTopic.findUnique({ where: { id: dto.topicId }, select: { name: true } });
       if (!t) throw new BadRequestException('موضوعِ انتخابی یافت نشد');
@@ -448,6 +468,8 @@ export class AiService {
         id: true, opType: true, postOpCare: true,
         procedureType: { select: { name: true, postOpCare: true } },
         diagnosis: { select: { title: true } },
+        otherProcedures: OTHER_PX,
+        otherDiagnoses: OTHER_DX,
         clinicalNotes: {
           where: { replacedAt: null, kind: 'op' },
           orderBy: { createdAt: 'desc' },
@@ -458,7 +480,12 @@ export class AiService {
     });
     if (!visit) throw new BadRequestException('مراجعه پیدا نشد');
 
-    const procName = visit.procedureType?.name ?? visit.opType ?? '';
+    /* بستهٔ ۷ — پرامپت همهٔ عمل‌ها و تشخیص‌ها را می‌شناسد (پیامِ کاربر)، ولی
+       ⚠️ **پایه فقط قالبِ عملِ اصلی** است: پیامکِ مراقبت و روزهای پیگیری هم
+       فقط از عملِ اصلی کاشته می‌شوند (`reminders.service`)؛ پیش‌نویسی که
+       قالبِ عملِ دوم را پایه بگیرد با پیامی که واقعاً می‌رود نمی‌خواند. */
+    const procs = procedureNames(visit);
+    const dxs = diagnosisTitles(visit);
     const base = visit.procedureType?.postOpCare?.trim();
     const opText = visit.clinicalNotes.map((n) => n.body).join('\n').slice(0, 4000);
 
@@ -468,13 +495,15 @@ export class AiService {
       '- فقط توصیه‌های مرتبط با همین عمل و همین شرح؛ داروی مشخص یا دوز اختراع نکن — اگر در شرح نیامده، «طبقِ دستورِ پزشک» بنویس.',
       '- سقفِ حدودِ ۶۰۰ نویسه؛ فهرست‌وار با خطِ جدا.',
       '- خروجی فقط متنِ مراقبت باشد، بدونِ مقدمه.',
-      base ? `قالبِ عمومیِ همین نوعِ عمل (پایه بگیر و با شرح شخصی‌سازی کن):\n${base}` : '',
+      base
+        ? `${procs.length > 1 ? `قالبِ عمومیِ عملِ اصلی («${procs[0]}»)` : 'قالبِ عمومیِ همین نوعِ عمل'} (پایه بگیر و با شرح شخصی‌سازی کن):\n${base}`
+        : '',
       cfg.prompts?.note ? `دستورِ اختصاصیِ این کلینیک:\n${cfg.prompts.note}` : '',
       ...(await this.feedbackBlock('care')),
     ].filter(Boolean).join('\n');
     const userMsg = [
-      procName ? `نوعِ عمل: ${procName}` : '',
-      visit.diagnosis?.title ? `تشخیص: ${visit.diagnosis.title}` : '',
+      procs.length ? `نوعِ عمل: ${promptList(procs)}` : '',
+      dxs.length ? `تشخیص: ${promptList(dxs)}` : '',
       opText ? `شرحِ عمل:\n${opText}` : 'شرحِ عمل هنوز ثبت نشده.',
     ].filter(Boolean).join('\n');
 
@@ -506,6 +535,8 @@ export class AiService {
         kind: true, opDate: true, opStatus: true, opType: true, nextVisitDate: true,
         procedureType: { select: { name: true } },
         diagnosis: { select: { title: true } },
+        otherProcedures: OTHER_PX,
+        otherDiagnoses: OTHER_DX,
         topic: { select: { name: true } },
       },
     });
@@ -526,8 +557,13 @@ export class AiService {
       [age ? `سن: ${age}` : '', gender ? `جنسیت: ${gender}` : ''].filter(Boolean).join('؛ '),
       'مراجعه‌ها (تازه‌ترین اول):',
       /* ⚠️ تاریخ **شمسی** می‌رود، نه ISO: مدل هرچه بگیرد همان را برمی‌گرداند و
-         خلاصه‌ای با «۲۰۲۶-۰۹-۰۱» برای پزشکِ ایرانی خام است (گزارشِ مالک). */
-      ...visits.map((v) => `- ${v.opDate ? faDateStr(v.opDate) : 'بی‌تاریخ'} | ${v.procedureType?.name ?? v.opType ?? v.kind}${v.diagnosis?.title ? ` | تشخیص: ${v.diagnosis.title}` : ''}${v.topic?.name ? ` | ${v.topic.name}` : ''} | وضعیت: ${v.opStatus}`),
+         خلاصه‌ای با «۲۰۲۶-۰۹-۰۱» برای پزشکِ ایرانی خام است (گزارشِ مالک).
+         بستهٔ ۷ — برچسبِ **ترکیبی** (همهٔ عمل‌ها/تشخیص‌ها): خلاصهٔ ارجاع نباید
+         بیماری‌های همراه یا عملِ همزمان را کم بگوید. تک‌مورد همان خطِ دیروز. */
+      ...visits.map((v) => {
+        const dx = diagnosisLabel(v);
+        return `- ${v.opDate ? faDateStr(v.opDate) : 'بی‌تاریخ'} | ${procedureLabel(v) ?? v.kind}${dx ? ` | تشخیص: ${dx}` : ''}${v.topic?.name ? ` | ${v.topic.name}` : ''} | وضعیت: ${v.opStatus}`;
+      }),
       'شرح‌های جاری:',
       ...notes.map((n) => `— [${KIND_FA[n.kind] ?? n.kind}] ${faDateStr(n.createdAt)}: ${n.body.slice(0, 800)}`),
     ].filter(Boolean).join('\n');
@@ -560,6 +596,7 @@ export class AiService {
       select: {
         id: true, opType: true,
         procedureType: { select: { name: true } },
+        otherProcedures: OTHER_PX,
         /* ⚠️ فقط **شرحِ عمل**. تا دیروز این `where` هیچ فیلترِ نوعی نداشت و
            عملاً مشکلی نمی‌ساخت چون تنها سندِ معمولِ یک مراجعه همان شرحِ عمل
            بود. با آمدنِ **شرحِ ترخیص** (بستهٔ ۴ب) هر عملِ ترخیص‌شده یک سندِ
@@ -583,12 +620,28 @@ export class AiService {
       take: 100,
       select: { code: true, name: true, price: true },
     });
-    const procName = visit.procedureType?.name ?? visit.opType ?? '';
-    const book = procName ? await this.serviceCodes.search(procName, 20).catch(() => []) : [];
+    /* بستهٔ ۷ — کتاب برای **هر** عملِ جلسه جستجو می‌شود؛ وگرنه عملِ همزمان
+       هیچ نامزدی نداشت و بی‌صدا کم‌صورت‌حساب می‌شد. عملِ اصلی دقیقاً همان
+       جستجوی دیروز است (۲۰ نتیجه، اول)؛ تا سه عملِ دیگر هرکدام ۱۰، بی‌تکرار
+       بر پایهٔ کد، سقفِ ۵۰ نامزدِ کتاب تا پرامپت بی‌اندازه نشود.
+       ⚠️ پشتِ‌سرِهم نه موازی: `search` در اولین فراخوانی کاتالوگ را وارد
+       می‌کند (`ensureImported`) و دو فراخوانیِ هم‌زمان دوبار وارد می‌کردند. */
+    const names = procedureNames(visit);
+    const book: any[] = [];
+    const seen = new Set<string>();
+    for (const [i, n] of names.slice(0, 4).entries()) {
+      const rows: any[] = await this.serviceCodes.search(n, i === 0 ? 20 : 10).catch(() => []);
+      for (const c of rows) {
+        const code = String(c.code);
+        if (seen.has(code) || book.length >= 50) continue;
+        seen.add(code);
+        book.push(c);
+      }
+    }
 
     const candidates = [
       ...internal.map((c) => ({ code: c.code, title: c.name, codeSystem: 'internal' as const, price: c.price })),
-      ...(book as any[]).map((c) => ({ code: String(c.code), title: c.title ?? '', codeSystem: 'book' as const, price: null })),
+      ...book.map((c) => ({ code: String(c.code), title: c.title ?? '', codeSystem: 'book' as const, price: null })),
     ];
     if (!candidates.length) throw new BadRequestException('نه کدِ داخلی تعریف شده نه کدی از کتاب پیدا شد');
 
@@ -599,7 +652,7 @@ export class AiService {
       'نامزدها:',
       ...candidates.map((c) => `${c.code} — ${c.title}${c.codeSystem === 'internal' ? ' (داخلی)' : ''}`),
     ].join('\n');
-    const userMsg = `${procName ? `نوعِ عمل: ${procName}\n` : ''}شرح:\n${noteText}`;
+    const userMsg = `${names.length ? `نوعِ عمل: ${promptList(names)}\n` : ''}شرح:\n${noteText}`;
 
     const reply = await this.chat({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey, model: cfg.models.chat }, system, userMsg);
     /* اعتبارسنجیِ سخت: فقط نامزدهایی که کدشان در جواب آمده — توهم حذف. */

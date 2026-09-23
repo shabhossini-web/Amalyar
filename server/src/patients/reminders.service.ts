@@ -11,6 +11,7 @@ import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 import { sendReminders } from '../reminders/send-reminders';
 import { AuditService } from '../audit/audit.service';
+import { diagnosisIds, procedureIds } from './visit-coding';
 
 /**
  * یادآوری‌ها — نسخهٔ ۱: «ویزیتِ بعدی» (docs/BOOKING.md، فازِ یادآوری‌ها).
@@ -97,6 +98,12 @@ export class RemindersService {
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
           opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
+          /* بستهٔ ۷ — فقط شناسه‌ها، برای بخش‌های فرمِ پیگیری (`followUpUrl`).
+             ⚠️ متنِ مراقبت و روزهای پیگیری عمداً از **عملِ اصلی** می‌مانند
+             (`procedureType` پایین): پیامکِ دوم برای عملِ همزمان یعنی دو دستورِ
+             ناهم‌خوان در یک روز، و متن جزوِ کلیدِ یکتای یادآوری است. */
+          otherProcedures: { select: { procedureTypeId: true } },
+          otherDiagnoses: { select: { diagnosisId: true } },
           postOpCare: true, followUpDays: true, postOpImmediate: true, preOpCare: true, preOpImmediate: true,
           procedureType: { select: { preOpCare: true, postOpCare: true, followUpDays: true } },
           patient: {
@@ -327,6 +334,12 @@ export class RemindersService {
    * نوعِ عمل و تشخیصِ ثبت‌شده، همه پشتِ **یک** توکن (بخش‌های اختصاصی
    * صفحه‌های بعدیِ همان فرم می‌شوند — `formView`ِ intake).
    *
+   * بستهٔ ۷ — بخش‌ها از **همهٔ** عمل‌ها و تشخیص‌های مراجعه می‌آیند، در هر
+   * رتبه‌ای: عملِ همزمان یا بیماریِ همراهی که فرمِ پیگیریِ خودش را دارد
+   * صفحهٔ بیشتر می‌گیرد، نه پیامکِ بیشتر (یک لینک، یک یادآوری برای هر موج).
+   * ⚠️ ترتیب همچنان `id` فرم است نه رتبه: جابه‌جاکردنِ اصلی و سایر نباید
+   * صفحه‌های ثبت‌نامِ بازی را که بیمار نیمه‌کاره پر کرده جابه‌جا کند.
+   *
    * ثبت‌نامِ بازِ همین فرم برای همین بیمار دوباره استفاده می‌شود (همان قاعدهٔ
    * `sendToPatient`)، پس هم‌گام‌سازی‌های مکرر ردیفِ نیمه‌کاره نمی‌کارند؛
    * اعتبارش تا آخرین موعدِ پیگیری + ۱۴ روز تمدید می‌شود.
@@ -334,6 +347,11 @@ export class RemindersService {
   private async followUpUrl(
     v: {
       id: number; patientId: number; opDate: Date | null; procedureTypeId: number | null; diagnosisId: number | null;
+      /* اختیاری: فیکسچرِ `intake-finance-roles.mjs` این متد را مستقیم و بدونِ
+         سایرین صدا می‌زند؛ نخوانده = فقط اصلی (توابعِ `visit-coding` خودشان
+         `?? []` دارند). */
+      otherProcedures?: { procedureTypeId: number }[];
+      otherDiagnoses?: { diagnosisId: number }[];
       patient: {
         firstName: string; lastName: string; phone: string | null;
         nationalId: string | null; birthDate: Date | null; address: string | null;
@@ -341,35 +359,46 @@ export class RemindersService {
     },
     days: number[],
   ): Promise<string | null> {
+    const pIds = procedureIds(v);
+    const dIds = diagnosisIds(v);
     const forms = await this.prisma.formDef.findMany({
       where: {
         active: true, scope: 'record',
         OR: [
           { followUp: 'general' },
-          ...(v.procedureTypeId ? [{ followUp: 'procedure', procedureTypeId: v.procedureTypeId }] : []),
-          ...(v.diagnosisId ? [{ followUp: 'diagnosis', diagnosisId: v.diagnosisId }] : []),
+          ...(pIds.length ? [{ followUp: 'procedure', procedureTypeId: { in: pIds } }] : []),
+          ...(dIds.length ? [{ followUp: 'diagnosis', diagnosisId: { in: dIds } }] : []),
         ],
       },
       orderBy: { id: 'asc' },
       select: { id: true, followUp: true },
     });
     if (!forms.length) return null;
-    /* پایه، بخشِ عمومی است؛ اگر تعریف نشده، اولین بخشِ اختصاصی پایه می‌شود. */
-    const base = forms.find((f) => f.followUp === 'general') ?? forms[0];
-    const extraFormIds = forms.filter((f) => f.id !== base.id).map((f) => f.id);
 
     const lastDay = days[days.length - 1];
     const opMs = (v.opDate ?? new Date()).getTime();
     const expiresAt = new Date(Math.max(Date.now(), opMs + lastDay * 24 * 3600_000) + 14 * 24 * 3600_000);
 
+    /* ⚠️ ثبت‌نامِ همین موج (مراجعه + روز + تاریخِ عمل) **بی‌قیدِ فرم** جست‌وجو
+       می‌شود و پایه‌اش **چسبنده** است (بازبینیِ بستهٔ ۷): با چند عمل/تشخیص،
+       مجموعهٔ فرم‌های منطبق با افزودن یا برداشتنِ یک «سایر» عوض می‌شود. نسخهٔ
+       قبل پایه را هر بار از نو برمی‌گزید (عمومی، وگرنه کوچک‌ترین id) و فقط
+       همان فرم را می‌جست؛ عملِ همزمانی با فرمِ id-کوچک‌تر پایه را عوض می‌کرد،
+       ثبت‌نامِ باز پیدا نمی‌شد، توکنِ تازه ساخته می‌شد و — چون لینک در متنِ
+       پیامک است — پیامکِ مراقبت و پیگیری **دوباره** می‌رفت و ثبت‌نامِ قبلی
+       یتیم در پرتالِ بیمار می‌ماند. حالا فرم‌ها فقط صفحه‌های اضافهٔ همان
+       لینک‌اند: یک موج، یک لینک، یک پیامک. */
     const open = await this.prisma.intakeSubmission.findFirst({
-      where: { patientId: v.patientId, formId: base.id, linkId: null, AND: [
+      where: { patientId: v.patientId, linkId: null, AND: [
         { data: { path: ['followUpVisitId'], equals: v.id } },
         { data: { path: ['followUpDay'], equals: days[0] } },
         { data: { path: ['followUpOpDate'], equals: v.opDate?.toISOString() ?? '' } },
       ] },
       orderBy: { id: 'desc' },
     });
+    /* پایه: فرمِ ثبت‌نامِ همین موج اگر هست؛ وگرنه بخشِ عمومی؛ وگرنه اولین بخشِ اختصاصی. */
+    const baseId = open?.formId ?? (forms.find((f) => f.followUp === 'general') ?? forms[0]).id;
+    const extraFormIds = forms.filter((f) => f.id !== baseId).map((f) => f.id);
     const row = open
       ? (['pending_fill', 'pending_payment'].includes(open.status) ? await this.prisma.intakeSubmission.update({
         where: { id: open.id },
@@ -382,7 +411,7 @@ export class RemindersService {
         data: {
           token: randomBytes(18).toString('base64url'),
           linkId: null,
-          formId: base.id,
+          formId: baseId,
           patientId: v.patientId,
           amount: 0,
           status: 'pending_fill',

@@ -1,0 +1,147 @@
+/*
+ * چیپ‌های «سایرین» (`CodingChips.jsx`) — تشخیص‌ها/عمل‌های دوم به بعدِ مراجعه.
+ *
+ * ⚠️ کنارِ خودِ کامپوننت (قانونِ ۲۱): هر چانکی که فرمِ مراجعه را باز می‌کند
+ * (داشبورد، میزِ پذیرش، پاپ‌آپ‌های پرونده) همین را از مسیرِ import می‌گیرد، نه
+ * از CSSِ صفحهٔ دیگری.
+ * ⚠️ فقط توکن (قانونِ ۲۳): پرده `--veil-rgb`، رنگِ معنایی `--*-text`؛ هیچ
+ * سفید/خاکستریِ خامی که در تمِ روشن محو شود.
+ * ⚠️ موبایلِ ۳۹۰: چیپ‌ها می‌پیچند و نامِ بلند کوتاه می‌شود (`min-width: 0`)؛
+ * هیچ اسکرولِ افقی. چیپ ۴۰px، دکمه‌های آیکونی ۳۲px — کفِ لمسِ `press.css`.
+ */
+
+.cc { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+.cc-list {
+  list-style: none; margin: 0; padding: 0; min-width: 0;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.cc-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 40px; max-width: 100%; min-width: 0;
+  padding-block: 3px; padding-inline: 12px 4px;
+  font-size: 13px; font-weight: 600; color: var(--text1);
+  background: rgba(var(--brand-rgb), 0.07);
+  border: 1px solid rgba(var(--brand-2-rgb), 0.28); border-radius: 12px;
+  animation: cc-in .18s ease-out;
+}
+@keyframes cc-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+
+.cc-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* کدِ ICD — کوچک و چپ‌به‌راست (قانونِ ۹)؛ `isolate` تا نقطه و رقمش با نامِ فارسی قاطی نشود. */
+.cc-icd {
+  flex: none; unicode-bidi: isolate;
+  font-size: 11px; font-weight: 700; color: var(--text3); letter-spacing: .02em;
+}
+/* غیرفعال: خاموش و خط‌چین — می‌ماند چون روی همین مراجعه ثبت است، ولی دیگر پیشنهاد نمی‌شود. */
+.cc-off {
+  flex: none; font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--text3);
+  padding: 2px 7px; border-radius: 99px;
+  background: rgba(var(--veil-rgb), 0.05); border: 1px dashed rgba(var(--veil-rgb), 0.22);
+}
+
+.cc-ico {
+  flex: none; display: grid; place-items: center;
+  width: 32px; height: 32px; padding: 0; cursor: pointer;
+  color: var(--text3); background: none;
+  border: 1px solid transparent; border-radius: 9px;
+  transition: color .15s, background-color .15s;
+}
+.cc-ico:hover { background: rgba(var(--veil-rgb), 0.07); }
+.cc-star:hover { color: var(--amber-text); }
+.cc-del:hover { color: var(--red-text); }
+.cc-ico:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), 0.7); outline-offset: 1px; }
+.cc-ico:disabled { cursor: not-allowed; opacity: .5; }
+.cc-ico:disabled:hover { color: var(--text3); background: none; }
+
+/* ── ردیفِ افزودن ── */
+.cc-addrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+/* پوستهٔ `data-coding-add` — هم‌اندازهٔ دکمهٔ Pick. */
+.cc-add { display: inline-flex; min-width: 0; max-width: 100%; }
+/* دکمهٔ Pick این‌جا «افزودن» است نه فیلد: خط‌چین، بی‌کرت، هم‌قدِ چیپ. */
+.cc-add .pk-btn {
+  width: auto; min-height: 40px; padding: 8px 12px;
+  font-size: 13px; font-weight: 700; color: var(--brand-text);
+  background: transparent; border: 1px dashed rgba(var(--brand-2-rgb), 0.45); border-radius: 12px;
+}
+.cc-add .pk-btn.empty span { color: inherit; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+.cc-add .pk-caret { display: none; }
+.cc-add .pk-btn:hover:not(:disabled) { border-style: solid; background: rgba(var(--brand-rgb), 0.08); }
+.cc-add .pk-btn:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), 0.7); outline-offset: 1px; }
+
+.cc-new {
+  min-height: 40px; padding: 0 12px; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
+  background: rgba(var(--veil-rgb), 0.04);
+  border: 1px solid rgba(var(--veil-rgb), 0.13); border-radius: 12px;
+}
+.cc-new:hover { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.45); }
+.cc-new:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), 0.7); outline-offset: 1px; }
+.cc-max { font-size: 11.5px; font-weight: 600; color: var(--text3); }
+
+/* افزودنِ سریع — همان شکلِ کادرِ DefSelect، این‌جا تکرار شد تا کامپوننت به CSSِ داشبورد وابسته نباشد. */
+.cc-quick { display: flex; gap: 6px; min-width: 0; }
+.cc-quick input {
+  flex: 1; min-width: 0; font-family: inherit; font-size: 14px; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--brand-2-rgb), 0.5);
+  border-radius: 11px; padding: 9px 12px; outline: none;
+}
+.cc-quick button {
+  flex: none; min-height: 40px; padding: 0 14px; cursor: pointer; white-space: nowrap;
+  font-family: inherit; font-size: 12.5px; font-weight: 800;
+  color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
+  border: none; border-radius: 11px;
+}
+.cc-quick button:disabled { opacity: .55; cursor: default; }
+.cc-quick button.ghost {
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.13);
+}
+
+/* بجِ «اصلی» کنارِ برچسبِ فیلد — فقط وقتی بیش از یکی هست. */
+.cc-badge {
+  display: inline-block; margin-inline-start: 6px; padding: 1px 8px; vertical-align: middle;
+  font-style: normal; font-size: 10.5px; font-weight: 800; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), 0.14); border: 1px solid rgba(var(--brand-2-rgb), 0.35); border-radius: 99px;
+}
+
+/* ── کپیِ تشخیصِ ویزیتِ تصمیم («همین‌ها») — داخلِ گرهِ تشخیصِ فرمِ عمل ──
+   خط‌چینِ کم‌رنگ: پیشنهاد است نه مقدار؛ تا دکمه زده نشود چیزی روی عمل نمی‌نشیند. */
+.cc-copy {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0;
+  padding: 8px 10px; border-radius: 11px;
+  background: rgba(var(--veil-rgb), 0.03); border: 1px dashed rgba(var(--veil-rgb), 0.2);
+}
+.cc-copy p { flex: 1 1 200px; min-width: 0; margin: 0; font-size: 12px; font-weight: 600; line-height: 1.8; color: var(--text2); }
+.cc-copy p b { color: var(--text1); font-weight: 700; }
+.cc-copy button {
+  flex: none; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 0 12px; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 800; color: var(--brand-text);
+  background: none; border: 1px solid rgba(var(--brand-2-rgb), 0.45); border-radius: 99px;
+}
+.cc-copy button:hover { background: rgba(var(--brand-rgb), 0.08); }
+.cc-copy button:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), 0.7); outline-offset: 1px; }
+
+/* ── راهنمای مراقبتِ «عمل‌های همزمان» — برنامهٔ مراقبتِ فرمِ عمل ──
+   ⚠️ کلاسِ جدا، نه `.db-default`: آن کلاس «قالبِ عملِ اصلی» است و تعدادش در
+   آزمونِ postop-flow سنجیده می‌شود. این‌جا فقط می‌گوید قالبِ سایرین **خودکار
+   نمی‌رود** و راهِ یک‌ضربه‌ایِ افزودنش به متنِ اختصاصی را می‌دهد. */
+.db-careother {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  padding: 8px 10px; border-radius: 11px;
+  background: rgba(var(--veil-rgb), 0.03); border: 1px dashed rgba(var(--veil-rgb), 0.22);
+}
+.db-careother p { margin: 0; font-size: 11.5px; line-height: 1.85; color: var(--text2); }
+.db-careother-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.db-careother button {
+  min-height: 32px; padding: 4px 11px; cursor: pointer; text-align: start;
+  font-family: inherit; font-size: 11px; font-weight: 800; color: var(--brand-text);
+  background: none; border: 1px solid rgba(var(--brand-2-rgb), 0.45); border-radius: 99px;
+}
+.db-careother button:hover { background: rgba(var(--brand-rgb), 0.08); }
+.db-careother button:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), 0.7); outline-offset: 1px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-chip { animation: none; }
+  .cc-ico { transition: none; }
+}

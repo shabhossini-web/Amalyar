@@ -10,7 +10,8 @@ import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
 import { useConfig } from './config.jsx';
-import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Scalpel } from '../ui/icons.jsx';
+import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Scalpel } from '../ui/icons.jsx';
+import { todayJStr, ymdToJStr } from '../lib/jalali.js';
 import './launcher.css';
 import './shell.css';
 import './work.css';
@@ -64,7 +65,9 @@ export default function Today() {
       .then((r) => { setData(r); setErr(null); })
       .catch((e) => setErr({ message: e?.message || 'بارگذاری نشد', status: e?.status ?? 0 }));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  /* ⚠️ حساب در همین تب عوض می‌شود (`/auth/switch`) بی آنکه صفحه از نو سوار شود؛
+     بی `user?.id` دادهٔ حسابِ قبلی (و دکمهٔ «+»ِ او) می‌ماند و به ۴۰۳ می‌خورد. */
+  useEffect(() => { setData(null); load(); }, [load, user?.id]);
   /* پاپ‌آپِ «همان چیز» (سفارش/مراجعه) از ردیفِ کار و از نمای استثنا — بازخوردِ
      مالک: هشدار باید بگوید مالِ چیست و با کلیک بازِ شود و از همان‌جا انجام شود.
      بعد از هر ثبت، صفحه و زنگِ پوسته با هم تازه می‌شوند. */
@@ -117,7 +120,7 @@ export default function Today() {
   const name = user?.displayName || user?.firstName || '';
 
   return (
-    <div className="td">
+    <div className={data?.canCreateVisit ? 'td has-fab' : 'td'}>
       <header className="td-head">
         <h1 className="td-hello">
           {greeting(new Date().getHours())}{name ? `، ${name}` : ''}
@@ -231,6 +234,24 @@ export default function Today() {
           </Overlay>
         )}
       </AnimatePresence>
+
+      {/* ── «+» — افزودنِ سریعِ مراجعهٔ دستی (بازخوردِ مالک ۱۴۰۵/۰۷/۰۱: «هر کسی
+          سریع خواست مراجعهٔ دستی اضافه کند»). همان فرمِ «مراجعهٔ جدید»ِ داشبورد،
+          از همان میزبانِ پاپ‌آپِ این صفحه — نه فرمِ دوم؛ بعد از ثبت، فهرستِ امروز
+          و زنگِ پوسته با `changed()` تازه می‌شوند. فقط وقتی سرور گفته این کاربر
+          اجازهٔ ساخت دارد (`canCreateVisit`). تاریخ پیش‌فرض امروز است. */}
+      {data?.canCreateVisit && (
+        <button
+          type="button"
+          className="td-fab"
+          data-quick-visit
+          aria-label={t.visitNew}
+          title={t.visitNew}
+          onClick={() => things.show({ type: 'visit', prefill: { opDateJ: ymdToJStr(data?.clinicToday) || todayJStr() } })}
+        >
+          <Plus width="26" height="26" aria-hidden="true" />
+        </button>
+      )}
 
       <ThingPopups things={things} />
       {toast && <div className="sh-toast" role="status">{toast}</div>}

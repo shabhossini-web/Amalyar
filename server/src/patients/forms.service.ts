@@ -1,4 +1,5 @@
 import { JOB_ROLE_KEYS, jobRoleLabel, fieldRoles } from '../common/job-roles';
+import { CODING_TWIN_KEYS } from './visit-coding';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -831,7 +832,9 @@ export class FormsService {
        کلید آن‌جا فقط مانع است: از بستهٔ ۶الف `history` هم کلیدِ هسته شد و
        فرمِ «شرحِ حال»ِ زیرپرونده دیگر نمی‌توانست فیلدِ `history` بگیرد
        (سوییتِ record-texts همین را گرفت). */
-    if (form.scope !== 'record' && (BUILTIN_VISIT_KEYS.has(key) || VISIT_CATALOG_KEYS.has(key))) {
+    /* بستهٔ ۷: کلیدِ همزادِ «سایرِ تشخیص‌ها/عمل‌ها» هم رزرو است — فیلدِ دلخواهی
+       به همین نام مقدارش را از مسیرِ کدگذاری می‌گرفت و در `extra` هم می‌نشست. */
+    if (form.scope !== 'record' && (BUILTIN_VISIT_KEYS.has(key) || VISIT_CATALOG_KEYS.has(key) || CODING_TWIN_KEYS.has(key))) {
       throw new BadRequestException('این کلید برای فیلدهای هسته‌ای رزرو است — نامِ دیگری بگذارید');
     }
     const dup = await this.prisma.formField.findUnique({ where: { formId_key: { formId, key } } });

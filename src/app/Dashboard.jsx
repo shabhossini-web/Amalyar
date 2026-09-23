@@ -52,6 +52,12 @@ const SORT_OPTIONS = [
 ];
 const PAGE_SIZES = [25, 50, 100, 200];
 
+/* بستهٔ ۷ — برچسبِ چندموردیِ عمل/تشخیص («A + B»، «X، Y») می‌تواند بلند شود؛
+   کارت حداکثر دو خط نشانش می‌دهد و متنِ کامل در `title` است (صداگذار هم متنِ
+   کامل را می‌خواند چون فقط دیداری بریده می‌شود). ⚠️ inline است نه کلاس، چون
+   `dashboard.css` در این بسته دست نخورد؛ رنگ ندارد پس قانونِ ۲۳ سالم می‌ماند. */
+const CLAMP_2 = { display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' };
+
 /**
  * بازه‌های سریع بر تقویمِ شمسی حساب می‌شوند، نه میلادی: «این ماه» یعنی ماهِ
  * شمسی، و هفته از شنبه شروع می‌شود. حسابِ میلادی این‌جا جوابِ غلط می‌دهد.
@@ -281,6 +287,12 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
     const t = setTimeout(() => setConfirmDel(false), 3000);
     return () => clearTimeout(t);
   }, [confirmDel]);
+  /* بستهٔ ۷ — برچسبِ ترکیبی را سرور می‌سازد (قانون ۱۵؛ `procedureLabel`/`diagnosisLabel`،
+     اصلی اول). ⚠️ fallback فقط برای پاسخِ سرورِ قدیمی‌تر است (PWAِ کش‌شده وسطِ
+     دیپلوی) — `procedureTypeName`/`diagnosisTitle` همیشه فقط **اصلی**‌اند و سایرین
+     را ندارند، پس کارت نباید اول سراغِ آن‌ها برود. */
+  const procLabel = v.procedureLabel ?? (v.procedureTypeName || v.opType);
+  const dxLabel = v.diagnosisLabel ?? v.diagnosisTitle;
 
   return (
     /* ⚠️ رنگِ اکسنت روی **کلِ کارت** می‌نشیند نه فقط برچسب: طرحِ مرجع
@@ -344,8 +356,8 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
           </Link>
           <span className="db-code" dir="ltr">{v.code}</span>
         </div>
-        {(v.procedureTypeName || v.opType) && (
-          <p className="db-sub">{v.procedureTypeName || v.opType}</p>
+        {procLabel && (
+          <p className="db-sub" style={CLAMP_2} title={procLabel}>{procLabel}</p>
         )}
 
         <div className="db-facts">
@@ -366,7 +378,11 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
               <Arrive width="14" height="14" /> <span dir="ltr">{v.techArriveTime}</span>
             </span>
           )}
-          {v.diagnosisTitle && <span><Diagnosis width="14" height="14" /> {v.diagnosisTitle}</span>}
+          {dxLabel && (
+            <span title={dxLabel}>
+              <Diagnosis width="14" height="14" /><span style={CLAMP_2}>{dxLabel}</span>
+            </span>
+          )}
           {/* «ویزیتِ بعدی» — پزشک روی فرم ثبت کرده؛ منشی از روی همین کارت
               پیگیری می‌کند تا فازِ یادآوریِ خودکار برسد. */}
           {v.nextVisitDate && (
@@ -784,8 +800,11 @@ export default function Dashboard() {
     if (adv.surgeonId) out.push({ key: 'surgeonId', label: `جراح: ${nameOf(defs.surgeons, adv.surgeonId, (r) => r?.name)}` });
     if (adv.hospitalId) out.push({ key: 'hospitalId', label: `بیمارستان: ${nameOf(defs.hospitals, adv.hospitalId, (r) => r?.name)}` });
     if (adv.techId) out.push({ key: 'techId', label: `کارشناس: ${nameOf(defs.techs, adv.techId, (r) => r?.name)}` });
-    if (adv.procedureTypeId) out.push({ key: 'procedureTypeId', label: `نوعِ عمل: ${nameOf(defs.procedures, adv.procedureTypeId, (r) => r?.name)}` });
-    if (adv.diagnosisId) out.push({ key: 'diagnosisId', label: `تشخیص: ${nameOf(defs.diagnoses, adv.diagnosisId, (r) => r?.title)}` });
+    /* ⚠️ بستهٔ ۷: فیلترِ عمل/تشخیص سمتِ سرور **هر رتبه‌ای** را می‌گیرد (`visitHasProcedure`
+       / `visitHasDiagnosis`) — مراجعه‌ای که X را به‌عنوانِ عمل/تشخیصِ دوم دارد هم می‌آید.
+       چیپ همین را می‌گوید («شاملِ»)، وگرنه کاربر کارتی با اصلیِ دیگر را خطای فیلتر می‌خواند. */
+    if (adv.procedureTypeId) out.push({ key: 'procedureTypeId', label: `نوعِ عمل: شاملِ ${nameOf(defs.procedures, adv.procedureTypeId, (r) => r?.name)}` });
+    if (adv.diagnosisId) out.push({ key: 'diagnosisId', label: `تشخیص: شاملِ ${nameOf(defs.diagnoses, adv.diagnosisId, (r) => r?.title)}` });
     if (adv.fromJ) out.push({ key: 'fromJ', label: `از ${faDigits(adv.fromJ)}` });
     if (adv.toJ) out.push({ key: 'toJ', label: `تا ${faDigits(adv.toJ)}` });
     if (adv.owing) out.push({ key: 'owing', label: 'فقط بدهکار' });

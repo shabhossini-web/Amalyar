@@ -1,0 +1,53 @@
+/* پیش‌فرض‌های شرحِ عمل (`OpDefaults.jsx`) — چیپ‌های «قالبِ آماده» و «افزودن به
+   پیش‌فرض». همراهِ خودِ کامپوننت (قانونِ ۲۱): سه صفحه مصرفش می‌کنند و هیچ‌کدام
+   نباید از CSSِ دیگری ارث ببرد. همهٔ رنگ‌ها از توکن‌ها — هر دو تم (قانونِ ۲۳).
+   ⚠️ پیشوندِ `opd-` و نه `od-`: `orders.css` (شیتِ سفارش) از قبل `.od-save` و
+   `.od-chip` دارد و فرمِ عمل هر دو را بار می‌کند — نسخهٔ اول همین برخورد را
+   خورد و دکمهٔ «افزودن» داخلِ قابِ دکمهٔ «ذخیره»ِ سفارش نشست. */
+
+.opd-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-block: 2px 8px; }
+.opd-chips small { font-size: 11px; color: var(--text3); }
+.opd-chip {
+  padding: 5px 12px; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700; color: var(--text2);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 99px;
+  transition: color .15s, border-color .15s;
+}
+.opd-chip:hover:not(:disabled) { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .5); }
+.opd-chip.sp { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .45); background: rgba(var(--brand-rgb), .1); }
+.opd-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.opd-chip:disabled { opacity: .55; cursor: default; }
+
+.opd-save { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
+.opd-btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 6px 12px; border-radius: 10px; font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--brand-2); background: rgba(var(--brand-rgb), .08); border: 1px dashed rgba(var(--brand-2-rgb), .5);
+  max-width: 100%; text-align: start;
+  transition: background .15s, border-color .15s;
+}
+.opd-btn:hover:not(:disabled) { background: rgba(var(--brand-rgb), .16); border-style: solid; }
+.opd-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.opd-btn:disabled { opacity: .55; cursor: default; }
+
+.opd-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; width: 100%; }
+.opd-row input {
+  flex: 1 1 200px; min-width: 0; padding: 8px 11px; border-radius: 10px; font: inherit; font-size: 13px;
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.opd-row input:focus { outline: none; border-color: rgba(var(--brand-2-rgb), .7); }
+.opd-ok, .opd-cancel {
+  padding: 8px 14px; border-radius: 10px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800;
+}
+.opd-ok { color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); border: none; }
+.opd-ok:disabled { opacity: .6; cursor: default; }
+.opd-cancel { color: var(--text2); background: transparent; border: 1px solid rgba(var(--veil-rgb), .16); }
+.opd-ok:focus-visible, .opd-cancel:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.opd-note, .opd-hint { font-size: 11.5px; color: var(--text3); line-height: 1.7; }
+.opd-hint { margin-top: 6px; }
+.opd-warn { display: flex; align-items: flex-start; gap: 5px; font-size: 11.5px; font-weight: 700; line-height: 1.7; color: var(--amber-text); }
+.opd-warn svg { flex: none; margin-top: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .opd-chip, .opd-btn { transition: none; }
+}

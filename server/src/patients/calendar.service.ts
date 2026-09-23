@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { scopedVisitWhere } from '../common/own-scope';
 import { AppointmentsService } from './appointments.service';
+import { OTHER_PX, procedureLabel } from './visit-coding';
 
 /**
  * تقویمِ ماهانهٔ عمل‌ها.
@@ -36,6 +37,7 @@ export class CalendarService {
         hospital: { select: { name: true } },
         tech: { include: { person: { select: { firstName: true, lastName: true } } } },
         procedureType: { select: { name: true } },
+        otherProcedures: OTHER_PX,
       },
     });
 
@@ -55,7 +57,8 @@ export class CalendarService {
         surgeonName: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName,
         hospitalName: v.hospital?.name ?? v.hospitalName,
         techName: v.tech ? `${v.tech.person.firstName} ${v.tech.person.lastName}`.trim() : null,
-        procedureName: v.procedureType?.name ?? v.opType,
+        /* بستهٔ ۷ج: برچسبِ همهٔ عمل‌های جلسه («A + B»، اصلی اول) — فقط نمایشی. */
+        procedureName: procedureLabel(v),
       });
     }
 
