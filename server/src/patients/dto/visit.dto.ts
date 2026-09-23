@@ -211,6 +211,20 @@ export class CreateVisitDto {
   @IsOptional() @IsString() @MaxLength(2000, { message: 'شکایتِ اولیه طولانی است' })
   chiefComplaint?: string;
 
+  /**
+   * **جزئیاتِ ساخت‌یافتهٔ عمل** (بستهٔ ۸) — ASA، رضایت، ناشتایی، ضدانعقاد، تیم،
+   * خون‌ریزی، نمونه، درن، ایمپلنت، عارضه. شکل و قاعده‌ها در `op-details.ts`
+   * (`opDetailsInput`)؛ این‌جا فقط «شیء است». وصلهٔ جزئی: کلیدِ نیامده = دست نزن.
+   */
+  @IsOptional()
+  @IsObject({ message: 'جزئیاتِ عمل باید یک شیء باشد' })
+  opDetails?: Record<string, unknown>;
+
+  /** سمت و سطحِ هر عمل (بستهٔ ۸) — `[{procedureTypeId, side, level}]`؛ قاعده در `visit-coding.ts`. */
+  @IsOptional()
+  @IsArray({ message: 'سمتِ عمل‌ها باید فهرست باشد' })
+  procedureDetails?: unknown[];
+
   /// ویزیتی که تصمیمِ عمل در آن گرفته شد — عملِ ساخته‌شده شکایتش را از آن
   /// **مشتق** می‌کند. تعلقش به همان بیمار در سرویس سنجیده می‌شود.
   @IsOptional() @IsInt({ message: 'شناسهٔ ویزیتِ تصمیم نامعتبر است' })
@@ -434,6 +448,20 @@ export class UpdateVisitDto {
   @IsOptional() @ValidateIf((o) => o.chiefComplaint !== null)
   @IsString() @MaxLength(2000, { message: 'شکایتِ اولیه طولانی است' })
   chiefComplaint?: string | null;
+
+  /**
+   * **جزئیاتِ ساخت‌یافتهٔ عمل** (بستهٔ ۸) — ASA، رضایت، ناشتایی، ضدانعقاد، تیم،
+   * خون‌ریزی، نمونه، درن، ایمپلنت، عارضه. شکل و قاعده‌ها در `op-details.ts`
+   * (`opDetailsInput`)؛ این‌جا فقط «شیء است». وصلهٔ جزئی: کلیدِ نیامده = دست نزن.
+   */
+  @IsOptional()
+  @IsObject({ message: 'جزئیاتِ عمل باید یک شیء باشد' })
+  opDetails?: Record<string, unknown>;
+
+  /** سمت و سطحِ هر عمل (بستهٔ ۸) — `[{procedureTypeId, side, level}]`؛ قاعده در `visit-coding.ts`. */
+  @IsOptional()
+  @IsArray({ message: 'سمتِ عمل‌ها باید فهرست باشد' })
+  procedureDetails?: unknown[];
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

@@ -288,6 +288,14 @@ export const PERMISSIONS: AccessDef[] = [
     defaultLevel: LEVEL.TECH,
   },
   {
+    /* بستهٔ ۸ — جدا از «ثبتِ ترخیص»: ویزیتِ بعدی پیامک می‌کارد و مراجعهٔ پست‌آپ
+       می‌سازد، یعنی کاری که از فرمِ عمل فقط با «ویرایشِ مراجعه» شدنی بود.
+       پیش‌فرض کارشناس‌ادمین؛ نصبی که می‌خواهد پرستارِ ترخیص هم تعیینش کند پایینش می‌آورد. */
+    key: 'theatre.followup', label: 'تعیینِ ویزیتِ بعدی هنگامِ ترخیص', group: 'patients',
+    hint: 'تاریخِ اولین ویزیتِ بعد از عمل از پاپ‌آپِ ترخیص — یادآوری و مراجعهٔ پست‌آپ از همین ساخته می‌شود.',
+    defaultLevel: LEVEL.TECH_ADMIN,
+  },
+  {
     key: 'patients.update', label: 'ویرایشِ مراجعه', group: 'patients',
     hint: 'جراح، بیمارستان، نوعِ عمل و تاریخ.',
     defaultLevel: LEVEL.SUPERVISOR,

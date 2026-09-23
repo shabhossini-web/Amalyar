@@ -1,10 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere } from '../common/own-scope';
 import { actorName } from '../common/person';
-import { currentNotes, noteBody, setVisitNote } from './clinical-note';
+import { DISCHARGE_NOTES, currentNotes, noteBody, setVisitNote } from './clinical-note';
 import { ANESTHESIA_LABELS, DISPOSITION_LABELS } from './labels';
 import { vitalView } from './vitals';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
@@ -12,8 +12,12 @@ import { RecordService } from './record.service';
 import { monthDayCounts } from './month-summary';
 import {
   diagnosisLabel, diagnosisList, kitTemplate, NEEDS_SELECT, OTHER_DX, OTHER_PX, OTHER_PX_KIT,
-  principalProcedureName, procedureIds, procedureLabel, procedureList,
+  principalProcedureName, procedureIds, procedureLabel, procedureList, PROC_DETAIL_SELECT, procedureSidesText,
 } from './visit-coding';
+import { ConfigService } from '../config/config.service';
+import { PatientsService } from './patients.service';
+import { OP_INTRA_KEYS, assertStructuredOwnership, opDetailsInput, opDetailsView, preOpSummary, writeOpDetails } from './op-details';
+import { toDateValue } from '../common/jalali';
 import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
 
@@ -127,7 +131,22 @@ const wallClock = () => {
  */
 @Injectable()
 export class TheatreService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private record: RecordService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    private record: RecordService,
+    private config: ConfigService,
+    private patients: PatientsService,
+  ) {}
+
+  /**
+   * بلوک‌های بالینیِ بستهٔ ۸ (ارزیابیِ پیش از عمل، جزئیاتِ عمل، داروهای ترخیص،
+   * ویزیتِ بعدی) فقط در **مطب**. میز در نورومانیتورینگ و ایمپلنت همان میزِ
+   * سبکِ دیروز است — شرکت پروندهٔ بالینیِ جراح را نمی‌نویسد.
+   */
+  private async clinical() {
+    return (await this.config.profile()).kind === 'clinic';
+  }
 
   private scope(user: any) {
     return (user?.level ?? 0) >= LEVEL.SUPERVISOR ? {} : ownVisitWhere(user);
@@ -154,6 +173,8 @@ export class TheatreService {
         procedureType: { select: { name: true } },
         /* فقط نامِ سایرِ عمل‌ها — برای برچسبِ ردیف (بستهٔ ۷ج). */
         otherProcedures: OTHER_PX,
+        /* سمت/سطح — روی تابلوی روز هم دیده شود (تأییدِ محل پیش از برش، بستهٔ ۸). */
+        procedureDetails: { select: PROC_DETAIL_SELECT },
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
       },
     });
@@ -170,6 +191,8 @@ export class TheatreService {
         /* برچسبِ ترکیبیِ همهٔ عمل‌ها («A + B») — کلیدِ فقط‌نمایشی، پس مقدارش
            برچسب است (قراردادِ `visit-coding.ts`)؛ تک‌عمل همان مقدارِ دیروز. */
         procedure: procedureLabel(v),
+        /* «چپ · L4–L5» — جدا از برچسب (برچسب اثرِ انگشتِ فاکتور است). */
+        sides: procedureSidesText(v),
         hospital: v.hospital?.name ?? v.hospitalName ?? null,
         surgeon: TheatreService.personName(v.surgeon) ?? v.surgeonName ?? null,
       })),
@@ -199,7 +222,10 @@ export class TheatreService {
         /* شکایتِ اولیه — مشتق از ویزیتِ تصمیم اگر خودِ عمل ننوشته باشدش
            (بستهٔ ۴الف). سرِ میز باید معلوم باشد بیمار **چرا** آمده. */
         chiefComplaint: true,
-        anesthesia: true, dischargeDisposition: true,
+        anesthesia: true, dischargeDisposition: true, nextVisitDate: true,
+        /* بستهٔ ۸ — جزئیاتِ ساخت‌یافته و سمتِ هر عمل. */
+        opDetail: true,
+        procedureDetails: { select: PROC_DETAIL_SELECT },
         /* ⚠️ شناسهٔ اصلی‌ها هم لازم است: `diagnosisList`/`procedureList` از
            همین‌ها `id`ِ ردیفِ اول را می‌سازند، و `select` چیزی را خودکار
            نمی‌آورد. */
@@ -227,8 +253,10 @@ export class TheatreService {
           },
         },
         /* اسنادِ جاریِ خودِ عمل — همان سندهای پرونده، نه کپی. */
+        /* ⚠️ اسنادِ ترخیص از خودِ `DISCHARGE_NOTES` — فهرستِ دستی یعنی سندِ تازهٔ
+           ترخیص (داروها، بستهٔ ۸) بی‌صدا از میز جا می‌ماند. */
         clinicalNotes: {
-          ...currentNotes(['op', 'findings', 'discharge', 'discharge_summary', 'discharge_note']),
+          ...currentNotes(['op', 'findings', ...Object.values(DISCHARGE_NOTES)]),
           select: { kind: true, body: true, authorName: true, createdAt: true },
         },
         vitals: { orderBy: [{ takenAt: 'asc' }, { id: 'asc' }] },
@@ -263,7 +291,19 @@ export class TheatreService {
     if (!v) throw new NotFoundException('عمل پیدا نشد');
     const p = v.patient;
     const done = new Map(v.safetyChecks.map((c) => [`${c.stage}/${c.key}`, c]));
+    const clinical = await this.clinical();
+    const opDetails = clinical ? opDetailsView((v as any).opDetail) : null;
+    /* چه کارهایی از این میز برای **این کاربر** شدنی است — سرور می‌گوید، نه رابط. */
+    const [canReport, canFollowup, canEditVisit] = await Promise.all([
+      canAccess(this.prisma, user, 'theatre', ['theatre.report']).catch(() => false),
+      canAccess(this.prisma, user, 'theatre', ['theatre.followup']).catch(() => false),
+      canAccess(this.prisma, user, 'dashboard', ['patients.update']).catch(() => false),
+    ]);
     return {
+      /* بستهٔ ۸: بلوک‌های بالینی (پیش از عمل، جزئیاتِ عمل، داروها و ویزیتِ بعدیِ
+         ترخیص) فقط در مطب؛ رابط از همین پرچم می‌خواند نه از حدسِ حوزه. */
+      clinical,
+      can: { report: canReport, followup: clinical && canFollowup, editVisit: canEditVisit },
       visit: {
         id: v.id, code: `${p.code}-V${v.seq}`, kind: v.kind, opDate: v.opDate, opStatus: v.opStatus,
         ...roomState(v),
@@ -290,6 +330,12 @@ export class TheatreService {
         dischargeRemark: noteBody(v.clinicalNotes, 'discharge_note'),
         dischargeDisposition: v.dischargeDisposition ?? null,
         dischargeDispositionFa: v.dischargeDisposition ? DISPOSITION_LABELS[v.dischargeDisposition] ?? v.dischargeDisposition : null,
+        /* ── بستهٔ ۸ (مطب) ── */
+        dischargeRx: clinical ? noteBody(v.clinicalNotes, 'discharge_rx') : null,
+        nextVisitDate: v.nextVisitDate ?? null,
+        opDetails,
+        /* یک سطرِ فقط‌خواندنیِ پیش از عمل برای میز — ویرایش در فرمِ عمل. */
+        preOp: clinical ? preOpSummary(opDetails, v.anesthesia) : null,
         instructions: v.surgeonInstructions || null,
         notes: v.notes || null,
       },
@@ -408,11 +454,18 @@ export class TheatreService {
    * ⚠️ زدنِ دوباره **ساعت را عوض نمی‌کند** و فقط نسخهٔ تازه‌ای از شرح ثبت
    * می‌کند. همان استدلالِ `stamp`: دستِ دستکش‌دار دکمه را دوباره می‌زند.
    */
-  async discharge(visitId: number, dto: { condition: string; disposition: string; summary?: string; remark?: string }, user: any) {
+  async discharge(
+    visitId: number,
+    dto: { condition: string; disposition: string; summary?: string; remark?: string; rx?: string; nextVisitDate?: string | null },
+    user: any,
+  ) {
     const condition = dto.condition;
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
-      select: { id: true, patientId: true, opStatus: true, opEndTime: true, dischargeAt: true },
+      select: {
+        id: true, patientId: true, kind: true, opStatus: true, opEndTime: true, opDate: true,
+        dischargeAt: true, dischargeDisposition: true, nextVisitDate: true,
+      },
     });
     if (!v) throw new NotFoundException('عمل پیدا نشد');
     if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده ترخیص نمی‌شود');
@@ -427,21 +480,102 @@ export class TheatreService {
        ستون برای حذفش آمد. */
     if (!DISPOSITION_LABELS[dto.disposition]) throw new BadRequestException('وضعیتِ خروج را انتخاب کنید');
 
+    /* ── بستهٔ ۸: داروهای ترخیص و ویزیتِ بعدی (فقط مطب) ──
+       هر دو «نیامده = دست نزن». */
+    const wantsRx = dto.rx !== undefined;
+    const wantsNext = dto.nextVisitDate !== undefined;
+    if ((wantsRx || wantsNext) && !(await this.clinical())) {
+      throw new BadRequestException('داروهای ترخیص و ویزیتِ بعدی فقط در مطب ثبت می‌شوند');
+    }
+    const death = dto.disposition === 'death';
+    /* ⚠️ «فوت» با دارو و ویزیتِ بعدی جمع نمی‌شود: ویزیتِ بعدی یادآوری و پیامکِ
+       مراقبت برای خانواده می‌کاشت (بازبینیِ طراحیِ بستهٔ ۸). */
+    if (death && ((wantsRx && (dto.rx ?? '').trim()) || (wantsNext && dto.nextVisitDate))) {
+      throw new BadRequestException('با وضعیتِ خروجِ «فوت» داروی ترخیص و ویزیتِ بعدی ثبت نمی‌شود');
+    }
+    let nextDate: Date | null | undefined;
+    if (wantsNext && !death) {
+      /* پاک‌کردن فقط از فرمِ عمل: ویزیتِ پست‌آپِ ساخته‌شده ممکن است نوبتِ رزروشده داشته باشد. */
+      if (dto.nextVisitDate === null || dto.nextVisitDate === '') {
+        throw new BadRequestException('برداشتنِ ویزیتِ بعدی از فرمِ عمل انجام می‌شود، نه از ترخیص');
+      }
+      const d = toDateValue(String(dto.nextVisitDate));
+      if (!d) throw new BadRequestException('تاریخِ ویزیتِ بعدی معتبر نیست');
+      const day = (x: Date) => x.toISOString().slice(0, 10);
+      if (v.opDate && day(d) < day(v.opDate)) throw new BadRequestException('ویزیتِ بعدی نمی‌تواند پیش از روزِ عمل باشد');
+      const same = v.nextVisitDate && day(v.nextVisitDate) === day(d);
+      if (!same) {
+        /* مجوزِ جدا: ویزیتِ بعدی پیامک می‌کارد و مراجعهٔ پست‌آپ می‌سازد — کاری
+           فراتر از «ثبتِ ترخیص» (پیش‌فرض کارشناس‌ادمین). */
+        if (!(await canAccess(this.prisma, user, 'theatre', ['theatre.followup']).catch(() => false))) {
+          throw new ForbiddenException('تعیینِ ویزیتِ بعدی برای این حساب مجاز نیست');
+        }
+        await assertStructuredOwnership(this.prisma, v.kind, user, { fields: ['nextVisitDate'] });
+        nextDate = d;
+      }
+    }
+    const clearNext = death && !!v.nextVisitDate;
+    const becameDeath = death && v.dischargeDisposition !== 'death';
+
     await this.prisma.$transaction(async (tx) => {
       await setVisitNote(tx, v, 'discharge', text, user);
       /* شرح و یادداشت اختیاری‌اند؛ `undefined` = دست نزن، رشتهٔ خالی = سندِ جاری را ببند. */
       if (dto.summary !== undefined) await setVisitNote(tx, v, 'discharge_summary', dto.summary, user);
       if (dto.remark !== undefined) await setVisitNote(tx, v, 'discharge_note', dto.remark, user);
+      if (wantsRx) await setVisitNote(tx, v, 'discharge_rx', death ? '' : dto.rx ?? '', user);
       await tx.visit.update({
         where: { id: visitId },
-        data: { dischargeDisposition: dto.disposition, ...(v.dischargeAt ? {} : { dischargeAt: new Date() }) },
+        data: {
+          dischargeDisposition: dto.disposition,
+          ...(v.dischargeAt ? {} : { dischargeAt: new Date() }),
+          ...(nextDate ? { nextVisitDate: nextDate } : {}),
+          ...(clearNext ? { nextVisitDate: null } : {}),
+        },
       });
     });
+    /* پس از commit — یادآوری و مراجعهٔ پست‌آپ همان مسیرِ فرمِ عمل (`afterVisitCreation`).
+       «فوت» هم باید اجرا شود تا پیام‌های بعد از عملِ کاشته‌شده لغو شوند. */
+    if (nextDate || clearNext || becameDeath) await this.patients.afterVisitCreation(visitId);
     await this.audit.record({
       actorId: user?.id, action: v.dischargeAt ? 'visit.discharge_edit' : 'visit.discharge',
       entityType: 'visit', entityId: visitId,
-      after: { condition: text, disposition: dto.disposition, summary: dto.summary?.trim() || null, remark: dto.remark?.trim() || null },
+      after: {
+        condition: text, disposition: dto.disposition, summary: dto.summary?.trim() || null, remark: dto.remark?.trim() || null,
+        ...(wantsRx ? { rxLength: death ? 0 : (dto.rx ?? '').trim().length } : {}),
+        ...(nextDate || clearNext ? { nextVisitDate: { before: v.nextVisitDate, after: nextDate ?? null } } : {}),
+      },
     });
+    return this.card(visitId, user);
+  }
+
+  /**
+   * **جزئیاتِ عمل از میزِ اتاقِ عمل** (بستهٔ ۸) — فقط تیم و حینِ عمل.
+   *
+   * ⚠️ ارزیابیِ پیش از عمل، سمتِ عمل‌ها و عارضه از میز نوشته **نمی‌شوند**:
+   * سمت پیش از بیهوشی رضایت‌گرفته و علامت‌گذاری‌شده است (تغییرش سرِ میز خطرِ
+   * محلِ اشتباه)، ASA دادهٔ ارزیابیِ بیهوشی است، و عارضه تا ۳۰ روز بعد معلوم
+   * می‌شود. همه در فرمِ عمل‌اند. همان نویسنده (`writeOpDetails`) و همان قفلِ نقش
+   * (`assertStructuredOwnership`) که فرمِ عمل دارد — میز دیگر دورِ قاعده نیست.
+   */
+  async setOpDetails(visitId: number, raw: unknown, user: any) {
+    if (!(await this.clinical())) throw new BadRequestException('جزئیاتِ ساخت‌یافتهٔ عمل فقط در مطب ثبت می‌شود');
+    const v = await this.prisma.visit.findFirst({
+      where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
+      select: { id: true, kind: true, opStatus: true, opDetail: true },
+    });
+    if (!v) throw new NotFoundException('عمل پیدا نشد');
+    if (v.kind !== 'surgery') throw new BadRequestException('جزئیاتِ عمل فقط برای مراجعهٔ نوعِ عمل ثبت می‌شود');
+    if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده جزئیات نمی‌گیرد');
+    const patch = opDetailsInput(raw, OP_INTRA_KEYS);
+    if (!patch || !Object.keys(patch).length) throw new BadRequestException('چیزی برای ثبت نیامده است');
+    await assertStructuredOwnership(this.prisma, v.kind, user, { patch, current: v.opDetail });
+    const r = await this.prisma.$transaction((tx) => writeOpDetails(tx, visitId, patch));
+    if (r.changed) {
+      await this.audit.record({
+        actorId: user?.id, action: 'visit.op_details', entityType: 'visit', entityId: visitId,
+        before: r.before, after: r.after,
+      });
+    }
     return this.card(visitId, user);
   }
 

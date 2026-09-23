@@ -31,9 +31,11 @@ import {
   CODING_TWIN, CODING_TWIN_KEYS, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
   diagnosisLabel, othersCreateData, otherIds, pickCodingKeys, planCoding, principalDiagnosisTitle,
   principalProcedureName, procedureLabel, touchedAxes, twinOf, visitHasDiagnosis, visitHasProcedure,
-  writeOthers,
+  writeOthers, PROC_DETAIL_SELECT, finalProcedureIds, procedureDetailsInput, procedureList, writeProcedureDetails,
 } from './visit-coding';
 import { withOtherProcedureNeeds } from './visit-requirements';
+import { ConfigService } from '../config/config.service';
+import { assertStructuredOwnership, opDetailsInput, opDetailsView, writeOpDetails } from './op-details';
 
 /**
  * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
@@ -112,6 +114,11 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
     dischargeDispositionFa: v.dischargeDisposition ? DISPOSITION_LABELS[v.dischargeDisposition] ?? v.dischargeDisposition : null,
     anesthesia: v.anesthesia ?? null,
     anesthesiaFa: v.anesthesia ? ANESTHESIA_LABELS[v.anesthesia] ?? v.anesthesia : null,
+    /* ── بستهٔ ۸ ── فقط وقتی خوانده شده‌اند (نمای کامل). `undefined` یعنی «نخوانده» —
+       فرمی که از ردیفِ سبک باز شده بلوک را قفل می‌کند و چیزی نمی‌فرستد؛
+       `null` یعنی «خوانده شد و هنوز ردیفی نیست». */
+    opDetails: v.opDetail === undefined ? undefined : opDetailsView(v.opDetail),
+    procedures: v.procedureDetails === undefined ? undefined : procedureList(v),
     opType: v.opType,
     opDate: v.opDate,
     nextVisitDate: v.nextVisitDate,
@@ -326,6 +333,10 @@ const LEGACY_PLAN: Record<string, string> = {
 const INCLUDE_VISIT_FULL = {
   ...INCLUDE_PATIENT,
   clinicalNotes: currentNotes(VISIT_FULL_NOTE_KINDS),
+  /* جزئیاتِ ساخت‌یافتهٔ عمل و سمتِ هر عمل (بستهٔ ۸) — فقط نمای کامل؛ فهرستِ
+     ۵۰۰تایی بی‌نیاز است و `undefined` می‌ماند (نخوانده ≠ خالی). */
+  opDetail: true,
+  procedureDetails: { select: PROC_DETAIL_SELECT },
 } as const;
 
 /**
@@ -347,7 +358,26 @@ export class PatientsService {
     private forms: FormsService,
       private reminders: RemindersService,
     private events: EventsService,
+    private config: ConfigService,
   ) {}
+
+  /**
+   * ورودیِ جزئیاتِ ساخت‌یافته (بستهٔ ۸) — مطب و نوعِ عمل، یا ۴۰۰.
+   *
+   * ⚠️ شرط روی **نصب** است نه فقط نوع: نورومانیتورینگ و ایمپلنت هم نوعِ پیش‌فرضشان
+   * `surgery` است، و شرکت پروندهٔ بالینیِ جراح را نمی‌نویسد. میزِ اتاق همین شرط را
+   * دارد؛ دو مسیر، یک قاعده.
+   */
+  private async structuredInput(dto: any, kind: string | null | undefined) {
+    if (dto?.opDetails === undefined && dto?.procedureDetails === undefined) return {};
+    if ((await this.config.profile()).kind !== 'clinic') {
+      throw new BadRequestException('جزئیاتِ ساخت‌یافتهٔ عمل فقط در مطب ثبت می‌شود');
+    }
+    if ((kind || 'surgery') !== 'surgery') {
+      throw new BadRequestException('جزئیاتِ عمل و سمتِ عمل‌ها فقط برای مراجعهٔ نوعِ عمل ثبت می‌شود');
+    }
+    return { opPatch: opDetailsInput(dto.opDetails), pdIn: procedureDetailsInput(dto.procedureDetails) };
+  }
 
   /**
    * ویزیتِ پست‌آپِ خودکار — «اولین مراجعهٔ بعد از عمل» یک مراجعهٔ **مستقل**
@@ -1215,6 +1245,12 @@ export class PatientsService {
       if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
     } else if (!opts?.skipFormValidation) await this.assertFormValid(dto, opts?.intakeCompany?.undated);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
+    /* جزئیاتِ ساخت‌یافته و سمتِ عمل‌ها (بستهٔ ۸) — شکل، مطب‌بودن و مالکیت پیش از تراکنش. */
+    const structured = await this.structuredInput(dto, (dto as any).kind);
+    await assertStructuredOwnership(this.prisma, (dto as any).kind || 'surgery', user, {
+      patch: structured.opPatch, current: null,
+      procedure: structured.pdIn ? { next: structured.pdIn, current: [] } : undefined,
+    });
     /* باکس‌های لینکِ فرم: نرمال‌شده می‌نشینند (URLِ معتبر، سقف، برش) و هر لینک
        مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. تعریفِ فرم **پیش از**
        تراکنش خوانده می‌شود؛ داخلِ tx فقط نوشتن. */
@@ -1339,6 +1375,12 @@ export class PatientsService {
         visit = await tx.visit.update({ where: { id: visit.id }, data: { techArriveTime: arrive }, include: INCLUDE_PATIENT });
       }
       await syncLinkDocuments(tx, { patientId, visitId: visit.id, fields: formFields as any, values: extraIn ?? {}, actorId: userId ?? null });
+      /* سمت/سطحِ عمل‌ها (بستهٔ ۸) با فهرستِ **نهایی** — در ادغام در مراجعهٔ هدف همیشه
+         (اصلیِ هدف ممکن است همین حالا عوض شده باشد و سمتِ عملِ رفته باید برود). */
+      if (target || structured.pdIn) {
+        await writeProcedureDetails(tx, visit.id, finalProcedureIds(dto, target ? targetCoding.procedure : EMPTY_CODING.procedure), structured.pdIn);
+      }
+      if (structured.opPatch) await writeOpDetails(tx, visit.id, structured.opPatch);
       /**
        * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
        *
@@ -1381,6 +1423,10 @@ export class PatientsService {
         orderBy: currentNotes(VISIT_FULL_NOTE_KINDS).orderBy,
         distinct: currentNotes(VISIT_FULL_NOTE_KINDS).distinct,
       });
+      /* بستهٔ ۸: همان نمای کامل — بدونِ این دو، پاسخِ ساخت `opDetails: undefined`
+         داشت و فرمی که از همین شیء دوباره باز می‌شد بلوک را «نخوانده» می‌دید. */
+      (visit as any).opDetail = await tx.visitOpDetail.findUnique({ where: { visitId: visit.id } });
+      (visit as any).procedureDetails = await tx.visitProcedureDetail.findMany({ where: { visitId: visit.id }, select: PROC_DETAIL_SELECT });
       const result = { ...enrich(visit, kinds, VISIT_FULL_NOTE_KINDS), patientStatus };
       await this.audit.record({ actorId: userId, action: target ? 'visit.intake_update' : 'visit.create', entityType: 'visit', entityId: visit.id, after: result }, tx);
       return result;
@@ -1451,6 +1497,12 @@ export class PatientsService {
         otherDiagnosisIds: coding.diagnosis.others, otherProcedureTypeIds: coding.procedure.others,
       },
     );
+    /* بستهٔ ۸: جزئیاتِ ساخت‌یافته — کلید‌به‌کلید در برابرِ ردیفِ فعلی. */
+    const structured = await this.structuredInput(dto, (dto as any).kind ?? v.kind);
+    await assertStructuredOwnership(this.prisma, (dto as any).kind ?? v.kind, user, {
+      patch: structured.opPatch, current: (v as any).opDetail,
+      procedure: structured.pdIn ? { next: structured.pdIn, current: (v as any).procedureDetails ?? [] } : undefined,
+    });
     if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
     await this.assertEditFormValid(v, dto);
     /* باکس‌های لینک: تعریفِ فرم و نرمال‌سازی **پیش از** تراکنش — کوئریِ بیرونِ tx
@@ -1547,6 +1599,13 @@ export class PatientsService {
       }
       /* شرحِ عمل و بخش‌های هسته — هر کدام فقط اگر در این PATCH آمده باشد. */
       await this.setSections(tx, { id, patientId: v.patientId }, dto, user);
+      /* بستهٔ ۸ — سمت/سطح با فهرستِ **نهایی** (نه خواندنِ میانه: اصلیِ تازه با
+         `visit.update`ِ پایین نوشته می‌شود)، هر بار که محورِ عمل لمس شده. */
+      const procTouched = (dto as any).procedureTypeId !== undefined || (dto as any)[CODING_TWIN.procedureTypeId] !== undefined;
+      if (procTouched || structured.pdIn) {
+        await writeProcedureDetails(tx, id, finalProcedureIds(dto, coding.procedure), structured.pdIn);
+      }
+      if (structured.opPatch) await writeOpDetails(tx, id, structured.opPatch);
       /* ساعتِ حضور مشتقِ برنامهٔ چینش است (W3.8/U7): با مقادیرِ **نهایی** پس از
          این ویرایش سنجیده می‌شود، نه با مقادیرِ قبلی — وگرنه تغییرِ بیمارستان یا
          تاریخ در همین ویرایش، ردیفِ حضورِ روزِ قبل را نگاه می‌کرد.

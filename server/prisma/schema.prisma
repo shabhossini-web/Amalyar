@@ -281,6 +281,8 @@ model ProcedureType {
   /// مراجعه‌هایی که این نوع را **غیرِ اصلی** دارند (بستهٔ ۷). `deleteOrDeactivate`
   /// این را هم می‌شمارد — تعریفِ به‌کاررفته فقط غیرفعال می‌شود.
   otherVisitLinks VisitOtherProcedure[]
+  /// سمت/سطحِ همین نوعِ عمل روی مراجعه‌ها (بستهٔ ۸) — Restrict: نوعِ به‌کاررفته فقط غیرفعال می‌شود.
+  procedureDetails VisitProcedureDetail[]
   /// الگوی اقلام — «این نوعِ عمل معمولاً چه چیزی می‌خواهد».
   needs  ProcedureTypeItem[]
   /// فرم‌های پیگیریِ اختصاصیِ همین نوعِ عمل (FormDef.followUp = procedure).
@@ -1541,6 +1543,14 @@ model Visit {
   /// این دو — فقط از `server/src/patients/visit-coding.ts` بخوانید/بنویسید.
   otherDiagnoses  VisitOtherDiagnosis[]
   otherProcedures VisitOtherProcedure[]
+
+  /// جزئیاتِ ساخت‌یافتهٔ عمل — ارزیابیِ پیش از عمل، تیم، جزئیاتِ حینِ عمل، عارضه
+  /// (بستهٔ ۸). یک به یک؛ فقط برای مراجعهٔ نوعِ عمل در مطب. تنها نویسنده:
+  /// `server/src/patients/op-details.ts`.
+  opDetail VisitOpDetail?
+  /// سمت و سطحِ هر عمل (بستهٔ ۸) — کلید (مراجعه، نوعِ عمل)، نه رتبه؛ پس جابه‌جاییِ
+  /// اصلی/سایرین سمت را گم نمی‌کند. تنها نویسنده: `visit-coding.ts`.
+  procedureDetails VisitProcedureDetail[]
 }
 
 /// **علائمِ حیاتی** — یک ردیف = یک نوبتِ اندازه‌گیری (فشار، نبض، تنفس، دما،
@@ -3036,4 +3046,66 @@ model EpisodeStep {
   @@index([episodeId, seq])
   @@index([status, dueAt])
   @@map("episode_steps")
+}
+
+/// **جزئیاتِ ساخت‌یافتهٔ عمل** (بستهٔ ۸، بندِ «د» گزارشِ HIS) — یک ردیف برای هر
+/// مراجعهٔ نوعِ عمل در مطب. متنِ روایی همچنان سندِ نسخه‌دار است (شرحِ عمل،
+/// یافته‌ها)؛ این‌جا فقط چیزهایی که باید **شمرده** شوند (ASA، خون‌ریزی، عارضه).
+///
+/// ⚠️ ستون‌ها nullable و سه‌حالته‌اند: null یعنی «ثبت نشده»، نه «خیر». قیدهای
+/// CHECK (فهرستِ کلیدها، درجهٔ عارضه فقط با عارضه، بازهٔ خون‌ریزی) در SQLِ
+/// مهاجرت‌اند و Prisma آن‌ها را نمی‌بیند. تنها نویسنده: `op-details.ts`.
+model VisitOpDetail {
+  visitId Int   @id @map("visit_id")
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  /// ارزیابیِ پیش از عمل — مالک: نقشِ فیلدِ «نوعِ بیهوشی».
+  asaClass      String?  @map("asa_class")
+  asaEmergency  Boolean? @map("asa_emergency")
+  consentSigned Boolean? @map("consent_signed")
+  npoConfirmed  Boolean? @map("npo_confirmed")
+  anticoagulant String?
+  anticoagNote  String?  @map("anticoag_note")
+
+  /// تیم و حینِ عمل — مالک: نقشِ فیلدِ «شرحِ عمل».
+  assistantSurgeonName String?  @map("assistant_surgeon_name")
+  anesthesiologistName String?  @map("anesthesiologist_name")
+  performedAsPlanned   Boolean? @map("performed_as_planned")
+  bloodLossMl          Int?     @map("blood_loss_ml")
+  specimenSent         Boolean? @map("specimen_sent")
+  specimenNote         String?  @map("specimen_note")
+  drainPlaced          Boolean? @map("drain_placed")
+  drainNote            String?  @map("drain_note")
+  implantNote          String?  @map("implant_note")
+
+  /// بعد از عمل — عارضه با درجه‌بندیِ Clavien–Dindo (معمولاً تا ۳۰ روز بعد
+  /// معلوم می‌شود، پس بعد از ترخیص هم ویرایش‌پذیر است).
+  complication      Boolean?  @map("complication")
+  complicationNote  String?   @map("complication_note")
+  clavienGrade      String?   @map("clavien_grade")
+  complicationDate  DateTime? @map("complication_date")
+  postopDxConfirmed Boolean?  @map("postop_dx_confirmed")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@map("visit_op_details")
+}
+
+/// **سمت و سطحِ هر عمل** (بستهٔ ۸) — کلیدِ (مراجعه، نوعِ عمل) و نه رتبه: `writeOthers`
+/// سایرین را پاک و دوباره می‌سازد و اصلی/سایر جابه‌جا می‌شوند؛ سمتِ کلیدخورده به
+/// خودِ عمل با هیچ‌کدام گم نمی‌شود. ردیفِ عملی که از فهرست رفت در همان تراکنش
+/// پاک می‌شود (سنجهٔ SQLِ run-live). همان عمل دو بار نمی‌آید → «دوطرفه».
+model VisitProcedureDetail {
+  id              Int           @id @default(autoincrement())
+  visitId         Int           @map("visit_id")
+  visit           Visit         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  procedureTypeId Int           @map("procedure_type_id")
+  procedureType   ProcedureType @relation(fields: [procedureTypeId], references: [id], onDelete: Restrict)
+  side            String?
+  level           String?
+
+  @@unique([visitId, procedureTypeId])
+  @@index([procedureTypeId])
+  @@map("visit_procedure_details")
 }

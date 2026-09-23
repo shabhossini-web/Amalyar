@@ -1,5 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { RETURNABLE } from './assets.service';
+import { SIDE_LABELS } from './labels';
+import { toEnDigits } from '../common/identity';
 
 /**
  * **کدگذاریِ بالینیِ مراجعه — تشخیص‌ها و عمل‌ها** (بستهٔ ۷ب/۷ج).
@@ -222,6 +224,81 @@ export async function writeOthers(tx: any, visitId: number, axis: Axis, others: 
   }
 }
 
+// ── سمت و سطحِ هر عمل (بستهٔ ۸) ────────────────────────────────────────────
+
+/** ستون‌هایی که خواننده‌ها از `visit_procedure_details` لازم دارند. */
+export const PROC_DETAIL_SELECT = { procedureTypeId: true, side: true, level: true } as const;
+export type ProcedureDetailIn = { procedureTypeId: number; side: string | null; level: string | null };
+const PROC_LEVEL_MAX = 60;
+
+/**
+ * ورودیِ `procedureDetails` → فهرستِ نرمال‌شده (یا `undefined` = دست نزن).
+ *
+ * هر ردیف `{procedureTypeId, side?, level?}`؛ `side` از `SIDE_LABELS`، سطح متنِ
+ * آزادِ کوتاه («L4–L5»، «زانو»). ردیفی که هر دو خالی است یعنی «سمت را پاک کن».
+ * این‌جا فقط شکل سنجیده می‌شود؛ «عمل روی همین مراجعه هست» در `writeProcedureDetails`
+ * و زیرِ قفل — چون فهرستِ عمل‌ها ممکن است همین حالا در همان درخواست عوض شود.
+ */
+export function procedureDetailsInput(raw: unknown): ProcedureDetailIn[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) throw new BadRequestException('سمتِ عمل‌ها باید فهرست باشد');
+  if (raw.length > MAX_OTHERS + 1) throw new BadRequestException('حداکثر ۱۰ عمل برای یک مراجعه');
+  const out: ProcedureDetailIn[] = [];
+  const seen = new Set<number>();
+  for (const r of raw as any[]) {
+    const id = Number(r?.procedureTypeId);
+    if (!Number.isInteger(id) || id < 1) throw new BadRequestException('شناسهٔ نوعِ عمل نامعتبر است');
+    if (seen.has(id)) throw new BadRequestException('یک عمل دو بار آمده است — برای دو طرف «دوطرفه» را بزنید');
+    seen.add(id);
+    const side = r?.side === undefined || r?.side === null || r?.side === '' ? null : String(r.side);
+    if (side !== null && !SIDE_LABELS[side]) throw new BadRequestException('سمتِ عمل نامعتبر است');
+    const lv = r?.level === undefined || r?.level === null ? '' : toEnDigits(String(r.level)).trim();
+    if (lv.length > PROC_LEVEL_MAX) throw new BadRequestException(`سطح/ناحیهٔ عمل حداکثر ${PROC_LEVEL_MAX} نویسه است`);
+    out.push({ procedureTypeId: id, side, level: lv || null });
+  }
+  return out;
+}
+
+/**
+ * **فهرستِ نهاییِ عمل‌ها پس از این درخواست** — از برنامهٔ کدگذاری (`planCoding`
+ * پیش‌تر `dto` را بازنویسی کرده)، نه با خواندنِ دوباره از پایگاه‌داده وسطِ تراکنش:
+ * اصلیِ تازه با `visit.update`ِ آخر نوشته می‌شود، پس خواندنِ میانه اصلیِ قبلی را
+ * می‌دید و سمتِ اصلیِ تازه ۴۰۰ می‌گرفت (بازبینیِ طراحیِ بستهٔ ۸).
+ */
+export function finalProcedureIds(dto: any, cur: Coding): number[] {
+  const primary = hasKey(dto, 'procedureTypeId') ? (dto.procedureTypeId ?? null) : cur.primary;
+  const others = hasKey(dto, AXES.procedure.twinKey) ? twinOf(dto, 'procedure') : cur.others;
+  return dedupe([primary, ...others]);
+}
+
+/**
+ * نوشتنِ سمت/سطح — **تنها نویسندهٔ** `visit_procedure_details`.
+ *
+ * - قفلِ همان ردیفِ مراجعه که `writeOthers` می‌گیرد: فرم و میزِ اتاق نمی‌توانند
+ *   هم‌زمان یکی فهرست را عوض کند و دیگری سمتِ عملِ رفته را بنویسد.
+ * - ردیفِ عملی که دیگر در `finalIds` نیست **همیشه** پاک می‌شود (حتی بی‌`details`)
+ *   — سمتِ کهنه نباید با برگشتنِ همان عمل بی‌صدا زنده شود (خطرِ محلِ اشتباه).
+ * - `details` فقط عمل‌های حاضر را می‌پذیرد؛ ردیفِ «هر دو خالی» حذف می‌شود.
+ */
+export async function writeProcedureDetails(tx: any, visitId: number, finalIds: number[], details?: ProcedureDetailIn[]) {
+  await tx.$queryRaw`SELECT id FROM visits WHERE id = ${visitId} FOR UPDATE`;
+  await tx.visitProcedureDetail.deleteMany({ where: { visitId, procedureTypeId: { notIn: finalIds.length ? finalIds : [-1] } } });
+  for (const d of details ?? []) {
+    if (!finalIds.includes(d.procedureTypeId)) {
+      throw new BadRequestException('سمت برای عملی آمده که روی این مراجعه نیست');
+    }
+    if (d.side === null && d.level === null) {
+      await tx.visitProcedureDetail.deleteMany({ where: { visitId, procedureTypeId: d.procedureTypeId } });
+      continue;
+    }
+    await tx.visitProcedureDetail.upsert({
+      where: { visitId_procedureTypeId: { visitId, procedureTypeId: d.procedureTypeId } },
+      create: { visitId, procedureTypeId: d.procedureTypeId, side: d.side, level: d.level },
+      update: { side: d.side, level: d.level },
+    });
+  }
+}
+
 // ── سمتِ خواندن ────────────────────────────────────────────────────────────
 
 /** نامِ عملِ اصلی — رابطه اگر بود، وگرنه عکسِ لحظه‌ای (`opType`؛ رکوردِ قدیمی/تعریفِ حذف‌شده). */
@@ -260,7 +337,11 @@ export function otherIds(v: any, axis: Axis): number[] | undefined {
   return rel.map((o: any) => o[AXES[axis].refKey]);
 }
 
-export type ProcedureEntry = { id: number | null; name: string; rank: number; primary: boolean };
+export type ProcedureEntry = {
+  id: number | null; name: string; rank: number; primary: boolean;
+  /** فقط وقتی `procedureDetails` خوانده شده (نمای کامل، میزِ اتاق) — وگرنه کلید نیست. */
+  side?: string | null; sideFa?: string | null; level?: string | null;
+};
 export type DiagnosisEntry = { id: number; title: string; icdCode: string | null; rank: number; primary: boolean };
 
 /** فهرستِ چیپ‌ها — `id: null` فقط برای متنِ قدیمیِ بی‌تعریف (`opType`). */
@@ -271,7 +352,26 @@ export function procedureList(v: any): ProcedureEntry[] {
   for (const o of v?.otherProcedures ?? []) {
     if (o.procedureType?.name) out.push({ id: o.procedureTypeId, name: o.procedureType.name, rank: o.rank, primary: false });
   }
+  /* ⚠️ سمت کلیدِ جداست و هرگز داخلِ `name`/`procedureLabel` نمی‌رود: اثرِ انگشتِ
+     فاکتور، گروه‌بندیِ گزارش و برابریِ بایت‌به‌بایتِ پرامپتِ AI روی همان نام‌اند. */
+  if (Array.isArray(v?.procedureDetails)) {
+    const by = new Map<number, any>(v.procedureDetails.map((d: any) => [d.procedureTypeId, d]));
+    for (const e of out) {
+      const d = e.id != null ? by.get(e.id) : undefined;
+      e.side = d?.side ?? null;
+      e.sideFa = d?.side ? SIDE_LABELS[d.side] ?? d.side : null;
+      e.level = d?.level ?? null;
+    }
+  }
   return out;
+}
+
+/** «چپ · L4–L5» برای ردیفِ کوتاه (تابلوی اتاقِ عمل) — تهی وقتی هیچ سمتی ثبت نشده. */
+export function procedureSidesText(v: any): string | null {
+  const parts = procedureList(v)
+    .filter((e) => e.sideFa || e.level)
+    .map((e) => [e.sideFa, e.level].filter(Boolean).join(' · '));
+  return parts.length ? parts.join('، ') : null;
 }
 export function diagnosisList(v: any): DiagnosisEntry[] {
   const out: DiagnosisEntry[] = [];

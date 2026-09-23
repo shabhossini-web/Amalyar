@@ -30,7 +30,7 @@ import path from 'node:path';
 const SETS = [
   { name: 'وضعیتِ نوبت (APPT_LABELS)', keys: ['held', 'confirmed', 'arrived', 'noshow', 'done', 'cancelled'] },
   { name: 'وضعیتِ مراجعه (OP_LABELS)', keys: ['pending', 'done', 'cancelled'] },
-  { name: 'نوعِ سندِ بالینی (NOTE_KIND_LABELS)', keys: ['history', 'visit', 'exam', 'findings', 'rx', 'op', 'progress', 'discharge', 'discharge_summary', 'discharge_note', 'consult'] },
+  { name: 'نوعِ سندِ بالینی (NOTE_KIND_LABELS)', keys: ['history', 'visit', 'exam', 'findings', 'rx', 'op', 'progress', 'discharge', 'discharge_summary', 'discharge_note', 'discharge_rx', 'consult'] },
   { name: 'وضعیتِ سفارش (ORDER_LABELS)', keys: ['draft', 'sent', 'answered', 'in_review', 'reviewed', 'needs_action'] },
   { name: 'وضعیتِ یادآوری (REMINDER_LABELS)', keys: ['pending', 'sending', 'sent', 'simulated', 'failed', 'uncertain'] },
   { name: 'نوعِ یادآوری (REMINDER_KIND_LABELS)', keys: ['next_visit', 'surgery', 'appointment', 'pre_op_care', 'post_op_care', 'follow_up', 'notice', 'dispatch'] },
@@ -44,6 +44,11 @@ const SETS = [
   { name: 'نوعِ بیهوشی (ANESTHESIA_LABELS)', keys: ['general', 'spinal', 'local', 'sedation'] },
   { name: 'وضعیتِ خروج (DISPOSITION_LABELS)', keys: ['home', 'transfer', 'ama', 'death'] },
   { name: 'علائمِ حیاتی (VITAL_LABELS)', keys: ['bp', 'hr', 'rr', 'temp', 'spo2', 'weight', 'height', 'pain'] },
+  /* ── بستهٔ ۸ ── جزئیاتِ ساخت‌یافتهٔ عمل؛ چیپ‌های فرم و میز از `/config` می‌خوانند. */
+  { name: 'کلاسِ ASA (ASA_LABELS)', keys: ['I', 'II', 'III', 'IV', 'V'] },
+  { name: 'ضدانعقاد (ANTICOAG_LABELS)', keys: ['none', 'stopped', 'bridged', 'continued'] },
+  { name: 'سمتِ عمل (SIDE_LABELS)', keys: ['right', 'left', 'bilateral', 'midline'] },
+  { name: 'درجهٔ عارضه (CLAVIEN_LABELS)', keys: ['I', 'II', 'IIIa', 'IIIb', 'IVa', 'IVb', 'V'] },
 ];
 const MIN_HITS = 3;
 

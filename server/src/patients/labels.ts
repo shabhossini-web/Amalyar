@@ -70,6 +70,9 @@ export const NOTE_KIND_LABELS: Record<string, string> = {
   discharge: 'وضعیتِ هنگامِ ترخیص',
   discharge_summary: 'شرحِ ترخیص',
   discharge_note: 'یادداشتِ ترخیص',
+  /* بستهٔ ۸: داروهای ترخیص سندِ جدای خودش است، نه `rx` — `rx` نسخهٔ خودِ
+     مراجعه است و روی فرمِ عمل هم هست؛ یکی‌کردنشان دو فهرستِ دارو را قاطی می‌کرد. */
+  discharge_rx: 'داروهای ترخیص',
   consult: 'مشاوره',
 };
 
@@ -119,6 +122,48 @@ export const DISPOSITION_LABELS: Record<string, string> = {
   death: 'فوت',
 };
 export const DISPOSITION_KEYS = Object.keys(DISPOSITION_LABELS);
+
+/* ── بستهٔ ۸: جزئیاتِ ساخت‌یافتهٔ عمل ──
+   کلیدِ کوتاه روی چیپ، برچسبِ کامل زیرش (کلاینت هیچ نگاشتِ فارسی ندارد). */
+
+/** کلاسِ ASA. VI (مرگِ مغزی/اهدای عضو) عمداً نیست: در عملِ مطب هرگز پیش نمی‌آید. */
+export const ASA_LABELS: Record<string, string> = {
+  I: 'ASA I — بیمارِ سالم',
+  II: 'ASA II — بیماریِ سیستمیکِ خفیف',
+  III: 'ASA III — بیماریِ سیستمیکِ شدید',
+  IV: 'ASA IV — بیماریِ سیستمیکِ شدید با تهدیدِ دائمیِ حیات',
+  V: 'ASA V — در خطرِ مرگ بدونِ عمل',
+};
+
+/**
+ * ضدانعقاد / ضدپلاکت پیش از عمل. «جایگزینیِ هپارین» جداست: بیمارِ bridge شده
+ * قطع کرده ولی بی‌دارو نیست — تیمِ بیهوشی باید بداند.
+ */
+export const ANTICOAG_LABELS: Record<string, string> = {
+  none: 'مصرف نمی‌کند',
+  stopped: 'طبقِ دستور قطع شد',
+  bridged: 'قطع و جایگزینیِ هپارین',
+  continued: 'ادامه دارد (با نظرِ پزشک)',
+};
+
+/** سمتِ هر عمل (WHO: تأییدِ محل پیش از برش). */
+export const SIDE_LABELS: Record<string, string> = {
+  right: 'راست',
+  left: 'چپ',
+  bilateral: 'دوطرفه',
+  midline: 'خطِ وسط',
+};
+
+/** درجه‌بندیِ عارضه (Clavien–Dindo) — بر پایهٔ درمانی که عارضه لازم داشت. */
+export const CLAVIEN_LABELS: Record<string, string> = {
+  I: 'درجهٔ I — بی‌نیاز به درمانِ خاص',
+  II: 'درجهٔ II — درمانِ دارویی',
+  IIIa: 'درجهٔ IIIa — مداخله بدونِ بیهوشیِ عمومی',
+  IIIb: 'درجهٔ IIIb — مداخله با بیهوشیِ عمومی',
+  IVa: 'درجهٔ IVa — نارساییِ یک عضو (ICU)',
+  IVb: 'درجهٔ IVb — نارساییِ چند عضو (ICU)',
+  V: 'درجهٔ V — فوت',
+};
 
 /**
  * **علائمِ حیاتی** — برچسبِ هر اندازه (`VitalSign`). واحد و بازهٔ مجاز در

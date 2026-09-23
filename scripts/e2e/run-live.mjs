@@ -179,7 +179,11 @@ const CODING_INVARIANT_SQL = `SELECT
   + (SELECT count(*) FROM (SELECT visit_id FROM visit_other_diagnoses GROUP BY visit_id
       HAVING min(rank) <> 2 OR max(rank) <> count(*) + 1) a)
   + (SELECT count(*) FROM (SELECT visit_id FROM visit_other_procedures GROUP BY visit_id
-      HAVING min(rank) <> 2 OR max(rank) <> count(*) + 1) b)`;
+      HAVING min(rank) <> 2 OR max(rank) <> count(*) + 1) b)
+  + (SELECT count(*) FROM visit_procedure_details d JOIN visits v ON v.id = d.visit_id
+      WHERE d.procedure_type_id IS DISTINCT FROM v.procedure_type_id
+        AND NOT EXISTS (SELECT 1 FROM visit_other_procedures o
+                        WHERE o.visit_id = d.visit_id AND o.procedure_type_id = d.procedure_type_id))`;
 /* شمارِ ردیف‌های ناسازگار در هر دیتابیسِ تنانت. خطای psql هم «شکست» است، نه
    «صفر»: نگهبانی که وقتی نمی‌تواند بسنجد سبز بماند دروغ می‌گوید. */
 const codingViolations = () => TENANT_DBS.map((d) => {
@@ -200,7 +204,8 @@ const codingInvariantError = (before) => {
       msgs.push(`ناوردای کدگذاریِ مراجعه روی «${v.db}» سنجیده نشد: ${v.err}`);
     } else if (v.n > (Number.isFinite(base) ? base : 0)) {
       msgs.push(`ناوردای کدگذاریِ مراجعه شکست — ${v.n} ردیفِ ناسازگار در visit_other_* روی «${v.db}»: `
-        + 'سایرِ برابرِ اصلی، سایر بدونِ اصلی، یا رتبهٔ گسسته. یعنی جایی بیرون از visit-coding.ts (planCoding/writeOthers) در این جدول‌ها نوشته است');
+        + 'سایرِ برابرِ اصلی، سایر بدونِ اصلی، رتبهٔ گسسته، یا سمتِ عملی که دیگر روی مراجعه نیست (visit_procedure_details، بستهٔ ۸). '
+        + 'یعنی جایی بیرون از visit-coding.ts (planCoding/writeOthers/writeProcedureDetails) در این جدول‌ها نوشته است');
     }
   }
   return msgs.length ? msgs.join(' ⏎ ') : null;

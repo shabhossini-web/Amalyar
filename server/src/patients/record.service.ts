@@ -9,11 +9,13 @@ import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
-import { NOTE_KIND_LABELS, OP_LABELS } from './labels';
-import { SECTION_KEYS, SECTION_NOTES, currentNotes, noteBody } from './clinical-note';
+import { DISPOSITION_LABELS, NOTE_KIND_LABELS, OP_LABELS } from './labels';
+import { opDetailsView } from './op-details';
+import { DISCHARGE_NOTES, SECTION_KEYS, SECTION_NOTES, currentNotes, noteBody } from './clinical-note';
 import {
   OTHER_DX, OTHER_PX, diagnosisIds, diagnosisLabel, diagnosisList, principalDiagnosisTitle,
   principalProcedureName, procedureIds, procedureLabel, visitHasDiagnosis, visitHasProcedure,
+  PROC_DETAIL_SELECT, procedureList,
 } from './visit-coding';
 
 /* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
@@ -46,6 +48,8 @@ export const NOTE_KINDS = [
   'op', 'progress',
   /* ترخیص سه سند دارد: وضعیت (اجباری)، شرح و یادداشت (بستهٔ ۶ب). */
   'discharge', 'discharge_summary', 'discharge_note',
+  /* بستهٔ ۸: داروهای ترخیص (مطب) — جدا از `rx`. */
+  'discharge_rx',
   'consult',
 ] as const;
 
@@ -196,7 +200,9 @@ export class RecordService {
              include کارتِ مراجعه در پرونده همان متن‌ها را بی‌صدا گم می‌کرد —
              همان «نوشته شد ولی جایی که خوانده می‌شود نیست» که `answersOf` برایش
              ساخته شد. فقط برای کسی که اجازهٔ بالینی دارد خوانده می‌شود. */
-          ...(clinical ? { clinicalNotes: currentNotes(Object.values(SECTION_NOTES)) } : {}),
+          ...(clinical ? { clinicalNotes: currentNotes([...Object.values(SECTION_NOTES), ...Object.values(DISCHARGE_NOTES)]) } : {}),
+          /* بستهٔ ۸: جزئیاتِ ساخت‌یافتهٔ عمل و سمتِ هر عمل — همان دروازهٔ بالینی. */
+          ...(clinical ? { opDetail: true, procedureDetails: { select: PROC_DETAIL_SELECT } } : {}),
         },
         orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { seq: 'desc' }],
       }),
@@ -431,6 +437,20 @@ export class RecordService {
         /* فهرستِ کامل (اصلی اول، با کدِ ICD) — کارتِ مراجعه چندتایی را
            خوانا می‌چیند نه به‌شکلِ یک رشتهٔ بلند. */
         diagnoses: diagnosisList(v),
+        /* ── بستهٔ ۸ (فقط با اجازهٔ بالینی) ── عمل‌ها با سمت/سطح، جزئیاتِ ساخت‌یافته
+           و خلاصهٔ ترخیص: کارتِ عمل در پرونده تا دیروز هیچ‌کدام را نداشت و ترخیص
+           فقط در تبِ شرح‌ها به‌صورتِ سطرِ پراکنده دیده می‌شد. */
+        ...(clinical ? {
+          procedures: procedureList(v),
+          opDetails: v.kind === 'surgery' ? opDetailsView((v as any).opDetail) : null,
+          discharge: v.dischargeAt ? {
+            at: v.dischargeAt,
+            dispositionFa: v.dischargeDisposition ? DISPOSITION_LABELS[v.dischargeDisposition] ?? v.dischargeDisposition : null,
+            condition: noteBody((v as any).clinicalNotes, 'discharge'),
+            rx: noteBody((v as any).clinicalNotes, 'discharge_rx'),
+          } : null,
+          nextVisitDate: v.nextVisitDate ?? null,
+        } : {}),
         notes: v.notes,
         extra: v.extra ?? {},
         /* پاسخ‌های فرم — همان چیزی که پزشک نوشته، با برچسبِ خودش. */

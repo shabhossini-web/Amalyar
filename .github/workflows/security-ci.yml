@@ -3536,6 +3536,28 @@ jobs:
             bad('C9 visit-requirements.ts باید کیتِ چندعملیِ تأییدِ پذیرش را با mergeNeeds ادغام کند');
           }
 
+          /* ── C10 (بستهٔ ۸): سمت/سطحِ عمل‌ها یک نویسنده دارد ──
+             ردیفِ سمتِ عملی که از فهرست رفت باید در همان تراکنش برود، وگرنه با
+             برگشتنِ همان عمل سمتِ کهنه بی‌صدا زنده می‌شود (خطرِ محلِ اشتباه). فقط
+             writeProcedureDetails زیرِ قفلِ ردیفِ مراجعه این را تضمین می‌کند. */
+          const C10 = [
+            /visitProcedureDetail\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+            /\[\s*['\"\x60]visitProcedureDetail['\"\x60]\s*\]/,
+            /procedureDetails\s*:\s*\{\s*(create|createMany|connect|connectOrCreate|set|disconnect|delete|deleteMany|upsert|update|updateMany)\b/,
+            /(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+(?:[\"']?\w+[\"']?\.)?[\"']?visit_procedure_details\b/i,
+          ];
+          for (const f of writers) {
+            const src = strip(read(f));
+            for (const re of C10) {
+              for (const h of hits(src, re)) bad('C10 ' + f + ':' + h.n + ' «' + h.text + '» — سمتِ عمل‌ها فقط با writeProcedureDetails در visit-coding.ts نوشته می‌شود');
+            }
+          }
+          const wpd = vc.split('export async function writeProcedureDetails(')[1];
+          if (!wpd || !/FOR UPDATE/.test(wpd.split('\n}')[0])) {
+            bad('C10 writeProcedureDetails در visit-coding.ts باید باشد و ردیفِ مراجعه را FOR UPDATE قفل کند');
+          }
+          if (!/\bwriteProcedureDetails\(/.test(ps)) bad('C10 patients.service.ts باید سمت‌ها را با writeProcedureDetails بنویسد');
+
           if (errs.length) {
             console.error('کدگذاریِ مراجعه (بستهٔ ۷) — ' + errs.length + ' مورد:');
             for (const e of errs) console.error('  ✗ ' + e);

@@ -45,6 +45,8 @@ export const DISCHARGE_NOTES: Record<string, string> = {
   dischargeNote: 'discharge',
   dischargeSummary: 'discharge_summary',
   dischargeRemark: 'discharge_note',
+  /* بستهٔ ۸ — داروهای ترخیص، سندِ جدا از `rx`ِ خودِ مراجعه (مطب). */
+  dischargeRx: 'discharge_rx',
 };
 
 /**

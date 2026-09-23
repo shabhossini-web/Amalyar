@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { DISPOSITION_KEYS } from './labels';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
@@ -56,6 +56,20 @@ class DischargeDto {
 
   @IsOptional() @IsString() @MaxLength(2000, { message: 'یادداشتِ ترخیص طولانی است' })
   remark?: string;
+
+  /* ── بستهٔ ۸ (مطب): داروهای ترخیص و ویزیتِ بعدی — «نیامده = دست نزن». ── */
+  @IsOptional() @IsString({ message: 'داروهای ترخیص باید متن باشد' }) @MaxLength(4000, { message: 'داروهای ترخیص طولانی است' })
+  rx?: string;
+
+  /** تاریخِ میلادیِ ISO؛ `null` از ترخیص پذیرفته نیست (برداشتن فقط از فرمِ عمل). */
+  @IsOptional() @ValidateIf((o) => o.nextVisitDate !== null) @IsString({ message: 'تاریخِ ویزیتِ بعدی معتبر نیست' })
+  nextVisitDate?: string | null;
+}
+
+/** جزئیاتِ عمل از میز — فقط بخشِ تیم و حینِ عمل (`OP_INTRA_KEYS`)؛ شکل در `op-details.ts`. */
+class OpDetailsDto {
+  @IsObject({ message: 'جزئیاتِ عمل باید یک شیء باشد' })
+  opDetails!: Record<string, unknown>;
 }
 
 /**
@@ -165,6 +179,13 @@ export class TheatreController {
 
   /* ⚠️ مجوزِ خودش را دارد نه `visits.times`: این یکی سندِ بالینیِ امضادار
      می‌نویسد، نه مهرِ ساعت. */
+  /* جزئیاتِ عمل (بستهٔ ۸) — همان مجوزِ شرحِ عمل؛ فقط تیم و حینِ عمل. */
+  @RequirePermissions('theatre.report')
+  @Post('visits/:id/op-details')
+  opDetails(@Param('id', ParseIntPipe) id: number, @Body() dto: OpDetailsDto, @CurrentUser() user: any) {
+    return this.theatre.setOpDetails(id, dto.opDetails, user);
+  }
+
   @RequirePermissions('theatre.discharge')
   @Post('visits/:id/discharge')
   discharge(@Param('id', ParseIntPipe) id: number, @Body() dto: DischargeDto, @CurrentUser() user: any) {

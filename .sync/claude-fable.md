@@ -1,10 +1,31 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
+status: active
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-23
-paths: []
-note: بستهٔ ۷ (چند تشخیص/چند عمل) + «+»ِ امروز + پیش‌فرضِ شرحِ عمل مرج شد (#94)؛ هیچ مسیری در دست نیست.
+paths:
+  - server/src/patients/op-details.ts
+  - server/src/patients/visit-coding.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/theatre.service.ts
+  - server/src/patients/theatre.controller.ts
+  - server/src/patients/record.service.ts
+  - server/src/patients/reminders.service.ts
+  - server/src/patients/clinical-note.ts
+  - server/src/patients/labels.ts
+  - server/src/patients/dto/visit.dto.ts
+  - server/src/config/config.service.ts
+  - server/src/auth/access-registry.ts
+  - src/app/OpDetails.jsx
+  - src/app/op-details.css
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
+  - src/app/config.jsx
+  - scripts/verify-status-labels.js
+  - scripts/e2e/run-live.mjs
+  - scripts/e2e/op-details.mjs
+  - scripts/e2e/op-details-ui.mjs
+note: بستهٔ ۸ (بندِ «د» HIS) — شرحِ عملِ ساخت‌یافته، سمت/سطحِ عمل، تکمیلِ ترخیص. هم‌پوشانیِ اعلام‌شده با کلیمِ بیاتِ claude-opus (مرج‌شده در #80): src/app/VisitForm.jsx، src/app/PatientRecord.jsx و server/prisma/ را هم ویرایش می‌کنم — طبقِ پیشینهٔ بستهٔ ۶ در paths نیامده‌اند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
