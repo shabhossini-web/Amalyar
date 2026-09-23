@@ -13,6 +13,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { captchaFor } from './lib/captcha.mjs';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const USER = process.env.E2E_USER ?? 'admin';
@@ -47,7 +48,6 @@ const send = (p, m, b, auth = true) => fetch(API + p, {
   body: b ? JSON.stringify(b) : undefined,
 }).then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 const get = (p) => fetch(API + p, { headers: A }).then((r) => r.json());
-const CAP = { captchaA: 3, captchaB: 4, captchaAnswer: 7 };
 
 const trash = { forms: [], visits: [], links: [] };
 
@@ -67,7 +67,7 @@ try {
   const link = (await send('/intake/links', 'POST', { title: `لینکِ ${tag}`, amount: 0 })).json;
   trash.links.push(link.id);
   const reg = await send(`/public/intake/link/${link.token}/register`, 'POST',
-    { firstName: 'بیمارِ', lastName: 'سنجش', nationalId: NID, phone: '09120000611', ...CAP }, false);
+    { firstName: 'بیمارِ', lastName: 'سنجش', nationalId: NID, phone: '09120000611', ...(await captchaFor(API, link.token)) }, false);
   if (reg.status >= 300) { console.error('ثبت‌نامِ پایه نشد: ' + JSON.stringify(reg.json)); process.exit(1); }
   const patientId = Number(sql(`SELECT id FROM patients WHERE national_id='${NID}'`));
   ok(Number.isInteger(patientId) && patientId > 0, `بیمارِ آزمون ساخته شد (#${patientId})`);

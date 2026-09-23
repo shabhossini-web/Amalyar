@@ -8,6 +8,7 @@
  *
  * اجرا: `node scripts/e2e/approve-kind.mjs`
  */
+import { captchaFor } from './lib/captcha.mjs';
 const API = 'http://localhost:3101/api';
 let TOKEN = '';
 let pass = 0;
@@ -118,7 +119,7 @@ console.log('\n۳) فرمِ مراجعه → مراجعه‌ای با نوعِ *
   const link = (await api('/intake/links', { method: 'POST', body: { title: '[ak] لینکِ پیگیری', amount: 120000, formId: visitForm.id } })).json;
   const reg = (await api(`/public/intake/link/${link.token}/register`, {
     method: 'POST', auth: false,
-    body: { firstName: 'کاظم', lastName: 'پیگیر', nationalId: nid(RUN * 17 + 3), phone: '09120000031', captchaA: 1, captchaB: 2, captchaAnswer: 3 },
+    body: { firstName: 'کاظم', lastName: 'پیگیر', nationalId: nid(RUN * 17 + 3), phone: '09120000031', ...(await captchaFor(API, link.token)) },
   })).json;
   await api(`/public/intake/form/${reg.token}/fill`, { method: 'POST', auth: false, body: { values: { akNote: 'حالم بهتر است' } } });
 
@@ -150,7 +151,7 @@ console.log('\n۴) فرمِ زیرپرونده → **هیچ مراجعه‌ای*
   const link = (await api('/intake/links', { method: 'POST', body: { title: '[ak] لینکِ نظرسنجی', amount: 0, formId: recForm.id } })).json;
   const reg = (await api(`/public/intake/link/${link.token}/register`, {
     method: 'POST', auth: false,
-    body: { firstName: 'سارا', lastName: 'نظرده', nationalId: nid(RUN * 23 + 11), phone: '09120000032', captchaA: 2, captchaB: 2, captchaAnswer: 4 },
+    body: { firstName: 'سارا', lastName: 'نظرده', nationalId: nid(RUN * 23 + 11), phone: '09120000032', ...(await captchaFor(API, link.token)) },
   })).json;
   const visitsBefore = await visitCount();
   /* ⚠️ قراردادِ تازه: فرمِ زیرپرونده‌ی رایگان صفِ تأیید ندارد — پرشدن همان
@@ -177,7 +178,7 @@ console.log('\n۵) لینکِ بدونِ فرم همان رفتارِ قبلی �
   const link = (await api('/intake/links', { method: 'POST', body: { title: '[ak] بی‌فرم', amount: 0 } })).json;
   const reg = (await api(`/public/intake/link/${link.token}/register`, {
     method: 'POST', auth: false,
-    body: { firstName: 'قدیم', lastName: 'کاربر', nationalId: nid(RUN * 29 + 5), phone: '09120000033', captchaA: 3, captchaB: 3, captchaAnswer: 6 },
+    body: { firstName: 'قدیم', lastName: 'کاربر', nationalId: nid(RUN * 29 + 5), phone: '09120000033', ...(await captchaFor(API, link.token)) },
   })).json;
   await api(`/public/intake/form/${reg.token}/fill`, { method: 'POST', auth: false, body: { procedure: 'عملِ آزمایشی' } });
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');

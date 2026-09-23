@@ -32,6 +32,7 @@ import { chromium } from 'playwright-core';
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { browserLogin } from './lib/browser-login.mjs';
+import { captchaFor } from './lib/captcha.mjs';
 
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://127.0.0.1:3101/api';
@@ -217,7 +218,7 @@ try {
     trash.links.push(link.id);
     const reg = await fetch(`${API}/public/intake/link/${link.token}/register`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ firstName: 'مهسا', lastName: `ثبت‌نام${tag}`, nationalId: nid(), phone: '09120000941', captchaA: 1, captchaB: 2, captchaAnswer: 3 }),
+      body: JSON.stringify({ firstName: 'مهسا', lastName: `ثبت‌نام${tag}`, nationalId: nid(), phone: '09120000941', ...(await captchaFor(API, link.token)) }),
     }).then((r) => r.json());
     await fetch(`${API}/public/intake/form/${reg.token}/fill`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ values: {} }),

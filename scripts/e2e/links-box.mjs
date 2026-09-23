@@ -10,6 +10,7 @@
  * هر بار قابلِ تکرار: دادهٔ اجرای قبلی با پیشوندِ `[lk]` جمع می‌شود.
  */
 import { chromium } from 'playwright-core';
+import { captchaFor } from './lib/captcha.mjs';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
@@ -114,7 +115,7 @@ const link = (await api('/intake/links', { method: 'POST', body: { title: '[lk] 
 if (!link?.token) { console.error('لینک ساخته نشد: ' + JSON.stringify(link).slice(0, 200)); process.exit(1); }
 const reg = (await api(`/public/intake/link/${link.token}/register`, {
   method: 'POST', auth: false,
-  body: { firstName: 'بیمارِ', lastName: 'لینک‌دار', nationalId: nid(RUN * 7 + 3), phone: '09120000041', captchaA: 2, captchaB: 3, captchaAnswer: 5 },
+  body: { firstName: 'بیمارِ', lastName: 'لینک‌دار', nationalId: nid(RUN * 7 + 3), phone: '09120000041', ...(await captchaFor(API, link.token)) },
 })).json;
 if (!reg?.token) { console.error('ثبت‌نام نشد: ' + JSON.stringify(reg).slice(0, 200)); process.exit(1); }
 const fill = (values) => api(`/public/intake/form/${reg.token}/fill`, { method: 'POST', auth: false, body: { values } });
@@ -205,7 +206,7 @@ console.log('\n۸) مرورگر: باکسِ لینک روی فرمِ عمومی'
 {
   const reg2 = (await api(`/public/intake/link/${link.token}/register`, {
     method: 'POST', auth: false,
-    body: { firstName: 'بیمارِ', lastName: 'مرورگر', nationalId: nid(RUN * 11 + 5), phone: '09120000042', captchaA: 2, captchaB: 3, captchaAnswer: 5 },
+    body: { firstName: 'بیمارِ', lastName: 'مرورگر', nationalId: nid(RUN * 11 + 5), phone: '09120000042', ...(await captchaFor(API, link.token)) },
   })).json;
   const browser = await chromium.launch({ executablePath: EXE, args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true });

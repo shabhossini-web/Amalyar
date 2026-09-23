@@ -10,6 +10,7 @@
  * مرزِ دقیق هم سنجیده می‌شود: فرمی که کادرِ پرداخت **دارد** ولی مبلغش صفر
  * است عمداً همچنان فیش می‌خواهد — آن یک خطای پیکربندی است نه فرمِ رایگان.
  */
+import { captchaFor } from './lib/captcha.mjs';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const USER = process.env.E2E_USER ?? 'admin';
 const PASS = process.env.E2E_PASS ?? 'test1234';
@@ -70,7 +71,7 @@ const walk = async (link, code) => {
     method: 'POST', headers: J,
     body: JSON.stringify({
       firstName: 'آزمونِ', lastName: 'رایگان', phone: '0912' + code.slice(0, 7), nationalId: code,
-      captchaA: 3, captchaB: 4, captchaAnswer: 7,
+      ...(await captchaFor(API, link.token)),
     }),
   }).then((r) => r.json());
   const res = await fetch(API + `/public/intake/form/${reg.token ?? link.token}/fill`, {

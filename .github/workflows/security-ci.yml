@@ -2206,10 +2206,12 @@ jobs:
 
           const svc = read('server/src/patients/intake.service.ts');
 
-          // ② کپچا روی **سرور** سنجیده شود — این نشانی عمومی است و اعتبارسنجیِ
-          //    کلاینت جلوی یک اسکریپت را نمی‌گیرد.
-          if (!/if \(Number\(dto\.captchaAnswer\) !== Number\(dto\.captchaA\)/.test(svc)) {
-            console.error('کپچا روی سرور سنجیده نمی‌شود'); process.exit(1);
+          // ② کپچا روی **سرور** ساخته و سنجیده شود (intake-captcha.ts) — این نشانی عمومی است و
+          //    اعتبارسنجیِ کلاینت جلوی یک اسکریپت را نمی‌گیرد. تا ۱۴۰۵/۰۷/۰۱ مرورگر خودش دو عدد را
+          //    انتخاب می‌کرد و سرور فقط جمعشان را می‌سنجید؛ برگشتنِ فیلدِ captchaA/B یعنی همان حفره.
+          if (!/verifyChallenge\(captchaSecret\(\), USED_CHALLENGES, linkToken, dto\.captchaToken/.test(svc)
+            || /captcha[AB][!?]?\s*:/.test(svc + ctl)) {
+            console.error('کپچا روی سرور ساخته و سنجیده نمی‌شود'); process.exit(1);
           }
           // ③ نوعِ فایلِ فیش هم روی سرور. ⚠️ لنگر روی خودِ «if (» است نه فقط
           //    نامِ ثابت: با «false &&» رشته می‌ماند ولی شرط اجرا نمی‌شود و
@@ -3281,6 +3283,14 @@ jobs:
         run: node scripts/e2e/implant-rows.mjs
       - name: Verify the implant picker shows stock and the surgeon portal shows the locked prescription
         run: node scripts/e2e/implant-rows-ui.mjs
+      - name: Verify returning an intake to a chosen stage sets files aside, texts the patient and times the review task
+        run: node scripts/e2e/intake-return-local.mjs
+      - name: Verify the approval popup returns or rejects with a stage and reason and the patient sees the banner
+        run: node scripts/e2e/intake-return-ui.mjs
+      - name: Verify the registration captcha is issued and checked by the server, single-use and rate limited
+        run: node scripts/e2e/intake-captcha-local.mjs
+      - name: Verify the registration page shows the server captcha image and asks a new one after a wrong answer
+        run: node scripts/e2e/intake-captcha-ui.mjs
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی

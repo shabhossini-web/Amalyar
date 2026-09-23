@@ -8,6 +8,7 @@
  *
  * اجرا: `node scripts/e2e/record-forms.mjs`
  */
+import { captchaFor } from './lib/captcha.mjs';
 const API = 'http://localhost:3101/api';
 let TOKEN = '';
 let pass = 0;
@@ -116,7 +117,7 @@ let subId = 0;
 
   const reg = (await api(`/public/intake/link/${link.token}/register`, {
     method: 'POST', auth: false,
-    body: { firstName: 'پرونده', lastName: 'دار', nationalId: NID, phone: '09120000081', captchaA: 2, captchaB: 3, captchaAnswer: 5 },
+    body: { firstName: 'پرونده', lastName: 'دار', nationalId: NID, phone: '09120000081', ...(await captchaFor(API, link.token)) },
   })).json;
   ok('ثبت‌نام روی همان کد ملی انجام شد', !!reg?.token, JSON.stringify(reg)?.slice(0, 140));
 

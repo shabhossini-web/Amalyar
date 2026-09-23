@@ -1,6 +1,6 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: active
+status: idle
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-23
 paths:
@@ -65,6 +65,31 @@ paths:
   - src/app/surgeon-portal.css
   - scripts/e2e/implant-rows.mjs
   - scripts/e2e/implant-rows-ui.mjs
+  - server/src/patients/intake-return.ts
+  - server/src/work/work-rules.ts
+  - server/src/common/sms-template.ts
+  - scripts/e2e/intake-return.mjs
+  - scripts/e2e/intake-return-local.mjs
+  - scripts/e2e/intake-return-ui.mjs
+  - server/src/patients/intake-captcha.ts
+  - server/src/patients/captcha-glyphs.ts
+  - server/src/common/client-ip.ts
+  - scripts/e2e/lib/captcha.mjs
+  - scripts/e2e/intake-captcha.mjs
+  - scripts/e2e/intake-captcha-local.mjs
+  - scripts/e2e/intake-captcha-ui.mjs
+  - scripts/e2e/approve-kind.mjs
+  - scripts/e2e/free-form.mjs
+  - scripts/e2e/link-form.mjs
+  - scripts/e2e/links-box.mjs
+  - scripts/e2e/multi-image.mjs
+  - scripts/e2e/public-form.mjs
+  - scripts/e2e/record-direct.mjs
+  - scripts/e2e/record-forms.mjs
+  - scripts/e2e/w3-8-single-source.mjs
+  - scripts/e2e/intake-guards.mjs
+  - scripts/e2e/reserved-date-keys.mjs
+  - scripts/e2e/send-delete-crm.mjs
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
@@ -225,6 +250,11 @@ note: >-
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۷/۰۱ · PR #92 (`9a5b4f1`) و PRِ G+H · **«اصلاحاتِ شرکتی» A–H** — نوعِ نصب و بستهٔ خدمات،
+  فرمِ ثبت‌نام به‌ازای هر خدمت، صفحهٔ پرداخت با کارتِ بانکی، پاپ‌آپِ تأیید با سه کارت، ردیف‌های ایمپلنت با
+  «طبقِ نسخه»ِ قفل، برگشت برای اصلاح به یک مرحله با پیامک، و پرسشِ امنیتیِ سمتِ سرور با سقفِ نرخ.
+  **قراردادِ تازه برای آزمون‌ها:** ثبت‌نامِ عمومی دیگر `captchaA/B` نمی‌پذیرد — از `scripts/e2e/lib/captcha.mjs`
+  (`captchaFor(API, linkToken)`) استفاده کنید؛ نشان را با `JWT_SECRET` باز می‌کند.
 - ۱۴۰۵/۰۶/۲۶ · PR #36 · `211426f` · **W3.4 لینکِ واحدِ بیمار (بخشِ آزاد)** — «کارهای شما»
   روی `/p` با deep-linkِ `/f` `/o` `/s`، کارتِ ادغام‌شدهٔ توصیه+نوبت روی `forVisitId`،
   و لینکی‌کردنِ متنِ پیام‌ها بدونِ `dangerouslySetInnerHTML`. e2e ۱۹/۱۹.

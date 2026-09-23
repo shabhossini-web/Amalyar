@@ -16,6 +16,7 @@
  */
 import { chromium } from 'playwright-core';
 import { execSync } from 'node:child_process';
+import { captchaFor } from './lib/captcha.mjs';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
@@ -134,7 +135,7 @@ const link = (await api('/intake/links', { method: 'POST', body: { title: '[vn] 
 if (!link?.token) { console.error('لینک ساخته نشد: ' + JSON.stringify(link).slice(0, 200)); process.exit(1); }
 const register = async (last, seed, phone) => (await api(`/public/intake/link/${link.token}/register`, {
   method: 'POST', auth: false,
-  body: { firstName: 'بیمارِ', lastName: last, nationalId: nid(seed), phone, captchaA: 2, captchaB: 3, captchaAnswer: 5 },
+  body: { firstName: 'بیمارِ', lastName: last, nationalId: nid(seed), phone, ...(await captchaFor(API, link.token)) },
 })).json;
 const reg = await register(`لینک‌صوتی${RUN}`, RUN * 13 + 7, '09120000972');
 ok('ثبت‌نام انجام شد', !!reg?.token, JSON.stringify(reg).slice(0, 120));

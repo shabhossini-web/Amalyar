@@ -99,8 +99,8 @@
   font-size: 12px; line-height: 1.9; color: var(--text2);
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
 }
-.ia-note.warn { color: #fcd34d; background: rgba(245, 158, 11, .09); border-color: rgba(251, 191, 36, .3); }
-.ia-note.ok { color: #6ee7b7; background: rgba(52, 211, 153, .09); border-color: rgba(52, 211, 153, .3); }
+.ia-note.warn { color: var(--amber-text); background: rgba(245, 158, 11, .09); border-color: rgba(251, 191, 36, .3); }
+.ia-note.ok { color: var(--green-text); background: rgba(52, 211, 153, .09); border-color: rgba(52, 211, 153, .3); }
 
 .ia-acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .ia-ok, .ia-ghost, .ia-no {
@@ -264,3 +264,15 @@
 .ia-open { display: block; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: start; cursor: pointer; }
 .ia-block-act:focus-visible, .ia-open:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .ia-block-act { transition: none; } }
+
+/* ── برگشت برای اصلاح / رد در پاپ‌آپ ── */
+.ia-decide textarea {
+  width: 100%; font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 11px; resize: vertical;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
+}
+.ia-decide textarea:focus { border-color: rgba(var(--brand-2-rgb), .6); }
+.ia-stage { display: flex; flex-wrap: wrap; gap: 6px; }
+.ia-stage .ia-chip { cursor: pointer; font: inherit; font-size: 12.5px; color: var(--text1); padding: 5px 12px; min-height: 32px; }
+.ia-stage .ia-chip.on { border-color: rgba(251, 191, 36, .6); background: rgba(245, 158, 11, .14); font-weight: 700; }
+.ia-stage .ia-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ia-stage .ia-chip { transition: none; } }

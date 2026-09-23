@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
@@ -6,7 +6,7 @@ import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import Mark from '../components/Mark.jsx';
 import './intake.css';
-import { Alert, Bank, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -44,11 +44,18 @@ function Register() {
      نه تعدادِ بیمارِ هر کانال، که دادهٔ تجاریِ شرکت است و روی صفحهٔ بی‌احراز
      جایی ندارد. */
   const [sources, setSources] = useState([]);
-  /* ⚠️ دو عددِ کپچا یک‌بار ساخته می‌شوند و در رندرِ بعدی عوض نمی‌شوند — با
-     `useMemo` و نه در بدنهٔ تابع، وگرنه هر تایپِ کاربر عددها را عوض می‌کرد و
-     پاسخِ درست هم غلط می‌شد. */
-  const cap = useMemo(() => ({ a: 2 + Math.floor(Math.random() * 7), b: 1 + Math.floor(Math.random() * 6) }), []);
+  /* پرسشِ امنیتی را **سرور** می‌سازد: تصویرِ دو عدد + نشانی که پاسخ را رمزشده در خود دارد
+     (`server/src/patients/intake-captcha.ts`). مرورگر پاسخ را نمی‌داند — تا دیروز خودش دو عدد را
+     انتخاب می‌کرد و هر اسکریپتی با `1 + 1 = 2` ثبت‌نام می‌ساخت. هر نشان یک‌بار سنجیده می‌شود. */
+  const [cap, setCap] = useState(null);
+  const [capErr, setCapErr] = useState('');
   const [answer, setAnswer] = useState('');
+  const loadCap = useCallback(() => {
+    setCapErr(''); setAnswer('');
+    return api(`/public/intake/link/${token}/captcha`, { auth: false })
+      .then(setCap)
+      .catch((e) => { setCap(null); setCapErr(e.message); });
+  }, [token]);
 
   useEffect(() => { document.title = 'ثبت‌نام'; }, []);
   useEffect(() => {
@@ -57,10 +64,14 @@ function Register() {
     api('/public/referral-sources', { auth: false }).then(setSources).catch(() => {});
   }, []);
   useEffect(() => {
+    /* `live`: پاسخِ اجرای کنارگذاشته (StrictMode، عوض‌شدنِ لینک) پرسشِ دوم نسازد — هر پرسش
+       یک رسمِ تصویر روی سرور است و از سقفِ نرخِ همین نشانی کم می‌کند. */
+    let live = true;
     api(`/public/intake/link/${token}`, { auth: false })
-      .then(setLink)
-      .catch((e) => setErr(e.message));
-  }, [token]);
+      .then((l) => { if (live) { setLink(l); loadCap(); } })
+      .catch((e) => { if (live) setErr(e.message); });
+    return () => { live = false; };
+  }, [token, loadCap]);
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
@@ -78,13 +89,17 @@ function Register() {
           birthDate: f.birthDate.trim() ? jStrToIso(f.birthDate) : '',
           ...(f.referralSourceId ? { referralSourceId: Number(f.referralSourceId) } : {}),
           ...(f.referralNote.trim() ? { referralNote: f.referralNote.trim() } : {}),
-          captchaA: cap.a, captchaB: cap.b, captchaAnswer: Number(toEnDigits(answer)) || 0,
+          captchaToken: cap?.challenge ?? '', captchaAnswer: Number(toEnDigits(answer)) || 0,
         },
       });
       // از این‌جا به بعد، نشانیِ خودِ بیمار است — با replace تا دکمهٔ برگشت
       // بیمار را به فرمِ خالیِ ثبت‌نام برنگرداند.
       window.location.replace(`/f/${r.token}`);
-    } catch (e) { setErr(e.message); setBusy(false); }
+    } catch (e) {
+      setErr(e.message); setBusy(false);
+      /* ۴۲۲ = نشان همین حالا مصرف شد (پاسخِ غلط یا منقضی) — پرسشِ تازه، نه ارسالِ دوباره. */
+      if (e.status === 422) loadCap();
+    }
   };
 
   if (err && !link) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
@@ -126,12 +141,21 @@ function Register() {
       </div>
 
       <div className="ik-cap">
-        <span>برای اطمینان از اینکه ربات نیستید: <b dir="ltr">{faNum(cap.a)} + {faNum(cap.b)} = ?</b></span>
-        <input dir="ltr" inputMode="numeric" value={answer} onChange={(e) => setAnswer(e.target.value)} disabled={busy} />
+        <span id="ik-cap-q">برای اطمینان از اینکه ربات نیستید، حاصلِ جمعِ دو عددِ تصویر را بنویسید:</span>
+        <div className="ik-cap-row">
+          {cap
+            ? <img className="ik-cap-img" src={cap.image} width="180" height="64" alt="پرسشِ امنیتی: جمعِ دو عدد" />
+            : <span className="ik-cap-img ik-cap-empty" role={capErr ? 'alert' : undefined}>{capErr || 'در حالِ بارگذاری…'}</span>}
+          <button type="button" className="ik-cap-new" onClick={loadCap} disabled={busy} aria-label="پرسشِ دیگر" title="پرسشِ دیگر">
+            <Refresh width="17" height="17" />
+          </button>
+          <input dir="ltr" inputMode="numeric" aria-labelledby="ik-cap-q" value={answer}
+                 onChange={(e) => setAnswer(e.target.value)} disabled={busy || !cap} />
+        </div>
       </div>
 
       {err && <p className="ik-bad"><Alert width="15" height="15" /> {err}</p>}
-      <button type="button" className="ik-go" disabled={busy} onClick={submit}>
+      <button type="button" className="ik-go" disabled={busy || !cap} onClick={submit}>
         {busy ? 'در حال ثبت…' : 'ادامه'}
       </button>
     </Shell>
@@ -418,7 +442,15 @@ function Form() {
         </ol>
       )}
 
-      {d.reviewNote && !done && (
+      {/* برگشت برای اصلاح (مالک، ۱۴۰۵/۰۷/۰۱): بیمار باید بداند **کدام بخش** و **چرا** — نه فقط
+          یک یادداشت. مرحله و راهنما از سرور (`intake-return.ts`) می‌آیند. */}
+      {d.returned ? (
+        <div className="ik-returned" role="status">
+          <b><Alert width="15" height="15" /> برای اصلاح برگشت خورد — {d.returned.stageLabel}</b>
+          <p>{d.returned.note}</p>
+          <small>{d.returned.hint}</small>
+        </div>
+      ) : d.reviewNote && !done && (
         <p className="ik-warn"><Alert width="15" height="15" /> {d.reviewNote}</p>
       )}
 

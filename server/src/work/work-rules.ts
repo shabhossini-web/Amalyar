@@ -175,13 +175,19 @@ export const RULES: Record<string, Rule> = {
   'pathway.step_closed': (_e, ref) => close(ref, 'pathway_step'),
 
   /* ── ثبت‌نام (D04) ── */
+  /* ⚠️ `reopen`: ثبت‌نامی که برای اصلاح برگشته بود (کارش با `intake.returned` بسته شد) با
+     ارسالِ دوبارهٔ بیمار همان کار را **باز** می‌کند — کلیدِ یکتا همان است، پس بی‌این یک
+     ثبت‌نامِ اصلاح‌شده بی‌صدا از صفِ کارِ منشی غیب می‌شد. بازپخشِ رویدادِ قدیمی بازش نمی‌کند. */
   'intake.submitted': (e, ref) => upsert({
     ...base(e, 'approve_intake', ref),
     title: 'بررسی و تأییدِ ثبت‌نام',
     ownerRole: 'secretary',
     dueAt: inDays(1, e.at),
     priority: 2,
+    reopen: true,
   }),
+  /* برگشت برای اصلاح: کار منتظرِ بیمار است نه منشی. */
+  'intake.returned': (_e, ref) => close(ref, 'approve_intake'),
   'intake.approved': (_e, ref) => close(ref, 'approve_intake', 'repair_intake'),
   'intake.rejected': (_e, ref) => close(ref, 'approve_intake'),
   'intake.approve_failed': (e, ref) => upsert({

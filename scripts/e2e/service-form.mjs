@@ -21,6 +21,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { captchaFor } from './lib/captcha.mjs';
 const require = createRequire(new URL('../../server/package.json', import.meta.url));
 const { PrismaClient } = require('@prisma/client');
 
@@ -50,7 +51,7 @@ async function upload(token, field) {
 const setSetting = (key, value) => db.setting.upsert({ where: { key }, create: { key, value }, update: { value } });
 async function register(linkToken) {
   const r = await pub(`/public/intake/link/${linkToken}/register`, {
-    firstName: 'بیمارِ', lastName: 'خدمت', nationalId: nid(++seed * 7919), phone: '0912' + String(1000000 + (seed % 8999999)), captchaA: 2, captchaB: 3, captchaAnswer: 5,
+    firstName: 'بیمارِ', lastName: 'خدمت', nationalId: nid(++seed * 7919), phone: '0912' + String(1000000 + (seed % 8999999)), ...(await captchaFor(API, linkToken)),
   });
   assert.ok(r.status < 300 && r.data?.token, msg(r));
   return r.data.token;

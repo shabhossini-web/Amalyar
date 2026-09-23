@@ -18,6 +18,7 @@
  *   باید همچنان کار کند.
  */
 import { randomBytes } from 'node:crypto';
+import { captchaFor } from './lib/captcha.mjs';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const USER = process.env.E2E_USER ?? 'admin';
@@ -80,7 +81,7 @@ const walk = async (link, code) => {
     method: 'POST', headers: J,
     body: JSON.stringify({
       firstName: 'نظرسنجِ', lastName: 'مستقیم', phone: '0913' + code.slice(0, 7), nationalId: code,
-      captchaA: 2, captchaB: 5, captchaAnswer: 7,
+      ...(await captchaFor(API, link.token)),
     }),
   }).then((r) => r.json());
   const res = await fetch(API + `/public/intake/form/${reg.token ?? link.token}/fill`, {

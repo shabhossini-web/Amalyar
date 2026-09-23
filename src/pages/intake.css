@@ -83,7 +83,17 @@
   padding: 10px 12px; border-radius: 13px; font-size: 12px; color: var(--text2);
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
-.ik-cap b { font-size: 14px; color: var(--text1); }
+.ik-cap > span { flex: 1 1 100%; line-height: 1.8; }
+/* تصویرِ پرسش از سرور — روشن در هر دو تم (پس‌زمینهٔ خودِ PNG). */
+.ik-cap-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.ik-cap-img { width: 180px; height: 64px; flex: 0 0 auto; border-radius: 10px; border: 1px solid rgba(var(--veil-rgb), .16); }
+.ik-cap-empty { display: grid; place-items: center; padding: 6px; text-align: center; font-size: 11.5px; line-height: 1.6; background: rgba(var(--veil-rgb), .06); }
+.ik-cap-new {
+  display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; cursor: pointer; border-radius: 10px;
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.ik-cap-new:hover:not(:disabled) { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .5); }
+.ik-cap-new:focus-visible, .ik-cap input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .ik-cap input {
   font: inherit; width: 70px; margin-inline-start: auto; text-align: center;
   font-size: 14px; color: var(--text1); padding: 8px; border-radius: 10px;
@@ -101,6 +111,9 @@
   border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ik-go:disabled { opacity: .55; cursor: not-allowed; }
+/* ⚠️ دکمهٔ نئونِ `press.css` داخلش شفاف است و متنش `#fff`؛ در تمِ روشن (پیش‌فرضِ مطب) «ادامه» سفید
+   روی بنفشِ کم‌رنگ می‌نشست و خوانده نمی‌شد. `--text1` در تمِ تیره همان سفید است. */
+.ik-go:not(.ghost) { color: var(--text1); }
 
 .ik-pay { display: grid; gap: 9px; }
 .ik-note, .ik-good, .ik-bad, .ik-warn {
@@ -108,9 +121,9 @@
   font-size: 12.5px; line-height: 1.9;
 }
 .ik-note { color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1); }
-.ik-good { color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .32); }
+.ik-good { color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .32); }
 .ik-bad { color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .32); }
-.ik-warn { color: #fcd34d; background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35); }
+.ik-warn { color: var(--amber-text); background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35); }
 .ik-note svg, .ik-good svg, .ik-bad svg, .ik-warn svg { flex: 0 0 auto; }
 
 @media (max-width: 460px) {
@@ -280,3 +293,13 @@
   padding: 4px 10px; cursor: pointer; font: inherit; font-size: 11px; color: #f87171;
   background: none; border: 1px solid rgba(248, 113, 113, .4); border-radius: 99px;
 }
+
+/* ── برگشت برای اصلاح: کدام بخش، چرا، چه باید کرد ── */
+.ik-returned {
+  display: grid; gap: 4px; padding: 11px 13px; border-radius: 13px;
+  color: var(--text1); background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .4);
+}
+.ik-returned b { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--amber-text); }
+.ik-returned b svg { flex: 0 0 auto; }
+.ik-returned p { margin: 0; font-size: 13px; line-height: 1.9; }
+.ik-returned small { font-size: 11.5px; color: var(--text2); line-height: 1.8; }

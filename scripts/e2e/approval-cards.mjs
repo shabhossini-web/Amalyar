@@ -20,6 +20,7 @@
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { captchaFor } from './lib/captcha.mjs';
 const require = createRequire(new URL('../../server/package.json', import.meta.url));
 const { PrismaClient } = require('@prisma/client');
 const { imageRefsOf, receiptIdsOf } = require('./dist/patients/intake-docs.js');
@@ -71,7 +72,7 @@ try {
   assert.ok(link.status < 300, msg(link));
   const reg = await pub(`/public/intake/link/${link.data.token}/register`, {
     firstName: 'بیمارِ', lastName: 'کارت‌ها', nationalId: nid(++seed * 7919), phone: '0912' + String(1000000 + (seed % 8999999)),
-    birthDate: '1990-03-21', captchaA: 2, captchaB: 3, captchaAnswer: 5,
+    birthDate: '1990-03-21', ...(await captchaFor(API, link.data.token)),
   });
   assert.ok(reg.status < 300 && reg.data?.token, msg(reg));
   const t = reg.data.token;
