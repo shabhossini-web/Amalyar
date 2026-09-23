@@ -261,3 +261,8 @@
 .th-postdx p { margin: 4px 0 0; font-size: 14px; line-height: 1.8; color: var(--text1); }
 .th-postdx .th-warn, .th-dialog .th-warn { font-size: 12px; font-weight: 700; color: var(--amber-text); }
 .th-dialog .th-warn { margin: 6px 0 0; }
+/* سمتِ هر عمل کنارِ نامش — پررنگ‌تر از کدِ ICD چون خطرِ «محلِ اشتباه» است. */
+.th-code-side {
+  padding: 0 8px; border-radius: 99px; font-size: 11.5px; font-weight: 800; line-height: 1.8;
+  color: var(--text1); background: rgba(var(--veil-rgb), .08); border: 1px solid rgba(var(--veil-rgb), .3);
+}

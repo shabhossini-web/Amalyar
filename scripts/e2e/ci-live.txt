@@ -126,3 +126,5 @@ multi-procedure
 today-quick-visit
 op-defaults
 tenant-profile
+op-details
+op-details-ui

@@ -399,6 +399,8 @@ function CodingList({ items, label }) {
       {items.map((it) => (
         <li key={`${it.rank}-${it.id ?? ''}`} className={multi && it.primary ? 'is-primary' : undefined}>
           <span className="th-code-name">{it.name ?? it.title}</span>
+          {/* سمت/سطحِ همین عمل (بستهٔ ۸) — تأییدِ محل پیش از برش همین‌جاست. */}
+          {(it.sideFa || it.level) && <span className="th-code-side" data-proc-side-label>{[it.sideFa, it.level].filter(Boolean).join(' · ')}</span>}
           {it.icdCode && <span className="th-code-icd" dir="ltr">{it.icdCode}</span>}
           {multi && it.primary && <span className="th-code-primary">اصلی</span>}
         </li>

@@ -173,7 +173,10 @@ export class TheatreService {
         procedureType: { select: { name: true } },
         /* فقط نامِ سایرِ عمل‌ها — برای برچسبِ ردیف (بستهٔ ۷ج). */
         otherProcedures: OTHER_PX,
-        /* سمت/سطح — روی تابلوی روز هم دیده شود (تأییدِ محل پیش از برش، بستهٔ ۸). */
+        /* سمت/سطح — روی تابلوی روز هم دیده شود (تأییدِ محل پیش از برش، بستهٔ ۸).
+           ⚠️ `procedureTypeId` لازم است: `procedureList` سمتِ عملِ **اصلی** را با همین
+           شناسه جفت می‌کند و بی‌آن فقط سمتِ همزمان‌ها روی تابلو می‌آمد (e2e: T2). */
+        procedureTypeId: true,
         procedureDetails: { select: PROC_DETAIL_SELECT },
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
       },
