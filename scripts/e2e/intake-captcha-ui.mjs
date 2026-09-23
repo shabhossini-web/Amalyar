@@ -86,7 +86,9 @@ try {
   console.log('\n۳) پرسش نیامد');
   capFails = 1;
   await page.goto(`${vite.base}/r/tok`, { waitUntil: 'networkidle' });
-  const empty = page.locator('.ik-cap-empty');
+  /* ⚠️ جای خالی اول «در حالِ بارگذاری…» است و بعد خطا — منتظرِ **خودِ خطا** بمان، وگرنه زیرِ بار
+     متنِ بارگذاری خوانده می‌شود (یک‌بار در CIِ محلی فلیک شد). */
+  const empty = page.locator('.ik-cap-empty', { hasText: 'تعداد درخواست‌ها' });
   await empty.waitFor();
   ok((await empty.innerText()).includes('تعداد درخواست‌ها زیاد است'), '۴۲۹ در جای تصویر دیده می‌شود');
   ok(await page.getByRole('button', { name: 'ادامه' }).isDisabled(), '**«ادامه» تا پرسش نیامده غیرفعال**');
