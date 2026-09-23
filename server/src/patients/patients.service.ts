@@ -27,6 +27,12 @@ import { vitalsInput } from './vitals';
 import { actorName } from '../common/person';
 import { summarize } from './billing.service';
 import { todayRangeUtc } from '../common/clinic-day';
+import {
+  CODING_TWIN, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
+  diagnosisLabel, othersCreateData, otherIds, pickCodingKeys, planCoding, principalDiagnosisTitle,
+  principalProcedureName, procedureLabel, touchedAxes, twinOf, visitHasDiagnosis, visitHasProcedure,
+  writeOthers,
+} from './visit-coding';
 
 /**
  * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
@@ -70,13 +76,22 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
     surgeonName: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName,
     hospitalName: v.hospital?.name ?? v.hospitalName,
     techName: v.tech ? `${v.tech.person.firstName} ${v.tech.person.lastName}`.trim() : null,
+    /* ⚠️ `procedureTypeName`/`diagnosisTitle` **همیشه اصلی**‌اند (بستهٔ ۷):
+       فاکتورِ صادرشده، گزارش و بیست‌وچند خواننده روی همین معنا سوارند.
+       همهٔ موارد در `procedureLabel`/`diagnosisLabel`، و شناسه‌های سایرین برای
+       فرم — `undefined` وقتی رابطه خوانده نشده (نخوانده ≠ خالی؛ همان قاعدهٔ
+       `sectionsOf`)، تا فرمِ بازشده از ردیفِ سبک با ذخیره پاکشان نکند. */
     procedureTypeId: v.procedureTypeId,
-    procedureTypeName: v.procedureType?.name ?? v.opType,
+    procedureTypeName: principalProcedureName(v),
+    otherProcedureTypeIds: otherIds(v, 'procedure'),
+    procedureLabel: procedureLabel(v),
     diagnosisId: v.diagnosisId,
+    otherDiagnosisIds: otherIds(v, 'diagnosis'),
+    diagnosisLabel: diagnosisLabel(v),
     topicId: v.topicId,
     topicName: v.topic?.name ?? null,
     topicColor: v.topic?.color ?? null,
-    diagnosisTitle: v.diagnosis?.title ?? null,
+    diagnosisTitle: principalDiagnosisTitle(v),
     // شرحِ عمل حالا یک ClinicalNote است (نسخه‌دار و تغییرناپذیر)، ولی فرمِ مراجعه
     // همان یک فیلد را می‌بیند — تنها نسخهٔ جاری.
     /* ⚠️ `find` و نه `[0]`: از وقتی شرحِ ترخیص هم در همین آرایه می‌آید،
@@ -283,6 +298,11 @@ const INCLUDE_PATIENT = {
   /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط برای **مشتق‌کردنِ** شکایتِ
      اولیه. سه ستون، نه کلِ ردیف: این include روی فهرستِ ۵۰۰تایی هم می‌دود. */
   decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+  /* سایرِ تشخیص‌ها و عمل‌ها (بستهٔ ۷) — دو کوئریِ دسته‌ایِ `IN` روی فهرست و
+     خروجی، هر دو ایندکس‌دار. همهٔ مسیرهای نوشتن/خواندنِ مراجعه از همین include
+     می‌گذرند، پس فرم، ممیزی و فهرست همان فهرستِ کامل را می‌بینند. */
+  otherDiagnoses: OTHER_DX,
+  otherProcedures: OTHER_PX,
   /* فقط نسخهٔ جاریِ شرحِ عمل و شرحِ ترخیص؛ تاریخچه از مسیرِ پروندهٔ بیمار
      خوانده می‌شود. هر دو یک جنس‌اند (سندِ بالینیِ نسخه‌دار)، پس یک کوئری.
      ⚠️ `distinct` و نه `take` — توضیح در `currentNotes`. */
@@ -418,9 +438,16 @@ export class PatientsService {
     if (status && status !== 'all') where.opStatus = status;
     if (kind && kind !== 'all') where.kind = kind;
 
-    for (const key of ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId', 'topicId'] as const) {
+    for (const key of ['surgeonId', 'hospitalId', 'techId', 'topicId'] as const) {
       if (f[key]) where[key] = f[key];
     }
+    /* ⚠️ تشخیص و نوعِ عمل **در هر رتبه‌ای** (بستهٔ ۷): «بیمارانِ X» بیمارانی را
+       هم می‌گیرد که X تشخیصِ دوم یا عملِ همزمانشان بوده. `AND` نه `OR`، چون
+       جستجوی آزاد مالکِ `where.OR` است؛ فهرست، خروجی و آمار همه از همین تابع‌اند. */
+    const and: any[] = [];
+    if (f.procedureTypeId) and.push(visitHasProcedure(f.procedureTypeId));
+    if (f.diagnosisId) and.push(visitHasDiagnosis(f.diagnosisId));
+    if (and.length) where.AND = and;
 
     // بازهٔ تاریخِ عمل. «تا» شاملِ خودِ روز است — کاربری که یک تاریخ را به‌عنوان
     // پایان می‌زند انتظار دارد عمل‌های همان روز را هم ببیند.
@@ -458,6 +485,8 @@ export class PatientsService {
           { diagnosis: { title: { contains: v, mode: 'insensitive' } } },
           { hospital: { name: { contains: v, mode: 'insensitive' } } },
           { opType: { contains: v, mode: 'insensitive' } },
+          /* بدونِ این دو، تشخیص یا عملِ دوم هرگز با جستجو پیدا نمی‌شد. */
+          ...codingSearchOr(v),
           { tech: { person: { OR: [
             { firstName: { contains: v, mode: 'insensitive' } },
             { lastName: { contains: v, mode: 'insensitive' } },
@@ -1086,26 +1115,35 @@ export class PatientsService {
     });
     if (!form || form.fields.length === 0) return;
 
+    /* ⚠️ آرایه با ترتیب مقایسه می‌شود: رتبهٔ تشخیص/عمل دادهٔ بالینی است، پس
+       جابه‌جا کردنش هم «نوشتن» است. */
     const norm = (v: unknown) => {
       if (v === null || v === undefined) return '';
       if (v instanceof Date) return v.toISOString();
+      if (Array.isArray(v)) return v.join(',');
       return String(v);
     };
     const curExtra = (current?.extra && typeof current.extra === 'object') ? current.extra as Record<string, any> : {};
     for (const f of form.fields) {
       const roles = fieldRoles(f);
       if (!roles.length || roles.includes(myRole)) continue;
-      const inExtra = dto.extra && Object.prototype.hasOwnProperty.call(dto.extra, f.key);
-      const inRoot = Object.prototype.hasOwnProperty.call(dto, f.key);
-      if (!inExtra && !inRoot) continue;
-      const next = inExtra ? dto.extra[f.key] : dto[f.key];
-      const prev = inExtra ? curExtra[f.key] : current?.[f.key];
-      /* در ساخت (current تهی) مقدارِ خالی مجاز است — فرم مقدارِ پیش‌فرضِ
-         خالی می‌فرستد و آن «نوشتن» نیست. */
-      if (norm(next) === norm(prev ?? '')) continue;
-      throw new BadRequestException(
-        `«${f.label}» بخشِ ${roles.map(jobRoleLabel).join("، ")} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
-      );
+      /* فهرستِ «سایرِ تشخیص‌ها/عمل‌ها» مالکِ خودش را ندارد؛ مالکش همان فیلدِ
+         اصلی است (`CODING_TWIN`) — وگرنه منشی‌ای که تشخیصِ اصلی را نمی‌تواند
+         عوض کند، تشخیصِ دوم را اضافه می‌کرد. */
+      const twin = (CODING_TWIN as Record<string, string>)[f.key];
+      for (const key of twin ? [f.key, twin] : [f.key]) {
+        const inExtra = dto.extra && Object.prototype.hasOwnProperty.call(dto.extra, key);
+        const inRoot = Object.prototype.hasOwnProperty.call(dto, key);
+        if (!inExtra && !inRoot) continue;
+        const next = inExtra ? dto.extra[key] : dto[key];
+        const prev = inExtra ? curExtra[key] : current?.[key];
+        /* در ساخت (current تهی) مقدارِ خالی مجاز است — فرم مقدارِ پیش‌فرضِ
+           خالی می‌فرستد و آن «نوشتن» نیست. */
+        if (norm(next) === norm(prev ?? '')) continue;
+        throw new BadRequestException(
+          `«${f.label}» بخشِ ${roles.map(jobRoleLabel).join("، ")} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
+        );
+      }
     }
   }
 
@@ -1121,6 +1159,11 @@ export class PatientsService {
     const userId: number | undefined = user?.id;
     /* پیش از هر سنجه: کلاینتِ کهنه بخش‌های هسته را در `extra` می‌فرستد. */
     PatientsService.liftLegacy(dto, []);
+    /* تشخیص‌ها/عمل‌ها (بستهٔ ۷): برنامه **پیش از** ستاره و مالکیت، تا «اجباری»
+       روی اصلیِ نهایی (پس از ارتقای اولینِ سایرین) سنجیده شود. `raw` برای
+       مسیرِ «مراجعهٔ هدف» است که باید با وضعیتِ همان مراجعه دوباره برنامه‌ریزی شود. */
+    const rawCoding = pickCodingKeys(dto);
+    const codingPlan = planCoding(dto, EMPTY_CODING);
     const vitalsRow = vitalsInput((dto as any).vitals);
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
@@ -1162,17 +1205,35 @@ export class PatientsService {
       }
       // شمارهٔ مراجعه برای همین بیمار در مسیرهای هم‌زمان تکرار نشود.
       await tx.$queryRaw`SELECT id FROM patients WHERE id = ${patientId} FOR UPDATE`;
-      const refs = await this.resolveRefs(tx, dto);
       let target: any = null;
+      let targetCoding = EMPTY_CODING;
       if (targetVisitId) {
         await tx.$queryRaw`SELECT id FROM visits WHERE id = ${targetVisitId} FOR UPDATE`;
-        target = await tx.visit.findFirst({ where: { id: targetVisitId, patientId } });
+        target = await tx.visit.findFirst({
+          where: { id: targetVisitId, patientId },
+          include: { otherDiagnoses: { select: { diagnosisId: true } }, otherProcedures: { select: { procedureTypeId: true } } },
+        });
         if (!target || target.opStatus === 'cancelled') throw new BadRequestException('مراجعهٔ هدف معتبر نیست یا لغو شده است');
+        /* ⚠️ ادغام در مراجعهٔ **موجود**: عملِ تأییدشدهٔ پذیرش اصلیِ همان
+           مراجعه می‌شود و سایرینِ ثبت‌شده‌اش می‌مانند — برنامه از `raw` و با
+           وضعیتِ هدف دوباره ساخته می‌شود، نه از برنامهٔ «مراجعهٔ تازه». */
+        targetCoding = currentCoding(target);
+        const re = { ...rawCoding } as any;
+        planCoding(re, targetCoding);
+        for (const [k, val] of Object.entries(re)) (dto as any)[k] = val;
       }
+      const refs = await this.resolveRefs(tx, dto);
       const decidedIn = await this.resolveDecidedIn(tx, patientId, dto.decidedInVisitId);
       const complaint = PatientsService.ownComplaint(dto.chiefComplaint, decidedIn?.chiefComplaint);
       const max = await tx.visit.aggregate({ where: { patientId }, _max: { seq: true } });
       const seq = (max._max.seq ?? 0) + 1;
+      /* سایرین: وجود + فعال‌بودنِ افزوده‌های تازه؛ برای مراجعهٔ هدف نوشتن پیش از
+         update تا پاسخ همان فهرستِ نهایی را داشته باشد. */
+      for (const axis of touchedAxes(dto)) {
+        const c = targetCoding[axis];
+        await assertCodingRefs(tx, axis, twinOf(dto, axis), target ? [c.primary, ...c.others] : []);
+        if (target) await writeOthers(tx, target.id, axis, twinOf(dto, axis));
+      }
       let visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
         ...refs,
         ...(dto.decidedInVisitId !== undefined ? { decidedInVisitId: decidedIn?.id ?? null } : {}),
@@ -1190,6 +1251,8 @@ export class PatientsService {
           seq,
           kind: dto.kind || 'surgery',
           ...refs,
+          /* سایرِ تشخیص‌ها/عمل‌ها در همان عبارتِ ساخت (تنها نویسنده: visit-coding). */
+          ...othersCreateData(codingPlan),
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
           opDate: toDateValue(dto.opDate) ?? null,
@@ -1319,13 +1382,19 @@ export class PatientsService {
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_VISIT_FULL });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     PatientsService.liftLegacy(dto, v.decisions ?? []);
+    /* تشخیص‌ها/عمل‌ها (بستهٔ ۷) — پیش از ستاره و مالکیت؛ کلیدِ نیامده = دست نزن. */
+    const coding = currentCoding(v);
+    planCoding(dto, coding);
     /* ⚠️ «مقدارِ فعلی»ِ بخش‌های هسته از اسنادِ بالینی می‌آید نه از ستون: بدونِ
        این، منشی‌ای که فرم را بی‌تغییر ذخیره می‌کند (فرم همهٔ مقادیر را پس
        می‌فرستد) با «معاینه بخشِ پزشک است» رد می‌شد — چون مقدارِ قبلی را
        `undefined` می‌دید. */
     await this.assertRoleOwnership(
       (dto as any).kind ?? v.kind, dto, user,
-      { ...(v as any), ...sectionsOf(v.clinicalNotes, VISIT_FULL_NOTE_KINDS) },
+      {
+        ...(v as any), ...sectionsOf(v.clinicalNotes, VISIT_FULL_NOTE_KINDS),
+        otherDiagnosisIds: coding.diagnosis.others, otherProcedureTypeIds: coding.procedure.others,
+      },
     );
     if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
     await this.assertEditFormValid(v, dto);
@@ -1349,7 +1418,10 @@ export class PatientsService {
       if (dto.surgeonId === null) { visitPatch.surgeonId = null; visitPatch.surgeonName = null; }
       if (dto.hospitalId === null) { visitPatch.hospitalId = null; visitPatch.hospitalName = null; }
       if (dto.techId === null) visitPatch.techId = null;
-      if (dto.procedureTypeId === null) { visitPatch.procedureTypeId = null; visitPatch.opType = null; }
+      /* ⚠️ پاک‌کردنِ نوعِ عمل + متنِ آزاد در همان درخواست: متن می‌ماند. تا
+         بستهٔ ۷ `opType` همین‌جا null می‌شد و شاخهٔ پایین (که فقط وقتی
+         `visitPatch.opType` تعریف‌نشده است می‌خواند) آن را نمی‌دید. */
+      if (dto.procedureTypeId === null) { visitPatch.procedureTypeId = null; visitPatch.opType = dto.opType?.trim() || null; }
       if (dto.diagnosisId === null) visitPatch.diagnosisId = null;
       if (dto.topicId === null) visitPatch.topicId = null;
       // متنِ آزاد فقط وقتی خوانده می‌شود که نوعِ عمل انتخاب نشده باشد.
@@ -1411,6 +1483,12 @@ export class PatientsService {
 
       if (Object.keys(patientPatch).length) {
         await tx.patient.update({ where: { id: v.patientId }, data: patientPatch });
+      }
+      /* سایرِ تشخیص‌ها/عمل‌ها — فقط محوری که این PATCH به آن دست زده. */
+      for (const axis of touchedAxes(dto)) {
+        const c = coding[axis];
+        await assertCodingRefs(tx, axis, twinOf(dto, axis), [c.primary, ...c.others]);
+        await writeOthers(tx, id, axis, twinOf(dto, axis));
       }
       /* شرحِ عمل و بخش‌های هسته — هر کدام فقط اگر در این PATCH آمده باشد. */
       await this.setSections(tx, { id, patientId: v.patientId }, dto, user);
@@ -1482,7 +1560,14 @@ export class PatientsService {
   /// حذفِ مراجعه؛ اگر آخرین مراجعهٔ بیمار بود، خودِ بیمار هم پاک می‌شود
   async deleteVisit(id: number, user?: any) {
     await this.assertVisitAccess(id, user);
-    const v = await this.prisma.visit.findUnique({ where: { id } });
+    /* سایرین هم در «قبل»ِ ممیزی — حذف آن‌ها را cascade می‌کند. */
+    const v = await this.prisma.visit.findUnique({
+      where: { id },
+      include: {
+        otherDiagnoses: { select: { diagnosisId: true, rank: true } },
+        otherProcedures: { select: { procedureTypeId: true, rank: true } },
+      },
+    });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;

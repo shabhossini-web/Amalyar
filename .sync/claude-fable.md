@@ -1,75 +1,64 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
+status: active
 branch: claude/quirky-volta-uyuznl
-since: 2026-09-22
+since: 2026-09-23
 paths:
-  - server/src/patients/clinical-note.ts
-  - server/src/patients/labels.ts
-  - server/src/patients/form-presets.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/forms.controller.ts
+  - server/src/patients/visit-coding.ts
   - server/src/patients/patients.service.ts
   - server/src/patients/dto/visit.dto.ts
+  - server/src/patients/definitions.service.ts
+  - server/src/patients/forms.service.ts
   - server/src/patients/record.service.ts
-  - server/src/patients/record.controller.ts
   - server/src/patients/summary.service.ts
   - server/src/patients/theatre.service.ts
-  - server/src/patients/theatre.controller.ts
-  - server/src/patients/vitals.ts
-  - server/src/patients/vitals.service.ts
-  - server/src/patients/vitals.controller.ts
-  - server/src/patients/link-documents.ts
+  - server/src/patients/reminders.service.ts
+  - server/src/patients/dispatch.service.ts
+  - server/src/patients/surgeon-portal.service.ts
+  - server/src/patients/visit-requirements.ts
   - server/src/patients/intake.service.ts
-  - server/src/patients/intake.controller.ts
-  - server/src/patients/patients.module.ts
-  - server/src/config/config.service.ts
-  - server/src/common/file-type.ts
-  - src/app/FormBuilder.jsx
-  - src/app/useFormDef.jsx
+  - server/src/patients/tech.service.ts
+  - server/src/patients/calendar.service.ts
+  - server/src/patients/portal.service.ts
+  - server/src/patients/invoices.service.ts
+  - server/src/patients/reports.service.ts
+  - server/src/ai/ai.service.ts
+  - server/src/ai/assistant-knowledge.ts
+  - src/app/CodingChips.jsx
+  - src/app/coding-chips.css
+  - src/app/Dashboard.jsx
   - src/app/Theatre.jsx
   - src/app/theatre.css
-  - src/app/VitalSigns.jsx
-  - src/app/vital-signs.css
-  - src/app/OrderPublic.jsx
-  - src/ui/DynForm.jsx
-  - src/ui/VoiceInput.jsx
-  - src/ui/VoiceNote.jsx
-  - src/ui/voice.css
-  - src/ui/wav-recorder.js
-  - src/ui/dynform.css
-  - src/index.css
-  - src/pages/Intake.jsx
-  - src/app/formbuilder.css
-  - scripts/verify-status-labels.js
-  - scripts/verify-theme-tokens.js
-  - scripts/e2e/clinical-core.mjs
-  - scripts/e2e/vital-signs.mjs
-  - scripts/e2e/voice-notes.mjs
-  - scripts/e2e/theatre.mjs
+  - src/app/NotesSearch.jsx
+  - src/app/exports.js
+  - src/app/invoice-print.js
+  - src/app/Accounting.jsx
+  - src/pages/VisitSummary.jsx
+  - scripts/e2e/multi-diagnosis.mjs
+  - scripts/e2e/multi-procedure.mjs
+  - scripts/e2e/run-live.mjs
   - scripts/e2e/ci-live.txt
+  - .github/workflows/security-ci.yml
 note: >-
-  **بستهٔ ۶ — «ویزیت یک استانداردِ ثابت، عمل یک استانداردِ ثابت»** (تصمیمِ
-  مالک پس از بررسیِ HIS). ۶الف — بخش‌های پایه (شرحِ حال، معاینه، یافته‌ها،
-  طرحِ درمان، نسخه) از `Visit.extra` به `ClinicalNote` می‌روند و نوعِ بیهوشی
-  ستون می‌شود؛ `plan`ِ تک‌انتخابی در `decisions` ادغام می‌شود؛ بخش‌های هسته
-  در فرم‌ساز قفل‌اند ولی «اجباری‌بودن» قابلِ تنظیم می‌ماند. ۶ب — ترخیصِ
-  ساختاری (وضعیتِ خروج + شرحِ ترخیص + یادداشت). ۶ج — علائمِ حیاتی در ویزیت و
-  عمل، اختیاری. ۶د — ضبطِ صدا زیرِ لینک‌ها و مدارک.
-  ⚠️ **هم‌پوشانیِ اعلام‌شده:** این بسته `src/app/VisitForm.jsx`,
-  `src/app/PatientRecord.jsx`, `src/app/OrderSheet.jsx`,
-  `server/src/patients/orders.service.ts` و یک migration در `server/prisma/`
-  را هم می‌نویسد — مسیرهایی که کلیمِ `claude-opus` رویشان است. کارِ آن کلیم
-  (`claude/doc-phase-and-review-fix`) در `92d74ce` کامل در `main` نشسته و
-  شاخه‌اش صفر کامیت جلوتر است، پس هم‌زمانیِ واقعی نیست؛ در `paths` نیامدند تا
-  نگهبان قرمز نشود، و این‌جا صریح نوشته شد.
-  ⚠️ **رفعِ جانبیِ تمِ روشن (همین بسته):** `.pf-field input` متنِ `#fff`ِ
-  ثابت داشت — روی دستگاهی با تمِ روشن، ورودی‌های فرمِ عمومی سفید روی سفید
-  بودند. و `var(--muted, …)`/`--fg`/`--text`/`--mono` هرگز توکن نبودند.
-  نگهبانِ `verify-theme-tokens.js` حالا توکنِ تعریف‌نشده را هم می‌گیرد.
-  ⚠️ قراردادهایی که می‌شکنند: کلیدهای `exam`, `planNote`, `prescription`,
-  `history`, `findings`, `anesthesia` رزروِ هسته می‌شوند (فیلدِ دلخواه با این
-  کلیدها دیگر ساخته نمی‌شود) و مقدارشان دیگر در `Visit.extra` نیست.
+  **بستهٔ ۷ — چند تشخیص و چند عمل برای یک مراجعه** (ادامهٔ گزارشِ HIS؛
+  بندهای ب و ج). مدل: اصلی (رتبهٔ ۱) همان ستونِ `visits.diagnosis_id` /
+  `procedure_type_id` می‌ماند؛ سایرین در دو جدولِ تازهٔ `visit_other_diagnoses`
+  / `visit_other_procedures` (رتبهٔ ≥۲، CHECK). تنها صاحبِ هر دو محور:
+  `server/src/patients/visit-coding.ts`. فیلتر/جستجو/قالب/زمینهٔ AI/کیت «هر
+  رتبه»؛ درآمد، پیامکِ مراقبت، روزهای پیگیری و عنوانِ قلمِ خدمت «فقط اصلی».
+  ⚠️ **هم‌پوشانیِ اعلام‌شده:** این بسته `server/prisma/` (migrationِ
+  `20260924000000_visit_other_coding`)، `src/app/VisitForm.jsx` و
+  `src/app/PatientRecord.jsx` را هم می‌نویسد — مسیرهای کلیمِ `claude-opus`.
+  کارِ آن کلیم (`claude/doc-phase-and-review-fix`) در `92d74ce` کامل در `main`
+  است و شاخه‌اش صفر کامیت جلوتر؛ هم‌زمانیِ واقعی نیست. در `paths` نیامدند تا
+  نگهبان قرمز نشود، و این‌جا صریح نوشته شد (همان روالِ بستهٔ ۶).
+  ⚠️ قراردادهایی که تغییر می‌کنند: کلیدهای تازهٔ `otherDiagnosisIds` /
+  `otherProcedureTypeIds` در ورودی و خروجیِ مراجعه؛ `diagnosisLabel` /
+  `procedureLabel` در خروجی؛ کلیدهای فقط‌نمایشیِ `procedure`/`procedureName`
+  برای مراجعهٔ چندعملی برچسبِ ترکیبی («A + B») می‌شوند؛ فیلترِ
+  `procedureTypeId`/`diagnosisId` مراجعه‌هایی را هم می‌گیرد که آن مورد
+  غیرِ اصلی‌شان است؛ حذفِ تعریفی که فقط غیرِ اصلی به کار رفته غیرفعال‌سازی
+  می‌شود. دو کلیدِ تازه برای فیلدِ دلخواهِ فرم رزرو شدند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

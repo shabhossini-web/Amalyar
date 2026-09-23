@@ -282,12 +282,16 @@ export class DefinitionsService {
   async listProcedureTypes() {
     const rows = await this.prisma.procedureType.findMany({
       orderBy: [{ active: 'desc' }, { name: 'asc' }],
-      include: { _count: { select: { visits: true } } },
+      /* ⚠️ «عملِ همزمان» هم استفاده است (بستهٔ ۷) — دو مجموعه جدا از هم‌اند
+         (هیچ مراجعه‌ای یک نوع را هم اصلی و هم سایر ندارد)، پس جمعشان شمارِ
+         مراجعه‌های متمایز است. */
+      include: { _count: { select: { visits: true, otherVisitLinks: true } } },
     });
     /* قالبِ مراقبت و روزهای پیگیری هم برمی‌گردند: فرمِ عمل باید **پیش‌فرضِ
        همین نوعِ عمل** را به جراح نشان دهد، نه اینکه خالی بماند و او حدس بزند. */
     return rows.map((r) => ({
-      id: r.id, name: r.name, code: r.code, notes: r.notes, active: r.active, visitCount: r._count.visits,
+      id: r.id, name: r.name, code: r.code, notes: r.notes, active: r.active,
+      visitCount: r._count.visits + r._count.otherVisitLinks,
       preOpCare: r.preOpCare, postOpCare: r.postOpCare, followUpDays: r.followUpDays,
     }));
   }
@@ -433,9 +437,12 @@ export class DefinitionsService {
   async listDiagnoses() {
     const rows = await this.prisma.diagnosis.findMany({
       orderBy: [{ active: 'desc' }, { title: 'asc' }],
-      include: { _count: { select: { visits: true } } },
+      include: { _count: { select: { visits: true, otherVisitLinks: true } } },
     });
-    return rows.map((r) => ({ id: r.id, title: r.title, icdCode: r.icdCode, active: r.active, visitCount: r._count.visits }));
+    return rows.map((r) => ({
+      id: r.id, title: r.title, icdCode: r.icdCode, active: r.active,
+      visitCount: r._count.visits + r._count.otherVisitLinks,
+    }));
   }
 
   async createDiagnosis(dto: { title: string; icdCode?: string }) {
@@ -683,17 +690,28 @@ export class DefinitionsService {
 
   /// موجودیتی که در مراجعه‌ای استفاده شده حذفِ سخت نمی‌شود — غیرفعال می‌شود تا
   /// دادهٔ تاریخی نشکند. همان قاعدهٔ جراح و بیمارستان.
+  ///
+  /// ⚠️ **تشخیص/عملِ غیرِ اصلی هم «استفاده» است** (بستهٔ ۷). اگر فقط ستونِ
+  /// اصلی شمرده می‌شد، تعریفی که فقط تشخیصِ دوم بود حذفِ سخت می‌شد و آن
+  /// تشخیص بی‌صدا از تاریخچهٔ بیمار می‌پرید. FKِ جدولِ پیوند RESTRICT است، پس
+  /// حذفِ هم‌زمان با یک پیوندِ تازه P2003 می‌دهد — آن هم به غیرفعال‌سازی می‌رسد.
   private async deleteOrDeactivate(model: 'procedureType' | 'diagnosis', id: number, notFound: string) {
     const row = await (this.prisma[model] as any).findUnique({
       where: { id },
-      include: { _count: { select: { visits: true } } },
+      include: { _count: { select: { visits: true, otherVisitLinks: true } } },
     });
     if (!row) throw new NotFoundException(notFound);
-    if (row._count.visits > 0) {
+    const deactivate = async () => {
       await (this.prisma[model] as any).update({ where: { id }, data: { active: false } });
       return { ok: true, deactivated: true };
+    };
+    if (row._count.visits + row._count.otherVisitLinks > 0) return deactivate();
+    try {
+      await (this.prisma[model] as any).delete({ where: { id } });
+    } catch (e: any) {
+      if (e?.code === 'P2003') return deactivate();
+      throw e;
     }
-    await (this.prisma[model] as any).delete({ where: { id } });
     return { ok: true, deactivated: false };
   }
 }

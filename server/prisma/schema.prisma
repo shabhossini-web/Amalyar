@@ -278,6 +278,9 @@ model ProcedureType {
   createdAt      DateTime     @default(now()) @map("created_at")
 
   visits Visit[]
+  /// مراجعه‌هایی که این نوع را **غیرِ اصلی** دارند (بستهٔ ۷). `deleteOrDeactivate`
+  /// این را هم می‌شمارد — تعریفِ به‌کاررفته فقط غیرفعال می‌شود.
+  otherVisitLinks VisitOtherProcedure[]
   /// الگوی اقلام — «این نوعِ عمل معمولاً چه چیزی می‌خواهد».
   needs  ProcedureTypeItem[]
   /// فرم‌های پیگیریِ اختصاصیِ همین نوعِ عمل (FormDef.followUp = procedure).
@@ -554,10 +557,55 @@ model Diagnosis {
   createdAt DateTime @default(now()) @map("created_at")
 
   visits Visit[]
+  /// مراجعه‌هایی که این تشخیص را **غیرِ اصلی** دارند (بستهٔ ۷) — همان استدلالِ ProcedureType.
+  otherVisitLinks VisitOtherDiagnosis[]
   /// فرم‌های پیگیریِ اختصاصیِ همین تشخیص (FormDef.followUp = diagnosis).
   followUpForms FormDef[]
 
   @@map("diagnoses")
+}
+
+/// **سایرِ تشخیص‌ها**ی یک مراجعه — رتبهٔ ۲ به بعد (FHIR Encounter.diagnosis.rank).
+///
+/// ⚠️ تشخیصِ اصلی (رتبهٔ ۱) همان `Visit.diagnosisId` است و **هرگز** این‌جا
+/// نمی‌آید (CHECK rank >= 2 در migration). یعنی «دقیقاً یک اصلی» را ساختار
+/// تضمین می‌کند نه کد، و بیست‌وچند خواننده‌ای که فقط اصلی را لازم دارند و
+/// نویسنده‌هایی که مستقیم ستون را می‌نویسند (import، فیکسچرهای Prisma) دست‌نخورده
+/// درست می‌مانند — نسخهٔ «همه در جدول + ستونِ آینه» دو منبع می‌ساخت.
+///
+/// ⚠️ «همهٔ تشخیص‌ها» = ستون + این جدول؛ تنها خواننده و نویسنده
+/// `server/src/patients/visit-coding.ts` است (نگهبانِ CI).
+/// `Restrict` روی تعریف: تعریفِ به‌کاررفته فقط غیرفعال می‌شود، پس رابطه گم
+/// نمی‌شود و عکسِ نام لازم نیست.
+model VisitOtherDiagnosis {
+  id          Int       @id @default(autoincrement())
+  visit       Visit     @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId     Int       @map("visit_id")
+  diagnosis   Diagnosis @relation(fields: [diagnosisId], references: [id], onDelete: Restrict)
+  diagnosisId Int       @map("diagnosis_id")
+  /// ۲..n، پیوسته — ترتیبِ اهمیت دادهٔ بالینی است.
+  rank        Int
+
+  @@unique([visitId, diagnosisId])
+  @@unique([visitId, rank])
+  @@index([diagnosisId])
+  @@map("visit_other_diagnoses")
+}
+
+/// **سایرِ عمل‌ها**ی همان جلسه — رتبهٔ ۲ به بعد. عملِ اصلی = `Visit.procedureTypeId`.
+/// همان قواعدِ `VisitOtherDiagnosis`.
+model VisitOtherProcedure {
+  id              Int           @id @default(autoincrement())
+  visit           Visit         @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId         Int           @map("visit_id")
+  procedureType   ProcedureType @relation(fields: [procedureTypeId], references: [id], onDelete: Restrict)
+  procedureTypeId Int           @map("procedure_type_id")
+  rank            Int
+
+  @@unique([visitId, procedureTypeId])
+  @@unique([visitId, rank])
+  @@index([procedureTypeId])
+  @@map("visit_other_procedures")
 }
 
 /// جراحی/خدمتِ داخلِ مطب — کدِ **داخلیِ** خودِ مطب با مبلغِ مصوبش.
@@ -1233,7 +1281,8 @@ model ClinicalNote {
 /// مراجعه (Visit) — واحدِ اصلیِ کار: عمل/خدمت برای یک بیمار
 /// ⚠️ همهٔ مبالغ «تومان» و عددِ صحیح‌اند (قانونِ تک‌واحدی — درسِ ملک‌طب)
 model Visit {
-  /// Patient-specific plan, not consumption or invoice charges. Null uses procedure defaults.
+  /// Patient-specific plan, not consumption or invoice charges. Null uses procedure defaults
+  /// (the merged kit of the primary + other procedures — `kitTemplate` in visit-coding.ts).
   requiredItems Json? @map("required_items")
   surgeonInstructions String? @map("surgeon_instructions")
   invoices       InvoiceDocument[]
@@ -1262,7 +1311,7 @@ model Visit {
   // حذف‌شده). عمداً با تغییرِ نامِ موجودیت به‌روز نمی‌شود؛ عکسی که بازنویسی شود عکس نیست.
   surgeonName  String?   @map("surgeon_name")
   hospitalName String?   @map("hospital_name")
-  opType       String?   @map("op_type") // عکسِ لحظه‌ای از نامِ نوعِ عمل
+  opType       String?   @map("op_type") // عکسِ لحظه‌ای از نامِ عملِ **اصلی** (یا متنِ قدیمیِ بی‌تعریف)
   surgeon      Surgeon?  @relation(fields: [surgeonId], references: [id], onDelete: SetNull)
   surgeonId    Int?      @map("surgeon_id")
   hospital     Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
@@ -1270,8 +1319,10 @@ model Visit {
   tech         Account?  @relation("VisitTech", fields: [techId], references: [id], onDelete: SetNull)
   techId       Int?      @map("tech_id") // کارشناسِ منتسب (از accounts)
 
+  /// عملِ **اصلی** (رتبهٔ ۱) — سایرِ عمل‌های همان جلسه در `visit_other_procedures`.
   procedureType   ProcedureType? @relation(fields: [procedureTypeId], references: [id], onDelete: SetNull)
   procedureTypeId Int?           @map("procedure_type_id")
+  /// تشخیصِ **اصلی** (رتبهٔ ۱) — سایرِ تشخیص‌ها در `visit_other_diagnoses`.
   diagnosis       Diagnosis?     @relation(fields: [diagnosisId], references: [id], onDelete: SetNull)
   diagnosisId     Int?           @map("diagnosis_id")
 
@@ -1475,6 +1526,12 @@ model Visit {
 
   /// علائمِ حیاتی — هر ردیف یک نوبتِ اندازه‌گیری (بستهٔ ۶ج).
   vitals VitalSign[]
+
+  /// سایرِ تشخیص‌ها و عمل‌های همین مراجعه — رتبهٔ ۲ به بعد (بستهٔ ۷).
+  /// اصلی (رتبهٔ ۱) همان `diagnosisId`/`procedureTypeId` است. «همه» = ستون +
+  /// این دو — فقط از `server/src/patients/visit-coding.ts` بخوانید/بنویسید.
+  otherDiagnoses  VisitOtherDiagnosis[]
+  otherProcedures VisitOtherProcedure[]
 }
 
 /// **علائمِ حیاتی** — یک ردیف = یک نوبتِ اندازه‌گیری (فشار، نبض، تنفس، دما،

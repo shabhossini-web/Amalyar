@@ -1,5 +1,6 @@
 import { CANCEL_REASON_KEYS } from '../../common/cancel-reasons';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -93,6 +94,27 @@ export class CreateVisitDto {
   @IsOptional()
   @IsInt({ message: 'تشخیص نامعتبر است' })
   diagnosisId?: number;
+
+  /**
+   * **سایرِ تشخیص‌ها** به ترتیبِ اهمیت (رتبهٔ ۲ به بعد) — بستهٔ ۷ب.
+   * تشخیصِ اصلی همان `diagnosisId` است. نبودنِ کلید = دست نزن؛ `[]` یا `null` = پاک کن.
+   * ⚠️ باید در DTO اعلام شود: `ValidationPipe({ whitelist: true })` کلیدِ
+   * اعلام‌نشده را بی‌صدا دور می‌ریزد (نگهبانِ CI).
+   */
+  @IsOptional()
+  @IsArray({ message: 'فهرستِ تشخیص‌ها نامعتبر است' })
+  @ArrayMaxSize(9, { message: 'حداکثر ۱۰ تشخیص برای یک مراجعه (یک اصلی و ۹ دیگر)' })
+  @IsInt({ each: true, message: 'تشخیص نامعتبر است' })
+  @Min(1, { each: true, message: 'تشخیص نامعتبر است' })
+  otherDiagnosisIds?: number[] | null;
+
+  /** **سایرِ عمل‌ها**ی همان جلسه (رتبهٔ ۲ به بعد) — بستهٔ ۷ج. همان قواعد. */
+  @IsOptional()
+  @IsArray({ message: 'فهرستِ عمل‌ها نامعتبر است' })
+  @ArrayMaxSize(9, { message: 'حداکثر ۱۰ عمل برای یک مراجعه (یک اصلی و ۹ دیگر)' })
+  @IsInt({ each: true, message: 'نوعِ عمل نامعتبر است' })
+  @Min(1, { each: true, message: 'نوعِ عمل نامعتبر است' })
+  otherProcedureTypeIds?: number[] | null;
 
   /** موضوعِ ویزیت — اولیه / پست‌آپ / زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. */
   @IsOptional()
@@ -312,6 +334,27 @@ export class UpdateVisitDto {
   @ValidateIf((o) => o.diagnosisId !== null)
   @IsInt({ message: 'تشخیص نامعتبر است' })
   diagnosisId?: number | null;
+
+  /**
+   * **سایرِ تشخیص‌ها** به ترتیبِ اهمیت (رتبهٔ ۲ به بعد) — بستهٔ ۷ب.
+   * تشخیصِ اصلی همان `diagnosisId` است. نبودنِ کلید = دست نزن؛ `[]` یا `null` = پاک کن.
+   * ⚠️ باید در DTO اعلام شود: `ValidationPipe({ whitelist: true })` کلیدِ
+   * اعلام‌نشده را بی‌صدا دور می‌ریزد (نگهبانِ CI).
+   */
+  @IsOptional()
+  @IsArray({ message: 'فهرستِ تشخیص‌ها نامعتبر است' })
+  @ArrayMaxSize(9, { message: 'حداکثر ۱۰ تشخیص برای یک مراجعه (یک اصلی و ۹ دیگر)' })
+  @IsInt({ each: true, message: 'تشخیص نامعتبر است' })
+  @Min(1, { each: true, message: 'تشخیص نامعتبر است' })
+  otherDiagnosisIds?: number[] | null;
+
+  /** **سایرِ عمل‌ها**ی همان جلسه (رتبهٔ ۲ به بعد) — بستهٔ ۷ج. همان قواعد. */
+  @IsOptional()
+  @IsArray({ message: 'فهرستِ عمل‌ها نامعتبر است' })
+  @ArrayMaxSize(9, { message: 'حداکثر ۱۰ عمل برای یک مراجعه (یک اصلی و ۹ دیگر)' })
+  @IsInt({ each: true, message: 'نوعِ عمل نامعتبر است' })
+  @Min(1, { each: true, message: 'نوعِ عمل نامعتبر است' })
+  otherProcedureTypeIds?: number[] | null;
 
   /** `null` صریح یعنی «موضوع را بردار». */
   @IsOptional()
