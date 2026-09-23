@@ -2635,7 +2635,7 @@ jobs:
           /* ⚠️ **استثنای صریح، نه نوعِ عام.** ستونی که خودش متنِ ساده است،
              مقدارِ خامِ بیمار دقیقاً شکلِ خودش است و تبدیلی نمی‌خواهد —
              «علت مراجعه»ی فرمِ ثبت‌نام همین است. ولی «هر textarea امن است»
-             غلط می‌بود: `notes` هم textarea است و یادداشتِ **داخلی** است،
+             غلط می‌بود: \`notes\` هم textarea است و یادداشتِ **داخلی** است،
              نه چیزی که بیمار پر کند. پس فهرستِ سفیدِ کوتاه و کلید‌به‌کلید،
              و پایین برای هر کدامش اثبات می‌خواهیم که approve نوعش را
              می‌سنجد — وگرنه این فهرست فقط راهِ فرار از نگهبان می‌شد. */
@@ -2652,10 +2652,13 @@ jobs:
             process.exit(1);
           }
 
-          /* ①ب هر کلیدِ فهرستِ سفید باید در `approve` نوعش سنجیده شود. بدونِ
-                 این، `RAW_TEXT_OK` یک در پشتی بود: کافی بود کسی کلیدی را
+          /* ①ب هر کلیدِ فهرستِ سفید باید در \`approve\` نوعش سنجیده شود. بدونِ
+                 این، \`RAW_TEXT_OK\` یک در پشتی بود: کافی بود کسی کلیدی را
                  آن‌جا بنویسد تا نگهبان ساکت شود. */
-          const unchecked = [...RAW_TEXT_OK].filter((k) => !new RegExp(`typeof d\\.${k} === 'string'`).test(intake));
+          /* ⚠️ بدونِ بک‌تیک: این اسکریپت داخلِ «node -e \"…\"» است و bash بک‌تیکِ خام را
+                 command substitution می‌خواند — نسخهٔ قبل «new RegExp()» می‌شد که همه‌چیز را
+                 می‌پذیرد، پس این بند هرگز نمی‌افتاد. */
+          const unchecked = [...RAW_TEXT_OK].filter((k) => !new RegExp(\"typeof d\\\\.\" + k + \" === 'string'\").test(intake));
           if (unchecked.length) {
             console.error('کلیدِ فهرستِ سفید که approve نوعش را نمی‌سنجد: ' + unchecked.join('، '));
             process.exit(1);
@@ -2847,16 +2850,16 @@ jobs:
            * است — همان اشتباه یک‌بار سرِ «ریال» هم رخ داد.
            */
           const code = (src) => src.replace(/\\/\\*[\\s\\S]*?\\*\\//g, '').replace(/\\/\\/[^\\n]*/g, '');
-          /* از W2.3 کاتالوگِ کاشی‌ها و گیتشان در `src/app/tools.jsx` است و هم
-             لانچر (`/app/tools`) و هم کشوی صفحهٔ «امروز» از همان می‌خوانند —
+          /* از W2.3 کاتالوگِ کاشی‌ها و گیتشان در \`src/app/tools.jsx\` است و هم
+             لانچر (\`/app/tools\`) و هم کشوی صفحهٔ «امروز» از همان می‌خوانند —
              پس سنجهٔ مثبت همان‌جاست و سنجهٔ منفی روی **هر دو**. */
           const surfaces = { 'src/app/tools.jsx': true, 'src/app/Launcher.jsx': false };
           for (const [file, mustRead] of Object.entries(surfaces)) {
             const lx = code(read(file));
             if (/lvl >= min\\b/.test(lx) || /f\\?\\.minLevel/.test(lx)) {
-              console.error(`${file} نباید خودش سطح را حساب کند — allowedِ سرور`); process.exit(1);
+              console.error(file + ' نباید خودش سطح را حساب کند — allowedِ سرور'); process.exit(1);
             }
-            if (mustRead && !/f\\.allowed/.test(lx)) { console.error(`${file} باید allowed را بخواند`); process.exit(1); }
+            if (mustRead && !/f\\.allowed/.test(lx)) { console.error(file + ' باید allowed را بخواند'); process.exit(1); }
           }
           if (/const (HERO|TOOLS|DAILY) =/.test(code(read('src/app/Launcher.jsx')))) {
             console.error('کاتالوگِ کاشی‌ها فقط در src/app/tools.jsx — دو نسخه یعنی ماژولی که در یکی هست و در دیگری نیست'); process.exit(1);

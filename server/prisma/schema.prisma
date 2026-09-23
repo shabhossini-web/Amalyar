@@ -677,7 +677,16 @@ model NoteTemplate {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
 
+  /// ردِ منشأِ «افزودن به پیش‌فرض» (بستهٔ ۸): چه کسی و از متنِ کدام مراجعه. مثلِ
+  /// `ClinicalNote.authorId` شناسهٔ خام است نه رابطه — حذفِ حساب یا مراجعه نباید
+  /// قالب را بشکند. **در هیچ فهرستی برنمی‌گردد**؛ فقط برای ردگیریِ قالبی که
+  /// نشانهٔ بیمار در آن جا مانده (پاک‌سازی با `source_visit_id`).
+  createdById   Int?    @map("created_by_id")
+  createdByName String? @map("created_by_name")
+  sourceVisitId Int?    @map("source_visit_id")
+
   @@index([kind, active])
+  @@index([sourceVisitId])
   @@map("note_templates")
 }
 

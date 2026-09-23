@@ -76,41 +76,62 @@ export async function listOpTemplates(prisma: any, procedureTypeIds: number[]): 
  *   ۴۰۹ با پیامِ روشن. تصمیمِ مدیر با یک کلیکِ دیگران بی‌صدا برنمی‌گردد.
  * - عنوان: همان که کاربر داده، وگرنه نامِ عمل — و اگر آن نام گرفته شده،
  *   «نام (۲)»، «نام (۳)»… تا چیپ‌ها از هم تشخیص داده شوند.
+ *
+ * ⚠️ **همه زیرِ قفلِ ردیفِ نوعِ عمل** (`FOR UPDATE`، همان الگوی `writeOthers`):
+ * بی‌قفل، دو «افزودن»ِ هم‌زمانِ همان متن هر دو «تکراری نیست» می‌دیدند و دو قالبِ
+ * یکسان می‌ساختند؛ همین برای عنوانِ «(۲)» و سقفِ ۳۰ هم صادق بود. قفل روی نوعِ عمل
+ * است نه کلِ جدول: افزودن برای دو عملِ مختلف هم‌زمان جلو می‌رود.
+ *
+ * `createdById`/`sourceVisitId` فقط ردِ منشأند (کدام متنِ کدام مراجعه قالب شد) —
+ * در هیچ فهرستی برنمی‌گردند؛ قالب به همهٔ همکاران نشان داده می‌شود و شناسهٔ
+ * مراجعهٔ مبدأ نباید همراهش برود.
  */
 export async function addOpTemplate(
   prisma: any,
-  input: { procedureTypeId: number; body: string; title?: string | null },
+  input: {
+    procedureTypeId: number; body: string; title?: string | null;
+    createdById?: number | null; createdByName?: string | null; sourceVisitId?: number | null;
+  },
 ): Promise<{ created: boolean; duplicate: boolean; template: OpTemplateItem; procedureName: string }> {
   const body = String(input.body ?? '').trim();
   if (body.length < OP_TEMPLATE_MIN) throw new BadRequestException('متن کوتاه‌تر از آن است که پیش‌فرض شود');
   if (body.length > OP_TEMPLATE_MAX) throw new BadRequestException('متن بلندتر از سقفِ یک قالب است');
-  const pt = await prisma.procedureType.findUnique({ where: { id: input.procedureTypeId }, select: { id: true, name: true } });
-  if (!pt) throw new NotFoundException('نوعِ عمل یافت نشد');
+  return prisma.$transaction(async (tx: any) => {
+    const locked: any[] = await tx.$queryRaw`SELECT id FROM procedure_types WHERE id = ${input.procedureTypeId} FOR UPDATE`;
+    if (!locked.length) throw new NotFoundException('نوعِ عمل یافت نشد');
+    const pt = await tx.procedureType.findUnique({ where: { id: input.procedureTypeId }, select: { id: true, name: true } });
+    if (!pt) throw new NotFoundException('نوعِ عمل یافت نشد');
 
-  const siblings: any[] = await prisma.noteTemplate.findMany({
-    where: { kind: 'op', procedureTypeId: pt.id },
-    select: { id: true, title: true, body: true, procedureTypeId: true, active: true },
-    orderBy: { id: 'asc' },
-  });
-  /* فعالِ هم‌متن مقدم است: غیرفعالِ قدیمی نباید قالبِ فعالِ هم‌متن را بپوشاند و ۴۰۹ِ دروغ بدهد. */
-  const twin = siblings.find((t) => t.active && same(t.body, body)) ?? siblings.find((t) => same(t.body, body));
-  const item = (t: any): OpTemplateItem => ({ id: t.id, title: t.title, body: t.body, procedureTypeId: t.procedureTypeId, specific: true });
-  if (twin?.active) return { created: false, duplicate: true, template: item(twin), procedureName: pt.name };
-  if (twin) {
-    throw new ConflictException(`همین متن پیش‌تر پیش‌فرضِ «${pt.name}» بوده و غیرفعال شده است — فعال‌کردنش از «تعاریفِ پایه» است`);
-  }
+    const siblings: any[] = await tx.noteTemplate.findMany({
+      where: { kind: 'op', procedureTypeId: pt.id },
+      select: { id: true, title: true, body: true, procedureTypeId: true, active: true },
+      orderBy: { id: 'asc' },
+    });
+    /* فعالِ هم‌متن مقدم است: غیرفعالِ قدیمی نباید قالبِ فعالِ هم‌متن را بپوشاند و ۴۰۹ِ دروغ بدهد. */
+    const twin = siblings.find((t) => t.active && same(t.body, body)) ?? siblings.find((t) => same(t.body, body));
+    const item = (t: any): OpTemplateItem => ({ id: t.id, title: t.title, body: t.body, procedureTypeId: t.procedureTypeId, specific: true });
+    if (twin?.active) return { created: false, duplicate: true, template: item(twin), procedureName: pt.name };
+    if (twin) {
+      throw new ConflictException(`همین متن پیش‌تر پیش‌فرضِ «${pt.name}» بوده و غیرفعال شده است — فعال‌کردنش از «تعاریفِ پایه» است`);
+    }
 
-  if (siblings.filter((t) => t.active).length >= OP_TEMPLATE_CAP) {
-    throw new ConflictException(`«${pt.name}» ${faNum(OP_TEMPLATE_CAP)} پیش‌فرضِ فعال دارد — اول یکی را از «تعاریفِ پایه» بردارید`);
-  }
-  /* عنوانِ دستی هم یکتا می‌شود: دو چیپِ هم‌نام یعنی جراح نمی‌داند کدام قالبِ تأییدشده است. */
-  const wanted = String(input.title ?? '').replace(BIDI, '').trim().slice(0, OP_TEMPLATE_TITLE_MAX) || pt.name;
-  const taken = new Set(siblings.map((t) => t.title));
-  let title = wanted;
-  for (let n = 2; taken.has(title); n++) title = `${wanted} (${faNum(n)})`;
-  const t = await prisma.noteTemplate.create({
-    data: { kind: 'op', title, body, procedureTypeId: pt.id },
-    select: { id: true, title: true, body: true, procedureTypeId: true },
+    if (siblings.filter((t) => t.active).length >= OP_TEMPLATE_CAP) {
+      throw new ConflictException(`«${pt.name}» ${faNum(OP_TEMPLATE_CAP)} پیش‌فرضِ فعال دارد — اول یکی را از «تعاریفِ پایه» بردارید`);
+    }
+    /* عنوانِ دستی هم یکتا می‌شود: دو چیپِ هم‌نام یعنی جراح نمی‌داند کدام قالبِ تأییدشده است. */
+    const wanted = String(input.title ?? '').replace(BIDI, '').trim().slice(0, OP_TEMPLATE_TITLE_MAX) || pt.name;
+    const taken = new Set(siblings.map((t) => t.title));
+    let title = wanted;
+    for (let n = 2; taken.has(title); n++) title = `${wanted} (${faNum(n)})`;
+    const t = await tx.noteTemplate.create({
+      data: {
+        kind: 'op', title, body, procedureTypeId: pt.id,
+        createdById: input.createdById ?? null,
+        createdByName: input.createdByName ? String(input.createdByName).slice(0, 120) : null,
+        sourceVisitId: input.sourceVisitId ?? null,
+      },
+      select: { id: true, title: true, body: true, procedureTypeId: true },
+    });
+    return { created: true, duplicate: false, template: item(t), procedureName: pt.name };
   });
-  return { created: true, duplicate: false, template: item(t), procedureName: pt.name };
 }

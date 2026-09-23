@@ -492,7 +492,10 @@ export class TheatreService {
     if (!v.procedureTypeId) {
       throw new BadRequestException('این عمل هنوز نوعِ عمل ندارد — اول در فرمِ عمل انتخابش کنید');
     }
-    const r = await addOpTemplate(this.prisma, { procedureTypeId: v.procedureTypeId, body: dto.body, title: dto.title });
+    const r = await addOpTemplate(this.prisma, {
+      procedureTypeId: v.procedureTypeId, body: dto.body, title: dto.title,
+      createdById: user?.id ?? null, createdByName: actorName(user), sourceVisitId: visitId,
+    });
     if (r.created) {
       await this.audit.record({
         actorId: user?.id, action: 'note_template.add', entityType: 'note_template', entityId: r.template.id,

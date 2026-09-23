@@ -3,12 +3,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
 import { LEVEL } from '../common/levels';
-import { buildPersonPatch, PersonInput } from '../common/person';
+import { actorName, buildPersonPatch, PersonInput } from '../common/person';
 import { NOTE_KINDS } from './record.service';
 import { NOTE_KIND_LABELS } from './labels';
 import { AuditService } from '../audit/audit.service';
 import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
+import { scopedVisitWhere } from '../common/own-scope';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
 
@@ -645,14 +646,27 @@ export class DefinitionsService {
 
   /** «افزودن به پیش‌فرض» از فرمِ عمل — یک قاعده با میزِ اتاقِ عمل (`op-templates.ts`). */
   async addOpTemplate(dto: { procedureTypeId: number; body: string; title?: string; source?: string; visitId?: number }, user: any) {
-    const r = await addOpTemplate(this.prisma, dto);
+    /* مراجعهٔ مبدأ فقط اگر در دامنهٔ همین کاربر باشد ثبت می‌شود — ردِ منشأ نباید
+       راهی برای چسباندنِ شناسهٔ مراجعهٔ دیگری به قالب باشد. */
+    let sourceVisitId: number | null = null;
+    if (dto.visitId) {
+      const v = await this.prisma.visit.findFirst({
+        where: { AND: [{ id: dto.visitId, patient: { deletedAt: null } }, scopedVisitWhere(user)] }, select: { id: true },
+      });
+      if (!v) throw new NotFoundException('مراجعهٔ مبدأ یافت نشد');
+      sourceVisitId = v.id;
+    }
+    const r = await addOpTemplate(this.prisma, {
+      procedureTypeId: dto.procedureTypeId, body: dto.body, title: dto.title,
+      createdById: user?.id ?? null, createdByName: actorName(user), sourceVisitId,
+    });
     if (r.created) {
       /* منبع و مراجعه فقط برای ردگیری‌اند (کدام متنِ کدام بیمار قالب شد)، نه برای اجازه. */
       await this.audit.record({
         actorId: user?.id, action: 'note_template.add', entityType: 'note_template', entityId: r.template.id,
         after: {
           kind: 'op', procedureTypeId: dto.procedureTypeId, title: r.template.title, length: r.template.body.length,
-          via: dto.source === 'record' ? 'record' : 'form', visitId: dto.visitId ?? null,
+          via: dto.source === 'record' ? 'record' : 'form', visitId: sourceVisitId,
         },
       });
     }
