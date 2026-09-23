@@ -28,11 +28,12 @@ import { actorName } from '../common/person';
 import { summarize } from './billing.service';
 import { todayRangeUtc } from '../common/clinic-day';
 import {
-  CODING_TWIN, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
+  CODING_TWIN, CODING_TWIN_KEYS, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
   diagnosisLabel, othersCreateData, otherIds, pickCodingKeys, planCoding, principalDiagnosisTitle,
   principalProcedureName, procedureLabel, touchedAxes, twinOf, visitHasDiagnosis, visitHasProcedure,
   writeOthers,
 } from './visit-coding';
+import { withOtherProcedureNeeds } from './visit-requirements';
 
 /**
  * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
@@ -917,6 +918,10 @@ export class PatientsService {
   static liftLegacy(dto: any, currentDecisions: string[]) {
     const extra = dto?.extra;
     if (!extra || typeof extra !== 'object') return;
+    /* کلیدهای «سایرِ تشخیص/عمل» فقط در ریشه معنا دارند و برای فیلدِ دلخواه رزروند
+       (`forms.addField`)؛ نسخه‌ای که در `extra` بیاید فقط زباله‌ای است که در
+       `Visit.extra` می‌نشست — و پیش‌تر سایهٔ دورزدنِ سدِ مالکیت بود. */
+    for (const k of CODING_TWIN_KEYS) delete extra[k];
     for (const k of SECTION_KEYS) {
       if (typeof extra[k] !== 'string') continue;
       if (dto[k] === undefined) dto[k] = extra[k];
@@ -1132,14 +1137,18 @@ export class PatientsService {
          عوض کند، تشخیصِ دوم را اضافه می‌کرد. */
       const twin = (CODING_TWIN as Record<string, string>)[f.key];
       for (const key of twin ? [f.key, twin] : [f.key]) {
-        const inExtra = dto.extra && Object.prototype.hasOwnProperty.call(dto.extra, key);
-        const inRoot = Object.prototype.hasOwnProperty.call(dto, key);
-        if (!inExtra && !inRoot) continue;
-        const next = inExtra ? dto.extra[key] : dto[key];
-        const prev = inExtra ? curExtra[key] : current?.[key];
+        /* ⚠️ **هر دو جا سنجیده می‌شوند، نه یکی** (بازبینیِ بستهٔ ۷): نسخهٔ قبل
+           اگر کلید در `extra` بود فقط `extra` را می‌سنجید و ریشه را نه. پس
+           درخواستی با مقدارِ تازه در ریشه و یک «سایه»ی بی‌تغییر در `extra`
+           (`{otherDiagnosisIds:[9], extra:{otherDiagnosisIds:null}}`) از سدِ
+           مالکیت می‌گذشت، در حالی که نویسنده‌ها (`planCoding`، ستون‌ها) فقط
+           ریشه را می‌خوانند — یعنی منشی کلِ کدگذاریِ پزشک را بازنویسی می‌کرد. */
+        const places: [unknown, unknown][] = [];
+        if (dto.extra && Object.prototype.hasOwnProperty.call(dto.extra, key)) places.push([dto.extra[key], curExtra[key]]);
+        if (Object.prototype.hasOwnProperty.call(dto, key)) places.push([dto[key], current?.[key]]);
         /* در ساخت (current تهی) مقدارِ خالی مجاز است — فرم مقدارِ پیش‌فرضِ
            خالی می‌فرستد و آن «نوشتن» نیست. */
-        if (norm(next) === norm(prev ?? '')) continue;
+        if (places.every(([next, prev]) => norm(next) === norm(prev ?? ''))) continue;
         throw new BadRequestException(
           `«${f.label}» بخشِ ${roles.map(jobRoleLabel).join("، ")} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
         );
@@ -1211,7 +1220,14 @@ export class PatientsService {
         await tx.$queryRaw`SELECT id FROM visits WHERE id = ${targetVisitId} FOR UPDATE`;
         target = await tx.visit.findFirst({
           where: { id: targetVisitId, patientId },
-          include: { otherDiagnoses: { select: { diagnosisId: true } }, otherProcedures: { select: { procedureTypeId: true } } },
+          /* ⚠️ به ترتیبِ **رتبه** (بازبینیِ بستهٔ ۷): رابطهٔ تو‌در‌تو بی‌`orderBy`
+             ترتیبِ تصادفیِ پایگاه‌داده را می‌داد (روی جدولِ بزرگ ترتیبِ ایندکسِ
+             `(visit_id, ref)`)، `writeOthers` آن را «تغییر» می‌دید و رتبه‌های
+             پزشک را بی‌صدا جابه‌جا بازنویسی می‌کرد. */
+          include: {
+            otherDiagnoses: { orderBy: { rank: 'asc' }, select: { diagnosisId: true } },
+            otherProcedures: { orderBy: { rank: 'asc' }, select: { procedureTypeId: true } },
+          },
         });
         if (!target || target.opStatus === 'cancelled') throw new BadRequestException('مراجعهٔ هدف معتبر نیست یا لغو شده است');
         /* ⚠️ ادغام در مراجعهٔ **موجود**: عملِ تأییدشدهٔ پذیرش اصلیِ همان
@@ -1220,7 +1236,14 @@ export class PatientsService {
         targetCoding = currentCoding(target);
         const re = { ...rawCoding } as any;
         planCoding(re, targetCoding);
-        for (const [k, val] of Object.entries(re)) (dto as any)[k] = val;
+        /* ⚠️ **همهٔ** کلیدهای کدگذاری از برنامهٔ هدف — نه فقط آنچه برنامهٔ هدف
+           گذاشته: برنامهٔ اول (مراجعهٔ تازه، بی‌اصلی) با «فقط سایرین» اولیِ
+           سایرین را اصلی می‌کرد، و آن ماندهٔ `dto` اصلیِ هدف را عوض و همان id
+           را هم اصلی و هم سایر می‌نشاند. کلیدی که برنامهٔ هدف نگذاشت یعنی «دست نزن». */
+        for (const k of [...Object.keys(CODING_TWIN), ...CODING_TWIN_KEYS]) {
+          if (Object.prototype.hasOwnProperty.call(re, k)) (dto as any)[k] = re[k];
+          else delete (dto as any)[k];
+        }
       }
       const refs = await this.resolveRefs(tx, dto);
       const decidedIn = await this.resolveDecidedIn(tx, patientId, dto.decidedInVisitId);
@@ -1234,11 +1257,19 @@ export class PatientsService {
         await assertCodingRefs(tx, axis, twinOf(dto, axis), target ? [c.primary, ...c.others] : []);
         if (target) await writeOthers(tx, target.id, axis, twinOf(dto, axis));
       }
+      /* عکسِ کیتِ مراجعهٔ هدف = فهرستِ تأییدشده + نیازِ عمل‌های همزمانی که ماندند
+         (بازبینیِ بستهٔ ۷ — `withOtherProcedureNeeds`). */
+      const targetRequirements = target && opts?.requirements
+        ? await withOtherProcedureNeeds(tx as any, opts.requirements,
+          /* محورِ دست‌نخورده = سایرینِ همان هدف (`twinOf` برای کلیدِ نیامده [] می‌دهد، نه undefined). */
+          Object.prototype.hasOwnProperty.call(dto, CODING_TWIN.procedureTypeId)
+            ? twinOf(dto, 'procedure') : targetCoding.procedure.others)
+        : opts?.requirements;
       let visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
         ...refs,
         ...(dto.decidedInVisitId !== undefined ? { decidedInVisitId: decidedIn?.id ?? null } : {}),
         ...(dto.chiefComplaint !== undefined ? { chiefComplaint: complaint } : {}),
-        ...(opts?.requirements ? { requiredItems: opts.requirements } : {}),
+        ...(targetRequirements ? { requiredItems: targetRequirements } : {}),
         ...(dto.opType !== undefined && refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
         ...(dto.opDate !== undefined ? { opDate: toDateValue(dto.opDate) ?? null } : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes || null } : {}),

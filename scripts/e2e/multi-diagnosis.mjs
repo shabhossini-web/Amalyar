@@ -284,6 +284,12 @@ try {
       `${e2.status} ${msgOf(e2)}`);
     const e3 = await send(`/visits/${vq.id}`, 'PATCH', { otherDiagnosisIds: [d3.id, d2.id] });
     ok('**نباید بیفتد:** … یا فقط جابه‌جا کند (رتبه دادهٔ بالینی است)', e3.status === 400, `${e3.status} ${msgOf(e3)}`);
+    /* «سایه»: مقدارِ تازه در ریشه + کپیِ بی‌تغییرِ قدیمی در `extra` — نسخهٔ قبل فقط
+       `extra` را می‌سنجید و از سد می‌گذشت، در حالی که نویسنده ریشه را می‌خواند. */
+    const e3b = await send(`/visits/${vq.id}`, 'PATCH', { otherDiagnosisIds: [d2.id], extra: { otherDiagnosisIds: null } });
+    ok('**نباید بیفتد:** سایهٔ بی‌تغییر در `extra` سدِ مالکیت را دور نمی‌زند', e3b.status === 400 && msgOf(e3b).includes('پزشک'),
+      `${e3b.status} ${msgOf(e3b)}`);
+    ok('… و سایرین دست‌نخورده ماند', sql(`SELECT string_agg(diagnosis_id::text, ',' ORDER BY rank) FROM visit_other_diagnoses WHERE visit_id=${vq.id}`) === `${d2.id},${d3.id}`);
     const e4 = await send(`/visits/${vq.id}`, 'PATCH', { diagnosisId: d1.id });
     ok('echoی تک‌کلیدِ کلاینتِ کهنه → ۲۰۰', e4.status === 200, `${e4.status} ${msgOf(e4)}`);
     const e5 = await send(`/visits/${vq.id}`, 'PATCH', { notes: `منشی ${tag}` });

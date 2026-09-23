@@ -145,6 +145,10 @@ class OpTemplateAddDto {
 
   @IsOptional() @IsString({ message: 'عنوان نامعتبر است' }) @MaxLength(120, { message: 'عنوان بلند است' })
   title?: string;
+
+  /* فقط برای ممیزی: از کدام صفحه و کدام مراجعه. */
+  @IsOptional() @IsIn(['form', 'record'], { message: 'منبعِ نامعتبر' }) source?: string;
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'مراجعه نامعتبر است' }) @Min(1) visitId?: number;
 }
 
 class NoteTemplatePatchDto {

@@ -773,6 +773,10 @@ a.db-defbtn { text-decoration: none; }
   margin: 0; padding: 8px 10px 10px; border-radius: 12px;
   border: 1px dashed rgba(var(--brand-2-rgb), .35);
   background: rgba(var(--brand-2-rgb), .04);
+  /* ⚠️ `fieldset` پیش‌فرضِ مرورگر `min-inline-size: min-content` دارد: متنِ
+     نشکستهٔ یک چیپِ تشخیصِ بلند (`white-space: nowrap`) کمینهٔ پهنای کلِ جعبه
+     می‌شد و شیتِ مراجعه روی موبایلِ ۳۹۰ افقی اسکرول می‌خورد (بازبینیِ بستهٔ ۷). */
+  min-inline-size: 0; min-width: 0;
 }
 .db-rolebox > legend {
   padding: 0 7px; font-size: 10.5px; font-weight: 700; color: rgb(var(--brand-2-rgb));

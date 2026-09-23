@@ -374,22 +374,31 @@ export class RemindersService {
       select: { id: true, followUp: true },
     });
     if (!forms.length) return null;
-    /* پایه، بخشِ عمومی است؛ اگر تعریف نشده، اولین بخشِ اختصاصی پایه می‌شود. */
-    const base = forms.find((f) => f.followUp === 'general') ?? forms[0];
-    const extraFormIds = forms.filter((f) => f.id !== base.id).map((f) => f.id);
 
     const lastDay = days[days.length - 1];
     const opMs = (v.opDate ?? new Date()).getTime();
     const expiresAt = new Date(Math.max(Date.now(), opMs + lastDay * 24 * 3600_000) + 14 * 24 * 3600_000);
 
+    /* ⚠️ ثبت‌نامِ همین موج (مراجعه + روز + تاریخِ عمل) **بی‌قیدِ فرم** جست‌وجو
+       می‌شود و پایه‌اش **چسبنده** است (بازبینیِ بستهٔ ۷): با چند عمل/تشخیص،
+       مجموعهٔ فرم‌های منطبق با افزودن یا برداشتنِ یک «سایر» عوض می‌شود. نسخهٔ
+       قبل پایه را هر بار از نو برمی‌گزید (عمومی، وگرنه کوچک‌ترین id) و فقط
+       همان فرم را می‌جست؛ عملِ همزمانی با فرمِ id-کوچک‌تر پایه را عوض می‌کرد،
+       ثبت‌نامِ باز پیدا نمی‌شد، توکنِ تازه ساخته می‌شد و — چون لینک در متنِ
+       پیامک است — پیامکِ مراقبت و پیگیری **دوباره** می‌رفت و ثبت‌نامِ قبلی
+       یتیم در پرتالِ بیمار می‌ماند. حالا فرم‌ها فقط صفحه‌های اضافهٔ همان
+       لینک‌اند: یک موج، یک لینک، یک پیامک. */
     const open = await this.prisma.intakeSubmission.findFirst({
-      where: { patientId: v.patientId, formId: base.id, linkId: null, AND: [
+      where: { patientId: v.patientId, linkId: null, AND: [
         { data: { path: ['followUpVisitId'], equals: v.id } },
         { data: { path: ['followUpDay'], equals: days[0] } },
         { data: { path: ['followUpOpDate'], equals: v.opDate?.toISOString() ?? '' } },
       ] },
       orderBy: { id: 'desc' },
     });
+    /* پایه: فرمِ ثبت‌نامِ همین موج اگر هست؛ وگرنه بخشِ عمومی؛ وگرنه اولین بخشِ اختصاصی. */
+    const baseId = open?.formId ?? (forms.find((f) => f.followUp === 'general') ?? forms[0]).id;
+    const extraFormIds = forms.filter((f) => f.id !== baseId).map((f) => f.id);
     const row = open
       ? (['pending_fill', 'pending_payment'].includes(open.status) ? await this.prisma.intakeSubmission.update({
         where: { id: open.id },
@@ -402,7 +411,7 @@ export class RemindersService {
         data: {
           token: randomBytes(18).toString('base64url'),
           linkId: null,
-          formId: base.id,
+          formId: baseId,
           patientId: v.patientId,
           amount: 0,
           status: 'pending_fill',

@@ -152,6 +152,13 @@ try {
     ok(denied.status === 403, `A12 … و سرور واقعاً رد می‌کند (${denied.status}) — دکمه دروغ نمی‌گوید`);
     await send('/access/permissions/templates.add/reset', 'POST');
     ok((await tech(`/theatre/visits/${S1.id}/op-templates`)).json?.canAdd === true, 'A12 بازگردانی به پیش‌فرض');
+    /* کسی که حقِ نوشتنِ شرحِ عمل ندارد نباید شرح را از راهِ «پیش‌فرض» منتشر کند. */
+    const offR = await send('/access/permissions/theatre.report', 'PATCH', { enabled: false });
+    ok(offR.status === 200, `A13 مدیر «ثبتِ شرحِ عمل» را بست (${offR.status})`);
+    ok((await tech(`/theatre/visits/${S1.id}/op-templates`)).json?.canAdd === false, 'A13 … `canAdd` در اتاق هم خاموش شد');
+    const deniedR = await tech(`/theatre/visits/${S1.id}/op-templates`, 'POST', { body: LONG('بی‌مجوزِ شرح') });
+    ok(deniedR.status === 403, `A13 **نباید بیفتد:** بی \`theatre.report\` انتشار از اتاق ۴۰۳ (${deniedR.status})`);
+    await send('/access/permissions/theatre.report/reset', 'POST');
     await send(`/visits/${S1.id}`, 'PATCH', { techId: null });
   } else {
     ok(false, `حسابِ آزمایشی ساخته نشد: ${JSON.stringify(made).slice(0, 120)}`);
@@ -230,10 +237,40 @@ try {
   await page.locator('.opd-row input').press('Enter');
   await page.waitForTimeout(1200);
   ok(tplCount(P1.id) === nRec + 1, 'U3 از پرونده هم برای عملِ اصلیِ همان مراجعه افزوده شد');
+  const aud = sql(`SELECT concat(after_json->>'via', ',', after_json->>'visitId') FROM audit_events WHERE action='note_template.add' ORDER BY id DESC LIMIT 1`);
+  ok(aud === `record,${S1.id}`, `U3 ممیزی مسیرِ «پرونده» و مراجعهٔ مبدأ را دارد («${aud}») — برای ردگیریِ قالبِ نشت‌کرده`);
   const newest = sql(`SELECT title FROM note_templates WHERE procedure_type_id=${P1.id} ORDER BY id DESC LIMIT 1`);
   await page.locator(`.rc-tpl:has-text("${newest}")`).waitFor({ timeout: 5000 }).catch(() => {});
   ok(await page.locator(`.rc-tpl:has-text("${newest}")`).count() >= 1, `U3 چیپِ «${newest}» بی‌رفرش در «قالبِ آماده» آمد`);
   await page.close();
+
+  console.log('\n۶ب) شرحِ ذخیره‌شده «تایپ» نیست');
+  const savedText = LONG('شرحِ ذخیره‌شدهٔ جراح');
+  const sv = await send(`/theatre/visits/${S1.id}/report`, 'POST', { body: savedText });
+  ok(sv.status === 201 || sv.status === 200, `شرحِ عمل ذخیره شد (${sv.status})`);
+  const p5 = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+  watch(p5, 'saved');
+  await browserLogin(p5, login.accessToken, { ui: UI });
+  await p5.goto(UI + '/app/theatre', { waitUntil: 'networkidle' });
+  await p5.locator(`.th-item[data-visit-id="${S1.id}"]`).click();
+  const sbox = p5.locator('section[data-note="opReport"]');
+  await sbox.locator('[data-op-default]').first().waitFor({ timeout: 8000 }).catch(() => {});
+  ok((await sbox.locator('textarea[data-report]').inputValue()) === savedText
+    && await sbox.locator('[data-op-default-add]').count() === 0,
+    'U5 **نباید بیفتد:** میز با شرحِ ذخیره‌شده باز شد و دکمهٔ افزودن نیست');
+  await sbox.locator('textarea[data-report]').fill(`${savedText} — ویرایش`);
+  ok(await sbox.locator('[data-op-default-add]').count() === 1, 'U5 … با اولین تایپ آمد');
+  await p5.goto(`${UI}/app/dashboard?patient=${S1.id}`, { waitUntil: 'networkidle' });
+  await p5.waitForSelector('.db-sheet', { timeout: 10000 });
+  const intra5 = p5.getByRole('tab', { name: 'حین عمل' });
+  if (await intra5.count()) await intra5.first().click();
+  const rep5 = p5.locator('.db-sheet .db-report');
+  await rep5.locator('[data-op-default]').first().waitFor({ timeout: 8000 }).catch(() => {});
+  ok((await rep5.locator('textarea').inputValue()) === savedText && await rep5.locator('[data-op-default-add]').count() === 0,
+    'U5 **نباید بیفتد:** فرمِ ویرایش هم با شرحِ ذخیره‌شده دکمه ندارد');
+  await rep5.locator('textarea').fill(`${savedText} — ویرایشِ فرم`);
+  ok(await rep5.locator('[data-op-default-add]').count() === 1, 'U5 … و با تغییر می‌آید');
+  await p5.close();
 
   console.log('\n۷) موبایل ۳۹۰');
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -257,6 +294,7 @@ try {
 } finally {
   await browser.close().catch(() => {});
   await send('/access/permissions/templates.add/reset', 'POST').catch(() => {});
+  await send('/access/permissions/theatre.report/reset', 'POST').catch(() => {});
   sql(`DELETE FROM note_templates WHERE title LIKE '%${tag}%' OR body LIKE '%${tag}%' OR procedure_type_id IN (${trash.procs.join(',') || -1})`);
   for (const v of trash.visits) await send(`/visits/${v}`, 'DELETE').catch(() => {});
   for (const id of trash.surgeons) await send(`/surgeons/${id}`, 'DELETE').catch(() => {});

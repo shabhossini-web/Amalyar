@@ -7,7 +7,7 @@ import { ownVisitWhere } from '../common/own-scope';
 import { AvailabilityService } from '../patients/availability.service';
 import { WorkService } from './work.service';
 import { canAccess } from '../auth/access-check';
-import { todayRangeUtc } from '../common/clinic-day';
+import { clinicTodayIso, todayRangeUtc } from '../common/clinic-day';
 
 /**
  * صفحهٔ «امروز» (W2.3) — یک پاسخ برای «الان چه کار کنم؟».
@@ -101,6 +101,8 @@ export class TodayService {
       exceptions,
       canProcess,
       canCreateVisit,
+      /* «امروز»ِ مطب (YYYY-MM-DD) — تاریخِ پیش‌فرضِ «+»، همان تعریفی که فهرستِ امروز با آن فیلتر می‌شود. */
+      clinicToday: clinicTodayIso(now),
       sections: { visits: seesVisits, appointments: can('calendar'), intake: can('formgen'), exceptions: seesExceptions },
     };
   }

@@ -926,6 +926,7 @@ function NotesTab({ rec, reload, toast }) {
         {kind === 'op' && (
           <OpDefaultSave
             text={body}
+            noTarget={!opPid}
             procedureName={opPid ? opVisit.procedureTypeName : null}
             missingHint={visitId
               ? 'این مراجعه نوعِ عمل ندارد — برای «افزودن به پیش‌فرض» اول در فرمِ عمل انتخابش کنید.'
@@ -935,7 +936,7 @@ function NotesTab({ rec, reload, toast }) {
             onToast={toast}
             onSave={async (title) => {
               const r = await api('/op-templates', {
-                method: 'POST', body: { procedureTypeId: opPid, body, ...(title ? { title } : {}) },
+                method: 'POST', body: { procedureTypeId: opPid, body, source: 'record', visitId: opVisit.id, ...(title ? { title } : {}) },
               });
               setTplsRev((n) => n + 1);
               return r;

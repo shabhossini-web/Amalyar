@@ -32,6 +32,7 @@ const pub = (p, m, b) => fetch(API + p, { method: m ?? 'GET', headers: { 'Conten
 
 const tag = 'fu' + randomBytes(3).toString('hex');
 const trash = { forms: [], visits: [], procs: [], diags: [] };
+let restoreGen = '';
 
 try {
   console.log('۱) چیدمان: نوعِ عمل + تشخیص + سه فرمِ پیگیری');
@@ -131,7 +132,44 @@ try {
   await send(`/visits/${visit.id}/status`, 'PATCH', { opStatus: 'cancelled', cancelReason: 'other' });
   const afterCancel = sql(`SELECT count(*) FROM reminders WHERE visit_id=${visit.id} AND kind='follow_up' AND status='pending'`);
   ok(Number(afterCancel) === 0, 'لغوِ عمل، پیگیری‌ها را باطل می‌کند');
+
+  console.log('\n۶) بی فرمِ عمومی: افزودنِ عملِ همزمان لینک و پیامک را عوض نمی‌کند');
+  /* بازبینیِ بستهٔ ۷: پایه «کم‌شناسه‌ترین» فرمِ مجموعه بود، پس عملِ همزمانی که فرمِ
+     کم‌شناسه‌تری داشت پایه را برمی‌گرداند → توکنِ تازه، پیامکِ دوباره، ردیفِ قبلی یتیم.
+     فرم‌های «عمومی» موقتاً کنار می‌روند (و در finally برمی‌گردند) تا همین مسیر برود. */
+  restoreGen = sql(`SELECT coalesce(string_agg(id::text, ','), '') FROM form_defs WHERE follow_up='general'`);
+  if (restoreGen) sql(`UPDATE form_defs SET follow_up=NULL WHERE id IN (${restoreGen})`);
+  const p2 = (await send('/procedure-types', 'POST', { name: `همزمانِ ${tag}` })).json;
+  trash.procs.push(p2.id);
+  const secF = await mk(`${tag}s`, 'پیگیریِ عملِ همزمان');
+  await send(`/forms/${secF.id}/fields`, 'POST', { key: 'fuSec', label: 'وضعیتِ عملِ همزمان' });
+  const p1 = (await send('/procedure-types', 'POST', { name: `اصلیِ ${tag}`, followUpDays: '7', postOpCare: 'استراحت کنید.' })).json;
+  trash.procs.push(p1.id);
+  const priF = await mk(`${tag}r`, 'پیگیریِ عملِ اصلی');
+  await send(`/forms/${priF.id}/fields`, 'POST', { key: 'fuPri', label: 'وضعیتِ عملِ اصلی' });
+  await send(`/forms/${secF.id}`, 'PATCH', { followUp: 'procedure', procedureTypeId: p2.id });
+  await send(`/forms/${priF.id}`, 'PATCH', { followUp: 'procedure', procedureTypeId: p1.id });
+  ok(secF.id < priF.id, `فرمِ همزمان شناسهٔ کمتری دارد (${secF.id} < ${priF.id}) — همان حالتِ باگ`);
+  const v6 = (await send('/visits', 'POST', {
+    kind: tag, firstName: 'بیمارِ', lastName: 'پیگیری', phone: '09120000919', opDate: op.toISOString(), procedureTypeId: p1.id,
+  })).json;
+  trash.visits.push(v6.id);
+  sql(`UPDATE visits SET kind='surgery' WHERE id=${v6.id}`);
+  await send(`/visits/${v6.id}`, 'PATCH', { opDate: op.toISOString() });
+  const snap = () => sql(`SELECT string_agg(kind || ':' || replace(text, E'\\n', ' '), ' | ' ORDER BY kind, due_at) FROM reminders WHERE visit_id=${v6.id} AND status='pending'`);
+  const subsOf = () => Number(sql(`SELECT count(*) FROM intake_submissions WHERE data->>'followUpVisitId' = '${v6.id}'`));
+  const before6 = snap();
+  const tok6 = before6.match(/\/f\/([A-Za-z0-9_-]+)/)?.[1];
+  ok(!!tok6 && subsOf() === 1, `یک لینک، یک ردیف (${subsOf()})`);
+  const add6 = await send(`/visits/${v6.id}`, 'PATCH', { otherProcedureTypeIds: [p2.id] });
+  ok(add6.status === 200, `عملِ همزمان افزوده شد (${add6.status})`);
+  ok(snap() === before6, '**نباید بیفتد:** متنِ پیامک‌ها (و لینک) عوض نشد — پیامکِ دوباره نمی‌رود');
+  ok(subsOf() === 1, `**نباید بیفتد:** ردیفِ دوم ساخته نشد (${subsOf()})`);
+  const view6 = (await pub(`/public/intake/form/${tok6}`)).json;
+  const k6 = (view6?.form?.fields ?? []).map((f) => f.key);
+  ok(k6.includes('fuPri') && k6.includes('fuSec'), '… و بخشِ عملِ همزمان پشتِ همان لینک اضافه شد');
 } finally {
+  if (restoreGen) sql(`UPDATE form_defs SET follow_up='general' WHERE id IN (${restoreGen})`);
   sql(`DELETE FROM reminders WHERE patient_id IN (SELECT id FROM patients WHERE last_name='پیگیری')`);
   sql(`DELETE FROM intake_submissions WHERE patient_id IN (SELECT id FROM patients WHERE last_name='پیگیری')`);
   for (const id of trash.visits) await send(`/visits/${id}`, 'DELETE').catch(() => {});

@@ -126,7 +126,8 @@ export class TheatreController {
     return this.theatre.opTemplates(id, user);
   }
 
-  @RequirePermissions('templates.add')
+  /* ⚠️ `theatre.report` هم: کسی که اجازهٔ نوشتنِ شرحِ عمل ندارد، شرحِ دیگری را منتشر نمی‌کند. */
+  @RequirePermissions('theatre.report', 'templates.add')
   @Post('visits/:id/op-templates')
   addOpTemplate(@Param('id', ParseIntPipe) id: number, @Body() dto: OpTemplateDto, @CurrentUser() user: any) {
     return this.theatre.addOpTemplate(id, dto, user);

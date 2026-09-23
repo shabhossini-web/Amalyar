@@ -11,7 +11,7 @@ import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
 import { useConfig } from './config.jsx';
 import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Scalpel } from '../ui/icons.jsx';
-import { todayJStr } from '../lib/jalali.js';
+import { todayJStr, ymdToJStr } from '../lib/jalali.js';
 import './launcher.css';
 import './shell.css';
 import './work.css';
@@ -65,7 +65,9 @@ export default function Today() {
       .then((r) => { setData(r); setErr(null); })
       .catch((e) => setErr({ message: e?.message || 'بارگذاری نشد', status: e?.status ?? 0 }));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  /* ⚠️ حساب در همین تب عوض می‌شود (`/auth/switch`) بی آنکه صفحه از نو سوار شود؛
+     بی `user?.id` دادهٔ حسابِ قبلی (و دکمهٔ «+»ِ او) می‌ماند و به ۴۰۳ می‌خورد. */
+  useEffect(() => { setData(null); load(); }, [load, user?.id]);
   /* پاپ‌آپِ «همان چیز» (سفارش/مراجعه) از ردیفِ کار و از نمای استثنا — بازخوردِ
      مالک: هشدار باید بگوید مالِ چیست و با کلیک بازِ شود و از همان‌جا انجام شود.
      بعد از هر ثبت، صفحه و زنگِ پوسته با هم تازه می‌شوند. */
@@ -245,7 +247,7 @@ export default function Today() {
           data-quick-visit
           aria-label={t.visitNew}
           title={t.visitNew}
-          onClick={() => things.show({ type: 'visit', prefill: { opDateJ: todayJStr() } })}
+          onClick={() => things.show({ type: 'visit', prefill: { opDateJ: ymdToJStr(data?.clinicToday) || todayJStr() } })}
         >
           <Plus width="26" height="26" aria-hidden="true" />
         </button>

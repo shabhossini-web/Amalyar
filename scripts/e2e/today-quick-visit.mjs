@@ -37,7 +37,7 @@ const send = (p, m = 'GET', b) => fetch(API + p, { method: m, headers: A, body: 
   .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = 'qv' + randomBytes(3).toString('hex');
-const trash = { visits: [], accounts: [], surgeons: [], hospitals: [] };
+const trash = { visits: [], accounts: [], surgeons: [], hospitals: [], forms: [] };
 const countMine = () => Number(sql(`SELECT count(*) FROM visits v JOIN patients p ON p.id = v.patient_id WHERE p.last_name = 'سریع${tag}'`));
 const browser = await chromium.launch({ executablePath: EXE, headless: true, args: ['--no-sandbox'] });
 const errors = [];
@@ -102,38 +102,43 @@ try {
   /* فیلدهای «اجباری» مالِ فرم‌سازِ هر نصب‌اند (این‌جا مثلاً «جراح»)، نه این آزمون؛
      پس به‌جای حدس، همان پیامی که فرم می‌دهد («X را کامل کنید») خوانده و همان
      فیلد پر می‌شود — گزینهٔ اولِ انتخابگر یا یک متنِ آزمایشی. */
-  const fillRequired = async (label) => {
-    const field = page.locator('.db-sheet label.db-field:visible', { hasText: label }).first();
+  const fillRequired = async (pg, label) => {
+    const field = pg.locator('.db-sheet label.db-field:visible', { hasText: label }).first();
     if (await field.locator('.pk-btn').count()) {
       await field.locator('.pk-btn').first().click();
-      await page.waitForSelector('.pk-panel', { timeout: 5000 });
-      await page.locator('.pk-panel .pk-item:not(.pk-clear)').first().click();
-      await page.waitForSelector('.pk-panel', { state: 'detached', timeout: 5000 }).catch(() => {});
+      await pg.waitForSelector('.pk-panel', { timeout: 5000 });
+      await pg.locator('.pk-panel .pk-item:not(.pk-clear)').first().click();
+      await pg.waitForSelector('.pk-panel', { state: 'detached', timeout: 5000 }).catch(() => {});
       return true;
     }
     const box = field.locator('input:not([type=hidden]), textarea').first();
     if (await box.count()) { await box.fill('آزمونِ ثبتِ سریع'); return true; }
     return false;
   };
+  /* ذخیرهٔ شیت؛ هر «X را کامل کنید» را از پیامِ خودِ فرم پر می‌کند. */
+  const saveSheet = async (pg) => {
   let res = null;
   for (let attempt = 0; attempt < 5 && !res; attempt++) {
-    const saved = page.waitForResponse((r) => r.url().endsWith('/api/visits') && r.request().method() === 'POST', { timeout: 4000 });
-    await page.locator('.db-sheet button.db-submit[type="submit"]').click();
+    const saved = pg.waitForResponse((r) => r.url().endsWith('/api/visits') && r.request().method() === 'POST', { timeout: 4000 });
+    await pg.locator('.db-sheet button.db-submit[type="submit"]').click();
     let need = null;
     for (let i = 0; i < 20 && !need; i++) {
-      const t = (await page.locator('.sh-toast').allInnerTexts()).join(' ');
+      const t = (await pg.locator('.sh-toast').allInnerTexts()).join(' ');
       need = /«([^»]+)» را کامل کنید/.exec(t)?.[1] ?? null;
       if (!need) {
-        const r = await Promise.race([saved.catch(() => null), page.waitForTimeout(100).then(() => undefined)]);
+        const r = await Promise.race([saved.catch(() => null), pg.waitForTimeout(100).then(() => undefined)]);
         if (r) { res = r; break; }
       }
     }
     if (res) break;
     if (!need) { res = await saved.catch(() => null); break; }
     console.log(`  · فرم «${need}» را اجباری می‌خواهد — پر می‌شود`);
-    if (!await fillRequired(need)) break;
+    if (!await fillRequired(pg, need)) break;
     await saved.catch(() => null);
   }
+  return res;
+  };
+  const res = await saveSheet(page);
   ok(res?.status() === 201 || res?.status() === 200, `ثبت شد (HTTP ${res?.status()})`);
   const body = await res?.json().catch(() => null);
   if (body?.id) trash.visits.push(body.id);
@@ -145,6 +150,38 @@ try {
   await row.first().waitFor({ timeout: 8000 }).catch(() => {});
   ok(await row.count() === 1, 'همان مراجعه بی‌رفرش در فهرستِ «امروز» نشست');
   await page.close();
+
+  console.log('\n۴ب) «کاندیدای جراحی» از «+» هم فرمِ عمل را باز می‌کند');
+  /* همان قولِ فرم («بعد از ذخیره، فرمِ عملِ همین بیمار باز می‌شود») که داشبورد و
+     پرونده نگه می‌داشتند و «+»ِ امروز نه — عملِ بعدی به ویزیتِ تصمیم گره نمی‌خورد. */
+  const dform = (await send('/forms', 'POST', { key: `d${tag}`, title: `ویزیتِ سریع ${tag}`, scope: 'visit' })).json;
+  if (dform?.id) trash.forms.push(dform.id);
+  const pd = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+  watch(pd, 'decision');
+  await browserLogin(pd, login.accessToken, { ui: UI });
+  await pd.goto(UI + '/app', { waitUntil: 'networkidle' });
+  await pd.waitForSelector('.td-hello', { timeout: 15000 });
+  await pd.locator('[data-quick-visit]').click();
+  await pd.waitForSelector('.db-sheet', { timeout: 8000 });
+  await pd.locator('.db-sheet input[required]').first().fill('بیمارِ');
+  await pd.locator('.db-sheet input[required]').nth(1).fill(`سریع${tag}`);
+  await pd.locator('.db-stepnav .db-submit').click();
+  await pd.waitForTimeout(500);
+  await pd.locator('.db-sheet .db-kindrow button', { hasText: `ویزیتِ سریع ${tag}` }).click();
+  await pd.locator('.db-stepnav .db-submit').click();
+  const dec = pd.locator('.db-sheet .db-decide');
+  await dec.waitFor({ timeout: 8000 }).catch(() => {});
+  await dec.locator('.db-daychip', { hasText: 'کاندیدای جراحی' }).first().click();
+  const r2 = await saveSheet(pd);
+  ok(r2?.status() === 201, `ویزیتِ تصمیم ثبت شد (HTTP ${r2?.status()})`);
+  const b2 = await r2?.json().catch(() => null);
+  if (b2?.id) trash.visits.push(b2.id);
+  await pd.waitForTimeout(1200);
+  await pd.locator('.db-sheet').waitFor({ timeout: 8000 }).catch(() => {});
+  const follow = await pd.locator('.sh-toast').innerText({ timeout: 5000 }).catch(() => '');
+  ok(await pd.locator('.db-sheet').count() === 1 && /فرمِ عمل را برای همین بیمار/.test(follow),
+    `**فرمِ عملِ همین بیمار بلافاصله باز شد** (مثلِ داشبورد و پرونده) — «${follow}»`);
+  await pd.close();
 
   console.log('\n۵) موبایل ۳۹۰');
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -198,6 +235,7 @@ try {
   for (const v of trash.visits) await send(`/visits/${v}`, 'DELETE').catch(() => {});
   for (const id of trash.surgeons) await send(`/surgeons/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.hospitals) await send(`/hospitals/${id}`, 'DELETE').catch(() => {});
+  for (const id of trash.forms) await send(`/forms/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.accounts) {
     sql(`DELETE FROM account_sessions WHERE account_id=${id}`);
     sql(`DELETE FROM accounts WHERE id=${id}`);

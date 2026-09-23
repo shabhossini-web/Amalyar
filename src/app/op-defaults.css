@@ -45,6 +45,8 @@
 .opd-ok:focus-visible, .opd-cancel:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .opd-note, .opd-hint { font-size: 11.5px; color: var(--text3); line-height: 1.7; }
 .opd-hint { margin-top: 6px; }
+.opd-warn { display: flex; align-items: flex-start; gap: 5px; font-size: 11.5px; font-weight: 700; line-height: 1.7; color: var(--amber-text); }
+.opd-warn svg { flex: none; margin-top: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
   .opd-chip, .opd-btn { transition: none; }

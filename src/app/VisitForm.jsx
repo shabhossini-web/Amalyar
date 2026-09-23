@@ -462,14 +462,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      با آرایه هر ضربهٔ کیبورد یک درخواست می‌شد. */
   const opReportOn = fd.isOn('opReport');
   const opIdsKey = f.procedureTypeIds.join(',');
-  const [opTpl, setOpTpl] = useState({ items: [], canAdd: false });
+  const [opTpl, setOpTpl] = useState({ items: [], canAdd: false, procedure: null });
   const [opTplRev, setOpTplRev] = useState(0);
   useEffect(() => {
-    if (!opReportOn) { setOpTpl({ items: [], canAdd: false }); return undefined; }
+    if (!opReportOn) { setOpTpl({ items: [], canAdd: false, procedure: null }); return undefined; }
     let alive = true;
     api(`/op-templates?procedureTypeIds=${opIdsKey}`)
-      .then((r) => { if (alive) setOpTpl({ items: Array.isArray(r?.items) ? r.items : [], canAdd: !!r?.canAdd }); })
-      .catch(() => { if (alive) setOpTpl({ items: [], canAdd: false }); });
+      .then((r) => { if (alive) setOpTpl({ items: Array.isArray(r?.items) ? r.items : [], canAdd: !!r?.canAdd, procedure: r?.procedure ?? null }); })
+      .catch(() => { if (alive) setOpTpl({ items: [], canAdd: false, procedure: null }); });
     return () => { alive = false; };
   }, [opReportOn, opIdsKey, opTplRev]);
   /* کاتالوگ‌های بستهٔ ۶ — برچسب از سرور، نه آرایهٔ هاردکد. */
@@ -942,9 +942,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const copyDecidedDx = () => {
     const keep = [];
     const skipped = [];
+    /* ⚠️ «در تعریف‌ها نیست» یعنی «هنوز نیامده»، نه «غیرفعال» (بازبینیِ بستهٔ ۷):
+       تعریف‌ها تنبل بار می‌شوند و این دکمه زودتر از آن‌ها ظاهر می‌شد، پس همهٔ
+       تشخیص‌ها «غیرفعال» خوانده و هیچ‌کدام کپی نمی‌شد. فقط غیرفعالِ **واقعی**
+       کنار می‌ماند؛ ناشناخته‌ها می‌روند و سرور (`assertCodingRefs`) خودش می‌سنجد. */
     for (const id of decidedDxIds) {
       const d = defs.diagnoses.find((x) => x.id === id);
-      if (d?.active) keep.push(id); else skipped.push(d?.title ?? 'یک تشخیص');
+      if (d && d.active === false) skipped.push(d.title ?? 'یک تشخیص'); else keep.push(id);
     }
     if (keep.length) setDiagnosisIds(keep.slice(0, 10));
     if (skipped.length) {
@@ -1054,14 +1058,20 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           «کلیدِ تکی = اصلی» (بستهٔ ۷). */}
       <OpDefaultSave
         text={f.opReport}
-        procedureName={defs.procedures.find((p) => p.id === f.procedureTypeIds[0])?.name ?? null}
+        typed={f.opReport.trim() !== (initial?.opReport ?? '').trim()}
+        noTarget={!f.procedureTypeIds.length}
+        procedureName={defs.procedures.find((p) => p.id === f.procedureTypeIds[0])?.name
+          ?? (opTpl.procedure && opTpl.procedure.id === f.procedureTypeIds[0] ? opTpl.procedure.name : null)}
         canAdd={opTpl.canAdd}
         disabled={busy || !!aiBusy}
         onToast={onToast}
         onSave={async (title) => {
           const r = await api('/op-templates', {
             method: 'POST',
-            body: { procedureTypeId: f.procedureTypeIds[0], body: f.opReport, ...(title ? { title } : {}) },
+            body: {
+              procedureTypeId: f.procedureTypeIds[0], body: f.opReport, source: 'form',
+              ...(initial?.id ? { visitId: initial.id } : {}), ...(title ? { title } : {}),
+            },
           });
           setOpTplRev((n) => n + 1);
           return r;

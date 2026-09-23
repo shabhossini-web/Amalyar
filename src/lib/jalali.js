@@ -97,6 +97,15 @@ export function isoToJStr(iso) {
   return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
 }
 
+/// «YYYY-MM-DD» (روزِ تقویمی، بی‌ساعت) → «۱۴۰۵/۰۴/۲۸» — از خودِ اجزا، نه `new Date`:
+/// `new Date('2026-09-23')` نیمه‌شبِ UTC است و در منطقهٔ زمانیِ منفی روزِ قبل می‌شود.
+export function ymdToJStr(ymd) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? ''));
+  if (!m) return '';
+  const { jy, jm, jd } = toJalaali(+m[1], +m[2], +m[3]);
+  return `${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`;
+}
+
 export function todayJStr() {
   const d = new Date();
   const { jy, jm, jd } = toJalaali(d.getFullYear(), d.getMonth() + 1, d.getDate());

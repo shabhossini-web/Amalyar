@@ -481,7 +481,7 @@ export class TheatreService {
     const v = await this.codedVisit(visitId, user);
     const [items, canAdd] = await Promise.all([
       listOpTemplates(this.prisma, procedureIds(v)),
-      canAccess(this.prisma, user, 'theatre', ['templates.add']).catch(() => false),
+      canAccess(this.prisma, user, 'theatre', ['theatre.report', 'templates.add']).catch(() => false),
     ]);
     return { items, canAdd, procedure: v.procedureTypeId ? { id: v.procedureTypeId, name: principalProcedureName(v) } : null };
   }

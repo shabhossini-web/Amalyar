@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus } from '../ui/icons.jsx';
+import { Alert, Plus } from '../ui/icons.jsx';
 import './op-defaults.css';
 
 /**
@@ -65,22 +65,32 @@ export function OpDefaultChips({ items, onPick, disabled }) {
  * document است و `stopPropagation`ِ React پیش از رسیدن به آن جلویش را می‌گیرد.
  *
  * @param {object} p
+ * ⚠️ «وقتی تایپ کردند» یعنی **متنِ همین کاربر در همین نشست** (`typed`) — نه شرحِ
+ * ذخیره‌شده‌ای که فرم/میز با آن باز شده. وگرنه کارشناسی که فقط پرونده را باز کرده
+ * شرحِ جراح (با نام و شرحِ حالِ بیمار) را با دو ضربه قالبِ همه می‌کرد، و قالب
+ * به هیچ مراجعه‌ای بسته نیست پس کسانی هم می‌دیدندش که آن پرونده را نمی‌بینند.
+ *
  * @param {string} p.text متنِ فعلیِ کادرِ شرح
- * @param {string|null} p.procedureName نامِ عملِ مقصد (اصلی)؛ نبودش یعنی هنوز مقصدی نیست
+ * @param {boolean} [p.typed] کاربر خودش در این نشست نوشته/درج کرده است
+ * @param {boolean} [p.noTarget] مراجعه هنوز نوعِ عمل ندارد → راهنما
+ * @param {string|null} p.procedureName نامِ عملِ مقصد (اصلی)؛ با `noTarget=false` و نامِ خالی یعنی «هنوز نرسیده» → هیچ
  * @param {string} [p.missingHint] وقتی مقصد نیست چه بگوییم (هر صفحه راهِ خودش را دارد)
  * @param {boolean} p.canAdd از سرور
  * @param {(title?: string) => Promise<{duplicate?: boolean}>} p.onSave
  * @param {(msg: string, bad?: boolean) => void} p.onToast
  */
-export function OpDefaultSave({ text, procedureName, missingHint, canAdd, onSave, onToast, disabled }) {
+export function OpDefaultSave({ text, typed = true, noTarget, procedureName, missingHint, canAdd, onSave, onToast, disabled }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [busy, setBusy] = useState(false);
 
-  if (!canAdd || !String(text ?? '').trim()) return null;
-  if (!procedureName) {
+  if (!canAdd || !typed || !String(text ?? '').trim()) return null;
+  if (noTarget) {
     return <p className="opd-hint" data-op-default-hint>{missingHint || 'برای «افزودن به پیش‌فرض»، اول نوعِ عمل را انتخاب کنید.'}</p>;
   }
+  /* عمل انتخاب شده ولی نامش هنوز نرسیده (تعریف‌ها در راه‌اند): «انتخاب کنید» دروغ
+     است و دکمهٔ بی‌نام گنگ — هیچ. */
+  if (!procedureName) return null;
 
   const close = () => { setOpen(false); setTitle(''); };
   const save = async () => {
@@ -126,6 +136,10 @@ export function OpDefaultSave({ text, procedureName, missingHint, canAdd, onSave
             </button>
             <button type="button" className="opd-cancel" disabled={busy} onClick={close}>لغو</button>
           </div>
+          <small className="opd-warn" data-op-default-warn>
+            <Alert width="13" height="13" aria-hidden="true" />
+            پیش از افزودن، نام، سن و هر نشانهٔ بیمار را از متن بردارید — قالب مالِ همهٔ همکاران است، نه این پرونده.
+          </small>
           <small className="opd-note">
             همین متن قالبِ آمادهٔ شرحِ «{procedureName}» می‌شود و از این به بعد بالای همین کادر پیشنهاد می‌شود.
           </small>

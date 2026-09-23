@@ -634,20 +634,26 @@ export class DefinitionsService {
   async opTemplates(idsRaw: string | undefined, user: any) {
     const ids = String(idsRaw ?? '').split(',').map((x) => Number(x.trim()))
       .filter((x) => Number.isInteger(x) && x > 0).slice(0, 10);
-    const [items, canAdd] = await Promise.all([
+    const [items, canAdd, pt] = await Promise.all([
       listOpTemplates(this.prisma, ids),
       canAccess(this.prisma, user, 'dashboard', ['templates.add']).catch(() => false),
+      ids[0] ? this.prisma.procedureType.findUnique({ where: { id: ids[0] }, select: { id: true, name: true } }) : null,
     ]);
-    return { items, canAdd };
+    /* نامِ اصلی از سرور تا برچسبِ دکمه منتظرِ تعریف‌های تنبلِ فرم نماند. */
+    return { items, canAdd, procedure: pt ? { id: pt.id, name: pt.name } : null };
   }
 
   /** «افزودن به پیش‌فرض» از فرمِ عمل — یک قاعده با میزِ اتاقِ عمل (`op-templates.ts`). */
-  async addOpTemplate(dto: { procedureTypeId: number; body: string; title?: string }, user: any) {
+  async addOpTemplate(dto: { procedureTypeId: number; body: string; title?: string; source?: string; visitId?: number }, user: any) {
     const r = await addOpTemplate(this.prisma, dto);
     if (r.created) {
+      /* منبع و مراجعه فقط برای ردگیری‌اند (کدام متنِ کدام بیمار قالب شد)، نه برای اجازه. */
       await this.audit.record({
         actorId: user?.id, action: 'note_template.add', entityType: 'note_template', entityId: r.template.id,
-        after: { kind: 'op', procedureTypeId: dto.procedureTypeId, title: r.template.title, length: r.template.body.length, via: 'form' },
+        after: {
+          kind: 'op', procedureTypeId: dto.procedureTypeId, title: r.template.title, length: r.template.body.length,
+          via: dto.source === 'record' ? 'record' : 'form', visitId: dto.visitId ?? null,
+        },
       });
     }
     return r;
@@ -732,14 +738,17 @@ export class DefinitionsService {
   private async deleteOrDeactivate(model: 'procedureType' | 'diagnosis', id: number, notFound: string) {
     const row = await (this.prisma[model] as any).findUnique({
       where: { id },
-      include: { _count: { select: { visits: true, otherVisitLinks: true } } },
+      /* ⚠️ قالب‌های شرح هم «استفاده» حساب می‌شوند: FKِ قالب `SET NULL` است، پس
+         حذفِ سخت قالبِ اختصاصیِ یک عمل را **عمومی** می‌کرد و بالای شرحِ عملِ
+         همهٔ عمل‌های دیگر پیشنهاد می‌شد (بازبینیِ بستهٔ ۷). */
+      include: { _count: { select: { visits: true, otherVisitLinks: true, noteTemplates: true } } },
     });
     if (!row) throw new NotFoundException(notFound);
     const deactivate = async () => {
       await (this.prisma[model] as any).update({ where: { id }, data: { active: false } });
       return { ok: true, deactivated: true };
     };
-    if (row._count.visits + row._count.otherVisitLinks > 0) return deactivate();
+    if (row._count.visits + row._count.otherVisitLinks + row._count.noteTemplates > 0) return deactivate();
     try {
       await (this.prisma[model] as any).delete({ where: { id } });
     } catch (e: any) {

@@ -330,11 +330,13 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
       )}
 
       <NoteBox
+        key={`findings-${v.id}`}
         visit={v} field="findings" path="/findings" actKey="findings"
         title="یافته‌های حینِ عمل" placeholder="آنچه حینِ عمل دیده شد…"
         savedMsg="یافته‌ها ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
       />
       <NoteBox
+        key={`report-${v.id}`}
         visit={v} field="opReport" path="/report" actKey="report"
         title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
         savedMsg="شرحِ عمل ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
@@ -395,6 +397,9 @@ function CodingList({ items, label }) {
 function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, busy, onAct, onToast }) {
   const [text, setText] = useState(visit[field] ?? '');
   const dirty = useRef(false);
+  /* «نوشتهٔ خودم»: برخلافِ `dirty` با ذخیره پاک نمی‌شود — «بنویس، ذخیره کن، بعد
+     به پیش‌فرض بیفزا» باید کار کند، ولی شرحی که میز با آن باز شده نه. */
+  const [touched, setTouched] = useState(false);
   useEffect(() => {
     if (dirty.current) return;
     setText(visit[field] ?? '');
@@ -429,7 +434,7 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
         <OpDefaultChips
           items={tpl.items}
           disabled={busy === actKey}
-          onPick={(t) => { dirty.current = true; setText((cur) => withTemplate(cur, t.body)); }}
+          onPick={(t) => { dirty.current = true; setTouched(true); setText((cur) => withTemplate(cur, t.body)); }}
         />
       )}
       <textarea
@@ -437,7 +442,7 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
         value={text}
         {...(field === 'opReport' ? { 'data-report': true } : { 'data-findings': true })}
         placeholder={placeholder}
-        onChange={(e) => { dirty.current = true; setText(e.target.value); }}
+        onChange={(e) => { dirty.current = true; setTouched(true); setText(e.target.value); }}
       />
       <div className="th-report-bar">
         <span className="th-hint">
@@ -455,6 +460,8 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
       {isOp && (
         <OpDefaultSave
           text={text}
+          typed={touched}
+          noTarget={!procKey}
           procedureName={tpl.procedure?.name ?? null}
           missingHint="این عمل هنوز نوعِ عمل ندارد — در فرمِ عمل انتخابش کنید تا بشود پیش‌فرض ساخت."
           canAdd={tpl.canAdd}

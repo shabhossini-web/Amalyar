@@ -3335,10 +3335,16 @@ jobs:
              ⚠️ هم «?.» هم «.»: نسخهٔ بی‌علامتِ سؤال همان دور زدن است.
              تنها استثنا listNoteTemplates است که نامِ **هدفِ قالب** را می‌خواند نه
              مراجعه را — فقط همان متد، نه کلِ فایل. */
+          /* ⚠️ بازبینیِ بستهٔ ۷: نسخهٔ اول فقط «.x.y» و «.x?.y» را می‌گرفت؛ «!.»ِ
+             TypeScript، زنجیرهٔ شکسته روی دو سطر و خواندنِ براکتی («?.['name']»)
+             همه سبز می‌ماندند. بک‌تیک به‌صورتِ \x60 نوشته شده: بک‌تیکِ خام داخلِ
+             رشتهٔ دوکوتیشنیِ شل، جایگزینیِ فرمان است و نگهبان را بی‌صدا می‌کُشد. */
           const C1 = [
-            [/\.diagnosis\??\.title\b/, 'principalDiagnosisTitle / diagnosisLabel / diagnosisTitles'],
-            [/\.procedureType\??\.name\b/, 'principalProcedureName / procedureLabel / procedureNames'],
-            [/\.procedureType\??\.needs\b/, 'kitTemplate'],
+            [/\.diagnosis\s*[?!]?\s*\.\s*title\b/, 'principalDiagnosisTitle / diagnosisLabel / diagnosisTitles'],
+            [/\.diagnosis\s*[?!]?\s*\.?\s*\[\s*['\"\x60]title['\"\x60]\s*\]/, 'principalDiagnosisTitle / diagnosisLabel / diagnosisTitles'],
+            [/\.procedureType\s*[?!]?\s*\.\s*name\b/, 'principalProcedureName / procedureLabel / procedureNames'],
+            [/\.procedureType\s*[?!]?\s*\.\s*needs\b/, 'kitTemplate'],
+            [/\.procedureType\s*[?!]?\s*\.?\s*\[\s*['\"\x60](name|needs)['\"\x60]\s*\]/, 'principalProcedureName / procedureLabel / kitTemplate'],
           ];
           for (const f of walk('server/src', ['.ts']).filter((x) => x !== OWNER)) {
             let src = strip(read(f));
@@ -3384,10 +3390,14 @@ jobs:
              بی‌تکرار) را فقط planCoding و writeOthers نگه می‌دارند؛ دیتابیس فقط
              rank >= 2 را می‌بیند. هر نوشتنِ دیگری — Prisma، تو‌در‌تو از سمتِ مراجعه
              یا تعریف، یا SQLِ خام — دورشان می‌زند. */
+          /* ⚠️ بازبینیِ بستهٔ ۷: دسترسیِ براکتیِ مدل («tx['visitOtherDiagnosis']»، همان
+             الگویی که خودِ مالک به کار می‌برد) و SQLِ با پیشوندِ طرح
+             («public.visit_other_…»، همان شکلی که لاگِ Prisma چاپ می‌کند) از چشم افتاده بودند. */
           const C3 = [
             /visitOther(Diagnosis|Procedure)\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+            /\[\s*['\"\x60]visitOther(Diagnosis|Procedure)['\"\x60]\s*\]/,
             /other(Diagnoses|Procedures|VisitLinks)\s*:\s*\{\s*(create|createMany|connect|connectOrCreate|set|disconnect|delete|deleteMany|upsert|update|updateMany)\b/,
-            /(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+[\"']?visit_other_(diagnoses|procedures)\b/i,
+            /(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+(?:[\"']?\w+[\"']?\.)?[\"']?visit_other_(diagnoses|procedures)\b/i,
           ];
           const writers = [...walk('server/src', ['.ts']), ...walk('server/scripts', ['.ts', '.js', '.mjs'])].filter((x) => x !== OWNER);
           for (const f of writers) {

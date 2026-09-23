@@ -24,6 +24,10 @@ export const OP_TEMPLATE_MIN = 10;
 /** همان سقفِ متنِ شرح‌های بالینی — قالبی بلندتر از خودِ شرح معنا ندارد. */
 export const OP_TEMPLATE_MAX = 20000;
 export const OP_TEMPLATE_TITLE_MAX = 120;
+/** سقفِ پیش‌فرضِ فعالِ هر عمل — فهرستِ چیپ باید قابلِ‌خواندن بماند و افزودنِ انبوه ممکن نباشد. */
+export const OP_TEMPLATE_CAP = 30;
+/** کنترل‌های جهتِ متن (نه ZWNJ): عنوانِ دو قالب نباید فقط با نویسهٔ نامرئی متفاوت باشد. */
+const BIDI = /[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 
 /** مقایسهٔ «همان متن»: فاصله‌ها و خط‌شکنی‌های اضافه تفاوت نیستند. */
 const same = (a: string, b: string) => a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
@@ -53,6 +57,7 @@ export async function listOpTemplates(prisma: any, procedureTypeIds: number[]): 
     },
     orderBy: [{ title: 'asc' }, { id: 'asc' }],
     select: { id: true, title: true, body: true, procedureTypeId: true },
+    take: OP_TEMPLATE_CAP * 3,
   });
   /* عمومی‌ها بعد از همهٔ اختصاصی‌ها؛ `sort` پایدار است، پس ترتیبِ عنوان داخلِ هر گروه می‌ماند. */
   const rank = (t: any) => (t.procedureTypeId == null ? ids.length : ids.indexOf(t.procedureTypeId));
@@ -87,19 +92,22 @@ export async function addOpTemplate(
     select: { id: true, title: true, body: true, procedureTypeId: true, active: true },
     orderBy: { id: 'asc' },
   });
-  const twin = siblings.find((t) => same(t.body, body));
+  /* فعالِ هم‌متن مقدم است: غیرفعالِ قدیمی نباید قالبِ فعالِ هم‌متن را بپوشاند و ۴۰۹ِ دروغ بدهد. */
+  const twin = siblings.find((t) => t.active && same(t.body, body)) ?? siblings.find((t) => same(t.body, body));
   const item = (t: any): OpTemplateItem => ({ id: t.id, title: t.title, body: t.body, procedureTypeId: t.procedureTypeId, specific: true });
   if (twin?.active) return { created: false, duplicate: true, template: item(twin), procedureName: pt.name };
   if (twin) {
     throw new ConflictException(`همین متن پیش‌تر پیش‌فرضِ «${pt.name}» بوده و غیرفعال شده است — فعال‌کردنش از «تعاریفِ پایه» است`);
   }
 
-  let title = String(input.title ?? '').trim().slice(0, OP_TEMPLATE_TITLE_MAX);
-  if (!title) {
-    const taken = new Set(siblings.map((t) => t.title));
-    title = pt.name;
-    for (let n = 2; taken.has(title); n++) title = `${pt.name} (${faNum(n)})`;
+  if (siblings.filter((t) => t.active).length >= OP_TEMPLATE_CAP) {
+    throw new ConflictException(`«${pt.name}» ${faNum(OP_TEMPLATE_CAP)} پیش‌فرضِ فعال دارد — اول یکی را از «تعاریفِ پایه» بردارید`);
   }
+  /* عنوانِ دستی هم یکتا می‌شود: دو چیپِ هم‌نام یعنی جراح نمی‌داند کدام قالبِ تأییدشده است. */
+  const wanted = String(input.title ?? '').replace(BIDI, '').trim().slice(0, OP_TEMPLATE_TITLE_MAX) || pt.name;
+  const taken = new Set(siblings.map((t) => t.title));
+  let title = wanted;
+  for (let n = 2; taken.has(title); n++) title = `${wanted} (${faNum(n)})`;
   const t = await prisma.noteTemplate.create({
     data: { kind: 'op', title, body, procedureTypeId: pt.id },
     select: { id: true, title: true, body: true, procedureTypeId: true },

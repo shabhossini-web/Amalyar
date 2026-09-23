@@ -38,3 +38,44 @@ export async function procedureRequirements(prisma: PrismaService, ids: (number 
   const needs = mergeNeeds(order.map((id) => rows.filter((r) => r.procedureTypeId === id)));
   return resolveRequirements(prisma, needs.map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? undefined })));
 }
+
+/**
+ * **فهرستِ تأییدشده + نیازِ عمل‌های دیگرِ همان مراجعه** — تأییدِ پذیرش روی
+ * مراجعهٔ **موجود** (بازبینیِ بستهٔ ۷).
+ *
+ * ادغام در مراجعهٔ هدف عملِ تأییدشده را اصلی می‌کند و عمل‌های همزمانِ ثبت‌شده‌اش
+ * را نگه می‌دارد؛ ولی عکسِ کیت (`requiredItems`) فقط از فهرستِ همان عملِ
+ * تأییدشده ساخته می‌شد، و چون عکسِ صریح بر قالب (`kitTemplate`) مقدم است،
+ * اقلامِ عمل‌های نگه‌داشته‌شده از میزِ اتاق، چینش و پرتالِ جراح غیب می‌شدند.
+ * همان اجتماعِ `mergeNeeds` (مصرفی جمع، ست/دستگاه بیشینه)؛ فهرستِ تأییدشده اول.
+ *
+ * ⚠️ سقف‌های `resolveRequirements` (یادداشت ۱۰۰۰، تعداد ۱۰۰۰۰) پس از ادغام
+ * رعایت می‌شوند — جمعِ دو فهرستِ مجاز نباید تأیید را ۴۰۰ کند.
+ */
+export async function withOtherProcedureNeeds(
+  prisma: PrismaService,
+  approved: { itemId: number; quantity: number; notes?: string | null }[],
+  otherIds: (number | null | undefined)[],
+) {
+  const ids = [...new Set(otherIds.filter((x): x is number => Number.isInteger(x) && (x as number) > 0))];
+  if (!ids.length || !approved?.length) return approved;
+  const [rows, kinds] = await Promise.all([
+    prisma.procedureTypeItem.findMany({
+      where: { procedureTypeId: { in: ids }, item: { active: true } },
+      orderBy: { id: 'asc' },
+      select: { procedureTypeId: true, itemId: true, quantity: true, notes: true, item: { select: { assetKind: true } } },
+    }),
+    prisma.item.findMany({ where: { id: { in: approved.map((r) => r.itemId) } }, select: { id: true, assetKind: true } }),
+  ]);
+  if (!rows.length) return approved;
+  const kindOf = new Map(kinds.map((k) => [k.id, k.assetKind]));
+  const first = approved.map((r) => ({
+    itemId: r.itemId, quantity: r.quantity, notes: r.notes ?? null, item: { assetKind: kindOf.get(r.itemId) ?? undefined },
+  }));
+  const merged = mergeNeeds([first, ...ids.map((id) => rows.filter((r) => r.procedureTypeId === id))]);
+  return resolveRequirements(prisma, merged.map((n) => ({
+    itemId: n.itemId,
+    quantity: Math.min(n.quantity, 10000),
+    notes: n.notes ? n.notes.slice(0, 1000) : undefined,
+  })));
+}
