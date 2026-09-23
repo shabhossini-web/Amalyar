@@ -4,6 +4,7 @@ import { useAuth } from './auth.jsx';
 import { DEFAULT_VERTICAL, termsFor } from '../lib/terms.js';
 import { applyBrand } from '../lib/brand-palette.js';
 import { applyTheme, resolveTheme, storedTheme } from '../lib/theme.js';
+import { profileFromConfig } from '../lib/profile.js';
 
 const Ctx = createContext(null);
 
@@ -77,8 +78,10 @@ export function ConfigProvider({ children }) {
   const { user } = useAuth();
   useEffect(() => { reload(); }, [reload, user?.id]);
 
+  /* نوعِ نصب و خدمات همیشه از یک قاعده (`lib/profile.js`)؛ mockی که فقط
+     `vertical` دارد همان چیزی را می‌بیند که سرور برای نصبِ بی‌ردیفِ خدمات می‌گوید. */
   const value = useMemo(
-    () => ({ ...config, t: termsFor(config.vertical), error, reload }),
+    () => ({ ...config, ...profileFromConfig(config), t: termsFor(config.vertical), error, reload }),
     [config, error, reload],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -93,6 +96,7 @@ export function useConfig() {
       decision: [], anesthesia: [], disposition: [],
     },
     vitals: [],
+    ...profileFromConfig({ vertical: DEFAULT_VERTICAL }),
     t: termsFor(DEFAULT_VERTICAL), reload: () => {},
   };
 }

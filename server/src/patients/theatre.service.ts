@@ -576,9 +576,10 @@ export class TheatreService {
    */
   private static items(v: any) {
     const custom = Array.isArray(v.requiredItems) ? v.requiredItems : null;
-    if (custom?.length) return custom.map((r: any) => ({ name: r.name ?? r.itemName ?? '—', quantity: r.quantity ?? 1, notes: r.notes || null }));
+    /* «طبقِ نسخه» کنارِ برنامه سرِ عمل دیده می‌شود (مالک): اگر کم‌وزیاد شده، تیم باید بداند. */
+    if (custom?.length) return custom.map((r: any) => ({ name: r.name ?? r.itemName ?? '—', quantity: r.quantity ?? 1, prescribed: Number.isInteger(r.prescribedQuantity) ? r.prescribedQuantity : null, notes: r.notes || null }));
     return kitTemplate(v).map((n) => ({
-      name: [n.item?.name, n.item?.size].filter(Boolean).join(' · ') || '—', quantity: n.quantity ?? 1, notes: null,
+      name: [n.item?.name, n.item?.size].filter(Boolean).join(' · ') || '—', quantity: n.quantity ?? 1, prescribed: null, notes: null,
     }));
   }
 

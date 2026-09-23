@@ -15,7 +15,7 @@ import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { FormsService } from './forms.service';
-import { BUILTIN_VISIT_KEYS, VISIT_CATALOG_KEYS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, UNDATED_KEY, VISIT_CATALOG_KEYS } from './form-presets';
 import { visitMoneyMap } from './visit-money';
 import { syncLinkDocuments } from './link-documents';
 import {
@@ -327,6 +327,17 @@ const INCLUDE_VISIT_FULL = {
   ...INCLUDE_PATIENT,
   clinicalNotes: currentNotes(VISIT_FULL_NOTE_KINDS),
 } as const;
+
+/**
+ * قاعدهٔ تأییدِ ثبت‌نامِ شرکت برای `prepareVisitCreation` — `intake.service.ts` از
+ * خدمتِ همان ردیف می‌سازدش (`intake-service-of.ts`).
+ */
+export interface IntakeCompanyRule {
+  /** ستاره‌های فرمِ عمل شل شوند (نورومانیتورینگ). */
+  relaxRequired: boolean;
+  /** بیمار «رزرو بدون تاریخ» زده — تاریخِ عمل اجباری نیست. */
+  undated: boolean;
+}
 
 @Injectable()
 export class PatientsService {
@@ -1057,9 +1068,14 @@ export class PatientsService {
     );
   }
 
-  private async assertFormValid(dto: any) {
+  /**
+   * @param undated «رزرو بدون تاریخ»ِ ثبت‌نام — همان یک استثنای `validateFields`
+   *   روی تاریخِ عمل. نشان در `values` می‌نشیند، نه در `extra`: در `RESERVED`ِ
+   *   تأیید است و دادهٔ بالینی نیست.
+   */
+  private async assertFormValid(dto: any, undated = false) {
     const kind = dto.kind || 'surgery';
-    const values = { ...(dto.extra ?? {}), ...pickBuiltin(dto) };
+    const values = { ...(dto.extra ?? {}), ...pickBuiltin(dto), ...(undated ? { [UNDATED_KEY]: true } : {}) };
     await this.forms.assertValid(`visit.${kind}`, values);
   }
 
@@ -1156,7 +1172,7 @@ export class PatientsService {
     }
   }
 
-  async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
+  async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeCompany?: IntakeCompanyRule }) {
     const create = await this.prepareVisitCreation(dto, user, opts);
     const result = await this.prisma.$transaction(create);
     await this.afterVisitCreation(result.id);
@@ -1164,7 +1180,7 @@ export class PatientsService {
   }
 
   /** اعتبارسنجی بیرون از تراکنش؛ تمامِ نوشتن‌ها با همان txِ فراخواننده. */
-  async prepareVisitCreation(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeIonm?: boolean }) {
+  async prepareVisitCreation(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeCompany?: IntakeCompanyRule }) {
     const userId: number | undefined = user?.id;
     /* پیش از هر سنجه: کلاینتِ کهنه بخش‌های هسته را در `extra` می‌فرستد. */
     PatientsService.liftLegacy(dto, []);
@@ -1184,12 +1200,20 @@ export class PatientsService {
        ویزیتی را شروع کند مگر همهٔ فیلدهای اجباریِ پزشک را هم خودش بداند —
        یعنی هرگز. ستاره‌ها در مسیرهای ثبتِ کامل (داشبورد/فرمِ عمومی) سرِ
        جایشان‌اند؛ این پرچم فقط از `startVisit` می‌آید. */
-    if (opts?.intakeIonm) {
+    /* ⚠️ تأییدِ ثبت‌نامِ **شرکت** (تصمیمِ مالک ۱۴۰۵/۰۷/۰۱): جراحِ تعریف‌شده برای
+       هر دو خدمت الزامی است. ستاره‌های فرمِ عمل ولی **فقط در نورومانیتورینگ**
+       شل می‌شوند — همان رفتارِ پیش از بستهٔ خدمات: بیمار فیلدهای کادرِ فنی را
+       نمی‌داند و تأییدکننده بعداً از خودِ مراجعه کاملشان می‌کند. ایمپلنت با
+       ستاره‌های کامل سنجیده می‌شود (تاریخِ عمل برای رزروِ اقلام لازم است)، و
+       تنها راهِ بی‌تاریخ ماندنش همان «رزرو بدون تاریخ»ی است که بیمار صریحاً زده. */
+    if (opts?.intakeCompany) {
       if (!dto.surgeonId || !await this.prisma.surgeon.findFirst({ where: { id: dto.surgeonId, active: true } })) throw new BadRequestException('جراح را از تعاریف پایه انتخاب کنید');
+    }
+    if (opts?.intakeCompany?.relaxRequired) {
       const form = await this.forms.forVisitKind(dto.kind || 'surgery');
       const check = this.forms.validateFields((form?.fields ?? []).map(f => ({ ...f, required: false })), { ...(dto as any).extra, ...pickBuiltin(dto) });
       if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
-    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto);
+    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto, opts?.intakeCompany?.undated);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     /* باکس‌های لینکِ فرم: نرمال‌شده می‌نشینند (URLِ معتبر، سقف، برش) و هر لینک
        مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. تعریفِ فرم **پیش از**

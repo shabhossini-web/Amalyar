@@ -18,7 +18,7 @@ export async function runApprovalTests(app) {
   if (![API, DB].every(u => ['localhost', '127.0.0.1'].includes(new URL(u).hostname))) throw Error('فقط محیط محلی جداگانه');
   const db = new PrismaClient({ datasources: { db: { url: DB } } });
   const tag = 'approve' + randomBytes(4).toString('hex');
-  let auth, count = 0, patient, other, form, record, surgeon, bank;
+  let auth, count = 0, patient, other, form, record, surgeon, bank, hospital;
   const ok = (v, label) => { assert.ok(v, label); console.log('PASS ' + ++count + ' ' + label); };
   async function api(path, body, method = 'POST') {
     const r = await fetch(API + path, { method, headers: { 'Content-Type': 'application/json', ...(auth ? { Authorization: 'Bearer ' + auth } : {}) }, body: JSON.stringify(body) });
@@ -31,7 +31,8 @@ export async function runApprovalTests(app) {
       expiresAt: new Date(Date.now() + 86400000), ...opts } });
     submissions.push(row.id); return row;
   }
-  const approve = (id, extra = {}) => api(`/intake/submissions/${id}/approve`, { surgeonId: surgeon.id, bankAccountId: bank.id, ...extra });
+  /* ⚠️ تصمیمِ مالک (۱۴۰۵/۰۷/۰۱): در شرکت جراح **و بیمارستانِ** تعریف‌شده الزامی است. */
+  const approve = (id, extra = {}) => api(`/intake/submissions/${id}/approve`, { surgeonId: surgeon.id, hospitalId: hospital.id, bankAccountId: bank.id, ...extra });
   const intake = app.get(IntakeService);
   const expire = intake.expireIfDue.bind(intake);
   let releaseEdit;
@@ -45,6 +46,7 @@ export async function runApprovalTests(app) {
     patient = await db.patient.create({ data: { code: tag, firstName: 'تست', lastName: 'تأیید', phone: '09120000001' } });
     other = await db.patient.create({ data: { code: tag + 'other', firstName: 'بیمار', lastName: 'دیگر' } });
     surgeon = await db.surgeon.create({ data: { person: { create: { firstName: 'جراح', lastName: 'تست' } } } });
+    hospital = await db.hospital.create({ data: { name: 'بیمارستانِ ' + tag } });
     bank = await db.bankAccount.create({ data: { ownerName: 'آزمون', classification: 'formal' } });
     form = await db.formDef.create({ data: { key: 'visit.' + tag, scope: 'visit', visitKind: tag, title: 'تأیید آزمایشی', fields: { create: [
       { key: 'note', label: 'شرح', type: 'text' }, { key: 'scan', label: 'تصویر', type: 'image' },

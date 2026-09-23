@@ -20,7 +20,7 @@ try {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   prisma = new PrismaClient({ datasources: { db: { url: `postgresql://postgres@127.0.0.1:${server.address().port}/postgres?connection_limit=1` } } });
   const audit = new (cls('audit/audit.service', 'AuditService'))(prisma);
-  const forms = new (cls('patients/forms.service', 'FormsService'))(prisma, { vertical: async () => 'clinic' });
+  const forms = new (cls('patients/forms.service', 'FormsService'))(prisma, { vertical: async () => 'clinic', profile: async () => cls('config/tenant-profile', 'profileOf')('clinic', null) });
   const reminders = { syncNextVisit: async () => {}, syncAppointment: async () => {} };
   const events = new (cls('work/events.service', 'EventsService'))(prisma); // W2.2: outboxِ رویداد — همان سرویسِ واقعی
   const patients = new (cls('patients/patients.service', 'PatientsService'))(prisma, audit, forms, reminders, events);

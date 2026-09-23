@@ -24,7 +24,7 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
  * تا از تغییرش نترسد.
  */
 export default function Settings() {
-  const { vertical, verticals, error: configError, reload } = useConfig();
+  const { kind, services, kinds = [], serviceCatalog = [], error: configError, reload } = useConfig();
   const { user: me } = useAuth();
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
@@ -73,15 +73,43 @@ export default function Settings() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  const pick = async (key) => {
-    if (key === vertical || busy) return;
+  /**
+   * **نوعِ نصب و بستهٔ خدمات** (مالک، ۱۴۰۵/۰۷/۰۱): مطب/کلینیک یا شرکتی، و شرکت
+   * خودش خدماتش را می‌چیند. انتخاب اول پیش‌نویس است؛ ذخیره یک **پیش‌نمایش** از
+   * سرور می‌گیرد (کدام ماژول روشن/خاموش می‌شود، لینک‌های زندهٔ خدمتِ برداشته‌شده،
+   * عوض‌شدنِ واژگان) و فقط بعد از تأیید می‌نویسد — تغییرِ ماژول‌ها تصمیمی نیست
+   * که کسی باید بعداً از روی لانچرِ عوض‌شده کشفش کند.
+   */
+  const current = { kind, services: services ?? [] };
+  const [draft, setDraft] = useState(current);
+  const [preview, setPreview] = useState(null);
+  const currentKey = `${kind}:${(services ?? []).join(',')}`;
+  useEffect(() => { setDraft({ kind, services: services ?? [] }); setPreview(null); }, [currentKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const draftKey = `${draft.kind}:${draft.services.join(',')}`;
+  const dirty = draftKey !== currentKey;
+  const draftOk = draft.kind === 'clinic' || draft.services.length > 0;
+  const toggleService = (key) => setDraft((d) => ({
+    ...d,
+    services: serviceCatalog.map((x) => x.key).filter((k) => (k === key ? !d.services.includes(k) : d.services.includes(k))),
+  }));
+  const pickKind = (k) => setDraft((d) => ({ kind: k, services: k === 'clinic' ? [] : (d.services.length ? d.services : (services?.length ? services : [serviceCatalog[0]?.key].filter(Boolean))) }));
+  const body = () => ({ kind: draft.kind, services: draft.kind === 'clinic' ? [] : draft.services });
+  const askPreview = async () => {
+    if (!dirty || !draftOk || busy) return;
+    setBusy(true);
+    try { setPreview(await api('/config/profile/preview', { method: 'POST', body: body() })); }
+    catch (e) { setToast(e.message); } finally { setBusy(false); }
+  };
+  const saveProfile = async () => {
     setBusy(true);
     try {
-      await api('/config/vertical', { method: 'PATCH', body: { vertical: key } });
+      await api('/config/profile', { method: 'PATCH', body: body() });
       await reload();
-      setToast('حوزهٔ کاری تغییر کرد ✓ واژگان و ماژول‌ها به‌روز شدند.');
+      setPreview(null);
+      setToast('نوع و خدماتِ شرکت ذخیره شد ✓');
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
+  const ACTION = { create: 'روشن می‌شود', enable: 'روشن می‌شود', disable: 'خاموش می‌شود', relevel: 'سطحِ پیش‌فرضش عوض می‌شود' };
 
   return (
     <div className="df">
@@ -90,13 +118,14 @@ export default function Settings() {
         <Link className="df-back" to="/app"><Back width="14" height="14" /> سامانه</Link>
         <div>
           <h1>تنظیماتِ شرکت</h1>
-          <p>حوزهٔ کاری تعیین می‌کند کاربر چه کلماتی ببیند و کدام ماژول‌ها فعال باشند.</p>
+          <p>نوعِ نصب و خدماتِ شرکت تعیین می‌کند کدام ماژول‌ها و فرم‌های ثبت‌نام فعال باشند و کاربر چه کلماتی ببیند.</p>
         </div>
       </header>
 
       <div className="df-note">
-        تغییرِ حوزه هیچ داده‌ای را پاک یا تبدیل نمی‌کند؛ فقط واژگان و دسترسیِ ماژول‌ها عوض می‌شود.
-        برگشت به حوزهٔ قبلی هم همین‌قدر بی‌خطر است.
+        نصب یا <b>مطب / کلینیک</b> است یا <b>شرکتی</b>؛ شرکت خودش انتخاب می‌کند چه خدماتی می‌دهد.
+        این تغییر هیچ داده‌ای را پاک یا تبدیل نمی‌کند — فقط ماژول‌ها، فرم‌های ثبت‌نام و واژگان.
+        سطح‌هایی که خودتان در «دسترسی‌ها» عوض کرده‌اید دست نمی‌خورند.
       </div>
 
       {configError && (
@@ -108,21 +137,16 @@ export default function Settings() {
         </div>
       )}
 
-      <div className="df-list st-verticals">
-        {verticals.map((v) => {
-          const on = v.key === vertical;
-          const sample = termsFor(v.key);
+      <div className="df-list st-verticals" role="radiogroup" aria-label="نوعِ نصب">
+        {kinds.map((k) => {
+          const on = k.key === draft.kind;
+          const sample = termsFor(k.key === 'clinic' ? 'clinic' : (draft.services[0] ?? services?.[0] ?? 'ionm'));
           return (
-            <button
-              key={v.key}
-              type="button"
-              className={`df-row st-vertical${on ? ' on' : ''}`}
-              disabled={busy}
-              onClick={() => pick(v.key)}
-            >
+            <button key={k.key} type="button" role="radio" aria-checked={on}
+                    className={`df-row st-vertical${on ? ' on' : ''}`} disabled={busy} onClick={() => pickKind(k.key)}>
               <span className={`st-check${on ? ' on' : ''}`}>{on && <Check width="14" height="14" />}</span>
               <span className="df-row-main">
-                <b>{v.label}</b>
+                <b>{k.label}</b>
                 {/* نمونهٔ واژگان، تا پیش از انتخاب معلوم باشد چه چیزی عوض می‌شود. */}
                 <small>{sample.visitNew} · {sample.visits} · {sample.tech}</small>
               </span>
@@ -130,6 +154,52 @@ export default function Settings() {
           );
         })}
       </div>
+
+      {draft.kind === 'company' && (
+        <>
+          <h3 className="st-h3">خدماتِ شرکت</h3>
+          <div className="df-list st-services" role="group" aria-label="خدماتِ شرکت">
+            {serviceCatalog.map((x) => {
+              const on = draft.services.includes(x.key);
+              return (
+                <button key={x.key} type="button" role="checkbox" aria-checked={on}
+                        className={`df-row st-vertical${on ? ' on' : ''}`} disabled={busy} onClick={() => toggleService(x.key)}>
+                  <span className={`st-check${on ? ' on' : ''}`}>{on && <Check width="14" height="14" />}</span>
+                  <span className="df-row-main"><b>{x.label}</b><small>فرمِ ثبت‌نام و لینکِ جدای همین خدمت</small></span>
+                </button>
+              );
+            })}
+          </div>
+          {!draftOk && <div className="st-fail"><small>دست‌کم یک خدمت انتخاب کنید.</small></div>}
+        </>
+      )}
+
+      {dirty && !preview && (
+        <div className="st-profile-acts">
+          <button type="button" className="df-add" disabled={busy || !draftOk} onClick={askPreview}>بررسیِ تغییرات</button>
+          <button type="button" className="df-ghost" disabled={busy} onClick={() => setDraft(current)}>انصراف</button>
+        </div>
+      )}
+
+      {preview && (
+        <div className="st-preview" role="region" aria-label="پیش‌نمایشِ تغییرِ نوع و خدمات">
+          <b>{preview.before.label} ← {preview.after.label}</b>
+          {preview.changes.length ? (
+            <ul>{preview.changes.map((c) => <li key={c.key}>{c.label}: {ACTION[c.action]}</li>)}</ul>
+          ) : <p>هیچ ماژولی عوض نمی‌شود.</p>}
+          {preview.vocabularyChanges && <p>واژه‌های رابط هم عوض می‌شود (مثلاً «{termsFor(preview.after.kind === 'clinic' ? 'clinic' : preview.after.services[0]).visits}»).</p>}
+          {preview.removed.filter((r) => r.links || r.open).map((r) => (
+            <p key={r.service} className="warn">
+              خدمتِ «{r.label}» برداشته می‌شود ولی {faNum(r.links)} لینکِ فعال و {faNum(r.open)} ثبت‌نامِ باز دارد؛
+              لینک‌ها کار می‌کنند و ثبت‌نام‌ها تأییدشدنی می‌مانند، فقط لینکِ تازه‌ای برایش پیشنهاد نمی‌شود.
+            </p>
+          ))}
+          <div className="st-profile-acts">
+            <button type="button" className="df-add" disabled={busy} onClick={saveProfile}>تأیید و ذخیره</button>
+            <button type="button" className="df-ghost" disabled={busy} onClick={() => setPreview(null)}>بازگشت</button>
+          </div>
+        </div>
+      )}
 
       <h3 className="st-h3">ضریبِ ریالیِ تعرفه</h3>
       <div className="df-note st-tnote">

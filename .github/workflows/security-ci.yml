@@ -3263,6 +3263,28 @@ jobs:
         run: node scripts/e2e/w3-6-light-theme.mjs
       - name: Verify module icons and naming (W3.7 UI)
         run: node scripts/e2e/w3-7-icons-naming.mjs
+      - name: Verify tenant kind and services derive from one rule on both sides
+        run: node scripts/e2e/tenant-profile-unit.mjs
+      - name: Verify intake approval follows each submission's service and needs defined surgeon and hospital
+        run: node scripts/e2e/company-services-local.mjs
+      - name: Verify the intake queue shows each row's service and asks only when ambiguous
+        run: node scripts/e2e/company-services-ui.mjs
+      - name: Verify the company profile save keeps customised access and installs one form per service
+        run: node scripts/e2e/tenant-profile-write-local.mjs
+      - name: Verify the settings screen previews a profile change before saving it
+        run: node scripts/e2e/tenant-profile-ui.mjs
+      - name: Verify the service form asks for ID card, prescription and allows a date-less reservation
+        run: node scripts/e2e/service-form-local.mjs
+      - name: Verify the approval popup gets every receipt and form document, and the payment note defaults
+        run: node scripts/e2e/approval-cards-local.mjs
+      - name: Verify the payment page shows a bank card and copies plain card and SHEBA numbers
+        run: node scripts/e2e/payment-step-ui.mjs
+      - name: Verify the approval popup has identity, service and payment cards and opens from the row
+        run: node scripts/e2e/approval-cards-ui.mjs
+      - name: Verify implant rows freeze the prescribed quantity at approval and only show stock
+        run: node scripts/e2e/implant-rows.mjs
+      - name: Verify the implant picker shows stock and the surgeon portal shows the locked prescription
+        run: node scripts/e2e/implant-rows-ui.mjs
 
       # ══ بستهٔ ۷ — چند تشخیص / چند عمل: کدگذاریِ مراجعه یک صاحب دارد ══
       # اصلی (رتبهٔ ۱) همان ستونِ Visit است و سایرین در visit_other_*؛ هر مشتق

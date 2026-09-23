@@ -204,8 +204,10 @@ export const REMINDER_KIND_LABELS: Record<string, string> = {
  * ردیف، بدونِ هیچ تفاوتی در داده.
  */
 export const INTAKE_LABELS: Record<string, string> = {
-  pending_fill: 'در انتظارِ تکمیل',
-  pending_payment: 'در انتظارِ فیش',
+  /* ⚠️ واژه‌های مالک (۱۴۰۵/۰۷/۰۱): ردیف از همان صفحهٔ اول در فهرست است و
+     «در انتظارِ تکمیل» می‌گفت انگار کارِ شرکت مانده؛ کار دستِ بیمار است. */
+  pending_fill: 'در حالِ پر کردن',
+  pending_payment: 'در انتظارِ واریز',
   pending_approval: 'در انتظارِ تأیید',
   approved: 'تأییدشده',
   rejected: 'رد‌شده',

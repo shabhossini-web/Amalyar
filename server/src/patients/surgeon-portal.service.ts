@@ -7,6 +7,7 @@ import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { kitTemplate, NEEDS_SELECT, OTHER_PX_KIT, procedureLabel } from './visit-coding';
+import { visitIsImplant } from './intake-service-of';
 import { summarize } from './billing.service';
 import { APPT_LABELS, OP_LABELS } from './labels';
 import { clinicTodayIso, dayRangeUtc } from '../common/clinic-day';
@@ -241,6 +242,7 @@ export class SurgeonPortalService {
     const scope = await this.scope(user);
     const q = query.trim().slice(0, 80), current = Number.isFinite(page) ? Math.min(100000, Math.max(1, Math.floor(page) || 1)) : 1;
     const where = { ...scope, patient: { deletedAt: null, ...(q ? { OR: [{ firstName: { contains: toEnDigits(q) } }, { lastName: { contains: toEnDigits(q) } }, { code: { contains: toEnDigits(q) } }] } : {}) } };
+    const profile = await this.config.profile();
     const [rows, total] = await Promise.all([
       this.prisma.visit.findMany({ where, orderBy: [{ opDate: 'desc' }, { id: 'desc' }], take: 25, skip: (current - 1) * 25,
         select: { id: true, seq: true, kind: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true, hospitalName: true, surgeonName: true, requiredItems: true, surgeonInstructions: true,
@@ -259,10 +261,13 @@ export class SurgeonPortalService {
       opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       procedure: procedureLabel(v),
       hospital: v.hospital?.name ?? v.hospitalName, surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}` : v.surgeonName,
+      /* ⚠️ مشتقِ سرور (قانون ۱۵) و **per-مراجعه**: در شرکتِ دوخدمته ویرایشگرِ اقلام
+         فقط روی مراجعهٔ ایمپلنتی — نه روی همه، نه روی هیچ‌کدام (`visitIsImplant`). */
+      implant: visitIsImplant(v.requiredItems, profile),
       /* ⚠️ قاعدهٔ override همان دیروز: `requiredItems`ِ ذخیره‌شده (غیرِ null) برنده
          است. فقط الگو حالا اجتماعِ نیازِ همهٔ عمل‌های جلسه است. */
       requiredItems: v.requiredItems ?? kitTemplate(v).map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item?.name, n.item?.size].filter(Boolean).join(' ') })), instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
-    })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical() };
+    })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical(), services: profile.services };
   }
 
   async finances(user: any, selectedId?: number, page = 1) {
@@ -297,7 +302,8 @@ export class SurgeonPortalService {
   async saveInstructions(id: number, dto: { instructions: string; requiredItems?: RequiredItemInput[] }, user: any) {
     const before = await this.visit(id, user);
     const scope = await this.scope(user);
-    const requiredItems = dto.requiredItems === undefined ? undefined : await resolveRequirements(this.prisma, dto.requiredItems);
+    /* «طبقِ نسخه» از ردیف‌های فعلی حمل می‌شود — ویرایشِ جراح فقط برنامه را عوض می‌کند. */
+    const requiredItems = dto.requiredItems === undefined ? undefined : await resolveRequirements(this.prisma, dto.requiredItems, { previous: before.requiredItems });
     const after = { surgeonInstructions: dto.instructions.trim(), ...(requiredItems !== undefined ? { requiredItems } : {}) };
     await this.prisma.$transaction(async tx => {
       const result = await tx.visit.updateMany({ where: { id, ...scope, patient: { deletedAt: null } }, data: after });

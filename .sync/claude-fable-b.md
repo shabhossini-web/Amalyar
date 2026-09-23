@@ -1,21 +1,134 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: idle
+status: active
 branch: claude/quirky-johnson-ynzr4y
-since: 2026-09-20
-paths: []
+since: 2026-09-23
+paths:
+  - server/src/config/tenant-profile.ts
+  - server/src/config/config.service.ts
+  - server/src/config/config.controller.ts
+  - src/app/Settings.jsx
+  - src/app/settings.css
+  - scripts/e2e/tenant-profile-write.mjs
+  - scripts/e2e/tenant-profile-write-local.mjs
+  - scripts/e2e/tenant-profile-ui.mjs
+  - server/src/patients/labels.ts
+  - server/src/patients/form-presets.ts
+  - src/ui/DynForm.jsx
+  - scripts/e2e/service-form.mjs
+  - scripts/e2e/service-form-local.mjs
+  - server/src/patients/intake-service-of.ts
+  - server/src/patients/intake.service.ts
+  - server/src/patients/intake.controller.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/surgeon-portal.service.ts
+  - server/src/ai/ai.service.ts
+  - src/app/config.jsx
+  - src/app/Intake.jsx
+  - src/app/intake-admin.css
+  - src/app/SurgeonPortal.jsx
+  - src/app/BillingSheet.jsx
+  - src/lib/profile.js
+  - src/lib/terms.js
+  - src/pages/Intake.jsx
+  - scripts/e2e/tenant-profile.mjs
+  - scripts/e2e/tenant-profile-unit.mjs
+  - scripts/e2e/company-services.mjs
+  - scripts/e2e/company-services-local.mjs
+  - scripts/e2e/company-services-ui.mjs
+  - scripts/e2e/w0-1-intake-steps.mjs
+  - scripts/e2e/w1-4-approve-atomic.mjs
+  - scripts/e2e/w1-5-appointment-visit-link.mjs
+  - scripts/e2e/w2-2b-intake-events.mjs
+  - scripts/e2e/profile-workflows.mjs
+  - scripts/e2e/company-operations.mjs
+  - scripts/e2e/intake-finance-roles.mjs
+  - server/src/ai/assistant-knowledge.ts
+  - scripts/e2e/booking-flow.mjs
+  - scripts/e2e/voice-notes.mjs
+  - server/src/config/settings-registry.ts
+  - server/src/patients/intake-docs.ts
+  - src/pages/intake.css
+  - src/ui/hospital-lookup.css
+  - scripts/e2e/approval-cards.mjs
+  - scripts/e2e/approval-cards-local.mjs
+  - scripts/e2e/approval-cards-ui.mjs
+  - scripts/e2e/payment-step-ui.mjs
+  - server/src/patients/visit-requirements.ts
+  - server/src/patients/inventory.service.ts
+  - server/src/patients/inventory.controller.ts
+  - server/src/patients/theatre.service.ts
+  - src/app/RequiredItems.jsx
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
+  - src/app/surgeon-portal.css
+  - scripts/e2e/implant-rows.mjs
+  - scripts/e2e/implant-rows-ui.mjs
 note: >-
-  ✅ **لِینِ ب بسته است؛ بدهی‌های لِینِ الف هم (به نیابت) تا آخرین ردیف.** آخرین
-  لند: #67 (`40d9a40`) — پورتال فرمِ پیگیری را فقط از روزِ موعدش «کار» نشان می‌دهد +
-  `follow-up.mjs` با قراردادِ per-wave. قبلش #65 — نوعِ فایلِ آپلودِ عمومی از بایت‌ها +
-  نرخ‌گیرِ `draft`. کلیم آزاد است — هیچ مسیری قفل نیست.
-  🔴 یک یافته برای لِینِ الف پایینِ همین فایل («یادداشت برای لِین‌های دیگر») منتظر
-  است: یادآوریِ لغوشده با برگرداندنِ وضعیت زنده نمی‌شود (W1.9، `plan()` با `update: {}`).
+  بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
+  خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
+  هویت ← خدمت ← واریز ← تأیید. بستهٔ الف: پروفایل (نوع + خدمات) فقط سمتِ خواندن،
+  بی‌هیچ تغییری برای نصب‌های فعلی + واژه‌های وضعیت و دکمهٔ فرمِ پولی.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۷/۰۱ · **فرمِ ثبتِ خدمت** (هر دو خدمت): «نام عمل» (اجباری)، `opDateOpen` («رزرو بدون
+  تاریخ»، bool)، `nationalIdImage` (دستهٔ `identity`) و `prescription` (هر دو اجباری). `opDate`
+  وقتی `opDateOpen` روشن است اجباری نیست — **یک** قاعده در `validateFields` و `DynForm`.
+  فرم‌های نصب‌شدهٔ دو خدمت یک‌بار (`registration_<key>_service_fields`) **فقط فیلدهای تازهٔ همین نسخه** را
+  می‌گیرند (`REGISTRATION_V2`)؛ فیلدِ دست‌خورده یا پاک‌شده دست نمی‌خورد و مطب ارتقا ندارد.
+
+- ۱۴۰۵/۰۷/۰۱ · **`PATCH /config/profile`** `{kind, services}` و **`POST /config/profile/preview`**
+  (سوپرادمین). ماژول‌ها فقط جایی عوض می‌شوند که عضویتشان در پلان عوض شده — سطح و خاموشِ
+  دست‌خورده می‌مانند (`featureChanges`). `PATCH /config/vertical` برای سوییت‌ها و بازگشت
+  می‌ماند با همان رفتارِ قدیمی (بازچینیِ کامل) + پاک‌کردنِ ردیفِ `services`.
+- ۱۴۰۵/۰۷/۰۱ · **فرمِ ثبت‌نام به‌ازای هر خدمت:** شرکتِ دوخدمته `intake.ionm` و
+  `intake.implant` هر دو را نصب می‌کند و `/intake/link-options` هر دو را `recommended`
+  می‌دهد (قبلاً دقیقاً یکی). نصب با پرچمِ `registration_<key>_installed` (همان کلیدهای قبلی).
+
+- ۱۴۰۵/۰۷/۰۱ · **تأییدِ ثبت‌نام در شرکت** (تصمیمِ مالک): جراح **و بیمارستانِ** تعریف‌شده برای
+  هر دو خدمت الزامی است؛ بیمارستانِ «پیشنهادی» (تطبیقِ فازی) دیگر خودکار نمی‌نشیند (دقیق/مستعار/انتخابِ
+  بیمار بله). ستاره‌های فرمِ عمل **فقط در نورومانیتورینگ** شل‌اند (مثلِ قبل)؛ ایمپلنت با ستاره‌های
+  کامل سنجیده می‌شود و تنها استثنایش «رزرو بدون تاریخ» است
+  (`prepareVisitCreation(..., { intakeCompany: { relaxRequired, undated } })` جای `intakeIonm`). مطب بی‌تغییر.
+  **هر e2eای که ثبت‌نامِ شرکت را بی‌`hospitalId` تأیید می‌کند باید بیمارستان بدهد** — `w1-4-approve-atomic`،
+  `w2-2b-intake-events`، `booking-flow` و `voice-notes` همین را گرفتند.
+- ۱۴۰۵/۰۷/۰۱ · اقلامِ ایمپلنت و این قاعده حالا بر اساسِ **خدمتِ ردیف** است (`intake-service-of.ts`)،
+  نه `vertical`: ردیف‌های `/intake/submissions` فیلدهای `service`، `serviceLabel`، `serviceAmbiguous`
+  دارند؛ `ApproveDto.service` (فقط فرمِ دلخواه در شرکتِ دوخدمته). ردیف‌های `/surgeon/visits`
+  `implant` (per-مراجعه) و پاسخ `services` دارد.
+- ۱۴۰۵/۰۷/۰۱ · ردیف‌های `/intake/submissions` حالا `profileKind` هم دارند (پاپ‌آپ «الزامی» را از ردیف
+  می‌خواند نه از کانفیگِ کش‌شده) و ردیفِ فرمِ زیرپرونده `service: null`، `serviceAmbiguous: false`
+  می‌گیرد. کلیدِ فرمِ `intake.<خدمت>` فقط وقتی خدمت را تعیین می‌کند که شرکت هنوز همان خدمت را بدهد.
+  ردیفِ تنظیماتِ `services` وقتی خدمتِ اصلی‌اش (`primaryOf`) با `vertical` نخواند کهنه است و نادیده.
+- ۱۴۰۵/۰۷/۰۱ · **پاپ‌آپِ تأیید و صفحهٔ پرداخت:** ردیف‌های `/intake/submissions` حالا `receipts`
+  (`[{id,name,pdf}]` — **همهٔ** فیش‌ها، بی‌پاک‌شده‌ها) و `documents` (عکس‌های کادرهای عکسِ فرم با
+  `field`/`label`) و `patient.birthDate` دارند؛ کلاینت دیگر `receiptDocumentId` یا `data.prescription` را
+  خودش درنمی‌آورد. نمای عمومیِ فرم `paymentNote` دارد (تنظیمِ تازهٔ `intake_payment_note` در گروهِ تازهٔ
+  `intake`؛ خالی = پیش‌فرض). اصلاحِ هویت در پاپ‌آپ از همان `PATCH /patients/:id` می‌رود (کدِ ملی نه).
+- ۱۴۰۵/۰۷/۰۱ · **ردیف‌های ایمپلنت:** هر ردیفِ `Visit.requiredItems` حالا `prescribedQuantity` هم دارد —
+  در تأییدِ ثبت‌نام برابرِ تعداد و **قفل**؛ ویرایشِ بعدی (پرتالِ جراح) فقط `quantity` (برنامه) را عوض
+  می‌کند، ردیفِ نسخه‌دار حذف نمی‌شود (۴۰۰)، ردیفِ افزوده‌شده بعد از تأیید `null` می‌گیرد.
+  `resolveRequirements(prisma, rows, { prescribe?, previous? })`. نمای اتاقِ عمل `prescribed` کنارِ
+  `quantity` می‌دهد. endpointِ تازهٔ `GET /stock/availability?items=` (فقط خواندن، `inventory.read`).
+- ۱۴۰۵/۰۷/۰۱ · **هارنس‌های دست‌ساز:** `FormsService`/`SurgeonPortalService` از config
+  `profile()` هم می‌خواهند و `AiService` پارامترِ چهارمِ `ConfigService` دارد. پنج هارنس به‌روز شد
+  (`profile-workflows`, `company-operations`, `intake-finance-roles`, `w1-5-…`, `w2-2b-…`) — هارنسِ تازه
+  همان `cls('config/tenant-profile','profileOf')` را بدهد، نه جوابِ دست‌نوشته.
+
+- ۱۴۰۵/۰۷/۰۱ · **`GET /config`** سه فیلدِ تازه دارد: `kind` (`clinic|company`)، `services`
+  (برای شرکت دست‌کم یکی از `ionm|implant`)، `profileLabel`؛ به‌علاوهٔ `kinds` و
+  `serviceCatalog`. `vertical` سرِ جایش است و برای شرکت **خدمتِ اصلی** است — هرگز
+  `company`. خوانندهٔ تازه‌ای که «این شرکت ایمپلنت دارد؟» می‌پرسد از `services` بپرسد
+  (`src/lib/profile.js` → `hasService`)، نه از `vertical === 'implant'`.
+- ۱۴۰۵/۰۷/۰۱ · **`PATCH /config/vertical`** ردیفِ `services` را پاک می‌کند.
+- ۱۴۰۵/۰۷/۰۱ · برچسبِ وضعیتِ ثبت‌نام: `pending_fill` «در حالِ پر کردن»، `pending_payment`
+  «در انتظارِ واریز» (کلیدها همان). دکمهٔ فرمِ **پولی** «ثبت و مرحلهٔ بعد» است
+  (`T.submit.paid`)؛ فرمِ رایگان همان «ذخیرهٔ اطلاعات».
 
 - ۱۴۰۵/۰۶/۲۹ · **`scripts/e2e/follow-up.mjs`** فایلِ پیش از لِین‌بندی است و صاحبِ
   مشخصی ندارد؛ فقط سنجه‌هایش با قراردادِ اعلام‌شدهٔ لِینِ الف هم‌خوان می‌شود، رفتاری

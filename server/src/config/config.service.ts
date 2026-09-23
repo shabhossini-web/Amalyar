@@ -8,6 +8,12 @@ import { vitalCatalog } from '../patients/vitals';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
+import {
+  KEY_SERVICES, SERVICES, SERVICE_ORDER, TENANT_KINDS, TenantKind, TenantProfile,
+  featureChanges, profileError, profileLabel, profileOf, requestedProfile,
+} from './tenant-profile';
+import { FEATURES } from '../auth/access-registry';
+import { SITE_SECTIONS, sectionPlanFor } from '../site/site.registry';
 import { SettingsService } from './settings.service';
 import { CANCEL_REASONS, cancelSms } from '../common/cancel-reasons';
 import { LEVEL } from '../common/levels';
@@ -35,11 +41,32 @@ export class ConfigService {
     return isVertical(raw) ? raw : DEFAULT_VERTICAL;
   }
 
+  /**
+   * **نوعِ نصب + بستهٔ خدمات** — منبعِ واحد برای هر کسی که می‌پرسد «مطب است یا
+   * شرکت، و این شرکت چه خدماتی دارد». قاعده در `tenant-profile.ts` است.
+   *
+   * ⚠️ خوانندهٔ تازه باید از همین بپرسد، نه از `vertical()`: برای شرکتِ
+   * دوخدمته `vertical` فقط خدمتِ اصلی است و «ایمپلنت هم دارد» را نمی‌گوید.
+   */
+  async profile(): Promise<TenantProfile> {
+    const [vertical, services] = await Promise.all([this.vertical(), this.read(KEY_SERVICES)]);
+    return profileOf(vertical, services);
+  }
+
   async get() {
-    const [vertical, brand] = await Promise.all([this.vertical(), this.settings.brand()]);
+    const [vertical, brand, profile] = await Promise.all([this.vertical(), this.settings.brand(), this.profile()]);
     return {
       vertical,
       verticalLabel: VERTICALS[vertical].label,
+      /**
+       * نوعِ نصب و بستهٔ خدمات (`tenant-profile.ts`). `vertical` برای
+       * سازگاری می‌ماند و برای شرکت همیشه خدمتِ اصلی است.
+       */
+      kind: profile.kind,
+      services: profile.services,
+      profileLabel: profileLabel(profile),
+      kinds: Object.entries(TENANT_KINDS).map(([key, v]) => ({ key, label: v.label })),
+      serviceCatalog: SERVICE_ORDER.map((key) => ({ key, label: SERVICES[key].label })),
       /// نوعِ پیش‌فرضِ مراجعهٔ تازه — از حوزه (مطب: ویزیت)؛ کلاینت hardcode نمی‌کند.
       defaultKind: VERTICALS[vertical].defaultKind,
       brandName: brand.name,
@@ -110,6 +137,30 @@ export class ConfigService {
   }
 
   /**
+   * در مطب، بنیان‌گذارِ تنها خودش پزشک است — شرحِ کامل کنارِ فراخوانِ آن در
+   * `setVertical`. هر دو مسیرِ «مطب شدن» (حوزهٔ قدیمی و پروفایل) از همین می‌گذرند،
+   * وگرنه یکی‌شان روزی `Surgeon`ِ بنیان‌گذار را جا می‌انداخت.
+   */
+  private async promoteSoleFounder(tx: any) {
+    const admins = await tx.account.findMany({
+      where: { level: LEVEL.SUPER_ADMIN, status: 'active' },
+      select: { id: true, jobRole: true },
+    });
+    if (admins.length === 1 && !admins[0].jobRole) {
+      const row = await tx.account.update({ where: { id: admins[0].id }, data: { jobRole: 'doctor' }, select: { personId: true } });
+      /* 🔴 **نقش بدونِ تعریفِ جراح نصفِ کار است — و نصفش بدتر از هیچ است.**
+         نسخهٔ اولِ همین بلوک (بستهٔ ۱) فقط `jobRole` را می‌داد. صفِ کار درست
+         شد ولی `Surgeon`ی ساخته نشد، و کشویِ **اجباریِ** «پزشک» در فرمِ ویزیت
+         از `GET /surgeons` پر می‌شود: صاحبِ مطب می‌نشست پشتِ میزش و در فهرستِ
+         پزشکان **خودش نبود**، پس اولین ویزیتش هم ثبت نمی‌شد. `setJobRole` و
+         خودِ migration هر دو این upsert را داشتند؛ همین یک مسیر جا افتاده بود
+         — همان «دو مسیر برای یک نقش» که کامنتِ `accounts.service.ts` هشدارش
+         را می‌دهد. */
+      await tx.surgeon.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId } });
+    }
+  }
+
+  /**
    * تغییرِ حوزه — ماژول‌ها هم هم‌زمان بازچینی می‌شوند.
    *
    * ⚠️ هیچ داده‌ای پاک یا تبدیل نمی‌شود؛ فقط دسترسی و واژگان عوض می‌شود. برگشت
@@ -125,6 +176,11 @@ export class ConfigService {
         create: { key: KEY_VERTICAL, value },
         update: { value },
       });
+      /* ⚠️ مسیرِ قدیمیِ «تغییرِ حوزه» بستهٔ خدمات را هم به همان یک حوزه برمی‌گرداند.
+         بدونِ این، `vertical=implant` کنارِ یک `services=[ionm]`ِ جامانده
+         می‌نشست و دو منبع دو حرف می‌زدند (`profileOf` آن را کهنه می‌خواند، ولی
+         ردیفِ جامانده نباید اصلاً بماند). */
+      await tx.setting.deleteMany({ where: { key: KEY_SERVICES } });
 
       const plan = featurePlanFor(value);
       // ماژولی که در پلانِ حوزهٔ تازه نیست خاموش می‌شود، نه حذف — تا اگر شرکت
@@ -159,29 +215,99 @@ export class ConfigService {
          ⚠️ فقط وقتی که **یک** سوپرادمینِ فعال باشد — یعنی همان مطبِ تک‌پزشکه.
          با چند سوپرادمین نمی‌شود حدس زد کدامشان پزشک است، و حدسِ غلط یعنی
          کارِ بررسیِ نتیجهٔ پزشکی روی میزِ آدمِ اشتباه. */
-      if (value === 'clinic') {
-        const admins = await tx.account.findMany({
-          where: { level: LEVEL.SUPER_ADMIN, status: 'active' },
-          select: { id: true, jobRole: true },
-        });
-        if (admins.length === 1 && !admins[0].jobRole) {
-          const row = await tx.account.update({ where: { id: admins[0].id }, data: { jobRole: 'doctor' }, select: { personId: true } });
-          /* 🔴 **نقش بدونِ تعریفِ جراح نصفِ کار است — و نصفش بدتر از هیچ است.**
-             نسخهٔ اولِ همین بلوک (بستهٔ ۱) فقط `jobRole` را می‌داد. صفِ کار درست
-             شد ولی `Surgeon`ی ساخته نشد، و کشویِ **اجباریِ** «پزشک» در فرمِ ویزیت
-             از `GET /surgeons` پر می‌شود: صاحبِ مطب می‌نشست پشتِ میزش و در فهرستِ
-             پزشکان **خودش نبود**، پس اولین ویزیتش هم ثبت نمی‌شد. `setJobRole` و
-             خودِ migration هر دو این upsert را داشتند؛ همین یک مسیر جا افتاده بود
-             — همان «دو مسیر برای یک نقش» که کامنتِ `accounts.service.ts` هشدارش
-             را می‌دهد. */
-          await tx.surgeon.upsert({ where: { personId: row.personId }, update: {}, create: { personId: row.personId } });
-        }
-      }
+      if (value === 'clinic') await this.promoteSoleFounder(tx);
     });
 
     await this.audit.record({
       actorId: user?.id, action: 'config.vertical', entityType: 'setting', entityId: 0,
       before: { vertical: before }, after: { vertical: value },
+    });
+    return this.get();
+  }
+
+  /**
+   * **نوعِ نصب و بستهٔ خدمات را خودِ شرکت می‌چیند** (مالک، ۱۴۰۵/۰۷/۰۱).
+   *
+   * جانشینِ «تغییرِ حوزه» برای صفحهٔ تنظیمات؛ `PATCH /config/vertical` برای
+   * سوییت‌ها و بازگشت می‌ماند. تفاوت‌های عمدی با آن:
+   *  - ماژول‌ها فقط جایی عوض می‌شوند که عضویتشان در پلان عوض شده
+   *    (`featureChanges`) — سطح و خاموش/روشنِ دست‌خورده حفظ می‌شود.
+   *  - پروفایلِ بی‌تغییر هیچ نوشتنی ندارد.
+   *  - اگر خدمتِ اصلی (و در نتیجه چیدمانِ پیش‌فرضِ سایت) عوض شود، وضعیتِ فعلیِ
+   *    بخش‌های سایت اول **ثبت** می‌شود تا سایتِ منتشرشده یک‌شبه بخشِ تازه نگیرد.
+   */
+  async previewProfile(kind: string, services: string[]) {
+    const err = profileError(kind, services);
+    if (err) throw new BadRequestException(err);
+    const before = await this.profile();
+    const after = requestedProfile(kind as TenantKind, services);
+    const rows = await this.prisma.feature.findMany({ select: { key: true, minLevel: true, enabled: true } });
+    const label = (key: string) => FEATURES.find((f) => f.key === key)?.label ?? key;
+    const changes = featureChanges(before, after, rows).map((c) => ({ ...c, label: label(c.key) }));
+    /* خدمتی که برداشته می‌شود: لینک‌های زنده‌اش کار می‌کنند و ثبت‌نام‌های بازش
+       همچنان تأییدشدنی‌اند — ولی مدیر باید پیش از ذخیره بداند چند تاست. */
+    const removed = before.services.filter((x) => !after.services.includes(x));
+    const affected = await Promise.all(removed.map(async (service) => {
+      const where = { form: { key: `intake.${service}` } };
+      const [links, open] = await Promise.all([
+        this.prisma.intakeLink.count({ where: { ...where, active: true } }),
+        this.prisma.intakeSubmission.count({ where: { ...where, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] } } }),
+      ]);
+      return { service, label: SERVICES[service].label, links, open };
+    }));
+    const same = before.kind === after.kind && before.services.join() === after.services.join();
+    return {
+      same,
+      before: { kind: before.kind, services: before.services, label: profileLabel(before) },
+      after: { kind: after.kind, services: after.services, label: profileLabel(after) },
+      changes,
+      removed: affected,
+      /* واژگان از خدمتِ اصلی می‌آید (`terms.js`)؛ اگر عوض شود مدیر باید بداند. */
+      vocabularyChanges: before.primary !== after.primary,
+    };
+  }
+
+  async setProfile(kind: string, services: string[], user: any) {
+    const err = profileError(kind, services);
+    if (err) throw new BadRequestException(err);
+    const before = await this.profile();
+    const after = requestedProfile(kind as TenantKind, services);
+    if (before.kind === after.kind && before.services.join() === after.services.join()) return this.get();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.setting.upsert({ where: { key: KEY_VERTICAL }, create: { key: KEY_VERTICAL, value: after.primary }, update: { value: after.primary } });
+      if (after.kind === 'company') {
+        const value = JSON.stringify(after.services);
+        await tx.setting.upsert({ where: { key: KEY_SERVICES }, create: { key: KEY_SERVICES, value }, update: { value } });
+      } else {
+        await tx.setting.deleteMany({ where: { key: KEY_SERVICES } });
+      }
+
+      const rows = await tx.feature.findMany({ select: { key: true, minLevel: true, enabled: true } });
+      for (const c of featureChanges(before, after, rows)) {
+        if (c.action === 'create') await tx.feature.create({ data: { key: c.key, minLevel: c.minLevel!, enabled: true } });
+        else if (c.action === 'enable') await tx.feature.update({ where: { key: c.key }, data: { minLevel: c.minLevel!, enabled: true } });
+        else if (c.action === 'relevel') await tx.feature.update({ where: { key: c.key }, data: { minLevel: c.minLevel! } });
+        else await tx.feature.update({ where: { key: c.key }, data: { enabled: false } });
+      }
+
+      /* ⚠️ بخشِ بی‌ردیفِ سایت از چیدمانِ خدمتِ اصلی پیش‌فرض می‌گیرد
+         (`site.service.ts`)؛ عوض‌شدنِ خدمتِ اصلی یعنی سایتِ منتشرشده بی‌خبر
+         بخشِ تازه بگیرد یا بخشی را گم کند. پس وضعیتِ **فعلی** ثبت می‌شود. */
+      if (before.primary !== after.primary) {
+        const plan = new Set(sectionPlanFor(before.primary));
+        await tx.siteSection.createMany({
+          data: SITE_SECTIONS.map((d, i) => ({ key: d.key, enabled: plan.has(d.key), sort: i })),
+          skipDuplicates: true,
+        });
+      }
+
+      if (after.kind === 'clinic' && before.kind !== 'clinic') await this.promoteSoleFounder(tx);
+    });
+
+    await this.audit.record({
+      actorId: user?.id, action: 'config.profile', entityType: 'setting', entityId: 0,
+      before: { kind: before.kind, services: before.services }, after: { kind: after.kind, services: after.services },
     });
     return this.get();
   }

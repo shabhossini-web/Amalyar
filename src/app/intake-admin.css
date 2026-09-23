@@ -136,7 +136,7 @@
 .ia-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
 .ia-field input, .ia-field select {
   font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 10px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
   width: 100%;
 }
 .ia-field select option { background: var(--bg3); }
@@ -170,7 +170,7 @@
    نمی‌شود، ولی مرورِ صف هم نباید ده تصویرِ تمام‌قد باشد. */
 .ia-receipt {
   display: grid; gap: 6px; padding: 8px; cursor: zoom-in; text-align: start;
-  border-radius: 13px; background: rgba(0, 0, 0, .25);
+  border-radius: 13px; background: rgba(var(--surface-rgb), .5);
   border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ia-receipt img {
@@ -223,3 +223,44 @@
 .ia-definition-head { display: flex; align-items: center; gap: 8px; }
 .ia-definition-head a { margin-inline-start: auto; font-size: 11px; color: var(--text1); }
 .ia-definition-head button { display: inline-flex; padding: 5px; border: 1px solid var(--card-border); border-radius: 8px; background: transparent; color: inherit; }
+
+/* خدمتِ ثبت‌نام (شرکتِ دوخدمته) — نشانِ کارت و انتخابگرِ پاپ‌آپ. */
+.ia-tag.ia-svc { color: var(--brand-text); border-color: rgba(var(--brand-rgb), .35); background: rgba(var(--brand-rgb), .1); }
+.ia-svc-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text2); }
+.ia-svc-pick .ia-chip { cursor: pointer; font: inherit; color: var(--text1); padding: 4px 11px; min-height: 30px; }
+.ia-svc-pick .ia-chip.on { border-color: rgba(var(--brand-rgb), .55); background: rgba(var(--brand-rgb), .16); font-weight: 700; }
+.ia-svc-pick .ia-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ia-svc-pick .ia-chip { transition: none; } }
+.ia-undated { color: var(--amber-text); font-weight: 700; }
+
+/* ── پاپ‌آپِ تأیید: سه کارتِ هویت / خدمت / پرداخت (مالک، ۱۴۰۵/۰۷/۰۱) ── */
+.ia-block {
+  display: grid; gap: 9px; padding: 11px 12px 12px; border-radius: 14px;
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+}
+.ia-block > h3 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 13px; font-weight: 800; color: var(--text1); }
+.ia-block > h3 > svg { flex: 0 0 auto; color: var(--brand-2); }
+.ia-block-act {
+  margin-inline-start: auto; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  font: inherit; font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 99px;
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .12);
+  transition: color .25s, border-color .25s;
+}
+.ia-block-act:hover { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .4); }
+.ia-id { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 7px 12px; margin: 0; }
+.ia-id > div { display: grid; gap: 2px; min-width: 0; }
+.ia-id dt { font-size: 10.5px; color: var(--text3); }
+.ia-id dd { margin: 0; font-size: 13px; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ia-id dd[dir="ltr"] { text-align: end; }
+.ia-id-edit { display: grid; gap: 8px; }
+/* فیش‌ها و مدارک — چندتایی، کنارِ هم. */
+.ia-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ia-card .ia-receipt img { max-height: 150px; }
+/* فیشِ PDF لینک است نه بندانگشتی — بالای خانه می‌نشیند، نه کشیده تا ارتفاعِ عکسِ کناری. */
+.ia-docs > .bl-mini { align-self: start; }
+/* ردیفِ منتظرِ تأیید خودش پاپ‌آپ را باز می‌کند. */
+.ia-card.open { cursor: pointer; }
+.ia-card.open:hover { border-color: rgba(251, 191, 36, .6); }
+.ia-open { display: block; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: start; cursor: pointer; }
+.ia-block-act:focus-visible, .ia-open:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ia-block-act { transition: none; } }
