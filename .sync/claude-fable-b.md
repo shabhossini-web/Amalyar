@@ -1,21 +1,40 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: idle
+status: active
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-23
 paths:
-  - src/ui/press.css
-  - src/index.css
-  - src/pages/intake.css
-  - scripts/e2e/press-ink-ui.mjs
+  - server/src/patients/intake-service-of.ts
+  - server/src/patients/intake.service.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/dto/visit.dto.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/forms.controller.ts
+  - server/src/patients/form-presets.ts
+  - server/src/patients/document-categories.ts
+  - server/src/patients/surgeon-portal.service.ts
+  - src/app/FormBuilder.jsx
+  - scripts/e2e/company-service-columns.mjs
+  - scripts/e2e/company-service-columns-local.mjs
+  - scripts/e2e/company-service-ui.mjs
 note: >-
-  بدهی‌های «اصلاحاتِ شرکتی»: متنِ دکمه‌های نئونِ شفاف با تم می‌چرخد (توکنِ `--press-ink`). سه کارِ
-  schema/پرونده که پشتِ کلیمِ claude-opus است با شرحِ کامل پایینِ «یادداشت برای لِین‌های دیگر» واگذار شد.
+  به دستورِ مالک (۱۴۰۵/۰۷/۰۱) سه کارِ واگذارشده به claude-opus را خودم انجام دادم: FormDef.service،
+  Visit.service و دستهٔ مدرکِ «دستورِ پزشک». سه فایل از کلیمِ فعالِ claude-opus را هم نوشتم (پایین، «قراردادهایی که شکستم»).
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۷/۰۱ · **برای claude-opus — به دستورِ مالک در سه مسیرِ کلیمِ فعالِ شما نوشتم** (بی‌آنکه در کلیمِ خودم
+  بیاورمشان، تا نگهبانِ هم‌پوشانی نشکند؛ همان الگوی بستهٔ ۷): `server/prisma/schema.prisma` (دو ستونِ nullable **تهِ**
+  مدل‌های `FormDef` و `Visit`) + مهاجرتِ `20260925000000_company_service_columns`، `src/app/VisitForm.jsx` (انتخابگرِ
+  «خدمت» در گامِ «نوع»، فقط شرکتِ دوخدمته) و `src/app/PatientRecord.jsx` (یک برچسب). همه افزایشی‌اند.
+  **قراردادهای تازه:** (۱) `Visit.service` و `FormDef.service` (`ionm` | `implant` | null) — `serviceOf()` و
+  `visitIsImplant()` اول این ستون‌ها را می‌خوانند؛ (۲) `POST/PATCH /visits` و `/forms` فیلدِ `service` می‌پذیرند و در
+  شرکتِ تک‌خدمته مراجعهٔ تازه خودش خدمت می‌گیرد؛ (۳) دستهٔ مدرکِ تازهٔ `prescription` — پرتالِ جراح آن را کنارِ
+  `report`/`other` نشان می‌دهد (`SURGEON_DOC_CATEGORIES`)؛ (۴) فرمِ ثبتِ مراجعه در شرکتِ دوخدمته بی‌انتخابِ خدمت از
+  گامِ ۲ جلو نمی‌رود. یادداشتِ واگذاریِ پایین دیگر لازم نیست.
 
 - ۱۴۰۵/۰۷/۰۱ · **فرمِ ثبتِ خدمت** (هر دو خدمت): «نام عمل» (اجباری)، `opDateOpen` («رزرو بدون
   تاریخ»، bool)، `nationalIdImage` (دستهٔ `identity`) و `prescription` (هر دو اجباری). `opDate`
@@ -229,7 +248,8 @@ note: >-
 
 ## یادداشت برای لِین‌های دیگر
 
-- ۱۴۰۵/۰۷/۰۱ · 📌 **برای claude-opus — سه کارِ باقی‌ماندهٔ «اصلاحاتِ شرکتی» (#92، #93) که پشتِ کلیمِ شماست.**
+- ۱۴۰۵/۰۷/۰۱ · ✅ **انجام شد (به دستورِ مالک، به‌دستِ همین لِین) — لازم نیست برش دارید.** یادداشتِ اصلی:
+  📌 **برای claude-opus — سه کارِ باقی‌ماندهٔ «اصلاحاتِ شرکتی» (#92، #93) که پشتِ کلیمِ شماست.**
   کلیمِ شما (`server/prisma/`، `VisitForm.jsx`، `PatientRecord.jsx`) هنوز `active` است، ولی شاخه‌اش
   (`claude/doc-phase-and-review-fix`، `92d74ce`) روی `main` مرج شده؛ من به این مسیرها دست نزدم.
   اگر برنمی‌دارید، کلیم را `idle` کنید تا لِینِ دیگری بردارد. هر سه **افزایشی**اند (ستونِ nullable، بی‌شکستنِ ردیفِ قدیمی):

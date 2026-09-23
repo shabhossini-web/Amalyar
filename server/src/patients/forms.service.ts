@@ -7,6 +7,8 @@ import { ConfigService } from '../config/config.service';
 import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
+import { serviceOfFormKey } from './intake-service-of';
+import { isServiceKey } from '../config/tenant-profile';
 
 /**
  * موتورِ فرم — «چه چیزی پرسیده می‌شود» و «چه چیزی اجباری است».
@@ -347,6 +349,8 @@ export class FormsService {
     return {
       id: f.id, key: f.key, title: f.title, scope: f.scope,
       visitKind: f.visitKind, hint: f.hint, active: f.active,
+      /* خدمتِ فرمِ ثبت‌نام در نصبِ شرکتی — فرم‌ساز انتخابگرش را از همین پر می‌کند. */
+      service: f.service ?? null,
       color: f.color || colorForKey(f.key),
       /* نقشِ فرم در پیگیریِ پس از عمل — فرم‌ساز از همین می‌خواند. */
       followUp: f.followUp ?? null,
@@ -493,6 +497,7 @@ export class FormsService {
     await this.prisma.$transaction(async tx => {
       await tx.formDef.upsert({ where: { key: preset.key }, update: {}, create: {
         key: preset.key, title: preset.title, scope: preset.scope, visitKind: preset.visitKind, hint: preset.hint,
+        service: serviceOfFormKey(preset.key),
         /* ⚠️ `docCategory`/`placeholder`/`page` هم کپی می‌شوند (مثلِ `seedFrom`): بی‌آن‌ها
            کارتِ ملی با دستهٔ «متفرقه» در پرونده می‌نشست. */
         fields: { create: preset.fields.map((f, i) => ({ key: f.key, label: f.label, type: f.type ?? 'text', required: f.required ?? false, builtin: f.builtin ?? false, hint: f.hint, placeholder: f.placeholder ?? null, docCategory: normDocCategory(f.docCategory), page: f.page ?? 1, options: f.options ?? [], sort: (i + 1) * 10 })) },
@@ -681,7 +686,7 @@ export class FormsService {
       await this.prisma.formDef.create({
         data: {
           key: f.key, title: f.title, scope: f.scope,
-          visitKind: f.visitKind ?? null, hint: f.hint ?? null,
+          visitKind: f.visitKind ?? null, hint: f.hint ?? null, service: serviceOfFormKey(f.key),
           /* رنگ در قالب‌ها نوشته نشده و عمداً `null` می‌ماند: «خودکار» یعنی
              `view()` از کلید مشتقش می‌کند و همهٔ نصب‌ها یک رنگ می‌بینند. */
           /* ⚠️ قالب‌ها هم رنگِ **آزاد** می‌گیرند، نه فقط مشتقِ کلید: قالبِ
@@ -776,10 +781,12 @@ export class FormsService {
     dto: {
       title?: string; hint?: string; active?: boolean; color?: string | null;
       followUp?: string | null; procedureTypeId?: number | null; diagnosisId?: number | null;
+      service?: string | null;
     },
   ) {
     const row = await this.prisma.formDef.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('فرم پیدا نشد');
+    const service = await this.formServiceOf(dto.service, row.scope);
 
     /* نقشِ پیگیری فقط برای فرمِ زیرپرونده معنا دارد: پیگیری به پرونده می‌چسبد،
        مراجعه نمی‌سازد. بخشِ اختصاصی بدونِ مرجعش (نوعِ عمل/تشخیص) بی‌معناست. */
@@ -810,6 +817,7 @@ export class FormsService {
         ...(dto.active !== undefined ? { active: dto.active } : {}),
         /* رشته‌ی خالی یعنی «برگرد به خودکار» — پس `null` می‌نشیند، نه ''. */
         ...(dto.color !== undefined ? { color: normColor(dto.color) } : {}),
+        ...(service !== undefined ? { service } : {}),
         ...followUpPatch,
       },
     });
@@ -1041,7 +1049,21 @@ export class FormsService {
    * ⚠️ `visitKind` از `key` مشتق می‌شود و جدا گرفته نمی‌شود: دو شناسه برای یک
    * چیز یعنی روزی که با هم نخوانند، فرم پیدا نمی‌شود و کسی نمی‌فهمد چرا.
    */
-  async createForm(dto: { key?: string; title?: string; scope?: string; hint?: string; color?: string }) {
+  /**
+   * خدمتِ فرمِ ثبت‌نام (`FormDef.service`) — فقط نصبِ شرکتی، فقط فرمی که مراجعه می‌سازد (`visit`)،
+   * فقط از بستهٔ همان شرکت. `undefined` = دست نزن؛ '' = پاک کن (برگرد به کلید/تک‌خدمتی).
+   */
+  private async formServiceOf(input: unknown, scope: string): Promise<string | null | undefined> {
+    if (input === undefined) return undefined;
+    if (input === null || input === '') return null;
+    const profile = await this.config.profile();
+    if (profile.kind !== 'company') throw new BadRequestException('خدمتِ فرم فقط در نصبِ شرکتی معنا دارد');
+    if (scope !== 'visit') throw new BadRequestException('فقط فرمی که مراجعه می‌سازد خدمت دارد');
+    if (!isServiceKey(input) || !profile.services.includes(input)) throw new BadRequestException('این خدمت در بستهٔ خدماتِ شرکت نیست');
+    return input;
+  }
+
+  async createForm(dto: { key?: string; title?: string; scope?: string; hint?: string; color?: string; service?: string }) {
     const key = String(dto.key ?? '').trim();
     if (!KEY_RE.test(key)) {
       throw new BadRequestException('کلید باید با حرفِ لاتین شروع شود و فقط حرف، رقم و _ داشته باشد');
@@ -1055,12 +1077,14 @@ export class FormsService {
     const fullKey = scope === 'visit' ? `visit.${key}` : key;
     const dup = await this.prisma.formDef.findUnique({ where: { key: fullKey } });
     if (dup) throw new BadRequestException('فرمی با این کلید هست');
+    const service = await this.formServiceOf(dto.service, scope);
 
     await this.prisma.formDef.create({
       data: {
         key: fullKey, title, scope,
         visitKind: scope === 'visit' ? key : null,
         hint: dto.hint?.trim() || null,
+        service: service ?? null,
         /* رنگ همین‌جا **تثبیت** می‌شود، نه در زمانِ نمایش — دلیلش در
            `pickColor`. */
         color: normColor(dto.color) ?? (await this.freeColor(fullKey, scope)),

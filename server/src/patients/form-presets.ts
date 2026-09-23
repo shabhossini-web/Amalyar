@@ -393,7 +393,7 @@ const SERVICE_INFO: PresetField[] = [
   { key: 'opDate', label: 'تاریخ عمل', type: 'date', required: true },
   { key: UNDATED_KEY, label: 'رزرو بدون تاریخ', type: 'bool', hint: 'اگر تاریخِ عمل هنوز معلوم نیست «بله» را بزنید؛ شرکت بعداً با شما هماهنگ می‌کند.' },
   { key: 'nationalIdImage', label: 'تصویر کارت ملی', type: 'image', required: true, docCategory: 'identity' },
-  { key: 'prescription', label: 'تصویر دستور پزشک', type: 'image', required: true },
+  { key: 'prescription', label: 'تصویر دستور پزشک', type: 'image', required: true, docCategory: 'prescription' },
 ];
 
 /** Public registration is a separate workflow from the team's clinical visit form. */
