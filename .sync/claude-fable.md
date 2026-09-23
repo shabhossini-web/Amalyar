@@ -1,10 +1,13 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/quirky-volta-uyuznl
+status: active
+branch: claude/hotfix-clinic-report-work
 since: 2026-09-23
-paths: []
-note: بستهٔ ۷ (چند تشخیص/چند عمل) + «+»ِ امروز + پیش‌فرضِ شرحِ عمل مرج شد (#94)؛ هیچ مسیری در دست نیست.
+paths:
+  - server/src/work/work-detectors.ts
+  - server/src/work/work-rules.ts
+  - scripts/e2e/clinic-report-work.mjs
+note: هات‌فیکسِ جدا (به‌خواستِ مالک، پیش از بستهٔ ۸): کارِ «گزارشِ عمل بارگذاری نشده» در مطب — شرحِ عملِ نوشته‌شده همان گزارش است. بستهٔ ۸ روی claude/quirky-volta-uyuznl می‌ماند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

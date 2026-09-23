@@ -19,7 +19,12 @@
  *   کارِ باز را نگه می‌دارد، ولی سیلِ رویداد جدولِ analytics را بی‌معنا می‌کند.
  * - **کفِ ۶۰ روز**: نصبِ قدیمی با صدها عملِ بی‌وضعیت نباید در اولین sweep
  *   صدها کار بسازد — این کارها برای «امروز» است، نه ممیزیِ تاریخ.
- * - فقط `kind = 'surgery'`: مطب (`clinic`) گزارشِ عمل و مصرفِ سرِ عمل ندارد.
+ * - فقط `kind = 'surgery'`.
+ * - ⚠️ **در مطب، «گزارشِ عمل» همان شرحِ عملِ نوشته‌شده است** (سندِ بالینیِ `op`)، نه
+ *   فایلِ آپلودیِ دستهٔ `report` (آن گزارشِ مانیتورینگِ کارشناسِ شرکت است). نسخهٔ قبلی
+ *   فقط فایل را می‌دید و هر عملِ مطب — حتی با شرحِ کامل — «گزارشِ عمل بارگذاری نشده»
+ *   در صفِ کارشناس می‌گرفت (گزارشِ مالک ۱۴۰۵/۰۷/۰۱، ۱۷ کارِ دروغین). حالا در مطب
+ *   هر کدام از این دو کافی است، کار مالِ پزشک است و عنوانش «شرحِ عمل نوشته نشده».
  * - جدولِ نبوده (tenantِ migrate‌نشده) هر آشکارساز را جداگانه خاموش می‌کند،
  *   نه کلِ sweep را.
  */
@@ -53,6 +58,11 @@ async function emitOnce(client: any, type: string, rows: Row[], since: Date): Pr
 const missingTable = (e: any) =>
   ['P2021', 'P2022'].includes(e?.code) || e?.meta?.code === '42P01' || /does not exist/i.test(String(e?.message ?? ''));
 
+/** حوزهٔ همین نصب — همان ردیفِ `settings.vertical` که `ConfigService` می‌خواند. */
+async function isClinic(client: any): Promise<boolean> {
+  try { return (await client.setting.findUnique({ where: { key: 'vertical' } }))?.value === 'clinic'; } catch { return false; }
+}
+
 async function guard(fn: () => Promise<number>): Promise<number> {
   try { return await fn(); } catch (e) { if (missingTable(e)) return 0; throw e; }
 }
@@ -77,16 +87,30 @@ export async function detectStaleWork(client: any, now: Date = new Date()): Prom
       rows.map((v: any) => ({ patientId: v.patientId, visitId: v.id, payload: { techId: v.techId ?? null } })), since);
   });
 
+  const clinic = await isClinic(client);
   const reportMissing = await guard(async () => {
     const rows = await client.visit.findMany({
       where: {
         kind: 'surgery', opStatus: 'done', opDate: { lt: today, gte: floor }, ...live,
         documents: { none: { category: 'report', deletedAt: null } },
+        /* مطب: شرحِ عملِ جاری هم «گزارش» است (بالا). */
+        ...(clinic ? { clinicalNotes: { none: { kind: 'op', replacedAt: null } } } : {}),
       },
-      select: { id: true, patientId: true, techId: true }, orderBy: { opDate: 'asc' }, take: 200,
+      select: {
+        id: true, patientId: true, techId: true,
+        ...(clinic ? { surgeon: { select: { person: { select: { account: { select: { id: true, status: true } } } } } } } : {}),
+      },
+      orderBy: { opDate: 'asc' }, take: 200,
     });
-    return emitOnce(client, 'report.missing',
-      rows.map((v: any) => ({ patientId: v.patientId, visitId: v.id, payload: { techId: v.techId ?? null } })), since);
+    return emitOnce(client, 'report.missing', rows.map((v: any) => {
+      const doctor = v.surgeon?.person?.account;
+      return {
+        patientId: v.patientId, visitId: v.id,
+        payload: clinic
+          ? { clinic: true, doctorId: doctor?.status === 'active' ? doctor.id : null }
+          : { techId: v.techId ?? null },
+      };
+    }), since);
   });
 
   const usageUnconfirmed = await guard(async () => {
@@ -122,11 +146,18 @@ export async function detectStaleWork(client: any, now: Date = new Date()): Prom
       select: { visitId: true, patientId: true }, take: 200,
     });
     if (!open.length) return 0;
+    const ids = open.map((w: any) => w.visitId);
     const docs = await client.document.findMany({
-      where: { visitId: { in: open.map((w: any) => w.visitId) }, category: 'report', deletedAt: null },
+      where: { visitId: { in: ids }, category: 'report', deletedAt: null },
       select: { visitId: true }, distinct: ['visitId'],
     });
-    const has = new Set(docs.map((d: any) => d.visitId));
+    /* مطب: شرحِ عملِ نوشته‌شده هم کار را می‌بندد — کارهای دروغینِ قبل از این اصلاح
+       هم با همین sweep (هر ۵ دقیقه) خودشان بسته می‌شوند. */
+    const notes = clinic ? await client.clinicalNote.findMany({
+      where: { visitId: { in: ids }, kind: 'op', replacedAt: null },
+      select: { visitId: true }, distinct: ['visitId'],
+    }) : [];
+    const has = new Set([...docs, ...notes].map((d: any) => d.visitId));
     const rows = open.filter((w: any) => has.has(w.visitId)).map((w: any) => ({ patientId: w.patientId, visitId: w.visitId }));
     if (!rows.length) return 0;
     await client.domainEvent.createMany({

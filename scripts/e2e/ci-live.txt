@@ -126,3 +126,4 @@ multi-procedure
 today-quick-visit
 op-defaults
 tenant-profile
+clinic-report-work
