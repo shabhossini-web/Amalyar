@@ -7,6 +7,7 @@ import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
 import { useStatusList } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon } from '../ui/icons.jsx';
 import './theatre.css';
 import './definitions.css';
@@ -401,9 +402,36 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
 
   const saved = (visit[field] ?? '').trim();
   const changed = text.trim() !== saved;
+
+  /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) — فقط برای شرحِ عمل ──
+     چیپ‌ها و «افزودن به پیش‌فرض» همان کامپوننتِ فرمِ عمل‌اند؛ مسیرِ سرور زیرِ
+     ماژولِ اتاق است تا جراحِ سطح ۲ که داشبورد ندارد هم برسد. عمل‌ها از مراجعهٔ
+     ذخیره‌شده (کلیدِ رشته‌ای، نه آرایهٔ تازهٔ هر رندر). */
+  const isOp = field === 'opReport';
+  const procKey = (visit.procedures ?? []).map((p) => p.id).join(',');
+  const [tpl, setTpl] = useState({ items: [], canAdd: false, procedure: null });
+  const [tplRev, setTplRev] = useState(0);
+  useEffect(() => {
+    if (!isOp) return undefined;
+    let alive = true;
+    api(`/theatre/visits/${visit.id}/op-templates`)
+      .then((r) => {
+        if (alive) setTpl({ items: Array.isArray(r?.items) ? r.items : [], canAdd: !!r?.canAdd, procedure: r?.procedure ?? null });
+      })
+      .catch(() => { if (alive) setTpl({ items: [], canAdd: false, procedure: null }); });
+    return () => { alive = false; };
+  }, [isOp, visit.id, procKey, tplRev]);
+
   return (
     <section className="th-report" aria-label={title} data-note={field}>
       <h3><Form width="15" height="15" aria-hidden="true" /> {title}</h3>
+      {isOp && (
+        <OpDefaultChips
+          items={tpl.items}
+          disabled={busy === actKey}
+          onPick={(t) => { dirty.current = true; setText((cur) => withTemplate(cur, t.body)); }}
+        />
+      )}
       <textarea
         rows={field === 'opReport' ? 5 : 3}
         value={text}
@@ -424,6 +452,23 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
           }}
         >ذخیره</button>
       </div>
+      {isOp && (
+        <OpDefaultSave
+          text={text}
+          procedureName={tpl.procedure?.name ?? null}
+          missingHint="این عمل هنوز نوعِ عمل ندارد — در فرمِ عمل انتخابش کنید تا بشود پیش‌فرض ساخت."
+          canAdd={tpl.canAdd}
+          disabled={busy === actKey}
+          onToast={onToast}
+          onSave={async (tTitle) => {
+            const r = await api(`/theatre/visits/${visit.id}/op-templates`, {
+              method: 'POST', body: { body: text, ...(tTitle ? { title: tTitle } : {}) },
+            });
+            setTplRev((n) => n + 1);
+            return r;
+          }}
+        />
+      )}
     </section>
   );
 }

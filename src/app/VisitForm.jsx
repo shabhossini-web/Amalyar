@@ -22,6 +22,7 @@ import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
 import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
+import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
 import './dashboard.css';
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
@@ -453,6 +454,24 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
      فیلدهای دلخواهی که سوپرادمین ساخته. */
   const fd = useFormDef(f.kind);
+  /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) ──
+     چیپ‌های «قالبِ آماده» بالای کادر و «افزودن به پیش‌فرض» زیرش. عمل‌ها از
+     **همین فرم** خوانده می‌شوند نه از مراجعهٔ ذخیره‌شده: فرمِ ساخت هنوز مراجعه
+     ندارد و در ویرایش ممکن است اصلی همین حالا عوض شده باشد.
+     ⚠️ کلیدِ وابستگی رشته است نه خودِ آرایه — هر setF آرایهٔ تازه‌ای می‌سازد و
+     با آرایه هر ضربهٔ کیبورد یک درخواست می‌شد. */
+  const opReportOn = fd.isOn('opReport');
+  const opIdsKey = f.procedureTypeIds.join(',');
+  const [opTpl, setOpTpl] = useState({ items: [], canAdd: false });
+  const [opTplRev, setOpTplRev] = useState(0);
+  useEffect(() => {
+    if (!opReportOn) { setOpTpl({ items: [], canAdd: false }); return undefined; }
+    let alive = true;
+    api(`/op-templates?procedureTypeIds=${opIdsKey}`)
+      .then((r) => { if (alive) setOpTpl({ items: Array.isArray(r?.items) ? r.items : [], canAdd: !!r?.canAdd }); })
+      .catch(() => { if (alive) setOpTpl({ items: [], canAdd: false }); });
+    return () => { alive = false; };
+  }, [opReportOn, opIdsKey, opTplRev]);
   /* کاتالوگ‌های بستهٔ ۶ — برچسب از سرور، نه آرایهٔ هاردکد. */
   const anesthesiaOpts = useStatusList('anesthesia');
   const decisionOpts = useStatusList('decision');
@@ -1025,7 +1044,29 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: (
     <div className="db-field db-report">
       <span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
+      <OpDefaultChips
+        items={opTpl.items}
+        disabled={busy || !!aiBusy}
+        onPick={(tpl) => setF((s2) => ({ ...s2, opReport: withTemplate(s2.opReport, tpl.body) }))}
+      />
       <textarea rows={3} value={f.opReport} readOnly={!!aiBusy} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
+      {/* «افزودن به پیش‌فرض» — مقصد عملِ **اصلیِ همین فرم**؛ همان قراردادِ
+          «کلیدِ تکی = اصلی» (بستهٔ ۷). */}
+      <OpDefaultSave
+        text={f.opReport}
+        procedureName={defs.procedures.find((p) => p.id === f.procedureTypeIds[0])?.name ?? null}
+        canAdd={opTpl.canAdd}
+        disabled={busy || !!aiBusy}
+        onToast={onToast}
+        onSave={async (title) => {
+          const r = await api('/op-templates', {
+            method: 'POST',
+            body: { procedureTypeId: f.procedureTypeIds[0], body: f.opReport, ...(title ? { title } : {}) },
+          });
+          setOpTplRev((n) => n + 1);
+          return r;
+        }}
+      />
       {editing && aiOn && (
         <div className="db-aibar">
           {sttOn && (

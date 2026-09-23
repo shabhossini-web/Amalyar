@@ -12,8 +12,10 @@ import { RecordService } from './record.service';
 import { monthDayCounts } from './month-summary';
 import {
   diagnosisLabel, diagnosisList, kitTemplate, NEEDS_SELECT, OTHER_DX, OTHER_PX, OTHER_PX_KIT,
-  procedureLabel, procedureList,
+  principalProcedureName, procedureIds, procedureLabel, procedureList,
 } from './visit-coding';
+import { canAccess } from '../auth/access-check';
+import { addOpTemplate, listOpTemplates } from './op-templates';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
@@ -463,6 +465,55 @@ export class TheatreService {
       after: { length: (body ?? '').trim().length },
     });
     return this.card(visitId, user);
+  }
+
+  /**
+   * **پیش‌فرض‌های شرحِ عمل برای همین عمل** — چیپ‌های بالای کادرِ شرح و دکمهٔ
+   * «افزودن به پیش‌فرض» زیرش (درخواستِ مالک ۱۴۰۵/۰۷/۰۱).
+   *
+   * ⚠️ همان دامنهٔ کارت (`scope`): کسی که این عمل را نمی‌بیند، فهرستِ عمل‌هایش
+   * را هم نمی‌بیند. عمل‌ها از **مراجعهٔ ذخیره‌شده** می‌آیند — در اتاق فرمی نیست
+   * که اصلی را عوض کند؛ `procedure` (اصلی) همان مقصدِ «افزودن» است.
+   * ⚠️ `canAdd` با ماژولِ همین مسیر (`theatre`) سنجیده می‌شود، نه `dashboard`:
+   * جراحِ سطح ۲ داشبورد ندارد ولی باید بتواند شرحِ خودش را پیش‌فرض کند.
+   */
+  async opTemplates(visitId: number, user: any) {
+    const v = await this.codedVisit(visitId, user);
+    const [items, canAdd] = await Promise.all([
+      listOpTemplates(this.prisma, procedureIds(v)),
+      canAccess(this.prisma, user, 'theatre', ['templates.add']).catch(() => false),
+    ]);
+    return { items, canAdd, procedure: v.procedureTypeId ? { id: v.procedureTypeId, name: principalProcedureName(v) } : null };
+  }
+
+  /** «افزودن به پیش‌فرض» از میزِ اتاق — برای **عملِ اصلیِ** همین مراجعه. */
+  async addOpTemplate(visitId: number, dto: { body: string; title?: string }, user: any) {
+    const v = await this.codedVisit(visitId, user);
+    if (!v.procedureTypeId) {
+      throw new BadRequestException('این عمل هنوز نوعِ عمل ندارد — اول در فرمِ عمل انتخابش کنید');
+    }
+    const r = await addOpTemplate(this.prisma, { procedureTypeId: v.procedureTypeId, body: dto.body, title: dto.title });
+    if (r.created) {
+      await this.audit.record({
+        actorId: user?.id, action: 'note_template.add', entityType: 'note_template', entityId: r.template.id,
+        after: { kind: 'op', procedureTypeId: v.procedureTypeId, title: r.template.title, length: r.template.body.length, via: 'theatre', visitId },
+      });
+    }
+    return r;
+  }
+
+  /** مراجعه با عمل‌هایش (اصلی + همزمان) — در دامنهٔ همین کاربر. */
+  private async codedVisit(visitId: number, user: any) {
+    const v = await this.prisma.visit.findFirst({
+      where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
+      select: {
+        id: true, procedureTypeId: true, opType: true,
+        procedureType: { select: { name: true } },
+        otherProcedures: OTHER_PX,
+      },
+    });
+    if (!v) throw new NotFoundException('عمل پیدا نشد');
+    return v;
   }
 
   /**

@@ -6,6 +6,9 @@ import { LEVEL } from '../common/levels';
 import { buildPersonPatch, PersonInput } from '../common/person';
 import { NOTE_KINDS } from './record.service';
 import { NOTE_KIND_LABELS } from './labels';
+import { AuditService } from '../audit/audit.service';
+import { canAccess } from '../auth/access-check';
+import { addOpTemplate, listOpTemplates } from './op-templates';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
 
@@ -16,7 +19,7 @@ const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier:
  */
 @Injectable()
 export class DefinitionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService) {}
 
   private async hospitalDupCheck(name: string, exceptId?: number) {
     const row = await this.prisma.hospital.findFirst({
@@ -617,6 +620,37 @@ export class DefinitionsService {
         ...refs,
       },
     });
+  }
+
+  /**
+   * پیش‌فرض‌های شرحِ عمل برای **فرمِ عمل** (`op-templates.ts`) — اولی اصلی — و
+   * اینکه همین کاربر اجازهٔ «افزودن به پیش‌فرض» دارد یا نه.
+   *
+   * ⚠️ `canAdd` را سرور می‌گوید (قانونِ ۳)، نه حدسِ سطح در رابط: دکمه‌ای که
+   * به ۴۰۳ بخورد بدتر از نبودنش است. ماژول همان ماژولِ این کنترلر (`dashboard`).
+   * ⚠️ نوعِ عمل از **فرم** می‌آید نه از مراجعهٔ ذخیره‌شده: فرمِ ساختِ عمل هنوز
+   * مراجعه‌ای ندارد و فرمِ ویرایش ممکن است اصلی را همین حالا عوض کرده باشد.
+   */
+  async opTemplates(idsRaw: string | undefined, user: any) {
+    const ids = String(idsRaw ?? '').split(',').map((x) => Number(x.trim()))
+      .filter((x) => Number.isInteger(x) && x > 0).slice(0, 10);
+    const [items, canAdd] = await Promise.all([
+      listOpTemplates(this.prisma, ids),
+      canAccess(this.prisma, user, 'dashboard', ['templates.add']).catch(() => false),
+    ]);
+    return { items, canAdd };
+  }
+
+  /** «افزودن به پیش‌فرض» از فرمِ عمل — یک قاعده با میزِ اتاقِ عمل (`op-templates.ts`). */
+  async addOpTemplate(dto: { procedureTypeId: number; body: string; title?: string }, user: any) {
+    const r = await addOpTemplate(this.prisma, dto);
+    if (r.created) {
+      await this.audit.record({
+        actorId: user?.id, action: 'note_template.add', entityType: 'note_template', entityId: r.template.id,
+        after: { kind: 'op', procedureTypeId: dto.procedureTypeId, title: r.template.title, length: r.template.body.length, via: 'form' },
+      });
+    }
+    return r;
   }
 
   /** قالب سند نیست — حذفِ سخت مجاز است؛ شرح‌های نوشته‌شده متنِ خودشان را دارند. */

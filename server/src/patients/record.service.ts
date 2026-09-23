@@ -422,6 +422,9 @@ export class RecordService {
            ترکیبی کلیدِ خودش را دارد. یک کلید با دو معنا در دو صفحه همان
            ناهمسانی‌ای است که این قرارداد برای بستنش نوشته شد. */
         procedureTypeName: principalProcedureName(v),
+        /* شناسهٔ عملِ **اصلی** — مقصدِ «افزودن به پیش‌فرض» در کامپوزرِ شرحِ عملِ
+           پرونده (`op-templates.ts`)؛ همان قراردادِ «کلیدِ تکی = اصلی». */
+        procedureTypeId: v.procedureTypeId ?? null,
         procedureLabel: procedureLabel(v),
         diagnosisTitle: principalDiagnosisTitle(v),
         diagnosisLabel: diagnosisLabel(v),

@@ -40,6 +40,13 @@ paths:
   - src/app/Today.jsx
   - src/app/today.css
   - server/src/work/today.service.ts
+  - server/src/patients/op-templates.ts
+  - server/src/patients/definitions.controller.ts
+  - server/src/patients/theatre.controller.ts
+  - server/src/auth/access-registry.ts
+  - src/app/OpDefaults.jsx
+  - src/app/op-defaults.css
+  - scripts/e2e/op-defaults.mjs
   - scripts/e2e/run-live.mjs
   - scripts/e2e/ci-live.txt
   - .github/workflows/security-ci.yml
@@ -65,7 +72,10 @@ note: >-
   می‌شود. دو کلیدِ تازه برای فیلدِ دلخواهِ فرم رزرو شدند.
   **همراهِ همین شاخه (درخواستِ مالک ۱۴۰۵/۰۷/۰۱):** دکمهٔ «+» شناور روی صفحهٔ
   «امروز» برای ثبتِ سریعِ مراجعهٔ دستی — همان `VisitForm` از میزبانِ پاپ‌آپ؛
-  `GET /work/today` کلیدِ تازهٔ `canCreateVisit` می‌دهد.
+  `GET /work/today` کلیدِ تازهٔ `canCreateVisit` می‌دهد. و «افزودن به پیش‌فرض»
+  زیرِ شرحِ عمل (فرمِ عمل، میزِ اتاق، کامپوزرِ پرونده): مجوزِ تازهٔ
+  `templates.add` (سطحِ کارشناس)، مسیرهای `/op-templates` و
+  `/theatre/visits/:id/op-templates`، و کلیدِ `procedureTypeId` در مراجعه‌های پرونده.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

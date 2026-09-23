@@ -131,6 +131,22 @@ class NoteTemplateCreateDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) topicId?: number;
 }
 
+/**
+ * «افزودن به پیش‌فرض» زیرِ شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) — متنی که همین
+ * حالا نوشته شده، برای **یک** نوعِ عمل. عنوان اختیاری است (پیش‌فرض: نامِ عمل).
+ * سقف‌ها همان `op-templates.ts`؛ کمینه را خودِ آن‌جا با پیامِ روشن می‌سنجد.
+ */
+class OpTemplateAddDto {
+  @Type(() => Number) @IsInt({ message: 'نوعِ عمل نامعتبر است' }) @Min(1, { message: 'اول نوعِ عمل را انتخاب کنید' })
+  procedureTypeId!: number;
+
+  @IsString({ message: 'متنِ شرح نامعتبر است' }) @MaxLength(20000, { message: 'متن بلندتر از سقفِ یک قالب است' })
+  body!: string;
+
+  @IsOptional() @IsString({ message: 'عنوان نامعتبر است' }) @MaxLength(120, { message: 'عنوان بلند است' })
+  title?: string;
+}
+
 class NoteTemplatePatchDto {
   @IsOptional() @IsIn(NOTE_KINDS as unknown as string[], { message: 'نوعِ شرح نامعتبر است' })
   kind?: string;
@@ -500,6 +516,23 @@ export class DefinitionsController {
   @Delete('note-templates/:id')
   delNoteTemplate(@Param('id', ParseIntPipe) id: number) {
     return this.defs.deleteNoteTemplate(id);
+  }
+
+  /* ── پیش‌فرض‌های شرحِ عمل — برای فرمِ عمل (همین ماژول) ──
+     همتای میزِ اتاقِ عمل: `theatre/visits/:id/op-templates`. هر دو از
+     `op-templates.ts` می‌خوانند و می‌نویسند. */
+  @RequirePermissions('definitions.read')
+  @Get('op-templates')
+  opTemplates(@Query('procedureTypeIds') ids: string | undefined, @CurrentUser() user: any) {
+    return this.defs.opTemplates(ids, user);
+  }
+
+  /* ⚠️ مجوزِ جدای `templates.add` و نه `definitions.manage`: افزودن کارِ
+     نویسندهٔ شرح است، مدیریتِ فهرست کارِ ادمین (شرحِ کامل در access-registry). */
+  @RequirePermissions('templates.add')
+  @Post('op-templates')
+  addOpTemplate(@Body() dto: OpTemplateAddDto, @CurrentUser() user: any) {
+    return this.defs.addOpTemplate(dto, user);
   }
 
   @RequirePermissions('definitions.read')

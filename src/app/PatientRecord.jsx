@@ -26,6 +26,7 @@ import { WORK_CHANGED } from './WorkBell.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
+import { OpDefaultSave } from './OpDefaults.jsx';
 
 
 const CATEGORIES = {
@@ -707,6 +708,8 @@ function NotesTab({ rec, reload, toast }) {
   const [history, setHistory] = useState(null);
   /* قالب‌های آمادهٔ همین نوع/مراجعه — HIS-گونه؛ از تعریف‌های پایه می‌آیند. */
   const [tpls, setTpls] = useState([]);
+  /* بعد از «افزودن به پیش‌فرض» چیپ‌ها باید بی‌رفرش همان قالبِ تازه را نشان دهند. */
+  const [tplsRev, setTplsRev] = useState(0);
   /* دستیارِ AI — فقط وقتی در تنظیماتِ شرکت پیکربندی شده باشد دیده می‌شود. */
   const [aiOn, setAiOn] = useState(false);
   const [sttOn, setSttOn] = useState(false); // دستیارِ صوتی — فقط با مدلِ گفتار-به-متن
@@ -759,7 +762,23 @@ function NotesTab({ rec, reload, toast }) {
       .then((r) => { if (on) setTpls(Array.isArray(r) ? r : []); })
       .catch(() => { if (on) setTpls([]); });
     return () => { on = false; };
-  }, [rec.id, kind, visitId]);
+  }, [rec.id, kind, visitId, tplsRev]);
+
+  /* ── «افزودن به پیش‌فرض» برای شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) ──
+     همان کامپوننتِ فرمِ عمل و میزِ اتاق. مقصد: عملِ **اصلیِ** مراجعهٔ
+     انتخاب‌شده. اجازه را سرور می‌گوید (`canAdd`)؛ همان مسیرِ `/op-templates`ِ
+     فرمِ عمل، چون این صفحه هم زیرِ ماژولِ داشبورد است. */
+  const opVisit = kind === 'op' && visitId ? rec.visits.find((v) => String(v.id) === String(visitId)) : null;
+  const opPid = opVisit?.procedureTypeId ?? null;
+  const [opCanAdd, setOpCanAdd] = useState(false);
+  useEffect(() => {
+    if (kind !== 'op') { setOpCanAdd(false); return undefined; }
+    let on = true;
+    api(`/op-templates?procedureTypeIds=${opPid ?? ''}`)
+      .then((r) => { if (on) setOpCanAdd(!!r?.canAdd); })
+      .catch(() => { if (on) setOpCanAdd(false); });
+    return () => { on = false; };
+  }, [kind, opPid]);
 
   /**
    * ثبتِ شرح — و بعد **اثباتِ** اینکه واقعاً در پرونده نشسته.
@@ -904,6 +923,25 @@ function NotesTab({ rec, reload, toast }) {
         <label className="pf-field"><span>متن</span>
           <textarea rows={4} value={body} readOnly={!!aiBusy} onChange={(e) => setBody(e.target.value)} placeholder="یافته‌ها، سیرِ بیماری، توصیه‌ها…" />
         </label>
+        {kind === 'op' && (
+          <OpDefaultSave
+            text={body}
+            procedureName={opPid ? opVisit.procedureTypeName : null}
+            missingHint={visitId
+              ? 'این مراجعه نوعِ عمل ندارد — برای «افزودن به پیش‌فرض» اول در فرمِ عمل انتخابش کنید.'
+              : 'برای «افزودن به پیش‌فرض»، مراجعهٔ همین شرح را از «مربوط به مراجعه» انتخاب کنید.'}
+            canAdd={opCanAdd}
+            disabled={busy || !!aiBusy}
+            onToast={toast}
+            onSave={async (title) => {
+              const r = await api('/op-templates', {
+                method: 'POST', body: { procedureTypeId: opPid, body, ...(title ? { title } : {}) },
+              });
+              setTplsRev((n) => n + 1);
+              return r;
+            }}
+          />
+        )}
         <div className="rc-notebar">
           {sttOn && (
             <VoiceInput
