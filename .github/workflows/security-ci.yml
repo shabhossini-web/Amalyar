@@ -3271,6 +3271,12 @@ jobs:
         run: node scripts/e2e/tenant-profile-ui.mjs
       - name: Verify the service form asks for ID card, prescription and allows a date-less reservation
         run: node scripts/e2e/service-form-local.mjs
+      - name: Verify the approval popup gets every receipt and form document, and the payment note defaults
+        run: node scripts/e2e/approval-cards-local.mjs
+      - name: Verify the payment page shows a bank card and copies plain card and SHEBA numbers
+        run: node scripts/e2e/payment-step-ui.mjs
+      - name: Verify the approval popup has identity, service and payment cards and opens from the row
+        run: node scripts/e2e/approval-cards-ui.mjs
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی

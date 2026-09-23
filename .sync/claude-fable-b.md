@@ -48,6 +48,13 @@ paths:
   - scripts/e2e/booking-flow.mjs
   - scripts/e2e/voice-notes.mjs
   - server/src/config/settings-registry.ts
+  - server/src/patients/intake-docs.ts
+  - src/pages/intake.css
+  - src/ui/hospital-lookup.css
+  - scripts/e2e/approval-cards.mjs
+  - scripts/e2e/approval-cards-local.mjs
+  - scripts/e2e/approval-cards-ui.mjs
+  - scripts/e2e/payment-step-ui.mjs
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
@@ -88,6 +95,11 @@ note: >-
   می‌خواند نه از کانفیگِ کش‌شده) و ردیفِ فرمِ زیرپرونده `service: null`، `serviceAmbiguous: false`
   می‌گیرد. کلیدِ فرمِ `intake.<خدمت>` فقط وقتی خدمت را تعیین می‌کند که شرکت هنوز همان خدمت را بدهد.
   ردیفِ تنظیماتِ `services` وقتی خدمتِ اصلی‌اش (`primaryOf`) با `vertical` نخواند کهنه است و نادیده.
+- ۱۴۰۵/۰۷/۰۱ · **پاپ‌آپِ تأیید و صفحهٔ پرداخت:** ردیف‌های `/intake/submissions` حالا `receipts`
+  (`[{id,name,pdf}]` — **همهٔ** فیش‌ها، بی‌پاک‌شده‌ها) و `documents` (عکس‌های کادرهای عکسِ فرم با
+  `field`/`label`) و `patient.birthDate` دارند؛ کلاینت دیگر `receiptDocumentId` یا `data.prescription` را
+  خودش درنمی‌آورد. نمای عمومیِ فرم `paymentNote` دارد (تنظیمِ تازهٔ `intake_payment_note` در گروهِ تازهٔ
+  `intake`؛ خالی = پیش‌فرض). اصلاحِ هویت در پاپ‌آپ از همان `PATCH /patients/:id` می‌رود (کدِ ملی نه).
 - ۱۴۰۵/۰۷/۰۱ · **هارنس‌های دست‌ساز:** `FormsService`/`SurgeonPortalService` از config
   `profile()` هم می‌خواهند و `AiService` پارامترِ چهارمِ `ConfigService` دارد. پنج هارنس به‌روز شد
   (`profile-workflows`, `company-operations`, `intake-finance-roles`, `w1-5-…`, `w2-2b-…`) — هارنسِ تازه

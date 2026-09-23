@@ -14,6 +14,7 @@ import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { serviceLabel, serviceOf } from './intake-service-of';
+import { imageRefsOf, receiptIdsOf } from './intake-docs';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
@@ -21,6 +22,7 @@ import { RemindersService } from './reminders.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
+import { SETTING_BY_KEY } from '../config/settings-registry';
 import { TenantContext } from '../tenant/tenant-context';
 import { AvailabilityService } from './availability.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
@@ -638,6 +640,10 @@ export class IntakeService {
       //    و فیشی که آپلود می‌کرد به حسابِ ما نبود. فقط حساب‌هایی که ادمین
       //    صریحاً برای فرمِ عمومی علامت زده، و فقط فیلدهای لازمِ واریز.
       payTo: await this.payTo(link?.bankAccountId ?? null),
+      /* توضیحِ بالای کارتِ بانکی — یک متن برای کلِ شرکت (تنظیمات → پذیرشِ آنلاین).
+         ⚠️ «خالی = متنِ پیش‌فرض» (راهنمای همان تنظیم): متنِ خالیِ ذخیره‌شده یعنی مدیر پاکش
+         کرده، نه اینکه بیمار صفحهٔ پرداختِ بی‌توضیح ببیند. */
+      paymentNote: await this.settings.textOr('intake_payment_note', String(SETTING_BY_KEY.get('intake_payment_note')?.default ?? '')),
       /* ⚠️ تعریفِ فرم از **عکسِ لحظه‌ایِ خودِ ثبت‌نام** می‌آید نه از لینک: اگر
          ادمین وسطِ کار فرمِ لینک را عوض کند، بیمارِ در جریان باید همان فرمی را
          ببیند که شروع کرده. `null` یعنی «فرمی ندارد» و صفحه به فیلدهای
@@ -1929,15 +1935,32 @@ export class IntakeService {
       take: 200,
       include: {
         link: { select: { title: true } },
-        patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true, nationalId: true } },
+        patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true, nationalId: true, birthDate: true } },
         visit: { select: { id: true, seq: true } },
         /* فرمِ **همین ثبت‌نام** (عکسِ لحظه‌ای)، نه فرمِ فعلیِ لینک: پنلِ تأیید
            باید بگوید این ثبت‌نام چه می‌سازد، و آن از روی همان فرمی معلوم
            می‌شود که بیمار پر کرده. */
-        form: { select: { title: true, scope: true, color: true, visitKind: true, key: true } },
+        form: { select: {
+          title: true, scope: true, color: true, visitKind: true, key: true,
+          /* کادرهای عکسِ فرم (کارت ملی، دستور پزشک…) — تا پاپ‌آپ بداند کدام مقدار مدرک است. */
+          fields: { where: { type: 'image' }, orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }], select: { key: true, label: true } },
+        } },
       },
     });
-    return rows.map((r) => {
+    /* ⚠️ مدارکِ همهٔ ردیف‌ها با **یک** کوئری: نام و نوعِ فایل لازم است (PDF با
+       `<img>` باز نمی‌شود) و کوئری به‌ازای هر ردیف یعنی صفِ ۲۰۰تایی = ۲۰۰ رفت‌وبرگشت.
+       مدرکِ پاک‌شده (`deletedAt`) — فیشی که بیمار خودش برداشته — نشان داده نمی‌شود. */
+    const docRefs = rows.map((r) => ({ receipts: receiptIdsOf(r.data), images: imageRefsOf(r.data, r.form?.fields ?? []) }));
+    const docIds = [...new Set(docRefs.flatMap((x) => [...x.receipts, ...x.images.map((i) => i.id)]))];
+    const docs = docIds.length
+      ? await this.prisma.document.findMany({ where: { id: { in: docIds }, deletedAt: null }, select: { id: true, fileName: true, mimeType: true } })
+      : [];
+    const docById = new Map(docs.map((x) => [x.id, x]));
+    const docView = (id: number) => {
+      const x = docById.get(id)!;
+      return { id, name: x.fileName, pdf: x.mimeType === 'application/pdf' };
+    };
+    return rows.map((r, i) => {
       /* ⚠️ **مشتق سمتِ سرور** (قانون ۱۵): «آیا تأییدِ این ثبت‌نام مراجعه
          می‌سازد؟» یک قاعدهٔ سرور است و اگر کلاینت خودش از `scope` استنتاجش
          می‌کرد، روزی رفتارِ واقعی و آنچه پنل وعده می‌دهد از هم جدا می‌شدند. */
@@ -1981,6 +2004,9 @@ export class IntakeService {
          همین تصمیم می‌گیرد دکمهٔ «حذف از پرونده» را نشان بدهد و آزمون هم
          چیزی برای سنجیدنِ ادعای «امضا جعل نشد» دارد. */
       autoApproved: r.status === 'approved' && r.reviewedById === null && r.visitId === null,
+      /* مدارکِ پاپ‌آپ (قانون ۱۵) — **همهٔ** فیش‌ها نه فقط اولی، و عکس‌های فرم با برچسبِ کادرشان. */
+      receipts: docRefs[i].receipts.filter((id) => docById.has(id)).map(docView),
+      documents: docRefs[i].images.filter((x) => docById.has(x.id)).map((x) => ({ ...docView(x.id), field: x.field, label: x.label })),
       patient: r.patient,
       visitId: r.visitId,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
