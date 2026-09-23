@@ -10,7 +10,11 @@ import { SERVICES, ServiceKey, TenantProfile, isServiceKey } from '../config/ten
  * ثبت‌نامِ ایمپلنتی ویرایشگرِ اقلام نمی‌گرفت.
  *
  * ترتیبِ منبع‌ها:
- *  ۱. کلیدِ **خودِ فرم** (`intake.ionm` / `intake.implant`) — فرم می‌گوید چه خدمتی است.
+ *  ۱. کلیدِ **خودِ فرم** (`intake.ionm` / `intake.implant`) — فرم می‌گوید چه خدمتی است،
+ *     **به شرطِ اینکه شرکت هنوز همان خدمت را بدهد.** ثبت‌نامِ معلقی که پیش از
+ *     برداشتنِ یک خدمت از بسته پر شده، کلیدِ خدمتِ رفته را دارد؛ اگر آن کلید
+ *     برنده می‌شد، شرکتِ فقط‌نورومانیتورینگ ردیفِ ایمپلنت می‌خواست (یا شرکتِ
+ *     فقط‌ایمپلنت ردیف نمی‌خواست) — قاعدهٔ خدمتی که دیگر وجود ندارد.
  *  ۲. شرکتِ **تک‌خدمته** — ابهامی نیست.
  *  ۳. انتخابِ صریحِ تأییدکننده (فرمِ دلخواه در شرکتِ دوخدمته).
  *  ۴. خدمتِ اصلی — پیش‌فرضِ قابلِ‌ویرایش در پاپ‌آپ، **نه خطای ۴۰۰**: فرم‌های
@@ -35,7 +39,7 @@ export const serviceOfFormKey = (key?: string | null): ServiceKey | null => {
 export function serviceOf(formKey: string | null | undefined, profile: TenantProfile, chosen?: string | null): IntakeService {
   if (profile.kind === 'clinic') return { service: null, source: 'none', ambiguous: false };
   const fromForm = serviceOfFormKey(formKey);
-  if (fromForm) return { service: fromForm, source: 'form', ambiguous: false };
+  if (fromForm && profile.services.includes(fromForm)) return { service: fromForm, source: 'form', ambiguous: false };
   if (profile.services.length === 1) return { service: profile.services[0], source: 'single', ambiguous: false };
   if (chosen && isServiceKey(chosen) && profile.services.includes(chosen)) return { service: chosen, source: 'chosen', ambiguous: true };
   return { service: profile.primary === 'clinic' ? null : profile.primary, source: 'primary', ambiguous: true };

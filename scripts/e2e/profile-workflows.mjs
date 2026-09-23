@@ -46,11 +46,14 @@ try {
     assert.ok(reg); assert.equal(reg.scope, 'intake');
     assert.equal(reg.visitKind, profile === 'clinic' ? 'clinic' : 'surgery');
     assert.equal(all.filter(f => f.scope === 'intake').length, 1);
-    assert.equal(reg.fields.some(f => f.key === 'prescription' && f.required), profile === 'implant');
+    /* تصمیمِ مالک (۱۴۰۵/۰۷/۰۱): دستورِ پزشک و کارتِ ملی در فرمِ **هر دو** خدمتِ شرکت
+       اجباری‌اند (`form-presets.ts` → `SERVICE_INFO`)؛ مطب فرمِ خودش را دارد. */
+    assert.equal(reg.fields.some(f => f.key === 'prescription' && f.required), profile !== 'clinic');
+    assert.equal(reg.fields.some(f => f.key === 'nationalIdImage' && f.required && f.docCategory === 'identity'), profile !== 'clinic');
     if (profile === 'clinic') assert.deepEqual((await forms.visitKinds()).map(f => f.kind).sort(), ['clinic', 'surgery']);
     assert.equal((await intake.formsForLinks()).find(f => f.recommended)?.id, reg.id);
     const publicForm = await intake.formView(reg.id);
-    assert.equal(publicForm.fields.some(f => f.key === 'prescription'), profile === 'implant');
+    assert.equal(publicForm.fields.some(f => f.key === 'prescription'), profile !== 'clinic');
     assert.equal(publicForm.fields.some(f => f.key === 'chiefComplaint'), profile === 'clinic');
     assert.ok(publicForm.fields.every(f => !['amount', 'techId', 'opReport'].includes(f.key)));
     pass(`${profile}: independent recommended registration and correct visit kinds`);

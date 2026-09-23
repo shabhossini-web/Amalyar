@@ -10,6 +10,7 @@
  *   - بی‌کارتِ ملی یا بی‌دستورِ پزشک ← ۴۰۰ (هر دو خدمت)
  *   - «رزرو بدون تاریخ» تاریخِ نیمه‌پرِ قبلی را پاک می‌کند (دو ادعای متناقض نمی‌ماند)
  *   - با نوبت‌دهیِ روشن، «رزرو بدون تاریخ» روزِ نوبت نمی‌خواهد
+ *   - تأییدِ ایمپلنتِ بی‌تاریخ **بی** «رزرو بدون تاریخ» ← ۴۰۰ (ستارهٔ تاریخِ فرمِ عمل سرِ جایش)
  *   - فرمِ نصب‌شدهٔ قدیمی یک‌بار فیلدهای تازه را می‌گیرد؛ برچسبِ دست‌خورده و فیلدِ خاموش دست نمی‌خورند؛
  *     فیلدِ پاک‌شده بعد از ارتقا برنمی‌گردد
  *  نباید بیفتد:
@@ -60,17 +61,27 @@ try {
   assert.ok(auth, 'ورود');
 
   console.log('۱) فرمِ نصب‌شدهٔ قدیمی — ارتقای افزایشی (پیش از اولین خواندن)');
-  /* نصبِ واقعیِ دیروز: فرمِ ایمپلنت با فیلدهای قبلی و پرچمِ نصب؛ مدیر برچسبِ بیمارستان را
-     عوض کرده و توضیحات را خاموش. */
+  /* نصبِ واقعیِ دیروز: قالبِ کاملِ حوزه — از جمله **فرمِ عمل** که ستاره‌هایش در تأیید
+     سنجیده می‌شوند — با همان مسیرِ واقعی (`/forms` روی دیتابیسِ خالی) کاشته می‌شود؛ بعد
+     فقط فیلدهای فرمِ ثبت‌نامِ ایمپلنت به شکلِ دیروز برمی‌گردند: مدیر برچسبِ بیمارستان را
+     عوض کرده و توضیحات را خاموش، و پرچمِ ارتقا هنوز نیست.
+     ⚠️ نسخهٔ اولِ این آزمون فرمِ ثبت‌نام را دستی در دیتابیسِ خالی می‌ساخت؛ آن‌وقت قالب
+     هرگز کاشته نمی‌شد و تأییدِ بی‌تاریخِ ایمپلنت در بخشِ ۵ «سبز» می‌شد چون فرمِ عملی
+     نبود که تاریخ بخواهد — سبزی که هیچ نصبِ واقعی نمی‌بیند. */
   await setSetting('vertical', 'implant');
-  const old = await db.formDef.create({ data: { key: 'intake.implant', title: 'ثبت‌نام تأمین تجهیزات و ایمپلنت', scope: 'intake', visitKind: 'surgery', fields: { create: [
+  await api('/forms');
+  const old = await db.formDef.findUnique({ where: { key: 'intake.implant' } });
+  assert.ok(old && await db.formDef.findUnique({ where: { key: 'visit.surgery' } }), 'پیش‌شرط: قالبِ حوزه (فرمِ عمل و ثبت‌نام) کاشته شد');
+  await db.formField.deleteMany({ where: { formId: old.id } });
+  await db.formField.createMany({ data: [
     { key: 'surgeonName', label: 'نام جراح', required: true, sort: 10 },
     { key: 'hospitalName', label: 'بیمارستانِ محلِ عمل', required: true, sort: 20 },
     { key: 'procedure', label: 'نوع عمل', sort: 30 },
     { key: 'opDate', label: 'تاریخ عمل', type: 'date', sort: 40 },
     { key: 'prescription', label: 'تصویر دستور جراح', type: 'image', required: true, sort: 50 },
     { key: 'patientNotes', label: 'شرح دستور و توضیحات', type: 'textarea', active: false, sort: 60 },
-  ] } } });
+  ].map((f) => ({ ...f, formId: old.id })) });
+  await db.setting.deleteMany({ where: { key: 'registration_implant_v2' } });
   await setSetting('registration_implant_installed', 'true');
   await api('/forms');
   const up = await db.formField.findMany({ where: { formId: old.id } });
@@ -129,9 +140,16 @@ try {
   let v = await db.visit.findUnique({ where: { id: r.data.visitId } });
   ok(v.opDate === null && !('opDateOpen' in (v.extra ?? {})), '**مراجعهٔ بی‌تاریخ؛ نشانِ رزرو در extra نیست**', JSON.stringify({ d: v.opDate, e: v.extra }));
   const implantForm = await db.formDef.findUnique({ where: { key: 'intake.implant' } });
+  const implantItems = [{ itemId: item.id, quantity: 2, notes: '' }];
+  /* ⚠️ استثنا فقط «رزرو بدون تاریخ» است، نه هر ثبت‌نامِ بی‌تاریخ: ایمپلنت برخلافِ
+     نورومانیتورینگ با ستاره‌های کاملِ فرمِ عمل سنجیده می‌شود. */
+  const plain = await db.intakeSubmission.create({ data: { token: tag + 'p', patientId: row.patientId, formId: implantForm.id, status: 'pending_approval', amount: 0,
+    data: { ...base }, expiresAt: new Date(Date.now() + 864e5) } });
+  r = await api(`/intake/submissions/${plain.id}/approve`, { surgeonId: surgeon.id, hospitalId: hospital.id, registerPayment: false, requiredItems: implantItems });
+  ok(r.status === 400 && /تاریخ/.test(msg(r)), '**ایمپلنتِ بی‌تاریخ و بی‌«رزرو بدون تاریخ» ← ۴۰۰**', `${r.status} ${msg(r)}`);
   const sub = await db.intakeSubmission.create({ data: { token: tag + 'i', patientId: row.patientId, formId: implantForm.id, status: 'pending_approval', amount: 0,
     data: { ...base, opDateOpen: 'true' }, expiresAt: new Date(Date.now() + 864e5) } });
-  r = await api(`/intake/submissions/${sub.id}/approve`, { surgeonId: surgeon.id, hospitalId: hospital.id, registerPayment: false, requiredItems: [{ itemId: item.id, quantity: 2, notes: '' }] });
+  r = await api(`/intake/submissions/${sub.id}/approve`, { surgeonId: surgeon.id, hospitalId: hospital.id, registerPayment: false, requiredItems: implantItems });
   ok(r.status === 201, '**ایمپلنتِ بی‌تاریخ هم تأیید می‌شود** (پیش‌تر ستارهٔ تاریخِ فرمِ عمل ردش می‌کرد)', `${r.status} ${msg(r)}`);
   v = await db.visit.findUnique({ where: { id: r.data.visitId } });
   ok(v.opDate === null && v.requiredItems?.[0]?.quantity === 2, 'بی‌تاریخ، با ردیفِ اقلام');

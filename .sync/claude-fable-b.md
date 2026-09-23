@@ -44,6 +44,9 @@ paths:
   - scripts/e2e/profile-workflows.mjs
   - scripts/e2e/company-operations.mjs
   - scripts/e2e/intake-finance-roles.mjs
+  - server/src/ai/assistant-knowledge.ts
+  - scripts/e2e/booking-flow.mjs
+  - scripts/e2e/voice-notes.mjs
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
@@ -70,14 +73,19 @@ note: >-
 
 - ۱۴۰۵/۰۷/۰۱ · **تأییدِ ثبت‌نام در شرکت** (تصمیمِ مالک): جراح **و بیمارستانِ** تعریف‌شده برای
   هر دو خدمت الزامی است؛ بیمارستانِ «پیشنهادی» (تطبیقِ فازی) دیگر خودکار نمی‌نشیند (دقیق/مستعار/انتخابِ
-  بیمار بله). ایمپلنت هم مثلِ نورومانیتورینگ ستاره‌های فرمِ کارکنان را نمی‌خواهد
-  (`prepareVisitCreation(..., { intakeCompany })` جای `intakeIonm`). مطب بی‌تغییر.
-  **هر e2eای که ثبت‌نامِ شرکت را بی‌`hospitalId` تأیید می‌کند باید بیمارستان بدهد** — `w1-4-approve-atomic`
-  و `w2-2b-intake-events` همین را گرفتند.
+  بیمار بله). ستاره‌های فرمِ عمل **فقط در نورومانیتورینگ** شل‌اند (مثلِ قبل)؛ ایمپلنت با ستاره‌های
+  کامل سنجیده می‌شود و تنها استثنایش «رزرو بدون تاریخ» است
+  (`prepareVisitCreation(..., { intakeCompany: { relaxRequired, undated } })` جای `intakeIonm`). مطب بی‌تغییر.
+  **هر e2eای که ثبت‌نامِ شرکت را بی‌`hospitalId` تأیید می‌کند باید بیمارستان بدهد** — `w1-4-approve-atomic`،
+  `w2-2b-intake-events`، `booking-flow` و `voice-notes` همین را گرفتند.
 - ۱۴۰۵/۰۷/۰۱ · اقلامِ ایمپلنت و این قاعده حالا بر اساسِ **خدمتِ ردیف** است (`intake-service-of.ts`)،
   نه `vertical`: ردیف‌های `/intake/submissions` فیلدهای `service`، `serviceLabel`، `serviceAmbiguous`
   دارند؛ `ApproveDto.service` (فقط فرمِ دلخواه در شرکتِ دوخدمته). ردیف‌های `/surgeon/visits`
   `implant` (per-مراجعه) و پاسخ `services` دارد.
+- ۱۴۰۵/۰۷/۰۱ · ردیف‌های `/intake/submissions` حالا `profileKind` هم دارند (پاپ‌آپ «الزامی» را از ردیف
+  می‌خواند نه از کانفیگِ کش‌شده) و ردیفِ فرمِ زیرپرونده `service: null`، `serviceAmbiguous: false`
+  می‌گیرد. کلیدِ فرمِ `intake.<خدمت>` فقط وقتی خدمت را تعیین می‌کند که شرکت هنوز همان خدمت را بدهد.
+  ردیفِ تنظیماتِ `services` وقتی خدمتِ اصلی‌اش (`primaryOf`) با `vertical` نخواند کهنه است و نادیده.
 - ۱۴۰۵/۰۷/۰۱ · **هارنس‌های دست‌ساز:** `FormsService`/`SurgeonPortalService` از config
   `profile()` هم می‌خواهند و `AiService` پارامترِ چهارمِ `ConfigService` دارد. پنج هارنس به‌روز شد
   (`profile-workflows`, `company-operations`, `intake-finance-roles`, `w1-5-…`, `w2-2b-…`) — هارنسِ تازه

@@ -352,7 +352,9 @@ function ReceiptZoom({ url, onClose }) {
 function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const { user: me } = useAuth();
   const cfg = useConfig();
-  const company = cfg.kind === 'company';
+  /* نوعِ نصب از **خودِ ردیف** (سرور)، نه کانفیگِ کش‌شدهٔ رابط: «الزامی»ِ جراح و
+     بیمارستان باید همان قاعده‌ای باشد که `approve()` اجرا می‌کند. */
+  const company = (row.profileKind ?? cfg.kind) === 'company';
   /* ⚠️ خدمتِ **همین ثبت‌نام** از سرور (`intake-service-of.ts`)، نه حوزهٔ کلِ
      شرکت: شرکتِ دوخدمته هر دو نوع را در یک صف دارد. کلاینتِ کش‌شده‌ای که
      `service` نمی‌گیرد به همان `workflow`ِ قدیمی برمی‌گردد. فقط فرمِ دلخواه در
@@ -454,7 +456,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           registerPayment: f.registerPayment,
           bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
           extra: Object.fromEntries((fields ?? []).filter(field => !field.builtin && field.active !== false).map(field => [field.key, extra[field.key]])),
-          ...(row.serviceAmbiguous && service ? { service } : {}),
+          ...(row.makesVisit !== false && row.serviceAmbiguous && service ? { service } : {}),
           ...(workflow === 'implant' ? { requiredItems: requiredItems.map(({ itemId, quantity, notes }) => ({ itemId, quantity, notes: notes || '' })) } : {}),
         },
       });

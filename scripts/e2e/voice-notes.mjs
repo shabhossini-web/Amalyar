@@ -176,8 +176,10 @@ const sub = ((await api('/intake/submissions?status=pending_approval')).json ?? 
   ?? ((await api('/intake/submissions')).json ?? []).find((x) => x.token === reg.token);
 ok('ثبت‌نام در صفِ تأیید است', !!sub);
 const surgeon = (await api('/surgeons')).json?.[0];
+/* شرکت بیمارستانِ تعریف‌شده هم می‌خواهد (تصمیمِ مالک ۱۴۰۵/۰۷/۰۱)؛ bootstrap «بیمارستان آزمون» را ساخته. */
+const hospital = ((await api('/hospitals')).json ?? []).find((h) => h.active);
 const ap = await api(`/intake/submissions/${sub?.id}/approve`, {
-  method: 'POST', body: { surgeonId: surgeon?.id, opDate: new Date().toISOString().slice(0, 10), registerPayment: false },
+  method: 'POST', body: { surgeonId: surgeon?.id, hospitalId: hospital?.id, opDate: new Date().toISOString().slice(0, 10), registerPayment: false },
 });
 ok('تأیید شد و مراجعه ساخت', ap.status < 300 && !!ap.json?.visitId, ap.status + ' ' + ap.text.slice(0, 140));
 const visitId = ap.json?.visitId;

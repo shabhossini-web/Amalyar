@@ -8,6 +8,7 @@
  *
  *  باید بیفتد:
  *   - ردیفِ `services`ی که خدمتِ آینه‌شده در `vertical` را ندارد کهنه است و نادیده
+ *   - و همچنین ردیفی که آن را دارد ولی خدمتِ اصلی‌اش چیزِ دیگری است
  *   - مطب با ردیفِ `services`ِ جامانده همچنان مطب است، بی‌خدمت
  *   - کلیدِ ناشناخته/تکراری/JSONِ خراب هرگز به بیرون نمی‌رسد
  *   - کلاینت با mockِ قدیمی (فقط `vertical`) همان پروفایلِ سرور را می‌سازد
@@ -44,6 +45,8 @@ ok(S.profileLabel(S.profileOf('ionm', '["ionm","implant"]')) === 'شرکتی —
 
 console.log('\n۳) ردیفِ کهنه و خراب (باید بیفتد)');
 ok(same(S.profileOf('implant', '["ionm"]').services, ['implant']), '**ردیفِ services بی‌خدمتِ vertical کهنه است — vertical برنده**');
+ok(same(S.profileOf('implant', '["ionm","implant"]'), { kind: 'company', services: ['implant'], primary: 'implant' }),
+  '**ردیفِ دوخدمته کنارِ vertical=implant هم کهنه است** — خدمتِ اصلیِ آن بسته نورومانیتورینگ است، نه ایمپلنت');
 ok(same(S.profileOf('clinic', '["ionm","implant"]'), { kind: 'clinic', services: [], primary: 'clinic' }), '**مطب با ردیفِ جامانده همچنان مطب و بی‌خدمت**');
 ok(same(S.profileOf('ionm', '["dental"]').services, ['ionm']), 'کلیدِ ناشناخته دور ریخته می‌شود');
 ok(same(S.profileOf('ionm', 'not json').services, ['ionm']), 'JSONِ خراب ← بازگشت به vertical');
@@ -51,7 +54,7 @@ ok(same(S.profileOf('ionm', '["ionm","ionm"]').services, ['ionm']), 'تکرار 
 ok(same(S.normalizeServices({ 0: 'ionm' }), []), 'غیرِ آرایه ← خالی');
 
 console.log('\n۴) کلاینت همان قاعده را آینه می‌کند');
-const cases = [['ionm', null], ['implant', null], ['clinic', null], ['ionm', '["ionm","implant"]'], ['implant', '["ionm"]'], ['clinic', '["ionm"]']];
+const cases = [['ionm', null], ['implant', null], ['clinic', null], ['ionm', '["ionm","implant"]'], ['implant', '["ionm"]'], ['implant', '["ionm","implant"]'], ['clinic', '["ionm"]']];
 for (const [v, raw] of cases) {
   const srv = S.profileOf(v, raw);
   const fromServer = C.profileFromConfig({ vertical: srv.primary, kind: srv.kind, services: srv.services });

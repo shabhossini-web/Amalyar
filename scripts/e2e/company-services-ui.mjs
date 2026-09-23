@@ -6,7 +6,8 @@
  *   - در شرکتِ دوخدمته هر کارت خدمتِ خودش را نشان می‌دهد
  *   - فرمِ دلخواهِ مبهم انتخابگرِ خدمت دارد، پیش‌فرض خدمتِ اصلی؛ با «ایمپلنت» ویرایشگرِ
  *     اقلام ظاهر می‌شود و `service` همراهِ تأیید می‌رود
- *   - جراح و بیمارستان در شرکت «(الزامی)» اند (تصمیمِ مالک)
+ *   - جراح و بیمارستان در شرکت «(الزامی)» اند (تصمیمِ مالک) — و این را **خودِ ردیف**
+ *     (`profileKind`) می‌گوید: کانفیگِ کش‌شده‌ای که هنوز «مطب» است آن را برنمی‌دارد
  *  نباید بیفتد:
  *   - ثبت‌نامِ ایمپلنتیِ غیرمبهم انتخابگر ندارد و `service` نمی‌فرستد
  *   - شرکتِ تک‌خدمته نشانِ خدمت روی کارت ندارد (اطلاعِ اضافه، نه تفکیک)
@@ -27,7 +28,7 @@ const row = (id, o) => ({
   data: { firstName: 'بیمار', lastName: String(id), surgeonName: 'دکتر آزمون', hospitalName: 'مرکز آزمون' }, createdAt: '2026-09-23T08:00:00Z', ...o,
 });
 
-async function run(services) {
+async function run(services, { kind = 'company', profileKind } = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fa-IR', serviceWorkers: 'block' });
   const writes = [], errors = [];
   await ctx.route('**/api/**', async (route) => {
@@ -36,11 +37,11 @@ async function run(services) {
     if (method !== 'GET') writes.push({ path, data });
     let body = [];
     if (path === '/auth/me') body = { id: 1, level: 6, status: 'active', firstName: 'مدیر', lastName: 'تست' };
-    else if (path === '/config') body = { vertical: 'ionm', kind: 'company', services, serviceCatalog: CATALOG, brand: {} };
+    else if (path === '/config') body = { vertical: kind === 'clinic' ? 'clinic' : 'ionm', kind, services, serviceCatalog: CATALOG, brand: {} };
     else if (path === '/features') body = ['dashboard', 'formgen', 'definitions'].map((key) => ({ key, allowed: true }));
     else if (path === '/intake/submissions') body = [
-      row(1, { service: 'ionm', serviceLabel: 'نورومانیتورینگ', serviceAmbiguous: services.length > 1 }),
-      row(2, { service: 'implant', serviceLabel: 'ایمپلنت و تجهیزات', serviceAmbiguous: false }),
+      row(1, { service: 'ionm', serviceLabel: 'نورومانیتورینگ', serviceAmbiguous: services.length > 1, ...(profileKind ? { profileKind } : {}) }),
+      row(2, { service: 'implant', serviceLabel: 'ایمپلنت و تجهیزات', serviceAmbiguous: false, ...(profileKind ? { profileKind } : {}) }),
     ];
     else if (path === '/intake/link-options') body = { forms: [] };
     else if (path.startsWith('/forms/visit.')) body = { fields: ['surgeonId', 'hospitalId', 'procedureTypeId', 'opDate'].map((key) => ({ key, active: true, builtin: true })) };
@@ -106,6 +107,19 @@ try {
     await page.locator('.ia-card').nth(0).locator('.ia-ok').click();
     await page.locator('.ia-sheet').waitFor();
     pass(await page.locator('.ia-sheet').getByRole('radio').count() === 0, 'بی‌انتخابگرِ خدمت');
+    pass(errors.length === 0, 'بدونِ خطای JS', errors[0]);
+    await ctx.close();
+  }
+  console.log('\n۳) کانفیگِ کش‌شدهٔ «مطب»، ردیفِ شرکتی (باید بیفتد)');
+  {
+    /* سوپرادمین همین حالا نوعِ نصب را از مطب به شرکتی برده و تبِ دیگرِ مرورگر هنوز
+       کانفیگِ قبلی را دارد. `approve()` قاعدهٔ شرکت را اجرا می‌کند، پس پاپ‌آپ هم باید
+       همان را بگوید — وگرنه «جراح» بی‌ستاره است و ۴۰۰ غافلگیرکننده می‌آید. */
+    const { ctx, page, errors } = await run(['ionm'], { kind: 'clinic', profileKind: 'company' });
+    await page.locator('.ia-card').nth(0).locator('.ia-ok').click();
+    const sheet = page.locator('.ia-sheet'); await sheet.waitFor();
+    pass(await sheet.getByText('جراح (الزامی)').count() === 1 && await sheet.getByText('بیمارستان (الزامی)').count() === 1,
+      '**ردیفِ شرکتی جراح و بیمارستان را الزامی نشان می‌دهد، حتی با کانفیگِ کش‌شدهٔ مطب**');
     pass(errors.length === 0, 'بدونِ خطای JS', errors[0]);
     await ctx.close();
   }

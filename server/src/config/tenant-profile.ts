@@ -83,16 +83,19 @@ function parseServices(raw: string | null): ServiceKey[] {
  * @param vertical مقدارِ معتبرِ ردیفِ `vertical` (خواننده قبلاً پیش‌فرض را گذاشته)
  * @param servicesRaw مقدارِ خامِ ردیفِ `services` یا `null`
  *
- * ⚠️ ردیفِ `services`ی که **خدمتِ آینه‌شده در `vertical` را ندارد** کهنه است،
- * نه منبع: یعنی کسی از مسیرِ قدیمی (`PATCH /config/vertical`، یا نسخهٔ قبلیِ
- * کد پس از بازگشت) حوزه را عوض کرده و این ردیف را جا گذاشته. آن‌وقت
+ * ⚠️ ردیفِ `services`ی که **خدمتِ اصلی‌اش (`primaryOf`) همان `vertical` نیست**
+ * کهنه است، نه منبع: یعنی کسی از مسیرِ قدیمی (`PATCH /config/vertical`، یا
+ * نسخهٔ قبلیِ کد پس از بازگشت) حوزه را عوض کرده و این ردیف را جا گذاشته. آن‌وقت
  * `vertical` برنده است، چون همان را همهٔ خواننده‌های قدیمی هم می‌بینند —
  * دو منبعِ ناهم‌خوان یعنی نیمی از صفحه ایمپلنت و نیمی نورومانیتورینگ.
+ * «شاملِ `vertical` بودن» کافی نیست: `["ionm","implant"]` کنارِ `vertical=implant`
+ * هم شاملش است، ولی خدمتِ اصلیِ آن بسته نورومانیتورینگ است و خواننده‌های
+ * قدیمی واژه‌های ایمپلنت را نشان می‌دادند — همان دو منبعِ ناهم‌خوان.
  */
 export function profileOf(vertical: 'clinic' | ServiceKey, servicesRaw: string | null): TenantProfile {
   if (vertical === 'clinic') return { kind: 'clinic', services: [], primary: 'clinic' };
   const stored = parseServices(servicesRaw);
-  const services = stored.includes(vertical) ? stored : [vertical];
+  const services = stored.length > 0 && primaryOf(stored) === vertical ? stored : [vertical];
   return { kind: 'company', services, primary: vertical };
 }
 

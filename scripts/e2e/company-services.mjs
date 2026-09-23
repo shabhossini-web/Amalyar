@@ -15,11 +15,16 @@
  *   - بی‌جراحِ تعریف‌شده ← ۴۰۰
  *   - فرمِ دلخواه با خدمتِ ناشناخته/ارائه‌نشده ← ۴۰۰؛ با «ایمپلنت» بی‌اقلام ← ۴۰۰
  *   - پرتالِ جراح: ویرایشگرِ اقلام فقط روی مراجعهٔ ایمپلنتی (`implant` per-مراجعه)
+ *   - کلیدِ فرمِ خدمتی که شرکت دیگر ندارد برنده نیست: شرکتِ فقط‌ایمپلنت ثبت‌نامِ
+ *     معلقِ نورومانیتورینگ را هم بی‌اقلام نمی‌پذیرد
+ *   - فرمِ زیرپرونده خدمت ندارد (نه انتخابگر، نه ستارهٔ جراح/بیمارستان در پاپ‌آپ)
  *  نباید بیفتد:
- *   - نورومانیتورینگِ کامل **بی‌اقلام** تأیید می‌شود؛ ایمپلنتِ کامل با تعداد ۴ ذخیره می‌شود
+ *   - نورومانیتورینگِ کامل **بی‌اقلام و بی‌تاریخ** تأیید می‌شود؛ ایمپلنتِ کامل با تعداد ۴ ذخیره می‌شود
  *   - نامِ بیمارستانی که بیمار **دقیق** نوشته خودکار مچ می‌شود
  *   - فرمِ دلخواهِ مبهم پیش‌فرضِ خدمتِ اصلی می‌گیرد، نه خطا
- *   - شرکتِ تک‌خدمته: فرمِ دلخواه خدمتِ همان شرکت است و مبهم نیست
+ *   - شرکتِ تک‌خدمته: فرمِ دلخواه خدمتِ همان شرکت است و مبهم نیست؛ ثبت‌نامِ معلقِ
+ *     ایمپلنت در شرکتی که ایمپلنت را برداشته، قاعدهٔ نورومانیتورینگ را می‌گیرد
+ *   - هر ردیف نوعِ نصب (`profileKind`) را خودش می‌گوید
  */
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -61,7 +66,11 @@ try {
     data: { firstName: 'بیمارِ', lastName: 'دوخدمته', surgeonName: 'دکتر آزمون', ...data }, expiresAt: new Date(Date.now() + 864e5) } });
   const approve = (id, body) => api(`/intake/submissions/${id}/approve`, { registerPayment: false, ...body });
   const full = { surgeonId: surgeon.id, hospitalId: hospital.id };
+  /* ایمپلنت تاریخِ عمل می‌خواهد (مگر «رزرو بدون تاریخ» — `service-form.mjs`)؛
+     نورومانیتورینگ عمداً بی‌تاریخ تأیید می‌شود تا شل‌ماندنِ ستاره‌هایش سنجیده شود. */
+  const dated = { opDate: new Date().toISOString().slice(0, 10) };
   const rows = [{ itemId: item.id, quantity: 4, notes: '' }];
+  const recordForm = await db.formDef.create({ data: { key: 'rec' + tag, title: 'نظرسنجیِ زیرپرونده', scope: 'record' } });
 
   console.log('\n۱) صفِ ثبت‌نام خدمتِ هر ردیف را می‌گوید');
   const sIonm = await sub(ionmForm.id), sImplant = await sub(implantForm.id), sCustom = await sub(customForm.id);
@@ -70,6 +79,11 @@ try {
   ok(rowOf(sIonm.id)?.service === 'ionm' && rowOf(sIonm.id)?.serviceAmbiguous === false, 'فرمِ نورومانیتورینگ ← ionm', JSON.stringify(rowOf(sIonm.id)?.service));
   ok(rowOf(sImplant.id)?.service === 'implant' && rowOf(sImplant.id)?.serviceLabel === 'ایمپلنت و تجهیزات', 'فرمِ ایمپلنت ← implant با برچسب');
   ok(rowOf(sCustom.id)?.service === 'ionm' && rowOf(sCustom.id)?.serviceAmbiguous === true, '**فرمِ دلخواه در شرکتِ دوخدمته مبهم است؛ پیش‌فرض خدمتِ اصلی**');
+  ok(list.every((r) => r.profileKind === 'company'), '**هر ردیف نوعِ نصب را خودش می‌گوید** (پاپ‌آپ به کانفیگِ کش‌شده تکیه نکند)', JSON.stringify(list.map((r) => r.profileKind)));
+  const sRecord = await sub(recordForm.id);
+  const recRow = (await api('/intake/submissions?status=pending_approval')).data.find((r) => r.id === sRecord.id);
+  ok(recRow?.makesVisit === false && recRow?.service === null && recRow?.serviceAmbiguous === false,
+    '**فرمِ زیرپرونده خدمت ندارد و مبهم نیست** — مراجعه نمی‌سازد', JSON.stringify({ m: recRow?.makesVisit, s: recRow?.service, a: recRow?.serviceAmbiguous }));
 
   console.log('\n۲) ایمپلنت اقلام می‌خواهد، حتی وقتی خدمتِ اصلی نورومانیتورینگ است (باید بیفتد)');
   let r = await approve(sImplant.id, full);
@@ -89,10 +103,10 @@ try {
 
   console.log('\n۴) مسیرهای درست (نباید بیفتد)');
   r = await approve(sIonm.id, full);
-  ok(r.status === 201, '**نورومانیتورینگِ کامل بی‌اقلام تأیید می‌شود**', `${r.status} ${msg(r)}`);
+  ok(r.status === 201, '**نورومانیتورینگِ کامل بی‌اقلام و بی‌تاریخ تأیید می‌شود**', `${r.status} ${msg(r)}`);
   const vIonm = await db.visit.findUnique({ where: { id: r.data.visitId } });
   ok(vIonm.requiredItems == null && vIonm.hospitalId === hospital.id && vIonm.surgeonId === surgeon.id, 'مراجعهٔ نورومانیتورینگ بی‌اقلام، با جراح و بیمارستان');
-  r = await approve(sImplant.id, { ...full, requiredItems: rows });
+  r = await approve(sImplant.id, { ...full, ...dated, requiredItems: rows });
   ok(r.status === 201, 'ایمپلنتِ کامل تأیید می‌شود', `${r.status} ${msg(r)}`);
   const vImplant = await db.visit.findUnique({ where: { id: r.data.visitId } });
   ok(vImplant.requiredItems?.[0]?.quantity === 4, 'ردیفِ ایمپلنت با تعدادِ ۴ روی مراجعه');
@@ -106,7 +120,7 @@ try {
   ok(r.status === 400, 'خدمتِ ناشناخته ← ۴۰۰', `${r.status} ${msg(r)}`);
   r = await approve(sCustom.id, { ...full, service: 'implant' });
   ok(r.status === 400 && /اقلام/.test(msg(r)), '**«ایمپلنت» روی فرمِ دلخواه هم اقلام می‌خواهد**', `${r.status} ${msg(r)}`);
-  r = await approve(sCustom.id, { ...full, service: 'implant', requiredItems: rows });
+  r = await approve(sCustom.id, { ...full, ...dated, service: 'implant', requiredItems: rows });
   ok(r.status === 201, 'با اقلام تأیید می‌شود', `${r.status} ${msg(r)}`);
   const vCustom = r.data.visitId;
   const sCustom2 = await sub(customForm.id);
@@ -128,9 +142,24 @@ try {
   ok(row3?.service === 'ionm' && row3?.serviceAmbiguous === false, 'فرمِ دلخواه در شرکتِ تک‌خدمته مبهم نیست');
   r = await approve(sCustom3.id, { ...full, service: 'implant' });
   ok(r.status === 400 && /ارائه نمی‌کند/.test(msg(r)), 'خدمتی که شرکت ندارد ← ۴۰۰', `${r.status} ${msg(r)}`);
+  /* ثبت‌نامِ ایمپلنتی که پیش از برداشتنِ ایمپلنت از بسته پر شده و هنوز معلق است:
+     کلیدِ فرمش خدمتی را می‌گوید که دیگر وجود ندارد. شرکت امروز فقط نورومانیتورینگ
+     می‌دهد، پس قاعدهٔ نورومانیتورینگ — نه اقلامِ خدمتِ رفته. */
   const sImplant2 = await sub(implantForm.id);
+  const row4 = (await api('/intake/submissions?status=pending_approval')).data.find((x) => x.id === sImplant2.id);
+  ok(row4?.service === 'ionm' && row4?.serviceAmbiguous === false, '**کلیدِ فرمِ خدمتِ برداشته‌شده برنده نیست** — ردیف خدمتِ فعلیِ شرکت را می‌گوید', JSON.stringify(row4?.service));
   r = await approve(sImplant2.id, full);
-  ok(r.status === 400 && /اقلام/.test(msg(r)), 'فرمِ ایمپلنت خدمتش را خودش می‌گوید، حتی وقتی شرکت دیگر ایمپلنت ندارد');
+  ok(r.status === 201, 'و بی‌اقلام تأیید می‌شود (قاعدهٔ نورومانیتورینگ)', `${r.status} ${msg(r)}`);
+  ok((await db.visit.findUnique({ where: { id: r.data.visitId } })).requiredItems == null, 'مراجعه ردیفِ اقلام ندارد');
+
+  console.log('\n۸) آینه: شرکتِ فقط‌ایمپلنت و ثبت‌نامِ معلقِ نورومانیتورینگ (باید بیفتد)');
+  await setSetting('vertical', 'implant');
+  await setSetting('services', JSON.stringify(['implant']));
+  const sIonm2 = await sub(ionmForm.id);
+  r = await approve(sIonm2.id, { ...full, ...dated });
+  ok(r.status === 400 && /اقلام/.test(msg(r)), '**شرکتِ فقط‌ایمپلنت ثبت‌نامِ نورومانیتورینگِ معلق را بی‌اقلام نمی‌پذیرد**', `${r.status} ${msg(r)}`);
+  r = await approve(sIonm2.id, { ...full, ...dated, requiredItems: rows });
+  ok(r.status === 201, 'با اقلام تأیید می‌شود', `${r.status} ${msg(r)}`);
 
   console.log(`\n${count} سنجه سبز`);
 } finally {

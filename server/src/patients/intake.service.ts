@@ -1938,15 +1938,26 @@ export class IntakeService {
       },
     });
     return rows.map((r) => {
+      /* ⚠️ **مشتق سمتِ سرور** (قانون ۱۵): «آیا تأییدِ این ثبت‌نام مراجعه
+         می‌سازد؟» یک قاعدهٔ سرور است و اگر کلاینت خودش از `scope` استنتاجش
+         می‌کرد، روزی رفتارِ واقعی و آنچه پنل وعده می‌دهد از هم جدا می‌شدند. */
+      const makesVisit = (r.form?.scope ?? 'intake') !== 'record';
       /* ⚠️ خدمتِ **همین ردیف** (`intake-service-of.ts`) — شرکتِ دوخدمته هر دو
          نوع ثبت‌نام را در یک صف دارد و پاپ‌آپ باید بداند این یکی کدام است.
+         فرمِ زیرپرونده مراجعه نمی‌سازد، پس خدمتی هم ندارد — وگرنه پاپ‌آپِ
+         نظرسنجی انتخابگرِ خدمت و ستارهٔ جراح/بیمارستان می‌گرفت، در حالی که
+         `approve()` هیچ‌کدام را برایش نمی‌خواهد.
          `workflow` فقط برای کلاینتِ کش‌شدهٔ قدیمی می‌ماند. */
-      const svc = serviceOf(r.form?.key, profile);
+      const svc = makesVisit ? serviceOf(r.form?.key, profile) : null;
       return {
       workflow, approvalKind: r.form?.visitKind || defaultKind,
-      service: svc.service,
-      serviceLabel: serviceLabel(svc.service),
-      serviceAmbiguous: svc.ambiguous,
+      /* نوعِ نصب از **همان پاسخی** که ردیف را آورده، نه از کانفیگِ کشِ رابط:
+         پاپ‌آپ با همین تصمیم می‌گیرد جراح/بیمارستان را «الزامی» بنویسد، و اگر
+         کانفیگِ کش‌شده عقب باشد، وعدهٔ پاپ‌آپ با قاعدهٔ `approve()` نمی‌خواند. */
+      profileKind: profile.kind,
+      service: svc?.service ?? null,
+      serviceLabel: serviceLabel(svc?.service ?? null),
+      serviceAmbiguous: svc?.ambiguous ?? false,
       id: r.id,
       token: r.token,
       status: r.status,
@@ -1965,10 +1976,7 @@ export class IntakeService {
       direct: r.linkId === null,
       formTitle: r.form?.title ?? null,
       formColor: r.form?.color ?? null,
-      /* ⚠️ **مشتق سمتِ سرور** (قانون ۱۵): «آیا تأییدِ این ثبت‌نام مراجعه
-         می‌سازد؟» یک قاعدهٔ سرور است و اگر کلاینت خودش از `scope` استنتاجش
-         می‌کرد، روزی رفتارِ واقعی و آنچه پنل وعده می‌دهد از هم جدا می‌شدند. */
-      makesVisit: (r.form?.scope ?? 'intake') !== 'record',
+      makesVisit,
       /* مشتقِ سرور (قانون ۱۵): «این را ماشین تأیید کرده یا آدم؟» — UI با
          همین تصمیم می‌گیرد دکمهٔ «حذف از پرونده» را نشان بدهد و آزمون هم
          چیزی برای سنجیدنِ ادعای «امضا جعل نشد» دارد. */
@@ -2125,7 +2133,12 @@ export class IntakeService {
           opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
           notes: d.patientNotes ?? undefined,
           ...(Object.keys(extra).length ? { extra } : {}),
-        } as any, user, { requirements, intakeCompany: makesVisit && company })
+        } as any, user, {
+          requirements,
+          intakeCompany: makesVisit && company
+            ? { relaxRequired: service === 'ionm', undated: isUndated(d[UNDATED_KEY]) }
+            : undefined,
+        })
         : null;
 
     const snapshot = row.schemaSnapshot ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds);
