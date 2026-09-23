@@ -8,7 +8,7 @@ import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
-import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS, UNDATED_KEY, isUndated } from './form-presets';
 import { normalizeLinks } from './forms.service';
 import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
@@ -880,6 +880,10 @@ export class IntakeService {
         const when = toDateValue(data[fl.key]);
         if (when) data[fl.key] = when.toISOString().slice(0, 10);
       }
+      /* «رزرو بدون تاریخ» (مالک، ۱۴۰۵/۰۷/۰۱): تاریخِ نیمه‌پرِ قبلی نباید کنارِ
+         اعلامِ «هنوز معلوم نیست» بماند — دو ادعای متناقض که تأییدکننده باید حدس
+         بزند کدام درست است. */
+      if (isUndated(data[UNDATED_KEY])) delete data.opDate;
       /* باکسِ لینک: URLِ http(s)ِ معتبر، سقفِ ۱۰، متن‌ها بریده — همان قاعدهٔ
          `Visit.extra`. لینکِ `javascript:` روی صفحهٔ پرونده کلیک‌شدنی می‌شود. */
       for (const fl of form.fields) {
@@ -949,7 +953,9 @@ export class IntakeService {
        تمام کرد. وگرنه ثبت‌نامی به صفِ تأیید می‌رسید که هیچ روزی ندارد و
        ادمین باید تلفنی می‌پرسید «کِی می‌آیی؟» — یعنی همان کاری که این
        مرحله برای حذفش آمده. فرمِ زیرپرونده (نظرسنجی) مستثناست. */
-    if (meta?.scope !== 'record' && (await this.bookingOn())) {
+    /* ⚠️ «رزرو بدون تاریخ» همین قاعده را کنار می‌زند: بیمار صریحاً گفته روزِ عمل
+       هنوز معلوم نیست، پس خواستنِ روزِ نوبت یعنی مجبورش کنیم روزی را حدس بزند. */
+    if (meta?.scope !== 'record' && !isUndated(data[UNDATED_KEY]) && (await this.bookingOn())) {
       const appt = await this.prisma.appointment.findUnique({ where: { submissionId: row.id } });
       if (!appt || appt.status === 'cancelled') {
         throw new BadRequestException('روزِ نوبت را انتخاب کنید');
@@ -2042,6 +2048,8 @@ export class IntakeService {
     const RESERVED = new Set([
       'firstName', 'lastName', 'nationalId', 'phone', 'address', 'birthDate',
       'procedure', 'surgeonName', 'hospitalName', 'opDate', 'patientNotes', 'receiptDocumentId',
+      /* نشانِ «رزرو بدون تاریخ» دادهٔ بالینی نیست — نبودنِ `opDate` روی مراجعه همان را می‌گوید. */
+      UNDATED_KEY,
       /* ⚠️ «علت مراجعه»ی فرمِ ثبت‌نام حالا ستونِ `Visit.chiefComplaint` است و
          پایین به `createVisit` پاس می‌شود. اگر این‌جا نمی‌آمد، هم در `extra`
          می‌ماند هم در ستون می‌نشست — دو نسخه از یک داده. */
@@ -2110,7 +2118,7 @@ export class IntakeService {
           techId: dto.techId,
           procedureTypeId: dto.procedureTypeId,
           opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
-          opDate: dto.opDate ?? held?.date?.toISOString() ?? d.opDate ?? undefined,
+          opDate: dto.opDate ?? held?.date?.toISOString() ?? (isUndated(d[UNDATED_KEY]) ? undefined : d.opDate) ?? undefined,
           /* «چرا آمده» را خودِ بیمار در ثبت‌نام نوشته — همان‌جا به ستون برود،
              وگرنه منشی باید دوباره بپرسدش. */
           chiefComplaint: typeof d.chiefComplaint === 'string' ? d.chiefComplaint : undefined,

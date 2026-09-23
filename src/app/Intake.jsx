@@ -215,6 +215,7 @@ export default function IntakeAdmin() {
               {/* ⚠️ `faDate` نه رشتهٔ خام: مقدارِ ذخیره‌شده ISO است و چاپِ
                   خامش «2026-08-05» به ادمینِ فارسی‌زبان نشان می‌داد. */}
               {s.data?.opDate && <span>{faDate(s.data.opDate)}</span>}
+              {(s.data?.opDateOpen === true || s.data?.opDateOpen === 'true') && <span className="ia-undated">رزرو بدون تاریخ</span>}
               <span className="ia-when">{faDate(s.createdAt)}</span>
             </div>
 
@@ -474,6 +475,9 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
         <p className="ia-note">
           بیمار نوشته: {[row.data?.procedure, row.data?.surgeonName, row.data?.hospitalName].filter(Boolean).join(' · ') || '—'}
         </p>
+        {(row.data?.opDateOpen === true || row.data?.opDateOpen === 'true') && (
+          <p className="ia-note warn">بیمار «رزرو بدون تاریخ» زده: می‌توانید بی‌تاریخ تأیید کنید و تاریخِ عمل را بعداً روی مراجعه بگذارید.</p>
+        )}
         {/* ⚠️ فقط فرمِ **دلخواه** در شرکتِ دوخدمته مبهم است؛ پیش‌فرض خدمتِ اصلی
             است و تأییدکننده عوضش می‌کند (ردیف‌های ایمپلنت به همین بسته‌اند). */}
         {row.makesVisit !== false && row.serviceAmbiguous && cfg.services.length > 1 && (

@@ -231,3 +231,4 @@
 .ia-svc-pick .ia-chip.on { border-color: rgba(var(--brand-rgb), .55); background: rgba(var(--brand-rgb), .16); font-weight: 700; }
 .ia-svc-pick .ia-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .ia-svc-pick .ia-chip { transition: none; } }
+.ia-undated { color: var(--amber-text); font-weight: 700; }

@@ -3269,6 +3269,8 @@ jobs:
         run: node scripts/e2e/tenant-profile-write-local.mjs
       - name: Verify the settings screen previews a profile change before saving it
         run: node scripts/e2e/tenant-profile-ui.mjs
+      - name: Verify the service form asks for ID card, prescription and allows a date-less reservation
+        run: node scripts/e2e/service-form-local.mjs
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی

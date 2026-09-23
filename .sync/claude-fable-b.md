@@ -13,6 +13,10 @@ paths:
   - scripts/e2e/tenant-profile-write-local.mjs
   - scripts/e2e/tenant-profile-ui.mjs
   - server/src/patients/labels.ts
+  - server/src/patients/form-presets.ts
+  - src/ui/DynForm.jsx
+  - scripts/e2e/service-form.mjs
+  - scripts/e2e/service-form-local.mjs
   - server/src/patients/intake-service-of.ts
   - server/src/patients/intake.service.ts
   - server/src/patients/intake.controller.ts
@@ -50,6 +54,11 @@ note: >-
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۷/۰۱ · **فرمِ ثبتِ خدمت** (هر دو خدمت): «نام عمل» (اجباری)، `opDateOpen` («رزرو بدون
+  تاریخ»، bool)، `nationalIdImage` (دستهٔ `identity`) و `prescription` (هر دو اجباری). `opDate`
+  وقتی `opDateOpen` روشن است اجباری نیست — **یک** قاعده در `validateFields` و `DynForm`.
+  فرم‌های نصب‌شده یک‌بار (`registration_<key>_v2`) فیلدهای غایب را می‌گیرند؛ فیلدِ دست‌خورده دست نمی‌خورد.
 
 - ۱۴۰۵/۰۷/۰۱ · **`PATCH /config/profile`** `{kind, services}` و **`POST /config/profile/preview`**
   (سوپرادمین). ماژول‌ها فقط جایی عوض می‌شوند که عضویتشان در پلان عوض شده — سطح و خاموشِ
