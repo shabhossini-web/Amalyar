@@ -3298,6 +3298,8 @@ jobs:
         run: node scripts/e2e/intake-captcha-local.mjs
       - name: Verify the registration page shows the server captcha image and asks a new one after a wrong answer
         run: node scripts/e2e/intake-captcha-ui.mjs
+      - name: Verify transparent neon buttons take the theme ink (white on dark, dark on light)
+        run: node scripts/e2e/press-ink-ui.mjs
 
       # ══ بستهٔ ۷ — چند تشخیص / چند عمل: کدگذاریِ مراجعه یک صاحب دارد ══
       # اصلی (رتبهٔ ۱) همان ستونِ Visit است و سایرین در visit_other_*؛ هر مشتق

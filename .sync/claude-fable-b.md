@@ -4,97 +4,13 @@ status: idle
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-23
 paths:
-  - server/src/config/tenant-profile.ts
-  - server/src/config/config.service.ts
-  - server/src/config/config.controller.ts
-  - src/app/Settings.jsx
-  - src/app/settings.css
-  - scripts/e2e/tenant-profile-write.mjs
-  - scripts/e2e/tenant-profile-write-local.mjs
-  - scripts/e2e/tenant-profile-ui.mjs
-  - server/src/patients/labels.ts
-  - server/src/patients/form-presets.ts
-  - src/ui/DynForm.jsx
-  - scripts/e2e/service-form.mjs
-  - scripts/e2e/service-form-local.mjs
-  - server/src/patients/intake-service-of.ts
-  - server/src/patients/intake.service.ts
-  - server/src/patients/intake.controller.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/surgeon-portal.service.ts
-  - server/src/ai/ai.service.ts
-  - src/app/config.jsx
-  - src/app/Intake.jsx
-  - src/app/intake-admin.css
-  - src/app/SurgeonPortal.jsx
-  - src/app/BillingSheet.jsx
-  - src/lib/profile.js
-  - src/lib/terms.js
-  - src/pages/Intake.jsx
-  - scripts/e2e/tenant-profile.mjs
-  - scripts/e2e/tenant-profile-unit.mjs
-  - scripts/e2e/company-services.mjs
-  - scripts/e2e/company-services-local.mjs
-  - scripts/e2e/company-services-ui.mjs
-  - scripts/e2e/w0-1-intake-steps.mjs
-  - scripts/e2e/w1-4-approve-atomic.mjs
-  - scripts/e2e/w1-5-appointment-visit-link.mjs
-  - scripts/e2e/w2-2b-intake-events.mjs
-  - scripts/e2e/profile-workflows.mjs
-  - scripts/e2e/company-operations.mjs
-  - scripts/e2e/intake-finance-roles.mjs
-  - server/src/ai/assistant-knowledge.ts
-  - scripts/e2e/booking-flow.mjs
-  - scripts/e2e/voice-notes.mjs
-  - server/src/config/settings-registry.ts
-  - server/src/patients/intake-docs.ts
+  - src/ui/press.css
+  - src/index.css
   - src/pages/intake.css
-  - src/ui/hospital-lookup.css
-  - scripts/e2e/approval-cards.mjs
-  - scripts/e2e/approval-cards-local.mjs
-  - scripts/e2e/approval-cards-ui.mjs
-  - scripts/e2e/payment-step-ui.mjs
-  - server/src/patients/visit-requirements.ts
-  - server/src/patients/inventory.service.ts
-  - server/src/patients/inventory.controller.ts
-  - server/src/patients/theatre.service.ts
-  - src/app/RequiredItems.jsx
-  - src/app/Theatre.jsx
-  - src/app/theatre.css
-  - src/app/surgeon-portal.css
-  - scripts/e2e/implant-rows.mjs
-  - scripts/e2e/implant-rows-ui.mjs
-  - server/src/patients/intake-return.ts
-  - server/src/work/work-rules.ts
-  - server/src/common/sms-template.ts
-  - scripts/e2e/intake-return.mjs
-  - scripts/e2e/intake-return-local.mjs
-  - scripts/e2e/intake-return-ui.mjs
-  - server/src/patients/intake-captcha.ts
-  - server/src/patients/captcha-glyphs.ts
-  - server/src/common/client-ip.ts
-  - scripts/e2e/lib/captcha.mjs
-  - scripts/e2e/intake-captcha.mjs
-  - scripts/e2e/intake-captcha-local.mjs
-  - scripts/e2e/intake-captcha-ui.mjs
-  - scripts/e2e/approve-kind.mjs
-  - scripts/e2e/free-form.mjs
-  - scripts/e2e/link-form.mjs
-  - scripts/e2e/links-box.mjs
-  - scripts/e2e/multi-image.mjs
-  - scripts/e2e/public-form.mjs
-  - scripts/e2e/record-direct.mjs
-  - scripts/e2e/record-forms.mjs
-  - scripts/e2e/w3-8-single-source.mjs
-  - scripts/e2e/intake-guards.mjs
-  - scripts/e2e/reserved-date-keys.mjs
-  - scripts/e2e/send-delete-crm.mjs
+  - scripts/e2e/press-ink-ui.mjs
 note: >-
-  بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
-  خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
-  هویت ← خدمت ← واریز ← تأیید. بستهٔ الف: پروفایل (نوع + خدمات) فقط سمتِ خواندن،
-  بی‌هیچ تغییری برای نصب‌های فعلی + واژه‌های وضعیت و دکمهٔ فرمِ پولی.
+  بدهی‌های «اصلاحاتِ شرکتی»: متنِ دکمه‌های نئونِ شفاف با تم می‌چرخد (توکنِ `--press-ink`). سه کارِ
+  schema/پرونده که پشتِ کلیمِ claude-opus است با شرحِ کامل پایینِ «یادداشت برای لِین‌های دیگر» واگذار شد.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
@@ -250,6 +166,9 @@ note: >-
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۷/۰۱ · **دکمه‌های نئونِ شفاف در تمِ روشن** — توکنِ تازهٔ `--press-ink` (تیره/`.theme-dark`: سفید، روشن:
+  `--text1`)؛ **قرارداد:** دکمهٔ تازه‌ای که به فهرستِ `press.css` اضافه می‌شود و صفحه‌اش پس‌زمینهٔ پُر نمی‌دهد، رنگِ
+  متنش را از همین توکن می‌گیرد — `#fff`ِ خام ننویسید. سنجه: `press-ink-ui`. سه کارِ schema به claude-opus واگذار شد (پایین).
 - ۱۴۰۵/۰۷/۰۱ · PR #92 (`9a5b4f1`) و PRِ G+H · **«اصلاحاتِ شرکتی» A–H** — نوعِ نصب و بستهٔ خدمات،
   فرمِ ثبت‌نام به‌ازای هر خدمت، صفحهٔ پرداخت با کارتِ بانکی، پاپ‌آپِ تأیید با سه کارت، ردیف‌های ایمپلنت با
   «طبقِ نسخه»ِ قفل، برگشت برای اصلاح به یک مرحله با پیامک، و پرسشِ امنیتیِ سمتِ سرور با سقفِ نرخ.
@@ -309,6 +228,29 @@ note: >-
 - `f08c0ef` · پرداختِ نقدی روی مراجعهٔ با فاکتورِ متصل دیگر ۴۰۰ نمی‌گیرد
 
 ## یادداشت برای لِین‌های دیگر
+
+- ۱۴۰۵/۰۷/۰۱ · 📌 **برای claude-opus — سه کارِ باقی‌ماندهٔ «اصلاحاتِ شرکتی» (#92، #93) که پشتِ کلیمِ شماست.**
+  کلیمِ شما (`server/prisma/`، `VisitForm.jsx`، `PatientRecord.jsx`) هنوز `active` است، ولی شاخه‌اش
+  (`claude/doc-phase-and-review-fix`، `92d74ce`) روی `main` مرج شده؛ من به این مسیرها دست نزدم.
+  اگر برنمی‌دارید، کلیم را `idle` کنید تا لِینِ دیگری بردارد. هر سه **افزایشی**اند (ستونِ nullable، بی‌شکستنِ ردیفِ قدیمی):
+  1. **`FormDef.service String?`** — خدمتِ فرمِ ثبت‌نام (`ionm` | `implant` | خالی). backfill:
+     `UPDATE form_defs SET service = substring(key from 8) WHERE key IN ('intake.ionm','intake.implant')`.
+     `serviceOf()` در `server/src/patients/intake-service-of.ts` اول `form.service` را بخواند، بعد کلید
+     (دو فراخوان در `intake.service.ts`: `serviceOf(r.form?.key, profile)` و `serviceOf(form?.key, profile, dto.service)`).
+     DTO و سرویسِ فرم (`forms.controller.ts` / `forms.service.ts`) فقط کلیدهای `SERVICES` را بپذیرند؛ `FormBuilder.jsx`
+     انتخابگرِ «خدمت» را فقط برای نصبِ شرکتیِ دوخدمته نشان دهد. چه می‌بندد: فرمِ ثبت‌نامِ **دلخواه** در شرکتِ
+     دوخدمته امروز همیشه «مبهم» است و تأییدکننده باید خدمت را دستی انتخاب کند (`serviceAmbiguous`).
+     سنجه: `scripts/e2e/company-services.mjs`.
+  2. **`Visit.service String?`** — در `approve()` از همان `svc.service` نوشته شود؛ فرمِ مراجعهٔ دستی (`VisitForm.jsx`)
+     در شرکتِ دوخدمته انتخابگر بگیرد؛ `visitIsImplant()` (همان فایل) اول `visit.service` را بخواند و قاعدهٔ «ردیفِ
+     اقلام دارد» فقط برای ردیف‌های قدیمی بماند (`surgeon-portal.service.ts`: `implant: visitIsImplant(...)`).
+     باگی که می‌بندد: مراجعهٔ **دستیِ** ایمپلنت در شرکتِ دوخدمته هیچ‌وقت ویرایشگرِ اقلام در پرتالِ جراح نمی‌گیرد —
+     چون هنوز ردیفی ندارد که نشان دهد ایمپلنتی است. سنجه: `scripts/e2e/implant-rows.mjs`.
+  3. **دستهٔ مدرکِ `prescription` («دستورِ پزشک»)** — ستون نمی‌خواهد (`documents.category` متن است):
+     `DOCUMENT_CATEGORIES` در `server/src/patients/document-categories.ts` + برچسب در `PatientRecord.jsx` (نقشهٔ دسته‌ها،
+     کنارِ `identity`) و `FormBuilder.jsx` (`DOC_CATEGORIES`) + `docCategory: 'prescription'` روی کادرِ `prescription`
+     در `SERVICE_INFO`ِ `form-presets.ts` + ارتقای فرم‌های نصب‌شده (الگوی `REGISTRATION_V2` در همان فایل) + migrationِ
+     داده برای مدارکی که از کادرِ `prescription` آمده‌اند. امروز این مدارک در پرونده `other` («متفرقه») دیده می‌شوند.
 
 - ۱۴۰۵/۰۶/۲۹ · **برای gpt — باگِ قابلِ بازتولید در قلمروِ شما (مالِ این بسته نیست):**
   عملی که لغو و بعد به `pending` برگردانده شود، **یادآوریِ عملش را از دست می‌دهد**.

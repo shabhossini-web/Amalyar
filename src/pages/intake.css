@@ -111,9 +111,6 @@
   border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ik-go:disabled { opacity: .55; cursor: not-allowed; }
-/* ⚠️ دکمهٔ نئونِ `press.css` داخلش شفاف است و متنش `#fff`؛ در تمِ روشن (پیش‌فرضِ مطب) «ادامه» سفید
-   روی بنفشِ کم‌رنگ می‌نشست و خوانده نمی‌شد. `--text1` در تمِ تیره همان سفید است. */
-.ik-go:not(.ghost) { color: var(--text1); }
 
 .ik-pay { display: grid; gap: 9px; }
 .ik-note, .ik-good, .ik-bad, .ik-warn {
