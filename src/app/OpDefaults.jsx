@@ -35,13 +35,13 @@ export const withTemplate = (cur, body) => {
 export function OpDefaultChips({ items, onPick, disabled }) {
   if (!items?.length) return null;
   return (
-    <div className="od-chips" data-op-defaults aria-label="قالب‌های آمادهٔ شرحِ عمل">
+    <div className="opd-chips" data-op-defaults aria-label="قالب‌های آمادهٔ شرحِ عمل">
       <small>قالبِ آماده:</small>
       {items.map((t) => (
         <button
           key={t.id}
           type="button"
-          className={`od-chip${t.specific ? ' sp' : ''}`}
+          className={`opd-chip${t.specific ? ' sp' : ''}`}
           data-op-default={t.id}
           disabled={disabled}
           title={t.specific ? 'اختصاصیِ همین نوعِ عمل' : 'قالبِ عمومی'}
@@ -79,7 +79,7 @@ export function OpDefaultSave({ text, procedureName, missingHint, canAdd, onSave
 
   if (!canAdd || !String(text ?? '').trim()) return null;
   if (!procedureName) {
-    return <p className="od-hint" data-op-default-hint>{missingHint || 'برای «افزودن به پیش‌فرض»، اول نوعِ عمل را انتخاب کنید.'}</p>;
+    return <p className="opd-hint" data-op-default-hint>{missingHint || 'برای «افزودن به پیش‌فرض»، اول نوعِ عمل را انتخاب کنید.'}</p>;
   }
 
   const close = () => { setOpen(false); setTitle(''); };
@@ -104,10 +104,10 @@ export function OpDefaultSave({ text, procedureName, missingHint, canAdd, onSave
   };
 
   return (
-    <div className="od-save" data-op-default-save>
+    <div className="opd-save" data-op-default-save>
       {open ? (
         <>
-          <div className="od-row">
+          <div className="opd-row">
             <input
               type="text"
               value={title}
@@ -121,17 +121,17 @@ export function OpDefaultSave({ text, procedureName, missingHint, canAdd, onSave
                 if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
               }}
             />
-            <button type="button" className="od-ok" data-op-default-confirm disabled={busy || disabled} onClick={save}>
+            <button type="button" className="opd-ok" data-op-default-confirm disabled={busy || disabled} onClick={save}>
               {busy ? 'در حالِ افزودن…' : 'افزودن'}
             </button>
-            <button type="button" className="od-cancel" disabled={busy} onClick={close}>لغو</button>
+            <button type="button" className="opd-cancel" disabled={busy} onClick={close}>لغو</button>
           </div>
-          <small className="od-note">
+          <small className="opd-note">
             همین متن قالبِ آمادهٔ شرحِ «{procedureName}» می‌شود و از این به بعد بالای همین کادر پیشنهاد می‌شود.
           </small>
         </>
       ) : (
-        <button type="button" className="od-btn" data-op-default-add disabled={disabled} onClick={() => setOpen(true)}>
+        <button type="button" className="opd-btn" data-op-default-add disabled={disabled} onClick={() => setOpen(true)}>
           <Plus width="14" height="14" aria-hidden="true" />
           افزودن به پیش‌فرض‌های «{procedureName}»
         </button>

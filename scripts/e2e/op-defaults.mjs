@@ -81,7 +81,9 @@ try {
   const S2 = (await send('/visits', 'POST', {
     kind: 'surgery', patientId: S1?.patientId, opDate: today, hospitalId: hosp.id, surgeonId: surg?.id,
   })).json;
-  if (!S1?.id || !S2?.id) { console.error('مراجعه ساخته نشد', JSON.stringify({ S1, S2 }).slice(0, 300)); process.exit(1); }
+  /* ⚠️ `throw` نه `process.exit`: خروج از داخلِ try پاک‌سازیِ finally را جا می‌انداخت
+     و قالب‌های ساخته‌شده روی دیتابیس می‌ماندند (نسخهٔ اول همین را کرد). */
+  if (!S1?.id || !S2?.id) throw new Error(`مراجعه ساخته نشد: ${JSON.stringify({ S1, S2 }).slice(0, 300)}`);
   trash.visits.push(S1.id, S2.id);
 
   console.log('۱) API — فهرست، کمینه، عنوان، تکراری، ممیزی');
@@ -169,8 +171,8 @@ try {
   const roomText = LONG('نوشتهٔ اتاق');
   await box.locator('textarea[data-report]').fill(roomText);
   await box.locator('[data-op-default-add]').click();
-  await box.locator('.od-row input').fill(`اتاقِ ${tag}`);
-  await box.locator('.od-row input').press('Enter');
+  await box.locator('.opd-row input').fill(`اتاقِ ${tag}`);
+  await box.locator('.opd-row input').press('Enter');
   const th = await page.locator('.th-toast').innerText({ timeout: 5000 }).catch(() => '');
   ok(/اضافه شد/.test(th), `U1 پیام: «${th}»`);
   await box.locator(`[data-op-default]:has-text("اتاقِ ${tag}")`).waitFor({ timeout: 8000 }).catch(() => {});
@@ -195,20 +197,20 @@ try {
   ok((await rep.locator('textarea').inputValue()) === roomText, 'U2 کلیکِ چیپ متن را در کادرِ خالی نشاند');
   await rep.locator('textarea').fill(LONG('نوشتهٔ فرم'));
   await rep.locator('[data-op-default-add]').click();
-  await rep.locator('.od-row input').press('Escape');
-  ok(await page.locator('.db-sheet').count() === 1 && await rep.locator('.od-row').count() === 0,
+  await rep.locator('.opd-row input').press('Escape');
+  ok(await page.locator('.db-sheet').count() === 1 && await rep.locator('.opd-row').count() === 0,
     'U2 **نباید بیفتد:** Escape فقط کادرِ عنوان را بست نه کلِ فرم را');
   const nBefore = tplCount(P1.id);
   const visitSaves = [];
   page.on('request', (r) => { if (r.method() === 'PATCH' && /\/api\/visits\/\d+$/.test(r.url())) visitSaves.push(r.url()); });
   await rep.locator('[data-op-default-add]').click();
-  await rep.locator('.od-row input').press('Enter');
+  await rep.locator('.opd-row input').press('Enter');
   await page.waitForTimeout(1200);
   ok(tplCount(P1.id) === nBefore + 1 && visitSaves.length === 0,
     `U2 Enter پیش‌فرض را افزود و **فرمِ مراجعه را ثبت نکرد** (قالب ${nBefore}→${tplCount(P1.id)}، ذخیرهٔ مراجعه ${visitSaves.length})`);
   await rep.locator('textarea').fill(roomText);
   await rep.locator('[data-op-default-add]').click();
-  await rep.locator('.od-row input').press('Enter');
+  await rep.locator('.opd-row input').press('Enter');
   await page.waitForTimeout(1000);
   ok(tplCount(P1.id) === nBefore + 1, 'U2 **نباید بیفتد:** متنِ تکراری قالبِ دوم نساخت');
   await page.keyboard.press('Escape');
@@ -225,7 +227,7 @@ try {
   await page.locator('[data-op-default-add]').waitFor({ timeout: 5000 }).catch(() => {});
   const nRec = tplCount(P1.id);
   await page.locator('[data-op-default-add]').click();
-  await page.locator('.od-row input').press('Enter');
+  await page.locator('.opd-row input').press('Enter');
   await page.waitForTimeout(1200);
   ok(tplCount(P1.id) === nRec + 1, 'U3 از پرونده هم برای عملِ اصلیِ همان مراجعه افزوده شد');
   const newest = sql(`SELECT title FROM note_templates WHERE procedure_type_id=${P1.id} ORDER BY id DESC LIMIT 1`);
@@ -245,11 +247,13 @@ try {
   await mbox.locator('textarea[data-report]').fill(LONG('موبایل'));
   await mbox.locator('[data-op-default-add]').click();
   const over = await m.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  ok(over <= 1 && await mbox.locator('.od-row input').isVisible(), `U4 کادرِ عنوان روی موبایل جا شد، بدونِ سرریزِ افقی (${over}px)`);
+  ok(over <= 1 && await mbox.locator('.opd-row input').isVisible(), `U4 کادرِ عنوان روی موبایل جا شد، بدونِ سرریزِ افقی (${over}px)`);
   await ctx.close();
 
   console.log('\n۸) سلامتِ صفحه');
   ok(errors.length === 0, `بدونِ خطای جاوااسکریپت (${errors.length})${errors.length ? ' — ' + errors[0].slice(0, 160) : ''}`);
+} catch (e) {
+  ok(false, `اجرا متوقف شد: ${e?.message ?? e}`);
 } finally {
   await browser.close().catch(() => {});
   await send('/access/permissions/templates.add/reset', 'POST').catch(() => {});
