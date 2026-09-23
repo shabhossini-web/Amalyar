@@ -402,6 +402,9 @@ export class FormsService {
 
   async workflow() { return this.config.vertical(); }
 
+  /** نوعِ نصب + بستهٔ خدمات — `config/tenant-profile.ts`. خوانندهٔ تازه از این بپرسد، نه از `workflow()`. */
+  async profile() { return this.config.profile(); }
+
   async defaultVisitKind() {
     const vertical = await this.config.vertical();
     const kinds = await this.visitKinds();

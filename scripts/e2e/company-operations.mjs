@@ -100,7 +100,7 @@ try {
   await assert.rejects(() => accounts.approve(temp2.account.id, 2, user.id), /تأیید/);
   pass('OTP bound to own phone; seven-day expiry disables unverified account and revokes session');
 
-  const portal = new (cls('patients/surgeon-portal.service', 'SurgeonPortalService'))(prisma, { vertical: async () => 'ionm' }, audit);
+  const portal = new (cls('patients/surgeon-portal.service', 'SurgeonPortalService'))(prisma, { vertical: async () => 'ionm', profile: async () => cls('config/tenant-profile', 'profileOf')('ionm', null) }, audit);
   await prisma.visit.update({ where: { id: v.id }, data: { surgeonId: surgeon.id } });
   const otherSurgeon = await prisma.surgeon.create({ data: { person: { create: { firstName: 'جراح', lastName: 'دیگر' } } } });
   const settlement = await prisma.settlement.create({ data: { visitId: v.id, version: 1, status: 'final', revenue: 10000, entries: { create: [{ party: 'surgeon', partyId: surgeon.id, partyName: 'پزشک تست', amount: 3000 }, { party: 'surgeon', partyId: otherSurgeon.id, partyName: 'پزشک دیگر', amount: 7000 }] } } });
@@ -152,7 +152,7 @@ try {
   const accepted = await prisma.reminder.findUnique({ where: { id: staffSms.id } }); assert.equal(accepted.status, 'sent'); assert.equal(accepted.deliveryStatus, 'unknown');
   pass('transport notices omit patients, deduplicate, and distinguish provider acceptance from delivery; unknown sends never auto-retry');
 
-  const ai = new (cls('ai/ai.service', 'AiService'))(prisma, { ai: async () => ({ enabled: true, model: 'configured-model', prompts: {} }) }, {});
+  const ai = new (cls('ai/ai.service', 'AiService'))(prisma, { ai: async () => ({ enabled: true, model: 'configured-model', prompts: {} }) }, {}, { profile: async () => cls('config/tenant-profile', 'profileOf')('ionm', null) });
   ai.chat = async cfg => { assert.equal(cfg.model, 'configured-model'); return JSON.stringify({ domain: 'patients', query: 'بیمار آزمایشی' }); };
   let prompt = '';
   ai.streamCompletion = async (cfg, messages) => { prompt = messages[0].content; };

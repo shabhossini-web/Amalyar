@@ -14,7 +14,7 @@ if (!DB || ![API, DB].every(u => ['localhost', '127.0.0.1'].includes(new URL(u).
 const db = new PrismaClient({ datasources: { db: { url: DB } } });
 const tag = 'intakeEvents' + randomBytes(4).toString('hex');
 const formIds = [], subIds = [], apptIds = [];
-let token = '', passed = 0, patientId, surgeonId, surgeonPersonId;
+let token = '', passed = 0, patientId, surgeonId, surgeonPersonId, hospitalId;
 const ok = (condition, label) => { assert.ok(condition, label); passed++; console.log('PASS ' + label); };
 async function api(path, body, auth = true) {
   const r = await fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json',
@@ -34,6 +34,8 @@ try {
   patientId = (await db.patient.create({ data: { code: tag, firstName: 'بیمار', lastName: 'رویداد' } })).id;
   const surgeon = await db.surgeon.create({ data: { active: true, person: { create: { firstName: 'پزشک', lastName: 'آزمون' } } } });
   surgeonId = surgeon.id; surgeonPersonId = surgeon.personId;
+  /* ⚠️ تصمیمِ مالک (۱۴۰۵/۰۷/۰۱): تأییدِ شرکت بیمارستانِ تعریف‌شده هم می‌خواهد. */
+  hospitalId = (await db.hospital.create({ data: { name: 'بیمارستانِ رویداد ' + Date.now() } })).id;
   const record = await db.formDef.create({ data: { key: tag + 'record', title: 'پاسخ پرونده', scope: 'record',
     fields: { create: { key: 'note', label: 'شرح', type: 'text' } } } }); formIds.push(record.id);
   const clinic = await db.formDef.create({ data: { key: 'visit.' + tag, visitKind: tag, title: 'ویزیت آزمون', scope: 'visit',
@@ -48,7 +50,7 @@ try {
   await processDomainEvents(db);
   ok((await work('approve_intake', 'intake_submission', pending.id))?.state === 'open', 'submitted کار بررسی ثبت‌نام را باز می‌کند');
   ok((await work('confirm_appointment', 'appointment', held.id))?.state === 'open', 'کار تأیید نوبت از قبل باز است');
-  const approved = await api(`/intake/submissions/${pending.id}/approve`, { surgeonId });
+  const approved = await api(`/intake/submissions/${pending.id}/approve`, { surgeonId, hospitalId });
   assert.equal(approved.status, 201, JSON.stringify(approved.data));
   const approvedEvent = (await intakeEvents(pending.id)).find(e => e.type === 'intake.approved');
   ok(approvedEvent?.visitId === approved.data.visitId, 'approve ارجاع ثبت‌نام را حفظ و مراجعه را همراهش ثبت می‌کند');
@@ -57,7 +59,7 @@ try {
   await processDomainEvents(db);
   ok((await work('approve_intake', 'intake_submission', pending.id))?.state === 'done', 'approved کارِ همان ثبت‌نام را می‌بندد');
   ok((await work('confirm_appointment', 'appointment', held.id))?.state === 'done', 'confirmed کارِ held را پیش از شروع ویزیت می‌بندد');
-  await api(`/intake/submissions/${pending.id}/approve`, { surgeonId });
+  await api(`/intake/submissions/${pending.id}/approve`, { surgeonId, hospitalId });
   ok((await intakeEvents(pending.id)).filter(e => e.type === 'intake.approved').length === 1, 'تکرار نامعتبر تأیید رویداد دوم ندارد');
 
   const auto = await sub(record.id);
@@ -80,7 +82,7 @@ try {
     && (await work('confirm_appointment', 'appointment', cancel.id))?.state === 'done', 'رد ثبت‌نام، کار بررسی و کار نوبت لغوشده را می‌بندد');
 
   const audit = new (cls('audit/audit.service', 'AuditService'))(db);
-  const forms = new (cls('patients/forms.service', 'FormsService'))(db, { vertical: async () => 'clinic' });
+  const forms = new (cls('patients/forms.service', 'FormsService'))(db, { vertical: async () => 'clinic', profile: async () => cls('config/tenant-profile', 'profileOf')('clinic', null) });
   const reminders = { syncNextVisit: async () => {}, syncAppointment: async () => {} };
   const patients = new (cls('patients/patients.service', 'PatientsService'))(db, audit, forms, reminders, events);
   const failingBilling = { assertIntakePayment: async () => {}, addPayment: async () => { throw new Error('fixture payment failure'); } };

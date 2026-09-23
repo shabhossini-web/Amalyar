@@ -16,7 +16,8 @@ try {
   for (const dir of (await readdir(migrations)).sort()) if (dir.startsWith('20')) await db.exec(await readFile(new URL(`${dir}/migration.sql`, migrations), 'utf8'));
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   prisma = new PrismaClient({ datasources: { db: { url: `postgresql://postgres@127.0.0.1:${server.address().port}/postgres?connection_limit=1` } } });
-  const config = { vertical: async () => vertical };
+  /* ⚠️ `profile` همان قاعدهٔ واقعیِ سرور است (نصبِ بی‌ردیفِ خدمات) — نه یک جوابِ دست‌نوشته. */
+  const config = { vertical: async () => vertical, profile: async () => cls('config/tenant-profile', 'profileOf')(vertical, null) };
   const forms = new (cls('patients/forms.service', 'FormsService'))(prisma, config);
   const audit = new (cls('audit/audit.service', 'AuditService'))(prisma);
   const reminders = { syncNextVisit: async () => {}, syncAppointment: async () => {} };
@@ -92,7 +93,7 @@ try {
   assert.equal((await portal.grantAccount(surgeon.id, admin)).existing, true);
   await assert.rejects(() => portal.grantAccount(otherSurgeon.id, doctor), /مدیر/);
   pass('surgeon account uses existing identity, OTP claim and limited level; grant is admin only');
-  const ai = new (cls('ai/ai.service', 'AiService'))(prisma, { ai: async () => ({ enabled: false, models: {} }) }, {});
+  const ai = new (cls('ai/ai.service', 'AiService'))(prisma, { ai: async () => ({ enabled: false, models: {} }) }, {}, config);
   assert.equal((await ai.status(doctor)).enabled, false);
   await prisma.feature.upsert({ where: { key: 'surgeon' }, create: { key: 'surgeon', enabled: false, minLevel: 2 }, update: { enabled: false } });
   await assert.rejects(() => ai.status(doctor));

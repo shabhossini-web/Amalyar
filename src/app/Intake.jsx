@@ -40,6 +40,7 @@ const TAB_ORDER = ['pending_approval', 'pending_payment', 'pending_fill', 'appro
  */
 export default function IntakeAdmin() {
   const intakeFa = useStatusMap('intake');
+  const cfgServices = useConfig().services ?? [];
   const TABS = [
     ...TAB_ORDER.map((key) => ({ key, label: intakeFa[key] ?? key })),
     { key: 'all', label: 'همه' },
@@ -194,6 +195,8 @@ export default function IntakeAdmin() {
                   {s.data?.nationalId ? ` · ${s.data.nationalId}` : ''}
                 </small>
               </div>
+              {/* خدمتِ همین ردیف — در شرکتِ دوخدمته هر دو نوع در یک صف‌اند. */}
+              {s.serviceLabel && cfgServices.length > 1 && <span className="ia-tag ia-svc">{s.serviceLabel}</span>}
               <span className={`ia-tag s-${s.status}`}>{s.statusLabel}</span>
               <span className="ia-amount">{faNum(s.amount)} تومان</span>
               {/* حذفِ ثبت‌نام — تأییدشده‌ای که مراجعه ساخته حذف نمی‌شود (سرور هم
@@ -347,9 +350,15 @@ function ReceiptZoom({ url, onClose }) {
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
 function ApproveSheet({ row, onClose, onDone, onZoom }) {
   const { user: me } = useAuth();
-  const { vertical } = useConfig();
-  const workflow = row.workflow || vertical;
-  const targetKind = row.approvalKind || (workflow === 'clinic' ? 'clinic' : 'surgery');
+  const cfg = useConfig();
+  const company = cfg.kind === 'company';
+  /* ⚠️ خدمتِ **همین ثبت‌نام** از سرور (`intake-service-of.ts`)، نه حوزهٔ کلِ
+     شرکت: شرکتِ دوخدمته هر دو نوع را در یک صف دارد. کلاینتِ کش‌شده‌ای که
+     `service` نمی‌گیرد به همان `workflow`ِ قدیمی برمی‌گردد. فقط فرمِ دلخواه در
+     شرکتِ دوخدمته مبهم است و تأییدکننده انتخابش می‌کند. */
+  const [service, setService] = useState(row.service !== undefined ? row.service : (row.workflow && row.workflow !== 'clinic' ? row.workflow : null));
+  const workflow = service;
+  const targetKind = row.approvalKind || (cfg.kind === 'clinic' ? 'clinic' : 'surgery');
   const [fields, setFields] = useState(null), [requiredItems, setRequiredItems] = useState([]), [itemsTouched, setItemsTouched] = useState(false);
   const [extra, setExtra] = useState(row.data ?? {});
   /**
@@ -444,6 +453,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           registerPayment: f.registerPayment,
           bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
           extra: Object.fromEntries((fields ?? []).filter(field => !field.builtin && field.active !== false).map(field => [field.key, extra[field.key]])),
+          ...(row.serviceAmbiguous && service ? { service } : {}),
           ...(workflow === 'implant' ? { requiredItems: requiredItems.map(({ itemId, quantity, notes }) => ({ itemId, quantity, notes: notes || '' })) } : {}),
         },
       });
@@ -464,6 +474,19 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
         <p className="ia-note">
           بیمار نوشته: {[row.data?.procedure, row.data?.surgeonName, row.data?.hospitalName].filter(Boolean).join(' · ') || '—'}
         </p>
+        {/* ⚠️ فقط فرمِ **دلخواه** در شرکتِ دوخدمته مبهم است؛ پیش‌فرض خدمتِ اصلی
+            است و تأییدکننده عوضش می‌کند (ردیف‌های ایمپلنت به همین بسته‌اند). */}
+        {row.makesVisit !== false && row.serviceAmbiguous && cfg.services.length > 1 && (
+          <div className="ia-svc-pick" role="radiogroup" aria-label="خدمتِ این ثبت‌نام">
+            <span>خدمت:</span>
+            {cfg.services.map((key) => (
+              <button key={key} type="button" role="radio" aria-checked={service === key} disabled={busy}
+                      className={`ia-chip${service === key ? ' on' : ''}`} onClick={() => setService(key)}>
+                {cfg.serviceCatalog?.find((x) => x.key === key)?.label ?? key}
+              </button>
+            ))}
+          </div>
+        )}
         {/* ⚠️ فرمِ زیرپرونده مراجعه نمی‌سازد، پس جراح/بیمارستان/تاریخ و ردیفِ
             پرداخت برایش بی‌معنی‌اند — نشان‌دادنشان یعنی ادمین چیزی را انتخاب
             کند که هیچ‌جا نمی‌نشیند. */}
@@ -512,8 +535,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
                 suggested: 'پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید',
               }[match[k].source] ?? 'مطابقِ دقیقِ نوشتهٔ بیمار'}: {match[k].name}
             </p>))}
-          {(visible('surgeonId') || needs('surgeonId')) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : needs('surgeonId') ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
-          {visible('hospitalId') && <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
+          {(visible('surgeonId') || needs('surgeonId') || company) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : (company || needs('surgeonId')) ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
+          {(visible('hospitalId') || company) && <ApprovalSelect field="hospitalId" section="hospitals" label={company ? 'بیمارستان (الزامی)' : 'بیمارستان'} list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
           {visible('techId') && <ApprovalSelect field="techId" section="techs" label={needs('techId') ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
           {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />}
           {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}

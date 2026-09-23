@@ -223,3 +223,11 @@
 .ia-definition-head { display: flex; align-items: center; gap: 8px; }
 .ia-definition-head a { margin-inline-start: auto; font-size: 11px; color: var(--text1); }
 .ia-definition-head button { display: inline-flex; padding: 5px; border: 1px solid var(--card-border); border-radius: 8px; background: transparent; color: inherit; }
+
+/* خدمتِ ثبت‌نام (شرکتِ دوخدمته) — نشانِ کارت و انتخابگرِ پاپ‌آپ. */
+.ia-tag.ia-svc { color: var(--brand-text); border-color: rgba(var(--brand-rgb), .35); background: rgba(var(--brand-rgb), .1); }
+.ia-svc-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text2); }
+.ia-svc-pick .ia-chip { cursor: pointer; font: inherit; color: var(--text1); padding: 4px 11px; min-height: 30px; }
+.ia-svc-pick .ia-chip.on { border-color: rgba(var(--brand-rgb), .55); background: rgba(var(--brand-rgb), .16); font-weight: 700; }
+.ia-svc-pick .ia-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ia-svc-pick .ia-chip { transition: none; } }

@@ -4,7 +4,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -144,6 +144,8 @@ class RequiredItemDto {
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
 }
 class ApproveDto {
+  /** فقط برای فرمِ دلخواه در شرکتِ دوخدمته — فرمِ پیش‌فرض خدمتش را خودش می‌گوید. */
+  @IsOptional() @IsIn(['ionm', 'implant'], { message: 'خدمتِ انتخاب‌شده نامعتبر است' }) service?: string;
   @IsOptional() @IsString({ message: 'کلید تکرار درخواست باید متن باشد' }) @MaxLength(120, { message: 'کلید تکرار درخواست بیش از حد طولانی است' }) idempotencyKey?: string;
   @IsOptional() @IsObject() extra?: Record<string, any>;
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => RequiredItemDto) requiredItems?: RequiredItemDto[];

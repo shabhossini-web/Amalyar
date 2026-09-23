@@ -7,13 +7,33 @@ paths:
   - server/src/config/tenant-profile.ts
   - server/src/config/config.service.ts
   - server/src/patients/labels.ts
+  - server/src/patients/intake-service-of.ts
+  - server/src/patients/intake.service.ts
+  - server/src/patients/intake.controller.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/surgeon-portal.service.ts
+  - server/src/ai/ai.service.ts
   - src/app/config.jsx
+  - src/app/Intake.jsx
+  - src/app/intake-admin.css
+  - src/app/SurgeonPortal.jsx
+  - src/app/BillingSheet.jsx
   - src/lib/profile.js
   - src/lib/terms.js
   - src/pages/Intake.jsx
   - scripts/e2e/tenant-profile.mjs
   - scripts/e2e/tenant-profile-unit.mjs
+  - scripts/e2e/company-services.mjs
+  - scripts/e2e/company-services-local.mjs
+  - scripts/e2e/company-services-ui.mjs
   - scripts/e2e/w0-1-intake-steps.mjs
+  - scripts/e2e/w1-4-approve-atomic.mjs
+  - scripts/e2e/w1-5-appointment-visit-link.mjs
+  - scripts/e2e/w2-2b-intake-events.mjs
+  - scripts/e2e/profile-workflows.mjs
+  - scripts/e2e/company-operations.mjs
+  - scripts/e2e/intake-finance-roles.mjs
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
@@ -24,6 +44,21 @@ note: >-
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۷/۰۱ · **تأییدِ ثبت‌نام در شرکت** (تصمیمِ مالک): جراح **و بیمارستانِ** تعریف‌شده برای
+  هر دو خدمت الزامی است؛ بیمارستانِ «پیشنهادی» (تطبیقِ فازی) دیگر خودکار نمی‌نشیند (دقیق/مستعار/انتخابِ
+  بیمار بله). ایمپلنت هم مثلِ نورومانیتورینگ ستاره‌های فرمِ کارکنان را نمی‌خواهد
+  (`prepareVisitCreation(..., { intakeCompany })` جای `intakeIonm`). مطب بی‌تغییر.
+  **هر e2eای که ثبت‌نامِ شرکت را بی‌`hospitalId` تأیید می‌کند باید بیمارستان بدهد** — `w1-4-approve-atomic`
+  و `w2-2b-intake-events` همین را گرفتند.
+- ۱۴۰۵/۰۷/۰۱ · اقلامِ ایمپلنت و این قاعده حالا بر اساسِ **خدمتِ ردیف** است (`intake-service-of.ts`)،
+  نه `vertical`: ردیف‌های `/intake/submissions` فیلدهای `service`، `serviceLabel`، `serviceAmbiguous`
+  دارند؛ `ApproveDto.service` (فقط فرمِ دلخواه در شرکتِ دوخدمته). ردیف‌های `/surgeon/visits`
+  `implant` (per-مراجعه) و پاسخ `services` دارد.
+- ۱۴۰۵/۰۷/۰۱ · **هارنس‌های دست‌ساز:** `FormsService`/`SurgeonPortalService` از config
+  `profile()` هم می‌خواهند و `AiService` پارامترِ چهارمِ `ConfigService` دارد. پنج هارنس به‌روز شد
+  (`profile-workflows`, `company-operations`, `intake-finance-roles`, `w1-5-…`, `w2-2b-…`) — هارنسِ تازه
+  همان `cls('config/tenant-profile','profileOf')` را بدهد، نه جوابِ دست‌نوشته.
 
 - ۱۴۰۵/۰۷/۰۱ · **`GET /config`** سه فیلدِ تازه دارد: `kind` (`clinic|company`)، `services`
   (برای شرکت دست‌کم یکی از `ionm|implant`)، `profileLabel`؛ به‌علاوهٔ `kinds` و

@@ -6,6 +6,7 @@ import { verificationDeadline } from '../accounts/provisional';
 import { LEVEL } from '../common/levels';
 import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
+import { visitIsImplant } from './intake-service-of';
 import { summarize } from './billing.service';
 import { APPT_LABELS, OP_LABELS } from './labels';
 import { clinicTodayIso, dayRangeUtc } from '../common/clinic-day';
@@ -240,6 +241,7 @@ export class SurgeonPortalService {
     const scope = await this.scope(user);
     const q = query.trim().slice(0, 80), current = Number.isFinite(page) ? Math.min(100000, Math.max(1, Math.floor(page) || 1)) : 1;
     const where = { ...scope, patient: { deletedAt: null, ...(q ? { OR: [{ firstName: { contains: toEnDigits(q) } }, { lastName: { contains: toEnDigits(q) } }, { code: { contains: toEnDigits(q) } }] } : {}) } };
+    const profile = await this.config.profile();
     const [rows, total] = await Promise.all([
       this.prisma.visit.findMany({ where, orderBy: [{ opDate: 'desc' }, { id: 'desc' }], take: 25, skip: (current - 1) * 25,
         select: { id: true, seq: true, kind: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true, hospitalName: true, surgeonName: true, requiredItems: true, surgeonInstructions: true,
@@ -256,8 +258,11 @@ export class SurgeonPortalService {
       opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       procedure: v.procedureType?.name ?? v.opType,
       hospital: v.hospital?.name ?? v.hospitalName, surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}` : v.surgeonName,
+      /* ⚠️ مشتقِ سرور (قانون ۱۵) و **per-مراجعه**: در شرکتِ دوخدمته ویرایشگرِ اقلام
+         فقط روی مراجعهٔ ایمپلنتی — نه روی همه، نه روی هیچ‌کدام (`visitIsImplant`). */
+      implant: visitIsImplant(v.requiredItems, profile),
       requiredItems: v.requiredItems ?? v.procedureType?.needs.map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item.name, n.item.size].filter(Boolean).join(' ') })) ?? [], instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
-    })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical() };
+    })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical(), services: profile.services };
   }
 
   async finances(user: any, selectedId?: number, page = 1) {

@@ -13,6 +13,7 @@ import { normalizeLinks } from './forms.service';
 import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
+import { serviceLabel, serviceOf } from './intake-service-of';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
@@ -1911,6 +1912,7 @@ export class IntakeService {
 
   async list(status?: string) {
     const workflow = await this.forms.workflow();
+    const profile = await this.forms.profile();
     const defaultKind = await this.forms.defaultVisitKind();
     const where = status && status !== 'all' ? { status } : {};
     const rows = await this.prisma.intakeSubmission.findMany({
@@ -1924,11 +1926,19 @@ export class IntakeService {
         /* فرمِ **همین ثبت‌نام** (عکسِ لحظه‌ای)، نه فرمِ فعلیِ لینک: پنلِ تأیید
            باید بگوید این ثبت‌نام چه می‌سازد، و آن از روی همان فرمی معلوم
            می‌شود که بیمار پر کرده. */
-        form: { select: { title: true, scope: true, color: true, visitKind: true } },
+        form: { select: { title: true, scope: true, color: true, visitKind: true, key: true } },
       },
     });
-    return rows.map((r) => ({
+    return rows.map((r) => {
+      /* ⚠️ خدمتِ **همین ردیف** (`intake-service-of.ts`) — شرکتِ دوخدمته هر دو
+         نوع ثبت‌نام را در یک صف دارد و پاپ‌آپ باید بداند این یکی کدام است.
+         `workflow` فقط برای کلاینتِ کش‌شدهٔ قدیمی می‌ماند. */
+      const svc = serviceOf(r.form?.key, profile);
+      return {
       workflow, approvalKind: r.form?.visitKind || defaultKind,
+      service: svc.service,
+      serviceLabel: serviceLabel(svc.service),
+      serviceAmbiguous: svc.ambiguous,
       id: r.id,
       token: r.token,
       status: r.status,
@@ -1961,7 +1971,8 @@ export class IntakeService {
       reviewNote: r.reviewNote,
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
-    }));
+      };
+    });
   }
 
   /**
@@ -1978,6 +1989,8 @@ export class IntakeService {
     id: number,
     dto: {
       idempotencyKey?: string;
+      /// خدمتِ فرمِ دلخواه در شرکتِ دوخدمته (`intake-service-of.ts`).
+      service?: string;
       surgeonId?: number; hospitalId?: number; techId?: number; procedureTypeId?: number;
       opDate?: string; opStartTime?: string; note?: string;
       /// ثبتِ پرداختِ همان فیش — پیش‌فرض روشن، ولی حسابِ مقصد را ادمین می‌گوید.
@@ -2015,6 +2028,11 @@ export class IntakeService {
     const form = row.formId
       ? await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true, visitKind: true, key: true } })
       : null;
+    const profile = await this.forms.profile();
+    if (dto.service && !(profile.services as string[]).includes(dto.service)) {
+      throw new BadRequestException('این شرکت چنین خدمتی ارائه نمی‌کند');
+    }
+    const svc = serviceOf(form?.key, profile, dto.service);
 
     /* پاسخِ فیلدهای دلخواه باید به `Visit.extra` برسد، وگرنه چیزی که بیمار پر
        کرده در JSONِ ثبت‌نام دفن می‌شود و در پروندهٔ او پیدا نیست. کلیدهای
@@ -2035,8 +2053,23 @@ export class IntakeService {
        فرمی اصلاً نمی‌تواند مبلغ داشته باشد؛ `assertRecordFormHasNoAmount`). */
     const makesVisit = form?.scope !== 'record';
     if (!makesVisit && (row.amount > 0 || row.discountAmount > 0)) throw new BadRequestException('فرم زیرپرونده مبلغ ندارد');
-    const workflow = await this.forms.workflow();
+    /* ⚠️ **تصمیمِ مالک (۱۴۰۵/۰۷/۰۱): در شرکت، جراح و بیمارستانِ تعریف‌شده برای هر
+       دو خدمت الزامی است** (با افزودنِ سریع در پاپ‌آپ). تا دیروز فقط
+       نورومانیتورینگ جراحِ تعریف‌شده می‌خواست و در ایمپلنت نامِ جراح و
+       بیمارستانِ بیمار بی‌صدا از مراجعه می‌افتاد.
+       و بیمارستانِ «پیشنهادی» (تطبیقِ فازی) دیگر خودکار چسبانده نمی‌شود: فقط
+       انتخابِ خودِ بیمار از فهرست، تطبیقِ دقیق یا نامِ مستعار — «پیشنهاد، نه
+       ادغام» (`name-match.ts`). در مطب رفتار همان است که بود. */
+    const company = profile.kind === 'company';
+    const service = makesVisit ? svc.service : null;
     const matchedHospital = dto.hospitalId ? null : await matchIntakeHospital(this.prisma, d);
+    const autoHospital = matchedHospital && (!company || matchedHospital.source !== 'suggested') ? matchedHospital.id : undefined;
+    const hospitalId = dto.hospitalId ?? autoHospital;
+    if (makesVisit && company) {
+      if (!hospitalId || !await this.prisma.hospital.findFirst({ where: { id: hospitalId, active: true }, select: { id: true } })) {
+        throw new BadRequestException('بیمارستان را از تعاریفِ پایه انتخاب کنید یا همین‌جا اضافه کنید');
+      }
+    }
     const approvalKind = form?.visitKind || await this.forms.defaultVisitKind();
     if (makesVisit && dto.extra) {
       const target = await this.forms.forVisitKind(approvalKind);
@@ -2044,10 +2077,10 @@ export class IntakeService {
         if (!field.builtin && field.active && Object.prototype.hasOwnProperty.call(dto.extra, field.key)) extra[field.key] = dto.extra[field.key];
       }
     }
-    const requirements = makesVisit && workflow === 'implant'
+    const requirements = service === 'implant'
       ? dto.requiredItems !== undefined ? await resolveRequirements(this.prisma, dto.requiredItems) : await procedureRequirements(this.prisma, dto.procedureTypeId)
       : undefined;
-    if (makesVisit && workflow === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
+    if (service === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
 
     /* نوبتِ رزروشدهٔ همین ثبت‌نام — تاریخ و ساعتِ مراجعه از این‌جا می‌آید. */
     const held = await this.prisma.appointment.findUnique({ where: { submissionId: id } });
@@ -2070,7 +2103,7 @@ export class IntakeService {
           // نوع صریح فرم مقدم است؛ لینک‌های قدیمی از پیش‌فرض حوزه استفاده می‌کنند.
           kind: approvalKind,
           surgeonId: dto.surgeonId,
-          hospitalId: dto.hospitalId ?? matchedHospital?.id,
+          hospitalId,
           hospitalName: d.hospitalName ?? undefined,
           techId: dto.techId,
           procedureTypeId: dto.procedureTypeId,
@@ -2082,7 +2115,7 @@ export class IntakeService {
           opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
           notes: d.patientNotes ?? undefined,
           ...(Object.keys(extra).length ? { extra } : {}),
-        } as any, user, { requirements, intakeIonm: workflow === 'ionm' })
+        } as any, user, { requirements, intakeCompany: makesVisit && company })
         : null;
 
     const snapshot = row.schemaSnapshot ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds);
