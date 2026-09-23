@@ -21,6 +21,7 @@ paths:
   - src/app/Theatre.jsx
   - src/app/theatre.css
   - src/app/config.jsx
+  - src/app/record.css
   - scripts/verify-status-labels.js
   - scripts/e2e/run-live.mjs
   - scripts/e2e/op-details.mjs

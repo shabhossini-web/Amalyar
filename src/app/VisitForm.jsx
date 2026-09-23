@@ -23,6 +23,10 @@ import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
 import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
+import {
+  OP_INTRA, OP_POST, OP_PRE, OpIntraBlock, OpPostBlock, OpPreBlock, ProcedureSides,
+  opDiff, opInit, opSet, sidesDiff, sidesInit,
+} from './OpDetails.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
 import './dashboard.css';
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
@@ -69,6 +73,9 @@ const SECTION_KEYS = ['history', 'findings', 'exam', 'planNote', 'prescription']
  * کلِ ذخیره را ۴۰۰ می‌داد.
  */
 const CODING_TWIN_OWNER = { otherDiagnosisIds: 'diagnosisId', otherProcedureTypeIds: 'procedureTypeId' };
+
+/** بلوکِ ساخت‌یافته‌ای که مقدارِ قبلی‌اش به فرم نرسیده — چرا قفل است. */
+const LIGHT_NOTE = 'این فرم مقدارِ ثبت‌شدهٔ این بخش را ندارد؛ برای ویرایش، همین مراجعه را از پرونده باز کنید.';
 
 /* ── سلکتِ موجودیت + افزودنِ سریع (جراح/بیمارستان) ── */
 function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlaceholder }) {
@@ -504,6 +511,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const { user: me } = useAuth();
   const myRole = (me?.level ?? 0) >= 6 ? null : (me?.jobRole ?? null);
   const keyLocked = (key) => { const roles = fd.rolesOf(key); return !!(roles.length && myRole && !roles.includes(myRole)); };
+  /* ── جزئیاتِ ساخت‌یافتهٔ عمل + سمت/سطحِ هر عمل (بستهٔ ۸، فقط عملِ مطب) ──
+     ⚠️ «خوانده شده؟» همان قاعدهٔ بخش‌های هسته: `undefined` در نمای مراجعه یعنی
+     «نخوانده» (ردیفِ سبکِ فهرست)، نه «خالی». فرمی که مقدارِ قبلی را ندیده این
+     بلوک‌ها را قفل می‌کند، وگرنه وصلهٔ «ثبت نشده» روی مقدارِ ثبت‌شده می‌نشست.
+     ⚠️ مالکِ نقش **قرضی** است و جدا از `CODING_TWIN_OWNER` (آن آینهٔ سرور است):
+     پیش از عمل ← «نوعِ بیهوشی»، حین و بعد ← «شرحِ عمل»، سمت‌ها ← «نوعِ عمل». */
+  const opLoaded = !editing || initial?.opDetails !== undefined;
+  const [ops, setOps] = useState(() => opInit(initial?.opDetails));
+  const setOp = (k, v) => setOps((s2) => opSet(s2, k, v));
+  const sidesLoaded = !editing || (Array.isArray(initial?.procedures) && initial.procedures.every((p) => 'side' in p));
+  const [sides, setSides] = useState(() => sidesInit(initial?.procedures));
   const [extra, setExtra] = useState(() => initial?.extra ?? {});
   const [extraErr, setExtraErr] = useState({});
 
@@ -677,6 +695,21 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     );
     if (Object.keys(eBuiltin).length) { onToast(Object.values(eBuiltin)[0]); return; }
 
+    /* ── بستهٔ ۸: فقط کلیدِ تغییرکرده، فقط بخشِ نقشِ خودم ── */
+    let opDetailsOut;
+    let procDetailsOut;
+    if (isClinicCore && f.kind === 'surgery') {
+      if (opLoaded) {
+        const keys = [...(keyLocked('anesthesia') ? [] : OP_PRE), ...(keyLocked('opReport') ? [] : [...OP_INTRA, ...OP_POST])];
+        const { patch, bad } = opDiff(ops, editing ? initial?.opDetails : null, keys);
+        if (bad) { onToast(`${bad} نامعتبر است (مثال: ۱۴۰۵/۰۵/۱۰)`); return; }
+        if (Object.keys(patch).length) opDetailsOut = patch;
+      }
+      if (sidesLoaded && !keyLocked('procedureTypeId')) {
+        const rows = sidesDiff(sides, editing ? sidesInit(initial?.procedures) : {}, f.procedureTypeIds);
+        if (rows.length) procDetailsOut = rows;
+      }
+    }
     const common = {
       kind: f.kind,
       surgeonId: f.surgeonId ?? (editing ? null : undefined),
@@ -731,6 +764,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       opStartTime: editing || times.opStartTime ? times.opStartTime : undefined,
       opEndTime: editing || times.opEndTime ? times.opEndTime : undefined,
       notes: f.notes.trim() || undefined,
+      opDetails: opDetailsOut,
+      procedureDetails: procDetailsOut,
     };
     /* ⚠️ فیلدِ بخشِ نقشِ دیگر اصلاً فرستاده نمی‌شود — نه مقدارِ قفل‌شده‌اش.
        سرور echoی بی‌تغییر را تحمل می‌کند، ولی نفرستادن هم تمیزتر است هم
@@ -862,6 +897,15 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   };
   /* فیلدهای «حینِ عمل» — در فرمِ عمل داخلِ تبِ خودشان می‌نشینند، نه در کارتِ بالا. */
   const INTRA_KEYS = ['opStartTime', 'opEndTime', 'findings', 'opReport'];
+  /* بلوک‌های ساخت‌یافتهٔ بستهٔ ۸ — فقط عملِ مطب. قابِ نقش از فیلدِ مالک. */
+  const structOn = isClinicCore && f.kind === 'surgery';
+  const roleFrame = (owner) => ({
+    role: fd.roleOf(owner) ? fd.roleLabelOf(owner) : null,
+    locked: !opLoaded || keyLocked(owner),
+    note: opLoaded ? null : LIGHT_NOTE,
+  });
+  const dxLabel = f.diagnosisIds.map((id) => defs.diagnoses.find((d) => d.id === id)?.title).filter(Boolean).join('، ')
+    || (f.diagnosisIds.length ? initial?.diagnosisLabel ?? '' : '');
 
   /**
    * هر فیلدِ هسته‌ای یک گرهِ نام‌دار.
@@ -928,6 +972,19 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         addLabel="عملِ همزمان"
         max={10}
       />
+      {isClinicCore && f.kind === 'surgery' && (
+        <ProcedureSides
+          items={f.procedureTypeIds.map((id) => ({
+            id,
+            name: defs.procedures.find((p) => p.id === id)?.name
+              ?? (initial?.procedures ?? []).find((p) => p.id === id)?.name ?? '…',
+          }))}
+          sides={sides}
+          onChange={setSides}
+          disabled={!sidesLoaded}
+          note={sidesLoaded ? null : LIGHT_NOTE}
+        />
+      )}
     </>) };
   /* **تشخیصِ ویزیتِ تصمیم** — عملی که از یک ویزیت درآمده و هنوز تشخیصی ندارد.
      ⚠️ نه ارث و نه کپیِ خودکار: تشخیصِ پیش از عمل و پس از عمل دو واقعیتِ
@@ -1325,7 +1382,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      بلوک‌اند نه فیلدِ فرم، ولی در همان شبکه و به همان ترتیبِ یادداشتِ بالینی
      می‌نشینند: علائمِ حیاتی بعد از شرحِ حال، مدارک و لینک‌ها کنارِ یافته‌ها،
      تصمیم زیرِ تشخیص. */
-  const mediaFields = isClinicCore ? fd.customFields.filter((x) => x.type === 'image' || x.type === 'links') : [];
+  /* ⚠️ فقط ویزیت: در فرمِ عمل گرهِ `media` ساخته نمی‌شود، پس جداکردنشان از
+     «اطلاعاتِ تکمیلی» فیلدهای عکس/لینکِ فرم‌ساز را از فرمِ عمل **ناپدید** می‌کرد. */
+  const mediaFields = isClinicCore && f.kind !== 'surgery' ? fd.customFields.filter((x) => x.type === 'image' || x.type === 'links') : [];
   const restFields = isClinicCore ? fd.customFields.filter((x) => !mediaFields.includes(x)) : fd.customFields;
   if (isClinicCore && f.kind !== 'surgery') {
     builtinNodes.vitals = { wide: true, el: (
@@ -1815,6 +1874,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
           </div>
 
+          {structOn && <OpPreBlock ops={ops} onSet={setOp} {...roleFrame('anesthesia')} />}
+
           {phaseDocs}
           </div>
           )}
@@ -1833,6 +1894,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان، یافته‌ها، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
             )}
 
+            {structOn && <OpIntraBlock ops={ops} onSet={setOp} {...roleFrame('opReport')} />}
+
             {phaseDocs}
           </div>
           )}
@@ -1846,6 +1909,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           ) : (
             <p className="db-decide-hint">علائمِ حیاتیِ بعد از عمل پس از ذخیرهٔ همین عمل ثبت می‌شود.</p>
           ))}
+          {structOn && <OpPostBlock ops={ops} onSet={setOp} dxLabel={dxLabel} {...roleFrame('opReport')} />}
           {/* ── مراقبتِ بعد از عمل ── */}
           <div className="db-careblock">
             <div className="db-carehead">

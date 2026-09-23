@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
+import { faDate, jStrToIso, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
-import { useStatusList } from './config.jsx';
+import { useStatusList, useTerms } from './config.jsx';
+import { OP_INTRA, OpIntraBlock, opDiff, opInit, opSet } from './OpDetails.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon } from '../ui/icons.jsx';
@@ -141,7 +142,10 @@ export default function Theatre() {
               disposition: card.visit.dischargeDisposition ?? '',
               summary: card.visit.dischargeSummary ?? '',
               remark: card.visit.dischargeRemark ?? '',
+              rx: card.visit.dischargeRx ?? '',
+              nextJ: card.visit.nextVisitDate ? ymdToJStr(String(card.visit.nextVisitDate).slice(0, 10)) : '',
             }}
+            card={card}
             already={!!card.visit.dischargeAt}
             busy={busy === 'discharge'}
             onClose={() => setDischarging(false)}
@@ -169,7 +173,7 @@ function DayList({ day, busy, onOpen }) {
           <button type="button" className={`th-item${busy === `open-${v.id}` ? ' busy' : ''}`} data-visit-id={v.id} onClick={() => onOpen(v.id)}>
             <span className="th-item-time" dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</span>
             <span className="th-item-name">{v.patient}</span>
-            <span className="th-item-sub">{[v.procedure, v.hospital, v.surgeon].filter(Boolean).join(' · ') || v.code}</span>
+            <span className="th-item-sub">{[v.procedure, v.sides, v.hospital, v.surgeon].filter(Boolean).join(' · ') || v.code}</span>
             {/* ⚠️ جای شمارشِ چک‌لیست را گرفت: عددِ «۳/۷» به کسی نمی‌گفت این
                 بیمار کیست، ولی «چرا آمده» همان چیزی است که جراح می‌خواهد. */}
             {v.chiefComplaint && <span className="th-item-cc">{v.chiefComplaint}</span>}
@@ -186,6 +190,8 @@ function DayList({ day, busy, onOpen }) {
 /** کارتِ حینِ عمل. */
 function Card({ card, busy, onAct, onDischarge, onToast }) {
   const { visit: v, patient: p, alerts, items, documents } = card;
+  const t = useTerms();
+  const od = v.opDetails ?? null;
   /* ⚠️ عمل‌ها و تشخیص‌ها از **فهرستِ سرور** خوانده می‌شوند (اصلی اول، بستهٔ
      ۷) — نه با شکافتنِ برچسبِ «A + B» (قانونِ ۱۵). برچسب فقط وقتی به کار
      می‌آید که سرورِ قدیمی‌تر هنوز فهرست را نفرستد (فرانت و بک‌اند جدا دیپلوی
@@ -227,7 +233,7 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
           {v.hospital && <span className="th-op-at">{v.hospital}</span>}
           {!procs.length && !v.procedure && !v.hospital && <span>—</span>}
         </div>
-        {(dxs.length > 0 || v.diagnosis || v.anesthesiaFa) && (
+        {(dxs.length > 0 || v.diagnosis || v.anesthesiaFa || v.preOp) && (
           <div className="th-dx">
             {dxs.length > 0 ? (
               <div className={`th-dx-set${dxs.length > 1 ? ' multi' : ''}`}>
@@ -235,12 +241,18 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
                 <CodingList items={dxs} label="تشخیص‌ها" />
               </div>
             ) : v.diagnosis && <span>تشخیص: <b>{v.diagnosis}</b></span>}
-            {v.anesthesiaFa && <span>بیهوشی: <b>{v.anesthesiaFa}</b></span>}
+            {/* مطب: یک سطرِ پیش از عمل (بیهوشی · ASA · رضایت · ناشتایی · ضدانعقاد)
+                از سرور؛ ویرایشش در فرمِ عمل است نه سرِ میز. */}
+            {card.clinical
+              ? v.preOp && <span data-preop>پیش از عمل: <b>{v.preOp}</b></span>
+              : v.anesthesiaFa && <span>بیهوشی: <b>{v.anesthesiaFa}</b></span>}
           </div>
         )}
         <p className="th-team">
           {v.surgeon && <span>جراح: <b>{v.surgeon}</b></span>}
-          {v.tech && <span>کارشناس: <b>{v.tech}</b></span>}
+          {od?.assistantSurgeonName && <span>کمک‌جراح: <b>{od.assistantSurgeonName}</b></span>}
+          {od?.anesthesiologistName && <span>متخصصِ بیهوشی: <b>{od.anesthesiologistName}</b></span>}
+          {v.tech && <span>{t.tech}: <b>{v.tech}</b></span>}
           <span className={`th-state is-${v.state}`}>{v.stateFa}</span>
         </p>
       </section>
@@ -326,7 +338,15 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
           <p>{v.dischargeNote || '—'}</p>
           {v.dischargeSummary && <p className="th-dsum"><b>شرحِ ترخیص</b><span>{v.dischargeSummary}</span></p>}
           {v.dischargeRemark && <p className="th-dsum"><b>یادداشت</b><span>{v.dischargeRemark}</span></p>}
+          {v.dischargeRx && <p className="th-dsum" data-discharged-rx><b>داروهای ترخیص</b><span>{v.dischargeRx}</span></p>}
+          {card.clinical && v.nextVisitDate && (
+            <p className="th-dsum" data-discharged-next><b>ویزیتِ بعدی</b><span>{faDate(v.nextVisitDate)}</span></p>
+          )}
         </section>
+      )}
+
+      {card.clinical && v.state !== 'cancelled' && (
+        <OpIntraDesk key={`od-${v.id}`} visit={v} canReport={card.can?.report} busy={busy} onAct={onAct} onToast={onToast} />
       )}
 
       <NoteBox
@@ -556,24 +576,90 @@ function Documents({ visitId, groups }) {
 }
 
 /**
+ * **تیم و جزئیاتِ عمل سرِ میز** (بستهٔ ۸) — همان بلوکِ تبِ «حینِ عمل»ِ فرمِ عمل.
+ *
+ * ⚠️ فقط تیم و حینِ عمل؛ ارزیابیِ پیش از عمل، سمتِ عمل‌ها و عارضه سرِ میز
+ * نوشته نمی‌شوند (سرور هم نمی‌پذیرد — `setOpDetails`).
+ * ⚠️ یک ذخیره و فقط کلیدِ تغییرکرده (`opDiff`). پیش‌نویسِ روی صفحه با کارتِ
+ * تازه بازنویسی نمی‌شود مگر دست‌نخورده باشد — همان قاعدهٔ `NoteBox`.
+ */
+function OpIntraDesk({ visit, canReport, busy, onAct, onToast }) {
+  const [ops, setOps] = useState(() => opInit(visit.opDetails));
+  const dirty = useRef(false);
+  const serverKey = JSON.stringify(visit.opDetails ?? null);
+  useEffect(() => {
+    if (!dirty.current) setOps(opInit(visit.opDetails));
+  }, [serverKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { patch } = opDiff(ops, visit.opDetails, OP_INTRA);
+  const changed = Object.keys(patch).length > 0;
+  return (
+    <section className="th-opd" aria-label="تیم و جزئیاتِ عمل">
+      <OpIntraBlock
+        ops={ops}
+        onSet={(k, val) => { dirty.current = true; setOps((x) => opSet(x, k, val)); }}
+        locked={!canReport}
+        note={canReport ? null : 'ثبتِ جزئیاتِ عمل برای این حساب مجاز نیست.'}
+      />
+      <div className="th-report-bar">
+        <span className="th-hint">{changed ? 'ذخیره نشده' : visit.opDetails ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز ثبت نشده'}</span>
+        <button
+          type="button" className="th-btn" data-act="save-opdetails"
+          disabled={!changed || !canReport || busy === 'opdetails'}
+          onClick={async () => {
+            const done = await onAct('/op-details', 'opdetails', { opDetails: patch });
+            if (done) { dirty.current = false; onToast('جزئیاتِ عمل ذخیره شد ✓'); }
+          }}
+        >ذخیره</button>
+      </div>
+    </section>
+  );
+}
+
+/**
  * **پاپ‌آپِ ترخیص** — «با زدنِ ترخیص، توضیحِ وضعیت حینِ ترخیص باید پاپ‌آپ شه،
  * پر شه، سیو شه» (بازخوردِ مالک).
  *
  * ⚠️ متن اجباری است و دکمه تا پر نشدنش غیرفعال می‌ماند: ترخیصِ بی‌شرح سطری
  * است که می‌گوید بیمار رفت و نمی‌گوید در چه حالی — و همان سطر سندِ پرونده
  * می‌شود. سرور هم دوباره همین را می‌سنجد.
+ *
+ * ⚠️ بستهٔ ۸ (فقط مطب، `card.clinical`): داروهای ترخیص و ویزیتِ بعدی. ویزیتِ
+ * بعدی فقط وقتی **عوض شده** می‌رود (پیامک می‌کارد و مراجعهٔ پست‌آپ می‌سازد) و
+ * فقط برای حسابی که مجوزش را دارد (`can.followup`)؛ برداشتنش کارِ فرمِ عمل است.
+ * «فوت» هر دو را قفل می‌کند — سرور هم رد می‌کند.
  */
-function DischargeDialog({ initial, already, busy, onClose, onSave }) {
+function DischargeDialog({ initial, card, already, busy, onClose, onSave }) {
   const dispositions = useStatusList('disposition');
   const [f, setF] = useState(initial);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const clinical = !!card?.clinical;
+  const canNext = clinical && !!card?.can?.followup;
+  const death = f.disposition === 'death';
+  const v = card?.visit ?? {};
+  const dxs = v.diagnoses ?? [];
+  const confirmed = v.opDetails?.postopDxConfirmed ?? null;
+  const nextIso = f.nextJ.trim() ? jStrToIso(f.nextJ) : null;
+  const nextBad = !!f.nextJ.trim() && !nextIso;
+  const nextEarly = !!nextIso && !!v.opDate && nextIso < String(v.opDate).slice(0, 10);
   /* وضعیتِ خروج و وضعیتِ بیمار اجباری‌اند؛ شرح و یادداشت اختیاری. */
-  const ok = f.condition.trim().length >= 2 && !!f.disposition;
+  const ok = f.condition.trim().length >= 2 && !!f.disposition && !(canNext && !death && (nextBad || nextEarly));
+  const submit = () => {
+    const body = { condition: f.condition, disposition: f.disposition, summary: f.summary, remark: f.remark };
+    if (clinical) {
+      /* «فوت»: متنِ دارو خالی می‌رود تا سندِ جاری بسته شود؛ ویزیتِ بعدی را سرور پاک می‌کند. */
+      if (death) { if ((initial.rx ?? '').trim()) body.rx = ''; }
+      else {
+        if (f.rx !== initial.rx) body.rx = f.rx;
+        if (canNext && nextIso && f.nextJ !== initial.nextJ) body.nextVisitDate = nextIso;
+      }
+    }
+    onSave(body);
+  };
   return (
     <Overlay
       backdrop="th-overlay" panel="th-dialog" as="form" from="center"
       closable={!busy} onClose={onClose} aria-label="ثبتِ ترخیص"
-      onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(f); }}
+      onSubmit={(e) => { e.preventDefault(); if (ok && !busy) submit(); }}
     >
       <header className="th-dialog-head">
         <b>{already ? 'ویرایشِ ترخیص' : 'ترخیصِ بیمار'}</b>
@@ -593,7 +679,27 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
             >{d.label}</button>
           ))}
         </div>
+        {f.disposition === 'transfer' && (
+          <p className="th-hint">نامِ مرکزِ مقصد و علتِ انتقال را در «شرحِ ترخیص» بنویسید.</p>
+        )}
+        {death && clinical && (
+          <p className="th-hint" data-death-hint>با «فوت» داروی ترخیص و ویزیتِ بعدی ثبت نمی‌شوند و پیام‌های بعد از عمل لغو می‌شوند.</p>
+        )}
       </div>
+      {/* تشخیصِ پس از عمل — یک سطر و هشدار، نه ویرایش: اصلاحش در فرمِ عمل است. */}
+      {clinical && (
+        <div className="th-dialog-field th-postdx" data-postop-dx>
+          <span>تشخیصِ پس از عمل</span>
+          <p>{dxs.length ? dxs.map((d) => d.title).join('، ') : (v.diagnosis || 'ثبت نشده')}</p>
+          {!dxs.length && !v.diagnosis && <p className="th-warn">تشخیصی روی این عمل ثبت نشده.</p>}
+          {(dxs.length > 0 || v.diagnosis) && confirmed !== true && (
+            <p className="th-warn">
+              {confirmed === false ? 'یافتهٔ عمل این تشخیص را تأیید نکرد' : 'تأییدِ تشخیص با یافتهٔ عمل ثبت نشده'}
+              {card?.can?.editVisit ? ' — در تبِ «بعد از عمل»ِ فرمِ عمل اصلاحش کنید.' : '.'}
+            </p>
+          )}
+        </div>
+      )}
       <label className="th-dialog-field">
         <span>وضعیتِ بیمار هنگامِ ترخیص</span>
         <textarea
@@ -606,10 +712,42 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
         <span>شرحِ ترخیص <i>اختیاری</i></span>
         <textarea
           rows={4} value={f.summary} data-discharge-summary
-          placeholder="سیرِ بستری، داروهای ترخیص، توصیه‌ها، زمانِ مراجعهٔ بعدی…"
+          placeholder={clinical ? 'سیرِ بستری، توصیه‌ها…' : 'سیرِ بستری، داروهای ترخیص، توصیه‌ها، زمانِ مراجعهٔ بعدی…'}
           onChange={set('summary')}
         />
       </label>
+      {clinical && (
+        <label className="th-dialog-field">
+          <span>داروهای ترخیص <i>اختیاری</i></span>
+          <textarea
+            rows={3} value={death ? '' : f.rx} disabled={death} data-discharge-rx
+            placeholder="نام، دوز و دستورِ مصرف — هر دارو یک سطر"
+            onChange={set('rx')}
+          />
+        </label>
+      )}
+      {clinical && (
+        <div className="th-dialog-field" data-discharge-next>
+          {canNext ? (<>
+            <JDate
+              label={<>ویزیتِ بعدی <i>اختیاری</i></>}
+              value={death ? '' : f.nextJ}
+              disabled={death}
+              onChange={(val) => setF((x) => ({ ...x, nextJ: val }))}
+              placeholder="۱۴۰۵/۰۵/۱۰"
+            />
+            {nextEarly && !death && <p className="th-warn">ویزیتِ بعدی نمی‌تواند پیش از روزِ عمل باشد.</p>}
+            {initial.nextJ && !f.nextJ.trim() && !death && (
+              <p className="th-hint">برداشتنِ ویزیتِ بعدی از فرمِ عمل انجام می‌شود؛ خالی‌گذاشتن این‌جا تاریخِ فعلی را نگه می‌دارد.</p>
+            )}
+          </>) : (
+            <p className="th-hint">
+              ویزیتِ بعدی: <b>{initial.nextJ ? faDate(v.nextVisitDate) : 'تعیین نشده'}</b>
+              {' '}— تعیینش برای این حساب مجاز نیست.
+            </p>
+          )}
+        </div>
+      )}
       <label className="th-dialog-field">
         <span>یادداشت <i>اختیاری</i></span>
         <textarea
@@ -618,7 +756,7 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
           onChange={set('remark')}
         />
       </label>
-      <p className="th-hint">هر سه متن در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
+      <p className="th-hint">متن‌ها در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
       <div className="th-dialog-acts">
         <button type="button" className="th-btn" onClick={onClose} disabled={busy}>انصراف</button>
         <button type="submit" className="th-btn primary" disabled={!ok || busy}>

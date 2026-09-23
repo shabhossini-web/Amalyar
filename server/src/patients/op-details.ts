@@ -261,9 +261,11 @@ export async function assertStructuredOwnership(
 
 /** یک سطرِ خلاصهٔ پیش از عمل برای میز («ASA II · رضایت ✓ …») — فقط خواندنی. */
 export function preOpSummary(view: ReturnType<typeof opDetailsView>, anesthesia?: string | null): string | null {
-  if (!view) return anesthesia ? ANESTHESIA_LABELS[anesthesia] ?? anesthesia : null;
+  const an = anesthesia ? ANESTHESIA_LABELS[anesthesia] ?? anesthesia : null;
+  if (!view) return an;
   const yn = (b: boolean | null, yes: string, no: string) => (b === true ? yes : b === false ? no : null);
   const parts = [
+    an,
     view.asaClass ? `ASA ${view.asaClass}${view.asaEmergency ? 'E' : ''}` : null,
     yn(view.consentSigned, 'رضایت‌نامه امضا شد', 'رضایت‌نامه امضا نشده'),
     yn(view.npoConfirmed, 'ناشتا', 'ناشتا نیست'),

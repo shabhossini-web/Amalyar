@@ -308,6 +308,49 @@ function VisitDiagnoses({ v }) {
   );
 }
 
+/**
+ * **خلاصهٔ بالینیِ عمل روی کارتِ پرونده** (بستهٔ ۸، فقط مطب) — سمت/سطحِ
+ * عمل‌ها، جزئیاتِ ساخت‌یافته و ترخیص. برچسب‌ها همه از سرورند (`sideFa`،
+ * `asaFa`، `clavienGradeFa`، `dispositionFa`)؛ این‌جا فقط کنارِ هم چیده می‌شوند.
+ * ⚠️ «ثبت نشده» نوشته نمی‌شود: کارتِ پرونده فهرستِ کمبودها نیست، و «خیر»
+ * فقط وقتی دیده می‌شود که واقعاً «خیر» ثبت شده.
+ */
+function VisitClinical({ v }) {
+  const sides = (v.procedures ?? []).filter((p) => p.sideFa || p.level)
+    .map((p) => `${p.name} (${[p.sideFa, p.level].filter(Boolean).join(' · ')})`);
+  const od = v.opDetails;
+  const yn = (b, yes, no) => (b === true ? yes : b === false ? no : null);
+  const opLine = od ? [
+    od.asaFa && `ASA ${od.asaClass}${od.asaEmergency ? 'E' : ''}`,
+    yn(od.consentSigned, 'رضایت‌نامه امضا شد', 'رضایت‌نامه امضا نشده'),
+    od.bloodLossMl != null && `خون‌ریزی ${faNum(od.bloodLossMl)} میلی‌لیتر`,
+    yn(od.specimenSent, 'نمونهٔ پاتولوژی', null),
+    yn(od.drainPlaced, 'درن', null),
+    yn(od.performedAsPlanned, null, 'عمل با تغییر نسبت به برنامه'),
+    od.complication === true ? `عارضه${od.clavienGradeFa ? `: ${od.clavienGradeFa}` : ''}` : yn(od.complication, null, 'بدونِ عارضه'),
+    yn(od.postopDxConfirmed, 'تشخیص با یافتهٔ عمل تأیید شد', 'تشخیص پس از عمل عوض شد'),
+  ].filter(Boolean) : [];
+  const team = od ? [od.assistantSurgeonName && `کمک‌جراح: ${od.assistantSurgeonName}`,
+    od.anesthesiologistName && `بیهوشی: ${od.anesthesiologistName}`].filter(Boolean) : [];
+  const d = v.discharge;
+  if (!sides.length && !opLine.length && !team.length && !d && !v.nextVisitDate) return null;
+  return (
+    <div className="rc-clin" data-visit-clinical>
+      {sides.length > 0 && <small>سمت و سطح: {sides.join('، ')}</small>}
+      {team.length > 0 && <small>{team.join(' · ')}</small>}
+      {opLine.length > 0 && <small>{opLine.join(' · ')}</small>}
+      {od?.complication === true && od.complicationNote && <small>شرحِ عارضه: {od.complicationNote}</small>}
+      {d && (
+        <small>
+          ترخیص {faDate(d.at)}{d.dispositionFa ? ` · ${d.dispositionFa}` : ''}{d.condition ? ` — ${d.condition}` : ''}
+        </small>
+      )}
+      {d?.rx && <small className="rc-clin-rx">داروهای ترخیص: {d.rx}</small>}
+      {v.nextVisitDate && <small>ویزیتِ بعدی: {faDate(v.nextVisitDate)}</small>}
+    </div>
+  );
+}
+
 function VisitsTab({ rec, onErr, onOpen }) {
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
@@ -333,6 +376,7 @@ function VisitsTab({ rec, onErr, onOpen }) {
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}
             </small>
             <VisitDiagnoses v={v} />
+            <VisitClinical v={v} />
             {/* ⚠️ **پاسخ‌های فرمِ مراجعه.** پزشک «شکایتِ اصلی» و «شرحِ معاینه»
                 را در فرمِ ویزیت می‌نویسد؛ تا دیروز پرونده هیچ اثری از آن‌ها
                 نداشت و همه‌شان فقط داخلِ فرمِ خودِ مراجعه می‌ماندند. چیزی که

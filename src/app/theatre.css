@@ -253,3 +253,11 @@
   .th-acts { width: 100%; flex-wrap: wrap; }
   .th-btn { flex: 1 1 auto; min-width: 46%; padding: 0 12px; }
 }
+
+/* ── بستهٔ ۸ (مطب) ── */
+/* بلوکِ تیم و جزئیاتِ عمل خودش قاب دارد (`.odx`)؛ بخشِ دوم دور ریخته می‌شود. */
+.th-opd { padding: 0 !important; background: none !important; border: 0 !important; }
+.th-opd .th-report-bar { padding: 0 4px; }
+.th-postdx p { margin: 4px 0 0; font-size: 14px; line-height: 1.8; color: var(--text1); }
+.th-postdx .th-warn, .th-dialog .th-warn { font-size: 12px; font-weight: 700; color: var(--amber-text); }
+.th-dialog .th-warn { margin: 6px 0 0; }

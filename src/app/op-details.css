@@ -1,0 +1,70 @@
+/* ── جزئیاتِ ساخت‌یافتهٔ عمل (بستهٔ ۸) — `OpDetails.jsx` ──
+   همراهِ خودِ کامپوننت (قانونِ ۲۱): هم فرمِ عمل و هم میزِ اتاقِ عمل سوارش‌اند.
+   همه‌چیز روی توکن‌ها؛ لایهٔ کم‌آلفا با `--veil-rgb` تا در تمِ روشن گم نشود. */
+
+.odx {
+  margin: 0; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px;
+  border-radius: 13px; border: 1px solid rgba(var(--veil-rgb), .1);
+  background: rgba(var(--veil-rgb), .03);
+  /* ⚠️ کمینهٔ پیش‌فرضِ fieldset (`min-content`) روی موبایل پهنای برگه را می‌شکند. */
+  min-inline-size: 0; min-width: 0;
+}
+.odx > legend {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
+  padding: 0 6px; font-size: 12.5px; font-weight: 800; color: var(--text2);
+}
+.odx > legend > i {
+  font-style: normal; font-size: 10.5px; font-weight: 700; color: rgb(var(--brand-2-rgb));
+}
+.odx.locked { opacity: .75; }
+.odx.locked > legend > i { color: var(--text3); }
+.odx-note { margin: 0; font-size: 11.5px; line-height: 1.8; color: var(--text3); }
+
+.odx-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.odx-label { font-size: 12px; font-weight: 700; color: var(--text2); }
+.odx-hint { margin: 0; font-size: 11.5px; color: var(--text3); }
+.odx-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.odx-chip {
+  padding: 7px 14px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--text2);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16); border-radius: 99px;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.odx-chip:hover:not(:disabled) { border-color: rgba(var(--brand-2-rgb), .45); }
+.odx-chip:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 2px; }
+.odx-chip:disabled { cursor: default; }
+.odx-chip.on {
+  color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); border-color: transparent;
+}
+/* «خیر» روشن ولی بی‌گرادیانِ برند — تا «ثبت شد: خیر» با «بله» یکی دیده نشود. */
+.odx-chip.on.no {
+  color: var(--text1); background: rgba(var(--veil-rgb), .14); border-color: rgba(var(--veil-rgb), .35);
+}
+.odx-unset { font-style: normal; font-size: 11px; color: var(--text3); }
+
+.odx-text input, .odx-text textarea, .odx-level {
+  font-family: inherit; font-size: 14px; color: var(--text1); width: 100%;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13);
+  border-radius: 11px; padding: 9px 12px; outline: none; transition: border-color .15s;
+}
+.odx-text textarea { resize: vertical; }
+.odx-text input:focus, .odx-text textarea:focus, .odx-level:focus { border-color: rgba(var(--brand-2-rgb), .65); }
+.odx-num input { max-width: 160px; }
+.odx-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .odx-pair { grid-template-columns: 1fr; } }
+.odx-dx {
+  margin: 0; font-size: 13px; line-height: 1.8; color: var(--text1);
+  padding: 7px 10px; border-radius: 10px; background: rgba(var(--brand-rgb), .07);
+}
+
+/* ── سمت و سطحِ هر عمل — داخلِ گرهِ «نوعِ عمل» ── */
+.odx-sides {
+  margin-top: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 8px;
+  border-radius: 11px; border: 1px dashed rgba(var(--veil-rgb), .16);
+}
+.odx-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.odx-side > b { font-size: 12.5px; color: var(--text1); overflow-wrap: anywhere; }
+.odx-level { max-width: 260px; font-size: 13px; padding: 7px 11px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .odx-chip, .odx-text input, .odx-text textarea, .odx-level { transition: none; }
+}

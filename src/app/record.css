@@ -587,3 +587,8 @@
 
 /* ضبطِ صدا زیرِ لینک/فایل (بستهٔ ۶د) */
 .rc-voice { margin-top: 10px; }
+
+/* خلاصهٔ بالینیِ عمل (بستهٔ ۸) — زیرِ تشخیص‌ها، هم‌وزنِ سطرهای دیگرِ کارت. */
+.rc-clin { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rc-clin small { overflow-wrap: anywhere; }
+.rc-clin-rx { white-space: pre-wrap; }
