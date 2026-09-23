@@ -1,81 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-23
-paths:
-  - server/src/patients/visit-coding.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/dto/visit.dto.ts
-  - server/src/patients/definitions.service.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/record.service.ts
-  - server/src/patients/summary.service.ts
-  - server/src/patients/theatre.service.ts
-  - server/src/patients/reminders.service.ts
-  - server/src/patients/dispatch.service.ts
-  - server/src/patients/surgeon-portal.service.ts
-  - server/src/patients/visit-requirements.ts
-  - server/src/patients/intake.service.ts
-  - server/src/patients/tech.service.ts
-  - server/src/patients/calendar.service.ts
-  - server/src/patients/portal.service.ts
-  - server/src/patients/invoices.service.ts
-  - server/src/patients/reports.service.ts
-  - server/src/ai/ai.service.ts
-  - server/src/ai/assistant-knowledge.ts
-  - src/app/CodingChips.jsx
-  - src/app/coding-chips.css
-  - src/app/Dashboard.jsx
-  - src/app/Theatre.jsx
-  - src/app/theatre.css
-  - src/app/NotesSearch.jsx
-  - src/app/exports.js
-  - src/app/invoice-print.js
-  - src/app/Accounting.jsx
-  - src/pages/VisitSummary.jsx
-  - scripts/e2e/multi-diagnosis.mjs
-  - scripts/e2e/multi-procedure.mjs
-  - scripts/e2e/today-quick-visit.mjs
-  - src/app/Today.jsx
-  - src/app/today.css
-  - server/src/work/today.service.ts
-  - server/src/patients/op-templates.ts
-  - server/src/patients/definitions.controller.ts
-  - server/src/patients/theatre.controller.ts
-  - server/src/auth/access-registry.ts
-  - src/app/OpDefaults.jsx
-  - src/app/op-defaults.css
-  - scripts/e2e/op-defaults.mjs
-  - scripts/e2e/run-live.mjs
-  - scripts/e2e/ci-live.txt
-  - .github/workflows/security-ci.yml
-note: >-
-  **بستهٔ ۷ — چند تشخیص و چند عمل برای یک مراجعه** (ادامهٔ گزارشِ HIS؛
-  بندهای ب و ج). مدل: اصلی (رتبهٔ ۱) همان ستونِ `visits.diagnosis_id` /
-  `procedure_type_id` می‌ماند؛ سایرین در دو جدولِ تازهٔ `visit_other_diagnoses`
-  / `visit_other_procedures` (رتبهٔ ≥۲، CHECK). تنها صاحبِ هر دو محور:
-  `server/src/patients/visit-coding.ts`. فیلتر/جستجو/قالب/زمینهٔ AI/کیت «هر
-  رتبه»؛ درآمد، پیامکِ مراقبت، روزهای پیگیری و عنوانِ قلمِ خدمت «فقط اصلی».
-  ⚠️ **هم‌پوشانیِ اعلام‌شده:** این بسته `server/prisma/` (migrationِ
-  `20260924000000_visit_other_coding`)، `src/app/VisitForm.jsx` و
-  `src/app/PatientRecord.jsx` را هم می‌نویسد — مسیرهای کلیمِ `claude-opus`.
-  کارِ آن کلیم (`claude/doc-phase-and-review-fix`) در `92d74ce` کامل در `main`
-  است و شاخه‌اش صفر کامیت جلوتر؛ هم‌زمانیِ واقعی نیست. در `paths` نیامدند تا
-  نگهبان قرمز نشود، و این‌جا صریح نوشته شد (همان روالِ بستهٔ ۶).
-  ⚠️ قراردادهایی که تغییر می‌کنند: کلیدهای تازهٔ `otherDiagnosisIds` /
-  `otherProcedureTypeIds` در ورودی و خروجیِ مراجعه؛ `diagnosisLabel` /
-  `procedureLabel` در خروجی؛ کلیدهای فقط‌نمایشیِ `procedure`/`procedureName`
-  برای مراجعهٔ چندعملی برچسبِ ترکیبی («A + B») می‌شوند؛ فیلترِ
-  `procedureTypeId`/`diagnosisId` مراجعه‌هایی را هم می‌گیرد که آن مورد
-  غیرِ اصلی‌شان است؛ حذفِ تعریفی که فقط غیرِ اصلی به کار رفته غیرفعال‌سازی
-  می‌شود. دو کلیدِ تازه برای فیلدِ دلخواهِ فرم رزرو شدند.
-  **همراهِ همین شاخه (درخواستِ مالک ۱۴۰۵/۰۷/۰۱):** دکمهٔ «+» شناور روی صفحهٔ
-  «امروز» برای ثبتِ سریعِ مراجعهٔ دستی — همان `VisitForm` از میزبانِ پاپ‌آپ؛
-  `GET /work/today` کلیدِ تازهٔ `canCreateVisit` می‌دهد. و «افزودن به پیش‌فرض»
-  زیرِ شرحِ عمل (فرمِ عمل، میزِ اتاق، کامپوزرِ پرونده): مجوزِ تازهٔ
-  `templates.add` (سطحِ کارشناس)، مسیرهای `/op-templates` و
-  `/theatre/visits/:id/op-templates`، و کلیدِ `procedureTypeId` در مراجعه‌های پرونده.
+paths: []
+note: بستهٔ ۷ (چند تشخیص/چند عمل) + «+»ِ امروز + پیش‌فرضِ شرحِ عمل تمام و در حالِ مرج است؛ هیچ مسیری در دست نیست.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
