@@ -75,7 +75,7 @@
 }
 .ns-ai-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ns-ai-row input {
-  flex: 1 1 240px; min-width: 0; padding: 10px 14px; font: inherit; font-size: 13px; color: var(--text);
+  flex: 1 1 240px; min-width: 0; padding: 10px 14px; font: inherit; font-size: 13px; color: var(--text1);
   background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 12px;
 }
 .ns-ai-row input:focus { outline: none; border-color: rgba(var(--brand-2-rgb), .6); }
@@ -85,7 +85,7 @@
 }
 .ns-ai-ask:disabled { opacity: .55; cursor: default; }
 .ns-ai-out { display: flex; flex-direction: column; gap: 10px; }
-.ns-ai-answer { margin: 0; font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.9; }
+.ns-ai-answer { margin: 0; font-size: 13px; font-weight: 700; color: var(--text1); line-height: 1.9; }
 .ns-ai-meter {
   height: 8px; border-radius: 99px; overflow: hidden;
   background: rgba(var(--veil-rgb), .08);

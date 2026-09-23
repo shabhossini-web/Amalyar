@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
-import { IsBoolean, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { DISPOSITION_KEYS } from './labels';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -32,8 +33,19 @@ class ReportDto {
 class DischargeDto {
   @IsString({ message: 'وضعیتِ بیمار هنگامِ ترخیص را بنویسید' })
   @MinLength(2, { message: 'وضعیتِ بیمار هنگامِ ترخیص را بنویسید' })
-  @MaxLength(4000, { message: 'شرحِ ترخیص طولانی است' })
+  @MaxLength(4000, { message: 'وضعیتِ هنگامِ ترخیص طولانی است' })
   condition!: string;
+
+  /* ── بستهٔ ۶ب — تصمیمِ مالک: «توضیحات، شرحِ ترخیص و یادداشت». ──
+     وضعیتِ خروج اجباری است (یک لمس)، دو متنِ دیگر اختیاری. */
+  @IsIn(DISPOSITION_KEYS, { message: 'وضعیتِ خروج را انتخاب کنید (منزل، انتقال، با رضایتِ شخصی، فوت)' })
+  disposition!: string;
+
+  @IsOptional() @IsString() @MaxLength(8000, { message: 'شرحِ ترخیص طولانی است' })
+  summary?: string;
+
+  @IsOptional() @IsString() @MaxLength(2000, { message: 'یادداشتِ ترخیص طولانی است' })
+  remark?: string;
 }
 
 /**
@@ -97,6 +109,13 @@ export class TheatreController {
     return this.theatre.setReport(id, dto.body, user);
   }
 
+  /* یافته‌های حینِ عمل — همان مجوزِ شرحِ عمل، چون همان سندنویسیِ جراح است. */
+  @RequirePermissions('theatre.report')
+  @Post('visits/:id/findings')
+  findings(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportDto, @CurrentUser() user: any) {
+    return this.theatre.setReport(id, dto.body, user, 'findings');
+  }
+
   /**
    * مدرکِ همین عمل. عمداً زیرِ `theatre.read` و نه `documents.read`:
    * جراحِ داخلِ اتاق باید عکسِ MRI را ببیند بی‌آنکه دسترسیِ کلِ مدارکِ
@@ -125,6 +144,6 @@ export class TheatreController {
   @RequirePermissions('theatre.discharge')
   @Post('visits/:id/discharge')
   discharge(@Param('id', ParseIntPipe) id: number, @Body() dto: DischargeDto, @CurrentUser() user: any) {
-    return this.theatre.discharge(id, dto.condition, user);
+    return this.theatre.discharge(id, dto, user);
   }
 }

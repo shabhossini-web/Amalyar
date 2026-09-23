@@ -2519,6 +2519,19 @@ jobs:
           const declared = new Set(
             setBody[1].split(',').map((x) => x.trim().replace(/^'|'\$/g, '')).filter(Boolean),
           );
+          /* ⚠️ بستهٔ ۶الف: «خانه» فقط ستون نیست. بخش‌های متنیِ هسته (شرحِ حال،
+             معاینه، یافته‌ها، طرحِ درمان، نسخه، شرحِ عمل) عمداً ستون نیستند و
+             `ClinicalNote`ِ نسخه‌دارند — `SECTION_NOTES` در clinical-note.ts
+             نگاشتشان است و `liftLegacy` هر کدام را که در `extra` برسد بیرون
+             می‌کشد. پس قرارِ این نگهبان این است: هر کلیدِ builtinِ فرمِ مراجعه
+             یا ستون دارد یا سندِ بالینی — نه اینکه در JSON دفن شود. */
+          const notes = read('server/src/patients/clinical-note.ts')
+            .match(/SECTION_NOTES: Record<string, string> = \{([^}]*)\}/s);
+          if (!notes) { console.error('SECTION_NOTES پیدا نشد'); process.exit(1); }
+          for (const m of notes[1].matchAll(/([a-zA-Z0-9_]+):/g)) declared.add(m[1]);
+          if (!/liftLegacy/.test(read('server/src/patients/patients.service.ts'))) {
+            console.error('بخش‌های متنی بدونِ liftLegacy از extra بیرون کشیده نمی‌شوند'); process.exit(1);
+          }
 
           /* فقط قالب‌های scope=visit سنجیده می‌شوند: فیلدهای builtinِ فرمِ
              ثبت‌نام ستونِ Patient هستند و مسیرِ ذخیره‌شان IntakeService است،

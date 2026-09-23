@@ -87,6 +87,25 @@ for (const f of css) {
   });
 }
 
+/* ⑤ توکنی که **هیچ‌جا تعریف نشده** (`var(--muted, #b7b0d8)`).
+      ⚠️ باگِ واقعی (بستهٔ ۶): `--muted` هرگز توکنِ این پروژه نبود، پس
+      fallbackِ بنفشِ روشن همیشه برنده بود — در تمِ تیره درست به‌نظر می‌رسید
+      و در تمِ روشن روی زمینهٔ روشن محو می‌شد. هیچ خطایی هم نمی‌داد، چون CSS
+      برای توکنِ ناموجود دقیقاً همین fallback را می‌خواهد.
+      «تعریف» یعنی `--x:` در یک CSS یا نامش در کدِ JS (اسپاتلایتِ `--mx`
+      که `track` می‌نویسد، یا `style={{ '--x': … }}`). */
+const jsSrc = walk('src').filter((f) => /\.(jsx?|mjs)$/.test(f)).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+const defined = new Set();
+for (const f of css) for (const m of strip(fs.readFileSync(f, 'utf8')).matchAll(/(--[\w-]+)\s*:/g)) defined.add(m[1]);
+for (const m of jsSrc.matchAll(/['"`](--[\w-]+)['"`]/g)) defined.add(m[1]);
+for (const f of css) {
+  strip(fs.readFileSync(f, 'utf8')).split('\n').forEach((line, i) => {
+    for (const m of line.matchAll(/var\(\s*(--[\w-]+)/g)) {
+      if (!defined.has(m[1])) bad.push(`${f}:${i + 1} — ${m[1]} هیچ‌جا تعریف نشده (fallbackِ خام در هر دو تم برنده می‌شود)`);
+    }
+  });
+}
+
 if (bad.length) {
   console.error('رنگِ خام یا توکنِ جاافتاده:\n  ' + bad.slice(0, 40).join('\n  ')
     + (bad.length > 40 ? `\n  … و ${bad.length - 40} مورد دیگر` : ''));

@@ -5,6 +5,7 @@ import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
+import { useStatusList } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon } from '../ui/icons.jsx';
 import './theatre.css';
@@ -134,12 +135,17 @@ export default function Theatre() {
       <AnimatePresence>
         {discharging && card && (
           <DischargeDialog
-            initial={card.visit.dischargeNote ?? ''}
+            initial={{
+              condition: card.visit.dischargeNote ?? '',
+              disposition: card.visit.dischargeDisposition ?? '',
+              summary: card.visit.dischargeSummary ?? '',
+              remark: card.visit.dischargeRemark ?? '',
+            }}
             already={!!card.visit.dischargeAt}
             busy={busy === 'discharge'}
             onClose={() => setDischarging(false)}
-            onSave={async (condition) => {
-              const done = await act('/discharge', 'discharge', { condition });
+            onSave={async (body) => {
+              const done = await act('/discharge', 'discharge', body);
               if (done) { setDischarging(false); setToast('ترخیص ثبت شد ✓'); }
             }}
           />
@@ -206,6 +212,12 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
           </span>
         </p>
         <p className="th-op">{[v.procedure, v.hospital].filter(Boolean).join(' · ') || '—'}</p>
+        {(v.diagnosis || v.anesthesiaFa) && (
+          <p className="th-dx">
+            {v.diagnosis && <span>تشخیص: <b>{v.diagnosis}</b></span>}
+            {v.anesthesiaFa && <span>بیهوشی: <b>{v.anesthesiaFa}</b></span>}
+          </p>
+        )}
         <p className="th-team">
           {v.surgeon && <span>جراح: <b>{v.surgeon}</b></span>}
           {v.tech && <span>کارشناس: <b>{v.tech}</b></span>}
@@ -219,6 +231,25 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
         <h3>شکایتِ اولیه</h3>
         <p>{v.chiefComplaint || 'در پرونده ثبت نشده — از بیمار بپرسید و در فرمِ مراجعه ثبت کنید'}</p>
       </section>
+
+      {/* ویزیتی که تصمیمِ عمل در آن گرفته شد — «بیمار با چه یافته‌ای کاندیدِ
+          عمل شد» سرِ میز، بی‌آنکه جراح پرونده را جدا باز کند (بستهٔ ۶الف). */}
+      {card.decided && (
+        <section className="th-decided" aria-label="ویزیتِ تصمیم">
+          <h3>از ویزیتِ تصمیم{card.decided.opDate ? ` — ${faDate(card.decided.opDate)}` : ''}</h3>
+          {[
+            ['تشخیص', card.decided.diagnosis],
+            ['شرحِ حال', card.decided.history],
+            ['یافته‌ها', card.decided.findings],
+            ['معاینه', card.decided.exam],
+            ['طرحِ درمان', card.decided.plan],
+          ].filter(([, t]) => t).map(([l, t]) => (
+            <p key={l}><b>{l}</b><span>{t}</span></p>
+          ))}
+        </section>
+      )}
+
+      {card.vitals?.length > 0 && <VitalsView rows={card.vitals} />}
 
       {/* ⚠️ هر سه هشدار **همیشه** رندر می‌شوند. «پرسیده نشده» با «نداشت» یکی
           نیست، و سرِ میز فرقشان می‌تواند حیاتی باشد — کادرِ خالی یعنی برو بپرس. */}
@@ -261,12 +292,23 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
 
       {v.dischargeAt && (
         <section className="th-discharged" aria-label="ترخیص">
-          <h3>ترخیص — {faDate(v.dischargeAt)}</h3>
+          <h3>ترخیص — {faDate(v.dischargeAt)}{v.dischargeDispositionFa ? ` · ${v.dischargeDispositionFa}` : ''}</h3>
           <p>{v.dischargeNote || '—'}</p>
+          {v.dischargeSummary && <p className="th-dsum"><b>شرحِ ترخیص</b><span>{v.dischargeSummary}</span></p>}
+          {v.dischargeRemark && <p className="th-dsum"><b>یادداشت</b><span>{v.dischargeRemark}</span></p>}
         </section>
       )}
 
-      <OpReport visit={v} busy={busy} onAct={onAct} onToast={onToast} />
+      <NoteBox
+        visit={v} field="findings" path="/findings" actKey="findings"
+        title="یافته‌های حینِ عمل" placeholder="آنچه حینِ عمل دیده شد…"
+        savedMsg="یافته‌ها ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
+      />
+      <NoteBox
+        visit={v} field="opReport" path="/report" actKey="report"
+        title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
+        savedMsg="شرحِ عمل ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
+      />
 
       <Documents visitId={v.id} groups={documents} />
 
@@ -294,24 +336,24 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
  * صفحه بازنویسی **نمی‌شود**؛ فقط وقتی هم‌گام می‌شویم که کاربر چیزی ننوشته
  * باشد. همان قاعدهٔ `JDate`: نوشتهٔ کاربر زیرِ دستش عوض نمی‌شود.
  */
-function OpReport({ visit, busy, onAct, onToast }) {
-  const [text, setText] = useState(visit.opReport ?? '');
+function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, busy, onAct, onToast }) {
+  const [text, setText] = useState(visit[field] ?? '');
   const dirty = useRef(false);
   useEffect(() => {
     if (dirty.current) return;
-    setText(visit.opReport ?? '');
-  }, [visit.opReport]);
+    setText(visit[field] ?? '');
+  }, [visit[field]]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saved = (visit.opReport ?? '').trim();
+  const saved = (visit[field] ?? '').trim();
   const changed = text.trim() !== saved;
   return (
-    <section className="th-report" aria-label="شرحِ عمل">
-      <h3><Form width="15" height="15" aria-hidden="true" /> شرحِ عمل</h3>
+    <section className="th-report" aria-label={title} data-note={field}>
+      <h3><Form width="15" height="15" aria-hidden="true" /> {title}</h3>
       <textarea
-        rows={5}
+        rows={field === 'opReport' ? 5 : 3}
         value={text}
-        data-report
-        placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…"
+        {...(field === 'opReport' ? { 'data-report': true } : { 'data-findings': true })}
+        placeholder={placeholder}
         onChange={(e) => { dirty.current = true; setText(e.target.value); }}
       />
       <div className="th-report-bar">
@@ -319,13 +361,13 @@ function OpReport({ visit, busy, onAct, onToast }) {
           {changed ? 'ذخیره نشده' : saved ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز نوشته نشده'}
         </span>
         <button
-          type="button" className="th-btn" data-act="save-report"
-          disabled={!changed || busy === 'report'}
+          type="button" className="th-btn" data-act={field === 'opReport' ? 'save-report' : 'save-findings'}
+          disabled={!changed || busy === actKey}
           onClick={async () => {
-            const done = await onAct('/report', 'report', { body: text });
-            if (done) { dirty.current = false; onToast('شرحِ عمل ذخیره شد ✓'); }
+            const done = await onAct(path, actKey, { body: text });
+            if (done) { dirty.current = false; onToast(savedMsg); }
           }}
-        >ذخیرهٔ شرح</button>
+        >ذخیره</button>
       </div>
     </section>
   );
@@ -412,33 +454,98 @@ function Documents({ visitId, groups }) {
  * می‌شود. سرور هم دوباره همین را می‌سنجد.
  */
 function DischargeDialog({ initial, already, busy, onClose, onSave }) {
-  const [text, setText] = useState(initial);
-  const ok = text.trim().length >= 2;
+  const dispositions = useStatusList('disposition');
+  const [f, setF] = useState(initial);
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  /* وضعیتِ خروج و وضعیتِ بیمار اجباری‌اند؛ شرح و یادداشت اختیاری. */
+  const ok = f.condition.trim().length >= 2 && !!f.disposition;
   return (
     <Overlay
       backdrop="th-overlay" panel="th-dialog" as="form" from="center"
       closable={!busy} onClose={onClose} aria-label="ثبتِ ترخیص"
-      onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(text); }}
+      onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(f); }}
     >
       <header className="th-dialog-head">
-        <b>{already ? 'ویرایشِ شرحِ ترخیص' : 'ترخیصِ بیمار'}</b>
+        <b>{already ? 'ویرایشِ ترخیص' : 'ترخیصِ بیمار'}</b>
         <button type="button" className="th-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
+      {/* ⚠️ وضعیتِ خروج دکمه است نه کشویی: یک لمس، و هر چهار گزینه همیشه
+          جلوی چشم — «فوت» نباید پشتِ یک منوی بسته پنهان بماند. */}
+      <div className="th-dialog-field">
+        <span>وضعیتِ خروج</span>
+        <div className="th-dispo" role="radiogroup" aria-label="وضعیتِ خروج">
+          {dispositions.map((d) => (
+            <button
+              key={d.key} type="button" role="radio" aria-checked={f.disposition === d.key}
+              data-disposition={d.key}
+              className={`th-dispo-btn${f.disposition === d.key ? ' on' : ''}${d.key === 'death' ? ' grave' : ''}`}
+              onClick={() => setF((x) => ({ ...x, disposition: d.key }))}
+            >{d.label}</button>
+          ))}
+        </div>
+      </div>
       <label className="th-dialog-field">
         <span>وضعیتِ بیمار هنگامِ ترخیص</span>
         <textarea
-          rows={5} value={text} autoFocus data-discharge-note
-          placeholder="سطحِ هوشیاری، درد، محلِ عمل، توصیه‌های ترخیص…"
-          onChange={(e) => setText(e.target.value)}
+          rows={3} value={f.condition} autoFocus data-discharge-note
+          placeholder="سطحِ هوشیاری، درد، محلِ عمل…"
+          onChange={set('condition')}
         />
       </label>
-      <p className="th-hint">این متن در پروندهٔ بیمار به‌عنوانِ «خلاصهٔ ترخیص» ثبت می‌شود و نامِ شما را می‌گیرد.</p>
+      <label className="th-dialog-field">
+        <span>شرحِ ترخیص <i>اختیاری</i></span>
+        <textarea
+          rows={4} value={f.summary} data-discharge-summary
+          placeholder="سیرِ بستری، داروهای ترخیص، توصیه‌ها، زمانِ مراجعهٔ بعدی…"
+          onChange={set('summary')}
+        />
+      </label>
+      <label className="th-dialog-field">
+        <span>یادداشت <i>اختیاری</i></span>
+        <textarea
+          rows={2} value={f.remark} data-discharge-remark
+          placeholder="نکته‌ای برای تیم…"
+          onChange={set('remark')}
+        />
+      </label>
+      <p className="th-hint">هر سه متن در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
       <div className="th-dialog-acts">
         <button type="button" className="th-btn" onClick={onClose} disabled={busy}>انصراف</button>
         <button type="submit" className="th-btn primary" disabled={!ok || busy}>
-          {busy ? 'در حالِ ثبت…' : already ? 'ذخیرهٔ شرح' : 'ثبتِ ترخیص'}
+          {busy ? 'در حالِ ثبت…' : already ? 'ذخیرهٔ ترخیص' : 'ثبتِ ترخیص'}
         </button>
       </div>
     </Overlay>
+  );
+}
+
+/**
+ * علائمِ حیاتیِ همین عمل — فقط‌خواندنی سرِ میز (ثبتش در فرمِ مراجعه است).
+ * برچسب و واحد از `/config.vitals`؛ BMI و برچسبِ مرحله از خودِ ردیف (سرور).
+ */
+function VitalsView({ rows }) {
+  const FA = '۰۱۲۳۴۵۶۷۸۹';
+  const fa = (x) => String(x).replace(/\d/g, (d) => FA[d]).replace('.', '٫');
+  const line = (r) => [
+    r.bpSys != null ? `فشار ${fa(r.bpSys)}/${fa(r.bpDia)}` : null,
+    r.hr != null ? `نبض ${fa(r.hr)}` : null,
+    r.rr != null ? `تنفس ${fa(r.rr)}` : null,
+    r.temp != null ? `دما ${fa(r.temp)}` : null,
+    r.spo2 != null ? `اکسیژن ${fa(r.spo2)}٪` : null,
+    r.pain != null ? `درد ${fa(r.pain)}/۱۰` : null,
+    r.bmi != null ? `BMI ${fa(r.bmi)}` : null,
+  ].filter(Boolean).join(' · ');
+  return (
+    <section className="th-vitals" aria-label="علائمِ حیاتی">
+      <h3>علائمِ حیاتی</h3>
+      <ul>
+        {rows.map((r) => (
+          <li key={r.id}>
+            {r.phaseFa && <b>{r.phaseFa}</b>}
+            <span>{line(r)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

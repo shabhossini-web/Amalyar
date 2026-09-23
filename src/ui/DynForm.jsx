@@ -1,3 +1,4 @@
+import VoiceNote, { VoiceClip } from './VoiceNote.jsx';
 import AssistedTextarea from './AssistedTextarea.jsx';
 import { fieldRoles } from '../lib/job-roles.js';
 import { useRef, useState } from 'react';
@@ -6,7 +7,13 @@ import TimePick from './TimePick.jsx';
 import Pick from './Pick.jsx';
 import './dynform.css';
 import { toEnDigits } from '../lib/identity.js';
-import { Bank, Camera, Check, Copy, LinkIcon, Star, Trash } from './icons.jsx';
+import { Bank, Camera, Check, Copy, LinkIcon, Mic, Star, Trash } from './icons.jsx';
+
+/** مدتِ صدا — «۱:۰۵» با ارقامِ فارسی. */
+const faSec = (sec) => {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+};
 
 /**
  * رندرِ فرم از روی **تعریف**، نه JSX.
@@ -74,6 +81,15 @@ export default function DynForm({
    * می‌کرد و فیش‌ها به حسابِ بسته واریز می‌شد.
    */
   payment = null,
+  /**
+   * آپلودکنندهٔ **توضیحِ صوتیِ** یک ردیفِ باکسِ لینک (بستهٔ ۶د):
+   * `(file, field) => Promise<{id, name}>`. همان قاعدهٔ `onUpload`: مسیرِ ذخیره
+   * در داشبورد و فرمِ عمومی فرق دارد، پس خودِ فرم آدرس نمی‌داند. نبودنش یعنی
+   * این‌جا ضبطِ صدا در دسترس نیست (دکمه‌ای هم نشان داده نمی‌شود).
+   */
+  onVoice,
+  /** پخشِ صدای ثبت‌شده — `(ref) => Promise<blobUrl>`؛ فقط جایی که فایل خواندنی است. */
+  voiceUrl,
 }) {
   const set = (key, v) => onChange({ ...values, [key]: v });
 
@@ -103,6 +119,8 @@ export default function DynForm({
             onUpload={onUpload}
             onRemove={onRemove}
             payment={payment}
+            onVoice={onVoice}
+            voiceUrl={voiceUrl}
           />
 
           {errors[f.key]
@@ -115,7 +133,7 @@ export default function DynForm({
   );
 }
 
-function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, onRemove, payment }) {
+function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, onRemove, payment, onVoice, voiceUrl }) {
   const v = value ?? '';
   const common = { disabled, placeholder: f.placeholder || undefined };
 
@@ -174,7 +192,7 @@ function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, 
       return <ImageBox field={f} value={value} set={set} disabled={disabled} onUpload={onUpload} onRemove={onRemove} />;
 
     case 'links':
-      return <LinksBox field={f} value={value} set={set} disabled={disabled} />;
+      return <LinksBox field={f} value={value} set={set} disabled={disabled} onVoice={onVoice} voiceUrl={voiceUrl} />;
 
     case 'payment':
       return <PaymentBox info={payment} />;
@@ -422,7 +440,7 @@ function PaymentBox({ info }) {
  */
 const LINK_KINDS = [['imaging', 'تصویربرداری'], ['lab', 'آزمایش'], ['other', 'سایر']];
 const MAX_LINKS = 10;
-function LinksBox({ field: f, value, set, disabled }) {
+function LinksBox({ field: f, value, set, disabled, onVoice, voiceUrl }) {
   const list = Array.isArray(value) ? value
     : value && typeof value === 'object' ? [value]
       : value ? [{ url: String(value) }] : [];
@@ -474,6 +492,39 @@ function LinksBox({ field: f, value, set, disabled }) {
                 disabled={disabled} onChange={(e) => patch(i, { pass: e.target.value })} aria-label="رمزِ لینک"
               />
             </span>
+            {/* ── توضیحِ صوتیِ همین لینک (بستهٔ ۶د) ──
+                ⚠️ تا نشانی نیامده ضبط بسته است: ردیفِ بی‌نشانی را سرور دور
+                می‌ریزد و صدای آپلودشده‌اش بی‌صاحب در پرونده می‌ماند. */}
+            {it.voice?.id ? (
+              voiceUrl ? (
+                <VoiceClip
+                  load={() => voiceUrl(it.voice)}
+                  name={`توضیحِ صوتی${it.voice.seconds ? ` · ${faSec(it.voice.seconds)}` : ''}`}
+                  disabled={disabled}
+                  onDelete={() => patch(i, { voice: null })}
+                />
+              ) : (
+                <span className="dyn-voice-done">
+                  <Mic size={14} /> توضیحِ صوتی ثبت شد
+                  <button type="button" onClick={() => patch(i, { voice: null })} disabled={disabled} aria-label="برداشتنِ صدا">
+                    <Trash width="13" height="13" />
+                  </button>
+                </span>
+              )
+            ) : onVoice ? (
+              (it.url ?? '').trim()
+                ? (
+                  <VoiceNote
+                    disabled={disabled}
+                    onSave={async (file, seconds) => {
+                      const r = await onVoice(file, f);
+                      if (!r?.id) throw new Error('صدا ثبت نشد');
+                      patch(i, { voice: { id: r.id, name: r.name ?? null, seconds: Math.round(seconds) } });
+                    }}
+                  />
+                )
+                : <em className="dyn-note">برای افزودنِ توضیحِ صوتی، اول نشانیِ لینک را بگذارید.</em>
+            ) : null}
           </span>
         );
       })}

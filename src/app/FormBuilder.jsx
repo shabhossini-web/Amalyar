@@ -7,7 +7,7 @@ import { useConfig } from './config.jsx';
 import './definitions.css';
 import './formbuilder.css';
 import './launcher.css'; // شِلِ استانداردِ صفحه (lx-*) + glass
-import { ArrowDown, ArrowUp, Back, Close, Eye, EyeOff, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import { ArrowDown, ArrowUp, Back, Close, Eye, EyeOff, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import { COLOR_KEYS, FORM_COLORS } from '../lib/formColor.js';
 import { toEnDigits } from '../lib/identity.js';
 import { toFa } from '../lib/utils.js';
@@ -364,6 +364,15 @@ export default function FormBuilder() {
                   />
                 </details>
 
+                {/* هستهٔ ثابتِ مطب (بستهٔ ۶) — توضیح یک‌بار بالای فهرست، نه روی هر ردیف. */}
+                {form.fields.some((f) => f.core) && (
+                  <p className="fb-core-note">
+                    <Lock width="14" height="14" aria-hidden="true" />
+                    ردیف‌های «استاندارد» بخش‌های ثابتِ {form.visitKind === 'surgery' ? 'عمل' : 'ویزیت'}‌اند و
+                    خاموش یا جابه‌جا نمی‌شوند — اجباری‌بودن، برچسب و بخشِ نقششان را می‌توانید عوض کنید.
+                    فیلدهای دلخواه، فرمِ تکمیلیِ همین نوع‌اند.
+                  </p>
+                )}
                 <div className="fb-list">
                   {form.fields.map((f, i) => (
                     <motion.article key={f.id} {...stagger(i)} className={`glass fb-row${f.active ? '' : ' off'}`}>
@@ -371,8 +380,11 @@ export default function FormBuilder() {
                         {/* ⚠️ آیکونِ SVG، نه نویسه‌ی «▲»: نویسه‌های هندسی روی
                             اندروید و سافاری با فونت‌های متفاوت رندر می‌شوند و
                             گاهی اصلاً glyph ندارند. نگهبانِ CI همین را می‌گیرد. */}
-                        <button type="button" onClick={() => move(f, -1)} disabled={busy || i === 0} aria-label="بالاتر"><ArrowUp width="11" height="11" /></button>
-                        <button type="button" onClick={() => move(f, 1)} disabled={busy || i === form.fields.length - 1} aria-label="پایین‌تر"><ArrowDown width="11" height="11" /></button>
+                        {/* ترتیبِ بخشِ استاندارد ثابت است (سرور هسته را اول می‌چیند)؛
+                            فلشِ غیرفعال از فلشی که کار نمی‌کند صادق‌تر است — برای
+                            اولین ردیفِ دلخواه هم، چون بالاترش هسته است. */}
+                        <button type="button" onClick={() => move(f, -1)} disabled={busy || i === 0 || f.core || form.fields[i - 1]?.core} aria-label="بالاتر"><ArrowUp width="11" height="11" /></button>
+                        <button type="button" onClick={() => move(f, 1)} disabled={busy || i === form.fields.length - 1 || f.core} aria-label="پایین‌تر"><ArrowDown width="11" height="11" /></button>
                       </div>
 
                       <div className="fb-main">
@@ -382,7 +394,9 @@ export default function FormBuilder() {
                         </b>
                         <span>
                           {typeLabel(f.type)}
-                          {f.builtin ? <i className="fb-tag core">هسته‌ای</i> : <i className="fb-tag custom">دلخواه</i>}
+                          {f.core
+                            ? <i className="fb-tag std" title="بخشِ ثابتِ استاندارد — خاموش نمی‌شود">استاندارد</i>
+                            : f.builtin ? <i className="fb-tag core">هسته‌ای</i> : <i className="fb-tag custom">دلخواه</i>}
                           {/* نشانِ صفحه فقط وقتی فرم چندصفحه‌ای است — روی فرمِ
                               تک‌صفحه‌ای «صفحهٔ ۱» روی هر ردیف فقط شلوغی است. */}
                           {form.pages > 1 && <i className="fb-page">صفحهٔ {toFa(f.page ?? 1)}</i>}
@@ -418,9 +432,17 @@ export default function FormBuilder() {
                         <button type="button" className="df-act" disabled={busy} onClick={() => setEditing({ formId: form.id, field: f })} aria-label="ویرایش">
                           <Pencil width="15" height="15" />
                         </button>
-                        <button type="button" className="df-act" disabled={busy} onClick={() => toggleActive(f)} aria-label={f.active ? 'خاموش‌کردن' : 'روشن‌کردن'}>
-                          {f.active ? <Eye width="15" height="15" /> : <EyeOff width="15" height="15" />}
-                        </button>
+                        {/* بخشِ استاندارد دکمهٔ خاموش ندارد — سرور هم رد می‌کند؛
+                            نبودِ دکمه از خطای بعدِ کلیک بهتر است (همان قاعدهٔ سطلِ زباله). */}
+                        {f.core ? (
+                          <span className="df-act fb-locked" title="بخشِ ثابتِ استاندارد" aria-label="قفل — بخشِ ثابتِ استاندارد">
+                            <Lock width="15" height="15" />
+                          </span>
+                        ) : (
+                          <button type="button" className="df-act" disabled={busy} onClick={() => toggleActive(f)} aria-label={f.active ? 'خاموش‌کردن' : 'روشن‌کردن'}>
+                            {f.active ? <Eye width="15" height="15" /> : <EyeOff width="15" height="15" />}
+                          </button>
+                        )}
                         {/* فیلدِ هسته‌ای سطلِ زباله ندارد — نبودِ دکمه از خطای بعدِ کلیک بهتر است. */}
                         {!f.builtin && (
                           <button type="button" className="df-act danger" disabled={busy} onClick={() => removeField(f)} aria-label="حذف">

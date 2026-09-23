@@ -10,6 +10,7 @@ import { textSearchOr } from '../common/search';
 import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
 import { NOTE_KIND_LABELS, OP_LABELS } from './labels';
+import { SECTION_KEYS, SECTION_NOTES, currentNotes, noteBody } from './clinical-note';
 
 /* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
    re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
@@ -34,7 +35,15 @@ function normalizeDocPhase(phase: unknown, visitId: number | null): string | nul
 }
 
 /** انواعِ شرحِ بالینی — منطبق بر چرخهٔ مطب → عمل → پس از عمل. */
-export const NOTE_KINDS = ['history', 'visit', 'op', 'progress', 'discharge', 'consult'] as const;
+export const NOTE_KINDS = [
+  'history', 'visit',
+  /* بخش‌های هستهٔ ثابتِ مراجعه (بستهٔ ۶الف) — `SECTION_NOTES` در `clinical-note.ts`. */
+  'exam', 'findings', 'plan', 'rx',
+  'op', 'progress',
+  /* ترخیص سه سند دارد: وضعیت (اجباری)، شرح و یادداشت (بستهٔ ۶ب). */
+  'discharge', 'discharge_summary', 'discharge_note',
+  'consult',
+] as const;
 
 /**
  * حداکثرِ حجمِ مدرک. تصویربرداری بزرگ است، ولی بی‌سقف یعنی یک آپلود می‌تواند
@@ -173,6 +182,12 @@ export class RecordService {
           /* شکایتِ اولیهٔ عملی که از یک ویزیت درآمده، مشتق از همان ویزیت است
              (بستهٔ ۴الف) — پرونده هم باید همان را نشان بدهد که میزِ اتاقِ عمل. */
           decidedIn: { select: { chiefComplaint: true } },
+          /* بستهٔ ۶الف: شرح‌های بخشیِ فرم (شرحِ حال، معاینه، یافته‌ها، طرحِ درمان،
+             نسخه، شرحِ عمل) دیگر در `extra` نیستند و `ClinicalNote`اند. بدونِ این
+             include کارتِ مراجعه در پرونده همان متن‌ها را بی‌صدا گم می‌کرد —
+             همان «نوشته شد ولی جایی که خوانده می‌شود نیست» که `answersOf` برایش
+             ساخته شد. فقط برای کسی که اجازهٔ بالینی دارد خوانده می‌شود. */
+          ...(clinical ? { clinicalNotes: currentNotes(Object.values(SECTION_NOTES)) } : {}),
         },
         orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { seq: 'desc' }],
       }),
@@ -212,6 +227,10 @@ export class RecordService {
        چون همین‌جا ستونِ خودشان را دارند (جراح، بیمارستان، تاریخ، …) و دوباره
        نشان‌دادنشان فقط شلوغی است. */
     const kindFields: Record<string, { key: string; label: string; type?: string }[]> = {};
+    /* برچسبِ فیلدهای **builtin** هر نوع — برای پاسخ‌هایی که ستون یا شرحِ
+       بخشی‌اند (شکایتِ اولیه، شرحِ معاینه، …). بدونِ این، ردیفشان با کلیدِ خام
+       (`chiefComplaint`) روی کارت می‌نشست. ترتیب هم از همین فهرست است. */
+    const kindBuiltins: Record<string, { key: string; label: string }[]> = {};
     for (const d of kindDefs) {
       if (!d.visitKind) continue;
       kindTitles[d.visitKind] = d.title;
@@ -219,6 +238,9 @@ export class RecordService {
       kindFields[d.visitKind] = (d.fields ?? [])
         .filter((f) => !f.builtin)
         .map((f) => ({ key: f.key, label: f.label, type: f.type }));
+      kindBuiltins[d.visitKind] = (d.fields ?? [])
+        .filter((f) => f.builtin)
+        .map((f) => ({ key: f.key, label: f.label }));
     }
 
     const snapshotByVisit = new Map(submissions
@@ -270,14 +292,39 @@ export class RecordService {
       return out;
     };
 
+    /* برچسبِ کلیدی که فیلدِ سفارشیِ فرم نیست: اول برچسبِ builtinِ همان نوع،
+       بعد نامِ نوعِ شرح، و فقط در آخر خودِ کلید (دادهٔ یتیمِ فیلدِ حذف‌شده). */
+    const builtinLabel = (kind: string | null, key: string) =>
+      (kind ? kindBuiltins[kind]?.find((f) => f.key === key)?.label : undefined)
+      ?? (key === 'chiefComplaint' ? 'شکایتِ اولیه' : undefined)
+      ?? (SECTION_NOTES[key] ? NOTE_KIND_LABELS[SECTION_NOTES[key]] : undefined)
+      ?? key;
+
+    /* شرح‌های بخشیِ یک مراجعه (بستهٔ ۶الف) — به ترتیبِ خودِ فرم، و فقط با
+       اجازهٔ بالینی (include بالا برای بقیه اصلاً خوانده نمی‌شود). */
+    const sectionRowsOf = (v: any) => {
+      if (!clinical) return [];
+      const order = (v.kind ? kindBuiltins[v.kind] ?? [] : []).map((f) => f.key);
+      const rank = (k: string) => { const i = order.indexOf(k); return i < 0 ? 999 + SECTION_KEYS.indexOf(k) : i; };
+      return [...SECTION_KEYS]
+        .sort((a, b) => rank(a) - rank(b))
+        .map((k) => ({ key: k, label: builtinLabel(v.kind, k), value: noteBody(v.clinicalNotes, SECTION_NOTES[k]) }))
+        .filter((r) => r.value);
+    };
+
     const answersOf = (v: any) => {
       const { id, kind } = v;
       const vals = valuesOf(v);
       const defined = fieldsForVisit(id, kind);
       const seen = new Set(defined.map((f) => f.key));
-      const rows = defined
-        .map((f) => ({ key: f.key, label: f.label, value: vals[f.key] }))
-        .concat(Object.keys(vals).filter((k) => !seen.has(k)).map((k) => ({ key: k, label: k, value: vals[k] })));
+      const unseen = Object.keys(vals).filter((k) => !seen.has(k));
+      /* شکایتِ اولیه جلوتر از شرح‌های بخشی، و آن‌ها جلوتر از فیلدهای سفارشی —
+         همان ترتیبی که فرمِ هستهٔ ثابت نشان می‌دهد. */
+      const head: { key: string; label: string; value: any }[] = unseen.filter((k) => k === 'chiefComplaint').map((k) => ({ key: k, label: builtinLabel(kind, k), value: vals[k] }));
+      const rows = head
+        .concat(sectionRowsOf(v).filter((r) => !seen.has(r.key)))
+        .concat(defined.map((f) => ({ key: f.key, label: f.label, value: vals[f.key] })))
+        .concat(unseen.filter((k) => k !== 'chiefComplaint').map((k) => ({ key: k, label: builtinLabel(kind, k), value: vals[k] })));
       /* W0.4: شکل‌دهی از `answerParts` می‌آید — همان تابعی که فرم‌های چسبیده
          هم استفاده می‌کنند، تا دو مسیر دوباره از هم دور نیفتند. */
       return rows
@@ -612,6 +659,8 @@ export class RecordService {
       phaseFa: d.phase ? (DOCUMENT_PHASE_FA[d.phase] ?? null) : null,
       /// نوعِ محتوا برای کلاینت: عکس را inline نشان می‌دهد، بقیه را دانلود.
       isImage: d.mimeType.startsWith('image/'),
+      /// توضیحِ صوتی (بستهٔ ۶د): کلاینت پخش‌کننده نشان می‌دهد نه دکمهٔ دانلود.
+      isAudio: d.mimeType.startsWith('audio/'),
       /// مدرکِ لینکی: کلاینت به‌جای دانلود، همین نشانی را باز می‌کند.
       externalUrl: d.externalUrl,
       isLink: !!d.externalUrl,

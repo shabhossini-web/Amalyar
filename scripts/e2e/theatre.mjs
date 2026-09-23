@@ -138,9 +138,13 @@ try {
   const started = await send(`/theatre/visits/${v.id}/start`, 'POST');
   const t1 = started.json?.visit?.opStartTime;
   ok('«شروع شد» ساعتِ دیوار را می‌زند', started.status < 300 && /^\d{2}:\d{2}$/.test(t1 ?? ''), String(t1));
-  sql(`UPDATE visits SET op_start_time='01:02' WHERE id=${v.id}`);
+  /* ⚠️ `00:00` نه یک ساعتِ دلخواه: پایین‌تر همین شروع باید «در جریان» خوانده
+     شود، و شروعِ بعد از «الان» برنامه است نه جریان. با `01:02` این سوییت هر شب
+     بین ۰۰:۰۰ و ۰۱:۰۲ قرمز می‌شد (رانِ محلیِ بستهٔ ۶ از نیمه‌شب گذشت و گرفتش).
+     `00:00` هیچ‌وقت بعد از «الانِ» همان روز نیست. */
+  sql(`UPDATE visits SET op_start_time='00:00' WHERE id=${v.id}`);
   await send(`/theatre/visits/${v.id}/start`, 'POST');
-  ok('**نباید بیفتد:** لمسِ دوباره ساعتِ ثبت‌شده را بازنویسی کند', sql(`SELECT op_start_time FROM visits WHERE id=${v.id}`) === '01:02');
+  ok('**نباید بیفتد:** لمسِ دوباره ساعتِ ثبت‌شده را بازنویسی کند', sql(`SELECT op_start_time FROM visits WHERE id=${v.id}`) === '00:00');
   const fin = await send(`/theatre/visits/${v.id}/finish`, 'POST');
   ok('«پایان» بعد از شروع می‌نشیند', fin.status < 300 && /^\d{2}:\d{2}$/.test(fin.json?.visit?.opEndTime ?? ''), String(fin.json?.visit?.opEndTime));
 
@@ -161,7 +165,7 @@ try {
   const future = (await send(`/theatre/visits/${v.id}`)).json?.visit;
   ok('**نباید بیفتد:** ساعتِ شروعِ آیندهٔ همین امروز «در جریان» خوانده شود',
     future?.state === 'waiting' || new Date().getHours() === 23, JSON.stringify([future?.state, new Date().getHours()]));
-  sql(`UPDATE visits SET op_start_time='00:01' WHERE id=${v.id}`);
+  sql(`UPDATE visits SET op_start_time='00:00' WHERE id=${v.id}`);
   ok('… ولی ساعتِ گذشتهٔ همین امروز «در جریان» است', (await send(`/theatre/visits/${v.id}`)).json?.visit?.state === 'running');
   sql(`UPDATE visits SET op_date=CURRENT_DATE - 2 WHERE id=${v.id}`);
   const past = (await send(`/theatre/day?date=${new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10)}`)).json;
@@ -223,25 +227,56 @@ try {
 
   console.log('\n۷) ترخیص — مرحلهٔ سوم، نه مترادفِ «پایانِ عمل»');
   sql(`UPDATE visits SET op_end_time=NULL WHERE id=${v.id}`);
-  const early2 = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار' });
+  const early2 = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار', disposition: 'home' });
   ok('**نباید بیفتد:** ترخیص پیش از «پایانِ عمل»', early2.status === 400, String(early2.status));
   sql(`UPDATE visits SET op_end_time='09:30' WHERE id=${v.id}`);
-  const blank = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: '   ' });
+  const blank = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: '   ', disposition: 'home' });
   ok('**نباید بیفتد:** ترخیصِ بی‌شرح', blank.status === 400, String(blank.status));
-  const dis = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار، بدونِ نقصِ حرکتی، دردِ کنترل‌شده.' });
+  /* بستهٔ ۶ب: «به کجا رفت» جزوِ حداقلِ خلاصهٔ ترخیص است (منزل/انتقال/با
+     رضایتِ شخصی/فوت) — بی‌آن، آمارِ خروج و پیگیریِ بعد از عمل ممکن نیست. */
+  const noDispo = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار' });
+  ok('**نباید بیفتد:** ترخیص بدونِ وضعیتِ خروج', noDispo.status === 400
+    && /خروج|ترخیص/.test(JSON.stringify(noDispo.json)), JSON.stringify([noDispo.status, noDispo.json?.message]).slice(0, 160));
+  const badDispo = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار', disposition: 'mars' });
+  ok('**نباید بیفتد:** وضعیتِ خروجِ ناشناخته', badDispo.status === 400, String(badDispo.status));
+  const dis = await send(`/theatre/visits/${v.id}/discharge`, 'POST', {
+    condition: 'هوشیار، بدونِ نقصِ حرکتی، دردِ کنترل‌شده.',
+    disposition: 'home',
+    summary: 'لامینکتومیِ L4-L5 بدونِ عارضه؛ درن روزِ دوم خارج شد.',
+    remark: 'پانسمان روزِ پنجم در مطب.',
+  });
   ok('ترخیص ثبت می‌شود و شرحش برمی‌گردد',
     dis.status < 300 && !!dis.json?.visit?.dischargeAt && dis.json?.visit?.dischargeNote?.startsWith('هوشیار'),
     JSON.stringify([dis.status, dis.json?.visit?.dischargeAt, dis.json?.visit?.dischargeNote]).slice(0, 180));
   ok('… و شرحش سندِ `discharge`ِ پرونده است',
     num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='discharge' AND replaced_at IS NULL`) === 1);
+  ok('وضعیتِ خروج با برچسبِ فارسی برمی‌گردد (منزل)',
+    dis.json?.visit?.dischargeDisposition === 'home' && dis.json?.visit?.dischargeDispositionFa === 'منزل',
+    JSON.stringify([dis.json?.visit?.dischargeDisposition, dis.json?.visit?.dischargeDispositionFa]));
+  ok('شرحِ ترخیص و یادداشت هر کدام سندِ جدای پرونده‌اند',
+    dis.json?.visit?.dischargeSummary?.includes('L4-L5') && dis.json?.visit?.dischargeRemark?.includes('پانسمان')
+    && num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='discharge_summary' AND replaced_at IS NULL`) === 1
+    && num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='discharge_note' AND replaced_at IS NULL`) === 1,
+    JSON.stringify([dis.json?.visit?.dischargeSummary, dis.json?.visit?.dischargeRemark]).slice(0, 160));
+  ok('ستونِ discharge_disposition پر شد', sql(`SELECT discharge_disposition FROM visits WHERE id=${v.id}`) === 'home');
   ok('وضعیتِ اتاق «ترخیص شد» می‌شود — جدا از «در ریکاوری»',
     dis.json?.visit?.state === 'discharged' && dis.json?.visit?.stateFa === 'ترخیص شد',
     JSON.stringify([dis.json?.visit?.state, dis.json?.visit?.stateFa]));
   const at1 = sql(`SELECT discharge_at FROM visits WHERE id=${v.id}`);
-  const again = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار، با توصیهٔ فیزیوتراپی.' });
+  const again = await send(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'هوشیار، با توصیهٔ فیزیوتراپی.', disposition: 'transfer' });
   ok('زدنِ دوباره فقط شرح را نسخه‌بندی می‌کند و **ساعتِ ترخیص را عوض نمی‌کند**',
     again.status < 300 && sql(`SELECT discharge_at FROM visits WHERE id=${v.id}`) === at1
     && num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='discharge'`) === 2, at1);
+  /* ویرایشِ ترخیص بدونِ شرح/یادداشتِ تازه نباید آن دو را پاک کند — همان قاعدهٔ
+     «بخشِ نفرستاده دست نمی‌خورد» که فرمِ ویزیت هم دارد. */
+  ok('وضعیتِ خروج عوض شد ولی شرح و یادداشتِ قبلی ماند',
+    again.json?.visit?.dischargeDisposition === 'transfer'
+    && again.json?.visit?.dischargeSummary?.includes('L4-L5') && again.json?.visit?.dischargeRemark?.includes('پانسمان'),
+    JSON.stringify([again.json?.visit?.dischargeDisposition, again.json?.visit?.dischargeSummary]).slice(0, 160));
+  const rec7 = (await send(`/patients/${v.patientId}/record`)).json;
+  ok('در پرونده هر سه با نامِ خودشان‌اند',
+    ['وضعیتِ هنگامِ ترخیص', 'شرحِ ترخیص', 'یادداشتِ ترخیص'].every((l) => (rec7?.clinicalNotes ?? []).some((n) => n.visitId === v.id && n.kindFa === l)),
+    JSON.stringify((rec7?.clinicalNotes ?? []).filter((n) => n.visitId === v.id).map((n) => n.kindFa)));
   /* 🔴 شرحِ عمل نباید قربانیِ شرحِ ترخیص شود: هر دو در یک آرایه برمی‌گردند و
      نسخهٔ اولِ enrich با `[0]` می‌خواندشان. */
   ok('🔴 شرحِ عمل بعد از ترخیص هنوز شرحِ عمل است، نه شرحِ ترخیص',
@@ -284,7 +319,8 @@ try {
     JSON.stringify(oMon).slice(0, 160));
   ok('**نباید بیفتد:** شرحِ عمل یا ترخیصش را بنویسد',
     (await oApi(`/theatre/visits/${v.id}/report`, 'POST', { body: 'نفوذ' })).status === 404
-    && (await oApi(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'نفوذ' })).status === 404);
+    && (await oApi(`/theatre/visits/${v.id}/discharge`, 'POST', { condition: 'نفوذ', disposition: 'home' })).status === 404
+    && (await oApi(`/theatre/visits/${v.id}/findings`, 'POST', { body: 'نفوذ' })).status === 404);
   /* ولی همان حساب وقتی کارشناسِ عمل شد، می‌بیند — یعنی ۴۰۴ از دامنه بود نه از گارد. */
   sql(`UPDATE visits SET tech_id=${other.account.id} WHERE id=${v.id}`);
   ok('… و به‌محضِ اینکه کارشناسِ همین عمل شد، می‌بیند', (await oApi(`/theatre/visits/${v.id}`)).status === 200);

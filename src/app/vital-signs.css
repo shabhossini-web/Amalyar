@@ -1,0 +1,60 @@
+/* علائمِ حیاتی (بستهٔ ۶ج) — همهٔ رنگ‌ها از توکن‌ها (قانونِ ۲۳). */
+.vs-box {
+  border: 1px solid rgba(var(--veil-rgb), .12);
+  background: rgba(var(--surface-rgb), .35);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.vs-head { display: flex; align-items: baseline; gap: 8px; }
+.vs-head b { color: var(--text1); font-size: 14px; }
+.vs-head i { font-style: normal; color: var(--text3); font-size: 12px; }
+.vs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.vs-cell { display: grid; gap: 4px; min-width: 0; }
+.vs-cell > span:first-child { color: var(--text2); font-size: 12px; }
+.vs-in {
+  display: flex; align-items: center; gap: 4px;
+  border: 1px solid rgba(var(--veil-rgb), .16);
+  border-radius: 10px;
+  background: rgba(var(--veil-rgb), .04);
+  padding: 0 8px;
+  min-height: 38px;
+}
+.vs-in input {
+  flex: 1 1 0; min-width: 0; width: 100%;
+  border: 0; background: transparent; color: var(--text1);
+  font: inherit; font-size: 15px; padding: 6px 0; text-align: center;
+}
+.vs-in input:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 6px; }
+.vs-in i { font-style: normal; color: var(--text3); }
+.vs-in em { font-style: normal; color: var(--text3); font-size: 11px; white-space: nowrap; }
+.vs-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.vs-rows li {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  padding: 8px 10px; border-radius: 10px;
+  background: rgba(var(--veil-rgb), .05);
+  color: var(--text1); font-size: 13px;
+}
+.vs-rows time { color: var(--text2); font-size: 12px; }
+.vs-rows small { color: var(--text3); font-size: 11px; }
+.vs-rows span { flex: 1 1 200px; min-width: 0; }
+.vs-del {
+  margin-inline-start: auto; border: 0; background: transparent; color: var(--text3);
+  display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+}
+.vs-del:hover { color: var(--text1); background: rgba(var(--veil-rgb), .08); }
+.vs-add {
+  justify-self: start; display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid rgba(var(--brand-2-rgb), .45); color: var(--text1);
+  background: rgba(var(--brand-2-rgb), .12); border-radius: 10px; padding: 7px 12px;
+  font: inherit; font-size: 13px; cursor: pointer;
+}
+.vs-add:disabled, .vs-del:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: no-preference) {
+  .vs-add, .vs-del { transition: background .15s, color .15s; }
+}

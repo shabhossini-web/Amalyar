@@ -13,6 +13,17 @@ try {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fa-IR', reducedMotion: 'reduce', serviceWorkers: 'block' });
   let user = { id: 1, level: 6, status: 'active', firstName: 'مدیر', lastName: 'تست', username: 'manager', phone: '09120000001' };
   const writes = [], errors = [];
+  /* ⚠️ `selectOption` منتظرِ درخواستی که `onChange` می‌فرستد نمی‌ماند؛ خواندنِ
+     بی‌درنگِ `writes` یک مسابقه بود (تقریباً یک از سه ران، رانِ محلیِ بستهٔ ۶
+     گرفتش). جاهای دیگر پیش از خواندن منتظرِ پیامِ موفقیتِ روی صفحه‌اند؛ این‌جا
+     پیامی نیست، پس خودِ درخواست منتظر می‌ماند. */
+  const waitWrite = async (path, ms = 5000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await new Promise(r => setTimeout(r, 50))) {
+      const hit = writes.find(w => w.path === path);
+      if (hit) return hit;
+    }
+    throw new Error(`درخواستِ ${path} نرسید`);
+  };
   let testingEnabled = false;
   const hospital = { id: 1, name: 'بیمارستان تست', active: true };
   const technician = { id: 2, displayName: 'کارشناس تست', active: true };
@@ -88,7 +99,7 @@ try {
   user = { ...user, level: 6 };
   await page.goto(`${base}/app/dispatch`);
   await page.getByLabel('کارشناس بیمار تست').selectOption('2');
-  assert.equal(writes.find(w => w.path === '/dispatch/roster/visits/1').payload.techId, 2);
+  assert.equal((await waitWrite('/dispatch/roster/visits/1')).payload.techId, 2);
   await page.getByRole('button', { name: 'پیش‌نمایش ابلاغ برنامه روز' }).click();
   await page.getByText('برنامه تست؛ بیمار احتمالی').waitFor();
   pass('hospital roster assigns a patient and previews technician notification');

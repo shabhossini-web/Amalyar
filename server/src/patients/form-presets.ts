@@ -64,7 +64,11 @@ export type PresetForm = {
 export const BUILTIN_VISIT_KEYS = new Set([
   'surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId',
   'opDate', 'opStartTime', 'opEndTime', 'opType', 'notes', 'amount',
-  'payer', 'kind', 'topicId', 'nextVisitDate', 'chiefComplaint',
+  'payer', 'kind', 'topicId', 'nextVisitDate', 'chiefComplaint', 'anesthesia',
+  /* ↑ بستهٔ ۶الف: نوعِ بیهوشی ستون شد — تا دیروز فیلدِ دلخواهِ قالبِ جراحیِ مطب
+     بود و در `extra` می‌نشست، پس «چند عمل با بیهوشیِ عمومی؟» جواب نداشت.
+     ⚠️ کامنت **بعد از** کلید است نه قبلش: نگهبانِ CI این Set را با کاما
+     می‌شکند و کامنتی که به کلیدِ بعدی بچسبد، آن کلید را نامرئی می‌کند. */
   /* ⚠️ `techArriveTime` عمداً نیست (W3.8/U7): فرمِ مراجعه دیگر ساعتِ حضور
      نمی‌گیرد — از برنامهٔ چینش می‌آید. فیلدی که در فرم‌ساز روشن شود ولی
      چیزی ننویسد، بدترین نوعِ فیلد است: کاربر پُرش می‌کند و بی‌صدا گم می‌شود. */
@@ -103,6 +107,16 @@ export const VISIT_BUILTIN_CATALOG: { key: string; label: string; type: string }
   { key: 'opStartTime', label: 'ساعتِ شروع', type: 'time' },
   { key: 'opEndTime', label: 'ساعتِ پایان', type: 'time' },
   { key: 'opReport', label: 'شرحِ عمل', type: 'textarea' },
+  /* ── بخش‌های متنیِ هستهٔ ثابت (بستهٔ ۶الف) — مثلِ `opReport` ستون نیستند؛
+     `SECTION_NOTES` در `clinical-note.ts` هر کدام را به سندِ نسخه‌دارِ خودش
+     می‌برد. کلیدها عمداً همان کلیدهای قدیمیِ فیلدِ دلخواهِ قالبِ مطب‌اند تا
+     ردیفِ موجود ارتقا یابد نه دوتا شود. */
+  { key: 'history', label: 'شرحِ حال و علائم', type: 'textarea' },
+  { key: 'findings', label: 'یافته‌های پاراکلینیک', type: 'textarea' },
+  { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' },
+  { key: 'planNote', label: 'طرحِ درمان و توصیه‌ها', type: 'textarea' },
+  { key: 'prescription', label: 'نسخه / دارو', type: 'textarea' },
+  { key: 'anesthesia', label: 'نوعِ بیهوشی', type: 'select' },
   /* «دو هفتهٔ دیگر بیاید» — ستونِ واقعی، پایهٔ فازِ یادآوری‌ها. */
   { key: 'nextVisitDate', label: 'ویزیتِ بعدی', type: 'date' },
   { key: 'amount', label: 'مبلغ (تومان)', type: 'money' },
@@ -110,6 +124,43 @@ export const VISIT_BUILTIN_CATALOG: { key: string; label: string; type: string }
 ];
 
 export const VISIT_CATALOG_KEYS = new Set(VISIT_BUILTIN_CATALOG.map((f) => f.key));
+
+/**
+ * **هستهٔ ثابتِ مراجعه در مطب** — بخش‌هایی که فرم‌ساز خاموش یا حذفشان نمی‌کند.
+ *
+ * 🔴 تصمیمِ مالک (بستهٔ ۶): «مطب دو نوع مراجعه دارد، ویزیت و عمل؛ ویزیت یک
+ * استانداردِ ثابت دارد و عمل یک استانداردِ ثابت». تا دیروز فرم‌ساز می‌توانست
+ * حتی «تشخیص» و «شکایتِ اولیه» را خاموش کند، یعنی دو مطب روی یک سامانه دو
+ * پروندهٔ ناهم‌سنج می‌ساختند و هیچ گزارشی بینشان جمع نمی‌شد.
+ *
+ * ⚠️ «ثابت» یعنی **بودن و ترتیب**، نه همه‌چیز: ستاره (اجباری‌بودن)، برچسب و
+ * بخشِ نقش همچنان قابلِ تنظیم‌اند — خواستهٔ قبلیِ «سوپرادمین هر فیلد را
+ * ستاره‌دار کند یا نکند» سرِ جایش می‌ماند. تفاوت‌های هر مطب جایشان فیلدهای
+ * تکمیلی است.
+ *
+ * ⚠️ فقط حوزهٔ `clinic`: شرکتِ نورومانیتورینگ/ایمپلنت پروندهٔ بالینیِ جراح را
+ * نمی‌نویسد و فرمِ سبکِ خودش را نگه می‌دارد.
+ *
+ * ترتیبِ آرایه همان ترتیبِ رندر است (استانداردِ یادداشتِ بالینی).
+ */
+export const CLINIC_CORE: Record<'visit' | 'surgery', string[]> = {
+  visit: [
+    'opDate', 'surgeonId', 'chiefComplaint', 'history', 'findings', 'exam',
+    'diagnosisId', 'planNote', 'prescription', 'nextVisitDate',
+  ],
+  surgery: [
+    'opDate', 'surgeonId', 'hospitalId', 'procedureTypeId', 'diagnosisId',
+    'chiefComplaint', 'anesthesia', 'opStartTime', 'opEndTime', 'findings', 'opReport',
+  ],
+};
+
+/** خانوادهٔ هسته‌ای یک نوعِ مراجعه — هر نوعی جز عمل، ویزیت حساب می‌شود. */
+export const coreFamily = (visitKind: string | null | undefined): 'visit' | 'surgery' =>
+  (visitKind === 'surgery' ? 'surgery' : 'visit');
+
+/** آیا این کلید در این نوعِ مراجعه جزوِ هستهٔ ثابت است؟ (فقط حوزهٔ مطب) */
+export const isCoreKey = (vertical: string, visitKind: string | null | undefined, key: string) =>
+  vertical === 'clinic' && CLINIC_CORE[coreFamily(visitKind)].includes(key);
 
 /** فیلدهای هسته‌ای که تقریباً هر فرمِ مراجعه‌ای دارد. */
 const CORE = {
@@ -139,6 +190,21 @@ const CORE = {
     key: 'nextVisitDate', label: 'ویزیتِ بعدی', type: 'date', builtin: true,
     hint: 'اگر بیمار باید دوباره بیاید، همین‌جا ثبت شود — پایهٔ یادآوری‌ها',
   },
+  history: {
+    key: 'history', label: 'شرحِ حال و علائم', type: 'textarea', builtin: true,
+    placeholder: 'شروع، مدت، سیر، علائمِ همراه…',
+  },
+  findings: { key: 'findings', label: 'یافته‌های پاراکلینیک', type: 'textarea', builtin: true },
+  exam: { key: 'exam', label: 'شرحِ معاینه', type: 'textarea', builtin: true },
+  planNote: {
+    key: 'planNote', label: 'طرحِ درمان و توصیه‌ها', type: 'textarea', builtin: true,
+    placeholder: 'شرحِ درمان، توصیه‌ها…',
+  },
+  prescription: {
+    key: 'prescription', label: 'نسخه / دارو', type: 'textarea', builtin: true,
+    placeholder: 'داروها و دستورِ مصرف',
+  },
+  anesthesia: { key: 'anesthesia', label: 'نوعِ بیهوشی', type: 'select', builtin: true },
 } as const;
 
 /** فرمِ عملِ نورومانیتورینگ/تجهیزات — یک فرم، چون یک نوع کار هست. */
@@ -203,27 +269,19 @@ const CLINIC_VISIT: PresetForm = {
        می‌کند (quick-add در خودِ فرم). نبودنش در پریست یعنی هیچ مطبی این
        فیلد را نمی‌دید — روی نصبِ واقعی گزارش شد. */
     { ...CORE.topic },
+    /* ── هستهٔ ثابتِ ویزیت (بستهٔ ۶الف) — به ترتیبِ استانداردِ یادداشتِ بالینی:
+       شکایت ← شرحِ حال ← یافته‌ها ← معاینه ← تشخیص ← تصمیم ← طرح و نسخه.
+       ⚠️ «تصمیم» دیگر فیلدِ دلخواهِ `plan` نیست: ستونِ چندتاییِ
+       `Visit.decisions` است که همیشه زیرِ تشخیص رندر می‌شود. «مدتِ علائم» هم
+       در شرحِ حال آمد — یک جملهٔ کوتاه، نه یک فیلدِ جدا. */
     { ...CORE.chiefComplaint, required: true },
-    { key: 'historyDuration', label: 'مدتِ علائم', type: 'text', placeholder: 'مثلاً ۳ ماه' },
+    { ...CORE.history },
+    { ...CORE.findings },
     ...CLINIC_MEDIA_FIELDS,
-    { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' },
+    { ...CORE.exam },
     { ...CORE.diagnosis },
-    {
-      key: 'plan',
-      label: 'تصمیم',
-      type: 'select',
-      options: [
-        { v: 'conservative', l: 'درمانِ محافظه‌کارانه' },
-        { v: 'imaging', l: 'درخواستِ تصویربرداری' },
-        { v: 'lab', l: 'درخواستِ آزمایش' },
-        { v: 'surgery', l: 'کاندیدِ جراحی' },
-        { v: 'refer', l: 'ارجاع' },
-      ],
-      hint: '«کاندیدِ جراحی» یعنی این بیمار در ادامه فرمِ جراحی می‌گیرد.',
-    },
-    /* طرحِ درمان و نسخه — روایتِ آزادِ پزشک؛ «تصمیم»ِ بالا فقط دسته است. */
-    { key: 'planNote', label: 'طرحِ درمان', type: 'textarea', placeholder: 'شرحِ درمان، توصیه‌ها…' },
-    { key: 'prescription', label: 'نسخه / دارو', type: 'textarea', placeholder: 'داروها و دستورِ مصرف' },
+    { ...CORE.planNote },
+    { ...CORE.prescription },
     { ...CORE.nextVisit },
     { ...CORE.amount },
     { ...CORE.notes },
@@ -246,20 +304,11 @@ const CLINIC_SURGERY: PresetForm = {
        باید همین‌جا پرسیده شود. عملی که از ویزیت آمده این را خالی می‌گذارد و
        شکایت را از همان ویزیت **مشتق** می‌کند (`decidedInVisitId`). */
     { ...CORE.chiefComplaint },
+    { ...CORE.anesthesia },
     { ...CORE.assistant },
     { ...CORE.start },
     { ...CORE.end },
-    {
-      key: 'anesthesia',
-      label: 'نوعِ بیهوشی',
-      type: 'select',
-      options: [
-        { v: 'general', l: 'عمومی' },
-        { v: 'spinal', l: 'نخاعی' },
-        { v: 'local', l: 'موضعی' },
-        { v: 'sedation', l: 'سِدیشن' },
-      ],
-    },
+    { ...CORE.findings, label: 'یافته‌های حینِ عمل' },
     { key: 'admitDays', label: 'روزهای بستری', type: 'number' },
     { ...CORE.amount },
     { ...CORE.notes },

@@ -346,6 +346,17 @@ function Form() {
     return listNow[listNow.length - 1] ?? {};
   };
 
+  /**
+   * توضیحِ صوتیِ یک ردیفِ لینک (بستهٔ ۶د) — بیمار زیرِ لینکِ MRI می‌گوید
+   * رادیولوژیست چه گفت. سرور فقط WAVِ همین ضبط‌کننده را می‌پذیرد و ارجاعش
+   * داخلِ همان ردیفِ لینک می‌نشیند (ذخیرهٔ فرم، مثلِ بقیهٔ پاسخ‌ها).
+   */
+  const uploadVoice = async (file, field) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiUpload(`/public/intake/form/${token}/voice/${encodeURIComponent(field.key)}`, fd);
+  };
+
   /** برداشتنِ یک عکس از همان کادر — سمتِ سرور هم پاک شود. */
   const removeImage = async (ref, field) => {
     const fresh = await api(
@@ -460,6 +471,7 @@ function Form() {
               payment={payInfo}
               onUpload={uploadImage}
               onRemove={removeImage}
+              onVoice={uploadVoice}
             />
             </div>
             <div className="ik-nav">

@@ -217,7 +217,7 @@
 /* هدفِ ضربه دستِ‌کم ۴۴ پیکسل — بیمار روی موبایل با انگشت می‌زند. */
 .ik-slots button {
   min-width: 68px; min-height: 40px; font-family: inherit; font-size: 12.5px; cursor: pointer;
-  color: var(--text); padding: 8px 10px; border-radius: 10px;
+  color: var(--text1); padding: 8px 10px; border-radius: 10px;
   background: rgba(var(--brand-2-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .28);
 }
 .ik-slots button.on { color: #fff; background: rgba(var(--brand-2-rgb), .35); border-color: rgba(var(--brand-2-rgb), .7); }

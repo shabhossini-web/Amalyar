@@ -17,6 +17,7 @@ import {
 import { Type } from 'class-transformer';
 import { EnDigits, IsNationalId } from '../../common/validators';
 import { PAYERS } from '../settlement.service';
+import { ANESTHESIA_KEYS, DECISION_KEYS } from '../labels';
 
 /**
  * نوع‌های **پایه‌ی** ملاقات — نه فهرستِ کامل.
@@ -33,8 +34,8 @@ import { PAYERS } from '../settlement.service';
  * می‌سازد. همان دلیلِ اعتبارسنجیِ اجباری‌بودن.
  */
 export const VISIT_KINDS = ['surgery', 'clinic', 'followup', 'consult'] as const;
-/** تصمیمِ درمانیِ ویزیت — پایهٔ ردیفِ تصمیم در فرم و گزارش‌گیری. */
-export const DECISIONS = ['surgery', 'conservative', 'referral', 'consult', 'lab', 'imaging'] as const;
+/** تصمیمِ درمانیِ ویزیت — کلیدها از `DECISION_LABELS` (تنها خانهٔ برچسب‌ها). */
+export const DECISIONS = DECISION_KEYS;
 
 /// ثبتِ مراجعه — یا patientId (بیمارِ موجود) یا نام/نام‌خانوادگی (بیمارِ جدید)
 export class CreateVisitDto {
@@ -108,6 +109,32 @@ export class CreateVisitDto {
   @IsString()
   @MaxLength(5000, { message: 'شرحِ عمل طولانی است' })
   opReport?: string;
+
+  /* ── بخش‌های متنیِ هستهٔ ثابت (بستهٔ ۶الف) — هر کدام سندِ نسخه‌دارِ خودش
+     (`SECTION_NOTES`). سقف‌ها همان سقفِ شرحِ عمل: یادداشتِ بالینیِ واقعی
+     بلند می‌شود و بریدنِ بی‌صدا از ردکردن بدتر است. */
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'شرحِ حال طولانی است' })
+  history?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'شرحِ معاینه طولانی است' })
+  exam?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'یافته‌ها طولانی است' })
+  findings?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'طرحِ درمان طولانی است' })
+  planNote?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'نسخه طولانی است' })
+  prescription?: string;
+
+  /// نوعِ بیهوشی — کلیدی از `ANESTHESIA_LABELS`.
+  @IsOptional() @IsIn(ANESTHESIA_KEYS, { message: 'نوعِ بیهوشی نامعتبر است' })
+  anesthesia?: string;
+
+  /// علائمِ حیاتیِ لحظهٔ ثبت — اختیاری؛ ردیفِ اولِ `VitalSign` در همان تراکنش.
+  @IsOptional() @IsObject({ message: 'علائمِ حیاتی نامعتبر است' })
+  vitals?: Record<string, unknown>;
 
   /**
    * مبلغِ توافقی — **تومان**، فقط هنگامِ **ساخت**.
@@ -301,6 +328,28 @@ export class UpdateVisitDto {
   @IsString()
   @MaxLength(5000, { message: 'شرحِ عمل طولانی است' })
   opReport?: string;
+
+  /* بخش‌های هستهٔ ثابت — رشتهٔ خالی یعنی «این سند دیگر جاری نیست» (همان
+     معنای شرحِ عمل در `setVisitNote`). */
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'شرحِ حال طولانی است' })
+  history?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'شرحِ معاینه طولانی است' })
+  exam?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'یافته‌ها طولانی است' })
+  findings?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'طرحِ درمان طولانی است' })
+  planNote?: string;
+
+  @IsOptional() @IsString() @MaxLength(5000, { message: 'نسخه طولانی است' })
+  prescription?: string;
+
+  /// نوعِ بیهوشی — `null`/خالی یعنی پاکش کن.
+  @IsOptional() @ValidateIf((o) => o.anesthesia !== null && o.anesthesia !== '')
+  @IsIn(ANESTHESIA_KEYS, { message: 'نوعِ بیهوشی نامعتبر است' })
+  anesthesia?: string | null;
 
   @IsOptional()
   @ValidateIf((o) => o.opDate !== null && o.opDate !== '')

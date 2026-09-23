@@ -34,8 +34,15 @@ try {
   /* فرمِ ویزیت با یک textareaی عمومی و یکی بخشِ پزشک */
   const form = (await send('/forms', 'POST', { key: tag, title: 'ویزیتِ خلاصه‌دار', scope: 'visit' })).json;
   trash.forms.push(form.id);
-  await send(`/forms/${form.id}/fields`, 'POST', { key: 'planNote', label: 'طرحِ درمان', type: 'textarea' });
-  await send(`/forms/${form.id}/fields`, 'POST', { key: 'exam', label: 'شرحِ معاینه', type: 'textarea', role: 'doctor' });
+  /* ⚠️ از بستهٔ ۶الف `planNote` و `exam` کلیدهای هستهٔ ثابت‌اند: فیلدِ سفارشی
+     با آن‌ها ساخته نمی‌شود و هر فرمِ مراجعه ردیفِ builtinِ خاموششان را دارد.
+     پس همان کاری را می‌کنیم که کاربر در فرم‌ساز می‌کند — روشن‌کردن، و برای
+     معاینه محدودکردن به نقشِ پزشک. */
+  const view = (await send(`/forms/${encodeURIComponent('visit.' + tag)}`, 'GET')).json;
+  const fieldOf = (k) => view?.fields?.find((f) => f.key === k);
+  ok(fieldOf('planNote')?.builtin && fieldOf('exam')?.builtin, 'طرحِ درمان و معاینه ردیفِ builtinِ فرم‌اند');
+  await send(`/forms/fields/${fieldOf('planNote')?.id}`, 'PATCH', { active: true });
+  await send(`/forms/fields/${fieldOf('exam')?.id}`, 'PATCH', { active: true, roles: ['doctor'] });
 
   const nextIso = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
   const visit = (await send('/visits', 'POST', {
@@ -44,7 +51,7 @@ try {
     nextVisitDate: nextIso,
     notes: 'یادداشتِ داخلیِ منشی — نباید بیرون برود',
     amount: 500000,
-    extra: { planNote: 'فیزیوتراپی سه جلسه', exam: 'یافتهٔ خصوصیِ پزشک' },
+    planNote: 'فیزیوتراپی سه جلسه', exam: 'یافتهٔ خصوصیِ پزشک',
   })).json;
   if (!visit?.id) { console.error('مراجعه ساخته نشد: ' + JSON.stringify(visit).slice(0, 200)); process.exit(1); }
   trash.visits.push(visit.id);
@@ -59,7 +66,8 @@ try {
   ok(pub.status === 200, `بدونِ ورود باز می‌شود (${pub.status})`);
   const body = JSON.stringify(pub.json);
   ok(pub.json?.patient?.fullName === 'بیمارِ خلاصه', 'نامِ بیمار هست');
-  ok(pub.json?.answers?.some((a) => a.label === 'طرحِ درمان' && a.body.includes('فیزیوتراپی')),
+  /* برچسب از ردیفِ builtin می‌آید («طرحِ درمان و توصیه‌ها») — قابلِ تغییر در فرم‌ساز. */
+  ok(pub.json?.answers?.some((a) => /^طرحِ درمان/.test(a.label) && a.body.includes('فیزیوتراپی')),
     'طرحِ درمان (فیلدِ عمومی) هست');
   ok(!body.includes('خصوصیِ پزشک'), '**فیلدِ بخشِ پزشک بیرون نمی‌رود**');
   ok(!body.includes('یادداشتِ داخلی'), 'یادداشتِ داخلی هم بیرون نمی‌رود');

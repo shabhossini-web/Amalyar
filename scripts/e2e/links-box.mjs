@@ -72,7 +72,10 @@ const form = await ensureVisitForm('lkvisit', '[lk] ویزیت با لینک');
   ok('باکسِ عکس با دستهٔ تصویربرداری ساخته شد', r.status < 300, r.status + ' ' + r.text.slice(0, 120));
   const r2 = await api(`/forms/${form.id}/fields`, { method: 'POST', body: { key: 'links', label: 'لینکِ تصاویر و آزمایش‌ها', type: 'links', docCategory: 'imaging' } });
   ok('باکسِ لینک ساخته شد', r2.status < 300, r2.status + ' ' + r2.text.slice(0, 120));
-  await api(`/forms/${form.id}/fields`, { method: 'POST', body: { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' } });
+  /* ⚠️ کلید `examNote` است نه `exam`: از بستهٔ ۶الف `exam` کلیدِ رزروِ هستهٔ
+     ثابت است (شرحِ بخشی → ClinicalNote) و فیلدِ سفارشی با آن ساخته نمی‌شود.
+     این سوییت دربارهٔ «هر textareaی سفارشی در تبِ شرح‌ها» است، نه آن بخش. */
+  await api(`/forms/${form.id}/fields`, { method: 'POST', body: { key: 'examNote', label: 'شرحِ معاینه', type: 'textarea' } });
   const bad = await api(`/forms/${form.id}/fields`, { method: 'POST', body: { key: 'badcat', label: 'نامعتبر', type: 'links', docCategory: 'bogus' } });
   ok('دستهٔ مدرکِ نامعتبر ۴۰۰ می‌گیرد', bad.status === 400, 'status=' + bad.status);
   const view = (await api(`/forms/${encodeURIComponent('visit.lkvisit')}`)).json;
@@ -144,7 +147,7 @@ const LINKS = [
 ];
 let saved;
 {
-  const r = await fill({ links: LINKS, exam: 'دردِ کمر با انتشار به پای چپ — تستِ لینک' });
+  const r = await fill({ links: LINKS, examNote: 'دردِ کمر با انتشار به پای چپ — تستِ لینک' });
   ok('ذخیره شد', r.status < 300, r.status + ' ' + r.text.slice(0, 160));
   saved = r.json?.data?.links;
   ok('ردیفِ بی‌نشانی حذف شد — دو لینک ماند', Array.isArray(saved) && saved.length === 2, JSON.stringify(saved)?.slice(0, 160));

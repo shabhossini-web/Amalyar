@@ -30,11 +30,20 @@ import path from 'node:path';
 const SETS = [
   { name: 'وضعیتِ نوبت (APPT_LABELS)', keys: ['held', 'confirmed', 'arrived', 'noshow', 'done', 'cancelled'] },
   { name: 'وضعیتِ مراجعه (OP_LABELS)', keys: ['pending', 'done', 'cancelled'] },
-  { name: 'نوعِ سندِ بالینی (NOTE_KIND_LABELS)', keys: ['history', 'visit', 'op', 'progress', 'discharge', 'consult'] },
+  { name: 'نوعِ سندِ بالینی (NOTE_KIND_LABELS)', keys: ['history', 'visit', 'exam', 'findings', 'rx', 'op', 'progress', 'discharge', 'discharge_summary', 'discharge_note', 'consult'] },
   { name: 'وضعیتِ سفارش (ORDER_LABELS)', keys: ['draft', 'sent', 'answered', 'in_review', 'reviewed', 'needs_action'] },
   { name: 'وضعیتِ یادآوری (REMINDER_LABELS)', keys: ['pending', 'sending', 'sent', 'simulated', 'failed', 'uncertain'] },
   { name: 'نوعِ یادآوری (REMINDER_KIND_LABELS)', keys: ['next_visit', 'surgery', 'appointment', 'pre_op_care', 'post_op_care', 'follow_up', 'notice', 'dispatch'] },
   { name: 'وضعیتِ ثبت‌نام (INTAKE_LABELS)', keys: ['pending_fill', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'expired'] },
+  /* ── بستهٔ ۶ ── دکمه‌های فرم و پاپ‌آپِ ترخیص از `/config` رندر می‌شوند.
+     ⚠️ `DECISION_LABELS` عمداً این‌جا **نیست**: کلیدهای مشترکش (lab/imaging/
+     consult/referral) همان نوعِ سفارش‌اند و `FA`ِ `orders.service` را به دروغ
+     می‌گرفت، و بقیه‌اش در `DECISION_HINTS`ِ فرم‌اند که **جمله**‌اند نه برچسب
+     (همان استدلالِ `terms.js`). شمارِ تصمیم‌ها را e2eِ visit-decision از
+     خودِ `/config` می‌سنجد. */
+  { name: 'نوعِ بیهوشی (ANESTHESIA_LABELS)', keys: ['general', 'spinal', 'local', 'sedation'] },
+  { name: 'وضعیتِ خروج (DISPOSITION_LABELS)', keys: ['home', 'transfer', 'ama', 'death'] },
+  { name: 'علائمِ حیاتی (VITAL_LABELS)', keys: ['bp', 'hr', 'rr', 'temp', 'spo2', 'weight', 'height', 'pain'] },
 ];
 const MIN_HITS = 3;
 

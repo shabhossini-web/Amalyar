@@ -50,16 +50,18 @@
 /* ── بله/خیر، چندگزینه‌ای، امتیاز ─────────────────────────────────────── */
 .dyn .dyn-bool { display: flex; align-items: center; gap: 9px; }
 .dyn-bool input { width: 18px; height: 18px; accent-color: var(--brand-2, #a78bfa); cursor: pointer; }
-.dyn-bool i { font-style: normal; font-size: 13px; color: var(--muted, #b7b0d8); }
+/* ⚠️ `--muted` توکنِ این پروژه نیست — fallbackِ بنفشِ روشن همیشه برنده بود
+   و در تمِ روشن روی زمینهٔ روشن محو می‌شد. */
+.dyn-bool i { font-style: normal; font-size: 13px; color: var(--text2); }
 
 .dyn .dyn-multi { display: flex; flex-wrap: wrap; gap: 6px; }
 .dyn-pill {
   cursor: pointer; font-family: inherit; font-size: 12.5px; padding: 8px 16px; border-radius: 99px;
-  color: var(--muted, #b7b0d8); background: rgba(var(--veil-rgb), .05);
+  color: var(--text2); background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--veil-rgb), .14); transition: color .15s, background .15s, border-color .15s;
 }
 .dyn-pill.on {
-  color: #fff; background: rgba(var(--brand-soft-rgb), .22);
+  color: var(--text1); background: rgba(var(--brand-soft-rgb), .22);
   border-color: rgba(var(--brand-soft-rgb), .55);
 }
 /* بله/خیر: دو گزینهٔ هم‌عرض تا انگشتِ موبایل راحت باشد */
@@ -85,7 +87,7 @@
 .dyn-img-pick {
   cursor: pointer; font-family: inherit; font-size: 12.5px;
   display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
-  border-radius: 10px; color: var(--muted, #b7b0d8);
+  border-radius: 10px; color: var(--text2);
   background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--veil-rgb), .2);
   transition: color .15s, background .15s, border-color .15s;
 }
@@ -103,7 +105,7 @@
    بدونِ این، یک پیوستِ ساده کلِ شیت را می‌کشد. */
 .dyn-img-has img { width: 42px; height: 42px; border-radius: 7px; object-fit: cover; display: block; }
 .dyn-img-has b {
-  font-weight: 500; font-size: 12.5px; color: var(--muted, #b7b0d8);
+  font-weight: 500; font-size: 12.5px; color: var(--text2);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;
 }
 .dyn-img-has button {
@@ -115,7 +117,7 @@
 .dyn-img-list { display: flex; flex-direction: column; gap: 5px; }
 
 .dyn .dyn-note, .dyn .dyn-img .dyn-note {
-  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); opacity: .75;
+  font-style: normal; font-size: 11.5px; color: var(--text2); opacity: .75;
 }
 
 /* ── باکسِ پرداخت ──────────────────────────────────────────────────────────
@@ -126,10 +128,10 @@
   border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .dyn-pay-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #fff; }
-.dyn-pay-head i { font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8); }
+.dyn-pay-head i { font-style: normal; font-size: 11.5px; color: var(--text2); }
 .dyn-pay-row { display: flex; align-items: center; gap: 8px; }
 .dyn-pay-row i {
-  font-style: normal; font-size: 11.5px; color: var(--muted, #b7b0d8);
+  font-style: normal; font-size: 11.5px; color: var(--text2);
   min-width: 74px; flex-shrink: 0;
 }
 /* ⚠️ `tabular-nums` تا ارقام هم‌عرض باشند، و `isolate` چون یک عددِ لاتین
@@ -142,7 +144,7 @@
 }
 .dyn-pay-row button {
   cursor: pointer; display: grid; place-items: center; padding: 5px; border-radius: 7px;
-  color: var(--muted, #b7b0d8); background: transparent;
+  color: var(--text2); background: transparent;
   border: 1px solid rgba(var(--veil-rgb), .12); transition: color .15s, background .15s;
   margin-inline-start: auto; flex-shrink: 0;
 }
@@ -170,3 +172,14 @@
 .dyn-link-kinds .dyn-pill { padding: 5px 12px; font-size: 11.5px; }
 .dyn-link-cred { display: flex; gap: 6px; }
 .dyn-link-cred input { flex: 1; min-width: 0; }
+
+/* توضیحِ صوتیِ ثبت‌شده در فرمِ عمومی (بدونِ امکانِ پخش — فایل پشتِ احراز است). */
+.dyn-voice-done {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2);
+  padding: 4px 10px; border-radius: 99px; border: 1px solid rgba(var(--veil-rgb), .16);
+  background: rgba(var(--veil-rgb), .05);
+}
+.dyn-voice-done button {
+  display: inline-grid; place-items: center; border: 0; background: none; color: var(--text3); cursor: pointer; padding: 2px;
+}
+.dyn-voice-done button:hover:not(:disabled) { color: var(--text1); }

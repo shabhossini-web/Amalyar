@@ -10,9 +10,10 @@ import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
-import { api, apiUpload } from '../lib/api.js';
+import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { jStrToIso, isoToJStr, faDate } from '../lib/jalali.js';
 import { DocThumb, isImageDoc, openDoc } from '../ui/DocThumb.jsx';
+import VoiceNote, { VoiceClip } from '../ui/VoiceNote.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
@@ -66,6 +67,9 @@ function AnswerDocs({ docs, onToast }) {
               <button type="button" className="od-doc-thumb" title="بازکردن در اندازهٔ کامل" onClick={() => openDoc(d, onToast)}>
                 <DocThumb id={d.id} alt={d.title || d.fileName} />
               </button>
+            ) : String(d.mimeType ?? '').startsWith('audio/') ? (
+              /* توضیحِ صوتیِ بیمار (بستهٔ ۶د) — پخش همین‌جا، نه دانلود. */
+              <VoiceClip load={() => apiBlobUrl(`/patients/documents/${d.id}/file`)} name={d.title || 'توضیحِ صوتی'} />
             ) : d.contentText ? (
               <p className="od-doc-text">{d.contentText}</p>
             ) : d.externalUrl ? (
@@ -276,6 +280,22 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
           <label className="db-field"><span>لینکِ پاسخ</span>
             <input dir="ltr" value={f.resultLink} onChange={set('resultLink')} placeholder="https://…" />
           </label>
+          {/* توضیحِ صوتیِ کارکنان زیرِ لینک (بستهٔ ۶د) — «رادیولوژیست تلفنی گفت…».
+              مدرکِ همان پرونده و مراجعه می‌شود، با دستهٔ همین سفارش. */}
+          <div className="db-field od-voice"><span>توضیحِ صوتی (اختیاری)</span>
+            <VoiceNote
+              disabled={busy}
+              onSave={async (file) => {
+                const fdv = new FormData();
+                fdv.append('file', file);
+                fdv.append('category', kind === 'imaging' ? 'imaging' : kind === 'lab' ? 'lab' : 'report');
+                fdv.append('title', `توضیحِ صوتی — ${meta.fa}${f.specialty ? ` — ${f.specialty}` : ''}`.slice(0, 120));
+                if (visitId) fdv.append('visitId', String(visitId));
+                await apiUpload(`/patients/${patientId}/documents`, fdv);
+                onToast('توضیحِ صوتی در مدارکِ پرونده ثبت شد ✓');
+              }}
+            />
+          </div>
           {kind !== 'consult' && (
             <div className="db-grid2">
               <label className="db-field"><span>نامِ کاربری (اگر لینک رمز دارد)</span>

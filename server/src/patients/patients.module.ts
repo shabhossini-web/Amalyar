@@ -6,6 +6,8 @@ import { FrontDeskService } from './frontdesk.service';
 import { FrontDeskController } from './frontdesk.controller';
 import { TheatreService } from './theatre.service';
 import { TheatreController } from './theatre.controller';
+import { VitalsController } from './vitals.controller';
+import { VitalsService } from './vitals.service';
 import { TenantHospitalDirectoryService } from './hospital-directory.service';
 import { Module } from '@nestjs/common';
 import { PatientsController } from './patients.controller';
@@ -80,6 +82,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
   controllers: [
     FrontDeskController,
     TheatreController,
+    VitalsController,
     HospitalDutiesController,
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
@@ -93,6 +96,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     LiveService,
     FrontDeskService,
     TheatreService,
+    VitalsService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RepairService, RateLimitService, PermissionGuard,

@@ -1045,3 +1045,11 @@ a.db-defbtn { text-decoration: none; }
 .db-phase { display: flex; flex-direction: column; gap: 10px; }
 .db-phase .db-builtins { margin: 0; }
 .db-phase .db-orders { margin-top: 0; }
+
+/* ── بستهٔ ۶: هستهٔ ثابتِ مراجعه ── */
+.db-section textarea { min-height: 76px; }
+.db-media { margin: 0; padding: 0; border: 0; background: none; }
+.db-decided { display: grid; gap: 8px; }
+.db-decided-row { margin: 0; display: grid; gap: 2px; }
+.db-decided-row b { color: var(--text2); font-size: 12px; font-weight: 600; }
+.db-decided-row span { color: var(--text1); font-size: 14px; white-space: pre-wrap; line-height: 1.8; }

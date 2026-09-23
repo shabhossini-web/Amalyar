@@ -2,7 +2,8 @@
  * «ویزیتِ بعدی» روی فرمِ مراجعه — ستونِ واقعی، نه کلیدِ دفن‌شده در extra:
  * - کاتالوگِ builtin ردیفِ nextVisitDate را به هر فرمِ مراجعه backfill می‌کند
  * - ساخت/ویرایش/پاک‌کردن مقدار را در **ستون** می‌نشاند (پایهٔ یادآوری‌ها)
- * - فیلدهای بالینیِ آزاد (طرحِ درمان/نسخه) مثلِ همیشه در extra می‌مانند
+ * - طرحِ درمان/نسخه از بستهٔ ۶الف شرحِ بخشی‌اند (ClinicalNote) — حتی اگر
+ *   کلاینتِ کهنه آن‌ها را در extra بفرستد، سرور بیرونشان می‌کشد
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -52,7 +53,10 @@ try {
     '**ستونِ** next_visit_date پر شده');
   ok(sql(`SELECT COALESCE(extra->>'nextVisitDate','-') FROM visits WHERE id=${made.id}`) === '-',
     'و در extra دفن نشده');
-  ok(fresh.extra?.prescription?.includes('ژلوفن'), 'نسخه در extra می‌ماند (فیلدِ آزاد)');
+  ok(fresh.prescription?.includes('ژلوفن') && fresh.extra?.prescription === undefined,
+    `نسخهٔ کلاینتِ کهنه (extra) به شرحِ بخشی رفت («${fresh.prescription}»)`);
+  ok(sql(`SELECT count(*) FROM clinical_notes WHERE visit_id=${made.id} AND kind='rx' AND replaced_at IS NULL`) === '1',
+    'و یک ClinicalNote از نوعِ rx است');
 
   console.log('\n۳) ویرایش و پاک‌کردن');
   const iso2 = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();

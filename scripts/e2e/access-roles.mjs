@@ -86,12 +86,18 @@ try {
   console.log('\n۳) شرح‌های فرمِ مراجعه در پروندهٔ بیمار');
   const form = (await send(A, '/forms', 'POST', { key: tag, title: 'ویزیتِ شرح‌دار', scope: 'visit' })).json;
   trash.forms.push(form.id);
-  await send(A, `/forms/${form.id}/fields`, 'POST', { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' });
+  /* ⚠️ کلیدِ فیلد `examNote` است: از بستهٔ ۶الف `exam` کلیدِ رزروِ هستهٔ ثابت
+     است و فیلدِ سفارشی با آن ساخته نمی‌شود (۴۰۰) — آن شرح حالا ClinicalNote است
+     و پایین‌تر جدا سنجیده می‌شود. */
+  const reserved = await send(A, `/forms/${form.id}/fields`, 'POST', { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' });
+  ok(reserved.status === 400, `کلیدِ رزروِ «exam» برای فیلدِ سفارشی رد می‌شود (${reserved.status})`);
+  await send(A, `/forms/${form.id}/fields`, 'POST', { key: 'examNote', label: 'شرحِ معاینه', type: 'textarea' });
   const visit = (await send(A, '/visits', 'POST', {
     kind: tag, firstName: 'بیمارِ', lastName: 'شرح‌ها',
     opDate: new Date().toISOString(),
     notes: 'یادداشتِ کوتاهِ منشی',
-    extra: { exam: 'رفلکس‌ها طبیعی، لاسگ منفی' },
+    exam: 'تونِ عضلانی طبیعی',
+    extra: { examNote: 'رفلکس‌ها طبیعی، لاسگ منفی' },
   })).json;
   trash.visits.push(visit.id);
   const rec = (await send(A, `/patients/${visit.patientId}/record`, 'GET')).json;
@@ -103,6 +109,18 @@ try {
   ok(texts.every((t) => typeof t.code === 'string' && t.code.includes('-V')),
     'و هر شرح کدِ مراجعهٔ خودش را دارد');
   ok((rec?.counts?.visitTexts ?? 0) >= 2, `شمارش هم از سرور می‌آید (${rec?.counts?.visitTexts})`);
+  /* شرحِ بخشیِ هستهٔ ثابت یک ClinicalNote است: در فهرستِ شرح‌ها با نوعِ
+     خودش، و روی کارتِ مراجعه با برچسبِ فارسی — نه کلیدِ خام. و در visitTexts
+     **تکرار نمی‌شود**، وگرنه یک متن دو بار در همان تب دیده می‌شد. */
+  const examNote = (rec?.clinicalNotes ?? []).find((n) => n.kind === 'exam' && n.visitId === visit.id);
+  ok(examNote?.body === 'تونِ عضلانی طبیعی' && examNote?.kindFa === 'شرحِ معاینه',
+    `شرحِ معاینهٔ بخشی در شرح‌های بالینی است (${examNote?.kindFa})`);
+  ok(rec?.counts?.notesByKind?.exam === 1, `و چیپِ «شرحِ معاینه» می‌شماردش (${rec?.counts?.notesByKind?.exam})`);
+  ok(!texts.some((t) => t.body === 'تونِ عضلانی طبیعی'), 'در visitTexts تکرار نشده');
+  const card = (rec?.visits ?? []).find((v) => v.id === visit.id);
+  const examAns = (card?.answers ?? []).find((a) => a.key === 'exam');
+  ok(examAns?.value === 'تونِ عضلانی طبیعی' && examAns?.label !== 'exam',
+    `کارتِ مراجعه هم شرحِ بخشی را با برچسب نشان می‌دهد («${examAns?.label}»)`);
 } finally {
   await send(A, '/access/features/accounting/reset', 'POST').catch(() => {});
   for (const id of trash.visits) await send(A, `/visits/${id}`, 'DELETE').catch(() => {});

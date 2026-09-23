@@ -43,13 +43,18 @@ const st = cfg?.statuses ?? {};
 for (const [group, keys] of [
   ['visit', ['pending', 'done', 'cancelled']],
   ['appointment', ['held', 'confirmed', 'arrived', 'done', 'noshow', 'cancelled']],
-  ['note', ['history', 'visit', 'op', 'progress', 'discharge', 'consult']],
+  ['note', ['history', 'visit', 'exam', 'findings', 'plan', 'rx', 'op', 'progress', 'discharge', 'discharge_summary', 'discharge_note', 'consult']],
   /* سه خانوادهٔ بعدی هر کدام سه تا چهار کپیِ کلاینتی داشتند. */
   ['order', ['draft', 'sent', 'answered', 'in_review', 'reviewed', 'needs_action']],
   ['orderKind', ['lab', 'imaging', 'consult', 'referral']],
   ['reminder', ['pending', 'sending', 'sent', 'simulated', 'failed', 'uncertain', 'cancelled']],
   ['reminderKind', ['next_visit', 'surgery', 'appointment', 'pre_op_care', 'post_op_care', 'follow_up', 'notice', 'dispatch']],
   ['intake', ['pending_fill', 'pending_payment', 'pending_approval', 'approved', 'rejected', 'expired']],
+  /* بستهٔ ۶: تصمیمِ درمانی، نوعِ بیهوشی و وضعیتِ خروج — دکمه‌های فرم و پاپ‌آپِ
+     ترخیص از همین فهرست رندر می‌شوند، نه از کپیِ کلاینتی. */
+  ['decision', ['surgery', 'conservative', 'lab', 'imaging', 'consult', 'referral', 'followup', 'workup', 'service', 'admit']],
+  ['anesthesia', ['general', 'spinal', 'local', 'sedation']],
+  ['disposition', ['home', 'transfer', 'ama', 'death']],
 ]) {
   const rows = st[group] ?? [];
   const have = rows.map((r) => r.key);
@@ -58,8 +63,12 @@ for (const [group, keys] of [
 }
 /* 🔴 نوعِ `discharge` از بستهٔ ۴ب اضافه شد و یکی از سه کپیِ کلاینتی نداشتش،
    پس خلاصهٔ ترخیص با کلیدِ خام چاپ می‌شد. این ادعا همان را قفل می‌کند. */
-ok((st.note ?? []).find((r) => r.key === 'discharge')?.label === 'خلاصهٔ ترخیص',
-  '«خلاصهٔ ترخیص» در کاتالوگ هست — کلیدِ خام روی صفحه نمی‌افتد');
+/* ⚠️ بستهٔ ۶ب: متنِ تکِ پاپ‌آپِ ترخیص «وضعیتِ بیمار هنگامِ ترخیص» بود و با
+   نامِ «خلاصهٔ ترخیص» ذخیره می‌شد؛ حالا کنارش «شرحِ ترخیص» و «یادداشت» هم
+   هست، پس نامِ قبلی با شرحِ واقعیِ ترخیص اشتباه گرفته می‌شد. */
+ok((st.note ?? []).find((r) => r.key === 'discharge')?.label === 'وضعیتِ هنگامِ ترخیص'
+  && (st.note ?? []).find((r) => r.key === 'discharge_summary')?.label === 'شرحِ ترخیص',
+  '«وضعیتِ هنگامِ ترخیص» و «شرحِ ترخیص» در کاتالوگ جدا هستند — کلیدِ خام روی صفحه نمی‌افتد');
 
 console.log('\n۲) همان مراجعه، همان برچسب — در هر مسیری که میزها می‌خوانند');
 const surgeon = (await get('/surgeons'))?.[0]
@@ -135,7 +144,7 @@ console.log('\n۴) سندِ بالینی — برچسب همراهِ خودِ س
 await send(`/patients/${visit.patientId}/notes`, 'POST', { kind: 'discharge', body: 'هوشیار و برقرار.', visitId: visit.id });
 const rec = await get(`/patients/${visit.patientId}/record`);
 const note = (rec?.clinicalNotes ?? []).find((n) => n.kind === 'discharge');
-ok(note?.kindFa === 'خلاصهٔ ترخیص', `سندِ ترخیص برچسب دارد («${note?.kindFa}»)`, JSON.stringify(note ?? {}).slice(0, 140));
+ok(note?.kindFa === 'وضعیتِ هنگامِ ترخیص', `سندِ ترخیص برچسب دارد («${note?.kindFa}»)`, JSON.stringify(note ?? {}).slice(0, 140));
 const tpl = await get('/note-templates');
 ok(Array.isArray(tpl) && (tpl.length === 0 || tpl.every((r) => !!r.kindFa)),
   'قالب‌های شرح هم برچسبِ نوع دارند');

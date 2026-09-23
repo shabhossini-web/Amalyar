@@ -132,6 +132,42 @@
 .th-discharged h3 { color: var(--green-text); }
 .th-discharged p { margin: 0; font-size: 14px; line-height: 1.9; white-space: pre-wrap; }
 
+/* تشخیص و بیهوشی زیرِ خطِ عمل (بستهٔ ۶الف) */
+.th-dx { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 0; font-size: 13px; color: var(--text2); }
+.th-dx b { color: var(--text1); }
+
+/* ویزیتِ تصمیم — فقط‌خواندنی */
+.th-decided p { margin: 0; display: grid; gap: 2px; }
+.th-decided p + p { margin-top: 10px; }
+.th-decided b { font-size: 12px; color: var(--text3); font-weight: 700; }
+.th-decided span { font-size: 14px; line-height: 1.85; color: var(--text1); white-space: pre-wrap; }
+
+/* علائمِ حیاتی — فقط‌خواندنی سرِ میز */
+.th-vitals ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.th-vitals li { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; color: var(--text1); }
+.th-vitals li b { font-size: 12px; color: var(--text3); }
+
+/* شرح و یادداشتِ ترخیص */
+.th-discharged .th-dsum { margin-top: 10px; display: grid; gap: 2px; }
+.th-discharged .th-dsum b { font-size: 12px; color: var(--text3); }
+
+/* وضعیتِ خروج — چهار دکمه، همیشه جلوی چشم */
+/* ⚠️ `display: block` لازم است: سه فیلدِ متنی `<label>`اند و لیبل پیش‌فرض
+   inline است، پس `margin-top` رویشان اثر نداشت و هر برچسب به ردیفِ بالایی
+   می‌چسبید (اسکرین‌شاتِ بستهٔ ۶ب). */
+.th-dialog-field { display: block; }
+.th-dialog-field + .th-dialog-field { margin-top: 14px; }
+.th-dialog-field span i { font-style: normal; font-weight: 400; color: var(--text3); font-size: 12px; margin-inline-start: 6px; }
+.th-dispo { display: flex; flex-wrap: wrap; gap: 8px; }
+.th-dispo-btn {
+  min-height: 42px; padding: 0 16px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700;
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .18);
+}
+.th-dispo-btn:hover { border-color: var(--brand-2); }
+.th-dispo-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.th-dispo-btn.on { border-color: var(--brand-2); background: rgba(var(--brand-2-rgb), .18); }
+.th-dispo-btn.grave.on { border-color: var(--red-text); background: rgba(var(--veil-rgb), .08); }
+
 /* پاپ‌آپِ ترخیص */
 .th-overlay {
   position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 18px;
@@ -139,7 +175,7 @@
 }
 .th-dialog {
   width: min(560px, 100%); max-height: 90vh; overflow: auto; padding: 18px; border-radius: 18px;
-  background: var(--surface, rgba(var(--surface-rgb), 1)); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  background: rgba(var(--surface-rgb), 1); border: 1px solid rgba(var(--brand-soft-rgb), .35);
 }
 .th-dialog-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .th-dialog-head b { margin-inline-end: auto; font-size: 16px; }

@@ -4,14 +4,14 @@
 
 .sv-head { margin-bottom: 18px; }
 .sv-head h1 { margin: 0 0 6px; font-size: 20px; font-weight: 900; }
-.sv-head p { margin: 0; font-size: 13px; line-height: 1.9; color: var(--muted, #b7b0d8); }
+.sv-head p { margin: 0; font-size: 13px; line-height: 1.9; color: var(--text2); }
 
 /* پیامِ پایانی — بزرگ و وسط، چون تنها چیزِ صفحه است. */
 .sv-msg {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
-  text-align: center; padding: 28px 12px; color: var(--muted, #b7b0d8);
+  text-align: center; padding: 28px 12px; color: var(--text2);
 }
-.sv-msg b { font-size: 17px; color: var(--fg, var(--text1)); }
+.sv-msg b { font-size: 17px; color: var(--text1); }
 .sv-msg p { margin: 0; font-size: 13px; line-height: 2; max-width: 320px; }
 .sv-msg.ok { color: #6ee7b7; }
 .sv-msg.ok b { color: #a7f3d0; }

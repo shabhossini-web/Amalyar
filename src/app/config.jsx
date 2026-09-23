@@ -21,7 +21,12 @@ export function ConfigProvider({ children }) {
      می‌شوند و `cfg.statuses.note` روی `undefined` می‌ترکید. */
   const [config, setConfig] = useState({
     vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [],
-    statuses: { visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [] },
+    statuses: {
+      visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [],
+      decision: [], anesthesia: [], disposition: [],
+    },
+    /* اندازه‌های علائمِ حیاتی (واحد و بازه) — همان کاتالوگی که سرور با آن می‌سنجد. */
+    vitals: [],
   });
   /**
    * خطا نگه داشته می‌شود، بلعیده نمی‌شود.
@@ -83,7 +88,11 @@ export function ConfigProvider({ children }) {
 export function useConfig() {
   return useContext(Ctx) ?? {
     vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [], error: null,
-    statuses: { visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [] },
+    statuses: {
+      visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [],
+      decision: [], anesthesia: [], disposition: [],
+    },
+    vitals: [],
     t: termsFor(DEFAULT_VERTICAL), reload: () => {},
   };
 }

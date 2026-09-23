@@ -33,13 +33,15 @@ try {
   console.log('۱) شرح‌های فرمِ مراجعه');
   const vform = (await send('/forms', 'POST', { key: tag, title: 'ویزیتِ شرح', scope: 'visit' })).json;
   trash.forms.push(vform.id);
-  await send(`/forms/${vform.id}/fields`, 'POST', { key: 'exam', label: 'شرحِ معاینه', type: 'textarea' });
+  /* کلید `examNote` نه `exam`: از بستهٔ ۶الف `exam` کلیدِ رزروِ هستهٔ ثابت است
+     (شرحِ بخشی → ClinicalNote). این سوییت دربارهٔ textareaی سفارشی است. */
+  await send(`/forms/${vform.id}/fields`, 'POST', { key: 'examNote', label: 'شرحِ معاینه', type: 'textarea' });
   await send(`/forms/${vform.id}/fields`, 'POST', { key: 'brief', label: 'شرحِ کوتاه', type: 'text' });
   await send(`/forms/${vform.id}/fields`, 'POST', { key: 'insNo', label: 'کدِ بیمه', type: 'text' });
   const visit = (await send('/visits', 'POST', {
     kind: tag, firstName: 'بیمارِ', lastName: 'شرح‌ها', phone: '09120000920',
     opDate: new Date().toISOString(), notes: 'یادداشتِ خودِ مراجعه',
-    extra: { exam: 'متنِ کاملِ معاینه', brief: 'یک خطِ خلاصه', insNo: '12345' },
+    extra: { examNote: 'متنِ کاملِ معاینه', brief: 'یک خطِ خلاصه', insNo: '12345' },
   })).json;
   trash.visits.push(visit.id);
 
@@ -53,7 +55,10 @@ try {
   console.log('\n۲) شرح‌های فرمِ زیرپرونده');
   const rform = (await send('/forms', 'POST', { key: `${tag}r`, title: 'شرحِ حالِ آزمون', scope: 'record' })).json;
   trash.forms.push(rform.id);
-  await send(`/forms/${rform.id}/fields`, 'POST', { key: 'history', label: 'شرحِ حالِ بیمار', type: 'textarea' });
+  /* ⚠️ `history` در فرمِ زیرپرونده **مجاز** است — رزروِ هستهٔ ثابت فقط برای
+     فرمی است که مراجعه می‌سازد. */
+  const hist = await send(`/forms/${rform.id}/fields`, 'POST', { key: 'history', label: 'شرحِ حالِ بیمار', type: 'textarea' });
+  ok(hist.status < 300, `کلیدِ history در فرمِ زیرپرونده ساخته می‌شود (${hist.status})`);
   const sent = (await send('/intake/send', 'POST', { patientId: visit.patientId, formId: rform.id })).json;
   const fill = await pub(`/public/intake/form/${sent.token}/fill`, 'POST', {
     values: { history: 'سابقهٔ کاملِ بیماری این‌جاست' },

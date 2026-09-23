@@ -584,3 +584,6 @@
 .rc-chip-list button:hover { background: rgba(251, 191, 36, .14); }
 .rc-chip-list button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
 /* پاپ‌آپ‌های یادآوری/نوبت (`.rc-pop*`) به `thing-popups.css` رفتند — مشترکِ پرونده، «امروز» و «کارهای من». */
+
+/* ضبطِ صدا زیرِ لینک/فایل (بستهٔ ۶د) */
+.rc-voice { margin-top: 10px; }
