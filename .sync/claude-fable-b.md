@@ -47,6 +47,7 @@ paths:
   - server/src/ai/assistant-knowledge.ts
   - scripts/e2e/booking-flow.mjs
   - scripts/e2e/voice-notes.mjs
+  - server/src/config/settings-registry.ts
 note: >-
   بازخوردِ مالک ۱۴۰۵/۰۷/۰۱ — «اصلاحاتِ شرکتی»: نصب یا مطب/کلینیک است یا شرکتی و شرکت
   خودش بستهٔ خدماتش را می‌چیند؛ دو فرمِ ثبتِ خدمت (نورومانیتورینگ، ایمپلنت) با مسیرِ
@@ -61,7 +62,8 @@ note: >-
 - ۱۴۰۵/۰۷/۰۱ · **فرمِ ثبتِ خدمت** (هر دو خدمت): «نام عمل» (اجباری)، `opDateOpen` («رزرو بدون
   تاریخ»، bool)، `nationalIdImage` (دستهٔ `identity`) و `prescription` (هر دو اجباری). `opDate`
   وقتی `opDateOpen` روشن است اجباری نیست — **یک** قاعده در `validateFields` و `DynForm`.
-  فرم‌های نصب‌شده یک‌بار (`registration_<key>_v2`) فیلدهای غایب را می‌گیرند؛ فیلدِ دست‌خورده دست نمی‌خورد.
+  فرم‌های نصب‌شدهٔ دو خدمت یک‌بار (`registration_<key>_service_fields`) **فقط فیلدهای تازهٔ همین نسخه** را
+  می‌گیرند (`REGISTRATION_V2`)؛ فیلدِ دست‌خورده یا پاک‌شده دست نمی‌خورد و مطب ارتقا ندارد.
 
 - ۱۴۰۵/۰۷/۰۱ · **`PATCH /config/profile`** `{kind, services}` و **`POST /config/profile/preview`**
   (سوپرادمین). ماژول‌ها فقط جایی عوض می‌شوند که عضویتشان در پلان عوض شده — سطح و خاموشِ

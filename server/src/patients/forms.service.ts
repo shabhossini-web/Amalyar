@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 
@@ -164,6 +164,20 @@ export function pickColor(fullKey: string, taken: Set<string>): string {
  */
 const FIELD_ORDER = {
   fields: { where: { deletedAt: null }, orderBy: [{ page: 'asc' as const }, { sort: 'asc' as const }, { id: 'asc' as const }] },
+};
+
+/**
+ * پرچم‌های نصب/ارتقای فرمِ ثبت‌نامِ هر خدمت.
+ *
+ * ⚠️ کلیدها **لفظی** نوشته می‌شوند، نه با قالبِ رشته: نگهبانِ CI («هر تنظیمِ اعلام‌شده
+ * باید جایی مصرف شود») دنبالِ همین لفظ می‌گردد، و `registration_${key}_installed`
+ * کورش کرد — یک بار قرمز شد. و **بی‌رقم**: همان نگهبان فقط `[a-z_]` را می‌خواند، پس
+ * نامِ «…_v2» هرگز «مصرف‌شده» دیده نمی‌شد. مطب ارتقا ندارد (قالبش عوض نشده).
+ */
+const REGISTRATION_FLAGS: Record<keyof typeof REGISTRATION_PRESETS, { installed: string; v2: string | null }> = {
+  ionm: { installed: 'registration_ionm_installed', v2: 'registration_ionm_service_fields' },
+  implant: { installed: 'registration_implant_installed', v2: 'registration_implant_service_fields' },
+  clinic: { installed: 'registration_clinic_installed', v2: null },
 };
 
 @Injectable()
@@ -429,17 +443,17 @@ export class FormsService {
   }
 
   /**
-   * **ارتقای افزایشیِ فرمِ ثبت‌نامِ نصب‌شده** به فیلدهای خدمت (مالک، ۱۴۰۵/۰۷/۰۱):
-   * کارت ملی، دستور پزشک، «رزرو بدون تاریخ» — یک‌بار، با پرچمِ
-   * `registration_<key>_v2`.
+   * **ارتقای یک‌بارهٔ فرمِ ثبت‌نامِ نصب‌شده** به فیلدهای خدمت (مالک، ۱۴۰۵/۰۷/۰۱):
+   * کارت ملی، دستور پزشک، «رزرو بدون تاریخ» — با پرچمِ `registration_<خدمت>_service_fields`.
    *
-   * ⚠️ فقط **افزودنِ فیلدِ غایب**. فیلدی که مدیر ویرایش، خاموش یا پاک کرده دست
-   * نمی‌خورد (پرچم نمی‌گذارد فیلدِ پاک‌شده بعداً برگردد). تنها استثنا برچسبِ
-   * پیش‌فرضِ قدیمی «نوع عمل» است که به «نام عمل» (اجباری) می‌رود — همان قاعدهٔ
-   * «پیش‌فرضِ دست‌نخورده دنبالِ پیش‌فرضِ تازه می‌رود» که ماژول‌ها دارند.
+   * ⚠️ فقط کلیدهای `REGISTRATION_V2.added` اضافه می‌شوند و فقط پیش‌فرضِ **دست‌نخورده**
+   * جابه‌جا می‌شود (`moved`) — شرحش کنارِ همان ثابت در `form-presets.ts`. فیلدی که مدیر
+   * ویرایش، خاموش یا پاک کرده (پیش یا پس از ارتقا) دست نمی‌خورد.
    */
   private async upgradeRegistration(vertical: keyof typeof REGISTRATION_PRESETS) {
-    const flag = `registration_${vertical}_v2`;
+    const flag = REGISTRATION_FLAGS[vertical].v2;
+    const plan = REGISTRATION_V2[vertical];
+    if (!flag || !plan) return;
     if ((await this.prisma.setting.findUnique({ where: { key: flag } }))?.value === 'true') return;
     const preset = REGISTRATION_PRESETS[vertical];
     await this.prisma.$transaction(async tx => {
@@ -448,17 +462,18 @@ export class FormsService {
         const have = new Set(form.fields.map((f) => f.key));
         let sort = Math.max(0, ...form.fields.map((f) => f.sort));
         for (const f of preset.fields) {
-          if (have.has(f.key)) continue;
+          if (!plan.added.includes(f.key) || have.has(f.key)) continue;
           await tx.formField.create({ data: {
             formId: form.id, key: f.key, label: f.label, type: f.type ?? 'text', required: f.required ?? false,
             builtin: f.builtin ?? false, hint: f.hint ?? null, placeholder: f.placeholder ?? null, options: (f.options ?? []) as any,
             docCategory: normDocCategory(f.docCategory), page: f.page ?? 1, sort: (sort += 10),
           } });
         }
-        const proc = form.fields.find((f) => f.key === 'procedure');
-        const want = preset.fields.find((f) => f.key === 'procedure');
-        if (proc && want && proc.label === 'نوع عمل' && proc.label !== want.label) {
-          await tx.formField.update({ where: { id: proc.id }, data: { label: want.label, required: want.required ?? false } });
+        for (const m of plan.moved) {
+          const cur = form.fields.find((f) => f.key === m.key);
+          if (cur && cur.label === m.was.label && cur.required === m.was.required) {
+            await tx.formField.update({ where: { id: cur.id }, data: { label: m.now.label, required: m.now.required } });
+          }
         }
       }
       await tx.setting.upsert({ where: { key: flag }, create: { key: flag, value: 'true' }, update: { value: 'true' } });
@@ -471,7 +486,7 @@ export class FormsService {
   }
 
   private async installRegistration(vertical: keyof typeof REGISTRATION_PRESETS) {
-    const key = `registration_${vertical}_installed`;
+    const key = REGISTRATION_FLAGS[vertical].installed;
     if ((await this.prisma.setting.findUnique({ where: { key } }))?.value === 'true') return;
     const preset = REGISTRATION_PRESETS[vertical];
     await this.prisma.$transaction(async tx => {

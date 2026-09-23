@@ -417,6 +417,36 @@ export const REGISTRATION_PRESETS: Record<VerticalKey, PresetForm> = {
 };
 
 /**
+ * **ارتقای یک‌بارهٔ (v2) فرم‌های ثبت‌نامِ نصب‌شده** — دقیقاً آنچه قالب در
+ * «اصلاحاتِ شرکتی» (۱۴۰۵/۰۷/۰۱) عوض کرد، نه بیشتر.
+ *
+ * ⚠️ **فقط همین کلیدها اضافه می‌شوند، نه «هر فیلدِ غایبِ قالب».** نسخهٔ اولِ ارتقا
+ * هر فیلدی را که در فرم نبود از قالب برمی‌گرداند؛ آن‌وقت فیلدی که مدیر **پیش از**
+ * ارتقا عمداً پاک کرده بود (مثلاً باکسِ پرداخت در شرکتی که فیش را جای دیگری
+ * می‌گیرد) یک‌شبه برمی‌گشت. مطب این‌جا نیست چون قالبش عوض نشده.
+ *
+ * `moved`: پیش‌فرضی که عوض شده **فقط وقتی** دنبالِ پیش‌فرضِ تازه می‌رود که فیلد
+ * هنوز دقیقاً همان پیش‌فرضِ قدیمی باشد (برچسب و ستاره) — دست‌خورده‌اش مالِ مدیر است.
+ */
+export const REGISTRATION_V2: Partial<Record<VerticalKey, {
+  added: string[];
+  moved: { key: string; was: { label: string; required: boolean }; now: { label: string; required: boolean } }[];
+}>> = {
+  ionm: {
+    added: [UNDATED_KEY, 'nationalIdImage', 'prescription'],
+    moved: [{ key: 'procedure', was: { label: 'نوع عمل', required: false }, now: { label: 'نام عمل', required: true } }],
+  },
+  implant: {
+    added: [UNDATED_KEY, 'nationalIdImage'],
+    moved: [
+      { key: 'procedure', was: { label: 'نوع عمل', required: false }, now: { label: 'نام عمل', required: true } },
+      /* تاریخِ ایمپلنت اختیاری بود؛ حالا ستاره دارد و «رزرو بدون تاریخ» راهِ خالی‌گذاشتنش است. */
+      { key: 'opDate', was: { label: 'تاریخ عمل', required: false }, now: { label: 'تاریخ عمل', required: true } },
+    ],
+  },
+};
+
+/**
  * نظرسنجی — سؤال‌ها کاملاً قابلِ ویرایش، ولی با یک شروعِ معقول.
  *
  * ⚠️ `scope: 'record'` است نه `'survey'`: پرشدنش مراجعه نمی‌سازد، به **پرونده**

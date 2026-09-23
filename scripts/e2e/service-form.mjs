@@ -11,8 +11,9 @@
  *   - «رزرو بدون تاریخ» تاریخِ نیمه‌پرِ قبلی را پاک می‌کند (دو ادعای متناقض نمی‌ماند)
  *   - با نوبت‌دهیِ روشن، «رزرو بدون تاریخ» روزِ نوبت نمی‌خواهد
  *   - تأییدِ ایمپلنتِ بی‌تاریخ **بی** «رزرو بدون تاریخ» ← ۴۰۰ (ستارهٔ تاریخِ فرمِ عمل سرِ جایش)
- *   - فرمِ نصب‌شدهٔ قدیمی یک‌بار فیلدهای تازه را می‌گیرد؛ برچسبِ دست‌خورده و فیلدِ خاموش دست نمی‌خورند؛
- *     فیلدِ پاک‌شده بعد از ارتقا برنمی‌گردد
+ *   - فرمِ نصب‌شدهٔ قدیمی یک‌بار **فقط فیلدهای تازهٔ این نسخه** را می‌گیرد؛ برچسبِ دست‌خورده و فیلدِ
+ *     خاموش دست نمی‌خورند؛ فیلدی که مدیر پیش یا پس از ارتقا پاک کرده برنمی‌گردد (باکسِ پرداخت)
+ *   - مطب ارتقا ندارد: فیلدِ پاک‌شدهٔ فرمِ ثبت‌نامِ مطب برنمی‌گردد
  *  نباید بیفتد:
  *   - کارتِ ملی با دستهٔ «مدرکِ شناسایی» در پرونده می‌نشیند
  *   - تأییدِ «رزرو بدون تاریخ» مراجعهٔ بی‌تاریخ می‌سازد (نورومانیتورینگ و ایمپلنت)
@@ -81,7 +82,7 @@ try {
     { key: 'prescription', label: 'تصویر دستور جراح', type: 'image', required: true, sort: 50 },
     { key: 'patientNotes', label: 'شرح دستور و توضیحات', type: 'textarea', active: false, sort: 60 },
   ].map((f) => ({ ...f, formId: old.id })) });
-  await db.setting.deleteMany({ where: { key: 'registration_implant_v2' } });
+  await db.setting.deleteMany({ where: { key: 'registration_implant_service_fields' } });
   await setSetting('registration_implant_installed', 'true');
   await api('/forms');
   const up = await db.formField.findMany({ where: { formId: old.id } });
@@ -92,6 +93,10 @@ try {
   ok(f('hospitalName')?.label === 'بیمارستانِ محلِ عمل', '**برچسبِ دست‌خوردهٔ مدیر دست نخورد**');
   ok(f('patientNotes')?.active === false, '**فیلدِ خاموش خاموش ماند**');
   ok(f('prescription')?.label === 'تصویر دستور جراح' && up.filter((x) => x.key === 'prescription').length === 1, 'دستورِ موجود تکرار نشد');
+  /* فرمِ دیروز باکسِ پرداخت نداشت: مدیر پاکش کرده بود چون فیش را جای دیگری می‌گیرد. ارتقا
+     فقط فیلدهای **تازهٔ این نسخه** را می‌آورد، نه هر چه در قالب هست و در فرم نیست. */
+  ok(!f('pay'), '**باکسِ پرداختی که مدیر پیش از ارتقا پاک کرده بود برنگشت**', JSON.stringify(f('pay')?.label));
+  ok(f('opDate')?.required === true, 'تاریخِ عملِ دست‌نخورده ستاره گرفت («رزرو بدون تاریخ» راهِ خالی‌گذاشتنش است)');
   await db.formField.delete({ where: { id: f('nationalIdImage').id } });
   await api('/forms');
   ok(!(await db.formField.findFirst({ where: { formId: old.id, key: 'nationalIdImage' } })), '**فیلدی که مدیر بعد از ارتقا پاک کرد برنمی‌گردد**');
@@ -153,6 +158,22 @@ try {
   ok(r.status === 201, '**ایمپلنتِ بی‌تاریخ هم تأیید می‌شود** (پیش‌تر ستارهٔ تاریخِ فرمِ عمل ردش می‌کرد)', `${r.status} ${msg(r)}`);
   v = await db.visit.findUnique({ where: { id: r.data.visitId } });
   ok(v.opDate === null && v.requiredItems?.[0]?.quantity === 2, 'بی‌تاریخ، با ردیفِ اقلام');
+
+  console.log('\n۶) مطب ارتقا ندارد — فیلدِ پاک‌شدهٔ فرمِ ثبت‌نامش برنمی‌گردد');
+  /* مطبِ دیروز: فرمِ ثبت‌نامش نصب شده و مدیر «توضیحات تکمیلی» را پاک کرده. قالبِ مطب در این
+     نسخه عوض نشده، پس هیچ ارتقایی نباید به آن دست بزند. */
+  await setSetting('vertical', 'clinic');
+  await db.setting.deleteMany({ where: { key: 'services' } });
+  await db.formDef.create({ data: { key: 'intake.clinic', title: 'ثبت‌نام مطب و درخواست ویزیت', scope: 'intake', visitKind: 'clinic', fields: { create: [
+    { key: 'firstName', label: 'نام', required: true, builtin: true, sort: 10 },
+    { key: 'lastName', label: 'نام خانوادگی', required: true, builtin: true, sort: 20 },
+    { key: 'chiefComplaint', label: 'علت مراجعه', type: 'textarea', required: true, sort: 30 },
+  ] } } });
+  await setSetting('registration_clinic_installed', 'true');
+  await api('/forms');
+  const clinicFields = await db.formField.findMany({ where: { form: { key: 'intake.clinic' } } });
+  ok(!clinicFields.some((x) => x.key === 'patientNotes') && clinicFields.length === 3,
+    '**فیلدِ پاک‌شدهٔ مطب برنگشت** — ارتقای فرمِ خدمت به مطب نمی‌رسد', clinicFields.map((x) => x.key).join(','));
 
   console.log(`\n${count} سنجه سبز`);
 } finally {
