@@ -16,7 +16,8 @@ try {
   for (const dir of (await readdir(migrations)).sort()) if (dir.startsWith('20')) await db.exec(await readFile(new URL(`${dir}/migration.sql`, migrations), 'utf8'));
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   prisma = new PrismaClient({ datasources: { db: { url: `postgresql://postgres@127.0.0.1:${server.address().port}/postgres?connection_limit=1` } } });
-  const config = { vertical: async () => vertical };
+  /* ⚠️ `profile` همان قاعدهٔ واقعیِ سرور است (نصبِ بی‌ردیفِ خدمات) — نه یک جوابِ دست‌نوشته. */
+  const config = { vertical: async () => vertical, profile: async () => cls('config/tenant-profile', 'profileOf')(vertical, null) };
   const forms = new (cls('patients/forms.service', 'FormsService'))(prisma, config);
   const audit = new (cls('audit/audit.service', 'AuditService'))(prisma);
   const reminders = { syncNextVisit: async () => {}, syncAppointment: async () => {} };
@@ -45,11 +46,14 @@ try {
     assert.ok(reg); assert.equal(reg.scope, 'intake');
     assert.equal(reg.visitKind, profile === 'clinic' ? 'clinic' : 'surgery');
     assert.equal(all.filter(f => f.scope === 'intake').length, 1);
-    assert.equal(reg.fields.some(f => f.key === 'prescription' && f.required), profile === 'implant');
+    /* تصمیمِ مالک (۱۴۰۵/۰۷/۰۱): دستورِ پزشک و کارتِ ملی در فرمِ **هر دو** خدمتِ شرکت
+       اجباری‌اند (`form-presets.ts` → `SERVICE_INFO`)؛ مطب فرمِ خودش را دارد. */
+    assert.equal(reg.fields.some(f => f.key === 'prescription' && f.required), profile !== 'clinic');
+    assert.equal(reg.fields.some(f => f.key === 'nationalIdImage' && f.required && f.docCategory === 'identity'), profile !== 'clinic');
     if (profile === 'clinic') assert.deepEqual((await forms.visitKinds()).map(f => f.kind).sort(), ['clinic', 'surgery']);
     assert.equal((await intake.formsForLinks()).find(f => f.recommended)?.id, reg.id);
     const publicForm = await intake.formView(reg.id);
-    assert.equal(publicForm.fields.some(f => f.key === 'prescription'), profile === 'implant');
+    assert.equal(publicForm.fields.some(f => f.key === 'prescription'), profile !== 'clinic');
     assert.equal(publicForm.fields.some(f => f.key === 'chiefComplaint'), profile === 'clinic');
     assert.ok(publicForm.fields.every(f => !['amount', 'techId', 'opReport'].includes(f.key)));
     pass(`${profile}: independent recommended registration and correct visit kinds`);
@@ -92,7 +96,7 @@ try {
   assert.equal((await portal.grantAccount(surgeon.id, admin)).existing, true);
   await assert.rejects(() => portal.grantAccount(otherSurgeon.id, doctor), /مدیر/);
   pass('surgeon account uses existing identity, OTP claim and limited level; grant is admin only');
-  const ai = new (cls('ai/ai.service', 'AiService'))(prisma, { ai: async () => ({ enabled: false, models: {} }) }, {});
+  const ai = new (cls('ai/ai.service', 'AiService'))(prisma, { ai: async () => ({ enabled: false, models: {} }) }, {}, config);
   assert.equal((await ai.status(doctor)).enabled, false);
   await prisma.feature.upsert({ where: { key: 'surgeon' }, create: { key: 'surgeon', enabled: false, minLevel: 2 }, update: { enabled: false } });
   await assert.rejects(() => ai.status(doctor));

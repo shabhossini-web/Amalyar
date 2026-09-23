@@ -92,16 +92,22 @@ export default function DynForm({
   voiceUrl,
 }) {
   const set = (key, v) => onChange({ ...values, [key]: v });
+  /* «رزرو بدون تاریخ» (مالک، ۱۴۰۵/۰۷/۰۱): وقتی بیمار «بله» زده، کادرِ تاریخِ عمل
+     کنار می‌رود و ستاره‌اش هم — همان شرطِ `validateFields` سمتِ سرور. بدونِ
+     این، ستاره روی کادرِ غیرفعال می‌ماند و بیمار فکر می‌کرد فرم ناقص است. */
+  const undated = values.opDateOpen === true || values.opDateOpen === 'true';
+  const setOpen = (key, v) => onChange({ ...values, [key]: v, ...(key === 'opDateOpen' && (v === true || v === 'true') ? { opDate: '' } : {}) });
 
   return (
     <div className="pf dyn">
       {fields.filter((f) => f.active !== false).map((f) => {
         const locked = !!(fieldRoles(f).length && myRole && !fieldRoles(f).includes(myRole));
+        const parked = undated && f.key === 'opDate';
         return (
         <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}${locked ? ' dyn-locked' : ''}`}>
           <span>
             {f.label}
-            {f.required && <i className="dyn-star" aria-label="اجباری"> *</i>}
+            {f.required && !parked && <i className="dyn-star" aria-label="اجباری"> *</i>}
             {f.role && (
               <i className={`dyn-role${locked ? ' off' : ''}`}>
                 بخشِ {f.roleLabel ?? f.role}{locked ? ' — فقط‌خواندنی' : ''}
@@ -112,9 +118,9 @@ export default function DynForm({
           <Input
             assistance={assistance}
             field={f}
-            value={values[f.key]}
-            set={(v) => set(f.key, v)}
-            disabled={disabled || locked}
+            value={parked ? '' : values[f.key]}
+            set={(v) => setOpen(f.key, v)}
+            disabled={disabled || locked || parked}
             lookups={lookups}
             onUpload={onUpload}
             onRemove={onRemove}
@@ -123,9 +129,10 @@ export default function DynForm({
             voiceUrl={voiceUrl}
           />
 
-          {errors[f.key]
+          {errors[f.key] && !parked
             ? <em className="pf-err">{errors[f.key]}</em>
-            : f.hint ? <em className="pf-hint">{f.hint}</em> : null}
+            : parked ? <em className="pf-hint">رزرو بدون تاریخ — تاریخ را بعداً شرکت هماهنگ می‌کند.</em>
+              : f.hint ? <em className="pf-hint">{f.hint}</em> : null}
         </label>
         );
       })}

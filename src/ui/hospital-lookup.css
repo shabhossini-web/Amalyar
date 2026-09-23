@@ -7,7 +7,7 @@
 .hospital-lookup .ia-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
 .hospital-lookup .ia-field input {
   font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 10px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
   width: 100%;
 }
 .hospital-lookup .ia-field input:focus { border-color: rgba(var(--brand-2-rgb), .6); }

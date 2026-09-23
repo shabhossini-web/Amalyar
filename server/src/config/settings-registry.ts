@@ -58,6 +58,11 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
     hint: 'متن و زمانِ همهٔ پیامک‌هایی که برای بیمار می‌رود. نامِ برند خودکار اولِ هر پیامک می‌آید. جای‌گیرها: {date} تاریخِ شمسی، {time} ساعت، {topic} موضوع، {title} نامِ فرم، {link} لینک — جای‌گیرِ ساعت و موضوع خودشان جداکننده دارند.',
   },
   {
+    key: 'intake',
+    label: 'پذیرشِ آنلاین',
+    hint: 'متن‌هایی که بیمار در لینکِ ثبت‌نام می‌بیند. یک متن برای کلِ شرکت — همهٔ لینک‌ها و هر دو خدمت.',
+  },
+  {
     key: 'ai',
     label: 'دستیارِ هوشِ مصنوعی',
     hint: 'هر سرویسِ سازگار با OpenAI کار می‌کند (AvalAI، GapGPT، …). همهٔ فیلدهای خالی از پیکربندیِ مرکزیِ سامانه («مادر») خوانده می‌شوند — یعنی اگر مدیرِ پلتفرم آن‌جا را پر کرده باشد، این‌جا لازم نیست چیزی بنویسید؛ هر چه این‌جا بنویسید بر مرکزی مقدم است.',
@@ -68,6 +73,8 @@ export const SETTINGS: SettingDef[] = [
   { key: 'registration_ionm_installed', label: 'قالب ثبت‌نام نورو', group: 'identity', type: 'bool', default: false, hidden: true },
   { key: 'registration_implant_installed', label: 'قالب ثبت‌نام ایمپلنت', group: 'identity', type: 'bool', default: false, hidden: true },
   { key: 'registration_clinic_installed', label: 'قالب ثبت‌نام مطب', group: 'identity', type: 'bool', default: false, hidden: true },
+  { key: 'registration_ionm_service_fields', label: 'ارتقای فرم ثبت‌نام نورو (کارت ملی، دستور پزشک، رزرو بدون تاریخ)', group: 'identity', type: 'bool', default: false, hidden: true },
+  { key: 'registration_implant_service_fields', label: 'ارتقای فرم ثبت‌نام ایمپلنت (کارت ملی، رزرو بدون تاریخ)', group: 'identity', type: 'bool', default: false, hidden: true },
   { key: 'invoice_title', label: 'عنوان فاکتور', group: 'invoice', type: 'text', default: 'صورتحساب خدمات', maxLength: 120 },
   { key: 'invoice_prefix', label: 'پیشوند شماره فاکتور', hint: 'شمارهٔ ترتیبی خودکار بعد از این متن می‌آید.', group: 'invoice', type: 'text', default: '', maxLength: 20 },
   { key: 'invoice_formal_name', label: 'نام صادرکنندهٔ رسمی', hint: 'خالی = نام حقوقی شرکت در هویت شرکت. نام سامانه چاپ نمی‌شود.', group: 'invoice', type: 'text', default: '', maxLength: 120 },
@@ -122,6 +129,16 @@ export const SETTINGS: SettingDef[] = [
     key: 'company_address',
     label: 'نشانی',
     group: 'identity', type: 'textarea', default: '', maxLength: 300,
+  },
+
+  // ── پذیرشِ آنلاین ────────────────────────────────────────────
+  {
+    key: 'intake_payment_note',
+    label: 'توضیحِ صفحهٔ پرداخت',
+    hint: 'بالای کارتِ بانکی در مرحلهٔ واریز دیده می‌شود. خالی = متنِ پیش‌فرض.',
+    group: 'intake', type: 'textarea',
+    default: 'مبلغ را به کارت یا شبای زیر واریز کنید و تصویرِ فیش را همین‌جا بارگذاری کنید؛ ثبت‌نامِ شما پس از بررسیِ فیش تأیید می‌شود.',
+    maxLength: 600,
   },
 
   // ── انبار و دارایی ───────────────────────────────────────────

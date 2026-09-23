@@ -12,6 +12,13 @@
 .ri-row select, .ri-row input { width: 100%; min-width: 0; }
 .ri-delete { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid #fda4af66; border-radius: 12px; background: transparent; color: #fda4af; cursor: pointer; }
 .ri-editor .bl-mini { display: flex; gap: 8px; justify-content: center; }
+/* زیرِ تعداد: نسخه (قفل) و موجودیِ انبار (فقط نمایش — رزرو نمی‌کند). */
+/* ستونِ تعداد با توضیح‌هایش بلندتر است؛ بی‌این، کشوی کالای کناری تا وسطِ ردیف کشیده می‌شد. */
+.ri-row { align-items: start; }
+.ri-qty { min-width: 0; }
+.ri-hint, .ri-rx, .ri-stock { display: block; margin-top: 4px; font-size: 11px; line-height: 1.7; color: var(--text3); }
+.ri-rx { color: var(--brand-text); font-weight: 700; }
+.ri-stock.warn { color: var(--amber-text); font-weight: 700; }
 
 /* ── میزِ پزشک (مطب، بستهٔ ۵) — امروزِ من / بیمارانِ من / نتایجِ رسیده ── */
 .sp-hint { margin: 0 0 14px; font-size: 13px; line-height: 1.9; color: var(--text2); }

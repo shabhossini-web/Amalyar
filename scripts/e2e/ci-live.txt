@@ -121,3 +121,4 @@ form-types
 clinical-core
 vital-signs
 voice-notes
+tenant-profile

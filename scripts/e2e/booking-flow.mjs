@@ -150,10 +150,15 @@ try {
   const subs = await get('/intake/submissions');
   const mine = (subs.rows ?? subs).find((x) => x.token === tok1);
   ok(!!mine, 'ثبت‌نام در صفِ تأیید هست');
-  /* در حوزهٔ ionm تأییدِ مراجعه‌ساز بدونِ جراح رد می‌شود («جراح را از تعاریف
-     پایه انتخاب کنید»)؛ مطب نادیده‌اش می‌گیرد. جراحِ پایه را bootstrap ساخته. */
+  /* در شرکت تأییدِ مراجعه‌ساز بدونِ جراح و بیمارستانِ تعریف‌شده رد می‌شود
+     (تصمیمِ مالک ۱۴۰۵/۰۷/۰۱ — هر دو خدمت)؛ مطب نادیده‌شان می‌گیرد. جراحِ پایه
+     و «بیمارستان آزمون» را bootstrap ساخته. */
   const surgeons = await get('/surgeons');
-  const okRes = await send(`/intake/submissions/${mine.id}/approve`, 'POST', { surgeonId: (surgeons.rows ?? surgeons)[0]?.id });
+  const hospitals = await get('/hospitals');
+  const okRes = await send(`/intake/submissions/${mine.id}/approve`, 'POST', {
+    surgeonId: (surgeons.rows ?? surgeons)[0]?.id,
+    hospitalId: (hospitals.rows ?? hospitals).find((h) => h.active)?.id,
+  });
   ok(okRes.status < 300, `تأیید شد (${okRes.status})${okRes.status >= 300 ? ' — ' + JSON.stringify(okRes.json)?.slice(0, 300) : ''}`);
   if (okRes.json?.visitId) trash.visits = [...(trash.visits ?? []), okRes.json.visitId];
   const visit = await get(`/visits/${(await get('/visits')).rows?.[0]?.id ?? 0}`).catch(() => null);

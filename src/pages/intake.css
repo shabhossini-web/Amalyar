@@ -50,7 +50,7 @@
 .ik-field > span { font-size: 11.5px; }
 .ik-field input, .ik-field textarea {
   font: inherit; font-size: 13.5px; color: var(--text1); padding: 10px 11px; border-radius: 11px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
   width: 100%;
 }
 .ik-field input:focus, .ik-field textarea:focus { border-color: rgba(var(--brand-2-rgb), .6); }
@@ -87,7 +87,7 @@
 .ik-cap input {
   font: inherit; width: 70px; margin-inline-start: auto; text-align: center;
   font-size: 14px; color: var(--text1); padding: 8px; border-radius: 10px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .16); outline: none;
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .16); outline: none;
 }
 
 .ik-go {
@@ -122,7 +122,7 @@
 .ik-code { display: flex; gap: 7px; }
 .ik-code input {
   flex: 1; font: inherit; font-size: 13px; color: var(--text1); padding: 10px 11px;
-  border-radius: 11px; background: rgba(0, 0, 0, .3);
+  border-radius: 11px; background: rgba(var(--surface-rgb), .6);
   border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
 }
 .ik-code input:focus { border-color: rgba(var(--brand-2-rgb), .6); }
@@ -145,7 +145,7 @@
 .ik-copy {
   display: flex; align-items: center; gap: 9px; width: 100%; cursor: pointer;
   font: inherit; text-align: start; padding: 9px 11px; border-radius: 11px;
-  background: rgba(0, 0, 0, .3); border: 1px solid rgba(var(--veil-rgb), .14);
+  background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ik-copy span { font-size: 11px; color: var(--text3); flex: 0 0 auto; }
 .ik-copy b { flex: 1; font-size: 14.5px; font-weight: 800; letter-spacing: .5px; color: var(--text1); }
@@ -155,6 +155,41 @@
 }
 .ik-copy.ok { border-color: rgba(52, 211, 153, .45); }
 .ik-copy.ok i { color: #6ee7b7; background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .35); }
+.ik-copy:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ── کارتِ بانکی ──
+   رنگ از برندِ شرکت (دو سرِ گرادیان) و متن سفید — روی زمینهٔ برند در هر دو تم خواناست.
+   ⚠️ `print-color-adjust`: بیمارِ بی‌اینترنتِ بانک صفحه را چاپ یا اسکرین‌شات می‌کند. */
+.ik-pay-note { align-items: flex-start; }
+.ik-pay-note svg { margin-top: 5px; }
+.ik-bank { display: grid; gap: 8px; margin: 0; }
+.ik-bank + .ik-bank { padding-top: 10px; border-top: 1px dashed rgba(var(--veil-rgb), .14); }
+.ik-bank-face {
+  position: relative; isolation: isolate; overflow: hidden;
+  width: 100%; max-width: 340px; aspect-ratio: 1.586; justify-self: center;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 16px 18px; border-radius: 16px; color: #fff;
+  background: linear-gradient(135deg, rgb(var(--brand-2-rgb)), rgb(var(--brand-dark-rgb)));
+  box-shadow: 0 14px 30px rgba(var(--brand-dark-rgb), .32), inset 0 1px 0 rgba(var(--sheen-rgb), .28);
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.ik-bank-face::before {
+  content: ''; position: absolute; z-index: -1; top: -45%; left: -25%; width: 75%; aspect-ratio: 1;
+  border-radius: 50%; background: radial-gradient(circle, rgba(var(--sheen-rgb), .22), transparent 70%);
+}
+.ik-bank-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ik-bank-top b { font-size: 14px; font-weight: 800; }
+/* تراشه — شکلِ CSS، نه آیکون: فقط نشانهٔ «این یک کارت است». */
+.ik-bank-chip {
+  width: 36px; height: 27px; border-radius: 6px;
+  background: linear-gradient(135deg, rgba(var(--sheen-rgb), .85), rgba(var(--sheen-rgb), .45));
+  box-shadow: inset 0 0 0 1px rgba(var(--sheen-rgb), .5);
+}
+.ik-bank-num {
+  margin: 0; text-align: center; font-size: clamp(17px, 5.2vw, 21px); font-weight: 800;
+  letter-spacing: 1.5px; font-variant-numeric: tabular-nums; unicode-bidi: isolate;
+}
+.ik-bank-owner { font-size: 12.5px; font-weight: 700; opacity: .92; }
 
 /* ── فرمِ ساخته‌شده روی صفحهٔ بیمار ──
    ⚠️ `.dyn`ِ مشترک استایلِ خودش را از `definitions.css` می‌گیرد؛ این‌جا فقط

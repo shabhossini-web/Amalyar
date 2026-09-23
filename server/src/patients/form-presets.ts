@@ -373,29 +373,77 @@ const INTAKE: PresetForm = {
   ],
 };
 
+/** کلیدِ «رزرو بدون تاریخ» — شرحش کنارِ `SERVICE_INFO`. */
+export const UNDATED_KEY = 'opDateOpen';
+export const isUndated = (v: unknown) => v === true || v === 'true';
+
+/**
+ * **اطلاعاتِ خدمت در فرمِ ثبت‌نامِ شرکت** — مالک، ۱۴۰۵/۰۷/۰۱: «نام عمل، نام جراح،
+ * بیمارستان، تاریخ عمل (با قابلیتِ رزرو بدون تاریخ)، آپلود کارت ملی و دستور پزشک».
+ * هر دو خدمت همین را دارند؛ ایمپلنت فقط شرحِ دستور را جدا می‌پرسد.
+ *
+ * ⚠️ `opDate` ستاره دارد و `opDateOpen` («رزرو بدون تاریخ») ستاره‌اش را برمی‌دارد —
+ * یک قاعده در `validateFields` و `DynForm`، نه فیلدِ اختیاریِ بی‌قاعده: تاریخِ خالیِ
+ * بی‌اعلام یعنی بیمار فراموش کرده، تاریخِ خالیِ اعلام‌شده یعنی هنوز معلوم نیست.
+ */
+const SERVICE_INFO: PresetField[] = [
+  { key: 'surgeonName', label: 'نام جراح', required: true },
+  { key: 'hospitalName', label: 'بیمارستان', required: true },
+  { key: 'procedure', label: 'نام عمل', required: true },
+  { key: 'opDate', label: 'تاریخ عمل', type: 'date', required: true },
+  { key: UNDATED_KEY, label: 'رزرو بدون تاریخ', type: 'bool', hint: 'اگر تاریخِ عمل هنوز معلوم نیست «بله» را بزنید؛ شرکت بعداً با شما هماهنگ می‌کند.' },
+  { key: 'nationalIdImage', label: 'تصویر کارت ملی', type: 'image', required: true, docCategory: 'identity' },
+  { key: 'prescription', label: 'تصویر دستور پزشک', type: 'image', required: true },
+];
+
 /** Public registration is a separate workflow from the team's clinical visit form. */
 export const REGISTRATION_PRESETS: Record<VerticalKey, PresetForm> = {
   ionm: {
     ...INTAKE, key: 'intake.ionm', title: 'ثبت‌نام خدمات نورومانیتورینگ', visitKind: 'surgery',
     hint: 'مشخصات بیمار، اطلاعات عمل و فیش؛ پس از بررسی شرکت، مراجعه ثبت می‌شود.',
-    fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)),
-      { key: 'surgeonName', label: 'نام جراح', required: true }, { key: 'hospitalName', label: 'بیمارستان', required: true },
-      { key: 'procedure', label: 'نوع عمل' }, { key: 'opDate', label: 'تاریخ عمل', type: 'date', required: true },
+    fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)), ...SERVICE_INFO,
       { key: 'patientNotes', label: 'توضیحات بیمار', type: 'textarea' }, { key: 'pay', label: 'پرداخت و فیش واریزی', type: 'payment' }],
   },
   implant: {
     ...INTAKE, key: 'intake.implant', title: 'ثبت‌نام تأمین تجهیزات و ایمپلنت', visitKind: 'surgery',
     hint: 'دستور جراح و اطلاعات عمل را بفرستید؛ شرکت، اقلام و تعداد موردنیاز را پیش از تأیید بررسی می‌کند.',
-    fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)),
-      { key: 'surgeonName', label: 'نام جراح', required: true }, { key: 'hospitalName', label: 'بیمارستان', required: true },
-      { key: 'procedure', label: 'نوع عمل' }, { key: 'opDate', label: 'تاریخ عمل', type: 'date' },
-      { key: 'prescription', label: 'تصویر دستور جراح', type: 'image', required: true },
+    fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)), ...SERVICE_INFO,
       { key: 'patientNotes', label: 'شرح دستور و توضیحات', type: 'textarea' },
       { key: 'pay', label: 'پرداخت و فیش واریزی', type: 'payment' }],
   },
   clinic: { ...INTAKE, key: 'intake.clinic', title: 'ثبت‌نام مطب و درخواست ویزیت', visitKind: 'clinic',
     hint: 'ثبت‌نام اولیه و درخواست ویزیت؛ فرم عمل از مسیر جداگانهٔ مطب انتخاب می‌شود.',
     fields: [...INTAKE.fields, { key: 'chiefComplaint', label: 'علت مراجعه', type: 'textarea', required: true }, { key: 'patientNotes', label: 'توضیحات تکمیلی', type: 'textarea' }] },
+};
+
+/**
+ * **ارتقای یک‌بارهٔ (v2) فرم‌های ثبت‌نامِ نصب‌شده** — دقیقاً آنچه قالب در
+ * «اصلاحاتِ شرکتی» (۱۴۰۵/۰۷/۰۱) عوض کرد، نه بیشتر.
+ *
+ * ⚠️ **فقط همین کلیدها اضافه می‌شوند، نه «هر فیلدِ غایبِ قالب».** نسخهٔ اولِ ارتقا
+ * هر فیلدی را که در فرم نبود از قالب برمی‌گرداند؛ آن‌وقت فیلدی که مدیر **پیش از**
+ * ارتقا عمداً پاک کرده بود (مثلاً باکسِ پرداخت در شرکتی که فیش را جای دیگری
+ * می‌گیرد) یک‌شبه برمی‌گشت. مطب این‌جا نیست چون قالبش عوض نشده.
+ *
+ * `moved`: پیش‌فرضی که عوض شده **فقط وقتی** دنبالِ پیش‌فرضِ تازه می‌رود که فیلد
+ * هنوز دقیقاً همان پیش‌فرضِ قدیمی باشد (برچسب و ستاره) — دست‌خورده‌اش مالِ مدیر است.
+ */
+export const REGISTRATION_V2: Partial<Record<VerticalKey, {
+  added: string[];
+  moved: { key: string; was: { label: string; required: boolean }; now: { label: string; required: boolean } }[];
+}>> = {
+  ionm: {
+    added: [UNDATED_KEY, 'nationalIdImage', 'prescription'],
+    moved: [{ key: 'procedure', was: { label: 'نوع عمل', required: false }, now: { label: 'نام عمل', required: true } }],
+  },
+  implant: {
+    added: [UNDATED_KEY, 'nationalIdImage'],
+    moved: [
+      { key: 'procedure', was: { label: 'نوع عمل', required: false }, now: { label: 'نام عمل', required: true } },
+      /* تاریخِ ایمپلنت اختیاری بود؛ حالا ستاره دارد و «رزرو بدون تاریخ» راهِ خالی‌گذاشتنش است. */
+      { key: 'opDate', was: { label: 'تاریخ عمل', required: false }, now: { label: 'تاریخ عمل', required: true } },
+    ],
+  },
 };
 
 /**

@@ -3,7 +3,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, PresetForm, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 
@@ -164,6 +164,20 @@ export function pickColor(fullKey: string, taken: Set<string>): string {
  */
 const FIELD_ORDER = {
   fields: { where: { deletedAt: null }, orderBy: [{ page: 'asc' as const }, { sort: 'asc' as const }, { id: 'asc' as const }] },
+};
+
+/**
+ * پرچم‌های نصب/ارتقای فرمِ ثبت‌نامِ هر خدمت.
+ *
+ * ⚠️ کلیدها **لفظی** نوشته می‌شوند، نه با قالبِ رشته: نگهبانِ CI («هر تنظیمِ اعلام‌شده
+ * باید جایی مصرف شود») دنبالِ همین لفظ می‌گردد، و `registration_${key}_installed`
+ * کورش کرد — یک بار قرمز شد. و **بی‌رقم**: همان نگهبان فقط `[a-z_]` را می‌خواند، پس
+ * نامِ «…_v2» هرگز «مصرف‌شده» دیده نمی‌شد. مطب ارتقا ندارد (قالبش عوض نشده).
+ */
+const REGISTRATION_FLAGS: Record<keyof typeof REGISTRATION_PRESETS, { installed: string; v2: string | null }> = {
+  ionm: { installed: 'registration_ionm_installed', v2: 'registration_ionm_service_fields' },
+  implant: { installed: 'registration_implant_installed', v2: 'registration_implant_service_fields' },
+  clinic: { installed: 'registration_clinic_installed', v2: null },
 };
 
 @Injectable()
@@ -402,6 +416,9 @@ export class FormsService {
 
   async workflow() { return this.config.vertical(); }
 
+  /** نوعِ نصب + بستهٔ خدمات — `config/tenant-profile.ts`. خوانندهٔ تازه از این بپرسد، نه از `workflow()`. */
+  async profile() { return this.config.profile(); }
+
   async defaultVisitKind() {
     const vertical = await this.config.vertical();
     const kinds = await this.visitKinds();
@@ -409,16 +426,75 @@ export class FormsService {
     return kinds.find(k => k.kind === preferred)?.kind ?? kinds[0]?.kind ?? preferred;
   }
 
-  /** One additive installation per profile. Never restore a deliberately deleted form. */
+  /**
+   * فرمِ ثبت‌نامِ هر خدمتِ انتخاب‌شده — یک‌بار، افزایشی. فرمی که مدیر عمداً
+   * پاک کرده دوباره ساخته نمی‌شود (پرچمِ `registration_<key>_installed`).
+   *
+   * ⚠️ شرکتِ دوخدمته **دو** فرم می‌گیرد (نورومانیتورینگ و ایمپلنت) و برای هر
+   * خدمت لینکِ جدا می‌سازد (تصمیمِ مالک ۱۴۰۵/۰۷/۰۱). تا دیروز فقط فرمِ حوزهٔ
+   * شرکت نصب می‌شد.
+   */
   private async ensureRegistrationPreset() {
-    const vertical = await this.config.vertical();
-    const key = { ionm: 'registration_ionm_installed', implant: 'registration_implant_installed', clinic: 'registration_clinic_installed' }[vertical];
+    const profile = await this.config.profile();
+    for (const key of this.registrationKeys(profile)) {
+      await this.installRegistration(key);
+      await this.upgradeRegistration(key);
+    }
+  }
+
+  /**
+   * **ارتقای یک‌بارهٔ فرمِ ثبت‌نامِ نصب‌شده** به فیلدهای خدمت (مالک، ۱۴۰۵/۰۷/۰۱):
+   * کارت ملی، دستور پزشک، «رزرو بدون تاریخ» — با پرچمِ `registration_<خدمت>_service_fields`.
+   *
+   * ⚠️ فقط کلیدهای `REGISTRATION_V2.added` اضافه می‌شوند و فقط پیش‌فرضِ **دست‌نخورده**
+   * جابه‌جا می‌شود (`moved`) — شرحش کنارِ همان ثابت در `form-presets.ts`. فیلدی که مدیر
+   * ویرایش، خاموش یا پاک کرده (پیش یا پس از ارتقا) دست نمی‌خورد.
+   */
+  private async upgradeRegistration(vertical: keyof typeof REGISTRATION_PRESETS) {
+    const flag = REGISTRATION_FLAGS[vertical].v2;
+    const plan = REGISTRATION_V2[vertical];
+    if (!flag || !plan) return;
+    if ((await this.prisma.setting.findUnique({ where: { key: flag } }))?.value === 'true') return;
+    const preset = REGISTRATION_PRESETS[vertical];
+    await this.prisma.$transaction(async tx => {
+      const form = await tx.formDef.findUnique({ where: { key: preset.key }, include: { fields: true } });
+      if (form) {
+        const have = new Set(form.fields.map((f) => f.key));
+        let sort = Math.max(0, ...form.fields.map((f) => f.sort));
+        for (const f of preset.fields) {
+          if (!plan.added.includes(f.key) || have.has(f.key)) continue;
+          await tx.formField.create({ data: {
+            formId: form.id, key: f.key, label: f.label, type: f.type ?? 'text', required: f.required ?? false,
+            builtin: f.builtin ?? false, hint: f.hint ?? null, placeholder: f.placeholder ?? null, options: (f.options ?? []) as any,
+            docCategory: normDocCategory(f.docCategory), page: f.page ?? 1, sort: (sort += 10),
+          } });
+        }
+        for (const m of plan.moved) {
+          const cur = form.fields.find((f) => f.key === m.key);
+          if (cur && cur.label === m.was.label && cur.required === m.was.required) {
+            await tx.formField.update({ where: { id: cur.id }, data: { label: m.now.label, required: m.now.required } });
+          }
+        }
+      }
+      await tx.setting.upsert({ where: { key: flag }, create: { key: flag, value: 'true' }, update: { value: 'true' } });
+    });
+  }
+
+  /** کلیدِ پیش‌فرض‌های ثبت‌نامِ یک پروفایل — مطب: `clinic`؛ شرکت: هر خدمت. */
+  registrationKeys(profile: { kind: string; services: readonly string[] }): (keyof typeof REGISTRATION_PRESETS)[] {
+    return (profile.kind === 'clinic' ? ['clinic'] : profile.services) as (keyof typeof REGISTRATION_PRESETS)[];
+  }
+
+  private async installRegistration(vertical: keyof typeof REGISTRATION_PRESETS) {
+    const key = REGISTRATION_FLAGS[vertical].installed;
     if ((await this.prisma.setting.findUnique({ where: { key } }))?.value === 'true') return;
     const preset = REGISTRATION_PRESETS[vertical];
     await this.prisma.$transaction(async tx => {
       await tx.formDef.upsert({ where: { key: preset.key }, update: {}, create: {
         key: preset.key, title: preset.title, scope: preset.scope, visitKind: preset.visitKind, hint: preset.hint,
-        fields: { create: preset.fields.map((f, i) => ({ key: f.key, label: f.label, type: f.type ?? 'text', required: f.required ?? false, builtin: f.builtin ?? false, hint: f.hint, options: f.options ?? [], sort: (i + 1) * 10 })) },
+        /* ⚠️ `docCategory`/`placeholder`/`page` هم کپی می‌شوند (مثلِ `seedFrom`): بی‌آن‌ها
+           کارتِ ملی با دستهٔ «متفرقه» در پرونده می‌نشست. */
+        fields: { create: preset.fields.map((f, i) => ({ key: f.key, label: f.label, type: f.type ?? 'text', required: f.required ?? false, builtin: f.builtin ?? false, hint: f.hint, placeholder: f.placeholder ?? null, docCategory: normDocCategory(f.docCategory), page: f.page ?? 1, options: f.options ?? [], sort: (i + 1) * 10 })) },
       } });
       await tx.setting.upsert({ where: { key }, create: { key, value: 'true' }, update: { value: 'true' } });
     });
@@ -1119,6 +1195,10 @@ export class FormsService {
         if (problem) { errors[f.key] = problem; continue; }
       }
       if (!f.required) continue;
+      /* رزرو بدون تاریخ (`form-presets.ts` → `SERVICE_INFO`): تاریخِ عمل وقتی بیمار
+         صریحاً «هنوز معلوم نیست» زده اجباری نیست — ستاره همان ستاره است، فقط این
+         یک شرط کنارش. */
+      if (f.key === 'opDate' && isUndated(values?.[UNDATED_KEY])) continue;
       /* ⚠️ عکس و پرداخت مقدارشان در `values` نمی‌نشیند — فایل به `Document`
          می‌رود و شماره‌های حساب از لینک خوانده می‌شوند. ستاره‌ی رویشان اگر
          این‌جا سنجیده می‌شد، فرمی می‌ساخت که هیچ‌وقت ذخیره نمی‌شود. */

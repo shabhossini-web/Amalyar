@@ -6,7 +6,7 @@ import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import Mark from '../components/Mark.jsx';
 import './intake.css';
-import { Alert, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, CheckCircle, Clock, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -399,6 +399,10 @@ function Form() {
   /* «تأییدشده» یعنی همهٔ مرحله‌ها پشتِ سر است — نه یک مرحلهٔ جاریِ دیگر. */
   const stepIdx = done ? steps.length : steps.findIndex((s) => s.key === d.status);
   const T = PATIENT.intake;
+  /* فرمی که مرحلهٔ واریز دارد «ثبت و مرحلهٔ بعد» می‌گوید (همان استپر تصمیم
+     می‌گیرد، نه یک شرطِ دوم که بتواند از آن جدا بیفتد). */
+  const paidNext = steps.some((x) => x.key === 'pending_payment');
+  const submitLabel = paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
 
   return (
     <Shell title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}>
@@ -485,7 +489,7 @@ function Form() {
                 <button type="button" className="ik-go" disabled={busy} onClick={nextPage}>بعدی</button>
               ) : (
                 <button type="button" className="ik-go ghost" disabled={busy} onClick={saveForm}>
-                  {busy ? 'در حال ذخیره…' : makesVisit ? T.submit.visit : T.submit.record}
+                  {busy ? 'در حال ذخیره…' : submitLabel}
                 </button>
               )}
             </div>
@@ -504,7 +508,7 @@ function Form() {
               <textarea rows={2} value={f.notes} onChange={set('notes')} disabled={busy} />
             </label>
             <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
-              {busy ? 'در حال ذخیره…' : makesVisit ? T.submit.visit : T.submit.record}
+              {busy ? 'در حال ذخیره…' : submitLabel}
             </button>
           </>
         )
@@ -530,21 +534,16 @@ function Form() {
               <button type="button" disabled={busy || code.trim().length < 3} onClick={applyCode}>اعمال</button>
             </div>
           )}
+          {/* توضیحِ شرکت دربارهٔ واریز — یک متن برای همهٔ لینک‌ها (تنظیمات → پذیرشِ آنلاین). */}
+          {d.paymentNote && (
+            <p className="ik-note ik-pay-note"><Bank width="15" height="15" /> {d.paymentNote}</p>
+          )}
           {/* ⚠️ بدونِ شمارهٔ حساب، بیمار مبلغ را می‌دید ولی نمی‌دانست به کجا
               بریزد — و فیشی که آپلود می‌کرد به حسابِ ما نبود. */}
           {d.payTo?.length > 0 ? (
             <div className="ik-pay-to">
               <b>واریز به:</b>
-              {d.payTo.map((a) => (
-                <div key={a.id} className="ik-acc">
-                  <span className="ik-acc-who">{[a.ownerName, a.bankName].filter(Boolean).join(' · ')}</span>
-                  {a.cardNumber && <CopyRow label="شمارهٔ کارت" value={a.cardNumber} />}
-                  {/* ⚠️ شمارهٔ حساب سومین شماره است، نه هم‌معنیِ کارت یا شبا:
-                      بیمارِ شعبه‌رو فقط با همین می‌تواند واریز کند. */}
-                  {a.accountNumber && <CopyRow label="شمارهٔ حساب" value={a.accountNumber} />}
-                  {a.iban && <CopyRow label="شبا" value={a.iban} />}
-                </div>
-              ))}
+              {d.payTo.map((a) => <BankCard key={a.id} acc={a} />)}
             </div>
           ) : (
             <p className="ik-warn">
@@ -597,11 +596,10 @@ function Form() {
  */
 function CopyRow({ label, value }) {
   const [done, setDone] = useState(false);
-  const plain = String(value).replace(/[^0-9A-Za-z]/g, '');
+  const plain = plainOf(value);
   /* ⚠️ ارقامِ **نمایش** فارسی می‌شوند ولی آنچه کپی می‌شود لاتینِ بی‌فاصله
      می‌ماند: اپِ بانک نه فاصله می‌پذیرد نه رقمِ فارسی. */
-  const grouped = /^\d+$/.test(plain) ? plain.replace(/(\d{4})(?=\d)/g, '$1 ') : plain;
-  const pretty = grouped.replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+  const pretty = faDigits(group4(plain));
   const copy = async () => {
     try { await navigator.clipboard.writeText(plain); setDone(true); setTimeout(() => setDone(false), 1600); }
     catch { /* مرورگرِ بدونِ clipboard: خودِ عدد روی صفحه هست */ }
@@ -612,6 +610,53 @@ function CopyRow({ label, value }) {
       <b dir="ltr">{pretty}</b>
       <i>{done ? 'کپی شد' : 'کپی'}</i>
     </button>
+  );
+}
+
+/** فقط حروف و ارقامِ لاتین — همان چیزی که اپِ بانک می‌پذیرد. */
+const plainOf = (v) => String(v ?? '').replace(/[^0-9A-Za-z]/g, '');
+/**
+ * گروه‌های چهارتایی برای **خواندن**: کارت و حساب اگر فقط رقم‌اند، شبا با `IR` و ۲۴
+ * رقم — همان شکلی که بانک‌ها چاپش می‌کنند. شبا تا دیروز یک رشتهٔ ۲۶ نویسه‌ایِ
+ * پیوسته بود و بیمار باید چشمی می‌شمرد.
+ */
+const group4 = (plain) => (/^\d+$/.test(plain) || /^IR\d{24}$/i.test(plain)
+  ? plain.toUpperCase().replace(/(.{4})(?=.)/g, '$1 ')
+  : plain);
+const faDigits = (t) => String(t).replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+
+/**
+ * کارتِ بانکیِ مقصد — همان شکلی که بیمار روی کارتِ خودش و در اپِ بانک می‌بیند.
+ *
+ * ⚠️ شکلِ کارت تزئین نیست: بیمار شماره را با آنچه در اپِ بانکش تایپ کرده مقایسه
+ * می‌کند و ۱۶ رقمِ گروه‌بندی‌شده روی «کارت» خطای خواندن را کم می‌کند. ولی شکل را
+ * نمی‌شود کپی کرد، پس خودِ کارت برای صفحه‌خوان پنهان است و **همان اطلاعات**
+ * در ردیف‌های کپیِ زیرش هست — یک‌بار خوانده می‌شود، نه دو بار.
+ *
+ * ترتیبِ ردیف‌ها: کارت، شبا، حساب. ⚠️ شمارهٔ حساب سومین شماره است، نه هم‌معنیِ
+ * کارت یا شبا: بیمارِ شعبه‌رو فقط با همین می‌تواند واریز کند.
+ */
+function BankCard({ acc }) {
+  const card = plainOf(acc.cardNumber);
+  return (
+    <figure className="ik-bank">
+      {card && (
+        <div className="ik-bank-face" aria-hidden="true">
+          <div className="ik-bank-top">
+            <b>{acc.bankName || 'کارتِ بانکی'}</b>
+            <span className="ik-bank-chip" />
+          </div>
+          <p className="ik-bank-num" dir="ltr">{faDigits(group4(card))}</p>
+          {acc.ownerName && <span className="ik-bank-owner">{acc.ownerName}</span>}
+        </div>
+      )}
+      <figcaption className="ik-acc">
+        <span className="ik-acc-who">{[acc.ownerName, acc.bankName].filter(Boolean).join(' · ')}</span>
+        {acc.cardNumber && <CopyRow label="شمارهٔ کارت" value={acc.cardNumber} />}
+        {acc.iban && <CopyRow label="شبا" value={acc.iban} />}
+        {acc.accountNumber && <CopyRow label="شمارهٔ حساب" value={acc.accountNumber} />}
+      </figcaption>
+    </figure>
   );
 }
 

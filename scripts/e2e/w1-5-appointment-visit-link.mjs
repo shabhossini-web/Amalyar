@@ -114,7 +114,7 @@ try {
   // This also works on PGlite, whose wire adapter cannot recover a SQL RAISE error.
   const cls = (file, name) => require('./dist/' + file)[name];
   const audit = new (cls('audit/audit.service', 'AuditService'))(db);
-  const forms = new (cls('patients/forms.service', 'FormsService'))(db, { vertical: async () => 'clinic' });
+  const forms = new (cls('patients/forms.service', 'FormsService'))(db, { vertical: async () => 'clinic', profile: async () => cls('config/tenant-profile', 'profileOf')('clinic', null) });
   const noSideEffects = { syncNextVisit: async () => { throw new Error('side effect before commit'); } };
   const failureEvents = { emit: async () => { throw new Error('fixture outbox failure'); } };
   const patients = new (cls('patients/patients.service', 'PatientsService'))(db, audit, forms, noSideEffects, failureEvents);

@@ -8,11 +8,13 @@ import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
-import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS } from './form-presets';
+import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS, UNDATED_KEY, isUndated } from './form-presets';
 import { normalizeLinks } from './forms.service';
 import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
+import { serviceLabel, serviceOf } from './intake-service-of';
+import { imageRefsOf, receiptIdsOf } from './intake-docs';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
@@ -20,6 +22,7 @@ import { RemindersService } from './reminders.service';
 import { isValidNationalId, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
+import { SETTING_BY_KEY } from '../config/settings-registry';
 import { TenantContext } from '../tenant/tenant-context';
 import { AvailabilityService } from './availability.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
@@ -195,10 +198,12 @@ export class IntakeService {
    */
   async formsForLinks() {
     await this.forms.list();
-    const vertical = await this.forms.workflow();
-    const recommendedKey = REGISTRATION_PRESETS[vertical].key;
+    /* ⚠️ یک فرمِ پیشنهادی **به‌ازای هر خدمتِ انتخاب‌شده** (شرکتِ دوخدمته دو تا)؛
+       پیش‌فرضِ خدمتی که شرکت ندارد پنهان می‌ماند. لینک‌های زنده‌ای که از قبل به
+       آن اشاره می‌کنند دست نمی‌خورند — فقط در فهرستِ «لینکِ تازه» پیشنهاد نمی‌شود. */
+    const recommended = new Set(this.forms.registrationKeys(await this.forms.profile()).map((k) => REGISTRATION_PRESETS[k].key));
     const rows = await this.prisma.formDef.findMany({
-      where: { active: true, key: { notIn: Object.values(REGISTRATION_PRESETS).map(f => f.key).filter(k => k !== recommendedKey) } },
+      where: { active: true, key: { notIn: Object.values(REGISTRATION_PRESETS).map(f => f.key).filter(k => !recommended.has(k)) } },
       orderBy: [{ scope: 'asc' }, { id: 'asc' }],
       select: {
         id: true, key: true, title: true, color: true, scope: true, visitKind: true,
@@ -206,7 +211,7 @@ export class IntakeService {
       },
     });
     return rows.map((f) => ({
-      recommended: f.key === recommendedKey,
+      recommended: recommended.has(f.key),
       id: f.id, title: f.title, color: f.color, scope: f.scope, visitKind: f.visitKind,
       hasPayment: f.fields.length > 0,
       /* پرشدنش مراجعه می‌سازد؟ `record` نمی‌سازد و همین تفاوتِ اصلی است. */
@@ -635,6 +640,10 @@ export class IntakeService {
       //    و فیشی که آپلود می‌کرد به حسابِ ما نبود. فقط حساب‌هایی که ادمین
       //    صریحاً برای فرمِ عمومی علامت زده، و فقط فیلدهای لازمِ واریز.
       payTo: await this.payTo(link?.bankAccountId ?? null),
+      /* توضیحِ بالای کارتِ بانکی — یک متن برای کلِ شرکت (تنظیمات → پذیرشِ آنلاین).
+         ⚠️ «خالی = متنِ پیش‌فرض» (راهنمای همان تنظیم): متنِ خالیِ ذخیره‌شده یعنی مدیر پاکش
+         کرده، نه اینکه بیمار صفحهٔ پرداختِ بی‌توضیح ببیند. */
+      paymentNote: await this.settings.textOr('intake_payment_note', String(SETTING_BY_KEY.get('intake_payment_note')?.default ?? '')),
       /* ⚠️ تعریفِ فرم از **عکسِ لحظه‌ایِ خودِ ثبت‌نام** می‌آید نه از لینک: اگر
          ادمین وسطِ کار فرمِ لینک را عوض کند، بیمارِ در جریان باید همان فرمی را
          ببیند که شروع کرده. `null` یعنی «فرمی ندارد» و صفحه به فیلدهای
@@ -877,6 +886,10 @@ export class IntakeService {
         const when = toDateValue(data[fl.key]);
         if (when) data[fl.key] = when.toISOString().slice(0, 10);
       }
+      /* «رزرو بدون تاریخ» (مالک، ۱۴۰۵/۰۷/۰۱): تاریخِ نیمه‌پرِ قبلی نباید کنارِ
+         اعلامِ «هنوز معلوم نیست» بماند — دو ادعای متناقض که تأییدکننده باید حدس
+         بزند کدام درست است. */
+      if (isUndated(data[UNDATED_KEY])) delete data.opDate;
       /* باکسِ لینک: URLِ http(s)ِ معتبر، سقفِ ۱۰، متن‌ها بریده — همان قاعدهٔ
          `Visit.extra`. لینکِ `javascript:` روی صفحهٔ پرونده کلیک‌شدنی می‌شود. */
       for (const fl of form.fields) {
@@ -946,7 +959,9 @@ export class IntakeService {
        تمام کرد. وگرنه ثبت‌نامی به صفِ تأیید می‌رسید که هیچ روزی ندارد و
        ادمین باید تلفنی می‌پرسید «کِی می‌آیی؟» — یعنی همان کاری که این
        مرحله برای حذفش آمده. فرمِ زیرپرونده (نظرسنجی) مستثناست. */
-    if (meta?.scope !== 'record' && (await this.bookingOn())) {
+    /* ⚠️ «رزرو بدون تاریخ» همین قاعده را کنار می‌زند: بیمار صریحاً گفته روزِ عمل
+       هنوز معلوم نیست، پس خواستنِ روزِ نوبت یعنی مجبورش کنیم روزی را حدس بزند. */
+    if (meta?.scope !== 'record' && !isUndated(data[UNDATED_KEY]) && (await this.bookingOn())) {
       const appt = await this.prisma.appointment.findUnique({ where: { submissionId: row.id } });
       if (!appt || appt.status === 'cancelled') {
         throw new BadRequestException('روزِ نوبت را انتخاب کنید');
@@ -1911,6 +1926,7 @@ export class IntakeService {
 
   async list(status?: string) {
     const workflow = await this.forms.workflow();
+    const profile = await this.forms.profile();
     const defaultKind = await this.forms.defaultVisitKind();
     const where = status && status !== 'all' ? { status } : {};
     const rows = await this.prisma.intakeSubmission.findMany({
@@ -1919,16 +1935,52 @@ export class IntakeService {
       take: 200,
       include: {
         link: { select: { title: true } },
-        patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true, nationalId: true } },
+        patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true, nationalId: true, birthDate: true } },
         visit: { select: { id: true, seq: true } },
         /* فرمِ **همین ثبت‌نام** (عکسِ لحظه‌ای)، نه فرمِ فعلیِ لینک: پنلِ تأیید
            باید بگوید این ثبت‌نام چه می‌سازد، و آن از روی همان فرمی معلوم
            می‌شود که بیمار پر کرده. */
-        form: { select: { title: true, scope: true, color: true, visitKind: true } },
+        form: { select: {
+          title: true, scope: true, color: true, visitKind: true, key: true,
+          /* کادرهای عکسِ فرم (کارت ملی، دستور پزشک…) — تا پاپ‌آپ بداند کدام مقدار مدرک است. */
+          fields: { where: { type: 'image' }, orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }], select: { key: true, label: true } },
+        } },
       },
     });
-    return rows.map((r) => ({
+    /* ⚠️ مدارکِ همهٔ ردیف‌ها با **یک** کوئری: نام و نوعِ فایل لازم است (PDF با
+       `<img>` باز نمی‌شود) و کوئری به‌ازای هر ردیف یعنی صفِ ۲۰۰تایی = ۲۰۰ رفت‌وبرگشت.
+       مدرکِ پاک‌شده (`deletedAt`) — فیشی که بیمار خودش برداشته — نشان داده نمی‌شود. */
+    const docRefs = rows.map((r) => ({ receipts: receiptIdsOf(r.data), images: imageRefsOf(r.data, r.form?.fields ?? []) }));
+    const docIds = [...new Set(docRefs.flatMap((x) => [...x.receipts, ...x.images.map((i) => i.id)]))];
+    const docs = docIds.length
+      ? await this.prisma.document.findMany({ where: { id: { in: docIds }, deletedAt: null }, select: { id: true, fileName: true, mimeType: true } })
+      : [];
+    const docById = new Map(docs.map((x) => [x.id, x]));
+    const docView = (id: number) => {
+      const x = docById.get(id)!;
+      return { id, name: x.fileName, pdf: x.mimeType === 'application/pdf' };
+    };
+    return rows.map((r, i) => {
+      /* ⚠️ **مشتق سمتِ سرور** (قانون ۱۵): «آیا تأییدِ این ثبت‌نام مراجعه
+         می‌سازد؟» یک قاعدهٔ سرور است و اگر کلاینت خودش از `scope` استنتاجش
+         می‌کرد، روزی رفتارِ واقعی و آنچه پنل وعده می‌دهد از هم جدا می‌شدند. */
+      const makesVisit = (r.form?.scope ?? 'intake') !== 'record';
+      /* ⚠️ خدمتِ **همین ردیف** (`intake-service-of.ts`) — شرکتِ دوخدمته هر دو
+         نوع ثبت‌نام را در یک صف دارد و پاپ‌آپ باید بداند این یکی کدام است.
+         فرمِ زیرپرونده مراجعه نمی‌سازد، پس خدمتی هم ندارد — وگرنه پاپ‌آپِ
+         نظرسنجی انتخابگرِ خدمت و ستارهٔ جراح/بیمارستان می‌گرفت، در حالی که
+         `approve()` هیچ‌کدام را برایش نمی‌خواهد.
+         `workflow` فقط برای کلاینتِ کش‌شدهٔ قدیمی می‌ماند. */
+      const svc = makesVisit ? serviceOf(r.form?.key, profile) : null;
+      return {
       workflow, approvalKind: r.form?.visitKind || defaultKind,
+      /* نوعِ نصب از **همان پاسخی** که ردیف را آورده، نه از کانفیگِ کشِ رابط:
+         پاپ‌آپ با همین تصمیم می‌گیرد جراح/بیمارستان را «الزامی» بنویسد، و اگر
+         کانفیگِ کش‌شده عقب باشد، وعدهٔ پاپ‌آپ با قاعدهٔ `approve()` نمی‌خواند. */
+      profileKind: profile.kind,
+      service: svc?.service ?? null,
+      serviceLabel: serviceLabel(svc?.service ?? null),
+      serviceAmbiguous: svc?.ambiguous ?? false,
       id: r.id,
       token: r.token,
       status: r.status,
@@ -1947,21 +1999,22 @@ export class IntakeService {
       direct: r.linkId === null,
       formTitle: r.form?.title ?? null,
       formColor: r.form?.color ?? null,
-      /* ⚠️ **مشتق سمتِ سرور** (قانون ۱۵): «آیا تأییدِ این ثبت‌نام مراجعه
-         می‌سازد؟» یک قاعدهٔ سرور است و اگر کلاینت خودش از `scope` استنتاجش
-         می‌کرد، روزی رفتارِ واقعی و آنچه پنل وعده می‌دهد از هم جدا می‌شدند. */
-      makesVisit: (r.form?.scope ?? 'intake') !== 'record',
+      makesVisit,
       /* مشتقِ سرور (قانون ۱۵): «این را ماشین تأیید کرده یا آدم؟» — UI با
          همین تصمیم می‌گیرد دکمهٔ «حذف از پرونده» را نشان بدهد و آزمون هم
          چیزی برای سنجیدنِ ادعای «امضا جعل نشد» دارد. */
       autoApproved: r.status === 'approved' && r.reviewedById === null && r.visitId === null,
+      /* مدارکِ پاپ‌آپ (قانون ۱۵) — **همهٔ** فیش‌ها نه فقط اولی، و عکس‌های فرم با برچسبِ کادرشان. */
+      receipts: docRefs[i].receipts.filter((id) => docById.has(id)).map(docView),
+      documents: docRefs[i].images.filter((x) => docById.has(x.id)).map((x) => ({ ...docView(x.id), field: x.field, label: x.label })),
       patient: r.patient,
       visitId: r.visitId,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
       reviewNote: r.reviewNote,
       createdAt: r.createdAt,
       expiresAt: r.expiresAt,
-    }));
+      };
+    });
   }
 
   /**
@@ -1978,6 +2031,8 @@ export class IntakeService {
     id: number,
     dto: {
       idempotencyKey?: string;
+      /// خدمتِ فرمِ دلخواه در شرکتِ دوخدمته (`intake-service-of.ts`).
+      service?: string;
       surgeonId?: number; hospitalId?: number; techId?: number; procedureTypeId?: number;
       opDate?: string; opStartTime?: string; note?: string;
       /// ثبتِ پرداختِ همان فیش — پیش‌فرض روشن، ولی حسابِ مقصد را ادمین می‌گوید.
@@ -2015,6 +2070,11 @@ export class IntakeService {
     const form = row.formId
       ? await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true, visitKind: true, key: true } })
       : null;
+    const profile = await this.forms.profile();
+    if (dto.service && !(profile.services as string[]).includes(dto.service)) {
+      throw new BadRequestException('این شرکت چنین خدمتی ارائه نمی‌کند');
+    }
+    const svc = serviceOf(form?.key, profile, dto.service);
 
     /* پاسخِ فیلدهای دلخواه باید به `Visit.extra` برسد، وگرنه چیزی که بیمار پر
        کرده در JSONِ ثبت‌نام دفن می‌شود و در پروندهٔ او پیدا نیست. کلیدهای
@@ -2022,6 +2082,8 @@ export class IntakeService {
     const RESERVED = new Set([
       'firstName', 'lastName', 'nationalId', 'phone', 'address', 'birthDate',
       'procedure', 'surgeonName', 'hospitalName', 'opDate', 'patientNotes', 'receiptDocumentId',
+      /* نشانِ «رزرو بدون تاریخ» دادهٔ بالینی نیست — نبودنِ `opDate` روی مراجعه همان را می‌گوید. */
+      UNDATED_KEY,
       /* ⚠️ «علت مراجعه»ی فرمِ ثبت‌نام حالا ستونِ `Visit.chiefComplaint` است و
          پایین به `createVisit` پاس می‌شود. اگر این‌جا نمی‌آمد، هم در `extra`
          می‌ماند هم در ستون می‌نشست — دو نسخه از یک داده. */
@@ -2035,8 +2097,23 @@ export class IntakeService {
        فرمی اصلاً نمی‌تواند مبلغ داشته باشد؛ `assertRecordFormHasNoAmount`). */
     const makesVisit = form?.scope !== 'record';
     if (!makesVisit && (row.amount > 0 || row.discountAmount > 0)) throw new BadRequestException('فرم زیرپرونده مبلغ ندارد');
-    const workflow = await this.forms.workflow();
+    /* ⚠️ **تصمیمِ مالک (۱۴۰۵/۰۷/۰۱): در شرکت، جراح و بیمارستانِ تعریف‌شده برای هر
+       دو خدمت الزامی است** (با افزودنِ سریع در پاپ‌آپ). تا دیروز فقط
+       نورومانیتورینگ جراحِ تعریف‌شده می‌خواست و در ایمپلنت نامِ جراح و
+       بیمارستانِ بیمار بی‌صدا از مراجعه می‌افتاد.
+       و بیمارستانِ «پیشنهادی» (تطبیقِ فازی) دیگر خودکار چسبانده نمی‌شود: فقط
+       انتخابِ خودِ بیمار از فهرست، تطبیقِ دقیق یا نامِ مستعار — «پیشنهاد، نه
+       ادغام» (`name-match.ts`). در مطب رفتار همان است که بود. */
+    const company = profile.kind === 'company';
+    const service = makesVisit ? svc.service : null;
     const matchedHospital = dto.hospitalId ? null : await matchIntakeHospital(this.prisma, d);
+    const autoHospital = matchedHospital && (!company || matchedHospital.source !== 'suggested') ? matchedHospital.id : undefined;
+    const hospitalId = dto.hospitalId ?? autoHospital;
+    if (makesVisit && company) {
+      if (!hospitalId || !await this.prisma.hospital.findFirst({ where: { id: hospitalId, active: true }, select: { id: true } })) {
+        throw new BadRequestException('بیمارستان را از تعاریفِ پایه انتخاب کنید یا همین‌جا اضافه کنید');
+      }
+    }
     const approvalKind = form?.visitKind || await this.forms.defaultVisitKind();
     if (makesVisit && dto.extra) {
       const target = await this.forms.forVisitKind(approvalKind);
@@ -2044,10 +2121,13 @@ export class IntakeService {
         if (!field.builtin && field.active && Object.prototype.hasOwnProperty.call(dto.extra, field.key)) extra[field.key] = dto.extra[field.key];
       }
     }
-    const requirements = makesVisit && workflow === 'implant'
-      ? dto.requiredItems !== undefined ? await resolveRequirements(this.prisma, dto.requiredItems) : await procedureRequirements(this.prisma, dto.procedureTypeId)
+    const requirements = service === 'implant'
+      /* ⚠️ لحظهٔ تأیید لحظهٔ **نسخه** است: همین تعدادها «طبقِ نسخه» قفل می‌شوند (`visit-requirements.ts`). */
+      ? dto.requiredItems !== undefined
+        ? await resolveRequirements(this.prisma, dto.requiredItems, { prescribe: true })
+        : await procedureRequirements(this.prisma, dto.procedureTypeId, { prescribe: true })
       : undefined;
-    if (makesVisit && workflow === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
+    if (service === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
 
     /* نوبتِ رزروشدهٔ همین ثبت‌نام — تاریخ و ساعتِ مراجعه از این‌جا می‌آید. */
     const held = await this.prisma.appointment.findUnique({ where: { submissionId: id } });
@@ -2070,19 +2150,24 @@ export class IntakeService {
           // نوع صریح فرم مقدم است؛ لینک‌های قدیمی از پیش‌فرض حوزه استفاده می‌کنند.
           kind: approvalKind,
           surgeonId: dto.surgeonId,
-          hospitalId: dto.hospitalId ?? matchedHospital?.id,
+          hospitalId,
           hospitalName: d.hospitalName ?? undefined,
           techId: dto.techId,
           procedureTypeId: dto.procedureTypeId,
           opType: dto.procedureTypeId ? undefined : (d.procedure ?? undefined),
-          opDate: dto.opDate ?? held?.date?.toISOString() ?? d.opDate ?? undefined,
+          opDate: dto.opDate ?? held?.date?.toISOString() ?? (isUndated(d[UNDATED_KEY]) ? undefined : d.opDate) ?? undefined,
           /* «چرا آمده» را خودِ بیمار در ثبت‌نام نوشته — همان‌جا به ستون برود،
              وگرنه منشی باید دوباره بپرسدش. */
           chiefComplaint: typeof d.chiefComplaint === 'string' ? d.chiefComplaint : undefined,
           opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
           notes: d.patientNotes ?? undefined,
           ...(Object.keys(extra).length ? { extra } : {}),
-        } as any, user, { requirements, intakeIonm: workflow === 'ionm' })
+        } as any, user, {
+          requirements,
+          intakeCompany: makesVisit && company
+            ? { relaxRequired: service === 'ionm', undated: isUndated(d[UNDATED_KEY]) }
+            : undefined,
+        })
         : null;
 
     const snapshot = row.schemaSnapshot ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds);

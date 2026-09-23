@@ -10,7 +10,7 @@ import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
 import './dashboard.css'; // bl-mini / db-hint
-import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Eye, Form, Hospital, Pencil, Plus, Search, Send, Trash } from '../ui/icons.jsx';
+import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Eye, Form, Hospital, Pencil, Plus, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
 import { group3, numToWordsFa, parseMoney } from '../lib/money.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -23,6 +23,10 @@ const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
    جداکنندهٔ سه‌رقمی می‌گذارد — «۰۹۱۲۱۲۳۴۵۶۷» به «۹٬۱۲۱٬۲۳۴٬۵۶۷» تبدیل می‌شد. */
 const faDigits = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 /* ⚠️ مبلغ‌ها تومان‌اند؛ نسخهٔ اول تقسیم بر ۱۰ می‌کرد و عددِ یک‌دهم نشان می‌داد. */
+/** نامِ ردیف — از پرونده اگر هست (اصلاحِ کارتِ هویت همین‌جا دیده شود)، وگرنه متنِ فرم. */
+const nameOf = (s) => (s.patient ? `${s.patient.firstName} ${s.patient.lastName}` : `${s.data?.firstName ?? ''} ${s.data?.lastName ?? ''}`);
+/** فیش‌های ردیف از سرور (`intake-docs.ts`)؛ fallback فقط برای پاسخِ سرورِ قدیمی. */
+const receiptsOf = (s) => s.receipts ?? (s.data?.receiptDocumentId ? [{ id: s.data.receiptDocumentId }] : []);
 
 /* ⚠️ عنوانِ تب‌ها هم از `/config.statuses.intake` می‌آید: نسخهٔ ثابتِ قبلی
    `pending_fill` را «ناتمام» می‌گفت در حالی که سرور «در انتظارِ تکمیل»
@@ -40,6 +44,7 @@ const TAB_ORDER = ['pending_approval', 'pending_payment', 'pending_fill', 'appro
  */
 export default function IntakeAdmin() {
   const intakeFa = useStatusMap('intake');
+  const cfgServices = useConfig().services ?? [];
   const TABS = [
     ...TAB_ORDER.map((key) => ({ key, label: intakeFa[key] ?? key })),
     { key: 'all', label: 'همه' },
@@ -184,16 +189,31 @@ export default function IntakeAdmin() {
         {!rows && !err && <div className="ia-empty">در حال بارگذاری…</div>}
         {rows?.length === 0 && <div className="ia-empty">در این وضعیت ثبت‌نامی نیست</div>}
         {rows?.map((s, i) => (
-          <motion.article key={s.id} {...row(i)} className={`ia-card st-${s.status}`}>
+          <motion.article
+            key={s.id} {...row(i)}
+            className={`ia-card st-${s.status}${s.status === 'pending_approval' ? ' open' : ''}`}
+            /* ⚠️ مالک: «پاپ‌آپ از خودِ ردیف باز شود». کلیک روی دکمه‌ها، فیش و لینک‌های داخلِ کارت
+               کارِ خودشان را می‌کنند؛ دسترسیِ صفحه‌کلید از دکمهٔ نامِ بیمار است، نه از کلِ کارت. */
+            onClick={s.status === 'pending_approval'
+              ? (e) => { if (!e.target.closest('button, a, input, select, textarea, label')) setApproving(s); }
+              : undefined}
+          >
             <header>
               <div className="ia-title">
-                <b>{s.data?.firstName} {s.data?.lastName}</b>
+                {/* نام از **پرونده** — اگر تأییدکننده در کارتِ هویت اصلاحش کرده، همان دیده شود. */}
+                {s.status === 'pending_approval' ? (
+                  <button type="button" className="ia-open" onClick={() => setApproving(s)}>
+                    <b>{nameOf(s)}</b>
+                  </button>
+                ) : <b>{nameOf(s)}</b>}
                 <small>
                   {s.patient?.code}
                   {s.patient?.phone ? ` · ${s.patient.phone}` : ''}
                   {s.data?.nationalId ? ` · ${s.data.nationalId}` : ''}
                 </small>
               </div>
+              {/* خدمتِ همین ردیف — در شرکتِ دوخدمته هر دو نوع در یک صف‌اند. */}
+              {s.serviceLabel && cfgServices.length > 1 && <span className="ia-tag ia-svc">{s.serviceLabel}</span>}
               <span className={`ia-tag s-${s.status}`}>{s.statusLabel}</span>
               <span className="ia-amount">{faNum(s.amount)} تومان</span>
               {/* حذفِ ثبت‌نام — تأییدشده‌ای که مراجعه ساخته حذف نمی‌شود (سرور هم
@@ -212,6 +232,7 @@ export default function IntakeAdmin() {
               {/* ⚠️ `faDate` نه رشتهٔ خام: مقدارِ ذخیره‌شده ISO است و چاپِ
                   خامش «2026-08-05» به ادمینِ فارسی‌زبان نشان می‌داد. */}
               {s.data?.opDate && <span>{faDate(s.data.opDate)}</span>}
+              {(s.data?.opDateOpen === true || s.data?.opDateOpen === 'true') && <span className="ia-undated">رزرو بدون تاریخ</span>}
               <span className="ia-when">{faDate(s.createdAt)}</span>
             </div>
 
@@ -220,10 +241,16 @@ export default function IntakeAdmin() {
             {s.visitCode && <p className="ia-note ok"><CheckCircle width="13" height="13" /> مراجعهٔ {s.visitCode} ساخته شد</p>}
 
             {/* فیش روی خودِ کارت هم هست: ادمین اغلب می‌خواهد فقط نگاه کند
-                و بعد تصمیم بگیرد، نه اینکه اول شیت را باز کند. */}
-            {s.status === 'pending_approval' && (
-              <Receipt documentId={s.data?.receiptDocumentId} onOpen={setZoom} />
-            )}
+                و بعد تصمیم بگیرد، نه اینکه اول شیت را باز کند. **همهٔ** فیش‌ها، و
+                «فیشی نیست» فقط وقتی پولی در کار است — ثبت‌نامِ رایگان فیش ندارد. */}
+            {s.status === 'pending_approval' && (receiptsOf(s).length > 0 ? (
+              <div className="ia-docs">
+                {receiptsOf(s).map((doc, n) => (
+                  <Receipt key={doc.id} documentId={doc.id} fileName={doc.name} pdf={doc.pdf} onOpen={setZoom}
+                           label={receiptsOf(s).length > 1 ? `فیشِ ${faNum(n + 1)}` : 'فیشِ واریزی'} />
+                ))}
+              </div>
+            ) : (s.payable ?? s.amount) > 0 && <Receipt onOpen={setZoom} />)}
 
             {s.status === 'pending_approval' && (
               <footer className="ia-acts">
@@ -268,6 +295,7 @@ export default function IntakeAdmin() {
             onClose={() => setApproving(null)}
             onDone={(m) => { setApproving(null); setToast(m); load(); }}
             onZoom={setZoom}
+            onChanged={load}
           />
         )}
       </AnimatePresence>
@@ -305,7 +333,7 @@ export default function IntakeAdmin() {
  * ⚠️ URLِ عمومیِ ثابت برای فیش عمداً نداریم: لینکِ فوروارد‌شده یعنی هر کسی
  * مدرکِ مالیِ بیمار را ببیند.
  */
-function Receipt({ documentId, onOpen, label = 'فیشِ واریزی', fileName = '' }) {
+function Receipt({ documentId, onOpen, label = 'فیشِ واریزی', fileName = '', pdf = false }) {
   const [url, setUrl] = useState(null);
   const [bad, setBad] = useState(false);
 
@@ -325,12 +353,85 @@ function Receipt({ documentId, onOpen, label = 'فیشِ واریزی', fileName
   if (bad) return <p className="ia-note warn"><Alert width="13" height="13" /> فیش باز نشد</p>;
   if (!url) return <p className="ia-note">در حال بازکردنِ فیش…</p>;
 
-  if (/\.pdf$/i.test(fileName)) return <a href={url} target="_blank" rel="noopener noreferrer" className="bl-mini">بازکردن {label} (PDF)</a>;
+  if (pdf || /\.pdf$/i.test(fileName)) return <a href={url} target="_blank" rel="noopener noreferrer" className="bl-mini">بازکردن {label} (PDF)</a>;
   return (
     <button type="button" className="ia-receipt" onClick={() => onOpen(url)} title="بزرگ‌نمایی">
       <img src={url} alt={label} />
       <span><Search width="13" height="13" /> {label} — برای بزرگ‌نمایی بزنید</span>
     </button>
+  );
+}
+
+/**
+ * **کارتِ هویت** — چه کسی ثبت‌نام کرده، از روی **پرونده** (نه متنِ خامِ فرم).
+ *
+ * ⚠️ تصمیمِ مالک (۱۴۰۵/۰۷/۰۱): غلطِ هویتی برای اصلاح به بیمار برنمی‌گردد؛
+ * تأییدکننده همین‌جا درستش می‌کند. نام و موبایل از همان مسیرِ ویرایشِ پرونده
+ * (`PATCH /patients/:id`) می‌روند — با همان دسترسی و همان ردِ ممیزی، نه مسیرِ دوم.
+ *
+ * ⚠️ کدِ ملی **این‌جا عوض نمی‌شود**: کلیدِ پرونده است و تغییرش یعنی ادغام یا
+ * جداسازیِ پرونده (`record.service.ts`). رد کردنِ ثبت‌نام راهِ درستش است.
+ */
+function IdentityCard({ row, who, onSaved }) {
+  const [edit, setEdit] = useState(false);
+  const [v, setV] = useState({ firstName: '', lastName: '', phone: '' });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const d = row.data ?? {};
+  const name = who ? `${who.firstName} ${who.lastName}` : `${d.firstName ?? ''} ${d.lastName ?? ''}`.trim();
+  const birth = who?.birthDate ?? d.birthDate;
+  const open = () => {
+    setV({ firstName: who?.firstName ?? '', lastName: who?.lastName ?? '', phone: who?.phone ?? '' });
+    setErr(''); setEdit(true);
+  };
+  const save = async () => {
+    /* فقط آنچه واقعاً عوض شده — بقیه دست‌نخورده در ردِ ممیزی نمی‌نشیند. */
+    const patch = Object.fromEntries(Object.entries(v)
+      .map(([k, x]) => [k, x.trim()])
+      .filter(([k, x]) => x !== String(who?.[k] ?? '')));
+    if (!Object.keys(patch).length) { setEdit(false); return; }
+    setBusy(true); setErr('');
+    try {
+      await api(`/patients/${who.id}`, { method: 'PATCH', body: patch });
+      onSaved({ ...who, ...patch });
+      setEdit(false);
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <section className="ia-block" aria-labelledby={`ia-b-id-${row.id}`}>
+      <h3 id={`ia-b-id-${row.id}`}>
+        <User width="15" height="15" /> هویت
+        {who && !edit && (
+          <button type="button" className="ia-block-act" onClick={open}><Pencil width="13" height="13" /> اصلاح</button>
+        )}
+      </h3>
+      {!edit ? (
+        <dl className="ia-id">
+          <div><dt>نام</dt><dd>{name || '—'}</dd></div>
+          <div><dt>کدِ ملی</dt><dd dir="ltr">{faDigits(who?.nationalId ?? d.nationalId ?? '—')}</dd></div>
+          <div><dt>موبایل</dt><dd dir="ltr">{faDigits(who?.phone ?? d.phone ?? '—')}</dd></div>
+          {who?.code && <div><dt>پرونده</dt><dd dir="ltr">{who.code}</dd></div>}
+          {birth && <div><dt>تاریخِ تولد</dt><dd>{faDate(birth)}</dd></div>}
+        </dl>
+      ) : (
+        <div className="ia-id-edit">
+          <div className="ia-grid">
+            <label className="ia-field"><span>نام</span>
+              <input value={v.firstName} disabled={busy} autoFocus onChange={(e) => setV((x) => ({ ...x, firstName: e.target.value }))} /></label>
+            <label className="ia-field"><span>نام خانوادگی</span>
+              <input value={v.lastName} disabled={busy} onChange={(e) => setV((x) => ({ ...x, lastName: e.target.value }))} /></label>
+            <label className="ia-field"><span>موبایل</span>
+              <input dir="ltr" inputMode="numeric" value={v.phone} disabled={busy} onChange={(e) => setV((x) => ({ ...x, phone: e.target.value }))} /></label>
+          </div>
+          <p className="ia-note">کدِ ملی کلیدِ پرونده است و این‌جا عوض نمی‌شود؛ اگر اشتباه است، ثبت‌نام را رد کنید تا بیمار با کدِ درست ثبت‌نام کند.</p>
+          <div className="ia-acts">
+            <button type="button" className="ia-ok" disabled={busy} onClick={save}>{busy ? 'در حال ذخیره…' : 'ذخیرهٔ هویت'}</button>
+            <button type="button" className="ia-ghost" disabled={busy} onClick={() => setEdit(false)}>انصراف</button>
+          </div>
+        </div>
+      )}
+      {err && <p className="ia-note warn">{err}</p>}
+    </section>
   );
 }
 
@@ -345,11 +446,25 @@ function ReceiptZoom({ url, onClose }) {
 }
 
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
-function ApproveSheet({ row, onClose, onDone, onZoom }) {
+function ApproveSheet({ row, onClose, onDone, onZoom, onChanged }) {
   const { user: me } = useAuth();
-  const { vertical } = useConfig();
-  const workflow = row.workflow || vertical;
-  const targetKind = row.approvalKind || (workflow === 'clinic' ? 'clinic' : 'surgery');
+  const cfg = useConfig();
+  /* پروندهٔ بیمار — کارتِ هویت اصلاحش می‌کند و سربرگ همان را نشان می‌دهد. */
+  const [who, setWho] = useState(row.patient ?? null);
+  /* مدارک از سرور (`intake-docs.ts`)؛ fallbackِ پایین فقط برای پاسخِ سرورِ قدیمی. */
+  const receipts = receiptsOf(row);
+  const documents = row.documents ?? (Array.isArray(row.data?.prescription) ? row.data.prescription : row.data?.prescription?.id ? [row.data.prescription] : [])
+    .map((doc) => ({ ...doc, label: 'دستور جراح' }));
+  /* نوعِ نصب از **خودِ ردیف** (سرور)، نه کانفیگِ کش‌شدهٔ رابط: «الزامی»ِ جراح و
+     بیمارستان باید همان قاعده‌ای باشد که `approve()` اجرا می‌کند. */
+  const company = (row.profileKind ?? cfg.kind) === 'company';
+  /* ⚠️ خدمتِ **همین ثبت‌نام** از سرور (`intake-service-of.ts`)، نه حوزهٔ کلِ
+     شرکت: شرکتِ دوخدمته هر دو نوع را در یک صف دارد. کلاینتِ کش‌شده‌ای که
+     `service` نمی‌گیرد به همان `workflow`ِ قدیمی برمی‌گردد. فقط فرمِ دلخواه در
+     شرکتِ دوخدمته مبهم است و تأییدکننده انتخابش می‌کند. */
+  const [service, setService] = useState(row.service !== undefined ? row.service : (row.workflow && row.workflow !== 'clinic' ? row.workflow : null));
+  const workflow = service;
+  const targetKind = row.approvalKind || (cfg.kind === 'clinic' ? 'clinic' : 'surgery');
   const [fields, setFields] = useState(null), [requiredItems, setRequiredItems] = useState([]), [itemsTouched, setItemsTouched] = useState(false);
   const [extra, setExtra] = useState(row.data ?? {});
   /**
@@ -444,6 +559,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
           registerPayment: f.registerPayment,
           bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
           extra: Object.fromEntries((fields ?? []).filter(field => !field.builtin && field.active !== false).map(field => [field.key, extra[field.key]])),
+          ...(row.makesVisit !== false && row.serviceAmbiguous && service ? { service } : {}),
           ...(workflow === 'implant' ? { requiredItems: requiredItems.map(({ itemId, quantity, notes }) => ({ itemId, quantity, notes: notes || '' })) } : {}),
         },
       });
@@ -457,95 +573,143 @@ function ApproveSheet({ row, onClose, onDone, onZoom }) {
   return (
     <Overlay backdrop="ia-overlay" panel="ia-sheet" as="section" onClose={onClose} closable={!busy}>
       <header className="ia-sheet-head">
-        <b>تأییدِ {row.data?.firstName} {row.data?.lastName}</b>
+        <b>تأییدِ {who ? `${who.firstName} ${who.lastName}` : `${row.data?.firstName ?? ''} ${row.data?.lastName ?? ''}`}</b>
         <button type="button" className="ia-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <div className="ia-sheet-body">
-        <p className="ia-note">
-          بیمار نوشته: {[row.data?.procedure, row.data?.surgeonName, row.data?.hospitalName].filter(Boolean).join(' · ') || '—'}
-        </p>
-        {/* ⚠️ فرمِ زیرپرونده مراجعه نمی‌سازد، پس جراح/بیمارستان/تاریخ و ردیفِ
-            پرداخت برایش بی‌معنی‌اند — نشان‌دادنشان یعنی ادمین چیزی را انتخاب
-            کند که هیچ‌جا نمی‌نشیند. */}
-        {row.makesVisit === false && (
-          <p className="ia-note">
-            فرمِ «{row.formTitle}» زیرپرونده است: با تأیید، پاسخ‌ها به پروندهٔ
-            بیمار می‌چسبند و <b>مراجعه‌ای ساخته نمی‌شود</b>.
-          </p>
-        )}
-        {/* ⚠️ فیش **بالای** انتخابگرهاست و نه در یک صفحهٔ دیگر: تأیید یعنی
-            «پول رسیده»، و تصمیمِ مالی نباید بدونِ دیدنِ مدرک گرفته شود. */}
-        <div className="ia-money">
-          <span>مبلغ: <b>{faNum(row.amount)} تومان</b></span>
-          {row.discountAmount > 0 && (
-            <span className="off">تخفیف {faNum(row.discountAmount)} با کدِ {row.discountCode}</span>
+        {/* ⚠️ سه کارت به ترتیبِ کارِ تأییدکننده (مالک، ۱۴۰۵/۰۷/۰۱): **چه کسی** (هویت)،
+            **چه کاری** (خدمت: متنِ بیمار + مدارک + گره‌زدن به تعاریف)، **چه پولی**
+            (پرداخت: فیش‌ها + ثبتِ پرداخت). فیش کنارِ همان تیکِ «پرداخت ثبت شود» و بالای
+            دکمهٔ تأیید است — تصمیمِ مالی بدونِ دیدنِ مدرک گرفته نمی‌شود. */}
+        <IdentityCard row={row} who={who} onSaved={(p) => { setWho(p); onChanged?.(); }} />
+
+        <section className="ia-block" aria-labelledby={`ia-b-svc-${row.id}`}>
+          <h3 id={`ia-b-svc-${row.id}`}>
+            <Scalpel width="15" height="15" /> {row.makesVisit === false ? 'فرم' : 'خدمت'}
+            {row.makesVisit !== false && row.serviceLabel && !row.serviceAmbiguous && cfg.services?.length > 1 && (
+              <span className="ia-tag ia-svc">{row.serviceLabel}</span>
+            )}
+          </h3>
+          {/* ⚠️ فقط فرمِ **دلخواه** در شرکتِ دوخدمته مبهم است؛ پیش‌فرض خدمتِ اصلی
+              است و تأییدکننده عوضش می‌کند (ردیف‌های ایمپلنت به همین بسته‌اند). */}
+          {row.makesVisit !== false && row.serviceAmbiguous && cfg.services.length > 1 && (
+            <div className="ia-svc-pick" role="radiogroup" aria-label="خدمتِ این ثبت‌نام">
+              <span>خدمت:</span>
+              {cfg.services.map((key) => (
+                <button key={key} type="button" role="radio" aria-checked={service === key} disabled={busy}
+                        className={`ia-chip${service === key ? ' on' : ''}`} onClick={() => setService(key)}>
+                  {cfg.serviceCatalog?.find((x) => x.key === key)?.label ?? key}
+                </button>
+              ))}
+            </div>
           )}
-          <span className="pay">قابلِ پرداخت: <b>{faNum(row.payable ?? row.amount)} تومان</b></span>
-        </div>
-        {/* ⚠️ بزرگ‌نمایی **در والد** رندر می‌شود نه این‌جا: پوششِ `fixed` داخلِ
-            پنلی که `transform` دارد نسبت به همان پنل جا می‌گیرد، نه صفحه —
-            همان تلهٔ آشنای شیت‌های تودرتو. */}
-        <Receipt documentId={row.data?.receiptDocumentId} onOpen={onZoom} />
-        {(Array.isArray(row.data?.prescription) ? row.data.prescription : row.data?.prescription?.id ? [row.data.prescription] : []).map(doc => <Receipt key={doc.id} documentId={doc.id} fileName={doc.name} onOpen={onZoom} label="دستور جراح" />)}
-        {row.makesVisit !== false && (
-        <div className="ia-grid">
-          {/* ⚠️ **سه** حالت، نه دو تا — و این یکی با نگاه‌کردن به صفحه پیدا شد:
-              نسخهٔ قبلی هرچه «پیشنهادی» نبود را «ثبت‌شده بیمار» می‌خواند. برای
-              بیمارستان بی‌ضرر بود چون بیمار واقعاً کشویی دارد و `selected`
-              می‌شود؛ ولی جراح و نوعِ عمل کشویی ندارند، پس حالتِ رایجشان
-              `exact` است — یعنی **ماشین** متن را دقیق مچ کرده، نه اینکه بیمار
-              انتخابش کرده باشد. آن برچسب به کاربر می‌گفت به حدس به‌اندازهٔ
-              انتخابِ خودِ بیمار اعتماد کن.
-              ⚠️ و هر یادداشت به دیده‌شدنِ **کنترلِ خودش** گره خورده: یادداشت
-              دربارهٔ فیلدی که در این فرم وجود ندارد، هم اضافه است هم گمراه‌کننده
-              (متنِ خامِ بیمار بالای همین پنل هست). */}
-          {[
-            ['hospital', 'بیمارستان', visible('hospitalId')],
-            /* برچسبِ یادداشت باید با برچسبِ **کنترلِ خودش** یکی باشد: در حوزهٔ
-               مطب کنترل «پزشک» است و یادداشتِ «جراح» کنارش یعنی دو چیزِ متفاوت. */
-            ['surgeon', targetKind === 'clinic' ? 'پزشک' : 'جراح', visible('surgeonId') || needs('surgeonId')],
-            ['procedure', 'نوعِ عمل', visible('procedureTypeId')],
-          ].map(([k, label, on]) => on && match[k] && (
-            <p key={k} className="ia-note">
-              {label} {{
-                selected: 'ثبت‌شدهٔ خودِ بیمار',
-                suggested: 'پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید',
-              }[match[k].source] ?? 'مطابقِ دقیقِ نوشتهٔ بیمار'}: {match[k].name}
-            </p>))}
-          {(visible('surgeonId') || needs('surgeonId')) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : needs('surgeonId') ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
-          {visible('hospitalId') && <ApprovalSelect field="hospitalId" section="hospitals" label="بیمارستان" list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
-          {visible('techId') && <ApprovalSelect field="techId" section="techs" label={needs('techId') ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
-          {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />}
-          {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}
-                 onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />}
-          {visible('opStartTime') && <TimePick className="ia-field" label={targetKind === 'clinic' ? 'ساعت مراجعه' : 'ساعتِ عمل'} value={f.opStartTime}
-                    onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />}
-        </div>
-        )}
-        {row.makesVisit !== false && workflow === 'implant' && <RequiredItems value={requiredItems} onChange={rows => { setItemsTouched(true); setRequiredItems(rows); }} disabled={busy} />}
-        {row.makesVisit !== false && fields?.some(field => !field.builtin && field.active !== false) && <DynForm assistance fields={fields.filter(field => !field.builtin && field.active !== false)} values={extra} onChange={setExtra} disabled={busy} myRole={me?.level >= 6 ? null : me?.jobRole} />}
-        {/* ⚠️ ثبتِ پرداخت همین‌جاست چون همین‌جا فیش جلوی چشمِ ادمین است و
-            می‌داند پول کجا نشسته. نسخهٔ اول پرداخت ثبت نمی‌کرد و نتیجه‌اش
-            مراجعهٔ تأییدشده‌ای بود که کلِ مبلغش «مانده» می‌ماند. */}
-        {row.makesVisit !== false && (row.payable ?? row.amount) > 0 && (
-        <div className="ia-pay">
-          <label className="ia-check">
-            <input type="checkbox" checked={f.registerPayment} disabled={busy}
-                   onChange={(e) => setF((s) => ({ ...s, registerPayment: e.target.checked }))} />
-            <span>پرداختِ {faNum(row.payable ?? row.amount)} تومان ثبت شود</span>
-          </label>
-          {f.registerPayment && (
-            <label className="ia-field">
-              <span>به کدام حساب واریز شده؟</span>
-              <select value={f.bankAccountId} disabled={busy}
-                      onChange={(e) => setF((s) => ({ ...s, bankAccountId: e.target.value }))}>
-                <option value="">— نامشخص —</option>
-                {refs.banks.map((b) => <option key={b.id} value={b.id}>{[b.ownerName, b.bankName].filter(Boolean).join(" — ")}</option>)}
-              </select>
+          {/* ⚠️ فرمِ زیرپرونده مراجعه نمی‌سازد، پس جراح/بیمارستان/تاریخ و ردیفِ
+              پرداخت برایش بی‌معنی‌اند — نشان‌دادنشان یعنی ادمین چیزی را انتخاب
+              کند که هیچ‌جا نمی‌نشیند. */}
+          {row.makesVisit === false && (
+            <p className="ia-note">
+              فرمِ «{row.formTitle}» زیرپرونده است: با تأیید، پاسخ‌ها به پروندهٔ
+              بیمار می‌چسبند و <b>مراجعه‌ای ساخته نمی‌شود</b>.
+            </p>
+          )}
+          {row.makesVisit !== false && (
+            <p className="ia-note">
+              بیمار نوشته: {[row.data?.procedure, row.data?.surgeonName, row.data?.hospitalName].filter(Boolean).join(' · ') || '—'}
+            </p>
+          )}
+          {(row.data?.opDateOpen === true || row.data?.opDateOpen === 'true') && (
+            <p className="ia-note warn">بیمار «رزرو بدون تاریخ» زده: می‌توانید بی‌تاریخ تأیید کنید و تاریخِ عمل را بعداً روی مراجعه بگذارید.</p>
+          )}
+          {/* مدارکِ فرم (کارت ملی، دستور پزشک…) با برچسبِ کادرِ خودشان — از سرور. ⚠️ بزرگ‌نمایی
+              **در والد** رندر می‌شود: پوششِ `fixed` داخلِ پنلی که `transform` دارد نسبت به همان
+              پنل جا می‌گیرد، نه صفحه — همان تلهٔ آشنای شیت‌های تودرتو. */}
+          {documents.length > 0 && (
+            <div className="ia-docs">
+              {documents.map((doc) => <Receipt key={doc.id} documentId={doc.id} fileName={doc.name} pdf={doc.pdf} onOpen={onZoom} label={doc.label} />)}
+            </div>
+          )}
+          {row.makesVisit !== false && (
+          <div className="ia-grid">
+            {/* ⚠️ **سه** حالت، نه دو تا — و این یکی با نگاه‌کردن به صفحه پیدا شد:
+                نسخهٔ قبلی هرچه «پیشنهادی» نبود را «ثبت‌شده بیمار» می‌خواند. برای
+                بیمارستان بی‌ضرر بود چون بیمار واقعاً کشویی دارد و `selected`
+                می‌شود؛ ولی جراح و نوعِ عمل کشویی ندارند، پس حالتِ رایجشان
+                `exact` است — یعنی **ماشین** متن را دقیق مچ کرده، نه اینکه بیمار
+                انتخابش کرده باشد. آن برچسب به کاربر می‌گفت به حدس به‌اندازهٔ
+                انتخابِ خودِ بیمار اعتماد کن.
+                ⚠️ و هر یادداشت به دیده‌شدنِ **کنترلِ خودش** گره خورده: یادداشت
+                دربارهٔ فیلدی که در این فرم وجود ندارد، هم اضافه است هم گمراه‌کننده
+                (متنِ خامِ بیمار بالای همین پنل هست). */}
+            {[
+              ['hospital', 'بیمارستان', visible('hospitalId')],
+              /* برچسبِ یادداشت باید با برچسبِ **کنترلِ خودش** یکی باشد: در حوزهٔ
+                 مطب کنترل «پزشک» است و یادداشتِ «جراح» کنارش یعنی دو چیزِ متفاوت. */
+              ['surgeon', targetKind === 'clinic' ? 'پزشک' : 'جراح', visible('surgeonId') || needs('surgeonId')],
+              ['procedure', 'نوعِ عمل', visible('procedureTypeId')],
+            ].map(([k, label, on]) => on && match[k] && (
+              <p key={k} className="ia-note">
+                {label} {{
+                  selected: 'ثبت‌شدهٔ خودِ بیمار',
+                  suggested: 'پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید',
+                }[match[k].source] ?? 'مطابقِ دقیقِ نوشتهٔ بیمار'}: {match[k].name}
+              </p>))}
+            {(visible('surgeonId') || needs('surgeonId') || company) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : (company || needs('surgeonId')) ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
+            {(visible('hospitalId') || company) && <ApprovalSelect field="hospitalId" section="hospitals" label={company ? 'بیمارستان (الزامی)' : 'بیمارستان'} list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
+            {visible('techId') && <ApprovalSelect field="techId" section="techs" label={needs('techId') ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
+            {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />}
+            {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}
+                   onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />}
+            {visible('opStartTime') && <TimePick className="ia-field" label={targetKind === 'clinic' ? 'ساعت مراجعه' : 'ساعتِ عمل'} value={f.opStartTime}
+                      onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />}
+          </div>
+          )}
+          {row.makesVisit !== false && workflow === 'implant' && <RequiredItems prescribing stock value={requiredItems} onChange={rows => { setItemsTouched(true); setRequiredItems(rows); }} disabled={busy} />}
+          {row.makesVisit !== false && fields?.some(field => !field.builtin && field.active !== false) && <DynForm assistance fields={fields.filter(field => !field.builtin && field.active !== false)} values={extra} onChange={setExtra} disabled={busy} myRole={me?.level >= 6 ? null : me?.jobRole} />}
+        </section>
+
+        <section className="ia-block" aria-labelledby={`ia-b-pay-${row.id}`}>
+          <h3 id={`ia-b-pay-${row.id}`}><Bank width="15" height="15" /> پرداخت</h3>
+          <div className="ia-money">
+            <span>مبلغ: <b>{faNum(row.amount)} تومان</b></span>
+            {row.discountAmount > 0 && (
+              <span className="off">تخفیف {faNum(row.discountAmount)} با کدِ {row.discountCode}</span>
+            )}
+            <span className="pay">قابلِ پرداخت: <b>{faNum(row.payable ?? row.amount)} تومان</b></span>
+          </div>
+          {/* **همهٔ** فیش‌ها، نه فقط اولی — بیماری که دو قسط واریز کرده دو فیش دارد. */}
+          {receipts.length > 0 ? (
+            <div className="ia-docs">
+              {receipts.map((doc, n) => (
+                <Receipt key={doc.id} documentId={doc.id} fileName={doc.name} pdf={doc.pdf} onOpen={onZoom}
+                         label={receipts.length > 1 ? `فیشِ ${faNum(n + 1)}` : 'فیشِ واریزی'} />
+              ))}
+            </div>
+          ) : (row.payable ?? row.amount) > 0 && (
+            <p className="ia-note warn"><Alert width="13" height="13" /> فیشی آپلود نشده است</p>
+          )}
+          {/* ⚠️ ثبتِ پرداخت همین‌جاست چون همین‌جا فیش جلوی چشمِ ادمین است و
+              می‌داند پول کجا نشسته. نسخهٔ اول پرداخت ثبت نمی‌کرد و نتیجه‌اش
+              مراجعهٔ تأییدشده‌ای بود که کلِ مبلغش «مانده» می‌ماند. */}
+          {row.makesVisit !== false && (row.payable ?? row.amount) > 0 && (
+          <div className="ia-pay">
+            <label className="ia-check">
+              <input type="checkbox" checked={f.registerPayment} disabled={busy}
+                     onChange={(e) => setF((s) => ({ ...s, registerPayment: e.target.checked }))} />
+              <span>پرداختِ {faNum(row.payable ?? row.amount)} تومان ثبت شود</span>
             </label>
+            {f.registerPayment && (
+              <label className="ia-field">
+                <span>به کدام حساب واریز شده؟</span>
+                <select value={f.bankAccountId} disabled={busy}
+                        onChange={(e) => setF((s) => ({ ...s, bankAccountId: e.target.value }))}>
+                  <option value="">— نامشخص —</option>
+                  {refs.banks.map((b) => <option key={b.id} value={b.id}>{[b.ownerName, b.bankName].filter(Boolean).join(" — ")}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
           )}
-        </div>
-        )}
+        </section>
 
         {err && <p className="ia-note warn">{err}</p>}
         <button type="button" className="ia-ok" disabled={busy} onClick={save}>

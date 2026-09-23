@@ -6,6 +6,7 @@ import JDate from './JDate.jsx';
 import { toEnDigits } from '../lib/identity.js';
 import InvoicePanel from './InvoicePanel.jsx';
 import { useConfig } from './config.jsx';
+import { hasService } from '../lib/profile.js';
 import { Alert, Close, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -270,7 +271,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
           {tab === 'invoice' ? (
             <>
               <InvoiceAccount data={data} banks={banks} visitId={visit.id} onSaved={setData} onToast={onToast} />
-              <InvoicePanel visit={visit} billing={data} neuro={cfg.vertical === 'ionm'} onToast={onToast} reload={async () => { await load(); onChanged?.(); }} />
+              <InvoicePanel visit={visit} billing={data} neuro={hasService(cfg, 'ionm')} onToast={onToast} reload={async () => { await load(); onChanged?.(); }} />
             </>
           ) : tab === 'split' ? (
             <Settlement visitId={visit.id} onToast={onToast} onChanged={onChanged} />

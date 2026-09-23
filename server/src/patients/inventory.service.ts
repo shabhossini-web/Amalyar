@@ -139,6 +139,31 @@ export class InventoryService {
     return opts.inStock ? rows.filter((r) => r.quantity > 0) : rows;
   }
 
+  /**
+   * موجودیِ **در دسترسِ** هر کالا — جمعِ `available`ِ لات‌های منقضی‌نشده در انبارِ خودمان.
+   *
+   * برای انتخابگرِ اقلامِ ثبت‌نامِ ایمپلنت: فقط **نشان** می‌دهد، رزرو نمی‌کند (تصمیمِ مالک،
+   * ۱۴۰۵/۰۷/۰۱). ⚠️ همان `shapeLot`ِ فهرستِ لات‌ها، نه جمعِ دوباره‌ای از حرکت‌ها — دو تعریف از
+   * «موجودی» یعنی دو عددِ متفاوت در دو صفحه. لاتِ منقضی شمرده نمی‌شود چون مصرفش مسدود است.
+   */
+  async availability(itemIds: number[]) {
+    const ids = [...new Set(itemIds.filter((n) => Number.isInteger(n) && n > 0))].slice(0, 100);
+    if (!ids.length) return [];
+    const lots = await this.prisma.stockLot.findMany({ where: { itemId: { in: ids } }, include: { item: { select: { id: true, name: true, brand: true, size: true, sku: true, unit: true, price: true } } } });
+    const sums = lots.length
+      ? await this.prisma.stockMovement.groupBy({ by: ['lotId', 'location'], where: { lotId: { in: lots.map((l) => l.id) } }, _sum: { quantity: true } })
+      : [];
+    const byLot = new Map<number, { quantity: number; location: string | null }[]>();
+    for (const x of sums) byLot.set(x.lotId, [...(byLot.get(x.lotId) ?? []), { quantity: x._sum.quantity ?? 0, location: x.location }]);
+    const home = await this.home();
+    const total = new Map<number, number>();
+    for (const l of lots) {
+      const shaped = this.shapeLot(l, byLot.get(l.id) ?? [], home);
+      if (!shaped.expired && shaped.available > 0) total.set(l.itemId, (total.get(l.itemId) ?? 0) + shaped.available);
+    }
+    return ids.map((itemId) => ({ itemId, available: total.get(itemId) ?? 0 }));
+  }
+
   /** لات‌های قابلِ مصرفِ یک کالا — ورودیِ انتخابگرِ فاکتور. */
   async availableFor(itemId: number) {
     const rows = await this.listLots({ itemId, inStock: true });

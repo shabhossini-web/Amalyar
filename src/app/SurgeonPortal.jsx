@@ -347,7 +347,7 @@ function VisitsPane({ clinic, things, reloadRef, access }) {
       {error && <p className="bl-error" role="alert">{error}</p>}
       {!data && !error && <p className="sp-empty">در حال بارگذاری…</p>}
       {data?.rows.length === 0 && <p className="sp-empty">مراجعه‌ای برای نمایش نیست. انتسابِ پزشک هر مراجعه از تعاریف پایه بررسی می‌شود.</p>}
-      <div className="sp-list">{data?.rows.map((row) => <SurgeonCase key={row.id} row={row} clinic={clinic} implant={data.workflow === 'implant'} reload={load} things={things} access={access} />)}</div>
+      <div className="sp-list">{data?.rows.map((row) => <SurgeonCase key={row.id} row={row} clinic={clinic} implant={row.implant ?? data.workflow === 'implant'} reload={load} things={things} access={access} />)}</div>
       {data && <nav className="sp-pagination" aria-label="صفحه‌های مراجعات"><button className="bl-mini" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>قبلی</button><span>{faNum(page)} از {faNum(data.pages)} · {faNum(data.total)} مراجعه</span><button className="bl-mini" disabled={page >= data.pages} onClick={() => setPage((p) => p + 1)}>بعدی</button></nav>}
     </>
   );

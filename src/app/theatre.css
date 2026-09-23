@@ -197,6 +197,9 @@
 .th-box-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text2); }
 .th-box-list li b { color: var(--text1); }
 .th-box-list li em { font-style: normal; font-size: 11.5px; color: var(--text3); }
+/* «طبقِ نسخه» کنارِ تعدادِ برنامه؛ اگر فرق دارد کهربایی — تیم باید ببیند که از نسخه کم یا زیاد می‌برد. */
+.th-rx { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12); }
+.th-rx.diff { color: var(--amber-text); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .4); }
 .th-note p { margin: 0; font-size: 14px; line-height: 1.9; white-space: pre-wrap; }
 
 .th-toast {
