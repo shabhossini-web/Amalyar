@@ -6,6 +6,12 @@ since: 2026-09-23
 paths:
   - server/src/config/tenant-profile.ts
   - server/src/config/config.service.ts
+  - server/src/config/config.controller.ts
+  - src/app/Settings.jsx
+  - src/app/settings.css
+  - scripts/e2e/tenant-profile-write.mjs
+  - scripts/e2e/tenant-profile-write-local.mjs
+  - scripts/e2e/tenant-profile-ui.mjs
   - server/src/patients/labels.ts
   - server/src/patients/intake-service-of.ts
   - server/src/patients/intake.service.ts
@@ -44,6 +50,14 @@ note: >-
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
 
 ## قراردادهایی که شکستم
+
+- ۱۴۰۵/۰۷/۰۱ · **`PATCH /config/profile`** `{kind, services}` و **`POST /config/profile/preview`**
+  (سوپرادمین). ماژول‌ها فقط جایی عوض می‌شوند که عضویتشان در پلان عوض شده — سطح و خاموشِ
+  دست‌خورده می‌مانند (`featureChanges`). `PATCH /config/vertical` برای سوییت‌ها و بازگشت
+  می‌ماند با همان رفتارِ قدیمی (بازچینیِ کامل) + پاک‌کردنِ ردیفِ `services`.
+- ۱۴۰۵/۰۷/۰۱ · **فرمِ ثبت‌نام به‌ازای هر خدمت:** شرکتِ دوخدمته `intake.ionm` و
+  `intake.implant` هر دو را نصب می‌کند و `/intake/link-options` هر دو را `recommended`
+  می‌دهد (قبلاً دقیقاً یکی). نصب با پرچمِ `registration_<key>_installed` (همان کلیدهای قبلی).
 
 - ۱۴۰۵/۰۷/۰۱ · **تأییدِ ثبت‌نام در شرکت** (تصمیمِ مالک): جراح **و بیمارستانِ** تعریف‌شده برای
   هر دو خدمت الزامی است؛ بیمارستانِ «پیشنهادی» (تطبیقِ فازی) دیگر خودکار نمی‌نشیند (دقیق/مستعار/انتخابِ

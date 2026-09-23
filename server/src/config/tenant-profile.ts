@@ -21,6 +21,8 @@
  * بازچینیِ ماژولی لازم نیست.
  */
 
+import { VERTICALS } from './verticals';
+
 /** دو نوعِ نصب. کلیدِ `clinic` عمداً همان کلیدِ حوزهٔ قدیمی است. */
 export const TENANT_KINDS = {
   clinic: { label: 'مطب / کلینیک' },
@@ -98,4 +100,78 @@ export function profileOf(vertical: 'clinic' | ServiceKey, servicesRaw: string |
 export function profileLabel(p: TenantProfile): string {
   if (p.kind === 'clinic') return TENANT_KINDS.clinic.label;
   return `${TENANT_KINDS.company.label} — ${p.services.map((s) => SERVICES[s].label).join(' و ')}`;
+}
+
+/**
+ * **پلانِ ماژول‌های یک پروفایل** — `key → حداقلِ سطح`.
+ *
+ * مطب همان پلانِ مطب؛ شرکت **اجتماعِ** پلانِ خدماتش. وقتی دو خدمت برای یک
+ * ماژول سطحِ متفاوت دارند (حسابداری ۵ و ۴، انبار ۳ و ۲)، **سطحِ بازتر** —
+ * تصمیمِ پیش‌فرضِ مالک: خدمتی که ماژول را بیشتر لازم دارد تعیین می‌کند
+ * (ردیابیِ سریالِ ایمپلنت از سطحِ کارشناس)، و سوپرادمین بعداً از «دسترسی‌ها»
+ * تنگش می‌کند.
+ */
+export function featurePlanForProfile(kind: TenantKind, services: readonly ServiceKey[]): Record<string, number> {
+  const plans = kind === 'clinic' ? [VERTICALS.clinic.features] : services.map((s) => VERTICALS[s].features);
+  const out: Record<string, number> = {};
+  for (const plan of plans) {
+    for (const [key, level] of Object.entries(plan as Record<string, number>)) {
+      out[key] = key in out ? Math.min(out[key], level) : level;
+    }
+  }
+  return out;
+}
+
+/** اعتبارسنجیِ پروفایلِ درخواستی؛ خطای فارسی یا `null`. */
+export function profileError(kind: unknown, services: unknown): string | null {
+  if (kind !== 'clinic' && kind !== 'company') return 'نوعِ نصب باید «مطب / کلینیک» یا «شرکتی» باشد';
+  const list = Array.isArray(services) ? services : [];
+  if (list.some((s) => !isServiceKey(s))) return 'خدمتِ انتخاب‌شده نامعتبر است';
+  if (kind === 'clinic' && list.length) return 'مطب / کلینیک بستهٔ خدمات ندارد';
+  if (kind === 'company' && !list.length) return 'دست‌کم یک خدمت انتخاب کنید';
+  return null;
+}
+
+/** پروفایلِ تمیزشدهٔ یک درخواستِ معتبر — همان شکلی که `profileOf` برمی‌گرداند. */
+export function requestedProfile(kind: TenantKind, services: readonly string[]): TenantProfile {
+  if (kind === 'clinic') return { kind, services: [], primary: 'clinic' };
+  const list = normalizeServices(services);
+  return { kind, services: list, primary: primaryOf(list) };
+}
+
+/**
+ * **تغییرِ ماژول‌ها وقتی پروفایل عوض می‌شود — فقط آنچه عضویتش عوض شده.**
+ *
+ * ⚠️ `setVertical`ِ قدیمی هر ماژولِ پلان را به سطحِ پیش‌فرض برمی‌گرداند و
+ * روشن می‌کرد؛ یعنی اولین «ذخیره» سطح‌هایی را که شرکت در «دسترسی‌ها» تنظیم کرده
+ * بود و ماژول‌هایی را که عمداً خاموش کرده بود، بی‌صدا به پیش‌فرض برمی‌گرداند.
+ * این‌جا:
+ *  - ماژولی که **تازه** در پلان آمده: اگر ردیف ندارد ساخته، اگر خاموش است روشن می‌شود.
+ *  - ماژولی که از پلان **بیرون** رفته: خاموش (نه حذف — برگشت همان تنظیم را پس می‌دهد).
+ *  - ماژولی که در هر دو هست: فقط اگر سطحش **هنوز همان پیش‌فرضِ قبلی** است، به
+ *    پیش‌فرضِ تازه می‌رود؛ سطحِ دست‌خورده دست نمی‌خورد، روشن/خاموشش هم.
+ *  - ماژولی که در هیچ‌کدام نیست: دست نمی‌خورد.
+ */
+export interface FeatureRow { key: string; minLevel: number; enabled: boolean }
+export interface FeatureChange { key: string; action: 'create' | 'enable' | 'disable' | 'relevel'; minLevel?: number; from?: number }
+export function featureChanges(before: TenantProfile, after: TenantProfile, rows: readonly FeatureRow[]): FeatureChange[] {
+  const pb = featurePlanForProfile(before.kind, before.services);
+  const pa = featurePlanForProfile(after.kind, after.services);
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  const out: FeatureChange[] = [];
+  for (const [key, level] of Object.entries(pa)) {
+    const row = byKey.get(key);
+    if (!row) { out.push({ key, action: 'create', minLevel: level }); continue; }
+    if (!(key in pb)) {
+      if (!row.enabled) out.push({ key, action: 'enable', minLevel: level, from: row.minLevel });
+      continue;
+    }
+    if (row.minLevel === pb[key] && level !== pb[key]) out.push({ key, action: 'relevel', minLevel: level, from: row.minLevel });
+  }
+  for (const key of Object.keys(pb)) {
+    if (key in pa) continue;
+    const row = byKey.get(key);
+    if (row?.enabled) out.push({ key, action: 'disable', from: row.minLevel });
+  }
+  return out;
 }

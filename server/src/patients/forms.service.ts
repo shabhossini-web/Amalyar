@@ -412,10 +412,26 @@ export class FormsService {
     return kinds.find(k => k.kind === preferred)?.kind ?? kinds[0]?.kind ?? preferred;
   }
 
-  /** One additive installation per profile. Never restore a deliberately deleted form. */
+  /**
+   * فرمِ ثبت‌نامِ هر خدمتِ انتخاب‌شده — یک‌بار، افزایشی. فرمی که مدیر عمداً
+   * پاک کرده دوباره ساخته نمی‌شود (پرچمِ `registration_<key>_installed`).
+   *
+   * ⚠️ شرکتِ دوخدمته **دو** فرم می‌گیرد (نورومانیتورینگ و ایمپلنت) و برای هر
+   * خدمت لینکِ جدا می‌سازد (تصمیمِ مالک ۱۴۰۵/۰۷/۰۱). تا دیروز فقط فرمِ حوزهٔ
+   * شرکت نصب می‌شد.
+   */
   private async ensureRegistrationPreset() {
-    const vertical = await this.config.vertical();
-    const key = { ionm: 'registration_ionm_installed', implant: 'registration_implant_installed', clinic: 'registration_clinic_installed' }[vertical];
+    const profile = await this.config.profile();
+    for (const key of this.registrationKeys(profile)) await this.installRegistration(key);
+  }
+
+  /** کلیدِ پیش‌فرض‌های ثبت‌نامِ یک پروفایل — مطب: `clinic`؛ شرکت: هر خدمت. */
+  registrationKeys(profile: { kind: string; services: readonly string[] }): (keyof typeof REGISTRATION_PRESETS)[] {
+    return (profile.kind === 'clinic' ? ['clinic'] : profile.services) as (keyof typeof REGISTRATION_PRESETS)[];
+  }
+
+  private async installRegistration(vertical: keyof typeof REGISTRATION_PRESETS) {
+    const key = `registration_${vertical}_installed`;
     if ((await this.prisma.setting.findUnique({ where: { key } }))?.value === 'true') return;
     const preset = REGISTRATION_PRESETS[vertical];
     await this.prisma.$transaction(async tx => {

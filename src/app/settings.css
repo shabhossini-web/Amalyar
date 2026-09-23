@@ -16,3 +16,15 @@
 /* 🧪 دادهٔ آزمایشی (موقت) */
 .st-testrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 .st-nid { font-size: 15px; letter-spacing: .08em; padding: 6px 10px; border-radius: 8px; background: rgba(var(--veil-rgb), .06); }
+
+/* نوعِ نصب و خدمات — پیش‌نمایشِ تغییر پیش از ذخیره. */
+.st-services { margin-bottom: 12px; }
+.st-profile-acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
+.st-preview {
+  margin: 4px 0 18px; padding: 12px 14px; border-radius: 14px; font-size: 13px; line-height: 2;
+  background: rgba(var(--brand-rgb), .06); border: 1px solid rgba(var(--brand-rgb), .28);
+}
+.st-preview ul { margin: 6px 0; padding-inline-start: 18px; color: var(--text2); }
+.st-preview p { margin: 4px 0; color: var(--text2); }
+.st-preview p.warn { color: var(--amber-text); }
+.st-preview .st-profile-acts { margin-bottom: 0; }

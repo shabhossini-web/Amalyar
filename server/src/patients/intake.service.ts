@@ -196,10 +196,12 @@ export class IntakeService {
    */
   async formsForLinks() {
     await this.forms.list();
-    const vertical = await this.forms.workflow();
-    const recommendedKey = REGISTRATION_PRESETS[vertical].key;
+    /* ⚠️ یک فرمِ پیشنهادی **به‌ازای هر خدمتِ انتخاب‌شده** (شرکتِ دوخدمته دو تا)؛
+       پیش‌فرضِ خدمتی که شرکت ندارد پنهان می‌ماند. لینک‌های زنده‌ای که از قبل به
+       آن اشاره می‌کنند دست نمی‌خورند — فقط در فهرستِ «لینکِ تازه» پیشنهاد نمی‌شود. */
+    const recommended = new Set(this.forms.registrationKeys(await this.forms.profile()).map((k) => REGISTRATION_PRESETS[k].key));
     const rows = await this.prisma.formDef.findMany({
-      where: { active: true, key: { notIn: Object.values(REGISTRATION_PRESETS).map(f => f.key).filter(k => k !== recommendedKey) } },
+      where: { active: true, key: { notIn: Object.values(REGISTRATION_PRESETS).map(f => f.key).filter(k => !recommended.has(k)) } },
       orderBy: [{ scope: 'asc' }, { id: 'asc' }],
       select: {
         id: true, key: true, title: true, color: true, scope: true, visitKind: true,
@@ -207,7 +209,7 @@ export class IntakeService {
       },
     });
     return rows.map((f) => ({
-      recommended: f.key === recommendedKey,
+      recommended: recommended.has(f.key),
       id: f.id, title: f.title, color: f.color, scope: f.scope, visitKind: f.visitKind,
       hasPayment: f.fields.length > 0,
       /* پرشدنش مراجعه می‌سازد؟ `record` نمی‌سازد و همین تفاوتِ اصلی است. */
