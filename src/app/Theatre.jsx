@@ -185,6 +185,12 @@ function DayList({ day, busy, onOpen }) {
 /** کارتِ حینِ عمل. */
 function Card({ card, busy, onAct, onDischarge, onToast }) {
   const { visit: v, patient: p, alerts, items, documents } = card;
+  /* ⚠️ عمل‌ها و تشخیص‌ها از **فهرستِ سرور** خوانده می‌شوند (اصلی اول، بستهٔ
+     ۷) — نه با شکافتنِ برچسبِ «A + B» (قانونِ ۱۵). برچسب فقط وقتی به کار
+     می‌آید که سرورِ قدیمی‌تر هنوز فهرست را نفرستد (فرانت و بک‌اند جدا دیپلوی
+     می‌شوند و چند ثانیه‌ای ناهمگام‌اند). */
+  const procs = v.procedures ?? [];
+  const dxs = v.diagnoses ?? [];
   /* ⚠️ **مدتِ زنده** وقتی عمل در جریان است: سرِ میز «چقدر گذشته» را کسی از
      تفریقِ ذهنیِ دو ساعت در نمی‌آورد. تیکِ نیم‌دقیقه‌ای کافی است و فقط وقتی
      می‌زند که واقعاً در جریان باشد — نه یک تایمرِ همیشه‌روشن روی هر کارت. */
@@ -211,12 +217,25 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
             گروه خونی {p.bloodType ? <b dir="ltr">{p.bloodType}</b> : <b>ثبت نشده</b>}
           </span>
         </p>
-        <p className="th-op">{[v.procedure, v.hospital].filter(Boolean).join(' · ') || '—'}</p>
-        {(v.diagnosis || v.anesthesiaFa) && (
-          <p className="th-dx">
-            {v.diagnosis && <span>تشخیص: <b>{v.diagnosis}</b></span>}
+        {/* ⚠️ `div` نه `p`: فهرست (`ul`) داخلِ پاراگراف HTMLِ نامعتبر است و
+            مرورگر پاراگراف را پیش از فهرست می‌بندد. */}
+        <div className="th-op">
+          {procs.length > 0
+            ? <CodingList items={procs} label="عمل‌ها" />
+            : v.procedure && <span>{v.procedure}</span>}
+          {v.hospital && <span className="th-op-at">{v.hospital}</span>}
+          {!procs.length && !v.procedure && !v.hospital && <span>—</span>}
+        </div>
+        {(dxs.length > 0 || v.diagnosis || v.anesthesiaFa) && (
+          <div className="th-dx">
+            {dxs.length > 0 ? (
+              <div className={`th-dx-set${dxs.length > 1 ? ' multi' : ''}`}>
+                <span className="th-dx-h">{dxs.length > 1 ? 'تشخیص‌ها:' : 'تشخیص:'}</span>
+                <CodingList items={dxs} label="تشخیص‌ها" />
+              </div>
+            ) : v.diagnosis && <span>تشخیص: <b>{v.diagnosis}</b></span>}
             {v.anesthesiaFa && <span>بیهوشی: <b>{v.anesthesiaFa}</b></span>}
-          </p>
+          </div>
         )}
         <p className="th-team">
           {v.surgeon && <span>جراح: <b>{v.surgeon}</b></span>}
@@ -237,8 +256,18 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
       {card.decided && (
         <section className="th-decided" aria-label="ویزیتِ تصمیم">
           <h3>از ویزیتِ تصمیم{card.decided.opDate ? ` — ${faDate(card.decided.opDate)}` : ''}</h3>
+          {/* ⚠️ تشخیص‌های ویزیتِ تصمیم «تشخیصِ **پیش از** عمل»اند و عمداً با همین
+              عنوان جدا می‌آیند: به عمل ارث نمی‌رسند و کپی نمی‌شوند، چون تشخیصِ
+              پس از عمل (بالای کارت) واقعیتِ دیگری است و می‌تواند فرق کند. */}
+          {card.decided.diagnoses?.length > 0 ? (
+            <div className="th-decided-dx">
+              <b>تشخیصِ پیش از عمل</b>
+              <CodingList items={card.decided.diagnoses} label="تشخیصِ پیش از عمل" />
+            </div>
+          ) : card.decided.diagnosis && (
+            <p><b>تشخیصِ پیش از عمل</b><span>{card.decided.diagnosis}</span></p>
+          )}
           {[
-            ['تشخیص', card.decided.diagnosis],
             ['شرحِ حال', card.decided.history],
             ['یافته‌ها', card.decided.findings],
             ['معاینه', card.decided.exam],
@@ -323,6 +352,32 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
         </section>
       )}
     </div>
+  );
+}
+
+/**
+ * **فهرستِ تشخیص‌ها یا عمل‌ها** — همان فهرستِ آمادهٔ سرور (`procedures` /
+ * `diagnoses`؛ بستهٔ ۷).
+ *
+ * ⚠️ ترتیب رتبهٔ بالینیِ سرور است و این‌جا مرتب نمی‌شود؛ اولی همیشه اصلی است.
+ * ⚠️ نشانِ «اصلی» فقط وقتی **دو یا بیشتر** مورد هست: روی تک‌مورد هیچ خبری
+ * نمی‌دهد و فقط سطرِ سرِ میز را شلوغ می‌کند — تک‌مورد درست مثلِ دیروز دیده
+ * می‌شود.
+ * ⚠️ کدِ ICD با `dir="ltr"` (قانونِ ۹): «M51.1» در متنِ راست‌به‌چپ بی‌آن
+ * نقطه‌اش جابه‌جا می‌شود.
+ */
+function CodingList({ items, label }) {
+  const multi = items.length > 1;
+  return (
+    <ul className={`th-codes${multi ? ' multi' : ''}`} aria-label={label}>
+      {items.map((it) => (
+        <li key={`${it.rank}-${it.id ?? ''}`} className={multi && it.primary ? 'is-primary' : undefined}>
+          <span className="th-code-name">{it.name ?? it.title}</span>
+          {it.icdCode && <span className="th-code-icd" dir="ltr">{it.icdCode}</span>}
+          {multi && it.primary && <span className="th-code-primary">اصلی</span>}
+        </li>
+      ))}
+    </ul>
   );
 }
 

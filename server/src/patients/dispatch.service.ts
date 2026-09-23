@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { kitTemplate, OTHER_PX_KIT, procedureLabel } from './visit-coding';
 
 /**
  * نقش‌هایی که ابلاغِ **per-visit** می‌گیرند.
@@ -116,6 +117,9 @@ export class DispatchService {
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         // الگوی اقلام: «این نوعِ عمل چه می‌خواهد» — برای هشدارِ عملِ بی‌بار.
         procedureType: { select: { name: true, needs: { include: { item: { select: { id: true, name: true, size: true, assetKind: true } } } } } },
+        // بستهٔ ۷ج: عمل‌های همزمانِ همان جلسه — نامشان برای برچسب و نیازشان برای
+        // اجتماعِ کیت (`kitTemplate`). هیچ تشخیصی این‌جا خوانده نمی‌شود.
+        otherProcedures: OTHER_PX_KIT,
         // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
         // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {
@@ -158,7 +162,10 @@ export class DispatchService {
      * چیزی می‌خواهد که در بار نیست). کسری فقط وقتی معنا دارد که الگو تعریف
      * شده باشد — نبودِ الگو یعنی «نمی‌دانیم»، نه «چیزی لازم نیست».
      */
-    const needs = Array.isArray(v.requiredItems) ? v.requiredItems : v.procedureType?.needs ?? [];
+    /* ⚠️ قاعدهٔ override همان دیروز است: هر آرایه‌ای در `requiredItems` (حتی
+       خالی) برنده است. فقط fallbackِ الگو حالا اجتماعِ نیازِ **همهٔ** عمل‌های
+       جلسه است — دو عمل یعنی اقلامِ هر دو، وگرنه کسریِ عملِ دوم دیده نمی‌شد. */
+    const needs = Array.isArray(v.requiredItems) ? v.requiredItems : kitTemplate(v);
     const loaded = new Map<number, number>();
     for (const transfer of v.stockTransfers) for (const move of transfer.movements) {
       if (move.location === transfer.toLocation && move.lot?.itemId) loaded.set(move.lot.itemId, (loaded.get(move.lot.itemId) ?? 0) + move.quantity);
@@ -183,7 +190,9 @@ export class DispatchService {
       techArriveTime: v.techArriveTime,
       cargoDueTime: v.cargoDueTime,
       surgeonName: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName,
-      procedureName: v.procedureType?.name ?? v.opType,
+      /* برچسبِ همهٔ عمل‌ها (اصلی اول، «A + B») — همان کلید. فقط شاخهٔ کارشناسِ
+         `briefingText` آن را می‌خواند؛ راننده و پیک هرگز. تشخیص هیچ‌وقت. */
+      procedureName: procedureLabel(v),
       hospital: v.hospital
         ? { id: v.hospital.id, name: v.hospital.name, address: v.hospital.address, phone: v.hospital.phone, contactName: v.hospital.contactName, contactPhone: v.hospital.contactPhone }
         : (v.hospitalName ? { id: null, name: v.hospitalName, address: null, phone: null, contactName: null, contactPhone: null } : null),
@@ -214,6 +223,9 @@ export class DispatchService {
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         // الگوی اقلام: «این نوعِ عمل چه می‌خواهد» — برای هشدارِ عملِ بی‌بار.
         procedureType: { select: { name: true, needs: { include: { item: { select: { id: true, name: true, size: true, assetKind: true } } } } } },
+        // بستهٔ ۷ج: عمل‌های همزمانِ همان جلسه — نامشان برای برچسب و نیازشان برای
+        // اجتماعِ کیت (`kitTemplate`). هیچ تشخیصی این‌جا خوانده نمی‌شود.
+        otherProcedures: OTHER_PX_KIT,
         // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
         // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {

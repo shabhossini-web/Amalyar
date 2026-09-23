@@ -27,12 +27,16 @@ export default function VisitSummary() {
   if (!data) return <div className="vs-err quiet">در حال بارگذاری…</div>;
 
   const { brand, patient, visit, answers, nextVisitDateFa } = data;
+  /* ⚠️ چند تشخیص (بستهٔ ۷): برچسبِ کامل از سرور می‌آید (اصلی اول) — سندی که
+     به دستِ بیمار می‌رسد نباید تشخیصِ دوم را بیندازد. `diagnosisTitle` فقط
+     fallbackِ سرورِ قدیمی است. `procedure` همین حالا برچسبِ ترکیبی است. */
+  const manyDx = (visit.diagnoses ?? []).length > 1;
   const facts = [
     ['تاریخِ ویزیت', visit.opDateFa],
     ['پزشک', visit.doctorName],
     ['موضوع', visit.topicName],
     ['مرکز', visit.hospitalName],
-    ['تشخیص', visit.diagnosisTitle],
+    [manyDx ? 'تشخیص‌ها' : 'تشخیص', visit.diagnosisLabel ?? visit.diagnosisTitle],
     ['اقدام', visit.procedure],
   ].filter(([, v]) => v);
 

@@ -10,6 +10,10 @@ import { vitalView } from './vitals';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { RecordService } from './record.service';
 import { monthDayCounts } from './month-summary';
+import {
+  diagnosisLabel, diagnosisList, kitTemplate, NEEDS_SELECT, OTHER_DX, OTHER_PX, OTHER_PX_KIT,
+  procedureLabel, procedureList,
+} from './visit-coding';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
@@ -146,6 +150,8 @@ export class TheatreService {
         patient: { select: { id: true, code: true, firstName: true, lastName: true } },
         hospital: { select: { name: true } },
         procedureType: { select: { name: true } },
+        /* فقط نامِ سایرِ عمل‌ها — برای برچسبِ ردیف (بستهٔ ۷ج). */
+        otherProcedures: OTHER_PX,
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
       },
     });
@@ -159,7 +165,9 @@ export class TheatreService {
         ...roomState(v),
         /* مشتق، نه کپی — همان قاعدهٔ `enrich` در `patients.service`. */
         chiefComplaint: v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null,
-        procedure: v.procedureType?.name ?? v.opType ?? null,
+        /* برچسبِ ترکیبیِ همهٔ عمل‌ها («A + B») — کلیدِ فقط‌نمایشی، پس مقدارش
+           برچسب است (قراردادِ `visit-coding.ts`)؛ تک‌عمل همان مقدارِ دیروز. */
+        procedure: procedureLabel(v),
         hospital: v.hospital?.name ?? v.hospitalName ?? null,
         surgeon: TheatreService.personName(v.surgeon) ?? v.surgeonName ?? null,
       })),
@@ -190,14 +198,29 @@ export class TheatreService {
            (بستهٔ ۴الف). سرِ میز باید معلوم باشد بیمار **چرا** آمده. */
         chiefComplaint: true,
         anesthesia: true, dischargeDisposition: true,
+        /* ⚠️ شناسهٔ اصلی‌ها هم لازم است: `diagnosisList`/`procedureList` از
+           همین‌ها `id`ِ ردیفِ اول را می‌سازند، و `select` چیزی را خودکار
+           نمی‌آورد. */
+        diagnosisId: true, procedureTypeId: true,
         diagnosis: { select: { title: true, icdCode: true } },
+        /* **همهٔ** تشخیص‌ها و عمل‌ها (بستهٔ ۷): میزِ اتاقِ عمل کلِ برنامه را
+           لازم دارد، نه فقط اولی را. `OTHER_PX_KIT` هم نام می‌دهد هم نیازِ
+           اقلام — یک رابطه یک‌بار انتخاب می‌شود، پس همین یکی برای فهرست و
+           کیت هر دو. */
+        otherDiagnoses: OTHER_DX,
+        otherProcedures: OTHER_PX_KIT,
         /* **ویزیتِ تصمیم** — جراح سرِ میز باید بداند بیمار با چه شرحِ حال و
            معاینه و یافته‌ای کاندیدِ عمل شد (بستهٔ ۶الف). مشتق است، نه کپی:
-           همان اسنادِ آن ویزیت. */
+           همان اسنادِ آن ویزیت.
+           ⚠️ فهرستِ تشخیص‌های آن ویزیت همان «تشخیصِ پیش از عمل» است (بستهٔ
+           ۷ب) — به عمل **ارث نمی‌رسد و کپی نمی‌شود**؛ تشخیصِ پیش و پس از عمل
+           دو واقعیتِ جدایند. */
         decidedIn: {
           select: {
             id: true, seq: true, opDate: true, chiefComplaint: true,
-            diagnosis: { select: { title: true } },
+            diagnosisId: true,
+            diagnosis: { select: { title: true, icdCode: true } },
+            otherDiagnoses: OTHER_DX,
             clinicalNotes: { ...currentNotes(['history', 'exam', 'findings', 'plan']), select: { kind: true, body: true } },
           },
         },
@@ -215,7 +238,9 @@ export class TheatreService {
           },
         },
         hospital: { select: { name: true } },
-        procedureType: { select: { name: true, needs: { where: { item: { active: true } }, select: { quantity: true, item: { select: { name: true, size: true } } } } } },
+        /* `NEEDS_SELECT` همان فیلترِ «کالای فعال» را دارد و `itemId`/`assetKind`
+           را هم می‌آورد که ادغامِ کیتِ چندعملی (`kitTemplate`) لازم دارد. */
+        procedureType: { select: { name: true, needs: NEEDS_SELECT } },
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
         tech: { select: { person: { select: { firstName: true, lastName: true } } } },
         /* ⚠️ مدارک **بیشتر** و با هر چیزی که برای بازکردنشان لازم است: تا
@@ -240,14 +265,20 @@ export class TheatreService {
       visit: {
         id: v.id, code: `${p.code}-V${v.seq}`, kind: v.kind, opDate: v.opDate, opStatus: v.opStatus,
         ...roomState(v),
-        procedure: v.procedureType?.name ?? v.opType ?? null,
+        /* ⚠️ `procedure`/`diagnosis` کلیدِ فقط‌نمایشی‌اند و مقدارشان **برچسبِ
+           ترکیبی** است (تک‌مورد = همان مقدارِ دیروز). فهرستِ ساخت‌یافته کنارشان
+           جدا می‌آید تا رابط «اصلی» و کدِ ICD را بی‌آنکه رشته را بشکافد نشان
+           دهد (قانونِ ۱۵) — ترتیب همان رتبهٔ بالینی است، اصلی اول. */
+        procedure: procedureLabel(v),
+        procedures: procedureList(v),
         hospital: v.hospital?.name ?? v.hospitalName ?? null,
         surgeon: TheatreService.personName(v.surgeon) ?? v.surgeonName ?? null,
         tech: TheatreService.personName(v.tech),
         opStartTime: v.opStartTime, opEndTime: v.opEndTime, techArriveTime: v.techArriveTime,
         dischargeAt: v.dischargeAt,
         chiefComplaint: v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null,
-        diagnosis: v.diagnosis?.title ?? null,
+        diagnosis: diagnosisLabel(v),
+        diagnoses: diagnosisList(v),
         anesthesia: v.anesthesia ?? null,
         anesthesiaFa: v.anesthesia ? ANESTHESIA_LABELS[v.anesthesia] ?? v.anesthesia : null,
         opReport: noteBody(v.clinicalNotes, 'op'),
@@ -264,10 +295,13 @@ export class TheatreService {
         id: p.id, code: p.code, fullName: `${p.firstName} ${p.lastName}`.trim(),
         age: TheatreService.age(p.birthDate), gender: p.gender, bloodType: p.bloodType || null,
       },
-      /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط‌خواندنی سرِ میز. */
+      /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط‌خواندنی سرِ میز.
+         `diagnoses` همان «تشخیصِ پیش از عمل» است (فهرست، اصلی اول)؛
+         `diagnosis` برچسبِ ترکیبیِ همان برای خواننده‌های قدیمی‌تر. */
       decided: v.decidedIn ? {
         id: v.decidedIn.id, seq: v.decidedIn.seq, opDate: v.decidedIn.opDate,
-        diagnosis: v.decidedIn.diagnosis?.title ?? null,
+        diagnosis: diagnosisLabel(v.decidedIn),
+        diagnoses: diagnosisList(v.decidedIn),
         history: noteBody(v.decidedIn.clinicalNotes, 'history'),
         exam: noteBody(v.decidedIn.clinicalNotes, 'exam'),
         findings: noteBody(v.decidedIn.clinicalNotes, 'findings'),
@@ -479,11 +513,20 @@ export class TheatreService {
     return name || null;
   }
 
-  /** ستِ لازم — اختصاصیِ بیمار اگر ثبت شده، وگرنه قالبِ نوعِ عمل. */
+  /**
+   * ستِ لازم — اختصاصیِ بیمار اگر ثبت شده، وگرنه قالبِ **همهٔ** عمل‌های این
+   * جلسه (`kitTemplate`: مصرفی جمع، ست/دستگاه بیشینه؛ بستهٔ ۷ج).
+   *
+   * ⚠️ قاعدهٔ override مالِ خودِ همین خواننده است و عمداً یکی نشد: این‌جا
+   * فقط آرایهٔ **ناخالی** بر قالب غلبه می‌کند (دیسپچ هر آرایه‌ای، پرتالِ
+   * جراح `?? null`). یکی‌کردنِ آن سه قاعده تغییرِ رفتارِ جداگانه‌ای است.
+   * و یادداشتِ قالب مثلِ دیروز این‌جا نشان داده نمی‌شود (`notes: null`) —
+   * فقط fallbackِ قالب عوض شد، نه شکلِ خروجی.
+   */
   private static items(v: any) {
     const custom = Array.isArray(v.requiredItems) ? v.requiredItems : null;
     if (custom?.length) return custom.map((r: any) => ({ name: r.name ?? r.itemName ?? '—', quantity: r.quantity ?? 1, notes: r.notes || null }));
-    return (v.procedureType?.needs ?? []).map((n: any) => ({
+    return kitTemplate(v).map((n) => ({
       name: [n.item?.name, n.item?.size].filter(Boolean).join(' · ') || '—', quantity: n.quantity ?? 1, notes: null,
     }));
   }

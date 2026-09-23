@@ -917,7 +917,9 @@ function Report({ onToast }) {
 
       <Breakdown title="به تفکیکِ جراح" rows={d.bySurgeon} />
       <Breakdown title="به تفکیکِ بیمارستان" rows={d.byHospital} />
-      <Breakdown title="به تفکیکِ نوعِ عمل" rows={d.byProcedure} />
+      {/* ⚠️ بستهٔ ۷ج: مراجعهٔ چندعملی فقط زیرِ عملِ **اصلی** شمرده می‌شود (سرور،
+          `principalProcedureName`) تا جمعِ این تفکیک با جمعِ کل بخواند — عنوان همین را می‌گوید. */}
+      <Breakdown title="به تفکیکِ عملِ اصلی" rows={d.byProcedure} />
       {d.byExpenseCategory.length > 0 && (
         <div className="ac-list">
           <b className="ac-secttl">هزینه به تفکیکِ دسته</b>

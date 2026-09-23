@@ -276,6 +276,37 @@ function FormsTab({ rec, onErr }) {
   );
 }
 
+/**
+ * تشخیص‌های یک مراجعه روی کارتِ پرونده (بستهٔ ۷).
+ *
+ * ⚠️ پاسخ‌های فرم عمداً تشخیص را نشان نمی‌دهند (سرور، `valuesOf`)، پس این خط
+ * تنها جایی است که پرونده تشخیص‌ها را می‌گوید — دومی و سومی نباید این‌جا گم
+ * شوند. فهرست و ترتیب (اصلی اول) از سرور می‌آید (قانون ۱۵)؛ «اصلی» فقط وقتی
+ * نوشته می‌شود که بیش از یکی باشد، و کدِ ICD کنارِ هر عنوان `dir="ltr"` است.
+ * سرورِ قدیمیِ بی‌`diagnoses` به همان برچسب برمی‌گردد.
+ */
+function VisitDiagnoses({ v }) {
+  const list = v.diagnoses ?? [];
+  if (!list.length) {
+    const label = v.diagnosisLabel ?? v.diagnosisTitle;
+    return label ? <small>تشخیص: {label}</small> : null;
+  }
+  const many = list.length > 1;
+  return (
+    <small>
+      {many ? 'تشخیص‌ها: ' : 'تشخیص: '}
+      {list.map((d, i) => (
+        <Fragment key={d.id ?? i}>
+          {i > 0 && '، '}
+          {d.title}
+          {d.icdCode && <> <span dir="ltr">{d.icdCode}</span></>}
+          {many && d.primary && ' (اصلی)'}
+        </Fragment>
+      ))}
+    </small>
+  );
+}
+
 function VisitsTab({ rec, onErr, onOpen }) {
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
@@ -291,14 +322,16 @@ function VisitsTab({ rec, onErr, onOpen }) {
                 <i className="rc-kind" style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined} title={v.kindTitle || undefined}>
                   {v.kindTitle || kindLabel(v.kind, rec.kindTitles)}
                 </i>
-                {v.procedureTypeName ? ` — ${v.procedureTypeName}` : ''}
+                {/* برچسبِ ترکیبیِ عمل‌ها («A + B»، اصلی اول) از سرور؛ `procedureTypeName`
+                    فقط fallbackِ سرورِ قدیمی است و همیشه یعنی «اصلی». */}
+                {(v.procedureLabel ?? v.procedureTypeName) ? ` — ${v.procedureLabel ?? v.procedureTypeName}` : ''}
               </b>
             </button>
             <small>
               {[v.surgeonName && `جراح: ${v.surgeonName}`, v.hospitalName, v.techName && `کارشناس: ${v.techName}`,
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}
             </small>
-            {v.diagnosisTitle && <small>تشخیص: {v.diagnosisTitle}</small>}
+            <VisitDiagnoses v={v} />
             {/* ⚠️ **پاسخ‌های فرمِ مراجعه.** پزشک «شکایتِ اصلی» و «شرحِ معاینه»
                 را در فرمِ ویزیت می‌نویسد؛ تا دیروز پرونده هیچ اثری از آن‌ها
                 نداشت و همه‌شان فقط داخلِ فرمِ خودِ مراجعه می‌ماندند. چیزی که

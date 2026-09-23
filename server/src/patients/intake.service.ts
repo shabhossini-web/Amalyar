@@ -14,6 +14,7 @@ import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
 import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
+import { OTHER_PX, procedureLabel } from './visit-coding';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
 import { RemindersService } from './reminders.service';
@@ -1674,6 +1675,9 @@ export class IntakeService {
       select: {
         id: true, opDate: true, opType: true,
         procedureType: { select: { name: true } },
+        /* بستهٔ ۷ج: «نوعِ عمل»ِ فهرست برچسبِ همهٔ عمل‌های جلسه است (اصلی اول)؛
+           منشی باید بداند دربارهٔ کدام عمل‌ها تماس می‌گیرد. */
+        otherProcedures: OTHER_PX,
         patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true } },
       },
     });
@@ -1783,7 +1787,7 @@ export class IntakeService {
         name: `${v.patient.firstName} ${v.patient.lastName}`,
         phone: v.patient.phone,
         opDate: op,
-        procedure: v.procedureType?.name ?? v.opType ?? null,
+        procedure: procedureLabel(v),
         daysSince: Math.floor((now.getTime() - op.getTime()) / 864e5),
         sms: rs.includes('sent') ? 'sent' : rs.includes('pending') ? 'pending' : 'none',
         openForm: days.some((d) => d.open),
@@ -2044,8 +2048,11 @@ export class IntakeService {
         if (!field.builtin && field.active && Object.prototype.hasOwnProperty.call(dto.extra, field.key)) extra[field.key] = dto.extra[field.key];
       }
     }
+    /* بستهٔ ۷ج: API تأیید تک‌عمل ماند — همین یک عمل اصلیِ مراجعه می‌شود.
+       `procedureRequirements` آرایه می‌گیرد تا اجتماعِ کیتِ چندعملی (`mergeNeeds`)
+       فقط یک پیاده‌سازی داشته باشد. */
     const requirements = makesVisit && workflow === 'implant'
-      ? dto.requiredItems !== undefined ? await resolveRequirements(this.prisma, dto.requiredItems) : await procedureRequirements(this.prisma, dto.procedureTypeId)
+      ? dto.requiredItems !== undefined ? await resolveRequirements(this.prisma, dto.requiredItems) : await procedureRequirements(this.prisma, [dto.procedureTypeId])
       : undefined;
     if (makesVisit && workflow === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
 

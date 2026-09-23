@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toJalali } from '../common/jalali';
 import { recognize } from './revenue';
+import { principalProcedureName } from './visit-coding';
 
 /**
  * گزارشِ مالی.
@@ -84,7 +85,11 @@ export class ReportsService {
         month: monthKey(v.opDate ?? v.createdAt),
         surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName ?? '—',
         hospitalLabel: v.hospital?.name ?? v.hospitalName ?? '—',
-        procedureLabel: v.procedureType?.name ?? v.opType ?? '—',
+        /// ⚠️ **فقط عملِ اصلی** (بستهٔ ۷ج): درآمد مالِ مراجعه است و یک‌بار شمرده
+        ///    می‌شود؛ پخش‌کردنش روی چند عمل یعنی ساختنِ عددی که هیچ‌جا ثبت نشده، و
+        ///    گروه‌بندی با برچسبِ ترکیبی («A + B») جمعِ تفکیک را از جمعِ کل جدا می‌کرد.
+        ///    نامِ کلید عمداً `procedureLabel` نیست — آن در همهٔ endpointها برچسبِ ترکیبی است.
+        principalProcedure: principalProcedureName(v) ?? '—',
       };
     });
 
@@ -113,7 +118,8 @@ export class ReportsService {
       byMonth: byMonth(rows, expenses),
       bySurgeon: groupBy(rows, (r) => r.surgeon),
       byHospital: groupBy(rows, (r) => r.hospitalLabel),
-      byProcedure: groupBy(rows, (r) => r.procedureLabel),
+      /// Σ byProcedure == totals — هر مراجعه دقیقاً در یک گروه (عملِ اصلی).
+      byProcedure: groupBy(rows, (r) => r.principalProcedure),
       byExpenseCategory: expenseGroups(expenses),
     };
   }

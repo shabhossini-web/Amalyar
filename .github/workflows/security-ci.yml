@@ -875,7 +875,9 @@ jobs:
           if (!/v\.fullName/.test(guard.split('} else {')[0] || '')) {
             console.error('نامِ بیمار فقط باید داخلِ شاخهٔ کارشناس باشد'); process.exit(1);
           }
-          for (const f of ['v.fullName', 'v.code', 'v.surgeonName', 'v.procedureName']) {
+          // بستهٔ ۷: برچسبِ ترکیبیِ عمل‌ها و هر شکلی از تشخیص (diagnosisTitle،
+          // diagnosisLabel، diagnoses) هم دادهٔ درمانی است و به حمل‌کننده نمی‌رسد.
+          for (const f of ['v.fullName', 'v.code', 'v.surgeonName', 'v.procedureName', 'v.procedureLabel', 'diagnos']) {
             const after = body.split('} else {')[1] || '';
             const tail = after.split('L.push(\`بیمارستان')[0];
             if (tail.includes(f)) { console.error('شاخهٔ غیرکارشناس نباید ' + f + ' داشته باشد'); process.exit(1); }
@@ -1030,7 +1032,9 @@ jobs:
             console.error('متنِ ابلاغِ مسیر باید تابعِ خالصِ سرویس باشد'); process.exit(1);
           }
           const rb = routes.split('export function runBriefing')[1];
-          for (const f of ['fullName', 'patient', 'surgeonName', 'visitCode', 'procedureName']) {
+          // بستهٔ ۷: عمل‌های همزمان (otherProcedures، procedureLabel) و تشخیص در هر
+          // شکلی — ابلاغِ مسیر اصلاً هیچ‌کدام را لازم ندارد.
+          for (const f of ['fullName', 'patient', 'surgeonName', 'visitCode', 'procedureName', 'procedureLabel', 'otherProcedures', 'diagnos']) {
             if (rb.includes(f)) { console.error('ابلاغِ مسیر نباید ' + f + ' داشته باشد'); process.exit(1); }
           }
           // ابلاغِ per-visit فقط برای کارشناس می‌ماند؛ راننده ابلاغِ مسیر می‌گیرد.
@@ -3259,6 +3263,241 @@ jobs:
         run: node scripts/e2e/w3-6-light-theme.mjs
       - name: Verify module icons and naming (W3.7 UI)
         run: node scripts/e2e/w3-7-icons-naming.mjs
+
+      # ══ بستهٔ ۷ — چند تشخیص / چند عمل: کدگذاریِ مراجعه یک صاحب دارد ══
+      # اصلی (رتبهٔ ۱) همان ستونِ Visit است و سایرین در visit_other_*؛ هر مشتق
+      # (برچسب، فهرست، فیلتر، کیت) و هر نوشتن فقط در visit-coding.ts. پیش از این
+      # بسته پانزده کپیِ «نامِ عمل یا opType» با fallbackهای کمی متفاوت پخش بود،
+      # و خواننده‌ای که مستقیم ستون را بخواند عملِ دوم را **بی‌صدا** نمی‌بیند —
+      # هیچ آزمونِ تک‌عملی‌ای هم نمی‌گیردش. بندها همان C1–C9ِ سندِ بسته‌اند
+      # (C7 فهرست‌های حریمِ خصوصیِ گام‌های dispatch و routes در بالاست). ناوردای
+      # داده را هم run-live.mjs بعد از هر سوییتِ زنده با SQL می‌سنجد.
+      # تهِ جابِ build، طبقِ بندِ ۵ AGENTS.md (افزودن در وسط = کانفلیکت).
+      - name: Verify visit coding has one owner (package 7)
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const read = (f) => fs.readFileSync(f, 'utf8');
+
+          /* ⚠️ گزارهٔ مثبت روی **کد**، نه نبودِ رشته در متن: کامنتِ خودِ
+             visit-coding.ts و خواننده‌هایش الگوهای ممنوع را نام می‌برند، و دو بارِ
+             قبل نگهبانی با نثرِ یک کامنت گاز داد. کامنت با همان تعداد سطر جایگزین
+             می‌شود تا شمارهٔ خطِ گزارش همان شمارهٔ خطِ فایل بماند. */
+          const strip = (t) => t
+            .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ''))
+            .replace(/\/\/[^\n]*/g, '');
+          /* همهٔ خطاها با هم گزارش می‌شوند، نه فقط اولی: این گام چند فایلِ
+             مستقل را می‌سنجد و دیدنِ یکی‌یکی‌شان یعنی چند دور CI. */
+          const errs = [];
+          const bad = (m) => errs.push(m);
+          /* کلاینتِ تولیدشدهٔ Prisma (src/generated، gitignore) نوشتهٔ کسی نیست و
+             فقط بعد از بیلد هست — اسکنش نتیجه را به ترتیبِ گام‌ها وابسته می‌کرد. */
+          const walk = (dir, exts) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) return ['generated', 'node_modules'].includes(e.name) ? [] : walk(p, exts);
+            return exts.some((x) => e.name.endsWith(x)) ? [p] : [];
+          });
+          /* بدنهٔ متد: از امضا تا «}»ِ دوفاصله‌ای که تنها در سطرِ خودش است.
+             ⚠️ نه اولین «}»ِ دوفاصله‌ای: پارامترِ شیء‌ایِ searchNotes با «  }) {»
+             بسته می‌شود و متد همان‌جا بریده می‌شد. */
+          const body = (src, sig) => {
+            const i = src.indexOf(sig);
+            if (i < 0) return null;
+            const rest = src.slice(i);
+            const m = rest.match(/\n  \}[ \t]*\r?\n/);
+            return m ? rest.slice(0, m.index) : rest;
+          };
+          const need = (src, sig, file) => {
+            const b = body(src, sig);
+            if (b == null) bad(file + ': «' + sig + '» پیدا نشد — اگر نامش عوض شده، این نگهبان را هم‌گام کن نه اینکه حذفش کنی');
+            return b ?? '';
+          };
+          /* هر رخدادِ یک الگو با شمارهٔ خط — الگوهای چندسطری (نوشتنِ تو‌در‌تو) هم. */
+          const hits = (src, re) => [...src.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))]
+            .map((m) => {
+              const n = src.slice(0, m.index).split('\n').length;
+              return { n, text: src.split('\n')[n - 1].trim().slice(0, 140) };
+            });
+          const P = (f) => path.join('server/src/patients', f);
+          const OWNER = P('visit-coding.ts');
+          const vc = strip(read(OWNER));
+          const ps = strip(read(P('patients.service.ts')));
+          const rec = strip(read(P('record.service.ts')));
+          const rem = strip(read(P('reminders.service.ts')));
+          const defs = strip(read(P('definitions.service.ts')));
+
+          /* ── C1: یک مشتق ──
+             خواندنِ مستقیمِ رابطهٔ اصلی فقط رتبهٔ ۱ را می‌بیند. مسیرِ درست:
+             principalProcedureName / procedureLabel / procedureNames،
+             principalDiagnosisTitle / diagnosisLabel / diagnosisTitles و kitTemplate.
+             ⚠️ هم «?.» هم «.»: نسخهٔ بی‌علامتِ سؤال همان دور زدن است.
+             تنها استثنا listNoteTemplates است که نامِ **هدفِ قالب** را می‌خواند نه
+             مراجعه را — فقط همان متد، نه کلِ فایل. */
+          const C1 = [
+            [/\.diagnosis\??\.title\b/, 'principalDiagnosisTitle / diagnosisLabel / diagnosisTitles'],
+            [/\.procedureType\??\.name\b/, 'principalProcedureName / procedureLabel / procedureNames'],
+            [/\.procedureType\??\.needs\b/, 'kitTemplate'],
+          ];
+          for (const f of walk('server/src', ['.ts']).filter((x) => x !== OWNER)) {
+            let src = strip(read(f));
+            if (f === P('definitions.service.ts')) {
+              const t = body(src, 'async listNoteTemplates(');
+              if (t) src = src.replace(t, t.replace(/[^\n]/g, ''));
+            }
+            for (const [re, fix] of C1) {
+              for (const h of hits(src, re)) bad('C1 ' + f + ':' + h.n + ' «' + h.text + '» — از ' + fix + ' در visit-coding.ts بخوان');
+            }
+          }
+
+          /* ── C2: تلهٔ whitelist ──
+             ValidationPipe با whitelist کلیدِ اعلام‌نشده را **بی‌صدا** دور می‌ریزد:
+             فرم سایرین را می‌فرستد، پاسخ ۲۰۰ است و هیچ‌چیز ذخیره نمی‌شود. هر دو
+             DTO، هر دو کلید، هر کدام با IsArray و IsInt با each. نامِ کلیدها از
+             CODING_TWIN خوانده می‌شود تا تغییرِ یک‌طرفه همین‌جا قرمز شود. */
+          const TWIN = {};
+          const twinSrc = (vc.match(/\bCODING_TWIN\s*=\s*\{([^}]*)\}/) || [])[1] ?? '';
+          for (const m of twinSrc.matchAll(/(\w+)\s*:\s*'(\w+)'/g)) TWIN[m[1]] = m[2];
+          const WANT = { diagnosisId: 'otherDiagnosisIds', procedureTypeId: 'otherProcedureTypeIds' };
+          if (JSON.stringify(TWIN) !== JSON.stringify(WANT)) {
+            bad('C2 CODING_TWIN در visit-coding.ts باید ' + JSON.stringify(WANT) + ' باشد؛ خوانده شد: ' + JSON.stringify(TWIN));
+          }
+          const dto = strip(read(P('dto/visit.dto.ts')));
+          for (const cls of ['CreateVisitDto', 'UpdateVisitDto']) {
+            const i = dto.indexOf('export class ' + cls + ' ');
+            if (i < 0) { bad('C2 visit.dto.ts: کلاسِ ' + cls + ' پیدا نشد'); continue; }
+            const rest = dto.slice(i);
+            const end = rest.search(/\n\}/);
+            const decls = (end < 0 ? rest : rest.slice(0, end)).split(';');
+            for (const key of Object.values(WANT)) {
+              const d = decls.find((x) => (x.trim().split('\n').pop().match(/(\w+)[?!]?\s*:[^:]*\$/) || [])[1] === key);
+              if (!d) bad('C2 ' + cls + ' کلیدِ ' + key + ' را اعلام نکرده — whitelist بی‌صدا دورش می‌ریزد');
+              else if (!/@IsArray\(/.test(d) || !/@IsInt\(\{[^}]*each:\s*true/.test(d)) {
+                bad('C2 ' + cls + '.' + key + ' باید IsArray و IsInt با each: true داشته باشد');
+              }
+            }
+          }
+
+          /* ── C3: یک نویسنده ──
+             ناورداها (سایر ≠ اصلی، بی‌اصلی سایر ندارد، رتبهٔ ۲..n پیوسته و
+             بی‌تکرار) را فقط planCoding و writeOthers نگه می‌دارند؛ دیتابیس فقط
+             rank >= 2 را می‌بیند. هر نوشتنِ دیگری — Prisma، تو‌در‌تو از سمتِ مراجعه
+             یا تعریف، یا SQLِ خام — دورشان می‌زند. */
+          const C3 = [
+            /visitOther(Diagnosis|Procedure)\s*\.\s*(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+            /other(Diagnoses|Procedures|VisitLinks)\s*:\s*\{\s*(create|createMany|connect|connectOrCreate|set|disconnect|delete|deleteMany|upsert|update|updateMany)\b/,
+            /(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+[\"']?visit_other_(diagnoses|procedures)\b/i,
+          ];
+          const writers = [...walk('server/src', ['.ts']), ...walk('server/scripts', ['.ts', '.js', '.mjs'])].filter((x) => x !== OWNER);
+          for (const f of writers) {
+            const src = strip(read(f));
+            for (const re of C3) {
+              for (const h of hits(src, re)) bad('C3 ' + f + ':' + h.n + ' «' + h.text + '» — سایرین فقط با writeOthers/othersCreate در visit-coding.ts نوشته می‌شوند');
+            }
+          }
+          const wo = vc.split('export async function writeOthers(')[1];
+          if (!wo || !/FOR UPDATE/.test(wo.split('\n}')[0])) {
+            bad('C3 writeOthers در visit-coding.ts باید باشد و ردیفِ مراجعه را FOR UPDATE قفل کند');
+          }
+          if (!/\bwriteOthers\(/.test(ps)) bad('C3 patients.service.ts باید سایرین را با writeOthers بنویسد');
+
+          /* ── C4: تعریفِ به‌کاررفته حذفِ سخت نمی‌شود ──
+             تشخیصی که فقط «دوم» بوده هم استفاده است: اگر شمرده نشود حذفِ سخت
+             می‌شود — و FKِ RESTRICT همان حذف را ۵۰۰ می‌کند. */
+          for (const sig of ['async deleteOrDeactivate(', 'async listProcedureTypes(', 'async listDiagnoses(']) {
+            if (!/\botherVisitLinks\b/.test(need(defs, sig, 'definitions.service.ts'))) {
+              bad('C4 definitions.service.ts: ' + sig + ' باید otherVisitLinks را هم بشمارد');
+            }
+          }
+          if (!/P2003/.test(body(defs, 'async deleteOrDeactivate(') ?? '')) {
+            bad('C4 deleteOrDeactivate باید P2003ِ حذفِ هم‌زمان با پیوندِ تازه را به غیرفعال‌سازی برساند');
+          }
+          const schema = strip(read('server/prisma/schema.prisma'));
+          const model = (n) => (schema.split('model ' + n + ' {')[1] ?? '').split('\n}')[0];
+          for (const n of ['VisitOtherDiagnosis', 'VisitOtherProcedure']) {
+            if (!/onDelete:\s*Restrict/.test(model(n))) bad('C4 schema.prisma: ' + n + ' باید روی تعریف onDelete: Restrict باشد');
+          }
+          for (const [n, rel] of [['Diagnosis', 'VisitOtherDiagnosis'], ['ProcedureType', 'VisitOtherProcedure']]) {
+            if ((model(n).match(/otherVisitLinks\s+(\w+)\[\]/) || [])[1] !== rel) {
+              bad('C4 schema.prisma: ' + n + ' باید رابطهٔ otherVisitLinks از نوعِ ' + rel + ' داشته باشد — deleteOrDeactivate عمومی روی همین نام است');
+            }
+          }
+
+          /* ── C5: مالکیتِ نقش ──
+             فهرستِ سایرین مالکِ خودش را ندارد؛ مالکش فیلدِ اصلی است. بدونِ
+             CODING_TWIN منشی‌ای که تشخیصِ اصلی را نمی‌تواند عوض کند تشخیصِ دوم را
+             اضافه می‌کرد. مقایسه با ترتیب است: جابه‌جاییِ رتبه هم نوشتن است. */
+          const own = need(ps, 'async assertRoleOwnership(', 'patients.service.ts');
+          if (!/\bCODING_TWIN\b/.test(own)) bad('C5 assertRoleOwnership باید کلیدِ همزاد را با مالکیتِ فیلدِ اصلی بسنجد (CODING_TWIN)');
+          if (!/Array\.isArray\(/.test(own)) bad('C5 assertRoleOwnership باید آرایهٔ سایرین را با ترتیب مقایسه کند (Array.isArray در norm)');
+
+          /* ── C6: «مراجعه‌ای که X دارد» در هر رتبه ──
+             فهرست، خروجی، آمار و جستجوی شرح‌ها از visitHas* می‌خوانند؛ قالب‌های
+             شرح و بخش‌های فرمِ پیگیری همهٔ شناسه‌ها را با in می‌گیرند. برابریِ
+             ساده روی ستون یعنی بیمارِ «X دوم» هیچ‌جا پیدا نمی‌شود. */
+          const vw = need(ps, 'private visitWhere(', 'patients.service.ts');
+          for (const fn of ['visitHasDiagnosis', 'visitHasProcedure', 'codingSearchOr']) {
+            if (!vw.includes(fn + '(')) bad('C6 visitWhere باید ' + fn + ' را صدا بزند');
+          }
+          for (const m of vw.matchAll(/for \(const \w+ of \[([^\]]*)\]/g)) {
+            const k = (m[1].match(/'(diagnosisId|procedureTypeId)'/) || [])[1];
+            if (k) bad('C6 visitWhere: ' + k + ' در حلقهٔ برابری است — فقط رتبهٔ ۱ را می‌بیند');
+          }
+          if (/where\s*(\.|\[\s*['\"])\s*(diagnosisId|procedureTypeId)\b|\b(diagnosisId|procedureTypeId)\s*:\s*f\s*\./.test(vw)) {
+            bad('C6 visitWhere برابریِ مستقیم روی ستونِ اصلی دارد — visitHasDiagnosis / visitHasProcedure');
+          }
+          const sn = need(rec, 'async searchNotes(', 'record.service.ts');
+          for (const fn of ['visitHasDiagnosis', 'visitHasProcedure']) {
+            if (!sn.includes(fn + '(')) bad('C6 searchNotes باید ' + fn + ' را صدا بزند — همان فیلترِ فهرستِ مراجعات');
+          }
+          for (const [file, src, sig] of [['record.service.ts', rec, 'async noteTemplates('], ['reminders.service.ts', rem, 'async followUpUrl(']]) {
+            const b = need(src, sig, file);
+            if (!/\bdiagnosisId\s*:\s*\{\s*in\s*:/.test(b) || !/\bprocedureTypeId\s*:\s*\{\s*in\s*:/.test(b)) {
+              bad('C6 ' + file + ': ' + sig + ' باید همهٔ تشخیص‌ها و عمل‌ها را با in بگیرد');
+            }
+            if (!/\bdiagnosisIds\(/.test(b) || !/\bprocedureIds\(/.test(b)) {
+              bad('C6 ' + file + ': ' + sig + ' باید شناسه‌ها را از diagnosisIds / procedureIds بگیرد، نه از ستون');
+            }
+          }
+
+          /* ── C8: نگاشتِ کلیدِ همزاد در دو طرف یکی است ──
+             فرم کلیدِ سایرین را به مالکِ فیلدِ اصلی نگاشت می‌کند تا نقشِ قفل‌شده
+             آن را نفرستد؛ اگر این نگاشت از CODING_TWINِ سرور جا بماند، کلاینت
+             کلیدی می‌فرستد که سرور ۴۰۰ می‌دهد — یا بدتر، نمی‌فرستد و فرم ساکت می‌ماند. */
+          const vf = strip(read('src/app/VisitForm.jsx'));
+          const ownSrc = (vf.match(/\bCODING_TWIN_OWNER\s*=\s*\{([^}]*)\}/) || [])[1];
+          if (ownSrc == null) {
+            bad('C8 VisitForm.jsx: CODING_TWIN_OWNER پیدا نشد — نگاشتِ کلیدِ سایرین به فیلدِ اصلی برای قفلِ نقش');
+          } else {
+            const OWN = {};
+            for (const m of ownSrc.matchAll(/['\"]?(\w+)['\"]?\s*:\s*['\"](\w+)['\"]/g)) OWN[m[1]] = m[2];
+            const inv = Object.fromEntries(Object.entries(TWIN).map(([k, v]) => [v, k]));
+            const a = JSON.stringify(Object.entries(OWN).sort());
+            const b = JSON.stringify(Object.entries(inv).sort());
+            if (a !== b) bad('C8 CODING_TWIN_OWNER در VisitForm.jsx باید وارونهٔ CODING_TWIN باشد: ' + b + ' — خوانده شد: ' + a);
+            if (!/\bCODING_TWIN_OWNER\[/.test(vf)) bad('C8 VisitForm.jsx: CODING_TWIN_OWNER تعریف شده ولی در قفلِ نقش خوانده نمی‌شود');
+          }
+
+          /* ── C9: کیت یک منبع دارد ──
+             دو عمل در یک جلسه یعنی اقلامِ هر دو — مصرفی جمع، ست/دستگاه بیشینه.
+             هر خواننده قاعدهٔ override خودش را روی requiredItems نگه می‌دارد، ولی
+             fallbackِ الگو فقط kitTemplate است؛ و تأییدِ پذیرش پیش از
+             resolveRequirements با mergeNeeds ادغام می‌کند (کالای تکراری ۴۰۰ است). */
+          for (const f of ['dispatch.service.ts', 'theatre.service.ts', 'surgeon-portal.service.ts']) {
+            if (!/\bkitTemplate\(/.test(strip(read(P(f))))) bad('C9 ' + f + ' باید الگوی کیت را از kitTemplate بگیرد');
+          }
+          if (!/\bmergeNeeds\(/.test(strip(read(P('visit-requirements.ts'))))) {
+            bad('C9 visit-requirements.ts باید کیتِ چندعملیِ تأییدِ پذیرش را با mergeNeeds ادغام کند');
+          }
+
+          if (errs.length) {
+            console.error('کدگذاریِ مراجعه (بستهٔ ۷) — ' + errs.length + ' مورد:');
+            for (const e of errs) console.error('  ✗ ' + e);
+            process.exit(1);
+          }
+          console.log('visit coding ok');
+          "
 
   # ══════════════════════════════════════════════════════════════════════
   # سوییت‌های «سرورِ زنده» — ۱۰۰+ سوییت که تا امروز بیرونِ CI بودند و روی

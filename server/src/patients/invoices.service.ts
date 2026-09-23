@@ -9,6 +9,7 @@ import { durationOf } from './patients.service';
 import { InventoryService } from './inventory.service';
 import { canAccess } from '../auth/access-check';
 import { scopedVisitWhere } from '../common/own-scope';
+import { OTHER_PX, principalProcedureName, procedureNames } from './visit-coding';
 
 /**
  * فهرستِ خدماتِ نورومانیتورینگ — همان جدولِ ملک‌طب (کدِ کتابِ ارزش نسبی + نامِ رایج).
@@ -206,17 +207,24 @@ export class InvoicesService {
         return await this.prisma.$transaction(async tx => {
           // Serialize issuers and keep the complete financial snapshot on one DB revision.
           await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
-          const v = await tx.visit.findUniqueOrThrow({ where: { id }, include: { patient: true, hospital: true, payerHospital: true, surgeon: { include: { person: true } }, procedureType: true, invoiceBankAccount: true, charges: { orderBy: { id: 'asc' } }, payments: { orderBy: { id: 'asc' } } } });
+          const v = await tx.visit.findUniqueOrThrow({ where: { id }, include: { patient: true, hospital: true, payerHospital: true, surgeon: { include: { person: true } }, procedureType: true, otherProcedures: OTHER_PX, invoiceBankAccount: true, charges: { orderBy: { id: 'asc' } }, payments: { orderBy: { id: 'asc' } } } });
           if (v.invoiceType !== variant || !v.invoiceBankAccount?.active || v.invoiceBankAccount.classification !== variant) throw new BadRequestException('ابتدا نوع فاکتور و حساب دریافت هم‌نوع را ثبت کنید');
           if (v.payments.some(p => p.bankAccountId !== null && p.bankAccountId !== v.invoiceBankAccountId)) throw new BadRequestException('حساب پرداخت‌های ثبت‌شده با حساب فاکتور یکسان نیست');
           if (!v.charges.length) throw new BadRequestException('ابتدا اقلام فاکتور را ثبت کنید');
           const totals = summarize(v.charges, v.payments, v);
           if (totals.total < 0) throw new BadRequestException('جمع فاکتور نباید منفی باشد');
+          /* بستهٔ ۷ج — چند عمل در یک جلسه.
+             ⚠️ `procedureTypeName` همان عملِ **اصلی** می‌ماند (معنای snapshotهای قدیمی
+             عوض نمی‌شود) و `procedureNames` فقط از دو عمل به بالا می‌آید: `undefined`
+             در رفت‌وبرگشتِ JSONِ پایین حذف می‌شود، پس اثرانگشتِ فاکتورِ تک‌عملی
+             بایت‌به‌بایت همان دیروز است و صدورِ دوباره شمارهٔ رسمیِ تازه نمی‌سوزاند.
+             برای همین `version` هم ۱ می‌ماند. */
+          const names = procedureNames(v);
           const recipient = {
             code: `${v.patient.code}-V${v.seq}`, fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(), nationalId: v.patient.nationalId, phone: v.patient.phone,
             hospitalName: v.hospital?.name ?? v.hospitalName, hospitalAddress: v.hospital?.address, payer: v.payer, payerHospitalName: v.payerHospital?.name, payerAddress: v.payerHospital?.address,
             surgeonName: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName,
-            procedureTypeName: v.procedureType?.name ?? v.opType, opDate: v.opDate, opStartTime: v.opStartTime, opEndTime: v.opEndTime,
+            procedureTypeName: principalProcedureName(v), procedureNames: names.length >= 2 ? names : undefined, opDate: v.opDate, opStartTime: v.opStartTime, opEndTime: v.opEndTime,
           };
           const bank = v.invoiceBankAccount;
           const invoiceBankAccount = { id: bank.id, ownerName: bank.ownerName, bankName: bank.bankName, accountNumber: bank.accountNumber, iban: bank.iban };

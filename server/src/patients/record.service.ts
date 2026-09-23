@@ -11,6 +11,10 @@ import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
 import { NOTE_KIND_LABELS, OP_LABELS } from './labels';
 import { SECTION_KEYS, SECTION_NOTES, currentNotes, noteBody } from './clinical-note';
+import {
+  OTHER_DX, OTHER_PX, diagnosisIds, diagnosisLabel, diagnosisList, principalDiagnosisTitle,
+  principalProcedureName, procedureIds, procedureLabel, visitHasDiagnosis, visitHasProcedure,
+} from './visit-coding';
 
 /* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
    re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
@@ -179,6 +183,11 @@ export class RecordService {
           tech: { include: { person: true } },
           procedureType: true,
           diagnosis: true,
+          /* بستهٔ ۷: سایرِ عمل‌ها و تشخیص‌ها (رتبهٔ ۲ به بعد). ⚠️ پاسخ‌های فرم
+             عمداً تشخیص را نشان نمی‌دهند (`valuesOf` پایین)، پس اگر این‌ها خوانده
+             نشوند کارتِ مراجعه تشخیصِ دوم و سوم را **هیچ‌جا** نشان نمی‌دهد. */
+          otherProcedures: OTHER_PX,
+          otherDiagnoses: OTHER_DX,
           /* شکایتِ اولیهٔ عملی که از یک ویزیت درآمده، مشتق از همان ویزیت است
              (بستهٔ ۴الف) — پرونده هم باید همان را نشان بدهد که میزِ اتاقِ عمل. */
           decidedIn: { select: { chiefComplaint: true } },
@@ -408,8 +417,17 @@ export class RecordService {
         surgeonName: v.surgeon ? personName(v.surgeon.person) : v.surgeonName,
         hospitalName: v.hospital?.name ?? v.hospitalName,
         techName: v.tech ? personName(v.tech.person) : null,
-        procedureTypeName: v.procedureType?.name ?? v.opType,
-        diagnosisTitle: v.diagnosis?.title ?? null,
+        /* ⚠️ قراردادِ کلیدها (`visit-coding.ts`): `procedureTypeName` و
+           `diagnosisTitle` **همیشه اصلی**‌اند، مثلِ هر endpointِ دیگر؛ برچسبِ
+           ترکیبی کلیدِ خودش را دارد. یک کلید با دو معنا در دو صفحه همان
+           ناهمسانی‌ای است که این قرارداد برای بستنش نوشته شد. */
+        procedureTypeName: principalProcedureName(v),
+        procedureLabel: procedureLabel(v),
+        diagnosisTitle: principalDiagnosisTitle(v),
+        diagnosisLabel: diagnosisLabel(v),
+        /* فهرستِ کامل (اصلی اول، با کدِ ICD) — کارتِ مراجعه چندتایی را
+           خوانا می‌چیند نه به‌شکلِ یک رشتهٔ بلند. */
+        diagnoses: diagnosisList(v),
         notes: v.notes,
         extra: v.extra ?? {},
         /* پاسخ‌های فرم — همان چیزی که پزشک نوشته، با برچسبِ خودش. */
@@ -451,7 +469,8 @@ export class RecordService {
           opDate: v.opDate,
           opStatus: v.opStatus,
           opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
-          title: v.procedureType?.name ?? v.opType ?? null,
+          /* کلیدِ فقط‌نمایشیِ بی‌همزادِ id → برچسبِ ترکیبی («A + B»)؛ تک‌عمل همان دیروز. */
+          title: procedureLabel(v),
           /// فاصله از مراجعهٔ قبلی — «۳۲ روز بعد» چیزی است که پزشک می‌خواهد بداند.
           daysFromPrev: null as number | null,
         }))
@@ -846,25 +865,40 @@ export class RecordService {
    * بدونِ مراجعهٔ انتخاب‌شده فقط قالب‌های **عمومی** (بی‌هدف) می‌آیند؛ با
    * مراجعه، قالب‌های گره‌خورده به نوعِ عمل/تشخیص/موضوعِ همان مراجعه هم —
    * و اختصاصی‌ها جلوتر می‌نشینند چون مربوط‌ترند.
+   *
+   * ⚠️ بستهٔ ۷: عمل و تشخیص **در هر رتبه‌ای** منطبق‌اند — قالبِ شرحِ عملِ
+   * «B» باید برای جراحی‌ای که B عملِ دومش بوده هم پیشنهاد شود. ترتیب:
+   * ۰ منطبق بر اصلی · ۱ منطبق بر سایرین · ۲ فقط موضوع · ۳ عمومی؛ هم‌امتیازها
+   * به ترتیبِ عنوان (همان ترتیبِ کوئری، چون `sort` پایدار است). تک‌عمل/
+   * تک‌تشخیص همان «اختصاصی، بعد عمومی»ِ دیروز می‌ماند.
    */
   async noteTemplates(patientId: number, user: any, kind: string, visitId?: number) {
     await this.assertAccess(patientId, user);
     if (!this.canReadClinical(user)) throw new ForbiddenException('اجازهٔ خواندنِ شرح‌های بالینی را ندارید');
     if (!NOTE_KINDS.includes(kind as any)) throw new BadRequestException('نوعِ شرح نامعتبر است');
 
-    let v: { procedureTypeId: number | null; diagnosisId: number | null; topicId: number | null } | null = null;
+    let v: {
+      procedureTypeId: number | null; diagnosisId: number | null; topicId: number | null;
+      otherProcedures: { procedureTypeId: number }[]; otherDiagnoses: { diagnosisId: number }[];
+    } | null = null;
     if (visitId != null) {
       v = await this.prisma.visit.findFirst({
         where: { id: visitId, patientId },
-        select: { procedureTypeId: true, diagnosisId: true, topicId: true },
+        select: {
+          procedureTypeId: true, diagnosisId: true, topicId: true,
+          otherProcedures: { select: { procedureTypeId: true } },
+          otherDiagnoses: { select: { diagnosisId: true } },
+        },
       });
       if (!v) throw new BadRequestException('مراجعهٔ انتخابی برای این بیمار نیست');
     }
+    const pIds = v ? procedureIds(v) : [];
+    const dIds = v ? diagnosisIds(v) : [];
 
     const generic = { procedureTypeId: null, diagnosisId: null, topicId: null };
     const or: any[] = [generic];
-    if (v?.procedureTypeId) or.push({ procedureTypeId: v.procedureTypeId });
-    if (v?.diagnosisId) or.push({ diagnosisId: v.diagnosisId });
+    if (pIds.length) or.push({ procedureTypeId: { in: pIds } });
+    if (dIds.length) or.push({ diagnosisId: { in: dIds } });
     if (v?.topicId) or.push({ topicId: v.topicId });
 
     const rows = await this.prisma.noteTemplate.findMany({
@@ -873,9 +907,18 @@ export class RecordService {
       select: { id: true, title: true, body: true, procedureTypeId: true, diagnosisId: true, topicId: true },
     });
     const specific = (t: any) => t.procedureTypeId !== null || t.diagnosisId !== null || t.topicId !== null;
+    const score = (t: any) => {
+      if ((t.procedureTypeId != null && t.procedureTypeId === v?.procedureTypeId)
+        || (t.diagnosisId != null && t.diagnosisId === v?.diagnosisId)) return 0;
+      if ((t.procedureTypeId != null && pIds.includes(t.procedureTypeId))
+        || (t.diagnosisId != null && dIds.includes(t.diagnosisId))) return 1;
+      if (t.topicId != null && t.topicId === v?.topicId) return 2;
+      return 3;
+    };
     return rows
-      .sort((a, b) => Number(specific(b)) - Number(specific(a)))
-      .map((t) => ({ id: t.id, title: t.title, body: t.body, specific: specific(t) }));
+      .map((t) => ({ t, s: score(t) }))
+      .sort((a, b) => a.s - b.s)
+      .map(({ t }) => ({ id: t.id, title: t.title, body: t.body, specific: specific(t) }));
   }
 
   /**
@@ -884,6 +927,10 @@ export class RecordService {
    * فیلترهای عمل/تشخیص/موضوع روی **مراجعهٔ** شرح می‌نشینند؛ پس شرحِ بی‌مراجعه
    * (مثل شرحِ حالِ سطحِ پرونده) فقط وقتی می‌آید که هیچ‌کدام از آن سه فیلتر
    * فعال نباشد. فقط نسخهٔ جاریِ هر شرح (replacedAt = null) شمرده می‌شود.
+   *
+   * ⚠️ بستهٔ ۷: عمل و تشخیص **در هر رتبه‌ای** — «همهٔ شرح‌عمل‌های X» شاملِ
+   * جراحی‌هایی است که X عملِ دومشان بوده؛ همان `visitHas*`ِ فهرستِ مراجعات،
+   * تا این دو صفحه برای یک فیلتر دو جواب ندهند.
    */
   async searchNotes(user: any, f: {
     kind?: string; procedureTypeId?: number; diagnosisId?: number; topicId?: number; t?: string; take?: number;
@@ -895,8 +942,10 @@ export class RecordService {
       where.kind = f.kind;
     }
     const visitFilter: any = {};
-    if (f.procedureTypeId) visitFilter.procedureTypeId = f.procedureTypeId;
-    if (f.diagnosisId) visitFilter.diagnosisId = f.diagnosisId;
+    const and: any[] = [];
+    if (f.procedureTypeId) and.push(visitHasProcedure(f.procedureTypeId));
+    if (f.diagnosisId) and.push(visitHasDiagnosis(f.diagnosisId));
+    if (and.length) visitFilter.AND = and;
     if (f.topicId) visitFilter.topicId = f.topicId;
     if (Object.keys(visitFilter).length) where.visit = visitFilter;
     const term = (f.t ?? '').trim();
@@ -914,6 +963,8 @@ export class RecordService {
             id: true, seq: true, opDate: true, kind: true, opType: true,
             procedureType: { select: { name: true } },
             diagnosis: { select: { title: true } },
+            otherProcedures: OTHER_PX,
+            otherDiagnoses: OTHER_DX,
             topic: { select: { name: true } },
           },
         },
@@ -932,8 +983,10 @@ export class RecordService {
       visitId: n.visit?.id ?? null,
       visitCode: n.visit && n.patient ? `${n.patient.code}-V${n.visit.seq}` : null,
       opDate: n.visit?.opDate ?? null,
-      procedureName: n.visit?.procedureType?.name ?? n.visit?.opType ?? null,
-      diagnosisTitle: n.visit?.diagnosis?.title ?? null,
+      /* کلیدِ فقط‌نمایشی → برچسبِ ترکیبی؛ `diagnosisTitle` مثلِ همه‌جا اصلی است. */
+      procedureName: n.visit ? procedureLabel(n.visit) : null,
+      diagnosisTitle: n.visit ? principalDiagnosisTitle(n.visit) : null,
+      diagnosisLabel: n.visit ? diagnosisLabel(n.visit) : null,
       topicName: n.visit?.topic?.name ?? null,
     }));
   }

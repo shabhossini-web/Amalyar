@@ -11,6 +11,7 @@ import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 import { sendReminders } from '../reminders/send-reminders';
 import { AuditService } from '../audit/audit.service';
+import { diagnosisIds, procedureIds } from './visit-coding';
 
 /**
  * یادآوری‌ها — نسخهٔ ۱: «ویزیتِ بعدی» (docs/BOOKING.md، فازِ یادآوری‌ها).
@@ -97,6 +98,12 @@ export class RemindersService {
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
           opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
+          /* بستهٔ ۷ — فقط شناسه‌ها، برای بخش‌های فرمِ پیگیری (`followUpUrl`).
+             ⚠️ متنِ مراقبت و روزهای پیگیری عمداً از **عملِ اصلی** می‌مانند
+             (`procedureType` پایین): پیامکِ دوم برای عملِ همزمان یعنی دو دستورِ
+             ناهم‌خوان در یک روز، و متن جزوِ کلیدِ یکتای یادآوری است. */
+          otherProcedures: { select: { procedureTypeId: true } },
+          otherDiagnoses: { select: { diagnosisId: true } },
           postOpCare: true, followUpDays: true, postOpImmediate: true, preOpCare: true, preOpImmediate: true,
           procedureType: { select: { preOpCare: true, postOpCare: true, followUpDays: true } },
           patient: {
@@ -327,6 +334,12 @@ export class RemindersService {
    * نوعِ عمل و تشخیصِ ثبت‌شده، همه پشتِ **یک** توکن (بخش‌های اختصاصی
    * صفحه‌های بعدیِ همان فرم می‌شوند — `formView`ِ intake).
    *
+   * بستهٔ ۷ — بخش‌ها از **همهٔ** عمل‌ها و تشخیص‌های مراجعه می‌آیند، در هر
+   * رتبه‌ای: عملِ همزمان یا بیماریِ همراهی که فرمِ پیگیریِ خودش را دارد
+   * صفحهٔ بیشتر می‌گیرد، نه پیامکِ بیشتر (یک لینک، یک یادآوری برای هر موج).
+   * ⚠️ ترتیب همچنان `id` فرم است نه رتبه: جابه‌جاکردنِ اصلی و سایر نباید
+   * صفحه‌های ثبت‌نامِ بازی را که بیمار نیمه‌کاره پر کرده جابه‌جا کند.
+   *
    * ثبت‌نامِ بازِ همین فرم برای همین بیمار دوباره استفاده می‌شود (همان قاعدهٔ
    * `sendToPatient`)، پس هم‌گام‌سازی‌های مکرر ردیفِ نیمه‌کاره نمی‌کارند؛
    * اعتبارش تا آخرین موعدِ پیگیری + ۱۴ روز تمدید می‌شود.
@@ -334,6 +347,11 @@ export class RemindersService {
   private async followUpUrl(
     v: {
       id: number; patientId: number; opDate: Date | null; procedureTypeId: number | null; diagnosisId: number | null;
+      /* اختیاری: فیکسچرِ `intake-finance-roles.mjs` این متد را مستقیم و بدونِ
+         سایرین صدا می‌زند؛ نخوانده = فقط اصلی (توابعِ `visit-coding` خودشان
+         `?? []` دارند). */
+      otherProcedures?: { procedureTypeId: number }[];
+      otherDiagnoses?: { diagnosisId: number }[];
       patient: {
         firstName: string; lastName: string; phone: string | null;
         nationalId: string | null; birthDate: Date | null; address: string | null;
@@ -341,13 +359,15 @@ export class RemindersService {
     },
     days: number[],
   ): Promise<string | null> {
+    const pIds = procedureIds(v);
+    const dIds = diagnosisIds(v);
     const forms = await this.prisma.formDef.findMany({
       where: {
         active: true, scope: 'record',
         OR: [
           { followUp: 'general' },
-          ...(v.procedureTypeId ? [{ followUp: 'procedure', procedureTypeId: v.procedureTypeId }] : []),
-          ...(v.diagnosisId ? [{ followUp: 'diagnosis', diagnosisId: v.diagnosisId }] : []),
+          ...(pIds.length ? [{ followUp: 'procedure', procedureTypeId: { in: pIds } }] : []),
+          ...(dIds.length ? [{ followUp: 'diagnosis', diagnosisId: { in: dIds } }] : []),
         ],
       },
       orderBy: { id: 'asc' },

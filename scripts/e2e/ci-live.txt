@@ -121,3 +121,5 @@ form-types
 clinical-core
 vital-signs
 voice-notes
+multi-diagnosis
+multi-procedure

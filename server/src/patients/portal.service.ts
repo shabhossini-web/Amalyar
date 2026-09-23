@@ -10,6 +10,7 @@ import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 import { AvailabilityService } from './availability.service';
 import { OP_LABELS } from './labels';
+import { OTHER_PX, procedureLabel } from './visit-coding';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — لینکِ **دائمیِ** `/p/<token>`.
@@ -130,6 +131,7 @@ export class PortalService {
           surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
           surgeonName: true, opType: true,
           procedureType: { select: { name: true } },
+          otherProcedures: OTHER_PX,
           topic: { select: { name: true } },
         },
       }),
@@ -192,7 +194,8 @@ export class PortalService {
       doctorName: v.surgeon?.person
         ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim()
         : v.surgeonName,
-      procedure: v.procedureType?.name ?? v.opType,
+      /* بستهٔ ۷ج: سندِ بیمار عملِ دوم را جا نمی‌اندازد — برچسبِ همه، اصلی اول. */
+      procedure: procedureLabel(v),
       topicName: v.topic?.name ?? null,
       summaryUrl: `/v/${v.summaryToken}`,
     });

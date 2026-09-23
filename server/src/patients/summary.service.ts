@@ -9,6 +9,7 @@ import { toEnDigits } from '../common/identity';
 import { toJalali } from '../common/jalali';
 import { renderSms } from '../common/sms-template';
 import { currentNotes, noteBody } from './clinical-note';
+import { OTHER_DX, OTHER_PX, diagnosisLabel, diagnosisList, principalDiagnosisTitle, procedureLabel } from './visit-coding';
 
 /**
  * بخش‌های هسته که در **خلاصهٔ بیمار** دیده می‌شوند — کلیدِ فرم → نوعِ سند.
@@ -115,6 +116,10 @@ export class SummaryService {
         topic: { select: { name: true } },
         diagnosis: { select: { title: true } },
         procedureType: { select: { name: true } },
+        /* بستهٔ ۷: سایرِ تشخیص‌ها و عمل‌ها — سندی که به دستِ بیمار می‌رسد نباید
+           تشخیصِ دوم را بی‌صدا بیندازد. */
+        otherDiagnoses: OTHER_DX,
+        otherProcedures: OTHER_PX,
         /* بخش‌های متنیِ هسته — فقط همان سه‌تایی که پیش از بستهٔ ۶ هم به بیمار
            می‌رسید (پایین). */
         clinicalNotes: currentNotes(Object.values(PATIENT_SECTIONS)),
@@ -167,8 +172,16 @@ export class SummaryService {
         doctorName: person ? `${person.firstName} ${person.lastName}`.trim() : v.surgeonName,
         hospitalName: v.hospital?.name ?? v.hospitalName,
         topicName: v.topic?.name ?? null,
-        diagnosisTitle: v.diagnosis?.title ?? null,
-        procedure: v.procedureType?.name ?? v.opType,
+        /* قراردادِ کلیدها (`visit-coding.ts`): `diagnosisTitle` اصلی است و
+           `procedure` (فقط‌نمایشی، بی‌همزادِ id) برچسبِ ترکیبیِ «A + B». */
+        diagnosisTitle: principalDiagnosisTitle(v),
+        diagnosisLabel: diagnosisLabel(v),
+        /* ⚠️ projected، مثلِ بقیهٔ این سند: فقط عنوان و اصلی‌بودن. شناسهٔ
+           تعریف‌ها داخلی است و این لینک بی‌ورود باز می‌شود؛ کدِ ICD هم تا
+           امروز در این سند نبود و همان قاعدهٔ `PATIENT_SECTIONS` حاکم است —
+           چیزی بی‌اعلام به سندِ بیرونی اضافه نمی‌شود. */
+        diagnoses: diagnosisList(v).map((d) => ({ title: d.title, primary: d.primary })),
+        procedure: procedureLabel(v),
       },
       answers,
       nextVisitDate: v.nextVisitDate,

@@ -16,11 +16,12 @@ import VoiceInput from '../ui/VoiceInput.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
 import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import JDate from './JDate.jsx';
-import { Close, Plus } from '../ui/icons.jsx';
+import { Close, Copy, Plus } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
+import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
 import './dashboard.css';
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
@@ -56,6 +57,17 @@ const DECISION_HINTS = {
 
 /** بخش‌های متنیِ هستهٔ ثابت (بستهٔ ۶الف) — هر کدام سندِ نسخه‌دارِ خودش در سرور. */
 const SECTION_KEYS = ['history', 'findings', 'exam', 'planNote', 'prescription'];
+
+/**
+ * **مالکِ کلیدهای «سایرین»** (بستهٔ ۷) — فهرستِ سایرِ تشخیص‌ها/عمل‌ها فیلدِ
+ * فرم‌ساز نیست و نقشِ مالکش همان نقشِ فیلدِ اصلی است.
+ *
+ * ⚠️ آینهٔ وارونهٔ `CODING_TWIN` در `server/src/patients/visit-coding.ts`؛ نگهبانِ
+ * CI (C8) هم‌خوانیِ این دو را می‌سنجد. بدونِ این نگاشت، منشی‌ای که مالکِ تشخیص
+ * نیست `diagnosisId` را حذف می‌کرد ولی `otherDiagnosisIds` را می‌فرستاد و سرور
+ * کلِ ذخیره را ۴۰۰ می‌داد.
+ */
+const CODING_TWIN_OWNER = { otherDiagnosisIds: 'diagnosisId', otherProcedureTypeIds: 'procedureTypeId' };
 
 /* ── سلکتِ موجودیت + افزودنِ سریع (جراح/بیمارستان) ── */
 function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlaceholder }) {
@@ -168,8 +180,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     surgeonId: initial?.surgeonId ?? null,
     hospitalId: initial?.hospitalId ?? null,
     techId: initial?.techId ?? null,
-    procedureTypeId: initial?.procedureTypeId ?? null,
-    diagnosisId: initial?.diagnosisId ?? null,
+    /* ⚠️ فهرستِ **کامل** به ترتیبِ رتبه (بستهٔ ۷): `[0]` اصلی است (همان ستونِ
+       `procedureTypeId`/`diagnosisId`)، بقیه «سایرین». یک آرایه و نه دو فیلد تا
+       «اصلی کن» یک setState باشد و اصلی و سایرین هرگز از هم عقب نیفتند.
+       رکوردِ خراب (سایرین بدونِ اصلی) هم این‌جا خودبه‌خود اولی را اصلی می‌بیند —
+       همان ترمیمی که سرور در ذخیرهٔ بعدی انجام می‌دهد. */
+    procedureTypeIds: [initial?.procedureTypeId, ...(initial?.otherProcedureTypeIds ?? [])].filter((x) => x != null),
+    diagnosisIds: [initial?.diagnosisId, ...(initial?.otherDiagnosisIds ?? [])].filter((x) => x != null),
     topicId: initial?.topicId ?? null,
     // متنِ آزاد فقط برای رکوردهای قدیمی که هنوز به نوعِ عمل وصل نشده‌اند.
     opType: initial?.procedureTypeId ? '' : initial?.opType || '',
@@ -207,6 +224,38 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (initial?.id || initial?.kind || prefill?.kind || kindTouched.current) return;
     setF((s) => (s.kind === defaultKind ? s : { ...s, kind: defaultKind }));
   }, [defaultKind, initial?.id, initial?.kind, prefill?.kind]);
+  /* **«سایرین» خوانده شده‌اند یا نه؟** (بستهٔ ۷) — `undefined` در `initial` یعنی
+     «نخوانده» نه «خالی» (همان قاعدهٔ بخش‌های هسته، `sectionOut`). فرمی که سایرین
+     را ندیده و کاربر هم دستشان نزده، کلیدِ همزاد را **نمی‌فرستد** تا ذخیره‌اش
+     فهرستِ ندیده را پاک نکند؛ کلیدِ اصلی به‌تنهایی در سرور سایرین را نگه می‌دارد. */
+  const dxLoaded = !editing || Array.isArray(initial?.otherDiagnosisIds);
+  const pxLoaded = !editing || Array.isArray(initial?.otherProcedureTypeIds);
+  const dxTouched = useRef(false);
+  const pxTouched = useRef(false);
+  /* تغییرِ فهرستِ تشخیص/عمل — تنها مسیرِ نوشتنِ این دو آرایه، تا «دست‌خورده»
+     هیچ‌جا جا نیفتد. عمل‌ها متنِ آزادِ قدیمی (`opType`) را هم پاک می‌کنند؛ همان
+     رفتارِ پیش از بستهٔ ۷ برای انتخابِ نوعِ عمل. */
+  const nextIds = (next, cur) => (typeof next === 'function' ? next(cur) : next);
+  const setDiagnosisIds = (next) => {
+    dxTouched.current = true;
+    setF((s) => ({ ...s, diagnosisIds: nextIds(next, s.diagnosisIds) }));
+  };
+  const setProcedureTypeIds = (next) => {
+    pxTouched.current = true;
+    setF((s) => ({ ...s, procedureTypeIds: nextIds(next, s.procedureTypeIds), opType: '' }));
+  };
+  /* انتخابِ **اصلی** در DefSelect: پاک‌کردن یعنی «بعدی اصلی شود» (سایرین از
+     دست نمی‌روند)، و انتخابِ تازه جای اصلیِ قبلی را می‌گیرد — اگر همین مورد از
+     سایرین بود، از آن‌جا برمی‌خیزد تا تکراری نشود.
+     ⚠️ به‌شکلِ تابعِ به‌روزرسانی: افزودنِ سریعِ DefSelect بعد از یک درخواستِ
+     شبکه `onChange` را صدا می‌زند و فهرستِ لحظهٔ کلیک تا آن موقع کهنه است. */
+  const pickPrimary = (v) => (ids) => (v == null ? ids.slice(1) : [v, ...ids.slice(1).filter((x) => x !== v)]);
+  /* ⚠️ عوض‌کردنِ **فقط اصلی** «دست‌خورده» حساب نمی‌شود: اگر سایرین خوانده نشده
+     باشند، فهرستِ این‌جا فقط اصلی را دارد و فرستادنِ همزادِ `[]` سایرینِ ندیده
+     را پاک می‌کرد. کلیدِ اصلی به‌تنهایی در سرور همان کار را می‌کند (X اصلی
+     می‌شود، سایرین منهای X می‌مانند؛ `null` اولیِ سایرین را بالا می‌آورد). */
+  const setPrimaryDiagnosis = (v) => setF((s) => ({ ...s, diagnosisIds: pickPrimary(v)(s.diagnosisIds) }));
+  const setPrimaryProcedure = (v) => setF((s) => ({ ...s, procedureTypeIds: pickPrimary(v)(s.procedureTypeIds), opType: '' }));
   const [busy, setBusy] = useState(false);
   /* دستیارِ AI روی خودِ فرمِ عمل — دکمه‌های شرح/مراقبت فقط در ویرایش
      (پرونده و مراجعه معلوم‌اند)؛ دیکتهٔ صوتی در ساخت هم هست. */
@@ -342,7 +391,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     setF((s2) => (s2.preOpImmediate === opDayDelta > 0 ? s2 : { ...s2, preOpImmediate: opDayDelta > 0 }));
   }, [opDayDelta, editing]);
 
-  const procRow = defs.procedures.find((p) => p.id === f.procedureTypeId) ?? null;
+  /* ⚠️ پیش‌نمایشِ مراقبت **فقط از عملِ اصلی** — همان قاعدهٔ سرور (پیامکِ مراقبت
+     و روزهای پیگیری از `procedureTypeId`). اگر این‌جا اجتماعِ همهٔ عمل‌ها نشان
+     داده می‌شد، فرم چیزی را وعده می‌داد که یادآوری‌ها نمی‌فرستند. */
+  const procRow = defs.procedures.find((p) => p.id === f.procedureTypeIds[0]) ?? null;
   const procDefaults = {
     name: procRow?.name ?? (f.opType || ''),
     preOpCare: procRow?.preOpCare ?? '',
@@ -350,6 +402,33 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     followUpDays: procRow?.followUpDays ?? '',
     has: !!(procRow?.preOpCare || procRow?.postOpCare || procRow?.followUpDays),
   };
+  /* قالبِ «عمل‌های همزمان» — خودکار نمی‌رود؛ فقط صریح گفته می‌شود و با یک ضربه
+     به متنِ اختصاصیِ همین مراجعه افزوده می‌شود (`.db-careother`). */
+  const otherCare = f.procedureTypeIds.slice(1)
+    .map((id) => defs.procedures.find((p) => p.id === id))
+    .filter((p) => p && (p.preOpCare || p.postOpCare || p.followUpDays));
+  /**
+   * افزودنِ متنِ مراقبتِ یک عملِ همزمان به متنِ اختصاصی.
+   *
+   * ⚠️ متنِ اختصاصیِ خالی یعنی «قالبِ عملِ اصلی می‌رود». اگر متنِ دوم روی کادرِ
+   * خالی نوشته می‌شد، همان لحظه **جای** قالبِ اصلی را می‌گرفت و مراقبتِ عملِ
+   * اصلی بی‌صدا از پیامک حذف می‌شد. پس کادرِ خالی اول قالبِ اصلی را می‌گیرد و
+   * بعد متنِ دوم زیرش می‌آید. متنی که از قبل آن‌جاست دوباره افزوده نمی‌شود.
+   */
+  const appendCare = (p) => setF((s2) => {
+    const join = (own, base, extra) => {
+      const add = (extra ?? '').trim();
+      if (!add) return own;
+      const cur = own.trim() || (base ?? '').trim();
+      if (cur.includes(add)) return own;
+      return cur ? `${cur}\n\n${add}` : add;
+    };
+    return {
+      ...s2,
+      preOpCare: join(s2.preOpCare, procDefaults.preOpCare, p.preOpCare),
+      postOpCare: join(s2.postOpCare, procDefaults.postOpCare, p.postOpCare),
+    };
+  });
   const toggleFollowDay = (d) => setF((s2) => {
     const cur = parseFollowDays(s2.followUpDays);
     const next = cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort((a, b) => a - b);
@@ -557,7 +636,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     }
     const builtinVals = {
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
-      procedureTypeId: f.procedureTypeId, diagnosisId: f.diagnosisId, topicId: f.topicId,
+      /* ستارهٔ فیلد روی **اصلی** است؛ چون فهرست هرگز بدونِ اصلی نمی‌ماند
+         (پاک‌کردنِ اصلی، بعدی را بالا می‌آورد)، «اجباری» یعنی «دست‌کم یکی». */
+      procedureTypeId: f.procedureTypeIds[0] ?? null, diagnosisId: f.diagnosisIds[0] ?? null, topicId: f.topicId,
       opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
       nextVisitDate: f.nextVisitDateJ, notes: f.notes,
       /* بخش‌های هستهٔ ثابت — ستارهٔ فرم‌ساز رویشان هم همین‌جا زود گفته می‌شود. */
@@ -579,10 +660,22 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       surgeonId: f.surgeonId ?? (editing ? null : undefined),
       hospitalId: f.hospitalId ?? (editing ? null : undefined),
       techId: f.techId ?? (editing ? null : undefined),
-      procedureTypeId: f.procedureTypeId ?? (editing ? null : undefined),
-      diagnosisId: f.diagnosisId ?? (editing ? null : undefined),
+      /* ── تشخیص‌ها و عمل‌ها (بستهٔ ۷): اصلی در کلیدِ همیشگی، سایرین در همزاد ──
+         سه‌حالتیِ همزاد:
+         - ساخت: فقط وقتی واقعاً سایری هست (مراجعهٔ تک‌موردی همان بدنهٔ دیروز).
+         - ویرایش و «خوانده یا دست‌خورده»: فهرستِ کامل، حتی [] — پاک‌کردنِ آخرین
+           چیپ باید واقعاً پاک کند.
+         - ویرایش، نخوانده و دست‌نخورده: `undefined` = «دست نزن». */
+      procedureTypeId: f.procedureTypeIds[0] ?? (editing ? null : undefined),
+      otherProcedureTypeIds: editing
+        ? ((pxLoaded || pxTouched.current) ? f.procedureTypeIds.slice(1) : undefined)
+        : (f.procedureTypeIds.length > 1 ? f.procedureTypeIds.slice(1) : undefined),
+      diagnosisId: f.diagnosisIds[0] ?? (editing ? null : undefined),
+      otherDiagnosisIds: editing
+        ? ((dxLoaded || dxTouched.current) ? f.diagnosisIds.slice(1) : undefined)
+        : (f.diagnosisIds.length > 1 ? f.diagnosisIds.slice(1) : undefined),
       topicId: f.topicId ?? (editing ? null : undefined),
-      opType: f.procedureTypeId ? undefined : f.opType.trim() || undefined,
+      opType: f.procedureTypeIds.length ? undefined : f.opType.trim() || undefined,
       // پاسخِ فیلدهای دلخواه — سرور خودش به ستون و JSON تقسیمشان می‌کند.
       extra,
       /* خالی یعنی «ارث را نگه دار» (یا «بردار»، وقتی ارثی نیست) — پس در
@@ -620,8 +713,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* ⚠️ فیلدِ بخشِ نقشِ دیگر اصلاً فرستاده نمی‌شود — نه مقدارِ قفل‌شده‌اش.
        سرور echoی بی‌تغییر را تحمل می‌کند، ولی نفرستادن هم تمیزتر است هم
        جلوی ردشدنِ الکی با کلاینتِ ناهمگام را می‌گیرد. */
+    /* کلیدِ «سایرین» مالکِ خودش را ندارد؛ قفلش قفلِ فیلدِ اصلی است. */
     for (const k of Object.keys(common)) {
-      if (k !== 'extra' && keyLocked(k)) delete common[k];
+      if (k !== 'extra' && keyLocked(CODING_TWIN_OWNER[k] ?? k)) delete common[k];
     }
     if (common.extra) {
       common.extra = Object.fromEntries(Object.entries(common.extra).filter(([k]) => !keyLocked(k)));
@@ -638,7 +732,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           method: 'PATCH',
           body: {
             ...common,
-            opType: f.procedureTypeId ? undefined : f.opType.trim(),
+            opType: f.procedureTypeIds.length ? undefined : f.opType.trim(),
             opReport: f.opReport.trim(),
             opDate: opDate ?? null,
             firstName: f.firstName.trim(),
@@ -708,8 +802,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
 
   const activeSurgeons = defs.surgeons.filter((s) => s.active || s.id === f.surgeonId);
   const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
-  const activeProcedures = defs.procedures.filter((p) => p.active || p.id === f.procedureTypeId);
-  const activeDiagnoses = defs.diagnoses.filter((d) => d.active || d.id === f.diagnosisId);
+  /* ⚠️ هر غیرفعالی که **در فهرست** است می‌ماند، نه فقط اصلی: «اصلی کن» روی
+     سایرِ غیرفعال آن را به DefSelect می‌برد و بدونِ گزینه‌اش دکمه خالی دیده می‌شد. */
+  const activeProcedures = defs.procedures.filter((p) => p.active || f.procedureTypeIds.includes(p.id));
+  const activeDiagnoses = defs.diagnoses.filter((d) => d.active || f.diagnosisIds.includes(d.id));
   const activeTopics = (defs.topics ?? []).filter((t) => t.active || t.id === f.topicId);
 
   /**
@@ -787,24 +883,87 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       onChange={(v) => setF((s) => ({ ...s, techId: v }))}
       options={defs.techs}
     />) };
+  /* ── نوعِ عمل و تشخیص: اصلی + «سایرین» (بستهٔ ۷) ──
+     ⚠️ چیپ‌ها **داخلِ همان گره** زیرِ DefSelect می‌نشینند، نه گرهِ جدا: ترتیبِ
+     فرم‌ساز، `isOn`، برچسب، ستاره و جعبهٔ نقش همه مالِ همین یک کلید‌اند و
+     فهرستِ سایرین فیلدِ فرم‌ساز نیست که جای خودش را داشته باشد. */
   if (fd.isOn('procedureTypeId')) builtinNodes.procedureTypeId = { el: (
-    <DefSelect
-      label={<>{fd.labelOf('procedureTypeId', 'نوعِ عمل')}{star(fd.requiredOf('procedureTypeId'))}</>}
-      value={f.procedureTypeId}
-      onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v, opType: '' }))}
-      options={activeProcedures}
-      onQuickAdd={quickAdd('procedure-types')}
-      addPlaceholder="نامِ نوعِ عملِ جدید…"
-    />) };
+    <>
+      <DefSelect
+        label={<>{fd.labelOf('procedureTypeId', 'نوعِ عمل')}{star(fd.requiredOf('procedureTypeId'))}{f.procedureTypeIds.length > 1 && <PrimaryBadge />}</>}
+        value={f.procedureTypeIds[0] ?? null}
+        onChange={setPrimaryProcedure}
+        options={activeProcedures}
+        onQuickAdd={quickAdd('procedure-types')}
+        addPlaceholder="نامِ نوعِ عملِ جدید…"
+      />
+      <CodingChips
+        axis="procedure"
+        ids={f.procedureTypeIds}
+        options={defs.procedures}
+        onChange={setProcedureTypeIds}
+        onQuickAdd={quickAdd('procedure-types')}
+        addLabel="عملِ همزمان"
+        max={10}
+      />
+    </>) };
+  /* **تشخیصِ ویزیتِ تصمیم** — عملی که از یک ویزیت درآمده و هنوز تشخیصی ندارد.
+     ⚠️ نه ارث و نه کپیِ خودکار: تشخیصِ پیش از عمل و پس از عمل دو واقعیتِ
+     جدا‌اند (یافتهٔ حینِ عمل ممکن است عوضش کند)، و منشی شاید اصلاً مالکِ
+     فیلدِ تشخیص نباشد. فقط پیشنهاد + یک ضربه؛ غیرفعال‌ها کپی نمی‌شوند چون سرور
+     افزودنِ تازهٔ غیرفعال را رد می‌کند و کلِ ذخیره می‌ماند. */
+  const decidedDxIds = decidedVisit?.diagnosisId != null
+    ? [...new Set([decidedVisit.diagnosisId, ...(decidedVisit.otherDiagnosisIds ?? [])])]
+    : [];
+  const showDxCopy = f.kind === 'surgery' && decidedDxIds.length > 0 && f.diagnosisIds.length === 0
+    && !keyLocked('diagnosisId');
+  const copyDecidedDx = () => {
+    const keep = [];
+    const skipped = [];
+    for (const id of decidedDxIds) {
+      const d = defs.diagnoses.find((x) => x.id === id);
+      if (d?.active) keep.push(id); else skipped.push(d?.title ?? 'یک تشخیص');
+    }
+    if (keep.length) setDiagnosisIds(keep.slice(0, 10));
+    if (skipped.length) {
+      onToast(skipped.length === 1
+        ? `«${skipped[0]}» غیرفعال است و کپی نشد`
+        : `${skipped.map((n) => `«${n}»`).join('، ')} غیرفعال‌اند و کپی نشدند`);
+    }
+  };
   if (fd.isOn('diagnosisId')) builtinNodes.diagnosisId = { wide: true, el: (
-    <DefSelect
-      label={<>{fd.labelOf('diagnosisId', 'تشخیص')}{star(fd.requiredOf('diagnosisId'))}</>}
-      value={f.diagnosisId}
-      onChange={(v) => setF((s) => ({ ...s, diagnosisId: v }))}
-      options={activeDiagnoses}
-      onQuickAdd={quickAdd('diagnoses')}
-      addPlaceholder="عنوانِ تشخیصِ جدید…"
-    />) };
+    <>
+      <DefSelect
+        label={<>{fd.labelOf('diagnosisId', 'تشخیص')}{star(fd.requiredOf('diagnosisId'))}{f.diagnosisIds.length > 1 && <PrimaryBadge />}</>}
+        value={f.diagnosisIds[0] ?? null}
+        onChange={setPrimaryDiagnosis}
+        options={activeDiagnoses}
+        onQuickAdd={quickAdd('diagnoses')}
+        addPlaceholder="عنوانِ تشخیصِ جدید…"
+      />
+      <CodingChips
+        axis="diagnosis"
+        ids={f.diagnosisIds}
+        options={defs.diagnoses}
+        onChange={setDiagnosisIds}
+        onQuickAdd={quickAdd('diagnoses')}
+        addLabel="تشخیصِ دیگر"
+        max={10}
+      />
+      {showDxCopy && (
+        <div className="cc-copy" data-coding-copy>
+          <p>
+            تشخیصِ ویزیتِ تصمیم
+            ({decidedVisit.opDate ? faDate(decidedVisit.opDate) : <span dir="ltr">{decidedVisit.code}</span>}):
+            {' '}<b>{decidedVisit.diagnosisLabel ?? decidedVisit.diagnosisTitle}</b>
+          </p>
+          <button type="button" onClick={copyDecidedDx}>
+            <Copy width="14" height="14" />
+            همین‌ها
+          </button>
+        </div>
+      )}
+    </>) };
   /**
    * **شکایتِ اولیه** — «چرا آمده»، به زبانِ خودِ بیمار.
    *
@@ -1149,8 +1308,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         <span>از ویزیتِ تصمیم — {decidedVisit.code}{decidedVisit.opDate ? ` · ${faDate(decidedVisit.opDate)}` : ''}</span>
         <i>فقط‌خواندنی؛ اصلاح در همان ویزیت</i>
       </div>
+      {/* ⚠️ برچسبِ ترکیبی (همهٔ تشخیص‌ها، اصلی اول) نه فقط اصلی — این همان
+          «تشخیصِ پیش از عمل» است و جراح باید همه را ببیند. */}
       {[
-        ['تشخیص', decidedVisit.diagnosisTitle],
+        ['تشخیص', decidedVisit.diagnosisLabel ?? decidedVisit.diagnosisTitle],
         ['شرحِ حال و علائم', decidedVisit.history],
         ['یافته‌های پاراکلینیک', decidedVisit.findings],
         ['شرحِ معاینه', decidedVisit.exam],
@@ -1158,7 +1319,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       ].filter(([, v]) => v).map(([l, v]) => (
         <p key={l} className="db-decided-row"><b>{l}</b><span>{v}</span></p>
       ))}
-      {![decidedVisit.diagnosisTitle, decidedVisit.history, decidedVisit.findings, decidedVisit.exam, decidedVisit.planNote].some(Boolean) && (
+      {![decidedVisit.diagnosisLabel ?? decidedVisit.diagnosisTitle, decidedVisit.history, decidedVisit.findings, decidedVisit.exam, decidedVisit.planNote].some(Boolean) && (
         <p className="db-decide-hint">در آن ویزیت هنوز شرحی ثبت نشده.</p>
       )}
     </div>
@@ -1423,7 +1584,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       </div>
 
       {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
-      {!f.procedureTypeId && f.opType && (
+      {!f.procedureTypeIds.length && f.opType && (
         <label className="db-field"><span>نوعِ عمل (متنِ قدیمی)</span>
           <input type="text" value={f.opType} onChange={set('opType')} />
           <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
@@ -1500,6 +1661,28 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                 هرچه این‌جا بنویسید فقط برای همین بیمار اجرا می‌شود. برای اینکه دفعهٔ بعد
                 خودکار بیاید، همان را در «تعریف‌های پایه ← نوعِ عمل» ثبت کنید.
               </span>
+            </div>
+          )}
+          {/* ── عمل‌های همزمانِ قالب‌دار (بستهٔ ۷ج) ──
+              ⚠️ پیامکِ مراقبت و روزهای پیگیری **فقط از عملِ اصلی** است (سرور،
+              `reminders.service`)؛ این خط همین را همان‌جا که کاربر عمل را
+              انتخاب کرده می‌گوید، نه بعد از رسیدنِ پیامِ ناقص به بیمار. افزودنِ
+              قالبِ عملِ دوم کارِ صریحِ کاربر است — یک ضربه، به متنِ اختصاصی. */}
+          {otherCare.length > 0 && (
+            <div className="db-careother" data-section="care-other">
+              <p>
+                مراقبت و روزهای پیگیری فقط از عملِ اصلی («{procDefaults.name}») فرستاده می‌شود؛
+                قالبِ {otherCare.map((p) => `«${p.name}»`).join('، ')} ارسال نمی‌شود.
+              </p>
+              {otherCare.some((p) => p.preOpCare || p.postOpCare) && (
+                <div className="db-careother-btns">
+                  {otherCare.filter((p) => p.preOpCare || p.postOpCare).map((p) => (
+                    <button key={p.id} type="button" onClick={() => appendCare(p)}>
+                      افزودنِ متنِ «{p.name}» به متنِ اختصاصی
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
