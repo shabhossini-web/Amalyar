@@ -1,18 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/fixes-summary-paraclinic
 since: 2026-09-24
-paths:
-  - src/app/VisitDocs.jsx
-  - src/app/visit-docs.css
-  - src/app/dashboard.css
-  - src/app/Theatre.jsx
-  - src/lib/api.js
-  - scripts/e2e/w3-2-prep-card.mjs
-  - scripts/e2e/visit-docs-ui.mjs
-  - scripts/e2e/document-phase.mjs
-note: اصلاحاتِ مالک ۱۴۰۵/۰۷/۰۲ (خلاصهٔ کوچکِ بیمار، مدارکِ بالینیِ ویزیت، شرحِ عملِ پاپ‌آپ در مطب، پیامِ روشنِ فایلِ ناموجود). ⚠️ `src/app/VisitForm.jsx` را هم عوض می‌کند که در کلیمِ بیاتِ claude-opus است (شاخه‌اش در #80 مرج شد) — عمداً این‌جا فهرست نشد تا نگهبان قرمز نشود. تا «اکی»ِ مالک روی عکس‌ها مرج نمی‌شود؛ بستهٔ ۸+۹ (#98) جدا و در انتظارِ مرورِ مالک است.
+paths: []
+note: اصلاحاتِ مالک ۱۴۰۵/۰۷/۰۲ (خلاصهٔ بیمار، باکسِ مدارک، شرحِ عملِ پاپ‌آپ) مرج شد. بسته‌های ۸+۹ در PR #98 (draft) منتظرِ مرورِ مالک‌اند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
