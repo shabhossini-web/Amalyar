@@ -142,8 +142,19 @@ export async function apiDataUrl(path) {
  * `URL.revokeObjectURL` آزاد کند وگرنه حافظه نشت می‌کند.
  */
 export async function apiBlobUrl(path) {
-  const res = await fetch(`${BASE}${path}`, { credentials: 'include' });
-  if (!res.ok) throw new ApiError('فایل در دسترس نیست', res.status);
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { credentials: 'include' });
+  } catch {
+    throw new ApiError('اتصال به سرور برقرار نشد. اینترنت را بررسی کنید.', 0);
+  }
+  if (!res.ok) {
+    /* ⚠️ پیامِ خودِ سرور را نشان بده («فایلِ این مدرک روی سرور نیست» با «دسترسی
+       ندارید» فرق دارد و درمانشان هم فرق می‌کند)؛ پیامِ کلی فقط وقتی بدنه نیست. */
+    if (res.status === 401) announceUnauthorized(path, false);
+    const data = await parseBody(res).catch(() => null);
+    throw new ApiError(data && typeof data === 'object' && data.message ? messageOf(data, res.status) : 'فایل در دسترس نیست', res.status);
+  }
   return URL.createObjectURL(await res.blob());
 }
 

@@ -1057,3 +1057,45 @@ a.db-defbtn { text-decoration: none; }
 .db-decided-row { margin: 0; display: grid; gap: 2px; }
 .db-decided-row b { color: var(--text2); font-size: 12px; font-weight: 600; }
 .db-decided-row span { color: var(--text1); font-size: 14px; white-space: pre-wrap; line-height: 1.8; }
+
+/* خلاصهٔ کوچکِ بیمار بالای فرمِ ویرایش (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) — مثلِ کارتِ جزئیاتِ ملک‌طب:
+   دوستونهٔ ریزِ «برچسب: مقدار»، تا همهٔ جزئیات باشد و چشم گم نشود. */
+.db-psum {
+  display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px;
+  padding: 9px 12px; border-radius: 13px;
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+.db-psum-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 12px; color: var(--text3); }
+.db-psum-head b { font-size: 14px; color: var(--text1); }
+.db-psum-head span { font-variant-numeric: tabular-nums; }
+.db-psum-edit {
+  margin-inline-start: auto; font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  color: var(--brand-2); background: none; border: 1px solid rgba(var(--brand-soft-rgb), 0.35);
+  border-radius: 99px; padding: 3px 10px;
+}
+.db-psum-edit:hover, .db-psum-edit:focus-visible { border-color: var(--brand-2); outline: none; }
+.db-psum-edit[aria-expanded="true"] { background: rgba(var(--brand-soft-rgb), 0.14); }
+.db-psum-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; margin: 0; font-size: 12px; }
+.db-psum-grid div { display: flex; gap: 5px; min-width: 0; align-items: baseline; }
+.db-psum-grid dt { color: var(--text3); white-space: nowrap; font-weight: 700; }
+.db-psum-grid dd { margin: 0; color: var(--text1); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-psum-risk { padding: 6px 9px; }
+.db-psum-risk li { font-size: 12px; line-height: 1.7; }
+
+/* شرحِ عمل: پیش‌نمای کوتاه در فرم + پاپ‌آپِ نوشتن (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲). */
+.db-report-preview {
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px; text-align: start;
+  font: inherit; cursor: pointer; padding: 10px 12px; border-radius: 12px;
+  color: var(--text1); background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.14);
+}
+.db-report-preview:hover:not(:disabled), .db-report-preview:focus-visible { border-color: rgba(var(--brand-soft-rgb), 0.55); outline: none; }
+.db-report-text {
+  font-size: 13px; line-height: 1.9; white-space: pre-wrap;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden;
+}
+.db-report-preview i { font-style: normal; font-size: 12.5px; color: var(--text3); }
+.db-report-preview b { align-self: flex-end; font-size: 12px; color: var(--brand-2); }
+.db-report-sheet { max-width: 760px; }
+.db-report-body { gap: 10px; }
+.db-report-area { min-height: 46vh; font-size: 14px; line-height: 2; resize: vertical; }
+.db-report-done { width: 100%; margin-top: 12px; }

@@ -5,7 +5,7 @@ import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
-import { useStatusList } from './config.jsx';
+import { useConfig, useStatusList } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon } from '../ui/icons.jsx';
@@ -186,6 +186,9 @@ function DayList({ day, busy, onOpen }) {
 /** کارتِ حینِ عمل. */
 function Card({ card, busy, onAct, onDischarge, onToast }) {
   const { visit: v, patient: p, alerts, items, documents } = card;
+  /* ⚠️ «یافته‌های حینِ عمل» در مطب نیست (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) — همان
+     چیزی که از فرمِ عمل برداشته شد، سرِ میز هم نباید دوباره پیدا شود. */
+  const isClinic = useConfig().kind === 'clinic';
   /* ⚠️ عمل‌ها و تشخیص‌ها از **فهرستِ سرور** خوانده می‌شوند (اصلی اول، بستهٔ
      ۷) — نه با شکافتنِ برچسبِ «A + B» (قانونِ ۱۵). برچسب فقط وقتی به کار
      می‌آید که سرورِ قدیمی‌تر هنوز فهرست را نفرستد (فرانت و بک‌اند جدا دیپلوی
@@ -329,12 +332,14 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
         </section>
       )}
 
-      <NoteBox
-        key={`findings-${v.id}`}
-        visit={v} field="findings" path="/findings" actKey="findings"
-        title="یافته‌های حینِ عمل" placeholder="آنچه حینِ عمل دیده شد…"
-        savedMsg="یافته‌ها ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
-      />
+      {!isClinic && (
+        <NoteBox
+          key={`findings-${v.id}`}
+          visit={v} field="findings" path="/findings" actKey="findings"
+          title="یافته‌های حینِ عمل" placeholder="آنچه حینِ عمل دیده شد…"
+          savedMsg="یافته‌ها ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
+        />
+      )}
       <NoteBox
         key={`report-${v.id}`}
         visit={v} field="opReport" path="/report" actKey="report"
