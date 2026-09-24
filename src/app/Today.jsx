@@ -9,6 +9,7 @@ import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
+import { usePrefs } from './usePrefs.jsx';
 import { useConfig } from './config.jsx';
 import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Scalpel } from '../ui/icons.jsx';
 import { todayJStr, ymdToJStr } from '../lib/jalali.js';
@@ -53,6 +54,18 @@ export default function Today() {
   const [toast, setToast] = useState('');
   const [toolsOpen, setToolsOpen] = useState(false);
   const { hero, daily, tools, nothing } = useAllowedTools();
+  /* **ابزارک‌های منتخب** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — سه خانه بالای صفحه، به‌ازای هر حساب
+     (`/auth/prefs`). خانهٔ خالی کشوی ابزارها را برای **انتخاب** باز می‌کند، خانهٔ پر خودِ
+     ابزار را. ابزاری که دیگر اجازه‌اش نیست خانه‌اش را خالی نشان می‌دهد. */
+  const { prefs, save: savePrefs } = usePrefs();
+  const [pickSlot, setPickSlot] = useState(null);
+  const allTools = [hero, ...daily, ...tools].filter(Boolean);
+  const toolByKey = new Map(allTools.map((x) => [x.key, x]));
+  const setPin = async (slot, key) => {
+    /* همان ابزار در خانهٔ دیگری بود؟ جابه‌جا می‌شود، نه دوتا. */
+    const next = prefs.todayPins.map((k, i) => (i === slot ? key : k === key ? null : k));
+    try { await savePrefs('todayPins', next); } catch (e) { setToast(e?.message || 'ذخیره نشد'); }
+  };
   /* واژهٔ حوزه از واژگان (قانونِ ۲۴): «عملِ امروز» فقط در حوزه‌های عمل؛ مطب «ویزیت» — و چاقو فقط آن‌جا که عمل است. */
   const { t, vertical } = useConfig();
   const VisitIcon = vertical === 'clinic' ? Diagnosis : Scalpel;
@@ -115,7 +128,11 @@ export default function Today() {
     }
   };
 
-  const openTool = (t) => { setToolsOpen(false); if (t.to) navigate(t.to); };
+  const openTool = (t) => {
+    if (pickSlot != null) { const slot = pickSlot; setPickSlot(null); setToolsOpen(false); setPin(slot, t.key); return; }
+    setToolsOpen(false);
+    if (t.to) navigate(t.to);
+  };
   const b = data?.brief;
   const name = user?.displayName || user?.firstName || '';
 
@@ -140,6 +157,33 @@ export default function Today() {
           <Grid width="16" height="16" aria-hidden="true" /> همهٔ ابزارها
         </button>
       </header>
+
+      <section className="td-favs" aria-label="ابزارک‌های منتخب" data-today-favs>
+        {prefs.todayPins.map((key, i) => {
+          const tool = key ? toolByKey.get(key) : null;
+          if (!tool) {
+            return (
+              <button key={`fav-${i}`} type="button" className="td-fav" data-fav-slot={i}
+                onClick={() => { setPickSlot(i); setToolsOpen(true); }}>
+                <Plus width="24" height="24" aria-hidden="true" />
+                <span>ابزارکِ منتخب {faNum(i + 1)}</span>
+              </button>
+            );
+          }
+          return (
+            <div key={`fav-${i}`} className="td-fav on" data-fav-slot={i} data-fav={key}>
+              <button type="button" className="td-fav-open" onClick={() => openTool(tool)}>
+                <span className={`td-tile-ic tint-${tool.tint || 'violet'}`}><tool.icon width="22" height="22" aria-hidden="true" /></span>
+                <span>{tool.label}</span>
+              </button>
+              <button type="button" className="td-fav-x" aria-label={`برداشتنِ «${tool.label}» از منتخب‌ها`}
+                onClick={() => setPin(i, null)}>
+                <Close width="13" height="13" aria-hidden="true" />
+              </button>
+            </div>
+          );
+        })}
+      </section>
 
       {/* ۴۰۳ یعنی ماژولِ کار برای این نقش روشن نیست — این خطا نیست، پس قرمز هم نیست:
           کاربر باید از «همهٔ ابزارها» راهِ خودش را پیدا کند، نه با یک کادرِ قرمز روبه‌رو شود. */}
@@ -216,10 +260,11 @@ export default function Today() {
 
       <AnimatePresence>
         {toolsOpen && (
-          <Overlay backdrop="td-overlay" panel="td-drawer" from="bottom" onClose={() => setToolsOpen(false)} role="dialog" aria-modal="true" aria-label="همهٔ ابزارها">
+          <Overlay backdrop="td-overlay" panel="td-drawer" from="bottom" onClose={() => { setToolsOpen(false); setPickSlot(null); }} role="dialog" aria-modal="true"
+            aria-label={pickSlot != null ? `انتخابِ ابزارکِ منتخب ${faNum(pickSlot + 1)}` : 'همهٔ ابزارها'}>
             <div className="td-drawer-head">
-              <h2>همهٔ ابزارها</h2>
-              <button type="button" className="td-x" onClick={() => setToolsOpen(false)} aria-label="بستن"><Close width="18" height="18" /></button>
+              <h2>{pickSlot != null ? `انتخابِ ابزارکِ منتخب ${faNum(pickSlot + 1)}` : 'همهٔ ابزارها'}</h2>
+              <button type="button" className="td-x" onClick={() => { setToolsOpen(false); setPickSlot(null); }} aria-label="بستن"><Close width="18" height="18" /></button>
             </div>
             {nothing && <p className="td-empty">دسترسیِ شما هنوز محدود است. مدیرِ سامانه باید سطحتان را ارتقا دهد.</p>}
             <div className="td-tiles">

@@ -4,3 +4,19 @@
 .assisted-actions button:disabled { opacity: .5; cursor: default; }
 .assisted-actions button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .assisted-proposal { padding: 10px; border: 1px solid var(--card-border); border-radius: 10px; box-sizing: border-box; }
+
+/* ── ابزارهای دستیار: آیکونِ کوچک در گوشهٔ کادر (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳) ──
+   `inset-inline-end` = سمتِ پایانِ خط (در RTL چپ) — همان‌جا که متنِ فارسی دیرتر می‌رسد؛
+   کادر هم‌اندازهٔ آیکون‌ها از آن سمت فاصله می‌گیرد تا هیچ خطی زیرشان نرود. */
+.assisted-text { position: relative; }
+.assisted-text > textarea { padding-inline-end: calc(var(--at-tools, 0) * 32px + 10px) !important; }
+.assisted-tools { position: absolute; top: 6px; inset-inline-end: 6px; display: flex; gap: 4px; z-index: 1; }
+.assisted-tools .at-ic, .assisted-tools .vc-btn.vc-compact {
+  width: 28px; height: 28px; min-height: 0; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border-radius: 9px; color: var(--brand-2);
+  background: rgba(var(--surface-rgb), .72); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.assisted-tools .at-ic:disabled { opacity: .45; cursor: default; }
+.assisted-tools .at-ic:focus-visible, .assisted-tools .vc-btn.vc-compact:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+/* ضبطِ در جریان باید در همان آیکونِ کوچک هم از دور دیده شود (همان قرمزِ `voice.css`). */
+.assisted-tools .vc-btn.vc-compact.vc-rec { color: #f87171; border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .12); }

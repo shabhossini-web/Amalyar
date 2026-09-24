@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -24,6 +24,9 @@ import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
 import VisitDocs from './VisitDocs.jsx';
+import { AttachPicker, DecisionSelect, GrowthTrend, SubformCard, VisitHeadBar, attachableOn, useSubformCatalog } from './VisitSubforms.jsx';
+import { togglePin, usePrefs } from './usePrefs.jsx';
+import { useAllowedTools } from './tools.jsx';
 import './dashboard.css';
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
 
@@ -48,13 +51,29 @@ const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
  * می‌آید (`labels.ts`)؛ تا بستهٔ ۶ همین آرایه برچسب هم داشت و یک فیلدِ دلخواهِ
  * `plan` در قالبِ مطب واژگانِ دیگری برای همان تصمیم داشت.
  */
+/* ⚠️ از راهنماهای تصمیم فقط آن که **رفتار** را عوض می‌کند می‌ماند (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳:
+   «راهنماهای بلند برداشته شوند»): بقیه توضیحِ همان برچسب بودند و فقط جا می‌گرفتند. */
 const DECISION_HINTS = {
   surgery: 'بعد از ذخیره، فرمِ عملِ همین بیمار باز می‌شود',
-  conservative: 'ویزیتِ بعدی با موضوعِ پیگیریِ درمان',
-  followup: 'تاریخِ «ویزیتِ بعدی» را در همین فرم بنویسید تا یادآوری برود',
-  workup: 'بعد از رسیدنِ جوابِ آزمایش/تصویربرداری/مشاوره، تصمیمِ قطعی در ویزیتِ بعدی',
-  service: 'ارجاع به سرویسِ دیگرِ همین مرکز — شرحش را در طرحِ درمان بنویسید',
 };
+
+/**
+ * **ادامهٔ «کاندیدای جراحی»** — فرمِ عملی که بعد از ذخیرهٔ ویزیتِ تصمیم باز می‌شود.
+ *
+ * ⚠️ یک سازنده برای هر چهار جا (داشبورد، پرونده، پاپ‌آپ‌ها، میزِ پذیرش): تا بازبینیِ
+ * ۱۴۰۵/۰۷/۰۳ هرکدام نسخهٔ خودش را داشت، `patientName` از فیلدی خوانده می‌شد که پاسخِ سرور
+ * ندارد (`fullName` است) و پزشکِ ویزیت هم به فرمِ عمل نمی‌رسید.
+ */
+export function surgeryPrefill(saved, patientName) {
+  return {
+    patientId: saved.patientId, patientName: patientName ?? saved.fullName ?? '', kind: 'surgery',
+    surgeonId: saved.surgeonId ?? null,
+    decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
+  };
+}
+
+/** کلیدهای فرم‌سازِ قالبِ قدیمیِ مطب که حالا جای دیگری دارند و در فهرستِ فیلدها تکرار نمی‌شوند. */
+const INLINE_KEYS = { duration: 'historyDuration', legacyPlan: 'plan' };
 
 /** بخش‌های متنیِ هستهٔ ثابت (بستهٔ ۶الف) — هر کدام سندِ نسخه‌دارِ خودش در سرور. */
 const SECTION_KEYS = ['history', 'findings', 'exam', 'planNote', 'prescription'];
@@ -183,8 +202,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     phone: initial?.phone || '',
     nationalId: initial?.nationalId || '',
     birthDateJ: initial?.birthDate ? isoToJStr(initial.birthDate) : '',
-    surgeonId: initial?.surgeonId ?? null,
-    hospitalId: initial?.hospitalId ?? null,
+    /* پیوستگی (۱۴۰۵/۰۷/۰۳): فرمِ عملِ «کاندیدای جراحی» پزشکِ همان ویزیت را می‌گیرد. */
+    surgeonId: initial?.surgeonId ?? prefill?.surgeonId ?? null,
+    hospitalId: initial?.hospitalId ?? prefill?.hospitalId ?? null,
     techId: initial?.techId ?? null,
     /* ⚠️ فهرستِ **کامل** به ترتیبِ رتبه (بستهٔ ۷): `[0]` اصلی است (همان ستونِ
        `procedureTypeId`/`diagnosisId`)، بقیه «سایرین». یک آرایه و نه دو فیلد تا
@@ -454,12 +474,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      مشاوره بخواهد. «کاندیدای جراحی» موضوعِ همین ویزیت را هم پره‌آپ می‌کند:
      همان ویزیت است که تبدیل به ویزیتِ قبل از عمل شده. */
   const preOpTopicId = defs.topics.find((tp) => tp.name.includes('پره‌آپ'))?.id ?? null;
-  const toggleDecision = (v) => setF((s2) => {
-    const on = s2.decisions.includes(v);
-    const decisions = on ? s2.decisions.filter((x) => x !== v) : [...s2.decisions, v];
-    const topicId = !on && v === 'surgery' && preOpTopicId && !s2.topicId ? preOpTopicId : s2.topicId;
-    return { ...s2, decisions, topicId };
-  });
   const formDuration = durationMin(f.opStartTime, f.opEndTime);
 
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
@@ -518,6 +532,72 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [extra, setExtra] = useState(() => initial?.extra ?? {});
   const [extraErr, setExtraErr] = useState({});
 
+  /* ── زیرفرم‌های الصاقی (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) ──────────────────────────────
+     «هر چیزی که به مراجعه اضافه می‌کنیم زیرفرم باشد — پیش‌فرض پنهان، با الصاق نمایش.»
+     فهرست از نمای **کاملِ** مراجعه (`subforms`) می‌آید؛ فرمی که از ردیفِ سبک باز شده همان را
+     یک‌بار می‌خواند و تا نرسیده دکمهٔ الصاق را نمی‌دهد — وگرنه الصاقِ دوبارهٔ زیرفرمی که
+     پاسخ دارد، پاسخش را با یک کارتِ خالی بازنویسی می‌کرد. */
+  const catalog = useSubformCatalog();
+  const catByKey = useMemo(() => new Map((catalog?.items ?? []).map((x) => [x.key, x])), [catalog]);
+  const { prefs, save: savePrefs } = usePrefs();
+  const { tools: myTools } = useAllowedTools();
+  const toEntry = (x) => ({ ...x, data: x.data ?? {}, fresh: false });
+  const [subList, setSubList] = useState(() => (Array.isArray(initial?.subforms) ? initial.subforms.map(toEntry) : []));
+  const [subLoaded, setSubLoaded] = useState(() => !editing || Array.isArray(initial?.subforms));
+  const savedSubKeys = useRef(new Set((initial?.subforms ?? []).filter((x) => !x.implicit).map((x) => x.key)));
+  const subTouched = useRef(new Set());
+  const [subErr, setSubErr] = useState({});
+  const [cardsShut, setCardsShut] = useState({});
+  const [pickOpen, setPickOpen] = useState(false);
+  /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخوردهٔ علائمِ حیاتی — به‌ازای مرحله؛ «ذخیره» همراهِ خودش می‌برد. */
+  const [pendingVitals, setPendingVitals] = useState({});
+  const [vitalsCount, setVitalsCount] = useState(null);
+  useEffect(() => {
+    if (subLoaded || !initial?.id) return undefined;
+    let alive = true;
+    api(`/visits/${initial.id}`)
+      .then((v) => {
+        if (!alive) return;
+        const list = Array.isArray(v?.subforms) ? v.subforms : [];
+        savedSubKeys.current = new Set(list.filter((x) => !x.implicit).map((x) => x.key));
+        setSubList(list.map(toEntry));
+        setSubLoaded(true);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [subLoaded, initial?.id]);
+
+  const attachedKeys = useMemo(() => new Set(subList.map((x) => x.key)), [subList]);
+  /* کارتِ تازه یا منتخبِ زده‌شده دیده شود — اسکرول تا همان کارت بعد از رندر. */
+  const reveal = (key) => requestAnimationFrame(() => {
+    document.querySelector(`[data-subform="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+  const attachSub = (it) => {
+    if (!attachableOn(it, f.kind)) { onToast(`«${it.title}» در این فرم در دسترس نیست`); return; }
+    setCardsShut((s2) => ({ ...s2, [it.key]: false }));
+    if (!attachedKeys.has(it.key)) {
+      subTouched.current.add(it.key);
+      setSubList((l) => [...l, { key: it.key, builtin: !!it.builtin, title: it.title, data: {}, hasData: false, fresh: true }]);
+    }
+    setPickOpen(false);
+    reveal(it.key);
+  };
+  const removeSub = (key) => {
+    subTouched.current.add(key);
+    setSubList((l) => l.filter((x) => x.key !== key));
+    setSubErr((e) => { const n = { ...e }; delete n[key]; return n; });
+  };
+  const setSubData = (key, data) => {
+    subTouched.current.add(key);
+    setSubList((l) => l.map((x) => (x.key === key ? { ...x, data } : x)));
+  };
+  /* ستارهٔ «منتخب» — خانهٔ خالیِ بعدی؛ هر سه پر یعنی اول یکی را بردارید. */
+  const pinSub = async (it) => {
+    const next = togglePin(prefs.subformPins, it.key);
+    if (!next) { onToast('سه فرمِ منتخب پر است — اول ستارهٔ یکی را بردارید'); return; }
+    try { await savePrefs('subformPins', next); } catch (e) { onToast(e.message); }
+  };
+
   useEffect(() => {
     if (mode !== 'existing') return undefined;
     const t = setTimeout(() => {
@@ -574,6 +654,21 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         + ' اگر همان بیمار است رویش بزنید، وگرنه کد ملی را بررسی کنید.';
     }
     return '';
+  };
+
+  /**
+   * انتخابِ پروندهٔ موجود — پزشک و مرکزِ **آخرین مراجعه** در کادرِ خالی می‌نشیند (بازبینیِ
+   * ۱۴۰۵/۰۷/۰۳: «پیوستگیِ اطلاعات»). فقط جای خالی: انتخابی که کاربر همین حالا کرده بازنویسی نمی‌شود.
+   */
+  const pickPatient = (p) => {
+    setPicked(p);
+    const last = p?.last;
+    if (!last) return;
+    setF((s2) => ({
+      ...s2,
+      surgeonId: s2.surgeonId ?? last.surgeonId ?? null,
+      hospitalId: s2.hospitalId ?? (s2.kind !== 'surgery' ? last.hospitalId ?? null : null),
+    }));
   };
 
   const goNext = () => {
@@ -680,6 +775,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       /* ستارهٔ فیلد روی **اصلی** است؛ چون فهرست هرگز بدونِ اصلی نمی‌ماند
          (پاک‌کردنِ اصلی، بعدی را بالا می‌آورد)، «اجباری» یعنی «دست‌کم یکی». */
       procedureTypeId: f.procedureTypeIds[0] ?? null, diagnosisId: f.diagnosisIds[0] ?? null, topicId: f.topicId,
+      /* شکایتِ خالی ولی ارثی «پر» است — همان قاعدهٔ سرور (باگِ ممیزی ۱۴۰۵/۰۷/۰۳). */
+      chiefComplaint: f.chiefComplaint.trim() || inheritedComplaint,
       opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
       nextVisitDate: f.nextVisitDateJ, notes: f.notes,
       /* بخش‌های هستهٔ ثابت — ستارهٔ فرم‌ساز رویشان هم همین‌جا زود گفته می‌شود. */
@@ -695,6 +792,31 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       myRole,
     );
     if (Object.keys(eBuiltin).length) { onToast(Object.values(eBuiltin)[0]); return; }
+
+    /* زیرفرم‌ها: ستارهٔ هر کدام کنارِ همان کادر، و اولین خطا با نامِ زیرفرم. */
+    const eSubs = {};
+    for (const e of subList) {
+      const it = catByKey.get(e.key);
+      if (e.builtin || !it) continue;
+      const er = dynErrors(it.fields, e.data ?? {}, myRole);
+      if (Object.keys(er).length) eSubs[e.key] = er;
+    }
+    setSubErr(eSubs);
+    const firstSub = Object.entries(eSubs)[0];
+    if (firstSub) {
+      setCardsShut((c) => ({ ...c, [firstSub[0]]: false }));
+      onToast(`${catByKey.get(firstSub[0])?.title ?? ''}: ${Object.values(firstSub[1])[0]}`);
+      return;
+    }
+    /* دلتا، نه کلِ فهرست: فقط زیرفرمی که در همین فرم الصاق/پر/برداشته شد می‌رود. */
+    const subformsOut = [];
+    for (const key of subTouched.current) {
+      const e = subList.find((x) => x.key === key);
+      if (!e) { if (savedSubKeys.current.has(key)) subformsOut.push({ key, removed: true }); continue; }
+      subformsOut.push(e.builtin ? { key } : { key, data: e.data ?? {} });
+    }
+    const vitalsAttached = f.kind === 'surgery' || attachedKeys.has('vitals');
+    const pending = Object.values(pendingVitals).filter(Boolean);
 
     const common = {
       kind: f.kind,
@@ -734,9 +856,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
          باز شده بود بخش‌ها را خالی می‌دید و ذخیره‌اش سندِ جاری را می‌بست. */
       ...Object.fromEntries(SECTION_KEYS.map((k) => [k, sectionOut(k)])),
       anesthesia: f.anesthesia || (editing ? null : undefined),
-      /* علائمِ حیاتیِ لحظهٔ ثبت — فقط در ساخت؛ بعد از آن هر نوبت جدا ثبت می‌شود. */
-      vitals: !editing && f.vitals && Object.entries(f.vitals).some(([k, v]) => k !== 'phase' && String(v ?? '').trim())
-        ? f.vitals : undefined,
+      /* علائمِ حیاتی: در ساخت پیش‌نویسِ کارتِ الصاق‌شده؛ در ویرایش اندازه‌گیریِ تایپ‌شده‌ای که
+         «ثبت» نخورده — تا دیروز با «ذخیره» بی‌صدا دور ریخته می‌شد. */
+      vitals: editing
+        ? (pending.length ? pending : undefined)
+        : vitalsAttached && f.vitals && Object.entries(f.vitals).some(([k, v]) => k !== 'phase' && String(v ?? '').trim())
+          ? f.vitals : undefined,
+      subforms: subformsOut.length ? subformsOut : undefined,
       opDate,
       /* پاک‌کردن در ویرایش با null — پزشکِ منصرف باید بتواند برش دارد. */
       nextVisitDate: f.nextVisitDateJ.trim() ? nextVisitDate : (editing ? null : undefined),
@@ -757,12 +883,16 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        سرور echoی بی‌تغییر را تحمل می‌کند، ولی نفرستادن هم تمیزتر است هم
        جلوی ردشدنِ الکی با کلاینتِ ناهمگام را می‌گیرد. */
     /* کلیدِ «سایرین» مالکِ خودش را ندارد؛ قفلش قفلِ فیلدِ اصلی است. */
-    for (const k of Object.keys(common)) {
-      if (k !== 'extra' && keyLocked(CODING_TWIN_OWNER[k] ?? k)) delete common[k];
-    }
-    if (common.extra) {
-      common.extra = Object.fromEntries(Object.entries(common.extra).filter(([k]) => !keyLocked(k)));
-    }
+    /* ⚠️ قفلِ نقش روی **بدنهٔ نهایی** (`dropLocked`) اعمال می‌شود، نه فقط روی `common`: ویرایش
+       شرحِ عمل و تاریخ را بعداً دوباره می‌گذاشت و منشی‌ای که به شرحِ عمل دست نزده بود با
+       اختلافِ فاصلهٔ ته متن ۴۰۰ می‌گرفت (بازبینیِ ۱۴۰۵/۰۷/۰۳). */
+    const dropLocked = (body) => {
+      for (const k of Object.keys(body)) {
+        if (k !== 'extra' && k !== 'subforms' && k !== 'vitals' && keyLocked(CODING_TWIN_OWNER[k] ?? k)) delete body[k];
+      }
+      if (body.extra) body.extra = Object.fromEntries(Object.entries(body.extra).filter(([k]) => !keyLocked(k)));
+      return body;
+    };
 
     /* ⚠️ مبلغ فقط در **ساخت** می‌رود، نه در ویرایش: ویرایشِ مراجعه نباید
        بی‌سروصدا قلمِ تازه بسازد. اصلاحِ مبلغ کارِ صورت‌حساب است. */
@@ -773,8 +903,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       if (editing) {
         saved = await api(`/visits/${initial.id}`, {
           method: 'PATCH',
-          body: {
+          body: dropLocked({
             ...common,
+            /* نوعِ مراجعهٔ ثبت‌شده از این فرم عوض نمی‌شود (انتخابگرش در ویرایش نیست). */
+            kind: undefined,
             opType: f.procedureTypeIds.length ? undefined : f.opType.trim(),
             opReport: f.opReport.trim(),
             opDate: opDate ?? null,
@@ -783,15 +915,15 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             phone: toEnDigits(f.phone).trim(),
             nationalId: nid,
             birthDate: birthDate ?? null,
-          },
+          }),
         });
       } else if (mode === 'existing') {
         if (!picked) { onToast('یک بیمار را از فهرست انتخاب کنید'); setBusy(false); return; }
-        saved = await api('/visits', { method: 'POST', body: { ...common, patientId: picked.id, amount: amount || undefined } });
+        saved = await api('/visits', { method: 'POST', body: dropLocked({ ...common, patientId: picked.id, amount: amount || undefined }) });
       } else {
         saved = await api('/visits', {
           method: 'POST',
-          body: {
+          body: dropLocked({
             amount: amount || undefined,
             ...common,
             firstName: f.firstName.trim(),
@@ -799,7 +931,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             phone: toEnDigits(f.phone).trim() || undefined,
             nationalId: nid || undefined,
             birthDate,
-          },
+          }),
         });
       }
       /* یادگیری از اصلاحِ دستی: متنِ ذخیره‌شده با پیش‌نویسِ دستیار فرق دارد؟
@@ -841,7 +973,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    */
   const inheritedComplaint = (initial?.chiefComplaintFrom ? initial.chiefComplaint : prefill?.chiefComplaint) || '';
   const complaintSourceIso = initial?.chiefComplaintFrom?.opDate ?? prefill?.decidedInDate ?? null;
-  const complaintSourceLabel = complaintSourceIso ? `ویزیتِ ${faDate(complaintSourceIso)}` : 'ویزیتِ تصمیم';
+  /* ویزیتِ پست‌آپ از **عمل** ارث می‌برد، نه از ویزیت — برچسب باید همان را بگوید. */
+  const complaintSourceKind = initial?.chiefComplaintFrom?.kind ?? 'clinic';
+  const complaintSourceWord = kindOf(complaintSourceKind).label;
+  const complaintSourceLabel = complaintSourceIso ? `${complaintSourceWord}ِ ${faDate(complaintSourceIso)}` : `${complaintSourceWord}ِ مرتبط`;
 
   const activeSurgeons = defs.surgeons.filter((s) => s.active || s.id === f.surgeonId);
   const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
@@ -1020,24 +1155,40 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    * دیده نمی‌شد. خالی‌ماندن یعنی «همان ویزیت را بخوان»، و تایپ یعنی «برای
    * این عمل فرق دارد».
    */
+  /* «مدتِ علائم» (فیلدِ فرم‌سازِ قالبِ قدیمیِ مطب) کنارِ شکایت می‌نشیند، نه در جعبهٔ جدای
+     «اطلاعاتِ تکمیلی» — آن جعبه فقط همین یک کادر را داشت (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳). */
+  const durationField = fd.customFields.find((x) => x.key === INLINE_KEYS.duration && x.type === 'text') ?? null;
   if (fd.isOn('chiefComplaint')) builtinNodes.chiefComplaint = { wide: true, el: (
-    <div className="db-field">
-      <span>{fd.labelOf('chiefComplaint', 'شکایتِ اولیه')}{star(fd.requiredOf('chiefComplaint'))}</span>
-      <textarea
-        rows={2}
-        value={f.chiefComplaint}
-        onChange={set('chiefComplaint')}
-        placeholder={inheritedComplaint || 'به زبانِ خودِ بیمار…'}
-      />
-      {inheritedComplaint && !f.chiefComplaint.trim() && (
-        <p className="db-hint">
-          از {complaintSourceLabel} به ارث می‌رسد — خالی بماند تا همیشه هم‌گام بماند.
-        </p>
+    <div className={durationField ? 'vf-cc' : undefined}>
+      <div className="db-field">
+        <span>{fd.labelOf('chiefComplaint', 'شکایتِ اولیه')}{star(fd.requiredOf('chiefComplaint'))}</span>
+        <textarea
+          rows={2}
+          value={f.chiefComplaint}
+          onChange={set('chiefComplaint')}
+          placeholder={inheritedComplaint || 'به زبانِ خودِ بیمار…'}
+        />
+        {inheritedComplaint && !f.chiefComplaint.trim() && (
+          <p className="db-hint" data-complaint-source>
+            از {complaintSourceLabel} به ارث می‌رسد — خالی بماند تا همیشه هم‌گام بماند.
+          </p>
+        )}
+      </div>
+      {durationField && (
+        <label className={`db-field${extraErr[durationField.key] ? ' bad' : ''}`} data-field={durationField.key}>
+          <span>{durationField.label}{star(durationField.required)}</span>
+          <input
+            type="text" value={extra[durationField.key] ?? ''} placeholder={durationField.placeholder || 'مثلاً ۳ ماه'}
+            disabled={busy || keyLocked(durationField.key)}
+            onChange={(e) => setExtra((x) => ({ ...x, [durationField.key]: e.target.value }))}
+          />
+          {extraErr[durationField.key] && <small className="db-hint bad">{extraErr[durationField.key]}</small>}
+        </label>
       )}
     </div>) };
   /* موضوعِ ویزیت — اولیه/پست‌آپ/زیبایی. `docs/BOOKING.md` مرحلهٔ ۱. مثلِ بقیهٔ
      تعریف‌ها افزودنِ سریع دارد تا منشی وسطِ ثبت مجبور به رفتن به «تعریف‌ها» نشود. */
-  if (fd.isOn('topicId')) builtinNodes.topicId = { wide: true, el: (
+  if (fd.isOn('topicId')) builtinNodes.topicId = { wide: !isClinicCore, el: (
     <DefSelect
       label={<>{fd.labelOf('topicId', 'موضوعِ ویزیت')}{star(fd.requiredOf('topicId'))}</>}
       value={f.topicId}
@@ -1046,13 +1197,15 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       onQuickAdd={quickAdd('visit-topics')}
       addPlaceholder="موضوعِ تازه… مثلِ پست‌آپ"
     />) };
-  if (fd.isOn('opDate')) builtinNodes.opDate = { wide: true, el: (
-    /* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */
+  /* مطب: تاریخ و پزشک در یک ردیف (طرحِ مصوب) — تراکم، نه یک کادرِ تمام‌عرض برای ده رقم. */
+  if (fd.isOn('opDate')) builtinNodes.opDate = { wide: !isClinicCore, el: (
+    /* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت.
+       ⚠️ راهنمای کادر «سال / ماه / روز» است، نه یک تاریخِ نمونه که با مقدارِ واقعی اشتباه شود. */
     <JDate
       label={<>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){star(fd.requiredOf('opDate'))}</>}
       value={f.opDateJ}
       onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
-      placeholder="۱۴۰۵/۰۴/۲۸"
+      placeholder="سال / ماه / روز"
     />) };
   if (fd.isOn('opStartTime')) builtinNodes.opStartTime = { el: timeNode('opStartTime', 'ساعتِ شروع') };
   if (fd.isOn('opEndTime')) builtinNodes.opEndTime = { el: (
@@ -1235,7 +1388,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       label={<>{fd.labelOf('nextVisitDate', 'ویزیتِ بعدی')} (شمسی){star(fd.requiredOf('nextVisitDate'))}</>}
       value={f.nextVisitDateJ}
       onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
-      placeholder="۱۴۰۵/۰۵/۱۰"
+      placeholder="سال / ماه / روز"
     />) };
   /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
      در ویرایش، صورت‌حساب جای اصلاح است. */
@@ -1248,7 +1401,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     <div className="db-field db-financial-context" aria-label="وضعیت مالی ثبت‌شده">
       <span>{fd.labelOf('amount', 'مبلغ')} — صورت‌حساب</span>
       <p>مبلغ: {initial.total == null ? '—' : faNum(initial.total)} تومان · پرداخت‌شده: {initial.paid == null ? '—' : faNum(initial.paid)} تومان · مانده: {initial.due == null ? '—' : faNum(initial.due)} تومان</p>
-      <small className="db-hint">اصلاح مبلغ و پرداخت‌ها از صورت‌حساب انجام می‌شود. تغییر تاریخ و اطلاعات مراجعه، پرداخت قبلی را تغییر نمی‌دهد.</small>
     </div>) };
   if (fd.isOn('notes')) builtinNodes.notes = { wide: true, el: (
     <label className="db-field"><span>{fd.labelOf('notes', 'یادداشت')}{star(fd.requiredOf('notes'))}</span>
@@ -1275,22 +1427,22 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* سفارش‌های همین مراجعه — در فرمِ ویزیت زیرِ تصمیم، در فرمِ عمل داخلِ تبِ
      «قبل از عمل» (آزمایش/تصویربرداریِ پیش از عمل — تا دیروز از فرمِ عمل اصلاً
      قابلِ ثبت نبود؛ یافتهٔ جانبیِ بستهٔ ۱). فقط برای مراجعهٔ ذخیره‌شده. */
+  /* ⚠️ برچسبِ وضعیت از خودِ سفارش (`statusFa`، `labels.ts`) — نگاشتِ سه‌حالتیِ دستیِ قبلی
+     «بررسی‌شده» و «نیازمندِ اقدام» را «ثبت‌شده» نشان می‌داد (بازبینیِ ۱۴۰۵/۰۷/۰۳). */
   const ordersBlock = initial?.id ? (
             <div className="db-orders">
               {orders.map((o) => (
                 <div className="db-order" key={`${o.kind}-${o.id}`}>
                   <b>{o.kindFa}</b>
                   <span>{o.summary}</span>
-                  <i className={o.status}>
-                    {o.status === 'answered' ? 'پاسخ ثبت شد' : o.status === 'sent' ? 'برای بیمار رفت' : 'ثبت‌شده'}
-                  </i>
+                  <i className={o.status}>{o.statusFa ?? o.status}</i>
                   <button type="button" onClick={() => setOrderSheet({ kind: o.kind, order: o })}>باز کردن</button>
                 </div>
               ))}
               <div className="db-daychips">
                 {Object.entries(ORDER_META).map(([k, m]) => (
-                  <button key={k} type="button" className="db-daychip"
-                          onClick={() => setOrderSheet({ kind: k })}>+ {m.fa}</button>
+                  <button key={k} type="button" className="db-daychip" data-order-new={k}
+                          onClick={() => setOrderSheet({ kind: k })}>+ {m.fa.replace(/^درخواستِ\s*/, '')}</button>
                 ))}
               </div>
             </div>
@@ -1324,46 +1476,21 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   );
 
   /* ── تصمیمِ درمانی ──
-     «بیمار آمد، معاینه شد، حالا چه؟» تا امروز جوابش جایی ثبت نمی‌شد و
-     مرحلهٔ بعد در ذهنِ پزشک می‌ماند. این ردیف همان تصمیم را روی خودِ
-     مراجعه می‌نشاند (چندتایی، چون یک ویزیت می‌تواند هم آزمایش بدهد هم
-     مشاوره بخواهد) و مسیرِ بعدی را از همان‌جا باز می‌کند.
-     ⚠️ برچسب‌ها از `/config.statuses.decision` — «تصمیم»ِ دوم (فیلدِ دلخواهِ
-     `plan`) در بستهٔ ۶ در همین ستون ادغام شد. */
+     «بیمار آمد، معاینه شد، حالا چه؟» — یک کشوییِ چندانتخابی (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳) به‌جای
+     ردیفِ چیپ‌ها. درخواست‌ها (آزمایش/تصویربرداری/مشاوره/ارجاع) این‌جا نیستند: زیرفرمِ
+     «درخواستِ پاراکلینیک و مشاوره» خودش ثبتشان می‌کند و سرور کلیدِ همان تصمیم را می‌گذارد —
+     تا دیروز هر درخواست دو بار دیده می‌شد و چیپ و سفارش از هم عقب می‌افتادند.
+     «کاندیدای جراحی» موضوعِ همین ویزیت را هم پره‌آپ می‌کند (همان رفتارِ قبلی). */
+  const setDecisions = (next) => setF((s2) => {
+    const fresh = next.includes('surgery') && !s2.decisions.includes('surgery');
+    return { ...s2, decisions: next, topicId: fresh && preOpTopicId && !s2.topicId ? preOpTopicId : s2.topicId };
+  });
   const decisionsEl = (
-    <div className="db-decide" data-section="decisions">
-      <h4>تصمیمِ درمانیِ این ویزیت</h4>
-      <p className="db-hint">
-        چند مورد هم می‌تواند انتخاب شود. تصمیم روی همین مراجعه ثبت می‌شود تا
-        در پرونده و گزارش‌ها دیده شود.
-      </p>
-      <div className="db-daychips">
-        {decisionOpts.map((d) => (
-          <button
-            key={d.key} type="button"
-            className={f.decisions.includes(d.key) ? 'db-daychip on' : 'db-daychip'}
-            aria-pressed={f.decisions.includes(d.key)}
-            onClick={() => {
-              toggleDecision(d.key);
-              /* ⚠️ فرمِ سفارش فقط وقتی باز می‌شود که تصمیم **تازه** زده
-                 شده و مراجعه ذخیره‌شده است (سفارش به visitId نیاز دارد). */
-              if (ORDER_META[d.key] && !f.decisions.includes(d.key)) {
-                if (initial?.id) setOrderSheet({ kind: d.key });
-                else onToast('اول مراجعه را ذخیره کنید، بعد فرمِ درخواست باز می‌شود');
-              }
-            }}
-          >{d.label}</button>
-        ))}
-      </div>
-      {decisionOpts.filter((d) => DECISION_HINTS[d.key] && f.decisions.includes(d.key)).map((d) => (
-        <p key={d.key} className="db-decide-hint">{d.label}: {DECISION_HINTS[d.key]}</p>
+    <div className="db-field db-decide">
+      <DecisionSelect label="تصمیمِ درمانی" options={decisionOpts} value={f.decisions} onChange={setDecisions} disabled={busy} />
+      {f.decisions.filter((d) => DECISION_HINTS[d]).map((d) => (
+        <small key={d} className="db-decide-hint">{DECISION_HINTS[d]}</small>
       ))}
-      {!initial?.id && f.decisions.some((d) => ORDER_META[d]) && (
-        <p className="db-decide-hint">
-          فرمِ درخواست بعد از ذخیرهٔ همین مراجعه باز می‌شود (هر سفارش زیرِ مراجعهٔ خودش می‌نشیند).
-        </p>
-      )}
-      {ordersBlock}
     </div>
   );
 
@@ -1387,22 +1514,88 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      می‌نشینند: علائمِ حیاتی بعد از شرحِ حال، مدارک و لینک‌ها کنارِ یافته‌ها،
      تصمیم زیرِ تشخیص. */
   const mediaFields = isClinicCore ? fd.customFields.filter((x) => x.type === 'image' || x.type === 'links') : [];
-  const restFields = isClinicCore ? fd.customFields.filter((x) => !mediaFields.includes(x)) : fd.customFields;
+  /* ⚠️ «اطلاعاتِ تکمیلی» دیگر جعبهٔ جدا نیست (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳): فیلدهای دلخواهِ باقی‌مانده
+     زیرِ هستهٔ بالینی می‌نشینند، «مدتِ علائم» کنارِ شکایت، و `plan`ِ قالبِ قدیمی اصلاً نه —
+     سرور همان را در ذخیره به «تصمیمِ درمانی» می‌بَرد (`liftLegacy`) و کادرش دو تصمیمِ موازی بود. */
+  const restFields = fd.customFields.filter((x) => !mediaFields.includes(x)
+    && x !== durationField && !(isClinicCore && x.key === INLINE_KEYS.legacyPlan));
   if (isClinicCore && f.kind !== 'surgery') {
-    builtinNodes.vitals = { wide: true, el: (
-      <VitalSigns
-        visitId={initial?.id ?? null}
-        draft={f.vitals}
-        onDraft={(v) => setF((s2) => ({ ...s2, vitals: v }))}
-        disabled={busy}
-        onToast={onToast}
-      />) };
     /* مدارکِ بالینیِ ویزیت (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲): آنچه بیمار فرستاده کامل، وگرنه یک خطِ
        «+ افزودنِ مدارک» که باکسِ استاندارد (عکس، لینک + نام کاربری/رمز، صدا) را باز می‌کند. */
     builtinNodes.media = { wide: true, el: (
       <VisitDocs patientId={initial?.patientId ?? null} visitId={initial?.id ?? null} disabled={busy} onToast={onToast} />) };
-    builtinNodes.decisions = { wide: true, el: decisionsEl };
   }
+  if (f.kind !== 'surgery') builtinNodes.decisions = { wide: true, el: decisionsEl };
+
+  /* ── کارت‌های زیرفرم ──
+     داخلی‌ها: علائمِ حیاتی (پیش‌نویسِ ساخت یا اندازه‌گیریِ تایپ‌شده) و درخواست‌ها؛ فرم‌سازی‌ها با
+     همان `DynForm`ِ فرم‌ها. × فقط وقتی خالی است — سرور هم همین را می‌سنجد. */
+  const subUpload = (title) => async (file, field) => {
+    if (!initial?.id) throw new Error(`اول ${t.visit} را ذخیره کنید، بعد عکس بگذارید`);
+    const fdu = new FormData();
+    fdu.append('file', file);
+    fdu.append('category', field.docCategory || 'other');
+    fdu.append('visitId', String(initial.id));
+    fdu.append('title', `${title} — ${field.label}`.slice(0, 120));
+    const doc = await apiUpload(`/patients/${initial.patientId}/documents`, fdu);
+    return { id: doc.id, name: doc.fileName };
+  };
+  const subRemoveFile = async (ref) => { if (ref?.id) await api(`/patients/documents/${ref.id}`, { method: 'DELETE' }); };
+  const subCards = subList.filter((e) => !(e.builtin && f.kind === 'surgery')).map((e) => {
+    const it = catByKey.get(e.key);
+    const title = it?.title ?? e.title ?? e.key;
+    const open = cardsShut[e.key] !== true;
+    let body;
+    let empty;
+    if (e.key === 'vitals') {
+      empty = !(vitalsCount ?? (e.hasData ? 1 : 0)) && !pendingVitals.visit
+        && !(f.vitals && Object.entries(f.vitals).some(([k, v]) => k !== 'phase' && String(v ?? '').trim()));
+      body = (
+        <VitalSigns
+          visitId={initial?.id ?? null}
+          draft={f.vitals}
+          onDraft={(v) => setF((s2) => ({ ...s2, vitals: v }))}
+          pending={pendingVitals.visit ?? null}
+          onPending={(v) => setPendingVitals((p2) => ({ ...p2, visit: v }))}
+          onCount={setVitalsCount}
+          disabled={busy}
+          onToast={onToast}
+        />
+      );
+    } else if (e.key === 'orders') {
+      empty = orders.length === 0;
+      body = ordersBlock ?? <p className="vf-card-hint">بعد از ذخیرهٔ همین {t.visit}، درخواست از همین‌جا ثبت و برای بیمار فرستاده می‌شود.</p>;
+    } else {
+      empty = !Object.values(e.data ?? {}).some((v) => v !== false && v != null && String(Array.isArray(v) ? v.join('') : typeof v === 'object' ? (v.id ?? v.url ?? '') : v).trim() !== '');
+      body = it ? (<>
+        <DynForm
+          assistance
+          fields={it.fields}
+          values={e.data ?? {}}
+          errors={subErr[e.key] ?? {}}
+          onChange={(v) => setSubData(e.key, v)}
+          disabled={busy}
+          myRole={myRole}
+          onUpload={subUpload(title)}
+          onRemove={subRemoveFile}
+        />
+        {e.derived?.bmi != null && (
+          <p className="vf-card-bmi" data-subform-bmi>BMI (آخرین ذخیره): <b>{Number(e.derived.bmi).toLocaleString('fa-IR')}</b></p>
+        )}
+        <GrowthTrend history={e.history} current={e.data} />
+      </>) : <p className="vf-card-hint">تعریفِ این زیرفرم در فرم‌ساز پیدا نشد؛ پاسخِ ثبت‌شده‌اش سرِ جایش است.</p>;
+    }
+    return (
+      <SubformCard
+        key={e.key} skey={e.key} title={title} badge={e.implicit ? 'داده دارد' : 'الصاق‌شده'}
+        open={open} onToggle={() => setCardsShut((c) => ({ ...c, [e.key]: open }))}
+        onRemove={empty && !busy ? () => removeSub(e.key) : undefined}
+        removeHint={empty ? undefined : 'داده دارد و برداشته نمی‌شود'}
+      >
+        {body}
+      </SubformCard>
+    );
+  });
   const builtinOrder = isClinicCore
     ? CLINIC_LAYOUT[f.kind === 'surgery' ? 'surgery' : 'visit']
     : fd.orderBuiltins(BUILTIN_ORDER);
@@ -1433,9 +1626,41 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
 
   /* فرمِ انتخاب‌شده — برای عنوان و رنگِ بخشِ «فرم» (تمایز از ردیفِ نوع‌ها). */
   const kindMeta = (fd.kinds ?? []).find((k) => k.kind === f.kind) ?? null;
+  /* نامِ همین مراجعه در سربرگ — «فرمِ ویزیت» → «ویزیت» (طرحِ مصوب). */
+  const visitTitle = (kindMeta?.title ?? fd.def?.title ?? initial?.kindTitle ?? kindOf(f.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
+  const topicName = (defs.topics ?? []).find((tp) => tp.id === f.topicId)?.name ?? initial?.topicName ?? null;
+  const attachItems = (catalog?.items ?? []).filter((x) => attachableOn(x, f.kind));
+  const canBuildSubform = (myTools ?? []).some((x) => x.key === 'forms');
+
+  /* خدمتِ مراجعه (شرکتِ دوخدمته) — در ثبتِ تازه گامِ دوم، در ویرایش زیرِ سربرگ. */
+  const serviceEl = pickService ? (<>
+    <div className="db-sect">
+      <b>خدمت</b>
+      <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟ ویرایشگرِ اقلامِ پرتالِ جراح فقط برای «ایمپلنت» باز می‌شود.</small>
+    </div>
+    <div className="db-kindbox">
+      <div className="db-kindrow" role="radiogroup" aria-label={`خدمتِ این ${t.visit}`}>
+        {serviceCatalog.filter((x) => offered.includes(x.key)).map((x) => (
+          <button key={x.key} type="button" role="radio" aria-checked={f.service === x.key}
+                  className={f.service === x.key ? 'on' : ''}
+                  onClick={() => setF((s) => ({ ...s, service: x.key }))}>{x.label}</button>
+        ))}
+      </div>
+    </div>
+  </>) : null;
+
+  /* ── چیدمان: هسته (ستونِ اصلی)، زیرفرم‌ها و باقی (ستونِ کناری) ── */
+  const SIDE_KEYS = f.kind === 'surgery' ? ['amount', 'notes'] : ['media', 'decisions', 'nextVisitDate', 'amount', 'notes'];
+  const cell = (key) => {
+    const node = builtinNodes[key];
+    if (!node) return null;
+    return <div key={key} className={node.wide ? 'db-span2' : undefined}>{node.el}</div>;
+  };
+  const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key));
+  const sideKeys = SIDE_KEYS.filter((key) => builtinNodes[key]);
 
   return (
-    <Overlay backdrop="db-overlay" panel="glass db-sheet" as="form" from="bottom" onClose={onClose} onSubmit={submit}>
+    <Overlay backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom" onClose={onClose} onSubmit={submit}>
       <header className="db-sheet-head">
         <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
         <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
@@ -1519,7 +1744,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               />
               <div className="db-plist">
                 {pResults.map((p) => (
-                  <button type="button" key={p.id} onClick={() => setPicked(p)}>
+                  <button type="button" key={p.id} onClick={() => pickPatient(p)}>
                     <b>{p.fullName}</b>
                     <span dir="ltr">{p.code}</span>
                     <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} {t.visit}</small>
@@ -1582,7 +1807,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <span>{nidMatch.fullName} — <span dir="ltr">{nidMatch.code}</span> ({faNum(nidMatch.visitCount)} {t.visit})</span>
               <button
                 type="button"
-                onClick={() => { setPicked(nidMatch); setMode('existing'); }}
+                onClick={() => { pickPatient(nidMatch); setMode('existing'); }}
               >{t.visitOne}ِ تازه روی همین {t.record}</button>
             </div>
           )}
@@ -1592,15 +1817,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             mode="birth"
             value={f.birthDateJ}
             onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
-            placeholder="۱۳۷۰/۰۱/۱۵ — اختیاری"
+            placeholder="سال / ماه / روز — اختیاری"
           />
         </>
       )}
 
       </div>
 
-      {/* ── گامِ ۲: نوعِ فرم ── */}
-      {(editing || step === 2) && (<>
+      {/* ── گامِ ۲: نوعِ فرم ── فقط در ثبتِ تازه (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳): در ویرایش سربرگ فقط
+          نامِ همین مراجعه را می‌گوید؛ سه دکمهٔ نوعِ فرم بالای **هر** مراجعه بی‌معنا و پرخطر بود
+          (نوعِ مراجعهٔ ثبت‌شده را سرور هم فقط برای ادمین و بیرونِ زنجیره عوض می‌کند). */}
+      {!editing && step === 2 && (<>
       {/* ⚠️ نوعِ فرم **بعد از** پرونده می‌آید، نه قبلش. در پذیرشِ واقعی اول
           می‌پرسند «شما؟» و بعد «برای چه آمده‌اید؟» — و تا ندانیم بیمار کیست،
           پیشنهادِ نوع هم بی‌معنی است. برچسب‌های بقیهٔ فرم از همین انتخاب
@@ -1654,112 +1881,89 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         </div>
         )}
       </div>
-      {pickService && (<>
-        <div className="db-sect">
-          <b>خدمت</b>
-          <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟ ویرایشگرِ اقلامِ پرتالِ جراح فقط برای «ایمپلنت» باز می‌شود.</small>
-        </div>
-        <div className="db-kindbox">
-          <div className="db-kindrow" role="radiogroup" aria-label={`خدمتِ این ${t.visit}`}>
-            {serviceCatalog.filter((x) => offered.includes(x.key)).map((x) => (
-              <button key={x.key} type="button" role="radio" aria-checked={f.service === x.key}
-                      className={f.service === x.key ? 'on' : ''}
-                      onClick={() => setF((s) => ({ ...s, service: x.key }))}>{x.label}</button>
-            ))}
-          </div>
-        </div>
-      </>)}
+      {serviceEl}
 
       </>)}
 
       {/* ── گامِ ۳: تکمیل ── */}
       {(editing || step === 3) && (<>
-      <div className="db-sect">
-        <b>
-          {!editing && <i>{faNum(3)}</i>}
-          {/* عنوانِ فرم‌ها معمولاً خودشان با «فرم» شروع می‌شوند («فرمِ عمل»)؛
-              پیشوندِ دوباره «فرمِ فرمِ عمل» می‌ساخت. */}
-          {(() => { const ft = kindMeta?.title ?? fd.def?.title ?? t.visit; return /^\s*فرم/.test(ft) ? ft : `فرمِ ${ft}`; })()}
-        </b>
-        <small>فیلدهای همین فرم — لبهٔ رنگیِ این کارت، رنگِ همان فرم است تا با انتخابگرِ بالا اشتباه نشود.</small>
-      </div>
-      {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده — تمایز از ردیفِ نوع‌ها. */}
+      {/* سربرگ (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳): نامِ همین مراجعه + موضوع + «الصاقِ فرم» + سه منتخب. */}
+      <VisitHeadBar
+        title={visitTitle}
+        color={kindMeta?.color ?? initial?.kindColor ?? null}
+        topic={topicName}
+        pins={prefs.subformPins}
+        byKey={catByKey}
+        kind={f.kind}
+        attached={attachedKeys}
+        onAttach={() => setPickOpen(true)}
+        onPin={attachSub}
+        disabled={busy || !subLoaded}
+        showAttach={!!catalog && attachItems.length > 0}
+      />
+      {editing && serviceEl}
+      {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. */}
       <div
         className="db-formcard"
         style={kindMeta?.color ? { '--k': `var(--kind-${kindMeta.color})` } : undefined}
       >
-      {/* ⚠️ فیلدهای هسته‌ای **به ترتیبِ تعریف** چیده می‌شوند، نه به ترتیبِ این
-          فایل. هر کدام یک ورودیِ نام‌دار است تا `orderBuiltins` بتواند
-          جابه‌جاشان کند؛ اگر مثل قبل JSXِ درجا بودند، ترتیبِ فرم‌ساز هیچ
-          اثری نداشت. `wide` یعنی تمامِ عرضِ ردیف را بگیرد. */}
-      <div className="db-grid2 db-builtins">
-        {builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key))).map((key) => {
-          const node = builtinNodes[key];
-          if (!node) return null;
-          return (
-            <div key={key} className={node.wide ? 'db-span2' : undefined}>
-              {node.el}
+      <div className="vf-cols">
+        <div className="vf-main">
+          {/* ⚠️ فیلدهای هسته‌ای **به ترتیبِ تعریف** چیده می‌شوند، نه به ترتیبِ این
+              فایل. هر کدام یک ورودیِ نام‌دار است تا `orderBuiltins` بتواند
+              جابه‌جاشان کند. `wide` یعنی تمامِ عرضِ ردیف را بگیرد. */}
+          <div className="db-grid2 db-builtins">{mainKeys.map(cell)}</div>
+
+          {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
+          {!f.procedureTypeIds.length && f.opType && (
+            <label className="db-field"><span>نوعِ عمل (متنِ قدیمی)</span>
+              <input type="text" value={f.opType} onChange={set('opType')} />
+              <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
+            </label>
+          )}
+
+          {/* فیلدهای دلخواهِ سوپرادمین — بی جعبه و عنوانِ جدا، زیرِ هسته. */}
+          {restFields.length > 0 && (
+            <div className="db-extra vf-extra">
+              <DynForm assistance
+                fields={restFields}
+                values={extra}
+                errors={extraErr}
+                onChange={setExtra}
+                disabled={busy}
+                myRole={myRole}
+                onVoice={onVoice}
+                voiceUrl={voiceUrl}
+              />
             </div>
-          );
-        })}
-      </div>
-
-      {/* رکوردهای قدیمی متنِ آزاد دارند؛ تا وقتی به نوعِ عمل وصل نشده‌اند نمایش داده می‌شود. */}
-      {!f.procedureTypeIds.length && f.opType && (
-        <label className="db-field"><span>نوعِ عمل (متنِ قدیمی)</span>
-          <input type="text" value={f.opType} onChange={set('opType')} />
-          <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
-        </label>
-      )}
-
-      {/* ⚠️ فیلدهای دلخواهِ سوپرادمین. عمداً **انتهای فرم** و زیرِ یک عنوان:
-          این‌ها به‌ازای هر شرکت فرق می‌کنند و قاطی‌کردنشان با فیلدهای همیشگی
-          یعنی کاربری که بین دو نصب جابه‌جا می‌شود، فرم را نمی‌شناسد. */}
-      {restFields.length > 0 && (
-        <div className="db-extra">
-          <h4>{isClinicCore ? 'اطلاعاتِ تکمیلی' : (fd.def?.title ?? 'اطلاعاتِ تکمیلی')}</h4>
-          {fd.def?.hint && <p className="db-hint">{fd.def.hint}</p>}
-          <DynForm assistance
-            fields={restFields}
-            values={extra}
-            errors={extraErr}
-            onChange={setExtra}
-            disabled={busy}
-            myRole={myRole}
-            onVoice={onVoice}
-            voiceUrl={voiceUrl}
-          />
-        </div>
-      )}
-      </div>
-
-      {/* ── برنامهٔ پیام‌ها — انتهای فرمِ ویزیت ──
-          گزارشِ کاربر: «پایینِ فرم‌های ویزیت هم نمایش بده چه پیامکی چه وقت
-          ارسال می‌شود». تا امروز فقط فرمِ عمل این را می‌گفت و کاربرِ فرمِ
-          ویزیت نمی‌دانست ذخیره‌اش چه پیامی می‌فرستد — و «فرستاد یا نه؟»
-          سؤالی بود که فقط با دیدنِ گوشیِ بیمار جواب می‌گرفت. */}
-      {f.kind !== 'surgery' && (
-        <div className="db-postop db-msgplan">
-          <h4>برنامهٔ پیام‌ها</h4>
-          {f.nextVisitDateJ.trim() ? (
-            <p className="db-postop-plan">
-              یادآوریِ ویزیتِ بعدی برای <b>{f.nextVisitDateJ}</b> در صف می‌نشیند
-              {timing ? ` — ${faNum(timing.nextVisitDays)} روز قبل، ساعتِ ${faNum(timing.hour)}` : ''}.
-              اگر برای همان روز نوبتِ فعال ثبت شود، یادآوریِ نوبت جای این یکی را می‌گیرد تا پیامِ دوتایی نرود.
-            </p>
-          ) : (
-            <p className="db-postop-plan">
-              تاریخِ ویزیتِ بعدی خالی است، پس پیامی زمان‌بندی نمی‌شود. برای یادآوریِ خودکار،
-              «ویزیتِ بعدی» را در همین فرم پر کنید.
-            </p>
           )}
         </div>
-      )}
 
-      {/* ── تصمیمِ درمانی — انتهای فرمِ ویزیت (خارج از مطب) ──
-          در مطب همین بلوک داخلِ چینشِ استاندارد زیرِ تشخیص می‌نشیند
-          (`CLINIC_LAYOUT`)؛ این‌جا فقط برای بقیهٔ حوزه‌ها می‌ماند. */}
-      {f.kind !== 'surgery' && !isClinicCore && decisionsEl}
+        <div className="vf-sub" data-subforms>{subCards}</div>
+
+        <div className="vf-side">
+          {sideKeys.length > 0 && <div className="db-grid2 db-builtins">{sideKeys.map(cell)}</div>}
+          {/* ── برنامهٔ پیام‌ها — چه پیامکی چه وقت می‌رود (گزارشِ کاربر) ── */}
+          {f.kind !== 'surgery' && (
+            <div className="db-postop db-msgplan">
+              <h4>برنامهٔ پیام‌ها</h4>
+              {f.nextVisitDateJ.trim() ? (
+                <p className="db-postop-plan">
+                  یادآوریِ ویزیتِ بعدی برای <b>{f.nextVisitDateJ}</b> در صف می‌نشیند
+                  {timing ? ` — ${faNum(timing.nextVisitDays)} روز قبل، ساعتِ ${faNum(timing.hour)}` : ''}.
+                  اگر برای همان روز نوبتِ فعال ثبت شود، یادآوریِ نوبت جای این یکی را می‌گیرد تا پیامِ دوتایی نرود.
+                </p>
+              ) : (
+                <p className="db-postop-plan">
+                  تاریخِ ویزیتِ بعدی خالی است، پس پیامی زمان‌بندی نمی‌شود. برای یادآوریِ خودکار،
+                  «ویزیتِ بعدی» را در همین فرم پر کنید.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      </div>
 
       {/* ── برنامهٔ مراقبت و پیگیری — در ادامهٔ خودِ فرمِ عمل ──
           جراح همان‌جا که شرح را می‌نویسد برنامهٔ بعد را هم می‌بندد. قاعدهٔ
@@ -1830,6 +2034,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               phase="pre"
               draft={f.vitals}
               onDraft={(v) => setF((s2) => ({ ...s2, vitals: v }))}
+              pending={pendingVitals.pre ?? null}
+              onPending={(v) => setPendingVitals((p2) => ({ ...p2, pre: v }))}
               disabled={busy}
               onToast={onToast}
             />
@@ -1909,7 +2115,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           {/* علائمِ حیاتیِ ریکاوری — فقط برای عملِ ذخیره‌شده؛ پیش‌نویسِ لحظهٔ ثبت
               همان یکیِ تبِ «قبل از عمل» است تا دو پیش‌نویس روی هم نیفتند. */}
           {isClinicCore && (initial?.id ? (
-            <VitalSigns visitId={initial.id} phase="post" disabled={busy} onToast={onToast} />
+            <VitalSigns
+              visitId={initial.id} phase="post" disabled={busy} onToast={onToast}
+              pending={pendingVitals.post ?? null}
+              onPending={(v) => setPendingVitals((p2) => ({ ...p2, post: v }))}
+            />
           ) : (
             <p className="db-decide-hint">علائمِ حیاتیِ بعد از عمل پس از ذخیرهٔ همین عمل ثبت می‌شود.</p>
           ))}
@@ -1997,7 +2207,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             <JDate
               value={f.nextVisitDateJ}
               onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
-              placeholder="۱۴۰۵/۰۵/۱۰"
+              placeholder="سال / ماه / روز"
             />
           </div>
 
@@ -2020,6 +2230,19 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         </div>
       )}
 
+
+      <AttachPicker
+        open={pickOpen}
+        onClose={() => setPickOpen(false)}
+        visitWord={t.visit}
+        groups={catalog?.groups ?? []}
+        items={attachItems}
+        attached={attachedKeys}
+        pins={prefs.subformPins}
+        onPin={pinSub}
+        onAttach={attachSub}
+        canBuild={canBuildSubform}
+      />
 
       {/* میزبان همیشه سوار است و خودش presence را می‌گرداند (OrderSheet.jsx). */}
       <OrderSheet

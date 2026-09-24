@@ -1,0 +1,204 @@
+/* ── فرمِ مراجعه پس از بازخوردِ ۱۴۰۵/۰۷/۰۳ (طرحِ مصوب) ─────────────────────────
+   سربرگِ فشرده، کارت‌های زیرفرم، پنجرهٔ الصاق، کشوییِ تصمیم و چیدمانِ دوستونهٔ دسکتاپ.
+   همهٔ رنگ‌ها از توکن‌ها (قانونِ ۲۳) — هیچ رنگِ خامی که در تمِ روشن نامرئی شود. */
+
+/* ── سربرگ: نامِ مراجعه + الصاق + سه منتخب ── */
+.vf-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  padding: 10px 12px; border-radius: 16px;
+  border: 1px solid rgba(var(--veil-rgb), .12); background: rgba(var(--veil-rgb), .035);
+}
+.vf-bar-title { display: flex; align-items: center; gap: 8px; margin-inline-end: auto; min-width: 0; }
+.vf-dot {
+  flex: none; width: 10px; height: 10px; border-radius: 50%;
+  background: rgb(var(--k, var(--brand-soft-rgb))); box-shadow: 0 0 0 3px rgba(var(--k, var(--brand-soft-rgb)), .25);
+}
+.vf-bar-title b { font-size: 16px; font-weight: 900; color: var(--text1); }
+.vf-topic {
+  font-size: 12px; font-weight: 700; color: var(--text2); padding: 3px 9px; border-radius: 99px;
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+}
+.vf-bar-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vf-attach {
+  display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 13px; font-weight: 800;
+  color: #fff; padding: 7px 13px; border-radius: 12px; border: 0; cursor: pointer; white-space: nowrap;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand));
+}
+.vf-pin {
+  display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--text3); padding: 6px 10px; border-radius: 11px; cursor: pointer; white-space: nowrap;
+  border: 1px dashed rgba(var(--brand-soft-rgb), .45); background: transparent;
+}
+.vf-pin.on { color: var(--text1); border-style: solid; background: rgba(var(--brand-soft-rgb), .14); }
+.vf-pin.on svg { color: var(--amber); }
+.vf-pin.is-attached { box-shadow: inset 0 0 0 1px rgba(var(--brand-soft-rgb), .45); }
+.vf-attach:disabled, .vf-pin:disabled { opacity: .5; cursor: default; }
+.vf-attach:focus-visible, .vf-pin:focus-visible, .vf-ic:focus-visible, .vf-dd-btn:focus-visible,
+.vf-opt:focus-visible, .vf-star:focus-visible, .vf-add:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* ── کارتِ زیرفرم ── */
+.vf-card {
+  border-radius: 16px; overflow: hidden;
+  border: 1px solid rgba(var(--brand-soft-rgb), .28); background: rgba(var(--brand-soft-rgb), .06);
+}
+.vf-card > header {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: rgba(var(--brand-soft-rgb), .10); border-bottom: 1px solid rgba(var(--brand-soft-rgb), .18);
+}
+.vf-card > header b { font-size: 13.5px; font-weight: 800; color: var(--text1); margin-inline-end: auto; }
+.vf-card > header small { font-size: 11px; color: var(--text3); }
+.vf-ic {
+  flex: none; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border-radius: 8px; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.vf-ic svg { transition: transform .15s; }
+.vf-ic.is-open svg { transform: rotate(180deg); }
+.vf-ic:hover { color: var(--text1); }
+.vf-card-lock { width: 28px; flex: none; }
+.vf-card-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+/* علائمِ حیاتی داخلِ کارت: سربرگ و قابِ خودش تکراری است. */
+.vf-card .vs-box { border: 0; background: none; padding: 0; margin: 0; }
+.vf-card .vs-head { display: none; }
+.vf-card .db-orders { margin: 0; }
+.vf-card .pf.dyn { gap: 10px; }
+.vf-card-bmi { font-size: 12.5px; font-weight: 700; color: var(--text2); }
+.vf-card-bmi b { color: var(--text1); }
+.vf-card-hint { margin: 0; font-size: 12px; color: var(--text3); }
+
+/* ── روندِ رشد ── */
+.vf-trend { display: flex; flex-wrap: wrap; gap: 10px; }
+.vf-trend figure {
+  margin: 0; display: grid; grid-template-columns: auto auto; align-items: center; gap: 2px 8px;
+  padding: 6px 9px; border-radius: 10px; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .10);
+}
+.vf-trend figcaption { grid-column: 1 / -1; font-size: 11px; font-weight: 700; color: var(--text3); }
+.vf-trend span { font-size: 12px; font-weight: 800; color: var(--text1); white-space: nowrap; }
+.vf-spark { color: var(--brand-2); }
+
+/* ── پنجرهٔ «الصاقِ فرم» ── */
+.vf-pick-overlay { z-index: 80; }
+.vf-pick {
+  width: 100%; max-width: 560px; max-height: 88dvh; overflow-y: auto;
+  border-radius: 20px 20px 0 0; padding: 16px; display: flex; flex-direction: column; gap: 10px;
+  background: rgba(var(--surface-rgb), .98);
+}
+@media (min-width: 640px) { .vf-pick { border-radius: 20px; } }
+.vf-pick-head { display: flex; align-items: center; justify-content: space-between; }
+.vf-pick-head b { font-size: 16px; font-weight: 900; color: var(--text1); }
+.vf-pick-search {
+  display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 12px; color: var(--text3);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.vf-pick-search input { flex: 1; min-width: 0; font: inherit; font-size: 13px; padding: 10px 0; border: 0; background: none; color: var(--text1); outline: none; }
+.vf-pick-list { display: flex; flex-direction: column; gap: 10px; }
+.vf-pick-group { display: flex; flex-direction: column; gap: 7px; }
+.vf-pick-group > span { font-size: 11.5px; font-weight: 800; color: var(--text3); }
+.vf-pick-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px;
+  border: 1px solid rgba(var(--veil-rgb), .10); background: rgba(var(--veil-rgb), .03);
+}
+.vf-pick-row > div { display: flex; flex-direction: column; gap: 2px; margin-inline-end: auto; min-width: 0; }
+.vf-pick-row b { font-size: 13.5px; color: var(--text1); }
+.vf-pick-row small { font-size: 11.5px; color: var(--text3); }
+.vf-pick-row.is-done > div { opacity: .6; }
+.vf-star {
+  flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; cursor: pointer;
+  border-radius: 9px; color: var(--text3); background: transparent; border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.vf-star.on { color: var(--amber); border-color: rgba(var(--kind-amber), .5); }
+.vf-add {
+  flex: none; font: inherit; font-size: 12.5px; font-weight: 800; color: var(--brand-2); cursor: pointer;
+  padding: 6px 11px; border-radius: 10px; border: 1px solid rgba(var(--brand-soft-rgb), .5); background: rgba(var(--brand-soft-rgb), .10);
+}
+.vf-add:disabled { cursor: default; color: var(--text3); border-color: rgba(var(--veil-rgb), .14); background: transparent; }
+.vf-pick-empty { margin: 4px 0; font-size: 12.5px; color: var(--text3); }
+.vf-pick-foot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--brand-2); text-decoration: none; padding-top: 2px; }
+
+/* ── تصمیمِ درمانی: کشوییِ چندانتخابی ── */
+.vf-dd { position: relative; display: flex; flex-direction: column; gap: 5px; }
+.vf-dd-label { font-size: 12px; font-weight: 700; color: var(--text2); }
+.vf-dd-btn {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; min-height: 44px; cursor: pointer;
+  font: inherit; text-align: start; padding: 7px 10px; border-radius: 12px; color: var(--text1);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.vf-dd-btn i { font-style: normal; font-size: 13px; color: var(--text3); }
+.vf-tag {
+  font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 99px; color: var(--text1);
+  background: rgba(var(--brand-soft-rgb), .18); border: 1px solid rgba(var(--brand-soft-rgb), .45);
+}
+.vf-dd-caret { margin-inline-start: auto; color: var(--text3); }
+.vf-dd-panel {
+  position: absolute; z-index: 20; top: 100%; inset-inline: 0; margin-top: 6px; padding: 6px;
+  display: flex; flex-direction: column; border-radius: 14px;
+  border: 1px solid rgba(var(--veil-rgb), .16); background: rgba(var(--surface-rgb), .98);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, .35);
+}
+.vf-opt {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  font: inherit; font-size: 13px; text-align: start; color: var(--text1); background: none; border: 0;
+}
+.vf-opt:hover { background: rgba(var(--veil-rgb), .06); }
+/* ⚠️ تیک با بوردرِ **فیزیکی** (قانونِ ۹) — منطقی در RTL قرینه می‌شد. */
+.vf-opt i { flex: none; position: relative; width: 17px; height: 17px; border-radius: 5px; border: 2px solid rgba(var(--veil-rgb), .35); }
+.vf-opt.on i { background: var(--brand-2); border-color: var(--brand-2); }
+.vf-opt.on i::after {
+  content: ''; position: absolute; left: 4px; top: 1px; width: 5px; height: 9px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.vf-opt small { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
+.vf-opt.sep { border-top: 1px solid rgba(var(--veil-rgb), .12); border-radius: 0 0 10px 10px; margin-top: 4px; padding-top: 11px; }
+
+/* ── شکایتِ اولیه + مدتِ علائم در یک ردیف ── */
+.vf-cc { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 10px; align-items: start; }
+@media (max-width: 480px) { .vf-cc { grid-template-columns: 1fr; } }
+
+/* ── چیدمان: سه ناحیه — زیرفرم‌ها، هستهٔ بالینی، باقی ──
+   موبایل: زیرفرم‌ها بالا (همان‌جا که الصاق شدند دیده شوند)، بعد هسته، بعد باقی.
+   دسکتاپِ پهن: هسته در ستونِ اصلی، زیرفرم‌ها و باقی در ستونِ کناری (طرحِ مصوبِ A). */
+.vf-cols { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); grid-template-areas: "sub" "main" "side"; }
+.vf-main { grid-area: main; }
+.vf-sub { grid-area: sub; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.vf-side { grid-area: side; }
+.vf-sub:empty { display: none; }
+.vf-main, .vf-side { min-width: 0; }
+.vf-side .db-grid2 { grid-template-columns: minmax(0, 1fr); }
+
+@media (min-width: 1024px) {
+  .db-sheet.vf-wide { max-width: 1180px; }
+  .db-sheet.vf-wide .vf-cols {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    grid-template-areas: "main sub" "main side";
+    grid-template-rows: auto 1fr; align-items: start;
+  }
+  /* ذخیره همیشه در دسترس — فرمِ بلند دیگر تا ته اسکرول نمی‌خواهد. */
+  .db-sheet.vf-wide > .db-submit {
+    position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); z-index: 5;
+    box-shadow: 0 -10px 30px rgba(var(--surface-rgb), .9);
+  }
+}
+
+/* ── تراکم داخلِ کارت‌ها (بازخورد: «UI خیلی باز است») ──
+   فیلدهای کوتاهِ زیرفرم دوتایی کنارِ هم؛ متنِ بلند، عکس، چندانتخابی و لینک تمام‌عرض. */
+.vf-card .pf.dyn { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.vf-card .pf.dyn > [data-ftype="textarea"], .vf-card .pf.dyn > [data-ftype="image"],
+.vf-card .pf.dyn > [data-ftype="multiselect"], .vf-card .pf.dyn > [data-ftype="links"],
+.vf-card .pf.dyn > [data-ftype="bool"], .vf-card .pf.dyn > [data-ftype="rating"] { grid-column: 1 / -1; }
+/* علائمِ حیاتی: دو ستون حتی در موبایل؛ فشارِ خون (دو عدد) تمام‌عرض. */
+.vf-card .vs-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+@media (max-width: 480px) {
+  .vf-card .vs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .vf-card .vs-grid > .vs-cell:first-child { grid-column: 1 / -1; }
+}
+.vf-card > header small { white-space: nowrap; }
+
+/* فیلدهای دلخواهِ فرم دیگر جعبهٔ جدای «اطلاعاتِ تکمیلی» نیستند (طرحِ مصوب) — بی‌قاب، در ادامهٔ
+   همان شبکهٔ هسته، و کوتاه‌ها دوتایی. */
+.db-extra.vf-extra { margin-top: 12px; padding: 0; border: 0; background: none; border-radius: 0; }
+.vf-extra .pf.dyn { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.vf-extra .pf.dyn > [data-ftype="textarea"], .vf-extra .pf.dyn > [data-ftype="image"],
+.vf-extra .pf.dyn > [data-ftype="multiselect"], .vf-extra .pf.dyn > [data-ftype="links"],
+.vf-extra .pf.dyn > [data-ftype="bool"], .vf-extra .pf.dyn > [data-ftype="rating"],
+.vf-extra .pf.dyn > [data-ftype="payment"] { grid-column: 1 / -1; }
+@media (max-width: 480px) { .vf-extra .pf.dyn, .vf-card .pf.dyn { grid-template-columns: minmax(0, 1fr); } }

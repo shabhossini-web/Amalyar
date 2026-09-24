@@ -104,7 +104,7 @@ export default function DynForm({
         const locked = !!(fieldRoles(f).length && myRole && !fieldRoles(f).includes(myRole));
         const parked = undated && f.key === 'opDate';
         return (
-        <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}${locked ? ' dyn-locked' : ''}`}>
+        <label key={f.key} data-ftype={f.type} className={`pf-field${errors[f.key] ? ' bad' : ''}${locked ? ' dyn-locked' : ''}`}>
           <span>
             {f.label}
             {f.required && !parked && <i className="dyn-star" aria-label="اجباری"> *</i>}

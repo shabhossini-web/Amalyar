@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/identity.js';
 import { useConfig } from './config.jsx';
@@ -40,7 +40,12 @@ function summary(r, byGroup) {
   return parts;
 }
 
-export default function VitalSigns({ visitId, phase = null, draft, onDraft, disabled, onToast }) {
+/**
+ * @param pending/onPending اندازه‌گیریِ **تایپ‌شده ولی «ثبت»‌نخورده** در مراجعهٔ ذخیره‌شده —
+ *   کنترل‌شده از والد، تا «ذخیرهٔ تغییرات»ِ فرم همراهِ خودش ثبتش کند (بازبینیِ ۱۴۰۵/۰۷/۰۳:
+ *   تا دیروز بی‌صدا دور ریخته می‌شد) و جابه‌جاییِ تبِ قبل/بعد از عمل پاکش نکند.
+ */
+export default function VitalSigns({ visitId, phase = null, draft, onDraft, pending, onPending, onCount, disabled, onToast }) {
   const { vitals: catalog = [] } = useConfig();
   const byKey = Object.fromEntries(catalog.map((c) => [c.key, c]));
   const byGroup = Object.fromEntries(catalog.map((c) => [c.group, c]));
@@ -48,7 +53,15 @@ export default function VitalSigns({ visitId, phase = null, draft, onDraft, disa
 
   const saved = !!visitId;
   const [rows, setRows] = useState(null);
-  const [entry, setEntry] = useState(EMPTY);
+  const [ownEntry, setOwnEntry] = useState(EMPTY);
+  const controlled = typeof onPending === 'function';
+  const entry = controlled ? { ...EMPTY, ...(pending ?? {}) } : ownEntry;
+  const setEntry = (fn) => {
+    const next = typeof fn === 'function' ? fn(entry) : fn;
+    if (!controlled) { setOwnEntry(next); return; }
+    const any = Object.entries(next).some(([k, v]) => k !== 'phase' && String(v ?? '').trim() !== '');
+    onPending(any ? { ...next, ...(phase ? { phase } : {}) } : null);
+  };
   const [busy, setBusy] = useState(false);
   const values = saved ? entry : { ...EMPTY, ...(draft ?? {}) };
 
@@ -95,6 +108,10 @@ export default function VitalSigns({ visitId, phase = null, draft, onDraft, disa
   };
 
   const shown = (rows ?? []).filter((r) => (phase ? r.phase === phase : true));
+  /* شمارِ اندازه‌گیری‌های ثبت‌شده به والد — «×»ِ کارتِ زیرفرم فقط وقتی خالی است. */
+  const countRef = useRef(onCount);
+  countRef.current = onCount;
+  useEffect(() => { if (rows) countRef.current?.(shown.length); }, [rows, shown.length]);
   const num = (k, extra = {}) => {
     const c = byKey[k];
     return (

@@ -119,3 +119,7 @@
   color: #fff; font-weight: 800; border: 0;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
+
+/* ⚠️ راهنمای کادر باید **کم‌رنگ** باشد نه شبیهِ مقدار (بازبینیِ ۱۴۰۵/۰۷/۰۳): «۱۴۰۵/۰۵/۱۰»ِ
+   پیش‌فرض با رنگِ پیش‌فرضِ مرورگر مثلِ یک تاریخِ واقعیِ ثبت‌شده خوانده می‌شد. */
+.jd-row input::placeholder { color: var(--text3); opacity: .75; }
