@@ -370,6 +370,55 @@ export class AuthService {
     return this.publicUser(account);
   }
 
+  /**
+   * **منتخب‌های شخصی** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — سه «فرمِ منتخب» بالای فرمِ مراجعه و سه
+   * «ابزارکِ منتخب» بالای صفحهٔ امروز، به‌ازای هر حساب.
+   *
+   * ⚠️ سمتِ سرور و نه `localStorage`: پزشک بینِ رایانهٔ مطب و گوشی جابه‌جا می‌شود. کلیدها
+   * فقط از نظرِ **شکل** سنجیده می‌شوند نه وجود: فرم یا ابزاری که بعداً حذف یا بسته شود،
+   * خانه‌اش را رابط خالی نشان می‌دهد — اجازهٔ واقعیِ هر ابزار سرِ جای خودش سنجیده می‌شود.
+   */
+  async prefs(id: number) {
+    const a = await this.prisma.account.findUnique({ where: { id }, select: { prefs: true } });
+    return AuthService.normPrefs(a?.prefs);
+  }
+
+  async setPrefs(id: number, dto: { subformPins?: unknown; todayPins?: unknown }) {
+    const cur = await this.prefs(id);
+    const next = {
+      ...cur,
+      ...(dto.subformPins !== undefined ? { subformPins: AuthService.pins(dto.subformPins, 'فرمِ منتخب') } : {}),
+      ...(dto.todayPins !== undefined ? { todayPins: AuthService.pins(dto.todayPins, 'ابزارکِ منتخب') } : {}),
+    };
+    await this.prisma.account.update({ where: { id }, data: { prefs: next } });
+    return next;
+  }
+
+  private static readonly PIN_RE = /^[a-zA-Z][a-zA-Z0-9._-]{0,79}$/;
+
+  /** سه خانه — کلیدِ سالم یا `null`؛ تکراری‌ها یک‌بار. */
+  private static pins(v: unknown, label: string): (string | null)[] {
+    if (!Array.isArray(v) || v.length > 3) throw new BadRequestException(`${label}: حداکثر سه خانه`);
+    const out: (string | null)[] = [];
+    for (const x of v) {
+      if (x === null || x === '') { out.push(null); continue; }
+      if (typeof x !== 'string' || !AuthService.PIN_RE.test(x)) throw new BadRequestException(`${label}: کلیدِ نامعتبر`);
+      out.push(out.includes(x) ? null : x);
+    }
+    while (out.length < 3) out.push(null);
+    return out;
+  }
+
+  private static normPrefs(raw: unknown) {
+    const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+    const three = (v: unknown) => {
+      const a = Array.isArray(v) ? v.slice(0, 3).map((x) => (typeof x === 'string' && AuthService.PIN_RE.test(x) ? x : null)) : [];
+      while (a.length < 3) a.push(null);
+      return a;
+    };
+    return { subformPins: three(o.subformPins), todayPins: three(o.todayPins) };
+  }
+
   async changePassword(id: number, current: string, next: string) {
     const account = await this.prisma.account.findUnique({ where: { id } });
     if (!account) throw new UnauthorizedException();

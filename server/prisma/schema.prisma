@@ -72,6 +72,12 @@ model Account {
   /// `null` = بی‌نقش؛ هیچ محدودیتی ندارد (همهٔ حساب‌های موجود همین‌اند).
   jobRole String? @map("job_role")
 
+  /// **ترجیحاتِ شخصیِ رابط** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — سه «فرمِ منتخب» بالای فرمِ
+  /// مراجعه (`subformPins`) و سه «ابزارکِ منتخب» بالای صفحهٔ امروز (`todayPins`).
+  /// ⚠️ سمتِ سرور و نه `localStorage`: پزشک بینِ رایانهٔ مطب و گوشی جابه‌جا می‌شود
+  /// و منتخب‌هایش باید همراهش بیایند. شکل را فقط `auth/prefs` می‌نویسد و می‌سنجد.
+  prefs Json @default("{}")
+
   /// نوبت‌دهی (`docs/BOOKING.md`) — برنامهٔ کاری، استثنا و نوبت‌های این پزشک.
   availabilityRules      AvailabilityRule[]      @relation("AvailabilityDoctor")
   availabilityExceptions AvailabilityException[] @relation("AvailabilityExceptionDoctor")
@@ -1527,6 +1533,9 @@ model Visit {
   /// علائمِ حیاتی — هر ردیف یک نوبتِ اندازه‌گیری (بستهٔ ۶ج).
   vitals VitalSign[]
 
+  /// زیرفرم‌های الصاق‌شده — علائمِ حیاتی، درخواستِ پاراکلینیک، قد و وزن، زخم، … (۱۴۰۵/۰۷/۰۳).
+  subforms VisitSubform[]
+
   /// سایرِ تشخیص‌ها و عمل‌های همین مراجعه — رتبهٔ ۲ به بعد (بستهٔ ۷).
   /// اصلی (رتبهٔ ۱) همان `diagnosisId`/`procedureTypeId` است. «همه» = ستون +
   /// این دو — فقط از `server/src/patients/visit-coding.ts` بخوانید/بنویسید.
@@ -1583,6 +1592,37 @@ model VitalSign {
   @@index([visitId])
   @@index([patientId, takenAt])
   @@map("vital_signs")
+}
+
+/// **زیرفرمِ الصاق‌شده به یک مراجعه** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳).
+///
+/// «هر چیزی که به مراجعه اضافه می‌کنیم در قالبِ فرم‌های زیرِ مراجعه باشد — پیش‌فرض
+/// پنهان، و با الصاق نمایش داده شود.» یک ردیف = «این زیرفرم روی این مراجعه است».
+///
+/// ⚠️ دو جنس، یک جدول:
+/// - **داخلی** (`key` = `vitals` | `orders`، `formId` تهی): داده‌شان جای خودش است
+///   (`vital_signs`، جدول‌های سفارش) و این ردیف فقط «الصاق» را نگه می‌دارد — مراجعه‌ای
+///   که اندازه‌گیری یا سفارش دارد بی‌ردیف هم الصاق‌شده دیده می‌شود.
+/// - **فرم‌ساز** (`key` = کلیدِ `FormDef` با `scope=subform`): پاسخ‌ها در `data`.
+///
+/// ⚠️ `onDelete: Restrict` روی فرم: تعریفی که پاسخ دارد حذفِ سخت نمی‌شود، فقط خاموش
+/// (`FormsService.formUsage`) — وگرنه پاسخ‌های بالینی بی‌برچسب می‌ماندند.
+model VisitSubform {
+  id          Int      @id @default(autoincrement())
+  visit       Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId     Int      @map("visit_id")
+  key         String
+  form        FormDef? @relation(fields: [formId], references: [id], onDelete: Restrict)
+  formId      Int?     @map("form_id")
+  data        Json     @default("{}")
+  createdById Int?     @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([visitId, key])
+  @@index([formId])
+  @@index([key])
+  @@map("visit_subforms")
 }
 
 /// **بندِ چک‌لیستِ ایمنیِ اتاقِ عمل** — یک سطر به‌ازای هر بندِ تیک‌خورده.
@@ -2259,6 +2299,8 @@ model FormDef {
   /// در `removeForm`. بدونِ این، حذفِ فرم لینک را بی‌صدا از کار می‌انداخت.
   intakeLinks       IntakeLink[]
   intakeSubmissions IntakeSubmission[]
+  /// ردیف‌های زیرفرمی که از این تعریف پر شده‌اند (`scope=subform`) — «استفاده‌شده» در `removeForm`.
+  visitSubforms     VisitSubform[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")

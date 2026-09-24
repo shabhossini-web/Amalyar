@@ -1,4 +1,4 @@
-import { ORDER_LABELS } from './labels';
+import { ORDER_LABELS, EXCLUSIVE_DECISION } from './labels';
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -304,6 +304,20 @@ export class OrdersService {
     const data = Object.fromEntries(Object.entries(this.clean(kind, dto ?? {})).filter(([, v]) => v !== undefined));
     return this.prisma.$transaction(async tx => {
       const row = await this.table(kind, tx).create({ data: { ...data, patientId, visitId, token: this.token() } });
+      /* **سفارش همان تصمیم است** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳): دراپ‌داونِ تصمیم دیگر چیپِ
+         درخواست ندارد، پس کلیدِ همین نوع این‌جا روی مراجعه می‌نشیند — گزارش‌هایی که
+         «ویزیت‌هایی که آزمایش خواستند» را از `decisions` می‌خوانند چیزی گم نمی‌کنند.
+         «پیگیری لازم نیست» کنار می‌رود: درخواستِ باز یعنی جوابی که باید دیده شود.
+         فقط ویزیت — فرمِ عمل تصمیمِ درمانی ندارد. */
+      if (visitId) {
+        const v = await tx.visit.findUnique({ where: { id: visitId }, select: { kind: true, decisions: true } });
+        if (v && v.kind !== 'surgery') {
+          const next = [...new Set([...(v.decisions ?? []).filter((d: string) => d !== EXCLUSIVE_DECISION), kind])];
+          if (next.length !== (v.decisions ?? []).length || next.some((d) => !(v.decisions ?? []).includes(d))) {
+            await tx.visit.update({ where: { id: visitId }, data: { decisions: next } });
+          }
+        }
+      }
       const filesAdded = await this.attachFiles(kind, row, dto?.documentIds, tx);
       const hasAnswer = filesAdded || ['resultText', 'resultLink', 'answerText', 'answerLink'].some(k => (data as any)[k]);
       const fresh = hasAnswer ? await this.answered(kind, row, data, tx, user.id) : row;

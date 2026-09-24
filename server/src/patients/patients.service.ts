@@ -8,7 +8,7 @@ import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { syncVisitDuty } from './hospital-duties.service';
 import { LEVEL } from '../common/levels';
-import { ownVisitWhere, scopedPatientWhere } from '../common/own-scope';
+import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
 import { toDateValue } from '../common/jalali';
@@ -23,7 +23,8 @@ import {
   currentNotes, noteBody, sectionsOf, SECTION_KEYS, SECTION_NOTES, setVisitNote,
   VISIT_FULL_NOTE_KINDS, VISIT_NOTE_KINDS,
 } from './clinical-note';
-import { ANESTHESIA_LABELS, DECISION_LABELS, DISPOSITION_LABELS, OP_LABELS } from './labels';
+import { ANESTHESIA_LABELS, DECISION_LABELS, DISPOSITION_LABELS, EXCLUSIVE_DECISION, OP_LABELS } from './labels';
+import { planSubforms, subformDataHasValue, subformDerived, subformsOf, writeSubforms, SubformPlanItem } from './subforms';
 import { vitalsInput } from './vitals';
 import { actorName } from '../common/person';
 import { summarize } from './billing.service';
@@ -162,6 +163,10 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
        می‌شود. اولین نسخه دقیقاً همین را جا انداخته بود — نوشتن کار می‌کرد،
        خواندن نه، و آزمون آن را گرفت. */
     extra: v.extra ?? {},
+    /* زیرفرم‌های الصاقی (۱۴۰۵/۰۷/۰۳) — فقط نمای **کامل**؛ در فهرستِ سبک `undefined`
+       (نخوانده ≠ خالی — همان قاعدهٔ بخش‌های هسته)، تا فرمِ بازشده از ردیفِ فهرست با
+       ذخیره چیزی را برندارد. */
+    subforms: subformsOf(v),
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
   };
@@ -296,10 +301,11 @@ function orderFor(sort?: string, dir?: string): any[] {
  * را برای `ownComplaint` در ذخیره تکرار می‌کند؛ اگر این دو از هم جدا شوند، ذخیرهٔ
  * بی‌تغییرِ فرم متنِ ارثی را «شکایتِ خودش» می‌کند و ارث قطع می‌شود.
  */
-function inheritedComplaint(v: any): { text: string; from: { visitId: number; seq: number; opDate: Date | null } } | null {
+function inheritedComplaint(v: any): { text: string; from: { visitId: number; seq: number; opDate: Date | null; kind: string | null } } | null {
   const src = [v?.decidedIn, v?.followOf, v?.followOf?.decidedIn]
     .find((x: any) => typeof x?.chiefComplaint === 'string' && x.chiefComplaint.trim());
-  return src ? { text: src.chiefComplaint, from: { visitId: src.id, seq: src.seq, opDate: src.opDate } } : null;
+  /* `kind` تا رابط بگوید «از عملِ …» یا «از ویزیتِ …» — پست‌آپ از **عمل** ارث می‌برد. */
+  return src ? { text: src.chiefComplaint, from: { visitId: src.id, seq: src.seq, opDate: src.opDate, kind: src.kind ?? null } } : null;
 }
 
 // جراح و کارشناس هویتشان در Person است، پس همیشه با آن خوانده می‌شوند.
@@ -313,14 +319,14 @@ const INCLUDE_PATIENT = {
   tech: { include: { person: true } },
   /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط برای **مشتق‌کردنِ** شکایتِ
      اولیه. سه ستون، نه کلِ ردیف: این include روی فهرستِ ۵۰۰تایی هم می‌دود. */
-  decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+  decidedIn: { select: { id: true, seq: true, opDate: true, kind: true, chiefComplaint: true } },
   /* ویزیتِ پست‌آپِ خودکار شکایتش را از **همان عمل** (یا ویزیتِ تصمیمِ آن) می‌گیرد —
      همان قاعدهٔ «مشتق نه کپی». تا ۱۴۰۵/۰۷/۰۳ این زنجیره خوانده نمی‌شد و ویزیتِ
      پست‌آپ با شکایتِ خالی باز می‌شد (بازخوردِ مالک: «پیوستگیِ اطلاعات زیرِ سؤال»). */
   followOf: {
     select: {
-      id: true, seq: true, opDate: true, chiefComplaint: true,
-      decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+      id: true, seq: true, opDate: true, kind: true, chiefComplaint: true,
+      decidedIn: { select: { id: true, seq: true, opDate: true, kind: true, chiefComplaint: true } },
     },
   },
   /* سایرِ تشخیص‌ها و عمل‌ها (بستهٔ ۷) — دو کوئریِ دسته‌ایِ `IN` روی فهرست و
@@ -350,6 +356,10 @@ const LEGACY_PLAN: Record<string, string> = {
 const INCLUDE_VISIT_FULL = {
   ...INCLUDE_PATIENT,
   clinicalNotes: currentNotes(VISIT_FULL_NOTE_KINDS),
+  /* زیرفرم‌ها + شمارِ دادهٔ داخلی‌ها — «علائمِ حیاتی/درخواست» بی‌ردیفِ الصاق هم وقتی
+     داده دارند الصاق‌شده‌اند (`subformsOf`). شمارش و نه ردیف: فرم خودش جزئیات را می‌گیرد. */
+  subforms: { include: { form: { select: { title: true } } } },
+  _count: { select: { vitals: true, labOrders: true, imagingOrders: true, consultOrders: true, referralOrders: true } },
 } as const;
 
 /**
@@ -415,7 +425,10 @@ export class PatientsService {
         if (child.opStatus === 'done') return;
         const patch: Record<string, unknown> = {};
         if (child.opDate?.getTime() !== wantDate.getTime()) patch.opDate = wantDate;
-        if (child.opStatus === 'cancelled') patch.opStatus = 'pending';
+        /* زنده‌کردنِ فرزندِ لغوشده فقط وقتی «ویزیتِ بعدی»ِ عمل **دوباره** ست شده باشد — لغوِ
+           دستیِ فرزند آن تاریخ را برمی‌دارد (`syncPostOpParent`)، پس بودنِ تاریخ یعنی تصمیمِ
+           تازه. دلیلِ لغوِ کهنه هم پاک می‌شود، وگرنه مراجعهٔ زنده دلیلِ لغو حمل می‌کرد. */
+        if (child.opStatus === 'cancelled') Object.assign(patch, { opStatus: 'pending', cancelReason: null, cancelNote: null });
         if (child.surgeonId == null && carry.surgeonId) patch.surgeonId = carry.surgeonId;
         if (child.hospitalId == null && carry.hospitalId) patch.hospitalId = carry.hospitalId;
         if (Object.keys(patch).length) {
@@ -762,7 +775,40 @@ export class PatientsService {
     await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_VISIT_FULL });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
-    return enrich(v, await this.forms.kindMap(), VISIT_FULL_NOTE_KINDS);
+    const out = enrich(v, await this.forms.kindMap(), VISIT_FULL_NOTE_KINDS);
+    await this.attachSubformHistory(out, user);
+    return out;
+  }
+
+  /**
+   * **سابقهٔ همان زیرفرم در مراجعه‌های قبلیِ همین بیمار** — «نمودارِ رشد» و «دفعهٔ قبل زخم
+   * چطور بود» از همین می‌آیند. حداکثر ۱۰ نوبت، تازه‌ترین اول، فقط نوبت‌های پاسخ‌دار.
+   *
+   * ⚠️ با **همان دامنهٔ دیدِ کاربر** (`scopedVisitWhere`): پزشکِ زیرِ سوپروایزر فقط
+   * مراجعه‌های خودش را می‌بیند، پس سابقه هم نباید از مراجعهٔ پزشکِ دیگری نشت کند.
+   */
+  private async attachSubformHistory(out: any, user?: any) {
+    const custom = (out.subforms ?? []).filter((x: any) => !x.builtin);
+    if (!custom.length) return;
+    const rows = await this.prisma.visitSubform.findMany({
+      where: {
+        key: { in: custom.map((x: any) => x.key) }, visitId: { not: out.id },
+        visit: this.scopedVisitWhere(user, { patientId: out.patientId }),
+      },
+      select: { key: true, data: true, visitId: true, visit: { select: { seq: true, opDate: true, createdAt: true } } },
+      orderBy: { id: 'desc' },
+      take: 200,
+    });
+    for (const sf of custom) {
+      sf.history = rows
+        .filter((r) => r.key === sf.key && subformDataHasValue(r.data))
+        .map((r) => ({
+          visitId: r.visitId, seq: r.visit.seq, date: r.visit.opDate ?? r.visit.createdAt,
+          data: r.data, derived: subformDerived(r.data),
+        }))
+        .sort((a, b) => +new Date(b.date) - +new Date(a.date))
+        .slice(0, 10);
+    }
   }
 
   /**
@@ -786,7 +832,7 @@ export class PatientsService {
 
     const p = await this.prisma.patient.findUnique({
       where: { nationalId: clean },
-      include: { _count: { select: { visits: true } } },
+      include: { _count: { select: { visits: true } }, visits: this.lastVisitInclude(user) },
     });
     if (!p || p.deletedAt) return { found: false };
 
@@ -807,8 +853,28 @@ export class PatientsService {
         nationalId: p.nationalId,
         birthDate: p.birthDate,
         visitCount: p._count.visits,
+        last: PatientsService.lastOf(p.visits),
       },
     };
+  }
+
+  /**
+   * **آخرین مراجعهٔ زنده** — پزشک و مرکزِ مراجعهٔ تازهٔ همین بیمار از آن پیش‌پر می‌شود
+   * (بازبینیِ ۱۴۰۵/۰۷/۰۳: «پیوستگیِ اطلاعات»). با دامنهٔ دیدِ همان کاربر، تا پزشکِ زیرِ
+   * سوپروایزر از مراجعهٔ همکارش چیزی نبیند. مرکز فقط از مراجعهٔ **غیرجراحی**: بیمارستانِ
+   * عمل جای ویزیتِ مطب نیست.
+   */
+  private lastVisitInclude(user?: any) {
+    return {
+      where: { opStatus: { not: 'cancelled' }, ...scopedVisitWhereOf(user) },
+      orderBy: { seq: 'desc' as const }, take: 1,
+      select: { surgeonId: true, hospitalId: true, kind: true },
+    };
+  }
+
+  private static lastOf(visits: { surgeonId: number | null; hospitalId: number | null; kind: string }[] | undefined) {
+    const v = visits?.[0];
+    return v ? { surgeonId: v.surgeonId ?? null, hospitalId: v.kind !== 'surgery' ? v.hospitalId ?? null : null } : null;
   }
 
   /// جستجوی بیمارِ موجود (برای فرمِ «مراجعهٔ مجدد»)
@@ -833,7 +899,7 @@ export class PatientsService {
       },
       orderBy: { id: 'desc' },
       take: 20,
-      include: { _count: { select: { visits: true } } },
+      include: { _count: { select: { visits: true } }, visits: this.lastVisitInclude(user) },
     });
     return rows.map((p) => ({
       id: p.id,
@@ -842,6 +908,7 @@ export class PatientsService {
       phone: p.phone,
       nationalId: p.nationalId,
       visitCount: p._count.visits,
+      last: PatientsService.lastOf(p.visits),
     }));
   }
 
@@ -924,11 +991,11 @@ export class PatientsService {
     const row = await tx.visit.findUnique({
       where: { id: v.id },
       select: {
-        decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+        decidedIn: { select: { id: true, seq: true, opDate: true, kind: true, chiefComplaint: true } },
         followOf: {
           select: {
-            id: true, seq: true, opDate: true, chiefComplaint: true,
-            decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+            id: true, seq: true, opDate: true, kind: true, chiefComplaint: true,
+            decidedIn: { select: { id: true, seq: true, opDate: true, kind: true, chiefComplaint: true } },
           },
         },
       },
@@ -1124,10 +1191,31 @@ export class PatientsService {
    *   روی تاریخِ عمل. نشان در `values` می‌نشیند، نه در `extra`: در `RESERVED`ِ
    *   تأیید است و دادهٔ بالینی نیست.
    */
-  private async assertFormValid(dto: any, undated = false) {
+  /**
+   * @param inherited شکایتِ ارثیِ عملی که از یک ویزیت درآمده — کادرِ خالی یعنی «همان را
+   *   بخوان»، پس ستارهٔ «شکایتِ اولیه» با همان متن پر است (باگِ ممیزی ۱۴۰۵/۰۷/۰۳: عملِ
+   *   ارث‌گرفته با «شکایتِ اولیه را کامل کنید» ثبت نمی‌شد).
+   */
+  private async assertFormValid(dto: any, undated = false, inherited: string | null = null) {
     const kind = dto.kind || 'surgery';
-    const values = { ...(dto.extra ?? {}), ...pickBuiltin(dto), ...(undated ? { [UNDATED_KEY]: true } : {}) };
-    await this.forms.assertValid(`visit.${kind}`, values);
+    const values: Record<string, any> = { ...(dto.extra ?? {}), ...pickBuiltin(dto), ...(undated ? { [UNDATED_KEY]: true } : {}) };
+    if (inherited && !String(values.chiefComplaint ?? '').trim()) values.chiefComplaint = inherited;
+    const form = await this.forms.byKey(`visit.${kind}`).catch(() => null);
+    if (!form) return;
+    const r = this.forms.validateFields(await this.shownFields(form.fields), values);
+    if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
+  }
+
+  /**
+   * فیلدهایی که فرمِ مراجعهٔ **مطب** اصلاً نشان نمی‌دهد — ستاره‌شان نباید ذخیره را ببندد.
+   *
+   * ⚠️ آینهٔ `isClinicCore`ِ کلاینت (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲): «یافته‌ها» جایش را به باکسِ
+   * مدارک داده و باکس‌های عکس/لینکِ فرم هم (همان مدارک). ستاره‌ای روی کادری که دیده
+   * نمی‌شود یعنی ذخیره‌ای که با پیامی بی‌ربط رد می‌شود و کاربر راهی برای پرکردنش ندارد.
+   */
+  private async shownFields<T extends { key: string; builtin?: boolean; type?: string | null }>(fields: T[]): Promise<T[]> {
+    if ((await this.forms.workflow()) !== 'clinic') return fields;
+    return fields.filter((f) => !(f.builtin && f.key === 'findings') && !(!f.builtin && (f.type === 'image' || f.type === 'links')));
   }
 
   private async assertEditFormValid(v: any, dto: UpdateVisitDto) {
@@ -1140,12 +1228,53 @@ export class PatientsService {
     // نباید تغییر تاریخ را قفل کند. مبلغ همیشه از summarize دفتر مالی می‌آید،
     // شامل تخفیف و مدل گلوبال؛ مقدار ادعایی کلاینت منبع مالی نیست.
     const keys = new Set([...Object.keys(dto), ...Object.keys(dto.extra ?? {}), 'amount']);
-    const values = {
+    const values: Record<string, any> = {
       ...current.extra, ...dto.extra, ...current, ...dto,
       amount: current.total,
     };
-    const r = this.forms.validateFields(form.fields.filter((f) => keys.has(f.key)), values);
+    /* شکایتِ خالی در ویرایش یعنی «به ارث برگرد» — مقدارِ مؤثر همان متنِ ارثی است، نه ''. */
+    if (dto.chiefComplaint !== undefined && !String(dto.chiefComplaint ?? '').trim()) {
+      values.chiefComplaint = inheritedComplaint(v)?.text ?? '';
+    }
+    const r = this.forms.validateFields((await this.shownFields(form.fields)).filter((f) => keys.has(f.key)), values);
     if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
+  }
+
+  /** «فعلاً نیاز به پیگیریِ بعدی نیست» انحصاری است — با «ویزیتِ بعدی» تناقض است. */
+  private static assertDecisions(list: unknown) {
+    if (!Array.isArray(list) || list.length < 2 || !list.includes(EXCLUSIVE_DECISION)) return;
+    throw new BadRequestException(`«${DECISION_LABELS[EXCLUSIVE_DECISION]}» با تصمیمِ دیگری جمع نمی‌شود`);
+  }
+
+  /** ورودیِ `subforms` → برنامهٔ نوشتن؛ **بیرون از تراکنش** (تعریف‌ها کوئری‌اند). */
+  private async planSubformsFor(raw: unknown, kind: string): Promise<SubformPlanItem[] | undefined> {
+    if (raw === undefined || raw === null) return undefined;
+    const vertical = await this.forms.workflow();
+    return planSubforms(raw, {
+      kind, vertical,
+      defOf: (key) => this.forms.subformDef(key),
+      validate: (fields, data) => this.forms.validateFields(fields, data),
+      normalize: (fields, data) => (this.forms.normalizeExtra(fields as any, data as any) ?? {}) as Record<string, unknown>,
+    });
+  }
+
+  /**
+   * **تغییرِ نوعِ مراجعهٔ ثبت‌شده** (بازبینیِ ۱۴۰۵/۰۷/۰۳) — فقط ادمین، و نه روی زنجیره.
+   *
+   * ⚠️ نوع تعیین می‌کند فرم چه بخش‌هایی دارد. «ویزیت» که «عمل» شود سندهای ویزیت را بی‌کادر
+   * می‌گذارد، و عملی که پست‌آپ یا ویزیتِ تصمیم دارد با تغییرِ نوع پیوندِ آن‌ها را بی‌معنی
+   * می‌کند (پست‌آپ دنبالِ «عمل» است، ارثِ شکایت دنبالِ «ویزیت»). فرم انتخابگرِ نوع را در
+   * ویرایش نشان نمی‌دهد؛ این سدِ دومِ همان قاعده است.
+   */
+  private async assertKindChange(v: any, user: any) {
+    if ((user?.level ?? 0) < LEVEL.ADMIN) {
+      throw new ForbiddenException('نوعِ مراجعهٔ ثبت‌شده را فقط ادمین عوض می‌کند');
+    }
+    const linked = v.followOfVisitId || v.decidedInVisitId
+      || await this.prisma.visit.count({ where: { OR: [{ followOfVisitId: v.id }, { decidedInVisitId: v.id }] } });
+    if (linked) {
+      throw new BadRequestException('این مراجعه به مراجعهٔ دیگری پیوند دارد (عمل، پست‌آپ یا ویزیتِ تصمیم) و نوعش عوض نمی‌شود');
+    }
   }
 
   /**
@@ -1261,6 +1390,14 @@ export class PatientsService {
     const rawCoding = pickCodingKeys(dto);
     const codingPlan = planCoding(dto, EMPTY_CODING);
     const vitalsRow = vitalsInput((dto as any).vitals);
+    PatientsService.assertDecisions(dto.decisions);
+    const subformPlan = await this.planSubformsFor((dto as any).subforms, dto.kind || 'surgery');
+    /* عملی که از ویزیت درآمده و کادرِ شکایتش خالی است: ستاره با متنِ **ارثی** سنجیده
+       می‌شود. خواندنِ متن فقط برای همین سنجه است؛ تعلقِ ویزیت به بیمار داخلِ تراکنش
+       (`resolveDecidedIn`) سنجیده می‌شود. */
+    const inheritedCc = dto.decidedInVisitId && !String(dto.chiefComplaint ?? '').trim()
+      ? (await this.prisma.visit.findUnique({ where: { id: Number(dto.decidedInVisitId) }, select: { chiefComplaint: true } }))?.chiefComplaint ?? null
+      : null;
     /* ⚠️ **ستارهٔ فرم‌ساز این‌جا واقعی می‌شود.** بدونِ این خط، سوپرادمین
        فیلدی را اجباری می‌کرد، ستاره‌اش در مرورگر دیده می‌شد، و سرور مراجعه‌ی
        بی‌آن فیلد را با خوش‌رویی می‌پذیرفت — یعنی «اجباری» فقط یک نقاشی بود.
@@ -1284,7 +1421,7 @@ export class PatientsService {
       const form = await this.forms.forVisitKind(dto.kind || 'surgery');
       const check = this.forms.validateFields((form?.fields ?? []).map(f => ({ ...f, required: false })), { ...(dto as any).extra, ...pickBuiltin(dto) });
       if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
-    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto, opts?.intakeCompany?.undated);
+    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto, opts?.intakeCompany?.undated, inheritedCc);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     /* باکس‌های لینکِ فرم: نرمال‌شده می‌نشینند (URLِ معتبر، سقف، برش) و هر لینک
        مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. تعریفِ فرم **پیش از**
@@ -1447,6 +1584,14 @@ export class PatientsService {
           },
         });
       }
+      /* زیرفرم‌های الصاق‌شده در همان ثبت — داخلِ همین تراکنش. */
+      await writeSubforms(tx, visit, subformPlan, user);
+      const full = await tx.visit.findUnique({
+        where: { id: visit.id },
+        select: { subforms: INCLUDE_VISIT_FULL.subforms, _count: INCLUDE_VISIT_FULL._count },
+      });
+      (visit as any).subforms = full?.subforms ?? [];
+      (visit as any)._count = full?._count;
       /* ⚠️ پاسخ همیشه نمای **کامل** است: فرم بعد از ذخیره همان شیء را نگه
          می‌دارد و ویرایشِ بعدی از رویش باز می‌شود — بخشِ خوانده‌نشده یعنی
          فرمی که معاینه را خالی نشان دهد. */
@@ -1525,13 +1670,28 @@ export class PatientsService {
         otherDiagnosisIds: coding.diagnosis.others, otherProcedureTypeIds: coding.procedure.others,
       },
     );
-    if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
+    if (dto.kind !== undefined && dto.kind !== v.kind) {
+      await this.assertKind(dto.kind);
+      await this.assertKindChange(v, user);
+      /* مالکیت روی **هر دو** فرم: بخشی که در فرمِ قبلی مالِ نقشِ دیگری بود با عوض‌کردنِ
+         نوع از سدِ مالکیت نمی‌گریزد. */
+      await this.assertRoleOwnership(v.kind, dto, user, {
+        ...(v as any), ...sectionsOf(v.clinicalNotes, VISIT_FULL_NOTE_KINDS),
+        otherDiagnosisIds: coding.diagnosis.others, otherProcedureTypeIds: coding.procedure.others,
+      });
+    }
+    PatientsService.assertDecisions(dto.decisions);
     await this.assertEditFormValid(v, dto);
     /* باکس‌های لینک: تعریفِ فرم و نرمال‌سازی **پیش از** تراکنش — کوئریِ بیرونِ tx
        داخلِ تراکنشِ تعاملی روی PGliteِ CI (یک اتصال) قفل می‌کرد و تراکنشِ ۵ ثانیه‌ای
        منقضی می‌شد (intake-finance-roles). داخلِ tx فقط نوشتنِ مدرک‌ها می‌ماند. */
     const kindNow = dto.kind ?? v.kind ?? 'surgery';
     const servicePatch = await this.visitServiceOf((dto as any).service, false);
+    const subformPlan = await this.planSubformsFor(dto.subforms, kindNow);
+    /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخورده — با همین ذخیره می‌نشیند (باگِ ممیزی: گم می‌شد). */
+    const vitalsList = Array.isArray(dto.vitals) ? dto.vitals : dto.vitals ? [dto.vitals] : [];
+    if (vitalsList.length > 3) throw new BadRequestException('علائمِ حیاتیِ این درخواست بیش از اندازه است');
+    const vitalsRows = vitalsList.map((x) => vitalsInput(x)).filter((x): x is NonNullable<typeof x> => !!x);
     const linkFields = dto.extra !== undefined ? ((await this.forms.forVisitKind(kindNow))?.fields ?? []) : [];
     const extraIn = dto.extra !== undefined ? await this.forms.normalizeExtra(linkFields, dto.extra) : undefined;
 
@@ -1620,6 +1780,12 @@ export class PatientsService {
       }
       /* شرحِ عمل و بخش‌های هسته — هر کدام فقط اگر در این PATCH آمده باشد. */
       await this.setSections(tx, { id, patientId: v.patientId }, dto, user);
+      for (const row of vitalsRows) {
+        await tx.vitalSign.create({
+          data: { ...row, visitId: id, patientId: v.patientId, recordedById: user?.id ?? null, recordedByName: actorName(user) },
+        });
+      }
+      await writeSubforms(tx, { id }, subformPlan, user);
       /* ساعتِ حضور مشتقِ برنامهٔ چینش است (W3.8/U7): با مقادیرِ **نهایی** پس از
          این ویرایش سنجیده می‌شود، نه با مقادیرِ قبلی — وگرنه تغییرِ بیمارستان یا
          تاریخ در همین ویرایش، ردیفِ حضورِ روزِ قبل را نگاه می‌کرد.
@@ -1642,7 +1808,54 @@ export class PatientsService {
     /* ویرایش ممکن است تاریخِ ویزیتِ بعدی یا شمارهٔ بیمار را عوض کرده باشد. */
     await this.reminders.syncNextVisit(id);
     await this.syncPostOpVisit(id);
+    /* پست‌آپ دوطرفه است: تاریخِ ویزیتِ پست‌آپ که در خودش عوض شود، «ویزیتِ بعدی»ِ عمل (و
+       پیامکش) هم عوض می‌شود — تا دیروز ذخیرهٔ بعدیِ عمل تاریخِ منشی را بازنویسی می‌کرد. */
+    await this.syncPostOpParent(id);
+    await this.carrySurgeonToFollowers(v, updated);
     return result;
+  }
+
+  /**
+   * **ویزیتِ پست‌آپ → عمل** — نیمهٔ دومِ همگامیِ دوطرفه (بازبینیِ ۱۴۰۵/۰۷/۰۳).
+   *
+   * `syncPostOpVisit` تاریخِ «ویزیتِ بعدی»ِ عمل را روی فرزند می‌نشاند؛ این یکی برعکس: وقتی
+   * خودِ فرزند جابه‌جا، لغو یا از لغو برگردانده شد، «ویزیتِ بعدی»ِ عمل همان می‌شود و
+   * یادآوری از نو کاشته می‌شود. بدونِ این، پیامک تاریخِ قدیمیِ عمل را می‌برد و ذخیرهٔ بعدیِ
+   * عمل هم فرزندِ لغوشده را زنده می‌کرد.
+   *
+   * ⚠️ فرزندِ «انجام‌شده» برنامه را عوض نمی‌کند — ویزیت برگزار شده و «ویزیتِ بعدی»ِ عمل
+   * دیگر یادآوری ندارد؛ پاک‌کردنش سابقه را پاک می‌کرد.
+   */
+  async syncPostOpParent(childId: number) {
+    try {
+      const c = await this.prisma.visit.findUnique({
+        where: { id: childId },
+        select: {
+          opDate: true, opStatus: true,
+          followOf: { select: { id: true, kind: true, nextVisitDate: true, opStatus: true } },
+        },
+      });
+      const parent = c?.followOf;
+      if (!c || !parent || parent.kind !== 'surgery' || parent.opStatus === 'cancelled' || c.opStatus === 'done') return;
+      const want = c.opStatus === 'cancelled' ? null : c.opDate;
+      if ((want?.getTime() ?? null) === (parent.nextVisitDate?.getTime() ?? null)) return;
+      await this.prisma.visit.update({ where: { id: parent.id }, data: { nextVisitDate: want } });
+      await this.reminders.syncNextVisit(parent.id);
+    } catch (e) {
+      console.warn(`syncPostOpParent(${childId}) شکست خورد:`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  /**
+   * اصلاحِ جراحِ عمل به ویزیتِ پست‌آپِ **در انتظارِ** همان عمل هم می‌رسد — فقط اگر پزشکِ
+   * آن هنوز همان جراحِ قبلی است. انتخابِ دستیِ منشی (پزشکِ دیگری) دست نمی‌خورد.
+   */
+  private async carrySurgeonToFollowers(before: any, after: any) {
+    if (before?.kind !== 'surgery' || !before.surgeonId || !after?.surgeonId || before.surgeonId === after.surgeonId) return;
+    await this.prisma.visit.updateMany({
+      where: { followOfVisitId: before.id, opStatus: 'pending', surgeonId: before.surgeonId },
+      data: { surgeonId: after.surgeonId, surgeonName: after.surgeonName ?? null },
+    });
   }
 
   async setStatus(id: number, opStatus: string, user?: any, cancel?: { reason?: string; note?: string }) {
@@ -1682,6 +1895,9 @@ export class PatientsService {
     }
     await this.reminders.syncNextVisit(id);
     await this.syncPostOpVisit(id);
+    /* لغوِ ویزیتِ پست‌آپ «ویزیتِ بعدی»ِ عمل را برمی‌دارد و برگرداندنش آن را برمی‌گرداند —
+       وگرنه ذخیرهٔ بعدیِ عمل همین فرزندِ لغوشده را دوباره زنده می‌کرد. */
+    await this.syncPostOpParent(id);
     return enrich(updated, await this.forms.kindMap());
   }
 
