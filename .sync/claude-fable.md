@@ -1,10 +1,21 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/fixes-summary-paraclinic
+status: active
+branch: claude/visit-subforms
 since: 2026-09-24
-paths: []
-note: اصلاحاتِ مالک ۱۴۰۵/۰۷/۰۲ (خلاصهٔ بیمار، باکسِ مدارک، شرحِ عملِ پاپ‌آپ) مرج شد. بسته‌های ۸+۹ در PR #98 (draft) منتظرِ مرورِ مالک‌اند.
+paths:
+  - src/app/Today.jsx
+  - src/app/tools.jsx
+  - src/app/dashboard.css
+  - src/app/subforms.jsx
+  - src/ui/AssistedTextarea.jsx
+  - server/src/patients/patients.service.ts
+  - server/src/patients/subforms.service.ts
+  - server/src/accounts/
+  - scripts/e2e/
+note: >-
+  طرحِ مصوبِ مالک ۱۴۰۵/۰۷/۰۳ — زیرفرمِ الصاقی، سربرگِ فرمِ مراجعه، تصمیمِ دراپ‌داون، فرمِ درخواستِ پاراکلینیک، ابزارک‌های منتخب + رفعِ پیوستگیِ پست‌آپ.
+  VisitForm.jsx و server/prisma/ را هم می‌نویسم؛ در کلیمِ claude-opus هستند ولی شاخهٔ آن کلیم در PR #80 مرج شده است.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

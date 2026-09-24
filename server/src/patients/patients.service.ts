@@ -132,11 +132,9 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
        زمانِ ساخت هرگز نمی‌داد.
        `chiefComplaintOwn` برای فرم است (تا ذخیره، ارث را به کپی تبدیل نکند)
        و `chiefComplaintFrom` برای رابط، تا بتواند منبع را نشان بدهد. */
-    chiefComplaint: v.chiefComplaint ?? v.decidedIn?.chiefComplaint ?? null,
+    chiefComplaint: v.chiefComplaint ?? inheritedComplaint(v)?.text ?? null,
     chiefComplaintOwn: v.chiefComplaint ?? null,
-    chiefComplaintFrom: !v.chiefComplaint && v.decidedIn?.chiefComplaint
-      ? { visitId: v.decidedIn.id, seq: v.decidedIn.seq, opDate: v.decidedIn.opDate }
-      : null,
+    chiefComplaintFrom: !v.chiefComplaint ? (inheritedComplaint(v)?.from ?? null) : null,
     decidedInVisitId: v.decidedInVisitId ?? null,
     followOfVisitId: v.followOfVisitId ?? null,
     opStatus: v.opStatus,
@@ -290,6 +288,20 @@ function orderFor(sort?: string, dir?: string): any[] {
   }
 }
 
+/**
+ * **شکایتِ اولیهٔ ارثی** — یک قاعده برای خواندن و نوشتن.
+ *
+ * عمل از ویزیتِ تصمیمش می‌خواند؛ ویزیتِ پست‌آپِ خودکار (`followOf`) از همان عمل، و
+ * اگر عمل خودش شکایتی ندارد از ویزیتِ تصمیمِ آن. `inheritedComplaintText` همین ترتیب
+ * را برای `ownComplaint` در ذخیره تکرار می‌کند؛ اگر این دو از هم جدا شوند، ذخیرهٔ
+ * بی‌تغییرِ فرم متنِ ارثی را «شکایتِ خودش» می‌کند و ارث قطع می‌شود.
+ */
+function inheritedComplaint(v: any): { text: string; from: { visitId: number; seq: number; opDate: Date | null } } | null {
+  const src = [v?.decidedIn, v?.followOf, v?.followOf?.decidedIn]
+    .find((x: any) => typeof x?.chiefComplaint === 'string' && x.chiefComplaint.trim());
+  return src ? { text: src.chiefComplaint, from: { visitId: src.id, seq: src.seq, opDate: src.opDate } } : null;
+}
+
 // جراح و کارشناس هویتشان در Person است، پس همیشه با آن خوانده می‌شوند.
 const INCLUDE_PATIENT = {
   patient: true,
@@ -302,6 +314,15 @@ const INCLUDE_PATIENT = {
   /* ویزیتی که تصمیمِ عمل در آن گرفته شد — فقط برای **مشتق‌کردنِ** شکایتِ
      اولیه. سه ستون، نه کلِ ردیف: این include روی فهرستِ ۵۰۰تایی هم می‌دود. */
   decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+  /* ویزیتِ پست‌آپِ خودکار شکایتش را از **همان عمل** (یا ویزیتِ تصمیمِ آن) می‌گیرد —
+     همان قاعدهٔ «مشتق نه کپی». تا ۱۴۰۵/۰۷/۰۳ این زنجیره خوانده نمی‌شد و ویزیتِ
+     پست‌آپ با شکایتِ خالی باز می‌شد (بازخوردِ مالک: «پیوستگیِ اطلاعات زیرِ سؤال»). */
+  followOf: {
+    select: {
+      id: true, seq: true, opDate: true, chiefComplaint: true,
+      decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+    },
+  },
   /* سایرِ تشخیص‌ها و عمل‌ها (بستهٔ ۷) — دو کوئریِ دسته‌ایِ `IN` روی فهرست و
      خروجی، هر دو ایندکس‌دار. همهٔ مسیرهای نوشتن/خواندنِ مراجعه از همین include
      می‌گذرند، پس فرم، ممیزی و فهرست همان فهرستِ کامل را می‌بینند. */
@@ -369,12 +390,19 @@ export class PatientsService {
     try {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
-        select: { id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true },
+        select: {
+          id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true, surgeonId: true,
+          decidedIn: { select: { hospitalId: true } },
+        },
       });
       if (!v || v.kind !== 'surgery') return;
+      /* پیوستگی (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳): پزشکِ ویزیتِ پست‌آپ همان جراحِ عمل است و
+         مرکزش همان‌جا که تصمیمِ عمل گرفته شد (مطب)، نه بیمارستانِ عمل. فقط جای **خالی**
+         پر می‌شود — انتخابِ دستیِ منشی هرگز بازنویسی نمی‌شود. */
+      const carry = { surgeonId: v.surgeonId ?? null, hospitalId: v.decidedIn?.hospitalId ?? null };
       const child = await this.prisma.visit.findFirst({
         where: { followOfVisitId: v.id }, orderBy: { id: 'asc' },
-        select: { id: true, opDate: true, opStatus: true },
+        select: { id: true, opDate: true, opStatus: true, surgeonId: true, hospitalId: true },
       });
       const wantDate = v.opStatus === 'cancelled' ? null : v.nextVisitDate;
       if (!wantDate) {
@@ -388,6 +416,8 @@ export class PatientsService {
         const patch: Record<string, unknown> = {};
         if (child.opDate?.getTime() !== wantDate.getTime()) patch.opDate = wantDate;
         if (child.opStatus === 'cancelled') patch.opStatus = 'pending';
+        if (child.surgeonId == null && carry.surgeonId) patch.surgeonId = carry.surgeonId;
+        if (child.hospitalId == null && carry.hospitalId) patch.hospitalId = carry.hospitalId;
         if (Object.keys(patch).length) {
           await this.prisma.visit.update({ where: { id: child.id }, data: patch });
         }
@@ -411,6 +441,7 @@ export class PatientsService {
           patientId: v.patientId, seq: (last._max.seq ?? 0) + 1, kind,
           opDate: wantDate, opStatus: 'pending',
           topicId: topic?.id ?? null, followOfVisitId: v.id,
+          surgeonId: carry.surgeonId, hospitalId: carry.hospitalId,
         },
       });
     } catch (e) {
@@ -886,6 +917,23 @@ export class PatientsService {
     });
     if (!row) throw new BadRequestException('ویزیتِ تصمیم برای این بیمار نیست');
     return row;
+  }
+
+  /** متنِ شکایتِ ارثیِ یک مراجعه — همان ترتیبِ `inheritedComplaint` (تصمیم، عمل، تصمیمِ عمل). */
+  private static async inheritedComplaintText(tx: any, v: { id: number }) {
+    const row = await tx.visit.findUnique({
+      where: { id: v.id },
+      select: {
+        decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+        followOf: {
+          select: {
+            id: true, seq: true, opDate: true, chiefComplaint: true,
+            decidedIn: { select: { id: true, seq: true, opDate: true, chiefComplaint: true } },
+          },
+        },
+      },
+    });
+    return inheritedComplaint(row)?.text ?? null;
   }
 
   /**
@@ -1524,10 +1572,7 @@ export class PatientsService {
          ارث‌گرفته مقدارِ مشتق را نشان می‌دهد، پس هر «ذخیره»ی بی‌تغییر همان
          متن را پس می‌فرستد. بدونِ این خط، دومین ذخیره ارث را کپی می‌کرد. */
       if (dto.chiefComplaint !== undefined) {
-        const parent = v.decidedInVisitId
-          ? await tx.visit.findUnique({ where: { id: v.decidedInVisitId }, select: { chiefComplaint: true } })
-          : null;
-        visitPatch.chiefComplaint = PatientsService.ownComplaint(dto.chiefComplaint, parent?.chiefComplaint);
+        visitPatch.chiefComplaint = PatientsService.ownComplaint(dto.chiefComplaint, await PatientsService.inheritedComplaintText(tx, v));
       }
       if (dto.kind !== undefined) visitPatch.kind = dto.kind;
       // طرفِ حساب و استثنای سهمِ جراح — فیلدهای مالیِ سبک که روی خودِ مراجعه‌اند.
