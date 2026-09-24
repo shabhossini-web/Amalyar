@@ -799,9 +799,13 @@ export class PatientsService {
       orderBy: { id: 'desc' },
       take: 200,
     });
+    /* «سابقه» یعنی **پیش از** همین مراجعه — مراجعهٔ بعدی (مثلاً پست‌آپِ آینده) نقطهٔ
+       نمودارِ رشدِ امروز نیست. مراجعهٔ بی‌تاریخ با زمانِ ساختش سنجیده می‌شود. */
+    const at = (v: { opDate: Date | null; createdAt: Date }) => +(v.opDate ?? v.createdAt);
+    const here = at({ opDate: out.opDate ?? null, createdAt: out.createdAt });
     for (const sf of custom) {
       sf.history = rows
-        .filter((r) => r.key === sf.key && subformDataHasValue(r.data))
+        .filter((r) => r.key === sf.key && subformDataHasValue(r.data) && at(r.visit) < here)
         .map((r) => ({
           visitId: r.visitId, seq: r.visit.seq, date: r.visit.opDate ?? r.visit.createdAt,
           data: r.data, derived: subformDerived(r.data),
