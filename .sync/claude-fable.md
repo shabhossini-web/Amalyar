@@ -5,17 +5,26 @@ branch: claude/visit-subforms
 since: 2026-09-24
 paths:
   - src/app/Today.jsx
-  - src/app/tools.jsx
+  - src/app/today.css
+  - src/app/VisitSubforms.jsx
+  - src/app/visit-subforms.css
+  - src/app/usePrefs.jsx
+  - src/app/FormBuilder.jsx
+  - src/app/VitalSigns.jsx
   - src/app/dashboard.css
-  - src/app/subforms.jsx
   - src/ui/AssistedTextarea.jsx
+  - src/ui/DynForm.jsx
+  - src/ui/Spark.jsx
   - server/src/patients/patients.service.ts
-  - server/src/patients/subforms.service.ts
-  - server/src/accounts/
+  - server/src/patients/subforms.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/form-presets.ts
+  - server/src/auth/auth.service.ts
   - scripts/e2e/
 note: >-
   طرحِ مصوبِ مالک ۱۴۰۵/۰۷/۰۳ — زیرفرمِ الصاقی، سربرگِ فرمِ مراجعه، تصمیمِ دراپ‌داون، فرمِ درخواستِ پاراکلینیک، ابزارک‌های منتخب + رفعِ پیوستگیِ پست‌آپ.
-  VisitForm.jsx و server/prisma/ را هم می‌نویسم؛ در کلیمِ claude-opus هستند ولی شاخهٔ آن کلیم در PR #80 مرج شده است.
+  VisitForm.jsx، orders.service.ts و server/prisma/ را هم می‌نویسم؛ در کلیمِ claude-opus هستند ولی شاخهٔ آن کلیم در PR #80 مرج شده است.
+  تا «اکی»ِ مالک روی اسکرین‌شاتِ واقعی مرج نمی‌شود (قانونِ ۲۶).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

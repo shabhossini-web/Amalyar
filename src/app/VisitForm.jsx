@@ -1385,6 +1385,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      این‌جا رد می‌شود تا دو ورودیِ هم‌ارز روی یک state نباشد. */
   if (fd.isOn('nextVisitDate') && f.kind !== 'surgery') builtinNodes.nextVisitDate = { wide: true, el: (
     <JDate
+      className="db-field jd-next"
       label={<>{fd.labelOf('nextVisitDate', 'ویزیتِ بعدی')} (شمسی){star(fd.requiredOf('nextVisitDate'))}</>}
       value={f.nextVisitDateJ}
       onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
@@ -2205,6 +2206,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <i>{timing ? `یادآوری: ${faNum(timing.nextVisitDays)} روز قبل از همان تاریخ` : 'یادآوری پیش از موعد'}</i>
             </div>
             <JDate
+              className="db-field jd-next"
               value={f.nextVisitDateJ}
               onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
               placeholder="سال / ماه / روز"

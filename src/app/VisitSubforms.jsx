@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import { api } from '../lib/api.js';
 import Overlay from '../ui/Overlay.jsx';
 import { Caret, Close, Plus, Search, Star, StarLine } from '../ui/icons.jsx';
+import Spark from '../ui/Spark.jsx';
 import './visit-subforms.css';
 
 /**
@@ -256,24 +257,6 @@ const numOf = (v) => {
   const n = Number(String(v).replace(/[۰-۹]/g, (d) => FA.indexOf(d)).replace(/[٫,]/g, '.'));
   return Number.isFinite(n) ? n : null;
 };
-
-/** نمودارِ خطیِ کوچک — فقط هندسهٔ رسم، نه دادهٔ مشتق. */
-function Spark({ vals }) {
-  const w = 110; const h = 30; const pad = 3;
-  const lo = Math.min(...vals); const hi = Math.max(...vals);
-  const span = hi - lo || 1;
-  const pts = vals.map((v, i) => [
-    pad + (i * (w - 2 * pad)) / Math.max(1, vals.length - 1),
-    h - pad - ((v - lo) * (h - 2 * pad)) / span,
-  ]);
-  const last = pts[pts.length - 1];
-  return (
-    <svg className="vf-spark" viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true">
-      <polyline points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={last[0]} cy={last[1]} r="2.6" fill="currentColor" />
-    </svg>
-  );
-}
 
 /**
  * **روندِ رشد** — قد/وزن/دورِ سرِ همین بیمار در مراجعه‌های قبلی (`history`ِ سرور) + مقدارِ

@@ -129,3 +129,5 @@ tenant-profile
 clinic-report-work
 visit-docs-ui
 postop-continuity
+visit-subforms
+visit-subforms-ui

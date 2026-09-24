@@ -93,17 +93,29 @@ try {
     await page.goto(BASE + `/app/dashboard?patient=${v.id}`);
     await page.waitForTimeout(2500);
     const dec = page.locator('.db-decide');
-    ok(await dec.count() === 1, '**ردیفِ تصمیم در فرمِ ویزیت هست**');
-    /* ردیفِ اولِ چیپ‌ها = خودِ تصمیم‌ها؛ ردیفِ دومِ داخلِ همین بخش از #64
-       دکمه‌های «+ افزودنِ سفارش» است و جزوِ تصمیم‌ها شمرده نمی‌شود. */
-    const chips = dec.locator('.db-daychips').first().locator('.db-daychip');
-    /* ⚠️ تعداد از `/config.statuses.decision` می‌آید نه عددِ ثابت: از بستهٔ ۶الف
-       فهرستِ تصمیم‌ها سمتِ سرور است (ویزیتِ بعدی، تکمیلِ بررسی، تغییرِ سرویس،
-       بستری …) و فرم همان را رندر می‌کند. */
-    const cfgDec = ((await send('/config', 'GET')).json?.statuses?.decision ?? []).length;
-    ok(cfgDec >= 6 && await chips.count() === cfgDec, `همهٔ تصمیم‌های سرور نشان داده شد (${await chips.count()}/${cfgDec})`);
-    await chips.filter({ hasText: 'کاندیدای جراحی' }).click();
-    await page.waitForTimeout(500);
+    ok(await dec.count() === 1, '**تصمیم در فرمِ ویزیت هست**');
+    /* از بستهٔ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) تصمیم یک کشوییِ چندتایی است، نه ردیفِ چیپ؛ چهار
+       تصمیمِ «درخواست» (آزمایش، تصویربرداری، مشاوره، ارجاع) در آن نیستند — جایشان
+       زیرفرمِ «درخواستِ پاراکلینیک» است و ثبتِ خودِ سفارش کلیدش را می‌گذارد.
+       ⚠️ تعداد از `/config.statuses.decision` می‌آید نه عددِ ثابت. */
+    await dec.locator('[data-act="decision-open"]').click();
+    const opts = dec.locator('.vf-opt');
+    const cfgAll = (await send('/config', 'GET')).json?.statuses?.decision ?? [];
+    const cfgDec = cfgAll.filter((d) => !d.order).length;
+    ok(cfgDec >= 6 && await opts.count() === cfgDec, `همهٔ تصمیم‌های غیرِ درخواستیِ سرور نشان داده شد (${await opts.count()}/${cfgDec})`);
+    ok(await dec.locator('.vf-opt[data-decision="lab"]').count() === 0, 'تصمیمِ درخواستی (آزمایش) در کشو نیست');
+    ok(await dec.locator('.vf-opt.sep[data-decision="none"]').count() === 1, '«فعلاً نیاز به پیگیریِ بعدی نیست» جدا و انحصاری است');
+    await dec.locator('.vf-opt[data-decision="surgery"]').click();
+    await dec.locator('.vf-opt[data-decision="none"]').click();
+    ok(await dec.locator('[data-decision-tag]').count() === 1 && await dec.locator('[data-decision-tag="none"]').count() === 1,
+      '**گزینهٔ انحصاری بقیه را پاک کرد**');
+    await dec.locator('.vf-opt[data-decision="surgery"]').click();
+    ok(await dec.locator('[data-decision-tag="none"]').count() === 0 && await dec.locator('[data-decision-tag="surgery"]').count() === 1,
+      'و انتخابِ دوباره آن را برداشت');
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    ok(await page.locator('.db-sheet').count() === 1 && await dec.locator('.vf-dd-panel').count() === 0,
+      'Escape فقط کشو را بست، نه شیتِ مراجعه را');
     ok((await dec.locator('.db-decide-hint').first().innerText()).includes('فرمِ عمل'),
       '**راهنمای «بعد از ذخیره فرمِ عمل باز می‌شود» دیده شد**');
     /* ذخیره → همان ویزیت پره‌آپ می‌شود و **فرمِ عملِ همان بیمار** باز می‌شود. */
@@ -116,7 +128,7 @@ try {
     const opSheet = page.locator('.db-sheet');
     ok(await opSheet.count() === 1, '**فرمِ عمل بلافاصله باز شد**');
     ok(await page.locator('.db-postop').count() === 1, 'و برنامهٔ مراقبتِ فرمِ عمل داخلش هست');
-    ok(await page.locator('.db-decide').count() === 0, 'در فرمِ عمل ردیفِ تصمیم نیست');
+    ok(await page.locator('.db-decide').count() === 0, 'در فرمِ عمل تصمیم نیست');
     await page.locator('.db-sheet .db-x').click();
     await page.waitForTimeout(800);
 
@@ -128,7 +140,7 @@ try {
     sql(`UPDATE visits SET kind='surgery' WHERE id=${opVisit.id}`);
     await page.goto(BASE + `/app/dashboard?patient=${opVisit.id}`);
     await page.waitForTimeout(2500);
-    ok(await page.locator('.db-decide').count() === 0, '**در فرمِ عمل ردیفِ تصمیم نیست**');
+    ok(await page.locator('.db-decide').count() === 0, '**در فرمِ عمل تصمیم نیست**');
     ok(await page.locator('.db-postop').count() === 1, 'و به‌جایش برنامهٔ مراقبت هست');
     ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
   } finally {

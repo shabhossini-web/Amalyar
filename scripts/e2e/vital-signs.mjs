@@ -166,7 +166,12 @@ try {
     await page.waitForTimeout(1200);
     const box = page.locator('[data-vitals="visit"]');
     ok('بخشِ علائمِ حیاتی در فرمِ ویزیت هست', await box.count() === 1);
-    ok('با برچسبِ «اختیاری»', (await box.innerText().catch(() => '')).includes('اختیاری'));
+    /* از بستهٔ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) «اختیاری»‌بودن یعنی **زیرفرمِ الصاقی**: کارت عنوانِ خودش
+       را دارد و سرِ تکراریِ جعبه پنهان است. مراجعهٔ اندازه‌دار کارت را بی‌الصاقِ دستی دارد. */
+    const card = page.locator('[data-subform="vitals"]');
+    ok('در کارتِ زیرفرمِ «علائمِ حیاتی» است (الصاقِ ضمنیِ مراجعهٔ اندازه‌دار)',
+      await card.count() === 1 && await card.locator('[data-vitals="visit"]').count() === 1
+      && (await card.innerText().catch(() => '')).includes('علائمِ حیاتی'));
     ok('نوبتِ ثبت‌شده در فهرستش دیده می‌شود (۱۳۰/۸۵)',
       (await box.locator('[data-vital-row]').first().innerText().catch(() => '')).includes('۱۳۰/۸۵'));
     await box.locator('[data-vital="hr"]').fill('۸۸');

@@ -101,7 +101,7 @@ try {
   const upd = await send(`/orders/consult/${cons.id}`, 'PATCH', { answerText: `جوابِ مشاورهٔ ${tag}` });
   ok(upd.status === 200 && upd.json?.status === 'answered', '**ثبتِ جوابِ مشاوره وضعیت را جلو می‌برد**');
 
-  console.log('\n۶) مرورگر — چیپِ تصمیم فرم را باز می‌کند');
+  console.log('\n۶) مرورگر — کارتِ «درخواستِ پاراکلینیک» فرم را باز می‌کند');
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true });
   const page = await browser.newPage({ viewport: { width: 1150, height: 950 } });
   const errors = [];
@@ -118,10 +118,14 @@ try {
     await page.waitForTimeout(2600);
     ok(await page.locator('.db-order').count() === 4, `چهار سفارشِ موجود زیرِ مراجعه دیده می‌شوند (${await page.locator('.db-order').count()})`);
 
-    await page.locator('.db-decide .db-daychip', { hasText: 'درخواستِ آزمایش' }).first().click();
+    /* از بستهٔ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) درخواست‌ها یک زیرفرم‌اند نه چیپِ تصمیم؛ مراجعهٔ
+       سفارش‌دار کارتش را **بی‌الصاقِ دستی** دارد (الصاقِ ضمنی). */
+    const card = page.locator('[data-subform="orders"]');
+    ok(await card.count() === 1, 'مراجعهٔ سفارش‌دار کارتِ «درخواستِ پاراکلینیک» را خودکار دارد');
+    await card.locator('[data-order-new="lab"]').click();
     await page.waitForTimeout(900);
     const sheet = page.locator('.od-sheet');
-    ok(await sheet.count() === 1, '**کلیکِ چیپِ تصمیم، فرمِ درخواست را باز کرد**');
+    ok(await sheet.count() === 1, '**دکمهٔ «+ آزمایش» در کارت، فرمِ درخواست را باز کرد**');
     const chips = sheet.locator('.od-chip');
     ok(await chips.count() > 15, `تیک‌های استانداردِ آزمایش هست (${await chips.count()})`);
     await chips.filter({ hasText: 'ESR' }).first().click();
