@@ -1219,7 +1219,10 @@ export class PatientsService {
    */
   private async shownFields<T extends { key: string; builtin?: boolean; type?: string | null }>(fields: T[]): Promise<T[]> {
     if ((await this.forms.workflow()) !== 'clinic') return fields;
-    return fields.filter((f) => !(f.builtin && f.key === 'findings') && !(!f.builtin && (f.type === 'image' || f.type === 'links')));
+    /* «طرح»ِ تک‌انتخابیِ قالبِ قدیمی (`plan`) هم پنهان است — جایش کشوی تصمیم است و `liftLegacy`
+       مقدارِ قدیمی‌اش را به `decisions` می‌برد؛ ستارهٔ رویش ذخیره را برای همیشه می‌بست. */
+    return fields.filter((f) => !(f.builtin && f.key === 'findings')
+      && !(!f.builtin && (f.type === 'image' || f.type === 'links' || f.key === 'plan')));
   }
 
   private async assertEditFormValid(v: any, dto: UpdateVisitDto) {

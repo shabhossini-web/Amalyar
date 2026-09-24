@@ -17,6 +17,8 @@
  *   - تغییرِ نوعِ مراجعهٔ ثبت‌شده: فقط ادمین، و نه روی زنجیره
  *   - پست‌آپ دوطرفه: تاریخ/لغوِ فرزند «ویزیتِ بعدی»ِ عمل را عوض می‌کند و جراحِ عمل به فرزند می‌رسد
  *   - منتخب‌ها به‌ازای حساب و سمتِ سرور؛ کلیدِ بدشکل رد می‌شود
+ *   - «بازگرداندن به قالب» زیرفرم‌های آماده را پاک نمی‌کند
+ *   - پاک‌کردن و × در یک ذخیره پذیرفته می‌شود
  *   - جستجوی بیمار آخرین پزشک/مرکز را برای پیش‌پرکردن می‌دهد
  *  نباید بیفتد:
  *   - ذخیره‌ای که `subforms` ندارد یا فقط یک زیرفرم را می‌فرستد، بقیه را بردارد
@@ -159,6 +161,13 @@ try {
   ok('پاک‌کردنِ مقادیر', r.status === 200 && sfOf(r.json, 'subform.wound')?.hasData === false, msg(r));
   r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.wound', removed: true }] });
   ok('بعد از خالی‌شدن × کار کرد', r.status === 200 && !sfOf(r.json, 'subform.wound'), msg(r));
+  r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.wound', data: { site: 'ساق' } }] });
+  r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.wound', removed: true, data: { site: '' } }] });
+  ok('**پاک‌کردن و × در یک ذخیره** (پاسخِ خالیِ همراهِ برداشتن)', r.status === 200 && !sfOf(r.json, 'subform.wound'), `${r.status} ${msg(r)}`);
+  r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.wound', data: { site: 'ساق' } }] });
+  r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.wound', removed: true, data: { site: 'ساق' } }] });
+  ok('نباید بیفتد: برداشتن با پاسخِ پر رد می‌شود', r.status === 400 && msg(r).includes('پاسخ دارد'), `${r.status} ${msg(r)}`);
+  r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.wound', removed: true, data: { site: '' } }] });
   r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.postop', data: { meds: false, pain: '' } }] });
   r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.postop', removed: true }] });
   ok('**`false`ِ به‌جامانده از یک کلید «داده» نیست** — برداشته شد', r.status === 200 && !sfOf(r.json, 'subform.postop'), msg(r));
@@ -286,8 +295,13 @@ try {
   }
   const img = await send(`/forms/${cForm.id}/fields`, 'POST', { key: `xr${tag}`, label: 'عکسِ رادیولوژی', type: 'image', required: true });
   if (img.json?.id) trash.fields.push(img.json.id);
+  /* «طرح»ِ تک‌انتخابیِ قالبِ قدیمی — در مطب جایش کشوی تصمیم است و کادرش دیده نمی‌شود. */
+  const legacyPlan = cForm?.fields?.some((f) => f.key === 'plan')
+    ? null : await send(`/forms/${cForm.id}/fields`, 'POST', { key: 'plan', label: 'طرحِ قدیمی', type: 'select', options: [{ v: 'surgery', l: 'جراحی' }], required: true });
+  if (legacyPlan?.json?.id) trash.fields.push(legacyPlan.json.id);
+  ok('فیلدِ «طرح»ِ قالبِ قدیمی (اجباری) کاشته شد', !legacyPlan || legacyPlan.status === 201 || legacyPlan.status === 200, `${legacyPlan?.status} ${msg(legacyPlan)}`);
   const H1 = await clinicVisit({ patientId: P, opDate: day(-2) });
-  ok('**ستاره روی کادرهای پنهانِ مطب (یافته‌ها، عکسِ فرم) ذخیره را نبست**', H1.status === 201, `${H1.status} ${msg(H1)}`);
+  ok('**ستاره روی کادرهای پنهانِ مطب (یافته‌ها، عکسِ فرم، «طرح»ِ قدیمی) ذخیره را نبست**', H1.status === 201, `${H1.status} ${msg(H1)}`);
   if (H1.json?.id) {
     r = await send(`/visits/${H1.json.id}`, 'PATCH', { findings: '' });
     ok('در ویرایش هم نه', r.status === 200, `${r.status} ${msg(r)}`);
@@ -377,6 +391,14 @@ try {
   ok('پزشک = پزشکِ آخرین مراجعهٔ زنده', me?.last?.surgeonId === Number(ls), `${lastRow} ${JSON.stringify(me?.last)}`);
   ok('مرکز فقط از مراجعهٔ غیرجراحی (بیمارستانِ عمل جای مطب نیست)',
     me?.last?.hospitalId === (lk === 'surgery' ? null : Number(lh) || null), `${lastRow} ${JSON.stringify(me?.last)}`);
+
+  console.log('\n۱۵) «بازگرداندن به قالب» زیرفرم‌های آماده را برمی‌گرداند');
+  const rs = await send('/forms/reset', 'POST', { vertical: 'clinic' });
+  ok('بازگرداندن به قالب انجام شد', rs.status === 201 || rs.status === 200, `${rs.status} ${msg(rs)}`);
+  const afterReset = (await send('/forms/subforms')).json?.items ?? [];
+  ok('**چهار زیرفرمِ آماده بعد از بازگرداندن هستند و روشن‌اند** (پرچمِ یک‌باره جلویشان را نگرفت)',
+    ['subform.growth', 'subform.wound', 'subform.postop', 'subform.asa'].every((k) => afterReset.some((x) => x.key === k && x.active)),
+    JSON.stringify(afterReset.map((x) => `${x.key}:${x.active}`)));
 } catch (e) {
   fails.push('اجرا متوقف شد: ' + (e?.message ?? e));
   console.log('  ✘ اجرا متوقف شد: ' + (e?.stack ?? e));

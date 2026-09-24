@@ -825,6 +825,14 @@ export class FormsService {
     await this.prisma.formDef.deleteMany({ where: { id: { notIn: keep } } });
     await this.prisma.formDef.updateMany({ where: { id: { in: keep } }, data: { active: false } });
     await this.seedFrom(forms);
+    /* زیرفرم‌های آمادهٔ مطب هم جزوِ قالب‌اند: بالا همه پاک یا خاموش شدند، و پرچمِ یک‌بارهٔ
+       `ensureSubformPresets` دیگر برشان نمی‌گرداند — «بازگرداندن به قالب» بی این خط پنجرهٔ
+       «الصاقِ فرم» را برای همیشه خالی می‌کرد. */
+    if (v === 'clinic') {
+      await this.seedFrom(SUBFORM_PRESETS);
+      const flag = 'subform_presets_installed';
+      await this.prisma.setting.upsert({ where: { key: flag }, create: { key: flag, value: 'true' }, update: { value: 'true' } });
+    }
     return this.list();
   }
 

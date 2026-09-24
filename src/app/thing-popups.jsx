@@ -6,14 +6,14 @@ import { faDate } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useTerms, useStatusMap } from './config.jsx';
 import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
-
-/* پرونده همین سازنده را از همین‌جا می‌گیرد — هر دو فرمِ عمل را از یک میزبان باز می‌کنند. */
-export { surgeryPrefill };
 import OrderSheet from './OrderSheet.jsx';
 import { useVisitDefs } from './visit-defs.js';
 import Overlay from '../ui/Overlay.jsx';
 import { Calendar, Close, Send } from '../ui/icons.jsx';
 import './thing-popups.css';
+
+/* پرونده همین سازنده را از همین‌جا می‌گیرد — هر دو فرمِ عمل را از یک میزبان باز می‌کنند. */
+export { surgeryPrefill };
 
 /**
  * پاپ‌آپِ «همان چیز» — مراجعه، سفارش، یادآوری، نوبت — از هر صفحه‌ای.

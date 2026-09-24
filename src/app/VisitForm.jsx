@@ -546,6 +546,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [subLoaded, setSubLoaded] = useState(() => !editing || Array.isArray(initial?.subforms));
   const savedSubKeys = useRef(new Set((initial?.subforms ?? []).filter((x) => !x.implicit).map((x) => x.key)));
   const subTouched = useRef(new Set());
+  /* پاسخِ آخرِ کارتی که با × برداشته شد — «پاک کردم و برداشتم» در یک ذخیره (× فقط روی خالی دیده
+     می‌شود، پس این همیشه خالی است؛ سرور بی‌آن پاسخِ ذخیره‌شدهٔ قبلی را می‌دید و رد می‌کرد). */
+  const removedData = useRef({});
   const [subErr, setSubErr] = useState({});
   const [cardsShut, setCardsShut] = useState({});
   const [pickOpen, setPickOpen] = useState(false);
@@ -583,6 +586,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     reveal(it.key);
   };
   const removeSub = (key) => {
+    const gone = subList.find((x) => x.key === key);
+    if (gone && !gone.builtin) removedData.current[key] = gone.data ?? {};
     subTouched.current.add(key);
     setSubList((l) => l.filter((x) => x.key !== key));
     setSubErr((e) => { const n = { ...e }; delete n[key]; return n; });
@@ -761,7 +766,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        `extra` — همان تقسیمی که سرور هم دارد. */
     /* مطب: باکس‌های عکس/لینکِ فرم در ویرایش جای خود را به `VisitDocs` داده‌اند — ستارهٔ
        کادری که دیده نمی‌شود نباید ذخیره را بی‌صدا ببندد. */
-    const eCustom = dynErrors(isClinicCore ? fd.customFields.filter((x) => x.type !== 'image' && x.type !== 'links') : fd.customFields, extra, myRole);
+    /* «طرح»ِ تک‌انتخابیِ قالبِ قدیمی هم در مطب دیده نمی‌شود (جایش کشوی تصمیم است) — آینهٔ `shownFields`ِ سرور. */
+    const eCustom = dynErrors(isClinicCore
+      ? fd.customFields.filter((x) => x.type !== 'image' && x.type !== 'links' && x.key !== INLINE_KEYS.legacyPlan)
+      : fd.customFields, extra, myRole);
     setExtraErr(eCustom);
     if (Object.keys(eCustom).length) {
       onToast(Object.values(eCustom)[0]);
@@ -812,7 +820,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     const subformsOut = [];
     for (const key of subTouched.current) {
       const e = subList.find((x) => x.key === key);
-      if (!e) { if (savedSubKeys.current.has(key)) subformsOut.push({ key, removed: true }); continue; }
+      if (!e) {
+        if (savedSubKeys.current.has(key)) {
+          subformsOut.push(removedData.current[key] ? { key, removed: true, data: removedData.current[key] } : { key, removed: true });
+        }
+        continue;
+      }
       subformsOut.push(e.builtin ? { key } : { key, data: e.data ?? {} });
     }
     const vitalsAttached = f.kind === 'surgery' || attachedKeys.has('vitals');

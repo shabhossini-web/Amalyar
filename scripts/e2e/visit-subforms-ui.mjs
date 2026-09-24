@@ -182,8 +182,15 @@ try {
   ok('کارتِ داده‌دار قفلِ «داده دارد» دارد نه ×', await wound2.locator('[data-act="subform-remove"]').count() === 0 && await wound2.locator('.vf-card-lock').count() === 1);
   ok('کارتِ علائمِ حیاتی با اندازهٔ ثبت‌شده', await page.locator('[data-subform="vitals"] [data-vital-row]').count() === 1);
   ok('منتخبِ ستاره‌خورده روی کارتِ الصاق‌شده علامت دارد', await page.locator('.vf-pin.is-attached[data-pin="subform.wound"]').count() === 1);
+  await wound2.locator('label[data-ftype="text"]', { hasText: 'محلِ زخم' }).locator('input').fill('');
+  ok('پاک‌کردنِ مقدار × را برگرداند', await wound2.locator('[data-act="subform-remove"]').count() === 1);
   await page.locator('[data-subform="subform.wound"] .vf-ic[aria-expanded]').click();
   ok('کارت جمع می‌شود', await page.locator('[data-subform="subform.wound"] .vf-card-body').count() === 0);
+  await wound2.locator('[data-act="subform-remove"]').click();
+  const r2 = await saveSheet(page);
+  ok('**پاک‌کردن و × در یک ذخیره پذیرفته شد**', r2?.status() === 200, String(r2?.status()));
+  await page.waitForTimeout(600);
+  ok('ردیفِ زخم از سرور رفت', Number(sql(`SELECT count(*) FROM visit_subforms WHERE visit_id=${V.id} AND key='subform.wound'`)) === 0);
 
   console.log('\n۶) فرمِ عمل');
   const S = (await send('/visits', 'POST', {

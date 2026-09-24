@@ -179,15 +179,21 @@ export async function planSubforms(
     const def = await ctx.defOf(key);
     if (!def) throw new BadRequestException(`زیرفرمِ «${key}» پیدا نشد — شاید در فرم‌ساز حذف شده است`);
     let data: Record<string, unknown> | undefined;
-    if (!removed && item.data !== undefined) {
+    if (item.data !== undefined) {
       if (!item.data || typeof item.data !== 'object' || Array.isArray(item.data)) {
         throw new BadRequestException(`پاسخِ «${def.title}» نامعتبر است`);
       }
       /* فقط کلیدهای خودِ فرم — کلیدِ بیگانه در JSON دفن می‌شد و هیچ‌جا دیده نمی‌شد. */
       const known = new Set(def.fields.map((f) => f.key));
       const picked = Object.fromEntries(Object.entries(item.data as Record<string, unknown>).filter(([k]) => known.has(k)));
-      const check = ctx.validate(def.fields, picked);
-      if (!check.ok) throw new BadRequestException(`${def.title}: ${Object.values(check.errors).join('، ')}`);
+      /* ⚠️ برداشتن همراهِ پاسخ = «همین حالا خالی‌اش کردم و برداشتم» (پاک‌کردن و × در یک ذخیره).
+         ستاره این‌جا سنجیده نمی‌شود — زیرفرمی که برداشته می‌شود کادرِ اجباری ندارد؛ فقط
+         خالی‌بودنش در `writeSubforms` سنجیده می‌شود. بدونِ این، × بعد از پاک‌کردنِ مقادیر
+         با «پاسخ دارد» رد می‌شد چون سرور هنوز پاسخِ ذخیره‌شدهٔ قبلی را می‌دید. */
+      if (!removed) {
+        const check = ctx.validate(def.fields, picked);
+        if (!check.ok) throw new BadRequestException(`${def.title}: ${Object.values(check.errors).join('، ')}`);
+      }
       data = ctx.normalize(def.fields, picked);
     }
     out.push({
@@ -242,12 +248,11 @@ export async function writeSubforms(
           throw new BadRequestException('علائمِ حیاتیِ ثبت‌شده دارد و برداشته نمی‌شود — اول اندازه‌گیری‌ها را حذف کنید');
         }
         if (item.key === 'orders') {
-          const n = (await Promise.all([
-            tx.labOrder.count({ where: { visitId: visit.id } }),
-            tx.imagingOrder.count({ where: { visitId: visit.id } }),
-            tx.consultOrder.count({ where: { visitId: visit.id } }),
-            tx.referralOrder.count({ where: { visitId: visit.id } }),
-          ])).reduce((a: number, b: number) => a + b, 0);
+          /* پشتِ‌سرِهم، نه `Promise.all`: کوئریِ موازی روی یک اتصالِ تراکنشی (PGliteِ CI) قفل می‌کرد. */
+          let n = 0;
+          for (const model of ['labOrder', 'imagingOrder', 'consultOrder', 'referralOrder']) {
+            n += await tx[model].count({ where: { visitId: visit.id } });
+          }
           if (n) throw new BadRequestException('درخواستِ ثبت‌شده دارد و برداشته نمی‌شود');
         }
       } else if (row && subformDataHasValue(item.data ?? row.data)) {
