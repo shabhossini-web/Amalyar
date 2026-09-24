@@ -1,0 +1,51 @@
+/* مدارکِ بالینیِ ویزیت (VisitDocs.jsx) — فقط توکن؛ هر دو تم. */
+.vd { display: flex; flex-direction: column; gap: 8px; }
+/* در تبِ مرحلهٔ عمل باکس زیرِ فیلدهای همان تب می‌نشیند، نه داخلِ شبکهٔ فیلدها. */
+.vd-phase { margin-top: 12px; }
+.vd-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.vd-doc { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.vd-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.vd-row {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 8px 10px; border-radius: 12px;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.vd-cap { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: 11px; color: var(--text3); line-height: 1.7; overflow-wrap: anywhere; }
+.vd-part { display: inline-flex; align-items: center; }
+.vd-sep { display: inline-block; width: 1px; height: 10px; margin: 0 6px; background: currentColor; opacity: .45; }
+.vd-cred-show { flex-basis: 100%; color: var(--text2); }
+.vd-url { font-size: 11px; color: var(--text3); overflow-wrap: anywhere; text-align: left; }
+.vd-thumb { padding: 0; border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 10px; overflow: hidden; background: rgba(var(--veil-rgb), .05); cursor: zoom-in; aspect-ratio: 4 / 3; }
+.vd-thumb img, .vd-thumb .dt-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.vd-thumb .dt-thumb-ph { width: 100%; height: 100%; }
+.vd-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--brand-2); overflow-wrap: anywhere; text-decoration: none; }
+.vd-link:hover, .vd-link:focus-visible { text-decoration: underline; }
+.vd-text { font-size: 12.5px; color: var(--text1); line-height: 1.8; margin: 0; }
+.vd-file { font: inherit; font-size: 12px; color: var(--brand-2); background: none; border: 0; padding: 0; cursor: pointer; text-align: start; overflow-wrap: anywhere; }
+.vd-add {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--brand-2);
+  padding: 8px 12px; border-radius: 12px; cursor: pointer;
+  background: rgba(var(--veil-rgb), .03); border: 1px dashed rgba(var(--brand-soft-rgb), .45);
+}
+.vd-add:hover:not(:disabled), .vd-add:focus-visible { border-style: solid; outline: none; }
+.vd-add:disabled { opacity: .55; cursor: not-allowed; }
+.vd-box { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 14px; border: 1px solid rgba(var(--brand-soft-rgb), .2); background: rgba(var(--veil-rgb), .03); }
+.vd-cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.vd-cats button {
+  font: inherit; font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 99px; cursor: pointer;
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.vd-cats button.on { color: var(--text1); border-color: rgba(var(--brand-soft-rgb), .6); background: rgba(var(--brand-soft-rgb), .16); }
+.vd-cats button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.vd-linkrow { display: flex; flex-direction: column; gap: 6px; }
+.vd-linkrow input { font: inherit; font-size: 13px; padding: 9px 11px; border-radius: 10px; color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); min-width: 0; }
+/* ⚠️ کادرِ نشانی/نام کاربری `dir="ltr"` است؛ راهنمای فارسی در کادرِ چپ‌به‌راست از سرش بریده
+   می‌شد («ام کاربری…»). تا خالی است راست‌به‌چپ، با اولین حرف چپ‌به‌راست. */
+.vd-linkrow input[dir='ltr']:placeholder-shown { direction: rtl; }
+.vd-cred { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.vd-linkbtn, .vd-close {
+  align-self: flex-start; font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 10px; cursor: pointer;
+  color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.vd-linkbtn:disabled { opacity: .5; cursor: not-allowed; }
+.vd-close { align-self: flex-end; color: var(--text3); }

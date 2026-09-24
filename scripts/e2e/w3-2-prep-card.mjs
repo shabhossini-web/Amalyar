@@ -97,8 +97,22 @@ try {
     await page.locator('.db-card', { hasText: `آماده${tag}` }).first().locator('button[title="ویرایش"], button[aria-label="ویرایش"]').first().click().catch(async () => {
       await page.locator('.db-card', { hasText: `آماده${tag}` }).first().getByRole('button', { name: /ویرایش/ }).first().click();
     });
-    await page.waitForSelector('.db-prep', { timeout: 10000 });
-    ok(await page.locator('.db-prep').count() === 1, 'کارتِ آماده‌سازی بالای فرم رندر شد');
+    /* اصلاحِ مالک ۱۴۰۵/۰۷/۰۲: کارتِ آماده‌سازی حالا «خلاصهٔ کوچکِ بیمار» است — دوستونه، و
+       کادرهای مشخصات پشتِ «ویرایشِ مشخصات» (پیش‌فرض بسته) تا بالای هر فرم جا نگیرد. */
+    await page.waitForSelector('[data-patient-summary]', { timeout: 10000 });
+    const sum = page.locator('[data-patient-summary]');
+    ok(await sum.count() === 1, 'خلاصهٔ بیمار بالای فرم رندر شد');
+    const sumText = await sum.innerText();
+    ok(sumText.includes(`آماده${tag}`) && /موبایل/.test(sumText) && /کد ملی/.test(sumText), 'نام، موبایل و کد ملی در خلاصه دیده می‌شوند');
+    ok(await sum.locator('.db-psum-grid > div').count() >= 3, 'ردیف‌های خلاصه دوستونه‌اند (dl)');
+    const idStep = page.locator('.db-sheet .db-step').first();
+    ok(await idStep.isHidden(), '**نباید بیفتد:** کادرهای مشخصات در ویرایش پیش‌فرض بسته‌اند');
+    const editId = sum.locator('[data-act="edit-identity"]');
+    ok((await editId.getAttribute('aria-expanded')) === 'false', 'دکمهٔ «ویرایشِ مشخصات» بسته را اعلام می‌کند');
+    await editId.click();
+    ok(await idStep.isVisible() && (await editId.getAttribute('aria-expanded')) === 'true', 'با «ویرایشِ مشخصات» کادرها باز می‌شوند');
+    await editId.click();
+    ok(await idStep.isHidden(), 'و با «بستنِ مشخصات» دوباره بسته می‌شوند');
     const risk = page.locator('.db-prep-risk');
     ok(await risk.count() === 1 && /پنی‌سیلین/.test(await risk.innerText()), 'هشدارِ حساسیت **باز** و دیدنی است');
     const more = page.locator('.db-prep-more');

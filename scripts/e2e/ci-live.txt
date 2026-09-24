@@ -127,3 +127,4 @@ today-quick-visit
 op-defaults
 tenant-profile
 clinic-report-work
+visit-docs-ui

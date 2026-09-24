@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useAuth } from './auth.jsx';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
-import VoiceNote from '../ui/VoiceNote.jsx';
-import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStrToIso, jToFa } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
 import { useConfig, useStatusList, useStatusMap } from './config.jsx';
@@ -13,10 +13,9 @@ import VitalSigns from './VitalSigns.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
-import FileDrop from '../ui/FileDrop.jsx';
 import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import JDate from './JDate.jsx';
-import { Close, Copy, Plus } from '../ui/icons.jsx';
+import { Close, Copy, Pencil, Plus } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -24,6 +23,7 @@ import Pick from '../ui/Pick.jsx';
 import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
+import VisitDocs from './VisitDocs.jsx';
 import './dashboard.css';
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
 
@@ -140,6 +140,8 @@ const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'ب�
 const VISIT_DOC_CATEGORIES = {
   imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', prescription: 'دستورِ پزشک', other: 'متفرقه',
 };
+/* شکلِ آرایه‌ایِ همان برای `VisitDocs` — ثابتِ ماژول، تا باکس در هر رندر فهرست را از نو نخواند. */
+const PHASE_DOC_CATS = Object.entries(VISIT_DOC_CATEGORIES).map(([key, label]) => ({ key, label }));
 
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
   const { t, defaultKind = 'surgery', kind: tenantKind, services: offered = [], serviceCatalog = [] } = useConfig();
@@ -380,6 +382,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [orderSheet, setOrderSheet] = useState(null); // {kind, order?}
   /* کارتِ آماده‌سازی (W3.2) — یک درخواست، فقط برای مراجعهٔ ذخیره‌شده. */
   const [prep, setPrep] = useState(null);
+  /* اصلاحِ مالک ۱۴۰۵/۰۷/۰۲: مشخصاتِ بیمار در ویرایش پیش‌فرض بسته است؛ خلاصهٔ کوچکِ بالا کافی است. */
+  const [idOpen, setIdOpen] = useState(false);
+  /* شرحِ عمل در فرم فقط پیش‌نما دارد؛ نوشتن در پاپ‌آپِ بزرگ (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲). */
+  const [reportOpen, setReportOpen] = useState(false);
+  /* متنِ پیش‌فرضی که بازکردنِ پاپ‌آپ در شرح گذاشت (اگر گذاشت) — برای «نوشتهٔ کاربر» حساب نشود. */
+  const [reportPrefill, setReportPrefill] = useState(null);
   useEffect(() => {
     if (!initial?.id) return;
     let on = true;
@@ -656,7 +664,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        سرور هر دو را می‌سنجد؛ این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود.
        مقدارها از دو جا می‌آیند چون هسته‌ای‌ها در `f` هستند و دلخواه‌ها در
        `extra` — همان تقسیمی که سرور هم دارد. */
-    const eCustom = dynErrors(fd.customFields, extra, myRole);
+    /* مطب: باکس‌های عکس/لینکِ فرم در ویرایش جای خود را به `VisitDocs` داده‌اند — ستارهٔ
+       کادری که دیده نمی‌شود نباید ذخیره را بی‌صدا ببندد. */
+    const eCustom = dynErrors(isClinicCore ? fd.customFields.filter((x) => x.type !== 'image' && x.type !== 'links') : fd.customFields, extra, myRole);
     setExtraErr(eCustom);
     if (Object.keys(eCustom).length) {
       onToast(Object.values(eCustom)[0]);
@@ -680,7 +690,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       amount: editing ? initial.total : f.amount,
     };
     const eBuiltin = dynErrors(
-      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals),
+      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals && !(isClinicCore && x.key === 'findings')),
       builtinVals,
       myRole,
     );
@@ -1056,61 +1066,127 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     </>) };
   /* شرحِ عمل هم حالا ردیفِ کاتالوگ دارد؛ روی نوعی مثلِ «ویزیت» که عمل ندارد
      خاموش است و برچسبش را سوپرادمین می‌تواند مثلاً «شرحِ معاینه» کند. */
-  if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: (
+  /* ابزارهای شرحِ عمل (قالب‌ها، «افزودن به پیش‌فرض»، دیکته و دستیار) — یک‌بار تعریف و در
+     هر دو جا (کادرِ درونِ فرم / پاپ‌آپِ مطب) همان‌ها، تا دو نسخه از هم نیفتند. */
+  const reportTools = (area) => (<>
+    <OpDefaultChips
+      items={opTpl.items}
+      disabled={busy || !!aiBusy}
+      onPick={(tpl) => setF((s2) => ({ ...s2, opReport: withTemplate(s2.opReport, tpl.body) }))}
+    />
+    {area}
+    {/* «افزودن به پیش‌فرض» — مقصد عملِ **اصلیِ همین فرم**؛ همان قراردادِ
+        «کلیدِ تکی = اصلی» (بستهٔ ۷). */}
+    <OpDefaultSave
+      text={f.opReport}
+      /* ⚠️ پیش‌فرضی که خودِ بازکردنِ پاپ‌آپ در متن گذاشت «نوشتهٔ کاربر» نیست — تا دستش نزده،
+         پیشنهادِ «همین را پیش‌فرض کن» بی‌معناست. */
+      typed={f.opReport.trim() !== (initial?.opReport ?? '').trim() && f.opReport.trim() !== (reportPrefill ?? '').trim()}
+      noTarget={!f.procedureTypeIds.length}
+      procedureName={defs.procedures.find((p) => p.id === f.procedureTypeIds[0])?.name
+        ?? (opTpl.procedure && opTpl.procedure.id === f.procedureTypeIds[0] ? opTpl.procedure.name : null)}
+      canAdd={opTpl.canAdd}
+      disabled={busy || !!aiBusy}
+      onToast={onToast}
+      onSave={async (title) => {
+        const r = await api('/op-templates', {
+          method: 'POST',
+          body: {
+            procedureTypeId: f.procedureTypeIds[0], body: f.opReport, source: 'form',
+            ...(initial?.id ? { visitId: initial.id } : {}), ...(title ? { title } : {}),
+          },
+        });
+        setOpTplRev((n) => n + 1);
+        return r;
+      }}
+    />
+    {editing && aiOn && (
+      <div className="db-aibar">
+        {sttOn && (
+          <VoiceInput
+            disabled={busy || !!aiBusy}
+            onText={(txt) => setF((s2) => ({ ...s2, opReport: s2.opReport.trim() ? `${s2.opReport}\n${txt}` : txt }))}
+            onErr={(m) => onToast(m)}
+          />
+        )}
+        <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiReport('structure')}>
+          {aiBusy === 'structure' ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن'}
+        </button>
+        <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiReport('continue')}>
+          {aiBusy === 'continue' ? 'در حالِ ادامه…' : 'ادامه بنویس'}
+        </button>
+        {rawReport !== null && (
+          <button type="button" className="db-aighost" disabled={!!aiBusy} onClick={() => { setF((s2) => ({ ...s2, opReport: rawReport })); setRawReport(null); }}>
+            برگرداندنِ متنِ خام
+          </button>
+        )}
+      </div>
+    )}
+  </>);
+  const reportLabel = fd.labelOf('opReport', 'شرحِ عمل');
+  /* **پیش‌فرضِ همین نوعِ عمل** (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲): تا شرحی نوشته نشده، اولین پیش‌فرضِ
+     اختصاصیِ عملِ اصلی کم‌رنگ روی کادر دیده می‌شود و با بازکردنِ پاپ‌آپ در متن می‌نشیند تا
+     ویرایش شود. ⚠️ پیش از بازکردن در `f` نمی‌رود: شرحی که کسی ندیده نباید با «ذخیره» ثبت شود. */
+  const reportDefault = isClinicCore && !f.opReport.trim()
+    ? (opTpl.items.find((x) => x.procedureTypeId != null && x.procedureTypeId === f.procedureTypeIds[0]) ?? null)
+    : null;
+  const openReport = () => {
+    if (reportDefault) {
+      setF((s2) => (s2.opReport.trim() ? s2 : { ...s2, opReport: reportDefault.body }));
+      setReportPrefill(reportDefault.body);
+    }
+    setReportOpen(true);
+  };
+  /* ⚠️ مطب: شرحِ عمل در فرم فقط **پیش‌نما** دارد و نوشتن در پاپ‌آپِ بزرگ است (اصلاحِ مالک
+     ۱۴۰۵/۰۷/۰۲) — متنِ بلند در کادرِ سه‌خطیِ وسطِ فرم خوانده و ویرایش نمی‌شد. پاپ‌آپ روی
+     `document.body` می‌نشیند: transformِ شیتِ ویزیت، fixedِ فرزند را می‌بُرد (مثلِ OrderSheetHost).
+     مدلِ شرکتی دست نخورده، تا مالک برایش جدا تصمیم بگیرد (قانونِ ۲۶). */
+  if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: isClinicCore ? (
     <div className="db-field db-report">
-      <span>{fd.labelOf('opReport', 'شرحِ عمل')}{star(fd.requiredOf('opReport'))}</span>
-      <OpDefaultChips
-        items={opTpl.items}
-        disabled={busy || !!aiBusy}
-        onPick={(tpl) => setF((s2) => ({ ...s2, opReport: withTemplate(s2.opReport, tpl.body) }))}
-      />
-      <textarea rows={3} value={f.opReport} readOnly={!!aiBusy} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />
-      {/* «افزودن به پیش‌فرض» — مقصد عملِ **اصلیِ همین فرم**؛ همان قراردادِ
-          «کلیدِ تکی = اصلی» (بستهٔ ۷). */}
-      <OpDefaultSave
-        text={f.opReport}
-        typed={f.opReport.trim() !== (initial?.opReport ?? '').trim()}
-        noTarget={!f.procedureTypeIds.length}
-        procedureName={defs.procedures.find((p) => p.id === f.procedureTypeIds[0])?.name
-          ?? (opTpl.procedure && opTpl.procedure.id === f.procedureTypeIds[0] ? opTpl.procedure.name : null)}
-        canAdd={opTpl.canAdd}
-        disabled={busy || !!aiBusy}
-        onToast={onToast}
-        onSave={async (title) => {
-          const r = await api('/op-templates', {
-            method: 'POST',
-            body: {
-              procedureTypeId: f.procedureTypeIds[0], body: f.opReport, source: 'form',
-              ...(initial?.id ? { visitId: initial.id } : {}), ...(title ? { title } : {}),
-            },
-          });
-          setOpTplRev((n) => n + 1);
-          return r;
-        }}
-      />
-      {editing && aiOn && (
-        <div className="db-aibar">
-          {sttOn && (
-            <VoiceInput
-              disabled={busy || !!aiBusy}
-              onText={(txt) => setF((s2) => ({ ...s2, opReport: s2.opReport.trim() ? `${s2.opReport}\n${txt}` : txt }))}
-              onErr={(m) => onToast(m)}
-            />
+      <span>{reportLabel}{star(fd.requiredOf('opReport'))}</span>
+      {/* ⚠️ کلِ کادر یک دکمه است — هر جایش بخورد پاپ‌آپ باز می‌شود، نه فقط «بازکردن». */}
+      <button type="button" className={`db-report-preview${reportDefault ? ' is-default' : ''}`} data-report-open
+        onClick={openReport} disabled={busy} aria-label={`${reportLabel} — بازکردن برای نوشتن`}>
+        {f.opReport.trim() ? (
+          <span className="db-report-text">{f.opReport}</span>
+        ) : reportDefault ? (<>
+          <small className="db-report-deflabel">پیش‌فرضِ «{reportDefault.title}»</small>
+          <span className="db-report-text" data-report-default>{reportDefault.body}</span>
+        </>) : (
+          <i>هنوز نوشته نشده</i>
+        )}
+        <b>
+          <Pencil width="14" height="14" aria-hidden="true" />
+          {f.opReport.trim() ? 'بزنید تا باز و ویرایش شود' : reportDefault ? 'بزنید تا با همین پیش‌فرض بنویسید' : 'بزنید تا بنویسید'}
+        </b>
+      </button>
+      {createPortal(
+        <AnimatePresence>
+          {reportOpen && (
+            <Overlay backdrop="db-overlay db-report-overlay" panel="glass db-sheet db-report-sheet" from="bottom"
+              closable={!aiBusy} onClose={() => setReportOpen(false)} aria-label={reportLabel}>
+              <header className="db-sheet-head">
+                <b>{reportLabel}</b>
+                <button type="button" className="db-x" onClick={() => setReportOpen(false)} disabled={!!aiBusy} aria-label="بستن"><Close width="18" height="18" /></button>
+              </header>
+              <div className="db-field db-report db-report-body" data-report-sheet>
+                {reportTools(
+                  <textarea className="db-report-area" rows={14} autoFocus value={f.opReport} readOnly={!!aiBusy} onChange={set('opReport')}
+                    placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…" aria-label={reportLabel} data-report-area />,
+                )}
+              </div>
+              <button type="button" className="db-submit db-report-done" data-act="report-done" disabled={!!aiBusy} onClick={() => setReportOpen(false)}>تمام</button>
+            </Overlay>
           )}
-          {editing && aiOn && (<>
-          <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiReport('structure')}>
-            {aiBusy === 'structure' ? 'دستیار در حالِ نوشتن…' : 'ساخت‌یافته کن'}
-          </button>
-          <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiReport('continue')}>
-            {aiBusy === 'continue' ? 'در حالِ ادامه…' : 'ادامه بنویس'}
-          </button>
-          {rawReport !== null && (
-            <button type="button" className="db-aighost" disabled={!!aiBusy} onClick={() => { setF((s2) => ({ ...s2, opReport: rawReport })); setRawReport(null); }}>
-              برگرداندنِ متنِ خام
-            </button>
-          )}
-          </>)}
-        </div>
+        </AnimatePresence>,
+        document.body,
+      )}
+    </div>
+  ) : (
+    <div className="db-field db-report">
+      <span>{reportLabel}{star(fd.requiredOf('opReport'))}</span>
+      {reportTools(
+        <textarea rows={3} value={f.opReport} readOnly={!!aiBusy} onChange={set('opReport')} placeholder="یافته‌ها، مسیرِ عمل، رخدادهای حینِ مانیتورینگ…" />,
       )}
     </div>) };
   /* ── بخش‌های متنیِ هستهٔ ثابت (بستهٔ ۶الف) ──
@@ -1126,7 +1202,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     </div>
   );
   if (fd.isOn('history')) builtinNodes.history = { wide: true, el: textSection('history', 'شرحِ حال و علائم', 'شروع، مدت، سیر، علائمِ همراه…', 'شرحِ حال') };
-  if (fd.isOn('findings')) builtinNodes.findings = { wide: true, el: textSection('findings',
+  /* ⚠️ مطب: «یافته‌های پاراکلینیک/حینِ عمل» کادرِ متنی نیست (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) —
+     پاراکلینیک یعنی خودِ مدارکِ پرونده (`VisitDocs`). متنِ ثبت‌شدهٔ قبلی در پرونده می‌ماند. */
+  if (fd.isOn('findings') && !isClinicCore) builtinNodes.findings = { wide: true, el: textSection('findings',
     f.kind === 'surgery' ? 'یافته‌های حینِ عمل' : 'یافته‌های پاراکلینیک',
     f.kind === 'surgery' ? 'آنچه حینِ عمل دیده شد…' : 'خلاصهٔ آزمایش، MRI، سونوگرافی، سی‌تی، آندوسکوپی…',
     f.kind === 'surgery' ? 'یافته‌های حین عمل' : 'یافته‌های پاراکلینیک') };
@@ -1228,47 +1306,19 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      یکسان بودند. حالا آپلود داخلِ **همان تب** است و `visitId` و `phase` از
      جایی می‌آیند که کاربر ایستاده، نه از یک کشویی که باید یادش بماند پرش کند.
      دستهٔ مدرک از خودِ نوعِ فایل حدس زده نمی‌شود — کاربر انتخابش می‌کند. */
-  const [docCat, setDocCat] = useState('imaging');
+  /* اصلاحِ مالک ۱۴۰۵/۰۷/۰۲: همان باکسِ مدارکِ ویزیت، این‌جا با برچسبِ مرحله — مدرکی هست
+     باز و کامل، وگرنه فقط «+» با توضیح؛ در هر دو مدل. */
   const phaseDocs = initial?.id ? (
-    <div className="db-careblock db-phasedocs">
-      <div className="db-carehead">
-        <span>مدارکِ {PHASE_FA[phase]} — عکس، آزمایش، گزارش</span>
-        <i>در «مدارکِ» پرونده با همین برچسب ثبت می‌شود</i>
-      </div>
-      <label className="db-field db-docfield"><span>دستهٔ مدرک</span>
-        <select value={docCat} onChange={(e) => setDocCat(e.target.value)} disabled={busy}>
-          {Object.entries(VISIT_DOC_CATEGORIES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select>
-      </label>
-      <FileDrop
-        accept="image/*,.pdf"
-        maxMb={25}
-        hint={`عکس یا PDF — با برچسبِ «${PHASE_FA[phase]}» روی همین ${t.visit} ثبت می‌شود`}
-        onUpload={async (file) => {
-          const fd = new FormData();
-          fd.append('file', file);
-          fd.append('category', docCat);
-          fd.append('visitId', String(initial.id));
-          fd.append('phase', phase);
-          await apiUpload(`/patients/${initial.patientId}/documents`, fd);
-        }}
-        onAllDone={() => onToast(`مدرک با برچسبِ «${PHASE_FA[phase]}» ثبت شد ✓`)}
-      />
-      {/* توضیحِ صوتی کنارِ مدارکِ همین مرحله — همان مراجعه، مرحله و دسته. */}
-      <VoiceNote
-        disabled={busy}
-        onSave={async (file) => {
-          const fdv = new FormData();
-          fdv.append('file', file);
-          fdv.append('category', docCat);
-          fdv.append('visitId', String(initial.id));
-          fdv.append('phase', phase);
-          fdv.append('title', `توضیحِ صوتی — ${PHASE_FA[phase]}`);
-          await apiUpload(`/patients/${initial.patientId}/documents`, fdv);
-          onToast(`توضیحِ صوتی با برچسبِ «${PHASE_FA[phase]}» ثبت شد ✓`);
-        }}
-      />
-    </div>
+    <VisitDocs
+      key={`docs-${phase}`}
+      patientId={initial.patientId}
+      visitId={initial.id}
+      phase={phase}
+      phaseFa={PHASE_FA[phase]}
+      cats={PHASE_DOC_CATS}
+      disabled={busy}
+      onToast={onToast}
+    />
   ) : (
     <p className="db-decide-hint">بعد از ذخیرهٔ همین {t.visit}، مدارکِ هر مرحله از همین‌جا بارگذاری می‌شود.</p>
   );
@@ -1347,19 +1397,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         disabled={busy}
         onToast={onToast}
       />) };
-    if (mediaFields.length) builtinNodes.media = { wide: true, el: (
-      <div className="db-extra db-media" data-section="media">
-        <DynForm assistance
-          fields={mediaFields}
-          values={extra}
-          errors={extraErr}
-          onChange={setExtra}
-          disabled={busy}
-          myRole={myRole}
-          onVoice={onVoice}
-          voiceUrl={voiceUrl}
-        />
-      </div>) };
+    /* مدارکِ بالینیِ ویزیت (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲): آنچه بیمار فرستاده کامل، وگرنه یک خطِ
+       «+ افزودنِ مدارک» که باکسِ استاندارد (عکس، لینک + نام کاربری/رمز، صدا) را باز می‌کند. */
+    builtinNodes.media = { wide: true, el: (
+      <VisitDocs patientId={initial?.patientId ?? null} visitId={initial?.id ?? null} disabled={busy} onToast={onToast} />) };
     builtinNodes.decisions = { wide: true, el: decisionsEl };
   }
   const builtinOrder = isClinicCore
@@ -1400,7 +1441,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
 
-      {editing && prep && <PrepCard prep={prep} />}
+      {editing && <PatientSummary prep={prep} f={f} idOpen={idOpen} onToggleId={() => setIdOpen((x) => !x)} />}
 
       {editing && (initial.surgeonInstructions || initial.requiredItems?.length > 0) && <details className="sp-card">
         <summary>دستور جراح و اقلام موردنیاز</summary>
@@ -1436,7 +1477,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           می‌افتاد — یک `.db-overlay`ِ نامرئی روی صفحه می‌ماند و کلیک‌ها را
           می‌بلعید. آن ریشه در `Tabs.jsx` بسته شد (قرصِ همیشه‌مانده، بدونِ
           `layoutId`) و این `hidden` فقط برای اعتبارسنجی مانده. */}
-      <div className="db-step" hidden={!(editing || step === 1)}>
+      <div className="db-step" hidden={editing ? !idOpen : step !== 1}>
       {/* توضیحِ بالای بخش — کاربر باید بداند این قسمت چه کاری می‌کند. */}
       <div className="db-sect">
         <b>{!editing && <i>{faNum(1)}</i>}{t.record}</b>
@@ -1514,10 +1555,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                 اتفاقی نمی‌افتد. اعتبارسنجیِ واقعیِ این گام در
                 `stepOneProblem` است که پیام را کنارِ دکمه می‌نویسد. */}
             <label className="db-field"><span>نام</span>
-              <input type="text" value={f.firstName} onChange={set('firstName')} required={editing || step === 1} minLength={2} />
+              <input type="text" value={f.firstName} onChange={set('firstName')} required={editing ? idOpen : step === 1} minLength={2} />
             </label>
             <label className="db-field"><span>نام خانوادگی</span>
-              <input type="text" value={f.lastName} onChange={set('lastName')} required={editing || step === 1} minLength={2} />
+              <input type="text" value={f.lastName} onChange={set('lastName')} required={editing ? idOpen : step === 1} minLength={2} />
             </label>
             <label className="db-field"><span>موبایل</span>
               <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
@@ -1856,7 +1897,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                 })}
               </div>
             ) : (
-              <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان، یافته‌ها، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
+              <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان{isClinicCore ? '' : '، یافته‌ها'}، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
             )}
 
             {phaseDocs}
@@ -2026,18 +2067,16 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    نتیجه» و «نتیجه آمد — بررسی نشده» بود. حالا از `/config.statuses.order`. */
 
 /**
- * **کارتِ آماده‌سازیِ ویزیت** (W3.2، §۴.۴ سند) — آنچه باید *پیش از* دیدنِ بیمار دانست.
+ * **خلاصهٔ کوچکِ بیمار** بالای فرمِ ویرایش (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) — مثلِ کارتِ
+ * جزئیاتِ ملک‌طب: همهٔ جزئیات، ولی دوستونهٔ ریز تا چشم گم نشود. تا دیروز یک کارتِ
+ * بزرگ و زیرش کلِ بخشِ «پرونده» با پنج کادرِ ورودی بالای **هر** فرم می‌نشست؛ هم جا
+ * می‌گرفت هم کاربر را گیج می‌کرد. حالا کادرهای مشخصات پشتِ «ویرایشِ مشخصات» است.
  *
- * تا امروز این چند تکه در چند صفحه پخش بود: حساسیت و داروی بیمار در پرونده،
- * شرحِ ویزیتِ قبلی در تبِ دیگر، نتیجهٔ در انتظار در بخشِ سفارش‌ها، و ماندهٔ مالی
- * در صورت‌حساب. کسی که وقت ندارد هیچ‌کدام را باز نمی‌کند — و «حساسیت به
- * پنی‌سیلین» چیزی است که نباید دیده نشود.
- *
- * ⚠️ **هشدارِ بالینی باز است، بقیه بسته.** اگر همه‌چیز باز باشد، فرم زیرِ یک
- * دیوارِ متن دفن می‌شود؛ اگر همه بسته باشد، حساسیت دیده نمی‌شود.
- * ⚠️ هیچ عددی این‌جا حساب نمی‌شود: مانده، سن و کوتاه‌شدنِ متن از سرور می‌آیند.
+ * همان چیزهای کارتِ آماده‌سازی (W3.2، §۴.۴) هم این‌جاست: حساسیت و داروی بیمار
+ * **باز** (نباید دیده نشود)، سابقه **بسته**. هیچ عددی این‌جا حساب نمی‌شود: مانده و
+ * سن از سرور می‌آیند؛ موبایل و کد ملی از خودِ فرم، تا ویرایشِ همین حالا دیده شود.
  */
-function PrepCard({ prep: raw }) {
+function PatientSummary({ prep: raw, f, idOpen, onToggleId }) {
   const orderFa = useStatusMap('order');
   /* ⚠️ سرورِ واقعی همیشه هر پنج بخش را می‌فرستد، ولی پاسخِ ناقص (fixtureِ
      آزمون، یا لحظه‌ای که endpoint چیزی ندارد) نباید کلِ فرمِ مراجعه را
@@ -2054,18 +2093,32 @@ function PrepCard({ prep: raw }) {
   const answered = prep.pendingResults.filter((o) => o.status === 'answered').length;
   const due = prep.billing?.due;
 
-  return (
-    <section className="db-prep" aria-label="آماده‌سازیِ ویزیت">
-      <div className="db-prep-id">
-        <b>{p.fullName}</b>
-        <span dir="ltr">{p.code}</span>
-        {p.age != null && <span>{faNum(p.age)} ساله</span>}
-        {p.bloodType && <span className="db-prep-blood">{p.bloodType}</span>}
-        {p.insurer && <span>{p.insurer}</span>}
-      </div>
+  const name = p.fullName || `${f.firstName} ${f.lastName}`.trim();
+  const rows = [
+    ['موبایل', f.phone, true],
+    ['کد ملی', f.nationalId, true],
+    ['تاریخِ تولد', f.birthDateJ],
+    p.bloodType && ['گروهِ خون', p.bloodType, true],
+    p.insurer && ['بیمه', p.insurer],
+  ].filter(Boolean);
 
+  return (
+    <section className="db-psum" aria-label="خلاصهٔ بیمار" data-patient-summary>
+      <div className="db-psum-head">
+        <b>{name || '—'}</b>
+        {p.code && <span dir="ltr">{p.code}</span>}
+        {p.age != null && <span>{faNum(p.age)} ساله</span>}
+        <button type="button" className="db-psum-edit" aria-expanded={idOpen} onClick={onToggleId} data-act="edit-identity">
+          {idOpen ? 'بستنِ مشخصات' : 'ویرایشِ مشخصات'}
+        </button>
+      </div>
+      <dl className="db-psum-grid">
+        {rows.map(([k, v, ltr]) => (
+          <div key={k}><dt>{k}:</dt><dd dir={ltr && v ? 'ltr' : undefined}>{v ? jToFa(v) : '—'}</dd></div>
+        ))}
+      </dl>
       {risky.length > 0 && (
-        <ul className="db-prep-risk">
+        <ul className="db-prep-risk db-psum-risk">
           {risky.map((r) => <li key={r.k}><b>{r.l}:</b> {r.v}</li>)}
         </ul>
       )}

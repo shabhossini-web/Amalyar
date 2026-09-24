@@ -1,10 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
 status: idle
-branch: claude/quirky-volta-uyuznl
-since: 2026-09-23
+branch: claude/fixes-summary-paraclinic
+since: 2026-09-24
 paths: []
-note: هات‌فیکسِ «گزارشِ عمل در مطب» مرج شد (#97)؛ بستهٔ ۸ روی claude/quirky-volta-uyuznl با کلیمِ خودش ادامه دارد.
+note: اصلاحاتِ مالک ۱۴۰۵/۰۷/۰۲ (خلاصهٔ بیمار، باکسِ مدارک، شرحِ عملِ پاپ‌آپ) مرج شد. بسته‌های ۸+۹ در PR #98 (draft) منتظرِ مرورِ مالک‌اند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
