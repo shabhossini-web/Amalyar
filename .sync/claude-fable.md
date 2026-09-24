@@ -2,34 +2,39 @@
 agent: claude-fable
 status: active
 branch: claude/quirky-volta-uyuznl
-since: 2026-09-23
+since: 2026-09-24
 paths:
-  - server/src/patients/op-details.ts
-  - server/src/patients/visit-coding.ts
+  - scripts/e2e/ci-live.txt
+  - scripts/e2e/topic-supplement.mjs
+  - scripts/e2e/waitlist-ui.mjs
+  - scripts/e2e/waitlist.mjs
+  - scripts/verify-status-labels.js
+  - server/src/auth/access-registry.ts
+  - server/src/config/config.service.ts
+  - server/src/config/verticals.ts
+  - server/src/patients/definitions.controller.ts
+  - server/src/patients/definitions.service.ts
+  - server/src/patients/dto/visit.dto.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/labels.ts
+  - server/src/patients/live.service.ts
+  - server/src/patients/patients.module.ts
   - server/src/patients/patients.service.ts
-  - server/src/patients/theatre.service.ts
-  - server/src/patients/theatre.controller.ts
+  - server/src/patients/portal.service.ts
   - server/src/patients/record.service.ts
   - server/src/patients/reminders.service.ts
-  - server/src/patients/clinical-note.ts
-  - server/src/patients/labels.ts
-  - server/src/patients/dto/visit.dto.ts
-  - server/src/config/config.service.ts
-  - server/src/auth/access-registry.ts
-  - src/app/OpDetails.jsx
-  - src/app/op-details.css
-  - src/app/Theatre.jsx
-  - src/app/theatre.css
+  - server/src/patients/visit-supplement.ts
+  - server/src/patients/waitlist.controller.ts
+  - server/src/patients/waitlist.service.ts
+  - src/App.jsx
+  - src/app/Definitions.jsx
+  - src/app/Waitlist.jsx
   - src/app/config.jsx
-  - src/app/record.css
-  - scripts/verify-status-labels.js
-  - scripts/e2e/run-live.mjs
-  - scripts/e2e/op-details.mjs
-  - scripts/e2e/op-details-ui.mjs
-  - server/src/work/work-detectors.ts
-  - server/src/work/work-rules.ts
-  - scripts/e2e/clinic-report-work.mjs
-note: بستهٔ ۸ (بندِ «د» HIS) — شرحِ عملِ ساخت‌یافته، سمت/سطحِ عمل، تکمیلِ ترخیص. هم‌پوشانیِ اعلام‌شده با کلیمِ بیاتِ claude-opus (مرج‌شده در #80): src/app/VisitForm.jsx، src/app/PatientRecord.jsx و server/prisma/ را هم ویرایش می‌کنم — طبقِ پیشینهٔ بستهٔ ۶ در paths نیامده‌اند.
+  - src/app/dashboard.css
+  - src/app/tools.jsx
+  - src/app/waitlist.css
+  - src/ui/icons.jsx
+note: بستهٔ ۹ (بندِ «ه» HIS) — فرمِ تکمیلیِ موضوعِ ویزیت، عملِ بی‌تاریخ، فهرستِ انتظارِ عمل — روی سرِ بستهٔ ۸. هم‌پوشانیِ اعلام‌شده با کلیمِ claude-opus، مثلِ بسته‌های ۶ و ۸ در paths نیامده: server/prisma/migrations/20260927000000_topic_supplement/migration.sql، server/prisma/migrations/20260927010000_surgery_waitlist/migration.sql، server/prisma/schema.prisma، src/app/PatientRecord.jsx، src/app/VisitForm.jsx.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
