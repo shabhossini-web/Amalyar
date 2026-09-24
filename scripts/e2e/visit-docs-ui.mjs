@@ -3,7 +3,10 @@
  *  ۱) خلاصهٔ کوچکِ بیمار بالای فرم؛ کادرهای مشخصات پشتِ «ویرایشِ مشخصات» (پیش‌فرض بسته)
  *  ۲) «یافته‌های پاراکلینیک» کادرِ متنی نیست — مدارکِ همین ویزیت کامل دیده می‌شوند، وگرنه
  *     یک خطِ «+ افزودنِ مدارک…» که باکسِ استاندارد (عکس، لینک + ورود، صدا) را باز می‌کند
- *  ۳) «یافته‌های حینِ عمل» در مطب نیست؛ شرحِ عمل پیش‌نما + پاپ‌آپِ بزرگ
+ *  ۳) «یافته‌های حینِ عمل» در مطب نیست؛ شرحِ عمل پیش‌نما + پاپ‌آپِ بزرگ؛ کلِ کادر دکمه است و
+ *     تا شرحی نوشته نشده پیش‌فرضِ همان نوعِ عمل کم‌رنگ رویش دیده می‌شود (با بازکردن در متن می‌نشیند)
+ *  ۵) باکسِ مدارکِ تب‌های عمل همان الگو را دارد: مدرکِ همان مرحله باز، وگرنه فقط «+»؛ و «+» با
+ *     توضیح زیرِ فهرستِ پر هم هست
  *  ۴) فایلِ ناموجود: پیامِ خودِ سرور («روی سرور نیست»)، نه «فایل در دسترس نیست»
  *
  *  نباید بیفتد:
@@ -12,6 +15,8 @@
  *   - کادرهای بستهٔ مشخصات ذخیره را ببندند
  *   - Escape در پاپ‌آپِ شرح کلِ شیتِ ویزیت را ببندد
  *   - میزِ اتاقِ عملِ مطب «یافته‌های حینِ عمل» داشته باشد
+ *   - پیش‌فرضِ دیده‌نشده با «ذخیره» شرحِ عمل شود
+ *   - مدرکِ مرحلهٔ دیگر یا بی‌مرحله در تبِ یک مرحله
  */
 import { chromium } from 'playwright-core';
 import { randomBytes } from 'node:crypto';
@@ -83,7 +88,12 @@ try {
   const V1 = await mk({ kind: 'clinic', firstName: 'بی‌مدرکِ', lastName: `ویزیت${tag}`, phone: P1 });
   const V2 = await mk({ kind: 'clinic', firstName: 'با‌مدرکِ', lastName: `ویزیت${tag}`, phone: phone() });
   const V2b = await mk({ kind: 'clinic', patientId: V2.patientId, opDate: new Date(Date.now() - 20 * 864e5).toISOString() });
-  const V3 = await mk({ kind: 'surgery', firstName: 'عملِ', lastName: `مطب${tag}`, phone: phone(), hospitalId: hospital?.id });
+  const proc = (await send('/procedure-types', 'POST', { name: `عملِ مدرک ${tag}` })).json;
+  const TPL = `پیش‌فرضِ شرحِ عملِ آزمایشی ${tag}: وضعیتِ پرون، برشِ خطِ وسط، بستن.`;
+  const tpl = (await send('/op-templates', 'POST', { procedureTypeId: proc?.id, title: `پیش‌فرض ${tag}`, body: TPL })).json;
+  const V3 = await mk({ kind: 'surgery', firstName: 'عملِ', lastName: `مطب${tag}`, phone: phone(), hospitalId: hospital?.id, procedureTypeId: proc?.id });
+  const dIntra = (await send(`/patients/${V3.patientId}/documents/link`, 'POST', { url: `https://pacs.example.test/intra-${tag}`, category: 'report', title: `گزارشِ حین ${tag}`, visitId: V3.id, phase: 'intra' })).json;
+  const dNoPhase = await upload(V3.patientId, PNG, 'nophase.png', 'image/png', { category: 'imaging', visitId: V3.id, title: 'بی‌مرحله' });
 
   const dImg = await upload(V2.patientId, PNG, 'mri.png', 'image/png', { category: 'imaging', visitId: V2.id, title: `MRI ${tag}` });
   const dLink = (await send(`/patients/${V2.patientId}/documents/link`, 'POST', { url: `https://pacs.example.test/${tag}`, category: 'lab', title: `جوابِ آزمایش ${tag}`, user: `u${tag}`, pass: `p${tag}`, visitId: V2.id })).json;
@@ -95,7 +105,8 @@ try {
   sql(`UPDATE documents SET ref_type='imaging_order', ref_id=1 WHERE id=${dOrder.id}`);
   const dOther = await upload(V2.patientId, PNG, 'other.png', 'image/png', { category: 'imaging', visitId: V2b.id, title: 'ویزیتِ دیگر' });
   const dChart = await upload(V2.patientId, PNG, 'chart.png', 'image/png', { category: 'imaging', title: 'کلِ پرونده' });
-  ok('داده‌ها ساخته شدند', [dImg, dLink, dAud, dId, dPhase, dOrder, dOther, dChart].every((d) => d?.id), JSON.stringify([dImg, dLink, dAud].map((d) => d?.id ?? d)));
+  ok('داده‌ها ساخته شدند', [dImg, dLink, dAud, dId, dPhase, dOrder, dOther, dChart, proc, tpl?.template ?? tpl, dIntra, dNoPhase].every((d) => d?.id),
+    JSON.stringify([dImg, dLink, dAud, proc, tpl, dIntra].map((d) => d?.id ?? d)).slice(0, 300));
 
   browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
   const ctx = await browser.newContext({ viewport: { width: 1200, height: 1000 }, locale: 'fa-IR' });
@@ -160,7 +171,7 @@ try {
   }
   ok('نام کاربری/رمزِ لینکِ فرستاده‌شده کنارش است', (await vd2.locator(`[data-doc="${dLink.id}"]`).innerText()).includes(`u${tag} / p${tag}`));
   ok('صدا پخش‌کننده دارد، نه لینکِ دانلود', (await vd2.locator(`[data-doc="${dAud.id}"] button`).count()) >= 1);
-  ok('بدونِ «+» تکراری: خطِ «افزودنِ مدرکِ دیگر»', (await vd2.locator('[data-act="add-docs"]').innerText()).includes('مدرکِ دیگر'));
+  ok('زیرِ فهرستِ پر هم همان «+» با توضیح هست', (await vd2.locator('[data-act="add-docs"]').innerText()).includes('افزودنِ مدارک (تصویربرداری'));
 
   console.log('\n۴) فایلی که روی سرور نیست — پیامِ روشن');
   sql(`UPDATE documents SET sha256='${randomBytes(32).toString('hex')}' WHERE id=${dImg.id}`);
@@ -177,12 +188,24 @@ try {
   const intra = sheet.locator('.db-phase[data-phase="intra"]');
   ok('**نباید بیفتد:** «یافته‌های حینِ عمل» در تبِ حین', !(await intra.innerText()).includes('یافته‌های حین'));
   ok('شرحِ عمل فقط پیش‌نما دارد، کادرِ نوشتن در فرم نیست', (await intra.locator('[data-report-open]').count()) === 1 && (await intra.locator('.db-report textarea').count()) === 0);
-  await intra.locator('[data-report-open]').click();
+  const defShown = await intra.locator('[data-report-open] [data-report-default]').innerText().catch(() => '');
+  ok('تا شرحی نیست، پیش‌فرضِ همین نوعِ عمل روی کادر دیده می‌شود', defShown.includes(TPL) && (await intra.locator('.db-report-preview.is-default').count()) === 1, defShown.slice(0, 80));
+  await page.locator('.db-submit').click();
+  await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {});
+  const untouched = (await send(`/visits/${V3.id}`)).json;
+  ok('**نباید بیفتد:** پیش‌فرضِ دیده‌نشده با «ذخیره» شرحِ عمل شود', !(untouched?.opReport ?? '').trim(), String(untouched?.opReport).slice(0, 60));
+  sheet = await openForm(V3.id);
+  await sheet.locator('.ui-tabs button', { hasText: 'حین عمل' }).first().click();
+  await page.waitForTimeout(300);
+  /* کلیک روی **متنِ** کادر، نه روی «بزنید…»: کلِ کادر باید دکمه باشد. */
+  await intra.locator('[data-report-default]').click();
   const pop = page.locator('[data-report-sheet]');
   await pop.waitFor({ timeout: 5000 });
   /* ⚠️ خودِ پنلِ پاپ‌آپ هم `.db-sheet` است؛ «شیتِ ویزیت» همانی است که خلاصهٔ بیمار را دارد. */
   ok('پاپ‌آپ بیرونِ شیتِ ویزیت (روی body) باز شد', (await page.locator('.db-sheet:has([data-patient-summary]) [data-report-sheet]').count()) === 0
     && (await page.locator('[data-report-sheet]').count()) === 1);
+  ok('کلیک روی هر جای کادر پاپ‌آپ را باز کرد و پیش‌فرض در متن نشست', (await page.locator('[data-report-area]').inputValue()) === TPL);
+  ok('**نباید بیفتد:** «افزودن به پیش‌فرض» برای همان پیش‌فرضِ دست‌نخورده', (await page.locator('[data-report-sheet] [data-op-default-add]').count()) === 0);
   const TEXT = `شرحِ عملِ آزمایشی ${tag}`;
   await page.locator('[data-report-area]').fill(TEXT);
   await page.keyboard.press('Escape');
@@ -197,6 +220,29 @@ try {
   await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {});
   const saved = (await send(`/visits/${V3.id}`)).json;
   ok('ذخیره شرحِ نوشته‌شده در پاپ‌آپ را نشاند', (saved?.opReport ?? '').includes(TEXT), String(saved?.opReport).slice(0, 80));
+
+  console.log('\n۵) باکسِ مدارکِ تب‌های عمل');
+  sheet = await openForm(V3.id);
+  const tabTo = async (n) => { await sheet.locator('.ui-tabs button', { hasText: n }).first().click(); await page.waitForTimeout(300); };
+  await tabTo('حین عمل');
+  const bi = sheet.locator('[data-visit-docs][data-phase="intra"]');
+  await bi.locator('[data-doc]').first().waitFor({ timeout: 8000 }).catch(() => {});
+  const inIntra = await bi.locator('[data-doc]').evaluateAll((els) => els.map((e) => Number(e.getAttribute('data-doc'))));
+  ok('مدرکِ همین مرحله باز و دیده می‌شود', inIntra.includes(dIntra.id), JSON.stringify(inIntra));
+  ok('**نباید بیفتد:** مدرکِ بی‌مرحلهٔ همین عمل در تبِ مرحله', !inIntra.includes(dNoPhase.id));
+  ok('زیرِ فهرستِ پر هم «+» با توضیحِ همان مرحله هست', (await bi.locator('[data-act="add-docs"]').innerText()).includes('افزودنِ مدارکِ حین عمل ('));
+  await tabTo('قبل از عمل');
+  const bp = sheet.locator('[data-visit-docs][data-phase="pre"]');
+  ok('مرحلهٔ بی‌مدرک: فقط یک خطِ «+» با توضیح', (await bp.locator('[data-doc]').count()) === 0 && (await bp.locator('[data-act="add-docs"]').innerText()).includes('افزودنِ مدارکِ قبل از عمل ('));
+  ok('**نباید بیفتد:** مدرکِ مرحلهٔ دیگر در تبِ «قبل از عمل»', (await bp.locator(`[data-doc="${dIntra.id}"]`).count()) === 0);
+  await bp.locator('[data-act="add-docs"]').click();
+  await bp.locator('[role="radio"]', { hasText: 'آزمایش' }).click();
+  await bp.locator('input[type="file"]').first().setInputFiles({ name: `pre-${tag}.png`, mimeType: 'image/png', buffer: PNG });
+  await bp.locator('[data-doc]').first().waitFor({ timeout: 10000 }).catch(() => {});
+  const prow = sql(`SELECT coalesce(phase,'-') || ':' || category || ':' || visit_id FROM documents WHERE patient_id=${V3.patientId} AND file_name='pre-${tag}.png' AND deleted_at IS NULL`);
+  ok('بارگذاری از تبِ «قبل از عمل» برچسبِ همان مرحله و دستهٔ انتخابی را گرفت', prow === `pre:lab:${V3.id}`, prow);
+  await page.keyboard.press('Escape');
+  await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
 
   console.log('\n۳ب) میزِ اتاقِ عملِ مطب');
   await send(`/theatre/visits/${V3.id}/start`, 'POST');

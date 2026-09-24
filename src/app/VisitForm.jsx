@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useAuth } from './auth.jsx';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
-import VoiceNote from '../ui/VoiceNote.jsx';
 import { faDate, isoToJStr, jStrToIso, jToFa } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
@@ -14,10 +13,9 @@ import VitalSigns from './VitalSigns.jsx';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
-import FileDrop from '../ui/FileDrop.jsx';
 import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import JDate from './JDate.jsx';
-import { Close, Copy, Plus } from '../ui/icons.jsx';
+import { Close, Copy, Pencil, Plus } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -142,6 +140,8 @@ const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'ب�
 const VISIT_DOC_CATEGORIES = {
   imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', prescription: 'دستورِ پزشک', other: 'متفرقه',
 };
+/* شکلِ آرایه‌ایِ همان برای `VisitDocs` — ثابتِ ماژول، تا باکس در هر رندر فهرست را از نو نخواند. */
+const PHASE_DOC_CATS = Object.entries(VISIT_DOC_CATEGORIES).map(([key, label]) => ({ key, label }));
 
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
   const { t, defaultKind = 'surgery', kind: tenantKind, services: offered = [], serviceCatalog = [] } = useConfig();
@@ -386,6 +386,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [idOpen, setIdOpen] = useState(false);
   /* شرحِ عمل در فرم فقط پیش‌نما دارد؛ نوشتن در پاپ‌آپِ بزرگ (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲). */
   const [reportOpen, setReportOpen] = useState(false);
+  /* متنِ پیش‌فرضی که بازکردنِ پاپ‌آپ در شرح گذاشت (اگر گذاشت) — برای «نوشتهٔ کاربر» حساب نشود. */
+  const [reportPrefill, setReportPrefill] = useState(null);
   useEffect(() => {
     if (!initial?.id) return;
     let on = true;
@@ -1077,7 +1079,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         «کلیدِ تکی = اصلی» (بستهٔ ۷). */}
     <OpDefaultSave
       text={f.opReport}
-      typed={f.opReport.trim() !== (initial?.opReport ?? '').trim()}
+      /* ⚠️ پیش‌فرضی که خودِ بازکردنِ پاپ‌آپ در متن گذاشت «نوشتهٔ کاربر» نیست — تا دستش نزده،
+         پیشنهادِ «همین را پیش‌فرض کن» بی‌معناست. */
+      typed={f.opReport.trim() !== (initial?.opReport ?? '').trim() && f.opReport.trim() !== (reportPrefill ?? '').trim()}
       noTarget={!f.procedureTypeIds.length}
       procedureName={defs.procedures.find((p) => p.id === f.procedureTypeIds[0])?.name
         ?? (opTpl.procedure && opTpl.procedure.id === f.procedureTypeIds[0] ? opTpl.procedure.name : null)}
@@ -1120,6 +1124,19 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     )}
   </>);
   const reportLabel = fd.labelOf('opReport', 'شرحِ عمل');
+  /* **پیش‌فرضِ همین نوعِ عمل** (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲): تا شرحی نوشته نشده، اولین پیش‌فرضِ
+     اختصاصیِ عملِ اصلی کم‌رنگ روی کادر دیده می‌شود و با بازکردنِ پاپ‌آپ در متن می‌نشیند تا
+     ویرایش شود. ⚠️ پیش از بازکردن در `f` نمی‌رود: شرحی که کسی ندیده نباید با «ذخیره» ثبت شود. */
+  const reportDefault = isClinicCore && !f.opReport.trim()
+    ? (opTpl.items.find((x) => x.procedureTypeId != null && x.procedureTypeId === f.procedureTypeIds[0]) ?? null)
+    : null;
+  const openReport = () => {
+    if (reportDefault) {
+      setF((s2) => (s2.opReport.trim() ? s2 : { ...s2, opReport: reportDefault.body }));
+      setReportPrefill(reportDefault.body);
+    }
+    setReportOpen(true);
+  };
   /* ⚠️ مطب: شرحِ عمل در فرم فقط **پیش‌نما** دارد و نوشتن در پاپ‌آپِ بزرگ است (اصلاحِ مالک
      ۱۴۰۵/۰۷/۰۲) — متنِ بلند در کادرِ سه‌خطیِ وسطِ فرم خوانده و ویرایش نمی‌شد. پاپ‌آپ روی
      `document.body` می‌نشیند: transformِ شیتِ ویزیت، fixedِ فرزند را می‌بُرد (مثلِ OrderSheetHost).
@@ -1127,11 +1144,21 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   if (fd.isOn('opReport')) builtinNodes.opReport = { wide: true, el: isClinicCore ? (
     <div className="db-field db-report">
       <span>{reportLabel}{star(fd.requiredOf('opReport'))}</span>
-      <button type="button" className="db-report-preview" data-report-open onClick={() => setReportOpen(true)} disabled={busy}>
-        {f.opReport.trim()
-          ? <span className="db-report-text">{f.opReport}</span>
-          : <i>هنوز نوشته نشده — برای نوشتن بزنید</i>}
-        <b>{f.opReport.trim() ? 'بازکردن و ویرایش' : 'نوشتن'}</b>
+      {/* ⚠️ کلِ کادر یک دکمه است — هر جایش بخورد پاپ‌آپ باز می‌شود، نه فقط «بازکردن». */}
+      <button type="button" className={`db-report-preview${reportDefault ? ' is-default' : ''}`} data-report-open
+        onClick={openReport} disabled={busy} aria-label={`${reportLabel} — بازکردن برای نوشتن`}>
+        {f.opReport.trim() ? (
+          <span className="db-report-text">{f.opReport}</span>
+        ) : reportDefault ? (<>
+          <small className="db-report-deflabel">پیش‌فرضِ «{reportDefault.title}»</small>
+          <span className="db-report-text" data-report-default>{reportDefault.body}</span>
+        </>) : (
+          <i>هنوز نوشته نشده</i>
+        )}
+        <b>
+          <Pencil width="14" height="14" aria-hidden="true" />
+          {f.opReport.trim() ? 'بزنید تا باز و ویرایش شود' : reportDefault ? 'بزنید تا با همین پیش‌فرض بنویسید' : 'بزنید تا بنویسید'}
+        </b>
       </button>
       {createPortal(
         <AnimatePresence>
@@ -1279,47 +1306,19 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      یکسان بودند. حالا آپلود داخلِ **همان تب** است و `visitId` و `phase` از
      جایی می‌آیند که کاربر ایستاده، نه از یک کشویی که باید یادش بماند پرش کند.
      دستهٔ مدرک از خودِ نوعِ فایل حدس زده نمی‌شود — کاربر انتخابش می‌کند. */
-  const [docCat, setDocCat] = useState('imaging');
+  /* اصلاحِ مالک ۱۴۰۵/۰۷/۰۲: همان باکسِ مدارکِ ویزیت، این‌جا با برچسبِ مرحله — مدرکی هست
+     باز و کامل، وگرنه فقط «+» با توضیح؛ در هر دو مدل. */
   const phaseDocs = initial?.id ? (
-    <div className="db-careblock db-phasedocs">
-      <div className="db-carehead">
-        <span>مدارکِ {PHASE_FA[phase]} — عکس، آزمایش، گزارش</span>
-        <i>در «مدارکِ» پرونده با همین برچسب ثبت می‌شود</i>
-      </div>
-      <label className="db-field db-docfield"><span>دستهٔ مدرک</span>
-        <select value={docCat} onChange={(e) => setDocCat(e.target.value)} disabled={busy}>
-          {Object.entries(VISIT_DOC_CATEGORIES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-        </select>
-      </label>
-      <FileDrop
-        accept="image/*,.pdf"
-        maxMb={25}
-        hint={`عکس یا PDF — با برچسبِ «${PHASE_FA[phase]}» روی همین ${t.visit} ثبت می‌شود`}
-        onUpload={async (file) => {
-          const fd = new FormData();
-          fd.append('file', file);
-          fd.append('category', docCat);
-          fd.append('visitId', String(initial.id));
-          fd.append('phase', phase);
-          await apiUpload(`/patients/${initial.patientId}/documents`, fd);
-        }}
-        onAllDone={() => onToast(`مدرک با برچسبِ «${PHASE_FA[phase]}» ثبت شد ✓`)}
-      />
-      {/* توضیحِ صوتی کنارِ مدارکِ همین مرحله — همان مراجعه، مرحله و دسته. */}
-      <VoiceNote
-        disabled={busy}
-        onSave={async (file) => {
-          const fdv = new FormData();
-          fdv.append('file', file);
-          fdv.append('category', docCat);
-          fdv.append('visitId', String(initial.id));
-          fdv.append('phase', phase);
-          fdv.append('title', `توضیحِ صوتی — ${PHASE_FA[phase]}`);
-          await apiUpload(`/patients/${initial.patientId}/documents`, fdv);
-          onToast(`توضیحِ صوتی با برچسبِ «${PHASE_FA[phase]}» ثبت شد ✓`);
-        }}
-      />
-    </div>
+    <VisitDocs
+      key={`docs-${phase}`}
+      patientId={initial.patientId}
+      visitId={initial.id}
+      phase={phase}
+      phaseFa={PHASE_FA[phase]}
+      cats={PHASE_DOC_CATS}
+      disabled={busy}
+      onToast={onToast}
+    />
   ) : (
     <p className="db-decide-hint">بعد از ذخیرهٔ همین {t.visit}، مدارکِ هر مرحله از همین‌جا بارگذاری می‌شود.</p>
   );

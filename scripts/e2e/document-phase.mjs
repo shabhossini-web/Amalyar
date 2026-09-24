@@ -114,16 +114,20 @@ try {
   await page.getByRole('tab', { name: /مراجعه‌ها/ }).first().click();
   await page.locator('.rc-visit-btn').filter({ hasText: op.code }).first().click();
   await page.locator('.db-sheet').waitFor({ timeout: 10000 });
-  for (const [tab, label] of [['قبل از عمل', 'قبل از عمل'], ['حین عمل', 'حین عمل'], ['بعد از عمل', 'بعد از عمل']]) {
+  /* اصلاحِ مالک ۱۴۰۵/۰۷/۰۲: باکسِ مدارکِ هر مرحله همان باکسِ ویزیت است — مدرکی نیست؟ فقط
+     یک خطِ «+» با توضیحِ همان مرحله؛ دسته‌ها داخلِ باکسی است که همان «+» باز می‌کند. */
+  for (const [tab, phase] of [['قبل از عمل', 'pre'], ['حین عمل', 'intra'], ['بعد از عمل', 'post']]) {
     await page.locator('.db-phasetabs').getByRole('tab', { name: tab, exact: true }).click();
     await page.waitForTimeout(250);
-    const head = await page.locator('.db-phasedocs .db-carehead span').innerText().catch(() => '');
-    ok(`تبِ «${tab}» بلوکِ مدرکِ همان مرحله را دارد`, head.includes(label), head);
+    const add = await page.locator(`[data-visit-docs][data-phase="${phase}"] [data-act="add-docs"]`).innerText().catch(() => '');
+    ok(`تبِ «${tab}» خطِ «+» با توضیحِ همان مرحله را دارد`, add.includes(`مدارکِ ${tab}`), add);
   }
-  await page.locator('.db-phasedocs').scrollIntoViewIfNeeded();
+  const box = page.locator('[data-visit-docs][data-phase="post"]');
+  await box.locator('[data-act="add-docs"]').click();
+  await box.scrollIntoViewIfNeeded();
   await page.waitForTimeout(200);
   await page.screenshot({ path: '/tmp/doc-phase-form.png' });
-  ok('کشویِ دستهٔ مدرک داخلِ فرمِ عمل هست', (await page.locator('.db-phasedocs select').count()) === 1);
+  ok('دسته‌های مدرک داخلِ باکسِ همان مرحله هست (شش دسته)', (await box.locator('[data-docs-box] [role="radio"]').count()) === 6);
 
   console.log('\n۴) بدونِ خطای جاوااسکریپت');
   ok('هیچ خطای JS/کنسول', errors.length === 0, errors.slice(0, 2).join(' | '));
