@@ -1,40 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/quirky-volta-uyuznl
 since: 2026-09-24
-paths:
-  - scripts/e2e/ci-live.txt
-  - scripts/e2e/topic-supplement.mjs
-  - scripts/e2e/waitlist-ui.mjs
-  - scripts/e2e/waitlist.mjs
-  - scripts/verify-status-labels.js
-  - server/src/auth/access-registry.ts
-  - server/src/config/config.service.ts
-  - server/src/config/verticals.ts
-  - server/src/patients/definitions.controller.ts
-  - server/src/patients/definitions.service.ts
-  - server/src/patients/dto/visit.dto.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/labels.ts
-  - server/src/patients/live.service.ts
-  - server/src/patients/patients.module.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/portal.service.ts
-  - server/src/patients/record.service.ts
-  - server/src/patients/reminders.service.ts
-  - server/src/patients/visit-supplement.ts
-  - server/src/patients/waitlist.controller.ts
-  - server/src/patients/waitlist.service.ts
-  - src/App.jsx
-  - src/app/Definitions.jsx
-  - src/app/Waitlist.jsx
-  - src/app/config.jsx
-  - src/app/dashboard.css
-  - src/app/tools.jsx
-  - src/app/waitlist.css
-  - src/ui/icons.jsx
-note: بستهٔ ۹ (بندِ «ه» HIS) — فرمِ تکمیلیِ موضوعِ ویزیت، عملِ بی‌تاریخ، فهرستِ انتظارِ عمل — روی سرِ بستهٔ ۸. هم‌پوشانیِ اعلام‌شده با کلیمِ claude-opus، مثلِ بسته‌های ۶ و ۸ در paths نیامده: server/prisma/migrations/20260927000000_topic_supplement/migration.sql، server/prisma/migrations/20260927010000_surgery_waitlist/migration.sql، server/prisma/schema.prisma، src/app/PatientRecord.jsx، src/app/VisitForm.jsx.
+paths: []
+note: بسته‌های ۸ و ۹ (بندهای «د» و «ه» HIS) در PR #98؛ هیچ مسیری در دست نیست.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
