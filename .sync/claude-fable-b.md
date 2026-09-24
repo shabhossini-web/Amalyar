@@ -1,25 +1,11 @@
 <!-- claim:begin -->
 agent: claude-fable-b
-status: active
+status: idle
 branch: claude/quirky-johnson-ynzr4y
 since: 2026-09-23
-paths:
-  - server/src/patients/intake-service-of.ts
-  - server/src/patients/intake.service.ts
-  - server/src/patients/patients.service.ts
-  - server/src/patients/dto/visit.dto.ts
-  - server/src/patients/forms.service.ts
-  - server/src/patients/forms.controller.ts
-  - server/src/patients/form-presets.ts
-  - server/src/patients/document-categories.ts
-  - server/src/patients/surgeon-portal.service.ts
-  - src/app/FormBuilder.jsx
-  - scripts/e2e/company-service-columns.mjs
-  - scripts/e2e/company-service-columns-local.mjs
-  - scripts/e2e/company-service-ui.mjs
+paths: []
 note: >-
-  به دستورِ مالک (۱۴۰۵/۰۷/۰۱) سه کارِ واگذارشده به claude-opus را خودم انجام دادم: FormDef.service،
-  Visit.service و دستهٔ مدرکِ «دستورِ پزشک». سه فایل از کلیمِ فعالِ claude-opus را هم نوشتم (پایین، «قراردادهایی که شکستم»).
+  بستهٔ schemaِ شرکتی (FormDef.service، Visit.service، دستهٔ «دستورِ پزشک») مرج شد. کارِ باز ندارم.
 <!-- claim:end -->
 
 > **این فایل مالِ نشستِ لِینِ ب است** (مدلِ Fable، نشستِ دوم). نشستِ لِینِ ج فایلِ `claude-fable.md` را دارد. هر نشست فقط فایلِ خودش.
@@ -185,6 +171,10 @@ note: >-
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۷/۰۲ · **خدمت ستون شد** — `FormDef.service` و `Visit.service` (`ionm`|`implant`|null) با مهاجرتِ داده از
+  کلیدِ فرم؛ `serviceOf()`/`visitIsImplant()` اول ستون را می‌خوانند. فرم‌ساز خدمتِ فرمِ مراجعه‌ساز را می‌گیرد، فرمِ ثبتِ
+  مراجعه در شرکتِ دوخدمته می‌پرسد. دستهٔ مدرکِ تازهٔ `prescription` («دستورِ پزشک»؛ پرتالِ جراح می‌بیند). سنجه‌ها:
+  `company-service-columns-local` (۳۶) و `company-service-ui` (۱۴).
 - ۱۴۰۵/۰۷/۰۱ · **دکمه‌های نئونِ شفاف در تمِ روشن** — توکنِ تازهٔ `--press-ink` (تیره/`.theme-dark`: سفید، روشن:
   `--text1`)؛ **قرارداد:** دکمهٔ تازه‌ای که به فهرستِ `press.css` اضافه می‌شود و صفحه‌اش پس‌زمینهٔ پُر نمی‌دهد، رنگِ
   متنش را از همین توکن می‌گیرد — `#fff`ِ خام ننویسید. سنجه: `press-ink-ui`. سه کارِ schema به claude-opus واگذار شد (پایین).
