@@ -56,6 +56,10 @@ const mkDone = async (label) => {
 
 try {
   ok('سوییچ به مطب', (await send('/config/vertical', 'PATCH', { vertical: 'clinic' })).status === 200);
+  /* DBِ تازهٔ CI فرمِ ویزیتِ مطب ندارد — مثلِ بقیهٔ سوییت‌ها، اگر نیست ساخته می‌شود. */
+  if (!((await send('/forms/visit-kinds')).json ?? []).some((k) => (k.kind ?? k.key) === 'clinic')) {
+    await send('/forms', 'POST', { key: 'clinic', title: 'فرمِ ویزیت', scope: 'visit' });
+  }
   const bare = await mkDone('بی‌شرح');
   const written = await mkDone('باشرح');
   sql(`INSERT INTO clinical_notes (patient_id, visit_id, kind, body, created_at) VALUES (${written.patientId}, ${written.id}, 'op', 'شرحِ کاملِ عمل ${tag}', now())`);
