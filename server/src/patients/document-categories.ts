@@ -12,6 +12,7 @@ export const DOCUMENT_CATEGORIES = [
   'consent', // رضایت‌نامه
   'identity', // مدرکِ شناسایی
   'receipt', // فیشِ پرداخت
+  'prescription', // دستورِ پزشک — از کادرِ «تصویر دستور پزشک»ِ فرمِ خدمت (مالک، ۱۴۰۵/۰۷/۰۱)
   'other',
 ] as const;
 export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];

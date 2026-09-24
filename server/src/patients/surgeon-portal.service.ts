@@ -14,6 +14,14 @@ import { clinicTodayIso, dayRangeUtc } from '../common/clinic-day';
 import { monthDayCounts } from './month-summary';
 import { ORDER_LABELS } from './labels';
 
+/**
+ * مدارکی که جراح روی مراجعهٔ خودش می‌بیند — گزارش‌ها، «متفرقه»، و **دستورِ خودِ جراح** که بیمار در
+ * ثبت‌نام فرستاده. ⚠️ تا ۱۴۰۵/۰۷/۰۱ دستورِ پزشک «متفرقه» ذخیره می‌شد و از همان راه این‌جا دیده می‌شد؛
+ * با دستهٔ تازه‌اش (`document-categories.ts`) اگر این‌جا نمی‌آمد، بی‌صدا از پرتالِ جراح می‌افتاد.
+ * مدرکِ هویتی و فیش عمداً نیستند.
+ */
+const SURGEON_DOC_CATEGORIES = ['report', 'op-report', 'other', 'prescription'];
+
 
 
 @Injectable()
@@ -245,13 +253,13 @@ export class SurgeonPortalService {
     const profile = await this.config.profile();
     const [rows, total] = await Promise.all([
       this.prisma.visit.findMany({ where, orderBy: [{ opDate: 'desc' }, { id: 'desc' }], take: 25, skip: (current - 1) * 25,
-        select: { id: true, seq: true, kind: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true, hospitalName: true, surgeonName: true, requiredItems: true, surgeonInstructions: true,
+        select: { id: true, seq: true, kind: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true, hospitalName: true, surgeonName: true, requiredItems: true, surgeonInstructions: true, service: true,
           patient: { select: { id: true, code: true, firstName: true, lastName: true } }, hospital: { select: { name: true } }, topic: { select: { name: true } }, procedureType: { select: { name: true, needs: NEEDS_SELECT } },
           /* بستهٔ ۷ج: عمل‌های همزمانِ جلسه — برای برچسب و اجتماعِ کیت (`kitTemplate`). */
           otherProcedures: OTHER_PX_KIT,
           surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
           clinicalNotes: { where: { kind: 'op', replacedAt: null }, select: { body: true, createdAt: true }, orderBy: { id: 'desc' }, take: 1 },
-          documents: { where: { deletedAt: null, category: { in: ['report', 'op-report', 'other'] } }, select: { id: true, title: true, fileName: true }, orderBy: { id: 'desc' } },
+          documents: { where: { deletedAt: null, category: { in: SURGEON_DOC_CATEGORIES } }, select: { id: true, title: true, fileName: true }, orderBy: { id: 'desc' } },
         } }),
       this.prisma.visit.count({ where }),
     ]);
@@ -263,7 +271,7 @@ export class SurgeonPortalService {
       hospital: v.hospital?.name ?? v.hospitalName, surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}` : v.surgeonName,
       /* ⚠️ مشتقِ سرور (قانون ۱۵) و **per-مراجعه**: در شرکتِ دوخدمته ویرایشگرِ اقلام
          فقط روی مراجعهٔ ایمپلنتی — نه روی همه، نه روی هیچ‌کدام (`visitIsImplant`). */
-      implant: visitIsImplant(v.requiredItems, profile),
+      implant: visitIsImplant(v.requiredItems, profile, v.service),
       /* ⚠️ قاعدهٔ override همان دیروز: `requiredItems`ِ ذخیره‌شده (غیرِ null) برنده
          است. فقط الگو حالا اجتماعِ نیازِ همهٔ عمل‌های جلسه است. */
       requiredItems: v.requiredItems ?? kitTemplate(v).map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item?.name, n.item?.size].filter(Boolean).join(' ') })), instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
@@ -315,7 +323,7 @@ export class SurgeonPortalService {
 
   async document(id: number, documentId: number, user: any) {
     await this.visit(id, user);
-    const doc = await this.prisma.document.findFirst({ where: { id: documentId, visitId: id, deletedAt: null, category: { in: ['report', 'op-report', 'other'] } } });
+    const doc = await this.prisma.document.findFirst({ where: { id: documentId, visitId: id, deletedAt: null, category: { in: SURGEON_DOC_CATEGORIES } } });
     if (!doc) throw new NotFoundException('مدرک پیدا نشد');
     return doc;
   }

@@ -3300,6 +3300,10 @@ jobs:
         run: node scripts/e2e/intake-captcha-ui.mjs
       - name: Verify transparent neon buttons take the theme ink (white on dark, dark on light)
         run: node scripts/e2e/press-ink-ui.mjs
+      - name: Verify form and visit service columns, the prescription document category and their data migration
+        run: node scripts/e2e/company-service-columns-local.mjs
+      - name: Verify the form builder and the visit form ask for the service only in a two-service company
+        run: node scripts/e2e/company-service-ui.mjs
 
       # ══ بستهٔ ۷ — چند تشخیص / چند عمل: کدگذاریِ مراجعه یک صاحب دارد ══
       # اصلی (رتبهٔ ۱) همان ستونِ Visit است و سایرین در visit_other_*؛ هر مشتق

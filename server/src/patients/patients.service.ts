@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { isServiceKey } from '../config/tenant-profile';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
@@ -54,6 +55,8 @@ export type KindMap = Map<string, { title: string; color: string }>;
 function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
   const k = v.kind ? kinds?.get(v.kind) : undefined;
   return {
+    /* خدمتِ مراجعه در نصبِ شرکتی (`Visit.service`) — فرمِ مراجعه انتخابگرش را از همین پر می‌کند. */
+    service: v.service ?? null,
     requiredItems: v.requiredItems ?? null,
     surgeonInstructions: v.surgeonInstructions ?? null,
     id: v.id,
@@ -1218,6 +1221,24 @@ export class PatientsService {
     }
   }
 
+  /**
+   * خدمتِ مراجعه (`Visit.service`) — فقط در نصبِ شرکتی و فقط از بستهٔ خدماتِ همان شرکت.
+   *
+   * `undefined` = «دست نزن»؛ در **ساخت** شرکتِ تک‌خدمته خودش پر می‌شود تا اگر فردا خدمتِ دوم
+   * اضافه شد، مراجعه‌های امروز مبهم نشوند. `null`/'' = پاک کن. مطب خدمت ندارد: مقدارِ غیرِ خالی ۴۰۰.
+   */
+  private async visitServiceOf(input: unknown, creating: boolean): Promise<string | null | undefined> {
+    const profile = await this.forms.profile();
+    if (profile.kind !== 'company') {
+      if (input) throw new BadRequestException('خدمتِ مراجعه فقط در نصبِ شرکتی معنا دارد');
+      return input === undefined ? undefined : null;
+    }
+    if (input === undefined) return creating && profile.services.length === 1 ? profile.services[0] : undefined;
+    if (input === null || input === '') return null;
+    if (!isServiceKey(input) || !profile.services.includes(input)) throw new BadRequestException('این خدمت در بستهٔ خدماتِ شرکت نیست');
+    return input;
+  }
+
   async createVisit(dto: CreateVisitDto, user?: any, opts?: { skipFormValidation?: boolean; requirements?: any[]; intakeCompany?: IntakeCompanyRule }) {
     const create = await this.prepareVisitCreation(dto, user, opts);
     const result = await this.prisma.$transaction(create);
@@ -1230,6 +1251,8 @@ export class PatientsService {
     const userId: number | undefined = user?.id;
     /* پیش از هر سنجه: کلاینتِ کهنه بخش‌های هسته را در `extra` می‌فرستد. */
     PatientsService.liftLegacy(dto, []);
+    /* خدمتِ مراجعه — اولِ کار و بیرون از تراکنش: پاسخِ «این خدمت در بسته نیست» نباید پشتِ خطای فیلدها گم شود. */
+    const service = await this.visitServiceOf((dto as any).service, true);
     /* تشخیص‌ها/عمل‌ها (بستهٔ ۷): برنامه **پیش از** ستاره و مالکیت، تا «اجباری»
        روی اصلیِ نهایی (پس از ارتقای اولینِ سایرین) سنجیده شود. `raw` برای
        مسیرِ «مراجعهٔ هدف» است که باید با وضعیتِ همان مراجعه دوباره برنامه‌ریزی شود. */
@@ -1349,6 +1372,8 @@ export class PatientsService {
         ...(dto.opType !== undefined && refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
         ...(dto.opDate !== undefined ? { opDate: toDateValue(dto.opDate) ?? null } : {}),
         ...(dto.notes !== undefined ? { notes: dto.notes || null } : {}),
+        /* ادغام در مراجعهٔ موجود: فقط خدمتِ **صریح** (از تأییدِ ثبت‌نام) می‌نشیند، پیش‌فرضِ تک‌خدمتی نه. */
+        ...((dto as any).service !== undefined && service !== undefined ? { service } : {}),
         ...timePatch(dto),
         extra: { ...(target.extra as any ?? {}), ...(extraIn as any ?? {}) },
       }, include: INCLUDE_PATIENT }) : await tx.visit.create({
@@ -1371,6 +1396,7 @@ export class PatientsService {
           preOpImmediate: dto.preOpImmediate ?? false,
           decisions: dto.decisions ?? [],
           anesthesia: dto.anesthesia || null,
+          ...(service !== undefined ? { service } : {}),
           chiefComplaint: complaint,
           decidedInVisitId: decidedIn?.id ?? null,
           ...timePatch(dto),
@@ -1526,6 +1552,7 @@ export class PatientsService {
        داخلِ تراکنشِ تعاملی روی PGliteِ CI (یک اتصال) قفل می‌کرد و تراکنشِ ۵ ثانیه‌ای
        منقضی می‌شد (intake-finance-roles). داخلِ tx فقط نوشتنِ مدرک‌ها می‌ماند. */
     const kindNow = dto.kind ?? v.kind ?? 'surgery';
+    const servicePatch = await this.visitServiceOf((dto as any).service, false);
     const linkFields = dto.extra !== undefined ? ((await this.forms.forVisitKind(kindNow))?.fields ?? []) : [];
     const extraIn = dto.extra !== undefined ? await this.forms.normalizeExtra(linkFields, dto.extra) : undefined;
 
@@ -1568,6 +1595,7 @@ export class PatientsService {
       if (dto.preOpImmediate !== undefined) visitPatch.preOpImmediate = !!dto.preOpImmediate;
       if (dto.decisions !== undefined) visitPatch.decisions = dto.decisions ?? [];
       if (dto.anesthesia !== undefined) visitPatch.anesthesia = dto.anesthesia || null;
+      if (servicePatch !== undefined) visitPatch.service = servicePatch;
       /* ⚠️ `ownComplaint` این‌جا هم لازم است و نه فقط در ساخت: فرمِ عملِ
          ارث‌گرفته مقدارِ مشتق را نشان می‌دهد، پس هر «ذخیره»ی بی‌تغییر همان
          متن را پس می‌فرستد. بدونِ این خط، دومین ذخیره ارث را کپی می‌کرد. */

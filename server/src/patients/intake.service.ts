@@ -2003,7 +2003,7 @@ export class IntakeService {
            باید بگوید این ثبت‌نام چه می‌سازد، و آن از روی همان فرمی معلوم
            می‌شود که بیمار پر کرده. */
         form: { select: {
-          title: true, scope: true, color: true, visitKind: true, key: true,
+          title: true, scope: true, color: true, visitKind: true, key: true, service: true,
           /* کادرهای عکسِ فرم (کارت ملی، دستور پزشک…) — تا پاپ‌آپ بداند کدام مقدار مدرک است. */
           fields: { where: { type: 'image' }, orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }], select: { key: true, label: true } },
         } },
@@ -2033,7 +2033,7 @@ export class IntakeService {
          نظرسنجی انتخابگرِ خدمت و ستارهٔ جراح/بیمارستان می‌گرفت، در حالی که
          `approve()` هیچ‌کدام را برایش نمی‌خواهد.
          `workflow` فقط برای کلاینتِ کش‌شدهٔ قدیمی می‌ماند. */
-      const svc = makesVisit ? serviceOf(r.form?.key, profile) : null;
+      const svc = makesVisit ? serviceOf(r.form, profile) : null;
       return {
       workflow, approvalKind: r.form?.visitKind || defaultKind,
       /* نوعِ نصب از **همان پاسخی** که ردیف را آورده، نه از کانفیگِ کشِ رابط:
@@ -2132,13 +2132,13 @@ export class IntakeService {
        وقتی لینک فرمِ «ویزیت» یا «پیگیری» داشت. بی‌هیچ خطایی؛ فقط نوعِ غلط در
        تقویم و گزارش. */
     const form = row.formId
-      ? await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true, visitKind: true, key: true } })
+      ? await this.prisma.formDef.findUnique({ where: { id: row.formId }, select: { scope: true, visitKind: true, key: true, service: true } })
       : null;
     const profile = await this.forms.profile();
     if (dto.service && !(profile.services as string[]).includes(dto.service)) {
       throw new BadRequestException('این شرکت چنین خدمتی ارائه نمی‌کند');
     }
-    const svc = serviceOf(form?.key, profile, dto.service);
+    const svc = serviceOf(form, profile, dto.service);
 
     /* پاسخِ فیلدهای دلخواه باید به `Visit.extra` برسد، وگرنه چیزی که بیمار پر
        کرده در JSONِ ثبت‌نام دفن می‌شود و در پروندهٔ او پیدا نیست. کلیدهای
@@ -2230,6 +2230,8 @@ export class IntakeService {
           chiefComplaint: typeof d.chiefComplaint === 'string' ? d.chiefComplaint : undefined,
           opStartTime: dto.opStartTime ?? (held?.startMin != null ? AvailabilityService.minToHHMM(held.startMin) : undefined),
           notes: d.patientNotes ?? undefined,
+          /* خدمتِ همین ثبت‌نام روی خودِ مراجعه — تا پرتالِ جراح و گزارش‌ها دیگر از «ردیف دارد» حدس نزنند. */
+          ...(service ? { service } : {}),
           ...(Object.keys(extra).length ? { extra } : {}),
         } as any, user, {
           requirements,

@@ -29,6 +29,9 @@ class FormPatchDto {
 
   @IsOptional() @Type(() => Number) @IsInt() procedureTypeId?: number;
   @IsOptional() @Type(() => Number) @IsInt() diagnosisId?: number;
+
+  /** خدمتِ فرمِ ثبت‌نام در نصبِ شرکتی؛ '' یعنی پاک کن. بسته و محدوده در سرویس سنجیده می‌شود. */
+  @IsOptional() @IsIn(['ionm', 'implant', ''], { message: 'خدمتِ فرم نامعتبر است' }) service?: string;
 }
 
 /**
@@ -80,6 +83,7 @@ class FormCreateDto {
   @IsOptional() @IsIn([...FORM_SCOPES, 'survey'], { message: 'محدودهٔ فرم نامعتبر است' }) scope?: string;
   @IsOptional() @IsString() @MaxLength(200) hint?: string;
   @IsOptional() @IsIn([...FORM_COLORS, ''], { message: 'رنگ نامعتبر است' }) color?: string;
+  @IsOptional() @IsIn(['ionm', 'implant', ''], { message: 'خدمتِ فرم نامعتبر است' }) service?: string;
 }
 
 /**

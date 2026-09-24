@@ -60,7 +60,7 @@ const formTypeOf = (types, form) => {
   return types.find((t) => t.key === k) ?? types.find((t) => t.key === form.scope) ?? null;
 };
 /* دسته‌های مدرکِ پرونده برای باکسِ عکس/لینک — همان `DOCUMENT_CATEGORIES` سرور؛ «متفرقه» = خالی. */
-const DOC_CATEGORIES = { imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت' };
+const DOC_CATEGORIES = { imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت', prescription: 'دستورِ پزشک' };
 
 /**
  * ⚠️ `survey` هنوز در نگاشت هست هرچند دیگر ساخته نمی‌شود: نصبی که مهاجرت روی
@@ -284,6 +284,12 @@ export default function FormBuilder() {
                       'نقشِ پیگیری ذخیره شد ✓',
                     )} />
                 )}
+                {/* خدمتِ فرمِ ثبت‌نام — فقط شرکتِ دوخدمته (`ServicePick`). */}
+                <ServicePick form={form} busy={busy}
+                  onPick={(body) => apply(
+                    () => api(`/forms/${form.id}`, { method: 'PATCH', body }),
+                    'خدمتِ فرم ذخیره شد',
+                  )} />
                 {form.hint && <p className="fb-hint">{form.hint}</p>}
 
                 {/* ⚠️ **ماتریسِ نقش‌ها یک‌جاست، نه تکرارشده در هر ردیف.**
@@ -591,6 +597,28 @@ function ColorPick({ form, busy, onPick }) {
  * می‌خورد و هنگامِ ارسال، صفحه‌های بعدیِ همان فرمِ عمومی می‌شود — بیمار یک
  * لینک می‌بیند، دو بخش. روزهای ارسال روی خودِ نوعِ عمل است (تعریف‌های پایه).
  */
+/**
+ * **خدمتِ فرمِ ثبت‌نام** (`FormDef.service`) — فقط در نصبِ شرکتیِ دوخدمته و فقط برای فرمی که مراجعه می‌سازد.
+ *
+ * ⚠️ بی‌این، فرمِ دلخواهی که این‌جا ساخته می‌شد در صفِ تأیید «مبهم» می‌ماند (کلیدش `intake.<خدمت>` نیست)
+ * و تأییدکننده برای هر ثبت‌نام خدمت را دستی انتخاب می‌کرد. خالی = همان قاعدهٔ قبلی (کلیدِ فرم، وگرنه انتخابِ تأییدکننده).
+ */
+function ServicePick({ form, busy, onPick }) {
+  const { kind, services = [], serviceCatalog = [] } = useConfig();
+  if (kind !== 'company' || services.length < 2 || form.scope !== 'visit') return null;
+  return (
+    <div className="fb-followup">
+      <label>
+        <span>خدمتِ این فرم (برای ثبت‌نام)</span>
+        <select value={form.service ?? ''} disabled={busy} onChange={(e) => onPick({ service: e.target.value })}>
+          <option value="">— از کلیدِ فرم یا انتخابِ تأییدکننده —</option>
+          {serviceCatalog.filter((x) => services.includes(x.key)).map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
 function FollowUpPick({ form, busy, onPick }) {
   const [procs, setProcs] = useState([]);
   const [diags, setDiags] = useState([]);

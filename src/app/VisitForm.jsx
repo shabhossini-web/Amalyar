@@ -145,11 +145,13 @@ const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'ب�
    نیستند: آن‌ها مالِ کلِ پرونده‌اند، نه مرحلهٔ یک عمل — و از تبِ مدارکِ پرونده
    بارگذاری می‌شوند. فهرست زیرمجموعهٔ `DOCUMENT_CATEGORIES`ِ سرور است. */
 const VISIT_DOC_CATEGORIES = {
-  imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', other: 'متفرقه',
+  imaging: 'تصویربرداری', lab: 'آزمایش', report: 'گزارش', consent: 'رضایت‌نامه', prescription: 'دستورِ پزشک', other: 'متفرقه',
 };
 
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
-  const { t, defaultKind = 'surgery' } = useConfig();
+  const { t, defaultKind = 'surgery', kind: tenantKind, services: offered = [], serviceCatalog = [] } = useConfig();
+  /* خدمتِ مراجعه (`Visit.service`) فقط در شرکتِ **دوخدمته** پرسیده می‌شود؛ تک‌خدمته را سرور خودش پر می‌کند. */
+  const pickService = tenantKind === 'company' && offered.length > 1;
   const editing = !!initial?.id;
   /* prefill = ادامهٔ یک تصمیم («کاندیدای جراحی» در ویزیتِ قبلی): پرونده از
      قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم. */
@@ -180,6 +182,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [f, setF] = useState(() => ({
     /* پیش‌فرضِ نوع از حوزه (`/config.defaultKind`): مطب ویزیت، بقیه عمل (بستهٔ ۵ب). */
     kind: initial?.kind || prefill?.kind || defaultKind,
+    service: initial?.service ?? '',
     firstName: initial?.firstName || '',
     lastName: initial?.lastName || '',
     phone: initial?.phone || '',
@@ -589,6 +592,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       setStepErr(bad);
       if (bad) return;
     }
+    /* خدمت در همین گام پرسیده می‌شود — همین‌جا جلوی رفتن را می‌گیریم، نه در ثبتِ نهایی که کاربر
+       باید برای اصلاحش دوباره به عقب برگردد. */
+    if (step === 2 && pickService && !f.service) { setStepErr('خدمتِ این مراجعه را انتخاب کنید'); return; }
     setStepErr('');
     setStep((s) => Math.min(3, s + 1));
   };
@@ -674,6 +680,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       onToast(Object.values(eCustom)[0]);
       return;
     }
+    /* ⚠️ مراجعهٔ تازه در شرکتِ دوخدمته بی‌خدمت ثبت نمی‌شود: پرتالِ جراح ویرایشگرِ اقلام را فقط برای
+       مراجعهٔ ایمپلنتی باز می‌کند، و مراجعهٔ دستیِ بی‌خدمت هیچ نشانه‌ای از ایمپلنتی‌بودن نداشت. */
+    if (pickService && !editing && !f.service) { onToast('خدمتِ این مراجعه را انتخاب کنید'); return; }
     const builtinVals = {
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
       /* ستارهٔ فیلد روی **اصلی** است؛ چون فهرست هرگز بدونِ اصلی نمی‌ماند
@@ -712,6 +721,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     }
     const common = {
       kind: f.kind,
+      /* در ویرایش '' یعنی «بی‌خدمت» (ردیفِ قدیمی)؛ بیرون از شرکتِ دوخدمته اصلاً فرستاده نمی‌شود. */
+      service: pickService ? (f.service || (editing ? '' : undefined)) : undefined,
       surgeonId: f.surgeonId ?? (editing ? null : undefined),
       hospitalId: f.hospitalId ?? (editing ? null : undefined),
       techId: f.techId ?? (editing ? null : undefined),
@@ -1661,6 +1672,21 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         </div>
         )}
       </div>
+      {pickService && (<>
+        <div className="db-sect">
+          <b>خدمت</b>
+          <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟ ویرایشگرِ اقلامِ پرتالِ جراح فقط برای «ایمپلنت» باز می‌شود.</small>
+        </div>
+        <div className="db-kindbox">
+          <div className="db-kindrow" role="radiogroup" aria-label={`خدمتِ این ${t.visit}`}>
+            {serviceCatalog.filter((x) => offered.includes(x.key)).map((x) => (
+              <button key={x.key} type="button" role="radio" aria-checked={f.service === x.key}
+                      className={f.service === x.key ? 'on' : ''}
+                      onClick={() => setF((s) => ({ ...s, service: x.key }))}>{x.label}</button>
+            ))}
+          </div>
+        </div>
+      </>)}
 
       </>)}
 
