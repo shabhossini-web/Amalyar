@@ -185,8 +185,10 @@
 .vf-card .pf.dyn > [data-ftype="textarea"], .vf-card .pf.dyn > [data-ftype="image"],
 .vf-card .pf.dyn > [data-ftype="multiselect"], .vf-card .pf.dyn > [data-ftype="links"],
 .vf-card .pf.dyn > [data-ftype="bool"], .vf-card .pf.dyn > [data-ftype="rating"] { grid-column: 1 / -1; }
-/* علائمِ حیاتی: دو ستون حتی در موبایل؛ فشارِ خون (دو عدد) تمام‌عرض. */
+/* علائمِ حیاتی: دو ستون حتی در موبایل؛ فشارِ خون (دو عدد) دو خانه — در ستونِ کناری یک خانه
+   جای «۴۰–۳۰۰ / ۲۰–۲۰۰» را نداشت و راهنمای بازه بریده می‌شد. */
 .vf-card .vs-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.vf-card .vs-grid > .vs-cell:first-child { grid-column: span 2; }
 @media (max-width: 480px) {
   .vf-card .vs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .vf-card .vs-grid > .vs-cell:first-child { grid-column: 1 / -1; }
