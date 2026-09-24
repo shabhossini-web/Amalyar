@@ -31,7 +31,7 @@ import {
   CODING_TWIN, CODING_TWIN_KEYS, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
   diagnosisLabel, othersCreateData, otherIds, pickCodingKeys, planCoding, principalDiagnosisTitle,
   principalProcedureName, procedureLabel, touchedAxes, twinOf, visitHasDiagnosis, visitHasProcedure,
-  writeOthers, PROC_DETAIL_SELECT, finalProcedureIds, procedureDetailsInput, procedureList, writeProcedureDetails,
+  writeOthers, PROC_DETAIL_SELECT, finalProcedureIds, procedureDetailsInput, procedureList, writeProcedureDetails, touchesProcedureAxis,
 } from './visit-coding';
 import { withOtherProcedureNeeds } from './visit-requirements';
 import { ConfigService } from '../config/config.service';
@@ -396,17 +396,33 @@ export class PatientsService {
     try {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
-        select: { id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true },
+        select: { id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true, dischargeDisposition: true },
       });
       if (!v || v.kind !== 'surgery') return;
       const child = await this.prisma.visit.findFirst({
         where: { followOfVisitId: v.id }, orderBy: { id: 'asc' },
         select: { id: true, opDate: true, opStatus: true },
       });
-      const wantDate = v.opStatus === 'cancelled' ? null : v.nextVisitDate;
+      /* «فوت» هم مثلِ لغو: ویزیتِ بعدی از هر مسیری (فرمِ عمل، PATCH) نباید فرزندِ پست‌آپ را زنده کند (بازبینی). */
+      const dead = v.dischargeDisposition === 'death';
+      const wantDate = v.opStatus === 'cancelled' || dead ? null : v.nextVisitDate;
       if (!wantDate) {
         if (child && child.opStatus === 'pending') {
           await this.prisma.visit.update({ where: { id: child.id }, data: { opStatus: 'cancelled' } });
+        }
+        /* «فوت»: نوبتِ رزروشدهٔ همان ویزیتِ پست‌آپ و یادآوریِ پیامکی‌اش هم باید بسته شوند —
+           وگرنه به شمارهٔ بیمارِ فوت‌شده «نوبتِ شما فردا…» می‌رود. لغوِ سیستمی و بی‌صدا،
+           مثلِ حذفِ ثبت‌نام در intake (بدونِ notifyCancelled). */
+        if (dead && child) {
+          const appts = await this.prisma.appointment.findMany({
+            where: { forVisitId: child.id, status: { in: ['held', 'confirmed'] } }, select: { id: true },
+          });
+          if (appts.length) {
+            await this.prisma.appointment.updateMany({
+              where: { id: { in: appts.map((a) => a.id) } }, data: { status: 'cancelled', cancelReason: 'clinical' },
+            });
+            for (const a of appts) await this.reminders.syncAppointment(a.id);
+          }
         }
         return;
       }
@@ -1378,7 +1394,8 @@ export class PatientsService {
       /* سمت/سطحِ عمل‌ها (بستهٔ ۸) با فهرستِ **نهایی** — در ادغام در مراجعهٔ هدف همیشه
          (اصلیِ هدف ممکن است همین حالا عوض شده باشد و سمتِ عملِ رفته باید برود). */
       if (target || structured.pdIn) {
-        await writeProcedureDetails(tx, visit.id, finalProcedureIds(dto, target ? targetCoding.procedure : EMPTY_CODING.procedure), structured.pdIn);
+        /* `null` = فهرستِ ذخیره‌شده زیرِ قفل مرجع است: ردیف تا این‌جا ساخته/ادغام شده (بازبینی). */
+        await writeProcedureDetails(tx, visit.id, null, structured.pdIn);
       }
       if (structured.opPatch) await writeOpDetails(tx, visit.id, structured.opPatch);
       /**
@@ -1536,7 +1553,14 @@ export class PatientsService {
         visitPatch.opType = dto.opType?.trim() || null;
       }
       if (dto.opDate !== undefined) visitPatch.opDate = toDateValue(dto.opDate) ?? null;
-      if (dto.nextVisitDate !== undefined) visitPatch.nextVisitDate = toDateValue(dto.nextVisitDate) ?? null;
+      if (dto.nextVisitDate !== undefined) {
+        const nd = toDateValue(dto.nextVisitDate) ?? null;
+        /* «فوت» و ویزیتِ بعدی جمع نمی‌شوند — همان قاعدهٔ ترخیصِ میز، این‌جا هم (بازبینی). echoی همان تاریخ می‌گذرد. */
+        if (nd && v.dischargeDisposition === 'death' && nd.getTime() !== v.nextVisitDate?.getTime()) {
+          throw new BadRequestException('با وضعیتِ خروجِ «فوت» ویزیتِ بعدی ثبت نمی‌شود');
+        }
+        visitPatch.nextVisitDate = nd;
+      }
       if (dto.postOpCare !== undefined) visitPatch.postOpCare = dto.postOpCare?.trim() || null;
       if (dto.followUpDays !== undefined) visitPatch.followUpDays = dto.followUpDays?.trim() || null;
       if (dto.postOpImmediate !== undefined) visitPatch.postOpImmediate = !!dto.postOpImmediate;
@@ -1603,7 +1627,8 @@ export class PatientsService {
          `visit.update`ِ پایین نوشته می‌شود)، هر بار که محورِ عمل لمس شده. */
       const procTouched = (dto as any).procedureTypeId !== undefined || (dto as any)[CODING_TWIN.procedureTypeId] !== undefined;
       if (procTouched || structured.pdIn) {
-        await writeProcedureDetails(tx, id, finalProcedureIds(dto, coding.procedure), structured.pdIn);
+        /* فهرستِ حساب‌شده فقط وقتی محورِ عمل در همین درخواست عوض می‌شود (`visit.update` بعدتر می‌آید)؛ وگرنه ذخیره‌شده زیرِ قفل (بازبینی). */
+        await writeProcedureDetails(tx, id, touchesProcedureAxis(dto) ? finalProcedureIds(dto, coding.procedure) : null, structured.pdIn);
       }
       if (structured.opPatch) await writeOpDetails(tx, id, structured.opPatch);
       /* ساعتِ حضور مشتقِ برنامهٔ چینش است (W3.8/U7): با مقادیرِ **نهایی** پس از

@@ -173,7 +173,8 @@ function DayList({ day, busy, onOpen }) {
           <button type="button" className={`th-item${busy === `open-${v.id}` ? ' busy' : ''}`} data-visit-id={v.id} onClick={() => onOpen(v.id)}>
             <span className="th-item-time" dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</span>
             <span className="th-item-name">{v.patient}</span>
-            <span className="th-item-sub">{[v.procedure, v.sides, v.hospital, v.surgeon].filter(Boolean).join(' · ') || v.code}</span>
+            {/* سمت کنارِ نامِ خودِ عمل می‌نشیند، نه جدا از آن (بازبینی). */}
+            <span className="th-item-sub">{[v.sides ? `${v.procedure ?? ''} (${v.sides})`.trim() : v.procedure, v.hospital, v.surgeon].filter(Boolean).join(' · ') || v.code}</span>
             {/* ⚠️ جای شمارشِ چک‌لیست را گرفت: عددِ «۳/۷» به کسی نمی‌گفت این
                 بیمار کیست، ولی «چرا آمده» همان چیزی است که جراح می‌خواهد. */}
             {v.chiefComplaint && <span className="th-item-cc">{v.chiefComplaint}</span>}
@@ -346,7 +347,7 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
       )}
 
       {card.clinical && v.state !== 'cancelled' && (
-        <OpIntraDesk key={`od-${v.id}`} visit={v} canReport={card.can?.report} busy={busy} onAct={onAct} onToast={onToast} />
+        <OpIntraDesk key={`od-${v.id}`} visit={v} canReport={card.can?.opDetails ?? card.can?.report} lockRole={card.locks?.opDetails ?? null} busy={busy} onAct={onAct} onToast={onToast} />
       )}
 
       <NoteBox
@@ -585,7 +586,9 @@ function Documents({ visitId, groups }) {
  * ⚠️ یک ذخیره و فقط کلیدِ تغییرکرده (`opDiff`). پیش‌نویسِ روی صفحه با کارتِ
  * تازه بازنویسی نمی‌شود مگر دست‌نخورده باشد — همان قاعدهٔ `NoteBox`.
  */
-function OpIntraDesk({ visit, canReport, busy, onAct, onToast }) {
+function OpIntraDesk({ visit, canReport, lockRole, busy, onAct, onToast }) {
+  /* «ذخیره شده» فقط وقتی دست‌کم یک فیلدِ حینِ عمل مقدار دارد؛ ردیفِ خالیِ پیش/بعد از عمل ملاک نیست (بازبینی). */
+  const hasIntra = OP_INTRA.some((k) => visit.opDetails?.[k] != null);
   const [ops, setOps] = useState(() => opInit(visit.opDetails));
   const dirty = useRef(false);
   const serverKey = JSON.stringify(visit.opDetails ?? null);
@@ -600,10 +603,10 @@ function OpIntraDesk({ visit, canReport, busy, onAct, onToast }) {
         ops={ops}
         onSet={(k, val) => { dirty.current = true; setOps((x) => opSet(x, k, val)); }}
         locked={!canReport}
-        note={canReport ? null : 'ثبتِ جزئیاتِ عمل برای این حساب مجاز نیست.'}
+        note={canReport ? null : lockRole ? `جزئیاتِ عمل همراهِ «شرحِ عمل» بخشِ ${lockRole} است و از این حساب ویرایش نمی‌شود.` : 'ثبتِ جزئیاتِ عمل برای این حساب مجاز نیست.'}
       />
       <div className="th-report-bar">
-        <span className="th-hint">{changed ? 'ذخیره نشده' : visit.opDetails ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز ثبت نشده'}</span>
+        <span className="th-hint">{changed ? 'ذخیره نشده' : hasIntra ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز ثبت نشده'}</span>
         <button
           type="button" className="th-btn" data-act="save-opdetails"
           disabled={!changed || !canReport || busy === 'opdetails'}
@@ -643,8 +646,10 @@ function DischargeDialog({ initial, card, already, busy, onClose, onSave }) {
   const nextIso = f.nextJ.trim() ? jStrToIso(f.nextJ) : null;
   const nextBad = !!f.nextJ.trim() && !nextIso;
   const nextEarly = !!nextIso && !!v.opDate && nextIso < String(v.opDate).slice(0, 10);
+  /* تاریخِ ثبت‌شدهٔ قبلی (دست‌نخورده) نباید دکمه را قفل کند — فقط تغییرِ تازه سنجیده می‌شود (بازبینی). */
+  const nextChanged = f.nextJ.trim() !== (initial.nextJ ?? '').trim();
   /* وضعیتِ خروج و وضعیتِ بیمار اجباری‌اند؛ شرح و یادداشت اختیاری. */
-  const ok = f.condition.trim().length >= 2 && !!f.disposition && !(canNext && !death && (nextBad || nextEarly));
+  const ok = f.condition.trim().length >= 2 && !!f.disposition && !(canNext && !death && nextChanged && (nextBad || nextEarly));
   const submit = () => {
     const body = { condition: f.condition, disposition: f.disposition, summary: f.summary, remark: f.remark };
     if (clinical) {
@@ -738,7 +743,7 @@ function DischargeDialog({ initial, card, already, busy, onClose, onSave }) {
               onChange={(val) => setF((x) => ({ ...x, nextJ: val }))}
               placeholder="۱۴۰۵/۰۵/۱۰"
             />
-            {nextEarly && !death && <p className="th-warn">ویزیتِ بعدی نمی‌تواند پیش از روزِ عمل باشد.</p>}
+            {nextEarly && !death && <p className="th-warn">{nextChanged ? 'ویزیتِ بعدی نمی‌تواند پیش از روزِ عمل باشد.' : 'ویزیتِ بعدیِ ثبت‌شده پیش از روزِ عمل است — در صورتِ نیاز اصلاحش کنید.'}</p>}
             {initial.nextJ && !f.nextJ.trim() && !death && (
               <p className="th-hint">برداشتنِ ویزیتِ بعدی از فرمِ عمل انجام می‌شود؛ خالی‌گذاشتن این‌جا تاریخِ فعلی را نگه می‌دارد.</p>
             )}

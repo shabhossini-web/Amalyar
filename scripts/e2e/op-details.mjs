@@ -71,8 +71,9 @@ try {
   const surgeon = (await send('/surgeons', 'POST', { firstName: 'جراحِ', lastName: `جزئیات${tag}` })).json;
   const hospital = (await send('/hospitals')).json?.[0]
     ?? (await send('/hospitals', 'POST', { name: `بیمارستانِ ${tag}` })).json;
-  const mkProc = async (name) => { const r = (await send('/procedure-types', 'POST', { name })).json; trash.procs.push(r.id); return r; };
-  const P1 = await mkProc(`میکرودیسککتومی ${tag}`);
+  const mkProc = async (name, extra = {}) => { const r = (await send('/procedure-types', 'POST', { name, ...extra })).json; trash.procs.push(r.id); return r; };
+  /* P1 مراقبتِ پس از عمل و پیگیری دارد تا لغو/کاشتِ دوبارهٔ یادآوری‌ها در ترخیص سنجیدنی باشد. */
+  const P1 = await mkProc(`میکرودیسککتومی ${tag}`, { postOpCare: 'پانسمان را خشک نگه دارید', followUpDays: '1,7' });
   const P2 = await mkProc(`فیوژن ${tag}`);
   const P3 = await mkProc(`لامینکتومی ${tag}`);
   const dx = (await send('/diagnoses', 'POST', { title: `فتقِ دیسک ${tag}` })).json;
@@ -104,7 +105,7 @@ try {
   const p2 = g.procedures?.find((p) => p.id === P2.id);
   ok('A1 سمت و سطحِ هر عمل جدا', p1?.sideFa === 'راست' && p1?.level === 'L4–L5' && p2?.sideFa === 'چپ' && p2?.level === null, JSON.stringify(g.procedures));
   ok('A1 **نباید بیفتد:** سمت داخلِ نامِ عمل یا برچسبِ ترکیبی نرفت', g.procedureLabel === `${P1.name} + ${P2.name}` && p1?.name === P1.name, g.procedureLabel);
-  ok('A1 دو ردیفِ سمت در DB', JSON.stringify(detailRows(V.id)) === JSON.stringify([`${P1.id}:right:L4–L5`, `${P2.id}:left:-`].sort()), JSON.stringify(detailRows(V.id)));
+  ok('A1 دو ردیفِ سمت در DB', JSON.stringify(detailRows(V.id)) === JSON.stringify([`${P1.id}:right:L4–L5`, `${P2.id}:left:-`]), JSON.stringify(detailRows(V.id)));
 
   const a1b = await send('/visits', 'POST', {
     kind: 'surgery', patientId: V.patientId, opDate: today, surgeonId: surgeon.id, hospitalId: hospital.id,
@@ -178,7 +179,13 @@ try {
   ok('S2 **نباید بیفتد:** برگشتنِ P1 سمتِ کهنه‌اش را زنده کند', r.status === 200 && !detailRows(V.id).some((x) => x.startsWith(`${P1.id}:`)), JSON.stringify(detailRows(V.id)));
   r = await send(`/visits/${V.id}`, 'PATCH', { otherProcedureTypeIds: [], procedureDetails: [{ procedureTypeId: P1.id, side: 'right', level: 'L4–L5' }] });
   ok('S3 حذفِ همزمان‌ها + سمتِ اصلی در یک درخواست', r.status === 200 && JSON.stringify(detailRows(V.id)) === JSON.stringify([`${P1.id}:right:L4–L5`]), `${r.status} ${JSON.stringify(detailRows(V.id))}`);
-  await send(`/visits/${V.id}`, 'PATCH', { otherProcedureTypeIds: [P2.id], procedureDetails: [{ procedureTypeId: P2.id, side: 'left' }] });
+  r = await send(`/visits/${V.id}`, 'PATCH', { otherProcedureTypeIds: [P2.id], procedureDetails: [{ procedureTypeId: P2.id, side: 'left' }] });
+  ok('S3 برگرداندنِ P2 با سمت', r.status === 200, msgOf(r));
+  r = await send(`/visits/${V.id}`, 'PATCH', { procedureTypeId: P2.id, otherProcedureTypeIds: [P1.id], procedureDetails: [{ procedureTypeId: P2.id, side: 'left' }] });
+  ok('S4 جابه‌جاییِ اصلی + سمتِ اصلیِ تازه در یک درخواست — هر دو ردیف می‌مانند',
+    r.status === 200 && JSON.stringify(detailRows(V.id)) === JSON.stringify([`${P1.id}:right:L4–L5`, `${P2.id}:left:-`]), `${r.status} ${JSON.stringify(detailRows(V.id))}`);
+  r = await send(`/visits/${V.id}`, 'PATCH', { procedureTypeId: P1.id, otherProcedureTypeIds: [P2.id] });
+  ok('S4 برگشتِ ترتیب بدونِ details سمت‌ها را نگه می‌دارد', r.status === 200 && detailRows(V.id).length === 2, JSON.stringify(detailRows(V.id)));
   ok('S3 ناوردای جدول: هیچ سمتی برای عملِ ناموجود', num(`
     SELECT count(*) FROM visit_procedure_details d JOIN visits v ON v.id = d.visit_id
     WHERE d.procedure_type_id IS DISTINCT FROM v.procedure_type_id
@@ -230,6 +237,12 @@ try {
   ok('D4 دارو بسته شد', num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${V.id} AND kind='discharge_rx' AND replaced_at IS NULL AND trim(body) <> ''`) === 0);
   ok('D4 هیچ پیامِ پس از عمل/ویزیتِ بعدی در صف نماند',
     num(`SELECT count(*) FROM reminders WHERE visit_id=${V.id} AND kind IN ('next_visit','post_op_care','follow_up') AND status='pending'`) === 0);
+  /* اصلاحِ «فوت» بدونِ تاریخ (حالتِ عادیِ نقشی که ویزیتِ بعدی نمی‌دهد): مراقبتِ پس از عمل و پیگیری باید برگردند. */
+  r = await send(`/theatre/visits/${V.id}/discharge`, 'POST', { condition: 'هوشیار', disposition: 'home' });
+  ok('D4 اصلاحِ «فوت» ← منزل **بدونِ تاریخ** هم مراقبت/پیگیری را دوباره می‌کارد',
+    r.status < 300 && num(`SELECT count(*) FROM reminders WHERE visit_id=${V.id} AND kind IN ('post_op_care','follow_up') AND status='pending'`) >= 1, `${r.status} ${msgOf(r)}`);
+  r = await send(`/theatre/visits/${V.id}/discharge`, 'POST', { condition: 'ایست قلبی', disposition: 'death' });
+  ok('D4 «فوت»ِ دوباره همان‌ها را دوباره لغو می‌کند', r.status < 300 && num(`SELECT count(*) FROM reminders WHERE visit_id=${V.id} AND kind IN ('post_op_care','follow_up','next_visit') AND status='pending'`) === 0);
   r = await send(`/theatre/visits/${V.id}/discharge`, 'POST', { condition: 'هوشیار، دردِ کم', disposition: 'home', rx: 'سفالکسین', nextVisitDate: plusDays(8) });
   ok('D4 اصلاحِ اشتباهِ «فوت» ← منزل دوباره می‌کارد', r.status < 300 && num(`SELECT count(*) FROM reminders WHERE visit_id=${V.id} AND kind='next_visit' AND status='pending'`) >= 1, `${r.status} ${msgOf(r)}`);
 
@@ -291,10 +304,14 @@ try {
   }
 
   console.log('\n۱۰) دروازه‌ها');
+  /* فرمِ ویزیتِ مطب باید باشد، وگرنه ۴۰۰ از «نوعی که فرم ندارد» می‌آید و دروازهٔ «فقط عمل» سنجیده نمی‌شود (بازبینی). */
+  if (!((await send('/forms/visit-kinds')).json ?? []).some((k) => (k.kind ?? k.key) === 'clinic')) {
+    await send('/forms', 'POST', { key: 'clinic', title: 'فرمِ ویزیت', scope: 'visit' });
+  }
   const cv = await send('/visits', 'POST', {
     kind: 'clinic', patientId: V.patientId, opDate: today, surgeonId: surgeon.id, opDetails: { asaClass: 'I' },
   });
-  ok('G1 **نباید بیفتد:** جزئیاتِ عمل روی ویزیت', cv.status === 400, msgOf(cv));
+  ok('G1 **نباید بیفتد:** جزئیاتِ عمل روی ویزیت', cv.status === 400 && /فقط برای مراجعهٔ نوعِ عمل/.test(msgOf(cv)), msgOf(cv));
   if (cv.json?.id) trash.visits.push(cv.json.id);
   const other = vertical0 === 'clinic' ? 'ionm' : vertical0;
   await send('/config/vertical', 'PATCH', { vertical: other });

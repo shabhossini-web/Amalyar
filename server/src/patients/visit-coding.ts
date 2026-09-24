@@ -251,7 +251,7 @@ export function procedureDetailsInput(raw: unknown): ProcedureDetailIn[] | undef
     if (seen.has(id)) throw new BadRequestException('یک عمل دو بار آمده است — برای دو طرف «دوطرفه» را بزنید');
     seen.add(id);
     const side = r?.side === undefined || r?.side === null || r?.side === '' ? null : String(r.side);
-    if (side !== null && !SIDE_LABELS[side]) throw new BadRequestException('سمتِ عمل نامعتبر است');
+    if (side !== null && !Object.prototype.hasOwnProperty.call(SIDE_LABELS, side)) throw new BadRequestException('سمتِ عمل نامعتبر است');
     const lv = r?.level === undefined || r?.level === null ? '' : toEnDigits(String(r.level)).trim();
     if (lv.length > PROC_LEVEL_MAX) throw new BadRequestException(`سطح/ناحیهٔ عمل حداکثر ${PROC_LEVEL_MAX} نویسه است`);
     out.push({ procedureTypeId: id, side, level: lv || null });
@@ -280,11 +280,28 @@ export function finalProcedureIds(dto: any, cur: Coding): number[] {
  *   — سمتِ کهنه نباید با برگشتنِ همان عمل بی‌صدا زنده شود (خطرِ محلِ اشتباه).
  * - `details` فقط عمل‌های حاضر را می‌پذیرد؛ ردیفِ «هر دو خالی» حذف می‌شود.
  */
-export async function writeProcedureDetails(tx: any, visitId: number, finalIds: number[], details?: ProcedureDetailIn[]) {
+/** آیا این درخواست محورِ عمل (اصلی یا همزمان‌ها) را دست می‌زند؟ */
+export function touchesProcedureAxis(dto: any): boolean {
+  return hasKey(dto, 'procedureTypeId') || hasKey(dto, AXES.procedure.twinKey);
+}
+
+/** فهرستِ عمل‌های ذخیره‌شدهٔ مراجعه — خوانده‌شده زیرِ همان قفل، پس با ردیف یکی است. */
+async function persistedProcedureIds(tx: any, visitId: number): Promise<number[]> {
+  const v = await tx.visit.findUnique({
+    where: { id: visitId }, select: { procedureTypeId: true, otherProcedures: { select: { procedureTypeId: true } } },
+  });
+  return dedupe([v?.procedureTypeId ?? null, ...(v?.otherProcedures ?? []).map((o: any) => o.procedureTypeId)]);
+}
+
+export async function writeProcedureDetails(tx: any, visitId: number, finalIds: number[] | null, details?: ProcedureDetailIn[]) {
   await tx.$queryRaw`SELECT id FROM visits WHERE id = ${visitId} FOR UPDATE`;
-  await tx.visitProcedureDetail.deleteMany({ where: { visitId, procedureTypeId: { notIn: finalIds.length ? finalIds : [-1] } } });
+  /* ⚠️ `null` = مرجع فهرستِ ذخیره‌شده است. فهرستِ حساب‌شده از dto فقط وقتی مجاز است که
+     محورِ عمل در همین درخواست عوض می‌شود و `visit.update` هنوز نیامده؛ وگرنه با ردیفِ
+     واقعی ناسازگار می‌شود — سمتِ زنده پاک یا سمتِ عملِ رفته زنده می‌ماند (بازبینی). */
+  const ids = finalIds ?? await persistedProcedureIds(tx, visitId);
+  await tx.visitProcedureDetail.deleteMany({ where: { visitId, procedureTypeId: { notIn: ids.length ? ids : [-1] } } });
   for (const d of details ?? []) {
-    if (!finalIds.includes(d.procedureTypeId)) {
+    if (!ids.includes(d.procedureTypeId)) {
       throw new BadRequestException('سمت برای عملی آمده که روی این مراجعه نیست');
     }
     if (d.side === null && d.level === null) {

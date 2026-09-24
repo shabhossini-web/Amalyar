@@ -40,10 +40,11 @@ export function opInit(view) {
 /** مقدارِ نرمال‌شدهٔ یک کلید برای مقایسه و ارسال — `null` = «ثبت نشده». */
 function norm(k, val) {
   if (BOOL.has(k)) return val ?? null;
-  const s = toEnDigits(String(val ?? '')).trim();
-  if (!s) return null;
-  if (k === 'complicationDate') return jStrToIso(s) ?? `bad:${s}`;
-  return s;
+  const raw = String(val ?? '').trim();
+  if (!raw) return null;
+  if (k === 'complicationDate') return jStrToIso(raw) ?? `bad:${raw}`;
+  /* فقط عدد لاتین می‌شود؛ متنِ آزاد با همان ارقامی که کاربر نوشت می‌ماند (بازبینی). */
+  return k === 'bloodLossMl' ? toEnDigits(raw) : raw;
 }
 
 /**
@@ -221,8 +222,11 @@ export function OpPostBlock({ ops, onSet, role, locked, note, dxLabel }) {
         <div className="odx-row" data-od="complicationDate">
           <JDate label="تاریخِ عارضه" value={ops.complicationDate} onChange={s('complicationDate')} placeholder="۱۴۰۵/۰۵/۱۰" />
         </div>
-        <Text k="complicationNote" label="شرحِ عارضه" value={ops.complicationNote} onChange={s('complicationNote')} max={2000} rows={2} />
       </>)}
+      {/* شرحِ ذخیره‌شده بعد از «نداشت» هم دیدنی و پاک‌شدنی می‌ماند — مثلِ یادداشتِ نمونه و درن (بازبینی). */}
+      {(ops.complication === true || !!ops.complicationNote) && (
+        <Text k="complicationNote" label="شرحِ عارضه" value={ops.complicationNote} onChange={s('complicationNote')} max={2000} rows={2} />
+      )}
     </Frame>
   );
 }

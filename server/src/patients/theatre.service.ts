@@ -16,7 +16,7 @@ import {
 } from './visit-coding';
 import { ConfigService } from '../config/config.service';
 import { PatientsService } from './patients.service';
-import { OP_INTRA_KEYS, assertStructuredOwnership, opDetailsInput, opDetailsView, preOpSummary, writeOpDetails } from './op-details';
+import { OP_INTRA_KEYS, assertStructuredOwnership, opDetailsInput, opDetailsView, preOpSummary, writeOpDetails, ownerLock, NO_LOCK } from './op-details';
 import { toDateValue } from '../common/jalali';
 import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
@@ -297,16 +297,25 @@ export class TheatreService {
     const clinical = await this.clinical();
     const opDetails = clinical ? opDetailsView((v as any).opDetail) : null;
     /* چه کارهایی از این میز برای **این کاربر** شدنی است — سرور می‌گوید، نه رابط. */
-    const [canReport, canFollowup, canEditVisit] = await Promise.all([
+    const [canReport, canFollowup, canEditVisit, opLock, followLock] = await Promise.all([
       canAccess(this.prisma, user, 'theatre', ['theatre.report']).catch(() => false),
       canAccess(this.prisma, user, 'theatre', ['theatre.followup']).catch(() => false),
       canAccess(this.prisma, user, 'dashboard', ['patients.update']).catch(() => false),
+      /* قفلِ نقشِ فیلدِ مالک — همان چیزی که setOpDetails/discharge هنگامِ نوشتن می‌سنجند.
+         میز نباید ویرایشی را پیشنهاد کند که سرور رد می‌کند (بازبینی). */
+      clinical ? ownerLock(this.prisma, v.kind, user, 'opReport') : Promise.resolve(NO_LOCK),
+      clinical ? ownerLock(this.prisma, v.kind, user, 'nextVisitDate') : Promise.resolve(NO_LOCK),
     ]);
     return {
       /* بستهٔ ۸: بلوک‌های بالینی (پیش از عمل، جزئیاتِ عمل، داروها و ویزیتِ بعدیِ
          ترخیص) فقط در مطب؛ رابط از همین پرچم می‌خواند نه از حدسِ حوزه. */
       clinical,
-      can: { report: canReport, followup: clinical && canFollowup, editVisit: canEditVisit },
+      can: {
+        report: canReport, opDetails: canReport && !opLock.locked,
+        followup: clinical && canFollowup && !followLock.locked, editVisit: canEditVisit,
+      },
+      /* نقشِ مالک برای متنِ قفلِ رابط (null = قفلی نیست) */
+      locks: { opDetails: opLock.locked ? opLock.roleLabel : null, followup: followLock.locked ? followLock.roleLabel : null },
       visit: {
         id: v.id, code: `${p.code}-V${v.seq}`, kind: v.kind, opDate: v.opDate, opStatus: v.opStatus,
         ...roomState(v),
@@ -519,6 +528,9 @@ export class TheatreService {
     }
     const clearNext = death && !!v.nextVisitDate;
     const becameDeath = death && v.dischargeDisposition !== 'death';
+    /* اصلاحِ «فوت»ِ اشتباهی (فوت → منزل، بی‌تاریخ): بدونِ این، یادآوری‌های لغوشده هرگز
+       دوباره کاشته نمی‌شدند — نه مراقبتِ روزِ اول، نه لینکِ پیگیری (بازبینی). */
+    const leftDeath = !death && v.dischargeDisposition === 'death';
 
     await this.prisma.$transaction(async (tx) => {
       await setVisitNote(tx, v, 'discharge', text, user);
@@ -532,13 +544,13 @@ export class TheatreService {
           dischargeDisposition: dto.disposition,
           ...(v.dischargeAt ? {} : { dischargeAt: new Date() }),
           ...(nextDate ? { nextVisitDate: nextDate } : {}),
-          ...(clearNext ? { nextVisitDate: null } : {}),
+          ...(death ? { nextVisitDate: null } : {}), /* «فوت» همیشه ویزیتِ بعدی را پاک می‌کند، نه فقط وقتی پیش‌خوانده پر بود */
         },
       });
     });
     /* پس از commit — یادآوری و مراجعهٔ پست‌آپ همان مسیرِ فرمِ عمل (`afterVisitCreation`).
        «فوت» هم باید اجرا شود تا پیام‌های بعد از عملِ کاشته‌شده لغو شوند. */
-    if (nextDate || clearNext || becameDeath) await this.patients.afterVisitCreation(visitId);
+    if (nextDate || clearNext || becameDeath || leftDeath) await this.patients.afterVisitCreation(visitId);
     await this.audit.record({
       actorId: user?.id, action: v.dischargeAt ? 'visit.discharge_edit' : 'visit.discharge',
       entityType: 'visit', entityId: visitId,

@@ -3,6 +3,9 @@ import { toEnDigits } from '../common/identity';
 import { toDateValue } from '../common/jalali';
 import { LEVEL } from '../common/levels';
 import { fieldRoles, jobRoleLabel } from '../common/job-roles';
+
+/* جست‌وجوی کلید با مالکیتِ خودِ شیء — نامِ prototype (`constructor`) نباید از اعتبارسنجی بگذرد و در CHECK دیتابیس ۵۰۰ بدهد. */
+const hasOwn = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
 import { ANESTHESIA_LABELS, ANTICOAG_LABELS, ASA_LABELS, CLAVIEN_LABELS } from './labels';
 
 /**
@@ -93,7 +96,7 @@ export function opDetailsInput(raw: unknown, allowed?: readonly string[]): OpDet
   }
   const out: OpDetailsPatch = {};
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-    const spec = SPEC[k];
+    const spec = hasOwn(SPEC, k) ? SPEC[k] : undefined;
     if (!spec) throw new BadRequestException(`کلیدِ ناشناخته در جزئیاتِ عمل: ${k}`);
     if (allowed && !allowed.includes(k)) throw new BadRequestException('این بخش از جزئیاتِ عمل این‌جا نوشته نمی‌شود');
     if (v === undefined) continue;
@@ -105,12 +108,15 @@ export function opDetailsInput(raw: unknown, allowed?: readonly string[]): OpDet
         break;
       case 'enum': {
         const key = String(v);
-        if (!spec.labels[key]) throw new BadRequestException('گزینهٔ انتخاب‌شده در جزئیاتِ عمل نامعتبر است');
+        if (!hasOwn(spec.labels, key)) throw new BadRequestException('گزینهٔ انتخاب‌شده در جزئیاتِ عمل نامعتبر است');
         out[k] = key;
         break;
       }
       case 'int': {
-        const n = Number(toEnDigits(String(v)).trim());
+        if (typeof v !== 'string' && typeof v !== 'number') throw new BadRequestException(`«${spec.label}» باید عدد باشد`);
+        const str = toEnDigits(String(v)).trim();
+        if (!str) { out[k] = null; break; } /* فاصلهٔ خالی = ثبت‌نشده، نه صفر */
+        const n = Number(str);
         if (!Number.isInteger(n) || n < spec.min || n > spec.max) {
           throw new BadRequestException(`«${spec.label}» باید عددِ صحیح بین ${spec.min} و ${spec.max} باشد`);
         }
@@ -231,7 +237,7 @@ export async function assertStructuredOwnership(
   const changedOwners = new Set<string>(ops.fields ?? []);
   const cur = pickRow(ops.current);
   for (const [k, v] of Object.entries(ops.patch ?? {})) {
-    if (!eq(cur[k], v)) changedOwners.add(OP_DETAIL_OWNER[k]);
+    if (hasOwn(OP_DETAIL_OWNER, k) && !eq(cur[k], v)) changedOwners.add(OP_DETAIL_OWNER[k]);
   }
   if (ops.procedure) {
     const by = new Map<number, any>((ops.procedure.current ?? []).map((d: any) => [d.procedureTypeId, d]));
@@ -250,13 +256,34 @@ export async function assertStructuredOwnership(
     if (!f) continue;
     const roles = fieldRoles(f);
     if (!roles.length || roles.includes(myRole)) continue;
-    const what = owner === 'procedureTypeId' ? 'سمت و سطحِ عمل‌ها'
+    /* فیلدِ مستقیم (مثلاً ویزیتِ بعدیِ ترخیص) برچسبش را دو بار نمی‌گوید؛ فقط بخشِ قرضی «همراهِ» دارد. */
+    const borrowed = owner === 'procedureTypeId' ? 'سمت و سطحِ عمل‌ها'
       : owner === 'anesthesia' ? 'ارزیابیِ پیش از عمل'
-        : owner === 'opReport' ? 'جزئیاتِ عمل' : f.label;
-    throw new BadRequestException(
-      `«${what}» همراهِ «${f.label}» بخشِ ${roles.map(jobRoleLabel).join('، ')} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`,
-    );
+        : owner === 'opReport' ? 'جزئیاتِ عمل' : null;
+    const who = `بخشِ ${roles.map(jobRoleLabel).join('، ')} است و با حسابِ ${jobRoleLabel(myRole)} ویرایش نمی‌شود`;
+    throw new BadRequestException(borrowed ? `«${borrowed}» همراهِ «${f.label}» ${who}` : `«${f.label}» ${who}`);
   }
+}
+
+export const NO_LOCK: { locked: boolean; roleLabel: string | null } = { locked: false, roleLabel: null };
+/**
+ * **قفلِ نقشِ یک فیلدِ مالک برای این کاربر** — بدونِ پرتاب. میزِ اتاق با همین
+ * پرچم‌های `can` را می‌سازد تا ویرایشی را پیشنهاد نکند که `assertStructuredOwnership`
+ * هنگامِ نوشتن رد می‌کند (همان قاعده، همان فرم، همان نقش‌ها).
+ */
+export async function ownerLock(prisma: any, kind: string | null | undefined, user: any, owner: string): Promise<{ locked: boolean; roleLabel: string | null }> {
+  if ((user?.level ?? 0) >= LEVEL.SUPER_ADMIN) return NO_LOCK;
+  const myRole: string | null = user?.jobRole ?? null;
+  if (!myRole || !kind) return NO_LOCK;
+  const form = await prisma.formDef.findFirst({
+    where: { scope: 'visit', visitKind: kind },
+    select: { fields: { select: { key: true, label: true, role: true, roles: true } } },
+  });
+  const f = form?.fields?.find((x: any) => x.key === owner);
+  if (!f) return NO_LOCK;
+  const roles = fieldRoles(f);
+  if (!roles.length || roles.includes(myRole)) return NO_LOCK;
+  return { locked: true, roleLabel: roles.map(jobRoleLabel).join('، ') };
 }
 
 /** یک سطرِ خلاصهٔ پیش از عمل برای میز («ASA II · رضایت ✓ …») — فقط خواندنی. */
