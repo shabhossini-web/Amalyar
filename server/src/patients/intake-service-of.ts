@@ -10,7 +10,8 @@ import { SERVICES, ServiceKey, TenantProfile, isServiceKey } from '../config/ten
  * ثبت‌نامِ ایمپلنتی ویرایشگرِ اقلام نمی‌گرفت.
  *
  * ترتیبِ منبع‌ها:
- *  ۱. کلیدِ **خودِ فرم** (`intake.ionm` / `intake.implant`) — فرم می‌گوید چه خدمتی است،
+ *  ۱. **خودِ فرم** — ستونِ `FormDef.service` (فرمِ دلخواهی که در فرم‌ساز خدمتش را گرفته)، وگرنه
+ *     کلیدِ پیش‌فرض (`intake.ionm` / `intake.implant`) — فرم می‌گوید چه خدمتی است،
  *     **به شرطِ اینکه شرکت هنوز همان خدمت را بدهد.** ثبت‌نامِ معلقی که پیش از
  *     برداشتنِ یک خدمت از بسته پر شده، کلیدِ خدمتِ رفته را دارد؛ اگر آن کلید
  *     برنده می‌شد، شرکتِ فقط‌نورومانیتورینگ ردیفِ ایمپلنت می‌خواست (یا شرکتِ
@@ -20,9 +21,8 @@ import { SERVICES, ServiceKey, TenantProfile, isServiceKey } from '../config/ten
  *  ۴. خدمتِ اصلی — پیش‌فرضِ قابلِ‌ویرایش در پاپ‌آپ، **نه خطای ۴۰۰**: فرم‌های
  *     دلخواهِ زنده نباید با افزودنِ خدمتِ دوم ناگهان تأییدنشدنی شوند.
  *
- * ⚠️ کلیدِ فرمِ دلخواه نقطه نمی‌گیرد، پس فقط فرمِ پیش‌فرض با کلید شناخته
- * می‌شود. راهِ ماندگار ستونِ `FormDef.service` است (بستهٔ ستون‌ها، پشتِ کلیمِ
- * `server/prisma/`) — تا آن موقع همین قاعده.
+ * ⚠️ کلیدِ فرمِ دلخواه نقطه نمی‌گیرد، پس فرمِ دلخواه فقط با ستونِ `service` شناخته می‌شود
+ * (مهاجرتِ `20260925000000_company_service_columns` آن را برای فرم‌های پیش‌فرض هم پر کرد).
  */
 export interface IntakeService {
   service: ServiceKey | null;
@@ -36,9 +36,13 @@ export const serviceOfFormKey = (key?: string | null): ServiceKey | null => {
   return m && isServiceKey(m[1]) ? m[1] : null;
 };
 
-export function serviceOf(formKey: string | null | undefined, profile: TenantProfile, chosen?: string | null): IntakeService {
+/** فرم (یا فقط کلیدش، برای فراخوانِ قدیمی) — `service` ستونِ همان فرم است. */
+type FormLike = { key?: string | null; service?: string | null } | string | null | undefined;
+
+export function serviceOf(form: FormLike, profile: TenantProfile, chosen?: string | null): IntakeService {
   if (profile.kind === 'clinic') return { service: null, source: 'none', ambiguous: false };
-  const fromForm = serviceOfFormKey(formKey);
+  const f = typeof form === 'object' && form ? form : { key: form ?? null, service: null };
+  const fromForm = (isServiceKey(f.service) ? f.service : null) ?? serviceOfFormKey(f.key);
   if (fromForm && profile.services.includes(fromForm)) return { service: fromForm, source: 'form', ambiguous: false };
   if (profile.services.length === 1) return { service: profile.services[0], source: 'single', ambiguous: false };
   if (chosen && isServiceKey(chosen) && profile.services.includes(chosen)) return { service: chosen, source: 'chosen', ambiguous: true };
@@ -51,13 +55,15 @@ export const serviceLabel = (s: ServiceKey | null) => (s ? SERVICES[s].label : n
  * «این مراجعه ایمپلنتی است؟» — برای جایی که مراجعه (نه ثبت‌نام) باید تصمیم
  * بگیرد، مثلِ ویرایشگرِ اقلام در پرتالِ جراح.
  *
- * شرکتِ فقط‌ایمپلنت: همه (همان رفتارِ دیروز). شرکتِ دوخدمته: مراجعه‌ای که
- * ردیفِ اقلام دارد — تأییدِ ثبت‌نامِ ایمپلنت بی‌ردیف انجام نمی‌شود، پس این
- * نشانه برای مراجعه‌های ثبت‌نامی قطعی است. ⚠️ مراجعهٔ دستیِ ایمپلنتی که هنوز
- * ردیفی ندارد در شرکتِ دوخدمته دیده نمی‌شود؛ راهِ ماندگار ستونِ `Visit.service`.
+ * ۱. ستونِ `Visit.service` (از تأییدِ ثبت‌نام یا انتخابِ فرمِ مراجعه) — مراجعهٔ نورومانیتورینگ
+ *    ایمپلنتی نیست حتی اگر شرکت امروز فقط ایمپلنت بدهد: خدمت مالِ روزِ ساختِ مراجعه است.
+ * ۲. شرکتِ فقط‌ایمپلنت: همه (همان رفتارِ دیروز).
+ * ۳. ردیف‌های قدیمیِ بی‌ستون در شرکتِ دوخدمته: «ردیفِ اقلام دارد» — تأییدِ ثبت‌نامِ ایمپلنت
+ *    بی‌ردیف انجام نمی‌شد، پس این نشانه برای مراجعه‌های ثبت‌نامیِ قدیمی قطعی است.
  */
-export function visitIsImplant(requiredItems: unknown, profile: TenantProfile): boolean {
+export function visitIsImplant(requiredItems: unknown, profile: TenantProfile, service?: string | null): boolean {
   if (!profile.services.includes('implant')) return false;
+  if (isServiceKey(service)) return service === 'implant';
   if (profile.services.length === 1) return true;
   return Array.isArray(requiredItems) && requiredItems.length > 0;
 }

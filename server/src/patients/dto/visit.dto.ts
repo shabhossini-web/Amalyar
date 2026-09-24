@@ -40,6 +40,10 @@ export const DECISIONS = DECISION_KEYS;
 
 /// ثبتِ مراجعه — یا patientId (بیمارِ موجود) یا نام/نام‌خانوادگی (بیمارِ جدید)
 export class CreateVisitDto {
+  /// خدمتِ مراجعه در نصبِ شرکتی (`ionm` | `implant`)؛ شرکتِ تک‌خدمته خالی بگذارد، خودش پر می‌شود.
+  @IsOptional() @IsIn(['ionm', 'implant', ''], { message: 'خدمتِ مراجعه نامعتبر است' })
+  service?: string;
+
   /// اعتبارش در `assertKind` سنجیده می‌شود، نه این‌جا — فهرست پویاست.
   @IsOptional() @IsString() @MaxLength(40)
   kind?: string;
@@ -255,6 +259,10 @@ export class UpdateVisitDto {
   /// اعتبارش در `assertKind` سنجیده می‌شود، نه این‌جا — فهرست پویاست.
   @IsOptional() @IsString() @MaxLength(40)
   kind?: string;
+
+  /// خدمتِ مراجعه در نصبِ شرکتی؛ '' یعنی پاک کن. بستهٔ شرکت در سرویس سنجیده می‌شود (`visitServiceOf`).
+  @IsOptional() @IsIn(['ionm', 'implant', ''], { message: 'خدمتِ مراجعه نامعتبر است' })
+  service?: string;
 
   /// طرفِ حسابِ فاکتور — بیمار یا بیمارستان.
   @IsOptional()

@@ -31,7 +31,7 @@ import { OpDefaultSave } from './OpDefaults.jsx';
 
 const CATEGORIES = {
   lab: 'آزمایش', imaging: 'تصویربرداری', report: 'گزارش',
-  consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت', other: 'متفرقه',
+  consent: 'رضایت‌نامه', identity: 'مدرکِ شناسایی', receipt: 'فیشِ پرداخت', prescription: 'دستورِ پزشک', other: 'متفرقه',
 };
 /** مرحلهٔ مدرک نسبت به عمل — همان سه تبِ فرمِ عمل، عمداً با همان واژه‌ها. */
 const PHASES = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'بعد از عمل' };
