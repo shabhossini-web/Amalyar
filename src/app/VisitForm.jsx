@@ -1921,7 +1921,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         className="db-formcard"
         style={kindMeta?.color ? { '--k': `var(--kind-${kindMeta.color})` } : undefined}
       >
-      <div className="vf-cols">
+      {/* فرمِ عملِ بی‌زیرفرم ستونِ کناری‌اش فقط «مبلغ» و «توضیحات» است — دوستونه یعنی نیمهٔ خالی؛
+          پس یک‌ستونه، و همان دو کادر زیرِ هسته. */}
+      <div className={`vf-cols${f.kind === 'surgery' && subCards.length === 0 ? ' vf-flat' : ''}`}>
         <div className="vf-main">
           {/* ⚠️ فیلدهای هسته‌ای **به ترتیبِ تعریف** چیده می‌شوند، نه به ترتیبِ این
               فایل. هر کدام یک ورودیِ نام‌دار است تا `orderBuiltins` بتواند

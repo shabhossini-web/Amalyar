@@ -172,6 +172,8 @@
     grid-template-areas: "main sub" "main side";
     grid-template-rows: auto 1fr; align-items: start;
   }
+  .db-sheet.vf-wide .vf-cols.vf-flat { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side"; }
+  .vf-cols.vf-flat .vf-side .db-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* ذخیره همیشه در دسترس — فرمِ بلند دیگر تا ته اسکرول نمی‌خواهد. */
   .db-sheet.vf-wide > .db-submit {
     position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); z-index: 5;
