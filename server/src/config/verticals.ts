@@ -35,7 +35,7 @@ export const VERTICALS = {
     defaultKind: 'clinic',
     // `surgeon` = «میزِ پزشک»: پزشکِ مطب (حسابِ متصل به تعریفِ جراح) همه‌کارش را
     // از همان‌جا می‌کند — امروزِ من، بیمارانِ من، نتایجِ رسیده (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹).
-    features: { dashboard: 4, calendar: 3, frontdesk: 2, theatre: 2, surgeon: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, access: 6, work: 2, pathway: 2 },
+    features: { dashboard: 4, calendar: 3, frontdesk: 2, theatre: 2, surgeon: 2, waitlist: 2, accounting: 5, messenger: 2, formgen: 5, letter: 5, site: 5, users: 6, access: 6, work: 2, pathway: 2 },
   },
 } as const;
 

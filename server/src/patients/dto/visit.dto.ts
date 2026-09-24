@@ -229,6 +229,17 @@ export class CreateVisitDto {
   @IsArray({ message: 'سمتِ عمل‌ها باید فهرست باشد' })
   procedureDetails?: unknown[];
 
+  /** فرمِ تکمیلیِ موضوع (بستهٔ ۹): `{formId, values}` — شکل در `visit-supplement.ts`. */
+  @IsOptional() @IsObject() supplement?: Record<string, unknown>;
+
+  /**
+   * **عملِ بی‌تاریخ** (بستهٔ ۹، فقط مطب): `true` یعنی «هنوز تاریخ ندارد — فهرستِ انتظار».
+   * `opDate` خالی می‌ماند و ستاره‌های تاریخ و بیمارستان برای همین ذخیره برداشته می‌شوند.
+   */
+  @IsOptional() @IsBoolean({ message: 'حالتِ بی‌تاریخ نامعتبر است' }) opDateOpen?: boolean;
+  /** تاریخِ تقریبی — فقط سابقه؛ هیچ یادآوری/تقویمی رویش حساب نمی‌کند. `null` = پاک کن. */
+  @IsOptional() @ValidateIf((o) => o.plannedDate !== null) @IsString({ message: 'تاریخِ تقریبی نامعتبر است' }) plannedDate?: string | null;
+
   /// ویزیتی که تصمیمِ عمل در آن گرفته شد — عملِ ساخته‌شده شکایتش را از آن
   /// **مشتق** می‌کند. تعلقش به همان بیمار در سرویس سنجیده می‌شود.
   @IsOptional() @IsInt({ message: 'شناسهٔ ویزیتِ تصمیم نامعتبر است' })
@@ -470,6 +481,17 @@ export class UpdateVisitDto {
   @IsOptional()
   @IsArray({ message: 'سمتِ عمل‌ها باید فهرست باشد' })
   procedureDetails?: unknown[];
+
+  /** فرمِ تکمیلیِ موضوع (بستهٔ ۹): `{formId, values}` — شکل در `visit-supplement.ts`. */
+  @IsOptional() @IsObject() supplement?: Record<string, unknown>;
+
+  /**
+   * **عملِ بی‌تاریخ** (بستهٔ ۹، فقط مطب): `true` یعنی «هنوز تاریخ ندارد — فهرستِ انتظار».
+   * `opDate` خالی می‌ماند و ستاره‌های تاریخ و بیمارستان برای همین ذخیره برداشته می‌شوند.
+   */
+  @IsOptional() @IsBoolean({ message: 'حالتِ بی‌تاریخ نامعتبر است' }) opDateOpen?: boolean;
+  /** تاریخِ تقریبی — فقط سابقه؛ هیچ یادآوری/تقویمی رویش حساب نمی‌کند. `null` = پاک کن. */
+  @IsOptional() @ValidateIf((o) => o.plannedDate !== null) @IsString({ message: 'تاریخِ تقریبی نامعتبر است' }) plannedDate?: string | null;
 
   /// ساعت‌ها: «۰۸:۳۰». اعتبارسنجیِ دقیق و نرمال‌سازیِ ارقامِ فارسی در سرویس
   /// (`normalizeTime`) انجام می‌شود؛ این‌جا فقط از رشته‌بودن و طول مطمئن می‌شویم

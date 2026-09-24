@@ -13,7 +13,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEmpty, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DefinitionsService } from './definitions.service';
 import { SettingsService } from '../config/settings.service';
@@ -104,6 +104,14 @@ class TopicCreateDto {
   @IsOptional() @IsString() @MaxLength(30) color?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @IsOptional() @IsInt() sort?: number;
+  /** فرمِ تکمیلی (بستهٔ ۹) — شناسهٔ یک فرمِ زیرپرونده؛ `0`/`null` = بدونِ فرم. */
+  @IsOptional() @ValidateIf((o) => o.formId !== null) @IsInt({ message: 'فرمِ تکمیلی نامعتبر است' }) @Min(0) formId?: number | null;
+  /**
+   * ⚠️ کلیدِ سیستمی از API نوشته **نمی‌شود** — نه بی‌صدا دور ریخته (whitelist)، بلکه
+   * صریحاً ۴۰۰: مدیری که فکر می‌کند «پره‌آپ» را به موضوعِ دیگری منتقل کرده، نباید
+   * «ذخیره شد ✓» ببیند در حالی که خودکارسازی هنوز به موضوعِ قبلی وصل است.
+   */
+  @IsOptional() @IsEmpty({ message: 'کلیدِ سیستمیِ موضوع قابلِ تغییر نیست' }) system?: unknown;
 }
 
 class TopicPatchDto {
@@ -112,6 +120,8 @@ class TopicPatchDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @IsOptional() @IsBoolean() active?: boolean;
   @IsOptional() @IsInt() sort?: number;
+  @IsOptional() @ValidateIf((o) => o.formId !== null) @IsInt({ message: 'فرمِ تکمیلی نامعتبر است' }) @Min(0) formId?: number | null;
+  @IsOptional() @IsEmpty({ message: 'کلیدِ سیستمیِ موضوع قابلِ تغییر نیست' }) system?: unknown;
 }
 
 /** کدِ داخلیِ مطب — جراحی/خدمتِ داخلِ مطب با کد و مبلغِ خودِ مطب. */
@@ -385,6 +395,13 @@ export class DefinitionsController {
   @Get('visit-topics')
   visitTopics() {
     return this.defs.listVisitTopics();
+  }
+
+  /** فرم‌هایی که می‌توانند «فرمِ تکمیلیِ» یک موضوع باشند — کشوییِ تعریف‌ها (بستهٔ ۹). */
+  @RequirePermissions('definitions.read')
+  @Get('visit-topics/form-options')
+  visitTopicFormOptions() {
+    return this.defs.topicFormOptions();
   }
 
   @RequirePermissions('definitions.manage')

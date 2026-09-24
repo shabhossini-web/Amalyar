@@ -49,6 +49,8 @@ const SETS = [
   { name: 'ضدانعقاد (ANTICOAG_LABELS)', keys: ['none', 'stopped', 'bridged', 'continued'] },
   { name: 'سمتِ عمل (SIDE_LABELS)', keys: ['right', 'left', 'bilateral', 'midline'] },
   { name: 'درجهٔ عارضه (CLAVIEN_LABELS)', keys: ['I', 'II', 'IIIa', 'IIIb', 'IVa', 'IVb', 'V'] },
+  { name: 'فهرستِ انتظارِ عمل (WAITLIST_LABELS)', keys: ['awaiting', 'planned', 'booked'] },
+  { name: 'بستنِ تصمیمِ جراحی (DECISION_CLOSE_LABELS)', keys: ['declined', 'elsewhere', 'not_indicated', 'deceased'] },
 ];
 const MIN_HITS = 3;
 

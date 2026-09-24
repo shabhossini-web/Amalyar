@@ -344,30 +344,76 @@ export class DefinitionsService {
   async listVisitTopics() {
     const rows = await this.prisma.visitTopic.findMany({
       orderBy: [{ active: 'desc' }, { sort: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { visits: true } } },
+      include: {
+        _count: { select: { visits: true } },
+        form: { select: { id: true, key: true, title: true, active: true, scope: true, followUp: true } },
+      },
     });
+    /* ⚠️ نگاشتِ صریح — ستونِ تازه بی‌آن به کلاینت نمی‌رسد. `formKey` برای خواندنِ
+       تعریفِ فرم (`GET /forms/:key`) در فرمِ مراجعه؛ فرمِ خاموش‌شده دیگر پر نمی‌شود. */
     return rows.map((r) => ({
       id: r.id, name: r.name, color: r.color, notes: r.notes,
       active: r.active, sort: r.sort, visitCount: r._count.visits,
+      system: r.system ?? null,
+      /* `formId` همان ذخیره‌شده است (برای ویرایشگر)؛ `formKey` فقط وقتی فرم همان قاعدهٔ
+         گزینه‌ها/نویسنده را دارد: زیرپروندهٔ فعال و غیرِ پیگیری (بازبینی). */
+      formId: r.form?.id ?? null,
+      formKey: r.form && r.form.active && r.form.scope === 'record' && !r.form.followUp ? r.form.key : null,
+      formUsable: !!r.form && r.form.active && r.form.scope === 'record' && !r.form.followUp,
+      formTitle: r.form?.title ?? null,
     }));
   }
 
-  async createVisitTopic(dto: { name: string; color?: string; notes?: string; sort?: number }) {
+  /**
+   * فرم‌هایی که می‌توانند فرمِ تکمیلیِ موضوع باشند: **زیرپروندهٔ فعال و غیرِ پیگیری**.
+   *
+   * ⚠️ فرمِ پیگیری (`followUp`) نه: آن فرم را موجِ پیامکِ پس از عمل برای **بیمار**
+   * می‌فرستد و پاسخش به مراجعه با کلیدِ JSON گره می‌خورد؛ پرکردنش در مطب توسطِ
+   * کارکنان همان داده را دو جا می‌نشاند. فرمِ ثبت‌نام و فرمِ نوعِ مراجعه هم نه —
+   * اولی مالِ بیمار است، دومی همین حالا خودش «اطلاعاتِ تکمیلی» را دارد.
+   */
+  async topicFormOptions() {
+    const rows = await this.prisma.formDef.findMany({
+      where: { scope: 'record', active: true, followUp: null },
+      orderBy: [{ title: 'asc' }, { id: 'asc' }],
+      select: { id: true, title: true },
+    });
+    return rows.map((r) => ({ id: r.id, title: r.title, name: r.title }));
+  }
+
+  /** `0`/`null` → بی‌فرم؛ هر شناسهٔ دیگر باید یکی از `topicFormOptions` باشد. */
+  private async topicFormRef(formId: number | null | undefined): Promise<number | null | undefined> {
+    if (formId === undefined) return undefined;
+    if (!formId) return null;
+    const f = await this.prisma.formDef.findUnique({ where: { id: formId }, select: { scope: true, active: true, followUp: true } });
+    if (!f || f.scope !== 'record' || !f.active || f.followUp) {
+      throw new BadRequestException('فرمِ تکمیلی باید یک فرمِ زیرپروندهٔ فعال باشد (نه فرمِ پیگیری)');
+    }
+    return formId;
+  }
+
+  async createVisitTopic(dto: { name: string; color?: string; notes?: string; sort?: number; formId?: number | null }) {
     await this.uniqueName('visitTopic', 'name', dto.name);
+    const formId = await this.topicFormRef(dto.formId);
     return this.prisma.visitTopic.create({
       data: {
         name: dto.name.trim(),
         color: dto.color?.trim() || null,
         notes: dto.notes?.trim() || null,
         sort: dto.sort ?? 0,
+        formId: formId ?? null,
       },
     });
   }
 
-  async updateVisitTopic(id: number, dto: { name?: string; color?: string; notes?: string; active?: boolean; sort?: number }) {
+  async updateVisitTopic(id: number, dto: { name?: string; color?: string; notes?: string; active?: boolean; sort?: number; formId?: number | null }) {
     const row = await this.prisma.visitTopic.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('موضوعِ ویزیت یافت نشد');
     if (dto.name) await this.uniqueName('visitTopic', 'name', dto.name, id);
+    /* ⚠️ عوض‌کردنِ فرم پاسخ‌های قبلی را پاک نمی‌کند: ردیفِ `visit_supplements` به
+       (مراجعه، فرم) گره است نه به موضوع، و مراجعهٔ قبلی همان پاسخ را نگه می‌دارد. */
+    /* فرمِ بی‌تغییر دوباره سنجیده نمی‌شود — ویرایشِ نام نباید فرمِ خاموش‌شده را بی‌صدا جدا کند (بازبینی). */
+    const formId = dto.formId !== undefined && dto.formId === row.formId ? undefined : await this.topicFormRef(dto.formId);
     return this.prisma.visitTopic.update({
       where: { id },
       data: {
@@ -376,6 +422,7 @@ export class DefinitionsService {
         ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
         ...(dto.sort !== undefined ? { sort: dto.sort } : {}),
+        ...(formId !== undefined ? { formId } : {}),
       },
     });
   }
@@ -389,9 +436,13 @@ export class DefinitionsService {
    */
   async deleteVisitTopic(id: number) {
     const used = await this.prisma.visit.count({ where: { topicId: id } });
-    if (used > 0) {
+    /* ⚠️ موضوعِ سیستمی (پره‌آپ/پست‌آپ/…) هرگز حذفِ سخت نمی‌شود حتی بی‌مراجعه:
+       خودکارسازی‌ها با کلیدش پیدایش می‌کنند و حذفش یعنی نصبِ بعدی دیگر نمی‌داند
+       کدام موضوع «پست‌آپ» است. خاموش‌کردن برگشت‌پذیر است. */
+    const sys = await this.prisma.visitTopic.findUnique({ where: { id }, select: { system: true } });
+    if (used > 0 || sys?.system) {
       await this.prisma.visitTopic.update({ where: { id }, data: { active: false } });
-      return { ok: true, deactivated: true, visitCount: used };
+      return { ok: true, deactivated: true, system: !!sys?.system, visitCount: used };
     }
     await this.prisma.visitTopic.delete({ where: { id } });
     return { ok: true, deactivated: false, visitCount: 0 };

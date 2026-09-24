@@ -241,8 +241,9 @@ export class PortalService {
       const d = i.data as { followUpVisitId?: unknown; followUpDay?: unknown } | null;
       if (typeof d?.followUpVisitId !== 'number' || typeof d?.followUpDay !== 'number') return true;
       const v = visits.find((x) => x.id === d.followUpVisitId);
-      if (!v?.opDate) return true;
-      if (v.opStatus === 'cancelled') return false;
+      if (!v) return true;
+      /* عملی که لغو شد یا تاریخش را از دست داد (بی‌تاریخ شد): فرمِ پیگیری‌اش موعد ندارد (بازبینی). */
+      if (v.opStatus === 'cancelled' || !v.opDate) return false;
       return v.opDate.getTime() + d.followUpDay * 864e5 <= Date.now();
     };
 

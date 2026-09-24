@@ -24,7 +24,7 @@ export function ConfigProvider({ children }) {
     vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [],
     statuses: {
       visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [],
-      decision: [], anesthesia: [], disposition: [], asa: [], anticoag: [], side: [], clavien: [],
+      decision: [], anesthesia: [], disposition: [], asa: [], anticoag: [], side: [], clavien: [], waitlist: [], decisionClose: [],
     },
     /* اندازه‌های علائمِ حیاتی (واحد و بازه) — همان کاتالوگی که سرور با آن می‌سنجد. */
     vitals: [],
@@ -93,7 +93,7 @@ export function useConfig() {
     vertical: DEFAULT_VERTICAL, defaultKind: 'surgery', brandName: null, brand: {}, verticals: [], error: null,
     statuses: {
       visit: [], appointment: [], note: [], order: [], orderKind: [], reminder: [], reminderKind: [], intake: [],
-      decision: [], anesthesia: [], disposition: [], asa: [], anticoag: [], side: [], clavien: [],
+      decision: [], anesthesia: [], disposition: [], asa: [], anticoag: [], side: [], clavien: [], waitlist: [], decisionClose: [],
     },
     vitals: [],
     ...profileFromConfig({ vertical: DEFAULT_VERTICAL }),

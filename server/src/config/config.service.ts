@@ -3,7 +3,7 @@ import {
   APPT_LABELS, NOTE_KIND_LABELS, OP_LABELS,
   ORDER_LABELS, ORDER_KIND_LABELS, REMINDER_LABELS, REMINDER_KIND_LABELS, INTAKE_LABELS,
   DECISION_LABELS, ANESTHESIA_LABELS, DISPOSITION_LABELS,
-  ASA_LABELS, ANTICOAG_LABELS, SIDE_LABELS, CLAVIEN_LABELS,
+  ASA_LABELS, ANTICOAG_LABELS, SIDE_LABELS, CLAVIEN_LABELS, WAITLIST_LABELS, DECISION_CLOSE_LABELS,
 } from '../patients/labels';
 import { vitalCatalog } from '../patients/vitals';
 import { PrismaService } from '../prisma/prisma.service';
@@ -127,6 +127,9 @@ export class ConfigService {
         anticoag: Object.entries(ANTICOAG_LABELS).map(([key, label]) => ({ key, label })),
         side: Object.entries(SIDE_LABELS).map(([key, label]) => ({ key, label })),
         clavien: Object.entries(CLAVIEN_LABELS).map(([key, label]) => ({ key, label })),
+        /* بستهٔ ۹: وضعیتِ ردیفِ فهرستِ انتظار و دلیلِ بستنِ تصمیمِ جراحی. */
+        waitlist: Object.entries(WAITLIST_LABELS).map(([key, label]) => ({ key, label })),
+        decisionClose: Object.entries(DECISION_CLOSE_LABELS).map(([key, label]) => ({ key, label })),
       },
       /* اندازه‌های علائمِ حیاتی با واحد و بازه — فرم همین را رندر می‌کند و سرور
          با همین (`vitalsInput`) می‌سنجد؛ یک کاتالوگ، دو مصرف. */

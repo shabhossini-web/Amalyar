@@ -11,6 +11,7 @@ import { actorName } from '../common/person';
 import { colorForKey } from './forms.service';
 import { DISPOSITION_LABELS, NOTE_KIND_LABELS, OP_LABELS } from './labels';
 import { opDetailsView } from './op-details';
+import { SUPPLEMENT_INCLUDE, supplementsView } from './visit-supplement';
 import { DISCHARGE_NOTES, SECTION_KEYS, SECTION_NOTES, currentNotes, noteBody } from './clinical-note';
 import {
   OTHER_DX, OTHER_PX, diagnosisIds, diagnosisLabel, diagnosisList, principalDiagnosisTitle,
@@ -202,7 +203,7 @@ export class RecordService {
              ساخته شد. فقط برای کسی که اجازهٔ بالینی دارد خوانده می‌شود. */
           ...(clinical ? { clinicalNotes: currentNotes([...Object.values(SECTION_NOTES), ...Object.values(DISCHARGE_NOTES)]) } : {}),
           /* بستهٔ ۸: جزئیاتِ ساخت‌یافتهٔ عمل و سمتِ هر عمل — همان دروازهٔ بالینی. */
-          ...(clinical ? { opDetail: true, procedureDetails: { select: PROC_DETAIL_SELECT } } : {}),
+          ...(clinical ? { opDetail: true, procedureDetails: { select: PROC_DETAIL_SELECT }, supplements: SUPPLEMENT_INCLUDE } : {}),
         },
         orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { seq: 'desc' }],
       }),
@@ -450,6 +451,8 @@ export class RecordService {
             rx: noteBody((v as any).clinicalNotes, 'discharge_rx'),
           } : null,
           nextVisitDate: v.nextVisitDate ?? null,
+          /* فرمِ تکمیلیِ موضوع (بستهٔ ۹) — پاسخی که نوشته شد و در پرونده خوانده نشود، نوشته نشده. */
+          supplements: supplementsView((v as any).supplements) ?? [],
         } : {}),
         notes: v.notes,
         extra: v.extra ?? {},

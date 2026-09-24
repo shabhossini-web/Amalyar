@@ -377,6 +377,15 @@ function VisitsTab({ rec, onErr, onOpen }) {
             </small>
             <VisitDiagnoses v={v} />
             <VisitClinical v={v} />
+            {/* فرمِ تکمیلیِ موضوع (بستهٔ ۹) — برچسب و متنِ خوانا از سرور. */}
+            {(v.supplements ?? []).filter((x) => x.answers?.length).map((x) => (
+              <dl key={x.formId} className="rc-answers" data-visit-supplement={x.formId}>
+                <div><dt>{x.formTitle ?? 'فرمِ تکمیلی'}</dt><dd /></div>
+                {x.answers.map((a) => (
+                  <div key={a.key}><dt>{a.label}</dt><dd>{a.text}</dd></div>
+                ))}
+              </dl>
+            ))}
             {/* ⚠️ **پاسخ‌های فرمِ مراجعه.** پزشک «شکایتِ اصلی» و «شرحِ معاینه»
                 را در فرمِ ویزیت می‌نویسد؛ تا دیروز پرونده هیچ اثری از آن‌ها
                 نداشت و همه‌شان فقط داخلِ فرمِ خودِ مراجعه می‌ماندند. چیزی که

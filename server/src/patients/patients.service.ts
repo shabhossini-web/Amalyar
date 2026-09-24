@@ -23,7 +23,7 @@ import {
   currentNotes, noteBody, sectionsOf, SECTION_KEYS, SECTION_NOTES, setVisitNote,
   VISIT_FULL_NOTE_KINDS, VISIT_NOTE_KINDS,
 } from './clinical-note';
-import { ANESTHESIA_LABELS, DECISION_LABELS, DISPOSITION_LABELS, OP_LABELS } from './labels';
+import { ANESTHESIA_LABELS, DECISION_CLOSE_LABELS, DECISION_LABELS, DISPOSITION_LABELS, OP_LABELS } from './labels';
 import { vitalsInput } from './vitals';
 import { actorName } from '../common/person';
 import { summarize } from './billing.service';
@@ -37,6 +37,7 @@ import {
 import { withOtherProcedureNeeds } from './visit-requirements';
 import { ConfigService } from '../config/config.service';
 import { assertStructuredOwnership, opDetailsInput, opDetailsView, writeOpDetails } from './op-details';
+import { SUPPLEMENT_INCLUDE, loadSupplementForm, supplementInput, supplementsView, writeSupplement } from './visit-supplement';
 
 /**
  * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
@@ -122,6 +123,13 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
        `null` یعنی «خوانده شد و هنوز ردیفی نیست». */
     opDetails: v.opDetail === undefined ? undefined : opDetailsView(v.opDetail),
     procedures: v.procedureDetails === undefined ? undefined : procedureList(v),
+    supplements: supplementsView(v.supplements),
+    /* بستهٔ ۹: عملِ بی‌تاریخ (فهرستِ انتظار) و تاریخِ تقریبی — مشتق، نه در رابط. */
+    plannedDate: v.plannedDate ?? null,
+    undated: v.kind === 'surgery' && !v.opDate,
+    decisionClosed: v.surgeryDecisionClosedAt
+      ? { at: v.surgeryDecisionClosedAt, reason: v.surgeryDecisionCloseReason, reasonFa: DECISION_CLOSE_LABELS[v.surgeryDecisionCloseReason] ?? v.surgeryDecisionCloseReason }
+      : null,
     opType: v.opType,
     opDate: v.opDate,
     nextVisitDate: v.nextVisitDate,
@@ -333,6 +341,9 @@ const LEGACY_PLAN: Record<string, string> = {
  * متنیِ هسته و اسنادِ ترخیص. برای `GET /visits/:id`، ذخیره و هر جایی که
  * یک مراجعه را باز می‌کند، نه فهرست.
  */
+/** ستاره‌هایی که عملِ بی‌تاریخِ مطب ندارد (بستهٔ ۹ب): تاریخ، و آنچه با تاریخ معلوم می‌شود. */
+const UNDATED_RELAX = ['opDate', 'hospitalId', 'amount'];
+
 const INCLUDE_VISIT_FULL = {
   ...INCLUDE_PATIENT,
   clinicalNotes: currentNotes(VISIT_FULL_NOTE_KINDS),
@@ -340,6 +351,8 @@ const INCLUDE_VISIT_FULL = {
      ۵۰۰تایی بی‌نیاز است و `undefined` می‌ماند (نخوانده ≠ خالی). */
   opDetail: true,
   procedureDetails: { select: PROC_DETAIL_SELECT },
+  /* پاسخِ فرمِ تکمیلیِ موضوع (بستهٔ ۹) — همان قاعدهٔ «نخوانده ≠ خالی». */
+  supplements: SUPPLEMENT_INCLUDE,
 } as const;
 
 /**
@@ -383,6 +396,28 @@ export class PatientsService {
   }
 
   /**
+   * **عملِ بی‌تاریخ و تاریخِ تقریبی** (بستهٔ ۹ب) — فقط مطب، فقط نوعِ عمل.
+   *
+   * ⚠️ «بی‌تاریخ» یعنی `opDate = null`، نه یک وضعیتِ تازه: هر مصرف‌کننده‌ای (یادآوری،
+   * اتاقِ عمل، تقویم، امروز، چینش) همین حالا عملِ بی‌تاریخ را نادیده می‌گیرد. تاریخِ
+   * تقریبی ستونِ جداست (`plannedDate`) تا هیچ‌کدام آن را رزروِ قطعی نخوانند.
+   */
+  private async planningInput(dto: any, kind: string | null | undefined) {
+    const open = dto?.opDateOpen === true;
+    const hasPlanned = dto?.plannedDate !== undefined;
+    if (!open && !hasPlanned) return { undated: false, planned: undefined as Date | null | undefined };
+    if ((await this.config.profile()).kind !== 'clinic') throw new BadRequestException('عملِ بی‌تاریخ و تاریخِ تقریبی فقط در مطب ثبت می‌شود');
+    if ((kind || 'surgery') !== 'surgery') throw new BadRequestException('فقط مراجعهٔ نوعِ عمل بی‌تاریخ ثبت می‌شود');
+    if (open && dto.opDate) throw new BadRequestException('عملِ «هنوز تاریخ ندارد» نمی‌تواند تاریخِ عمل هم داشته باشد');
+    let planned: Date | null | undefined;
+    if (hasPlanned) {
+      planned = dto.plannedDate === null || dto.plannedDate === '' ? null : toDateValue(String(dto.plannedDate)) ?? undefined;
+      if (planned === undefined) throw new BadRequestException('تاریخِ تقریبی معتبر نیست');
+    }
+    return { undated: open, planned };
+  }
+
+  /**
    * ویزیتِ پست‌آپِ خودکار — «اولین مراجعهٔ بعد از عمل» یک مراجعهٔ **مستقل**
    * است، نه فقط یک تاریخ روی کارتِ عمل: باید در داشبورد/تقویم دیده شود و
    * پرونده‌اش همان‌جا نوشته شود (خواستهٔ صریحِ محصول).
@@ -399,7 +434,7 @@ export class PatientsService {
     try {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
-        select: { id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true, dischargeDisposition: true },
+        select: { id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true, dischargeDisposition: true, opDate: true },
       });
       if (!v || v.kind !== 'surgery') return;
       const child = await this.prisma.visit.findFirst({
@@ -408,7 +443,8 @@ export class PatientsService {
       });
       /* «فوت» هم مثلِ لغو: ویزیتِ بعدی از هر مسیری (فرمِ عمل، PATCH) نباید فرزندِ پست‌آپ را زنده کند (بازبینی). */
       const dead = v.dischargeDisposition === 'death';
-      const wantDate = v.opStatus === 'cancelled' || dead ? null : v.nextVisitDate;
+      /* عملِ بی‌تاریخ (بستهٔ ۹ب) برنامهٔ پس از عمل ندارد: ویزیتِ پست‌آپِ خودکارش با تاریخِ قطعی می‌آید (بازبینی). */
+      const wantDate = v.opStatus === 'cancelled' || dead || !v.opDate ? null : v.nextVisitDate;
       if (!wantDate) {
         if (child && child.opStatus === 'pending') {
           await this.prisma.visit.update({ where: { id: child.id }, data: { opStatus: 'cancelled' } });
@@ -448,9 +484,13 @@ export class PatientsService {
       const nonSurgery = defs.map((d) => d.visitKind).filter((k): k is string => !!k && k !== 'surgery');
       const kind = nonSurgery.includes('clinic') ? 'clinic' : nonSurgery[0];
       if (!kind) return;
-      const topic = await this.prisma.visitTopic.findFirst({
-        where: { active: true, name: { contains: 'پست‌آپ' } }, select: { id: true },
-      });
+      /* بستهٔ ۹: کلیدِ پایدار (`system='postop'`) اول — مدیری که نامِ موضوع را عوض
+         کرده بود، تا دیروز ویزیتِ پست‌آپِ بی‌موضوع می‌گرفت. نام فقط پشتیبانِ نصبی است
+         که seedش دست‌خورده بود و کلید نگرفت؛ ترتیبِ ثابت تا «اولی» تصادفی نباشد. */
+      const topic = await this.prisma.visitTopic.findFirst({ where: { active: true, system: 'postop' }, select: { id: true } })
+        ?? await this.prisma.visitTopic.findFirst({
+          where: { active: true, name: { contains: 'پست‌آپ' } }, select: { id: true }, orderBy: [{ sort: 'asc' }, { id: 'asc' }],
+        });
       const last = await this.prisma.visit.aggregate({ where: { patientId: v.patientId }, _max: { seq: true } });
       await this.prisma.visit.create({
         data: {
@@ -1122,13 +1162,18 @@ export class PatientsService {
    *   روی تاریخِ عمل. نشان در `values` می‌نشیند، نه در `extra`: در `RESERVED`ِ
    *   تأیید است و دادهٔ بالینی نیست.
    */
-  private async assertFormValid(dto: any, undated = false) {
+  private async assertFormValid(dto: any, undated = false, relax: string[] = []) {
     const kind = dto.kind || 'surgery';
     const values = { ...(dto.extra ?? {}), ...pickBuiltin(dto), ...(undated ? { [UNDATED_KEY]: true } : {}) };
-    await this.forms.assertValid(`visit.${kind}`, values);
+    if (!relax.length) { await this.forms.assertValid(`visit.${kind}`, values); return; }
+    /* عملِ بی‌تاریخِ مطب (بستهٔ ۹ب): بیمارستان و مبلغ هم با تاریخ معلوم می‌شوند. */
+    const form = await this.forms.byKey(`visit.${kind}`).catch(() => null);
+    if (!form) return;
+    const r = this.forms.validateFields(form.fields.map((f: any) => (relax.includes(f.key) ? { ...f, required: false } : f)), values);
+    if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
   }
 
-  private async assertEditFormValid(v: any, dto: UpdateVisitDto) {
+  private async assertEditFormValid(v: any, dto: UpdateVisitDto, relax: string[] = []) {
     const current = enrich(v, undefined, VISIT_FULL_NOTE_KINDS);
     const kind = dto.kind ?? v.kind;
     let form;
@@ -1142,7 +1187,8 @@ export class PatientsService {
       ...current.extra, ...dto.extra, ...current, ...dto,
       amount: current.total,
     };
-    const r = this.forms.validateFields(form.fields.filter((f) => keys.has(f.key)), values);
+    const r = this.forms.validateFields(
+      form.fields.filter((f) => keys.has(f.key)).map((f: any) => (relax.includes(f.key) ? { ...f, required: false } : f)), values);
     if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
   }
 
@@ -1264,6 +1310,9 @@ export class PatientsService {
        بی‌آن فیلد را با خوش‌رویی می‌پذیرفت — یعنی «اجباری» فقط یک نقاشی بود.
        اعتبارسنجیِ کلاینت دور زدنی است؛ این نیست. */
     await this.assertKind(dto.kind);
+    /* بستهٔ ۹ب: عملِ بی‌تاریخ — پیش از ستاره‌ها، چون ستارهٔ تاریخ و بیمارستان را برمی‌دارد. */
+    const planning = await this.planningInput(dto, (dto as any).kind);
+    if (planning.undated) (dto as any).amount = undefined;
     /* ⚠️ «شروعِ ویزیت» از میزِ پذیرش پوسته‌ی مراجعه را می‌سازد که **بعداً**
        پر شود؛ اگر ستاره‌های فرم همین‌جا اجرا می‌شدند، پذیرش نمی‌توانست هیچ
        ویزیتی را شروع کند مگر همهٔ فیلدهای اجباریِ پزشک را هم خودش بداند —
@@ -1282,7 +1331,10 @@ export class PatientsService {
       const form = await this.forms.forVisitKind(dto.kind || 'surgery');
       const check = this.forms.validateFields((form?.fields ?? []).map(f => ({ ...f, required: false })), { ...(dto as any).extra, ...pickBuiltin(dto) });
       if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
-    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto, opts?.intakeCompany?.undated);
+    } else if (!opts?.skipFormValidation) {
+      await this.assertFormValid(dto, opts?.intakeCompany?.undated || planning.undated, planning.undated ? UNDATED_RELAX : []);
+    }
+    if ((dto as any).opDateOpen === true && dto.opDate === undefined) (dto as any).opDate = null; /* همان قفلِ نقشِ تاریخ (بازبینی) */
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     /* جزئیاتِ ساخت‌یافته و سمتِ عمل‌ها (بستهٔ ۸) — شکل، مطب‌بودن و مالکیت پیش از تراکنش. */
     const structured = await this.structuredInput(dto, (dto as any).kind);
@@ -1295,6 +1347,9 @@ export class PatientsService {
        تراکنش خوانده می‌شود؛ داخلِ tx فقط نوشتن. */
     const formFields = (await this.forms.forVisitKind(dto.kind || 'surgery'))?.fields ?? [];
     const extraIn = await this.forms.normalizeExtra(formFields, (dto as any).extra);
+    /* فرمِ تکمیلیِ موضوع (بستهٔ ۹) — تعریف پیش از تراکنش، نوشتن داخلش. */
+    const suppIn = supplementInput((dto as any).supplement);
+    const suppForm = suppIn ? await loadSupplementForm(this.prisma, suppIn.formId) : null;
     const kinds = await this.forms.kindMap();
     return async (tx: Prisma.TransactionClient, targetVisitId?: number) => {
       let patientId = dto.patientId;
@@ -1387,7 +1442,8 @@ export class PatientsService {
           ...othersCreateData(codingPlan),
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
-          opDate: toDateValue(dto.opDate) ?? null,
+          opDate: planning.undated ? null : toDateValue(dto.opDate) ?? null,
+          ...(planning.planned !== undefined ? { plannedDate: planning.planned } : {}),
           nextVisitDate: toDateValue(dto.nextVisitDate) ?? null,
           postOpCare: dto.postOpCare?.trim() || null,
           followUpDays: dto.followUpDays?.trim() || null,
@@ -1424,6 +1480,12 @@ export class PatientsService {
         await writeProcedureDetails(tx, visit.id, null, structured.pdIn);
       }
       if (structured.opPatch) await writeOpDetails(tx, visit.id, structured.opPatch);
+      if (suppIn && suppForm) {
+        await writeSupplement(tx, {
+          visitId: visit.id, topicId: visit.topicId ?? null, form: suppForm, values: suppIn.values, user,
+          validate: (f, x) => this.forms.validateFields(f, x), normalize: (f, x) => this.forms.normalizeExtra(f, x),
+        });
+      }
       /**
        * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
        *
@@ -1470,6 +1532,7 @@ export class PatientsService {
          داشت و فرمی که از همین شیء دوباره باز می‌شد بلوک را «نخوانده» می‌دید. */
       (visit as any).opDetail = await tx.visitOpDetail.findUnique({ where: { visitId: visit.id } });
       (visit as any).procedureDetails = await tx.visitProcedureDetail.findMany({ where: { visitId: visit.id }, select: PROC_DETAIL_SELECT });
+      (visit as any).supplements = await tx.visitSupplement.findMany({ where: { visitId: visit.id }, ...SUPPLEMENT_INCLUDE });
       const result = { ...enrich(visit, kinds, VISIT_FULL_NOTE_KINDS), patientStatus };
       await this.audit.record({ actorId: userId, action: target ? 'visit.intake_update' : 'visit.create', entityType: 'visit', entityId: visit.id, after: result }, tx);
       return result;
@@ -1533,6 +1596,8 @@ export class PatientsService {
        این، منشی‌ای که فرم را بی‌تغییر ذخیره می‌کند (فرم همهٔ مقادیر را پس
        می‌فرستد) با «معاینه بخشِ پزشک است» رد می‌شد — چون مقدارِ قبلی را
        `undefined` می‌دید. */
+    /* «هنوز تاریخ ندارد» یعنی opDate = null — باید از همان قفلِ نقشِ فیلدِ تاریخ رد شود (بازبینی). */
+    if ((dto as any).opDateOpen === true && dto.opDate === undefined) (dto as any).opDate = null;
     await this.assertRoleOwnership(
       (dto as any).kind ?? v.kind, dto, user,
       {
@@ -1547,7 +1612,14 @@ export class PatientsService {
       procedure: structured.pdIn ? { next: structured.pdIn, current: (v as any).procedureDetails ?? [] } : undefined,
     });
     if (dto.kind !== undefined && dto.kind !== v.kind) await this.assertKind(dto.kind);
-    await this.assertEditFormValid(v, dto);
+    /* بستهٔ ۹ب: عملی که بی‌تاریخ ذخیره شده، در ویرایش هم بی‌تاریخ سنجیده می‌شود تا
+       کسی تاریخ ندهد — فرم `opDate: null` و `hospitalId: null` را هر بار می‌فرستد. */
+    const planning = await this.planningInput(dto, (dto as any).kind ?? v.kind);
+    /* فقط عملِ در انتظار بی‌تاریخ می‌شود؛ عملِ انجام‌شده/لغوشده تاریخش سندِ اتفاقی است که افتاده (بازبینی). */
+    if (planning.undated && v.opStatus !== 'pending') throw new BadRequestException('فقط عملِ در انتظار می‌تواند بی‌تاریخ شود');
+    const staysUndated = planning.undated
+      || ((dto.kind ?? v.kind) === 'surgery' && !v.opDate && !dto.opDate && (await this.config.profile()).kind === 'clinic');
+    await this.assertEditFormValid(v, dto, staysUndated ? UNDATED_RELAX : []);
     /* باکس‌های لینک: تعریفِ فرم و نرمال‌سازی **پیش از** تراکنش — کوئریِ بیرونِ tx
        داخلِ تراکنشِ تعاملی روی PGliteِ CI (یک اتصال) قفل می‌کرد و تراکنشِ ۵ ثانیه‌ای
        منقضی می‌شد (intake-finance-roles). داخلِ tx فقط نوشتنِ مدرک‌ها می‌ماند. */
@@ -1555,6 +1627,9 @@ export class PatientsService {
     const servicePatch = await this.visitServiceOf((dto as any).service, false);
     const linkFields = dto.extra !== undefined ? ((await this.forms.forVisitKind(kindNow))?.fields ?? []) : [];
     const extraIn = dto.extra !== undefined ? await this.forms.normalizeExtra(linkFields, dto.extra) : undefined;
+    const suppIn = supplementInput((dto as any).supplement);
+    const suppForm = suppIn ? await loadSupplementForm(this.prisma, suppIn.formId) : null;
+    let suppChange: { changed: boolean; changedKeys: string[] } | null = null;
 
     const patientPatch: any = {};
     if (dto.firstName !== undefined) patientPatch.firstName = dto.firstName;
@@ -1580,6 +1655,8 @@ export class PatientsService {
         visitPatch.opType = dto.opType?.trim() || null;
       }
       if (dto.opDate !== undefined) visitPatch.opDate = toDateValue(dto.opDate) ?? null;
+      if (planning.undated) visitPatch.opDate = null;
+      if (planning.planned !== undefined) visitPatch.plannedDate = planning.planned;
       if (dto.nextVisitDate !== undefined) {
         const nd = toDateValue(dto.nextVisitDate) ?? null;
         /* «فوت» و ویزیتِ بعدی جمع نمی‌شوند — همان قاعدهٔ ترخیصِ میز، این‌جا هم (بازبینی). echoی همان تاریخ می‌گذرد. */
@@ -1659,6 +1736,13 @@ export class PatientsService {
         await writeProcedureDetails(tx, id, touchesProcedureAxis(dto) ? finalProcedureIds(dto, coding.procedure) : null, structured.pdIn);
       }
       if (structured.opPatch) await writeOpDetails(tx, id, structured.opPatch);
+      if (suppIn && suppForm) {
+        suppChange = await writeSupplement(tx, {
+          visitId: id, topicId: dto.topicId !== undefined ? (dto.topicId ?? null) : (v.topicId ?? null),
+          form: suppForm, values: suppIn.values, user,
+          validate: (f, x) => this.forms.validateFields(f, x), normalize: (f, x) => this.forms.normalizeExtra(f, x),
+        });
+      }
       /* ساعتِ حضور مشتقِ برنامهٔ چینش است (W3.8/U7): با مقادیرِ **نهایی** پس از
          این ویرایش سنجیده می‌شود، نه با مقادیرِ قبلی — وگرنه تغییرِ بیمارستان یا
          تاریخ در همین ویرایش، ردیفِ حضورِ روزِ قبل را نگاه می‌کرد.
@@ -1678,6 +1762,10 @@ export class PatientsService {
     const kinds = await this.forms.kindMap();
     const result = enrich(updated, kinds, VISIT_FULL_NOTE_KINDS);
     await this.audit.record({ actorId: user?.id, action: 'visit.update', entityType: 'visit', entityId: id, before: enrich(v, kinds, VISIT_FULL_NOTE_KINDS), after: result });
+    const sc = suppChange as { changed: boolean; changedKeys: string[] } | null;
+    if (sc?.changed && suppForm) {
+      await this.audit.record({ actorId: user?.id, action: 'visit.supplement', entityType: 'visit', entityId: id, after: { formId: suppForm.id, changedKeys: sc.changedKeys } });
+    }
     /* ویرایش ممکن است تاریخِ ویزیتِ بعدی یا شمارهٔ بیمار را عوض کرده باشد. */
     await this.reminders.syncNextVisit(id);
     await this.syncPostOpVisit(id);
@@ -1688,6 +1776,11 @@ export class PatientsService {
     await this.assertVisitAccess(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id } });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    /* بستهٔ ۹ب: عملِ بی‌تاریخِ مطب «انجام‌شده» نمی‌شود — بی‌تاریخ هیچ مراقبت/پیگیری‌ای کاشته
+       نمی‌شود و عمل از همهٔ ردگیری‌های پس از عمل می‌افتد (بازبینی). */
+    if (opStatus === 'done' && v.kind === 'surgery' && !v.opDate && (await this.config.profile()).kind === 'clinic') {
+      throw new BadRequestException('برای ثبتِ «انجام شد» اول تاریخِ عمل را ثبت کنید');
+    }
     /* ⚠️ دلیلِ لغو **اجباری** است (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶) و از مجموعهٔ بستهٔ
        `CANCEL_REASONS` می‌آید، نه متنِ آزاد: متنش به دستِ بیمار می‌رسد.
        یادداشتِ داخلی اختیاری است و هرگز فرستاده نمی‌شود. */

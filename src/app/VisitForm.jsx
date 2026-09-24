@@ -5,7 +5,7 @@ import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useAuth } from './auth.jsx';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import VoiceNote from '../ui/VoiceNote.jsx';
-import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStrToIso, ymdToJStr } from '../lib/jalali.js';
 import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
 import { useConfig, useStatusList, useStatusMap } from './config.jsx';
@@ -188,7 +188,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     phone: initial?.phone || '',
     nationalId: initial?.nationalId || '',
     birthDateJ: initial?.birthDate ? isoToJStr(initial.birthDate) : '',
-    surgeonId: initial?.surgeonId ?? null,
+    surgeonId: initial?.surgeonId ?? prefill?.surgeonId ?? null,
     hospitalId: initial?.hospitalId ?? null,
     techId: initial?.techId ?? null,
     /* ⚠️ فهرستِ **کامل** به ترتیبِ رتبه (بستهٔ ۷): `[0]` اصلی است (همان ستونِ
@@ -220,6 +220,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        دکمهٔ «+» صفحهٔ «امروز» امروز را می‌دهد (همان `todayJStr` که دکمهٔ «امروز»ِ
        خودِ کادر می‌زند)؛ کاربر عوضش می‌کند اگر مراجعه برای روزِ دیگری است. */
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : (initial?.id ? '' : prefill?.opDateJ || ''),
+    /* بستهٔ ۹ب: عملِ «هنوز تاریخ ندارد» (فهرستِ انتظار) — فقط عملِ مطب. عملی که بی‌تاریخ
+       ذخیره شده با همین حالت باز می‌شود؛ ثبتِ تازه فقط با انتخابِ صریحِ کاربر. */
+    undated: !!(initial?.id && initial?.kind === 'surgery' && !initial?.opDate) || !!prefill?.undated,
+    plannedDateJ: initial?.plannedDate ? ymdToJStr(String(initial.plannedDate).slice(0, 10)) : '',
     nextVisitDateJ: initial?.nextVisitDate ? isoToJStr(initial.nextVisitDate) : '',
     postOpCare: initial?.postOpCare ?? '',
     followUpDays: initial?.followUpDays ?? '',
@@ -452,7 +456,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* تصمیمِ درمانی — چندتایی است چون یک ویزیت می‌تواند هم آزمایش بدهد هم
      مشاوره بخواهد. «کاندیدای جراحی» موضوعِ همین ویزیت را هم پره‌آپ می‌کند:
      همان ویزیت است که تبدیل به ویزیتِ قبل از عمل شده. */
-  const preOpTopicId = defs.topics.find((tp) => tp.name.includes('پره‌آپ'))?.id ?? null;
+  /* کلیدِ پایدار اول (بستهٔ ۹)، نام فقط پشتیبانِ نصبی که کلید نگرفت — تغییرِ نامِ
+     موضوع دیگر این خودکارسازی را بی‌صدا خاموش نمی‌کند. */
+  const preOpTopicId = (defs.topics.find((tp) => tp.system === 'preop' && tp.active !== false)
+    ?? defs.topics.find((tp) => tp.active !== false && tp.name.includes('پره‌آپ')))?.id ?? null;
   const toggleDecision = (v) => setF((s2) => {
     const on = s2.decisions.includes(v);
     const decisions = on ? s2.decisions.filter((x) => x !== v) : [...s2.decisions, v];
@@ -527,6 +534,30 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [sides, setSides] = useState(() => sidesInit(initial?.procedures));
   const [extra, setExtra] = useState(() => initial?.extra ?? {});
   const [extraErr, setExtraErr] = useState({});
+  /* ── فرمِ تکمیلیِ موضوع (بستهٔ ۹) ──
+     موضوعِ انتخاب‌شده اگر فرمی دارد، همان فرم این‌جا پر می‌شود و با خودِ مراجعه
+     ذخیره می‌شود. ⚠️ فقط وقتی کاربر دستش زده فرستاده می‌شود (ستاره‌ها هم فقط
+     آن‌وقت) — باز و بسته‌کردنِ فرم نباید ویزیتی را به‌خاطرِ فرمِ نیمه‌پر رد کند.
+     `undefined` در نمای مراجعه یعنی «نخوانده» (ردیفِ سبک) — آن‌وقت فرستاده نمی‌شود. */
+  const suppLoaded = !editing || Array.isArray(initial?.supplements);
+  /* عملِ بی‌تاریخ (بستهٔ ۹ب) — فقط عملِ مطب؛ سرور هم بیرون از آن ۴۰۰ می‌دهد. */
+  const planOn = isClinicCore && f.kind === 'surgery';
+  const undatedNow = planOn && f.undated;
+  const topicRow = (defs.topics ?? []).find((tp) => tp.id === f.topicId) ?? null;
+  const suppKey = topicRow?.formKey ?? null;
+  const [suppDef, setSuppDef] = useState(null);
+  useEffect(() => {
+    if (!suppKey) { setSuppDef(null); return undefined; }
+    let alive = true;
+    api(`/forms/${encodeURIComponent(suppKey)}`)
+      .then((r) => { if (alive) setSuppDef(r?.id ? r : null); })
+      .catch(() => { if (alive) setSuppDef(null); });
+    return () => { alive = false; };
+  }, [suppKey]);
+  const suppFields = (suppDef?.fields ?? []).filter((x) => x.active !== false && x.type !== 'image' && x.type !== 'payment');
+  const [suppVals, setSuppVals] = useState(() => Object.fromEntries((initial?.supplements ?? []).map((x) => [x.formId, x.values ?? {}])));
+  const [suppTouched, setSuppTouched] = useState({});
+  const [suppErr, setSuppErr] = useState({});
 
   useEffect(() => {
     if (mode !== 'existing') return undefined;
@@ -644,9 +675,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
     if (!editing && step < 3) { goNext(); return; }
     let opDate;
-    if (f.opDateJ.trim()) {
+    if (f.opDateJ.trim() && !undatedNow) {
       opDate = jStrToIso(f.opDateJ);
       if (!opDate) { onToast(`${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`); return; }
+    }
+    /* تاریخِ تقریبی — فقط وقتی عوض شده (خالی = پاک کن). */
+    let plannedOut;
+    if (undatedNow) {
+      const iso = f.plannedDateJ.trim() ? jStrToIso(f.plannedDateJ) : null;
+      if (f.plannedDateJ.trim() && !iso) { onToast('تاریخِ تقریبی نامعتبر است (مثال: ۱۴۰۵/۰۵/۱۰)'); return; }
+      const before = initial?.plannedDate ? String(initial.plannedDate).slice(0, 10) : null;
+      if ((iso ?? null) !== before) plannedOut = iso;
     }
     let nextVisitDate;
     if (f.nextVisitDateJ.trim()) {
@@ -683,6 +722,15 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* ⚠️ مراجعهٔ تازه در شرکتِ دوخدمته بی‌خدمت ثبت نمی‌شود: پرتالِ جراح ویرایشگرِ اقلام را فقط برای
        مراجعهٔ ایمپلنتی باز می‌کند، و مراجعهٔ دستیِ بی‌خدمت هیچ نشانه‌ای از ایمپلنتی‌بودن نداشت. */
     if (pickService && !editing && !f.service) { onToast('خدمتِ این مراجعه را انتخاب کنید'); return; }
+    /* فرمِ تکمیلی: فقط کلیدهای رندرشده، فقط اگر دست خورده. */
+    let suppOut;
+    if (suppLoaded && suppDef && suppTouched[suppDef.id]) {
+      const vals = suppVals[suppDef.id] ?? {};
+      const eSupp = dynErrors(suppFields, vals, myRole);
+      setSuppErr(eSupp);
+      if (Object.keys(eSupp).length) { onToast(Object.values(eSupp)[0]); return; }
+      suppOut = { formId: suppDef.id, values: Object.fromEntries(suppFields.filter((x) => x.key in vals).map((x) => [x.key, vals[x.key]])) };
+    }
     const builtinVals = {
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
       /* ستارهٔ فیلد روی **اصلی** است؛ چون فهرست هرگز بدونِ اصلی نمی‌ماند
@@ -698,7 +746,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       amount: editing ? initial.total : f.amount,
     };
     const eBuiltin = dynErrors(
-      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals),
+      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals
+        /* عملِ بی‌تاریخ: تاریخ و آنچه با آن معلوم می‌شود ستاره ندارد (همان `UNDATED_RELAX`ِ سرور). */
+        && !(undatedNow && ['opDate', 'hospitalId', 'amount'].includes(x.key))),
       builtinVals,
       myRole,
     );
@@ -777,6 +827,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       notes: f.notes.trim() || undefined,
       opDetails: opDetailsOut,
       procedureDetails: procDetailsOut,
+      opDateOpen: undatedNow ? true : undefined,
+      plannedDate: plannedOut,
+      supplement: suppOut,
     };
     /* ⚠️ فیلدِ بخشِ نقشِ دیگر اصلاً فرستاده نمی‌شود — نه مقدارِ قفل‌شده‌اش.
        سرور echoی بی‌تغییر را تحمل می‌کند، ولی نفرستادن هم تمیزتر است هم
@@ -864,7 +917,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    * مشتق است (`chiefComplaintFrom`)؛ در ساختِ عملی که همین الان از روی یک
    * تصمیم باز شده هنوز رکوردی وجود ندارد، پس از `prefill` می‌آید.
    */
-  const inheritedComplaint = (initial?.chiefComplaintFrom ? initial.chiefComplaint : prefill?.chiefComplaint) || '';
+  /* از فهرستِ انتظار هم شکایتِ ویزیتِ تصمیم می‌آید (بازبینی). */
+  const inheritedComplaint = (initial?.chiefComplaintFrom ? initial.chiefComplaint : (prefill?.chiefComplaint || decidedVisit?.chiefComplaint)) || '';
   const complaintSourceIso = initial?.chiefComplaintFrom?.opDate ?? prefill?.decidedInDate ?? null;
   const complaintSourceLabel = complaintSourceIso ? `ویزیتِ ${faDate(complaintSourceIso)}` : 'ویزیتِ تصمیم';
 
@@ -1094,13 +1148,36 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       addPlaceholder="موضوعِ تازه… مثلِ پست‌آپ"
     />) };
   if (fd.isOn('opDate')) builtinNodes.opDate = { wide: true, el: (
-    /* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */
-    <JDate
-      label={<>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){star(fd.requiredOf('opDate'))}</>}
-      value={f.opDateJ}
-      onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
-      placeholder="۱۴۰۵/۰۴/۲۸"
-    />) };
+    <>
+      {/* بستهٔ ۹ب: «هنوز تاریخ ندارد» — عمل ثبت می‌شود و در فهرستِ انتظار می‌نشیند؛
+          هیچ یادآوری/تقویمی رویش حساب نمی‌کند تا تاریخِ قطعی بخورد. */}
+      {/* چیپ فقط برای عملِ تازه یا در انتظار — عملِ انجام‌شده/لغوشده تاریخش را از دست نمی‌دهد (بازبینی). */}
+      {planOn && (!editing || initial?.opStatus === 'pending') && (
+        <div className="db-daychips db-undated" role="group" aria-label="تاریخِ عمل">
+          <button type="button" className={f.undated ? 'db-daychip' : 'db-daychip on'} aria-pressed={!f.undated}
+            onClick={() => setF((s2) => ({ ...s2, undated: false }))}>تاریخِ قطعی دارد</button>
+          <button type="button" data-undated className={f.undated ? 'db-daychip on' : 'db-daychip'} aria-pressed={f.undated}
+            onClick={() => setF((s2) => ({ ...s2, undated: true }))}>هنوز تاریخ ندارد (فهرستِ انتظار)</button>
+        </div>
+      )}
+      {planOn && f.undated ? (
+        <JDate
+          label="تاریخِ تقریبی (اختیاری)"
+          value={f.plannedDateJ}
+          onChange={(v) => setF((s2) => ({ ...s2, plannedDateJ: v }))}
+          placeholder="۱۴۰۵/۰۵/۱۰"
+          hint="فقط برای برنامه‌ریزی — پیامک و یادآوری با تاریخِ قطعی می‌روند"
+        />
+      ) : (
+        /* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت. */
+        <JDate
+          label={<>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){star(fd.requiredOf('opDate'))}</>}
+          value={f.opDateJ}
+          onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
+          placeholder="۱۴۰۵/۰۴/۲۸"
+        />
+      )}
+    </>) };
   if (fd.isOn('opStartTime')) builtinNodes.opStartTime = { el: timeNode('opStartTime', 'ساعتِ شروع') };
   if (fd.isOn('opEndTime')) builtinNodes.opEndTime = { el: (
     <>
@@ -1218,7 +1295,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     />) };
   /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
      در ویرایش، صورت‌حساب جای اصلاح است. */
-  if (!editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
+  if (!editing && fd.isOn('amount') && !(planOn && f.undated)) builtinNodes.amount = { wide: true, el: (
     <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount'))}</span>
       <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
              placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
@@ -1729,6 +1806,34 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           <small className="db-hint">برای گزارش‌گیری، از فهرستِ بالا یکی را انتخاب کنید.</small>
         </label>
       )}
+
+      {/* ── فرمِ تکمیلیِ موضوع (بستهٔ ۹) ── */}
+      {suppDef && suppFields.length > 0 && (
+        <div className="db-extra db-supp" data-supplement={suppDef.id}>
+          <h4>{suppDef.title}</h4>
+          <p className="db-hint">فرمِ موضوعِ «{topicRow?.name}»{suppLoaded ? '' : ' — این فرم مقدارِ ثبت‌شده را ندارد؛ برای ویرایش، مراجعه را از پرونده باز کنید.'}</p>
+          <DynForm
+            fields={suppFields}
+            values={suppVals[suppDef.id] ?? {}}
+            errors={suppErr}
+            onChange={(v) => {
+              setSuppVals((s2) => ({ ...s2, [suppDef.id]: typeof v === 'function' ? v(s2[suppDef.id] ?? {}) : v }));
+              setSuppTouched((s2) => ({ ...s2, [suppDef.id]: true }));
+            }}
+            disabled={busy || !suppLoaded}
+            myRole={myRole}
+          />
+        </div>
+      )}
+      {/* پاسخِ فرمِ تکمیلیِ موضوعِ **قبلیِ** همین مراجعه — می‌ماند و خوانده می‌شود. */}
+      {(initial?.supplements ?? []).filter((x) => x.formId !== suppDef?.id && x.answers?.length).map((x) => (
+        <div key={x.formId} className="db-extra db-supp-old" data-supplement-old={x.formId}>
+          <h4>{x.formTitle ?? 'فرمِ تکمیلی'}</h4>
+          <dl className="db-supp-ans">
+            {x.answers.map((a) => (<div key={a.key}><dt>{a.label}</dt><dd>{a.text}</dd></div>))}
+          </dl>
+        </div>
+      ))}
 
       {/* ⚠️ فیلدهای دلخواهِ سوپرادمین. عمداً **انتهای فرم** و زیرِ یک عنوان:
           این‌ها به‌ازای هر شرکت فرق می‌کنند و قاطی‌کردنشان با فیلدهای همیشگی

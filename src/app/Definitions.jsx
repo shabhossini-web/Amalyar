@@ -198,12 +198,15 @@ const SECTIONS = [
     label: 'موضوعِ ویزیت',
     path: '/visit-topics',
     title: (r) => r.name,
-    sub: (r) => (r.visitCount ? `${r.visitCount} مراجعه` : ''),
+    sub: (r) => [r.visitCount ? `${r.visitCount} مراجعه` : '', r.formTitle ? `فرمِ تکمیلی: ${r.formTitle}` : ''].filter(Boolean).join(' · '),
     empty: 'هنوز موضوعی تعریف نشده — مثلِ «ویزیتِ اولیه»، «پست‌آپ»، «زیبایی»',
     hint: 'موضوع همان چیزی است که روزِ کاری به آن گره می‌خورد؛ بیمار در هر روز فقط موضوعِ همان روز را می‌بیند.',
     fields: [
       { key: 'name', label: 'عنوان *', required: true },
       { key: 'notes', label: 'توضیح' },
+      /* بستهٔ ۹: فرمِ زیرپرونده‌ای که با انتخابِ این موضوع داخلِ فرمِ مراجعه پر می‌شود.
+         گزینه‌ها را سرور فیلتر می‌کند (زیرپروندهٔ فعال و غیرِ پیگیری). */
+      { key: 'formId', label: 'فرمِ تکمیلی', optionsFrom: '/visit-topics/form-options', emptyLabel: '— بدونِ فرم —' },
     ],
   },
 ];
@@ -255,7 +258,7 @@ export default function Definitions() {
   const remove = async (row) => {
     try {
       const r = await api(`${section.path}/${row.id}`, { method: 'DELETE' });
-      setToast(r.deactivated ? 'به‌دلیلِ سابقهٔ استفاده، غیرفعال شد' : 'حذف شد');
+      setToast(r.deactivated ? (r.system ? 'موضوعِ سیستمی حذف نمی‌شود — غیرفعال شد' : 'به‌دلیلِ سابقهٔ استفاده، غیرفعال شد') : 'حذف شد');
       await load();
     } catch (e) { setToast(e.message); }
   };
@@ -807,7 +810,7 @@ function EditSheet({ section, row, onClose, onSaved, onError, quick = false }) {
                 <span>{f.label}</span>
                 {f.options || f.optionsFrom ? (
                   <select value={String(form[f.key] ?? '')} onChange={setField(f.key)} disabled={busy}>
-                    <option value={f.optionsFrom ? '0' : ''}>{f.optionsFrom ? '— عمومی (همه) —' : '— انتخاب کنید —'}</option>
+                    <option value={f.optionsFrom ? '0' : ''}>{f.optionsFrom ? (f.emptyLabel ?? '— عمومی (همه) —') : '— انتخاب کنید —'}</option>
                     {(f.options ?? dynOpts[f.key] ?? []).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
                   </select>
                 ) : f.textarea

@@ -146,6 +146,26 @@ export const ANTICOAG_LABELS: Record<string, string> = {
   continued: 'ادامه دارد (با نظرِ پزشک)',
 };
 
+/**
+ * **وضعیتِ ردیفِ فهرستِ انتظارِ عمل** (بستهٔ ۹) — مشتق، نه ستون: «منتظرِ برنامه»
+ * یعنی تصمیمِ جراحی هست و عملی نه؛ «بی‌تاریخ» یعنی عمل ساخته شده ولی `opDate` ندارد؛
+ * «رزروشده» یعنی تاریخ دارد و هنوز انجام نشده.
+ */
+export const WAITLIST_LABELS: Record<string, string> = {
+  awaiting: 'منتظرِ برنامه',
+  planned: 'بی‌تاریخ',
+  booked: 'رزروشده',
+  closed: 'بسته‌شده',
+};
+
+/** دلیلِ بستنِ تصمیمِ جراحیِ بی‌عمل (بستهٔ ۹). */
+export const DECISION_CLOSE_LABELS: Record<string, string> = {
+  declined: 'بیمار عمل نخواست',
+  elsewhere: 'جای دیگری عمل شد',
+  not_indicated: 'دیگر اندیکاسیون ندارد',
+  deceased: 'فوت',
+};
+
 /** سمتِ هر عمل (WHO: تأییدِ محل پیش از برش). */
 export const SIDE_LABELS: Record<string, string> = {
   right: 'راست',

@@ -6,6 +6,8 @@ import { FrontDeskService } from './frontdesk.service';
 import { FrontDeskController } from './frontdesk.controller';
 import { TheatreService } from './theatre.service';
 import { TheatreController } from './theatre.controller';
+import { WaitlistController } from './waitlist.controller';
+import { WaitlistService } from './waitlist.service';
 import { VitalsController } from './vitals.controller';
 import { VitalsService } from './vitals.service';
 import { TenantHospitalDirectoryService } from './hospital-directory.service';
@@ -82,6 +84,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
   controllers: [
     FrontDeskController,
     TheatreController,
+    WaitlistController,
     VitalsController,
     HospitalDutiesController,
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
@@ -96,6 +99,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     LiveService,
     FrontDeskService,
     TheatreService,
+    WaitlistService,
     VitalsService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,

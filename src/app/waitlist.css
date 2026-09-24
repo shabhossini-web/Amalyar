@@ -1,0 +1,108 @@
+/* فهرستِ انتظارِ عمل (بستهٔ ۹) — همان پوستهٔ دفترِ یادآوری‌ها، روی توکن‌ها. */
+.wl { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+.wl-bg {
+  position: fixed; inset: 0; z-index: -1;
+  background: radial-gradient(900px 520px at 50% -10%, rgba(var(--brand-rgb), .15), transparent 60%), var(--bg);
+}
+.wl-head { max-width: 900px; margin: 0 auto 14px; }
+.wl-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 12.5px; text-decoration: none; color: var(--text2); }
+.wl-back:hover { color: var(--brand-2); }
+.wl-head h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
+.wl-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
+.wl-err {
+  display: flex; align-items: center; gap: 7px; max-width: 900px; margin: 0 auto 12px; padding: 10px 13px;
+  border-radius: 12px; font-size: 12.5px; color: var(--red-text);
+  background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
+}
+.wl-empty {
+  max-width: 900px; margin: 0 auto; padding: 26px 16px; text-align: center; font-size: 13px; color: var(--text3);
+  border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
+}
+.wl-note { max-width: 900px; margin: 0 auto 10px; font-size: 11.5px; color: var(--text3); }
+
+.wl-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;
+  max-width: 900px; margin: 0 auto 12px;
+}
+.wl-stats > div {
+  display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .17);
+}
+.wl-stats b { font-size: 20px; font-weight: 900; color: var(--text1); }
+.wl-stats span { font-size: 11.5px; color: var(--text3); }
+@media (max-width: 520px) {
+  .wl-stats { grid-template-columns: repeat(2, 1fr); }
+  .wl-stats > div:last-child:nth-child(odd) { grid-column: 1 / -1; } /* کارتِ تنهای آخر عرضِ کامل */
+}
+
+.wl-bar { display: flex; flex-direction: column; gap: 8px; max-width: 900px; margin: 0 auto 12px; }
+.wl-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.wl-tabs button {
+  cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 15px; border-radius: 99px; color: var(--text2);
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13);
+}
+.wl-tabs button.on { color: var(--text1); background: rgba(var(--brand-soft-rgb), .22); border-color: rgba(var(--brand-soft-rgb), .55); }
+.wl-tabs button:focus-visible, .wl-act:focus-visible, .wl-reasons button:focus-visible { outline: 2px solid rgba(var(--brand-2-rgb), .7); outline-offset: 2px; }
+.wl-tabs i { font-style: normal; font-size: 10.5px; opacity: .75; }
+.wl-surgeons button { font-size: 12px; padding: 6px 12px; }
+
+.wl-list { display: grid; gap: 9px; max-width: 900px; margin: 0 auto; }
+.wl-row {
+  padding: 12px 14px; border-radius: 15px; min-width: 0;
+  background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .17);
+}
+.wl-row.st-awaiting { border-color: rgba(245, 158, 11, .4); }
+.wl-row-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.wl-row-head b { font-size: 14px; }
+.wl-row-head em { font-style: normal; font-size: 11px; color: var(--text3); }
+.wl-days { margin-inline-start: auto; font-size: 12px; font-weight: 800; color: var(--amber-text); }
+.wl-tag {
+  font-style: normal; font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 99px;
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.wl-tag.s-awaiting { color: var(--amber-text); border-color: rgba(245, 158, 11, .45); }
+.wl-tag.s-booked { color: var(--green-text); border-color: rgba(52, 211, 153, .4); }
+.wl-facts { margin: 8px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12.5px; line-height: 1.8; }
+.wl-facts > div { display: contents; }
+.wl-facts dt { color: var(--text3); white-space: nowrap; }
+.wl-facts dd { margin: 0; color: var(--text1); overflow-wrap: anywhere; }
+.wl-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.wl-act {
+  cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; padding: 8px 14px; border-radius: 11px;
+  color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .3);
+}
+.wl-act.primary { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; }
+.wl-act.ghost { color: var(--text2); background: none; }
+.wl-act:disabled { opacity: .5; cursor: default; }
+
+.wl-overlay {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 18px;
+  background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px);
+}
+.wl-dialog {
+  width: min(480px, 100%); max-height: 90vh; overflow: auto; padding: 18px; border-radius: 18px;
+  background: rgba(var(--surface-rgb), 1); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+}
+.wl-dialog-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.wl-dialog-head b { margin-inline-end: auto; font-size: 15px; }
+.wl-x {
+  display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
+  color: var(--text2); background: none; border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.wl-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.wl-reasons button {
+  cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; padding: 9px 14px; border-radius: 12px;
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.wl-reasons button.on { color: var(--text1); background: rgba(var(--brand-soft-rgb), .22); border-color: rgba(var(--brand-soft-rgb), .6); }
+.wl-dialog-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+.wl-toast {
+  position: fixed; inset-inline: 0; bottom: 18px; margin-inline: auto; width: fit-content; max-width: 90vw;
+  padding: 10px 18px; border-radius: 99px; font-size: 12.5px; color: var(--text1);
+  background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .4);
+  opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 70;
+}
+.wl-toast.on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .wl-toast { transition: none; } }

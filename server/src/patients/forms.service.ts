@@ -1153,27 +1153,31 @@ export class FormsService {
   }
 
   private async formUsage(row: { id: number; visitKind: string | null }, db: Prisma.TransactionClient = this.prisma) {
-    const [visits, links, submissions] = await Promise.all([
+    /* ⚠️ هر FKِ `Restrict` به `form_defs` باید این‌جا شمرده شود، وگرنه حذف/بازنشانی
+       به‌جای «غیرفعال شد» خطای خامِ DB می‌دهد (بستهٔ ۹: موضوعِ ویزیت + پاسخِ تکمیلی). */
+    const [visits, links, submissions, topics, supplements] = await Promise.all([
       row.visitKind ? db.visit.count({ where: { kind: row.visitKind } }) : Promise.resolve(0),
       db.intakeLink.count({ where: { formId: row.id } }),
       db.intakeSubmission.count({ where: { OR: [{ formId: row.id }, { extraFormIds: { has: row.id } }] } }),
+      db.visitTopic.count({ where: { formId: row.id } }),
+      db.visitSupplement.count({ where: { formId: row.id } }),
     ]);
-    return { visits, links, submissions, total: visits + links + submissions };
+    return { visits, links, submissions, topics, supplements, total: visits + links + submissions + topics + supplements };
   }
 
   async removeForm(id: number) {
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.formDef.findUnique({ where: { id } });
       if (!row) throw new NotFoundException('فرم پیدا نشد');
-      const { visits, links, submissions, total } = await this.formUsage(row, tx);
+      const { visits, links, submissions, topics, supplements, total } = await this.formUsage(row, tx);
       if (total > 0) {
         await tx.formDef.update({ where: { id }, data: { active: false } });
         /* `used` برای سازگاری با کلاینتِ فعلی می‌ماند؛ `visits`/`links` تازه‌اند
            تا پیام بتواند بگوید **چرا** حذف نشد. */
-        return { ok: true, deactivated: true, used: total, visits, links, submissions };
+        return { ok: true, deactivated: true, used: total, visits, links, submissions, topics, supplements };
       }
       await tx.formDef.delete({ where: { id } });
-      return { ok: true, deactivated: false, used: 0, visits: 0, links: 0, submissions: 0 };
+      return { ok: true, deactivated: false, used: 0, visits: 0, links: 0, submissions: 0, topics: 0, supplements: 0 };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 

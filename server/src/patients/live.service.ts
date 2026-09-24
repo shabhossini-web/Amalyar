@@ -231,7 +231,8 @@ export class LiveService {
     const work = workVisible ? await this.work.list(user, { scope: 'patient', patientId, limit: 20 }) : [];
 
     const billing = this.billing(visits);
-    const cycle = visits[0] ?? null;
+    /* عملِ بی‌تاریخِ در انتظار (بستهٔ ۹ب) با NULLS LAST تهِ فهرست می‌افتد؛ ولی همان «الان کجاییم» است (بازبینی). */
+    const cycle = visits.find((x: any) => x.kind === 'surgery' && !x.opDate && x.opStatus === 'pending') ?? visits[0] ?? null;
     const upcoming = appointmentsC
       .filter((a) => a.date >= today && ['held', 'confirmed', 'arrived'].includes(a.status))
       .sort((a, b) => a.date.getTime() - b.date.getTime() || (a.startMin ?? 0) - (b.startMin ?? 0));

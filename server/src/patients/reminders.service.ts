@@ -165,8 +165,8 @@ export class RemindersService {
          برنامه خالی می‌شود و مرحلهٔ پایان (`planned`) ردیف‌های در انتظار را لغو می‌کند. */
       const deceased = v.dischargeDisposition === 'death';
 
-      /* «ویزیتِ بعدی» */
-      if (v.nextVisitDate && !deceased) {
+      /* «ویزیتِ بعدی» — عملِ بی‌تاریخ (بستهٔ ۹ب) هنوز برنامهٔ پس از عمل ندارد؛ پیامکش با تاریخِ قطعی می‌آید (بازبینی). */
+      if (v.nextVisitDate && !deceased && !(v.kind === 'surgery' && !v.opDate)) {
         /* اگر همان روز نوبتِ فعال دارد (مسیرِ «از همان ثبت، پیشنهادِ نوبت»)،
            یادآوریِ نوبت خودش می‌رود و این یکی دوبله می‌شد — کاشته نمی‌شود. */
         const hasAppt = await this.prisma.appointment.findFirst({

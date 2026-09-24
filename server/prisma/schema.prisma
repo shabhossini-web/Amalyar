@@ -314,6 +314,17 @@ model VisitTopic {
   sort      Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
 
+  /// **کلیدِ پایدارِ موضوع‌های استاندارد** (بستهٔ ۹): `initial | preop | postop | treatment`.
+  /// خودکارسازی‌ها (موضوعِ پره‌آپ با تصمیمِ جراحی، ویزیتِ پست‌آپِ خودکار) به این تکیه
+  /// می‌کنند نه به نام — مدیر نام را عوض می‌کند و کلید می‌ماند. از API نوشته نمی‌شود.
+  system String? @unique
+
+  /// **فرمِ تکمیلیِ این موضوع** — یک فرمِ زیرپرونده که با انتخابِ همین موضوع داخلِ
+  /// فرمِ مراجعه پر می‌شود. Restrict (همان پیشینهٔ `IntakeLink.formId`): فرمِ در
+  /// استفاده غیرفعال می‌شود نه حذف — `formUsage` این ارجاع را می‌شمارد.
+  formId Int?     @map("form_id")
+  form   FormDef? @relation("TopicForm", fields: [formId], references: [id], onDelete: Restrict)
+
   visits Visit[]
 
   /// روزهای کاری‌ای که این موضوع رویشان مجاز است، و نوبت‌هایی که گرفته‌اند.
@@ -1548,6 +1559,14 @@ model Visit {
   /// (بستهٔ ۸). یک به یک؛ فقط برای مراجعهٔ نوعِ عمل در مطب. تنها نویسنده:
   /// `server/src/patients/op-details.ts`.
   opDetail VisitOpDetail?
+  /// **تاریخِ تقریبیِ عملِ بی‌تاریخ** (بستهٔ ۹) — عمداً جدا از `opDate`: هر مصرف‌کننده‌ای
+  /// «opDate دارد» را رزروِ قطعی می‌خواند (یادآوری، اتاقِ عمل، تقویم). فقط سابقه و فهرستِ انتظار.
+  plannedDate DateTime? @map("planned_date") @db.Date
+  /// بستنِ تصمیمِ جراحیِ بی‌عمل (بستهٔ ۹): کلیدهای `DECISION_CLOSE_LABELS`. هر دو با هم یا هیچ‌کدام (CHECK).
+  surgeryDecisionClosedAt    DateTime? @map("surgery_decision_closed_at")
+  surgeryDecisionCloseReason String?   @map("surgery_decision_close_reason")
+  /// پاسخِ فرم‌های تکمیلیِ موضوعِ ویزیت (بستهٔ ۹) — یک ردیف به‌ازای هر فرم.
+  supplements VisitSupplement[]
   /// سمت و سطحِ هر عمل (بستهٔ ۸) — کلید (مراجعه، نوعِ عمل)، نه رتبه؛ پس جابه‌جاییِ
   /// اصلی/سایرین سمت را گم نمی‌کند. تنها نویسنده: `visit-coding.ts`.
   procedureDetails VisitProcedureDetail[]
@@ -2277,6 +2296,9 @@ model FormDef {
   /// در `removeForm`. بدونِ این، حذفِ فرم لینک را بی‌صدا از کار می‌انداخت.
   intakeLinks       IntakeLink[]
   intakeSubmissions IntakeSubmission[]
+  /// موضوع‌هایی که این فرم را «فرمِ تکمیلی»ِ خود کرده‌اند، و پاسخ‌های آن در مراجعات (بستهٔ ۹).
+  topics            VisitTopic[]      @relation("TopicForm")
+  supplements       VisitSupplement[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
@@ -3118,4 +3140,26 @@ model VisitProcedureDetail {
   @@unique([visitId, procedureTypeId])
   @@index([procedureTypeId])
   @@map("visit_procedure_details")
+}
+
+/// **پاسخِ فرمِ تکمیلیِ موضوعِ ویزیت** (بستهٔ ۹ — بندِ «ه» گزارشِ HIS).
+///
+/// ⚠️ نه `Visit.extra` (فضای نامِ مشترک با فیلدهای فرمِ نوعِ مراجعه؛ فرمِ زیرپرونده
+/// می‌تواند کلیدِ رزروشده مثلِ `exam` داشته باشد و آن‌جا جدا/بلند می‌شد) و نه
+/// `IntakeSubmission.visitId` (یکتاست، و ردیفِ بازش در پرتالِ بیمار و صفِ پذیرش
+/// دیده می‌شد). فقط مقدارها؛ برچسب هنگامِ خواندن از خودِ فرم می‌آید.
+/// یک ردیف به‌ازای (مراجعه، فرم): عوض‌شدنِ بعدیِ موضوع پاسخِ قبلی را پاک نمی‌کند.
+model VisitSupplement {
+  id        Int      @id @default(autoincrement())
+  visitId   Int      @map("visit_id")
+  visit     Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  formId    Int      @map("form_id")
+  form      FormDef  @relation(fields: [formId], references: [id], onDelete: Restrict)
+  data      Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@unique([visitId, formId])
+  @@index([formId])
+  @@map("visit_supplements")
 }

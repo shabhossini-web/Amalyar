@@ -137,6 +137,12 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.TECH,
   },
   {
+    /* بستهٔ ۹ — فقط مطب (پلانِ `verticals.ts` + مهاجرتِ ردیفِ features برای هر نصب). */
+    key: 'waitlist', label: 'فهرستِ انتظارِ عمل', group: 'modules',
+    hint: 'بیمارانی که تصمیمِ جراحی گرفته‌اند و هنوز تاریخِ عمل ندارند — با فاصلهٔ انتظار.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
     key: 'dispatch', label: 'چینشِ نیروها', group: 'modules',
     defaultLevel: LEVEL.SUPERVISOR,
   },
@@ -250,6 +256,16 @@ export const PERMISSIONS: AccessDef[] = [
   {
     key: 'theatre.read', label: 'دیدنِ اتاقِ عمل', group: 'patients',
     hint: 'عمل‌های امروزِ اتاق و کارتِ حینِ عمل — بدونِ هیچ عددِ مالی.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'waitlist.read', label: 'دیدنِ فهرستِ انتظارِ عمل', group: 'patients',
+    hint: 'زیرِ سوپروایزر فقط بیمارانِ خودِ همان کاربر (جراح یا کارشناسِ همان مراجعه).',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    key: 'waitlist.manage', label: 'بستن/بازکردنِ تصمیمِ جراحی', group: 'patients',
+    hint: 'بیماری که عمل نمی‌خواهد یا جای دیگر عمل کرده از فهرست بیرون می‌رود — با دلیل و قابلِ برگشت.',
     defaultLevel: LEVEL.TECH,
   },
   {
