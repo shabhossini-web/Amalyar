@@ -235,11 +235,12 @@ export const RULES: Record<string, Rule> = {
   }),
   'visit.done': (_e, ref) => close(ref, 'confirm_surgery_done'),
   'visit.cancelled': (_e, ref) => close(ref, 'confirm_surgery_done', 'complete_report', 'confirm_usage'),
+  /* مطب (`payload.clinic`): گزارش همان شرحِ عمل است و کارِ پزشک — نه کارشناس (work-detectors). */
   'report.missing': (e, ref) => upsert({
     ...base(e, 'complete_report', ref),
-    title: 'گزارشِ عمل هنوز بارگذاری نشده',
-    ownerRole: 'technician',
-    ownerAccountId: e.payload?.techId ?? null,
+    title: e.payload?.clinic ? 'شرحِ عمل هنوز نوشته نشده' : 'گزارشِ عمل هنوز بارگذاری نشده',
+    ownerRole: e.payload?.clinic ? 'doctor' : 'technician',
+    ownerAccountId: (e.payload?.clinic ? e.payload?.doctorId : e.payload?.techId) ?? null,
     dueAt: inDays(1, e.at),
   }),
   'report.uploaded': (_e, ref) => close(ref, 'complete_report'),
