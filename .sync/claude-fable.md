@@ -1,10 +1,34 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/unpin-live-suites
+status: active
+branch: claude/superadmin-all
 since: 2026-09-25
-paths: []
-note: ۴۲ سوییتِ زنده حالا نشانی را از `E2E_API`/`E2E_UI` می‌خوانند و بینِ همهٔ شاردهای CI محلی پخش می‌شوند؛ لند شد. بسته‌های ۸+۹ (PR #98، draft) هنوز باید روی زیرفرم‌ها بازنویسی شوند.
+paths:
+  - server/src/common/own-scope.ts
+  - server/src/work/
+  - server/src/patients/tech.service.ts
+  - server/src/patients/tech.controller.ts
+  - server/src/patients/hospital-duties.service.ts
+  - server/src/patients/hospital-duties.controller.ts
+  - server/src/patients/transport.service.ts
+  - server/src/patients/transport.controller.ts
+  - server/src/patients/surgeon-portal.service.ts
+  - server/src/patients/surgeon-portal.controller.ts
+  - server/src/patients/frontdesk.service.ts
+  - server/src/patients/theatre.service.ts
+  - server/src/patients/dispatch.service.ts
+  - src/app/Today.jsx
+  - src/app/WorkRow.jsx
+  - src/app/WorkList.jsx
+  - src/app/WorkBell.jsx
+  - src/app/Tech.jsx
+  - src/app/Transport.jsx
+  - src/app/SurgeonPortal.jsx
+  - src/app/FrontDesk.jsx
+  - src/app/Theatre.jsx
+note: >-
+  سوپرادمین بی‌محدودیت: «امروز»، صفِ کار و همهٔ پرتال‌ها (کارشناس، میزِ پزشک، حمل‌ونقل، پذیرش، اتاقِ عمل)
+  برای او «مالِ همه» است و هر عملیاتِ صاحبِ پرتال را خودش انجام می‌دهد — بی‌عوض‌کردنِ پروفایل.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

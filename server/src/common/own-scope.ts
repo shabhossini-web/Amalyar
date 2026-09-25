@@ -17,6 +17,22 @@ import { LEVEL } from './levels';
  */
 export const isScoped = (user: any) => (user?.level ?? 0) < LEVEL.SUPERVISOR;
 
+/**
+ * **سوپرادمین بی‌محدودیت است** (خواستهٔ صریحِ مالک ۱۴۰۵/۰۷/۰۳): هر صفحه‌ای که
+ * «مالِ من» را نشان می‌دهد — «امروز» و صفِ کار، پنلِ کارشناسی، میزِ پزشک،
+ * حمل‌ونقل — برای او «مالِ همه» است، و هر عملیاتی که آن صفحه به صاحبش اجازه
+ * می‌دهد برای او هم باز است. سوپرادمین برای انجامِ هیچ کاری نباید پروفایل عوض
+ * کند یا از کسِ دیگری بخواهد وارد شود.
+ *
+ * ⚠️ این استثنای تازه نیست؛ همان قاعدهٔ گاردهاست (عبورِ بی‌قیدِ سطحِ ۶ در
+ * `FeatureGuard` / `PermissionGuard` / `FeaturesService.forUser`) که تا امروز
+ * فقط به «دیدنِ کاشی» رسیده بود، نه به «دامنهٔ داده». هر جا دامنه را به «خودِ
+ * کاربر» می‌بندی (`techId: user.id`، `ownerAccountId: user.id`، `staffId` …)
+ * اول همین را بپرس. رابط سطح را حساب نمی‌کند (قانونِ ۳): سرور در پاسخ می‌گوید
+ * دامنه «همه» است (مثلاً `team: true`) و رابط فقط همان را نشان می‌دهد.
+ */
+export const isUnrestricted = (user: any) => (user?.level ?? 0) >= LEVEL.SUPER_ADMIN;
+
 /** شرطِ «مراجعهٔ منتسب به این کاربر» — برای جدولِ `visit`. */
 export function ownVisitWhere(user: any): Record<string, any> {
   const own: Record<string, any>[] = [{ techId: user?.id ?? -1 }];
