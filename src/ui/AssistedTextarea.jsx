@@ -15,6 +15,9 @@ import './assisted-textarea.css';
  *
  * بافتار: نوعِ عمل و تشخیصِ فرمِ دربرگیرنده (`AiContext`) + `aiContext`ِ خودِ کادر (مثلاً
  * `{care: 'pre'}` برای متنِ مراقبتی که پیامک می‌شود) همراهِ متن به سرور می‌رود.
+ *
+ * زیرِ هر آیکون یک توضیحِ یک‌کلمه‌ای هست (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳، دورِ دوم: «فقط آیکون
+ * گیج‌کننده است») — `aria-hidden`، چون نامِ دسترس‌پذیرِ دکمه همان متنِ کامل است.
  */
 export default function AssistedTextarea({ value = '', onChange, disabled, readOnly, purpose = 'شرح', aiContext, ...props }) {
   const shared = useContext(AiContext);
@@ -49,13 +52,15 @@ export default function AssistedTextarea({ value = '', onChange, disabled, readO
   return <span className="assisted-text" style={tools ? { '--at-tools': count } : undefined}>
     <textarea {...props} value={value} onChange={onChange} disabled={disabled} readOnly={readOnly} />
     {tools && <span className="assisted-tools">
-      {status.stt && <VoiceInput compact disabled={busy} onErr={setError} onText={(text) => change([current.current, text].filter(Boolean).join('\n'))} />}
+      {status.stt && <VoiceInput compact caption="با صدا" disabled={busy} onErr={setError} onText={(text) => change([current.current, text].filter(Boolean).join('\n'))} />}
       {status.enabled && <>
         <button type="button" className="at-ic" aria-label="اصلاح و ساختاربندی" title="اصلاح و ساختاربندی" disabled={busy || short} onClick={() => draft('structure')}>
           <Sparkle width="15" height="15" aria-hidden="true" />
+          <span className="at-cap" aria-hidden="true">مرتب‌کن</span>
         </button>
         <button type="button" className="at-ic" aria-label="ادامه با AI" title="ادامه با AI" disabled={busy || short} onClick={() => draft('continue')}>
           <Pencil width="14" height="14" aria-hidden="true" />
+          <span className="at-cap" aria-hidden="true">ادامه</span>
         </button>
       </>}
     </span>}

@@ -1,19 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/surgery-subform-phases
 since: 2026-09-25
-paths:
-  - src/app/VisitForm.jsx
-  - src/app/VisitSubforms.jsx
-  - src/app/visit-subforms.css
-  - src/app/CareEditor.jsx
-  - src/ui/AssistedTextarea.jsx
-  - server/src/patients/subforms.ts
-  - server/src/patients/patients.service.ts
-  - server/src/ai/ai.service.ts
-  - server/prisma/schema.prisma
-note: فرمِ عمل — زیرفرم به‌ازای مرحله (قبل/حین/بعد)، علائمِ حیاتی از هاردکد به الصاق؛ مراقبت‌های قبل/بعد پاپ‌آپ؛ AI با نوعِ عمل و تشخیص.
+paths: []
+note: فرمِ عمل — زیرفرم به‌ازای مرحله، مراقبتِ پاپ‌آپی، دستیار با بافتار و توضیحِ زیرِ آیکون‌های دستیار لند شد. بسته‌های ۸+۹ (PR #98، draft) هنوز باید روی زیرفرم‌ها بازنویسی شوند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
@@ -352,6 +343,15 @@ ok('follow-up links distinct per visit/day and stable after completion');
 - ۱۴۰۵/۰۶/۲۵ · **W2.1 قراردادِ تازه ساخت، نه شکست:** مدل‌های `WorkItem`/`DomainEvent` (تهِ schema)، feature `work` + مجوزهای `work.*` (تهِ رجیستری)، `work: 2` در هر سه پلنِ حوزه، و یک فراخوانیِ `processDomainEvents` در `sweepTenant`ِ worker. جزئیات در `docs/plan/CONTRACTS.md` §۱–۲.
 
 ## اخیراً لند شد
+
+- ۱۴۰۵/۰۷/۰۳ · `claude/surgery-subform-phases` · **فرمِ عمل: زیرفرم به‌ازای مرحله** (`visit_subforms.phase`،
+  علائمِ حیاتی از کادرِ ثابتِ تب‌ها به الصاق)، **مراقبتِ قبل/بعدِ پاپ‌آپی** (`CareEditor.jsx`، مطب)،
+  **دستیار با بافتارِ نوعِ عمل و تشخیص** (`src/ui/ai-context.js`، `/ai/care-draft` قبل و بعد) و
+  **توضیحِ یک‌کلمه‌ای زیرِ آیکون‌های دستیار** (`AssistedTextarea`). قرارداد: هر بندِ `subforms` روی عمل
+  باید `phase` داشته باشد؛ `vitals` روی عمل هم.
+  ⚠️ کلیمِ `claude-opus` (`claude/doc-phase-and-review-fix`، از ۲۰۲۶-۰۹-۲۱) هنوز `active` است با اینکه
+  کامیتش (`92d74ce`) در `main` است؛ روی `VisitForm.jsx` و `server/prisma/` با این کار هم‌پوشانی داشت و
+  نگهبانِ کلیم را قرمز کرد — آن لِین باید `idle` کند (فایلِ دیگری را دست نزدم).
 
 - ۱۴۰۵/۰۷/۰۱ · PR #94 · `2d3c042` · **بستهٔ ۷ — چند تشخیص / چند عمل** (اصلی در
   ستون‌های قبلی، سایرین در `visit_other_*`، تنها نویسنده `visit-coding.ts`) + «+»ِ
