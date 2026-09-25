@@ -109,7 +109,7 @@ export default function VoiceInput({ onText, onErr, disabled, label = 'دیکت�
       {state === 'busy' ? <span className="vc-spin" /> : state === 'rec' ? <StopRec size={15} /> : <Mic size={15} />}
       {!compact && <span>{state === 'busy' ? 'در حالِ تبدیل…' : state === 'rec' ? 'پایانِ ضبط' : label}</span>}
       {compact && caption && (
-        <span className="at-cap" aria-hidden="true">{state === 'busy' ? 'تبدیل…' : state === 'rec' ? 'توقف' : caption}</span>
+        <span className="vc-cap" aria-hidden="true">{state === 'busy' ? 'تبدیل…' : state === 'rec' ? 'توقف' : caption}</span>
       )}
     </button>
   );
