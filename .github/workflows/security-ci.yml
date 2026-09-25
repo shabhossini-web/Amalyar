@@ -1796,6 +1796,11 @@ jobs:
           if (!techIdSites.length || fromUser.length !== techIdSites.length) {
             console.error('دامنهٔ دفترِ کار از توکن نمی‌آید: ' + techIdSites.join(' / ')); process.exit(1);
           }
+          // ②ب گشودنِ دامنه به «همهٔ کارشناس‌دارها» فقط برای سوپرادمین (isUnrestricted، قانونِ ۲۹)؛
+          //    پذیرشِ ناظر هم کارشناس را از ردیفِ برنامهٔ حضور (dutyId) می‌خوانَد، نه از ورودی.
+          if (/techId:\s*\{\s*not:\s*null\s*\}/.test(svc) && !/isUnrestricted\(user\)\s*\?\s*\{[^\n]*techId:\s*\{\s*not:\s*null\s*\}/.test(svc)) {
+            console.error('گشودنِ دامنهٔ دفترِ کار فقط برای سوپرادمین (isUnrestricted)'); process.exit(1);
+          }
           if (/Query\('techId'\)|dto\.techId|query\.techId/.test(ctl + svc)) {
             console.error('پنلِ کارشناسی نباید techIdِ ورودی بپذیرد'); process.exit(1);
           }

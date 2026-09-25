@@ -59,7 +59,12 @@ try {
   ok(item.owner_role === 'doctor' && item.state === 'open' && item.patient_id === pid, 'مسئول = پزشک، باز، به بیمار وصل');
   const pat = (await send(`/work?scope=patient&patientId=${pid}`, 'GET')).json;
   ok(pat.some((w) => w.idempotencyKey === key && w.patient?.id === pid), 'در صفِ بیمار با نامِ بیمار enrich شده');
-  ok(!((await send('/work?scope=inbox', 'GET')).json).some((w) => w.idempotencyKey === key) || login.user?.jobRole === 'doctor', 'کارِ نقشِ پزشک در صفِ نقشِ دیگر نمی‌آید');
+  /* سوپرادمین (قانونِ ۲۹): صفِ پیش‌فرضش صفِ تیم است — کارِ صفِ پزشک با برچسبِ مالک در آن می‌آید.
+     جداییِ صف‌ها برای سطحِ پایین‌تر در `superadmin-today.mjs` سنجیده می‌شود. */
+  const inboxRow = ((await send('/work?scope=inbox', 'GET')).json ?? []).find?.((w) => w.idempotencyKey === key);
+  const teamView = (await send('/work/counts', 'GET')).json?.team === true;
+  ok(teamView ? inboxRow?.ownerLabel === 'صفِ پزشک' : !inboxRow || login.user?.jobRole === 'doctor',
+    teamView ? 'سوپرادمین کارِ صفِ پزشک را در صفِ تیم با برچسبِ «صفِ پزشک» می‌بیند' : 'کارِ نقشِ پزشک در صفِ نقشِ دیگر نمی‌آید');
 
   console.log('\n۳) بسته‌شدن با رویداد و نبودِ بازگشایی');
   emit('order.reviewed');

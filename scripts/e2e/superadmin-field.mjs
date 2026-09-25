@@ -203,7 +203,9 @@ try {
   const errors = [];
   const watch = (page, who) => {
     page.on('pageerror', (e) => errors.push(`[${who}] ${e}`));
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${who} console] ${m.text()}`); });
+    /* نشانیِ پاسخِ ۴xx/۵xx هم ثبت می‌شود — «Failed to load resource» به‌تنهایی نمی‌گوید کدام درخواست. */
+    page.on('response', (r) => { if (r.status() >= 400) errors.push(`[${who} http ${r.status()}] ${r.request().method()} ${r.url().replace(/^https?:\/\/[^/]+/, '')}`); });
+    page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`[${who} console] ${m.text()}`); });
   };
   const ctx = await browser.newContext({ viewport: { width: 1200, height: 900 } });
   const page = await ctx.newPage();
