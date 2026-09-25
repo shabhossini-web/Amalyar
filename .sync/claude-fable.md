@@ -1,34 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/superadmin-all
-since: 2026-09-25
-paths:
-  - server/src/common/own-scope.ts
-  - server/src/work/
-  - server/src/patients/tech.service.ts
-  - server/src/patients/tech.controller.ts
-  - server/src/patients/hospital-duties.service.ts
-  - server/src/patients/hospital-duties.controller.ts
-  - server/src/patients/transport.service.ts
-  - server/src/patients/transport.controller.ts
-  - server/src/patients/surgeon-portal.service.ts
-  - server/src/patients/surgeon-portal.controller.ts
-  - server/src/patients/frontdesk.service.ts
-  - server/src/patients/theatre.service.ts
-  - server/src/patients/dispatch.service.ts
-  - src/app/Today.jsx
-  - src/app/WorkRow.jsx
-  - src/app/WorkList.jsx
-  - src/app/WorkBell.jsx
-  - src/app/Tech.jsx
-  - src/app/Transport.jsx
-  - src/app/SurgeonPortal.jsx
-  - src/app/FrontDesk.jsx
-  - src/app/Theatre.jsx
+since: 2026-09-26
+paths: []
 note: >-
-  سوپرادمین بی‌محدودیت: «امروز»، صفِ کار و همهٔ پرتال‌ها (کارشناس، میزِ پزشک، حمل‌ونقل، پذیرش، اتاقِ عمل)
-  برای او «مالِ همه» است و هر عملیاتِ صاحبِ پرتال را خودش انجام می‌دهد — بی‌عوض‌کردنِ پروفایل.
+  سوپرادمینِ بی‌محدودیت لند شد: «امروز» صفِ تیم با «مالِ کیست» و «واگذاری»؛ پنلِ کارشناس، حمل‌ونقل،
+  میزِ پزشک و اتاقِ عمل برای سوپرادمین «مالِ همه» (قانونِ ۲۹، isUnrestricted). بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
