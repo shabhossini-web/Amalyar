@@ -2,8 +2,8 @@
 import { chromium } from 'playwright-core';
 import { randomBytes } from 'node:crypto';
 
-const API = 'http://localhost:3101/api';
-const BASE = 'http://127.0.0.1:5199';
+const API = process.env.E2E_API ?? 'http://localhost:3101/api';
+const BASE = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
 

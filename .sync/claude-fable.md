@@ -1,10 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/local-ci-shards
+status: active
+branch: claude/unpin-live-suites
 since: 2026-09-25
-paths: []
-note: CI محلیِ هم‌زمان لند شد (build سه‌تا‌سه‌تا، live در سه شارد) — از حدودِ یک ساعت به ۲۵ دقیقه. بسته‌های ۸+۹ (PR #98، draft) هنوز باید روی زیرفرم‌ها بازنویسی شوند.
+paths:
+  - scripts/e2e/
+  - scripts/local-ci.mjs
+note: ۴۲ سوییتِ زنده آدرسِ API/UI را از `process.env.E2E_API`/`E2E_UI` می‌خوانند (نه `localhost:3101`/`127.0.0.1:5199` ثابت) تا CI محلی آن‌ها را بینِ همهٔ شاردها پخش کند. یک‌خطی در هر فایل؛ کوتاه‌مدت.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

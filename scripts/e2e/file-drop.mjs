@@ -13,7 +13,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { chromium } from 'playwright-core';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
-const BASE = 'http://127.0.0.1:5199';
+const BASE = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
 const TMP = '/tmp/claude-0/-home-user-malekteb/95ee6f0b-abd4-5243-b5cd-45d56a076bd0/scratchpad/fd';
 const PHONE = '09120000968';

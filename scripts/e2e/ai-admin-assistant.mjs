@@ -13,7 +13,7 @@ import http from 'node:http';
 import { chromium } from 'playwright-core';
 
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
-const BASE = 'http://127.0.0.1:5199';
+const BASE = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
 
 let pass = 0, fail = 0;

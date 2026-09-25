@@ -251,6 +251,13 @@ cd .. && VITE_API_BASE=http://127.0.0.1:3009/api npm run dev   # فرانت رو
 # e2e: playwright-core + /opt/pw-browsers/chromium (اثر انگشت: CDP WebAuthn.addVirtualAuthenticator)
 ```
 
+> ⚠️ **سوییتِ زندهٔ تازه نشانیِ API و UI را از env می‌خوانَد، نه ثابت:**
+> `const API = process.env.E2E_API ?? 'http://localhost:3101/api'` و
+> `const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199'`. CI محلیِ هم‌زمان هر
+> شارد را روی پورتِ خودش بالا می‌آورد؛ سوییتی که پورتِ پیش‌فرض را ثابت بنویسد به
+> شاردِ ۰ بسته می‌شود (با هشدار در `node scripts/local-ci.mjs --plan`) و تقسیم را
+> ناهموار می‌کند — تا ۱۴۰۵/۰۷/۰۳، ۴۲ سوییت همین‌طور بودند.
+
 > جزئیاتِ کامپوننت‌ها، الگوهای تست و چک‌لیستِ ماژولِ جدید: اسکیلِ `amalyar-standard`.
 
 ## اسکیل‌های پروژه (`.claude/skills/`)

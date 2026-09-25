@@ -8,7 +8,7 @@
  *  • باکسِ **هسته‌ایِ** ستاره‌دار که ستون نیست (`opReport`) هم درست سنجیده
  *    می‌شود — نه «همیشه خالی».
  */
-const API = 'http://localhost:3101/api';
+const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 let TOKEN = '';
 let pass = 0;
 const fails = [];

@@ -11,11 +11,13 @@
  *  ۲. **هم‌هاست‌بودنِ API و UI.** کوکیِ نشست `SameSite=Lax` است؛ اگر Vite با
  *     `127.0.0.1` بالا باشد و آزمون `localhost` صدا بزند، همهٔ سوییت‌های
  *     مرورگری به `/login` می‌افتند. رانر هر دو را روی یک هاست می‌بندد.
- *  ۳. **نشانی‌های هاردکد.** ۱۸ سوییت `localhost:3101` را برای API و
- *     `127.0.0.1:5199` را برای UI هاردکد کرده‌اند (نه `E2E_API`/`E2E_UI`). پس
- *     پیش‌فرضِ پورت‌ها همان دو عدد است، Vite همیشه روی همان پورت بالا می‌آید و
- *     بین دسته‌ها **نمی‌میرد**؛ فقط API می‌میرد و روی همان پورت برمی‌گردد تا
- *     `VITE_API_BASE` معتبر بماند.
+ *  ۳. **نشانی‌ها از env.** هر سوییت API و UI را از `E2E_API`/`E2E_UI` می‌خوانَد
+ *     و `localhost:3101`/`127.0.0.1:5199` فقط پیش‌فرضِ اجرای تنهاست
+ *     (`process.env.E2E_API ?? '…'`). تا ۱۴۰۵/۰۷/۰۳، ۴۲ سوییت این دو را ثابت
+ *     نوشته بودند و CI محلیِ هم‌زمان مجبور بود همه را در یک شارد بریزد.
+ *     `--api-port`/`--ui-port` پورتِ همین رانر را عوض می‌کنند (شاردهای موازی).
+ *     Vite بین دسته‌ها **نمی‌میرد**؛ فقط API می‌میرد و روی همان پورت برمی‌گردد
+ *     تا `VITE_API_BASE` معتبر بماند.
  *  ۴. **سوییتِ افتاده نباید بقیه را قرمز کند.** اگر سوییتی سرور را انداخت،
  *     پیش از سوییتِ بعدی دوباره بالا می‌آید و stderrِ سرور در `api-<n>.log`
  *     می‌ماند تا مقصر پیدا شود — نه یک `ECONNREFUSED` بی‌نام در سوییتِ بعدی.
@@ -63,8 +65,8 @@ const argv = process.argv.slice(2);
 const opt = (name, dflt) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : dflt; };
 const flag = (name) => argv.includes(name);
 const BATCH = Number(opt('--batch', 6));            // زیرِ سقفِ ۸ ورود، با حاشیه
-const API_PORT = Number(opt('--api-port', 3101));   // ۱۸ سوییت `localhost:3101` را هاردکد کرده‌اند
-const UI_PORT = Number(opt('--ui-port', 5199));     // و `127.0.0.1:5199` را
+const API_PORT = Number(opt('--api-port', 3101));   // همان پیش‌فرضِ `E2E_API`ِ سوییت‌ها
+const UI_PORT = Number(opt('--ui-port', 5199));     // و `E2E_UI`
 const HOST = '127.0.0.1';                           // نه localhost — قاعدهٔ کوکی
 const LOG_DIR = resolve(root, opt('--log-dir', '.e2e-logs'));
 const TIMEOUT_MS = Number(opt('--timeout', 600)) * 1000;

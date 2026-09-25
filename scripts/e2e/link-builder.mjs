@@ -8,8 +8,8 @@
 import { chromium } from 'playwright-core';
 import { browserLogin } from './lib/browser-login.mjs';
 
-const UI = 'http://127.0.0.1:5199';
-const API = 'http://localhost:3101/api';
+const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
+const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const EXE = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 
 let pass = 0;
