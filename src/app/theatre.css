@@ -208,7 +208,7 @@
 /* پاپ‌آپِ ترخیص */
 .th-overlay {
   position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 18px;
-  background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px);
+  background: rgba(0, 0, 0, .55); backdrop-filter: blur(3px); /* تیره در هر دو تم */
 }
 .th-dialog {
   width: min(560px, 100%); max-height: 90vh; overflow: auto; padding: 18px; border-radius: 18px;

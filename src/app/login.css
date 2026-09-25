@@ -55,13 +55,14 @@
 .lg-field > span { font-size: 12px; font-weight: 700; color: var(--text2); padding-inline-start: 2px; }
 .lg-field input {
   width: 100%; font-family: inherit; font-size: 15px; color: var(--text1);
-  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(var(--veil-rgb), 0.12);
+  /* توکن: پروفایل همین فیلد را در تمِ روشن هم دارد و سیاهِ خام آن‌جا خاکستری می‌شد. */
+  background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), 0.12);
   border-radius: 13px; padding: 12px 14px; transition: border-color .2s, box-shadow .2s, background .2s;
 }
 .lg-field input::placeholder { color: var(--text3); }
 .lg-field input:focus {
   outline: none; border-color: rgba(var(--brand-2-rgb), 0.7);
-  background: rgba(0, 0, 0, 0.32); box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.18);
+  background: var(--field-bg-focus); box-shadow: 0 0 0 3px rgba(var(--brand-rgb), 0.18);
 }
 
 .lg-btn {
@@ -104,7 +105,7 @@
   width: 44px; height: 56px; border-radius: 14px;
   display: grid; place-items: center; position: relative;
   font-family: inherit; font-size: 24px; font-weight: 800; color: var(--text1);
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(var(--veil-rgb), 0.13);
+  background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), 0.13);
   transition: border-color .2s, box-shadow .2s, background .2s;
 }
 .otp-box.filled { border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.12); }
@@ -133,7 +134,7 @@
 
 /* selfie */
 .selfie { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.selfie-frame { width: 150px; height: 150px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,.35); border: 2px solid rgba(var(--brand-2-rgb),.5); box-shadow: inset 0 0 0 1px rgba(var(--veil-rgb), .08), 0 8px 24px rgba(var(--brand-rgb),.3); display: grid; place-items: center; }
+.selfie-frame { width: 150px; height: 150px; border-radius: 50%; overflow: hidden; background: rgba(0,0,0,.35); /* تیره در هر دو تم */ border: 2px solid rgba(var(--brand-2-rgb),.5); box-shadow: inset 0 0 0 1px rgba(var(--veil-rgb), .08), 0 8px 24px rgba(var(--brand-rgb),.3); display: grid; place-items: center; }
 .selfie-frame img, .selfie-video { width: 100%; height: 100%; object-fit: cover; }
 .selfie-video { transform: scaleX(-1); }
 .selfie-start { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: none; color: var(--brand-2); font-family: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 10px; }
@@ -164,7 +165,7 @@
 .lg-remember input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .lg-check {
   width: 19px; height: 19px; border-radius: 6px; flex: 0 0 auto; position: relative;
-  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(var(--veil-rgb), 0.2); transition: background .18s, border-color .18s;
+  background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), 0.2); transition: background .18s, border-color .18s;
 }
 .lg-check::after {
   content: ''; position: absolute; inset: 0; margin: auto; width: 10px; height: 6px;

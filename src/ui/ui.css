@@ -77,14 +77,15 @@
   background: rgba(251, 191, 36, .22);
   color: #fcd34d;
 }
-.ui-tabs button.on .ui-tab-badge { background: rgba(0, 0, 0, .22); color: #fff; }
+.ui-tabs button.on .ui-tab-badge { background: rgba(0, 0, 0, .22); color: #fff; } /* تیره در هر دو تم */
 
 /* ── گونهٔ «قاب‌دار» — کنترلِ بخش‌بندی‌شده (ورود/ثبت‌نام) ── */
 .ui-tabs-inset {
   gap: 6px;
   padding: 5px;
   border-radius: 14px;
-  background: rgba(0, 0, 0, .25);
+  /* توکن، نه `rgba(0,0,0,.25)`ِ خام: در تمِ روشن همان سیاه خاکستریِ کدر می‌شد (index.css). */
+  background: var(--well-bg);
   border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ui-tabs-inset button {
@@ -102,6 +103,13 @@
   overflow-x: auto;
   padding-bottom: 3px;
   scrollbar-width: thin;
+  /* ⚠️ لبهٔ ادامه‌دار محو می‌شود: بی‌آن، زبانهٔ آخر وسطِ کلمه بریده می‌شد و شبیهِ
+     خرابی بود نه «ادامه دارد» (فرم‌ساز، بازبینیِ ۱۴۰۵/۰۷/۰۳). اپ RTL است، پس
+     ادامه سمتِ چپ است؛ `padding-inline-end` جا می‌دهد تا زبانهٔ آخر پس از
+     اسکرول کامل از زیرِ محوشدگی بیرون بیاید. */
+  padding-inline-end: 28px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 28px);
+  mask-image: linear-gradient(to right, transparent 0, #000 28px);
 }
 .ui-tabs-scroll button { flex: 0 0 auto; padding: 10px 16px; font-size: 13px; }
 

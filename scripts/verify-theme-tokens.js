@@ -40,7 +40,7 @@ for (const f of css) {
    ندیدش — ولی چون رنگِ **ارثیِ** ریشهٔ پنج صفحه بود (`.cal`, `.acc`, `.df`,
    `.inv`, `.pf`), در تمِ روشن نامِ بیمار سفید روی سفید می‌شد و کلِ فهرست
    خالی به‌نظر می‌رسید. تقویمِ `JDate` هم قبلاً همین را خورده بود. */
-const GREY = /#(f2f0fc|f4f1ff|e5e0ff|e6ddff|cfc9e8|b8b3d6|b7b0d4|a9a1d8|9aa2c0|8f88b5|8f88af|8982aa|837ca5|817aa2|7d77a3|6f679a|6f688d|6b7280|c7c2df|7d76a0|9a93bb|c9c2e4)\b/i;
+const GREY = /#(f2f0fc|f4f1ff|e5e0ff|e6ddff|cfc9e8|b8b3d6|b7b0d4|a9a1d8|9aa2c0|8f88b5|8f88af|8982aa|837ca5|817aa2|7d77a3|8a84b0|5f5985|6f679a|6f688d|6b7280|c7c2df|7d76a0|9a93bb|c9c2e4)\b/i;
 /* ⚠️ این سه فقط در جایگاهِ **متن** ممنوع‌اند، نه در جایگاهِ پُرکننده: کهربای
    `#fbbf24` به‌عنوانِ زمینهٔ چیپ در هر دو تم درست است (مرکّبش `--ink-bright`
    می‌شود). پس الگو به `color:` مقید است، وگرنه نگهبان پُرکننده‌های سالم را
@@ -66,7 +66,9 @@ const block = (sel) => {
   return idx.slice(i, idx.indexOf('\n}', i));
 };
 const MUST = ['--bg', '--bg2', '--text1', '--text2', '--text3', '--veil-rgb', '--sheen-rgb', '--shadow-card',
-  '--cyan', '--green-text', '--amber-text', '--brand-text', '--red-text'];
+  '--cyan', '--green-text', '--amber-text', '--brand-text', '--red-text',
+  /* سطح‌های تم‌دار (⑥ پایین) — اگر یک بلوک جا بیندازدشان، آن تم مقدارِ تمِ دیگر را می‌گیرد. */
+  '--well-bg', '--field-bg', '--field-bg-focus', '--row-bg', '--ghost-bg', '--ghost-bg-hover', '--ghost-shadow', '--ghost-shadow-active'];
 for (const sel of [':root {', ':root[data-theme="light"] {', '.theme-dark {']) {
   const b = block(sel);
   if (!b) { bad.push(`src/index.css — بلوکِ ${sel} پیدا نشد`); continue; }
@@ -102,6 +104,26 @@ for (const f of css) {
   strip(fs.readFileSync(f, 'utf8')).split('\n').forEach((line, i) => {
     for (const m of line.matchAll(/var\(\s*(--[\w-]+)/g)) {
       if (!defined.has(m[1])) bad.push(`${f}:${i + 1} — ${m[1]} هیچ‌جا تعریف نشده (fallbackِ خام در هر دو تم برنده می‌شود)`);
+    }
+  });
+}
+
+/* ⑥ پُرِ سیاهِ خام (`background: rgba(0, 0, 0, α)`).
+      ⚠️ بازبینیِ شیشه (۱۴۰۵/۰۷/۰۳): فیلدِ پروفایل، قابِ تب‌ها، انتخابگرِ سطحِ
+      کاربران و گودهای ترابری/کارشناس با سیاهِ ۲۲–۳۵٪ ساخته شده بودند. ① سفیدِ خام
+      را می‌گرفت ولی سیاه را نه، چون سیاه برای **سایه و پرده** در هر دو تم درست
+      است. نتیجه: در تمِ روشن همین سیاه خاکستریِ کدر شد و فیلدِ خالی شبیهِ فیلدِ
+      غیرفعال دیده می‌شد. حالا پُرِ سطح از `--well-bg` / `--field-bg` / `--row-bg`
+      می‌آید؛ جایی که عمداً در هر دو تم تیره است (پردهٔ پشتِ مودال، نشانِ روی قرصِ
+      رنگی، قابِ دوربین) کنارِ همان خط نوشته می‌شود «تیره در هر دو تم». سایه
+      (`box-shadow`) و `index.css` بیرون از این قاعده‌اند. */
+const DARK_OK = /تیره در هر دو تم/;
+for (const f of css) {
+  if (f === 'src/index.css') continue;
+  const raw = fs.readFileSync(f, 'utf8').split('\n');
+  strip(raw.join('\n')).split('\n').forEach((line, i) => {
+    if (/background(-color)?\s*:[^;]*rgba\(\s*0\s*,\s*0\s*,\s*0\s*,/.test(line) && !DARK_OK.test(raw[i])) {
+      bad.push(`${f}:${i + 1} — پُرِ سیاهِ خام؛ var(--well-bg|--field-bg|--row-bg) بنویسید، یا اگر عمداً در هر دو تم تیره است کنارش «تیره در هر دو تم»`);
     }
   });
 }
