@@ -131,3 +131,5 @@ visit-docs-ui
 postop-continuity
 visit-subforms
 visit-subforms-ui
+ai-care-context
+surgery-subform-phases-ui

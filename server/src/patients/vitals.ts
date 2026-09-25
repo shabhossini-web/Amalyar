@@ -91,6 +91,25 @@ export function vitalsInput(raw: any): VitalsRow | null {
   return { ...out, phase, ...(takenAt ? { takenAt } : {}), note: note || null };
 }
 
+/** در فرمِ عمل هر اندازه مالِ یک مرحله است — کارتِ هر مرحله فقط اندازه‌های خودش را نشان می‌دهد. */
+export const VITALS_PHASE_REQUIRED = 'مرحلهٔ اندازه‌گیری را مشخص کنید — قبل، حین یا بعد از عمل';
+
+/**
+ * `vitals`ِ بدنهٔ ذخیرهٔ مراجعه — یک نوبت یا فهرستی تا سه نوبت (فرمِ عمل: یکی به‌ازای هر
+ * مرحلهٔ الصاق‌شده؛ ویرایش: اندازه‌های تایپ‌شده ولی «ثبت»‌نخورده). ردیفِ خالی دور ریخته می‌شود.
+ *
+ * ⚠️ در عمل، اندازهٔ بی‌مرحله رد می‌شود: کارتِ علائمِ حیاتی در هر تب فقط اندازه‌های همان
+ * مرحله را نشان می‌دهد، پس اندازهٔ بی‌مرحله در هیچ تبی دیده نمی‌شد.
+ */
+export function vitalsRowsFor(raw: unknown, kind: string | null | undefined): VitalsRow[] {
+  const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  if (list.length > 3) throw new BadRequestException('علائمِ حیاتیِ این درخواست بیش از اندازه است');
+  if (list.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) throw new BadRequestException('علائمِ حیاتی نامعتبر است');
+  const rows = list.map((x) => vitalsInput(x)).filter((x): x is VitalsRow => !!x);
+  if (kind === 'surgery' && rows.some((r) => !r.phase)) throw new BadRequestException(VITALS_PHASE_REQUIRED);
+  return rows;
+}
+
 /**
  * ردیفِ خروجی — BMI و برچسبِ مرحله **مشتق**‌اند (قانونِ ۱۵)، نه ستون.
  * BMI فقط وقتی هر دو اندازه در **همان** نوبت ثبت شده باشند؛ ترکیبِ وزنِ

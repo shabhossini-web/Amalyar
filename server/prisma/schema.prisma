@@ -1612,6 +1612,9 @@ model VisitSubform {
   visit       Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
   visitId     Int      @map("visit_id")
   key         String
+  /// مرحلهٔ فرمِ عمل: pre | intra | post — خالی برای مراجعهٔ غیرجراحی (همان واژگانِ مدارک).
+  /// یک زیرفرم در یک عمل می‌تواند در چند مرحله باشد (علائمِ حیاتیِ قبل و بعد از عمل).
+  phase       String   @default("")
   form        FormDef? @relation(fields: [formId], references: [id], onDelete: Restrict)
   formId      Int?     @map("form_id")
   data        Json     @default("{}")
@@ -1619,7 +1622,7 @@ model VisitSubform {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at")
 
-  @@unique([visitId, key])
+  @@unique([visitId, key, phase])
   @@index([formId])
   @@index([key])
   @@map("visit_subforms")

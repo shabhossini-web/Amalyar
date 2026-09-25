@@ -471,7 +471,8 @@ export class FormsService {
    * داخلی‌ها (علائمِ حیاتی، درخواستِ پاراکلینیک) + هر فرمِ `scope=subform`. خاموش‌ها هم
    * برمی‌گردند (`active: false`) چون مراجعه‌ای که از قبل پاسخشان را دارد باید بتواند
    * نشانش بدهد؛ پنجره فقط روشن‌ها را پیشنهاد می‌کند. `nonSurgery` یعنی فرمِ عمل آن را
-   * در تب‌هایش دارد و الصاقِ جدا ندارد (`builtinAllowed`).
+   * در تب‌هایش دارد و الصاقِ جدا ندارد (`builtinAllowed`) — امروز فقط «درخواست»؛ علائمِ حیاتی
+   * در عمل به‌ازای مرحله الصاق می‌شود.
    */
   async subformCatalog() {
     await this.ensureSeeded();
@@ -483,7 +484,7 @@ export class FormsService {
       .filter((k) => k !== 'vitals' || vertical === 'clinic')
       .map((k) => ({
         key: k, title: BUILTIN_SUBFORMS[k].title, short: BUILTIN_SUBFORMS[k].short, hint: BUILTIN_SUBFORMS[k].hint,
-        group: 'common', builtin: true, nonSurgery: true, active: true, color: null, fields: [],
+        group: 'common', builtin: true, nonSurgery: k === 'orders', active: true, color: null, fields: [],
       }));
     return {
       groups: SUBFORM_GROUPS,

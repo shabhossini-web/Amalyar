@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { toEnDigits } from '../common/identity';
 import { fieldRoles, jobRoleLabel } from '../common/job-roles';
 import { LEVEL } from '../common/levels';
+import { DOCUMENT_PHASES } from './document-categories';
 
 /**
  * **زیرفرم‌های مراجعه** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — هستهٔ خالص، بی‌DI.
@@ -17,8 +18,11 @@ import { LEVEL } from '../common/levels';
  *   سفارش دارد بی‌ردیف هم الصاق‌شده دیده می‌شود — دادهٔ پیش از این بسته گم نمی‌شود.
  * - **فرم‌ساز** (`FormDef.scope = 'subform'`): پاسخ‌ها در `visit_subforms.data`.
  *
- * ⚠️ فرمِ عمل علائمِ حیاتی و درخواست‌ها را از قبل در تب‌های قبل/حین/بعد دارد؛ پس
- * زیرفرمِ داخلی فقط روی مراجعهٔ **غیرجراحی** الصاق می‌شود (`builtinAllowed`).
+ * ⚠️ **مرحله در فرمِ عمل** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳، دور دوم): «در عمل، فرمی که الصاق
+ * می‌شود باید معلوم باشد مالِ قبل، حین یا بعد از عمل است.» پس هر بند در عمل مرحلهٔ خودش را
+ * دارد (`phase`، همان واژگانِ مدارک) و یک زیرفرم در چند مرحله الصاق می‌شود — علائمِ حیاتیِ
+ * قبل و بعد از عمل که تا دیروز دو کادرِ ثابت در تب‌ها بودند. مراجعهٔ غیرجراحی مرحله ندارد.
+ * درخواست‌ها هنوز در تبِ «قبل از عمل»ِ فرمِ عمل‌اند، پس `orders` فقط غیرجراحی است.
  */
 
 export const BUILTIN_SUBFORMS = {
@@ -65,11 +69,36 @@ export function shortTitle(title: string): string {
   return t || String(title ?? '');
 }
 
-/** زیرفرمِ داخلی روی این نوع مراجعه الصاق می‌شود؟ (فرمِ عمل آن‌ها را در تب‌ها دارد.) */
+/** زیرفرمِ داخلی روی این نوع مراجعه الصاق می‌شود؟ درخواست‌ها در تبِ «قبل از عمل»ِ فرمِ عمل‌اند. */
 export function builtinAllowed(key: BuiltinSubformKey, kind: string, vertical: string): boolean {
-  if (kind === 'surgery') return false;
-  return key !== 'vitals' || vertical === 'clinic';
+  if (key === 'orders') return kind !== 'surgery';
+  return vertical === 'clinic';
 }
+
+/** مرحله‌های فرمِ عمل — همان واژگانِ مدارک و علائمِ حیاتی، نه فهرستِ دوم. */
+export const SUBFORM_PHASES = DOCUMENT_PHASES;
+
+/**
+ * مرحلهٔ یک بند: در **عمل** یکی از سه مرحله و اجباری؛ در غیرجراحی خالی.
+ *
+ * ⚠️ پیش‌فرضِ بی‌صدا («قبل از عمل») عمداً نیست: بندی که مرحله ندارد از کلاینتِ کهنه آمده و
+ * نشاندنش در مرحلهٔ اشتباه یعنی پاسخی که کسی در تبِ درست پیدایش نمی‌کند.
+ */
+export function subformPhase(raw: unknown, kind: string): string {
+  const p = raw === undefined || raw === null ? '' : typeof raw === 'string' ? raw.trim() : null;
+  if (p === null) throw new BadRequestException('مرحلهٔ زیرفرم نامعتبر است');
+  if (kind === 'surgery') {
+    if (!(SUBFORM_PHASES as readonly string[]).includes(p)) {
+      throw new BadRequestException('در فرمِ عمل، مرحلهٔ زیرفرم را مشخص کنید — قبل، حین یا بعد از عمل');
+    }
+    return p;
+  }
+  if (p) throw new BadRequestException('مرحلهٔ زیرفرم فقط در فرمِ عمل معنا دارد');
+  return '';
+}
+
+/** شناسهٔ یک الصاق در یک مراجعه — کلید + مرحله (همان یکتاییِ جدول). */
+export const subformSlot = (key: string, phase: string) => `${key}@${phase}`;
 
 /**
  * آیا یک مقدار «خالی» است؟ — همان معنای `validateFields`، با یک تفاوتِ عمدی: `false`
@@ -119,11 +148,13 @@ export function subformDerived(data: unknown): { bmi?: number } {
 }
 
 /** یک بندِ ورودی — همان شکلی که کلاینت در `subforms` می‌فرستد. */
-export type SubformInput = { key?: unknown; data?: unknown; removed?: unknown };
+export type SubformInput = { key?: unknown; phase?: unknown; data?: unknown; removed?: unknown };
 
 /** بندِ سنجیده‌شده، آمادهٔ نوشتن. */
 export type SubformPlanItem = {
   key: string;
+  /** مرحلهٔ فرمِ عمل (`pre`/`intra`/`post`)؛ خالی در غیرجراحی. */
+  phase: string;
   title: string;
   builtin: boolean;
   formId: number | null;
@@ -165,15 +196,17 @@ export async function planSubforms(
   for (const item of raw as SubformInput[]) {
     const key = typeof item?.key === 'string' ? item.key.trim() : '';
     if (!key || key.length > 80) throw new BadRequestException('کلیدِ زیرفرم نامعتبر است');
-    if (seen.has(key)) throw new BadRequestException('یک زیرفرم دو بار در یک درخواست آمده است');
-    seen.add(key);
+    const phase = subformPhase(item?.phase, ctx.kind);
+    const slot = subformSlot(key, phase);
+    if (seen.has(slot)) throw new BadRequestException('یک زیرفرم دو بار در یک درخواست آمده است');
+    seen.add(slot);
     const removed = item.removed === true;
     if (isBuiltinSubform(key)) {
       const b = BUILTIN_SUBFORMS[key];
       if (!removed && !builtinAllowed(key, ctx.kind, ctx.vertical)) {
         throw new BadRequestException(`«${b.title}» روی این نوعِ مراجعه الصاق نمی‌شود`);
       }
-      out.push({ key, title: b.title, builtin: true, formId: null, inactive: false, removed, fields: [] });
+      out.push({ key, phase, title: b.title, builtin: true, formId: null, inactive: false, removed, fields: [] });
       continue;
     }
     const def = await ctx.defOf(key);
@@ -197,7 +230,7 @@ export async function planSubforms(
       data = ctx.normalize(def.fields, picked);
     }
     out.push({
-      key, title: def.title, builtin: false, formId: def.id, inactive: !def.active, removed, data,
+      key, phase, title: def.title, builtin: false, formId: def.id, inactive: !def.active, removed, data,
       fields: def.fields.map((f) => ({ key: f.key, label: f.label, roles: f.roles, role: f.role ?? null })),
     });
   }
@@ -239,12 +272,14 @@ export async function writeSubforms(
 ) {
   if (!plan?.length) return;
   const rows: any[] = await tx.visitSubform.findMany({ where: { visitId: visit.id } });
-  const byKey = new Map(rows.map((r) => [r.key, r]));
+  const bySlot = new Map(rows.map((r) => [subformSlot(r.key, r.phase ?? ''), r]));
   for (const item of plan) {
-    const row = byKey.get(item.key);
+    const row = bySlot.get(subformSlot(item.key, item.phase));
     if (item.removed) {
       if (item.builtin) {
-        if (item.key === 'vitals' && await tx.vitalSign.count({ where: { visitId: visit.id } })) {
+        /* عمل: فقط اندازه‌گیری‌های **همان مرحله** برداشتن را می‌بندند؛ غیرجراحی: همه. */
+        const inPhase = item.phase ? { phase: item.phase } : {};
+        if (item.key === 'vitals' && await tx.vitalSign.count({ where: { visitId: visit.id, ...inPhase } })) {
           throw new BadRequestException('علائمِ حیاتیِ ثبت‌شده دارد و برداشته نمی‌شود — اول اندازه‌گیری‌ها را حذف کنید');
         }
         if (item.key === 'orders') {
@@ -271,7 +306,7 @@ export async function writeSubforms(
     }
     await tx.visitSubform.create({
       data: {
-        visitId: visit.id, key: item.key, formId: item.formId, data: (item.data ?? {}) as any,
+        visitId: visit.id, key: item.key, phase: item.phase, formId: item.formId, data: (item.data ?? {}) as any,
         createdById: user?.id ?? null,
       },
     });
@@ -279,39 +314,83 @@ export async function writeSubforms(
 }
 
 /**
- * نمای زیرفرم‌های یک مراجعه — فقط در نمای **کامل** (`subforms` و `_count` خوانده شده).
+ * نمای زیرفرم‌های یک مراجعه — فقط در نمای **کامل** (`subforms`، `_count` و مرحلهٔ
+ * اندازه‌گیری‌ها خوانده شده).
  *
- * ترتیب: داخلی‌ها اول (علائم، درخواست)، بعد فرم‌ساز به ترتیبِ الصاق — همان ترتیبی که
- * مالک در طرحِ مصوب دید. داخلیِ بی‌ردیف ولی داده‌دار هم «الصاق‌شده» است (`implicit`).
+ * ترتیب: به‌ازای هر مرحله (غیرجراحی: یکی)، داخلی‌ها اول (علائم، درخواست)، بعد فرم‌ساز به
+ * ترتیبِ الصاق — همان ترتیبی که مالک در طرحِ مصوب دید. داخلیِ بی‌ردیف ولی داده‌دار هم
+ * «الصاق‌شده» است (`implicit`): عملی که پیش از این بسته علائمِ قبل/بعد از عمل داشت، کارتش را
+ * در همان تب می‌بیند.
  */
 export function subformsOf(v: any): any[] | undefined {
   if (!Array.isArray(v?.subforms)) return undefined;
   const c = v._count ?? {};
-  const counts: Record<BuiltinSubformKey, number> = {
-    vitals: c.vitals ?? 0,
-    orders: (c.labOrders ?? 0) + (c.imagingOrders ?? 0) + (c.consultOrders ?? 0) + (c.referralOrders ?? 0),
+  const surgery = v.kind === 'surgery';
+  const phases: string[] = surgery ? [...SUBFORM_PHASES] : [''];
+  const vitalRows: { phase: string | null }[] = Array.isArray(v.vitals) ? v.vitals : [];
+  const countOf = (key: BuiltinSubformKey, phase: string): number => {
+    if (key === 'orders') {
+      return (c.labOrders ?? 0) + (c.imagingOrders ?? 0) + (c.consultOrders ?? 0) + (c.referralOrders ?? 0);
+    }
+    /* غیرجراحی همهٔ اندازه‌ها را یک‌جا دارد؛ عمل هر مرحله را جدا. */
+    return phase ? vitalRows.filter((r) => (r.phase ?? '') === phase).length : (c.vitals ?? vitalRows.length);
   };
   const rows = [...v.subforms].sort((a: any, b: any) => +new Date(a.createdAt) - +new Date(b.createdAt));
   const out: any[] = [];
-  for (const key of BUILTIN_SUBFORM_KEYS) {
-    const row = rows.find((r: any) => r.key === key);
-    /* فرمِ عمل این دو را در تب‌ها دارد — الصاقِ جدا نشان داده نمی‌شود. */
-    if (v.kind === 'surgery') continue;
-    if (!row && !counts[key]) continue;
-    out.push({
-      key, builtin: true, formId: null, implicit: !row,
-      title: BUILTIN_SUBFORMS[key].title, hasData: counts[key] > 0, count: counts[key],
-      data: null, derived: {}, attachedAt: row?.createdAt ?? null, updatedAt: row?.updatedAt ?? null,
-    });
-  }
-  for (const row of rows) {
-    if (isBuiltinSubform(row.key)) continue;
-    out.push({
-      key: row.key, builtin: false, formId: row.formId, implicit: false,
-      title: row.form?.title ?? row.key,
-      hasData: subformDataHasValue(row.data), data: row.data ?? {}, derived: subformDerived(row.data),
-      attachedAt: row.createdAt, updatedAt: row.updatedAt,
-    });
+  for (const phase of phases) {
+    const here = rows.filter((r: any) => (r.phase ?? '') === phase);
+    for (const key of BUILTIN_SUBFORM_KEYS) {
+      /* فرمِ عمل درخواست‌ها را در تبِ «قبل از عمل» دارد — الصاقِ جدا نشان داده نمی‌شود. */
+      if (surgery && key === 'orders') continue;
+      const row = here.find((r: any) => r.key === key);
+      const n = countOf(key, phase);
+      if (!row && !n) continue;
+      out.push({
+        key, phase, builtin: true, formId: null, implicit: !row,
+        title: BUILTIN_SUBFORMS[key].title, hasData: n > 0, count: n,
+        data: null, derived: {}, attachedAt: row?.createdAt ?? null, updatedAt: row?.updatedAt ?? null,
+      });
+    }
+    for (const row of here) {
+      if (isBuiltinSubform(row.key)) continue;
+      out.push({
+        key: row.key, phase, builtin: false, formId: row.formId, implicit: false,
+        title: row.form?.title ?? row.key,
+        hasData: subformDataHasValue(row.data), data: row.data ?? {}, derived: subformDerived(row.data),
+        attachedAt: row.createdAt, updatedAt: row.updatedAt,
+      });
+    }
   }
   return out;
+}
+
+/**
+ * **تغییرِ نوعِ مراجعه ↔ مرحلهٔ زیرفرم‌ها** — خالص؛ خروجی را `PatientsService.update` داخلِ
+ * همان تراکنش اجرا می‌کند.
+ *
+ * - غیرجراحی → عمل: هر الصاق «قبل از عمل» می‌شود (ارزیابیِ ویزیت همان ارزیابیِ پیش از عمل است).
+ * - عمل → غیرجراحی: مرحله‌ها یکی می‌شوند. داخلیِ چندمرحله‌ای (علائمِ قبل و بعد) یک الصاق
+ *   می‌ماند — داده‌اش جای خودش است. فرم‌سازیِ چندمرحله‌ای فقط وقتی یکی می‌شود که حداکثر یکی
+ *   پاسخ داشته باشد؛ دو پاسخ یعنی دو سند و یکی‌کردنشان یعنی دورریختنِ یکی — پس رد.
+ */
+export function planKindPhases(
+  rows: { id: number; key: string; phase: string; data: unknown; title?: string | null }[],
+  toSurgery: boolean,
+): { moves: { id: number; phase: string }[]; drops: number[]; conflict: string | null } {
+  const moves: { id: number; phase: string }[] = [];
+  const drops: number[] = [];
+  if (toSurgery) {
+    for (const r of rows) if (!r.phase) moves.push({ id: r.id, phase: 'pre' });
+    return { moves, drops, conflict: null };
+  }
+  const byKey = new Map<string, typeof rows>();
+  for (const r of rows) byKey.set(r.key, [...(byKey.get(r.key) ?? []), r]);
+  for (const [key, list] of byKey) {
+    const answered = isBuiltinSubform(key) ? [] : list.filter((r) => subformDataHasValue(r.data));
+    if (answered.length > 1) return { moves: [], drops: [], conflict: list[0].title ?? key };
+    const keep = answered[0] ?? list[0];
+    if (keep.phase) moves.push({ id: keep.id, phase: '' });
+    for (const r of list) if (r.id !== keep.id) drops.push(r.id);
+  }
+  return { moves, drops, conflict: null };
 }

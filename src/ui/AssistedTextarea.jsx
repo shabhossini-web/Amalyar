@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
+import { AiContext } from './ai-context.js';
 import VoiceInput from './VoiceInput.jsx';
 import { Pencil, Sparkle } from './icons.jsx';
 import './assisted-textarea.css';
@@ -11,8 +12,12 @@ import './assisted-textarea.css';
  * هستند، نه ردیفی زیرِ هر کادر (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳ — «UI خیلی باز و شلخته»). نامِ دسترس‌پذیرِ
  * هر دکمه همان متنِ قبلی است، پس صفحه‌خوان و آزمون‌ها همان را پیدا می‌کنند. کادر به اندازهٔ
  * آیکون‌ها از آن سمت فاصله می‌گیرد تا متن زیرشان نرود.
+ *
+ * بافتار: نوعِ عمل و تشخیصِ فرمِ دربرگیرنده (`AiContext`) + `aiContext`ِ خودِ کادر (مثلاً
+ * `{care: 'pre'}` برای متنِ مراقبتی که پیامک می‌شود) همراهِ متن به سرور می‌رود.
  */
-export default function AssistedTextarea({ value = '', onChange, disabled, readOnly, purpose = 'شرح', ...props }) {
+export default function AssistedTextarea({ value = '', onChange, disabled, readOnly, purpose = 'شرح', aiContext, ...props }) {
+  const shared = useContext(AiContext);
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState(null);
@@ -30,7 +35,8 @@ export default function AssistedTextarea({ value = '', onChange, disabled, readO
     const source = String(value ?? '');
     setBusy(true); setError(''); setProposal(null);
     try {
-      const result = await api('/ai/text-draft', { method: 'POST', body: { text: source, mode, purpose } });
+      const context = shared || aiContext ? { ...(shared ?? {}), ...(aiContext ?? {}) } : null;
+      const result = await api('/ai/text-draft', { method: 'POST', body: { text: source, mode, purpose, ...(context ? { context } : {}) } });
       if (typeof result?.text !== 'string' || !result.text.trim()) throw new Error('پاسخ دستیار خالی بود؛ متن شما حفظ شد');
       if (alive.current) setProposal({ source, text: mode === 'continue' ? `${source}\n${result.text}` : result.text });
     } catch (e) { if (alive.current) setError(e.message); }

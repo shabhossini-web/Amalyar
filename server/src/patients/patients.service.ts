@@ -24,8 +24,8 @@ import {
   VISIT_FULL_NOTE_KINDS, VISIT_NOTE_KINDS,
 } from './clinical-note';
 import { ANESTHESIA_LABELS, DECISION_LABELS, DISPOSITION_LABELS, EXCLUSIVE_DECISION, OP_LABELS } from './labels';
-import { planSubforms, subformDataHasValue, subformDerived, subformsOf, writeSubforms, SubformPlanItem } from './subforms';
-import { vitalsInput } from './vitals';
+import { planKindPhases, planSubforms, subformDataHasValue, subformDerived, subformsOf, writeSubforms, SubformPlanItem } from './subforms';
+import { vitalsRowsFor } from './vitals';
 import { actorName } from '../common/person';
 import { summarize } from './billing.service';
 import { todayRangeUtc } from '../common/clinic-day';
@@ -360,6 +360,8 @@ const INCLUDE_VISIT_FULL = {
      داده دارند الصاق‌شده‌اند (`subformsOf`). شمارش و نه ردیف: فرم خودش جزئیات را می‌گیرد. */
   subforms: { include: { form: { select: { title: true } } } },
   _count: { select: { vitals: true, labOrders: true, imagingOrders: true, consultOrders: true, referralOrders: true } },
+  /* فقط مرحله — کارتِ علائمِ حیاتیِ هر تبِ فرمِ عمل با شمارِ همان مرحله الصاق‌شده دیده می‌شود. */
+  vitals: { select: { phase: true } },
 } as const;
 
 /**
@@ -1396,7 +1398,7 @@ export class PatientsService {
        مسیرِ «مراجعهٔ هدف» است که باید با وضعیتِ همان مراجعه دوباره برنامه‌ریزی شود. */
     const rawCoding = pickCodingKeys(dto);
     const codingPlan = planCoding(dto, EMPTY_CODING);
-    const vitalsRow = vitalsInput((dto as any).vitals);
+    const vitalsRows = vitalsRowsFor((dto as any).vitals, dto.kind || 'surgery');
     PatientsService.assertDecisions(dto.decisions);
     const subformPlan = await this.planSubformsFor((dto as any).subforms, dto.kind || 'surgery');
     /* عملی که از ویزیت درآمده و کادرِ شکایتش خالی است: ستاره با متنِ **ارثی** سنجیده
@@ -1582,11 +1584,12 @@ export class PatientsService {
       }
       /* بخش‌های متنیِ هسته (و شرحِ عمل) → اسنادِ نسخه‌دار، داخلِ همین تراکنش. */
       await this.setSections(tx, visit, dto, user, true);
-      /* علائمِ حیاتیِ لحظهٔ ثبت — اختیاری؛ ردیفِ کاملاً خالی ساخته نمی‌شود. */
-      if (vitalsRow) {
+      /* علائمِ حیاتیِ لحظهٔ ثبت — اختیاری؛ ردیفِ کاملاً خالی ساخته نمی‌شود. فرمِ عمل یکی به‌ازای
+         هر مرحلهٔ الصاق‌شده می‌فرستد. */
+      for (const row of vitalsRows) {
         await tx.vitalSign.create({
           data: {
-            ...vitalsRow, visitId: visit.id, patientId: visit.patientId,
+            ...row, visitId: visit.id, patientId: visit.patientId,
             recordedById: userId ?? null, recordedByName: actorName(user),
           },
         });
@@ -1595,10 +1598,11 @@ export class PatientsService {
       await writeSubforms(tx, visit, subformPlan, user);
       const full = await tx.visit.findUnique({
         where: { id: visit.id },
-        select: { subforms: INCLUDE_VISIT_FULL.subforms, _count: INCLUDE_VISIT_FULL._count },
+        select: { subforms: INCLUDE_VISIT_FULL.subforms, _count: INCLUDE_VISIT_FULL._count, vitals: INCLUDE_VISIT_FULL.vitals },
       });
       (visit as any).subforms = full?.subforms ?? [];
       (visit as any)._count = full?._count;
+      (visit as any).vitals = full?.vitals ?? [];
       /* ⚠️ پاسخ همیشه نمای **کامل** است: فرم بعد از ذخیره همان شیء را نگه
          می‌دارد و ویرایشِ بعدی از رویش باز می‌شود — بخشِ خوانده‌نشده یعنی
          فرمی که معاینه را خالی نشان دهد. */
@@ -1696,9 +1700,17 @@ export class PatientsService {
     const servicePatch = await this.visitServiceOf((dto as any).service, false);
     const subformPlan = await this.planSubformsFor(dto.subforms, kindNow);
     /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخورده — با همین ذخیره می‌نشیند (باگِ ممیزی: گم می‌شد). */
-    const vitalsList = Array.isArray(dto.vitals) ? dto.vitals : dto.vitals ? [dto.vitals] : [];
-    if (vitalsList.length > 3) throw new BadRequestException('علائمِ حیاتیِ این درخواست بیش از اندازه است');
-    const vitalsRows = vitalsList.map((x) => vitalsInput(x)).filter((x): x is NonNullable<typeof x> => !!x);
+    const vitalsRows = vitalsRowsFor(dto.vitals, kindNow);
+    /* تغییرِ نوع ↔ مرحلهٔ زیرفرم‌ها — پیش از تراکنش سنجیده می‌شود تا تعارض ۴۰۰ِ روشن باشد. */
+    const kindPhases = dto.kind !== undefined && dto.kind !== v.kind && (dto.kind === 'surgery') !== (v.kind === 'surgery')
+      ? planKindPhases(
+        ((v as any).subforms ?? []).map((r: any) => ({ id: r.id, key: r.key, phase: r.phase ?? '', data: r.data, title: r.form?.title ?? null })),
+        dto.kind === 'surgery',
+      )
+      : null;
+    if (kindPhases?.conflict) {
+      throw new BadRequestException(`«${kindPhases.conflict}» در بیش از یک مرحلهٔ عمل پاسخ دارد و نوعِ مراجعه عوض نمی‌شود — اول یکی را خالی کنید`);
+    }
     const linkFields = dto.extra !== undefined ? ((await this.forms.forVisitKind(kindNow))?.fields ?? []) : [];
     const extraIn = dto.extra !== undefined ? await this.forms.normalizeExtra(linkFields, dto.extra) : undefined;
 
@@ -1787,6 +1799,12 @@ export class PatientsService {
       }
       /* شرحِ عمل و بخش‌های هسته — هر کدام فقط اگر در این PATCH آمده باشد. */
       await this.setSections(tx, { id, patientId: v.patientId }, dto, user);
+      if (kindPhases) {
+        for (const d of kindPhases.drops) await tx.visitSubform.delete({ where: { id: d } });
+        for (const m of kindPhases.moves) await tx.visitSubform.update({ where: { id: m.id }, data: { phase: m.phase } });
+        /* ویزیت → عمل: اندازه‌های بی‌مرحله «قبل از عمل» می‌شوند تا در تبِ همان مرحله دیده شوند. */
+        if (dto.kind === 'surgery') await tx.vitalSign.updateMany({ where: { visitId: id, phase: null }, data: { phase: 'pre' } });
+      }
       for (const row of vitalsRows) {
         await tx.vitalSign.create({
           data: { ...row, visitId: id, patientId: v.patientId, recordedById: user?.id ?? null, recordedByName: actorName(user) },

@@ -12,7 +12,7 @@
  *   - «ابزارکِ منتخب»ِ صفحهٔ امروز با «+» پر، ماندگار و با × خالی می‌شود
  *  نباید بیفتد:
  *   - جعبهٔ «اطلاعات تکمیلی» برگردد
- *   - زیرفرمِ داخلی روی فرمِ عمل الصاق شود
+ *   - «درخواست» روی فرمِ عمل الصاق شود (تبِ ثابتِ «قبل از عمل» را دارد)
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -73,7 +73,9 @@ try {
   const clinicForm = (await send('/forms/visit.clinic')).json;
   if (!clinicForm?.fields?.some((f) => f.key === 'historyDuration')) {
     const df = await send(`/forms/${clinicForm.id}/fields`, 'POST', { key: 'historyDuration', label: 'مدتِ علائم', type: 'text' });
-    if (df.json?.id) trashFields.push(df.json.id);
+    /* افزودنِ فیلد کلِ فرم را برمی‌گرداند — شناسهٔ فیلد از روی کلیدش، نه `json.id` (شناسهٔ فرم). */
+    const fid = df.json?.fields?.find((f) => f.key === 'historyDuration')?.id;
+    if (fid) trashFields.push(fid);
   }
   const s1 = (await send('/surgeons', 'POST', { firstName: 'دکترِ', lastName: `رابط${tag}` })).json;
   const office = (await send('/hospitals', 'POST', { name: `مطبِ رابط ${tag}` })).json;
@@ -201,10 +203,15 @@ try {
   await send('/auth/prefs', 'PATCH', { subformPins: ['vitals', 'subform.asa', null] });
   await openVisit(page, S.id);
   const sbar = page.locator('.db-sheet [data-visit-bar]');
-  ok('**منتخبِ داخلی روی فرمِ عمل غیرفعال است**', await sbar.locator('.vf-pin[data-pin="vitals"]').isDisabled());
+  /* از دورِ دوم (۱۴۰۵/۰۷/۰۳): علائمِ حیاتی در عمل هم الصاقی است — به‌ازای مرحله؛ جزئیات در
+     `surgery-subform-phases-ui.mjs`. «درخواست» هنوز تبِ ثابتِ «قبل از عمل» را دارد. */
+  ok('**منتخبِ علائمِ حیاتی روی فرمِ عمل فعال است** (به تبِ فعال الصاق می‌شود)', !(await sbar.locator('.vf-pin[data-pin="vitals"]').isDisabled()));
   ok('منتخبِ فرم‌ساز (ASA) فعال است', !(await sbar.locator('.vf-pin[data-pin="subform.asa"]').isDisabled()));
   await sbar.locator('.vf-attach').click();
-  ok('پنجرهٔ فرمِ عمل داخلی‌ها را پیشنهاد نمی‌دهد', await page.locator('.vf-pick [data-subform-item="vitals"]').count() === 0
+  ok('پنجرهٔ فرمِ عمل «الصاق به» سه مرحله دارد و «درخواست» را پیشنهاد نمی‌دهد',
+    await page.locator('.vf-pick [data-pick-phase]').count() === 3
+    && await page.locator('.vf-pick [data-subform-item="orders"]').count() === 0
+    && await page.locator('.vf-pick [data-subform-item="vitals"]').count() === 1
     && await page.locator('.vf-pick [data-subform-item="subform.asa"]').count() === 1);
   await page.locator('.vf-pick .db-x').click();
   const over1 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

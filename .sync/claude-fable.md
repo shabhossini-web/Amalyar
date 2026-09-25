@@ -1,10 +1,19 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/visit-subforms
+status: active
+branch: claude/surgery-subform-phases
 since: 2026-09-25
-paths: []
-note: زیرفرم‌های الصاقیِ مراجعه، منتخب‌ها، تصمیمِ کشویی و پیوستگیِ پست‌آپ مرج شد. بسته‌های ۸+۹ در PR #98 (draft) باید روی همین زیرفرم‌ها بازنویسی و با مالک مرور شوند.
+paths:
+  - src/app/VisitForm.jsx
+  - src/app/VisitSubforms.jsx
+  - src/app/visit-subforms.css
+  - src/app/CareEditor.jsx
+  - src/ui/AssistedTextarea.jsx
+  - server/src/patients/subforms.ts
+  - server/src/patients/patients.service.ts
+  - server/src/ai/ai.service.ts
+  - server/prisma/schema.prisma
+note: فرمِ عمل — زیرفرم به‌ازای مرحله (قبل/حین/بعد)، علائمِ حیاتی از هاردکد به الصاق؛ مراقبت‌های قبل/بعد پاپ‌آپ؛ AI با نوعِ عمل و تشخیص.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

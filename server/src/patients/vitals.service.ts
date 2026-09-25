@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { actorName } from '../common/person';
 import { PatientsService } from './patients.service';
-import { vitalsInput, vitalView } from './vitals';
+import { VITALS_PHASE_REQUIRED, vitalsInput, vitalView } from './vitals';
 
 /**
  * علائمِ حیاتیِ یک مراجعه — هر نوبتِ اندازه‌گیری یک ردیف (بستهٔ ۶ج).
@@ -27,6 +27,7 @@ export class VitalsService {
     const v = await this.patients.assertVisitAccess(visitId, user);
     const row = vitalsInput(raw);
     if (!row) throw new BadRequestException('دستِ‌کم یکی از علائمِ حیاتی را وارد کنید');
+    if (v.kind === 'surgery' && !row.phase) throw new BadRequestException(VITALS_PHASE_REQUIRED);
     const created = await this.prisma.vitalSign.create({
       data: {
         ...row, visitId, patientId: v.patientId,
