@@ -1,10 +1,25 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/unpin-live-suites
+status: active
+branch: claude/glass-review
 since: 2026-09-25
-paths: []
-note: ۴۲ سوییتِ زنده حالا نشانی را از `E2E_API`/`E2E_UI` می‌خوانند و بینِ همهٔ شاردهای CI محلی پخش می‌شوند؛ لند شد. بسته‌های ۸+۹ (PR #98، draft) هنوز باید روی زیرفرم‌ها بازنویسی شوند.
+paths:
+  - src/index.css
+  - src/ui/ui.css
+  - src/ui/press.css
+  - src/app/launcher.css
+  - src/app/shell.css
+  - src/app/dashboard.css
+  - src/app/login.css
+  - src/app/users.css
+  - src/app/formbuilder.css
+  - src/app/FormBuilder.jsx
+  - src/app/record.css
+  - src/app/tech.css
+  - src/app/transport.css
+  - src/app/theatre.css
+  - scripts/verify-theme-tokens.js
+note: بازبینیِ شیشه (تأییدِ مالک، چهار بند) — سطح‌های گود/فیلد/دکمهٔ شبح/ردیف در تمِ روشن سفید، حذفِ تاریِ تودرتو، متنِ فرعی یک پله خواناتر، باگِ دکمهٔ فرم‌ساز؛ نگهبانِ پُرِ سیاهِ خام.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

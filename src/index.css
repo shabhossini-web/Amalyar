@@ -6,7 +6,7 @@
   --card-border: rgba(var(--brand-rgb), 0.22);
   --text1: #f2f0fc;
   --text2: #b8b3d6;
-  --text3: #7d77a3;
+  --text3: #8a84b0;  /* از #7d77a3: روی شیتِ تیره ۴٫۰ بود، زیرِ حدِ ۴٫۵ (بازبینیِ شیشه ۱۴۰۵/۰۷/۰۳) */
 
   /* ── خانوادهٔ رنگِ برند ──
      این‌ها مقدارِ **پیش‌فرض**اند، نه تنها مقدار: `lib/brand-palette.js` وقتی
@@ -102,6 +102,19 @@
   --surface-rgb: 18, 13, 49;
   /* سایهٔ «گودی» — در تمِ روشن باید ملایم‌تر باشد وگرنه کارت کثیف به‌نظر می‌رسد. */
   --shadow-card: 0 12px 36px rgba(var(--surface-rgb), 0.42);
+  /* ── «گود»، «فیلد»، «دکمهٔ شبح» و «ردیفِ فهرست» — سطح‌هایی که با تم عوض می‌شوند ──
+     ⚠️ بازبینیِ شیشه (۱۴۰۵/۰۷/۰۳): فیلدِ ورود/پروفایل و قابِ تب‌ها `rgba(0,0,0,.25)`ِ
+     خام بودند و دکمهٔ شبح گرادیانِ `--veil-rgb`. در تمِ تیره درست است، ولی در تمِ
+     روشن سیاهِ نیمه‌شفاف روی زمینهٔ روشن **خاکستریِ کدر** می‌شد و فیلدِ خالی شبیهِ
+     فیلدِ غیرفعال دیده می‌شد. پس هر تم مقدارِ خودش را دارد؛ تمِ تیره عیناً همان است. */
+  --well-bg: rgba(0, 0, 0, 0.22);
+  --field-bg: rgba(0, 0, 0, 0.3);
+  --field-bg-focus: rgba(0, 0, 0, 0.37);
+  --row-bg: rgba(var(--veil-rgb), 0.045);
+  --ghost-bg: linear-gradient(180deg, rgba(var(--veil-rgb), 0.10), rgba(var(--veil-rgb), 0.03) 55%, rgba(var(--veil-rgb), 0.06));
+  --ghost-bg-hover: linear-gradient(180deg, rgba(var(--veil-rgb), 0.14), rgba(var(--veil-rgb), 0.05) 55%, rgba(var(--veil-rgb), 0.09));
+  --ghost-shadow: inset 0 1px 0 rgba(var(--veil-rgb), 0.22), inset 0 -6px 14px -10px rgba(var(--veil-rgb), 0.35), 0 8px 20px -6px rgba(0, 0, 0, 0.45);
+  --ghost-shadow-active: inset 0 1px 0 rgba(var(--veil-rgb), 0.3), inset 0 -10px 22px -10px rgba(var(--veil-rgb), 0.5), inset 0 0 18px rgba(var(--veil-rgb), 0.06), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
 
   /* ── چگالی (W3.6) ──
      «فشرده» برای میزِ پذیرش که باید بیست ردیف را یک‌جا ببیند؛ «عادی» برای بقیه.
@@ -126,13 +139,22 @@
   --card-border: rgba(var(--brand-rgb), 0.20);
   --text1: #16132b;
   --text2: #4a4470;
-  --text3: #6b6590;
+  --text3: #5f5985;  /* از #6b6590: روی سطحِ خاکستری ۴٫۴ بود */
   --veil-rgb: 0, 0, 0;
   /* ⚠️ برخلافِ پرده، لبهٔ براق در تمِ روشن هم **سفید** می‌ماند: بازتابِ نور با
      تم عوض نمی‌شود. صریح نوشته شده تا ارث‌بری اتفاقی به‌نظر نرسد. */
   --sheen-rgb: 255, 255, 255;
   --surface-rgb: 255, 255, 255;
   --shadow-card: 0 10px 30px rgba(var(--surface-rgb), 0.10);
+  /* گود و فیلد و دکمهٔ شبح در تمِ روشن سفید و تمیزند، نه خاکستریِ کدر (بالا ↑). */
+  --well-bg: rgba(22, 19, 43, 0.05);
+  --field-bg: #ffffff;
+  --field-bg-focus: #ffffff;
+  --row-bg: #ffffff;
+  --ghost-bg: linear-gradient(180deg, #ffffff, rgba(var(--sheen-rgb), 0.82));
+  --ghost-bg-hover: linear-gradient(180deg, #ffffff, #ffffff);
+  --ghost-shadow: inset 0 1px 0 rgba(var(--sheen-rgb), 0.9), 0 1px 2px rgba(22, 19, 43, 0.08), 0 6px 14px -8px rgba(22, 19, 43, 0.22);
+  --ghost-shadow-active: inset 0 1px 3px rgba(22, 19, 43, 0.14), 0 1px 2px rgba(22, 19, 43, 0.06);
   --shadow-glow: 0 0 34px rgba(var(--brand-rgb), 0.18);
   /* ⚠️ سایان روی سفید خوانده نمی‌شود (نسبت ~۱.۷). لهجهٔ فوکوس در تمِ روشن
      همان بنفشِ برند است؛ سایان فقط روی تیره لهجه می‌ماند. */
@@ -191,11 +213,19 @@
   --card-border: rgba(var(--brand-rgb), 0.22);
   --text1: #f2f0fc;
   --text2: #b8b3d6;
-  --text3: #7d77a3;
+  --text3: #8a84b0;  /* از #7d77a3: روی شیتِ تیره ۴٫۰ بود، زیرِ حدِ ۴٫۵ (بازبینیِ شیشه ۱۴۰۵/۰۷/۰۳) */
   --veil-rgb: 255, 255, 255;
   --sheen-rgb: 255, 255, 255;
   --surface-rgb: 18, 13, 49;
   --shadow-card: 0 12px 36px rgba(var(--surface-rgb), 0.42);
+  --well-bg: rgba(0, 0, 0, 0.22);
+  --field-bg: rgba(0, 0, 0, 0.3);
+  --field-bg-focus: rgba(0, 0, 0, 0.37);
+  --row-bg: rgba(var(--veil-rgb), 0.045);
+  --ghost-bg: linear-gradient(180deg, rgba(var(--veil-rgb), 0.10), rgba(var(--veil-rgb), 0.03) 55%, rgba(var(--veil-rgb), 0.06));
+  --ghost-bg-hover: linear-gradient(180deg, rgba(var(--veil-rgb), 0.14), rgba(var(--veil-rgb), 0.05) 55%, rgba(var(--veil-rgb), 0.09));
+  --ghost-shadow: inset 0 1px 0 rgba(var(--veil-rgb), 0.22), inset 0 -6px 14px -10px rgba(var(--veil-rgb), 0.35), 0 8px 20px -6px rgba(0, 0, 0, 0.45);
+  --ghost-shadow-active: inset 0 1px 0 rgba(var(--veil-rgb), 0.3), inset 0 -10px 22px -10px rgba(var(--veil-rgb), 0.5), inset 0 0 18px rgba(var(--veil-rgb), 0.06), 0 4px 12px -4px rgba(0, 0, 0, 0.4);
   --cyan: #00e5ff;
   --green: #34d399;
   --amber: #fbbf24;

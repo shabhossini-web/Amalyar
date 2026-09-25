@@ -280,6 +280,8 @@ a.db-ico { text-decoration: none; }
   display: flex; flex-direction: column; gap: 12px;
   background: rgba(var(--surface-rgb), 0.92);
 }
+/* شیت روی پردهٔ تار می‌نشیند و خودش ۹۲٪ مات است؛ تارِ `.glass`ِ خودش کارِ اضافه برای گوشی است. */
+.db-overlay .db-sheet { -webkit-backdrop-filter: none; backdrop-filter: none; }
 @media (min-width: 640px) {
   .db-overlay { align-items: center; padding: 20px; }
   .db-sheet { border-radius: 22px; }
@@ -441,7 +443,7 @@ a.db-ico { text-decoration: none; }
   color: #fff; border-color: transparent;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
-.db-steps .on i { background: rgba(0, 0, 0, .22); }
+.db-steps .on i { background: rgba(0, 0, 0, .22); } /* تیره در هر دو تم */
 /* گامِ تمام‌شده کم‌رنگ ولی **خوانا** می‌ماند: کاربر باید بتواند برگردد. */
 .db-steps .done button { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .4); cursor: pointer; }
 .db-steps .done i { background: rgba(var(--brand-2-rgb), .2); }

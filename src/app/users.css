@@ -40,7 +40,7 @@
 .us-levelpick.grow { flex: 1; }
 .us-levelpick select {
   font-family: inherit; font-size: 13px; font-weight: 700; color: var(--text1); cursor: pointer;
-  background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(var(--veil-rgb), 0.15);
+  background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), 0.15);
   border-radius: 11px; padding: 8px 10px; transition: border-color .2s;
 }
 .us-levelpick select:focus { outline: none; border-color: rgba(var(--brand-2-rgb), 0.7); }

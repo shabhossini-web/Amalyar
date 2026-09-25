@@ -67,6 +67,9 @@
 
 .fb-list { display: flex; flex-direction: column; gap: 8px; }
 .fb-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; }
+/* ردیفِ فهرست سطحِ کار است نه قاب: پُرِ هر تم از توکن (روشن = کارتِ سفید) و بی‌تاری —
+   ده‌ها ردیفِ تار یعنی ده‌ها لایهٔ تار روی گوشی (بازبینیِ شیشه ۱۴۰۵/۰۷/۰۳). */
+.fb-row.glass { background: var(--row-bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* خاموش کم‌رنگ می‌شود ولی خوانا می‌ماند — کاربر باید بتواند دوباره روشنش کند. */
 .fb-row.off { opacity: .5; }
 
@@ -187,6 +190,14 @@
   .fb-matrix-scroll, .fb-preview > .pf { padding-inline: 10px; }
 }
 
+/* ⚠️ `.df-ghost` فقط پوستهٔ دکمهٔ شبح است؛ اندازه‌اش را `.df-sheet-foot`ِ تعریف‌ها می‌داد.
+   بیرون از آن فوتر، دکمه در ستونِ فلکسیِ `.lx-shell` کش می‌آمد و قد نداشت: نواری
+   باریک و تمام‌عرض که متنش از قاب بیرون می‌زد و روی تب‌ها می‌افتاد. */
+.fb-followup {
+  align-self: flex-start; margin-bottom: 12px; padding: 9px 16px;
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--text1); cursor: pointer;
+}
+.fb-followup:disabled { opacity: .55; cursor: default; }
 .fb-tabrow { display: flex; align-items: center; gap: 8px; }
 .fb-tabrow > :first-child { flex: 1 1 auto; min-width: 0; }
 .fb-newform {

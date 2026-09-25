@@ -92,9 +92,9 @@
 .rc-kindrow i {
   font-style: normal; font-size: 11px; font-weight: 700;
   min-width: 18px; padding: 1px 5px; border-radius: 8px; text-align: center;
-  color: var(--text2); background: rgba(0, 0, 0, .28);
+  color: var(--text2); background: var(--well-bg);
 }
-.rc-kindrow button.on i { color: #fff; background: rgba(0, 0, 0, .22); }
+.rc-kindrow button.on i { color: #fff; background: rgba(0, 0, 0, .22); } /* تیره در هر دو تم */
 
 .rc-upload {
   display: grid; gap: 12px; margin-bottom: 14px; padding: 15px; border-radius: 16px;
