@@ -180,6 +180,14 @@ try {
   const byRole = (await send('/work?scope=inbox&ownerRole=doctor&limit=300')).json;
   const rRow = (Array.isArray(byRole) ? byRole : []).find((w) => w.id === W);
   ok('صفِ «کارهای پزشکان» (`ownerRole=doctor`) کارِ پزشکِ اول را با نامِ او دارد', !!rRow && rRow.ownerLabel === d1.name, JSON.stringify([Array.isArray(byRole) ? byRole.length : byRole, rRow?.ownerLabel]));
+  /* کارِ شخصی که سوپرادمین به نامِ پزشک ساخته، ستونِ `owner_role` ندارد — ولی باز «کارِ پزشک» است. */
+  const P1 = (await send('/work', 'POST', { title: `کارِ شخصیِ پزشک ${tag}`, ownerAccountId: d1.id, priority: 3 })).json?.id;
+  const onlyPerson = sql(`SELECT coalesce(owner_role, 'null') FROM work_items WHERE id=${P1}`) === 'null';
+  const byRole2 = (await send('/work?scope=inbox&ownerRole=doctor&limit=300')).json;
+  const pRow = (Array.isArray(byRole2) ? byRole2 : []).find((w) => w.id === P1);
+  ok('**کارِ شخصیِ پزشک (بی‌ستونِ نقش) هم در «کارهای پزشکان» است، با نامِ او**', onlyPerson && pRow?.ownerLabel === d1.name, JSON.stringify([onlyPerson, pRow?.ownerLabel]));
+  const queueOnly = (await send('/work?scope=inbox&owner=none&ownerRole=doctor&limit=300')).json;
+  ok('**نباید بیفتد:** `owner=none&ownerRole=doctor` (دستهٔ «صفِ پزشک») کارِ شخصی را نمی‌آورد', Array.isArray(queueOnly) && !queueOnly.some((w) => w.id === P1));
 
   console.log('\n۲) API — نباید بیفتد: پزشکِ دیگر و ادمینِ سطح ۵ چیزِ تازه‌ای نمی‌بینند');
   const dd2 = (await d2.api('/surgeon/desk')).json;

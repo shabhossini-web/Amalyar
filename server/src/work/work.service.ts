@@ -131,7 +131,7 @@ export class WorkService {
       /* کارِ خودِ بیمار در صفِ کارکنان نمی‌آید. */
       scope === 'inbox' || scope === 'mine' || scope === 'role' ? NOT_PATIENT : {},
       q.owner === undefined ? {} : { ownerAccountId: q.owner === 'none' ? null : q.owner },
-      q.ownerRole === undefined ? {} : { ownerRole: q.ownerRole === 'none' ? null : q.ownerRole },
+      await this.ownerRoleWhere(q.owner, q.ownerRole),
     ];
     /* `limit=abc` از کوئری NaN می‌شود و `take: NaN` خطای ۵۰۰ِ Prisma می‌داد. */
     const take = Math.min(Math.max(Number.isFinite(q.limit) ? Math.trunc(q.limit as number) : 100, 1), 300);
@@ -150,6 +150,25 @@ export class WorkService {
       })
       : [];
     return this.enrich(user, [...late, ...rest]);
+  }
+
+  /**
+   * فیلترِ «نقشِ مسئول».
+   *
+   * - `none` = کاری که نقش ندارد.
+   * - همراهِ `owner=none` = فقط **صفِ** آن نقش (هنوز کسی برنداشته) — دستهٔ «صفِ …» در «امروز».
+   * - تنها = **کارِ آن نقش**: صفش، به‌علاوهٔ کارِ شخصیِ هر حسابی که همین نقشِ شغلی را دارد.
+   *   ⚠️ کارِ شخصی را معمولاً ستونِ `ownerRole` ندارد (واگذاری به شخص آن را خالی می‌گذارد)؛
+   *   نسخهٔ اول فقط ستون را می‌سنجید و «کارهای پزشکان»ِ میزِ پزشک کارِ «بررسیِ نتیجه»ای را
+   *   که به نامِ خودِ پزشک بود نشان نمی‌داد.
+   * همیشه با دامنه AND می‌شود، پس برای کسی که صفِ تیم ندارد چیزی باز نمی‌کند.
+   */
+  private async ownerRoleWhere(owner: OwnerFilter | undefined, role: OwnerRoleFilter | undefined) {
+    if (role === undefined) return {};
+    if (role === 'none') return { ownerRole: null };
+    if (owner === 'none') return { ownerRole: role };
+    const people = await this.prisma.account.findMany({ where: { jobRole: role }, select: { id: true } });
+    return people.length ? { OR: [{ ownerRole: role }, { ownerAccountId: { in: people.map((a) => a.id) } }] } : { ownerRole: role };
   }
 
   /** نامِ نمایشیِ چند حساب با **یک** کوئری — نه یکی به‌ازای هر ردیف. */
