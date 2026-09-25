@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
-import { ownVisitWhere } from '../common/own-scope';
+import { isUnrestricted, ownVisitWhere } from '../common/own-scope';
 import { actorName } from '../common/person';
 import { currentNotes, noteBody, setVisitNote } from './clinical-note';
 import { ANESTHESIA_LABELS, DISPOSITION_LABELS } from './labels';
@@ -133,10 +133,20 @@ export class TheatreService {
     return (user?.level ?? 0) >= LEVEL.SUPERVISOR ? {} : ownVisitWhere(user);
   }
 
-  /** عمل‌های یک روز که این کاربر می‌بیند — ترتیبِ ساعتِ اتاق. */
+  /**
+   * عمل‌های یک روز که این کاربر می‌بیند — ترتیبِ ساعتِ اتاق.
+   *
+   * ⚠️ **نمای سرپرستی (قانونِ ۲۹).** برای کارشناس و پزشک این تخته «عمل‌های
+   * من» است (`ownVisitWhere`)؛ برای سوپرادمین «عمل‌های همه». دامنه همان دامنهٔ
+   * دیروز است (سوپروایزر به بالا از قبل همه را می‌دید) — تازه فقط این است که
+   * پاسخ **می‌گوید** نمای همه است (`team`) و هر ردیف نامِ صاحبش را دارد، تا
+   * سوپرادمینی که به‌جای کارشناس «شروع شد» می‌زند بداند عملِ چه کسی است.
+   * رابط سطح را حساب نمی‌کند (قانونِ ۳)؛ برای بقیه شکلِ پاسخ همان دیروز است.
+   */
   async day(date: string, user: any) {
     const d = new Date(`${date}T00:00:00.000Z`);
     if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخ نامعتبر است');
+    const team = isUnrestricted(user);
     const start = new Date(d); const end = new Date(d); end.setUTCHours(23, 59, 59, 999);
     const rows = await this.prisma.visit.findMany({
       where: {
@@ -155,10 +165,13 @@ export class TheatreService {
         /* فقط نامِ سایرِ عمل‌ها — برای برچسبِ ردیف (بستهٔ ۷ج). */
         otherProcedures: OTHER_PX,
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
+        techId: true,
+        tech: { select: { person: { select: { firstName: true, lastName: true } } } },
       },
     });
     return {
       date,
+      team,
       visits: rows.map((v) => ({
         id: v.id, code: `${v.patient.code}-V${v.seq}`,
         patientId: v.patient.id, patient: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
@@ -172,6 +185,9 @@ export class TheatreService {
         procedure: procedureLabel(v),
         hospital: v.hospital?.name ?? v.hospitalName ?? null,
         surgeon: TheatreService.personName(v.surgeon) ?? v.surgeonName ?? null,
+        /* «مالِ کیست» فقط در نمای سرپرستی: `null` یعنی کارشناس تعیین نشده —
+           همان چیزی که سوپرادمین باید از روی تخته ببیند، نه اینکه حدس بزند. */
+        ...(team ? { techId: v.techId ?? null, tech: TheatreService.personName(v.tech) } : {}),
       })),
     };
   }

@@ -3,11 +3,17 @@ import { APPT_LABELS, OP_LABELS } from '../patients/labels';
 import { PrismaService } from '../prisma/prisma.service';
 import { FeaturesService } from '../features/features.service';
 import { LEVEL } from '../common/levels';
-import { ownVisitWhere } from '../common/own-scope';
+import { isUnrestricted, ownVisitWhere } from '../common/own-scope';
 import { AvailabilityService } from '../patients/availability.service';
 import { WorkService } from './work.service';
 import { canAccess } from '../auth/access-check';
 import { clinicTodayIso, todayRangeUtc } from '../common/clinic-day';
+
+/* سقفِ فهرستِ کارها روی «امروز»: هشت تا برای «کارهای من»؛ نمای تیم کمی بیشتر چون صفِ
+   همه است — ولی نه آن‌قدر که عمل‌ها و نوبت‌های امروز زیرش گم شوند. فهرستِ کامل (و
+   فیلترِ هر شخص) در `/app/work` است و فیلترِ «مالِ کیست» همین صفحه هم از سرور می‌پرسد. */
+const WORK_LIMIT = 8;
+const TEAM_WORK_LIMIT = 12;
 
 /**
  * صفحهٔ «امروز» (W2.3) — یک پاسخ برای «الان چه کار کنم؟».
@@ -58,9 +64,13 @@ export class TodayService {
     /* نمای استثنا (W2.5) فقط از سوپروایزر به بالا: این بخش دربارهٔ **کارِ دیگران**
        است — چیزی که از دستِ تیم افتاده — نه کارِ خودِ کاربر. */
     const seesExceptions = level >= LEVEL.SUPERVISOR;
+    /* سوپرادمین بی‌محدودیت است (قانونِ ۲۹): «کارهای من»ِ او «کارهای تیم» است — صفِ
+       `inbox`ش خودش همه را دارد — به‌علاوهٔ تفکیکِ «مالِ کیست» برای فیلترِ بالای فهرست.
+       رابط سطح را حساب نمی‌کند؛ همین `team` را می‌خواند (قانونِ ۳). */
+    const team = isUnrestricted(user);
     const [counts, items, visits, appointments, intakePending, exceptions, canProcess, canCreateVisit] = await Promise.all([
-      this.work.counts(user),
-      this.work.list(user, { scope: 'inbox', limit: 8 }),
+      this.work.counts(user, { owners: team }),
+      this.work.list(user, { scope: 'inbox', limit: team ? TEAM_WORK_LIMIT : WORK_LIMIT }),
       seesVisits ? this.visitsToday(user, level, start, end) : Promise.resolve([]),
       can('calendar') ? this.appointmentsToday(start) : Promise.resolve([]),
       can('formgen')
@@ -87,6 +97,10 @@ export class TodayService {
     return {
       now: now.toISOString(),
       user: { jobRole: user?.jobRole ?? null, level },
+      team,
+      /* دسته‌های «مالِ کیست» (هر شخص، هر صفِ نقش، بی‌مسئول) با شمار و `filter`ِ آماده
+         برای `GET /work` — به ترتیبِ شمار. برای غیرِ سوپرادمین خالی. */
+      owners: counts.team ? counts.owners ?? [] : [],
       brief: {
         work: counts.total,
         overdue: counts.overdue,

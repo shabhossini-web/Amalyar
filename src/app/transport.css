@@ -35,7 +35,7 @@
 }
 .tr-sum b { font-size: 16px; font-weight: 900; }
 .tr-sum span { font-size: 10.5px; color: var(--text3); }
-.tr-sum .warn b { color: #fcd34d; }
+.tr-sum .warn b { color: var(--amber-text); }
 
 .tr-list { display: grid; gap: 11px; max-width: 940px; margin: 0 auto; }
 .tr-empty {
@@ -68,9 +68,16 @@
   padding: 3px 9px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.tr-tag.ok { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.tr-tag.ok { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
 
 .tr-addr { font-size: 11.5px; line-height: 1.8; color: var(--text3); }
+
+/* نمای سرپرستی (سوپرادمین) — «مسیرِ کیست» روی هر توقف و در شیتِ تحویل. */
+.tr-owner { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--text2); }
+.tr-owner svg { flex: 0 0 auto; color: var(--brand-2); }
+.tr-owner b { font-weight: 800; color: var(--text1); }
+/* شمارِ توقفِ هر نیرو در فیلتر — همان وزنِ `td-own-n`ِ «امروز». */
+.tr-own-n { font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ── بار ── */
 .tr-cargo { display: grid; gap: 8px; }
@@ -85,7 +92,7 @@
 .tr-items li { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text2); }
 .tr-items em { font-style: normal; font-size: 10.5px; color: var(--text3); }
 .tr-items span { margin-inline-start: auto; font-weight: 700; color: var(--text1); }
-.tr-left { font-size: 11.5px; color: #fcd34d; }
+.tr-left { font-size: 11.5px; color: var(--amber-text); }
 .tr-left b { font-weight: 800; }
 .tr-none {
   display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 11px;
@@ -98,7 +105,7 @@
 .tr-who span { display: inline-flex; align-items: center; gap: 5px; }
 .tr-who b { color: var(--text1); font-weight: 700; }
 .tr-who svg { color: var(--brand-2); flex: 0 0 auto; }
-.tr-who .act svg { color: #6ee7b7; }
+.tr-who .act svg { color: var(--green-text); }
 
 .tr-calls { display: flex; flex-wrap: wrap; gap: 6px; }
 .tr-call {
@@ -152,15 +159,17 @@
   font: inherit; font-size: 11.5px; cursor: pointer; padding: 6px 11px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13);
 }
-.tr-chip.on { color: #fff; background: rgba(var(--brand-2-rgb), .3); border-color: rgba(var(--brand-2-rgb), .6); }
+.tr-chip.on { color: var(--text1); background: rgba(var(--brand-2-rgb), .3); border-color: rgba(var(--brand-2-rgb), .6); }
 
 .tr-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  /* متن از توکن: سطحِ توست در تمِ روشن سفید است و `#fff` رویش نامرئی می‌شد. */
+  color: var(--text1); background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .tr-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
+@media (prefers-reduced-motion: reduce) { .tr-toast { transition: none; } }
 
 @media (max-width: 560px) {
   .tr { padding: 12px 10px 32px; }

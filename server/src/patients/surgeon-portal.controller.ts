@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ArrayMaxSize, IsArray, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Response } from 'express';
@@ -21,21 +21,39 @@ class InstructionsDto {
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ItemDto) requiredItems?: ItemDto[];
 }
 
+/**
+ * `surgeonId` در کوئریِ میز (نمای ناظرِ سوپرادمین، قانونِ ۲۹): عددِ مثبت یا خالی — بقیه ۴۰۰،
+ * نه نادیده‌گرفتنِ بی‌صدا. اینکه **چه کسی** می‌تواند پزشکِ دیگری بدهد را سرویس می‌سنجد.
+ */
+function parseSurgeon(raw?: string): number | undefined {
+  if (raw == null || raw === '') return undefined;
+  if (/^\d{1,9}$/.test(raw) && Number(raw) > 0) return Number(raw);
+  throw new BadRequestException('شناسهٔ پزشک نامعتبر است');
+}
+
 @Controller('surgeon')
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('surgeon')
 export class SurgeonPortalController {
   constructor(private portal: SurgeonPortalService, private storage: StorageService) {}
   @Get('visits') @RequirePermissions('surgeon.read')
-  list(@CurrentUser() user: any, @Query('q') q?: string, @Query('page') page?: string) { return this.portal.list(user, q, Number(page)); }
+  list(@CurrentUser() user: any, @Query('q') q?: string, @Query('page') page?: string, @Query('surgeonId') surgeonId?: string) {
+    return this.portal.list(user, q, Number(page), parseSurgeon(surgeonId));
+  }
   /** «امروزِ من» — نوبت‌ها، مراجعه‌ها و نتیجه‌های بررسی‌نشدهٔ پزشک (بستهٔ ۵). */
   @Get('today') @RequirePermissions('surgeon.read')
-  today(@CurrentUser() user: any, @Query('date') date?: string) { return this.portal.today(user, date); }
+  today(@CurrentUser() user: any, @Query('date') date?: string, @Query('surgeonId') surgeonId?: string) {
+    return this.portal.today(user, date, parseSurgeon(surgeonId));
+  }
+
+  /** نمای ناظر یا نه، و فهرستِ پزشکان برای انتخابگرِ سوپرادمین — برای همه ۲۰۰ (قانونِ ۲۹). */
+  @Get('desk') @RequirePermissions('surgeon.read')
+  desk(@CurrentUser() user: any) { return this.portal.desk(user); }
 
   /** شمارشِ روزهای ماه — نشانهٔ تقویمِ انتخابِ تاریخ، با همان مجوزِ دیدنِ میز. */
   @Get('month') @RequirePermissions('surgeon.read')
-  month(@CurrentUser() user: any, @Query('year') year: string, @Query('month') month: string) {
-    return this.portal.month(user, Number(year), Number(month));
+  month(@CurrentUser() user: any, @Query('year') year: string, @Query('month') month: string, @Query('surgeonId') surgeonId?: string) {
+    return this.portal.month(user, Number(year), Number(month), parseSurgeon(surgeonId));
   }
   @Get('finances') @RequirePermissions('surgeon.read')
   finances(@CurrentUser() user: any, @Query('surgeonId') surgeonId?: string, @Query('page') page?: string) { return this.portal.finances(user, Number(surgeonId), Number(page) || 1); }

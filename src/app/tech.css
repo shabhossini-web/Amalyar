@@ -51,12 +51,20 @@
   padding: 3px 9px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.tk-tag.ok { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.tk-tag.ok { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
 .tk-tag.no { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 
 .tk-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text2); }
 .tk-facts span { display: inline-flex; align-items: center; gap: 5px; }
 .tk-facts svg { color: var(--brand-2); flex: 0 0 auto; }
+
+/* نمای سرپرستی (سوپرادمین) — «مالِ کیست» روی هر کارت. نام پررنگ‌تر از بقیهٔ
+   واقعیت‌هاست: در فهرستِ درهمِ چند نفر، اولین چیزی است که ناظر دنبالش می‌گردد. */
+.tk-owner { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+.tk-owner svg { flex: 0 0 auto; color: var(--brand-2); }
+.tk-owner b { font-weight: 800; color: var(--text1); }
+/* شمارِ کارِ هر نفر در فیلتر — همان وزنِ `td-own-n`ِ «امروز»، با ارقامِ هم‌عرض. */
+.tk-own-n { font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ── ستِ همراه ── */
 .tk-sets { display: grid; gap: 8px; }
@@ -86,9 +94,10 @@
   flex: 1; min-width: 130px; padding: 10px;
   color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13);
 }
-.tk-report.on { color: #6ee7b7; border-color: rgba(52, 211, 153, .3); background: rgba(52, 211, 153, .08); }
+.tk-report.on { color: var(--green-text); border-color: rgba(52, 211, 153, .3); background: rgba(52, 211, 153, .08); }
 .tk-ghost:hover, .tk-report:hover { border-color: rgba(var(--brand-2-rgb), .5); }
-.tk-mini:disabled, .tk-save:disabled, .tk-report:disabled { opacity: .5; cursor: not-allowed; }
+/* `tk-ghost` هم: هنگامِ یک پذیرش همهٔ دکمه‌های پذیرش قفل‌اند و باید قفل هم دیده شوند. */
+.tk-mini:disabled, .tk-save:disabled, .tk-report:disabled, .tk-ghost:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── شیت‌ها (ورود/خروج از ui/Overlay.jsx) ── */
 .tk-overlay {
@@ -119,7 +128,7 @@
 }
 .tk-tot b { font-size: 16px; font-weight: 900; }
 .tk-tot span { font-size: 10.5px; color: var(--text3); }
-.tk-tot .warn b { color: #fcd34d; }
+.tk-tot .warn b { color: var(--amber-text); }
 
 .tk-line {
   display: grid; gap: 4px; padding: 9px 10px; border-radius: 12px;
@@ -144,28 +153,30 @@
   font: inherit; font-size: 11.5px; cursor: pointer; padding: 6px 11px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .13);
 }
-.tk-chip.on { color: #fff; background: rgba(var(--brand-2-rgb), .3); border-color: rgba(var(--brand-2-rgb), .6); }
+.tk-chip.on { color: var(--text1); background: rgba(var(--brand-2-rgb), .3); border-color: rgba(var(--brand-2-rgb), .6); }
 .tk-save {
   padding: 11px; color: #fff; border: 0;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 .tk-note { font-size: 12px; line-height: 1.9; color: var(--text2); }
-.tk-note.ok { color: #6ee7b7; }
+.tk-note.ok { color: var(--green-text); }
 .tk-note.no { color: var(--red-text); }
 
 .tk-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  /* متن از توکن: سطحِ توست در تمِ روشن سفید است و `#fff` رویش نامرئی می‌شد. */
+  color: var(--text1); background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .tk-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
+@media (prefers-reduced-motion: reduce) { .tk-toast { transition: none; } }
 
 @media (max-width: 560px) {
   .tk { padding: 12px 10px 32px; }
   .tk-card { padding: 11px; }
   .tk-acts { flex-direction: column; }
 }
-/* Hospital roster offers only the unassigned visits in the operator's duty. */
-.tk-open-visit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid #ffffff20; }
+/* مراجعه‌های آزادِ همان بیمارستان و روزِ برنامهٔ حضور — فقط پذیرش‌پذیرها. */
+.tk-open-visit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(var(--veil-rgb), .12); }
 .tk-open-visit small { display: block; opacity: .7; margin-top: 6px; }

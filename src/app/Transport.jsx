@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import './transport.css';
-import { Alert, Arrive, Back, Box, CheckCircle, Clock, Close, Hospital, Phone, Truck, User } from '../ui/icons.jsx';
+import { Alert, Arrive, Back, Box, CheckCircle, Clock, Close, Hospital, Phone, Truck, User, Users } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { faTime } from '../lib/time.js';
@@ -20,19 +20,43 @@ const SCOPES = [
   { key: 'past', label: 'گذشته', icon: CheckCircle },
 ];
 
+/** برچسبِ فیلتر با شمارِ توقف — نام و عددِ پررنگ، همان شکلِ فیلترِ «امروز» و دفترِ کار. */
+const counted = (label, n) => (n ? <>{label} <b className="tr-own-n">{num(n)}</b></> : label);
+
+/**
+ * نیروهای نمای سرپرستی، به ترتیبِ نام — از خودِ توقف‌ها.
+ * «مالِ کیست» (`ownerId` + `staffName`) را سرور روی هر مسیر می‌گذارد؛ این‌جا فقط گروه می‌شوند.
+ */
+function peopleOf(stops) {
+  const by = new Map();
+  for (const s of stops) {
+    if (s.ownerId == null) continue;
+    const key = String(s.ownerId);
+    const p = by.get(key) ?? { key, name: s.staffName || '—', n: 0 };
+    p.n += 1;
+    by.set(key, p);
+  }
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+}
+
 /**
  * پرتالِ تیمِ حمل‌ونقل.
  *
- * ⚠️ این صفحه **تختهٔ چینش با فیلترِ راننده نیست**. سرور نمای جداگانه‌ای
+ * این صفحه **تختهٔ چینش با فیلترِ راننده نیست**. سرور نمای جداگانه‌ای
  * می‌دهد که هیچ نام و کدِ بیماری در آن نیست؛ اگر روزی این‌جا نامِ بیمار دیده
  * شد، اشکال در `transport.service.ts` است نه در این فایل.
  *
  * ترتیبِ کارتِ هر توقف همان ترتیبِ کارِ راننده است: ساعت و مقصد، بعد «چه
  * چیزی» (بار با نامِ کالا و سریال)، بعد «به چه کسی» (برنامه)، بعد شمارهٔ
  * کارشناسِ حاضر برای وقتی زودتر رسید، و آخر دکمهٔ ثبتِ تحویل.
+ *
+ * نمای سرپرستی (سوپرادمین، `data.team` از سرور — قانونِ ۲۹): مسیرِ **همهٔ**
+ * نیروها، با نامِ نیرو روی هر توقف و فیلترِ نیرو؛ «ثبتِ تحویل» همان دکمه است
+ * و از طرفِ نیروی همان مسیر ثبت می‌کند.
  */
 export default function Transport() {
   const [scope, setScope] = useState('today');
+  const [who, setWho] = useState('all');
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
@@ -53,8 +77,13 @@ export default function Transport() {
   }, []);
   useEffect(() => { load(scope); }, [load, scope]);
 
+  const team = !!data?.team;
   const runs = data?.runs ?? [];
-  const stops = runs.flatMap((r) => (r.stops ?? []).map((s) => ({ ...s, runDate: r.runDate, vehicle: r.vehicle, staffName: r.staffName })));
+  const allStops = runs.flatMap((r) => (r.stops ?? []).map((s) => ({ ...s, runDate: r.runDate, vehicle: r.vehicle, staffName: r.staffName, ownerId: r.ownerId })));
+  const people = team ? peopleOf(allStops) : [];
+  /* نیروی انتخاب‌شده ممکن است در بازهٔ تازه توقفی نداشته باشد؛ آن‌وقت «همه». */
+  const pick = people.some((p) => p.key === who) ? who : 'all';
+  const stops = pick === 'all' ? allStops : allStops.filter((s) => String(s.ownerId) === pick);
   const left = stops.filter((s) => !s.doneAt).length;
 
   return (
@@ -63,18 +92,37 @@ export default function Transport() {
       <header className="tr-head">
         <Link to="/app" className="tr-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
-          <h1>مسیرِ من</h1>
+          {/* تا پاسخ نیامده عنوانِ خنثی — وگرنه سوپرادمین یک لحظه «مسیرِ من» را می‌دید. */}
+          <h1>{team ? 'همهٔ مسیرها' : data ? 'مسیرِ من' : 'حمل‌ونقل'}</h1>
           <p>
-            {data?.staff
-              ? <>{data.staff.name}{data.staff.vehicle ? ` · ${data.staff.vehicle}` : ''} — چه چیزی، کجا، چه ساعتی، به چه کسی.</>
-              : data ? 'نمای سرپرستی — همهٔ مسیرها و نیروها.' : 'چه چیزی، کجا، چه ساعتی، به چه کسی.'}
+            {team
+              ? 'نمای سرپرستی — مسیرِ همهٔ نیروها، با نامِ نیرو روی هر توقف. تحویل را این‌جا از طرفِ همان نیرو ثبت کنید.'
+              : data?.staff
+                ? <>{data.staff.name}{data.staff.vehicle ? ` · ${data.staff.vehicle}` : ''} — چه چیزی، کجا، چه ساعتی، به چه کسی.</>
+                : 'چه چیزی، کجا، چه ساعتی، به چه کسی.'}
           </p>
         </div>
       </header>
 
       <Tabs label="بازهٔ کار" tone="brand" value={scope} onChange={setScope} items={SCOPES} />
 
-      {err && <div className="tr-err"><Alert width="15" height="15" /> {err}</div>}
+      {/* فیلترِ نیرو فقط وقتی بیش از یک نیرو در کار است. شمارشِ خلاصهٔ زیرش هم
+          همان نیروی انتخاب‌شده را می‌شمارد. */}
+      {people.length > 1 && (
+        <Tabs
+          label="نیروها"
+          variant="scroll"
+          className="tr-people"
+          value={pick}
+          onChange={setWho}
+          items={[
+            { key: 'all', label: counted('همه', allStops.length), icon: Users },
+            ...people.map((p) => ({ key: p.key, label: counted(p.name, p.n) })),
+          ]}
+        />
+      )}
+
+      {err && <div className="tr-err" role="alert"><Alert width="15" height="15" /> {err}</div>}
 
       {data && stops.length > 0 && (
         <div className="tr-sum">
@@ -88,7 +136,9 @@ export default function Transport() {
         {!data && !err && <div className="tr-empty">در حال بارگذاری…</div>}
         {data && stops.length === 0 && (
           <div className="tr-empty">
-            {scope === 'today' ? 'امروز توقفی به نامِ شما ثبت نشده' : scope === 'upcoming' ? 'برای دو هفتهٔ آینده توقفی ثبت نشده' : 'در دو هفتهٔ گذشته توقفی نبوده'}
+            {scope === 'today'
+              ? (team ? 'امروز برای هیچ نیرویی توقفی ثبت نشده' : 'امروز توقفی به نامِ شما ثبت نشده')
+              : scope === 'upcoming' ? 'برای دو هفتهٔ آینده توقفی ثبت نشده' : 'در دو هفتهٔ گذشته توقفی نبوده'}
           </div>
         )}
         {stops.map((s, i) => (
@@ -100,13 +150,20 @@ export default function Transport() {
                 <small>
                   {s.kind === 'pickup' ? 'جمع‌آوری' : 'تحویل'}
                   {scope !== 'today' && s.runDate ? ` · ${faDate(s.runDate)}` : ''}
-                  {s.staffName ? ` · ${s.staffName}` : ''}
+                  {!team && s.staffName ? ` · ${s.staffName}` : ''}
                 </small>
               </div>
               {s.doneAt
                 ? <span className="tr-tag ok">تحویل شد</span>
                 : <span className="tr-tag">مانده</span>}
             </header>
+
+            {/* نمای سرپرستی — «مسیرِ کیست» و با کدام خودرو. */}
+            {team && (
+              <p className="tr-owner">
+                <Truck width="14" height="14" /> مسیرِ <b>{s.staffName || '—'}</b>{s.vehicle ? ` · ${s.vehicle}` : ''}
+              </p>
+            )}
 
             {s.address && <p className="tr-addr">{s.address}</p>}
 
@@ -167,13 +224,14 @@ export default function Transport() {
         ))}
       </div>
 
-      {/* ⚠️ `AnimatePresence` باید در **والد** باشد، نه داخلِ خودِ شیت: اگر
+      {/* `AnimatePresence` باید در **والد** باشد، نه داخلِ خودِ شیت: اگر
           داخل بنشیند، با unmountِ شیت خودش هم می‌رود و انیمیشنِ خروج هرگز
           اجرا نمی‌شود — شیت به‌جای بسته‌شدن، می‌پرد. */}
       <AnimatePresence>
         {doneFor && (
           <DoneSheet
             stop={doneFor}
+            team={team}
             onClose={() => setDoneFor(null)}
             onSaved={(m) => { setDoneFor(null); setToast(m); load(scope); }}
             onError={setErr}
@@ -181,7 +239,7 @@ export default function Transport() {
         )}
       </AnimatePresence>
 
-      <div className={`tr-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`tr-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }
@@ -189,11 +247,14 @@ export default function Transport() {
 /**
  * ثبتِ تحویل.
  *
- * ⚠️ «تحویل‌گیرندهٔ واقعی» جدا از برنامه ثبت می‌شود. برنامه گفته «بده به
+ * «تحویل‌گیرندهٔ واقعی» جدا از برنامه ثبت می‌شود. برنامه گفته «بده به
  * کارشناس»، ولی راننده زودتر رسیده و به CSR داده — اگر همان فیلد بازنویسی
  * می‌شد، فردا معلوم نبود برنامه چه بود و واقعیت چه شد.
+ *
+ * در نمای سرپرستی شیت می‌گوید **از طرفِ کدام نیرو** ثبت می‌شود و پرسش را
+ * بی‌«شما» می‌پرسد — ناظر خودش چیزی تحویل نداده است.
  */
-function DoneSheet({ stop, onClose, onSaved, onError }) {
+function DoneSheet({ stop, team, onClose, onSaved, onError }) {
   const [who, setWho] = useState(stop.handedTo ?? '');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -206,7 +267,7 @@ function DoneSheet({ stop, onClose, onSaved, onError }) {
         method: 'POST',
         body: { handedActual: who.trim(), notes: notes.trim() },
       });
-      onSaved('تحویل ثبت شد ✓');
+      onSaved('تحویل ثبت شد');
     } catch (e) { onError(e.message); setBusy(false); }
   };
 
@@ -217,9 +278,10 @@ function DoneSheet({ stop, onClose, onSaved, onError }) {
         <button type="button" className="tr-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <div className="tr-sheet-body">
+        {team && <p className="tr-owner"><Truck width="14" height="14" /> ثبت از طرفِ <b>{stop.staffName || '—'}</b></p>}
         {stop.handedTo && <p className="tr-hint">برنامه: تحویل به «{stop.handedTo}»</p>}
         <label className="tr-field">
-          <span>به چه کسی تحویل دادید؟</span>
+          <span>{team ? 'به چه کسی تحویل داده شد؟' : 'به چه کسی تحویل دادید؟'}</span>
           <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="نام یا بخش" />
         </label>
         <div className="tr-chips">

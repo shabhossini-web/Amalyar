@@ -107,3 +107,36 @@
 
 /* کارِ راه‌اندازیِ یک‌باره — زیرِ کارِ روز و کم‌رنگ‌تر از آن */
 .sp-setup { margin-top: 28px; opacity: .85; }
+
+/* ── نمای ناظر (سوپرادمین، قانونِ ۲۹) — «میزِ کدام پزشک؟» ──
+   نواری جدا با لبهٔ برند تا روشن باشد این میزِ خودِ بیننده نیست. بالای تب‌ها چون
+   دامنهٔ همهٔ تب‌هاست. انتخابگر همان `Pick`ِ سراسری است، با کفِ لمسیِ ۴۴px. */
+.sp-scope {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 14px; padding: 10px 12px;
+  border-radius: 14px; background: rgba(var(--brand-rgb), .07); border: 1px solid rgba(var(--brand-2-rgb), .32);
+}
+.sp-scope-l { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: var(--text1); }
+.sp-scope-l > svg { flex: 0 0 auto; color: var(--brand-2); }
+.sp-scope-pick { flex: 1 1 220px; max-width: 380px; min-width: 0; }
+.sp-scope .pk-btn { min-height: 44px; }
+/* «همهٔ پزشکان» یک انتخابِ واقعی است، نه جای‌خالی — کم‌رنگِ پیش‌فرضِ `Pick` این‌جا نمی‌آید. */
+.sp-scope .pk-btn.empty span { color: var(--text1); font-weight: 700; }
+.sp-scope .pk-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* برچسبِ «مالِ کدام پزشک» روی ردیف‌ها و کارت‌های نمای ادغامی — هم‌شکلِ قرصِ «مالِ کیست»ِ
+   صفِ کار: خنثی، چون رنگ مالِ وضعیت است (منتظر/مانده کهرباست) نه مالک. نام کوتاه می‌شود،
+   نه مبلغ و نه وضعیتِ کنارش. */
+.sp-doc {
+  display: inline-flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; max-width: 55%;
+  padding: 0 8px; border-radius: 99px; font-size: 11.5px; font-weight: 700; line-height: 1.7;
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.sp-doc > svg { flex: 0 0 auto; color: var(--brand-2); }
+.sp-doc-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-card > .sp-doc { justify-self: start; max-width: 100%; }
+.sp-row-sub .sp-doc + .sp-row-meta:empty { display: none; }
+.sp-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+@media (max-width: 560px) { .sp-scope-pick { flex-basis: 100%; max-width: none; } }

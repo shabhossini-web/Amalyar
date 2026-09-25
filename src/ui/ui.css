@@ -75,7 +75,8 @@
   font-style: normal;
   font-size: 11px;
   background: rgba(251, 191, 36, .22);
-  color: #fcd34d;
+  /* توکن، نه `#fcd34d`: زردِ روشن روی زمینهٔ سفیدِ تمِ روشن (پیش‌فرضِ مطب) خوانا نبود. */
+  color: var(--amber-text);
 }
 .ui-tabs button.on .ui-tab-badge { background: rgba(0, 0, 0, .22); color: #fff; } /* تیره در هر دو تم */
 

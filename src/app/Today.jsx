@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import Overlay from '../ui/Overlay.jsx';
+import Tabs from '../ui/Tabs.jsx';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import WorkRow from './WorkRow.jsx';
@@ -19,17 +20,13 @@ import './work.css';
 import './today.css';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
-const tomorrow9 = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 0, 0);
-  return d.toISOString();
-};
 /* سلام بر پایهٔ ساعتِ **دستگاه** — نه سرور: کاربرِ شبِ ایران نباید «صبح بخیر» بگیرد
    چون سرور جای دیگری است. این تنها چیزی است که این‌جا محاسبه می‌شود. */
 const greeting = (h) => (h < 5 ? 'شبِ آرام' : h < 12 ? 'صبح بخیر' : h < 17 ? 'ظهر بخیر' : h < 21 ? 'عصر بخیر' : 'شب بخیر');
+/* فهرستِ یک دستهٔ «مالِ کیست» — همان سقفِ نمای تیمِ خودِ `/work/today`؛ بقیه در `/app/work`. */
+const OWNER_ROWS = 12;
 
-/* ⚠️ نگاشتِ فارسیِ وضعیت این‌جا **نیست** و نباید برگردد: سرور برچسب را همراهِ
+/* هشدار: نگاشتِ فارسیِ وضعیت این‌جا **نیست** و نباید برگردد: سرور برچسب را همراهِ
    خودِ ردیف می‌فرستد (`statusFa`, `opStatusFa`). نسخهٔ کلاینتیِ قبلی با سرور
    نمی‌خواند («رسید» در برابرِ «در مطب»، «رزرو» در برابرِ «در انتظارِ پرداخت»)،
    پس یک بیمار در دو میز دو وضعیتِ متفاوت داشت. نگهبانِ CI همین را می‌سنجد. */
@@ -41,9 +38,14 @@ const greeting = (h) => (h < 5 ? 'شبِ آرام' : h < 12 ? 'صبح بخیر' 
  * کارش کجاست؛ حالا اولین چیزی که می‌بیند کارِ خودش است و ابزارها یک کلیک
  * پایین‌تر در کشوی «همهٔ ابزارها» می‌مانند (لانچر هنوز روی `/app/tools` هست).
  *
- * ⚠️ هیچ عددی این‌جا حساب نمی‌شود: `GET /work/today` آماده می‌دهدشان (قانونِ ۱۵).
- * ⚠️ هر بخش سمتِ سرور گیت شده؛ `sections` می‌گوید کدام‌ها را اصلاً نشان بدهیم،
+ * هشدار: هیچ عددی این‌جا حساب نمی‌شود: `GET /work/today` آماده می‌دهدشان (قانونِ ۱۵).
+ * هشدار: هر بخش سمتِ سرور گیت شده؛ `sections` می‌گوید کدام‌ها را اصلاً نشان بدهیم،
  * پس کارشناسِ سطح ۲ صفحهٔ نصفه‌خالی با کادرهای «دسترسی ندارید» نمی‌بیند.
+ *
+ * **سوپرادمین بی‌محدودیت است** (قانونِ ۲۹، خواستهٔ مالک ۱۴۰۵/۰۷/۰۳): سرور `team`
+ * می‌گوید و «کارهای من» می‌شود «کارهای تیم» — کارِ همه، هر ردیف با «مالِ کیست»،
+ * با همان «انجام شد»/«فردا» و «واگذاری». تا دیروز این بخش برای او تقریباً خالی بود
+ * چون نقشِ شغلی ندارد، و برای دیدنِ کارِ دیگران باید پروفایل عوض می‌کرد.
  */
 export default function Today() {
   const { user } = useAuth();
@@ -78,9 +80,51 @@ export default function Today() {
       .then((r) => { setData(r); setErr(null); })
       .catch((e) => setErr({ message: e?.message || 'بارگذاری نشد', status: e?.status ?? 0 }));
   }, []);
-  /* ⚠️ حساب در همین تب عوض می‌شود (`/auth/switch`) بی آنکه صفحه از نو سوار شود؛
+  /* هشدار: حساب در همین تب عوض می‌شود (`/auth/switch`) بی آنکه صفحه از نو سوار شود؛
      بی `user?.id` دادهٔ حسابِ قبلی (و دکمهٔ «+»ِ او) می‌ماند و به ۴۰۳ می‌خورد. */
   useEffect(() => { setData(null); load(); }, [load, user?.id]);
+
+  /* ── نمای تیم (سوپرادمین، قانونِ ۲۹) ──
+     سرور می‌گوید (`team`) و دسته‌های «مالِ کیست» را با شمار و `filter`ِ آماده می‌دهد
+     (`owners`)؛ رابط سطح را حساب نمی‌کند (قانونِ ۳). دستهٔ انتخاب‌شده از خودِ سرور
+     پرسیده می‌شود نه از میانِ همان ردیف‌های آمده — وگرنه تب «سارا ۸» می‌گفت و سه
+     ردیف نشان می‌داد. */
+  const team = data?.team === true;
+  const owners = team ? data.owners ?? [] : [];
+  const [facet, setFacet] = useState('all');
+  const current = facet === 'all' ? null : owners.find((o) => o.key === facet) ?? null;
+  const facetQuery = current ? new URLSearchParams({ scope: 'inbox', limit: String(OWNER_ROWS), ...current.filter }).toString() : '';
+  const [facetRows, setFacetRows] = useState(null);
+  const [facetTick, setFacetTick] = useState(0);
+  const facetReq = useRef({ n: 0, query: '' });
+  /* فهرستِ افراد برای «واگذاری» — یک‌بار، فقط در نمای تیم. `false` یعنی نیامد: ردیف‌ها
+     برچسبِ ساده می‌مانند نه دکمه‌ای که به فهرستِ خالی باز شود. */
+  const [assignees, setAssignees] = useState(null);
+  useEffect(() => { setFacet('all'); setAssignees(null); }, [user?.id]);
+  /* دسته‌ای که با تازه‌شدنِ صفحه خالی شد (آخرین کارش بسته یا واگذار شد) دیگر تب ندارد؛ برگرد به «همه». */
+  useEffect(() => { if (facet !== 'all' && data && !current) setFacet('all'); }, [facet, data, current]);
+  useEffect(() => {
+    const req = facetReq.current;
+    /* برگشت به «همه»: پرسشِ در راه دیگر مالِ این نما نیست، و انتخابِ دوبارهٔ همان دسته
+       باید «در حالِ بارگذاری» بگیرد نه ردیف‌های کهنهٔ دفعهٔ قبل. */
+    if (!facetQuery) { req.n += 1; req.query = ''; return; }
+    const my = ++req.n;
+    /* تعویضِ دسته = «در حالِ بارگذاری»؛ تازه‌شدنِ همان دسته (بعد از «انجام شد») ردیف‌ها را
+       تا رسیدنِ پاسخ نگه می‌دارد — فهرست زیرِ دستِ کاربر چشمک نمی‌زند. */
+    if (req.query !== facetQuery) { req.query = facetQuery; setFacetRows(null); }
+    api(`/work?${facetQuery}`)
+      .then((r) => { if (req.n === my) setFacetRows(Array.isArray(r) ? r : []); })
+      .catch(() => { if (req.n === my) setFacetRows('error'); });
+  }, [facetQuery, facetTick]);
+  useEffect(() => {
+    if (!team || assignees !== null) return undefined;
+    let live = true;
+    api('/work/assignees')
+      .then((r) => { if (live) setAssignees(Array.isArray(r) ? r : []); })
+      .catch(() => { if (live) setAssignees(false); });
+    return () => { live = false; };
+  }, [team, assignees]);
+
   /* پاپ‌آپِ «همان چیز» (سفارش/مراجعه) از ردیفِ کار و از نمای استثنا — بازخوردِ
      مالک: هشدار باید بگوید مالِ چیست و با کلیک بازِ شود و از همان‌جا انجام شود.
      بعد از هر ثبت، صفحه و زنگِ پوسته با هم تازه می‌شوند. */
@@ -96,14 +140,14 @@ export default function Today() {
     setBusyProc(true);
     try {
       const r = await api('/work/process', { method: 'POST' });
-      setToast(`صف پردازش شد ✓ (${faNum(r?.processed ?? 0)} رویداد)`);
+      setToast(`صف پردازش شد (${faNum(r?.processed ?? 0)} رویداد)`);
       load();
       window.dispatchEvent(new Event(WORK_CHANGED));
     } catch (e) { setToast(e?.message || 'پردازش نشد'); } finally { setBusyProc(false); }
   };
-  /* کاری که از زنگِ پوسته بسته شود باید همین‌جا هم برود. */
+  /* کاری که از زنگِ پوسته بسته شود باید همین‌جا هم برود — فهرستِ دستهٔ انتخاب‌شده هم. */
   useEffect(() => {
-    const h = () => load();
+    const h = () => { load(); setFacetTick((n) => n + 1); };
     window.addEventListener(WORK_CHANGED, h);
     return () => window.removeEventListener(WORK_CHANGED, h);
   }, [load]);
@@ -119,10 +163,25 @@ export default function Today() {
         work: d.work.filter((x) => x.id !== w.id),
         brief: action === 'done' ? { ...d.brief, work: Math.max(0, d.brief.work - 1) } : d.brief,
       } : d));
+      setFacetRows((r) => (Array.isArray(r) ? r.filter((x) => x.id !== w.id) : r));
       window.dispatchEvent(new Event(WORK_CHANGED));
-      setToast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
+      setToast(action === 'done' ? 'انجام شد' : 'به فردا موکول شد');
     } catch (e) {
       setToast(e?.message || 'انجام نشد');
+    } finally {
+      setBusy(0);
+    }
+  };
+  /* «واگذاری» از ردیفِ تیم — همان `PATCH /work/:id` که سوپروایزر هم دارد؛ ممیزی به نامِ
+     خودِ سوپرادمین ثبت می‌شود. نامِ مقصد در توست از پاسخِ سرور می‌آید، نه از فهرستِ کلاینت. */
+  const assign = async (w, accountId) => {
+    setBusy(w.id);
+    try {
+      const r = await api(`/work/${w.id}`, { method: 'PATCH', body: { action: 'assign', accountId } });
+      window.dispatchEvent(new Event(WORK_CHANGED));
+      setToast(r?.mine ? 'به نامِ خودتان شد' : r?.ownerName ? `به ${r.ownerName} واگذار شد` : 'واگذار شد');
+    } catch (e) {
+      setToast(e?.message || 'واگذار نشد');
     } finally {
       setBusy(0);
     }
@@ -135,6 +194,11 @@ export default function Today() {
   };
   const b = data?.brief;
   const name = user?.displayName || user?.firstName || '';
+  /* ردیف‌های بخشِ کار: «همه» از خودِ `/work/today`، هر دسته از `GET /work` با فیلترِ همان دسته.
+     شمار و مقصدِ «همه» هم دنبالِ دستهٔ انتخاب‌شده می‌روند — «کارهای من» همان دسته را باز می‌کند. */
+  const workRows = data == null ? null : current ? facetRows : data.work;
+  const viewCount = current ? current.count : b?.work ?? 0;
+  const workTo = current ? `/app/work?owner=${encodeURIComponent(current.key)}` : '/app/work';
 
   return (
     <div className={data?.canCreateVisit ? 'td has-fab' : 'td'}>
@@ -144,7 +208,7 @@ export default function Today() {
         </h1>
         {b && (
           <ul className="td-chips" aria-label="خلاصهٔ امروز">
-            <li className={b.overdue ? 'hot' : ''}><b>{faNum(b.work)}</b> کارِ باز{b.overdue > 0 && <em> ({faNum(b.overdue)} عقب‌افتاده)</em>}</li>
+            <li className={b.overdue ? 'hot' : ''}><b>{faNum(b.work)}</b> {team ? 'کارِ بازِ تیم' : 'کارِ باز'}{b.overdue > 0 && <em> ({faNum(b.overdue)} عقب‌افتاده)</em>}</li>
             {data.sections.visits && <li><b>{faNum(b.visits)}</b> {t.todayVisit}</li>}
             {data.sections.appointments && <li><b>{faNum(b.appointments)}</b> نوبتِ امروز</li>}
             {data.sections.intake && b.intakePending > 0 && (
@@ -196,18 +260,47 @@ export default function Today() {
 
       <section className="td-sec" aria-labelledby="td-work-h">
         <div className="td-sec-head">
-          <h2 id="td-work-h">کارهای من</h2>
-          <Link to="/app/work" className="td-more">همه <ArrowStart width="14" height="14" /></Link>
+          <h2 id="td-work-h">{team ? 'کارهای تیم' : 'کارهای من'}</h2>
+          <Link to={workTo} className="td-more">همه <ArrowStart width="14" height="14" /></Link>
         </div>
-        {data == null ? <p className="td-skel">در حالِ بارگذاری…</p>
-          : data.work.length === 0 ? <p className="td-empty">کارِ بازی ندارید.</p>
-            : (
-              <ul className="wk-list">
-                {data.work.map((w) => (
-                  <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact onOpen={workTarget(w) ? () => things.open(workTarget(w)) : undefined} />
-                ))}
-              </ul>
-            )}
+        {/* «مالِ کیست» — یک ردیف تبِ اسکرولی با شمارِ هر دسته، تا پخشِ کار بینِ تیم
+            در یک نگاه دیده شود و با یک لمس به کارِ یک نفر برسد. همان `Tabs`ِ سامانه
+            (فلش‌ها/Home/End، قرصِ لغزان، حرکتِ کمتر). شمار داخلِ برچسب است نه `badge`:
+            نشانِ کهربایی یعنی «هشدار» و این‌جا هیچ دسته‌ای هشدار نیست. */}
+        {team && owners.length > 0 && (
+          <Tabs
+            variant="scroll" className="td-owners" label="مسئولِ کار" value={current ? current.key : 'all'} onChange={setFacet}
+            items={[
+              { key: 'all', label: <>همه <b className="td-own-n">{faNum(b.work)}</b></> },
+              ...owners.map((o) => ({ key: o.key, label: <>{o.label} <b className="td-own-n">{faNum(o.count)}</b></> })),
+            ]}
+          />
+        )}
+        {workRows == null ? <p className="td-skel">در حالِ بارگذاری…</p>
+          : workRows === 'error' ? (
+            <p className="td-empty" role="alert">
+              فهرستِ این دسته نیامد.{' '}
+              <button type="button" className="td-retry" onClick={() => setFacetTick((n) => n + 1)}>دوباره</button>
+            </p>
+          )
+            : workRows.length === 0 ? <p className="td-empty">{!team ? 'کارِ بازی ندارید.' : current ? 'در این دسته کارِ بازی نمانده.' : 'تیم کارِ بازی ندارد.'}</p>
+              : (
+                <>
+                  <ul className="wk-list">
+                    {workRows.map((w) => (
+                      <WorkRow
+                        key={w.id} w={w} onAct={act} busy={busy} compact
+                        onOpen={workTarget(w) ? () => things.open(workTarget(w)) : undefined}
+                        onAssign={assignees ? assign : undefined} assignees={assignees || undefined}
+                      />
+                    ))}
+                  </ul>
+                  {/* فهرست بریده شده؟ بگو چندتای دیگر هست و کجا — نه اینکه دوازده ردیف «همه» به‌نظر برسد. */}
+                  {team && viewCount > workRows.length && (
+                    <Link to={workTo} className="td-more td-more-all">همهٔ {faNum(viewCount)} کار <ArrowStart width="14" height="14" /></Link>
+                  )}
+                </>
+              )}
       </section>
 
       {data?.sections.visits && (
@@ -317,7 +410,7 @@ const hoursSince = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso).g
  * چهار شکافی که هیچ‌کس خبردار نمی‌شود چون هیچ‌کس مسئولشان نیست. عمداً **پایینِ**
  * صفحه است: کارِ خودِ کاربر اول می‌آید، این نما دربارهٔ کارِ تیم است.
  *
- * ⚠️ وقتی هر چهار ردیف صفرند، کلِ بخش رندر **نمی‌شود** — نمای استثنا که همیشه
+ * هشدار: وقتی هر چهار ردیف صفرند، کلِ بخش رندر **نمی‌شود** — نمای استثنا که همیشه
  * روی صفحه باشد دیگر استثنا نیست و چشم از رویش رد می‌شود.
  *
  * هر نمونه **نامِ بیمار** را می‌گوید و اگر مقصدی دارد (سفارش، مراجعه) دکمه است و
