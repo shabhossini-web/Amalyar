@@ -33,7 +33,7 @@ const provider = http.createServer(async (req, res) => {
 });
 await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
 const cfg = { enabled: true, baseUrl: `http://127.0.0.1:${provider.address().port}`, apiKey: 'local-only', models: { chat: 'fixture' }, prompts: {} };
-const ai = new AiService({ patient: { findUnique: async () => ({ id: 1 }) }, clinicalNote: { findMany: async () => [] }, aiFeedback: { findMany: async () => [] } }, { ai: async () => cfg }, {});
+const ai = new AiService({ patient: { findFirst: async () => ({ id: 1 }) }, clinicalNote: { findMany: async () => [] }, aiFeedback: { findMany: async () => [] } }, { ai: async () => cfg }, {});
 const proxy = http.createServer(async (req, res) => {
   let body = ''; for await (const chunk of req) body += chunk;
   if (req.url === '/api/crlf') { res.setHeader('Content-Type', 'text/event-stream'); res.end('data:{"d":"متن"}\r\n\r\ndata:[DONE]\r\n\r\n'); return; }

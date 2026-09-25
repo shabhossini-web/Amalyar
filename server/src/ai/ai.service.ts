@@ -10,7 +10,7 @@ import { NOTE_KIND_LABELS } from '../patients/labels';
 import { ServiceCodesService } from '../patients/service-codes.service';
 import { ASSISTANT_GUIDE } from './assistant-knowledge';
 import { canAccess } from '../auth/access-check';
-import { scopedVisitWhere } from '../common/own-scope';
+import { isScoped, scopedPatientWhere, scopedVisitWhere } from '../common/own-scope';
 import { textSearchOr } from '../common/search';
 import { jalalizeDates } from '../common/jalali';
 import { faDateStr } from '../patients/summary.service';
@@ -113,8 +113,11 @@ export class AiService {
     if (!text) throw new BadRequestException('متنی برای دستیار نیست');
     const cfg = await this.cfgOrThrow();
 
-    const patient = await this.prisma.patient.findUnique({
-      where: { id: dto.patientId },
+    /* ⚠️ با دامنهٔ دیدِ کاربر (زیرِ سوپروایزر فقط پرونده و مراجعهٔ منتسب به خودش) — همان قاعدهٔ
+       `careDraft`: بافتارِ این پیش‌نویس از خودِ مراجعه ساخته می‌شود و پیش از رسیدن به سرویسِ
+       بیرونی باید رد شود، با همان پیامِ «پیدا نشد» (وجودِ پرونده لو نرود). */
+    const patient = await this.prisma.patient.findFirst({
+      where: { AND: [{ id: dto.patientId }, scopedPatientWhere(user)] },
       select: { id: true },
     });
     if (!patient) throw new BadRequestException('پرونده پیدا نشد');
@@ -123,7 +126,7 @@ export class AiService {
     let procedureTypeId: number | null = null;
     if (dto.visitId != null) {
       const v = await this.prisma.visit.findFirst({
-        where: { id: dto.visitId, patientId: dto.patientId },
+        where: { AND: [{ id: dto.visitId, patientId: dto.patientId }, scopedVisitWhere(user)] },
         select: {
           procedureTypeId: true, opType: true,
           procedureType: { select: { name: true } },
@@ -625,14 +628,17 @@ export class AiService {
   async recordSummary(user: any, patientId: number) {
     this.assertClinical(user);
     const cfg = await this.cfgOrThrow();
-    const patient = await this.prisma.patient.findUnique({
-      where: { id: patientId },
+    /* ⚠️ دامنهٔ دیدِ کاربر، هم برای خودِ پرونده هم برای آنچه خلاصه می‌شود: کاربرِ زیرِ سوپروایزر
+       فقط مراجعه‌های منتسب به خودش را می‌بیند، پس خلاصه هم نباید سیر و شرحِ مراجعهٔ دیگری را
+       به سرویسِ بیرونی بفرستد. شرحِ بی‌مراجعه (سطحِ پرونده) می‌ماند. */
+    const patient = await this.prisma.patient.findFirst({
+      where: { AND: [{ id: patientId }, scopedPatientWhere(user)] },
       select: { id: true, birthDate: true, gender: true },
     });
     if (!patient) throw new BadRequestException('پرونده پیدا نشد');
 
     const visits = await this.prisma.visit.findMany({
-      where: { patientId },
+      where: { AND: [{ patientId }, scopedVisitWhere(user)] },
       orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
       take: 10,
       select: {
@@ -645,7 +651,10 @@ export class AiService {
       },
     });
     const notes = await this.prisma.clinicalNote.findMany({
-      where: { patientId, replacedAt: null },
+      where: {
+        patientId, replacedAt: null,
+        ...(isScoped(user) ? { OR: [{ visitId: null }, { visit: scopedVisitWhere(user) }] } : {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: 8,
       select: { kind: true, body: true, createdAt: true },
@@ -695,8 +704,10 @@ export class AiService {
   async suggestCodes(user: any, visitId: number) {
     this.assertClinical(user);
     const cfg = await this.cfgOrThrow();
-    const visit = await this.prisma.visit.findUnique({
-      where: { id: visitId },
+    /* ⚠️ دامنهٔ دیدِ کاربر — مثلِ `careDraft`: شرحِ عملِ مراجعه‌ای که کاربر نمی‌بیند نباید به سرویسِ
+       بیرونی برود. */
+    const visit = await this.prisma.visit.findFirst({
+      where: { AND: [{ id: visitId }, scopedVisitWhere(user)] },
       select: {
         id: true, opType: true,
         procedureType: { select: { name: true } },
