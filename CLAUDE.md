@@ -209,6 +209,7 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 | `server/src/tenant/*` · `prisma/control/*` | هستهٔ مالتی‌تننت: middleware (Host→tenant)، Prisma-proxyِ per-tenant، control-DB، رمزنگاری URL |
 | `server/src/platform/*` · `scripts/provisioning-worker.ts` | کنسولِ Platform Admin (بک‌اند) + Workerِ ساختِ خودکارِ DB/role |
 | `server/src/audit/*` | ثبتِ رویدادهای حساس (AuditEvent per-tenant) |
+| `server/src/patients/subforms.ts` · `src/app/VisitSubforms.jsx` | زیرفرم‌های الصاقیِ مراجعه (داخلی: علائمِ حیاتی/درخواستِ پاراکلینیک؛ فرم‌ساز: `scope=subform`) + منتخب‌های شخصی (`/auth/prefs`، `src/app/usePrefs.jsx`) |
 | `src/pages/TenantLanding.jsx` · `server/src/site/` | سایتِ معرفیِ شرکت روی دامنهٔ خودش — عمومی و بی‌احراز؛ پیش‌فرض‌ها در `site.registry.ts` |
 | `AGENTS.md` · `.sync/` | پروتکلِ هم‌زیستیِ ایجنت‌ها + کلیمِ هرکدام (قانون ۲۲) |
 | `server/src/site/seo.service.ts` · `nginx.conf.template` | قطعهٔ `<head>`/robots/sitemap هر شرکت + تزریقِ SSI در `index.html` (قانون ۲۰) |
