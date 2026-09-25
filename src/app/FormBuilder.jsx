@@ -236,7 +236,7 @@ export default function FormBuilder() {
 
         {forms?.length > 0 && (
           <>
-            <button type="button" className="df-ghost fb-followup" disabled={busy} onClick={async () => {
+            <button type="button" className="df-ghost fb-install-fu" disabled={busy} onClick={async () => {
               setBusy(true);
               try {
                 const installed = await api('/forms/install-followup', { method: 'POST', body: {} });
