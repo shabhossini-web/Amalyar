@@ -4,17 +4,22 @@ import { EventsService } from '../work/events.service';
 import { isUnrestricted } from '../common/own-scope';
 import { PatientsService } from './patients.service';
 import { RecordService } from './record.service';
-import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { clinicDateIso, dayUtc } from '../common/clinic-day';
 import { HospitalDutiesService } from './hospital-duties.service';
 import { OTHER_PX, procedureLabel } from './visit-coding';
 
 const DAY = 24 * 60 * 60 * 1000;
 
-/** بازهٔ روزِ شمسیِ حاوی `at` — همان مبنایی که تقویم و چینش دارند. */
+/**
+ * بازهٔ «روزِ مطب»ِ حاوی `at` — همان تعریفِ `common/clinic-day.ts` که پذیرش (`assign`)،
+ * «امروز» و میزِ پذیرش دارند.
+ *
+ * ⚠️ نسخهٔ قبلی روز را از **تاریخِ UTC** می‌ساخت. بینِ نیمه‌شب تا ۳:۳۰ صبحِ تهران
+ * «امروز»ِ این پنل روزِ **قبل** بود، در حالی که پذیرشِ همان ردیف روزِ گذشته را رد
+ * می‌کرد — کارشناسِ شب‌کار عملِ امروزش را نمی‌دید و عملِ دیروز را نمی‌توانست بپذیرد.
+ */
 function dayBounds(at: Date): [Date, Date] {
-  const [jy, jm, jd] = toJalali(at);
-  const [monthStart] = jalaliMonthRange(jy, jm);
-  const from = new Date(monthStart.getTime() + (jd - 1) * DAY);
+  const from = dayUtc(clinicDateIso(at));
   return [from, new Date(from.getTime() + DAY)];
 }
 

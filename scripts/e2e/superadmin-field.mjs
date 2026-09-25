@@ -63,15 +63,14 @@ const adminId = login.user?.id;
 
 const tag = 'sf' + randomBytes(3).toString('hex');
 const phone = () => '0912' + String(Math.floor(1e6 + Math.random() * 9e6));
-/* ⚠️ دو «امروز»: دفترِ کار بازه را روی روزِ UTC می‌بُرد ولی پذیرش (`assign`) روزِ
-   گذشته را با روزِ **مطب** (تهران) رد می‌کند. بینِ ۲۰:۳۰ تا ۲۴ UTC این دو یک روز
-   فاصله دارند؛ پس مراجعه‌ها روی روزِ مطب ساخته می‌شوند و اگر آن روز فردای UTC است،
-   در بازهٔ «پیشِ رو» خوانده می‌شوند — وگرنه سنجه فقط ساعتِ آزمون را می‌سنجید. */
-const utcToday = new Date().toISOString().slice(0, 10);
+/* «امروز» یک تعریف دارد: روزِ **مطب** (`common/clinic-day.ts`). دفترِ کار و حمل‌ونقل
+   تا این بسته روزِ UTC را می‌بریدند و بینِ نیمه‌شب تا ۳:۳۰ تهران «امروز»شان روزِ قبل
+   بود؛ حالا همان روزی است که پذیرش (`assign`) می‌سنجد. پس همه‌چیز روی روزِ مطب ساخته
+   و در بازهٔ «امروز» خوانده می‌شود — بی‌استثنای ساعتِ آزمون. */
 const clinicToday = new Intl.DateTimeFormat('en-CA', {
   timeZone: process.env.CLINIC_TZ || 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());
-const TECH_SCOPE = clinicToday === utcToday ? 'today' : 'upcoming';
+const TECH_SCOPE = 'today';
 
 const trash = { visits: [], forms: [], hospitals: [], accounts: [], runs: [], features: [] };
 let browser;
@@ -130,7 +129,7 @@ try {
   const staffOf = (accountId) => num(`SELECT t.id FROM transport_staff t JOIN accounts a ON a.person_id = t.person_id WHERE a.id = ${accountId}`);
   const staff1 = staffOf(drv1.id), staff2 = staffOf(drv2.id);
   const mkRun = async (staffId, plannedAt) => {
-    const run = (await send('/routes', 'POST', { staffId, runDate: `${utcToday}T08:00:00.000Z` })).json;
+    const run = (await send('/routes', 'POST', { staffId, runDate: `${clinicToday}T08:00:00.000Z` })).json;
     if (!run?.id) throw new Error('مسیر ساخته نشد: ' + JSON.stringify(run).slice(0, 160));
     trash.runs.push(run.id);
     await send(`/routes/${run.id}/stops`, 'POST', { hospitalId: hospital.id, kind: 'deliver', plannedAt, handedTo: 'CSR' });
@@ -213,7 +212,6 @@ try {
   await browserLogin(page, login.accessToken, { ui: UI });
   const openTech = async (p) => {
     await p.goto(UI + '/app/tech', { waitUntil: 'networkidle' });
-    if (TECH_SCOPE === 'upcoming') await p.locator('.ui-tabs button', { hasText: 'پیشِ رو' }).first().click();
     await p.waitForSelector(`.tk-card:has-text("عمل${tag}")`, { timeout: 15000 });
   };
   await openTech(page);
