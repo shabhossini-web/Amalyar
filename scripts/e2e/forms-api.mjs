@@ -3,7 +3,7 @@
  *
  * هر ادعا با **حالتِ برگشتیِ سرور** سنجیده می‌شود، نه با اینکه درخواست ۲۰۰ داد.
  */
-const API = 'http://localhost:3101/api';
+const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 let TOKEN = '';
 let pass = 0;
 const fails = [];

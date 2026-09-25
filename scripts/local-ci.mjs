@@ -30,9 +30,10 @@
  *     «درازترین اول» است، از روی زمان‌های اجرای قبل (`timings.json`).
  *   • جابِ live بین `--shards` شاردِ موازی (پیش‌فرض ۳) پخش می‌شود، هرکدام با
  *     دیتابیس و پورتِ خودش — همان کاری که CI با ماتریس روی چند ماشین می‌کند.
- *     سوییتی که پورتِ پیش‌فرض را هاردکد کرده فقط در شاردِ ۰ جا دارد و سوییت‌هایی
- *     که یک پورتِ ثابت را `listen` می‌کنند (سرورِ ساختگیِ AI روی ۳۱۹۹) با هم در
- *     یک شارد می‌مانند — تشخیص از خودِ متنِ سوییت است، نه از یک فهرستِ دستی.
+ *     سوییت‌هایی که یک پورتِ ثابت را `listen` می‌کنند (سرورِ ساختگیِ AI روی
+ *     ۳۱۹۹) با هم در یک شارد می‌مانند، و سوییتی که پورتِ پیش‌فرضِ API/UI را
+ *     ثابت نوشته باشد فقط در شاردِ ۰ جا دارد (با هشدار) — تشخیص از خودِ متنِ
+ *     سوییت است، نه از یک فهرستِ دستی.
  *   • تلاشِ دومِ افتاده‌ها **بعد از** خالی‌شدنِ استخر و تنها انجام می‌شود:
  *     قرمزِ ناشی از بار، زیرِ همان بار دوباره قرمز می‌شود.
  *   • `--jobs 1 --shards 1` همان اجرای قدیمیِ پشت‌سرِهم است.
@@ -348,11 +349,17 @@ const runSegment = async (seg, jobEnv) => {
 };
 
 /* ── شاردهای live ──
-   شاردِ ۰ پورت‌ها و دیتابیس‌های پیش‌فرض را دارد (۴۲ سوییت `localhost:3101` یا
-   `127.0.0.1:5199` را هاردکد کرده‌اند). شاردِ k ≥ ۱ روی API `3101 + 20k` و UI
-   `5401 + 20k` (۳۱۲۱/۵۴۲۱، ۳۱۴۱/۵۴۴۱، …) با دیتابیس‌های `<نام>_s<k>` — هیچ
-   سوییت و هیچ گامِ buildی این پورت‌ها را نمی‌گیرد. */
+   شاردِ ۰ پورت‌ها و دیتابیس‌های پیش‌فرض را دارد (۳۱۰۱/۵۱۹۹). شاردِ k ≥ ۱ روی
+   API `3101 + 20k` و UI `5401 + 20k` (۳۱۲۱/۵۴۲۱، ۳۱۴۱/۵۴۴۱، …) با دیتابیس‌های
+   `<نام>_s<k>` — هیچ سوییت و هیچ گامِ buildی این پورت‌ها را نمی‌گیرد.
+   ⚠️ تا ۱۴۰۵/۰۷/۰۳، ۴۲ سوییت `localhost:3101`/`127.0.0.1:5199` را ثابت نوشته
+   بودند و همه به شاردِ ۰ می‌رفتند؛ حالا همه `process.env.E2E_API`/`E2E_UI`
+   می‌خوانند. اگر سوییتِ تازه‌ای دوباره ثابت بنویسد، این‌جا به شاردِ ۰ بسته
+   می‌شود و نقشه هشدار می‌دهد — درست کار می‌کند، فقط تقسیم ناهموار می‌شود. */
 const DEFAULT_PORTS = new Set(['3101', '5199']);
+/* فاصلهٔ شروعِ شاردها: بالاآمدنِ سردِ سه Vite و سه گرم‌کردنِ seed در یک لحظه،
+   اولین سوییتِ هر شارد را کند و زمان‌حساس‌ها را قرمز می‌کرد. */
+const STAGGER_S = 15;
 const shardPorts = (k) => (k === 0 ? { api: 3101, ui: 5199 } : { api: 3101 + 20 * k, ui: 5401 + 20 * k });
 const shardUrl = (url, k) => {
   if (!url || k === 0) return url;
@@ -368,8 +375,10 @@ const portFree = (port) => new Promise((r) => {
   s.listen(port, '127.0.0.1', () => s.close(() => r(true)));
 });
 
-/* هر سوییت: آیا پورتِ پیش‌فرض را هاردکد کرده (← فقط شاردِ ۰)، و کدام پورت‌های
-   ثابتِ دیگر را می‌گیرد (← هم‌گروه با هر سوییتِ دیگری که همان را می‌گیرد). */
+/* هر سوییت: آیا پورتِ پیش‌فرض را ثابت نوشته (← فقط شاردِ ۰)، و کدام پورت‌های
+   ثابتِ دیگر را می‌گیرد (← هم‌گروه با هر سوییتِ دیگری که همان را می‌گیرد).
+   بارِ اولیهٔ شاردِ k همان تأخیرِ شروعش است (`k × STAGGER`) تا همه با هم تمام
+   شوند، نه اینکه آخری سی ثانیه دیرتر. */
 const planShards = (suites, n) => {
   const info = suites.map((name, order) => {
     const ports = portsIn(fileWithLibs(resolve(root, 'scripts/e2e', `${name}.mjs`)));
@@ -393,14 +402,23 @@ const planShards = (suites, n) => {
     units.set(r, u);
   });
   const lists = Array.from({ length: n }, () => []);
-  const loads = Array(n).fill(0);
+  const loads = Array.from({ length: n }, (_, k) => k * STAGGER_S);
   const all = [...units.values()];
   for (const u of all.filter((x) => x.pinned)) { lists[0].push(...u.members); loads[0] += u.weight; }
   for (const u of all.filter((x) => !x.pinned).sort((a, b) => b.weight - a.weight)) {
     const k = loads.indexOf(Math.min(...loads));
     lists[k].push(...u.members); loads[k] += u.weight;
   }
-  return lists.map((l, k) => ({ k, suites: l.sort((a, b) => a.order - b.order).map((s) => s.name), load: loads[k] }));
+  return {
+    shards: lists.map((l, k) => ({ k, suites: l.sort((a, b) => a.order - b.order).map((s) => s.name), load: loads[k] })),
+    pinned: info.filter((s) => s.pinned).map((s) => s.name),
+  };
+};
+
+const warnPinned = (pinned) => {
+  if (!pinned.length) return;
+  console.log(`  ⚠ ${pinned.length} سوییت پورتِ پیش‌فرضِ API/UI را ثابت نوشته‌اند و فقط در شاردِ ۰ جا دارند: ${pinned.join(' ')}`);
+  console.log("    به‌جایش: process.env.E2E_API ?? 'http://localhost:3101/api' و process.env.E2E_UI ?? 'http://127.0.0.1:5199'");
 };
 
 /* یک رانِ `run-live.mjs`: خروجی با پیشوندِ شارد در ترمینال و کامل در لاگ؛ هر خطِ
@@ -463,7 +481,9 @@ if (argv.includes('--plan')) {
   const suites = readFileSync(resolve(root, 'scripts/e2e/ci-live.txt'), 'utf8').split('\n')
     .map((l) => l.replace(/#.*$/, '').trim()).filter(Boolean);
   console.log(`\nجابِ live: ${suites.length} سوییت در ${SHARDS} شارد`);
-  for (const sh of planShards(suites, SHARDS)) {
+  const { shards, pinned } = planShards(suites, SHARDS);
+  warnPinned(pinned);
+  for (const sh of shards) {
     const { api, ui } = shardPorts(sh.k);
     console.log(`  شاردِ ${sh.k} (API ${api} · UI ${ui}): ${sh.suites.length} سوییت، حدودِ ${mins(sh.load * 1000)}`);
     console.log(`    ${sh.suites.join(' ')}`);
@@ -550,8 +570,10 @@ if (PART === 'all' || PART === 'live') {
   const perShard = prep.filter((s) => !BARRIER_RE.test(s.run));
   const manifestPath = resolve(root, 'scripts/e2e/ci-live.txt');
   const suites = readFileSync(manifestPath, 'utf8').split('\n').map((l) => l.replace(/#.*$/, '').trim()).filter(Boolean);
-  const plan = planShards(suites, SHARDS).filter((s) => s.suites.length);
+  const { shards, pinned } = planShards(suites, SHARDS);
+  const plan = shards.filter((s) => s.suites.length);
   console.log(`\n══ جابِ live — ${prep.length} گامِ آماده‌سازی + ${suites.length} سوییتِ ci-live.txt در ${plan.length} شاردِ موازی ══`);
+  warnPinned(pinned);
   for (const s of plan) {
     const { api, ui } = shardPorts(s.k);
     console.log(`  شاردِ ${s.k}: ${s.suites.length} سوییت، حدودِ ${mins(s.load * 1000)} — API ${api} · UI ${ui}`);
@@ -583,11 +605,9 @@ if (PART === 'all' || PART === 'live') {
     process.exit(1);
   }
 
-  /* شاردها با فاصلهٔ کوتاه بالا می‌آیند: بالاآمدنِ سردِ سه Vite و سه گرم‌کردنِ
-     seed در یک لحظه، اولین سوییتِ هر شارد را کند و زمان‌حساس‌ها را قرمز می‌کرد. */
   const runs = [];
   for (const [n, s] of plan.entries()) {
-    if (n) await sleep(15_000);
+    if (n) await sleep(STAGGER_S * 1000);
     const manifest = resolve(LOG_DIR, `live-s${s.k}.txt`);
     writeFileSync(manifest, `${s.suites.join('\n')}\n`);
     runs.push(runLive(plan.length > 1 ? `s${s.k}` : 'live', s.k, manifest, job.env,

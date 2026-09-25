@@ -9,7 +9,7 @@
  * اجرا: `node scripts/e2e/link-form.mjs` (راه‌اندازیِ محیط در README همین پوشه).
  */
 import { captchaFor } from './lib/captcha.mjs';
-const API = 'http://localhost:3101/api';
+const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 let TOKEN = '';
 let pass = 0;
 const fails = [];

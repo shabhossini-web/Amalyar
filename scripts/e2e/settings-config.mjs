@@ -6,7 +6,7 @@
  */
 import { chromium } from 'playwright-core';
 
-const BASE = 'http://127.0.0.1:5199';
+const BASE = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
 
