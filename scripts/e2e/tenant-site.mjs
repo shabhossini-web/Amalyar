@@ -60,6 +60,31 @@ async function signup(phone, username, password) {
   return r3;
 }
 
+/**
+ * هر بخشِ `.tl-reveal` را یک‌به‌یک داخلِ دید می‌آورد و برای هرکدام **دو فریمِ
+ * رندر** صبر می‌کند.
+ *
+ * ⚠️ `behavior: 'instant'` اجباری است: `index.css` سراسری
+ * `html { scroll-behavior: smooth }` دارد، پس اسکرولِ ساده انیمیشن می‌شود و
+ * حلقه زودتر از رسیدنِ صفحه تمام می‌شود — بخش‌های میانی هرگز داخلِ دید
+ * نمی‌آیند و ناظر شلیک نمی‌کند.
+ *
+ * ⚠️ نسخهٔ قبل هر ۴۰۰ پیکسل ۶۰ms می‌خوابید. IntersectionObserver فقط در فریمِ
+ * **رندرشده** می‌سنجد؛ زیرِ بارِ CI محلیِ هم‌زمان (سه شارد، هرکدام مرورگرِ
+ * خودش) فریم‌ها از ۶۰ms دیرتر می‌آمدند و بخشی که بینِ دو فریم رد می‌شد هرگز
+ * «داخلِ دید» سنجیده نمی‌شد (۱۱ از ۱۳). ادعا همان است — هر بخش وقتی دیده
+ * شود ظاهر می‌شود — فقط دیگر به ساعت وابسته نیست.
+ */
+async function scrollEverySection(page) {
+  await page.evaluate(async () => {
+    const frames = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    for (const el of document.querySelectorAll('.tl-reveal')) {
+      el.scrollIntoView({ block: 'center', behavior: 'instant' });
+      await frames();
+    }
+  });
+}
+
 (async () => {
   // ── ① API ────────────────────────────────────────────────────
   const admin = await signup('09120000001', 'siteadmin', 'Passw0rd!');
@@ -184,7 +209,10 @@ async function signup(phone, username, password) {
     null, { timeout: 5000 },
   );
   await page.locator('.tl-faq-q').first().click();
-  await page.waitForTimeout(500);
+  /* ⚠️ انتظار تا خودِ نتیجه، نه خوابِ ثابتِ ۵۰۰ms: زیرِ بارِ CI محلیِ هم‌زمان
+     (سه شارد + مرورگرِ هر کدام) گذارِ بازشدن از ۵۰۰ms می‌گذشت و ارتفاعِ پاسخ
+     هنوز صفر خوانده می‌شد — قرمزی که هیچ ربطی به محصول نداشت. */
+  await page.locator('.tl-faq-item.tl-open').first().waitFor({ timeout: 5000 }).catch(() => {});
   ok('آکاردئونِ پرسش باز می‌شود', await page.locator('.tl-faq-item.tl-open').count() === 1);
   /* ⚠️ **پرسشِ بازشده باید دیده بماند.** نشانهٔ reveal یک‌بار کلاس بود و
      رندرِ دوباره‌ی React پاکش می‌کرد؛ کاربر روی پرسش می‌زد و پرسش محو می‌شد.
@@ -202,21 +230,13 @@ async function signup(phone, username, password) {
       tick();
     }));
   ok('پرسشِ بازشده محو نمی‌شود', faqOpacity === '1', `opacity=${faqOpacity}`);
-  ok('پاسخ پس از باز شدن ارتفاع دارد',
-    await page.locator('.tl-faq-item.tl-open .tl-faq-a').evaluate((e) => e.getBoundingClientRect().height) > 10);
+  ok('پاسخ پس از باز شدن ارتفاع دارد', await page
+    .waitForFunction(() => (document.querySelector('.tl-faq-item.tl-open .tl-faq-a')?.getBoundingClientRect().height ?? 0) > 10,
+      null, { timeout: 5000 })
+    .then(() => true).catch(() => false));
 
   // اسکرولِ کامل تا همهٔ بخش‌ها reveal شوند و اسکرین‌شات واقعی باشد
-  await page.evaluate(async () => {
-    /* ⚠️ `behavior: 'instant'` اجباری است: `index.css` سراسری
-       `html { scroll-behavior: smooth }` دارد، پس `scrollTo`ِ ساده انیمیشن
-       می‌شود و حلقه زودتر از رسیدنِ صفحه تمام می‌شود — بخش‌های میانی هرگز
-       داخلِ دید نمی‌آیند و ناظر شلیک نمی‌کند. */
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    for (let y = 0; y < document.body.scrollHeight; y += 400) {
-      window.scrollTo({ top: y, behavior: 'instant' });
-      await new Promise((r) => setTimeout(r, 60));
-    }
-  });
+  await scrollEverySection(page);
   /* ⚠️ **انتظار تا نشستنِ شمارش، نه خوابِ ثابت.** IntersectionObserver ناهم‌گام
      است؛ با خوابِ ثابت، المانِ آخر گاهی می‌رسید و گاهی نه و همین سنجه خودش
      نوسان می‌کرد. */
@@ -241,13 +261,7 @@ async function signup(phone, username, password) {
   await m.waitForSelector('.tl-hero h1', { timeout: 8000 }).catch(() => {});
   const overflow = await m.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok('موبایل: اسکرولِ افقی ندارد', overflow <= 1, `overflow=${overflow}px`);
-  await m.evaluate(async () => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
-    for (let y = 0; y < document.body.scrollHeight; y += 300) {
-      window.scrollTo({ top: y, behavior: 'instant' });
-      await new Promise((r) => setTimeout(r, 50));
-    }
-  });
+  await scrollEverySection(m);
   const mShown = await m
     .waitForFunction(
       () => document.querySelectorAll('.tl-reveal').length === document.querySelectorAll('.tl-reveal[data-tl-in]').length,
