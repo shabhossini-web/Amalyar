@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { LEVEL } from '../common/levels';
+import { isUnrestricted } from '../common/own-scope';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { PlacesService } from './places.service';
 
@@ -49,11 +49,13 @@ export class TransportService {
   }
 
   async agenda(user: any, scope: 'today' | 'upcoming' | 'past' = 'today') {
-    /* ⚠️ سوپرادمین بدونِ رکوردِ نیرو تا امروز به دیوارِ ۴۰۴ می‌خورد؛ حالا
-       نمای سرپرستی می‌گیرد: **همهٔ** مسیرهای بازه، با نامِ نیرو روی هر
-       مسیر. نوشتن‌ها (markDone و بقیه) همچنان مالِ خودِ نیرو هستند. */
-    const isSuper = (user?.level ?? 0) >= LEVEL.SUPER_ADMIN;
-    const staff = isSuper
+    /* ⚠️ سوپرادمین بی‌محدودیت است (`isUnrestricted`، خواستهٔ مالک ۱۴۰۵/۰۷/۰۳):
+       **همهٔ** مسیرهای بازه را با نامِ نیروی هر مسیر می‌بیند و تحویل را از طرفِ
+       همان نیرو ثبت می‌کند (`markDone`). حتی اگر خودش هم رکوردِ نیرو داشته
+       باشد، نمایش «همه» است نه «مالِ من» — تا امروز همان رکورد او را به مسیرِ
+       خودش محدود می‌کرد. برای بقیه دامنه همچنان نیروی خودِ کاربر است. */
+    const team = isUnrestricted(user);
+    const staff = team
       ? await (async () => { try { return await this.me(user); } catch { return null; } })()
       : await this.me(user);
     const [start, end] = dayBounds(new Date());
@@ -63,8 +65,10 @@ export class TransportService {
           : [start, end];
 
     const runs = await this.prisma.transportRun.findMany({
-      where: { ...(staff ? { staffId: staff.id } : {}), runDate: { gte: from, lt: to } },
-      orderBy: { runDate: scope === 'past' ? 'desc' : 'asc' },
+      where: { ...(team ? {} : { staffId: staff?.id ?? -1 }), runDate: { gte: from, lt: to } },
+      // ⚠️ `id` به‌عنوانِ دومین کلید: در نمای سرپرستی چند مسیرِ هم‌روز هست و
+      //    ترتیبشان نباید با هر بارگذاری جابه‌جا شود.
+      orderBy: [{ runDate: scope === 'past' ? 'desc' : 'asc' }, { id: 'asc' }],
       include: {
         staff: { include: { person: { select: { firstName: true, lastName: true } } } },
         stops: {
@@ -91,17 +95,24 @@ export class TransportService {
 
     return {
       scope,
-      /* بدونِ رکوردِ نیرو (سوپرادمینِ ناظر) `staff: null` — کلاینت با همین
-         تفاوت، نمای سرپرستی را از نمای شخصی جدا می‌کند. */
+      /* نمای سرپرستی را **همین پرچم** می‌گوید، نه نبودنِ `staff`: سوپرادمینی که
+         خودش هم نیرو است `staff` دارد و باز هم همه را می‌بیند. رابط سطح را حساب
+         نمی‌کند (قانونِ ۳). */
+      team,
+      /* بدونِ رکوردِ نیرو (سوپرادمینِ ناظر) `staff: null`. */
       staff: staff ? {
         id: staff.id, role: staff.role, vehicle: staff.vehicle,
         name: `${staff.person.firstName} ${staff.person.lastName}`.trim(),
       } : null,
       runs: runs.map((r: any) => ({
-        id: r.id, runDate: r.runDate, status: r.status, vehicle: r.vehicle ?? staff?.vehicle ?? null,
+        // خودروی همیشگیِ **نیروی همان مسیر**، نه نیروی بیننده: در نمای سرپرستی
+        // خودروی ناظر روی مسیرِ دیگری می‌نشست.
+        id: r.id, runDate: r.runDate, status: r.status, vehicle: r.vehicle ?? r.staff?.vehicle ?? null,
         staffName: r.staff?.person
           ? `${r.staff.person.firstName} ${r.staff.person.lastName}`.trim()
           : null,
+        // کلیدِ «مالِ کیست» برای فیلترِ نیرو — فقط در نمای سرپرستی.
+        ...(team ? { ownerId: r.staffId } : {}),
         stops: r.stops.map((s: any) => this.shapeStop(s)),
       })),
     };
@@ -151,12 +162,17 @@ export class TransportService {
    * می‌شد، فردا معلوم نبود برنامه چه بود و واقعیت چه شد.
    */
   async markDone(stopId: number, dto: { handedActual?: string; notes?: string }, user: any) {
-    const staff = await this.me(user);
+    /* سوپرادمین توقفِ **هر مسیری** را از طرفِ نیروی همان مسیر ثبت می‌کند — بی‌آنکه
+       پروفایل عوض کند یا از راننده بخواهد وارد شود. ردِ ممیزی بازیگر را خودِ
+       سوپرادمین و صاحبِ مسیر را `staffId` نگه می‌دارد. توقفِ بی‌مسیر (صفِ
+       جمع‌آوریِ چینش) در هیچ پرتالی نیست، پس این‌جا هم پذیرفته نمی‌شود. */
+    const team = isUnrestricted(user);
+    const staff = team ? null : await this.me(user);
     const stop = await this.prisma.transportStop.findFirst({
-      where: { id: stopId, run: { staffId: staff.id } },
-      select: { id: true, doneAt: true },
+      where: { id: stopId, ...(staff ? { run: { staffId: staff.id } } : { runId: { not: null } }) },
+      select: { id: true, doneAt: true, run: { select: { staffId: true } } },
     });
-    if (!stop) throw new NotFoundException('این توقف در مسیرِ شما نیست');
+    if (!stop) throw new NotFoundException(team ? 'این توقف در هیچ مسیری نیست' : 'این توقف در مسیرِ شما نیست');
     if (stop.doneAt) throw new BadRequestException('این توقف قبلاً انجام‌شده ثبت شده است');
 
     // ⚠️ همان کانونی‌سازیِ کارشناس، این‌بار روی حرفِ راننده — وگرنه یک طرفِ
@@ -172,7 +188,7 @@ export class TransportService {
     });
     await this.audit.record({
       actorId: user?.id, action: 'transport.stop.done', entityType: 'transport_stop', entityId: stopId,
-      after: { handedActual },
+      after: { handedActual, ...(team ? { staffId: stop.run?.staffId ?? null } : {}) },
     });
     return this.agenda(user, 'today');
   }

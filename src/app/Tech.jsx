@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, toEnDigits } from '../lib/jalali.js';
 import './tech.css';
-import { Alert, Arrive, Back, CheckCircle, Clock, Close, Hospital, Doctor, Box, Wave } from '../ui/icons.jsx';
+import { Alert, Arrive, Back, CheckCircle, Clock, Close, Hospital, Doctor, Box, User, Users, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { badTime, faTime, normTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
 import { usePlaces } from '../lib/places.js';
+import { useTerms } from './config.jsx';
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* نمایشِ فارسیِ ساعت از `lib/time` می‌آید — همان تبدیلی که خودِ ورودی به کار
@@ -24,18 +25,53 @@ const SCOPES = [
   { key: 'past', label: 'گذشته', icon: CheckCircle },
 ];
 
+/** برچسبِ فیلتر با شمارِ کار — «مریم · ۳»؛ بی‌کار، فقط نام. */
+const counted = (label, n) => (n ? `${label} · ${num(n)}` : label);
+
+/**
+ * نفرهای نمای سرپرستی، به ترتیبِ نام.
+ *
+ * «مالِ کیست» (`ownerId` + `techName`) را سرور روی هر ردیف می‌گذارد؛ این‌جا فقط
+ * گروه می‌شوند. کسی که امروز فقط برنامهٔ حضور دارد (و مراجعهٔ آزادی برای
+ * پذیرش) هم در فهرست می‌آید، ولی شمارش فقط عمل‌های به‌نامِ اوست.
+ */
+function peopleOf(visits, duties) {
+  const by = new Map();
+  const add = (row, work) => {
+    if (row.ownerId == null) return;
+    const key = String(row.ownerId);
+    const p = by.get(key) ?? { key, name: row.techName || '—', n: 0 };
+    p.n += work;
+    by.set(key, p);
+  };
+  visits.forEach((v) => add(v, 1));
+  duties.forEach((d) => add(d, 0));
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+}
+
+/** «مالِ کیست» روی کارت — فقط در نمای سرپرستی؛ برچسبِ نقش از واژگانِ حوزه. */
+function Owner({ role, name }) {
+  return <p className="tk-owner"><User width="14" height="14" /> {role}: <b>{name || '—'}</b></p>;
+}
+
 /**
  * دفترِ کارِ کارشناس.
  *
- * ⚠️ این صفحه عمداً **فهرستِ داشبورد نیست با یک فیلتر**. سرور نمای جداگانه‌ای
+ * این صفحه عمداً **فهرستِ داشبورد نیست با یک فیلتر**. سرور نمای جداگانه‌ای
  * می‌دهد که هیچ عددِ مالی در آن نیست؛ اگر روزی این‌جا مبلغ دیده شد، اشکال در
  * `tech.service.ts` است نه در این فایل.
  *
  * ترتیبِ کارتِ هر عمل همان ترتیبِ روزِ کارشناس است: کجا و کِی، بعد چه ستی
  * همراهش می‌رود، بعد کاری که باید بکند (ساعت، مصرف، پایان، گزارش).
+ *
+ * نمای سرپرستی (سوپرادمین، `data.team` از سرور — قانونِ ۲۹): کارِ **همهٔ**
+ * کارشناسان، با نامِ صاحب روی هر کارت و فیلترِ نفر؛ همهٔ دکمه‌ها همان‌اند و
+ * از طرفِ صاحبِ همان ردیف ثبت می‌کنند — «پذیرش» به نامِ صاحبِ همان برنامهٔ حضور.
  */
 export default function Tech() {
+  const terms = useTerms();
   const [scope, setScope] = useState('today');
+  const [who, setWho] = useState('all');
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
@@ -58,10 +94,25 @@ export default function Tech() {
   }, []);
   useEffect(() => { load(scope); }, [load, scope]);
 
-  const visits = data?.visits ?? [];
-  const claim = async (id) => {
-    setClaiming(id);
-    try { await api(`/tech/visits/${id}/claim`, { method: 'POST' }); setToast('مراجعه به نام شما ثبت شد'); }
+  const team = !!data?.team;
+  const allVisits = data?.visits ?? [];
+  const allDuties = data?.hospitals ?? [];
+  const people = team ? peopleOf(allVisits, allDuties) : [];
+  /* نفرِ انتخاب‌شده ممکن است در بازهٔ تازه کاری نداشته باشد؛ آن‌وقت «همه» —
+     بی‌آنکه انتخابش دور ریخته شود (برگشت به همان بازه دوباره همان نفر است). */
+  const pick = people.some((p) => p.key === who) ? who : 'all';
+  const shown = (row) => pick === 'all' || String(row.ownerId) === pick;
+  const visits = allVisits.filter(shown);
+  const duties = allDuties.filter(shown);
+  /* در نمای سرپرستی یک مراجعهٔ آزاد زیرِ کارتِ حضورِ هر کارشناسِ همان
+     بیمارستان و روز می‌آید؛ پس «در حال ثبت» باید به جفتِ «حضور + مراجعه» بچسبد
+     نه به خودِ مراجعه، وگرنه دکمهٔ کارتِ دیگر هم «در حال ثبت…» نشان می‌داد. */
+  const claim = async (duty, visit) => {
+    setClaiming(`${duty.id}:${visit.id}`);
+    try {
+      const r = await api(`/tech/visits/${visit.id}/claim`, { method: 'POST', ...(team ? { body: { dutyId: duty.id } } : {}) });
+      setToast(team ? `مراجعه به نامِ ${r?.techName || duty.techName} ثبت شد` : 'مراجعه به نام شما ثبت شد');
+    }
     catch (e) { setToast(e.message); }
     finally { await load(scope); setClaiming(null); }
   };
@@ -72,26 +123,49 @@ export default function Tech() {
       <header className="tk-head">
         <Link to="/app" className="tk-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
-          <h1>دفترِ کار</h1>
-          <p>عمل‌هایی که کارشناسشان شما هستید — ساعت، ست، مصرف و گزارش.</p>
+          <h1>{team ? `دفترِ کارِ ${terms.techs}` : 'دفترِ کار'}</h1>
+          {/* تا پاسخ نیامده متنِ خنثی — وگرنه سوپرادمین یک لحظه «شما» را می‌دید. */}
+          <p>
+            {team
+              ? `نمای سرپرستی — کارِ همهٔ ${terms.techs}، با نامِ صاحب روی هر کارت. هر کاری این‌جا از طرفِ همان نفر ثبت می‌شود.`
+              : data ? 'عمل‌هایی که کارشناسشان شما هستید — ساعت، ست، مصرف و گزارش.' : 'ساعت، ست، مصرف و گزارش.'}
+          </p>
         </div>
       </header>
 
       <Tabs label="بازهٔ کار" tone="brand" value={scope} onChange={setScope} items={SCOPES} />
 
-      {err && <div className="tk-err"><Alert width="15" height="15" /> {err}</div>}
+      {/* فیلترِ نفر فقط وقتی بیش از یک نفر در کار است — برای یک نفر، نامِ روی کارت کافی است. */}
+      {people.length > 1 && (
+        <Tabs
+          label={terms.techs}
+          variant="scroll"
+          className="tk-people"
+          value={pick}
+          onChange={setWho}
+          items={[
+            { key: 'all', label: counted('همه', allVisits.length), icon: Users },
+            ...people.map((p) => ({ key: p.key, label: counted(p.name, p.n) })),
+          ]}
+        />
+      )}
+
+      {err && <div className="tk-err" role="alert"><Alert width="15" height="15" /> {err}</div>}
 
       <div className="tk-list">
-        {(data?.hospitals ?? []).map(h => <section className="tk-card" key={h.id}>
-          <header><div className="tk-title"><b>{h.name}</b><small>{faDate(h.date)} · حضور شما: {time(h.arriveTime)}</small></div></header>
+        {duties.map(h => <section className="tk-card" key={h.id}>
+          <header><div className="tk-title"><b>{h.name}</b><small>{faDate(h.date)} · {team ? 'حضور' : 'حضور شما'}: {time(h.arriveTime)}</small></div></header>
+          {team && <Owner role={terms.tech} name={h.techName} />}
           <p>بیماران احتمالی — هنوز به کارشناس تخصیص داده نشده‌اند</p>
           {h.openVisits.length === 0 && <p>مراجعه آزادی در این بیمارستان نیست.</p>}
-          {h.openVisits.map(v => <div className="tk-open-visit" key={v.id}><div><b>{v.name}</b><small>{v.procedure || ''} · {time(v.opStartTime)}</small></div><button className="tk-ghost" disabled={claiming !== null} onClick={() => claim(v.id)}>{claiming === v.id ? 'در حال ثبت…' : 'پذیرش این مراجعه'}</button></div>)}
+          {h.openVisits.map(v => <div className="tk-open-visit" key={v.id}><div><b>{v.name}</b><small>{v.procedure || ''} · {time(v.opStartTime)}</small></div><button className="tk-ghost" disabled={claiming !== null} onClick={() => claim(h, v)}>{claiming === `${h.id}:${v.id}` ? 'در حال ثبت…' : team ? `پذیرش برای ${h.techName || terms.tech}` : 'پذیرش این مراجعه'}</button></div>)}
         </section>)}
         {!data && !err && <div className="tk-empty">در حال بارگذاری…</div>}
         {data && visits.length === 0 && (
           <div className="tk-empty">
-            {scope === 'today' ? 'امروز عملی به نامِ شما ثبت نشده' : scope === 'upcoming' ? 'برای سه هفتهٔ آینده عملی ثبت نشده' : 'در سی روزِ گذشته عملی نبوده'}
+            {scope === 'today'
+              ? (team ? `امروز عملی برای ${terms.techs} ثبت نشده` : 'امروز عملی به نامِ شما ثبت نشده')
+              : scope === 'upcoming' ? 'برای سه هفتهٔ آینده عملی ثبت نشده' : 'در سی روزِ گذشته عملی نبوده'}
           </div>
         )}
         {visits.map((v, i) => (
@@ -106,10 +180,12 @@ export default function Tech() {
               {v.status === 'cancelled' && <span className="tk-tag no">لغو</span>}
             </header>
 
+            {team && <Owner role={terms.tech} name={v.techName} />}
+
             <div className="tk-facts">
               <span><Hospital width="14" height="14" /> {v.hospitalName || '—'}</span>
               <span><Doctor width="14" height="14" /> {v.surgeonName || '—'}</span>
-              {v.techName && <span className="tk-tech">{v.techName}</span>}
+              {!team && v.techName && <span className="tk-tech">{v.techName}</span>}
               {v.procedure && <span><Wave width="14" height="14" /> {v.procedure}</span>}
               {v.techArriveTime && <span><Clock width="14" height="14" /> حضور {time(v.techArriveTime)}</span>}
             </div>
@@ -152,7 +228,7 @@ export default function Tech() {
         ))}
       </div>
 
-      {/* ⚠️ `AnimatePresence` باید در **والد** باشد، نه داخلِ خودِ شیت: اگر
+      {/* `AnimatePresence` باید در **والد** باشد، نه داخلِ خودِ شیت: اگر
           داخل بنشیند، با unmountِ شیت خودش هم می‌رود و انیمیشنِ خروج هرگز
           اجرا نمی‌شود — شیت به‌جای بسته‌شدن، می‌پرد. */}
       <AnimatePresence>
@@ -174,14 +250,14 @@ export default function Tech() {
         )}
       </AnimatePresence>
 
-      <div className={`tk-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`tk-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }
 
 /** آپلودِ گزارشِ عمل — یک دکمه، بدونِ شیت: کارشناس فایل را همان‌جا می‌دهد. */
 function ReportButton({ visit, onDone, onError }) {
-  /* ⚠️ گزارشِ عمل معمولاً **چند صفحه** است؛ تا دیروز هر صفحه یک رفت‌وبرگشتِ
+  /* گزارشِ عمل معمولاً **چند صفحه** است؛ تا دیروز هر صفحه یک رفت‌وبرگشتِ
      کامل بود. حالا همان کادرِ مشترک صف را می‌گرداند. */
   const send = async (file) => {
     const fd = new FormData();
@@ -194,7 +270,7 @@ function ReportButton({ visit, onDone, onError }) {
       accept="image/*,application/pdf"
       label={visit.reportAt ? `گزارش ثبت شده — ${faDate(visit.reportAt)} · افزودنِ صفحه` : 'آپلودِ گزارشِ عمل'}
       onUpload={send}
-      onAllDone={() => onDone('گزارشِ عمل ثبت شد ✓')}
+      onAllDone={() => onDone('گزارشِ عمل ثبت شد')}
     />
   );
 }
@@ -202,7 +278,7 @@ function ReportButton({ visit, onDone, onError }) {
 /**
  * برگهٔ مصرف + اعلامِ پایان.
  *
- * ⚠️ عدد «جمعِ مصرف‌شده» است نه «چقدر کم کن» — کارشناسِ وسطِ عمل حسابِ ثبتِ
+ * عدد «جمعِ مصرف‌شده» است نه «چقدر کم کن» — کارشناسِ وسطِ عمل حسابِ ثبتِ
  * قبلی را نگه نمی‌دارد. همان قراردادی که صفحهٔ انبار دارد؛ دو معنیِ متفاوت
  * برای یک فیلد یعنی موجودیِ غلط.
  */
@@ -269,7 +345,7 @@ function UsageSheet({ transferId, onClose, onToast }) {
                     onClick={() => act(
                       `/stock/transfers/${transferId}/usage`,
                       { lines: t.lines.map((l) => ({ lotId: l.lotId, used: Number(toEnDigits(used[l.lotId] ?? String(l.used))) || 0 })) },
-                      'برگهٔ مصرف ثبت شد ✓',
+                      'برگهٔ مصرف ثبت شد',
                     )}>
               ثبتِ برگهٔ مصرف
             </button>
@@ -286,7 +362,7 @@ function UsageSheet({ transferId, onClose, onToast }) {
               </p>
             ) : (
               <div className="tk-rel">
-                {/* ⚠️ «تمام شد» به‌تنهایی برای تیمِ حمل‌ونقل تکلیف نمی‌سازد: راننده
+                {/* «تمام شد» به‌تنهایی برای تیمِ حمل‌ونقل تکلیف نمی‌سازد: راننده
                     باید بداند **کِی** برود و **از کجا** بردارد. همین دو فیلد
                     توقفِ جمع‌آوری را در تختهٔ چینش می‌سازد. */}
                 <TimePick
@@ -313,7 +389,7 @@ function UsageSheet({ transferId, onClose, onToast }) {
                           act(
                             `/stock/transfers/${transferId}/release`,
                             { note: note.trim(), pickupAt: at, leftAt: leftAt.trim() },
-                            'پایانِ عمل اعلام شد ✓',
+                            'پایانِ عمل اعلام شد',
                           );
                         }}>
                   اعلامِ پایانِ عمل
@@ -330,7 +406,7 @@ function UsageSheet({ transferId, onClose, onToast }) {
 /**
  * ساعتِ واقعیِ عمل — شروع و پایان.
  *
- * ⚠️ «ساعتِ حضورِ شما» عمداً این‌جا نیست (W3.8/U7، تصمیمِ مالک ۱۴۰۵/۰۶/۲۶):
+ * «ساعتِ حضورِ شما» عمداً این‌جا نیست (W3.8/U7، تصمیمِ مالک ۱۴۰۵/۰۶/۲۶):
  * حضور مالِ «کارشناس در آن بیمارستان در آن روز» است، نه مالِ یک بیمار، و از
  * برنامهٔ چینش می‌آید. وقتی سه جا می‌نوشتندش، سه جا واگرا می‌شد.
  */
@@ -343,14 +419,14 @@ function TimesSheet({ visit, onClose, onSaved }) {
   const [err, setErr] = useState('');
 
   const save = async () => {
-    // ⚠️ نرمال‌سازی پیش از ارسال، چون کاربر ممکن است بدونِ خروج از فیلد
+    // نرمال‌سازی پیش از ارسال، چون کاربر ممکن است بدونِ خروج از فیلد
     //    مستقیم «ذخیره» را بزند و «۸:۵» خام به سرور برسد.
     const body = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, normTime(v)]));
     if (Object.values(body).some(badTime)) { setErr('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
     setBusy(true); setErr('');
     try {
       await api(`/tech/visits/${visit.id}/times`, { method: 'PATCH', body });
-      onSaved('ساعت ثبت شد ✓');
+      onSaved('ساعت ثبت شد');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
