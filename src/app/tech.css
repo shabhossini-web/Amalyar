@@ -63,6 +63,8 @@
 .tk-owner { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
 .tk-owner svg { flex: 0 0 auto; color: var(--brand-2); }
 .tk-owner b { font-weight: 800; color: var(--text1); }
+/* شمارِ کارِ هر نفر در فیلتر — همان وزنِ `td-own-n`ِ «امروز»، با ارقامِ هم‌عرض. */
+.tk-own-n { font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ── ستِ همراه ── */
 .tk-sets { display: grid; gap: 8px; }
@@ -94,7 +96,8 @@
 }
 .tk-report.on { color: var(--green-text); border-color: rgba(52, 211, 153, .3); background: rgba(52, 211, 153, .08); }
 .tk-ghost:hover, .tk-report:hover { border-color: rgba(var(--brand-2-rgb), .5); }
-.tk-mini:disabled, .tk-save:disabled, .tk-report:disabled { opacity: .5; cursor: not-allowed; }
+/* `tk-ghost` هم: هنگامِ یک پذیرش همهٔ دکمه‌های پذیرش قفل‌اند و باید قفل هم دیده شوند. */
+.tk-mini:disabled, .tk-save:disabled, .tk-report:disabled, .tk-ghost:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── شیت‌ها (ورود/خروج از ui/Overlay.jsx) ── */
 .tk-overlay {

@@ -20,8 +20,8 @@ const SCOPES = [
   { key: 'past', label: 'گذشته', icon: CheckCircle },
 ];
 
-/** برچسبِ فیلتر با شمارِ توقف — «علی · ۳». */
-const counted = (label, n) => (n ? `${label} · ${num(n)}` : label);
+/** برچسبِ فیلتر با شمارِ توقف — نام و عددِ پررنگ، همان شکلِ فیلترِ «امروز» و دفترِ کار. */
+const counted = (label, n) => (n ? <>{label} <b className="tr-own-n">{num(n)}</b></> : label);
 
 /**
  * نیروهای نمای سرپرستی، به ترتیبِ نام — از خودِ توقف‌ها.

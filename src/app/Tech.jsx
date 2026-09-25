@@ -25,8 +25,12 @@ const SCOPES = [
   { key: 'past', label: 'گذشته', icon: CheckCircle },
 ];
 
-/** برچسبِ فیلتر با شمارِ کار — «مریم · ۳»؛ بی‌کار، فقط نام. */
-const counted = (label, n) => (n ? `${label} · ${num(n)}` : label);
+/**
+ * برچسبِ فیلتر با شمارِ کار — نام و عددِ پررنگ؛ بی‌کار، فقط نام. همان شکلِ فیلترِ
+ * «مسئولِ کار» در «امروز» (`td-own-n`)، تا ناظر در دو صفحه دو زبان نبیند. شمار
+ * داخلِ برچسب است نه `badge`: نشانِ کهربایی یعنی «هشدار» و این‌جا هشداری نیست.
+ */
+const counted = (label, n) => (n ? <>{label} <b className="tk-own-n">{num(n)}</b></> : label);
 
 /**
  * نفرهای نمای سرپرستی، به ترتیبِ نام.
@@ -100,10 +104,18 @@ export default function Tech() {
   const people = team ? peopleOf(allVisits, allDuties) : [];
   /* نفرِ انتخاب‌شده ممکن است در بازهٔ تازه کاری نداشته باشد؛ آن‌وقت «همه» —
      بی‌آنکه انتخابش دور ریخته شود (برگشت به همان بازه دوباره همان نفر است). */
+  /* فیلترِ نفر فقط وقتی بیش از یک نفر در کار است — برای یک نفر، نامِ روی کارت کافی است. */
+  const filterable = people.length > 1;
   const pick = people.some((p) => p.key === who) ? who : 'all';
-  const shown = (row) => pick === 'all' || String(row.ownerId) === pick;
+  const picked = people.find((p) => p.key === pick);
+  const shown = (it) => pick === 'all' || String(it.ownerId) === pick;
   const visits = allVisits.filter(shown);
-  const duties = allDuties.filter(shown);
+  /* در «همه»ِ نمای سرپرستی فقط کارتِ حضوری که مراجعهٔ آزاد برای پذیرش دارد —
+     ده کارتِ «مراجعهٔ آزادی نیست» جلوی کارِ اصلی را می‌گرفت. با انتخابِ یک نفر،
+     همهٔ برنامهٔ حضورِ او (ساعتِ حضور) برمی‌گردد. ولی فقط وقتی فیلتر هست: اگر
+     امروز یک نفر برنامه دارد، ردیفِ فیلتر نمی‌آید و پنهان‌کردنِ کارتش یعنی
+     حضورش هیچ‌جا دیده نمی‌شد. */
+  const duties = allDuties.filter((h) => shown(h) && (!team || !filterable || pick !== 'all' || h.openVisits.length > 0));
   /* در نمای سرپرستی یک مراجعهٔ آزاد زیرِ کارتِ حضورِ هر کارشناسِ همان
      بیمارستان و روز می‌آید؛ پس «در حال ثبت» باید به جفتِ «حضور + مراجعه» بچسبد
      نه به خودِ مراجعه، وگرنه دکمهٔ کارتِ دیگر هم «در حال ثبت…» نشان می‌داد. */
@@ -135,8 +147,7 @@ export default function Tech() {
 
       <Tabs label="بازهٔ کار" tone="brand" value={scope} onChange={setScope} items={SCOPES} />
 
-      {/* فیلترِ نفر فقط وقتی بیش از یک نفر در کار است — برای یک نفر، نامِ روی کارت کافی است. */}
-      {people.length > 1 && (
+      {filterable && (
         <Tabs
           label={terms.techs}
           variant="scroll"
@@ -163,9 +174,11 @@ export default function Tech() {
         {!data && !err && <div className="tk-empty">در حال بارگذاری…</div>}
         {data && visits.length === 0 && (
           <div className="tk-empty">
-            {scope === 'today'
-              ? (team ? `امروز عملی برای ${terms.techs} ثبت نشده` : 'امروز عملی به نامِ شما ثبت نشده')
-              : scope === 'upcoming' ? 'برای سه هفتهٔ آینده عملی ثبت نشده' : 'در سی روزِ گذشته عملی نبوده'}
+            {picked
+              ? `در این بازه عملی به نامِ ${picked.name} نیست`
+              : scope === 'today'
+                ? (team ? `امروز عملی برای ${terms.techs} ثبت نشده` : 'امروز عملی به نامِ شما ثبت نشده')
+                : scope === 'upcoming' ? 'برای سه هفتهٔ آینده عملی ثبت نشده' : 'در سی روزِ گذشته عملی نبوده'}
           </div>
         )}
         {visits.map((v, i) => (

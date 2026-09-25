@@ -5,10 +5,10 @@ import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
-import { useConfig, useStatusList } from './config.jsx';
+import { useConfig, useStatusList, useTerms } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
-import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon } from '../ui/icons.jsx';
+import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
 import './theatre.css';
 import './definitions.css';
 import './launcher.css';
@@ -40,13 +40,14 @@ const duration = (from, to) => {
  * و چک‌لیستِ ایمنیِ WHO فعلاً لازم نیست — از رابط برداشته شد (داده و APIش
  * سرِ جایشان است؛ توضیح در `theatre.service.ts`).
  *
- * ⚠️ **هیچ عددِ مالی این‌جا نیست.** دستِ دستکش‌دار نه مبلغ لازم دارد نه باید
+ * **هیچ عددِ مالی این‌جا نیست.** دستِ دستکش‌دار نه مبلغ لازم دارد نه باید
  * ببیند؛ سرور هم اصلاً نمی‌فرستدش. اگر روزی مبلغی دیده شد، اشکال آن‌طرف است.
  *
- * ⚠️ همهٔ متن‌ها و برچسب‌ها از سرور می‌آیند (قانونِ ۱۵): وضعیتِ اتاق، برچسبِ
+ * همهٔ متن‌ها و برچسب‌ها از سرور می‌آیند (قانونِ ۱۵): وضعیتِ اتاق، برچسبِ
  * مرحلهٔ مدارک و شکایتِ مشتق‌شده هیچ‌کدام این‌جا ساخته نمی‌شوند.
  */
 export default function Theatre() {
+  const t = useTerms();
   const [jday, setJday] = useState(todayJStr());
   const [day, setDay] = useState(null);
   const [openId, setOpenId] = useState(null);
@@ -105,6 +106,11 @@ export default function Theatre() {
         <div>
           <h1><TheatreIcon width="20" height="20" aria-hidden="true" /> اتاقِ عمل</h1>
           <p>{faDate(iso)}</p>
+          {/* نمای سرپرستی (قانونِ ۲۹) — تصمیمش از سرور می‌آید (`day.team`)، نه از
+              سطحِ کاربر؛ بقیه همان عنوانِ دیروز را می‌بینند. */}
+          {day?.team && !openId && (
+            <p className="th-scope"><Users width="14" height="14" aria-hidden="true" /> {`عمل‌های همه — نامِ جراح و ${t.tech}ِ هر عمل روی ردیفش است`}</p>
+          )}
         </div>
         {!openId && <>
           <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
@@ -120,10 +126,12 @@ export default function Theatre() {
 
       {err && err.status !== 403 && <div className="th-err" role="alert">{err.message}</div>}
 
-      {!openId && <DayList day={day} busy={busy} onOpen={openCard} />}
+      {!openId && <DayList day={day} busy={busy} onOpen={openCard} techLabel={t.tech} />}
       {openId && card && (
         <Card
           card={card}
+          team={!!day?.team}
+          techLabel={t.tech}
           busy={busy}
           onAct={act}
           onDischarge={() => setDischarging(true)}
@@ -131,7 +139,7 @@ export default function Theatre() {
         />
       )}
 
-      {/* ⚠️ `AnimatePresence` در **والد** است نه داخلِ خودِ دیالوگ — وگرنه
+      {/* `AnimatePresence` در **والد** است نه داخلِ خودِ دیالوگ — وگرنه
           هنگامِ بسته‌شدن با آن unmount می‌شود و خروجی اجرا نمی‌شود. */}
       <AnimatePresence>
         {discharging && card && (
@@ -147,7 +155,7 @@ export default function Theatre() {
             onClose={() => setDischarging(false)}
             onSave={async (body) => {
               const done = await act('/discharge', 'discharge', body);
-              if (done) { setDischarging(false); setToast('ترخیص ثبت شد ✓'); }
+              if (done) { setDischarging(false); setToast('ترخیص ثبت شد'); }
             }}
           />
         )}
@@ -158,19 +166,34 @@ export default function Theatre() {
   );
 }
 
-/** فهرستِ عمل‌های روز — ساعت، بیمار، عمل، و **چرا آمده**. */
-function DayList({ day, busy, onOpen }) {
+/**
+ * فهرستِ عمل‌های روز — ساعت، بیمار، عمل، و **چرا آمده**.
+ *
+ * در نمای سرپرستی (`day.team`) هر ردیف یک سطرِ «مالِ کیست» هم دارد — جراح و
+ * کارشناسِ همان عمل، با متن و آیکون (نه فقط رنگ). جراح از سطرِ فرعی به همین
+ * سطر می‌آید تا دو بار نوشته نشود؛ «تعیین نشده» هم خودش خبر است: عملی که
+ * هنوز کسی برایش گذاشته نشده.
+ */
+function DayList({ day, busy, onOpen, techLabel }) {
   if (!day) return <p className="th-empty">در حالِ بارگذاری…</p>;
   if (!day.visits.length) return <p className="th-empty">برای این روز عملی ثبت نشده.</p>;
+  const team = !!day.team;
   return (
     <ul className="th-list">
       {day.visits.map((v) => (
         <li key={v.id}>
-          <button type="button" className={`th-item${busy === `open-${v.id}` ? ' busy' : ''}`} data-visit-id={v.id} onClick={() => onOpen(v.id)}>
+          <button type="button" className={`th-item${team ? ' has-owner' : ''}${busy === `open-${v.id}` ? ' busy' : ''}`} data-visit-id={v.id} onClick={() => onOpen(v.id)}>
             <span className="th-item-time" dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</span>
             <span className="th-item-name">{v.patient}</span>
-            <span className="th-item-sub">{[v.procedure, v.hospital, v.surgeon].filter(Boolean).join(' · ') || v.code}</span>
-            {/* ⚠️ جای شمارشِ چک‌لیست را گرفت: عددِ «۳/۷» به کسی نمی‌گفت این
+            {team && (
+              <span className="th-item-owner">
+                <User width="13" height="13" aria-hidden="true" />
+                <span>جراح: <b>{v.surgeon || 'ثبت نشده'}</b></span>
+                <span className={v.tech ? undefined : 'none'}>{techLabel}: <b>{v.tech || 'تعیین نشده'}</b></span>
+              </span>
+            )}
+            <span className="th-item-sub">{[v.procedure, v.hospital, team ? null : v.surgeon].filter(Boolean).join(' · ') || v.code}</span>
+            {/* جای شمارشِ چک‌لیست را گرفت: عددِ «۳/۷» به کسی نمی‌گفت این
                 بیمار کیست، ولی «چرا آمده» همان چیزی است که جراح می‌خواهد. */}
             {v.chiefComplaint && <span className="th-item-cc">{v.chiefComplaint}</span>}
             <span className="th-item-side">
@@ -183,19 +206,25 @@ function DayList({ day, busy, onOpen }) {
   );
 }
 
-/** کارتِ حینِ عمل. */
-function Card({ card, busy, onAct, onDischarge, onToast }) {
+/**
+ * کارتِ حینِ عمل.
+ *
+ * `team` همان پرچمِ سرور در پاسخِ تخته است (قانونِ ۲۹): در نمای سرپرستی
+ * عملِ بی‌کارشناس «تعیین نشده» می‌گوید، نه اینکه جایش خالی بماند — همان خبری
+ * که ردیفِ فهرست داد، با بازکردنِ کارت گم نشود.
+ */
+function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
   const { visit: v, patient: p, alerts, items, documents } = card;
-  /* ⚠️ «یافته‌های حینِ عمل» در مطب نیست (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) — همان
+  /* «یافته‌های حینِ عمل» در مطب نیست (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) — همان
      چیزی که از فرمِ عمل برداشته شد، سرِ میز هم نباید دوباره پیدا شود. */
   const isClinic = useConfig().kind === 'clinic';
-  /* ⚠️ عمل‌ها و تشخیص‌ها از **فهرستِ سرور** خوانده می‌شوند (اصلی اول، بستهٔ
+  /* عمل‌ها و تشخیص‌ها از **فهرستِ سرور** خوانده می‌شوند (اصلی اول، بستهٔ
      ۷) — نه با شکافتنِ برچسبِ «A + B» (قانونِ ۱۵). برچسب فقط وقتی به کار
      می‌آید که سرورِ قدیمی‌تر هنوز فهرست را نفرستد (فرانت و بک‌اند جدا دیپلوی
      می‌شوند و چند ثانیه‌ای ناهمگام‌اند). */
   const procs = v.procedures ?? [];
   const dxs = v.diagnoses ?? [];
-  /* ⚠️ **مدتِ زنده** وقتی عمل در جریان است: سرِ میز «چقدر گذشته» را کسی از
+  /* **مدتِ زنده** وقتی عمل در جریان است: سرِ میز «چقدر گذشته» را کسی از
      تفریقِ ذهنیِ دو ساعت در نمی‌آورد. تیکِ نیم‌دقیقه‌ای کافی است و فقط وقتی
      می‌زند که واقعاً در جریان باشد — نه یک تایمرِ همیشه‌روشن روی هر کارت. */
   const running = !!v.opStartTime && !v.opEndTime && v.state !== 'cancelled';
@@ -221,7 +250,7 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
             گروه خونی {p.bloodType ? <b dir="ltr">{p.bloodType}</b> : <b>ثبت نشده</b>}
           </span>
         </p>
-        {/* ⚠️ `div` نه `p`: فهرست (`ul`) داخلِ پاراگراف HTMLِ نامعتبر است و
+        {/* `div` نه `p`: فهرست (`ul`) داخلِ پاراگراف HTMLِ نامعتبر است و
             مرورگر پاراگراف را پیش از فهرست می‌بندد. */}
         <div className="th-op">
           {procs.length > 0
@@ -243,12 +272,14 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
         )}
         <p className="th-team">
           {v.surgeon && <span>جراح: <b>{v.surgeon}</b></span>}
-          {v.tech && <span>کارشناس: <b>{v.tech}</b></span>}
+          {v.tech
+            ? <span>{techLabel}: <b>{v.tech}</b></span>
+            : team && <span className="none">{techLabel}: <b>تعیین نشده</b></span>}
           <span className={`th-state is-${v.state}`}>{v.stateFa}</span>
         </p>
       </section>
 
-      {/* ⚠️ **همیشه** رندر می‌شود، حتی خالی. «پرسیده نشده» با «نداشت» یکی نیست،
+      {/* **همیشه** رندر می‌شود، حتی خالی. «پرسیده نشده» با «نداشت» یکی نیست،
           و شکایتِ اولیه اولین چیزی است که جراح سرِ میز می‌پرسد. */}
       <section className={`th-cc${v.chiefComplaint ? ' on' : ''}`} aria-label="شکایتِ اولیه">
         <h3>شکایتِ اولیه</h3>
@@ -260,7 +291,7 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
       {card.decided && (
         <section className="th-decided" aria-label="ویزیتِ تصمیم">
           <h3>از ویزیتِ تصمیم{card.decided.opDate ? ` — ${faDate(card.decided.opDate)}` : ''}</h3>
-          {/* ⚠️ تشخیص‌های ویزیتِ تصمیم «تشخیصِ **پیش از** عمل»اند و عمداً با همین
+          {/* تشخیص‌های ویزیتِ تصمیم «تشخیصِ **پیش از** عمل»اند و عمداً با همین
               عنوان جدا می‌آیند: به عمل ارث نمی‌رسند و کپی نمی‌شوند، چون تشخیصِ
               پس از عمل (بالای کارت) واقعیتِ دیگری است و می‌تواند فرق کند. */}
           {card.decided.diagnoses?.length > 0 ? (
@@ -284,10 +315,10 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
 
       {card.vitals?.length > 0 && <VitalsView rows={card.vitals} />}
 
-      {/* ⚠️ هر سه هشدار **همیشه** رندر می‌شوند. «پرسیده نشده» با «نداشت» یکی
+      {/* هر سه هشدار **همیشه** رندر می‌شوند. «پرسیده نشده» با «نداشت» یکی
           نیست، و سرِ میز فرقشان می‌تواند حیاتی باشد — کادرِ خالی یعنی برو بپرس. */}
       <section className="th-alerts" aria-label="هشدارهای بالینی">
-        {/* ⚠️ حساسیت **قرمز** و دو تای دیگر کهربایی: وقتی هر سه یک قرمز باشند،
+        {/* حساسیت **قرمز** و دو تای دیگر کهربایی: وقتی هر سه یک قرمز باشند،
             هیچ‌کدام دیگر هشدار نیست. چیزی که سرِ میز می‌تواند بکشد حساسیت است. */}
         {[['allergies', 'حساسیت', 'red'], ['chronicConditions', 'بیماریِ زمینه‌ای', 'amber'], ['medications', 'داروها', 'amber']].map(([k, label, tone]) => (
           <div key={k} className={`th-alert${alerts[k] ? ` on is-${tone}` : ''}`}>
@@ -303,9 +334,9 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
           <span>پایان <b dir="ltr">{v.opEndTime ? faTime(v.opEndTime) : '—'}</b></span>
           {elapsed && <span className="th-elapsed"><Clock width="13" height="13" aria-hidden="true" /> {running ? 'تا این لحظه' : 'مدت'} <b dir="ltr">{elapsed}</b></span>}
         </div>
-        {/* ⚠️ «اصلی» روی **کارِ بعدی** می‌نشیند، نه همیشه روی «شروع شد»: وقتی عمل
+        {/* «اصلی» روی **کارِ بعدی** می‌نشیند، نه همیشه روی «شروع شد»: وقتی عمل
             شروع شده، دکمهٔ پررنگِ غیرفعال هم چشم را می‌برد هم دروغ می‌گوید.
-            ⚠️ و ترخیص دکمهٔ **سوم** است نه مترادفِ پایان — «توی جراحی یه پایانِ
+            و ترخیص دکمهٔ **سوم** است نه مترادفِ پایان — «توی جراحی یه پایانِ
             عمل داریم یه ترخیص». */}
         <div className="th-acts">
           <button type="button" className={`th-btn${running || v.opEndTime ? '' : ' primary'}`}
@@ -337,14 +368,14 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
           key={`findings-${v.id}`}
           visit={v} field="findings" path="/findings" actKey="findings"
           title="یافته‌های حینِ عمل" placeholder="آنچه حینِ عمل دیده شد…"
-          savedMsg="یافته‌ها ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
+          savedMsg="یافته‌ها ذخیره شد" busy={busy} onAct={onAct} onToast={onToast}
         />
       )}
       <NoteBox
         key={`report-${v.id}`}
         visit={v} field="opReport" path="/report" actKey="report"
         title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
-        savedMsg="شرحِ عمل ذخیره شد ✓" busy={busy} onAct={onAct} onToast={onToast}
+        savedMsg="شرحِ عمل ذخیره شد" busy={busy} onAct={onAct} onToast={onToast}
       />
 
       <Documents visitId={v.id} groups={documents} />
@@ -370,11 +401,11 @@ function Card({ card, busy, onAct, onDischarge, onToast }) {
  * **فهرستِ تشخیص‌ها یا عمل‌ها** — همان فهرستِ آمادهٔ سرور (`procedures` /
  * `diagnoses`؛ بستهٔ ۷).
  *
- * ⚠️ ترتیب رتبهٔ بالینیِ سرور است و این‌جا مرتب نمی‌شود؛ اولی همیشه اصلی است.
- * ⚠️ نشانِ «اصلی» فقط وقتی **دو یا بیشتر** مورد هست: روی تک‌مورد هیچ خبری
+ * ترتیب رتبهٔ بالینیِ سرور است و این‌جا مرتب نمی‌شود؛ اولی همیشه اصلی است.
+ * نشانِ «اصلی» فقط وقتی **دو یا بیشتر** مورد هست: روی تک‌مورد هیچ خبری
  * نمی‌دهد و فقط سطرِ سرِ میز را شلوغ می‌کند — تک‌مورد درست مثلِ دیروز دیده
  * می‌شود.
- * ⚠️ کدِ ICD با `dir="ltr"` (قانونِ ۹): «M51.1» در متنِ راست‌به‌چپ بی‌آن
+ * کدِ ICD با `dir="ltr"` (قانونِ ۹): «M51.1» در متنِ راست‌به‌چپ بی‌آن
  * نقطه‌اش جابه‌جا می‌شود.
  */
 function CodingList({ items, label }) {
@@ -395,10 +426,10 @@ function CodingList({ items, label }) {
 /**
  * **شرحِ عمل، همین‌جا.**
  *
- * ⚠️ متن در stateِ محلی می‌ماند و فقط با «ذخیره» می‌رود: ذخیرهٔ خودکار وسطِ
+ * متن در stateِ محلی می‌ماند و فقط با «ذخیره» می‌رود: ذخیرهٔ خودکار وسطِ
  * تایپِ جراح یعنی هر مکث یک نسخهٔ تازه در پرونده — و این سند نسخه‌دار است.
  *
- * ⚠️ اگر سرور متنِ تازه‌تری داشت (کسی از فرمِ مراجعه نوشته)، پیش‌نویسِ روی
+ * اگر سرور متنِ تازه‌تری داشت (کسی از فرمِ مراجعه نوشته)، پیش‌نویسِ روی
  * صفحه بازنویسی **نمی‌شود**؛ فقط وقتی هم‌گام می‌شویم که کاربر چیزی ننوشته
  * باشد. همان قاعدهٔ `JDate`: نوشتهٔ کاربر زیرِ دستش عوض نمی‌شود.
  */
@@ -491,11 +522,11 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
 /**
  * **مدارکِ قبل / حین / بعد — بازشدنی.**
  *
- * ⚠️ تا دیروز فقط نامِ مدرک نوشته می‌شد و زیرش «از پروندهٔ بیمار بازش کنید»:
+ * تا دیروز فقط نامِ مدرک نوشته می‌شد و زیرش «از پروندهٔ بیمار بازش کنید»:
  * یعنی جراحِ وسطِ عمل باید از این صفحه بیرون می‌رفت و دسترسیِ بالاتری هم
  * می‌خواست. حالا مسیرِ خودِ اتاق (`theatre/.../file`) بازشان می‌کند.
  *
- * ⚠️ لینکِ دانلود با `<a download>` ساخته نمی‌شود چون نشستِ ما کوکیِ HttpOnly
+ * لینکِ دانلود با `<a download>` ساخته نمی‌شود چون نشستِ ما کوکیِ HttpOnly
  * است و کوکی روی همان دامنه می‌رود — پس `credentials: 'include'` لازم است و
  * تگِ ساده کافی نیست. برای همین مدرک با `fetch` گرفته و در تبِ تازه باز
  * می‌شود؛ مدرکِ لینکی هم که اصلاً فایلی ندارد و خودِ نشانی‌اش باز می‌شود.
@@ -507,12 +538,12 @@ function Documents({ visitId, groups }) {
 
   const open = async (doc) => {
     if (doc.url) { window.open(doc.url, '_blank', 'noopener'); return; }
-    /* ⚠️ **پنجره باید پیش از `await` باز شود.** Safari (و کرومِ موبایل در
+    /* **پنجره باید پیش از `await` باز شود.** Safari (و کرومِ موبایل در
        بعضی حالت‌ها) `window.open` بعد از یک await را پاپ‌آپِ ناخواسته
        می‌شمارد و **بی‌صدا** بلاک می‌کند — یعنی همان مدرکی که مالک خواست
        سرِ میز باز شود، روی آیفون هیچ کاری نمی‌کرد و هیچ خطایی هم نمی‌داد.
        پس اول تبِ خالی باز می‌شود و بعد نشانی‌اش گذاشته می‌شود.
-       ⚠️ `noopener` این‌جا عمداً نیست: با آن `window.open` مقدارِ `null`
+       `noopener` این‌جا عمداً نیست: با آن `window.open` مقدارِ `null`
        برمی‌گرداند و دیگر نمی‌شود نشانی را ست کرد. */
     const win = window.open('', '_blank');
     setBusyId(doc.id); setErr('');
@@ -527,7 +558,7 @@ function Documents({ visitId, groups }) {
         a.href = url; a.download = doc.title || 'document';
         a.click();
       }
-      /* ⚠️ نشانیِ بلاب باید آزاد شود وگرنه حافظه نشت می‌کند (هشدارِ خودِ
+      /* نشانیِ بلاب باید آزاد شود وگرنه حافظه نشت می‌کند (هشدارِ خودِ
          `apiBlobUrl`) — ولی نه فوری: تبِ تازه هنوز آن را می‌خواند. */
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) {
@@ -564,7 +595,7 @@ function Documents({ visitId, groups }) {
  * **پاپ‌آپِ ترخیص** — «با زدنِ ترخیص، توضیحِ وضعیت حینِ ترخیص باید پاپ‌آپ شه،
  * پر شه، سیو شه» (بازخوردِ مالک).
  *
- * ⚠️ متن اجباری است و دکمه تا پر نشدنش غیرفعال می‌ماند: ترخیصِ بی‌شرح سطری
+ * متن اجباری است و دکمه تا پر نشدنش غیرفعال می‌ماند: ترخیصِ بی‌شرح سطری
  * است که می‌گوید بیمار رفت و نمی‌گوید در چه حالی — و همان سطر سندِ پرونده
  * می‌شود. سرور هم دوباره همین را می‌سنجد.
  */
@@ -584,7 +615,7 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
         <b>{already ? 'ویرایشِ ترخیص' : 'ترخیصِ بیمار'}</b>
         <button type="button" className="th-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
-      {/* ⚠️ وضعیتِ خروج دکمه است نه کشویی: یک لمس، و هر چهار گزینه همیشه
+      {/* وضعیتِ خروج دکمه است نه کشویی: یک لمس، و هر چهار گزینه همیشه
           جلوی چشم — «فوت» نباید پشتِ یک منوی بسته پنهان بماند. */}
       <div className="th-dialog-field">
         <span>وضعیتِ خروج</span>

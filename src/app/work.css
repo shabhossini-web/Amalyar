@@ -103,3 +103,51 @@
   font-size: 12px; font-weight: 700; color: var(--text2);
   background: rgba(var(--veil-rgb), .05); border: 1px dashed rgba(var(--veil-rgb), .16);
 }
+
+/* ── «مالِ کیست» (نمای تیمِ سوپرادمین، قانونِ ۲۹) ──
+   برچسبِ خنثی کنارِ نامِ بیمار و موعد: رنگ مالِ وضعیت است (عقب‌افتاده کهرباست)، نه
+   مالک. «بی‌مسئول» خط‌چین است تا بی‌صاحبی دیده شود بی‌آنکه شبیهِ هشدار شود. */
+.wk-owner {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%;
+  padding: 1px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700; line-height: 1.7;
+  color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.wk-owner > svg { flex: 0 0 auto; color: var(--brand-2); }
+.wk-owner.is-none { border-style: dashed; }
+
+/* همان برچسب وقتی «واگذاری» هم هست: دکمهٔ `Pick` در شکلِ همان قرص + شِوران —
+   «مسئول این است؛ بزن تا عوضش کنی». پوسته خودش قرص نیست، دکمهٔ داخلش است. */
+.wk-owner.wk-assign { padding: 0; background: none; border: 0; }
+.wk-assign .pk-btn {
+  position: relative; width: auto; max-width: 100%; gap: 6px; padding: 1px 9px 1px 10px;
+  border-radius: 99px; font-size: 11.5px; font-weight: 700; line-height: 1.7; color: var(--text2);
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
+  transition: color .2s, border-color .2s, background .2s;
+}
+.wk-assign .pk-btn.empty span { color: inherit; font-weight: inherit; }
+.wk-assign .pk-btn svg { vertical-align: -2px; margin-inline-end: 4px; color: var(--brand-2); }
+.wk-assign .pk-caret { width: 6px; height: 6px; margin-top: -2px; }
+.wk-assign .pk-btn:hover:not(:disabled) { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .6); background: rgba(var(--brand-rgb), .10); }
+.wk-assign .pk-btn:focus-visible { color: var(--text1); outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.wk-assign.is-none .pk-btn { border-style: dashed; }
+/* روی کارِ خودِ کاربر برچسبی نیست؛ همان‌جا فقط کنشِ «واگذاری» — خط‌چینِ برند، نه قرصِ نام. */
+.wk-assign.is-self .pk-btn { color: var(--brand-text); border-style: dashed; border-color: rgba(var(--brand-2-rgb), .45); }
+.wk-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+/* فیلترِ «مالِ کیست» زیرِ تب‌های دامنه — همان `Tabs`؛ شمار داخلِ برچسب با وزنِ بیشتر. */
+.wk-owners { margin-bottom: 12px; }
+.wk-own-n { font-weight: 800; font-variant-numeric: tabular-nums; }
+/* لمس: هدفِ ≥ ۴۰px. قرصِ «واگذاری» خودش ۳۰px می‌شود و لایهٔ نامرئیِ دورش فقط ۵px —
+   نه ۹px: عنوانِ کار (دکمهٔ بازکردنِ همان چیز) فقط ۳px بالاتر است و لایهٔ بزرگ‌تر لمسِ
+   لبهٔ پایینش را می‌دزدید و به‌جای خودِ کار «واگذاری» باز می‌کرد. هم‌ترازیِ وسط فقط در
+   ردیفی که این قرص را دارد (نمای تیم)؛ ردیفِ بقیه دست نمی‌خورد. دکمه‌های «انجام شد/فردا»
+   خودشان بلندتر می‌شوند. */
+@media (pointer: coarse) {
+  .wk-meta:has(> .wk-assign) { align-items: center; }
+  .wk-assign .pk-btn { min-height: 30px; }
+  .wk-assign .pk-btn::after { content: ''; position: absolute; inset: -5px -4px; }
+  .wk-btn { min-height: 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .wk-assign .pk-btn { transition: none; } }

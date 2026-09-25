@@ -155,15 +155,21 @@ export class TechService {
    * ردِ ممیزی (بازیگر = سوپرادمین) را دارد.
    */
   async claim(id: number, dutyId: number | undefined, user: any) {
+    const team = isUnrestricted(user);
+    /* سوپرادمین خودش کارشناسِ برنامه نیست؛ «به نامِ خودم» برای او یعنی خطای
+       گنگِ «این کارشناس در برنامه نیست» — پس صریح گفته می‌شود چه بفرستد. */
+    if (dutyId == null && team) throw new BadRequestException('برای پذیرش، کارتِ حضورِ کارشناسی را که مراجعه به نامش ثبت شود انتخاب کنید');
     if (dutyId == null) return this.duties.assign(id, user.id, user, true);
-    if (!isUnrestricted(user)) throw new ForbiddenException('پذیرش به نامِ کارشناسِ دیگر فقط برای سوپرادمین باز است');
+    if (!team) throw new ForbiddenException('پذیرش به نامِ کارشناسِ دیگر فقط برای سوپرادمین باز است');
     const duty = await this.prisma.hospitalDuty.findUnique({
       where: { id: dutyId },
       include: { tech: { select: { person: { select: { firstName: true, lastName: true } } } } },
     });
     if (!duty) throw new NotFoundException('این برنامهٔ حضور پیدا نشد');
     const visit = await this.prisma.visit.findFirst({ where: { id, patient: { deletedAt: null } }, select: { hospitalId: true, opDate: true } });
-    if (visit && (visit.hospitalId !== duty.hospitalId || visit.opDate?.toISOString().slice(0, 10) !== duty.date.toISOString().slice(0, 10))) {
+    // مراجعهٔ ناموجود یا حذف‌شده «پیدا نشد» است، نه «بیمارستان و تاریخ را مشخص کنید»ِ `assign`.
+    if (!visit) throw new NotFoundException('این مراجعه پیدا نشد');
+    if (visit.hospitalId !== duty.hospitalId || visit.opDate?.toISOString().slice(0, 10) !== duty.date.toISOString().slice(0, 10)) {
       throw new BadRequestException('این مراجعه در بیمارستان و روزِ همین برنامهٔ حضور نیست');
     }
     await this.duties.assign(id, duty.techId, user, true);

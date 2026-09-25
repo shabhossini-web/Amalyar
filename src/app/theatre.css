@@ -45,6 +45,18 @@
   grid-column: 2; display: block; max-width: 100%; margin-top: 2px; font-size: 12.5px; line-height: 1.6;
   color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* نمای سرپرستی (قانونِ ۲۹) — «مالِ کیست» با متن و آیکون، نه فقط رنگ. نام‌ها
+   می‌پیچند و بریده نمی‌شوند: برچسبی که نصفه دیده شود همان حدسی است که آمد
+   حذفش کند. «تعیین نشده» کهربایی است چون کاری است که کسی باید انجامش دهد. */
+.th-head .th-scope { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--text2); }
+.th-head .th-scope svg { flex: none; color: var(--brand-2); }
+.th-item-owner {
+  grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px;
+  font-size: 12.5px; line-height: 1.6; color: var(--text3);
+}
+.th-item-owner svg { flex: none; color: var(--brand-2); }
+.th-item-owner b { font-weight: 700; color: var(--text1); }
+.th-item-owner .none b { color: var(--amber-text); }
 
 .th-state { padding: 3px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 700; color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12); }
 .th-state.is-finished { color: var(--green-text); border-color: rgba(52, 211, 153, .45); }
@@ -79,6 +91,8 @@
 .th-op > .th-codes.multi + .th-op-at { margin-top: 2px; font-size: 13.5px; font-weight: 600; color: var(--text2); }
 .th-team { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 8px 0 0; font-size: 12.5px; color: var(--text3); }
 .th-team b { color: var(--text1); }
+/* همان «تعیین نشده»ِ ردیفِ فهرست (نمای سرپرستی) — متن و رنگ، نه فقط رنگ. */
+.th-team .none b { color: var(--amber-text); }
 
 /* هشدارها — هر سه همیشه هستند؛ پرشده برجسته، خالی کم‌رنگ ولی دیدنی. */
 .th-alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; padding: 0 !important; background: none !important; border: 0 !important; }
@@ -248,6 +262,9 @@
 @media (max-width: 560px) {
   .th-item { grid-template-columns: 54px minmax(0, 1fr); }
   .th-item-side { grid-column: 1 / -1; grid-row: 4; flex-direction: row; align-items: center; justify-content: space-between; }
+  /* سطرِ «مالِ کیست» یک ردیف اضافه می‌کند؛ ردیفِ ثابتِ ۴ آن‌وقت روی شکایتِ
+     اولیه می‌افتاد. فقط برای همین ردیف‌ها — ردیفِ بقیه دست نمی‌خورد. */
+  .th-item.has-owner .th-item-side { grid-row: auto; }
   /* سه دکمه در یک ردیفِ ۳۲۰پیکسلی جا نمی‌شوند — می‌پیچند، و هر کدام
      همان کفِ لمسِ ۴۴px را نگه می‌دارد. */
   .th-acts { width: 100%; flex-wrap: wrap; }

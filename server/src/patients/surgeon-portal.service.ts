@@ -4,6 +4,7 @@ import { ConfigService } from '../config/config.service';
 import { AuditService } from '../audit/audit.service';
 import { verificationDeadline } from '../accounts/provisional';
 import { LEVEL } from '../common/levels';
+import { isUnrestricted } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { kitTemplate, NEEDS_SELECT, OTHER_PX_KIT, procedureLabel } from './visit-coding';
@@ -22,6 +23,29 @@ import { ORDER_LABELS } from './labels';
  */
 const SURGEON_DOC_CATEGORIES = ['report', 'op-report', 'other', 'prescription'];
 
+type NamedPerson = { firstName: string | null; lastName: string | null } | null | undefined;
+const personName = (p: NamedPerson) => (p ? `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || null : null);
+/** نامِ پزشکِ یک مراجعه: تعریفِ جراح، وگرنه نامِ denormalizeشده روی خودِ مراجعه. */
+const visitDoctor = (v: { surgeon?: { person: NamedPerson } | null; surgeonName?: string | null } | null | undefined) =>
+  (v ? personName(v.surgeon?.person) ?? (v.surgeonName?.trim() || null) : null);
+const DOCTOR_SELECT = { surgeonName: true, surgeon: { select: { person: { select: { firstName: true, lastName: true } } } } } as const;
+/* ردیفِ بی‌پزشک در نمای ادغامی هم باید بگوید مالِ کیست — «هیچ‌کس» هم یک پاسخ است. */
+const NO_DOCTOR = 'پزشک تعیین نشده';
+
+/**
+ * دامنهٔ یک درخواستِ میز — «کدام پزشک، و چه کسی می‌پرسد».
+ *
+ * - `team`: نمای ادغامیِ همهٔ پزشکان (فقط سوپرادمینِ بی‌انتخاب) — هر ردیف نامِ پزشکش را می‌گیرد.
+ * - `doctor`: پزشکی که سوپرادمین انتخاب کرده؛ `accountId` حسابِ فعالِ همان شخص است تا
+ *   رابط صفِ کارِ او را بخواهد (`/work?owner=`) بی‌آنکه خودش شخص را به حساب نگاشت کند.
+ */
+type DeskScope = {
+  where: { surgeonId?: number };
+  unrestricted: boolean;
+  team: boolean;
+  doctor: { id: number; name: string; accountId: number | null } | null;
+};
+
 
 
 @Injectable()
@@ -36,13 +60,80 @@ export class SurgeonPortalService {
    * و همهٔ نوع‌های مراجعه (ویزیت/عمل/پیگیری) را می‌آورد، نه فقط عمل. جراح از
    * `user.surgeonId` می‌آید (یک‌بار در `validateSession`)، با fallback به جستجو.
    */
-  private async scope(user: any) {
-    if ((user?.level ?? 0) >= LEVEL.SUPER_ADMIN) return {};
+  private async scope(user: any): Promise<{ surgeonId?: number }> {
+    if (isUnrestricted(user)) return {};
     if (Number.isInteger(user?.surgeonId) && user.surgeonId > 0) return { surgeonId: user.surgeonId as number };
     const account = await this.prisma.account.findUnique({ where: { id: user?.id ?? -1 }, select: { personId: true, status: true } });
     const surgeon = account?.status === 'active' ? await this.prisma.surgeon.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } }) : null;
     if (!surgeon) throw new ForbiddenException('حساب شما به جراح فعال در تعاریف پایه متصل نیست');
     return { surgeonId: surgeon.id };
+  }
+
+  /**
+   * **سوپرادمین بی‌محدودیت است** (قانونِ ۲۹، خواستهٔ مالک ۱۴۰۵/۰۷/۰۳): میزِ پزشک برای او
+   * «میزِ همهٔ پزشکان» است، یا میزِ **یک** پزشک که خودش انتخاب کرده — بی‌آنکه برای دیدن
+   * یا انجامِ کارِ آن پزشک پروفایل عوض کند.
+   *
+   * ⚠️ `picked` شناسهٔ **پزشکِ دیگر** است و فقط سوپرادمین می‌تواند بدهدش. بقیه (پزشک،
+   * ادمینِ سطح ۵) اگر شناسهٔ خودشان را بدهند همان دامنهٔ همیشگی را می‌گیرند و اگر شناسهٔ
+   * دیگری بدهند ۴۰۳ — نه نادیده‌گرفتنِ بی‌صدا، که درخواستِ دست‌ساز را پنهان کند.
+   */
+  private async deskScope(user: any, picked?: number): Promise<DeskScope> {
+    const unrestricted = isUnrestricted(user);
+    if (picked === undefined) return { where: await this.scope(user), unrestricted, team: unrestricted, doctor: null };
+    if (!unrestricted) {
+      const own = await this.scope(user);
+      if (own.surgeonId !== picked) throw new ForbiddenException('دیدنِ میزِ پزشکِ دیگر فقط برای مدیرِ سامانه مجاز است');
+      return { where: own, unrestricted, team: false, doctor: null };
+    }
+    const surgeon = await this.prisma.surgeon.findUnique({
+      where: { id: picked },
+      select: { id: true, person: { select: { firstName: true, lastName: true, account: { select: { id: true, status: true } } } } },
+    });
+    if (!surgeon) throw new NotFoundException('پزشک پیدا نشد');
+    const account = surgeon.person.account;
+    return {
+      where: { surgeonId: surgeon.id }, unrestricted, team: false,
+      doctor: { id: surgeon.id, name: personName(surgeon.person) ?? 'پزشک', accountId: account?.status === 'active' ? account.id : null },
+    };
+  }
+
+  /**
+   * «من کیستم روی این میز» — رابط از این‌جا می‌فهمد نمای ناظر است یا نه و فهرستِ پزشکان
+   * را برای انتخابگر می‌گیرد (قانونِ ۳: رابط سطح را حساب نمی‌کند).
+   *
+   * ⚠️ برای هیچ‌کس ۴۰۳ نمی‌دهد: پزشکِ سطح ۲ هم این را می‌خوانَد و جوابش «ناظر نیستی» است.
+   * ۴۰۳ این‌جا یعنی خطای کنسول روی میزِ هر پزشک (سنجهٔ «هیچ ۴۰۳ی» در `clinic-doctor-portal`).
+   */
+  async desk(user: any) {
+    const selfSurgeonId = Number.isInteger(user?.surgeonId) && user.surgeonId > 0 ? (user.surgeonId as number) : null;
+    if (!isUnrestricted(user)) return { unrestricted: false, selfSurgeonId, doctors: [] };
+    const rows = await this.prisma.surgeon.findMany({
+      where: { active: true }, orderBy: [{ person: { lastName: 'asc' } }, { id: 'asc' }],
+      select: { id: true, specialty: true, person: { select: { firstName: true, lastName: true, account: { select: { id: true, status: true } } } } },
+    });
+    /* صاحبِ مطبی که خودش پزشک است میزِ **خودش** را از همین فهرست برمی‌دارد: `me` و
+       برچسبِ «(خودم)» از سرور (قانونِ ۱۵، همان قراردادِ `assignees`ِ صفِ کار)، و اولِ
+       فهرست — نه گم‌شده میانِ نام‌های الفبایی. */
+    const doctors = rows.map((s) => {
+      const name = personName(s.person) ?? `پزشکِ ${s.id}`;
+      const me = s.id === selfSurgeonId;
+      return {
+        id: s.id, name, label: me ? `${name} (خودم)` : name, me, specialty: s.specialty,
+        accountId: s.person.account?.status === 'active' ? s.person.account.id : null,
+      };
+    });
+    return { unrestricted: true, selfSurgeonId, doctors: [...doctors.filter((d) => d.me), ...doctors.filter((d) => !d.me)] };
+  }
+
+  /**
+   * نوبتِ «بیمارِ این پزشک» — یک تعریف برای `today()` و `month()`.
+   * نمای ادغامی بی‌قید است؛ پزشکِ انتخاب‌شده با حسابِ خودش (اگر دارد) و بیمارانش.
+   */
+  private apptScope(desk: DeskScope, user: any) {
+    if (desk.team) return {};
+    const doctorAccount = desk.doctor ? desk.doctor.accountId ?? -1 : user?.id ?? -1;
+    return { OR: [{ doctorId: doctorAccount }, { patient: { visits: { some: desk.where } } }] };
   }
 
   /**
@@ -59,14 +150,11 @@ export class SurgeonPortalService {
    * و نوبت‌ها با همان قاعدهٔ `today()` دامنه می‌خورند (بیمارِ من)، وگرنه دو
    * تعریفِ متفاوت از «نوبتِ من» می‌ساختیم.
    */
-  async month(user: any, jy: number, jm: number) {
-    const scope = await this.scope(user);
-    const mine = (user?.level ?? 0) >= LEVEL.SUPER_ADMIN
-      ? {}
-      : { OR: [{ doctorId: user?.id ?? -1 }, { patient: { visits: { some: scope } } }] };
+  async month(user: any, jy: number, jm: number, picked?: number) {
+    const desk = await this.deskScope(user, picked);
     return monthDayCounts(this.prisma, jy, jm, {
-      visitWhere: { ...scope, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
-      apptWhere: { status: { not: 'cancelled' }, ...mine },
+      visitWhere: { ...desk.where, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
+      apptWhere: { status: { not: 'cancelled' }, ...this.apptScope(desk, user) },
     });
   }
 
@@ -78,8 +166,15 @@ export class SurgeonPortalService {
    * دیروز را هم نه. بازخوردِ مالک ۱۴۰۵/۰۶/۳۱ صریحاً «تقویم‌ها … تو میزِ
    * پزشک» را نام برد.
    */
-  async today(user: any, dateIso?: string) {
-    const scope = await this.scope(user);
+  async today(user: any, dateIso?: string, picked?: number) {
+    const desk = await this.deskScope(user, picked);
+    const scope = desk.where;
+    /* نامِ پزشکِ هر ردیف فقط در نمای ادغامی — روی میزِ یک پزشک تکرارِ بی‌فایده است. */
+    const docLabel = (name: string | null) => (desk.team ? name ?? NO_DOCTOR : null);
+    /* ⚠️ سقفِ ۴۰/۶۰/۲۰ برای میزِ **یک** پزشک است. نمای ادغامی روزِ کلِ مطب است و با
+       همان سقف ردیف‌های آخر (بی‌ساعت‌ها و تازه‌ترین نتیجه‌ها) بی‌صدا می‌افتادند — «همه را
+       ببیند» یعنی همه، نه چهل‌تای اول. */
+    const cap = desk.team ? { visits: 200, appts: 300, orders: 60 } : { visits: 40, appts: 60, orders: 20 };
     const now = new Date();
     /* «امروز» به وقتِ مطب (`common/clinic-day.ts`) — نه ساعتِ کانتینر. */
     const iso = dateIso && /^\d{4}-\d{2}-\d{2}$/.test(dateIso) ? dateIso : clinicTodayIso(now);
@@ -96,9 +191,10 @@ export class SurgeonPortalService {
     const [visits, appointments] = await Promise.all([
       this.prisma.visit.findMany({
         where: { ...scope, opDate: { gte: start, lte: end }, opStatus: { not: 'cancelled' }, patient: { deletedAt: null } },
-        orderBy: [{ opStartTime: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 40,
+        orderBy: [{ opStartTime: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: cap.visits,
         select: {
           id: true, seq: true, kind: true, opStartTime: true, opStatus: true, hospitalName: true, patient: patientSel, topic: { select: { name: true } },
+          ...DOCTOR_SELECT,
           /* پول هم لازم است: میزِ پزشکِ مطب باید بداند بیمارِ امروزش تسویه کرده
              یا نه (قانونِ ۱۷ — خلاصهٔ مالیِ پایه، فقط‌خواندنی و تک‌منبع). */
           pricingModel: true, globalAmount: true,
@@ -118,14 +214,14 @@ export class SurgeonPortalService {
          * دستِ‌کم یک مراجعه به نامِ این جراح دارد. `doctorId` هم اگر روزی نوشته
          * شد سرِ جایش می‌ماند (شاخهٔ اول).
          */
-        where: {
-          date: day, status: { not: 'cancelled' },
-          ...((user?.level ?? 0) >= LEVEL.SUPER_ADMIN
-            ? {}
-            : { OR: [{ doctorId: user?.id ?? -1 }, { patient: { visits: { some: scope } } }] }),
+        where: { date: day, status: { not: 'cancelled' }, ...this.apptScope(desk, user) },
+        orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: cap.appts,
+        select: {
+          id: true, startMin: true, seq: true, status: true, visitId: true, date: true, patient: patientSel, topic: { select: { name: true } },
+          /* پزشکِ نوبت برای برچسبِ نمای ادغامی: حسابِ پزشکِ نوبت، وگرنه پزشکِ مراجعه‌اش. */
+          doctor: { select: { person: { select: { firstName: true, lastName: true } } } },
+          visit: { select: DOCTOR_SELECT }, forVisit: { select: DOCTOR_SELECT },
         },
-        orderBy: [{ startMin: { sort: 'asc', nulls: 'last' } }, { seq: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: 60,
-        select: { id: true, startMin: true, seq: true, status: true, visitId: true, date: true, patient: patientSel, topic: { select: { name: true } } },
       }),
     ]);
     const kinds: { key: string; table: any; fa: string }[] = [
@@ -137,10 +233,10 @@ export class SurgeonPortalService {
     for (const k of kinds) {
       const rows = await k.table.findMany({
         where: { status: { in: ['answered', 'in_review'] }, visit: { ...scope, patient: { deletedAt: null } } },
-        orderBy: { updatedAt: 'asc' }, take: 20,
-        select: { id: true, patientId: true, visitId: true, status: true, updatedAt: true, patient: patientSel },
+        orderBy: { updatedAt: 'asc' }, take: cap.orders,
+        select: { id: true, patientId: true, visitId: true, status: true, updatedAt: true, patient: patientSel, visit: { select: DOCTOR_SELECT } },
       });
-      unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, statusFa: ORDER_LABELS[r.status] ?? r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient) })));
+      unreviewed.push(...rows.map((r: any) => ({ id: r.id, kind: k.key, kindFa: k.fa, status: r.status, statusFa: ORDER_LABELS[r.status] ?? r.status, visitId: r.visitId, updatedAt: r.updatedAt, patientId: r.patientId, patient: person(r.patient), doctor: docLabel(visitDoctor(r.visit)) })));
     }
     unreviewed.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
     /* سقفِ ۲۰ در هر نوع یعنی ممکن است چیزی از قلم بیفتد؛ شمارشِ واقعی برمی‌گردد
@@ -153,15 +249,23 @@ export class SurgeonPortalService {
       id: v.id, code: `${v.patient.code}-V${v.seq}`, kind: v.kind, opStartTime: v.opStartTime,
       opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       hospital: v.hospitalName, topic: v.topic?.name ?? null, patientId: v.patient.id, patient: person(v.patient),
+      doctor: docLabel(visitDoctor(v)),
       billing: summarize(v.charges, v.payments, v),
     }));
     const apptViews = appointments.map((a) => ({
       id: a.id, time: hhmm(a.startMin), seq: a.seq, status: a.status, statusFa: APPT_LABELS[a.status] ?? a.status,
       visitId: a.visitId, date: a.date,
       topic: a.topic?.name ?? null, patientId: a.patient?.id ?? null, patient: person(a.patient),
+      doctor: docLabel(personName(a.doctor?.person) ?? visitDoctor(a.visit) ?? visitDoctor(a.forVisit)),
     }));
     return {
       now: now.toISOString(),
+      /* نمای ناظر (قانونِ ۲۹) — رابط برچسب‌ها و راهنما را از همین‌ها می‌چیند، نه از سطح. */
+      unrestricted: desk.unrestricted,
+      team: desk.team,
+      doctor: desk.doctor ? { id: desk.doctor.id, name: desk.doctor.name } : null,
+      /* حسابِ پزشکِ انتخاب‌شده — برای `GET /work?owner=`؛ پزشکِ بی‌حساب کاری به نامش ندارد. */
+      doctorAccountId: desk.doctor?.accountId ?? null,
       /* روزِ نمایش‌داده‌شده و اینکه امروز است یا نه — تا سربرگ بتواند «امروز»
          را از «۳ مهر» تفکیک کند بی‌آنکه خودش تاریخ را دوباره حساب کند. */
       date: iso,
@@ -208,6 +312,7 @@ export class SurgeonPortalService {
       code: v.code as string | null, kind: v.kind as string | null,
       topic: v.topic as string | null, hospital: v.hospital as string | null,
       opStatus: v.opStatus as string | null, opStatusFa: (OP_LABELS[v.opStatus] ?? v.opStatus) as string | null,
+      doctor: (v.doctor ?? null) as string | null,
       billing: v.billing as { total: number; itemsTotal: number; paid: number; due: number; paidPct: number } | null,
       time: v.opStartTime ?? null, seq: null as number | null,
       apptId: null as number | null, apptStatus: null as string | null, apptStatusFa: null as string | null,
@@ -216,6 +321,8 @@ export class SurgeonPortalService {
     const attach = (row: any, a: any) => {
       row.apptId = a.id; row.apptStatus = a.status; row.apptStatusFa = APPT_LABELS[a.status] ?? a.status;
       row.time = a.time ?? row.time; row.seq = a.seq ?? row.seq; row.topic = row.topic ?? a.topic;
+      /* پزشکِ مراجعه مقدم است؛ نوبت فقط وقتی که مراجعه پزشک نداشت. */
+      if (row.doctor == null || row.doctor === NO_DOCTOR) row.doctor = a.doctor ?? row.doctor;
     };
     /* شمارشِ نامزدها **قبل از** هر چسباندنی — وگرنه ترتیبِ حلقه تصمیم می‌گیرد. */
     const loose = appts.filter((a) => !(a.visitId && byVisit.has(a.visitId)));
@@ -230,7 +337,7 @@ export class SurgeonPortalService {
       rows.push({
         key: `a${a.id}`, visitId: null, patientId: a.patientId, patient: a.patient,
         code: null, kind: null, topic: a.topic, hospital: null,
-        opStatus: null, opStatusFa: null, billing: null,
+        opStatus: null, opStatusFa: null, doctor: a.doctor ?? null, billing: null,
         time: a.time, seq: a.seq,
         apptId: a.id, apptStatus: a.status, apptStatusFa: APPT_LABELS[a.status] ?? a.status,
       });
@@ -246,8 +353,9 @@ export class SurgeonPortalService {
     return row;
   }
 
-  async list(user: any, query = '', page = 1) {
-    const scope = await this.scope(user);
+  async list(user: any, query = '', page = 1, picked?: number) {
+    const desk = await this.deskScope(user, picked);
+    const scope = desk.where;
     const q = query.trim().slice(0, 80), current = Number.isFinite(page) ? Math.min(100000, Math.max(1, Math.floor(page) || 1)) : 1;
     const where = { ...scope, patient: { deletedAt: null, ...(q ? { OR: [{ firstName: { contains: toEnDigits(q) } }, { lastName: { contains: toEnDigits(q) } }, { code: { contains: toEnDigits(q) } }] } : {}) } };
     const profile = await this.config.profile();
@@ -269,13 +377,16 @@ export class SurgeonPortalService {
       opStatus: v.opStatus, opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       procedure: procedureLabel(v),
       hospital: v.hospital?.name ?? v.hospitalName, surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}` : v.surgeonName,
+      /* برچسبِ «مالِ کدام پزشک» فقط در نمای ادغامیِ سوپرادمین (قانونِ ۲۹) — روی میزِ یک پزشک تکرار است. */
+      doctor: desk.team ? visitDoctor(v) ?? NO_DOCTOR : null,
       /* ⚠️ مشتقِ سرور (قانون ۱۵) و **per-مراجعه**: در شرکتِ دوخدمته ویرایشگرِ اقلام
          فقط روی مراجعهٔ ایمپلنتی — نه روی همه، نه روی هیچ‌کدام (`visitIsImplant`). */
       implant: visitIsImplant(v.requiredItems, profile, v.service),
       /* ⚠️ قاعدهٔ override همان دیروز: `requiredItems`ِ ذخیره‌شده (غیرِ null) برنده
          است. فقط الگو حالا اجتماعِ نیازِ همهٔ عمل‌های جلسه است. */
       requiredItems: v.requiredItems ?? kitTemplate(v).map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item?.name, n.item?.size].filter(Boolean).join(' ') })), instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
-    })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical(), services: profile.services };
+    })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical(), services: profile.services,
+      unrestricted: desk.unrestricted, team: desk.team, doctor: desk.doctor ? { id: desk.doctor.id, name: desk.doctor.name } : null };
   }
 
   async finances(user: any, selectedId?: number, page = 1) {

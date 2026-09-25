@@ -184,3 +184,19 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 }
 .td-fav-x:hover, .td-fav-x:focus-visible { color: var(--red-text); outline: none; border-color: rgba(var(--veil-rgb), .3); }
 @media (max-width: 560px) { .td-favs { gap: 8px; } .td-fav, .td-fav-open { min-height: 80px; font-size: 11.5px; } }
+
+/* ── نمای تیم (سوپرادمین، قانونِ ۲۹) — «مالِ کیست» بالای فهرستِ کارها ──
+   همان `Tabs`ِ اسکرولی؛ فاصله را `gap`ِ خودِ بخش می‌دهد، نه حاشیهٔ پیش‌فرضِ نوار. */
+.td-sec .td-owners { margin: 0; max-width: none; }
+.td-own-n { font-weight: 800; font-variant-numeric: tabular-nums; }
+/* فهرستِ بریده: «همهٔ N کار» — تا دوازده ردیف «همه» به‌نظر نرسد. */
+.td-more-all { align-self: flex-start; padding: 6px 2px; }
+.td-more-all:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 6px; }
+.td-retry {
+  min-height: 34px; margin-inline-start: 6px; padding: 5px 12px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 700; color: var(--brand-text);
+  background: none; border: 1px solid rgba(var(--brand-2-rgb), .45); border-radius: 10px;
+}
+.td-retry:hover { background: rgba(var(--brand-rgb), .12); }
+.td-retry:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+@media (pointer: coarse) { .td-retry { min-height: 40px; } .td-more-all { padding: 10px 2px; } }

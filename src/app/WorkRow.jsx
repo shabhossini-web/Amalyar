@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom';
 import { faDate } from '../lib/jalali.js';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
+import Pick from '../ui/Pick.jsx';
+import { User, Users } from '../ui/icons.jsx';
 
 /**
  * برچسبِ فارسیِ نوعِ کار — کلیدها همان `work-rules.ts`.
  *
- * ⚠️ `repair_data` تنها کلیدی است که از `work-rules.ts` نمی‌آید: اسکنِ W1.10
+ * هشدار: `repair_data` تنها کلیدی است که از `work-rules.ts` نمی‌آید: اسکنِ W1.10
  * مستقیم `upsertWork` را صدا می‌زند (رویدادی در کار نیست). اگر روزی قاعده‌اش
  * هم اضافه شد، همین کلید می‌ماند.
  */
@@ -28,8 +30,16 @@ const tomorrow9 = () => {
 /**
  * یک ردیفِ کار — در زنگِ اعلان و صفحهٔ «کارهای من» یکی است.
  * `overdue` و نامِ بیمار از سرور می‌آید (قانونِ ۱۵)؛ این‌جا فقط رندر.
+ *
+ * **«مالِ کیست»** (نمای تیمِ سوپرادمین، قانونِ ۲۹): سرور روی هر ردیف `ownerLabel`
+ * می‌گذارد — نامِ شخص، «صفِ منشی»، یا «بی‌مسئول» — و برای بقیهٔ کاربران `null`،
+ * پس ردیفِ آن‌ها در هیچ صفحه‌ای عوض نمی‌شود. برچسب فقط وقتی دیده می‌شود که کار
+ * مالِ خودِ کاربر نیست. اگر صفحه `onAssign` بدهد و سرور `canAssign`، همان برچسب
+ * دکمهٔ «واگذاری» است (روی ردیفِ خودِ او: «واگذاری» به‌تنهایی) — یک جا برای «مالِ
+ * کیست» و «به چه کسی بدهم»، نه دکمهٔ سومی کنارِ «انجام شد» که ردیف را بلند کند.
+ * فهرستِ افراد (`assignees`) را صفحه یک‌بار از `GET /work/assignees` می‌گیرد.
  */
-export default function WorkRow({ w, onAct, busy, compact = false, onOpen }) {
+export default function WorkRow({ w, onAct, busy, compact = false, onOpen, onAssign, assignees }) {
   const due = w.dueAt ? faDate(w.dueAt) : '';
   /* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده (`attachments` از سرور، W0.8):
      خودِ ردیف نشانشان می‌دهد تا کاربر برای دیدنِ «چه آمده» دو کلیک نرود
@@ -37,6 +47,10 @@ export default function WorkRow({ w, onAct, busy, compact = false, onOpen }) {
   const maxDocs = compact ? 3 : 4;
   const docs = (w.attachments ?? []).slice(0, maxDocs);
   const more = Math.max(0, (w.attachmentCount ?? docs.length) - docs.length);
+  const showOwner = !w.mine && !!w.ownerLabel;
+  const assignable = !!onAssign && w.canAssign && Array.isArray(assignees);
+  /* شخص: آدمک؛ صفِ نقش: چند آدمک؛ «بی‌مسئول» بی‌آیکون — آدمک برای «هیچ‌کس» دروغ است (خط‌چینِ قرص می‌گویدش). */
+  const OwnerIcon = w.ownerKind === 'role' ? Users : w.ownerKind === 'person' ? User : null;
   return (
     <li className={`wk-row${w.overdue ? ' overdue' : ''}${w.state === 'blocked' ? ' blocked' : ''}`} data-work-id={w.id}>
       <div className="wk-main">
@@ -51,6 +65,33 @@ export default function WorkRow({ w, onAct, busy, compact = false, onOpen }) {
           {w.patient && <Link to={`/app/patients/${w.patient.id}`} className="wk-patient">{w.patient.fullName}</Link>}
           {due && <span className={`wk-due${w.overdue ? ' hot' : ''}`}>{w.overdue ? 'عقب‌افتاده · ' : 'تا '}{due}</span>}
           {w.state === 'blocked' && <span className="wk-blocked">متوقف{w.blockedReason ? `: ${w.blockedReason}` : ''}</span>}
+          {assignable ? (
+            /* `Pick` صفتِ اضافه را به دکمه‌اش نمی‌دهد؛ `title` و کلاسِ حالت روی پوسته‌اند
+               و پوسته دقیقاً هم‌اندازهٔ دکمه است. `value` همیشه خالی: این دکمه «واگذاری»
+               است، نه فیلدی که مقدارش مسئولِ فعلی باشد — مسئولِ فعلی از فهرست بیرون است. */
+            <span
+              className={`wk-owner wk-assign is-${showOwner ? w.ownerKind : 'self'}`}
+              title={showOwner ? `${OwnerIcon ? 'مسئول: ' : ''}${w.ownerLabel} — واگذاری به یک هم‌تیمی` : 'واگذاری به یک هم‌تیمی'}
+              data-owner={showOwner ? w.ownerLabel : undefined}
+            >
+              <Pick
+                label="واگذاری به…"
+                value={null}
+                clearable={false}
+                disabled={busy === w.id}
+                options={assignees.filter((a) => a.id !== w.ownerAccountId)}
+                labelOf={(a) => a.label}
+                placeholder={showOwner
+                  ? <>{OwnerIcon && <OwnerIcon size={13} />}{OwnerIcon && <span className="wk-sr">مسئول: </span>}{w.ownerLabel}<span className="wk-sr"> — واگذاری</span></>
+                  : <>واگذاری</>}
+                onChange={(id) => { if (id != null) onAssign(w, id); }}
+              />
+            </span>
+          ) : showOwner && (
+            <span className={`wk-owner is-${w.ownerKind}`} data-owner={w.ownerLabel}>
+              {OwnerIcon && <OwnerIcon size={13} />}{OwnerIcon && <span className="wk-sr">مسئول: </span>}{w.ownerLabel}
+            </span>
+          )}
         </span>
         {!compact && w.note && <span className="wk-note">{w.note}</span>}
         {docs.length > 0 && (

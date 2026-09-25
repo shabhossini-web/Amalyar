@@ -76,6 +76,8 @@
 .tr-owner { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--text2); }
 .tr-owner svg { flex: 0 0 auto; color: var(--brand-2); }
 .tr-owner b { font-weight: 800; color: var(--text1); }
+/* شمارِ توقفِ هر نیرو در فیلتر — همان وزنِ `td-own-n`ِ «امروز». */
+.tr-own-n { font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ── بار ── */
 .tr-cargo { display: grid; gap: 8px; }

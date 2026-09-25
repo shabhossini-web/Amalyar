@@ -35,6 +35,18 @@ const ORDER = [{ priority: 'desc' as const }, { dueAt: 'asc' as const }, { id: '
  */
 const roleFa = (key: string | null | undefined): string | null => (key ? OWNER_ROLE_FA[key] ?? jobRoleLabel(key) ?? key : null);
 
+/**
+ * حسابی که کار به نامش بنشیند باید بتواند وارد شود: فعال، نه حسابِ سیستمی، و نه حسابِ
+ * موقتی که مهلتِ تأییدِ شماره‌اش گذشته (ورودش بسته است تا worker غیرفعالش کند).
+ * ⚠️ با `OR`ِ صریح، نه `NOT`ِ دوشرطی — `verification_due_at` برای حسابِ عادی NULL
+ * است و `NOT (… AND NULL)` در SQL خودش NULL می‌شود و همهٔ حساب‌های عادی را حذف می‌کرد.
+ */
+const assignableWhere = () => ({
+  status: 'active',
+  systemKey: null,
+  OR: [{ phoneVerifiedAt: { not: null } }, { verificationDueAt: null }, { verificationDueAt: { gt: new Date() } }],
+});
+
 type NamedAccount = { id: number; username: string | null; person: { firstName: string | null; lastName: string | null; phone: string | null } | null };
 /* همان قاعدهٔ `publicUser`: نام، وگرنه نامِ کاربری، وگرنه شماره — یک شخص همه‌جا یک نام دارد. */
 const nameOf = (a: NamedAccount) =>
@@ -90,14 +102,16 @@ export class WorkService {
   }) {
     const scope: WorkScope = q.scope ?? 'inbox';
     if (scope === 'all' && !this.isSupervisor(user)) throw new ForbiddenException('دیدنِ همهٔ کارها برای سوپروایزر و بالاتر است');
-    /* فیلترِ مسئول (نمای تیم). کارِ **شخصِ دیگر** یا صفِ نقشی که مالِ من نیست همان
-       قاعدهٔ `all` را دارد؛ `none` فقط باریک می‌کند (کارِ بی‌شخص/بی‌نقش از دامنهٔ
-       خودِ کاربر)، پس برای همه آزاد است. فیلتر همیشه با دامنه AND می‌شود — هرگز
-       دامنه را باز نمی‌کند. */
+    /* فیلترِ مسئول (نمای تیم، قانونِ ۲۹). شناسهٔ **شخصِ دیگر** یا صفِ نقشی که مالِ
+       من نیست فقط برای سوپرادمین است — همان کسی که دسته‌های `owners` را می‌گیرد؛
+       سطحِ پایین‌تر ۴۰۳ می‌گیرد، حتی سوپروایزر با `scope=all` (شناسهٔ بیگانه‌ای که
+       تا امروز نادیده گرفته می‌شد، نباید بی‌صدا معنی پیدا کند). «خودم»، نقشِ خودم و
+       `none` فقط دامنهٔ خودِ کاربر را باریک می‌کنند، پس برای همه آزادند. فیلتر همیشه
+       با دامنه AND می‌شود — هرگز دامنه را باز نمی‌کند. */
     const foreignOwner = typeof q.owner === 'number' && q.owner !== user.id;
     const foreignRole = q.ownerRole !== undefined && q.ownerRole !== 'none' && q.ownerRole !== (user.jobRole ?? null);
-    if ((foreignOwner || foreignRole) && !this.isSupervisor(user)) {
-      throw new ForbiddenException('دیدنِ کارهای دیگران برای سوپروایزر و بالاتر است');
+    if ((foreignOwner || foreignRole) && !isUnrestricted(user)) {
+      throw new ForbiddenException('فیلترِ کارهای دیگران فقط برای سوپرادمین است');
     }
     if (scope === 'patient') {
       if (!q.patientId) throw new BadRequestException('شناسهٔ بیمار لازم است');
@@ -119,7 +133,8 @@ export class WorkService {
       q.owner === undefined ? {} : { ownerAccountId: q.owner === 'none' ? null : q.owner },
       q.ownerRole === undefined ? {} : { ownerRole: q.ownerRole === 'none' ? null : q.ownerRole },
     ];
-    const take = Math.min(Math.max(q.limit ?? 100, 1), 300);
+    /* `limit=abc` از کوئری NaN می‌شود و `take: NaN` خطای ۵۰۰ِ Prisma می‌داد. */
+    const take = Math.min(Math.max(Number.isFinite(q.limit) ? Math.trunc(q.limit as number) : 100, 1), 300);
     if (q.sort !== 'overdue') {
       return this.enrich(user, await this.prisma.workItem.findMany({ where: { AND: where }, orderBy: ORDER, take }));
     }
@@ -151,11 +166,16 @@ export class WorkService {
   /** بیمار/مراجعه را سمتِ سرور ضمیمه می‌کند (قانونِ ۱۵ — render فرمول ندارد). */
   private async enrich(user: any, rows: any[]) {
     const pids = [...new Set(rows.map((r) => r.patientId).filter(Boolean))] as number[];
+    /* نمای تیم فقط برای سوپرادمین (قانونِ ۲۹). «مالِ کیست» (`ownerName`/`ownerLabel`)
+       برای بقیه `null` می‌ماند: ردیف‌هایشان در هیچ صفحه‌ای عوض نمی‌شود، و کارشناسی که
+       کارهای یک بیمار را می‌بیند (`scope=patient`) نامِ هم‌تیمی‌ها را تازه نمی‌گیرد. */
+    const team = isUnrestricted(user);
+    /* نامِ مالک‌ها هم‌زمان با بیمارها — یک کوئری برای همهٔ ردیف‌ها، و فقط وقتی لازم است. */
     const [patients, names] = await Promise.all([
       pids.length
         ? this.prisma.patient.findMany({ where: { id: { in: pids } }, select: { id: true, code: true, firstName: true, lastName: true, phone: true } })
-        : Promise.resolve([]),
-      this.accountNames(rows.map((r) => r.ownerAccountId)),
+        : Promise.resolve([] as { id: number; code: string; firstName: string; lastName: string; phone: string | null }[]),
+      team ? this.accountNames(rows.map((r) => r.ownerAccountId)) : Promise.resolve(new Map<number, string>()),
     ]);
     const byId = new Map(patients.map((p) => [p.id, { ...p, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() }]));
     /* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده (W0.8) کنارِ ردیف می‌آیند —
@@ -175,9 +195,6 @@ export class WorkService {
     const docsByRef = new Map<string, any[]>();
     for (const d of docs) docsByRef.set(refKey(d), [...(docsByRef.get(refKey(d)) ?? []), d]);
     const now = Date.now();
-    /* نمای تیم فقط برای سوپرادمین (قانونِ ۲۹). برچسبِ «مالِ کیست» برای بقیه `null`
-       می‌ماند تا ردیف‌هایشان در هیچ صفحه‌ای عوض نشود. */
-    const team = isUnrestricted(user);
     return rows.map((r) => {
       const mine = !!r.ownerAccountId && r.ownerAccountId === user?.id;
       const ownerName = r.ownerAccountId ? names.get(r.ownerAccountId) ?? null : null;
@@ -200,8 +217,9 @@ export class WorkService {
             : ownerKind === 'person' ? ownerName ?? 'حسابِ ناشناخته'
               : r.ownerRole === 'patient' ? 'خودِ بیمار'
                 : ownerKind === 'role' ? `صفِ ${ownerRoleFa}` : 'بی‌مسئول',
-        /* «واگذاری» روی ردیف — سرور می‌گوید، رابط سطح را حساب نمی‌کند (قانونِ ۳). */
-        canAssign: team && OPEN.includes(r.state),
+        /* «واگذاری» روی ردیف — سرور می‌گوید، رابط سطح را حساب نمی‌کند (قانونِ ۳).
+           کارِ خودِ بیمار واگذارشدنی نیست (همان قاعدهٔ `act`). */
+        canAssign: team && OPEN.includes(r.state) && r.ownerRole !== 'patient',
       };
     });
   }
@@ -218,9 +236,10 @@ export class WorkService {
       team ? this.prisma.workItem.count({ where: { AND: [base, NOT_PATIENT] } }) : Promise.resolve(0),
       team && opts.owners ? this.ownerFacets(user) : Promise.resolve(undefined),
     ]);
-    if (!team) return { mine, role, overdue, total: mine + role, team: false };
-    /* `total` همان عددِ چیپِ «امروز» و نشانِ زنگ است — هر دو یک تعریف دارند. */
-    return { mine, role, overdue, total: teamTotal, team: true, ...(owners ? { owners } : {}) };
+    if (!team) return { mine, role, overdue, total: mine + role, team: false as const };
+    /* `total` همان عددِ چیپِ «امروز» و نشانِ زنگ است — هر دو یک تعریف دارند.
+       `owners` فقط وقتی خواسته شده باشد (`undefined` در JSON نمی‌آید). */
+    return { mine, role, overdue, total: teamTotal, team: true as const, owners };
   }
 
   /**
@@ -275,7 +294,7 @@ export class WorkService {
   async assignees(user: any) {
     if (!isUnrestricted(user)) throw new ForbiddenException('فهرستِ واگذاری فقط برای سوپرادمین است');
     const rows = await this.prisma.account.findMany({
-      where: { status: 'active', systemKey: null },
+      where: assignableWhere(),
       select: { id: true, username: true, level: true, jobRole: true, person: { select: { firstName: true, lastName: true, phone: true } } },
     });
     const memo = new Map<string, Promise<unknown>>();
@@ -342,7 +361,7 @@ export class WorkService {
    * می‌نوشت: از صفِ نقش بیرون می‌رفت و در صفِ هیچ شخصی هم نمی‌نشست — گم.
    */
   private async assertAssignee(accountId: number) {
-    const target = await this.prisma.account.findFirst({ where: { id: accountId, status: 'active', systemKey: null }, select: { id: true } });
+    const target = await this.prisma.account.findFirst({ where: { id: accountId, ...assignableWhere() }, select: { id: true } });
     if (!target) throw new BadRequestException('حسابِ مقصد پیدا نشد یا فعال نیست');
   }
 
@@ -365,6 +384,9 @@ export class WorkService {
         break;
       case 'assign':
         if (!this.isSupervisor(user) && body.accountId !== user.id) throw new ForbiddenException('واگذاری به دیگران برای سوپروایزر و بالاتر است');
+        /* کارِ خودِ بیمار (`ownerRole='patient'`) با `NOT_PATIENT` از هر صفِ کارکنان بیرون
+           است؛ به نامِ یک کارمند نوشتنش یعنی کاری که نه او می‌بیند نه بیمار — گم. */
+        if (row.ownerRole === 'patient') throw new BadRequestException('کارِ خودِ بیمار به کارکنان واگذار نمی‌شود');
         if (body.accountId && body.accountId !== user.id) await this.assertAssignee(body.accountId);
         data = { ownerAccountId: body.accountId ?? null, state: row.state === 'blocked' ? 'blocked' : 'open' };
         break;
