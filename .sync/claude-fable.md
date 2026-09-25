@@ -1,25 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/glass-review
 since: 2026-09-25
-paths:
-  - src/index.css
-  - src/ui/ui.css
-  - src/ui/press.css
-  - src/app/launcher.css
-  - src/app/shell.css
-  - src/app/dashboard.css
-  - src/app/login.css
-  - src/app/users.css
-  - src/app/formbuilder.css
-  - src/app/FormBuilder.jsx
-  - src/app/record.css
-  - src/app/tech.css
-  - src/app/transport.css
-  - src/app/theatre.css
-  - scripts/verify-theme-tokens.js
-note: بازبینیِ شیشه (تأییدِ مالک، چهار بند) — سطح‌های گود/فیلد/دکمهٔ شبح/ردیف در تمِ روشن سفید، حذفِ تاریِ تودرتو، متنِ فرعی یک پله خواناتر، باگِ دکمهٔ فرم‌ساز؛ نگهبانِ پُرِ سیاهِ خام.
+paths: []
+note: >-
+  بازبینیِ شیشه (چهار بندِ مصوب) لند شد: تمِ روشن بی‌خاکستریِ کدر، بی‌تاریِ تودرتو، متنِ فرعیِ خواناتر،
+  دکمهٔ فرم‌ساز. بعدی: سوپرادمینِ بی‌محدودیت روی شاخهٔ claude/superadmin-all.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
