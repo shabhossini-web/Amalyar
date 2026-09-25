@@ -1,12 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/unpin-live-suites
 since: 2026-09-25
-paths:
-  - scripts/e2e/
-  - scripts/local-ci.mjs
-note: ۴۲ سوییتِ زنده آدرسِ API/UI را از `process.env.E2E_API`/`E2E_UI` می‌خوانند (نه `localhost:3101`/`127.0.0.1:5199` ثابت) تا CI محلی آن‌ها را بینِ همهٔ شاردها پخش کند. یک‌خطی در هر فایل؛ کوتاه‌مدت.
+paths: []
+note: ۴۲ سوییتِ زنده حالا نشانی را از `E2E_API`/`E2E_UI` می‌خوانند و بینِ همهٔ شاردهای CI محلی پخش می‌شوند؛ لند شد. بسته‌های ۸+۹ (PR #98، draft) هنوز باید روی زیرفرم‌ها بازنویسی شوند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
