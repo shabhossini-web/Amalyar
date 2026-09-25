@@ -191,7 +191,10 @@ try {
     ok(/\/app\/frontdesk/.test(page.url()),
       `**نباید بیفتد:** برگشت به داشبورد بپرد (${page.url().split('/app')[1]}) — منشی آن‌جا دسترسی ندارد`);
     await page.keyboard.press('Escape');                     // کلیکِ برگشت
-    await page.waitForTimeout(500);
+    /* ⚠️ انتظار تا بسته‌شدنِ واقعیِ شیت، نه خوابِ ثابتِ ۵۰۰ms: شیت با انیمیشن
+       بسته می‌شود و زیرِ بارِ CI محلیِ هم‌زمان (سه شارد) گاهی از ۵۰۰ms
+       می‌گذشت — قرمزی بی‌ربط به محصول. ادعا همان است: **یک** اقدام، بی‌کلیکِ دیگر. */
+    await page.waitForSelector('.db-sheet', { state: 'detached', timeout: 5000 }).catch(() => {});
     ok(await page.locator('.db-sheet').count() === 0 && await page.locator('.fd-board').count() === 1,
       'با **یک** اقدام (Escape) به میز برگشت');
 
