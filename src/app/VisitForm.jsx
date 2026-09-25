@@ -157,6 +157,9 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
 const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'بعد از عمل' };
 /* سه مرحلهٔ فرمِ عمل — تب‌ها و «الصاق به»ِ پنجرهٔ الصاق از همین یک فهرست. */
 const PHASE_ITEMS = Object.entries(PHASE_FA).map(([key, label]) => ({ key, label }));
+/* پاسخِ یک زیرفرم چیزی دارد؟ — `false`ِ به‌جامانده از یک کلید پاسخ نیست (همان معنای «خالی»ِ سرور). */
+const hasAnswer = (data) => Object.values(data ?? {}).some((v) => v !== false && v != null
+  && String(Array.isArray(v) ? v.join('') : typeof v === 'object' ? (v.id ?? v.url ?? '') : v).trim() !== '');
 /* دسته‌های مدرکی که واقعاً به یک عمل گره می‌خورند. «مدرکِ شناسایی» و «فیش» عمداً
    نیستند: آن‌ها مالِ کلِ پرونده‌اند، نه مرحلهٔ یک عمل — و از تبِ مدارکِ پرونده
    بارگذاری می‌شوند. فهرست زیرمجموعهٔ `DOCUMENT_CATEGORIES`ِ سرور است. */
@@ -647,30 +650,55 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (!next) { onToast('سه فرمِ منتخب پر است — اول ستارهٔ یکی را بردارید'); return; }
     try { await savePrefs('subformPins', next); } catch (e) { onToast(e.message); }
   };
-  /* ثبتِ تازه، برگشت به گامِ «نوع» و عوض‌کردنِ ویزیت ↔ عمل: الصاق‌ها مرحلهٔ نوعِ تازه را
-     می‌گیرند (عمل: «قبل از عمل»؛ غیرجراحی: بی‌مرحله، یکی به‌ازای هر زیرفرم). هنوز چیزی ذخیره
-     نشده، پس فقط همین فهرست و پیش‌نویسِ علائم جابه‌جا می‌شوند — وگرنه بندِ بی‌مرحله در عمل ۴۰۰
-     می‌گرفت. */
+  /* پیش‌نویسِ علائمی که واقعاً عدد دارد، و کارتی که پاسخ دارد — برای جابه‌جاییِ نوع در ثبتِ تازه. */
+  const draftHas = (d) => !!d && Object.entries(d).some(([k, v]) => k !== 'phase' && String(v ?? '').trim() !== '');
+  const entryHas = (e) => (e.key === 'vitals' ? draftHas(f.vitals?.[vk(e.phase)]) : !e.builtin && hasAnswer(e.data));
+  /**
+   * انتخابِ نوع در ثبتِ تازه (گامِ ۲). ⚠️ عمل → ویزیت وقتی یک زیرفرم در دو مرحله پاسخ دارد، یکی‌کردن
+   * یعنی دورریختنِ یکی — پس نوع عوض نمی‌شود و گفته می‌شود چرا (همان قاعدهٔ سرور برای مراجعهٔ
+   * ثبت‌شده، `planKindPhases`).
+   */
+  const pickKind = (kind) => {
+    if (isSurgery && kind !== 'surgery') {
+      const answered = new Map();
+      for (const e of subList) if (entryHas(e)) answered.set(e.key, (answered.get(e.key) ?? 0) + 1);
+      const clash = subList.find((e) => (answered.get(e.key) ?? 0) > 1);
+      if (clash) {
+        onToast(`«${catByKey.get(clash.key)?.title ?? clash.title ?? clash.key}» در بیش از یک مرحلهٔ عمل پاسخ دارد — اول یکی را خالی کنید، بعد نوع را عوض کنید`);
+        return;
+      }
+    }
+    kindTouched.current = true;
+    setF((s) => ({ ...s, kind }));
+  };
+  /* ثبتِ تازه، برگشت به گامِ «نوع» و عوض‌کردنِ ویزیت ↔ عمل: الصاق‌ها مرحلهٔ نوعِ تازه را می‌گیرند —
+     عمل: مرحلهٔ پیش‌فرضِ همان زیرفرم (`defaultPhase`ِ کاتالوگ: ارزیابی «قبل»، پیگیریِ پس از عمل «بعد»)؛
+     غیرجراحی: بی‌مرحله، یکی به‌ازای هر زیرفرم و **آن که پاسخ دارد** (دو پاسخ را `pickKind` نمی‌گذارد).
+     هنوز چیزی ذخیره نشده، پس فقط همین فهرست و پیش‌نویسِ علائم جابه‌جا می‌شوند — وگرنه بندِ بی‌مرحله
+     در عمل ۴۰۰ می‌گرفت. */
   const wasSurgery = useRef(isSurgery);
   useEffect(() => {
     if (editing || wasSurgery.current === isSurgery) return;
     wasSurgery.current = isSurgery;
-    const to = isSurgery ? 'pre' : '';
-    const seen = new Set();
-    const next = [];
+    const phaseFor = (key) => (isSurgery ? (catByKey.get(key)?.defaultPhase ?? 'pre') : '');
+    const keep = new Map();
     for (const e of subList) {
       if (isSurgery && e.key === 'orders') continue; // درخواست در عمل جای ثابتِ خودش را دارد
-      const slot = slotOf(e.key, to);
-      if (seen.has(slot)) continue;
-      seen.add(slot);
-      next.push({ ...e, phase: to, slot });
+      const cur = keep.get(e.key);
+      if (!cur || (!entryHas(cur) && entryHas(e))) keep.set(e.key, e);
     }
+    const next = subList.filter((e) => keep.get(e.key) === e).map((e) => {
+      const ph = phaseFor(e.key);
+      return { ...e, phase: ph, slot: slotOf(e.key, ph) };
+    });
     subTouched.current = new Set(next.map((e) => e.slot));
     setSubList(next);
     setF((s2) => {
       const d = s2.vitals ?? {};
-      const first = d[isSurgery ? 'visit' : 'pre'] ?? Object.values(d).find(Boolean) ?? null;
-      return { ...s2, vitals: first ? { [vk(to)]: first } : {} };
+      const card = next.find((e) => e.key === 'vitals');
+      /* پیش‌نویسی که واقعاً عدد دارد — نه اولین کلید، که ممکن است فقط رشتهٔ خالی باشد. */
+      const src = ['visit', 'pre', 'intra', 'post'].map((k) => d[k]).find(draftHas) ?? null;
+      return { ...s2, vitals: card && src ? { [vk(card.phase)]: src } : {} };
     });
     setSubErr({});
     setCardsShut({});
@@ -1672,7 +1700,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       empty = orders.length === 0;
       body = ordersBlock ?? <p className="vf-card-hint">بعد از ذخیرهٔ همین {t.visit}، درخواست از همین‌جا ثبت و برای بیمار فرستاده می‌شود.</p>;
     } else {
-      empty = !Object.values(e.data ?? {}).some((v) => v !== false && v != null && String(Array.isArray(v) ? v.join('') : typeof v === 'object' ? (v.id ?? v.url ?? '') : v).trim() !== '');
+      empty = !hasAnswer(e.data);
       body = it ? (<>
         <DynForm
           assistance
@@ -2061,7 +2089,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               aria-checked={f.kind === k.kind}
               className={f.kind === k.kind ? 'on' : ''}
               style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
-              onClick={() => { kindTouched.current = true; setF((s) => ({ ...s, kind: k.kind })); }}
+              onClick={() => pickKind(k.kind)}
             >{k.title}</button>
           ))}
         </div>

@@ -12,7 +12,8 @@
  *   - دستیارِ کادرها (text-draft): خطِ «بافتار» با عمل و تشخیص؛ `care` دستورِ مراقبتِ پیامکی را می‌دهد
  *   - شرح‌نویس (note-draft): شناسه‌های فرم بر عملِ ذخیره‌شدهٔ مراجعه مقدم‌اند
  *  نباید بیفتد:
- *   - فرمِ بی‌بافتار «مراقبتِ عمومی» بگیرد (۴۰۰)
+ *   - فرمِ بی‌بافتار یا بدنهٔ خالی «مراقبتِ عمومی» بگیرد (۴۰۰)
+ *   - کاربرِ زیرِ سوپروایزر از شرحِ عملِ مراجعه‌ای که نمی‌بیند پیش‌نویس بگیرد
  *   - بدنهٔ کهنهٔ `{visitId}` رفتارش عوض شود (قالبِ بعد از عمل، عمل و تشخیصِ مراجعه)
  *   - کادری که بیرونِ فرمِ مراجعه است (بی‌بافتار) خطِ «بافتار» بگیرد
  *   - شناسهٔ غیرعددی پذیرفته شود
@@ -60,7 +61,7 @@ const last = () => {
   return [String(m[0]?.content ?? ''), String(m[1]?.content ?? '')];
 };
 
-const trash = { visits: [], procs: [], diags: [] };
+const trash = { visits: [], procs: [], diags: [], accounts: [] };
 
 try {
   console.log('۱) چیدمان: دو نوعِ عمل با قالب، یک تشخیص، یک عملِ ذخیره‌شده');
@@ -113,6 +114,9 @@ try {
   console.log('\n۵) نباید بیفتد');
   r = await send('/ai/care-draft', 'POST', { phase: 'pre', procedureTypeIds: [], diagnosisIds: [] });
   ok('**فرمِ بی‌بافتار «مراقبتِ عمومی» نمی‌گیرد (۴۰۰)**', r.status === 400 && msg(r).includes('نوعِ عمل یا تشخیص'), `${r.status} ${msg(r)}`);
+  const before = captured.length;
+  r = await send('/ai/care-draft', 'POST', {});
+  ok('**بدنهٔ خالی هم «مراقبتِ عمومی» نمی‌گیرد (۴۰۰، بی‌تماس با سرویس)**', r.status === 400 && captured.length === before, `${r.status} ${msg(r)}`);
   r = await send('/ai/care-draft', 'POST', { phase: 'pre', procedureTypeIds: ['x'] });
   ok('شناسهٔ غیرعددی ۴۰۰', r.status === 400, `${r.status} ${msg(r)}`);
   r = await send('/ai/care-draft', 'POST', { phase: 'lunch', procedureTypeIds: [pA.id] });
@@ -122,6 +126,25 @@ try {
   ok('**بدنهٔ کهنهٔ `{visitId}`: همان رفتارِ دیروز** (قالبِ «بعد»، عمل و تشخیصِ مراجعه)',
     r.status < 300 && sys.includes(`پانسمان را خشک نگه دارید ${tag}`) && usr.includes(`نوعِ عمل: ${pA.name}`) && usr.includes(`تشخیص: ${dx.title}`),
     `${r.status} ${usr.slice(0, 160)}`);
+
+  /* دامنهٔ دید: کارشناس‌ادمینِ (سطحِ ۳) بی‌ربط به این مراجعه — شرحِ عملش نباید به پیش‌نویسِ او برسد. */
+  const ta = (await send('/accounts/temporary', 'POST', {
+    firstName: 'کارشناسِ', lastName: `بافتار${tag}`, phone: '0912' + String(Math.floor(1e6 + Math.random() * 9e6)),
+    level: 3, jobRole: 'technician', username: `ac${tag}`,
+  })).json;
+  const taLogin = ta?.temporaryPassword ? await fetch(API + '/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ identifier: `ac${tag}`, password: ta.temporaryPassword }),
+  }).then((x) => x.json()) : null;
+  if (ta?.account?.id) trash.accounts.push(ta.account.id);
+  if (taLogin?.accessToken) {
+    const beforeTa = captured.length;
+    const rt = await fetch(API + '/ai/care-draft', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + taLogin.accessToken },
+      body: JSON.stringify({ visitId: V.id }),
+    }).then(async (x) => ({ status: x.status, json: await x.json().catch(() => null) }));
+    ok('**کارشناس‌ادمینِ بی‌ربط از شرحِ این مراجعه پیش‌نویس نمی‌گیرد** (۴۰۰، بی‌تماس با سرویس)',
+      rt.status === 400 && msg(rt).includes('مراجعه پیدا نشد') && captured.length === beforeTa, `${rt.status} ${msg(rt)}`);
+  } else ok('حسابِ کارشناس‌ادمین ساخته شد', false, JSON.stringify(ta).slice(0, 160));
 
   console.log('\n۶) دستیارِ کادرها (text-draft)');
   r = await send('/ai/text-draft', 'POST', {
@@ -167,6 +190,7 @@ try {
   for (const id of trash.visits.filter(Boolean)) await send(`/visits/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.procs.filter(Boolean)) await send(`/procedure-types/${id}`, 'DELETE').catch(() => {});
   for (const id of trash.diags.filter(Boolean)) await send(`/diagnoses/${id}`, 'DELETE').catch(() => {});
+  for (const id of trash.accounts) await send(`/accounts/${id}`, 'DELETE').catch(() => {});
 }
 
 console.log(`\n${pass} سنجه سبز${fails.length ? `، ${fails.length} قرمز` : ''}`);

@@ -16,7 +16,8 @@
  *     نشان می‌دهد و بازکردن آن را در متن نمی‌نشاند)؛ «استفاده و ویرایش» صریح است
  *   - دستیارِ مراقبت: بدنه نوعِ عمل، تشخیص، مرحله و متنِ فعلی را دارد؛ «برگرداندن» کار می‌کند
  *   - ابزارِ «ادامه با AI»ِ کادر بافتارِ فرم + `care` را می‌فرستد
- *   - ثبتِ تازه: ویزیت ← عمل در گامِ «نوع» الصاق و پیش‌نویسِ علائم را به «قبل از عمل» می‌برد
+ *   - ثبتِ تازه: ویزیت ← عمل در گامِ «نوع» الصاق و پیش‌نویسِ علائم را به «قبل از عمل» می‌برد؛
+ *     عمل → ویزیت پاسخ‌دار را نگه می‌دارد، و با دو پاسخ در دو مرحله نوع را عوض نمی‌کند (با پیام)
  *  نباید بیفتد:
  *   - کادرِ علائمِ حیاتیِ بیرون از کارت
  *   - بدنهٔ ذخیرهٔ عمل بندِ بی‌مرحله داشته باشد
@@ -277,6 +278,39 @@ try {
   ok('**عوض‌شدنِ نوع: کارت و اندازهٔ تایپ‌شده به «قبل از عمل» رفت**',
     await card(p2, 'vitals', 'pre').count() === 1 && (await card(p2, 'vitals', 'pre').locator('[data-vital="hr"]').inputValue()) === '66'
     && await p2.locator('[data-subform="vitals"]:not([data-subform-phase])').count() === 0);
+  /* عمل → ویزیت: دو مرحله با پاسخ یعنی یکی‌کردنِ دو اندازه — نوع عوض نمی‌شود و گفته می‌شود چرا. */
+  await p2.locator('.db-postop .ui-tabs button', { hasText: 'بعد از عمل' }).click();
+  await p2.locator('[data-act="phase-attach"][data-phase="post"]').click();
+  await p2.locator('.vf-pick [data-subform-item="vitals"] [data-act="attach"]').click();
+  await card(p2, 'vitals', 'post').locator('[data-vital="spo2"]').fill('97');
+  await p2.locator('.db-steps li').nth(1).locator('button').click();
+  await p2.waitForTimeout(400);
+  await kindBtn(clinicKind).click();
+  await p2.waitForTimeout(300);
+  ok('**عمل → ویزیت با پاسخ در دو مرحله: نوع عوض نشد و پیام گفت چرا**',
+    (await kindBtn(surgeryKind).getAttribute('aria-checked')) === 'true'
+    && (await p2.locator('.lx-toast').innerText()).includes('در بیش از یک مرحلهٔ عمل پاسخ دارد'),
+    await p2.locator('.lx-toast').innerText().catch(() => ''));
+  await p2.locator('.db-stepnav button').last().click();
+  await p2.waitForTimeout(700);
+  await p2.locator('.db-postop .ui-tabs button', { hasText: 'قبل از عمل' }).click();
+  await card(p2, 'vitals', 'pre').locator('[data-vital="hr"]').fill('');
+  await p2.locator('.db-steps li').nth(1).locator('button').click();
+  await p2.waitForTimeout(400);
+  await kindBtn(clinicKind).click();
+  await p2.locator('.db-stepnav button').last().click();
+  await p2.waitForTimeout(900);
+  ok('**عمل → ویزیت: کارتِ پاسخ‌دار («بعد») ماند، نه اولی**',
+    await p2.locator('[data-subform="vitals"]:not([data-subform-phase])').count() === 1
+    && (await p2.locator('[data-subform="vitals"] [data-vital="spo2"]').inputValue()) === '97');
+  await p2.locator('.db-steps li').nth(1).locator('button').click();
+  await p2.waitForTimeout(400);
+  await kindBtn(surgeryKind).click();
+  await p2.locator('.db-stepnav button').last().click();
+  await p2.waitForTimeout(900);
+  ok('و برگشت به عمل: همان اندازه در «قبل از عمل»', (await card(p2, 'vitals', 'pre').locator('[data-vital="spo2"]').inputValue()) === '97');
+  await card(p2, 'vitals', 'pre').locator('[data-vital="spo2"]').fill('');
+  await card(p2, 'vitals', 'pre').locator('[data-vital="hr"]').fill('66');
   await p2.locator('[data-care-open="pre"]').click();
   const sheet3 = p2.locator('[data-care-sheet="pre"]');
   await sheet3.waitFor({ timeout: 5000 });

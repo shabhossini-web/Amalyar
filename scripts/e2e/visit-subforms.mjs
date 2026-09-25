@@ -277,6 +277,10 @@ try {
   ok('**اندازهٔ «حین» کارتِ ضمنیِ همان مرحله را ساخت**', sfAt(fresh, 'vitals', 'intra')?.implicit === true && sfAt(fresh, 'vitals', 'intra')?.count === 1,
     JSON.stringify((fresh?.subforms ?? []).map((x) => [x.key, x.phase, x.implicit])));
   ok('**فهرستِ زیرفرمِ عمل «درخواست» را نشان نمی‌دهد** (تبِ ثابت)', !sfOf(fresh, 'orders'), JSON.stringify((fresh?.subforms ?? []).map((x) => x.key)));
+  const catNow2 = (await send('/forms/subforms')).json?.items ?? [];
+  ok('کاتالوگ مرحلهٔ پیش‌فرضِ هر زیرفرم را می‌دهد (پیگیریِ پس از عمل «بعد»، بقیه «قبل»)',
+    catNow2.find((x) => x.key === 'subform.postop')?.defaultPhase === 'post' && catNow2.find((x) => x.key === 'subform.asa')?.defaultPhase === 'pre'
+    && catNow2.find((x) => x.key === 'vitals')?.defaultPhase === 'pre');
   ok('**تصمیمِ عمل با ثبتِ سفارش عوض نشد**', !(fresh?.decisions ?? []).includes('lab'), JSON.stringify(fresh?.decisions));
 
   console.log('\n۸) زیرفرمِ خاموش');
@@ -368,12 +372,13 @@ try {
     ok('منتخب‌های هر حساب جداست (سوپروایزرِ تازه خالی است)', JSON.stringify(pr?.subformPins) === '[null,null,null]', JSON.stringify(pr));
   }
   /* مرحله‌ها با نوع جابه‌جا می‌شوند: زیرفرمِ پاسخ‌دار + اندازهٔ بی‌مرحله روی ویزیت. */
-  await send(`/visits/${K.id}`, 'PATCH', { subforms: [{ key: 'subform.growth', data: { height: '100', weight: '15' } }] });
+  await send(`/visits/${K.id}`, 'PATCH', { subforms: [{ key: 'subform.growth', data: { height: '100', weight: '15' } }, { key: 'subform.postop' }] });
   await send(`/visits/${K.id}/vitals`, 'POST', { hr: '70' });
   r = await send(`/visits/${K.id}`, 'PATCH', { kind: 'surgery' });
   ok('ادمین نوعِ مراجعهٔ مستقل را عوض می‌کند', r.status === 200 && r.json?.kind === 'surgery', `${r.status} ${msg(r)}`);
-  ok('**ویزیت → عمل: زیرفرم و اندازه «قبل از عمل» شدند**',
+  ok('**ویزیت → عمل: ارزیابی و اندازه «قبل از عمل»، پیگیریِ پس از عمل «بعد»**',
     (r.json?.subforms ?? []).find((x) => x.key === 'subform.growth')?.phase === 'pre'
+    && (r.json?.subforms ?? []).find((x) => x.key === 'subform.postop')?.phase === 'post'
     && (r.json?.subforms ?? []).find((x) => x.key === 'vitals')?.phase === 'pre'
     && sql(`SELECT string_agg(coalesce(phase,'-'), ',') FROM vital_signs WHERE visit_id=${K.id}`) === 'pre',
     JSON.stringify((r.json?.subforms ?? []).map((x) => [x.key, x.phase])));
@@ -386,7 +391,7 @@ try {
   r = await send(`/visits/${K.id}`, 'PATCH', { kind: 'clinic' });
   ok('و برمی‌گرداند', r.status === 200 && r.json?.kind === 'clinic', `${r.status} ${msg(r)}`);
   ok('**عمل → ویزیت: یک ردیف به‌ازای هر زیرفرم، بی‌مرحله** (علائمِ «قبل» و «بعد» یکی شد)',
-    sql(`SELECT string_agg(key || ':' || phase, ',' ORDER BY key) FROM visit_subforms WHERE visit_id=${K.id}`) === 'subform.growth:,vitals:'
+    sql(`SELECT string_agg(key || ':' || phase, ',' ORDER BY key) FROM visit_subforms WHERE visit_id=${K.id}`) === 'subform.growth:,subform.postop:,vitals:'
     && (r.json?.subforms ?? []).find((x) => x.key === 'subform.growth')?.data?.height === '100',
     sql(`SELECT string_agg(key || ':' || phase, ',' ORDER BY key) FROM visit_subforms WHERE visit_id=${K.id}`));
   r = await send(`/visits/${V1.id}`, 'PATCH', { kind: 'surgery' });

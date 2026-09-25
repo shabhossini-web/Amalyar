@@ -10,6 +10,7 @@ import { NOTE_KIND_LABELS } from '../patients/labels';
 import { ServiceCodesService } from '../patients/service-codes.service';
 import { ASSISTANT_GUIDE } from './assistant-knowledge';
 import { canAccess } from '../auth/access-check';
+import { scopedVisitWhere } from '../common/own-scope';
 import { textSearchOr } from '../common/search';
 import { jalalizeDates } from '../common/jalali';
 import { faDateStr } from '../patients/summary.service';
@@ -550,8 +551,10 @@ export class AiService {
     }
     const visitId = Number(dto.visitId ?? 0);
     if (visitId > 0) {
-      const visit = await this.prisma.visit.findUnique({
-        where: { id: visitId },
+      /* ⚠️ با دامنهٔ دیدِ کاربر (زیرِ سوپروایزر فقط مراجعه‌های خودش): متنِ دستیار از شرحِ عملِ همین
+         مراجعه ساخته می‌شود و نباید شرحِ مراجعه‌ای را برساند که کاربر اجازهٔ بازکردنش را ندارد. */
+      const visit = await this.prisma.visit.findFirst({
+        where: { AND: [{ id: visitId }, scopedVisitWhere(user)] },
         select: {
           id: true, opType: true,
           procedureType: { select: { name: true, preOpCare: true, postOpCare: true } },
@@ -578,8 +581,9 @@ export class AiService {
     }
     const own = String(dto.text ?? '').trim().slice(0, 4000);
     /* فرمی که هیچ بافتاری ندارد پیش‌نویسِ «مراقبتِ عمومی» می‌گرفت — همان چیزی که مالک گفت
-       نمی‌خواهد. بدنهٔ کهنه (فقط `visitId`) مثلِ دیروز از خودِ مراجعه می‌نویسد. */
-    if (fromForm && !procs.length && !dxs.length && !base && !own && !opText) {
+       نمی‌خواهد؛ بدنهٔ خالی (نه شناسه، نه مراجعه) هم. بدنهٔ کهنه (فقط `visitId`) مثلِ دیروز از خودِ
+       مراجعه می‌نویسد، حتی وقتی آن مراجعه عمل و تشخیص ندارد. */
+    if ((fromForm || !(visitId > 0)) && !procs.length && !dxs.length && !base && !own && !opText) {
       throw new BadRequestException('اول نوعِ عمل یا تشخیص را انتخاب کنید تا دستیار بداند مراقبتِ چه عملی را بنویسد');
     }
 

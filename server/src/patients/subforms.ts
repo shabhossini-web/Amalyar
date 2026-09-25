@@ -97,6 +97,13 @@ export function subformPhase(raw: unknown, kind: string): string {
   return '';
 }
 
+/**
+ * مرحلهٔ پیش‌فرضِ یک زیرفرم وقتی خودِ کاربر مرحله را نگفته — مهاجرتِ ردیف‌های قدیمی و تغییرِ
+ * «ویزیت → عمل». «فرم پیگیریِ پس از عمل» مالِ «بعد» است؛ بقیه (ارزیابی‌ها) «قبل».
+ * ⚠️ همین قاعده در migrationِ `20260929000000_subform_phase` هم هست.
+ */
+export const defaultSurgeryPhase = (key: string): string => (key === 'subform.postop' ? 'post' : 'pre');
+
 /** شناسهٔ یک الصاق در یک مراجعه — کلید + مرحله (همان یکتاییِ جدول). */
 export const subformSlot = (key: string, phase: string) => `${key}@${phase}`;
 
@@ -368,7 +375,8 @@ export function subformsOf(v: any): any[] | undefined {
  * **تغییرِ نوعِ مراجعه ↔ مرحلهٔ زیرفرم‌ها** — خالص؛ خروجی را `PatientsService.update` داخلِ
  * همان تراکنش اجرا می‌کند.
  *
- * - غیرجراحی → عمل: هر الصاق «قبل از عمل» می‌شود (ارزیابیِ ویزیت همان ارزیابیِ پیش از عمل است).
+ * - غیرجراحی → عمل: هر الصاق مرحلهٔ پیش‌فرضِ خودش را می‌گیرد (`defaultSurgeryPhase`: ارزیابی‌ها
+ *   «قبل از عمل» — ارزیابیِ ویزیت همان ارزیابیِ پیش از عمل است — و پیگیریِ پس از عمل «بعد»).
  * - عمل → غیرجراحی: مرحله‌ها یکی می‌شوند. داخلیِ چندمرحله‌ای (علائمِ قبل و بعد) یک الصاق
  *   می‌ماند — داده‌اش جای خودش است. فرم‌سازیِ چندمرحله‌ای فقط وقتی یکی می‌شود که حداکثر یکی
  *   پاسخ داشته باشد؛ دو پاسخ یعنی دو سند و یکی‌کردنشان یعنی دورریختنِ یکی — پس رد.
@@ -380,7 +388,7 @@ export function planKindPhases(
   const moves: { id: number; phase: string }[] = [];
   const drops: number[] = [];
   if (toSurgery) {
-    for (const r of rows) if (!r.phase) moves.push({ id: r.id, phase: 'pre' });
+    for (const r of rows) if (!r.phase) moves.push({ id: r.id, phase: defaultSurgeryPhase(r.key) });
     return { moves, drops, conflict: null };
   }
   const byKey = new Map<string, typeof rows>();
