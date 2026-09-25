@@ -158,9 +158,10 @@ export class CreateVisitDto {
   @IsOptional() @IsIn(ANESTHESIA_KEYS, { message: 'نوعِ بیهوشی نامعتبر است' })
   anesthesia?: string;
 
-  /// علائمِ حیاتیِ لحظهٔ ثبت — اختیاری؛ ردیفِ اولِ `VitalSign` در همان تراکنش.
-  @IsOptional() @IsObject({ message: 'علائمِ حیاتی نامعتبر است' })
-  vitals?: Record<string, unknown>;
+  /// علائمِ حیاتیِ لحظهٔ ثبت — اختیاری؛ یک شیء، یا تا سه (فرمِ عمل: یکی به‌ازای هر مرحلهٔ
+  /// الصاق‌شده). شکل و بازه در `vitalsRowsFor` سنجیده می‌شود — همان قراردادِ ویرایش.
+  @IsOptional()
+  vitals?: Record<string, unknown> | Record<string, unknown>[];
 
   /// زیرفرم‌های الصاقی (۱۴۰۵/۰۷/۰۳) — `[{ key, data?, removed? }]`؛ شکلِ دقیق و سنجشِ
   /// پاسخ‌ها در `planSubforms` (تعریفِ زیرفرم را سوپرادمین در زمانِ اجرا می‌سازد).

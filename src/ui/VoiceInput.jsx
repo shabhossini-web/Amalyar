@@ -21,10 +21,12 @@ import './voice.css';
 const MAX_SECONDS = 420;
 
 /**
- * @param compact فقط آیکون (بازخوردِ ۱۴۰۵/۰۷/۰۳: دکمه‌های دستیار داخلِ گوشهٔ کادر، نه ردیفی زیرِ
- *   هر کادر). نامِ دسترس‌پذیر همان `label` می‌ماند — صفحه‌خوان و آزمون‌ها با همان پیدایش می‌کنند.
+ * @param compact آیکون در گوشهٔ کادر (بازخوردِ ۱۴۰۵/۰۷/۰۳: دکمه‌های دستیار داخلِ گوشهٔ کادر، نه ردیفی
+ *   زیرِ هر کادر). نامِ دسترس‌پذیر همان `label` می‌ماند — صفحه‌خوان و آزمون‌ها با همان پیدایش می‌کنند.
+ * @param caption توضیحِ کوتاهِ زیرِ آیکونِ فشرده (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳، دورِ دوم: «فقط آیکون
+ *   گیج‌کننده است؛ زیرش یک توضیحِ کوچک بنویس»). در حالِ ضبط/تبدیل، خودِ حالت را می‌گوید.
  */
-export default function VoiceInput({ onText, onErr, disabled, label = 'دیکته با میکروفون', compact = false }) {
+export default function VoiceInput({ onText, onErr, disabled, label = 'دیکته با میکروفون', compact = false, caption = null }) {
   const [state, setState] = useState('idle'); // idle | rec | busy
   const recRef = useRef(null); // {stream, ctx, src, proc, chunks, rate, samples}
 
@@ -106,6 +108,9 @@ export default function VoiceInput({ onText, onErr, disabled, label = 'دیکت�
     >
       {state === 'busy' ? <span className="vc-spin" /> : state === 'rec' ? <StopRec size={15} /> : <Mic size={15} />}
       {!compact && <span>{state === 'busy' ? 'در حالِ تبدیل…' : state === 'rec' ? 'پایانِ ضبط' : label}</span>}
+      {compact && caption && (
+        <span className="vc-cap" aria-hidden="true">{state === 'busy' ? 'تبدیل…' : state === 'rec' ? 'توقف' : caption}</span>
+      )}
     </button>
   );
 }

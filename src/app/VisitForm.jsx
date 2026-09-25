@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
+import { AiContext } from '../ui/ai-context.js';
+import CareEditor from './CareEditor.jsx';
 import { useAuth } from './auth.jsx';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, jToFa } from '../lib/jalali.js';
@@ -24,7 +26,7 @@ import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
 import VisitDocs from './VisitDocs.jsx';
-import { AttachPicker, DecisionSelect, GrowthTrend, SubformCard, VisitHeadBar, attachableOn, useSubformCatalog } from './VisitSubforms.jsx';
+import { AttachPicker, DecisionSelect, GrowthTrend, PhaseAttach, SubformCard, VisitHeadBar, attachableOn, useSubformCatalog } from './VisitSubforms.jsx';
 import { togglePin, usePrefs } from './usePrefs.jsx';
 import { useAllowedTools } from './tools.jsx';
 import './dashboard.css';
@@ -153,6 +155,11 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
 /** برچسبِ سه مرحله — همان واژه‌های تبِ مرحله، تا بج و تب دو حرفِ متفاوت نزنند. */
 const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'بعد از عمل' };
+/* سه مرحلهٔ فرمِ عمل — تب‌ها و «الصاق به»ِ پنجرهٔ الصاق از همین یک فهرست. */
+const PHASE_ITEMS = Object.entries(PHASE_FA).map(([key, label]) => ({ key, label }));
+/* پاسخِ یک زیرفرم چیزی دارد؟ — `false`ِ به‌جامانده از یک کلید پاسخ نیست (همان معنای «خالی»ِ سرور). */
+const hasAnswer = (data) => Object.values(data ?? {}).some((v) => v !== false && v != null
+  && String(Array.isArray(v) ? v.join('') : typeof v === 'object' ? (v.id ?? v.url ?? '') : v).trim() !== '');
 /* دسته‌های مدرکی که واقعاً به یک عمل گره می‌خورند. «مدرکِ شناسایی» و «فیش» عمداً
    نیستند: آن‌ها مالِ کلِ پرونده‌اند، نه مرحلهٔ یک عمل — و از تبِ مدارکِ پرونده
    بارگذاری می‌شوند. فهرست زیرمجموعهٔ `DOCUMENT_CATEGORIES`ِ سرور است. */
@@ -228,8 +235,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     planNote: initial?.planNote || '',
     prescription: initial?.prescription || '',
     anesthesia: initial?.anesthesia || '',
-    /* علائمِ حیاتیِ لحظهٔ ثبت — فقط در ساخت (بعد از ذخیره هر نوبت جدا ثبت می‌شود). */
-    vitals: null,
+    /* پیش‌نویسِ علائمِ حیاتیِ لحظهٔ ثبت — فقط در ساخت، یکی به‌ازای هر کارتِ الصاق‌شده
+       (کلید: مرحلهٔ عمل یا «visit»)؛ بعد از ذخیره هر نوبت جدا ثبت می‌شود. */
+    vitals: {},
     amount: '', // مبلغِ توافقی — فقط هنگامِ ساخت
     /* `prefill.opDateJ` — تاریخِ پیش‌فرضِ ثبتِ تازه، به همان شکلِ کادر (شمسی).
        دکمهٔ «+» صفحهٔ «امروز» امروز را می‌دهد (همان `todayJStr` که دکمهٔ «امروز»ِ
@@ -286,11 +294,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const setPrimaryDiagnosis = (v) => setF((s) => ({ ...s, diagnosisIds: pickPrimary(v)(s.diagnosisIds) }));
   const setPrimaryProcedure = (v) => setF((s) => ({ ...s, procedureTypeIds: pickPrimary(v)(s.procedureTypeIds), opType: '' }));
   const [busy, setBusy] = useState(false);
-  /* دستیارِ AI روی خودِ فرمِ عمل — دکمه‌های شرح/مراقبت فقط در ویرایش
-     (پرونده و مراجعه معلوم‌اند)؛ دیکتهٔ صوتی در ساخت هم هست. */
+  /* دستیارِ AI روی خودِ فرمِ عمل — دکمه‌های شرح فقط در ویرایش (پرونده و مراجعه معلوم‌اند)؛
+     پیش‌نویسِ مراقبت و دیکتهٔ صوتی در ساخت هم هست (بافتار از خودِ فرم می‌آید). */
   const [aiOn, setAiOn] = useState(false);
   const [sttOn, setSttOn] = useState(false); // دستیارِ صوتی — با مدلِ گفتار-به-متن
-  const [aiBusy, setAiBusy] = useState(false); // false | 'structure' | 'continue' | 'care' | 'dictate'
+  const [aiBusy, setAiBusy] = useState(false); // false | 'structure' | 'continue' | 'care-pre' | 'care-post' | 'dictate'
   const [rawReport, setRawReport] = useState(null);
   /* آخرین پیش‌نویس‌های دستیار روی همین فرم — برای «یادگیری از اصلاحِ دستی». */
   const aiDraftsRef = useRef({});
@@ -311,7 +319,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       setRawReport(raw);
       await apiStream(
         '/ai/note-draft/stream',
-        { patientId: initial.patientId, visitId: initial.id, kind: 'op', mode, text: raw },
+        { patientId: initial.patientId, visitId: initial.id, kind: 'op', mode, text: raw, ...aiCoding },
         (d) => { draft += d; setF((s2) => ({ ...s2, opReport: draft })); },
       );
       /* متنِ کامل، همان‌طور که دستیار تحویل داد — مبنای «یادگیری از اصلاح». */
@@ -323,13 +331,37 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     } finally { setAiBusy(false); }
   };
 
-  /** پیش‌نویسِ مراقبتِ پس از عمل — با اشراف به پرونده/تشخیص/شرحِ همین مراجعه. */
-  const aiCare = async () => {
-    setAiBusy('care');
+  /* بافتارِ دستیار از **خودِ فرم** — نوعِ عمل و تشخیصِ انتخاب‌شده، حتی پیش از ذخیره (بازخوردِ مالک
+     ۱۴۰۵/۰۷/۰۳: «AI باید نسبت به نوعِ عمل و تشخیص بنویسد»). هر کادرِ `AssistedTextarea`ِ داخلِ فرم
+     همین را از `AiContext` می‌گیرد. */
+  const aiCoding = useMemo(
+    () => ({ procedureTypeIds: f.procedureTypeIds, diagnosisIds: f.diagnosisIds }),
+    [f.procedureTypeIds, f.diagnosisIds],
+  );
+  /* متنِ پیش از آخرین پیش‌نویسِ دستیار، به‌ازای مرحله — «برگرداندنِ متنِ قبلی» در پاپ‌آپ. */
+  const [careUndo, setCareUndo] = useState({});
+  /**
+   * پیش‌نویسِ مراقبتِ **قبل یا بعد از عمل** — از نوعِ عمل و تشخیصِ همین فرم (ثبت‌نشده هم)، قالبِ
+   * همان مرحلهٔ عملِ اصلی، شرحِ عمل و متنی که تا این‌جا نوشته شده. تا دیروز فقط «بعد از عمل» و
+   * فقط در ویرایش بود.
+   */
+  const aiCare = async (ph) => {
+    const field = ph === 'pre' ? 'preOpCare' : 'postOpCare';
+    const before = f[field];
+    setAiBusy(`care-${ph}`);
     try {
-      const r = await api('/ai/care-draft', { method: 'POST', body: { visitId: initial.id } });
-      aiDraftsRef.current.care = r.text;
-      setF((s2) => ({ ...s2, postOpCare: r.text }));
+      const r = await api('/ai/care-draft', {
+        method: 'POST',
+        body: {
+          phase: ph, ...aiCoding, text: before,
+          ...(initial?.id ? { visitId: initial.id } : {}),
+          ...(ph === 'post' && f.opReport.trim() ? { opReport: f.opReport } : {}),
+        },
+      });
+      if (typeof r?.text !== 'string' || !r.text.trim()) throw new Error('پاسخِ دستیار خالی بود؛ متنِ شما سرِ جایش است');
+      aiDraftsRef.current[ph === 'pre' ? 'carePre' : 'care'] = r.text;
+      setCareUndo((u) => ({ ...u, [ph]: before }));
+      setF((s2) => ({ ...s2, [field]: r.text }));
     } catch (e) { onToast(e.message); } finally { setAiBusy(false); }
   };
 
@@ -541,20 +573,28 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const catByKey = useMemo(() => new Map((catalog?.items ?? []).map((x) => [x.key, x])), [catalog]);
   const { prefs, save: savePrefs } = usePrefs();
   const { tools: myTools } = useAllowedTools();
-  const toEntry = (x) => ({ ...x, data: x.data ?? {}, fresh: false });
+  /* ⚠️ شناسهٔ یک الصاق = کلید + مرحله: فرمِ عمل هر زیرفرم را به‌ازای «قبل / حین / بعد از عمل»
+     جدا الصاق می‌کند (علائمِ حیاتیِ قبل و بعد از عمل دو کارت‌اند)؛ غیرجراحی مرحله ندارد. */
+  const slotOf = (key, ph) => `${key}@${ph || ''}`;
+  /* کلیدِ پیش‌نویس/شمارِ علائمِ حیاتیِ هر کارت — مرحلهٔ عمل، یا «visit» برای غیرجراحی. */
+  const vk = (ph) => ph || 'visit';
+  const toEntry = (x) => ({ ...x, phase: x.phase ?? '', slot: slotOf(x.key, x.phase), data: x.data ?? {}, fresh: false });
   const [subList, setSubList] = useState(() => (Array.isArray(initial?.subforms) ? initial.subforms.map(toEntry) : []));
   const [subLoaded, setSubLoaded] = useState(() => !editing || Array.isArray(initial?.subforms));
-  const savedSubKeys = useRef(new Set((initial?.subforms ?? []).filter((x) => !x.implicit).map((x) => x.key)));
+  const savedSlots = useRef(new Set((initial?.subforms ?? []).filter((x) => !x.implicit).map((x) => slotOf(x.key, x.phase))));
   const subTouched = useRef(new Set());
-  /* پاسخِ آخرِ کارتی که با × برداشته شد — «پاک کردم و برداشتم» در یک ذخیره (× فقط روی خالی دیده
-     می‌شود، پس این همیشه خالی است؛ سرور بی‌آن پاسخِ ذخیره‌شدهٔ قبلی را می‌دید و رد می‌کرد). */
+  /* کارتی که با × برداشته شد — کلید، مرحله و پاسخِ آخرش: «پاک کردم و برداشتم» در یک ذخیره
+     (× فقط روی خالی دیده می‌شود، پس پاسخ همیشه خالی است؛ سرور بی‌آن پاسخِ ذخیره‌شدهٔ قبلی را
+     می‌دید و رد می‌کرد). */
   const removedData = useRef({});
   const [subErr, setSubErr] = useState({});
   const [cardsShut, setCardsShut] = useState({});
   const [pickOpen, setPickOpen] = useState(false);
-  /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخوردهٔ علائمِ حیاتی — به‌ازای مرحله؛ «ذخیره» همراهِ خودش می‌برد. */
+  /* مرحلهٔ پنجرهٔ الصاق در فرمِ عمل — پیش‌فرض همان تبی که کاربر در آن است. */
+  const [pickPhase, setPickPhase] = useState('pre');
+  /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخوردهٔ علائمِ حیاتی — به‌ازای کارت؛ «ذخیره» همراهِ خودش می‌برد. */
   const [pendingVitals, setPendingVitals] = useState({});
-  const [vitalsCount, setVitalsCount] = useState(null);
+  const [vitalsCount, setVitalsCount] = useState({});
   useEffect(() => {
     if (subLoaded || !initial?.id) return undefined;
     let alive = true;
@@ -562,7 +602,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       .then((v) => {
         if (!alive) return;
         const list = Array.isArray(v?.subforms) ? v.subforms : [];
-        savedSubKeys.current = new Set(list.filter((x) => !x.implicit).map((x) => x.key));
+        savedSlots.current = new Set(list.filter((x) => !x.implicit).map((x) => slotOf(x.key, x.phase)));
         setSubList(list.map(toEntry));
         setSubLoaded(true);
       })
@@ -570,31 +610,39 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return () => { alive = false; };
   }, [subLoaded, initial?.id]);
 
-  const attachedKeys = useMemo(() => new Set(subList.map((x) => x.key)), [subList]);
+  const isSurgery = f.kind === 'surgery';
+  /* کلیدهای الصاق‌شده در یک مرحله — «الصاق شده»ِ پنجره و منتخب‌ها به‌ازای همان مرحله است. */
+  const attachedIn = (ph) => new Set(subList.filter((x) => x.phase === (ph || '')).map((x) => x.key));
   /* کارتِ تازه یا منتخبِ زده‌شده دیده شود — اسکرول تا همان کارت بعد از رندر. */
-  const reveal = (key) => requestAnimationFrame(() => {
-    document.querySelector(`[data-subform="${CSS.escape(key)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  const reveal = (key, ph) => requestAnimationFrame(() => {
+    const sel = `[data-subform="${CSS.escape(key)}"]${ph ? `[data-subform-phase="${ph}"]` : ''}`;
+    document.querySelector(sel)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
-  const attachSub = (it) => {
+  /** الصاق — در فرمِ عمل به مرحلهٔ داده‌شده (پنجره/تب/منتخب)، و تب به همان مرحله می‌رود. */
+  const attachSub = (it, ph) => {
     if (!attachableOn(it, f.kind)) { onToast(`«${it.title}» در این فرم در دسترس نیست`); return; }
-    setCardsShut((s2) => ({ ...s2, [it.key]: false }));
-    if (!attachedKeys.has(it.key)) {
-      subTouched.current.add(it.key);
-      setSubList((l) => [...l, { key: it.key, builtin: !!it.builtin, title: it.title, data: {}, hasData: false, fresh: true }]);
+    const where = isSurgery ? (ph || phase) : '';
+    const slot = slotOf(it.key, where);
+    setCardsShut((s2) => ({ ...s2, [slot]: false }));
+    if (!subList.some((x) => x.slot === slot)) {
+      subTouched.current.add(slot);
+      setSubList((l) => [...l, { key: it.key, phase: where, slot, builtin: !!it.builtin, title: it.title, data: {}, hasData: false, fresh: true }]);
     }
     setPickOpen(false);
-    reveal(it.key);
+    if (where) setPhase(where);
+    reveal(it.key, where);
   };
-  const removeSub = (key) => {
-    const gone = subList.find((x) => x.key === key);
-    if (gone && !gone.builtin) removedData.current[key] = gone.data ?? {};
-    subTouched.current.add(key);
-    setSubList((l) => l.filter((x) => x.key !== key));
-    setSubErr((e) => { const n = { ...e }; delete n[key]; return n; });
+  const openPicker = (ph) => { setPickPhase(ph || phase); setPickOpen(true); };
+  const removeSub = (slot) => {
+    const gone = subList.find((x) => x.slot === slot);
+    if (gone) removedData.current[slot] = { key: gone.key, phase: gone.phase, data: gone.builtin ? undefined : (gone.data ?? {}) };
+    subTouched.current.add(slot);
+    setSubList((l) => l.filter((x) => x.slot !== slot));
+    setSubErr((e) => { const n = { ...e }; delete n[slot]; return n; });
   };
-  const setSubData = (key, data) => {
-    subTouched.current.add(key);
-    setSubList((l) => l.map((x) => (x.key === key ? { ...x, data } : x)));
+  const setSubData = (slot, data) => {
+    subTouched.current.add(slot);
+    setSubList((l) => l.map((x) => (x.slot === slot ? { ...x, data } : x)));
   };
   /* ستارهٔ «منتخب» — خانهٔ خالیِ بعدی؛ هر سه پر یعنی اول یکی را بردارید. */
   const pinSub = async (it) => {
@@ -602,6 +650,59 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (!next) { onToast('سه فرمِ منتخب پر است — اول ستارهٔ یکی را بردارید'); return; }
     try { await savePrefs('subformPins', next); } catch (e) { onToast(e.message); }
   };
+  /* پیش‌نویسِ علائمی که واقعاً عدد دارد، و کارتی که پاسخ دارد — برای جابه‌جاییِ نوع در ثبتِ تازه. */
+  const draftHas = (d) => !!d && Object.entries(d).some(([k, v]) => k !== 'phase' && String(v ?? '').trim() !== '');
+  const entryHas = (e) => (e.key === 'vitals' ? draftHas(f.vitals?.[vk(e.phase)]) : !e.builtin && hasAnswer(e.data));
+  /**
+   * انتخابِ نوع در ثبتِ تازه (گامِ ۲). ⚠️ عمل → ویزیت وقتی یک زیرفرم در دو مرحله پاسخ دارد، یکی‌کردن
+   * یعنی دورریختنِ یکی — پس نوع عوض نمی‌شود و گفته می‌شود چرا (همان قاعدهٔ سرور برای مراجعهٔ
+   * ثبت‌شده، `planKindPhases`).
+   */
+  const pickKind = (kind) => {
+    if (isSurgery && kind !== 'surgery') {
+      const answered = new Map();
+      for (const e of subList) if (entryHas(e)) answered.set(e.key, (answered.get(e.key) ?? 0) + 1);
+      const clash = subList.find((e) => (answered.get(e.key) ?? 0) > 1);
+      if (clash) {
+        onToast(`«${catByKey.get(clash.key)?.title ?? clash.title ?? clash.key}» در بیش از یک مرحلهٔ عمل پاسخ دارد — اول یکی را خالی کنید، بعد نوع را عوض کنید`);
+        return;
+      }
+    }
+    kindTouched.current = true;
+    setF((s) => ({ ...s, kind }));
+  };
+  /* ثبتِ تازه، برگشت به گامِ «نوع» و عوض‌کردنِ ویزیت ↔ عمل: الصاق‌ها مرحلهٔ نوعِ تازه را می‌گیرند —
+     عمل: مرحلهٔ پیش‌فرضِ همان زیرفرم (`defaultPhase`ِ کاتالوگ: ارزیابی «قبل»، پیگیریِ پس از عمل «بعد»)؛
+     غیرجراحی: بی‌مرحله، یکی به‌ازای هر زیرفرم و **آن که پاسخ دارد** (دو پاسخ را `pickKind` نمی‌گذارد).
+     هنوز چیزی ذخیره نشده، پس فقط همین فهرست و پیش‌نویسِ علائم جابه‌جا می‌شوند — وگرنه بندِ بی‌مرحله
+     در عمل ۴۰۰ می‌گرفت. */
+  const wasSurgery = useRef(isSurgery);
+  useEffect(() => {
+    if (editing || wasSurgery.current === isSurgery) return;
+    wasSurgery.current = isSurgery;
+    const phaseFor = (key) => (isSurgery ? (catByKey.get(key)?.defaultPhase ?? 'pre') : '');
+    const keep = new Map();
+    for (const e of subList) {
+      if (isSurgery && e.key === 'orders') continue; // درخواست در عمل جای ثابتِ خودش را دارد
+      const cur = keep.get(e.key);
+      if (!cur || (!entryHas(cur) && entryHas(e))) keep.set(e.key, e);
+    }
+    const next = subList.filter((e) => keep.get(e.key) === e).map((e) => {
+      const ph = phaseFor(e.key);
+      return { ...e, phase: ph, slot: slotOf(e.key, ph) };
+    });
+    subTouched.current = new Set(next.map((e) => e.slot));
+    setSubList(next);
+    setF((s2) => {
+      const d = s2.vitals ?? {};
+      const card = next.find((e) => e.key === 'vitals');
+      /* پیش‌نویسی که واقعاً عدد دارد — نه اولین کلید، که ممکن است فقط رشتهٔ خالی باشد. */
+      const src = ['visit', 'pre', 'intra', 'post'].map((k) => d[k]).find(draftHas) ?? null;
+      return { ...s2, vitals: card && src ? { [vk(card.phase)]: src } : {} };
+    });
+    setSubErr({});
+    setCardsShut({});
+  }, [isSurgery, editing]);
 
   useEffect(() => {
     if (mode !== 'existing') return undefined;
@@ -807,28 +908,41 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       const it = catByKey.get(e.key);
       if (e.builtin || !it) continue;
       const er = dynErrors(it.fields, e.data ?? {}, myRole);
-      if (Object.keys(er).length) eSubs[e.key] = er;
+      if (Object.keys(er).length) eSubs[e.slot] = er;
     }
     setSubErr(eSubs);
     const firstSub = Object.entries(eSubs)[0];
     if (firstSub) {
+      const e0 = subList.find((x) => x.slot === firstSub[0]);
       setCardsShut((c) => ({ ...c, [firstSub[0]]: false }));
-      onToast(`${catByKey.get(firstSub[0])?.title ?? ''}: ${Object.values(firstSub[1])[0]}`);
+      /* کارتِ عمل داخلِ تبِ مرحلهٔ خودش است — تب به همان‌جا می‌رود تا ستاره دیده شود. */
+      if (e0?.phase) setPhase(e0.phase);
+      onToast(`${catByKey.get(e0?.key)?.title ?? ''}${e0?.phase ? ` (${PHASE_FA[e0.phase]})` : ''}: ${Object.values(firstSub[1])[0]}`);
       return;
     }
-    /* دلتا، نه کلِ فهرست: فقط زیرفرمی که در همین فرم الصاق/پر/برداشته شد می‌رود. */
+    /* دلتا، نه کلِ فهرست: فقط زیرفرمی که در همین فرم الصاق/پر/برداشته شد می‌رود — با مرحله‌اش
+       در فرمِ عمل (سرور بندِ بی‌مرحلهٔ عمل را رد می‌کند). */
     const subformsOut = [];
-    for (const key of subTouched.current) {
-      const e = subList.find((x) => x.key === key);
+    const withPhase = (ph) => (ph ? { phase: ph } : {});
+    for (const slot of subTouched.current) {
+      const e = subList.find((x) => x.slot === slot);
       if (!e) {
-        if (savedSubKeys.current.has(key)) {
-          subformsOut.push(removedData.current[key] ? { key, removed: true, data: removedData.current[key] } : { key, removed: true });
+        const gone = removedData.current[slot];
+        if (gone && savedSlots.current.has(slot)) {
+          subformsOut.push({ key: gone.key, ...withPhase(gone.phase), removed: true, ...(gone.data ? { data: gone.data } : {}) });
         }
         continue;
       }
-      subformsOut.push(e.builtin ? { key } : { key, data: e.data ?? {} });
+      subformsOut.push(e.builtin ? { key: e.key, ...withPhase(e.phase) } : { key: e.key, ...withPhase(e.phase), data: e.data ?? {} });
     }
-    const vitalsAttached = f.kind === 'surgery' || attachedKeys.has('vitals');
+    /* پیش‌نویسِ علائمِ حیاتیِ ساخت — یکی به‌ازای هر کارتِ علائمِ الصاق‌شده؛ مرحله از خودِ کارت
+       (نه از پیش‌نویس، که ممکن است پیش از عوض‌شدنِ نوع تایپ شده باشد). */
+    const vitalsDrafts = subList.filter((e) => e.key === 'vitals').map((e) => {
+      const d = f.vitals?.[vk(e.phase)];
+      if (!d || !Object.entries(d).some(([k, v]) => k !== 'phase' && String(v ?? '').trim())) return null;
+      const { phase: _drop, ...rest } = d;
+      return e.phase ? { ...rest, phase: e.phase } : rest;
+    }).filter(Boolean);
     const pending = Object.values(pendingVitals).filter(Boolean);
 
     const common = {
@@ -873,8 +987,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
          «ثبت» نخورده — تا دیروز با «ذخیره» بی‌صدا دور ریخته می‌شد. */
       vitals: editing
         ? (pending.length ? pending : undefined)
-        : vitalsAttached && f.vitals && Object.entries(f.vitals).some(([k, v]) => k !== 'phase' && String(v ?? '').trim())
-          ? f.vitals : undefined,
+        : vitalsDrafts.length ? (vitalsDrafts.length === 1 ? vitalsDrafts[0] : vitalsDrafts) : undefined,
       subforms: subformsOut.length ? subformsOut : undefined,
       opDate,
       /* پاک‌کردن در ویرایش با null — پزشکِ منصرف باید بتواند برش دارد. */
@@ -956,6 +1069,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       }
       if (fb.care?.trim() && f.postOpCare.trim() && fb.care.trim() !== f.postOpCare.trim()) {
         api('/ai/feedback', { method: 'POST', body: { kind: 'care', draft: fb.care.trim(), final: f.postOpCare.trim() } }).catch(() => {});
+      }
+      if (fb.carePre?.trim() && f.preOpCare.trim() && fb.carePre.trim() !== f.preOpCare.trim()) {
+        api('/ai/feedback', { method: 'POST', body: { kind: 'care_pre', draft: fb.carePre.trim(), final: f.preOpCare.trim() } }).catch(() => {});
       }
       aiDraftsRef.current = {};
       /* ⚠️ فرمِ عمل فقط وقتی باز می‌شود که تصمیم **در همین ذخیره تازه**
@@ -1555,23 +1671,27 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return { id: doc.id, name: doc.fileName };
   };
   const subRemoveFile = async (ref) => { if (ref?.id) await api(`/patients/documents/${ref.id}`, { method: 'DELETE' }); };
-  const subCards = subList.filter((e) => !(e.builtin && f.kind === 'surgery')).map((e) => {
+  const cardOf = (e) => {
     const it = catByKey.get(e.key);
     const title = it?.title ?? e.title ?? e.key;
-    const open = cardsShut[e.key] !== true;
+    const open = cardsShut[e.slot] !== true;
     let body;
     let empty;
     if (e.key === 'vitals') {
-      empty = !(vitalsCount ?? (e.hasData ? 1 : 0)) && !pendingVitals.visit
-        && !(f.vitals && Object.entries(f.vitals).some(([k, v]) => k !== 'phase' && String(v ?? '').trim()));
+      /* فرمِ عمل: هر مرحله کارتِ خودش — فقط اندازه‌های همان مرحله، پیش‌نویسِ همان مرحله. */
+      const k = vk(e.phase);
+      const draft = f.vitals?.[k] ?? null;
+      empty = !(vitalsCount[k] ?? (e.count ?? (e.hasData ? 1 : 0))) && !pendingVitals[k]
+        && !(draft && Object.entries(draft).some(([kk, v]) => kk !== 'phase' && String(v ?? '').trim()));
       body = (
         <VitalSigns
           visitId={initial?.id ?? null}
-          draft={f.vitals}
-          onDraft={(v) => setF((s2) => ({ ...s2, vitals: v }))}
-          pending={pendingVitals.visit ?? null}
-          onPending={(v) => setPendingVitals((p2) => ({ ...p2, visit: v }))}
-          onCount={setVitalsCount}
+          phase={e.phase || null}
+          draft={draft}
+          onDraft={(v) => setF((s2) => ({ ...s2, vitals: { ...(s2.vitals ?? {}), [k]: v } }))}
+          pending={pendingVitals[k] ?? null}
+          onPending={(v) => setPendingVitals((p2) => ({ ...p2, [k]: v }))}
+          onCount={(n) => setVitalsCount((c) => (c[k] === n ? c : { ...c, [k]: n }))}
           disabled={busy}
           onToast={onToast}
         />
@@ -1580,14 +1700,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       empty = orders.length === 0;
       body = ordersBlock ?? <p className="vf-card-hint">بعد از ذخیرهٔ همین {t.visit}، درخواست از همین‌جا ثبت و برای بیمار فرستاده می‌شود.</p>;
     } else {
-      empty = !Object.values(e.data ?? {}).some((v) => v !== false && v != null && String(Array.isArray(v) ? v.join('') : typeof v === 'object' ? (v.id ?? v.url ?? '') : v).trim() !== '');
+      empty = !hasAnswer(e.data);
       body = it ? (<>
         <DynForm
           assistance
           fields={it.fields}
           values={e.data ?? {}}
-          errors={subErr[e.key] ?? {}}
-          onChange={(v) => setSubData(e.key, v)}
+          errors={subErr[e.slot] ?? {}}
+          onChange={(v) => setSubData(e.slot, v)}
           disabled={busy}
           myRole={myRole}
           onUpload={subUpload(title)}
@@ -1601,15 +1721,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     }
     return (
       <SubformCard
-        key={e.key} skey={e.key} title={title} badge={e.implicit ? 'داده دارد' : 'الصاق‌شده'}
-        open={open} onToggle={() => setCardsShut((c) => ({ ...c, [e.key]: open }))}
-        onRemove={empty && !busy ? () => removeSub(e.key) : undefined}
+        key={e.slot} skey={e.key} phase={e.phase} title={title} badge={e.implicit ? 'داده دارد' : 'الصاق‌شده'}
+        open={open} onToggle={() => setCardsShut((c) => ({ ...c, [e.slot]: open }))}
+        onRemove={empty && !busy ? () => removeSub(e.slot) : undefined}
         removeHint={empty ? undefined : 'داده دارد و برداشته نمی‌شود'}
       >
         {body}
       </SubformCard>
     );
-  });
+  };
+  /* غیرجراحی: ستونِ زیرفرم‌ها. فرمِ عمل: هر کارت داخلِ تبِ مرحلهٔ خودش (`phaseSubs`). */
+  const subCards = isSurgery ? [] : subList.map(cardOf);
   const builtinOrder = isClinicCore
     ? CLINIC_LAYOUT[f.kind === 'surgery' ? 'surgery' : 'visit']
     : fd.orderBuiltins(BUILTIN_ORDER);
@@ -1645,6 +1767,20 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const topicName = (defs.topics ?? []).find((tp) => tp.id === f.topicId)?.name ?? initial?.topicName ?? null;
   const attachItems = (catalog?.items ?? []).filter((x) => attachableOn(x, f.kind));
   const canBuildSubform = (myTools ?? []).some((x) => x.key === 'forms');
+  const canAttach = !!catalog && attachItems.length > 0;
+  /* **فرمِ عمل: زیرفرم‌های هر مرحله داخلِ تبِ خودش** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳، دورِ دوم) — کارت‌ها
+     و ته‌شان «+ الصاقِ فرم به این مرحله». علائمِ حیاتی دیگر کادرِ ثابتِ تب‌ها نیست؛ عملی که از قبل
+     اندازه دارد کارتش را خودکار در همان تب می‌بیند (`implicit`ِ سرور). */
+  const phaseSubs = (ph) => {
+    const cards = subList.filter((e) => e.phase === ph).map(cardOf);
+    if (!cards.length && !canAttach) return null;
+    return (
+      <div className="vf-phase-subs" data-phase-subforms={ph}>
+        {cards}
+        {canAttach && <PhaseAttach phase={ph} label={PHASE_FA[ph]} onClick={() => openPicker(ph)} disabled={busy || !subLoaded} />}
+      </div>
+    );
+  };
 
   /* خدمتِ مراجعه (شرکتِ دوخدمته) — در ثبتِ تازه گامِ دوم، در ویرایش زیرِ سربرگ. */
   const serviceEl = pickService ? (<>
@@ -1670,10 +1806,74 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (!node) return null;
     return <div key={key} className={node.wide ? 'db-span2' : undefined}>{node.el}</div>;
   };
+  /* «کِی می‌رود» — هم سرِ کادرِ مراقبت در تب، هم بالای پاپ‌آپش. */
+  const preWhen = [
+    f.preOpImmediate ? 'به‌محضِ ثبت' : null,
+    timing ? `${faNum(timing.preOpDays)} روز قبل از عمل، ساعتِ ${faNum(timing.hour)}` : 'پیش از عمل',
+  ].filter(Boolean).join(' + ');
+  const postWhen = f.postOpImmediate
+    ? 'ارسال: بلافاصله بعد از ثبتِ فرم'
+    : timing ? `ارسال: ${faNum(timing.postOpDays)} روز بعد از عمل، ساعتِ ${faNum(timing.hour)}` : 'ارسال: بعد از عمل';
+  /* دستیارِ مراقبت بی‌بافتار «مراقبتِ عمومی» می‌نوشت — همان که مالک نخواست؛ پس دست‌کم یکی از
+     نوعِ عمل، تشخیص یا متنِ خودِ کادر لازم است (سرور هم همین را می‌سنجد). */
+  const careAiReady = (own) => f.procedureTypeIds.length > 0 || f.diagnosisIds.length > 0 || !!String(own ?? '').trim();
+  /**
+   * **کادرِ مراقبتِ قبل/بعد از عمل** — مطب: پیش‌نما + پاپ‌آپِ بزرگ، مثلِ شرحِ عمل (بازخوردِ مالک
+   * ۱۴۰۵/۰۷/۰۳)؛ مدلِ شرکتی دست‌نخورده (همان استدلالِ شرحِ عمل، قانونِ ۲۶) و فقط دستیارش بافتارِ
+   * نوعِ عمل و تشخیص گرفت. در هر دو، «خالی = قالبِ نوعِ عمل».
+   */
+  const careField = (ph) => {
+    const field = ph === 'pre' ? 'preOpCare' : 'postOpCare';
+    const label = `مراقبت‌های ${PHASE_FA[ph]} — پیامک به بیمار`;
+    const def = ph === 'pre' ? procDefaults.preOpCare : procDefaults.postOpCare;
+    const placeholder = def ? 'خالی = همان پیش‌فرضِ بالا' : 'خالی = پیامی نمی‌رود';
+    if (isClinicCore) {
+      const undo = careUndo[ph];
+      return (
+        <CareEditor
+          phase={ph}
+          label={label}
+          when={ph === 'pre' ? preWhen : postWhen}
+          value={f[field]}
+          onChange={(v) => setF((s2) => ({ ...s2, [field]: v }))}
+          defaultText={def}
+          defaultName={procDefaults.name}
+          placeholder={placeholder}
+          disabled={busy}
+          aiOn={aiOn}
+          aiBusy={aiBusy === `care-${ph}`}
+          aiReady={careAiReady(f[field]) || (ph === 'post' && !!f.opReport.trim())}
+          onAi={() => aiCare(ph)}
+          canUndo={undo !== undefined && undo !== f[field]}
+          onUndo={() => { setF((s2) => ({ ...s2, [field]: undo ?? '' })); setCareUndo((u) => ({ ...u, [ph]: undefined })); }}
+        />
+      );
+    }
+    return (<>
+      {def && (
+        <div className="db-default">
+          <p>{def}</p>
+          <button type="button" onClick={() => setF((s2) => ({ ...s2, [field]: def }))}>
+            استفاده و ویرایش
+          </button>
+        </div>
+      )}
+      <AssistedTextarea disabled={busy || !!aiBusy} rows={ph === 'pre' ? 2 : 3} value={f[field]} onChange={set(field)}
+                placeholder={placeholder} purpose={label} aiContext={{ care: ph }} />
+      {ph === 'post' && editing && aiOn && (
+        <div className="db-aibar">
+          <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={() => aiCare('post')}>
+            {aiBusy === 'care-post' ? 'دستیار در حالِ نوشتن…' : 'پیش‌نویسِ مراقبت با دستیار (از پرونده)'}
+          </button>
+        </div>
+      )}
+    </>);
+  };
   const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key));
   const sideKeys = SIDE_KEYS.filter((key) => builtinNodes[key]);
 
   return (
+    <AiContext.Provider value={aiCoding}>
     <Overlay backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom" onClose={onClose} onSubmit={submit}>
       <header className="db-sheet-head">
         <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
@@ -1889,7 +2089,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               aria-checked={f.kind === k.kind}
               className={f.kind === k.kind ? 'on' : ''}
               style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
-              onClick={() => { kindTouched.current = true; setF((s) => ({ ...s, kind: k.kind })); }}
+              onClick={() => pickKind(k.kind)}
             >{k.title}</button>
           ))}
         </div>
@@ -1909,11 +2109,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         pins={prefs.subformPins}
         byKey={catByKey}
         kind={f.kind}
-        attached={attachedKeys}
-        onAttach={() => setPickOpen(true)}
-        onPin={attachSub}
+        attached={attachedIn(isSurgery ? phase : '')}
+        pinPhase={isSurgery ? PHASE_FA[phase] : null}
+        onAttach={() => openPicker(phase)}
+        onPin={(it) => attachSub(it, isSurgery ? phase : '')}
         disabled={busy || !subLoaded}
-        showAttach={!!catalog && attachItems.length > 0}
+        showAttach={canAttach}
       />
       {editing && serviceEl}
       {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. */}
@@ -1921,9 +2122,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         className="db-formcard"
         style={kindMeta?.color ? { '--k': `var(--kind-${kindMeta.color})` } : undefined}
       >
-      {/* فرمِ عملِ بی‌زیرفرم ستونِ کناری‌اش فقط «مبلغ» و «توضیحات» است — دوستونه یعنی نیمهٔ خالی؛
-          پس یک‌ستونه، و همان دو کادر زیرِ هسته. */}
-      <div className={`vf-cols${f.kind === 'surgery' && subCards.length === 0 ? ' vf-flat' : ''}`}>
+      {/* فرمِ عمل ستونِ زیرفرم ندارد (کارت‌ها در تبِ مرحلهٔ خودشان‌اند) و ستونِ کناری‌اش فقط «مبلغ» و
+          «توضیحات» است — دوستونه یعنی نیمهٔ خالی؛ پس یک‌ستونه، و همان دو کادر زیرِ هسته. */}
+      <div className={`vf-cols${isSurgery ? ' vf-flat' : ''}`}>
         <div className="vf-main">
           {/* ⚠️ فیلدهای هسته‌ای **به ترتیبِ تعریف** چیده می‌شوند، نه به ترتیبِ این
               فایل. هر کدام یک ورودیِ نام‌دار است تا `orderBuiltins` بتواند
@@ -2038,48 +2239,24 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             label="مرحلهٔ عمل"
             value={phase}
             onChange={setPhase}
-            items={[{ key: 'pre', label: 'قبل از عمل' }, { key: 'intra', label: 'حین عمل' }, { key: 'post', label: 'بعد از عمل' }]}
+            items={PHASE_ITEMS}
           />
 
           {phase === 'pre' && (
           <div className="db-phase" data-phase="pre">
           {decidedCard}
-          {isClinicCore && (
-            <VitalSigns
-              visitId={initial?.id ?? null}
-              phase="pre"
-              draft={f.vitals}
-              onDraft={(v) => setF((s2) => ({ ...s2, vitals: v }))}
-              pending={pendingVitals.pre ?? null}
-              onPending={(v) => setPendingVitals((p2) => ({ ...p2, pre: v }))}
-              disabled={busy}
-              onToast={onToast}
-            />
-          )}
           {/* ── مراقبتِ قبل از عمل ── */}
           <div className="db-careblock">
             <div className="db-carehead">
               <span>مراقبت‌های قبل از عمل — پیامک به بیمار</span>
-              <i>{[
-                f.preOpImmediate ? 'به‌محضِ ثبت' : null,
-                timing ? `${faNum(timing.preOpDays)} روز قبل از عمل، ساعتِ ${faNum(timing.hour)}` : 'پیش از عمل',
-              ].filter(Boolean).join(' + ')}</i>
+              <i>{preWhen}</i>
             </div>
             {opIsToday && (
               <p className="db-decide-hint">
                 عملْ همین امروز است — معمولاً دیگر پیامِ «قبل از عمل» لازم نیست؛ اگر لازم است، «به‌محضِ ثبت» را بزنید.
               </p>
             )}
-            {procDefaults.preOpCare && (
-              <div className="db-default">
-                <p>{procDefaults.preOpCare}</p>
-                <button type="button" onClick={() => setF((s2) => ({ ...s2, preOpCare: procDefaults.preOpCare }))}>
-                  استفاده و ویرایش
-                </button>
-              </div>
-            )}
-            <AssistedTextarea disabled={busy || !!aiBusy} rows={2} value={f.preOpCare} onChange={set('preOpCare')}
-                      placeholder={procDefaults.preOpCare ? 'خالی = همان پیش‌فرضِ بالا' : 'خالی = پیامی نمی‌رود'} />
+            {careField('pre')}
             {/* ⚠️ این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
                 آن است — برعکسِ مراقبتِ بعد از عمل. */}
             <div className="db-daychips db-whenchips">
@@ -2104,6 +2281,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
           </div>
 
+          {phaseSubs('pre')}
           {phaseDocs}
           </div>
           )}
@@ -2122,50 +2300,20 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان{isClinicCore ? '' : '، یافته‌ها'}، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
             )}
 
+            {phaseSubs('intra')}
             {phaseDocs}
           </div>
           )}
 
           {phase === 'post' && (
           <div className="db-phase" data-phase="post">
-          {/* علائمِ حیاتیِ ریکاوری — فقط برای عملِ ذخیره‌شده؛ پیش‌نویسِ لحظهٔ ثبت
-              همان یکیِ تبِ «قبل از عمل» است تا دو پیش‌نویس روی هم نیفتند. */}
-          {isClinicCore && (initial?.id ? (
-            <VitalSigns
-              visitId={initial.id} phase="post" disabled={busy} onToast={onToast}
-              pending={pendingVitals.post ?? null}
-              onPending={(v) => setPendingVitals((p2) => ({ ...p2, post: v }))}
-            />
-          ) : (
-            <p className="db-decide-hint">علائمِ حیاتیِ بعد از عمل پس از ذخیرهٔ همین عمل ثبت می‌شود.</p>
-          ))}
           {/* ── مراقبتِ بعد از عمل ── */}
           <div className="db-careblock">
             <div className="db-carehead">
               <span>مراقبت‌های بعد از عمل — پیامک به بیمار</span>
-              <i>{f.postOpImmediate
-                ? 'ارسال: بلافاصله بعد از ثبتِ فرم'
-                : timing ? `ارسال: ${faNum(timing.postOpDays)} روز بعد از عمل، ساعتِ ${faNum(timing.hour)}` : 'ارسال: بعد از عمل'}</i>
+              <i>{postWhen}</i>
             </div>
-            {procDefaults.postOpCare && (
-              <div className="db-default">
-                <p>{procDefaults.postOpCare}</p>
-                <button type="button" onClick={() => setF((s2) => ({ ...s2, postOpCare: procDefaults.postOpCare }))}>
-                  استفاده و ویرایش
-                </button>
-              </div>
-            )}
-            <AssistedTextarea disabled={busy || !!aiBusy} rows={3} value={f.postOpCare} onChange={set('postOpCare')}
-                      placeholder={procDefaults.postOpCare ? 'خالی = همان پیش‌فرضِ بالا' : 'خالی = پیامی نمی‌رود'} />
-            {editing && aiOn && (
-              <div className="db-aibar">
-                {editing && aiOn && (
-                  <button type="button" className="db-aibtn" disabled={busy || !!aiBusy} onClick={aiCare}>
-                    {aiBusy === 'care' ? 'دستیار در حالِ نوشتن…' : 'پیش‌نویسِ مراقبت با دستیار (از پرونده)'}
-                  </button>
-                )}
-              </div>
-            )}
+            {careField('post')}
             <div className="db-daychips db-whenchips">
               {[{ v: false, l: 'فردایِ عمل' }, { v: true, l: 'بلافاصله بعد از ثبت' }].map((o) => (
                 <button
@@ -2228,6 +2376,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             />
           </div>
 
+          {phaseSubs('post')}
           {phaseDocs}
           </div>
           )}
@@ -2251,14 +2400,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       <AttachPicker
         open={pickOpen}
         onClose={() => setPickOpen(false)}
-        visitWord={t.visit}
+        visitWord={isSurgery ? 'عمل' : t.visit}
         groups={catalog?.groups ?? []}
         items={attachItems}
-        attached={attachedKeys}
+        attached={attachedIn(isSurgery ? pickPhase : '')}
         pins={prefs.subformPins}
         onPin={pinSub}
-        onAttach={attachSub}
+        onAttach={(it) => attachSub(it, isSurgery ? pickPhase : '')}
         canBuild={canBuildSubform}
+        phases={isSurgery ? PHASE_ITEMS : null}
+        phase={pickPhase}
+        onPhase={setPickPhase}
       />
 
       {/* میزبان همیشه سوار است و خودش presence را می‌گرداند (OrderSheet.jsx). */}
@@ -2295,6 +2447,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         </>
       )}
     </Overlay>
+    </AiContext.Provider>
   );
 }
 

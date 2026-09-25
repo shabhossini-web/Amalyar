@@ -113,7 +113,27 @@
 }
 .vf-add:disabled { cursor: default; color: var(--text3); border-color: rgba(var(--veil-rgb), .14); background: transparent; }
 .vf-pick-empty { margin: 4px 0; font-size: 12.5px; color: var(--text3); }
+/* فرمِ عمل: «الصاق به» — سه مرحله، یکی روشن. */
+.vf-pick-phase { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vf-pick-phase > span { font-size: 12px; font-weight: 800; color: var(--text2); margin-inline-end: 2px; }
+.vf-pick-phase button {
+  font: inherit; font-size: 12.5px; font-weight: 700; padding: 6px 12px; border-radius: 99px; cursor: pointer;
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.vf-pick-phase button.on { color: var(--text1); border-color: rgba(var(--brand-soft-rgb), .6); background: rgba(var(--brand-soft-rgb), .18); }
+.vf-pick-phase button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
 .vf-pick-foot { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; color: var(--brand-2); text-decoration: none; padding-top: 2px; }
+
+/* ── فرمِ عمل: زیرفرم‌های هر مرحله داخلِ تبِ خودش + «الصاقِ فرم به این مرحله» ── */
+.vf-phase-subs { display: flex; flex-direction: column; gap: 10px; }
+.vf-phase-attach {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  font: inherit; font-size: 13px; font-weight: 700; color: var(--brand-2);
+  padding: 8px 12px; border-radius: 12px; cursor: pointer;
+  background: rgba(var(--veil-rgb), .03); border: 1px dashed rgba(var(--brand-soft-rgb), .45);
+}
+.vf-phase-attach:hover:not(:disabled), .vf-phase-attach:focus-visible { border-style: solid; outline: none; }
+.vf-phase-attach:disabled { opacity: .55; cursor: not-allowed; }
 
 /* ── تصمیمِ درمانی: کشوییِ چندانتخابی ── */
 .vf-dd { position: relative; display: flex; flex-direction: column; gap: 5px; }

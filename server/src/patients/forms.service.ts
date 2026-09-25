@@ -5,7 +5,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
 import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
-import { BUILTIN_SUBFORMS, BUILTIN_SUBFORM_KEYS, SUBFORM_GROUPS, SUBFORM_PRESET_GROUP, SubformDef, shortTitle } from './subforms';
+import { BUILTIN_SUBFORMS, BUILTIN_SUBFORM_KEYS, SUBFORM_GROUPS, SUBFORM_PRESET_GROUP, SubformDef, defaultSurgeryPhase, shortTitle } from './subforms';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 import { serviceOfFormKey } from './intake-service-of';
@@ -471,7 +471,8 @@ export class FormsService {
    * داخلی‌ها (علائمِ حیاتی، درخواستِ پاراکلینیک) + هر فرمِ `scope=subform`. خاموش‌ها هم
    * برمی‌گردند (`active: false`) چون مراجعه‌ای که از قبل پاسخشان را دارد باید بتواند
    * نشانش بدهد؛ پنجره فقط روشن‌ها را پیشنهاد می‌کند. `nonSurgery` یعنی فرمِ عمل آن را
-   * در تب‌هایش دارد و الصاقِ جدا ندارد (`builtinAllowed`).
+   * در تب‌هایش دارد و الصاقِ جدا ندارد (`builtinAllowed`) — امروز فقط «درخواست»؛ علائمِ حیاتی
+   * در عمل به‌ازای مرحله الصاق می‌شود.
    */
   async subformCatalog() {
     await this.ensureSeeded();
@@ -483,7 +484,7 @@ export class FormsService {
       .filter((k) => k !== 'vitals' || vertical === 'clinic')
       .map((k) => ({
         key: k, title: BUILTIN_SUBFORMS[k].title, short: BUILTIN_SUBFORMS[k].short, hint: BUILTIN_SUBFORMS[k].hint,
-        group: 'common', builtin: true, nonSurgery: true, active: true, color: null, fields: [],
+        group: 'common', builtin: true, nonSurgery: k === 'orders', defaultPhase: defaultSurgeryPhase(k), active: true, color: null, fields: [],
       }));
     return {
       groups: SUBFORM_GROUPS,
@@ -493,7 +494,7 @@ export class FormsService {
           const f = this.view(r, vertical);
           return {
             key: f.key, title: f.title, short: shortTitle(f.title), hint: f.hint ?? null,
-            group: SUBFORM_PRESET_GROUP[f.key] ?? 'custom', builtin: false, nonSurgery: false,
+            group: SUBFORM_PRESET_GROUP[f.key] ?? 'custom', builtin: false, nonSurgery: false, defaultPhase: defaultSurgeryPhase(f.key),
             active: f.active, color: f.color, fields: f.fields,
           };
         }),

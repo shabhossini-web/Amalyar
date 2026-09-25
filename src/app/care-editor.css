@@ -1,0 +1,5 @@
+/* مراقبت‌های قبل/بعد از عمل — همان پیش‌نما و پاپ‌آپِ شرحِ عمل (`.db-report-*`ِ dashboard.css)؛
+   این‌جا فقط آنچه مراقبت اضافه دارد: خطِ «کِی می‌رود» و راهنمای دکمهٔ دستیار. */
+.db-care-when { margin: 0; font-size: 12px; font-weight: 700; color: var(--text2); }
+.db-care-aihint { font-size: 11.5px; color: var(--text3); }
+.db-care-body .db-default p { font-size: 12.5px; }

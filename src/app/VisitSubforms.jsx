@@ -13,6 +13,8 @@ import './visit-subforms.css';
  * - زیرفرم‌ها: پیش‌فرض پنهان، با الصاق دیده می‌شوند — کارتِ جمع‌شونده با × فقط وقتی خالی است؛
  * - پنجرهٔ الصاق: گروه‌ها، جستجو و ستارهٔ «منتخب»؛
  * - تصمیمِ درمانی: یک کشوییِ چندانتخابی، با گزینهٔ انحصاریِ «فعلاً نیاز به پیگیریِ بعدی نیست».
+ * - فرمِ عمل (دورِ دوم، همان روز): هر الصاق مالِ یک مرحله است — «قبل / حین / بعد از عمل» — و
+ *   کارتش داخلِ تبِ همان مرحله می‌نشیند؛ علائمِ حیاتی دیگر کادرِ ثابتِ تب‌ها نیست.
  *
  * ⚠️ هیچ فهرستی این‌جا هاردکد نیست: زیرفرم‌ها از `/forms/subforms`، تصمیم‌ها و پرچمِ
  * «درخواست/انحصاری»شان از `/config` (`labels.ts`) می‌آیند.
@@ -34,16 +36,17 @@ export function useSubformCatalog() {
   return cat;
 }
 
-/** قابلِ الصاق روی این نوع؟ — داخلی‌ها (علائم/درخواست) در فرمِ عمل تبِ خودشان را دارند. */
+/** قابلِ الصاق روی این نوع؟ — «درخواست» در فرمِ عمل جای ثابتِ خودش را در تبِ «قبل از عمل» دارد. */
 export const attachableOn = (item, kind) => !!item && item.active !== false && !(item.nonSurgery && kind === 'surgery');
 
 /**
  * **سربرگِ مراجعه** — نقطهٔ رنگِ نوع، نامِ همین مراجعه، موضوع، «الصاقِ فرم» و سه منتخب.
  *
- * ⚠️ اسلاتِ پر روی فرمی که این‌جا الصاق‌شدنی نیست (داخلی در فرمِ عمل، یا خاموش در
- * فرم‌ساز) غیرفعال است با توضیح — پنهان‌کردنش جای اسلات‌ها را جابه‌جا می‌کرد.
+ * ⚠️ اسلاتِ پر روی فرمی که این‌جا الصاق‌شدنی نیست (درخواست در فرمِ عمل، یا خاموش در
+ * فرم‌ساز) غیرفعال است با توضیح — پنهان‌کردنش جای اسلات‌ها را جابه‌جا می‌کرد. در فرمِ عمل منتخب
+ * به تبِ فعال الصاق می‌شود (`pinPhase`).
  */
-export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached, onAttach, onPin, disabled, showAttach }) {
+export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached, pinPhase, onAttach, onPin, disabled, showAttach }) {
   return (
     <div className="vf-bar" data-visit-bar>
       <div className="vf-bar-title">
@@ -72,7 +75,9 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
                 key={`slot-${i}`} type="button" data-pin-slot={i} data-pin={key}
                 className={`vf-pin on${on ? ' is-attached' : ''}`}
                 onClick={() => onPin(it)} disabled={disabled || !usable}
-                title={!usable ? `«${it.title}» در این فرم در دسترس نیست` : on ? `«${it.title}» الصاق شده — برو به آن` : `الصاقِ «${it.title}»`}
+                title={!usable ? `«${it.title}» در این فرم در دسترس نیست`
+                  : on ? `«${it.title}» الصاق شده — برو به آن`
+                    : pinPhase ? `الصاقِ «${it.title}» به «${pinPhase}»` : `الصاقِ «${it.title}»`}
               >
                 <Star width="13" height="13" aria-hidden="true" />{it.short}
               </button>
@@ -88,9 +93,9 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
  * **کارتِ یک زیرفرم** — عنوان، «الصاق‌شده»، جمع/باز، و × فقط وقتی خالی است (سرور هم
  * همین را می‌سنجد؛ دادهٔ بالینی با یک کلیکِ اشتباه نمی‌رود).
  */
-export function SubformCard({ skey, title, badge, open, onToggle, onRemove, removeHint, children }) {
+export function SubformCard({ skey, phase, title, badge, open, onToggle, onRemove, removeHint, children }) {
   return (
-    <section className="vf-card" data-subform={skey}>
+    <section className="vf-card" data-subform={skey} data-subform-phase={phase || undefined}>
       <header>
         <b>{title}</b>
         {badge && <small>{badge}</small>}
@@ -112,10 +117,25 @@ export function SubformCard({ skey, title, badge, open, onToggle, onRemove, remo
 }
 
 /**
+ * **«+ الصاقِ فرم به این مرحله»** — ته‌ِ هر تبِ فرمِ عمل؛ همان پنجره را با همین مرحله باز می‌کند.
+ * بدونِ این، کاربری که در تبِ «قبل از عمل» علائمِ حیاتی می‌خواست باید تا سربرگ بالا می‌رفت.
+ */
+export function PhaseAttach({ phase, label, onClick, disabled }) {
+  return (
+    <button type="button" className="vf-phase-attach" onClick={onClick} disabled={disabled} data-act="phase-attach" data-phase={phase}>
+      <Plus width="14" height="14" aria-hidden="true" />الصاقِ فرم به «{label}»
+    </button>
+  );
+}
+
+/**
  * **پنجرهٔ «الصاقِ فرم»** — گروه‌ها (پرکاربرد/ارزیابی/جراحی/ساختِ خودتان)، جستجو، ستارهٔ
  * منتخب و «الصاق». روی `body` می‌نشیند: transformِ شیتِ مراجعه fixedِ فرزند را می‌بُرد.
+ *
+ * فرمِ عمل: بالای فهرست «الصاق به: قبل / حین / بعد از عمل» (`phases`) — پیش‌فرض همان تبی که
+ * کاربر در آن است؛ «الصاق شده» هم به‌ازای همان مرحله است (`attached` را والد می‌سازد).
  */
-export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild }) {
+export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild, phases, phase, onPhase }) {
   const [q, setQ] = useState('');
   useEffect(() => { if (!open) setQ(''); }, [open]);
   const needle = q.trim();
@@ -135,6 +155,17 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
             <b>الصاقِ فرم به این {visitWord}</b>
             <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
           </header>
+          {phases && (
+            <div className="vf-pick-phase" role="radiogroup" aria-label="مرحلهٔ عمل">
+              <span>الصاق به</span>
+              {phases.map((p) => (
+                <button
+                  key={p.key} type="button" role="radio" aria-checked={phase === p.key} data-pick-phase={p.key}
+                  className={phase === p.key ? 'on' : ''} onClick={() => onPhase(p.key)}
+                >{p.label}</button>
+              ))}
+            </div>
+          )}
           <label className="vf-pick-search">
             <Search width="15" height="15" aria-hidden="true" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجوی فرم…" aria-label="جستجوی فرم" />

@@ -7,7 +7,10 @@
  *   - الصاق با پاسخ؛ کلیدِ بیگانه دور ریخته می‌شود؛ BMI سمتِ سرور (با رقمِ فارسی)
  *   - ستارهٔ فیلدِ زیرفرم ذخیره را می‌بندد و پیامش عنوانِ زیرفرم را دارد
  *   - × فقط روی خالی: پاسخ، اندازه‌گیری یا سفارش برداشتن را می‌بندد
- *   - داخلی‌ها روی عمل الصاق نمی‌شوند (فرمِ عمل آن‌ها را در تب‌ها دارد)؛ زیرفرمِ فرم‌ساز می‌شود
+ *   - عمل: هر الصاق مرحلهٔ خودش را دارد (قبل/حین/بعد)، اجباری؛ یک زیرفرم در چند مرحله؛ علائمِ
+ *     حیاتی به‌ازای مرحله (با شمارِ همان مرحله)؛ «درخواست» روی عمل الصاق نمی‌شود (تبِ ثابتِ خودش)
+ *   - غیرجراحی مرحله نمی‌پذیرد؛ اندازهٔ بی‌مرحله روی عمل رد می‌شود
+ *   - تغییرِ نوع ↔ مرحله‌ها: ویزیت→عمل «قبل از عمل»؛ عمل→ویزیت یکی‌شدن، و دو پاسخ در دو مرحله رد
  *   - زیرفرمِ خاموش الصاقِ تازه نمی‌پذیرد ولی ردیفِ موجودش ویرایش می‌شود
  *   - سابقه فقط از مراجعه‌های **پیش از** همین مراجعه، تازه‌ترین اول
  *   - «فعلاً نیاز به پیگیریِ بعدی نیست» انحصاری است؛ ثبتِ سفارش کلیدش را می‌گذارد و آن را برمی‌دارد
@@ -61,6 +64,9 @@ const vertical0 = (await send('/config')).json?.vertical ?? 'ionm';
 const trash = { visits: [], forms: [], accounts: [], fields: [] };
 const restoreRequired = [];
 const sfOf = (v, key) => (v?.subforms ?? []).find((x) => x.key === key);
+/* ⚠️ افزودنِ فیلد **کلِ فرم** را برمی‌گرداند، نه فیلد را — شناسهٔ فیلد از روی کلیدش؛ `json.id`
+   شناسهٔ فرم است و پاک‌کردنش فیلدِ دیگری را برمی‌داشت و فیلدِ آزمون را جا می‌گذاشت. */
+const fieldIdOf = (r, key) => r?.json?.fields?.find((f) => f.key === key)?.id ?? null;
 const msg = (r) => String(r?.json?.message ?? '');
 
 try {
@@ -79,8 +85,10 @@ try {
   ok('چهار گروه به ترتیبِ طرح', JSON.stringify((cat?.groups ?? []).map((g) => g.key)) === JSON.stringify(['common', 'assess', 'surgery', 'custom']),
     JSON.stringify(cat?.groups));
   const it = (k) => cat?.items?.find((x) => x.key === k);
-  ok('داخلی‌ها: علائمِ حیاتی و درخواستِ پاراکلینیک، هر دو «پرکاربرد» و غیرجراحی',
-    ['vitals', 'orders'].every((k) => it(k)?.builtin && it(k)?.group === 'common' && it(k)?.nonSurgery));
+  ok('داخلی‌ها: علائمِ حیاتی و درخواستِ پاراکلینیک، هر دو «پرکاربرد»',
+    ['vitals', 'orders'].every((k) => it(k)?.builtin && it(k)?.group === 'common'));
+  ok('**علائمِ حیاتی روی عمل هم الصاق می‌شود؛ درخواست نه** (تبِ ثابتِ «قبل از عمل»)',
+    it('vitals')?.nonSurgery === false && it('orders')?.nonSurgery === true, JSON.stringify([it('vitals')?.nonSurgery, it('orders')?.nonSurgery]));
   ok('عنوانِ یکپارچهٔ درخواست‌ها «فرم درخواستِ پاراکلینیک و مشاوره»', it('orders')?.title === 'فرم درخواستِ پاراکلینیک و مشاوره', it('orders')?.title);
   ok('قد و وزن و زخم در «ارزیابی»', it('subform.growth')?.group === 'assess' && it('subform.wound')?.group === 'assess');
   ok('پیگیریِ پست‌آپ و ASA در «جراحی»', it('subform.postop')?.group === 'surgery' && it('subform.asa')?.group === 'surgery');
@@ -216,25 +224,63 @@ try {
   fresh = (await send(`/visits/${V1.id}`)).json;
   ok('سفارشِ دوم کلید را تکراری نکرد', fresh?.decisions?.filter((d) => d === 'lab').length === 1, JSON.stringify(fresh?.decisions));
 
-  console.log('\n۷) عمل: داخلی‌ها الصاق نمی‌شوند');
-  const S = await send('/visits', 'POST', {
-    kind: 'surgery', patientId: P, decidedInVisitId: V1.id, opDate: day(-20), surgeonId: s1.id, hospitalId: hosp.id,
-    procedureTypeId: proc.id, subforms: [{ key: 'vitals' }],
+  console.log('\n۷) عمل: هر الصاق مرحلهٔ خودش را دارد');
+  const surgeryBody = { kind: 'surgery', patientId: P, decidedInVisitId: V1.id, opDate: day(-20), surgeonId: s1.id, hospitalId: hosp.id, procedureTypeId: proc.id };
+  let S = await send('/visits', 'POST', { ...surgeryBody, subforms: [{ key: 'vitals' }] });
+  ok('**الصاقِ بی‌مرحله روی عمل ۴۰۰ با «مرحله»**', S.status === 400 && msg(S).includes('مرحلهٔ زیرفرم'), msg(S));
+  S = await send('/visits', 'POST', { ...surgeryBody, subforms: [{ key: 'subform.asa', phase: 'lunch' }] });
+  ok('مرحلهٔ ساختگی ۴۰۰', S.status === 400 && msg(S).includes('مرحلهٔ زیرفرم'), msg(S));
+  S = await send('/visits', 'POST', { ...surgeryBody, vitals: { hr: '70' } });
+  ok('**اندازهٔ بی‌مرحله روی عمل ۴۰۰**', S.status === 400 && msg(S).includes('مرحلهٔ اندازه‌گیری'), msg(S));
+  r = await send(`/visits/${V1.id}`, 'PATCH', { subforms: [{ key: 'subform.wound', phase: 'pre' }] });
+  ok('نباید بیفتد: مرحله روی ویزیت پذیرفته شود', r.status === 400 && msg(r).includes('فقط در فرمِ عمل'), msg(r));
+  const S1r = await send('/visits', 'POST', {
+    ...surgeryBody, decisions: [],
+    subforms: [
+      { key: 'subform.asa', phase: 'pre', data: { asa: 'II', emergency: true } },
+      { key: 'vitals', phase: 'pre' }, { key: 'vitals', phase: 'post' },
+    ],
+    vitals: [{ hr: '80', phase: 'pre' }, { bpSys: '110', bpDia: '70', phase: 'post' }],
   });
-  ok('**الصاقِ علائمِ حیاتی روی عمل ۴۰۰**', S.status === 400 && msg(S).includes('الصاق نمی‌شود'), msg(S));
-  const S1 = (await send('/visits', 'POST', {
-    kind: 'surgery', patientId: P, decidedInVisitId: V1.id, opDate: day(-20), surgeonId: s1.id, hospitalId: hosp.id,
-    procedureTypeId: proc.id, decisions: [], subforms: [{ key: 'subform.asa', data: { asa: 'II', emergency: true } }],
-  })).json;
+  const S1 = S1r.json;
   if (S1?.id) trash.visits.push(S1.id);
-  ok('زیرفرمِ فرم‌ساز (ASA) روی عمل الصاق شد', sfOf(S1, 'subform.asa')?.data?.asa === 'II', JSON.stringify(S1?.subforms ?? S1).slice(0, 200));
-  r = await send(`/visits/${S1.id}`, 'PATCH', { subforms: [{ key: 'orders' }] });
-  ok('الصاقِ درخواست روی عمل هم ۴۰۰', r.status === 400, msg(r));
+  const sfAt = (v, key, ph) => (v?.subforms ?? []).find((x) => x.key === key && x.phase === ph);
+  ok('عمل با زیرفرمِ «قبل» و علائمِ «قبل» و «بعد» ساخته شد', S1r.status === 201 && sfAt(S1, 'subform.asa', 'pre')?.data?.asa === 'II',
+    `${S1r.status} ${msg(S1r)} ${JSON.stringify(S1?.subforms ?? []).slice(0, 240)}`);
+  ok('**هر مرحله کارتِ علائمِ خودش با شمارِ همان مرحله**',
+    sfAt(S1, 'vitals', 'pre')?.count === 1 && sfAt(S1, 'vitals', 'post')?.count === 1 && !sfAt(S1, 'vitals', 'intra'),
+    JSON.stringify((S1?.subforms ?? []).map((x) => [x.key, x.phase, x.count])));
+  ok('اندازه‌ها با مرحلهٔ درست نشستند',
+    sql(`SELECT string_agg(phase || ':' || coalesce(hr::text, bp_sys::text), ',' ORDER BY phase) FROM vital_signs WHERE visit_id=${S1.id}`) === 'post:110,pre:80');
+  r = await send(`/visits/${S1.id}`, 'PATCH', { subforms: [{ key: 'subform.asa', phase: 'post', data: { asa: 'III' } }] });
+  ok('**همان زیرفرم در مرحلهٔ دیگر هم الصاق شد**', r.status === 200 && sfAt(r.json, 'subform.asa', 'post')?.data?.asa === 'III'
+    && sfAt(r.json, 'subform.asa', 'pre')?.data?.asa === 'II', `${r.status} ${msg(r)}`);
+  ok('ترتیب: مرحله به مرحله، داخلی‌ها اولِ هر مرحله',
+    JSON.stringify((r.json?.subforms ?? []).map((x) => `${x.phase}:${x.key}`)) === JSON.stringify(['pre:vitals', 'pre:subform.asa', 'post:vitals', 'post:subform.asa']),
+    JSON.stringify((r.json?.subforms ?? []).map((x) => `${x.phase}:${x.key}`)));
+  r = await send(`/visits/${S1.id}`, 'PATCH', { subforms: [{ key: 'subform.asa', phase: 'pre' }, { key: 'subform.asa', phase: 'pre' }] });
+  ok('یک زیرفرم دو بار در یک مرحله ۴۰۰', r.status === 400 && msg(r).includes('دو بار'), msg(r));
+  r = await send(`/visits/${S1.id}`, 'PATCH', { subforms: [{ key: 'vitals', phase: 'post', removed: true }] });
+  ok('علائمِ «بعد» با اندازه برداشته نمی‌شود', r.status === 400 && msg(r).includes('علائمِ حیاتیِ ثبت‌شده'), msg(r));
+  const postRow = sql(`SELECT id FROM vital_signs WHERE visit_id=${S1.id} AND phase='post'`);
+  await send(`/visits/${S1.id}/vitals/${postRow}`, 'DELETE');
+  r = await send(`/visits/${S1.id}`, 'PATCH', { subforms: [{ key: 'vitals', phase: 'post', removed: true }] });
+  ok('**بعد از حذفِ اندازهٔ همان مرحله برداشته شد — «قبل» ماند**', r.status === 200 && !sfAt(r.json, 'vitals', 'post') && sfAt(r.json, 'vitals', 'pre')?.count === 1,
+    `${r.status} ${msg(r)}`);
+  r = await send(`/visits/${S1.id}`, 'PATCH', { subforms: [{ key: 'orders', phase: 'pre' }] });
+  ok('الصاقِ درخواست روی عمل ۴۰۰ (تبِ ثابتِ خودش را دارد)', r.status === 400 && msg(r).includes('الصاق نمی‌شود'), msg(r));
+  const bare = await send(`/visits/${S1.id}/vitals`, 'POST', { hr: '75' });
+  ok('**ثبتِ اندازهٔ بی‌مرحله روی عمل ۴۰۰**', bare.status === 400 && msg(bare).includes('مرحلهٔ اندازه‌گیری'), msg(bare));
   await send('/orders/lab', 'POST', { patientId: P, visitId: S1.id, tests: ['PT'] });
-  await send(`/visits/${S1.id}/vitals`, 'POST', { hr: '80', phase: 'pre' });
+  await send(`/visits/${S1.id}/vitals`, 'POST', { hr: '88', phase: 'intra' });
   fresh = (await send(`/visits/${S1.id}`)).json;
-  ok('**فهرستِ زیرفرمِ عمل داخلی‌ها را نشان نمی‌دهد** (سفارش و اندازه در تب‌هایند)',
-    !sfOf(fresh, 'orders') && !sfOf(fresh, 'vitals') && !!sfOf(fresh, 'subform.asa'), JSON.stringify((fresh?.subforms ?? []).map((x) => x.key)));
+  ok('**اندازهٔ «حین» کارتِ ضمنیِ همان مرحله را ساخت**', sfAt(fresh, 'vitals', 'intra')?.implicit === true && sfAt(fresh, 'vitals', 'intra')?.count === 1,
+    JSON.stringify((fresh?.subforms ?? []).map((x) => [x.key, x.phase, x.implicit])));
+  ok('**فهرستِ زیرفرمِ عمل «درخواست» را نشان نمی‌دهد** (تبِ ثابت)', !sfOf(fresh, 'orders'), JSON.stringify((fresh?.subforms ?? []).map((x) => x.key)));
+  const catNow2 = (await send('/forms/subforms')).json?.items ?? [];
+  ok('کاتالوگ مرحلهٔ پیش‌فرضِ هر زیرفرم را می‌دهد (پیگیریِ پس از عمل «بعد»، بقیه «قبل»)',
+    catNow2.find((x) => x.key === 'subform.postop')?.defaultPhase === 'post' && catNow2.find((x) => x.key === 'subform.asa')?.defaultPhase === 'pre'
+    && catNow2.find((x) => x.key === 'vitals')?.defaultPhase === 'pre');
   ok('**تصمیمِ عمل با ثبتِ سفارش عوض نشد**', !(fresh?.decisions ?? []).includes('lab'), JSON.stringify(fresh?.decisions));
 
   console.log('\n۸) زیرفرمِ خاموش');
@@ -294,11 +340,11 @@ try {
     restoreRequired.push({ id: findings.id, required: false });
   }
   const img = await send(`/forms/${cForm.id}/fields`, 'POST', { key: `xr${tag}`, label: 'عکسِ رادیولوژی', type: 'image', required: true });
-  if (img.json?.id) trash.fields.push(img.json.id);
+  if (fieldIdOf(img, `xr${tag}`)) trash.fields.push(fieldIdOf(img, `xr${tag}`));
   /* «طرح»ِ تک‌انتخابیِ قالبِ قدیمی — در مطب جایش کشوی تصمیم است و کادرش دیده نمی‌شود. */
   const legacyPlan = cForm?.fields?.some((f) => f.key === 'plan')
     ? null : await send(`/forms/${cForm.id}/fields`, 'POST', { key: 'plan', label: 'طرحِ قدیمی', type: 'select', options: [{ v: 'surgery', l: 'جراحی' }], required: true });
-  if (legacyPlan?.json?.id) trash.fields.push(legacyPlan.json.id);
+  if (fieldIdOf(legacyPlan, 'plan')) trash.fields.push(fieldIdOf(legacyPlan, 'plan'));
   ok('فیلدِ «طرح»ِ قالبِ قدیمی (اجباری) کاشته شد', !legacyPlan || legacyPlan.status === 201 || legacyPlan.status === 200, `${legacyPlan?.status} ${msg(legacyPlan)}`);
   const H1 = await clinicVisit({ patientId: P, opDate: day(-2) });
   ok('**ستاره روی کادرهای پنهانِ مطب (یافته‌ها، عکسِ فرم، «طرح»ِ قدیمی) ذخیره را نبست**', H1.status === 201, `${H1.status} ${msg(H1)}`);
@@ -325,10 +371,29 @@ try {
     const pr = (await sendSup('/auth/prefs')).json;
     ok('منتخب‌های هر حساب جداست (سوپروایزرِ تازه خالی است)', JSON.stringify(pr?.subformPins) === '[null,null,null]', JSON.stringify(pr));
   }
+  /* مرحله‌ها با نوع جابه‌جا می‌شوند: زیرفرمِ پاسخ‌دار + اندازهٔ بی‌مرحله روی ویزیت. */
+  await send(`/visits/${K.id}`, 'PATCH', { subforms: [{ key: 'subform.growth', data: { height: '100', weight: '15' } }, { key: 'subform.postop' }] });
+  await send(`/visits/${K.id}/vitals`, 'POST', { hr: '70' });
   r = await send(`/visits/${K.id}`, 'PATCH', { kind: 'surgery' });
   ok('ادمین نوعِ مراجعهٔ مستقل را عوض می‌کند', r.status === 200 && r.json?.kind === 'surgery', `${r.status} ${msg(r)}`);
+  ok('**ویزیت → عمل: ارزیابی و اندازه «قبل از عمل»، پیگیریِ پس از عمل «بعد»**',
+    (r.json?.subforms ?? []).find((x) => x.key === 'subform.growth')?.phase === 'pre'
+    && (r.json?.subforms ?? []).find((x) => x.key === 'subform.postop')?.phase === 'post'
+    && (r.json?.subforms ?? []).find((x) => x.key === 'vitals')?.phase === 'pre'
+    && sql(`SELECT string_agg(coalesce(phase,'-'), ',') FROM vital_signs WHERE visit_id=${K.id}`) === 'pre',
+    JSON.stringify((r.json?.subforms ?? []).map((x) => [x.key, x.phase])));
+  r = await send(`/visits/${K.id}`, 'PATCH', { subforms: [{ key: 'subform.growth', phase: 'post', data: { height: '101' } }, { key: 'vitals', phase: 'post' }] });
+  ok('همان زیرفرم در «بعد» با پاسخِ دیگر', r.status === 200, msg(r));
+  r = await send(`/visits/${K.id}`, 'PATCH', { kind: 'clinic' });
+  ok('**عمل → ویزیت با دو پاسخ در دو مرحله ۴۰۰** (یکی‌کردن یعنی دورریختنِ یکی)', r.status === 400 && msg(r).includes('بیش از یک مرحله'), `${r.status} ${msg(r)}`);
+  r = await send(`/visits/${K.id}`, 'PATCH', { subforms: [{ key: 'subform.growth', phase: 'post', removed: true, data: { height: '' } }] });
+  ok('پاسخِ «بعد» پاک و برداشته شد', r.status === 200, msg(r));
   r = await send(`/visits/${K.id}`, 'PATCH', { kind: 'clinic' });
   ok('و برمی‌گرداند', r.status === 200 && r.json?.kind === 'clinic', `${r.status} ${msg(r)}`);
+  ok('**عمل → ویزیت: یک ردیف به‌ازای هر زیرفرم، بی‌مرحله** (علائمِ «قبل» و «بعد» یکی شد)',
+    sql(`SELECT string_agg(key || ':' || phase, ',' ORDER BY key) FROM visit_subforms WHERE visit_id=${K.id}`) === 'subform.growth:,subform.postop:,vitals:'
+    && (r.json?.subforms ?? []).find((x) => x.key === 'subform.growth')?.data?.height === '100',
+    sql(`SELECT string_agg(key || ':' || phase, ',' ORDER BY key) FROM visit_subforms WHERE visit_id=${K.id}`));
   r = await send(`/visits/${V1.id}`, 'PATCH', { kind: 'surgery' });
   ok('**ویزیتی که عمل از آن درآمده نوعش عوض نمی‌شود**', r.status === 400 && msg(r).includes('پیوند دارد'), `${r.status} ${msg(r)}`);
   r = await send(`/visits/${K.id}`, 'PATCH', { kind: `nokind${tag}` });

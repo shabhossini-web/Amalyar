@@ -193,6 +193,13 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
     ۸ و ۹ بی‌سؤال طراحی و کدنویسی شدند؛ مالک پیش از دیپلوی نگهشان داشت و مرورِ
     بند‌به‌بند با عکس خواست.)
 
+27. **هر چیزی که مالک می‌خواند فارسی است — بی‌استثنا.** گزارشِ پایانی، توضیح، پاسخِ
+    «تموم؟»، خلاصهٔ وضعیت، سؤال (`AskUserQuestion`)، کپشنِ عکس و حتی همان یک خطِ «دارم
+    چه می‌کنم» (قانونِ ۲۵) — فارسیِ ساده و روان، کوتاه، بی‌اصطلاحِ فنیِ انگلیسی مگر
+    ناگزیر (نامِ فایل، دستور و شاخه داخلِ `code`). اگر پاسخی ناخواسته انگلیسی نوشته شد،
+    همان لحظه فارسی‌اش جایگزین می‌شود. (درسِ واقعی ۱۴۰۵/۰۷/۰۳: وضعیتِ آزمون و دیپلوی
+    انگلیسی گزارش شد و مالک مجبور شد دوباره بپرسد «فارسی بگو ببینم چی شد».)
+
 ## ساختارِ کلیدی
 
 | مسیر | نقش |
@@ -209,7 +216,8 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 | `server/src/tenant/*` · `prisma/control/*` | هستهٔ مالتی‌تننت: middleware (Host→tenant)، Prisma-proxyِ per-tenant، control-DB، رمزنگاری URL |
 | `server/src/platform/*` · `scripts/provisioning-worker.ts` | کنسولِ Platform Admin (بک‌اند) + Workerِ ساختِ خودکارِ DB/role |
 | `server/src/audit/*` | ثبتِ رویدادهای حساس (AuditEvent per-tenant) |
-| `server/src/patients/subforms.ts` · `src/app/VisitSubforms.jsx` | زیرفرم‌های الصاقیِ مراجعه (داخلی: علائمِ حیاتی/درخواستِ پاراکلینیک؛ فرم‌ساز: `scope=subform`) + منتخب‌های شخصی (`/auth/prefs`، `src/app/usePrefs.jsx`) |
+| `server/src/patients/subforms.ts` · `src/app/VisitSubforms.jsx` | زیرفرم‌های الصاقیِ مراجعه (داخلی: علائمِ حیاتی/درخواستِ پاراکلینیک؛ فرم‌ساز: `scope=subform`) + منتخب‌های شخصی (`/auth/prefs`، `src/app/usePrefs.jsx`). ⚠️ در **فرمِ عمل** هر الصاق مرحلهٔ خودش را دارد (`phase`: pre/intra/post، اجباری) و کارتش داخلِ تبِ همان مرحله است؛ غیرجراحی مرحله ندارد |
+| `src/app/CareEditor.jsx` · `src/ui/ai-context.js` | مراقبتِ قبل/بعد از عمل: پیش‌نما + پاپ‌آپ (مطب)؛ بافتارِ دستیار (نوعِ عمل/تشخیصِ **فرم**) برای هر `AssistedTextarea`ِ فرمِ مراجعه و `/ai/care-draft` |
 | `src/pages/TenantLanding.jsx` · `server/src/site/` | سایتِ معرفیِ شرکت روی دامنهٔ خودش — عمومی و بی‌احراز؛ پیش‌فرض‌ها در `site.registry.ts` |
 | `AGENTS.md` · `.sync/` | پروتکلِ هم‌زیستیِ ایجنت‌ها + کلیمِ هرکدام (قانون ۲۲) |
 | `server/src/site/seo.service.ts` · `nginx.conf.template` | قطعهٔ `<head>`/robots/sitemap هر شرکت + تزریقِ SSI در `index.html` (قانون ۲۰) |
