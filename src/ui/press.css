@@ -221,31 +221,32 @@
 .ik-go.ghost,
 .us-btn:not(.ok):not(.no) {
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(var(--veil-rgb), 0.10), rgba(var(--veil-rgb), 0.03) 55%, rgba(var(--veil-rgb), 0.06));
+  /* ⚠️ پوسته از توکن‌های هر تم (index.css)، نه `--veil-rgb`: پرده در تمِ روشن سیاه
+     است، پس گرادیان خاکستریِ کدر و برقِ لبهٔ بالا خطِ تیره می‌شد. */
+  background: var(--ghost-bg);
   border: 1px solid rgba(var(--veil-rgb), 0.14);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  box-shadow:
-    inset 0 1px 0 rgba(var(--veil-rgb), 0.22),
-    inset 0 -6px 14px -10px rgba(var(--veil-rgb), 0.35),
-    0 8px 20px -6px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--ghost-shadow);
   transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.64, 1), box-shadow 0.22s ease, border-color 0.2s, background 0.2s;
 }
 .btn-ghost:hover, .plan .cta.line:hover, .df-ghost:hover, .iv-ghost:hover,
 .tp-ghost:hover, .pa-ghost:hover, .tk-ghost:hover, .jd-ghost:hover,
 .ik-go.ghost:hover, .us-btn:not(.ok):not(.no):hover {
   border-color: rgba(var(--veil-rgb), 0.26);
-  background: linear-gradient(180deg, rgba(var(--veil-rgb), 0.14), rgba(var(--veil-rgb), 0.05) 55%, rgba(var(--veil-rgb), 0.09));
+  background: var(--ghost-bg-hover);
 }
 .btn-ghost:active, .plan .cta.line:active, .df-ghost:active, .iv-ghost:active,
 .tp-ghost:active, .pa-ghost:active, .tk-ghost:active, .jd-ghost:active,
 .ik-go.ghost:active, .us-btn:not(.ok):not(.no):active {
   transform: scale(0.955);
-  box-shadow:
-    inset 0 1px 0 rgba(var(--veil-rgb), 0.3),
-    inset 0 -10px 22px -10px rgba(var(--veil-rgb), 0.5),
-    inset 0 0 18px rgba(var(--veil-rgb), 0.06),
-    0 4px 12px -4px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--ghost-shadow-active);
+}
+/* ⚠️ دکمهٔ شبح روی کارتِ شیشه‌ای تار نمی‌شود: کارت پشت را از قبل تار کرده و تارِ
+   دوم در ظاهر فرقی نمی‌کند، فقط گوشی را دوبار به کار می‌گیرد (بازبینیِ ۱۴۰۵/۰۷/۰۳). */
+.glass :is(.btn-ghost, .df-ghost, .iv-ghost, .tp-ghost, .pa-ghost, .tk-ghost, .jd-ghost, .ik-go.ghost, .us-btn:not(.ok):not(.no)) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
