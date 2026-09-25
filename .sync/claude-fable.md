@@ -1,13 +1,10 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/local-ci-shards
 since: 2026-09-25
-paths:
-  - scripts/local-ci.mjs
-  - scripts/e2e/tenant-site.mjs
-  - scripts/e2e/w3-3-front-desk.mjs
-note: CI محلی — گام‌های جابِ build هم‌زمان (با قفلِ پورت و سقفِ مرورگر) و جابِ live در چند شاردِ موازی با پورت و دیتابیسِ جدا؛ زمانِ کل از حدودِ یک ساعت به کمتر از نیم ساعت. بسته‌های ۸+۹ (PR #98، draft) هنوز باید روی زیرفرم‌ها بازنویسی شوند.
+paths: []
+note: CI محلیِ هم‌زمان لند شد (build سه‌تا‌سه‌تا، live در سه شارد) — از حدودِ یک ساعت به ۲۵ دقیقه. بسته‌های ۸+۹ (PR #98، draft) هنوز باید روی زیرفرم‌ها بازنویسی شوند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
