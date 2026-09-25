@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   APPT_LABELS, NOTE_KIND_LABELS, OP_LABELS,
   ORDER_LABELS, ORDER_KIND_LABELS, REMINDER_LABELS, REMINDER_KIND_LABELS, INTAKE_LABELS,
-  DECISION_LABELS, ANESTHESIA_LABELS, DISPOSITION_LABELS,
+  DECISION_LABELS, ANESTHESIA_LABELS, DISPOSITION_LABELS, EXCLUSIVE_DECISION, ORDER_DECISIONS,
 } from '../patients/labels';
 import { vitalCatalog } from '../patients/vitals';
 import { PrismaService } from '../prisma/prisma.service';
@@ -118,7 +118,13 @@ export class ConfigService {
         intake: Object.entries(INTAKE_LABELS).map(([key, label]) => ({ key, label })),
         /* بستهٔ ۶: تصمیمِ درمانی، نوعِ بیهوشی و وضعیتِ خروج — کشویی/دکمه‌های
            فرم از همین می‌خوانند، نه از فهرستِ هاردکدِ کلاینت. */
-        decision: Object.entries(DECISION_LABELS).map(([key, label]) => ({ key, label })),
+        /* `order`: همان درخواست است و دراپ‌داون نشانش نمی‌دهد (سفارش خودش کلید را می‌گذارد)؛
+           `exclusive`: با تصمیمِ دیگری جمع نمی‌شود. هر دو از `labels.ts` — کلاینت فهرست ندارد. */
+        decision: Object.entries(DECISION_LABELS).map(([key, label]) => ({
+          key, label,
+          ...((ORDER_DECISIONS as readonly string[]).includes(key) ? { order: true } : {}),
+          ...(key === EXCLUSIVE_DECISION ? { exclusive: true } : {}),
+        })),
         anesthesia: Object.entries(ANESTHESIA_LABELS).map(([key, label]) => ({ key, label })),
         disposition: Object.entries(DISPOSITION_LABELS).map(([key, label]) => ({ key, label })),
       },

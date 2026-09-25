@@ -933,14 +933,9 @@ a.db-defbtn { text-decoration: none; }
 .db-nodefault span { font-size: 11.5px; line-height: 1.9; color: var(--text3); }
 .db-whenchips { margin-top: 2px; }
 
-/* ── ردیفِ تصمیمِ درمانی (انتهای فرمِ ویزیت) ── */
-.db-decide {
-  margin-top: 14px; padding: 14px 16px;
-  background: rgba(var(--brand-rgb), .05);
-  border: 1px solid rgba(var(--brand-2-rgb), .22); border-radius: 16px;
-  display: flex; flex-direction: column; gap: 9px;
-}
-.db-decide h4 { margin: 0; font-size: 13.5px; font-weight: 800; color: var(--brand-2); }
+/* ── تصمیمِ درمانی — یک کشوییِ چندانتخابی (`DecisionSelect`)، نه جعبهٔ جدا با راهنمای بلند
+   (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳). ── */
+.db-decide { display: flex; flex-direction: column; gap: 5px; }
 .db-decide .db-hint { margin: 0; }
 .db-decide-hint { margin: 0; font-size: 11.5px; line-height: 1.9; color: var(--text3); }
 

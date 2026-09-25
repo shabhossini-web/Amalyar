@@ -6,7 +6,7 @@ import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useTerms } from './config.jsx';
 import { useVisitDefs } from './visit-defs.js';
-import VisitForm from './VisitForm.jsx';
+import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
 import JDate from './JDate.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import { Arrive, Close, Money, Phone, Plus, Search } from '../ui/icons.jsx';
@@ -268,11 +268,22 @@ export default function FrontDesk() {
       <AnimatePresence>
         {sheet && (
           <VisitForm
+            key={sheet.visit?.id ?? 'new-surgery'}
             initial={sheet.visit}
+            prefill={sheet.prefill}
             defs={defs}
             onDefsChanged={reloadDefs}
             onClose={() => setSheet(null)}
-            onSaved={() => { setSheet(null); after(); }}
+            onSaved={(saved, wasEdit, opts) => {
+              setSheet(null);
+              after();
+              /* «کاندیدای جراحی» — همان قولِ فرم در داشبورد و پرونده (بازبینیِ ۱۴۰۵/۰۷/۰۳):
+                 تا دیروز میزِ پذیرش `openSurgery` را نادیده می‌گرفت و عمل به ویزیتِ تصمیم گره نمی‌خورد. */
+              if (opts?.openSurgery && saved?.id) {
+                setToast('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+                setTimeout(() => setSheet({ prefill: surgeryPrefill(saved) }), 400);
+              }
+            }}
             onToast={setToast}
           />
         )}

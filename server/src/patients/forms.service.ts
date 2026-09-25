@@ -4,7 +4,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
+import { BUILTIN_SUBFORMS, BUILTIN_SUBFORM_KEYS, SUBFORM_GROUPS, SUBFORM_PRESET_GROUP, SubformDef, shortTitle } from './subforms';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 import { serviceOfFormKey } from './intake-service-of';
@@ -57,7 +58,7 @@ const VALUELESS_TYPES = new Set<string>(['payment']);
  * نه یک محدوده. `normScope` مقدارِ قدیمی را می‌پذیرد تا نصبی که هنوز مهاجرت
  * نکرده ۴۰۰ نگیرد.
  */
-export const FORM_SCOPES = ['visit', 'record', 'intake'] as const;
+export const FORM_SCOPES = ['visit', 'record', 'intake', 'subform'] as const;
 export const VISIT_KINDS = ['clinic', 'surgery', 'followup', 'consult'] as const;
 
 /**
@@ -374,6 +375,7 @@ export class FormsService {
     const n = await this.prisma.formDef.count();
     if (n > 0) {
       await this.ensureRegistrationPreset();
+      await this.ensureSubformPresets();
       await this.backfillColors();
       await this.backfillVisitBuiltins();
       await this.activateClinicCore();
@@ -382,6 +384,7 @@ export class FormsService {
     const vertical = await this.config.vertical();
     await this.seedFrom(PRESETS[vertical] ?? []);
     await this.ensureRegistrationPreset();
+    await this.ensureSubformPresets();
     /* قالب‌ها عمداً کاتالوگِ کامل ندارند (سندِ خوانا ماندن مهم‌تر است)؛
        تکمیلشان کارِ همین backfill است تا نصبِ تازه و نصبِ قدیمی یک مسیر
        داشته باشند. */
@@ -445,6 +448,65 @@ export class FormsService {
       await this.installRegistration(key);
       await this.upgradeRegistration(key);
     }
+  }
+
+  /**
+   * **زیرفرم‌های آمادهٔ مطب** — یک‌بار (پرچمِ `subform_presets_installed`)، فقط حوزهٔ مطب.
+   *
+   * ⚠️ پرچم و نه «هر بار که نبود»: زیرفرمی که مدیر عمداً پاک کرده نباید در بوتِ بعدی
+   * برگردد (همان قاعدهٔ `installRegistration`). ⚠️ `seedFrom` خودش فرمِ موجود را
+   * دوباره نمی‌سازد، پس نصبی که یکی از همین کلیدها را از قبل دارد دست نمی‌خورد.
+   */
+  private async ensureSubformPresets() {
+    if ((await this.config.vertical()) !== 'clinic') return;
+    const key = 'subform_presets_installed';
+    if ((await this.prisma.setting.findUnique({ where: { key } }))?.value === 'true') return;
+    await this.seedFrom(SUBFORM_PRESETS);
+    await this.prisma.setting.upsert({ where: { key }, create: { key, value: 'true' }, update: { value: 'true' } });
+  }
+
+  /**
+   * **کاتالوگِ زیرفرم‌ها** — منبعِ پنجرهٔ «الصاقِ فرم» و اسلات‌های «فرمِ منتخب».
+   *
+   * داخلی‌ها (علائمِ حیاتی، درخواستِ پاراکلینیک) + هر فرمِ `scope=subform`. خاموش‌ها هم
+   * برمی‌گردند (`active: false`) چون مراجعه‌ای که از قبل پاسخشان را دارد باید بتواند
+   * نشانش بدهد؛ پنجره فقط روشن‌ها را پیشنهاد می‌کند. `nonSurgery` یعنی فرمِ عمل آن را
+   * در تب‌هایش دارد و الصاقِ جدا ندارد (`builtinAllowed`).
+   */
+  async subformCatalog() {
+    await this.ensureSeeded();
+    const vertical = await this.config.vertical();
+    const rows = await this.prisma.formDef.findMany({
+      where: { scope: 'subform' }, orderBy: { id: 'asc' }, include: FIELD_ORDER,
+    });
+    const builtins = BUILTIN_SUBFORM_KEYS
+      .filter((k) => k !== 'vitals' || vertical === 'clinic')
+      .map((k) => ({
+        key: k, title: BUILTIN_SUBFORMS[k].title, short: BUILTIN_SUBFORMS[k].short, hint: BUILTIN_SUBFORMS[k].hint,
+        group: 'common', builtin: true, nonSurgery: true, active: true, color: null, fields: [],
+      }));
+    return {
+      groups: SUBFORM_GROUPS,
+      items: [
+        ...builtins,
+        ...rows.map((r) => {
+          const f = this.view(r, vertical);
+          return {
+            key: f.key, title: f.title, short: shortTitle(f.title), hint: f.hint ?? null,
+            group: SUBFORM_PRESET_GROUP[f.key] ?? 'custom', builtin: false, nonSurgery: false,
+            active: f.active, color: f.color, fields: f.fields,
+          };
+        }),
+      ],
+    };
+  }
+
+  /** تعریفِ یک زیرفرمِ فرم‌ساز برای سنجشِ ذخیره — `null` یعنی «زیرفرمی با این کلید نیست». */
+  async subformDef(key: string): Promise<SubformDef | null> {
+    const row = await this.prisma.formDef.findFirst({ where: { key, scope: 'subform' }, include: FIELD_ORDER });
+    if (!row) return null;
+    const f = this.view(row);
+    return { id: f.id, key: f.key, title: f.title, active: f.active, fields: f.fields };
   }
 
   /**
@@ -763,6 +825,14 @@ export class FormsService {
     await this.prisma.formDef.deleteMany({ where: { id: { notIn: keep } } });
     await this.prisma.formDef.updateMany({ where: { id: { in: keep } }, data: { active: false } });
     await this.seedFrom(forms);
+    /* زیرفرم‌های آمادهٔ مطب هم جزوِ قالب‌اند: بالا همه پاک یا خاموش شدند، و پرچمِ یک‌بارهٔ
+       `ensureSubformPresets` دیگر برشان نمی‌گرداند — «بازگرداندن به قالب» بی این خط پنجرهٔ
+       «الصاقِ فرم» را برای همیشه خالی می‌کرد. */
+    if (v === 'clinic') {
+      await this.seedFrom(SUBFORM_PRESETS);
+      const flag = 'subform_presets_installed';
+      await this.prisma.setting.upsert({ where: { key: flag }, create: { key: flag, value: 'true' }, update: { value: 'true' } });
+    }
     return this.list();
   }
 
@@ -1074,7 +1144,9 @@ export class FormsService {
     const scope = normScope(dto.scope);
     if (!scope) throw new BadRequestException('محدودهٔ فرم نامعتبر است');
 
-    const fullKey = scope === 'visit' ? `visit.${key}` : key;
+    /* زیرفرم هم پیشوندِ خودش را می‌گیرد: کلیدِ `subform.*` در ذخیرهٔ مراجعه با کلیدِ
+       داخلی‌ها (`vitals`, `orders`) هرگز یکی نمی‌شود. */
+    const fullKey = scope === 'visit' ? `visit.${key}` : scope === 'subform' ? `subform.${key}` : key;
     const dup = await this.prisma.formDef.findUnique({ where: { key: fullKey } });
     if (dup) throw new BadRequestException('فرمی با این کلید هست');
     const service = await this.formServiceOf(dto.service, scope);
@@ -1153,12 +1225,14 @@ export class FormsService {
   }
 
   private async formUsage(row: { id: number; visitKind: string | null }, db: Prisma.TransactionClient = this.prisma) {
-    const [visits, links, submissions] = await Promise.all([
+    const [visits, links, submissions, subforms] = await Promise.all([
       row.visitKind ? db.visit.count({ where: { kind: row.visitKind } }) : Promise.resolve(0),
       db.intakeLink.count({ where: { formId: row.id } }),
       db.intakeSubmission.count({ where: { OR: [{ formId: row.id }, { extraFormIds: { has: row.id } }] } }),
+      /* زیرفرمی که روی مراجعه‌ای پر شده «استفاده‌شده» است — FKِ `Restrict` هم سدِ آخر است. */
+      db.visitSubform.count({ where: { formId: row.id } }),
     ]);
-    return { visits, links, submissions, total: visits + links + submissions };
+    return { visits: visits + subforms, links, submissions, total: visits + links + submissions + subforms };
   }
 
   async removeForm(id: number) {

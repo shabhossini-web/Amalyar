@@ -28,7 +28,7 @@ import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
 import { useStagger } from '../ui/stagger.js';
 /* W3.2: فرمِ ثبت/ویرایشِ مراجعه به فایلِ خودش رفت — این فایل فهرست و کارت است. */
-import VisitForm from './VisitForm.jsx';
+import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
 import { kindOf } from './visit-kinds.js';
 
 /* ── آیکون‌های خطی ── */
@@ -903,10 +903,7 @@ export default function Dashboard() {
          متنش کپی شود: شکایتِ اولیه از همان‌جا خوانده می‌شود، پس اصلاحِ بعدیِ
          ویزیت همان لحظه در میزِ اتاقِ عمل هم دیده می‌شود. متن و تاریخ فقط
          برای نشان‌دادنِ «از کجا می‌آید» در فرم می‌روند. */
-      setTimeout(() => setModal({ prefill: {
-        patientId: saved.patientId, patientName: saved.patientName, kind: 'surgery',
-        decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
-      } }), 400);
+      setTimeout(() => setModal({ prefill: surgeryPrefill(saved) }), 400);
       return;
     }
     if (wasEdit) { setToast(`${t.visit} ویرایش شد ✓`); return; }

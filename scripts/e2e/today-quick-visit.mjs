@@ -171,7 +171,9 @@ try {
   await pd.locator('.db-stepnav .db-submit').click();
   const dec = pd.locator('.db-sheet .db-decide');
   await dec.waitFor({ timeout: 8000 }).catch(() => {});
-  await dec.locator('.db-daychip', { hasText: 'کاندیدای جراحی' }).first().click();
+  /* تصمیم از بستهٔ زیرفرم‌ها کشوییِ چندتایی است (نه ردیفِ چیپ). */
+  await dec.locator('[data-act="decision-open"]').click();
+  await dec.locator('.vf-opt[data-decision="surgery"]').click();
   const r2 = await saveSheet(pd);
   ok(r2?.status() === 201, `ویزیتِ تصمیم ثبت شد (HTTP ${r2?.status()})`);
   const b2 = await r2?.json().catch(() => null);

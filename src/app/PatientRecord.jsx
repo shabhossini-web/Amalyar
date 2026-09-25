@@ -5,7 +5,7 @@ import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import VoiceNote, { VoiceClip } from '../ui/VoiceNote.jsx';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
-import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
+import { ThingPopups, surgeryPrefill, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { fmtMoney } from '../lib/money.js';
@@ -1556,10 +1556,7 @@ export default function PatientRecord() {
           if (opts?.openSurgery) {
             say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
             /* همان پیوندِ داشبورد — شکایتِ اولیه از ویزیتِ تصمیم مشتق می‌شود. */
-            setTimeout(() => things.show({ type: 'visit', prefill: {
-              patientId: rec.id, patientName: rec.fullName, kind: 'surgery',
-              decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
-            } }), 400);
+            setTimeout(() => things.show({ type: 'visit', prefill: surgeryPrefill(saved, rec.fullName) }), 400);
             return;
           }
           say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);

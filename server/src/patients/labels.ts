@@ -93,8 +93,21 @@ export const DECISION_LABELS: Record<string, string> = {
   workup: 'تکمیلِ بررسی — تصمیمِ قطعی بعداً',
   service: 'تغییرِ سرویس',
   admit: 'بستری',
+  /* ⚠️ **انحصاری** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳): با هیچ تصمیمِ دیگری جمع نمی‌شود —
+     `assertDecisions` در سرور و دراپ‌داونِ فرم هر دو همین را اجرا می‌کنند. */
+  none: 'فعلاً نیاز به پیگیریِ بعدی نیست',
 };
 export const DECISION_KEYS = Object.keys(DECISION_LABELS);
+
+/** تصمیمی که بقیه را کنار می‌زند — «پیگیری لازم نیست» با «ویزیتِ بعدی» تناقض است. */
+export const EXCLUSIVE_DECISION = 'none';
+
+/**
+ * تصمیم‌هایی که همان **درخواست**اند — چیپِ تصمیم و فرمِ سفارش دو بار یک چیز را می‌گفتند
+ * (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳). دراپ‌داونِ تصمیم این‌ها را نشان نمی‌دهد و ثبتِ سفارش خودش
+ * کلیدِ همان نوع را روی مراجعه می‌گذارد؛ کلیدهای قبلی دست نمی‌خورند.
+ */
+export const ORDER_DECISIONS = ['lab', 'imaging', 'consult', 'referral'] as const;
 
 /** نوعِ بیهوشی (`Visit.anesthesia`) — همان چهار گزینهٔ قالبِ قدیمی، تا دادهٔ قبلی بی‌ترجمه بنشیند. */
 export const ANESTHESIA_LABELS: Record<string, string> = {

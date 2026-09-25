@@ -129,6 +129,14 @@ export class FormsController {
     return this.forms.formTypes();
   }
 
+  /* کاتالوگِ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) — پنجرهٔ «الصاقِ فرم»ِ فرمِ مراجعه. همان تلهٔ
+     ترتیب: پیش از `forms/:key`. */
+  @RequirePermissions('forms.read')
+  @Get('forms/subforms')
+  subforms() {
+    return this.forms.subformCatalog();
+  }
+
   @RequirePermissions('forms.read')
   @Get('forms/:key')
   byKey(@Param('key') key: string) {

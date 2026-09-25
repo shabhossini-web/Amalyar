@@ -5,12 +5,15 @@ import { api } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useTerms, useStatusMap } from './config.jsx';
-import VisitForm from './VisitForm.jsx';
+import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
 import OrderSheet from './OrderSheet.jsx';
 import { useVisitDefs } from './visit-defs.js';
 import Overlay from '../ui/Overlay.jsx';
 import { Calendar, Close, Send } from '../ui/icons.jsx';
 import './thing-popups.css';
+
+/* پرونده همین سازنده را از همین‌جا می‌گیرد — هر دو فرمِ عمل را از یک میزبان باز می‌کنند. */
+export { surgeryPrefill };
 
 /**
  * پاپ‌آپِ «همان چیز» — مراجعه، سفارش، یادآوری، نوبت — از هر صفحه‌ای.
@@ -111,10 +114,7 @@ export function ThingPopups({ things, onVisitSaved }) {
                  با وضعیتِ تازه سوار شود. */
               if (opts?.openSurgery && saved?.id) {
                 say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
-                setTimeout(() => things.show({ type: 'visit', prefill: {
-                  patientId: saved.patientId, patientName: saved.patientName, kind: 'surgery',
-                  decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
-                } }), 400);
+                setTimeout(() => things.show({ type: 'visit', prefill: surgeryPrefill(saved) }), 400);
                 return;
               }
               say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);

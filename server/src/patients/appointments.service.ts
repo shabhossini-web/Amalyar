@@ -485,6 +485,9 @@ export class AppointmentsService {
         return { visitId, made: !row.forVisitId };
       });
       if (result.made) await this.patients.afterVisitCreation(result.visitId);
+      /* ویزیتِ پست‌آپی که با آمدنِ بیمار تاریخِ امروز گرفت: «ویزیتِ بعدی»ِ عمل هم همان
+         می‌شود تا یادآوریِ تاریخِ قدیمی برای ویزیتی که برگزار شده نرود (همگامیِ دوطرفه). */
+      else if (source.forVisitId) await this.patients.syncPostOpParent(result.visitId);
       return result;
     } catch (e: any) {
       if (e?.code === 'P2002') throw new ConflictException('این مراجعه هم‌زمان به نوبتِ دیگری وصل شد؛ صفحه را تازه کنید');

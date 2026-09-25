@@ -39,7 +39,7 @@ export type PresetForm = {
    * و `scope: 'record'` می‌گیرد. مهاجرت مقدارِ قدیمیِ داخلِ دیتابیس را هم
    * برمی‌گرداند، پس نصب‌های موجود چیزی گم نمی‌کنند.
    */
-  scope: 'visit' | 'record' | 'intake';
+  scope: 'visit' | 'record' | 'intake' | 'subform';
   visitKind?: string;
   hint?: string;
   /** توکنِ رنگِ کارت. نیامدنش یعنی «خودکار از کلید». */
@@ -483,6 +483,90 @@ export const POSTOP_FOLLOWUP: PresetForm = {
     { key: 'otherNotes', label: 'توضیحات دیگر', type: 'textarea' },
   ],
 };
+
+/**
+ * **زیرفرم‌های آمادهٔ مطب** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — نمونه‌هایی که پنجرهٔ «الصاقِ فرم»
+ * از روزِ اول دارد؛ از آن به بعد مالِ سوپرادمین‌اند و در فرم‌ساز عوض می‌شوند.
+ *
+ * ⚠️ یک‌بار نصب می‌شوند (پرچمِ `subform_presets_installed`): زیرفرمی که مدیر عمداً پاک کرده
+ * نباید در بوتِ بعدی برگردد. ⚠️ هیچ فیلدی اجباری نیست: «الصاق» یعنی «می‌خواهم این را هم
+ * ثبت کنم»، و ستاره‌ای که ذخیرهٔ مراجعه را تا پرشدنِ کاملِ زیرفرم ببندد، الصاقِ سریع را
+ * بی‌معنی می‌کرد. گروهِ هرکدام در پنجره از `SUBFORM_PRESET_GROUP` (`subforms.ts`) می‌آید.
+ */
+export const SUBFORM_PRESETS: PresetForm[] = [
+  {
+    key: 'subform.growth', title: 'فرم قد و وزن', scope: 'subform',
+    hint: 'قد، وزن، دورِ سر، BMI و نمودارِ رشدِ کودک',
+    fields: [
+      { key: 'height', label: 'قد', type: 'number', placeholder: 'سانتی‌متر' },
+      { key: 'weight', label: 'وزن', type: 'number', placeholder: 'کیلوگرم' },
+      { key: 'head', label: 'دورِ سر', type: 'number', placeholder: 'سانتی‌متر' },
+      { key: 'note', label: 'توضیح', type: 'text' },
+    ],
+  },
+  {
+    key: 'subform.wound', title: 'فرم زخم', scope: 'subform',
+    hint: 'محل، اندازه، ترشح، بخیه، پانسمان — با عکس',
+    fields: [
+      { key: 'site', label: 'محلِ زخم', type: 'text' },
+      { key: 'size', label: 'اندازه', type: 'text', placeholder: 'مثلاً ۳ × ۲ سانتی‌متر' },
+      { key: 'discharge', label: 'ترشح', type: 'select', options: [
+        { v: 'none', l: 'ندارد' }, { v: 'serous', l: 'سروزی' }, { v: 'bloody', l: 'خونابه‌ای' }, { v: 'purulent', l: 'چرکی' },
+      ] },
+      { key: 'signs', label: 'نشانه‌ها', type: 'multiselect', options: [
+        { v: 'redness', l: 'قرمزی' }, { v: 'swelling', l: 'تورم' }, { v: 'warmth', l: 'گرمی' },
+        { v: 'dehiscence', l: 'بازشدگی' }, { v: 'odor', l: 'بوی بد' },
+      ] },
+      { key: 'sutures', label: 'بخیه', type: 'select', options: [
+        { v: 'intact', l: 'سالم' }, { v: 'removed', l: 'کشیده شد' }, { v: 'opened', l: 'باز شده' }, { v: 'none', l: 'ندارد' },
+      ] },
+      { key: 'dressing', label: 'پانسمان', type: 'select', options: [
+        { v: 'changed', l: 'تعویض شد' }, { v: 'kept', l: 'بدونِ تغییر' }, { v: 'notNeeded', l: 'لازم نیست' },
+      ] },
+      { key: 'photos', label: 'عکسِ زخم', type: 'image', docCategory: 'other' },
+      { key: 'note', label: 'توضیح', type: 'textarea' },
+    ],
+  },
+  {
+    key: 'subform.postop', title: 'فرم پیگیریِ پس از عمل', scope: 'subform',
+    hint: 'درد، زخم، عارضه، بازگشت به فعالیت',
+    fields: [
+      { key: 'pain', label: 'شدتِ درد', type: 'number', placeholder: '۰ تا ۱۰' },
+      { key: 'wound', label: 'وضعیتِ زخم', type: 'select', options: [
+        { v: 'good', l: 'خوب' }, { v: 'care', l: 'نیازمندِ مراقبت' }, { v: 'infected', l: 'مشکوک به عفونت' },
+      ] },
+      { key: 'complication', label: 'عارضه', type: 'select', options: [
+        { v: 'none', l: 'ندارد' }, { v: 'minor', l: 'خفیف' }, { v: 'major', l: 'نیازمندِ اقدام' },
+      ] },
+      { key: 'complicationNote', label: 'شرحِ عارضه', type: 'textarea' },
+      { key: 'activity', label: 'بازگشت به فعالیت', type: 'select', options: [
+        { v: 'full', l: 'کامل' }, { v: 'partial', l: 'نسبی' }, { v: 'notYet', l: 'هنوز نه' },
+      ] },
+      { key: 'meds', label: 'داروها طبقِ دستور مصرف می‌شود', type: 'bool' },
+    ],
+  },
+  {
+    key: 'subform.asa', title: 'فرم ارزیابیِ بیهوشی (ASA)', scope: 'subform',
+    hint: 'کلاسِ ASA، راهِ هوایی، ناشتایی، ضدانعقاد',
+    fields: [
+      { key: 'asa', label: 'کلاسِ ASA', type: 'select', options: [
+        { v: 'I', l: 'I — سالم' }, { v: 'II', l: 'II — بیماریِ سیستمیکِ خفیف' },
+        { v: 'III', l: 'III — بیماریِ سیستمیکِ شدید' }, { v: 'IV', l: 'IV — بیماریِ شدیدِ تهدیدکنندهٔ حیات' },
+        { v: 'V', l: 'V — بدونِ عمل زنده نمی‌ماند' }, { v: 'VI', l: 'VI — مرگِ مغزی (اهدای عضو)' },
+      ] },
+      { key: 'emergency', label: 'اورژانسی (E)', type: 'bool' },
+      { key: 'airway', label: 'راهِ هوایی (مالامپاتی)', type: 'select', options: [
+        { v: '1', l: 'کلاسِ ۱' }, { v: '2', l: 'کلاسِ ۲' }, { v: '3', l: 'کلاسِ ۳' }, { v: '4', l: 'کلاسِ ۴' },
+      ] },
+      { key: 'npoSince', label: 'ناشتا از ساعت', type: 'time' },
+      { key: 'anticoag', label: 'ضدانعقاد / ضدپلاکت', type: 'select', options: [
+        { v: 'none', l: 'مصرف نمی‌کند' }, { v: 'stopped', l: 'قطع شده' }, { v: 'continued', l: 'ادامه دارد' },
+      ] },
+      { key: 'anticoagNote', label: 'نامِ دارو و زمانِ قطع', type: 'text' },
+      { key: 'note', label: 'توضیح', type: 'textarea' },
+    ],
+  },
+];
 
 /**
  * فرم‌هایی که یک حوزه با آن‌ها شروع می‌کند.

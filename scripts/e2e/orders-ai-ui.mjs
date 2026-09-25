@@ -10,7 +10,14 @@ const vite = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host',
 let browser;
 let pass = 0;
 const check = (condition, message) => { assert.ok(condition, message); console.log(`PASS ${++pass}: ${message}`); };
-const visit = { id: 1, patientId: 1, kind: 'clinic', firstName: 'بیمار', lastName: 'آزمایشی', fullName: 'بیمار آزمایشی', phone: '09120000000', code: 'AM-001', seq: 1, decisions: [], opReport: 'متن اولیه پزشک', amount: 0, paid: 0, due: 0, opStatus: 'pending' };
+/* از بستهٔ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) درخواست‌ها زیرفرمِ «درخواستِ پاراکلینیک» اند نه چیپِ تصمیم؛
+   مراجعهٔ ماک آن را الصاق‌شده دارد و کاتالوگ فقط همان را. */
+const ORDERS_SUB = { key: 'orders', builtin: true, formId: null, implicit: false, title: 'فرم درخواستِ پاراکلینیک و مشاوره', hasData: false, count: 0, data: null, derived: {}, attachedAt: null, updatedAt: null };
+const visit = { id: 1, patientId: 1, kind: 'clinic', firstName: 'بیمار', lastName: 'آزمایشی', fullName: 'بیمار آزمایشی', phone: '09120000000', code: 'AM-001', seq: 1, decisions: [], opReport: 'متن اولیه پزشک', amount: 0, paid: 0, due: 0, opStatus: 'pending', subforms: [ORDERS_SUB] };
+const subformCatalog = {
+  groups: [{ key: 'common', label: 'پرکاربرد' }],
+  items: [{ key: 'orders', title: ORDERS_SUB.title, short: 'درخواستِ پاراکلینیک', hint: null, group: 'common', builtin: true, nonSurgery: true, active: true, color: null, fields: [] }],
+};
 const record = { ...visit, clinicalVisible: true, visits: [visit], notes: [], clinicalNotes: [], documents: [], forms: [], visitTexts: [], counts: { visits: 1, notes: 0, documents: 0, forms: 0, notesByKind: {} } };
 let reply = 'data: {"d":"شرح ساخت‌یافته"}\r\n\r\ndata: [DONE]\r\n\r\n';
 const writes = [];
@@ -37,6 +44,8 @@ try {
       if (path === '/auth/me') body = { id: 1, firstName: 'تست', lastName: 'محلی', level: 6, status: 'active' };
       else if (path === '/config') body = { vertical: 'clinic', brand: {}, statuses: { decision: decisions } };
       else if (path === '/features') body = [{ key: 'dashboard', allowed: true }];
+      else if (path === '/forms/subforms') body = subformCatalog;
+      else if (path === '/auth/prefs') body = { subformPins: [null, null, null], todayPins: [null, null, null] };
       else if (path === '/visits/1') body = visit;
       else if (path === '/visits') body = { rows: [visit], total: 1, pages: 1, stats: { total: 1, pending: 1, today: 0, due: 0, kinds: [] } };
       else if (path === '/forms/visit-kinds') body = [{ key: 'clinic', title: 'ویزیت' }, { key: 'surgery', title: 'عمل' }];
@@ -53,8 +62,8 @@ try {
     page.on('pageerror', (e) => { errors.push(e.message); console.error('BROWSER', e.message); });
     await page.goto(`${base}/app/dashboard?patient=1`);
     await page.locator('.db-sheet').waitFor();
-    for (const [kind, label] of [['lab', 'درخواستِ آزمایش'], ['imaging', 'درخواستِ عکس‌برداری'], ['consult', 'مشاوره'], ['referral', 'ارجاع']]) {
-      await page.locator('.db-decide .db-daychip').filter({ hasText: label }).first().click();
+    for (const kind of ['lab', 'imaging', 'consult', 'referral']) {
+      await page.locator(`[data-subform="orders"] [data-order-new="${kind}"]`).click();
       const sheet = page.locator('.od-sheet');
       await sheet.waitFor();
       await delay(450);
@@ -81,8 +90,7 @@ try {
       check(await page.locator('.od-bg').count() === 0 && await page.locator('.db-sheet').count() === 1, `${kind} closes fully and preserves visit form`);
     }
     // Smaller viewport while a long form is open (landscape / less room with a keyboard).
-    await page.locator('.db-decide .db-daychip').filter({ hasText: 'درخواستِ آزمایش' }).first().click();
-    await page.locator('.db-decide .db-daychip').filter({ hasText: 'درخواستِ آزمایش' }).first().click();
+    await page.locator('[data-subform="orders"] [data-order-new="lab"]').click();
     await page.setViewportSize({ width: viewport.width, height: 420 });
     await page.locator('.od-save').scrollIntoViewIfNeeded();
     const bottom = await page.locator('.od-save').boundingBox();

@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import VoiceInput from './VoiceInput.jsx';
+import { Pencil, Sparkle } from './icons.jsx';
 import './assisted-textarea.css';
 
-/** پیشنهاد جدا از مقدار ثبت‌شدنی است؛ فقط «اعمال» متن فرم را عوض می‌کند. */
+/**
+ * پیشنهاد جدا از مقدار ثبت‌شدنی است؛ فقط «اعمال» متن فرم را عوض می‌کند.
+ *
+ * ⚠️ سه ابزار (دیکته، «اصلاح و ساختاربندی»، «ادامه با AI») **آیکونِ کوچک در گوشهٔ خودِ کادر**
+ * هستند، نه ردیفی زیرِ هر کادر (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳ — «UI خیلی باز و شلخته»). نامِ دسترس‌پذیرِ
+ * هر دکمه همان متنِ قبلی است، پس صفحه‌خوان و آزمون‌ها همان را پیدا می‌کنند. کادر به اندازهٔ
+ * آیکون‌ها از آن سمت فاصله می‌گیرد تا متن زیرشان نرود.
+ */
 export default function AssistedTextarea({ value = '', onChange, disabled, readOnly, purpose = 'شرح', ...props }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -29,16 +37,23 @@ export default function AssistedTextarea({ value = '', onChange, disabled, readO
     finally { if (alive.current) setBusy(false); }
   };
   const locked = disabled || readOnly;
-  return <span className="assisted-text">
+  const tools = !locked && (status?.enabled || status?.stt);
+  const count = (status?.stt ? 1 : 0) + (status?.enabled ? 2 : 0);
+  const short = String(value).trim().length < 2;
+  return <span className="assisted-text" style={tools ? { '--at-tools': count } : undefined}>
     <textarea {...props} value={value} onChange={onChange} disabled={disabled} readOnly={readOnly} />
-    {!locked && (status?.enabled || status?.stt) && <span className="assisted-actions">
-      {status.stt && <VoiceInput disabled={busy} onErr={setError} onText={(text) => change([current.current, text].filter(Boolean).join('\n'))} />}
+    {tools && <span className="assisted-tools">
+      {status.stt && <VoiceInput compact disabled={busy} onErr={setError} onText={(text) => change([current.current, text].filter(Boolean).join('\n'))} />}
       {status.enabled && <>
-        <button type="button" disabled={busy || String(value).trim().length < 2} onClick={() => draft('structure')}>اصلاح و ساختاربندی</button>
-        <button type="button" disabled={busy || String(value).trim().length < 2} onClick={() => draft('continue')}>ادامه با AI</button>
+        <button type="button" className="at-ic" aria-label="اصلاح و ساختاربندی" title="اصلاح و ساختاربندی" disabled={busy || short} onClick={() => draft('structure')}>
+          <Sparkle width="15" height="15" aria-hidden="true" />
+        </button>
+        <button type="button" className="at-ic" aria-label="ادامه با AI" title="ادامه با AI" disabled={busy || short} onClick={() => draft('continue')}>
+          <Pencil width="14" height="14" aria-hidden="true" />
+        </button>
       </>}
-      {busy && <small role="status">در حال آماده‌کردن پیشنهاد…</small>}
     </span>}
+    {busy && <small role="status">در حال آماده‌کردن پیشنهاد…</small>}
     {error && <small role="alert">{error}</small>}
     {proposal && !locked && <span className="assisted-proposal">
       <small>پیشنهاد را بررسی کنید؛ با اعمال، وارد متن فرم می‌شود.</small>

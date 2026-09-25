@@ -135,7 +135,19 @@ try {
     await page.click('button[type="submit"]');
     await page.waitForURL('**/app**', { timeout: 15000 });
 
+    /* از بستهٔ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) ویرایش انتخابگرِ نوع ندارد — سربرگ فقط نامِ همان
+       مراجعه را می‌گوید؛ فهرستِ نوع‌ها در گامِ ۲ِ **ثبتِ تازه** است. */
     await page.goto(BASE + `/app/dashboard?patient=${v1.id}`);
+    await page.waitForTimeout(2200);
+    ok(await page.locator('.db-sheet [data-visit-bar]').count() === 1 && await page.locator('.db-sheet .db-kindrow').count() === 0,
+      'ویرایش: سربرگِ نامِ مراجعه، بی‌انتخابگرِ نوع');
+    await page.goto(BASE + '/app/dashboard');
+    await page.waitForTimeout(1200);
+    await page.locator('.db-add').first().click();
+    await page.waitForTimeout(700);
+    const nameInp = page.locator('.db-sheet .db-grid2 input');
+    await nameInp.nth(0).fill('پیگیریِ'); await nameInp.nth(1).fill(`آزما${tag}`);
+    await page.locator('.db-stepnav button').last().click();
     /* در لحظه‌های اول یا اسکلت است یا فهرستِ واقعی — هرگز دکمهٔ «پیگیری». */
     let sawGhost = false;
     for (let i = 0; i < 10; i++) {

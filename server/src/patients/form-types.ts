@@ -191,6 +191,17 @@ export const FORM_TYPES: Record<string, FormTypeDef> = {
     approval: ['surgeonId', 'hospitalId', 'opDate', 'opStartTime'],
     sections: [patientSection(), mediaSection(), customSection()],
   },
+  /* زیرفرمِ مراجعه (۱۴۰۵/۰۷/۰۳) — روی یک مراجعه **الصاق** می‌شود؛ نه مراجعه می‌سازد نه
+     به پرونده می‌چسبد. پرداخت ندارد: پولِ مراجعه از خودِ مراجعه می‌آید. */
+  subform: {
+    key: 'subform',
+    label: 'زیرفرمِ مراجعه',
+    hint: 'به یک مراجعه الصاق می‌شود — علائم، ارزیابی، پیگیری. مراجعه نمی‌سازد و پول نمی‌گیرد.',
+    payment: 'never',
+    boxes: [...PLAIN, ...MEDIA],
+    approval: [],
+    sections: [customSection(), mediaSection()],
+  },
   record: {
     key: 'record',
     label: 'فرمِ زیرپرونده',

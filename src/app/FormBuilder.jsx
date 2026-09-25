@@ -67,7 +67,7 @@ const DOC_CATEGORIES = { imaging: 'تصویربرداری', lab: 'آزمایش',
  * آن اجرا نشده هنوز فرمِ `scope: 'survey'` دارد، و نبودِ کلید یعنی کاربر
  * به‌جای «زیرپرونده» رشته‌ی خامِ انگلیسی می‌دید.
  */
-const SCOPE_FA = { visit: 'مراجعه', record: 'زیرپرونده', intake: 'ثبت‌نام', survey: 'زیرپرونده' };
+const SCOPE_FA = { visit: 'مراجعه', record: 'زیرپرونده', intake: 'ثبت‌نام', survey: 'زیرپرونده', subform: 'زیرفرمِ مراجعه' };
 
 /** نامِ فارسیِ نقش‌های یک فیلد — خالی یعنی «عمومی» (همه پر می‌کنند). */
 const roleNamesOf = (field) => fieldRoles(field).map((v) => JOB_ROLES.find((r) => r.v === v)?.l ?? v);
@@ -82,7 +82,12 @@ export default function FormBuilder() {
   const [scopeFilter, setScopeFilter] = useState('all');
   const [editing, setEditing] = useState(null); // {formId, field} — field={} یعنی جدید
   const [resetting, setResetting] = useState(false);
-  const [newForm, setNewForm] = useState(false);
+  /* «+ ساختِ زیرفرمِ تازه» در پنجرهٔ الصاقِ فرمِ مراجعه این‌جا را با `?new=subform` باز می‌کند
+     (۱۴۰۵/۰۷/۰۳) — برگهٔ ساخت همان لحظه با محدودهٔ «زیرفرم» باز می‌شود. */
+  const [newForm, setNewForm] = useState(() => {
+    const q = new URLSearchParams(window.location.search).get('new');
+    return q === 'subform' ? { scope: 'subform' } : false;
+  });
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const [err, setErr] = useState('');
@@ -243,7 +248,7 @@ export default function FormBuilder() {
               setScopeFilter(scope);
               const candidates = forms.filter(f => scope === 'all' || f.scope === scope);
               setTab(cur => candidates.some(f => f.key === cur) ? cur : candidates[0]?.key ?? '');
-            }} items={[{ key: 'all', label: 'همه' }, { key: 'intake', label: 'ثبت‌نام مراجع' }, { key: 'visit', label: 'مراجعه و درمان' }, { key: 'record', label: 'پیگیری و زیرپرونده' }]} />
+            }} items={[{ key: 'all', label: 'همه' }, { key: 'intake', label: 'ثبت‌نام مراجع' }, { key: 'visit', label: 'مراجعه و درمان' }, { key: 'subform', label: 'زیرفرم‌های مراجعه' }, { key: 'record', label: 'پیگیری و زیرپرونده' }]} />
             <div className="fb-tabrow">
               <Tabs
                 variant="scroll"
@@ -508,6 +513,7 @@ export default function FormBuilder() {
       <AnimatePresence>
         {newForm && (
           <NewFormSheet
+            scope={newForm?.scope ?? 'visit'}
             onClose={() => setNewForm(false)}
             onCreated={(fresh) => {
               setNewForm(false);
@@ -881,8 +887,8 @@ function FieldSheet({ formId, field, pages = 1, ftype = null, onClose, onSaved }
  * ⚠️ فقط سه چیز می‌پرسد و بقیه را بعداً می‌شود چید: عنوان، کلید، و اینکه
  * کجای برنامه استفاده می‌شود. فرمی که ساختش ده فیلد بخواهد، ساخته نمی‌شود.
  */
-function NewFormSheet({ onClose, onCreated }) {
-  const [form, setForm] = useState({ title: '', key: '', scope: 'visit', hint: '', color: '' });
+function NewFormSheet({ onClose, onCreated, scope = 'visit' }) {
+  const [form, setForm] = useState({ title: '', key: '', scope, hint: '', color: '' });
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
@@ -929,6 +935,7 @@ function NewFormSheet({ onClose, onCreated }) {
         {fld('scope', 'این فرم چیست', (
           <select value={form.scope} onChange={set('scope')} disabled={busy}>
             <option value="visit">مراجعه — پرشدنش یک مراجعهٔ تازه می‌سازد</option>
+            <option value="subform">زیرفرمِ مراجعه — روی یک مراجعه الصاق می‌شود</option>
             <option value="record">زیرپرونده — به پروندهٔ بیمار می‌چسبد</option>
             <option value="intake">ثبت‌نام — پروندهٔ تازه باز می‌کند</option>
           </select>
@@ -970,6 +977,12 @@ function NewFormSheet({ onClose, onCreated }) {
           <p className="fb-note">
             پرشدنِ این فرم <b>مراجعه نمی‌سازد</b>؛ زیرِ پروندهٔ بیمار می‌نشیند —
             مثلِ نظرسنجی، جوابِ آزمایش یا شرحِ حال.
+          </p>
+        )}
+        {form.scope === 'subform' && (
+          <p className="fb-note">
+            در فرمِ مراجعه از «<b>الصاقِ فرم</b>» اضافه می‌شود و پیش‌فرض پنهان است —
+            مثلِ «قد و وزن»، «زخم» یا یک پرسش‌نامهٔ تخصصی. پاسخ‌ها روی همان مراجعه می‌مانند.
           </p>
         )}
       </div>

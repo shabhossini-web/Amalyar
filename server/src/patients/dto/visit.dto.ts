@@ -162,6 +162,11 @@ export class CreateVisitDto {
   @IsOptional() @IsObject({ message: 'علائمِ حیاتی نامعتبر است' })
   vitals?: Record<string, unknown>;
 
+  /// زیرفرم‌های الصاقی (۱۴۰۵/۰۷/۰۳) — `[{ key, data?, removed? }]`؛ شکلِ دقیق و سنجشِ
+  /// پاسخ‌ها در `planSubforms` (تعریفِ زیرفرم را سوپرادمین در زمانِ اجرا می‌سازد).
+  @IsOptional() @IsArray({ message: 'زیرفرم‌ها نامعتبر است' })
+  subforms?: Record<string, unknown>[];
+
   /**
    * مبلغِ توافقی — **تومان**، فقط هنگامِ **ساخت**.
    *
@@ -473,6 +478,14 @@ export class UpdateVisitDto {
   @IsOptional() @IsObject({ message: 'فیلدهای دلخواه نامعتبرند' })
   extra?: Record<string, any>;
 
+  /// اندازه‌گیریِ تایپ‌شده در فرمِ ویرایش که هنوز «ثبت» نخورده — همراهِ «ذخیره» می‌نشیند
+  /// (بازبینیِ ۱۴۰۵/۰۷/۰۳: تا دیروز بی‌صدا دور ریخته می‌شد). یک شیء یا تا سه (قبل/بعد از عمل).
+  @IsOptional()
+  vitals?: Record<string, unknown> | Record<string, unknown>[];
+
+  /// زیرفرم‌های الصاقی — همان قراردادِ ساخت.
+  @IsOptional() @IsArray({ message: 'زیرفرم‌ها نامعتبر است' })
+  subforms?: Record<string, unknown>[];
 }
 
 /// فقط ساعت‌ها — برای کارشناسِ سرِ عمل و پنلِ چینش، بدونِ اجازهٔ ویرایشِ بقیهٔ مراجعه.

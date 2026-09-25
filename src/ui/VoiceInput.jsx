@@ -20,7 +20,11 @@ import './voice.css';
 
 const MAX_SECONDS = 420;
 
-export default function VoiceInput({ onText, onErr, disabled, label = 'دیکته با میکروفون' }) {
+/**
+ * @param compact فقط آیکون (بازخوردِ ۱۴۰۵/۰۷/۰۳: دکمه‌های دستیار داخلِ گوشهٔ کادر، نه ردیفی زیرِ
+ *   هر کادر). نامِ دسترس‌پذیر همان `label` می‌ماند — صفحه‌خوان و آزمون‌ها با همان پیدایش می‌کنند.
+ */
+export default function VoiceInput({ onText, onErr, disabled, label = 'دیکته با میکروفون', compact = false }) {
   const [state, setState] = useState('idle'); // idle | rec | busy
   const recRef = useRef(null); // {stream, ctx, src, proc, chunks, rate, samples}
 
@@ -94,14 +98,14 @@ export default function VoiceInput({ onText, onErr, disabled, label = 'دیکت�
   return (
     <button
       type="button"
-      className={`vc-btn${state === 'rec' ? ' vc-rec' : ''}`}
+      className={`vc-btn${compact ? ' vc-compact' : ''}${state === 'rec' ? ' vc-rec' : ''}`}
       disabled={disabled || state === 'busy'}
       aria-label={state === 'rec' ? 'پایانِ ضبط' : label}
       title={state === 'rec' ? 'پایانِ ضبط و تبدیل به متن' : label}
       onClick={state === 'rec' ? stop : start}
     >
       {state === 'busy' ? <span className="vc-spin" /> : state === 'rec' ? <StopRec size={15} /> : <Mic size={15} />}
-      <span>{state === 'busy' ? 'در حالِ تبدیل…' : state === 'rec' ? 'پایانِ ضبط' : label}</span>
+      {!compact && <span>{state === 'busy' ? 'در حالِ تبدیل…' : state === 'rec' ? 'پایانِ ضبط' : label}</span>}
     </button>
   );
 }

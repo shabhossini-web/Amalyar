@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -31,4 +31,16 @@ export class ChangePasswordDto {
   @MinLength(6, { message: 'رمزِ جدید حداقل ۶ کاراکتر' })
   @MaxLength(128)
   next: string;
+}
+
+/**
+ * منتخب‌های شخصی — سه «فرمِ منتخب» و سه «ابزارکِ منتخب» (۱۴۰۵/۰۷/۰۳).
+ * هر خانه کلید یا `null`؛ شکلِ دقیقِ کلید در `AuthService.setPrefs` سنجیده می‌شود.
+ */
+export class UpdatePrefsDto {
+  @IsOptional() @IsArray({ message: 'فرم‌های منتخب نامعتبر است' }) @ArrayMaxSize(3, { message: 'حداکثر سه فرمِ منتخب' })
+  subformPins?: (string | null)[];
+
+  @IsOptional() @IsArray({ message: 'ابزارک‌های منتخب نامعتبر است' }) @ArrayMaxSize(3, { message: 'حداکثر سه ابزارکِ منتخب' })
+  todayPins?: (string | null)[];
 }

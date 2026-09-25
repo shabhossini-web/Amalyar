@@ -7,7 +7,7 @@ import { AuthService } from './auth.service';
 import { WebauthnService } from './webauthn.service';
 import { LoginDto } from './dto/login.dto';
 import { WebauthnLoginOptionsDto, WebauthnVerifyDto } from './dto/webauthn.dto';
-import { ChangePasswordDto, UpdateProfileDto } from './dto/profile.dto';
+import { ChangePasswordDto, UpdatePrefsDto, UpdateProfileDto } from './dto/profile.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
@@ -155,6 +155,19 @@ export class AuthController {
   @Patch('profile')
   updateProfile(@CurrentUser() user: any, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.id, dto);
+  }
+
+  /** منتخب‌های شخصی — «فرمِ منتخب» و «ابزارکِ منتخب» (۱۴۰۵/۰۷/۰۳). */
+  @UseGuards(JwtAuthGuard)
+  @Get('prefs')
+  prefs(@CurrentUser() user: any) {
+    return this.auth.prefs(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('prefs')
+  setPrefs(@CurrentUser() user: any, @Body() dto: UpdatePrefsDto) {
+    return this.auth.setPrefs(user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard)

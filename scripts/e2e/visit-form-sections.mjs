@@ -56,9 +56,13 @@ try {
 
   console.log('\n۳) گامِ ۳ — کارتِ رنگیِ خودِ فرم');
   ok(await page.locator('.db-formcard').count() === 1, '**فیلدهای فرم داخلِ کارتِ جدا هستند**');
-  const head = (await page.locator('.db-sect b').last().innerText()).replace(/\s+/g, ' ').trim();
-  ok(head.includes(kindTitle) && !/فرمِ\s*فرم/.test(head),
-    `عنوانِ بخش نامِ فرم را بدونِ دوباره‌گویی می‌گوید («${head}»)`);
+  /* از بستهٔ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) سرِ گامِ ۳ سربرگِ فشرده است: فقط نامِ مراجعه (بی‌پیشوندِ
+     «فرم») + موضوع + «الصاقِ فرم». */
+  const head = (await page.locator('[data-visit-title]').first().innerText()).replace(/\s+/g, ' ').trim();
+  const bare = kindTitle.replace(/^\s*فرم(?:ِ)?\s+/, '');
+  ok(head.includes(bare) && !/^فرم/.test(head),
+    `سربرگ نامِ فرم را بدونِ دوباره‌گویی می‌گوید («${head}»)`);
+  ok(await page.locator('[data-visit-bar]').count() === 1, 'سربرگِ فشرده جای عنوانِ بخشِ گامِ ۳ را گرفت');
   const borderColor = await page.locator('.db-formcard').evaluate((el) => getComputedStyle(el).borderInlineStartColor ?? getComputedStyle(el).borderRightColor);
   ok(!!borderColor && borderColor !== 'rgba(0, 0, 0, 0)', `لبهٔ کارتِ فرم رنگی است (${borderColor})`);
 
