@@ -120,7 +120,12 @@ try {
       '**راهنمای «بعد از ذخیره فرمِ عمل باز می‌شود» دیده شد**');
     /* ذخیره → همان ویزیت پره‌آپ می‌شود و **فرمِ عملِ همان بیمار** باز می‌شود. */
     await page.locator('.db-submit').click();
-    await page.waitForTimeout(3000);
+    /* ⚠️ انتظار تا بازشدنِ خودِ فرمِ عمل، نه خوابِ ثابتِ ۳ ثانیه: زیرِ بارِ CI
+       محلیِ هم‌زمان شیتِ عمل باز بود ولی محتوایش هنوز نیامده بود و «برنامهٔ
+       مراقبت داخلش هست» قرمز می‌شد، در حالی که همان سنجه چند خط پایین‌تر سبز
+       بود. `.db-postop` فقط در فرمِ عملِ **رندرشده** هست؛ پس رسیدنش یعنی ذخیره
+       هم تمام شده. اگر هرگز نیاید، سنجه‌های زیر قرمز می‌شوند — همان‌طور که باید. */
+    await page.locator('.db-postop').first().waitFor({ timeout: 15000 }).catch(() => {});
     const savedDec = sql(`SELECT array_to_string(decisions, ',') FROM visits WHERE id=${v.id}`);
     ok(savedDec.includes('surgery'), `**تصمیمِ «کاندیدای جراحی» ذخیره شد** (${savedDec})`);
     const topicName = sql(`SELECT t.name FROM visits v JOIN visit_topics t ON t.id=v.topic_id WHERE v.id=${v.id}`);
@@ -139,7 +144,9 @@ try {
     trash.visits.push(opVisit.id);
     sql(`UPDATE visits SET kind='surgery' WHERE id=${opVisit.id}`);
     await page.goto(BASE + `/app/dashboard?patient=${opVisit.id}`);
-    await page.waitForTimeout(2500);
+    /* ⚠️ همان انتظار: با خوابِ ثابت، اگر فرم هنوز نیامده بود «تصمیم نیست»
+       **بی‌معنا سبز** می‌شد (هیچ‌چیز نبود که تصمیم داشته باشد). */
+    await page.locator('.db-postop').first().waitFor({ timeout: 15000 }).catch(() => {});
     ok(await page.locator('.db-decide').count() === 0, '**در فرمِ عمل تصمیم نیست**');
     ok(await page.locator('.db-postop').count() === 1, 'و به‌جایش برنامهٔ مراقبت هست');
     ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
