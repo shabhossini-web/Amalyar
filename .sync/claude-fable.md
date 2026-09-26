@@ -1,21 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/sms-postop-fix
 since: 2026-09-26
-paths:
-  - server/src/sms/sms.service.ts
-  - server/src/reminders/send-reminders.ts
-  - server/src/patients/intake.service.ts
-  - server/src/patients/summary.service.ts
-  - server/src/patients/portal.service.ts
-  - src/app/Reminders.jsx
-  - src/app/Intake.jsx
-  - scripts/e2e/w1-9-reminder-idempotency.mjs
-  - docs/plan/CONTRACTS.md
+paths: []
 note: >-
-  پیامکِ مراقبتِ بعد از عمل «موقتاً در دسترس نیست» می‌گفت: علتِ ردِ ملی‌پیامک دور ریخته می‌شد.
-  علت حالا در دفترِ یادآوری و دکمه‌های کارکنان؛ «لغو11» لاتین. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  لند شد: ردِ لحظه‌ایِ ملی‌پیامک خودش ۵/۱۵/۴۵ دقیقه بعد دوباره امتحان می‌شود و علتِ واقعی در دفتر؛
+  «لغو11» لاتین؛ قانونِ زبان بالای CLAUDE.md. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
