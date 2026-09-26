@@ -1,17 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/tenant-domains
 since: 2026-09-26
-paths:
-  - server/src/platform/platform.module.ts
-  - src/app/PlatformAdmin.jsx
-  - src/app/platform.css
-  - scripts/e2e/platform-domains.mjs
-  - scripts/e2e/platform-domain-change.mjs
+paths: []
 note: >-
-  تغییرِ نشانیِ سایتِ شرکت از پنلِ پلتفرم (افزودن + اصلی‌کردن؛ نشانیِ قبلی کار می‌کند).
-  بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  لند شد: تغییرِ نشانیِ سایتِ شرکت از پنلِ پلتفرم. بعدی: صفِ عملیاتِ پنل (فقط کارهای باز) و
+  بیمارستان‌های مرکزیِ تاشو. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
