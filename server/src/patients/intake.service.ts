@@ -415,11 +415,11 @@ export class IntakeService {
     if (!/^09\d{9}$/.test(to)) throw new BadRequestException('شمارهٔ موبایل نامعتبر است (مثال: ۰۹۱۲۱۲۳۴۵۶۷)');
 
     /* ⚠️ عنوانِ لینک داخلِ متن می‌آید تا بیمار بداند این پیامک برای چیست.
-       «لغو۱۱» را خودِ `send` می‌چسباند — این‌جا تکرارش نکن، وگرنه دوبار
+       «لغو11» را خودِ `send` می‌چسباند — این‌جا تکرارش نکن، وگرنه دوبار
        می‌آید (خودِ `appendLagho` نسخهٔ قبلی را پاک می‌کند، ولی به آن تکیه
        نکن). */
     const text = `${link.title}\n${this.publicUrl(link.token)}`;
-    const res = await this.sms.send(to, text);
+    const res = await this.sms.sendForStaff(to, text);
 
     /* ⚠️ متنِ پیامک در audit **نوشته نمی‌شود** ولی مقصد بله: باید بتوان
        پاسخ داد «این لینک برای چه شماره‌ای رفت»، بی‌آنکه دفترِ ممیزی به
@@ -1438,7 +1438,7 @@ export class IntakeService {
     const url = `https://${host}/f/${row.token}`;
     const smsCfg = await this.settings.sms();
     const noticeText = renderSms(smsCfg.formSendText, { title: form.title, link: url });
-    const res = await this.sms.send(to, noticeText);
+    const res = await this.sms.sendForStaff(to, noticeText);
     /* دفترِ اطلاع‌رسانیِ بیمار — پروندهٔ الکترونیک همهٔ پیام‌ها را نشان می‌دهد. */
     await this.prisma.reminder.create({
       data: {

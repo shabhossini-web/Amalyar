@@ -82,7 +82,7 @@ export class SummaryService {
     const cfg = await this.settings.sms();
     const url = this.urlOf(token);
     const text = `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.summaryText, { link: url })}`;
-    const res = await this.sms.send(to, text);
+    const res = await this.sms.sendForStaff(to, text);
     /* در دفترِ اطلاع‌رسانی هم ثبت می‌شود — پروندهٔ الکترونیکِ بیمار همهٔ
        پیام‌های ما را یک‌جا نشان می‌دهد. */
     await this.prisma.reminder.create({

@@ -69,7 +69,7 @@ export class PortalService {
     const cfg = await this.settings.sms();
     const url = this.urlOf(token);
     const text = `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.portalText, { link: url })}`;
-    const res = await this.sms.send(to, text);
+    const res = await this.sms.sendForStaff(to, text);
     await this.prisma.reminder.create({
       data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },
     }).catch(() => undefined);
