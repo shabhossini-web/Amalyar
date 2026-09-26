@@ -199,6 +199,37 @@ try {
   ok(l.status === 'sent' && !l.error && l.providerId === '3741437414', `تلاشِ دوم رفت (${l.status}، علت: ${l.error ?? '—'})`);
   ok(await db.domainEvent.count({ where: { type: 'sms.failed', refType: 'reminder', refId: later.id } }) === 0,
     '**نباید بیفتد:** ردی که بعدتر رفت کارِ «ارسالِ دوباره» نساخت');
+
+  console.log('\n۱۱) گزارشِ عیب‌یابیِ پیامک — خطِ زمانیِ تلاش‌ها، بی‌شماره و بی‌متن');
+  /* ارسالِ دوبارهٔ دستیِ `later` را شبیه‌سازی می‌کنیم: ممیزیِ `reminder.retry` لحظه‌ای
+     **بعد از** رویدادِ `sms.sent`ِ همان ردیف ثبت می‌شود (همان ترتیبِ `retry()`). */
+  const manual = await db.auditEvent.create({ data: {
+    action: 'reminder.retry', entityType: 'reminder', entityId: String(later.id),
+    afterJson: { due: 1, sent: 1, failed: 0, skipped: 0 },
+  } });
+  /* ارسالِ مستقیم از دکمه — فقط ممیزی دارد؛ `after.to` شمارهٔ واقعی است و نباید چاپ شود. */
+  const directSms = await db.auditEvent.create({ data: {
+    action: 'intake.link.sms', entityType: 'intake_link', entityId: '1',
+    afterJson: { to: '09121112233', sent: true, stub: false },
+  } });
+  const report = await reminders.diagnostics();
+  const lines = report.split('\n');
+  ok(lines[0].startsWith('عیب‌یابیِ پیامک') && report.includes('پروسهٔ سرور از'), 'گزارش سرتیتر و زمانِ روشن‌شدنِ سرور را دارد');
+  ok(lines.some((l) => l.startsWith('• اطلاع‌رسانی:') && l.includes('نرفته') && l.includes('بخش')),
+    'خلاصهٔ هر نوع: رفته/نرفته و طول و تعدادِ بخش');
+  ok(lines.some((l) => l.includes(' · نرفت · ') && l.includes('سقفِ ارسالِ لحظه‌ای')),
+    'هر تلاشِ ناموفق با علتش در خطِ زمانی هست');
+  const faId = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+  ok(lines.some((l) => l.includes(' · رفت · ') && l.includes('دستی') && l.includes(`ردیفِ ${faId(later.id)}`)),
+    'ارسالِ دوبارهٔ دستی «دستی» علامت خورد و شمارهٔ ردیفش پیداست');
+  ok(report.includes('«ارسالِ دوباره»ی دستی') && lines.some((l) => l.includes(`ردیفِ `) && l.endsWith('· رفت')),
+    'بخشِ «ارسالِ دوباره»ی دستی نتیجه را دارد');
+  ok(lines.some((l) => l.includes(' · رفت · لینکِ ثبت‌نام · دکمهٔ ارسالِ مستقیم')),
+    'ارسالِ مستقیم از دکمه هم در همان خطِ زمانی هست');
+  ok(!report.includes('09120000000') && !report.includes('۰۹۱۲۰۰۰۰۰۰۰') && !report.includes(tag + ' ردِ لحظه‌ای')
+    && !report.includes('09121112233') && !report.includes('۰۹۱۲۱۱۱۲۲۳۳'),
+    '**نباید بیفتد:** شمارهٔ بیمار یا متنِ پیام در گزارش');
+  await db.auditEvent.deleteMany({ where: { id: { in: [manual.id, directSms.id] } } });
 } finally {
   const vids = (await db.visit.findMany({ where: { patient: { code: { startsWith: tag } } }, select: { id: true } })).map((x) => x.id);
   await db.domainEvent.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } }).catch(() => {});

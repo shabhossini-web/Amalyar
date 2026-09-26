@@ -216,6 +216,14 @@ jobs:
           if grep -rn "sendForStaff" src/auth src/platform; then
             echo "مسیرِ عمومی نباید علتِ داخلیِ پیامک را نشان دهد"; exit 1
           fi
+          # گزارشِ عیب‌یابیِ پیامک (خطِ زمانیِ تلاش‌ها، زمانِ روشن‌شدنِ سرور) فقط برای ادمین به بالا.
+          node -e "
+          const s = require('fs').readFileSync('src/patients/summary.controller.ts', 'utf8');
+          const i = s.search(/@Get\\(.reminders\\/diagnostics.\\)/);
+          if (i < 0 || !/@MinLevel\\(LEVEL\\.(ADMIN|SUPER_ADMIN)\\)/.test(s.slice(Math.max(0, i - 400), i))) {
+            console.error('گزارشِ عیب‌یابیِ پیامک باید پشتِ سطحِ ادمین باشد'); process.exit(1);
+          }
+          "
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js
