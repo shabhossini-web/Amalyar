@@ -729,7 +729,10 @@ export class RemindersService {
         && r.createdAt.getTime() >= e.at.getTime() && r.createdAt.getTime() - e.at.getTime() < 120_000);
       const sz = row ? size(row.text) : null;
       const why = typeof payload.error === 'string' && payload.error.trim() ? ` · ${payload.error.trim().slice(0, 90)}` : '';
+      /* شمارهٔ ردیف لازم است: «همان پیام بعدتر رفت» (علتِ بیرونی) با «پیامِ تازه‌ای با متنِ
+         دیگر رفت» (علت در خودِ متن) فقط از روی آن جدا می‌شود. */
       timeline.push({ t: e.at.getTime(), line: `${at(e.at)} · ${OUTCOME[e.type] ?? e.type} · ${kindFa(row?.kind ?? payload.kind)} · ${code(row)}`
+        + (e.refId ? ` · ردیفِ ${fa(e.refId)}` : '')
         + (sz ? ` · ${fa(sz.n)} نویسه / ${fa(sz.parts)} بخش` : '')
         + ` · ${manual ? '«ارسالِ دوباره»ی دستی' : 'خودکار'}${why}` });
     }
