@@ -88,6 +88,96 @@ try {
   ok(await dual.locator('.pa-host.on').count() === 1, 'فقط یکی به‌عنوان اصلی نشانه خورده');
   ok((await dual.locator('.pa-host.on').innerText()).trim() === 'dual.amalyar.com', 'و همان primaryِ سرور است');
 
+  console.log('\n۶) «تغییرِ نشانی»: پنجره، پیش‌نمایشِ زیردامنه، ثبت، راهنمای Coolify');
+  const shots = process.env.E2E_SHOTS;
+  let posted = null;
+  await p.route('**/api/platform/tenants/t-solo/domains', async (r) => {
+    posted = JSON.parse(r.request().postData() || '{}');
+    const custom = !posted.hostname.endsWith('.amalyar.com');
+    await json(r, {
+      id: 't-solo', hostname: posted.hostname, shared: true,
+      domains: [{ hostname: posted.hostname, primary: true }, { hostname: 'solo.amalyar.com', primary: false }],
+      added: { hostname: posted.hostname, automatic: !custom },
+    });
+  });
+  ok(await solo.locator('.pa-soft').count() === 1, 'دکمهٔ «تغییرِ نشانی» روی کارتِ شرکت هست');
+  if (shots) await p.screenshot({ path: `${shots}/platform-domain-list.png` });
+  await solo.locator('.pa-soft').click();
+  const dlg = p.locator('.pa-addr');
+  await dlg.waitFor({ timeout: 5000 });
+  ok(await dlg.locator('.pa-addr-list li').count() === 1, 'پنجره نشانیِ فعلی را نشان می‌دهد');
+  await dlg.locator('#pa-addr-new').fill('DrNew');
+  ok((await dlg.locator('.pa-addr-preview').innerText()).trim() === 'drnew.amalyar.com',
+    'نامِ بی‌نقطه → زیردامنهٔ همان دامنه، با حروفِ کوچک');
+  await dlg.locator('.pa-primary-btn').click();
+  await dlg.locator('.pa-addr-next').waitFor({ timeout: 5000 });
+  ok(posted?.hostname === 'drnew.amalyar.com', `نشانیِ کامل به سرور رفت (${posted?.hostname})`);
+  const next = await dlg.locator('.pa-addr-next').innerText();
+  ok(/همین حالا/.test(next) && !/Coolify/.test(next),
+    'زیردامنهٔ amalyar.com: «همین حالا باز می‌شود»، بی‌کارِ دستیِ Coolify (wildcard)');
+  ok(/دوباره وارد/.test(next), 'یادآوریِ ورودِ دوباره و ثبتِ دوبارهٔ اثرِ انگشت');
+  ok((await dlg.locator('.pa-addr-list li.on a').innerText()).trim() === 'drnew.amalyar.com', 'در پنجره نشانیِ تازه اصلی است');
+  if (shots) await p.screenshot({ path: `${shots}/platform-domain-dialog.png` });
+  /* دامنهٔ خودِ مشتری: گواهی و مسیرِ wildcard آن را نمی‌پوشاند — راهنمای DNS و Coolify لازم است. */
+  await dlg.locator('#pa-addr-new').fill('clinic-gorji.ir');
+  await dlg.locator('.pa-primary-btn').click();
+  await p.waitForFunction(() => /Coolify/.test(document.querySelector('.pa-addr-next')?.innerText ?? ''), null, { timeout: 5000 });
+  const manual = await dlg.locator('.pa-addr-next').innerText();
+  ok(manual.includes('https://clinic-gorji.ir/api') && /DNS/.test(manual), 'دامنهٔ خودِ مشتری: راهنمای DNS و Coolify با هر دو نشانی');
+  /* نامِ بی‌نقطه حالا زیردامنهٔ **دامنهٔ اصلیِ تازه** می‌شود (clinic-gorji.ir)، نه amalyar.com. */
+  await dlg.locator('#pa-addr-new').fill('drnew');
+  const pv = (await dlg.locator('.pa-addr-preview').innerText()).trim();
+  ok(pv === 'drnew.clinic-gorji.ir', `پیش‌نمایش از دامنهٔ اصلیِ فعلی پیروی می‌کند (${pv})`);
+  /* برگرداندن به drnew.amalyar.com برای ادامهٔ سنجه‌ها — نشانیِ کامل */
+  await dlg.locator('#pa-addr-new').fill('drnew.amalyar.com');
+  await dlg.locator('.pa-primary-btn').click();
+  await p.waitForFunction(() => /همین حالا/.test(document.querySelector('.pa-addr-next')?.innerText ?? ''), null, { timeout: 5000 });
+  await dlg.locator('.pa-ghost').click();
+  await p.waitForTimeout(500);
+  const soloAfter = p.locator('.pa-row', { hasText: 'کلینیکِ تک‌دامنه' });
+  ok((await soloAfter.locator('.pa-host.on').innerText()).trim() === 'drnew.amalyar.com', 'کارتِ شرکت بی‌بارگذاریِ دوباره تازه شد');
+  ok(await soloAfter.locator('.pa-host').count() === 2, 'نشانیِ قبلی هم روی کارت ماند');
+
+  console.log('\n۷) حذفِ نشانیِ فرعی دو قدم دارد و هشدار می‌دهد');
+  let removed = null;
+  await p.route('**/api/platform/tenants/t-solo/domains/remove', async (r) => {
+    removed = JSON.parse(r.request().postData() || '{}');
+    await json(r, { id: 't-solo', hostname: 'drnew.amalyar.com', shared: false, domains: [{ hostname: 'drnew.amalyar.com', primary: true }] });
+  });
+  await soloAfter.locator('.pa-soft').click();
+  const dlg2 = p.locator('.pa-addr');
+  await dlg2.waitFor({ timeout: 5000 });
+  await dlg2.locator('.pa-addr-del').click();
+  await p.waitForTimeout(300);
+  ok(removed === null && await dlg2.locator('.pa-addr-warn').count() === 1, 'کلیکِ اول فقط هشدار می‌دهد، حذف نمی‌کند');
+  await dlg2.locator('.pa-addr-del').click();
+  await p.waitForTimeout(500);
+  ok(removed?.hostname === 'solo.amalyar.com', 'کلیکِ دوم حذف کرد');
+  ok(await dlg2.locator('.pa-addr-list li').count() === 1, 'فهرستِ پنجره تازه شد');
+  await dlg2.locator('.pa-ghost').click();
+  await p.waitForTimeout(400);
+
+  console.log('\n۸) گوشی: پنجره در عرضِ ۳۹۰ جا می‌شود');
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.locator('.pa-row', { hasText: 'کلینیکِ دو‌دامنه' }).locator('.pa-soft').click();
+  const dlg3 = p.locator('.pa-addr');
+  await dlg3.waitFor({ timeout: 5000 });
+  /* پنجره با محوشدن/بزرگ‌شدن باز می‌شود؛ اندازه و عکس بعد از پایانِ حرکت، نه وسطش. */
+  const settled = () => p.waitForFunction(() => {
+    const panel = document.querySelector('.pa-addr');
+    const bg = document.querySelector('.pa-modal-bg');
+    return panel && bg && getComputedStyle(panel).opacity === '1' && getComputedStyle(bg).opacity === '1'
+      && !/matrix\(0\.9/.test(getComputedStyle(panel).transform);
+  }, null, { timeout: 5000 });
+  await settled();
+  const box = await dlg3.boundingBox();
+  ok(box && box.x >= 0 && box.x + box.width <= 390 + 1, `پنجره بیرون نمی‌زند (${Math.round(box?.x)}…${Math.round((box?.x ?? 0) + (box?.width ?? 0))})`);
+  const scroll = await p.evaluate(() => document.documentElement.scrollWidth);
+  ok(scroll <= 391, `صفحه اسکرولِ افقی نمی‌گیرد (${scroll})`);
+  if (shots) await p.screenshot({ path: `${shots}/platform-domain-mobile.png` });
+  await dlg3.locator('.pa-ghost').click();
+  await p.setViewportSize({ width: 1200, height: 900 });
+
   console.log('\n۵) پاسخِ قدیمیِ سرور (بدونِ آرایهٔ domains) صفحه را خالی نمی‌کند');
   /* پنل و API جدا دیپلوی می‌شوند؛ اگر پنل زودتر بالا بیاید، فهرستِ نشانی‌ها
      نباید ناپدید شود. */

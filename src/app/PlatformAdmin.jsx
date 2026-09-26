@@ -101,6 +101,16 @@ export default function PlatformAdmin() {
   const [form, setForm] = useState({ name: '', slug: '', hostname: '' });
   const [hostnameEdited, setHostnameEdited] = useState(false);
 
+  // نشانیِ سایتِ یک شرکت — افزودن و اصلی‌کردن، برگشت به نشانیِ قبلی، حذفِ نشانیِ فرعی
+  const [addrFor, setAddrFor] = useState(null);
+  /** کارتِ همان شرکت با پاسخِ سرور تازه می‌شود — بی‌بارگذاریِ دوبارهٔ کلِ پنل. */
+  const domainsChanged = (next) => setSnapshot((snap) => ({
+    ...snap,
+    tenants: snap.tenants.map((t) => (t.id === next.id
+      ? { ...t, hostname: next.hostname, domains: next.domains, shared: next.shared }
+      : t)),
+  }));
+
   // مودالِ حذف — دو مرحله: ارسالِ کد، سپس تایپِ شناسه + کد
   const [doomed, setDoomed] = useState(null); // شرکتِ در دستِ حذف
   const [delStep, setDelStep] = useState('confirm'); // confirm | code
@@ -496,6 +506,15 @@ export default function PlatformAdmin() {
                         <span className={`pa-badge ${status[1]}`}>{status[0]}</span>
                         <button
                           type="button"
+                          className="pa-soft"
+                          disabled={busy || tenant.status !== 'active'}
+                          onClick={() => setAddrFor(tenant)}
+                          title="نشانیِ تازه برای سایتِ این شرکت؛ نشانیِ قبلی هم کار می‌کند"
+                        >
+                          تغییرِ نشانی
+                        </button>
+                        <button
+                          type="button"
                           className="pa-danger"
                           disabled={busy || removing}
                           onClick={() => openDelete(tenant)}
@@ -563,6 +582,12 @@ export default function PlatformAdmin() {
           )}
         </div>
       )}
+
+      <AnimatePresence>
+        {addrFor && (
+          <TenantDomainsDialog tenant={addrFor} onClose={() => setAddrFor(null)} onChanged={domainsChanged} />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {doomed && (
@@ -636,6 +661,139 @@ export default function PlatformAdmin() {
         )}
       </AnimatePresence>
     </main>
+  );
+}
+
+/**
+ * نشانیِ سایتِ یک شرکت (درخواستِ مشتری، ۱۴۰۵/۰۷/۰۴).
+ *
+ * «تغییرِ نشانی» یعنی نشانیِ تازه **اضافه و اصلی** شود و نشانیِ قبلی هم کار کند؛ وگرنه
+ * هر لینکی که قبلاً برای بیماران پیامک شده (ثبت‌نام، پیگیری، پرونده) می‌شکست. داده و
+ * دیتابیس جابه‌جا نمی‌شود. کارِ دستیِ Coolify همین‌جا نوشته می‌شود — بدونِ آن نشانیِ
+ * تازه اصلاً به سرور نمی‌رسد و مدیر گمان می‌کند خرابی از ماست.
+ */
+function TenantDomainsDialog({ tenant, onClose, onChanged }) {
+  const [domains, setDomains] = useState(() => domainsOf(tenant));
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [added, setAdded] = useState('');
+  const [sure, setSure] = useState('');
+
+  const primary = domains.find((d) => d.primary)?.hostname ?? domains[0]?.hostname ?? '';
+  /* «نامِ تازه» بدونِ نقطه یعنی زیردامنه‌ای روی همان دامنهٔ اصلی — همان کاری که فرمِ ساخت می‌کند. */
+  const apex = primary.split('.').slice(-2).join('.') || 'amalyar.com';
+  const clean = input.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[/?#].*$/, '').replace(/\.$/, '');
+  const target = clean && !clean.includes('.') ? `${clean}.${apex}` : clean;
+
+  const call = async (path, hostname) => {
+    setBusy(true);
+    setError('');
+    try {
+      const next = await platformApi(`/tenants/${tenant.id}/domains${path}`, { method: 'POST', csrf: true, body: { hostname } });
+      setDomains(next.domains);
+      onChanged(next);
+      return next;
+    } catch (e) {
+      setError(e.message);
+      return null;
+    } finally {
+      setBusy(false);
+      setSure('');
+    }
+  };
+  const add = async () => {
+    if (!target || busy) return;
+    const next = await call('', target);
+    /* نشانیِ فرعیِ موجود که فقط اصلی شد `added` ندارد — از قبل کار می‌کرد، راهنما لازم نیست. */
+    if (next) { setAdded(next.added ?? null); setInput(''); }
+  };
+
+  return (
+    <Overlay
+      backdrop="pa-modal-bg"
+      panel="pa-card pa-modal pa-addr"
+      as="section"
+      onClose={onClose}
+      closable={!busy}
+      role="dialog" aria-modal="true" aria-labelledby="pa-addr-title"
+    >
+      <h2 id="pa-addr-title">نشانیِ سایتِ {tenant.name}</h2>
+      <p className="pa-modal-sub">
+        نشانیِ تازه اضافه و اصلی می‌شود و نشانیِ قبلی هم کار می‌کند تا لینک‌هایی که قبلاً برای
+        بیماران پیامک شده نشکنند. داده جابه‌جا نمی‌شود.
+      </p>
+
+      <ul className="pa-addr-list">
+        {domains.map((d) => (
+          <li key={d.hostname} className={d.primary ? 'on' : ''}>
+            <a dir="ltr" href={`https://${d.hostname}`} target="_blank" rel="noreferrer">{d.hostname}</a>
+            {d.primary ? <em>اصلی</em> : (
+              <span>
+                <button type="button" disabled={busy} onClick={() => call('/primary', d.hostname)}>اصلی کن</button>
+                {sure === d.hostname ? (
+                  <button type="button" className="pa-addr-del" disabled={busy} onClick={() => call('/remove', d.hostname)}>
+                    مطمئنم، حذف
+                  </button>
+                ) : (
+                  <button type="button" className="pa-addr-del" disabled={busy} onClick={() => setSure(d.hostname)}>حذف</button>
+                )}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {sure && (
+        <p className="pa-addr-warn">
+          با حذفِ <b dir="ltr">{sure}</b> هر لینکی که با این نشانی برای بیماران رفته دیگر باز نمی‌شود.
+        </p>
+      )}
+
+      <label htmlFor="pa-addr-new">نشانیِ تازه</label>
+      <input
+        id="pa-addr-new"
+        dir="ltr"
+        value={input}
+        onChange={(e) => { setInput(e.target.value); setError(''); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') add(); }}
+        placeholder={`new-name.${apex}`}
+        autoComplete="off"
+        spellCheck={false}
+        disabled={busy}
+      />
+      {target && target !== clean && <p className="pa-addr-preview" dir="ltr">{target}</p>}
+
+      <div className="pa-modal-actions">
+        <button type="button" className="pa-ghost" onClick={onClose} disabled={busy}>بستن</button>
+        <button type="button" className="pa-primary-btn" onClick={add} disabled={busy || !target}>
+          {busy ? 'در حالِ ثبت…' : 'ثبت و اصلی‌کردن'}
+        </button>
+      </div>
+      {error && <div className="pa-modal-err">{error}</div>}
+
+      {added && (
+        <div className="pa-addr-next" role="status">
+          {added.automatic ? (
+            <b>
+              ثبت شد و همین حالا روی <a dir="ltr" href={`https://${added.hostname}`} target="_blank" rel="noreferrer">{added.hostname}</a> باز
+              می‌شود — گواهی و مسیرِ زیردامنه‌های amalyar.com خودکار است.
+            </b>
+          ) : (
+            <>
+              <b>ثبت شد. این نشانی زیرِ amalyar.com نیست، پس دو کارِ دستی لازم است:</b>
+              <ol>
+                <li>در DNSِ همان دامنه، رکوردِ A را به IPِ سرور بدهید.</li>
+                <li>
+                  در Coolify نشانیِ <code dir="ltr">https://{added.hostname}</code> را به اپِ فرانت و
+                  {' '}<code dir="ltr">https://{added.hostname}/api</code> را به اپِ بک‌اند اضافه، ذخیره و Redeploy کنید.
+                </li>
+              </ol>
+            </>
+          )}
+          <p>کاربران روی نشانیِ تازه یک بار دوباره وارد می‌شوند و اثرِ انگشت را همان‌جا از نو ثبت می‌کنند.</p>
+        </div>
+      )}
+    </Overlay>
   );
 }
 

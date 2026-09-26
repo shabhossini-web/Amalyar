@@ -1,12 +1,17 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/sms-diagnostics
+status: active
+branch: claude/tenant-domains
 since: 2026-09-26
-paths: []
+paths:
+  - server/src/platform/platform.module.ts
+  - src/app/PlatformAdmin.jsx
+  - src/app/platform.css
+  - scripts/e2e/platform-domains.mjs
+  - scripts/e2e/platform-domain-change.mjs
 note: >-
-  لند شد: گزارشِ عیب‌یابیِ پیامک (/api/reminders/diagnostics، خطِ زمانیِ تلاش‌ها از دادهٔ خودِ سایت).
-  بعدی: تغییرِ نشانیِ سایتِ شرکت در پنلِ پلتفرم. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  تغییرِ نشانیِ سایتِ شرکت از پنلِ پلتفرم (افزودن + اصلی‌کردن؛ نشانیِ قبلی کار می‌کند).
+  بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
