@@ -3,7 +3,8 @@ import './hospital-directory.css';
 import { api } from '../lib/api.js';
 const sectors = { private: 'خصوصی', public: 'دولتی', nonprofit: 'عمومی غیردولتی', charity: 'خیریه', military: 'نیروهای مسلح' };
 const blank = { name: '', province: 'تهران', city: 'تهران', phone: '', address: '', sector: '', website: '', sourceUrl: '', sourceName: '', verified: false, active: true };
-export default function HospitalDirectory({ platformApi, onChanged = () => {} }) {
+/* `embedded`: داخلِ بخشِ تاشوی پنلِ پلتفرم — قاب و سرخط را همان بخش دارد، پس این‌جا تکرار نمی‌شوند. */
+export default function HospitalDirectory({ platformApi, onChanged = () => {}, embedded = false }) {
   const central = !!platformApi;
   const [data, setData] = useState(null), [q, setQ] = useState(''), [province, setProvince] = useState('تهران'), [city, setCity] = useState(''), [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState(''), [selected, setSelected] = useState([]), [sector, setSector] = useState('');
@@ -23,8 +24,9 @@ export default function HospitalDirectory({ platformApi, onChanged = () => {} })
     setMessage(`${result.created} افزوده شد؛ ${result.linked} مورد متصل بود یا متصل شد. ${result.pending ? `${result.pending} مورد نیاز به تعیین نوع تعرفه یا اتصال به تعریف موجود دارد.` : ''}`);
   });
   const save = event => { event.preventDefault(); run(async () => { await platformApi('/hospitals', { method: 'POST', csrf: true, body: form }); setForm(null); setMessage('اطلاعات مرکزی ذخیره شد؛ ویرایش‌های شرکت‌ها حفظ می‌شود.'); }); };
-  return <section className={central ? 'pa-card pa-jobs' : 'df-directory'} dir="rtl">
-    <h2>فهرست مرکزی بیمارستان‌ها</h2>
+  const Root = embedded ? 'div' : 'section';
+  return <Root className={embedded ? 'pa-dir' : central ? 'pa-card pa-jobs' : 'df-directory'} dir="rtl">
+    {!embedded && <h2>فهرست مرکزی بیمارستان‌ها</h2>}
     <p>جستجو بر اساس نام، استان، شهر و نشانی. اطلاعات هر شرکت پس از دریافت، مستقل قابل تکمیل و ویرایش است.</p>
     {data?.coverage && <p>{data.coverage.total} بیمارستان در فهرست؛ {data.coverage.verified} مورد با اطلاعات تماس بررسی‌شده. پوشش فهرست در حال تکمیل است.</p>}
     <div className="df-directory-tools">
@@ -67,5 +69,5 @@ export default function HospitalDirectory({ platformApi, onChanged = () => {} })
       {data && !data.rows?.length && <p>موردی پیدا نشد؛ فیلترها را تغییر دهید.</p>}
     </div>
     <div className="df-directory-tools"><button disabled={busy || page <= 1} onClick={() => setPage(p => p - 1)}>صفحه قبل</button><span>صفحه {data?.page || page} از {data?.pages || 1} · {data?.total || 0} نتیجه</span><button disabled={busy || page >= (data?.pages || 1)} onClick={() => setPage(p => p + 1)}>صفحه بعد</button></div>
-  </section>;
+  </Root>;
 }

@@ -71,6 +71,16 @@ try {
   console.log('PASS: older search cannot replace latest result; no mobile horizontal overflow');
   row.sectorReview.requiresConfirmation = true;
   await page.goto(`${base}/platform-admin`);
+  /* در پنلِ پلتفرم فهرستِ مرکزی تاشو و بسته است و تا باز نشود هیچ جستجویی نمی‌زند. */
+  const fold = page.getByRole('button', { name: 'فهرست مرکزی بیمارستان‌ها', exact: true });
+  await fold.waitFor();
+  const searchesBefore = searches.length;
+  await delay(400);
+  assert.equal(await fold.getAttribute('aria-expanded'), 'false');
+  assert.equal(searches.length, searchesBefore);
+  await fold.click();
+  assert.equal(await fold.getAttribute('aria-expanded'), 'true');
+  console.log('PASS: central directory is folded by default and searches only once opened');
   await page.getByRole('button', { name: 'افزودن بیمارستان مرکزی', exact: true }).click();
   await page.locator('.df-directory-form').getByLabel('نام', { exact: true }).fill('بیمارستان مرکزی تست');
   await page.locator('.df-directory-form').getByLabel('تلفن', { exact: true }).fill('02112345678');
