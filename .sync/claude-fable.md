@@ -1,12 +1,19 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/theatre-owners
+status: active
+branch: claude/sms-postop-fix
 since: 2026-09-26
-paths: []
+paths:
+  - server/src/sms/sms.service.ts
+  - server/src/reminders/send-reminders.ts
+  - server/src/patients/intake.service.ts
+  - server/src/patients/summary.service.ts
+  - server/src/patients/portal.service.ts
+  - src/app/Reminders.jsx
+  - src/app/Intake.jsx
 note: >-
-  لند شد: فیلترِ «مالِ کیست» روی تختهٔ اتاقِ عمل، و گفتگوی خصوصیِ دیگران حتی برای سوپرادمین بسته
-  (قانونِ ۲۹، استثنا + نگهبانِ CI). بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  پیامکِ مراقبتِ بعد از عمل «موقتاً در دسترس نیست» می‌گفت: علتِ ردِ ملی‌پیامک دور ریخته می‌شد.
+  علت حالا در دفترِ یادآوری و دکمه‌های کارکنان؛ «لغو11» لاتین. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

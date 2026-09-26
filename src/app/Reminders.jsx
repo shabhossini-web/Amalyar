@@ -88,8 +88,12 @@ export default function Reminders() {
     setRowBusy(r.id);
     try {
       const fresh = await api(`/reminders/${r.id}/${what}`, { method: 'POST' });
+      /* ارسالِ دوباره همان لحظه امتحان می‌شود؛ اگر باز رد شد «در صف نشست» دروغ است.
+         علتِ کامل بلند است و جایش زیرِ خودِ ردیف است، نه توستِ دوثانیه‌ای. */
       setToast(what === 'retry'
-        ? (fresh?.status === 'sent' ? 'فرستاده شد' : `دوباره در صف نشست (${fresh?.statusFa ?? statusFa(fresh?.status)})`)
+        ? (fresh?.status === 'sent' ? 'فرستاده شد'
+          : fresh?.status === 'failed' ? 'باز هم نرفت — علتش زیرِ همان ردیف آمده است'
+          : `دوباره در صف نشست (${fresh?.statusFa ?? statusFa(fresh?.status)})`)
         : 'لغو شد و از دفتر برداشته شد');
       await load();
     } catch (e) { setToast(e.message); } finally { setRowBusy(0); }

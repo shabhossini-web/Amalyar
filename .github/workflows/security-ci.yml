@@ -105,7 +105,97 @@ jobs:
       - name: Verify Platform Admin SMS uses origin-bound WebOTP
         working-directory: server
         run: |
-          node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='test'; process.env.MELI_API_KEY='ci-key'; process.env.MELI_FROM='ci-line'; let payload; global.fetch=async (_url,init) => { payload=JSON.parse(init.body); return { ok:true, json:async()=>({recIds:[1]}) }; }; new SmsService().sendOtp('09000000000','123456','admin-staging.amalyar.com').then((result) => { if (!result.sent || !payload?.text?.endsWith('@admin-staging.amalyar.com #123456')) process.exit(1); }).catch(() => process.exit(1));"
+          node -e "const { SmsService } = require('./dist/sms/sms.service'); process.env.NODE_ENV='test'; process.env.MELI_API_KEY='ci-key'; process.env.MELI_FROM='ci-line'; let payload; global.fetch=async (_url,init) => { payload=JSON.parse(init.body); return { ok:true, json:async()=>({recIds:[3741437414]}) }; }; new SmsService().sendOtp('09000000000','123456','admin-staging.amalyar.com').then((result) => { if (!result.sent || !payload?.text?.endsWith('@admin-staging.amalyar.com #123456')) process.exit(1); }).catch(() => process.exit(1));"
+      # «چرا پیامک نرفت» نباید گم شود. پیامِ عمومیِ ۵۰۳ («موقتاً در دسترس نیست») عمداً
+      # کلی است چون تا صفحهٔ ورودِ ناشناس هم می‌رسد؛ ولی دفترِ یادآوری‌ها و دکمه‌های
+      # پنلِ کارکنان باید علتِ واقعی را ببینند — کلید/خط تنظیم نیست، یا متنِ ردِ خودِ
+      # ملی‌پیامک. تا ۱۴۰۵/۰۷/۰۴ پیامکِ مراقبتِ بعد از عمل فقط «موقتاً در دسترس نیست»
+      # می‌گفت و هیچ راهی برای فهمیدنِ علت نبود. عددِ کوچکِ recIds کدِ خطاست، نه شناسه.
+      - name: Verify the SMS rejection reason reaches staff, never the public login
+        working-directory: server
+        run: |
+          set -e
+          node -e "
+          const { SmsService } = require('./dist/sms/sms.service');
+          const { sendReminders } = require('./dist/reminders/send-reminders');
+          const fail = (m) => { console.error(m); process.exit(1); };
+          const PUBLIC = 'سرویس پیامک موقتاً در دسترس نیست';
+          let payload = null, reply = null;
+          global.fetch = async (_url, init) => { payload = JSON.parse(init.body); return reply; };
+          const answer = (status, body) => { reply = { ok: status < 400, status, json: async () => body }; };
+          const sms = new SmsService();
+          const rejected = async (label) => {
+            try { await sms.send('09121234567', 'مراقبت بعد از عمل'); } catch (e) { return e; }
+            fail(label + ': ردِ ملی‌پیامک در production باید خطا بدهد');
+          };
+          (async () => {
+            process.env.NODE_ENV = 'production';
+            // ① کلید/خط تنظیم نیست → ۵۰۳ با پیامِ کلی + علتِ راه‌اندازی برای کارکنان
+            delete process.env.MELI_API_KEY; delete process.env.MELI_FROM;
+            let e = await rejected('بی‌کلید');
+            if (e.getStatus?.() !== 503 || e.message !== PUBLIC) fail('پیامِ عمومی باید همان ۵۰۳ِ کلی بماند: ' + e.message);
+            if (e.smsOutcome !== 'unconfigured' || !/MELI_API_KEY/.test(e.smsDetail || '')) fail('علتِ «تنظیم نشده» باید روی smsDetail بنشیند: ' + e.smsDetail);
+            process.env.MELI_API_KEY = 'ci-key'; process.env.MELI_FROM = 'ci-line';
+            // ② متنِ ردِ خودِ ملی‌پیامک (HTTP 200 با recIdsِ خالی) — بی‌شماره
+            answer(200, { recIds: [], status: 'متن حاوی لینک است؛ گیرنده 09121234567، کد 123456' });
+            e = await rejected('متنِ رد');
+            if (e.getStatus?.() !== 503 || e.message !== PUBLIC || e.smsOutcome !== 'rejected') fail('ردِ provider باید ۵۰۳ِ کلی با smsOutcome=rejected باشد');
+            if (!/لینک/.test(e.smsDetail || '')) fail('متنِ ردِ ملی‌پیامک گم شد: ' + e.smsDetail);
+            if (/[0-9]{4,}/.test(e.smsDetail)) fail('شماره نباید در علت بماند: ' + e.smsDetail);
+            // ③ کدِ خطا در recIds — عددِ کوچک کد است، نه شناسهٔ ارسال
+            answer(200, { recIds: [14] });
+            e = await rejected('کدِ ۱۴');
+            if (!/لینک/.test(e.smsDetail || '') || !/14/.test(e.smsDetail)) fail('کدِ ۱۴ ترجمه نشد: ' + e.smsDetail);
+            answer(200, { recIds: [2], status: '' });
+            e = await rejected('کدِ ۲');
+            if (!/اعتبار/.test(e.smsDetail || '')) fail('کدِ ۲ (اعتبار) ترجمه نشد: ' + e.smsDetail);
+            // ④ پاسخِ غیرِ JSON با HTTP 500
+            reply = { ok: false, status: 500, json: async () => { throw new Error('html'); } };
+            e = await rejected('HTTP 500');
+            if (!/500/.test(e.smsDetail || '')) fail('کدِ HTTP باید در علت بیاید: ' + e.smsDetail);
+            // ⑤ دکمه‌های کارکنان علت را می‌بینند؛ مسیرِ OTP همان پیامِ کلی
+            answer(200, { recIds: [14] });
+            try { await sms.sendForStaff('09121234567', 'x'); fail('sendForStaff باید خطا بدهد'); }
+            catch (x) { if (x.getStatus?.() !== 503 || !/لینک/.test(x.message)) fail('دکمهٔ کارکنان علت را نمی‌بیند: ' + x.message); }
+            try { await sms.sendOtp('09121234567', '123456'); fail('OTP باید خطا بدهد'); }
+            catch (x) { if (x.message !== PUBLIC) fail('OTPِ عمومی نباید علتِ داخلی را نشان دهد: ' + x.message); }
+            // ⑥ ارسالِ موفق: شناسهٔ واقعیِ چندرقمی + «لغو11» با رقمِ لاتین، دقیقاً یک‌بار
+            answer(200, { recIds: [3741437414], status: 'ارسال موفق بود' });
+            let r = await sms.send('09121234567', 'مراقبت بعد از عمل\nلغو۱۱');
+            if (!r.sent || r.providerId !== '3741437414') fail('ارسالِ موفق شناخته نشد');
+            if (!payload.text.endsWith('\nلغو11') || payload.text.split('لغو').length !== 2) fail('«لغو11» باید دقیقاً یک‌بار ته پیام باشد: ' + JSON.stringify(payload.text));
+            // ⑦ بیرون از production ارسال نمی‌شکند ولی علت برمی‌گردد
+            process.env.NODE_ENV = 'test';
+            answer(200, { recIds: [], status: 'خط فرستنده معتبر نیست' });
+            r = await sms.send('09121234567', 'x');
+            if (r.sent || r.stub || !/خط فرستنده/.test(r.detail || '')) fail('بیرون از production علت باید برگردد: ' + JSON.stringify(r));
+            // ⑧ دفترِ یادآوری‌ها و کارِ «ارسالِ دوباره» علتِ واقعی را می‌گیرند، نه پیامِ کلی
+            process.env.NODE_ENV = 'production';
+            answer(200, { recIds: [14] });
+            const writes = [], events = [];
+            const row = { id: 7, phone: '09121234567', text: 'مراقبت', attempts: 0, kind: 'post_op_care', patientId: 1, visitId: 2 };
+            const client = {
+              reminder: {
+                updateMany: async (q) => ({ count: q.where && q.where.id === 7 ? 1 : 0 }),
+                findMany: async () => [row],
+                update: async (q) => { writes.push(q.data); return {}; },
+              },
+              domainEvent: { create: async (q) => { events.push(q.data); } },
+            };
+            const res = await sendReminders(client, sms, [7]);
+            const w = writes[writes.length - 1] || {};
+            if (res.failed !== 1 || w.status !== 'failed') fail('ردِ قطعی باید failed شود: ' + JSON.stringify(w));
+            if (!/لینک/.test(w.error || '') || w.error.includes(PUBLIC)) fail('دفتر علتِ واقعی را ندارد: ' + w.error);
+            const ev = events.find((x) => x.type === 'sms.failed');
+            if (!ev || ev.payload.error !== w.error) fail('کارِ «ارسالِ دوباره» باید همان علت را ببرد');
+            console.log('sms reason ok');
+          })().catch((x) => fail(String((x && x.stack) || x)));
+          "
+          # مسیرِ عمومیِ ورود و پنلِ پلتفرم هرگز از sendForStaff نمی‌گذرند — علتِ داخلی
+          # (کلید تنظیم نیست، اعتبار تمام شده) نباید به بازدیدکنندهٔ ناشناس برسد.
+          if grep -rn "sendForStaff" src/auth src/platform; then
+            echo "مسیرِ عمومی نباید علتِ داخلیِ پیامک را نشان دهد"; exit 1
+          fi
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js

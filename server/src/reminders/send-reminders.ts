@@ -38,13 +38,16 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
     try {
       if (!row.phone) throw new Error('شماره‌ای ثبت نشده');
       const result = await sms.send(row.phone, row.text);
-      if (!result.sent && !result.stub) throw new Error('سرویس پیامک ارسال را نپذیرفت');
+      if (!result.sent && !result.stub) throw new Error(result.detail ?? 'سرویس پیامک ارسال را نپذیرفت');
       accepted = result.sent;
       await client.reminder.update({ where: { id: row.id }, data: { status: result.stub ? 'simulated' : 'sent', sentAt: result.sent ? new Date() : null, providerId: result.providerId ?? null, deliveryStatus: result.sent ? 'unknown' : 'not_sent', error: result.stub ? 'حالت آزمایشی؛ پیام واقعی ارسال نشده است' : null } });
       if (result.sent) sent++; else skipped++;
       if (result.sent) await emitSms(client, row, 'sms.sent', { providerId: result.providerId ?? null });
     } catch (e) {
       failed++;
+      /* علتِ واقعی (`smsDetail`: کلید/خط تنظیم نیست، یا متنِ ردِ ملی‌پیامک)، نه پیامِ
+         عمومیِ «موقتاً در دسترس نیست» — این دفتر را فقط کارکنان می‌بینند. */
+      const reason = String((e as any)?.smsDetail ?? (e instanceof Error ? e.message : e));
       const uncertain = accepted || (e as any)?.smsOutcome === 'unknown';
       const attempts = (row.attempts ?? 0) + 1;
       /* تلاشِ بعدی: ۵ → ۱۵ → ۴۵ دقیقه. بعد از سومی دیگر `uncertain` نمی‌ماند،
@@ -61,10 +64,10 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
           deliveryStatus: uncertain && retry ? 'unknown' : 'not_sent',
           error: uncertain
             ? (retry ? UNCERTAIN_TEXT : 'پس از سه تلاش نتیجهٔ ارسال مشخص نشد')
-            : String(e instanceof Error ? e.message : e).slice(0, 300),
+            : reason.slice(0, 300),
         },
       });
-      await emitSms(client, row, retry ? 'sms.uncertain' : 'sms.failed', { error: String(e instanceof Error ? e.message : e).slice(0, 300), attempts });
+      await emitSms(client, row, retry ? 'sms.uncertain' : 'sms.failed', { error: reason.slice(0, 300), attempts });
     }
   }
   return { due: due.length, sent, failed, skipped };
