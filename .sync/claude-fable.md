@@ -1,18 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/platform-queue
 since: 2026-09-26
-paths:
-  - src/app/PlatformAdmin.jsx
-  - src/app/HospitalDirectory.jsx
-  - src/app/platform.css
-  - server/src/platform/platform.module.ts
-  - scripts/e2e/platform-queue.mjs
-  - scripts/e2e/hospital-directory-ui.mjs
+paths: []
 note: >-
-  پنلِ پلتفرم: «صف عملیات» فقط کارهای باز (در صف/در حال ساخت/ناموفق) + «انجام‌شده‌ها»ی تاشو؛
-  فهرستِ مرکزیِ بیمارستان‌ها تاشو و بسته. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  لند شد: «صف عملیات»ِ پنلِ پلتفرم فقط کارهای باز + «انجام‌شده‌ها»ی تاشو؛ فهرستِ مرکزیِ
+  بیمارستان‌ها تاشو. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
