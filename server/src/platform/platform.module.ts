@@ -228,6 +228,18 @@ class CentralAiDto {
 /** دامنهٔ کدِ حذف به شناسهٔ همان شرکت گره می‌خورد. */
 const deletionScope = (tenantId: string) => `tenant-delete:${tenantId}`;
 
+/**
+ * کارهای **باز** (هر وضعیتی جز `succeeded`: در صف، در حال اجرا، ناموفق) همیشه در
+ * `snapshot` می‌آیند — هر قدر هم قدیمی — و از تمام‌شده‌ها فقط تازه‌ترین‌ها.
+ *
+ * ⚠️ تا ۱۴۰۵/۰۷/۰۴ این یک `take: 30`ِ ساده به ترتیبِ ساخت بود و پنل همهٔ آن سی‌تا را
+ * زیرِ «صف عملیات» نشان می‌داد؛ مالک پرسید چرا شرکتی که در «شرکت‌های فعال» است هنوز
+ * در صف است. پنل حالا تمام‌شده‌ها را جدا و تاشو نشان می‌دهد و می‌گوید «کاری در صف
+ * نیست» — پس کارِ باز نباید فقط چون سی کارِ تازه‌تر آمده از پاسخ بیفتد، وگرنه یک ساختِ
+ * ناموفقِ قدیمی بی‌صدا ناپدید می‌شد و پنل دروغ می‌گفت. این سقف فقط ترمزِ اضطراری است.
+ */
+const OPEN_JOBS_CAP = 200;
+
 @Injectable()
 export class PlatformAuthService {
   constructor(
@@ -555,7 +567,7 @@ export class PlatformProvisioningService {
   } as const;
 
   async snapshot() {
-    const [tenants, jobs] = await Promise.all([
+    const [tenants, openJobs, doneJobs] = await Promise.all([
       this.control.tenant.findMany({
         orderBy: { createdAt: 'desc' },
         select: {
@@ -584,6 +596,13 @@ export class PlatformProvisioningService {
         },
       }),
       this.control.provisioningJob.findMany({
+        where: { status: { not: 'succeeded' } },
+        orderBy: { createdAt: 'desc' },
+        take: OPEN_JOBS_CAP,
+        select: this.jobSelect,
+      }),
+      this.control.provisioningJob.findMany({
+        where: { status: 'succeeded' },
         orderBy: { createdAt: 'desc' },
         take: 30,
         select: this.jobSelect,
@@ -602,7 +621,7 @@ export class PlatformProvisioningService {
         shared: tenant.domains.length > 1,
         createdAt: tenant.createdAt,
       })),
-      jobs,
+      jobs: [...openJobs, ...doneJobs],
       deletions: await this.deletionJobs(),
     };
   }
@@ -727,12 +746,23 @@ export class PlatformProvisioningService {
     return job;
   }
 
+  /** همان قاعدهٔ `snapshot()`: حذفِ باز یا ناموفق هرگز از پاسخ نمی‌افتد. */
   async deletionJobs() {
-    return this.control.tenantDeletionJob.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 20,
-      select: this.deletionSelect,
-    });
+    const [open, done] = await Promise.all([
+      this.control.tenantDeletionJob.findMany({
+        where: { status: { not: 'succeeded' } },
+        orderBy: { createdAt: 'desc' },
+        take: OPEN_JOBS_CAP,
+        select: this.deletionSelect,
+      }),
+      this.control.tenantDeletionJob.findMany({
+        where: { status: 'succeeded' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        select: this.deletionSelect,
+      }),
+    ]);
+    return [...open, ...done];
   }
 
   /**

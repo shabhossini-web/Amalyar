@@ -157,6 +157,43 @@
 .pa-job-foot button { padding: 6px 8px; border-radius: 8px; color: #fda4af; background: rgba(251, 113, 133, .08); }
 .pa-empty { padding: 24px; text-align: center; color: var(--text3); font-size: 13px; }
 
+/* «انجام‌شده‌ها»ی صفِ عملیات — تاریخچه، نه صف؛ بسته به‌طورِ پیش‌فرض و کم‌رنگ‌تر از کارِ باز. */
+.pa-history { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(var(--brand-soft-rgb), .14); }
+.pa-history-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; border-radius: 12px;
+  font-size: 12.5px; font-weight: 800; color: var(--text2);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .22) !important;
+}
+.pa-history-btn:hover { color: var(--text1); }
+.pa-history-btn i {
+  font-style: normal; font-size: 11px; padding: 1px 9px; border-radius: 99px;
+  color: #34d399; background: rgba(52, 211, 153, .1);
+}
+.pa-history-btn svg { transition: transform .2s cubic-bezier(.2, .7, .2, 1); }
+.pa-history-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.pa-history-note { margin: 12px 2px 10px; font-size: 11px; color: var(--text3); }
+.pa-job-done { opacity: .78; }
+
+/* بخشِ تاشو (فهرستِ مرکزیِ بیمارستان‌ها). کلِ ردیفِ سربرگ دکمه است: `::after`ِ دکمه
+   روی ردیف کشیده می‌شود، پس ساختارِ سرخط (`h2 > button`) معتبر می‌ماند و جای کلیک بزرگ است. */
+.pa-fold-title { position: relative; margin-bottom: 0; }
+.pa-fold.is-open .pa-fold-title { margin-bottom: 18px; }
+.pa-fold-title > span svg { display: block; }
+.pa-fold-title h2 button { padding: 0; font: inherit; color: inherit; background: none; text-align: start; }
+.pa-fold-title h2 button::after { content: ''; position: absolute; inset: -8px; border-radius: 16px; }
+.pa-fold-title h2 button:focus-visible { outline: none; }
+.pa-fold-title h2 button:focus-visible::after { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.pa-fold-caret {
+  flex-shrink: 0; margin-inline-start: auto; color: var(--text3);
+  transition: transform .2s cubic-bezier(.2, .7, .2, 1), color .25s;
+}
+.pa-fold-title:hover .pa-fold-caret { color: var(--text1); }
+.pa-fold.is-open .pa-fold-caret { transform: rotate(180deg); }
+.pa-history-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .pa-fold-caret, .pa-history-btn svg { transition: none; }
+}
+
 /* تعرفه‌های سراسری */
 .pa-tariff-form {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;

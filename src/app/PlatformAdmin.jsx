@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import Mark from '../components/Mark.jsx';
 import './platform.css';
 import Overlay from '../ui/Overlay.jsx';
+import { Caret, Hospital } from '../ui/icons.jsx';
 
 const API = typeof window === 'undefined' ? '/api/platform' : `${window.location.origin}/api/platform`;
 
@@ -51,7 +52,7 @@ async function platformApi(path, { method = 'GET', body, csrf = false } = {}) {
 const STATUS = {
   queued: ['در صف', 'wait'],
   running: ['در حال ساخت', 'run'],
-  succeeded: ['آماده', 'ok'],
+  succeeded: ['ساخته شد', 'ok'],
   failed: ['ناموفق', 'fail'],
 };
 
@@ -90,6 +91,13 @@ const domainsOf = (tenant) => (
 /// یک ثابت، تا هیچ‌جا snapshot با آرایهٔ جاافتاده ست نشود (باگِ واقعیِ خروج).
 const EMPTY_SNAPSHOT = { tenants: [], jobs: [], deletions: [] };
 
+/**
+ * «تمام‌شده» فقط `succeeded` است؛ هر وضعیتِ دیگری — حتی وضعیتی که این نسخه نمی‌شناسد —
+ * باز حساب می‌شود تا هیچ کارِ ناتمامی از صف پنهان نشود. سرور هم همین مرز را می‌کشد
+ * (`OPEN_JOBS_CAP` در `platform.module.ts`).
+ */
+const isDone = (job) => job.status === 'succeeded';
+
 export default function PlatformAdmin() {
   const [phase, setPhase] = useState('loading');
   const [authOptions, setAuthOptions] = useState([]);
@@ -123,6 +131,22 @@ export default function PlatformAdmin() {
       .some((job) => job.status === 'queued' || job.status === 'running'),
     [snapshot.jobs, snapshot.deletions],
   );
+
+  /**
+   * «صف عملیات» فقط کارهای باز را نشان می‌دهد؛ تمام‌شده‌ها (ساخت و حذف) زیرِ
+   * «انجام‌شده‌ها»ی تاشو می‌روند. تا ۱۴۰۵/۰۷/۰۴ همهٔ سی کارِ آخر زیرِ عنوانِ «صف»
+   * بودند و شمارِ کنارش هم همان سی را می‌شمرد؛ شرکتی که «آماده» و در «شرکت‌های فعال»
+   * بود هنوز «در صف» به نظر می‌رسید.
+   */
+  const queue = useMemo(() => ({
+    open: snapshot.jobs.filter((job) => !isDone(job)),
+    deletions: snapshot.deletions.filter((job) => !isDone(job)),
+    done: [
+      ...snapshot.jobs.filter(isDone).map((job) => ({ ...job, kind: 'build' })),
+      ...snapshot.deletions.filter(isDone).map((job) => ({ ...job, kind: 'delete' })),
+    ].sort((a, b) => new Date(b.finishedAt ?? b.updatedAt) - new Date(a.finishedAt ?? a.updatedAt)),
+  }), [snapshot.jobs, snapshot.deletions]);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const stats = useMemo(() => {
     const all = [...snapshot.jobs, ...snapshot.deletions];
@@ -459,7 +483,7 @@ export default function PlatformAdmin() {
 
             <section className="pa-card">
               <div className="pa-section-title">
-                <span>{snapshot.tenants.length}</span>
+                <span>{faNum(snapshot.tenants.length)}</span>
                 <div><h2>شرکت‌های فعال</h2><p>هر شرکت دیتابیس و نقش PostgreSQL مستقل دارد.</p></div>
               </div>
               <div className="pa-list">
@@ -530,15 +554,18 @@ export default function PlatformAdmin() {
             </section>
           </section>
 
-          <section className="pa-card pa-jobs">
+          <section className="pa-card pa-jobs" data-section="queue">
             <div className="pa-section-title">
-              <span>{snapshot.jobs.length}</span>
-              <div><h2>صف عملیات</h2><p>وضعیت بدون نمایش هیچ secret یا URL اتصال به‌روزرسانی می‌شود.</p></div>
+              <span>{faNum(queue.open.length)}</span>
+              <div>
+                <h2>صف عملیات</h2>
+                <p>فقط کارهای باز — در صف، در حال ساخت یا ناموفق. شرکتِ ساخته‌شده از صف بیرون می‌رود و در «شرکت‌های فعال» می‌نشیند.</p>
+              </div>
               <button className="pa-refresh" type="button" onClick={() => load().catch((e) => setNotice(e.message))}>به‌روزرسانی</button>
             </div>
             <div className="pa-job-grid">
-              {snapshot.jobs.length === 0 && <div className="pa-empty">درخواستی در صف نیست.</div>}
-              {snapshot.jobs.map((job) => {
+              {queue.open.length === 0 && <div className="pa-empty">کاری در صف نیست.</div>}
+              {queue.open.map((job) => {
                 const status = STATUS[job.status] || [job.status, ''];
                 return (
                   <article key={job.id} className="pa-job">
@@ -553,20 +580,62 @@ export default function PlatformAdmin() {
                 );
               })}
             </div>
+            {queue.done.length > 0 && (
+              <div className="pa-history">
+                <button
+                  type="button"
+                  className="pa-history-btn"
+                  aria-expanded={historyOpen}
+                  aria-controls="pa-history-list"
+                  onClick={() => setHistoryOpen((open) => !open)}
+                >
+                  انجام‌شده‌ها <i>{faNum(queue.done.length)}</i>
+                  <Caret width="15" height="15" aria-hidden="true" />
+                </button>
+                <div id="pa-history-list" hidden={!historyOpen}>
+                  {historyOpen && (
+                    <>
+                      <p className="pa-history-note">تازه‌ترین ساخت‌ها و حذف‌های تمام‌شده (تا سی ساخت و بیست حذفِ آخر).</p>
+                      <div className="pa-job-grid">
+                        {queue.done.map((job) => {
+                          const status = (job.kind === 'delete' ? DELETE_STATUS : STATUS)[job.status] || [job.status, ''];
+                          return (
+                            <article key={`${job.kind}:${job.id}`} className="pa-job pa-job-done">
+                              <div className="pa-job-top"><b>{job.name}</b><span className={`pa-badge ${status[1]}`}>{status[0]}</span></div>
+                              <code dir="ltr">{job.slug}</code>
+                              {job.hostname && <small dir="ltr">{job.hostname}</small>}
+                              <div className="pa-job-foot"><span>{faDate(job.finishedAt ?? job.updatedAt)}</span></div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
-          <HospitalDirectory platformApi={platformApi} />
+          <Fold
+            id="hospitals"
+            icon={<Hospital width="20" height="20" />}
+            title="فهرست مرکزی بیمارستان‌ها"
+            sub="بیمارستان‌هایی که شرکت‌ها از این فهرست دریافت می‌کنند — برای جستجو، افزودن یا ویرایش باز کنید."
+          >
+            <HospitalDirectory platformApi={platformApi} embedded />
+          </Fold>
           <TariffsPanel busy={busy} onNotice={setNotice} />
           <CentralAiPanel busy={busy} onNotice={setNotice} />
 
-          {snapshot.deletions.length > 0 && (
-            <section className="pa-card pa-jobs">
+          {/* فقط وقتی حذفی باز است؛ حذف‌های تمام‌شده در «انجام‌شده‌ها»ی صفِ عملیات‌اند. */}
+          {queue.deletions.length > 0 && (
+            <section className="pa-card pa-jobs" data-section="deletions">
               <div className="pa-section-title">
-                <span>{snapshot.deletions.length}</span>
+                <span>{faNum(queue.deletions.length)}</span>
                 <div><h2>صف حذف</h2><p>دیتابیس و نقشِ PostgreSQL شرکت توسط Worker حذف می‌شود.</p></div>
               </div>
               <div className="pa-job-grid">
-                {snapshot.deletions.map((job) => {
+                {queue.deletions.map((job) => {
                   const status = DELETE_STATUS[job.status] || [job.status, ''];
                   return (
                     <article key={job.id} className="pa-job">
@@ -661,6 +730,33 @@ export default function PlatformAdmin() {
         )}
       </AnimatePresence>
     </main>
+  );
+}
+
+/**
+ * بخشِ تاشوی پنل — بسته به‌طورِ پیش‌فرض. سربرگ همان `.pa-section-title` است و کلِ
+ * ردیفش دکمه است (`::after`ِ دکمه روی ردیف کشیده می‌شود، پس سرخط معتبر می‌ماند:
+ * `h2 > button`). بدنه فقط وقتِ باز بودن mount می‌شود: فهرستِ مرکزیِ بیمارستان‌ها تا
+ * باز نشده هیچ درخواستی نمی‌زند (درخواستِ مالک، ۱۴۰۵/۰۷/۰۴: «خیلی جا گرفته»).
+ */
+function Fold({ id, icon, title, sub, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className={`pa-card pa-jobs pa-fold${open ? ' is-open' : ''}`} data-section={id}>
+      <div className="pa-section-title pa-fold-title">
+        <span aria-hidden="true">{icon}</span>
+        <div>
+          <h2>
+            <button type="button" aria-expanded={open} aria-controls={`pa-fold-${id}`} onClick={() => setOpen((x) => !x)}>
+              {title}
+            </button>
+          </h2>
+          <p>{sub}</p>
+        </div>
+        <Caret className="pa-fold-caret" width="18" height="18" aria-hidden="true" />
+      </div>
+      <div id={`pa-fold-${id}`} hidden={!open}>{open && children}</div>
+    </section>
   );
 }
 
@@ -840,7 +936,7 @@ function TariffsPanel({ busy: parentBusy, onNotice }) {
   return (
     <section className="pa-card pa-jobs pa-tariffs">
       <div className="pa-section-title">
-        <span>{rows?.length ?? '…'}</span>
+        <span>{rows ? faNum(rows.length) : '…'}</span>
         <div>
           <h2>تعرفه‌های سراسری</h2>
           <p>ضریبِ ریالیِ کتابِ ارزش نسبی — سالی یک‌بار، برای همهٔ شرکت‌ها؛ ضریبِ اختصاصیِ خودِ شرکت (اگر گذاشته باشد) مقدم است.</p>
