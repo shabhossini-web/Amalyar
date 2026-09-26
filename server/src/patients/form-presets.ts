@@ -396,20 +396,29 @@ const SERVICE_INFO: PresetField[] = [
   { key: 'prescription', label: 'تصویر دستور پزشک', type: 'image', required: true, docCategory: 'prescription' },
 ];
 
+/**
+ * برچسبِ باکسِ پرداختی که قالبِ ثبت‌نامِ خدمت تا ۱۴۰۵/۰۷/۰۴ داشت — `forms.service` با همین
+ * آن را (فقط اگر دست‌نخورده باشد) یک‌بار از فرم‌های نصب‌شده برمی‌دارد.
+ *
+ * ⚠️ مالک: «یه باکسِ پرداختِ اضافه صفحهٔ اوله». مرحلهٔ «فیشِ واریزی» همان شماره‌ها را
+ * با مبلغ، کدِ تخفیف و آپلودِ فیش نشان می‌دهد؛ باکسِ صفحهٔ اول فقط تکرارش بود و بیمار
+ * پیش از پرکردنِ فرم با کارتِ بانکی روبه‌رو می‌شد. مرحلهٔ فیش را مبلغِ لینک می‌سازد.
+ */
+export const REGISTRATION_PAY_BOX_LABEL = 'پرداخت و فیش واریزی';
+
 /** Public registration is a separate workflow from the team's clinical visit form. */
 export const REGISTRATION_PRESETS: Record<VerticalKey, PresetForm> = {
   ionm: {
     ...INTAKE, key: 'intake.ionm', title: 'ثبت‌نام خدمات نورومانیتورینگ', visitKind: 'surgery',
     hint: 'مشخصات بیمار، اطلاعات عمل و فیش؛ پس از بررسی شرکت، مراجعه ثبت می‌شود.',
     fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)), ...SERVICE_INFO,
-      { key: 'patientNotes', label: 'توضیحات بیمار', type: 'textarea' }, { key: 'pay', label: 'پرداخت و فیش واریزی', type: 'payment' }],
+      { key: 'patientNotes', label: 'توضیحات بیمار', type: 'textarea' }],
   },
   implant: {
     ...INTAKE, key: 'intake.implant', title: 'ثبت‌نام تأمین تجهیزات و ایمپلنت', visitKind: 'surgery',
     hint: 'دستور جراح و اطلاعات عمل را بفرستید؛ شرکت، اقلام و تعداد موردنیاز را پیش از تأیید بررسی می‌کند.',
     fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)), ...SERVICE_INFO,
-      { key: 'patientNotes', label: 'شرح دستور و توضیحات', type: 'textarea' },
-      { key: 'pay', label: 'پرداخت و فیش واریزی', type: 'payment' }],
+      { key: 'patientNotes', label: 'شرح دستور و توضیحات', type: 'textarea' }],
   },
   clinic: { ...INTAKE, key: 'intake.clinic', title: 'ثبت‌نام مطب و درخواست ویزیت', visitKind: 'clinic',
     hint: 'ثبت‌نام اولیه و درخواست ویزیت؛ فرم عمل از مسیر جداگانهٔ مطب انتخاب می‌شود.',

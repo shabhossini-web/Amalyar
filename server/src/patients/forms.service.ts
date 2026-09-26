@@ -4,7 +4,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PAY_BOX_LABEL, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
 import { BUILTIN_SUBFORMS, BUILTIN_SUBFORM_KEYS, SUBFORM_GROUPS, SUBFORM_PRESET_GROUP, SubformDef, defaultSurgeryPhase, shortTitle } from './subforms';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
@@ -178,10 +178,10 @@ const FIELD_ORDER = {
  * کورش کرد — یک بار قرمز شد. و **بی‌رقم**: همان نگهبان فقط `[a-z_]` را می‌خواند، پس
  * نامِ «…_v2» هرگز «مصرف‌شده» دیده نمی‌شد. مطب ارتقا ندارد (قالبش عوض نشده).
  */
-const REGISTRATION_FLAGS: Record<keyof typeof REGISTRATION_PRESETS, { installed: string; v2: string | null }> = {
-  ionm: { installed: 'registration_ionm_installed', v2: 'registration_ionm_service_fields' },
-  implant: { installed: 'registration_implant_installed', v2: 'registration_implant_service_fields' },
-  clinic: { installed: 'registration_clinic_installed', v2: null },
+const REGISTRATION_FLAGS: Record<keyof typeof REGISTRATION_PRESETS, { installed: string; v2: string | null; noPayBox: string | null }> = {
+  ionm: { installed: 'registration_ionm_installed', v2: 'registration_ionm_service_fields', noPayBox: 'registration_ionm_no_payment_box' },
+  implant: { installed: 'registration_implant_installed', v2: 'registration_implant_service_fields', noPayBox: 'registration_implant_no_payment_box' },
+  clinic: { installed: 'registration_clinic_installed', v2: null, noPayBox: null },
 };
 
 @Injectable()
@@ -447,7 +447,35 @@ export class FormsService {
     for (const key of this.registrationKeys(profile)) {
       await this.installRegistration(key);
       await this.upgradeRegistration(key);
+      await this.dropRegistrationPayBox(key);
     }
+  }
+
+  /**
+   * **باکسِ پرداختِ صفحهٔ اول از فرمِ ثبت‌نامِ خدمت برداشته می‌شود** — یک‌بار، با پرچمِ
+   * `registration_<خدمت>_no_payment_box`. شرحش کنارِ `REGISTRATION_PAY_BOX_LABEL`.
+   *
+   * ⚠️ فقط پیش‌فرضِ **دست‌نخورده** (همان کلید، نوع و برچسبِ قالب)، و همان مسیرِ حذفِ
+   * فرم‌ساز (`removeField`: خاموش + `deletedAt`): باکسی که مدیر خودش ساخته یا برچسبش را
+   * عوض کرده مالِ مدیر است و دست نمی‌خورد؛ اگر بعداً دوباره بسازدش هم برنمی‌گردد.
+   * ⚠️ فرمی که لینکِ **بی‌مبلغ** دارد هم دست نمی‌خورد: آن‌جا همین باکس مرحلهٔ فیش را
+   * می‌ساخت (`fill`: «رایگان» یعنی بی‌مبلغ **و** بی‌باکسِ پرداخت) و برداشتنش بیمار را
+   * بی‌فیش به صفِ تأیید می‌فرستاد.
+   */
+  private async dropRegistrationPayBox(vertical: keyof typeof REGISTRATION_PRESETS) {
+    const flag = REGISTRATION_FLAGS[vertical].noPayBox;
+    if (!flag) return;
+    if ((await this.prisma.setting.findUnique({ where: { key: flag } }))?.value === 'true') return;
+    const form = await this.prisma.formDef.findUnique({ where: { key: REGISTRATION_PRESETS[vertical].key }, select: { id: true } });
+    const box = form && await this.prisma.formField.findFirst({
+      where: { formId: form.id, key: 'pay', type: 'payment', label: REGISTRATION_PAY_BOX_LABEL, deletedAt: null },
+    });
+    const freeLink = form && await this.prisma.intakeLink.count({ where: { formId: form.id, amount: 0 } });
+    if (form && box && !freeLink) {
+      await this.prisma.formField.update({ where: { id: box.id }, data: { active: false, deletedAt: new Date() } });
+      await this.compactPages(form.id);
+    }
+    await this.prisma.setting.upsert({ where: { key: flag }, create: { key: flag, value: 'true' }, update: { value: 'true' } });
   }
 
   /**

@@ -44,6 +44,11 @@ class DraftDto {
    * یعنی عددِ بی‌معنی (منفی، رشته، ۱۰۰۰) اصلاً به سرویس نمی‌رسد.
    */
   @IsOptional() @IsInt() @Min(1) @Max(50) page?: number;
+  /**
+   * نسخهٔ این ذخیره (عددِ صعودیِ مرورگر) — پیش‌نویسِ دیررس روی ذخیرهٔ تازه‌تر
+   * نمی‌نشیند (`SAVE_REV` در سرویس). بی‌اعلامش `whitelist` بی‌صدا دورش می‌ریخت.
+   */
+  @IsOptional() @IsInt() @Min(1) rev?: number;
 }
 
 class FillDto {
@@ -64,6 +69,8 @@ class FillDto {
    * دورش می‌ریزد و فرم «ذخیره شد» می‌گوید بی‌آنکه چیزی ذخیره شود.
    */
   @IsOptional() @IsObject({ message: 'پاسخ‌های فرم نامعتبر است' }) values?: Record<string, any>;
+  /** همان نسخهٔ `DraftDto.rev` — ثبتِ نهایی هم پیش‌نویس‌های قدیمی‌ترِ در راه را کنار می‌زند. */
+  @IsOptional() @IsInt() @Min(1) rev?: number;
 }
 
 /** رزروِ نوبت توسطِ بیمار — `docs/BOOKING.md` مرحلهٔ ۳. */
