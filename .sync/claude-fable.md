@@ -1,12 +1,28 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/platform-queue
+status: active
+branch: claude/intake-form-fixes
 since: 2026-09-26
-paths: []
+paths:
+  - src/pages/Intake.jsx
+  - src/ui/DynForm.jsx
+  - src/ui/dynform.css
+  - src/ui/HospitalLookup.jsx
+  - src/ui/hospital-lookup.css
+  - server/src/patients/intake.service.ts
+  - server/src/patients/intake.controller.ts
+  - server/src/patients/intake-match.ts
+  - server/src/common/name-match.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/form-presets.ts
+  - server/src/config/settings-registry.ts
+  - scripts/e2e/intake-concurrency.mjs
+  - scripts/e2e/intake-service-ui.mjs
+  - scripts/e2e/intake-return-ui.mjs
 note: >-
-  لند شد: «صف عملیات»ِ پنلِ پلتفرم فقط کارهای باز + «انجام‌شده‌ها»ی تاشو؛ فهرستِ مرکزیِ
-  بیمارستان‌ها تاشو. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  فرمِ عمومیِ نورومانیتورینگ (گزارشِ مالک ۱۴۰۵/۰۷/۰۴): خطای «ثبت‌نام تغییر کرده» هنگامِ
+  بارگذاریِ کارت ملی، باکسِ پرداختِ اضافه در صفحهٔ اول، تاریخِ عمل/«رزرو بدون تاریخ» در یک
+  کنترل، و جست‌وجوی بیمارستان با پیشنهادِ زیرِ کادر.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

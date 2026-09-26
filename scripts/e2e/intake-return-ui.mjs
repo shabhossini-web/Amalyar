@@ -133,7 +133,10 @@ try {
   ok(text.includes('فیشِ واریزی') && text.includes('مبلغِ فیش کم است') && text.includes('فیشِ تازه بارگذاری کنید'), '**بیمار مرحله، دلیل و راهنما را می‌بیند**', text);
   ok(await p2.locator('.ik-warn', { hasText: 'مبلغِ فیش کم است' }).count() === 0, 'دلیل دوبار (بنر + یادداشت) تکرار نمی‌شود');
   if (process.env.SHOT) await p2.screenshot({ path: process.env.SHOT + '-banner.png', fullPage: true });
-  /* فهرستِ بیمارستان در این ماک باز نمی‌شود — پیامش باید کوچکِ زیرِ کادر باشد، نه متنِ بدنه. */
+  /* فهرستِ بیمارستان در این ماک باز نمی‌شود — پیامش باید کوچکِ زیرِ کادر باشد، نه متنِ بدنه.
+     از ۱۴۰۵/۰۷/۰۴ فهرست فقط هنگامِ تایپ خوانده می‌شود (کادرِ جست‌وجو، نه دیوارِ چیپ)، پس اول
+     چیزی تایپ می‌شود. */
+  await p2.locator('.hospital-lookup input').fill('امام');
   const lookupNote = p2.locator('.hospital-lookup > p');
   await lookupNote.waitFor();
   ok(Number.parseFloat(await lookupNote.evaluate((el) => getComputedStyle(el).fontSize)) <= 13, 'پیامِ «فهرست باز نشد» استایل دارد (نه قلمِ درشتِ بدنه)');

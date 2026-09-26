@@ -97,11 +97,54 @@ export default function DynForm({
      این، ستاره روی کادرِ غیرفعال می‌ماند و بیمار فکر می‌کرد فرم ناقص است. */
   const undated = values.opDateOpen === true || values.opDateOpen === 'true';
   const setOpen = (key, v) => onChange({ ...values, [key]: v, ...(key === 'opDateOpen' && (v === true || v === 'true') ? { opDate: '' } : {}) });
+  /* «یا تاریخِ عمل، یا رزرو بدون تاریخ» (مالک، ۱۴۰۵/۰۷/۰۴): وقتی هر دو کادر در همین صفحه‌اند،
+     یک کنترلِ واحد می‌شوند — دو گزینه و فقط محتوای گزینهٔ انتخاب‌شده. تا دیروز کادرِ تاریخ و
+     پرسشِ «رزرو بدون تاریخ» هم‌زمان روی صفحه بودند و بیمار نمی‌فهمید کدام را باید پر کند. */
+  const active = fields.filter((f) => f.active !== false);
+  const undatedField = active.find((f) => f.key === 'opDateOpen');
+  const paired = !!undatedField && active.some((f) => f.key === 'opDate');
 
   return (
     <div className="pf dyn">
-      {fields.filter((f) => f.active !== false).map((f) => {
+      {active.map((f) => {
         const locked = !!(fieldRoles(f).length && myRole && !fieldRoles(f).includes(myRole));
+        if (paired && f.key === 'opDateOpen') return null;
+        if (paired && f.key === 'opDate') {
+          const off = disabled || locked;
+          return (
+            <div key={f.key} data-ftype="date" role="group" aria-labelledby="dyn-when-label"
+                 className={`pf-field dyn-when${errors[f.key] && !undated ? ' bad' : ''}`}>
+              <span id="dyn-when-label">
+                {f.label}
+                {f.required && !undated && <i className="dyn-star" aria-label="اجباری"> *</i>}
+              </span>
+              <span className="dyn-multi dyn-when-pick">
+                <button type="button" className={`dyn-pill${!undated ? ' on' : ''}`} aria-pressed={!undated}
+                        disabled={off} onClick={() => setOpen('opDateOpen', false)}>
+                  تاریخ مشخص است
+                </button>
+                <button type="button" className={`dyn-pill${undated ? ' on' : ''}`} aria-pressed={undated}
+                        disabled={off} onClick={() => setOpen('opDateOpen', true)}>
+                  {undatedField.label}
+                </button>
+              </span>
+              {undated ? (
+                <em className="pf-hint">تاریخِ عمل را بعداً شرکت با شما هماهنگ می‌کند.</em>
+              ) : (
+                <label className="dyn-when-date">
+                  <span className="dyn-sr">{f.label}</span>
+                  <Input
+                    assistance={assistance} field={f} value={values[f.key]} set={(v) => setOpen(f.key, v)}
+                    disabled={off} lookups={lookups}
+                  />
+                </label>
+              )}
+              {errors[f.key] && !undated
+                ? <em className="pf-err">{errors[f.key]}</em>
+                : !undated && f.hint ? <em className="pf-hint">{f.hint}</em> : null}
+            </div>
+          );
+        }
         const parked = undated && f.key === 'opDate';
         return (
         <label key={f.key} data-ftype={f.type} className={`pf-field${errors[f.key] ? ' bad' : ''}${locked ? ' dyn-locked' : ''}`}>
@@ -564,6 +607,10 @@ export function dynErrors(fields, values, myRole = null) {
       if (bad) { e[f.key] = `«${f.label}»: نشانی باید با http یا https شروع شود`; continue; }
     }
     if (!f.required) continue;
+    /* «رزرو بدون تاریخ»: تاریخِ خالیِ اعلام‌شده خطا نیست — همان قاعدهٔ `validateFields`ِ سرور.
+       ⚠️ تا ۱۴۰۵/۰۷/۰۴ این‌جا نبود و خطایش هم زیرِ کادرِ کنارگذاشته پنهان بود: بیمارِ «بله» زده
+       «ثبت» را می‌زد و هیچ اتفاقی نمی‌افتاد (سنجهٔ `intake-service-ui` پیدایش کرد). */
+    if (f.key === 'opDate' && (values?.opDateOpen === true || values?.opDateOpen === 'true')) continue;
     /* فیلدِ اجباریِ بخشِ دیگر نباید ذخیرهٔ این نقش را قفل کند: منشی که فرم
        را می‌بندد مسئولِ «شرحِ معاینه»ی پزشک نیست. سرور هم همین‌طور رفتار
        می‌کند (assertRoleOwnership فقط تغییر را می‌سنجد، نه خالی‌بودن را). */

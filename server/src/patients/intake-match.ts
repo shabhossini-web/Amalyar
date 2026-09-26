@@ -1,10 +1,47 @@
-import { bestMatches, normalizeName } from '../common/name-match';
+import { bestMatches, foldText, normalizeName } from '../common/name-match';
 
 export async function hospitalOptions(prisma: any, query: string) {
   const hospitals = await prisma.hospital.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 2000 });
   const q = String(query ?? '').trim().slice(0, 150);
   if (!q) return hospitals.slice(0, 30);
   return bestMatches(q, hospitals, 8);
+}
+
+/**
+ * پیشنهادِ **هم‌زمان با تایپ** برای کادرِ بیمارستانِ فرمِ بیمار — جدا از `hospitalOptions`.
+ *
+ * ⚠️ `bestMatches` برای تطبیقِ **نامِ کامل** ساخته شده: شباهت ≥ ۰٫۶ روی کلیدی که «بیمارستان»،
+ * «امام»، «شهید»… از آن حذف شده. پس بخشی از یک نام — «امام»، «الب» — هیچ پیشنهادی نمی‌گرفت و
+ * کادر عملاً فقط با نامِ کامل کار می‌کرد (مالک، ۱۴۰۵/۰۷/۰۴: «وقتی تایپ می‌شود گزینه‌ها زیرش
+ * بیایند»). این‌جا هر واژهٔ تایپ‌شده باید آغازِ واژه‌ای از نام باشد — نامی که با همان عبارت
+ * شروع می‌شود اول — و اگر کم آمد، تطبیقِ فازی برای غلطِ تایپی پشتش می‌آید.
+ *
+ * `matchIntakeHospital` عمداً همان `hospitalOptions` را می‌خواند: امتیازِ شباهت مبنای
+ * «پیشنهادِ یکتا» در تأیید است و این رتبه‌بندی امتیاز ندارد.
+ */
+export async function hospitalTypeahead(prisma: any, query: string, limit = 8) {
+  const hospitals = await prisma.hospital.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 2000 });
+  const q = String(query ?? '').trim().slice(0, 150);
+  if (!q) return hospitals.slice(0, 30);
+  const typed = foldText(q);
+  const words = typed.split(' ');
+  const rank = (name: string) => {
+    const n = foldText(name);
+    if (n.startsWith(typed)) return 3;
+    const parts = n.split(' ');
+    if (words.every((w) => parts.some((p) => p.startsWith(w)))) return n.includes(typed) ? 2 : 1;
+    return 0;
+  };
+  const hits = hospitals
+    .map((h: { id: number; name: string }) => ({ id: h.id, name: h.name, r: rank(h.name) }))
+    .filter((h: { r: number }) => h.r > 0)
+    .sort((a: any, b: any) => b.r - a.r || a.name.localeCompare(b.name, 'fa'))
+    .slice(0, limit)
+    .map(({ id, name }: { id: number; name: string }) => ({ id, name }));
+  if (hits.length >= limit) return hits;
+  const seen = new Set(hits.map((h: { id: number }) => h.id));
+  const fuzzy = bestMatches(q, hospitals, limit).filter((m) => !seen.has(m.id)).map(({ id, name }) => ({ id, name }));
+  return [...hits, ...fuzzy].slice(0, limit);
 }
 
 /**

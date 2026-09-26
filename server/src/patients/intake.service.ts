@@ -15,7 +15,7 @@ import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS, UNDATED_KEY, isUndated } from
 import { normalizeLinks } from './forms.service';
 import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
-import { hospitalOptions, matchIntakeHospital, matchIntakeRefs } from './intake-match';
+import { hospitalTypeahead, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { serviceLabel, serviceOf } from './intake-service-of';
 import { imageRefsOf, receiptIdsOf } from './intake-docs';
 import { UsedChallenges, issueChallenge, verifyChallenge } from './intake-captcha';
@@ -123,6 +123,19 @@ const bankLabel = (b: { ownerName: string; bankName?: string | null }) =>
  * این آدم بیمارِ قدیمی است یا تازه. پروندهٔ بی‌مراجعه بی‌ضرر است: آدمی که با
  * ما تماس گرفته، حتی اگر عملش نشد.
  */
+/**
+ * نسخهٔ ذخیرهٔ بیمار (`data._saveRev`) — عددِ صعودی که مرورگر روی هر پیش‌نویس و ثبتِ
+ * نهایی می‌فرستد.
+ *
+ * ⚠️ از وقتی ذخیرهٔ بیمار بعد از برخوردِ نسخه دوباره روی ردیفِ تازه اجرا می‌شود
+ * (`onFreshRow`)، پیش‌نویسِ دیررس دیگر خودبه‌خود رد نمی‌شود. این عدد نمی‌گذارد
+ * پیش‌نویسی که **پیش از** ذخیرهٔ دیگری ساخته شده بعد از آن بنشیند و پاسخی را که
+ * بیمار بعداً نوشته (یا ثبتِ نهایی) برگرداند.
+ */
+const SAVE_REV = '_saveRev';
+const saveRev = (v: unknown): number | null => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : null);
+const staleSave = (data: unknown, rev: number) => Number((data as any)?.[SAVE_REV]) > rev;
+
 @Injectable()
 export class IntakeService {
   constructor(
@@ -864,8 +877,23 @@ export class IntakeService {
     token: string,
     dto: {
       procedure?: string; surgeonName?: string; hospitalName?: string; opDate?: string; notes?: string;
+      values?: Record<string, any>; hospitalId?: number; rev?: number;
+    },
+  ) {
+    /* ثبتِ نهایی هم با پیش‌نویسِ در راه برخورد می‌کرد — همان «صفحه را تازه کنید» روی دکمهٔ
+       ثبت. همه‌چیزِ `fillOnce` از ردیفِ تازه ساخته می‌شود و نوشتن و رویدادها در یک
+       تراکنش‌اند، پس تکرارش بعد از برخورد بی‌عارضه است (`onFreshRow`). */
+    return this.onFreshRow(() => this.fillOnce(token, dto, saveRev(dto.rev)));
+  }
+
+  /** یک تلاشِ `fill` — همه‌چیز از ردیفی که همین‌جا خوانده می‌شود. */
+  private async fillOnce(
+    token: string,
+    dto: {
+      procedure?: string; surgeonName?: string; hospitalName?: string; opDate?: string; notes?: string;
       values?: Record<string, any>; hospitalId?: number;
     },
+    rev: number | null,
   ) {
     const row = await this.expireIfDue(token);
     if (!['pending_fill', 'pending_payment'].includes(row.status)) {
@@ -1016,6 +1044,8 @@ export class IntakeService {
     const hasReceipt = receiptIdsOf(data).length > 0;
     const nextStatus = direct ? 'approved' : free || hasReceipt ? 'pending_approval' : 'pending_payment';
 
+    /* پیش‌نویسی که پیش از این ثبت ساخته شده و دیرتر برسد، روی آن نمی‌نشیند (`SAVE_REV`). */
+    if (rev !== null) data[SAVE_REV] = Math.max(rev, Number(data[SAVE_REV]) || 0);
     const schemaSnapshot = row.schemaSnapshot ?? form?.fields ?? await this.forms.schemaSnapshot(row.formId, row.extraFormIds);
     await this.prisma.$transaction(async (tx) => {
       const saved = await this.updateSubmissionVersion(row, {
@@ -1079,7 +1109,7 @@ export class IntakeService {
    * پس ترافیکش از `fill` خیلی بیشتر است. افزودنِ throttlerِ سراسری بیرونِ این
    * بسته است و در `STATUS.md` ثبت شد.
    */
-  async draft(token: string, dto: { values?: Record<string, any>; page?: number }) {
+  async draft(token: string, dto: { values?: Record<string, any>; page?: number; rev?: number }) {
     /**
      * ⚠️ نشانیِ **عمومی و بی‌احراز** که در هر فراخوانی در دیتابیس می‌نویسد —
      * پس نرخ‌گیر دارد. (یادداشتِ W1.8 نوشته بود «پروژه throttler ندارد»؛
@@ -1095,25 +1125,34 @@ export class IntakeService {
      * NATِ موبایل نباید بابتِ دیگری جریمه شود.
      */
     this.rateLimit.hit(`intake-draft:${token}`, 300, 15 * 60_000);
-    const row = await this.expireIfDue(token);
-    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
-      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
-    }
-    const data: Record<string, any> = { ...(row.data as any) };
-    const form = await this.formView(row.formId, row.extraFormIds ?? []);
-    if (form && dto.values) {
-      /* همان لیستِ سفیدِ `fill`: `payment` مقدار ندارد و ارجاعِ `image` را فقط
-         مسیرِ آپلود می‌نویسد — وگرنه بیمار می‌توانست id مدرکِ دیگری را جا بزند. */
-      const writable = new Set(
-        form.fields.filter((x) => x.type !== 'payment' && x.type !== 'image').map((x) => x.key),
-      );
-      for (const [k, v] of Object.entries(dto.values)) {
-        if (writable.has(k)) data[k] = typeof v === 'string' ? text(v, 2000) : v;
+    const rev = saveRev(dto.rev);
+    const save = async () => {
+      const row = await this.expireIfDue(token);
+      if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+        throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
       }
-    }
-    if (typeof dto.page === 'number' && dto.page >= 1) data._page = dto.page;
-    const saved = await this.updateSubmissionVersion(row, { data });
-    return { savedAt: saved.updatedAt };
+      /* پیش‌نویسِ دیررس روی ذخیرهٔ تازه‌تر (پیش‌نویسِ بعدی یا ثبتِ نهایی) نمی‌نشیند. */
+      if (rev !== null && staleSave(row.data, rev)) return { savedAt: row.updatedAt };
+      const data: Record<string, any> = { ...(row.data as any) };
+      const form = await this.formView(row.formId, row.extraFormIds ?? []);
+      if (form && dto.values) {
+        /* همان لیستِ سفیدِ `fill`: `payment` مقدار ندارد و ارجاعِ `image` را فقط
+           مسیرِ آپلود می‌نویسد — وگرنه بیمار می‌توانست id مدرکِ دیگری را جا بزند. */
+        const writable = new Set(
+          form.fields.filter((x) => x.type !== 'payment' && x.type !== 'image').map((x) => x.key),
+        );
+        for (const [k, v] of Object.entries(dto.values)) {
+          if (writable.has(k)) data[k] = typeof v === 'string' ? text(v, 2000) : v;
+        }
+      }
+      if (typeof dto.page === 'number' && dto.page >= 1) data._page = dto.page;
+      if (rev !== null) data[SAVE_REV] = rev;
+      const saved = await this.updateSubmissionVersion(row, { data });
+      return { savedAt: saved.updatedAt };
+    };
+    /* کلاینتِ قدیمیِ کش‌شده `rev` نمی‌فرستد: ترتیبِ دو پیش‌نویسش را نمی‌شود سنجید، پس
+       همان یک تلاشِ قبلی — برخوردش همان ۴۰۹ِ همیشگی است، نه بازنویسیِ پاسخِ تازه‌تر. */
+    return rev === null ? save() : this.onFreshRow(save);
   }
 
   /**
@@ -1215,14 +1254,21 @@ export class IntakeService {
        دارد (پشت و روی کارت، دو صفحهٔ جواب). رکوردهای قدیمی شیءِ تکی‌اند و
        همان‌جا به آرایهٔ یک‌عضوی تبدیل می‌شوند — بی‌مهاجرتِ جدا و بی‌شکستنِ
        فرم‌های پرشدهٔ موجود. */
-    const prev = (row.data as any)?.[fieldKey];
-    const list = Array.isArray(prev) ? [...prev] : (prev && typeof prev === 'object' && prev.id ? [prev] : []);
-    if (list.length >= MAX_FIELD_IMAGES) {
-      throw new BadRequestException(`برای این کادر حداکثر ${MAX_FIELD_IMAGES} فایل می‌شود گذاشت`);
-    }
-    list.push({ id: doc.id, name: doc.fileName });
-    const data = { ...(row.data as any), [fieldKey]: list };
-    await this.updateSubmissionVersion(row, { data });
+    /* ارجاع روی **تازه‌ترین** نسخه افزوده می‌شود: ذخیرهٔ خودکارِ هم‌زمان (بازگشت از
+       پنجرهٔ انتخابِ عکس روی اندروید) دیگر آپلود را رد نمی‌کند — `onFreshRow`. */
+    await this.onFreshRow(async () => {
+      const cur = await this.expireIfDue(token);
+      if (!['pending_fill', 'pending_payment'].includes(cur.status)) {
+        throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+      }
+      const prev = (cur.data as any)?.[fieldKey];
+      const list = Array.isArray(prev) ? [...prev] : (prev && typeof prev === 'object' && prev.id ? [prev] : []);
+      if (list.length >= MAX_FIELD_IMAGES) {
+        throw new BadRequestException(`برای این کادر حداکثر ${MAX_FIELD_IMAGES} فایل می‌شود گذاشت`);
+      }
+      list.push({ id: doc.id, name: doc.fileName });
+      await this.updateSubmissionVersion(cur, { data: { ...(cur.data as any), [fieldKey]: list } });
+    });
     return this.publicView(token);
   }
 
@@ -1278,15 +1324,16 @@ export class IntakeService {
    * فایلِ آپلودشده سندِ پرونده است و حذفش کارِ ادمین است نه لینکِ عمومی.
    */
   async detachImage(token: string, fieldKey: string, docId: number) {
-    const row = await this.expireIfDue(token);
-    if (!['pending_fill', 'pending_payment'].includes(row.status)) {
-      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
-    }
-    const prev = (row.data as any)?.[fieldKey];
-    const list = Array.isArray(prev) ? prev : (prev && typeof prev === 'object' && prev.id ? [prev] : []);
-    const next = list.filter((x: any) => Number(x?.id) !== Number(docId));
-    const data = { ...(row.data as any), [fieldKey]: next };
-    await this.updateSubmissionVersion(row, { data });
+    await this.onFreshRow(async () => {
+      const row = await this.expireIfDue(token);
+      if (!['pending_fill', 'pending_payment'].includes(row.status)) {
+        throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+      }
+      const prev = (row.data as any)?.[fieldKey];
+      const list = Array.isArray(prev) ? prev : (prev && typeof prev === 'object' && prev.id ? [prev] : []);
+      const next = list.filter((x: any) => Number(x?.id) !== Number(docId));
+      await this.updateSubmissionVersion(row, { data: { ...(row.data as any), [fieldKey]: next } });
+    });
     return this.publicView(token);
   }
 
@@ -1330,39 +1377,48 @@ export class IntakeService {
        خواننده‌های موجود (تأیید، ساختِ مراجعه، پرونده) رویش بنا شده‌اند.
        فیش‌های بعدی در `receiptDocumentIds` جمع می‌شوند — بیمار که دو قسط
        واریز کرده یا عکسش ناخوانا بوده، باید بتواند دومی را هم بگذارد. */
-    const prevIds: number[] = Array.isArray((row.data as any)?.receiptDocumentIds)
-      ? (row.data as any).receiptDocumentIds.map(Number).filter(Boolean)
-      : ((row.data as any)?.receiptDocumentId ? [Number((row.data as any).receiptDocumentId)] : []);
-    if (prevIds.length >= MAX_FIELD_IMAGES) {
-      throw new BadRequestException(`حداکثر ${MAX_FIELD_IMAGES} فیش می‌شود گذاشت`);
-    }
-    const ids = [...prevIds, doc.id];
-    const data = { ...(row.data as any), receiptDocumentId: ids[0], receiptDocumentIds: ids };
-    await this.prisma.$transaction(async (tx) => {
-      const saved = await this.updateSubmissionVersion(row, { data, status: 'pending_approval' }, tx);
-      /* اولین فیش = حالا چیزی برای تأیید هست (همان رویدادی که `fill` برای فرمِ رایگان می‌زند). */
-      if (row.status !== 'pending_approval') {
-        await this.events.emit({ type: 'intake.submitted', refType: 'intake_submission', refId: row.id,
-          patientId: saved.patientId, visitId: saved.visitId }, tx);
+    /* روی تازه‌ترین نسخه — همان دلیلِ `attachImage` (`onFreshRow`). */
+    await this.onFreshRow(async () => {
+      const cur = await this.expireIfDue(token);
+      if (!['pending_payment', 'pending_approval'].includes(cur.status)) {
+        throw new BadRequestException('ابتدا اطلاعاتِ عمل را کامل کنید');
       }
+      const prevIds: number[] = Array.isArray((cur.data as any)?.receiptDocumentIds)
+        ? (cur.data as any).receiptDocumentIds.map(Number).filter(Boolean)
+        : ((cur.data as any)?.receiptDocumentId ? [Number((cur.data as any).receiptDocumentId)] : []);
+      if (prevIds.length >= MAX_FIELD_IMAGES) {
+        throw new BadRequestException(`حداکثر ${MAX_FIELD_IMAGES} فیش می‌شود گذاشت`);
+      }
+      const ids = [...prevIds, doc.id];
+      const data = { ...(cur.data as any), receiptDocumentId: ids[0], receiptDocumentIds: ids };
+      await this.prisma.$transaction(async (tx) => {
+        const saved = await this.updateSubmissionVersion(cur, { data, status: 'pending_approval' }, tx);
+        /* اولین فیش = حالا چیزی برای تأیید هست (همان رویدادی که `fill` برای فرمِ رایگان می‌زند). */
+        if (cur.status !== 'pending_approval') {
+          await this.events.emit({ type: 'intake.submitted', refType: 'intake_submission', refId: cur.id,
+            patientId: saved.patientId, visitId: saved.visitId }, tx);
+        }
+      });
     });
     return this.publicView(token);
   }
 
   /** برداشتنِ یکی از فیش‌ها — تا وقتی فرم تأیید نشده. */
   async detachReceipt(token: string, docId: number) {
-    const row = await this.expireIfDue(token);
-    if (!['pending_payment', 'pending_approval'].includes(row.status)) {
-      throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
-    }
-    const prevIds: number[] = Array.isArray((row.data as any)?.receiptDocumentIds)
-      ? (row.data as any).receiptDocumentIds.map(Number).filter(Boolean)
-      : ((row.data as any)?.receiptDocumentId ? [Number((row.data as any).receiptDocumentId)] : []);
-    const ids = prevIds.filter((x) => x !== Number(docId));
-    const data = { ...(row.data as any), receiptDocumentId: ids[0] ?? null, receiptDocumentIds: ids };
-    /* آخرین فیش که برداشته شد، فرم به «در انتظارِ فیش» برمی‌گردد — وگرنه در
-       صفِ تأیید می‌ماند بی‌آنکه چیزی برای تأیید باشد. */
-    await this.updateSubmissionVersion(row, { data, status: ids.length ? row.status : 'pending_payment' });
+    await this.onFreshRow(async () => {
+      const row = await this.expireIfDue(token);
+      if (!['pending_payment', 'pending_approval'].includes(row.status)) {
+        throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
+      }
+      const prevIds: number[] = Array.isArray((row.data as any)?.receiptDocumentIds)
+        ? (row.data as any).receiptDocumentIds.map(Number).filter(Boolean)
+        : ((row.data as any)?.receiptDocumentId ? [Number((row.data as any).receiptDocumentId)] : []);
+      const ids = prevIds.filter((x) => x !== Number(docId));
+      const data = { ...(row.data as any), receiptDocumentId: ids[0] ?? null, receiptDocumentIds: ids };
+      /* آخرین فیش که برداشته شد، فرم به «در انتظارِ فیش» برمی‌گردد — وگرنه در
+         صفِ تأیید می‌ماند بی‌آنکه چیزی برای تأیید باشد. */
+      await this.updateSubmissionVersion(row, { data, status: ids.length ? row.status : 'pending_payment' });
+    });
     return this.publicView(token);
   }
 
@@ -1373,6 +1429,36 @@ export class IntakeService {
     } catch (error: any) {
       if (error?.code === 'P2025') throw new ConflictException('ثبت‌نام تغییر کرده است؛ صفحه را تازه کنید');
       throw error;
+    }
+  }
+
+  /**
+   * نوشتنِ خودِ بیمار روی ثبت‌نامش — از **تازه‌ترین** نسخه، با چند تلاش.
+   *
+   * ⚠️ باگِ میدانی (۱۴۰۵/۰۷/۰۴، فرمِ نورومانیتورینگ روی گوشی): آپلودِ کارتِ ملی و
+   * دستورِ پزشک «ثبت‌نام تغییر کرده است؛ صفحه را تازه کنید» می‌گرفت. دکمهٔ «انتخابِ
+   * عکس» فوکوس را از کادرِ قبلی می‌گیرد و ذخیرهٔ خودکار ۱٫۵ ثانیه بعد زمان‌بندی
+   * می‌شود؛ اندروید تا پنجرهٔ انتخابِ عکس باز است صفحه را متوقف می‌کند، پس همان
+   * ذخیره درست لحظهٔ برگشت — هم‌زمان با آپلود — می‌رود. هر دو یک نسخه را خوانده
+   * بودند و قفلِ نسخه دومی را رد می‌کرد، در حالی که هیچ‌کدام به کلیدِ دیگری دست
+   * نمی‌زد (پیش‌نویس کادرِ عکس را نمی‌نویسد). روی سرورِ محلی ۸ جفت از ۹ جفتِ
+   * هم‌زمانِ «پیش‌نویس + آپلود» همین ۴۰۹ را می‌گرفتند (`intake-concurrency`).
+   *
+   * `run` باید همه‌چیز را از ردیفی بسازد که **خودش** می‌خواند (ادغامِ پیش‌نویس، افزودن
+   * یا برداشتنِ یک ارجاع) تا تکرارش درست باشد. برخوردِ واقعی — تأیید، رد، برگشت،
+   * انقضا — وضعیت را عوض کرده و تلاشِ بعد با پیامِ خودش رد می‌شود؛ پس قفل همچنان
+   * نمی‌گذارد نوشتنِ دیرِ بیمار تأییدی را باز کند.
+   */
+  private async onFreshRow<T>(run: () => Promise<T>, tries = 6): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await run();
+      } catch (error) {
+        if (!(error instanceof ConflictException) || attempt >= tries) throw error;
+        /* مکثِ کوتاه و نامنظم: بی‌آن نویسنده‌های هم‌زمان دوباره هم‌قدم می‌خوانند و دوباره برخورد
+           می‌کنند (سنجه با پنج نویسندهٔ هم‌زمان گاهی چهار تلاش را تمام می‌کرد). */
+        await new Promise((resolve) => setTimeout(resolve, attempt * 15 + Math.random() * 25));
+      }
     }
   }
 
@@ -1968,7 +2054,8 @@ export class IntakeService {
   // ── صفِ تأیید (ادمین) ─────────────────────────────────────────────
   async publicHospitals(token: string, q = '') {
     await this.expireIfDue(token);
-    return hospitalOptions(this.prisma, q);
+    /* کادرِ جست‌وجوی بیمار: پیشوندِ واژه‌ها، نه شباهتِ نامِ کامل — شرحش در `hospitalTypeahead`. */
+    return hospitalTypeahead(this.prisma, q);
   }
 
   /**
@@ -2462,6 +2549,12 @@ export class IntakeService {
    * زدنِ دوبارهٔ همان کد سهمِ استفاده را نمی‌سوزاند.
    */
   async applyDiscount(token: string, rawCode: string) {
+    /* همان برخوردِ `onFreshRow`؛ این‌جا بدترش بود: `update`ِ خام بی‌پوشش بود و برخورد
+       به‌جای ۴۰۹ یک ۵۰۰ می‌ساخت. شمارندهٔ کد در همان تراکنش است، پس تکرار دوبار نمی‌شمرد. */
+    return this.onFreshRow(() => this.applyDiscountOnce(token, rawCode));
+  }
+
+  private async applyDiscountOnce(token: string, rawCode: string) {
     const row = await this.expireIfDue(token);
     if (!['pending_fill', 'pending_payment'].includes(row.status)) {
       throw new BadRequestException('این فرم دیگر قابلِ ویرایش نیست');
@@ -2487,13 +2580,10 @@ export class IntakeService {
     // تخفیف هرگز از خودِ مبلغ بیشتر نمی‌شود — مبلغِ منفی یعنی ما بدهکار شویم.
     off = Math.max(0, Math.min(off, row.amount));
 
-    await this.prisma.$transaction([
-      this.prisma.intakeSubmission.update({
-        where: { id: row.id, status: row.status, updatedAt: row.updatedAt },
-        data: { discountCode: dc.code, discountAmount: off },
-      }),
-      this.prisma.discountCode.update({ where: { id: dc.id }, data: { usedCount: { increment: 1 } } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await this.updateSubmissionVersion(row, { discountCode: dc.code, discountAmount: off }, tx);
+      await tx.discountCode.update({ where: { id: dc.id }, data: { usedCount: { increment: 1 } } });
+    });
     return this.publicView(token);
   }
 

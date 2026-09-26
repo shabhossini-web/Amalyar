@@ -67,6 +67,18 @@
 /* بله/خیر: دو گزینهٔ هم‌عرض تا انگشتِ موبایل راحت باشد */
 .dyn .dyn-yesno .dyn-pill { min-width: 74px; text-align: center; }
 
+/* «تاریخ مشخص است / رزرو بدون تاریخ» — یک کنترل؛ فقط محتوای گزینهٔ انتخاب‌شده دیده می‌شود. */
+.dyn .dyn-when-pick { margin-bottom: 8px; }
+.dyn .dyn-when-pick .dyn-pill { flex: 1 1 0; min-width: 0; min-height: 44px; text-align: center; }
+.dyn .dyn-when-date { display: block; }
+.dyn .dyn-when > .pf-hint { display: block; }
+/* برچسبِ کادرِ تاریخ برای صفحه‌خوان — سرخطِ گروه همان را روی صفحه نشان می‌دهد. */
+.dyn .dyn-sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.dyn .dyn-pill:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
 .dyn .dyn-rate { display: flex; gap: 4px; align-items: center; }
 .dyn-star-btn {
   cursor: pointer; background: transparent; border: none; padding: 2px;

@@ -30,6 +30,19 @@ for (let i = 0; i < 10; i += 1) { DIGITS['۰۱۲۳۴۵۶۷۸۹'[i]] = String(i);
  * می‌ماند.
  */
 export function normalizeName(raw: string | null | undefined): string {
+  const all = foldText(raw).split(' ').filter(Boolean);
+  const words = all.filter((w) => !NOISE.includes(w));
+  // اگر کلِ نام از واژه‌های بی‌معنا ساخته شده بود، خودِ نام را نگه دار — وگرنه
+  // «بیمارستان امام» به کلیدِ خالی می‌رسید و با هر نامِ خالیِ دیگری یکی می‌شد.
+  return (words.length ? words : all).join(' ');
+}
+
+/**
+ * همان یکسان‌سازیِ حروفِ `normalizeName` (ی/ک عربی، رقمِ فارسی، نیم‌فاصله، علائم)، **بی**
+ * حذفِ واژه‌های بی‌معنا — برای جست‌وجوی هم‌زمان با تایپ، که «امام» و «بیمارستان» همان
+ * چیزی‌اند که کاربر تایپ می‌کند.
+ */
+export function foldText(raw: string | null | undefined): string {
   if (!raw) return '';
   let s = String(raw);
   s = s.replace(/[يكةۀأإآؤئ]/g, (c) => AR_TO_FA[c] ?? c);
@@ -37,12 +50,7 @@ export function normalizeName(raw: string | null | undefined): string {
   // نیم‌فاصله، اعرابِ عربی، کشیده و علائم → فاصله
   s = s.replace(/[‌‏‎ً-ْـ]/g, ' ');
   s = s.replace(/[()\[\]{}«»"'’,،.\-_/\\|+*#]/g, ' ');
-  s = s.toLowerCase();
-  const words = s.split(/\s+/).filter(Boolean).filter((w) => !NOISE.includes(w));
-  // اگر کلِ نام از واژه‌های بی‌معنا ساخته شده بود، خودِ نام را نگه دار — وگرنه
-  // «بیمارستان امام» به کلیدِ خالی می‌رسید و با هر نامِ خالیِ دیگری یکی می‌شد.
-  const kept = words.length ? words : s.split(/\s+/).filter(Boolean);
-  return kept.join(' ');
+  return s.toLowerCase().split(/\s+/).filter(Boolean).join(' ');
 }
 
 /** فاصلهٔ ویرایشیِ دو رشته (Levenshtein) — برای «لقمان» در برابر «لغمان». */

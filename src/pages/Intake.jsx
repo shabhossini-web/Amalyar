@@ -217,6 +217,11 @@ function Form() {
   const [draftState, setDraftState] = useState('idle');
   const draftTimer = useRef(null);
   const draftSeq = useRef(0);
+  /* نسخهٔ هر ذخیره (پیش‌نویس یا ثبت) — عددِ صعودی. سرور پیش‌نویسِ دیررس را روی ذخیرهٔ
+     تازه‌تر نمی‌نشاند (`SAVE_REV` در `intake.service.ts`)، حالا که برخورد را به‌جای رد
+     کردن روی نسخهٔ تازه دوباره اجرا می‌کند. */
+  const lastRev = useRef(0);
+  const nextRev = () => { lastRev.current = Math.max(Date.now(), lastRev.current + 1); return lastRev.current; };
 
   useEffect(() => { document.title = 'فرمِ مراجعه'; }, []);
   const load = useCallback(async () => {
@@ -270,7 +275,7 @@ function Form() {
     try {
       await api(`/public/intake/form/${token}/draft`, {
         method: 'POST', auth: false,
-        body: { values: vals, ...(nextPage ? { page: nextPage } : {}) },
+        body: { values: vals, rev: nextRev(), ...(nextPage ? { page: nextPage } : {}) },
       });
       if (seq === draftSeq.current) setDraftState('saved');
     } catch {
@@ -307,11 +312,14 @@ function Form() {
 
   const saveFill = async () => {
     setErr(''); setBusy(true);
+    /* ثبت همهٔ پاسخ‌ها را می‌برد؛ ذخیرهٔ خودکارِ در صف دیگر فقط یک نوشتنِ اضافه بود که
+       با همین ثبت هم‌زمان می‌رسید. */
+    clearTimeout(draftTimer.current);
     /* ⚠️ تاریخ **شمسی فقط در مرورگر** زندگی می‌کند؛ روی سیم همیشه ISO می‌رود.
        تا دیروز `f` خام فرستاده می‌شد، یعنی «۱۴۰۵/۰۵/۱۴» به سرور می‌رسید و
        سرور آن را سالِ ۱۴۰۵ **میلادی** می‌فهمید — و مراجعه بی‌سروصدا شش قرن
        عقب ثبت می‌شد. هیچ خطایی نمی‌داد؛ فقط از تقویم و گزارش‌ها غیب می‌شد. */
-    const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '', values: vals, hospitalId: vals.hospitalId };
+    const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '', values: vals, hospitalId: vals.hospitalId, rev: nextRev() };
     try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body })); }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
@@ -426,6 +434,9 @@ function Form() {
   /* فرمی که مرحلهٔ واریز دارد «ثبت و مرحلهٔ بعد» می‌گوید (همان استپر تصمیم
      می‌گیرد، نه یک شرطِ دوم که بتواند از آن جدا بیفتد). */
   const paidNext = steps.some((x) => x.key === 'pending_payment');
+  /* کادرِ بیمارستان جدا از `DynForm` کشیده می‌شود (جست‌وجو با پیشنهاد)، ولی برچسب، ستاره و
+     روشن/خاموشش همان فیلدِ فرم‌ساز است. */
+  const hospitalField = d.form?.fields?.find((x) => x.key === 'hospitalName' && x.active !== false && (x.page ?? 1) === page);
   const submitLabel = paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
 
   return (
@@ -494,7 +505,13 @@ function Form() {
                 </span>
               )}
             </div>
-            {d.form.fields.some(x => x.key === 'hospitalName' && (x.page ?? 1) === page) && <HospitalLookup token={token} value={vals.hospitalName ?? ''} onChange={(name, id) => setVals(s => ({ ...s, hospitalName: name, hospitalId: id }))} disabled={busy} error={vErr.hospitalName} />}
+            {hospitalField && (
+              <HospitalLookup
+                token={token} label={hospitalField.label} required={!!hospitalField.required}
+                value={vals.hospitalName ?? ''} disabled={busy} error={vErr.hospitalName}
+                onChange={(name, id) => setVals((s) => ({ ...s, hospitalName: name, hospitalId: id }))}
+              />
+            )}
             {/* ذخیرهٔ خودکار روی blur. `onBlur` در ری‌اکت **حباب می‌کند**، پس
                 این یک لایه کافی است و `DynForm`ِ مشترک دست نمی‌خورد. */}
             <div onBlur={draftSoon}>
