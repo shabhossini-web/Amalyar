@@ -18,6 +18,8 @@
  *   - تغییرِ تاریخ یا متن، ردیفِ تازه بسازد و قبلی را لغو کند
  *   - `uncertain` با مکثِ ۵/۱۵/۴۵ دقیقه برگردد به صف
  *   - بعد از سه تلاشِ دوباره `failed` شود و `sms.failed` صادر شود
+ *   - ردِ ملی‌پیامک («قطعاً نرفت») هم همان سه تلاش را بگیرد — در صف، با علتِ پیدا
+ *     (گزارشِ میدانی ۱۴۰۵/۰۷/۰۴: ردِ لحظه‌ای تا ابد «ناموفق» ماند و دستیِ همان متن رفت)
  *  نباید بیفتد:
  *   - پیامِ **رفته** دوباره کاشته یا لغو شود
  *   - یادآوریِ کهنهٔ بی‌کلید برای همیشه `pending` بماند (تلهٔ NULL در SQL)
@@ -156,6 +158,47 @@ try {
   const h = await db.reminder.findUnique({ where: { id: hard.id } });
   ok(h.status === 'failed' && h.attempts === 1,
     `**نباید بیفتد:** خطای قطعی سه بار تکرار نشد (${h.status}، ${h.attempts} تلاش)`);
+
+  console.log('\n۹) ردِ ملی‌پیامک «قطعاً نرفت» است — همان سه تلاش، ولی در صف و با علتِ پیدا');
+  const refusing = { send: async () => {
+    const e = new Error('سرویس پیامک موقتاً در دسترس نیست');
+    e.smsOutcome = 'rejected'; e.smsDetail = 'ملی‌پیامک پیام را نپذیرفت: سقفِ ارسالِ لحظه‌ای';
+    throw e;
+  } };
+  const refused = await db.reminder.create({
+    data: { patientId: pid, kind: 'notice', dueAt: new Date(Date.now() - 60000), phone: '09120000000',
+      text: tag + ' ردِ لحظه‌ای', status: 'pending', dedupeKey: tag + 'refused' },
+  });
+  const rw = [];
+  for (let i = 1; i <= 4; i++) {
+    await db.reminder.updateMany({ where: { id: refused.id }, data: { dueAt: new Date(Date.now() - 1000) } });
+    await sendReminders(db, refusing, [refused.id]);
+    const r = await db.reminder.findUnique({ where: { id: refused.id } });
+    rw.push({ status: r.status, attempts: r.attempts, inMin: Math.round((r.dueAt.getTime() - Date.now()) / 60000), error: r.error ?? '' });
+  }
+  ok(rw.slice(0, 3).every((w) => w.status === 'pending'),
+    `**باید بیفتد:** ردِ ملی‌پیامک در صف ماند، نه «ناموفق» (${rw.map((w) => w.status).join('، ')})`);
+  ok(rw.slice(0, 3).map((w) => w.inMin).join(',') === '5,15,45',
+    `**باید بیفتد:** مکث‌ها ۵ / ۱۵ / ۴۵ دقیقه (${rw.slice(0, 3).map((w) => w.inMin).join('، ')})`);
+  ok(rw.every((w) => w.error.includes('سقفِ ارسالِ لحظه‌ای') && !w.error.includes('موقتاً در دسترس نیست')),
+    'علتِ واقعی در هر تلاش در دفتر پیداست، نه پیامِ کلی');
+  ok(rw[3].status === 'failed' && rw[3].attempts === 4,
+    `**باید بیفتد:** بعد از سه تلاشِ دوباره failed شد (${rw[3].status}، ${rw[3].attempts} تلاش)`);
+  ok(await db.domainEvent.count({ where: { type: 'sms.failed', refType: 'reminder', refId: refused.id } }) === 1,
+    'کارِ «ارسالِ دوباره» یک‌بار و فقط پس از آخرین تلاش');
+
+  console.log('\n۱۰) ردِ لحظه‌ای که تلاشِ بعدی‌اش برود — همان ردیف «رفت»، بی‌علت و بی‌کار');
+  const later = await db.reminder.create({
+    data: { patientId: pid, kind: 'notice', dueAt: new Date(Date.now() - 60000), phone: '09120000000',
+      text: tag + ' بعدتر می‌رود', status: 'pending', dedupeKey: tag + 'later' },
+  });
+  await sendReminders(db, refusing, [later.id]);
+  await db.reminder.updateMany({ where: { id: later.id }, data: { dueAt: new Date(Date.now() - 1000) } });
+  await sendReminders(db, { send: async () => ({ sent: true, stub: false, providerId: '3741437414' }) }, [later.id]);
+  const l = await db.reminder.findUnique({ where: { id: later.id } });
+  ok(l.status === 'sent' && !l.error && l.providerId === '3741437414', `تلاشِ دوم رفت (${l.status}، علت: ${l.error ?? '—'})`);
+  ok(await db.domainEvent.count({ where: { type: 'sms.failed', refType: 'reminder', refId: later.id } }) === 0,
+    '**نباید بیفتد:** ردی که بعدتر رفت کارِ «ارسالِ دوباره» نساخت');
 } finally {
   const vids = (await db.visit.findMany({ where: { patient: { code: { startsWith: tag } } }, select: { id: true } })).map((x) => x.id);
   await db.domainEvent.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } }).catch(() => {});

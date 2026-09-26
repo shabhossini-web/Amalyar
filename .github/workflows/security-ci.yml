@@ -168,26 +168,46 @@ jobs:
             process.env.NODE_ENV = 'test';
             answer(200, { recIds: [], status: 'خط فرستنده معتبر نیست' });
             r = await sms.send('09121234567', 'x');
-            if (r.sent || r.stub || !/خط فرستنده/.test(r.detail || '')) fail('بیرون از production علت باید برگردد: ' + JSON.stringify(r));
-            // ⑧ دفترِ یادآوری‌ها و کارِ «ارسالِ دوباره» علتِ واقعی را می‌گیرند، نه پیامِ کلی
+            if (r.sent || r.stub || r.outcome !== 'rejected' || !/خط فرستنده/.test(r.detail || '')) fail('بیرون از production علت باید برگردد: ' + JSON.stringify(r));
+            r = await sms.send('123', 'x');
+            if (r.sent || r.outcome !== 'invalid') fail('شمارهٔ خراب باید invalid باشد، نه رد: ' + JSON.stringify(r));
+            // ⑧ ردِ ملی‌پیامک یعنی «قطعاً نرفت»: سه تلاشِ خودکار (۵ / ۱۵ / ۴۵ دقیقه) در صف و با
+            //    علتِ پیدا؛ بعد failed + یک کارِ «ارسالِ دوباره» با همان علت، نه پیامِ کلی.
+            //    (گزارشِ میدانی: ردِ لحظه‌ای تا ابد «ناموفق» می‌ماند و ارسالِ دستیِ همان متن رفت.)
             process.env.NODE_ENV = 'production';
             answer(200, { recIds: [14] });
-            const writes = [], events = [];
-            const row = { id: 7, phone: '09121234567', text: 'مراقبت', attempts: 0, kind: 'post_op_care', patientId: 1, visitId: 2 };
-            const client = {
-              reminder: {
-                updateMany: async (q) => ({ count: q.where && q.where.id === 7 ? 1 : 0 }),
-                findMany: async () => [row],
-                update: async (q) => { writes.push(q.data); return {}; },
-              },
-              domainEvent: { create: async (q) => { events.push(q.data); } },
+            const fake = (phone) => {
+              const writes = [], events = [];
+              const row = { id: 7, phone, text: 'مراقبت', attempts: 0, kind: 'post_op_care', patientId: 1, visitId: 2 };
+              const client = {
+                reminder: {
+                  updateMany: async (q) => ({ count: q.where && q.where.id === 7 ? 1 : 0 }),
+                  findMany: async () => [row],
+                  update: async (q) => { writes.push(q.data); if (q.data.attempts) row.attempts = q.data.attempts; return {}; },
+                },
+                domainEvent: { create: async (q) => { events.push(q.data); } },
+              };
+              return { writes, events, client };
             };
-            const res = await sendReminders(client, sms, [7]);
-            const w = writes[writes.length - 1] || {};
-            if (res.failed !== 1 || w.status !== 'failed') fail('ردِ قطعی باید failed شود: ' + JSON.stringify(w));
-            if (!/لینک/.test(w.error || '') || w.error.includes(PUBLIC)) fail('دفتر علتِ واقعی را ندارد: ' + w.error);
-            const ev = events.find((x) => x.type === 'sms.failed');
-            if (!ev || ev.payload.error !== w.error) fail('کارِ «ارسالِ دوباره» باید همان علت را ببرد');
+            const f = fake('09121234567');
+            const steps = [];
+            for (let i = 0; i < 4; i++) {
+              await sendReminders(f.client, sms, [7]);
+              const w = f.writes[f.writes.length - 1];
+              steps.push({ status: w.status, inMin: w.dueAt ? Math.round((w.dueAt.getTime() - Date.now()) / 60000) : null, error: w.error || '' });
+            }
+            if (steps.slice(0, 3).map((x) => x.status).join() !== 'pending,pending,pending') fail('ردِ ملی‌پیامک باید در صف بماند: ' + JSON.stringify(steps));
+            if (steps.slice(0, 3).map((x) => x.inMin).join() !== '5,15,45') fail('مکث‌ها باید ۵ / ۱۵ / ۴۵ دقیقه باشند: ' + steps.map((x) => x.inMin).join());
+            if (!steps.every((x) => /لینک/.test(x.error) && !x.error.includes(PUBLIC))) fail('علتِ واقعی در هر تلاش باید پیدا باشد: ' + JSON.stringify(steps));
+            if (steps[3].status !== 'failed') fail('بعد از سه تلاشِ دوباره باید failed شود: ' + steps[3].status);
+            const failedEv = f.events.filter((x) => x.type === 'sms.failed');
+            if (failedEv.length !== 1 || f.events.length !== 1) fail('کارِ «ارسالِ دوباره» فقط یک‌بار و فقط پس از آخرین تلاش: ' + f.events.map((x) => x.type).join());
+            if (!/لینک/.test(failedEv[0].payload.error)) fail('کارِ «ارسالِ دوباره» باید علتِ واقعی را ببرد: ' + failedEv[0].payload.error);
+            // شمارهٔ خراب تکرار نمی‌شود — یک‌باره failed با علتِ روشن
+            const g = fake('123');
+            await sendReminders(g.client, sms, [7]);
+            const gw = g.writes[g.writes.length - 1] || {};
+            if (gw.status !== 'failed' || gw.attempts !== 1 || !/شماره/.test(gw.error || '')) fail('شمارهٔ خراب نباید تلاشِ دوباره بگیرد: ' + JSON.stringify(gw));
             console.log('sms reason ok');
           })().catch((x) => fail(String((x && x.stack) || x)));
           "

@@ -11,6 +11,8 @@ paths:
   - server/src/patients/portal.service.ts
   - src/app/Reminders.jsx
   - src/app/Intake.jsx
+  - scripts/e2e/w1-9-reminder-idempotency.mjs
+  - docs/plan/CONTRACTS.md
 note: >-
   پیامکِ مراقبتِ بعد از عمل «موقتاً در دسترس نیست» می‌گفت: علتِ ردِ ملی‌پیامک دور ریخته می‌شد.
   علت حالا در دفترِ یادآوری و دکمه‌های کارکنان؛ «لغو11» لاتین. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.

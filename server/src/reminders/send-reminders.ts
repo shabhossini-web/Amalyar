@@ -17,6 +17,8 @@ async function emitSms(client: any, row: any, type: string, payload: Record<stri
  */
 const BACKOFF_MIN = [5, 15, 45];
 const MAX_ATTEMPTS = BACKOFF_MIN.length + 1;   // ارسالِ اول + سه تلاشِ دوباره
+/** رقمِ فارسی برای متنی که کارکنان در دفتر می‌خوانند. */
+const faNum = (n: number) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
 const UNCERTAIN_TEXT = 'نتیجه ارسال مشخص نشد؛ پیش از ارسال مجدد در سرویس پیامک بررسی شود';
 
 export async function sendReminders(client: any, sms: any, ids?: number[]) {
@@ -38,7 +40,11 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
     try {
       if (!row.phone) throw new Error('شماره‌ای ثبت نشده');
       const result = await sms.send(row.phone, row.text);
-      if (!result.sent && !result.stub) throw new Error(result.detail ?? 'سرویس پیامک ارسال را نپذیرفت');
+      if (!result.sent && !result.stub) {
+        /* `outcome` (بیرون از production): «rejected» = ملی‌پیامک نپذیرفت و دوباره امتحان
+           می‌شود؛ «invalid» = شمارهٔ خراب، تکرارش بی‌فایده است. */
+        throw Object.assign(new Error(result.detail ?? 'سرویس پیامک ارسال را نپذیرفت'), { smsOutcome: result.outcome });
+      }
       accepted = result.sent;
       await client.reminder.update({ where: { id: row.id }, data: { status: result.stub ? 'simulated' : 'sent', sentAt: result.sent ? new Date() : null, providerId: result.providerId ?? null, deliveryStatus: result.sent ? 'unknown' : 'not_sent', error: result.stub ? 'حالت آزمایشی؛ پیام واقعی ارسال نشده است' : null } });
       if (result.sent) sent++; else skipped++;
@@ -48,26 +54,43 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
       /* علتِ واقعی (`smsDetail`: کلید/خط تنظیم نیست، یا متنِ ردِ ملی‌پیامک)، نه پیامِ
          عمومیِ «موقتاً در دسترس نیست» — این دفتر را فقط کارکنان می‌بینند. */
       const reason = String((e as any)?.smsDetail ?? (e instanceof Error ? e.message : e));
-      const uncertain = accepted || (e as any)?.smsOutcome === 'unknown';
+      const outcome = (e as any)?.smsOutcome;
+      const uncertain = accepted || outcome === 'unknown';
+      /* ردِ ملی‌پیامک (یا کلید/خطِ تنظیم‌نشده) یعنی «قطعاً نرفت» — دوباره فرستادنش پیامِ
+         تکراری نمی‌سازد، پس همان سه تلاش را می‌گیرد؛ این بار در صف (`pending`)، نه «نامعلوم».
+         گزارشِ میدانی ۱۴۰۵/۰۷/۰۴: مراقبتِ بعد از عمل در لحظهٔ موعد رد شد و تا ابد «ناموفق»
+         ماند، در حالی که «ارسالِ دوباره»ی دستیِ **همان متن** بعدتر رفت. شکستِ قطعیِ دیگر
+         (شمارهٔ خراب، خطای برنامه) همچنان یک‌باره `failed` است. */
+      const refused = !uncertain && (outcome === 'rejected' || outcome === 'unconfigured');
       const attempts = (row.attempts ?? 0) + 1;
-      /* تلاشِ بعدی: ۵ → ۱۵ → ۴۵ دقیقه. بعد از سومی دیگر `uncertain` نمی‌ماند،
+      /* تلاشِ بعدی: ۵ → ۱۵ → ۴۵ دقیقه. بعد از سومی دیگر تکرار نمی‌شود،
          `failed` می‌شود و `sms.failed` صادر می‌شود تا کسی ببیندش. */
-      const retry = uncertain && attempts < MAX_ATTEMPTS;
+      const retry = (uncertain || refused) && attempts < MAX_ATTEMPTS;
       const nextDue = retry ? new Date(Date.now() + BACKOFF_MIN[attempts - 1] * 60000) : undefined;
+      /* علت همیشه پیداست؛ شمارهٔ تلاش **اول** می‌آید تا بریدنِ ۳۰۰ نویسه آن را نبرد. */
+      const error = uncertain
+        ? (retry ? UNCERTAIN_TEXT : 'پس از سه تلاش نتیجهٔ ارسال مشخص نشد')
+        : refused
+          ? (retry
+            ? `تلاشِ ${faNum(attempts)} از ${faNum(MAX_ATTEMPTS)} نرفت و خودکار دوباره امتحان می‌شود — ${reason}`
+            : `پس از ${faNum(attempts)} تلاش نرفت — ${reason}`)
+          : reason;
       await client.reminder.update({
         where: { id: row.id },
         data: {
           attempts,
-          status: retry ? 'uncertain' : 'failed',
+          status: retry ? (uncertain ? 'uncertain' : 'pending') : 'failed',
           ...(nextDue ? { dueAt: nextDue } : {}),
           sentAt: null,
           deliveryStatus: uncertain && retry ? 'unknown' : 'not_sent',
-          error: uncertain
-            ? (retry ? UNCERTAIN_TEXT : 'پس از سه تلاش نتیجهٔ ارسال مشخص نشد')
-            : reason.slice(0, 300),
+          error: error.slice(0, 300),
         },
       });
-      await emitSms(client, row, retry ? 'sms.uncertain' : 'sms.failed', { error: reason.slice(0, 300), attempts });
+      /* ردی که هنوز تلاش دارد رویداد نمی‌سازد: کارِ «ارسالِ دوباره» (`sms.failed`) فقط وقتی
+         به منشی می‌رسد که تلاش‌های خودکار تمام شده باشد. */
+      if (!(refused && retry)) {
+        await emitSms(client, row, retry ? 'sms.uncertain' : 'sms.failed', { error: reason.slice(0, 300), attempts });
+      }
     }
   }
   return { due: due.length, sent, failed, skipped };

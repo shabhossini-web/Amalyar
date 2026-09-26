@@ -105,13 +105,14 @@ export class SmsService {
     phone: string,
     text: string,
     opts: { skipLagho?: boolean } = {},
-  ): Promise<{ sent: boolean; stub: boolean; providerId?: string; detail?: string }> {
+  ): Promise<{ sent: boolean; stub: boolean; providerId?: string; detail?: string; outcome?: 'rejected' | 'invalid' }> {
     const apiKey = process.env.MELI_API_KEY;
     const from = process.env.MELI_FROM;
     const to = this.normalize(phone);
     if (!to) {
       this.log.warn('درخواست پیامک با شمارهٔ نامعتبر رد شد');
-      return { sent: false, stub: false };
+      /* `invalid`: تکرارش بی‌فایده است — دفترِ یادآوری دوباره امتحانش نمی‌کند. */
+      return { sent: false, stub: false, detail: 'شمارهٔ موبایلِ گیرنده معتبر نیست', outcome: 'invalid' };
     }
     if (!apiKey || !from) {
       if (process.env.NODE_ENV === 'production') {
@@ -146,7 +147,7 @@ export class SmsService {
       /* علت بی‌شماره و بی‌متنِ پیام — `rejectionDetail` هر رشتهٔ رقمیِ بلند را پاک کرده است. */
       this.log.warn(`ارسال ملی‌پیامک پذیرفته نشد (HTTP ${res.status}) — ${detail}`);
       if (process.env.NODE_ENV === 'production') throw smsUnavailable(detail, 'rejected');
-      return { sent: false, stub: false, detail };
+      return { sent: false, stub: false, detail, outcome: 'rejected' };
     }
     return { sent: true, stub: false, providerId: String(recIds[0]) };
   }
