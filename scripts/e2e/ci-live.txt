@@ -51,6 +51,7 @@ order-review-sheet
 org-chat
 pick-ui
 platform-domains
+platform-domain-change
 portal
 portal-ui
 postop-flow

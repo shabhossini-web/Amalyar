@@ -215,6 +215,60 @@
   color: #fecdd3; background: rgba(251, 113, 133, .09); border: 1px solid rgba(251, 113, 133, .25);
 }
 
+/* ── نشانیِ سایتِ شرکت: افزودن و اصلی‌کردن، برگشت، حذفِ نشانیِ فرعی ──
+   فیروزه‌ای = نشانی (همان رنگِ تراشه‌های کارت)؛ صورتی فقط برای حذف. */
+.pa-soft {
+  font-size: 10px; padding: 7px 11px; border-radius: 9px; color: #67e8f9; cursor: pointer;
+  background: rgba(103, 232, 249, .08); border: 1px solid rgba(103, 232, 249, .24) !important;
+}
+.pa-soft:disabled { opacity: .45; cursor: default; }
+.pa-addr { width: min(520px, 100%); text-align: right; }
+.pa-addr h2, .pa-addr .pa-modal-sub { text-align: center; }
+.pa-addr-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 8px; }
+.pa-addr-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 48px;
+  padding: 6px 12px; border-radius: 12px;
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(103, 232, 249, .16);
+}
+.pa-addr-list li.on { background: rgba(103, 232, 249, .08); border-color: rgba(103, 232, 249, .38); }
+.pa-addr-list a {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12.5px; color: #67e8f9; text-decoration: none;
+}
+.pa-addr-list a:hover { text-decoration: underline; }
+.pa-addr-list em {
+  flex-shrink: 0; font-style: normal; font-size: 10px; font-weight: 800; color: #34d399;
+  padding: 3px 10px; border-radius: 99px; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .24);
+}
+.pa-addr-list span { display: flex; gap: 6px; flex-shrink: 0; }
+.pa-addr-list button {
+  min-height: 36px; padding: 0 11px; border-radius: 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
+  color: #67e8f9; background: rgba(103, 232, 249, .08); border: 1px solid rgba(103, 232, 249, .24);
+}
+.pa-addr-list .pa-addr-del { color: #fda4af; background: rgba(251, 113, 133, .08); border-color: rgba(251, 113, 133, .26); }
+.pa-addr-list button:disabled { opacity: .45; cursor: default; }
+.pa-addr-warn { margin: -4px 0 14px; font-size: 11.5px; line-height: 1.9; color: #fda4af; text-align: center; }
+.pa-addr input { text-align: left; letter-spacing: normal; border-color: rgba(103, 232, 249, .3); }
+.pa-addr input:focus { border-color: #67e8f9; box-shadow: 0 0 0 3px rgba(103, 232, 249, .14); }
+.pa-addr-preview { margin: 8px 2px 0; font-size: 12px; color: var(--text2); text-align: left; }
+.pa-primary-btn { color: #fff; cursor: pointer; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
+.pa-primary-btn:disabled { opacity: .45; cursor: default; }
+.pa-addr-next {
+  margin-top: 16px; padding: 13px 15px; border-radius: 13px; font-size: 12px; line-height: 2; color: var(--text2);
+  background: rgba(103, 232, 249, .06); border: 1px solid rgba(103, 232, 249, .22);
+}
+.pa-addr-next b { color: var(--text1); }
+.pa-addr-next ol { margin: 6px 0; padding-inline-start: 20px; }
+.pa-addr-next code, .pa-addr-next a { color: #67e8f9; font-size: 11.5px; word-break: break-all; }
+.pa-addr-next p { margin: 6px 0 0; }
+.pa-soft:focus-visible, .pa-addr button:focus-visible, .pa-addr-list a:focus-visible {
+  outline: 2px solid var(--cyan); outline-offset: 2px;
+}
+@media (max-width: 480px) {
+  .pa-addr-list li { flex-wrap: wrap; padding: 8px 12px; }
+  .pa-addr-list span { width: 100%; justify-content: flex-end; }
+}
+
 @media (max-width: 760px) {
   .pa { padding: 14px; }
   .pa-grid { grid-template-columns: 1fr; }

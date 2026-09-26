@@ -2,6 +2,7 @@ import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
 import { HospitalDirectoryService } from '../catalog/hospital-directory.service';
 import { TenantMigratorService } from '../tenant/tenant-migrator.service';
 import {
+  BadRequestException,
   Body,
   CanActivate,
   ConflictException,
@@ -63,6 +64,12 @@ function requestIp(req: Request): string {
   return (first || req.ip || 'unknown').trim().slice(0, 128);
 }
 
+/** Hostِ همین درخواستِ پنل — تا نشانیِ خودِ پنل هرگز به شرکتی داده نشود. */
+function requestHost(req: Request): string | null {
+  const host = String(req.headers.host ?? '').split(':')[0].trim().toLowerCase();
+  return host || null;
+}
+
 function equalText(left: string, right: string): boolean {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
@@ -114,6 +121,67 @@ class DeleteTenantDto {
   @IsString()
   @Length(3, 40)
   confirmSlug!: string;
+}
+
+/** همان قالبِ دامنه‌ای که ساختِ شرکت می‌پذیرد — یک قاعده برای ساخت و تغییرِ نشانی. */
+const HOSTNAME_RE = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+/**
+ * نشانیِ واردشده در پنل → دامنهٔ خام. مدیر ممکن است نشانی را از نوارِ مرورگر کپی کند
+ * (`https://…/`، حروفِ بزرگ، نقطهٔ آخر)؛ همه این‌جا یکی می‌شوند، نه در هر مصرف‌کننده.
+ */
+export function normalizeTenantHostname(raw: string): string {
+  const host = String(raw ?? '').trim().toLowerCase()
+    .replace(/^https?:\/\//, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '').replace(/\.$/, '');
+  if (!HOSTNAME_RE.test(host)) {
+    throw new BadRequestException('نشانی معتبر نیست — فقط حروفِ انگلیسی، عدد، خط‌تیره و نقطه؛ مثلِ name.amalyar.com');
+  }
+  return host;
+}
+
+/**
+ * نشانی‌هایی که مالِ خودِ پلتفرم‌اند و هرگز به شرکتی نمی‌رسند.
+ *
+ * ⚠️ `TenantMiddleware` هر Hostی را که در `tenant_domains` باشد به همان شرکت می‌برد. اگر
+ * `api.amalyar.com` یا نشانیِ همین پنل روزی دامنهٔ یک شرکت ثبت شود، درخواست‌های آن نشانی
+ * دیتابیسِ آن شرکت را می‌گیرند. پس ریشهٔ دامنه، برچسب‌های زیرساختی (`api`، `admin`،
+ * `www`، …، و نسخه‌های `api-staging` و مانندش) و نشانیِ خودِ پنل رد می‌شوند.
+ */
+const RESERVED_LABELS = new Set(['www', 'api', 'admin', 'panel', 'platform', 'app', 'mail', 'status']);
+export function reservedTenantHostname(hostname: string, platformHost?: string | null): boolean {
+  let adminHost = '';
+  try { adminHost = platformAdminConfig().webOtpHost; } catch { /* پیکربندیِ ناقص خودش جای دیگر خطا می‌دهد */ }
+  const own = [platformHost, adminHost]
+    .map((h) => String(h ?? '').trim().toLowerCase().replace(/:\d+$/, ''))
+    .filter(Boolean);
+  if (own.includes(hostname)) return true;
+  const apexes = new Set(['amalyar.com', ...own.map((h) => h.split('.').slice(-2).join('.'))]);
+  if (apexes.has(hostname)) return true;
+  const [label, ...rest] = hostname.split('.');
+  if (!apexes.has(rest.join('.'))) return false;
+  const base = label.replace(/-(staging|stage|dev|test)$/, '');
+  return RESERVED_LABELS.has(base);
+}
+
+/**
+ * زیردامنهٔ یک‌سطحی زیرِ این دامنه بی هیچ کارِ دستی سرو می‌شود: گواهیِ wildcard (DNS-01 آروان) و
+ * routerِ wildcardِ Traefik در `/data/coolify/proxy/dynamic/wildcard.yaml` (`docs/CLAUDE_HANDOFF.md`،
+ * ۲۰۲۶-۰۷-۲۶). گواهیِ `*.amalyar.com` فقط **یک** سطح را می‌پوشاند؛ `a.b.amalyar.com` و دامنهٔ
+ * خودِ مشتری (مثلاً `clinic.ir`) رکوردِ DNS و افزودنِ دستی در Coolify می‌خواهند.
+ */
+const WILDCARD_APEX = 'amalyar.com';
+export const servedAutomatically = (hostname: string) =>
+  hostname.endsWith(`.${WILDCARD_APEX}`) && hostname.split('.').length === WILDCARD_APEX.split('.').length + 1;
+
+class TenantDomainDto {
+  @IsString()
+  @Length(4, 260, { message: 'نشانی را کامل بنویسید' })
+  hostname!: string;
+
+  /// پیش‌فرض: نشانیِ تازه همان لحظه اصلی می‌شود — «تغییرِ نشانی» یعنی همین.
+  @IsOptional()
+  @IsBoolean()
+  primary?: boolean;
 }
 
 class CentralTariffDto {
@@ -545,10 +613,14 @@ export class PlatformProvisioningService {
     return job;
   }
 
-  async create(dto: CreateProvisioningJobDto, actorHash: string, ipHash: string) {
+  async create(dto: CreateProvisioningJobDto, actorHash: string, ipHash: string, platformHost: string | null = null) {
     const slug = dto.slug.trim().toLowerCase();
     const name = dto.name.trim();
     const hostname = dto.hostname.trim().toLowerCase();
+    /* همان نگهبانِ تغییرِ نشانی: شرکتِ تازه هم نشانیِ خودِ پلتفرم را نمی‌گیرد. */
+    if (reservedTenantHostname(hostname, platformHost)) {
+      throw new BadRequestException('این نشانی مالِ خودِ پلتفرم است و به شرکتی داده نمی‌شود');
+    }
 
     const tenant = await this.control.tenant.findFirst({
       where: { OR: [{ slug }, { domains: { some: { hostname } } }] },
@@ -661,6 +733,120 @@ export class PlatformProvisioningService {
       take: 20,
       select: this.deletionSelect,
     });
+  }
+
+  /**
+   * تغییرِ نشانیِ سایتِ یک شرکت (۱۴۰۵/۰۷/۰۴ — درخواستِ مشتری).
+   *
+   * «تغییر» یعنی **افزودن + اصلی‌کردن**، نه جایگزینی: نشانیِ قبلی هم به همان شرکت
+   * می‌رسد تا لینک‌هایی که برای بیماران پیامک شده (ثبت‌نام، پیگیری، پرونده) نشکنند.
+   * `resolveHostname` هر دامنه‌ای در `tenant_domains` را به شرکتش می‌برد؛ `primary` فقط
+   * نشانیِ نمایشیِ پنل است. دیتابیس، شناسهٔ شرکت (`slug`) و داده دست نمی‌خورند.
+   */
+  async addDomain(tenantId: string, raw: string, makePrimary: boolean, platformHost: string | null, actorHash: string, ipHash: string) {
+    const hostname = normalizeTenantHostname(raw);
+    if (reservedTenantHostname(hostname, platformHost)) {
+      throw new BadRequestException('این نشانی مالِ خودِ پلتفرم است و به شرکتی داده نمی‌شود');
+    }
+    const tenant = await this.activeTenant(tenantId);
+    const mine = tenant.domains.find((d) => d.hostname === hostname);
+    if (mine) {
+      if (mine.primary) throw new ConflictException('این نشانی همین حالا نشانیِ اصلیِ همین شرکت است');
+      if (!makePrimary) throw new ConflictException('این نشانی از قبل مالِ همین شرکت است');
+      return this.setPrimaryDomain(tenantId, hostname, actorHash, ipHash);
+    }
+    const taken = await this.control.tenantDomain.findUnique({ where: { hostname }, select: { tenantId: true } });
+    if (taken) throw new ConflictException('این نشانی مالِ شرکتِ دیگری است');
+    const queued = await this.control.provisioningJob.findFirst({
+      where: { hostname, status: { in: ['queued', 'running'] } },
+      select: { id: true },
+    });
+    if (queued) throw new ConflictException('این نشانی برای ساختِ شرکتِ دیگری در صف است');
+
+    const previous = tenant.domains.find((d) => d.primary)?.hostname ?? null;
+    await this.control.$transaction(async (tx) => {
+      if (makePrimary) await tx.tenantDomain.updateMany({ where: { tenantId, primary: true }, data: { primary: false } });
+      await tx.tenantDomain.create({ data: { tenantId, hostname, primary: makePrimary } });
+      await tx.platformAuditEvent.create({
+        data: {
+          actorHash, action: 'platform.tenant.domain_added', targetType: 'tenant', targetId: tenantId, ipHash,
+          metadata: { hostname, primary: makePrimary, previous },
+        },
+      });
+    });
+    /* کلاینت نباید حدس بزند نشانی همین حالا باز می‌شود یا کارِ DNS/Coolify می‌خواهد (قانونِ ۱۵). */
+    return { ...(await this.tenantDomains(tenantId)), added: { hostname, automatic: servedAutomatically(hostname) } };
+  }
+
+  /** نشانیِ موجودِ همین شرکت اصلی می‌شود — برگشت به نشانیِ قبلی هم همین است. */
+  async setPrimaryDomain(tenantId: string, raw: string, actorHash: string, ipHash: string) {
+    const hostname = normalizeTenantHostname(raw);
+    const tenant = await this.activeTenant(tenantId);
+    const mine = tenant.domains.find((d) => d.hostname === hostname);
+    if (!mine) throw new NotFoundException('این نشانی مالِ این شرکت نیست');
+    if (!mine.primary) {
+      const previous = tenant.domains.find((d) => d.primary)?.hostname ?? null;
+      await this.control.$transaction(async (tx) => {
+        await tx.tenantDomain.updateMany({ where: { tenantId, primary: true }, data: { primary: false } });
+        await tx.tenantDomain.update({ where: { hostname }, data: { primary: true } });
+        await tx.platformAuditEvent.create({
+          data: {
+            actorHash, action: 'platform.tenant.domain_primary', targetType: 'tenant', targetId: tenantId, ipHash,
+            metadata: { hostname, previous },
+          },
+        });
+      });
+    }
+    return this.tenantDomains(tenantId);
+  }
+
+  /**
+   * حذفِ یک نشانیِ فرعی. نشانیِ اصلی حذف نمی‌شود — شرکت نباید بی‌نشانی بماند، و
+   * «نشانیِ اصلیِ تازه» باید آگاهانه انتخاب شود نه خودکار.
+   */
+  async removeDomain(tenantId: string, raw: string, actorHash: string, ipHash: string) {
+    const hostname = normalizeTenantHostname(raw);
+    const tenant = await this.activeTenant(tenantId);
+    const mine = tenant.domains.find((d) => d.hostname === hostname);
+    if (!mine) throw new NotFoundException('این نشانی مالِ این شرکت نیست');
+    if (mine.primary || tenant.domains.length < 2) {
+      throw new ConflictException('نشانیِ اصلی حذف نمی‌شود — اول نشانیِ دیگری را اصلی کنید');
+    }
+    await this.control.$transaction(async (tx) => {
+      await tx.tenantDomain.delete({ where: { hostname } });
+      await tx.platformAuditEvent.create({
+        data: {
+          actorHash, action: 'platform.tenant.domain_removed', targetType: 'tenant', targetId: tenantId, ipHash,
+          metadata: { hostname },
+        },
+      });
+    });
+    return this.tenantDomains(tenantId);
+  }
+
+  private async activeTenant(tenantId: string) {
+    const tenant = await this.control.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, status: true, domains: { select: { hostname: true, primary: true } } },
+    });
+    if (!tenant) throw new NotFoundException('شرکت یافت نشد');
+    if (tenant.status !== 'active') throw new ConflictException('نشانیِ شرکتی که فعال نیست عوض نمی‌شود');
+    return tenant;
+  }
+
+  /** دامنه‌ها به همان شکلِ `snapshot` — کلاینت کارتِ همان شرکت را بی‌بارگذاریِ دوباره تازه می‌کند. */
+  private async tenantDomains(tenantId: string) {
+    const domains = await this.control.tenantDomain.findMany({
+      where: { tenantId },
+      orderBy: [{ primary: 'desc' }, { hostname: 'asc' }],
+      select: { hostname: true, primary: true },
+    });
+    return {
+      id: tenantId,
+      hostname: domains.find((d) => d.primary)?.hostname ?? domains[0]?.hostname ?? null,
+      domains,
+      shared: domains.length > 1,
+    };
   }
 
   async retry(id: string, actorHash: string, ipHash: string) {
@@ -880,7 +1066,7 @@ export class PlatformController {
   @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
   createJob(@Body() dto: CreateProvisioningJobDto, @Req() req: Request) {
     const session = (req as any).platformSession;
-    return this.provisioning.create(dto, session.phoneHash, this.auth.ipHash(requestIp(req)));
+    return this.provisioning.create(dto, session.phoneHash, this.auth.ipHash(requestIp(req)), requestHost(req));
   }
 
   @Post('provisioning-jobs/:id/retry')
@@ -954,6 +1140,36 @@ export class PlatformController {
       session.phoneHash,
       this.auth.ipHash(ip),
     );
+  }
+
+  /**
+   * نشانی‌های سایتِ یک شرکت — افزودن (و اصلی‌کردن)، اصلی‌کردنِ نشانیِ موجود، حذفِ نشانیِ
+   * فرعی. هیچ‌کدام داده را جابه‌جا نمی‌کند؛ فقط این‌که کدام Host به این شرکت برسد.
+   */
+  @Post('tenants/:id/domains')
+  @HttpCode(200)
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  addDomain(@Param('id') id: string, @Body() dto: TenantDomainDto, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.provisioning.addDomain(
+      id, dto.hostname, dto.primary !== false, requestHost(req), session.phoneHash, this.auth.ipHash(requestIp(req)),
+    );
+  }
+
+  @Post('tenants/:id/domains/primary')
+  @HttpCode(200)
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  primaryDomain(@Param('id') id: string, @Body() dto: TenantDomainDto, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.provisioning.setPrimaryDomain(id, dto.hostname, session.phoneHash, this.auth.ipHash(requestIp(req)));
+  }
+
+  @Post('tenants/:id/domains/remove')
+  @HttpCode(200)
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  removeDomain(@Param('id') id: string, @Body() dto: TenantDomainDto, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.provisioning.removeDomain(id, dto.hostname, session.phoneHash, this.auth.ipHash(requestIp(req)));
   }
 }
 
