@@ -7,6 +7,7 @@ import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import Tabs from '../ui/Tabs.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
 import './theatre.css';
@@ -14,6 +15,13 @@ import './definitions.css';
 import './launcher.css';
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+
+/**
+ * برچسبِ دکمهٔ فیلتر: نام و شمارِ پررنگ — همان شکلِ فیلترِ «مالِ کیست» در پنلِ
+ * کارشناسی و «امروز»، تا ناظر در سه صفحه یک زبان ببیند. شمار داخلِ برچسب است نه
+ * `badge`ِ کهربایی (آن یعنی «هشدار»).
+ */
+const counted = (label, n) => <>{label} <b className="th-own-n">{faNum(n)}</b></>;
 const GENDER_FA = { male: 'مرد', female: 'زن' };
 
 /** «HH:MM» → دقیقه؛ برای مدتِ سپری‌شده. ساعتِ دیوار است، پس همان‌روز حساب می‌شود. */
@@ -56,6 +64,9 @@ export default function Theatre() {
   const [busy, setBusy] = useState('');
   const [toast, setToast] = useState('');
   const [discharging, setDischarging] = useState(false);
+  /* فیلترِ «مالِ کیست» (نمای سرپرستی) — در state همین صفحه، تا با باز و بسته‌شدنِ
+     کارتِ یک عمل همان فیلتر بماند. */
+  const [who, setWho] = useState('all');
 
   const iso = jStrToIso(jday);
 
@@ -96,6 +107,15 @@ export default function Theatre() {
     finally { setBusy(''); }
   };
 
+  /* دسته‌ها و شمارشان از سرور می‌آیند (`day.owners`، فقط در نمای سرپرستی)؛ این‌جا فقط
+     انتخاب می‌شوند. با یک نفر چیزی برای فیلترکردن نیست. دسته‌ای که با عوض‌شدنِ روز
+     دیگر نیست، بی‌صدا به «همه» برمی‌گردد — نه فهرستِ خالی. */
+  const owners = day?.team ? day.owners ?? [] : [];
+  const filterable = owners.length > 1;
+  const pickedOwner = owners.find((o) => o.key === who);
+  const pick = pickedOwner ? who : 'all';
+  const visible = day ? (pickedOwner ? day.visits.filter((v) => (v.techId ?? null) === pickedOwner.techId) : day.visits) : [];
+
   if (err?.status === 403) {
     return <div className="th"><div className="th-note" role="status">{err.message} — از «همهٔ ابزارها» به بخش‌های خودتان بروید.</div></div>;
   }
@@ -126,7 +146,20 @@ export default function Theatre() {
 
       {err && err.status !== 403 && <div className="th-err" role="alert">{err.message}</div>}
 
-      {!openId && <DayList day={day} busy={busy} onOpen={openCard} techLabel={t.tech} />}
+      {!openId && filterable && (
+        <Tabs
+          label={`${t.tech}ِ هر عمل`}
+          variant="scroll"
+          className="th-owners"
+          value={pick}
+          onChange={setWho}
+          items={[
+            { key: 'all', label: counted('همه', day.visits.length), icon: Users },
+            ...owners.map((o) => ({ key: o.key, label: counted(o.kind === 'none' ? `بی‌${t.tech}` : o.label, o.count) })),
+          ]}
+        />
+      )}
+      {!openId && <DayList day={day} visits={visible} busy={busy} onOpen={openCard} techLabel={t.tech} />}
       {openId && card && (
         <Card
           card={card}
@@ -174,13 +207,13 @@ export default function Theatre() {
  * سطر می‌آید تا دو بار نوشته نشود؛ «تعیین نشده» هم خودش خبر است: عملی که
  * هنوز کسی برایش گذاشته نشده.
  */
-function DayList({ day, busy, onOpen, techLabel }) {
+function DayList({ day, visits, busy, onOpen, techLabel }) {
   if (!day) return <p className="th-empty">در حالِ بارگذاری…</p>;
   if (!day.visits.length) return <p className="th-empty">برای این روز عملی ثبت نشده.</p>;
   const team = !!day.team;
   return (
     <ul className="th-list">
-      {day.visits.map((v) => (
+      {visits.map((v) => (
         <li key={v.id}>
           <button type="button" className={`th-item${team ? ' has-owner' : ''}${busy === `open-${v.id}` ? ' busy' : ''}`} data-visit-id={v.id} onClick={() => onOpen(v.id)}>
             <span className="th-item-time" dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</span>

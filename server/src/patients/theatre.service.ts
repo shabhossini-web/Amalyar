@@ -189,7 +189,34 @@ export class TheatreService {
            همان چیزی که سوپرادمین باید از روی تخته ببیند، نه اینکه حدس بزند. */
         ...(team ? { techId: v.techId ?? null, tech: TheatreService.personName(v.tech) } : {}),
       })),
+      /* فیلترِ «مالِ کیست» فقط در نمای سرپرستی؛ برای بقیه شکلِ پاسخ همان دیروز است. */
+      ...(team ? { owners: TheatreService.ownersOf(rows) } : {}),
     };
+  }
+
+  /**
+   * دسته‌های «مالِ کیست» برای فیلترِ تختهٔ اتاقِ عمل (خواستهٔ مالک ۱۴۰۵/۰۷/۰۴: «مثلِ
+   * پنلِ کارشناسی») — هر کارشناس با شمارِ عمل‌هایش، و «بی‌کارشناس» ته فهرست.
+   *
+   * از **همان ردیف‌های همین پاسخ** شمرده می‌شود، نه کوئریِ دوم: عددِ روی دکمه و
+   * ردیف‌هایی که با زدنش می‌آیند نباید همدیگر را تکذیب کنند (قانونِ ۱۵). هر عمل
+   * دقیقاً در یک دسته است، پس جمعِ دسته‌ها همان «همه» است. `techId` روی هر دسته
+   * همان مقداری است که رابط با `techId`ِ ردیف مقایسه می‌کند — نگاشتِ «کلید ← شرط»
+   * در کلاینت نیست. برچسبِ «بی‌کارشناس» را رابط با واژهٔ حوزه (`t.tech`) می‌سازد.
+   */
+  private static ownersOf(rows: { techId: number | null; tech: { person?: { firstName: string | null; lastName: string | null } | null } | null }[]) {
+    const people = new Map<number, { key: string; kind: 'person'; techId: number; label: string; count: number }>();
+    let none = 0;
+    for (const v of rows) {
+      if (v.techId == null) { none++; continue; }
+      const f = people.get(v.techId) ?? { key: `t:${v.techId}`, kind: 'person' as const, techId: v.techId, label: TheatreService.personName(v.tech) ?? 'کارشناسِ بی‌نام', count: 0 };
+      f.count++;
+      people.set(v.techId, f);
+    }
+    return [
+      ...[...people.values()].sort((a, b) => a.label.localeCompare(b.label, 'fa')),
+      ...(none ? [{ key: 'none', kind: 'none' as const, techId: null, label: null, count: none }] : []),
+    ];
   }
 
   /**

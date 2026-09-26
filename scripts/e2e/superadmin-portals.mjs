@@ -62,7 +62,7 @@ const phone = () => '0912' + String(Math.floor(1e6 + Math.random() * 9e6));
 const today = new Date().toISOString().slice(0, 10);
 const opDate = `${today}T00:00:00.000Z`;
 
-const trash = { visits: [], appts: [], patients: [], hospitals: [], surgeons: [], accounts: [], features: [] };
+const trash = { visits: [], appts: [], patients: [], hospitals: [], surgeons: [], accounts: [], features: [], chats: [] };
 let browser;
 
 try {
@@ -125,6 +125,15 @@ try {
   ok(String(rowA?.surgeon ?? '').includes(`اتاق${tag}`), `… و نامِ جراحش را («${rowA?.surgeon}»)`);
   ok(!!rowFree && rowFree.tech === null && rowFree.techId === null, 'عملِ بی‌کارشناس `tech: null` است — «تعیین نشده» خودش خبر است، نه کلیدِ جاافتاده');
   ok(!/"(amount|paid|price|fee|discount|charges|payments|shares?)"/.test(JSON.stringify(day)), 'نمای همه هم هیچ فیلدِ مالی ندارد (قاعدهٔ میزِ اتاقِ عمل)');
+  /* فیلترِ «مالِ کیست» (تصمیمِ مالک ۱۴۰۵/۰۷/۰۴: «مثلِ پنلِ کارشناسی») — دسته‌ها از همان ردیف‌ها. */
+  const owners = day?.owners ?? [];
+  const facetA = owners.find((o) => o.techId === techA.id);
+  const facetNone = owners.find((o) => o.kind === 'none');
+  ok(facetA?.key === `t:${techA.id}` && facetA.count >= 2 && String(facetA.label ?? '').includes(`صاحب${tag}`),
+    `دستهٔ «مالِ کیست»ِ کارشناسِ صاحب با نام و شمارِ عمل‌هایش (${JSON.stringify(facetA)})`);
+  ok(!!facetNone && facetNone.count >= 1 && facetNone.techId === null && owners[owners.length - 1] === facetNone,
+    'دستهٔ «بی‌کارشناس» هست و ته فهرست است');
+  ok(owners.reduce((n, o) => n + o.count, 0) === (day?.visits ?? []).length, 'جمعِ دسته‌ها = همهٔ عمل‌های تخته (هر عمل در یک دسته)');
 
   console.log('\n۲) نباید بیفتد — پیش از نوشتنِ سوپرادمین');
   const dayB = (await asB(`/theatre/day?date=${today}`)).json;
@@ -143,6 +152,8 @@ try {
   const day5 = await as5(`/theatre/day?date=${today}`);
   ok(day5.status === 200 && day5.json?.team === false && !(day5.json?.visits ?? []).some((v) => 'tech' in v || 'techId' in v),
     'ادمینِ سطح ۵ بی‌محدودیت نیست: `team: false` و بی‌کلیدِ «مالِ کیست» (دامنهٔ دیدش همان دیروز)');
+  ok(!('owners' in (dayA ?? {})) && !('owners' in (dayB ?? {})) && !('owners' in (day5.json ?? {})),
+    '**نباید بیفتد:** کارشناس و ادمینِ سطح ۵ دستهٔ «مالِ کیست» نمی‌گیرند');
 
   console.log('\n۳) سوپرادمینِ بی‌نقش روی عملِ کارشناسِ دیگر می‌نویسد — بی‌آنکه پروفایل عوض کند');
   const start = await send(`/theatre/visits/${vS.id}/start`, 'POST');
@@ -172,6 +183,24 @@ try {
     `«رسید» ثبت شد (${arrived.status}${arrived.status >= 400 ? ' — ' + JSON.stringify(arrived.json).slice(0, 120) : ''})`);
   ok(num(`SELECT actor_id FROM audit_events WHERE action='appointment.status' AND entity_id='${apptId}' ORDER BY id DESC LIMIT 1`) === adminId,
     '… و ردِ ممیزی بازیگر را سوپرادمین نشان می‌دهد');
+
+  console.log('\n۴ب) محرمانگی — گفتگوی خصوصیِ دو نفرِ دیگر، حتی برای سوپرادمین، بسته است');
+  /* تصمیمِ مالک ۱۴۰۵/۰۷/۰۴: «طبقِ اصولِ محرمانگی، دادهٔ خصوصی — نه، نباید ببیند». سوپرادمین
+     به همه پیام می‌دهد ولی گفتگوی دو نفرِ دیگر را نه می‌خواند، نه در فهرستش می‌بیند، نه در آن می‌نویسد. */
+  const dm = await asA('/chat/dm', 'POST', { accountId: techB.id });
+  const chId = dm.json?.id;
+  if (chId) trash.chats.push(chId);
+  const secret = `پیامِ خصوصی ${tag}`;
+  const sentDm = await asA(`/chat/channels/${chId}/messages`, 'POST', { body: secret });
+  ok(!!chId && [200, 201].includes(sentDm.status), `دو کارشناس با هم گفتگوی خصوصی دارند (${dm.status}/${sentDm.status})`);
+  const peek = await send(`/chat/channels/${chId}/messages`);
+  ok(peek.status === 404 && !JSON.stringify(peek.json ?? '').includes(secret), `**سوپرادمین پیام‌های آن گفتگو را نمی‌خواند** (${peek.status})`);
+  const myChannels = (await send('/chat/channels')).json;
+  ok(Array.isArray(myChannels) && !myChannels.some((c) => c.id === chId), '… آن گفتگو در فهرستِ گفتگوهای او نیست');
+  const intrude = await send(`/chat/channels/${chId}/messages`, 'POST', { body: `نفوذ ${tag}` });
+  ok(intrude.status === 404 && num(`SELECT count(*) FROM chat_messages WHERE channel_id=${chId}`) === 1, `… و در آن پیامی نمی‌نشیند (${intrude.status})`);
+  const readB = await asB(`/chat/channels/${chId}/messages`);
+  ok(readB.status === 200 && JSON.stringify(readB.json ?? '').includes(secret), 'عضوِ گفتگو همچنان پیام را می‌خواند (قفل فقط برای غیرعضو است)');
 
   console.log('\n۵) مرورگر — اتاقِ عمل برای سوپرادمین');
   browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
@@ -220,6 +249,34 @@ try {
   await page.waitForSelector(`.th-item[data-visit-id="${vFree.id}"]`, { timeout: 8000 });
   ok(await page.locator('.th-head .th-scope').count() === 1, 'برگشت به فهرست: زیرعنوان و برچسب‌ها سرِ جایشان‌اند');
 
+  /* فیلترِ «مالِ کیست» روی تخته — دکمه‌ها از `day.owners`، ردیف‌ها با `techId`ِ همان دسته. */
+  await page.waitForSelector('.th-owners', { timeout: 8000 });
+  const ids = () => page.$$eval('.th-list .th-item', (els) => els.map((b) => Number(b.dataset.visitId)));
+  const tabA = page.locator('.th-owners button', { hasText: `صاحب${tag}` });
+  ok(await tabA.count() === 1, 'دکمهٔ فیلترِ کارشناسِ صاحب روی تخته هست');
+  await tabA.click();
+  const onlyA = await page.waitForFunction(({ a, free }) => {
+    const got = [...document.querySelectorAll('.th-list .th-item')].map((b) => Number(b.dataset.visitId));
+    return got.includes(a) && !got.includes(free);
+  }, { a: vA.id, free: vFree.id }, { timeout: 8000 }).then(() => true).catch(() => false);
+  const ownersShown = await page.locator('.th-list .th-item-owner').allInnerTexts();
+  ok(onlyA && ownersShown.length > 0 && ownersShown.every((x) => x.includes(`صاحب${tag}`)),
+    `**فیلترِ کارشناس: فقط عمل‌های او؛ عملِ بی‌کارشناس نیست** (${JSON.stringify(await ids())})`);
+  await page.locator('.th-owners button').last().click();
+  const onlyFree = await page.waitForFunction(({ a, free }) => {
+    const got = [...document.querySelectorAll('.th-list .th-item')].map((b) => Number(b.dataset.visitId));
+    return got.includes(free) && !got.includes(a);
+  }, { a: vA.id, free: vFree.id }, { timeout: 8000 }).then(() => true).catch(() => false);
+  ok(onlyFree && (await page.locator('.th-owners button').last().innerText()).includes('بی‌'), '**دکمهٔ آخر «بی‌کارشناس»: فقط عمل‌هایی که کسی برایشان گذاشته نشده**');
+  await page.locator(`.th-item[data-visit-id="${vFree.id}"]`).click();
+  await page.waitForSelector('.th-card .th-acts', { timeout: 10000 });
+  await page.locator('.th-head button', { hasText: 'فهرستِ روز' }).click();
+  await page.waitForSelector(`.th-item[data-visit-id="${vFree.id}"]`, { timeout: 8000 });
+  ok(await page.locator(`.th-item[data-visit-id="${vA.id}"]`).count() === 0, 'باز و بستنِ کارت فیلتر را نگه می‌دارد');
+  await page.locator('.th-owners button').first().click();
+  await page.waitForSelector(`.th-item[data-visit-id="${vA.id}"]`, { timeout: 8000 });
+  ok((await ids()).includes(vFree.id), '«همه» همهٔ عمل‌ها را برمی‌گرداند');
+
   if (SHOTS) {
     mkdirSync(SHOTS, { recursive: true });
     const shot = await newPage(login.accessToken, 'shots', { width: 390, height: 844 }, { deviceScaleFactor: 2 });
@@ -234,7 +291,7 @@ try {
   console.log('\n۶) مرورگر — همان صفحه برای کارشناسِ صاحب');
   const pageA = await newPage(sessA.accessToken, 'tech');
   await openTheatre(pageA, vA.id);
-  ok(await pageA.locator('.th-scope').count() === 0 && await pageA.locator('.th-item-owner').count() === 0,
+  ok(await pageA.locator('.th-scope').count() === 0 && await pageA.locator('.th-item-owner').count() === 0 && await pageA.locator('.th-owners').count() === 0,
     'کارشناس نه زیرعنوانِ «عمل‌های همه» دارد نه سطرِ «مالِ کیست»');
   ok(await pageA.locator(`.th-item[data-visit-id="${vFree.id}"]`).count() === 0, 'و عملی که به نامش نیست در تخته‌اش نیست');
   ok((await pageA.locator(`.th-item[data-visit-id="${vA.id}"] .th-item-sub`).innerText()).includes(`اتاق${tag}`),
@@ -249,6 +306,7 @@ try {
   await browser?.close().catch(() => {});
   /* پاک‌سازی هرگز خودِ نتیجه را قرمز نمی‌کند — هر گام جدا. */
   const q = (s) => { try { sql(s); } catch (e) { console.log('  (پاک‌سازی) ' + String(e.message).split('\n')[0].slice(0, 160)); } };
+  if (trash.chats.length) q(`DELETE FROM chat_channels WHERE id IN (${trash.chats.join(',')})`);
   const pids = trash.patients.filter(Boolean);
   if (pids.length) {
     q(`DELETE FROM work_items WHERE patient_id IN (${pids.join(',')})`);
