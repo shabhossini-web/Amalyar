@@ -91,6 +91,15 @@ try {
   ok(del.status === 200, 'حذف شد');
   const gone = await fetch(API + '/settings/letterhead', { headers: { Authorization: A.Authorization } });
   ok(gone.status === 404, 'بعد از حذف، ۴۰۴');
+
+  console.log('\n۵) گزارشِ عیب‌یابیِ پیامک — متنِ ساده برای گوشیِ مالک، بی‌شماره');
+  const diag = await fetch(API + '/reminders/diagnostics', { headers: { Authorization: A.Authorization } });
+  const body = await diag.text();
+  ok(diag.status === 200 && (diag.headers.get('content-type') ?? '').startsWith('text/plain'),
+    `گزارش متنِ ساده است، نه JSON (${diag.status}، ${diag.headers.get('content-type')})`);
+  ok(body.startsWith('عیب‌یابیِ پیامک') && body.includes('پروسهٔ سرور از') && body.includes('کلید و خطِ ملی‌پیامک'),
+    'سرتیتر، زمانِ روشن‌شدنِ سرور و وضعیتِ تنظیمِ پیامک در گزارش هست');
+  ok(!body.includes('09120000912') && !body.includes('۰۹۱۲۰۰۰۰۹۱۲'), '**نباید بیفتد:** شمارهٔ بیمار در گزارش');
 } finally {
   await patchSettings({ sms_next_visit_text: '', sms_next_visit_days: 1, sms_portal_text: '' })
     .catch(() => {});

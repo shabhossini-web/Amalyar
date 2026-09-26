@@ -1,12 +1,16 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/sms-postop-fix
+status: active
+branch: claude/sms-diagnostics
 since: 2026-09-26
-paths: []
+paths:
+  - server/src/patients/reminders.service.ts
+  - server/src/patients/summary.controller.ts
+  - scripts/e2e/w1-9-reminder-idempotency.mjs
+  - scripts/e2e/sms-center.mjs
 note: >-
-  لند شد: ردِ لحظه‌ایِ ملی‌پیامک خودش ۵/۱۵/۴۵ دقیقه بعد دوباره امتحان می‌شود و علتِ واقعی در دفتر؛
-  «لغو11» لاتین؛ قانونِ زبان بالای CLAUDE.md. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  گزارشِ عیب‌یابیِ پیامک (خطِ زمانیِ تلاش‌ها از دادهٔ خودِ سایت) برای علتِ ریشه‌ایِ «پست‌آپ نمی‌رفت
+  و ناگهان رفت». بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

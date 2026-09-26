@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -77,6 +77,20 @@ export class SummaryController {
   @Get('reminders')
   list(@Query('patientId') patientId?: string) {
     return this.reminders.list(patientId ? Number(patientId) : undefined);
+  }
+
+  /**
+   * عیب‌یابیِ پیامک — گزارشِ **متنیِ فارسی** (نه JSON) تا مالک همان را از روی گوشی
+   * باز کند، بخواند و بفرستد: خطِ زمانیِ هر تلاشِ ارسال، «ارسالِ دوباره»های دستی و زمانِ
+   * روشن‌شدنِ سرور. متنِ پیام و شمارهٔ بیمار در آن نیست؛ باز هم فقط برای ادمین به بالا.
+   */
+  @MinLevel(LEVEL.ADMIN)
+  @RequirePermissions('patients.read')
+  @Get('reminders/diagnostics')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  @Header('Cache-Control', 'no-store')
+  diagnostics() {
+    return this.reminders.diagnostics();
   }
 
   /**

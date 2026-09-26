@@ -1,4 +1,4 @@
-import { REMINDER_KIND_LABELS, REMINDER_LABELS } from './labels';
+import { ORDER_KIND_LABELS, REMINDER_KIND_LABELS, REMINDER_LABELS } from './labels';
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,6 +12,15 @@ import { renderSms } from '../common/sms-template';
 import { sendReminders } from '../reminders/send-reminders';
 import { AuditService } from '../audit/audit.service';
 import { diagnosisIds, procedureIds } from './visit-coding';
+import { toJalali } from '../common/jalali';
+
+/** ممیزیِ ارسال‌های مستقیمِ پیامک از دکمه‌ها — برای خطِ زمانیِ گزارشِ عیب‌یابی. */
+const DIRECT_SMS: Record<string, string> = {
+  'intake.link.sms': 'لینکِ ثبت‌نام',
+  'intake.send_form': 'ارسالِ فرم',
+  'visit.summary.sms': 'خلاصهٔ ویزیت',
+  'patient.portal.sms': 'پروندهٔ الکترونیک',
+};
 
 /**
  * یادآوری‌ها — نسخهٔ ۱: «ویزیتِ بعدی» (docs/BOOKING.md، فازِ یادآوری‌ها).
@@ -606,6 +615,148 @@ export class RemindersService {
   }
 
   /** دوباره در صف — شمارندهٔ تلاش صفر می‌شود چون این تصمیمِ یک آدم است، نه backoff. */
+  /**
+   * عیب‌یابیِ پیامک — گزارشِ متنیِ فارسی از دادهٔ خودِ همین شرکت (۱۴۰۵/۰۷/۰۴).
+   *
+   * ⚠️ چرا لازم شد: پیامکِ مراقبتِ بعد از عمل هیچ‌وقت نرفته بود و «ارسالِ دوباره» هم رد
+   * می‌شد؛ بعد **بی هیچ دیپلویی** همان متن به همان شماره رفت. پس علت بیرون از کد بود
+   * (ری‌استارتِ سرور با تنظیماتِ تازه، اعتبارِ پنلِ ملی‌پیامک، ساعتِ ارسال، …) و بدونِ خطِ
+   * زمانیِ دقیق فقط می‌شد حدس زد. این گزارش همان خطِ زمانی است: هر تلاشِ ارسال (رویدادهای
+   * `sms.*`) با ساعت، نتیجه، طول و تعدادِ بخشِ پیام؛ «ارسالِ دوباره»های دستی (ممیزی)؛ و
+   * زمانِ روشن‌شدنِ همین پروسهٔ سرور — تا «بعد از ری‌استارت درست شد» از «بعد از شارژِ پنل
+   * درست شد» جدا شود.
+   *
+   * متنِ پیام و شمارهٔ بیمار در آن **نیست** — فقط طول و کدِ مراجعه.
+   */
+  async diagnostics(): Promise<string> {
+    const DAYS = 14;
+    const since = new Date(Date.now() - DAYS * 86_400_000);
+    const [events, retries, direct, recent] = await Promise.all([
+      this.prisma.domainEvent.findMany({
+        where: { type: { in: ['sms.sent', 'sms.failed', 'sms.uncertain'] }, at: { gte: since } },
+        orderBy: { at: 'desc' }, take: 80,
+      }),
+      this.prisma.auditEvent.findMany({
+        where: { action: 'reminder.retry', createdAt: { gte: since } },
+        orderBy: { createdAt: 'desc' }, take: 40,
+      }),
+      /* ارسال‌های مستقیم از دکمه‌ها (لینکِ ثبت‌نام، فرم، خلاصه، پرونده، دستورِ پزشک) در دفترِ
+         یادآوری رویداد ندارند، فقط ممیزی. بدونِ آن‌ها نمی‌شد گفت «در همان ساعت هیچ پیامکی
+         نمی‌رفت» یا «فقط پیامِ بلند نمی‌رفت». `after.to` (شماره) هرگز چاپ نمی‌شود. */
+      this.prisma.auditEvent.findMany({
+        where: { createdAt: { gte: since }, OR: [
+          { action: { in: Object.keys(DIRECT_SMS) } },
+          { action: { startsWith: 'order.', endsWith: '.send' } },
+        ] },
+        orderBy: { createdAt: 'desc' }, take: 60,
+      }),
+      this.prisma.reminder.findMany({
+        where: { channel: 'sms', updatedAt: { gte: since } },
+        select: { kind: true, status: true, text: true },
+        take: 2000,
+      }),
+    ]);
+    const ids = [...new Set([
+      ...events.flatMap((e) => (e.refType === 'reminder' && e.refId ? [e.refId] : [])),
+      ...retries.map((r) => Number(r.entityId)).filter((n) => Number.isInteger(n) && n > 0),
+    ])];
+    const rows = new Map((ids.length ? await this.prisma.reminder.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, kind: true, text: true, patient: { select: { code: true } }, visit: { select: { seq: true } } },
+    }) : []).map((r) => [r.id, r]));
+
+    const fa = (v: number | string) => String(v).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+    const p2 = (n: number) => String(n).padStart(2, '0');
+    /* تهران بی‌ساعتِ تابستانی (همان ۳٫۵ ساعتِ `utcHour`). */
+    const at = (d: Date) => {
+      const t = new Date(d.getTime() + 3.5 * 3_600_000);
+      const [jy, jm, jd] = toJalali(t);
+      return fa(`${jy}/${p2(jm)}/${p2(jd)} ${p2(t.getUTCHours())}:${p2(t.getUTCMinutes())}`);
+    };
+    /** اندازهٔ همان چیزی که رفت — با «لغو11»ی که `SmsService` ته پیام می‌گذارد. */
+    const size = (text: string) => {
+      const n = [...text].length + 6;
+      const parts = /^[\x00-\x7f]*$/.test(text)
+        ? (n <= 160 ? 1 : Math.ceil(n / 153))
+        : (n <= 70 ? 1 : Math.ceil(n / 67));
+      return { n, parts };
+    };
+    const kindFa = (k?: string | null) => (k ? REMINDER_KIND_LABELS[k] ?? k : '—');
+    const code = (r?: { patient?: { code: string } | null; visit?: { seq: number } | null }) =>
+      (r?.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : '—');
+
+    const started = new Date(Date.now() - process.uptime() * 1000);
+    const from = process.env.MELI_FROM ?? '';
+    const configured = Boolean(process.env.MELI_API_KEY && from);
+    const out: string[] = [
+      `عیب‌یابیِ پیامک — ${this.tenant.require().hostname}`,
+      `اکنون: ${at(new Date())} به وقتِ تهران`,
+      `پروسهٔ سرور از ${at(started)} روشن است (هر دیپلوی یا ری‌استارت این زمان را عوض می‌کند)`,
+      `کلید و خطِ ملی‌پیامک روی سرور: ${configured ? `تنظیم است (خطِ …${fa(from.slice(-4))})` : 'تنظیم نیست'}`
+        + ` · محیط: ${process.env.NODE_ENV ?? '—'}`,
+      '',
+      `۱) پیامک‌های ${fa(DAYS)} روزِ اخیر به تفکیکِ نوع`,
+    ];
+    const byKind = new Map<string, { sent: number; failed: number; uncertain: number; pending: number; other: number; min: number; max: number; minP: number; maxP: number }>();
+    for (const r of recent) {
+      const k = byKind.get(r.kind) ?? { sent: 0, failed: 0, uncertain: 0, pending: 0, other: 0, min: Infinity, max: 0, minP: Infinity, maxP: 0 };
+      if (r.status === 'sent') k.sent++;
+      else if (r.status === 'failed') k.failed++;
+      else if (r.status === 'uncertain') k.uncertain++;
+      else if (r.status === 'pending' || r.status === 'sending') k.pending++;
+      else k.other++;
+      const { n, parts } = size(r.text);
+      k.min = Math.min(k.min, n); k.max = Math.max(k.max, n);
+      k.minP = Math.min(k.minP, parts); k.maxP = Math.max(k.maxP, parts);
+      byKind.set(r.kind, k);
+    }
+    if (!byKind.size) out.push('— در این بازه پیامکی نیست');
+    for (const [kind, k] of byKind) {
+      const range = (a: number, b: number) => (a === b ? fa(a) : `${fa(a)} تا ${fa(b)}`);
+      out.push(`• ${kindFa(kind)}: رفته ${fa(k.sent)} · نرفته ${fa(k.failed)} · نامعلوم ${fa(k.uncertain)} · در صف ${fa(k.pending)}`
+        + (k.other ? ` · دیگر ${fa(k.other)}` : '')
+        + ` — ${range(k.min, k.max)} نویسه (${range(k.minP, k.maxP)} بخش)`);
+    }
+
+    /* یک خطِ زمانیِ واحد: تلاش‌های دفترِ یادآوری (خودکار یا «ارسالِ دوباره»ی دستی) و
+       ارسال‌های مستقیم از دکمه‌ها، کنارِ هم و به ترتیبِ زمان. */
+    const OUTCOME: Record<string, string> = { 'sms.sent': 'رفت', 'sms.failed': 'نرفت', 'sms.uncertain': 'نامعلوم' };
+    const timeline: { t: number; line: string }[] = [];
+    for (const e of events) {
+      const row = e.refType === 'reminder' && e.refId ? rows.get(e.refId) : undefined;
+      const payload = (e.payload ?? {}) as Record<string, any>;
+      const manual = retries.some((r) => Number(r.entityId) === e.refId
+        && r.createdAt.getTime() >= e.at.getTime() && r.createdAt.getTime() - e.at.getTime() < 120_000);
+      const sz = row ? size(row.text) : null;
+      const why = typeof payload.error === 'string' && payload.error.trim() ? ` · ${payload.error.trim().slice(0, 90)}` : '';
+      timeline.push({ t: e.at.getTime(), line: `${at(e.at)} · ${OUTCOME[e.type] ?? e.type} · ${kindFa(row?.kind ?? payload.kind)} · ${code(row)}`
+        + (sz ? ` · ${fa(sz.n)} نویسه / ${fa(sz.parts)} بخش` : '')
+        + ` · ${manual ? '«ارسالِ دوباره»ی دستی' : 'خودکار'}${why}` });
+    }
+    for (const d of direct) {
+      const after = (d.afterJson ?? {}) as Record<string, any>;
+      const order = /^order\.(\w+)\.send$/.exec(d.action)?.[1];
+      const label = DIRECT_SMS[d.action] ?? (order ? `دستورِ ${ORDER_KIND_LABELS[order] ?? order}` : d.action);
+      const result = after.sent ? 'رفت' : after.stub ? 'آزمایشی (نرفت)' : 'نرفت';
+      timeline.push({ t: d.createdAt.getTime(), line: `${at(d.createdAt)} · ${result} · ${label} · دکمهٔ ارسالِ مستقیم` });
+    }
+    timeline.sort((a, b) => b.t - a.t);
+    out.push('', `۲) هر تلاشِ ارسال — تازه‌ترین بالا (${fa(timeline.length)} مورد)`);
+    out.push('   (ارسالِ مستقیمی که خطا داد پیش از ۱۴۰۵/۰۷/۰۴ جایی ثبت نمی‌شد؛ فقط موفق‌هایش این‌جاست.)');
+    if (!timeline.length) out.push('— در این بازه تلاشی ثبت نشده');
+    for (const x of timeline.slice(0, 120)) out.push(x.line);
+
+    out.push('', `۳) «ارسالِ دوباره»ی دستی — تازه‌ترین بالا (${fa(retries.length)} مورد)`);
+    if (!retries.length) out.push('— در این بازه کسی ارسالِ دوباره نزده');
+    for (const r of retries) {
+      const row = rows.get(Number(r.entityId));
+      const res = (r.afterJson ?? {}) as Record<string, any>;
+      const result = res.sent > 0 ? 'رفت' : res.failed > 0 ? 'نرفت' : 'بی‌نتیجه';
+      out.push(`${at(r.createdAt)} · ردیفِ ${fa(r.entityId ?? '—')} (${kindFa(row?.kind)}، ${code(row)}) · ${result}`);
+    }
+    return out.join('\n') + '\n';
+  }
+
   async retry(id: number, user: any) {
     const row = await this.act(id, RemindersService.RETRYABLE, 'ارسالِ دوباره');
     await this.prisma.reminder.update({
