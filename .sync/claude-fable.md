@@ -1,12 +1,16 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/superadmin-all
+status: active
+branch: claude/theatre-owners
 since: 2026-09-26
-paths: []
+paths:
+  - server/src/patients/theatre.service.ts
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
+  - scripts/e2e/superadmin-portals.mjs
 note: >-
-  سوپرادمینِ بی‌محدودیت لند شد: «امروز» صفِ تیم با «مالِ کیست» و «واگذاری»؛ پنلِ کارشناس، حمل‌ونقل،
-  میزِ پزشک و اتاقِ عمل برای سوپرادمین «مالِ همه» (قانونِ ۲۹، isUnrestricted). بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  تصمیم‌های مالک پس از #108: فیلترِ «مالِ کیست» روی تختهٔ اتاقِ عمل (مثلِ پنلِ کارشناسی)،
+  و قفلِ محرمانگیِ گفتگوی خصوصی حتی برای سوپرادمین (قانون + نگهبان + آزمون).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

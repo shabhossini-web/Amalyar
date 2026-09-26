@@ -1830,6 +1830,32 @@ jobs:
           console.log('tech ok');
           "
 
+      - name: Verify private conversations stay private, even for the super admin
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+          const svc = strip(fs.readFileSync('server/src/chat/chat.service.ts', 'utf8'));
+          const ctl = strip(fs.readFileSync('server/src/chat/chat.controller.ts', 'utf8'));
+
+          // تصمیمِ مالک ۱۴۰۵/۰۷/۰۴ (قانونِ ۲۹، استثنا): سوپرادمین همه‌جا «مالِ همه» را می‌بیند
+          // جز گفتگوی خصوصیِ دیگران — «طبقِ اصولِ محرمانگی، نه». پیام‌رسان سطحِ کاربر را
+          // نمی‌سنجد؛ دسترسی فقط عضویت است. اگر روزی کسی «سوپرادمین هم ببیند» را این‌جا
+          // اضافه کند، همین گام قرمز می‌شود.
+          if (/isUnrestricted|LEVEL\\.|user\\??\\.level/.test(svc + ctl)) {
+            console.error('پیام‌رسان نباید سطحِ کاربر را بسنجد — گفتگوی خصوصی فقط مالِ اعضایش است'); process.exit(1);
+          }
+          // خواندن، نوشتن و «خوانده شد» هر سه از عضویت رد می‌شوند.
+          const gates = (svc.match(/this\\.membership\\(/g) || []).length;
+          if (gates < 3) { console.error('خواندن/نوشتن/خوانده‌شدنِ پیام باید از membership رد شود (' + gates + ')'); process.exit(1); }
+          // فهرستِ گفتگوها فقط عضویت‌های خودِ کاربر است.
+          if (!/chatMember\\.findMany\\(\\{\\s*where:\\s*\\{\\s*accountId:\\s*user\\.id\\s*\\}/.test(svc)) {
+            console.error('فهرستِ گفتگوها باید فقط عضویت‌های خودِ کاربر باشد'); process.exit(1);
+          }
+          console.log('chat privacy ok');
+          "
+
       - name: Verify time input is one control, typed or picked
         run: |
           set -e
