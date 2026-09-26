@@ -136,6 +136,16 @@ const SAVE_REV = '_saveRev';
 const saveRev = (v: unknown): number | null => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : null);
 const staleSave = (data: unknown, rev: number) => Number((data as any)?.[SAVE_REV]) > rev;
 
+/**
+ * برخوردِ نسخه **بی‌تغییرِ وضعیت** — دو نوشتنِ هم‌زمانِ خودِ بیمار (پیش‌نویس + آپلود). فقط همین
+ * را `onFreshRow` دوباره روی ردیفِ تازه اجرا می‌کند.
+ *
+ * ⚠️ برخوردی که وضعیت را عوض کرده (تأیید، رد، برگشت، انقضا) همان ۴۰۹ِ همیشگی می‌ماند و تکرار
+ * نمی‌شود: ویرایشی که پیش از تأیید خوانده شده باید بفهمد «ثبت‌نام تغییر کرده»، نه اینکه در
+ * تلاشِ دوم «دیگر قابلِ ویرایش نیست» بگیرد — نگهبانِ W1.4 در CI همین ۴۰۹ را می‌سنجد.
+ */
+class StaleSubmissionVersion extends ConflictException {}
+
 @Injectable()
 export class IntakeService {
   constructor(
@@ -1427,8 +1437,13 @@ export class IntakeService {
     try {
       return await db.intakeSubmission.update({ where: { id: row.id, status: row.status, updatedAt: row.updatedAt }, data });
     } catch (error: any) {
-      if (error?.code === 'P2025') throw new ConflictException('ثبت‌نام تغییر کرده است؛ صفحه را تازه کنید');
-      throw error;
+      if (error?.code !== 'P2025') throw error;
+      /* ⚠️ با همان `db` خوانده می‌شود نه `this.prisma`: داخلِ تراکنشِ تعاملی، اتصالِ دوم روی
+         استخرِ یک‌اتصالی (سنجهٔ W1.4 روی PGlite) تا پایانِ مهلت منتظر می‌ماند. P2025 خطای
+         موتورِ Prisma است نه پایگاه، پس تراکنش هنوز قابلِ خواندن است؛ اگر نبود، ۴۰۹ِ عادی. */
+      const now = await db.intakeSubmission.findUnique({ where: { id: row.id }, select: { status: true } }).catch(() => null);
+      const Conflict = now?.status === row.status ? StaleSubmissionVersion : ConflictException;
+      throw new Conflict('ثبت‌نام تغییر کرده است؛ صفحه را تازه کنید');
     }
   }
 
@@ -1445,16 +1460,16 @@ export class IntakeService {
    * هم‌زمانِ «پیش‌نویس + آپلود» همین ۴۰۹ را می‌گرفتند (`intake-concurrency`).
    *
    * `run` باید همه‌چیز را از ردیفی بسازد که **خودش** می‌خواند (ادغامِ پیش‌نویس، افزودن
-   * یا برداشتنِ یک ارجاع) تا تکرارش درست باشد. برخوردِ واقعی — تأیید، رد، برگشت،
-   * انقضا — وضعیت را عوض کرده و تلاشِ بعد با پیامِ خودش رد می‌شود؛ پس قفل همچنان
-   * نمی‌گذارد نوشتنِ دیرِ بیمار تأییدی را باز کند.
+   * یا برداشتنِ یک ارجاع) تا تکرارش درست باشد. فقط برخوردِ بی‌تغییرِ وضعیت
+   * (`StaleSubmissionVersion`) تکرار می‌شود؛ برخوردِ واقعی — تأیید، رد، برگشت، انقضا —
+   * همان ۴۰۹ِ قبلی است، پس قفل همچنان نمی‌گذارد نوشتنِ دیرِ بیمار تأییدی را باز کند.
    */
   private async onFreshRow<T>(run: () => Promise<T>, tries = 6): Promise<T> {
     for (let attempt = 1; ; attempt++) {
       try {
         return await run();
       } catch (error) {
-        if (!(error instanceof ConflictException) || attempt >= tries) throw error;
+        if (!(error instanceof StaleSubmissionVersion) || attempt >= tries) throw error;
         /* مکثِ کوتاه و نامنظم: بی‌آن نویسنده‌های هم‌زمان دوباره هم‌قدم می‌خوانند و دوباره برخورد
            می‌کنند (سنجه با پنج نویسندهٔ هم‌زمان گاهی چهار تلاش را تمام می‌کرد). */
         await new Promise((resolve) => setTimeout(resolve, attempt * 15 + Math.random() * 25));
