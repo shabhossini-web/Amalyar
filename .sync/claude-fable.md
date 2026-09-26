@@ -1,16 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/theatre-owners
 since: 2026-09-26
-paths:
-  - server/src/patients/theatre.service.ts
-  - src/app/Theatre.jsx
-  - src/app/theatre.css
-  - scripts/e2e/superadmin-portals.mjs
+paths: []
 note: >-
-  تصمیم‌های مالک پس از #108: فیلترِ «مالِ کیست» روی تختهٔ اتاقِ عمل (مثلِ پنلِ کارشناسی)،
-  و قفلِ محرمانگیِ گفتگوی خصوصی حتی برای سوپرادمین (قانون + نگهبان + آزمون).
+  لند شد: فیلترِ «مالِ کیست» روی تختهٔ اتاقِ عمل، و گفتگوی خصوصیِ دیگران حتی برای سوپرادمین بسته
+  (قانونِ ۲۹، استثنا + نگهبانِ CI). بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
