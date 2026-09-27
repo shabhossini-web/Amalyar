@@ -118,6 +118,25 @@ export async function matchIntakeSurgeon(prisma: any, data: any) {
   return pickExactOrSuggested(name, rows.map((s: any) => ({ id: s.id, name: `${s.person.firstName} ${s.person.lastName}`.trim() })));
 }
 
+/**
+ * نوعِ عمل — **نزدیک‌ترین** گزینه، نه فقط یکتای ≥۰٫۸ (مالک، ۱۴۰۵/۰۷/۰۵: «نوعِ عمل از فرمی که
+ * بیمار پر می‌کند بیاید و نزدیک‌ترینش انتخاب شود؛ اگر در فهرستِ ما نیست، نوشتهٔ بیمار نشان داده
+ * شود»).
+ *
+ * ⚠️ چرا آستانهٔ جراح این‌جا نیست: نامِ عمل را بیمار با واژه‌های خودش می‌نویسد («کرانیوتومی
+ * برای تومور») و فهرستِ شرکت کوتاه و تخصصی است؛ آستانهٔ ۰٫۸ تقریباً هیچ‌وقت پر نمی‌شد و پنل
+ * «— انتخاب —» می‌ماند. این‌جا بهترین گزینهٔ ≥`SUGGEST_MIN` برمی‌گردد، به شرطِ اینکه از دومی
+ * **جلوتر** باشد — دو گزینهٔ هم‌امتیاز یعنی حدسِ سکه‌ای، و آن‌وقت انتخاب با آدم است.
+ * ⚠️ همچنان «پیشنهادی» است نه «دقیق»: رابط می‌گوید بررسی کنید، و سرور خودکار نمی‌چسباندش.
+ */
+export function nearestProcedure(name: string, pool: { id: number; name: string }[]) {
+  const exact = pool.filter((r) => normalizeName(r.name) === normalizeName(name));
+  if (exact.length === 1) return { ...exact[0], source: 'exact' as const };
+  const [top, next] = bestMatches(name, pool, 2);
+  if (!top || (next && next.score >= top.score)) return null;
+  return { id: top.id, name: top.name, source: 'suggested' as const };
+}
+
 export async function matchIntakeProcedure(prisma: any, data: any) {
   if (Number.isInteger(data?.procedureTypeId)) {
     const picked = await prisma.procedureType.findFirst({ where: { id: data.procedureTypeId }, select: { id: true, name: true } });
@@ -125,8 +144,8 @@ export async function matchIntakeProcedure(prisma: any, data: any) {
   }
   const name = String(data?.procedure ?? '').trim().slice(0, 150);
   if (!name) return null;
-  const rows = await prisma.procedureType.findMany({ select: { id: true, name: true }, take: 2000 });
-  return pickExactOrSuggested(name, rows);
+  const rows = await prisma.procedureType.findMany({ where: { active: true }, select: { id: true, name: true }, take: 2000 });
+  return nearestProcedure(name, rows);
 }
 
 /** هر سه ارجاعِ یک ثبت‌نام در یک رفت‌وبرگشت — رابط هر سه را با هم می‌خواهد. */

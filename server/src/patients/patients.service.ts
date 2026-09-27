@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { syncVisitDuty } from './hospital-duties.service';
+import { serviceTitleOf } from './visit-title';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
@@ -64,7 +65,8 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
     /* ⚠️ `null` وقتی این نوع فرمی ندارد (فرمش خاموش شده، یا دادهٔ واردشده از
        سامانهٔ قبلی). کلاینت آن‌وقت به برچسبِ پشتیبانِ خودش برمی‌گردد —
        «عمل» نامیدنِ یک نوعِ ناشناخته دروغ است. */
-    kindTitle: k?.title ?? null,
+    /* شرکت: نامِ خدمت («نورومانیتورینگ») — `visit-title.ts`؛ بقیه نامِ فرمِ نوع. */
+    kindTitle: serviceTitleOf(v) ?? k?.title ?? null,
     kindColor: k?.color ?? null,
     code: `${v.patient.code}-V${v.seq}`,
     patientCode: v.patient.code,
@@ -1922,6 +1924,49 @@ export class PatientsService {
     await this.syncPostOpVisit(id);
     /* لغوِ ویزیتِ پست‌آپ «ویزیتِ بعدی»ِ عمل را برمی‌دارد و برگرداندنش آن را برمی‌گرداند —
        وگرنه ذخیرهٔ بعدیِ عمل همین فرزندِ لغوشده را دوباره زنده می‌کرد. */
+    await this.syncPostOpParent(id);
+    return enrich(updated, await this.forms.kindMap());
+  }
+
+  /**
+   * **«موکول شد»** — عمل انجام نشد ولی لغو هم نشد: تاریخِ تازه، یا «هنوز تاریخ ندارد».
+   *
+   * ⚠️ وضعیتِ جدا (`postponed`) عمداً ساخته نشد: عملِ موکول‌شده همان عملِ «در انتظار» است با
+   * تاریخی دیگر — همهٔ فیلترها، تقویم، چینش و یادآوری‌ها از قبل همین را می‌فهمند، و وضعیتِ
+   * چهارم یعنی ده جای دیگر که باید یادش بگیرند. ردِ «موکول شد» در ممیزی و رویدادِ
+   * `visit.postponed` می‌ماند؛ همان رویداد کارِ «وضعیتِ عمل ثبت نشده» را می‌بندد.
+   *
+   * ⚠️ «بدونِ تاریخ» یعنی `opDate = null` — همان «رزرو بدون تاریخ»ِ ثبت‌نام: عمل از دفترِ
+   * روزِ کارشناس بیرون می‌رود و یادآوری‌های تاریخ‌دارش (عملِ پیشِ‌رو، مراقبت) هرس می‌شوند تا
+   * بیمار پیامکِ روزی را نگیرد که دیگر عملی در آن نیست.
+   */
+  async postpone(id: number, opDate: string | null | undefined, user?: any) {
+    await this.assertVisitAccess(id, user);
+    const v = await this.prisma.visit.findUnique({ where: { id } });
+    if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    if (v.opStatus !== 'pending') throw new BadRequestException('فقط عملِ در انتظار موکول می‌شود');
+    const next = opDate ? toDateValue(opDate) ?? null : null;
+    if (opDate && !next) throw new BadRequestException('تاریخِ تازه نامعتبر است');
+    /* ⚠️ «امروز»ِ مطب، نه UTC — همان تعریفِ `clinic-day` که دفترِ کار با آن روز را می‌بُرد. */
+    if (next && next.getTime() < todayRangeUtc()[0].getTime()) {
+      throw new BadRequestException('تاریخِ تازه باید امروز یا بعد از آن باشد');
+    }
+    const updated = await this.prisma.$transaction(async (tx) => {
+      /* ساعتِ حضور مشتقِ برنامهٔ چینشِ **همان روز** است (`syncVisitDuty`)؛ روزِ تازه، حضورِ تازه —
+         و بی‌تاریخ، بی‌حضور. همان قاعدهٔ `updateVisit`. */
+      const techArriveTime = await syncVisitDuty(tx, { id, techId: v.techId, hospitalId: v.hospitalId, opDate: next, opStartTime: v.opStartTime });
+      return tx.visit.update({ where: { id }, data: { opDate: next, techArriveTime }, include: INCLUDE_PATIENT });
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'visit.postpone', entityType: 'visit', entityId: id,
+      before: { opDate: v.opDate }, after: { opDate: next },
+    });
+    await this.events.emit({
+      type: 'visit.postponed', visitId: id, patientId: v.patientId, actorId: user?.id ?? null,
+      payload: { from: v.opDate?.toISOString() ?? null, to: next?.toISOString() ?? null, techId: v.techId ?? null },
+    });
+    await this.reminders.syncNextVisit(id);
+    await this.syncPostOpVisit(id);
     await this.syncPostOpParent(id);
     return enrich(updated, await this.forms.kindMap());
   }

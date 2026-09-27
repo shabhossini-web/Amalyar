@@ -3,6 +3,7 @@ import { faDate } from '../lib/jalali.js';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
 import Pick from '../ui/Pick.jsx';
 import { User, Users } from '../ui/icons.jsx';
+import { useTerms } from './config.jsx';
 
 /**
  * برچسبِ فارسیِ نوعِ کار — کلیدها همان `work-rules.ts`.
@@ -14,7 +15,7 @@ import { User, Users } from '../ui/icons.jsx';
 export const TYPE_FA = {
   review_result: 'بررسیِ نتیجه', review_form: 'بررسیِ فرم', approve_intake: 'تأییدِ ثبت‌نام', repair_intake: 'تأییدِ نیمه‌کاره',
   call_patient: 'تماس با بیمار', confirm_appointment: 'تأییدِ نوبت', confirm_surgery_done: 'وضعیتِ عمل',
-  complete_report: 'گزارشِ عمل', confirm_usage: 'تأییدِ مصرف', issue_invoice: 'صدورِ فاکتور', resend_sms: 'پیامک',
+  complete_report: 'گزارشِ خدمت', confirm_usage: 'تأییدِ مصرف', issue_invoice: 'صدورِ فاکتور', resend_sms: 'پیامک',
   follow_up_unanswered: 'پیگیریِ بی‌پاسخ', fill_form: 'فرم', upload_result: 'ارسالِ نتیجه', pick_slot: 'انتخابِ زمان', manual: 'یادداشت',
   repair_data: 'تطبیقِ دادهٔ ناقص',
 };
@@ -40,7 +41,10 @@ const tomorrow9 = () => {
  * فهرستِ افراد (`assignees`) را صفحه یک‌بار از `GET /work/assignees` می‌گیرد.
  */
 export default function WorkRow({ w, onAct, busy, compact = false, onOpen, onAssign, assignees }) {
+  const t = useTerms();
   const due = w.dueAt ? faDate(w.dueAt) : '';
+  /* «گزارشِ خدمت» در شرکت، «شرحِ عمل» در مطب — همان کار، دو مفهوم (واژگانِ حوزه). */
+  const typeFa = w.type === 'complete_report' ? t.workReport ?? TYPE_FA.complete_report : TYPE_FA[w.type] ?? w.type;
   /* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده (`attachments` از سرور، W0.8):
      خودِ ردیف نشانشان می‌دهد تا کاربر برای دیدنِ «چه آمده» دو کلیک نرود
      (بازخوردِ مالک: عکسِ مشاوره باید در صفحهٔ «امروز» بیاید و از همان‌جا باز شود). */
@@ -54,7 +58,7 @@ export default function WorkRow({ w, onAct, busy, compact = false, onOpen, onAss
   return (
     <li className={`wk-row${w.overdue ? ' overdue' : ''}${w.state === 'blocked' ? ' blocked' : ''}`} data-work-id={w.id}>
       <div className="wk-main">
-        <span className="wk-type">{TYPE_FA[w.type] ?? w.type}</span>
+        <span className="wk-type">{typeFa}</span>
         {/* عنوانِ کار وقتی **مقصد** دارد (سفارش، مراجعه) دکمه است و پاپ‌آپِ خودش را
             باز می‌کند — «انجام شد» بدونِ دیدنِ خودِ چیز، امضای کور است (بازخوردِ
             مالک: هر هشدار باید بگوید مالِ چیست و با کلیک بازِ شود). */}

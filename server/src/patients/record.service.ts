@@ -19,6 +19,7 @@ import {
 /* دسته‌های مدرک در `document-categories.ts` (مشترک با forms.service)؛ این‌جا
    re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
 import { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
+import { serviceTitleOf } from './visit-title';
 export { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, DOCUMENT_PHASE_FA };
 
 /**
@@ -437,7 +438,8 @@ export class RecordService {
         answers: answersOf(v),
         /* ⚠️ `null` وقتی این نوع فرمی ندارد — کلاینت آن‌وقت به کلید برمی‌گردد.
            «عمل» نامیدنِ نوعِ ناشناخته دروغ است. */
-        kindTitle: v.kind ? kindTitles[v.kind] ?? null : null,
+        /* شرکت: نامِ خدمت («نورومانیتورینگ»)؛ بقیه نامِ فرمِ نوع — `visit-title.ts`. */
+        kindTitle: serviceTitleOf(v) ?? (v.kind ? kindTitles[v.kind] ?? null : null),
         kindColor: v.kind ? kindColors[v.kind] ?? null : null,
       })),
       /**

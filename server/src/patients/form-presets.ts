@@ -207,10 +207,24 @@ const CORE = {
   anesthesia: { key: 'anesthesia', label: 'نوعِ بیهوشی', type: 'select', builtin: true },
 } as const;
 
+/**
+ * عنوانِ قالبیِ فرمِ مراجعهٔ شرکت — فقط برای شناختنِ «دست‌نخورده» در ارتقا (`forms.service`).
+ *
+ * ⚠️ مالک (۱۴۰۵/۰۷/۰۵): «برای بیمار چرا فرمِ عمل تشکیل می‌شود؛ باید مراجعهٔ نورومانیتورینگ ساخته
+ * شود». شرکت عمل انجام نمی‌دهد، خدمتی حینِ عمل می‌دهد — پس نامِ این فرم نامِ **خدمت** است و
+ * `companyVisitFormTitle` آن را می‌سازد؛ این رشته فقط نامِ نصب‌های قدیمی است.
+ */
+export const OPERATION_FORM_TITLE = 'فرمِ عمل';
+
+/** نامِ فرمِ مراجعهٔ شرکت از خدماتش: تک‌خدمته نامِ همان خدمت، دوخدمته «فرمِ خدمت». */
+export function companyVisitFormTitle(labels: readonly string[]): string {
+  return labels.length === 1 ? `فرمِ ${labels[0]}` : 'فرمِ خدمت';
+}
+
 /** فرمِ عملِ نورومانیتورینگ/تجهیزات — یک فرم، چون یک نوع کار هست. */
 const OPERATION: PresetForm = {
   key: 'visit.surgery',
-  title: 'فرمِ عمل',
+  title: OPERATION_FORM_TITLE,
   scope: 'visit',
   visitKind: 'surgery',
   fields: [

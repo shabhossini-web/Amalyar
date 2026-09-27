@@ -539,6 +539,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
    * چیزی انتخاب کرده، پاسخِ دیررسِ سرور نباید انتخابش را عوض کند.
    */
   const [match, setMatch] = useState({});
+  /* نوشتهٔ خودِ بیمار برای نوعِ عمل — کنارِ کشویی، وقتی فهرست چیزی نزدیک به آن ندارد. */
+  const patientProcedure = String(row.data?.procedure ?? '').trim();
   useEffect(() => {
     let live = true;
     api(`/intake/submissions/${row.id}/refs`).then(r => {
@@ -717,14 +719,26 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
                   selected: 'ثبت‌شدهٔ خودِ بیمار',
                   suggested: 'پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید',
                 }[match[k].source] ?? 'مطابقِ دقیقِ نوشتهٔ بیمار'}: {match[k].name}
+                {/* نزدیک‌ترین گزینه ممکن است با نوشتهٔ بیمار یکی نباشد — خودِ نوشته کنارش. */}
+                {k === 'procedure' && match[k].source === 'suggested' && patientProcedure && ` (بیمار نوشته: «${patientProcedure}»)`}
               </p>))}
             {(visible('surgeonId') || needs('surgeonId') || company) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : (company || needs('surgeonId')) ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
             {(visible('hospitalId') || company) && <ApprovalSelect field="hospitalId" section="hospitals" label={company ? 'بیمارستان (الزامی)' : 'بیمارستان'} list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
             {visible('techId') && <ApprovalSelect field="techId" section="techs" label={needs('techId') ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
-            {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))} onAdd={setQuick} />}
+            {/* ⚠️ مالک (۱۴۰۵/۰۷/۰۵): «اگر در لیستِ خودمان نیست، نوشتهٔ مریض باید نشان داده شود» — درست
+                بالای همان کشویی، نه فقط در خلاصهٔ بالای پنل؛ «+» همین نوشته را پیش‌پر می‌کند. */}
+            {visible('procedureTypeId') && patientProcedure && !match.procedure && !f.procedureTypeId && (
+              <p className="ia-note warn ia-px-typed">
+                <Alert width="13" height="13" /> بیمار نوشته «{patientProcedure}» — در فهرستِ انواعِ عمل نیست؛ نزدیک‌ترین را انتخاب کنید یا با + همین را اضافه کنید.
+              </p>
+            )}
+            {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))}
+              onAdd={(q) => setQuick({ ...q, initial: patientProcedure && !f.procedureTypeId ? { name: patientProcedure } : undefined })} />}
             {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}
                    onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />}
-            {visible('opStartTime') && <TimePick className="ia-field" label={targetKind === 'clinic' ? 'ساعت مراجعه' : 'ساعتِ عمل'} value={f.opStartTime}
+            {/* ⚠️ ساعتِ عمل هنگامِ تأییدِ ثبت‌نامِ شرکتی بی‌معناست (مالک، ۱۴۰۵/۰۷/۰۵): ساعت را کارشناس سرِ
+                عمل ثبت می‌کند (`visits.times`). مطب همچنان ساعتِ مراجعه را این‌جا می‌گذارد. */}
+            {visible('opStartTime') && !company && <TimePick className="ia-field" label={targetKind === 'clinic' ? 'ساعت مراجعه' : 'ساعتِ عمل'} value={f.opStartTime}
                       onChange={(v) => setF((s) => ({ ...s, opStartTime: v }))} disabled={busy} />}
           </div>
           )}
@@ -793,7 +807,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
           <Decide row={row} mode={mode} onCancel={() => setMode('approve')} onDone={onDone} />
         )}
       </div>
-      {quick && <QuickDefinitionEditor sectionKey={quick.section} onClose={() => setQuick(null)} onSaved={async (_message, saved) => {
+      {quick && <QuickDefinitionEditor sectionKey={quick.section} initial={quick.initial} onClose={() => setQuick(null)} onSaved={async (_message, saved) => {
         setF((s) => ({ ...s, [quick.field]: String(saved.id) })); setQuick(null); await loadRefs();
       }} />}
     </Overlay>

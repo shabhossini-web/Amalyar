@@ -4,7 +4,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { CANCEL_REASON_KEYS } from '../common/cancel-reasons';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -30,6 +31,27 @@ class ClaimDto {
   @IsInt({ message: 'برنامهٔ حضورِ انتخابی نامعتبر است' })
   @Min(1, { message: 'برنامهٔ حضورِ انتخابی نامعتبر است' })
   dutyId?: number;
+}
+
+/**
+ * وضعیتِ عمل از پنلِ کارشناسی.
+ *
+ * `opDate` فقط برای «موکول شد» و اختیاری: نیامدن یعنی «هنوز تاریخ ندارد». دلیلِ لغو شکلش
+ * این‌جا سنجیده می‌شود و **اجباری‌بودنش** در `PatientsService.setStatus` — همان قاعدهٔ
+ * `VisitStatusDto`، چون به خودِ وضعیت وابسته است.
+ */
+class TechStatusDto {
+  @IsIn(['done', 'postponed', 'cancelled'], { message: 'وضعیت نامعتبر است' })
+  status!: string;
+
+  @IsOptional() @IsString({ message: 'تاریخِ تازه نامعتبر است' }) @MaxLength(40)
+  opDate?: string;
+
+  @IsOptional() @IsIn(CANCEL_REASON_KEYS, { message: 'دلیلِ لغو نامعتبر است' })
+  cancelReason?: string;
+
+  @IsOptional() @IsString() @MaxLength(400)
+  cancelNote?: string;
 }
 
 /**
@@ -61,6 +83,13 @@ export class TechController {
   @Patch('visits/:id/times')
   times(@Param('id', ParseIntPipe) id: number, @Body() dto: VisitTimesDto, @CurrentUser() user: any) {
     return this.tech.setTimes(id, dto, user);
+  }
+
+  /// «انجام شد / موکول شد / لغو شد» — فقط عملی که کارشناسش خودِ کاربر است (`TechService.setStatus`).
+  @RequirePermissions('visits.status')
+  @Post('visits/:id/status')
+  status(@Param('id', ParseIntPipe) id: number, @Body() dto: TechStatusDto, @CurrentUser() user: any) {
+    return this.tech.setStatus(id, dto, user);
   }
 
   @RequirePermissions('documents.write')

@@ -1,12 +1,40 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/intake-form-fixes
-since: 2026-09-26
-paths: []
+status: active
+branch: claude/company-service-flow
+since: 2026-09-27
+paths:
+  - server/src/auth/access-registry.ts
+  - server/src/config/settings-registry.ts
+  - server/src/features/features.service.ts
+  - server/src/patients/form-presets.ts
+  - server/src/patients/forms.service.ts
+  - server/src/patients/intake-match.ts
+  - server/src/patients/live.service.ts
+  - server/src/patients/patients.service.ts
+  - server/src/patients/portal.service.ts
+  - server/src/patients/record.service.ts
+  - server/src/patients/tech.controller.ts
+  - server/src/patients/tech.service.ts
+  - server/src/patients/visit-title.ts
+  - server/src/work/work-rules.ts
+  - src/app/Definitions.jsx
+  - src/app/Intake.jsx
+  - src/app/Tech.jsx
+  - src/app/WorkRow.jsx
+  - src/app/tech.css
+  - src/lib/terms.js
+  - src/pages/Intake.jsx
+  - src/pages/intake.css
+  - src/ui/FileDrop.jsx
+  - scripts/e2e/clinic-report-work.mjs
+  - scripts/e2e/company-service-flow.mjs
+  - scripts/e2e/company-flow-ui.mjs
+  - scripts/e2e/ci-live.txt
 note: >-
-  لند شد (#114): فرمِ عمومیِ بیمار — خطای بارگذاریِ کارت ملی، باکسِ پرداختِ اضافه، تاریخ/رزرو در یک
-  کنترل، جست‌وجوی بیمارستان با پیشنهادِ زیرِ کادر. بسته‌های ۸+۹ (PR #98) هنوز در انتظار.
+  بازخوردِ مالک روی roham (۱۴۰۵/۰۷/۰۵): وضعیتِ عمل از پنلِ کارشناس (انجام/موکول/لغو)، تأییدِ شرکتی
+  بی‌ساعتِ عمل و نوعِ عمل از نوشتهٔ بیمار، فیشِ چندتایی، مراجعه به نامِ خدمت، «گزارشِ خدمت» جدا از
+  «شرحِ عمل».
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

@@ -7,6 +7,7 @@ import { RecordService } from './record.service';
 import { clinicDateIso, dayUtc } from '../common/clinic-day';
 import { HospitalDutiesService } from './hospital-duties.service';
 import { OTHER_PX, procedureLabel } from './visit-coding';
+import { SERVICES, isServiceKey } from '../config/tenant-profile';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -25,6 +26,10 @@ function dayBounds(at: Date): [Date, Date] {
 
 const fullName = (p?: { firstName: string; lastName: string } | null) =>
   (p ? [p.firstName, p.lastName].filter(Boolean).join(' ') : null);
+
+/** نامِ سندِ گزارش — «گزارشِ نورومانیتورینگ» یا «گزارشِ خدمت»، هرگز «گزارشِ عمل» (`uploadReport`). */
+export const reportTitle = (service?: string | null) =>
+  (isServiceKey(service) ? `گزارشِ ${SERVICES[service].label}` : 'گزارشِ خدمت');
 
 /**
  * دامنهٔ دفترِ کار — **یک تعریف** برای خواندن و نوشتن.
@@ -45,7 +50,7 @@ const visitScope = (user: any) => (isUnrestricted(user) ? { patient: { deletedAt
 
 /** نمای پروجکت‌شدهٔ هر عمل — همان چیزی که `shape` می‌شناسد، و نه یک فیلدِ بیشتر. */
 const VISIT_SELECT = {
-  id: true, seq: true, kind: true, opDate: true, opStatus: true,
+  id: true, seq: true, kind: true, service: true, opDate: true, opStatus: true,
   opStartTime: true, opEndTime: true, techArriveTime: true,
   surgeonName: true, hospitalName: true, opType: true,
   patient: { select: { id: true, code: true, firstName: true, lastName: true } },
@@ -207,6 +212,8 @@ export class TechService {
       /* برچسبِ همهٔ عمل‌های جلسه (اصلی اول) — کارشناس باید بداند برای چه عمل‌هایی می‌رود. */
       procedure: procedureLabel(v),
       reportAt: v.documents[0]?.createdAt ?? null,
+      /* نامِ گزارشِ همین خدمت از سرور (قانونِ ۱۵) — «گزارشِ نورومانیتورینگ»، نه «گزارشِ عمل». */
+      reportLabel: reportTitle(v.service),
       transfers: v.stockTransfers.map((t: any) => ({
         id: t.id,
         code: t.code,
@@ -254,16 +261,49 @@ export class TechService {
     return this.one(id, user);
   }
 
-  /** گزارشِ عمل — دستهٔ `report` روی پروندهٔ همان بیمار. */
+  /**
+   * **وضعیتِ عمل از پنلِ کارشناسی** — انجام شد / موکول شد / لغو شد (مالک، ۱۴۰۵/۰۷/۰۵).
+   *
+   * کارِ «وضعیتِ عمل ثبت نشده — انجام شد یا موکول؟» از قبل به نامِ خودِ کارشناس ساخته می‌شد
+   * (`work-rules`) ولی پنلش هیچ دکمه‌ای برای انجامش نداشت؛ فقط سوپروایزر به بالا از داشبورد
+   * می‌توانست. منطق همان است که داشبورد دارد — `setStatus` (رویداد، دلیلِ لغو و پیامکش،
+   * یادآوری‌ها) و `postpone` — و این‌جا فقط دامنه و قیدِ «از در انتظار» اضافه می‌شود.
+   *
+   * ⚠️ فقط از `pending`: برگرداندنِ «انجام شد» یا «لغو» کارِ مدیر است، نه دکمه‌ای که روی
+   * گوشیِ کارشناس با یک لمسِ اشتباه عملِ انجام‌شده را دوباره باز کند.
+   * ⚠️ خروجیِ `PatientsService` دور ریخته می‌شود (همان دلیلِ `setTimes`): مبلغ و سهم دارد.
+   */
+  async setStatus(id: number, dto: { status: string; opDate?: string | null; cancelReason?: string; cancelNote?: string }, user: any) {
+    await this.ownVisit(id, user);
+    const cur = await this.prisma.visit.findUnique({ where: { id }, select: { opStatus: true } });
+    if (cur?.opStatus !== 'pending') {
+      throw new BadRequestException('وضعیتِ این عمل قبلاً ثبت شده است؛ برای تغییرش با مدیر هماهنگ کنید');
+    }
+    if (dto.status === 'postponed') await this.patients.postpone(id, dto.opDate ?? null, user);
+    else if (dto.status === 'done') await this.patients.setStatus(id, 'done', user);
+    else if (dto.status === 'cancelled') {
+      await this.patients.setStatus(id, 'cancelled', user, { reason: dto.cancelReason, note: dto.cancelNote });
+    } else throw new BadRequestException('وضعیت نامعتبر است');
+    return this.one(id, user);
+  }
+
+  /**
+   * گزارش — دستهٔ `report` روی پروندهٔ همان بیمار.
+   *
+   * ⚠️ نامش «گزارشِ خدمت» است نه «گزارشِ عمل» (مالک، ۱۴۰۵/۰۷/۰۵): شرکت عمل انجام نمی‌دهد،
+   * **خدمتی حینِ عمل** ارائه می‌کند و این گزارشِ همان خدمت است — برای بیمه و پرونده. «شرحِ
+   * عمل» سندِ جراح در مطب است و هرگز با این یکی قاطی نمی‌شود.
+   */
   async uploadReport(id: number, file: any, user: any) {
     const v = await this.ownVisit(id, user);
     if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
+    const svc = await this.prisma.visit.findUnique({ where: { id }, select: { service: true } });
     await this.record.addDocument(
       v.patientId, file,
-      { category: 'report', visitId: id, title: 'گزارشِ عمل' },
+      { category: 'report', visitId: id, title: reportTitle(svc?.service) },
       user,
     );
-    /* W2.2: گزارش آمد ← بستنِ «گزارشِ عمل بارگذاری نشده» (work-rules: report.uploaded). */
+    /* W2.2: گزارش آمد ← بستنِ «گزارشِ خدمت هنوز بارگذاری نشده» (work-rules: report.uploaded). */
     await this.events.emit({ type: 'report.uploaded', visitId: id, patientId: v.patientId, actorId: user?.id ?? null });
     return this.one(id, user);
   }

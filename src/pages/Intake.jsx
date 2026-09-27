@@ -209,6 +209,17 @@ function Form() {
   const [vErr, setVErr] = useState({});
   const [page, setPage] = useState(1);
   const [code, setCode] = useState('');
+  /* بیمار همین حالا فیش می‌گذارد — تا خودش «تمام شد» نزده، کادرِ فیش سرِ جایش می‌ماند.
+     ⚠️ مالک (۱۴۰۵/۰۷/۰۵): «بعد از انتخابِ اولین عکسِ واریز فرم خودبه‌خود به مرحلهٔ بعد می‌رود و
+     اجازهٔ چند عکس نمی‌دهد». سرور با اولین فیش ثبت‌نام را به صفِ بررسی می‌فرستد (درست است: کارکنان
+     باید ببینندش) و این صفحه تا دیروز همان لحظه کادر را برمی‌داشت. */
+  const [addingReceipts, setAddingReceipts] = useState(false);
+  /* پیش‌نمایشِ فیش‌هایی که **در همین صفحه** رفته‌اند (شناسهٔ سند → نشانیِ blob) تا بیمار ببیند کدام
+     عکس را برمی‌دارد؛ پس از تازه‌کردنِ صفحه نشانِ ساده جایش می‌نشیند (سرور نشانیِ عمومیِ فیش ندارد). */
+  const [thumbs, setThumbs] = useState({});
+  const thumbsRef = useRef(thumbs);
+  thumbsRef.current = thumbs;
+  useEffect(() => () => { Object.values(thumbsRef.current).forEach((u) => URL.revokeObjectURL(u)); }, []);
   const fileRef = useRef(null);
   /* W1.8 — پیش‌نویس. `idle` | `saving` | `saved` | `offline`.
      ⚠️ هیچ‌چیز در `localStorage` نمی‌نشیند (قرارداد §۶): این فرم دادهٔ پزشکیِ
@@ -409,13 +420,31 @@ function Form() {
   /* ⚠️ خطا **پرتاب** می‌شود تا همان فایل در فهرستِ کادر قرمز شود؛ پیامِ
      سراسری معلوم نمی‌کرد کدام فیش نرفته. */
   const sendReceipt = async (file) => {
+    /* پیش از ارسال: پاسخی که وضعیت را «در انتظارِ بررسی» می‌کند نباید کادر را زیرِ پای صفِ
+       آپلودِ چندفایلی بردارد. */
+    setAddingReceipts(true);
     const fd = new FormData();
     fd.append('file', file);
-    setD(await apiUpload(`/public/intake/form/${token}/receipt`, fd));
+    const next = await apiUpload(`/public/intake/form/${token}/receipt`, fd);
+    /* سرور فیشِ تازه را ته فهرست می‌گذارد (`attachReceipt`). ⚠️ `at(-1)` نه: صفحهٔ بیمار روی
+       گوشی‌های قدیمی (سافاریِ پیش از ۱۵٫۴) هم باز می‌شود. */
+    const ids = receiptsOf(next);
+    const id = ids[ids.length - 1];
+    if (id && file.type.startsWith('image/')) setThumbs((t) => ({ ...t, [id]: URL.createObjectURL(file) }));
+    setD(next);
   };
   const removeReceipt = async (docId) => {
     setErr('');
-    try { setD(await api(`/public/intake/form/${token}/receipt/${docId}`, { auth: false, method: 'DELETE' })); }
+    try {
+      setD(await api(`/public/intake/form/${token}/receipt/${docId}`, { auth: false, method: 'DELETE' }));
+      setThumbs((t) => {
+        if (!t[docId]) return t;
+        URL.revokeObjectURL(t[docId]);
+        const rest = { ...t };
+        delete rest[docId];
+        return rest;
+      });
+    }
     catch (e) { setErr(e.message); }
   };
 
@@ -428,8 +457,11 @@ function Form() {
   const makesVisit = d.makesVisit !== false;
   const receipts = receiptsOf(d);
   const steps = stepsFor(d);
+  /* کادرِ فیش: مرحلهٔ پرداخت، یا بیماری که همین حالا فیش می‌گذارد (وضعیت دیگر «در انتظارِ بررسی»
+     است ولی او هنوز «تمام شد» نزده). */
+  const payOpen = d.status === 'pending_payment' || (d.status === 'pending_approval' && addingReceipts);
   /* «تأییدشده» یعنی همهٔ مرحله‌ها پشتِ سر است — نه یک مرحلهٔ جاریِ دیگر. */
-  const stepIdx = done ? steps.length : steps.findIndex((s) => s.key === d.status);
+  const stepIdx = done ? steps.length : steps.findIndex((s) => s.key === (payOpen ? 'pending_payment' : d.status));
   const T = PATIENT.intake;
   /* فرمی که مرحلهٔ واریز دارد «ثبت و مرحلهٔ بعد» می‌گوید (همان استپر تصمیم
      می‌گیرد، نه یک شرطِ دوم که بتواند از آن جدا بیفتد). */
@@ -563,7 +595,7 @@ function Form() {
         )
       )}
 
-      {d.status === 'pending_payment' && (
+      {payOpen && (
         <div className="ik-pay">
           {/* ⚠️ ترتیب: **اول چقدر، بعد به کجا.** نسخهٔ اول شماره‌حساب‌ها را
               بالای مبلغ می‌گذاشت و بیمار پیش از دانستنِ عدد با فهرستِ کارت
@@ -607,27 +639,45 @@ function Form() {
             disabled={busy}
             label="آپلودِ فیشِ واریزی"
             hint="عکس یا PDFِ فیش — تا ۸ مگابایت؛ چند فیش هم می‌شود گذاشت"
+            keepDone={false}
             onUpload={sendReceipt}
           />
           {receipts.length > 0 && (
             <div className="ik-receipts">
+              {/* فهرستِ **سروری**ِ فیش‌ها — تنها فهرست (کادرِ بالا فقط صف و خطا را نشان می‌دهد). */}
               {receipts.map((id, i) => (
                 <span className="ik-receipt-row" key={id}>
-                  <b>فیشِ {i + 1}</b>
-                  <button type="button" onClick={() => removeReceipt(id)}>حذف</button>
+                  {thumbs[id]
+                    ? <img src={thumbs[id]} alt="" className="ik-receipt-thumb" />
+                    : <span className="ik-receipt-thumb" aria-hidden="true"><Bank width="16" height="16" /></span>}
+                  <b>فیشِ {faNum(i + 1)}</b>
+                  <button type="button" onClick={() => removeReceipt(id)} aria-label={`حذفِ فیشِ ${faNum(i + 1)}`}>حذف</button>
                 </span>
               ))}
+            </div>
+          )}
+          {/* بیمار خودش می‌گوید کارش با فیش تمام شده — نه اولین آپلود به جای او. */}
+          {receipts.length > 0 && d.status === 'pending_approval' && (
+            <div className="ik-receipt-done">
+              <p className="ik-note"><CheckCircle width="15" height="15" /> {T.receiptsIn(receipts.length)}</p>
+              <button type="button" className="ik-go" onClick={() => setAddingReceipts(false)}>{T.receiptsDone}</button>
             </div>
           )}
         </div>
       )}
 
-      {d.status === 'pending_approval' && (
-        <p className="ik-note">
-          {/* ⚠️ فرمِ رایگان فیش ندارد — «فیشِ شما دریافت شد» برای آن دروغ است
-              و بیمار را دنبالِ فیشی می‌فرستد که هرگز نفرستاده. */}
-          <Clock width="15" height="15" /> {receipts.length ? T.review.withReceipt : T.review.noReceipt}
-        </p>
+      {d.status === 'pending_approval' && !payOpen && (
+        <>
+          <p className="ik-note">
+            {/* ⚠️ فرمِ رایگان فیش ندارد — «فیشِ شما دریافت شد» برای آن دروغ است
+                و بیمار را دنبالِ فیشی می‌فرستد که هرگز نفرستاده. */}
+            <Clock width="15" height="15" /> {receipts.length ? T.review.withReceipt : T.review.noReceipt}
+          </p>
+          {/* قسطِ دوم یا عکسِ خواناتر — تا کسی بررسی نکرده، راهِ برگشت به کادرِ فیش باز است. */}
+          {receipts.length > 0 && (
+            <button type="button" className="ik-go ghost" onClick={() => setAddingReceipts(true)}>{T.receiptsMore}</button>
+          )}
+        </>
       )}
 
       {err && <p className="ik-bad"><Alert width="15" height="15" /> {err}</p>}

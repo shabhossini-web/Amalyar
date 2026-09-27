@@ -9,6 +9,7 @@ import { APPT_LABELS } from './appointments.service';
 import { ORDER_LABELS, REMINDER_LABELS, OP_LABELS } from './labels';
 import { canAccess } from '../auth/access-check';
 import { todayRangeUtc } from '../common/clinic-day';
+import { serviceTitleOf } from './visit-title';
 
 /**
  * سفارشِ باز = نتیجه‌ای که یا نیامده یا آمده و هنوز بسته نشده.
@@ -159,7 +160,7 @@ export class LiveService {
         where: { patientId },
         orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { seq: 'desc' }],
         select: {
-          id: true, seq: true, kind: true, opDate: true, opStatus: true, createdAt: true,
+          id: true, seq: true, kind: true, service: true, opDate: true, opStatus: true, createdAt: true,
           nextVisitDate: true, followOfVisitId: true, surgeonName: true, hospitalName: true,
           pricingModel: true, globalAmount: true,
           charges: { select: { amount: true } },
@@ -223,8 +224,8 @@ export class LiveService {
       kindTitle[d.visitKind] = d.title;
       kindColor[d.visitKind] = d.color || colorForKey(d.key);
     }
-    const vLabel = (v: { kind: string | null; seq: number }) =>
-      `${kindTitle[v.kind ?? ''] ?? V} ${patient.code}-V${v.seq}`;
+    const vLabel = (v: { kind: string | null; seq: number; service?: string | null }) =>
+      `${serviceTitleOf(v) ?? kindTitle[v.kind ?? ''] ?? V} ${patient.code}-V${v.seq}`;
 
     /* کارهای باز از همان لایهٔ کار می‌آید، نه کوئریِ محلی: مالک، موعد، و
        «عقب‌افتاده» آن‌جا حساب می‌شوند و دو نسخه‌شان یعنی دو حقیقت. */
@@ -284,10 +285,12 @@ export class LiveService {
        نگاشتِ **هاردکد** (`visit-kinds.js`) برچسب می‌ساخت — یعنی شرکتی که فرمش
        را «فرمِ عمل» نامیده بود، در نوارِ مرحله «عمل جراحی» می‌دید و در خطِ زمانِ
        همان صفحه «فرمِ عمل». نامی که مشتری گذاشته باید برنده باشد (قانونِ ۱۵). */
+    /* شرکت: گامِ مراجعه به نامِ خدمتِ همان دوره («نورومانیتورینگ») — `visit-title.ts`. */
+    const cycleTitle = cycle ? serviceTitleOf(cycle) ?? kindTitle[cycle.kind ?? ''] ?? null : null;
     const add = (key: string, title: string, state: Step['state'], detail: string | null, at: Date | null = null, kind: string | null = null) =>
       steps.push({
         key, title, state, detail, at,
-        ...(kind ? { kind, kindFa: kindTitle[kind] ?? null } : {}),
+        ...(kind ? { kind, kindFa: (key === 'visit' ? cycleTitle : null) ?? kindTitle[kind] ?? null } : {}),
       });
 
     add('intake', 'ثبت‌نام', 'done', 'پرونده ساخته شد', patient.createdAt);
@@ -314,12 +317,12 @@ export class LiveService {
     if (!cycle) {
       add('visit', V, 'todo', `هنوز ${V}ای ثبت نشده`, null);
     } else if (cycle.opStatus === 'done') {
-      add('visit', V, 'done', kindTitle[cycle.kind ?? ''] ?? 'انجام شد', cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
+      add('visit', V, 'done', cycleTitle ?? 'انجام شد', cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
     } else if (cycle.opStatus === 'cancelled') {
       add('visit', V, 'skipped', `آخرین ${V} لغو شد`, cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
     } else {
       add('visit', V, 'current',
-        `${kindTitle[cycle.kind ?? ''] ?? V} در انتظار`, cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
+        `${cycleTitle ?? V} در انتظار`, cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
     }
 
     /* بی‌دسترسی ≠ بی‌سفارش: گام رد می‌شود ولی متنش دروغ نمی‌گوید. */
@@ -388,7 +391,7 @@ export class LiveService {
         /* `title` خودش `«نامِ نوع» + کد` است؛ `kindFa` همان را **جدا** می‌دهد تا
            کلاینت بتواند کد را `dir="ltr"` بگذارد (قانونِ ۹) بی‌آنکه مجبور شود
            نامِ نوع را از نگاشتِ هاردکدِ خودش بسازد. */
-        kind: v.kind ?? null, kindFa: kindTitle?.[v.kind ?? ''] ?? null, code: `${patient.code}-V${v.seq}`,
+        kind: v.kind ?? null, kindFa: serviceTitleOf(v) ?? kindTitle?.[v.kind ?? ''] ?? null, code: `${patient.code}-V${v.seq}`,
       });
     }
     for (const a of appointments) {

@@ -234,11 +234,16 @@ export const RULES: Record<string, Rule> = {
     priority: 2,
   }),
   'visit.done': (_e, ref) => close(ref, 'confirm_surgery_done'),
+  /* «موکول شد» (پنلِ کارشناسی، ۱۴۰۵/۰۷/۰۵) هم جوابِ همین پرسش است — عمل دیگر «بی‌وضعیت» نیست؛
+     اگر تاریخِ تازه هم بگذرد و ثبت نشود، آشکارساز دوباره می‌پرسد. */
+  'visit.postponed': (_e, ref) => close(ref, 'confirm_surgery_done'),
   'visit.cancelled': (_e, ref) => close(ref, 'confirm_surgery_done', 'complete_report', 'confirm_usage'),
-  /* مطب (`payload.clinic`): گزارش همان شرحِ عمل است و کارِ پزشک — نه کارشناس (work-detectors). */
+  /* مطب (`payload.clinic`): گزارش همان شرحِ عمل است و کارِ پزشک — نه کارشناس (work-detectors).
+     شرکت: «گزارشِ خدمت» — شرکت عمل انجام نمی‌دهد، خدمتی حینِ عمل می‌دهد و گزارشِ همان را
+     برای بیمه و پرونده بارگذاری می‌کند (مالک، ۱۴۰۵/۰۷/۰۵: «این‌ها را از هم تفکیک کن»). */
   'report.missing': (e, ref) => upsert({
     ...base(e, 'complete_report', ref),
-    title: e.payload?.clinic ? 'شرحِ عمل هنوز نوشته نشده' : 'گزارشِ عمل هنوز بارگذاری نشده',
+    title: e.payload?.clinic ? 'شرحِ عمل هنوز نوشته نشده' : 'گزارشِ خدمت هنوز بارگذاری نشده',
     ownerRole: e.payload?.clinic ? 'doctor' : 'technician',
     ownerAccountId: (e.payload?.clinic ? e.payload?.doctorId : e.payload?.techId) ?? null,
     dueAt: inDays(1, e.at),

@@ -32,6 +32,10 @@ export default function FileDrop({
   accept = 'image/*,.pdf',
   maxMb = 25,
   multiple = true,
+  /* `false` = فایلِ رفته از این فهرست برداشته می‌شود — وقتی صفحه فهرستِ **سروری**ِ خودش را
+     دارد (فیش‌های فرمِ بیمار با «حذف»)، دو فهرستِ هم‌زمان از یک فایل فقط شلوغی است. صف،
+     پیشرفت و خطا (با «تلاشِ دوباره») همچنان همین‌جا دیده می‌شوند. */
+  keepDone = true,
   disabled = false,
   capture,
   /* 'drop' = کادرِ بزرگ (پرونده، فرم‌ها) | 'button' = دکمهٔ فشرده برای
@@ -61,7 +65,8 @@ export default function FileDrop({
         patch(next.id, { status: 'uploading', error: '' });
         try {
           await onUpload(next.file);
-          patch(next.id, { status: 'done' });
+          if (keepDone) patch(next.id, { status: 'done' });
+          else drop(next.id);
         } catch (e) {
           patch(next.id, { status: 'error', error: e?.message || 'ارسال نشد' });
         }

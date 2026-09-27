@@ -833,14 +833,22 @@ function EditSheet({ section, row, onClose, onSaved, onError, quick = false }) {
   );
 }
 
-export function QuickDefinitionEditor({ sectionKey, onClose, onSaved }) {
+/**
+ * افزودنِ سریعِ یک تعریف از وسطِ کارِ دیگر (پنلِ تأیید، فرمِ مراجعه).
+ *
+ * `initial` پیش‌پرِ ردیفِ **تازه** است — مثلاً همان نامِ عملی که بیمار نوشته و در فهرست نبود
+ * (مالک، ۱۴۰۵/۰۷/۰۵). شناسه ندارد، پس همیشه «افزودن» است نه «ویرایش».
+ */
+export function QuickDefinitionEditor({ sectionKey, initial, onClose, onSaved }) {
   const [error, setError] = useState('');
   const section = sectionKey === 'techs'
     ? { key: 'techs', path: '/accounts/technicians', label: 'کارشناسان', person: true, extra: [] }
     : SECTIONS.find((s) => s.key === sectionKey);
   if (!section) return null;
+  const seed = { ...(initial ?? {}) };
+  delete seed.id;
   return createPortal(<div>
-    <EditSheet quick section={section} row={{}} onClose={onClose} onSaved={onSaved} onError={setError} />
+    <EditSheet quick section={section} row={seed} onClose={onClose} onSaved={onSaved} onError={setError} />
     {error && <div className="df-quick-error" role="alert" onClick={() => setError('')}>{error}</div>}
   </div>, document.body);
 }
