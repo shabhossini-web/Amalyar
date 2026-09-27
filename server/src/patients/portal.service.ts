@@ -11,7 +11,7 @@ import { renderSms } from '../common/sms-template';
 import { AvailabilityService } from './availability.service';
 import { OP_LABELS } from './labels';
 import { OTHER_PX, procedureLabel } from './visit-coding';
-import { serviceTitleOf } from './visit-title';
+import { visitTitleOf } from './visit-title';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — لینکِ **دائمیِ** `/p/<token>`.
@@ -184,7 +184,7 @@ export class PortalService {
     const shape = (v: (typeof visits)[number]) => ({
       code: `${p.code}-V${v.seq}`,
       kind: v.kind,
-      kindTitle: serviceTitleOf(v) ?? (v.kind ? titles.get(v.kind) ?? null : null),
+      kindTitle: visitTitleOf(v, v.kind ? titles.get(v.kind) : null),
       dateFa: v.opDate ? faDateStr(v.opDate) : null,
       status: v.opStatus,
       /* ⚠️ برچسب از سرور می‌آید و نه از نگاشتِ خودِ پرتال: پرتالِ بیمار

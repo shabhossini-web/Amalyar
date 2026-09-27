@@ -12,7 +12,7 @@
  *   - فیشِ دوم پس از رفتنِ ثبت‌نام به «در انتظارِ بررسی» هم پذیرفته می‌شود (سرور؛ رابط در `company-flow-ui`)
  *   - نوعِ عمل: نزدیک‌ترینِ یکتا پیشنهاد می‌شود؛ وقتی چیزی نزدیک نیست `null`
  *   - مراجعهٔ تأییدشده «نورومانیتورینگ» نام دارد (مراجعه، پرونده، «الان کجاییم»، پرتالِ بیمار) و
- *     فرمش «فرمِ نورومانیتورینگ»؛ نامِ دستیِ مدیر دست نمی‌خورد
+ *     نوعش (نامِ فرم) هم «نورومانیتورینگ»؛ نامِ دستیِ مدیر دست نمی‌خورد و روی مراجعه هم برنده است
  *   - کارشناس: «موکول» بی‌تاریخ و با تاریخ، «انجام شد»، «لغو» با دلیل؛ رویداد و ممیزی
  *   - نامِ سندِ گزارش «گزارشِ نورومانیتورینگ» است و پنل همان را نشان می‌دهد
  *   - مطب: کاشیِ «پنلِ کارشناسی» و «چینش» حتی برای سوپرادمین نیست
@@ -119,7 +119,7 @@ try {
   const full = (await api(`/visits/${vid}`, null, 'GET', auth)).data;
   ok(full?.kindTitle === 'نورومانیتورینگ', 'نامِ مراجعه «نورومانیتورینگ» — نه «فرمِ عمل»', full?.kindTitle);
   const kinds = (await api('/forms/visit-kinds', null, 'GET', auth)).data ?? [];
-  ok(kinds.find((k) => k.kind === 'surgery')?.title === 'فرمِ نورومانیتورینگ', 'فرمِ مراجعه «فرمِ نورومانیتورینگ»', JSON.stringify(kinds.map((k) => k.title)));
+  ok(kinds.find((k) => k.kind === 'surgery')?.title === 'نورومانیتورینگ', 'نوعِ مراجعه (نامِ فرم) «نورومانیتورینگ» — نه «فرمِ عمل»', JSON.stringify(kinds.map((k) => k.title)));
   const rec = (await api(`/patients/${row.patientId}/record`, null, 'GET', auth)).data;
   const recVisit = (rec?.visits ?? []).find((x) => x.id === vid);
   ok(!rec || recVisit?.kindTitle === 'نورومانیتورینگ', 'پرونده هم همان نام', recVisit?.kindTitle);
@@ -134,15 +134,22 @@ try {
   await db.setting.deleteMany({ where: { key: 'company_visit_form_title' } });
   await api('/forms', null, 'GET', auth);
   ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'فرمِ اختصاصیِ ما', '**نباید بیفتد:** نامی که مدیر در فرم‌ساز گذاشته بازنویسی شود');
-  /* دوخدمته: نامِ قالبی ← «فرمِ خدمت»؛ هر مراجعه همچنان نامِ خدمتِ خودش. */
+  ok((await api(`/visits/${vid}`, null, 'GET', auth)).data?.kindTitle === 'فرمِ اختصاصیِ ما', 'و روی مراجعه هم نامِ مدیر برنده است، نه نامِ خدمت (قانونِ ۱۵)');
+  /* دوخدمته: نامِ قالبی ← «خدمت»؛ هر مراجعه همچنان نامِ خدمتِ خودش. */
   await db.formDef.update({ where: { key: 'visit.surgery' }, data: { title: 'فرمِ عمل' } });
   await set('services', JSON.stringify(['ionm', 'implant']));
   await api('/forms', null, 'GET', auth);
-  ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'فرمِ خدمت', 'شرکتِ دوخدمته: «فرمِ خدمت»');
+  ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'خدمت', 'شرکتِ دوخدمته: «خدمت»');
   ok((await api(`/visits/${vid}`, null, 'GET', auth)).data?.kindTitle === 'نورومانیتورینگ', 'و مراجعه همچنان «نورومانیتورینگ»');
+  /* نوعی که شرکت خودش در فرم‌ساز ساخته نامِ فرمِ خودش را دارد — خدمتِ پیش‌فرض رویش می‌نشیند
+     (`visitServiceOf`) ولی «نورومانیتورینگ» نامیدنش دروغ است. */
+  await set('services', JSON.stringify(['ionm']));
+  await api('/forms', { key: `cf${tag}`, title: 'پیگیریِ تلفنی', scope: 'visit' }, 'POST', auth);
+  const own = await api('/visits', { kind: `cf${tag}`, firstName: 'سید', lastName: `شهاب ${tag}`, phone: phone(), hospitalId: hosp.id, surgeonId: surgeon.id, opDate: isoDay(2) }, 'POST', auth);
+  ok(own.status === 201 && own.data?.kindTitle === 'پیگیریِ تلفنی', '**نباید بیفتد:** نوعی که شرکت خودش ساخته «نورومانیتورینگ» نامیده شود', `${own.status} ${own.data?.kindTitle ?? JSON.stringify(own.data).slice(0, 120)}`);
   await set('services', JSON.stringify(['ionm']));
   await api('/forms', null, 'GET', auth);
-  ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'فرمِ نورومانیتورینگ', 'برگشت به تک‌خدمته ← دوباره «فرمِ نورومانیتورینگ» (نامِ خودکار، نه دستی)');
+  ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'نورومانیتورینگ', 'برگشت به تک‌خدمته ← دوباره «نورومانیتورینگ» (نامِ خودکار، نه دستی)');
 
   console.log('\n۴) کارشناس: وضعیتِ عمل');
   const agenda = (await api('/tech/agenda?scope=today', null, 'GET', techA.token)).data;
@@ -197,6 +204,10 @@ try {
   ok(f('dashboard')?.allowed === true && f('theatre')?.allowed === true, 'و بقیهٔ کاشی‌هایش سرِ جایشان‌اند');
   await db.feature.updateMany({ where: { key: 'tech' }, data: { enabled: true } });
   ok(((await api('/features', null, 'GET', auth)).data ?? []).find((x) => x.key === 'tech')?.allowed === true, 'مطبی که خودش پنلِ کارشناسی را روشن کرده همچنان می‌بیندش');
+  /* نامِ خودکارِ فرم برگشت‌پذیر است: «نورومانیتورینگ» در فهرستِ فرم‌های مطب دروغ است. */
+  await api('/forms', null, 'GET', auth);
+  ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'فرمِ عمل'
+    && !(await db.setting.findUnique({ where: { key: 'company_visit_form_title' } })), 'مطب‌شدن نامِ خودکارِ فرم را به «فرمِ عمل» برگرداند');
 } catch (e) {
   ok(false, `اجرا متوقف شد: ${e?.stack ?? e}`);
 } finally {

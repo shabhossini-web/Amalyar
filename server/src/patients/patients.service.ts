@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { syncVisitDuty } from './hospital-duties.service';
-import { serviceTitleOf } from './visit-title';
+import { visitTitleOf } from './visit-title';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
@@ -65,8 +65,8 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
     /* ⚠️ `null` وقتی این نوع فرمی ندارد (فرمش خاموش شده، یا دادهٔ واردشده از
        سامانهٔ قبلی). کلاینت آن‌وقت به برچسبِ پشتیبانِ خودش برمی‌گردد —
        «عمل» نامیدنِ یک نوعِ ناشناخته دروغ است. */
-    /* شرکت: نامِ خدمت («نورومانیتورینگ») — `visit-title.ts`؛ بقیه نامِ فرمِ نوع. */
-    kindTitle: serviceTitleOf(v) ?? k?.title ?? null,
+    /* نامِ فرمِ نوع؛ در شرکت اگر آن نام خودکار است، نامِ خدمتِ همین مراجعه («نورومانیتورینگ») — `visit-title.ts`. */
+    kindTitle: visitTitleOf(v, k?.title),
     kindColor: k?.color ?? null,
     code: `${v.patient.code}-V${v.seq}`,
     patientCode: v.patient.code,

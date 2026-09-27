@@ -481,29 +481,33 @@ export class FormsService {
   }
 
   /**
-   * **نامِ فرمِ مراجعهٔ شرکت = نامِ خدمت** — «فرمِ نورومانیتورینگ»، نه «فرمِ عمل» (مالک،
-   * ۱۴۰۵/۰۷/۰۵). شرکتِ دوخدمته «فرمِ خدمت»؛ نامِ هر مراجعه را `serviceTitleOf` از خدمتِ خودش می‌سازد.
+   * **نامِ فرمِ مراجعهٔ شرکت = نامِ خدمت** — «نورومانیتورینگ»، نه «فرمِ عمل» (مالک، ۱۴۰۵/۰۷/۰۵).
+   * شرکتِ دوخدمته «خدمت»؛ نامِ هر مراجعه‌اش را `visitTitleOf` از خدمتِ خودش می‌سازد.
    *
    * ⚠️ فقط نامِ **دست‌نخورده**: قالبِ قدیمی (`OPERATION_FORM_TITLE`) یا همان نامی که دفعهٔ قبل
    * خودِ سامانه گذاشته بود (`company_visit_form_title`). نامی که مدیر در فرم‌ساز نوشته هرگز
    * بازنویسی نمی‌شود. با عوض‌شدنِ بستهٔ خدمات دوباره سنجیده می‌شود — شرکتی که ایمپلنت را
    * اضافه کند «فرمِ نورومانیتورینگ»ش «فرمِ خدمت» می‌شود، مگر نامش را خودش عوض کرده باشد.
+   * ⚠️ **و برگشت‌پذیر است:** نصبی که مطب شود، نامِ خودکار به نامِ قالب برمی‌گردد — «فرمِ ایمپلنت»
+   * در فهرستِ فرم‌های مطب دروغ است (`tenant-profile-write` §۶ همین را گرفت).
    * ⚠️ این در هر خواندنِ فرم می‌دود؛ حالتِ عادی یک کوئری است (پرچمِ هم‌خوان → بازگشت).
    */
   private async retitleCompanyVisitForm() {
     const profile = await this.config.profile();
-    if (profile.kind !== 'company') return;
-    const want = companyVisitFormTitle(profile.services.map((k) => SERVICES[k].label));
+    const want = profile.kind === 'company'
+      ? companyVisitFormTitle(profile.services.map((k) => SERVICES[k].label))
+      : null;
     const KEY = 'company_visit_form_title';
-    const last = (await this.prisma.setting.findUnique({ where: { key: KEY } }))?.value ?? null;
+    const last = (await this.prisma.setting.findUnique({ where: { key: KEY } }))?.value || null;
     if (last === want) return;
     const form = await this.prisma.formDef.findUnique({ where: { key: 'visit.surgery' }, select: { id: true, title: true } });
     /* بی‌فرم پرچم هم نمی‌خورد — وگرنه فرمی که بعداً نصب شود (تغییرِ پروفایل) با نامِ قالبی می‌ماند. */
     if (!form) return;
     if (form.title === OPERATION_FORM_TITLE || (last && form.title === last)) {
-      await this.prisma.formDef.update({ where: { id: form.id }, data: { title: want } });
+      await this.prisma.formDef.update({ where: { id: form.id }, data: { title: want ?? OPERATION_FORM_TITLE } });
     }
-    await this.prisma.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: want }, update: { value: want } });
+    if (want) await this.prisma.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: want }, update: { value: want } });
+    else await this.prisma.setting.deleteMany({ where: { key: KEY } });
   }
 
   /**

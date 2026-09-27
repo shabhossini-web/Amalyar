@@ -9,7 +9,7 @@ import { APPT_LABELS } from './appointments.service';
 import { ORDER_LABELS, REMINDER_LABELS, OP_LABELS } from './labels';
 import { canAccess } from '../auth/access-check';
 import { todayRangeUtc } from '../common/clinic-day';
-import { serviceTitleOf } from './visit-title';
+import { visitTitleOf } from './visit-title';
 
 /**
  * سفارشِ باز = نتیجه‌ای که یا نیامده یا آمده و هنوز بسته نشده.
@@ -225,7 +225,7 @@ export class LiveService {
       kindColor[d.visitKind] = d.color || colorForKey(d.key);
     }
     const vLabel = (v: { kind: string | null; seq: number; service?: string | null }) =>
-      `${serviceTitleOf(v) ?? kindTitle[v.kind ?? ''] ?? V} ${patient.code}-V${v.seq}`;
+      `${visitTitleOf(v, kindTitle[v.kind ?? '']) ?? V} ${patient.code}-V${v.seq}`;
 
     /* کارهای باز از همان لایهٔ کار می‌آید، نه کوئریِ محلی: مالک، موعد، و
        «عقب‌افتاده» آن‌جا حساب می‌شوند و دو نسخه‌شان یعنی دو حقیقت. */
@@ -285,8 +285,8 @@ export class LiveService {
        نگاشتِ **هاردکد** (`visit-kinds.js`) برچسب می‌ساخت — یعنی شرکتی که فرمش
        را «فرمِ عمل» نامیده بود، در نوارِ مرحله «عمل جراحی» می‌دید و در خطِ زمانِ
        همان صفحه «فرمِ عمل». نامی که مشتری گذاشته باید برنده باشد (قانونِ ۱۵). */
-    /* شرکت: گامِ مراجعه به نامِ خدمتِ همان دوره («نورومانیتورینگ») — `visit-title.ts`. */
-    const cycleTitle = cycle ? serviceTitleOf(cycle) ?? kindTitle[cycle.kind ?? ''] ?? null : null;
+    /* نامِ گامِ مراجعه همان نامِ کارتِ مراجعه است (`visit-title.ts`) — نوار و کارت یک چیز بگویند. */
+    const cycleTitle = cycle ? visitTitleOf(cycle, kindTitle[cycle.kind ?? '']) : null;
     const add = (key: string, title: string, state: Step['state'], detail: string | null, at: Date | null = null, kind: string | null = null) =>
       steps.push({
         key, title, state, detail, at,
@@ -391,7 +391,7 @@ export class LiveService {
         /* `title` خودش `«نامِ نوع» + کد` است؛ `kindFa` همان را **جدا** می‌دهد تا
            کلاینت بتواند کد را `dir="ltr"` بگذارد (قانونِ ۹) بی‌آنکه مجبور شود
            نامِ نوع را از نگاشتِ هاردکدِ خودش بسازد. */
-        kind: v.kind ?? null, kindFa: serviceTitleOf(v) ?? kindTitle?.[v.kind ?? ''] ?? null, code: `${patient.code}-V${v.seq}`,
+        kind: v.kind ?? null, kindFa: visitTitleOf(v, kindTitle?.[v.kind ?? '']), code: `${patient.code}-V${v.seq}`,
       });
     }
     for (const a of appointments) {

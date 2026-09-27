@@ -14,6 +14,7 @@ paths:
   - server/src/patients/patients.service.ts
   - server/src/patients/portal.service.ts
   - server/src/patients/record.service.ts
+  - server/src/patients/summary.service.ts
   - server/src/patients/tech.controller.ts
   - server/src/patients/tech.service.ts
   - server/src/patients/visit-title.ts

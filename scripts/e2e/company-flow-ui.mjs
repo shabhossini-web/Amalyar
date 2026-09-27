@@ -351,6 +351,16 @@ try {
       ok(await hOverflow(p) <= 0, 'اسکرولِ افقی نیست');
       if (shots) await p.screenshot({ path: `${shots}/company-flow-${T.key}-tech-after.png`, fullPage: true });
       await ctx.close();
+
+      /* پرونده: مراجعه «نورومانیتورینگ» نام دارد، نه «فرمِ عمل» (بندِ ۴ِ مالک). */
+      const adm = await context(T.key);
+      await browserLogin(adm.p, auth, { ui: UI });
+      await adm.p.goto(`${UI}/app/patients/${(await visit(ids.c)).patientId}`, { waitUntil: 'networkidle' });
+      const kind = adm.p.locator('.rc-kind').first();
+      await kind.waitFor();
+      ok((await kind.innerText()).trim() === 'نورومانیتورینگ', '**پرونده: مراجعه «نورومانیتورینگ» نام دارد** — نه «فرمِ عمل»', await kind.innerText());
+      if (shots) { await kind.scrollIntoViewIfNeeded(); await adm.p.screenshot({ path: `${shots}/company-flow-${T.key}-record.png` }); }
+      await adm.ctx.close();
     }
   }
 } finally {
