@@ -162,6 +162,31 @@
 .tk-note.ok { color: var(--green-text); }
 .tk-note.no { color: var(--red-text); }
 
+/* ── وضعیتِ عمل: انجام شد / موکول شد / لغو شد (مالک، ۱۴۰۵/۰۷/۰۵) ──
+   سه گزینهٔ بزرگ و خوانا، نه کشویی: کارشناس سرِ عمل با یک دست روی گوشی انتخاب می‌کند و باید
+   هر سه را **ببیند**. رنگِ آیکون همان رنگِ معناییِ وضعیت است (سبز/کهربایی/قرمز). */
+.tk-status { display: grid; gap: 8px; }
+.tk-status-opt {
+  display: flex; align-items: center; gap: 11px; min-height: 52px; padding: 10px 12px;
+  font: inherit; text-align: start; cursor: pointer; border-radius: 12px; color: var(--text1);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .13);
+  transition: border-color .2s, background-color .2s;
+}
+.tk-status-opt span { display: grid; gap: 1px; min-width: 0; }
+.tk-status-opt b { font-size: 13px; }
+.tk-status-opt small { font-size: 11px; line-height: 1.7; color: var(--text3); }
+.tk-status-opt svg { flex: 0 0 auto; }
+.tk-status-opt.k-done svg { color: var(--green-text); }
+.tk-status-opt.k-postponed svg { color: var(--amber-text); }
+.tk-status-opt.k-cancelled svg { color: var(--red-text); }
+.tk-status-opt:hover { border-color: rgba(var(--brand-2-rgb), .45); }
+.tk-status-opt.on { background: rgba(var(--brand-soft-rgb), .14); border-color: rgba(var(--brand-2-rgb), .7); }
+.tk-status-opt:disabled { opacity: .55; cursor: not-allowed; }
+.tk-status-opt:focus-visible, .tk-ghost:focus-visible, .tk-save:focus-visible, .tk-x:focus-visible {
+  outline: 2px solid var(--cyan); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) { .tk-status-opt { transition: none; } }
+
 .tk-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
@@ -175,7 +200,9 @@
 @media (max-width: 560px) {
   .tk { padding: 12px 10px 32px; }
   .tk-card { padding: 11px; }
-  .tk-acts { flex-direction: column; }
+  /* دو دکمهٔ کوتاه («وضعیتِ عمل»، «ثبتِ ساعت») کنارِ هم و گزارش در ردیفِ خودش — با دکمهٔ سوم،
+     چیدمانِ ستونیِ قبلی هر کارت را سه ردیفِ تمام‌عرض بلند می‌کرد. */
+  .tk-acts > .fdrop { flex-basis: 100%; }
 }
 /* مراجعه‌های آزادِ همان بیمارستان و روزِ برنامهٔ حضور — فقط پذیرش‌پذیرها. */
 .tk-open-visit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(var(--veil-rgb), .12); }

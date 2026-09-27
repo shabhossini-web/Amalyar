@@ -4,12 +4,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PAY_BOX_LABEL, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, coreFamily, isCoreKey, isUndated } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, OPERATION_FORM_TITLE, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PAY_BOX_LABEL, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, companyVisitFormTitle, coreFamily, isCoreKey, isUndated } from './form-presets';
 import { BUILTIN_SUBFORMS, BUILTIN_SUBFORM_KEYS, SUBFORM_GROUPS, SUBFORM_PRESET_GROUP, SubformDef, defaultSurgeryPhase, shortTitle } from './subforms';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 import { serviceOfFormKey } from './intake-service-of';
-import { isServiceKey } from '../config/tenant-profile';
+import { SERVICES, isServiceKey } from '../config/tenant-profile';
 
 /**
  * موتورِ فرم — «چه چیزی پرسیده می‌شود» و «چه چیزی اجباری است».
@@ -375,6 +375,7 @@ export class FormsService {
     const n = await this.prisma.formDef.count();
     if (n > 0) {
       await this.ensureRegistrationPreset();
+      await this.retitleCompanyVisitForm();
       await this.ensureSubformPresets();
       await this.backfillColors();
       await this.backfillVisitBuiltins();
@@ -384,6 +385,7 @@ export class FormsService {
     const vertical = await this.config.vertical();
     await this.seedFrom(PRESETS[vertical] ?? []);
     await this.ensureRegistrationPreset();
+    await this.retitleCompanyVisitForm();
     await this.ensureSubformPresets();
     /* قالب‌ها عمداً کاتالوگِ کامل ندارند (سندِ خوانا ماندن مهم‌تر است)؛
        تکمیلشان کارِ همین backfill است تا نصبِ تازه و نصبِ قدیمی یک مسیر
@@ -476,6 +478,36 @@ export class FormsService {
       await this.compactPages(form.id);
     }
     await this.prisma.setting.upsert({ where: { key: flag }, create: { key: flag, value: 'true' }, update: { value: 'true' } });
+  }
+
+  /**
+   * **نامِ فرمِ مراجعهٔ شرکت = نامِ خدمت** — «نورومانیتورینگ»، نه «فرمِ عمل» (مالک، ۱۴۰۵/۰۷/۰۵).
+   * شرکتِ دوخدمته «خدمت»؛ نامِ هر مراجعه‌اش را `visitTitleOf` از خدمتِ خودش می‌سازد.
+   *
+   * ⚠️ فقط نامِ **دست‌نخورده**: قالبِ قدیمی (`OPERATION_FORM_TITLE`) یا همان نامی که دفعهٔ قبل
+   * خودِ سامانه گذاشته بود (`company_visit_form_title`). نامی که مدیر در فرم‌ساز نوشته هرگز
+   * بازنویسی نمی‌شود. با عوض‌شدنِ بستهٔ خدمات دوباره سنجیده می‌شود — شرکتی که ایمپلنت را
+   * اضافه کند «فرمِ نورومانیتورینگ»ش «فرمِ خدمت» می‌شود، مگر نامش را خودش عوض کرده باشد.
+   * ⚠️ **و برگشت‌پذیر است:** نصبی که مطب شود، نامِ خودکار به نامِ قالب برمی‌گردد — «فرمِ ایمپلنت»
+   * در فهرستِ فرم‌های مطب دروغ است (`tenant-profile-write` §۶ همین را گرفت).
+   * ⚠️ این در هر خواندنِ فرم می‌دود؛ حالتِ عادی یک کوئری است (پرچمِ هم‌خوان → بازگشت).
+   */
+  private async retitleCompanyVisitForm() {
+    const profile = await this.config.profile();
+    const want = profile.kind === 'company'
+      ? companyVisitFormTitle(profile.services.map((k) => SERVICES[k].label))
+      : null;
+    const KEY = 'company_visit_form_title';
+    const last = (await this.prisma.setting.findUnique({ where: { key: KEY } }))?.value || null;
+    if (last === want) return;
+    const form = await this.prisma.formDef.findUnique({ where: { key: 'visit.surgery' }, select: { id: true, title: true } });
+    /* بی‌فرم پرچم هم نمی‌خورد — وگرنه فرمی که بعداً نصب شود (تغییرِ پروفایل) با نامِ قالبی می‌ماند. */
+    if (!form) return;
+    if (form.title === OPERATION_FORM_TITLE || (last && form.title === last)) {
+      await this.prisma.formDef.update({ where: { id: form.id }, data: { title: want ?? OPERATION_FORM_TITLE } });
+    }
+    if (want) await this.prisma.setting.upsert({ where: { key: KEY }, create: { key: KEY, value: want }, update: { value: want } });
+    else await this.prisma.setting.deleteMany({ where: { key: KEY } });
   }
 
   /**

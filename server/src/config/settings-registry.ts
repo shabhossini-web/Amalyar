@@ -77,6 +77,8 @@ export const SETTINGS: SettingDef[] = [
   { key: 'registration_implant_service_fields', label: 'ارتقای فرم ثبت‌نام ایمپلنت (کارت ملی، رزرو بدون تاریخ)', group: 'identity', type: 'bool', default: false, hidden: true },
   { key: 'registration_ionm_no_payment_box', label: 'برداشتنِ باکسِ پرداختِ تکراری از فرم ثبت‌نام نورو', group: 'identity', type: 'bool', default: false, hidden: true },
   { key: 'registration_implant_no_payment_box', label: 'برداشتنِ باکسِ پرداختِ تکراری از فرم ثبت‌نام ایمپلنت', group: 'identity', type: 'bool', default: false, hidden: true },
+  /* آخرین نامی که سامانه خودش روی فرمِ مراجعهٔ شرکت گذاشت — تا نامِ دستیِ مدیر هرگز بازنویسی نشود. */
+  { key: 'company_visit_form_title', label: 'نامِ خودکارِ فرمِ مراجعهٔ شرکت', group: 'identity', type: 'text', default: '', maxLength: 80, hidden: true },
   { key: 'invoice_title', label: 'عنوان فاکتور', group: 'invoice', type: 'text', default: 'صورتحساب خدمات', maxLength: 120 },
   { key: 'invoice_prefix', label: 'پیشوند شماره فاکتور', hint: 'شمارهٔ ترتیبی خودکار بعد از این متن می‌آید.', group: 'invoice', type: 'text', default: '', maxLength: 20 },
   { key: 'invoice_formal_name', label: 'نام صادرکنندهٔ رسمی', hint: 'خالی = نام حقوقی شرکت در هویت شرکت. نام سامانه چاپ نمی‌شود.', group: 'invoice', type: 'text', default: '', maxLength: 120 },

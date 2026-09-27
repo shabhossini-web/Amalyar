@@ -10,7 +10,8 @@
  *   - نوشتنِ شرح ← sweepِ بعدی کار را می‌بندد؛ کارهای دروغینِ قدیمی هم (R2)
  *  نباید بیفتد:
  *   - مطب، عملِ done با شرح ← کار (R3)
- *   - حوزهٔ شرکت: شرح جای فایلِ گزارشِ مانیتورینگ را بگیرد (R4)
+ *   - حوزهٔ شرکت: شرح جای فایلِ گزارشِ مانیتورینگ را بگیرد (R4) — و نامش «گزارشِ خدمت» است،
+ *     نه «گزارشِ عمل» (مالک، ۱۴۰۵/۰۷/۰۵: شرکت عمل انجام نمی‌دهد، خدمتی حینِ عمل می‌دهد)
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -90,7 +91,7 @@ try {
   sql(`INSERT INTO clinical_notes (patient_id, visit_id, kind, body, created_at) VALUES (${co.patientId}, ${co.id}, 'op', 'شرح ${tag}', now())`);
   await process_();
   const wc = work(co.id);
-  ok(`R4 **نباید بیفتد:** در ${other} شرح جای فایلِ گزارش را بگیرد`, wc?.state === 'open' && wc.owner_role === 'technician' && wc.title === 'گزارشِ عمل هنوز بارگذاری نشده',
+  ok(`R4 **نباید بیفتد:** در ${other} شرح جای فایلِ گزارش را بگیرد`, wc?.state === 'open' && wc.owner_role === 'technician' && wc.title === 'گزارشِ خدمت هنوز بارگذاری نشده',
     JSON.stringify(wc && { s: wc.state, r: wc.owner_role, t: wc.title }));
 } catch (e) {
   ok(`اجرا متوقف شد: ${e?.message ?? e}`, false);

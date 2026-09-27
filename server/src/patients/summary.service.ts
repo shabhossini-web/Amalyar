@@ -10,6 +10,7 @@ import { toJalali } from '../common/jalali';
 import { renderSms } from '../common/sms-template';
 import { currentNotes, noteBody } from './clinical-note';
 import { OTHER_DX, OTHER_PX, diagnosisLabel, diagnosisList, principalDiagnosisTitle, procedureLabel } from './visit-coding';
+import { visitTitleOf } from './visit-title';
 
 /**
  * بخش‌های هسته که در **خلاصهٔ بیمار** دیده می‌شوند — کلیدِ فرم → نوعِ سند.
@@ -166,7 +167,8 @@ export class SummaryService {
       },
       visit: {
         code: `${v.patient.code}-V${v.seq}`,
-        kindTitle: def?.title ?? null,
+        /* همان قاعدهٔ نامِ مراجعه که بقیهٔ صفحه‌ها دارند — `visit-title.ts`. */
+        kindTitle: visitTitleOf(v, def?.title),
         opDate: v.opDate,
         opDateFa: v.opDate ? faDateStr(v.opDate) : null,
         doctorName: person ? `${person.firstName} ${person.lastName}`.trim() : v.surgeonName,

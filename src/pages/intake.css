@@ -281,15 +281,27 @@
 /* فهرستِ فیش‌های آپلودشده — چندتایی، با امکانِ برداشتن. */
 .ik-receipts { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
 .ik-receipt-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 7px 11px; background: rgba(var(--veil-rgb), .05);
-  border: 1px solid rgba(var(--veil-rgb), .12); border-radius: 10px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 9px; background: rgba(var(--veil-rgb), .05);
+  border: 1px solid rgba(var(--veil-rgb), .12); border-radius: 12px;
 }
-.ik-receipt-row b { font-size: 12px; color: var(--text2); }
+/* پیش‌نمایشِ همان عکسی که همین حالا رفت؛ بی‌پیش‌نمایش (PDF یا پس از تازه‌کردن) نشانِ بانک. */
+.ik-receipt-thumb {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 8px; object-fit: cover;
+  display: grid; place-items: center; color: var(--text3);
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.ik-receipt-row b { flex: 1; font-size: 13px; color: var(--text1); }
+/* هدفِ لمسیِ «حذف» — تا ۱۴۰۵/۰۷/۰۵ حدودِ ۲۴ پیکسل بود؛ حالا که فیشِ چندتایی جریانِ اصلی است، کافی. */
 .ik-receipt-row button {
-  padding: 4px 10px; cursor: pointer; font: inherit; font-size: 11px; color: #f87171;
-  background: none; border: 1px solid rgba(248, 113, 113, .4); border-radius: 99px;
+  min-height: 40px; min-width: 60px; padding: 4px 14px; cursor: pointer; font: inherit; font-size: 12px;
+  color: var(--red-text); background: none; border: 1px solid rgba(248, 113, 113, .45); border-radius: 99px;
 }
+.ik-receipt-row button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+/* «فیش رسید» + «تمام شد» — بیمار خودش پایانِ فیش‌ها را اعلام می‌کند (مالک، ۱۴۰۵/۰۷/۰۵). */
+.ik-receipt-done { display: grid; gap: 8px; margin-top: 4px; }
+.ik-receipt-done .ik-go { min-height: 48px; }
+.ik-go:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* ── برگشت برای اصلاح: کدام بخش، چرا، چه باید کرد ── */
 .ik-returned {

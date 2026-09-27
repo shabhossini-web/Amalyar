@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
-import { faDate, toEnDigits } from '../lib/jalali.js';
+import { faDate, jStrToIso, toEnDigits } from '../lib/jalali.js';
 import './tech.css';
 import { Alert, Arrive, Back, CheckCircle, Clock, Close, Hospital, Doctor, Box, User, Users, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
+import CancelReason from '../ui/CancelReason.jsx';
+import JDate from './JDate.jsx';
 import { badTime, faTime, normTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
 import { usePlaces } from '../lib/places.js';
@@ -81,6 +83,7 @@ export default function Tech() {
   const [toast, setToast] = useState('');
   const [usageFor, setUsageFor] = useState(null); // {visit, transfer}
   const [timesFor, setTimesFor] = useState(null); // visit
+  const [statusFor, setStatusFor] = useState(null); // visit
   const [claiming, setClaiming] = useState(null);
   const row = useStagger();
 
@@ -234,6 +237,11 @@ export default function Tech() {
             )}
 
             <footer className="tk-acts">
+              {/* مالک (۱۴۰۵/۰۷/۰۵): «کارشناس باید وضعیتِ عمل را تعیین کند — انجام شد، موکول شد یا کلاً
+                  لغو شد». فقط برای عملِ در انتظار؛ برگرداندنِ وضعیتِ ثبت‌شده کارِ مدیر است. */}
+              {v.status === 'pending' && (
+                <button type="button" className="tk-ghost tk-status-btn" onClick={() => setStatusFor(v)}>وضعیتِ عمل</button>
+              )}
               <button type="button" className="tk-ghost" onClick={() => setTimesFor(v)}>ثبتِ ساعت</button>
               <ReportButton visit={v} onDone={(msg) => { setToast(msg); load(scope); }} onError={setErr} />
             </footer>
@@ -263,14 +271,112 @@ export default function Tech() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {statusFor && (
+          <StatusSheet
+            visit={statusFor}
+            onClose={() => setStatusFor(null)}
+            onSaved={(m) => { setStatusFor(null); setToast(m); load(scope); }}
+          />
+        )}
+      </AnimatePresence>
+
       <div className={`tk-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }
 
-/** آپلودِ گزارشِ عمل — یک دکمه، بدونِ شیت: کارشناس فایل را همان‌جا می‌دهد. */
+/* سه پاسخِ «این عمل چه شد؟» — ترتیب همان ترتیبِ رخداد: بیشترِ عمل‌ها انجام می‌شوند. */
+const STATUS_CHOICES = [
+  { key: 'done', label: 'انجام شد', hint: 'خدمت سرِ عمل ارائه شد', icon: CheckCircle },
+  { key: 'postponed', label: 'موکول شد', hint: 'عمل به روزِ دیگری افتاد', icon: Clock },
+  { key: 'cancelled', label: 'لغو شد', hint: 'عمل انجام نمی‌شود — دلیلش به بیمار پیامک می‌شود', icon: Close },
+];
+
+/**
+ * **وضعیتِ عمل** — انجام شد / موکول شد / لغو شد (`POST /tech/visits/:id/status`).
+ *
+ * ⚠️ لغو پنجرهٔ مشترکِ `CancelReason` را باز می‌کند، نه یک فهرستِ دوم: دلیل به دستِ بیمار
+ * می‌رسد و متنِ پیامکش همان‌جا پیش‌نمایش دارد — همان پنجره‌ای که داشبورد و تقویم دارند.
+ * ⚠️ «موکول» بی‌تاریخ هم پذیرفته است (خالی = «هنوز تاریخ ندارد»): کارشناسِ سرِ عمل معمولاً
+ * فقط می‌داند که امروز نشد، نه روزِ بعدش را؛ تاریخ را مدیر بعداً می‌گذارد.
+ */
+function StatusSheet({ visit, onClose, onSaved }) {
+  const [pick, setPick] = useState('');
+  const [date, setDate] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [asking, setAsking] = useState(false);
+
+  const send = async (body, msg) => {
+    setBusy(true); setErr('');
+    try {
+      await api(`/tech/visits/${visit.id}/status`, { method: 'POST', body });
+      onSaved(msg);
+    } catch (e) { setErr(e.message); setBusy(false); throw e; }
+  };
+  const save = async () => {
+    if (pick === 'cancelled') { setAsking(true); return; }
+    if (pick === 'done') { await send({ status: 'done' }, 'انجام شد — ثبت شد').catch(() => {}); return; }
+    const iso = date.trim() ? jStrToIso(date) : '';
+    if (date.trim() && !iso) { setErr('تاریخ را به شکلِ ۱۴۰۵/۰۷/۱۲ بنویسید'); return; }
+    await send({ status: 'postponed', ...(iso ? { opDate: iso } : {}) },
+      iso ? `موکول شد به ${faDate(iso)}` : 'موکول شد — تاریخِ تازه را مدیر می‌گذارد').catch(() => {});
+  };
+  const cta = pick === 'done' ? 'ثبت: انجام شد'
+    : pick === 'postponed' ? (date.trim() ? 'ثبت: موکول به همین تاریخ' : 'ثبت: موکول، بی‌تاریخ')
+      : pick === 'cancelled' ? 'ادامه: دلیلِ لغو' : 'یکی را انتخاب کنید';
+
+  /* ⚠️ پنجرهٔ دلیلِ لغو **به‌جای** این شیت، نه داخلش: `Overlay` پورتال نمی‌شود و پوششِ `fixed`
+     داخلِ پنلی که `transform` دارد نسبت به همان پنل جا می‌گیرد — همان تلهٔ شیت‌های تودرتو. */
+  if (asking) {
+    return (
+      <CancelReason
+        kind="visit"
+        what={`${visit.patientName} · ${faDate(visit.opDate)}`}
+        onClose={() => setAsking(false)}
+        onConfirm={({ cancelReason, cancelNote }) => send({ status: 'cancelled', cancelReason, cancelNote }, 'لغو شد — به بیمار پیامک می‌شود')}
+      />
+    );
+  }
+  return (
+    <Overlay backdrop="tk-overlay" panel="tk-sheet sm" as="section" onClose={onClose} closable={!busy}>
+      <header className="tk-sheet-head">
+        <b>وضعیتِ عمل — {visit.patientName}</b>
+        <button type="button" className="tk-x" onClick={onClose} aria-label="بستن" disabled={busy}><Close width="17" height="17" /></button>
+      </header>
+      <div className="tk-sheet-body">
+        <p className="tk-note">{visit.code} · {faDate(visit.opDate)}{visit.procedure ? ` · ${visit.procedure}` : ''}</p>
+        <div className="tk-status" role="radiogroup" aria-label="وضعیتِ عمل">
+          {STATUS_CHOICES.map(({ key, label, hint, icon: Icon }) => (
+            <button key={key} type="button" role="radio" aria-checked={pick === key} disabled={busy}
+                    className={`tk-status-opt k-${key}${pick === key ? ' on' : ''}`} onClick={() => { setPick(key); setErr(''); }}>
+              <Icon width="18" height="18" aria-hidden="true" />
+              <span><b>{label}</b><small>{hint}</small></span>
+            </button>
+          ))}
+        </div>
+        {pick === 'postponed' && (
+          <JDate className="tk-field" label="تاریخِ تازه (اختیاری)" value={date} onChange={setDate} disabled={busy}
+                 hint="اگر هنوز معلوم نیست خالی بگذارید؛ عمل از دفترِ امروز برداشته می‌شود و مدیر تاریخ را می‌گذارد." />
+        )}
+        {err && <p className="tk-note no" role="alert">{err}</p>}
+        <button type="button" className="tk-save" disabled={busy || !pick} onClick={save}>
+          {busy ? 'در حال ثبت…' : cta}
+        </button>
+      </div>
+    </Overlay>
+  );
+}
+
+/**
+ * آپلودِ گزارشِ خدمت — یک دکمه، بدونِ شیت: کارشناس فایل را همان‌جا می‌دهد.
+ *
+ * ⚠️ «گزارشِ خدمت» (نامش از سرور: «گزارشِ نورومانیتورینگ») نه «گزارشِ عمل» — شرکت عمل انجام
+ * نمی‌دهد، خدمتی حینِ عمل می‌دهد و این گزارشِ همان است (مالک، ۱۴۰۵/۰۷/۰۵).
+ */
 function ReportButton({ visit, onDone, onError }) {
-  /* گزارشِ عمل معمولاً **چند صفحه** است؛ تا دیروز هر صفحه یک رفت‌وبرگشتِ
+  /* گزارش معمولاً **چند صفحه** است؛ تا دیروز هر صفحه یک رفت‌وبرگشتِ
      کامل بود. حالا همان کادرِ مشترک صف را می‌گرداند. */
   const send = async (file) => {
     const fd = new FormData();
@@ -281,9 +387,9 @@ function ReportButton({ visit, onDone, onError }) {
     <FileDrop
       variant="button"
       accept="image/*,application/pdf"
-      label={visit.reportAt ? `گزارش ثبت شده — ${faDate(visit.reportAt)} · افزودنِ صفحه` : 'آپلودِ گزارشِ عمل'}
+      label={visit.reportAt ? `گزارش ثبت شده — ${faDate(visit.reportAt)} · افزودنِ صفحه` : `آپلودِ ${visit.reportLabel || 'گزارشِ خدمت'}`}
       onUpload={send}
-      onAllDone={() => onDone('گزارشِ عمل ثبت شد')}
+      onAllDone={() => onDone(`${visit.reportLabel || 'گزارشِ خدمت'} ثبت شد`)}
     />
   );
 }

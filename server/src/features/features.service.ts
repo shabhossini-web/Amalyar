@@ -9,6 +9,9 @@ import { LEVEL } from '../common/levels';
  */
 export const FEATURE_DEFAULTS = FEATURE_DEFAULT_LEVELS;
 
+/** ماژول‌های کارشناسی — مطب ندارد، حتی برای سوپرادمین (`forUser`). */
+const CLINIC_ABSENT = new Set(['tech', 'dispatch']);
+
 /**
  * خواندنِ ماژول‌ها.
  *
@@ -58,7 +61,16 @@ export class FeaturesService {
        «میزِ پزشک» است و روشن/خاموشش را فقط پلانِ حوزه (`verticals.ts`) و پیوندِ حساب
        به تعریفِ جراح (`eligibility`) تعیین می‌کند — نه یک استثنای هاردکد. */
     if (level >= LEVEL.SUPER_ADMIN) {
-      return rows.map((r) => ({ ...r, allowed: true, reason: null }));
+      /* ⚠️ **استثنا: بخشِ کارشناسِ مطب** (مالک، ۱۴۰۵/۰۷/۰۵ — «در مطب اصلاً بخشِ کارشناس نداریم،
+         گزارش نداریم»). پلانِ مطب `tech` و `dispatch` را ندارد، پس برای بقیه از قبل خاموش‌اند؛
+         ولی سوپرادمینِ مطب کاشیِ «پنلِ کارشناسی» را می‌دید و در آن عملِ مطب «آپلودِ گزارش»
+         می‌خواست — درحالی‌که سندِ عملِ مطب شرحِ عملِ جراح است. فقط وقتی خاموش‌اند: مطبی که
+         خودش از «سطوحِ دسترسی» روشنشان کرده همچنان می‌بیندشان. */
+      const clinic = (await this.prisma.setting.findUnique({ where: { key: 'vertical' } }).catch(() => null))?.value === 'clinic';
+      return rows.map((r) => {
+        const absent = clinic && !r.enabled && CLINIC_ABSENT.has(r.key);
+        return { ...r, allowed: !absent, reason: absent ? 'این بخش در مطب نیست' : null };
+      });
     }
     const eligible = await this.eligibility(user);
     const jobRole = user?.jobRole ?? '';
