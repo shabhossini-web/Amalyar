@@ -1,13 +1,24 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/company-service-flow
-since: 2026-09-27
-paths: []
+status: active
+branch: claude/p89-replan
+since: 2026-09-28
+paths:
+  - src/app/Waitlist.jsx
+  - src/app/waitlist.css
+  - src/app/ProcedureSides.jsx
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
+  - src/app/Definitions.jsx
+  - src/app/VisitForm.jsx
+  - src/app/PatientRecord.jsx
+  - server/src/patients/theatre.*
+  - server/src/patients/waitlist.*
 note: >-
-  لند شد (#115): جریانِ شرکتیِ نورومانیتورینگ — وضعیتِ عمل از پنلِ کارشناس، تأییدِ بی‌ساعت و نوعِ
-  عمل از نوشتهٔ بیمار، فیشِ چندتایی، مراجعه به نامِ خدمت، «گزارشِ خدمت» جدا از «شرحِ عمل». بسته‌های
-  ۸+۹ (PR #98) هنوز در انتظار.
+  بسته‌های ۸+۹ از نو روی زیرفرم‌ها (نه جدولِ جدا): جزئیاتِ حینِ عمل = زیرفرمِ آماده، زیرفرم‌ها روی میزِ
+  اتاقِ عمل، سمت/سطحِ عمل، داروی ترخیص و ویزیتِ بعدی (+ قاعدهٔ فوت)، پاسخِ زیرفرم‌ها در پرونده، فرم‌های
+  پیش‌فرضِ موضوع، عملِ بی‌تاریخ، «فهرستِ انتظارِ عمل». منتظرِ «اکی»ِ بند‌به‌بندِ مالک (قانونِ ۲۶) پیش از سرور.
+  PR #98 با این جایگزین و بسته می‌شود.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

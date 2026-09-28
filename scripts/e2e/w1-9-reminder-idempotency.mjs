@@ -212,8 +212,25 @@ try {
     action: 'intake.link.sms', entityType: 'intake_link', entityId: '1',
     afterJson: { to: '09121112233', sent: true, stub: false },
   } });
+  /* «رفت»ِ دروغینِ پیش از #110: پاسخِ «پیام ارسال نشد (کدِ ۱۱)» با `recIds[0] > 0` «رفت» ثبت می‌شد
+     و شناسه‌اش همان کد بود. گزارش باید آن را «نرفت» با همان کد بخواند (مالک، ۱۴۰۵/۰۷/۰۶: «اعتبار
+     زیاد دارد، ربطی به آن ندارد» — تنها ردِ واقعیِ آن دوره همین شناسه‌هاست). */
+  const fakeSent = await db.reminder.create({
+    data: { patientId: pid, kind: 'post_op_care', dueAt: new Date(Date.now() - 3600000), phone: '09120000000',
+      text: tag + ' مراقبتِ بلند', status: 'sent', sentAt: new Date(), providerId: '11', dedupeKey: tag + 'fake' },
+  });
+  const fakeEvent = await db.domainEvent.create({ data: {
+    type: 'sms.sent', patientId: pid, refType: 'reminder', refId: fakeSent.id, payload: { kind: 'post_op_care', providerId: '11' },
+  } });
   const report = await reminders.diagnostics();
   const lines = report.split('\n');
+  ok(lines.some((l) => l.includes(`ردیفِ ${String(fakeSent.id).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d])}`) && l.includes('نرفت (ثبت شده بود «رفت»؛ ملی‌پیامک کدِ ۱۱ داده بود: پیام ارسال نشد)')),
+    '**«رفت»ِ قدیمی با شناسهٔ کوچک «نرفت» با همان کدِ ملی‌پیامک خوانده شد**');
+  ok(lines.some((l) => l.includes('«رفت»ِ ثبت‌شده که در واقع رد شده ۱')), 'خلاصهٔ نوع هم «رفت»ِ دروغین را جدا می‌شمارد');
+  const causes = lines.slice(lines.findIndex((l) => l.startsWith('۴) علتِ ردها')));
+  ok(causes.some((l) => l.startsWith('• ') && l.includes('کدِ ۱۱') && l.includes('پیام ارسال نشد'))
+    && causes.some((l) => l.startsWith('• ') && l.includes('سقفِ ارسالِ لحظه‌ای') && !l.includes('تلاشِ')),
+    '**علتِ ردها شمرده شد** — کدِ ملی‌پیامک و علتِ ثبت‌شده، بی‌پیشوندِ «تلاشِ n از ۴»');
   ok(lines[0].startsWith('عیب‌یابیِ پیامک') && report.includes('پروسهٔ سرور از'), 'گزارش سرتیتر و زمانِ روشن‌شدنِ سرور را دارد');
   ok(lines.some((l) => l.startsWith('• اطلاع‌رسانی:') && l.includes('نرفته') && l.includes('بخش')),
     'خلاصهٔ هر نوع: رفته/نرفته و طول و تعدادِ بخش');
@@ -230,6 +247,7 @@ try {
     && !report.includes('09121112233') && !report.includes('۰۹۱۲۱۱۱۲۲۳۳'),
     '**نباید بیفتد:** شمارهٔ بیمار یا متنِ پیام در گزارش');
   await db.auditEvent.deleteMany({ where: { id: { in: [manual.id, directSms.id] } } });
+  await db.domainEvent.deleteMany({ where: { id: fakeEvent.id } });
 } finally {
   const vids = (await db.visit.findMany({ where: { patient: { code: { startsWith: tag } } }, select: { id: true } })).map((x) => x.id);
   await db.domainEvent.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } }).catch(() => {});

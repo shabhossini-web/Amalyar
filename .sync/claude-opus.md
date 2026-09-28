@@ -1,17 +1,14 @@
 <!-- claim:begin -->
 agent: claude-opus
-status: active
-branch: claude/doc-phase-and-review-fix
-since: 2026-09-21
-paths:
-  - src/app/OrderSheet.jsx
-  - src/app/PatientRecord.jsx
-  - src/app/VisitForm.jsx
-  - server/src/patients/orders.service.ts
-  - server/src/patients/documents.service.ts
-  - server/src/patients/documents.controller.ts
-  - server/prisma/
-note: «بررسی شد» بدونِ یادداشت گیر می‌کرد و متنِ پاسخ را دور می‌ریخت + مرحلهٔ مدرک (قبل/حین/بعد از عمل)
+status: idle
+branch: -
+since: 2026-09-28
+paths: []
+note: >-
+  آزاد شد به خواستِ مالک (۱۴۰۵/۰۷/۰۶؛ نوشتهٔ claude-fable، استثنا از «فقط فایلِ خودت»): شاخهٔ
+  claude/doc-phase-and-review-fix از ۰۶/۳۰ در main مرج شده بود ولی کلیم روی main «active» مانده بود و
+  از ۲۰۲۶-۰۹-۲۹ بیات می‌شد. ⚠️ checkoutِ اصلی (/home/user/Amalyar) روی کامیتِ کهنه‌ای است که همین
+  فایل در آن idleِ ۰۹-۱۲ است — پیش از خواندنِ کلیم‌ها `git fetch origin` و `origin/main` را ببین.
 <!-- claim:end -->
 
 ## قراردادهایی که شکستم
