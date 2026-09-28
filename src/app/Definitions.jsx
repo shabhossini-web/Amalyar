@@ -8,7 +8,7 @@ import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/jalali.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
-import { Back, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import { Back, Check, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -198,15 +198,51 @@ const SECTIONS = [
     label: 'موضوعِ ویزیت',
     path: '/visit-topics',
     title: (r) => r.name,
-    sub: (r) => (r.visitCount ? `${r.visitCount} مراجعه` : ''),
+    sub: (r) => [r.visitCount ? `${r.visitCount} مراجعه` : '', r.defaultSubformTitles?.length ? `خودکار: ${r.defaultSubformTitles.join('، ')}` : ''].filter(Boolean).join(' · '),
     empty: 'هنوز موضوعی تعریف نشده — مثلِ «ویزیتِ اولیه»، «پست‌آپ»، «زیبایی»',
     hint: 'موضوع همان چیزی است که روزِ کاری به آن گره می‌خورد؛ بیمار در هر روز فقط موضوعِ همان روز را می‌بیند.',
     fields: [
       { key: 'name', label: 'عنوان *', required: true },
       { key: 'notes', label: 'توضیح' },
+      /* بستهٔ ۹: زیرفرم‌هایی که با انتخابِ همین موضوع در ویزیتِ تازه خودشان الصاق می‌شوند. */
+      { key: 'defaultSubforms', label: 'فرم‌هایی که با این موضوع خودکار الصاق می‌شوند', subforms: true,
+        hint: 'در ویزیتِ تازه با انتخابِ همین موضوع، این فرم‌ها خودشان باز می‌شوند؛ اگر لازم نبود با × برداشته می‌شوند.' },
     ],
   },
 ];
+
+/**
+ * **فرم‌های خودکارِ یک موضوعِ ویزیت** (بستهٔ ۹) — چیپ‌های روشن/خاموش از همان کاتالوگِ «الصاقِ فرم»
+ * (`/forms/subforms`)؛ فقط فرم‌هایی که روی ویزیت الصاق می‌شوند.
+ */
+function SubformDefaults({ label, hint, value, onChange, disabled }) {
+  const [items, setItems] = useState(null);
+  useEffect(() => {
+    let on = true;
+    api('/forms/subforms').then((r) => { if (on) setItems((r?.items ?? []).filter((x) => x.active !== false)); }).catch(() => { if (on) setItems([]); });
+    return () => { on = false; };
+  }, []);
+  const toggle = (k) => onChange(value.includes(k) ? value.filter((x) => x !== k) : [...value, k]);
+  return (
+    <div className="pf-field df-subdefs" role="group" aria-label={label}>
+      <span>{label}</span>
+      {items === null ? <em className="pf-hint">در حالِ بارگذاری…</em> : !items.length ? (
+        <em className="pf-hint">هنوز زیرفرمی ساخته نشده — از «فرم‌ساز ← زیرفرم‌های مراجعه».</em>
+      ) : (
+        <div className="df-subdefs-chips">
+          {items.map((it) => (
+            <button key={it.key} type="button" aria-pressed={value.includes(it.key)} disabled={disabled}
+                    className={`df-subdef${value.includes(it.key) ? ' on' : ''}`} onClick={() => toggle(it.key)}>
+              {value.includes(it.key) ? <Check width="13" height="13" aria-hidden="true" /> : <Plus width="13" height="13" aria-hidden="true" />}
+              {it.title}
+            </button>
+          ))}
+        </div>
+      )}
+      {hint && <em className="pf-hint">{hint}</em>}
+    </div>
+  );
+}
 
 export default function Definitions() {
   const stagger = useStagger();
@@ -802,7 +838,11 @@ function EditSheet({ section, row, onClose, onSaved, onError, quick = false }) {
           </>
         ) : (
           <div className="pf">
-            {(section.fields ?? []).map((f) => (
+            {(section.fields ?? []).map((f) => f.subforms ? (
+              <SubformDefaults key={f.key} label={f.label} hint={f.hint} disabled={busy}
+                               value={Array.isArray(form[f.key]) ? form[f.key] : []}
+                               onChange={(v) => setForm((x) => ({ ...x, [f.key]: v }))} />
+            ) : (
               <label key={f.key} className={`pf-field${errors[f.key] ? ' bad' : ''}`}>
                 <span>{f.label}</span>
                 {f.options || f.optionsFrom ? (

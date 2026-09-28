@@ -33,6 +33,7 @@ const Accounting = lazy(() => import('./app/Accounting.jsx'));
 const Calendar = lazy(() => import('./app/Calendar.jsx'));
 const FrontDesk = lazy(() => import('./app/FrontDesk.jsx'));
 const Theatre = lazy(() => import('./app/Theatre.jsx'));
+const Waitlist = lazy(() => import('./app/Waitlist.jsx'));
 const Schedule = lazy(() => import('./app/Schedule.jsx'));
 const Dispatch = lazy(() => import('./app/Dispatch.jsx'));
 const Tech = lazy(() => import('./app/Tech.jsx'));
@@ -114,6 +115,7 @@ export default function App() {
             <Route path="/app/calendar" element={<Gate feature="calendar"><Calendar /></Gate>} />
             <Route path="/app/frontdesk" element={<Gate feature="frontdesk"><FrontDesk /></Gate>} />
             <Route path="/app/theatre" element={<Gate feature="theatre"><Theatre /></Gate>} />
+            <Route path="/app/waitlist" element={<Gate feature="waitlist"><Waitlist /></Gate>} />
             <Route path="/app/schedule" element={<Gate feature="calendar"><Schedule /></Gate>} />
             <Route path="/app/dispatch" element={<Gate feature="dispatch"><Dispatch /></Gate>} />
             <Route path="/app/tech" element={<Gate feature="tech"><Tech /></Gate>} />

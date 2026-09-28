@@ -8,6 +8,7 @@ import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import DynForm from '../ui/DynForm.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
 import './theatre.css';
@@ -289,6 +290,7 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
           {procs.length > 0
             ? <CodingList items={procs} label="عمل‌ها" />
             : v.procedure && <span>{v.procedure}</span>}
+          {v.sidesFa && <span className="th-op-side" data-proc-sides>{v.sidesFa}</span>}
           {v.hospital && <span className="th-op-at">{v.hospital}</span>}
           {!procs.length && !v.procedure && !v.hospital && <span>—</span>}
         </div>
@@ -361,6 +363,8 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
         ))}
       </section>
 
+      <PreOpSummary subforms={card.subforms ?? []} />
+
       <section className="th-clock" aria-label="ساعتِ عمل">
         <div className="th-times">
           <span>شروع <b dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</b></span>
@@ -410,6 +414,8 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
         title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
         savedMsg="شرحِ عمل ذخیره شد" busy={busy} onAct={onAct} onToast={onToast}
       />
+
+      <DeskSubforms visitId={v.id} subforms={(card.subforms ?? []).filter((x) => x.phase === 'intra')} onToast={onToast} />
 
       <Documents visitId={v.id} groups={documents} />
 
@@ -625,6 +631,57 @@ function Documents({ visitId, groups }) {
 }
 
 /**
+ * **ارزیابیِ پیش از عمل سرِ میز** (بستهٔ ۸) — پاسخ‌های زیرفرم‌های الصاق‌شده به مرحلهٔ «قبل از عمل»
+ * (مثلِ «فرم ارزیابیِ بیهوشی (ASA)»)، فقط‌خواندنی، درست کنارِ هشدارها: لحظهٔ تایم‌اوت همین‌جاست.
+ * ⚠️ متنِ هر سطر را سرور می‌سازد (`summary`، قانونِ ۱۵) — این‌جا هیچ برچسب یا گزینه‌ای ترجمه نمی‌شود.
+ */
+function PreOpSummary({ subforms }) {
+  const pre = subforms.filter((x) => x.phase === 'pre');
+  return (
+    <section className={`th-pre${pre.length ? ' on' : ''}`} aria-label="ارزیابیِ پیش از عمل">
+      <h3>ارزیابیِ پیش از عمل</h3>
+      {pre.length === 0 ? (
+        <p className="th-pre-none">در فرمِ عمل فرمی برای «قبل از عمل» الصاق نشده — مثلِ فرم ارزیابیِ بیهوشی (ASA).</p>
+      ) : pre.map((x) => (
+        <div key={x.key} className="th-pre-row">
+          <b>{x.title}</b>
+          {x.summary?.length ? (
+            <p>{x.summary.map((l) => <span key={l.label}><em>{l.label}</em> {l.text}</span>)}</p>
+          ) : <p className="th-pre-none">الصاق شده ولی هنوز پر نشده.</p>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/**
+ * **فرم‌های حینِ عمل سرِ میز** (بستهٔ ۸) — همان زیرفرم‌هایی که در تبِ «حینِ عمل»ِ فرم الصاق شده‌اند
+ * (مثلِ «فرم جزئیاتِ حینِ عمل»)، این‌جا پر و ذخیره می‌شوند؛ یک نویسنده (`writeSubforms`) و همان
+ * قفلِ نقشِ فیلدها. ⚠️ نمونهٔ ماکاپ — ذخیره هنوز به سرور وصل نیست.
+ */
+function DeskSubforms({ visitId, subforms, onToast }) {
+  const [vals, setVals] = useState(() => Object.fromEntries(subforms.map((x) => [x.key, x.data ?? {}])));
+  if (!subforms.length) return null;
+  void visitId;
+  return (
+    <section className="th-subs" aria-label="فرم‌های حینِ عمل">
+      <h3>فرم‌های حینِ عمل</h3>
+      {subforms.map((x) => (
+        <div key={x.key} className="th-sub">
+          <b>{x.title}</b>
+          <DynForm fields={x.fields ?? []} values={vals[x.key] ?? {}} errors={{}}
+                   onChange={(v) => setVals((m) => ({ ...m, [x.key]: v }))} />
+          <div className="th-report-bar">
+            <span className="th-hint">همان فرمِ تبِ «حینِ عمل»؛ هرچه این‌جا ذخیره شود در فرمِ عمل هم دیده می‌شود.</span>
+            <button type="button" className="th-btn" onClick={() => onToast?.(`«${x.title}» ذخیره شد`)}>ذخیره</button>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/**
  * **پاپ‌آپِ ترخیص** — «با زدنِ ترخیص، توضیحِ وضعیت حینِ ترخیص باید پاپ‌آپ شه،
  * پر شه، سیو شه» (بازخوردِ مالک).
  *
@@ -632,7 +689,7 @@ function Documents({ visitId, groups }) {
  * است که می‌گوید بیمار رفت و نمی‌گوید در چه حالی — و همان سطر سندِ پرونده
  * می‌شود. سرور هم دوباره همین را می‌سنجد.
  */
-function DischargeDialog({ initial, already, busy, onClose, onSave }) {
+function DischargeDialog({ initial, already, busy, onClose, onSave, canFollowUp = true }) {
   const dispositions = useStatusList('disposition');
   const [f, setF] = useState(initial);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -675,10 +732,37 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
         <span>شرحِ ترخیص <i>اختیاری</i></span>
         <textarea
           rows={4} value={f.summary} data-discharge-summary
-          placeholder="سیرِ بستری، داروهای ترخیص، توصیه‌ها، زمانِ مراجعهٔ بعدی…"
+          placeholder="سیرِ بستری، توصیه‌ها…"
           onChange={set('summary')}
         />
       </label>
+      {/* بستهٔ ۸: داروها و ویزیتِ بعدی هم همین‌جا — «ویزیتِ بعدی» همان تاریخی است که ویزیتِ پست‌آپِ
+          خودکار و پیامک‌هایش از آن ساخته می‌شوند. «فوت» هر دو را می‌بندد و پیامک‌های پس از عمل را لغو می‌کند. */}
+      {f.disposition === 'death' ? (
+        <p className="th-death" role="note" data-discharge-death>
+          <Alert width="15" height="15" aria-hidden="true" />
+          با «فوت» داروی ترخیص و ویزیتِ بعدی ثبت نمی‌شود؛ پیامک‌های پس از عمل و نوبتِ ویزیتِ پست‌آپ خودکار لغو می‌شوند.
+          اگر اشتباهی زده شد، با انتخابِ وضعیتِ دیگر برمی‌گردند.
+        </p>
+      ) : (
+        <>
+          <label className="th-dialog-field">
+            <span>داروهای ترخیص <i>اختیاری</i></span>
+            <textarea
+              rows={3} value={f.rx ?? ''} data-discharge-rx
+              placeholder="نامِ دارو، دوز، دفعات، مدت…"
+              onChange={set('rx')}
+            />
+          </label>
+          {canFollowUp && (
+            <div className="th-dialog-field th-next">
+              <JDate label={<>ویزیتِ بعدی <i>اختیاری</i></>} value={f.nextVisitDateJ ?? ''}
+                     onChange={(v) => setF((x) => ({ ...x, nextVisitDateJ: v }))} placeholder="سال / ماه / روز" />
+              <em className="th-hint">با این تاریخ ویزیتِ پست‌آپ و یادآوری‌هایش ساخته می‌شود؛ اگر از قبل تاریخی بود، همان جابه‌جا می‌شود.</em>
+            </div>
+          )}
+        </>
+      )}
       <label className="th-dialog-field">
         <span>یادداشت <i>اختیاری</i></span>
         <textarea
@@ -687,7 +771,7 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
           onChange={set('remark')}
         />
       </label>
-      <p className="th-hint">هر سه متن در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
+      <p className="th-hint">متن‌ها در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
       <div className="th-dialog-acts">
         <button type="button" className="th-btn" onClick={onClose} disabled={busy}>انصراف</button>
         <button type="submit" className="th-btn primary" disabled={!ok || busy}>
