@@ -57,7 +57,7 @@ function peopleOf(visits, duties) {
 
 /** «مالِ کیست» روی کارت — فقط در نمای سرپرستی؛ برچسبِ نقش از واژگانِ حوزه. */
 function Owner({ role, name }) {
-  return <p className="tk-owner"><User width="14" height="14" /> {role}: <b>{name || '—'}</b></p>;
+  return <p className="tk-owner"><User width="14" height="14" /> {role}: <b>{name || 'بدون کارشناس'}</b></p>;
 }
 
 /**
