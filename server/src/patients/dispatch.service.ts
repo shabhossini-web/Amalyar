@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
-import { kitTemplate, OTHER_PX_KIT, procedureLabel } from './visit-coding';
+import { OTHER_PX, procedureLabel } from './visit-coding';
 
 /**
  * نقش‌هایی که ابلاغِ **per-visit** می‌گیرند.
@@ -116,10 +116,10 @@ export class DispatchService {
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         // الگوی اقلام: «این نوعِ عمل چه می‌خواهد» — برای هشدارِ عملِ بی‌بار.
-        procedureType: { select: { name: true, needs: { include: { item: { select: { id: true, name: true, size: true, assetKind: true } } } } } },
+        procedureType: { select: { name: true } },
         // بستهٔ ۷ج: عمل‌های همزمانِ همان جلسه — نامشان برای برچسب و نیازشان برای
         // اجتماعِ کیت (`kitTemplate`). هیچ تشخیصی این‌جا خوانده نمی‌شود.
-        otherProcedures: OTHER_PX_KIT,
+        otherProcedures: OTHER_PX,
         // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
         // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {
@@ -165,7 +165,7 @@ export class DispatchService {
     /* ⚠️ قاعدهٔ override همان دیروز است: هر آرایه‌ای در `requiredItems` (حتی
        خالی) برنده است. فقط fallbackِ الگو حالا اجتماعِ نیازِ **همهٔ** عمل‌های
        جلسه است — دو عمل یعنی اقلامِ هر دو، وگرنه کسریِ عملِ دوم دیده نمی‌شد. */
-    const needs = Array.isArray(v.requiredItems) ? v.requiredItems : kitTemplate(v);
+    const needs = Array.isArray(v.requiredItems) ? v.requiredItems : [];
     const loaded = new Map<number, number>();
     for (const transfer of v.stockTransfers) for (const move of transfer.movements) {
       if (move.location === transfer.toLocation && move.lot?.itemId) loaded.set(move.lot.itemId, (loaded.get(move.lot.itemId) ?? 0) + move.quantity);
@@ -222,10 +222,10 @@ export class DispatchService {
         hospital: true,
         tech: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } },
         // الگوی اقلام: «این نوعِ عمل چه می‌خواهد» — برای هشدارِ عملِ بی‌بار.
-        procedureType: { select: { name: true, needs: { include: { item: { select: { id: true, name: true, size: true, assetKind: true } } } } } },
+        procedureType: { select: { name: true } },
         // بستهٔ ۷ج: عمل‌های همزمانِ همان جلسه — نامشان برای برچسب و نیازشان برای
         // اجتماعِ کیت (`kitTemplate`). هیچ تشخیصی این‌جا خوانده نمی‌شود.
-        otherProcedures: OTHER_PX_KIT,
+        otherProcedures: OTHER_PX,
         // «رانندهٔ این عمل» ذخیره نمی‌شود: از مسیرِ حمل مشتق است — عمل ← حواله
         // ← توقف ← مسیر ← نیرو. ستونِ جدا یعنی دو جواب برای یک سؤال.
         stockTransfers: {

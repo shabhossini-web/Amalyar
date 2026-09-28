@@ -37,7 +37,6 @@ import {
   principalProcedureName, procedureLabel, touchedAxes, twinOf, visitHasDiagnosis, visitHasProcedure,
   writeOthers,
 } from './visit-coding';
-import { withOtherProcedureNeeds } from './visit-requirements';
 
 /**
  * نگاشتِ نوعِ مراجعه به برچسب و رنگ — `visitKind → { title, color }`.
@@ -1584,14 +1583,7 @@ export class PatientsService {
         await assertCodingRefs(tx, axis, twinOf(dto, axis), target ? [c.primary, ...c.others] : []);
         if (target) await writeOthers(tx, target.id, axis, twinOf(dto, axis));
       }
-      /* عکسِ کیتِ مراجعهٔ هدف = فهرستِ تأییدشده + نیازِ عمل‌های همزمانی که ماندند
-         (بازبینیِ بستهٔ ۷ — `withOtherProcedureNeeds`). */
-      const targetRequirements = target && opts?.requirements
-        ? await withOtherProcedureNeeds(tx as any, opts.requirements,
-          /* محورِ دست‌نخورده = سایرینِ همان هدف (`twinOf` برای کلیدِ نیامده [] می‌دهد، نه undefined). */
-          Object.prototype.hasOwnProperty.call(dto, CODING_TWIN.procedureTypeId)
-            ? twinOf(dto, 'procedure') : targetCoding.procedure.others)
-        : opts?.requirements;
+      const targetRequirements = target ? opts?.requirements : undefined;
       let visit = target ? await tx.visit.update({ where: { id: target.id }, data: {
         ...refs,
         ...(dto.decidedInVisitId !== undefined ? { decidedInVisitId: decidedIn?.id ?? null } : {}),

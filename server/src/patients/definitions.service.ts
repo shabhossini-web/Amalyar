@@ -300,43 +300,6 @@ export class DefinitionsService {
     }));
   }
 
-  /**
-   * الگوی اقلامِ یک نوعِ عمل — «نورومانیتورینگ دستگاه می‌خواهد».
-   *
-   * ⚠️ نیاز است نه تعهد: هیچ لاتی رزرو نمی‌شود. چینش از روی همین، بار را
-   * پیشنهاد می‌دهد و کسری را قرمز می‌کند؛ تصمیم با چینش‌کننده می‌ماند.
-   */
-  async listNeeds(procedureTypeId: number) {
-    const rows = await this.prisma.procedureTypeItem.findMany({
-      where: { procedureTypeId },
-      orderBy: { id: 'asc' },
-      include: { item: { select: { id: true, name: true, brand: true, size: true, unit: true, assetKind: true } } },
-    });
-    return rows.map((r) => ({
-      id: r.id, itemId: r.itemId, quantity: r.quantity, notes: r.notes,
-      name: r.item.name, brand: r.item.brand, size: r.item.size, unit: r.item.unit, assetKind: r.item.assetKind,
-    }));
-  }
-
-  async addNeed(procedureTypeId: number, dto: { itemId: number; quantity?: number; notes?: string }) {
-    const type = await this.prisma.procedureType.findUnique({ where: { id: procedureTypeId } });
-    if (!type) throw new NotFoundException('نوعِ عمل پیدا نشد');
-    const item = await this.prisma.item.findUnique({ where: { id: Number(dto.itemId) } });
-    if (!item) throw new NotFoundException('کالا پیدا نشد');
-    const quantity = Math.max(1, Number(dto.quantity) || 1);
-    await this.prisma.procedureTypeItem.upsert({
-      where: { procedureTypeId_itemId: { procedureTypeId, itemId: item.id } },
-      create: { procedureTypeId, itemId: item.id, quantity, notes: dto.notes?.trim() || null },
-      update: { quantity, notes: dto.notes?.trim() || null },
-    });
-    return this.listNeeds(procedureTypeId);
-  }
-
-  async removeNeed(procedureTypeId: number, id: number) {
-    await this.prisma.procedureTypeItem.deleteMany({ where: { id, procedureTypeId } });
-    return this.listNeeds(procedureTypeId);
-  }
-
   /* ────────────── موضوعِ ویزیت (ویزیتِ اولیه / پست‌آپ / زیبایی) ──────────────
      مرحلهٔ ۱ از `docs/BOOKING.md`. عمداً جدا از `Visit.kind`: آن یکی تعیین
      می‌کند کدام فرم رندر شود، این یکی دسته‌بندیِ داخلِ همان فرم است. */

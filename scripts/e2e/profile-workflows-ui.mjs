@@ -34,7 +34,6 @@ try {
       // One denied list must not erase the other selectors.
       else if (path === '/techs') return route.fulfill({ status: 403, contentType: 'application/json', body: '{"message":"اجازه ندارید"}' });
       else if (path === '/procedure-types') body = [{ id: 1, name: 'عمل تست', active: true }];
-      else if (path === '/procedure-types/1/needs') body = requirements;
       else if (path === '/items' || path === '/surgeon/items') body = [item];
       else if (path === '/patients/documents/55/file') return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-fixture' });
       else if (path.endsWith('/approve')) body = { ok: true, visitId: 1, visitCode: 'WF-1' };
@@ -62,8 +61,12 @@ try {
     if (profile === 'implant') {
       pass(await sheet.getByRole('link', { name: 'بازکردن دستور جراح (PDF)' }).count() === 1, 'prescription is visible during approval');
       await page.locator('#approve-procedureTypeId').selectOption('1');
+      /* الگوی نوعِ عمل حذف شد: اقلام هیچ‌وقت خودکار پر نمی‌شوند و کاربر صریح می‌افزاید. */
+      pass(await sheet.getByLabel('کالا 1', { exact: true }).count() === 0, 'no procedure template: requirements start empty');
+      await sheet.getByRole('button', { name: 'افزودن کالای موردنیاز' }).click();
+      await sheet.getByLabel('کالا 1', { exact: true }).selectOption('9');
       await sheet.getByLabel('تعداد 1', { exact: true }).fill('7');
-      pass(await sheet.getByLabel('کالا 1', { exact: true }).inputValue() === '9', 'procedure default chooses canonical item');
+      pass(await sheet.getByLabel('کالا 1', { exact: true }).inputValue() === '9', 'user picks the canonical item explicitly');
       await sheet.getByRole('button', { name: 'افزودن کالای موردنیاز' }).click();
       await sheet.getByRole('button', { name: 'حذف کالای موردنیاز 2', exact: true }).click();
     }

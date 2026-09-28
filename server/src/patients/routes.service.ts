@@ -54,7 +54,7 @@ export class RoutesService {
     private reminders: RemindersService,
   ) {}
 
-  private static readonly STOP_INCLUDE = {
+  static readonly STOP_INCLUDE = {
     hospital: { select: { id: true, name: true, address: true, phone: true, contactName: true, contactPhone: true } },
     proofs: { select: { id: true, fileName: true, mimeType: true, size: true, caption: true, createdAt: true }, orderBy: { id: 'asc' } },
     transfers: {
@@ -182,7 +182,7 @@ export class RoutesService {
    * حوالهٔ فردا هنوز حرکتی ندارد؛ بدونِ این شاخه، بارِ مسیرِ فردا خالی دیده
    * می‌شد — یعنی دقیقاً همان مسیری که باید چیده شود.
    */
-  private linesOf(t: any) {
+  linesOf(t: any) {
     if (t.status !== 'planned') {
       return t.movements
         .filter((m: any) => m.location === t.toLocation)
@@ -511,7 +511,7 @@ export class RoutesService {
   }
 
   /** لاتِ حواله‌های برنامه‌ریزی‌شده را یک‌جا می‌خواند تا `linesOf` نامِ کالا داشته باشد. */
-  private async withPlannedLots(rows: any[]) {
+  async withPlannedLots(rows: any[]) {
     const ids = rows
       .filter((t) => t.status === 'planned')
       .flatMap((t) => ((t.plannedLines as any[] | null) ?? []).map((l) => Number(l.lotId)));

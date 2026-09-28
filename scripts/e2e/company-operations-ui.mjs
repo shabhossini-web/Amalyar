@@ -27,6 +27,7 @@ try {
   let testingEnabled = false;
   const hospital = { id: 1, name: 'بیمارستان تست', active: true };
   const technician = { id: 2, displayName: 'کارشناس تست', active: true };
+  let boardState = { on: '2026-10-07', drivers: [{ id: 1, name: 'راننده تست', phone: null, vehicle: null, role: 'driver' }], runs: [], hospitals: [{ key: 'h1', hospitalId: 1, name: hospital.name, visits: [{ id: 1, code: 'AM-1-V1', opStartTime: '09:00', procedure: null }], techs: [{ id: 2, name: technician.displayName, phone: null, arriveTime: '08:00' }], deliveries: [], pickupStops: [], pickupQueue: [], hasCargo: false, firstTime: '09:00' }], summary: { hospitals: 1, noCargo: 1, noDriver: 0 } };
   await ctx.route('**/api/**', async route => {
     const req = route.request(), u = new URL(req.url()), path = u.pathname.replace(/^\/api/, ''), method = req.method();
     const payload = method !== 'GET' && req.headers()['content-type']?.includes('application/json') ? req.postDataJSON() : null;
@@ -50,6 +51,8 @@ try {
     else if (path === '/dispatch/roster') body = { hospitals: [{ hospitalId: 1, name: hospital.name, duties: [{ id: 1, techId: 2, name: technician.displayName, arriveTime: '08:00', active: true }], visits: [{ id: 1, name: 'بیمار تست', code: 'TEST-V1', techId: null, opStartTime: '09:00' }] }] };
     else if (path === '/dispatch/roster/preview') body = { programs: [{ techId: 2, name: technician.displayName, text: 'برنامه تست؛ بیمار احتمالی' }] };
     else if (path === '/routes/day') body = { runs: [] };
+    else if (path === '/routes/board' && method === 'GET') body = boardState;
+    else if (path === '/routes/board/delivery') { boardState = { ...boardState, hospitals: [{ ...boardState.hospitals[0], hasCargo: true, deliveries: [{ id: 5, kind: 'deliver', plannedAt: null, doneAt: null, handedTo: null, notes: null, runId: 1, staffId: 1, staffName: 'راننده تست', transfers: [{ id: 7, code: 'HV-TEST', status: 'planned', lines: [{ itemName: 'دستگاه تست', serialNo: 'SERIAL-1', quantity: 1 }] }] }] }] }; body = boardState; }
     else if (path === '/stock/lots') body = [{ id: 3, itemId: 4, itemName: 'دستگاه تست', quantity: 1, available: 1, serialNo: 'SERIAL-1' }];
     else if (path === '/stock/transfers') body = { id: 1, code: 'HV-TEST', status: 'planned' };
     await route.fulfill({ json: body });
@@ -104,14 +107,19 @@ try {
   await page.getByText('برنامه تست؛ بیمار احتمالی').waitFor();
   pass('hospital roster assigns a patient and previews technician notification');
   await page.getByRole('tab', { name: /حمل/ }).click();
-  await page.getByRole('button', { name: 'انتخاب تجهیزات برای بیمارستان' }).click();
-  await page.getByLabel('بیمارستان', { exact: true }).selectOption('1');
+  /* تختهٔ روزِ حمل‌ونقل: بیمارستانِ آن روز با کارشناسش می‌آید و «ثبتِ تحویل» یک درخواستِ یکپارچه است. */
+  await page.getByText(hospital.name, { exact: true }).first().waitFor();
+  await page.getByText(/کارشناس تست/).first().waitFor();
+  pass('transport board loads the day hospitals with their present technician');
+  await page.getByRole('button', { name: '+ تحویلِ تازه' }).click();
   await page.getByRole('checkbox', { name: /دستگاه تست/ }).check();
-  await page.getByRole('button', { name: 'ثبت حواله برنامه‌ریزی‌شده' }).click();
-  await page.getByText(/حواله HV-TEST برنامه‌ریزی شد/).waitFor();
-  const plan = writes.find(w => w.path === '/stock/transfers').payload;
-  assert.equal(plan.planOnly, true); assert.deepEqual(plan.lines, [{ lotId: 3, quantity: 1 }]);
-  pass('transport equipment selection creates a planned transfer without recording shipment');
+  await page.getByLabel('راننده', { exact: true }).last().selectOption('1');
+  await page.getByRole('button', { name: 'ثبتِ تحویل', exact: true }).click();
+  await page.getByText('تحویل ثبت شد').waitFor();
+  const plan = (await waitWrite('/routes/board/delivery')).payload;
+  assert.equal(plan.hospitalId, 1); assert.equal(plan.staffId, 1); assert.deepEqual(plan.lines, [{ lotId: 3, quantity: 1 }]);
+  assert.equal(writes.some(w => w.path === '/stock/transfers'), false, 'the board never calls the old per-hospital transfer form');
+  pass('one save sends transfer lines, driver and hospital together; shipment is not recorded');
   assert.deepEqual(errors, []); pass('mobile journeys have no uncaught browser errors');
   await ctx.close(); console.log(`${count} company operations UI scenarios passed`);
 } finally { if (browser) await browser.close(); vite.kill(); }

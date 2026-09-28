@@ -20,7 +20,7 @@ import { serviceLabel, serviceOf } from './intake-service-of';
 import { imageRefsOf, receiptIdsOf } from './intake-docs';
 import { UsedChallenges, issueChallenge, verifyChallenge } from './intake-captcha';
 import { RETURN_STAGES, applyReturn, currentReturn, isReturnStage, returnsOf, withoutReturns } from './intake-return';
-import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
+import { RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { OTHER_PX, procedureLabel } from './visit-coding';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
@@ -2289,14 +2289,10 @@ export class IntakeService {
         if (!field.builtin && field.active && Object.prototype.hasOwnProperty.call(dto.extra, field.key)) extra[field.key] = dto.extra[field.key];
       }
     }
-    /* بستهٔ ۷ج: API تأیید تک‌عمل ماند — همین یک عمل اصلیِ مراجعه می‌شود.
-       `procedureRequirements` آرایه هم می‌گیرد تا اجتماعِ کیتِ چندعملی (`mergeNeeds`)
-       فقط یک پیاده‌سازی داشته باشد. */
-    const requirements = service === 'implant'
-      /* ⚠️ لحظهٔ تأیید لحظهٔ **نسخه** است: همین تعدادها «طبقِ نسخه» قفل می‌شوند (`visit-requirements.ts`). */
-      ? dto.requiredItems !== undefined
-        ? await resolveRequirements(this.prisma, dto.requiredItems, { prescribe: true })
-        : await procedureRequirements(this.prisma, [dto.procedureTypeId], { prescribe: true })
+    /* اقلامِ ایمپلنت را جراح/پذیرش صریح وارد می‌کند؛ الگوی نوعِ عمل حذف شده و چیزی
+       خودکار پر نمی‌شود. ⚠️ لحظهٔ تأیید لحظهٔ **نسخه** است: همین تعدادها «طبقِ نسخه» قفل می‌شوند. */
+    const requirements = service === 'implant' && dto.requiredItems !== undefined
+      ? await resolveRequirements(this.prisma, dto.requiredItems, { prescribe: true })
       : undefined;
     if (service === 'implant' && !requirements?.length) throw new BadRequestException('اقلام و تعداد موردنیاز بیمار را بر اساس دستور جراح مشخص کنید');
 

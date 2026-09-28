@@ -51,6 +51,7 @@ import { NameMergeController } from './name-merge.controller';
 import { NameMergeService } from './name-merge.service';
 import { RoutesController } from './routes.controller';
 import { RoutesService } from './routes.service';
+import { TransportBoardService } from './transport-board.service';
 import { AssetsService } from './assets.service';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
@@ -102,7 +103,7 @@ import { WaitlistService } from './waitlist.service';
     WaitlistService,
     VitalsService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
-    ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,
+    ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, TransportBoardService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RepairService, RateLimitService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */

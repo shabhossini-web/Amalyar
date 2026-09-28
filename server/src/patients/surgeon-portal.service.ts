@@ -7,7 +7,7 @@ import { LEVEL } from '../common/levels';
 import { isUnrestricted } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { RequiredItemInput, resolveRequirements } from './visit-requirements';
-import { kitTemplate, NEEDS_SELECT, OTHER_PX_KIT, procedureLabel } from './visit-coding';
+import { OTHER_PX, procedureLabel } from './visit-coding';
 import { visitIsImplant } from './intake-service-of';
 import { summarize } from './billing.service';
 import { APPT_LABELS, OP_LABELS } from './labels';
@@ -362,9 +362,9 @@ export class SurgeonPortalService {
     const [rows, total] = await Promise.all([
       this.prisma.visit.findMany({ where, orderBy: [{ opDate: 'desc' }, { id: 'desc' }], take: 25, skip: (current - 1) * 25,
         select: { id: true, seq: true, kind: true, opDate: true, opStartTime: true, opEndTime: true, opStatus: true, opType: true, hospitalName: true, surgeonName: true, requiredItems: true, surgeonInstructions: true, service: true,
-          patient: { select: { id: true, code: true, firstName: true, lastName: true } }, hospital: { select: { name: true } }, topic: { select: { name: true } }, procedureType: { select: { name: true, needs: NEEDS_SELECT } },
+          patient: { select: { id: true, code: true, firstName: true, lastName: true } }, hospital: { select: { name: true } }, topic: { select: { name: true } }, procedureType: { select: { name: true } },
           /* بستهٔ ۷ج: عمل‌های همزمانِ جلسه — برای برچسب و اجتماعِ کیت (`kitTemplate`). */
-          otherProcedures: OTHER_PX_KIT,
+          otherProcedures: OTHER_PX,
           surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
           clinicalNotes: { where: { kind: 'op', replacedAt: null }, select: { body: true, createdAt: true }, orderBy: { id: 'desc' }, take: 1 },
           documents: { where: { deletedAt: null, category: { in: SURGEON_DOC_CATEGORIES } }, select: { id: true, title: true, fileName: true }, orderBy: { id: 'desc' } },
@@ -384,7 +384,7 @@ export class SurgeonPortalService {
       implant: visitIsImplant(v.requiredItems, profile, v.service),
       /* ⚠️ قاعدهٔ override همان دیروز: `requiredItems`ِ ذخیره‌شده (غیرِ null) برنده
          است. فقط الگو حالا اجتماعِ نیازِ همهٔ عمل‌های جلسه است. */
-      requiredItems: v.requiredItems ?? kitTemplate(v).map(n => ({ itemId: n.itemId, quantity: n.quantity, notes: n.notes ?? '', name: [n.item?.name, n.item?.size].filter(Boolean).join(' ') })), instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
+      requiredItems: v.requiredItems ?? [], instructions: v.surgeonInstructions ?? '', report: v.clinicalNotes[0]?.body ?? null, documents: v.documents,
     })), total, page: current, pages: Math.max(1, Math.ceil(total / 25)), workflow: await this.config.vertical(), services: profile.services,
       unrestricted: desk.unrestricted, team: desk.team, doctor: desk.doctor ? { id: desk.doctor.id, name: desk.doctor.name } : null };
   }

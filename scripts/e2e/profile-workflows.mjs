@@ -35,7 +35,7 @@ try {
   const hospital = await prisma.hospital.create({ data: { name: 'مرکز تست' } });
   const item = await prisma.item.create({ data: { name: 'پیچ تست' } });
   const inactive = await prisma.item.create({ data: { name: 'غیرفعال', active: false } });
-  const procedure = await prisma.procedureType.create({ data: { name: 'عمل تست', needs: { create: [{ itemId: item.id, quantity: 4 }] } } });
+  const procedure = await prisma.procedureType.create({ data: { name: 'عمل تست' } });
   const dto = { surgeonId: surgeon.id, hospitalId: hospital.id, procedureTypeId: procedure.id, opDate: '2026-09-10', registerPayment: false };
   const submission = (formId, data = {}) => prisma.intakeSubmission.create({ data: { token: `wf-${Math.random()}`, patientId: patient.id, formId, amount: 0, expiresAt: new Date('2027-01-01'), status: 'pending_approval', data } });
   for (const profile of ['ionm', 'implant', 'clinic']) {
@@ -72,7 +72,7 @@ try {
       await prisma.intakeSubmission.update({ where: { id: row.id }, data: { data: { prescription: { id: prescription.id }, receiptDocumentId: foreignDocument.id } } });
       pass('implant: empty/inactive requirements fail before creating a visit');
     }
-    const approved = await intake.approve(row.id, dto, admin);
+    const approved = await intake.approve(row.id, profile === 'implant' ? { ...dto, requiredItems: [{ itemId: item.id, quantity: 4 }] } : dto, admin);
     const visit = await prisma.visit.findUnique({ where: { id: approved.visitId } });
     assert.equal(visit.kind, reg.visitKind);
     assert.equal(visit.requiredItems?.[0]?.quantity ?? null, profile === 'implant' ? 4 : null);
@@ -104,14 +104,14 @@ try {
   await assert.rejects(() => ai.status({ id: -1, level: 2 }));
   pass('limited surgeon can use text assistance only while dynamic portal access is enabled');
   const other = await prisma.visit.create({ data: { patientId: patient.id, seq: 20, surgeonId: otherSurgeon.id } });
-  const own = await prisma.visit.create({ data: { patientId: patient.id, seq: 21, surgeonId: surgeon.id, opDate: new Date('2026-09-10'), procedureTypeId: procedure.id } });
+  const own = await prisma.visit.create({ data: { patientId: patient.id, seq: 21, surgeonId: surgeon.id, opDate: new Date('2026-09-10'), procedureTypeId: procedure.id, requiredItems: [{ itemId: item.id, name: item.name, quantity: 4, notes: '' }] } });
   const doc = await prisma.document.create({ data: { patientId: patient.id, visitId: own.id, category: 'other', fileName: 'order.pdf', mimeType: 'application/pdf', size: 100, sha256: 'fixture' } });
   const receipt = await prisma.document.create({ data: { patientId: patient.id, visitId: own.id, category: 'receipt', fileName: 'receipt.jpg', mimeType: 'image/jpeg', size: 100, sha256: 'fixture2' } });
   const listed = await portal.list(doctor, '', Infinity);
   assert.equal(listed.page, 1); assert.ok(listed.rows.some(v => v.id === own.id)); assert.ok(!listed.rows.some(v => v.id === other.id));
   assert.equal(listed.rows.find(v => v.id === own.id).requiredItems[0].quantity, 4);
   await portal.saveInstructions(own.id, { instructions: 'فقط متن' }, doctor);
-  assert.equal((await prisma.visit.findUnique({ where: { id: own.id } })).requiredItems, null);
+  assert.equal((await prisma.visit.findUnique({ where: { id: own.id } })).requiredItems[0].quantity, 4); // ذخیرهٔ فقط‌متن اقلام را دست نمی‌زند
   assert.ok(!JSON.stringify(listed).includes('receipt.jpg')); assert.ok(listed.rows.every(v => !('paid' in v) && !('bankAccount' in v)));
   assert.equal((await portal.document(own.id, doc.id, doctor)).id, doc.id);
   await assert.rejects(() => portal.document(own.id, receipt.id, doctor));
@@ -125,7 +125,7 @@ try {
   assert.equal(await prisma.charge.count({ where: { visitId: own.id } }), 0);
   const shape = dispatch.shape({ ...saved, patient, stockTransfers: [{ code: 'T1', toLocation: 'hospital', movements: [{ location: 'hospital', quantity: 3, lot: { itemId: item.id, item } }, { location: 'stock', quantity: 3, lot: { itemId: item.id, item } }] }], procedureType: { name: 'عمل', needs: [{ itemId: item.id, quantity: 4, item }] }, settlements: [] });
   assert.equal(shape.missingNeeds[0].quantity, 4); assert.equal(shape.requiredItems[0].quantity, 7); assert.equal(shape.surgeonInstructions, 'دستور تست');
-  pass('case requirements override procedure defaults; dispatch counts destination quantity and exposes instructions');
+  pass('case requirements are explicit per visit (no procedure template); dispatch counts destination quantity and exposes instructions');
   await prisma.document.update({ where: { id: doc.id }, data: { deletedAt: new Date() } });
   await assert.rejects(() => portal.document(own.id, doc.id, doctor));
   await prisma.surgeon.update({ where: { id: surgeon.id }, data: { active: false } });

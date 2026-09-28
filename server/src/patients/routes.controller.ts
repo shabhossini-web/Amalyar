@@ -11,6 +11,8 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { RoutesService } from './routes.service';
+import { TransportBoardService } from './transport-board.service';
+import type { PlanDeliveryDto } from './transport-board.service';
 import { AttachDto, ReorderDto, RunCostDto, RunCreateDto, RunPatchDto, StopCreateDto, StopPatchDto } from './dto/routes.dto';
 
 /** مسیرهای حمل — یک نیرو، یک روز، چند توقفِ مرتب. */
@@ -18,12 +20,38 @@ import { AttachDto, ReorderDto, RunCostDto, RunCreateDto, RunPatchDto, StopCreat
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('dispatch')
 export class RoutesController {
-  constructor(private routes: RoutesService) {}
+  constructor(private routes: RoutesService, private board: TransportBoardService) {}
 
   @RequirePermissions('patients.read')
   @Get('month')
   month(@Query('year') y?: string, @Query('month') m?: string) {
     return this.routes.month(Number(y), Number(m));
+  }
+
+  /// تختهٔ روزِ حمل‌ونقل — بیمارستان‌های آن روز با کارشناس، تحویل‌ها و بارِ آزادشده.
+  @RequirePermissions('patients.read')
+  @Get('board')
+  boardDay(@Query('on') on?: string) {
+    return this.board.board(on ? new Date(on) : new Date());
+  }
+
+  /// ثبتِ تحویلِ یک بیمارستان: حواله + مسیرِ راننده + توقف با یک درخواست.
+  @RequirePermissions('patients.update')
+  @Post('board/delivery')
+  planDelivery(@Body() dto: PlanDeliveryDto, @CurrentUser() user: any) {
+    return this.board.planDelivery(dto, user);
+  }
+
+  @RequirePermissions('patients.update')
+  @Delete('board/delivery/:id')
+  removeDelivery(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.board.removeDelivery(id, user);
+  }
+
+  @RequirePermissions('patients.update')
+  @Delete('board/transfer/:id')
+  removeBoardTransfer(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.board.removeTransfer(id, user);
   }
 
   @RequirePermissions('patients.read')

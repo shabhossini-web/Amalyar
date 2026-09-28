@@ -11,6 +11,7 @@ import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import HospitalRoster from './HospitalRoster.jsx';
+import TransportBoard from './TransportBoard.jsx';
 import { badTime, normTime } from '../lib/time.js';
 import { usePlaces } from '../lib/places.js';
 
@@ -46,7 +47,6 @@ export default function Dispatch() {
   const [loose, setLoose] = useState([]);   // حواله‌های بی‌مسیرِ همان روز
   const [pickup, setPickup] = useState([]); // آنچه کارشناس «تمام شد» اعلام کرده
   const [orphan, setOrphan] = useState([]); // توقفِ جمع‌آوریِ ساخته‌شده ولی بی‌راننده
-  const [newRun, setNewRun] = useState(''); // نیروی انتخاب‌شده برای مسیرِ تازه
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
   const [busy, setBusy] = useState(false);
@@ -132,12 +132,6 @@ export default function Dispatch() {
       if (okMsg) setToast(okMsg);
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
-
-  const createRun = () =>
-    newRun && guard(async () => {
-      await api('/routes', { method: 'POST', body: { staffId: Number(newRun), runDate: onIso } });
-      setNewRun('');
-    }, 'مسیر ساخته شد ✓');
 
   const addStop = (runId, body) =>
     guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body }), 'توقف اضافه شد ✓');
@@ -255,34 +249,16 @@ export default function Dispatch() {
 
       <section className="dp-day">
         <b>{faNum(day)} {J_MONTHS[ym.m - 1]}</b>
-        {tab === 'transport' && visits.length === 0 && <div className="dp-empty">عملی برای این روز ثبت نشده</div>}
-
         {tab === 'tech' && <HospitalRoster key={onIso} date={onIso} techs={techs} hospitals={hospitals} onChanged={refresh} />}
 
         {tab === 'transport' && (
           <div className="dp-routes">
-            {/* ⚠️ «عملِ بی‌بار» بالاتر از همه‌چیز است، چون تنها خطای این صفحه
-                است که **روزِ عمل** معلوم می‌شود: بیمارستانی که دستگاه یا ست
-                نرسیده، عمل ندارد. `noCargo` یعنی هیچ حواله‌ای به نامِ این عمل
-                نیست؛ `missingNeeds` یعنی حواله هست ولی الگوی نوعِ عمل کسری
-                دارد (مثلاً نورومانیتورینگ بدونِ دستگاه). */}
-            {visits.some((v) => v.noCargo || v.missingNeeds?.length) && (
-              <div className="dp-nocargo">
-                <b><Alert size={14} /> عمل‌های بی‌بار</b>
-                {visits.filter((v) => v.noCargo || v.missingNeeds?.length).map((v) => (
-                  <span key={v.id} className="dp-chip bad">
-                    <em dir="ltr">{v.code}</em>
-                    {v.hospital?.name || '—'}
-                    {v.opStartTime ? ` · ${v.opStartTime}` : ''}
-                    {' · '}
-                    {v.noCargo
-                      ? 'هیچ حواله‌ای ندارد'
-                      : `کسری: ${v.missingNeeds.map((n) => n.name).join('، ')}`}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* ⚠️ تختهٔ روز: بیمارستان‌های همان روز با کارشناسشان؛ هر تحویل (قلم از
+                انبار، ساعت، تحویل‌گیرنده، راننده) همین‌جا ثبت می‌شود. */}
+            <TransportBoard key={onIso} on={onIso} onChanged={() => { loadMonth(); loadRoutes(); }} onToast={setToast} />
 
+            <details className="dp-legacy">
+              <summary>مسیرِ راننده‌ها، هزینه و رسیدها</summary>
             {/* توقفی که خودِ اعلامِ پایانِ کارشناس ساخته و هنوز راننده ندارد —
                 کارشناس گفته «ساعت ۱۷ بیایید CSR»، حالا باید کسی برود. */}
             {orphan.length > 0 && (
@@ -341,20 +317,6 @@ export default function Dispatch() {
                 ))}
               </div>
             )}
-
-            <EquipmentPlan hospitals={hospitals} onIso={onIso} onSaved={loadRoutes} />
-            <div className="dp-newrun">
-              <label>
-                <span>مسیرِ تازه برای</span>
-                <select value={newRun} disabled={busy} onChange={(e) => setNewRun(e.target.value)}>
-                  <option value="">— نیرو —</option>
-                  {staff.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name} ({s.roleLabel}){s.vehicle ? ` — ${s.vehicle}` : ''}</option>
-                  ))}
-                </select>
-              </label>
-              <button type="button" className="dp-brief-btn" disabled={busy || !newRun} onClick={createRun}>+ ساختِ مسیر</button>
-            </div>
 
             {runs.length === 0 && <div className="dp-empty">مسیری برای این روز ساخته نشده</div>}
 
@@ -467,6 +429,7 @@ export default function Dispatch() {
                 هنوز راننده یا پیکی تعریف نشده — از <Link to="/app/definitions">تعاریفِ پایه › راننده و پیک</Link> اضافه کنید.
               </p>
             )}
+            </details>
           </div>
         )}
       </section>
@@ -698,28 +661,4 @@ function RunCost({ run, busy, onClose, onSave }) {
       </footer>
     </Overlay>
   );
-}
-
-function EquipmentPlan({ hospitals, onIso, onSaved }) {
-  const [hospitalId, setHospital] = useState(''), [q, setQ] = useState(''), [lots, setLots] = useState([]), [selected, setSelected] = useState({}), [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [open, setOpen] = useState(false);
-  useEffect(() => { if (!open) return; let alive = true; const t = setTimeout(() => api(`/stock/lots?q=${encodeURIComponent(q)}&inStock=1`).then(rows => { if (alive) setLots(rows); }).catch(e => { if (alive) setMessage(e.message); }), 250); return () => { alive = false; clearTimeout(t); }; }, [q, open]);
-  const plan = async () => {
-    setBusy(true); setMessage('');
-    try { const hospital = hospitals.find(h => String(h.id) === hospitalId);
-      const lines = Object.entries(selected).map(([id, row]) => ({ lotId: Number(id), quantity: Number(row.quantity) }));
-      if (lines.some(l => !Number.isInteger(l.quantity) || l.quantity < 1)) throw new Error('تعداد هر وسیله باید عدد صحیح مثبت باشد');
-      const result = await api('/stock/transfers', { method: 'POST', body: { hospitalId: Number(hospitalId), toLocation: hospital.name, plannedFor: onIso, planOnly: true, lines } });
-      setSelected({}); setMessage(`حواله ${result.code ?? ''} برنامه‌ریزی شد. اکنون در مسیر راننده، توقف همین بیمارستان را اضافه و این حواله را به بار آن وصل کنید. موجودی هنگام ارسال واقعی حواله جابه‌جا می‌شود.`); await onSaved();
-    } catch (e) { setMessage(e.message); } finally { setBusy(false); }
-  };
-  return <section className="dp-newrun"><button className="dp-brief-btn" type="button" onClick={() => setOpen(v => !v)}>انتخاب تجهیزات برای بیمارستان</button>
-    {open && <div><p>۱. بیمارستان و تجهیزات را انتخاب کنید. ۲. حواله را به توقف مسیر نیرو وصل کنید. ۳. متن برنامه را بازبینی و ابلاغ کنید.</p>
-      <label>بیمارستان<select aria-label="بیمارستان" value={hospitalId} disabled={busy} onChange={e => setHospital(e.target.value)}><option value="">انتخاب بیمارستان</option>{hospitals.filter(h => h.active !== false).map(h => <option key={h.id} value={h.id}>{h.name}</option>)}</select></label>
-      <label>جستجوی وسیله یا سریال<input value={q} disabled={busy} onChange={e => setQ(e.target.value)} /></label>
-      {lots.slice(0, 30).map(l => <label key={l.id}><input type="checkbox" checked={!!selected[l.id]} disabled={busy || l.expired} onChange={e => setSelected(prev => { const n = { ...prev }; if (e.target.checked) n[l.id] = { name: l.itemName, quantity: 1 }; else delete n[l.id]; return n; })} />{l.itemName} · {l.serialNo || l.lotNo} · موجودی {faNum(l.quantity)}</label>)}
-      {Object.entries(selected).map(([id, row]) => <label key={id}>{row.name}<input inputMode="numeric" value={row.quantity} disabled={busy} onChange={e => setSelected(prev => ({ ...prev, [id]: { ...prev[id], quantity: toEnDigits(e.target.value) } }))} /><button type="button" disabled={busy} onClick={() => setSelected(prev => { const n = { ...prev }; delete n[id]; return n; })}>حذف</button></label>)}
-      <button className="dp-brief-btn" disabled={busy || !hospitalId || !Object.keys(selected).length} onClick={plan}>ثبت حواله برنامه‌ریزی‌شده</button>
-      <p role="status">{message}</p>
-    </div>}
-  </section>;
 }

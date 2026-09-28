@@ -1,5 +1,4 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { RETURNABLE } from './assets.service';
 
 /**
  * **کدگذاریِ بالینیِ مراجعه — تشخیص‌ها و عمل‌ها** (بستهٔ ۷ب/۷ج).
@@ -75,20 +74,6 @@ export const OTHER_DX = {
 export const OTHER_PX = {
   orderBy: { rank: 'asc' },
   select: { procedureTypeId: true, rank: true, procedureType: { select: { name: true, active: true } } },
-} as const;
-
-/** نیازِ اقلامِ یک نوعِ عمل — همان فیلترِ «کالای فعال» که میزِ اتاقِ عمل و پرتالِ جراح داشتند. */
-export const NEEDS_SELECT = {
-  where: { item: { active: true } },
-  orderBy: { id: 'asc' },
-  select: {
-    itemId: true, quantity: true, notes: true,
-    item: { select: { name: true, size: true, assetKind: true } },
-  },
-} as const;
-export const OTHER_PX_KIT = {
-  orderBy: { rank: 'asc' },
-  select: { procedureTypeId: true, rank: true, procedureType: { select: { name: true, needs: NEEDS_SELECT } } },
 } as const;
 
 // ── سمتِ نوشتن ─────────────────────────────────────────────────────────────
@@ -310,54 +295,4 @@ export function codingSearchOr(v: string): any[] {
 export function promptList(names: string[]): string {
   if (names.length <= 1) return names[0] ?? '';
   return `${names[0]} (اصلی)، ${names.slice(1).join('، ')}`;
-}
-
-// ── کیت (نیازِ اقلام) ──────────────────────────────────────────────────────
-
-export type Need = {
-  itemId: number; quantity: number; notes?: string | null;
-  item?: { name?: string; size?: string | null; assetKind?: string };
-};
-
-/**
- * **اجتماعِ نیازها** — دو عمل در یک جلسه یعنی اقلامِ هر دو.
- *
- * - مصرفی (یا بی‌نوع) → **جمع**: دو عمل دو برابر گاز/پیچ می‌خواهد.
- * - ست/دستگاه (`RETURNABLE`) → **بیشینه**: یک ست برای دو عمل در همان
- *   جلسه کافی است؛ جمع یعنی بردنِ دو دستگاهِ بی‌مصرف.
- * - یادداشت‌ها بی‌تکرار با « · ».
- *
- * ⚠️ ادغام **پیش از** `resolveRequirements` لازم است: آن تابع کالای تکراری را
- * ۴۰۰ می‌کند، پس الحاقِ سادهٔ دو قالب تأییدِ پذیرش را می‌شکست.
- * ترتیب: اولین ظهور — اصلی اول.
- */
-export function mergeNeeds(lists: Need[][]): Need[] {
-  const nonEmpty = lists.filter((l) => l?.length);
-  if (nonEmpty.length <= 1) return nonEmpty[0] ?? [];
-  const by = new Map<number, Need & { _notes: string[] }>();
-  for (const list of nonEmpty) {
-    for (const n of list) {
-      const prev = by.get(n.itemId);
-      const note = n.notes?.trim();
-      if (!prev) {
-        by.set(n.itemId, { ...n, _notes: note ? [note] : [] });
-        continue;
-      }
-      const returnable = RETURNABLE.includes(prev.item?.assetKind ?? n.item?.assetKind ?? 'consumable');
-      prev.quantity = returnable ? Math.max(prev.quantity, n.quantity) : prev.quantity + n.quantity;
-      if (note && !prev._notes.includes(note)) prev._notes.push(note);
-    }
-  }
-  return [...by.values()].map(({ _notes, ...n }) => ({ ...n, notes: _notes.length ? _notes.join(' · ') : null }));
-}
-
-/**
- * قالبِ کیتِ مراجعه از **همهٔ** عمل‌ها — فقط fallbackِ الگو؛ هر خواننده قاعدهٔ
- * override خودش را روی `requiredItems` نگه می‌دارد (یکی‌کردنِ آن سه قاعده
- * تغییرِ رفتارِ جداگانه‌ای است). بدونِ سایرین همان فهرستِ دیروز، دست‌نخورده.
- */
-export function kitTemplate(v: any): Need[] {
-  const primary: Need[] = v?.procedureType?.needs ?? [];
-  if (!v?.otherProcedures?.length) return primary;
-  return mergeNeeds([primary, ...v.otherProcedures.map((o: any) => o.procedureType?.needs ?? [])]);
 }

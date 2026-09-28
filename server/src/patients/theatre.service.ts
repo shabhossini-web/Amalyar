@@ -14,7 +14,7 @@ import { subformSummary } from './subforms';
 import { fieldRoles, jobRoleLabel } from '../common/job-roles';
 import { monthDayCounts } from './month-summary';
 import {
-  diagnosisLabel, diagnosisList, kitTemplate, NEEDS_SELECT, OTHER_DX, OTHER_PX, OTHER_PX_KIT,
+  diagnosisLabel, diagnosisList, OTHER_DX, OTHER_PX,
   principalProcedureName, procedureIds, procedureLabel, procedureList,
 } from './visit-coding';
 import { canAccess } from '../auth/access-check';
@@ -269,7 +269,7 @@ export class TheatreService {
            اقلام — یک رابطه یک‌بار انتخاب می‌شود، پس همین یکی برای فهرست و
            کیت هر دو. */
         otherDiagnoses: OTHER_DX,
-        otherProcedures: OTHER_PX_KIT,
+        otherProcedures: OTHER_PX,
         /* **ویزیتِ تصمیم** — جراح سرِ میز باید بداند بیمار با چه شرحِ حال و
            معاینه و یافته‌ای کاندیدِ عمل شد (بستهٔ ۶الف). مشتق است، نه کپی:
            همان اسنادِ آن ویزیت.
@@ -303,7 +303,7 @@ export class TheatreService {
         hospital: { select: { name: true } },
         /* `NEEDS_SELECT` همان فیلترِ «کالای فعال» را دارد و `itemId`/`assetKind`
            را هم می‌آورد که ادغامِ کیتِ چندعملی (`kitTemplate`) لازم دارد. */
-        procedureType: { select: { name: true, needs: NEEDS_SELECT } },
+        procedureType: { select: { name: true } },
         surgeon: { select: { person: { select: { firstName: true, lastName: true } } } },
         tech: { select: { person: { select: { firstName: true, lastName: true } } } },
         /* ⚠️ مدارک **بیشتر** و با هر چیزی که برای بازکردنشان لازم است: تا
@@ -773,9 +773,7 @@ export class TheatreService {
     const custom = Array.isArray(v.requiredItems) ? v.requiredItems : null;
     /* «طبقِ نسخه» کنارِ برنامه سرِ عمل دیده می‌شود (مالک): اگر کم‌وزیاد شده، تیم باید بداند. */
     if (custom?.length) return custom.map((r: any) => ({ name: r.name ?? r.itemName ?? '—', quantity: r.quantity ?? 1, prescribed: Number.isInteger(r.prescribedQuantity) ? r.prescribedQuantity : null, notes: r.notes || null }));
-    return kitTemplate(v).map((n) => ({
-      name: [n.item?.name, n.item?.size].filter(Boolean).join(' · ') || '—', quantity: n.quantity ?? 1, prescribed: null, notes: null,
-    }));
+    return [];
   }
 
   private static age(birth: Date | null) {

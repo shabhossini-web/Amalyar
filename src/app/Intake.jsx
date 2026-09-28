@@ -594,12 +594,6 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
   }, []);
   useEffect(() => { let live = true; api(`/forms/visit.${targetKind}`).then(form => { if (live) setFields(form.fields || []); }).catch(() => { if (live) setFields(null); }); return () => { live = false; }; }, [targetKind]);
   useEffect(() => {
-    if (workflow !== 'implant' || !f.procedureTypeId || itemsTouched) return;
-    let live = true;
-    api(`/procedure-types/${f.procedureTypeId}/needs`).then(rows => { if (live) setRequiredItems(rows); }).catch(e => { if (live) setErr(e.message); });
-    return () => { live = false; };
-  }, [workflow, f.procedureTypeId, itemsTouched]);
-  useEffect(() => {
     const reload = () => loadRefs().catch((e) => setErr(e.message));
     reload(); window.addEventListener('focus', reload);
     return () => window.removeEventListener('focus', reload);

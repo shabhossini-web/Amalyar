@@ -116,21 +116,6 @@ model Surgeon {
 /// همین الگو بار را **پیشنهاد** می‌دهد و کسری را نشان می‌دهد؛ تصمیم با
 /// چینش‌کننده است. اگر این جدول رزرو می‌کرد، هر تغییرِ الگو تعهدهای دیروزِ
 /// ثبت‌شده را هم عوض می‌کرد.
-model ProcedureTypeItem {
-  id              Int           @id @default(autoincrement())
-  procedureType   ProcedureType @relation(fields: [procedureTypeId], references: [id], onDelete: Cascade)
-  procedureTypeId Int           @map("procedure_type_id")
-  item            Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  itemId          Int           @map("item_id")
-  /// تعدادِ معمول — برای مصرفی معنا دارد، برای دستگاه معمولاً ۱.
-  quantity        Int           @default(1)
-  notes           String?
-  createdAt       DateTime      @default(now()) @map("created_at")
-
-  @@unique([procedureTypeId, itemId])
-  @@map("procedure_type_items")
-}
-
 model Hospital {
   centralId String? @unique @map("central_id")
   centralSnapshot Json? @map("central_snapshot")
@@ -288,7 +273,6 @@ model ProcedureType {
   /// این را هم می‌شمارد — تعریفِ به‌کاررفته فقط غیرفعال می‌شود.
   otherVisitLinks VisitOtherProcedure[]
   /// الگوی اقلام — «این نوعِ عمل معمولاً چه چیزی می‌خواهد».
-  needs  ProcedureTypeItem[]
   /// فرم‌های پیگیریِ اختصاصیِ همین نوعِ عمل (FormDef.followUp = procedure).
   followUpForms FormDef[]
 
@@ -382,7 +366,6 @@ model Item {
   @@index([category])
   @@map("items")
   /// در الگوی کدام نوع‌عمل‌ها آمده است.
-  procedureNeeds ProcedureTypeItem[]
 }
 
 /// یک لاتِ فیزیکی از یک کالا — «کدام بچ، چند تا، کجا، تا کِی».
@@ -1295,7 +1278,7 @@ model ClinicalNote {
 /// ⚠️ همهٔ مبالغ «تومان» و عددِ صحیح‌اند (قانونِ تک‌واحدی — درسِ ملک‌طب)
 model Visit {
   /// Patient-specific plan, not consumption or invoice charges. Null uses procedure defaults
-  /// (the merged kit of the primary + other procedures — `kitTemplate` in visit-coding.ts).
+  /// (the surgeon-prescribed items).
   requiredItems Json? @map("required_items")
   surgeonInstructions String? @map("surgeon_instructions")
   invoices       InvoiceDocument[]

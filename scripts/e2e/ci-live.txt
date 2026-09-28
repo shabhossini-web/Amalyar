@@ -126,7 +126,6 @@ clinical-core
 vital-signs
 voice-notes
 multi-diagnosis
-multi-procedure
 today-quick-visit
 op-defaults
 tenant-profile
