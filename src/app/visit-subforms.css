@@ -76,8 +76,23 @@
 .vf-trend span { font-size: 12px; font-weight: 800; color: var(--text1); white-space: nowrap; }
 .vf-spark { color: var(--brand-2); }
 
-/* ── پنجرهٔ «الصاقِ فرم» ── */
-.vf-pick-overlay { z-index: 80; }
+/* ── پنجرهٔ «الصاقِ فرم» ──
+   ⚠️ پرده و دکمهٔ بستن این‌جا هم تعریف شده‌اند، نه فقط در `dashboard.css`: میزِ اتاقِ عمل (بستهٔ ۸)
+   همین پنجره را باز می‌کند و `dashboard.css` را ندارد (قانونِ ۲۱). مقادیر همان `.db-overlay`/`.db-x`. */
+.vf-pick-overlay {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(var(--surface-rgb), 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+@media (min-width: 640px) { .vf-pick-overlay { align-items: center; padding: 20px; } }
+/* شیشه داخلِ شیشه تار نمی‌شود (قانونِ ۱۶): پرده خودش تار است، پنل نه. */
+.vf-pick-overlay .vf-pick { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.vf-pick .db-x {
+  display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.06);
+  border: 1px solid rgba(var(--veil-rgb), 0.12); border-radius: 10px;
+}
+.vf-pick .db-x:hover { color: var(--red-text); border-color: rgba(248, 113, 113, 0.4); }
+.vf-pick .db-x:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .vf-pick {
   width: 100%; max-width: 560px; max-height: 88dvh; overflow-y: auto;
   border-radius: 20px 20px 0 0; padding: 16px; display: flex; flex-direction: column; gap: 10px;

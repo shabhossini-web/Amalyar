@@ -274,3 +274,49 @@
   .th-acts { width: 100%; flex-wrap: wrap; }
   .th-btn { flex: 1 1 auto; min-width: 46%; padding: 0 12px; }
 }
+
+/* بستهٔ ۸ — ارزیابیِ پیش از عمل (از زیرفرم‌های «قبل»)، فرم‌های حینِ عمل، ترخیصِ کامل. */
+.th-pre { border-style: dashed !important; }
+.th-pre.on { border-style: solid !important; border-color: rgba(var(--brand-2-rgb), .45) !important; }
+.th-pre-row { display: flex; flex-direction: column; gap: 3px; }
+.th-pre-row + .th-pre-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(var(--veil-rgb), .08); }
+.th-pre-row > b { font-size: 12px; color: var(--text2); }
+.th-pre-row p { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14.5px; line-height: 1.85; color: var(--text1); }
+.th-pre-row p em { font-style: normal; font-size: 12px; color: var(--text3); margin-inline-end: 3px; }
+.th-pre-none { margin: 0; font-size: 13px; color: var(--text3); }
+.th-subs .th-sub + .th-sub { margin-top: 14px; }
+.th-sub > b { display: block; margin-bottom: 8px; font-size: 13px; color: var(--text2); }
+.th-death {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0 0 12px; padding: 10px 12px; border-radius: 12px;
+  font-size: 12.5px; line-height: 1.8; color: var(--red-text);
+  background: rgba(239, 68, 68, .1); border: 1px solid rgba(248, 113, 113, .45);
+}
+.th-death svg { flex: 0 0 auto; margin-top: 4px; }
+.th-next .th-hint { display: block; margin-top: 4px; }
+.th-hint.is-err { color: var(--red-text); }
+.th-hint.is-warn { color: var(--amber-text); }
+/* ویزیتِ بعدی برای حسابِ بی‌مجوز: تاریخ دیده شود و بگوید مالِ کیست — نه کادرِ مرده. */
+.th-next-ro {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 12px; padding: 9px 12px;
+  border-radius: 12px; background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.th-next-ro b { font-size: 12px; color: var(--text2); }
+.th-next-ro span { font-size: 13.5px; font-weight: 800; color: var(--text1); }
+.th-next-ro small { flex-basis: 100%; font-size: 11.5px; color: var(--text3); }
+/* سرتیترِ «فرم‌های حینِ عمل» با دکمهٔ الصاق در همان ردیف. */
+.th-subs-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.th-subs-head h3 { margin: 0; }
+.th-subs-add { display: inline-flex; align-items: center; gap: 5px; }
+.th-sub-off { font-size: 11px; color: var(--amber-text); margin-inline-end: auto; }
+.th-sub-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+/* عنوانِ هر فرم یک پله پایین‌تر از سرتیترِ بخش — همان وزنِ سطرهای «پیش از عمل». */
+.th-sub-head > b { margin: 0; font-size: 13px; font-weight: 800; color: var(--text2); }
+.th-sub-sum { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; line-height: 1.85; color: var(--text1); }
+.th-sub-sum em { font-style: normal; font-size: 12px; color: var(--text3); margin-inline-end: 3px; }
+/* فرمِ حینِ عمل روی میزِ پهن دوستونه — فیلدهای کوتاه (نام، عدد، بله/خیر) یک ستونِ بلند نمی‌خواهند. */
+@media (min-width: 760px) {
+  .th-sub-form .pf.dyn { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+  .th-sub-form .pf.dyn > [data-ftype="textarea"] { grid-column: 1 / -1; }
+}
+.th-sub-form .th-report-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.th-sub-form .th-report-bar .th-hint { flex: 1 1 220px; margin: 0; }

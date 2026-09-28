@@ -74,6 +74,8 @@ import { RepairController } from './repair.controller';
 import { RepairService } from './repair.service';
 import { HospitalDutiesController } from './hospital-duties.controller';
 import { HospitalDutiesService } from './hospital-duties.service';
+import { WaitlistController } from './waitlist.controller';
+import { WaitlistService } from './waitlist.service';
 
 @Module({
   imports: [HospitalDirectoryModule, WorkModule],
@@ -82,6 +84,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
   controllers: [
     FrontDeskController,
     TheatreController,
+    WaitlistController,
     VitalsController,
     HospitalDutiesController,
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
@@ -96,6 +99,7 @@ import { HospitalDutiesService } from './hospital-duties.service';
     LiveService,
     FrontDeskService,
     TheatreService,
+    WaitlistService,
     VitalsService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
     ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, NameMergeService,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth.jsx';
 import { useTerms } from './config.jsx';
-import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Theatre, Truck, Users, Wave , Arrive, Pathway } from '../ui/icons.jsx';
+import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Theatre, Truck, Users, Wave , Arrive, Pathway, Waitlist } from '../ui/icons.jsx';
 
 /**
  * کاتالوگِ ابزارها — **تنها** جای تعریفِ کاشی‌ها.
@@ -44,6 +44,7 @@ export const TOOLS = [
      امروز**اند و هر دو سطحِ کارشناس. نام «اتاقِ عمل» است نه «نمای اتاقِ عمل» —
      نامِ کاشی همان کاری است که کاربر می‌کند، نه نامِ ابزار (قانونِ ۲۴). */
   { key: 'theatre', label: 'اتاقِ عمل', icon: Theatre, tint: 'teal', ready: true, min: 2, to: '/app/theatre' },
+  { key: 'waitlist', label: 'فهرستِ انتظارِ عمل', icon: Waitlist, tint: 'amber', ready: true, min: 2, to: '/app/waitlist' },
   /* نامِ کاشی = عنوانِ صفحه (قانون ۲۴). «مسیرِ درمان» نه «الگوها»: کاربر
      دنبالِ مسیرِ بیمار می‌گردد، نه دنبالِ ابزارِ ساختِ الگو. */
   { key: 'pathway', label: 'مسیرِ درمان', icon: Pathway, tint: 'violet', ready: true, min: 2, to: '/app/pathways' },

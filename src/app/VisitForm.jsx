@@ -243,6 +243,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        دکمهٔ «+» صفحهٔ «امروز» امروز را می‌دهد (همان `todayJStr` که دکمهٔ «امروز»ِ
        خودِ کادر می‌زند)؛ کاربر عوضش می‌کند اگر مراجعه برای روزِ دیگری است. */
     opDateJ: initial?.opDate ? isoToJStr(initial.opDate) : (initial?.id ? '' : prefill?.opDateJ || ''),
+    /* «هنوز تاریخ ندارد» (بستهٔ ۹): عملِ در انتظارِ بی‌تاریخ همان حالت را نشان می‌دهد نه کادرِ ستاره‌دارِ خالی. */
+    undated: initial?.id
+      ? (initial.undated ?? (initial.kind === 'surgery' && !initial.opDate && initial.opStatus === 'pending'))
+      : !!prefill?.undated,
+    plannedDateJ: initial?.plannedDate ? isoToJStr(initial.plannedDate) : '',
     nextVisitDateJ: initial?.nextVisitDate ? isoToJStr(initial.nextVisitDate) : '',
     postOpCare: initial?.postOpCare ?? '',
     followUpDays: initial?.followUpDays ?? '',
@@ -505,7 +510,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* تصمیمِ درمانی — چندتایی است چون یک ویزیت می‌تواند هم آزمایش بدهد هم
      مشاوره بخواهد. «کاندیدای جراحی» موضوعِ همین ویزیت را هم پره‌آپ می‌کند:
      همان ویزیت است که تبدیل به ویزیتِ قبل از عمل شده. */
-  const preOpTopicId = defs.topics.find((tp) => tp.name.includes('پره‌آپ'))?.id ?? null;
+  /* کلیدِ پایدارِ سرور (بستهٔ ۹الف) — نه نام: مطب نامِ موضوع را عوض می‌کند. نصبِ پیش از مهاجرت با همان قاعدهٔ نام. */
+  const preOpTopicId = (defs.topics.find((tp) => tp.systemKey === 'preop') ?? defs.topics.find((tp) => tp.name.includes('پره‌آپ')))?.id ?? null;
   const formDuration = durationMin(f.opStartTime, f.opEndTime);
 
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
@@ -632,6 +638,29 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (where) setPhase(where);
     reveal(it.key, where);
   };
+  /* **فرم‌های پیش‌فرضِ موضوع** (بستهٔ ۹): با انتخابِ موضوعِ ویزیت در ثبتِ تازه، زیرفرم‌هایی که در
+     «تعریف‌ها → موضوعِ ویزیت» به آن وصل شده‌اند خودشان الصاق می‌شوند — با برچسبِ «از موضوع» و قابلِ
+     برداشتن. عوض‌کردنِ موضوع فقط الصاق‌های خودکارِ **خالی** را برمی‌دارد؛ پاسخِ نوشته‌شده نمی‌رود. */
+  const topicAuto = useRef(new Map());
+  useEffect(() => {
+    if (editing || isSurgery || !catalog) return;
+    const topic = (defs.topics ?? []).find((x) => x.id === f.topicId);
+    const want = (topic?.defaultSubforms ?? [])
+      .map((k) => (catalog.items ?? []).find((x) => x.key === k))
+      .filter((it) => it && attachableOn(it, f.kind));
+    const wantSlots = new Set(want.map((it) => slotOf(it.key, '')));
+    setSubList((l) => {
+      let next = l.filter((x) => !(topicAuto.current.has(x.slot) && !wantSlots.has(x.slot) && !draftHas(x.data)));
+      for (const it of want) {
+        const slot = slotOf(it.key, '');
+        if (next.some((x) => x.slot === slot)) continue;
+        topicAuto.current.set(slot, topic.name);
+        subTouched.current.add(slot);
+        next = [...next, { key: it.key, phase: '', slot, builtin: !!it.builtin, title: it.title, data: {}, hasData: false, fresh: true }];
+      }
+      return next;
+    });
+  }, [f.topicId, catalog, editing, isSurgery]); // eslint-disable-line react-hooks/exhaustive-deps
   const openPicker = (ph) => { setPickPhase(ph || phase); setPickOpen(true); };
   const removeSub = (slot) => {
     const gone = subList.find((x) => x.slot === slot);
@@ -834,10 +863,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
        کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
     if (!editing && step < 3) { goNext(); return; }
+    /* «هنوز تاریخ ندارد» (بستهٔ ۹ب) — فقط عمل؛ کادرِ تاریخ آن‌وقت دیده نمی‌شود و خوانده هم نمی‌شود. */
+    const undatedNow = f.kind === 'surgery' && f.undated;
     let opDate;
-    if (f.opDateJ.trim()) {
+    if (!undatedNow && f.opDateJ.trim()) {
       opDate = jStrToIso(f.opDateJ);
       if (!opDate) { onToast(`${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`); return; }
+    }
+    let plannedDate;
+    if (undatedNow && f.plannedDateJ.trim()) {
+      plannedDate = jStrToIso(f.plannedDateJ);
+      if (!plannedDate) { onToast('تاریخِ تقریبی نامعتبر است (مثال: ۱۴۰۵/۰۸/۰۱)'); return; }
     }
     let nextVisitDate;
     if (f.nextVisitDateJ.trim()) {
@@ -886,7 +922,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       procedureTypeId: f.procedureTypeIds[0] ?? null, diagnosisId: f.diagnosisIds[0] ?? null, topicId: f.topicId,
       /* شکایتِ خالی ولی ارثی «پر» است — همان قاعدهٔ سرور (باگِ ممیزی ۱۴۰۵/۰۷/۰۳). */
       chiefComplaint: f.chiefComplaint.trim() || inheritedComplaint,
-      opDate: f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
+      opDate: undatedNow ? '' : f.opDateJ, opStartTime: f.opStartTime, opEndTime: f.opEndTime,
+      /* همان قاعدهٔ `dynErrors`/سرور: «هنوز تاریخ ندارد» ستارهٔ تاریخ را برمی‌دارد. */
+      ...(undatedNow ? { opDateOpen: true } : {}),
       nextVisitDate: f.nextVisitDateJ, notes: f.notes,
       /* بخش‌های هستهٔ ثابت — ستارهٔ فرم‌ساز رویشان هم همین‌جا زود گفته می‌شود. */
       history: f.history, findings: f.findings, exam: f.exam,
@@ -896,7 +934,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       amount: editing ? initial.total : f.amount,
     };
     const eBuiltin = dynErrors(
-      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals && !(isClinicCore && x.key === 'findings')),
+      (fd.def?.fields ?? []).filter((x) => x.builtin && x.key in builtinVals && !(isClinicCore && x.key === 'findings')
+        /* مطب: عملِ بی‌تاریخ هنوز بیمارستان و مبلغ ندارد — آینهٔ `undatedWaiver`ِ سرور. */
+        && !(undatedNow && tenantKind === 'clinic' && (x.key === 'hospitalId' || x.key === 'amount'))),
       builtinVals,
       myRole,
     );
@@ -988,8 +1028,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       vitals: editing
         ? (pending.length ? pending : undefined)
         : vitalsDrafts.length ? (vitalsDrafts.length === 1 ? vitalsDrafts[0] : vitalsDrafts) : undefined,
-      subforms: subformsOut.length ? subformsOut : undefined,
-      opDate,
+      /* ساخت با کاتالوگِ خوانده‌شده: فهرست همیشه می‌رود، حتی خالی — «فرم‌های خودکارِ موضوع» را کاربر
+         این‌جا دیده و شاید برداشته؛ `undefined` یعنی سرور خودش آن‌ها را الصاق کند (بستهٔ ۹الف). */
+      subforms: subformsOut.length ? subformsOut : (!editing && catalog ? [] : undefined),
+      /* بی‌تاریخ: در ویرایش `null` (تاریخِ قبلی برداشته شود) + پرچمِ صریح؛ تاریخِ تقریبی فقط همین‌جا. */
+      opDate: undatedNow ? (editing ? null : undefined) : opDate,
+      ...(undatedNow ? { opDateOpen: true, plannedDate: plannedDate ?? (editing ? null : undefined) } : {}),
       /* پاک‌کردن در ویرایش با null — پزشکِ منصرف باید بتواند برش دارد. */
       nextVisitDate: f.nextVisitDateJ.trim() ? nextVisitDate : (editing ? null : undefined),
       /* پیگیریِ اختصاصیِ همین بیمار — خالی یعنی «برگرد به قالبِ نوعِ عمل». */
@@ -1176,7 +1220,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     />) };
   if (fd.isOn('hospitalId')) builtinNodes.hospitalId = { el: (
     <DefSelect
-      label={<>{fd.labelOf('hospitalId', 'بیمارستان')}{star(fd.requiredOf('hospitalId'))}</>}
+      label={<>{fd.labelOf('hospitalId', 'بیمارستان')}{star(fd.requiredOf('hospitalId') && !(f.kind === 'surgery' && f.undated && tenantKind === 'clinic'))}</>}
       value={f.hospitalId}
       onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))}
       options={activeHospitals}
@@ -1327,15 +1371,42 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       addPlaceholder="موضوعِ تازه… مثلِ پست‌آپ"
     />) };
   /* مطب: تاریخ و پزشک در یک ردیف (طرحِ مصوب) — تراکم، نه یک کادرِ تمام‌عرض برای ده رقم. */
-  if (fd.isOn('opDate')) builtinNodes.opDate = { wide: !isClinicCore, el: (
+  /* عمل می‌تواند «هنوز تاریخ نداشته باشد» (بستهٔ ۹): همان کنترلِ دوگزینه‌ایِ فرمِ عمومیِ بیمار —
+     «تاریخ مشخص است / هنوز تاریخ ندارد» — و در هر لحظه فقط محتوای گزینهٔ انتخاب‌شده. */
+  const undatable = f.kind === 'surgery';
+  const dateLabel = <>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){!(undatable && f.undated) && star(fd.requiredOf('opDate'))}</>;
+  if (fd.isOn('opDate')) builtinNodes.opDate = { wide: !isClinicCore || undatable, el: !undatable ? (
     /* دکمهٔ «امروز» داخلِ خودِ تقویم است؛ تکرارش کنارِ فیلد فقط جا می‌گرفت.
        ⚠️ راهنمای کادر «سال / ماه / روز» است، نه یک تاریخِ نمونه که با مقدارِ واقعی اشتباه شود. */
     <JDate
-      label={<>{fd.labelOf('opDate', kindOf(f.kind).date)} (شمسی){star(fd.requiredOf('opDate'))}</>}
+      label={dateLabel}
       value={f.opDateJ}
       onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))}
       placeholder="سال / ماه / روز"
-    />) };
+    />) : (
+    <div className="db-when" role="group" aria-labelledby="db-when-l">
+      <span id="db-when-l" className="db-when-l">{dateLabel}</span>
+      <div className="db-when-pick">
+        <button type="button" className={`db-when-pill${!f.undated ? ' on' : ''}`} aria-pressed={!f.undated}
+                onClick={() => setF((s2) => ({ ...s2, undated: false }))}>تاریخ مشخص است</button>
+        <button type="button" className={`db-when-pill${f.undated ? ' on' : ''}`} aria-pressed={f.undated}
+                onClick={() => setF((s2) => ({ ...s2, undated: true, opDateJ: '' }))}>هنوز تاریخ ندارد</button>
+      </div>
+      {!f.undated ? (
+        <JDate label={<span className="db-sr">{fd.labelOf('opDate', kindOf(f.kind).date)}</span>} value={f.opDateJ}
+               onChange={(v) => setF((s2) => ({ ...s2, opDateJ: v }))} placeholder="سال / ماه / روز" />
+      ) : (
+        <>
+          <JDate label="تاریخِ تقریبی (اختیاری)" value={f.plannedDateJ}
+                 onChange={(v) => setF((s2) => ({ ...s2, plannedDateJ: v }))} placeholder="مثلاً اولِ ماهِ بعد" />
+          <p className="db-hint db-when-hint">
+            {tenantKind === 'clinic'
+              ? 'تا تاریخِ قطعی، پیامک، یادآوری، تقویم و اتاقِ عمل برای این عمل راه نمی‌افتند و بیمار در «فهرستِ انتظارِ عمل» می‌ماند. بیمارستان و مبلغ هم تا آن موقع اجباری نیستند.'
+              : 'تا تاریخِ قطعی، پیامک، یادآوری و تقویم برای این مراجعه راه نمی‌افتند.'}
+          </p>
+        </>
+      )}
+    </div>) };
   if (fd.isOn('opStartTime')) builtinNodes.opStartTime = { el: timeNode('opStartTime', 'ساعتِ شروع') };
   if (fd.isOn('opEndTime')) builtinNodes.opEndTime = { el: (
     <>
@@ -1523,7 +1594,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
      در ویرایش، صورت‌حساب جای اصلاح است. */
   if (!editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
-    <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount'))}</span>
+    <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount') && !(f.kind === 'surgery' && f.undated && tenantKind === 'clinic'))}</span>
       <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
              placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
     </label>) };
@@ -1721,7 +1792,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     }
     return (
       <SubformCard
-        key={e.slot} skey={e.key} phase={e.phase} title={title} badge={e.implicit ? 'داده دارد' : 'الصاق‌شده'}
+        key={e.slot} skey={e.key} phase={e.phase} title={title}
+        badge={e.implicit ? 'داده دارد' : topicAuto.current.has(e.slot) ? `از موضوعِ «${topicAuto.current.get(e.slot)}»` : 'الصاق‌شده'}
         open={open} onToggle={() => setCardsShut((c) => ({ ...c, [e.slot]: open }))}
         onRemove={empty && !busy ? () => removeSub(e.slot) : undefined}
         removeHint={empty ? undefined : 'داده دارد و برداشته نمی‌شود'}
@@ -1877,7 +1949,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     <AiContext.Provider value={aiCoding}>
     <Overlay backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom" onClose={onClose} onSubmit={submit}>
       <header className="db-sheet-head">
-        <b>{editing ? `ویرایشِ ${t.visit} ${initial.code}` : t.visitNew}</b>
+        {/* نوعِ «عمل» نامِ خودش را دارد (`surgery`/`surgeryNew`ِ واژگان) — فرمِ عملِ مطب «ویزیتِ جدید» می‌نوشت. */}
+        <b data-sheet-title>{editing ? `ویرایشِ ${f.kind === 'surgery' ? t.surgery : t.visit} ${initial.code}` : f.kind === 'surgery' ? t.surgeryNew : t.visitNew}</b>
         <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
 
@@ -2427,7 +2500,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       />
 
       <button className="db-submit" type="submit" disabled={busy || !!aiBusy}>
-        {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : t.visitOne}
+        {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : f.kind === 'surgery' ? t.surgeryOne : t.visitOne}
       </button>
       </>)}
 

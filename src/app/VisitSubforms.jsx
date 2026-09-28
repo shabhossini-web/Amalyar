@@ -22,17 +22,21 @@ import './visit-subforms.css';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 
-/** کاتالوگِ زیرفرم‌ها — هر بار که فرم باز می‌شود از نو: فرم‌ساز ممکن است همین حالا عوضش کرده باشد. */
-export function useSubformCatalog() {
+/**
+ * کاتالوگِ زیرفرم‌ها — هر بار که فرم باز می‌شود از نو: فرم‌ساز ممکن است همین حالا عوضش کرده باشد.
+ * `enabled`: میزِ اتاقِ عمل فقط وقتی پنجرهٔ الصاق باز شد می‌خوانَدش، نه با هر بازشدنِ کارت.
+ */
+export function useSubformCatalog(enabled = true) {
   const [cat, setCat] = useState(null);
   useEffect(() => {
+    if (!enabled) return undefined;
     let on = true;
     api('/forms/subforms')
       .then((r) => { if (on) setCat({ groups: r?.groups ?? [], items: Array.isArray(r?.items) ? r.items : [] }); })
       /* بی‌کاتالوگ یعنی «زیرفرمی نیست» — فرم بی‌دکمهٔ الصاق کار می‌کند، نه صفحهٔ شکسته. */
       .catch(() => { if (on) setCat({ groups: [], items: [] }); });
     return () => { on = false; };
-  }, []);
+  }, [enabled]);
   return cat;
 }
 
@@ -135,7 +139,7 @@ export function PhaseAttach({ phase, label, onClick, disabled }) {
  * فرمِ عمل: بالای فهرست «الصاق به: قبل / حین / بعد از عمل» (`phases`) — پیش‌فرض همان تبی که
  * کاربر در آن است؛ «الصاق شده» هم به‌ازای همان مرحله است (`attached` را والد می‌سازد).
  */
-export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild, phases, phase, onPhase }) {
+export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild, phases, phase, onPhase, loading = false, title }) {
   const [q, setQ] = useState('');
   useEffect(() => { if (!open) setQ(''); }, [open]);
   const needle = q.trim();
@@ -152,7 +156,7 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
           role="dialog" aria-modal="true" aria-label={`الصاقِ فرم به این ${visitWord}`}
         >
           <header className="vf-pick-head">
-            <b>الصاقِ فرم به این {visitWord}</b>
+            <b>{title ?? `الصاقِ فرم به این ${visitWord}`}</b>
             <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
           </header>
           {phases && (
@@ -186,13 +190,17 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
                           <b>{it.title}</b>
                           {it.hint && <small>{it.hint}</small>}
                         </div>
-                        <button
-                          type="button" className={`vf-star${star ? ' on' : ''}`} onClick={() => onPin(it)}
-                          aria-pressed={star} aria-label={star ? `برداشتنِ «${it.title}» از منتخب‌ها` : `افزودنِ «${it.title}» به منتخب‌ها`}
-                          title={star ? 'از منتخب‌ها بردار' : 'به منتخب‌ها اضافه کن'}
-                        >
-                          {star ? <Star width="15" height="15" /> : <StarLine width="15" height="15" />}
-                        </button>
+                        {/* ستارهٔ «منتخب» فقط جایی که منتخب معنا دارد (فرمِ مراجعه) — میزِ اتاقِ عمل
+                            `onPin` نمی‌دهد و دکمهٔ بی‌اثر هم نمی‌گیرد. */}
+                        {onPin && (
+                          <button
+                            type="button" className={`vf-star${star ? ' on' : ''}`} onClick={() => onPin(it)}
+                            aria-pressed={star} aria-label={star ? `برداشتنِ «${it.title}» از منتخب‌ها` : `افزودنِ «${it.title}» به منتخب‌ها`}
+                            title={star ? 'از منتخب‌ها بردار' : 'به منتخب‌ها اضافه کن'}
+                          >
+                            {star ? <Star width="15" height="15" /> : <StarLine width="15" height="15" />}
+                          </button>
+                        )}
                         <button type="button" className="vf-add" disabled={done} onClick={() => onAttach(it)} data-act="attach">
                           {done ? 'الصاق شده' : 'الصاق'}
                         </button>
@@ -202,7 +210,9 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
                 </div>
               );
             })}
-            {!shown.length && <p className="vf-pick-empty">{needle ? 'فرمی با این نام نیست.' : 'هنوز زیرفرمی تعریف نشده.'}</p>}
+            {!shown.length && (
+              <p className="vf-pick-empty">{loading ? 'در حالِ بارگذاری…' : needle ? 'فرمی با این نام نیست.' : 'هنوز زیرفرمی تعریف نشده.'}</p>
+            )}
           </div>
           {canBuild && (
             /* تبِ تازه: رفتن از همین‌جا فرمِ نیمه‌پرِ مراجعه را می‌بست و نوشته‌ها گم می‌شد. */

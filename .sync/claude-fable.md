@@ -1,24 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/p89-replan
 since: 2026-09-28
-paths:
-  - src/app/Waitlist.jsx
-  - src/app/waitlist.css
-  - src/app/ProcedureSides.jsx
-  - src/app/Theatre.jsx
-  - src/app/theatre.css
-  - src/app/Definitions.jsx
-  - src/app/VisitForm.jsx
-  - src/app/PatientRecord.jsx
-  - server/src/patients/theatre.*
-  - server/src/patients/waitlist.*
+paths: []
 note: >-
-  بسته‌های ۸+۹ از نو روی زیرفرم‌ها (نه جدولِ جدا): جزئیاتِ حینِ عمل = زیرفرمِ آماده، زیرفرم‌ها روی میزِ
-  اتاقِ عمل، سمت/سطحِ عمل، داروی ترخیص و ویزیتِ بعدی (+ قاعدهٔ فوت)، پاسخِ زیرفرم‌ها در پرونده، فرم‌های
-  پیش‌فرضِ موضوع، عملِ بی‌تاریخ، «فهرستِ انتظارِ عمل». منتظرِ «اکی»ِ بند‌به‌بندِ مالک (قانونِ ۲۶) پیش از سرور.
-  PR #98 با این جایگزین و بسته می‌شود.
+  بسته‌های ۸+۹ (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶، روی زیرفرم‌ها) با PR #117 در main مرج شد و PR #98 به‌جایش بسته
+  شد. کارِ باز ندارم؛ فقط عیب‌یابیِ پیامکِ پست‌آپ منتظرِ اسکرین‌شاتِ مالک است (بدونِ کد).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

@@ -9,6 +9,7 @@ import { NOTE_KIND_LABELS } from './labels';
 import { AuditService } from '../audit/audit.service';
 import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
+import { BUILTIN_SUBFORMS, isBuiltinSubform } from './subforms';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
 
@@ -341,32 +342,72 @@ export class DefinitionsService {
      می‌کند کدام فرم رندر شود، این یکی دسته‌بندیِ داخلِ همان فرم است. */
 
   async listVisitTopics() {
-    const rows = await this.prisma.visitTopic.findMany({
-      orderBy: [{ active: 'desc' }, { sort: 'asc' }, { name: 'asc' }],
-      include: { _count: { select: { visits: true } } },
-    });
+    const [rows, titles] = await Promise.all([
+      this.prisma.visitTopic.findMany({
+        orderBy: [{ active: 'desc' }, { sort: 'asc' }, { name: 'asc' }],
+        include: { _count: { select: { visits: true } } },
+      }),
+      this.subformTitles(),
+    ]);
     return rows.map((r) => ({
       id: r.id, name: r.name, color: r.color, notes: r.notes,
       active: r.active, sort: r.sort, visitCount: r._count.visits,
+      /* بستهٔ ۹الف — کلیدِ پایدار (فقط‌خواندنی) و فرم‌های خودکار با عنوانشان (قانونِ ۱۵). عنوانِ
+         زیرفرمی که در فرم‌ساز پاک شده نمی‌آید — همان‌طور که دیگر الصاق هم نمی‌شود. */
+      systemKey: r.systemKey ?? null,
+      defaultSubforms: r.defaultSubforms ?? [],
+      defaultSubformTitles: (r.defaultSubforms ?? []).map((k) => titles.get(k)).filter((t): t is string => !!t),
     }));
   }
 
-  async createVisitTopic(dto: { name: string; color?: string; notes?: string; sort?: number }) {
+  /** عنوانِ هر زیرفرم (داخلی + فرم‌ساز) — برای خلاصهٔ «خودکار: …» در فهرستِ موضوع‌ها. */
+  private async subformTitles() {
+    const rows = await this.prisma.formDef.findMany({ where: { scope: 'subform' }, select: { key: true, title: true } });
+    return new Map<string, string>([
+      ...Object.entries(BUILTIN_SUBFORMS).map(([k, b]) => [k, b.title] as [string, string]),
+      ...rows.map((r) => [r.key, r.title] as [string, string]),
+    ]);
+  }
+
+  /**
+   * «فرم‌های خودکار»ِ موضوع — فقط کلیدِ زیرفرمِ موجود (داخلی یا فرم‌ساز)، یکتا و با سقف. کلیدِ ناشناخته
+   * ۴۰۰ است نه دورریختنِ بی‌صدا: مدیری که انتخاب کرده باید بفهمد چرا ذخیره نشد.
+   */
+  private async topicSubforms(input: unknown): Promise<string[] | undefined> {
+    if (input === undefined) return undefined;
+    if (!Array.isArray(input)) throw new BadRequestException('فرم‌های خودکار نامعتبر است');
+    const keys = [...new Set(input.map((k) => String(k ?? '').trim()).filter(Boolean))];
+    if (keys.length > 12) throw new BadRequestException('حداکثر ۱۲ فرمِ خودکار برای یک موضوع');
+    const custom = keys.filter((k) => !isBuiltinSubform(k));
+    if (custom.length) {
+      const found = new Set((await this.prisma.formDef.findMany({
+        where: { key: { in: custom }, scope: 'subform' }, select: { key: true },
+      })).map((d) => d.key));
+      const missing = custom.find((k) => !found.has(k));
+      if (missing) throw new BadRequestException(`زیرفرمِ «${missing}» پیدا نشد — شاید در فرم‌ساز حذف شده است`);
+    }
+    return keys;
+  }
+
+  async createVisitTopic(dto: { name: string; color?: string; notes?: string; sort?: number; defaultSubforms?: string[] }) {
     await this.uniqueName('visitTopic', 'name', dto.name);
+    const defaults = await this.topicSubforms(dto.defaultSubforms);
     return this.prisma.visitTopic.create({
       data: {
         name: dto.name.trim(),
         color: dto.color?.trim() || null,
         notes: dto.notes?.trim() || null,
         sort: dto.sort ?? 0,
+        ...(defaults ? { defaultSubforms: defaults } : {}),
       },
     });
   }
 
-  async updateVisitTopic(id: number, dto: { name?: string; color?: string; notes?: string; active?: boolean; sort?: number }) {
+  async updateVisitTopic(id: number, dto: { name?: string; color?: string; notes?: string; active?: boolean; sort?: number; defaultSubforms?: string[] }) {
     const row = await this.prisma.visitTopic.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('موضوعِ ویزیت یافت نشد');
     if (dto.name) await this.uniqueName('visitTopic', 'name', dto.name, id);
+    const defaults = await this.topicSubforms(dto.defaultSubforms);
     return this.prisma.visitTopic.update({
       where: { id },
       data: {
@@ -375,6 +416,7 @@ export class DefinitionsService {
         ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
         ...(dto.sort !== undefined ? { sort: dto.sort } : {}),
+        ...(defaults ? { defaultSubforms: defaults } : {}),
       },
     });
   }
@@ -388,7 +430,10 @@ export class DefinitionsService {
    */
   async deleteVisitTopic(id: number) {
     const used = await this.prisma.visit.count({ where: { topicId: id } });
-    if (used > 0) {
+    /* موضوعِ استاندارد (کلیددار) هم حذفِ سخت نمی‌شود: ویزیتِ پست‌آپِ خودکار با همین کلید موضوع
+       می‌گیرد، و موضوعِ هم‌نامِ تازه آن کلید را ندارد (بستهٔ ۹الف). */
+    const system = !!(await this.prisma.visitTopic.findUnique({ where: { id }, select: { systemKey: true } }))?.systemKey;
+    if (used > 0 || system) {
       await this.prisma.visitTopic.update({ where: { id }, data: { active: false } });
       return { ok: true, deactivated: true, visitCount: used };
     }

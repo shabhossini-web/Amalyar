@@ -1,14 +1,17 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
 import { isUnrestricted, ownVisitWhere } from '../common/own-scope';
 import { actorName } from '../common/person';
-import { currentNotes, noteBody, setVisitNote } from './clinical-note';
+import { DISCHARGE_NOTES, currentNotes, noteBody, setVisitNote } from './clinical-note';
 import { ANESTHESIA_LABELS, DISPOSITION_LABELS } from './labels';
 import { vitalView } from './vitals';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { RecordService } from './record.service';
+import { PatientsService } from './patients.service';
+import { subformSummary } from './subforms';
+import { fieldRoles, jobRoleLabel } from '../common/job-roles';
 import { monthDayCounts } from './month-summary';
 import {
   diagnosisLabel, diagnosisList, kitTemplate, NEEDS_SELECT, OTHER_DX, OTHER_PX, OTHER_PX_KIT,
@@ -16,6 +19,8 @@ import {
 } from './visit-coding';
 import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
+import { ConfigService } from '../config/config.service';
+import { toDateValue } from '../common/jalali';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
@@ -127,7 +132,18 @@ const wallClock = () => {
  */
 @Injectable()
 export class TheatreService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private record: RecordService) {}
+  constructor(
+    private prisma: PrismaService, private audit: AuditService, private record: RecordService,
+    private patients: PatientsService, private config: ConfigService,
+  ) {}
+
+  /**
+   * داروهای ترخیص و ویزیتِ بعدی (بستهٔ ۸) فقط در **مطب**: در نصبِ شرکتی میز مالِ کارشناسِ
+   * نورومانیتورینگ/ایمپلنت است و شرکت پروندهٔ بالینیِ جراح را نمی‌نویسد.
+   */
+  private async clinical() {
+    return (await this.config.profile()).kind === 'clinic';
+  }
 
   private scope(user: any) {
     return (user?.level ?? 0) >= LEVEL.SUPERVISOR ? {} : ownVisitWhere(user);
@@ -242,7 +258,7 @@ export class TheatreService {
         /* شکایتِ اولیه — مشتق از ویزیتِ تصمیم اگر خودِ عمل ننوشته باشدش
            (بستهٔ ۴الف). سرِ میز باید معلوم باشد بیمار **چرا** آمده. */
         chiefComplaint: true,
-        anesthesia: true, dischargeDisposition: true,
+        anesthesia: true, dischargeDisposition: true, nextVisitDate: true,
         /* ⚠️ شناسهٔ اصلی‌ها هم لازم است: `diagnosisList`/`procedureList` از
            همین‌ها `id`ِ ردیفِ اول را می‌سازند، و `select` چیزی را خودکار
            نمی‌آورد. */
@@ -269,9 +285,11 @@ export class TheatreService {
             clinicalNotes: { ...currentNotes(['history', 'exam', 'findings', 'plan']), select: { kind: true, body: true } },
           },
         },
-        /* اسنادِ جاریِ خودِ عمل — همان سندهای پرونده، نه کپی. */
+        /* اسنادِ جاریِ خودِ عمل — همان سندهای پرونده، نه کپی.
+           ⚠️ اسنادِ ترخیص از خودِ `DISCHARGE_NOTES`: فهرستِ دستی یعنی سندِ تازهٔ ترخیص
+           (داروها، بستهٔ ۸) بی‌صدا از میز جا بماند. */
         clinicalNotes: {
-          ...currentNotes(['op', 'findings', 'discharge', 'discharge_summary', 'discharge_note']),
+          ...currentNotes(['op', 'findings', ...Object.values(DISCHARGE_NOTES)]),
           select: { kind: true, body: true, authorName: true, createdAt: true },
         },
         vitals: { orderBy: [{ takenAt: 'asc' }, { id: 'asc' }] },
@@ -301,9 +319,33 @@ export class TheatreService {
           },
         },
         safetyChecks: { select: { stage: true, key: true, checkedByName: true, checkedAt: true } },
+        /* زیرفرم‌های الصاق‌شدهٔ خودِ عمل (بستهٔ ۸) — «ارزیابیِ پیش از عمل» سرِ میز خوانده و
+           «فرم‌های حینِ عمل» همین‌جا پر می‌شوند. تعریفِ فرم همراهش، تا برچسب‌ها و گزینه‌ها
+           از سرور بیاید (قانونِ ۱۵). */
+        subforms: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: {
+            key: true, phase: true, data: true, createdAt: true,
+            form: {
+              select: {
+                title: true, active: true,
+                fields: { where: { deletedAt: null }, orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }] },
+              },
+            },
+          },
+        },
       },
     });
     if (!v) throw new NotFoundException('عمل پیدا نشد');
+    /* چه کارهایی از این میز برای **این کاربر** شدنی است — سرور می‌گوید، نه رابط (قانونِ ۳).
+       قفلِ نقشِ فیلدِ «ویزیتِ بعدی» همان است که ترخیص هنگامِ نوشتن می‌سنجد: میز نباید
+       چیزی را پیشنهاد کند که سرور رد می‌کند. */
+    const clinical = await this.clinical();
+    const [canWriteSubforms, canFollowup, followLock] = await Promise.all([
+      canAccess(this.prisma, user, 'theatre', ['theatre.report']).catch(() => false),
+      clinical ? canAccess(this.prisma, user, 'theatre', ['theatre.followup']).catch(() => false) : Promise.resolve(false),
+      clinical ? this.patients.fieldLock(v.kind, 'nextVisitDate', user) : Promise.resolve(null),
+    ]);
     const p = v.patient;
     const done = new Map(v.safetyChecks.map((c) => [`${c.stage}/${c.key}`, c]));
     return {
@@ -333,6 +375,9 @@ export class TheatreService {
         dischargeRemark: noteBody(v.clinicalNotes, 'discharge_note'),
         dischargeDisposition: v.dischargeDisposition ?? null,
         dischargeDispositionFa: v.dischargeDisposition ? DISPOSITION_LABELS[v.dischargeDisposition] ?? v.dischargeDisposition : null,
+        /* ── بستهٔ ۸ (مطب) — پیش‌خوانِ پاپ‌آپِ ترخیص. ویزیتِ بعدی همان ستونِ فرمِ عمل است. ── */
+        dischargeRx: clinical ? noteBody(v.clinicalNotes, 'discharge_rx') : null,
+        nextVisitDate: clinical ? v.nextVisitDate ?? null : null,
         instructions: v.surgeonInstructions || null,
         notes: v.notes || null,
       },
@@ -366,6 +411,14 @@ export class TheatreService {
          نگاشتِ دومی از `pre/intra/post` داشته باشد. مدرکِ بی‌مرحله در گروهِ
          «پرونده» می‌نشیند، نه اینکه با فرضِ اشتباه «قبل از عمل» شود. */
       documents: TheatreService.docGroups(v.documents),
+      /* بستهٔ ۸ — زیرفرم‌های فرم‌سازِ همین عمل، به‌ترتیبِ مرحله. `summary` متنِ آمادهٔ نمایش است
+         (خلاصهٔ پیش از عمل)، `fields`/`data` برای پرکردنِ فرم‌های «حینِ عمل» سرِ میز. */
+      subforms: TheatreService.subformView(v.subforms),
+      /* `clinical`: داروهای ترخیص و ویزیتِ بعدی فقط در مطب — رابط از همین پرچم می‌خوانَد نه از حدسِ حوزه.
+         `locks.followup`: نامِ نقشی که «ویزیتِ بعدی» مالِ اوست، برای متنِ رابط (null = قفلی نیست). */
+      clinical,
+      can: { subforms: canWriteSubforms, followup: clinical && canFollowup && !followLock },
+      locks: { followup: followLock },
       /* ⚠️ همچنان برمی‌گردد با اینکه رابط دیگر نشانش نمی‌دهد: `setCheck`
          پاسخش همین کارت است و کارتِ بدونِ چک‌لیست یعنی endpointی که نتیجهٔ
          کارِ خودش را برنمی‌گرداند. بالا ↑ دلیلِ کاملِ ماندنش. */
@@ -377,6 +430,46 @@ export class TheatreService {
         }),
       })),
     };
+  }
+
+  /** نمای زیرفرم‌های میز — فقط فرم‌ساز (داخلی‌ها نمای خودشان را دارند: علائمِ حیاتی). */
+  private static subformView(rows: any[]) {
+    const rank = (p: string) => Math.max(0, (DOCUMENT_PHASES as readonly string[]).indexOf(p));
+    return (rows ?? [])
+      .filter((r) => r.form)
+      .map((r) => {
+        const fields = (r.form.fields ?? []).filter((f: any) => f.active !== false).map((f: any) => ({
+          key: f.key, label: f.label, type: f.type, required: !!f.required, options: f.options ?? [],
+          hint: f.hint ?? null, placeholder: f.placeholder ?? null, active: true,
+          role: f.role ?? null, roles: fieldRoles(f), roleLabel: fieldRoles(f).map(jobRoleLabel).join('، ') || null,
+        }));
+        return {
+          key: r.key, phase: r.phase ?? '', phaseFa: r.phase ? DOCUMENT_PHASE_FA[r.phase] ?? null : null,
+          title: r.form.title, inactive: r.form.active === false,
+          data: (r.data ?? {}) as Record<string, unknown>, fields,
+          summary: subformSummary({ fields }, r.data),
+        };
+      })
+      .sort((a, b) => rank(a.phase) - rank(b.phase));
+  }
+
+  /**
+   * **فرم‌های «حینِ عمل» از میزِ اتاقِ عمل** (بستهٔ ۸، طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶) — الصاق یا پرکردن.
+   *
+   * ⚠️ همان برنامه‌ریز، نویسنده و قفلِ نقشِ فیلدهایی که فرمِ عمل دارد (`PatientsService.saveSubforms`)
+   * — میز دورِ قاعده نیست. فقط مرحلهٔ «حینِ عمل»: ارزیابیِ پیش از عمل مالِ بیهوشی است و پیگیری مالِ
+   * بعد از ترخیص؛ هر دو در فرمِ عمل. دامنه همان دامنهٔ تخته (`this.scope`).
+   */
+  async saveSubforms(visitId: number, items: unknown, user: any) {
+    const v = await this.prisma.visit.findFirst({
+      where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
+      select: { id: true, kind: true, opStatus: true },
+    });
+    if (!v) throw new NotFoundException('عمل پیدا نشد');
+    if (v.kind !== 'surgery') throw new BadRequestException('فرم‌های حینِ عمل فقط روی عمل ثبت می‌شوند');
+    if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده فرمِ حینِ عمل نمی‌گیرد');
+    await this.patients.saveSubforms(visitId, items, user, { phases: ['intra'], via: 'theatre' });
+    return this.card(visitId, user);
   }
 
   /**
@@ -451,11 +544,18 @@ export class TheatreService {
    * ⚠️ زدنِ دوباره **ساعت را عوض نمی‌کند** و فقط نسخهٔ تازه‌ای از شرح ثبت
    * می‌کند. همان استدلالِ `stamp`: دستِ دستکش‌دار دکمه را دوباره می‌زند.
    */
-  async discharge(visitId: number, dto: { condition: string; disposition: string; summary?: string; remark?: string }, user: any) {
+  async discharge(
+    visitId: number,
+    dto: { condition: string; disposition: string; summary?: string; remark?: string; rx?: string; nextVisitDate?: string | null },
+    user: any,
+  ) {
     const condition = dto.condition;
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
-      select: { id: true, patientId: true, opStatus: true, opEndTime: true, dischargeAt: true },
+      select: {
+        id: true, patientId: true, kind: true, opStatus: true, opEndTime: true, opDate: true,
+        dischargeAt: true, dischargeDisposition: true, nextVisitDate: true,
+      },
     });
     if (!v) throw new NotFoundException('عمل پیدا نشد');
     if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده ترخیص نمی‌شود');
@@ -470,20 +570,72 @@ export class TheatreService {
        ستون برای حذفش آمد. */
     if (!DISPOSITION_LABELS[dto.disposition]) throw new BadRequestException('وضعیتِ خروج را انتخاب کنید');
 
+    /* ── بستهٔ ۸ (مطب، طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶): داروهای ترخیص و ویزیتِ بعدی — هر دو «نیامده = دست نزن». */
+    const wantsRx = dto.rx !== undefined;
+    const wantsNext = dto.nextVisitDate !== undefined;
+    if ((wantsRx || wantsNext) && !(await this.clinical())) {
+      throw new BadRequestException('داروهای ترخیص و ویزیتِ بعدی فقط در مطب ثبت می‌شوند');
+    }
+    const death = dto.disposition === 'death';
+    /* ⚠️ «فوت» با دارو و ویزیتِ بعدی جمع نمی‌شود: ویزیتِ بعدی ویزیتِ پست‌آپ و پیامکِ یادآوری
+       برای خانواده می‌کاشت. رد می‌شود نه بی‌صدا دور ریخته: کلاینتی که هر دو را فرستاده خبر ندارد. */
+    if (death && ((wantsRx && (dto.rx ?? '').trim()) || (wantsNext && dto.nextVisitDate))) {
+      throw new BadRequestException('با وضعیتِ خروجِ «فوت» داروی ترخیص و ویزیتِ بعدی ثبت نمی‌شود');
+    }
+    const day = (x: Date) => x.toISOString().slice(0, 10);
+    let nextDate: Date | undefined;
+    if (wantsNext && !death) {
+      /* برداشتن فقط از فرمِ عمل: ویزیتِ پست‌آپِ ساخته‌شده ممکن است نوبتِ رزروشده داشته باشد و
+         پاپ‌آپِ ترخیص جای دیدنِ آن نیست. */
+      if (dto.nextVisitDate === null || dto.nextVisitDate === '') {
+        throw new BadRequestException('برداشتنِ ویزیتِ بعدی از فرمِ عمل انجام می‌شود، نه از ترخیص');
+      }
+      const d = toDateValue(String(dto.nextVisitDate));
+      if (!d) throw new BadRequestException('تاریخِ ویزیتِ بعدی معتبر نیست');
+      if (v.opDate && day(d) < day(v.opDate)) throw new BadRequestException('ویزیتِ بعدی نمی‌تواند پیش از روزِ عمل باشد');
+      if (!(v.nextVisitDate && day(v.nextVisitDate) === day(d))) {
+        /* مجوزِ جدا (`theatre.followup`): ویزیتِ بعدی مراجعهٔ پست‌آپ می‌سازد و پیامک می‌کارد —
+           کاری فراتر از «ثبتِ ترخیص». و قفلِ نقشِ همان فیلد در فرمِ عمل، نه کپیِ دومِ قاعده. */
+        if (!(await canAccess(this.prisma, user, 'theatre', ['theatre.followup']).catch(() => false))) {
+          throw new ForbiddenException('تعیینِ ویزیتِ بعدی برای این حساب مجاز نیست');
+        }
+        await this.patients.assertFieldOwnership(v.kind, { nextVisitDate: d }, user, { nextVisitDate: v.nextVisitDate });
+        nextDate = d;
+      }
+    }
+    const clearNext = death && !!v.nextVisitDate;
+    const becameDeath = death && v.dischargeDisposition !== 'death';
+    /* اصلاحِ «فوت»ِ اشتباهی (فوت → منزل): بی‌این، یادآوری‌های لغوشده هرگز دوباره کاشته نمی‌شدند. */
+    const leftDeath = !death && v.dischargeDisposition === 'death';
+
     await this.prisma.$transaction(async (tx) => {
       await setVisitNote(tx, v, 'discharge', text, user);
       /* شرح و یادداشت اختیاری‌اند؛ `undefined` = دست نزن، رشتهٔ خالی = سندِ جاری را ببند. */
       if (dto.summary !== undefined) await setVisitNote(tx, v, 'discharge_summary', dto.summary, user);
       if (dto.remark !== undefined) await setVisitNote(tx, v, 'discharge_note', dto.remark, user);
+      /* «فوت» داروی جاری را هم می‌بندد — حتی اگر کلاینت این بار فیلدش را نفرستاده باشد. */
+      if (wantsRx || death) await setVisitNote(tx, v, 'discharge_rx', death ? '' : dto.rx ?? '', user);
       await tx.visit.update({
         where: { id: visitId },
-        data: { dischargeDisposition: dto.disposition, ...(v.dischargeAt ? {} : { dischargeAt: new Date() }) },
+        data: {
+          dischargeDisposition: dto.disposition,
+          ...(v.dischargeAt ? {} : { dischargeAt: new Date() }),
+          ...(nextDate ? { nextVisitDate: nextDate } : {}),
+          ...(clearNext ? { nextVisitDate: null } : {}),
+        },
       });
     });
+    /* پس از commit — ویزیتِ پست‌آپ و یادآوری‌ها همان مسیرِ فرمِ عمل (`afterVisitCreation`).
+       «فوت» هم باید بدود تا پیام‌های کاشته‌شده و پست‌آپِ در انتظار لغو شوند. */
+    if (nextDate || clearNext || becameDeath || leftDeath) await this.patients.afterVisitCreation(visitId);
     await this.audit.record({
       actorId: user?.id, action: v.dischargeAt ? 'visit.discharge_edit' : 'visit.discharge',
       entityType: 'visit', entityId: visitId,
-      after: { condition: text, disposition: dto.disposition, summary: dto.summary?.trim() || null, remark: dto.remark?.trim() || null },
+      after: {
+        condition: text, disposition: dto.disposition, summary: dto.summary?.trim() || null, remark: dto.remark?.trim() || null,
+        ...(wantsRx || death ? { rxLength: death ? 0 : (dto.rx ?? '').trim().length } : {}),
+        ...(nextDate || clearNext ? { nextVisitDate: { before: v.nextVisitDate, after: nextDate ?? null } } : {}),
+      },
     });
     return this.card(visitId, user);
   }

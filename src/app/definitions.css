@@ -300,3 +300,16 @@
 .df-overlay.df-quick-overlay { z-index: 140; height: 100dvh; box-sizing: border-box; padding: 12px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .df-quick-overlay .df-sheet { max-height: 100%; min-height: 0; margin: 0; overflow-y: auto; }
 .df-quick-error { position: fixed; z-index: 150; bottom: 24px; inset-inline: 24px; padding: 16px; background: var(--bg); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text1); }
+
+/* فرم‌های خودکارِ یک موضوعِ ویزیت (بستهٔ ۹) — چیپِ روشن/خاموش. */
+.df-subdefs > span { display: block; margin-bottom: 6px; }
+.df-subdefs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.df-subdef {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 0 13px; border-radius: 99px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
+  background: var(--row-bg); border: 1px solid rgba(var(--veil-rgb), .16);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.df-subdef.on { color: var(--text1); background: rgba(var(--brand-rgb), .14); border-color: rgba(var(--brand-2-rgb), .6); }
+.df-subdef:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .df-subdef { transition: none; } }

@@ -137,6 +137,13 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.TECH,
   },
   {
+    /* بستهٔ ۹ج — فقط مطب (پلانِ `verticals.ts` + مهاجرتِ ردیفِ features برای هر نصب). ماژولِ خودش و
+       نه زیرِ `dashboard`: پزشکِ سطح ۲ بیمارانِ منتظرِ خودش را می‌خواهد بی‌آنکه داشبوردِ مالی بگیرد. */
+    key: 'waitlist', label: 'فهرستِ انتظارِ عمل', group: 'modules',
+    hint: 'بیمارانی که در ویزیت کاندیدای جراحی شده‌اند و هنوز عمل نشده‌اند — با روزهای انتظار.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
     key: 'dispatch', label: 'چینشِ نیروها', group: 'modules',
     defaultLevel: LEVEL.SUPERVISOR,
   },
@@ -285,6 +292,26 @@ export const PERMISSIONS: AccessDef[] = [
        می‌برد بی‌آنکه ثبتِ ساعت را هم از کارشناس بگیرد. */
     key: 'theatre.discharge', label: 'ثبتِ ترخیص', group: 'patients',
     hint: 'پایانِ کارِ بیمار در اتاق: لحظهٔ ترخیص + شرحِ وضعیتِ او هنگامِ ترخیص.',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    /* ⚠️ جدا از `theatre.discharge` و عمداً بالاتر (بستهٔ ۸، مطب): «ویزیتِ بعدی» در پاپ‌آپِ
+       ترخیص فقط یک تاریخ نیست — ویزیتِ پست‌آپِ خودکار می‌سازد و پیامکِ یادآوری برای بیمار
+       می‌کارد. پرستاری که ترخیص را ثبت می‌کند لزوماً کسی نیست که برنامهٔ پیگیری را می‌چیند. */
+    key: 'theatre.followup', label: 'تعیینِ ویزیتِ بعدی هنگامِ ترخیص', group: 'patients',
+    hint: 'تاریخِ ویزیتِ بعدی در پاپ‌آپِ ترخیص — ویزیتِ پست‌آپ و یادآوری‌هایش از همین تاریخ ساخته می‌شوند.',
+    defaultLevel: LEVEL.TECH_ADMIN,
+  },
+  {
+    key: 'waitlist.read', label: 'دیدنِ فهرستِ انتظارِ عمل', group: 'patients',
+    hint: 'زیرِ سوپروایزر فقط بیمارانِ خودِ همان کاربر (جراح یا کارشناسِ همان مراجعه).',
+    defaultLevel: LEVEL.TECH,
+  },
+  {
+    /* هم‌سطحِ «دیدن»: «بیمار عمل نخواست» تصمیمِ همان پزشک است، و دامنه (`scopedVisitWhere`) او را به
+       بیمارانِ خودش محدود می‌کند. برگشت‌پذیر است و در `audit` ثبت می‌شود. */
+    key: 'waitlist.manage', label: 'بستن/بازکردنِ تصمیمِ جراحی', group: 'patients',
+    hint: 'بیماری که عمل نمی‌خواهد یا جای دیگر عمل کرده از فهرست بیرون می‌رود — با دلیل و قابلِ برگشت.',
     defaultLevel: LEVEL.TECH,
   },
   {

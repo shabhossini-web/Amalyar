@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
+import { faDate, jStrToIso, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import DynForm, { dynErrors } from '../ui/DynForm.jsx';
+import { AttachPicker, useSubformCatalog } from './VisitSubforms.jsx';
+import { useAuth } from './auth.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
-import { Alert, Back, Close, Clock, Form, LogOut, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
+import { Alert, Back, Close, Clock, Form, LogOut, Plus, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
 import './theatre.css';
 import './definitions.css';
 import './launcher.css';
@@ -23,6 +26,9 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
  */
 const counted = (label, n) => <>{label} <b className="th-own-n">{faNum(n)}</b></>;
 const GENDER_FA = { male: 'مرد', female: 'زن' };
+/* «ویزیتِ بعدی» روزِ تقویمی است (نیمه‌شبِ UTC) — از اجزا، نه `new Date` که در منطقهٔ منفی روزِ قبل می‌شود. */
+const nextYmd = (iso) => (iso ? String(iso).slice(0, 10) : '');
+const nextJ = (iso) => ymdToJStr(nextYmd(iso));
 
 /** «HH:MM» → دقیقه؛ برای مدتِ سپری‌شده. ساعتِ دیوار است، پس همان‌روز حساب می‌شود. */
 const mins = (t) => {
@@ -182,11 +188,24 @@ export default function Theatre() {
               disposition: card.visit.dischargeDisposition ?? '',
               summary: card.visit.dischargeSummary ?? '',
               remark: card.visit.dischargeRemark ?? '',
+              rx: card.visit.dischargeRx ?? '',
+              nextVisitDateJ: nextJ(card.visit.nextVisitDate),
             }}
+            clinical={!!card.clinical}
+            canFollowUp={!!card.can?.followup}
+            followLock={card.locks?.followup ?? null}
             already={!!card.visit.dischargeAt}
             busy={busy === 'discharge'}
             onClose={() => setDischarging(false)}
-            onSave={async (body) => {
+            onSave={async (f) => {
+              /* بدنه صریح ساخته می‌شود نه `f`ِ خام: `nextVisitDateJ` مقدارِ کادر است نه فیلدِ API. */
+              const body = { condition: f.condition, disposition: f.disposition, summary: f.summary, remark: f.remark };
+              if (card.clinical && f.disposition !== 'death') {
+                body.rx = f.rx ?? '';
+                const iso = f.nextVisitDateJ ? jStrToIso(f.nextVisitDateJ) : null;
+                /* فقط تاریخِ **تازه** — همان تاریخ یعنی «دست نزن» (سرور هم همین را می‌فهمد). */
+                if (card.can?.followup && iso && iso !== nextYmd(card.visit.nextVisitDate)) body.nextVisitDate = iso;
+              }
               const done = await act('/discharge', 'discharge', body);
               if (done) { setDischarging(false); setToast('ترخیص ثبت شد'); }
             }}
@@ -361,6 +380,9 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
         ))}
       </section>
 
+      {/* بستهٔ ۸: در مطب همیشه (جای خالی خودش خبر است)؛ در نصبِ شرکتی فقط اگر واقعاً فرمی الصاق شده. */}
+      {(card.clinical || (card.subforms ?? []).some((x) => x.phase === 'pre')) && <PreOpSummary subforms={card.subforms ?? []} />}
+
       <section className="th-clock" aria-label="ساعتِ عمل">
         <div className="th-times">
           <span>شروع <b dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</b></span>
@@ -392,6 +414,8 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
           <h3>ترخیص — {faDate(v.dischargeAt)}{v.dischargeDispositionFa ? ` · ${v.dischargeDispositionFa}` : ''}</h3>
           <p>{v.dischargeNote || '—'}</p>
           {v.dischargeSummary && <p className="th-dsum"><b>شرحِ ترخیص</b><span>{v.dischargeSummary}</span></p>}
+          {v.dischargeRx && <p className="th-dsum" data-discharged-rx><b>داروهای ترخیص</b><span>{v.dischargeRx}</span></p>}
+          {v.nextVisitDate && <p className="th-dsum" data-discharged-next><b>ویزیتِ بعدی</b><span>{faDate(nextYmd(v.nextVisitDate))}</span></p>}
           {v.dischargeRemark && <p className="th-dsum"><b>یادداشت</b><span>{v.dischargeRemark}</span></p>}
         </section>
       )}
@@ -409,6 +433,13 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
         visit={v} field="opReport" path="/report" actKey="report"
         title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
         savedMsg="شرحِ عمل ذخیره شد" busy={busy} onAct={onAct} onToast={onToast}
+      />
+
+      <DeskSubforms
+        key={`subs-${v.id}`}
+        subforms={(card.subforms ?? []).filter((x) => x.phase === 'intra')}
+        canWrite={!!card.can?.subforms} canAttach={!!card.clinical && !!card.can?.subforms}
+        busy={busy} onAct={onAct} onToast={onToast}
       />
 
       <Documents visitId={v.id} groups={documents} />
@@ -625,6 +656,129 @@ function Documents({ visitId, groups }) {
 }
 
 /**
+ * **ارزیابیِ پیش از عمل سرِ میز** (بستهٔ ۸) — پاسخ‌های زیرفرم‌های الصاق‌شده به مرحلهٔ «قبل از عمل»
+ * (مثلِ «فرم ارزیابیِ بیهوشی (ASA)»)، فقط‌خواندنی، درست کنارِ هشدارها: لحظهٔ تایم‌اوت همین‌جاست.
+ * ⚠️ متنِ هر سطر را سرور می‌سازد (`summary`، قانونِ ۱۵) — این‌جا هیچ برچسب یا گزینه‌ای ترجمه نمی‌شود.
+ */
+function PreOpSummary({ subforms }) {
+  const pre = subforms.filter((x) => x.phase === 'pre');
+  return (
+    <section className={`th-pre${pre.length ? ' on' : ''}`} aria-label="ارزیابیِ پیش از عمل">
+      <h3>ارزیابیِ پیش از عمل</h3>
+      {pre.length === 0 ? (
+        <p className="th-pre-none">در فرمِ عمل فرمی برای «قبل از عمل» الصاق نشده — مثلِ فرم ارزیابیِ بیهوشی (ASA).</p>
+      ) : pre.map((x) => (
+        <div key={x.key} className="th-pre-row">
+          <b>{x.title}</b>
+          {x.summary?.length ? (
+            <p>{x.summary.map((l) => <span key={l.label}><em>{l.label}</em> {l.text}</span>)}</p>
+          ) : <p className="th-pre-none">الصاق شده ولی هنوز پر نشده.</p>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+/**
+ * **فرم‌های حینِ عمل سرِ میز** (بستهٔ ۸، طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶) — همان زیرفرم‌هایی که در تبِ «حینِ عمل»ِ
+ * فرمِ عمل الصاق شده‌اند (مثلِ «فرم جزئیاتِ حینِ عمل») این‌جا پر و ذخیره می‌شوند، و اگر هنوز فرمی
+ * الصاق نشده، از همین‌جا الصاق می‌شود — جراحِ وسطِ عمل برای یک فرم به فرمِ عمل برنمی‌گردد.
+ *
+ * ⚠️ یک نویسنده: `POST /theatre/visits/:id/subforms` همان `writeSubforms` و قفلِ نقشِ فیلدهای فرمِ
+ * عمل است؛ هرچه این‌جا ذخیره شود در تبِ «حینِ عمل» هم دیده می‌شود. خطای «اجباری» پیش از رفت‌وبرگشت
+ * کنارِ فیلد نشان داده می‌شود (`dynErrors` — همان قاعدهٔ سرور).
+ * ⚠️ پنجرهٔ الصاق همان `AttachPicker`ِ فرمِ مراجعه است (بی‌ستارهٔ منتخب و بی‌انتخابِ مرحله) — نه
+ * نسخهٔ موازی. کاتالوگ فقط با بازشدنِ پنجره خوانده می‌شود.
+ */
+function DeskSubforms({ subforms, canWrite, canAttach, busy, onAct, onToast }) {
+  const { user: me } = useAuth();
+  /* همان نقشی که فرمِ مراجعه به `DynForm` می‌دهد — قفلِ نمایشی؛ اجرای واقعی سمتِ سرور است. */
+  const myRole = (me?.level ?? 0) >= 6 ? null : (me?.jobRole ?? null);
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState({});
+  const [errors, setErrors] = useState({});
+  const [picking, setPicking] = useState(false);
+  const cat = useSubformCatalog(picking);
+  if (!subforms.length && !canAttach) return null;
+  const saving = busy === 'subforms';
+  const start = (x) => { setDraft(x.data ?? {}); setErrors({}); setEditing(x.key); };
+  const save = async (x) => {
+    const e = dynErrors(x.fields ?? [], draft, myRole);
+    setErrors(e);
+    if (Object.keys(e).length) return;
+    if (await onAct('/subforms', 'subforms', { items: [{ key: x.key, phase: 'intra', data: draft }] })) {
+      setEditing(null);
+      onToast?.(`«${x.title}» ذخیره شد`);
+    }
+  };
+  /* الصاق بی‌پاسخ می‌رود (`data` نیامده = «دست نزن»): فرمِ تازه هنوز کادرِ اجباریِ پرشده ندارد و
+     سرور ستاره را روی پاسخِ فرستاده‌شده می‌سنجد. بعدش همان‌جا برای پرکردن باز می‌شود. */
+  const attach = async (it) => {
+    if (await onAct('/subforms', 'subforms', { items: [{ key: it.key, phase: 'intra' }] })) {
+      setPicking(false);
+      setDraft({}); setErrors({}); setEditing(it.key);
+    }
+  };
+  /* فقط آنچه به «حینِ عمل» می‌خورد: زیرفرمِ آمادهٔ همین مرحله و فرم‌های ساختِ خودِ مطب. ارزیابی‌ها (ASA، قد و
+     وزن) و پیگیریِ پس از عمل جایشان تبِ خودشان در فرمِ عمل است — فهرستِ ده‌تایی وسطِ عمل فقط مکث می‌آورد. */
+  const items = (cat?.items ?? []).filter((x) => !x.builtin && x.active !== false && (x.defaultPhase === 'intra' || x.group === 'custom'));
+  return (
+    <section className="th-subs" aria-label="فرم‌های حینِ عمل" data-desk-subforms>
+      <div className="th-subs-head">
+        <h3>فرم‌های حینِ عمل</h3>
+        {canAttach && (
+          <button type="button" className="th-btn th-subs-add" onClick={() => setPicking(true)} disabled={saving} data-act="desk-attach">
+            <Plus width="14" height="14" aria-hidden="true" /> الصاقِ فرم
+          </button>
+        )}
+      </div>
+      {!subforms.length && (
+        <p className="th-pre-none">در فرمِ عمل فرمی برای «حینِ عمل» الصاق نشده — مثلِ «فرم جزئیاتِ حینِ عمل» (تیم، خون‌ریزی، نمونه، درن، ایمپلنت).</p>
+      )}
+      {subforms.map((x) => (
+        <div key={x.key} className="th-sub" data-desk-subform={x.key}>
+          <div className="th-sub-head">
+            <b>{x.title}</b>
+            {x.inactive && <small className="th-sub-off">در فرم‌ساز خاموش است</small>}
+            {canWrite && editing !== x.key && (
+              <button type="button" className="th-btn" onClick={() => start(x)} disabled={saving} data-act="desk-subform-edit">
+                {x.summary?.length ? 'ویرایش' : 'پرکردن'}
+              </button>
+            )}
+          </div>
+          {editing === x.key ? (
+            <div className="th-sub-form">
+              <DynForm
+                fields={x.fields ?? []} values={draft} errors={errors} myRole={myRole} disabled={saving}
+                onChange={(v) => { setDraft(v); if (Object.keys(errors).length) setErrors(dynErrors(x.fields ?? [], v, myRole)); }}
+              />
+              <div className="th-report-bar">
+                <span className="th-hint">همان فرمِ تبِ «حینِ عمل»؛ هرچه این‌جا ذخیره شود در فرمِ عمل هم دیده می‌شود.</span>
+                <button type="button" className="th-btn" onClick={() => setEditing(null)} disabled={saving}>انصراف</button>
+                <button type="button" className="th-btn primary" onClick={() => save(x)} disabled={saving} data-act="desk-subform-save">
+                  {saving ? 'در حالِ ذخیره…' : 'ذخیره'}
+                </button>
+              </div>
+            </div>
+          ) : x.summary?.length ? (
+            <p className="th-sub-sum">{x.summary.map((l) => <span key={l.key ?? l.label}><em>{l.label}</em> {l.text}</span>)}</p>
+          ) : <p className="th-pre-none">الصاق شده ولی هنوز پر نشده.</p>}
+        </div>
+      ))}
+      {canAttach && (
+        <AttachPicker
+          open={picking} onClose={() => setPicking(false)}
+          title="الصاقِ فرم به «حینِ عمل»" visitWord="عمل"
+          groups={cat?.groups ?? []} items={items} loading={!cat}
+          attached={new Set(subforms.map((x) => x.key))}
+          onAttach={attach}
+        />
+      )}
+    </section>
+  );
+}
+
+/**
  * **پاپ‌آپِ ترخیص** — «با زدنِ ترخیص، توضیحِ وضعیت حینِ ترخیص باید پاپ‌آپ شه،
  * پر شه، سیو شه» (بازخوردِ مالک).
  *
@@ -632,12 +786,16 @@ function Documents({ visitId, groups }) {
  * است که می‌گوید بیمار رفت و نمی‌گوید در چه حالی — و همان سطر سندِ پرونده
  * می‌شود. سرور هم دوباره همین را می‌سنجد.
  */
-function DischargeDialog({ initial, already, busy, onClose, onSave }) {
+function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = false, canFollowUp = false, followLock = null }) {
   const dispositions = useStatusList('disposition');
   const [f, setF] = useState(initial);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  /* تاریخِ نیمه‌تایپ‌شده یعنی ترخیصی که «ثبت شد» می‌گوید ولی ویزیتِ بعدی را بی‌صدا جا انداخته. */
+  const nextBad = clinical && canFollowUp && f.disposition !== 'death' && !!f.nextVisitDateJ && !jStrToIso(f.nextVisitDateJ);
+  /* برداشتنِ تاریخ از ترخیص انجام نمی‌شود (پست‌آپِ ساخته‌شده شاید نوبت داشته باشد) — کادرِ خالی‌شده «دست نزن» است. */
+  const clearing = clinical && canFollowUp && !!initial.nextVisitDateJ && !f.nextVisitDateJ;
   /* وضعیتِ خروج و وضعیتِ بیمار اجباری‌اند؛ شرح و یادداشت اختیاری. */
-  const ok = f.condition.trim().length >= 2 && !!f.disposition;
+  const ok = f.condition.trim().length >= 2 && !!f.disposition && !nextBad;
   return (
     <Overlay
       backdrop="th-overlay" panel="th-dialog" as="form" from="center"
@@ -675,10 +833,46 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
         <span>شرحِ ترخیص <i>اختیاری</i></span>
         <textarea
           rows={4} value={f.summary} data-discharge-summary
-          placeholder="سیرِ بستری، داروهای ترخیص، توصیه‌ها، زمانِ مراجعهٔ بعدی…"
+          placeholder="سیرِ بستری، توصیه‌ها…"
           onChange={set('summary')}
         />
       </label>
+      {/* بستهٔ ۸: داروها و ویزیتِ بعدی هم همین‌جا — «ویزیتِ بعدی» همان تاریخی است که ویزیتِ پست‌آپِ
+          خودکار و پیامک‌هایش از آن ساخته می‌شوند. «فوت» هر دو را می‌بندد و پیامک‌های پس از عمل را لغو می‌کند. */}
+      {clinical && (f.disposition === 'death' ? (
+        <p className="th-death" role="note" data-discharge-death>
+          <Alert width="15" height="15" aria-hidden="true" />
+          با «فوت» داروی ترخیص و ویزیتِ بعدی ثبت نمی‌شود؛ پیامک‌های پس از عمل و ویزیتِ پست‌آپِ در انتظار خودکار لغو می‌شوند.
+          اگر اشتباهی زده شد، با انتخابِ وضعیتِ دیگر برمی‌گردند.
+        </p>
+      ) : (
+        <>
+          <label className="th-dialog-field">
+            <span>داروهای ترخیص <i>اختیاری</i></span>
+            <textarea
+              rows={3} value={f.rx ?? ''} data-discharge-rx
+              placeholder="نامِ دارو، دوز، دفعات، مدت…"
+              onChange={set('rx')}
+            />
+          </label>
+          {canFollowUp ? (
+            <div className="th-dialog-field th-next" data-discharge-next>
+              <JDate label={<>ویزیتِ بعدی <i>اختیاری</i></>} value={f.nextVisitDateJ ?? ''}
+                     onChange={(v) => setF((x) => ({ ...x, nextVisitDateJ: v }))} placeholder="سال / ماه / روز" />
+              {nextBad ? <em className="th-hint is-err" role="alert">تاریخ را کامل و درست بنویسید — مثلاً ۱۴۰۵/۰۷/۲۰</em>
+                : clearing ? <em className="th-hint is-warn">برداشتنِ ویزیتِ بعدی از فرمِ عمل انجام می‌شود؛ این‌جا همان تاریخِ قبلی می‌ماند.</em>
+                  : <em className="th-hint">با این تاریخ ویزیتِ پست‌آپ و یادآوری‌هایش ساخته می‌شود؛ اگر از قبل تاریخی بود، همان جابه‌جا می‌شود.</em>}
+            </div>
+          ) : (initial.nextVisitDateJ || followLock) ? (
+            /* بی‌مجوز: تاریخِ فعلی دیده شود (نه کادرِ مرده) و بگوید مالِ کیست. */
+            <p className="th-next-ro" data-discharge-next-ro>
+              <b>ویزیتِ بعدی</b>
+              <span>{initial.nextVisitDateJ ? faDate(jStrToIso(initial.nextVisitDateJ)) : 'تعیین نشده'}</span>
+              <small>{followLock ? `تعیینش بخشِ ${followLock} است.` : 'تعیینش با حسابِ شما نیست.'}</small>
+            </p>
+          ) : null}
+        </>
+      ))}
       <label className="th-dialog-field">
         <span>یادداشت <i>اختیاری</i></span>
         <textarea
@@ -687,7 +881,7 @@ function DischargeDialog({ initial, already, busy, onClose, onSave }) {
           onChange={set('remark')}
         />
       </label>
-      <p className="th-hint">هر سه متن در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
+      <p className="th-hint">متن‌ها در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
       <div className="th-dialog-acts">
         <button type="button" className="th-btn" onClick={onClose} disabled={busy}>انصراف</button>
         <button type="submit" className="th-btn primary" disabled={!ok || busy}>
