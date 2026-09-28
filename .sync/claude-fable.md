@@ -1,25 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/p89-replan
 since: 2026-09-28
-paths:
-  - src/app/Waitlist.jsx
-  - src/app/waitlist.css
-  - src/app/Theatre.jsx
-  - src/app/theatre.css
-  - src/app/Definitions.jsx
-  - src/app/VisitForm.jsx
-  - src/app/VisitSubforms.jsx
-  - src/app/PatientRecord.jsx
-  - server/src/patients/theatre.*
-  - server/src/patients/waitlist.*
-  - server/src/patients/subforms.ts
-  - server/prisma/migrations/20260930*
+paths: []
 note: >-
-  بسته‌های ۸+۹ (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶، روی زیرفرم‌ها): زیرفرمِ آمادهٔ «حینِ عمل»، زیرفرم‌ها روی میزِ اتاقِ عمل،
-  داروی ترخیص و ویزیتِ بعدی (+ قاعدهٔ فوت)، پاسخِ زیرفرم‌ها در پرونده، فرم‌های خودکارِ موضوع، عملِ «هنوز تاریخ
-  ندارد»، «فهرستِ انتظارِ عمل». سمت/سطحِ عمل به خواستِ مالک حذف شد. PR #98 با این جایگزین و بسته می‌شود.
+  بسته‌های ۸+۹ (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶، روی زیرفرم‌ها) با PR #117 در main مرج شد و PR #98 به‌جایش بسته
+  شد. کارِ باز ندارم؛ فقط عیب‌یابیِ پیامکِ پست‌آپ منتظرِ اسکرین‌شاتِ مالک است (بدونِ کد).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
