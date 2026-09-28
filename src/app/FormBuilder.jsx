@@ -964,7 +964,7 @@ function NewFormSheet({ onClose, onCreated, scope = 'visit' }) {
               />
             ))}
           </span>
-        ), 'در داشبورد کارتِ این فرم با همین رنگ دیده می‌شود.')}
+        ), 'در فهرستِ بیماران کارتِ این فرم با همین رنگ دیده می‌شود.')}
 
         {form.scope === 'visit' && (
           <p className="fb-note">

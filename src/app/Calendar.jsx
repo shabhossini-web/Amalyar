@@ -217,7 +217,7 @@ export default function Calendar() {
               </small>
               {v.techName && <small className="cal-tech">کارشناس: {v.techName}{v.techArriveTime ? ` — حضور ${v.techArriveTime}` : ''}</small>}
             </div>
-            <Link className="cal-open" to={`/app/dashboard?patient=${v.id}`} title="بازکردن در داشبورد">
+            <Link className="cal-open" to={`/app/dashboard?patient=${v.id}`} title="بازکردن در فهرستِ بیماران">
               <span dir="ltr">{v.code}</span>
             </Link>
           </article>

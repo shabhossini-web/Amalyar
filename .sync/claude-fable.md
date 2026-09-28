@@ -7,6 +7,9 @@ paths:
   - .claude/skills/ux-audit/
   - .claude/skills/ui-ux-pro-max/SKILL.md
   - scripts/ux/
+  - src/app/PatientRecord.jsx
+  - src/app/Calendar.jsx
+  - src/app/FormBuilder.jsx
 note: >-
   بررسیِ کاملِ UX عمل‌یار به خواستِ مالک (۱۴۰۵/۰۷/۰۶): اسکیلِ تازهٔ `ux-audit` + ابزارِ عکس‌برداری
   (`scripts/ux/*`) + گزارشِ بند‌به‌بند برای تصمیمِ مالک. رفعِ باگ‌های قطعیِ گزارش پس از آن، روی همین شاخه.

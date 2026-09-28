@@ -1503,7 +1503,7 @@ export default function PatientRecord() {
     <div className="df">
       <div className="df-bg" />
       <header className="df-head">
-        <Link className="df-back" to="/app/dashboard"><Back width="14" height="14" /> داشبورد</Link>
+        <Link className="df-back" to="/app/dashboard"><Back width="14" height="14" /> بیماران</Link>
         <div>
           <h1>{rec.fullName}</h1>
           <p>
