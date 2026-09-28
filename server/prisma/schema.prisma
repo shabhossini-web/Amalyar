@@ -318,6 +318,13 @@ model VisitTopic {
   sort      Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
 
+  /// کلیدِ پایدارِ موضوع‌های استاندارد (`initial`/`preop`/`postop`/`followup`) — کد به **نام** تکیه
+  /// نمی‌کند: مطبی که «پست‌آپ» را «ویزیتِ پس از جراحی» بنامد، ویزیتِ پست‌آپِ خودکارش بی‌موضوع نماند.
+  systemKey       String?  @unique @map("system_key")
+  /// زیرفرم‌هایی که با انتخابِ این موضوع در ویزیتِ تازه خودشان الصاق می‌شوند (کلیدِ `FormDef`/داخلی)
+  /// — قابلِ تنظیم در «تعاریف ← موضوعِ ویزیت» (بستهٔ ۹الف).
+  defaultSubforms String[] @default([]) @map("default_subforms")
+
   visits Visit[]
 
   /// روزهای کاری‌ای که این موضوع رویشان مجاز است، و نوبت‌هایی که گرفته‌اند.
@@ -1338,6 +1345,9 @@ model Visit {
   topicId Int?        @map("topic_id")
 
   opDate   DateTime? @map("op_date") // تاریخِ عمل
+  /// **تاریخِ تقریبیِ** عملِ «هنوز تاریخ ندارد» (بستهٔ ۹ب) — فقط برای برنامه‌ریزی و فهرستِ انتظار؛
+  /// هیچ پیامک، یادآوری، تقویم یا اتاقِ عملی از آن راه نمی‌افتد. با آمدنِ `opDate` پاک می‌شود.
+  plannedDate DateTime? @map("planned_date")
 
   /// پیگیریِ **اختصاصیِ همین بیمار** — جراح بعد از عمل همان‌جا تعیین می‌کند؛
   /// خالی = قالب/روزهای نوعِ عمل (تعریف‌های پایه). override است نه کپی:
@@ -1345,6 +1355,11 @@ model Visit {
   /// تصمیمِ درمانیِ این ویزیت — چندتایی (آزمایش + مشاوره هم‌زمان ممکن است):
   /// surgery | conservative | referral | consult | lab | imaging
   decisions     String[] @default([])
+  /// **بستنِ تصمیمِ جراحیِ بی‌عمل** (بستهٔ ۹ج) — بیمار نخواست، جای دیگر عمل کرد، … — برگشت‌پذیر.
+  /// کلید از `DECISION_CLOSE_LABELS`؛ ستونِ خودش و نه حذفِ `surgery` از `decisions`: تصمیمِ پزشک
+  /// سندِ همان ویزیت است و نباید با بستنِ پیگیری‌اش پاک شود.
+  surgeryDecisionClosedAt    DateTime? @map("surgery_decision_closed_at")
+  surgeryDecisionCloseReason String?   @map("surgery_decision_close_reason")
 
   /// ویزیتِ پست‌آپِ خودکار: این مراجعه «اولین مراجعهٔ بعد از» کدام عمل است؟
   /// حذفِ عمل، این را مستقل می‌کند (SetNull) — نه اینکه ویزیت را ببرد.

@@ -4,7 +4,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
-import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, OPERATION_FORM_TITLE, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PAY_BOX_LABEL, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, companyVisitFormTitle, coreFamily, isCoreKey, isUndated } from './form-presets';
+import { BUILTIN_VISIT_KEYS, CLINIC_CORE, CLINIC_MEDIA_FIELDS, OPERATION_FORM_TITLE, POSTOP_FOLLOWUP, PRESETS, REGISTRATION_PAY_BOX_LABEL, REGISTRATION_PRESETS, REGISTRATION_V2, PresetForm, SUBFORM_PRESETS, SUBFORM_PRESETS_V1, SUBFORM_PRESET_KEYS_SETTING, UNDATED_KEY, VISIT_BUILTIN_CATALOG, VISIT_CATALOG_KEYS, companyVisitFormTitle, coreFamily, isCoreKey, isUndated } from './form-presets';
 import { BUILTIN_SUBFORMS, BUILTIN_SUBFORM_KEYS, SUBFORM_GROUPS, SUBFORM_PRESET_GROUP, SubformDef, defaultSurgeryPhase, shortTitle } from './subforms';
 import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
@@ -528,10 +528,44 @@ export class FormsService {
    */
   private async ensureSubformPresets() {
     if ((await this.config.vertical()) !== 'clinic') return;
-    const key = 'subform_presets_installed';
-    if ((await this.prisma.setting.findUnique({ where: { key } }))?.value === 'true') return;
-    await this.seedFrom(SUBFORM_PRESETS);
-    await this.prisma.setting.upsert({ where: { key }, create: { key, value: 'true' }, update: { value: 'true' } });
+    /* ⚠️ **به‌ازای کلید**، نه یک پرچمِ کلی (بستهٔ ۸): زیرفرمِ آمادهٔ تازه («جزئیاتِ حینِ عمل») باید به
+       نصب‌های موجود هم برسد، ولی زیرفرمی که مدیر عمداً پاک کرده برنگردد. پس فهرستِ کلیدهایی که
+       یک‌بار نصب شده‌اند نگه داشته می‌شود؛ نصبی که فقط پرچمِ قدیمی را دارد یعنی چهار کلیدِ نسخهٔ اول. */
+    const flag = await this.prisma.setting.findUnique({ where: { key: 'subform_presets_installed' } });
+    const list = await this.prisma.setting.findUnique({ where: { key: SUBFORM_PRESET_KEYS_SETTING } });
+    let done: string[] = [];
+    try { done = list?.value ? JSON.parse(list.value) : []; } catch { done = []; }
+    if (!list && flag?.value === 'true') done = [...SUBFORM_PRESETS_V1];
+    const todo = SUBFORM_PRESETS.filter((p) => !done.includes(p.key));
+    if (todo.length) {
+      await this.seedFrom(todo);
+      await this.markSubformPresets([...done, ...todo.map((p) => p.key)]);
+    }
+    await this.ensureTopicDefaults();
+  }
+
+  /**
+   * **فرم‌های خودکارِ موضوع — نصبِ یک‌باره** (بستهٔ ۹الف، طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶): ویزیتِ قبل از عمل ←
+   * «فرم ارزیابیِ بیهوشی (ASA)»، ویزیتِ بعد از عمل ← «فرم پیگیریِ پس از عمل». فقط موضوعِ کلیددارِ
+   * **خالی** و فقط زیرفرمی که هست؛ از آن به بعد مالِ مدیر است (تعاریف ← موضوعِ ویزیت) — پرچم نمی‌گذارد
+   * انتخابِ «هیچ» یا پاک‌شدنِ زیرفرم در بوتِ بعدی برگردد.
+   */
+  private async ensureTopicDefaults() {
+    const FLAG = 'topic_default_subforms_seeded';
+    if ((await this.prisma.setting.findUnique({ where: { key: FLAG } }))?.value === 'true') return;
+    const seeds: [string, string][] = [['preop', 'subform.asa'], ['postop', 'subform.postop']];
+    for (const [systemKey, key] of seeds) {
+      if (!await this.prisma.formDef.findFirst({ where: { key, scope: 'subform' }, select: { id: true } })) continue;
+      await this.prisma.visitTopic.updateMany({ where: { systemKey, defaultSubforms: { isEmpty: true } }, data: { defaultSubforms: [key] } });
+    }
+    await this.prisma.setting.upsert({ where: { key: FLAG }, create: { key: FLAG, value: 'true' }, update: { value: 'true' } });
+  }
+
+  /** ثبتِ کلیدهای نصب‌شدهٔ زیرفرم‌های آماده (+ پرچمِ قدیمی برای سازگاری). */
+  private async markSubformPresets(keys: string[]) {
+    const value = JSON.stringify([...new Set(keys)]);
+    await this.prisma.setting.upsert({ where: { key: SUBFORM_PRESET_KEYS_SETTING }, create: { key: SUBFORM_PRESET_KEYS_SETTING, value }, update: { value } });
+    await this.prisma.setting.upsert({ where: { key: 'subform_presets_installed' }, create: { key: 'subform_presets_installed', value: 'true' }, update: { value: 'true' } });
   }
 
   /**
@@ -900,8 +934,7 @@ export class FormsService {
        «الصاقِ فرم» را برای همیشه خالی می‌کرد. */
     if (v === 'clinic') {
       await this.seedFrom(SUBFORM_PRESETS);
-      const flag = 'subform_presets_installed';
-      await this.prisma.setting.upsert({ where: { key: flag }, create: { key: flag, value: 'true' }, update: { value: 'true' } });
+      await this.markSubformPresets(SUBFORM_PRESETS.map((p) => p.key));
     }
     return this.list();
   }

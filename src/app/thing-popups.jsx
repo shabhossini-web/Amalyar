@@ -117,7 +117,8 @@ export function ThingPopups({ things, onVisitSaved }) {
                 setTimeout(() => things.show({ type: 'visit', prefill: surgeryPrefill(saved) }), 400);
                 return;
               }
-              say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
+              const word = saved?.kind === 'surgery' ? t.surgery : t.visit;
+              say(wasEdit ? `${word} ویرایش شد ✓` : `${word} ثبت شد ✓`);
             }}
             onToast={(m) => say(m)}
           />

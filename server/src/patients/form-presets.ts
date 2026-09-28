@@ -524,6 +524,11 @@ export const POSTOP_FOLLOWUP: PresetForm = {
  * ثبت کنم»، و ستاره‌ای که ذخیرهٔ مراجعه را تا پرشدنِ کاملِ زیرفرم ببندد، الصاقِ سریع را
  * بی‌معنی می‌کرد. گروهِ هرکدام در پنجره از `SUBFORM_PRESET_GROUP` (`subforms.ts`) می‌آید.
  */
+/** کلیدهای نسخهٔ اولِ زیرفرم‌های آماده — نصبی که فقط پرچمِ قدیمیِ `subform_presets_installed` را دارد همین‌ها را گرفته است. */
+export const SUBFORM_PRESETS_V1 = ['subform.growth', 'subform.wound', 'subform.postop', 'subform.asa'] as const;
+/** فهرستِ کلیدهای نصب‌شده (JSON) — زیرفرمِ آمادهٔ تازه فقط یک‌بار به هر نصب می‌رسد. */
+export const SUBFORM_PRESET_KEYS_SETTING = 'subform_presets_keys';
+
 export const SUBFORM_PRESETS: PresetForm[] = [
   {
     key: 'subform.growth', title: 'فرم قد و وزن', scope: 'subform',
@@ -574,6 +579,29 @@ export const SUBFORM_PRESETS: PresetForm[] = [
         { v: 'full', l: 'کامل' }, { v: 'partial', l: 'نسبی' }, { v: 'notYet', l: 'هنوز نه' },
       ] },
       { key: 'meds', label: 'داروها طبقِ دستور مصرف می‌شود', type: 'bool' },
+    ],
+  },
+  /* بستهٔ ۸ (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶): جزئیاتِ حینِ عمل یک **زیرفرم** است، نه جدول یا کادرِ ثابتِ
+     دوم — همان قاعدهٔ «هر چیزی که به مراجعه اضافه می‌شود زیرفرم است». مرحلهٔ پیش‌فرضش «حینِ عمل»
+     (`defaultSurgeryPhase`)؛ سرِ میزِ اتاقِ عمل هم پر می‌شود (`TheatreService.saveSubforms`). */
+  {
+    key: 'subform.intra', title: 'فرم جزئیاتِ حینِ عمل', scope: 'subform',
+    hint: 'تیم، طبقِ برنامه، خون‌ریزی، نمونه، درن، ایمپلنت',
+    fields: [
+      { key: 'assistantSurgeon', label: 'کمک‌جراح', type: 'text' },
+      { key: 'anesthesiologist', label: 'متخصصِ بیهوشی', type: 'text' },
+      { key: 'asPlanned', label: 'طبقِ برنامه انجام شد', type: 'select', options: [
+        { v: 'yes', l: 'بله' }, { v: 'changed', l: 'تغییر کرد' },
+      ] },
+      { key: 'bloodLoss', label: 'خون‌ریزیِ تخمینی (میلی‌لیتر)', type: 'number' },
+      { key: 'specimen', label: 'نمونهٔ پاتولوژی', type: 'select', options: [
+        { v: 'none', l: 'ارسال نشد' }, { v: 'sent', l: 'ارسال شد' },
+      ] },
+      { key: 'drain', label: 'درن', type: 'select', options: [
+        { v: 'none', l: 'ندارد' }, { v: 'placed', l: 'گذاشته شد' },
+      ] },
+      { key: 'implant', label: 'ایمپلنت / پروتز', type: 'text', placeholder: 'نوع، اندازه، شمارهٔ سریال' },
+      { key: 'note', label: 'توضیح', type: 'textarea' },
     ],
   },
   {

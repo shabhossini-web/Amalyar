@@ -188,6 +188,16 @@ export class CreateVisitDto {
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
   opDate?: string;
 
+  /// **«هنوز تاریخ ندارد»** (بستهٔ ۹ب) — عملی که تصمیمش گرفته شده ولی روزش نه: تاریخ (و در مطب
+  /// بیمارستان و مبلغ) اجباری نیست و هیچ پیامک، تقویم یا اتاقِ عملی راه نمی‌افتد. با `opDate` جمع نمی‌شود.
+  @IsOptional() @IsBoolean({ message: '«هنوز تاریخ ندارد» نامعتبر است' })
+  opDateOpen?: boolean;
+
+  /// تاریخِ **تقریبی** همان عملِ بی‌تاریخ — فقط برای برنامه‌ریزی (فهرستِ انتظار).
+  @IsOptional() @ValidateIf((o) => o.plannedDate !== null && o.plannedDate !== '')
+  @IsISO8601({}, { message: 'تاریخِ تقریبی نامعتبر است' })
+  plannedDate?: string | null;
+
   /// «ویزیتِ بعدی» — پزشک روی خودِ فرم ثبت می‌کند؛ ستونِ واقعی، پایهٔ یادآوری‌ها.
   /// پاک‌کردن با `null` است نه رشتهٔ خالی (IsISO8601 رشتهٔ خالی را رد می‌کند).
   @IsOptional()
@@ -412,6 +422,15 @@ export class UpdateVisitDto {
   @ValidateIf((o) => o.opDate !== null && o.opDate !== '')
   @IsISO8601({}, { message: 'تاریخ عمل نامعتبر است' })
   opDate?: string | null;
+
+  /// «هنوز تاریخ ندارد» (بستهٔ ۹ب) — برداشتنِ تاریخِ یک عمل فقط با همین پرچمِ صریح؛ عملی که از اول
+  /// بی‌تاریخ بوده (رزرو بدون تاریخ، موکول بی‌تاریخ) بی‌پرچم هم بی‌تاریخ ویرایش می‌شود.
+  @IsOptional() @IsBoolean({ message: '«هنوز تاریخ ندارد» نامعتبر است' })
+  opDateOpen?: boolean;
+
+  @IsOptional() @ValidateIf((o) => o.plannedDate !== null && o.plannedDate !== '')
+  @IsISO8601({}, { message: 'تاریخِ تقریبی نامعتبر است' })
+  plannedDate?: string | null;
 
   /// «ویزیتِ بعدی» — `null`/رشتهٔ خالی یعنی پاکش کن (پزشک منصرف شد).
   @IsOptional()

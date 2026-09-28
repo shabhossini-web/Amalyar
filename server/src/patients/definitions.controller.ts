@@ -104,6 +104,11 @@ class TopicCreateDto {
   @IsOptional() @IsString() @MaxLength(30) color?: string;
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @IsOptional() @IsInt() sort?: number;
+
+  /** بستهٔ ۹الف — کلیدِ زیرفرم‌هایی که با این موضوع خودکار الصاق می‌شوند؛ سرویس وجودشان را می‌سنجد. */
+  @IsOptional() @IsArray({ message: 'فرم‌های خودکار نامعتبر است' }) @ArrayMaxSize(12, { message: 'حداکثر ۱۲ فرمِ خودکار برای یک موضوع' })
+  @IsString({ each: true, message: 'فرم‌های خودکار نامعتبر است' }) @MaxLength(80, { each: true, message: 'کلیدِ زیرفرم نامعتبر است' })
+  defaultSubforms?: string[];
 }
 
 class TopicPatchDto {
@@ -112,6 +117,10 @@ class TopicPatchDto {
   @IsOptional() @IsString() @MaxLength(500) notes?: string;
   @IsOptional() @IsBoolean() active?: boolean;
   @IsOptional() @IsInt() sort?: number;
+
+  @IsOptional() @IsArray({ message: 'فرم‌های خودکار نامعتبر است' }) @ArrayMaxSize(12, { message: 'حداکثر ۱۲ فرمِ خودکار برای یک موضوع' })
+  @IsString({ each: true, message: 'فرم‌های خودکار نامعتبر است' }) @MaxLength(80, { each: true, message: 'کلیدِ زیرفرم نامعتبر است' })
+  defaultSubforms?: string[];
 }
 
 /** کدِ داخلیِ مطب — جراحی/خدمتِ داخلِ مطب با کد و مبلغِ خودِ مطب. */

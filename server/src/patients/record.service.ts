@@ -20,6 +20,7 @@ import {
    re-export می‌شود تا DTOها همان مسیرِ قبلی را بخوانند. */
 import { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { visitTitleOf } from './visit-title';
+import { subformSummaryRows } from './subforms';
 export { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, DOCUMENT_PHASE_FA };
 
 /**
@@ -45,8 +46,8 @@ export const NOTE_KINDS = [
   /* بخش‌های هستهٔ ثابتِ مراجعه (بستهٔ ۶الف) — `SECTION_NOTES` در `clinical-note.ts`. */
   'exam', 'findings', 'plan', 'rx',
   'op', 'progress',
-  /* ترخیص سه سند دارد: وضعیت (اجباری)، شرح و یادداشت (بستهٔ ۶ب). */
-  'discharge', 'discharge_summary', 'discharge_note',
+  /* ترخیص: وضعیت (اجباری)، شرح و یادداشت (بستهٔ ۶ب) + داروهای ترخیص (بستهٔ ۸، مطب). */
+  'discharge', 'discharge_summary', 'discharge_note', 'discharge_rx',
   'consult',
 ] as const;
 
@@ -197,7 +198,27 @@ export class RecordService {
              include کارتِ مراجعه در پرونده همان متن‌ها را بی‌صدا گم می‌کرد —
              همان «نوشته شد ولی جایی که خوانده می‌شود نیست» که `answersOf` برایش
              ساخته شد. فقط برای کسی که اجازهٔ بالینی دارد خوانده می‌شود. */
-          ...(clinical ? { clinicalNotes: currentNotes(Object.values(SECTION_NOTES)) } : {}),
+          ...(clinical ? {
+            clinicalNotes: currentNotes(Object.values(SECTION_NOTES)),
+            /* بستهٔ ۸: پاسخِ زیرفرم‌های الصاقی (ASA، جزئیاتِ حینِ عمل، پیگیری، …) زیرِ همان مراجعه —
+               همان دادهٔ فرمِ مراجعه، با تعریفِ فرمش تا برچسب و گزینه‌ها از سرور بیاید (قانونِ ۱۵).
+               همان گیتِ بالینیِ شرح‌ها: پاسخِ ارزیابیِ بیهوشی سندِ پزشکی است. */
+            subforms: {
+              select: {
+                key: true, phase: true, data: true, createdAt: true,
+                form: {
+                  select: {
+                    title: true,
+                    fields: {
+                      where: { deletedAt: null },
+                      orderBy: [{ page: 'asc' }, { sort: 'asc' }, { id: 'asc' }],
+                      select: { key: true, label: true, type: true, active: true, options: true },
+                    },
+                  },
+                },
+              },
+            },
+          } : {}),
         },
         orderBy: [{ opDate: { sort: 'desc', nulls: 'last' } }, { seq: 'desc' }],
       }),
@@ -441,6 +462,8 @@ export class RecordService {
         /* نامِ فرمِ نوع، یا در شرکت نامِ خدمتِ همین مراجعه وقتی نامِ فرم خودکار است — `visit-title.ts`. */
         kindTitle: visitTitleOf(v, v.kind ? kindTitles[v.kind] : null),
         kindColor: v.kind ? kindColors[v.kind] ?? null : null,
+        /* «برچسب: پاسخ»ِ هر زیرفرمِ پرشده، به ترتیبِ مرحله — فقط با اجازهٔ بالینی (بالا). */
+        subformSummaries: clinical ? subformSummaryRows((v as any).subforms) : [],
       })),
       /**
        * **مسیرِ درمان** — مشتق از توالیِ مراجعات، نه ذخیره‌شده.

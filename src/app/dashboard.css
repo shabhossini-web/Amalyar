@@ -1123,30 +1123,3 @@ a.db-defbtn { text-decoration: none; }
 }
 @media (prefers-reduced-motion: reduce) { .db-when-pill { transition: none; } }
 
-/* سمت و سطحِ هر عمل (بستهٔ ۸) — زیرِ «نوعِ عمل»؛ پیش‌فرض یک «+» کوچک. */
-.ps { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.ps-add {
-  align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 12px;
-  border-radius: 10px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700;
-  color: var(--brand-2); background: none; border: 1px dashed rgba(var(--brand-2-rgb), .45);
-}
-.ps-add:hover { background: rgba(var(--brand-rgb), .08); }
-.ps-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px;
-  background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .1);
-}
-.ps-name { flex: 1 0 100%; font-size: 12px; font-weight: 700; color: var(--text2); }
-.ps-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.ps-chip {
-  min-height: 38px; padding: 0 14px; border-radius: 99px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700;
-  color: var(--text2); background: var(--row-bg); border: 1px solid rgba(var(--veil-rgb), .16);
-  transition: color .15s, background .15s, border-color .15s;
-}
-.ps-chip.on { color: var(--text1); background: rgba(var(--brand-rgb), .16); border-color: rgba(var(--brand-2-rgb), .65); }
-.ps-level {
-  flex: 1 1 180px; min-width: 0; min-height: 38px; padding: 0 12px; border-radius: 10px; font: inherit; font-size: 13px;
-  color: var(--text1); background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), .16);
-}
-.ps-level:focus { outline: none; border-color: rgba(var(--brand-2-rgb), .65); background: var(--field-bg-focus); }
-.ps-add:focus-visible, .ps-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .ps-chip { transition: none; } }

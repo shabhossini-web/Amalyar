@@ -906,7 +906,9 @@ export default function Dashboard() {
       setTimeout(() => setModal({ prefill: surgeryPrefill(saved) }), 400);
       return;
     }
-    if (wasEdit) { setToast(`${t.visit} ویرایش شد ✓`); return; }
+    /* «عمل» نامِ خودش را دارد — در مطب «ویزیت ثبت شد» برای یک عمل غلط بود. */
+    const word = saved?.kind === 'surgery' ? t.surgery : t.visit;
+    if (wasEdit) { setToast(`${word} ویرایش شد ✓`); return; }
 
     // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی
     // کد ملی به پروندهٔ موجود خورده و پروندهٔ تکراری ساخته نشده است.
@@ -914,10 +916,10 @@ export default function Dashboard() {
     const where = `${t.record} ${saved.patientCode} — ${t.visit} ${seq}`;
     setToast({
       new: `${t.record}ِ جدید ساخته شد ✓ ${where}`,
-      matched: `بیمار از قبل ${t.record} داشت؛ ${t.visit}ِ تازه ثبت شد ✓ ${where}`,
-      restored: `${t.record}ِ حذف‌شده برگشت و ${t.visit}ِ تازه ثبت شد ✓ ${where}`,
-      existing: `${t.visit} ثبت شد ✓ ${where}`,
-    }[saved.patientStatus] ?? `${t.visit} ${saved.code} ثبت شد ✓`);
+      matched: `بیمار از قبل ${t.record} داشت؛ ${word}ِ تازه ثبت شد ✓ ${where}`,
+      restored: `${t.record}ِ حذف‌شده برگشت و ${word}ِ تازه ثبت شد ✓ ${where}`,
+      existing: `${word} ثبت شد ✓ ${where}`,
+    }[saved.patientStatus] ?? `${word} ${saved.code} ثبت شد ✓`);
   };
 
   /* نوشتنِ وضعیت — **می‌اندازد**، نمی‌بلعد: پنجرهٔ دلیلِ لغو باید خطا را

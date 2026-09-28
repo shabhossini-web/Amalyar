@@ -70,6 +70,7 @@ export const NOTE_KIND_LABELS: Record<string, string> = {
   discharge: 'وضعیتِ هنگامِ ترخیص',
   discharge_summary: 'شرحِ ترخیص',
   discharge_note: 'یادداشتِ ترخیص',
+  discharge_rx: 'داروهای ترخیص',
   consult: 'مشاوره',
 };
 
@@ -132,6 +133,32 @@ export const DISPOSITION_LABELS: Record<string, string> = {
   death: 'فوت',
 };
 export const DISPOSITION_KEYS = Object.keys(DISPOSITION_LABELS);
+
+/**
+ * **وضعیتِ ردیفِ فهرستِ انتظارِ عمل** (بستهٔ ۹ج) — مشتق، نه ستون (`waitlist.service.ts`):
+ * تصمیمِ بی‌برنامه، عملِ بی‌تاریخ، عملِ تاریخ‌دارِ انجام‌نشده، تصمیمِ بسته‌شده.
+ */
+export const WAITLIST_LABELS: Record<string, string> = {
+  awaiting: 'منتظرِ برنامه',
+  planned: 'بی‌تاریخ',
+  booked: 'رزروشده',
+  closed: 'بسته‌شده',
+};
+
+/** دلیلِ بستنِ تصمیمِ جراحیِ بی‌عمل (بستهٔ ۹ج) — `Visit.surgeryDecisionCloseReason`. */
+export const DECISION_CLOSE_LABELS: Record<string, string> = {
+  declined: 'بیمار عمل نخواست',
+  elsewhere: 'جای دیگری عمل شد',
+  not_indicated: 'دیگر اندیکاسیون ندارد',
+  deceased: 'فوت',
+};
+/** یک جملهٔ راهنما زیرِ هر دلیل — جمله است نه برچسب، پس جدا (همان استدلالِ `DECISION_HINTS`). */
+export const DECISION_CLOSE_HINTS: Record<string, string> = {
+  declined: 'پس از توضیحِ پزشک، بیمار فعلاً عمل را نپذیرفت.',
+  elsewhere: 'بیمار در مرکز یا نزدِ پزشکِ دیگری عمل کرده است.',
+  not_indicated: 'با درمانِ نگه‌دارنده بهتر شد یا دیگر نیازی به عمل نیست.',
+  deceased: 'بیمار پیش از عمل فوت کرده است.',
+};
 
 /**
  * **علائمِ حیاتی** — برچسبِ هر اندازه (`VitalSign`). واحد و بازهٔ مجاز در

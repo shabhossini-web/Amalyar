@@ -198,7 +198,8 @@ const SECTIONS = [
     label: 'موضوعِ ویزیت',
     path: '/visit-topics',
     title: (r) => r.name,
-    sub: (r) => [r.visitCount ? `${r.visitCount} مراجعه` : '', r.defaultSubformTitles?.length ? `خودکار: ${r.defaultSubformTitles.join('، ')}` : ''].filter(Boolean).join(' · '),
+    /* شمارِ مراجعه در ستونِ کناری هست (`df-uses`)؛ زیرِ عنوان فقط «فرم‌های خودکار» (بستهٔ ۹الف). */
+    sub: (r) => (r.defaultSubformTitles?.length ? `خودکار: ${r.defaultSubformTitles.join('، ')}` : ''),
     empty: 'هنوز موضوعی تعریف نشده — مثلِ «ویزیتِ اولیه»، «پست‌آپ»، «زیبایی»',
     hint: 'موضوع همان چیزی است که روزِ کاری به آن گره می‌خورد؛ بیمار در هر روز فقط موضوعِ همان روز را می‌بیند.',
     fields: [
@@ -219,7 +220,8 @@ function SubformDefaults({ label, hint, value, onChange, disabled }) {
   const [items, setItems] = useState(null);
   useEffect(() => {
     let on = true;
-    api('/forms/subforms').then((r) => { if (on) setItems((r?.items ?? []).filter((x) => x.active !== false)); }).catch(() => { if (on) setItems([]); });
+    /* موضوع مالِ ویزیت است نه عمل: فرمی که جایش «حینِ عمل» است (جزئیاتِ حینِ عمل) این‌جا پیشنهاد نمی‌شود. */
+    api('/forms/subforms').then((r) => { if (on) setItems((r?.items ?? []).filter((x) => x.active !== false && x.defaultPhase !== 'intra')); }).catch(() => { if (on) setItems([]); });
     return () => { on = false; };
   }, []);
   const toggle = (k) => onChange(value.includes(k) ? value.filter((x) => x !== k) : [...value, k]);

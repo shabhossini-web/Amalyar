@@ -3,6 +3,7 @@ import {
   APPT_LABELS, NOTE_KIND_LABELS, OP_LABELS,
   ORDER_LABELS, ORDER_KIND_LABELS, REMINDER_LABELS, REMINDER_KIND_LABELS, INTAKE_LABELS,
   DECISION_LABELS, ANESTHESIA_LABELS, DISPOSITION_LABELS, EXCLUSIVE_DECISION, ORDER_DECISIONS,
+  WAITLIST_LABELS, DECISION_CLOSE_LABELS, DECISION_CLOSE_HINTS,
 } from '../patients/labels';
 import { vitalCatalog } from '../patients/vitals';
 import { PrismaService } from '../prisma/prisma.service';
@@ -127,6 +128,9 @@ export class ConfigService {
         })),
         anesthesia: Object.entries(ANESTHESIA_LABELS).map(([key, label]) => ({ key, label })),
         disposition: Object.entries(DISPOSITION_LABELS).map(([key, label]) => ({ key, label })),
+        /* بستهٔ ۹ج — تب‌های فهرستِ انتظار و دلایلِ بستنِ تصمیم (با جملهٔ راهنمای هرکدام). */
+        waitlist: Object.entries(WAITLIST_LABELS).map(([key, label]) => ({ key, label })),
+        decisionClose: Object.entries(DECISION_CLOSE_LABELS).map(([key, label]) => ({ key, label, hint: DECISION_CLOSE_HINTS[key] ?? null })),
       },
       /* اندازه‌های علائمِ حیاتی با واحد و بازه — فرم همین را رندر می‌کند و سرور
          با همین (`vitalsInput`) می‌سنجد؛ یک کاتالوگ، دو مصرف. */

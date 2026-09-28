@@ -106,7 +106,7 @@ export class RemindersService {
         where: { id: visitId },
         select: {
           id: true, patientId: true, nextVisitDate: true, seq: true, kind: true,
-          opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true,
+          opDate: true, opStatus: true, procedureTypeId: true, diagnosisId: true, dischargeDisposition: true,
           /* بستهٔ ۷ — فقط شناسه‌ها، برای بخش‌های فرمِ پیگیری (`followUpUrl`).
              ⚠️ متنِ مراقبت و روزهای پیگیری عمداً از **عملِ اصلی** می‌مانند
              (`procedureType` پایین): پیامکِ دوم برای عملِ همزمان یعنی دو دستورِ
@@ -169,8 +169,14 @@ export class RemindersService {
         });
       };
 
-      /* «ویزیتِ بعدی» */
-      if (v.nextVisitDate) {
+      /* ⚠️ بستهٔ ۸: ترخیص با «فوت» یعنی هیچ پیامِ بعد از عملی به خانواده نرود — نه یادآوریِ
+         ویزیتِ بعدی، نه مراقبتِ بعد از عمل، نه لینکِ فرمِ پیگیری. برنامه خالی می‌ماند و مرحلهٔ
+         پایان (`planned`) ردیف‌های در انتظار را لغو می‌کند؛ پیامِ رفته دست نمی‌خورد. اصلاحِ «فوت»ِ
+         اشتباهی (وضعیتِ دیگر) همین مسیر را دوباره می‌دود و برنامه برمی‌گردد. */
+      const deceased = v.dischargeDisposition === 'death';
+
+      /* «ویزیتِ بعدی» — عملِ «هنوز تاریخ ندارد» (بستهٔ ۹ب) برنامهٔ پس از عمل ندارد؛ پیامکش با تاریخِ قطعی می‌آید. */
+      if (v.nextVisitDate && !deceased && !(v.kind === 'surgery' && !v.opDate)) {
         /* اگر همان روز نوبتِ فعال دارد (مسیرِ «از همان ثبت، پیشنهادِ نوبت»)،
            یادآوریِ نوبت خودش می‌رود و این یکی دوبله می‌شد — کاشته نمی‌شود. */
         const hasAppt = await this.prisma.appointment.findFirst({
@@ -189,7 +195,7 @@ export class RemindersService {
       /* «عملِ پیشِ‌رو» + مراقبتِ قبل/بعدِ عمل — فقط جراحیِ لغونشدهٔ تاریخ‌دار.
          متنِ مراقبت از قالبِ **نوعِ عمل** می‌آید (تعریف‌های پایه)؛ قالبِ خالی
          یعنی برای این نوع پیامی نمی‌رود. */
-      if (v.kind === 'surgery' && v.opDate && v.opStatus !== 'cancelled') {
+      if (v.kind === 'surgery' && v.opDate && v.opStatus !== 'cancelled' && !deceased) {
         /* فرمِ پیگیریِ پس از عمل — روزها از خودِ نوعِ عمل (تعریف‌های پایه).
            لینکِ فرم همین‌جا آماده می‌شود تا متنِ ثبت‌شده در دفتر کامل باشد؛
            پیامکِ مراقبتِ بعد از عمل هم همان لینک را ضمیمه می‌کند. */

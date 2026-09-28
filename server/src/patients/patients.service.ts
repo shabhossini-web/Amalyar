@@ -25,8 +25,9 @@ import {
   VISIT_FULL_NOTE_KINDS, VISIT_NOTE_KINDS,
 } from './clinical-note';
 import { ANESTHESIA_LABELS, DECISION_LABELS, DISPOSITION_LABELS, EXCLUSIVE_DECISION, OP_LABELS } from './labels';
-import { planKindPhases, planSubforms, subformDataHasValue, subformDerived, subformsOf, writeSubforms, SubformPlanItem } from './subforms';
+import { planKindPhases, planSubforms, subformDataHasValue, subformDerived, subformsOf, topicSubformItems, writeSubforms, SubformPlanItem } from './subforms';
 import { vitalsRowsFor } from './vitals';
+import { DOCUMENT_PHASE_FA } from './document-categories';
 import { actorName } from '../common/person';
 import { summarize } from './billing.service';
 import { todayRangeUtc } from '../common/clinic-day';
@@ -120,6 +121,10 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
     anesthesiaFa: v.anesthesia ? ANESTHESIA_LABELS[v.anesthesia] ?? v.anesthesia : null,
     opType: v.opType,
     opDate: v.opDate,
+    /* تاریخِ تقریبیِ عملِ «هنوز تاریخ ندارد» (بستهٔ ۹ب) — فقط برنامه‌ریزی، هیچ اتوماسیونی از آن نیست. */
+    plannedDate: v.plannedDate ?? null,
+    /* «هنوز تاریخ ندارد» مشتق است نه ستون: عملِ در انتظارِ بی‌تاریخ. فرم همین را نشان می‌دهد (قانونِ ۱۵). */
+    undated: v.kind === 'surgery' && !v.opDate && v.opStatus === 'pending',
     nextVisitDate: v.nextVisitDate,
     postOpCare: v.postOpCare ?? null,
     followUpDays: v.followUpDays ?? null,
@@ -405,7 +410,7 @@ export class PatientsService {
       const v = await this.prisma.visit.findUnique({
         where: { id: visitId },
         select: {
-          id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true, surgeonId: true,
+          id: true, patientId: true, kind: true, nextVisitDate: true, opStatus: true, surgeonId: true, opDate: true,
           decidedIn: { select: { hospitalId: true } },
         },
       });
@@ -418,7 +423,8 @@ export class PatientsService {
         where: { followOfVisitId: v.id }, orderBy: { id: 'asc' },
         select: { id: true, opDate: true, opStatus: true, surgeonId: true, hospitalId: true },
       });
-      const wantDate = v.opStatus === 'cancelled' ? null : v.nextVisitDate;
+      /* عملِ «هنوز تاریخ ندارد» (بستهٔ ۹ب) هنوز پیگیریِ پس از عمل ندارد — ویزیتِ پست‌آپش با تاریخِ قطعی می‌آید. */
+      const wantDate = v.opStatus === 'cancelled' || (v.opStatus === 'pending' && !v.opDate) ? null : v.nextVisitDate;
       if (!wantDate) {
         if (child && child.opStatus === 'pending') {
           await this.prisma.visit.update({ where: { id: child.id }, data: { opStatus: 'cancelled' } });
@@ -449,23 +455,37 @@ export class PatientsService {
       const nonSurgery = defs.map((d) => d.visitKind).filter((k): k is string => !!k && k !== 'surgery');
       const kind = nonSurgery.includes('clinic') ? 'clinic' : nonSurgery[0];
       if (!kind) return;
-      const topic = await this.prisma.visitTopic.findFirst({
-        where: { active: true, name: { contains: 'پست‌آپ' } }, select: { id: true },
-      });
+      const topic = await this.postOpTopic();
       const last = await this.prisma.visit.aggregate({ where: { patientId: v.patientId }, _max: { seq: true } });
-      await this.prisma.visit.create({
+      const made = await this.prisma.visit.create({
         data: {
           patientId: v.patientId, seq: (last._max.seq ?? 0) + 1, kind,
           opDate: wantDate, opStatus: 'pending',
           topicId: topic?.id ?? null, followOfVisitId: v.id,
           surgeonId: carry.surgeonId, hospitalId: carry.hospitalId,
         },
+        select: { id: true },
       });
+      /* بستهٔ ۹الف: ویزیتِ پست‌آپِ خودکار هم فرم‌های خودکارِ موضوعش را می‌گیرد (مثلِ «فرم پیگیریِ
+         پس از عمل») — همان قاعدهٔ ثبتِ دستی، همان برنامه‌ریز و نویسنده. */
+      const auto = await topicSubformItems(this.prisma, topic?.id, kind, await this.forms.workflow());
+      if (auto.length) await writeSubforms(this.prisma, made, await this.planSubformsFor(auto, kind), null);
     } catch (e) {
       /* ثبتِ عمل نباید قربانیِ ویزیتِ خودکار شود — مثلِ قاعدهٔ یادآوری‌ها. */
       console.warn(`syncPostOpVisit(${visitId}) شکست خورد:`, e instanceof Error ? e.message : e);
       if (strict) throw e;
     }
+  }
+
+  /**
+   * موضوعِ «پست‌آپ» — با کلیدِ پایدار (بستهٔ ۹الف). نصبی که پیش از مهاجرت نامش را عوض کرده و کلید
+   * نگرفته، با همان قاعدهٔ نامِ دیروز — رفتارِ هیچ نصبی عوض نمی‌شود.
+   */
+  private async postOpTopic() {
+    return (await this.prisma.visitTopic.findFirst({ where: { active: true, systemKey: 'postop' }, select: { id: true } }))
+      ?? this.prisma.visitTopic.findFirst({
+        where: { active: true, name: { contains: 'پست‌آپ' } }, orderBy: { id: 'asc' }, select: { id: true },
+      });
   }
 
   private scopedVisitWhere(user: any, where: any = {}) {
@@ -1210,8 +1230,19 @@ export class PatientsService {
     if (inherited && !String(values.chiefComplaint ?? '').trim()) values.chiefComplaint = inherited;
     const form = await this.forms.byKey(`visit.${kind}`).catch(() => null);
     if (!form) return;
-    const r = this.forms.validateFields(await this.shownFields(form.fields), values);
+    const waived = await this.undatedWaiver(undated);
+    const r = this.forms.validateFields((await this.shownFields(form.fields)).filter((f) => !waived.has(f.key)), values);
     if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
+  }
+
+  /**
+   * **ستاره‌هایی که عملِ «هنوز تاریخ ندارد» برمی‌دارد** (بستهٔ ۹ب) — تاریخ همیشه؛ در مطب بیمارستان و
+   * مبلغ هم: عملی که تازه تصمیمش گرفته شده هنوز جا و قیمت ندارد، و ستاره‌ای که ثبتش را ببندد بیمار را
+   * از فهرستِ انتظار بیرون نگه می‌دارد. شرکت (رزرو بدون تاریخ) فقط تاریخ — قاعدهٔ دیروزش.
+   */
+  private async undatedWaiver(undated: boolean): Promise<Set<string>> {
+    if (!undated) return new Set();
+    return new Set(['opDate', ...((await this.forms.workflow()) === 'clinic' ? ['hospitalId', 'amount'] : [])]);
   }
 
   /**
@@ -1232,6 +1263,18 @@ export class PatientsService {
   private async assertEditFormValid(v: any, dto: UpdateVisitDto) {
     const current = enrich(v, undefined, VISIT_FULL_NOTE_KINDS);
     const kind = dto.kind ?? v.kind;
+    /* ── «هنوز تاریخ ندارد» (بستهٔ ۹ب) + رفعِ باگِ B1 ──
+       عملی که از اول بی‌تاریخ ثبت شده (رزرو بدون تاریخ، موکول بی‌تاریخ، عملِ فهرستِ انتظار) بی‌تاریخ
+       هم ویرایش می‌شود — تا دیروز هر ذخیره‌اش «تاریخِ عمل را کامل کنید» می‌گرفت و منشی برای
+       عوض‌کردنِ یک شماره مجبور بود تاریخِ ساختگی بزند. **برداشتنِ** تاریخِ عملِ تاریخ‌دار ولی فقط با
+       پرچمِ صریحِ `opDateOpen` است، نه با خالی‌شدنِ تصادفیِ کادر. */
+    const ask = (dto as any).opDateOpen === true;
+    const nextDate = dto.opDate !== undefined ? (toDateValue(dto.opDate) ?? null) : v.opDate;
+    if (ask && kind !== 'surgery') throw new BadRequestException('فقط عمل می‌تواند «هنوز تاریخ ندارد» باشد');
+    if (ask && nextDate) throw new BadRequestException('«هنوز تاریخ ندارد» با تاریخِ عمل جمع نمی‌شود — یکی را انتخاب کنید');
+    /* عملِ بسته (لغو/انجام‌شده) برنامه‌ای ندارد که «هنوز تاریخ نداشته باشد». */
+    if (ask && v.opStatus !== 'pending') throw new BadRequestException('عملِ لغوشده یا انجام‌شده «هنوز تاریخ ندارد» نمی‌شود');
+    const undated = kind === 'surgery' && !nextDate && (ask || !v.opDate);
     let form;
     try { form = await this.forms.byKey(`visit.${kind}`); }
     catch (e) { if (e instanceof NotFoundException) return; throw e; }
@@ -1247,7 +1290,9 @@ export class PatientsService {
     if (dto.chiefComplaint !== undefined && !String(dto.chiefComplaint ?? '').trim()) {
       values.chiefComplaint = inheritedComplaint(v)?.text ?? '';
     }
-    const r = this.forms.validateFields((await this.shownFields(form.fields)).filter((f) => keys.has(f.key)), values);
+    if (undated) values[UNDATED_KEY] = true;
+    const waived = await this.undatedWaiver(undated);
+    const r = this.forms.validateFields((await this.shownFields(form.fields)).filter((f) => keys.has(f.key) && !waived.has(f.key)), values);
     if (!r.ok) throw new BadRequestException(Object.values(r.errors).join('، '));
   }
 
@@ -1364,6 +1409,32 @@ export class PatientsService {
   }
 
   /**
+   * همان قفلِ نقشِ فیلدهای فرمِ مراجعه برای نویسنده‌ای **بیرون از فرم** (پاپ‌آپِ ترخیصِ میزِ اتاقِ
+   * عمل، بستهٔ ۸) — قاعده یکی است، نه کپیِ دوم. `patch` فقط کلیدهایی که آن مسیر می‌نویسد.
+   */
+  async assertFieldOwnership(kind: string | null | undefined, patch: Record<string, unknown>, user: any, current: Record<string, unknown>) {
+    await this.assertRoleOwnership(kind, patch, user, current);
+  }
+
+  /**
+   * «این فیلد برای این حساب قفل است؟» — نامِ نقشِ صاحبش، یا null. همان پرسشِ `assertRoleOwnership`
+   * (همان کوئری و همان استثناهای سوپرادمین و حسابِ بی‌نقش)، تا رابط چیزی را پیشنهاد نکند که سرور رد می‌کند.
+   */
+  async fieldLock(kind: string | null | undefined, key: string, user: any): Promise<string | null> {
+    if ((user?.level ?? 0) >= LEVEL.SUPER_ADMIN) return null;
+    const myRole: string | null = user?.jobRole ?? null;
+    if (!myRole || !kind) return null;
+    const form = await this.prisma.formDef.findFirst({
+      where: { scope: 'visit', visitKind: kind },
+      select: { fields: { where: { key }, select: { key: true, role: true, roles: true } } },
+    });
+    const f = form?.fields?.[0];
+    const roles = f ? fieldRoles(f) : [];
+    if (!roles.length || roles.includes(myRole)) return null;
+    return roles.map(jobRoleLabel).join('، ');
+  }
+
+  /**
    * خدمتِ مراجعه (`Visit.service`) — فقط در نصبِ شرکتی و فقط از بستهٔ خدماتِ همان شرکت.
    *
    * `undefined` = «دست نزن»؛ در **ساخت** شرکتِ تک‌خدمته خودش پر می‌شود تا اگر فردا خدمتِ دوم
@@ -1402,7 +1473,20 @@ export class PatientsService {
     const codingPlan = planCoding(dto, EMPTY_CODING);
     const vitalsRows = vitalsRowsFor((dto as any).vitals, dto.kind || 'surgery');
     PatientsService.assertDecisions(dto.decisions);
-    const subformPlan = await this.planSubformsFor((dto as any).subforms, dto.kind || 'surgery');
+    /* بستهٔ ۹الف — فرم‌های خودکارِ موضوع برای ثبتی که فهرستِ زیرفرم نفرستاده (میزِ پذیرش، نوبت،
+       API). فرمِ مراجعه خودش فهرست را می‌فرستد — حتی خالی، وقتی کاربر آن‌ها را برداشته — و همان مقدم است. */
+    let subformsIn = (dto as any).subforms;
+    if (subformsIn === undefined && dto.topicId) {
+      const auto = await topicSubformItems(this.prisma, dto.topicId, dto.kind || 'surgery', await this.forms.workflow());
+      if (auto.length) subformsIn = auto;
+    }
+    const subformPlan = await this.planSubformsFor(subformsIn, dto.kind || 'surgery');
+    /* «هنوز تاریخ ندارد» (بستهٔ ۹ب): فقط عمل، و با تاریخِ عمل جمع نمی‌شود. ثبت‌نامِ شرکت («رزرو
+       بدون تاریخ») همان معنا را از مسیرِ خودش می‌آورد. */
+    const undatedAsk = (dto as any).opDateOpen === true;
+    if (undatedAsk && (dto.kind || 'surgery') !== 'surgery') throw new BadRequestException('فقط عمل می‌تواند «هنوز تاریخ ندارد» ثبت شود');
+    if (undatedAsk && dto.opDate) throw new BadRequestException('«هنوز تاریخ ندارد» با تاریخِ عمل جمع نمی‌شود — یکی را انتخاب کنید');
+    const undated = !!opts?.intakeCompany?.undated || undatedAsk;
     /* عملی که از ویزیت درآمده و کادرِ شکایتش خالی است: ستاره با متنِ **ارثی** سنجیده
        می‌شود. خواندنِ متن فقط برای همین سنجه است؛ تعلقِ ویزیت به بیمار داخلِ تراکنش
        (`resolveDecidedIn`) سنجیده می‌شود. */
@@ -1432,7 +1516,7 @@ export class PatientsService {
       const form = await this.forms.forVisitKind(dto.kind || 'surgery');
       const check = this.forms.validateFields((form?.fields ?? []).map(f => ({ ...f, required: false })), { ...(dto as any).extra, ...pickBuiltin(dto) });
       if (!check.ok) throw new BadRequestException(Object.values(check.errors).join('، '));
-    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto, opts?.intakeCompany?.undated, inheritedCc);
+    } else if (!opts?.skipFormValidation) await this.assertFormValid(dto, undated, inheritedCc);
     await this.assertRoleOwnership((dto as any).kind || 'surgery', dto, user);
     /* باکس‌های لینکِ فرم: نرمال‌شده می‌نشینند (URLِ معتبر، سقف، برش) و هر لینک
        مدرکِ لینکیِ همین مراجعه می‌شود — داخلِ همان تراکنش. تعریفِ فرم **پیش از**
@@ -1532,6 +1616,8 @@ export class PatientsService {
           // اگر نوعِ عمل انتخاب شده باشد، opType را resolveRefs گذاشته است.
           ...(refs.opType === undefined ? { opType: dto.opType?.trim() || null } : {}),
           opDate: toDateValue(dto.opDate) ?? null,
+          /* تاریخِ تقریبی فقط برای عملِ بی‌تاریخ (بستهٔ ۹ب) — کنارِ تاریخِ قطعی معنایی ندارد. */
+          plannedDate: dto.opDate ? null : toDateValue((dto as any).plannedDate) ?? null,
           nextVisitDate: toDateValue(dto.nextVisitDate) ?? null,
           postOpCare: dto.postOpCare?.trim() || null,
           followUpDays: dto.followUpDays?.trim() || null,
@@ -1619,6 +1705,36 @@ export class PatientsService {
     };
   }
 
+  /**
+   * **زیرفرم‌های یک مراجعه، بیرون از فرمِ مراجعه** (بستهٔ ۸ — میزِ اتاقِ عمل).
+   *
+   * همان سه تکهٔ `update`: `planSubformsFor` (سنجش و نرمال‌سازی بیرونِ تراکنش)، `writeSubforms`
+   * (یک نویسنده، «برداشتن فقط وقتی خالی است») و قفلِ نقشِ فیلدها (`assertSubformRoles` داخلِ
+   * نویسنده). `phases` محدودهٔ مجازِ مسیرِ فراخواننده است — میز فقط «حینِ عمل».
+   */
+  async saveSubforms(visitId: number, raw: unknown, user: any, opts: { phases: string[]; via: string }) {
+    const v = await this.prisma.visit.findUnique({ where: { id: visitId }, include: INCLUDE_VISIT_FULL });
+    if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    const plan = await this.planSubformsFor(raw, v.kind);
+    if (!plan?.length) throw new BadRequestException('فرمی برای ثبت نیامده است');
+    const bad = plan.find((it) => !opts.phases.includes(it.phase));
+    if (bad) throw new BadRequestException(`از این‌جا فقط فرم‌های «${opts.phases.map((p) => DOCUMENT_PHASE_FA[p] ?? p).join('، ')}» ثبت می‌شوند`);
+    const kinds = await this.forms.kindMap();
+    const before = enrich(v, kinds, VISIT_FULL_NOTE_KINDS);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await writeSubforms(tx, { id: visitId }, plan, user);
+      return tx.visit.findUniqueOrThrow({ where: { id: visitId }, include: INCLUDE_VISIT_FULL });
+    });
+    const after = enrich(updated, kinds, VISIT_FULL_NOTE_KINDS);
+    const touched = new Set(plan.map((it) => `${it.key}@${it.phase}`));
+    const pick = (x: any) => (x.subforms ?? []).filter((r: any) => touched.has(`${r.key}@${r.phase ?? ''}`));
+    await this.audit.record({
+      actorId: user?.id, action: 'visit.subforms', entityType: 'visit', entityId: visitId,
+      before: { via: opts.via, subforms: pick(before) }, after: { via: opts.via, subforms: pick(after) },
+    });
+    return after;
+  }
+
   /** فقط پس از commit؛ خطای تراکنش نباید یادآوری یا مراجعهٔ پست‌آپ بسازد. */
   async afterVisitCreation(visitId: number, strict = false) {
     await this.reminders.syncNextVisit(visitId, strict);
@@ -1669,6 +1785,9 @@ export class PatientsService {
     const v = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_VISIT_FULL });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
     PatientsService.liftLegacy(dto, v.decisions ?? []);
+    /* «هنوز تاریخ ندارد» (بستهٔ ۹ب) خودش یعنی «تاریخِ قبلی را بردار» — کلاینتی که فقط پرچم را
+       می‌فرستد نباید با «پرچم و تاریخ با هم» رد شود (تاریخِ ذخیره‌شده را که خودش نفرستاده). */
+    if ((dto as any).opDateOpen === true && dto.opDate === undefined) dto.opDate = null;
     /* تشخیص‌ها/عمل‌ها (بستهٔ ۷) — پیش از ستاره و مالکیت؛ کلیدِ نیامده = دست نزن. */
     const coding = currentCoding(v);
     planCoding(dto, coding);
@@ -1740,6 +1859,10 @@ export class PatientsService {
         visitPatch.opType = dto.opType?.trim() || null;
       }
       if (dto.opDate !== undefined) visitPatch.opDate = toDateValue(dto.opDate) ?? null;
+      /* تاریخِ تقریبی فقط تا وقتی عمل تاریخِ قطعی ندارد معنا دارد؛ تاریخِ قطعی آن را پاک می‌کند (بستهٔ ۹ب). */
+      const opDateAfter = dto.opDate !== undefined ? visitPatch.opDate : v.opDate;
+      if (opDateAfter) { if (v.plannedDate) visitPatch.plannedDate = null; }
+      else if ((dto as any).plannedDate !== undefined) visitPatch.plannedDate = toDateValue((dto as any).plannedDate) ?? null;
       if (dto.nextVisitDate !== undefined) visitPatch.nextVisitDate = toDateValue(dto.nextVisitDate) ?? null;
       if (dto.postOpCare !== undefined) visitPatch.postOpCare = dto.postOpCare?.trim() || null;
       if (dto.followUpDays !== undefined) visitPatch.followUpDays = dto.followUpDays?.trim() || null;

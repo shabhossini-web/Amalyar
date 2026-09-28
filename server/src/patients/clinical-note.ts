@@ -40,11 +40,18 @@ export const SECTION_NOTES: Record<string, string> = {
 };
 export const SECTION_KEYS = Object.keys(SECTION_NOTES);
 
-/** اسنادِ ترخیص — کلیدِ پاسخ → نوع (بستهٔ ۶ب). */
+/**
+ * اسنادِ ترخیص — کلیدِ پاسخ → نوع (بستهٔ ۶ب).
+ *
+ * ⚠️ `dischargeRx` (بستهٔ ۸، مطب) جدا از `rx`ِ «نسخه» است: نسخهٔ ویزیت دستورِ پیش از عمل است و
+ * داروهای ترخیص دستورِ پس از آن — یکی‌کردنشان یعنی ترخیص نسخهٔ ویزیتِ تصمیم را بازنویسی کند.
+ * میزِ اتاقِ عمل فهرستش را از همین‌جا می‌خوانَد؛ فهرستِ دستی یعنی سندِ تازهٔ ترخیص بی‌صدا جا بماند.
+ */
 export const DISCHARGE_NOTES: Record<string, string> = {
   dischargeNote: 'discharge',
   dischargeSummary: 'discharge_summary',
   dischargeRemark: 'discharge_note',
+  dischargeRx: 'discharge_rx',
 };
 
 /**

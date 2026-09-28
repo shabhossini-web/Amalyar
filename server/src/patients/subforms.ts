@@ -2,7 +2,8 @@ import { BadRequestException } from '@nestjs/common';
 import { toEnDigits } from '../common/identity';
 import { fieldRoles, jobRoleLabel } from '../common/job-roles';
 import { LEVEL } from '../common/levels';
-import { DOCUMENT_PHASES } from './document-categories';
+import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
+import { toJalali } from '../common/jalali';
 
 /**
  * **زیرفرم‌های مراجعه** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — هستهٔ خالص، بی‌DI.
@@ -58,6 +59,7 @@ export const SUBFORM_PRESET_GROUP: Record<string, string> = {
   'subform.wound': 'assess',
   'subform.postop': 'surgery',
   'subform.asa': 'surgery',
+  'subform.intra': 'surgery',
 };
 
 /** سقفِ زیرفرم‌های یک درخواست — سدِ ورودیِ نجومی، نه قاعدهٔ کاری. */
@@ -73,6 +75,27 @@ export function shortTitle(title: string): string {
 export function builtinAllowed(key: BuiltinSubformKey, kind: string, vertical: string): boolean {
   if (key === 'orders') return kind !== 'surgery';
   return vertical === 'clinic';
+}
+
+/**
+ * **فرم‌های خودکارِ موضوعِ ویزیت → بندهای الصاق** (بستهٔ ۹الف) — فقط آن‌هایی که امروز روی این نوع
+ * مراجعه الصاق‌شدنی‌اند: زیرفرمی که در فرم‌ساز پاک یا خاموش شده بی‌صدا کنار می‌رود، نه اینکه ثبتِ
+ * مراجعه را بشکند (`writeSubforms` الصاقِ تازهٔ فرمِ خاموش را رد می‌کند). بند **بی‌پاسخ** است:
+ * «دست نزن»، پس ستارهٔ فرمِ تازه ثبت را نمی‌بندد. فرمِ عمل موضوع‌محور نیست (مرحله دارد) — خالی.
+ */
+export async function topicSubformItems(
+  prisma: any, topicId: number | null | undefined, kind: string, vertical: string,
+): Promise<{ key: string }[]> {
+  if (!topicId || kind === 'surgery') return [];
+  const t = await prisma.visitTopic.findUnique({ where: { id: topicId }, select: { defaultSubforms: true } });
+  const keys: string[] = [...new Set<string>((t?.defaultSubforms ?? []) as string[])];
+  if (!keys.length) return [];
+  const live = new Set<string>((await prisma.formDef.findMany({
+    where: { key: { in: keys }, scope: 'subform', active: true }, select: { key: true },
+  })).map((d: { key: string }) => d.key));
+  return keys
+    .filter((k) => (isBuiltinSubform(k) ? builtinAllowed(k, kind, vertical) : live.has(k)))
+    .map((key) => ({ key }));
 }
 
 /** مرحله‌های فرمِ عمل — همان واژگانِ مدارک و علائمِ حیاتی، نه فهرستِ دوم. */
@@ -99,10 +122,12 @@ export function subformPhase(raw: unknown, kind: string): string {
 
 /**
  * مرحلهٔ پیش‌فرضِ یک زیرفرم وقتی خودِ کاربر مرحله را نگفته — مهاجرتِ ردیف‌های قدیمی و تغییرِ
- * «ویزیت → عمل». «فرم پیگیریِ پس از عمل» مالِ «بعد» است؛ بقیه (ارزیابی‌ها) «قبل».
- * ⚠️ همین قاعده در migrationِ `20260929000000_subform_phase` هم هست.
+ * «ویزیت → عمل». «فرم پیگیریِ پس از عمل» مالِ «بعد» است، «جزئیاتِ حینِ عمل» مالِ «حین»؛ بقیه
+ * (ارزیابی‌ها) «قبل».
+ * ⚠️ همین قاعده (بی «حین» — آن زیرفرم بعدتر آمد) در migrationِ `20260929000000_subform_phase` هم هست.
  */
-export const defaultSurgeryPhase = (key: string): string => (key === 'subform.postop' ? 'post' : 'pre');
+export const defaultSurgeryPhase = (key: string): string =>
+  (key === 'subform.postop' ? 'post' : key === 'subform.intra' ? 'intra' : 'pre');
 
 /** شناسهٔ یک الصاق در یک مراجعه — کلید + مرحله (همان یکتاییِ جدول). */
 export const subformSlot = (key: string, phase: string) => `${key}@${phase}`;
@@ -176,8 +201,84 @@ export type SubformPlanItem = {
 /** تعریفِ زیرفرمی که سنجش لازم دارد — همان شکلِ `FormsService.view`. */
 export type SubformDef = {
   id: number; key: string; title: string; active: boolean;
-  fields: { key: string; label: string; type: string; required?: boolean; active?: boolean; roles?: string[]; role?: string | null }[];
+  fields: {
+    key: string; label: string; type: string; required?: boolean; active?: boolean; roles?: string[]; role?: string | null;
+    options?: { v: string; l: string }[] | unknown;
+  }[];
 };
+
+const FA_DIGITS = '۰۱۲۳۴۵۶۷۸۹';
+const faDigits = (x: unknown) => String(x).replace(/\d/g, (d) => FA_DIGITS[+d]);
+const optLabel = (options: unknown, v: unknown): string => {
+  const list = Array.isArray(options) ? options as { v?: unknown; l?: unknown }[] : [];
+  const hit = list.find((o) => String(o?.v) === String(v));
+  return hit?.l != null ? String(hit.l) : String(v);
+};
+
+/**
+ * **خلاصهٔ پاسخِ یک زیرفرم** — «برچسب: متن» برای هر پاسخِ پرشده، به ترتیبِ فرم (قانونِ ۱۵:
+ * برچسبِ گزینه، تاریخِ شمسی و ارقامِ فارسی همه سمتِ سرور). مصرف: خلاصهٔ «ارزیابیِ پیش از عمل»
+ * سرِ میزِ اتاقِ عمل و سطرِ هر زیرفرم در پرونده (بستهٔ ۸).
+ *
+ * ⚠️ پاسخِ خالی (همان معنای `emptyValue`) سطر نمی‌گیرد — `false`ِ یک کلید هم خالی است، همان‌طور
+ * که برداشتنِ زیرفرم را نمی‌بندد. فیلدِ خاموش در فرم‌ساز هم دیده نمی‌شود.
+ */
+export function subformSummary(def: Pick<SubformDef, 'fields'> | null | undefined, data: unknown): { key: string; label: string; text: string }[] {
+  if (!def || !data || typeof data !== 'object' || Array.isArray(data)) return [];
+  const d = data as Record<string, unknown>;
+  const out: { key: string; label: string; text: string }[] = [];
+  for (const f of def.fields ?? []) {
+    if (f.active === false) continue;
+    const v = d[f.key];
+    if (emptyValue(v)) continue;
+    let text: string;
+    switch (f.type) {
+      case 'select': text = optLabel(f.options, v); break;
+      case 'multiselect': text = (Array.isArray(v) ? v : [v]).filter((x) => !emptyValue(x)).map((x) => optLabel(f.options, x)).join('، '); break;
+      case 'bool': text = v === true || v === 'true' ? 'بله' : 'خیر'; break;
+      case 'number': case 'money': case 'rating': case 'time': case 'phone': text = faDigits(v); break;
+      case 'date': {
+        const dt = new Date(String(v));
+        if (Number.isNaN(dt.getTime())) { text = faDigits(v); break; }
+        const [jy, jm, jd] = toJalali(dt);
+        text = faDigits(`${jy}/${String(jm).padStart(2, '0')}/${String(jd).padStart(2, '0')}`);
+        break;
+      }
+      case 'image': text = `${faDigits((Array.isArray(v) ? v : [v]).length)} عکس`; break;
+      case 'links': text = `${faDigits((Array.isArray(v) ? v : [v]).length)} لینک`; break;
+      case 'payment': continue;
+      default: {
+        const t = String(v).replace(/\s+/g, ' ').trim();
+        text = t.length > 160 ? `${t.slice(0, 157)}…` : t;
+      }
+    }
+    if (text) out.push({ key: f.key, label: f.label, text });
+  }
+  return out;
+}
+
+/**
+ * **سطرهای زیرفرم‌های یک مراجعه** برای نمایشِ فقط‌خواندنی (پرونده، میزِ اتاقِ عمل) — فقط زیرفرم‌های
+ * فرم‌سازِ **پاسخ‌دار**؛ علائمِ حیاتی و درخواست‌ها جای نمایشِ خودشان را دارند. ردیف‌ها با تعریفِ
+ * فرمشان (`form: { title, fields }`) می‌آیند.
+ */
+export function subformSummaryRows(rows: any[] | null | undefined): {
+  key: string; phase: string; phaseFa: string | null; title: string; summary: { key: string; label: string; text: string }[];
+}[] {
+  const list = (rows ?? []).filter((r) => r && !isBuiltinSubform(r.key));
+  const rank = (p: string) => { const i = (SUBFORM_PHASES as readonly string[]).indexOf(p); return i < 0 ? -1 : i; };
+  return list
+    .map((r) => ({
+      key: r.key as string, phase: (r.phase ?? '') as string,
+      phaseFa: r.phase ? DOCUMENT_PHASE_FA[r.phase] ?? null : null,
+      title: (r.form?.title ?? r.key) as string,
+      summary: subformSummary(r.form ? { fields: r.form.fields ?? [] } : null, r.data),
+      at: +new Date(r.createdAt ?? 0),
+    }))
+    .filter((x) => x.summary.length)
+    .sort((a, b) => rank(a.phase) - rank(b.phase) || a.at - b.at)
+    .map(({ at: _at, ...x }) => x);
+}
 
 /**
  * ورودیِ `subforms` → برنامهٔ نوشتن. **پیش از تراکنش** اجرا می‌شود (کوئریِ تعریف‌ها بیرونِ

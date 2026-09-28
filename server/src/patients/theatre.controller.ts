@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { DISPOSITION_KEYS } from './labels';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
@@ -56,6 +56,21 @@ class DischargeDto {
 
   @IsOptional() @IsString() @MaxLength(2000, { message: 'یادداشتِ ترخیص طولانی است' })
   remark?: string;
+
+  /* ── بستهٔ ۸ (مطب): داروهای ترخیص و ویزیتِ بعدی — «نیامده = دست نزن». ── */
+  @IsOptional() @IsString({ message: 'داروهای ترخیص باید متن باشد' }) @MaxLength(4000, { message: 'داروهای ترخیص طولانی است' })
+  rx?: string;
+
+  /** تاریخِ میلادیِ ISO؛ `null` از ترخیص پذیرفته نیست (برداشتن فقط از فرمِ عمل) و سرویس با پیامِ خودش ردش می‌کند. */
+  @IsOptional() @ValidateIf((o) => o.nextVisitDate !== null)
+  @IsString({ message: 'تاریخِ ویزیتِ بعدی معتبر نیست' }) @MaxLength(30, { message: 'تاریخِ ویزیتِ بعدی معتبر نیست' })
+  nextVisitDate?: string | null;
+}
+
+/** زیرفرم‌های میز — شکلِ هر بند همان `subforms`ِ فرمِ مراجعه است و `planSubforms` می‌سنجدش. */
+class SubformsDto {
+  @IsArray({ message: 'فرم‌ها نامعتبر است' }) @ArrayMaxSize(20, { message: 'فرم‌های این درخواست بیش از اندازه است' })
+  items!: Record<string, unknown>[];
 }
 
 /**
@@ -161,6 +176,13 @@ export class TheatreController {
     // مدرکِ پزشکی نباید در کشِ میانی بنشیند — همان قاعدهٔ مسیرِ پرونده.
     res.setHeader('Cache-Control', 'private, no-store');
     stream.pipe(res);
+  }
+
+  /* بستهٔ ۸ — فرم‌های «حینِ عمل» (زیرفرم) از میز: همان مجوزِ شرحِ عمل، چون همان سندنویسیِ سرِ میز است. */
+  @RequirePermissions('theatre.report')
+  @Post('visits/:id/subforms')
+  subforms(@Param('id', ParseIntPipe) id: number, @Body() dto: SubformsDto, @CurrentUser() user: any) {
+    return this.theatre.saveSubforms(id, dto.items, user);
   }
 
   /* ⚠️ مجوزِ خودش را دارد نه `visits.times`: این یکی سندِ بالینیِ امضادار

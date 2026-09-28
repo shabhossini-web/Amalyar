@@ -160,7 +160,7 @@ export default function Waitlist() {
               </div>
               <p className="wl-facts">
                 {r.decision && <span><em>تصمیم</em> {faDate(r.decision.date)}{r.decision.diagnosis ? ` — ${r.decision.diagnosis}` : ''}</span>}
-                {r.surgery?.procedure && <span><em>عمل</em> {r.surgery.procedure}{r.surgery.sides ? ` (${r.surgery.sides})` : ''}</span>}
+                {r.surgery?.procedure && <span><em>عمل</em> {r.surgery.procedure}</span>}
                 {r.surgery?.opDate && <span><em>تاریخِ عمل</em> {faDate(r.surgery.opDate)}</span>}
                 {!r.surgery?.opDate && r.surgery?.plannedDate && <span><em>تاریخِ تقریبی</em> {faDate(r.surgery.plannedDate)}</span>}
                 {r.surgery?.hospital && <span><em>مرکز</em> {r.surgery.hospital}</span>}
