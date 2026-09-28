@@ -10,6 +10,7 @@ import { FORM_TYPES } from './form-types';
 import { DOCUMENT_CATEGORIES } from './document-categories';
 import { serviceOfFormKey } from './intake-service-of';
 import { SERVICES, isServiceKey } from '../config/tenant-profile';
+import { SERVICE_VISIT_KIND, visitTitleOf } from './visit-title';
 
 /**
  * موتورِ فرم — «چه چیزی پرسیده می‌شود» و «چه چیزی اجباری است».
@@ -273,6 +274,7 @@ export class FormsService {
       select: { key: true, visitKind: true, title: true, color: true },
       orderBy: { id: 'asc' },
     });
+    const profile = await this.config.profile();
     return rows
       .filter((r) => r.visitKind)
       .map((r) => ({
@@ -282,6 +284,13 @@ export class FormsService {
            در داشبورد با همین رنگ از بقیه جدا می‌شود، و اگر مشتق‌کردنش به
            کلاینت می‌افتاد یک نوع در داشبورد و در فرم‌ساز دو رنگ می‌گرفت. */
         color: r.color || colorForKey(r.key),
+        /* **نامِ مراجعهٔ این نوع به‌ازای هر خدمتِ شرکت** — همان `visitTitleOf` که کارت و پرونده
+           دارند، تا سربرگِ فرمِ مراجعه در شرکتِ دوخدمته «نورومانیتورینگ»/«ایمپلنت» بگوید نه «خدمت»ِ
+           مشترک (مالک، ۱۴۰۵/۰۷/۰۶). قاعده سمتِ سرور می‌ماند (قانونِ ۱۵)؛ کلاینت فقط با خدمتِ انتخاب‌شده
+           کلید می‌زند. نامِ دستیِ مدیر همان‌جا برای هر خدمت برمی‌گردد. */
+        ...(profile.kind === 'company' && r.visitKind === SERVICE_VISIT_KIND ? {
+          serviceTitles: Object.fromEntries(profile.services.map((k) => [k, visitTitleOf({ kind: r.visitKind, service: k }, r.title)])),
+        } : {}),
       }));
   }
 

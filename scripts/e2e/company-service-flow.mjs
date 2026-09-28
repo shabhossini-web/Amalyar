@@ -135,11 +135,17 @@ try {
   await api('/forms', null, 'GET', auth);
   ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'فرمِ اختصاصیِ ما', '**نباید بیفتد:** نامی که مدیر در فرم‌ساز گذاشته بازنویسی شود');
   ok((await api(`/visits/${vid}`, null, 'GET', auth)).data?.kindTitle === 'فرمِ اختصاصیِ ما', 'و روی مراجعه هم نامِ مدیر برنده است، نه نامِ خدمت (قانونِ ۱۵)');
+  const kc = ((await api('/forms/visit-kinds', null, 'GET', auth)).data ?? []).find((k) => k.kind === 'surgery');
+  ok(kc?.serviceTitles?.ionm === 'فرمِ اختصاصیِ ما', 'سربرگ هم نامِ مدیر را می‌گوید', JSON.stringify(kc?.serviceTitles));
   /* دوخدمته: نامِ قالبی ← «خدمت»؛ هر مراجعه همچنان نامِ خدمتِ خودش. */
   await db.formDef.update({ where: { key: 'visit.surgery' }, data: { title: 'فرمِ عمل' } });
   await set('services', JSON.stringify(['ionm', 'implant']));
   await api('/forms', null, 'GET', auth);
   ok((await db.formDef.findUnique({ where: { key: 'visit.surgery' } })).title === 'خدمت', 'شرکتِ دوخدمته: «خدمت»');
+  /* سربرگِ فرمِ مراجعه (مالک، ۱۴۰۵/۰۷/۰۶): نامِ هر خدمت از همان قاعدهٔ سرور، نه «خدمت»ِ مشترک. */
+  const k2 = ((await api('/forms/visit-kinds', null, 'GET', auth)).data ?? []).find((k) => k.kind === 'surgery');
+  ok(k2?.serviceTitles?.ionm === 'نورومانیتورینگ' && k2?.serviceTitles?.implant === 'ایمپلنت و تجهیزات',
+    'دوخدمته: نامِ مراجعه به‌ازای هر خدمت در `/forms/visit-kinds` (سربرگِ فرم از همین)', JSON.stringify(k2?.serviceTitles));
   ok((await api(`/visits/${vid}`, null, 'GET', auth)).data?.kindTitle === 'نورومانیتورینگ', 'و مراجعه همچنان «نورومانیتورینگ»');
   /* نوعی که شرکت خودش در فرم‌ساز ساخته نامِ فرمِ خودش را دارد — خدمتِ پیش‌فرض رویش می‌نشیند
      (`visitServiceOf`) ولی «نورومانیتورینگ» نامیدنش دروغ است. */

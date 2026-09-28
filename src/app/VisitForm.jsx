@@ -1762,8 +1762,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
 
   /* فرمِ انتخاب‌شده — برای عنوان و رنگِ بخشِ «فرم» (تمایز از ردیفِ نوع‌ها). */
   const kindMeta = (fd.kinds ?? []).find((k) => k.kind === f.kind) ?? null;
-  /* نامِ همین مراجعه در سربرگ — «فرمِ ویزیت» → «ویزیت» (طرحِ مصوب). */
-  const visitTitle = (kindMeta?.title ?? fd.def?.title ?? initial?.kindTitle ?? kindOf(f.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
+  /* نامِ همین مراجعه در سربرگ — «فرمِ ویزیت» → «ویزیت» (طرحِ مصوب). شرکتِ دوخدمته: نامِ خدمتِ
+     انتخاب‌شده («نورومانیتورینگ»/«ایمپلنت») به‌جای «خدمت»ِ مشترک — نگاشتش از سرور (`serviceTitles`). */
+  const visitTitle = (kindMeta?.serviceTitles?.[f.service] ?? kindMeta?.title ?? fd.def?.title ?? initial?.kindTitle ?? kindOf(f.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
   const topicName = (defs.topics ?? []).find((tp) => tp.id === f.topicId)?.name ?? initial?.topicName ?? null;
   const attachItems = (catalog?.items ?? []).filter((x) => attachableOn(x, f.kind));
   const canBuildSubform = (myTools ?? []).some((x) => x.key === 'forms');

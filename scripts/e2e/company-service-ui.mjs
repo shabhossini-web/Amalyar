@@ -6,6 +6,7 @@
  *   - فرم‌ساز برای فرمی که مراجعه می‌سازد انتخابگرِ خدمت دارد و `{service}` را PATCH می‌کند
  *   - فرمِ ثبتِ مراجعه در شرکتِ دوخدمته خدمت را می‌پرسد و بی‌انتخاب از گامِ «نوع» جلو نمی‌رود
  *   - انتخاب همان `service` است که به سرور می‌رود
+ *   - سربرگِ فرم نامِ خدمتِ انتخاب‌شده را می‌گوید (`serviceTitles`ِ سرور)، نه «خدمت»ِ مشترک
  *  نباید بیفتد:
  *   - فرمِ زیرپرونده و شرکتِ تک‌خدمته انتخابگر ندارند؛ شرکتِ تک‌خدمته `service` نمی‌فرستد
  */
@@ -31,7 +32,11 @@ const base = (services) => ({ path, method }) => {
   if (path === '/forms/1' && method === 'PATCH') return FORMS[0];
   if (path === '/visits' && method === 'GET') return { rows: [], total: 0, pages: 1, stats: { total: 0, pending: 0, today: 0, due: 0, kinds: [] } };
   if (path === '/visits' && method === 'POST') return { id: 9, patientId: 1, kind: 'surgery', seq: 1, fullName: 'بیمارِ خدمت', code: 'AM-9', decisions: [] };
-  if (path === '/forms/visit-kinds') return [{ kind: 'surgery', title: 'عمل', color: 'violet' }];
+  /* همان شکلِ سرور: نامِ خودکارِ فرم («خدمت» / نامِ تک‌خدمت) + نامِ مراجعه به‌ازای هر خدمت. */
+  if (path === '/forms/visit-kinds') return [{
+    kind: 'surgery', title: services.length === 1 ? CATALOG.find((c) => c.key === services[0]).label : 'خدمت', color: 'violet',
+    serviceTitles: Object.fromEntries(services.map((k) => [k, CATALOG.find((c) => c.key === k).label])),
+  }];
   if (path === '/forms/visit.surgery') return { fields: [{ key: 'opDate', builtin: true, active: true, label: 'تاریخِ عمل' }] };
   if (path === '/ai/status') return { enabled: false, stt: false };
   if (path.startsWith('/forms')) return [];
@@ -97,6 +102,9 @@ try {
   ok(await group.getByRole('radio', { name: 'ایمپلنت و تجهیزات' }).getAttribute('aria-checked') === 'true', 'انتخاب نشست (aria-checked)');
   await v.p.locator('.db-stepnav .db-submit').click();
   await v.p.locator('.db-formcard').waitFor();
+  /* مالک (۱۴۰۵/۰۷/۰۶): سربرگ نامِ خدمتِ همین مراجعه را بگوید، نه «خدمت»ِ مشترکِ دوخدمته. */
+  const head = (await v.p.locator('[data-visit-title]').first().innerText()).trim();
+  ok(head === 'ایمپلنت و تجهیزات', '**سربرگِ فرم نامِ خدمتِ انتخاب‌شده را می‌گوید** — نه «خدمت»', head);
   await v.p.locator('.db-stepnav .db-submit, .db-sheet .db-submit').last().click();
   await v.p.waitForTimeout(500);
   const post = v.writes.find((w) => w.path === '/visits' && w.method === 'POST');
@@ -109,6 +117,8 @@ try {
   await v.p.locator('.db-kindbox .db-kindrow button').first().click();
   await v.p.locator('.db-stepnav .db-submit').click();
   await v.p.locator('.db-formcard').waitFor();
+  const head1 = (await v.p.locator('[data-visit-title]').first().innerText()).trim();
+  ok(head1 === 'نورومانیتورینگ', 'شرکتِ تک‌خدمته: سربرگ «نورومانیتورینگ»', head1);
   await v.p.locator('.db-stepnav .db-submit, .db-sheet .db-submit').last().click();
   await v.p.waitForTimeout(500);
   const post1 = v.writes.find((w) => w.path === '/visits' && w.method === 'POST');
