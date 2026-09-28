@@ -348,6 +348,19 @@ function VisitsTab({ rec, onErr, onOpen }) {
                 ))}
               </dl>
             )}
+            {/* **پاسخِ زیرفرم‌ها** (بستهٔ ۸) — هر زیرفرمِ الصاق‌شده یک سطر: عنوان + پاسخ‌های پرشده. تا دیروز
+                پاسخِ «فرم ارزیابیِ بیهوشی» یا «جزئیاتِ حینِ عمل» فقط داخلِ خودِ فرمِ مراجعه دیده می‌شد.
+                متنِ هر سطر را سرور می‌سازد (`summary`، قانونِ ۱۵)؛ مرحلهٔ عمل کنارِ عنوان. */}
+            {(v.subformSummaries ?? []).length > 0 && (
+              <ul className="rc-subs" aria-label="زیرفرم‌های این مراجعه">
+                {v.subformSummaries.map((x) => (
+                  <li key={`${x.key}@${x.phase}`}>
+                    <b>{x.title}{x.phaseFa ? <i className="rc-subs-ph"> · {x.phaseFa}</i> : null}</b>
+                    <span>{x.summary.map((l) => `${l.label}: ${l.text}`).join(' · ')}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <span className={`rc-st rc-st-${v.opStatus}`}>{v.opStatusFa ?? v.opStatus}</span>
         </div>

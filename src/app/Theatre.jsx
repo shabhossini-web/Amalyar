@@ -659,22 +659,36 @@ function PreOpSummary({ subforms }) {
  * (مثلِ «فرم جزئیاتِ حینِ عمل»)، این‌جا پر و ذخیره می‌شوند؛ یک نویسنده (`writeSubforms`) و همان
  * قفلِ نقشِ فیلدها. ⚠️ نمونهٔ ماکاپ — ذخیره هنوز به سرور وصل نیست.
  */
-function DeskSubforms({ visitId, subforms, onToast }) {
+function DeskSubforms({ subforms, onToast }) {
   const [vals, setVals] = useState(() => Object.fromEntries(subforms.map((x) => [x.key, x.data ?? {}])));
+  const [editing, setEditing] = useState(null);
   if (!subforms.length) return null;
-  void visitId;
   return (
     <section className="th-subs" aria-label="فرم‌های حینِ عمل">
       <h3>فرم‌های حینِ عمل</h3>
       {subforms.map((x) => (
         <div key={x.key} className="th-sub">
-          <b>{x.title}</b>
-          <DynForm fields={x.fields ?? []} values={vals[x.key] ?? {}} errors={{}}
-                   onChange={(v) => setVals((m) => ({ ...m, [x.key]: v }))} />
-          <div className="th-report-bar">
-            <span className="th-hint">همان فرمِ تبِ «حینِ عمل»؛ هرچه این‌جا ذخیره شود در فرمِ عمل هم دیده می‌شود.</span>
-            <button type="button" className="th-btn" onClick={() => onToast?.(`«${x.title}» ذخیره شد`)}>ذخیره</button>
+          <div className="th-sub-head">
+            <b>{x.title}</b>
+            {editing !== x.key && (
+              <button type="button" className="th-btn" onClick={() => setEditing(x.key)}>
+                {x.summary?.length ? 'ویرایش' : 'پرکردن'}
+              </button>
+            )}
           </div>
+          {editing === x.key ? (
+            <div className="th-sub-form">
+              <DynForm fields={x.fields ?? []} values={vals[x.key] ?? {}} errors={{}}
+                       onChange={(v) => setVals((m) => ({ ...m, [x.key]: v }))} />
+              <div className="th-report-bar">
+                <span className="th-hint">همان فرمِ تبِ «حینِ عمل»؛ هرچه این‌جا ذخیره شود در فرمِ عمل هم دیده می‌شود.</span>
+                <button type="button" className="th-btn" onClick={() => setEditing(null)}>انصراف</button>
+                <button type="button" className="th-btn primary" onClick={() => { setEditing(null); onToast?.(`«${x.title}» ذخیره شد`); }}>ذخیره</button>
+              </div>
+            </div>
+          ) : x.summary?.length ? (
+            <p className="th-sub-sum">{x.summary.map((l) => <span key={l.label}><em>{l.label}</em> {l.text}</span>)}</p>
+          ) : <p className="th-pre-none">الصاق شده ولی هنوز پر نشده.</p>}
         </div>
       ))}
     </section>
