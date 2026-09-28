@@ -3,7 +3,7 @@ import { ConflictException, Injectable, Logger, NotFoundException } from '@nestj
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { cancelSms, type CancelKind } from '../common/cancel-reasons';
-import { SmsService } from '../sms/sms.service';
+import { SmsService, meliCodeText, meliErrorCodeOf } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { toEnDigits } from '../common/identity';
@@ -652,7 +652,7 @@ export class RemindersService {
       }),
       this.prisma.reminder.findMany({
         where: { channel: 'sms', updatedAt: { gte: since } },
-        select: { kind: true, status: true, text: true },
+        select: { kind: true, status: true, text: true, providerId: true, error: true },
         take: 2000,
       }),
     ]);
@@ -697,10 +697,12 @@ export class RemindersService {
       '',
       `۱) پیامک‌های ${fa(DAYS)} روزِ اخیر به تفکیکِ نوع`,
     ];
-    const byKind = new Map<string, { sent: number; failed: number; uncertain: number; pending: number; other: number; min: number; max: number; minP: number; maxP: number }>();
+    const byKind = new Map<string, { sent: number; fake: number; failed: number; uncertain: number; pending: number; other: number; min: number; max: number; minP: number; maxP: number }>();
     for (const r of recent) {
-      const k = byKind.get(r.kind) ?? { sent: 0, failed: 0, uncertain: 0, pending: 0, other: 0, min: Infinity, max: 0, minP: Infinity, maxP: 0 };
-      if (r.status === 'sent') k.sent++;
+      const k = byKind.get(r.kind) ?? { sent: 0, fake: 0, failed: 0, uncertain: 0, pending: 0, other: 0, min: Infinity, max: 0, minP: Infinity, maxP: 0 };
+      /* «رفت»ی که شناسه‌اش کدِ خطاست، رفته نیست (`meliErrorCodeOf`). */
+      if (r.status === 'sent' && meliErrorCodeOf(r.providerId) !== null) k.fake++;
+      else if (r.status === 'sent') k.sent++;
       else if (r.status === 'failed') k.failed++;
       else if (r.status === 'uncertain') k.uncertain++;
       else if (r.status === 'pending' || r.status === 'sending') k.pending++;
@@ -714,6 +716,7 @@ export class RemindersService {
     for (const [kind, k] of byKind) {
       const range = (a: number, b: number) => (a === b ? fa(a) : `${fa(a)} تا ${fa(b)}`);
       out.push(`• ${kindFa(kind)}: رفته ${fa(k.sent)} · نرفته ${fa(k.failed)} · نامعلوم ${fa(k.uncertain)} · در صف ${fa(k.pending)}`
+        + (k.fake ? ` · «رفت»ِ ثبت‌شده که در واقع رد شده ${fa(k.fake)}` : '')
         + (k.other ? ` · دیگر ${fa(k.other)}` : '')
         + ` — ${range(k.min, k.max)} نویسه (${range(k.minP, k.maxP)} بخش)`);
     }
@@ -729,9 +732,14 @@ export class RemindersService {
         && r.createdAt.getTime() >= e.at.getTime() && r.createdAt.getTime() - e.at.getTime() < 120_000);
       const sz = row ? size(row.text) : null;
       const why = typeof payload.error === 'string' && payload.error.trim() ? ` · ${payload.error.trim().slice(0, 90)}` : '';
+      /* پیش از #110 پاسخِ «پیام ارسال نشد (کدِ ۱۱)» هم «رفت» ثبت می‌شد؛ شناسه‌اش همان کد است. */
+      const fakeCode = e.type === 'sms.sent' ? meliErrorCodeOf(payload.providerId) : null;
+      const outcome = fakeCode !== null
+        ? `نرفت (ثبت شده بود «رفت»؛ ملی‌پیامک کدِ ${fa(fakeCode)} داده بود: ${meliCodeText(fakeCode)})`
+        : OUTCOME[e.type] ?? e.type;
       /* شمارهٔ ردیف لازم است: «همان پیام بعدتر رفت» (علتِ بیرونی) با «پیامِ تازه‌ای با متنِ
          دیگر رفت» (علت در خودِ متن) فقط از روی آن جدا می‌شود. */
-      timeline.push({ t: e.at.getTime(), line: `${at(e.at)} · ${OUTCOME[e.type] ?? e.type} · ${kindFa(row?.kind ?? payload.kind)} · ${code(row)}`
+      timeline.push({ t: e.at.getTime(), line: `${at(e.at)} · ${outcome} · ${kindFa(row?.kind ?? payload.kind)} · ${code(row)}`
         + (e.refId ? ` · ردیفِ ${fa(e.refId)}` : '')
         + (sz ? ` · ${fa(sz.n)} نویسه / ${fa(sz.parts)} بخش` : '')
         + ` · ${manual ? '«ارسالِ دوباره»ی دستی' : 'خودکار'}${why}` });
@@ -746,6 +754,7 @@ export class RemindersService {
     timeline.sort((a, b) => b.t - a.t);
     out.push('', `۲) هر تلاشِ ارسال — تازه‌ترین بالا (${fa(timeline.length)} مورد)`);
     out.push('   (ارسالِ مستقیمی که خطا داد پیش از ۱۴۰۵/۰۷/۰۴ جایی ثبت نمی‌شد؛ فقط موفق‌هایش این‌جاست.)');
+    out.push('   (پیش از ۱۴۰۵/۰۷/۰۴ ساعتِ ۰۹:۴۳ پاسخی که عددِ کوچکی داشت «رفت» ثبت می‌شد؛ آن عدد کدِ خطای ملی‌پیامک است و این‌جا با همان کد «نرفت» خوانده می‌شود.)');
     if (!timeline.length) out.push('— در این بازه تلاشی ثبت نشده');
     for (const x of timeline.slice(0, 120)) out.push(x.line);
 
@@ -757,6 +766,21 @@ export class RemindersService {
       const result = res.sent > 0 ? 'رفت' : res.failed > 0 ? 'نرفت' : 'بی‌نتیجه';
       out.push(`${at(r.createdAt)} · ردیفِ ${fa(r.entityId ?? '—')} (${kindFa(row?.kind)}، ${code(row)}) · ${result}`);
     }
+
+    /* **علتِ ردها، شمرده** — جوابِ مستقیمِ «چرا نمی‌رود». هر ردیف یک‌بار با آخرین علتش؛ پیشوندِ
+       «تلاشِ n از ۴ …» برداشته می‌شود تا یک علت با شمارهٔ تلاشِ متفاوت دو خط نشود. */
+    const causes = new Map<string, number>();
+    const bump = (why: string) => causes.set(why, (causes.get(why) ?? 0) + 1);
+    for (const r of recent) {
+      const fake = r.status === 'sent' ? meliErrorCodeOf(r.providerId) : null;
+      if (fake !== null) { bump(`«رفت» ثبت شده بود ولی ملی‌پیامک کدِ ${fa(fake)} داده بود: ${meliCodeText(fake)}`); continue; }
+      if (!r.error || !['failed', 'pending', 'uncertain'].includes(r.status)) continue;
+      const why = r.error.replace(/^(تلاشِ [۰-۹]+ از [۰-۹]+ نرفت و خودکار دوباره امتحان می‌شود|پس از [۰-۹]+ تلاش نرفت) — /, '').trim();
+      bump(why === 'سرویس پیامک موقتاً در دسترس نیست' ? `${why} (علتِ دقیق پیش از ۱۴۰۵/۰۷/۰۴ ثبت نمی‌شد)` : why);
+    }
+    out.push('', '۴) علتِ ردها — از پاسخِ خودِ ملی‌پیامک (هر ردیف یک‌بار، با آخرین علتش)');
+    if (!causes.size) out.push('— در این بازه ردی نیست');
+    for (const [why, n] of [...causes].sort((a, b) => b[1] - a[1]).slice(0, 10)) out.push(`• ${fa(n)} ردیف: ${why.slice(0, 200)}`);
     return out.join('\n') + '\n';
   }
 
