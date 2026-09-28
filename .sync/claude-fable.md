@@ -1,13 +1,24 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/visit-header-service
+status: active
+branch: claude/p89-replan
 since: 2026-09-28
-paths: []
+paths:
+  - src/app/Waitlist.jsx
+  - src/app/waitlist.css
+  - src/app/ProcedureSides.jsx
+  - src/app/Theatre.jsx
+  - src/app/theatre.css
+  - src/app/Definitions.jsx
+  - src/app/VisitForm.jsx
+  - src/app/PatientRecord.jsx
+  - server/src/patients/theatre.*
+  - server/src/patients/waitlist.*
 note: >-
-  سربرگِ فرمِ مراجعه در شرکتِ دوخدمته نامِ خدمتِ همان مراجعه را می‌گوید (VisitForm از کلیمِ بیاتِ
-  claude-opus به خواستِ مالک گرفته شد) + گزارشِ عیب‌یابیِ پیامک «رفت»های دروغینِ پیش از #110 را با
-  کدِ ملی‌پیامک می‌خواند و علتِ ردها را می‌شمارد. بعدی: بسته‌های ۸+۹ (طرح‌ریزیِ دوباره).
+  بسته‌های ۸+۹ از نو روی زیرفرم‌ها (نه جدولِ جدا): جزئیاتِ حینِ عمل = زیرفرمِ آماده، زیرفرم‌ها روی میزِ
+  اتاقِ عمل، سمت/سطحِ عمل، داروی ترخیص و ویزیتِ بعدی (+ قاعدهٔ فوت)، پاسخِ زیرفرم‌ها در پرونده، فرم‌های
+  پیش‌فرضِ موضوع، عملِ بی‌تاریخ، «فهرستِ انتظارِ عمل». منتظرِ «اکی»ِ بند‌به‌بندِ مالک (قانونِ ۲۶) پیش از سرور.
+  PR #98 با این جایگزین و بسته می‌شود.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
