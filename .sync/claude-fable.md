@@ -7,12 +7,19 @@ paths:
   - .claude/skills/ux-audit/
   - .claude/skills/ui-ux-pro-max/SKILL.md
   - scripts/ux/
-  - src/app/PatientRecord.jsx
-  - src/app/Calendar.jsx
-  - src/app/FormBuilder.jsx
+  - scripts/verify-theme-tokens.js
+  - src/app/
+  - src/ui/
+  - src/pages/
+  - src/lib/
+  - src/index.css
+  - src/App.jsx
+  - src/main.jsx
+  - server/src/
 note: >-
   بررسیِ کاملِ UX عمل‌یار به خواستِ مالک (۱۴۰۵/۰۷/۰۶): اسکیلِ تازهٔ `ux-audit` + ابزارِ عکس‌برداری
-  (`scripts/ux/*`) + گزارشِ بند‌به‌بند برای تصمیمِ مالک. رفعِ باگ‌های قطعیِ گزارش پس از آن، روی همین شاخه.
+  (`scripts/ux/*`) + گزارشِ بند‌به‌بند برای تصمیمِ مالک. حالا: رفعِ ۶۶ باگِ قطعیِ گزارش در چند شاخهٔ
+  موازیِ `claude/ux-fix-*` که روی همین شاخه مرج می‌شوند — مسیرهای بالا تا مرج در دستِ این لِین است.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
