@@ -14,7 +14,8 @@ import { faDate } from '../lib/jalali.js';
 import './definitions.css';
 import './launcher.css';
 import './users.css';
-import { Back, Check, Close, User } from '../ui/icons.jsx';
+import { Back, Caret, Check, Close, Lock, Plus, Search, User } from '../ui/icons.jsx';
+import { useConfirm } from '../ui/Confirm.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -163,7 +164,9 @@ export default function Users() {
   const stagger = useStagger();
   const { user } = useAuth();
   const { vertical } = useConfig();
-  const [tab, setTab] = useState('pending'); // pending | all | perm
+  const [tab, setTab] = useState('pending'); // pending | all
+  const [q, setQ] = useState('');
+  const [confirmNode, confirm] = useConfirm();
   const [pending, setPending] = useState(null);
   const [all, setAll] = useState(null);
   const [levelSel, setLevelSel] = useState({}); // id → سطحِ انتخابی
@@ -187,6 +190,12 @@ export default function Users() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  /* جستجو در «همهٔ کاربران» — نام، نامِ کاربری، موبایل (ارقامِ فارسی هم). */
+  const needle = toEnDigits(q.trim()).toLowerCase();
+  const shownAll = all && (needle
+    ? all.filter((r) => [r.displayName, r.username, r.phone].some((v) => toEnDigits(String(v ?? '')).toLowerCase().includes(needle)))
+    : all);
 
   if (user && user.level < 6) return <Navigate to="/app" replace />;
 
@@ -213,6 +222,14 @@ export default function Users() {
   };
 
   const reject = async (row) => {
+    /* «رد» بی‌پرسش انجام می‌شد (بازبینیِ UX ۱۴۰۵/۰۷) — حالا با نامِ فرد و اثرش. */
+    const ok = await confirm({
+      title: `درخواستِ «${row.displayName}» رد شود؟`,
+      body: 'این حساب وارد سامانه نمی‌شود و از فهرستِ «در انتظارِ تأیید» بیرون می‌رود؛ در «همهٔ کاربران» با وضعیتِ «ردشده» می‌ماند.',
+      ok: 'رد کن',
+      danger: true,
+    });
+    if (!ok) return;
     setBusyId(row.id);
     try {
       await api(`/accounts/${row.id}/reject`, { method: 'POST' });
@@ -230,7 +247,7 @@ export default function Users() {
     setBusyId(row.id);
     try {
       await api(`/accounts/${row.id}/job-role`, { method: 'POST', body: { jobRole } });
-      setToast(jobRole ? 'نقشِ شغلی ثبت شد ✓' : 'نقشِ شغلی برداشته شد ✓');
+      setToast(jobRole ? 'نقشِ شغلی ثبت شد' : 'نقشِ شغلی برداشته شد');
       await load();
     } catch (e) { setToast(e.message); } finally { setBusyId(0); }
   };
@@ -265,22 +282,28 @@ export default function Users() {
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
           <h1>{title}</h1>
+          {/* «دسترسی‌ها» تبی بود که فقط یک لینک داشت — حالا خودِ لینک کنارِ عنوان است. */}
+          <Link to="/app/access" className="us-headlink"><Lock width="14" height="14" aria-hidden="true" /> سطوحِ دسترسی</Link>
         </header>
 
-        {!user?.isTestAccount && <section className="glass us-card"><b>تست نقش‌ها با یک شماره</b><p>حالت آزمایشی را روشن کنید، سپس در «ساخت حساب موقت» گزینهٔ شماره مشترک و نام کاربری مستقل را انتخاب کنید. از منوی حساب، «افزودن حساب» و جابه‌جایی بین نقش‌ها استفاده کنید.</p><p>پایان تست همهٔ حساب‌های آزمایشی و نشست‌هایشان را غیرفعال می‌کند؛ اطلاعات ثبت‌شده حذف نمی‌شود. روشن‌کردن دوباره، حساب‌های قبلی را خودکار فعال نمی‌کند.</p><button className="us-btn" disabled={modeBusy} onClick={toggleTesting}>{modeBusy ? 'در حال ثبت…' : testingEnabled ? 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' : 'فعال‌کردن ساخت حساب آزمایشی'}</button></section>}
-        <button className="us-btn ok" onClick={() => setCreating(true)}>+ ساخت حساب موقت</button>
-        <Tabs
-          variant="inset"
-          className="us-tabs"
-          label="بخش‌های کاربران"
-          value={tab}
-          onChange={setTab}
-          items={[
-            { key: 'pending', label: 'در انتظار تأیید', badge: pending?.length || null },
-            { key: 'all', label: 'همهٔ کاربران' },
-            { key: 'perm', label: 'دسترسی‌ها' },
-          ]}
-        />
+        {/* کارِ اصلیِ صفحه — تأییدِ کارکنان و فهرستِ همه — بالا؛ ساختِ حساب یک دکمهٔ عادی کنارِ آن،
+            نه پررنگ‌ترین دکمهٔ صفحه، و ابزارِ آزمایشیِ نقش‌ها تاشو پایینِ صفحه (بازبینیِ UX ۱۴۰۵/۰۷). */}
+        <div className="us-bar">
+          <Tabs
+            variant="inset"
+            className="us-tabs"
+            label="بخش‌های کاربران"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { key: 'pending', label: 'در انتظار تأیید', badge: pending?.length || null },
+              { key: 'all', label: 'همهٔ کاربران' },
+            ]}
+          />
+          <button type="button" className="us-btn us-new" onClick={() => setCreating(true)}>
+            <Plus width="15" height="15" aria-hidden="true" /> ساختِ حسابِ موقت
+          </button>
+        </div>
 
         {/* ── در انتظار تأیید ── */}
         {tab === 'pending' && (
@@ -323,8 +346,14 @@ export default function Users() {
         {/* ── همهٔ کاربران ── */}
         {tab === 'all' && (
           <div className="us-list">
+            <label className="us-search">
+              <Search width="16" height="16" aria-hidden="true" />
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام، نامِ کاربری یا موبایل…"
+                aria-label="جستجو در کاربران" autoComplete="off" />
+            </label>
             {all === null && <p className="us-empty">در حال بارگذاری…</p>}
-            {all?.map((row, i) => (
+            {all && shownAll.length === 0 && <p className="us-empty">کاربری با «{q.trim()}» پیدا نشد.</p>}
+            {shownAll?.map((row, i) => (
               <motion.div key={row.id} {...stagger(i)} className="glass us-card slim">
                 <div className="us-row">
                   <Avatar row={row} />
@@ -371,18 +400,13 @@ export default function Users() {
             ))}
           </div>
         )}
-        {/* ── دسترسی‌ها ──
-            ⚠️ ماتریسِ کامل (ماژول‌ها + مجوزهای عملیاتی) صفحهٔ خودش را دارد.
-            این‌جا فقط یک در است: تنظیمِ دسترسی تا امروز داخلِ همین تب قایم
-            بود و مدیر پیدایش نمی‌کرد — قابلیتی که پیدا نشود وجود ندارد. */}
-        {tab === 'perm' && (
-          <div className="us-list">
-            <p className="us-hint">
-              سطحِ لازم برای هر بخش و هر مجوزِ عملیاتی در صفحهٔ «سطوحِ دسترسی» تعیین
-              می‌شود — همان‌جا هم می‌شود دید که یک سطحِ مشخص به چه چیزهایی می‌رسد.
-            </p>
-            <Link className="us-btn ok us-acclink" to="/app/access">رفتن به سطوحِ دسترسی</Link>
-          </div>
+        {!user?.isTestAccount && (
+          <details className="glass us-card us-testing">
+            <summary>تست نقش‌ها با یک شماره (حسابِ آزمایشی) <Caret className="us-caret" width="15" height="15" aria-hidden="true" /></summary>
+            <p>حالت آزمایشی را روشن کنید، سپس در «ساختِ حسابِ موقت» گزینهٔ شماره مشترک و نام کاربری مستقل را انتخاب کنید. از منوی حساب، «افزودن حساب» و جابه‌جایی بین نقش‌ها استفاده کنید.</p>
+            <p>پایان تست همهٔ حساب‌های آزمایشی و نشست‌هایشان را غیرفعال می‌کند؛ اطلاعات ثبت‌شده حذف نمی‌شود. روشن‌کردن دوباره، حساب‌های قبلی را خودکار فعال نمی‌کند.</p>
+            <button className="us-btn" disabled={modeBusy} onClick={toggleTesting}>{modeBusy ? 'در حال ثبت…' : testingEnabled ? 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' : 'فعال‌کردن ساخت حساب آزمایشی'}</button>
+          </details>
         )}
       </div>
 
@@ -392,12 +416,13 @@ export default function Users() {
           <ProfileSheet
             id={profileId}
             onClose={() => setProfileId(0)}
-            onSaved={async () => { setProfileId(0); setToast('پروفایل ذخیره شد ✓'); await load(); }}
+            onSaved={async () => { setProfileId(0); setToast('پروفایل ذخیره شد'); await load(); }}
             onError={setToast}
           />
         )}
       </AnimatePresence>
 
+      {confirmNode}
       <Toast msg={toast} />
     </div>
   );
