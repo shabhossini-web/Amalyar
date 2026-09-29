@@ -8,9 +8,10 @@ import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/jalali.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
+import './def-acts.css';
 import { Back, Check, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 import { useConfig } from './config.jsx';
 
@@ -256,6 +257,10 @@ export default function Definitions() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
   const [editing, setEditing] = useState(null); // null | {} (جدید) | row (ویرایش)
+  /* حذف اول می‌پرسد (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-15): سطلِ هر ردیف با یک لمس و بی‌برگشت پاک
+     می‌کرد، درست کنارِ کلیدِ فعال/غیرفعال. */
+  const [deleting, setDeleting] = useState(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   const section = useMemo(() => SECTIONS.find((s) => s.key === tab), [tab]);
 
@@ -291,11 +296,13 @@ export default function Definitions() {
   };
 
   const remove = async (row) => {
+    setDelBusy(true);
     try {
       const r = await api(`${section.path}/${row.id}`, { method: 'DELETE' });
-      setToast(r.deactivated ? 'به‌دلیلِ سابقهٔ استفاده، غیرفعال شد' : 'حذف شد');
+      setToast(r.deactivated ? `«${section.title(row)}» به‌دلیلِ سابقهٔ استفاده فقط غیرفعال شد` : `«${section.title(row)}» حذف شد`);
       await load();
     } catch (e) { setToast(e.message); }
+    finally { setDelBusy(false); setDeleting(null); }
   };
 
   return (
@@ -359,7 +366,7 @@ export default function Definitions() {
               <button type="button" title={row.active ? 'غیرفعال کن' : 'فعال کن'} onClick={() => toggle(row)}>
                 <span className={`df-dot${row.active ? ' on' : ''}`} />
               </button>
-              <button type="button" className="df-del" title="حذف" onClick={() => remove(row)}><Trash width="15" height="15" /></button>
+              <button type="button" className="df-del" title="حذف" aria-label={`حذفِ ${section.title(row)}`} onClick={() => setDeleting(row)}><Trash width="15" height="15" /></button>
             </div>
           </motion.article>
         ))}
@@ -367,6 +374,18 @@ export default function Definitions() {
 
       </>
       )}
+
+      <AnimatePresence>
+        {deleting && (
+          <ConfirmDialog
+            title={`حذفِ «${section.title(deleting)}»؟`}
+            text="این کار برگشت ندارد. اگر در مراجعه یا سندی به کار رفته باشد، پاک نمی‌شود و فقط غیرفعال می‌شود."
+            busy={delBusy}
+            onConfirm={() => remove(deleting)}
+            onCancel={() => setDeleting(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={setToast} />}

@@ -249,35 +249,65 @@ export default function Overlay({
 }
 
 /**
- * **پرسشِ تغییرِ ذخیره‌نشده** — سه گزینه: «ذخیره» / «دور ریختن» / «ادامهٔ ویرایش».
- *
- * هم نگهبانِ `Overlay` از آن استفاده می‌کند و هم صفحه‌ای که پنجره نیست ولی از یک نمای ویرایش بیرون
- * می‌رود (میزِ اتاقِ عمل ← «فهرستِ روز»). ⚠️ در `document.body` رندر می‌شود: پنلِ شیت در حینِ
- * انیمیشن `transform` دارد و `position: fixed`ِ فرزندش را به خودش می‌چسباند، نه به صفحه.
- * Escape و لمسِ پس‌زمینهٔ خودِ پرسش یعنی «ادامهٔ ویرایش» — امن‌ترین گزینه، نه دور ریختن.
+ * پوستهٔ مشترکِ پرسش‌های کوتاه (`alertdialog`) — عنوان، یک جملهٔ پیامد، ردیفِ دکمه‌ها.
+ * ⚠️ در `document.body` رندر می‌شود: پنلِ شیت در حینِ انیمیشن `transform` دارد و `position: fixed`ِ
+ * فرزندش را به خودش می‌چسباند، نه به صفحه. Escape و لمسِ پس‌زمینهٔ خودِ پرسش همان `onCancel` است —
+ * امن‌ترین گزینه، نه کارِ برگشت‌ناپذیر.
  */
-export function UnsavedPrompt({ onSave, onDiscard, onCancel, busy = false, title, text }) {
+function Ask({ title, text, busy, onCancel, children }) {
   const hid = useId();
   const did = useId();
   if (typeof document === 'undefined') return null;
   return createPortal(
     <Overlay
       backdrop="ov-ask-overlay" panel="ov-ask" as="section" from="center"
-      role="alertdialog" aria-labelledby={hid} aria-describedby={did}
+      role="alertdialog" aria-labelledby={hid} aria-describedby={text ? did : undefined}
       closable={!busy} onClose={onCancel}
     >
-      <b id={hid} className="ov-ask-title">{title ?? 'تغییرها ذخیره نشده‌اند'}</b>
-      <p id={did} className="ov-ask-text">{text ?? 'اگر بدونِ ذخیره ببندید، آنچه نوشته‌اید از بین می‌رود.'}</p>
-      <div className="ov-ask-acts">
-        {onSave && (
-          <button type="button" className="df-save" data-unsaved="save" onClick={onSave} disabled={busy}>
-            {busy ? 'در حالِ ذخیره…' : 'ذخیره'}
-          </button>
-        )}
-        <button type="button" className="df-ghost" data-unsaved="keep" onClick={onCancel} disabled={busy}>ادامهٔ ویرایش</button>
-        <button type="button" className="df-ghost ov-ask-drop" data-unsaved="discard" onClick={onDiscard} disabled={busy}>دور ریختن</button>
-      </div>
+      <b id={hid} className="ov-ask-title">{title}</b>
+      {text && <p id={did} className="ov-ask-text">{text}</p>}
+      <div className="ov-ask-acts">{children}</div>
     </Overlay>,
     document.body,
+  );
+}
+
+/**
+ * **پرسشِ تغییرِ ذخیره‌نشده** — سه گزینه: «ذخیره» / «دور ریختن» / «ادامهٔ ویرایش».
+ *
+ * هم نگهبانِ `Overlay` از آن استفاده می‌کند و هم صفحه‌ای که پنجره نیست ولی از یک نمای ویرایش بیرون
+ * می‌رود (میزِ اتاقِ عمل ← «فهرستِ روز»).
+ */
+export function UnsavedPrompt({ onSave, onDiscard, onCancel, busy = false, title, text }) {
+  return (
+    <Ask
+      title={title ?? 'تغییرها ذخیره نشده‌اند'}
+      text={text ?? 'اگر بدونِ ذخیره ببندید، آنچه نوشته‌اید از بین می‌رود.'}
+      busy={busy} onCancel={onCancel}
+    >
+      {onSave && (
+        <button type="button" className="ov-ask-btn is-primary" data-unsaved="save" onClick={onSave} disabled={busy}>
+          {busy ? 'در حالِ ذخیره…' : 'ذخیره'}
+        </button>
+      )}
+      <button type="button" className="ov-ask-btn" data-unsaved="keep" onClick={onCancel} disabled={busy}>ادامهٔ ویرایش</button>
+      <button type="button" className="ov-ask-btn is-drop" data-unsaved="discard" onClick={onDiscard} disabled={busy}>دور ریختن</button>
+    </Ask>
+  );
+}
+
+/**
+ * **تأییدِ کارِ برگشت‌ناپذیر** (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-15): حذفِ تعریف، فیلد یا فرم با یک
+ * لمس و بی‌پرسش انجام می‌شد. عنوان **نامِ خودِ مورد** را می‌گوید و متن **پیامدش** را — «مطمئنید؟» به
+ * کسی نمی‌گوید چه اتفاقی می‌افتد (همان قاعدهٔ «بازگرداندن به قالب»ِ فرم‌ساز).
+ */
+export function ConfirmDialog({ title, text, confirmLabel = 'حذف', cancelLabel = 'انصراف', busy = false, onConfirm, onCancel }) {
+  return (
+    <Ask title={title} text={text} busy={busy} onCancel={onCancel}>
+      <button type="button" className="ov-ask-btn is-danger" data-confirm="yes" onClick={onConfirm} disabled={busy}>
+        {busy ? 'در حالِ انجام…' : confirmLabel}
+      </button>
+      <button type="button" className="ov-ask-btn" data-confirm="no" onClick={onCancel} disabled={busy}>{cancelLabel}</button>
+    </Ask>
   );
 }

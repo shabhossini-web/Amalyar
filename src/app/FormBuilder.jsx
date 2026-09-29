@@ -12,7 +12,7 @@ import { COLOR_KEYS, FORM_COLORS } from '../lib/formColor.js';
 import { toEnDigits } from '../lib/identity.js';
 import { toFa } from '../lib/utils.js';
 import Tabs from '../ui/Tabs.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import DynForm from '../ui/DynForm.jsx';
 import { useStagger } from '../ui/stagger.js';
 
@@ -82,6 +82,9 @@ export default function FormBuilder() {
   const [scopeFilter, setScopeFilter] = useState('all');
   const [editing, setEditing] = useState(null); // {formId, field} — field={} یعنی جدید
   const [resetting, setResetting] = useState(false);
+  /* حذفِ فیلد یا کلِ فرم اول می‌پرسد (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-15) — همان قاعدهٔ «بازگرداندن
+     به قالب»: نامِ مورد و پیامدش. `{kind:'field', field}` یا `{kind:'form', form}`. */
+  const [confirmDel, setConfirmDel] = useState(null);
   /* «+ ساختِ زیرفرمِ تازه» در پنجرهٔ الصاقِ فرمِ مراجعه این‌جا را با `?new=subform` باز می‌کند
      (۱۴۰۵/۰۷/۰۳) — برگهٔ ساخت همان لحظه با محدودهٔ «زیرفرم» باز می‌شود. */
   const [newForm, setNewForm] = useState(() => {
@@ -154,7 +157,17 @@ export default function FormBuilder() {
     );
 
   const removeField = (field) =>
-    apply(() => api(`/forms/fields/${field.id}`, { method: 'DELETE' }), 'حذف شد');
+    apply(() => api(`/forms/fields/${field.id}`, { method: 'DELETE' }), `«${field.label}» حذف شد`);
+
+  /** حذفِ کلِ فرم — پیام از خودِ پاسخ ساخته می‌شود، نه از حدس: سرور می‌داند حذف شد یا فقط خاموش. */
+  const removeForm = async (f) => {
+    setBusy(true);
+    const r = await api(`/forms/${f.id}`, { method: 'DELETE' }).catch((e) => ({ error: e.message }));
+    setBusy(false);
+    if (r.error) { setToast(r.error); return; }
+    setToast(r.deactivated ? `«${f.title}» به‌دلیلِ ${r.used} مراجعهٔ ثبت‌شده فقط خاموش شد` : `«${f.title}» حذف شد`);
+    load();
+  };
 
   /** بخشِ نقشِ فیلد — «این فیلد مالِ کیست». خالی = عمومی. */
   const setFieldRoles = (field, roles) => {
@@ -456,7 +469,7 @@ export default function FormBuilder() {
                         )}
                         {/* فیلدِ هسته‌ای سطلِ زباله ندارد — نبودِ دکمه از خطای بعدِ کلیک بهتر است. */}
                         {!f.builtin && (
-                          <button type="button" className="df-act danger" disabled={busy} onClick={() => removeField(f)} aria-label="حذف">
+                          <button type="button" className="df-act danger" disabled={busy} onClick={() => setConfirmDel({ kind: 'field', field: f })} aria-label={`حذفِ فیلدِ ${f.label}`}>
                             <Trash width="15" height="15" />
                           </button>
                         )}
@@ -469,18 +482,7 @@ export default function FormBuilder() {
                   <button type="button" className="df-add" onClick={() => setEditing({ formId: form.id, field: {} })}>
                     <Plus width="16" height="16" /> فیلدِ تازه
                   </button>
-                  <button
-                    type="button"
-                    className="fb-delform"
-                    onClick={async () => {
-                      const r = await api(`/forms/${form.id}`, { method: 'DELETE' }).catch((e) => ({ error: e.message }));
-                      if (r.error) { setToast(r.error); return; }
-                      /* پیام از خودِ پاسخ ساخته می‌شود، نه از حدس: سرور
-                         می‌داند حذف شد یا فقط خاموش. */
-                      setToast(r.deactivated ? `به‌دلیلِ ${r.used} مراجعهٔ ثبت‌شده فقط خاموش شد` : 'فرم حذف شد');
-                      load();
-                    }}
-                  >
+                  <button type="button" className="fb-delform" disabled={busy} onClick={() => setConfirmDel({ kind: 'form', form })}>
                     حذفِ این فرم
                   </button>
                   <button type="button" className="fb-reset" onClick={() => setResetting(true)}>
@@ -521,6 +523,24 @@ export default function FormBuilder() {
               setScopeFilter('all'); setTab(fresh.key);
               setToast('فرم ساخته شد ✓');
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmDel && (
+          <ConfirmDialog
+            title={confirmDel.kind === 'field' ? `حذفِ فیلدِ «${confirmDel.field.label}»؟` : `حذفِ فرمِ «${confirmDel.form.title}»؟`}
+            text={confirmDel.kind === 'field'
+              ? 'فیلد از این فرم برداشته می‌شود و این کار برگشت ندارد. اگر فقط نمی‌خواهید دیده شود، «خاموش» کنید.'
+              : 'این کار برگشت ندارد. اگر مراجعه‌ای با این فرم ثبت شده باشد، پاک نمی‌شود و فقط خاموش می‌شود.'}
+            busy={busy}
+            onConfirm={async () => {
+              const c = confirmDel;
+              if (c.kind === 'field') await removeField(c.field); else await removeForm(c.form);
+              setConfirmDel(null);
+            }}
+            onCancel={() => setConfirmDel(null)}
           />
         )}
       </AnimatePresence>
