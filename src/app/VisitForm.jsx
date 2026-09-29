@@ -2071,11 +2071,18 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                 autoFocus
               />
               <div className="db-plist">
+                {/* ⚠️ کدِ ملی و موبایل **متن‌اند نه عدد** (بازبینیِ UX، clinic-daily-11): `faNum` آن‌ها را
+                    `Number` می‌کرد — «۰۰۲۷۰۲۵۸۵۳» می‌شد «۲۷٬۰۲۵٬۸۵۳»، صفرِ اول می‌افتاد و «· ۱ ویزیت» به
+                    عدد می‌چسبید؛ منشی‌ای که برای جداکردنِ دو هم‌نام کدِ ملی را با کارت مقایسه می‌کند عددِ
+                    غلط می‌دید. حالا فقط رقم‌ها فارسی می‌شوند، با برچسب، و شمارِ مراجعه جداست. */}
                 {pResults.map((p) => (
-                  <button type="button" key={p.id} onClick={() => pickPatient(p)}>
-                    <b>{p.fullName}</b>
-                    <span dir="ltr">{p.code}</span>
-                    <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} {t.visit}</small>
+                  <button type="button" key={p.id} className="vf-pitem" onClick={() => pickPatient(p)}>
+                    <span className="vf-pitem-top"><b>{p.fullName}</b><span dir="ltr">{p.code}</span></span>
+                    <small className="vf-pitem-meta">
+                      {p.nationalId && <span>کد ملی <bdi dir="ltr">{jToFa(p.nationalId)}</bdi></span>}
+                      {p.phone && <span>موبایل <bdi dir="ltr">{jToFa(p.phone)}</bdi></span>}
+                      <span className="vf-pitem-n">{p.visitCount ? `${faNum(p.visitCount)} ${t.visit}` : `بدونِ ${t.visit}`}</span>
+                    </small>
                   </button>
                 ))}
                 {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
