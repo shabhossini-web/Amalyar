@@ -10,7 +10,10 @@
  *   - تب‌ها roving tabindex دارند و با فلش/Home/End عوض می‌شوند
  *  نباید بیفتد:
  *   - Escape روی تقویمِ بازِ داخلِ شیت فقط تقویم را می‌بندد، نه شیت را (لایه‌ها)
- *   - کلیک روی پس‌زمینه همچنان می‌بندد
+ *  نگهبانِ تغییرِ ذخیره‌نشده (بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-08):
+ *   - کلیک روی پس‌زمینهٔ فرمِ بلندِ مراجعه **نمی‌بندد** (پیش از این می‌بست)
+ *   - Escape روی شیتِ دست‌خورده پرسشِ `alertdialog` می‌دهد؛ Escapeِ پرسش = ادامهٔ ویرایش؛
+ *     «دور ریختن» می‌بندد و هیچ پوششی نمی‌ماند
  */
 import { startVite, launch, mockContext } from './lib/mock-ui.mjs';
 
@@ -102,12 +105,27 @@ try {
   a = await active();
   ok(a.isAdd, `فوکوس روی دکمهٔ «مراجعهٔ جدید» است (${a.tag}.${String(a.cls).split(' ')[0]})`);
 
-  console.log('\n۵) کلیک روی پس‌زمینه همچنان می‌بندد (نباید بیفتد)');
+  console.log('\n۵) فرمِ بلند: پس‌زمینه نمی‌بندد؛ نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود');
   await openSheet();
   await page.locator('.db-overlay').click({ position: { x: 8, y: 8 } });
+  await page.waitForTimeout(300);
+  ok((await page.locator('.db-sheet').count()) === 1, 'کلیک روی پس‌زمینه شیتِ مراجعه را نبست');
+  const nameBox = page.locator('.db-sheet .db-grid2 input').first();
+  await nameBox.fill('نوشته');
+  await page.keyboard.press('Escape');
+  const ask = page.locator('[role="alertdialog"]');
+  await ask.waitFor();
+  ok((await ask.getAttribute('aria-modal')) === 'true' && (await ask.locator('[data-unsaved]').count()) >= 2,
+    'Escape روی شیتِ دست‌خورده پرسشِ «ذخیره‌نشده» را باز کرد (alertdialog)');
+  await page.keyboard.press('Escape');
+  await ask.waitFor({ state: 'detached' });
+  ok((await page.locator('.db-sheet').count()) === 1 && (await nameBox.inputValue()) === 'نوشته',
+    'Escapeِ پرسش = ادامهٔ ویرایش؛ شیت و نوشته سرِ جایشان');
+  await page.locator('.db-sheet .db-x').click();
+  await page.locator('[data-unsaved="discard"]').click();
   await page.locator('.db-sheet').waitFor({ state: 'detached' });
   await page.waitForTimeout(250);
-  ok((await overlays()) === 0, 'بسته شد، بدونِ پوششِ باقی‌مانده');
+  ok((await overlays()) === 0, '«دور ریختن» بست، بدونِ پوششِ باقی‌مانده');
 
   console.log('\n۶) تب‌ها — roving tabindex و کلیدهای جهت');
   await openSheet();

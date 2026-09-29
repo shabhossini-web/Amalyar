@@ -1,7 +1,25 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import './overlay.css';
 
 const noop = () => {};
+
+/* بستنِ «محافظت‌شده» برای دکمه‌های داخلِ پنجره (ضربدر، انصراف) — همان مسیری که Escape و
+   پس‌زمینه می‌روند، تا پرسشِ «تغییرِ ذخیره‌نشده» از هیچ راهی دور زده نشود. */
+const CloseCtx = createContext(null);
+/** بستنِ پنجرهٔ دربرگیرنده از داخلش؛ بیرون از `Overlay` همان `null`. */
+export const useOverlayClose = () => useContext(CloseCtx);
+
+/**
+ * ضربدر/انصرافِ پنجره — `onClick`ش همان بستنِ محافظت‌شدهٔ `Overlay` است. مصرف‌کننده‌ای که خودش
+ * `Overlay` را رندر می‌کند نمی‌تواند هوکِ کانتکستِ آن را صدا بزند (کانتکست زیرِ اوست، نه بالایش)؛
+ * این دکمه داخلِ پنجره رندر می‌شود و به آن می‌رسد.
+ */
+export function CloseButton({ children, ...rest }) {
+  const close = useOverlayClose();
+  return <button type="button" {...rest} onClick={() => close?.()}>{children}</button>;
+}
 
 /* ── لایه‌ها: کدام پوشش «رویی» است (W0.6) ─────────────────────────────
    Escape فقط بالاترین لایه را می‌بندد. پوشش‌ها تودرتو می‌شوند (پرسشِ تسویه روی
@@ -52,6 +70,15 @@ const focusables = (root) => [...root.querySelectorAll(FOCUSABLE)]
  *  - `role="dialog"` + `aria-modal` پیش‌فرض است تا صفحه‌خوان بازشدنِ پنجره را
  *    اعلام کند؛ مصرف‌کننده با `aria-label` نامش را می‌دهد و با `role` می‌تواند
  *    عوضش کند.
+ *
+ * **نگهبانِ تغییرِ ذخیره‌نشده** (اختیاری، بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-08): پزشک روی گوشی
+ * شکایت و شرحِ حال را نوشت و یک لمسِ پس‌زمینه، ضربدر یا Escape همه را بی‌پرسش دور ریخت.
+ *  - `dirty` — تا وقتی درست است، **هر** راهِ بستن (Escape، پس‌زمینه، `CloseButton`) اول می‌پرسد:
+ *    «ذخیره / دور ریختن / ادامهٔ ویرایش».
+ *  - `onSave` — کارِ گزینهٔ «ذخیره»: تابع، یا `'submit'` یعنی همان ارسالِ خودِ فرم (`requestSubmit`)
+ *    با همهٔ اعتبارسنجی‌هایش. نبودش یعنی چیزی برای ذخیره نیست و پرسش دوگزینه‌ای می‌شود.
+ *  - `backdropClose={false}` — فرم‌های بلند با لمسِ پس‌زمینه اصلاً بسته نمی‌شوند؛ آن لمس بیشتر
+ *    اشتباهِ انگشت است تا خواستنِ بستن.
  */
 export default function Overlay({
   backdrop,             // کلاسِ پس‌زمینه — همان `iv-overlay` / `df-overlay` / …
@@ -60,6 +87,9 @@ export default function Overlay({
   from = 'center',      // center → باز می‌شود · bottom → از لبهٔ پایین بالا می‌آید
   onClose,
   closable = true,      // وقتی درخواستی در جریان است، کلیکِ پس‌زمینه نباید ببندد
+  dirty = false,        // تغییرِ ذخیره‌نشده — بستن اول می‌پرسد (بالا)
+  onSave,               // «ذخیره»ِ همان پرسش: تابع یا 'submit'
+  backdropClose = true, // فرمِ بلند: لمسِ پس‌زمینه نمی‌بندد
   children,
   ...rest               // به شیت می‌رسد: onSubmit، role، aria-*
 }) {
@@ -73,6 +103,20 @@ export default function Overlay({
   onCloseRef.current = onClose;
   const closableRef = useRef(closable);
   closableRef.current = closable;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const [asking, setAsking] = useState(false);
+  /** تنها مسیرِ بستن: تغییرِ ذخیره‌نشده اول پرسیده می‌شود. هویتِ ثابت — مقدارِ کانتکست است. */
+  const requestClose = useCallback(() => {
+    if (!closableRef.current) return;
+    if (dirtyRef.current) { setAsking(true); return; }
+    onCloseRef.current?.();
+  }, []);
+  const save = () => {
+    setAsking(false);
+    if (onSave === 'submit') panelRef.current?.requestSubmit?.();
+    else onSave?.();
+  };
 
   /* Escape — فقط بالاترین لایه. شنونده روی document است نه روی پنل، چون فوکوس
      ممکن است روی body باشد (کلیک روی جایی که فوکوس نمی‌گیرد) و آن‌وقت رویدادِ
@@ -83,7 +127,7 @@ export default function Overlay({
     const onKey = (e) => {
       if (e.key !== 'Escape' || layers[layers.length - 1] !== layer || !closableRef.current) return;
       e.preventDefault();
-      onCloseRef.current?.();
+      requestClose();
     };
     document.addEventListener('keydown', onKey);
     return () => {
@@ -91,7 +135,7 @@ export default function Overlay({
       const i = layers.indexOf(layer);
       if (i >= 0) layers.splice(i, 1);
     };
-  }, []);
+  }, [requestClose]);
 
   /* فوکوس: ورود به پنل، بازگشت به بازکننده. */
   useEffect(() => {
@@ -164,7 +208,7 @@ export default function Overlay({
       animate="shown"
       exit="gone"
       onUpdate={noop}
-      onClick={(e) => { if (e.target === e.currentTarget && closable) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && backdropClose) requestClose(); }}
     >
       <Panel
         ref={panelRef}
@@ -189,8 +233,51 @@ export default function Overlay({
         onKeyDown={trapTab}
         {...panelProps}
       >
-        {children}
+        <CloseCtx.Provider value={requestClose}>{children}</CloseCtx.Provider>
       </Panel>
+      <AnimatePresence>
+        {asking && (
+          <UnsavedPrompt
+            onSave={onSave ? save : null}
+            onDiscard={() => { setAsking(false); onCloseRef.current?.(); }}
+            onCancel={() => setAsking(false)}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
+  );
+}
+
+/**
+ * **پرسشِ تغییرِ ذخیره‌نشده** — سه گزینه: «ذخیره» / «دور ریختن» / «ادامهٔ ویرایش».
+ *
+ * هم نگهبانِ `Overlay` از آن استفاده می‌کند و هم صفحه‌ای که پنجره نیست ولی از یک نمای ویرایش بیرون
+ * می‌رود (میزِ اتاقِ عمل ← «فهرستِ روز»). ⚠️ در `document.body` رندر می‌شود: پنلِ شیت در حینِ
+ * انیمیشن `transform` دارد و `position: fixed`ِ فرزندش را به خودش می‌چسباند، نه به صفحه.
+ * Escape و لمسِ پس‌زمینهٔ خودِ پرسش یعنی «ادامهٔ ویرایش» — امن‌ترین گزینه، نه دور ریختن.
+ */
+export function UnsavedPrompt({ onSave, onDiscard, onCancel, busy = false, title, text }) {
+  const hid = useId();
+  const did = useId();
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <Overlay
+      backdrop="ov-ask-overlay" panel="ov-ask" as="section" from="center"
+      role="alertdialog" aria-labelledby={hid} aria-describedby={did}
+      closable={!busy} onClose={onCancel}
+    >
+      <b id={hid} className="ov-ask-title">{title ?? 'تغییرها ذخیره نشده‌اند'}</b>
+      <p id={did} className="ov-ask-text">{text ?? 'اگر بدونِ ذخیره ببندید، آنچه نوشته‌اید از بین می‌رود.'}</p>
+      <div className="ov-ask-acts">
+        {onSave && (
+          <button type="button" className="df-save" data-unsaved="save" onClick={onSave} disabled={busy}>
+            {busy ? 'در حالِ ذخیره…' : 'ذخیره'}
+          </button>
+        )}
+        <button type="button" className="df-ghost" data-unsaved="keep" onClick={onCancel} disabled={busy}>ادامهٔ ویرایش</button>
+        <button type="button" className="df-ghost ov-ask-drop" data-unsaved="discard" onClick={onDiscard} disabled={busy}>دور ریختن</button>
+      </div>
+    </Overlay>,
+    document.body,
   );
 }

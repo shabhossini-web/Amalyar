@@ -106,6 +106,8 @@ try {
     }
     const text = labels.join(' | ');
     await p.locator('.db-x').click();
+    /* نام‌های گامِ ۱ تایپ شده‌اند و بستنِ فرمِ دست‌خورده اول می‌پرسد (بازبینیِ UX، clinic-daily-08). */
+    await p.locator('[data-unsaved="discard"]').click({ timeout: 4000 });
     await p.waitForTimeout(900);
     return text;
   };

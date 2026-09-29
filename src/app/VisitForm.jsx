@@ -19,7 +19,7 @@ import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import JDate from './JDate.jsx';
 import { Close, Copy, Pencil, Plus } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { CloseButton } from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
 import MoneyInput from '../ui/MoneyInput.jsx';
@@ -602,6 +602,23 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخوردهٔ علائمِ حیاتی — به‌ازای کارت؛ «ذخیره» همراهِ خودش می‌برد. */
   const [pendingVitals, setPendingVitals] = useState({});
   const [vitalsCount, setVitalsCount] = useState({});
+  /* **تغییرِ ذخیره‌نشده** (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-08، surgery-07): پزشک روی گوشی شکایت و
+     شرحِ حال را نوشت و یک لمسِ پس‌زمینه یا ضربدر همه را بی‌پرسش دور ریخت. عکسِ دادهٔ فرم وقتی فرم
+     «آرام گرفت» (ویرایش: بعد از رسیدنِ زیرفرم‌ها) مبنا می‌شود و هر فرقی با آن یعنی بستن اول بپرسد.
+     ⚠️ در **ثبتِ تازه** نوع (با حوزه هم‌گام می‌شود) و «ارسالِ فوری» (از تاریخ مشتق می‌شود) در مبنا
+     نیستند: خودکارند نه نوشتهٔ کاربر، و پرسشی که بی‌دلیل می‌آید کاربر را به «دور ریختن»ِ بی‌نگاه عادت
+     می‌دهد. در ویرایش هر دو فقط با دستِ کاربر عوض می‌شوند و حساب‌اند. */
+  const unsavedSnap = JSON.stringify([
+    editing ? f : { ...f, kind: undefined, preOpImmediate: undefined },
+    extra,
+    subList.map((e) => [e.slot, e.data ?? null]),
+    pendingVitals,
+  ]);
+  const unsavedBase = useRef(null);
+  useEffect(() => {
+    if (unsavedBase.current === null && subLoaded) unsavedBase.current = unsavedSnap;
+  }, [subLoaded, unsavedSnap]);
+  const unsaved = unsavedBase.current !== null && unsavedSnap !== unsavedBase.current;
   useEffect(() => {
     if (subLoaded || !initial?.id) return undefined;
     let alive = true;
@@ -1963,11 +1980,18 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
 
   return (
     <AiContext.Provider value={aiCoding}>
-    <Overlay backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom" onClose={onClose} onSubmit={submit}>
+    <Overlay
+      backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom"
+      onClose={onClose} onSubmit={submit} closable={!busy}
+      /* نگهبانِ تغییرِ ذخیره‌نشده — «ذخیره» همان ارسالِ فرم است با همهٔ اعتبارسنجی‌ها؛ پیش از گامِ
+         «تکمیل» هنوز چیزی برای ذخیره نیست و پرسش فقط «دور ریختن / ادامه» می‌دهد. لمسِ پس‌زمینه این
+         فرمِ بلند را نمی‌بندد: بیشتر اشتباهِ انگشت است تا خواستنِ بستن. */
+      dirty={unsaved} onSave={editing || step === 3 ? 'submit' : undefined} backdropClose={false}
+    >
       <header className="db-sheet-head">
         {/* نوعِ «عمل» نامِ خودش را دارد (`surgery`/`surgeryNew`ِ واژگان) — فرمِ عملِ مطب «ویزیتِ جدید» می‌نوشت. */}
         <b data-sheet-title>{editing ? `ویرایشِ ${f.kind === 'surgery' ? t.surgery : t.visit} ${initial.code}` : f.kind === 'surgery' ? t.surgeryNew : t.visitNew}</b>
-        <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+        <CloseButton className="db-x" aria-label="بستن"><Close width="18" height="18" /></CloseButton>
       </header>
 
       {editing && <PatientSummary prep={prep} f={f} idOpen={idOpen} onToggleId={() => setIdOpen((x) => !x)} />}

@@ -6,7 +6,7 @@ import { faDate, jStrToIso, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { CloseButton, UnsavedPrompt } from '../ui/Overlay.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import { AttachPicker, useSubformCatalog } from './VisitSubforms.jsx';
@@ -42,6 +42,22 @@ const duration = (from, to) => {
   return `${faNum(Math.floor(d / 60))}:${faNum(String(d % 60).padStart(2, '0'))}`;
 };
 
+/* **پیش‌نویسِ روی دستگاه** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-07): «شرحِ عمل»ِ ذخیره‌نشده با زدنِ «فهرستِ
+   روز»، برگشتِ گوشی یا تازه‌کردنِ صفحه پاک می‌شد. حالا تا «ذخیره» یا «دور ریختن» روی همین دستگاه
+   می‌ماند و با بازکردنِ دوبارهٔ کارت برمی‌گردد. کلید شناسهٔ کاربر را دارد (دستگاهِ مشترکِ اتاقِ عمل)
+   و پس از یک روز کهنه حساب و پاک می‌شود. */
+const DRAFT_TTL = 24 * 3600e3;
+const draftKey = (uid, visitId, field) => `amalyar_draft:${uid ?? 0}:${visitId}:${field}`;
+const readDraft = (k) => {
+  try {
+    const v = JSON.parse(localStorage.getItem(k) ?? 'null');
+    if (!v || typeof v.text !== 'string' || Date.now() - (Number(v.at) || 0) > DRAFT_TTL) { localStorage.removeItem(k); return null; }
+    return v.text;
+  } catch { return null; }
+};
+const writeDraft = (k, text) => { try { localStorage.setItem(k, JSON.stringify({ text, at: Date.now() })); } catch { /* حالتِ ناشناس — فقط همین صفحه */ } };
+const dropDraft = (k) => { try { localStorage.removeItem(k); } catch { /* همان */ } };
+
 /**
  * **نمای اتاقِ عمل** — یک عمل، یک صفحه، در لحظه.
  *
@@ -73,6 +89,11 @@ export default function Theatre() {
   /* فیلترِ «مالِ کیست» (نمای سرپرستی) — در state همین صفحه، تا با باز و بسته‌شدنِ
      کارتِ یک عمل همان فیلتر بماند. */
   const [who, setWho] = useState('all');
+  /* **نوشته‌های ذخیره‌نشدهٔ کارت** (surgery-07) — هر جعبه (شرحِ عمل، یافته‌ها، فرمِ حینِ عمل) خودش
+     را این‌جا ثبت می‌کند: `{label, save, discard}`. «فهرستِ روز» پیش از بستنِ کارت همین را می‌پرسد. */
+  const unsaved = useRef(new Map()).current;
+  const [leaving, setLeaving] = useState(null); // null | برچسب‌های ذخیره‌نشده
+  const [leaveBusy, setLeaveBusy] = useState(false);
 
   const iso = jStrToIso(jday);
 
@@ -113,6 +134,30 @@ export default function Theatre() {
     finally { setBusy(''); }
   };
 
+  const closeCard = () => { setOpenId(null); setCard(null); loadDay(); };
+  /** برگشت به فهرستِ روز — نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود (ذخیره / دور ریختن / ادامهٔ ویرایش). */
+  const backToDay = () => {
+    if (unsaved.size) { setLeaving([...unsaved.values()].map((u) => u.label)); return; }
+    closeCard();
+  };
+  const leaveSaving = async () => {
+    setLeaveBusy(true);
+    try {
+      for (const u of [...unsaved.values()]) {
+        /* شکستِ یکی (پیامش را `act` داده) یعنی روی کارت بمان — نه اینکه بقیه را هم بی‌صدا رها کنی. */
+        if (!(await u.save())) { setLeaving(null); return; }
+      }
+      setLeaving(null);
+      closeCard();
+    } finally { setLeaveBusy(false); }
+  };
+  const leaveDiscarding = () => {
+    for (const u of unsaved.values()) u.discard?.();
+    unsaved.clear();
+    setLeaving(null);
+    closeCard();
+  };
+
   /* دسته‌ها و شمارشان از سرور می‌آیند (`day.owners`، فقط در نمای سرپرستی)؛ این‌جا فقط
      انتخاب می‌شوند. با یک نفر چیزی برای فیلترکردن نیست. دسته‌ای که با عوض‌شدنِ روز
      دیگر نیست، بی‌صدا به «همه» برمی‌گردد — نه فهرستِ خالی. */
@@ -143,7 +188,7 @@ export default function Theatre() {
           <button type="button" className="th-today" onClick={() => setJday(todayJStr())}>امروز</button>
         </>}
         {openId && (
-          <button type="button" className="th-today" onClick={() => { setOpenId(null); setCard(null); loadDay(); }}>
+          <button type="button" className="th-today" onClick={backToDay}>
             <Back width="15" height="15" aria-hidden="true" /> فهرستِ روز
           </button>
         )}
@@ -175,6 +220,7 @@ export default function Theatre() {
           onAct={act}
           onDischarge={() => setDischarging(true)}
           onToast={setToast}
+          unsaved={unsaved}
         />
       )}
 
@@ -209,6 +255,18 @@ export default function Theatre() {
               const done = await act('/discharge', 'discharge', body);
               if (done) { setDischarging(false); setToast('ترخیص ثبت شد'); }
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {leaving && (
+          <UnsavedPrompt
+            busy={leaveBusy}
+            text={`${leaving.map((l) => `«${l}»`).join('، ')} هنوز ذخیره نشده — اگر بی‌ذخیره به فهرستِ روز برگردید، از بین می‌رود.`}
+            onSave={leaveSaving}
+            onDiscard={leaveDiscarding}
+            onCancel={() => setLeaving(null)}
           />
         )}
       </AnimatePresence>
@@ -265,7 +323,7 @@ function DayList({ day, visits, busy, onOpen, techLabel }) {
  * عملِ بی‌کارشناس «تعیین نشده» می‌گوید، نه اینکه جایش خالی بماند — همان خبری
  * که ردیفِ فهرست داد، با بازکردنِ کارت گم نشود.
  */
-function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
+function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast, unsaved }) {
   const { visit: v, patient: p, alerts, items, documents } = card;
   /* «یافته‌های حینِ عمل» در مطب نیست (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) — همان
      چیزی که از فرمِ عمل برداشته شد، سرِ میز هم نباید دوباره پیدا شود. */
@@ -425,21 +483,21 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast }) {
           key={`findings-${v.id}`}
           visit={v} field="findings" path="/findings" actKey="findings"
           title="یافته‌های حینِ عمل" placeholder="آنچه حینِ عمل دیده شد…"
-          savedMsg="یافته‌ها ذخیره شد" busy={busy} onAct={onAct} onToast={onToast}
+          savedMsg="یافته‌ها ذخیره شد" busy={busy} onAct={onAct} onToast={onToast} unsaved={unsaved}
         />
       )}
       <NoteBox
         key={`report-${v.id}`}
         visit={v} field="opReport" path="/report" actKey="report"
         title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
-        savedMsg="شرحِ عمل ذخیره شد" busy={busy} onAct={onAct} onToast={onToast}
+        savedMsg="شرحِ عمل ذخیره شد" busy={busy} onAct={onAct} onToast={onToast} unsaved={unsaved}
       />
 
       <DeskSubforms
         key={`subs-${v.id}`}
         subforms={(card.subforms ?? []).filter((x) => x.phase === 'intra')}
         canWrite={!!card.can?.subforms} canAttach={!!card.clinical && !!card.can?.subforms}
-        busy={busy} onAct={onAct} onToast={onToast}
+        busy={busy} onAct={onAct} onToast={onToast} unsaved={unsaved}
       />
 
       <Documents visitId={v.id} groups={documents} />
@@ -497,9 +555,17 @@ function CodingList({ items, label }) {
  * صفحه بازنویسی **نمی‌شود**؛ فقط وقتی هم‌گام می‌شویم که کاربر چیزی ننوشته
  * باشد. همان قاعدهٔ `JDate`: نوشتهٔ کاربر زیرِ دستش عوض نمی‌شود.
  */
-function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, busy, onAct, onToast }) {
-  const [text, setText] = useState(visit[field] ?? '');
-  const dirty = useRef(false);
+function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, busy, onAct, onToast, unsaved }) {
+  const { user: me } = useAuth();
+  const dk = draftKey(me?.id, visit.id, field);
+  /* پیش‌نویسِ همین دستگاه (اگر با پرونده فرق دارد) جای متنِ پرونده می‌نشیند — «ذخیره نشده» می‌ماند
+     تا کاربر خودش ذخیره یا دور بریزد. */
+  const [fromDevice] = useState(() => {
+    const d = readDraft(dk);
+    return d != null && d.trim() !== (visit[field] ?? '').trim() ? d : null;
+  });
+  const [text, setText] = useState(fromDevice ?? visit[field] ?? '');
+  const dirty = useRef(fromDevice != null);
   /* «نوشتهٔ خودم»: برخلافِ `dirty` با ذخیره پاک نمی‌شود — «بنویس، ذخیره کن، بعد
      به پیش‌فرض بیفزا» باید کار کند، ولی شرحی که میز با آن باز شده نه. */
   const [touched, setTouched] = useState(false);
@@ -510,6 +576,26 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
 
   const saved = (visit[field] ?? '').trim();
   const changed = text.trim() !== saved;
+  /* هر تغییرِ کاربر (تایپ یا چیپِ پیش‌فرض) روی دستگاه می‌نشیند؛ برگشت به متنِ پرونده پاکش می‌کند. */
+  useEffect(() => {
+    if (!dirty.current) return;
+    if (changed) writeDraft(dk, text); else dropDraft(dk);
+  }, [text, changed, dk]);
+  const saveNow = async () => {
+    const done = await onAct(path, actKey, { body: text });
+    if (done) { dirty.current = false; dropDraft(dk); onToast(savedMsg); }
+    return done;
+  };
+  const saveRef = useRef(saveNow);
+  saveRef.current = saveNow;
+  /* ثبت در فهرستِ «ذخیره‌نشده»های کارت — «فهرستِ روز» پیش از رفتن همین را می‌پرسد. */
+  useEffect(() => {
+    if (!unsaved) return undefined;
+    const key = `note:${field}`;
+    if (!changed) { unsaved.delete(key); return undefined; }
+    unsaved.set(key, { label: title, save: () => saveRef.current(), discard: () => dropDraft(dk) });
+    return () => { unsaved.delete(key); };
+  }, [unsaved, changed, field, title, dk]);
 
   /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) — فقط برای شرحِ عمل ──
      چیپ‌ها و «افزودن به پیش‌فرض» همان کامپوننتِ فرمِ عمل‌اند؛ مسیرِ سرور زیرِ
@@ -548,16 +634,15 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
         onChange={(e) => { dirty.current = true; setTouched(true); setText(e.target.value); }}
       />
       <div className="th-report-bar">
-        <span className="th-hint">
-          {changed ? 'ذخیره نشده' : saved ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز نوشته نشده'}
+        <span className={`th-hint${changed ? ' is-warn' : ''}`} data-note-state={changed ? 'unsaved' : 'saved'}>
+          {changed
+            ? (fromDevice ? 'پیش‌نویسِ ذخیره‌نشدهٔ همین دستگاه — هنوز در پرونده نیست' : 'ذخیره نشده')
+            : saved ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز نوشته نشده'}
         </span>
         <button
           type="button" className="th-btn" data-act={field === 'opReport' ? 'save-report' : 'save-findings'}
           disabled={!changed || busy === actKey}
-          onClick={async () => {
-            const done = await onAct(path, actKey, { body: text });
-            if (done) { dirty.current = false; onToast(savedMsg); }
-          }}
+          onClick={saveNow}
         >ذخیره</button>
       </div>
       {isOp && (
@@ -690,7 +775,7 @@ function PreOpSummary({ subforms }) {
  * ⚠️ پنجرهٔ الصاق همان `AttachPicker`ِ فرمِ مراجعه است (بی‌ستارهٔ منتخب و بی‌انتخابِ مرحله) — نه
  * نسخهٔ موازی. کاتالوگ فقط با بازشدنِ پنجره خوانده می‌شود.
  */
-function DeskSubforms({ subforms, canWrite, canAttach, busy, onAct, onToast }) {
+function DeskSubforms({ subforms, canWrite, canAttach, busy, onAct, onToast, unsaved }) {
   const { user: me } = useAuth();
   /* همان نقشی که فرمِ مراجعه به `DynForm` می‌دهد — قفلِ نمایشی؛ اجرای واقعی سمتِ سرور است. */
   const myRole = (me?.level ?? 0) >= 6 ? null : (me?.jobRole ?? null);
@@ -699,18 +784,30 @@ function DeskSubforms({ subforms, canWrite, canAttach, busy, onAct, onToast }) {
   const [errors, setErrors] = useState({});
   const [picking, setPicking] = useState(false);
   const cat = useSubformCatalog(picking);
+  /* فرمِ حینِ عملِ نیمه‌پر هم «ذخیره‌نشده» است (surgery-07) — «فهرستِ روز» پیش از رفتن می‌پرسد. */
+  const saveRef = useRef(null);
+  useEffect(() => {
+    if (!unsaved) return undefined;
+    const x = editing ? subforms.find((s2) => s2.key === editing) : null;
+    if (!x || JSON.stringify(draft) === JSON.stringify(x.data ?? {})) { unsaved.delete('desk-subform'); return undefined; }
+    unsaved.set('desk-subform', { label: x.title, save: () => saveRef.current?.(x) ?? false, discard: () => setEditing(null) });
+    return () => { unsaved.delete('desk-subform'); };
+  }, [unsaved, editing, draft, subforms]);
   if (!subforms.length && !canAttach) return null;
   const saving = busy === 'subforms';
   const start = (x) => { setDraft(x.data ?? {}); setErrors({}); setEditing(x.key); };
   const save = async (x) => {
     const e = dynErrors(x.fields ?? [], draft, myRole);
     setErrors(e);
-    if (Object.keys(e).length) return;
+    if (Object.keys(e).length) return false;
     if (await onAct('/subforms', 'subforms', { items: [{ key: x.key, phase: 'intra', data: draft }] })) {
       setEditing(null);
       onToast?.(`«${x.title}» ذخیره شد`);
+      return true;
     }
+    return false;
   };
+  saveRef.current = save;
   /* الصاق بی‌پاسخ می‌رود (`data` نیامده = «دست نزن»): فرمِ تازه هنوز کادرِ اجباریِ پرشده ندارد و
      سرور ستاره را روی پاسخِ فرستاده‌شده می‌سنجد. بعدش همان‌جا برای پرکردن باز می‌شود. */
   const attach = async (it) => {
@@ -796,15 +893,18 @@ function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = f
   const clearing = clinical && canFollowUp && !!initial.nextVisitDateJ && !f.nextVisitDateJ;
   /* وضعیتِ خروج و وضعیتِ بیمار اجباری‌اند؛ شرح و یادداشت اختیاری. */
   const ok = f.condition.trim().length >= 2 && !!f.disposition && !nextBad;
+  /* نوشتهٔ ذخیره‌نشده (surgery-07) — بستن اول می‌پرسد؛ لمسِ پس‌زمینه این فرمِ پنج‌کادره را نمی‌بندد. */
+  const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   return (
     <Overlay
       backdrop="th-overlay" panel="th-dialog" as="form" from="center"
       closable={!busy} onClose={onClose} aria-label="ثبتِ ترخیص"
+      dirty={dirty} onSave="submit" backdropClose={false}
       onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(f); }}
     >
       <header className="th-dialog-head">
         <b>{already ? 'ویرایشِ ترخیص' : 'ترخیصِ بیمار'}</b>
-        <button type="button" className="th-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+        <CloseButton className="th-x" aria-label="بستن"><Close width="18" height="18" /></CloseButton>
       </header>
       {/* وضعیتِ خروج دکمه است نه کشویی: یک لمس، و هر چهار گزینه همیشه
           جلوی چشم — «فوت» نباید پشتِ یک منوی بسته پنهان بماند. */}
@@ -883,7 +983,7 @@ function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = f
       </label>
       <p className="th-hint">متن‌ها در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
       <div className="th-dialog-acts">
-        <button type="button" className="th-btn" onClick={onClose} disabled={busy}>انصراف</button>
+        <CloseButton className="th-btn" disabled={busy}>انصراف</CloseButton>
         <button type="submit" className="th-btn primary" disabled={!ok || busy}>
           {busy ? 'در حالِ ثبت…' : already ? 'ذخیرهٔ ترخیص' : 'ثبتِ ترخیص'}
         </button>
