@@ -2,12 +2,34 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FEATURES, FEATURE_BY_KEY, FEATURE_DEFAULT_LEVELS, LOCKED_FEATURES } from '../auth/access-registry';
 import { LEVEL } from '../common/levels';
+import { DEFAULT_VERTICAL, isVertical } from '../config/verticals';
+import { KEY_SERVICES, TenantProfile, featureSeedRows, profileOf } from '../config/tenant-profile';
 
 /**
  * پیش‌فرضِ سطحِ ماژول‌ها — از رجیستریِ دسترسی می‌آید، نه از فهرستی که این‌جا
  * نوشته شده باشد. منبعِ حقیقتِ زمانِ اجرا همچنان DB است.
  */
 export const FEATURE_DEFAULTS = FEATURE_DEFAULT_LEVELS;
+
+/**
+ * **ساختِ ردیف‌های غایبِ ماژول — به نوعِ همین نصب** (global-07). همهٔ سازنده‌های تنبل (این سرویس،
+ * ماتریسِ دسترسی، و دو مسیرِ «عوض‌کردنِ نوع» پیش از گذار) از همین می‌گذرند تا ردیفِ تازه همیشه
+ * همان چیزی باشد که پلانِ پروفایل می‌گوید — نه «روشن با سطحِ سراسری» (`featureSeedRows`).
+ *
+ * `profile` را کسی می‌دهد که پروفایلِ **قبلی** را می‌خواهد (گذارِ نوعِ نصب داخلِ تراکنشی که ردیفِ
+ * تنظیمات را همین حالا عوض کرده)؛ بی‌آن، از همان دو ردیفِ تنظیمات خوانده می‌شود. ⚠️ ردیفِ موجود
+ * دست نمی‌خورد (`skipDuplicates`) — سطح و خاموش/روشنی که شرکت خودش گذاشته حفظ می‌شود.
+ */
+export async function seedFeatureRows(db: { setting: any; feature: any }, profile?: TenantProfile) {
+  let p = profile;
+  if (!p) {
+    const rows: { key: string; value: string }[] = await db.setting.findMany({ where: { key: { in: ['vertical', KEY_SERVICES] } } });
+    const get = (k: string) => rows.find((r) => r.key === k)?.value ?? null;
+    const raw = get('vertical');
+    p = profileOf(isVertical(raw) ? raw : DEFAULT_VERTICAL, get(KEY_SERVICES));
+  }
+  await db.feature.createMany({ data: featureSeedRows(p, FEATURES), skipDuplicates: true });
+}
 
 /** ماژول‌های کارشناسی — مطب ندارد، حتی برای سوپرادمین (`forUser`). */
 const CLINIC_ABSENT = new Set(['tech', 'dispatch']);
@@ -24,12 +46,9 @@ const CLINIC_ABSENT = new Set(['tech', 'dispatch']);
 export class FeaturesService {
   constructor(private prisma: PrismaService) {}
 
-  /// seedِ تنبل: کلیدهای غایب با پیش‌فرض ساخته می‌شوند
+  /// seedِ تنبل: کلیدهای غایب به پلانِ نوعِ همین نصب ساخته می‌شوند (`seedFeatureRows`)
   private async ensureSeeded() {
-    await this.prisma.feature.createMany({
-      data: FEATURES.map((f) => ({ key: f.key, minLevel: f.defaultLevel })),
-      skipDuplicates: true,
-    });
+    await seedFeatureRows(this.prisma);
   }
 
   /**

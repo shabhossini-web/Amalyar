@@ -13,6 +13,7 @@ import {
   PERMISSIONS,
   PERMISSION_BY_KEY,
 } from './access-registry';
+import { seedFeatureRows } from '../features/features.service';
 
 export type AccessKind = 'feature' | 'permission';
 
@@ -61,10 +62,8 @@ export class AccessService {
   // ── seedِ تنبل ────────────────────────────────────────────────
 
   private async ensureSeeded() {
-    await this.prisma.feature.createMany({
-      data: FEATURES.map((f) => ({ key: f.key, minLevel: f.defaultLevel })),
-      skipDuplicates: true,
-    });
+    /* ماژولِ غایب به پلانِ نوعِ همین نصب، نه «روشن با سطحِ سراسری» (global-07). */
+    await seedFeatureRows(this.prisma);
     await this.prisma.permission.createMany({
       data: PERMISSIONS.map((p) => ({ key: p.key, minLevel: p.defaultLevel })),
       skipDuplicates: true,
