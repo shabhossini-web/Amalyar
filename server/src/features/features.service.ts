@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FEATURES, FEATURE_BY_KEY, FEATURE_DEFAULT_LEVELS, LOCKED_FEATURES } from '../auth/access-registry';
 import { LEVEL } from '../common/levels';
 import { DEFAULT_VERTICAL, isVertical } from '../config/verticals';
-import { KEY_SERVICES, TenantProfile, featureSeedRows, profileOf } from '../config/tenant-profile';
+import { KEY_SERVICES, TenantProfile, featurePlanForProfile, featureSeedRows, profileOf } from '../config/tenant-profile';
 
 /**
  * پیش‌فرضِ سطحِ ماژول‌ها — از رجیستریِ دسترسی می‌آید، نه از فهرستی که این‌جا
@@ -21,18 +21,18 @@ export const FEATURE_DEFAULTS = FEATURE_DEFAULT_LEVELS;
  * دست نمی‌خورد (`skipDuplicates`) — سطح و خاموش/روشنی که شرکت خودش گذاشته حفظ می‌شود.
  */
 export async function seedFeatureRows(db: { setting: any; feature: any }, profile?: TenantProfile) {
-  let p = profile;
-  if (!p) {
-    const rows: { key: string; value: string }[] = await db.setting.findMany({ where: { key: { in: ['vertical', KEY_SERVICES] } } });
-    const get = (k: string) => rows.find((r) => r.key === k)?.value ?? null;
-    const raw = get('vertical');
-    p = profileOf(isVertical(raw) ? raw : DEFAULT_VERTICAL, get(KEY_SERVICES));
-  }
+  const p = profile ?? await readProfile(db);
   await db.feature.createMany({ data: featureSeedRows(p, FEATURES), skipDuplicates: true });
 }
 
-/** ماژول‌های کارشناسی — مطب ندارد، حتی برای سوپرادمین (`forUser`). */
-const CLINIC_ABSENT = new Set(['tech', 'dispatch']);
+/** نوعِ نصب + خدمات از همان دو ردیفِ تنظیمات — همان قاعدهٔ `ConfigService.profile()` (`profileOf`). */
+async function readProfile(db: { setting: any }): Promise<TenantProfile> {
+  const rows: { key: string; value: string }[] = await db.setting.findMany({ where: { key: { in: ['vertical', KEY_SERVICES] } } });
+  const get = (k: string) => rows.find((r) => r.key === k)?.value ?? null;
+  const raw = get('vertical');
+  return profileOf(isVertical(raw) ? raw : DEFAULT_VERTICAL, get(KEY_SERVICES));
+}
+
 
 /**
  * خواندنِ ماژول‌ها.
@@ -70,26 +70,35 @@ export class FeaturesService {
   async forUser(user: any) {
     const rows = await this.list();
     const level = user?.level ?? 0;
-    /* ⚠️ سوپرادمین **همهٔ** پنل‌ها را می‌بیند — همان قاعدهٔ گاردها (عبورِ
+    /* ⚠️ سوپرادمین **همهٔ** پنل‌های **روشن** را می‌بیند — همان قاعدهٔ گاردها (عبورِ
        بی‌قیدِ سطح ۶) و همان انتظارِ کاربر از ملک‌طب: یک نفر باید کلِ چرخه را
        با دیدِ کامل ببیند. تا امروز صلاحیتِ نقش‌محور (راننده/کارشناس) کاشیِ
        سوپرادمین را هم پنهان می‌کرد در حالی که خودِ endpointها برایش باز بودند
-       — لانچر و سرور دو حرفِ متفاوت می‌زدند. */
+       — لانچر و سرور دو حرفِ متفاوت می‌زدند. ماژولِ خاموش اما برای او هم خاموش
+       است (پایین، shell-06). */
     /* تا بستهٔ ۵ (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹) کاشیِ `surgeon` در مطب همین‌جا برای همه
        خاموش می‌شد («پزشک مطب از داشبورد استفاده می‌کند»). حالا در مطب همان کاشی
        «میزِ پزشک» است و روشن/خاموشش را فقط پلانِ حوزه (`verticals.ts`) و پیوندِ حساب
        به تعریفِ جراح (`eligibility`) تعیین می‌کند — نه یک استثنای هاردکد. */
     if (level >= LEVEL.SUPER_ADMIN) {
-      /* ⚠️ **استثنا: بخشِ کارشناسِ مطب** (مالک، ۱۴۰۵/۰۷/۰۵ — «در مطب اصلاً بخشِ کارشناس نداریم،
-         گزارش نداریم»). پلانِ مطب `tech` و `dispatch` را ندارد، پس برای بقیه از قبل خاموش‌اند؛
-         ولی سوپرادمینِ مطب کاشیِ «پنلِ کارشناسی» را می‌دید و در آن عملِ مطب «آپلودِ گزارش»
-         می‌خواست — درحالی‌که سندِ عملِ مطب شرحِ عملِ جراح است. فقط وقتی خاموش‌اند: مطبی که
-         خودش از «سطوحِ دسترسی» روشنشان کرده همچنان می‌بیندشان. */
-      const clinic = (await this.prisma.setting.findUnique({ where: { key: 'vertical' } }).catch(() => null))?.value === 'clinic';
-      return rows.map((r) => {
-        const absent = clinic && !r.enabled && CLINIC_ABSENT.has(r.key);
-        return { ...r, allowed: !absent, reason: absent ? 'این بخش در مطب نیست' : null };
-      });
+      /* ⚠️ **ماژولِ خاموش برای سوپرادمین هم کاشی ندارد** (بازبینیِ UX، shell-06). تا امروز
+         `allowed` برای او فقط «در مطب نبودنِ» پنلِ کارشناس را می‌سنجید و `enabled` را نادیده
+         می‌گرفت: مالک ماژولی را در «سطوحِ دسترسی» خاموش می‌کرد و کاشی سرِ جایش می‌ماند — و
+         خیال می‌کرد کلید خراب است؛ و «فهرستِ انتظارِ عمل» (فقط مطب) در شرکت به کادرِ قرمزِ
+         بی‌راه می‌رسید. سطح و صلاحیتِ نقش همچنان برای او سنجیده نمی‌شوند (همان عبورِ بی‌قیدِ
+         سطحِ ۶ در گاردها)؛ فقط روشن/خاموشِ ماژول — اهرمِ پلن — به او هم می‌رسد. و چون ماژولِ
+         خاموش **در خودِ جدول** خاموش است، سوپرادمین از «سطوحِ دسترسی» همان را روشن می‌کند.
+         ⚠️ **دلیل می‌گوید چرا:** ماژولی که پلانِ همین نوعِ نصب ندارد «در مطب نیست» / «در خدماتِ
+         این شرکت نیست» (مالک، ۱۴۰۵/۰۷/۰۵ — «در مطب اصلاً بخشِ کارشناس نداریم»)؛ بقیه «غیرفعال».
+         مطبی که خودش از «سطوحِ دسترسی» روشنشان کرده همچنان می‌بیندشان. */
+      const profile = await readProfile(this.prisma).catch(() => null);
+      const plan = profile ? featurePlanForProfile(profile.kind, profile.services) : null;
+      const outside = profile?.kind === 'clinic' ? 'این بخش در مطب نیست' : 'این بخش در خدماتِ این شرکت نیست';
+      return rows.map((r) => ({
+        ...r,
+        allowed: r.enabled,
+        reason: r.enabled ? null : plan && !(r.key in plan) ? outside : 'این بخش غیرفعال است',
+      }));
     }
     const eligible = await this.eligibility(user);
     const jobRole = user?.jobRole ?? '';
