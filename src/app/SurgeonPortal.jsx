@@ -358,7 +358,8 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
                   <Row open={open} data-day-key={r.key} data-visit-id={r.visitId ?? undefined} data-appt-id={r.apptId ?? undefined}>
                     <span className="sp-row-time">{faTime(r.time) || (r.seq != null ? `شمارهٔ ${faNum(r.seq)}` : '—')}</span>
                     <span className="sp-row-name">
-                      {r.patient?.fullName ?? 'ثبت‌نامِ تکمیل‌نشده'}
+                      {/* فاصلهٔ واقعی تا برچسب — وگرنه حرفِ آخرِ نام به آن می‌چسبد («رضایـ»، clinic-daily-13). */}
+                      {r.patient?.fullName ?? 'ثبت‌نامِ تکمیل‌نشده'}{' '}
                       {r.kind && <span className="sp-kind">{kindOf(r.kind).label}</span>}
                     </span>
                     {/* هشدار: مبلغ **بیرونِ** بخشِ کوتاه‌شونده است: روی عرضِ گوشی

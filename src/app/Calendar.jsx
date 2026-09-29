@@ -174,7 +174,9 @@ export default function Calendar() {
                 </div>
                 <div className="cal-main">
                   <b>
-                    {a.fullName ?? 'بدونِ پرونده'}
+                    {/* ⚠️ فاصلهٔ واقعی بینِ نام و برچسب (بازبینیِ UX، clinic-daily-13): مرورگر حروفِ فارسی
+                        را از مرزِ دو عنصر هم به هم می‌چسباند و «رضایی» کنارِ «در مطب» «رضایـ» دیده می‌شد. */}
+                    {a.fullName ?? 'بدونِ پرونده'}{' '}
                     <i className={`cal-appt-st st-${a.status}`}>{a.statusLabel}</i>
                   </b>
                   <small>{[a.topicName, a.patientCode, a.phone].filter(Boolean).join(' · ') || '—'}</small>
@@ -246,7 +248,7 @@ export default function Calendar() {
             </div>
             <div className="cal-main">
               <b>
-                {v.fullName}
+                {v.fullName}{' '}
                 {/* نامِ نوع از سرور (`kindTitle`، همان کارتِ «بیماران») — نه نگاشتِ هاردکد. */}
                 {v.kind && <i className="cal-kind">{v.kindTitle || kindOf(v.kind).label}</i>}
               </b>
