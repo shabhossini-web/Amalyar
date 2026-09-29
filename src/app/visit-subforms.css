@@ -269,3 +269,16 @@
   color: var(--red-text); background: rgba(var(--surface-rgb), .96);
   border: 1px solid var(--red-text);
 }
+
+/* ── «روزهای پیگیری (دلخواه)» در تبِ «بعد از عمل» (surgery-20) ─────────────────
+   کادر استایلِ فیلدها را نمی‌گرفت: در تمِ تیره یک مستطیلِ سفیدِ خام وسطِ صفحه بود و از چیپ‌های کنارش
+   کوتاه‌تر. حالا همان توکن‌های `.db-field input` (زمینه، بوردر، رنگِ متن) و هم‌قدِ چیپ‌ها. */
+.db-daychips .db-dayinput {
+  box-sizing: border-box; min-height: 38px; width: 130px;
+  font-family: inherit; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.13);
+  border-radius: 99px; outline: none; transition: border-color .15s;
+}
+.db-daychips .db-dayinput::placeholder { color: var(--text3); }
+.db-daychips .db-dayinput:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
+.db-daychips .db-daychip { min-height: 38px; }
