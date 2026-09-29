@@ -240,7 +240,9 @@
 }
 
 /* ── تنظیماتِ اختصاصیِ شرکت ─────────────────────────────────── */
-.st-group { margin: 14px 0 6px; }
+/* همان ستونِ ۹۰۰ پیکسلیِ بالای صفحه — تا امروز از «قالب فاکتور» به بعد فیلدها تمام‌عرضِ
+   پنجره می‌شدند و سرتیترها به لبه می‌چسبیدند (بازبینیِ UX ۱۴۰۵/۰۷). */
+.st-group { max-width: 900px; margin: 14px auto 6px; }
 .st-group-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
 .st-group-head b { font-size: 14px; }
 .st-group-head small { font-size: 12px; opacity: .7; line-height: 1.7; }
@@ -248,6 +250,19 @@
 .st-knobs { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .st-knob.wide { grid-column: 1 / -1; }
 .st-knob > span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* کشویی‌های تنظیمات («بخش»، بله/خیر) — هم‌قدِ فیلدهای کناری و از توکن، نه کنترلِ خامِ مرورگر.
+   `.pf-field select`ِ dynform/record این صفحه را نمی‌گیرد (چانکِ دیگری‌اند). */
+.df .pf-field select {
+  width: 100%; min-height: 46px; border-radius: 11px; padding: 0 13px; padding-inline-start: 34px;
+  font: inherit; font-size: 13px; color: var(--text1); cursor: pointer;
+  appearance: none; -webkit-appearance: none; outline: none;
+  background-color: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--brand-soft-rgb), .26);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23857fae' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: left 12px center;
+}
+.df .pf-field select:focus { border-color: var(--brand-2); }
+.df .pf-field select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.df .pf-field select option { background: var(--bg3); color: var(--text1); }
 .st-knob textarea {
   padding: 8px 10px; border-radius: 10px; font: inherit; font-size: 13px; resize: vertical;
   border: 1px solid rgba(148, 163, 184, .25); background: rgba(var(--surface-rgb), .5); color: inherit;
