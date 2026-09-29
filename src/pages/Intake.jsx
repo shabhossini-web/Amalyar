@@ -5,7 +5,7 @@ import { api, apiUpload } from '../lib/api.js';
 import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
-import { Alert, Bank, Box, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, CheckCircle, ChevronEnd, Clock, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -131,14 +131,17 @@ function Register() {
         {sources.length > 0 && (
           <label className="ik-field">
             <span>چطور با ما آشنا شدید؟</span>
-            <select
-              value={f.referralSourceId}
-              disabled={busy}
-              onChange={(e) => setF((s2) => ({ ...s2, referralSourceId: e.target.value, referralNote: '' }))}
-            >
-              <option value="">— انتخاب کنید —</option>
-              {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
+            <span className="ik-select">
+              <select
+                value={f.referralSourceId}
+                disabled={busy}
+                onChange={(e) => setF((s2) => ({ ...s2, referralSourceId: e.target.value, referralNote: '' }))}
+              >
+                <option value="">— انتخاب کنید —</option>
+                {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <ChevronEnd className="ik-select-ic" width="17" height="17" aria-hidden="true" />
+            </span>
           </label>
         )}
         {/* نامِ معرف فقط برای کانال‌هایی که معرف دارند — پرسیدنش از کسی که
