@@ -19,6 +19,17 @@
   border: 1px solid rgba(var(--brand-2-rgb), 0.4); border-radius: 18px; padding: 8px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
 }
+/* زیرِ ۶۴۰ پیکسل کشو **شیتِ تمام‌عرض** است، بسته به لبه‌های صفحه نه به دکمه: زنگ وسطِ
+   نوار است و کشوی ۳۵۸ پیکسلی‌ای که از لبهٔ چپِ آن باز می‌شد تا ۵۲۳ پیکسل می‌رفت — عنوان،
+   «انجام شد» و «فردا» بیرونِ صفحهٔ ۳۹۰ پیکسلی بودند (بازبینیِ UX ۱۴۰۵/۰۷). ⚠️ `fixed` این‌جا
+   نسبت به خودِ نوار است، نه پنجره: `backdrop-filter`ِ `.sh-bar` بلوکِ دربرگیرنده می‌سازد؛ نوار
+   چسبانِ بالای صفحه و تمام‌عرض است، پس نتیجه همان است. سنجه: `scripts/e2e/w2-4-shell.mjs`. */
+@media (max-width: 640px) {
+  .wb-menu {
+    position: fixed; top: calc(var(--shell-h) + 6px); inset-inline: 16px; width: auto;
+    max-height: calc(100dvh - var(--shell-h) - 24px); overflow-y: auto;
+  }
+}
 .wb-head { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; border-bottom: 1px solid rgba(var(--veil-rgb), .08); }
 .wb-head b { font-size: 14px; }
 .wb-counts { font-size: 12px; color: var(--text2); }
