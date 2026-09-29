@@ -59,6 +59,20 @@
 .ax-name b svg { color: var(--text3); }
 .ax-name small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.8; color: var(--text3); }
 .ax-key { display: block; margin-top: 3px; font-size: 10px; font-style: normal; color: var(--text3); }
+/* «کاشی‌های تحتِ این کلید» — نامِ کاشی‌ها همان‌طور که در لانچر دیده می‌شوند. */
+.ax-name small.ax-tiles { color: var(--text2); }
+
+/* کاشی‌هایی که کلیدِ ماژولِ خودشان را ندارند — فقط خواندنی، زیرِ گروهِ ماژول‌ها. */
+.ax-keyless {
+  margin-top: 10px; padding: 11px 13px; border-radius: 15px;
+  background: rgba(var(--veil-rgb), .03); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
+}
+.ax-keyless > b { display: block; font-size: 12.5px; font-weight: 800; }
+.ax-keyless > small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.8; color: var(--text3); }
+.ax-keyless ul { list-style: none; display: grid; gap: 6px; margin-top: 8px; }
+.ax-keyless li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; }
+.ax-keyless li span { font-weight: 700; }
+.ax-keyless li small { font-size: 11px; color: var(--text2); }
 .ax-tag {
   font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px;
   color: var(--amber-text); background: var(--amber-bg);

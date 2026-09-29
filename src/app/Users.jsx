@@ -19,6 +19,7 @@ import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 import Toast, { useToast } from '../ui/Toast.jsx';
+import { useToolTitle } from './tools.jsx';
 
 
 /**
@@ -167,7 +168,8 @@ export default function Users() {
   const [creating, setCreating] = useState(false);
   const [testingEnabled, setTestingEnabled] = useState(false), [modeBusy, setModeBusy] = useState(false);
 
-  useEffect(() => { document.title = 'عمل‌یار — مدیریت کاربران'; }, []);
+  /* نامِ صفحه همان نامِ کاشی است («کاربران») — قانونِ ۲۴؛ کاتالوگ تنها منبعِ نام است. */
+  const { label: title } = useToolTitle('users');
 
   const load = useCallback(async () => {
     try {
@@ -255,7 +257,7 @@ export default function Users() {
       <div className="lx-shell us-shell">
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>مدیریت کاربران</h1>
+          <h1>{title}</h1>
         </header>
 
         {!user?.isTestAccount && <section className="glass us-card"><b>تست نقش‌ها با یک شماره</b><p>حالت آزمایشی را روشن کنید، سپس در «ساخت حساب موقت» گزینهٔ شماره مشترک و نام کاربری مستقل را انتخاب کنید. از منوی حساب، «افزودن حساب» و جابه‌جایی بین نقش‌ها استفاده کنید.</p><p>پایان تست همهٔ حساب‌های آزمایشی و نشست‌هایشان را غیرفعال می‌کند؛ اطلاعات ثبت‌شده حذف نمی‌شود. روشن‌کردن دوباره، حساب‌های قبلی را خودکار فعال نمی‌کند.</p><button className="us-btn" disabled={modeBusy} onClick={toggleTesting}>{modeBusy ? 'در حال ثبت…' : testingEnabled ? 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' : 'فعال‌کردن ساخت حساب آزمایشی'}</button></section>}

@@ -6,6 +6,8 @@ import './access.css';
 import { Alert, Back, CheckCircle, Lock } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
 import Toast, { useToast } from '../ui/Toast.jsx';
+import { useTerms } from './config.jsx';
+import { allTools, toolsOfFeature, useToolTitle } from './tools.jsx';
 
 /**
  * ماتریسِ سطوحِ دسترسی.
@@ -28,7 +30,8 @@ export default function Access() {
   const [lens, setLens] = useState(0); // ۰ = همه؛ وگرنه «از نگاهِ سطحِ N»
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — سطوحِ دسترسی'; }, []);
+  const { label: title } = useToolTitle('access');
+  const t = useTerms();
 
   const load = useCallback(async () => {
     setErr('');
@@ -57,13 +60,32 @@ export default function Access() {
 
   const levels = data?.levels ?? [];
 
+  /* نامِ هر ردیفِ ماژول **از کاتالوگِ کاشی‌ها** می‌آید، نه از برچسبِ سرور: مدیر در لانچر
+     «بیماران» می‌بیند و این‌جا باید همان را پیدا کند، نه «داشبورد مدیریت». کلیدی که چند
+     کاشی را با هم باز و بسته می‌کند (مثلِ «بیماران» که «یادآوری‌ها» و «جستجوی بالینی» را هم
+     می‌برد) زیرِ نامش فهرستِ همان کاشی‌ها را می‌گوید. */
+  const shown = (r) => {
+    if (r.kind !== 'feature') return { ...r, tiles: [] };
+    const tiles = toolsOfFeature(r.key, t);
+    const own = tiles.find((x) => x.key === r.key);
+    const label = own?.label ?? r.label;
+    const listed = tiles.length > 1 || (tiles.length === 1 && tiles[0].label !== label) ? tiles : [];
+    return { ...r, label, tiles: listed };
+  };
+  /* کاشی‌هایی که کلیدِ ماژولِ خودشان را ندارند — تا امروز در این صفحه اصلاً ردیفی نداشتند و
+     مدیر نمی‌دانست چرا «تنظیمات» یا «دستیار» را نمی‌تواند خاموش کند. */
+  const featureKeys = new Set((data?.groups ?? []).flatMap((g) => g.rows).filter((r) => r.kind === 'feature').map((r) => r.key));
+  const permLabel = new Map((data?.groups ?? []).flatMap((g) => g.rows).filter((r) => r.kind === 'permission').map((r) => [r.key, r.label]));
+  const keyless = data ? allTools(t).filter((x) => !featureKeys.has(x.feature ?? x.key)) : [];
+  const levelName = (v) => levels.find((l) => l.value === v)?.label ?? '';
+
   return (
     <div className="ax">
       <div className="ax-bg" aria-hidden="true" />
       <header className="ax-head">
         <Link to="/app" className="ax-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
-          <h1>سطوحِ دسترسی</h1>
+          <h1>{title}</h1>
           <p>
             هر ردیف یک در است و شش ستون شش سطح. ستونِ روشن یعنی آن سطح و
             بالاترش این در را باز می‌کنند.
@@ -95,7 +117,7 @@ export default function Access() {
           <h2>{g.label}</h2>
           {g.hint && <p className="ax-ghint">{g.hint}</p>}
           <div className="ax-rows">
-            {g.rows.map((r, i) => {
+            {g.rows.map(shown).map((r, i) => {
               const open = lens === 0 || (r.enabled && lens >= r.minLevel);
               return (
                 <motion.article
@@ -109,6 +131,9 @@ export default function Access() {
                       {!r.isDefault && <i className="ax-tag">دست‌کاری‌شده</i>}
                     </b>
                     {r.hint && <small>{r.hint}</small>}
+                    {r.tiles.length > 0 && (
+                      <small className="ax-tiles">کاشی‌های تحتِ این کلید: {r.tiles.map((x) => x.label).join('، ')}</small>
+                    )}
                     <em className="ax-key" dir="ltr">{r.key}</em>
                   </div>
 
@@ -175,6 +200,23 @@ export default function Access() {
               );
             })}
           </div>
+          {g.key === 'modules' && keyless.length > 0 && (
+            <div className="ax-keyless" aria-label="کاشی‌هایی که کلیدِ جدا ندارند">
+              <b>کاشی‌هایی که کلیدِ جدا ندارند</b>
+              <small>روشن/خاموش ندارند و فقط با سطح دیده می‌شوند؛ اگر مجوزی داده‌شان را باز می‌کند، همان ردیف را پایین‌تر عوض کنید.</small>
+              <ul>
+                {keyless.map((x) => (
+                  <li key={x.key}>
+                    <span>{x.label}</span>
+                    <small>
+                      از سطحِ {Number(x.min).toLocaleString('fa-IR')} ({levelName(x.min)}) به بالا
+                      {x.perm && permLabel.get(x.perm) && <> · داده‌اش با «{permLabel.get(x.perm)}»</>}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       ))}
 
