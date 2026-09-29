@@ -204,9 +204,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* پیش‌فرضِ نوع از حوزه (`/config.defaultKind`): مطب ویزیت، بقیه عمل (بستهٔ ۵ب). */
     kind: initial?.kind || prefill?.kind || defaultKind,
     service: initial?.service ?? '',
-    firstName: initial?.firstName || '',
-    lastName: initial?.lastName || '',
-    phone: initial?.phone || '',
+    /* نام/موبایل از «ثبتِ بیمارِ تازه»ِ جستجوی سراسری (prefill) — بازبینیِ UX، shell-25. */
+    firstName: initial?.firstName || prefill?.firstName || '',
+    lastName: initial?.lastName || prefill?.lastName || '',
+    phone: initial?.phone || prefill?.phone || '',
     nationalId: initial?.nationalId || '',
     birthDateJ: initial?.birthDate ? isoToJStr(initial.birthDate) : '',
     /* پیوستگی (۱۴۰۵/۰۷/۰۳): فرمِ عملِ «کاندیدای جراحی» پزشکِ همان ویزیت را می‌گیرد. */

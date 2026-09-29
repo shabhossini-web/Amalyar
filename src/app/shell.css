@@ -100,3 +100,14 @@
 .gs-meta code { font-family: inherit; color: var(--brand-2); }
 .gs-empty, .gs-hint { padding: 14px 12px; color: var(--text3); font-size: 12.5px; }
 .gs-hint kbd { font-family: inherit; border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 5px; padding: 0 5px; margin-inline: 2px; font-size: 11px; }
+/* بی‌نتیجه: راهِ بعدی — «ثبتِ بیمارِ تازه با نامِ …» (بازبینیِ UX ۱۴۰۵/۰۷). */
+.gs-none { padding: 0 6px 10px; }
+.gs-none .gs-empty { padding: 10px 6px 8px; }
+.gs-new {
+  width: 100%; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 12px;
+  border-radius: 12px; cursor: pointer; text-align: start;
+  font: inherit; font-size: 13.5px; font-weight: 800; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), 0.10); border: 1px dashed rgba(var(--brand-2-rgb), 0.55);
+}
+.gs-new:hover { background: rgba(var(--brand-rgb), 0.18); }
+.gs-new:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

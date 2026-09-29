@@ -143,6 +143,20 @@ export function useToolTitle(key) {
   return { label, icon: tool?.icon ?? null };
 }
 
+/*
+ * `/features` یک‌بار برای همهٔ مصرف‌کننده‌های هم‌زمان (نوارِ پوسته، جستجو، «امروز»، لانچر) —
+ * هرکدام تا پیش از این درخواستِ خودش را می‌فرستاد. کلید = حساب، عمرِ کوتاه (۱۵ ثانیه).
+ */
+let featuresCache = null; // { who, at, promise }
+function fetchFeatures(who) {
+  const now = Date.now();
+  if (featuresCache && featuresCache.who === who && now - featuresCache.at < 15_000) return featuresCache.promise;
+  const promise = import('../lib/api.js').then(({ api }) => api('/features'));
+  featuresCache = { who, at: now, promise };
+  promise.catch(() => { if (featuresCache?.promise === promise) featuresCache = null; });
+  return promise;
+}
+
 /**
  * کاشی‌هایی که این کاربر اجازه دارد.
  *
@@ -156,18 +170,17 @@ export function useAllowedTools() {
   const [features, setFeatures] = useState(null); // key → {allowed, …}
   useEffect(() => {
     let alive = true;
-    import('../lib/api.js').then(({ api }) =>
-      api('/features')
+    fetchFeatures(user?.id)
         .then((rows) => { if (alive) setFeatures(Object.fromEntries(rows.map((r) => [r.key, r]))); })
         /* ⚠️ شکستِ این درخواست باید به **پشتیبانِ `min`** برگردد، نه به انتظارِ ابدی.
            تا دیروز `catch` خالی بود و `features` روی `null` می‌ماند؛ برای لانچر
            بی‌اثر بود (فقط فهرست خالی می‌شد) ولی میزِ پزشک روی همین `loading`
            رندر را نگه می‌دارد و صفحه تا ابد «در حالِ بارگذاری…» می‌ماند.
            `{}` یعنی «پاسخی نیامد»: `allowed()` به `lvl >= t.min` برمی‌گردد. */
-        .catch(() => { if (alive) setFeatures({}); }),
-    );
+        .catch(() => { if (alive) setFeatures({}); });
     return () => { alive = false; };
-  }, []);
+    /* حسابِ دیگر (`/auth/switch` در همین زبانه) یعنی کاشی‌های دیگر — دوباره پرسیده می‌شود. */
+  }, [user?.id]);
 
   const allowed = (t) => {
     const f = features?.[t.feature ?? t.key];
