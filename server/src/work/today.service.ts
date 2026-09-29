@@ -16,6 +16,56 @@ const WORK_LIMIT = 8;
 const TEAM_WORK_LIMIT = 12;
 
 /**
+ * نوعِ مراجعه به فارسی — برای چیپِ هر ردیف در «امروز». مطب ویزیت و عمل را در یک فهرست
+ * دارد و تا دیروز همه «ویزیت» خوانده می‌شدند؛ ردیفی با «بیمارستان پارس» ویزیت بود و یک
+ * بیمار یک‌بار «در انتظار» و یک‌بار «انجام شد» می‌آمد بی‌آنکه معلوم باشد کدام عمل است
+ * (بازبینیِ UX ۱۴۰۵/۰۷). نوعِ ناشناخته عنوانِ فرمِ خودش را می‌گیرد، نه «عمل».
+ */
+const KIND_FA: Record<string, string> = {
+  surgery: 'عمل', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره',
+};
+
+/**
+ * رویدادِ دامنه به فارسی — کارتِ «رویدادِ پردازش‌نشده» در نمای استثنا تا دیروز نوعِ خامِ
+ * انگلیسی (`appointment.cancelled`) را نشان می‌داد. کلید همان `RULES`ِ `work-rules.ts` است؛
+ * نوعِ تازه‌ای که این‌جا نیامده «رویدادِ سامانه» می‌خورد، نه کلیدِ خام.
+ */
+const EVENT_FA: Record<string, string> = {
+  'order.answered': 'پاسخِ سفارش رسید',
+  'order.reviewed': 'سفارش بررسی شد',
+  'order.needs_action': 'نتیجه باید دوباره فرستاده شود',
+  'form.answered': 'پاسخِ فرمِ بیمار رسید',
+  'form.reviewed': 'پاسخِ فرم بررسی شد',
+  'form.unanswered': 'فرمِ پیگیری بی‌پاسخ ماند',
+  'pathway.step_overdue': 'مرحلهٔ مسیرِ درمان عقب افتاد',
+  'pathway.step_closed': 'مرحلهٔ مسیرِ درمان بسته شد',
+  'intake.submitted': 'ثبت‌نامِ تازه رسید',
+  'intake.returned': 'ثبت‌نام برای اصلاح برگشت',
+  'intake.approved': 'ثبت‌نام تأیید شد',
+  'intake.rejected': 'ثبت‌نام رد شد',
+  'intake.approve_failed': 'تأییدِ ثبت‌نام ناتمام ماند',
+  'intake.approval_sync_pending': 'تأییدِ ثبت‌نام در انتظارِ هم‌گام‌سازی',
+  'intake.approval_synced': 'تأییدِ ثبت‌نام هم‌گام شد',
+  'appointment.held': 'نوبت نگه داشته شد',
+  'appointment.confirmed': 'نوبت قطعی شد',
+  'appointment.cancelled': 'نوبت لغو شد',
+  'appointment.noshow': 'بیمار سرِ نوبت نیامد',
+  'appointment.started': 'مراجعه از نوبت شروع شد',
+  'visit.unconfirmed': 'وضعیتِ مراجعه ثبت نشده',
+  'visit.done': 'مراجعه انجام شد',
+  'visit.postponed': 'مراجعه موکول شد',
+  'visit.cancelled': 'مراجعه لغو شد',
+  'report.missing': 'گزارشِ مراجعه ثبت نشده',
+  'report.uploaded': 'گزارشِ مراجعه بارگذاری شد',
+  'usage.unconfirmed': 'مصرفِ اقلام تأیید نشده',
+  'usage.confirmed': 'مصرفِ اقلام تأیید شد',
+  'invoice.ready': 'آمادهٔ صدورِ فاکتور',
+  'invoice.issued': 'فاکتور صادر شد',
+  'sms.failed': 'پیامک نرسید',
+  'sms.sent': 'پیامک رفت',
+};
+
+/**
  * صفحهٔ «امروز» (W2.3) — یک پاسخ برای «الان چه کار کنم؟».
  *
  * هر بخش **جدا گیت می‌شود** و اگر کاربر اجازه‌اش را نداشته باشد خالی برمی‌گردد،
@@ -68,7 +118,7 @@ export class TodayService {
        `inbox`ش خودش همه را دارد — به‌علاوهٔ تفکیکِ «مالِ کیست» برای فیلترِ بالای فهرست.
        رابط سطح را حساب نمی‌کند؛ همین `team` را می‌خواند (قانونِ ۳). */
     const team = isUnrestricted(user);
-    const [counts, items, visits, appointments, intakePending, exceptions, canProcess, canCreateVisit] = await Promise.all([
+    const [counts, items, visits, appointments, intakePending, exceptions, canProcess, canCreateVisit, bookingOn] = await Promise.all([
       this.work.counts(user, { owners: team }),
       this.work.list(user, { scope: 'inbox', limit: team ? TEAM_WORK_LIMIT : WORK_LIMIT }),
       seesVisits ? this.visitsToday(user, level, start, end) : Promise.resolve([]),
@@ -86,7 +136,15 @@ export class TodayService {
          `patients.create`)، نه حدسِ سطح در رابط (قانونِ ۳): دکمه‌ای که به ۴۰۳
          می‌خورد بدتر از نبودنش است. */
       canAccess(this.prisma, user, 'dashboard', ['patients.create']).catch(() => false),
+      /* «نوبت‌دهی دارد؟» — همان قاعدهٔ `IntakeService.bookingOn()`: دست‌کم یک برنامهٔ کاریِ فعال. */
+      can('calendar')
+        ? this.prisma.availabilityRule.count({ where: { active: true } }).then((n) => n > 0).catch(() => false)
+        : Promise.resolve(false),
     ]);
+    /* بخشِ نوبت‌ها فقط برای نصبی که **نوبت‌دهی** دارد — نه هر کسی که «تقویمِ عمل‌ها» را باز
+       می‌کند. شرکتی که برنامهٔ کاری ندارد هر روز «۰ نوبتِ امروز» و «امروز نوبتی نیست» می‌دید
+       (بازبینیِ UX ۱۴۰۵/۰۷). نوبتی که با این همه امروز ثبت شده باشد، بخش را باز می‌کند. */
+    const apptSection = can('calendar') && (bookingOn || appointments.length > 0);
 
     /* «کارِ بعدی» = نزدیک‌ترین چیزی که ساعت دارد — عمل یا نوبت، هرکدام زودتر. */
     const nextAt = [
@@ -117,7 +175,7 @@ export class TodayService {
       canCreateVisit,
       /* «امروز»ِ مطب (YYYY-MM-DD) — تاریخِ پیش‌فرضِ «+»، همان تعریفی که فهرستِ امروز با آن فیلتر می‌شود. */
       clinicToday: clinicTodayIso(now),
-      sections: { visits: seesVisits, appointments: can('calendar'), intake: can('formgen'), exceptions: seesExceptions },
+      sections: { visits: seesVisits, appointments: apptSection, intake: can('formgen'), exceptions: seesExceptions },
     };
   }
 
@@ -194,7 +252,10 @@ export class TodayService {
 
     return {
       unowned: { count: unownedCount, items: unowned.map((w) => ({ ...w, patient: byPatient.get(w.patientId ?? -1) ?? null })) },
-      stuckEvents: { count: stuckCount, items: stuck.map((e) => ({ ...e, patient: byPatient.get(e.patientId ?? -1) ?? null })) },
+      stuckEvents: {
+        count: stuckCount,
+        items: stuck.map((e) => ({ ...e, typeFa: EVENT_FA[e.type] ?? 'رویدادِ سامانه', patient: byPatient.get(e.patientId ?? -1) ?? null })),
+      },
       unreviewed,
       halfApproved: { count: halfCount, items: half.map(({ patient, ...i }) => ({ ...i, patient: TodayService.person(patient) })) },
     };
@@ -253,7 +314,7 @@ export class TodayService {
 
   /** عمل‌های امروز — دامنهٔ دید مثلِ خودِ فهرستِ مراجعات: زیرِ سوپروایزر فقط مالِ خودش. */
   private async visitsToday(user: any, level: number, start: Date, end: Date) {
-    const rows = await this.prisma.visit.findMany({
+    const [rows, forms] = await Promise.all([this.prisma.visit.findMany({
       where: {
         opDate: { gte: start, lte: end },
         opStatus: { not: 'cancelled' },
@@ -267,13 +328,18 @@ export class TodayService {
         hospitalName: true, surgeonName: true,
         patient: { select: { id: true, code: true, firstName: true, lastName: true } },
       },
-    });
+    }),
+    /* عنوانِ فرمِ هر نوعِ ناشناخته — «فرمِ پیگیریِ ارتوپدی» → «پیگیریِ ارتوپدی». */
+    this.prisma.formDef.findMany({ where: { scope: 'visit', visitKind: { not: null } }, select: { visitKind: true, title: true } })
+      .catch(() => [] as { visitKind: string | null; title: string }[])]);
+    const formTitle = new Map(forms.map((f) => [f.visitKind, f.title.replace(/^فرمِ?\s+/, '').trim()]));
     return rows.map((v) => ({
       id: v.id,
       patientId: v.patient.id,
       code: `${v.patient.code}-V${v.seq}`,
       fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
       kind: v.kind,
+      kindFa: KIND_FA[v.kind] ?? (formTitle.get(v.kind) || v.kind),
       opStartTime: v.opStartTime,
       opStatus: v.opStatus,
       /* برچسب از `labels.ts` می‌آید، نه از نگاشتِ کلاینتی — قانونِ «یک وضعیت،

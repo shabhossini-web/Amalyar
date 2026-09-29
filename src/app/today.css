@@ -51,6 +51,15 @@
 }
 .td-time { font-size: 13px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
 .td-name { grid-column: 2; font-size: 14px; font-weight: 700; color: var(--text1); text-decoration: none; }
+/* نام + چیپِ نوع («ویزیت»/«عمل») در یک سطر — مطب هر دو را در یک فهرست دارد. */
+.td-main { grid-column: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 3px 7px; min-width: 0; }
+.td-main .td-name { grid-column: auto; min-width: 0; }
+.td-kind {
+  display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 99px;
+  font-size: 11px; font-weight: 700; line-height: 1.7; white-space: nowrap;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.14);
+}
+.td-kind.k-surgery { color: var(--brand-text); background: rgba(var(--brand-rgb), 0.10); border-color: rgba(var(--brand-2-rgb), 0.40); }
 a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); }
 .td-name.muted { color: var(--text3); font-weight: 600; }
 .td-sub { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

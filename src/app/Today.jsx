@@ -12,7 +12,7 @@ import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
 import { usePrefs } from './usePrefs.jsx';
 import { useConfig } from './config.jsx';
-import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Scalpel } from '../ui/icons.jsx';
+import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Surgery } from '../ui/icons.jsx';
 import { todayJStr, ymdToJStr } from '../lib/jalali.js';
 import './launcher.css';
 import './shell.css';
@@ -69,9 +69,13 @@ export default function Today() {
     const next = prefs.todayPins.map((k, i) => (i === slot ? key : k === key ? null : k));
     try { await savePrefs('todayPins', next); } catch (e) { setToast(e?.message || 'ذخیره نشد'); }
   };
-  /* واژهٔ حوزه از واژگان (قانونِ ۲۴): «عملِ امروز» فقط در حوزه‌های عمل؛ مطب «ویزیت» — و چاقو فقط آن‌جا که عمل است. */
+  /* واژهٔ حوزه از واژگان (قانونِ ۲۴): «عملِ امروز» فقط در حوزه‌های عمل؛ مطب «ویزیت» — و تیغِ جراحی
+     فقط آن‌جا که عمل است. `Surgery` نه `Scalpel`: تیغِ مورب همان مدادِ «ویرایش» بود. */
   const { t, vertical } = useConfig();
-  const VisitIcon = vertical === 'clinic' ? Diagnosis : Scalpel;
+  const VisitIcon = vertical === 'clinic' ? Diagnosis : Surgery;
+  /* چیپِ نوع روی هر ردیف: مطب ویزیت و عمل را در یک فهرست دارد، پس همه‌جا؛ جای دیگر فقط وقتی
+     نوعِ ردیف همان «عمل»ِ پیش‌فرضِ فهرست نیست. برچسب را سرور می‌دهد (`kindFa`). */
+  const kindChip = (v) => (vertical === 'clinic' || v.kind !== 'surgery') && (v.kindFa || v.kind);
 
   useEffect(() => { document.title = 'امروز — عمل‌یار'; }, []);
 
@@ -314,7 +318,15 @@ export default function Today() {
               {data.visits.map((v) => (
                 <li key={v.id} className="td-item">
                   <span className="td-time">{v.opStartTime || '—'}</span>
-                  <Link to={`/app/patients/${v.patientId}`} className="td-name">{v.fullName}</Link>
+                  <span className="td-main">
+                    <Link to={`/app/patients/${v.patientId}`} className="td-name">{v.fullName}</Link>
+                    {kindChip(v) && (
+                      <span className={`td-kind${v.kind === 'surgery' ? ' k-surgery' : ''}`}>
+                        {v.kind === 'surgery' && <Surgery width="13" height="13" aria-hidden="true" />}
+                        {kindChip(v)}
+                      </span>
+                    )}
+                  </span>
                   <span className="td-sub">{[v.surgeonName, v.hospitalName].filter(Boolean).join(' · ')}</span>
                   <span className={`td-tag op-${v.opStatus}`}>{v.opStatusFa ?? v.opStatus}</span>
                 </li>
@@ -434,7 +446,8 @@ function ExceptionsPanel({ ex, onOpen, onProcess, busyProc }) {
     {
       key: 'stuckEvents', count: ex.stuckEvents.count, title: 'رویدادِ پردازش‌نشده',
       hint: 'زنجیرهٔ رویداد ← کار ایستاده؛ تا رفع نشود هیچ کارِ تازه‌ای ساخته نمی‌شود',
-      line: (e) => e.type,
+      /* برچسبِ فارسی از سرور (`typeFa`) — نوعِ خامِ `appointment.cancelled` برای مدیر معنا ندارد. */
+      line: (e) => e.typeFa ?? e.type,
       meta: (e) => `${faNum(hoursSince(e.at))} ساعت`,
       open: () => null,
       to: patientTo,
