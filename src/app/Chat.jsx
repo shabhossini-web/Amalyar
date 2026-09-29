@@ -8,6 +8,7 @@ import './launcher.css';
 import './chat.css';
 import { Back, Chat as ChatIcon, Close, Plus, Send, Users } from '../ui/icons.jsx';
 import { CHAT_READ } from './ChatBell.jsx';
+import { useToolTitle } from './tools.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 
@@ -33,7 +34,8 @@ export default function Chat() {
   curRef.current = cur;
   msgsRef.current = msgs;
 
-  useEffect(() => { document.title = 'عمل‌یار — پیام‌رسان'; }, []);
+  /* نام و عنوانِ زبانه از کاتالوگِ کاشی‌ها (قانونِ ۲۴). */
+  const { label: title } = useToolTitle('messenger');
 
   const loadChannels = () => api('/chat/channels').then((r) => { setChannels(r); setErr(''); }).catch((e) => setErr(e.message));
   useEffect(() => { loadChannels(); api('/chat/directory').then(setDir).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -112,7 +114,7 @@ export default function Chat() {
       <aside className="ch-side">
         <header className="ch-side-head">
           <Link to="/app" className="ch-back"><Back width="15" height="15" /> سامانه</Link>
-          <h1><ChatIcon width="18" height="18" /> پیام‌رسان</h1>
+          <h1><ChatIcon width="18" height="18" /> {title}</h1>
           <button type="button" className="ch-new" onClick={() => setSheet(true)} aria-label="گفتگوی تازه">
             <Plus width="15" height="15" />
           </button>

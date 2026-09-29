@@ -4,6 +4,7 @@ import Mark from '../components/Mark.jsx';
 import { useAuth } from './auth.jsx';
 import { useConfig } from './config.jsx';
 import { usePendingAccounts } from './usePending.js';
+import { useChatUnread } from './ChatBell.jsx';
 import './launcher.css';
 import { ArrowStart, Back } from '../ui/icons.jsx';
 /* کاتالوگِ کاشی‌ها از W2.3 مشترک است — صفحهٔ «امروز» هم از همین می‌خواند. */
@@ -29,6 +30,8 @@ export default function Launcher() {
 
   /* بنرِ نصب به پوسته رفت (همهٔ صفحه‌ها)؛ شمارِ درخواست‌های عضویت از همان قلابِ زنگ و «امروز». */
   const pendingCount = usePendingAccounts(lvl >= 6);
+  /* پیام‌های نخوانده روی کاشیِ «پیام‌رسان» — همان شمارِ نوارِ پوسته (shell-22). */
+  const chatUnread = useChatUnread(daily.some((x) => x.key === 'messenger'));
 
   return (
     /* `theme-dark`: لانچر ویترین است و شیشه و نئونش را در هر تمی نگه می‌دارد (§۴.۸). */
@@ -78,7 +81,10 @@ export default function Launcher() {
                     <span className={`lx-tile-ic tint-${t.tint || 'violet'}`}><t.icon width="24" height="24" /></span>
                     <span className="lx-tile-label">{t.label}</span>
                     {!t.ready && <em className="soon dot" title="به‌زودی" />}
-                    {t.key === 'users' && pendingCount > 0 && <span className="lx-badge">{pendingCount}</span>}
+                    {t.key === 'users' && pendingCount > 0 && <span className="lx-badge">{Number(pendingCount).toLocaleString('fa-IR')}</span>}
+                    {t.key === 'messenger' && chatUnread > 0 && (
+                      <span className="lx-badge" aria-label={`${Number(chatUnread).toLocaleString('fa-IR')} پیامِ نخوانده`}>{Number(chatUnread).toLocaleString('fa-IR')}</span>
+                    )}
                   </button>
                 ))}
               </div>
