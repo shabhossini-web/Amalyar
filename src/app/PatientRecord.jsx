@@ -1166,7 +1166,7 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
     try {
       await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
       window.dispatchEvent(new Event(WORK_CHANGED));
-      toast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
+      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد ✓') : 'یادآوری به فردا افتاد');
       await onActed();
     } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
   };

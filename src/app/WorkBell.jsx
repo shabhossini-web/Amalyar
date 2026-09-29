@@ -65,7 +65,7 @@ export default function WorkBell({ onToast }) {
       await api(`/work/${w.id}`, { method: 'PATCH', body: { action, ...body } });
       setRows((r) => (r ?? []).filter((x) => x.id !== w.id));
       window.dispatchEvent(new Event(WORK_CHANGED));
-      onToast?.(action === 'done' ? 'انجام شد' : 'به فردا موکول شد');
+      onToast?.(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
     } catch (e) {
       onToast?.(e?.message || 'انجام نشد');
     } finally {

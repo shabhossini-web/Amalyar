@@ -494,7 +494,7 @@ function Decide({ row, mode, onCancel, onDone }) {
 }
 
 /** بزرگ‌نماییِ فیش — تصمیمِ مالی با تصویرِ کوچک گرفته نمی‌شود. */
-function ReceiptZoom({ url, onClose }) {
+export function ReceiptZoom({ url, onClose }) {
   return (
     <Overlay backdrop="ia-overlay" panel="ia-zoom" as="section" onClose={onClose}>
       <button type="button" className="ia-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
@@ -504,7 +504,7 @@ function ReceiptZoom({ url, onClose }) {
 }
 
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
-function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction = 'approve' }) {
+export function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction = 'approve' }) {
   const { user: me } = useAuth();
   const cfg = useConfig();
   /* سه تصمیمِ پاپ‌آپ (مالک، ۱۴۰۵/۰۷/۰۱): تأیید / برگشت برای اصلاح (با مرحله) / رد. */

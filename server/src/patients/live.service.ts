@@ -229,6 +229,9 @@ export class LiveService {
 
     /* کارهای باز از همان لایهٔ کار می‌آید، نه کوئریِ محلی: مالک، موعد، و
        «عقب‌افتاده» آن‌جا حساب می‌شوند و دو نسخه‌شان یعنی دو حقیقت. */
+    /* `settle`: کاری که رویدادِ واقعی‌اش همین حالا رخ داد (وضعیتِ عمل، گزارشِ آمده) همین حالا
+       از کارتِ «کارِ بعدی» برود — همان قاعدهٔ «امروز» و «کارهای من». */
+    if (workVisible) await this.work.settle();
     const work = workVisible ? await this.work.list(user, { scope: 'patient', patientId, limit: 20 }) : [];
 
     const billing = this.billing(visits);

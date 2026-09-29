@@ -5,6 +5,9 @@
  * - رویدادِ «بررسی شد» کارِ باز را می‌بندد؛ کارِ بسته با رویدادِ تکراری **دوباره باز نمی‌شود**
  * - object-authz: سطحِ پایین همهٔ کارها را نمی‌بیند؛ کارِ خودِ بیمار در صفِ کارکنان نمی‌آید
  * - اقدام‌ها: done / block (دلیل لازم) / snooze / cancel — و done روی کارِ بسته رد می‌شود
+ * - کارِ رویدادی (بازبینیِ UX، company-01): «انجام شد»ِ خالی نمی‌بنددش (۴۰۰ فارسی)؛ «بستن بدونِ
+ *   اقدام» صریح است و در `outcome` می‌نشیند؛ رویدادِ تازهٔ آشکارساز بازش می‌کند ولی بازپخش نه؛
+ *   و رویدادِ واقعی بی‌پردازشگر، با همان خواندنِ بعدیِ صف کار را می‌بندد (`settle`)
  */
 import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
@@ -108,6 +111,35 @@ try {
   ok((await send(`/work/${id}`, 'PATCH', { action: 'done', outcome: { callResult: 'answered' } })).json?.state === 'done', 'انجام شد با خروجی');
   ok((await send(`/work/${id}`, 'PATCH', { action: 'done' })).status === 400, '**نباید بیفتد:** done روی کارِ بسته رد می‌شود');
   ok(Number(sql(`SELECT count(*) FROM audit_events WHERE action='work.done' AND entity_id='${id}'`)) >= 1, 'ردِ ممیزی ثبت شد');
+
+  console.log('\n۶) کارِ رویدادی: «انجام شد»ِ خالی فقط برای یادداشتِ دستی');
+  /* رویدادِ آشکارساز با refِ خودِ مراجعه (نه سفارش) — همان شکلی که `detectStaleWork` می‌سازد. */
+  const emitV = (type) => Number(sql(`INSERT INTO domain_events(type, patient_id, visit_id) VALUES ('${type}', ${pid}, ${visit.id}) RETURNING id`));
+  const ckey = `confirm_surgery_done:visit:${visit.id}`;
+  const cRow = () => JSON.parse(sql(`SELECT coalesce((SELECT row_to_json(w) FROM work_items w WHERE idempotency_key='${ckey}')::text, 'null')`));
+  const firstEv = emitV('visit.unconfirmed');
+  await send('/work/process', 'POST');
+  const cw = cRow();
+  ok(cw?.state === 'open', 'کارِ «وضعیتِ عمل ثبت نشده» ساخته شد');
+  const listed = ((await send(`/work?scope=patient&patientId=${pid}`, 'GET')).json ?? []).find((w) => w.id === cw?.id);
+  ok(listed?.manual === false && listed?.visit?.id === visit.id && typeof listed?.visit?.code === 'string',
+    'ردیف می‌گوید دستی نیست (`manual:false`) و خلاصهٔ مراجعه‌اش (`visit.code`) را برای پاپ‌آپِ خودش دارد', JSON.stringify(listed?.visit));
+  const plain = await send(`/work/${cw.id}`, 'PATCH', { action: 'done' });
+  ok(plain.status === 400 && /بستن بدونِ اقدام/.test(plain.json?.message ?? '') && cRow()?.state === 'open',
+    `**نباید بیفتد:** «انجام شد»ِ خالی کارِ رویدادی را ببندد (${plain.status})`);
+  const dis = await send(`/work/${cw.id}`, 'PATCH', { action: 'done', outcome: { dismissed: true } });
+  ok(dis.json?.state === 'done' && dis.json?.outcome?.closedBy === 'dismiss', '«بستن بدونِ اقدام» صریح می‌بندد و در `outcome` ثبت می‌شود');
+  sql(`UPDATE domain_events SET processed_at=NULL WHERE id=${firstEv}`);
+  await send('/work/process', 'POST');
+  ok(cRow()?.state === 'done', '**نباید بیفتد:** بازپخشِ همان رویدادِ قدیمی یادآوریِ بسته را باز کند');
+  emitV('visit.unconfirmed');
+  await send('/work/process', 'POST');
+  ok(cRow()?.state === 'open', 'آشکارسازِ بعدی (مشکل هنوز هست) یادآوریِ کنارگذاشته را **دوباره باز می‌کند** — برای همیشه نمی‌رود');
+  /* رویدادِ واقعی بی‌پردازشگر: خواندنِ بعدیِ صف (`settle`) همان را پردازش می‌کند. */
+  emitV('visit.done');
+  await send(`/work?scope=patient&patientId=${pid}`, 'GET');
+  const closed = cRow();
+  ok(closed?.state === 'done' && closed?.outcome?.closedBy === 'event', '**رویدادِ واقعی کار را با همان خواندنِ بعدی بست** — بی‌انتظار برای worker', JSON.stringify([closed?.state, closed?.outcome]));
 } finally {
   for (const v of trash.visits) await send(`/visits/${v}`, 'DELETE').catch(() => {});
   for (const f of trash.forms) await send(`/forms/${f}`, 'DELETE').catch(() => {});

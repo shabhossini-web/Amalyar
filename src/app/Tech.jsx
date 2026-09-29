@@ -301,7 +301,7 @@ const STATUS_CHOICES = [
  * ⚠️ «موکول» بی‌تاریخ هم پذیرفته است (خالی = «هنوز تاریخ ندارد»): کارشناسِ سرِ عمل معمولاً
  * فقط می‌داند که امروز نشد، نه روزِ بعدش را؛ تاریخ را مدیر بعداً می‌گذارد.
  */
-function StatusSheet({ visit, onClose, onSaved }) {
+export function StatusSheet({ visit, onClose, onSaved }) {
   const [pick, setPick] = useState('');
   const [date, setDate] = useState('');
   const [busy, setBusy] = useState(false);

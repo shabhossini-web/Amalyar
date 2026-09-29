@@ -1,9 +1,12 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { faDate } from '../lib/jalali.js';
 import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
 import Pick from '../ui/Pick.jsx';
 import { User, Users } from '../ui/icons.jsx';
-import { useTerms } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
+import { workTarget } from './work-target.js';
+import './work-row.css';
 
 /**
  * برچسبِ فارسیِ نوعِ کار — کلیدها همان `work-rules.ts`.
@@ -21,6 +24,31 @@ export const TYPE_FA = {
 };
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
+
+/**
+ * فعلِ دکمهٔ اصلیِ کارِ رویدادی — همان کاری که ردیف یادآوری‌اش است، به زبانِ مقصدش
+ * (`work-target.js`): «ثبتِ وضعیت» پنجرهٔ سه‌گزینه‌ای را باز می‌کند، نه اینکه ببندد.
+ */
+function actVerb(w, target, t) {
+  if (!target) return null;
+  if (target.type === 'opstatus') return 'ثبتِ وضعیت';
+  if (target.type === 'report') return 'بارگذاریِ گزارش';
+  if (target.type === 'intake') return 'بررسی و تأیید';
+  if (target.type === 'order' && w.type === 'review_result') return 'بررسیِ نتیجه';
+  /* مطب: «گزارش» همان شرحِ عملِ داخلِ فرمِ عمل است. */
+  if (w.type === 'complete_report') return `نوشتنِ ${t.workReport}`;
+  return 'بازکردن';
+}
+
+/** آنچه «بستن بدونِ اقدام» **ثبت نمی‌کند** — در پرسشِ تأیید، صریح. */
+function notDone(w, t) {
+  if (w.type === 'confirm_surgery_done') return 'وضعیتِ عمل ثبت نمی‌شود';
+  if (w.type === 'complete_report') return `${t.workReport} ثبت نمی‌شود`;
+  if (w.type === 'approve_intake') return 'ثبت‌نام تأیید نمی‌شود';
+  if (w.type === 'review_result') return 'نتیجه «بررسی‌شده» ثبت نمی‌شود';
+  return 'خودِ کار انجام‌شده ثبت نمی‌شود';
+}
+
 const tomorrow9 = () => {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -39,9 +67,32 @@ const tomorrow9 = () => {
  * دکمهٔ «واگذاری» است (روی ردیفِ خودِ او: «واگذاری» به‌تنهایی) — یک جا برای «مالِ
  * کیست» و «به چه کسی بدهم»، نه دکمهٔ سومی کنارِ «انجام شد» که ردیف را بلند کند.
  * فهرستِ افراد (`assignees`) را صفحه یک‌بار از `GET /work/assignees` می‌گیرد.
+ *
+ * **دکمه‌ها** (بازبینیِ UX، company-01 — بحرانی): «انجام شد»ِ خالی فقط برای **یادداشتِ
+ * دستی** است (`w.manual` از سرور). روی کارِ **رویدادی** («وضعیتِ عمل ثبت نشده»، «گزارشِ خدمت
+ * هنوز بارگذاری نشده»، «بررسی و تأییدِ ثبت‌نام» …) همان دکمه فقط یادآوری را می‌بست و خودِ کار
+ * دست نمی‌خورد — مدیر خیال می‌کرد عمل را انجام‌شده ثبت کرده. حالا دکمهٔ اصلیِ آن‌ها **خودِ کار**
+ * است (پاپ‌آپِ مقصد، `work-target.js`) و کار با رویدادِ واقعی‌اش بسته می‌شود؛ برای کنار
+ * گذاشتنِ یادآوری «بستن بدونِ اقدام» هست، با پرسشِ تأییدی که می‌گوید چه چیزی ثبت **نمی‌شود**.
+ * سرور هم «انجام شد»ِ بی‌این نشانه را روی کارِ رویدادی رد می‌کند.
  */
 export default function WorkRow({ w, onAct, busy, compact = false, onOpen, onAssign, assignees }) {
   const t = useTerms();
+  const { kind } = useConfig();
+  /* پاسخِ سرورِ قدیمی `manual` ندارد؛ نوعِ «manual» همان تعریفِ سرور است. */
+  const manual = w.manual ?? w.type === 'manual';
+  const verb = !manual && onOpen ? actVerb(w, workTarget(w, kind), t) : null;
+  /* پرسشِ «بستن بدونِ اقدام» داخلِ خودِ ردیف — نه پنجره: همین ردیف در کشوی زنگ هم هست و
+     پوششِ `fixed` داخلِ کشویی که `transform` دارد جای درستش را پیدا نمی‌کند. */
+  const [asking, setAsking] = useState(false);
+  const askRef = useRef(null);
+  const cancelRef = useRef(null);
+  const wasAsking = useRef(false);
+  useEffect(() => {
+    if (asking) cancelRef.current?.focus();
+    else if (wasAsking.current) askRef.current?.focus();
+    wasAsking.current = asking;
+  }, [asking]);
   const due = w.dueAt ? faDate(w.dueAt) : '';
   /* «گزارشِ خدمت» در شرکت، «شرحِ عمل» در مطب — همان کار، دو مفهوم (واژگانِ حوزه). */
   const typeFa = w.type === 'complete_report' ? t.workReport ?? TYPE_FA.complete_report : TYPE_FA[w.type] ?? w.type;
@@ -98,6 +149,30 @@ export default function WorkRow({ w, onAct, busy, compact = false, onOpen, onAss
           )}
         </span>
         {!compact && w.note && <span className="wk-note">{w.note}</span>}
+        {asking && (
+          <div
+            className="wk-dismiss"
+            role="group"
+            aria-labelledby={`wk-dq-${w.id}`}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setAsking(false); } }}
+          >
+            <p id={`wk-dq-${w.id}`}>
+              <b>بستن بدونِ اقدام؟</b>
+              {' '}این کار با انجامِ خودش خودکار بسته می‌شود. این‌جا فقط یادآوری برداشته می‌شود — {notDone(w, t)}.
+            </p>
+            <div className="wk-dismiss-acts">
+              <button
+                type="button"
+                className="wk-btn wk-dismiss-yes"
+                disabled={busy === w.id}
+                onClick={() => { setAsking(false); onAct(w, 'done', { outcome: { dismissed: true } }); }}
+              >
+                بله، ببند
+              </button>
+              <button ref={cancelRef} type="button" className="wk-btn" onClick={() => setAsking(false)}>انصراف</button>
+            </div>
+          </div>
+        )}
         {docs.length > 0 && (
           <ul className="wk-docs" aria-label="پاسخِ بیمار">
             {docs.map((d) => (
@@ -117,10 +192,21 @@ export default function WorkRow({ w, onAct, busy, compact = false, onOpen, onAss
           </ul>
         )}
       </div>
-      <div className="wk-actions">
-        <button type="button" className="wk-btn primary" disabled={busy === w.id} onClick={() => onAct(w, 'done')}>انجام شد</button>
-        <button type="button" className="wk-btn" disabled={busy === w.id} onClick={() => onAct(w, 'snooze', { until: tomorrow9() })}>فردا</button>
-      </div>
+      {!asking && (
+        <div className="wk-actions">
+          {manual ? (
+            <button type="button" className="wk-btn primary" disabled={busy === w.id} onClick={() => onAct(w, 'done')}>انجام شد</button>
+          ) : verb && (
+            <button type="button" className="wk-btn primary" disabled={busy === w.id} onClick={() => onOpen(w)}>{verb}</button>
+          )}
+          <button type="button" className="wk-btn" disabled={busy === w.id} onClick={() => onAct(w, 'snooze', { until: tomorrow9() })}>یادآوریِ فردا</button>
+          {!manual && (
+            <button ref={askRef} type="button" className="wk-btn wk-quiet" disabled={busy === w.id} onClick={() => setAsking(true)}>
+              بستن بدونِ اقدام
+            </button>
+          )}
+        </div>
+      )}
     </li>
   );
 }

@@ -165,7 +165,7 @@ export default function Today() {
       } : d));
       setFacetRows((r) => (Array.isArray(r) ? r.filter((x) => x.id !== w.id) : r));
       window.dispatchEvent(new Event(WORK_CHANGED));
-      setToast(action === 'done' ? 'انجام شد' : 'به فردا موکول شد');
+      setToast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
     } catch (e) {
       setToast(e?.message || 'انجام نشد');
     } finally {

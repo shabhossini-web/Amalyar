@@ -98,7 +98,7 @@ export default function WorkList() {
       setRows((r) => (r ?? []).filter((x) => x.id !== w.id));
       window.dispatchEvent(new Event(WORK_CHANGED));
       if (team) loadMeta();
-      setToast(action === 'done' ? 'انجام شد' : 'به فردا موکول شد');
+      setToast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
     } catch (e) {
       setToast(e?.message || 'انجام نشد');
     } finally {
