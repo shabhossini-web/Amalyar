@@ -153,7 +153,8 @@ try {
     await noteField.fill('');
     const writesBeforeRequired = writes.length;
     await page.getByRole('button', { name: 'ذخیرهٔ تغییرات', exact: true }).click();
-    await page.getByText('«یادداشت» را کامل کنید', { exact: true }).waitFor();
+    /* خطای فیلد کنارِ خودِ فیلد و روی نوارِ ذخیره (بازبینیِ UX، surgery-08) — نه toastِ گذرا. */
+    await page.locator('[data-save-error]', { hasText: '«یادداشت» را کامل کنید' }).waitFor();
     check(!writes.slice(writesBeforeRequired).some((w) => w.path === '/visits/1'), 'required clinical fields still block empty edits');
     await page.goto(`${base}/app/dashboard`);
     await page.getByTitle('صورت‌حساب', { exact: true }).click();

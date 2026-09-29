@@ -123,7 +123,8 @@ try {
     await pg.locator('.db-sheet button.db-submit[type="submit"]').click();
     let need = null;
     for (let i = 0; i < 20 && !need; i++) {
-      const t = (await pg.locator('.sh-toast').allInnerTexts()).join(' ');
+      /* از بازبینیِ UX (surgery-08) خطای فیلد کنارِ خودِ فیلد و روی نوارِ ذخیره می‌ماند، نه در toast. */
+      const t = (await pg.locator('.sh-toast, [data-save-error]').allInnerTexts()).join(' ');
       need = /«([^»]+)» را کامل کنید/.exec(t)?.[1] ?? null;
       if (!need) {
         const r = await Promise.race([saved.catch(() => null), pg.waitForTimeout(100).then(() => undefined)]);

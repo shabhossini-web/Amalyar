@@ -210,7 +210,7 @@
   .db-sheet.vf-wide .vf-cols.vf-flat { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side"; }
   .vf-cols.vf-flat .vf-side .db-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* ذخیره همیشه در دسترس — فرمِ بلند دیگر تا ته اسکرول نمی‌خواهد. */
-  .db-sheet.vf-wide > .db-submit {
+  .db-sheet.vf-wide > .vf-savebar {
     position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); z-index: 5;
     box-shadow: 0 -10px 30px rgba(var(--surface-rgb), .9);
   }
@@ -253,3 +253,19 @@
 .vf-pitem-meta bdi { font-variant-numeric: tabular-nums; color: var(--text1); font-weight: 600; }
 .db-plist .vf-pitem-meta .vf-pitem-n { margin-inline-start: auto; color: var(--text3); }
 .db-plist button.vf-pitem:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ── خطای ذخیره کنارِ خودِ فیلد (surgery-08) ─────────────────────────────────
+   فیلدِ هستهٔ ردشده قرمز می‌شود و متنِ خطا زیرش می‌نشیند؛ نوارِ ذخیره همان پیام را تا اصلاح نگه
+   می‌دارد. رنگ از توکنِ دوتمی — `.db-hint.bad`ِ قدیمی صورتیِ خام بود و در تمِ روشن کم‌رنگ. */
+.vf-bad :is(input, textarea, select, .pk-btn) { border-color: var(--red-text) !important; }
+.vf-bad > .db-field > span:first-child,
+.vf-bad .jd-wrap > span:first-child,
+.vf-bad .db-when-l { color: var(--red-text); }
+.vf-core-err { display: block; margin-top: 5px; font-size: 12px; font-weight: 700; line-height: 1.7; color: var(--red-text); }
+.vf-savebar { display: grid; gap: 8px; }
+.vf-saveerr {
+  margin: 0; padding: 9px 12px; border-radius: 11px;
+  font-size: 12.5px; font-weight: 700; line-height: 1.7;
+  color: var(--red-text); background: rgba(var(--surface-rgb), .96);
+  border: 1px solid var(--red-text);
+}

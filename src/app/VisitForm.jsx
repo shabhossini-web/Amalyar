@@ -874,65 +874,48 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return v;
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (busy || aiBusy) return;
-    /* ⚠️ Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
-       زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
-       کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
-    if (!editing && step < 3) { goNext(); return; }
+  /**
+   * **سنجشِ فیلدهای هسته** — یک‌جا، برای ذخیره و برای پاک‌شدنِ زندهٔ خطا وقتی کاربر اصلاحش کرد.
+   * `problems` کلید → پیام؛ بقیه همان مقدارهای خوانده‌شده که ذخیره لازم دارد.
+   */
+  const parseCore = () => {
+    const problems = {};
     /* «هنوز تاریخ ندارد» (بستهٔ ۹ب) — فقط عمل؛ کادرِ تاریخ آن‌وقت دیده نمی‌شود و خوانده هم نمی‌شود. */
     const undatedNow = f.kind === 'surgery' && f.undated;
     let opDate;
     if (!undatedNow && f.opDateJ.trim()) {
       opDate = jStrToIso(f.opDateJ);
-      if (!opDate) { onToast(`${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`); return; }
+      if (!opDate) problems.opDate = `${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`;
     }
     let plannedDate;
     if (undatedNow && f.plannedDateJ.trim()) {
       plannedDate = jStrToIso(f.plannedDateJ);
-      if (!plannedDate) { onToast('تاریخِ تقریبی نامعتبر است (مثال: ۱۴۰۵/۰۸/۰۱)'); return; }
+      if (!plannedDate) problems.opDate = 'تاریخِ تقریبی نامعتبر است (مثال: ۱۴۰۵/۰۸/۰۱)';
     }
     let nextVisitDate;
     if (f.nextVisitDateJ.trim()) {
       nextVisitDate = jStrToIso(f.nextVisitDateJ);
-      if (!nextVisitDate) { onToast('تاریخِ ویزیتِ بعدی نامعتبر است (مثال: ۱۴۰۵/۰۵/۱۰)'); return; }
+      if (!nextVisitDate) problems.nextVisitDate = 'تاریخِ ویزیتِ بعدی نامعتبر است (مثال: ۱۴۰۵/۰۵/۱۰)';
     }
     let birthDate;
     if (f.birthDateJ.trim()) {
       birthDate = jStrToIso(f.birthDateJ);
-      if (!birthDate) { onToast('تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)'); return; }
+      if (!birthDate) problems.birthDate = 'تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)';
     }
     // ساعت‌ها پیش از ارسال نرمال می‌شوند (کاربر ممکن است بدونِ blur ذخیره بزند).
     const times = {
       opStartTime: normTime(f.opStartTime),
       opEndTime: normTime(f.opEndTime),
     };
-    const badKey = Object.entries(times).find(([, v]) => badTime(v));
-    if (badKey) { onToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
-
+    for (const [k, v] of Object.entries(times)) if (badTime(v)) problems[k] = 'ساعت باید به شکلِ ۰۸:۳۰ باشد';
     const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
     // اعتبارسنجیِ سمتِ کاربر تا پیشِ ارسال بازخورد بگیرد؛ اعتبارِ واقعی سمتِ سرور است.
-    if (nid && !isValidNationalId(nid)) { onToast('کد ملی معتبر نیست — رقم‌ها را بررسی کنید'); return; }
-
-    /* ⚠️ ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها.
-       سرور هر دو را می‌سنجد؛ این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود.
-       مقدارها از دو جا می‌آیند چون هسته‌ای‌ها در `f` هستند و دلخواه‌ها در
-       `extra` — همان تقسیمی که سرور هم دارد. */
-    /* مطب: باکس‌های عکس/لینکِ فرم در ویرایش جای خود را به `VisitDocs` داده‌اند — ستارهٔ
-       کادری که دیده نمی‌شود نباید ذخیره را بی‌صدا ببندد. */
-    /* «طرح»ِ تک‌انتخابیِ قالبِ قدیمی هم در مطب دیده نمی‌شود (جایش کشوی تصمیم است) — آینهٔ `shownFields`ِ سرور. */
-    const eCustom = dynErrors(isClinicCore
-      ? fd.customFields.filter((x) => x.type !== 'image' && x.type !== 'links' && x.key !== INLINE_KEYS.legacyPlan)
-      : fd.customFields, extra, myRole);
-    setExtraErr(eCustom);
-    if (Object.keys(eCustom).length) {
-      onToast(Object.values(eCustom)[0]);
-      return;
-    }
+    if (nid && !isValidNationalId(nid)) problems.nationalId = 'کد ملی معتبر نیست — رقم‌ها را بررسی کنید';
     /* ⚠️ مراجعهٔ تازه در شرکتِ دوخدمته بی‌خدمت ثبت نمی‌شود: پرتالِ جراح ویرایشگرِ اقلام را فقط برای
        مراجعهٔ ایمپلنتی باز می‌کند، و مراجعهٔ دستیِ بی‌خدمت هیچ نشانه‌ای از ایمپلنتی‌بودن نداشت. */
-    if (pickService && !editing && !f.service) { onToast('خدمتِ این مراجعه را انتخاب کنید'); return; }
+    if (pickService && !editing && !f.service) problems.service = 'خدمتِ این مراجعه را انتخاب کنید';
+    /* ⚠️ ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها. سرور هر دو را می‌سنجد؛
+       این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود. */
     const builtinVals = {
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
       /* ستارهٔ فیلد روی **اصلی** است؛ چون فهرست هرگز بدونِ اصلی نمی‌ماند
@@ -958,7 +941,67 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       builtinVals,
       myRole,
     );
-    if (Object.keys(eBuiltin).length) { onToast(Object.values(eBuiltin)[0]); return; }
+    for (const [k, v] of Object.entries(eBuiltin)) if (!problems[k]) problems[k] = v;
+    return { problems, undatedNow, opDate, plannedDate, nextVisitDate, birthDate, times, nid };
+  };
+  /* مطب: باکس‌های عکس/لینکِ فرم در ویرایش جای خود را به `VisitDocs` داده‌اند — ستارهٔ کادری که دیده
+     نمی‌شود نباید ذخیره را بی‌صدا ببندد. «طرح»ِ تک‌انتخابیِ قالبِ قدیمی هم در مطب دیده نمی‌شود (جایش
+     کشوی تصمیم است) — آینهٔ `shownFields`ِ سرور. */
+  const customProblems = () => dynErrors(isClinicCore
+    ? fd.customFields.filter((x) => x.type !== 'image' && x.type !== 'links' && x.key !== INLINE_KEYS.legacyPlan)
+    : fd.customFields, extra, myRole);
+  /* کلیدهایی که آخرین ذخیره رد کرد — خطایشان تا وقتی واقعاً درست نشده‌اند می‌ماند و با اصلاح
+     همان لحظه می‌رود (سنجشِ زنده، نه تا ذخیرهٔ بعدی). */
+  const [errKeys, setErrKeys] = useState([]);
+  /* خطای غیرِ هسته (فیلدِ دلخواه، زیرفرم، پاسخِ سرور) — تا تغییرِ بعدیِ فرم کنارِ دکمه می‌ماند. */
+  const [formErr, setFormErr] = useState('');
+  useEffect(() => { setFormErr(''); }, [extra, subList]);
+  const sheetHead = useRef(null);
+  /** تا فیلد برو و فوکوس بده — دو فریم: یکی برای رندرِ تب/کلاسِ خطا، یکی برای چیدمان. */
+  const revealSel = (sel) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    const root = sheetHead.current?.closest('.db-sheet') ?? document;
+    const el = root.querySelector(sel);
+    if (!el) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    const target = el.matches('input, textarea, select, button') ? el : el.querySelector('input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])');
+    target?.focus({ preventScroll: true });
+  }));
+  /* فیلدهای پرونده در گامِ ۱ (ثبتِ تازه) یا پشتِ «ویرایشِ مشخصات» (ویرایش) پنهان‌اند. */
+  const PATIENT_KEYS = ['nationalId', 'birthDate'];
+  const revealCore = (key) => {
+    if (PATIENT_KEYS.includes(key)) { if (editing) setIdOpen(true); else setStep(1); }
+    else if (f.kind === 'surgery' && INTRA_KEYS.includes(key)) setPhase('intra');
+    revealSel(`[data-core="${key}"]`);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy || aiBusy) return;
+    /* ⚠️ Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
+       زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
+       کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
+    if (!editing && step < 3) { goNext(); return; }
+    /* ⚠️ هر خطای فیلدِ هسته **کنارِ خودِ فیلد** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-08): قرمز، متن زیرش،
+       اسکرول و فوکوس، و پیامِ کنارِ دکمه تا اصلاح بماند — نه یک toastِ ۲٫۶ثانیه‌ای روی دکمه در
+       حالی که فیلد ۱۳۴۷ پیکسل بالاتر است. همان کاری که زیرفرم‌ها از قبل می‌کردند. */
+    const core = parseCore();
+    const eCustom = customProblems();
+    setExtraErr(eCustom);
+    const bad = orderCore(Object.keys(core.problems));
+    if (bad.length) {
+      setErrKeys(bad);
+      setFormErr('');
+      revealCore(bad[0]);
+      return;
+    }
+    setErrKeys([]);
+    if (Object.keys(eCustom).length) {
+      setFormErr(`${Object.values(eCustom)[0]}${Object.keys(eCustom).length > 1 ? ` — و ${faNum(Object.keys(eCustom).length - 1)} مورد دیگر` : ''}`);
+      revealSel('.vf-extra .pf-field.bad, [data-field].bad');
+      return;
+    }
+    const { undatedNow, opDate, plannedDate, nextVisitDate, birthDate, times, nid } = core;
 
     /* زیرفرم‌ها: ستارهٔ هر کدام کنارِ همان کادر، و اولین خطا با نامِ زیرفرم. */
     const eSubs = {};
@@ -975,9 +1018,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       setCardsShut((c) => ({ ...c, [firstSub[0]]: false }));
       /* کارتِ عمل داخلِ تبِ مرحلهٔ خودش است — تب به همان‌جا می‌رود تا ستاره دیده شود. */
       if (e0?.phase) setPhase(e0.phase);
-      onToast(`${catByKey.get(e0?.key)?.title ?? ''}${e0?.phase ? ` (${PHASE_FA[e0.phase]})` : ''}: ${Object.values(firstSub[1])[0]}`);
+      setFormErr(`${catByKey.get(e0?.key)?.title ?? ''}${e0?.phase ? ` (${PHASE_FA[e0.phase]})` : ''}: ${Object.values(firstSub[1])[0]}`);
+      revealSel(`[data-subform="${CSS.escape(e0?.key ?? '')}"]${e0?.phase ? `[data-subform-phase="${e0.phase}"]` : ''} .pf-field.bad, [data-subform="${CSS.escape(e0?.key ?? '')}"]`);
       return;
     }
+    setFormErr('');
     /* دلتا، نه کلِ فهرست: فقط زیرفرمی که در همین فرم الصاق/پر/برداشته شد می‌رود — با مرحله‌اش
        در فرمِ عمل (سرور بندِ بی‌مرحلهٔ عمل را رد می‌کند). */
     const subformsOut = [];
@@ -1144,6 +1189,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       onSaved(saved, editing, { openSurgery: newSurgery });
     } catch (err) {
       onToast(err.message);
+      setFormErr(err.message);
     } finally {
       setBusy(false);
     }
@@ -1168,6 +1214,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const complaintSourceKind = initial?.chiefComplaintFrom?.kind ?? 'clinic';
   const complaintSourceWord = kindOf(complaintSourceKind).label;
   const complaintSourceLabel = complaintSourceIso ? `${complaintSourceWord}ِ ${faDate(complaintSourceIso)}` : `${complaintSourceWord}ِ مرتبط`;
+  /* خطای زندهٔ فیلدهای هسته (surgery-08) — ⚠️ این‌جا و نه کنارِ `parseCore`: سنجش در رندر اجرا می‌شود
+     و به `inheritedComplaint`ِ بالا نیاز دارد (پیش از اعلامش خطای TDZ می‌داد). */
+  const liveCore = errKeys.length ? parseCore().problems : null;
+  const coreErr = liveCore ? Object.fromEntries(errKeys.filter((k) => liveCore[k]).map((k) => [k, liveCore[k]])) : {};
+  const coreErrKeys = Object.keys(coreErr);
+  const saveErr = coreErrKeys.length
+    ? `${coreErr[coreErrKeys[0]]}${coreErrKeys.length > 1 ? ` — و ${faNum(coreErrKeys.length - 1)} مورد دیگر` : ''}`
+    : formErr;
 
   const activeSurgeons = defs.surgeons.filter((s) => s.active || s.id === f.surgeonId);
   const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
@@ -1826,6 +1880,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const builtinOrder = isClinicCore
     ? CLINIC_LAYOUT[f.kind === 'surgery' ? 'surgery' : 'visit']
     : fd.orderBuiltins(BUILTIN_ORDER);
+  /* «اولین خطا» به ترتیبِ دیداری: پرونده و خدمت بالا، بعد هسته به چینشِ فرم؛ در فرمِ عمل فیلدهای
+     حینِ عمل داخلِ تبِ خودشان‌اند، پس بعد از بقیه. */
+  const orderCore = (keys) => {
+    const base = ['nationalId', 'birthDate', 'service', ...builtinOrder];
+    const rank = (k) => (base.indexOf(k) < 0 ? 999 : base.indexOf(k)) + (f.kind === 'surgery' && INTRA_KEYS.includes(k) ? 500 : 0);
+    return [...keys].sort((a, b) => rank(a) - rank(b));
+  };
 
   /* ویزیتِ تصمیم (فقط‌خواندنی) — کارتِ اولِ تبِ «قبل از عمل». */
   const decidedCard = decidedVisit ? (
@@ -1889,7 +1950,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   };
 
   /* خدمتِ مراجعه (شرکتِ دوخدمته) — در ثبتِ تازه گامِ دوم، در ویرایش زیرِ سربرگ. */
-  const serviceEl = pickService ? (<>
+  const serviceEl = pickService ? (<div data-core="service" className={coreErr.service ? 'vf-bad' : undefined}>
     <div className="db-sect">
       <b>خدمت</b>
       <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟ ویرایشگرِ اقلامِ پرتالِ جراح فقط برای «ایمپلنت» باز می‌شود.</small>
@@ -1903,14 +1964,22 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         ))}
       </div>
     </div>
-  </>) : null;
+    {coreErr.service && <small className="vf-core-err" role="alert">{coreErr.service}</small>}
+  </div>) : null;
 
   /* ── چیدمان: هسته (ستونِ اصلی)، زیرفرم‌ها و باقی (ستونِ کناری) ── */
   const SIDE_KEYS = f.kind === 'surgery' ? ['amount', 'notes'] : ['media', 'decisions', 'nextVisitDate', 'amount', 'notes'];
+  /* هر فیلدِ هسته با `data-core` — نشانیِ «برو به همین فیلد»ِ خطای ذخیره (surgery-08). */
   const cell = (key) => {
     const node = builtinNodes[key];
     if (!node) return null;
-    return <div key={key} className={node.wide ? 'db-span2' : undefined}>{node.el}</div>;
+    const err = coreErr[key];
+    return (
+      <div key={key} data-core={key} className={[node.wide ? 'db-span2' : '', err ? 'vf-bad' : ''].filter(Boolean).join(' ') || undefined}>
+        {node.el}
+        {err && <small className="vf-core-err" role="alert">{err}</small>}
+      </div>
+    );
   };
   /* «کِی می‌رود» — هم سرِ کادرِ مراقبت در تب، هم بالای پاپ‌آپش. */
   const preWhen = [
@@ -1990,7 +2059,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       /* «برگشت»ِ گوشی اول همین فرم را می‌بندد، نه صفحهٔ زیرش را (surgery-06). */
       history
     >
-      <header className="db-sheet-head">
+      <header className="db-sheet-head" ref={sheetHead}>
         {/* نوعِ «عمل» نامِ خودش را دارد (`surgery`/`surgeryNew`ِ واژگان) — فرمِ عملِ مطب «ویزیتِ جدید» می‌نوشت. */}
         <b data-sheet-title>{editing ? `ویرایشِ ${f.kind === 'surgery' ? t.surgery : t.visit} ${initial.code}` : f.kind === 'surgery' ? t.surgeryNew : t.visitNew}</b>
         <CloseButton className="db-x" aria-label="بستن"><Close width="18" height="18" /></CloseButton>
@@ -2125,7 +2194,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             <label className="db-field"><span>موبایل</span>
               <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
             </label>
-            <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی
+            <label className={`db-field${nidBad || coreErr.nationalId ? ' bad' : ''}`} data-core="nationalId"><span>کد ملی
               {/* موقت — بیمارِ آزمایشی (خواستهٔ مالک): کدِ تصادفیِ معتبر تا
                   اعتبارسنجی رد شود. فقط سوپرادمین می‌بیند. */}
               {me?.level >= 6 && !editing && (
@@ -2149,13 +2218,16 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
           )}
 
-          <JDate
-            label="تاریخِ تولد (شمسی)"
-            mode="birth"
-            value={f.birthDateJ}
-            onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
-            placeholder="سال / ماه / روز — اختیاری"
-          />
+          <div data-core="birthDate" className={coreErr.birthDate ? 'vf-bad' : undefined}>
+            <JDate
+              label="تاریخِ تولد (شمسی)"
+              mode="birth"
+              value={f.birthDateJ}
+              onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
+              placeholder="سال / ماه / روز — اختیاری"
+            />
+            {coreErr.birthDate && <small className="vf-core-err" role="alert">{coreErr.birthDate}</small>}
+          </div>
         </>
       )}
 
@@ -2413,11 +2485,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           <div className="db-phase" data-phase="intra">
             {INTRA_KEYS.some((k) => builtinNodes[k]) ? (
               <div className="db-grid2 db-builtins">
-                {INTRA_KEYS.map((key) => {
-                  const node = builtinNodes[key];
-                  if (!node) return null;
-                  return <div key={key} className={node.wide ? 'db-span2' : undefined}>{node.el}</div>;
-                })}
+                {INTRA_KEYS.map(cell)}
               </div>
             ) : (
               <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان{isClinicCore ? '' : '، یافته‌ها'}، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
@@ -2548,9 +2616,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         onToast={onToast}
       />
 
-      <button className="db-submit" type="submit" disabled={busy || !!aiBusy}>
-        {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : f.kind === 'surgery' ? t.surgeryOne : t.visitOne}
-      </button>
+      {/* نوارِ ذخیره — پیامِ خطا **کنارِ خودِ دکمه** و تا اصلاح می‌ماند (surgery-08)؛ toast می‌رود و
+          کاربر با دکمه‌ای می‌ماند که نمی‌داند چرا کار نکرد. */}
+      <div className="vf-savebar">
+        {saveErr && <p className="vf-saveerr" role="alert" data-save-error>{saveErr}</p>}
+        <button className="db-submit" type="submit" disabled={busy || !!aiBusy}>
+          {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : f.kind === 'surgery' ? t.surgeryOne : t.visitOne}
+        </button>
+      </div>
       </>)}
 
       {/* ── ناوبریِ گام ── */}
