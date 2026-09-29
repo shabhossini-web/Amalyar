@@ -593,7 +593,7 @@ export class IntakeService {
   /** تقویمِ آزادِ ماه برای صفحهٔ بیمار — بدونِ نیاز به لاگین، فقط با توکن. */
   async publicSlots(token: string, jy: number, jm: number, topicId?: number) {
     await this.expireIfDue(token); // توکنِ نامعتبر همین‌جا رد می‌شود
-    return this.availability.month(jy, jm, { topicId });
+    return this.availability.month(jy, jm, { topicId, patient: true });
   }
 
   /** موضوع‌های قابلِ انتخاب — فقط آن‌هایی که واقعاً روزی دارند. */
@@ -643,17 +643,29 @@ export class IntakeService {
        دقیقه باز مانده باشد و آن جا از دست رفته باشد؛ اعتمادِ به کلاینت یعنی
        رزروِ روی روزِ تعطیل یا ظرفیتِ پرشده. */
     const [jy, jm] = jalaliYm(date);
-    const cal = await this.availability.month(jy, jm, { topicId: dto.topicId });
+    /* ⚠️ همان نمای بیمار (`patient: true`) که صفحه نشان داده: ساعتِ گذشتهٔ امروز این‌جا هم رد
+       می‌شود، نه فقط در تقویم (بازبینیِ UX، بندِ ۹۷). */
+    const cal = await this.availability.month(jy, jm, { topicId: dto.topicId, patient: true });
     const day = cal.days.find((d: any) => d.date === dto.date);
-    if (!day || !day.open) throw new BadRequestException('این روز دیگر آزاد نیست — روزِ دیگری انتخاب کنید');
+    if (!day || !day.open) {
+      /* امروزی که ساعت‌هایش گذشته با «پر شد» یکی نیست — بیمار باید بداند چرا. */
+      const late = !!day && !day.past && day.windows.some((w: any) => w.past || (w.slots ?? []).some((x: any) => x.past));
+      throw new BadRequestException(day?.past ? 'این روز گذشته است — روزِ دیگری انتخاب کنید'
+        : late ? 'وقتِ نوبت‌دهیِ امروز تمام شده — روزِ دیگری انتخاب کنید'
+          : 'این روز دیگر آزاد نیست — روزِ دیگری انتخاب کنید');
+    }
 
     const slotMode = day.windows.some((w: any) => w.mode === 'slot');
     if (slotMode) {
-      const free = day.windows
+      const sl = day.windows
         .filter((w: any) => w.mode === 'slot')
         .flatMap((w: any) => w.slots)
-        .find((sl: any) => sl.startMin === dto.startMin && !sl.taken);
-      if (!free) throw new BadRequestException('این ساعت دیگر آزاد نیست — ساعتِ دیگری انتخاب کنید');
+        .find((x: any) => x.startMin === dto.startMin);
+      if (!sl || sl.taken) {
+        throw new BadRequestException(sl?.past
+          ? 'این ساعت گذشته یا خیلی نزدیک است — ساعتِ دیگری انتخاب کنید'
+          : 'این ساعت دیگر آزاد نیست — ساعتِ دیگری انتخاب کنید');
+      }
     }
 
     try {

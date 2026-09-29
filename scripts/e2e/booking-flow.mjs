@@ -101,19 +101,32 @@ try {
   ok(/روزِ نوبت/.test(early.json?.message ?? ''), `و می‌گوید چه باید کرد («${early.json?.message}»)`);
 
   console.log('\n۴) بیمار روزهای آزاد را می‌بیند و یکی را می‌گیرد');
-  const now = new Intl.DateTimeFormat('en-u-ca-persian', { year: 'numeric', month: 'numeric', timeZone: 'UTC' })
-    .formatToParts(new Date());
-  const jy = Number(now.find((x) => x.type === 'year').value.replace(/[^\d]/g, ''));
-  const jm = Number(now.find((x) => x.type === 'month').value);
-  const slots = await fetch(`${API}/public/intake/form/${tok1}/slots?year=${jy}&month=${jm}`).then((r) => r.json());
-  const openDay = slots.days.find((d) => d.open);
+  /* ⚠️ ماهِ جاری **به وقتِ مطب** (سرور «امروز» را با `CLINIC_TZ` می‌سنجد) و اولین روزی که دستِ‌کم
+     سه ساعتِ آزاد دارد: در نمای بیمار ساعت‌های گذشته/نزدیکِ امروز «گرفته»اند (`PATIENT_LEAD_MIN`،
+     بازبینیِ UX بندِ ۹۷)، پس آزمون نباید به ساعتِ اجرا حساس باشد — روزِ آخرِ ماه، ماهِ بعد. */
+  const ymOf = (at) => {
+    const parts = new Intl.DateTimeFormat('en-u-ca-persian', { year: 'numeric', month: 'numeric', timeZone: 'Asia/Tehran' })
+      .formatToParts(at);
+    return [Number(parts.find((x) => x.type === 'year').value.replace(/[^\d]/g, '')), Number(parts.find((x) => x.type === 'month').value)];
+  };
+  let [jy, jm] = ymOf(new Date());
+  const freeOf = (d) => (d.windows[0]?.slots ?? []).filter((x) => !x.taken);
+  const monthSlots = () => fetch(`${API}/public/intake/form/${tok1}/slots?year=${jy}&month=${jm}`).then((r) => r.json());
+  let slots = await monthSlots();
+  let openDay = slots.days.find((d) => d.open && freeOf(d).length >= 3);
+  if (!openDay) {
+    [jy, jm] = jm === 12 ? [jy + 1, 1] : [jy, jm + 1];
+    slots = await monthSlots();
+    openDay = slots.days.find((d) => d.open && freeOf(d).length >= 3);
+  }
   ok(!!openDay, `روزِ باز پیدا شد (${openDay?.date})`);
+  /* سه ساعتِ **آزاد** همان روز — نه `slots[0..2]` که امروز ممکن است گذشته باشند. */
+  const [first, second, third] = freeOf(openDay).map((x) => x.startMin);
   ok(openDay.windows[0].slots.length === 4, `۲ ساعت ÷ ۳۰ دقیقه = ۴ نوبت (${openDay.windows[0].slots.length})`);
 
   const topicsPub = await fetch(`${API}/public/intake/form/${tok1}/topics`).then((r) => r.json());
   ok(topicsPub.some((t) => t.id === topic.id), 'موضوعِ روز در فهرستِ عمومی هست');
 
-  const first = openDay.windows[0].slots[0].startMin;
   const booked = await send(`/public/intake/form/${tok1}/book`, 'POST',
     { date: openDay.date, startMin: first, topicId: topic.id }, false);
   ok(booked.status < 300, `رزرو پذیرفته شد (${booked.status})`);
@@ -134,7 +147,6 @@ try {
   ok(/آزاد نیست|گرفت/.test(clash.json?.message ?? ''), `و پیامش قابلِ فهم است («${clash.json?.message}»)`);
 
   console.log('\n۶) جابه‌جایی نوبتِ دوم نمی‌سازد');
-  const second = openDay.windows[0].slots[1].startMin;
   await send(`/public/intake/form/${tok1}/book`, 'POST', { date: openDay.date, startMin: second }, false);
   const moved = await fetch(`${API}/public/intake/form/${tok1}/slots?year=${jy}&month=${jm}`).then((r) => r.json());
   const d2 = moved.days.find((d) => d.date === openDay.date);
@@ -179,7 +191,6 @@ try {
   console.log('\n۹) ردکردنِ ثبت‌نام جا را آزاد می‌کند');
   const r3 = await register(link.token);
   const tok3 = r3.json.token;
-  const third = openDay.windows[0].slots[2].startMin;
   await send(`/public/intake/form/${tok3}/book`, 'POST', { date: openDay.date, startMin: third }, false);
   await send(`/public/intake/form/${tok3}/fill`, 'POST', { procedure: 'ویزیت' }, false);
   const subs2 = await get('/intake/submissions');
