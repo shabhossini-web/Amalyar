@@ -20,6 +20,8 @@ import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 import Toast, { useToast } from '../ui/Toast.jsx';
 import { useToolTitle } from './tools.jsx';
+import { useConfig } from './config.jsx';
+import { roleShown } from '../lib/terms.js';
 
 
 /**
@@ -120,6 +122,7 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
 }
 
 function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
+  const { vertical } = useConfig();
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
   const [testAccount, setTestAccount] = useState(false), [username, setUsername] = useState('');
   const [level, setLevel] = useState(2), [jobRole, setRole] = useState('technician');
@@ -146,7 +149,7 @@ function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
         <p>حساب بلافاصله قابل ورود است. صاحب شماره هفت روز برای تأیید پیامکی و تکمیل پروفایل فرصت دارد. مشخصات افراد موجود در تعاریف پایه حفظ می‌شود.</p>
         <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
         <label className="pf-field"><span>سطح دسترسی</span><select value={level} onChange={e => setLevel(+e.target.value)} disabled={busy}>{LEVELS.map(l => <option key={l.v} value={l.v}>{l.l}</option>)}</select></label>
-        <label className="pf-field"><span>نقش شغلی</span><select value={jobRole} onChange={e => setRole(e.target.value)} disabled={busy}>{JOB_ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></label>
+        <label className="pf-field"><span>نقش شغلی</span><select value={jobRole} onChange={e => setRole(e.target.value)} disabled={busy}>{JOB_ROLES.filter(r => roleShown(vertical, r.v)).map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></label>
         {['driver', 'courier'].includes(jobRole) && <p>حساب به نیروی حمل‌ونقل متصل می‌شود و مسیرها و ابلاغ‌ها در پرتال حمل‌ونقل قابل مشاهده خواهند بود.</p>}
         {jobRole === 'doctor' && <p>در شرکت‌های نورومانیتورینگ و ایمپلنت، حساب پزشک به جراح در تعاریف پایه و پرتال او متصل می‌شود.</p>}
       </>}
@@ -158,6 +161,7 @@ function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
 export default function Users() {
   const stagger = useStagger();
   const { user } = useAuth();
+  const { vertical } = useConfig();
   const [tab, setTab] = useState('pending'); // pending | all | perm
   const [pending, setPending] = useState(null);
   const [all, setAll] = useState(null);
@@ -354,7 +358,8 @@ export default function Users() {
                       onChange={(e) => setJobRole(row, e.target.value || null)}
                     >
                       <option value="">— بدونِ نقش —</option>
-                      {JOB_ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+                      {/* نقشِ بی‌ربط به حوزه پنهان است، مگر همین حساب از قبل آن را دارد. */}
+                      {JOB_ROLES.filter((r) => roleShown(vertical, r.v) || r.v === row.jobRole).map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
                     </select>
                   </label>
                   <button type="button" className="us-btn" onClick={() => setProfileId(row.id)}>پروفایل</button>

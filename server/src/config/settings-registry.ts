@@ -37,10 +37,10 @@ export interface SettingDef {
 }
 
 export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
-  { key: 'invoice', label: 'قالب فاکتور شرکت', hint: 'اطلاعات این قالب در نسخهٔ صادرشده ثبت می‌شود؛ تغییر قالب، فاکتورهای قبلی را تغییر نمی‌دهد.' },
+  { key: 'invoice', label: 'قالب فاکتور {org}', hint: 'اطلاعات این قالب در نسخهٔ صادرشده ثبت می‌شود؛ تغییر قالب، فاکتورهای قبلی را تغییر نمی‌دهد.' },
   {
     key: 'identity',
-    label: 'هویتِ شرکت',
+    label: 'هویتِ {org}',
     hint: 'روی فاکتورِ رسمی و سربرگ چاپ می‌شود. فاکتورِ بدونِ شناسهٔ ملی و کدِ اقتصادی سندِ مالیاتی نیست.',
   },
   {
@@ -60,7 +60,7 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
   {
     key: 'intake',
     label: 'پذیرشِ آنلاین',
-    hint: 'متن‌هایی که بیمار در لینکِ ثبت‌نام می‌بیند. یک متن برای کلِ شرکت — همهٔ لینک‌ها و هر دو خدمت.',
+    hint: 'متن‌هایی که بیمار در لینکِ ثبت‌نام می‌بیند. یک متن برای کلِ {org} و همهٔ لینک‌ها.',
   },
   {
     key: 'ai',
@@ -81,11 +81,11 @@ export const SETTINGS: SettingDef[] = [
   { key: 'company_visit_form_title', label: 'نامِ خودکارِ فرمِ مراجعهٔ شرکت', group: 'identity', type: 'text', default: '', maxLength: 80, hidden: true },
   { key: 'invoice_title', label: 'عنوان فاکتور', group: 'invoice', type: 'text', default: 'صورتحساب خدمات', maxLength: 120 },
   { key: 'invoice_prefix', label: 'پیشوند شماره فاکتور', hint: 'شمارهٔ ترتیبی خودکار بعد از این متن می‌آید.', group: 'invoice', type: 'text', default: '', maxLength: 20 },
-  { key: 'invoice_formal_name', label: 'نام صادرکنندهٔ رسمی', hint: 'خالی = نام حقوقی شرکت در هویت شرکت. نام سامانه چاپ نمی‌شود.', group: 'invoice', type: 'text', default: '', maxLength: 120 },
-  { key: 'invoice_informal_name', label: 'نام صادرکنندهٔ غیررسمی', hint: 'خالی = نام حقوقی شرکت در هویت شرکت.', group: 'invoice', type: 'text', default: '', maxLength: 120 },
-  { key: 'invoice_registration', label: 'شماره ثبت شرکت', group: 'invoice', type: 'text', default: '', maxLength: 40, ltr: true },
-  { key: 'invoice_postal', label: 'کد پستی شرکت', group: 'invoice', type: 'text', default: '', maxLength: 20, ltr: true },
-  { key: 'invoice_website', label: 'وب‌سایت شرکت', group: 'invoice', type: 'text', default: '', maxLength: 180, ltr: true },
+  { key: 'invoice_formal_name', label: 'نام صادرکنندهٔ رسمی', hint: 'خالی = نامِ حقوقیِ {org} در «هویتِ {org}». نامِ سامانه چاپ نمی‌شود.', group: 'invoice', type: 'text', default: '', maxLength: 120 },
+  { key: 'invoice_informal_name', label: 'نام صادرکنندهٔ غیررسمی', hint: 'خالی = نامِ حقوقیِ {org} در «هویتِ {org}».', group: 'invoice', type: 'text', default: '', maxLength: 120 },
+  { key: 'invoice_registration', label: 'شمارهٔ ثبتِ {org}', group: 'invoice', type: 'text', default: '', maxLength: 40, ltr: true },
+  { key: 'invoice_postal', label: 'کدِ پستیِ {org}', group: 'invoice', type: 'text', default: '', maxLength: 20, ltr: true },
+  { key: 'invoice_website', label: 'وب‌سایتِ {org}', group: 'invoice', type: 'text', default: '', maxLength: 180, ltr: true },
   { key: 'invoice_notes', label: 'توضیحات پایین فاکتور', group: 'invoice', type: 'textarea', default: '', maxLength: 2000 },
   { key: 'invoice_signatures', label: 'محل‌های امضا (هر عنوان در یک خط)', group: 'invoice', type: 'textarea', default: 'تنظیم‌کننده\nمهر و امضای شرکت\nتأیید دریافت‌کننده', maxLength: 300 },
   { key: 'invoice_show_payments', label: 'نمایش ریز پرداخت‌ها', group: 'invoice', type: 'bool', default: true },
@@ -116,7 +116,7 @@ export const SETTINGS: SettingDef[] = [
   },
   {
     key: 'company_national_id',
-    label: 'شناسهٔ ملیِ شرکت',
+    label: 'شناسهٔ ملیِ {org}',
     group: 'identity', type: 'text', default: '', maxLength: 20, ltr: true,
   },
   {
@@ -126,7 +126,7 @@ export const SETTINGS: SettingDef[] = [
   },
   {
     key: 'company_phone',
-    label: 'تلفنِ شرکت',
+    label: 'تلفنِ {org}',
     group: 'identity', type: 'text', default: '', maxLength: 30, ltr: true,
   },
   {
@@ -274,22 +274,22 @@ export const SETTINGS: SettingDef[] = [
     group: 'ai', type: 'text', default: '', maxLength: 80, ltr: true,
   },
   {
-    key: 'ai_prompt_note', label: 'دستورِ اختصاصیِ شرکت — شرح‌نویسی',
+    key: 'ai_prompt_note', label: 'دستورِ اختصاصیِ {org} — شرح‌نویسی',
     hint: 'اختیاری. به دستورِ دستیارِ شرح‌نویسی اضافه می‌شود؛ مثلاً «همیشه توصیه‌های پس از عمل را جدا بیاور».',
     group: 'ai', type: 'textarea', default: '', maxLength: 2000,
   },
   {
-    key: 'ai_prompt_template', label: 'دستورِ اختصاصیِ شرکت — قالب‌ساز',
+    key: 'ai_prompt_template', label: 'دستورِ اختصاصیِ {org} — قالب‌ساز',
     hint: 'اختیاری. به دستورِ قالب‌سازِ خودکار اضافه می‌شود.',
     group: 'ai', type: 'textarea', default: '', maxLength: 2000,
   },
   {
-    key: 'ai_prompt_assistant', label: 'دستورِ اختصاصیِ شرکت — دستیارِ مدیریت',
+    key: 'ai_prompt_assistant', label: 'دستورِ اختصاصیِ {org} — دستیارِ مدیریت',
     hint: 'اختیاری. به دستورِ دستیارِ کلیِ مدیریت اضافه می‌شود.',
     group: 'ai', type: 'textarea', default: '', maxLength: 2000,
   },
   {
-    key: 'ai_prompt_voice', label: 'دستورِ اختصاصیِ شرکت — دستیارِ صوتی',
+    key: 'ai_prompt_voice', label: 'دستورِ اختصاصیِ {org} — دستیارِ صوتی',
     hint: 'اختیاری. به تحلیلِ متنِ دیکته‌شده (مثلاً ثبتِ بیمارِ جدید با صدا) اضافه می‌شود؛ مثلاً «نامِ خانوادگی را همیشه بدونِ پیشوند بنویس».',
     group: 'ai', type: 'textarea', default: '', maxLength: 2000,
   },
@@ -307,6 +307,16 @@ export const SETTINGS: SettingDef[] = [
 
 export const SETTING_BY_KEY = new Map(SETTINGS.map((d) => [d.key, d]));
 
+/**
+ * واژهٔ «سازمان» در برچسب‌ها و راهنماها — جای‌گیرِ `{org}` → «مطب» یا «شرکت».
+ *
+ * بازبینیِ UX (۱۴۰۵/۰۷): نصبِ مطب همه‌جا «شرکت» خوانده می‌شد («هویتِ شرکت»، «قالب فاکتور
+ * شرکت»، «شناسهٔ ملیِ شرکت»). همان واژهٔ `org`ِ `src/lib/terms.js` است؛ هر برچسبِ تازه‌ای که
+ * به خودِ سازمان اشاره می‌کند `{org}` بنویسد، نه «شرکت».
+ */
+export const orgWord = (kind: string | null | undefined) => (kind === 'clinic' ? 'مطب' : 'شرکت');
+export const withOrg = (text: string, org: string) => text.replace(/\{org\}/g, org);
+
 /** ارقامِ فارسی/عربی → انگلیسی. ورودیِ عددی از کیبوردِ فارسی می‌آید. */
 export function toEnDigits(input: string): string {
   return input
@@ -320,7 +330,9 @@ export function toEnDigits(input: string): string {
  * خطا **متن** برمی‌گرداند نه پرتاب می‌کند: ذخیرهٔ گروهی چند فیلد را با هم
  * می‌فرستد و کاربر باید همهٔ ایرادها را یک‌جا ببیند، نه یکی‌یکی.
  */
-export function coerce(def: SettingDef, raw: unknown): { value?: string | number | boolean; error?: string } {
+export function coerce(def: SettingDef, raw: unknown, org = 'شرکت'): { value?: string | number | boolean; error?: string } {
+  /* برچسب در پیامِ خطا با واژهٔ همان نصب — «شناسهٔ ملیِ مطب»، نه جای‌گیرِ خام. */
+  def = { ...def, label: withOrg(def.label, org) };
   if (def.type === 'bool') {
     if (typeof raw === 'boolean') return { value: raw };
     if (raw === 'true' || raw === '1') return { value: true };

@@ -6,7 +6,8 @@ import './access.css';
 import { Alert, Back, CheckCircle, Lock } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
 import Toast, { useToast } from '../ui/Toast.jsx';
-import { useTerms } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
+import { roleShown } from '../lib/terms.js';
 import { allTools, toolsOfFeature, useToolTitle } from './tools.jsx';
 
 /**
@@ -32,6 +33,7 @@ export default function Access() {
 
   const { label: title } = useToolTitle('access');
   const t = useTerms();
+  const { vertical } = useConfig();
 
   const load = useCallback(async () => {
     setErr('');
@@ -157,7 +159,8 @@ export default function Access() {
                       یعنی «هر نقشی»؛ سوپرادمین همیشه بیرونِ قاعده است. */}
                   <div className="ax-roles" role="group" aria-label={`نقش‌های مجاز برای ${r.label}`}>
                     <em>نقش:</em>
-                    {(data.roles ?? []).map((ro) => {
+                    {/* نقشِ بی‌ربط به حوزه (راننده و پیکِ مطب) پنهان است — مگر همین ردیف از قبل آن را دارد. */}
+                    {(data.roles ?? []).filter((ro) => roleShown(vertical, ro.key) || r.roles.includes(ro.key)).map((ro) => {
                       const on = r.roles.includes(ro.key);
                       return (
                         <button

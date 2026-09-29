@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiDataUrl } from '../lib/api.js';
 import { faDate, jToFa } from '../lib/jalali.js';
-import { useConfig } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
+import { useToolTitle } from './tools.jsx';
 import { printLetter } from './exports.js';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -30,7 +31,9 @@ export default function Letters() {
   const row = useStagger();
   const tRef = useRef(0);
 
-  useEffect(() => { document.title = 'عمل‌یار — نامهٔ اداری'; }, []);
+  const { label: title } = useToolTitle('letter');
+  /* «سربرگِ مطب» / «سربرگِ شرکت» — واژهٔ سازمان از حوزه (بازبینیِ UX). */
+  const { org } = useTerms();
   useEffect(() => { apiDataUrl('/settings/letterhead').then(setLetterheadUrl); }, []);
 
   const load = (term = q) =>
@@ -59,8 +62,8 @@ export default function Letters() {
       <header className="lt-head">
         <Link to="/app" className="lt-back"><Back width="15" height="15" /> سامانه</Link>
         <div className="lt-title">
-          <h1><Mail width="20" height="20" /> نامهٔ اداری</h1>
-          <p>نامهٔ رسمی روی سربرگِ شرکت — شماره خودکار، چاپ و بایگانی.</p>
+          <h1><Mail width="20" height="20" /> {title}</h1>
+          <p>نامهٔ رسمی روی سربرگِ {org} — شماره خودکار، چاپ و بایگانی.</p>
         </div>
         <button type="button" className="lt-new" onClick={() => setSheet({})}>
           <Plus width="14" height="14" /> نامهٔ تازه
@@ -108,7 +111,7 @@ export default function Letters() {
             onSaved={(saved, wasEdit) => {
               setSheet(null);
               load();
-              setToast(wasEdit ? 'نامه ویرایش شد ✓' : `نامهٔ ${jToFa(saved.no)} صادر شد ✓`);
+              setToast(wasEdit ? 'نامه ویرایش شد' : `نامهٔ ${jToFa(saved.no)} صادر شد`);
             }}
             onDeleted={() => { setSheet(null); load(); setToast('نامه حذف شد'); }}
             onPrint={print}

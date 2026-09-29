@@ -138,7 +138,8 @@ try {
     ok(await aiGroup.count() === 1, 'گروهِ AI در تنظیمات هست');
     ok(await aiGroup.locator('label:has-text("مدلِ تحلیلِ عکس")').count() === 1, 'فیلدِ مدلِ تحلیلِ عکس');
     ok(await aiGroup.locator('label:has-text("گفتار به متن")').count() === 1, 'فیلدِ ویسپر');
-    ok(await aiGroup.locator('label:has-text("دستورِ اختصاصیِ شرکت — شرح‌نویسی")').count() === 1, 'فیلدِ دستورِ اختصاصی');
+    /* واژهٔ سازمان از حوزه می‌آید (`{org}`): «شرکت» یا «مطب» — بازبینیِ UX، shell-08. */
+    ok(await aiGroup.locator('label', { hasText: /دستورِ اختصاصیِ (شرکت|مطب) — شرح‌نویسی/ }).count() === 1, 'فیلدِ دستورِ اختصاصی');
     await aiGroup.locator('.st-aiguide-btn').click();
     await page.waitForTimeout(400);
     ok((await aiGroup.locator('.st-aiguide-body').innerText()).includes('حریمِ بیمار'),

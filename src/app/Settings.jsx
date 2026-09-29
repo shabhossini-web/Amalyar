@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
-import { useConfig } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
+import { useToolTitle } from './tools.jsx';
 import { randomNationalId, toEnDigits } from '../lib/identity.js';
 import { useAuth } from './auth.jsx';
 import './launcher.css';
@@ -27,6 +28,9 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
 export default function Settings() {
   const { kind, services, kinds = [], serviceCatalog = [], error: configError, reload } = useConfig();
   const { user: me } = useAuth();
+  /* «تنظیماتِ مطب» / «تنظیماتِ شرکت» — نامِ کاشی از کاتالوگ، واژهٔ سازمان از حوزه (بازبینیِ UX). */
+  const { label: title } = useToolTitle('settings');
+  const { org } = useTerms();
   const [busy, setBusy] = useState(false);
   const { msg: toast, show: setToast } = useToast(2200);
 
@@ -63,11 +67,9 @@ export default function Settings() {
         },
       });
       await loadTariffs();
-      setToast('ضریبِ تعرفه ذخیره شد ✓');
+      setToast('ضریبِ تعرفه ذخیره شد');
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
-
-  useEffect(() => { document.title = 'عمل‌یار — تنظیماتِ شرکت'; }, []);
 
   /**
    * **نوعِ نصب و بستهٔ خدمات** (مالک، ۱۴۰۵/۰۷/۰۱): مطب/کلینیک یا شرکتی، و شرکت
@@ -102,7 +104,7 @@ export default function Settings() {
       await api('/config/profile', { method: 'PATCH', body: body() });
       await reload();
       setPreview(null);
-      setToast('نوع و خدماتِ شرکت ذخیره شد ✓');
+      setToast(`نوع و خدماتِ ${org} ذخیره شد`);
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
   const ACTION = { create: 'روشن می‌شود', enable: 'روشن می‌شود', disable: 'خاموش می‌شود', relevel: 'سطحِ پیش‌فرضش عوض می‌شود' };
@@ -113,8 +115,8 @@ export default function Settings() {
       <header className="df-head">
         <Link className="df-back" to="/app"><Back width="14" height="14" /> سامانه</Link>
         <div>
-          <h1>تنظیماتِ شرکت</h1>
-          <p>نوعِ نصب و خدماتِ شرکت تعیین می‌کند کدام ماژول‌ها و فرم‌های ثبت‌نام فعال باشند و کاربر چه کلماتی ببیند.</p>
+          <h1>{title}</h1>
+          <p>نوعِ نصب و خدماتِ {org} تعیین می‌کند کدام ماژول‌ها و فرم‌های ثبت‌نام فعال باشند و کاربر چه کلماتی ببیند.</p>
         </div>
       </header>
 
@@ -126,7 +128,7 @@ export default function Settings() {
 
       {configError && (
         <div className="st-fail">
-          <b>پیکربندیِ شرکت خوانده نشد</b>
+          <b>پیکربندیِ {org} خوانده نشد</b>
           <small>{configError}</small>
           <small>حوزهٔ کاری و نامِ برند تا وقتی این خطا هست نمایش داده نمی‌شوند. بقیهٔ سامانه با واژگانِ پیش‌فرض کار می‌کند.</small>
           <button type="button" onClick={() => reload()}>تلاشِ دوباره</button>
@@ -245,7 +247,7 @@ export default function Settings() {
                   {faNum(t.year)} — {t.sectorLabel}
                   {/* منبعِ ضریب: سراسری از مرکز می‌آید، اختصاصی را خودِ شرکت گذاشته و مقدم است. */}
                   <i className={`st-tsrc${t.source === 'local' ? ' own' : ''}`}>
-                    {t.source === 'local' ? 'اختصاصیِ شرکت' : 'سراسری'}
+                    {t.source === 'local' ? `اختصاصیِ ${org}` : 'سراسری'}
                   </i>
                 </b>
                 <small>
@@ -261,9 +263,9 @@ export default function Settings() {
         </div>
       )}
 
-      <Knobs onToast={setToast} onSaved={reload} />
+      <Knobs onToast={setToast} onSaved={reload} org={org} />
 
-      <LetterheadPanel onToast={setToast} />
+      <LetterheadPanel onToast={setToast} org={org} />
 
       <ImportPanel onToast={setToast} />
 
@@ -282,7 +284,7 @@ export default function Settings() {
 function TestDataPanel({ onToast }) {
   const [nid, setNid] = useState('');
   const copy = async () => {
-    try { await navigator.clipboard.writeText(nid); onToast('کپی شد ✓'); } catch { onToast(nid); }
+    try { await navigator.clipboard.writeText(nid); onToast('کپی شد'); } catch { onToast(nid); }
   };
   return (
     <div className="st-brand st-testdata">
@@ -312,7 +314,7 @@ function TestDataPanel({ onToast }) {
  * همین‌جا خودش ظاهر می‌شود — وگرنه هر تنظیمِ جدید دو تغییر لازم داشت و دیر یا
  * زود یکی‌شان جا می‌ماند.
  */
-function Knobs({ onToast, onSaved }) {
+function Knobs({ onToast, onSaved, org }) {
   const [groups, setGroups] = useState(null);
   const [draft, setDraft] = useState({});     // فقط فیلدهای دست‌خورده
   const [busy, setBusy] = useState(false);
@@ -350,7 +352,7 @@ function Knobs({ onToast, onSaved }) {
       setDraft({});
       // پیکربندی دوباره خوانده می‌شود تا نامِ برند در همین لحظه در رابط عوض شود.
       await onSaved?.();
-      onToast(`${faNum(d.changed)} تنظیم ذخیره شد ✓`);
+      onToast(`${faNum(d.changed)} تنظیم ذخیره شد`);
     } catch (e) {
       // پیام‌های گروهی را خودِ لایهٔ api به هم چسبانده؛ همه را نشان می‌دهیم نه فقط اولی.
       onToast(e.message);
@@ -359,9 +361,9 @@ function Knobs({ onToast, onSaved }) {
 
   return (
     <>
-      <h3 className="st-h3">تنظیماتِ شرکت</h3>
+      <h3 className="st-h3">تنظیماتِ {org}</h3>
       <div className="df-note">
-        این‌ها فقط برای همین شرکت‌اند و روی نصبِ بقیه اثری ندارند. «پیش‌فرض» یعنی
+        این‌ها فقط برای همین {org}‌اند و روی نصبِ بقیه اثری ندارند. «پیش‌فرض» یعنی
         هنوز دست نخورده — و اگر روزی پیش‌فرضِ سامانه بهتر شود، همین‌ها خودشان به‌روز می‌شوند.
       </div>
 
@@ -379,7 +381,7 @@ function Knobs({ onToast, onSaved }) {
             <b>{g.label}</b>
             {g.hint && <small>{g.hint}</small>}
           </div>
-          {g.key === 'ai' && <AiGuide />}
+          {g.key === 'ai' && <AiGuide org={org} />}
           <div className="st-knobs">
             {g.items.map((it) => {
               const v = valueOf(it);
@@ -446,7 +448,7 @@ function Knobs({ onToast, onSaved }) {
  * فایل پشتِ Authorization است، پس پیش‌نمایش با blob URL می‌آید نه `<img src>`ِ
  * مستقیم — همان الگوی مدارکِ پرونده.
  */
-function LetterheadPanel({ onToast }) {
+function LetterheadPanel({ onToast, org }) {
   const [preview, setPreview] = useState(null); // blob URL یا null = سربرگی نیست
   const [busy, setBusy] = useState(false);
 
@@ -473,7 +475,7 @@ function LetterheadPanel({ onToast }) {
       fd.append('file', f);
       await apiUpload('/settings/letterhead', fd);
       await load();
-      onToast('سربرگ ذخیره شد ✓');
+      onToast('سربرگ ذخیره شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -489,7 +491,7 @@ function LetterheadPanel({ onToast }) {
 
   return (
     <>
-      <h3 className="st-h3">سربرگِ شرکت</h3>
+      <h3 className="st-h3">سربرگِ {org}</h3>
       <div className="df-note">
         تصویرِ سربرگِ رسمی (PNG، JPEG یا WebP — ترجیحاً اندازهٔ A4). روی فاکتورِ رسمی
         و نامهٔ اداری همین چاپ می‌شود؛ تا وقتی سربرگی نگذاشته‌اید، اسناد بدونِ سربرگ چاپ می‌شوند.
@@ -545,7 +547,7 @@ function ImportPanel({ onToast }) {
     try {
       const res = await api(`/import/malekteb${dryRun ? '?dryRun=1' : ''}`, { method: 'POST', body: dump });
       setReport(res);
-      onToast(dryRun ? 'اجرای آزمایشی انجام شد — چیزی ذخیره نشد' : 'ایمپورت انجام شد ✓');
+      onToast(dryRun ? 'اجرای آزمایشی انجام شد — چیزی ذخیره نشد' : 'ایمپورت انجام شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -621,7 +623,7 @@ function ImportPanel({ onToast }) {
  * متنِ آموزشیِ دستیارِ هوشمند — داخلِ همان گروهِ تنظیمات، تاشو، تا صفحهٔ
  * تنظیمات را بلند نکند ولی همیشه دمِ دست باشد.
  */
-function AiGuide() {
+function AiGuide({ org }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="st-aiguide">
@@ -645,10 +647,10 @@ function AiGuide() {
           <p><b>حریمِ بیمار:</b> نام و شمارهٔ بیمار هرگز به سرویسِ بیرونی نمی‌رود — فقط بافتارِ بالینی
           (نوعِ عمل/تشخیص/موضوع) و متنی که خودتان نوشته‌اید. هیچ پیش‌نویسی هم تا «ثبت» نزنید در پرونده نمی‌نشیند.</p>
           <p><b>راه‌اندازی:</b> اگر مدیرِ سامانه پیکربندیِ مرکزی را روشن کرده باشد، همین حالا کار می‌کند و
-          لازم نیست این‌جا چیزی پر کنید. اگر می‌خواهید سرویس/کلیدِ خودِ شرکت را داشته باشید، «نشانیِ پایه» و
+          لازم نیست این‌جا چیزی پر کنید. اگر می‌خواهید سرویس/کلیدِ خودِ {org} را داشته باشید، «نشانیِ پایه» و
           «کلید» را از ارائه‌دهنده (AvalAI، GapGPT، …) بگیرید و این‌جا بگذارید — تنظیمِ شما بر مرکزی مقدم است.</p>
           <p><b>دستورِ اختصاصی:</b> اگر می‌خواهید دستیار همیشه قاعده‌ای را رعایت کند (مثلاً «توصیه‌های پس از
-          عمل را جدا بیاور»)، آن را در فیلدهای «دستورِ اختصاصیِ شرکت» بنویسید.</p>
+          عمل را جدا بیاور»)، آن را در فیلدهای «دستورِ اختصاصیِ {org}» بنویسید.</p>
         </div>
       )}
     </div>

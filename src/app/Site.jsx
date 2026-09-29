@@ -12,6 +12,8 @@ import './launcher.css';
 import './users.css';
 import './site.css';
 import Toast, { useToast } from '../ui/Toast.jsx';
+import { useTerms } from './config.jsx';
+import { useToolTitle } from './tools.jsx';
 
 /**
  * ویرایشگرِ سایتِ عمومیِ شرکت.
@@ -235,7 +237,9 @@ export default function Site() {
   const [busy, setBusy] = useState(false);
   const stagger = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — سایتِ معرفی'; }, []);
+  const { label: title } = useToolTitle('site');
+  /* «دامنهٔ خودِ مطب» / «دامنهٔ خودِ شرکت» — واژهٔ سازمان از حوزه (بازبینیِ UX). */
+  const { org } = useTerms();
 
   const load = useCallback(async () => {
     try {
@@ -334,8 +338,8 @@ export default function Site() {
       <header className="df-head">
         <Link to="/app" className="df-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
-          <h1>سایتِ معرفی</h1>
-          <p>صفحه‌ای که روی دامنهٔ خودِ شرکت دیده می‌شود — پیش از هر ورودی.</p>
+          <h1>{title}</h1>
+          <p>صفحه‌ای که روی دامنهٔ خودِ {org} دیده می‌شود — پیش از هر ورودی.</p>
         </div>
       </header>
 
@@ -345,7 +349,7 @@ export default function Site() {
           <b>{data.published ? 'سایت منتشر شده است' : 'سایت منتشر نشده'}</b>
           <small>
             {data.published
-              ? 'ریشهٔ دامنهٔ شرکت این صفحه را نشان می‌دهد.'
+              ? `ریشهٔ دامنهٔ ${org} این صفحه را نشان می‌دهد.`
               : 'تا وقتی منتشر نشود، ریشهٔ دامنه مثلِ همیشه به فرمِ ورود می‌رود.'}
           </small>
         </div>

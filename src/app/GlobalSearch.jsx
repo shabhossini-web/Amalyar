@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import Overlay from '../ui/Overlay.jsx';
 import { api } from '../lib/api.js';
 import { Close, Search } from '../ui/icons.jsx';
+import { useTerms } from './config.jsx';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 const isTyping = (el) => {
@@ -26,6 +27,8 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
   const inputRef = useRef(null);
   const seq = useRef(0);
   const navigate = useNavigate();
+  /* «۲ ویزیت» در مطب، «۲ مراجعه»/«۲ عمل» جای دیگر — واژهٔ حوزه (قانونِ ۲۴). */
+  const t = useTerms();
 
   useEffect(() => {
     const onKey = (e) => {
@@ -108,7 +111,7 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
                 <span className="gs-meta">
                   <code dir="ltr">{p.code}</code>
                   {p.phone && <span dir="ltr">{p.phone}</span>}
-                  <span>{faNum(p.visitCount)} مراجعه</span>
+                  <span>{faNum(p.visitCount)} {t.visit}</span>
                 </span>
               </li>
             ))}
