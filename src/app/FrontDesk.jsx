@@ -1,5 +1,6 @@
 import { AnimatePresence } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { fmtToman } from '../lib/money.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
@@ -8,6 +9,7 @@ import { useTerms } from './config.jsx';
 import { useAllowedTools } from './tools.jsx';
 import { useVisitDefs } from './visit-defs.js';
 import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
+import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import { Arrive, Close, Money, Phone, Plus, Search } from '../ui/icons.jsx';
@@ -16,6 +18,8 @@ import CancelReason from '../ui/CancelReason.jsx';
 import './launcher.css';
 import './definitions.css';
 import './frontdesk.css';
+import './users.css';     // `.us-empty`ِ پنجرهٔ صورت‌حساب
+import './dashboard.css'; // پنجرهٔ صورت‌حساب (`BillingSheet`) روی پوستهٔ `db-*` سوار است
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
@@ -55,6 +59,10 @@ export default function FrontDesk() {
      سرور (`/features`)، همان الگوی میزِ پزشک؛ سرور به‌هرحال خودش می‌سنجد. */
   const { hero } = useAllowedTools();
   const canCreate = hero?.key === 'dashboard';
+  /* پرونده و صورت‌حساب هم APIِ همان «بیماران»اند — پیوندِ نام و دکمهٔ «دریافت» فقط برای کسی که آن را
+     دارد (clinic-daily-19)؛ برای بقیه نام متن می‌ماند، نه پیوندی به صفحهٔ ممنوع. */
+  const canPatients = canCreate;
+  const [billing, setBilling] = useState(null); // مراجعه‌ای که صورت‌حسابش همین‌جا باز است
 
   /* تنبل: تا شیت باز نشود، شش fetchِ تعریف‌ها نمی‌رود. */
   const { defs, reload: reloadDefs } = useVisitDefs(!!sheet, user?.id);
@@ -74,7 +82,7 @@ export default function FrontDesk() {
   /* ⚠️ پنجرهٔ دلیلِ لغو هم «باز» حساب می‌شود: تازه‌سازی ردیف‌ها را از نو
      می‌سازد و یادداشتی که کاربر در حالِ نوشتنش است زیرِ دستش عوض می‌شود. */
   const sheetRef = useRef(sheet);
-  sheetRef.current = sheet || cancelAsk;
+  sheetRef.current = sheet || cancelAsk || billing;
   useEffect(() => {
     const tick = () => { if (!sheetRef.current && document.visibilityState === 'visible') load(); };
     const id = setInterval(tick, POLL_MS);
@@ -177,6 +185,16 @@ export default function FrontDesk() {
   };
 
 
+  /* «دریافت» — پنجرهٔ صورت‌حسابِ همان مراجعه همین‌جا، نه «بیماران ← کارت ← صورت‌حساب ← پرداخت‌ها»
+     (شش لمس و یک صفحهٔ دیگر). ردیفِ تخته کدِ مراجعه ندارد، پس نمای کاملش خوانده می‌شود. */
+  const pay = async (row) => {
+    const id = row.visitId ?? row.forVisitId;
+    if (!id) return;
+    setBusy(row.id);
+    try { setBilling(await api(`/visits/${id}`)); }
+    catch (e) { setToast(e?.message || 'باز نشد'); } finally { setBusy(0); }
+  };
+
   if (err && err.status === 403) {
     return (
       <div className="fd"><div className="df-bg" />
@@ -247,7 +265,7 @@ export default function FrontDesk() {
             <h2>{laneTitle(l.key, l.title)} <em>{faNum(l.count)}</em></h2>
             <ul>
               {rows.filter((r) => r.lane === l.key).map((r) => (
-                <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} />
+                <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} canPatients={canPatients} onPay={pay} />
               ))}
               {!rows.some((r) => r.lane === l.key) && <li className="fd-empty">{needle && all.some((r) => r.lane === l.key) ? 'در این ستون نتیجه‌ای نیست' : '—'}</li>}
             </ul>
@@ -259,7 +277,7 @@ export default function FrontDesk() {
         <section className="fd-cancelled" aria-label="لغوشده‌های امروز">
           <h2>لغوشده</h2>
           <ul>{rows.filter((r) => r.lane === 'cancelled').map((r) => (
-            <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} />
+            <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} canPatients={canPatients} onPay={pay} />
           ))}</ul>
         </section>
       )}
@@ -301,6 +319,17 @@ export default function FrontDesk() {
                 setTimeout(() => setSheet({ prefill: surgeryPrefill(saved) }), 400);
               }
             }}
+            onToast={setToast}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {billing && (
+          <BillingSheet
+            visit={billing}
+            onClose={() => setBilling(null)}
+            onChanged={after}
             onToast={setToast}
           />
         )}
@@ -476,7 +505,7 @@ function WalkInSheet({ date, canCreate, onCreate, onClose, onDone }) {
 }
 
 /** یک کارتِ بیمار روی تخته. همهٔ برچسب‌ها از سرور می‌آیند. */
-function Card({ row, t, busy, onAct, onOpen }) {
+function Card({ row, t, busy, onAct, onOpen, canPatients, onPay }) {
   const due = row.billing && row.billing.total > 0 ? row.billing.due : 0;
   /* بدهیِ مراجعه‌های **دیگرِ** همین بیمار — سرور جمعش را داده و مراجعهٔ وصل‌شده
      را کنار گذاشته، پس با `due` بالا دوبار شمرده نمی‌شود. */
@@ -487,7 +516,12 @@ function Card({ row, t, busy, onAct, onOpen }) {
         {/* سه‌راهه: ساعت، وگرنه شمارهٔ نوبت، وگرنه هیچ — نوبتِ آنلاین و
             حضوریِ اسلات‌محور `seq` ندارند. */}
         <span className="fd-when" dir="ltr">{row.time ? faNum(row.time) : row.seq ? `#${faNum(row.seq)}` : '—'}</span>
-        <b>{row.fullName ?? '—'}</b>
+        {/* نام درِ پرونده است — منشی سابقه و شماره را از همین‌جا باز می‌کند، نه از جستجوی بالا (clinic-daily-19). */}
+        <b>
+          {canPatients && row.patientId && row.fullName
+            ? <Link className="fd-name" to={`/app/patients/${row.patientId}`} title="پروندهٔ بیمار">{row.fullName}</Link>
+            : (row.fullName ?? '—')}
+        </b>
         {row.patientCode && <span className="fd-code" dir="ltr">{row.patientCode}</span>}
       </div>
       <div className="fd-card-meta">
@@ -521,6 +555,11 @@ function Card({ row, t, busy, onAct, onOpen }) {
           <button key={o.status} type="button" className={`fd-btn${o.status === 'cancelled' ? ' danger' : ''}`}
             disabled={busy === row.id} onClick={() => onAct(row, o.status)}>{o.label}</button>
         ))}
+        {canPatients && (row.visitId || row.forVisitId) && (
+          <button type="button" className="fd-btn fd-pay" disabled={busy === row.id} onClick={() => onPay(row)}>
+            <Money width="13" height="13" aria-hidden="true" /> {due > 0 ? 'دریافت' : 'صورت‌حساب'}
+          </button>
+        )}
       </div>
     </li>
   );
