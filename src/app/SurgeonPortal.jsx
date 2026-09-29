@@ -497,7 +497,9 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
         ? <h2><button type="button" className="sp-open" onClick={() => things.open({ type: 'visit', id: row.id, patientId: row.patientId })}>{row.fullName}</button></h2>
         : <h2>{row.fullName}</h2>}
       <DoctorTag name={row.doctor} />
-      <span>{row.code} · {faDate(row.opDate)} · {row.hospital || 'مرکز تعیین نشده'}</span>
+      {/* ⚠️ کدِ لاتین جدا از تاریخ (قانونِ ۹، company-05): بی‌جداسازی مرورگر رقمِ روز را آن‌طرفِ کد می‌برد و
+          «۶ مهر ۱۴۰۵» به‌شکلِ «۶ · AM-0005-V1 مهر ۱۴۰۵» دیده می‌شد — روزِ عمل اشتباه خوانده می‌شد. */}
+      <span><bdi dir="ltr">{row.code}</bdi> · {faDate(row.opDate)} · {row.hospital || 'مرکز تعیین نشده'}</span>
       <span>{clinic ? [kindOf(row.kind).label, row.topic].filter(Boolean).join(' · ') : (row.procedure || 'عمل تعیین نشده')} · {status}</span>
       {row.report && <details><summary>گزارشِ ثبت‌شدهٔ {kindOf(row.kind).label}</summary><div className="sp-report">{row.report}</div></details>}
       {row.documents?.map((doc) => <button className="bl-mini" type="button" key={doc.id} onClick={() => document(doc)}>{doc.title || doc.fileName}</button>)}
@@ -536,7 +538,7 @@ function SurgeonFinances({ pickId }) {
     {data?.selectionRequired && <p className="sp-empty">بیلان مالِ یک پزشک است: پزشک را از «میزِ کدام پزشک؟» بالای صفحه انتخاب کنید.</p>}
     {data && !data.selectionRequired && <><article className="sp-card"><h2>{data.surgeon}</h2><p>سهم نهایی: {money(data.earned)} · پرداخت ثبت‌شده: {money(data.paid)} · مانده: {money(data.balance)}</p></article>
       {data.rows.length === 0 && <p>مراجعه‌ای ثبت نشده است.</p>}
-      {data.rows.map((r) => <article className="sp-card" key={r.id}><h2>{r.patient}</h2><span>{r.code} · {faDate(r.date)} · {r.hospital}</span>
+      {data.rows.map((r) => <article className="sp-card" key={r.id}><h2>{r.patient}</h2><span><bdi dir="ltr">{r.code}</bdi> · {faDate(r.date)} · {r.hospital}</span>
         <p>{r.finalized ? `سهم نهایی: ${money(r.earned)}` : 'در انتظار تسویه نهایی'} · پرداخت: {money(r.paid)}{r.finalized ? ` · مانده: ${money(r.balance)}` : ''}</p>
         {r.payments.length > 0 && <details><summary>پرداخت‌های این مراجعه</summary>{r.payments.map((p) => <p key={p.id}>{faDate(p.paidAt)} · {money(p.amount)} تومان {p.reference ? `· پیگیری ${p.reference}` : ''}</p>)}</details>}
       </article>)}
