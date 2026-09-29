@@ -9,13 +9,13 @@ import { FLOW } from '../lib/terms.js';
 import CancelReason from '../ui/CancelReason.jsx';
 import './calendar.css';
 import { ChevronEnd, Clock } from '../ui/icons.jsx';
+import { kindOf } from './visit-kinds.js';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
-const KIND_TAG = { surgery: '', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره' };
 
 /**
- * تقویمِ عمل‌ها.
+ * تقویم — «تقویمِ عمل‌ها» در شرکت، «تقویمِ نوبت‌ها» در مطب (`t.calendar`).
  *
  * سلولِ روز فقط **خلاصه** نشان می‌دهد (تعداد + چند نام) و جزئیات زیرِ تقویم
  * می‌آید: ریختنِ همهٔ اطلاعات داخلِ سلول، تقویم را در موبایل غیرقابلِ استفاده
@@ -36,7 +36,10 @@ export default function Calendar() {
   const [day, setDay] = useState(td);
   const [err, setErr] = useState('');
 
-  useEffect(() => { document.title = 'عمل‌یار — تقویمِ عمل‌ها'; }, []);
+  /* ⚠️ نام و واژه‌ها از واژه‌نامهٔ حوزه (بازبینیِ UX، clinic-daily-05): در مطب این صفحه بیشتر نوبت
+     و ویزیت نشان می‌دهد و «تقویمِ عمل‌ها / ۱۱ عمل در مهر / عملی ثبت نشده» برای منشی غلط بود.
+     کاشیِ لانچر همان `t.calendar` را می‌خواند (قانونِ ۲۴: نامِ کاشی = عنوانِ صفحه). */
+  useEffect(() => { document.title = `عمل‌یار — ${t.calendar}`; }, [t.calendar]);
 
   const load = useCallback(async (y, m) => {
     setErr('');
@@ -78,8 +81,12 @@ export default function Calendar() {
       <header className="cal-head">
         <Link to="/app" className="cal-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
         <div>
-          <h1>تقویمِ عمل‌ها</h1>
-          <p>{data ? `${faNum(data.total)} عمل در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}</p>
+          <h1>{t.calendar}</h1>
+          <p>
+            {data
+              ? `${faNum(data.total)} ${t.calendarUnit}${data.appointments ? ` و ${faNum(data.appointments)} ${FLOW.appointment}` : ''} در ${J_MONTHS[ym.m - 1]}`
+              : 'در حال بارگذاری…'}
+          </p>
         </div>
       </header>
 
@@ -199,7 +206,7 @@ export default function Calendar() {
 
         {!picked || picked.visits.length === 0 ? (
           (picked?.appointments ?? []).length === 0
-            ? <div className="cal-empty">عملی برای این روز ثبت نشده</div>
+            ? <div className="cal-empty">برای این روز {t.calendarUnit} یا نوبتی ثبت نشده</div>
             : null
         ) : picked.visits.map((v) => (
           <article key={v.id} className={`cal-row s-${v.opStatus}`}>
@@ -210,12 +217,13 @@ export default function Calendar() {
             <div className="cal-main">
               <b>
                 {v.fullName}
-                {KIND_TAG[v.kind] && <i className="cal-kind">{KIND_TAG[v.kind]}</i>}
+                {/* نامِ نوع از سرور (`kindTitle`، همان کارتِ «بیماران») — نه نگاشتِ هاردکد. */}
+                {v.kind && <i className="cal-kind">{v.kindTitle || kindOf(v.kind).label}</i>}
               </b>
               <small>
                 {[v.procedureName, v.surgeonName, v.hospitalName].filter(Boolean).join(' · ') || '—'}
               </small>
-              {v.techName && <small className="cal-tech">کارشناس: {v.techName}{v.techArriveTime ? ` — حضور ${v.techArriveTime}` : ''}</small>}
+              {v.techName && <small className="cal-tech">{t.tech}: {v.techName}{v.techArriveTime ? ` — حضور ${v.techArriveTime}` : ''}</small>}
             </div>
             <Link className="cal-open" to={`/app/dashboard?patient=${v.id}`} title="بازکردن در فهرستِ بیماران">
               <span dir="ltr">{v.code}</span>

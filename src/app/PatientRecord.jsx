@@ -309,6 +309,7 @@ function VisitDiagnoses({ v }) {
 }
 
 function VisitsTab({ rec, onErr, onOpen }) {
+  const t = useConfig().t;
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
     <div className="df-list">
@@ -329,7 +330,8 @@ function VisitsTab({ rec, onErr, onOpen }) {
               </b>
             </button>
             <small>
-              {[v.surgeonName && `جراح: ${v.surgeonName}`, v.hospitalName, v.techName && `کارشناس: ${v.techName}`,
+              {/* «جراح/کارشناس» از واژه‌نامهٔ حوزه — در مطب «پزشک/دستیار» (clinic-daily-05). */}
+              {[v.surgeonName && `${t.surgeon}: ${v.surgeonName}`, v.hospitalName, v.techName && `${t.tech}: ${v.techName}`,
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}
             </small>
             <VisitDiagnoses v={v} />

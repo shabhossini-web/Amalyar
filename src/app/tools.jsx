@@ -104,7 +104,8 @@ export function useAllowedTools() {
   /* نامِ کاشیِ پزشک از واژگانِ حوزه می‌آید («پرتال جراح» / «میزِ پزشک») — قانونِ ۲۴؛
      کاتالوگِ ثابت بالا فقط پشتیبان است تا نگهبانِ آیکون‌ها بتواند بخواندش. */
   const daily = DAILY.filter(allowed).map((x) => (x.key === 'surgeon' ? { ...x, label: t.portal } : x));
-  const tools = TOOLS.filter(allowed);
+  /* نامِ حوزه‌ایِ کاشی = همان عنوانِ صفحه، از `TERMS` (قانونِ ۲۴؛ بازبینیِ UX: clinic-daily-05). */
+  const tools = TOOLS.filter(allowed).map((x) => (x.key === 'calendar' ? { ...x, label: t.calendar } : x));
   return { hero, daily, tools, loading: features === null, nothing: !hero && !daily.length && !tools.length };
 }
 
