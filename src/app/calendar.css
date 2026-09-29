@@ -101,6 +101,8 @@
 .cal-appt-st {
   margin-inline-start: 6px; font-style: normal; font-size: 9.5px; font-weight: 700;
   padding: 2px 7px; border-radius: 99px; vertical-align: 1px;
+  /* برچسبِ وضعیت یک تکه است — «در مطب» هرگز دو خط نمی‌شود (clinic-daily-03). */
+  display: inline-block; white-space: nowrap;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .cal-appt-st.st-held { color: var(--amber-text); background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.3); }
@@ -131,3 +133,18 @@
   border: 1px dashed rgba(var(--veil-rgb), .22); padding: 6px 10px;
 }
 .cal-appt-go.is-off:hover { color: var(--text2); border-color: rgba(var(--veil-rgb), .34); }
+
+/* ── موبایل: ردیفِ نوبت دو طبقه (بازبینیِ UX، clinic-daily-03) ──
+   بالا ساعت/شماره + نام + وضعیت، پایین دکمه‌ها در یک ردیفِ تمام‌عرض — همان چیدمانِ کارتِ
+   میزِ پذیرش. ⚠️ تا پیش از این دکمه‌ها کنارِ نام می‌ماندند و برای نام و مشخصات ۹ تا ۵۰ پیکسل
+   جا می‌ماند: هر کلمه یک خط، ردیفِ ۲۴۰ پیکسلی، و منشی نمی‌توانست نوبت‌ها را مرور کند. */
+@media (max-width: 640px) {
+  .cal-appt {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+    grid-template-areas: 'time main' 'acts acts'; gap: 8px 10px;
+  }
+  .cal-appt > .cal-time { grid-area: time; min-width: 36px; }
+  .cal-appt > .cal-main { grid-area: main; }
+  .cal-appt-acts { grid-area: acts; margin-inline-start: 0; justify-content: stretch; gap: 6px; }
+  .cal-appt-acts > button { flex: 1 1 auto; min-height: 44px; font-size: 12px; }
+}
