@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import './portal.css';
 import { ChevronEnd } from '../ui/icons.jsx';
+import { adoptFace } from '../lib/public-face.js';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — `/p/<token>`، عمومی و دائمی.
@@ -49,6 +50,8 @@ export default function Portal() {
   useEffect(() => {
     api(`/public/portal/${token}`, { auth: false })
       .then((d) => {
+        /* تم و رنگِ مطب از همین پاسخ — این صفحه `/config` نمی‌خوانَد (بیرونِ Providerها). */
+        adoptFace(d);
         setData(d);
         /* تبِ خالی خوش‌آمد نیست. ترتیبِ اهمیت: کاری که از بیمار خواسته شده ←
            برنامهٔ پیشِ‌رو ← تاریخچه. */

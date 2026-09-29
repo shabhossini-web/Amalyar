@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
@@ -11,6 +11,7 @@ import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
 import { BrandMark, CallLink, PublicFoot } from './PublicBits.jsx';
+import { adoptFace } from '../lib/public-face.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* ⚠️ مبلغ‌ها در کلِ عمل‌یار **تومان**اند (مثلِ `Charge.amount`). نسخهٔ اول
@@ -36,6 +37,7 @@ export default function Intake({ step }) {
 /* ── گامِ ۱: اطلاعاتِ پایه + کپچا ───────────────────────────────── */
 function Register() {
   const { token } = useParams();
+  const navigate = useNavigate();
   const [link, setLink] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ function Register() {
        یک رسمِ تصویر روی سرور است و از سقفِ نرخِ همین نشانی کم می‌کند. */
     let live = true;
     api(`/public/intake/link/${token}`, { auth: false })
-      .then((l) => { if (live) { setLink(l); loadCap(); } })
+      .then((l) => { if (live) { adoptFace(l); setLink(l); loadCap(); } })
       .catch((e) => { if (live) setErr(e.message); });
     return () => { live = false; };
   }, [token, loadCap]);
@@ -95,7 +97,9 @@ function Register() {
       });
       // از این‌جا به بعد، نشانیِ خودِ بیمار است — با replace تا دکمهٔ برگشت
       // بیمار را به فرمِ خالیِ ثبت‌نام برنگرداند.
-      window.location.replace(`/f/${r.token}`);
+      // ⚠️ `navigate` نه `location.replace`: بارگذاریِ کاملِ اپ روی گوشیِ کند یعنی چند
+      // ثانیه صفحهٔ سفید و دانلودِ دوبارهٔ همهٔ چانک‌ها برای رفتن به صفحهٔ بعدیِ همین اپ.
+      navigate(`/f/${r.token}`, { replace: true });
     } catch (e) {
       setErr(e.message); setBusy(false);
       /* ۴۲۲ = نشان همین حالا مصرف شد (پاسخِ غلط یا منقضی) — پرسشِ تازه، نه ارسالِ دوباره. */
@@ -239,6 +243,7 @@ function Form() {
   const load = useCallback(async () => {
     try {
       const r = await api(`/public/intake/form/${token}`, { auth: false });
+      adoptFace(r);
       setD(r);
       setF((s) => ({
         procedure: r.data?.procedure ?? s.procedure,

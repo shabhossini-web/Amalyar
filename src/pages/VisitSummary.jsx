@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import './visit-summary.css';
+import { adoptFace } from '../lib/public-face.js';
 
 /**
  * خلاصهٔ ویزیت — سندی که به دستِ بیمار می‌رسد (`/v/<token>`، عمومی).
@@ -19,7 +20,8 @@ export default function VisitSummary() {
   useEffect(() => { document.title = 'خلاصهٔ ویزیت'; }, []);
   useEffect(() => {
     api(`/public/visit-summary/${token}`, { auth: false })
-      .then(setData)
+      /* سند رنگِ کاغذ دارد و تم نمی‌گیرد؛ هویت فقط برای صفحهٔ خطای بعدی (تلفنِ مطب) نگه داشته می‌شود. */
+      .then((d) => { adoptFace({ brand: d?.brand }); setData(d); })
       .catch((e) => setErr(e.message));
   }, [token]);
 
