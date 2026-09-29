@@ -126,6 +126,12 @@ try {
   const live = (await api(`/patients/${row.patientId}/live`, null, 'GET', auth)).data;
   const step = (live?.stage?.steps ?? []).find((s) => s.key === 'visit');
   ok(step?.kindFa === 'نورومانیتورینگ' && /نورومانیتورینگ در انتظار/.test(step?.detail ?? ''), '«الان کجاییم»: «نورومانیتورینگ در انتظار»', JSON.stringify(step && { k: step.kindFa, d: step.detail }));
+  /* company-08: نوارِ شرکت از کارِ خودِ شرکت — گام‌های مطب (نوبت/نتیجه‌ها/پیگیری) اصلاً نیستند. */
+  const keys = (live?.stage?.steps ?? []).map((s) => s.key).join(',');
+  ok(keys === 'intake,tech,visit,report,invoice,billing', '**نوارِ شرکت: ثبت‌نام ← کارشناس ← خدمت ← گزارشِ خدمت ← فاکتور ← تسویه**', keys);
+  const techStep = (live?.stage?.steps ?? []).find((s) => s.key === 'tech');
+  ok(techStep?.state === 'done' && techStep.title.includes('{tech}') && live.stage.key === 'visit',
+    'کارشناس تعیین شده («{tech}» جای خالیِ واژهٔ حوزه) و «الان کجاییم» همان خدمت است', JSON.stringify([techStep?.state, techStep?.title, live?.stage?.key]));
   const tl = (live?.timeline?.items ?? []).find((i) => i.id === `visit:${vid}`);
   ok(tl?.kindFa === 'نورومانیتورینگ' && tl.title.startsWith('نورومانیتورینگ'), 'خطِ زمانِ پرونده هم «نورومانیتورینگ» (نه نامِ فرم)', JSON.stringify(tl && { k: tl.kindFa, t: tl.title }));
 
@@ -197,9 +203,15 @@ try {
   ok(cancelled.status === 201 && v3.opStatus === 'cancelled' && v3.cancelReason === 'doctor', '«لغو شد» با دلیل ثبت شد', `${cancelled.status} ${v3.opStatus} ${v3.cancelReason}`);
 
   console.log('\n۵) گزارشِ خدمت، نه گزارشِ عمل');
+  const liveNoRep = (await api(`/patients/${row.patientId}/live`, null, 'GET', auth)).data;
+  ok(liveNoRep?.stage?.key === 'report' && liveNoRep.stage.title !== 'همه‌چیزِ این دوره بسته شده',
+    '**نباید بیفتد:** خدمت انجام شده ولی گزارش نیامده و نوار بگوید «همه‌چیز بسته شده» — «الان کجاییم» گزارشِ خدمت است', JSON.stringify([liveNoRep?.stage?.key, liveNoRep?.stage?.title]));
   const rep = await upload(`/tech/visits/${vid}/report`, techA.token);
   const doc = await db.document.findFirst({ where: { visitId: vid, category: 'report' }, orderBy: { id: 'desc' } });
   ok(rep.status === 201 && doc?.title === 'گزارشِ نورومانیتورینگ', 'سندِ گزارش «گزارشِ نورومانیتورینگ» نام دارد', `${rep.status} ${doc?.title}`);
+  const liveRep = (await api(`/patients/${row.patientId}/live`, null, 'GET', auth)).data;
+  ok(liveRep?.stage?.steps?.find((s) => s.key === 'report')?.state === 'done' && liveRep.stage.key === 'invoice',
+    'گزارش که آمد گامش «انجام‌شده» و «الان کجاییم» فاکتور است', JSON.stringify(liveRep?.stage?.key));
 
   console.log('\n۶) مطب: بخشِ کارشناس نیست');
   await set('vertical', 'clinic'); await set('services', '[]');
