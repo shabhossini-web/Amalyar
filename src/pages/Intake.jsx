@@ -5,7 +5,7 @@ import { api, apiUpload } from '../lib/api.js';
 import { isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
-import { Alert, Bank, Box, CheckCircle, ChevronEnd, Clock, Refresh, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, Caret, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -169,7 +169,7 @@ function Register() {
                 <option value="">— انتخاب کنید —</option>
                 {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
-              <ChevronEnd className="ik-select-ic" width="17" height="17" aria-hidden="true" />
+              <Caret className="ik-select-ic" width="17" height="17" aria-hidden="true" />
             </span>
           </label>
         )}

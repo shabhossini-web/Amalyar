@@ -62,7 +62,7 @@
 .ik-select { position: relative; display: block; color: var(--text2); }
 .ik-select-ic {
   position: absolute; inset-inline-end: 14px; top: 50%; pointer-events: none;
-  transform: translateY(-50%) rotate(90deg);
+  transform: translateY(-50%);
 }
 .ik-field select {
   width: 100%;
