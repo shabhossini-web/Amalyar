@@ -22,6 +22,7 @@ import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
+import MoneyInput from '../ui/MoneyInput.jsx';
 import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
@@ -1593,9 +1594,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     />) };
   /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
      در ویرایش، صورت‌حساب جای اصلاح است. */
+  /* باکسِ مبلغِ مشترک (قانونِ ۱۳): سه‌رقمی در blur + «به‌حروف»ِ زنده — «20000000»ِ خام صفرِ کم/زیاد را پنهان می‌کرد. */
   if (!editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
     <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount') && !(f.kind === 'surgery' && f.undated && tenantKind === 'clinic'))}</span>
-      <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
+      <MoneyInput value={f.amount} onChange={(v) => setF((s) => ({ ...s, amount: v }))}
              placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
     </label>) };
   if (editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (

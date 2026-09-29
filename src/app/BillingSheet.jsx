@@ -10,6 +10,7 @@ import { hasService } from '../lib/profile.js';
 import { Alert, Close, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import MoneyInput from '../ui/MoneyInput.jsx';
 
 
 const CHARGE_KINDS = { service: 'خدمت', item: 'کالا', discount: 'تخفیف' };
@@ -448,7 +449,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                     <input dir="ltr" inputMode="numeric" value={c.quantity} onChange={(e) => setC((s) => ({ ...s, quantity: e.target.value }))} />
                   </label>
                   <label className="db-field"><span>مبلغِ واحد (تومان)</span>
-                    <input dir="ltr" inputMode="numeric" value={c.unitPrice} onChange={(e) => setC((s) => ({ ...s, unitPrice: e.target.value }))} placeholder="۰" />
+                    <MoneyInput value={c.unitPrice} onChange={(v) => setC((s) => ({ ...s, unitPrice: v }))} placeholder="۰" />
                   </label>
                 </div>
                 {c.kind === 'discount' && <p className="db-hint">تخفیف را مثبت وارد کنید؛ خودش از جمع کم می‌شود.</p>}
@@ -466,7 +467,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
               <div className="bl-add">
                 <div className="db-grid2">
                   <label className="db-field"><span>مبلغ (تومان)</span>
-                    <input dir="ltr" inputMode="numeric" value={p.amount} onChange={(e) => setP((s) => ({ ...s, amount: e.target.value }))} placeholder="۰" />
+                    <MoneyInput value={p.amount} onChange={(v) => setP((s) => ({ ...s, amount: v }))} placeholder="۰" />
                   </label>
                   <label className="db-field"><span>روش</span>
                     <select value={p.method} onChange={(e) => setP((s) => ({ ...s, method: e.target.value }))}>
@@ -590,8 +591,8 @@ function PricingBar({ data, busy, setBusy, onToast, visitId, reload }) {
           گلوبال
         </button>
       </div>
-      <input dir="ltr" inputMode="numeric" value={amount} placeholder="مبلغِ کلِ توافقی (تومان)"
-        onChange={(e) => setAmount(e.target.value)} />
+      <MoneyInput value={amount} placeholder="مبلغِ کلِ توافقی (تومان)" aria-label="مبلغِ کلِ توافقی (تومان)"
+        onChange={setAmount} />
       {isGlobal && parseMoney(amount) !== (data.globalAmount ?? 0) && (
         <button type="button" className="bl-mini" disabled={busy} onClick={() => setModel('global', parseMoney(amount))}>
           ذخیرهٔ مبلغ
