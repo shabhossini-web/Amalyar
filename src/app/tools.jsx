@@ -105,7 +105,7 @@ export function useAllowedTools() {
      کاتالوگِ ثابت بالا فقط پشتیبان است تا نگهبانِ آیکون‌ها بتواند بخواندش. */
   const daily = DAILY.filter(allowed).map((x) => (x.key === 'surgeon' ? { ...x, label: t.portal } : x));
   /* نامِ حوزه‌ایِ کاشی = همان عنوانِ صفحه، از `TERMS` (قانونِ ۲۴؛ بازبینیِ UX: clinic-daily-05). */
-  const tools = TOOLS.filter(allowed).map((x) => (x.key === 'calendar' ? { ...x, label: t.calendar } : x));
+  const tools = TOOLS.filter(allowed).map((x) => (x.key === 'calendar' ? { ...x, label: t.calendar } : x.key === 'crm' ? { ...x, label: t.crm } : x));
   return { hero, daily, tools, loading: features === null, nothing: !hero && !daily.length && !tools.length };
 }
 

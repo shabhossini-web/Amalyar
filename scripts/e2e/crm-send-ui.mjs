@@ -1,4 +1,5 @@
 import { chromium } from 'playwright-core';
+import { TERMS } from '../../src/lib/terms.js';
 
 const BASE = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const API = process.env.E2E_API ?? 'http://127.0.0.1:3101/api';
@@ -47,8 +48,11 @@ ok(logged, 'ورود انجام شد');
 /* W3.7: `/app` صفحهٔ «امروز» است و لانچرِ کاشی‌ها به `/app/tools` رفت. */
 await page.goto(BASE + '/app/tools');
 await page.waitForTimeout(1200);
-const crmTile = await page.locator('a:has-text("تحلیل و CRM"), button:has-text("تحلیل و CRM")').count();
-ok(crmTile >= 1, 'کاشیِ «تحلیل و CRM» در لانچر هست');
+/* نامِ کاشی از واژه‌نامهٔ حوزه است (بازبینیِ UX، clinic-daily-23): «تحلیلِ مشتریان» در شرکت،
+   «تحلیل و ارتباط با بیماران» در مطب — هر کدام که این نصب دارد. */
+const crmNames = [...new Set(Object.values(TERMS).map((x) => x.crm))];
+const crmTile = await page.locator('a, button').filter({ hasText: new RegExp(crmNames.join('|')) }).count();
+ok(crmTile >= 1, `کاشیِ «${crmNames.join(' / ')}» در لانچر هست`);
 
 // ۲) صفحهٔ CRM
 await page.goto(BASE + '/app/crm');

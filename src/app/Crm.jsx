@@ -6,7 +6,7 @@ import { faDate, J_MONTHS } from '../lib/jalali.js';
 import './crm.css';
 import { Alert, Back, Chart, Star } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
-import { useStatusMap } from './config.jsx';
+import { useStatusMap, useTerms } from './config.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
@@ -53,7 +53,9 @@ function TrendCard({ trend }) {
                   <i className="t" style={{ height: `${(m.total / peak) * 100}%` }} />
                   <i className="f" style={{ height: `${(m.filled / peak) * 100}%` }} />
                 </div>
-                <span>{J_MONTHS[m.jm - 1].slice(0, 3)}</span>
+                {/* نامِ **کاملِ** ماه — سه‌حرفیِ قبلی «مرد»، «شهر»، «ارد» می‌ساخت (clinic-daily-23). روی
+                    گوشی عمودی می‌نشیند تا جا شود، نه اینکه بریده شود. */}
+                <span>{J_MONTHS[m.jm - 1]}</span>
               </div>
             ))}
           </div>
@@ -190,12 +192,14 @@ function FieldBlock({ f }) {
  */
 export default function Crm() {
   const intakeFa = useStatusMap('intake');
+  const t = useTerms();
   const [data, setData] = useState(null);
   const [unf, setUnf] = useState(null);
   const [err, setErr] = useState('');
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — تحلیل و CRM'; }, []);
+  /* نام از واژه‌نامهٔ حوزه — کاشیِ لانچر همان `t.crm` را می‌خواند (قانونِ ۲۴؛ clinic-daily-23). */
+  useEffect(() => { document.title = `عمل‌یار — ${t.crm}`; }, [t.crm]);
   useEffect(() => {
     api('/intake/analytics').then(setData).catch((e) => setErr(e.message));
     api('/intake/unfollowed').then(setUnf).catch((e) => setErr(e.message));
@@ -207,7 +211,7 @@ export default function Crm() {
       <header className="crm-head">
         <Link to="/app" className="crm-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
-          <h1><Chart width="20" height="20" /> تحلیل و CRM</h1>
+          <h1><Chart width="20" height="20" /> {t.crm}</h1>
           <p>نتیجهٔ نظرسنجی‌ها و پرسش‌نامه‌های زیرپرونده، و این‌که بیماران از کجا می‌آیند.</p>
         </div>
       </header>
