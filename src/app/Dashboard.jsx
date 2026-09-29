@@ -8,6 +8,8 @@ import { faDate, isoToJStr, jStrToIso, todayJStr, toJalaali, toGregorian } from 
 import { isValidNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, faDuration, normTime } from '../lib/time.js';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
+import { fmtMoney, fmtToman } from '../lib/money.js';
+import { faTime } from '../lib/time.js';
 import { useFormDef, star } from './useFormDef.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
@@ -98,12 +100,12 @@ const jToDate = (jy, jm, jd) => {
  * کلاینتیِ قبلی «تمام‌شده/کنسل» می‌نوشت در حالی که بقیهٔ سامانه «انجام شد/لغو».
  */
 const statusLabel = (v) => (v.opStatus === 'pending' ? kindOf(v.kind).pending : (v.opStatusFa ?? v.opStatus));
-const FILTERS = [
-  { v: 'all', l: 'همه' },
-  { v: 'pending', l: 'در انتظار' },
-  { v: 'done', l: 'تمام‌شده' },
-  { v: 'cancelled', l: 'کنسل' },
-];
+/**
+ * فیلترِ وضعیت — **از همان فهرستِ وضعیتِ سرور** (`/config.statuses.visit`) که کارت‌ها می‌خوانند.
+ * ⚠️ تا بازبینیِ UX (company-17) این‌جا «تمام‌شده / کنسل» ثابت بود در حالی که کارت و بقیهٔ سامانه
+ * «انجام شد / لغو» می‌گفتند — یک وضعیت، دو نام در یک صفحه.
+ */
+const statusFilters = (statuses) => [{ v: 'all', l: 'همه' }, ...statuses.map((s) => ({ v: s.key, l: s.label }))];
 /**
  * فیلترِ نوع از **نوع‌هایی که واقعاً در داده هستند** ساخته می‌شود، نه از فهرستی
  * در کد. نوعِ دلخواهی که سوپرادمین ساخته (مثلاً «درمان») همان‌جا در فیلتر
@@ -118,6 +120,18 @@ const kindFilters = (present, titles = {}) => [
   { v: 'all', l: 'همه' },
   ...present.map((v) => ({ v, l: titles[v] || kindOf(v).label })),
 ];
+
+/**
+ * برچسبِ کاشیِ شمارش — «۱۸ ویزیت، ۹ عمل» وقتی چند نوع در نتیجه هست، نامِ همان نوع وقتی یکی است.
+ * ⚠️ تا بازبینیِ UX (clinic-daily-04) کاشی «۲۷ ویزیت» می‌گفت و عمل‌ها را هم ویزیت می‌شمرد.
+ * شمارِ هر نوع از سرور می‌آید (`stats.kindCounts`)؛ این‌جا فقط کنارِ هم نوشته می‌شوند.
+ */
+const countLabel = (kindCounts = [], titles = {}, fallback = '') => {
+  const name = (k) => titles[k] || kindOf(k).label;
+  if (kindCounts.length === 1) return name(kindCounts[0].kind);
+  if (kindCounts.length > 1) return kindCounts.map((k) => `${Number(k.count).toLocaleString('fa-IR')} ${name(k.kind)}`).join('، ');
+  return fallback;
+};
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 /// ارقامِ لاتینِ یک رشته (مثلِ «۱۴۰۵/۰۵/۰۱»ِ ورودی) را فارسی می‌کند — فقط برای
 /// نمایش؛ مقدارِ داخلِ input عمداً لاتین می‌ماند تا تایپ و ویرایش ساده بماند.
@@ -409,7 +423,7 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
               <i style={{ inlineSize: `${v.paidPct}%` }} />
             </div>
             <small className={v.due <= 0 ? 'ok' : undefined}>
-              {v.due > 0 ? `مانده ${faNum(v.due)} از ${faNum(v.total)}` : `تسویه — ${faNum(v.total)}`}
+              {v.due > 0 ? `مانده ${fmtMoney(v.due)} از ${fmtToman(v.total)}` : `تسویه — ${fmtToman(v.total)}`}
             </small>
           </div>
         )}
@@ -649,6 +663,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   // brandName برای سربرگِ برگهٔ چاپ لازم است، پس کلِ config خوانده می‌شود نه فقط واژگان.
   const { t, brandName } = useConfig();
+  const visitStatuses = useStatusList('visit');
   const [visits, setVisits] = useState(null);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
@@ -769,7 +784,9 @@ export default function Dashboard() {
       .catch(() => setVisitKinds([]));
   }, [user?.id]);
   const kindTitles = useMemo(
-    () => Object.fromEntries(visitKinds.map((k) => [k.kind, k.title])),
+    /* `label` نامِ **نوع** است («ویزیت»، «عمل»، «نورومانیتورینگ») و `title` نامِ فرم («فرمِ ویزیت») —
+       فیلتر و کاشی نوع را می‌گویند نه فرم را (clinic-daily-04). سرورِ قدیمی `label` ندارد. */
+    () => Object.fromEntries(visitKinds.map((k) => [k.kind, k.label ?? k.title])),
     [visitKinds],
   );
 
@@ -846,7 +863,7 @@ export default function Dashboard() {
         limit: res.limit,
         filterLabel: [
           q.trim() && `جستجو: ${q.trim()}`,
-          status !== 'all' && `وضعیت: ${FILTERS.find((f) => f.v === status)?.l}`,
+          status !== 'all' && `وضعیت: ${statusFilters(visitStatuses).find((f) => f.v === status)?.l}`,
           kind !== 'all' && `نوع: ${kindTitles[kind] || kindOf(kind).label}`,
           ...activeChips.map((c) => c.label),
         ].filter(Boolean).join(' · '),
@@ -973,12 +990,22 @@ export default function Dashboard() {
 
         {!denied && (<>
         <div className="db-stats">
-          <div className="glass db-stat"><b>{faNum(stats.total)}</b><span>{t.visit}</span></div>
+          {/* ⚠️ شمارش «مراجعه» است نه «ویزیت»: فهرستِ مطب عمل‌ها را هم دارد و «۲۷ ویزیت» آن‌ها
+              را ویزیت می‌نامید (clinic-daily-04). چند نوع = «۱۸ ویزیت، ۹ عمل» (نقطهٔ وسط کنارِ رقمِ فارسی «۰» خوانده می‌شود). */}
+          <div className="glass db-stat"><b>{faNum(stats.total)}</b><span>{countLabel(stats.kindCounts, kindTitles, t.visit)}</span></div>
           {/* برچسب‌ها کلی‌اند چون فهرست می‌تواند عمل و ویزیت و پیگیری را با هم داشته باشد؛
               وقتی روی یک نوع فیلتر شده، همان نوع را می‌گویند. */}
           <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار</span></div>
-          {stats.due > 0 && <div className="glass db-stat db-stat-due"><b>{faNum(stats.due)}</b><span>ماندهٔ کل</span></div>}
           <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>{kind === 'all' ? 'امروز' : `${kindTitles[kind] || kindOf(kind).label}ِ امروز`}</span></div>
+          {/* ⚠️ عددِ مالی هرگز بی‌صدا بریده نمی‌شود (clinic-daily-02): روی گوشی «۱۵۸٬۶۰۰٬۰۰۰» در
+              ستونِ ۷۰ پیکسلی «۵۸٬۶۰۰٬۰۰۰» دیده می‌شد. کاشیِ مبلغ پهن است (روی گوشی یک ردیفِ کامل)
+              و واحدش زیرِ عدد می‌آید (clinic-daily-10). */}
+          {stats.due > 0 && (
+            <div className="glass db-stat db-stat-due">
+              <b>{fmtMoney(stats.due)}</b>
+              <span>ماندهٔ کل (تومان)</span>
+            </div>
+          )}
         </div>
 
         <div className="db-toolbar">
@@ -1020,7 +1047,7 @@ export default function Dashboard() {
           label="وضعیت"
           value={status}
           onChange={setStatus}
-          items={FILTERS.map((fl) => ({ key: fl.v, label: fl.l }))}
+          items={statusFilters(visitStatuses).map((fl) => ({ key: fl.v, label: fl.l }))}
         />
 
         {/* فیلترِ نوع فقط وقتی دیده می‌شود که واقعاً بیش از یک نوع در کار باشد؛

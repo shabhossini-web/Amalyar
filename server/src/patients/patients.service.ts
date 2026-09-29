@@ -749,7 +749,7 @@ export class PatientsService {
       this.prisma.visit.count({ where: { ...live, AND: [...live.AND, { opDate: { gte: dayStart, lte: dayEnd } }] } }),
       // نوع‌های موجود در کلِ نتیجه — نه فقط صفحهٔ جاری، وگرنه چیپِ «ویزیت» با
       // ورق‌زدن ظاهر و ناپدید می‌شود.
-      this.prisma.visit.groupBy({ by: ['kind'], where: scoped }),
+      this.prisma.visit.groupBy({ by: ['kind'], where: scoped, _count: { _all: true } }),
       /**
        * ⚠️ **همان قاعدهٔ صورت‌حساب، نه یک جمعِ دستی.** نسخهٔ قبلی این‌جا
        * `charge.groupBy` می‌زد و `pricingModel === 'global'` را نمی‌دید —
@@ -792,7 +792,9 @@ export class PatientsService {
       byPayer = [...acc.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.due - a.due);
     }
 
-    return { total, pending, today, due, byPayer, kinds: kinds.map((k) => k.kind) };
+    /* شمارِ هر نوع — کاشیِ شمارشِ «بیماران» عمل‌ها را «ویزیت» نمی‌نامد (بازبینیِ UX، clinic-daily-04). */
+    const kindCounts = kinds.map((k) => ({ kind: k.kind, count: k._count._all }));
+    return { total, pending, today, due, byPayer, kinds: kinds.map((k) => k.kind), kindCounts };
   }
 
   async getVisit(id: number, user?: any) {

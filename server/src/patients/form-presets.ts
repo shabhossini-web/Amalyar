@@ -338,7 +338,6 @@ const CLINIC_SURGERY: PresetForm = {
 };
 
 /** ⚠️ بازنشسته — از PRESETS برداشته شد؛ فقط برای نصب‌های قدیمی مستند می‌ماند. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CLINIC_FOLLOWUP: PresetForm = {
   key: 'visit.followup',
   title: 'فرمِ پیگیری',
@@ -369,6 +368,16 @@ const CLINIC_FOLLOWUP: PresetForm = {
     { ...CORE.notes },
   ],
 };
+
+/**
+ * نامِ **قالبیِ** فرم‌های مراجعهٔ مطب — «فرمِ ویزیت»، «فرمِ جراحی» (و «فرمِ پیگیری»ِ نصب‌های قدیمی).
+ *
+ * ⚠️ این‌ها نامِ **فرم**اند نه نامِ **نوعِ مراجعه**: منشی روی کارت «فرمِ جراحی» می‌خواند در حالی که
+ * کنارش «در انتظارِ عمل» آمده بود (بازبینیِ UX، clinic-daily-04). `visit-title.ts` این نام‌ها را مثلِ
+ * نامِ خودکارِ شرکت «دست‌نخورده» می‌شناسد و جایشان واژهٔ حوزه (ویزیت/عمل) می‌نشیند؛ نامی که مطب در
+ * فرم‌ساز عوض کرده همچنان برنده است.
+ */
+export const CLINIC_PRESET_VISIT_TITLES: readonly string[] = [CLINIC_VISIT.title, CLINIC_SURGERY.title, CLINIC_FOLLOWUP.title];
 
 /**
  * فرمِ ثبت‌نامِ بیمار (عمومی).

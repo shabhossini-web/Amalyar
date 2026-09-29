@@ -4,6 +4,9 @@ import { toEnDigits } from './jalali.js';
 /// نمایشِ سه‌رقم‌سه‌رقم با ارقامِ فارسی: 30000000 → «۳۰٬۰۰۰٬۰۰۰»
 export const fmtMoney = (n) => Number(n || 0).toLocaleString('fa-IR');
 
+/// همان قالب با واحد: 40000000 → «۴۰٬۰۰۰٬۰۰۰ تومان» — عددِ بی‌واحد کنارِ ریالِ کارت‌خوان گمراه‌کننده است
+export const fmtToman = (n) => `${fmtMoney(n)} تومان`;
+
 /// رشتهٔ ورودی (با جداکننده/ارقامِ فارسی) → عددِ صحیح
 export const parseMoney = (s) => {
   const digits = toEnDigits(s).replace(/[^\d]/g, '');

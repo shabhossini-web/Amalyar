@@ -4,16 +4,19 @@
 
 /* آمارِ بالای صفحه */
 /* تعدادِ کارت‌ها متغیر است (ماندهٔ کل فقط وقتی بدهی هست ظاهر می‌شود)،
-   پس ستون‌ها ثابت نیستند. */
-.db-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 10px; margin-bottom: 14px; }
+   پس ستون‌ها ثابت نیستند. کاشیِ مبلغ دو ستون می‌گیرد: عددِ یازده‌رقمی در
+   ستونِ ۷۰ پیکسلی بی‌صدا بریده می‌شد (clinic-daily-02). */
+.db-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 10px; margin-bottom: 14px; }
 .db-stat {
   border-radius: 15px; padding: 11px 8px 9px; text-align: center; cursor: default;
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
 }
 .db-stat:hover { transform: none; }
-.db-stat b { font-size: 18px; font-weight: 900; }
-.db-stat span { font-size: 10.5px; color: var(--text2); font-weight: 600; }
-.db-stat-due b { color: var(--amber-text); }
+.db-stat b { font-size: 18px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.db-stat span { font-size: 10.5px; color: var(--text2); font-weight: 600; line-height: 1.6; }
+.db-stat-due { grid-column: span 2; }
+/* ⚠️ اگر جا نبود **می‌شکند**، هرگز بریده نمی‌شود — عددِ مالیِ ناقص از نبودنش بدتر است. */
+.db-stat-due b { color: var(--amber-text); overflow-wrap: anywhere; }
 .db-stat-today b { color: var(--green-text); }
 
 /* نوارِ ابزار: سرچ + افزودن.
@@ -476,8 +479,11 @@ a.db-ico { text-decoration: none; }
 .db-submit:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 @media (max-width: 430px) {
-  .db-stats { grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 7px; }
+  /* گوشی: سه کاشیِ شمارشی در یک ردیف و مبلغ یک ردیفِ کامل زیرشان. */
+  .db-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
   .db-stat b { font-size: 15.5px; }
+  .db-stat-due { grid-column: 1 / -1; }
+  .db-stat-due b { font-size: 17px; }
   .db-add span { display: none; }
 }
 
