@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import Overlay from './Overlay.jsx';
 import './confirm.css';
@@ -14,6 +15,10 @@ import './confirm.css';
  * بازبینیِ UX (۱۴۰۵/۰۷): «رد»ِ درخواستِ عضویت، خاموش‌کردنِ یک ماژول برای همه و «خروج از همهٔ
  * حساب‌ها» بی‌پرسش انجام می‌شدند. متنِ پرسش **اثر** را می‌گوید، نه «مطمئنید؟».
  * دکمهٔ امن («انصراف») اول است و فوکوسِ پیش‌فرض روی خودِ پنجره — Enter کارِ مخرب را انجام نمی‌دهد.
+ *
+ * ⚠️ روی `body` ساخته می‌شود (portal): پرسشی که از منوی پروفایلِ نوارِ پوسته باز شود، داخلِ
+ * `.sh-bar`ی است که `backdrop-filter` دارد — و آن برای `position: fixed` بلوکِ دربرگیرنده
+ * می‌سازد؛ پنجره در همان نوارِ ۶۳ پیکسلی زندانی می‌شد.
  */
 export function useConfirm() {
   const [req, setReq] = useState(null);
@@ -28,7 +33,7 @@ export function useConfirm() {
     pending.current = null;
     setReq(null);
   };
-  const node = (
+  const node = typeof document === 'undefined' ? null : createPortal(
     <AnimatePresence>
       {req && (
         <Overlay backdrop="cf-overlay" panel="cf-sheet" role="alertdialog" aria-labelledby="cf-title"
@@ -41,7 +46,8 @@ export function useConfirm() {
           </div>
         </Overlay>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
   return [node, confirm];
 }
