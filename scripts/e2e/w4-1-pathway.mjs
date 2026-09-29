@@ -49,12 +49,19 @@ const trash = { visits: [], forms: [], episodes: [], templates: [] };
 let pid = 0;
 
 try {
-  console.log('۱) چهار الگوی آماده خودشان می‌نشینند');
+  console.log('۱) الگوهای آماده خودشان می‌نشینند — فقط الگوهای حوزهٔ همین نصب، به‌علاوهٔ الگوی بی‌حوزه');
+  /* بازبینیِ UX (clinic-daily-16): مطب «عملِ نورومانیتورینگ» و «کیسِ ایمپلنت» را هم می‌دید. حوزه از
+     پروفایلِ نصب است نه فقط `vertical`: شرکتِ دوخدمته هر دو خدمتش را دارد. */
+  const cfg = (await send('/config', 'GET')).json;
+  const mine = cfg.kind === 'clinic' ? ['clinic'] : (cfg.services?.length ? cfg.services : [cfg.vertical]);
+  const REG = { 'clinic-visit': 'clinic', 'ionm-surgery': 'ionm', 'implant-case': 'implant', 'followup-course': null };
+  const want = Object.keys(REG).filter((k) => REG[k] === null || mine.includes(REG[k]));
+  const foreign = Object.keys(REG).filter((k) => REG[k] !== null && !mine.includes(REG[k]));
   const templates = (await send('/pathway/templates', 'GET')).json;
-  ok(Array.isArray(templates) && templates.length >= 4, `الگوها آمدند (${templates?.length})`);
+  ok(Array.isArray(templates) && templates.length >= want.length, `الگوها آمدند (${templates?.length})`);
   const keys = new Set(templates.map((t) => t.key));
-  ok(['clinic-visit', 'ionm-surgery', 'implant-case', 'followup-course'].every((k) => keys.has(k)),
-    'هر چهار الگوی سند هست: مطب، نورومانیتورینگ، ایمپلنت، پیگیری');
+  ok(want.every((k) => keys.has(k)), `الگوهای حوزهٔ این نصب (${mine.join('+')}) هستند: ${want.join('، ')}`);
+  ok(foreign.every((k) => !keys.has(k)), `🔴 **نباید بیفتد:** الگوی حوزهٔ دیگر در فهرست بیاید (${foreign.join('، ') || '—'})`);
   ok(templates.every((t) => t.publishedVersion?.steps?.length), 'هرکدام نسخهٔ منتشرشده با گام دارند');
   const ionm = templates.find((t) => t.key === 'ionm-surgery');
   ok(ionm.publishedVersion.steps.some((s) => s.offsetDays < 0),
@@ -169,8 +176,10 @@ try {
   console.log('۱۱) پرونده — مرحله‌ها با مسئول و موعد دیده می‌شوند');
   const browser = await chromium.launch({ executablePath: CHROME, args: ['--no-sandbox'] });
   try {
-    /* دورهٔ تازه روی همان بیمار، چون دورهٔ بخشِ ۷ بسته شد و دکمه نمی‌خواهد. */
-    const clinic = (await send('/pathway/templates', 'GET')).json.find((t) => t.key === 'clinic-visit');
+    /* دورهٔ تازه روی همان بیمار، چون دورهٔ بخشِ ۷ بسته شد و دکمه نمی‌خواهد.
+       ⚠️ الگوی **بی‌حوزه** («دورهٔ پیگیری»): فهرست حالا با حوزهٔ نصب فیلتر می‌شود و «ویزیتِ مطب»
+       در نصبِ نورومانیتورینگ نیست. */
+    const clinic = (await send('/pathway/templates', 'GET')).json.find((t) => t.key === 'followup-course');
     const shown = (await send('/pathway/episodes', 'POST', { patientId: pid, templateId: clinic.id })).json;
     trash.episodes.push(shown.id);
 
