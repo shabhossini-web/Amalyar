@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate, jStrToIso, todayJStr, ymdToJStr } from '../lib/jalali.js';
+import { faDate, jStrToIso, toEnDigits, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
@@ -29,6 +29,11 @@ const GENDER_FA = { male: 'مرد', female: 'زن' };
 /* «ویزیتِ بعدی» روزِ تقویمی است (نیمه‌شبِ UTC) — از اجزا، نه `new Date` که در منطقهٔ منفی روزِ قبل می‌شود. */
 const nextYmd = (iso) => (iso ? String(iso).slice(0, 10) : '');
 const nextJ = (iso) => ymdToJStr(nextYmd(iso));
+/** روزِ شمسی ← پارامترِ نشانی «1405-07-06» (رقمِ لاتین، دوتایی)؛ نیمه‌تایپ‌شده ← null. */
+const dayParam = (j) => {
+  const m = toEnDigits(j).trim().match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
+  return m && jStrToIso(j) ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
+};
 
 /** «HH:MM» → دقیقه؛ برای مدتِ سپری‌شده. ساعتِ دیوار است، پس همان‌روز حساب می‌شود. */
 const mins = (t) => {
@@ -78,9 +83,18 @@ const dropDraft = (k) => { try { localStorage.removeItem(k); } catch { /* هما
  */
 export default function Theatre() {
   const t = useTerms();
-  const [jday, setJday] = useState(todayJStr());
+  /* **نشانی منبعِ حقیقتِ روز و عملِ باز است** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-06):
+     «/app/theatre?date=1405-07-06&visit=19». تا دیروز هر دو فقط در state بودند: «برگشت»ِ گوشی به‌جای
+     فهرستِ روز از کلِ صفحه بیرون می‌رفت، تازه‌کردن عملِ باز و روزِ انتخابی را گم می‌کرد و پیوندِ یک عمل
+     را نمی‌شد برای همکار فرستاد. بازکردنِ کارت یک ورودیِ تاریخچه می‌سازد تا «برگشت» اول همان را ببندد؛
+     عوض‌کردنِ روز جای ورودیِ فعلی را می‌گیرد (ده روز جلو رفتن ده «برگشت» نمی‌خواهد). */
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const urlDay = (() => { const d = dayParam(params.get('date') ?? ''); return d ? d.replace(/-/g, '/') : null; })();
+  const [jday, setJdayText] = useState(() => urlDay ?? todayJStr());
+  const openId = Number(params.get('visit')) || null;
   const [day, setDay] = useState(null);
-  const [openId, setOpenId] = useState(null);
   const [card, setCard] = useState(null);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState('');
@@ -114,14 +128,51 @@ export default function Theatre() {
     try { setDay(await api(`/theatre/day?date=${iso}`)); setErr(null); }
     catch (e) { setErr({ message: e.message, status: e.status }); }
   }, [iso]);
-  useEffect(() => { loadDay(); }, [loadDay]);
+  /* با بازشدن و بسته‌شدنِ کارت هم — فهرستِ روز بعد از کارهای کارت تازه بماند. */
+  useEffect(() => { loadDay(); }, [loadDay, openId]);
 
+  /** روزِ تازه — کادرِ تاریخ همان متنِ تایپ‌شده را نگه می‌دارد؛ نشانی فقط تاریخِ کامل و درست را. */
+  const setJday = (v) => {
+    setJdayText(v);
+    const d = dayParam(v);
+    if (d) setParams((p) => { const n = new URLSearchParams(p); n.set('date', d); return n; }, { replace: true });
+  };
+  /* نشانی از بیرون عوض شد (برگشت/جلو، پیوندِ فرستاده‌شده) — کادرِ تاریخ هم‌گام می‌شود. */
+  useEffect(() => {
+    if (urlDay && jStrToIso(urlDay) !== jStrToIso(jday)) setJdayText(urlDay);
+  }, [urlDay]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** کلیک روی ردیف: اول کارت خوانده می‌شود (ردیف تا آن موقع «در حالِ باز شدن» است)، بعد نشانی. */
   const openCard = useCallback(async (id) => {
     setBusy(`open-${id}`);
-    try { setCard(await api(`/theatre/visits/${id}`)); setOpenId(id); }
+    try {
+      setCard(await api(`/theatre/visits/${id}`));
+      setParams((p) => {
+        const n = new URLSearchParams(p);
+        const d = dayParam(jday);
+        if (d) n.set('date', d);
+        n.set('visit', String(id));
+        return n;
+      }, { state: { thCard: true } });
+    }
     catch (e) { setToast(e.message); }
     finally { setBusy(''); }
-  }, []);
+  }, [jday, setParams]);
+  /* نشانی ← کارت: تازه‌کردن، برگشت/جلو یا پیوندِ فرستاده‌شده. عملِ نیافتنی (حذف‌شده، بی‌دسترسی)
+     پیامش را می‌دهد و از نشانی برداشته می‌شود — نه صفحهٔ خالیِ «در حالِ بارگذاری» تا ابد. */
+  useEffect(() => {
+    if (!openId) { setCard(null); return undefined; }
+    if (card?.visit?.id === openId) return undefined;
+    let alive = true;
+    api(`/theatre/visits/${openId}`)
+      .then((c) => { if (alive) setCard(c); })
+      .catch((e) => {
+        if (!alive) return;
+        setToast(e.message);
+        setParams((p) => { const n = new URLSearchParams(p); n.delete('visit'); return n; }, { replace: true });
+      });
+    return () => { alive = false; };
+  }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** هر کنشِ کارت یک POST و یک کارتِ تازه — فهرستِ روز هم با آن هم‌گام می‌شود. */
   const act = async (path, key, body) => {
@@ -134,7 +185,12 @@ export default function Theatre() {
     finally { setBusy(''); }
   };
 
-  const closeCard = () => { setOpenId(null); setCard(null); loadDay(); };
+  /* کارتی که همین‌جا باز شد یک ورودیِ تاریخچه دارد — «فهرستِ روز» همان را برمی‌دارد (برگشتِ بعدی
+     صفحه را عوض می‌کند، نه اینکه کارت را دوباره باز کند)؛ کارتی که از پیوند آمد فقط از نشانی می‌رود. */
+  const closeCard = () => {
+    if (location.state?.thCard) navigate(-1);
+    else setParams((p) => { const n = new URLSearchParams(p); n.delete('visit'); return n; }, { replace: true });
+  };
   /** برگشت به فهرستِ روز — نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود (ذخیره / دور ریختن / ادامهٔ ویرایش). */
   const backToDay = () => {
     if (unsaved.size) { setLeaving([...unsaved.values()].map((u) => u.label)); return; }
@@ -211,6 +267,7 @@ export default function Theatre() {
         />
       )}
       {!openId && <DayList day={day} visits={visible} busy={busy} onOpen={openCard} techLabel={t.tech} />}
+      {openId && !card && <p className="th-empty">در حالِ بارگذاری…</p>}
       {openId && card && (
         <Card
           card={card}
@@ -899,7 +956,7 @@ function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = f
     <Overlay
       backdrop="th-overlay" panel="th-dialog" as="form" from="center"
       closable={!busy} onClose={onClose} aria-label="ثبتِ ترخیص"
-      dirty={dirty} onSave="submit" backdropClose={false}
+      dirty={dirty} onSave="submit" backdropClose={false} history
       onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(f); }}
     >
       <header className="th-dialog-head">

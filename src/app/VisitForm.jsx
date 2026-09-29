@@ -1987,6 +1987,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
          «تکمیل» هنوز چیزی برای ذخیره نیست و پرسش فقط «دور ریختن / ادامه» می‌دهد. لمسِ پس‌زمینه این
          فرمِ بلند را نمی‌بندد: بیشتر اشتباهِ انگشت است تا خواستنِ بستن. */
       dirty={unsaved} onSave={editing || step === 3 ? 'submit' : undefined} backdropClose={false}
+      /* «برگشت»ِ گوشی اول همین فرم را می‌بندد، نه صفحهٔ زیرش را (surgery-06). */
+      history
     >
       <header className="db-sheet-head">
         {/* نوعِ «عمل» نامِ خودش را دارد (`surgery`/`surgeryNew`ِ واژگان) — فرمِ عملِ مطب «ویزیتِ جدید» می‌نوشت. */}

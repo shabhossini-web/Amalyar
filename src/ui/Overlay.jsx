@@ -5,6 +5,62 @@ import './overlay.css';
 
 const noop = () => {};
 
+/* ── «برگشت»ِ گوشی و مرورگر (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-06) ────────────────────────────
+   پنجره‌ای که `history` دارد یک ورودیِ تاریخچه با **همان نشانی** می‌سازد تا «برگشت» اول خودِ پنجره را
+   ببندد، نه صفحه را (فرمِ عملِ بازشده از فهرستِ انتظار با «برگشت» همراهِ کلِ صفحه می‌رفت).
+   ⚠️ `state`ِ روتر (`idx`/`key`) کپی می‌شود: روتر ورودیِ ما را همان صفحه می‌بیند و با برداشتنش
+   جابه‌جا نمی‌شود. ⚠️ `history.back()` ناهم‌گام است؛ پنجره‌ای که در همان فاصله باز شود (ذخیره ← فرمِ
+   عملِ تازه) صبر می‌کند تا برگشتِ قبلی برسد، وگرنه همان برگشت ورودیِ پنجرهٔ تازه را برمی‌داشت. و
+   ورودیِ جامانده از پنجره‌ای که با ناوبری رفت بازیافت می‌شود، نه اینکه زیرِ ورودیِ تازه انباشته شود. */
+const liveEntries = new Set();
+let backPending = false;
+const afterBack = [];
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', () => {
+    if (!backPending) return;
+    backPending = false;
+    afterBack.splice(0).forEach((f) => f());
+  });
+}
+function useBackEntry(enabled, onBack) {
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  useEffect(() => {
+    if (!enabled || typeof window === 'undefined') return undefined;
+    const token = `ov-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    let armed = false; let mine = false; let gone = false;
+    const push = () => {
+      const st = window.history.state ?? {};
+      const next = { ...st, amalyarOverlay: token };
+      if (st.amalyarOverlay && !liveEntries.has(st.amalyarOverlay)) window.history.replaceState(next, '');
+      else window.history.pushState(next, '');
+      mine = true;
+    };
+    const onPop = () => {
+      if (!mine || window.history.state?.amalyarOverlay === token) return;
+      mine = false;
+      /* `true` یعنی «بسته نشد» (تغییرِ ذخیره‌نشده، درخواستِ در جریان) — ورودی دوباره ساخته می‌شود. */
+      if (onBackRef.current?.()) push();
+    };
+    const arm = () => {
+      if (gone) return;
+      armed = true;
+      liveEntries.add(token);
+      push();
+      window.addEventListener('popstate', onPop);
+    };
+    if (backPending) afterBack.push(arm); else arm();
+    return () => {
+      gone = true;
+      if (!armed) return;
+      liveEntries.delete(token);
+      window.removeEventListener('popstate', onPop);
+      /* بسته شد از راهِ دیگر (ضربدر، ذخیره) — ورودیِ خودش را برمی‌دارد تا «برگشتِ» بعدی صفحه را ببرد. */
+      if (mine && window.history.state?.amalyarOverlay === token) { backPending = true; window.history.back(); }
+    };
+  }, [enabled]);
+}
+
 /* بستنِ «محافظت‌شده» برای دکمه‌های داخلِ پنجره (ضربدر، انصراف) — همان مسیری که Escape و
    پس‌زمینه می‌روند، تا پرسشِ «تغییرِ ذخیره‌نشده» از هیچ راهی دور زده نشود. */
 const CloseCtx = createContext(null);
@@ -79,6 +135,8 @@ const focusables = (root) => [...root.querySelectorAll(FOCUSABLE)]
  *    با همهٔ اعتبارسنجی‌هایش. نبودش یعنی چیزی برای ذخیره نیست و پرسش دوگزینه‌ای می‌شود.
  *  - `backdropClose={false}` — فرم‌های بلند با لمسِ پس‌زمینه اصلاً بسته نمی‌شوند؛ آن لمس بیشتر
  *    اشتباهِ انگشت است تا خواستنِ بستن.
+ *  - `history` — «برگشت»ِ گوشی/مرورگر اول همین پنجره را می‌بندد (با همان پرسش اگر `dirty` است)؛
+ *    پیش‌فرض خاموش، برای شیت‌های کاری که کاربر رویشان می‌ماند (بالا، `useBackEntry`).
  */
 export default function Overlay({
   backdrop,             // کلاسِ پس‌زمینه — همان `iv-overlay` / `df-overlay` / …
@@ -90,6 +148,7 @@ export default function Overlay({
   dirty = false,        // تغییرِ ذخیره‌نشده — بستن اول می‌پرسد (بالا)
   onSave,               // «ذخیره»ِ همان پرسش: تابع یا 'submit'
   backdropClose = true, // فرمِ بلند: لمسِ پس‌زمینه نمی‌بندد
+  history = false,      // «برگشت»ِ گوشی/مرورگر اول همین پنجره را می‌بندد
   children,
   ...rest               // به شیت می‌رسد: onSubmit، role، aria-*
 }) {
@@ -106,6 +165,16 @@ export default function Overlay({
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
   const [asking, setAsking] = useState(false);
+  const askingRef = useRef(asking);
+  askingRef.current = asking;
+  /* «برگشت» روی پرسشِ باز یعنی «ادامهٔ ویرایش»؛ روی پنجرهٔ دست‌خورده همان پرسش؛ وگرنه بستن. */
+  useBackEntry(history, () => {
+    if (askingRef.current) { setAsking(false); return true; }
+    if (!closableRef.current) return true;
+    if (dirtyRef.current) { setAsking(true); return true; }
+    onCloseRef.current?.();
+    return false;
+  });
   /** تنها مسیرِ بستن: تغییرِ ذخیره‌نشده اول پرسیده می‌شود. هویتِ ثابت — مقدارِ کانتکست است. */
   const requestClose = useCallback(() => {
     if (!closableRef.current) return;
