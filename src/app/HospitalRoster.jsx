@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { badTime, normTime } from '../lib/time.js';
 import TimePick from '../ui/TimePick.jsx';
+import { Send } from '../ui/icons.jsx';
 
 export default function HospitalRoster({ date, techs, hospitals, onChanged }) {
   const [data, setData] = useState(null);
@@ -71,11 +72,19 @@ export default function HospitalRoster({ date, techs, hospitals, onChanged }) {
           </select></label>
         </div>)}</div>
       </section>)}
-      <div className="roster-send"><button className="dp-brief-btn" disabled={busy} onClick={showPreview}>پیش‌نمایش ابلاغ برنامه روز</button><Link to="/app/reminders">وضعیت پیام‌ها</Link></div>
-      {preview && <section className="dp-card roster-preview"><h2>ابلاغ برنامه روز</h2>
+      {/* «ابلاغِ برنامهٔ روز» اصلی‌ترین کارِ این صفحه است: دکمهٔ اصلیِ درشتِ پایینِ روز (company-02).
+          اول پیش‌نمایش، بعد ارسال — پیامک به دستِ کارشناس می‌رسد و پس‌گرفتنی نیست. */}
+      <div className="roster-send">
+        {preview
+          ? <button type="button" className="dp-brief-btn" disabled={busy} onClick={() => setPreview(null)}>بستنِ پیش‌نمایش</button>
+          : <button type="button" className="roster-send-main" disabled={busy} onClick={showPreview}><Send width="17" height="17" aria-hidden="true" /> ابلاغِ برنامهٔ روز</button>}
+        <Link to="/app/reminders">وضعیتِ پیام‌ها</Link>
+        {!preview && <p className="roster-send-hint">اول پیامِ هر کارشناس را می‌بینید؛ ارسال فقط با تأییدِ شما.</p>}
+      </div>
+      {preview && <section className="dp-card roster-preview"><h2>ابلاغِ برنامهٔ روز</h2>
         {!preview.programs.length && <p>هنوز کارشناس و ساعت حضور ثبت نشده است.</p>}
         {preview.programs.map(p => <details key={p.techId} open><summary>{p.name}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{p.text}</p></details>)}
-        {!!preview.programs.length && <button className="dp-brief-btn" disabled={busy} onClick={send}>ارسال برنامه روز با پیامک و ربات اطلاع‌رسانی</button>}
+        {!!preview.programs.length && <button type="button" className="roster-send-main" disabled={busy} onClick={send}><Send width="17" height="17" aria-hidden="true" /> ارسالِ برنامهٔ روز با پیامک و ربات</button>}
       </section>}
     </>}
   </div>;

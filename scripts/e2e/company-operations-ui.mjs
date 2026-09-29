@@ -100,7 +100,8 @@ try {
   await page.goto(`${base}/app/dispatch`);
   await page.getByLabel('کارشناس بیمار تست').selectOption('2');
   assert.equal((await waitWrite('/dispatch/roster/visits/1')).payload.techId, 2);
-  await page.getByRole('button', { name: 'پیش‌نمایش ابلاغ برنامه روز' }).click();
+  /* company-02: دکمهٔ اصلیِ درشتِ پایینِ روز — «ابلاغِ برنامهٔ روز» (اول پیش‌نمایش، بعد ارسال). */
+  await page.getByRole('button', { name: 'ابلاغِ برنامهٔ روز' }).click();
   await page.getByText('برنامه تست؛ بیمار احتمالی').waitFor();
   pass('hospital roster assigns a patient and previews technician notification');
   await page.getByRole('tab', { name: /حمل/ }).click();
