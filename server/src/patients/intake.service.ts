@@ -463,7 +463,17 @@ export class IntakeService {
     const link = await this.prisma.intakeLink.findUnique({ where: { token } });
     if (!link) throw new NotFoundException('این لینک معتبر نیست');
     if (!link.active) throw new ForbiddenException('این لینک غیرفعال شده است');
-    return { title: link.title, amount: link.amount };
+    /* نام و تلفنِ مطب/شرکت (بازبینیِ UX، بندِ ۹۲): بیمار از لینکِ «مطب دکتر رحیمی» می‌آید و
+       تا دیروز بالای فرم «عمل‌یار» می‌دید که کدِ ملی و ۴۰ میلیون می‌خواهد — شبیهِ کلاه‌برداری. */
+    return { title: link.title, amount: link.amount, ...(await this.portal.publicFace()) };
+  }
+
+  /**
+   * هویتِ شرکت برای صفحه‌ای که **دادهٔ خودش نیامد** — لینکِ ناقص‌کپی‌شده، منقضی یا خطای
+   * اتصال. صفحهٔ خطا بی‌این نه نامِ مطب را داشت نه تلفنش را (بازبینیِ UX، بندِ ۱۱۰).
+   */
+  publicFace() {
+    return this.portal.publicFace();
   }
 
   /**
@@ -685,6 +695,7 @@ export class IntakeService {
 
   async publicView(token: string) {
     const row = await this.expireIfDue(token);
+    const face = await this.portal.publicFace();
     /* یک‌بار برای دو مصرف: هم `makesVisit` هم خاموش‌کردنِ نوبت‌دهی. */
     const scope = await this.formScope(row.formId);
     /* ⚠️ حساب از **لینکِ همین ثبت‌نام** خوانده می‌شود، نه از خودِ ثبت‌نام.
@@ -755,6 +766,8 @@ export class IntakeService {
       /* برگشتِ جاری (مرحله، دلیل، راهنما) — تا وقتی بیمار اصلاح را نفرستاده. */
       returned: currentReturn(row.data, row.status),
       expiresAt: row.expiresAt,
+      /* نام/تلفنِ مطب و حوزه (تم) — همان `publicLink`. */
+      ...face,
     };
   }
 

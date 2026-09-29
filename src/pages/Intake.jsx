@@ -4,13 +4,13 @@ import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
-import Mark from '../components/Mark.jsx';
 import './intake.css';
 import { Alert, Bank, Box, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
+import { BrandMark, CallLink, PublicFoot } from './PublicBits.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* ⚠️ مبلغ‌ها در کلِ عمل‌یار **تومان**اند (مثلِ `Charge.amount`). نسخهٔ اول
@@ -57,7 +57,8 @@ function Register() {
       .catch((e) => { setCap(null); setCapErr(e.message); });
   }, [token]);
 
-  useEffect(() => { document.title = 'ثبت‌نام'; }, []);
+  /* عنوانِ زبانه با نامِ مطب — بیمار چند زبانه باز دارد و «ثبت‌نام» تنها معلوم نمی‌کرد کجاست. */
+  useEffect(() => { document.title = link?.brand?.name ? `ثبت‌نام — ${link.brand.name}` : 'ثبت‌نام'; }, [link]);
   useEffect(() => {
     /* خطا بلعیده می‌شود: نبودِ فهرستِ کانال‌ها نباید جلوی ثبت‌نام را بگیرد —
        این یک پرسشِ اختیاری است، نه شرطِ پذیرش. */
@@ -105,7 +106,7 @@ function Register() {
   if (err && !link) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
 
   return (
-    <Shell title={link?.title} amount={link?.amount}>
+    <Shell brand={link?.brand} title={link?.title} amount={link?.amount}>
       <div className="ik-grid">
         <Field label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} />
         <Field label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} />
@@ -234,7 +235,7 @@ function Form() {
   const lastRev = useRef(0);
   const nextRev = () => { lastRev.current = Math.max(Date.now(), lastRev.current + 1); return lastRev.current; };
 
-  useEffect(() => { document.title = 'فرمِ مراجعه'; }, []);
+  useEffect(() => { document.title = d?.brand?.name ? `فرمِ مراجعه — ${d.brand.name}` : 'فرمِ مراجعه'; }, [d?.brand?.name]);
   const load = useCallback(async () => {
     try {
       const r = await api(`/public/intake/form/${token}`, { auth: false });
@@ -472,7 +473,7 @@ function Form() {
   const submitLabel = paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
 
   return (
-    <Shell title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}>
+    <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}>
       {/* نوارِ مرحله — بیمار باید بداند کجای کار است و چه چیزی مانده؛ و در
           پایان، اینکه چیزی نمانده. مرحله‌ها از وضعیتِ همین فرم ساخته می‌شوند. */}
       {!rejected && !expired && (
@@ -627,9 +628,10 @@ function Form() {
               {d.payTo.map((a) => <BankCard key={a.id} acc={a} />)}
             </div>
           ) : (
-            <p className="ik-warn">
-              <Alert width="15" height="15" /> شمارهٔ حسابی تنظیم نشده — پیش از واریز با ما تماس بگیرید.
-            </p>
+            <div className="ik-warn ik-warn-call">
+              <p><Alert width="15" height="15" /> شمارهٔ حسابی تنظیم نشده — پیش از واریز تماس بگیرید.</p>
+              <CallLink phone={d.brand?.phone} label={d.brand?.name ? `تماس با ${d.brand.name}` : 'تماس'} />
+            </div>
           )}
           {/* فیش هم چندتایی است: دو قسط، یا عکسِ ناخوانا که دوباره فرستاده
               می‌شود. کادر همان کادرِ مشترکِ سامانه است. */}
@@ -760,20 +762,30 @@ function BankCard({ acc }) {
 }
 
 /* ── پوسته ─────────────────────────────────────────────────────── */
-function Shell({ title, amount, children }) {
+/**
+ * سربرگ = **هویتِ مطب/شرکت**، نه نامِ نرم‌افزار (بازبینیِ UX، بندِ ۹۲).
+ *
+ * ⚠️ تا دیروز بالای فرم «عمل‌یار» بود (`data-brand-name` که هیچ کدی پرش نمی‌کرد): بیمار از
+ * لینکِ «مطب دکتر رحیمی» می‌آمد، نامِ دیگری می‌دید که کدِ ملی و ۴۰ میلیون می‌خواهد، و ته صفحه
+ * «به شرکت نوروپایش واریز کنید» — برای بیمارِ نگران یعنی کلاه‌برداری. حالا نام و تلفن از
+ * پاسخِ خودِ صفحه می‌آید و «عمل‌یار» فقط کوچک در پاورقی است. نامِ نیامده (پاسخِ قدیمی)
+ * «ثبت‌نام» می‌شود، هرگز «عمل‌یار».
+ */
+function Shell({ brand, title, amount, children }) {
   return (
     <div className="ik">
       <div className="ik-bg" aria-hidden="true" />
       <main className="ik-card">
         <header className="ik-head">
-          <Mark className="ik-mark" gradient aria-hidden="true" />
+          <BrandMark brand={brand} />
           <div>
-            <b data-brand-name>عمل‌یار</b>
+            <b>{brand?.name || 'ثبت‌نام'}</b>
             {title && <small>{title}</small>}
           </div>
           {amount > 0 && <span className="ik-amount">{faNum(amount)} تومان</span>}
         </header>
         {children}
+        <PublicFoot brand={brand} />
       </main>
     </div>
   );

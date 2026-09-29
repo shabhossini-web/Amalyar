@@ -18,7 +18,6 @@
   border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .ik-head { display: flex; align-items: center; gap: 10px; }
-.ik-mark { width: 34px; height: 34px; flex: 0 0 auto; }
 .ik-head > div { flex: 1; min-width: 0; }
 .ik-head b { display: block; font-size: 15px; font-weight: 900; }
 .ik-head small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--text3); }
@@ -122,6 +121,10 @@
 .ik-bad { color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .32); }
 .ik-warn { color: var(--amber-text); background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35); }
 .ik-note svg, .ik-good svg, .ik-bad svg, .ik-warn svg { flex: 0 0 auto; }
+/* «شمارهٔ حسابی نیست — تماس بگیرید» همراهِ خودِ دکمهٔ تماس، نه جملهٔ بی‌شماره. */
+.ik-warn-call { flex-direction: column; align-items: stretch; gap: 9px; }
+.ik-warn-call p { margin: 0; display: flex; align-items: center; gap: 7px; }
+.ik-warn-call .pb-call { align-self: flex-start; }
 
 @media (max-width: 460px) {
   .ik-grid { grid-template-columns: 1fr; }

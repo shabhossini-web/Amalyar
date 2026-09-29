@@ -196,6 +196,12 @@ export class PublicIntakeController {
   @Get('form/:token/hospitals')
   hospitals(@Param('token') token: string, @Query('q') q?: string) { return this.intake.publicHospitals(token, q); }
 
+  /** هویتِ عمومیِ شرکت (نام، تلفن، نشانی، رنگ، حوزه) — برای صفحهٔ خطای بیمار. */
+  @Get('brand')
+  brand() {
+    return this.intake.publicFace();
+  }
+
   @Get('link/:token')
   link(@Param('token') token: string) {
     return this.intake.publicLink(token);

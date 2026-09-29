@@ -12,6 +12,7 @@ import { AvailabilityService } from './availability.service';
 import { OP_LABELS } from './labels';
 import { OTHER_PX, procedureLabel } from './visit-coding';
 import { visitTitleOf } from './visit-title';
+import { DEFAULT_VERTICAL, isVertical } from '../config/verticals';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — لینکِ **دائمیِ** `/p/<token>`.
@@ -48,6 +49,32 @@ export class PortalService {
 
   private urlOf(token: string) {
     return `https://${this.tenant.require().hostname}/p/${token}`;
+  }
+
+  /**
+   * **«این صفحه مالِ کدام مطب است»** — تک‌منبعِ هویتِ شرکت روی صفحه‌های بی‌احرازِ بیمار
+   * (ثبت‌نام، فرم، پرونده، و صفحهٔ خطای هر کدام).
+   *
+   * ⚠️ فقط همان پنج فیلدی که پرونده و خلاصه از قبل بیرون می‌دادند (نام، لوگو، رنگ، تلفن،
+   * نشانی) — نه `settings.brand()`ِ کامل که شناسهٔ ملی و کدِ اقتصادیِ فاکتورِ رسمی را هم
+   * دارد. لینکِ این صفحه‌ها در پیامک و بیوی اینستاگرام می‌رود.
+   *
+   * `vertical` برای تم است: صفحه‌های بیمار بیرونِ `ConfigProvider` رندر می‌شوند (دیگر
+   * `/config`ِ پشتِ احراز را صدا نمی‌زنند) و پیش‌فرضِ «مطب روشن، بقیه تیره» را از همین
+   * می‌گیرند — تا دیروز بیمارِ مطب صفحهٔ تیرهٔ بنفشِ پیش‌فرض را می‌دید و کارکنان روشن.
+   */
+  async publicFace() {
+    const [brand, row] = await Promise.all([
+      this.settings.brand(),
+      this.prisma.setting.findUnique({ where: { key: 'vertical' }, select: { value: true } }),
+    ]);
+    return {
+      brand: {
+        name: brand.name, phone: brand.phone, address: brand.address, color: brand.color,
+        logo: (brand as any).logo ?? null,
+      },
+      vertical: isVertical(row?.value) ? row!.value : DEFAULT_VERTICAL,
+    };
   }
 
   async link(patientId: number) {
@@ -121,7 +148,7 @@ export class PortalService {
     const common = { token: true, status: true, createdAt: true } as const;
     const openOrderWhere = { patientId: p.id, status: { in: ['sent', 'needs_action'] } };
 
-    const [visits, kindDefs, appointments, notices, brand, intakes, surveys, labs, imaging, consults, referrals] =
+    const [visits, kindDefs, appointments, notices, face, intakes, surveys, labs, imaging, consults, referrals] =
       await Promise.all([
       this.prisma.visit.findMany({
         where: { patientId: p.id },
@@ -151,7 +178,7 @@ export class PortalService {
         take: 50,
         select: { kind: true, status: true, dueAt: true, sentAt: true, text: true },
       }),
-      this.settings.brand(),
+      this.publicFace(),
       /* ثبت‌نامِ نیمه‌تمام — بیمار فرم را باز کرده ولی تمام نکرده یا فیش نداده. */
       this.prisma.intakeSubmission.findMany({
         where: { patientId: p.id, status: { in: ['pending_fill', 'pending_payment'] } },
@@ -313,7 +340,9 @@ export class PortalService {
     ];
 
     return {
-      brand: { name: brand.name, phone: brand.phone, address: brand.address },
+      /* رنگ و حوزه هم می‌روند: صفحه بیرونِ `ConfigProvider` است و تم/رنگِ مطب را از همین می‌گیرد. */
+      brand: face.brand,
+      vertical: face.vertical,
       patient: { fullName: `${p.firstName} ${p.lastName}`.trim(), code: p.code },
       tasks,
       upcoming,
