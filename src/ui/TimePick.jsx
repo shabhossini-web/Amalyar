@@ -40,7 +40,8 @@ export default function TimePick({
   onChange,                 // هر کلید — متنِ خام (فقط ارقام لاتین‌شده)
   onCommit,                 // خروج از فیلد / انتخاب از فهرست — مقدارِ نرمال‌شده
   step = 15,
-  placeholder = '۰۸:۳۰',
+  /* قالب، نه مقدار: «۰۸:۳۰» در کادرِ خالیِ عملِ بی‌ساعت شبیهِ ساعتِ ثبت‌شده بود (بازبینیِ UX ۱۴۰۵/۰۷). */
+  placeholder = 'ساعت : دقیقه',
   className = 'db-field',
   disabled,
   hint,
