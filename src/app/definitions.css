@@ -4,7 +4,8 @@
      با تم نمی‌چرخید، پس در تمِ روشن نامِ بیمار، کدِ مراجعه و هر متنی که توکنِ
      صریح نداشت سفیدِ روی سفید می‌شد. نگهبانِ تم این هگز را در فهرستِ
      خاکستری‌هایش نداشت، پس بی‌صدا رد شد. */
-  min-height: 100vh; background: var(--bg); color: var(--text1);
+  /* صفحه‌نما منهای نوارِ پوسته (`--shell-h`) — نه `100vh` که ۶۳ پیکسل اسکرولِ بی‌دلیل می‌ساخت. */
+  min-height: calc(100dvh - var(--shell-h)); background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
 }
 .df * { box-sizing: border-box; }

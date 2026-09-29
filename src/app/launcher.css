@@ -1,7 +1,8 @@
 /* ── لانچرِ عمل‌یار — هابِ شیشه‌ای (glassmorphism + اسپاتلایتِ اشاره‌گر) ── */
 .lx {
   direction: rtl;
-  min-height: 100vh; min-height: 100dvh;
+  /* همهٔ صفحه‌های `.lx` (لانچر، کاربران، پروفایل) زیرِ نوارِ پوسته‌اند — ارتفاعش کم می‌شود. */
+  min-height: calc(100vh - var(--shell-h)); min-height: calc(100dvh - var(--shell-h));
   background: var(--bg);
   color: var(--text1);
   position: relative; overflow: hidden;
@@ -40,7 +41,7 @@
   position: relative; z-index: 1;
   max-width: 468px; margin: 0 auto;
   padding: max(env(safe-area-inset-top, 0px), 20px) 20px 40px;
-  display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh;
+  display: flex; flex-direction: column; min-height: calc(100vh - var(--shell-h)); min-height: calc(100dvh - var(--shell-h));
 }
 
 .lx-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

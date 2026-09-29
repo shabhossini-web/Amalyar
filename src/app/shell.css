@@ -7,9 +7,10 @@
 }
 /* چیپِ پروفایلِ داخلِ نوار تارِ دوم نمی‌خواهد؛ نوار پشت را از قبل تار کرده (launcher.css). */
 .sh-bar .glass { -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* ارتفاعِ نوار = `--shell-h` (با خطِ زیرین) — صفحه‌های تمام‌قد همین عدد را از `100dvh` کم می‌کنند. */
 .sh-in {
   max-width: var(--maxw); margin: 0 auto; padding: 8px 16px;
-  display: flex; align-items: center; gap: 10px; min-height: 52px;
+  display: flex; align-items: center; gap: 10px; min-height: calc(var(--shell-h) - 1px);
 }
 .sh-brand {
   display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text1);
