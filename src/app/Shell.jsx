@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Outlet } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import { useConfig } from './config.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
@@ -26,10 +26,8 @@ export default function Shell() {
   const [searchOpen, setSearchOpen] = useState(false);
   const { msg: toast, show: setToast } = useToast(1800);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
-  /* صفحهٔ «همهٔ ابزارها» (لانچر) منوی پروفایلِ خودش را دارد — این‌جا دو تا نشود.
-     از W2.3 نشانی‌اش `/app/tools` است و `/app` خودش صفحهٔ «امروز» است. */
-  const { pathname } = useLocation();
-  const launcher = pathname === '/app/tools' || pathname === '/app/tools/';
+  /* منوی پروفایل **فقط** این‌جاست — روی لانچر (`/app/tools`) هم. تا بازبینیِ UX (۱۴۰۵/۰۷)
+     لانچر چیپِ خودش را داخلِ بدنه داشت و این نوار آن‌جا بی‌پروفایل بود. */
 
   return (
     <>
@@ -49,13 +47,53 @@ export default function Shell() {
           </button>
           <div className="sh-end">
             <WorkBell onToast={setToast} />
-            {!launcher && <ProfileMenu onToast={setToast} />}
+            <ProfileMenu onToast={setToast} />
           </div>
         </div>
       </header>
+      <InstallBanner onToast={setToast} />
       <GlobalSearch open={searchOpen} onOpen={() => setSearchOpen(true)} onClose={() => setSearchOpen(false)} />
       <Outlet />
       <Toast msg={toast} />
     </>
+  );
+}
+
+const A2HS_KEY = 'amalyar_a2hs_dismissed';
+const dismissed = () => { try { return !!localStorage.getItem(A2HS_KEY); } catch { return false; } };
+
+/**
+ * بنرِ «عمل‌یار را روی گوشی نصب کن» (اندروید/کروم — `beforeinstallprompt`).
+ *
+ * تا بازبینیِ UX (۱۴۰۵/۰۷) فقط لانچر به این رویداد گوش می‌داد — صفحه‌ای که از وقتی «امروز»
+ * صفحهٔ نخست شد کسی به آن نمی‌رسید؛ یعنی بنرِ نصبِ خودِ سامانه دیگر دیده نمی‌شد. حالا پوسته
+ * گوش می‌دهد و بنر زیرِ نوار، داخلِ جریانِ صفحه می‌نشیند — نه شناورِ پایین، که روی «+»ِ
+ * «امروز» و توست بیفتد.
+ */
+function InstallBanner({ onToast }) {
+  const [evt, setEvt] = useState(null);
+  useEffect(() => {
+    if (dismissed()) return undefined;
+    const h = (e) => { e.preventDefault(); setEvt(e); };
+    window.addEventListener('beforeinstallprompt', h);
+    return () => window.removeEventListener('beforeinstallprompt', h);
+  }, []);
+  if (!evt) return null;
+  const install = async () => {
+    evt.prompt();
+    const { outcome } = await evt.userChoice;
+    if (outcome === 'accepted') onToast?.('عمل‌یار نصب شد');
+    setEvt(null);
+  };
+  const later = () => {
+    try { localStorage.setItem(A2HS_KEY, '1'); } catch { /* حالتِ خصوصی — فقط همین بار بسته می‌شود */ }
+    setEvt(null);
+  };
+  return (
+    <div className="sh-install" role="region" aria-label="نصبِ اپلیکیشن">
+      <span className="sh-install-txt">عمل‌یار را روی گوشی نصب کنید — بی‌مرورگر و با یک لمس باز می‌شود.</span>
+      <button type="button" className="sh-install-ok" onClick={install}>نصب</button>
+      <button type="button" className="sh-install-no" onClick={later}>بعداً</button>
+    </div>
   );
 }

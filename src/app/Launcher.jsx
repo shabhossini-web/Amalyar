@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import { useAuth } from './auth.jsx';
 import { useConfig } from './config.jsx';
-import ProfileMenu from './ProfileMenu.jsx';
+import { usePendingAccounts } from './usePending.js';
 import './launcher.css';
 import { ArrowStart, Back } from '../ui/icons.jsx';
 /* کاتالوگِ کاشی‌ها از W2.3 مشترک است — صفحهٔ «امروز» هم از همین می‌خواند. */
@@ -25,41 +25,8 @@ export default function Launcher() {
   const { hero, daily, tools, nothing } = useAllowedTools();
   const showHero = !!hero;
 
-  // بنرِ نصبِ PWA (اندروید/کروم — beforeinstallprompt)
-  const [installEvt, setInstallEvt] = useState(null);
-  useEffect(() => {
-    if (localStorage.getItem('amalyar_a2hs_dismissed')) return;
-    const h = (e) => {
-      e.preventDefault();
-      setInstallEvt(e);
-    };
-    window.addEventListener('beforeinstallprompt', h);
-    return () => window.removeEventListener('beforeinstallprompt', h);
-  }, []);
-  const doInstall = async () => {
-    if (!installEvt) return;
-    installEvt.prompt();
-    const { outcome } = await installEvt.userChoice;
-    if (outcome === 'accepted') setToast('عمل‌یار نصب شد ✓');
-    setInstallEvt(null);
-  };
-  const dismissInstall = () => {
-    localStorage.setItem('amalyar_a2hs_dismissed', '1');
-    setInstallEvt(null);
-  };
-
-  // نشانِ تعدادِ در انتظارِ تأیید (فقط سوپرادمین)
-  const [pendingCount, setPendingCount] = useState(0);
-  useEffect(() => {
-    if (lvl < 6) return;
-    let alive = true;
-    import('../lib/api.js').then(({ api }) =>
-      api('/accounts/pending')
-        .then((rows) => { if (alive) setPendingCount(rows.length); })
-        .catch(() => {}),
-    );
-    return () => { alive = false; };
-  }, [lvl]);
+  /* بنرِ نصب به پوسته رفت (همهٔ صفحه‌ها)؛ شمارِ درخواست‌های عضویت از همان قلابِ زنگ و «امروز». */
+  const pendingCount = usePendingAccounts(lvl >= 6);
 
   return (
     /* `theme-dark`: لانچر ویترین است و شیشه و نئونش را در هر تمی نگه می‌دارد (§۴.۸). */
@@ -71,9 +38,11 @@ export default function Launcher() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell">
+        {/* بازگشت به «امروز»، نه به سایتِ عمومی: «سایت» کاربرِ واردشده را از سامانه بیرون می‌برد
+            (در این نصب به صفحهٔ تبلیغاتیِ عمل‌یار). منوی پروفایل هم مثلِ بقیهٔ صفحه‌ها در نوارِ پوسته است. */}
         <div className="lx-top">
-          <Link to="/" className="lx-back" aria-label="بازگشت به سایت"><Back width="15" height="15" /> سایت</Link>
-          <ProfileMenu onToast={setToast} />
+          <Link to="/app" className="lx-back"><Back width="15" height="15" /> امروز</Link>
+          <h1 className="lx-title">همهٔ ابزارها</h1>
         </div>
 
         <header className="lx-brand">
@@ -138,14 +107,6 @@ export default function Launcher() {
         </div>
 
       </div>
-
-      {installEvt && (
-        <div className="glass lx-install" role="dialog" aria-label="نصبِ اپلیکیشن">
-          <span className="lx-install-txt">عمل‌یار را روی گوشی نصب کن</span>
-          <button className="lx-install-ok" onClick={doInstall}>نصب</button>
-          <button className="lx-install-no" onClick={dismissInstall}>بعداً</button>
-        </div>
-      )}
 
       <Toast msg={toast} />
     </div>

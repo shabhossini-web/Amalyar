@@ -22,6 +22,7 @@ import Toast, { useToast } from '../ui/Toast.jsx';
 import { useToolTitle } from './tools.jsx';
 import { useConfig } from './config.jsx';
 import { roleShown } from '../lib/terms.js';
+import { PENDING_CHANGED } from './usePending.js';
 
 
 /**
@@ -202,6 +203,7 @@ export default function Users() {
     try {
       await api(`/accounts/${row.id}/approve`, { method: 'POST', body: { level } });
       setToast(`«${row.displayName}» تأیید شد — ${LEVELS.find((x) => x.v === level)?.l}`);
+      window.dispatchEvent(new Event(PENDING_CHANGED));
       await load();
     } catch (e) {
       setToast(e.message);
@@ -215,6 +217,7 @@ export default function Users() {
     try {
       await api(`/accounts/${row.id}/reject`, { method: 'POST' });
       setToast(`درخواستِ «${row.displayName}» رد شد`);
+      window.dispatchEvent(new Event(PENDING_CHANGED));
       await load();
     } catch (e) {
       setToast(e.message);

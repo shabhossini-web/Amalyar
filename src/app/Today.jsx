@@ -11,6 +11,7 @@ import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { useAllowedTools, track } from './tools.jsx';
 import { usePrefs } from './usePrefs.jsx';
+import { usePendingAccounts } from './usePending.js';
 import { useConfig } from './config.jsx';
 import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Surgery } from '../ui/icons.jsx';
 import { todayJStr, ymdToJStr } from '../lib/jalali.js';
@@ -57,6 +58,8 @@ export default function Today() {
   const { msg: toast, show: setToast } = useToast(1800);
   const [toolsOpen, setToolsOpen] = useState(false);
   const { hero, daily, tools, nothing } = useAllowedTools();
+  /* شمارِ درخواست‌های عضویت روی کاشیِ «کاربران»ِ کشو — فقط سوپرادمین (بازبینیِ UX ۱۴۰۵/۰۷). */
+  const pendingAccounts = usePendingAccounts((user?.level ?? 0) >= 6);
   /* **ابزارک‌های منتخب** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — سه خانه بالای صفحه، به‌ازای هر حساب
      (`/auth/prefs`). خانهٔ خالی کشوی ابزارها را برای **انتخاب** باز می‌کند، خانهٔ پر خودِ
      ابزار را. ابزاری که دیگر اجازه‌اش نیست خانه‌اش را خالی نشان می‌دهد. */
@@ -369,6 +372,8 @@ export default function Today() {
             aria-label={pickSlot != null ? `انتخابِ ابزارکِ منتخب ${faNum(pickSlot + 1)}` : 'همهٔ ابزارها'}>
             <div className="td-drawer-head">
               <h2>{pickSlot != null ? `انتخابِ ابزارکِ منتخب ${faNum(pickSlot + 1)}` : 'همهٔ ابزارها'}</h2>
+              {/* نمای کاملِ لانچر (`/app/tools`) تا بازبینیِ UX هیچ راهی نداشت. */}
+              {pickSlot == null && <Link to="/app/tools" className="td-more td-full" onClick={() => setToolsOpen(false)}>نمای کامل <ArrowStart width="14" height="14" /></Link>}
               <button type="button" className="td-x" onClick={() => { setToolsOpen(false); setPickSlot(null); }} aria-label="بستن"><Close width="18" height="18" /></button>
             </div>
             {nothing && <p className="td-empty">دسترسیِ شما هنوز محدود است. مدیرِ سامانه باید سطحتان را ارتقا دهد.</p>}
@@ -378,6 +383,9 @@ export default function Today() {
                   <span className="glass-glow" aria-hidden="true" />
                   <span className={`td-tile-ic tint-${t.tint || 'violet'}`}><t.icon width="22" height="22" /></span>
                   <span className="td-tile-label">{t.label}</span>
+                  {t.key === 'users' && pendingAccounts > 0 && (
+                    <span className="td-badge" aria-label={`${faNum(pendingAccounts)} درخواستِ عضویت در انتظارِ تأیید`}>{faNum(pendingAccounts)}</span>
+                  )}
                 </button>
               ))}
             </div>

@@ -48,6 +48,23 @@
   .sh-kbd { display: none; }
 }
 
+/* ── بنرِ نصبِ PWA — زیرِ نوار و داخلِ جریانِ صفحه (نه شناور روی «+» و توست) ── */
+.sh-install {
+  max-width: var(--maxw); margin: 10px auto 0; width: calc(100% - 32px);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px;
+  padding: 10px 14px; border-radius: 14px; font-size: 13px; color: var(--text1);
+  background: rgba(var(--brand-rgb), 0.10); border: 1px solid rgba(var(--brand-2-rgb), 0.38);
+}
+.sh-install-txt { flex: 1 1 220px; font-weight: 700; line-height: 1.8; }
+.sh-install-ok, .sh-install-no {
+  min-height: 40px; padding: 8px 16px; border-radius: 11px; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 800;
+}
+.sh-install-ok { color: #fff; border: 0; background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); }
+.sh-install-no { color: var(--text2); background: none; border: 1px solid rgba(var(--veil-rgb), 0.16); }
+.sh-install-no:hover { color: var(--text1); }
+@media (pointer: coarse) { .sh-install-ok, .sh-install-no { min-height: 44px; } }
+
 /* ── پالتِ جستجو ── */
 .gs-overlay {
   position: fixed; inset: 0; z-index: 120; background: rgba(var(--surface-rgb), 0.62);

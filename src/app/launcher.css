@@ -45,6 +45,8 @@
 }
 
 .lx-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+/* عنوانِ صفحه — لانچر تا بازبینیِ UX (۱۴۰۵/۰۷) اصلاً `h1` نداشت. */
+.lx-title { font-size: 15px; font-weight: 800; color: var(--text1); }
 
 .lx-back {
   align-self: flex-start;
@@ -159,6 +161,8 @@
 .tint-green  { background: linear-gradient(135deg, rgba(0, 80, 60, .35), rgba(0, 180, 110, .35)); border: 1px solid rgba(0, 255, 170, .28); box-shadow: 0 0 14px rgba(0, 200, 130, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
 .tint-amber  { background: linear-gradient(135deg, rgba(120, 60, 0, .35), rgba(200, 120, 0, .35)); border: 1px solid rgba(245, 158, 11, .38); box-shadow: 0 0 14px rgba(245, 158, 11, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
 .tint-blue   { background: linear-gradient(135deg, rgba(0, 40, 90, .35), rgba(0, 90, 160, .35)); border: 1px solid rgba(59, 130, 246, .38); box-shadow: 0 0 14px rgba(59, 130, 246, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
+/* «میزِ پذیرش» `tint: 'cyan'` داشت و این کلاس تعریف نشده بود — آیکونش قابِ رنگی نداشت. */
+.tint-cyan   { background: linear-gradient(135deg, rgba(0, 60, 85, .35), rgba(0, 170, 205, .35)); border: 1px solid rgba(0, 229, 255, .40); box-shadow: 0 0 14px rgba(0, 229, 255, .20), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
 .tint-teal   { background: linear-gradient(135deg, rgba(0, 80, 50, .35), rgba(0, 160, 120, .35)); border: 1px solid rgba(0, 229, 255, .32); box-shadow: 0 0 14px rgba(0, 229, 255, .18), inset 0 1px 0 rgba(var(--veil-rgb), .16); }
 
 /* نشانِ تعدادِ در‌انتظار روی تایلِ کاربران */
