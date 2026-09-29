@@ -28,3 +28,54 @@
 .st-preview p { margin: 4px 0; color: var(--text2); }
 .st-preview p.warn { color: var(--amber-text); }
 .st-preview .st-profile-acts { margin-bottom: 0; }
+
+/* ── فهرستِ پرش به بخش‌ها (بازبینیِ UX ۱۴۰۵/۰۷) — چسبان زیرِ نوارِ پوسته ── */
+.st-nav {
+  position: sticky; top: var(--shell-h); z-index: 20;
+  max-width: 900px; margin: 0 auto 16px; padding: 8px 2px;
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin;
+  background: rgba(var(--surface-rgb), 0.88);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(var(--brand-soft-rgb), 0.16);
+}
+.st-nav a {
+  flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 36px; padding: 6px 12px;
+  border-radius: 99px; font-size: 12px; font-weight: 700; white-space: nowrap; text-decoration: none;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+.st-nav a:hover { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.45); }
+.st-nav a.on { color: var(--brand-text); background: rgba(var(--brand-rgb), 0.12); border-color: rgba(var(--brand-2-rgb), 0.5); }
+@media (pointer: coarse) { .st-nav a { min-height: 44px; } }
+/* مقصدِ پرش زیرِ نوارِ پوسته و همین فهرست پنهان نشود. */
+.df .st-h3[id], .df .st-group[id] { scroll-margin-top: calc(var(--shell-h) + 70px); }
+.df .st-h3[id]:focus:not(:focus-visible), .df .st-group[id]:focus:not(:focus-visible) { outline: none; }
+
+/* ── نوارِ ذخیره: تا تغییری هست چسبانِ پایینِ صفحه ── */
+.st-savebar.on {
+  position: fixed; z-index: 40; inset-inline: 0; bottom: 0; max-width: none; margin: 0;
+  padding: 10px max(16px, calc((100vw - 900px) / 2)) calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(var(--surface-rgb), 0.94); border-top: 1px solid rgba(var(--brand-2-rgb), 0.35);
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.18);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.st-savebar-t { flex: 1 1 auto; font-size: 13px; font-weight: 800; color: var(--amber-text); }
+@media (pointer: coarse) { .st-savebar .df-save, .st-savebar .st-load { min-height: 44px; } }
+
+/* ── متنِ پیامک: جای‌گیرهای فارسی + پیش‌نمایشِ زنده ── */
+.st-sms { display: grid; gap: 8px; }
+.st-vars { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-var {
+  min-height: 32px; padding: 4px 11px; border-radius: 99px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), 0.08); border: 1px dashed rgba(var(--brand-2-rgb), 0.5);
+}
+.st-var:hover { background: rgba(var(--brand-rgb), 0.16); }
+@media (pointer: coarse) { .st-var { min-height: 44px; } }
+.st-sms-preview {
+  display: grid; gap: 4px; padding: 10px 12px; border-radius: 14px;
+  background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.12);
+}
+.st-sms-preview b { font-size: 11px; color: var(--text3); }
+.st-sms-body { margin: 0; font-size: 13px; line-height: 1.9; color: var(--text1); white-space: pre-wrap; overflow-wrap: anywhere; }
+.st-sms-preview small { font-size: 11px; color: var(--text2); }
+

@@ -92,17 +92,24 @@ export class SettingsService {
    * سرویس وابسته است. خطا صفحه را نمی‌اندازد: پیش‌فرض همان «شرکت» است که تا دیروز بود.
    */
   private async profile(): Promise<TenantProfile> {
-    const [v, sv] = await Promise.all([
-      this.prisma.setting.findUnique({ where: { key: 'vertical' } }).catch(() => null),
-      this.prisma.setting.findUnique({ where: { key: KEY_SERVICES } }).catch(() => null),
-    ]);
+    /* `Promise.resolve().then` تا حتی خطای هم‌زمان (استابِ آزمونی بی‌`setting`) هم به پیش‌فرض برگردد. */
+    const read = (key: string) => Promise.resolve().then(() => this.prisma.setting.findUnique({ where: { key } })).catch(() => null);
+    const [v, sv] = await Promise.all([read('vertical'), read(KEY_SERVICES)]);
     return profileOf(isVertical(v?.value) ? v!.value : DEFAULT_VERTICAL, sv?.value ?? null);
   }
 
   /** فهرستِ گروه‌بندی‌شده برای رابط. کلاینت هیچ کلیدی را hardcode نمی‌کند. */
   async all() {
-    const [rows, profile] = await Promise.all([this.rows(), this.profile()]);
+    const [rows, profile, features] = await Promise.all([
+      this.rows(), this.profile(),
+      Promise.resolve().then(() => this.prisma.feature.findMany({ select: { key: true, enabled: true } }))
+        .catch(() => [] as { key: string; enabled: boolean }[]),
+    ]);
     const org = orgWord(profile.kind);
+    /* گروهِ ماژولِ خاموش («انبار»، «حمل و نقل» در مطب) و فیلدِ خدمتی که نصب ندارد (فاکتورِ نورو)
+       اصلاً نمی‌آیند — بازبینیِ UX ۱۴۰۵/۰۷. ردیفِ نبوده در `features` یعنی هنوز seed نشده: روشن. */
+    const off = new Set(features.filter((f) => !f.enabled).map((f) => f.key));
+    const hasService = (d: SettingDef) => !d.services || d.services.some((x) => (profile.services as string[]).includes(x));
     const item = (d: SettingDef) => {
       const value = parse(d, rows.get(d.key));
       return {
@@ -121,11 +128,11 @@ export class SettingsService {
       };
     };
     return {
-      groups: SETTING_GROUPS.map((g) => ({
-        ...g,
+      groups: SETTING_GROUPS.filter((g) => !g.feature || !off.has(g.feature)).map((g) => ({
+        key: g.key,
         label: withOrg(g.label, org),
         hint: g.hint ? withOrg(g.hint, org) : null,
-        items: SETTINGS.filter((d) => d.group === g.key && !d.hidden).map(item),
+        items: SETTINGS.filter((d) => d.group === g.key && !d.hidden && hasService(d)).map(item),
       })).filter((g) => g.items.length > 0),
     };
   }

@@ -34,9 +34,22 @@ export interface SettingDef {
   ltr?: boolean;
   /** در صفحهٔ تنظیمات نشان داده نمی‌شود — با فرایندِ خودش (مثلاً آپلود) پر می‌شود. */
   hidden?: boolean;
+  /**
+   * فقط برای نصبی که یکی از این خدمات را دارد (مثلاً فیلدهای فاکتورِ نورومانیتورینگ) — مطب و
+   * شرکتِ ایمپلنت قالبِ خامِ `901290:EMG,…` را نمی‌بینند (بازبینیِ UX ۱۴۰۵/۰۷).
+   */
+  services?: string[];
 }
 
-export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
+export interface SettingGroupDef {
+  key: string;
+  label: string;
+  hint?: string;
+  /** گروه فقط وقتی ماژولِ همین کلید برای این نصب روشن است — «حمل و نقل» در مطب معنا ندارد. */
+  feature?: string;
+}
+
+export const SETTING_GROUPS: SettingGroupDef[] = [
   { key: 'invoice', label: 'قالب فاکتور {org}', hint: 'اطلاعات این قالب در نسخهٔ صادرشده ثبت می‌شود؛ تغییر قالب، فاکتورهای قبلی را تغییر نمی‌دهد.' },
   {
     key: 'identity',
@@ -47,15 +60,17 @@ export const SETTING_GROUPS: { key: string; label: string; hint?: string }[] = [
     key: 'inventory',
     label: 'انبار و دارایی',
     hint: 'پیش‌فرض‌های انبار. تغییرشان روی دادهٔ ثبت‌شده اثر ندارد؛ از این به بعد اعمال می‌شود.',
+    feature: 'inventory',
   },
   {
     key: 'transport',
     label: 'حمل و نقل',
+    feature: 'transport',
   },
   {
     key: 'sms',
     label: 'پیامک‌ها و زمان‌بندی',
-    hint: 'متن و زمانِ همهٔ پیامک‌هایی که برای بیمار می‌رود. نامِ برند خودکار اولِ هر پیامک می‌آید. جای‌گیرها: {date} تاریخِ شمسی، {time} ساعت، {topic} موضوع، {title} نامِ فرم، {link} لینک، {reason} دلیلِ برگشت یا رد، {stage} مرحلهٔ برگشت — جای‌گیرِ ساعت و موضوع خودشان جداکننده دارند.',
+    hint: 'متن و زمانِ همهٔ پیامک‌هایی که برای بیمار می‌رود. نامِ برند خودکار اولِ هر پیامک می‌آید. با دکمه‌های زیرِ هر متن («+ تاریخ»، «+ لینک»، …) جای‌گیر بگذارید؛ پیش‌نمایش و شمارِ پیامک همان‌جا دیده می‌شود.',
   },
   {
     key: 'intake',
@@ -93,8 +108,8 @@ export const SETTINGS: SettingDef[] = [
   { key: 'invoice_letterhead_bottom', label: 'فضای پایین سربرگ (میلی‌متر)', group: 'invoice', type: 'number', default: 24, min: 10, max: 45 },
   /* فاکتورِ نورومانیتورینگ — الگوی ملک‌طب: یک پاپ‌آپ، همهٔ خدمات با تیکِ پیش‌فرض، مصرفی‌های پرتکرار.
      هر شرکت پیش‌فرضِ خودش را دارد؛ از خودِ پاپ‌آپ («ذخیره به‌عنوانِ پیش‌فرضِ شرکت») هم پر می‌شود. */
-  { key: 'invoice_neuro_defaults', label: 'خدماتِ نورومانیتورینگِ پیش‌فرضِ فاکتور', hint: 'شناسه‌های «کد:نام» که در پاپ‌آپِ صدور از قبل تیک دارند، با کاما. ساده‌ترین راه: در پاپ‌آپ انتخاب کنید و «ذخیره به‌عنوانِ پیش‌فرضِ شرکت» را بزنید.', group: 'invoice', type: 'text', default: '901290:EMG,901325:MEP,901320:SEP,901300:Monitoring', maxLength: 400, ltr: true },
-  { key: 'invoice_neuro_consumables', label: 'مصرفی‌های پرتکرارِ فاکتورِ نورومانیتورینگ', hint: 'از پنجره فاکتور نورو، اقلام انبار و اثر مصرف را انتخاب و پیش‌فرض شرکت را ذخیره کنید. قالب قدیمی نام | IRC | تعداد نیز خوانده می‌شود.', group: 'invoice', type: 'textarea', default: 'Electrode | 9449874222229990 | 40', maxLength: 12000 },
+  { key: 'invoice_neuro_defaults', label: 'خدماتِ نورومانیتورینگِ پیش‌فرضِ فاکتور', hint: 'شناسه‌های «کد:نام» که در پاپ‌آپِ صدور از قبل تیک دارند، با کاما. ساده‌ترین راه: در پاپ‌آپ انتخاب کنید و «ذخیره به‌عنوانِ پیش‌فرضِ شرکت» را بزنید.', group: 'invoice', type: 'text', default: '901290:EMG,901325:MEP,901320:SEP,901300:Monitoring', maxLength: 400, ltr: true, services: ['ionm'] },
+  { key: 'invoice_neuro_consumables', label: 'مصرفی‌های پرتکرارِ فاکتورِ نورومانیتورینگ', hint: 'از پنجره فاکتور نورو، اقلام انبار و اثر مصرف را انتخاب و پیش‌فرض شرکت را ذخیره کنید. قالب قدیمی نام | IRC | تعداد نیز خوانده می‌شود.', group: 'invoice', type: 'textarea', default: 'Electrode | 9449874222229990 | 40', maxLength: 12000, services: ['ionm'] },
   // ── هویتِ شرکت ────────────────────────────────────────────────
   {
     key: 'brand_name',

@@ -7,6 +7,9 @@
   /* صفحه‌نما منهای نوارِ پوسته (`--shell-h`) — نه `100vh` که ۶۳ پیکسل اسکرولِ بی‌دلیل می‌ساخت. */
   min-height: calc(100dvh - var(--shell-h)); background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+  /* `clip` نه `hidden`: `hidden` صفحه را ظرفِ اسکرول می‌کند و هر `position: sticky`ِ درونش
+     (فهرستِ پرشِ «تنظیمات») می‌میرد. مرورگری که `clip` نمی‌شناسد همان `hidden` را نگه می‌دارد. */
+  overflow-x: clip;
 }
 .df * { box-sizing: border-box; }
 .df-bg {
@@ -286,11 +289,13 @@
   color: var(--amber-text); background: var(--amber-bg); border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
 }
 .st-reset:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-.st-knobsave { display: flex; gap: 8px; align-items: center; margin: 14px 0 20px; }
+/* نوارِ ذخیرهٔ تنظیمات. نامش `st-savebar` است نه `st-knobsave`: `press.css` آن نام را جزوِ
+   **دکمه‌های** نئون می‌شمرد و کلِ نوار حلقه و هالهٔ دکمه می‌گرفت. */
+.st-savebar { display: flex; gap: 8px; align-items: center; max-width: 900px; margin: 14px auto 20px; }
 /* دکمهٔ ذخیره باید هم‌اندازهٔ بقیهٔ دکمه‌های ذخیرهٔ همین صفحه دیده شود، وگرنه
    کنارِ فرمِ بزرگ به‌چشم نمی‌آید و کاربر فکر می‌کند تغییرش ذخیره نشده. */
-.st-knobsave .df-save { padding: 9px 20px; border-radius: 11px; font-size: 13px; border: 0; cursor: pointer; }
-.st-knobsave .st-load { padding: 9px 16px; }
+.st-savebar .df-save { padding: 9px 20px; border-radius: 11px; font-size: 13px; border: 0; cursor: pointer; }
+.st-savebar .st-load { padding: 9px 16px; }
 
 /* ── فرمِ داده‌محور (DynForm) ── استایلِ کنترل‌هایش همراهِ خودِ کامپوننت
    است: `src/ui/dynform.css`. این‌جا نبود که فرمِ عمومیِ بیمار (که این فایل
