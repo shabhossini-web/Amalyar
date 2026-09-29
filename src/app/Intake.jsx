@@ -3,7 +3,7 @@ import { useAuth } from './auth.jsx';
 import { useConfig, useStatusMap } from './config.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import DynForm from '../ui/DynForm.jsx';
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
@@ -206,10 +206,11 @@ export default function IntakeAdmin() {
                     <b>{nameOf(s)}</b>
                   </button>
                 ) : <b>{nameOf(s)}</b>}
+                {/* کد و شماره‌ها هرکدام LTRِ جدا (قانونِ ۹) — کنارِ «·»ِ فارسی تکه‌تکه نمی‌شکنند (company-04). */}
                 <small>
-                  {s.patient?.code}
-                  {s.patient?.phone ? ` · ${s.patient.phone}` : ''}
-                  {s.data?.nationalId ? ` · ${s.data.nationalId}` : ''}
+                  {[s.patient?.code, s.patient?.phone, s.data?.nationalId].filter(Boolean).map((x, k) => (
+                    <Fragment key={k}>{k > 0 && ' · '}<bdi dir="ltr">{x}</bdi></Fragment>
+                  ))}
                 </small>
               </div>
               {/* خدمتِ همین ردیف — در شرکتِ دوخدمته هر دو نوع در یک صف‌اند. */}

@@ -80,6 +80,13 @@
 .ia-title { flex: 1; min-width: 0; }
 .ia-title b { display: block; font-size: 14px; }
 .ia-title small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
+.ia-title small bdi { white-space: nowrap; }
+/* گوشی: نام و مشخصات یک ردیفِ کامل، چیپ‌ها/مبلغ/حذف ردیفِ دوم (company-04). پیش از این چیپ‌ها و مبلغ
+   و سطل همهٔ عرض را می‌گرفتند و برای نام ۳۳ پیکسل می‌ماند: «بهمن کیانی» دو خط، کد و شماره تکه‌تکه. */
+@media (max-width: 500px) {
+  .ia-title { flex: 1 1 100%; }
+  .ia-card > header .ia-cardel { margin-inline-start: auto; width: 40px; height: 40px; }
+}
 .ia-tag {
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
