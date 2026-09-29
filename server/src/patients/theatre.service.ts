@@ -92,15 +92,21 @@ const roomState = (v: { opStatus: string | null; opStartTime: string | null; opE
      همان تلهٔ `finished` که یک‌بار روی `cancelled` خورده بود. */
   if (v.dischargeAt) return { state: 'discharged', stateFa: 'ترخیص شد' };
   if (v.opEndTime) return { state: 'finished', stateFa: 'در ریکاوری' };
-  if (!v.opStartTime) return { state: 'waiting', stateFa: 'در انتظار' };
-  /* ⚠️ **ساعتِ شروعِ آینده یعنی برنامه، نه جریان.** `opStartTime` فیلدِ حینِ عمل
-     است (`INTRA_KEYS` در فرم) ولی هیچ‌چیز جلوی مطبی را نمی‌گیرد که ساعتِ
-     برنامه‌ریزی‌شده را همان‌جا بنویسد — و آن‌وقت ساعتِ ۹ صبح، عملِ ۱۳:۰۰ هم
-     «در جریان» می‌شد. در اولین اسکرین‌شات هر سه ردیفِ روز همین را نشان دادند. */
   const day = v.opDate ? v.opDate.toISOString().slice(0, 10) : null;
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  if (!v.opStartTime) {
+    /* ⚠️ روزِ گذشتهٔ بی‌شروع «در انتظار» نیست (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-16): کسی منتظرِ عملِ دیروز
+       نیست؛ یا انجام نشد یا ثبت نشد، و همین برچسب کارِ کسی است که باید تکلیفش را روشن کند. همان عمل
+       در «فهرستِ انتظار» با «موعد گذشته — ثبت نشده» بالای فهرست می‌ماند. */
+    if (day && day < todayIso && v.opStatus === 'pending') return { state: 'missed', stateFa: 'انجام‌نشده' };
+    return { state: 'waiting', stateFa: 'در انتظار' };
+  }
+  /* ⚠️ **ساعتِ شروعِ آینده یعنی برنامه، نه جریان.** `opStartTime` فیلدِ حینِ عمل
+     است (`INTRA_KEYS` در فرم) ولی هیچ‌چیز جلوی مطبی را نمی‌گیرد که ساعتِ
+     برنامه‌ریزی‌شده را همان‌جا بنویسد — و آن‌وقت ساعتِ ۹ صبح، عملِ ۱۳:۰۰ هم
+     «در جریان» می‌شد. در اولین اسکرین‌شات هر سه ردیفِ روز همین را نشان دادند. */
   if (day && day > todayIso) return { state: 'waiting', stateFa: 'در انتظار' };
   /* روزِ گذشته با شروعِ بی‌پایان «در جریان» نیست — **ناتمام** است، و همین
      برچسب کارِ کسی است که باید ببنددش. */

@@ -70,6 +70,8 @@
 .th-state.is-running { color: var(--cyan); border-color: rgba(34, 211, 238, .55); background: rgba(34, 211, 238, .1); }
 /* «ناتمام» = شروع خورده و پایان هیچ‌وقت ثبت نشده؛ کارِ کسی است که باید ببنددش. */
 .th-state.is-open { color: var(--amber-text); border-color: rgba(251, 191, 36, .5); }
+/* روزِ گذشته بی‌شروع (surgery-16) — «انجام‌نشده»؛ تکلیفش در «فهرستِ انتظار» روشن می‌شود. */
+.th-state.is-missed { color: var(--amber-text); border-color: rgba(251, 191, 36, .5); background: rgba(251, 191, 36, .1); }
 /* «ترخیص شد» پایانِ واقعیِ کارِ بیمار است — سبزِ پررنگ‌تر از «در ریکاوری». */
 .th-state.is-discharged { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .6); }
 

@@ -6,7 +6,8 @@ import { faDate } from '../lib/jalali.js';
 import { useStatusList, useTerms } from './config.jsx';
 import { useThings, ThingPopups } from './thing-popups.jsx';
 import { surgeryPrefill } from './VisitForm.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
+import CancelReason from '../ui/CancelReason.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Pick from '../ui/Pick.jsx';
 import { Alert, Back, Close, Doctor, Refresh, Waitlist as WaitlistIcon } from '../ui/icons.jsx';
@@ -34,6 +35,10 @@ export default function Waitlist() {
   const [surgeonId, setSurgeonId] = useState(null);
   const [toast, setToast] = useState('');
   const [closing, setClosing] = useState(null);
+  /* تکلیفِ ردیفِ «موعد گذشته» (surgery-16): «انجام شد» یک تأییدِ کوتاه، «لغو» همان پنجرهٔ دلیلِ لغو. */
+  const [doneAsk, setDoneAsk] = useState(null);
+  const [cancelAsk, setCancelAsk] = useState(null);
+  const [busyStatus, setBusyStatus] = useState(false);
 
   useEffect(() => { document.title = 'فهرستِ انتظارِ عمل — عمل‌یار'; }, []);
   useEffect(() => { if (!toast) return undefined; const x = setTimeout(() => setToast(''), 2600); return () => clearTimeout(x); }, [toast]);
@@ -72,14 +77,25 @@ export default function Waitlist() {
     undated: true,
   } });
 
+  /* همان مسیرِ دکمه‌های وضعیتِ داشبورد (`PATCH /visits/:id/status`) — لغو بی‌دلیل ثبت نمی‌شود. */
+  const setStatus = async (r, opStatus, extra) => {
+    setBusyStatus(true);
+    try {
+      await api(`/visits/${r.surgery.id}/status`, { method: 'PATCH', body: { opStatus, ...extra } });
+      load();
+    } finally { setBusyStatus(false); }
+  };
+
   const tabs = [
     { key: 'open', label: <>همه <b className="wl-n">{faNum(mine.filter((r) => inTab(r, 'open')).length)}</b></> },
     ...states.map((st) => ({ key: st.key, label: <>{st.label} <b className="wl-n">{faNum(mine.filter((r) => inTab(r, st.key)).length)}</b></> })),
   ];
   const emptyText = {
     open: 'هیچ بیماری در انتظارِ عمل نیست.',
+    overdue: 'عملِ رزروشده‌ای که روزش گذشته و ثبت نشده باشد نیست.',
     awaiting: 'بیماری با تصمیمِ جراحی که هنوز برنامه نگرفته باشد نیست.',
     planned: 'عملِ ثبت‌شده‌ای که هنوز تاریخ نگرفته باشد نیست.',
+    today: 'امروز عملی از این فهرست در اتاقِ عمل نیست.',
     booked: 'عملِ تاریخ‌داری که هنوز انجام نشده باشد نیست.',
     closed: 'تصمیمی بسته نشده است.',
   }[tab];
@@ -152,7 +168,8 @@ export default function Waitlist() {
                 </button>
                 <em dir="ltr">{r.patient.code}</em>
                 <i className={`wl-tag s-${r.state}`}>{r.stateFa}</i>
-                {r.state !== 'closed' && (
+                {/* بیمارِ امروز روی تخت است، نه «۱۸ روز در انتظار». */}
+                {r.state !== 'closed' && r.state !== 'today' && (
                   <span className={`wl-days d-${waitTone(r.waitingDays)}`} title={r.waitStartApprox ? 'از روزِ ثبتِ عمل (ویزیتِ تصمیم ندارد)' : 'از روزِ ویزیتِ تصمیم'}>
                     <b>{faNum(r.waitingDays)}</b> روز انتظار{r.waitStartApprox ? '*' : ''}
                   </span>
@@ -168,16 +185,26 @@ export default function Waitlist() {
                 {r.lastCancelReasonFa && <span className="wl-warn"><em>عملِ قبلی لغو شد</em> {r.lastCancelReasonFa}</span>}
                 {r.state === 'closed' && <span><em>بسته شد</em> {faDate(r.closedAt)}{r.closeReasonFa ? ` — ${r.closeReasonFa}` : ''}</span>}
               </p>
+              {r.state === 'overdue' && (
+                <p className="wl-overdue" data-wl-overdue>
+                  <Alert width="14" height="14" aria-hidden="true" />
+                  روزِ رزرو گذشت و عمل شروع نشد — انجام شد، لغو شد، یا تاریخِ تازه می‌خواهد؟
+                </p>
+              )}
               <div className="wl-acts">
                 {r.state === 'awaiting' && data.can?.plan && (
                   <button type="button" className="wl-act primary" data-act="plan" onClick={() => plan(r)}>برنامهٔ عمل</button>
                 )}
                 {r.surgery && data.can?.edit && (
-                  <button type="button" className={`wl-act${r.state === 'planned' ? ' primary' : ''}`} data-act="open"
+                  <button type="button" className={`wl-act${r.state === 'planned' || r.state === 'overdue' ? ' primary' : ''}`} data-act="open"
                           onClick={() => things.open({ type: 'visit', id: r.surgery.id, patientId: r.patient.id })}>
-                    {r.state === 'planned' ? 'تعیینِ تاریخ' : 'بازکردنِ فرمِ عمل'}
+                    {r.state === 'planned' ? 'تعیینِ تاریخ' : r.state === 'overdue' ? 'تاریخِ تازه' : 'بازکردنِ فرمِ عمل'}
                   </button>
                 )}
+                {r.state === 'overdue' && data.can?.status && (<>
+                  <button type="button" className="wl-act" data-act="done" disabled={busyStatus} onClick={() => setDoneAsk(r)}>انجام شد</button>
+                  <button type="button" className="wl-act ghost" data-act="cancel" disabled={busyStatus} onClick={() => setCancelAsk(r)}>لغو شد</button>
+                </>)}
                 {r.state === 'awaiting' && data.can?.manage && (
                   <button type="button" className="wl-act ghost" data-act="close" onClick={() => setClosing(r)}>بستنِ تصمیم</button>
                 )}
@@ -197,6 +224,35 @@ export default function Waitlist() {
             onClose={() => setClosing(null)}
             onDone={(m) => { setClosing(null); setToast(m); load(); }}
             onError={(m) => setToast(m)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {doneAsk && (
+          <ConfirmDialog
+            title={`عملِ ${doneAsk.patient.fullName} انجام شد؟`}
+            text={`${doneAsk.surgery?.opDate ? `رزروِ ${faDate(doneAsk.surgery.opDate)}` : 'این عمل'} «انجام شد» ثبت می‌شود و از فهرستِ انتظار بیرون می‌رود. ساعت و شرحِ عمل را بعداً در فرمِ عمل هم می‌شود نوشت.`}
+            confirmLabel="بله، انجام شد" busy={busyStatus}
+            onConfirm={async () => {
+              try { await setStatus(doneAsk, 'done'); setToast('«انجام شد» ثبت شد'); }
+              catch (e) { setToast(e.message); }
+              setDoneAsk(null);
+            }}
+            onCancel={() => setDoneAsk(null)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {cancelAsk && (
+          <CancelReason
+            kind="visit"
+            what={`${cancelAsk.surgery?.code ?? ''} — ${cancelAsk.patient.fullName}`}
+            onClose={() => setCancelAsk(null)}
+            onConfirm={async (c) => {
+              await setStatus(cancelAsk, 'cancelled', c);
+              setCancelAsk(null);
+              setToast('لغو ثبت شد و به بیمار اطلاع داده شد');
+            }}
           />
         )}
       </AnimatePresence>
