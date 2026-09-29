@@ -106,6 +106,13 @@ const statusLabel = (v) => (v.opStatus === 'pending' ? kindOf(v.kind).pending : 
  * «انجام شد / لغو» می‌گفتند — یک وضعیت، دو نام در یک صفحه.
  */
 const statusFilters = (statuses) => [{ v: 'all', l: 'همه' }, ...statuses.map((s) => ({ v: s.key, l: s.label }))];
+/** فیلترِ مرحلهٔ جامانده (company-13) — واژهٔ کارشناس و گزارش از حوزه. */
+const missingFilters = (t) => [
+  { key: 'all', label: 'همهٔ مرحله‌ها' },
+  { key: 'tech', label: `بی‌${t.tech}` },
+  { key: 'report', label: `بی‌${t.workReport}` },
+  { key: 'invoice', label: 'بی‌فاکتور' },
+];
 /**
  * فیلترِ نوع از **نوع‌هایی که واقعاً در داده هستند** ساخته می‌شود، نه از فهرستی
  * در کد. نوعِ دلخواهی که سوپرادمین ساخته (مثلاً «درمان») همان‌جا در فیلتر
@@ -514,6 +521,131 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
 /* ── جستجوی پیشرفته ──
    پاپ‌آپِ چندپارامتری. عمداً «اعمال» دارد و زنده نیست: کاربر پنج فیلتر را
    می‌چیند و یک‌بار نتیجه می‌خواهد، نه پنج بار بارگذاریِ نصفه‌کاره. */
+/* ── نمای جدولیِ دسکتاپ (بازبینیِ UX، global-04 + company-13) ──
+   روی صفحهٔ ۱۲۸۰ پیکسلی فهرست یک ستونِ باریکِ ۵۲۰ پیکسلی بود و هر کارت ۲۶۰ تا ۳۵۰ پیکسل ارتفاع داشت:
+   برای دیدنِ ده بیمار چند صفحه اسکرول، و دوسومِ صفحه خالی. حالا روی دسکتاپ یک ردیف برای هر مراجعه، با
+   همان داده و همان کارها؛ کارت برای موبایل می‌ماند. در شرکت نشان‌های مرحله (کارشناس، ساعت، گزارش، فاکتور)
+   می‌گویند هر عمل چه کم دارد — بی‌بازکردنِ تک‌تکِ کارت‌ها.
+   هشدار: کلاس‌ها و عنوان‌های کارها همان کارت‌اند (`.db-statuspick`، `button[title="صورت‌حساب"]`،
+   `.db-code`، `.db-open`) تا آزمون‌ها و میان‌برها در هر دو نما یکی بمانند. */
+const WIDE_Q = '(min-width: 1024px)';
+function useWide() {
+  const [wide, setWide] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(WIDE_Q).matches : false));
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia(WIDE_Q);
+    const on = () => setWide(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return wide;
+}
+/* انتخابِ «کارت/جدول» فقط راحتیِ همین دستگاه است (localStorage)، نه داده. */
+const VIEW_KEY = 'amalyar_dashboard_view';
+const readView = () => { try { return localStorage.getItem(VIEW_KEY) === 'cards' ? 'cards' : 'table'; } catch { return 'table'; } };
+const saveView = (v) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* حالتِ خصوصی — بی‌اثر */ } };
+
+function StageBadges({ v, t }) {
+  const s = v.stages;
+  if (!s) return null;
+  const list = [
+    ['tech', t.tech, User, s.tech ? (v.techName || 'تعیین شده') : 'تعیین نشده'],
+    ['time', 'ساعت', Clock, s.time ? faTime(v.opStartTime) : 'ثبت نشده'],
+    ['report', t.workReport, Book, s.report ? 'رسیده' : 'نرسیده'],
+    ['invoice', 'فاکتور', Money, s.invoice ? 'صادر شده' : 'صادر نشده'],
+  ];
+  return (
+    <ul className="db-stages" aria-label="مرحله‌ها">
+      {list.map(([k, label, Icon, state]) => (
+        <li key={k} className={s[k] ? 'ok' : 'miss'} title={`${label}: ${state}`} aria-label={`${label}: ${state}`}>
+          <Icon width="12" height="12" aria-hidden="true" />
+          <span>{label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function VisitRow({ v, busy, onEdit, onStatus, onDelete, onBilling, onToast, statuses, t, company }) {
+  const procLabel = v.procedureLabel ?? (v.procedureTypeName || v.opType);
+  /* کلیکِ هر جای ردیف مراجعه را باز می‌کند (مثلِ سطحِ کارت)، مگر روی کنترل‌های خودِ ردیف؛
+     کاربرِ صفحه‌کلید دکمهٔ کد را دارد. */
+  const open = (e) => { if (!e.target.closest('a, button, input, select, [role="menu"], [role="group"]')) onEdit(v); };
+  return (
+    <tr className="db-row" data-visit-id={v.id} onClick={open} aria-busy={busy || undefined}
+        style={v.kindColor ? { '--k': `var(--kind-${v.kindColor})` } : undefined}>
+      <td className="db-t-when">
+        <b>{v.opDate ? faDate(v.opDate) : 'بدونِ تاریخ'}</b>
+        {v.opStartTime && <small><bdi dir="ltr">{faTime(v.opStartTime)}{v.opEndTime ? `–${faTime(v.opEndTime)}` : ''}</bdi></small>}
+      </td>
+      <td className="db-t-who">
+        <span className="db-t-name">
+          <Link className="db-name" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">{v.fullName}</Link>
+          {' '}
+          {v.kind && <span className="db-kindtag">{v.kindTitle || kindOf(v.kind).label}</span>}
+        </span>
+        <button type="button" className="db-open db-code" onClick={() => onEdit(v)} disabled={busy}
+                aria-label={`گشودنِ ${v.code} — ${v.fullName}`}>
+          <bdi dir="ltr">{v.code}</bdi>
+        </button>
+        {procLabel && <small className="db-t-sub" title={procLabel}>{procLabel}</small>}
+      </td>
+      <td className="db-t-who2">
+        {v.surgeonName ? <span><Doctor width="13" height="13" aria-hidden="true" /> {v.surgeonName}</span> : <span className="db-t-none">—</span>}
+        {v.hospitalName && <small><Hospital width="12" height="12" aria-hidden="true" /> {v.hospitalName}</small>}
+        {!company && v.techName && <small><User width="12" height="12" aria-hidden="true" /> {v.techName}</small>}
+      </td>
+      {company && <td><StageBadges v={v} t={t} /></td>}
+      <td><StatusPick v={v} busy={busy} onStatus={onStatus} statuses={statuses} t={t} compact /></td>
+      <td className="db-t-money">
+        {v.total ? (
+          <>
+            <b className={v.due > 0 ? 'due' : 'ok'}>{v.due > 0 ? `مانده ${fmtToman(v.due)}` : 'تسویه'}</b>
+            <small>وصول {faNum(v.paidPct)}٪ از {fmtToman(v.total)}</small>
+          </>
+        ) : <span className="db-t-none">بی‌صورت‌حساب</span>}
+      </td>
+      <td className="db-t-acts">
+        <Link className="db-ico" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار" aria-label={`پروندهٔ ${v.fullName}`}>
+          <Book width="15" height="15" />
+        </Link>
+        <button type="button" className="db-ico" title="صورت‌حساب" aria-label={`صورت‌حسابِ ${v.code}`} onClick={() => onBilling(v)} disabled={busy}>
+          <Money width="15" height="15" />
+        </button>
+        <button type="button" className="db-ico" title="ویرایش" aria-label={`ویرایشِ ${v.code}`} onClick={() => onEdit(v)} disabled={busy}>
+          <Pencil width="15" height="15" />
+        </button>
+        <MoreMenu v={v} busy={busy} onToast={onToast} onDelete={onDelete} t={t} compact />
+      </td>
+    </tr>
+  );
+}
+
+function VisitTable({ rows, busyId, company, t, ...rest }) {
+  return (
+    <div className="db-tablewrap">
+      <table className="db-t">
+        <caption className="db-sr">{`فهرستِ ${t.visits}`}</caption>
+        <thead>
+          <tr>
+            <th scope="col">تاریخ</th>
+            <th scope="col">بیمار</th>
+            <th scope="col">{t.surgeon} / {company ? 'بیمارستان' : 'مرکز'}</th>
+            {company && <th scope="col">مرحله‌ها</th>}
+            <th scope="col">وضعیت</th>
+            <th scope="col">مالی</th>
+            <th scope="col"><span className="db-sr">کارها</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((v) => <VisitRow key={v.id} v={v} busy={busyId === v.id} company={company} t={t} {...rest} />)}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function AdvancedSearch({ value, defs, onApply, onClose }) {
   const t = useTerms();
   const [f, setF] = useState(value);
@@ -694,8 +826,15 @@ function NextVisitBook({ data, onClose, onToast }) {
 export default function Dashboard() {
   const { user } = useAuth();
   // brandName برای سربرگِ برگهٔ چاپ لازم است، پس کلِ config خوانده می‌شود نه فقط واژگان.
-  const { t, brandName } = useConfig();
+  const { t, brandName, kind: tenantKind } = useConfig();
+  const company = tenantKind === 'company';
   const visitStatuses = useStatusList('visit');
+  /* نمای جدول فقط روی دسکتاپ (global-04)؛ انتخابِ کاربر روی همین دستگاه می‌ماند. */
+  const wide = useWide();
+  const [view, setView] = useState(readView);
+  const asTable = wide && view === 'table';
+  /* مرحلهٔ جامانده — فقط شرکت (company-13): «بی‌کارشناس / بی‌گزارش / بی‌فاکتور». */
+  const [missing, setMissing] = useState('all');
   const [visits, setVisits] = useState(null);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
@@ -731,8 +870,9 @@ export default function Dashboard() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const load = useCallback((query, st, kn, a = EMPTY_ADV, so = 'date', dr = 'desc', pg = 1, ps = 50) => {
+  const load = useCallback((query, st, kn, a = EMPTY_ADV, so = 'date', dr = 'desc', pg = 1, ps = 50, mi = 'all') => {
     const params = new URLSearchParams();
+    if (mi && mi !== 'all') params.set('missing', mi);
     if (query?.trim()) params.set('q', query.trim());
     if (st && st !== 'all') params.set('status', st);
     if (kn && kn !== 'all') params.set('kind', kn);
@@ -793,9 +933,9 @@ export default function Dashboard() {
   // دوباره از سرور خوانده می‌شود (باگِ واقعی: دادهٔ حسابِ قبلی تا رفرش می‌ماند)
   useEffect(() => {
     setDenied(false);
-    const t = setTimeout(() => load(q, status, kind, adv, sort, dir, page, pageSize), q ? 300 : 0);
+    const t = setTimeout(() => load(q, status, kind, adv, sort, dir, page, pageSize, missing), q ? 300 : 0);
     return () => clearTimeout(t);
-  }, [q, status, kind, adv, sort, dir, page, pageSize, load, user?.id]);
+  }, [q, status, kind, adv, sort, dir, page, pageSize, missing, load, user?.id]);
 
   // هر تغییرِ فیلتر کاربر را به صفحهٔ یک برمی‌گرداند؛ وگرنه در صفحهٔ ۴ فیلتری
   // می‌زند که سه صفحه بیشتر ندارد و فهرستِ خالی می‌بیند.
@@ -803,7 +943,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return; }
     setPage(1);
-  }, [q, status, kind, adv, sort, dir, pageSize]);
+  }, [q, status, kind, adv, sort, dir, pageSize, missing]);
 
 
   /* نوع‌های مراجعه — برای برچسبِ فیلتر. کارتِ مراجعه به این نیازی ندارد
@@ -883,6 +1023,7 @@ export default function Dashboard() {
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       if (adv.owing) params.set('owing', '1');
+      if (missing !== 'all') params.set('missing', missing);
       params.set('sort', sort); params.set('dir', dir);
 
       const res = await api(`/visits/export?${params}`);
@@ -897,6 +1038,7 @@ export default function Dashboard() {
           q.trim() && `جستجو: ${q.trim()}`,
           status !== 'all' && `وضعیت: ${statusFilters(visitStatuses).find((f) => f.v === status)?.l}`,
           kind !== 'all' && `نوع: ${kindTitles[kind] || kindOf(kind).label}`,
+          missing !== 'all' && missingFilters(t).find((m) => m.key === missing)?.label,
           ...activeChips.map((c) => c.label),
         ].filter(Boolean).join(' · '),
         kindLabel: (v) => v.kindTitle || kindOf(v.kind).label,
@@ -1012,7 +1154,7 @@ export default function Dashboard() {
     <div className="lx">
       <div className="lx-bg" aria-hidden="true" />
       <div className="lx-grid" aria-hidden="true" />
-      <div className="lx-shell us-shell db-shell">
+      <div className={`lx-shell us-shell db-shell${asTable ? ' is-table' : ''}`}>
         <header className="us-head">
           <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
           {/* نام با کاشیِ لانچر یکی است (W3.7/B3): کاربر روی «بیماران» می‌زند
@@ -1082,6 +1224,17 @@ export default function Dashboard() {
           items={statusFilters(visitStatuses).map((fl) => ({ key: fl.v, label: fl.l }))}
         />
 
+        {company && (
+          <Tabs
+            variant="inset"
+            className="db-filters db-missfilter"
+            label="مرحلهٔ جامانده"
+            value={missing}
+            onChange={setMissing}
+            items={missingFilters(t)}
+          />
+        )}
+
         {/* فیلترِ نوع فقط وقتی دیده می‌شود که واقعاً بیش از یک نوع در کار باشد؛
             برای شرکتی که فقط عمل ثبت می‌کند، یک ردیفِ اضافه فقط شلوغی است.
             ⚠️ وقتی فیلتر فعال است حتماً می‌ماند، وگرنه لیست به یک نوع محدود
@@ -1142,6 +1295,14 @@ export default function Dashboard() {
           >
             {exporting === 'print' ? '…' : <Print width="16" height="16" />}
           </button>
+          {wide && (
+            <div className="db-view" role="group" aria-label="نمای فهرست">
+              {[['table', 'جدول'], ['cards', 'کارت']].map(([k, l]) => (
+                <button key={k} type="button" aria-pressed={view === k} className={view === k ? 'on' : undefined}
+                        onClick={() => { setView(k); saveView(k); }}>{l}</button>
+              ))}
+            </div>
+          )}
           <label className="db-psize">
             <span>در صفحه</span>
             <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
@@ -1157,7 +1318,24 @@ export default function Dashboard() {
           {!denied && visits?.length === 0 && (
             <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد' : t.emptyList}</div>
           )}
-          {visits?.map((v, i) => (
+          {asTable && visits?.length > 0 && (
+            <VisitTable
+              rows={visits}
+              busyId={busyId}
+              company={company}
+              t={t}
+              onEdit={async (vv) => {
+                const full = await api(`/visits/${vv.id}`).catch(() => null);
+                setModal({ visit: full?.id ? full : vv });
+              }}
+              onStatus={onStatus}
+              onDelete={onDelete}
+              onBilling={setBilling}
+              onToast={setToast}
+              statuses={visitStatuses}
+            />
+          )}
+          {!asTable && visits?.map((v, i) => (
             <VisitCard
               key={v.id}
               v={v}

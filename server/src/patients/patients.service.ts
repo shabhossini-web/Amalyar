@@ -273,6 +273,9 @@ export type VisitFilter = {
   to?: Date;
   /// فقط مراجعاتی که هنوز بدهی دارند.
   owing?: boolean;
+  /// مرحلهٔ جامانده (بازبینیِ UX، global-04/company-13): `tech` بی‌کارشناس، `report` انجام‌شدهٔ بی‌گزارش،
+  /// `invoice` انجام‌شدهٔ بی‌فاکتور — همان پرسشِ صبحِ مدیرِ شرکت.
+  missing?: 'tech' | 'report' | 'invoice';
   sort?: string;
   dir?: string;
   page?: number;
@@ -530,6 +533,18 @@ export class PatientsService {
     const and: any[] = [];
     if (f.procedureTypeId) and.push(visitHasProcedure(f.procedureTypeId));
     if (f.diagnosisId) and.push(visitHasDiagnosis(f.diagnosisId));
+    /* مرحلهٔ جامانده — تعریفِ «گزارش» همان `work-detectors` است (سندِ گزارش، یا در مطب شرحِ عمل)
+       و «فاکتور» سندِ فاکتورِ جاری (جایگزین‌نشده). گزارش و فاکتور فقط برای عملِ **انجام‌شده** معنا
+       دارند؛ عملِ هفتهٔ بعد که هنوز گزارش ندارد «جامانده» نیست. */
+    if (f.missing === 'tech') and.push({ techId: null, opStatus: { not: 'cancelled' } });
+    if (f.missing === 'report') {
+      and.push({
+        opStatus: 'done',
+        documents: { none: { category: 'report', deletedAt: null } },
+        clinicalNotes: { none: { kind: 'op', replacedAt: null } },
+      });
+    }
+    if (f.missing === 'invoice') and.push({ opStatus: 'done', invoices: { none: { supersededAt: null } } });
     if (and.length) where.AND = and;
 
     // بازهٔ تاریخِ عمل. «تا» شاملِ خودِ روز است — کاربری که یک تاریخ را به‌عنوان
@@ -607,7 +622,7 @@ export class PatientsService {
         /* ⚠️ `.map(enrich)`ِ خالی ننویس: `Array.map` ایندکس را به‌عنوانِ
            آرگومانِ دوم می‌فرستد و آن‌وقت یک **عدد** به‌جای نگاشتِ نوع‌ها
            می‌رسید. TypeScript گرفتش؛ در JS بی‌صدا `undefined` می‌داد. */
-        rows: pageIds.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds)),
+        rows: await this.withStages(pageIds.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds))),
         total, page, pageSize,
         pages: Math.max(1, Math.ceil(total / pageSize)),
         sort: moneySort ? f.sort : DEFAULT_SORT,
@@ -633,7 +648,7 @@ export class PatientsService {
     const kinds = await this.forms.kindMap();
 
     return {
-      rows: rows.map((v) => enrich(v, kinds)),
+      rows: await this.withStages(rows.map((v) => enrich(v, kinds))),
       total,
       page,
       pageSize,
@@ -642,6 +657,27 @@ export class PatientsService {
       dir: f.dir === 'asc' ? 'asc' : 'desc',
       stats,
     };
+  }
+
+  /**
+   * **نشان‌های مرحله** برای ردیف‌های یک صفحه (بازبینیِ UX، global-04/company-13): کارشناس، ساعت،
+   * گزارش، فاکتور — تا مدیر بی‌بازکردنِ تک‌تکِ کارت‌ها ببیند کدام عمل چه کم دارد.
+   * ⚠️ سه کوئری برای کلِ صفحه، نه N تا؛ تعریفِ «گزارش» همان `work-detectors` (سند یا شرحِ عمل).
+   */
+  private async withStages<T extends { id: number; techId?: number | null; opStartTime?: string | null }>(rows: T[]) {
+    const ids = rows.map((r) => r.id);
+    if (!ids.length) return rows;
+    const [docs, notes, invoices] = await Promise.all([
+      this.prisma.document.findMany({ where: { visitId: { in: ids }, category: 'report', deletedAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
+      this.prisma.clinicalNote.findMany({ where: { visitId: { in: ids }, kind: 'op', replacedAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
+      this.prisma.invoiceDocument.findMany({ where: { visitId: { in: ids }, supersededAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
+    ]);
+    const reported = new Set([...docs, ...notes].map((d) => d.visitId));
+    const invoiced = new Set(invoices.map((d) => d.visitId));
+    return rows.map((r) => ({
+      ...r,
+      stages: { tech: !!r.techId, time: !!r.opStartTime, report: reported.has(r.id), invoice: invoiced.has(r.id) },
+    }));
   }
 
   /**
