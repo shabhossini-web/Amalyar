@@ -25,13 +25,19 @@ const DELIVERY_FA = { unknown: 'رسیدن به گوشی هنوز تأیید ن�
    دروغ بگوید. `sending` هم نیست چون همین حالا دستِ سرور است. */
 const RETRYABLE = ['failed', 'uncertain', 'simulated'];
 const CANCELLABLE = ['pending', 'uncertain', 'failed'];
+/* ⚠️ جمعِ تب‌ها باید با «همه» بخواند (بازبینیِ UX، clinic-daily-17): «آزمایشی — ارسال نشده» تبِ
+   خودش را نداشت و «همه ۱۵» در برابرِ جمعِ ۸ بقیه می‌ایستاد؛ «در حالِ ارسال» هم جزوِ «در صف» است. */
 const TABS = [
   { key: 'all', label: 'همه' },
-  { key: 'pending', label: 'در صف' },
+  { key: 'pending', label: 'در صف', has: ['pending', 'sending'] },
   { key: 'sent', label: 'رفته' },
   { key: 'failed', label: 'نرفته' },
   { key: 'uncertain', label: 'نامشخص' },
+  { key: 'simulated', label: 'آزمایشی' },
 ];
+const inTab = (r, key) => key === 'all' || (TABS.find((x) => x.key === key)?.has ?? [key]).includes(r.status);
+/* متنِ پیامک دو خط، با «بیشتر» — کارتِ هر پیام متنِ کاملِ پیامک را داشت و صفحه ۲۶۰۰ پیکسل می‌شد. */
+const LONG_TEXT = 110;
 
 /**
  * دفترِ یادآوری‌ها — چه پیامی، به چه کسی، کی می‌رود / رفت / نرفت.
@@ -106,8 +112,10 @@ export default function Reminders() {
     } catch (e) { setToast(e.message); } finally { setRowBusy(0); }
   };
 
-  const shown = (rows ?? []).filter((r) => tab === 'all' || r.status === tab);
-  const count = (k) => (rows ?? []).filter((r) => k === 'all' || r.status === k).length;
+  const shown = (rows ?? []).filter((r) => inTab(r, tab));
+  const count = (k) => (rows ?? []).filter((r) => inTab(r, k)).length;
+  const [openText, setOpenText] = useState(() => new Set());
+  const toggleText = (id) => setOpenText((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
   return (
     <div className="rm">
@@ -138,6 +146,14 @@ export default function Reminders() {
         )}
       </div>
 
+      {/* پیامِ آزمایشی به بیمار نرفته است — نباید در میانِ «رفته»ها گم شود. */}
+      {count('simulated') > 0 && tab !== 'simulated' && (
+        <p className="rm-warn" role="note">
+          <Alert width="14" height="14" aria-hidden="true" /> {count('simulated').toLocaleString('fa-IR')} پیام «آزمایشی» است و به گوشیِ بیمار نرفته.{' '}
+          <button type="button" onClick={() => setTab('simulated')}>دیدنِ آن‌ها</button>
+        </p>
+      )}
+
       {rows === null && !err && <div className="rm-empty">در حال بارگذاری…</div>}
       {rows !== null && shown.length === 0 && (
         <div className="rm-empty">در این وضعیت یادآوری‌ای نیست</div>
@@ -152,13 +168,30 @@ export default function Reminders() {
               {r.recipientName && <span>{r.recipientName}</span>}
               <span>{r.channel === 'chat' ? 'پیام‌رسان داخلی' : 'پیامک'}</span>
               {r.visitCode && <em dir="ltr">{r.visitCode}</em>}
+              {/* «امروز / عقب‌افتاده» از سرور (`dueState`) — کارِ امروز در یک نگاه (clinic-daily-17). */}
+              {r.dueState === 'overdue' && <span className="rm-due late">عقب‌افتاده</span>}
+              {r.dueState === 'today' && <span className="rm-due today">امروز</span>}
               <small>
                 {r.status === 'pending' ? `موعد: ${faDate(r.dueAt)}` : faDate(r.sentAt ?? r.dueAt)}
                 {r.phone ? ` · ${String(r.phone).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}` : ''}
               </small>
               <i className={`rm-tag s-${r.status}`} title={r.status}>{r.statusFa ?? statusFa(r.status)}</i>
             </div>
-            <p className="rm-text">{r.text}</p>
+            {(() => {
+              const long = (r.text ?? '').length > LONG_TEXT || (r.text ?? '').split('\n').length > 2;
+              const open = openText.has(r.id);
+              return (
+                <>
+                  <p className={`rm-text${long && !open ? ' clamp' : ''}`} id={`rm-text-${r.id}`}>{r.text}</p>
+                  {long && (
+                    <button type="button" className="rm-more" aria-expanded={open} aria-controls={`rm-text-${r.id}`}
+                            onClick={() => toggleText(r.id)}>
+                      {open ? 'کمتر' : 'بیشتر'}
+                    </button>
+                  )}
+                </>
+              );
+            })()}
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}
             {r.error && <p className="rm-fail">علت: {r.error}</p>}
             {(RETRYABLE.includes(r.status) || CANCELLABLE.includes(r.status)) && (

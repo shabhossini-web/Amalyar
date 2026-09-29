@@ -13,6 +13,7 @@ import { sendReminders } from '../reminders/send-reminders';
 import { AuditService } from '../audit/audit.service';
 import { diagnosisIds, procedureIds } from './visit-coding';
 import { toJalali } from '../common/jalali';
+import { clinicDateIso, clinicTodayIso } from '../common/clinic-day';
 
 /** ممیزیِ ارسال‌های مستقیمِ پیامک از دکمه‌ها — برای خطِ زمانیِ گزارشِ عیب‌یابی. */
 const DIRECT_SMS: Record<string, string> = {
@@ -550,15 +551,22 @@ export class RemindersService {
    * سراسریِ مدیر است که لغوشده‌ها را نشان نمی‌دهد.
    */
   async list(patientId?: number) {
-    const rows = await this.prisma.reminder.findMany({
-      where: patientId ? { patientId } : { status: { not: 'cancelled' } },
-      orderBy: [{ status: 'asc' }, { dueAt: 'desc' }],
-      take: 100,
-      include: {
-        patient: { select: { code: true, firstName: true, lastName: true } },
-        visit: { select: { seq: true } },
-      },
-    });
+    const include = {
+      patient: { select: { code: true, firstName: true, lastName: true } },
+      visit: { select: { seq: true } },
+    } as const;
+    const rows = patientId
+      ? await this.prisma.reminder.findMany({
+        where: { patientId }, orderBy: [{ status: 'asc' }, { dueAt: 'desc' }], take: 100, include,
+      })
+      : await this.queue(include);
+    /* «امروز / عقب‌افتاده» برای پیامِ هنوز نرفته — مشتقِ سرور (قانونِ ۱۵)، به وقتِ مطب. */
+    const today = clinicTodayIso();
+    const dueStateOf = (r: { status: string; dueAt: Date }) => {
+      if (r.status !== 'pending' && r.status !== 'sending') return null;
+      const d = clinicDateIso(r.dueAt);
+      return d < today ? 'overdue' : d === today ? 'today' : 'upcoming';
+    };
     const chatIds = rows.flatMap(r => r.chatMessageId ? [r.chatMessageId] : []);
     const chatMessages = chatIds.length ? await this.prisma.chatMessage.findMany({ where: { id: { in: chatIds } }, include: { channel: { include: { members: true } } } }) : [];
     return rows.map((r) => ({
@@ -579,6 +587,7 @@ export class RemindersService {
       status: r.status,
       statusFa: REMINDER_LABELS[r.status] ?? null,
       dueAt: r.dueAt,
+      dueState: dueStateOf(r),
       sentAt: r.sentAt,
       phone: r.phone,
       text: r.text,
@@ -586,6 +595,28 @@ export class RemindersService {
       patientName: r.patient ? `${r.patient.firstName} ${r.patient.lastName}`.trim() : null,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
     }));
+  }
+
+  /**
+   * صفِ دفترِ یادآوری‌ها — **نزدیک‌ترین موعد اول** (بازبینیِ UX، clinic-daily-17).
+   *
+   * ⚠️ تا پیش از این `status, dueAt desc` بود: اول پیامِ ۱۶ مهر می‌آمد و پیام‌های امروز و
+   * عقب‌افتاده پایینِ یک فهرستِ بلند. حالا: گیرکرده‌ها (نرفته/نامشخص) اول، بعد صف با نزدیک‌ترین موعد،
+   * بعد آزمایشی‌ها، و در آخر رفته‌ها از تازه به کهنه. دو کوئری با سقفِ جدا تا انبوهِ رفته‌ها صفِ
+   * زنده را از قابِ ۱۰۰تایی بیرون نکنند.
+   */
+  private async queue<I extends object>(include: I) {
+    const [open, sent] = await Promise.all([
+      this.prisma.reminder.findMany({
+        where: { status: { notIn: ['cancelled', 'sent'] } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 150, include,
+      }),
+      this.prisma.reminder.findMany({
+        where: { status: 'sent' }, orderBy: [{ sentAt: 'desc' }, { id: 'desc' }], take: 50, include,
+      }),
+    ]);
+    const rank = (st: string) => (st === 'failed' || st === 'uncertain' ? 0 : st === 'pending' || st === 'sending' ? 1 : 2);
+    const sorted = [...open].sort((a, b) => rank(a.status) - rank(b.status) || +a.dueAt - +b.dueAt || a.id - b.id);
+    return [...sorted, ...sent];
   }
 
   /**

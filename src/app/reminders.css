@@ -107,3 +107,28 @@
 .rm-ask .rm-act { min-height: 40px; }
 .rm-act.rm-ask-yes { color: #fff; background: #dc2626; border-color: #dc2626; }
 .rm-act.rm-ask-yes:hover:not(:disabled) { background: #b91c1c; }
+
+/* ── صفِ نزدیک‌ترین موعد (clinic-daily-17) ── */
+.rm-due {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+}
+.rm-due.today { color: var(--brand-text); background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .38); }
+.rm-due.late { color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .4); }
+.rm-text.clamp {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.rm-more {
+  justify-self: start; min-height: 32px; padding: 0 2px; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 700; color: var(--brand-text);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.rm-more:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+.rm-warn {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: 880px; margin: 0 auto 10px;
+  padding: 9px 12px; border-radius: 12px; font-size: 12.5px; color: var(--amber-text);
+  background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .35);
+}
+.rm-warn button {
+  min-height: 32px; padding: 0 4px; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 800; color: inherit; text-decoration: underline;
+}
