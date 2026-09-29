@@ -9,6 +9,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { TheatreService } from './theatre.service';
+import { VisitTimesDto } from './dto/visit.dto';
 
 class CheckDto {
   @IsString() @MaxLength(30, { message: 'مرحله نامعتبر است' }) stage!: string;
@@ -126,6 +127,13 @@ export class TheatreController {
   @Post('visits/:id/finish')
   finish(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.theatre.stamp(id, 'finish', user);
+  }
+
+  /** اصلاح/برگرداندنِ ساعتِ شروع و پایان از خودِ میز (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-04). */
+  @RequirePermissions('visits.times')
+  @Post('visits/:id/times')
+  times(@Param('id', ParseIntPipe) id: number, @Body() dto: VisitTimesDto, @CurrentUser() user: any) {
+    return this.theatre.setTimes(id, dto, user);
   }
 
   @RequirePermissions('theatre.report')

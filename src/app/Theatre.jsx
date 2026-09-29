@@ -3,16 +3,18 @@ import { AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr, ymdToJStr } from '../lib/jalali.js';
-import { faTime } from '../lib/time.js';
+import { faDuration, faTime } from '../lib/time.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
 import Overlay, { CloseButton, UnsavedPrompt } from '../ui/Overlay.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import { AttachPicker, useSubformCatalog } from './VisitSubforms.jsx';
+import { ThingPopups, useThings } from './thing-popups.jsx';
 import { useAuth } from './auth.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
-import { Alert, Back, Close, Clock, Form, LogOut, Plus, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
+import { Alert, Back, Check, Close, Clock, Form, LogOut, Pencil, Plus, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
+import TimePick from '../ui/TimePick.jsx';
 import './theatre.css';
 import './definitions.css';
 import './launcher.css';
@@ -40,11 +42,11 @@ const mins = (t) => {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? ''));
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 };
-const duration = (from, to) => {
+/** دقیقه‌های میانِ دو ساعتِ دیوار؛ پایانِ کوچک‌تر یعنی عمل از نیمه‌شب گذشته. */
+const minutesBetween = (from, to) => {
   const a = mins(from); const b = mins(to);
   if (a == null || b == null) return null;
-  const d = (b - a + 1440) % 1440;
-  return `${faNum(Math.floor(d / 60))}:${faNum(String(d % 60).padStart(2, '0'))}`;
+  return (b - a + 1440) % 1440;
 };
 
 /* **پیش‌نویسِ روی دستگاه** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-07): «شرحِ عمل»ِ ذخیره‌نشده با زدنِ «فهرستِ
@@ -187,6 +189,14 @@ export default function Theatre() {
 
   /* کارتی که همین‌جا باز شد یک ورودیِ تاریخچه دارد — «فهرستِ روز» همان را برمی‌دارد (برگشتِ بعدی
      صفحه را عوض می‌کند، نه اینکه کارت را دوباره باز کند)؛ کارتی که از پیوند آمد فقط از نشانی می‌رود. */
+  /* «بازکردنِ فرمِ عمل» روی خودِ میز (surgery-04) — همان میزبانِ پاپ‌آپِ «فهرستِ انتظار»؛ بعد از ذخیره
+     کارت و فهرستِ روز تازه می‌شوند. */
+  const reloadCard = useCallback(async () => {
+    if (openId) { try { setCard(await api(`/theatre/visits/${openId}`)); } catch { /* کارت همان قبلی می‌ماند */ } }
+    loadDay();
+  }, [openId, loadDay]);
+  const things = useThings({ onChanged: reloadCard, toast: (m) => setToast(m) });
+
   const closeCard = () => {
     if (location.state?.thCard) navigate(-1);
     else setParams((p) => { const n = new URLSearchParams(p); n.delete('visit'); return n; }, { replace: true });
@@ -278,6 +288,7 @@ export default function Theatre() {
           onDischarge={() => setDischarging(true)}
           onToast={setToast}
           unsaved={unsaved}
+          onOpenForm={() => things.open({ type: 'visit', id: card.visit.id, patientId: card.patient?.id })}
         />
       )}
 
@@ -328,6 +339,7 @@ export default function Theatre() {
         )}
       </AnimatePresence>
 
+      <ThingPopups things={things} />
       {toast && <button type="button" className="th-toast" onClick={() => setToast('')}>{toast}</button>}
     </div>
   );
@@ -374,17 +386,132 @@ function DayList({ day, visits, busy, onOpen, techLabel }) {
 }
 
 /**
+ * **مراحلِ عمل سرِ میز** — «۱ شروع ← ۲ پایان ← ۳ ترخیص» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-03/04).
+ *
+ * تا دیروز سه دکمهٔ هم‌شکل بودند: «شروع شد» خاکستری یعنی «انجام شد»، «ترخیص» خاکستری یعنی «هنوز نه» و
+ * هیچ‌کدام نمی‌گفت چرا؛ برچسب‌ها گزارشِ گذشته بودند نه فرمان، و «تا این لحظه ۱۱:۵۶» شبیهِ ساعت خوانده
+ * می‌شد نه مدت. حالا:
+ *  - مرحلهٔ انجام‌شده **تیک و ساعت** می‌گیرد، نه دکمهٔ مرده؛ فقط مرحلهٔ بعدی دکمهٔ اصلی است، با فعل
+ *    («ثبتِ شروع»، «ثبتِ پایان»)؛ مرحلهٔ بعدتر می‌گوید کِی باز می‌شود.
+ *  - هر ثبت یک نوارِ ۱۰ثانیه‌ای «… ساعتِ ۱۰:۱۵ ثبت شد — برگرداندن» دارد و کنارِ هر ساعت «اصلاحِ ساعت» —
+ *    لمسِ اشتباهِ دستِ دستکش‌دار دیگر فقط از فرمِ عمل درست نمی‌شود (`POST …/times`).
+ *  - مدت به‌صورتِ «۱۱ ساعت و ۵۶ دقیقه».
+ * در نصبِ شرکتی ترخیص نیست (company-12): شرکت حینِ عملِ جراحِ دیگری خدمت می‌دهد، بیمار را ترخیص نمی‌کند.
+ */
+function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, elapsedMin, running }) {
+  const [undo, setUndo] = useState(null); // {which, at}
+  const [fixing, setFixing] = useState(null); // 'start' | 'end'
+  const [draft, setDraft] = useState('');
+  useEffect(() => {
+    if (!undo) return undefined;
+    const h = setTimeout(() => setUndo(null), 10000);
+    return () => clearTimeout(h);
+  }, [undo]);
+  const cancelled = v.state === 'cancelled';
+  const stamp = async (which) => {
+    if (await onAct(which === 'start' ? '/start' : '/finish', which === 'start' ? 'start' : 'finish')) {
+      setUndo({ which });
+    }
+  };
+  const revert = async () => {
+    const u = undo;
+    setUndo(null);
+    if (await onAct('/times', 'times', u.which === 'start' ? { opStartTime: null } : { opEndTime: null })) {
+      onToast(u.which === 'start' ? 'شروعِ عمل برگشت — دوباره می‌شود ثبتش کرد' : 'پایانِ عمل برگشت — عمل دوباره در جریان است');
+    }
+  };
+  const saveFix = async () => {
+    const key = fixing === 'start' ? 'opStartTime' : 'opEndTime';
+    if (await onAct('/times', 'times', { [key]: draft })) { setFixing(null); onToast('ساعت اصلاح شد'); }
+  };
+  const steps = [
+    { key: 'start', label: 'شروعِ عمل', verb: 'ثبتِ شروع', act: 'start', at: v.opStartTime, wait: '' },
+    { key: 'end', label: 'پایانِ عمل', verb: 'ثبتِ پایان', act: 'finish', at: v.opEndTime, wait: 'بعد از ثبتِ شروع' },
+    ...(clinical ? [{ key: 'discharge', label: 'ترخیص', verb: 'ترخیص', act: 'discharge', at: v.dischargeAt, wait: 'بعد از ثبتِ پایان فعال می‌شود' }] : []),
+  ];
+  const next = cancelled ? null : steps.find((st) => !st.at)?.key ?? null;
+  const timeOf = (st) => (st.key === 'start' ? v.opStartTime : st.key === 'end' ? v.opEndTime : null);
+  return (
+    <section className="th-clock" aria-label="مراحلِ عمل">
+      <ol className="th-steps">
+        {steps.map((st, i) => {
+          const done = !!st.at;
+          const state = done ? 'done' : st.key === next ? 'next' : 'wait';
+          const t = timeOf(st);
+          return (
+            <li key={st.key} className={`th-step is-${state}`} data-step={st.key} data-state={state}>
+              <span className="th-step-n" aria-hidden="true">{done ? <Check width="15" height="15" /> : faNum(i + 1)}</span>
+              <div className="th-step-body">
+                <b>{st.label}</b>
+                {done && t && <span className="th-step-at" dir="ltr">{faTime(t)}</span>}
+                {done && st.key === 'discharge' && <span className="th-step-at">{faDate(v.dischargeAt)}</span>}
+                {state === 'wait' && <small id={`th-wait-${st.key}`}>{cancelled ? 'عمل لغو شده است' : st.wait}</small>}
+                {done && canTimes && t && fixing !== st.key && (
+                  <button type="button" className="th-link" data-act={`fix-${st.key}`}
+                          onClick={() => { setFixing(st.key); setDraft(t); setUndo(null); }}>
+                    <Pencil width="13" height="13" aria-hidden="true" /> اصلاحِ ساعت
+                  </button>
+                )}
+                {fixing === st.key && (
+                  <div className="th-fix">
+                    <TimePick label={`ساعتِ ${st.key === 'start' ? 'شروع' : 'پایان'}`} value={draft} onChange={setDraft} className="db-field th-fix-pick" />
+                    <button type="button" className="th-btn primary" onClick={saveFix} disabled={busy === 'times' || !draft}>ذخیرهٔ ساعت</button>
+                    <button type="button" className="th-btn" onClick={() => setFixing(null)} disabled={busy === 'times'}>انصراف</button>
+                  </div>
+                )}
+              </div>
+              {state === 'next' && st.act !== 'discharge' && (
+                <button type="button" className="th-btn primary" data-act={st.act} disabled={busy === st.act}
+                        onClick={() => stamp(st.key)}>{busy === st.act ? 'در حالِ ثبت…' : st.verb}</button>
+              )}
+              {st.act === 'discharge' && (state === 'next' || done) && (
+                <button type="button" className={`th-btn${state === 'next' ? ' primary' : ''}`} data-act="discharge"
+                        disabled={busy === 'discharge'} onClick={onDischarge}>
+                  <LogOut width="15" height="15" aria-hidden="true" /> {done ? 'ویرایشِ ترخیص' : st.verb}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {elapsedMin != null && (
+        <p className="th-elapsed"><Clock width="13" height="13" aria-hidden="true" /> {running ? 'مدت تا این لحظه' : 'مدتِ عمل'}: <b>{faDuration(elapsedMin)}</b></p>
+      )}
+      {undo && (
+        <div className="th-undo" role="status">
+          <span>
+            {undo.which === 'start' ? 'شروعِ عمل' : 'پایانِ عمل'} ساعتِ{' '}
+            <b dir="ltr">{faTime(undo.which === 'start' ? v.opStartTime : v.opEndTime)}</b> ثبت شد
+          </span>
+          {canTimes && <button type="button" className="th-link" data-act="undo" onClick={revert} disabled={busy === 'times'}>برگرداندن</button>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
  * کارتِ حینِ عمل.
  *
  * `team` همان پرچمِ سرور در پاسخِ تخته است (قانونِ ۲۹): در نمای سرپرستی
  * عملِ بی‌کارشناس «تعیین نشده» می‌گوید، نه اینکه جایش خالی بماند — همان خبری
  * که ردیفِ فهرست داد، با بازکردنِ کارت گم نشود.
+ *
+ * ⚠️ **ترتیب** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-05): در ۳۹۰px هشدارِ حساسیت از پیکسلِ ۸۶۷ و دکمه‌های
+ * شروع/پایان از ۱۲۵۴ شروع می‌شدند؛ وقتی پرستار به دکمه‌ها می‌رسید نامِ بیمار دیگر روی صفحه نبود. حالا:
+ * نام و عمل ← هشدارها (سه کادرِ خالی یک سطر) ← مراحل ← شکایت ← «از ویزیتِ تصمیم» (جمع‌شونده) ← بقیه.
+ * ترتیبِ DOM همان ترتیبِ دیداری است — نه `order`ِ CSS — تا Tab و صفحه‌خوان هم همین را بخوانند.
  */
-function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast, unsaved }) {
+function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast, unsaved, onOpenForm }) {
   const { visit: v, patient: p, alerts, items, documents } = card;
+  const t = useTerms();
   /* «یافته‌های حینِ عمل» در مطب نیست (اصلاحِ مالک ۱۴۰۵/۰۷/۰۲) — همان
      چیزی که از فرمِ عمل برداشته شد، سرِ میز هم نباید دوباره پیدا شود. */
   const isClinic = useConfig().kind === 'clinic';
+  /* پرسش‌های بالینیِ «از بیمار بپرسید» (گروهِ خونی، حساسیت، دارو، شکایت) کارِ مطب است؛ شرکت حینِ عملِ
+     جراحِ دیگری خدمت می‌دهد و کارشناسش این‌ها را نمی‌پرسد (company-12) — فقط اگر ثبت شده باشند دیده
+     می‌شوند. پرچم از سرور است (`clinical`)، نه از حدسِ حوزه. */
+  const clinical = !!card.clinical;
   /* عمل‌ها و تشخیص‌ها از **فهرستِ سرور** خوانده می‌شوند (اصلی اول، بستهٔ
      ۷) — نه با شکافتنِ برچسبِ «A + B» (قانونِ ۱۵). برچسب فقط وقتی به کار
      می‌آید که سرورِ قدیمی‌تر هنوز فهرست را نفرستد (فرانت و بک‌اند جدا دیپلوی
@@ -402,20 +529,35 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast, unsave
     return () => clearInterval(h);
   }, [running]);
   const nowHHMM = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-  const elapsed = v.opEndTime ? duration(v.opStartTime, v.opEndTime) : running ? duration(v.opStartTime, nowHHMM()) : null;
+  const elapsedMin = v.opEndTime ? minutesBetween(v.opStartTime, v.opEndTime) : running ? minutesBetween(v.opStartTime, nowHHMM()) : null;
   void tick;
+  /* «از ویزیتِ تصمیم» جمع‌شونده: در موبایل بسته (۳۶۰px متنِ فقط‌خواندنی جای دکمه‌ها را می‌گرفت)، در
+     دسکتاپ باز. فقط وضعیتِ آغازین است؛ بعدش انتخابِ کاربر. */
+  const [decidedOpen] = useState(() => typeof window === 'undefined' || !window.matchMedia?.('(max-width: 620px)').matches);
+  const alertRows = [['allergies', 'حساسیت', 'red'], ['chronicConditions', 'بیماریِ زمینه‌ای', 'amber'], ['medications', 'داروها', 'amber']];
+  const noAlerts = alertRows.every(([k]) => !alerts[k]);
 
   return (
     <div className="th-card">
       <section className="th-who" aria-labelledby="th-who-h">
-        <h2 id="th-who-h" className="th-name">{p.fullName}</h2>
+        <div className="th-who-top">
+          <h2 id="th-who-h" className="th-name">{p.fullName}</h2>
+          {/* فرمِ کاملِ همین عمل — تنها جایی که شرح، ساعت و مدارک یک‌جا اصلاح می‌شوند (surgery-04). */}
+          {card.can?.form && onOpenForm && (
+            <button type="button" className="th-link th-open-form" data-act="open-form" onClick={onOpenForm}>
+              <Form width="14" height="14" aria-hidden="true" /> بازکردنِ فرمِ {t.surgery}
+            </button>
+          )}
+        </div>
         <p className="th-meta">
           <span dir="ltr">{p.code}</span>
           {p.age != null && <span>{faNum(p.age)} ساله</span>}
           {p.gender && <span>{GENDER_FA[p.gender] ?? p.gender}</span>}
-          <span className={`th-blood${p.bloodType ? '' : ' none'}`}>
-            گروه خونی {p.bloodType ? <b dir="ltr">{p.bloodType}</b> : <b>ثبت نشده</b>}
-          </span>
+          {(clinical || p.bloodType) && (
+            <span className={`th-blood${p.bloodType ? '' : ' none'}`}>
+              گروه خونی {p.bloodType ? <b dir="ltr">{p.bloodType}</b> : <b>ثبت نشده</b>}
+            </span>
+          )}
         </p>
         {/* `div` نه `p`: فهرست (`ul`) داخلِ پاراگراف HTMLِ نامعتبر است و
             مرورگر پاراگراف را پیش از فهرست می‌بندد. */}
@@ -446,18 +588,57 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast, unsave
         </p>
       </section>
 
-      {/* **همیشه** رندر می‌شود، حتی خالی. «پرسیده نشده» با «نداشت» یکی نیست،
-          و شکایتِ اولیه اولین چیزی است که جراح سرِ میز می‌پرسد. */}
-      <section className={`th-cc${v.chiefComplaint ? ' on' : ''}`} aria-label="شکایتِ اولیه">
-        <h3>شکایتِ اولیه</h3>
-        <p>{v.chiefComplaint || 'در پرونده ثبت نشده — از بیمار بپرسید و در فرمِ مراجعه ثبت کنید'}</p>
-      </section>
+      {/* هر سه هشدار در مطب **همیشه** دیده می‌شوند: «پرسیده نشده» با «نداشت» یکی نیست و سرِ میز فرقشان
+          می‌تواند حیاتی باشد. ولی سه کادرِ خالیِ هم‌شکل ۲۴۵px جا می‌گرفت و دکمه‌های کار را زیرِ تا می‌برد
+          (surgery-05) — اگر هر سه خالی‌اند، یک سطر. */}
+      {noAlerts ? (clinical && (
+        <section className="th-alerts-none" aria-label="هشدارهای بالینی">
+          <Alert width="14" height="14" aria-hidden="true" />
+          <span>حساسیت / بیماریِ زمینه‌ای / دارو: <b>در پرونده ثبت نشده — بپرسید</b></span>
+        </section>
+      )) : (
+        <section className="th-alerts" aria-label="هشدارهای بالینی">
+          {/* حساسیت **قرمز** و دو تای دیگر کهربایی: وقتی هر سه یک قرمز باشند،
+              هیچ‌کدام دیگر هشدار نیست. چیزی که سرِ میز می‌تواند بکشد حساسیت است. */}
+          {alertRows.map(([k, label, tone]) => (
+            <div key={k} className={`th-alert${alerts[k] ? ` on is-${tone}` : ''}`}>
+              <span className="th-alert-h">{alerts[k] ? <Alert width="14" height="14" aria-hidden="true" /> : null}{label}</span>
+              <p>{alerts[k] || (clinical ? 'در پرونده ثبت نشده — بپرسید' : 'ثبت نشده')}</p>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <OpSteps
+        v={v} clinical={clinical} canTimes={!!card.can?.times} busy={busy}
+        onAct={onAct} onDischarge={onDischarge} onToast={onToast} elapsedMin={elapsedMin} running={running}
+      />
+
+      {v.dischargeAt && (
+        <section className="th-discharged" aria-label="ترخیص">
+          <h3>ترخیص — {faDate(v.dischargeAt)}{v.dischargeDispositionFa ? ` · ${v.dischargeDispositionFa}` : ''}</h3>
+          <p>{v.dischargeNote || '—'}</p>
+          {v.dischargeSummary && <p className="th-dsum"><b>شرحِ ترخیص</b><span>{v.dischargeSummary}</span></p>}
+          {v.dischargeRx && <p className="th-dsum" data-discharged-rx><b>داروهای ترخیص</b><span>{v.dischargeRx}</span></p>}
+          {v.nextVisitDate && <p className="th-dsum" data-discharged-next><b>ویزیتِ بعدی</b><span>{faDate(nextYmd(v.nextVisitDate))}</span></p>}
+          {v.dischargeRemark && <p className="th-dsum"><b>یادداشت</b><span>{v.dischargeRemark}</span></p>}
+        </section>
+      )}
+
+      {/* شکایتِ اولیه در مطب **همیشه**، حتی خالی: اولین چیزی که جراح سرِ میز می‌پرسد. در شرکت فقط اگر
+          ثبت شده باشد — کارشناس از بیمار نمی‌پرسد (company-12). */}
+      {(clinical || v.chiefComplaint) && (
+        <section className={`th-cc${v.chiefComplaint ? ' on' : ''}`} aria-label="شکایتِ اولیه">
+          <h3>شکایتِ اولیه</h3>
+          <p>{v.chiefComplaint || 'در پرونده ثبت نشده — از بیمار بپرسید و در فرمِ مراجعه ثبت کنید'}</p>
+        </section>
+      )}
 
       {/* ویزیتی که تصمیمِ عمل در آن گرفته شد — «بیمار با چه یافته‌ای کاندیدِ
           عمل شد» سرِ میز، بی‌آنکه جراح پرونده را جدا باز کند (بستهٔ ۶الف). */}
       {card.decided && (
-        <section className="th-decided" aria-label="ویزیتِ تصمیم">
-          <h3>از ویزیتِ تصمیم{card.decided.opDate ? ` — ${faDate(card.decided.opDate)}` : ''}</h3>
+        <details className="th-decided" aria-label="ویزیتِ تصمیم" open={decidedOpen}>
+          <summary><h3>از ویزیتِ تصمیم{card.decided.opDate ? ` — ${faDate(card.decided.opDate)}` : ''}</h3></summary>
           {/* تشخیص‌های ویزیتِ تصمیم «تشخیصِ **پیش از** عمل»اند و عمداً با همین
               عنوان جدا می‌آیند: به عمل ارث نمی‌رسند و کپی نمی‌شوند، چون تشخیصِ
               پس از عمل (بالای کارت) واقعیتِ دیگری است و می‌تواند فرق کند. */}
@@ -474,66 +655,16 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast, unsave
             ['یافته‌ها', card.decided.findings],
             ['معاینه', card.decided.exam],
             ['طرحِ درمان', card.decided.plan],
-          ].filter(([, t]) => t).map(([l, t]) => (
-            <p key={l}><b>{l}</b><span>{t}</span></p>
+          ].filter(([, x]) => x).map(([l, x]) => (
+            <p key={l}><b>{l}</b><span>{x}</span></p>
           ))}
-        </section>
+        </details>
       )}
 
       {card.vitals?.length > 0 && <VitalsView rows={card.vitals} />}
 
-      {/* هر سه هشدار **همیشه** رندر می‌شوند. «پرسیده نشده» با «نداشت» یکی
-          نیست، و سرِ میز فرقشان می‌تواند حیاتی باشد — کادرِ خالی یعنی برو بپرس. */}
-      <section className="th-alerts" aria-label="هشدارهای بالینی">
-        {/* حساسیت **قرمز** و دو تای دیگر کهربایی: وقتی هر سه یک قرمز باشند،
-            هیچ‌کدام دیگر هشدار نیست. چیزی که سرِ میز می‌تواند بکشد حساسیت است. */}
-        {[['allergies', 'حساسیت', 'red'], ['chronicConditions', 'بیماریِ زمینه‌ای', 'amber'], ['medications', 'داروها', 'amber']].map(([k, label, tone]) => (
-          <div key={k} className={`th-alert${alerts[k] ? ` on is-${tone}` : ''}`}>
-            <span className="th-alert-h">{alerts[k] ? <Alert width="14" height="14" aria-hidden="true" /> : null}{label}</span>
-            <p>{alerts[k] || 'در پرونده ثبت نشده — بپرسید'}</p>
-          </div>
-        ))}
-      </section>
-
       {/* بستهٔ ۸: در مطب همیشه (جای خالی خودش خبر است)؛ در نصبِ شرکتی فقط اگر واقعاً فرمی الصاق شده. */}
       {(card.clinical || (card.subforms ?? []).some((x) => x.phase === 'pre')) && <PreOpSummary subforms={card.subforms ?? []} />}
-
-      <section className="th-clock" aria-label="ساعتِ عمل">
-        <div className="th-times">
-          <span>شروع <b dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</b></span>
-          <span>پایان <b dir="ltr">{v.opEndTime ? faTime(v.opEndTime) : '—'}</b></span>
-          {elapsed && <span className="th-elapsed"><Clock width="13" height="13" aria-hidden="true" /> {running ? 'تا این لحظه' : 'مدت'} <b dir="ltr">{elapsed}</b></span>}
-        </div>
-        {/* «اصلی» روی **کارِ بعدی** می‌نشیند، نه همیشه روی «شروع شد»: وقتی عمل
-            شروع شده، دکمهٔ پررنگِ غیرفعال هم چشم را می‌برد هم دروغ می‌گوید.
-            و ترخیص دکمهٔ **سوم** است نه مترادفِ پایان — «توی جراحی یه پایانِ
-            عمل داریم یه ترخیص». */}
-        <div className="th-acts">
-          <button type="button" className={`th-btn${running || v.opEndTime ? '' : ' primary'}`}
-            disabled={!!v.opStartTime || busy === 'start' || v.state === 'cancelled'}
-            onClick={() => onAct('/start', 'start')}>شروع شد</button>
-          <button type="button" className={`th-btn${running ? ' primary' : ''}`}
-            disabled={!v.opStartTime || !!v.opEndTime || busy === 'finish'}
-            onClick={() => onAct('/finish', 'finish')}>پایان یافت</button>
-          <button type="button" className={`th-btn${v.opEndTime && !v.dischargeAt ? ' primary' : ''}`}
-            data-act="discharge"
-            disabled={!v.opEndTime || v.state === 'cancelled' || busy === 'discharge'}
-            onClick={onDischarge}>
-            <LogOut width="15" height="15" aria-hidden="true" /> {v.dischargeAt ? 'ویرایشِ ترخیص' : 'ترخیص'}
-          </button>
-        </div>
-      </section>
-
-      {v.dischargeAt && (
-        <section className="th-discharged" aria-label="ترخیص">
-          <h3>ترخیص — {faDate(v.dischargeAt)}{v.dischargeDispositionFa ? ` · ${v.dischargeDispositionFa}` : ''}</h3>
-          <p>{v.dischargeNote || '—'}</p>
-          {v.dischargeSummary && <p className="th-dsum"><b>شرحِ ترخیص</b><span>{v.dischargeSummary}</span></p>}
-          {v.dischargeRx && <p className="th-dsum" data-discharged-rx><b>داروهای ترخیص</b><span>{v.dischargeRx}</span></p>}
-          {v.nextVisitDate && <p className="th-dsum" data-discharged-next><b>ویزیتِ بعدی</b><span>{faDate(nextYmd(v.nextVisitDate))}</span></p>}
-          {v.dischargeRemark && <p className="th-dsum"><b>یادداشت</b><span>{v.dischargeRemark}</span></p>}
-        </section>
-      )}
 
       {!isClinic && (
         <NoteBox
@@ -543,11 +674,13 @@ function Card({ card, team, techLabel, busy, onAct, onDischarge, onToast, unsave
           savedMsg="یافته‌ها ذخیره شد" busy={busy} onAct={onAct} onToast={onToast} unsaved={unsaved}
         />
       )}
+      {/* مطب «شرحِ عمل» می‌نویسد، شرکت «گزارشِ خدمت» — واژه از حوزه (`t.workReport`، company-12). */}
       <NoteBox
         key={`report-${v.id}`}
         visit={v} field="opReport" path="/report" actKey="report"
-        title="شرحِ عمل" placeholder="مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…"
-        savedMsg="شرحِ عمل ذخیره شد" busy={busy} onAct={onAct} onToast={onToast} unsaved={unsaved}
+        title={t.workReport}
+        placeholder={clinical ? 'مسیرِ عمل، اقدام‌ها، رخدادهای حینِ عمل…' : 'خدمتی که حینِ عمل داده شد و نکته‌هایش…'}
+        savedMsg={`${t.workReport} ذخیره شد`} busy={busy} onAct={onAct} onToast={onToast} unsaved={unsaved}
       />
 
       <DeskSubforms
@@ -950,6 +1083,10 @@ function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = f
   const clearing = clinical && canFollowUp && !!initial.nextVisitDateJ && !f.nextVisitDateJ;
   /* وضعیتِ خروج و وضعیتِ بیمار اجباری‌اند؛ شرح و یادداشت اختیاری. */
   const ok = f.condition.trim().length >= 2 && !!f.disposition && !nextBad;
+  /* دکمهٔ خاموش می‌گوید چه کم است (surgery-03) — نه یک خاکستریِ بی‌توضیح. */
+  const missing = !f.disposition ? 'وضعیتِ خروج را انتخاب کنید'
+    : f.condition.trim().length < 2 ? 'وضعیتِ بیمار هنگامِ ترخیص را بنویسید'
+      : nextBad ? 'تاریخِ ویزیتِ بعدی را درست کنید' : '';
   /* نوشتهٔ ذخیره‌نشده (surgery-07) — بستن اول می‌پرسد؛ لمسِ پس‌زمینه این فرمِ پنج‌کادره را نمی‌بندد. */
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   return (
@@ -1040,8 +1177,9 @@ function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = f
       </label>
       <p className="th-hint">متن‌ها در پروندهٔ بیمار با نامِ شما ثبت می‌شوند؛ اصلاحِ بعدی نسخهٔ تازه می‌سازد.</p>
       <div className="th-dialog-acts">
+        {missing && <span className="th-hint th-dialog-missing" id="th-dis-missing" data-discharge-missing>{missing}</span>}
         <CloseButton className="th-btn" disabled={busy}>انصراف</CloseButton>
-        <button type="submit" className="th-btn primary" disabled={!ok || busy}>
+        <button type="submit" className="th-btn primary" disabled={!ok || busy} aria-describedby={missing ? 'th-dis-missing' : undefined}>
           {busy ? 'در حالِ ثبت…' : already ? 'ذخیرهٔ ترخیص' : 'ثبتِ ترخیص'}
         </button>
       </div>

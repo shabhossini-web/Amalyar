@@ -112,13 +112,55 @@
 .th-alert.is-amber { background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .45); }
 .th-alert.is-amber .th-alert-h { color: var(--amber-text); }
 
-/* ساعت */
-.th-clock { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.th-times { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-inline-end: auto; font-size: 13px; color: var(--text3); }
-.th-times b { margin-inline-start: 6px; font-size: 17px; font-weight: 800; color: var(--text1); font-variant-numeric: tabular-nums; }
-.th-elapsed { display: flex; align-items: center; gap: 5px; color: var(--cyan); }
-.th-elapsed b { color: var(--cyan); }
-.th-acts { display: flex; gap: 8px; }
+/* ── مراحلِ عمل: «۱ شروع ← ۲ پایان ← ۳ ترخیص» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-03/04) ──
+   مرحلهٔ انجام‌شده تیک و ساعت، مرحلهٔ بعدی دکمهٔ اصلی، مرحلهٔ بعدتر می‌گوید کِی باز می‌شود. */
+.th-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.th-step {
+  display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 8px 12px; border-radius: 13px;
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.th-step.is-next { background: rgba(var(--brand-rgb), .07); border-color: rgba(var(--brand-2-rgb), .5); }
+.th-step.is-done { border-color: rgba(52, 211, 153, .35); }
+.th-step-n {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  font-size: 13px; font-weight: 800; color: var(--text2); background: rgba(var(--veil-rgb), .07);
+}
+.th-step.is-next .th-step-n { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+.th-step.is-done .th-step-n { color: var(--green-text); background: rgba(52, 211, 153, .16); }
+.th-step-body { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.th-step-body b { font-size: 14px; font-weight: 800; color: var(--text1); }
+.th-step.is-wait .th-step-body b { color: var(--text2); }
+.th-step-at { font-size: 17px; font-weight: 800; color: var(--text1); font-variant-numeric: tabular-nums; }
+.th-step-body small { flex-basis: 100%; font-size: 12px; line-height: 1.7; color: var(--text3); }
+.th-link {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 8px; border-radius: 8px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--brand-text); background: none; border: 0;
+}
+.th-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.th-link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.th-link:disabled { opacity: .5; cursor: default; }
+.th-fix { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 6px; }
+.th-fix .th-fix-pick { flex: 1 1 150px; }
+.th-elapsed { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 13px; color: var(--text2); }
+.th-elapsed b { color: var(--text1); }
+/* نوارِ ۱۰ثانیه‌ایِ «… ثبت شد — برگرداندن» */
+.th-undo {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-top: 10px; padding: 8px 12px; border-radius: 12px;
+  font-size: 13px; color: var(--text1); background: rgba(var(--brand-rgb), .08); border: 1px solid rgba(var(--brand-2-rgb), .35);
+}
+.th-undo b { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: no-preference) {
+  .th-undo { animation: th-undo-in .2s ease-out; }
+  @keyframes th-undo-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+}
+/* سه کادرِ خالیِ هشدار ← یک سطر (surgery-05) — «پرسیده نشده» همچنان گفته می‌شود. */
+.th-card .th-alerts-none { display: flex; align-items: center; gap: 8px; padding: 11px 14px; font-size: 13px; color: var(--text2); border-style: dashed; }
+.th-alerts-none svg { flex: none; color: var(--amber-text); }
+.th-alerts-none b { color: var(--amber-text); font-weight: 700; }
+/* سربرگِ کارت: نام و «بازکردنِ فرمِ عمل» */
+.th-who-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.th-who-top .th-name { flex: 1 1 auto; min-width: 0; }
+.th-open-form { min-height: 36px; padding: 0 12px; border-radius: 99px; border: 1px solid rgba(var(--brand-2-rgb), .35); }
 /* ⚠️ `inline-flex` + `align-items:center`: قاعدهٔ سراسریِ `svg { display:block }` (index.css) آیکونِ
    دکمه را به سطرِ خودش می‌برد و «ترخیص» دوخطی می‌شد — آیکون بالا، متن پایین. */
 .th-btn {
@@ -199,6 +241,19 @@
    ⚠️ گزینشگرها **فرزندِ مستقیم**اند (`>`): فهرستِ تشخیصِ پیش از عمل هم `span`
    دارد و `.th-decided span`ِ نسلی نامِ تشخیص را `pre-wrap` و کدِ ICD را
    ۱۴پیکسلی می‌کرد. */
+/* جمع‌شونده (surgery-05): `details` هم پوستهٔ کارت‌های بخش را می‌گیرد. */
+.th-card > details.th-decided { padding: 16px; border-radius: 16px; background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--veil-rgb), .1); }
+.th-decided > summary { display: flex; align-items: center; gap: 8px; min-height: 32px; cursor: pointer; list-style: none; border-radius: 8px; }
+.th-decided > summary::-webkit-details-marker { display: none; }
+.th-decided > summary h3 { margin: 0; }
+/* پیکان با بوردرِ **فیزیکی** (قانونِ RTL): بوردرِ منطقی در راست‌به‌چپ قرینه می‌شد. */
+.th-decided > summary::after {
+  content: ''; margin-inline-start: auto; width: 8px; height: 8px;
+  border-right: 2px solid var(--text3); border-bottom: 2px solid var(--text3); transform: rotate(45deg);
+}
+.th-decided[open] > summary { margin-bottom: 10px; }
+.th-decided[open] > summary::after { transform: rotate(-135deg); }
+.th-decided > summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .th-decided > p, .th-decided-dx { margin: 0; display: grid; gap: 2px; }
 .th-decided > p + p, .th-decided-dx + p { margin-top: 10px; }
 .th-decided > p > b, .th-decided-dx > b { font-size: 12px; color: var(--text3); font-weight: 700; }
@@ -248,7 +303,8 @@
 }
 .th-x:hover { color: var(--text1); border-color: var(--brand-2); }
 .th-dialog-field span { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 700; }
-.th-dialog-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.th-dialog-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.th-dialog-missing { margin-inline-end: auto; font-size: 12.5px; font-weight: 700; color: var(--amber-text); }
 
 /* ⚠️ استایلِ چک‌لیستِ ایمنی این‌جا بود و **پاک شد**، نه اینکه برای روزِ
    مبادا بماند: JSXاش رفته، و CSS برای مارک‌آپی که وجود ندارد بی‌صدا می‌پوسد
@@ -277,10 +333,11 @@
   /* سطرِ «مالِ کیست» یک ردیف اضافه می‌کند؛ ردیفِ ثابتِ ۴ آن‌وقت روی شکایتِ
      اولیه می‌افتاد. فقط برای همین ردیف‌ها — ردیفِ بقیه دست نمی‌خورد. */
   .th-item.has-owner .th-item-side { grid-row: auto; }
-  /* سه دکمه در یک ردیفِ ۳۲۰پیکسلی جا نمی‌شوند — می‌پیچند، و هر کدام
-     همان کفِ لمسِ ۴۴px را نگه می‌دارد. */
-  .th-acts { width: 100%; flex-wrap: wrap; }
-  .th-btn { flex: 1 1 auto; min-width: 46%; padding: 0 12px; }
+  /* دکمهٔ هر مرحله زیرِ نامش تمام‌عرض می‌شود و کفِ لمسِ ۴۴px را نگه می‌دارد. */
+  .th-step { flex-wrap: wrap; }
+  .th-step > .th-btn { flex: 1 1 100%; }
+  .th-btn { padding: 0 12px; }
+  .th-link, .th-open-form { min-height: 44px; }
 }
 
 /* بستهٔ ۸ — ارزیابیِ پیش از عمل (از زیرفرم‌های «قبل»)، فرم‌های حینِ عمل، ترخیصِ کامل. */
