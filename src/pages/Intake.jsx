@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
-import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
+import { isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
 import { Alert, Bank, Box, CheckCircle, ChevronEnd, Clock, Refresh, Upload } from '../ui/icons.jsx';
@@ -14,6 +14,19 @@ import { BrandMark, CallLink, PublicFoot, useFallbackFace } from './PublicBits.j
 import { adoptFace } from '../lib/public-face.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
+/**
+ * مقدارِ ذخیره‌شدهٔ کادرِ «تاریخ» ← شمسیِ کادرِ `JDate`.
+ *
+ * ⚠️ سرور تاریخِ کلیدهای مراجعه (`opDate`…) را هنگامِ ثبت به ISO برمی‌گرداند؛ بیمارِ برگشته تا
+ * دیروز «۲۰۲۶-۱۰-۰۳» را در کادر می‌دید با خطای «تاریخ باید به شکل ۱۴۰۵/۰۵/۰۷ باشد» — یعنی
+ * نمی‌توانست بی‌تایپِ دوباره ثبت کند. مقدارِ از قبل شمسی (پیش‌نویس) دست نمی‌خورد.
+ */
+const jBack = (v) => {
+  if (typeof v !== 'string') return v;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return ymdToJStr(v) || v;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return isoToJStr(v) || v;
+  return v;
+};
 /* ⚠️ مبلغ‌ها در کلِ عمل‌یار **تومان**اند (مثلِ `Charge.amount`). نسخهٔ اول
    این‌جا بر ۱۰ تقسیم می‌کرد چون قراردادِ ریالیِ سامانهٔ قبلی را آورده بودم —
    یعنی بیمار یک‌دهمِ مبلغ را می‌دید. */
@@ -267,7 +280,8 @@ function Form() {
         setVals((s) => {
           const next = { ...s };
           for (const fl of r.form.fields) {
-            if (r.data?.[fl.key] !== undefined && next[fl.key] === undefined) next[fl.key] = r.data[fl.key];
+            if (r.data?.[fl.key] === undefined || next[fl.key] !== undefined) continue;
+            next[fl.key] = fl.type === 'date' ? jBack(r.data[fl.key]) : r.data[fl.key];
           }
           return next;
         });
