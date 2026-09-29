@@ -219,12 +219,11 @@
 .db-prog small { font-size: 11px; color: var(--text3); }
 .db-prog small.ok { color: var(--green-text); }
 
-/* ردیفِ کنش‌ها — بیرونِ پنل، مثلِ طرحِ مرجع */
-.db-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-inline: 4px; }
-.db-foot .us-status { flex: 0 0 auto; }
-/* در عرضِ کم کلِ گروه به خطِ دوم می‌رود و به لبهٔ پایانی می‌چسبد — دو دستهٔ
-   تمیز، نه یک دکمهٔ سرگردان. */
-.db-tools { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+/* ردیفِ کنش‌ها — بیرونِ پنل، مثلِ طرحِ مرجع.
+   دو طبقه: بالا انتخابگرِ وضعیت (که خودش برچسبِ وضعیت هم هست)، پایین چهار کارِ
+   نوشته‌دار. هیچ‌کدام دوخطی نمی‌شکند (clinic-daily-18). */
+.db-foot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding-inline: 4px; }
+.db-tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .db-st-pending { color: var(--amber-text); background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); }
 .db-st-done { color: var(--green-text); background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.35); }
 .db-st-cancelled { color: var(--red-text); background: rgba(248, 113, 113, 0.1); border: 1px solid rgba(248, 113, 113, 0.35); }
@@ -243,16 +242,27 @@
 .db-money b.ok { color: var(--green-text); }
 .db-money b.due { color: var(--amber-text); }
 
-.db-statuspick { flex: 1; display: flex; gap: 6px; }
+.db-statuspick {
+  display: flex; gap: 4px; padding: 3px; border-radius: 12px;
+  background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), 0.1);
+}
 .db-statuspick button {
-  flex: 1; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
-  color: var(--text3); background: rgba(var(--veil-rgb), 0.04);
-  border: 1px solid rgba(var(--veil-rgb), 0.1); border-radius: 9px; padding: 6px 4px;
+  flex: 1 1 0; min-width: 0; min-height: 40px; white-space: nowrap;
+  font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  color: var(--text2); background: none;
+  border: 1px solid transparent; border-radius: 9px; padding: 6px 8px;
   transition: color .15s, border-color .15s, background .15s;
 }
-.db-statuspick button:hover:not(:disabled) { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.5); }
-.db-statuspick button:disabled { cursor: default; }
-.db-statuspick button.on { cursor: default; }
+.db-statuspick button:hover:not(:disabled):not(.on) { color: var(--text1); background: rgba(var(--veil-rgb), 0.05); }
+.db-statuspick button:disabled { cursor: default; opacity: .6; }
+.db-statuspick button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+/* ⚠️ وضعیتِ فعلی **رنگِ خودش** را می‌گیرد — سه کلاس و نه یک، تا قاعدهٔ عمومیِ
+   دکمه (بالا) بر آن نچربد؛ همان اولویتِ CSS که رنگ را گم کرده بود (company-07). */
+.db-statuspick button.on { cursor: default; font-weight: 800; }
+.db-statuspick button.on.db-st-pending { color: var(--amber-text); background: rgba(251, 191, 36, 0.14); border-color: rgba(251, 191, 36, 0.5); }
+.db-statuspick button.on.db-st-done { color: var(--green-text); background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.5); }
+.db-statuspick button.on.db-st-cancelled { color: var(--red-text); background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.5); }
+@media (prefers-reduced-motion: reduce) { .db-statuspick button { transition: none; } }
 .db-ico {
   flex: 0 0 auto; display: grid; place-items: center; width: 32px; height: 32px;
   font-family: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer;
@@ -264,9 +274,17 @@
    بیاید، وگرنه در ردیفِ آیکون‌ها یک خطِ بی‌ربط دیده می‌شود. */
 a.db-ico { text-decoration: none; }
 .db-ico:hover:not(:disabled) { color: var(--cyan); border-color: rgba(0, 229, 255, 0.4); }
-.db-ico.del:hover:not(:disabled) { color: var(--red-text); border-color: rgba(248, 113, 113, 0.45); }
-.db-ico.del.arm { width: auto; padding: 0 10px; color: #fff; background: #dc2626; border-color: #dc2626; }
 .db-ico:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+/* کارِ نوشته‌دارِ کارت — آیکون بالای نوشته، هدفِ ≥۴۴px (روی گوشی چهارتا در یک ردیف جا می‌شوند). */
+.db-act {
+  width: auto; height: auto; min-height: 48px; padding: 6px 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 11.5px; font-weight: 700; border-radius: 11px; white-space: nowrap;
+}
+.db-act > span { line-height: 1.3; }
+.db-act.db-act-icon { min-height: 36px; width: 36px; padding: 0; }
+.db-tools .db-more { display: flex; }
+.db-tools .db-more > .db-act { flex: 1; }
 
 /* ── مودالِ فرم ──
    ورود/خروج دستِ `ui/Overlay.jsx` است، نه @keyframes: انیمیشنِ CSS فقط ورود
@@ -809,11 +827,26 @@ a.db-defbtn { text-decoration: none; }
   padding: 9px 10px; border-radius: 10px;
 }
 .db-sendmenu button:hover { background: rgba(var(--brand-rgb), 0.16); }
+/* منوی «بیشتر» — گروهِ خلاصه، جداکننده و حذفِ آخرِ منو با پرسش. */
+.db-moremenu { min-width: 236px; max-width: min(300px, calc(100vw - 32px)); }
+.db-moremenu button { display: flex; align-items: center; gap: 8px; min-height: 40px; background: none; border: none; cursor: pointer; font-family: inherit; }
+.db-moremenu button:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+.db-moremenu button:disabled { opacity: .55; cursor: default; }
+.db-moremenu button.danger { color: var(--red-text); }
+.db-moremenu button.danger:hover { background: rgba(248, 113, 113, 0.12); }
+.db-moremenu hr { border: none; border-top: 1px solid rgba(var(--veil-rgb), 0.1); margin: 4px 0; }
+.db-moremenu .db-moreback { color: var(--text2); font-size: 12px; }
+.db-moreconfirm { display: grid; gap: 10px; padding: 4px 6px; }
+.db-moreconfirm p { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--text1); }
+.db-moreconfirm > div { display: flex; gap: 6px; }
+.db-moreconfirm > div button { flex: 1; justify-content: center; border: 1px solid rgba(var(--veil-rgb), 0.14); }
+.db-moreconfirm > div button.danger { color: #fff; background: #dc2626; border-color: #dc2626; }
+.db-moreconfirm > div button.danger:hover { background: #b91c1c; }
 
 /* «ویزیتِ بعدی» روی کارت — سبز تا از واقعیت‌های گذشته جدا دیده شود: این
    تنها چیزِ روی کارت است که به «آینده» اشاره می‌کند و منشی باید پیگیرش باشد. */
-.db-facts .db-nextvisit { color: #6ee7b7; }
-.db-facts .db-nextvisit svg { color: #34d399; }
+.db-facts .db-nextvisit { color: var(--green-text); }
+.db-facts .db-nextvisit svg { color: var(--green-text); }
 
 /* ── «از همان ثبت، پیشنهادِ نوبت» — پنجرهٔ بعد از ذخیرهٔ ویزیتِ دارای ویزیتِ بعدی ── */
 .db-nvb { max-width: 480px; }

@@ -23,7 +23,7 @@ import './launcher.css';
 import './users.css';
 import './dashboard.css';
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
-import { Arrive, Back, Book, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
+import { Arrive, ArrowStart, Back, Book, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, More, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -152,47 +152,76 @@ const faDigits = (s) => String(s ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷�
  * مشترک است.
  */
 let recordFormsCache = null;
-function SendFormMenu({ patientId, busy, onToast }) {
-  const [open, setOpen] = useState(false);
-  const [forms, setForms] = useState(recordFormsCache);
-  const [sending, setSending] = useState(0);
-  const wrapRef = useRef(null);
+/* واژهٔ «این مراجعه» برای منو/پرسش/توست: عمل با واژهٔ عملِ حوزه، بقیه با واژهٔ مراجعهٔ حوزه —
+   همان قاعدهٔ توستِ ذخیره پایین‌تر؛ در مطب «حذفِ ویزیت» روی یک عمل دروغ است. */
+const visitNoun = (v, t) => (v?.kind === 'surgery' ? t.surgery : t.visit);
+const faPhone = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
-  /* ⚠️ بستن با شنوندهٔ سند، نه با پردهٔ `position:fixed`: کارتِ framer-motion
-     `transform` دارد و transform مرجعِ fixed را به خودِ کارت محدود می‌کند —
-     پرده فقط روی کارت می‌افتاد و کلیکِ بیرونِ کارت هیچ‌جا نمی‌خورد. */
+/**
+ * منوی «بیشتر» — کارهای کم‌تکرارِ یک مراجعه، در یک جا (بازبینیِ UX، clinic-daily-18).
+ *
+ * تا پیش از این زیرِ هر کارت شش آیکونِ ۳۲ پیکسلیِ بی‌نوشته بود که معنایشان فقط با
+ * راهنمای ماوس پیدا می‌شد (روی گوشی هرگز)، و «حذف» درست کنارِ «ویرایش» بود. حالا سه
+ * کارِ پرتکرار (پرونده، صورت‌حساب، ویرایش) با نوشته روی کارت‌اند و بقیه این‌جا:
+ * ارسالِ فرم، خلاصه (چاپ / پیامک) و — **آخرِ فهرست و با پرسش** — حذف.
+ *
+ * ⚠️ بستن با شنوندهٔ سند، نه با پردهٔ `position:fixed`: کارتِ framer-motion
+ * `transform` دارد و transform مرجعِ fixed را به خودِ کارت محدود می‌کند — پرده
+ * فقط روی کارت می‌افتاد و کلیکِ بیرونِ کارت هیچ‌جا نمی‌خورد.
+ *
+ * ⚠️ «ارسالِ فرم» = ساختِ ثبت‌نام + پیامک به خودِ بیمار (سمتِ سرور). فهرستِ فرم‌ها
+ * یک‌بار برای کلِ صفحه کش می‌شود؛ منو per-row است ولی داده مشترک.
+ */
+function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState('main'); // main | forms | confirm
+  const [forms, setForms] = useState(recordFormsCache);
+  const [working, setWorking] = useState(0);
+  const wrapRef = useRef(null);
+  const btnRef = useRef(null);
+  const noun = visitNoun(v, t);
+  const summary = `خلاصهٔ ${noun}`;
+
+  const close = useCallback(() => { setOpen(false); setView('main'); }, []);
   useEffect(() => {
     if (!open) return undefined;
-    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
+    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) close(); };
+    const k = (e) => { if (e.key === 'Escape') { close(); btnRef.current?.focus(); } };
     document.addEventListener('pointerdown', h);
-    return () => document.removeEventListener('pointerdown', h);
-  }, [open]);
+    document.addEventListener('keydown', k);
+    return () => { document.removeEventListener('pointerdown', h); document.removeEventListener('keydown', k); };
+  }, [open, close]);
+  /* فوکوس با منو جابه‌جا می‌شود — کاربرِ صفحه‌کلید با Tab به‌دنبالِ منویی که
+     باز شده نمی‌گردد. در پرسشِ حذف روی «انصراف» می‌نشیند، نه روی خودِ حذف. */
+  useEffect(() => {
+    if (!open) return;
+    const menu = wrapRef.current?.querySelector('.db-moremenu');
+    const target = view === 'confirm' ? menu?.querySelector('.db-moreconfirm button:not(.danger)')
+      : (menu?.querySelector('button[role="menuitem"]:not(:disabled)') ?? menu?.querySelector('button:not(:disabled)'));
+    target?.focus();
+  }, [open, view, forms]);
 
-  const toggle = async () => {
-    const next = !open;
-    setOpen(next);
-    if (next && !recordFormsCache) {
-      try {
-        const all = await api('/forms');
-        recordFormsCache = (all ?? []).filter((f) => f.scope === 'record' && f.active !== false);
-        setForms(recordFormsCache);
-      } catch (e) { onToast(e.message); setOpen(false); }
-    }
+  const showForms = async () => {
+    setView('forms');
+    if (recordFormsCache) return;
+    try {
+      const all = await api('/forms');
+      recordFormsCache = (all ?? []).filter((f) => f.scope === 'record' && f.active !== false);
+      setForms(recordFormsCache);
+    } catch (e) { onToast(e.message); close(); }
   };
 
   const sendForm = async (f) => {
-    setSending(f.id);
+    setWorking(f.id);
     try {
-      const r = await api('/intake/send', { method: 'POST', body: { patientId, formId: f.id } });
+      const r = await api('/intake/send', { method: 'POST', body: { patientId: v.patientId, formId: f.id } });
       /* «ارسال» = پیامک به خودِ بیمار (سمتِ سرور). گزارش باید همان واقعیت
          باشد: فرستاده شد / پیکربندی نیست / نرفت — نه «کپی شد». */
-      const toFa = String(r.to ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
       /* ⚠️ نشانی از توکن بازسازی می‌شود، نه فقط از `r.url`: وقتی سرورِ در
-         حالِ دیپلوی هنوز نسخهٔ قدیم است، `url/sent/stub` در پاسخ نیست و
-         toast «undefined» چاپ می‌کرد. توکن در هر دو نسخه هست. */
+         حالِ دیپلوی هنوز نسخهٔ قدیم است، `url/sent/stub` در پاسخ نیست. */
       const url = r.url ?? `${window.location.origin}/f/${r.token}`;
       if (r.sent) {
-        onToast(`«${f.title}» پیامک شد به ${toFa}${r.reused ? ' (یادآوریِ همان فرمِ باز)' : ''} ✓`);
+        onToast(`«${f.title}» پیامک شد به ${faPhone(r.to)}${r.reused ? ' (یادآوریِ همان فرمِ باز)' : ''} ✓`);
       } else if (r.stub) {
         onToast(`سرویسِ پیامک پیکربندی نشده — لینک: ${url}`);
       } else if (r.sent === undefined) {
@@ -202,25 +231,88 @@ function SendFormMenu({ patientId, busy, onToast }) {
       } else {
         onToast(`پیامک نرفت — لینک: ${url}`);
       }
-      setOpen(false);
-    } catch (e) { onToast(e.message); } finally { setSending(0); }
+      close();
+    } catch (e) { onToast(e.message); } finally { setWorking(0); }
+  };
+
+  /* خلاصه — لینک تنبل سمتِ سرور ساخته می‌شود؛ بازکردنِ دوباره همان را می‌دهد. */
+  const openPrint = async () => {
+    setWorking(-1);
+    try {
+      const r = await api(`/visits/${v.id}/summary-link`, { method: 'POST' });
+      window.open(r.url ?? `/v/${r.token}`, '_blank', 'noopener');
+      close();
+    } catch (e) { onToast(e.message); } finally { setWorking(0); }
+  };
+  const sms = async (path, what) => {
+    setWorking(-1);
+    try {
+      const r = await api(path, { method: 'POST' });
+      onToast(r.sent ? `${what} پیامک شد به ${faPhone(r.to)} ✓`
+        : r.stub ? `سرویسِ پیامک پیکربندی نشده — لینک: ${r.url}`
+          : `پیامک نرفت — لینک: ${r.url}`);
+      close();
+    } catch (e) { onToast(e.message); } finally { setWorking(0); }
   };
 
   return (
-    <span className="db-sendwrap" ref={wrapRef}>
-      <button type="button" className="db-ico" title="ارسالِ فرم برای بیمار" disabled={busy} onClick={toggle}>
-        <Send width="15" height="15" />
+    <span className="db-sendwrap db-more" ref={wrapRef}>
+      <button
+        ref={btnRef} type="button" className={`db-ico db-act${compact ? ' db-act-icon' : ''}`}
+        aria-haspopup="menu" aria-expanded={open} disabled={busy}
+        aria-label={`کارهای دیگرِ ${v.code}`} title="بیشتر"
+        onClick={() => (open ? close() : setOpen(true))}
+      >
+        <More width="17" height="17" />{!compact && <span>بیشتر</span>}
       </button>
       {open && (
-        <div className="db-sendmenu" role="menu">
-          <b>ارسالِ فرم برای این بیمار</b>
-          {forms === null && <small>در حال بارگذاری…</small>}
-          {forms?.length === 0 && <small>فرمِ زیرپرونده‌ای ساخته نشده — از فرم‌ساز بسازید</small>}
-          {forms?.map((f) => (
-            <button key={f.id} type="button" role="menuitem" disabled={!!sending} onClick={() => sendForm(f)}>
-              {sending === f.id ? 'در حال ساخت…' : f.title}
-            </button>
-          ))}
+        <div className="db-sendmenu db-moremenu" role="menu" aria-label={`کارهای دیگرِ ${v.fullName}`}>
+          {view === 'main' && (
+            <>
+              <button type="button" role="menuitem" onClick={showForms}>
+                <Send width="15" height="15" /> ارسالِ فرم برای بیمار…
+              </button>
+              <b>{summary}</b>
+              <button type="button" role="menuitem" disabled={!!working} onClick={openPrint}>
+                <Print width="15" height="15" /> بازکردن — چاپ / ذخیرهٔ PDF
+              </button>
+              <button type="button" role="menuitem" disabled={!!working} onClick={() => sms(`/visits/${v.id}/summary-sms`, summary)}>
+                پیامکِ لینکِ {summary}
+              </button>
+              <button type="button" role="menuitem" disabled={!!working} onClick={() => sms(`/patients/${v.patientId}/portal-sms`, 'لینکِ پرونده')}>
+                پیامکِ پروندهٔ الکترونیک
+              </button>
+              <hr />
+              {/* ⚠️ حذف **آخرِ منو و با پرسش** — دیگر کنارِ «ویرایش» نیست که یک ضربهٔ اشتباه ببَردش. */}
+              <button type="button" role="menuitem" className="danger" onClick={() => setView('confirm')}>
+                <Trash width="15" height="15" /> حذفِ این {noun}…
+              </button>
+            </>
+          )}
+          {view === 'forms' && (
+            <>
+              <button type="button" className="db-moreback" onClick={() => setView('main')}>
+                <ArrowStart width="14" height="14" /> بازگشت
+              </button>
+              <b>ارسالِ فرم برای این بیمار</b>
+              {forms === null && <small>در حال بارگذاری…</small>}
+              {forms?.length === 0 && <small>فرمِ زیرپرونده‌ای ساخته نشده — از فرم‌ساز بسازید</small>}
+              {forms?.map((f) => (
+                <button key={f.id} type="button" role="menuitem" disabled={!!working} onClick={() => sendForm(f)}>
+                  {working === f.id ? 'در حال ساخت…' : f.title}
+                </button>
+              ))}
+            </>
+          )}
+          {view === 'confirm' && (
+            <div className="db-moreconfirm" role="group" aria-label="تأییدِ حذف">
+              <p>حذفِ <bdi dir="ltr">{v.code}</bdi> — {v.fullName}؟ این کار برگشت ندارد.</p>
+              <div>
+                <button type="button" className="danger" disabled={busy} onClick={() => { close(); onDelete(v); }}>حذفِ {noun}</button>
+                <button type="button" onClick={() => setView('main')}>انصراف</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </span>
@@ -228,79 +320,37 @@ function SendFormMenu({ patientId, busy, onToast }) {
 }
 
 /**
- * منوی «خلاصهٔ ویزیت» — چاپ/PDF برای خودِ ادمین، یا پیامکِ لینک برای بیمار.
- * لینک تنبل سمتِ سرور ساخته می‌شود؛ بازکردنِ دوباره همان را می‌دهد.
+ * انتخابگرِ وضعیت — **خودِ برچسبِ وضعیت هم هست** (بازبینیِ UX، company-07 و clinic-daily-18).
+ *
+ * ⚠️ تا پیش از این سه دکمهٔ هم‌شکل کنارِ یک چیپِ جداگانه بودند و رنگِ حالتِ انتخاب‌شده
+ * زیرِ اولویتِ CSS گم می‌شد؛ مدیر نمی‌فهمید این‌ها دکمه‌اند یا برچسب. حالا وضعیتِ فعلی
+ * رنگِ خودش را دارد و `aria-pressed` می‌گوید کدام است؛ چیپِ جدا برداشته شد.
+ * فهرست از سرور (`/config`) — دکمه‌ها باید **همهٔ** گزینه‌ها را نشان دهند.
  */
-function SummaryMenu({ visitId, patientId, busy, onToast }) {
-  const [open, setOpen] = useState(false);
-  const [working, setWorking] = useState(false);
-  const wrapRef = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const h = (e) => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('pointerdown', h);
-    return () => document.removeEventListener('pointerdown', h);
-  }, [open]);
-
-  const openPrint = async () => {
-    setWorking(true);
-    try {
-      const r = await api(`/visits/${visitId}/summary-link`, { method: 'POST' });
-      window.open(r.url ?? `/v/${r.token}`, '_blank', 'noopener');
-      setOpen(false);
-    } catch (e) { onToast(e.message); } finally { setWorking(false); }
-  };
-  const sendPortal = async () => {
-    setWorking(true);
-    try {
-      const r = await api(`/patients/${patientId}/portal-sms`, { method: 'POST' });
-      const toFa = String(r.to ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
-      onToast(r.sent ? `لینکِ پرونده پیامک شد به ${toFa} ✓`
-        : r.stub ? `سرویسِ پیامک پیکربندی نشده — لینک: ${r.url}`
-          : `پیامک نرفت — لینک: ${r.url}`);
-      setOpen(false);
-    } catch (e) { onToast(e.message); } finally { setWorking(false); }
-  };
-  const sendSms = async () => {
-    setWorking(true);
-    try {
-      const r = await api(`/visits/${visitId}/summary-sms`, { method: 'POST' });
-      const toFa = String(r.to ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
-      onToast(r.sent ? `خلاصهٔ ویزیت پیامک شد به ${toFa} ✓`
-        : r.stub ? `سرویسِ پیامک پیکربندی نشده — لینک: ${r.url}`
-          : `پیامک نرفت — لینک: ${r.url}`);
-      setOpen(false);
-    } catch (e) { onToast(e.message); } finally { setWorking(false); }
-  };
-
+function StatusPick({ v, busy, onStatus, statuses, t, compact = false }) {
   return (
-    <span className="db-sendwrap" ref={wrapRef}>
-      <button type="button" className="db-ico" title="خلاصهٔ ویزیت (چاپ / ارسال)" disabled={busy} onClick={() => setOpen((o) => !o)}>
-        <Print width="15" height="15" />
-      </button>
-      {open && (
-        <div className="db-sendmenu" role="menu">
-          <b>خلاصهٔ ویزیت</b>
-          <button type="button" role="menuitem" disabled={working} onClick={openPrint}>بازکردن — چاپ / ذخیرهٔ PDF</button>
-          <button type="button" role="menuitem" disabled={working} onClick={sendSms}>پیامکِ لینک برای بیمار</button>
-          <button type="button" role="menuitem" disabled={working} onClick={sendPortal}>پیامکِ پروندهٔ الکترونیک</button>
-        </div>
-      )}
-    </span>
+    <div className={`db-statuspick${compact ? ' db-statuspick-sm' : ''}`} role="group" aria-label={`وضعیتِ ${visitNoun(v, t)}`}>
+      {statuses.map(({ key: k, label: l }) => {
+        const on = v.opStatus === k;
+        return (
+          <button
+            key={k}
+            type="button"
+            className={on ? `on db-st-${k}` : undefined}
+            aria-pressed={on}
+            disabled={busy}
+            onClick={() => { if (!on) onStatus(v, k); }}
+          >
+            {k === 'pending' ? kindOf(v.kind).pending : l}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onToast }) {
-  /* فهرستِ کاملِ وضعیت‌ها از سرور (`/config`) — این‌جا لازم است چون دکمه‌های
-     گذار باید **همهٔ** گزینه‌ها را نشان دهند، نه فقط وضعیتِ همین ردیف. */
-  const statuses = useStatusList('visit');
+function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onToast, statuses, t }) {
   const row = useStagger();
-  const [confirmDel, setConfirmDel] = useState(false);
-  useEffect(() => {
-    if (!confirmDel) return undefined;
-    const t = setTimeout(() => setConfirmDel(false), 3000);
-    return () => clearTimeout(t);
-  }, [confirmDel]);
   /* بستهٔ ۷ — برچسبِ ترکیبی را سرور می‌سازد (قانون ۱۵؛ `procedureLabel`/`diagnosisLabel`،
      اصلی اول). ⚠️ fallback فقط برای پاسخِ سرورِ قدیمی‌تر است (PWAِ کش‌شده وسطِ
      دیپلوی) — `procedureTypeName`/`diagnosisTitle` همیشه فقط **اصلی**‌اند و سایرین
@@ -383,13 +433,14 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
           {v.opStartTime && (
             <span title={v.durationMin != null ? `مدت: ${faDuration(v.durationMin)}` : undefined}>
               <Clock width="14" height="14" />
-              <span dir="ltr">{v.opStartTime}{v.opEndTime ? `–${v.opEndTime}` : ''}</span>
+              {/* ساعت با ارقامِ فارسی — مثلِ میزِ پذیرش و میزِ پزشک (clinic-daily-25). */}
+              <span dir="ltr">{faTime(v.opStartTime)}{v.opEndTime ? `–${faTime(v.opEndTime)}` : ''}</span>
               {v.durationMin != null && ` (${faDuration(v.durationMin)})`}
             </span>
           )}
           {v.techArriveTime && (
             <span title={`ساعتِ حضورِ ${v.techName || 'کارشناس'}`}>
-              <Arrive width="14" height="14" /> <span dir="ltr">{v.techArriveTime}</span>
+              <Arrive width="14" height="14" /> <span dir="ltr">{faTime(v.techArriveTime)}</span>
             </span>
           )}
           {dxLabel && (
@@ -438,41 +489,22 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
           پرتکرارترین کارِ این صفحه دو کلیک شود. طرح را می‌گیریم، نه ضعفِ
           کاربردی‌اش را. */}
       <div className="db-foot">
-        <span className={`us-status db-st-${v.opStatus}`}>{statusLabel(v)}</span>
-        <div className="db-statuspick" role="group" aria-label="تغییر وضعیت">
-          {statuses.map(({ key: k, label: l }) => (
-            <button
-              key={k}
-              type="button"
-              className={v.opStatus === k ? `on db-st-${k}` : ''}
-              disabled={busy || v.opStatus === k}
-              onClick={() => onStatus(v, k)}
-            >
-              {k === 'pending' ? kindOf(v.kind).pending : l}
-            </button>
-          ))}
-        </div>
-        {/* ⚠️ آیکون‌ها یک **گروه**اند نه سه فرزندِ جدا: در عرضِ کم باید با هم
-            به خطِ دوم بروند. تا وقتی مستقیم فرزندِ `.db-foot` بودند فقط
-            «حذف» تنها می‌افتاد پایین و ردیف شکسته به‌نظر می‌رسید. */}
+        <StatusPick v={v} busy={busy} onStatus={onStatus} statuses={statuses} t={t} />
+        {/* ⚠️ سه کارِ پرتکرار با **نوشته** و هدفِ ≥۴۴px، بقیه در «بیشتر» (clinic-daily-18).
+            تا پیش از این شش آیکونِ ۳۲ پیکسلیِ بی‌نوشته بودند که روی گوشی معنا نداشتند.
+            ⚠️ لینکِ پرونده هدفِ **مطمئن** است: نامِ وسطِ کارت یک میان‌بُر است و روی
+            موبایل با ضربهٔ «وسطِ کارت» قاطی می‌شود؛ این یکی هرگز قاطی نمی‌شود. */}
         <div className="db-tools">
-          {/* ⚠️ هدفِ **مطمئنِ** پرونده. نامِ وسطِ کارت یک میان‌بُر است و روی
-              موبایل با ضربهٔ «وسطِ کارت» قاطی می‌شود؛ این یکی هرگز قاطی
-              نمی‌شود چون کنارِ بقیهٔ ابزارهاست و برچسب دارد. */}
-          <Link className="db-ico" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار"><Book width="15" height="15" /></Link>
-          <SendFormMenu patientId={v.patientId} busy={busy} onToast={onToast} />
-          <SummaryMenu visitId={v.id} patientId={v.patientId} busy={busy} onToast={onToast} />
-          <button type="button" className="db-ico" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}><Money width="15" height="15" /></button>
-          <button type="button" className="db-ico" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}><Pencil width="15" height="15" /></button>
-          <button
-            type="button"
-            className={`db-ico del${confirmDel ? ' arm' : ''}`}
-            title={confirmDel ? 'برای حذفِ قطعی دوباره بزنید' : 'حذف'}
-            disabled={busy}
-            onClick={() => (confirmDel ? onDelete(v) : setConfirmDel(true))}
-          >
-            {confirmDel ? 'حذف؟' : <Trash width="15" height="15" />}
+          <Link className="db-ico db-act" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">
+            <Book width="17" height="17" /><span>پرونده</span>
+          </Link>
+          <button type="button" className="db-ico db-act" title="صورت‌حساب" onClick={() => onBilling(v)} disabled={busy}>
+            <Money width="17" height="17" /><span>صورت‌حساب</span>
           </button>
+          <button type="button" className="db-ico db-act" title="ویرایش" onClick={() => onEdit(v)} disabled={busy}>
+            <Pencil width="17" height="17" /><span>ویرایش</span>
+          </button>
+          <MoreMenu v={v} busy={busy} onToast={onToast} onDelete={onDelete} t={t} />
         </div>
       </div>
     </motion.div>
@@ -968,7 +1000,7 @@ export default function Dashboard() {
     try {
       await api(`/visits/${v.id}`, { method: 'DELETE' });
       setVisits((rows) => rows.filter((r) => r.id !== v.id));
-      setToast('مراجعه حذف شد');
+      setToast(`${visitNoun(v, t)} حذف شد`);
     } catch (e) {
       setToast(e.message);
     } finally {
@@ -1143,6 +1175,8 @@ export default function Dashboard() {
               onDelete={onDelete}
               onBilling={setBilling}
               onToast={setToast}
+              statuses={visitStatuses}
+              t={t}
             />
           ))}
         </div>

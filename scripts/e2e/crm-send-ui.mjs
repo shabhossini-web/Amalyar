@@ -61,18 +61,21 @@ ok(barCount >= 1, `نوارِ توزیع (${barCount})`);
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 ok(overflow <= 1, `بدونِ سرریزِ افقیِ موبایل (${overflow}px)`);
 
-// ۳) داشبورد — منوی ارسالِ فرم روی کارت
+// ۳) داشبورد — «ارسالِ فرم» روی کارت. از بازبینیِ UX (clinic-daily-18) کارهای
+//    کم‌تکرار زیرِ منوی «بیشتر»ِ کارت‌اند: بیشتر ← «ارسالِ فرم برای بیمار…» ← فهرستِ فرم‌ها.
 await page.goto(BASE + '/app/dashboard');
 await page.waitForTimeout(2500);
-const sendBtn = page.locator('.db-sendwrap > button').first();
+const sendBtn = page.locator('.db-more > button').first();
 const haveCards = await sendBtn.count();
-ok(haveCards >= 1, 'دکمهٔ ارسالِ فرم روی کارتِ مراجعه هست');
+ok(haveCards >= 1, 'دکمهٔ «بیشتر» (ارسالِ فرم) روی کارتِ مراجعه هست');
 if (haveCards) {
   await sendBtn.click();
+  await page.waitForTimeout(400);
+  await page.locator('.db-sendmenu [role="menuitem"]', { hasText: 'ارسالِ فرم' }).first().click();
   await page.waitForTimeout(1200);
   const menu = page.locator('.db-sendmenu');
   ok(await menu.count() === 1, 'منوی فرم‌های زیرپرونده باز شد');
-  const items = await menu.locator('button').allTextContents();
+  const items = await menu.locator('button[role="menuitem"]').allTextContents();
   console.log('    فرم‌ها: ' + items.join(' | '));
   ok(items.length >= 1, `دستِ‌کم یک فرمِ record در منو (${items.length})`);
   // بیرون کلیک → بسته شود
