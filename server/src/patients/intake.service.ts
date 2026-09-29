@@ -19,6 +19,7 @@ import { hospitalTypeahead, matchIntakeHospital, matchIntakeRefs } from './intak
 import { serviceLabel, serviceOf } from './intake-service-of';
 import { imageRefsOf, receiptIdsOf } from './intake-docs';
 import { UsedChallenges, issueChallenge, openChallenge, verifyChallenge } from './intake-captcha';
+import { faClock, faDayLong } from './fa-when';
 import { RETURN_STAGES, applyReturn, currentReturn, isReturnStage, returnsOf, withoutReturns } from './intake-return';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { OTHER_PX, procedureLabel } from './visit-coding';
@@ -761,6 +762,10 @@ export class IntakeService {
                 date: a.date.toISOString().slice(0, 10),
                 startMin: a.startMin,
                 time: a.startMin == null ? null : AvailabilityService.minToHHMM(a.startMin),
+                /* «چهارشنبه ۸ مهر ۱۴۰۵» و «۱۶:۰۰» — کارتِ پایانیِ فرم نوبت را به زبانِ بیمار می‌گوید
+                   (بازبینیِ UX، بندِ ۱۰۲). */
+                whenFa: faDayLong(a.date),
+                timeFa: a.startMin == null ? null : faClock(AvailabilityService.minToHHMM(a.startMin)),
                 status: a.status,
                 topicId: a.topic?.id ?? null,
                 topicName: a.topic?.name ?? null,

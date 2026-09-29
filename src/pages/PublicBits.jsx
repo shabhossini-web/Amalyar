@@ -58,10 +58,11 @@ export function CallLink({ phone, label = 'تماس', className = '' }) {
  * پاورقیِ صفحهٔ بیمار: تماس با مطب، نشانی، و نامِ نرم‌افزار **کوچک** — «عمل‌یار» هویتِ
  * صفحه نیست، فقط سازندهٔ آن است.
  */
-export function PublicFoot({ brand }) {
+export function PublicFoot({ brand, call = true }) {
   return (
     <footer className="pb-foot">
-      <CallLink phone={brand?.phone} label={brand?.name ? `تماس با ${brand.name}` : 'تماس'} />
+      {/* `call={false}`: خودِ صفحه دکمهٔ تماس را جای برجسته‌تری گذاشته (کارتِ پایانی) — دوبار نه. */}
+      {call && <CallLink phone={brand?.phone} label={brand?.name ? `تماس با ${brand.name}` : 'تماس'} />}
       {brand?.address && <small className="pb-addr">{brand.address}</small>}
       <small className="pb-powered">با پشتیبانیِ عمل‌یار</small>
     </footer>

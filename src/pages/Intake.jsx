@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
-import { isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
-import { Alert, Bank, Box, Caret, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -518,7 +518,8 @@ function Form() {
   const submitLabel = paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
 
   return (
-    <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}>
+    <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}
+           footCall={!(d.status === 'pending_approval' && !payOpen)}>
       {/* نوارِ مرحله — بیمار باید بداند کجای کار است و چه چیزی مانده؛ و در
           پایان، اینکه چیزی نمانده. مرحله‌ها از وضعیتِ همین فرم ساخته می‌شوند. */}
       {!rejected && !expired && (
@@ -713,18 +714,41 @@ function Form() {
         </div>
       )}
 
+      {/* ── کارتِ پایانی (بازبینیِ UX، بندِ ۱۰۲) ──
+          تا دیروز فقط یک جملهٔ «بررسی می‌کند» بود و بزرگ‌ترین دکمهٔ صفحه «افزودنِ فیشِ دیگر» — بیمار
+          گمان می‌کرد کارش ناقص مانده؛ نوبتی را هم که همین حالا گرفته بود دیگر نمی‌دید. */}
       {d.status === 'pending_approval' && !payOpen && (
-        <>
+        <section className="ik-final" aria-labelledby="ik-final-h">
+          <span className="ik-final-ic" aria-hidden="true"><CheckCircle width="30" height="30" /></span>
+          <h2 id="ik-final-h">{T.final.title}</h2>
           <p className="ik-note">
             {/* ⚠️ فرمِ رایگان فیش ندارد — «فیشِ شما دریافت شد» برای آن دروغ است
                 و بیمار را دنبالِ فیشی می‌فرستد که هرگز نفرستاده. */}
             <Clock width="15" height="15" /> {receipts.length ? T.review.withReceipt : T.review.noReceipt}
           </p>
-          {/* قسطِ دوم یا عکسِ خواناتر — تا کسی بررسی نکرده، راهِ برگشت به کادرِ فیش باز است. */}
-          {receipts.length > 0 && (
-            <button type="button" className="ik-go ghost" onClick={() => setAddingReceipts(true)}>{T.receiptsMore}</button>
+          {d.booking?.appointment && (
+            <div className="ik-final-appt">
+              <Calendar width="20" height="20" aria-hidden="true" />
+              <div>
+                <span>نوبتِ شما</span>
+                <b>
+                  {d.booking.appointment.whenFa ?? faDate(d.booking.appointment.date)}
+                  {d.booking.appointment.timeFa && <>، ساعتِ <bdi dir="ltr">{d.booking.appointment.timeFa}</bdi></>}
+                </b>
+                {d.booking.appointment.topicName && <small>{d.booking.appointment.topicName}</small>}
+                <em>{d.booking.appointment.status === 'confirmed' ? T.final.confirmed : T.final.held(d.brand?.name)}</em>
+              </div>
+            </div>
           )}
-        </>
+          <p className="ik-final-when">{T.final.when}</p>
+          {d.brand?.phone && <p className="ik-final-q">سؤالی دارید؟</p>}
+          <CallLink phone={d.brand?.phone} label={d.brand?.name ? `تماس با ${d.brand.name}` : 'تماس'} />
+          {/* قسطِ دوم یا عکسِ خواناتر — تا کسی بررسی نکرده، راهِ برگشت به کادرِ فیش باز است؛ ولی
+              کنشِ فرعی است، نه دکمهٔ اصلیِ صفحه. */}
+          {receipts.length > 0 && (
+            <button type="button" className="ik-linkbtn" onClick={() => setAddingReceipts(true)}>{T.receiptsMore}</button>
+          )}
+        </section>
       )}
 
       {err && <p className="ik-bad"><Alert width="15" height="15" /> {err}</p>}
@@ -816,7 +840,7 @@ function BankCard({ acc }) {
  * پاسخِ خودِ صفحه می‌آید و «عمل‌یار» فقط کوچک در پاورقی است. نامِ نیامده (پاسخِ قدیمی)
  * «ثبت‌نام» می‌شود، هرگز «عمل‌یار».
  */
-function Shell({ brand, title, amount, children }) {
+function Shell({ brand, title, amount, children, footCall = true }) {
   return (
     <div className="ik">
       <div className="ik-bg" aria-hidden="true" />
@@ -830,7 +854,7 @@ function Shell({ brand, title, amount, children }) {
           {amount > 0 && <span className="ik-amount">{faNum(amount)} تومان</span>}
         </header>
         {children}
-        <PublicFoot brand={brand} />
+        <PublicFoot brand={brand} call={footCall} />
       </main>
     </div>
   );

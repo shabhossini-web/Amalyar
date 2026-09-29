@@ -11,8 +11,10 @@
 }
 
 /* دکمهٔ تماس — لینکِ `tel:` با ظاهرِ دکمه، نه متنِ ریزِ بی‌نشان. */
+/* ⚠️ نامِ بلندِ مطب + شماره در گوشیِ باریک جا نمی‌شود: شماره به خطِ دوم می‌رود (flex-wrap)، نه اینکه
+   خودِ نام وسطش بشکند. */
 .pb-call {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 8px;
   min-height: 46px; padding: 9px 18px; border-radius: 999px; text-decoration: none;
   font-size: 15px; font-weight: 800; color: var(--brand-text);
   background: rgba(var(--brand-rgb), .08); border: 1px solid rgba(var(--brand-2-rgb), .45);
