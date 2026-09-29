@@ -10,7 +10,7 @@ import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
-import { BrandMark, CallLink, PublicFoot } from './PublicBits.jsx';
+import { BrandMark, CallLink, PublicFoot, useFallbackFace } from './PublicBits.jsx';
 import { adoptFace } from '../lib/public-face.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -76,6 +76,9 @@ function Register() {
     return () => { live = false; };
   }, [token, loadCap]);
 
+  /* لینک باز نشد ← هویت و تمِ مطب از مسیرِ عمومیِ جدا، تا صفحهٔ خطا هم نام و تلفن داشته باشد. */
+  const fallback = useFallbackFace(!!err && !link);
+
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
   const submit = async () => {
@@ -107,7 +110,7 @@ function Register() {
     }
   };
 
-  if (err && !link) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
+  if (err && !link) return <Shell brand={fallback?.brand}><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
 
   return (
     <Shell brand={link?.brand} title={link?.title} amount={link?.amount}>
@@ -275,6 +278,7 @@ function Form() {
     } catch (e) { setErr(e.message); }
   }, [token]);
   useEffect(() => { load(); }, [load]);
+  const fallback = useFallbackFace(!!err && !d);
 
   /**
    * ذخیرهٔ پیش‌نویس روی سرور — W1.8.
@@ -454,7 +458,7 @@ function Form() {
     catch (e) { setErr(e.message); }
   };
 
-  if (err && !d) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
+  if (err && !d) return <Shell brand={fallback?.brand}><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
   if (!d) return <Shell><p className="ik-note">در حال بارگذاری…</p></Shell>;
 
   const done = d.status === 'approved';

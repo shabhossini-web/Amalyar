@@ -12,7 +12,7 @@ import { AvailabilityService } from './availability.service';
 import { OP_LABELS } from './labels';
 import { OTHER_PX, procedureLabel } from './visit-coding';
 import { visitTitleOf } from './visit-title';
-import { DEFAULT_VERTICAL, isVertical } from '../config/verticals';
+import { publicFaceOf } from './public-face';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — لینکِ **دائمیِ** `/p/<token>`.
@@ -51,30 +51,9 @@ export class PortalService {
     return `https://${this.tenant.require().hostname}/p/${token}`;
   }
 
-  /**
-   * **«این صفحه مالِ کدام مطب است»** — تک‌منبعِ هویتِ شرکت روی صفحه‌های بی‌احرازِ بیمار
-   * (ثبت‌نام، فرم، پرونده، و صفحهٔ خطای هر کدام).
-   *
-   * ⚠️ فقط همان پنج فیلدی که پرونده و خلاصه از قبل بیرون می‌دادند (نام، لوگو، رنگ، تلفن،
-   * نشانی) — نه `settings.brand()`ِ کامل که شناسهٔ ملی و کدِ اقتصادیِ فاکتورِ رسمی را هم
-   * دارد. لینکِ این صفحه‌ها در پیامک و بیوی اینستاگرام می‌رود.
-   *
-   * `vertical` برای تم است: صفحه‌های بیمار بیرونِ `ConfigProvider` رندر می‌شوند (دیگر
-   * `/config`ِ پشتِ احراز را صدا نمی‌زنند) و پیش‌فرضِ «مطب روشن، بقیه تیره» را از همین
-   * می‌گیرند — تا دیروز بیمارِ مطب صفحهٔ تیرهٔ بنفشِ پیش‌فرض را می‌دید و کارکنان روشن.
-   */
-  async publicFace() {
-    const [brand, row] = await Promise.all([
-      this.settings.brand(),
-      this.prisma.setting.findUnique({ where: { key: 'vertical' }, select: { value: true } }),
-    ]);
-    return {
-      brand: {
-        name: brand.name, phone: brand.phone, address: brand.address, color: brand.color,
-        logo: (brand as any).logo ?? null,
-      },
-      vertical: isVertical(row?.value) ? row!.value : DEFAULT_VERTICAL,
-    };
+  /** هویتِ عمومیِ شرکت (نام، لوگو، رنگ، تلفن، نشانی + حوزه) — تعریف و دلیلش در `public-face.ts`. */
+  publicFace() {
+    return publicFaceOf(this.settings, this.prisma);
   }
 
   async link(patientId: number) {

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import './visit-summary.css';
 import { adoptFace } from '../lib/public-face.js';
+import { useFallbackFace } from './PublicBits.jsx';
 
 /**
  * خلاصهٔ ویزیت — سندی که به دستِ بیمار می‌رسد (`/v/<token>`، عمومی).
@@ -20,10 +21,12 @@ export default function VisitSummary() {
   useEffect(() => { document.title = 'خلاصهٔ ویزیت'; }, []);
   useEffect(() => {
     api(`/public/visit-summary/${token}`, { auth: false })
-      /* سند رنگِ کاغذ دارد و تم نمی‌گیرد؛ هویت فقط برای صفحهٔ خطای بعدی (تلفنِ مطب) نگه داشته می‌شود. */
-      .then((d) => { adoptFace({ brand: d?.brand }); setData(d); })
+      /* خودِ سند رنگِ کاغذ دارد و از تم نمی‌گیرد (`visit-summary.css`)؛ تم و رنگِ مطب برای قابِ
+         صفحه و صفحهٔ خطاست — این صفحه `/config` نمی‌خوانَد (بیرونِ Providerها). */
+      .then((d) => { adoptFace(d); setData(d); })
       .catch((e) => setErr(e.message));
   }, [token]);
+  useFallbackFace(!!err);
 
   if (err) return <div className="vs-err">{err}</div>;
   if (!data) return <div className="vs-err quiet">در حال بارگذاری…</div>;

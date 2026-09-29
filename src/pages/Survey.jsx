@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
+import { fetchFace } from '../lib/public-face.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import { CheckCircle, Alert } from '../ui/icons.jsx';
 import '../app/definitions.css';
@@ -28,6 +29,9 @@ export default function Survey() {
   const [err, setErr] = useState('');
 
   useEffect(() => { document.title = 'نظرسنجی'; }, []);
+  /* تم و رنگِ مطب (بازبینیِ UX، بندِ ۹۴): پاسخِ نظرسنجی عمداً جز سؤال‌ها چیزی ندارد، پس هویت از
+     مسیرِ عمومیِ جدا می‌آید — هم‌زمان با خودِ سؤال‌ها، نه پشتِ سرشان. */
+  useEffect(() => { fetchFace(); }, []);
   useEffect(() => {
     api(`/public/survey/${token}`, { auth: false })
       .then(setView)

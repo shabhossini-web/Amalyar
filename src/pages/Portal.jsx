@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import './portal.css';
 import { ChevronEnd } from '../ui/icons.jsx';
 import { adoptFace } from '../lib/public-face.js';
+import { useFallbackFace } from './PublicBits.jsx';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — `/p/<token>`، عمومی و دائمی.
@@ -59,6 +60,8 @@ export default function Portal() {
       })
       .catch((e) => setErr(e.message));
   }, [token]);
+  /* پرونده باز نشد ← تم و هویتِ مطب از مسیرِ عمومیِ جدا. */
+  useFallbackFace(!!err);
 
   if (err) return <div className="po-err">{err}</div>;
   if (!data) return <div className="po-err quiet">در حال بارگذاری…</div>;
