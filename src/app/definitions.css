@@ -81,8 +81,10 @@
 .df-empty { padding: 34px; text-align: center; color: var(--text3); font-size: 13px; }
 
 /* ── فرم ── */
+/* z-index همان ۶۰ِ نوارِ پوسته (`.sh-bar`) و پنجره‌های داشبورد: پوشش بعد از نوار در DOM
+   می‌آید پس رویش می‌نشیند — با ۴۰ سرِ شیت و دکمهٔ بستنش زیرِ نوارِ بالا می‌ماند. */
 .df-overlay {
-  position: fixed; inset: 0; z-index: 40; padding: 16px; overflow: auto;
+  position: fixed; inset: 0; z-index: 60; padding: 16px; overflow: auto;
   background: rgba(var(--surface-rgb), .76); backdrop-filter: blur(6px);
   display: grid; place-items: start center;
 }
