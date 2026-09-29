@@ -10,6 +10,7 @@ import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import ErrorBoundary from './app/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './app/auth.jsx';
 import { ConfigProvider } from './app/config.jsx';
+import { hostKind } from './lib/host-mode.js';
 const Landing = lazy(() => import('./pages/Landing.jsx'));
 const TenantSite = lazy(() => import('./pages/TenantLanding.jsx').then((m) => ({ default: m.TenantSite })));
 const Intake = lazy(() => import('./pages/Intake.jsx'));
@@ -55,17 +56,11 @@ const PlatformAdmin = lazy(() => import('./app/PlatformAdmin.jsx'));
 /* دکمه‌های سه‌بعدی + کفِ تاچ‌تارگت — سراسری، بعد از CSSهای صفحه‌ها تا برنده شود. */
 import './ui/press.css';
 
-const MARKETING_HOSTS = new Set(['amalyar.com', 'www.amalyar.com', 'localhost', '127.0.0.1']);
-const PLATFORM_HOSTS = new Set((import.meta.env.VITE_PLATFORM_HOSTS || 'admin-staging.amalyar.com').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
-
+/* نوعِ میزبان یک تعریف دارد (`lib/host-mode.js`) — صفحهٔ ورود هم «بازگشت به سایت» را از همان می‌فهمد. */
 function TenantAwareRoot() {
-  const hostname = typeof window === 'undefined' ? '' : window.location.hostname.toLowerCase();
-  if (PLATFORM_HOSTS.has(hostname)) return <Navigate to="/platform-admin" replace />;
-  const forced = import.meta.env.VITE_TENANT_UI;
-  const tenantMode =
-    forced === 'true' ||
-    (forced !== 'false' && typeof window !== 'undefined' && !MARKETING_HOSTS.has(window.location.hostname));
-  if (!tenantMode) return <Landing />;
+  const kind = hostKind();
+  if (kind === 'platform') return <Navigate to="/platform-admin" replace />;
+  if (kind === 'marketing') return <Landing />;
   /* ریشهٔ دامنهٔ شرکت: اگر سایتِ معرفی روشن باشد همان را نشان بده، وگرنه —
      مثلِ همیشه — فرمِ ورود. تصمیم با سرور است (`/public/site`)، نه با کلاینت. */
   return <TenantSite fallback={<Navigate to="/login" replace />} />;

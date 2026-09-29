@@ -9,8 +9,9 @@ import PasswordInput from './PasswordInput.jsx';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import './login.css';
-import { Clock, Fingerprint, Info } from '../ui/icons.jsx';
+import { Back, Check, Clock, Fingerprint, Info } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import { hostKind } from '../lib/host-mode.js';
 
 const toEnDigits = (s) =>
   (s || '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
@@ -51,6 +52,19 @@ export default function Login() {
   useEffect(() => {
     document.title = 'عمل‌یار — ورود';
   }, []);
+
+  /* سایتِ معرفیِ همین شرکت — منتشر شده؟ (بی‌احراز؛ شکست یعنی «نیست»). ⚠️ «بازگشت به سایت» فقط وقتی
+     ریشهٔ دامنه جای دیگری جز همین صفحه است (بازبینیِ UX، بندِ ۱۱۱): روی دامنهٔ مطبی که سایتش منتشر
+     نشده، `/` خودِ ورود است و پیوند کاربر را در یک دورِ بسته نگه می‌داشت. */
+  const kind = hostKind();
+  const [site, setSite] = useState(null);
+  useEffect(() => {
+    if (kind === 'platform') return undefined;
+    let alive = true;
+    api('/public/site', { quiet401: true }).then((s) => { if (alive) setSite(s); }).catch(() => {});
+    return () => { alive = false; };
+  }, [kind]);
+  const backToSite = kind === 'marketing' || (kind === 'tenant' && !!site?.enabled);
 
   useEffect(() => {
     if (adding) return; // در حالتِ افزودن، کاربرِ واردشده نباید ریدایرکت شود
@@ -325,14 +339,18 @@ export default function Login() {
               {busy ? '…' : 'تأییدِ کد'}
             </button>
             <button type="button" className="lg-link" disabled={busy}
-              onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>← اصلاحِ شماره / ارسالِ دوباره</button>
+              onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>
+              <Back width="15" height="15" aria-hidden="true" /> اصلاحِ شماره / ارسالِ دوباره
+            </button>
           </form>
         )}
 
         {/* ── ثبت‌نام: مرحلهٔ پروفایل + سلفی ── */}
         {tab === 'signup' && step === 'form' && (
           <form onSubmit={doSignup} className="lg-form">
-            <div className="lg-verified">شمارهٔ {phone} تأیید شد ✓</div>
+            <div className="lg-verified">
+              <Check width="15" height="15" aria-hidden="true" /> شمارهٔ <bdi dir="ltr">{phone}</bdi> تأیید شد
+            </div>
             <div className="lg-row2">
               {field('نام', <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />)}
               {field('نام خانوادگی', <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required />)}
@@ -366,7 +384,7 @@ export default function Login() {
         {step !== 'done' && (
           adding
             ? <button type="button" className="lg-back" style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }} onClick={() => navigate('/app')}>انصراف و بازگشت به سامانه</button>
-            : <a className="lg-back" href="/">بازگشت به سایت</a>
+            : backToSite && <a className="lg-back" href="/">بازگشت به سایت</a>
         )}
       </div>
     </div>
