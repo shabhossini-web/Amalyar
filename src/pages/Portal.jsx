@@ -66,15 +66,22 @@ export default function Portal() {
   if (err) return <div className="po-err">{err}</div>;
   if (!data) return <div className="po-err quiet">در حال بارگذاری…</div>;
 
-  const VisitRow = (v) => (
-    <a key={v.code} className="po-row" href={v.summaryUrl} target="_blank" rel="noopener noreferrer">
-      <div className="po-row-main">
-        <b>{v.kindTitle ?? 'مراجعه'}</b>
-        <small>{[v.dateFa, v.doctorName, v.procedure ?? v.topicName].filter(Boolean).join(' · ')}</small>
-      </div>
-      <span className={`po-tag s-${v.status}`}>{v.statusFa ?? v.status}</span>
-    </a>
-  );
+  /* ⚠️ فقط مراجعهٔ **انجام‌شده** خلاصه دارد (سرور `summaryUrl` را برای بقیه تهی می‌فرستد): تا دیروز
+     لمسِ نوبتِ فردا «خلاصهٔ ویزیت»ِ کاری را باز می‌کرد که هنوز انجام نشده (بازبینیِ UX، بندِ ۱۰۰). */
+  const VisitRow = (v) => {
+    const body = (
+      <>
+        <div className="po-row-main">
+          <b>{v.kindTitle ?? 'مراجعه'}</b>
+          <small>{[v.dateFa, v.doctorName, v.procedure ?? v.topicName].filter(Boolean).join(' · ')}</small>
+        </div>
+        <span className={`po-tag s-${v.status}`}>{v.statusFa ?? v.status}</span>
+      </>
+    );
+    return v.summaryUrl
+      ? <a key={v.code} className="po-row" href={v.summaryUrl} target="_blank" rel="noopener noreferrer">{body}</a>
+      : <div key={v.code} className="po-row po-row-plain">{body}</div>;
+  };
 
   return (
     <div className="po">
@@ -126,10 +133,18 @@ export default function Portal() {
           {/* یک مرحله = یک کارت (DECISIONS.md #۵): وقتی نوبتِ قطعی برای همان
               «ویزیتِ بعدی» گرفته شده، سرور یک ردیفِ `booked` می‌دهد و توصیهٔ
               پزشک زیرش توضیح می‌شود — نه دو ردیفِ رقیب با دو تاریخ. */}
+          {/* «کِی بیایم؟» اولین سؤالِ بیمار است: روزِ هفته + تاریخ + ساعت درشت، بعد پزشک و «کجا»
+              (بازبینیِ UX، بندِ ۱۰۰). پاسخِ سرورِ قدیمی (فقط `dateFa`) هم همان کارت را می‌سازد. */}
           {data.upcoming.map((u, i) => (
             <div key={i} className={`po-row po-up${u.booked ? ' booked' : ''}`}>
               <div className="po-row-main">
-                <b>{u.label}: {u.dateFa}</b>
+                <b>{u.label}</b>
+                <span className="po-when">
+                  {u.whenFa ?? u.dateFa}
+                  {u.timeFa && <>، ساعتِ <bdi dir="ltr">{u.timeFa}</bdi></>}
+                </span>
+                {u.doctorName && <small>پزشک: {u.doctorName}</small>}
+                {(u.place || u.address) && <small>{[u.place, u.address].filter(Boolean).join(' — ')}</small>}
                 {u.detail && <small>{u.detail}</small>}
               </div>
             </div>

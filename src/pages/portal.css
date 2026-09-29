@@ -60,6 +60,9 @@
 .po-row-main small { display: block; margin-top: 3px; font-size: 11.5px; color: var(--text2); }
 .po-up { border-color: rgba(52, 211, 153, .38); background: rgba(52, 211, 153, .07); }
 .po-up b { color: var(--green-text); }
+/* «کِی» درشت‌تر از بقیهٔ کارت — همان سؤالی که بیمار برایش آمده (بازبینیِ UX، بندِ ۱۰۰). */
+.po-when { display: block; margin-top: 3px; font-size: 15px; font-weight: 800; color: var(--text1); }
+.po-when bdi { font-variant-numeric: tabular-nums; }
 
 .po-tag {
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;

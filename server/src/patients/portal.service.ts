@@ -11,8 +11,13 @@ import { renderSms } from '../common/sms-template';
 import { AvailabilityService } from './availability.service';
 import { OP_LABELS } from './labels';
 import { OTHER_PX, procedureLabel } from './visit-coding';
-import { visitTitleOf } from './visit-title';
+import { serviceTitleOf, visitTitleOf } from './visit-title';
+import { faClock, faDayLong, visitClock } from './fa-when';
+import { clinicTodayIso, dayUtc } from '../common/clinic-day';
 import { publicFaceOf } from './public-face';
+
+/** روزِ تقویمیِ مطبِ یک لحظه — `YYYY-MM-DD`. */
+const clinicDayOf = (d: Date) => clinicTodayIso(d);
 
 /**
  * پروندهٔ الکترونیکِ بیمار — لینکِ **دائمیِ** `/p/<token>`.
@@ -140,6 +145,10 @@ export class PortalService {
           procedureType: { select: { name: true } },
           otherProcedures: OTHER_PX,
           topic: { select: { name: true } },
+          /* برای «کِی و کجا بیایم» در کارتِ پیشِ‌رو (بازبینیِ UX، بندِ ۱۰۰). */
+          opStartTime: true, hospitalName: true,
+          hospital: { select: { name: true, address: true } },
+          appointment: { select: { startMin: true } },
         },
       }),
       this.prisma.formDef.findMany({ where: { scope: 'visit' }, select: { visitKind: true, title: true } }),
@@ -149,7 +158,7 @@ export class PortalService {
         /* `forVisitId` (از W1.5) تنها چیزی است که می‌گوید این نوبت **برای کدام
            مراجعه** گرفته شده — بدونِ آن ادغامِ «تاریخِ توصیه‌شده + نوبتِ قطعی»
            حدس می‌شد و دو نوبتِ مستقل را هم روی هم می‌انداخت. */
-        select: { date: true, startMin: true, status: true, forVisitId: true, topic: { select: { name: true } } },
+        select: { date: true, startMin: true, status: true, forVisitId: true, visitId: true, topic: { select: { name: true } } },
       }),
       this.prisma.reminder.findMany({
         where: { patientId: p.id, status: { in: ['sent', 'pending'] } },
@@ -187,24 +196,46 @@ export class PortalService {
     }
 
     const titles = new Map(kindDefs.filter((d) => d.visitKind).map((d) => [d.visitKind!, d.title] as const));
+
+    /* ── آینده یا گذشته (بازبینیِ UX، بندِ ۱۰۰) ─────────────────────────────
+       مراجعهٔ «در انتظار» با تاریخِ امروز (به وقتِ مطب) یا بعد، **برنامهٔ پیشِ‌رو**ست نه تاریخچه: تا
+       دیروز فقط در «مراجعات» کنارِ گذشته‌ها می‌آمد، تبِ «پیشِ‌رو» می‌گفت «برنامه‌ای ثبت نشده» و
+       لمسش «خلاصهٔ ویزیت»ِ کاری را باز می‌کرد که هنوز انجام نشده. */
+    const todayStart = dayUtc(clinicTodayIso()).getTime();
+    const isAhead = (v: (typeof visits)[number]) => v.opStatus === 'pending' && !!v.opDate && v.opDate.getTime() >= todayStart;
+
+    /**
+     * نامِ مراجعه **برای بیمار** (بازبینیِ UX، بندِ ۱۱۳): موضوعِ نوبت («ویزیتِ اولیه»)، نامِ خدمت
+     * («نورومانیتورینگ»)، یا نامِ نوع بی‌پیشوندِ «فرمِ» («فرمِ ویزیت» ← «ویزیت»). «فرمِ ویزیت» اصطلاحِ
+     * کارکنان است — بیمار فرمی ندارد، نوبت دارد.
+     */
+    const patientTitle = (v: (typeof visits)[number]) => {
+      const t = visitTitleOf(v, v.kind ? titles.get(v.kind) : null);
+      return v.topic?.name ?? serviceTitleOf(v) ?? (t ? t.replace(/^فرمِ?\s*/, '') || t : null) ?? 'مراجعه';
+    };
+    const doctorOf = (v: (typeof visits)[number]) => (v.surgeon?.person
+      ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim()
+      : v.surgeonName);
+
     const shape = (v: (typeof visits)[number]) => ({
       code: `${p.code}-V${v.seq}`,
       kind: v.kind,
-      kindTitle: visitTitleOf(v, v.kind ? titles.get(v.kind) : null),
+      kindTitle: patientTitle(v),
       dateFa: v.opDate ? faDateStr(v.opDate) : null,
       status: v.opStatus,
       /* ⚠️ برچسب از سرور می‌آید و نه از نگاشتِ خودِ پرتال: پرتالِ بیمار
          احراز ندارد و `/config` را نمی‌خواند، پس تنها راهِ «یک وضعیت، یک
          برچسب» همین است. نسخهٔ قبلیِ کلاینت `cancelled` را «لغو شد»
-         می‌نوشت و کارکنان «لغو» می‌دیدند. */
-      statusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
-      doctorName: v.surgeon?.person
-        ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim()
-        : v.surgeonName,
+         می‌نوشت و کارکنان «لغو» می‌دیدند.
+         تنها استثنا مراجعهٔ **آینده**ٔ در انتظار است: «در انتظار» برای بیمار بی‌معناست (در انتظارِ چه؟)؛
+         برای او «نوبتِ پیشِ‌رو» است (بندِ ۱۱۳). */
+      statusFa: isAhead(v) ? 'نوبتِ پیشِ‌رو' : OP_LABELS[v.opStatus] ?? v.opStatus,
+      doctorName: doctorOf(v),
       /* بستهٔ ۷ج: سندِ بیمار عملِ دوم را جا نمی‌اندازد — برچسبِ همه، اصلی اول. */
       procedure: procedureLabel(v),
       topicName: v.topic?.name ?? null,
-      summaryUrl: `/v/${v.summaryToken}`,
+      /* خلاصه **فقط برای مراجعهٔ انجام‌شده** — سندِ کاری که هنوز انجام نشده یا لغو شده، سند نیست. */
+      summaryUrl: v.opStatus === 'done' ? `/v/${v.summaryToken}` : null,
     });
 
     const now = Date.now();
@@ -287,36 +318,72 @@ export class PortalService {
       a.startMin != null ? `ساعتِ ${AvailabilityService.minToHHMM(a.startMin)}` : null,
     ].filter(Boolean).join(' — ') || null;
 
+    /* مراجعه‌های آینده — هر کدام یک کارت با «کِی، ساعت، پزشک، کجا». */
+    const aheadVisits = visits.filter(isAhead);
+    const aheadDays = new Set(aheadVisits.map((v) => clinicDayOf(v.opDate!)));
+    const aheadIds = new Set(aheadVisits.map((v) => v.id));
+    const visitCards = aheadVisits.map((v) => {
+      const clock = visitClock(v);
+      const place = v.hospital?.name ?? v.hospitalName ?? null;
+      return {
+        kind: 'visit',
+        code: `${p.code}-V${v.seq}`,
+        at: v.opDate!.toISOString(),
+        dateFa: faDateStr(v.opDate!),
+        whenFa: faDayLong(v.opDate!),
+        timeFa: clock ? faClock(clock) : null,
+        label: patientTitle(v),
+        doctorName: doctorOf(v),
+        /* «کجا»: بیمارستانِ عمل، وگرنه خودِ مطب (نشانیِ مطب از `brand`). */
+        place: place ?? face.brand.name ?? null,
+        address: v.hospital?.address ?? (place ? null : face.brand.address ?? null),
+        detail: v.kind === 'surgery' ? procedureLabel(v) : null,
+        booked: true,
+      };
+    });
+
     const upcoming = [
+      ...visitCards,
       ...visits
-        .filter((v) => v.nextVisitDate && v.nextVisitDate.getTime() >= now - 24 * 3600_000)
+        /* توصیهٔ «ویزیتِ بعدی» روی همان روزی که مراجعه‌اش از قبل ثبت شده، کارتِ دوم نمی‌سازد
+           (DECISIONS.md #۵ — یک مرحله = یک کارت). */
+        .filter((v) => v.nextVisitDate && v.nextVisitDate.getTime() >= now - 24 * 3600_000 && !aheadDays.has(clinicDayOf(v.nextVisitDate)))
         .map((v) => {
           const a = bookedFor.get(v.id);
           if (!a) {
             return {
-              kind: 'next_visit', dateFa: faDateStr(v.nextVisitDate!), label: 'ویزیتِ بعدی',
-              detail: `پیروِ مراجعهٔ ${p.code}-V${v.seq}`, booked: false,
+              kind: 'next_visit', at: v.nextVisitDate!.toISOString(), dateFa: faDateStr(v.nextVisitDate!),
+              whenFa: faDayLong(v.nextVisitDate!), timeFa: null, label: 'ویزیتِ بعدی',
+              detail: `پیروِ مراجعهٔ ${p.code}-V${v.seq} — روز و ساعتِ دقیق را مطب هماهنگ می‌کند`, booked: false,
             };
           }
           /* ادغام‌شده: تاریخِ **قطعی** حرفِ آخر است و توصیه زیرش توضیح می‌شود. */
           return {
             kind: 'next_visit_booked',
+            at: a.date.toISOString(),
             dateFa: faDateStr(a.date),
+            whenFa: faDayLong(a.date),
+            timeFa: a.startMin != null ? faClock(AvailabilityService.minToHHMM(a.startMin)) : null,
             label: a.status === 'confirmed' ? 'نوبتِ قطعیِ ویزیتِ بعدی' : 'نوبتِ رزروشدهٔ ویزیتِ بعدی',
             detail: [apptDetail(a), `توصیهٔ پزشک: ${faDateStr(v.nextVisitDate!)}`].filter(Boolean).join(' · '),
             booked: true,
           };
         }),
       ...appointments
+        /* نوبتی که مراجعه‌اش همین حالا کارتِ «پیشِ‌رو» دارد تکرار نمی‌شود. */
+        .filter((a) => !(a.visitId != null && aheadIds.has(a.visitId)))
         .filter((a) => a.forVisitId == null || !visits.some((v) => v.id === a.forVisitId && v.nextVisitDate))
         .map((a) => ({
           kind: 'appointment',
+          at: a.date.toISOString(),
           dateFa: faDateStr(a.date),
+          whenFa: faDayLong(a.date),
+          timeFa: a.startMin != null ? faClock(AvailabilityService.minToHHMM(a.startMin)) : null,
           label: a.status === 'confirmed' ? 'نوبتِ قطعی' : 'نوبتِ رزروشده',
           detail: apptDetail(a),
           booked: true,
         })),
-    ];
+    ].sort((x, y) => x.at.localeCompare(y.at));
 
     return {
       /* رنگ و حوزه هم می‌روند: صفحه بیرونِ `ConfigProvider` است و تم/رنگِ مطب را از همین می‌گیرد. */
@@ -325,7 +392,8 @@ export class PortalService {
       patient: { fullName: `${p.firstName} ${p.lastName}`.trim(), code: p.code },
       tasks,
       upcoming,
-      visits: visits.map(shape),
+      /* «مراجعات» = تاریخچه؛ آینده‌ها در «پیشِ‌رو»اند. «عمل‌ها» نمای دسته‌ای است و همه را دارد. */
+      visits: visits.filter((v) => !isAhead(v)).map(shape),
       surgeries: visits.filter((v) => v.kind === 'surgery').map(shape),
       notices: notices.map((n) => ({
         kind: n.kind,

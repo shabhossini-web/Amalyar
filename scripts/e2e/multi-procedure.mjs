@@ -284,7 +284,8 @@ try {
   ok('تقویم: `procedureName` = «P1 + P2»', calRow?.procedureName === LABEL, JSON.stringify(calRow?.procedureName));
   const link = (await send(`/patients/${VM.patientId}/portal-link`, 'POST')).json;
   const portal = (await send(`/public/portal/${link?.token}`, 'GET', undefined, false)).json;
-  const pRow = (portal?.visits ?? []).find((v) => v.code === VM.code);
+  /* VM آینده است: در «مراجعات» (تاریخچه) نیست ولی «عمل‌ها» همهٔ جراحی‌ها را دارد (بازبینیِ UX، بندِ ۱۰۰). */
+  const pRow = [...(portal?.visits ?? []), ...(portal?.surgeries ?? [])].find((v) => v.code === VM.code);
   ok('پرتالِ بیمار: `procedure` = «P1 + P2» (سندِ بیمار عملِ دوم را جا نمی‌اندازد)', pRow?.procedure === LABEL, JSON.stringify(pRow?.procedure));
   const rP = await mkVisit({ ...surgery(`گذشته${tag}`, { procedureTypeId: P1.id, otherProcedureTypeIds: [P2.id] }), opDate: at8(-20) });
   const VP = rP.json;
