@@ -250,12 +250,24 @@ export class AppointmentsService {
    * کسِ دیگر.
    */
   async walkIn(
-    dto: { patientId: number; date: string; startMin?: number; topicId?: number; note?: string },
+    dto: { patientId: number; date: string; startMin?: number; topicId?: number; note?: string; visitId?: number },
     user: any,
     opts: { desk?: boolean } = {},
   ) {
     const patient = await this.prisma.patient.findUnique({ where: { id: dto.patientId }, select: { id: true } });
     if (!patient) throw new NotFoundException('پرونده پیدا نشد');
+    /* پرونده‌ای که همین حالا از «ساختِ پروندهٔ تازه»ِ میزِ پذیرش ساخته شد، با مراجعهٔ امروزش می‌آید
+       (بازبینیِ UX، clinic-daily-07): نوبتِ حضوری **هدفِ** همان مراجعه می‌شود (`forVisitId`)، تا
+       «شروعِ ویزیت» همان را باز کند و مراجعهٔ دوم نسازد. */
+    if (dto.visitId != null) {
+      const target = await this.prisma.visit.findUnique({ where: { id: dto.visitId }, select: { patientId: true, opStatus: true } });
+      if (!target || target.patientId !== dto.patientId) throw new BadRequestException('این مراجعه به پروندهٔ این بیمار تعلق ندارد');
+      if (target.opStatus === 'cancelled') throw new BadRequestException('این مراجعه لغو شده است');
+      const taken = await this.prisma.appointment.findFirst({
+        where: { OR: [{ visitId: dto.visitId }, { forVisitId: dto.visitId }], status: { not: 'cancelled' } }, select: { id: true },
+      });
+      if (taken) throw new BadRequestException('این مراجعه از قبل نوبت دارد');
+    }
     const d = new Date(`${dto.date}T00:00:00.000Z`);
     if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخ نامعتبر است');
 
@@ -287,7 +299,7 @@ export class AppointmentsService {
         const appt = await tx.appointment.create({
           data: {
             patientId: dto.patientId,
-            forVisitId: await this.patients.appointmentTarget(tx, dto.patientId, d),
+            forVisitId: dto.visitId ?? await this.patients.appointmentTarget(tx, dto.patientId, d),
             topicId: dto.topicId ?? null,
             date: d,
             startMin: wantsSlot ? dto.startMin ?? null : null,

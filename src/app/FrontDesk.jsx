@@ -5,6 +5,7 @@ import { fmtMoney } from '../lib/money.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useTerms } from './config.jsx';
+import { useAllowedTools } from './tools.jsx';
 import { useVisitDefs } from './visit-defs.js';
 import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
 import JDate from './JDate.jsx';
@@ -50,6 +51,10 @@ export default function FrontDesk() {
      جستجوی باز فراموش می‌کند سه نفر دیگر هم منتظرند. */
   const [q, setQ] = useState('');
   const [walkIn, setWalkIn] = useState(false);
+  /* ساختِ پرونده = ثبتِ مراجعه (فرمِ «بیماران»)، پس فقط برای کسی که آن ماژول را دارد — تصمیم از
+     سرور (`/features`)، همان الگوی میزِ پزشک؛ سرور به‌هرحال خودش می‌سنجد. */
+  const { hero } = useAllowedTools();
+  const canCreate = hero?.key === 'dashboard';
 
   /* تنبل: تا شیت باز نشود، شش fetchِ تعریف‌ها نمی‌رود. */
   const { defs, reload: reloadDefs } = useVisitDefs(!!sheet, user?.id);
@@ -269,13 +274,25 @@ export default function FrontDesk() {
         {sheet && (
           <VisitForm
             key={sheet.visit?.id ?? 'new-surgery'}
-            initial={sheet.visit}
+            initial={sheet.visit ?? sheet.initial}
             prefill={sheet.prefill}
             defs={defs}
             onDefsChanged={reloadDefs}
             onClose={() => setSheet(null)}
-            onSaved={(saved, wasEdit, opts) => {
+            onSaved={async (saved, wasEdit, opts) => {
+              const admit = sheet.admit;
               setSheet(null);
+              /* «ساختِ پروندهٔ تازه»ِ بیمارِ بدونِ نوبت: پرونده و مراجعهٔ امروزش ساخته شد؛ حالا خودِ
+                 پذیرش — نوبتِ حضوریِ **هدفِ همان مراجعه**، تا روی تخته دیده شود و «شروعِ ویزیت»
+                 مراجعهٔ دوم نسازد (clinic-daily-07). */
+              if (admit && !wasEdit && saved?.id && saved?.patientId) {
+                try {
+                  const r = await api('/frontdesk/walk-in', { method: 'POST', body: { patientId: saved.patientId, date: iso, visitId: saved.id } });
+                  setToast(`پروندهٔ ${saved.fullName ?? 'بیمار'} ساخته و پذیرش شد ✓${r?.beyondCapacity ? ' — بیش از ظرفیتِ امروز' : ''}`);
+                } catch (e) { setToast(`پرونده ساخته شد ولی پذیرش نشد: ${e?.message || 'خطا'} — از «بیمارِ بدونِ نوبت» دوباره بپذیرید`); }
+                after();
+                return;
+              }
               after();
               /* «کاندیدای جراحی» — همان قولِ فرم در داشبورد و پرونده (بازبینیِ ۱۴۰۵/۰۷/۰۳):
                  تا دیروز میزِ پذیرش `openSurgery` را نادیده می‌گرفت و عمل به ویزیتِ تصمیم گره نمی‌خورد. */
@@ -293,6 +310,11 @@ export default function FrontDesk() {
         {walkIn && (
           <WalkInSheet
             date={iso}
+            canCreate={canCreate}
+            onCreate={(typed) => {
+              setWalkIn(false);
+              setSheet({ initial: seedFromQuery(typed), prefill: { opDateJ: todayJStr() }, admit: true });
+            }}
             onClose={() => setWalkIn(false)}
             onDone={(msg) => { setWalkIn(false); setToast(msg); after(); }}
           />
@@ -323,17 +345,32 @@ export default function FrontDesk() {
 }
 
 /**
+ * نام/شمارهٔ تایپ‌شده در جستجو ← پیش‌پرِ فرمِ ثبتِ بیمار. شمارهٔ موبایل شماره است، کدِ پرونده
+ * چیزی برای پیش‌پر ندارد، و بقیه نام است (اولین کلمه نام، بقیه نامِ خانوادگی).
+ */
+function seedFromQuery(raw) {
+  const s = toEnDigits(String(raw ?? '').trim());
+  const digits = s.replace(/[\s-]/g, '');
+  if (/^0?9\d{9}$/.test(digits)) return { phone: digits.startsWith('0') ? digits : `0${digits}` };
+  if (/^[a-z]{2}-?\d/i.test(s) || /^\d+$/.test(digits)) return {};
+  const [first = '', ...rest] = String(raw).trim().split(/\s+/);
+  return { firstName: first, lastName: rest.join(' ') };
+}
+
+/**
  * **پذیرشِ بیمارِ بدونِ نوبت.**
  *
- * ⚠️ فقط بیمارِ **موجود** — پروندهٔ تازه از «پذیرش» ساخته می‌شود، نه از این
- * پنجره: ساختنِ پرونده کدِ ملی و تأییدِ شماره می‌خواهد و فشردنش در یک پنجرهٔ
- * سه‌فیلدی یعنی پرونده‌های نصفه که بعداً باید ادغام شوند.
+ * ⚠️ این پنجره پرونده **نمی‌سازد** — ساختنِ پرونده کدِ ملی و تأییدِ شماره می‌خواهد و فشردنش
+ * در یک پنجرهٔ سه‌فیلدی یعنی پرونده‌های نصفه که بعداً باید ادغام شوند. ولی بن‌بست هم نیست
+ * (بازبینیِ UX، clinic-daily-07): اگر پرونده پیدا نشد، «ساختِ پروندهٔ تازه» فرمِ کاملِ ثبت را با
+ * همان نام/شماره باز می‌کند و بعد از ذخیره خودِ پذیرش هم انجام می‌شود؛ کسی که اجازهٔ ساخت ندارد
+ * دقیق می‌خواند از چه کسی بخواهد.
  *
  * ⚠️ ظرفیت **نشان داده می‌شود ولی مانع نیست** (تصمیمِ مالک): اگر روز پر باشد،
  * پنجره می‌گوید و اجازه می‌دهد — قاضیِ «وقت هست یا نه» منشی است. رد فقط برای
  * دو چیز است که قضاوت نیستند: روزِ تعطیل، و اسلاتِ پرِ نام‌برده.
  */
-function WalkInSheet({ date, onClose, onDone }) {
+function WalkInSheet({ date, canCreate, onCreate, onClose, onDone }) {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState(null);
   const [picked, setPicked] = useState(null);
@@ -381,7 +418,21 @@ function WalkInSheet({ date, onClose, onDone }) {
             <input value={q} onChange={(ev) => setQ(ev.target.value)} autoFocus placeholder="دستِ‌کم دو حرف" />
           </label>
           {rows === null && <p className="fd-sheet-hint">برای یافتنِ پرونده بنویسید.</p>}
-          {rows?.length === 0 && <p className="fd-sheet-hint">پرونده‌ای پیدا نشد. پروندهٔ تازه از «پذیرش» ساخته می‌شود.</p>}
+          {rows?.length === 0 && (
+            <div className="fd-none" role="status">
+              <p className="fd-sheet-hint">پرونده‌ای با «{q.trim()}» پیدا نشد.</p>
+              {canCreate ? (
+                <button type="button" className="fd-btn primary fd-create" onClick={() => onCreate(q)}>
+                  <Plus width="15" height="15" aria-hidden="true" /> ساختِ پروندهٔ تازه
+                </button>
+              ) : (
+                <p className="fd-sheet-hint">
+                  ساختِ پروندهٔ تازه با کسی است که به «بیماران» دسترسی دارد (مثلاً مدیر)؛ از او بخواهید
+                  پرونده را بسازد، بعد همین‌جا جستجو و پذیرش کنید.
+                </p>
+              )}
+            </div>
+          )}
           {rows?.length > 0 && (
             <ul className="fd-found">
               {rows.map((r) => (
@@ -393,6 +444,11 @@ function WalkInSheet({ date, onClose, onDone }) {
                 </li>
               ))}
             </ul>
+          )}
+          {rows?.length > 0 && canCreate && (
+            <button type="button" className="fd-create-link" onClick={() => onCreate(q)}>
+              در فهرست نیست؟ ساختِ پروندهٔ تازه
+            </button>
           )}
         </>
       )}
@@ -412,7 +468,7 @@ function WalkInSheet({ date, onClose, onDone }) {
 
       {err && <p className="fd-sheet-err" role="alert">{err}</p>}
       <div className="fd-sheet-acts">
-        <button type="submit" className="fd-btn primary" disabled={!picked || busy}>{busy ? 'در حالِ ثبت…' : 'پذیرش'}</button>
+        <button type="submit" className="fd-btn primary" disabled={!picked || busy}>{busy ? 'در حالِ ثبت…' : 'پذیرشِ بیمار'}</button>
         <button type="button" className="fd-btn" onClick={onClose} disabled={busy}>انصراف</button>
       </div>
     </Overlay>

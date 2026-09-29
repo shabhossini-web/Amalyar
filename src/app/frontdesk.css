@@ -131,6 +131,15 @@
 }
 .fd-sheet-field input:focus { outline: none; border-color: var(--brand-2); }
 .fd-sheet-hint { margin: 0; font-size: 12px; color: var(--text3); }
+/* پرونده پیدا نشد — راهِ بعدی همین‌جاست، نه ارجاع به صفحه‌ای دیگر (clinic-daily-07). */
+.fd-none { display: grid; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(var(--brand-soft-rgb), .3); }
+.fd-none .fd-sheet-hint { line-height: 1.9; }
+.fd-btn.fd-create { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: auto; min-height: 44px; font-size: 13px; }
+.fd-create-link {
+  justify-self: start; min-height: 36px; padding: 0 4px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  color: var(--brand-text); background: none; border: none; text-decoration: underline; text-underline-offset: 3px;
+}
+.fd-create-link:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; border-radius: 6px; }
 .fd-sheet-err { margin: 0; font-size: 12.5px; color: var(--red-text); }
 
 .fd-found { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; max-height: 240px; overflow: auto; }
