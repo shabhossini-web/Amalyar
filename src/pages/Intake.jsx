@@ -5,7 +5,7 @@ import { api, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
-import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Info, Refresh, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Info, Pencil, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -291,6 +291,32 @@ function Resume({ token, onBack }) {
 
 /* ── گامِ ۲: اطلاعاتِ مراجعه + فیش ──────────────────────────────── */
 
+/**
+ * ردیف‌های کارتِ خلاصهٔ مرحلهٔ واریز — «برچسب: مقدار» از پاسخ‌های همین فرم (حداکثر شش ردیف).
+ * فقط نوع‌هایی که یک خطِ متن‌اند؛ عکس، پیوند و کادرِ پرداخت در خلاصه جا ندارند.
+ */
+const SUMMARY_TYPES = new Set(['text', 'textarea', 'number', 'money', 'phone', 'date', 'time', 'select', 'multiselect', undefined]);
+function summaryOf(d, vals, f) {
+  const fields = d.form?.fields ?? [];
+  if (!fields.length) {
+    return [['نوعِ عمل', f.procedure], ['نامِ جراح', f.surgeonName], ['بیمارستان', f.hospitalName], ['تاریخِ عمل', f.opDate]]
+      .filter(([, v]) => v);
+  }
+  const label = (fl, x) => (fl.options ?? []).find((o) => o?.v === x)?.l ?? String(x);
+  const rows = [];
+  for (const fl of fields) {
+    if (fl.active === false || !SUMMARY_TYPES.has(fl.type)) continue;
+    const v = vals[fl.key] ?? d.data?.[fl.key];
+    if (v == null || v === '' || (Array.isArray(v) && !v.length) || typeof v === 'object' && !Array.isArray(v)) continue;
+    let text = Array.isArray(v) ? v.map((x) => label(fl, x)).join('، ') : fl.type === 'select' ? label(fl, v) : String(v);
+    if (fl.type === 'money' || fl.type === 'number') text = faNum(toEnDigits(String(v)).replace(/[^0-9]/g, ''));
+    if (text.length > 60) text = `${text.slice(0, 58)}…`;
+    rows.push([fl.label, text]);
+    if (rows.length >= 6) break;
+  }
+  return rows;
+}
+
 /** شناسهٔ فیش‌های این ثبت‌نام — `receiptDocumentIds` (چندتایی) با سازگاریِ عقب‌روِ کلیدِ تکی. */
 const receiptsOf = (d) => {
   const ids = d?.data?.receiptDocumentIds;
@@ -338,6 +364,12 @@ function Form() {
   const [vErr, setVErr] = useState({});
   const [page, setPage] = useState(1);
   const [code, setCode] = useState('');
+  /* خطای کدِ تخفیف **زیرِ همان کادر**، جدا از خطای سراسریِ ته کارت (بازبینیِ UX، بندِ ۱۰۴): تا دیروز
+     ۷۰۰ پیکسل پایین‌تر می‌نشست و تا اقدامِ بعدی هم می‌ماند. */
+  const [codeErr, setCodeErr] = useState('');
+  /* مرحلهٔ واریز: فرمِ پرشده به یک کارتِ خلاصه تا می‌شود؛ «ویرایش» بازش می‌کند. */
+  const [editing, setEditing] = useState(false);
+  const payRef = useRef(null);
   /* بیمار همین حالا فیش می‌گذارد — تا خودش «تمام شد» نزده، کادرِ فیش سرِ جایش می‌ماند.
      ⚠️ مالک (۱۴۰۵/۰۷/۰۵): «بعد از انتخابِ اولین عکسِ واریز فرم خودبه‌خود به مرحلهٔ بعد می‌رود و
      اجازهٔ چند عکس نمی‌دهد». سرور با اولین فیش ثبت‌نام را به صفِ بررسی می‌فرستد (درست است: کارکنان
@@ -463,7 +495,17 @@ function Form() {
        سرور آن را سالِ ۱۴۰۵ **میلادی** می‌فهمید — و مراجعه بی‌سروصدا شش قرن
        عقب ثبت می‌شد. هیچ خطایی نمی‌داد؛ فقط از تقویم و گزارش‌ها غیب می‌شد. */
     const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '', values: vals, hospitalId: vals.hospitalId, rev: nextRev() };
-    try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body })); }
+    try {
+      const next = await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body });
+      setD(next);
+      setEditing(false);
+      /* ⚠️ بعد از «ثبت و مرحلهٔ بعد» صفحه همان‌جا می‌ماند و بخشِ واریز ته صفحه اضافه می‌شد — بیمار
+         نمی‌فهمید ثبت شد یا نه و ممکن بود دوباره «ثبت» بزند (بازبینیِ UX، بندِ ۱۰۴). */
+      if (next?.status === 'pending_payment') {
+        const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        requestAnimationFrame(() => payRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' }));
+      }
+    }
     catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
@@ -544,9 +586,9 @@ function Form() {
   };
 
   const applyCode = async () => {
-    setErr(''); setBusy(true);
+    setErr(''); setCodeErr(''); setBusy(true);
     try { setD(await api(`/public/intake/form/${token}/discount`, { auth: false, method: 'POST', body: { code: code.trim() } })); }
-    catch (e) { setErr(e.message); } finally { setBusy(false); }
+    catch (e) { setCodeErr(e.message); } finally { setBusy(false); }
   };
 
   /* ⚠️ خطا **پرتاب** می‌شود تا همان فایل در فهرستِ کادر قرمز شود؛ پیامِ
@@ -555,6 +597,7 @@ function Form() {
     /* پیش از ارسال: پاسخی که وضعیت را «در انتظارِ بررسی» می‌کند نباید کادر را زیرِ پای صفِ
        آپلودِ چندفایلی بردارد. */
     setAddingReceipts(true);
+    setCodeErr('');
     const fd = new FormData();
     fd.append('file', file);
     const next = await apiUpload(`/public/intake/form/${token}/receipt`, fd);
@@ -601,7 +644,9 @@ function Form() {
   /* کادرِ بیمارستان جدا از `DynForm` کشیده می‌شود (جست‌وجو با پیشنهاد)، ولی برچسب، ستاره و
      روشن/خاموشش همان فیلدِ فرم‌ساز است. */
   const hospitalField = d.form?.fields?.find((x) => x.key === 'hospitalName' && x.active !== false && (x.page ?? 1) === page);
-  const submitLabel = paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
+  const submitLabel = editing ? 'ذخیرهٔ تغییرات' : paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
+  /* انصرافِ ویرایش: پاسخ‌های ذخیره‌شده برمی‌گردند — خلاصه نباید تغییرِ ثبت‌نشده را «ثبت شد» نشان دهد. */
+  const cancelEdit = () => { setEditing(false); setVals({}); load(); };
 
   return (
     <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}
@@ -668,7 +713,24 @@ function Form() {
         <BookingPick token={token} booking={d.booking} disabled={busy} onBooked={setD} />
       )}
 
-      {(d.status === 'pending_fill' || d.status === 'pending_payment') && (
+      {/* ── مرحلهٔ واریز: فرمِ پرشده یک کارتِ خلاصه است، نه همان فرم و همان دکمهٔ «ثبت» (بندِ ۱۰۴) ── */}
+      {d.status === 'pending_payment' && !editing && (
+        <section className="ik-sum" aria-labelledby="ik-sum-h">
+          <div className="ik-sum-head">
+            <b id="ik-sum-h"><CheckCircle width="16" height="16" aria-hidden="true" /> اطلاعاتِ مراجعه ثبت شد</b>
+            <button type="button" className="ik-sum-edit" onClick={() => setEditing(true)} disabled={busy}>
+              <Pencil width="15" height="15" aria-hidden="true" /> ویرایش
+            </button>
+          </div>
+          {summaryOf(d, vals, f).length > 0 && (
+            <dl>
+              {summaryOf(d, vals, f).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+            </dl>
+          )}
+        </section>
+      )}
+
+      {(d.status === 'pending_fill' || (d.status === 'pending_payment' && editing)) && (
         d.form?.fields?.length ? (
           <>
             {d.form.hint && <p className="ik-hint">{d.form.hint}</p>}
@@ -723,6 +785,7 @@ function Form() {
                 </button>
               )}
             </div>
+            {editing && <button type="button" className="ik-linkbtn" onClick={cancelEdit} disabled={busy}>انصراف — بدونِ تغییر</button>}
           </>
         ) : (
           <>
@@ -740,12 +803,13 @@ function Form() {
             <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
               {busy ? 'در حال ذخیره…' : submitLabel}
             </button>
+            {editing && <button type="button" className="ik-linkbtn" onClick={cancelEdit} disabled={busy}>انصراف — بدونِ تغییر</button>}
           </>
         )
       )}
 
       {payOpen && (
-        <div className="ik-pay">
+        <div className="ik-pay" ref={payRef}>
           {/* ⚠️ ترتیب: **اول چقدر، بعد به کجا.** نسخهٔ اول شماره‌حساب‌ها را
               بالای مبلغ می‌گذاشت و بیمار پیش از دانستنِ عدد با فهرستِ کارت
               روبه‌رو می‌شد؛ و مبلغ زیرِ فهرست، خارج از دیدِ صفحه می‌افتاد.
@@ -759,10 +823,15 @@ function Form() {
           </p>
           {/* ⚠️ فقط کد فرستاده می‌شود؛ مبلغ را سرور حساب می‌کند. */}
           {!d.discountCode && (
-            <div className="ik-code">
-              <input value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} placeholder="کدِ تخفیف (اختیاری)" />
-              <button type="button" disabled={busy || code.trim().length < 3} onClick={applyCode}>اعمال</button>
-            </div>
+            <>
+              <div className="ik-code">
+                <input value={code} onChange={(e) => { setCode(e.target.value); setCodeErr(''); }} disabled={busy}
+                       placeholder="کدِ تخفیف (اختیاری)" aria-invalid={codeErr ? true : undefined}
+                       aria-describedby={codeErr ? 'ik-code-err' : undefined} />
+                <button type="button" disabled={busy || code.trim().length < 3} onClick={applyCode}>اعمال</button>
+              </div>
+              {codeErr && <p id="ik-code-err" className="ik-bad ik-code-err" role="alert"><Alert width="15" height="15" /> <span>{codeErr}</span></p>}
+            </>
           )}
           {/* توضیحِ شرکت دربارهٔ واریز — یک متن برای همهٔ لینک‌ها (تنظیمات → پذیرشِ آنلاین). */}
           {d.paymentNote && (

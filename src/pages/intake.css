@@ -402,3 +402,26 @@
 /* مهلتِ فرم — ریز ولی خوانا، زیرِ نوارِ مرحله. */
 .ik-deadline { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; font-size: 13px; color: var(--text2); }
 .ik-deadline svg { flex: 0 0 auto; color: var(--text3); }
+
+/* ── مرحلهٔ واریز: خلاصهٔ تاشدهٔ فرم + «ویرایش» (بازبینیِ UX، بندِ ۱۰۴) ── */
+.ik-sum {
+  display: grid; gap: 8px; padding: 12px 14px; border-radius: 14px;
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(52, 211, 153, .35);
+}
+.ik-sum-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ik-sum-head b { display: inline-flex; align-items: center; gap: 7px; font-size: 14.5px; color: var(--green-text); }
+.ik-sum-edit {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 14px; border-radius: 999px;
+  cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), .07); border: 1px solid rgba(var(--brand-2-rgb), .4);
+}
+.ik-sum-edit:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.ik-sum dl { display: grid; gap: 4px; margin: 0; }
+.ik-sum dl div { display: flex; gap: 8px; align-items: baseline; font-size: 13.5px; line-height: 1.8; }
+.ik-sum dt { flex: 0 0 auto; color: var(--text2); }
+.ik-sum dt::after { content: ':'; }
+.ik-sum dd { margin: 0; min-width: 0; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; }
+/* خطای کدِ تخفیف همان زیرِ کادرش. */
+.ik-code-err { margin-top: -3px; }
+/* پس از «ثبت و مرحلهٔ بعد» بخشِ واریز زیرِ نوارِ بالای گوشی گم نشود. */
+.ik-pay { scroll-margin-top: 12px; }
