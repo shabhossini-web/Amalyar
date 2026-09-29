@@ -425,3 +425,13 @@
 .ik-code-err { margin-top: -3px; }
 /* پس از «ثبت و مرحلهٔ بعد» بخشِ واریز زیرِ نوارِ بالای گوشی گم نشود. */
 .ik-pay { scroll-margin-top: 12px; }
+
+/* ── خطای هر کادر، زیرِ همان کادر (بازبینیِ UX، بندِ ۱۰۵) ── */
+.ik-field.bad input, .ik-field.bad select, .ik-field.bad textarea { border-color: rgba(248, 113, 113, .75); }
+.ik-fieldwrap { display: grid; gap: 4px; align-content: start; }
+.ik-ferr { display: block; font-style: normal; font-size: 13px; line-height: 1.7; color: var(--red-text); }
+.ik-cap .ik-ferr { flex: 1 1 100%; }
+.ik-cap:has(.ik-ferr) { border-color: rgba(248, 113, 113, .6); }
+/* تقویمِ نوبت وقتی روزی زده نشده. */
+.ik-book.bad { padding: 10px; margin-inline: -10px; border-radius: 16px; border: 1px solid rgba(248, 113, 113, .6); }
+.ik-book-anchor { scroll-margin-top: 12px; }

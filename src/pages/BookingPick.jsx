@@ -18,7 +18,7 @@ const faTime = (t) => String(t ?? '').replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷
  * اولین اختلافِ کبیسه از هم جدا می‌شوند — و آن‌وقت بیمار و منشی دو تقویمِ
  * متفاوت می‌بینند.
  */
-export default function BookingPick({ token, booking, onBooked, disabled }) {
+export default function BookingPick({ token, booking, onBooked, disabled, error = '' }) {
   const [ty, tm] = jToday();
   const [ym, setYm] = useState({ y: ty, m: tm });
   const [cal, setCal] = useState(null);
@@ -68,8 +68,10 @@ export default function BookingPick({ token, booking, onBooked, disabled }) {
   const chosen = booking?.appointment;
 
   return (
-    <section className="ik-book">
+    <section className={`ik-book${error ? ' bad' : ''}`} aria-describedby={error ? 'ik-book-need' : undefined}>
       <h3>روزِ نوبت را انتخاب کنید</h3>
+      {/* «روزی انتخاب نشده» روی خودِ تقویم — فرم با اسکرول همین‌جا می‌آورد (بازبینیِ UX، بندِ ۱۰۵). */}
+      {error && <p id="ik-book-need" className="ik-book-err" role="alert">{error}</p>}
 
       {chosen && (
         <p className="ik-book-has">
