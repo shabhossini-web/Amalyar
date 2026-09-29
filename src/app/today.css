@@ -58,10 +58,17 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
   grid-column: 3; grid-row: 1 / span 2; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700;
   color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.12);
 }
-/* وضعیت با **بوردر + رنگِ متن** حمل می‌شود، نه فقط یک لایهٔ کم‌آلفا روی زمینهٔ تیره. */
-.td-tag.op-done, .td-tag.appt-done, .td-tag.appt-arrived { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(6, 56, 42, 0.55); }
-.td-tag.appt-noshow { color: var(--amber); border-color: rgba(251, 191, 36, 0.5); background: rgba(58, 39, 8, 0.6); }
-.td-tag.op-cancelled, .td-tag.appt-cancelled { color: var(--red-text); border-color: rgba(248, 113, 113, 0.4); background: rgba(60, 12, 12, 0.5); }
+/* وضعیت با **بوردر + رنگِ متن** حمل می‌شود، نه فقط یک لایهٔ کم‌آلفا روی زمینهٔ تیره.
+   زمینه از توکن‌های `--green-bg` / `--amber-bg` / `--red-bg` (index.css): در تمِ تیره همان
+   زمینهٔ مات و هم‌فامِ قبلی، در تمِ روشن ته‌رنگِ روشنِ همان فام — زمینهٔ تیرهٔ خام در تمِ روشن
+   گِلِ کدر می‌شد و «در مطب/نیامد/لغو» رویش ۱٫۱ تا ۱٫۴:۱ خوانده می‌شد (بازبینیِ UX ۱۴۰۵/۰۷). */
+.td-tag.op-done, .td-tag.appt-done, .td-tag.appt-arrived {
+  color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); background: var(--green-bg);
+}
+.td-tag.appt-noshow { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 50%, transparent); background: var(--amber-bg); }
+.td-tag.op-cancelled, .td-tag.appt-cancelled {
+  color: var(--red-text); border-color: color-mix(in srgb, var(--red-text) 40%, transparent); background: var(--red-bg);
+}
 .td-item.appt-cancelled { opacity: .62; }
 
 /* کشوی «همهٔ ابزارها» — از لبهٔ پایین، مثلِ شیت‌های دیگرِ سامانه. */
