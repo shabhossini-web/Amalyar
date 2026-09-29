@@ -529,7 +529,7 @@ function AdvancedSearch({ value, defs, onApply, onClose }) {
     { key: 'techId', label: t.tech, options: defs.techs },
     { key: 'procedureTypeId', label: 'نوعِ عمل', options: defs.procedures },
     { key: 'diagnosisId', label: 'تشخیص', options: defs.diagnoses },
-    { key: 'topicId', label: 'موضوعِ ویزیت', options: defs.topics ?? [] },
+    { key: 'topicId', label: `موضوعِ ${t.visit}`, options: defs.topics ?? [] },
   ];
 
   return (

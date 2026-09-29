@@ -133,12 +133,16 @@ export default function SurgeonPortal() {
      مراجعاتِ پزشکان» برای صاحبِ مطبی که خودش پزشک است **غلط** بود؛ حالا همان قاعده از
      طرفِ دیگر: ناظری که میزِ همه یا پزشکِ دیگری را می‌بیند «امروزِ من» نمی‌خوانَد. */
   const financesLabel = mine ? 'بیلان مالی من' : clinic ? 'بیلانِ پزشک' : 'بیلان جراح';
+  /* ⚠️ واژه‌های نمای ناظر از حوزه (بازبینیِ UX، company-23): شرکت «پرتالِ کدام جراح؟ / همهٔ جراحان»،
+     مطب «میزِ کدام پزشک؟ / همهٔ پزشکان» — تا پیش از این در شرکت هم «میزِ کدام پزشک؟» نوشته می‌شد. */
+  const deskOf = clinic ? 'میزِ' : 'پرتالِ';
+  const pickLabel = `${deskOf} کدام ${t.surgeon}؟`;
   const items = clinic
     ? [{ key: 'today', label: mine ? 'امروزِ من' : 'امروز' }, { key: 'visits', label: mine ? 'بیمارانِ من' : 'بیماران' }, { key: 'results', label: 'نتایجِ رسیده' }, { key: 'finances', label: financesLabel }]
     : [{ key: 'visits', label: 'بیماران و دستورها' }, { key: 'finances', label: financesLabel }];
   const hint = mine ? t.portalHint
-    : picked ? `نمای ناظر: میزِ ${picked.name} — هر کارِ این میز از همین‌جا انجام می‌شود، بی‌نیاز به ورود با حسابِ او.`
-      : 'نمای ناظر: میزِ همهٔ پزشکان — هر ردیف نامِ پزشکش را دارد؛ برای میزِ یک پزشک او را انتخاب کنید.';
+    : picked ? `نمای ناظر: ${deskOf} ${picked.name} — هر کارِ آن از همین‌جا انجام می‌شود، بی‌نیاز به ورود با حسابِ او.`
+      : `نمای ناظر: ${deskOf} همهٔ ${t.surgeon}ان — هر ردیف نامِ ${t.surgeon}ش را دارد؛ برای ${deskOf} یک ${t.surgeon} او را انتخاب کنید.`;
   const pane = { things, reloadRef, access, pickId, picked, mine };
 
   return (
@@ -151,9 +155,9 @@ export default function SurgeonPortal() {
             /* انتخابگرِ «میزِ کدام پزشک؟» — فقط برای ناظر، بالای تب‌ها چون دامنهٔ **همهٔ**
                تب‌هاست (امروز، بیماران، نتایج، بیلان)، نه فیلترِ یک تب. */
             <div className="sp-scope" role="group" aria-labelledby="sp-scope-l">
-              <span id="sp-scope-l" className="sp-scope-l"><Eye size={16} />میزِ کدام پزشک؟</span>
+              <span id="sp-scope-l" className="sp-scope-l"><Eye size={16} />{pickLabel}</span>
               <div className="sp-scope-pick">
-                <Pick label="میزِ کدام پزشک؟" value={pickId} onChange={choosePick} options={desk.doctors} labelOf={(d) => d.label || d.name} placeholder="همهٔ پزشکان" />
+                <Pick label={pickLabel} value={pickId} onChange={choosePick} options={desk.doctors} labelOf={(d) => d.label || d.name} placeholder={`همهٔ ${t.surgeon}ان`} />
               </div>
             </div>
           )}
@@ -197,10 +201,11 @@ function Row({ open, className = '', children, ...attrs }) {
  * قانونِ ۱۵) و برای بقیه `null` است، پس ردیفِ پزشک در میزِ خودش عوض نمی‌شود.
  */
 function DoctorTag({ name }) {
+  const { t } = useConfig();
   if (!name) return null;
   return (
     <span className="sp-doc" data-doctor={name}>
-      <Doctor size={13} /><span className="sp-sr">پزشک: </span><span className="sp-doc-n">{name}</span>
+      <Doctor size={13} /><span className="sp-sr">{t.surgeon}: </span><span className="sp-doc-n">{name}</span>
     </span>
   );
 }
@@ -216,6 +221,7 @@ const withDoctor = (path, pickId) => (pickId ? `${path}${path.includes('?') ? '&
  * انتخاب‌شده — و «کارها» صفِ همان پزشک (`/work?owner=`) یا صفِ تیم.
  */
 function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine }) {
+  const { t } = useConfig();
   const orderFa = useStatusMap('order');
   const [data, setData] = useState(null);
   const [work, setWork] = useState(null);
@@ -309,8 +315,8 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
   const who = mine ? 'شما' : picked?.name ?? null;
   const workMode = work?.mode ?? (mine ? 'mine' : 'team');
   const workTitle = workMode === 'mine' ? 'کارهای من'
-    : workMode === 'doctor' || workMode === 'noaccount' ? `کارهای ${picked?.name ?? 'پزشک'}`
-      : workMode === 'team' ? 'کارهای پزشکان' : 'کارهای تیم';
+    : workMode === 'doctor' || workMode === 'noaccount' ? `کارهای ${picked?.name ?? t.surgeon}`
+      : workMode === 'team' ? `کارهای ${t.surgeon}ان` : 'کارهای تیم';
   return (
     <>
       {/* نوارِ خلاصه — «اطلاعاتِ لازم دمِ دست» (بازخوردِ مالک ۱۴۰۵/۰۶/۳۰). هیچ
@@ -525,6 +531,7 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
  * `selectionRequired` می‌گوید و این‌جا همان را راهنمایی می‌کند.
  */
 function SurgeonFinances({ pickId }) {
+  const { t, vertical } = useConfig();
   const [page, setPage] = useState(1), [data, setData] = useState(null), [error, setError] = useState('');
   useEffect(() => { let alive = true; setData(null); setError('');
     api(`/surgeon/finances?surgeonId=${pickId ?? ''}&page=${page}`).then((d) => { if (alive) setData(d); }).catch((e) => { if (alive) setError(e.message); });
@@ -535,7 +542,7 @@ function SurgeonFinances({ pickId }) {
     <p>همه مبالغ تومان است. سهم فقط از تسویه نهایی محاسبه می‌شود. پرداخت‌ها، ثبت‌های مالی شرکت هستند؛ ثبت چک به معنی وصول آن نیست. پرونده بدون تسویه نهایی، سهم قطعی ندارد.</p>
     {error && <p role="alert">{error}</p>}
     {!data && !error && <p>در حال دریافت بیلان…</p>}
-    {data?.selectionRequired && <p className="sp-empty">بیلان مالِ یک پزشک است: پزشک را از «میزِ کدام پزشک؟» بالای صفحه انتخاب کنید.</p>}
+    {data?.selectionRequired && <p className="sp-empty">بیلان مالِ یک {t.surgeon} است: {t.surgeon} را از «{vertical === 'clinic' ? 'میزِ' : 'پرتالِ'} کدام {t.surgeon}؟» بالای صفحه انتخاب کنید.</p>}
     {data && !data.selectionRequired && <><article className="sp-card"><h2>{data.surgeon}</h2><p>سهم نهایی: {money(data.earned)} · پرداخت ثبت‌شده: {money(data.paid)} · مانده: {money(data.balance)}</p></article>
       {data.rows.length === 0 && <p>مراجعه‌ای ثبت نشده است.</p>}
       {data.rows.map((r) => <article className="sp-card" key={r.id}><h2>{r.patient}</h2><span><bdi dir="ltr">{r.code}</bdi> · {faDate(r.date)} · {r.hospital}</span>

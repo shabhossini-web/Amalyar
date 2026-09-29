@@ -323,7 +323,8 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                     جستجو را به اولین کنترلِ همان label هم می‌فرستد و انتخاب
                     بلافاصله پس گرفته می‌شود. */}
                 <div className="db-field bl-codesearch">
-                  <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : 'کدِ خدمت (کتابِ ارزش نسبی یا کدِ داخلیِ مطب)'}</span>
+                  {/* «کدِ داخلیِ مطب» در شرکت هم نوشته می‌شد (بازبینیِ UX، company-23) — واژهٔ سازمان از نوعِ نصب. */}
+                  <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : `کدِ خدمت (کتابِ ارزش نسبی یا کدِ داخلیِ ${cfg.kind === 'clinic' ? 'مطب' : 'شرکت'})`}</span>
                   <input
                     value={codeQ}
                     onChange={(e) => setCodeQ(e.target.value)}
