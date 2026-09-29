@@ -155,7 +155,7 @@ export default function WorkList() {
       </header>
 
       <form className="wk-new" onSubmit={create}>
-        <input id="wk-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="یادداشتِ کاری برای خودم… (مثلاً تماس با بیمارِ فلان)" maxLength={160} />
+        <input id="wk-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="یادداشتِ کاری برای خودم… (مثلاً تماس با بیمارِ فلان)" aria-label="کارِ تازه برای خودم" maxLength={160} />
         <select id="wk-new-due" value={due} onChange={(e) => setDue(e.target.value)} aria-label="مهلت">
           <option value="">بدونِ مهلت</option>
           <option value="today">امروز</option>

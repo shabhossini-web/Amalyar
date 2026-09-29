@@ -24,7 +24,9 @@
   color: var(--text2); border-radius: 12px; padding: 7px 12px; font-size: 13px; text-align: start;
   transition: border-color .2s, background .2s, color .2s;
 }
-.sh-search:hover, .sh-search:focus-visible { border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); color: var(--text1); outline: none; }
+/* ⚠️ `outline: none` این‌جا ممنوع: حلقهٔ سراسریِ `:focus-visible` (index.css) تنها نشانهٔ فوکوسِ صفحه‌کلید
+   است و تغییرِ رنگِ هاور جایش را نمی‌گیرد (بازبینیِ UX ۱۴۰۵/۰۷). */
+.sh-search:hover, .sh-search:focus-visible { border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); color: var(--text1); }
 .sh-search-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sh-kbd {
   font-family: inherit; font-size: 11px; color: var(--text3);
@@ -63,7 +65,7 @@
 @keyframes gs-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .gs-busy { animation: none; } }
 .gs-close { color: var(--text3); border-radius: 8px; padding: 4px; display: grid; place-items: center; }
-.gs-close:hover, .gs-close:focus-visible { color: var(--text1); background: rgba(var(--veil-rgb), 0.08); outline: none; }
+.gs-close:hover, .gs-close:focus-visible { color: var(--text1); background: rgba(var(--veil-rgb), 0.08); }
 .gs-list { list-style: none; max-height: 52vh; overflow-y: auto; padding: 6px; }
 .gs-list li[role="option"] { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 12px; cursor: pointer; }
 .gs-list li.on { background: rgba(var(--brand-rgb), 0.18); }
