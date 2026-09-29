@@ -18,7 +18,7 @@ import { syncLinkDocuments } from './link-documents';
 import { hospitalTypeahead, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { serviceLabel, serviceOf } from './intake-service-of';
 import { imageRefsOf, receiptIdsOf } from './intake-docs';
-import { UsedChallenges, issueChallenge, verifyChallenge } from './intake-captcha';
+import { UsedChallenges, issueChallenge, openChallenge, verifyChallenge } from './intake-captcha';
 import { RETURN_STAGES, applyReturn, currentReturn, isReturnStage, returnsOf, withoutReturns } from './intake-return';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { OTHER_PX, procedureLabel } from './visit-coding';
@@ -527,9 +527,15 @@ export class IntakeService {
        مصرف شد (درست یا غلط)، پس ارسالِ دوباره با همان نشان بی‌فایده است. */
     const verdict = verifyChallenge(captchaSecret(), USED_CHALLENGES, linkToken, dto.captchaToken, dto.captchaAnswer);
     if (verdict !== 'ok') {
+      /* «کهنه» دو علت دارد و بیمار باید بداند کدام (بازبینیِ UX، بندِ ۹۸): پرسشی که یک‌بار فرستاده شده
+         (مثلاً پیش از خطای کدِ ملی) یا بیش از ۱۰ دقیقه پیش آمده. صفحه در هر دو حالت پرسشِ تازه می‌گیرد. */
+      const opened = verdict === 'stale' ? openChallenge(captchaSecret(), dto.captchaToken) : null;
+      const expired = !!opened && opened.s === linkToken && opened.e <= Date.now();
       throw new UnprocessableEntityException(verdict === 'wrong'
         ? 'پاسخِ پرسشِ امنیتی درست نیست — پرسشِ تازه را جواب دهید'
-        : 'پرسشِ امنیتی منقضی شده — پرسشِ تازه را جواب دهید');
+        : expired
+          ? 'پرسشِ امنیتی منقضی شده (بیش از ۱۰ دقیقه گذشته) — پرسشِ تازه را جواب دهید'
+          : 'این پرسش یک‌بار مصرف شد؛ پرسشِ تازه را جواب دهید');
     }
 
     const { patientId } = await this.prisma.$transaction((tx) =>

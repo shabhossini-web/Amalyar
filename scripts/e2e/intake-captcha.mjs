@@ -93,7 +93,7 @@ try {
   r = await reg(L, { ...person(), captchaToken: c.captchaToken, captchaAnswer: c.captchaAnswer + 1 });
   ok(r.status === 422 && /درست نیست/.test(msg(r)), 'پاسخِ غلط ← ۴۲۲', `${r.status} ${msg(r)}`);
   r = await reg(L, { ...person(), ...c });
-  ok(r.status === 422 && /منقضی/.test(msg(r)), '**پاسخِ غلط نشان را سوزاند** — همان نشان با پاسخِ درست هم رد', `${r.status} ${msg(r)}`);
+  ok(r.status === 422 && /یک‌بار مصرف شد/.test(msg(r)), '**پاسخِ غلط نشان را سوزاند** — همان نشان با پاسخِ درست هم رد («یک‌بار مصرف شد»)', `${r.status} ${msg(r)}`);
   c = await captchaFor(API, L);
   r = await reg(L2, { ...person(), ...c });
   ok(r.status === 422, 'نشانِ لینکِ دیگر رد می‌شود', `${r.status} ${msg(r)}`);

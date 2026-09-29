@@ -53,6 +53,8 @@ function Register() {
   const navigate = useNavigate();
   const [link, setLink] = useState(null);
   const [err, setErr] = useState('');
+  /* کدِ خطای آخر — ۴۰۹ (برخوردِ کدِ ملی) را بیمار به‌تنهایی حل نمی‌کند و کنارش دکمهٔ تماس می‌آید. */
+  const [errStatus, setErrStatus] = useState(0);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ firstName: '', lastName: '', nationalId: '', phone: '', birthDate: '', address: '', referralSourceId: '', referralNote: '' });
   /* ⚠️ کانال‌ها از یک endpointِ **عمومی** می‌آیند که فقط نام و شناسه می‌دهد —
@@ -65,10 +67,13 @@ function Register() {
   const [cap, setCap] = useState(null);
   const [capErr, setCapErr] = useState('');
   const [answer, setAnswer] = useState('');
+  /* لحظهٔ رسیدنِ پرسش به **ساعتِ همین مرورگر** — سنِ پرسش از این سنجیده می‌شود نه از `expiresAt`ِ
+     سرور، که با ساعتِ غلطِ گوشی هر پرسشی را «کهنه» نشان می‌داد. */
+  const capAt = useRef(0);
   const loadCap = useCallback(() => {
     setCapErr(''); setAnswer('');
     return api(`/public/intake/link/${token}/captcha`, { auth: false })
-      .then(setCap)
+      .then((c) => { capAt.current = Date.now(); setCap(c); })
       .catch((e) => { setCap(null); setCapErr(e.message); });
   }, [token]);
 
@@ -95,7 +100,15 @@ function Register() {
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
 
   const submit = async () => {
-    setErr(''); setBusy(true);
+    /* هر پرسش ۱۰ دقیقه اعتبار دارد و بیمارِ مسن ممکن است بیشتر طول بکشد: پرسشِ نزدیک به انقضا پیش از
+       ارسال تازه می‌شود، نه اینکه سرور ردش کند و بیمار یک رفت‌وبرگشتِ دیگر بخورد. */
+    if (cap && Date.now() - capAt.current > 9.5 * 60_000) {
+      setErr('پرسشِ امنیتی تازه شد (هر پرسش تا ۱۰ دقیقه اعتبار دارد) — پاسخِ پرسشِ تازه را بنویسید.');
+      setErrStatus(0);
+      loadCap();
+      return;
+    }
+    setErr(''); setErrStatus(0); setBusy(true);
     try {
       const r = await api(`/public/intake/link/${token}/register`, {
         auth: false,
@@ -117,9 +130,12 @@ function Register() {
       // ثانیه صفحهٔ سفید و دانلودِ دوبارهٔ همهٔ چانک‌ها برای رفتن به صفحهٔ بعدیِ همین اپ.
       navigate(`/f/${r.token}`, { replace: true });
     } catch (e) {
-      setErr(e.message); setBusy(false);
-      /* ۴۲۲ = نشان همین حالا مصرف شد (پاسخِ غلط یا منقضی) — پرسشِ تازه، نه ارسالِ دوباره. */
-      if (e.status === 422) loadCap();
+      setErr(e.message); setErrStatus(e.status ?? 0); setBusy(false);
+      /* ⚠️ هر خطایی **پس از** سنجشِ پرسش یعنی نشان مصرف شده (بازبینیِ UX، بندِ ۹۸): ۴۲۲ (پاسخِ غلط یا
+         کهنه)، ۴۰۹ (کدِ ملی با نامِ خانوادگیِ دیگر)، خطای سرور یا قطعِ اتصال. تا دیروز فقط روی ۴۲۲
+         پرسشِ تازه می‌آمد و تلاشِ بعد از ۴۰۹ با «منقضی شده» رد می‌شد — سه رفت‌وبرگشت. فقط ۴۰۰
+         (سنجشِ نام/کدِ ملی/موبایل، پیش از پرسش) نشان را نمی‌سوزاند و پاسخ سرِ جایش می‌ماند. */
+      if (e.status !== 400) loadCap();
     }
   };
 
@@ -179,6 +195,9 @@ function Register() {
       </div>
 
       {err && <p className="ik-bad"><Alert width="15" height="15" /> {err}</p>}
+      {err && errStatus === 409 && (
+        <CallLink phone={link?.brand?.phone} label={link?.brand?.name ? `تماس با ${link.brand.name}` : 'تماس'} className="ik-err-call" />
+      )}
       <button type="button" className="ik-go" disabled={busy || !cap} onClick={submit}>
         {busy ? 'در حال ثبت…' : 'ادامه'}
       </button>
