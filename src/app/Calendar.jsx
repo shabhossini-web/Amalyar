@@ -12,6 +12,7 @@ import { ThingPopups, useThings } from './thing-popups.jsx';
 import './calendar.css';
 import { ChevronEnd, Clock } from '../ui/icons.jsx';
 import { kindOf } from './visit-kinds.js';
+import { faTime } from '../lib/time.js';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -144,7 +145,7 @@ export default function Calendar() {
               <div className="cal-names">
                 {cell.visits.slice(0, 2).map((v) => (
                   <span key={v.id} className={`s-${v.opStatus}`}>
-                    {v.opStartTime ? `${v.opStartTime} ` : ''}{v.fullName}
+                    {v.opStartTime ? `${faTime(v.opStartTime)} ` : ''}{v.fullName}
                   </span>
                 ))}
                 {cell.visits.length > 2 && <span className="more">+{faNum(cell.visits.length - 2)} دیگر</span>}
@@ -178,7 +179,8 @@ export default function Calendar() {
             {picked.appointments.map((a) => (
               <article key={`ap${a.id}`} className={`cal-appt st-${a.status}`}>
                 <div className="cal-time">
-                  {a.time ? <b dir="ltr">{a.time}</b> : a.seq ? <b>#{faNum(a.seq)}</b> : <b className="none">—</b>}
+                  {/* ساعت با ارقامِ فارسی — مثلِ میزِ پذیرش و میزِ پزشک (clinic-daily-25). */}
+                  {a.time ? <b dir="ltr">{faTime(a.time)}</b> : a.seq ? <b>#{faNum(a.seq)}</b> : <b className="none">—</b>}
                 </div>
                 <div className="cal-main">
                   <b>
@@ -251,8 +253,8 @@ export default function Calendar() {
         ) : picked.visits.map((v) => (
           <article key={v.id} className={`cal-row s-${v.opStatus}`}>
             <div className="cal-time">
-              {v.opStartTime ? <b dir="ltr">{v.opStartTime}</b> : <b className="none">—</b>}
-              {v.opEndTime && <small dir="ltr">تا {v.opEndTime}</small>}
+              {v.opStartTime ? <b dir="ltr">{faTime(v.opStartTime)}</b> : <b className="none">—</b>}
+              {v.opEndTime && <small>تا <bdi dir="ltr">{faTime(v.opEndTime)}</bdi></small>}
             </div>
             <div className="cal-main">
               <b>
@@ -263,7 +265,7 @@ export default function Calendar() {
               <small>
                 {[v.procedureName, v.surgeonName, v.hospitalName].filter(Boolean).join(' · ') || '—'}
               </small>
-              {v.techName && <small className="cal-tech">{t.tech}: {v.techName}{v.techArriveTime ? ` — حضور ${v.techArriveTime}` : ''}</small>}
+              {v.techName && <small className="cal-tech">{t.tech}: {v.techName}{v.techArriveTime ? ` — حضور ${faTime(v.techArriveTime)}` : ''}</small>}
             </div>
             {/* بازکردنِ خودِ مراجعه **همین‌جا** (clinic-daily-06) — نه پرش به «بیماران». */}
             {canOpen ? (

@@ -632,7 +632,7 @@ function NextVisitBook({ data, onClose, onToast }) {
         <div className="db-nvb-done">
           <p>
             نوبتِ <b>{dateFa}</b> ثبت شد ✓
-            {booked.time ? <> — ساعتِ <b>{booked.time}</b></> : booked.seq ? <> — شمارهٔ صف <b>{faNum(booked.seq)}</b></> : null}
+            {booked.time ? <> — ساعتِ <b dir="ltr">{faTime(booked.time)}</b></> : booked.seq ? <> — شمارهٔ صف <b>{faNum(booked.seq)}</b></> : null}
           </p>
           <em>یادآوریِ پیامکیِ نوبت، عصرِ روزِ قبل خودکار می‌رود.</em>
           <button type="button" className="db-nvb-main" onClick={onClose}>بستن</button>
@@ -641,7 +641,7 @@ function NextVisitBook({ data, onClose, onToast }) {
         <div className="db-nvb-done">
           <p>
             این بیمار برای <b>{dateFa}</b> از قبل نوبت دارد
-            {sug.existing.time ? <> — ساعتِ <b>{sug.existing.time}</b></> : sug.existing.seq ? <> — شمارهٔ صف <b>{faNum(sug.existing.seq)}</b></> : null}
+            {sug.existing.time ? <> — ساعتِ <b dir="ltr">{faTime(sug.existing.time)}</b></> : sug.existing.seq ? <> — شمارهٔ صف <b>{faNum(sug.existing.seq)}</b></> : null}
             {' '}({sug.existing.statusLabel}).
           </p>
           <button type="button" className="db-nvb-main" onClick={onClose}>باشه</button>
@@ -670,7 +670,7 @@ function NextVisitBook({ data, onClose, onToast }) {
                   className={`db-nvb-slot${startMin === s.startMin ? ' on' : ''}`}
                   onClick={() => setStartMin(s.startMin)}
                 >
-                  <Clock width="12" height="12" /> {s.time}
+                  <Clock width="12" height="12" /> <span dir="ltr">{faTime(s.time)}</span>
                 </button>
               ))}
             </div>

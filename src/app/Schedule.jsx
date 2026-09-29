@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import { toEnDigits } from '../lib/identity.js';
+import { faTime } from '../lib/time.js';
 import JGrid from './JGrid.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { ChevronEnd, Plus, Trash } from '../ui/icons.jsx';
@@ -279,49 +280,53 @@ export default function Schedule() {
 
         <div className="sc-week">
           {grouped.map((g) => (
+            /* ⚠️ نامِ روز یک ستون و ساعت‌های همان روز کنارش (بازبینیِ UX، clinic-daily-25): تا پیش از
+               این ساعت با `dir="ltr"` روی خودِ بلوک وسطِ کارت می‌افتاد، دور از نامِ روز، و رقمش لاتین بود. */
             <div key={g.i} className={`sc-day${g.rows.length ? '' : ' empty'}`}>
               <b>{g.label}</b>
-              {g.rows.length === 0 ? <small>—</small> : g.rows.map((r) => (
-                <article key={r.id} className={`sc-rule${r.active ? '' : ' off'}`}>
-                  <div>
-                    <b dir="ltr">{r.start}–{r.end}</b>
-                    <small>
-                      {r.mode === 'slot'
-                        ? `هر ${faNum(r.slotMinutes)} دقیقه · ${faNum(r.slotsPerDay)} نوبت`
-                        : `ظرفیت ${faNum(r.capacity)} نفر`}
-                      {r.doctorName ? ` · ${r.doctorName}` : ''}
-                    </small>
-                    {r.topics.length > 0 && (
-                      <small className="sc-topics">{r.topics.map((t) => t.name).join('، ')}</small>
-                    )}
-                  </div>
-                  {askDel === r.id ? (
-                    <div className="sc-ask" role="group" aria-label={`حذفِ روزِ کاریِ ${g.label}`}>
-                      <p>
-                        حذفِ «{g.label} <bdi dir="ltr">{r.start}–{r.end}</bdi>»؟ نوبت‌دهیِ این ساعت‌ها در همهٔ {g.label}‌ها
-                        برداشته می‌شود و برگشت ندارد. برای بستنِ فقط یک روز، «تعطیل‌کردنِ این روز» در پیش‌نمایش کافی است.
-                      </p>
-                      <div>
-                        <button type="button" className="danger" onClick={() => remove(r)} disabled={busy}>حذفِ روزِ کاری</button>
-                        {/* فوکوس روی گزینهٔ امن، همان لحظه که پرسش باز شد. */}
-                        <button type="button" autoFocus onClick={() => setAskDel(0)}>انصراف</button>
+              <div className="sc-day-rules">
+                {g.rows.length === 0 ? <small>—</small> : g.rows.map((r) => (
+                  <article key={r.id} className={`sc-rule${r.active ? '' : ' off'}`}>
+                    <div>
+                      <b className="sc-hours"><bdi dir="ltr">{faTime(r.start)}–{faTime(r.end)}</bdi></b>
+                      <small>
+                        {r.mode === 'slot'
+                          ? `هر ${faNum(r.slotMinutes)} دقیقه · ${faNum(r.slotsPerDay)} نوبت`
+                          : `ظرفیت ${faNum(r.capacity)} نفر`}
+                        {r.doctorName ? ` · ${r.doctorName}` : ''}
+                      </small>
+                      {r.topics.length > 0 && (
+                        <small className="sc-topics">{r.topics.map((t) => t.name).join('، ')}</small>
+                      )}
+                    </div>
+                    {askDel === r.id ? (
+                      <div className="sc-ask" role="group" aria-label={`حذفِ روزِ کاریِ ${g.label}`}>
+                        <p>
+                          حذفِ «{g.label} <bdi dir="ltr">{faTime(r.start)}–{faTime(r.end)}</bdi>»؟ نوبت‌دهیِ این ساعت‌ها در همهٔ {g.label}‌ها
+                          برداشته می‌شود و برگشت ندارد. برای بستنِ فقط یک روز، «تعطیل‌کردنِ این روز» در پیش‌نمایش کافی است.
+                        </p>
+                        <div>
+                          <button type="button" className="danger" onClick={() => remove(r)} disabled={busy}>حذفِ روزِ کاری</button>
+                          {/* فوکوس روی گزینهٔ امن، همان لحظه که پرسش باز شد. */}
+                          <button type="button" autoFocus onClick={() => setAskDel(0)}>انصراف</button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="sc-tools">
-                      <button type="button" onClick={() => toggle(r)} disabled={busy} aria-pressed={r.active}
-                              title={r.active ? 'خاموش‌کردنِ نوبت‌دهیِ این ساعت‌ها' : 'روشن‌کردنِ نوبت‌دهیِ این ساعت‌ها'}>
-                        {r.active ? 'فعال' : 'خاموش'}
-                      </button>
-                      {/* سطل **دور** از کلیدِ روشن/خاموش، با جداکننده — و خودش فقط پرسش را باز می‌کند. */}
-                      <button type="button" className="del" onClick={() => setAskDel(r.id)} disabled={busy}
-                              aria-label={`حذفِ روزِ کاریِ ${g.label} ${r.start} تا ${r.end}`} title="حذفِ این روزِ کاری">
-                        <Trash width="14" height="14" />
-                      </button>
-                    </div>
-                  )}
-                </article>
-              ))}
+                    ) : (
+                      <div className="sc-tools">
+                        <button type="button" onClick={() => toggle(r)} disabled={busy} aria-pressed={r.active}
+                                title={r.active ? 'خاموش‌کردنِ نوبت‌دهیِ این ساعت‌ها' : 'روشن‌کردنِ نوبت‌دهیِ این ساعت‌ها'}>
+                          {r.active ? 'فعال' : 'خاموش'}
+                        </button>
+                        {/* سطل **دور** از کلیدِ روشن/خاموش، با جداکننده — و خودش فقط پرسش را باز می‌کند. */}
+                        <button type="button" className="del" onClick={() => setAskDel(r.id)} disabled={busy}
+                                aria-label={`حذفِ روزِ کاریِ ${g.label} ${faTime(r.start)} تا ${faTime(r.end)}`} title="حذفِ این روزِ کاری">
+                          <Trash width="14" height="14" />
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -366,13 +371,13 @@ export default function Schedule() {
               <>
                 {picked.windows.map((w, i) => (
                   <div key={i} className="sc-win">
-                    <b dir="ltr">{w.start}–{w.end}</b>
+                    <b><bdi dir="ltr">{faTime(w.start)}–{faTime(w.end)}</bdi></b>
                     {w.mode === 'capacity' ? (
                       <small>{faNum(w.left)} از {faNum(w.capacity)} جا مانده</small>
                     ) : (
                       <div className="sc-slots">
                         {w.slots.map((sl) => (
-                          <span key={sl.startMin} className={sl.taken ? 'taken' : ''} dir="ltr">{sl.time}</span>
+                          <span key={sl.startMin} className={sl.taken ? 'taken' : ''} dir="ltr">{faTime(sl.time)}</span>
                         ))}
                       </div>
                     )}
