@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import { useTerms } from './config.jsx';
 import { FLOW } from '../lib/terms.js';
 import CancelReason from '../ui/CancelReason.jsx';
+import { ThingPopups, useThings } from './thing-popups.jsx';
 import './calendar.css';
 import { ChevronEnd, Clock } from '../ui/icons.jsx';
 import { kindOf } from './visit-kinds.js';
@@ -26,7 +27,6 @@ export default function Calendar() {
      هاردکد داشت، پس نصبِ نورومانیتورینگ («مراجعه») و تجهیزات («عمل») هم روی
      دکمهٔ میزِ پذیرش «ویزیت» می‌دید (یافتهٔ U15). */
   const t = useTerms();
-  const navigate = useNavigate();
   const [busyAppt, setBusyAppt] = useState(0);
   const [cancelAsk, setCancelAsk] = useState(null); // نوبتی که دلیلِ لغوش پرسیده می‌شود
   const [err2, setErr2] = useState('');
@@ -35,6 +35,23 @@ export default function Calendar() {
   const [data, setData] = useState(null);
   const [day, setDay] = useState(td);
   const [err, setErr] = useState('');
+  const [note, setNote] = useState(null); // { text, bad } — پیامِ کوتاهِ پایینِ صفحه
+  /* بازکردنِ فرمِ مراجعه «بیماران» (`dashboard`) می‌خواهد، و در مطب تقویم از سطحِ ۳ باز است ولی
+     «بیماران» از ۴. تصمیم از سرور (`/features`)؛ تا نیامده «می‌شود» فرض می‌شود — سرور به‌هرحال
+     می‌سنجد و خطایش همین‌جا دیده می‌شود. */
+  const [canOpen, setCanOpen] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    api('/features')
+      .then((rows) => { const f = (rows ?? []).find((r) => r.key === 'dashboard'); if (alive && f) setCanOpen(!!f.allowed); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (!note || note.bad) return undefined;
+    const id = setTimeout(() => setNote(null), note.text.length > 40 ? 4500 : 2400);
+    return () => clearTimeout(id);
+  }, [note]);
 
   /* ⚠️ نام و واژه‌ها از واژه‌نامهٔ حوزه (بازبینیِ UX، clinic-daily-05): در مطب این صفحه بیشتر نوبت
      و ویزیت نشان می‌دهد و «تقویمِ عمل‌ها / ۱۱ عمل در مهر / عملی ثبت نشده» برای منشی غلط بود.
@@ -47,6 +64,13 @@ export default function Calendar() {
     catch (e) { setErr(e.message); setData(null); }
   }, []);
   useEffect(() => { load(ym.y, ym.m); }, [load, ym]);
+
+  /* فرمِ مراجعه **همین‌جا** باز می‌شود، نه با پرش به «بیماران» (بازبینیِ UX، clinic-daily-06) —
+     مثلِ میزِ پذیرش و پرونده. بستنش کاربر را روی همان روزِ تقویم نگه می‌دارد. */
+  const things = useThings({
+    onChanged: () => load(ym.y, ym.m),
+    toast: (text, bad) => setNote({ text, bad: !!bad }),
+  });
 
   const byDay = new Map((data?.days ?? []).map((d) => [d.day, d]));
   const picked = byDay.get(day);
@@ -66,13 +90,19 @@ export default function Calendar() {
     runApptStatus(a, status).catch((e) => setErr2(e.message));
   };
 
-  /* شروعِ ویزیت — مراجعه از خودِ نوبت ساخته (یا پیدا) می‌شود و فرمش باز. */
+  /* شروعِ ویزیت — مراجعه از خودِ نوبت ساخته (یا پیدا) می‌شود و فرمش **همین‌جا** باز.
+     ⚠️ تا بازبینیِ UX (clinic-daily-06) این دکمه به «بیماران» می‌پرید: کاربر دیگر روی آن روزِ
+     تقویم نبود، و کاربرِ سطحِ ۳ِ مطب (که «بیماران» را ندارد) بعد از عوض‌شدنِ وضعیتِ نوبت به
+     صفحه‌ای می‌رسید که اجازه‌اش را نداشت. حالا اگر بازکردنِ فرم مجاز نیست، شروع ثبت می‌شود و
+     صریح گفته می‌شود فرم دستِ کیست. */
   const startVisit = async (a) => {
     setBusyAppt(a.id); setErr2('');
     try {
-      const r = await api(`/appointments/${a.id}/visit`, { method: 'POST' });
-      navigate(`/app/dashboard?patient=${r.visitId}`);
-    } catch (e) { setErr2(e.message); setBusyAppt(0); }
+      const r = a.visitId ? { visitId: a.visitId } : await api(`/appointments/${a.id}/visit`, { method: 'POST' });
+      if (!a.visitId) await load(ym.y, ym.m);
+      if (canOpen) await things.open({ type: 'visit', id: r.visitId, patientId: a.patientId });
+      else setNote({ text: `${t.visitStart} ثبت شد ✓ — فرمش را کسی باز می‌کند که به «بیماران» دسترسی دارد` });
+    } catch (e) { setErr2(e.message); } finally { setBusyAppt(0); }
   };
 
   return (
@@ -167,12 +197,12 @@ export default function Calendar() {
                       علتش را می‌گوید. دکمهٔ ناپدید یعنی کاربر فکر کند صفحه
                       خراب است؛ `title` روی لمس دیده نمی‌شود، پس کلیکش هم
                       همان علت را نشان می‌دهد. */}
-                  {a.visitId ? (
+                  {a.visitId ? (canOpen && (
                     <button type="button" className="cal-appt-go" disabled={busyAppt === a.id}
                             onClick={() => startVisit(a)}>
                       {t.visitOpen}
                     </button>
-                  ) : a.canStart ? (
+                  )) : a.canStart ? (
                     <button type="button" className="cal-appt-go" disabled={busyAppt === a.id}
                             onClick={() => startVisit(a)}>
                       {t.visitStart}
@@ -225,26 +255,45 @@ export default function Calendar() {
               </small>
               {v.techName && <small className="cal-tech">{t.tech}: {v.techName}{v.techArriveTime ? ` — حضور ${v.techArriveTime}` : ''}</small>}
             </div>
-            <Link className="cal-open" to={`/app/dashboard?patient=${v.id}`} title="بازکردن در فهرستِ بیماران">
-              <span dir="ltr">{v.code}</span>
-            </Link>
+            {/* بازکردنِ خودِ مراجعه **همین‌جا** (clinic-daily-06) — نه پرش به «بیماران». */}
+            {canOpen ? (
+              <button type="button" className="cal-open" onClick={() => things.open({ type: 'visit', id: v.id })}
+                      aria-label={`بازکردنِ ${v.code} — ${v.fullName}`}>
+                <span dir="ltr">{v.code}</span>
+              </button>
+            ) : <span className="cal-code" dir="ltr">{v.code}</span>}
           </article>
         ))}
       </section>
 
-      <AnimatePresence>
-        {cancelAsk && (
-          <CancelReason
-            kind="appointment"
-            what={cancelAsk.fullName}
-            onClose={() => setCancelAsk(null)}
-            onConfirm={async (c) => {
-              await runApptStatus(cancelAsk, 'cancelled', c);
-              setCancelAsk(null);
-            }}
-          />
+      {/* ⚠️ همهٔ لایه‌های شناور داخلِ **یک** ظرف: قاعدهٔ `.cal > *:not(.cal-bg) { position: relative }`
+          (برای بالاآوردنِ محتوا از روی درخششِ پس‌زمینه) اولویتِ بیشتری از `position: fixed`ِ پرده‌ها
+          دارد، پس پنجرهٔ دلیلِ لغو تا امروز ته صفحه در جریانِ متن می‌نشست نه روی صفحه. ظرفِ نسبی
+          مرجعِ fixed نیست و z-indexِ پرده‌ها را هم در خودش حبس نمی‌کند. */}
+      <div className="cal-layer">
+        <ThingPopups things={things} />
+
+        {note && (
+          <button type="button" className={`cal-toast${note.bad ? ' bad' : ''}`} onClick={() => setNote(null)}
+                  aria-live={note.bad ? 'assertive' : 'polite'}>
+            {note.text}
+          </button>
         )}
-      </AnimatePresence>
+
+        <AnimatePresence>
+          {cancelAsk && (
+            <CancelReason
+              kind="appointment"
+              what={cancelAsk.fullName}
+              onClose={() => setCancelAsk(null)}
+              onConfirm={async (c) => {
+                await runApptStatus(cancelAsk, 'cancelled', c);
+                setCancelAsk(null);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
