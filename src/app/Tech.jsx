@@ -190,7 +190,9 @@ export default function Tech() {
               <span className="tk-time" dir="ltr">{time(v.opStartTime)}</span>
               <div className="tk-title">
                 <b>{v.patientName}</b>
-                <small>{v.code} · {faDate(v.opDate)}</small>
+                {/* تاریخ اول و کد جدا از جهتِ متن (قانونِ ۹، company-05): کدِ لاتینِ بی‌جداساز
+                    رقمِ روز را آن‌طرفِ خودش می‌برد — «۶ · AM-0005-V1 مهر ۱۴۰۵». */}
+                <small>{faDate(v.opDate)} · <bdi dir="ltr">{v.code}</bdi></small>
               </div>
               {v.status === 'done' && <span className="tk-tag ok">انجام‌شده</span>}
               {v.status === 'cancelled' && <span className="tk-tag no">لغو</span>}
@@ -211,7 +213,7 @@ export default function Tech() {
                 {v.transfers.map((t) => (
                   <div key={t.id} className="tk-set">
                     <div className="tk-set-head">
-                      <b><Box width="14" height="14" /> {t.code}</b>
+                      <b><Box width="14" height="14" /> <bdi dir="ltr">{t.code}</bdi></b>
                       <span>{t.toLocation}</span>
                       {t.releasedAt
                         ? <i className="tk-tag ok">پایان اعلام شد</i>
@@ -346,7 +348,11 @@ export function StatusSheet({ visit, onClose, onSaved }) {
         <button type="button" className="tk-x" onClick={onClose} aria-label="بستن" disabled={busy}><Close width="17" height="17" /></button>
       </header>
       <div className="tk-sheet-body">
-        <p className="tk-note">{visit.code} · {faDate(visit.opDate)}{visit.procedure ? ` · ${visit.procedure}` : ''}</p>
+        <p className="tk-note">
+          {[visit.opDate ? faDate(visit.opDate) : null, visit.code ? <bdi key="c" dir="ltr">{visit.code}</bdi> : null, visit.procedure || null]
+            .filter(Boolean)
+            .flatMap((part, i) => (i ? [' · ', part] : [part]))}
+        </p>
         <div className="tk-status" role="radiogroup" aria-label="وضعیتِ عمل">
           {STATUS_CHOICES.map(({ key, label, hint, icon: Icon }) => (
             <button key={key} type="button" role="radio" aria-checked={pick === key} disabled={busy}
@@ -429,7 +435,7 @@ function UsageSheet({ transferId, onClose, onToast }) {
   return (
     <Overlay backdrop="tk-overlay" panel="tk-sheet" as="section" onClose={onClose} closable={!busy}>
       <header className="tk-sheet-head">
-        <b>{t ? `حوالهٔ ${t.code}` : 'حواله'}</b>
+        <b>{t ? <>حوالهٔ <bdi dir="ltr">{t.code}</bdi></> : 'حواله'}</b>
         <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
 
