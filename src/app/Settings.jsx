@@ -9,6 +9,7 @@ import './launcher.css';
 import './definitions.css';
 import './settings.css';
 import { Back, Check } from '../ui/icons.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 
 /** بخش‌های تعرفه‌ای — باید با SECTORS سمتِ سرور یکی بماند. */
@@ -27,7 +28,7 @@ export default function Settings() {
   const { kind, services, kinds = [], serviceCatalog = [], error: configError, reload } = useConfig();
   const { user: me } = useAuth();
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(2200);
 
   const [tariffs, setTariffs] = useState([]);
   const [codes, setCodes] = useState({ total: 0, version: null });
@@ -67,11 +68,6 @@ export default function Settings() {
   };
 
   useEffect(() => { document.title = 'عمل‌یار — تنظیماتِ شرکت'; }, []);
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = setTimeout(() => setToast(''), toast.length > 40 ? 4500 : 2200);
-    return () => clearTimeout(timer);
-  }, [toast]);
 
   /**
    * **نوعِ نصب و بستهٔ خدمات** (مالک، ۱۴۰۵/۰۷/۰۱): مطب/کلینیک یا شرکتی، و شرکت
@@ -273,7 +269,7 @@ export default function Settings() {
 
       {me?.level >= 6 && <TestDataPanel onToast={setToast} />}
 
-      {toast && <div className="df-toast" role="status">{toast}</div>}
+      <Toast msg={toast} />
     </div>
   );
 }

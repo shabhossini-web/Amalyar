@@ -5,6 +5,7 @@ import { api } from '../lib/api.js';
 import './access.css';
 import { Alert, Back, CheckCircle, Lock } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 /**
  * ماتریسِ سطوحِ دسترسی.
@@ -22,17 +23,12 @@ import { useStagger } from '../ui/stagger.js';
 export default function Access() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(2400);
   const [busy, setBusy] = useState('');
   const [lens, setLens] = useState(0); // ۰ = همه؛ وگرنه «از نگاهِ سطحِ N»
   const row = useStagger();
 
   useEffect(() => { document.title = 'عمل‌یار — سطوحِ دسترسی'; }, []);
-  useEffect(() => {
-    if (!toast) return undefined;
-    const t = setTimeout(() => setToast(''), 2400);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const load = useCallback(async () => {
     setErr('');
@@ -182,7 +178,7 @@ export default function Access() {
         </section>
       ))}
 
-      <div className={`ax-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }

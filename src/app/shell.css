@@ -31,11 +31,13 @@
   border: 1px solid rgba(var(--veil-rgb), 0.14); border-radius: 6px; padding: 1px 6px; direction: ltr;
 }
 .sh-end { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; }
+/* توستِ قدیمیِ پوسته — فقط صفحه‌هایی که هنوز به `src/ui/Toast.jsx` نیامده‌اند (میزِ پزشک).
+   رنگ و قاب همان توکن‌های `--toast-*`ِ توستِ مشترک: زمینهٔ خامِ ‎#1b1238 با متنِ `--text1`
+   در تمِ روشن سرمه‌ای روی سرمه‌ای بود. */
 .sh-toast {
-  position: fixed; bottom: 22px; inset-inline-start: 50%; transform: translateX(50%);
-  /* رنگ از توکنِ توست (index.css): زمینهٔ خامِ ‎#1b1238 با متنِ `--text1` در تمِ روشن سرمه‌ای روی سرمه‌ای بود. */
-  z-index: 200; background: var(--toast-bg); color: var(--toast-ink); border: 1px solid var(--toast-edge);
-  border-radius: 12px; padding: 9px 16px; font-size: 13px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  position: fixed; bottom: 18px; inset-inline-start: 50%; transform: translateX(50%);
+  z-index: 300; background: var(--toast-bg); color: var(--toast-ink); border: 1px solid var(--toast-edge);
+  border-radius: 14px; padding: 11px 18px; font-size: 13px; font-weight: 600; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
 }
 @media (max-width: 640px) {
   .sh-brand-name { display: none; }

@@ -11,11 +11,12 @@ import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/identity.js';
 import { faDate } from '../lib/jalali.js';
 import { Back, User } from '../ui/icons.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 
 export default function Profile() {
   const { user, updateProfile, changePassword, setUser } = useAuth();
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1800);
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [selfie, setSelfie] = useState(''); // فقط وقتی عکسِ جدید گرفته شود
@@ -34,11 +35,6 @@ export default function Profile() {
   };
 
   useEffect(() => { document.title = 'عمل‌یار — پروفایل من'; }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
   useEffect(() => {
     setFirstName(user?.firstName || '');
     setLastName(user?.lastName || '');
@@ -158,7 +154,7 @@ export default function Profile() {
         </form>
       </div>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }

@@ -123,7 +123,7 @@ try {
     await pg.locator('.db-sheet button.db-submit[type="submit"]').click();
     let need = null;
     for (let i = 0; i < 20 && !need; i++) {
-      const t = (await pg.locator('.sh-toast').allInnerTexts()).join(' ');
+      const t = (await pg.locator('.ui-toast.on').allInnerTexts()).join(' ');
       need = /«([^»]+)» را کامل کنید/.exec(t)?.[1] ?? null;
       if (!need) {
         const r = await Promise.race([saved.catch(() => null), pg.waitForTimeout(100).then(() => undefined)]);
@@ -144,7 +144,7 @@ try {
   if (body?.id) trash.visits.push(body.id);
   await page.waitForSelector('.db-sheet', { state: 'detached', timeout: 8000 }).catch(() => {});
   ok(countMine() === before + 1, 'دقیقاً یک مراجعه در سرور');
-  const toast = await page.locator('.sh-toast').innerText({ timeout: 5000 }).catch(() => '');
+  const toast = await page.locator('.ui-toast.on').innerText({ timeout: 5000 }).catch(() => '');
   ok(/ثبت شد/.test(toast), `پیامِ ثبت آمد («${toast}»)`);
   const row = page.locator('.td-item', { hasText: `سریع${tag}` });
   await row.first().waitFor({ timeout: 8000 }).catch(() => {});
@@ -180,7 +180,7 @@ try {
   if (b2?.id) trash.visits.push(b2.id);
   await pd.waitForTimeout(1200);
   await pd.locator('.db-sheet').waitFor({ timeout: 8000 }).catch(() => {});
-  const follow = await pd.locator('.sh-toast').innerText({ timeout: 5000 }).catch(() => '');
+  const follow = await pd.locator('.ui-toast.on').innerText({ timeout: 5000 }).catch(() => '');
   ok(await pd.locator('.db-sheet').count() === 1 && /فرمِ عمل را برای همین بیمار/.test(follow),
     `**فرمِ عملِ همین بیمار بلافاصله باز شد** (مثلِ داشبورد و پرونده) — «${follow}»`);
   await pd.close();

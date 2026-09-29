@@ -8,19 +8,15 @@ import './launcher.css';
 import { ArrowStart, Back } from '../ui/icons.jsx';
 /* کاتالوگِ کاشی‌ها از W2.3 مشترک است — صفحهٔ «امروز» هم از همین می‌خواند. */
 import { HERO, useAllowedTools, track } from './tools.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 
 export default function Launcher() {
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1600);
   const { user } = useAuth();
   const { brandName } = useConfig();
   const navigate = useNavigate();
   useEffect(() => { document.title = 'همهٔ ابزارها — عمل‌یار'; }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1600);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const soon = (label) => setToast(`«${label}» به‌زودی`);
   const open = (t) => (t.to ? navigate(t.to) : soon(t.label));
@@ -151,7 +147,7 @@ export default function Launcher() {
         </div>
       )}
 
-      <div className={`lx-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }

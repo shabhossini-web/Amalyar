@@ -18,6 +18,7 @@ import { Back, Check, Close, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 
 /**
@@ -161,17 +162,12 @@ export default function Users() {
   const [all, setAll] = useState(null);
   const [levelSel, setLevelSel] = useState({}); // id → سطحِ انتخابی
   const [busyId, setBusyId] = useState(0);
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1800);
   const [profileId, setProfileId] = useState(0);
   const [creating, setCreating] = useState(false);
   const [testingEnabled, setTestingEnabled] = useState(false), [modeBusy, setModeBusy] = useState(false);
 
   useEffect(() => { document.title = 'عمل‌یار — مدیریت کاربران'; }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const load = useCallback(async () => {
     try {
@@ -392,7 +388,7 @@ export default function Users() {
         )}
       </AnimatePresence>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }

@@ -18,6 +18,7 @@ import './launcher.css';
 import './shell.css';
 import './work.css';
 import './today.css';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 /* سلام بر پایهٔ ساعتِ **دستگاه** — نه سرور: کاربرِ شبِ ایران نباید «صبح بخیر» بگیرد
@@ -53,7 +54,7 @@ export default function Today() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(0);
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1800);
   const [toolsOpen, setToolsOpen] = useState(false);
   const { hero, daily, tools, nothing } = useAllowedTools();
   /* **ابزارک‌های منتخب** (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — سه خانه بالای صفحه، به‌ازای هر حساب
@@ -73,7 +74,6 @@ export default function Today() {
   const VisitIcon = vertical === 'clinic' ? Diagnosis : Scalpel;
 
   useEffect(() => { document.title = 'امروز — عمل‌یار'; }, []);
-  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 1800); return () => clearTimeout(t); }, [toast]);
 
   const load = useCallback(() => {
     api('/work/today')
@@ -392,7 +392,7 @@ export default function Today() {
       )}
 
       <ThingPopups things={things} />
-      {toast && <div className="sh-toast" role="status">{toast}</div>}
+      <Toast msg={toast} />
     </div>
   );
 }

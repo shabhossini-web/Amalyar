@@ -11,6 +11,7 @@ import { useStagger } from '../ui/stagger.js';
 import './launcher.css'; /* lx-toast */
 import './letters.css';
 import { Alert, Back, Close, Mail, Plus, Print, Search, Trash } from '../ui/icons.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 /**
  * نامهٔ اداری (#47) — سندِ رسمیِ شرکت روی سربرگِ آپلودشده در تنظیمات.
@@ -24,7 +25,7 @@ export default function Letters() {
   const [q, setQ] = useState('');
   const [sheet, setSheet] = useState(null); // null | {} | {row}
   const [err, setErr] = useState('');
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(3500);
   const [letterheadUrl, setLetterheadUrl] = useState(null);
   const row = useStagger();
   const tRef = useRef(0);
@@ -45,11 +46,6 @@ export default function Letters() {
     tRef.current = setTimeout(() => load(v), 350);
   };
 
-  useEffect(() => {
-    if (!toast) return undefined;
-    const id = setTimeout(() => setToast(''), 3500);
-    return () => clearTimeout(id);
-  }, [toast]);
 
   const print = (r) => {
     if (!printLetter({ letter: r, brand: cfg.brand, letterheadUrl })) {
@@ -121,7 +117,7 @@ export default function Letters() {
         )}
       </AnimatePresence>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }

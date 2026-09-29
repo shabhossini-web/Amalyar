@@ -11,6 +11,7 @@ import './definitions.css';
 import './launcher.css';
 import './users.css';
 import './site.css';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 /**
  * ویرایشگرِ سایتِ عمومیِ شرکت.
@@ -230,16 +231,11 @@ export default function Site() {
   const [tab, setTab] = useState('sections');
   const [editing, setEditing] = useState(null); // {kind, row}
   const [draft, setDraft] = useState({});       // متن‌های ویرایش‌نشده‌ی در دست
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(2200);
   const [busy, setBusy] = useState(false);
   const stagger = useStagger();
 
   useEffect(() => { document.title = 'عمل‌یار — سایتِ معرفی'; }, []);
-  useEffect(() => {
-    if (!toast) return undefined;
-    const t = setTimeout(() => setToast(''), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const load = useCallback(async () => {
     try {
@@ -465,7 +461,7 @@ export default function Site() {
         )}
       </AnimatePresence>
 
-      {toast && <div className="df-toast" role="status">{toast}</div>}
+      <Toast msg={toast} />
     </div>
   );
 }

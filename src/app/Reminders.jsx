@@ -176,7 +176,7 @@ export default function Reminders() {
         ))}
       </div>
 
-      <div className={`rm-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
+      <div className={`rm-toast${toast ? ' on' : ''}`}>{toast}</div>
     </div>
   );
 }

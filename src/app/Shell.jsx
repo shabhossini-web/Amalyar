@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import { useConfig } from './config.jsx';
@@ -10,6 +10,7 @@ import { Search } from '../ui/icons.jsx';
    پوسته صریحاً آن را می‌آورد (قانونِ ۲۱: هیچ صفحه‌ای از CSSِ صفحهٔ دیگر ارث نمی‌برد). */
 import './launcher.css';
 import './shell.css';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 /**
  * پوستهٔ سراسریِ سامانه (W2.4) — یک نوارِ ثابت بالای **همهٔ** صفحاتِ `/app`:
@@ -23,12 +24,7 @@ import './shell.css';
 export default function Shell() {
   const { brandName } = useConfig();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [toast, setToast] = useState('');
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const { msg: toast, show: setToast } = useToast(1800);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
   /* صفحهٔ «همهٔ ابزارها» (لانچر) منوی پروفایلِ خودش را دارد — این‌جا دو تا نشود.
      از W2.3 نشانی‌اش `/app/tools` است و `/app` خودش صفحهٔ «امروز» است. */
@@ -59,7 +55,7 @@ export default function Shell() {
       </header>
       <GlobalSearch open={searchOpen} onOpen={() => setSearchOpen(true)} onClose={() => setSearchOpen(false)} />
       <Outlet />
-      {toast && <div className="sh-toast" role="status">{toast}</div>}
+      <Toast msg={toast} />
     </>
   );
 }
