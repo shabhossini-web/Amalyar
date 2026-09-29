@@ -17,7 +17,8 @@
   color: var(--text1); background: rgba(var(--surface-rgb), .55); border: 1px solid rgba(var(--brand-soft-rgb), .28);
 }
 .th-today:hover, .th-exit:hover { border-color: var(--brand-2); }
-.th-exit { background: none; color: var(--brand-2); border-color: transparent; }
+/* متن با `--brand-text` (قانونِ ۲۳): `--brand-2` روی زمینهٔ روشن ۳٫۶ به ۱ بود — فقط برای بوردر و پس‌زمینه. */
+.th-exit { background: none; color: var(--brand-text); border-color: transparent; }
 
 .th-err, .th-note, .th-empty, .th-hint {
   max-width: 900px; margin: 0 auto 12px; padding: 12px 15px; border-radius: 12px; font-size: 13px;
@@ -84,7 +85,7 @@
 .th-blood.none b { font-size: 12px; font-weight: 700; color: var(--amber-text); }
 .th-op {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0;
-  margin: 12px 0 0; font-size: 16px; font-weight: 700; color: var(--brand-2);
+  margin: 12px 0 0; font-size: 16px; font-weight: 700; color: var(--brand-text);
 }
 /* تک‌عمل: «عمل · بیمارستان» در یک خط، همان ظاهرِ دیروز. چندعمل: فهرست تمام‌عرض
    و بیمارستان زیرش — جداکننده آن‌جا فقط سرِ خطِ تازه آویزان می‌ماند. */
@@ -116,10 +117,15 @@
 .th-elapsed { display: flex; align-items: center; gap: 5px; color: var(--cyan); }
 .th-elapsed b { color: var(--cyan); }
 .th-acts { display: flex; gap: 8px; }
+/* ⚠️ `inline-flex` + `align-items:center`: قاعدهٔ سراسریِ `svg { display:block }` (index.css) آیکونِ
+   دکمه را به سطرِ خودش می‌برد و «ترخیص» دوخطی می‌شد — آیکون بالا، متن پایین. */
 .th-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 46px; padding: 0 20px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 800;
   color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--brand-soft-rgb), .3);
 }
+.th-btn svg { flex: none; }
+.th-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
 .th-btn:hover:not(:disabled) { border-color: var(--brand-2); }
 .th-btn.primary { color: #fff; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border-color: transparent; }
 .th-btn:disabled { opacity: .45; cursor: default; }

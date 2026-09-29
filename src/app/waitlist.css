@@ -64,7 +64,7 @@
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .wl-tag.s-awaiting { color: var(--amber-text); border-color: rgba(245, 158, 11, .45); }
-.wl-tag.s-planned { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .45); }
+.wl-tag.s-planned { color: var(--brand-text); border-color: rgba(var(--brand-2-rgb), .45); }
 .wl-tag.s-booked { color: var(--green-text); border-color: rgba(52, 211, 153, .45); }
 .wl-days {
   margin-inline-start: auto; display: inline-flex; align-items: baseline; gap: 4px; padding: 3px 10px; border-radius: 10px;
@@ -79,7 +79,8 @@
 .wl-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12.5px; line-height: 1.8; color: var(--text1); }
 .wl-facts > span { min-width: 0; overflow-wrap: anywhere; }
 .wl-facts em { font-style: normal; color: var(--text3); margin-inline-end: 3px; }
-.wl-facts .wl-owner { color: var(--brand-2); }
+/* متن با `--brand-text` (بنفشِ تیره در تمِ روشن)؛ `--brand-2` فقط برای بوردر/پس‌زمینه — روی سفید ۳٫۶ به ۱ بود. */
+.wl-facts .wl-owner { color: var(--brand-text); }
 .wl-facts .wl-warn { color: var(--amber-text); }
 
 .wl-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
