@@ -76,7 +76,13 @@ try {
   const hit = writes.find((w) => w.path.includes('/retry'));
   ok(hit?.path === '/reminders/1/retry' && hit.method === 'POST', `درخواستِ ارسالِ دوباره رفت (${hit?.path})`);
 
-  await page.locator('.rm-row', { hasText: 'پیامِ در صف' }).locator('.rm-act').first().click();
+  /* لغو از بازبینیِ UX (clinic-daily-15) اول **می‌پرسد**: لمسِ اول فقط پرسش را باز می‌کند. */
+  const queuedRow = page.locator('.rm-row', { hasText: 'پیامِ در صف' });
+  await queuedRow.locator('.rm-act').first().click();
+  await queuedRow.locator('.rm-ask').waitFor({ timeout: 8000 });
+  ok(!writes.some((w) => w.path === '/reminders/3/cancel'), '🔴 **نباید بیفتد:** لمسِ اولِ «لغو» بی‌پرسش درخواست بفرستد');
+  ok((await queuedRow.locator('.rm-ask').innerText()).includes('برگشت ندارد'), 'پرسش پیامد را می‌گوید');
+  await queuedRow.locator('.rm-ask-yes').click();
   await page.waitForFunction(() => document.querySelector('.rm-toast.on'), null, { timeout: 8000 });
   ok(writes.some((w) => w.path === '/reminders/3/cancel' && w.method === 'POST'), 'و لغو هم روی شناسهٔ خودش');
 

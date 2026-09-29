@@ -84,7 +84,12 @@ export default function Reminders() {
    * کدام کار در جریان است.
    */
   const [rowBusy, setRowBusy] = useState(0);
+  /* ⚠️ «لغوِ این پیام» **می‌پرسد** (بازبینیِ UX، clinic-daily-15 / company-10): با یک لمس یادآوریِ
+     مراقبتِ بیمار لغو می‌شد، بی‌پرسش و بی‌برگشت — و روی گوشی دکمه درست زیرِ متنِ پیام است. پرسش
+     همان‌جا روی ردیف باز می‌شود، با نامِ بیمار و پیامد؛ فوکوس روی «نگه‌داشتن». */
+  const [askCancel, setAskCancel] = useState(0);
   const act = async (r, what) => {
+    setAskCancel(0);
     setRowBusy(r.id);
     try {
       const fresh = await api(`/reminders/${r.id}/${what}`, { method: 'POST' });
@@ -96,7 +101,7 @@ export default function Reminders() {
           : fresh?.status === 'failed' ? 'باز هم نرفت — علتش زیرِ همان ردیف آمده است'
           : fresh?.error ? 'این بار نرفت — خودش چند دقیقهٔ دیگر دوباره امتحان می‌کند'
           : `دوباره در صف نشست (${fresh?.statusFa ?? statusFa(fresh?.status)})`)
-        : 'لغو شد و از دفتر برداشته شد');
+        : 'یادآوری لغو شد — دیگر فرستاده نمی‌شود');
       await load();
     } catch (e) { setToast(e.message); } finally { setRowBusy(0); }
   };
@@ -164,19 +169,35 @@ export default function Reminders() {
                     <Send width="13" height="13" /> ارسالِ دوباره
                   </button>
                 )}
-                {CANCELLABLE.includes(r.status) && (
+                {CANCELLABLE.includes(r.status) && askCancel !== r.id && (
                   <button type="button" className="rm-act rm-act-off" disabled={rowBusy === r.id}
-                          onClick={() => act(r, 'cancel')}>
+                          onClick={() => setAskCancel(r.id)}>
                     لغوِ این پیام
                   </button>
                 )}
+              </div>
+            )}
+            {askCancel === r.id && (
+              <div className="rm-ask" role="group" aria-label="تأییدِ لغوِ یادآوری">
+                <p>
+                  یادآوریِ «{kindFa(r)}»{(r.patientName || r.recipientName) ? ` برای ${r.patientName || r.recipientName}` : ''} لغو
+                  شود؟ این پیام دیگر فرستاده نمی‌شود و برگشت ندارد.
+                </p>
+                <div>
+                  <button type="button" className="rm-act rm-ask-yes" disabled={rowBusy === r.id} onClick={() => act(r, 'cancel')}>
+                    لغوِ یادآوری
+                  </button>
+                  {/* فوکوس روی گزینهٔ امن، همان لحظه که پرسش باز شد. */}
+                  <button type="button" className="rm-act" autoFocus onClick={() => setAskCancel(0)}>نگه‌داشتن</button>
+                </div>
               </div>
             )}
           </motion.article>
         ))}
       </div>
 
-      <div className={`rm-toast${toast ? ' on' : ''}`}>{toast}</div>
+      {/* توست برای صفحه‌خوان هم اعلام می‌شود (company-10). */}
+      <div className={`rm-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

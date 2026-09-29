@@ -119,7 +119,12 @@ export default function Schedule() {
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
+  /* ⚠️ حذفِ روزِ کاری **می‌پرسد** (بازبینیِ UX، clinic-daily-15): سطلِ هر روز کنارِ کلیدِ «فعال»
+     بود و با یک لمس کلِ آن روزِ هفته را از نوبت‌دهی برمی‌داشت، بی‌پرسش و بی‌برگشت. پرسش همان‌جا
+     روی ردیف باز می‌شود (نامِ روز و ساعت + پیامد)، فوکوس روی «انصراف» می‌نشیند. */
+  const [askDel, setAskDel] = useState(0);
   const remove = async (r) => {
+    setAskDel(0);
     setBusy(true);
     try {
       await api(`/availability/rules/${r.id}`, { method: 'DELETE' });
@@ -290,14 +295,31 @@ export default function Schedule() {
                       <small className="sc-topics">{r.topics.map((t) => t.name).join('، ')}</small>
                     )}
                   </div>
-                  <div className="sc-tools">
-                    <button type="button" onClick={() => toggle(r)} disabled={busy} title={r.active ? 'خاموش' : 'روشن'}>
-                      {r.active ? 'فعال' : 'خاموش'}
-                    </button>
-                    <button type="button" className="del" onClick={() => remove(r)} disabled={busy} title="حذف">
-                      <Trash width="14" height="14" />
-                    </button>
-                  </div>
+                  {askDel === r.id ? (
+                    <div className="sc-ask" role="group" aria-label={`حذفِ روزِ کاریِ ${g.label}`}>
+                      <p>
+                        حذفِ «{g.label} <bdi dir="ltr">{r.start}–{r.end}</bdi>»؟ نوبت‌دهیِ این ساعت‌ها در همهٔ {g.label}‌ها
+                        برداشته می‌شود و برگشت ندارد. برای بستنِ فقط یک روز، «تعطیل‌کردنِ این روز» در پیش‌نمایش کافی است.
+                      </p>
+                      <div>
+                        <button type="button" className="danger" onClick={() => remove(r)} disabled={busy}>حذفِ روزِ کاری</button>
+                        {/* فوکوس روی گزینهٔ امن، همان لحظه که پرسش باز شد. */}
+                        <button type="button" autoFocus onClick={() => setAskDel(0)}>انصراف</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sc-tools">
+                      <button type="button" onClick={() => toggle(r)} disabled={busy} aria-pressed={r.active}
+                              title={r.active ? 'خاموش‌کردنِ نوبت‌دهیِ این ساعت‌ها' : 'روشن‌کردنِ نوبت‌دهیِ این ساعت‌ها'}>
+                        {r.active ? 'فعال' : 'خاموش'}
+                      </button>
+                      {/* سطل **دور** از کلیدِ روشن/خاموش، با جداکننده — و خودش فقط پرسش را باز می‌کند. */}
+                      <button type="button" className="del" onClick={() => setAskDel(r.id)} disabled={busy}
+                              aria-label={`حذفِ روزِ کاریِ ${g.label} ${r.start} تا ${r.end}`} title="حذفِ این روزِ کاری">
+                        <Trash width="14" height="14" />
+                      </button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>

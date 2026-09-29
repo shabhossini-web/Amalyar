@@ -96,3 +96,14 @@
 .rm-act:disabled { opacity: .5; cursor: default; }
 .rm-act:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .rm-act { transition: none; } }
+
+/* پرسشِ لغوِ یادآوری همان‌جا روی ردیف — نامِ بیمار + پیامد (clinic-daily-15). */
+.rm-ask {
+  display: grid; gap: 8px; margin-top: 8px; padding: 10px 12px; border-radius: 11px;
+  background: rgba(248, 113, 113, .07); border: 1px solid rgba(248, 113, 113, .35);
+}
+.rm-ask p { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--text1); }
+.rm-ask > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.rm-ask .rm-act { min-height: 40px; }
+.rm-act.rm-ask-yes { color: #fff; background: #dc2626; border-color: #dc2626; }
+.rm-act.rm-ask-yes:hover:not(:disabled) { background: #b91c1c; }
