@@ -29,6 +29,7 @@
    است و تغییرِ رنگِ هاور جایش را نمی‌گیرد (بازبینیِ UX ۱۴۰۵/۰۷). */
 .sh-search:hover, .sh-search:focus-visible { border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); color: var(--text1); }
 .sh-search-label { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-search-short { display: none; }
 .sh-kbd {
   font-family: inherit; font-size: 11px; color: var(--text3);
   border: 1px solid rgba(var(--veil-rgb), 0.14); border-radius: 6px; padding: 1px 6px; direction: ltr;
@@ -42,9 +43,16 @@
   z-index: 300; background: var(--toast-bg); color: var(--toast-ink); border: 1px solid var(--toast-edge);
   border-radius: 14px; padding: 11px 18px; font-size: 13px; font-weight: 600; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
 }
+/* نوارِ موبایل (بازبینیِ UX ۱۴۰۵/۰۷): پرکاربردترین دکمه‌های سامانه‌اند — لوگو ۲۳×۲۴، جستجو ۳۶ و
+   زنگ ۳۸ پیکسل بود و چیپِ پروفایل ۱۴۰ پیکسل می‌گرفت. حالا هر هدف دست‌کم ۴۴ پیکسل و چیپ فقط
+   آواتار است (نام و سطح داخلِ منو، `profile-menu.css`). */
 @media (max-width: 640px) {
+  .sh-in { padding: 8px 12px; gap: 8px; }
+  .sh-brand { justify-content: center; min-width: 44px; min-height: 44px; }
   .sh-brand-name { display: none; }
-  .sh-search { max-width: none; }
+  .sh-search { max-width: none; min-height: 44px; }
+  .sh-search-label { display: none; }
+  .sh-search-short { display: inline; flex: 1 1 auto; white-space: nowrap; }
   .sh-kbd { display: none; }
 }
 

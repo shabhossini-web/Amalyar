@@ -7,6 +7,8 @@
 }
 .wb-btn:hover, .wb-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); }
 .wb-btn.hot { color: var(--amber); }
+/* هدفِ لمسیِ زنگ روی گوشی دست‌کم ۴۴ پیکسل (بازبینیِ UX ۱۴۰۵/۰۷). */
+@media (max-width: 640px) { .wb-btn { width: 44px; height: 44px; } }
 .wb-badge {
   position: absolute; top: -6px; inset-inline-end: -6px; min-width: 20px; height: 20px; padding: 0 6px;
   border-radius: 99px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800;

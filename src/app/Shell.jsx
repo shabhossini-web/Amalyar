@@ -42,7 +42,9 @@ export default function Shell() {
             onClick={() => setSearchOpen(true)} aria-label="جستجوی بیمار" aria-keyshortcuts="Control+K"
           >
             <Search width="16" height="16" />
+            {/* روی گوشی «جستجو»: «جستجوی بیم…»ِ بریده بدتر از واژهٔ کوتاه است (بازبینیِ UX ۱۴۰۵/۰۷). */}
             <span className="sh-search-label">جستجوی بیمار…</span>
+            <span className="sh-search-short" aria-hidden="true">جستجو</span>
             <kbd className="sh-kbd" aria-hidden="true">{isMac ? '⌘' : 'Ctrl'} K</kbd>
           </button>
           <div className="sh-end">
