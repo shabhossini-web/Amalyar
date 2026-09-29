@@ -12,7 +12,7 @@ import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
 import { digitVariants, textSearchOr } from '../common/search';
-import { toDateValue } from '../common/jalali';
+import { jalaliText, toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -2034,7 +2034,7 @@ export class PatientsService {
     });
     if (cancelling) {
       await this.reminders.notifyCancelled('visit', v.patientId, cancel!.reason!, {
-        when: v.opDate ? v.opDate.toISOString().slice(0, 10) : null,
+        when: v.opDate ? jalaliText(v.opDate) : null, // «۸ مهر ۱۴۰۵» — نه ISOِ میلادی (clinic-daily-12)
       });
     }
     /* لغوِ عمل باید یادآوریِ «عملِ پیشِ‌رو» را هم باطل کند. */

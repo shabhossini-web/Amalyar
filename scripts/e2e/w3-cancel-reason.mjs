@@ -99,6 +99,8 @@ try {
   ok(notices() === 1, 'یک پیامکِ اطلاع ثبت شد');
   const text = sql(`SELECT text FROM reminders WHERE patient_id=${pid} AND kind='notice' ORDER BY id DESC LIMIT 1`);
   ok(text.includes('مراجعهٔ شما'), 'متن از مراجعه حرف می‌زند، نه نوبت');
+  /* 🔴 نباید بیفتد (بازبینیِ UX، clinic-daily-12): تاریخِ ISOِ میلادی («2026-09-30») در پیامکِ بیمار. */
+  ok(!/\d{4}-\d{2}-\d{2}/.test(text), 'تاریخِ پیامک شمسی و فارسی است، نه ISOِ میلادی');
   /* 🔴 نباید بیفتد: یادداشتِ داخلی به دستِ بیمار برسد. */
   ok(!text.includes(tag), 'یادداشتِ داخلی در پیامک نیامد');
 
@@ -137,6 +139,8 @@ try {
   ok(notices() === before + 1, 'پیامکِ لغوِ نوبت ثبت شد');
   const aText = sql(`SELECT text FROM reminders WHERE patient_id=${pid} AND kind='notice' ORDER BY id DESC LIMIT 1`);
   ok(aText.includes('نوبتِ شما'), 'متنِ نوبت از «نوبت» حرف می‌زند');
+  ok(!/\d{4}-\d{2}-\d{2}/.test(aText) && /[۰-۹]+ (فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند) [۰-۹]{4}/.test(aText),
+    `تاریخِ پیامکِ نوبت شمسی و فارسی است (${aText.slice(0, 60)}…)`);
   ok(!aText.includes(tag), 'یادداشتِ داخلی در پیامکِ نوبت نیامد');
 
   console.log('۸) میزِ پذیرش همان دلیل را رد می‌کند (مسیرِ سومِ لغو)');

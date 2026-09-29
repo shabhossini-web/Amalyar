@@ -9,6 +9,7 @@ import { AvailabilityService } from './availability.service';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { RemindersService } from './reminders.service';
 import { clinicTodayIso, dayUtc } from '../common/clinic-day';
+import { jalaliText } from '../common/jalali';
 
 /** برچسب‌های فارسیِ وضعیتِ نوبت — مشتقِ سرور (قانون ۱۵). */
 /* ⚠️ خانه‌اش `labels.ts` است (تنها منبعِ برچسب‌های وضعیت). این‌جا فقط دوباره
@@ -400,7 +401,7 @@ export class AppointmentsService {
     await this.reminders.syncAppointment(id);
     if (cancelling) {
       await this.reminders.notifyCancelled('appointment', row.patientId, cancel!.reason!, {
-        when: row.date.toISOString().slice(0, 10),
+        when: jalaliText(row.date), // «۸ مهر ۱۴۰۵» — نه ISOِ میلادی (clinic-daily-12)
       });
     }
     /* قرینهٔ خاموشیِ walkIn: نوبتی که «ویزیتِ بعدی» را پوشش می‌داد اگر لغو یا

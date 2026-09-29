@@ -142,6 +142,20 @@ export function toJalali(date: Date): [number, number, number] {
   return [jy, 7 + div(k, 30), mod(k, 30) + 1];
 }
 
+const FA_MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+
+/**
+ * تاریخ برای **متنِ رو به بیمار** — «۸ مهر ۱۴۰۵»: شمسی، ارقام و نامِ ماهِ فارسی.
+ *
+ * ⚠️ پیامکِ لغو تا بازبینیِ UX (clinic-daily-12) `toISOString().slice(0, 10)` می‌فرستاد —
+ * «مراجعهٔ شما 2026-09-30 … لغو شد» — و بیمار نمی‌فهمید کدام نوبتش لغو شده است.
+ */
+export function jalaliText(date: Date): string {
+  const [jy, jm, jd] = toJalali(date);
+  const fa = (n: number) => String(n).replace(/\d/g, (x) => '۰۱۲۳۴۵۶۷۸۹'[Number(x)]);
+  return `${fa(jd)} ${FA_MONTHS[jm - 1]} ${fa(jy)}`;
+}
+
 /**
  * تاریخِ میلادیِ ISO در **متنِ آزاد** (۲۰۲۶-۰۹-۰۱) → شمسی با ارقامِ فارسی (۱۴۰۵/۰۶/۱۰).
  *
