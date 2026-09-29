@@ -465,7 +465,7 @@ export default function Site() {
         )}
       </AnimatePresence>
 
-      {toast && <div className="df-toast">{toast}</div>}
+      {toast && <div className="df-toast" role="status">{toast}</div>}
     </div>
   );
 }

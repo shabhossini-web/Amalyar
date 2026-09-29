@@ -149,7 +149,7 @@
 .ia-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .ia-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }

@@ -314,7 +314,7 @@ export default function IntakeAdmin() {
         {zoom && <ReceiptZoom url={zoom} onClose={() => setZoom(null)} />}
       </AnimatePresence>
 
-      <div className={`ia-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`ia-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

@@ -551,7 +551,7 @@ export default function FormBuilder() {
         )}
       </AnimatePresence>
 
-      <div className={`df-toast${toast ? ' on' : ''}`} role="status">{toast}</div>
+      {toast && <div className="df-toast" role="status">{toast}</div>}
     </div>
   );
 }

@@ -273,7 +273,7 @@ export default function Settings() {
 
       {me?.level >= 6 && <TestDataPanel onToast={setToast} />}
 
-      {toast && <div className="df-toast">{toast}</div>}
+      {toast && <div className="df-toast" role="status">{toast}</div>}
     </div>
   );
 }

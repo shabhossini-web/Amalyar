@@ -182,7 +182,7 @@ export default function Access() {
         </section>
       ))}
 
-      <div className={`ax-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`ax-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

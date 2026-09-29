@@ -14,7 +14,12 @@
     radial-gradient(60% 45% at 85% -10%, rgba(var(--brand-rgb), .5), transparent 70%),
     radial-gradient(50% 40% at -10% 110%, rgba(0, 212, 255, .18), transparent 70%);
 }
-.df > *:not(.df-bg) { position: relative; }
+/* فرزندانِ صفحه روی `.df-bg`ِ ثابت بنشینند. ⚠️ با وزنِ **صفر** (`:where`): این قاعده
+   با وزنِ ۰,۲,۰ بر `position: fixed`ِ هر پنجره و توستِ فرزندِ مستقیم (`.df-overlay`،
+   `.df-toast`، `.db-overlay`ِ پاپ‌آپ‌های پرونده، `.lx-bg`ِ فرم‌ساز) می‌چربید و آن‌ها را
+   ته صفحه، بیرون از دید می‌ساخت (بازبینیِ UX ۱۴۰۵/۰۷). حالا هر کلاسی که `position`
+   بدهد برنده است — بی‌وابستگی به ترتیبِ بارشدنِ CSSِ چانک‌ها. */
+:where(.df > :not(.df-bg)) { position: relative; }
 
 .df-head { display: flex; align-items: flex-start; gap: 14px; max-width: 900px; margin: 0 auto 18px; }
 .df-back {
@@ -111,8 +116,8 @@
 .df-toast {
   position: fixed; inset-inline: 16px; bottom: 18px; z-index: 60; margin: auto;
   width: fit-content; max-width: calc(100% - 32px);
-  padding: 12px 18px; border-radius: 13px; font-size: 13px; color: #ede9ff;
-  background: rgba(30, 20, 70, .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  padding: 12px 18px; border-radius: 13px; font-size: 13px;
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   box-shadow: 0 12px 40px rgba(0, 0, 0, .45);
 }
 

@@ -368,6 +368,7 @@ export default function Schedule() {
           type="button"
           className={`sc-toast${toast.bad ? ' bad' : ''}`}
           onClick={() => setToast(null)}
+          aria-live={toast.bad ? 'assertive' : 'polite'}
         >
           {toast.text}
           {toast.bad && <i>برای بستن بزنید</i>}

@@ -1191,7 +1191,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`lx-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

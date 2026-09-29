@@ -195,7 +195,7 @@
 .iv-toast {
   position: fixed; inset-inline: 0; bottom: 22px; z-index: 80; width: fit-content; max-width: 90vw;
   margin: 0 auto; padding: 12px 20px; border-radius: 13px; font-size: 12.5px;
-  background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .3);
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
 }
 

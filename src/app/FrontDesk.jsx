@@ -317,7 +317,7 @@ export default function FrontDesk() {
         )}
       </AnimatePresence>
 
-      {toast && <button type="button" className="fd-toast" onClick={() => setToast('')}>{toast}</button>}
+      {toast && <button type="button" className="fd-toast" aria-live="polite" onClick={() => setToast('')}>{toast}</button>}
     </div>
   );
 }

@@ -79,7 +79,7 @@
 .fd-toast {
   position: fixed; inset-inline-start: 50%; transform: translateX(50%); bottom: 22px; z-index: 60;
   padding: 10px 18px; border-radius: 12px; font: inherit; font-size: 13px; cursor: pointer;
-  color: var(--ink-bright); background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: 0;
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   box-shadow: var(--shadow-card);
 }
 

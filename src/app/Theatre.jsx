@@ -213,7 +213,7 @@ export default function Theatre() {
         )}
       </AnimatePresence>
 
-      {toast && <button type="button" className="th-toast" onClick={() => setToast('')}>{toast}</button>}
+      {toast && <button type="button" className="th-toast" aria-live="polite" onClick={() => setToast('')}>{toast}</button>}
     </div>
   );
 }
