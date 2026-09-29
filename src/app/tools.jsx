@@ -20,7 +20,9 @@ import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Do
  * نگهبانِ ماشینی: `node scripts/verify-module-icons.js`.
  *
  * ⚠️ **نام بر پایهٔ کارِ کاربر، نه نامِ ابزار** (یافتهٔ B3 سندِ بازبینی):
- * «داشبورد مدیریت» → «بیماران»، «ثبت‌نامِ بیماران» → «پذیرش». واژه‌هایی مثل
+ * «داشبورد مدیریت» → «بیماران». «پذیرش» هم «ثبت‌نام‌های آنلاین» شد (بازبینیِ UX ۱۴۰۵/۰۷):
+ * کنارِ «میزِ پذیرش» دو کاشیِ تقریباً هم‌نام بودند و منشی‌ای که بیمارِ رسیده را می‌پذیرفت
+ * اولی (صفِ ثبت‌نام‌های اینترنتی) را می‌زد. واژه‌هایی مثل
  * «پرتال» و «پنل» می‌گویند این *چه ابزاری است*، نه اینکه کاربر **چه کاری**
  * می‌کند.
  */
@@ -28,7 +30,7 @@ export const HERO = { key: 'dashboard', label: 'بیماران', desc: 'ثبت �
 
 export const DAILY = [
   { key: 'surgeon', label: 'پرتال جراح', icon: Doctor, ready: true, min: 2, to: '/app/surgeon' },
-  { key: 'formgen', label: 'پذیرش', icon: Form, ready: true, min: 5, to: '/app/intake' },
+  { key: 'formgen', label: 'ثبت‌نام‌های آنلاین', icon: Form, ready: true, min: 5, to: '/app/intake' },
   { key: 'messenger', label: 'پیام‌رسان', icon: Chat, ready: true, min: 2, to: '/app/chat' },
 ];
 
@@ -68,6 +70,32 @@ export const TOOLS = [
 ];
 
 export { ArrowStart };
+
+/**
+ * گروه‌های کاشی — در لانچر و کشوی «همهٔ ابزارها» (بازبینیِ UX ۱۴۰۵/۰۷: ۲۲ کاشیِ بی‌گروه کنارِ هم
+ * و ابزارهای روزانه لابه‌لای ابزارهای مدیریتی). ترتیبِ کلیدها همان ترتیبِ نمایش است؛ ابزارِ
+ * روزانه بالا. کاشیِ تازه‌ای که این‌جا نیامده ته گروهِ آخر می‌نشیند — گم نمی‌شود.
+ */
+export const TOOL_GROUPS = [
+  { key: 'daily', label: 'کارِ روزانه', keys: ['frontdesk', 'formgen', 'surgeon', 'theatre', 'tech', 'dispatch', 'transport', 'messenger', 'reminders'] },
+  { key: 'care', label: 'بیمار و درمان', keys: ['dashboard', 'calendar', 'schedule', 'waitlist', 'pathway', 'notes'] },
+  { key: 'money', label: 'مالی', keys: ['accounting', 'inventory', 'crm'] },
+  { key: 'admin', label: 'مدیریت و تنظیمات', keys: ['letter', 'assistant', 'definitions', 'forms', 'users', 'access', 'site', 'settings'] },
+];
+
+/** کاشی‌های مجاز، گروه‌بندی‌شده — گروهِ خالی نمی‌آید. */
+export function groupTools(list) {
+  const byKey = new Map(list.filter(Boolean).map((x) => [x.key, x]));
+  const placed = new Set();
+  const groups = TOOL_GROUPS.map((g) => {
+    const tools = g.keys.map((k) => byKey.get(k)).filter(Boolean);
+    tools.forEach((x) => placed.add(x.key));
+    return { key: g.key, label: g.label, tools };
+  });
+  const rest = [...byKey.values()].filter((x) => !placed.has(x.key));
+  if (rest.length) groups[groups.length - 1].tools.push(...rest);
+  return groups.filter((g) => g.tools.length > 0);
+}
 
 /* `perm` روی کاشی‌ای که کلیدِ ماژولِ خودش را ندارد: مجوزی که داده‌اش را باز می‌کند. کاشی با
    سطح (`min`) دیده می‌شود و «سطوحِ دسترسی» همین را زیرِ «کاشی‌های بی‌کلید» می‌نویسد، تا مدیر

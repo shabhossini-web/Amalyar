@@ -93,7 +93,7 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.ADMIN,
   },
   {
-    key: 'formgen', label: 'پذیرش', group: 'modules',
+    key: 'formgen', label: 'ثبت‌نام‌های آنلاین', group: 'modules',
     defaultLevel: LEVEL.ADMIN,
   },
   {

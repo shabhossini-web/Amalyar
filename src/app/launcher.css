@@ -149,6 +149,8 @@
 
 /* tools */
 .lx-tools-label { font-size: 12px; font-weight: 700; color: var(--text2); letter-spacing: .5px; margin: 18px 4px 2px; }
+/* هر گروه (کارِ روزانه، بیمار و درمان، …) سرتیترِ خودش را دارد و کاشی‌هایش زیرِ آن. */
+.lx-group { display: flex; flex-direction: column; gap: 10px; }
 .lx-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
 .lx-tile { display: flex; flex-direction: column; align-items: center; gap: 9px; border-radius: 18px; padding: 16px 8px 13px; }
 .lx-tile-ic {

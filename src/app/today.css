@@ -112,6 +112,9 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); }
 .td-x:hover, .td-x:focus-visible { color: var(--text1); border-color: var(--brand-2); }
 
 .td-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 9px; }
+/* گروه‌های کشو — «کارِ روزانه»، «بیمار و درمان»، «مالی»، «مدیریت و تنظیمات». */
+.td-group + .td-group { margin-top: 14px; }
+.td-group-h { margin: 0 2px 8px; font-size: 12px; font-weight: 800; color: var(--text2); }
 .td-tile {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 14px 8px; border-radius: 16px; text-align: center;

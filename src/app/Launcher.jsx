@@ -7,7 +7,7 @@ import { usePendingAccounts } from './usePending.js';
 import './launcher.css';
 import { ArrowStart, Back } from '../ui/icons.jsx';
 /* کاتالوگِ کاشی‌ها از W2.3 مشترک است — صفحهٔ «امروز» هم از همین می‌خواند. */
-import { HERO, useAllowedTools, track } from './tools.jsx';
+import { HERO, groupTools, useAllowedTools, track } from './tools.jsx';
 import Toast, { useToast } from '../ui/Toast.jsx';
 
 
@@ -24,6 +24,8 @@ export default function Launcher() {
   const lvl = user?.level ?? 0;
   const { hero, daily, tools, nothing } = useAllowedTools();
   const showHero = !!hero;
+  /* کاشی‌ها گروه‌بندی‌شده (کارِ روزانه بالا) — «بیماران» کارتِ بزرگِ بالاست و در گروه‌ها تکرار نمی‌شود. */
+  const groups = groupTools([...daily, ...tools]);
 
   /* بنرِ نصب به پوسته رفت (همهٔ صفحه‌ها)؛ شمارِ درخواست‌های عضویت از همان قلابِ زنگ و «امروز». */
   const pendingCount = usePendingAccounts(lvl >= 6);
@@ -66,35 +68,22 @@ export default function Launcher() {
             </button>
           )}
 
-          {daily.length > 0 && (
-            <div className="lx-row">
-              {daily.map((t) => (
-                <button key={t.key} className="glass lx-card" onMouseMove={track} onClick={() => open(t)}>
-                  <span className="glass-glow" aria-hidden="true" />
-                  <span className="lx-card-ic"><t.icon width="24" height="24" /></span>
-                  <span className="lx-card-title">{t.label}</span>
-                  {!t.ready && <em className="soon dot" title="به‌زودی" />}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {tools.length > 0 && (
-            <>
-              <div className="lx-tools-label">ابزارها</div>
+          {groups.map((g) => (
+            <section key={g.key} className="lx-group" aria-labelledby={`lx-g-${g.key}`}>
+              <h2 id={`lx-g-${g.key}`} className="lx-tools-label">{g.label}</h2>
               <div className="lx-tools">
-                {tools.map((t) => (
+                {g.tools.map((t) => (
                   <button key={t.key} className="glass lx-tile" onMouseMove={track} onClick={() => open(t)}>
                     <span className="glass-glow" aria-hidden="true" />
-                    <span className={`lx-tile-ic tint-${t.tint}`}><t.icon width="24" height="24" /></span>
+                    <span className={`lx-tile-ic tint-${t.tint || 'violet'}`}><t.icon width="24" height="24" /></span>
                     <span className="lx-tile-label">{t.label}</span>
                     {!t.ready && <em className="soon dot" title="به‌زودی" />}
                     {t.key === 'users' && pendingCount > 0 && <span className="lx-badge">{pendingCount}</span>}
                   </button>
                 ))}
               </div>
-            </>
-          )}
+            </section>
+          ))}
 
           {nothing && (
             <div className="glass lx-hero" style={{ cursor: 'default' }}>

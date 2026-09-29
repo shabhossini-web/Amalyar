@@ -381,7 +381,7 @@ function WalkInSheet({ date, onClose, onDone }) {
             <input value={q} onChange={(ev) => setQ(ev.target.value)} autoFocus placeholder="دستِ‌کم دو حرف" />
           </label>
           {rows === null && <p className="fd-sheet-hint">برای یافتنِ پرونده بنویسید.</p>}
-          {rows?.length === 0 && <p className="fd-sheet-hint">پرونده‌ای پیدا نشد. پروندهٔ تازه از «پذیرش» ساخته می‌شود.</p>}
+          {rows?.length === 0 && <p className="fd-sheet-hint">پرونده‌ای پیدا نشد. پروندهٔ تازه از «ثبت‌نام‌های آنلاین» ساخته می‌شود.</p>}
           {rows?.length > 0 && (
             <ul className="fd-found">
               {rows.map((r) => (

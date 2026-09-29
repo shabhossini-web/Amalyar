@@ -9,7 +9,7 @@ import WorkRow from './WorkRow.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
-import { useAllowedTools, track } from './tools.jsx';
+import { groupTools, useAllowedTools, track } from './tools.jsx';
 import { usePrefs } from './usePrefs.jsx';
 import { usePendingAccounts } from './usePending.js';
 import { useConfig } from './config.jsx';
@@ -428,18 +428,24 @@ export default function Today() {
               <button type="button" className="td-x" onClick={() => { setToolsOpen(false); setPickSlot(null); }} aria-label="بستن"><Close width="18" height="18" /></button>
             </div>
             {nothing && <p className="td-empty">دسترسیِ شما هنوز محدود است. مدیرِ سامانه باید سطحتان را ارتقا دهد.</p>}
-            <div className="td-tiles">
-              {[hero, ...daily, ...tools].filter(Boolean).map((t) => (
-                <button key={t.key} type="button" className="glass td-tile" onMouseMove={track} onClick={() => openTool(t)}>
-                  <span className="glass-glow" aria-hidden="true" />
-                  <span className={`td-tile-ic tint-${t.tint || 'violet'}`}><t.icon width="22" height="22" /></span>
-                  <span className="td-tile-label">{t.label}</span>
-                  {t.key === 'users' && pendingAccounts > 0 && (
-                    <span className="td-badge" aria-label={`${faNum(pendingAccounts)} درخواستِ عضویت در انتظارِ تأیید`}>{faNum(pendingAccounts)}</span>
-                  )}
-                </button>
-              ))}
-            </div>
+            {/* گروه‌بندی‌شده — «کارِ روزانه» بالا، «مدیریت و تنظیمات» پایین (بازبینیِ UX ۱۴۰۵/۰۷). */}
+            {groupTools([hero, ...daily, ...tools]).map((g) => (
+              <section key={g.key} className="td-group" aria-labelledby={`td-g-${g.key}`}>
+                <h3 id={`td-g-${g.key}`} className="td-group-h">{g.label}</h3>
+                <div className="td-tiles">
+                  {g.tools.map((t) => (
+                    <button key={t.key} type="button" className="glass td-tile" onMouseMove={track} onClick={() => openTool(t)}>
+                      <span className="glass-glow" aria-hidden="true" />
+                      <span className={`td-tile-ic tint-${t.tint || 'violet'}`}><t.icon width="22" height="22" /></span>
+                      <span className="td-tile-label">{t.label}</span>
+                      {t.key === 'users' && pendingAccounts > 0 && (
+                        <span className="td-badge" aria-label={`${faNum(pendingAccounts)} درخواستِ عضویت در انتظارِ تأیید`}>{faNum(pendingAccounts)}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ))}
           </Overlay>
         )}
       </AnimatePresence>
