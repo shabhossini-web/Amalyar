@@ -88,7 +88,8 @@
    ردیفِ «کار» از ردیفِ تاریخچه باید در یک نگاه جدا باشد: این یکی از بیمار
    **اقدام** می‌خواهد، آن یکی فقط سند است. */
 .po-task { border-color: rgba(var(--brand-soft-rgb, 167, 139, 250), .42); }
-.po-task .po-go { flex: 0 0 auto; color: var(--text2); }
+.po-task .po-go, .po-row .po-go { flex: 0 0 auto; color: var(--text2); }
+.po-row:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .po-task:active { background: rgba(var(--veil-rgb), .09); }
 /* «فیشِ واریزی» و «ارسالِ دوبارهٔ نتیجه» عقب‌افتاده‌اند، نه صرفاً باز. */
 .po-task.urgent {

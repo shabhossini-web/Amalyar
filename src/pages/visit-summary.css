@@ -31,6 +31,11 @@
 }
 .vs-head h1 { font-size: 19px; font-weight: 900; }
 .vs-head small { color: var(--paper-label); }
+/* نشان + نامِ مطب؛ تلفن لمس‌شدنی (`tel:`) ولی روی کاغذ همان متنِ ساده (بازبینیِ UX، بندِ ۱۱۲). */
+.vs-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.vs-logo { width: 44px; height: 44px; border-radius: 12px; font-size: 22px; box-shadow: none; }
+.vs-tel { display: inline-block; margin-top: 2px; color: var(--paper-label); text-decoration: none; font-variant-numeric: tabular-nums; }
+.vs-tel:focus-visible { outline: 2px solid var(--paper-ink); outline-offset: 2px; border-radius: 4px; }
 .vs-doc { text-align: left; }
 .vs-doc b { display: block; font-size: 13px; }
 .vs-doc small { color: var(--paper-label); font-size: 11px; }
@@ -66,14 +71,21 @@
 .vs-foot small { color: var(--paper-label); font-size: 11px; }
 
 .vs-actions {
-  position: fixed; inset-inline: 0; bottom: 0; display: flex; justify-content: center;
+  position: fixed; inset-inline: 0; bottom: 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;
   padding: 12px; background: linear-gradient(transparent, rgba(236, 234, 243, .96) 40%);
 }
+/* کنشِ اصلی رنگِ برندِ مطب را دارد؛ «بازگشت» ثانویه و روشن — هر دو روی میزِ کاغذیِ ثابت. */
 .vs-actions button {
-  cursor: pointer; font: inherit; font-weight: 800; font-size: 14px;
-  padding: 12px 30px; border-radius: 99px; color: #fff; border: 0;
-  background: #4b3f78; box-shadow: 0 8px 24px rgba(75, 63, 120, .35);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 46px; cursor: pointer; font: inherit; font-weight: 800; font-size: 15px;
+  padding: 11px 24px; border-radius: 99px; text-decoration: none;
 }
+.vs-actions .vs-print {
+  color: #fff; border: 0;
+  background: var(--brand-dark); box-shadow: 0 8px 24px rgba(var(--brand-dark-rgb), .35);
+}
+.vs-actions .vs-back { color: var(--paper-ink); background: #fff; border: 1px solid rgba(22, 19, 43, .18); }
+.vs-actions button:focus-visible { outline: 2px solid var(--paper-ink); outline-offset: 3px; }
 
 /* ── چاپ: خودِ سند، تمام‌صفحه، بدونِ دکمه — Safari هم صفحهٔ دومِ سفید نسازد ── */
 @media print {

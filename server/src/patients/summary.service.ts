@@ -170,6 +170,8 @@ export class SummaryService {
       },
       visit: {
         code: `${v.patient.code}-V${v.seq}`,
+        /* نوع — سند «خلاصهٔ عمل / تاریخِ عمل / جراح» را از «خلاصهٔ ویزیت» جدا می‌کند (بازبینیِ UX، بندِ ۱۱۲). */
+        kind: v.kind,
         /* همان قاعدهٔ نامِ مراجعه که بقیهٔ صفحه‌ها دارند — `visit-title.ts`. */
         kindTitle: visitTitleOf(v, def?.title),
         opDate: v.opDate,

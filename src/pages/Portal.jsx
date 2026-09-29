@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import './portal.css';
 import { ChevronEnd } from '../ui/icons.jsx';
@@ -45,7 +45,10 @@ export default function Portal() {
   const { token } = useParams();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
-  const [tab, setTab] = useState('tasks');
+  const [tab, setTabState] = useState('tasks');
+  /* زبانه در نشانی (`?tab=`) هم می‌نشیند تا «بازگشت» از خلاصه به همان زبانه برگردد، نه به پیش‌فرض. */
+  const [params, setParams] = useSearchParams();
+  const setTab = (k) => { setTabState(k); setParams({ tab: k }, { replace: true }); };
 
   useEffect(() => { document.title = 'پروندهٔ الکترونیک'; }, []);
   useEffect(() => {
@@ -55,8 +58,11 @@ export default function Portal() {
         adoptFace(d);
         setData(d);
         /* تبِ خالی خوش‌آمد نیست. ترتیبِ اهمیت: کاری که از بیمار خواسته شده ←
-           برنامهٔ پیشِ‌رو ← تاریخچه. */
-        setTab(d.tasks?.length ? 'tasks' : d.upcoming?.length ? 'upcoming' : 'visits');
+           برنامهٔ پیشِ‌رو ← تاریخچه. زبانهٔ نشانی (بازگشت از خلاصه) مقدم است اگر خالی نباشد. */
+        const want = params.get('tab');
+        setTabState(want && SECTIONS.some((x) => x.key === want) && (d[want] ?? []).length
+          ? want
+          : d.tasks?.length ? 'tasks' : d.upcoming?.length ? 'upcoming' : 'visits');
       })
       .catch((e) => setErr(e.message));
   }, [token]);
@@ -78,8 +84,15 @@ export default function Portal() {
         <span className={`po-tag s-${v.status}`}>{v.statusFa ?? v.status}</span>
       </>
     );
+    /* ⚠️ همان زبانه، نه زبانهٔ تازه (بازبینیِ UX، بندِ ۱۱۵): بیمارِ مسن از زبانهٔ تازه راهِ برگشت را پیدا
+       نمی‌کرد. `state.back` دکمهٔ «بازگشت به پروندهٔ من» را در خلاصه روشن می‌کند. */
     return v.summaryUrl
-      ? <a key={v.code} className="po-row" href={v.summaryUrl} target="_blank" rel="noopener noreferrer">{body}</a>
+      ? (
+        <Link key={v.code} className="po-row" to={v.summaryUrl} state={{ back: `/p/${token}` }}>
+          {body}
+          <ChevronEnd className="po-go" width="15" height="15" aria-hidden="true" />
+        </Link>
+      )
       : <div key={v.code} className="po-row po-row-plain">{body}</div>;
   };
 
@@ -156,7 +169,7 @@ export default function Portal() {
         <section className="po-list">
           {data.visits.length === 0 && <div className="po-empty">هنوز مراجعه‌ای ثبت نشده است</div>}
           {data.visits.map(VisitRow)}
-          {data.visits.length > 0 && <p className="po-hint">با لمسِ هر مراجعه، خلاصهٔ آن باز می‌شود.</p>}
+          {data.visits.some((v) => v.summaryUrl) && <p className="po-hint">با لمسِ مراجعهٔ انجام‌شده، خلاصهٔ آن باز می‌شود.</p>}
         </section>
       )}
 
