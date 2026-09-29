@@ -303,8 +303,18 @@
 }
 .th-x:hover { color: var(--text1); border-color: var(--brand-2); }
 .th-dialog-field span { display: block; margin-bottom: 7px; font-size: 13px; font-weight: 700; }
-.th-dialog-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+/* پاورقیِ چسبانِ «انصراف / ثبتِ ترخیص» (surgery-09): دکمه‌ها زیرِ پنج کادرِ متن بیرون از دید بودند. */
+.th-dialog-acts {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: 14px -18px -18px;
+  position: sticky; bottom: -18px; z-index: 2; padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: rgba(var(--surface-rgb), 1); border-top: 1px solid rgba(var(--veil-rgb), .1);
+  border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;
+}
 .th-dialog-missing { margin-inline-end: auto; font-size: 12.5px; font-weight: 700; color: var(--amber-text); }
+@media (max-width: 560px) {
+  .th-dialog-missing { flex-basis: 100%; }
+  .th-dialog-acts .th-btn { flex: 1 1 0; }
+}
 
 /* ⚠️ استایلِ چک‌لیستِ ایمنی این‌جا بود و **پاک شد**، نه اینکه برای روزِ
    مبادا بماند: JSXاش رفته، و CSS برای مارک‌آپی که وجود ندارد بی‌صدا می‌پوسد

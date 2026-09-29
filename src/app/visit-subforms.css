@@ -209,11 +209,6 @@
   }
   .db-sheet.vf-wide .vf-cols.vf-flat { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side"; }
   .vf-cols.vf-flat .vf-side .db-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* ذخیره همیشه در دسترس — فرمِ بلند دیگر تا ته اسکرول نمی‌خواهد. */
-  .db-sheet.vf-wide > .vf-savebar {
-    position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); z-index: 5;
-    box-shadow: 0 -10px 30px rgba(var(--surface-rgb), .9);
-  }
 }
 
 /* ── تراکم داخلِ کارت‌ها (بازخورد: «UI خیلی باز است») ──
@@ -303,3 +298,17 @@
 .vf-cc-own:disabled { opacity: .5; cursor: default; }
 .vf-cc-own:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (max-width: 620px) { .vf-cc-own { min-height: 44px; } }
+
+/* ── ذخیره همیشه دمِ دست — در **همهٔ** عرض‌ها (surgery-09) ─────────────────────
+   تا بازبینیِ UX ۱۴۰۵/۰۷ فقط از ۱۰۲۴px به بالا چسبان بود؛ در موبایل «ذخیرهٔ تغییرات» ته شیتی به بلندیِ
+   حدودِ ۳۰۰۰px بود و پس از عوض‌کردنِ یک ساعت در تبِ «حین عمل» باید تا ته رفت. نوار تا لبه‌های شیت کش
+   می‌آید (منفیِ همان padding) و فاصلهٔ safe-area را خودش نگه می‌دارد تا زیرِ نوارِ خانهٔ گوشی نرود. */
+.db-sheet.vf-wide > .vf-savebar {
+  position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); z-index: 5;
+  margin: 0 -18px calc(-18px - env(safe-area-inset-bottom, 0px));
+  padding: 10px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(var(--surface-rgb), .97);
+  border-top: 1px solid rgba(var(--veil-rgb), .1);
+  border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;
+  box-shadow: 0 -10px 24px rgba(var(--surface-rgb), .85);
+}
