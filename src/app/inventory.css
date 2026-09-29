@@ -158,7 +158,8 @@
 
 .iv-hint {
   margin: 0; padding: 10px 13px; border-radius: 11px; font-size: 11.5px; line-height: 1.9;
-  color: #c8f7ff; background: rgba(34, 211, 238, .07); border: 1px solid rgba(34, 211, 238, .18);
+  color: var(--text2); background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, transparent);
 }
 
 .iv-ledger { display: grid; gap: 6px; }

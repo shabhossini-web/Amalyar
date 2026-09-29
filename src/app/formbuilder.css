@@ -94,7 +94,7 @@
   font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
 }
-.fb-tag.core { color: #7dd3fc; background: rgba(56, 189, 248, .1); border-color: rgba(56, 189, 248, .3); }
+.fb-tag.core { font-size: 11px; color: var(--cyan); background: rgba(var(--veil-rgb), .06); border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
 /* بخشِ ثابتِ استاندارد (بستهٔ ۶) — رنگ از توکنِ برند تا در هر دو تم خوانا بماند. */
 .fb-tag.std { color: var(--brand-2); background: rgba(var(--veil-rgb), .06); border-color: var(--brand-2); }
 .fb-locked { opacity: .55; cursor: default; display: inline-grid; place-items: center; }
