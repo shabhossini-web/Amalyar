@@ -308,8 +308,12 @@
 .roster-duty b, .roster-visit > div { flex: 1 1 160px; }
 .roster-visit small { display: block; margin-top: 6px; opacity: .7; }
 .hospital-roster select { min-width: 0; max-width: 100%; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--bg3); color: inherit; }
-.roster-duty button { border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; background: var(--card); color: inherit; cursor: pointer; }
-.roster-duty button:disabled { opacity: .4; cursor: default; }
+/* ⚠️ فقط دکمه‌های **خودِ ردیف** (`>`): قاعدهٔ بی‌فرزندِ قبلی روی دکمهٔ ساعتِ `TimePick` هم
+   می‌نشست و آیکونِ ساعت را به ۱۰ پیکسل می‌فشرد — شبیهِ یک نقطه (company-18). */
+.roster-duty > button { min-height: 44px; border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; background: var(--card); color: inherit; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; }
+.roster-duty > button:hover:not(:disabled) { border-color: rgba(var(--brand-2-rgb), .55); }
+.roster-duty > button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.roster-duty > button:disabled { opacity: .4; cursor: default; }
 .roster-send { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
 /* «ابلاغِ برنامهٔ روز» — اصلی‌ترین کارِ این صفحه، پس دکمهٔ اصلیِ درشتِ پایینِ روز (company-02)،
    نه دکمهٔ کوچکِ ۳۴ پیکسلی. متنِ سفید روی گرادیانِ برند در هر دو تم (همان `.wk-btn.primary`). */
