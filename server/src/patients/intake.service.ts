@@ -2,7 +2,7 @@ import {
   BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -76,6 +76,10 @@ function storedMime(file: { mimetype?: string; buffer: Buffer }): string {
 
 /** روزهای اعتبارِ یک ثبت‌نامِ نیمه‌کاره. */
 const TTL_DAYS = 14;
+/** کدِ «ادامه با موبایل» — همان قراردادِ کدِ ورود (`auth.service.ts`): ۵ دقیقه، ۵ تلاش. */
+const RESUME_OTP_TTL_MS = 5 * 60_000;
+const RESUME_OTP_MAX_ATTEMPTS = 5;
+const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /** سقفِ فهرستِ «پیگیری‌نشده» — فهرستِ کارِ امروزِ منشی است، نه آرشیو.
     خروجی `capped` و `total` را هم می‌دهد تا بریدگی **دیده شود** (W1.1). */
@@ -559,7 +563,8 @@ export class IntakeService {
       where: { patientId, linkId: link.id, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] } },
       orderBy: { id: 'desc' },
     });
-    if (open) return this.publicView(open.token);
+    /* بیمارِ برگشته احتمالاً لینکش را گم کرده — همان لینک دوباره پیامک می‌شود (با سقفِ ۱۰دقیقه‌ای). */
+    if (open) return { ...(await this.publicView(open.token)), linkSmsTo: await this.sendContinueLink(patientId, open.token, link.title) };
 
     const row = await this.prisma.intakeSubmission.create({
       data: {
@@ -574,7 +579,112 @@ export class IntakeService {
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
       },
     });
-    return this.publicView(row.token);
+    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row.token, link.title) };
+  }
+
+  /**
+   * **پیامکِ «لینکِ ادامهٔ همین فرم»** — بلافاصله پس از ثبت‌نام (بازبینیِ UX، بندِ ۱۰۳).
+   *
+   * ⚠️ چرا: بیمار معمولاً از مرورگرِ داخلیِ اینستاگرام/تلگرام آمده و وسطِ کار برای واریز به اپِ بانک
+   * می‌رود؛ بسته‌شدنِ آن مرورگر تا دیروز یعنی پرکردنِ دوبارهٔ همهٔ فیلدها + کپچا.
+   *
+   * ⚠️ منتظرِ درگاهِ پیامک نمی‌ماند — ثبت‌نام روی اینترنتِ کند نباید پشتِ درگاه گیر کند؛ ارسال در
+   * پس‌زمینه است و نتیجه‌اش (فرستاده/ناموفق) مثلِ «ارسالِ فرم» در دفترِ پیام‌های بیمار می‌نشیند.
+   * ⚠️ برای هر ثبت‌نام حداکثر یک پیامک در ۱۰ دقیقه — تکرارِ ثبت‌نام بمبارانِ پیامک نمی‌سازد.
+   * خروجی: شمارهٔ **پوشیده** برای جملهٔ «لینک به … پیامک شد»، یا `null` (شمارهٔ نامعتبر).
+   */
+  private async sendContinueLink(patientId: number, token: string, title: string): Promise<string | null> {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, deletedAt: null }, select: { phone: true } });
+    const to = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(to)) return null;
+    const masked = `${to.slice(0, 4)}…${to.slice(-3)}`;
+    try {
+      this.rateLimit.hit(`intake-link-sms:${token}`, 1, 10 * 60_000);
+    } catch {
+      return masked; // همین چند دقیقه پیش رفته است
+    }
+    const smsCfg = await this.settings.sms();
+    const text = renderSms(smsCfg.formSendText, { title, link: this.publicFormLink(token) });
+    void (async () => {
+      const res = await this.sms.send(to, text).catch(() => ({ sent: false, stub: false }));
+      await this.prisma.reminder.create({
+        data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },
+      }).catch(() => undefined);
+    })().catch(() => undefined);
+    return masked;
+  }
+
+  /* ── ادامه با موبایل + کد (بازبینیِ UX، بندِ ۱۰۳) ─────────────────────────
+     بیماری که لینکِ فرمش را گم کرده، روی همان لینکِ ثبت‌نام شماره‌اش را می‌دهد و با کدِ پیامکی به
+     ثبت‌نامِ بازِ خودش برمی‌گردد — بی‌پرکردنِ دوبارهٔ فرم و کپچا.
+     ⚠️ **بی‌شمارش**: پاسخِ درخواست همیشه یکی است («اگر ثبت‌نامِ بازی باشد کد پیامک می‌شود»)؛ وجود یا
+     نبودِ ثبت‌نام از بیرون خوانده نمی‌شود. کد در همان جدولِ `otpCode`ِ ورود با هدفِ جدا (`intake-resume`)،
+     هش‌شده، ۵ دقیقه، ۵ تلاش، یک‌بارمصرف. */
+
+  private async openByPhone(linkId: number, phone: string) {
+    return this.prisma.intakeSubmission.findFirst({
+      where: { linkId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] }, patient: { phone, deletedAt: null } },
+      orderBy: { id: 'desc' },
+      select: { id: true, token: true },
+    });
+  }
+
+  private async resumeLink(linkToken: string) {
+    const link = await this.prisma.intakeLink.findUnique({ where: { token: linkToken } });
+    if (!link) throw new NotFoundException('این لینک معتبر نیست');
+    if (!link.active) throw new ForbiddenException('این لینک غیرفعال شده است');
+    return link;
+  }
+
+  private static resumePhone(raw: unknown) {
+    const phone = toEnDigits(String(raw ?? '')).replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(phone)) throw new BadRequestException('شمارهٔ موبایل را کامل بنویسید (مثلاً ۰۹۱۲۳۴۵۶۷۸۹)');
+    return phone;
+  }
+
+  async resumeRequest(linkToken: string, rawPhone: string, ip = 'unknown') {
+    this.rateLimit.hit(`intake-resume:ip:${ip}`, 10, 15 * 60_000);
+    const phone = IntakeService.resumePhone(rawPhone);
+    this.rateLimit.hit(`intake-resume:phone:${phone}`, 3, 15 * 60_000);
+    const link = await this.resumeLink(linkToken);
+    const purpose = `intake-resume:${link.id}`;
+    const answer = { ok: true, ttl: RESUME_OTP_TTL_MS / 1000 };
+    const open = await this.openByPhone(link.id, phone);
+    if (!open) return answer;
+    const recent = await this.prisma.otpCode.findFirst({
+      where: { phone, purpose, createdAt: { gt: new Date(Date.now() - 60_000) } },
+    });
+    if (recent) return answer; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
+    const code = String(randomInt(100000, 1000000));
+    await this.prisma.otpCode.create({
+      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
+    });
+    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => ({ sent: false, stub: false }));
+    /* همان قراردادِ ورود: کدِ آزمون فقط در محیطِ test و با درگاهِ stub. */
+    return { ...answer, ...(res.stub && process.env.NODE_ENV === 'test' ? { devCode: code } : {}) };
+  }
+
+  async resumeVerify(linkToken: string, rawPhone: string, rawCode: string, ip = 'unknown') {
+    this.rateLimit.hit(`intake-resume-verify:ip:${ip}`, 20, 15 * 60_000);
+    const phone = IntakeService.resumePhone(rawPhone);
+    this.rateLimit.hit(`intake-resume-verify:phone:${phone}`, 8, 15 * 60_000);
+    const code = toEnDigits(String(rawCode ?? '')).replace(/[^0-9]/g, '');
+    const link = await this.resumeLink(linkToken);
+    const purpose = `intake-resume:${link.id}`;
+    const wrong = () => new BadRequestException('کدِ تأیید درست نیست یا منقضی شده — کدِ تازه بگیرید');
+    const otp = await this.prisma.otpCode.findFirst({ where: { phone, purpose, consumedAt: null }, orderBy: { createdAt: 'desc' } });
+    if (!otp || otp.expiresAt < new Date() || otp.attempts >= RESUME_OTP_MAX_ATTEMPTS) throw wrong();
+    if (sha256(code) !== otp.codeHash) {
+      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+      throw wrong();
+    }
+    const consumed = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
+    });
+    if (!consumed.count) throw wrong();
+    const open = await this.openByPhone(link.id, phone);
+    if (!open) throw wrong();
+    return { token: open.token };
   }
 
   /**
@@ -789,6 +899,8 @@ export class IntakeService {
       /* برگشتِ جاری (مرحله، دلیل، راهنما) — تا وقتی بیمار اصلاح را نفرستاده. */
       returned: currentReturn(row.data, row.status),
       expiresAt: row.expiresAt,
+      /* مهلتِ فرم به زبانِ بیمار («دوشنبه ۲۱ مهر ۱۴۰۵») — تا دیروز هیچ‌جا گفته نمی‌شد (بندِ ۱۰۳). */
+      expiresFa: row.expiresAt ? faDayLong(row.expiresAt) : null,
       /* نام/تلفنِ مطب و حوزه (تم) — همان `publicLink`. */
       ...face,
     };

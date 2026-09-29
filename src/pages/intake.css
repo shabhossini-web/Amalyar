@@ -383,3 +383,22 @@
   color: var(--brand-text); background: none; border: none; text-decoration: underline; text-underline-offset: 5px;
 }
 .ik-linkbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }
+
+/* ── «قبلاً ثبت‌نام کرده‌اید؟» — ادامه با موبایل + کد (بازبینیِ UX، بندِ ۱۰۳) ── */
+.ik-resume-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; min-height: 44px;
+  padding: 8px 12px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 14px; color: var(--text2);
+  background: rgba(var(--brand-rgb), .06); border: 1px dashed rgba(var(--brand-2-rgb), .45);
+}
+.ik-resume-toggle b { color: var(--brand-text); }
+.ik-resume-toggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.ik-resume { display: grid; gap: 10px; }
+.ik-resume h2 { margin: 0; font-size: 17px; font-weight: 900; }
+.ik-resume-form { display: grid; gap: 10px; }
+.ik-resume-form .ik-hint { margin: 0; }
+.ik-resume .ik-linkbtn { justify-self: center; }
+.ik-sms-note { align-items: flex-start; }
+.ik-sms-note svg { margin-top: 6px; }
+/* مهلتِ فرم — ریز ولی خوانا، زیرِ نوارِ مرحله. */
+.ik-deadline { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; font-size: 13px; color: var(--text2); }
+.ik-deadline svg { flex: 0 0 auto; color: var(--text3); }

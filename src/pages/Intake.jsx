@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
-import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Info, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -61,6 +61,8 @@ function Register() {
      نه تعدادِ بیمارِ هر کانال، که دادهٔ تجاریِ شرکت است و روی صفحهٔ بی‌احراز
      جایی ندارد. */
   const [sources, setSources] = useState([]);
+  /* «قبلاً ثبت‌نام کرده‌اید؟» — ادامه با موبایل + کد به‌جای پرکردنِ دوبارهٔ فرم (بازبینیِ UX، بندِ ۱۰۳). */
+  const [resume, setResume] = useState(false);
   /* پرسشِ امنیتی را **سرور** می‌سازد: تصویرِ دو عدد + نشانی که پاسخ را رمزشده در خود دارد
      (`server/src/patients/intake-captcha.ts`). مرورگر پاسخ را نمی‌داند — تا دیروز خودش دو عدد را
      انتخاب می‌کرد و هر اسکریپتی با `1 + 1 = 2` ثبت‌نام می‌ساخت. هر نشان یک‌بار سنجیده می‌شود. */
@@ -128,7 +130,8 @@ function Register() {
       // بیمار را به فرمِ خالیِ ثبت‌نام برنگرداند.
       // ⚠️ `navigate` نه `location.replace`: بارگذاریِ کاملِ اپ روی گوشیِ کند یعنی چند
       // ثانیه صفحهٔ سفید و دانلودِ دوبارهٔ همهٔ چانک‌ها برای رفتن به صفحهٔ بعدیِ همین اپ.
-      navigate(`/f/${r.token}`, { replace: true });
+      /* شمارهٔ پوشیده‌ای که لینکِ ادامه به آن پیامک شد — صفحهٔ فرم همان را می‌گوید. */
+      navigate(`/f/${r.token}`, { replace: true, state: { smsTo: r.linkSmsTo ?? null } });
     } catch (e) {
       setErr(e.message); setErrStatus(e.status ?? 0); setBusy(false);
       /* ⚠️ هر خطایی **پس از** سنجشِ پرسش یعنی نشان مصرف شده (بازبینیِ UX، بندِ ۹۸): ۴۲۲ (پاسخِ غلط یا
@@ -143,6 +146,10 @@ function Register() {
 
   return (
     <Shell brand={link?.brand} title={link?.title} amount={link?.amount}>
+      {resume ? <Resume token={token} onBack={() => setResume(false)} /> : (<>
+      <button type="button" className="ik-resume-toggle" onClick={() => setResume(true)}>
+        قبلاً ثبت‌نام کرده‌اید؟ <b>ادامه با شمارهٔ موبایل</b>
+      </button>
       <div className="ik-grid">
         <Field label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} />
         <Field label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} />
@@ -201,7 +208,84 @@ function Register() {
       <button type="button" className="ik-go" disabled={busy || !cap} onClick={submit}>
         {busy ? 'در حال ثبت…' : 'ادامه'}
       </button>
+      </>)}
     </Shell>
+  );
+}
+
+/**
+ * **ادامهٔ ثبت‌نامِ قبلی با موبایل + کد** (بازبینیِ UX، بندِ ۱۰۳) — روی همان لینکِ ثبت‌نام.
+ *
+ * بیمارِ مرورگرِ داخلیِ اینستاگرام که برای واریز به اپِ بانک رفته و برگشته، یا پیامکِ لینکش را پاک
+ * کرده، تا دیروز فقط با پرکردنِ دوبارهٔ همهٔ فیلدها + کپچا برمی‌گشت. پاسخِ «ارسالِ کد» همیشه یکی است
+ * (سرور وجودِ ثبت‌نام را لو نمی‌دهد)؛ کدِ درست مستقیم به `/f/…` می‌برد.
+ */
+function Resume({ token, onBack }) {
+  const navigate = useNavigate();
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [step, setStep] = useState('phone');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [dev, setDev] = useState('');
+  const digits = (v) => toEnDigits(v).replace(/[^0-9]/g, '');
+
+  /* WebOTP — اندروید کدِ پیامک را خودش پر می‌کند (همان الگوی صفحهٔ ورود). */
+  useEffect(() => {
+    if (step !== 'code' || !('OTPCredential' in window)) return undefined;
+    const ac = new AbortController();
+    navigator.credentials.get({ otp: { transport: ['sms'] }, signal: ac.signal })
+      .then((o) => { if (o?.code) setCode(o.code); })
+      .catch(() => {});
+    return () => ac.abort();
+  }, [step]);
+
+  const send = async (e) => {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    try {
+      const r = await api(`/public/intake/link/${token}/resume/request`, { method: 'POST', body: { phone: digits(phone) } });
+      setDev(r?.devCode ?? '');
+      setCode(r?.devCode ?? '');
+      setStep('code');
+    } catch (x) { setErr(x.message); } finally { setBusy(false); }
+  };
+  const verify = async (e) => {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    try {
+      const r = await api(`/public/intake/link/${token}/resume/verify`, { method: 'POST', body: { phone: digits(phone), code: digits(code) } });
+      navigate(`/f/${r.token}`, { replace: true });
+    } catch (x) { setErr(x.message); setBusy(false); }
+  };
+
+  return (
+    <section className="ik-resume" aria-labelledby="ik-resume-h">
+      <h2 id="ik-resume-h">ادامهٔ ثبت‌نامِ قبلی</h2>
+      {step === 'phone' ? (
+        <form className="ik-resume-form" onSubmit={send}>
+          <p className="ik-hint">شماره‌ای را که با آن ثبت‌نام کرده‌اید بنویسید؛ یک کدِ ۶رقمی برایتان پیامک می‌شود.</p>
+          <Field label="شمارهٔ موبایل" type="tel" dir="ltr" inputMode="numeric" autoComplete="tel" enterKeyHint="send"
+                 placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} required />
+          <button type="submit" className="ik-go" disabled={busy || digits(phone).length < 11}>{busy ? 'در حال ارسال…' : 'ارسالِ کد'}</button>
+        </form>
+      ) : (
+        <form className="ik-resume-form" onSubmit={verify}>
+          <p className="ik-note" role="status">
+            <span>اگر ثبت‌نامِ بازی با شمارهٔ <bdi dir="ltr">{faDigits(digits(phone))}</bdi> باشد، کد تا یکی‌دو دقیقه پیامک می‌شود.</span>
+          </p>
+          {dev && <p className="ik-note"><span>پیامک هنوز وصل نیست — کدِ آزمون: <b dir="ltr">{faDigits(dev)}</b></span></p>}
+          <Field label="کدِ ۶رقمی" dir="ltr" inputMode="numeric" autoComplete="one-time-code" enterKeyHint="go" maxLength={6}
+                 value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} required />
+          <button type="submit" className="ik-go" disabled={busy || digits(code).length < 6}>{busy ? 'در حال بررسی…' : 'ادامهٔ فرم'}</button>
+          <button type="button" className="ik-linkbtn" disabled={busy} onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>
+            اصلاحِ شماره یا گرفتنِ کدِ تازه
+          </button>
+        </form>
+      )}
+      {err && <p className="ik-bad" role="alert"><Alert width="15" height="15" /> {err}</p>}
+      <button type="button" className="ik-linkbtn" onClick={onBack}>نه، ثبت‌نامِ تازه</button>
+    </section>
   );
 }
 
@@ -243,6 +327,8 @@ function stepsFor(d) {
 
 function Form() {
   const { token } = useParams();
+  /* شمارهٔ پوشیده‌ای که ثبت‌نام همین حالا لینکِ این فرم را به آن پیامک کرد (`state` از `Register`). */
+  const smsTo = useLocation().state?.smsTo ?? null;
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -530,6 +616,22 @@ function Form() {
             </li>
           ))}
         </ol>
+      )}
+
+      {/* لینکِ ادامه و مهلتِ فرم (بازبینیِ UX، بندِ ۱۰۳): بیمار باید بداند اگر این صفحه بسته شد از کجا
+          برگردد و تا کِی وقت دارد. */}
+      {(d.status === 'pending_fill' || d.status === 'pending_payment') && smsTo && (
+        <p className="ik-note ik-sms-note" role="status">
+          <Info width="15" height="15" />
+          {/* ⚠️ یک span: `.ik-note` فلکس است و متن + bdi بی‌این سه ستونِ جدا می‌شدند. */}
+          <span>لینکِ ادامهٔ همین فرم به <bdi dir="ltr">{faDigits(smsTo)}</bdi> پیامک شد؛ اگر این صفحه بسته شد، از همان پیامک برگردید.</span>
+        </p>
+      )}
+      {(d.status === 'pending_fill' || d.status === 'pending_payment') && d.expiresFa && (
+        <p className="ik-deadline">
+          <Clock width="14" height="14" aria-hidden="true" />
+          {paidNext ? `مهلتِ تکمیل و بارگذاریِ فیش: تا ${d.expiresFa}` : `این فرم تا ${d.expiresFa} باز است`}
+        </p>
       )}
 
       {/* برگشت برای اصلاح (مالک، ۱۴۰۵/۰۷/۰۱): بیمار باید بداند **کدام بخش** و **چرا** — نه فقط
