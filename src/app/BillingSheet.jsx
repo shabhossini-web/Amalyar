@@ -236,7 +236,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
 
       {!data ? <div className="us-empty">در حال بارگذاری…</div> : (
         <>
-          {/* سه عددِ اصلی همیشه بالا — کاربر برای «چقدر مانده» نباید اسکرول کند. */}
+          {/* سه عددِ اصلی همیشه بالا — کاربر برای «چقدر مانده» نباید اسکرول کند.
+              واحدِ همهٔ مبلغ‌های این پنجره یک‌بار و صریح (clinic-daily-10): عددِ بی‌واحد کنارِ ریالِ
+              کارت‌خوان گمراه‌کننده است. */}
+          <p className="bl-unit">مبالغ به تومان</p>
           <div className="bl-summary">
             <div>
               <b>{money(data.total)}</b>

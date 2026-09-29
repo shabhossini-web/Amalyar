@@ -8,7 +8,7 @@ import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
 import { ThingPopups, surgeryPrefill, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
-import { fmtMoney } from '../lib/money.js';
+import { fmtToman } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
@@ -1212,8 +1212,8 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
         )}
         {due > 0 && (
           <button type="button" className="rc-chip is-money" onClick={() => onGo('visits')}>
-            <Money width="13" height="13" /> ماندهٔ مالی: <b>{fmtMoney(due)}</b>
-            <i>از {fmtMoney(live.billing.total)} — {faNum(live.billing.paidPct)}٪ پرداخت شده</i>
+            <Money width="13" height="13" /> ماندهٔ مالی: <b>{fmtToman(due)}</b>
+            <i>از {fmtToman(live.billing.total)} — {faNum(live.billing.paidPct)}٪ پرداخت شده</i>
           </button>
         )}
       </div>

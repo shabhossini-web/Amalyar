@@ -1,7 +1,7 @@
 import { AnimatePresence } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
-import { fmtMoney } from '../lib/money.js';
+import { fmtToman } from '../lib/money.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useTerms } from './config.jsx';
@@ -500,11 +500,11 @@ function Card({ row, t, busy, onAct, onOpen }) {
         {row.phone && <a className="fd-tel" href={`tel:${row.phone}`}><Phone width="12" height="12" /> تماس</a>}
       </div>
       {due > 0 && (
-        <p className="fd-money"><Money width="12" height="12" /> مانده <b>{fmtMoney(due)}</b></p>
+        <p className="fd-money"><Money width="12" height="12" /> مانده <b>{fmtToman(due)}</b></p>
       )}
       {debt > 0 && (
         <p className="fd-money fd-debt">
-          <Money width="12" height="12" /> بدهیِ قبلی <b>{fmtMoney(debt)}</b>
+          <Money width="12" height="12" /> بدهیِ قبلی <b>{fmtToman(debt)}</b>
           {row.debt.visits > 1 && <span> ({faNum(row.debt.visits)} مراجعه)</span>}
         </p>
       )}

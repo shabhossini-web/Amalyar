@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
-import { fmtMoney } from '../lib/money.js';
+import { fmtMoney, fmtToman } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { useConfig, useStatusMap } from './config.jsx';
 import { HERO, useAllowedTools } from './tools.jsx';
@@ -322,8 +322,9 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
         <li className={sum.unreviewed ? 'hot' : ''}><b>{faNum(sum.unreviewed ?? 0)}</b> نتیجهٔ منتظر</li>
         {money.total > 0 && (
           <li className="sp-sum-money">
-            صورت‌حسابِ امروز <b>{fmtMoney(money.total)}</b>
-            {money.due > 0 ? <> · مانده <b className="due">{fmtMoney(money.due)}</b></> : <> · تسویه</>} تومان
+            {/* واحد کنارِ هر عدد — «· تسویه تومان» بی‌معنا بود (clinic-daily-10). */}
+            صورت‌حسابِ امروز <b>{fmtToman(money.total)}</b>
+            {money.due > 0 ? <> · مانده <b className="due">{fmtToman(money.due)}</b></> : <> · تسویه</>}
           </li>
         )}
       </ul>

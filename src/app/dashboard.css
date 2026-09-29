@@ -516,6 +516,7 @@ a.db-ico { text-decoration: none; }
 
 /* ── صورت‌حساب ── */
 .bl-sheet { gap: 12px; }
+.bl-unit { margin: 0 0 6px; font-size: 11px; color: var(--text3); }
 .bl-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .bl-summary > div {
   padding: 13px 14px; border-radius: 14px; text-align: center;
