@@ -167,7 +167,7 @@ try {
   await pd.locator('.db-sheet input[required]').nth(1).fill(`سریع${tag}`);
   await pd.locator('.db-stepnav .db-submit').click();
   await pd.waitForTimeout(500);
-  await pd.locator('.db-sheet .db-kindrow button', { hasText: `ویزیتِ سریع ${tag}` }).click();
+  await pd.locator(`.db-sheet .db-kindrow button[data-kind="d${tag}"]`).click(); // کلید، نه متن (clinic-daily-04)
   await pd.locator('.db-stepnav .db-submit').click();
   const dec = pd.locator('.db-sheet .db-decide');
   await dec.waitFor({ timeout: 8000 }).catch(() => {});

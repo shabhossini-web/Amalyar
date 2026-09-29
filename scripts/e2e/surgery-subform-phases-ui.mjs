@@ -243,9 +243,10 @@ try {
     restoreRequired.push(fld.id);
   }
   /* فهرستِ تازه — فرمِ ویزیت ممکن است همین اولِ سوییت ساخته شده باشد. */
-  const kindsNow = (await send('/forms/visit-kinds')).json ?? [];
-  const clinicKind = kindsNow.find((k) => (k.kind ?? k.key) === 'clinic')?.title ?? 'فرمِ ویزیت';
-  const surgeryKind = kindsNow.find((k) => (k.kind ?? k.key) === 'surgery')?.title ?? 'فرمِ جراحی';
+  /* ⚠️ دکمهٔ نوع با کلیدش (`data-kind`) پیدا می‌شود نه با متن: برچسب از واژهٔ حوزه است
+     («ویزیت / عمل»، بازبینیِ UX clinic-daily-04) و عنوانِ فرم دیگر رویش نیست. */
+  const clinicKind = 'clinic';
+  const surgeryKind = 'surgery';
   const ctx2 = await browser.newContext({ viewport: { width: 1320, height: 900 } });
   const p2 = await ctx2.newPage();
   watch(p2);
@@ -259,7 +260,7 @@ try {
   await nameInp.nth(1).fill(`مرحله${tag}`);
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(900);
-  const kindBtn = (title) => p2.locator('.db-kindrow button').filter({ hasText: new RegExp(`^\\s*${title}\\s*$`) });
+  const kindBtn = (kind) => p2.locator(`.db-kindrow button[data-kind="${kind}"]`);
   await kindBtn(clinicKind).click();
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(900);

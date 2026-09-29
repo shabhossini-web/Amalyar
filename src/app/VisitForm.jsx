@@ -1840,6 +1840,20 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      انتخاب‌شده («نورومانیتورینگ»/«ایمپلنت») به‌جای «خدمت»ِ مشترک — نگاشتش از سرور (`serviceTitles`). */
   const visitTitle = (kindMeta?.serviceTitles?.[f.service] ?? kindMeta?.title ?? fd.def?.title ?? initial?.kindTitle ?? kindOf(f.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
   const topicName = (defs.topics ?? []).find((tp) => tp.id === f.topicId)?.name ?? initial?.topicName ?? null;
+  /* **برچسبِ نوعِ مراجعه از واژه‌نامهٔ حوزه** (clinic-daily-04): «ویزیت» و «عمل»، نه عنوانِ فرم.
+     نوعی که حوزه واژه‌ای برایش ندارد (پیگیری/مشاوره یا نوعِ ساختِ فرم‌ساز) از پشتیبان یا همان
+     عنوانِ بی‌پیشوندِ «فرمِ» می‌آید — همان قاعدهٔ `visitTitle`.
+     ⚠️ اگر دو نوع به یک واژه برسند (نورومانیتورینگ به هر دو «مراجعه» می‌گوید)، واژه چیزی را از هم
+     جدا نمی‌کند و همان عنوانِ بی‌پیشوند برمی‌گردد — دو دکمهٔ هم‌نام از یک دکمهٔ فنی بدتر است. */
+  const kindChoices = fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label }));
+  const plainTitle = (k) => String(k.title ?? kindOf(k.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
+  const vocabOf = (k) => (k.kind === 'surgery' ? t.surgery : k.kind === 'clinic' ? t.visit : KINDS[k.kind]?.label ?? plainTitle(k));
+  const vocabClash = new Set(kindChoices.map(vocabOf)).size < kindChoices.length;
+  const kindLabel = (k) => (vocabClash ? plainTitle(k) : vocabOf(k));
+  /* نامِ گامِ دوم در نشانگر — «ویزیت یا عمل» (همان پرسشِ گام)؛ جز این «نوعِ مراجعه». تا پاسخِ
+     سرور نرسیده همان «نوعِ مراجعه»، نه فهرستِ چهارتاییِ پشتیبان. */
+  const kindStepLabel = fd.kinds?.length === 2 ? fd.kinds.map(kindLabel).join(' یا ') : 'نوعِ مراجعه';
+
   const attachItems = (catalog?.items ?? []).filter((x) => attachableOn(x, f.kind));
   const canBuildSubform = (myTools ?? []).some((x) => x.key === 'forms');
   const canAttach = !!catalog && attachItems.length > 0;
@@ -1967,7 +1981,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       {/* نشانگرِ گام — کاربر باید بداند کجای کار است و چند قدم مانده. */}
       {!editing && (
         <ol className="db-steps" aria-label="گام‌های ثبت">
-          {[t.record, `نوعِ ${t.visit}`, 'تکمیل'].map((label, i) => (
+          {[t.record, kindStepLabel, 'تکمیل'].map((label, i) => (
             <li key={label} className={step === i + 1 ? 'on' : step > i + 1 ? 'done' : ''}>
               {/* برگشت فقط به گامِ **گذشته** — پرشِ رو به جلو همان دور زدنِ
                   اعتبارسنجیِ گام است. */}
@@ -2135,12 +2149,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
 
           تا وقتی پاسخِ سرور نرسیده فهرستِ پشتیبان می‌ماند، وگرنه یک قطعیِ
           لحظه‌ای ردیف را **خالی** می‌کرد. */}
+      {/* ⚠️ پرسش به زبانِ پذیرش است نه سامانه (بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-04): «برای چه
+          آمده؟ ویزیت یا عمل». عنوانِ فرم («فرمِ ویزیت / فرمِ جراحی») فقط مالِ فرم‌ساز است؛ منشی‌ای که
+          «فرمِ جراحی» می‌خواند نمی‌داند نوعِ مراجعه را انتخاب می‌کند یا یک سند را. */}
       <div className="db-sect">
-        <b>{!editing && <i>{faNum(2)}</i>}نوعِ فرم</b>
-        <small>
-          این {t.visit} با کدام فرم ثبت شود؟ هر دکمه یکی از فرم‌های ساخته‌شده در
-          فرم‌ساز است و رنگش، رنگِ کارتِ همان فرم روی داشبورد.
-        </small>
+        <b>{!editing && <i>{faNum(2)}</i>}برای چه آمده؟</b>
+        <small>فرمِ گامِ بعد بر همین پایه چیده می‌شود.</small>
       </div>
       {/* جعبهٔ خنثیِ خط‌چین — تا ردیفِ انتخابِ نوع از کارتِ رنگیِ خودِ فرم
           (پایین) جدا دیده شود؛ گزارشِ کاربر: «رنگ‌ها قاطی می‌شد». */}
@@ -2156,17 +2170,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           </div>
         ) : (
         <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
-          {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
-            .map((k) => (
+          {kindChoices.map((k) => (
             <button
               key={k.kind}
               type="button"
               role="radio"
+              data-kind={k.kind}
               aria-checked={f.kind === k.kind}
               className={f.kind === k.kind ? 'on' : ''}
               style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
               onClick={() => pickKind(k.kind)}
-            >{k.title}</button>
+            >{kindLabel(k)}</button>
           ))}
         </div>
         )}
