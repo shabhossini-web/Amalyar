@@ -235,6 +235,14 @@
 
 /* ── انتخابِ نوبت — `docs/BOOKING.md` مرحلهٔ ۳ ── */
 .ik-book { display: grid; gap: 10px; margin-bottom: 18px; }
+/* ⚠️ تمام‌عرض (بازبینیِ UX، بندِ ۹۶): `margin: 0 auto`ِ گریدِ مشترک داخلِ این گرید آن را تا اندازهٔ
+   محتوا جمع می‌کرد — تقویمِ ۲۰۶ پیکسلی با خانه‌های ۲۴ پیکسلی روی گوشی. حالا خانه‌ها حدودِ ۴۴ پیکسل‌اند
+   و در دسکتاپ هم تقویم از ۴۴۰ پیکسل پهن‌تر نمی‌شود. */
+.ik-book .jg { width: 100%; max-width: 440px; }
+.ik-book .jg.compact .jg-grid, .ik-book .jg.compact .jg-dows { gap: 4px; }
+.ik-book .jg.compact .jg-num { font-size: 15px; }
+.ik-book .jg-head button { width: 44px; height: 44px; }
+.ik-book .jg-head .jg-today { min-height: 44px; font-size: 13px; }
 .ik-book h3 { margin: 0; font-size: 14px; font-weight: 800; }
 .ik-book-has {
   margin: 0; padding: 9px 11px; border-radius: 11px; font-size: 12.5px;
@@ -295,9 +303,10 @@
   color: var(--text1); padding: 8px 10px; border-radius: 10px;
   background: rgba(var(--brand-2-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .28);
 }
-.ik-slots button.on { color: var(--press-ink); font-weight: 800; background: rgba(var(--brand-2-rgb), .35); border-color: rgba(var(--brand-2-rgb), .7); }
-/* اشغال: خط‌خورده و کم‌رنگ — «نمی‌شود گرفت» باید در یک نگاه پیدا باشد. */
-.ik-slots button:disabled {
+.ik-slots button.on { color: var(--press-ink); font-weight: 800; background: rgba(var(--brand-2-rgb), .35); border-color: rgba(var(--brand-2-rgb), .7); cursor: default; }
+/* اشغال: خط‌خورده و کم‌رنگ — «نمی‌شود گرفت» باید در یک نگاه پیدا باشد.
+   ⚠️ `:not(.on)`: ساعتِ خودِ بیمار وقتی فرم «در حالِ ثبت» است هم باید «انتخاب‌شده» بماند. */
+.ik-slots button:disabled:not(.on) {
   cursor: default; color: var(--text3); text-decoration: line-through;
   background: rgba(var(--veil-rgb), .03); border-color: rgba(var(--veil-rgb), .1);
 }
