@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -446,6 +446,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [reportOpen, setReportOpen] = useState(false);
   /* متنِ پیش‌فرضی که بازکردنِ پاپ‌آپ در شرح گذاشت (اگر گذاشت) — برای «نوشتهٔ کاربر» حساب نشود. */
   const [reportPrefill, setReportPrefill] = useState(null);
+  /* «شکایتِ جدا برای این عمل» — تا کاربر نخواهد، شکایتِ ارثی فقط‌خواندنی دیده می‌شود (surgery-21). */
+  const [ccOwn, setCcOwn] = useState(false);
+  const ccId = `vf-cc-${useId().replace(/:/g, '')}`;
   useEffect(() => {
     if (!initial?.id) return;
     let on = true;
@@ -1403,22 +1406,47 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* «مدتِ علائم» (فیلدِ فرم‌سازِ قالبِ قدیمیِ مطب) کنارِ شکایت می‌نشیند، نه در جعبهٔ جدای
      «اطلاعاتِ تکمیلی» — آن جعبه فقط همین یک کادر را داشت (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳). */
   const durationField = fd.customFields.find((x) => x.key === INLINE_KEYS.duration && x.type === 'text') ?? null;
+  /* ⚠️ بازبینیِ UX ۱۴۰۵/۰۷ (surgery-21): کادر برچسبِ دسترس‌پذیر نداشت (یک `span` داخلِ `div`، تنها کادرِ
+     بی‌نامِ فرمِ عمل) و شکایتِ ارثی فقط جای‌نگهدارِ کم‌رنگی بود که با اولین حرف ناپدید می‌شد. حالا
+     ارثی یک متنِ فقط‌خواندنیِ دیدنی است با دکمهٔ «نوشتنِ شکایتِ جدا»؛ کادر فقط وقتی باز می‌شود که
+     کاربر واقعاً شکایتِ دیگری برای همین عمل دارد — و «برگشت به ارثی» همان خالی‌کردن است. */
+  const ccLabel = <>{fd.labelOf('chiefComplaint', 'شکایتِ اولیه')}{star(fd.requiredOf('chiefComplaint'))}</>;
+  const ccInherited = !!inheritedComplaint && !f.chiefComplaint.trim() && !ccOwn;
   if (fd.isOn('chiefComplaint')) builtinNodes.chiefComplaint = { wide: true, el: (
     <div className={durationField ? 'vf-cc' : undefined}>
-      <div className="db-field">
-        <span>{fd.labelOf('chiefComplaint', 'شکایتِ اولیه')}{star(fd.requiredOf('chiefComplaint'))}</span>
-        <textarea
-          rows={2}
-          value={f.chiefComplaint}
-          onChange={set('chiefComplaint')}
-          placeholder={inheritedComplaint || 'به زبانِ خودِ بیمار…'}
-        />
-        {inheritedComplaint && !f.chiefComplaint.trim() && (
-          <p className="db-hint" data-complaint-source>
-            از {complaintSourceLabel} به ارث می‌رسد — خالی بماند تا همیشه هم‌گام بماند.
-          </p>
-        )}
-      </div>
+      {ccInherited ? (
+        <div className="db-field" role="group" aria-labelledby={`${ccId}-l`}>
+          <span id={`${ccId}-l`}>{ccLabel}</span>
+          <div className="vf-cc-inherit" data-complaint-source>
+            <p>{inheritedComplaint}</p>
+            <small>از {complaintSourceLabel} — با همان هم‌گام می‌ماند.</small>
+            <button type="button" className="vf-cc-own" data-act="complaint-own" disabled={keyLocked('chiefComplaint')}
+                    onClick={() => setCcOwn(true)}>
+              <Pencil width="14" height="14" aria-hidden="true" /> نوشتنِ شکایتِ جدا برای این {t.surgery}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <label className="db-field">
+          <span>{ccLabel}</span>
+          <textarea
+            rows={2}
+            value={f.chiefComplaint}
+            onChange={set('chiefComplaint')}
+            placeholder="به زبانِ خودِ بیمار…"
+            autoFocus={ccOwn && !f.chiefComplaint}
+          />
+          {inheritedComplaint && (
+            <span className="vf-cc-back">
+              <small>{f.chiefComplaint.trim() ? 'به‌جای' : 'خالی بماند تا'} شکایتِ {complaintSourceLabel}{f.chiefComplaint.trim() ? '' : ' برگردد'}: «{inheritedComplaint}»</small>
+              <button type="button" className="vf-cc-own" data-act="complaint-inherit"
+                      onClick={() => { setF((s2) => ({ ...s2, chiefComplaint: '' })); setCcOwn(false); }}>
+                برگشت به شکایتِ {complaintSourceWord}
+              </button>
+            </span>
+          )}
+        </label>
+      )}
       {durationField && (
         <label className={`db-field${extraErr[durationField.key] ? ' bad' : ''}`} data-field={durationField.key}>
           <span>{durationField.label}{star(durationField.required)}</span>

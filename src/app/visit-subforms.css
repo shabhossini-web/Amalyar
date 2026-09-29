@@ -282,3 +282,24 @@
 .db-daychips .db-dayinput::placeholder { color: var(--text3); }
 .db-daychips .db-dayinput:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
 .db-daychips .db-daychip { min-height: 38px; }
+
+/* ── شکایتِ اولیهٔ ارثی (surgery-21) ─────────────────────────────────────────
+   متنِ فقط‌خواندنی به‌جای جای‌نگهدارِ کم‌رنگ — دیده می‌شود و با اولین حرف ناپدید نمی‌شود. */
+.vf-cc-inherit {
+  display: grid; gap: 6px; padding: 10px 12px; border-radius: 11px;
+  background: rgba(var(--veil-rgb), .035); border: 1px dashed rgba(var(--veil-rgb), .2);
+}
+.vf-cc-inherit p { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.8; color: var(--text1); white-space: pre-wrap; }
+.vf-cc-inherit small { font-size: 11.5px; color: var(--text3); }
+.vf-cc-back { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.vf-cc-back small { font-weight: 600; color: var(--text3); }
+.vf-cc-own {
+  justify-self: start; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 0 12px; border-radius: 99px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 800; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), .08); border: 1px solid rgba(var(--brand-2-rgb), .35);
+}
+.vf-cc-own:hover { background: rgba(var(--brand-rgb), .14); }
+.vf-cc-own:disabled { opacity: .5; cursor: default; }
+.vf-cc-own:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (max-width: 620px) { .vf-cc-own { min-height: 44px; } }
