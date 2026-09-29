@@ -7,6 +7,7 @@ import Overlay from '../ui/Overlay.jsx';
 import './launcher.css';
 import './chat.css';
 import { Back, Chat as ChatIcon, Close, Plus, Send, Users } from '../ui/icons.jsx';
+import { CHAT_READ } from './ChatBell.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 
@@ -45,6 +46,7 @@ export default function Chat() {
     if (fresh.length) {
       setMsgs((m) => [...m, ...fresh.filter((x) => !m.some((y) => y.id === x.id))]);
       await api(`/chat/channels/${chId}/read`, { method: 'POST', body: { lastId: fresh[fresh.length - 1].id } }).catch(() => {});
+      window.dispatchEvent(new Event(CHAT_READ));
       loadChannels();
     }
   };
@@ -72,7 +74,11 @@ export default function Chat() {
       const rows = await api(`/chat/channels/${ch.id}/messages`);
       setMsgs(rows);
       const last = rows[rows.length - 1]?.id ?? 0;
-      if (last) await api(`/chat/channels/${ch.id}/read`, { method: 'POST', body: { lastId: last } }).catch(() => {});
+      if (last) {
+        await api(`/chat/channels/${ch.id}/read`, { method: 'POST', body: { lastId: last } }).catch(() => {});
+        /* نشانِ پیام‌رسانِ نوارِ پوسته همان لحظه تازه شود. */
+        window.dispatchEvent(new Event(CHAT_READ));
+      }
       loadChannels();
     } catch (e) { setErr(e.message); }
   };

@@ -47,6 +47,12 @@ export class ChatController {
     return this.chat.channels(user);
   }
 
+  /** شمارِ نخوانده برای نشانِ پوسته — `{ total, channels }`. */
+  @Get('unread')
+  unread(@CurrentUser() user: any) {
+    return this.chat.unread(user);
+  }
+
   @Post('dm')
   dm(@Body() dto: DmDto, @CurrentUser() user: any) {
     return this.chat.dm(user, dto.accountId);

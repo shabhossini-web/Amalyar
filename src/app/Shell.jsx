@@ -5,6 +5,7 @@ import { useConfig } from './config.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import GlobalSearch from './GlobalSearch.jsx';
 import WorkBell from './WorkBell.jsx';
+import ChatBell from './ChatBell.jsx';
 import { Search } from '../ui/icons.jsx';
 /* `.glass`ِ منوی پروفایل در launcher.css تعریف شده؛ حالا که منو روی همهٔ صفحات است،
    پوسته صریحاً آن را می‌آورد (قانونِ ۲۱: هیچ صفحه‌ای از CSSِ صفحهٔ دیگر ارث نمی‌برد). */
@@ -48,6 +49,7 @@ export default function Shell() {
             <kbd className="sh-kbd" aria-hidden="true">{isMac ? '⌘' : 'Ctrl'} K</kbd>
           </button>
           <div className="sh-end">
+            <ChatBell />
             <WorkBell onToast={setToast} />
             <ProfileMenu onToast={setToast} />
           </div>
