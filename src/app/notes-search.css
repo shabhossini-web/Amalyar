@@ -51,9 +51,12 @@
 }
 .ns-patient { display: inline-flex; align-items: baseline; gap: 6px; text-decoration: none; color: var(--text1); }
 .ns-patient b { font-size: 13.5px; }
-.ns-patient span { font-size: 10.5px; color: var(--text3); }
+.ns-patient bdi { font-size: 11px; color: var(--text3); }
 .ns-patient:hover b { color: var(--brand-2); }
-.ns-card-head small { margin-inline-start: auto; font-size: 10.5px; color: var(--text3); }
+.ns-card-head small { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
+/* تکه‌های سطرِ مشخصات با «·» از هم جدا می‌شوند — جداکننده در CSS، نه چسبیده به کد/تاریخ. */
+.ns-meta { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+.ns-meta > * + *::before { content: '·'; margin-inline-end: 6px; color: var(--text3); }
 .ns-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
 .ns-tags i {
   font-style: normal; font-size: 10.5px; padding: 2px 9px; border-radius: 99px;

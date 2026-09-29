@@ -9,7 +9,7 @@ import './launcher.css'; /* lx-toast */
 import './notes-search.css';
 import { Alert, Back, Book, Search } from '../ui/icons.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
-import { useStatusList } from './config.jsx';
+import { useStatusList, useTerms } from './config.jsx';
 
 /* ⚠️ فهرستِ نوع‌ها از `/config.statuses.note` می‌آید — تنها خانه‌اش
    `server/src/patients/labels.ts` است. کپیِ ثابتِ قبلی با افزودنِ هر نوعِ
@@ -23,6 +23,7 @@ import { useStatusList } from './config.jsx';
 export default function NotesSearch() {
   /* فهرستِ کاملِ نوع‌ها برای کشویِ فیلتر (برچسبِ هر ردیف را خودش می‌آورد). */
   const noteKinds = useStatusList('note');
+  const t = useTerms();
   const kindOptions = noteKinds.map((k) => ({ id: k.key, name: k.label }));
   const kindFa = Object.fromEntries(noteKinds.map((k) => [k.key, k.label]));
   const [f, setF] = useState({ kind: null, procedureTypeId: null, diagnosisId: null, topicId: null, t: '' });
@@ -84,6 +85,7 @@ export default function NotesSearch() {
 
   useEffect(() => { load(f); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const filtered = !!(f.kind || f.procedureTypeId || f.diagnosisId || f.topicId || f.t.trim());
   const change = (patch) => {
     const next = { ...f, ...patch };
     setF(next);
@@ -138,9 +140,9 @@ export default function NotesSearch() {
                     <span className="ns-kind">{m.kindFa ?? kindFa[m.kind] ?? m.kind}</span>
                     <Link to={`/app/patients/${m.patientId}`} className="ns-patient">
                       <b>{m.patientName ?? 'بی‌نام'}</b>
-                      {m.patientCode && <span>{m.patientCode}</span>}
+                      {m.patientCode && <bdi dir="ltr">{m.patientCode}</bdi>}
                     </Link>
-                    {m.visitCode && <small>{m.visitCode}</small>}
+                    {m.visitCode && <small><bdi dir="ltr">{m.visitCode}</bdi></small>}
                   </header>
                   <p className="ns-body">{m.snippet}</p>
                 </article>
@@ -168,7 +170,13 @@ export default function NotesSearch() {
 
       {err && <div className="ns-err"><Alert width="15" height="15" /> {err}</div>}
       {!rows && !err && <div className="ns-empty">در حال بارگذاری…</div>}
-      {rows && rows.length === 0 && <div className="ns-empty">شرحی با این فیلترها پیدا نشد.</div>}
+      {/* بی‌فیلتر و خالی یعنی «هنوز شرحی نیست»، نه «با این فیلترها پیدا نشد» — آن جمله وقتی
+          هیچ فیلتری نزده‌اید گمراه‌کننده است و نمی‌گوید شرح از کجا می‌آید. */}
+      {rows && rows.length === 0 && (
+        <div className="ns-empty">
+          {filtered ? 'شرحی با این فیلترها پیدا نشد.' : 'هنوز شرحی ثبت نشده — شرح‌ها از پروندهٔ بیمار نوشته می‌شوند.'}
+        </div>
+      )}
 
       {rows && rows.map((n, i) => (
         <motion.article {...row(i)} className="ns-card" key={n.id}>
@@ -176,13 +184,15 @@ export default function NotesSearch() {
             <span className="ns-kind">{n.kindFa ?? kindFa[n.kind] ?? n.kind}</span>
             <Link to={`/app/patients/${n.patientId}`} className="ns-patient">
               <b>{n.patientName ?? 'بی‌نام'}</b>
-              {n.patientCode && <span>{n.patientCode}</span>}
+              {n.patientCode && <bdi dir="ltr">{n.patientCode}</bdi>}
             </Link>
-            <small>
-              {n.visitCode ? `${n.visitCode} · ` : ''}
-              {n.opDate ? `${faDate(n.opDate)} · ` : ''}
-              {faDate(n.createdAt)}
-              {n.authorName ? ` · ${n.authorName}` : ''}
+            {/* هر تکه جدا و با برچسب: کدِ لاتین در `<bdi>` تا ترتیبِ سطر در RTL به‌هم نریزد، و دو
+                تاریخ با نامشان («عمل: …»، «نوشته: …») — دو تاریخِ بی‌برچسبِ پشتِ هم معلوم نبود کدام کدام است. */}
+            <small className="ns-meta">
+              {n.visitCode && <bdi dir="ltr">{n.visitCode}</bdi>}
+              {n.opDate && <span>{n.procedureName ? t.surgery : t.visit}: {faDate(n.opDate)}</span>}
+              <span>نوشته: {faDate(n.createdAt)}</span>
+              {n.authorName && <span>{n.authorName}</span>}
             </small>
           </header>
           {/* ⚠️ `procedureName` از سرور همین حالا برچسبِ ترکیبی («A + B») است؛
