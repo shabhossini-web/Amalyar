@@ -1,12 +1,25 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/p89-replan
+status: active
+branch: claude/ux-audit
 since: 2026-09-28
-paths: []
+paths:
+  - .claude/skills/ux-audit/
+  - .claude/skills/ui-ux-pro-max/SKILL.md
+  - scripts/ux/
+  - scripts/verify-theme-tokens.js
+  - src/app/
+  - src/ui/
+  - src/pages/
+  - src/lib/
+  - src/index.css
+  - src/App.jsx
+  - src/main.jsx
+  - server/src/
 note: >-
-  بسته‌های ۸+۹ (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶، روی زیرفرم‌ها) با PR #117 در main مرج شد و PR #98 به‌جایش بسته
-  شد. کارِ باز ندارم؛ فقط عیب‌یابیِ پیامکِ پست‌آپ منتظرِ اسکرین‌شاتِ مالک است (بدونِ کد).
+  بررسیِ کاملِ UX عمل‌یار به خواستِ مالک (۱۴۰۵/۰۷/۰۶): اسکیلِ تازهٔ `ux-audit` + ابزارِ عکس‌برداری
+  (`scripts/ux/*`) + گزارشِ بند‌به‌بند برای تصمیمِ مالک. حالا: رفعِ ۶۶ باگِ قطعیِ گزارش در چند شاخهٔ
+  موازیِ `claude/ux-fix-*` که روی همین شاخه مرج می‌شوند — مسیرهای بالا تا مرج در دستِ این لِین است.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
