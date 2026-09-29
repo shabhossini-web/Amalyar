@@ -150,7 +150,7 @@ export default function Pathways() {
               <div className="pw-card-main">
                 <b>{t.title}</b>
                 {t.notes && <small>{t.notes}</small>}
-                {/* ⚠️ نقطهٔ وسط کنارِ رقمِ فارسی شبیهِ «۰» است: «نسخهٔ ۱ · ۴ مرحله» «۴۰۱ مرحله» خوانده
+                {/* هشدار: نقطهٔ وسط کنارِ رقمِ فارسی شبیهِ «۰» است: «نسخهٔ ۱ · ۴ مرحله» «۴۰۱ مرحله» خوانده
                     می‌شد (بازبینیِ UX، clinic-daily-16). جداکنندهٔ بلند و ویرگول، نه «·». */}
                 <small className="pw-meta">
                   {t.publishedVersion

@@ -120,7 +120,7 @@ export default function Schedule() {
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
-  /* ⚠️ حذفِ روزِ کاری **می‌پرسد** (بازبینیِ UX، clinic-daily-15): سطلِ هر روز کنارِ کلیدِ «فعال»
+  /* هشدار: حذفِ روزِ کاری **می‌پرسد** (بازبینیِ UX، clinic-daily-15): سطلِ هر روز کنارِ کلیدِ «فعال»
      بود و با یک لمس کلِ آن روزِ هفته را از نوبت‌دهی برمی‌داشت، بی‌پرسش و بی‌برگشت. پرسش همان‌جا
      روی ردیف باز می‌شود (نامِ روز و ساعت + پیامد)، فوکوس روی «انصراف» می‌نشیند. */
   const [askDel, setAskDel] = useState(0);
@@ -280,7 +280,7 @@ export default function Schedule() {
 
         <div className="sc-week">
           {grouped.map((g) => (
-            /* ⚠️ نامِ روز یک ستون و ساعت‌های همان روز کنارش (بازبینیِ UX، clinic-daily-25): تا پیش از
+            /* هشدار: نامِ روز یک ستون و ساعت‌های همان روز کنارش (بازبینیِ UX، clinic-daily-25): تا پیش از
                این ساعت با `dir="ltr"` روی خودِ بلوک وسطِ کارت می‌افتاد، دور از نامِ روز، و رقمش لاتین بود. */
             <div key={g.i} className={`sc-day${g.rows.length ? '' : ' empty'}`}>
               <b>{g.label}</b>

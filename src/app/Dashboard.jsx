@@ -102,7 +102,7 @@ const jToDate = (jy, jm, jd) => {
 const statusLabel = (v) => (v.opStatus === 'pending' ? kindOf(v.kind).pending : (v.opStatusFa ?? v.opStatus));
 /**
  * فیلترِ وضعیت — **از همان فهرستِ وضعیتِ سرور** (`/config.statuses.visit`) که کارت‌ها می‌خوانند.
- * ⚠️ تا بازبینیِ UX (company-17) این‌جا «تمام‌شده / کنسل» ثابت بود در حالی که کارت و بقیهٔ سامانه
+ * هشدار: تا بازبینیِ UX (company-17) این‌جا «تمام‌شده / کنسل» ثابت بود در حالی که کارت و بقیهٔ سامانه
  * «انجام شد / لغو» می‌گفتند — یک وضعیت، دو نام در یک صفحه.
  */
 const statusFilters = (statuses) => [{ v: 'all', l: 'همه' }, ...statuses.map((s) => ({ v: s.key, l: s.label }))];
@@ -123,7 +123,7 @@ const kindFilters = (present, titles = {}) => [
 
 /**
  * برچسبِ کاشیِ شمارش — «۱۸ ویزیت، ۹ عمل» وقتی چند نوع در نتیجه هست، نامِ همان نوع وقتی یکی است.
- * ⚠️ تا بازبینیِ UX (clinic-daily-04) کاشی «۲۷ ویزیت» می‌گفت و عمل‌ها را هم ویزیت می‌شمرد.
+ * هشدار: تا بازبینیِ UX (clinic-daily-04) کاشی «۲۷ ویزیت» می‌گفت و عمل‌ها را هم ویزیت می‌شمرد.
  * شمارِ هر نوع از سرور می‌آید (`stats.kindCounts`)؛ این‌جا فقط کنارِ هم نوشته می‌شوند.
  */
 const countLabel = (kindCounts = [], titles = {}, fallback = '') => {
@@ -165,11 +165,11 @@ const faPhone = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸
  * کارِ پرتکرار (پرونده، صورت‌حساب، ویرایش) با نوشته روی کارت‌اند و بقیه این‌جا:
  * ارسالِ فرم، خلاصه (چاپ / پیامک) و — **آخرِ فهرست و با پرسش** — حذف.
  *
- * ⚠️ بستن با شنوندهٔ سند، نه با پردهٔ `position:fixed`: کارتِ framer-motion
+ * هشدار: بستن با شنوندهٔ سند، نه با پردهٔ `position:fixed`: کارتِ framer-motion
  * `transform` دارد و transform مرجعِ fixed را به خودِ کارت محدود می‌کند — پرده
  * فقط روی کارت می‌افتاد و کلیکِ بیرونِ کارت هیچ‌جا نمی‌خورد.
  *
- * ⚠️ «ارسالِ فرم» = ساختِ ثبت‌نام + پیامک به خودِ بیمار (سمتِ سرور). فهرستِ فرم‌ها
+ * هشدار: «ارسالِ فرم» = ساختِ ثبت‌نام + پیامک به خودِ بیمار (سمتِ سرور). فهرستِ فرم‌ها
  * یک‌بار برای کلِ صفحه کش می‌شود؛ منو per-row است ولی داده مشترک.
  */
 function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
@@ -221,7 +221,7 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
          حالِ دیپلوی هنوز نسخهٔ قدیم است، `url/sent/stub` در پاسخ نیست. */
       const url = r.url ?? `${window.location.origin}/f/${r.token}`;
       if (r.sent) {
-        onToast(`«${f.title}» پیامک شد به ${faPhone(r.to)}${r.reused ? ' (یادآوریِ همان فرمِ باز)' : ''} ✓`);
+        onToast(`«${f.title}» پیامک شد به ${faPhone(r.to)}${r.reused ? ' (یادآوریِ همان فرمِ باز)' : ''}`);
       } else if (r.stub) {
         onToast(`سرویسِ پیامک پیکربندی نشده — لینک: ${url}`);
       } else if (r.sent === undefined) {
@@ -248,7 +248,7 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
     setWorking(-1);
     try {
       const r = await api(path, { method: 'POST' });
-      onToast(r.sent ? `${what} پیامک شد به ${faPhone(r.to)} ✓`
+      onToast(r.sent ? `${what} پیامک شد به ${faPhone(r.to)}`
         : r.stub ? `سرویسِ پیامک پیکربندی نشده — لینک: ${r.url}`
           : `پیامک نرفت — لینک: ${r.url}`);
       close();
@@ -283,7 +283,7 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
                 پیامکِ پروندهٔ الکترونیک
               </button>
               <hr />
-              {/* ⚠️ حذف **آخرِ منو و با پرسش** — دیگر کنارِ «ویرایش» نیست که یک ضربهٔ اشتباه ببَردش. */}
+              {/* هشدار: حذف **آخرِ منو و با پرسش** — دیگر کنارِ «ویرایش» نیست که یک ضربهٔ اشتباه ببَردش. */}
               <button type="button" role="menuitem" className="danger" onClick={() => setView('confirm')}>
                 <Trash width="15" height="15" /> حذفِ این {noun}…
               </button>
@@ -322,7 +322,7 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
 /**
  * انتخابگرِ وضعیت — **خودِ برچسبِ وضعیت هم هست** (بازبینیِ UX، company-07 و clinic-daily-18).
  *
- * ⚠️ تا پیش از این سه دکمهٔ هم‌شکل کنارِ یک چیپِ جداگانه بودند و رنگِ حالتِ انتخاب‌شده
+ * هشدار: تا پیش از این سه دکمهٔ هم‌شکل کنارِ یک چیپِ جداگانه بودند و رنگِ حالتِ انتخاب‌شده
  * زیرِ اولویتِ CSS گم می‌شد؛ مدیر نمی‌فهمید این‌ها دکمه‌اند یا برچسب. حالا وضعیتِ فعلی
  * رنگِ خودش را دارد و `aria-pressed` می‌گوید کدام است؛ چیپِ جدا برداشته شد.
  * فهرست از سرور (`/config`) — دکمه‌ها باید **همهٔ** گزینه‌ها را نشان دهند.
@@ -490,9 +490,9 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
           کاربردی‌اش را. */}
       <div className="db-foot">
         <StatusPick v={v} busy={busy} onStatus={onStatus} statuses={statuses} t={t} />
-        {/* ⚠️ سه کارِ پرتکرار با **نوشته** و هدفِ ≥۴۴px، بقیه در «بیشتر» (clinic-daily-18).
+        {/* هشدار: سه کارِ پرتکرار با **نوشته** و هدفِ ≥۴۴px، بقیه در «بیشتر» (clinic-daily-18).
             تا پیش از این شش آیکونِ ۳۲ پیکسلیِ بی‌نوشته بودند که روی گوشی معنا نداشتند.
-            ⚠️ لینکِ پرونده هدفِ **مطمئن** است: نامِ وسطِ کارت یک میان‌بُر است و روی
+            هشدار: لینکِ پرونده هدفِ **مطمئن** است: نامِ وسطِ کارت یک میان‌بُر است و روی
             موبایل با ضربهٔ «وسطِ کارت» قاطی می‌شود؛ این یکی هرگز قاطی نمی‌شود. */}
         <div className="db-tools">
           <Link className="db-ico db-act" to={`/app/patients/${v.patientId}`} title="پروندهٔ بیمار">
@@ -1022,14 +1022,14 @@ export default function Dashboard() {
 
         {!denied && (<>
         <div className="db-stats">
-          {/* ⚠️ شمارش «مراجعه» است نه «ویزیت»: فهرستِ مطب عمل‌ها را هم دارد و «۲۷ ویزیت» آن‌ها
+          {/* هشدار: شمارش «مراجعه» است نه «ویزیت»: فهرستِ مطب عمل‌ها را هم دارد و «۲۷ ویزیت» آن‌ها
               را ویزیت می‌نامید (clinic-daily-04). چند نوع = «۱۸ ویزیت، ۹ عمل» (نقطهٔ وسط کنارِ رقمِ فارسی «۰» خوانده می‌شود). */}
           <div className="glass db-stat"><b>{faNum(stats.total)}</b><span>{countLabel(stats.kindCounts, kindTitles, t.visit)}</span></div>
           {/* برچسب‌ها کلی‌اند چون فهرست می‌تواند عمل و ویزیت و پیگیری را با هم داشته باشد؛
               وقتی روی یک نوع فیلتر شده، همان نوع را می‌گویند. */}
           <div className="glass db-stat"><b>{faNum(stats.pending)}</b><span>در انتظار</span></div>
           <div className="glass db-stat db-stat-today"><b>{faNum(stats.today)}</b><span>{kind === 'all' ? 'امروز' : `${kindTitles[kind] || kindOf(kind).label}ِ امروز`}</span></div>
-          {/* ⚠️ عددِ مالی هرگز بی‌صدا بریده نمی‌شود (clinic-daily-02): روی گوشی «۱۵۸٬۶۰۰٬۰۰۰» در
+          {/* هشدار: عددِ مالی هرگز بی‌صدا بریده نمی‌شود (clinic-daily-02): روی گوشی «۱۵۸٬۶۰۰٬۰۰۰» در
               ستونِ ۷۰ پیکسلی «۵۸٬۶۰۰٬۰۰۰» دیده می‌شد. کاشیِ مبلغ پهن است (روی گوشی یک ردیفِ کامل)
               و واحدش زیرِ عدد می‌آید (clinic-daily-10). */}
           {stats.due > 0 && (

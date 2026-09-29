@@ -133,7 +133,7 @@ export default function SurgeonPortal() {
      مراجعاتِ پزشکان» برای صاحبِ مطبی که خودش پزشک است **غلط** بود؛ حالا همان قاعده از
      طرفِ دیگر: ناظری که میزِ همه یا پزشکِ دیگری را می‌بیند «امروزِ من» نمی‌خوانَد. */
   const financesLabel = mine ? 'بیلان مالی من' : clinic ? 'بیلانِ پزشک' : 'بیلان جراح';
-  /* ⚠️ واژه‌های نمای ناظر از حوزه (بازبینیِ UX، company-23): شرکت «پرتالِ کدام جراح؟ / همهٔ جراحان»،
+  /* هشدار: واژه‌های نمای ناظر از حوزه (بازبینیِ UX، company-23): شرکت «پرتالِ کدام جراح؟ / همهٔ جراحان»،
      مطب «میزِ کدام پزشک؟ / همهٔ پزشکان» — تا پیش از این در شرکت هم «میزِ کدام پزشک؟» نوشته می‌شد. */
   const deskOf = clinic ? 'میزِ' : 'پرتالِ';
   const pickLabel = `${deskOf} کدام ${t.surgeon}؟`;
@@ -503,7 +503,7 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
         ? <h2><button type="button" className="sp-open" onClick={() => things.open({ type: 'visit', id: row.id, patientId: row.patientId })}>{row.fullName}</button></h2>
         : <h2>{row.fullName}</h2>}
       <DoctorTag name={row.doctor} />
-      {/* ⚠️ کدِ لاتین جدا از تاریخ (قانونِ ۹، company-05): بی‌جداسازی مرورگر رقمِ روز را آن‌طرفِ کد می‌برد و
+      {/* هشدار: کدِ لاتین جدا از تاریخ (قانونِ ۹، company-05): بی‌جداسازی مرورگر رقمِ روز را آن‌طرفِ کد می‌برد و
           «۶ مهر ۱۴۰۵» به‌شکلِ «۶ · AM-0005-V1 مهر ۱۴۰۵» دیده می‌شد — روزِ عمل اشتباه خوانده می‌شد. */}
       <span><bdi dir="ltr">{row.code}</bdi> · {faDate(row.opDate)} · {row.hospital || 'مرکز تعیین نشده'}</span>
       <span>{clinic ? [kindOf(row.kind).label, row.topic].filter(Boolean).join(' · ') : (row.procedure || 'عمل تعیین نشده')} · {status}</span>

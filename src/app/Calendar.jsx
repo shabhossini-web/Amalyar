@@ -52,7 +52,7 @@ export default function Calendar() {
     return () => clearTimeout(id);
   }, [note]);
 
-  /* ⚠️ نام و واژه‌ها از واژه‌نامهٔ حوزه (بازبینیِ UX، clinic-daily-05): در مطب این صفحه بیشتر نوبت
+  /* هشدار: نام و واژه‌ها از واژه‌نامهٔ حوزه (بازبینیِ UX، clinic-daily-05): در مطب این صفحه بیشتر نوبت
      و ویزیت نشان می‌دهد و «تقویمِ عمل‌ها / ۱۱ عمل در مهر / عملی ثبت نشده» برای منشی غلط بود.
      کاشیِ لانچر همان `t.calendar` را می‌خواند (قانونِ ۲۴: نامِ کاشی = عنوانِ صفحه). */
   useEffect(() => { document.title = `عمل‌یار — ${t.calendar}`; }, [t.calendar]);
@@ -90,7 +90,7 @@ export default function Calendar() {
   };
 
   /* شروعِ ویزیت — مراجعه از خودِ نوبت ساخته (یا پیدا) می‌شود و فرمش **همین‌جا** باز.
-     ⚠️ تا بازبینیِ UX (clinic-daily-06) این دکمه به «بیماران» می‌پرید: کاربر دیگر روی آن روزِ
+     هشدار: تا بازبینیِ UX (clinic-daily-06) این دکمه به «بیماران» می‌پرید: کاربر دیگر روی آن روزِ
      تقویم نبود، و کاربرِ سطحِ ۳ِ مطب (که «بیماران» را ندارد) بعد از عوض‌شدنِ وضعیتِ نوبت به
      صفحه‌ای می‌رسید که اجازه‌اش را نداشت. حالا اگر بازکردنِ فرم مجاز نیست، شروع ثبت می‌شود و
      صریح گفته می‌شود فرم دستِ کیست. */
@@ -100,7 +100,7 @@ export default function Calendar() {
       const r = a.visitId ? { visitId: a.visitId } : await api(`/appointments/${a.id}/visit`, { method: 'POST' });
       if (!a.visitId) await load(ym.y, ym.m);
       if (canOpen) await things.open({ type: 'visit', id: r.visitId, patientId: a.patientId });
-      else setNote({ text: `${t.visitStart} ثبت شد ✓ — فرمش را کسی باز می‌کند که به «بیماران» دسترسی دارد` });
+      else setNote({ text: `${t.visitStart} ثبت شد — فرمش را کسی باز می‌کند که به «بیماران» دسترسی دارد` });
     } catch (e) { setErr2(e.message); } finally { setBusyAppt(0); }
   };
 
@@ -133,7 +133,7 @@ export default function Calendar() {
           return (
             <>
               <div className="cal-dots">
-                {/* ⚠️ معنای رنگ فقط در `title` بود (روی گوشی هرگز دیده نمی‌شد) — حالا زیرِ تقویم
+                {/* هشدار: معنای رنگ فقط در `title` بود (روی گوشی هرگز دیده نمی‌شد) — حالا زیرِ تقویم
                     راهنما دارد و صفحه‌خوان هم «۲ در انتظار» می‌خواند (clinic-daily-14). */}
                 {cell.counts.pending > 0 && <i className="p" title={stLabel('pending', 'در انتظار')} aria-label={`${faNum(cell.counts.pending)} ${stLabel('pending', 'در انتظار')}`}>{faNum(cell.counts.pending)}</i>}
                 {cell.counts.done > 0 && <i className="d" title={stLabel('done', 'انجام شد')} aria-label={`${faNum(cell.counts.done)} ${stLabel('done', 'انجام شد')}`}>{faNum(cell.counts.done)}</i>}
@@ -184,7 +184,7 @@ export default function Calendar() {
                 </div>
                 <div className="cal-main">
                   <b>
-                    {/* ⚠️ فاصلهٔ واقعی بینِ نام و برچسب (بازبینیِ UX، clinic-daily-13): مرورگر حروفِ فارسی
+                    {/* هشدار: فاصلهٔ واقعی بینِ نام و برچسب (بازبینیِ UX، clinic-daily-13): مرورگر حروفِ فارسی
                         را از مرزِ دو عنصر هم به هم می‌چسباند و «رضایی» کنارِ «در مطب» «رضایـ» دیده می‌شد. */}
                     {a.fullName ?? 'بدونِ پرونده'}{' '}
                     <i className={`cal-appt-st st-${a.status}`}>{a.statusLabel}</i>
@@ -280,7 +280,7 @@ export default function Calendar() {
         ))}
       </section>
 
-      {/* ⚠️ همهٔ لایه‌های شناور داخلِ **یک** ظرف: قاعدهٔ `.cal > *:not(.cal-bg) { position: relative }`
+      {/* هشدار: همهٔ لایه‌های شناور داخلِ **یک** ظرف: قاعدهٔ `.cal > *:not(.cal-bg) { position: relative }`
           (برای بالاآوردنِ محتوا از روی درخششِ پس‌زمینه) اولویتِ بیشتری از `position: fixed`ِ پرده‌ها
           دارد، پس پنجرهٔ دلیلِ لغو تا امروز ته صفحه در جریانِ متن می‌نشست نه روی صفحه. ظرفِ نسبی
           مرجعِ fixed نیست و z-indexِ پرده‌ها را هم در خودش حبس نمی‌کند. */}
