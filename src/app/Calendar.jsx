@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
-import { useTerms } from './config.jsx';
+import { useStatusList, useTerms } from './config.jsx';
+import { useAllowedTools } from './tools.jsx';
 import { FLOW } from '../lib/terms.js';
 import CancelReason from '../ui/CancelReason.jsx';
 import { ThingPopups, useThings } from './thing-popups.jsx';
@@ -37,16 +38,13 @@ export default function Calendar() {
   const [err, setErr] = useState('');
   const [note, setNote] = useState(null); // { text, bad } — پیامِ کوتاهِ پایینِ صفحه
   /* بازکردنِ فرمِ مراجعه «بیماران» (`dashboard`) می‌خواهد، و در مطب تقویم از سطحِ ۳ باز است ولی
-     «بیماران» از ۴. تصمیم از سرور (`/features`)؛ تا نیامده «می‌شود» فرض می‌شود — سرور به‌هرحال
-     می‌سنجد و خطایش همین‌جا دیده می‌شود. */
-  const [canOpen, setCanOpen] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    api('/features')
-      .then((rows) => { const f = (rows ?? []).find((r) => r.key === 'dashboard'); if (alive && f) setCanOpen(!!f.allowed); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, []);
+     «بیماران» از ۴. تصمیم از سرور (`/features` از راهِ `useAllowedTools`، همان الگوی میزِ پزشک و
+     میزِ پذیرش)؛ تا نیامده «می‌شود» فرض می‌شود — سرور به‌هرحال می‌سنجد. */
+  const { hero, loading: accessLoading } = useAllowedTools();
+  const canOpen = accessLoading || hero?.key === 'dashboard';
+  /* برچسبِ رنگ‌ها از فهرستِ وضعیتِ سرور — همان واژه‌ای که کارتِ «بیماران» می‌گوید. */
+  const visitStatuses = useStatusList('visit');
+  const stLabel = (k, fb) => visitStatuses.find((x) => x.key === k)?.label ?? fb;
   useEffect(() => {
     if (!note || note.bad) return undefined;
     const id = setTimeout(() => setNote(null), note.text.length > 40 ? 4500 : 2400);
@@ -134,9 +132,11 @@ export default function Calendar() {
           return (
             <>
               <div className="cal-dots">
-                {cell.counts.pending > 0 && <i className="p" title="در انتظار">{faNum(cell.counts.pending)}</i>}
-                {cell.counts.done > 0 && <i className="d" title="تمام‌شده">{faNum(cell.counts.done)}</i>}
-                {cell.counts.cancelled > 0 && <i className="c" title="لغو">{faNum(cell.counts.cancelled)}</i>}
+                {/* ⚠️ معنای رنگ فقط در `title` بود (روی گوشی هرگز دیده نمی‌شد) — حالا زیرِ تقویم
+                    راهنما دارد و صفحه‌خوان هم «۲ در انتظار» می‌خواند (clinic-daily-14). */}
+                {cell.counts.pending > 0 && <i className="p" title={stLabel('pending', 'در انتظار')} aria-label={`${faNum(cell.counts.pending)} ${stLabel('pending', 'در انتظار')}`}>{faNum(cell.counts.pending)}</i>}
+                {cell.counts.done > 0 && <i className="d" title={stLabel('done', 'انجام شد')} aria-label={`${faNum(cell.counts.done)} ${stLabel('done', 'انجام شد')}`}>{faNum(cell.counts.done)}</i>}
+                {cell.counts.cancelled > 0 && <i className="c" title={stLabel('cancelled', 'لغو')} aria-label={`${faNum(cell.counts.cancelled)} ${stLabel('cancelled', 'لغو')}`}>{faNum(cell.counts.cancelled)}</i>}
               </div>
               {cell.counts.appointments > 0 && (
                 <div className="cal-appt-dot" title={FLOW.appointments}><Clock width="9" height="9" /> {faNum(cell.counts.appointments)}</div>
@@ -153,6 +153,14 @@ export default function Calendar() {
           );
         }}
       />
+
+      {/* راهنمای رنگ‌های خانه‌های تقویم — معنا نباید فقط با رنگ یا نگه‌داشتنِ ماوس باشد. */}
+      <ul className="cal-legend" aria-label="راهنمای رنگ‌های تقویم">
+        <li><i className="p" aria-hidden="true" />{stLabel('pending', 'در انتظار')}</li>
+        <li><i className="d" aria-hidden="true" />{stLabel('done', 'انجام شد')}</li>
+        <li><i className="c" aria-hidden="true" />{stLabel('cancelled', 'لغو')}</li>
+        <li className="appt"><Clock width="11" height="11" aria-hidden="true" />{FLOW.appointments}</li>
+      </ul>
 
       <section className="cal-day">
         <b>{faNum(day)} {J_MONTHS[ym.m - 1]}</b>
@@ -261,6 +269,8 @@ export default function Calendar() {
             {canOpen ? (
               <button type="button" className="cal-open" onClick={() => things.open({ type: 'visit', id: v.id })}
                       aria-label={`بازکردنِ ${v.code} — ${v.fullName}`}>
+                {/* «بازکردن» روی خودِ دکمه (clinic-daily-14): کدِ تنها نمی‌گفت این تنها راهِ بازکردنِ مراجعه است. */}
+                <span className="cal-open-v">بازکردن</span>
                 <span dir="ltr">{v.code}</span>
               </button>
             ) : <span className="cal-code" dir="ltr">{v.code}</span>}
