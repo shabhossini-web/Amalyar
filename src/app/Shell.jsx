@@ -1,15 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, Outlet } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import { useConfig } from './config.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import GlobalSearch from './GlobalSearch.jsx';
 import WorkBell from './WorkBell.jsx';
+import ChatBell from './ChatBell.jsx';
 import { Search } from '../ui/icons.jsx';
 /* `.glass`ِ منوی پروفایل در launcher.css تعریف شده؛ حالا که منو روی همهٔ صفحات است،
    پوسته صریحاً آن را می‌آورد (قانونِ ۲۱: هیچ صفحه‌ای از CSSِ صفحهٔ دیگر ارث نمی‌برد). */
 import './launcher.css';
 import './shell.css';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 /**
  * پوستهٔ سراسریِ سامانه (W2.4) — یک نوارِ ثابت بالای **همهٔ** صفحاتِ `/app`:
@@ -23,17 +25,10 @@ import './shell.css';
 export default function Shell() {
   const { brandName } = useConfig();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [toast, setToast] = useState('');
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const { msg: toast, show: setToast } = useToast(1800);
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
-  /* صفحهٔ «همهٔ ابزارها» (لانچر) منوی پروفایلِ خودش را دارد — این‌جا دو تا نشود.
-     از W2.3 نشانی‌اش `/app/tools` است و `/app` خودش صفحهٔ «امروز» است. */
-  const { pathname } = useLocation();
-  const launcher = pathname === '/app/tools' || pathname === '/app/tools/';
+  /* منوی پروفایل **فقط** این‌جاست — روی لانچر (`/app/tools`) هم. تا بازبینیِ UX (۱۴۰۵/۰۷)
+     لانچر چیپِ خودش را داخلِ بدنه داشت و این نوار آن‌جا بی‌پروفایل بود. */
 
   return (
     <>
@@ -48,18 +43,80 @@ export default function Shell() {
             onClick={() => setSearchOpen(true)} aria-label="جستجوی بیمار" aria-keyshortcuts="Control+K"
           >
             <Search width="16" height="16" />
+            {/* روی گوشی «جستجو»: «جستجوی بیم…»ِ بریده بدتر از واژهٔ کوتاه است (بازبینیِ UX ۱۴۰۵/۰۷). */}
             <span className="sh-search-label">جستجوی بیمار…</span>
+            <span className="sh-search-short" aria-hidden="true">جستجو</span>
             <kbd className="sh-kbd" aria-hidden="true">{isMac ? '⌘' : 'Ctrl'} K</kbd>
           </button>
           <div className="sh-end">
+            <ChatBell />
             <WorkBell onToast={setToast} />
-            {!launcher && <ProfileMenu onToast={setToast} />}
+            <ProfileMenu onToast={setToast} />
           </div>
         </div>
       </header>
+      <InstallBanner onToast={setToast} />
       <GlobalSearch open={searchOpen} onOpen={() => setSearchOpen(true)} onClose={() => setSearchOpen(false)} />
       <Outlet />
-      {toast && <div className="sh-toast" role="status">{toast}</div>}
+      <Toast msg={toast} />
     </>
+  );
+}
+
+const A2HS_KEY = 'amalyar_a2hs_dismissed';
+const dismissed = () => { try { return !!localStorage.getItem(A2HS_KEY); } catch { return false; } };
+
+/**
+ * بنرِ «عمل‌یار را روی گوشی نصب کن» (اندروید/کروم — `beforeinstallprompt`).
+ *
+ * تا بازبینیِ UX (۱۴۰۵/۰۷) فقط لانچر به این رویداد گوش می‌داد — صفحه‌ای که از وقتی «امروز»
+ * صفحهٔ نخست شد کسی به آن نمی‌رسید؛ یعنی بنرِ نصبِ خودِ سامانه دیگر دیده نمی‌شد. حالا پوسته
+ * گوش می‌دهد و بنر زیرِ نوار، داخلِ جریانِ صفحه می‌نشیند — نه شناورِ پایین، که روی «+»ِ
+ * «امروز» و توست بیفتد.
+ */
+function InstallBanner({ onToast }) {
+  const [evt, setEvt] = useState(null);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (dismissed()) return undefined;
+    const h = (e) => { e.preventDefault(); setEvt(e); };
+    window.addEventListener('beforeinstallprompt', h);
+    return () => window.removeEventListener('beforeinstallprompt', h);
+  }, []);
+  /* ارتفاعِ بنر (با فاصلهٔ بالایش) در `--install-h` روی ریشه (بازبینیِ خصمانه، R7): صفحه‌های
+     تمام‌قد («پیام‌رسان»، «دستیار») `100dvh - --shell-h` می‌گیرند و بنرِ داخلِ جریان — روی گوشی
+     دوخطی، حدودِ ۸۰ پیکسل — کادرِ نوشتنشان را زیرِ لبهٔ صفحه می‌برد. آن دو صفحه این را هم کم
+     می‌کنند؛ بی‌بنر متغیر برداشته می‌شود و پیش‌فرضِ ۰ می‌ماند. با تغییرِ عرض (چرخشِ گوشی) دوباره
+     اندازه گرفته می‌شود. */
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const measure = () => {
+      const top = parseFloat(getComputedStyle(el).marginTop) || 0;
+      root.style.setProperty('--install-h', `${Math.ceil(el.getBoundingClientRect().height + top)}px`);
+    };
+    measure();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty('--install-h'); };
+  }, [evt]);
+  if (!evt) return null;
+  const install = async () => {
+    evt.prompt();
+    const { outcome } = await evt.userChoice;
+    if (outcome === 'accepted') onToast?.('عمل‌یار نصب شد');
+    setEvt(null);
+  };
+  const later = () => {
+    try { localStorage.setItem(A2HS_KEY, '1'); } catch { /* حالتِ خصوصی — فقط همین بار بسته می‌شود */ }
+    setEvt(null);
+  };
+  return (
+    <div ref={ref} className="sh-install" role="region" aria-label="نصبِ اپلیکیشن">
+      <span className="sh-install-txt">عمل‌یار را روی گوشی نصب کنید — بی‌مرورگر و با یک لمس باز می‌شود.</span>
+      <button type="button" className="sh-install-ok" onClick={install}>نصب</button>
+      <button type="button" className="sh-install-no" onClick={later}>بعداً</button>
+    </div>
   );
 }

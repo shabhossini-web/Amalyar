@@ -109,7 +109,10 @@ export async function apiUpload(path, formData) {
   const data = await parseBody(res);
   if (!res.ok) {
     if (res.status === 401) announceUnauthorized(path, false);
-    throw new ApiError(messageOf(data, res.status), res.status);
+    /* هشدار: ۴۱۳ از multer با متنِ انگلیسیِ «File too large» می‌آید و خام کنارِ دکمهٔ بیمار می‌نشست
+       (بازبینیِ UX، بندِ ۹۹). پیامِ فارسیِ خودِ سرور (اگر بود) مقدم است. */
+    const tooLarge = res.status === 413 && !/[\u0600-\u06FF]/.test(messageOf(data, res.status));
+    throw new ApiError(tooLarge ? 'حجمِ فایل از سقفِ مجاز بیشتر است — فایلِ کوچک‌تری بفرستید' : messageOf(data, res.status), res.status);
   }
   return data;
 }

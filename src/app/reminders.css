@@ -1,34 +1,26 @@
 /* دفترِ یادآوری‌ها. */
-.rm { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
+.rm { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .rm-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
     radial-gradient(900px 520px at 50% -10%, rgba(var(--brand-rgb), .15), transparent 60%),
     var(--bg);
 }
-.rm-head { max-width: 880px; margin: 0 auto 14px; }
-.rm-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.rm-back:hover { color: var(--brand-2); }
-.rm-head h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
-.rm-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
-
 .rm-err {
-  display: flex; align-items: center; gap: 7px; max-width: 880px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .rm-empty {
-  max-width: 880px; margin: 0 auto; padding: 26px 16px; text-align: center;
+  max-width: var(--page-w); margin: 0 auto; padding: 26px 16px; text-align: center;
   font-size: 13px; color: var(--text3);
   border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 .rm-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
-  max-width: 880px; margin: 0 auto 12px;
+  max-width: var(--page-w); margin: 0 auto 12px;
 }
 .rm-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .rm-tabs button {
@@ -39,7 +31,7 @@
   border: 1px solid rgba(var(--veil-rgb), .13);
 }
 .rm-tabs button.on {
-  color: #fff; background: rgba(var(--brand-soft-rgb), .22);
+  color: var(--text1); background: rgba(var(--brand-soft-rgb), .22);
   border-color: rgba(var(--brand-soft-rgb), .55);
 }
 .rm-tabs i { font-style: normal; font-size: 10.5px; opacity: .75; }
@@ -51,7 +43,7 @@
 }
 .rm-sweep:disabled { opacity: .6; cursor: default; }
 
-.rm-list { display: grid; gap: 9px; max-width: 880px; margin: 0 auto; }
+.rm-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .rm-row {
   padding: 11px 14px; border-radius: 15px;
   background: rgba(var(--veil-rgb), .045);
@@ -67,7 +59,7 @@
   font-style: normal; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.rm-tag.s-sent { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.rm-tag.s-sent { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
 .rm-tag.s-failed { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .rm-text { margin-top: 6px; font-size: 12.5px; line-height: 1.8; color: var(--text2); white-space: pre-wrap; }
 .rm-fail { margin-top: 4px; font-size: 11px; color: var(--red-text); }
@@ -75,7 +67,7 @@
 .rm-toast {
   position: fixed; inset-inline: 0; bottom: 18px; margin-inline: auto; width: fit-content;
   max-width: 90vw; padding: 10px 18px; border-radius: 99px; font-size: 12.5px;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .4);
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 60;
 }
 .rm-toast.on { opacity: 1; }
@@ -96,3 +88,39 @@
 .rm-act:disabled { opacity: .5; cursor: default; }
 .rm-act:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .rm-act { transition: none; } }
+
+/* پرسشِ لغوِ یادآوری همان‌جا روی ردیف — نامِ بیمار + پیامد (clinic-daily-15). */
+.rm-ask {
+  display: grid; gap: 8px; margin-top: 8px; padding: 10px 12px; border-radius: 11px;
+  background: rgba(248, 113, 113, .07); border: 1px solid rgba(248, 113, 113, .35);
+}
+.rm-ask p { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--text1); }
+.rm-ask > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.rm-ask .rm-act { min-height: 40px; }
+.rm-act.rm-ask-yes { color: #fff; background: #dc2626; border-color: #dc2626; }
+.rm-act.rm-ask-yes:hover:not(:disabled) { background: #b91c1c; }
+
+/* ── صفِ نزدیک‌ترین موعد (clinic-daily-17) ── */
+.rm-due {
+  flex: 0 0 auto; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+}
+.rm-due.today { color: var(--brand-text); background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .38); }
+.rm-due.late { color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .4); }
+.rm-text.clamp {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+}
+.rm-more {
+  justify-self: start; min-height: 32px; padding: 0 2px; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 700; color: var(--brand-text);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.rm-more:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+.rm-warn {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: var(--page-w); margin: 0 auto 10px;
+  padding: 9px 12px; border-radius: 12px; font-size: 12.5px; color: var(--amber-text);
+  background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .35);
+}
+.rm-warn button {
+  min-height: 32px; padding: 0 4px; border: none; background: none; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 800; color: inherit; text-decoration: underline;
+}

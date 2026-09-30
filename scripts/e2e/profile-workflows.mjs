@@ -90,7 +90,9 @@ try {
     pass(`${profile}: custom definitions preserved and deliberate deletion is not reseeded`);
   }
   vertical = 'implant';
-  const grant = await portal.grantAccount(surgeon.id, admin);
+  /* بستهٔ PS (PS6): شماره را سوپرادمین از خودِ جراح می‌پرسد و با تعاریف سنجیده می‌شود. */
+  const surgeonPhone = (await prisma.person.findUnique({ where: { id: surgeon.personId }, select: { phone: true } })).phone;
+  const grant = await portal.grantAccount(surgeon.id, admin, surgeonPhone);
   const doctor = await prisma.account.findUnique({ where: { id: grant.id } });
   assert.equal(doctor.passwordHash, ''); assert.equal(doctor.level, 2); assert.equal(doctor.personId, surgeon.personId); assert.equal(doctor.jobRole, 'doctor');
   assert.equal((await portal.grantAccount(surgeon.id, admin)).existing, true);

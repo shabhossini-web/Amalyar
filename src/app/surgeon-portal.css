@@ -1,6 +1,5 @@
-.sp-page { max-width: 1100px; margin: auto; padding: 24px 16px 70px; }
-.sp-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 24px; }
-.sp-head h1 { flex: 1; font-size: 23px; }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ ۳۲ پیکسل = حاشیهٔ دوطرفه. */
+.sp-page { --page-w: var(--maxw); max-width: calc(var(--page-w) + 32px); margin: auto; padding: 20px 16px 70px; }
 .sp-list { display: grid; gap: 18px; margin: 20px 0; }
 .sp-card { border: 1px solid rgba(var(--brand-soft-rgb),.3); border-radius: 18px; padding: 20px; display: grid; gap: 12px; }
 .sp-card h2 { font-size: 18px; margin: 0; }
@@ -10,7 +9,7 @@
 .ri-editor { min-width: 0; margin: 12px 0; padding: 12px; border: 1px solid rgba(var(--brand-soft-rgb),.25); border-radius: 14px; display: grid; gap: 12px; }
 .ri-row { display: grid; grid-template-columns: minmax(0,2fr) minmax(70px,1fr); gap: 10px; border-top: 1px solid rgba(var(--veil-rgb), .12); padding-top: 12px; }
 .ri-row select, .ri-row input { width: 100%; min-width: 0; }
-.ri-delete { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid #fda4af66; border-radius: 12px; background: transparent; color: #fda4af; cursor: pointer; }
+.ri-delete { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid #fda4af66; border-radius: 12px; background: transparent; color: var(--red-text); cursor: pointer; }
 .ri-editor .bl-mini { display: flex; gap: 8px; justify-content: center; }
 /* زیرِ تعداد: نسخه (قفل) و موجودیِ انبار (فقط نمایش — رزرو نمی‌کند). */
 /* ستونِ تعداد با توضیح‌هایش بلندتر است؛ بی‌این، کشوی کالای کناری تا وسطِ ردیف کشیده می‌شد. */
@@ -100,6 +99,9 @@
 /* دو برچسب کنارِ هم (وضعیتِ نوبت + وضعیتِ مراجعه) روی یک ردیفِ ادغام‌شده */
 .sp-row-tags { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .sp-row-tags .sp-row-tag { grid-column: auto; grid-row: auto; }
+/* روی گوشی دو برچسبِ پیشونددار («نوبت: …»، «ویزیت: …») زیرِ هم می‌نشینند: کنارِ هم، ستونِ نام را
+   آن‌قدر تنگ می‌کردند که نام دوخطی و برچسبِ پزشک «!…» می‌شد (clinic-daily-20). */
+@media (max-width: 560px) { .sp-row-tags { flex-direction: column; align-items: flex-end; } }
 /* مبلغ هرگز کوتاه نمی‌شود — متنِ کنارش کوتاه می‌شود. */
 .sp-due { flex: 0 0 auto; color: var(--amber-text); font-weight: 700; white-space: nowrap; }
 .sp-due::before { content: '·'; margin-inline-end: 6px; color: var(--text3); font-weight: 400; }

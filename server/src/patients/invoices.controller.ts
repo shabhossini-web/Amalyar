@@ -10,25 +10,35 @@ import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InvoicesService } from './invoices.service';
 
+/* پیامِ هر decorator فارسی است (DF16، قانون ۸) — پیش‌فرضِ class-validator انگلیسی است و همان متن به کاربر می‌رسید. */
+const HOURS = { int: { message: 'مدتِ قابلِ صورتحساب باید عددِ صحیحِ ساعت باشد' }, min: { message: 'مدتِ قابلِ صورتحساب دستِ‌کم ۱ ساعت است' }, max: { message: 'مدتِ قابلِ صورتحساب حداکثر ۷۲ ساعت است' } };
+const YEAR = { str: { message: 'سالِ تعرفه نامعتبر است' }, re: { message: 'سالِ تعرفه باید چهاررقمی باشد (مثلاً ۱۴۰۵)' } };
+const OWNER = { message: 'مالکِ دستگاه باید «شرکت» یا «بیمارستان» باشد' };
 class NeuroServiceDto {
-  @IsString() @Matches(/^\d{4,8}$/) code!: string;
-  @IsInt() @Min(1) @Max(72) hours!: number;
-  @IsString() @Matches(/^\d{4}$/) year!: string;
-  @IsIn(['company', 'hospital']) deviceOwner!: string;
+  @IsString({ message: 'کدِ خدمت نامعتبر است' }) @Matches(/^\d{4,8}$/, { message: 'کدِ خدمت باید ۴ تا ۸ رقم باشد' }) code!: string;
+  @IsInt(HOURS.int) @Min(1, HOURS.min) @Max(72, HOURS.max) hours!: number;
+  @IsString(YEAR.str) @Matches(/^\d{4}$/, YEAR.re) year!: string;
+  @IsIn(['company', 'hospital'], OWNER) deviceOwner!: string;
 }
 /** پاپ‌آپِ یک‌جا: چند خدمت با یک مدت/سال/مالک. `items` = شناسه‌های «کد:نام» از neuro-catalog. */
 class NeuroQuoteDto {
-  @IsArray() @ArrayMinSize(1) @IsString({ each: true }) items!: string[];
-  @IsInt() @Min(1) @Max(72) hours!: number;
-  @IsString() @Matches(/^\d{4}$/) year!: string;
-  @IsIn(['company', 'hospital']) deviceOwner!: string;
+  @IsArray({ message: 'فهرستِ خدمات نامعتبر است' }) @ArrayMinSize(1, { message: 'دستِ‌کم یک خدمت انتخاب کنید' })
+  @IsString({ each: true, message: 'شناسهٔ خدمت نامعتبر است' }) items!: string[];
+  @IsInt(HOURS.int) @Min(1, HOURS.min) @Max(72, HOURS.max) hours!: number;
+  @IsString(YEAR.str) @Matches(/^\d{4}$/, YEAR.re) year!: string;
+  @IsIn(['company', 'hospital'], OWNER) deviceOwner!: string;
+  /** شناسهٔ قلم‌های مبلغِ کلِ مراجعه که با این خدمات جایگزین می‌شوند (company-14) — سرویس می‌سنجد.
+   *  در `neuro-quote` هم هست تا پیش‌نمایشِ «صورت‌حسابِ پس از ثبت» همان جایگزینی را بسنجد (DF2). */
+  @IsOptional() @IsArray({ message: 'فهرستِ قلم‌های جایگزین‌شونده باید آرایه باشد' }) replace?: unknown[];
 }
 class NeuroApplyDto extends NeuroQuoteDto {
-  @IsOptional() @IsBoolean() returnUnusedStock?: boolean;
+  @IsOptional() @IsBoolean({ message: 'گزینهٔ «برگشت به موجودی» نامعتبر است' }) returnUnusedStock?: boolean;
   /** `{name, irc?, qty}` — شکلِ دقیق در سرویس سنجیده می‌شود. */
-  @IsOptional() @IsArray() consumables?: unknown[];
+  @IsOptional() @IsArray({ message: 'فهرستِ مصرفی‌ها نامعتبر است' }) consumables?: unknown[];
+  /** شناسهٔ قلم‌های مبلغِ کلی که کاربر صریحاً گفت «کنارش بماند» (DF3) — ماندگار روی خطوطِ نوروی تازه. */
+  @IsOptional() @IsArray({ message: 'فهرستِ قلم‌های نگه‌داشته باید آرایه باشد' }) keep?: unknown[];
 }
-class IssueInvoiceDto { @IsIn(['formal', 'informal']) variant!: string; }
+class IssueInvoiceDto { @IsIn(['formal', 'informal'], { message: 'نوعِ فاکتور باید رسمی یا غیررسمی باشد' }) variant!: string; }
 
 @Controller('visits/:id/invoices')
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)

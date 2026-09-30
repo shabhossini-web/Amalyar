@@ -6,13 +6,14 @@ import { cancelSms, type CancelKind } from '../common/cancel-reasons';
 import { SmsService, meliCodeText, meliErrorCodeOf } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
-import { toEnDigits } from '../common/identity';
+import { submissionPhone, toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 import { sendReminders } from '../reminders/send-reminders';
 import { AuditService } from '../audit/audit.service';
 import { diagnosisIds, procedureIds } from './visit-coding';
 import { toJalali } from '../common/jalali';
+import { clinicDateIso, clinicTodayIso } from '../common/clinic-day';
 
 /** ممیزیِ ارسال‌های مستقیمِ پیامک از دکمه‌ها — برای خطِ زمانیِ گزارشِ عیب‌یابی. */
 const DIRECT_SMS: Record<string, string> = {
@@ -453,12 +454,17 @@ export class RemindersService {
       const a = await this.prisma.appointment.findUnique({
         where: { id: appointmentId },
         select: {
-          id: true, patientId: true, date: true, startMin: true, status: true,
+          id: true, patientId: true, date: true, startMin: true, status: true, submissionId: true,
           topic: { select: { name: true } },
           patient: { select: { phone: true } },
         },
       });
       if (!a) return;
+      /* نوبتی که یک ثبت‌نامِ عمومی گرفته و پرونده‌اش هنوز شماره ندارد ← شمارهٔ همان ثبت‌نام (بستهٔ PS، PS12):
+         فرمِ عمومی دیگر شماره را روی پروندهٔ موجود نمی‌نشاند، ولی کسی که نوبت گرفته باید یادآوری‌اش را بگیرد. */
+      const own = a.submissionId && !String(a.patient?.phone ?? '').trim()
+        ? await this.prisma.intakeSubmission.findUnique({ where: { id: a.submissionId }, select: { data: true } })
+        : null;
       await this.prisma.reminder.updateMany({
         where: { appointmentId, kind: 'appointment', status: 'pending' },
         data: { status: 'cancelled' },
@@ -475,7 +481,7 @@ export class RemindersService {
       await this.prisma.reminder.create({
         data: {
           patientId: a.patientId, appointmentId, kind: 'appointment', dueAt,
-          phone: String(a.patient?.phone ?? '').trim() || null,
+          phone: String(a.patient?.phone ?? '').trim() || submissionPhone(null, own?.data) || null,
           text: `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.appointmentText, { date: faDateStr(a.date), time, topic })}`,
         },
       });
@@ -550,15 +556,22 @@ export class RemindersService {
    * سراسریِ مدیر است که لغوشده‌ها را نشان نمی‌دهد.
    */
   async list(patientId?: number) {
-    const rows = await this.prisma.reminder.findMany({
-      where: patientId ? { patientId } : { status: { not: 'cancelled' } },
-      orderBy: [{ status: 'asc' }, { dueAt: 'desc' }],
-      take: 100,
-      include: {
-        patient: { select: { code: true, firstName: true, lastName: true } },
-        visit: { select: { seq: true } },
-      },
-    });
+    const include = {
+      patient: { select: { code: true, firstName: true, lastName: true } },
+      visit: { select: { seq: true } },
+    } as const;
+    const rows = patientId
+      ? await this.prisma.reminder.findMany({
+        where: { patientId }, orderBy: [{ status: 'asc' }, { dueAt: 'desc' }], take: 100, include,
+      })
+      : await this.queue(include);
+    /* «امروز / عقب‌افتاده» برای پیامِ هنوز نرفته — مشتقِ سرور (قانونِ ۱۵)، به وقتِ مطب. */
+    const today = clinicTodayIso();
+    const dueStateOf = (r: { status: string; dueAt: Date }) => {
+      if (r.status !== 'pending' && r.status !== 'sending') return null;
+      const d = clinicDateIso(r.dueAt);
+      return d < today ? 'overdue' : d === today ? 'today' : 'upcoming';
+    };
     const chatIds = rows.flatMap(r => r.chatMessageId ? [r.chatMessageId] : []);
     const chatMessages = chatIds.length ? await this.prisma.chatMessage.findMany({ where: { id: { in: chatIds } }, include: { channel: { include: { members: true } } } }) : [];
     return rows.map((r) => ({
@@ -579,6 +592,7 @@ export class RemindersService {
       status: r.status,
       statusFa: REMINDER_LABELS[r.status] ?? null,
       dueAt: r.dueAt,
+      dueState: dueStateOf(r),
       sentAt: r.sentAt,
       phone: r.phone,
       text: r.text,
@@ -586,6 +600,37 @@ export class RemindersService {
       patientName: r.patient ? `${r.patient.firstName} ${r.patient.lastName}`.trim() : null,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
     }));
+  }
+
+  /**
+   * صفِ دفترِ یادآوری‌ها — **نزدیک‌ترین موعد اول** (بازبینیِ UX، clinic-daily-17).
+   *
+   * ⚠️ تا پیش از این `status, dueAt desc` بود: اول پیامِ ۱۶ مهر می‌آمد و پیام‌های امروز و
+   * عقب‌افتاده پایینِ یک فهرستِ بلند. حالا: گیرکرده‌ها (نرفته/نامشخص) اول، بعد صف با نزدیک‌ترین موعد،
+   * بعد آزمایشی‌ها، و در آخر رفته‌ها از تازه به کهنه.
+   *
+   * ⚠️ **هر گروه کوئری و سقفِ خودش را دارد** (بستهٔ DF، DF4). نسخهٔ قبل یک کوئری با
+   * `notIn [cancelled, sent]`، `dueAt asc` و سقفِ ۱۵۰ بود و گروه‌بندی را **بعد** از بریدن می‌کرد: ۱۵۰
+   * ردیفِ «نرفته/نامشخص/آزمایشی»ِ ماه‌های پیش — که قدیمی‌ترین موعدها را دارند — کلِ قاب را پر می‌کردند و
+   * صفِ زنده (`pending`) اصلاً به صفحه نمی‌رسید. حالا: صفِ زنده نزدیک‌ترین موعد اول؛ گیرکرده‌ها و آزمایشی‌ها
+   * تازه‌ترین اول (کهنه‌ها جا را از تازه‌ها نمی‌گیرند)؛ رفته‌ها تازه‌ترین ارسال اول.
+   */
+  private async queue<I extends object>(include: I) {
+    const [stuck, live, simulated, sent] = await Promise.all([
+      this.prisma.reminder.findMany({
+        where: { status: { in: ['failed', 'uncertain'] } }, orderBy: [{ dueAt: 'desc' }, { id: 'desc' }], take: 50, include,
+      }),
+      this.prisma.reminder.findMany({
+        where: { status: { in: ['pending', 'sending'] } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 150, include,
+      }),
+      this.prisma.reminder.findMany({
+        where: { status: 'simulated' }, orderBy: [{ dueAt: 'desc' }, { id: 'desc' }], take: 50, include,
+      }),
+      this.prisma.reminder.findMany({
+        where: { status: 'sent' }, orderBy: [{ sentAt: 'desc' }, { id: 'desc' }], take: 50, include,
+      }),
+    ]);
+    return [...stuck, ...live, ...simulated, ...sent];
   }
 
   /**

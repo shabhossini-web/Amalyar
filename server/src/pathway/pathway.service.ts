@@ -4,7 +4,8 @@ import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { scopedPatientWhere } from '../common/own-scope';
 import { jobRoleLabel } from '../common/job-roles';
-import { PATHWAY_TEMPLATES, validateSteps, type PathwayStepDef } from './pathway.registry';
+import { ConfigService } from '../config/config.service';
+import { PATHWAY_TEMPLATES, RENAMED_BUILTIN_TITLES, validateSteps, type PathwayStepDef } from './pathway.registry';
 
 const DAY = 86_400_000;
 
@@ -26,7 +27,10 @@ const STEP_FA: Record<string, string> = { pending: 'در انتظار', done: '�
  */
 @Injectable()
 export class PathwayService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private events: EventsService) {}
+  constructor(
+    private prisma: PrismaService, private audit: AuditService, private events: EventsService,
+    private config: ConfigService,
+  ) {}
 
   /**
    * الگوهای آمادهٔ کد را یک‌بار روی این نصب می‌نشاند.
@@ -50,13 +54,26 @@ export class PathwayService {
         },
       }).catch(() => undefined);   // رقابتِ دو درخواستِ هم‌زمان: unique کلید کافی است
     }
+    /* نامِ پیش‌فرضی که عوض شد («کیسِ …» خلافِ واژه‌نامه بود) فقط روی الگوی **دست‌نخورده**: اگر
+       شرکت نامِ خودش را گذاشته، همان می‌ماند. */
+    for (const [key, [from, to]] of Object.entries(RENAMED_BUILTIN_TITLES)) {
+      await this.prisma.pathwayTemplate.updateMany({ where: { key, builtin: true, title: from }, data: { title: to } });
+    }
   }
 
-  /** فهرستِ الگوها با نسخهٔ منتشرشده‌شان. */
+  /**
+   * فهرستِ الگوها با نسخهٔ منتشرشده‌شان — **فقط الگوهای حوزهٔ همین نصب** (+ الگوی بی‌حوزه).
+   *
+   * ⚠️ تا بازبینیِ UX (clinic-daily-16) مطب «عملِ نورومانیتورینگ» و «کیسِ تجهیزات/ایمپلنت» را هم
+   * می‌دید (گام‌هایی مثلِ «حضورِ کارشناس» و «ارسالِ بار»). حوزه از `profile()` می‌آید نه `vertical()`:
+   * شرکتِ دوخدمته هر دو خدمتش را دارد. الگویی که همین حالا دوره‌ای رویش هست هرگز پنهان نمی‌شود.
+   */
   async templates() {
     await this.ensureBuiltins();
+    const profile = await this.config.profile();
+    const mine: string[] = profile.kind === 'clinic' ? ['clinic'] : [...profile.services];
     const rows = await this.prisma.pathwayTemplate.findMany({
-      where: { active: true },
+      where: { active: true, OR: [{ vertical: null }, { vertical: { in: mine } }, { episodes: { some: {} } }] },
       include: { versions: { orderBy: { version: 'desc' } }, _count: { select: { episodes: true } } },
       orderBy: [{ builtin: 'desc' }, { title: 'asc' }],
     });

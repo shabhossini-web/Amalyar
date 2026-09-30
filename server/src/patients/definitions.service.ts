@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
@@ -12,6 +12,19 @@ import { addOpTemplate, listOpTemplates } from './op-templates';
 import { BUILTIN_SUBFORMS, isBuiltinSubform } from './subforms';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
+
+/** پیامِ ردِ عوض‌کردنِ شمارهٔ صاحبِ حساب از «تعاریف» (PF1) — آزمونِ `password-reset.mjs` همین را می‌سنجد. */
+export const ACCOUNT_PHONE_LOCKED = 'شمارهٔ کسی که حسابِ کاربری دارد فقط از «مدیریتِ کاربران» عوض می‌شود.';
+/**
+ * فیلدهای هویتیِ صاحبِ حساب که از «تعاریف» عوض نمی‌شوند (بستهٔ PS، PS5) — هر کدام با نامِ خودش در پیام.
+ * شماره راهِ بازیابی است (PF1)، شبا مقصدِ پرداختِ سهم، و نام و عکس همان چیزی که همکاران در پیام‌رسان و
+ * پرتال می‌بینند؛ مسیرِ درستِ همه «مدیریتِ کاربران» است (سوپرادمین، `accounts.service.updateProfile`).
+ */
+const ACCOUNT_LOCKED_FIELDS: [key: string, label: string][] = [
+  ['phone', 'شمارهٔ'], ['iban', 'شبای'], ['firstName', 'نامِ'], ['lastName', 'نامِ خانوادگیِ'], ['photo', 'عکسِ'],
+];
+/** قبل/بعدِ ممیزیِ ویرایشِ هر تعریفِ شخص — برای **همهٔ** اشخاص، حساب‌دار یا نه (PS5). */
+const AUDITED_PERSON_FIELDS = ['iban', 'phone', 'nationalId'] as const;
 
 /**
  * تعریف‌های عملیاتیِ ماژولِ بیماران: جراحان و بیمارستان‌ها (+ فهرستِ کارشناسان).
@@ -27,6 +40,44 @@ export class DefinitionsService {
       where: { name: { equals: name.trim(), mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
     });
     if (row) throw new BadRequestException('این نام قبلاً ثبت شده است');
+  }
+
+  /**
+   * **شمارهٔ کسی که حسابِ کاربری دارد از «تعاریف» عوض نمی‌شود** (بازبینیِ امنیتیِ بستهٔ P، PF1).
+   *
+   * شمارهٔ `Person` همان نشانی‌ای است که کدِ بازیابیِ رمز و کدِ تصاحبِ حساب به آن پیامک می‌شود.
+   * `definitions.manage` (پیش‌فرض سطح ۵) تا دیروز تلفنِ هر جراح و راننده را می‌نوشت — از جمله جراحِ
+   * متصل به **سوپرادمینِ بنیان‌گذارِ مطب** (`promoteSoleFounder`) و پزشکی که مدیر برایش حسابِ موقت
+   * ساخته. ادمین شمارهٔ «دکتر X» را سیم‌کارتِ خودش می‌کرد و با «رمز را فراموش کرده‌ام» (یا ثبت‌نامِ
+   * تصاحب) صاحبِ آن حساب می‌شد. مسیرِ درست «مدیریتِ کاربران» است (`accounts.service.updateProfile`،
+   * فقط سوپرادمین) که حساب را «موقت» می‌کند تا صاحبِ شمارهٔ تازه با کد تأییدش کند.
+   *
+   * هشدار — رد، نه موقت‌کردن: این‌جا جای تصمیم‌گرفتن دربارهٔ حساب نیست. شمارهٔ **یکسان** (فرمِ تعاریف همیشه
+   * همهٔ فیلدها را می‌فرستد) و شخصِ بی‌حساب (رانندهٔ معمولی) مثلِ قبل ذخیره می‌شوند.
+   * هشدار — قفلِ ردیف لازم است، نه فقط خواندن: ثبت‌نامی که هم‌زمان همین شخص را به حسابی وصل می‌کند
+   * (`completeSignup`، `connect`) برای کلیدِ خارجی `FOR KEY SHARE` می‌گیرد و پشتِ این `FOR UPDATE`
+   * می‌ماند؛ بی‌قفل، حساب درست پس از سنجش ساخته می‌شد و شماره باز هم عوض.
+   */
+  private async refuseAccountIdentity(tx: any, personId: number, patch: Record<string, unknown>) {
+    await tx.$queryRaw`SELECT id FROM people WHERE id = ${personId} FOR UPDATE`;
+    const p = await tx.person.findUnique({ where: { id: personId }, include: { account: { select: { id: true } } } });
+    if (!p) throw new NotFoundException('شخص یافت نشد');
+    /* هشدار — شبا، نام و عکس هم (بستهٔ PS، PS5): سطحِ ۵ شبای «دکتر X» را حسابِ خودش می‌کرد و سهمِ بعدی به
+       آن واریز می‌شد، بی هیچ ردی. مقدارِ **یکسان** (فرم همهٔ فیلدها را می‌فرستد) مثلِ قبل می‌گذرد. */
+    if (p.account) {
+      for (const [key, label] of ACCOUNT_LOCKED_FIELDS) {
+        if (patch[key] === undefined || String(patch[key] ?? '') === String((p as any)[key] ?? '')) continue;
+        throw new ForbiddenException(key === 'phone' ? ACCOUNT_PHONE_LOCKED : `${label} کسی که حسابِ کاربری دارد فقط از «مدیریتِ کاربران» عوض می‌شود.`);
+      }
+    }
+    return p;
+  }
+
+  /** ممیزیِ ویرایشِ تعریفِ یک شخص (PS5) — قبل/بعدِ شبا، شماره و کدِ ملی، در همان تراکنش. */
+  private async auditPersonEdit(tx: any, action: string, before: any, patch: Record<string, unknown>, extra: Record<string, unknown>, actorId?: number | null) {
+    const pick = (src: any) => Object.fromEntries(AUDITED_PERSON_FIELDS.map((k) => [k, src?.[k] ?? null]));
+    const after = { ...pick(before), ...Object.fromEntries(AUDITED_PERSON_FIELDS.filter((k) => patch[k] !== undefined).map((k) => [k, patch[k] ?? null])) };
+    await this.audit.record({ actorId: actorId ?? null, action, entityType: 'person', entityId: before.id, before: pick(before), after: { ...after, ...extra } }, tx);
   }
 
   /// جراح = نقش روی Person؛ نام و تلفن از همان‌جا می‌آیند، نه از خودِ رکوردِ جراح.
@@ -78,19 +129,23 @@ export class DefinitionsService {
     return this.surgeonView(row);
   }
 
-  async updateSurgeon(id: number, dto: PersonInput & { specialty?: string; licenseNo?: string; active?: boolean }) {
+  async updateSurgeon(id: number, dto: PersonInput & { specialty?: string; licenseNo?: string; active?: boolean }, user?: any) {
     const s = await this.prisma.surgeon.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('جراح یافت نشد');
     const personPatch = buildPersonPatch(dto, false);
-    const updated = await this.prisma.surgeon.update({
-      where: { id },
-      data: {
-        ...(dto.specialty !== undefined ? { specialty: dto.specialty?.trim() || null } : {}),
-        ...(dto.licenseNo !== undefined ? { licenseNo: dto.licenseNo?.trim() || null } : {}),
-        ...(dto.active !== undefined ? { active: dto.active } : {}),
-        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
-      },
-      include: DefinitionsService.SURGEON_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const before = await this.refuseAccountIdentity(tx, s.personId, personPatch);
+      await this.auditPersonEdit(tx, 'definitions.surgeon.update', before, personPatch, { surgeonId: id, fields: Object.keys(personPatch) }, user?.id);
+      return tx.surgeon.update({
+        where: { id },
+        data: {
+          ...(dto.specialty !== undefined ? { specialty: dto.specialty?.trim() || null } : {}),
+          ...(dto.licenseNo !== undefined ? { licenseNo: dto.licenseNo?.trim() || null } : {}),
+          ...(dto.active !== undefined ? { active: dto.active } : {}),
+          ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+        },
+        include: DefinitionsService.SURGEON_INCLUDE,
+      });
     });
     // ⚠️ عمداً visit.surgeonName را به‌روز نمی‌کنیم: آن فیلد «عکسِ لحظهٔ ثبت» است و
     // فقط وقتی خوانده می‌شود که رابطه از بین رفته باشد. خواندن همیشه رابطه را
@@ -166,20 +221,24 @@ export class DefinitionsService {
     return this.staffView(row);
   }
 
-  async updateTransportStaff(id: number, dto: PersonInput & { role?: string; vehicle?: string; notes?: string; active?: boolean }) {
+  async updateTransportStaff(id: number, dto: PersonInput & { role?: string; vehicle?: string; notes?: string; active?: boolean }, user?: any) {
     const s = await this.prisma.transportStaff.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('نیرو یافت نشد');
     const personPatch = buildPersonPatch(dto, false);
-    const updated = await this.prisma.transportStaff.update({
-      where: { id },
-      data: {
-        ...(dto.role !== undefined ? { role: dto.role } : {}),
-        ...(dto.vehicle !== undefined ? { vehicle: dto.vehicle?.trim() || null } : {}),
-        ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
-        ...(dto.active !== undefined ? { active: dto.active } : {}),
-        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
-      },
-      include: DefinitionsService.STAFF_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const before = await this.refuseAccountIdentity(tx, s.personId, personPatch);
+      await this.auditPersonEdit(tx, 'definitions.transport_staff.update', before, personPatch, { transportStaffId: id, fields: Object.keys(personPatch) }, user?.id);
+      return tx.transportStaff.update({
+        where: { id },
+        data: {
+          ...(dto.role !== undefined ? { role: dto.role } : {}),
+          ...(dto.vehicle !== undefined ? { vehicle: dto.vehicle?.trim() || null } : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+          ...(dto.active !== undefined ? { active: dto.active } : {}),
+          ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+        },
+        include: DefinitionsService.STAFF_INCLUDE,
+      });
     });
     return this.staffView(updated);
   }

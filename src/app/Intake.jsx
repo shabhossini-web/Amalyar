@@ -3,20 +3,23 @@ import { useAuth } from './auth.jsx';
 import { useConfig, useStatusMap } from './config.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import DynForm from '../ui/DynForm.jsx';
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
 import './dashboard.css'; // bl-mini / db-hint
-import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, Eye, Form, Hospital, Pencil, Plus, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
+import { Alert, Bank, CheckCircle, Close, Copy, Doctor, External, Eye, Form, Hospital, Pencil, Plus, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
+import { ThingPopups, useThings } from './thing-popups.jsx';
+import { prefersReducedMotion } from '../lib/utils.js';
 import { group3, numToWordsFa, parseMoney } from '../lib/money.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
+import PageHeader from '../ui/PageHeader.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* ⚠️ برای شماره‌ی موبایل `faNum` **غلط** است: `Number` صفرِ اول را می‌خورد و
@@ -45,9 +48,13 @@ const TAB_ORDER = ['pending_approval', 'pending_payment', 'pending_fill', 'appro
 export default function IntakeAdmin() {
   const intakeFa = useStatusMap('intake');
   const cfgServices = useConfig().services ?? [];
+  /* شمارِ هر زبانه از سرور (بازبینیِ UX، company-19): بی‌آن باید تک‌تک زبانه‌ها را باز کرد تا فهمید
+     کدام صف کار دارد. زبانهٔ خالی نشان نمی‌گیرد — «۰» توجه را بی‌دلیل می‌کشد. */
+  const [counts, setCounts] = useState(null);
+  const badge = (key) => (counts?.[key] ? faNum(counts[key]) : null);
   const TABS = [
-    ...TAB_ORDER.map((key) => ({ key, label: intakeFa[key] ?? key })),
-    { key: 'all', label: 'همه' },
+    ...TAB_ORDER.map((key) => ({ key, label: intakeFa[key] ?? key, badge: badge(key) })),
+    { key: 'all', label: 'همه', badge: badge('all') },
   ];
   const [tab, setTab] = useState('pending_approval');
   const [rows, setRows] = useState(null);
@@ -61,17 +68,27 @@ export default function IntakeAdmin() {
   /* شمارهٔ درحالِ ارسال — `null` یعنی هیچ ردیفی باز نیست. */
   const [smsFor, setSmsFor] = useState(null);
   const [zoom, setZoom] = useState(null); // نشانیِ blobِ فیشِ در حالِ بزرگ‌نمایی
+  /* قدمِ بعد از تأیید (company-19): توستِ تنها «ساخته شد» بود و کاربر باید خودش مراجعه را پیدا می‌کرد
+     تا کارشناس بگذارد. حالا توست دکمهٔ همان کار را دارد و فرمِ مراجعه همین‌جا باز می‌شود. */
+  const [next, setNext] = useState(null); // { text, label, visitId }
+  const things = useThings({ toast: setToast });
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — پذیرش'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2400);
     return () => clearTimeout(t);
   }, [toast]);
+  useEffect(() => {
+    if (!next) return undefined;
+    const t = setTimeout(() => setNext(null), 12000);
+    return () => clearTimeout(t);
+  }, [next]);
 
   const load = useCallback(async () => {
     setErr('');
+    /* جدا و بی‌صدا: نبودنِ شمار (سرورِ قدیمی‌تر) نباید فهرست را خالی کند. */
+    api('/intake/submissions/counts', { quiet401: true }).then(setCounts).catch(() => setCounts(null));
     try {
       const [s, l] = await Promise.all([api(`/intake/submissions?status=${tab}`), api('/intake/links')]);
       setRows(s);
@@ -90,7 +107,7 @@ export default function IntakeAdmin() {
 
   const copyLink = async (token) => {
     const url = `${window.location.origin}/r/${token}`;
-    try { await navigator.clipboard.writeText(url); setToast('لینک کپی شد ✓'); }
+    try { await navigator.clipboard.writeText(url); setToast('لینک کپی شد'); }
     catch { setToast(url); }
   };
 
@@ -129,13 +146,8 @@ export default function IntakeAdmin() {
   return (
     <div className="ia">
       <div className="ia-bg" aria-hidden="true" />
-      <header className="ia-head">
-        <Link to="/app" className="ia-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>پذیرش</h1>
-          <p>فرم‌هایی که بیماران از لینکِ عمومی پر کرده‌اند. تا تأیید نشوند، مراجعه‌ای ساخته نمی‌شود.</p>
-        </div>
-      </header>
+      {/* نامِ صفحه = نامِ کاشی از کاتالوگ («ثبت‌نام‌های آنلاین») — بازبینیِ UX، shell-17. */}
+      <PageHeader tool="formgen" sub="فرم‌هایی که بیماران از لینکِ عمومی پر کرده‌اند. تا تأیید نشوند، مراجعه‌ای ساخته نمی‌شود." />
 
       {/* لینک‌های عمومی — همان چیزی که در بیو و کانال گذاشته می‌شود. */}
       <section className="ia-links">
@@ -154,6 +166,8 @@ export default function IntakeAdmin() {
               </i>
             )}
             <i>{faNum(l.submissionCount)} ثبت‌نام</i>
+            {/* وضعیت چیپ است و دکمه فعل (company-19): «غیرفعال» روی دکمه معلوم نبود حالت است یا فرمان. */}
+            <i className={`ia-chip ia-state${l.active ? ' on' : ''}`}>{l.active ? 'فعال' : 'غیرفعال'}</i>
             <button type="button" onClick={() => copyLink(l.token)} title="کپیِ نشانی"><Copy width="13" height="13" /></button>
             {/* ⚠️ پریویو = بازکردنِ **همان** نشانیِ بیمار در تبِ تازه، نه یک
                 شبیه‌سازی. شبیه‌سازی چیزی را نشان می‌دهد که ممکن است با
@@ -171,7 +185,7 @@ export default function IntakeAdmin() {
                 `catch` نداشت، پس یک ۴۰۳ ردیف را بی‌تغییر می‌گذاشت و فقط یک
                 unhandled rejection در کنسول می‌ریخت. */}
             <button type="button" onClick={() => toggleLink(l)}>
-              {l.active ? 'غیرفعال' : 'فعال'}
+              {l.active ? 'غیرفعال‌کردن' : 'فعال‌کردن'}
             </button>
             <button type="button" className="ia-del" title="حذفِ لینک" onClick={() => deleteLink(l)}>
               <Trash width="13" height="13" />
@@ -206,10 +220,11 @@ export default function IntakeAdmin() {
                     <b>{nameOf(s)}</b>
                   </button>
                 ) : <b>{nameOf(s)}</b>}
+                {/* کد و شماره‌ها هرکدام LTRِ جدا (قانونِ ۹) — کنارِ «·»ِ فارسی تکه‌تکه نمی‌شکنند (company-04). */}
                 <small>
-                  {s.patient?.code}
-                  {s.patient?.phone ? ` · ${s.patient.phone}` : ''}
-                  {s.data?.nationalId ? ` · ${s.data.nationalId}` : ''}
+                  {[s.patient?.code, s.patient?.phone, s.data?.nationalId].filter(Boolean).map((x, k) => (
+                    <Fragment key={k}>{k > 0 && ' · '}<bdi dir="ltr">{x}</bdi></Fragment>
+                  ))}
                 </small>
               </div>
               {/* خدمتِ همین ردیف — در شرکتِ دوخدمته هر دو نوع در یک صف‌اند. */}
@@ -288,7 +303,7 @@ export default function IntakeAdmin() {
           <ApproveSheet
             row={approving}
             onClose={() => setApproving(null)}
-            onDone={(m) => { setApproving(null); setToast(m); load(); }}
+            onDone={(m, step) => { setApproving(null); if (step?.visitId) setNext({ text: m, ...step }); else setToast(m); load(); }}
             onZoom={setZoom}
             onChanged={load}
             initialAction={approving.action ?? 'approve'}
@@ -314,7 +329,23 @@ export default function IntakeAdmin() {
         {zoom && <ReceiptZoom url={zoom} onClose={() => setZoom(null)} />}
       </AnimatePresence>
 
-      <div className={`ia-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <ThingPopups things={things} />
+      {/* دو ظرفِ زنده، هر دو همیشه در DOM (DF14): توستِ «قدمِ بعد» (دکمه‌دار، ۱۲ ثانیه) و پیامِ عادی **بالای** آن —
+          تا دیروز قدمِ بعد جای ظرفِ پیام را می‌گرفت و هر پیامِ تازه (خطا، «لینک کپی شد») تا ۱۲ ثانیه دیده و خوانده
+          نمی‌شد؛ ظرفی هم که همراهِ متنش سوار می‌شود را صفحه‌خوان اعلام نمی‌کند. */}
+      <div role="status" aria-live="polite">
+        {next && (
+          <div className="ia-toast on has-act">
+            <span>{next.text}</span>
+            <button type="button" className="ia-toast-act"
+                    onClick={() => { const id = next.visitId; setNext(null); things.open({ type: 'visit', id }); }}>
+              {next.label}
+            </button>
+            <button type="button" className="ia-toast-x" aria-label="بستن" onClick={() => setNext(null)}><Close width="14" height="14" /></button>
+          </div>
+        )}
+      </div>
+      <div className={`ia-toast${toast ? ' on' : ''}${next ? ' above' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }
@@ -405,7 +436,10 @@ function IdentityCard({ row, who, onSaved }) {
         <dl className="ia-id">
           <div><dt>نام</dt><dd>{name || '—'}</dd></div>
           <div><dt>کدِ ملی</dt><dd dir="ltr">{faDigits(who?.nationalId ?? d.nationalId ?? '—')}</dd></div>
-          <div><dt>موبایل</dt><dd dir="ltr">{faDigits(who?.phone ?? d.phone ?? '—')}</dd></div>
+          <div><dt>موبایل</dt><dd dir="ltr">{faDigits(who?.phone ?? d.phone ?? '—')}</dd>
+            {/* پروندهٔ بی‌شماره: شماره از خودِ ثبت‌نام است و فقط با تأیید روی پرونده می‌نشیند (بستهٔ PS، PS12). */}
+            {who && !who.phone && d.phone && <small className="ia-id-hint">از همین ثبت‌نام — با تأیید روی پرونده می‌نشیند</small>}
+          </div>
           {who?.code && <div><dt>پرونده</dt><dd dir="ltr">{who.code}</dd></div>}
           {birth && <div><dt>تاریخِ تولد</dt><dd>{faDate(birth)}</dd></div>}
         </dl>
@@ -494,7 +528,7 @@ function Decide({ row, mode, onCancel, onDone }) {
 }
 
 /** بزرگ‌نماییِ فیش — تصمیمِ مالی با تصویرِ کوچک گرفته نمی‌شود. */
-function ReceiptZoom({ url, onClose }) {
+export function ReceiptZoom({ url, onClose }) {
   return (
     <Overlay backdrop="ia-overlay" panel="ia-zoom" as="section" onClose={onClose}>
       <button type="button" className="ia-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
@@ -504,7 +538,7 @@ function ReceiptZoom({ url, onClose }) {
 }
 
 /** فرمِ تأیید — جایی که «دکتر رضایی»ِ متنی به جراحِ تعریف‌شده گره می‌خورد. */
-function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction = 'approve' }) {
+export function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction = 'approve' }) {
   const { user: me } = useAuth();
   const cfg = useConfig();
   /* سه تصمیمِ پاپ‌آپ (مالک، ۱۴۰۵/۰۷/۰۱): تأیید / برگشت برای اصلاح (با مرحله) / رد. */
@@ -579,15 +613,39 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
     opDate: row.data?.opDate ? isoToJStr(row.data.opDate) : '', opStartTime: '',
     /* ⚠️ پیش‌فرض **روشن**: ادمین همین حالا فیش را دیده و تأیید یعنی «پول
        رسیده». خاموش‌بودنش یعنی هر مراجعهٔ تأییدشده بدهکار بماند. */
-    registerPayment: true, bankAccountId: '',
+    registerPayment: true,
+    /* پیش‌فرض همان حسابی است که بیمار روی فرم دید (سرور، `payToAccountId`؛ company-19) — نه «نامشخص»
+       وقتی لینک خودش حساب دارد. اگر فرم چند حساب نشان می‌داد، انتخاب با تأییدکننده می‌ماند. */
+    bankAccountId: row.payToAccountId ? String(row.payToAccountId) : '',
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  /* خطای «الزامی» زیرِ همان فیلد (company-19)، نه یک خطِ کلی پایینِ پنجره و دور از فیلد. */
+  const [fieldErr, setFieldErr] = useState({});
+  const pick = (key) => (v) => { setF((s) => ({ ...s, [key]: v })); setFieldErr((e) => ({ ...e, [key]: undefined })); };
+  /**
+   * یادداشتِ تطبیق فقط وقتی **ناقص** است (بازبینیِ UX، company-19): نوشتهٔ بیمار چهار بار تکرار می‌شد —
+   * خلاصهٔ بالا و سه جعبهٔ «مطابقِ دقیق» — حتی وقتی کشویی همان را نشان می‌داد. تطبیقِ دقیق، نامِ مستعار
+   * و انتخابِ خودِ بیمار دیگر یادداشت ندارند؛ فقط پیشنهادِ فازی که هنوز انتخاب است «بررسی کنید» می‌گیرد،
+   * با نوشتهٔ خودِ بیمار کنارش، زیرِ همان کشویی.
+   */
+  const typed = { hospital: row.data?.hospitalName, surgeon: row.data?.surgeonName, procedure: patientProcedure };
+  const suggestNote = (k, key) => {
+    const m = match[k];
+    if (!m || m.source !== 'suggested' || String(m.id) !== String(f[key])) return null;
+    const said = String(typed[k] ?? '').trim();
+    return `پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید: ${m.name}${said ? ` (بیمار نوشته: «${said}»)` : ''}`;
+  };
 
   const loadRefs = useCallback(async () => {
     const keys = ['surgeons', 'hospitals', 'techs', 'types', 'banks'];
     const paths = ['/surgeons', '/hospitals', '/techs', '/procedure-types', '/bank-accounts'];
     const results = await Promise.allSettled(paths.map(path => api(path)));
+    /* DF5: `/bank-accounts` پلنِ حسابداری می‌خواهد؛ بی‌آن فهرستِ حساب‌ها را از `/intake/link-options` بگیر (همان
+       حساب‌هایی که روی فرمِ بیمار نشان داده می‌شوند، فقط نام) تا حسابِ لینک دیده و انتخاب‌شدنی بماند. */
+    if (results[4].status === 'rejected') {
+      try { results[4] = { status: 'fulfilled', value: (await api('/intake/link-options')).banks ?? [] }; } catch { /* همان خطای بالا */ }
+    }
     setRefs(Object.fromEntries(results.map((r, i) => [keys[i], r.status === 'fulfilled' ? r.value : []])));
     const failed = results.flatMap((r, i) => r.status === 'rejected' ? [['جراحان', 'بیمارستان‌ها', 'کارشناسان', 'انواع عمل', 'حساب‌ها'][i]] : []);
     if (failed.length) setErr(`دریافت ${failed.join('، ')} انجام نشد؛ بقیهٔ انتخابگرها قابل استفاده‌اند.`);
@@ -605,7 +663,23 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
     return () => window.removeEventListener('focus', reload);
   }, [loadRefs]);
 
+  /* DF5: حسابی فقط وقتی انتخاب‌شده است که در همین فهرست دیده شود — وگرنه کشویی «نامشخص» نشان می‌داد و
+     شناسهٔ حسابِ لینک بی‌صدا فرستاده می‌شد. */
+  const bankShown = refs.banks.some((b) => String(b.id) === f.bankAccountId) ? f.bankAccountId : '';
+
   const save = async () => {
+    /* همان قاعدهٔ `approve()`ِ سرور برای شرکت (جراح و بیمارستانِ تعریف‌شده الزامی)؛ سرور همچنان داور
+       است — این فقط خطا را کنارِ فیلد می‌آورد و فوکوس را همان‌جا می‌برد. */
+    const missing = company && row.makesVisit !== false
+      ? [['surgeonId', 'جراح را از فهرست انتخاب کنید یا با + همین‌جا اضافه کنید'], ['hospitalId', 'بیمارستان را از فهرست انتخاب کنید یا با + همین‌جا اضافه کنید']].filter(([k]) => !f[k])
+      : [];
+    setFieldErr(Object.fromEntries(missing));
+    if (missing.length) {
+      const el = document.getElementById(`approve-${missing[0][0]}`);
+      el?.scrollIntoView({ block: 'center', behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+      el?.focus({ preventScroll: true });
+      return;
+    }
     setBusy(true); setErr('');
     try {
       const r = await api(`/intake/submissions/${row.id}/approve`, {
@@ -619,7 +693,7 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
           opDate: f.opDate.trim() ? jStrToIso(f.opDate) : undefined,
           opStartTime: f.opStartTime || undefined,
           registerPayment: f.registerPayment,
-          bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
+          bankAccountId: f.registerPayment && bankShown ? Number(bankShown) : undefined,
           extra: Object.fromEntries((fields ?? []).filter(field => !field.builtin && field.active !== false).map(field => [field.key, extra[field.key]])),
           ...(row.makesVisit !== false && row.serviceAmbiguous && service ? { service } : {}),
           ...(workflow === 'implant' ? { requiredItems: requiredItems.map(({ itemId, quantity, notes }) => ({ itemId, quantity, notes: notes || '' })) } : {}),
@@ -627,7 +701,10 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
       });
       /* ⚠️ پیام از **پاسخِ سرور** ساخته می‌شود نه از حدس: فرمِ زیرپرونده
          `visitCode` ندارد و متنِ قبلی «مراجعهٔ undefined ساخته شد» می‌داد. */
-      onDone(r.madeVisit === false ? 'در پروندهٔ بیمار ثبت شد ✓' : `مراجعهٔ ${r.visitCode} ساخته شد ✓`);
+      /* قدمِ بعد روی خودِ توست (company-19): در شرکت اگر کارشناس همین‌جا تعیین نشد، همان کار؛ وگرنه
+         بازکردنِ مراجعهٔ تازه. */
+      onDone(r.madeVisit === false ? 'در پروندهٔ بیمار ثبت شد' : `مراجعهٔ ${r.visitCode} ساخته شد`,
+        r.visitId ? { visitId: r.visitId, label: company && !f.techId ? `تعیینِ ${cfg.t?.tech ?? 'کارشناس'}` : (cfg.t?.visitOpen ?? 'بازکردنِ مراجعه') } : undefined);
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
@@ -697,34 +774,9 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
           )}
           {row.makesVisit !== false && (
           <div className="ia-grid">
-            {/* ⚠️ **سه** حالت، نه دو تا — و این یکی با نگاه‌کردن به صفحه پیدا شد:
-                نسخهٔ قبلی هرچه «پیشنهادی» نبود را «ثبت‌شده بیمار» می‌خواند. برای
-                بیمارستان بی‌ضرر بود چون بیمار واقعاً کشویی دارد و `selected`
-                می‌شود؛ ولی جراح و نوعِ عمل کشویی ندارند، پس حالتِ رایجشان
-                `exact` است — یعنی **ماشین** متن را دقیق مچ کرده، نه اینکه بیمار
-                انتخابش کرده باشد. آن برچسب به کاربر می‌گفت به حدس به‌اندازهٔ
-                انتخابِ خودِ بیمار اعتماد کن.
-                ⚠️ و هر یادداشت به دیده‌شدنِ **کنترلِ خودش** گره خورده: یادداشت
-                دربارهٔ فیلدی که در این فرم وجود ندارد، هم اضافه است هم گمراه‌کننده
-                (متنِ خامِ بیمار بالای همین پنل هست). */}
-            {[
-              ['hospital', 'بیمارستان', visible('hospitalId')],
-              /* برچسبِ یادداشت باید با برچسبِ **کنترلِ خودش** یکی باشد: در حوزهٔ
-                 مطب کنترل «پزشک» است و یادداشتِ «جراح» کنارش یعنی دو چیزِ متفاوت. */
-              ['surgeon', targetKind === 'clinic' ? 'پزشک' : 'جراح', visible('surgeonId') || needs('surgeonId')],
-              ['procedure', 'نوعِ عمل', visible('procedureTypeId')],
-            ].map(([k, label, on]) => on && match[k] && (
-              <p key={k} className="ia-note">
-                {label} {{
-                  selected: 'ثبت‌شدهٔ خودِ بیمار',
-                  suggested: 'پیشنهادی بر اساس نوشتهٔ بیمار؛ بررسی کنید',
-                }[match[k].source] ?? 'مطابقِ دقیقِ نوشتهٔ بیمار'}: {match[k].name}
-                {/* نزدیک‌ترین گزینه ممکن است با نوشتهٔ بیمار یکی نباشد — خودِ نوشته کنارش. */}
-                {k === 'procedure' && match[k].source === 'suggested' && patientProcedure && ` (بیمار نوشته: «${patientProcedure}»)`}
-              </p>))}
-            {(visible('surgeonId') || needs('surgeonId') || company) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : (company || needs('surgeonId')) ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={(v) => setF((s) => ({ ...s, surgeonId: v }))} onAdd={setQuick} />}
-            {(visible('hospitalId') || company) && <ApprovalSelect field="hospitalId" section="hospitals" label={company ? 'بیمارستان (الزامی)' : 'بیمارستان'} list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={(v) => setF((s) => ({ ...s, hospitalId: v }))} onAdd={setQuick} />}
-            {visible('techId') && <ApprovalSelect field="techId" section="techs" label={needs('techId') ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={(v) => setF((s) => ({ ...s, techId: v }))} onAdd={me?.level >= 6 ? setQuick : null} />}
+            {(visible('surgeonId') || needs('surgeonId') || company) && <ApprovalSelect field="surgeonId" section="surgeons" label={targetKind === 'clinic' ? 'پزشک' : (company || needs('surgeonId')) ? 'جراح (الزامی)' : 'جراح'} list={refs.surgeons} value={f.surgeonId} busy={busy} onChange={pick('surgeonId')} onAdd={setQuick} note={suggestNote('surgeon', 'surgeonId')} error={fieldErr.surgeonId} />}
+            {(visible('hospitalId') || company) && <ApprovalSelect field="hospitalId" section="hospitals" label={company ? 'بیمارستان (الزامی)' : 'بیمارستان'} list={refs.hospitals} value={f.hospitalId} busy={busy} onChange={pick('hospitalId')} onAdd={setQuick} note={suggestNote('hospital', 'hospitalId')} error={fieldErr.hospitalId} />}
+            {visible('techId') && <ApprovalSelect field="techId" section="techs" label={needs('techId') ? 'کارشناس (اختیاری؛ قابل تعیین در چینش)' : 'کارشناس'} list={refs.techs} value={f.techId} busy={busy} onChange={pick('techId')} onAdd={me?.level >= 6 ? setQuick : null} />}
             {/* ⚠️ مالک (۱۴۰۵/۰۷/۰۵): «اگر در لیستِ خودمان نیست، نوشتهٔ مریض باید نشان داده شود» — درست
                 بالای همان کشویی، نه فقط در خلاصهٔ بالای پنل؛ «+» همین نوشته را پیش‌پر می‌کند. */}
             {visible('procedureTypeId') && patientProcedure && !match.procedure && !f.procedureTypeId && (
@@ -732,8 +784,8 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
                 <Alert width="13" height="13" /> بیمار نوشته «{patientProcedure}» — در فهرستِ انواعِ عمل نیست؛ نزدیک‌ترین را انتخاب کنید یا با + همین را اضافه کنید.
               </p>
             )}
-            {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={(v) => setF((s) => ({ ...s, procedureTypeId: v }))}
-              onAdd={(q) => setQuick({ ...q, initial: patientProcedure && !f.procedureTypeId ? { name: patientProcedure } : undefined })} />}
+            {visible('procedureTypeId') && <ApprovalSelect field="procedureTypeId" section="procedure-types" label="نوعِ عمل" list={refs.types} value={f.procedureTypeId} busy={busy} onChange={pick('procedureTypeId')}
+              onAdd={(q) => setQuick({ ...q, initial: patientProcedure && !f.procedureTypeId ? { name: patientProcedure } : undefined })} note={suggestNote('procedure', 'procedureTypeId')} />}
             {visible('opDate') && <JDate className="ia-field" label={targetKind === 'clinic' ? 'تاریخ مراجعه' : 'تاریخِ عمل'} value={f.opDate}
                    onChange={(v) => setF((s) => ({ ...s, opDate: v }))} disabled={busy} />}
             {/* ⚠️ ساعتِ عمل هنگامِ تأییدِ ثبت‌نامِ شرکتی بی‌معناست (مالک، ۱۴۰۵/۰۷/۰۵): ساعت را کارشناس سرِ
@@ -779,11 +831,14 @@ function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialAction =
             {f.registerPayment && (
               <label className="ia-field">
                 <span>به کدام حساب واریز شده؟</span>
-                <select value={f.bankAccountId} disabled={busy}
+                <select value={bankShown} disabled={busy}
                         onChange={(e) => setF((s) => ({ ...s, bankAccountId: e.target.value }))}>
                   <option value="">— نامشخص —</option>
-                  {refs.banks.map((b) => <option key={b.id} value={b.id}>{[b.ownerName, b.bankName].filter(Boolean).join(" — ")}</option>)}
+                  {refs.banks.map((b) => <option key={b.id} value={b.id}>{b.label ?? [b.ownerName, b.bankName].filter(Boolean).join(" — ")}</option>)}
                 </select>
+                {row.payToAccountId && bankShown === String(row.payToAccountId) && (
+                  <small className="ia-hint">همان حسابی که روی فرمِ بیمار بود</small>
+                )}
               </label>
             )}
           </div>
@@ -842,7 +897,7 @@ function SmsSheet({ link, onClose, onDone }) {
          هیچ پیامکی نرفته — و همان اشتباه روی سرورِ بدونِ کلید تکرار می‌شد. */
       onDone(r.stub
         ? 'سرویسِ پیامک پیکربندی نشده — چیزی ارسال نشد'
-        : r.sent ? `لینک به ${faDigits(r.to)} پیامک شد ✓` : 'ارسال انجام نشد — شماره یا سرویس را بررسی کنید');
+        : r.sent ? `لینک به ${faDigits(r.to)} پیامک شد` : 'ارسال انجام نشد — شماره یا سرویس را بررسی کنید');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
@@ -935,7 +990,7 @@ function LinkSheet({ initial, onClose, onDone }) {
           bankAccountId: needsBank && bankId ? Number(bankId) : 0,
         },
       });
-      onDone(editing ? 'لینک ویرایش شد ✓' : 'لینک ساخته شد ✓');
+      onDone(editing ? 'لینک ویرایش شد' : 'لینک ساخته شد');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
@@ -996,15 +1051,28 @@ function LinkSheet({ initial, onClose, onDone }) {
   );
 }
 
-function ApprovalSelect({ field, section, label, list, value, busy, onChange, onAdd }) {
+/**
+ * کشوییِ تأیید. هشدار (company-19): پیوندِ «تعریف پایه» متنی بود و کنارِ «+» شبیهِ برچسب دیده می‌شد؛ حالا
+ * آیکونِ «مدیریتِ فهرست» (زبانهٔ تازه) با نامِ کامل برای صفحه‌خوان. یادداشتِ تطبیق و خطای «الزامی» هم
+ * زیرِ خودِ کشویی‌اند، و خطا با `aria-describedby` به آن وصل است.
+ */
+function ApprovalSelect({ field, section, label, list, value, busy, onChange, onAdd, note, error }) {
+  const noun = String(label).replace(/\s*\(.*\)\s*$/, '');
+  const errId = `approve-${field}-err`;
   return <div className="ia-field">
     <div className="ia-definition-head"><label htmlFor={`approve-${field}`}>{label}</label>
       {onAdd && <button type="button" disabled={busy} onClick={() => onAdd({ field, section })} aria-label={`افزودن ${label}`}><Plus width="16" height="16" /></button>}
-      <Link to={section === 'techs' ? '/app/users' : `/app/definitions?section=${section}`} target="_blank" rel="noopener noreferrer">تعریف پایه</Link>
+      <Link to={section === 'techs' ? '/app/users' : `/app/definitions?section=${section}`} target="_blank" rel="noopener noreferrer"
+            className="ia-manage" title="مدیریتِ فهرست (زبانهٔ تازه)" aria-label={`مدیریتِ فهرستِ ${noun} (در زبانهٔ تازه)`}>
+        <External width="14" height="14" />
+      </Link>
     </div>
-    <select id={`approve-${field}`} value={value} disabled={busy} onChange={(e) => onChange(e.target.value)}>
+    <select id={`approve-${field}`} value={value} disabled={busy} onChange={(e) => onChange(e.target.value)}
+            aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined}>
       <option value="">— انتخاب —</option>
       {list.filter((r) => r.active !== false).map((r) => <option key={r.id} value={r.id}>{r.name ?? r.displayName}</option>)}
     </select>
+    {error && <p id={errId} className="ia-field-err"><Alert width="12" height="12" /> {error}</p>}
+    {note && <p className="ia-note">{note}</p>}
   </div>;
 }

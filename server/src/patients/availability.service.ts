@@ -1,6 +1,21 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { CLINIC_TZ, clinicTodayIso, dayUtc } from '../common/clinic-day';
+
+/**
+ * حاشیهٔ رزروِ همان روز برای **بیمار**: ساعتی که تا این‌قدر دیگر شروع می‌شود دیگر گرفتنی نیست
+ * (بازبینیِ UX، بندِ ۹۷). بیمار باید برسد، و نوبتِ آنلاین تا تأییدِ مطب «موقت» است.
+ */
+export const PATIENT_LEAD_MIN = 30;
+
+/** فرمتِ «ساعت:دقیقه»ِ اکنون به وقتِ مطب — یک‌بار ساخته می‌شود (ساختنِ `Intl` گران است). */
+const HHMM = new Intl.DateTimeFormat('en-GB', { timeZone: CLINIC_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+/** دقیقه از نیمه‌شبِ **مطب** — نه کانتینر (UTC). */
+export function clinicMinuteOfDay(at: Date = new Date()): number {
+  const [h, m] = HHMM.format(at).split(':').map(Number);
+  return h * 60 + m;
+}
 
 /**
  * **برنامهٔ کاری و روزهای آزاد** — `docs/BOOKING.md` مرحلهٔ ۲.
@@ -198,7 +213,12 @@ export class AvailabilityService {
    * برای هر روز می‌گوید باز است یا نه، چه موضوع‌هایی مجازند، و **چقدر جا
    * مانده** — با کم‌کردنِ نوبت‌های گرفته‌شده. روزِ گذشته هرگز باز نیست.
    */
-  async month(jy: number, jm: number, opts: { doctorId?: number; topicId?: number } = {}) {
+  /**
+   * `patient`: نمای بیمار — ساعت‌های امروز که شروعشان از «اکنون + حاشیه» گذشته گرفتنی نیستند.
+   * کارکنان (میزِ پذیرش، تقویم) عمداً همان نمای قبلی را می‌گیرند: منشی بیمارِ حاضرِ دیرآمده را
+   * آگاهانه در اسلاتِ جاری می‌نشاند.
+   */
+  async month(jy: number, jm: number, opts: { doctorId?: number; topicId?: number; patient?: boolean } = {}) {
     if (!Number.isInteger(jy) || jy < 1300 || jy > 1500) throw new BadRequestException('سالِ نامعتبر');
     if (!Number.isInteger(jm) || jm < 1 || jm > 12) throw new BadRequestException('ماهِ نامعتبر');
     const [from, to] = jalaliMonthRange(jy, jm);
@@ -240,15 +260,21 @@ export class AvailabilityService {
     const extraByDay = new Map<string, any>();
     for (const e of exceptions.filter((x) => !x.closed)) extraByDay.set(AvailabilityService.dayKey(e.date), e);
 
-    /* «امروز» بر مبنای همان نیمه‌شبِ UTC، تا روزِ جاری تا آخرِ شب قابلِ رزرو
-       بماند و ساعتِ سرور روزِ کاربر را یک روز جلو نبرد. */
-    const today = AvailabilityService.midnight(new Date());
+    /* «امروز» = **روزِ تقویمیِ مطب** (`clinic-day.ts`)، به‌شکلِ همان نیمه‌شبِ UTCِ ستونِ `DATE`.
+       ⚠️ تا دیروز نیمه‌شبِ UTCِ ساعتِ کانتینر بود: از ۰۰:۰۰ تا ۰۳:۳۰ِ تهران «امروز» هنوز دیروز بود و
+       ساعت‌های عصرِ دیروز باز می‌ماند — در آزمون، ۰۰:۰۲ِ ۷ مهر رزروِ ۱۶:۰۰ِ ۶ مهر پذیرفته شد
+       (بازبینیِ UX، بندِ ۹۷). */
+    const todayIso = clinicTodayIso();
+    const today = dayUtc(todayIso);
+    /* ساعتِ برش فقط برای امروز و فقط در نمای بیمار؛ ‎-1 یعنی «هیچ ساعتی گذشته نیست». */
+    const cutoffMin = opts.patient ? clinicMinuteOfDay() + PATIENT_LEAD_MIN : -1;
 
     const days: any[] = [];
     for (let d = new Date(from); d < to; d = new Date(d.getTime() + 86400000)) {
       const key = AvailabilityService.dayKey(d);
       const [, , jd] = toJalali(d);
       const past = d < today;
+      const isToday = key === todayIso;
       const weekday = AvailabilityService.jalaliWeekday(d);
 
       const extra = extraByDay.get(key);
@@ -277,13 +303,15 @@ export class AvailabilityService {
       if (!closedDays.has(key) && !past) {
         for (const r of applicable as any[]) {
           if (r.mode === 'capacity') {
-            const left = Math.max(0, (r.capacity ?? 0) - taken.count);
+            /* پنجرهٔ ظرفیتی تا وقتی تمام نشده گرفتنی است — بیمار در طولِ پنجره می‌رسد. */
+            const gone = isToday && r.endMin <= cutoffMin;
+            const left = gone ? 0 : Math.max(0, (r.capacity ?? 0) - taken.count);
             free += left;
             windows.push({
               ruleId: r.id ?? null, mode: 'capacity',
               start: AvailabilityService.minToHHMM(r.startMin),
               end: AvailabilityService.minToHHMM(r.endMin),
-              capacity: r.capacity ?? 0, left,
+              capacity: r.capacity ?? 0, left, ...(gone ? { past: true } : {}),
               topics: (r.topics ?? []).map((t: any) => ({ id: t.topic.id, name: t.topic.name })),
             });
           } else {
@@ -291,8 +319,10 @@ export class AvailabilityService {
             const slots: any[] = [];
             for (let m = r.startMin; step > 0 && m + step <= r.endMin; m += step) {
               const busy = taken.mins.has(m);
-              if (!busy) free += 1;
-              slots.push({ startMin: m, time: AvailabilityService.minToHHMM(m), taken: busy });
+              /* گذشته = گرفتنی نیست؛ همان شکلِ «پر» به‌اضافهٔ `past` تا پیامِ رزرو بتواند بگوید چرا. */
+              const gone = isToday && m < cutoffMin;
+              if (!busy && !gone) free += 1;
+              slots.push({ startMin: m, time: AvailabilityService.minToHHMM(m), taken: busy || gone, ...(gone ? { past: true } : {}) });
             }
             windows.push({
               ruleId: r.id ?? null, mode: 'slot',

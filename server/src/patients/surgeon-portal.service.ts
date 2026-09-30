@@ -444,15 +444,28 @@ export class SurgeonPortalService {
     return this.prisma.item.findMany({ where: { active: true, name: { contains: toEnDigits(query.trim().slice(0, 80)), mode: 'insensitive' } }, take: 100, orderBy: { name: 'asc' }, select: { id: true, name: true, size: true, unit: true } });
   }
 
-  async grantAccount(surgeonId: number, user: any) {
+  /**
+   * ساختِ حسابِ تصاحب‌نشده برای جراحِ تعریف‌شده — صاحبِ شماره با ثبت‌نام و کدِ پیامکی تحویلش می‌گیرد.
+   *
+   * هشدار — **شماره را خودِ سوپرادمین تأیید می‌کند** (بستهٔ PS، PS6). تا دیروز به شمارهٔ «تعاریف» اعتماد می‌شد،
+   * که سطحِ ۵ (`definitions.manage`) می‌نویسدش: شمارهٔ جراحِ بی‌حساب را سیم‌کارتِ خودش می‌کرد، سوپرادمین «آماده‌سازی»
+   * را می‌زد، و صاحبِ آن سیم‌کارت حسابِ پزشک را تحویل می‌گرفت. حالا سوپرادمین شمارهٔ جراح را (از خودِ جراح) می‌نویسد و
+   * باید با تعاریف یکی باشد؛ عوض‌شدنِ شماره در تعاریف هم ممیزی دارد (PS5).
+   */
+  async grantAccount(surgeonId: number, user: any, confirmedPhone?: string) {
     if ((user?.level ?? 0) < LEVEL.SUPER_ADMIN) throw new ForbiddenException('ایجاد حساب جراح فقط برای مدیر سامانه مجاز است');
     await this.scope(user);
     const surgeon = await this.prisma.surgeon.findFirst({ where: { id: surgeonId, active: true }, include: { person: { include: { account: true } } } });
     if (!surgeon) throw new NotFoundException('جراح پیدا نشد');
     if (!/^09\d{9}$/.test(surgeon.person.phone ?? '')) throw new BadRequestException('شماره موبایل جراح را در تعاریف پایه کامل کنید');
     if (surgeon.person.account) return { id: surgeon.person.account.id, existing: true, level: surgeon.person.account.level, status: surgeon.person.account.status };
+    const typed = toEnDigits(String(confirmedPhone ?? '')).replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(typed)) throw new BadRequestException('شمارهٔ موبایلِ جراح را کامل بنویسید (از خودِ جراح بپرسید) تا با تعاریف سنجیده شود');
+    if (typed !== surgeon.person.phone) {
+      throw new BadRequestException('این شماره با شمارهٔ جراح در «تعاریف» یکی نیست — شمارهٔ درست را از خودِ جراح بپرسید و اگر تعاریف اشتباه است، اول آن را اصلاح کنید');
+    }
     const account = await this.prisma.account.create({ data: { personId: surgeon.personId, passwordHash: '', level: LEVEL.TECH, status: 'active', verificationDueAt: verificationDeadline(), jobRole: 'doctor', approvedById: user.id, approvedAt: new Date() } });
-    await this.audit.record({ actorId: user.id, action: 'surgeon.account.create', entityType: 'account', entityId: account.id, after: { surgeonId, personId: surgeon.personId } });
+    await this.audit.record({ actorId: user.id, action: 'surgeon.account.create', entityType: 'account', entityId: account.id, after: { surgeonId, personId: surgeon.personId, confirmedPhone: typed } });
     return { id: account.id, existing: false, level: account.level, status: account.status };
   }
 }

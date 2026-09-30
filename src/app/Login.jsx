@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
@@ -9,8 +9,9 @@ import PasswordInput from './PasswordInput.jsx';
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
 import './login.css';
-import { Clock, Fingerprint, Info } from '../ui/icons.jsx';
+import { Back, Check, Clock, Fingerprint, Info } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import { hostKind } from '../lib/host-mode.js';
 
 const toEnDigits = (s) =>
   (s || '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
@@ -48,9 +49,66 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [selfie, setSelfie] = useState('');
 
+  /* بازیابیِ رمز (بازبینیِ UX، بندِ ۱۹): «رمز را فراموش کرده‌ام» ← کدِ پیامکی به موبایلِ **خودِ حساب** ← رمزِ تازه.
+     تا دیروز کارکنی که رمزش را فراموش می‌کرد راهی جز سوپرادمین نداشت و مالک راهی جز پایگاه‌داده. پاسخِ سرور
+     برای حسابِ موجود و ناموجود یکی است، پس صفحه هم هرگز نمی‌گوید «این حساب نیست». */
+  const [forgot, setForgot] = useState(null); // null | ask | code
+  const [fpCode, setFpCode] = useState('');
+  const [fpPass, setFpPass] = useState('');
+  const [fpDev, setFpDev] = useState('');
+  /* پیامِ موفقیت روی فرمِ ورود (پس از رمزِ تازه). */
+  const [notice, setNotice] = useState('');
+  /* فوکوس با عوض‌شدنِ نما (بستهٔ PF، PF13): «رمز را فراموش کرده‌ام» ← سرتیترِ بازیابی؛ «بازگشت» ← همان پیوند؛
+     رمزِ تازه ذخیره شد ← کادرِ رمز. بی این، فوکوس روی دکمه‌ای می‌ماند که دیگر در صفحه نیست. نمای «کد» خودش
+     کادرِ کد را فوکوس می‌کند (`OtpInput`). */
+  const forgotBtn = useRef(null);
+  const fpHead = useRef(null);
+  const fpMove = useRef(null);
   useEffect(() => {
-    document.title = 'عمل‌یار — ورود';
-  }, []);
+    const m = fpMove.current;
+    fpMove.current = null;
+    if (m === 'ask') fpHead.current?.focus();
+    else if (m === 'login') forgotBtn.current?.focus();
+    else if (m === 'password') document.querySelector('.lg-form input[autocomplete="current-password"]')?.focus();
+  }, [forgot]);
+
+  /* سایتِ معرفیِ همین شرکت — منتشر شده؟ (بی‌احراز؛ شکست یعنی «نیست»). هشدار: «بازگشت به سایت» فقط وقتی
+     ریشهٔ دامنه جای دیگری جز همین صفحه است (بازبینیِ UX، بندِ ۱۱۱): روی دامنهٔ مطبی که سایتش منتشر
+     نشده، `/` خودِ ورود است و پیوند کاربر را در یک دورِ بسته نگه می‌داشت. */
+  const kind = hostKind();
+  const [site, setSite] = useState(null);
+  useEffect(() => {
+    if (kind === 'platform') return undefined;
+    let alive = true;
+    api('/public/site', { quiet401: true }).then((s) => { if (alive) setSite(s); }).catch(() => {});
+    return () => { alive = false; };
+  }, [kind]);
+  const backToSite = kind === 'marketing' || (kind === 'tenant' && !!site?.enabled);
+
+  /* نامِ مطب/شرکت زیرِ نشانِ عمل‌یار (بندِ ۱۹) — کارکن باید مطمئن باشد واردِ سامانهٔ درست شده. از مسیرِ
+     عمومیِ هویت (بی‌احراز)؛ فقط نام خوانده می‌شود، نه تم — صفحهٔ ورود عمداً همیشه تیره است. */
+  const [tenantName, setTenantName] = useState('');
+  const [tenantPhone, setTenantPhone] = useState('');
+  useEffect(() => {
+    if (kind === 'platform') return undefined;
+    let alive = true;
+    api('/public/intake/brand', { quiet401: true })
+      .then((f) => {
+        if (!alive || !f?.brand?.name) return;
+        setTenantName(f.brand.name);
+        setTenantPhone(f.brand.phone ?? '');
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [kind]);
+  /* روی دامنهٔ مطب/شرکت این صفحه **مالِ کارکنان** است (بازبینیِ UX، بندِ ۱۰۸): بیمارِ دنبالِ نوبت که از ریشهٔ
+     دامنه به این‌جا می‌رسید «ثبت‌نام» را می‌زد، موبایل و کد و سلفی می‌داد و آخرش «در انتظارِ تأییدِ مدیر» —
+     یک درخواستِ حسابِ کارمندیِ بی‌جا. پس: عنوانِ «ورودِ کارکنانِ …»، تبِ «درخواستِ حسابِ کارمند» و راهِ بیمار.
+     اولین حسابِ سامانه (راه‌اندازی) همان «ثبت‌نام» می‌ماند. */
+  const staffHost = !!tenantName && !firstAdmin;
+  useEffect(() => {
+    document.title = tenantName ? `ورود — ${tenantName}` : 'عمل‌یار — ورود';
+  }, [tenantName]);
 
   useEffect(() => {
     if (adding) return; // در حالتِ افزودن، کاربرِ واردشده نباید ریدایرکت شود
@@ -71,6 +129,17 @@ export default function Login() {
       });
     return () => ac.abort();
   }, [step]);
+
+  // WebOTP برای کدِ بازیابیِ رمز — همان رفتارِ کدِ ثبت‌نام
+  useEffect(() => {
+    if (forgot !== 'code' || !('OTPCredential' in window)) return undefined;
+    const ac = new AbortController();
+    navigator.credentials
+      .get({ otp: { transport: ['sms'] }, signal: ac.signal })
+      .then((otp) => { if (otp?.code) setFpCode(otp.code); })
+      .catch(() => { /* لغو یا عدمِ پشتیبانی */ });
+    return () => ac.abort();
+  }, [forgot]);
 
   // اگر دیتابیس خالی است → تبِ ثبت‌نام و پیامِ «اولین حساب سوپرادمین می‌شود»
   useEffect(() => {
@@ -96,6 +165,7 @@ export default function Login() {
   const doLogin = async (e) => {
     e.preventDefault();
     setErr('');
+    setNotice('');
     setBusy(true);
     try {
       await login(identifier.trim(), password, remember);
@@ -118,6 +188,51 @@ export default function Login() {
       if (e2?.name !== 'NotAllowedError' && e2?.name !== 'AbortError') {
         setErr(e2.message || 'ورود با اثر انگشت ناموفق بود');
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openForgot = () => {
+    setErr(''); setNotice(''); setFpCode(''); setFpPass(''); setFpDev(''); fpMove.current = 'ask'; setForgot('ask');
+  };
+  const closeForgot = () => { setErr(''); fpMove.current = 'login'; setForgot(null); };
+
+  const sendResetCode = async (e) => {
+    e.preventDefault();
+    setErr('');
+    setBusy(true);
+    try {
+      const r = await api('/auth/password/request-otp', { method: 'POST', body: { identifier: toEnDigits(identifier).trim() } });
+      setFpDev(r?.devCode ?? '');
+      setFpCode(r?.devCode ?? '');
+      setForgot('code');
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doReset = async (e) => {
+    e.preventDefault();
+    const c = toEnDigits(fpCode).trim();
+    if (c.length !== 6) { setErr('کدِ ۶رقمیِ پیامک را کامل بنویسید.'); return; }
+    if (fpPass.length < 6) { setErr('رمزِ تازه دستِ‌کم ۶ نویسه باشد.'); return; }
+    setErr('');
+    setBusy(true);
+    try {
+      const r = await api('/auth/password/reset', { method: 'POST', body: { identifier: toEnDigits(identifier).trim(), code: c, password: fpPass } });
+      fpMove.current = 'password';
+      setForgot(null);
+      setPassword('');
+      setFpPass('');
+      setFpCode('');
+      /* بازیابی پس‌کی‌های حساب را هم پاک می‌کند (PF6) — بی این جمله «ورود با اثر انگشت» بی‌دلیل خطا می‌داد. */
+      setNotice(`رمزِ تازه ذخیره شد؛ حالا با آن وارد شوید. نشست‌های قبلیِ این حساب بسته شدند.${
+        r?.passkeysRemoved ? ' اثر انگشت/پس‌کیِ این حساب هم پاک شد؛ پس از ورود، از منوی حساب «فعال‌سازی ورود با اثر انگشت» را دوباره بزنید.' : ''}`);
+    } catch (e2) {
+      setErr(e2.message);
     } finally {
       setBusy(false);
     }
@@ -253,6 +368,7 @@ export default function Login() {
         <header className="lg-brand">
           <Mark className="lg-mark" gradient aria-hidden="true" />
           <div className="lg-word">عمل<span className="grad-text">‌یار</span></div>
+          {tenantName && <p className="lg-tenant">ورودِ کارکنانِ {tenantName}</p>}
         </header>
 
         {adding && step !== 'done' && (
@@ -263,27 +379,30 @@ export default function Login() {
         )}
 
         {/* تب‌ها */}
-        {step !== 'done' && (
+        {step !== 'done' && !forgot && (
           <Tabs
             variant="inset"
+            className="lg-tabs"
             label="ورود یا ثبت‌نام"
             value={tab}
-            onChange={(k) => { setTab(k); setErr(''); }}
-            items={[{ key: 'login', label: 'ورود' }, { key: 'signup', label: 'ثبت‌نام' }]}
+            onChange={(k) => { setTab(k); setErr(''); setNotice(''); }}
+            items={[{ key: 'login', label: 'ورود' }, { key: 'signup', label: staffHost ? 'درخواستِ حسابِ کارمند' : 'ثبت‌نام' }]}
           />
         )}
 
         {err && <div className="lg-err" role="alert">{err}</div>}
+        {notice && <div className="lg-verified" role="status"><Check width="15" height="15" aria-hidden="true" /> {notice}</div>}
 
         {/* ── ورود ── */}
-        {tab === 'login' && step !== 'done' && (
+        {tab === 'login' && step !== 'done' && !forgot && (
           <form onSubmit={doLogin} className="lg-form">
             {field('نام کاربری یا موبایل',
               <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="username یا 09..." autoComplete="username" required />)}
+                placeholder="نام کاربری یا ۰۹…" autoComplete="username" required />)}
             {field('رمز عبور',
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="رمز عبور" autoComplete="current-password" required />)}
+            <button type="button" className="lg-link lg-forgot" ref={forgotBtn} onClick={openForgot} disabled={busy}>رمز را فراموش کرده‌ام</button>
             <label className="lg-remember">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               <span className="lg-check" aria-hidden="true" />
@@ -302,12 +421,50 @@ export default function Login() {
           </form>
         )}
 
+        {/* ── بازیابیِ رمز: شناسه ← کد + رمزِ تازه ── */}
+        {tab === 'login' && forgot === 'ask' && (
+          <form onSubmit={sendResetCode} className="lg-form">
+            <h2 className="lg-title" ref={fpHead} tabIndex={-1}>بازیابیِ رمز</h2>
+            <p className="lg-fp-text">نام کاربری یا شمارهٔ موبایلِ حسابتان را بنویسید؛ یک کدِ ۶رقمی به موبایلِ همان حساب پیامک می‌شود.</p>
+            {field('نام کاربری یا موبایل',
+              <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="نام کاربری یا ۰۹…" autoComplete="username" enterKeyHint="send" required />)}
+            <button className="lg-btn" type="submit" disabled={busy || !identifier.trim()}>{busy ? '…' : 'ارسالِ کد'}</button>
+            {/* سوپرادمین کدِ پیامکی نمی‌گیرد (`resetTarget`، PF1) — بی این جمله منتظرِ پیامکی می‌ماند که نمی‌آید. */}
+            <p className="lg-hint">رمزِ مدیرِ کل (سوپرادمین) با پیامک بازیابی نمی‌شود؛ از پشتیبانیِ عمل‌یار کمک بگیرید.</p>
+            <button type="button" className="lg-link" onClick={closeForgot} disabled={busy}>
+              <Back width="15" height="15" aria-hidden="true" /> بازگشت به ورود
+            </button>
+          </form>
+        )}
+        {tab === 'login' && forgot === 'code' && (
+          <form onSubmit={doReset} className="lg-form">
+            <h2 className="lg-title">رمزِ تازه</h2>
+            <p className="lg-fp-text" role="status">
+              اگر حسابی با «<bdi>{identifier.trim()}</bdi>» ثبت شده باشد، کدِ ۶رقمی به موبایلِ آن پیامک شد؛ تا ۵ دقیقه معتبر است.
+            </p>
+            {fpDev && <div className="lg-devcode">پیامک هنوز وصل نیست — کدِ تست: <b>{fpDev}</b></div>}
+            <div className="lg-field">
+              <span>کدِ تأیید</span>
+              <OtpInput value={fpCode} onChange={setFpCode} status="idle" />
+            </div>
+            {field('رمزِ تازه',
+              <PasswordInput value={fpPass} onChange={(e) => setFpPass(e.target.value)}
+                placeholder="حداقل ۶ نویسه" autoComplete="new-password" required />)}
+            <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'ذخیرهٔ رمزِ تازه'}</button>
+            <button type="button" className="lg-link" onClick={() => { fpMove.current = 'ask'; setForgot('ask'); setFpCode(''); setErr(''); }} disabled={busy}>
+              <Back width="15" height="15" aria-hidden="true" /> کد نرسید؟ ارسالِ دوباره
+            </button>
+            <button type="button" className="lg-link" onClick={closeForgot} disabled={busy}>بازگشت به ورود</button>
+          </form>
+        )}
+
         {/* ── ثبت‌نام: مرحلهٔ موبایل ── */}
         {tab === 'signup' && step === 'phone' && (
           <form onSubmit={sendOtp} className="lg-form">
             {field('شمارهٔ موبایل',
               <input type="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)}
-                placeholder="09..." autoComplete="tel" required />)}
+                placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" autoComplete="tel" required />)}
             <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'ارسالِ کدِ تأیید'}</button>
             <p className="lg-hint">کدِ تأیید با پیامک به موبایل شما ارسال می‌شود.</p>
           </form>
@@ -325,14 +482,18 @@ export default function Login() {
               {busy ? '…' : 'تأییدِ کد'}
             </button>
             <button type="button" className="lg-link" disabled={busy}
-              onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>← اصلاحِ شماره / ارسالِ دوباره</button>
+              onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>
+              <Back width="15" height="15" aria-hidden="true" /> اصلاحِ شماره / ارسالِ دوباره
+            </button>
           </form>
         )}
 
         {/* ── ثبت‌نام: مرحلهٔ پروفایل + سلفی ── */}
         {tab === 'signup' && step === 'form' && (
           <form onSubmit={doSignup} className="lg-form">
-            <div className="lg-verified">شمارهٔ {phone} تأیید شد ✓</div>
+            <div className="lg-verified">
+              <Check width="15" height="15" aria-hidden="true" /> شمارهٔ <bdi dir="ltr">{phone}</bdi> تأیید شد
+            </div>
             <div className="lg-row2">
               {field('نام', <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" required />)}
               {field('نام خانوادگی', <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" required />)}
@@ -363,10 +524,23 @@ export default function Login() {
           </div>
         )}
 
+        {staffHost && !adding && step !== 'done' && !forgot && (
+          <p className="lg-patient">
+            <Info width="16" height="16" aria-hidden="true" />
+            <span>
+              بیمار هستید؟ این صفحه برای کارکنان است. برای نوبت
+              {tenantPhone
+                ? <> با <a href={`tel:${toEnDigits(tenantPhone).replace(/[^0-9+]/g, '')}`}><bdi dir="ltr">{tenantPhone.replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}</bdi></a> تماس بگیرید</>
+                : ' با ما تماس بگیرید'}
+              {' '}یا از لینکِ ثبت‌نامی که برایتان فرستاده شده استفاده کنید.
+            </span>
+          </p>
+        )}
+
         {step !== 'done' && (
           adding
             ? <button type="button" className="lg-back" style={{ background: 'none', border: 'none', cursor: 'pointer', font: 'inherit' }} onClick={() => navigate('/app')}>انصراف و بازگشت به سامانه</button>
-            : <a className="lg-back" href="/">بازگشت به سایت</a>
+            : backToSite && <a className="lg-back" href="/">بازگشت به سایت</a>
         )}
       </div>
     </div>

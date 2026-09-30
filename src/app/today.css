@@ -19,28 +19,36 @@
 /* عقب‌افتادگی تنها چیزی است که رنگ می‌گیرد — اگر همه‌چیز برجسته باشد، هیچ‌چیز نیست. */
 .td-chips li.hot { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.08); }
 .td-chips li.hot b, .td-chips li.hot em { color: var(--amber); font-style: normal; }
-.td-chips li.td-next b { color: var(--cyan); }
+.td-chips li.td-link.hot { padding: 0; }
+.td-chips li.td-link.hot a b, .td-chips li.td-link.hot a em { color: var(--amber); font-style: normal; }
+/* «بعدی: ساعتِ … — نامِ بیمار» — بر پایهٔ ساعتِ اکنون (سرور). */
+.td-nextline { margin: -4px 0 0; font-size: 14px; font-weight: 700; color: var(--text2); }
+.td-nextline a { color: var(--brand-text); text-decoration: none; }
+.td-nextline a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.td-nextline bdi { font-weight: 800; }
+.td-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
 .td-tools-btn {
-  align-self: flex-start; display: inline-flex; align-items: center; gap: 7px;
+  display: inline-flex; align-items: center; gap: 7px;
   padding: 9px 14px; border-radius: 12px; font-size: 13.5px; font-weight: 700; color: var(--text1);
   background: rgba(var(--brand-rgb), 0.14); border: 1px solid rgba(var(--brand-2-rgb), 0.42);
   transition: background .2s, border-color .2s;
 }
-.td-tools-btn:hover, .td-tools-btn:focus-visible { background: rgba(var(--brand-rgb), 0.24); border-color: var(--brand-2); outline: none; }
+.td-tools-btn:hover, .td-tools-btn:focus-visible { background: rgba(var(--brand-rgb), 0.24); border-color: var(--brand-2); }
 
 .td-note { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: var(--text2); background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.12); }
 .td-chips li.td-link { padding: 0; }
 .td-chips li.td-link a { display: inline-flex; align-items: baseline; gap: 5px; padding: 6px 11px; border-radius: 99px; color: inherit; text-decoration: none; }
-.td-chips li.td-link a:hover, .td-chips li.td-link a:focus-visible { color: var(--text1); outline: none; }
+.td-chips li.td-link a:hover, .td-chips li.td-link a:focus-visible { color: var(--text1); }
 .td-chips li.td-link a b { color: var(--brand-2); }
 .td-err { padding: 10px 14px; border-radius: 12px; font-size: 13px; color: var(--red-text); background: rgba(220, 38, 38, 0.12); border: 1px solid rgba(220, 38, 38, 0.4); }
 
-.td-sec { display: flex; flex-direction: column; gap: 10px; }
+.td-sec { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: calc(var(--shell-h) + 12px); }
+.td-sec h2:focus:not(:focus-visible) { outline: none; }
 .td-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .td-sec-head h2 { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 800; color: var(--text1); }
 .td-more { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700; color: var(--brand-2); text-decoration: none; }
-.td-more:hover, .td-more:focus-visible { color: var(--cyan); outline: none; }
+.td-more:hover, .td-more:focus-visible { color: var(--cyan); }
 .td-empty, .td-skel { padding: 14px; border-radius: 14px; font-size: 13px; color: var(--text3); text-align: center; background: rgba(var(--veil-rgb), 0.03); border: 1px dashed rgba(var(--veil-rgb), 0.10); }
 
 .td-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
@@ -50,18 +58,43 @@
   background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.09);
 }
 .td-time { font-size: 13px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
+/* ساعتِ خالی: «ساعت؟» کم‌رنگ — نه «—»ِ درشت که دکمهٔ «جمع‌کردن» خوانده می‌شد (company-22). */
+.td-time.none { font-size: 12px; font-weight: 600; color: var(--text3); }
+button.td-time.none {
+  justify-self: start; min-height: 32px; padding: 2px 6px; margin-inline-start: -6px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 600; background: none; border: 1px dashed transparent; border-radius: 8px;
+}
+button.td-time.none:hover { color: var(--brand-text); border-color: rgba(var(--brand-2-rgb), .4); }
+@media (pointer: coarse) { button.td-time.none { min-height: 44px; } }
+.td-tech { color: var(--text2); }
 .td-name { grid-column: 2; font-size: 14px; font-weight: 700; color: var(--text1); text-decoration: none; }
-a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none; }
+/* نام + چیپِ نوع («ویزیت»/«عمل») در یک سطر — مطب هر دو را در یک فهرست دارد. */
+.td-main { grid-column: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 3px 7px; min-width: 0; }
+.td-main .td-name { grid-column: auto; min-width: 0; }
+.td-kind {
+  display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 99px;
+  font-size: 11px; font-weight: 700; line-height: 1.7; white-space: nowrap;
+  color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.14);
+}
+.td-kind.k-surgery { color: var(--brand-text); background: rgba(var(--brand-rgb), 0.10); border-color: rgba(var(--brand-2-rgb), 0.40); }
+a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); }
 .td-name.muted { color: var(--text3); font-weight: 600; }
 .td-sub { grid-column: 2; grid-row: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-tag {
   grid-column: 3; grid-row: 1 / span 2; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700;
   color: var(--text2); background: rgba(var(--veil-rgb), 0.06); border: 1px solid rgba(var(--veil-rgb), 0.12);
 }
-/* وضعیت با **بوردر + رنگِ متن** حمل می‌شود، نه فقط یک لایهٔ کم‌آلفا روی زمینهٔ تیره. */
-.td-tag.op-done, .td-tag.appt-done, .td-tag.appt-arrived { color: var(--green); border-color: rgba(52, 211, 153, 0.45); background: rgba(6, 56, 42, 0.55); }
-.td-tag.appt-noshow { color: var(--amber); border-color: rgba(251, 191, 36, 0.5); background: rgba(58, 39, 8, 0.6); }
-.td-tag.op-cancelled, .td-tag.appt-cancelled { color: var(--red-text); border-color: rgba(248, 113, 113, 0.4); background: rgba(60, 12, 12, 0.5); }
+/* وضعیت با **بوردر + رنگِ متن** حمل می‌شود، نه فقط یک لایهٔ کم‌آلفا روی زمینهٔ تیره.
+   زمینه از توکن‌های `--green-bg` / `--amber-bg` / `--red-bg` (index.css): در تمِ تیره همان
+   زمینهٔ مات و هم‌فامِ قبلی، در تمِ روشن ته‌رنگِ روشنِ همان فام — زمینهٔ تیرهٔ خام در تمِ روشن
+   گِلِ کدر می‌شد و «در مطب/نیامد/لغو» رویش ۱٫۱ تا ۱٫۴:۱ خوانده می‌شد (بازبینیِ UX ۱۴۰۵/۰۷). */
+.td-tag.op-done, .td-tag.appt-done, .td-tag.appt-arrived {
+  color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); background: var(--green-bg);
+}
+.td-tag.appt-noshow { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 50%, transparent); background: var(--amber-bg); }
+.td-tag.op-cancelled, .td-tag.appt-cancelled {
+  color: var(--red-text); border-color: color-mix(in srgb, var(--red-text) 40%, transparent); background: var(--red-bg);
+}
 .td-item.appt-cancelled { opacity: .62; }
 
 /* کشوی «همهٔ ابزارها» — از لبهٔ پایین، مثلِ شیت‌های دیگرِ سامانه. */
@@ -76,9 +109,12 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 .td-drawer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .td-drawer-head h2 { font-size: 15px; font-weight: 800; }
 .td-x { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--text2); border: 1px solid rgba(var(--veil-rgb), 0.12); }
-.td-x:hover, .td-x:focus-visible { color: var(--text1); border-color: var(--brand-2); outline: none; }
+.td-x:hover, .td-x:focus-visible { color: var(--text1); border-color: var(--brand-2); }
 
 .td-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 9px; }
+/* گروه‌های کشو — «کارِ روزانه»، «بیمار و درمان»، «مالی»، «مدیریت و تنظیمات». */
+.td-group + .td-group { margin-top: 14px; }
+.td-group-h { margin: 0 2px 8px; font-size: 12px; font-weight: 800; color: var(--text2); }
 .td-tile {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 14px 8px; border-radius: 16px; text-align: center;
@@ -86,6 +122,14 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 .td-tile-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; color: var(--text1); }
 .td-tile-label { font-size: 12px; font-weight: 700; color: var(--text2); line-height: 1.5; }
 .td-tile:hover .td-tile-label, .td-tile:focus-visible .td-tile-label { color: var(--text1); }
+/* شمارِ درخواست‌های عضویت روی کاشیِ «کاربران» — همان نشانِ لانچر (`.lx-badge`). */
+.td-badge {
+  position: absolute; top: 8px; inset-inline-end: 9px; min-width: 20px; height: 20px; padding: 0 6px;
+  display: grid; place-items: center; border-radius: 99px;
+  font-size: 11px; font-weight: 800; color: var(--amber-text);
+  background: var(--amber-bg); border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent);
+}
+.td-drawer-head .td-full { margin-inline-start: auto; margin-inline-end: 10px; padding: 8px 4px; }
 
 @media (max-width: 560px) {
   .td { padding: 14px 12px 60px; gap: 15px; }
@@ -110,7 +154,7 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
   font-size: 12.5px; color: var(--text2); text-decoration: none; padding: 3px 0;
 }
-.td-ex-items a:hover, .td-ex-items a:focus-visible { color: var(--text1); outline: none; }
+.td-ex-items a:hover, .td-ex-items a:focus-visible { color: var(--text1); }
 .td-ex-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-ex-meta { flex: 0 0 auto; font-size: 11.5px; color: var(--amber); font-variant-numeric: tabular-nums; }
 .td-ex-more { font-size: 11.5px; color: var(--text3); }
@@ -126,13 +170,13 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
   background: none; border: 0;
 }
 .td-ex-items .td-ex-btn .td-ex-line { text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px; }
-.td-ex-items .td-ex-btn:hover, .td-ex-items .td-ex-btn:focus-visible { color: var(--text1); outline: none; }
+.td-ex-items .td-ex-btn:hover, .td-ex-items .td-ex-btn:focus-visible { color: var(--text1); }
 .td-ex-items .td-ex-btn:hover .td-ex-line { color: var(--brand-2); }
 .td-ex-act {
   align-self: flex-start; margin-top: 4px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700;
   color: var(--amber); background: none; border: 1px solid rgba(251, 191, 36, .45); border-radius: 10px;
 }
-.td-ex-act:hover:not(:disabled), .td-ex-act:focus-visible { background: rgba(251, 191, 36, .12); outline: none; }
+.td-ex-act:hover:not(:disabled), .td-ex-act:focus-visible { background: rgba(251, 191, 36, .12); }
 .td-ex-act:disabled { opacity: .5; cursor: default; }
 
 /* ── «+» شناور — افزودنِ سریعِ مراجعهٔ دستی (بازخوردِ مالک ۱۴۰۵/۰۷/۰۱) ──
@@ -154,25 +198,34 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
 .td-fab:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(var(--brand-rgb), 0.55), 0 2px 6px rgba(0, 0, 0, 0.25); }
 .td-fab:active { transform: scale(0.95); }
 .td-fab:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.td-fab-t { display: none; }
+/* دسکتاپ: دکمهٔ برچسب‌دار کنارِ «همهٔ ابزارها» — نه دایرهٔ شناورِ بی‌برچسب روی ستونِ وضعیت‌ها. */
+@media (min-width: 720px) {
+  .td.has-fab { padding-bottom: 60px; }
+  .td-fab {
+    position: static; width: auto; height: auto; min-height: 40px; padding: 8px 16px 8px 14px;
+    display: inline-flex; align-items: center; gap: 6px; border-radius: 12px;
+    font: inherit; font-size: 13.5px; font-weight: 800;
+    box-shadow: 0 6px 18px rgba(var(--brand-rgb), 0.35);
+  }
+  .td-fab svg { width: 18px; height: 18px; }
+  .td-fab-t { display: inline; }
+}
 @media (prefers-reduced-motion: reduce) {
   .td-fab { transition: none; }
   .td-fab:hover, .td-fab:active { transform: none; }
 }
 
-/* ── ابزارک‌های منتخب (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳) — سه خانه بالای صفحه ──
-   خالی: خط‌چین با «+»؛ پر: همان آیکون و رنگِ کاشیِ ابزار، و × کوچک برای برداشتن. */
-.td-favs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* ── میان‌بُرها (بازخوردِ مالک ۱۴۰۵/۰۷/۰۳؛ بازبینیِ UX ۱۴۰۵/۰۷) ──
+   خانه‌های پر به‌شکلِ کاشی با آیکون و رنگِ همان ابزار، و × کوچک برای برداشتن؛ خانه‌های خالی یک
+   دکمهٔ کوچکِ «+ افزودنِ میان‌بُر» — نه سه کادرِ خط‌چینِ بزرگ که برنامهٔ امروز را پایین می‌راند. */
+.td-favs { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; }
 .td-fav {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-  min-height: 92px; padding: 10px 6px; border-radius: 18px; cursor: pointer;
-  font: inherit; font-size: 12.5px; font-weight: 700; text-align: center; color: var(--text3);
-  border: 1.5px dashed rgba(var(--brand-soft-rgb), .45); background: rgba(var(--veil-rgb), .025);
+  position: relative; flex: 0 1 150px; min-width: 120px; border-radius: 16px;
+  border: 1.5px solid rgba(var(--brand-soft-rgb), .45); background: rgba(var(--brand-soft-rgb), .10); color: var(--text1);
 }
-.td-fav > svg { color: var(--brand-2); }
-.td-fav:hover, .td-fav:focus-visible { border-color: var(--brand-2); color: var(--text2); outline: none; }
-.td-fav.on { padding: 0; cursor: default; border-style: solid; background: rgba(var(--brand-soft-rgb), .10); color: var(--text1); }
 .td-fav-open {
-  width: 100%; height: 100%; min-height: 92px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; height: 100%; min-height: 78px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   padding: 10px 6px; border: 0; border-radius: inherit; background: none; cursor: pointer;
   font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text1);
 }
@@ -182,8 +235,27 @@ a.td-name:hover, a.td-name:focus-visible { color: var(--brand-2); outline: none;
   display: grid; place-items: center; cursor: pointer; border-radius: 8px;
   color: var(--text3); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.td-fav-x:hover, .td-fav-x:focus-visible { color: var(--red-text); outline: none; border-color: rgba(var(--veil-rgb), .3); }
-@media (max-width: 560px) { .td-favs { gap: 8px; } .td-fav, .td-fav-open { min-height: 80px; font-size: 11.5px; } }
+.td-fav-x:hover, .td-fav-x:focus-visible { color: var(--red-text); border-color: rgba(var(--veil-rgb), .3); }
+.td-fav-add {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; align-self: center;
+  min-height: 40px; padding: 7px 14px; border-radius: 12px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
+  background: rgba(var(--veil-rgb), .025); border: 1.5px dashed rgba(var(--brand-soft-rgb), .45);
+}
+.td-fav-add svg { color: var(--brand-2); }
+.td-fav-add:hover, .td-fav-add:focus-visible { border-color: var(--brand-2); color: var(--text1); }
+/* هدفِ لمسیِ × دست‌کم ۴۴ پیکسل (بازبینیِ خصمانه، R15)، ولی تراشهٔ دیدنی ۲۸ پیکسل: لایهٔ بیرونی شفاف است
+   (`padding` + `background-clip`) تا × روی کاشیِ کوچکِ گوشی سنگین نشود؛ حلقهٔ فوکوس/hover همان ۴۴ را نشان می‌دهد.
+   هشدار: جعبه ۶ پیکسل بیرون از گوشهٔ کاشی می‌نشیند (در فاصلهٔ بینِ کاشی‌ها): درونِ کاشی روی آیکونِ ابزار
+   می‌افتاد و لمسِ لبهٔ آیکون — به‌جای بازکردن — میان‌بُر را بی‌پرسش برمی‌داشت. */
+@media (pointer: coarse) {
+  .td-fav-add { min-height: 44px; }
+  .td-fav-x {
+    width: 44px; height: 44px; top: -6px; inset-inline-end: -6px; padding: 8px; border-radius: 16px;
+    border-color: transparent; background-clip: content-box;
+  }
+}
+@media (max-width: 560px) { .td-fav { flex: 1 1 calc(33% - 8px); min-width: 0; } .td-fav-open { min-height: 72px; font-size: 11.5px; } }
 
 /* ── نمای تیم (سوپرادمین، قانونِ ۲۹) — «مالِ کیست» بالای فهرستِ کارها ──
    همان `Tabs`ِ اسکرولی؛ فاصله را `gap`ِ خودِ بخش می‌دهد، نه حاشیهٔ پیش‌فرضِ نوار. */

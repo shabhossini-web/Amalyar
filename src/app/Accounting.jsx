@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api.js';
-import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
+import { J_MONTHS, faDate, jStrToIso, jToFa, todayJStr, toEnDigits } from '../lib/jalali.js';
+import { useConfig, useTerms } from './config.jsx';
 import JDate from './JDate.jsx';
 import './accounting.css';
-import { Alert, Bank, Book, Calendar, Chart, ChevronEnd, Doctor, Money, Pencil, Plus, Users } from '../ui/icons.jsx';
+import { Alert, Bank, Book, Calendar, Chart, Doctor, Money, Pencil, Plus, Users } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 
@@ -26,7 +27,6 @@ export default function Accounting() {
   const [tab, setTab] = useState('report');
   const [toast, setToast] = useState('');
 
-  useEffect(() => { document.title = 'عمل‌یار — حسابداری'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 3200);
@@ -36,13 +36,7 @@ export default function Accounting() {
   return (
     <div className="ac">
       <div className="ac-bg" aria-hidden="true" />
-      <header className="ac-head">
-        <Link to="/app" className="ac-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>حسابداری</h1>
-          <p>قاعده‌ها این‌جا تعریف می‌شوند؛ تقسیمِ سهمِ هر عمل در صورت‌حسابِ همان مراجعه است.</p>
-        </div>
-      </header>
+      <PageHeader tool="accounting" sub="قاعده‌ها این‌جا تعریف می‌شوند؛ تقسیمِ سهمِ هر عمل در صورت‌حسابِ همان مراجعه است." />
 
       <Tabs
         label="بخش‌های حسابداری"
@@ -840,7 +834,18 @@ function Fiscal({ onToast }) {
  * صفحه است: فاکتورِ صادره درآمدِ شناسایی‌شده است، پرداخت پولِ رسیده. یکی‌کردنشان
  * همان اشتباهی است که شرکتِ سودده را بی‌نقدینگی می‌کند.
  */
+/** «۱۴۰۵/۰۷» → «مهر» (+ سال، وقتی نمودار از یک سال بیشتر را نشان می‌دهد). ماه از `J_MONTHS`ِ همان تقویمِ پروژه. */
+const monthParts = (key) => {
+  const [yy, mm] = String(key ?? '').split('/');
+  return { name: J_MONTHS[Number(mm) - 1] ?? key, year: jToFa(yy ?? '') };
+};
+
 function Report({ onToast }) {
+  const t0 = useTerms();
+  const { kind } = useConfig();
+  /* «بدهیِ مطب/شرکت به بیمار» — واژهٔ سازمان از واژگانِ حوزه (قانونِ ۲۴)؛ تا کلیدش در `terms.js` نیامده،
+     از نوعِ نصب. */
+  const org = t0.org || (kind === 'clinic' ? 'مطب' : 'شرکت');
   const [d, setD] = useState(null);
   const [r, setR] = useState({ fromJ: '', toJ: '' });
   const [busy, setBusy] = useState(false);
@@ -866,6 +871,13 @@ function Report({ onToast }) {
   if (!d) return <div className="ac-empty">در حال بارگذاری…</div>;
   const t = d.totals;
   const peak = Math.max(1, ...d.byMonth.map((m) => Math.max(m.revenue, m.expenses)));
+  /* سالِ هر ستون فقط وقتی لازم است که نمودار از مرزِ سال بگذرد. */
+  const manyYears = new Set(d.byMonth.map((m) => String(m.month).split('/')[0])).size > 1;
+  /* بازهٔ همین گزارش — از پاسخِ سرور (`range`)، نه از کادرهای تایپ‌نشده: جای‌نگهدارِ خالی شبیهِ
+     «از ۱۴۰۵/۰۱/۰۱» بود در حالی که گزارش همهٔ زمان‌ها را نشان می‌داد. */
+  const from = d.range?.from ? faDate(d.range.from) : null;
+  const to = d.range?.to ? faDate(d.range.to) : null;
+  const rangeText = from && to ? `${from} تا ${to}` : from ? `از ${from}` : to ? `تا ${to}` : 'همهٔ زمان‌ها';
 
   return (
     <>
@@ -875,6 +887,11 @@ function Report({ onToast }) {
           <JDate label="تا تاریخ" value={r.toJ} onChange={(v) => setR((s) => ({ ...s, toJ: v }))} />
         </div>
         <button type="button" className="ac-submit" onClick={apply} disabled={busy}>اعمالِ بازه</button>
+
+        <p className="ac-scope" data-report-scope>
+          <span>بازه: <b>{rangeText}</b></span>
+          <span>همهٔ مبالغ به <b>تومان</b></span>
+        </p>
 
         {/* ⚠️ سه عددِ متفاوت که قبلاً یکی بودند. «درآمد» تا دیروز جمعِ فاکتورها
             بود، پس عملِ هفتهٔ بعد هم در سود می‌نشست. حالا شناسایی‌شده، در جریان،
@@ -893,23 +910,26 @@ function Report({ onToast }) {
         <p className="ac-hint">
           <b>درآمدِ شناسایی‌شده</b> فقط عمل‌های <b>انجام‌شده</b> است و سود با همان حساب می‌شود.
           پولی که رسیده ولی عملش نشده <b>پیش‌دریافت</b> است — در صندوق هست، ولی هنوز
-          بدهیِ شرکت به بیمار است و تقسیم نمی‌شود. <b>در جریان</b> جمعِ فاکتورها صرف‌نظر از انجام.
+          بدهیِ {org} به بیمار است و تقسیم نمی‌شود. <b>در جریان</b> جمعِ فاکتورها صرف‌نظر از انجام.
         </p>
       </div>
 
       {d.byMonth.length > 0 && (
         <div className="ac-add">
-          <b className="ac-secttl">روندِ ماهانه</b>
+          <b className="ac-secttl">روندِ ماهانه <small>مبالغ به تومان</small></b>
           <div className="ac-chart">
-            {d.byMonth.map((m) => (
-              <div key={m.month} className="ac-bar" title={`${m.month} — درآمد ${num(m.revenue)} · هزینه ${num(m.expenses)}`}>
-                <div className="ac-bar-stack">
-                  <i className="rev" style={{ height: `${(m.revenue / peak) * 100}%` }} />
-                  <i className="exp" style={{ height: `${(m.expenses / peak) * 100}%` }} />
+            {d.byMonth.map((m) => {
+              const mp = monthParts(m.month);
+              return (
+                <div key={m.month} className="ac-bar" title={`${mp.name} ${mp.year} — درآمد ${num(m.revenue)} تومان · هزینه ${num(m.expenses)} تومان`}>
+                  <div className="ac-bar-stack">
+                    <i className="rev" style={{ height: `${(m.revenue / peak) * 100}%` }} />
+                    <i className="exp" style={{ height: `${(m.expenses / peak) * 100}%` }} />
+                  </div>
+                  <span>{mp.name}{manyYears && <small>{mp.year}</small>}</span>
                 </div>
-                <span>{m.month.replace(/^\d{4}\//, '')}</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="ac-legend"><i className="rev" /> درآمد <i className="exp" /> هزینه</div>
         </div>
@@ -922,7 +942,7 @@ function Report({ onToast }) {
       <Breakdown title="به تفکیکِ عملِ اصلی" rows={d.byProcedure} />
       {d.byExpenseCategory.length > 0 && (
         <div className="ac-list">
-          <b className="ac-secttl">هزینه به تفکیکِ دسته</b>
+          <b className="ac-secttl">هزینه به تفکیکِ دسته <small>مبالغ به تومان</small></b>
           {d.byExpenseCategory.map((x) => (
             <article key={x.label} className="ac-row">
               <div className="ac-val"><b>{num(x.amount)}</b><span>تومان</span></div>
@@ -939,12 +959,13 @@ function Breakdown({ title, rows }) {
   if (!rows?.length) return null;
   return (
     <div className="ac-list">
-      <b className="ac-secttl">{title}</b>
+      <b className="ac-secttl">{title} <small>مبالغ به تومان</small></b>
       {rows.map((x) => (
         <article key={x.label} className="ac-row">
           <div className="ac-val"><b>{num(x.revenue)}</b><span>درآمد</span></div>
           <div className="ac-row-main">
             <b>{x.label}</b>
+            {/* واحد یک‌بار سرِ بلوک آمده («مبالغ به تومان») — تکرارش در هر سطر فقط سطر را دوتا می‌کرد. */}
             <small>وصولی {num(x.collected)} · مانده {num(x.due)} · {num(x.visits)} مراجعه</small>
           </div>
         </article>

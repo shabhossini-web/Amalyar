@@ -59,8 +59,8 @@
   font-style: normal; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
   color: var(--text3); background: rgba(var(--veil-rgb), .07);
 }
-.db-order i.sent { color: #38bdf8; background: rgba(56, 189, 248, .14); }
-.db-order i.answered { color: #34d399; background: rgba(52, 211, 153, .14); }
+.db-order i.sent { color: rgb(var(--kind-sky)); background: rgba(56, 189, 248, .14); }
+.db-order i.answered { color: var(--green-text); background: rgba(52, 211, 153, .14); }
 .db-order button {
   padding: 5px 11px; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; color: var(--brand-2);
   background: none; border: 1px solid rgba(var(--brand-2-rgb), .4); border-radius: 99px;
@@ -136,3 +136,26 @@
 /* توضیحِ صوتیِ کارکنان زیرِ لینکِ پاسخ (بستهٔ ۶د) */
 .od-voice { display: grid; gap: 6px; }
 .op-voice { display: grid; gap: 6px; }
+
+/* ── مقیاسِ خوانایی روی صفحهٔ عمومیِ سفارش (بازبینیِ UX، بندِ ۱۰۶) ──
+   همان مقیاسِ صفحه‌های بیمار (`intake.css`): متن ۱۵، برچسب ۱۴، ورودی ۱۶ (زیرِ ۱۶ آیفون هنگامِ فوکوس زوم
+   می‌کند)، کمینه ۱۳. فقط زیرِ `.op-wrap` — `.db-field` و FileDropِ مشترک در پنلِ کارکنان فشرده می‌مانند. */
+.op-wrap { font-size: 15px; line-height: 1.7; }
+.op-wrap .op-clinic { font-size: 13.5px; }
+.op-wrap .op-card h1 { font-size: 19px; }
+.op-wrap .op-card h2 { font-size: 15.5px; }
+.op-wrap .op-summary { font-size: 15.5px; line-height: 1.8; }
+.op-wrap .op-note { font-size: 14.5px; line-height: 1.8; }
+.op-wrap .op-due, .op-wrap .op-err, .op-wrap .op-err-line { font-size: 14px; }
+.op-wrap .op-hint { font-size: 13.5px; line-height: 1.8; }
+.op-wrap .op-ok { font-size: 14.5px; }
+.op-wrap .op-send { font-size: 16px; }
+.op-wrap .op-more { font-size: 14px; min-height: 44px; }
+.op-wrap .db-field { font-size: 14px; }
+.op-wrap .db-field input, .op-wrap .db-field textarea { font-size: 16px; }
+.op-wrap .fdrop-drop b { font-size: 15px; }
+.op-wrap .fdrop-drop small, .op-wrap .fdrop-meta small, .op-wrap .fdrop-meta b { font-size: 13px; }
+.op-wrap .fdrop-doc, .op-wrap .fdrop-retry, .op-wrap .fdrop-clear { font-size: 12.5px; }
+.op-wrap .vn .vc-btn { font-size: 14px; min-height: 44px; }
+.op-wrap .vn-rec time, .op-wrap .vn-ghost, .op-wrap .vn-err { font-size: 13.5px; }
+.op-wrap .vn-ghost { min-height: 44px; }

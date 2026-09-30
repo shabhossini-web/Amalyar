@@ -62,6 +62,15 @@ export interface PathwayTemplateDef {
  * می‌کنند (مراقبتِ پیش از عمل، روزِ عمل، پیگیریِ پس از آن) — تا وقتی شرکتی
  * از `syncPostOpVisit` به مسیرِ صریح مهاجرت می‌کند، چیزی از دست ندهد.
  */
+/**
+ * نام‌های پیش‌فرضی که عوض شدند — `[کلید]: [نامِ قبلی، نامِ تازه]`. `ensureBuiltins` فقط الگوی
+ * دست‌نخورده (نامش هنوز همان پیش‌فرضِ قبلی است) را به‌روز می‌کند. «کیس» خلافِ واژه‌نامهٔ پروژه است
+ * (`src/lib/terms.js`: در گفتارِ بالینی «کیس» خودِ بیمار است) — بازبینیِ UX، clinic-daily-16.
+ */
+export const RENAMED_BUILTIN_TITLES: Record<string, [string, string]> = {
+  'implant-case': ['کیسِ تجهیزات/ایمپلنت', 'عملِ تجهیزات/ایمپلنت'],
+};
+
 export const PATHWAY_TEMPLATES: PathwayTemplateDef[] = [
   {
     key: 'clinic-visit',
@@ -93,7 +102,7 @@ export const PATHWAY_TEMPLATES: PathwayTemplateDef[] = [
   },
   {
     key: 'implant-case',
-    title: 'کیسِ تجهیزات/ایمپلنت',
+    title: 'عملِ تجهیزات/ایمپلنت',
     vertical: 'implant',
     notes: 'مبدأ = تاریخِ عمل. تمرکز روی تجهیزات و تسویه.',
     steps: [

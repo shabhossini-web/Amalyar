@@ -63,7 +63,7 @@ try {
   const fields = { 'نام *': 'مهسا', 'نامِ خانوادگی *': 'آزمون', 'کدِ ملی *': '0012345679', 'شمارهٔ موبایل *': '09120000000' };
   for (const [label, value] of Object.entries(fields)) await page.getByLabel(label, { exact: true }).fill(value);
   await answer.fill('۸');
-  await page.getByRole('button', { name: 'ادامه' }).click();
+  await page.getByRole('button', { name: 'ادامه', exact: true }).click();
   await page.waitForFunction((s) => document.querySelector('img.ik-cap-img')?.getAttribute('src') !== s, src1);
   const first = writes.find((w) => w.path === '/public/intake/link/tok/register');
   ok(first?.body?.captchaToken === 'c1' && first.body.captchaAnswer === 8, '**`{captchaToken, captchaAnswer}` رفت؛ «۸» عدد شد**', JSON.stringify(first?.body));
@@ -77,7 +77,7 @@ try {
   await page.waitForFunction((s) => document.querySelector('img.ik-cap-img')?.getAttribute('src') !== s, src2);
   ok(n === 3, '«پرسشِ دیگر» پرسشِ تازه می‌گیرد', String(n));
   await answer.fill('11');
-  await page.getByRole('button', { name: 'ادامه' }).click();
+  await page.getByRole('button', { name: 'ادامه', exact: true }).click();
   await page.waitForURL('**/f/ft');
   const second = writes.filter((w) => w.path === '/public/intake/link/tok/register').at(-1);
   ok(second?.body?.captchaToken === 'c3' && second.body.captchaAnswer === 11, 'ارسالِ دوم با نشانِ تازه', JSON.stringify(second?.body));
@@ -91,10 +91,10 @@ try {
   const empty = page.locator('.ik-cap-empty', { hasText: 'تعداد درخواست‌ها' });
   await empty.waitFor();
   ok((await empty.innerText()).includes('تعداد درخواست‌ها زیاد است'), '۴۲۹ در جای تصویر دیده می‌شود');
-  ok(await page.getByRole('button', { name: 'ادامه' }).isDisabled(), '**«ادامه» تا پرسش نیامده غیرفعال**');
+  ok(await page.getByRole('button', { name: 'ادامه', exact: true }).isDisabled(), '**«ادامه» تا پرسش نیامده غیرفعال**');
   await page.getByRole('button', { name: 'پرسشِ دیگر' }).click();
   await img.waitFor();
-  ok(!(await page.getByRole('button', { name: 'ادامه' }).isDisabled()), 'با «پرسشِ دیگر» پرسش آمد و «ادامه» فعال شد');
+  ok(!(await page.getByRole('button', { name: 'ادامه', exact: true }).isDisabled()), 'با «پرسشِ دیگر» پرسش آمد و «ادامه» فعال شد');
   ok(await hOverflow(page) <= 0, 'بی‌اسکرولِ افقی در عرضِ موبایل');
   ok(errors.length === 0, 'بدونِ خطای JS', errors[0]);
   await context.close();
@@ -106,7 +106,7 @@ try {
   const lp = await light.context.newPage();
   await lp.goto(`${vite.base}/r/tok`, { waitUntil: 'networkidle' });
   await lp.locator('img.ik-cap-img').waitFor();
-  const ink = await lp.getByRole('button', { name: 'ادامه' }).evaluate((el) => getComputedStyle(el).color.match(/\d+/g).slice(0, 3).map(Number));
+  const ink = await lp.getByRole('button', { name: 'ادامه', exact: true }).evaluate((el) => getComputedStyle(el).color.match(/\d+/g).slice(0, 3).map(Number));
   const lum = (0.2126 * ink[0] + 0.7152 * ink[1] + 0.0722 * ink[2]) / 255;
   ok(await lp.evaluate(() => document.documentElement.dataset.theme) === 'light' && lum < 0.45,
     '**«ادامه» در تمِ روشن سفید روی بنفشِ کم‌رنگ نیست** (دکمهٔ نئون داخلش شفاف است)', `rgb(${ink}) lum=${lum.toFixed(2)}`);

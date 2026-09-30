@@ -1,22 +1,14 @@
 /* صفِ ثبت‌نامِ بیماران. */
-.ia { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و کارت‌ها از `--page-w` می‌خوانند. */
+.ia { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .ia-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
     radial-gradient(900px 520px at 70% -10%, rgba(var(--brand-rgb), .16), transparent 60%),
     var(--bg);
 }
-.ia-head { max-width: 980px; margin: 0 auto 14px; }
-.ia-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.ia-back:hover { color: var(--brand-2); }
-.ia-head h1 { font-size: 20px; font-weight: 900; }
-.ia-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
-
 .ia-err {
-  display: flex; align-items: center; gap: 7px; max-width: 980px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
@@ -24,7 +16,7 @@
 /* ── لینک‌های عمومی ── */
 .ia-links {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  max-width: 980px; margin: 0 auto 12px; padding: 11px 13px; border-radius: 14px;
+  max-width: var(--page-w); margin: 0 auto 12px; padding: 11px 13px; border-radius: 14px;
   background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(var(--veil-rgb), .14);
 }
 .ia-links > b { font-size: 12.5px; }
@@ -64,7 +56,7 @@
 }
 
 /* ── کارتِ ثبت‌نام ── */
-.ia-list { display: grid; gap: 10px; max-width: 980px; margin: 12px auto 0; }
+.ia-list { display: grid; gap: 10px; max-width: var(--page-w); margin: 12px auto 0; }
 .ia-empty {
   padding: 26px 16px; text-align: center; font-size: 13px; color: var(--text3);
   border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
@@ -80,12 +72,19 @@
 .ia-title { flex: 1; min-width: 0; }
 .ia-title b { display: block; font-size: 14px; }
 .ia-title small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
+.ia-title small bdi { white-space: nowrap; }
+/* گوشی: نام و مشخصات یک ردیفِ کامل، چیپ‌ها/مبلغ/حذف ردیفِ دوم (company-04). پیش از این چیپ‌ها و مبلغ
+   و سطل همهٔ عرض را می‌گرفتند و برای نام ۳۳ پیکسل می‌ماند: «بهمن کیانی» دو خط، کد و شماره تکه‌تکه. */
+@media (max-width: 500px) {
+  .ia-title { flex: 1 1 100%; }
+  .ia-card > header .ia-cardel { margin-inline-start: auto; width: 40px; height: 40px; }
+}
 .ia-tag {
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.ia-tag.s-pending_approval { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
-.ia-tag.s-approved { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.ia-tag.s-pending_approval { color: var(--amber-text); background: var(--amber-bg); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+.ia-tag.s-approved { color: var(--green); background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
 .ia-tag.s-rejected { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .ia-amount { flex: 0 0 auto; font-size: 12px; font-weight: 800; }
 
@@ -133,7 +132,8 @@
 }
 .ia-sheet-body { display: grid; gap: 10px; padding: 14px 15px 16px; }
 .ia-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-.ia-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
+/* `align-content: start`: کنارِ فیلدی که یادداشت یا خطا دارد، کشوییِ همسایه کش نیاید (company-19). */
+.ia-field { display: grid; gap: 5px; align-content: start; font-size: 12px; color: var(--text2); }
 .ia-field input, .ia-field select {
   font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 10px;
   background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
@@ -149,13 +149,38 @@
 .ia-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .ia-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
+/* پیامِ عادی وقتی توستِ «قدمِ بعد» هست، بالای آن می‌نشیند نه زیرش (DF14). */
+.ia-toast.above { inset-block-end: 84px; z-index: 71; }
+/* توستِ قدمِ بعد (company-19) — دکمه دارد، پس لمس‌پذیر است و خودش زود نمی‌رود. */
+.ia-toast.has-act {
+  pointer-events: auto; display: flex; align-items: center; gap: 10px; z-index: 70;
+  max-width: calc(100vw - 24px); box-shadow: var(--shadow-card);
+}
+.ia-toast-act {
+  flex: none; min-height: 36px; padding: 0 14px; border-radius: 10px; cursor: pointer;
+  /* سفید روی گرادیانِ برند در هر دو تم — همان `.rc-act.is-main` و `.ia-ok`. */
+  font: inherit; font-size: 12.5px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: 0;
+}
+.ia-toast-x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  /* زمینهٔ توست در هر دو تم تیره است (`--toast-bg`)، پس ضربدر رنگِ متنِ توست را می‌گیرد نه `--text2`. */
+  cursor: pointer; color: var(--toast-ink); opacity: .8; background: transparent; border: 0; border-radius: 8px;
+}
+.ia-toast-act:focus-visible, .ia-toast-x:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ia-toast { transition: none; } }
 
 @media (max-width: 560px) {
-  .ia { padding: 12px 10px 32px; }
+  .ia-toast.has-act { inset-inline: 12px; transform: none; justify-content: space-between; }
+  .ia-toast.above { inset-block-end: 96px; }
+  .ia-toast-act { min-height: 44px; }
+  .ia-toast-x { width: 44px; height: 44px; }
+  .ia-definition-head button, .ia-manage { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; }
+  .ia { padding: 20px 10px 32px; }
   .ia-grid { grid-template-columns: 1fr; }
   .ia-acts { flex-direction: column; }
   .ia-ok { min-width: 0; }
@@ -189,7 +214,7 @@
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ia-money b { color: var(--text1); font-weight: 800; }
-.ia-money .off { color: #6ee7b7; }
+.ia-money .off { color: var(--green-text); }
 .ia-money .pay { margin-inline-start: auto; }
 
 .ia-zoom {
@@ -209,8 +234,8 @@
 .ia-check input { width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; }
 
 /* ── حذفِ لینک و ثبت‌نام ─────────────────────────────────────────── */
-.ia-del { color: #fda4af; }
-.ia-del:hover { color: #fb7185; }
+.ia-del { color: var(--red-text); }
+.ia-del:hover { color: var(--red-text); }
 .ia-cardel {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
@@ -218,11 +243,23 @@
   color: var(--text3); background: rgba(var(--veil-rgb), 0.04);
   border: 1px solid rgba(var(--veil-rgb), 0.08);
 }
-.ia-cardel:hover { color: #fb7185; border-color: rgba(251, 113, 133, 0.4); }
+.ia-cardel:hover { color: var(--red-text); border-color: rgba(251, 113, 133, 0.4); }
 
 .ia-definition-head { display: flex; align-items: center; gap: 8px; }
-.ia-definition-head a { margin-inline-start: auto; font-size: 11px; color: var(--text1); }
 .ia-definition-head button { display: inline-flex; padding: 5px; border: 1px solid var(--card-border); border-radius: 8px; background: transparent; color: inherit; }
+/* «مدیریتِ فهرست» — آیکون، نه متنِ «تعریف پایه» که کنارِ «+» شبیهِ برچسب بود (company-19). */
+.ia-manage {
+  margin-inline-start: auto; display: inline-flex; padding: 5px; border-radius: 8px;
+  color: var(--text2); border: 1px solid var(--card-border);
+}
+.ia-manage:hover { color: var(--brand-text); border-color: rgba(var(--brand-2-rgb), .55); }
+.ia-manage:focus-visible, .ia-definition-head button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+/* خطا و یادداشتِ تطبیق زیرِ خودِ کشویی. */
+.ia-field select[aria-invalid="true"] { border-color: rgba(248, 113, 113, .75); }
+.ia-field-err { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 11.5px; font-weight: 700; color: var(--red-text); }
+.ia-field > .ia-note { padding: 5px 9px; font-size: 11.5px; line-height: 1.8; }
+/* وضعیتِ لینک چیپ است و دکمه فعل. */
+.ia-chip.ia-state.on { color: var(--green-text); background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .35); }
 
 /* خدمتِ ثبت‌نام (شرکتِ دوخدمته) — نشانِ کارت و انتخابگرِ پاپ‌آپ. */
 .ia-tag.ia-svc { color: var(--brand-text); border-color: rgba(var(--brand-rgb), .35); background: rgba(var(--brand-rgb), .1); }
@@ -252,6 +289,7 @@
 .ia-id dt { font-size: 10.5px; color: var(--text3); }
 .ia-id dd { margin: 0; font-size: 13px; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .ia-id dd[dir="ltr"] { text-align: end; }
+.ia-id-hint { font-size: 11px; line-height: 1.6; color: var(--amber-text); }
 .ia-id-edit { display: grid; gap: 8px; }
 /* فیش‌ها و مدارک — چندتایی، کنارِ هم. */
 .ia-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }

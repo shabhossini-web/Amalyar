@@ -3,7 +3,10 @@ import { Link } from 'react-router-dom';
 import { api, apiStream } from '../lib/api.js';
 import './launcher.css';
 import './assistant.css';
-import { Alert, Back, Send, Wave } from '../ui/icons.jsx';
+import { Alert, Send } from '../ui/icons.jsx';
+import { useTerms } from './config.jsx';
+import { toolLabel } from './tools.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 
 const STARTERS = [
   'چه فرم‌هایی منتظرِ تاییدند؟',
@@ -38,7 +41,7 @@ export default function Assistant() {
   const [status, setStatus] = useState(null); // null=loading | {enabled}
   const endRef = useRef(null);
 
-  useEffect(() => { document.title = 'عمل‌یار — دستیارِ هوشمند'; }, []);
+  const t = useTerms();
   useEffect(() => {
     api('/ai/status').then(setStatus).catch((e) => setStatus({ enabled: false, error: e.message }));
   }, []);
@@ -75,17 +78,14 @@ export default function Assistant() {
   return (
     <div className="as">
       <div className="as-bg" aria-hidden="true" />
-      <header className="as-head">
-        <Link to="/app" className="as-back"><Back width="15" height="15" /> سامانه</Link>
-        <h1><Wave width="20" height="20" /> دستیارِ هوشمند</h1>
-        <p>مشاورِ نرم‌افزار و وضعیتِ لحظه‌ای — صفِ تایید، نوبت‌های امروز، و «این کار را از کجا انجام بدهم؟»</p>
-      </header>
+      {/* نام و آیکون همان کاشی (`Sparkle`) — `Wave` آیکونِ «پنل کارشناسی» است و این‌جا قرض گرفته شده بود. */}
+      <PageHeader tool="assistant" sub="مشاورِ نرم‌افزار و وضعیتِ لحظه‌ای — صفِ تایید، نوبت‌های امروز، و «این کار را از کجا انجام بدهم؟»" />
 
       {status && !status.enabled && (
         <div className="as-off">
           <Alert width="15" height="15" />
           دستیار هنوز پیکربندی نشده — اگر مدیرِ پلتفرم «هوشِ مصنوعیِ مرکزی» را روشن کرده باشد خودکار فعال است؛
-          وگرنه در <Link to="/app/settings">تنظیماتِ شرکت</Link> بخشِ «دستیارِ هوشِ مصنوعی» را پر کنید.
+          وگرنه در <Link to="/app/settings">{toolLabel('settings', t)}</Link> بخشِ «دستیارِ هوشِ مصنوعی» را پر کنید.
         </div>
       )}
 

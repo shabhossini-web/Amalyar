@@ -132,6 +132,7 @@ function filterFrom(query: Record<string, string>) {
     from: dateOf(query.from),
     to: dateOf(query.to),
     owing: query.owing === '1',
+    missing: (['tech', 'report', 'invoice'] as const).find((k) => k === query.missing),
     sort: query.sort,
     dir: query.dir,
     page: intOf(query.page),

@@ -16,7 +16,8 @@
  *   - تاریخچهٔ برگشت (`_returns`) به `Visit.extra` و صفحهٔ عمومی نمی‌رود و بیمار نمی‌نویسدش
  *  نباید بیفتد:
  *   - مدرک و فیشِ کنارگذاشته پاک نمی‌شوند (سندند)
- *   - بیمارِ بی‌شمارهٔ معتبر: برگشت انجام می‌شود، فقط پیامکی نمی‌رود
+ *   - پروندهٔ بی‌شماره: پیامکِ برگشت به شمارهٔ خودِ همین ثبت‌نام می‌رود (PS12)؛
+ *     شمارهٔ نامعتبرِ پرونده: برگشت انجام می‌شود، فقط پیامکی نمی‌رود
  */
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -216,9 +217,18 @@ try {
   ok(await task(Q.id) === 'done', 'کارِ تأیید بسته شد');
 
   console.log('\n۹) بیمارِ بی‌شمارهٔ معتبر');
+  /* بستهٔ PS (PS12): پروندهٔ **بی‌شماره** ← پیامکِ خودِ همین ثبت‌نام (برگشت/رد) به شماره‌ای می‌رود که ثبت‌نام‌کننده
+     در همان ثبت‌نام نوشت؛ فقط شمارهٔ **نامعتبرِ** پرونده یعنی «پیامکی نمی‌رود» (کارکنان باید اصلاحش کنند). */
+  const E = await ready();
+  await receipt(E.t, 'e.jpg');
+  await db.patient.update({ where: { id: (await subOf(E.t)).patientId }, data: { phone: null } });
+  r = await ret(E.id, { stage: 'service', note: 'نام جراح' });
+  s = await sms(`intake_returned:${E.id}:1`);
+  ok(r.status === 201 && r.data?.sms === 'queued' && s?.phone === E.phone,
+    '**پروندهٔ بی‌شماره: پیامکِ برگشت به شمارهٔ خودِ همین ثبت‌نام می‌رود** (PS12)', `${msg(r)} → ${s?.phone}`);
   const N = await ready();
   await receipt(N.t, 'n.jpg');
-  await db.patient.update({ where: { id: (await subOf(N.t)).patientId }, data: { phone: null } });
+  await db.patient.update({ where: { id: (await subOf(N.t)).patientId }, data: { phone: '0912' } });
   r = await ret(N.id, { stage: 'service', note: 'نام جراح' });
   ok(r.status === 201 && r.data?.sms === 'no_phone' && (await subOf(N.t)).status === 'pending_fill',
     '**برگشت انجام می‌شود، فقط پیامکی نمی‌رود** — و رابط همین را می‌گوید', msg(r));

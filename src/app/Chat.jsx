@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiEvents } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import Overlay from '../ui/Overlay.jsx';
 import './launcher.css';
 import './chat.css';
-import { Back, Chat as ChatIcon, Close, Plus, Send, Users } from '../ui/icons.jsx';
+import { Back, Close, Plus, Send, Users } from '../ui/icons.jsx';
+import { CHAT_READ } from './ChatBell.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 
@@ -32,7 +33,6 @@ export default function Chat() {
   curRef.current = cur;
   msgsRef.current = msgs;
 
-  useEffect(() => { document.title = 'عمل‌یار — پیام‌رسان'; }, []);
 
   const loadChannels = () => api('/chat/channels').then((r) => { setChannels(r); setErr(''); }).catch((e) => setErr(e.message));
   useEffect(() => { loadChannels(); api('/chat/directory').then(setDir).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -45,6 +45,7 @@ export default function Chat() {
     if (fresh.length) {
       setMsgs((m) => [...m, ...fresh.filter((x) => !m.some((y) => y.id === x.id))]);
       await api(`/chat/channels/${chId}/read`, { method: 'POST', body: { lastId: fresh[fresh.length - 1].id } }).catch(() => {});
+      window.dispatchEvent(new Event(CHAT_READ));
       loadChannels();
     }
   };
@@ -72,7 +73,11 @@ export default function Chat() {
       const rows = await api(`/chat/channels/${ch.id}/messages`);
       setMsgs(rows);
       const last = rows[rows.length - 1]?.id ?? 0;
-      if (last) await api(`/chat/channels/${ch.id}/read`, { method: 'POST', body: { lastId: last } }).catch(() => {});
+      if (last) {
+        await api(`/chat/channels/${ch.id}/read`, { method: 'POST', body: { lastId: last } }).catch(() => {});
+        /* نشانِ پیام‌رسانِ نوارِ پوسته همان لحظه تازه شود. */
+        window.dispatchEvent(new Event(CHAT_READ));
+      }
       loadChannels();
     } catch (e) { setErr(e.message); }
   };
@@ -104,13 +109,13 @@ export default function Chat() {
     <div className={`ch${cur ? ' has-open' : ''}`}>
       <div className="ch-bg" aria-hidden="true" />
       <aside className="ch-side">
-        <header className="ch-side-head">
-          <Link to="/app" className="ch-back"><Back width="15" height="15" /> سامانه</Link>
-          <h1><ChatIcon width="18" height="18" /> پیام‌رسان</h1>
+        {/* نام، آیکون و عنوانِ زبانه از کاتالوگِ کاشی‌ها (قانونِ ۲۴). بازگشت فقط به اندازهٔ خودش —
+            تا بازبینیِ UX (shell-15) کلِ عرضِ ردیف را می‌گرفت و لمسِ جای خالی کاربر را بیرون می‌برد. */}
+        <PageHeader tool="messenger">
           <button type="button" className="ch-new" onClick={() => setSheet(true)} aria-label="گفتگوی تازه">
-            <Plus width="15" height="15" />
+            <Plus width="16" height="16" aria-hidden="true" /><span className="ch-new-t">گفتگوی تازه</span>
           </button>
-        </header>
+        </PageHeader>
         {err && <div className="ch-err">{err}</div>}
         {!channels && !err && <div className="ch-empty">در حال بارگذاری…</div>}
         {channels && channels.length === 0 && (

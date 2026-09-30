@@ -1,5 +1,6 @@
 /* گریدِ ماهانهٔ شمسی — مشترک بینِ تقویم و چینش */
-.jg { max-width: 940px; margin: 0 auto; }
+/* هم‌عرضِ محتوای همان صفحه (`--page-w`، shell-15) — تا لبه‌هایش با سربرگ یکی بماند. */
+.jg { max-width: var(--page-w); margin: 0 auto; }
 .jg * { box-sizing: border-box; }
 
 .jg-head { display: flex; align-items: center; gap: 8px; margin-block-end: 12px; }
@@ -30,7 +31,7 @@
 .jg-cell.today { border-color: rgba(0, 229, 255, .5); background: rgba(0, 229, 255, .06); }
 .jg-cell.sel { border-color: transparent; box-shadow: 0 0 0 2px var(--brand-2); }
 .jg-num { font-size: 12px; font-weight: 700; color: rgba(var(--veil-rgb), .75); }
-.jg-cell.today .jg-num { color: #67e8f9; }
+.jg-cell.today .jg-num { color: var(--cyan); }
 
 @media (max-width: 640px) {
   .jg-cell { min-height: 62px; padding: 4px; }
@@ -59,7 +60,7 @@
 .jg.compact .jg-cell.pick:hover { background: rgba(var(--brand-rgb), .12); transform: translateY(-1px); }
 /* امروز: حلقهٔ نازکِ سیان — نشانه است، نه انتخاب. */
 .jg.compact .jg-cell.today { background: rgba(0, 229, 255, .05); border-color: rgba(0, 229, 255, .35); }
-.jg.compact .jg-cell.today .jg-num { color: #67e8f9; }
+.jg.compact .jg-cell.today .jg-num { color: var(--cyan); }
 /* انتخاب‌شده: گرادیانِ نئونِ برند→سیان با هاله — تنها سلولِ «پُر». */
 .jg.compact .jg-cell.sel {
   background: linear-gradient(135deg, var(--brand-2), var(--brand) 55%, #0891b2);

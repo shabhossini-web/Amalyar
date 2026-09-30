@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, apiUpload } from '../lib/api.js';
+import { fetchFace } from '../lib/public-face.js';
 import { faDate } from '../lib/jalali.js';
 import { PATIENT } from '../lib/terms.js';
 import { Alert, CheckCircle, Clock } from '../ui/icons.jsx';
@@ -48,6 +49,7 @@ export default function OrderPublic() {
 
   useEffect(() => {
     document.title = 'عمل‌یار — درخواستِ پزشک';
+    fetchFace(); // تم و رنگِ مطب — این صفحه بیرونِ ConfigProvider است (بازبینیِ UX، بندِ ۹۴)
     api(`/public/order/${token}`)
       .then(setRow)
       .catch((e) => setErr(e.message));

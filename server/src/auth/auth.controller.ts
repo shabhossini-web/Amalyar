@@ -11,9 +11,11 @@ import { ChangePasswordDto, UpdatePrefsDto, UpdateProfileDto } from './dto/profi
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
+import { PasswordResetDto, PasswordResetRequestDto } from './dto/password-reset.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import { clearSessionCookies, csrfMatches, setSessionCookies } from './session-cookie';
+import { clientIp } from '../common/client-ip';
 
 class SwitchDto {
   @IsInt() accountId!: number;
@@ -23,7 +25,9 @@ class LogoutDto {
   @IsOptional() @IsInt() accountId?: number;
 }
 
-const meta = (req: Request) => ({ ua: req.headers['user-agent'], ip: req.ip });
+/* نشانیِ بازدیدکننده از `clientIp` (تهِ X-Forwarded-For)، نه `req.ip`: پشتِ Traefik `req.ip` نشانیِ خودِ پراکسی است
+   و سقفِ نرخِ ورود/ثبت‌نام/بازیابی برای همهٔ کاربرانِ همهٔ شرکت‌ها یک سطل می‌شد (بستهٔ PF، PF2). */
+const meta = (req: Request) => ({ ua: req.headers['user-agent'], ip: clientIp(req) });
 
 @Controller('auth')
 export class AuthController {
@@ -53,18 +57,29 @@ export class AuthController {
 
   @Post('signup/request-otp')
   requestOtp(@Body() dto: RequestOtpDto, @Req() req: Request) {
-    return this.auth.requestSignupOtp(dto.phone, req.ip);
+    return this.auth.requestSignupOtp(dto.phone, clientIp(req));
   }
 
   @Post('signup/verify-otp')
   verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: Request) {
-    return this.auth.verifySignupOtp(dto, req.ip);
+    return this.auth.verifySignupOtp(dto, clientIp(req));
   }
 
   @Post('signup/complete')
   async completeSignup(@Body() dto: CompleteSignupDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const r: any = await this.auth.completeSignup(dto, meta(req));
     return r.accessToken ? this.attach(req, res, r, true) : r;
+  }
+
+  /* بازیابیِ رمز (بازبینیِ UX، بندِ ۱۹) — بی‌احراز مثلِ ثبت‌نام؛ پاسخِ درخواست برای حسابِ موجود و ناموجود یکی است. */
+  @Post('password/request-otp')
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto, @Req() req: Request) {
+    return this.auth.requestPasswordReset(dto.identifier, clientIp(req));
+  }
+
+  @Post('password/reset')
+  resetPassword(@Body() dto: PasswordResetDto, @Req() req: Request) {
+    return this.auth.resetPassword(dto, meta(req));
   }
 
   @Post('login')
@@ -172,11 +187,11 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('phone/request-otp')
-  requestPhone(@CurrentUser() user: any, @Req() req: Request) { return this.auth.requestPhoneVerification(user, req.ip ?? 'unknown'); }
+  requestPhone(@CurrentUser() user: any, @Req() req: Request) { return this.auth.requestPhoneVerification(user, clientIp(req)); }
 
   @UseGuards(JwtAuthGuard)
   @Post('phone/verify-otp')
-  verifyPhone(@CurrentUser() user: any, @Body() dto: VerifyOtpDto, @Req() req: Request) { return this.auth.verifyPhone(user, dto, req.ip ?? 'unknown'); }
+  verifyPhone(@CurrentUser() user: any, @Body() dto: VerifyOtpDto, @Req() req: Request) { return this.auth.verifyPhone(user, dto, clientIp(req)); }
 
   @UseGuards(JwtAuthGuard)
   @Post('change-password')

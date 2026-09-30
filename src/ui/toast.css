@@ -1,0 +1,45 @@
+/* ── توستِ مشترکِ سامانه (`Toast.jsx`) ──
+   یک ظاهر برای «انجام شد / ذخیره نشد / واگذار شد» در هر صفحه: سطحِ **وارونه** از توکن‌های
+   `--toast-*` (تیره با متنِ روشن در هر دو تم)، پایینِ وسطِ صفحه، بالاتر از شیت‌ها و کشوها.
+   تا ۱۴۰۵/۰۷ هجده توستِ جدا سه ظاهر داشتند و در تمِ روشن نیمی‌شان نامرئی بودند. */
+.ui-toast {
+  position: fixed; z-index: 300;
+  inset-inline: 16px; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  margin-inline: auto; width: fit-content; max-width: min(560px, calc(100% - 32px));
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 18px; border-radius: 14px;
+  font-size: 13px; font-weight: 600; line-height: 1.8; text-align: start;
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  /* تا پیامی نیست دیده نمی‌شود و کلیکی نمی‌گیرد — ولی **در DOM می‌ماند**: ناحیهٔ زنده باید
+     پیش از آمدنِ متن وجود داشته باشد، وگرنه صفحه‌خوان اولین پیام را اعلام نمی‌کند. */
+  visibility: hidden; opacity: 0; transform: translateY(14px); pointer-events: none;
+  transition: opacity .2s, transform .2s cubic-bezier(.2, .7, .2, 1), visibility 0s linear .2s;
+}
+.ui-toast.on {
+  visibility: visible; opacity: 1; transform: none;
+  transition: opacity .2s, transform .2s cubic-bezier(.2, .7, .2, 1), visibility 0s;
+}
+/* خطا تا کاربر نبندد می‌ماند و قابِ قرمز دارد — سطح همان سطحِ وارونه است، پس در هر دو تم خواناست. */
+.ui-toast.bad { border-color: rgba(248, 113, 113, 0.7); }
+.ui-toast-txt { flex: 1 1 auto; min-width: 0; white-space: pre-line; }
+.ui-toast button {
+  pointer-events: auto; flex: 0 0 auto; cursor: pointer; font: inherit;
+  color: var(--toast-ink); background: none; border-radius: 10px;
+}
+/* «واگرد» — دکمهٔ متنیِ واقعی (نه آیکون) کنارِ پیام؛ ≥۴۴ پیکسل روی لمس. */
+.ui-toast .ui-toast-act {
+  min-height: 34px; padding: 4px 12px; font-size: 12.5px; font-weight: 800;
+  border: 1px solid var(--toast-edge);
+}
+.ui-toast .ui-toast-act:hover { background: rgba(var(--brand-2-rgb), 0.22); }
+.ui-toast .ui-toast-x { display: grid; place-items: center; width: 30px; height: 30px; border: 0; opacity: .8; }
+.ui-toast .ui-toast-x:hover { opacity: 1; background: rgba(var(--brand-2-rgb), 0.18); }
+.ui-toast button:focus-visible { outline: 2px solid var(--toast-edge); outline-offset: 2px; }
+@media (pointer: coarse) {
+  .ui-toast .ui-toast-act { min-height: 44px; }
+  .ui-toast .ui-toast-x { width: 44px; height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast, .ui-toast.on { transition: none; transform: none; }
+}

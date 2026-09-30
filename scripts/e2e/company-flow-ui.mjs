@@ -9,6 +9,9 @@
  *     چیزی نزدیک نیست هشدارِ بالای کشویی و «+» که همان نوشته را پیش‌پر می‌کند
  *   - پنلِ کارشناس: «وضعیتِ عمل» ← موکولِ بی‌تاریخ و با تاریخ، «انجام شد»، «لغو شد» با پنجرهٔ
  *     مشترکِ دلیل (و «انصراف»ش به همان شیت برمی‌گردد)؛ دکمهٔ گزارش «آپلودِ گزارشِ نورومانیتورینگ»
+ *   - کارهای رویدادی (بازبینیِ UX، company-01): دکمهٔ اصلیِ ردیف خودِ کار است — «ثبتِ وضعیت» همان
+ *     پنجرهٔ سه‌گزینه‌ای، «بارگذاریِ گزارش» کادرِ فایل — و کار با رویدادِ واقعی همان لحظه بسته
+ *     می‌شود؛ «بستن بدونِ اقدام» با پرسشِ تأیید فقط یادآوری را برمی‌دارد
  *  نباید بیفتد:
  *   - کادرِ فیش با اولین آپلود بسته شود (همان باگِ گزارش‌شده)
  *   - «موکول» به گذشته بی‌پیام بماند یا چیزی را عوض کند
@@ -312,16 +315,42 @@ try {
       ok(true, `توست «موکول شد به ${faDate(later)}»`);
       ok((await visit(ids.b)).opDate?.toISOString().startsWith(later), 'تاریخِ تازه روی سرور نشست');
 
-      /* ج) انجام شد. */
+      /* ب۲) «انجام شد» روی عملِ آینده بی‌پرسش ثبت نمی‌شود (بازبینیِ UX company-20). */
+      await p.getByRole('tab', { name: 'پیشِ رو' }).tap();
+      await card(pb).waitFor();
+      sheet = await openStatus(pb);
+      await sheet.getByRole('radio', { name: /انجام شد/ }).tap();
+      await sheet.locator('.tk-save').tap();
+      const ask = sheet.locator('.tk-ask');
+      await ask.waitFor();
+      ok((await ask.innerText()).includes(`برای ${faDate(later)} است`), `**«انجام شد» روی عملِ آینده می‌پرسد: «… برای ${faDate(later)} است — تاریخش به امروز عوض شود؟»**`, await ask.innerText());
+      await sheet.getByRole('button', { name: 'نه، برگرد' }).tap();
+      await sheet.getByRole('radiogroup', { name: 'وضعیتِ عمل' }).waitFor();
+      const bRow = await visit(ids.b);
+      ok(bRow.opStatus === 'pending' && bRow.opDate?.toISOString().startsWith(later), '… و «نه، برگرد» چیزی را عوض نکرد');
+      await sheet.getByRole('button', { name: 'بستن' }).tap();
+      await sheet.waitFor({ state: 'detached' });
+      await p.getByRole('tab', { name: 'امروز' }).tap();
+      await card(pc).waitFor();
+
+      /* ج) انجام شد — شروع ثبت شده و پایان خالی: همان‌جا ساعت را می‌پرسد و پایان با «الان» پیش‌پر
+         است (بازبینیِ UX company-15)؛ «انجام شد» پیش از این گام روی سرور نشسته است. */
       sheet = await openStatus(pc);
       await sheet.getByRole('radio', { name: /انجام شد/ }).tap();
       ok((await sheet.locator('.tk-field').count()) === 0 && (await sheet.locator('.tk-save').innerText()).includes('ثبت: انجام شد'), '«انجام شد» کادرِ تاریخ ندارد');
       await sheet.locator('.tk-save').tap();
+      await sheet.locator('.tk-done-note').waitFor();
+      const tp = sheet.locator('.tp-input');
+      const [st, en] = [await tp.nth(0).inputValue(), await tp.nth(1).inputValue()];
+      ok(st === '۱۱:۰۰' && /^[۰-۹]{2}:[۰-۹]{2}$/.test(en), '**پس از «انجام شد» ساعتِ خالی همان‌جا پرسیده شد** — شروع ۱۱:۰۰، پایان با «الان» پیش‌پر', `${st} | ${en}`);
+      ok((await visit(ids.c)).opStatus === 'done', '… و «انجام شد» پیش از پرسشِ ساعت روی سرور نشسته');
+      await sheet.getByRole('button', { name: 'ذخیرهٔ ساعت' }).tap();
       await sheet.waitFor({ state: 'detached' });
       await p.waitForFunction(() => document.querySelector('.tk-toast.on')?.textContent.includes('انجام شد'));
       await card(pc).locator('.tk-tag.ok').waitFor();
       ok(await card(pc).getByRole('button', { name: 'وضعیتِ عمل' }).count() === 0, '**کارت «انجام‌شده» شد و دکمهٔ وضعیت از رویش رفت**');
-      ok((await visit(ids.c)).opStatus === 'done', 'روی سرور «انجام شد»');
+      const cRow = await visit(ids.c);
+      ok(cRow.opStatus === 'done' && /^\d{2}:\d{2}$/.test(cRow.opEndTime ?? ''), 'روی سرور «انجام شد» و ساعتِ پایان هم نشست', cRow.opEndTime);
 
       /* د) لغو — پنجرهٔ مشترکِ دلیل؛ «انصراف» به همان شیت برمی‌گردد. */
       sheet = await openStatus(pd);
@@ -362,6 +391,75 @@ try {
       if (shots) { await kind.scrollIntoViewIfNeeded(); await adm.p.screenshot({ path: `${shots}/company-flow-${T.key}-record.png` }); }
       await adm.ctx.close();
     }
+  }
+
+  console.log('\n۴) کارهای رویدادی: دکمهٔ اصلی خودِ کار است، نه «انجام شد»ِ خالی');
+  {
+    const tech = await mkTech('cfw', 'چهارم');
+    const past = clinicDay(-2);
+    const mkPast = async (last) => {
+      const r = await api('/visits', { kind: 'surgery', firstName: 'رضا', lastName: last, phone: phone(), hospitalId: hosp.id, surgeonId: surgeon.id, opDate: `${past}T00:00:00.000Z`, techId: tech.id, opStartTime: '10:00' }, 'POST', auth);
+      if (!r.data?.id) throw new Error('مراجعه: ' + JSON.stringify(r.data).slice(0, 160));
+      return r.data;
+    };
+    const vs = await mkPast('وضعیت‌نگرفته');
+    const vd = await mkPast('کنارگذاشتنی');
+    const vr = await mkPast('بی‌گزارش');
+    await api(`/visits/${vr.id}/status`, { opStatus: 'done' }, 'PATCH', auth);
+    await api('/work/process', {}, 'POST', auth);
+    const work = (type, visitId) => db.workItem.findUnique({ where: { idempotencyKey: `${type}:visit:${visitId}` } });
+    ok((await work('confirm_surgery_done', vs.id))?.state === 'open' && (await work('complete_report', vr.id))?.state === 'open', 'آشکارساز کارهای رویدادی را ساخت');
+    const { ctx, p } = await context('dark');
+    await browserLogin(p, auth, { ui: UI });
+    const next = async (pid) => {
+      await p.goto(`${UI}/app/patients/${pid}`, { waitUntil: 'networkidle' });
+      const row = p.locator('.rc-next-main .wk-row');
+      await row.waitFor();
+      return row;
+    };
+    const gone = () => p.waitForFunction(() => !document.querySelector('.rc-next-main .wk-row'), null, { timeout: 10000 }).catch(() => {});
+
+    /* الف) «ثبتِ وضعیت» ← همان پنجرهٔ سه‌گزینه‌ایِ پنلِ کارشناس؛ کار با رویدادِ واقعی بسته می‌شود. */
+    let row = await next(vs.patientId);
+    ok(await row.getByRole('button', { name: 'انجام شد', exact: true }).count() === 0, '**نباید بیفتد:** «انجام شد»ِ خالی روی کارِ رویدادی');
+    await row.getByRole('button', { name: 'ثبتِ وضعیت' }).tap();
+    const sheet = p.locator('.tk-sheet');
+    await sheet.getByRole('radiogroup', { name: 'وضعیتِ عمل' }).waitFor();
+    const opts = (await sheet.locator('[role="radio"] b').allInnerTexts()).map((t) => t.trim()).join('|');
+    ok(opts === 'انجام شد|موکول شد|لغو شد', '**«ثبتِ وضعیت» همان پنجرهٔ سه‌گزینه‌ایِ پنلِ کارشناس را باز کرد**', opts);
+    await sheet.getByRole('radio', { name: /موکول شد/ }).tap();
+    await sheet.locator('.tk-save').tap();
+    await sheet.waitFor({ state: 'detached' });
+    await gone();
+    const ws = await work('confirm_surgery_done', vs.id);
+    ok(ws?.state === 'done' && ws?.outcome?.closedBy === 'event', '**کار با رویدادِ واقعی («موکول شد») همان لحظه بسته شد**', JSON.stringify([ws?.state, ws?.outcome]));
+
+    /* ب) «بستن بدونِ اقدام» — پرسشِ تأیید؛ عمل دست نمی‌خورد. */
+    row = await next(vd.patientId);
+    await row.getByRole('button', { name: 'بستن بدونِ اقدام' }).tap();
+    const ask = row.locator('.wk-dismiss');
+    await ask.waitFor();
+    ok((await ask.innerText()).includes('وضعیتِ عمل ثبت نمی‌شود'), 'پرسشِ تأیید می‌گوید چه چیزی ثبت **نمی‌شود**', await ask.innerText());
+    if (shots) await p.screenshot({ path: `${shots}/company-flow-work-dismiss.png` });
+    await ask.getByRole('button', { name: 'بله، ببند' }).tap();
+    await gone();
+    const wd = await work('confirm_surgery_done', vd.id);
+    ok(wd?.state === 'done' && wd?.outcome?.closedBy === 'dismiss' && (await db.visit.findUnique({ where: { id: vd.id } })).opStatus === 'pending',
+      '«بستن بدونِ اقدام»: یادآوری بسته شد ولی عمل «در انتظار» ماند', JSON.stringify([wd?.state, wd?.outcome]));
+
+    /* ج) «بارگذاریِ گزارش» ← کادرِ فایل؛ گزارش که آمد کار بسته است. */
+    row = await next(vr.patientId);
+    await row.getByRole('button', { name: 'بارگذاریِ گزارش' }).tap();
+    const pop = p.locator('.rc-pop-report');
+    await pop.waitFor();
+    await pop.locator('input[type="file"]').setInputFiles(photo(1));
+    await pop.waitFor({ state: 'detached', timeout: 15000 });
+    await gone();
+    const wr = await work('complete_report', vr.id);
+    ok(wr?.state === 'done' && (await db.document.count({ where: { visitId: vr.id, category: 'report' } })) === 1,
+      '**«بارگذاریِ گزارش» فایل را گذاشت و کار با همان بسته شد**', wr?.state);
+    ok(errs.length === 0, 'بی‌خطای JS', errs[0]);
+    await ctx.close();
   }
 } finally {
   console.log('\n' + '─'.repeat(50));

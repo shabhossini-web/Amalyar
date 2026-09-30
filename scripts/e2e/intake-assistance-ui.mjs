@@ -19,6 +19,8 @@ try {
     let visit = { id: 1, patientId: 1, firstName: 'تست', lastName: 'محلی', code: 'AM-001', seq: 1, kind: 'clinic', total: 30000000, paid: 30000000, due: 0, opDate: '2026-09-10', opReport: '', decisions: [] };
     let bill = { charges: [], payments: [], total: 0, paid: 0, due: 0, pricingModel: 'coded', tariffSector: 'public', invoiceType: null, invoiceBankAccount: null };
     let aiReply = { text: 'متن مرتب پیشنهادی' };
+    /* DF5: نصبِ بی‌حسابداری — `/bank-accounts` ۴۰۳ و فهرستِ حساب از `/intake/link-options`. */
+    let bankDenied = false, linkBanks = [];
     await ctx.route('**/api/**', async (route) => {
       const req = route.request(), path = new URL(req.url()).pathname.replace(/^\/api/, ''), method = req.method();
       const payload = method !== 'GET' && req.headers()['content-type']?.includes('application/json') ? req.postDataJSON() : null;
@@ -27,10 +29,11 @@ try {
       if (path === '/auth/me') body = { id: 1, level: 6, firstName: 'تست', lastName: 'مدیر', status: 'active' };
       else if (path === '/config') body = { vertical: 'clinic', brand: {} };
       else if (path === '/features') body = ['dashboard', 'formgen', 'accounting', 'definitions'].map((key) => ({ key, allowed: true }));
-      else if (path === '/intake/submissions') body = [{ id: 1, token: 'fixture', patientId: 1, amount: 30000000, payable: 30000000, workflow: 'ionm', approvalKind: 'surgery', status: 'pending_approval', makesVisit: true, data: { firstName: 'تست', lastName: 'پرداخت' } }];
+      else if (path === '/intake/submissions') body = [{ id: 1, token: 'fixture', patientId: 1, amount: 30000000, payable: 30000000, workflow: 'ionm', approvalKind: 'surgery', status: 'pending_approval', makesVisit: true, payToAccountId: 7, data: { firstName: 'تست', lastName: 'پرداخت' } }];
       else if (path.endsWith('/approve')) body = { ok: true, visitId: 1, visitCode: 'AM-001-V1' };
       else if (path === '/hospitals') { if (method === 'POST') { body = { ...payload, id: 51, active: true }; hospitals.push(body); } else body = hospitals; }
-      else if (path === '/bank-accounts') { if (method === 'POST') { body = { ...payload, id: 52, active: true }; banks.push(body); } else body = banks; }
+      else if (path === '/intake/link-options') body = { forms: [], banks: linkBanks };
+      else if (path === '/bank-accounts') { if (bankDenied && method === 'GET') return route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ message: 'دسترسی ندارید' }) }); if (method === 'POST') { body = { ...payload, id: 52, active: true }; banks.push(body); } else body = banks; }
       else if (path === '/partners') body = [{ id: 2, name: 'شریک تست', active: true }];
       else if (path === '/forms/fields/11') { form = { ...form, fields: [{ ...form.fields[0], ...payload, role: payload.roles?.[0] ?? null }] }; body = form; }
       else if (path === '/forms') body = [form];
@@ -81,6 +84,33 @@ try {
     await approval.getByRole('button', { name: 'تأیید و ساختِ مراجعه', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.ia-sheet'));
     check(writes.some((w) => w.path.endsWith('/approve') && w.body.registerPayment && w.body.bankAccountId === 1 && w.body.hospitalId === 51), 'approval transmits payment and new hospital selection');
+    /* DF14: توستِ «قدمِ بعد» (۱۲ ثانیه) پیامِ تازه را نمی‌پوشاند — پیام بالای آن دیده می‌شود و ظرفِ زنده سرِ جایش است. */
+    const nextToast = page.locator('.ia-toast.has-act'); await nextToast.waitFor();
+    page.once('dialog', (d) => d.accept());
+    await page.locator('.ia-card .ia-cardel').first().click();
+    const plain = page.locator('.ia-toast.above.on[role="status"]'); await plain.waitFor();
+    await delay(350); // گذارِ ورودِ توست (۰٫۲s) تمام شود، بعد اندازه
+    const [nb, pb] = [await nextToast.boundingBox(), await plain.boundingBox()];
+    check((await plain.innerText()).includes('ثبت‌نام حذف شد') && await nextToast.isVisible() && pb.y + pb.height <= nb.y + 1,
+      'DF14: a new message shows above the next-step toast instead of being hidden for 12 seconds');
+    check(await page.locator('[role="status"][aria-live="polite"]').count() >= 2, 'DF14: both live regions stay mounted');
+    /* DF5: حسابِ لینک (۷) فقط وقتی پیش‌پر و فرستاده می‌شود که در فهرستِ پنجره دیده شود — بی‌پلنِ حسابداری فهرست از
+       `/intake/link-options` می‌آید؛ اگر آن‌جا هم نبود، کشویی «نامشخص» است و شناسهٔ نادیده نمی‌رود. */
+    bankDenied = true;
+    for (const [list, expected] of [[[{ id: 7, label: 'حسابِ لینک' }], 7], [[{ id: 9, label: 'حسابِ دیگر' }], undefined]]) {
+      linkBanks = list;
+      await page.goto(`${base}/app/intake`);
+      await page.locator('.ia-card .ia-ok').click();
+      const again = page.locator('.ia-sheet'); await again.waitFor();
+      await again.locator(`.ia-pay select option[value="${list[0].id}"]`).waitFor({ state: 'attached' });
+      check(await again.locator('.ia-pay select').inputValue() === (expected ? String(expected) : ''), `DF5: the payment account shown is the one sent (${expected ?? 'unknown'})`);
+      const before = writes.length;
+      await again.getByRole('button', { name: 'تأیید و ساختِ مراجعه', exact: true }).click();
+      await page.waitForFunction(() => !document.querySelector('.ia-sheet'));
+      const sent = writes.slice(before).find((w) => w.path.endsWith('/approve'));
+      check(sent && sent.body.bankAccountId === expected, `DF5: approval sends account ${expected ?? 'none'} — never an account the approver could not see`);
+    }
+    bankDenied = false;
     await page.goto(`${base}/app/forms`);
     /* W3.5 نقش‌ها را از هر ردیف به یک ماتریسِ فیلد×نقش برد (`.fb-matrix`، بسته
        به‌طورِ پیش‌فرض)؛ `.fb-role-choices` دیگر وجود ندارد. برچسبِ هر تیک
@@ -129,6 +159,9 @@ try {
       const beforeWrites = writes.length;
       await page.goto(`${base}/app/dashboard?patient=1`);
       const sheet = page.locator('.db-sheet');
+      /* فرمِ عمل روی زبانهٔ مرحلهٔ زمانی باز می‌شود؛ مبلغ و تاریخ در زبانهٔ «مشخصات»‌اند (بازبینیِ UX، surgery-10). */
+      const toInfo = () => (state.kind === 'surgery' ? sheet.locator('.db-phasetabs button').first().click() : null);
+      await toInfo();
       await sheet.getByLabel('وضعیت مالی ثبت‌شده').waitFor();
       check((await sheet.getByLabel('وضعیت مالی ثبت‌شده').innerText()).includes(state.total.toLocaleString('fa-IR')), `edit shows server invoice total ${state.total}`);
       const date = sheet.locator('.db-builtins .jd-row input').first();
@@ -141,6 +174,7 @@ try {
       assert.equal(writes.slice(beforeWrites).filter((w) => /payment|charge|billing/.test(w.path)).length, 0);
       check(true, `date edit persists without financial writes (${state.kind}, ${state.total})`);
       await page.goto(`${base}/app/dashboard?patient=1`);
+      await toInfo();
       await sheet.getByLabel('وضعیت مالی ثبت‌شده').waitFor();
       /* کادرِ تاریخ در حالتِ **غیرِ ویرایش** ارقامش فارسی است (`JDate`): تقویم
          روزها را فارسی می‌کشد و placeholder هم فارسی است، پس مقدارِ لاتین یعنی
@@ -153,7 +187,8 @@ try {
     await noteField.fill('');
     const writesBeforeRequired = writes.length;
     await page.getByRole('button', { name: 'ذخیرهٔ تغییرات', exact: true }).click();
-    await page.getByText('«یادداشت» را کامل کنید', { exact: true }).waitFor();
+    /* خطای فیلد کنارِ خودِ فیلد و روی نوارِ ذخیره (بازبینیِ UX، surgery-08) — نه toastِ گذرا. */
+    await page.locator('[data-save-error]', { hasText: '«یادداشت» را کامل کنید' }).waitFor();
     check(!writes.slice(writesBeforeRequired).some((w) => w.path === '/visits/1'), 'required clinical fields still block empty edits');
     await page.goto(`${base}/app/dashboard`);
     await page.getByTitle('صورت‌حساب', { exact: true }).click();

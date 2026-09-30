@@ -2,6 +2,8 @@
 .iv {
   min-height: 100vh; background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+  /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و بلوک‌ها از همین می‌خوانند. */
+  --page-w: var(--maxw);
 }
 .iv * { box-sizing: border-box; }
 .iv-bg {
@@ -12,22 +14,12 @@
 }
 .iv > *:not(.iv-bg) { position: relative; }
 
-.iv-head { display: flex; align-items: flex-start; gap: 14px; max-width: 940px; margin: 0 auto 18px; }
-.iv-back {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  color: var(--text1); text-decoration: none; font-size: 12px;
-  padding: 9px 13px; border-radius: 11px;
-  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
-}
-.iv-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
-.iv-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
-
 /* ⚠️ سه‌ستونهٔ ثابت نه: چهار کارت روی سه ستون یعنی کارتِ چهارم تنها در ردیفِ
    دوم می‌ماند و کج به‌نظر می‌رسد — همان چیزی که مالکِ محصول در موبایل دید.
    با auto-fit، کارت‌ها خودشان بینِ دو و سه ستون پخش می‌شوند. */
 .iv-stats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 9px; max-width: 940px; margin: 0 auto 14px;
+  gap: 9px; max-width: var(--page-w); margin: 0 auto 14px;
 }
 .iv-stats > div {
   padding: 13px 14px; border-radius: 14px; text-align: center;
@@ -36,11 +28,11 @@
 .iv-stats b { display: block; font-size: 20px; }
 .iv-stats span { font-size: 11px; color: var(--text3); }
 .iv-stats .iv-warn { border-color: rgba(251, 113, 133, .35); }
-.iv-stats .iv-warn b { color: #fda4af; }
+.iv-stats .iv-warn b { color: var(--red-text); }
 
 .iv-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
-  max-width: 940px; margin: 0 auto 12px;
+  max-width: var(--page-w); margin: 0 auto 12px;
 }
 .iv-search {
   flex: 1 1 240px; min-width: 0; padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 13px;
@@ -59,7 +51,7 @@
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 
-.iv-list { display: grid; gap: 9px; max-width: 940px; margin: 0 auto; }
+.iv-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .iv-empty {
   padding: 26px 16px; text-align: center; font-size: 12.5px; color: var(--text3);
   border-radius: 15px; background: rgba(var(--surface-rgb), .55); border: 1px dashed rgba(var(--brand-soft-rgb), .2);
@@ -83,7 +75,7 @@
 .iv-row-main b { display: block; font-size: 13.5px; }
 .iv-row-main small { display: block; margin-top: 4px; font-size: 11px; color: var(--text3); }
 .iv-sub2 { color: var(--text3) !important; }
-.iv-expired { color: #fda4af; font-weight: 700; }
+.iv-expired { color: var(--red-text); font-weight: 700; }
 
 .iv-acts { display: flex; gap: 5px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 .iv-acts button {
@@ -91,7 +83,7 @@
   color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .iv-acts button:disabled { opacity: .35; cursor: not-allowed; }
-.iv-acts .iv-trace { display: grid; place-items: center; width: 34px; padding: 0; height: 32px; color: #67e8f9; border-color: rgba(34, 211, 238, .28); }
+.iv-acts .iv-trace { display: grid; place-items: center; width: 34px; padding: 0; height: 32px; color: var(--cyan); border-color: rgba(34, 211, 238, .28); }
 
 /* ── شیت ── */
 .iv-overlay {
@@ -158,7 +150,8 @@
 
 .iv-hint {
   margin: 0; padding: 10px 13px; border-radius: 11px; font-size: 11.5px; line-height: 1.9;
-  color: #c8f7ff; background: rgba(34, 211, 238, .07); border: 1px solid rgba(34, 211, 238, .18);
+  color: var(--text2); background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, transparent);
 }
 
 .iv-ledger { display: grid; gap: 6px; }
@@ -170,9 +163,9 @@
   flex-shrink: 0; padding: 4px 9px; border-radius: 8px; font-size: 10.5px;
   background: rgba(var(--brand-soft-rgb), .18); color: var(--brand-text);
 }
-.iv-mv.k-out .iv-mv-tag { background: rgba(251, 113, 133, .16); color: #fda4af; }
-.iv-mv.k-in .iv-mv-tag { background: rgba(52, 211, 153, .14); color: #6ee7b7; }
-.iv-mv.k-adjust .iv-mv-tag { background: rgba(251, 191, 36, .14); color: #fcd34d; }
+.iv-mv.k-out .iv-mv-tag { background: rgba(251, 113, 133, .16); color: var(--red-text); }
+.iv-mv.k-in .iv-mv-tag { background: rgba(52, 211, 153, .14); color: var(--green-text); }
+.iv-mv.k-adjust .iv-mv-tag { background: rgba(251, 191, 36, .14); color: var(--amber-text); }
 .iv-mv-main { flex: 1; min-width: 0; }
 .iv-mv-main b { font-size: 13px; }
 .iv-mv-main small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
@@ -195,7 +188,7 @@
 .iv-toast {
   position: fixed; inset-inline: 0; bottom: 22px; z-index: 80; width: fit-content; max-width: 90vw;
   margin: 0 auto; padding: 12px 20px; border-radius: 13px; font-size: 12.5px;
-  background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .3);
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
 }
 
@@ -206,16 +199,16 @@
 .iv-out { display: flex; flex-wrap: wrap; gap: 5px; margin-block-start: 4px; }
 .iv-out i {
   font-style: normal; font-size: 10px; padding: 1px 8px; border-radius: 8px;
-  color: #fcd34d; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .24);
+  color: var(--amber-text); background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .24);
 }
 
 /* ── حواله‌ها ── */
 .iv-note { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.9; color: rgba(var(--veil-rgb), .6); }
 .iv-tr .iv-qty b { font-size: 15px; }
 .iv-tag { padding: 1px 8px; border-radius: 8px; font-size: 10px; }
-.iv-tag.s-sent     { color: #93c5fd; background: rgba(59, 130, 246, .12); }
-.iv-tag.s-received { color: #fcd34d; background: rgba(251, 191, 36, .12); }
-.iv-tag.s-closed   { color: #6ee7b7; background: rgba(52, 211, 153, .12); }
+.iv-tag.s-sent     { color: rgb(var(--kind-sky)); background: rgba(59, 130, 246, .12); }
+.iv-tag.s-received { color: var(--amber-text); background: rgba(251, 191, 36, .12); }
+.iv-tag.s-closed   { color: var(--green-text); background: rgba(52, 211, 153, .12); }
 .iv-row.st-closed { opacity: .72; }
 
 .iv-hits { margin-block-start: 6px; max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
@@ -224,7 +217,7 @@
   color: inherit; background: none; border: 0; border-radius: 9px; padding: 7px 9px; font: inherit; font-size: 12px;
 }
 .iv-hits button:hover { background: rgba(var(--brand-rgb), .18); }
-.iv-hits b { flex-shrink: 0; color: #6ee7b7; }
+.iv-hits b { flex-shrink: 0; color: var(--green-text); }
 
 .iv-lines { display: flex; flex-direction: column; gap: 6px; margin-block-end: 12px; }
 .iv-line { display: flex; align-items: center; gap: 8px; font-size: 12px; }
@@ -242,23 +235,23 @@
 .iv-trline { padding: 9px 11px; border-radius: 12px; background: rgba(var(--veil-rgb), .04); font-size: 12px; }
 .iv-trline b { display: block; }
 .iv-trline small { color: rgba(var(--veil-rgb), .5); font-size: 10.5px; }
-.iv-trline span { display: block; margin-block-start: 3px; font-size: 11px; color: #a5b4fc; }
+.iv-trline span { display: block; margin-block-start: 3px; font-size: 11px; color: var(--brand-text); }
 
 .iv-tracts { display: flex; gap: 8px; }
 .iv-mini {
   padding: 9px 13px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
   color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
-.iv-mini.warn { color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
+.iv-mini.warn { color: var(--amber-text); border-color: rgba(251, 191, 36, .3); }
 
 /* برگهٔ مصرف — کارِ کارشناسِ سرِ عمل */
-.iv-uline { display: flex; align-items: center; gap: 10px; margin-block-start: 5px; font-size: 11px; color: #a5b4fc; }
-.iv-uline label { display: flex; align-items: center; gap: 6px; color: #6ee7b7; }
+.iv-uline { display: flex; align-items: center; gap: 10px; margin-block-start: 5px; font-size: 11px; color: var(--brand-text); }
+.iv-uline label { display: flex; align-items: center; gap: 6px; color: var(--green-text); }
 .iv-uline input {
   width: 62px; padding: 5px; text-align: center; border-radius: 9px; font: inherit; font-size: 12px;
   color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(52, 211, 153, .3);
 }
-.iv-uline .rem { color: #fcd34d; }
+.iv-uline .rem { color: var(--amber-text); }
 .iv-usebtn {
   width: 100%; padding: 11px; margin-block-end: 12px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
   color: #052e1a; font-weight: 700; background: linear-gradient(135deg, #34d399, #059669); border: 0;
@@ -269,17 +262,17 @@
 .iv-daypick { min-width: 180px; }
 .as-kind {
   margin-inline-start: 7px; padding: 1px 7px; border-radius: 7px;
-  font-style: normal; font-size: 9.5px; color: #67e8f9; background: rgba(34, 211, 238, .12);
+  font-style: normal; font-size: 9.5px; color: var(--cyan); background: rgba(34, 211, 238, .12);
 }
 .as-sn { margin-inline-start: 6px; font-style: normal; font-size: 10px; color: rgba(var(--veil-rgb), .45); }
-.as-book { color: #c4b5fd !important; }
+.as-book { color: var(--brand-text) !important; }
 .as-state {
   flex-shrink: 0; padding: 5px 11px; border-radius: 10px; font-size: 11px; font-weight: 600;
   color: rgba(var(--veil-rgb), .6); background: rgba(var(--veil-rgb), .06);
 }
-.as-state.ok { color: #86efac; background: rgba(52, 211, 153, .12); }
-.as-state.warn { color: #fcd34d; background: rgba(245, 158, 11, .12); }
-.as-state.out { color: #a5b4fc; background: rgba(129, 140, 248, .14); }
+.as-state.ok { color: var(--green-text); background: rgba(52, 211, 153, .12); }
+.as-state.warn { color: var(--amber-text); background: rgba(245, 158, 11, .12); }
+.as-state.out { color: var(--brand-text); background: rgba(129, 140, 248, .14); }
 .as-state.bad { color: var(--red-text); background: rgba(248, 113, 113, .14); }
 .iv-row.as-service { border-inline-start: 3px solid rgba(248, 113, 113, .8); }
 .iv-row.as-out { border-inline-start: 3px solid rgba(129, 140, 248, .7); }
@@ -296,7 +289,7 @@
   flex-shrink: 0; font: inherit; font-size: 11px; cursor: pointer; padding: 6px 12px; border-radius: 9px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28);
 }
-.iv-note.ok { color: #86efac; }
+.iv-note.ok { color: var(--green-text); }
 
 /* ── چک‌لیستِ برگشتِ ست ── */
 .iv-check {
@@ -324,8 +317,8 @@
 
 .as-count { font-size: 12px; opacity: .85; }
 .as-count.bad { color: var(--red-text); opacity: 1; }
-.as-count.warn { color: #fcd34d; opacity: 1; }
-.as-count.ok { color: #86efac; }
+.as-count.warn { color: var(--amber-text); opacity: 1; }
+.as-count.ok { color: var(--green-text); }
 
 .as-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .iv-ghost.sm { padding: 4px 10px; font-size: 12px; }

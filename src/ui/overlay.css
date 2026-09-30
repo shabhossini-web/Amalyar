@@ -1,0 +1,60 @@
+/*
+ * پرسشِ «تغییرِ ذخیره‌نشده» (`UnsavedPrompt` در Overlay.jsx) — بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-08.
+ *
+ * رویِ هر شیت و پاپ‌آپی می‌نشیند: z بالاتر از همهٔ پوشش‌های برنامه (۶۰ تا ۱۴۰) و زیرِ
+ * اعلانِ نسخهٔ تازه. پنل مات است نه شیشه‌ای — روی فرمی که همین حالا تار شده، تارِ دوم
+ * فقط گوشی را کند می‌کند (قاعدهٔ «شیشه داخلِ شیشه»)؛ و `.glass` با هاور بالا می‌پرد.
+ */
+.ov-ask-overlay {
+  position: fixed; inset: 0; z-index: 160;
+  display: grid; place-items: center; padding: 18px;
+  background: rgba(0, 0, 0, .5); /* پرده — تیره در هر دو تم */
+}
+.ov-ask {
+  width: min(430px, 100%);
+  display: grid; gap: 8px;
+  padding: 20px 20px 18px;
+  border-radius: 18px;
+  color: var(--text1);
+  background: rgba(var(--surface-rgb), 1);
+  border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .35);
+  outline: none;
+}
+.ov-ask-title { font-size: 16px; font-weight: 800; }
+.ov-ask-text { margin: 0; font-size: 13.5px; color: var(--text2); }
+.ov-ask-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+/* ⚠️ دکمه‌ها کلاسِ خودشان را دارند نه `.df-save`/`.df-ghost`ِ صفحه: آن‌ها در هر صفحه شکلِ دیگری دارند
+   (رینگِ نئونِ شفاف، گرادیان، یا بوردرِ `!important`ِ definitions.css که بوردرِ قرمزِ «حذف» را می‌پوشاند)
+   و پرسشِ یکسان باید همه‌جا یک شکل و یک معنا داشته باشد. */
+.ov-ask-btn {
+  flex: 1 1 auto; min-height: 44px; padding: 0 16px; border-radius: 999px;
+  font: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer;
+  color: var(--text1);
+  background: var(--ghost-bg);
+  border: 1px solid rgba(var(--veil-rgb), .16);
+  box-shadow: var(--ghost-shadow);
+  transition: transform .18s cubic-bezier(.2, .7, .2, 1), background .2s, border-color .2s;
+}
+.ov-ask-btn:hover { background: var(--ghost-bg-hover); border-color: rgba(var(--veil-rgb), .28); }
+.ov-ask-btn:active { transform: scale(.97); }
+.ov-ask-btn.is-primary {
+  color: #fff; border-color: transparent; box-shadow: none;
+  background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+}
+/* «دور ریختن» خطرناک است ولی پررنگ نه — متنِ قرمز؛ پررنگ فقط «ذخیره». */
+.ov-ask-btn.is-drop { color: var(--red-text); }
+/* تأییدِ حذف (`ConfirmDialog`) کارِ اصلیِ همان پرسش است: متن و بوردرِ قرمز تا از «انصراف» جدا خوانده
+   شود. پُرِ قرمز نه — توکنِ زمینهٔ قرمز در هر دو تم نداریم و قرمزِ روشنِ تمِ تیره روی پُرِ قرمز خوانا نیست. */
+.ov-ask-btn.is-danger { color: var(--red-text); border-color: var(--red-text); }
+.ov-ask-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ov-ask-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .ov-ask-btn { transition: none; } .ov-ask-btn:active { transform: none; } }
+
+/* موبایل: سه دکمهٔ تمام‌عرضِ زیرِ هم — «ذخیره» بالا، «دور ریختن» دورترین از انگشتِ شست نیست
+   ولی از «ذخیره» جداست. */
+@media (max-width: 520px) {
+  .ov-ask-overlay { align-items: end; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+  .ov-ask-acts { flex-direction: column; }
+  .ov-ask-btn { width: 100%; }
+}

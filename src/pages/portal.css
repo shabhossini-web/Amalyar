@@ -6,7 +6,7 @@
    همسایه‌اش `intake.css` از اول `var(--bg)` داشت و سالم بود. */
 .po {
   position: relative; min-height: 100dvh; padding: 22px 14px 40px;
-  color: var(--text1); font-size: 14px;
+  color: var(--text1); font-size: 15px; line-height: 1.7;
   max-width: 640px; margin-inline: auto;
 }
 .po-bg {
@@ -17,22 +17,29 @@
 }
 .po-err {
   min-height: 100dvh; display: grid; place-items: center; background: var(--bg);
-  color: var(--red-text); font-size: 14px; padding: 20px; text-align: center;
+  color: var(--red-text); font-size: 15px; padding: 20px; text-align: center;
 }
 .po-err.quiet { color: var(--text3); }
 
 .po-head { text-align: center; margin-bottom: 16px; }
-.po-head small { display: block; color: var(--text2); font-size: 12px; }
+.po-head small { display: block; color: var(--text2); font-size: 14px; }
 .po-head h1 { font-size: 21px; font-weight: 900; margin-top: 4px; }
-.po-head em { font-style: normal; font-size: 11.5px; color: var(--text3); }
+.po-head em { font-style: normal; font-size: 13px; color: var(--text3); }
 
 .po-tabs {
-  display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px;
+  /* یک ردیفِ اسکرولی (بازبینیِ UX، بندِ ۱۱۵) — در گوشی از کنار اسکرول می‌خورد و در دسکتاپ وسط می‌نشیند:
+     حاشیهٔ خودکارِ اولین و آخرین تب وقتی جا هست وسط‌چین می‌کند و وقتی نیست صفر می‌شود (نه `justify-content:
+     center` که سرِ ردیفِ سرریزکرده را بیرون از دسترسِ اسکرول می‌برد). */
+  display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 14px; padding: 2px 14px 4px;
+  scrollbar-width: none; overscroll-behavior-x: contain;
 }
+.po-tabs::-webkit-scrollbar { display: none; }
+.po-tabs > button:first-child { margin-inline-start: auto; }
+.po-tabs > button:last-child { margin-inline-end: auto; }
 .po-tabs button {
-  cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700;
+  cursor: pointer; font: inherit; font-size: 14px; font-weight: 700;
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 15px; border-radius: 99px;
+  min-height: 44px; padding: 8px 15px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--veil-rgb), .13);
 }
@@ -40,14 +47,18 @@
   color: var(--brand-text); background: rgba(var(--brand-soft-rgb, 167, 139, 250), .22);
   border-color: rgba(var(--brand-soft-rgb, 167, 139, 250), .55);
 }
-.po-tabs i { font-style: normal; font-size: 10.5px; opacity: .75; }
+.po-tabs i { font-style: normal; font-size: 12.5px; opacity: .85; }
+.po-tabs button { flex: 0 0 auto; }
+/* تبِ خالی کم‌رنگ — نه پنهان: بیمار باید ببیند آن بخش هست و فعلاً چیزی ندارد. */
+.po-tabs button.empty:not(.on) { color: var(--text3); background: transparent; border-style: dashed; }
+.po-tabs button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .po-list { display: grid; gap: 9px; }
 .po-empty {
-  padding: 26px 14px; text-align: center; font-size: 13px; color: var(--text3);
+  padding: 26px 14px; text-align: center; font-size: 14.5px; color: var(--text2);
   border: 1px dashed rgba(var(--veil-rgb), .13); border-radius: 15px;
 }
-.po-hint { text-align: center; font-size: 11px; color: var(--text3); margin-top: 4px; }
+.po-hint { text-align: center; font-size: 13px; color: var(--text3); margin-top: 4px; }
 
 .po-row {
   display: flex; align-items: center; gap: 10px; padding: 12px 14px;
@@ -56,13 +67,16 @@
   border: 1px solid rgba(var(--brand-soft-rgb, 167, 139, 250), .18);
 }
 .po-row-main { flex: 1; min-width: 0; }
-.po-row-main b { display: block; font-size: 13.5px; }
-.po-row-main small { display: block; margin-top: 3px; font-size: 11.5px; color: var(--text2); }
+.po-row-main b { display: block; font-size: 15.5px; }
+.po-row-main small { display: block; margin-top: 3px; font-size: 13.5px; color: var(--text2); }
 .po-up { border-color: rgba(52, 211, 153, .38); background: rgba(52, 211, 153, .07); }
 .po-up b { color: var(--green-text); }
+/* «کِی» درشت‌تر از بقیهٔ کارت — همان سؤالی که بیمار برایش آمده (بازبینیِ UX، بندِ ۱۰۰). */
+.po-when { display: block; margin-top: 3px; font-size: 15px; font-weight: 800; color: var(--text1); }
+.po-when bdi { font-variant-numeric: tabular-nums; }
 
 .po-tag {
-  flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
+  flex: 0 0 auto; font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .po-tag.s-done { color: var(--green-text); border-color: rgba(52, 211, 153, .35); background: rgba(52, 211, 153, .1); }
@@ -74,18 +88,18 @@
   border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .po-notice.up { border-style: dashed; border-color: rgba(52, 211, 153, .35); }
-.po-notice small { display: block; font-size: 10.5px; color: var(--text3); margin-bottom: 4px; }
-.po-notice p { font-size: 12.5px; line-height: 1.8; white-space: pre-wrap; }
+.po-notice small { display: block; font-size: 12.5px; color: var(--text3); margin-bottom: 4px; }
+.po-notice p { font-size: 14.5px; line-height: 1.8; white-space: pre-wrap; }
 
-.po-foot { margin-top: 22px; text-align: center; display: grid; gap: 4px; }
-.po-foot a { color: var(--text2); text-decoration: none; font-size: 13px; }
-.po-foot small { color: var(--text3); font-size: 11px; }
+/* پاورقی = `PublicFoot` (دکمهٔ تماس، نشانی) — فقط فاصله‌اش از فهرست این‌جاست. */
+.po .pb-foot { margin-top: 22px; }
 
 /* ── کارهای باز (W3.4 §۴.۶) ───────────────────────────────────────────
    ردیفِ «کار» از ردیفِ تاریخچه باید در یک نگاه جدا باشد: این یکی از بیمار
    **اقدام** می‌خواهد، آن یکی فقط سند است. */
 .po-task { border-color: rgba(var(--brand-soft-rgb, 167, 139, 250), .42); }
-.po-task .po-go { flex: 0 0 auto; color: var(--text2); }
+.po-task .po-go, .po-row .po-go { flex: 0 0 auto; color: var(--text2); }
+.po-row:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .po-task:active { background: rgba(var(--veil-rgb), .09); }
 /* «فیشِ واریزی» و «ارسالِ دوبارهٔ نتیجه» عقب‌افتاده‌اند، نه صرفاً باز. */
 .po-task.urgent {

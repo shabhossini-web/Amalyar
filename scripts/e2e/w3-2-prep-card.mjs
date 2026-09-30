@@ -93,9 +93,11 @@ try {
     /* ⚠️ `?patient=` در داشبورد شناسهٔ **مراجعه** است نه بیمار (نامش گمراه‌کننده است)؛
        این‌جا اصلاً لازم نیست: کارت را با نامِ بیمار پیدا می‌کنیم. */
     await page.goto(`${UI}/app/dashboard`, { waitUntil: 'networkidle' });
-    await page.locator('.db-card', { hasText: `آماده${tag}` }).first().waitFor({ timeout: 15000 });
-    await page.locator('.db-card', { hasText: `آماده${tag}` }).first().locator('button[title="ویرایش"], button[aria-label="ویرایش"]').first().click().catch(async () => {
-      await page.locator('.db-card', { hasText: `آماده${tag}` }).first().getByRole('button', { name: /ویرایش/ }).first().click();
+    /* کارت (موبایل) یا ردیفِ جدول (دسکتاپ، بازبینیِ UX global-04) — همان دکمهٔ «ویرایش» در هر دو. */
+    const row = page.locator(':is(.db-card, .db-row)', { hasText: `آماده${tag}` }).first();
+    await row.waitFor({ timeout: 15000 });
+    await row.locator('button[title="ویرایش"], button[aria-label="ویرایش"]').first().click().catch(async () => {
+      await row.getByRole('button', { name: /ویرایش/ }).first().click();
     });
     /* اصلاحِ مالک ۱۴۰۵/۰۷/۰۲: کارتِ آماده‌سازی حالا «خلاصهٔ کوچکِ بیمار» است — دوستونه، و
        کادرهای مشخصات پشتِ «ویرایشِ مشخصات» (پیش‌فرض بسته) تا بالای هر فرم جا نگیرد. */

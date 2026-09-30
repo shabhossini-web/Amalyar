@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import './transport.css';
-import { Alert, Arrive, Back, Box, CheckCircle, Clock, Close, Hospital, Phone, Truck, User, Users } from '../ui/icons.jsx';
+import { Alert, Arrive, Box, CheckCircle, Clock, Close, Hospital, Phone, Truck, User, Users } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { faTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
@@ -63,7 +63,6 @@ export default function Transport() {
   const [doneFor, setDoneFor] = useState(null); // stop
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — پرتالِ حمل‌ونقل'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2600);
@@ -89,20 +88,17 @@ export default function Transport() {
   return (
     <div className="tr">
       <div className="tr-bg" aria-hidden="true" />
-      <header className="tr-head">
-        <Link to="/app" className="tr-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          {/* تا پاسخ نیامده عنوانِ خنثی — وگرنه سوپرادمین یک لحظه «مسیرِ من» را می‌دید. */}
-          <h1>{team ? 'همهٔ مسیرها' : data ? 'مسیرِ من' : 'حمل‌ونقل'}</h1>
-          <p>
-            {team
-              ? 'نمای سرپرستی — مسیرِ همهٔ نیروها، با نامِ نیرو روی هر توقف. تحویل را این‌جا از طرفِ همان نیرو ثبت کنید.'
-              : data?.staff
-                ? <>{data.staff.name}{data.staff.vehicle ? ` · ${data.staff.vehicle}` : ''} — چه چیزی، کجا، چه ساعتی، به چه کسی.</>
-                : 'چه چیزی، کجا، چه ساعتی، به چه کسی.'}
-          </p>
-        </div>
-      </header>
+      {/* عنوان به نقش بسته است (قانونِ ۲۹) و آیکون همان کاشیِ «حمل‌ونقل»؛ `tr-head` قلابِ آزمون است
+          (superadmin-field). تا پاسخ نیامده عنوانِ خنثی — وگرنه سوپرادمین یک لحظه «مسیرِ من» را می‌دید. */}
+      <PageHeader
+        className="tr-head" tool="transport"
+        title={team ? 'همهٔ مسیرها' : data ? 'مسیرِ من' : 'حمل‌ونقل'}
+        sub={team
+          ? 'نمای سرپرستی — مسیرِ همهٔ نیروها، با نامِ نیرو روی هر توقف. تحویل را این‌جا از طرفِ همان نیرو ثبت کنید.'
+          : data?.staff
+            ? <>{data.staff.name}{data.staff.vehicle ? ` · ${data.staff.vehicle}` : ''} — چه چیزی، کجا، چه ساعتی، به چه کسی.</>
+            : 'چه چیزی، کجا، چه ساعتی، به چه کسی.'}
+      />
 
       <Tabs label="بازهٔ کار" tone="brand" value={scope} onChange={setScope} items={SCOPES} />
 

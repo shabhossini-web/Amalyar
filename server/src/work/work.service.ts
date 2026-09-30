@@ -9,6 +9,7 @@ import { detectStaleWork } from './work-detectors';
 import { closeWork, processDomainEvents, upsertWork } from './work-processor';
 import type { WorkUpsert } from './work-rules';
 import { OWNER_ROLE_FA } from './work-rules';
+import { OTHER_PX, procedureLabel } from '../patients/visit-coding';
 
 export type WorkScope = 'inbox' | 'mine' | 'role' | 'patient' | 'all';
 export type WorkAction = 'done' | 'block' | 'assign' | 'snooze' | 'cancel' | 'reopen';
@@ -26,6 +27,25 @@ const ORDER_REF = /^(lab|imaging|consult|referral)_order$/;
 /* سقفِ عکس‌های ضمیمه در هر ردیف؛ شمارِ کامل جدا می‌آید تا «۴ تا» با «۱۴ تا» اشتباه نشود. */
 const ATTACH_MAX = 4;
 const ORDER = [{ priority: 'desc' as const }, { dueAt: 'asc' as const }, { id: 'asc' as const }];
+/* همان آستانهٔ `stuckEvents`ِ «امروز» (`today.service.ts`): رویدادِ پردازش‌نشدهٔ کهنه‌تر از
+   این یعنی صفِ رویداد ایستاده است — آن‌وقت `settle` کنار می‌کشد (پایین). */
+const SETTLE_FRESH_MS = 3600 * 1000;
+
+/**
+ * کارهایی که **خودشان کارِ دستِ آدم‌اند** و «انجام شد» دارند، در برابرِ کارِ **رویدادی** که با
+ * انجامِ خودِ چیز بسته می‌شود (رویدادِ `visit.done`، `report.uploaded`، `intake.approved` …)،
+ * نه با دکمهٔ «انجام شد» روی یادآوری‌اش.
+ *
+ * - `manual` — یادداشتِ کاری (`POST /work`).
+ * - `call_patient` («تماس با بیمارِ غایب») و `follow_up_unanswered` («تماس با بیمار — فرمِ پیگیری
+ *   بی‌پاسخ») — خودِ کار **تماس** است و هیچ رویدادی در سامانه تماس را ثبت نمی‌کند. ⚠️ بازبینیِ
+ *   خصمانه (R4): با قاعدهٔ «فقط یادداشتِ دستی» تنها راهِ بستنشان «بستن بدونِ اقدام» مانده بود —
+ *   یعنی منشی‌ای که تماس گرفته بود باید می‌نوشت «کاری نکردم»، و یادآوریِ پیگیری هر هفته برمی‌گشت.
+ *   «انجام شد»ِ این دو `closedBy: 'hand'` می‌گیرد و آشکارساز دیگر بازش نمی‌کند (`upsertWork`).
+ */
+const HAND_DONE = new Set(['manual', 'call_patient', 'follow_up_unanswered']);
+const isManual = (row: { type?: string | null }) => HAND_DONE.has(row?.type ?? 'manual');
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * برچسبِ فارسیِ نقشِ مالک. `OWNER_ROLE_FA` نقش‌هایی را دارد که لایهٔ کار **صادر**
@@ -182,6 +202,77 @@ export class WorkService {
     return new Map(rows.map((a) => [a.id, nameOf(a)]));
   }
 
+  /**
+   * **خلاصهٔ مراجعهٔ هر کار** — کد، تاریخ، وضعیت و نامِ عمل — تا پاپ‌آپِ **خودِ کار** («وضعیتِ
+   * عمل»، «گزارشِ خدمت») بی‌درخواستِ دوم بگوید دربارهٔ کدام عمل است (و «عملِ آینده» را بپرسد).
+   * عمداً همین چند فیلد: نه مبلغ، نه سهم — کارشناس هم این ردیف را می‌بیند.
+   *
+   * ⚠️ **`techPopup`** (بازبینیِ خصمانه، R1): آن دو پاپ‌آپ همان مسیرهای پنلِ کارشناس‌اند
+   * (`/tech/visits/:id/{status,report}`) و آن مسیرها پشتِ ماژولِ `tech` و مجوزِ همان کار
+   * (`visits.status` / `documents.write`) هستند و فقط عملِ **خودِ کارشناس** را می‌پذیرند
+   * (سوپرادمین: هر عملی که کارشناس دارد — `visitScope`ِ `tech.service.ts`). کارِ «بی‌مسئول»
+   * (عملِ بی‌کارشناس)، کارِ واگذارشده به دیگری، یا شرکتی که ماژولِ `tech` را خاموش کرده، با
+   * آن پاپ‌آپ ۴۰۴/۴۰۳ می‌گرفت. پس سرور همین را برای **همین کاربر و همین نوعِ کار** می‌گوید
+   * (قانونِ ۳) و رابط بی‌آن فرمِ همان مراجعه را باز می‌کند — کاری که پیش از پاپ‌آپ‌ها می‌کرد.
+   *
+   * نمای استثنای «امروز» (`TodayService.exceptions`) هم ردیفِ کارِ خام دارد و همان پاپ‌آپ‌ها را
+   * باز می‌کند، پس هر دو از `targets` (پایین) می‌خوانند؛ یک تعریف، نه دو.
+   */
+  private async visitBriefs(user: any, rows: { type?: string | null; visitId?: number | null }[]) {
+    const vids = [...new Set(rows.map((r) => r.visitId).filter(Boolean))] as number[];
+    const needs = (type: string) => rows.some((r) => r.type === type && r.visitId);
+    const [visits, canStatus, canReport] = await Promise.all([
+      vids.length
+        ? this.prisma.visit.findMany({
+          where: { id: { in: vids } },
+          select: {
+            id: true, seq: true, opDate: true, opStatus: true, opType: true, techId: true,
+            procedureType: { select: { name: true } }, otherProcedures: OTHER_PX,
+            patient: { select: { code: true, deletedAt: true } },
+          },
+        })
+        : Promise.resolve([] as any[]),
+      /* فقط وقتی ردیفی از همین نوع هست — فهرستِ بی‌این دو نوع کوئریِ اضافه نمی‌زند. */
+      needs('confirm_surgery_done') ? canAccess(this.prisma, user, 'tech', ['visits.status']).catch(() => false) : Promise.resolve(false),
+      needs('complete_report') ? canAccess(this.prisma, user, 'tech', ['documents.write']).catch(() => false) : Promise.resolve(false),
+    ]);
+    const team = isUnrestricted(user);
+    /* همان دامنهٔ `visitScope`ِ پنلِ کارشناس (یک تعریف برای دو جا). */
+    const inTechScope = (v: any) => (team ? !!v.techId && !v.patient.deletedAt : !!v.techId && v.techId === user?.id);
+    const byId = new Map(visits.map((v: any) => [v.id, v]));
+    return (r: { type?: string | null; visitId?: number | null }) => {
+      const v: any = r.visitId ? byId.get(r.visitId) : null;
+      if (!v) return null;
+      const may = r.type === 'confirm_surgery_done' ? canStatus : r.type === 'complete_report' ? canReport : false;
+      return {
+        id: v.id, code: `${v.patient.code}-V${v.seq}`, opDate: v.opDate, opStatus: v.opStatus, procedure: procedureLabel(v),
+        techPopup: may && inTechScope(v),
+      };
+    };
+  }
+
+  /**
+   * **مقصدِ «خودِ کار» برای همین کاربر** — خلاصهٔ مراجعه (`visit`، با `techPopup`) و برای کارِ
+   * «بررسی و تأییدِ ثبت‌نام» `intakePopup`.
+   *
+   * ⚠️ `intakePopup` (بازبینیِ خصمانه، R6): پنجرهٔ تأیید ردیفِ ثبت‌نام را از `/intake/submissions`
+   * می‌خوانَد که پشتِ ماژولِ `formgen` و مجوزِ `intake.read` است (پیش‌فرض سطحِ ادمین)؛ کار ولی
+   * در **صفِ منشی** می‌نشیند. منشیِ بی‌دسترسی با «بررسی و تأیید» ۴۰۳ می‌گرفت. بی‌این پرچم ردیف
+   * دکمهٔ اصلی ندارد — همان «یادآوریِ فردا» و «بستن بدونِ اقدام»ِ پیش از پاپ‌آپ‌ها.
+   */
+  async targets(user: any, rows: { type?: string | null; visitId?: number | null }[]) {
+    const [visitOf, canIntake] = await Promise.all([
+      this.visitBriefs(user, rows),
+      rows.some((r) => r.type === 'approve_intake')
+        ? canAccess(this.prisma, user, 'formgen', ['intake.read']).catch(() => false)
+        : Promise.resolve(false),
+    ]);
+    return (r: { type?: string | null; visitId?: number | null }) => ({
+      visit: visitOf(r),
+      ...(r.type === 'approve_intake' ? { intakePopup: canIntake } : {}),
+    });
+  }
+
   /** بیمار/مراجعه را سمتِ سرور ضمیمه می‌کند (قانونِ ۱۵ — render فرمول ندارد). */
   private async enrich(user: any, rows: any[]) {
     const pids = [...new Set(rows.map((r) => r.patientId).filter(Boolean))] as number[];
@@ -189,12 +280,13 @@ export class WorkService {
        برای بقیه `null` می‌ماند: ردیف‌هایشان در هیچ صفحه‌ای عوض نمی‌شود، و کارشناسی که
        کارهای یک بیمار را می‌بیند (`scope=patient`) نامِ هم‌تیمی‌ها را تازه نمی‌گیرد. */
     const team = isUnrestricted(user);
-    /* نامِ مالک‌ها هم‌زمان با بیمارها — یک کوئری برای همهٔ ردیف‌ها، و فقط وقتی لازم است. */
-    const [patients, names] = await Promise.all([
+    /* نامِ مالک‌ها هم‌زمان با بیمارها و مراجعه‌ها — یک کوئری برای همهٔ ردیف‌ها، و فقط وقتی لازم است. */
+    const [patients, names, targetOf] = await Promise.all([
       pids.length
         ? this.prisma.patient.findMany({ where: { id: { in: pids } }, select: { id: true, code: true, firstName: true, lastName: true, phone: true } })
         : Promise.resolve([] as { id: number; code: string; firstName: string; lastName: string; phone: string | null }[]),
       team ? this.accountNames(rows.map((r) => r.ownerAccountId)) : Promise.resolve(new Map<number, string>()),
+      this.targets(user, rows),
     ]);
     const byId = new Map(patients.map((p) => [p.id, { ...p, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() }]));
     /* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده (W0.8) کنارِ ردیف می‌آیند —
@@ -222,6 +314,10 @@ export class WorkService {
       return {
         ...r,
         patient: r.patientId ? byId.get(r.patientId) ?? null : null,
+        ...targetOf(r),
+        /* «انجام شد»ِ خالی فقط برای یادداشتِ دستی است (`act`)؛ کارِ رویدادی با انجامِ خودش
+           بسته می‌شود یا با «بستن بدونِ اقدام». رابط همین را می‌خواند، نه فهرستِ نوع‌ها. */
+        manual: isManual(r),
         attachments: (docsByRef.get(refKey(r)) ?? []).slice(0, ATTACH_MAX),
         attachmentCount: (docsByRef.get(refKey(r)) ?? []).length,
         overdue: !!r.dueAt && OPEN.includes(r.state) && new Date(r.dueAt).getTime() < now,
@@ -388,11 +484,31 @@ export class WorkService {
     const row = await this.ownedOrVisible(user, id);
     let data: any;
     switch (action) {
-      case 'done':
+      case 'done': {
         if (!OPEN.includes(row.state)) throw new BadRequestException('این کار باز نیست');
+        /* ⚠️ **«انجام شد»ِ خالی فقط برای یادداشتِ دستی** (بازبینیِ UX، company-01). روی کارِ
+           رویدادی همان دکمه فقط یادآوری را می‌بست و خودِ کار — عملی که هنوز «در انتظار» بود،
+           گزارشی که نیامده بود — دست نمی‌خورد؛ مدیر خیال می‌کرد عمل را ثبت کرده و یادآوری هم
+           دیگر نمی‌آمد. حالا چنین کاری یا با **رویدادِ واقعیِ خودش** بسته می‌شود یا با «بستن
+           بدونِ اقدام» که صریح است (`outcome.dismissed`) و در `outcome` همین را ثبت می‌کند —
+           تا ممیزی «انجام شد» را از «کنار گذاشته شد» جدا ببیند. */
+        const dismissed = body.outcome?.dismissed === true;
+        if (!isManual(row) && !dismissed) {
+          throw new BadRequestException('این کار با انجامِ خودش بسته می‌شود؛ اگر فقط می‌خواهید یادآوری کنار برود، «بستن بدونِ اقدام» را بزنید');
+        }
+        /* `outcome`: «کنار گذاشته شد» (`dismiss`) از «انجام شد» جدا — یادداشتِ کاری همان خروجیِ
+           آزادش را نگه می‌دارد؛ کارِ تماس `closedBy: 'hand'` می‌گیرد تا آشکارساز بازش نکند. */
+        const outcome = dismissed ? { closedBy: 'dismiss' }
+          : (row.type ?? 'manual') === 'manual' ? body.outcome ?? undefined
+            : { ...(isObj(body.outcome) ? body.outcome : {}), closedBy: 'hand' };
         /* مالک همان می‌ماند (کارِ سارا که سوپرادمین بست، هنوز «کارِ سارا» است)؛ «چه کسی بست» در `completedById`. */
-        data = { state: 'done', completedAt: new Date(), completedById: user.id, outcome: body.outcome ?? undefined, ownerAccountId: row.ownerAccountId ?? user.id };
+        data = {
+          state: 'done', completedAt: new Date(), completedById: user.id,
+          outcome,
+          ownerAccountId: row.ownerAccountId ?? user.id,
+        };
         break;
+      }
       case 'block':
         if (!body.reason) throw new BadRequestException('دلیلِ توقف لازم است');
         data = { state: 'blocked', blockedReason: body.reason };
@@ -431,6 +547,32 @@ export class WorkService {
 
   closeByRef(ref: { refType: string; refId: number; type?: string }, actorId: number | null = null, tx?: any) {
     return closeWork(tx ?? this.prisma, ref, actorId);
+  }
+
+  /**
+   * **رویدادِ تازه ← کار، همین حالا** — پیش از هر خواندنِ صفِ کار («امروز»، «کارهای من»،
+   * زنگ، پرونده).
+   *
+   * کارِ رویدادی با رویدادِ واقعی‌اش بسته می‌شود (`visit.done`، `report.uploaded`،
+   * `intake.approved` …) ولی آن رویداد را تا امروز فقط worker هر پنج دقیقه پردازش می‌کرد:
+   * کاربری که از پاپ‌آپِ خودِ کار «انجام شد» یا «موکول شد» را ثبت می‌کرد، همان ردیف را
+   * پس از بسته‌شدنِ پاپ‌آپ هنوز باز می‌دید و خیال می‌کرد ثبت نشده. همان پردازشگرِ worker
+   * (`processDomainEvents`، idempotent و به ترتیبِ شناسه) این‌جا هم صدا زده می‌شود —
+   * رویدادهایی که داخلِ تراکنش ثبت شده‌اند (تأییدِ ثبت‌نام) هم تا این خواندن commit شده‌اند.
+   *
+   * ⚠️ اگر رویدادِ **کهنه**‌ای پردازش‌نشده مانده (صفِ ایستاده)، دست نمی‌زند: کارتِ
+   * «رویدادِ پردازش‌نشده»ِ نمای استثنا همان را باید نشان دهد و پردازشِ رویدادِ تازه پیش از
+   * کهنه ترتیب را به‌هم می‌زند. خطا هرگز خواندن را نمی‌اندازد؛ worker همان را بعداً می‌زند.
+   * ⚠️ چند خواندنِ هم‌زمان (زنگ + «امروز» + پرونده) هر کدام این را صدا می‌زنند؛ پردازشگر خودش
+   * پشتِ قفل است (`processDomainEvents`، R13) و دومی منتظرِ اولی می‌ماند، نه اینکه همان رویدادها را
+   * دوباره اعمال کند.
+   */
+  async settle() {
+    try {
+      const stale = new Date(Date.now() - SETTLE_FRESH_MS);
+      if (await this.prisma.domainEvent.count({ where: { processedAt: null, at: { lt: stale } } })) return;
+      await processDomainEvents(this.prisma, { limit: 100 });
+    } catch { /* fail-soft */ }
   }
 
   async process(user: any) {

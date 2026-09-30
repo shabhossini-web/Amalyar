@@ -12,7 +12,9 @@
  *   - کارتِ حینِ عمل: هویت، گروه خونی، سه هشدارِ بالینی، ست
  *   - مدارک **مرحله‌بندی‌شده** و بازشدنی از خودِ میز (نه از پروندهٔ بیمار)
  *   - نوشتنِ شرحِ عمل سرِ میز → همان `ClinicalNote`ِ پرونده
- *   - «شروع شد» ساعتِ دیوار را می‌زند و بارِ دوم بازنویسی نمی‌کند
+ *   - «شروع شد» ساعتِ دیوار را می‌زند و بارِ دوم بازنویسی نمی‌کند — و `stamped` می‌گوید کدام لمس نوشت
+ *   - «برگرداندن»/«اصلاحِ ساعت» با `expect`ِ کهنه ۴۰۹ می‌گیرد و ساعتِ دیگری را پاک نمی‌کند (بستهٔ FF، FF3)
+ *   - شرحِ میز با `base`ِ کهنه ۴۰۹ می‌گیرد و شرحِ تازه‌ترِ پرونده را جایگزین نمی‌کند (بستهٔ FF، FF1)
  *   - ترخیص: بعد از پایان، با شرحِ اجباری، و زدنِ دوباره ساعت را عوض نمی‌کند
  *   - تیکِ چک‌لیست (API همچنان کار می‌کند) نامِ زننده را نگه می‌دارد
  *  نباید بیفتد:
@@ -138,13 +140,25 @@ try {
   const started = await send(`/theatre/visits/${v.id}/start`, 'POST');
   const t1 = started.json?.visit?.opStartTime;
   ok('«شروع شد» ساعتِ دیوار را می‌زند', started.status < 300 && /^\d{2}:\d{2}$/.test(t1 ?? ''), String(t1));
+  ok('… و `stamped` می‌گوید همین لمس نوشت (میز فقط با آن نوارِ «برگرداندن» می‌دهد)', started.json?.stamped === true, String(started.json?.stamped));
   /* ⚠️ `00:00` نه یک ساعتِ دلخواه: پایین‌تر همین شروع باید «در جریان» خوانده
      شود، و شروعِ بعد از «الان» برنامه است نه جریان. با `01:02` این سوییت هر شب
      بین ۰۰:۰۰ و ۰۱:۰۲ قرمز می‌شد (رانِ محلیِ بستهٔ ۶ از نیمه‌شب گذشت و گرفتش).
      `00:00` هیچ‌وقت بعد از «الانِ» همان روز نیست. */
   sql(`UPDATE visits SET op_start_time='00:00' WHERE id=${v.id}`);
-  await send(`/theatre/visits/${v.id}/start`, 'POST');
+  const restamp = await send(`/theatre/visits/${v.id}/start`, 'POST');
   ok('**نباید بیفتد:** لمسِ دوباره ساعتِ ثبت‌شده را بازنویسی کند', sql(`SELECT op_start_time FROM visits WHERE id=${v.id}`) === '00:00');
+  /* ⚠️ بستهٔ FF (FF3): پاسخِ این لمس هم کارت بود و میز «… ثبت شد — برگرداندن» نشان می‌داد؛ «برگرداندن»
+     ساعتی را پاک می‌کرد که کسِ دیگری زده بود. */
+  ok('**نباید بیفتد:** لمسی که چیزی ننوشت `stamped` بگیرد', restamp.status < 300 && restamp.json?.stamped === false, String(restamp.json?.stamped));
+  const staleUndo = await send(`/theatre/visits/${v.id}/times`, 'POST', { opStartTime: null, expect: { opStartTime: t1 === '00:00' ? '00:01' : t1 } });
+  ok('**نباید بیفتد:** «برگرداندن» با ساعتِ کهنه ساعتِ فعلی را پاک کند — ۴۰۹ فارسی',
+    staleUndo.status === 409 && /کسِ دیگری/.test(String(staleUndo.json?.message)) && sql(`SELECT op_start_time FROM visits WHERE id=${v.id}`) === '00:00',
+    `${staleUndo.status} ${staleUndo.json?.message}`);
+  const rightUndo = await send(`/theatre/visits/${v.id}/times`, 'POST', { opStartTime: null, expect: { opStartTime: '00:00' } });
+  ok('… و با همان ساعتی که دیده شد برمی‌گردد', rightUndo.status < 300 && sql(`SELECT coalesce(op_start_time, 'NULL') FROM visits WHERE id=${v.id}`) === 'NULL',
+    String(rightUndo.status));
+  sql(`UPDATE visits SET op_start_time='00:00' WHERE id=${v.id}`);
   const fin = await send(`/theatre/visits/${v.id}/finish`, 'POST');
   ok('«پایان» بعد از شروع می‌نشیند', fin.status < 300 && /^\d{2}:\d{2}$/.test(fin.json?.visit?.opEndTime ?? ''), String(fin.json?.visit?.opEndTime));
 
@@ -159,6 +173,12 @@ try {
   ok('… و با شروعِ بی‌پایان «در جریان»', (await send(`/theatre/visits/${v.id}`)).json?.visit?.state === 'running');
   sql(`UPDATE visits SET op_start_time=NULL WHERE id=${v.id}`);
   ok('… و بی‌ساعت «در انتظار»', (await send(`/theatre/visits/${v.id}`)).json?.visit?.state === 'waiting');
+  /* ⚠️ بستهٔ FF (FF8): عملی که از فهرستِ انتظار «انجام شد» خورد ولی ساعتش سرِ میز زده نشد «در انتظار» می‌ماند. */
+  sql(`UPDATE visits SET op_status='done' WHERE id=${v.id}`);
+  const doneRow = (await send(`/theatre/visits/${v.id}`)).json?.visit;
+  ok('**نباید بیفتد:** عملِ «انجام شد»ِ بی‌ساعت روی تخته «در انتظار» بماند',
+    doneRow?.state === 'finished' && doneRow?.stateFa === 'انجام شد', JSON.stringify([doneRow?.state, doneRow?.stateFa]));
+  sql(`UPDATE visits SET op_status='pending' WHERE id=${v.id}`);
   /* 🔴 **ساعتِ شروعِ آینده برنامه است، نه جریان.** مطب ساعتِ برنامه‌ریزی‌شده را در
      همین فیلد می‌نویسد؛ بدونِ این شرط، ساعتِ ۹ صبح عملِ ۲۳:۵۹ هم «در جریان» بود. */
   sql(`UPDATE visits SET op_start_time='23:59' WHERE id=${v.id}`);
@@ -191,6 +211,14 @@ try {
   ok('ویرایش نسخهٔ تازه می‌سازد و قبلی را بایگانی می‌کند (نه بازنویسی)',
     num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='op'`) === 2
     && num(`SELECT count(*) FROM clinical_notes WHERE visit_id=${v.id} AND kind='op' AND replaced_at IS NULL`) === 1);
+  /* ⚠️ بستهٔ FF (FF1): پیش‌نویسِ کهنهٔ یک تبلت (پایه‌اش شرحِ اول) نباید شرحِ تازه‌تر را بی‌صدا جایگزین کند. */
+  const stale = await send(`/theatre/visits/${v.id}/report`, 'POST', { body: 'پیش‌نویسِ کهنه', base: 'لامینکتومیِ L4-L5؛ مانیتورینگ بدونِ افتِ دامنه.' });
+  ok('**نباید بیفتد:** شرح با پایهٔ کهنه شرحِ تازه‌ترِ پرونده را جایگزین کند — ۴۰۹ فارسی',
+    stale.status === 409 && /عوض شده/.test(String(stale.json?.message))
+    && sql(`SELECT body FROM clinical_notes WHERE visit_id=${v.id} AND kind='op' AND replaced_at IS NULL`).includes('MEP'),
+    `${stale.status} ${stale.json?.message}`);
+  const fresh = await send(`/theatre/visits/${v.id}/report`, 'POST', { body: 'لامینکتومیِ L4-L5؛ افتِ گذرای MEP در دقیقهٔ ۴۰؛ برگشت.', base: 'لامینکتومیِ L4-L5؛ افتِ گذرای MEP در دقیقهٔ ۴۰.' });
+  ok('… و با پایهٔ درست ذخیره می‌شود', fresh.status < 300 && fresh.json?.visit?.opReport?.endsWith('برگشت.'), String(fresh.status));
 
   console.log('\n۶) مدارک — مرحله‌بندی‌شده و بازشدنی از خودِ میز');
   const upload = async (name, body, phase) => {

@@ -86,13 +86,16 @@ try {
   console.log('\n۴) ثبتِ یک مراجعهٔ دستی از همین‌جا');
   await fab.click();
   await page.waitForSelector('.db-sheet', { timeout: 8000 });
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await page.locator('.db-sheet [data-act="new-record"]').click();
   await page.locator('.db-sheet input[required]').first().fill('بیمارِ');
   await page.locator('.db-sheet input[required]').nth(1).fill(`سریع${tag}`);
   await page.locator('.db-stepnav .db-submit').click();
   await page.waitForTimeout(500);
   const kindBtn = page.locator('.db-sheet .db-kindrow button').first();
   if (await kindBtn.count()) await kindBtn.click();
-  await page.locator('.db-stepnav .db-submit').click();
+  /* فرمِ تک‌نوع در نصبِ تک‌خدمته گامِ «نوع» ندارد و «بعدی» مستقیم به «تکمیل» می‌رود (بازبینیِ UX، company-24). */
+  if (await page.locator('.db-stepnav .db-submit').count()) await page.locator('.db-stepnav .db-submit').click();
   /* ⚠️ `:visible`: کادرِ «تاریخِ تولد»ِ گامِ ۱ پنهان در DOM می‌ماند و اولین
      `.jd-wrap` همان است، نه تاریخِ مراجعه. */
   const dateInput = page.locator('.db-sheet .jd-wrap:visible input').first();
@@ -123,7 +126,8 @@ try {
     await pg.locator('.db-sheet button.db-submit[type="submit"]').click();
     let need = null;
     for (let i = 0; i < 20 && !need; i++) {
-      const t = (await pg.locator('.sh-toast').allInnerTexts()).join(' ');
+      /* از بازبینیِ UX (surgery-08) خطای فیلد کنارِ خودِ فیلد و روی نوارِ ذخیره می‌ماند؛ توستِ سراسری هم `.ui-toast` شد (shell-03). */
+      const t = (await pg.locator('.ui-toast.on, [data-save-error]').allInnerTexts()).join(' ');
       need = /«([^»]+)» را کامل کنید/.exec(t)?.[1] ?? null;
       if (!need) {
         const r = await Promise.race([saved.catch(() => null), pg.waitForTimeout(100).then(() => undefined)]);
@@ -144,7 +148,7 @@ try {
   if (body?.id) trash.visits.push(body.id);
   await page.waitForSelector('.db-sheet', { state: 'detached', timeout: 8000 }).catch(() => {});
   ok(countMine() === before + 1, 'دقیقاً یک مراجعه در سرور');
-  const toast = await page.locator('.sh-toast').innerText({ timeout: 5000 }).catch(() => '');
+  const toast = await page.locator('.ui-toast.on').innerText({ timeout: 5000 }).catch(() => '');
   ok(/ثبت شد/.test(toast), `پیامِ ثبت آمد («${toast}»)`);
   const row = page.locator('.td-item', { hasText: `سریع${tag}` });
   await row.first().waitFor({ timeout: 8000 }).catch(() => {});
@@ -163,11 +167,12 @@ try {
   await pd.waitForSelector('.td-hello', { timeout: 15000 });
   await pd.locator('[data-quick-visit]').click();
   await pd.waitForSelector('.db-sheet', { timeout: 8000 });
+  await pd.locator('.db-sheet [data-act="new-record"]').click();
   await pd.locator('.db-sheet input[required]').first().fill('بیمارِ');
   await pd.locator('.db-sheet input[required]').nth(1).fill(`سریع${tag}`);
   await pd.locator('.db-stepnav .db-submit').click();
   await pd.waitForTimeout(500);
-  await pd.locator('.db-sheet .db-kindrow button', { hasText: `ویزیتِ سریع ${tag}` }).click();
+  await pd.locator(`.db-sheet .db-kindrow button[data-kind="d${tag}"]`).click(); // کلید، نه متن (clinic-daily-04)
   await pd.locator('.db-stepnav .db-submit').click();
   const dec = pd.locator('.db-sheet .db-decide');
   await dec.waitFor({ timeout: 8000 }).catch(() => {});
@@ -180,7 +185,7 @@ try {
   if (b2?.id) trash.visits.push(b2.id);
   await pd.waitForTimeout(1200);
   await pd.locator('.db-sheet').waitFor({ timeout: 8000 }).catch(() => {});
-  const follow = await pd.locator('.sh-toast').innerText({ timeout: 5000 }).catch(() => '');
+  const follow = await pd.locator('.ui-toast.on').innerText({ timeout: 5000 }).catch(() => '');
   ok(await pd.locator('.db-sheet').count() === 1 && /فرمِ عمل را برای همین بیمار/.test(follow),
     `**فرمِ عملِ همین بیمار بلافاصله باز شد** (مثلِ داشبورد و پرونده) — «${follow}»`);
   await pd.close();

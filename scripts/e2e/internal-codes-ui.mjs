@@ -56,6 +56,8 @@ try {
   const search = page.locator('input[placeholder*="جستجو"], input[type="search"]').first();
   if (await search.count()) { await search.fill('بخیه'); await page.waitForTimeout(1200); }
   const card = page.locator('article, .db-card', { hasText: 'بیمارِ بخیه' }).first();
+  // نتیجهٔ جستجو ممکن است دیرتر از ۱٫۲ ثانیه برسد (کلیکِ بعدی خودش صبر می‌کند؛ شمارش نه)
+  await card.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
   ok(await card.count() >= 1, 'کارتِ مراجعه پیدا شد');
   await card.locator('button[title="صورت‌حساب"]').first().click();
   await page.waitForTimeout(1500);
@@ -70,7 +72,9 @@ try {
   await page.waitForTimeout(400);
   ok(await page.locator('.bl-picked .bl-internal-tag').count() === 1, 'بعد از انتخاب هم نشانِ داخلی می‌ماند');
   const price = await page.locator('.bl-sheet input[placeholder="۰"]').first().inputValue().catch(() => '');
-  ok(String(price) === '450000', `**مبلغِ مصوبِ کد خودکار پر شد (${price})**`);
+  // باکسِ مبلغ (MoneyInput، قانون ۱۳) سه‌رقمی نشان می‌دهد — عدد را بی‌جداکننده بسنج
+  const priceDigits = String(price).replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[^0-9]/g, '');
+  ok(priceDigits === '450000', `**مبلغِ مصوبِ کد خودکار پر شد (${price})**`);
   ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
 } finally {
   await browser.close();

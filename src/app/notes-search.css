@@ -1,23 +1,15 @@
 /* جستجوی بالینی — شرح‌های همهٔ پرونده‌ها با فیلترِ نوع/عمل/تشخیص/موضوع. */
-.ns { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
+.ns { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .ns-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
     radial-gradient(900px 520px at 40% -10%, rgba(var(--brand-rgb), .15), transparent 60%),
     var(--bg);
 }
-.ns-head { max-width: 860px; margin: 0 auto 12px; }
-.ns-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.ns-back:hover { color: var(--brand-2); }
-.ns-head h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
-.ns-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
-
 .ns-filters {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
-  max-width: 860px; margin: 0 auto 12px;
+  max-width: var(--page-w); margin: 0 auto 12px;
 }
 .ns-filters .pk-btn { width: 100%; }
 .ns-q {
@@ -29,18 +21,18 @@
 .ns-q input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text1); background: none; border: 0; outline: none; }
 
 .ns-err {
-  display: flex; align-items: center; gap: 7px; max-width: 860px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .ns-empty {
-  max-width: 860px; margin: 0 auto 12px; padding: 26px 16px; text-align: center;
+  max-width: var(--page-w); margin: 0 auto 12px; padding: 26px 16px; text-align: center;
   font-size: 13px; color: var(--text3);
   border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 .ns-card {
-  max-width: 860px; margin: 0 auto 10px; padding: 12px 14px; border-radius: 15px;
+  max-width: var(--page-w); margin: 0 auto 10px; padding: 12px 14px; border-radius: 15px;
   background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .ns-card-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -51,9 +43,12 @@
 }
 .ns-patient { display: inline-flex; align-items: baseline; gap: 6px; text-decoration: none; color: var(--text1); }
 .ns-patient b { font-size: 13.5px; }
-.ns-patient span { font-size: 10.5px; color: var(--text3); }
+.ns-patient bdi { font-size: 11px; color: var(--text3); }
 .ns-patient:hover b { color: var(--brand-2); }
-.ns-card-head small { margin-inline-start: auto; font-size: 10.5px; color: var(--text3); }
+.ns-card-head small { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
+/* تکه‌های سطرِ مشخصات با «·» از هم جدا می‌شوند — جداکننده در CSS، نه چسبیده به کد/تاریخ. */
+.ns-meta { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; }
+.ns-meta > * + *::before { content: '·'; margin-inline-end: 6px; color: var(--text3); }
 .ns-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
 .ns-tags i {
   font-style: normal; font-size: 10.5px; padding: 2px 9px; border-radius: 99px;

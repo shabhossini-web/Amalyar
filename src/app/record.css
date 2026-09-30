@@ -1,9 +1,9 @@
 /* پروندهٔ بیمار — روی همان پایهٔ definitions.css سوار است (df-*, pf-*) */
-.rc-body { max-width: 900px; margin: 0 auto; }
+.rc-body { max-width: var(--page-w); margin: 0 auto; }
 .rc-form { display: grid; gap: 12px; }
 
 .rc-h3 {
-  margin: 6px 0 0; font-size: 12px; font-weight: 800; color: #c4b5fd;
+  margin: 6px 0 0; font-size: 12px; font-weight: 800; color: var(--brand-text);
   padding-bottom: 7px; border-bottom: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .rc-h3:first-child { margin-top: 0; }
@@ -21,13 +21,13 @@
 
 .rc-locked {
   display: flex; align-items: center; gap: 8px; padding: 13px 15px; border-radius: 12px;
-  font-size: 12.5px; color: #cbd5e1;
+  font-size: 12.5px; color: var(--text1);
   background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(148, 163, 184, .35);
 }
 
 /* هشدارِ حساسیت — باید از همه‌چیز بیشتر به چشم بیاید */
 .rc-alert {
-  max-width: 900px; margin: 0 auto 12px; padding: 11px 15px; border-radius: 12px;
+  max-width: var(--page-w); margin: 0 auto 12px; padding: 11px 15px; border-radius: 12px;
   font-size: 13px; font-weight: 800; color: var(--red-text);
   background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .45);
 }
@@ -36,7 +36,7 @@
 .rc-kind {
   margin-inline-start: 7px; font-style: normal; font-size: 10px; font-weight: 700;
   border-radius: 99px; padding: 2px 8px;
-  color: #c4b5fd; background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .3);
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
 /* ⚠️ یک قاعده برای همهٔ رنگ‌ها، نه یک کلاس به‌ازای هر نوع. فهرستِ نوع‌ها باز
    است: نوعی که کاربر در فرم‌ساز می‌سازد کلاسی در CSS ندارد و برچسبش این‌جا
@@ -67,7 +67,7 @@
 }
 .rc-st-pending   { color: var(--amber-text); background: rgba(251, 191, 36, .1);  border: 1px solid rgba(251, 191, 36, .35); }
 .rc-st-done      { color: var(--green-text); background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .35); }
-.rc-st-cancelled { color: #fda4af; background: rgba(251, 113, 133, .1); border: 1px solid rgba(251, 113, 133, .35); }
+.rc-st-cancelled { color: var(--red-text); background: rgba(251, 113, 133, .1); border: 1px solid rgba(251, 113, 133, .35); }
 
 /* ── آپلود / فرمِ افزودن ── */
 /* ردیفِ نوعِ شرح — جانشینِ `<select>`ِ بسته.
@@ -107,7 +107,7 @@
   background: rgba(var(--surface-rgb), .5); border: 1.5px dashed rgba(var(--brand-soft-rgb), .4);
 }
 .rc-drop input { display: none; }
-.rc-drop b { font-size: 13px; font-weight: 800; color: #d8d2f5; }
+.rc-drop b { font-size: 13px; font-weight: 800; color: var(--text1); }
 .rc-drop small { font-size: 11px; color: var(--text3); }
 .rc-drop:hover, .rc-drop.on { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .1); }
 .rc-drop.busy { opacity: .6; cursor: progress; }
@@ -122,7 +122,7 @@
 .rc-doc-main { min-width: 0; flex: 1; }
 .rc-doc-main b { display: block; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rc-doc-main small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
-.rc-doc-visit { color: #8b7ff0 !important; }
+.rc-doc-visit { color: var(--brand-text) !important; }
 
 /* ── بجِ مرحلهٔ مدرک (قبل/حین/بعد از عمل) ──
    سه مرحله سه رنگ، چون معیارِ کاربر «یک نگاه» است نه خواندن. رنگ‌ها از
@@ -147,7 +147,7 @@
 @keyframes rc-pulse { 0%, 100% { opacity: .35; } 50% { opacity: .7; } }
 .rc-thumb-file {
   display: grid; place-items: center; font-size: 10.5px; font-weight: 800;
-  color: #a99df0; text-transform: uppercase;
+  color: var(--brand-text); text-transform: uppercase;
 }
 
 /* ── شرح‌ها ── */
@@ -156,10 +156,10 @@
   background: rgba(var(--surface-rgb), .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
 }
 .rc-note-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
-.rc-note-head b { font-size: 12.5px; color: #c4b5fd; }
+.rc-note-head b { font-size: 12.5px; color: var(--brand-text); }
 .rc-note-head small { font-size: 10.5px; color: var(--text3); }
 .rc-note-visit {
-  font-size: 10px; font-weight: 700; color: #8b7ff0; border-radius: 99px; padding: 2px 8px;
+  font-size: 10px; font-weight: 700; color: var(--brand-text); border-radius: 99px; padding: 2px 8px;
   background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
 .rc-edited {
@@ -172,7 +172,7 @@
   border-radius: 8px; cursor: pointer; color: var(--text1);
   background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
-.rc-note-body { margin: 0; font-size: 13px; line-height: 2; color: #e6e2f7; white-space: pre-wrap; }
+.rc-note-body { margin: 0; font-size: 13px; line-height: 2; color: var(--text1); white-space: pre-wrap; }
 
 .rc-history { display: grid; gap: 10px; max-height: 60vh; overflow-y: auto; }
 .rc-hrow {
@@ -199,6 +199,7 @@
 }
 .df-toast.bad {
   cursor: pointer;
+  /* زمینهٔ مات و تیره در هر دو تم است، پس متنِ روشن عمدی است (نگهبانِ ⑦). */
   color: #fee2e2;
   background: rgba(76, 12, 20, .97);
   border-color: rgba(248, 113, 113, .55);
@@ -336,9 +337,10 @@
    وگرنه تنها بخشی است که تا لبهٔ صفحه کش می‌آید (W4.1 همین را خورد و فقط با
    اسکرین‌شات دیده شد). */
 .rc-stage,
+.rc-last,
 .rc-next,
 .rc-path,
-.rc-tl { max-width: 900px; margin-inline: auto; }
+.rc-tl { max-width: var(--page-w); margin-inline: auto; }
 
 /* ── کارتِ هویت: فقط‌خواندنی، ویرایش یک اقدام است ── */
 .rc-id {
@@ -404,6 +406,34 @@
 /* ⚠️ گامِ ردشده محو می‌شود ولی **حذف نمی‌شود**: شکلِ نوار باید برای همهٔ
    بیمارها یکی بماند، وگرنه مقایسه با یک نگاه ممکن نیست. */
 .rc-step.is-skipped { opacity: .42; }
+
+/* ── خلاصهٔ آخرین مراجعه (clinic-daily-21): تشخیص، طرحِ درمان، دارو، حساسیت — بالای صفحه ── */
+.rc-last {
+  padding: 11px 14px; border-radius: 14px; margin-bottom: 12px;
+  background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--brand-soft-rgb), .24);
+}
+.rc-last h3 { margin: 0 0 7px; font-size: 12px; }
+.rc-last-open {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; min-height: 30px; padding: 0;
+  cursor: pointer; font: inherit; color: var(--text2); text-align: start; background: none; border: 0;
+}
+.rc-last-open span {
+  font-size: 12.5px; font-weight: 800; color: var(--brand-text);
+  text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px;
+}
+.rc-last-open time, .rc-last-open bdi { font-size: 11.5px; color: var(--text3); }
+.rc-last-open:hover span { color: var(--text1); }
+.rc-last-open:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; border-radius: 6px; }
+.rc-last dl { margin: 0; display: grid; gap: 5px; }
+.rc-last dl > div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.rc-last dt { font-size: 11.5px; color: var(--text3); }
+/* متنِ بلند (طرحِ درمان، نسخه) سه خط؛ متنِ کامل در پاپ‌آپِ همان مراجعه است — سرخط بازش می‌کند. */
+.rc-last dd {
+  margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text1); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.rc-last dd.is-none { font-weight: 400; color: var(--text3); }
+.rc-last-icd { font-size: 11px; font-weight: 600; color: var(--text3); }
 
 /* ── «چه مانده» ── */
 .rc-next { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; margin-bottom: 12px; }
@@ -493,7 +523,18 @@
 
 @media (max-width: 720px) {
   .rc-next { grid-template-columns: 1fr; }
-  .rc-step { flex-basis: 100%; }
+  /* نوارِ مرحله روی گوشی **یک خط** است: «الان کجاییم» + نقطه‌های پیشرفت (clinic-daily-21). فهرستِ
+     عمودیِ شش‌گامی ۴۰۰ پیکسل می‌گرفت و تب‌ها را زیرِ دو صفحه اسکرول می‌برد. متنِ گام‌ها برای
+     صفحه‌خوان می‌ماند (پنهانِ دیداری، نه `display: none`). */
+  .rc-stage { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  .rc-stage-now { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; }
+  .rc-steps { flex: none; flex-wrap: nowrap; gap: 5px; }
+  .rc-step { flex: none; min-width: 0; }
+  .rc-step-dot { width: 13px; height: 13px; margin-top: 0; }
+  .rc-step-dot svg { width: 9px; height: 9px; }
+  .rc-step-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .rc-last-open { min-height: 44px; }
+  .rc-last dl > div { grid-template-columns: 70px minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .rc-act, .rc-tl-row.is-link > a, .rc-tl-row.is-link > button { transition: none; }

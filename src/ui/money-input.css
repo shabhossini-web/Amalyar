@@ -1,0 +1,9 @@
+/* باکسِ مبلغ (`MoneyInput`) — فقط سطرِ «به‌حروف»؛ خودِ کادر استایلِ ظرفش را می‌گیرد (`.db-field input`، …). */
+.mi-words {
+  display: block; flex-basis: 100%; margin-top: 4px;
+  font-size: 11.5px; font-weight: 600; font-style: normal; line-height: 1.6;
+  color: var(--brand-text);
+}
+.mi-words:empty { display: none; }
+/* در کادرِ برچسب‌دارِ فرم جای سطر از اول نگه داشته می‌شود تا با اولین رقم فرم یک سطر پایین نپرد. */
+.db-field .mi-words:empty { display: block; min-height: 1.6em; }

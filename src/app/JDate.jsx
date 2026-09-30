@@ -20,7 +20,9 @@ import Overlay from '../ui/Overlay.jsx';
  * تایپِ مستقیم هم باز می‌ماند — کاربرِ حرفه‌ای سریع‌تر تایپ می‌کند تا کلیک.
  */
 export default function JDate({
-  label, value, onChange, placeholder = '۱۴۰۵/۰۱/۰۱',
+  /* جای‌نگهدار **قالب** را می‌گوید نه یک مقدار (بازبینیِ UX ۱۴۰۵/۰۷): «۱۴۰۵/۰۱/۰۱» در کادرِ خالی
+     شبیهِ تاریخِ پرشده بود — در گزارشِ مالی «از/تا ۱۴۰۵/۰۱/۰۱» در حالی که گزارش همهٔ زمان‌ها بود. */
+  label, value, onChange, placeholder = 'سال / ماه / روز',
   mode = 'date', // date | birth (بازهٔ سال فرق می‌کند)
   className = 'db-field', disabled, hint,
   /**

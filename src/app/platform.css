@@ -25,9 +25,9 @@
 .pa-mark svg { width: 100%; height: auto; }
 
 .pa-word { margin: 0 0 2px; font-size: 30px; font-weight: 900; letter-spacing: -1px; line-height: 1; }
-.pa-kicker { color: #22d3ee; font-size: 11px; letter-spacing: 2px; font-weight: 800; margin: 0; }
+.pa-kicker { color: var(--cyan); font-size: 11px; letter-spacing: 2px; font-weight: 800; margin: 0; }
 .pa h1 { font-size: clamp(25px, 5vw, 38px); margin: 7px 0; }
-.pa-sub { color: #aaa3ca; font-size: 14px; line-height: 2; margin: 0 auto 24px; max-width: 370px; }
+.pa-sub { color: var(--text2); font-size: 14px; line-height: 2; margin: 0 auto 24px; max-width: 370px; }
 
 .pa form { display: grid; gap: 10px; text-align: right; }
 .pa label { font-size: 12px; color: var(--text2); margin-top: 5px; }
@@ -38,7 +38,7 @@
 .pa input:focus, .pa select:focus { border-color: var(--brand-2); box-shadow: 0 0 0 3px rgba(var(--brand-2-rgb), .12); }
 .pa-identity {
   min-height: 52px; display: flex; align-items: center; padding: 12px 15px;
-  border-radius: 13px; font-size: 12px; line-height: 1.8; color: #aaa4c6;
+  border-radius: 13px; font-size: 12px; line-height: 1.8; color: var(--text2);
   background: rgba(var(--brand-soft-rgb), .07); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 
@@ -48,11 +48,11 @@
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 .pa button:disabled { opacity: .5; cursor: not-allowed; }
-.pa-link { color: #a9a2cb; background: transparent; padding: 10px; }
+.pa-link { color: var(--text2); background: transparent; padding: 10px; }
 
 .pa-notice {
   margin-top: 16px; padding: 12px 15px; border-radius: 12px; font-size: 13px; line-height: 1.8;
-  color: #c8f7ff; background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .22);
+  color: var(--cyan); background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .22);
 }
 .pa-security { margin-top: 22px; color: #6f6991; font-size: 10px; line-height: 1.8; }
 .pa-loader {
@@ -64,18 +64,18 @@
 
 /* ── سربرگِ داشبورد ── */
 .pa-head { display: flex; align-items: center; gap: 14px; margin: 16px 0 18px; }
-.pa-head-mark { width: 52px; height: auto; flex-shrink: 0; color: #c4b5fd; }
+.pa-head-mark { width: 52px; height: auto; flex-shrink: 0; color: var(--brand-text); }
 .pa-head-text { min-width: 0; flex: 1; }
 .pa-head h1 { margin: 2px 0; }
 .pa-logout, .pa-refresh {
-  flex-shrink: 0; padding: 10px 15px; border-radius: 12px; color: #ddd7f5;
+  flex-shrink: 0; padding: 10px 15px; border-radius: 12px; color: var(--text1);
   background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24) !important;
 }
 .pa-wide { margin: 0 0 18px; }
 
 .pa-live {
   display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0;
-  font-size: 11px; font-weight: 800; color: #67e8f9; padding: 7px 12px; border-radius: 99px;
+  font-size: 11px; font-weight: 800; color: var(--cyan); padding: 7px 12px; border-radius: 99px;
   background: rgba(34, 211, 238, .1); border: 1px solid rgba(34, 211, 238, .28);
 }
 .pa-live i { width: 7px; height: 7px; border-radius: 50%; background: #22d3ee; animation: paPulse 1.4s ease-in-out infinite; }
@@ -89,7 +89,7 @@
 }
 .pa-stat b { display: block; font-size: 26px; font-weight: 900; line-height: 1.2; }
 .pa-stat small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
-.pa-stat.bad b { color: #fb7185; }
+.pa-stat.bad b { color: var(--red-text); }
 
 /* ── چیدمانِ اصلی ── */
 .pa-grid { display: grid; grid-template-columns: minmax(300px, .8fr) minmax(340px, 1.2fr); gap: 18px; }
@@ -97,7 +97,7 @@
 .pa-section-title { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .pa-section-title > span {
   min-width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px;
-  font-weight: 900; color: #c084fc; background: rgba(var(--brand-2-rgb), .13);
+  font-weight: 900; color: var(--brand-text); background: rgba(var(--brand-2-rgb), .13);
 }
 .pa-section-title h2 { font-size: 18px; margin: 0; }
 .pa-section-title p { font-size: 11px; color: var(--text3); margin: 3px 0 0; }
@@ -115,7 +115,7 @@
 .pa-row-main { min-width: 0; }
 .pa-row-side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .pa-host {
-  display: block; margin-top: 4px; font-size: 10px; color: #67e8f9; text-decoration: none;
+  display: block; margin-top: 4px; font-size: 10px; color: var(--cyan); text-decoration: none;
   overflow: hidden; text-overflow: ellipsis;
 }
 .pa-host:hover { text-decoration: underline; }
@@ -135,9 +135,9 @@
   font-size: 10px; padding: 5px 10px; border-radius: 99px; white-space: nowrap;
   color: var(--amber-text); background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .22);
 }
-.pa-badge.ok   { color: #34d399; background: rgba(52, 211, 153, .1);  border-color: rgba(52, 211, 153, .22); }
-.pa-badge.run  { color: #22d3ee; background: rgba(34, 211, 238, .1);  border-color: rgba(34, 211, 238, .22); }
-.pa-badge.fail { color: #fb7185; background: rgba(251, 113, 133, .1); border-color: rgba(251, 113, 133, .22); }
+.pa-badge.ok   { color: var(--green-text); background: rgba(52, 211, 153, .1);  border-color: rgba(52, 211, 153, .22); }
+.pa-badge.run  { color: var(--cyan); background: rgba(34, 211, 238, .1);  border-color: rgba(34, 211, 238, .22); }
+.pa-badge.fail { color: var(--red-text); background: rgba(251, 113, 133, .1); border-color: rgba(251, 113, 133, .22); }
 
 .pa-jobs { margin-top: 18px; }
 .pa-job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
@@ -154,7 +154,7 @@
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   margin-top: 13px; font-size: 9px; color: var(--text3);
 }
-.pa-job-foot button { padding: 6px 8px; border-radius: 8px; color: #fda4af; background: rgba(251, 113, 133, .08); }
+.pa-job-foot button { padding: 6px 8px; border-radius: 8px; color: var(--red-text); background: rgba(251, 113, 133, .08); }
 .pa-empty { padding: 24px; text-align: center; color: var(--text3); font-size: 13px; }
 
 /* «انجام‌شده‌ها»ی صفِ عملیات — تاریخچه، نه صف؛ بسته به‌طورِ پیش‌فرض و کم‌رنگ‌تر از کارِ باز. */
@@ -167,7 +167,7 @@
 .pa-history-btn:hover { color: var(--text1); }
 .pa-history-btn i {
   font-style: normal; font-size: 11px; padding: 1px 9px; border-radius: 99px;
-  color: #34d399; background: rgba(52, 211, 153, .1);
+  color: var(--green-text); background: rgba(52, 211, 153, .1);
 }
 .pa-history-btn svg { transition: transform .2s cubic-bezier(.2, .7, .2, 1); }
 .pa-history-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
@@ -201,7 +201,7 @@
 }
 .pa-tariff-form input, .pa-tariff-form select {
   width: 100%; padding: 10px 12px; border-radius: 11px; font: inherit; font-size: 12.5px;
-  color: #e8e4f8; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .22);
+  color: var(--text1); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .pa-tariff-form button {
   cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; border: 0;
@@ -209,10 +209,10 @@
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 .pa-tariff-form button:disabled { opacity: .55; cursor: default; }
-.pa-tariffs .pa-job-foot button { color: #c084fc; background: rgba(var(--brand-2-rgb), .13); }
+.pa-tariffs .pa-job-foot button { color: var(--brand-text); background: rgba(var(--brand-2-rgb), .13); }
 
 .pa-danger {
-  font-size: 10px; padding: 7px 11px; border-radius: 9px; color: #fda4af;
+  font-size: 10px; padding: 7px 11px; border-radius: 9px; color: var(--red-text);
   background: rgba(251, 113, 133, .09); border: 1px solid rgba(251, 113, 133, .24) !important;
 }
 .pa-danger:disabled { opacity: .45; }
@@ -225,10 +225,10 @@
 }
 .pa-modal { width: min(430px, 100%); padding: 28px; text-align: center; }
 .pa-modal h2 { font-size: 20px; margin: 0 0 8px; }
-.pa-modal-sub { color: #c3bcdd; font-size: 13px; line-height: 2; margin: 0 0 20px; }
+.pa-modal-sub { color: var(--text2); font-size: 13px; line-height: 2; margin: 0 0 20px; }
 .pa-danger-mark {
   width: 52px; height: 52px; margin: 0 auto 14px; display: grid; place-items: center;
-  border-radius: 16px; font-size: 28px; font-weight: 900; color: #fb7185;
+  border-radius: 16px; font-size: 28px; font-weight: 900; color: var(--red-text);
   background: rgba(251, 113, 133, .12); border: 1px solid rgba(251, 113, 133, .3);
 }
 .pa-modal label { display: block; text-align: right; font-size: 12px; color: var(--text2); margin-bottom: 7px; }
@@ -239,7 +239,7 @@
 }
 .pa-modal input:focus { border-color: #fb7185; box-shadow: 0 0 0 3px rgba(251, 113, 133, .12); }
 .pa-echo {
-  margin-bottom: 9px; padding: 9px; border-radius: 10px; font-size: 13px; color: #d7d1f2; user-select: all;
+  margin-bottom: 9px; padding: 9px; border-radius: 10px; font-size: 13px; color: var(--text1); user-select: all;
   background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(var(--brand-soft-rgb), .28);
 }
 .pa-modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
@@ -249,13 +249,13 @@
 .pa-danger-btn:disabled { opacity: .42; }
 .pa-modal-err {
   margin-top: 14px; padding: 11px 14px; border-radius: 11px; font-size: 12px; line-height: 1.9;
-  color: #fecdd3; background: rgba(251, 113, 133, .09); border: 1px solid rgba(251, 113, 133, .25);
+  color: var(--red-text); background: rgba(251, 113, 133, .09); border: 1px solid rgba(251, 113, 133, .25);
 }
 
 /* ── نشانیِ سایتِ شرکت: افزودن و اصلی‌کردن، برگشت، حذفِ نشانیِ فرعی ──
    فیروزه‌ای = نشانی (همان رنگِ تراشه‌های کارت)؛ صورتی فقط برای حذف. */
 .pa-soft {
-  font-size: 10px; padding: 7px 11px; border-radius: 9px; color: #67e8f9; cursor: pointer;
+  font-size: 10px; padding: 7px 11px; border-radius: 9px; color: var(--cyan); cursor: pointer;
   background: rgba(103, 232, 249, .08); border: 1px solid rgba(103, 232, 249, .24) !important;
 }
 .pa-soft:disabled { opacity: .45; cursor: default; }
@@ -270,21 +270,21 @@
 .pa-addr-list li.on { background: rgba(103, 232, 249, .08); border-color: rgba(103, 232, 249, .38); }
 .pa-addr-list a {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 12.5px; color: #67e8f9; text-decoration: none;
+  font-size: 12.5px; color: var(--cyan); text-decoration: none;
 }
 .pa-addr-list a:hover { text-decoration: underline; }
 .pa-addr-list em {
-  flex-shrink: 0; font-style: normal; font-size: 10px; font-weight: 800; color: #34d399;
+  flex-shrink: 0; font-style: normal; font-size: 10px; font-weight: 800; color: var(--green-text);
   padding: 3px 10px; border-radius: 99px; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .24);
 }
 .pa-addr-list span { display: flex; gap: 6px; flex-shrink: 0; }
 .pa-addr-list button {
   min-height: 36px; padding: 0 11px; border-radius: 9px; font: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
-  color: #67e8f9; background: rgba(103, 232, 249, .08); border: 1px solid rgba(103, 232, 249, .24);
+  color: var(--cyan); background: rgba(103, 232, 249, .08); border: 1px solid rgba(103, 232, 249, .24);
 }
-.pa-addr-list .pa-addr-del { color: #fda4af; background: rgba(251, 113, 133, .08); border-color: rgba(251, 113, 133, .26); }
+.pa-addr-list .pa-addr-del { color: var(--red-text); background: rgba(251, 113, 133, .08); border-color: rgba(251, 113, 133, .26); }
 .pa-addr-list button:disabled { opacity: .45; cursor: default; }
-.pa-addr-warn { margin: -4px 0 14px; font-size: 11.5px; line-height: 1.9; color: #fda4af; text-align: center; }
+.pa-addr-warn { margin: -4px 0 14px; font-size: 11.5px; line-height: 1.9; color: var(--red-text); text-align: center; }
 .pa-addr input { text-align: left; letter-spacing: normal; border-color: rgba(103, 232, 249, .3); }
 .pa-addr input:focus { border-color: #67e8f9; box-shadow: 0 0 0 3px rgba(103, 232, 249, .14); }
 .pa-addr-preview { margin: 8px 2px 0; font-size: 12px; color: var(--text2); text-align: left; }
@@ -296,7 +296,7 @@
 }
 .pa-addr-next b { color: var(--text1); }
 .pa-addr-next ol { margin: 6px 0; padding-inline-start: 20px; }
-.pa-addr-next code, .pa-addr-next a { color: #67e8f9; font-size: 11.5px; word-break: break-all; }
+.pa-addr-next code, .pa-addr-next a { color: var(--cyan); font-size: 11.5px; word-break: break-all; }
 .pa-addr-next p { margin: 6px 0 0; }
 .pa-soft:focus-visible, .pa-addr button:focus-visible, .pa-addr-list a:focus-visible {
   outline: 2px solid var(--cyan); outline-offset: 2px;

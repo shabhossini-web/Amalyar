@@ -8,7 +8,7 @@
 }
 .gt-ic {
   display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px;
-  color: #fcd34d; background: rgba(245, 158, 11, .12); border: 1px solid rgba(251, 191, 36, .32);
+  color: var(--amber-text); background: rgba(245, 158, 11, .12); border: 1px solid rgba(251, 191, 36, .32);
 }
 .gt-card b { font-size: 15px; font-weight: 900; }
 .gt-card p { font-size: 12.5px; line-height: 1.9; color: var(--text2); }

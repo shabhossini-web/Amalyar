@@ -85,7 +85,9 @@ const openVisit = async (p, id) => {
   await p.locator('.db-sheet [data-visit-bar]').waitFor({ timeout: 15000 }).catch(() => {});
   await p.waitForTimeout(700);
 };
-const tab = (p, label) => p.locator('.db-postop .ui-tabs button', { hasText: label }).click();
+/* زبانه‌های فرمِ عمل از بازبینیِ UX (surgery-10) زیرِ سربرگ‌اند: «مشخصات | قبل | حین | بعد». */
+const tab = (p, label) => p.locator('.db-sheet .db-phasetabs button', { hasText: label }).click();
+const activeTab = (p) => p.locator('.db-sheet .db-phasetabs button[aria-selected="true"]').innerText();
 const card = (p, key, ph) => p.locator(`[data-subform="${key}"][data-subform-phase="${ph}"]`);
 
 try {
@@ -119,7 +121,7 @@ try {
 
   console.log('۱) عملِ موجود — علائمِ حیاتی دیگر کادرِ ثابت نیست');
   await openVisit(page, S.id);
-  ok('عملِ آینده روی «قبل از عمل» باز شد', (await page.locator('.db-postop .ui-tabs button[aria-selected="true"]').innerText()).includes('قبل از عمل'));
+  ok('عملِ آینده روی «قبل از عمل» باز شد', (await activeTab(page)).includes('قبل از عمل'));
   ok('**هیچ کادرِ علائمِ حیاتیِ بیرون از کارت نیست**',
     await page.locator('.db-sheet .vs-box').count() === await page.locator('.db-sheet .vf-card .vs-box').count());
   ok('**اندازهٔ قبلیِ «قبل» کارتِ ضمنیِ همان تب را دارد** (با «داده دارد» و قفل، نه ×)',
@@ -157,14 +159,39 @@ try {
   await page.locator('.vf-pick [data-subform-item="subform.asa"] [data-act="attach"]').click();
   await page.waitForTimeout(500);
   ok('**الصاق تب را به همان مرحله برد و کارت آن‌جاست**',
-    (await page.locator('.db-postop .ui-tabs button[aria-selected="true"]').innerText()).includes('قبل از عمل')
+    (await activeTab(page)).includes('قبل از عمل')
     && await card(page, 'subform.asa', 'pre').count() === 1);
   await page.locator('.vf-attach').click();
   await page.locator('.vf-pick').waitFor({ timeout: 5000 });
   ok('سربرگ پنجره را با تبِ فعال باز می‌کند', await page.locator('.vf-pick [data-pick-phase="pre"][aria-checked="true"]').count() === 1);
+  /* surgery-11: فرمی که مالِ یک مرحلهٔ خاص است مرحله‌اش را کنارِ ردیف می‌گوید؛ هشدار فقط وقتی کاربر خودش
+     مرحلهٔ دیگری زده. فرمِ بی‌مرحلهٔ خاص (علائمِ حیاتی) برچسب نمی‌گیرد. */
+  const intraRow = page.locator('.vf-pick [data-subform-item="subform.intra"]');
+  const hasIntraForm = (await intraRow.count()) === 1;
+  if (hasIntraForm) {
+    ok('**«فرمِ جزئیاتِ حینِ عمل»: «معمولاً: حین عمل» کنارِ ردیف، بی‌هشدار (مرحله را کاربر نزده)**',
+      (await intraRow.locator('[data-usual-phase="intra"]').innerText()).includes('حین عمل') && await intraRow.locator('.vf-pick-usual.is-off').count() === 0);
+  }
+  ok('فرمِ بی‌مرحلهٔ خاص (علائمِ حیاتی) برچسبِ مرحله نمی‌گیرد', await page.locator('.vf-pick [data-subform-item="vitals"] [data-usual-phase]').count() === 0);
   await page.locator('.vf-pick [data-pick-phase="post"]').click();
   ok('ASA در «بعد» هنوز الصاق نشده', (await page.locator('.vf-pick [data-subform-item="subform.asa"] [data-act="attach"]').innerText()).trim() === 'الصاق');
+  if (hasIntraForm) {
+    ok('**با «الصاق به»ِ دیگر، کنارِ همان ردیف هشدار می‌آید**', await intraRow.locator('.vf-pick-usual.is-off').count() === 1
+      && (await intraRow.locator('.vf-pick-usual.is-off').innerText()).includes('بعد از عمل'));
+  }
   await page.locator('.vf-pick .db-x').click();
+  if (hasIntraForm) {
+    /* از سربرگ (بی‌انتخابِ صریحِ مرحله) فرمِ حینِ عمل به «حین» می‌رود، نه به تبِ فعالِ «قبل» — و زبانه همان‌جا
+       می‌رود. کارتِ خالی بعد با × برداشته می‌شود تا بدنهٔ ذخیرهٔ پایین دست نخورد. */
+    await page.locator('.vf-attach').click();
+    await page.locator('.vf-pick').waitFor({ timeout: 5000 });
+    await intraRow.locator('[data-act="attach"]').click();
+    await page.waitForTimeout(400);
+    ok('**الصاق از سربرگ: فرمِ حینِ عمل در «حین عمل» نشست و زبانه همان‌جا رفت**',
+      await card(page, 'subform.intra', 'intra').count() === 1 && await card(page, 'subform.intra', 'pre').count() === 0 && (await activeTab(page)).includes('حین عمل'));
+    await card(page, 'subform.intra', 'intra').locator('[data-act="subform-remove"]').click();
+    await tab(page, 'قبل از عمل');
+  }
 
   console.log('\n۴) مراقبتِ «قبل از عمل» — پاپ‌آپ');
   const prev = page.locator('[data-care-open="pre"]');
@@ -243,9 +270,10 @@ try {
     restoreRequired.push(fld.id);
   }
   /* فهرستِ تازه — فرمِ ویزیت ممکن است همین اولِ سوییت ساخته شده باشد. */
-  const kindsNow = (await send('/forms/visit-kinds')).json ?? [];
-  const clinicKind = kindsNow.find((k) => (k.kind ?? k.key) === 'clinic')?.title ?? 'فرمِ ویزیت';
-  const surgeryKind = kindsNow.find((k) => (k.kind ?? k.key) === 'surgery')?.title ?? 'فرمِ جراحی';
+  /* ⚠️ دکمهٔ نوع با کلیدش (`data-kind`) پیدا می‌شود نه با متن: برچسب از واژهٔ حوزه است
+     («ویزیت / عمل»، بازبینیِ UX clinic-daily-04) و عنوانِ فرم دیگر رویش نیست. */
+  const clinicKind = 'clinic';
+  const surgeryKind = 'surgery';
   const ctx2 = await browser.newContext({ viewport: { width: 1320, height: 900 } });
   const p2 = await ctx2.newPage();
   watch(p2);
@@ -254,12 +282,14 @@ try {
   await p2.goto(`${UI}/app/dashboard`, { waitUntil: 'networkidle' });
   await p2.locator('.db-add').first().click();
   await p2.waitForTimeout(600);
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await p2.locator('.db-sheet [data-act="new-record"]').click();
   const nameInp = p2.locator('.db-sheet .db-grid2 input');
   await nameInp.nth(0).fill('تازهٔ');
   await nameInp.nth(1).fill(`مرحله${tag}`);
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(900);
-  const kindBtn = (title) => p2.locator('.db-kindrow button').filter({ hasText: new RegExp(`^\\s*${title}\\s*$`) });
+  const kindBtn = (kind) => p2.locator(`.db-kindrow button[data-kind="${kind}"]`);
   await kindBtn(clinicKind).click();
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(900);
@@ -275,11 +305,14 @@ try {
   await kindBtn(surgeryKind).click();
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(900);
+  /* ثبتِ تازه روی زبانهٔ «مشخصات» باز می‌شود (هسته هنوز خالی است) — کارتِ جابه‌جاشده در زبانهٔ «قبل». */
+  ok('ثبتِ تازهٔ عمل روی زبانهٔ «مشخصات» باز شد', (await activeTab(p2)).includes('مشخصات'), await activeTab(p2).catch(() => ''));
+  await tab(p2, 'قبل از عمل');
   ok('**عوض‌شدنِ نوع: کارت و اندازهٔ تایپ‌شده به «قبل از عمل» رفت**',
     await card(p2, 'vitals', 'pre').count() === 1 && (await card(p2, 'vitals', 'pre').locator('[data-vital="hr"]').inputValue()) === '66'
     && await p2.locator('[data-subform="vitals"]:not([data-subform-phase])').count() === 0);
   /* عمل → ویزیت: دو مرحله با پاسخ یعنی یکی‌کردنِ دو اندازه — نوع عوض نمی‌شود و گفته می‌شود چرا. */
-  await p2.locator('.db-postop .ui-tabs button', { hasText: 'بعد از عمل' }).click();
+  await tab(p2, 'بعد از عمل');
   await p2.locator('[data-act="phase-attach"][data-phase="post"]').click();
   await p2.locator('.vf-pick [data-subform-item="vitals"] [data-act="attach"]').click();
   await card(p2, 'vitals', 'post').locator('[data-vital="spo2"]').fill('97');
@@ -293,7 +326,7 @@ try {
     await p2.locator('.lx-toast').innerText().catch(() => ''));
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(700);
-  await p2.locator('.db-postop .ui-tabs button', { hasText: 'قبل از عمل' }).click();
+  await tab(p2, 'قبل از عمل');
   await card(p2, 'vitals', 'pre').locator('[data-vital="hr"]').fill('');
   await p2.locator('.db-steps li').nth(1).locator('button').click();
   await p2.waitForTimeout(400);
@@ -345,9 +378,9 @@ try {
   await fakeAi(m);
   await browserLogin(m, login.accessToken, { ui: UI });
   await openVisit(m, S.id);
-  await m.locator('.db-postop .ui-tabs button', { hasText: 'حین عمل' }).click();
+  await tab(m, 'حین عمل');
   ok('موبایل: کارتِ «حین» و «+ الصاقِ فرم» در تب', await card(m, 'vitals', 'intra').count() === 1 && await m.locator('[data-act="phase-attach"][data-phase="intra"]').count() === 1);
-  await m.locator('.db-postop .ui-tabs button', { hasText: 'قبل از عمل' }).click();
+  await tab(m, 'قبل از عمل');
   await m.locator('[data-care-open="pre"]').click();
   await m.locator('[data-care-sheet="pre"]').waitFor({ timeout: 5000 });
   const over = await m.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

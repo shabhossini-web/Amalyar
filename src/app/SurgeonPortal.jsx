@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
-import { fmtMoney } from '../lib/money.js';
+import { faDate, jStrToIso, toEnDigits, todayJStr } from '../lib/jalali.js';
+import { fmtMoney, fmtToman } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { useConfig, useStatusMap } from './config.jsx';
 import { HERO, useAllowedTools } from './tools.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Pick from '../ui/Pick.jsx';
 import { Doctor, Eye } from '../ui/icons.jsx';
 import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
+import { FLOW } from '../lib/terms.js';
 import JDate from './JDate.jsx';
 import './surgeon-portal.css';
 import './launcher.css';
@@ -110,11 +112,13 @@ export default function SurgeonPortal() {
   useEffect(() => { if (!tabPicked.current) setTab(clinic ? 'today' : 'visits'); }, [clinic]);
   const [toast, setToast] = useState('');
   const [surgeonId, setSurgeonId] = useState('');
+  /* شمارهٔ جراح را خودِ سوپرادمین می‌نویسد و سرور با «تعاریف» می‌سنجد (بستهٔ PS، PS6) — نه اعتماد به تعاریف. */
+  const [grantPhone, setGrantPhone] = useState('');
+  const grantDigits = toEnDigits(grantPhone).replace(/[^0-9]/g, '');
   const [notice, setNotice] = useState('');
   const [grantBusy, setGrantBusy] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { document.title = `${t.portal} — عمل‌یار`; }, [t.portal]);
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2200); return () => clearTimeout(h); }, [toast]);
 
   /* هر پنل بازخوانیِ خودش را این‌جا می‌گذارد تا پاپ‌آپ بعد از ثبت همان را تازه کند. */
@@ -124,7 +128,8 @@ export default function SurgeonPortal() {
   const grant = async () => {
     setGrantBusy(true);
     try {
-      const result = await api(`/surgeon/accounts/${surgeonId}`, { method: 'POST', body: {} });
+      setError('');
+      const result = await api(`/surgeon/accounts/${surgeonId}`, { method: 'POST', body: { phone: grantDigits } });
       setNotice(result.existing ? `حساب جراح موجود است (سطح ${result.level}، وضعیت ${result.status}). وضعیت و سطح از مدیریت کاربران قابل بررسی است.` : 'حساب جراح آماده شد. جراح با شمارهٔ ثبت‌شده، از «ثبت‌نام» و کد پیامکی حسابش را تحویل می‌گیرد؛ نیازی به ساخت هویت تکراری نیست.');
     } catch (e) { setError(e.message); } finally { setGrantBusy(false); }
   };
@@ -133,17 +138,23 @@ export default function SurgeonPortal() {
      مراجعاتِ پزشکان» برای صاحبِ مطبی که خودش پزشک است **غلط** بود؛ حالا همان قاعده از
      طرفِ دیگر: ناظری که میزِ همه یا پزشکِ دیگری را می‌بیند «امروزِ من» نمی‌خوانَد. */
   const financesLabel = mine ? 'بیلان مالی من' : clinic ? 'بیلانِ پزشک' : 'بیلان جراح';
+  /* هشدار: واژه‌های نمای ناظر از حوزه (بازبینیِ UX، company-23): شرکت «پرتالِ کدام جراح؟ / همهٔ جراحان»،
+     مطب «میزِ کدام پزشک؟ / همهٔ پزشکان» — تا پیش از این در شرکت هم «میزِ کدام پزشک؟» نوشته می‌شد. */
+  const deskOf = clinic ? 'میزِ' : 'پرتالِ';
+  const pickLabel = `${deskOf} کدام ${t.surgeon}؟`;
   const items = clinic
     ? [{ key: 'today', label: mine ? 'امروزِ من' : 'امروز' }, { key: 'visits', label: mine ? 'بیمارانِ من' : 'بیماران' }, { key: 'results', label: 'نتایجِ رسیده' }, { key: 'finances', label: financesLabel }]
     : [{ key: 'visits', label: 'بیماران و دستورها' }, { key: 'finances', label: financesLabel }];
   const hint = mine ? t.portalHint
-    : picked ? `نمای ناظر: میزِ ${picked.name} — هر کارِ این میز از همین‌جا انجام می‌شود، بی‌نیاز به ورود با حسابِ او.`
-      : 'نمای ناظر: میزِ همهٔ پزشکان — هر ردیف نامِ پزشکش را دارد؛ برای میزِ یک پزشک او را انتخاب کنید.';
+    : picked ? `نمای ناظر: ${deskOf} ${picked.name} — هر کارِ آن از همین‌جا انجام می‌شود، بی‌نیاز به ورود با حسابِ او.`
+      : `نمای ناظر: ${deskOf} همهٔ ${t.surgeon}ان — هر ردیف نامِ ${t.surgeon}ش را دارد؛ برای ${deskOf} یک ${t.surgeon} او را انتخاب کنید.`;
   const pane = { things, reloadRef, access, pickId, picked, mine };
 
   return (
     <main className="sp-page">
-      <header className="sp-head"><h1>{t.portal}</h1><Link to="/app">سامانه</Link></header>
+      {/* «میزِ پزشک» / «پرتال جراح» از واژگانِ حوزه (قانونِ ۲۴) با آیکونِ همان کاشی؛ بازگشت تا بازبینیِ UX
+          (shell-15) یک لینکِ بی‌آیکونِ «سامانه» ته سربرگ بود. */}
+      <PageHeader tool="surgeon" />
       {!desk ? <p className="sp-empty">در حالِ بارگذاری…</p> : (
         <>
           <p className="sp-hint">{verticalLabel} · {hint}</p>
@@ -151,9 +162,9 @@ export default function SurgeonPortal() {
             /* انتخابگرِ «میزِ کدام پزشک؟» — فقط برای ناظر، بالای تب‌ها چون دامنهٔ **همهٔ**
                تب‌هاست (امروز، بیماران، نتایج، بیلان)، نه فیلترِ یک تب. */
             <div className="sp-scope" role="group" aria-labelledby="sp-scope-l">
-              <span id="sp-scope-l" className="sp-scope-l"><Eye size={16} />میزِ کدام پزشک؟</span>
+              <span id="sp-scope-l" className="sp-scope-l"><Eye size={16} />{pickLabel}</span>
               <div className="sp-scope-pick">
-                <Pick label="میزِ کدام پزشک؟" value={pickId} onChange={choosePick} options={desk.doctors} labelOf={(d) => d.label || d.name} placeholder="همهٔ پزشکان" />
+                <Pick label={pickLabel} value={pickId} onChange={choosePick} options={desk.doctors} labelOf={(d) => d.label || d.name} placeholder={`همهٔ ${t.surgeon}ان`} />
               </div>
             </div>
           )}
@@ -174,7 +185,11 @@ export default function SurgeonPortal() {
       {supervising && (
         <details className="sp-card sp-setup"><summary>فعال‌سازی حساب جراح از تعاریف پایه</summary>
           <label className="ia-field"><span>جراح</span><select value={surgeonId} onChange={(e) => setSurgeonId(e.target.value)}><option value="">انتخاب جراح</option>{desk.doctors.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
-          <button className="bl-mini" disabled={!surgeonId || grantBusy} type="button" onClick={grant}>آماده‌سازی حساب پرتال</button>
+          <label className="ia-field"><span>موبایلِ جراح — از خودِ او بپرسید</span>
+            <input type="tel" dir="ltr" inputMode="numeric" autoComplete="off" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={grantPhone}
+                   onChange={(e) => setGrantPhone(e.target.value)} aria-describedby="sp-grant-note" /></label>
+          <p id="sp-grant-note" className="sp-hint">حساب فقط وقتی ساخته می‌شود که این شماره با شمارهٔ جراح در «تعاریف» یکی باشد؛ کدِ تحویلِ حساب به همین شماره پیامک می‌شود.</p>
+          <button className="bl-mini" disabled={!surgeonId || grantDigits.length !== 11 || grantBusy} type="button" onClick={grant}>آماده‌سازی حساب پرتال</button>
           <Link to="/app/definitions?section=surgeons">تعریف یا اصلاح مشخصات جراح</Link>
           {notice && <p role="status">{notice}</p>}
         </details>
@@ -197,10 +212,11 @@ function Row({ open, className = '', children, ...attrs }) {
  * قانونِ ۱۵) و برای بقیه `null` است، پس ردیفِ پزشک در میزِ خودش عوض نمی‌شود.
  */
 function DoctorTag({ name }) {
+  const { t } = useConfig();
   if (!name) return null;
   return (
     <span className="sp-doc" data-doctor={name}>
-      <Doctor size={13} /><span className="sp-sr">پزشک: </span><span className="sp-doc-n">{name}</span>
+      <Doctor size={13} /><span className="sp-sr">{t.surgeon}: </span><span className="sp-doc-n">{name}</span>
     </span>
   );
 }
@@ -216,6 +232,7 @@ const withDoctor = (path, pickId) => (pickId ? `${path}${path.includes('?') ? '&
  * انتخاب‌شده — و «کارها» صفِ همان پزشک (`/work?owner=`) یا صفِ تیم.
  */
 function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine }) {
+  const { t } = useConfig();
   const orderFa = useStatusMap('order');
   const [data, setData] = useState(null);
   const [work, setWork] = useState(null);
@@ -282,7 +299,7 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
       await api(`/work/${w.id}`, { method: 'PATCH', body: { action, ...body } });
       setWork((cur) => (cur && Array.isArray(cur.rows) ? { ...cur, rows: cur.rows.filter((x) => x.id !== w.id) } : cur));
       window.dispatchEvent(new Event(WORK_CHANGED));
-      toast(action === 'done' ? 'انجام شد' : 'به فردا موکول شد');
+      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
     } catch (e) { toast(e?.message || 'انجام نشد'); } finally { setBusy(0); }
   };
   const openVisit = (v) => things.open({ type: 'visit', id: v.id, patientId: v.patientId });
@@ -309,8 +326,8 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
   const who = mine ? 'شما' : picked?.name ?? null;
   const workMode = work?.mode ?? (mine ? 'mine' : 'team');
   const workTitle = workMode === 'mine' ? 'کارهای من'
-    : workMode === 'doctor' || workMode === 'noaccount' ? `کارهای ${picked?.name ?? 'پزشک'}`
-      : workMode === 'team' ? 'کارهای پزشکان' : 'کارهای تیم';
+    : workMode === 'doctor' || workMode === 'noaccount' ? `کارهای ${picked?.name ?? t.surgeon}`
+      : workMode === 'team' ? `کارهای ${t.surgeon}ان` : 'کارهای تیم';
   return (
     <>
       {/* نوارِ خلاصه — «اطلاعاتِ لازم دمِ دست» (بازخوردِ مالک ۱۴۰۵/۰۶/۳۰). هیچ
@@ -322,8 +339,9 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
         <li className={sum.unreviewed ? 'hot' : ''}><b>{faNum(sum.unreviewed ?? 0)}</b> نتیجهٔ منتظر</li>
         {money.total > 0 && (
           <li className="sp-sum-money">
-            صورت‌حسابِ امروز <b>{fmtMoney(money.total)}</b>
-            {money.due > 0 ? <> · مانده <b className="due">{fmtMoney(money.due)}</b></> : <> · تسویه</>} تومان
+            {/* واحد کنارِ هر عدد — «· تسویه تومان» بی‌معنا بود (clinic-daily-10). */}
+            صورت‌حسابِ امروز <b>{fmtToman(money.total)}</b>
+            {money.due > 0 ? <> · مانده <b className="due">{fmtToman(money.due)}</b></> : <> · تسویه</>}
           </li>
         )}
       </ul>
@@ -357,7 +375,8 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
                   <Row open={open} data-day-key={r.key} data-visit-id={r.visitId ?? undefined} data-appt-id={r.apptId ?? undefined}>
                     <span className="sp-row-time">{faTime(r.time) || (r.seq != null ? `شمارهٔ ${faNum(r.seq)}` : '—')}</span>
                     <span className="sp-row-name">
-                      {r.patient?.fullName ?? 'ثبت‌نامِ تکمیل‌نشده'}
+                      {/* فاصلهٔ واقعی تا برچسب — وگرنه حرفِ آخرِ نام به آن می‌چسبد («رضایـ»، clinic-daily-13). */}
+                      {r.patient?.fullName ?? 'ثبت‌نامِ تکمیل‌نشده'}{' '}
                       {r.kind && <span className="sp-kind">{kindOf(r.kind).label}</span>}
                     </span>
                     {/* هشدار: مبلغ **بیرونِ** بخشِ کوتاه‌شونده است: روی عرضِ گوشی
@@ -368,9 +387,13 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
                       <span className="sp-row-meta">{[r.topic, r.hospital, r.code].filter(Boolean).join(' · ') || (r.visitId ? '' : 'هنوز مراجعه‌ای ثبت نشده')}</span>
                       {due > 0 && <span className="sp-due">مانده {fmtMoney(due)} تومان</span>}
                     </span>
+                    {/* هشدار: هر برچسب پیشوندِ صاحبش را دارد (بازبینیِ UX، clinic-daily-20): «انجام شد» و
+                        «در انتظار» کنارِ هم می‌آمدند و معلوم نبود کدام مالِ نوبت است و کدام مالِ
+                        ویزیت — دو خبرِ به‌ظاهر متناقض. واژهٔ دوم نوعِ همین مراجعه است («عمل جراحی»)،
+                        و اگر نوع نیامد واژهٔ حوزه. خودِ وضعیت‌ها همچنان از سرورند. */}
                     <span className="sp-row-tags">
-                      {r.apptStatusFa && <span className={`sp-row-tag${r.apptStatus === 'arrived' ? ' hot' : ''}`}>{r.apptStatusFa}</span>}
-                      {r.opStatusFa && <span className="sp-row-tag">{r.opStatusFa}</span>}
+                      {r.apptStatusFa && <span className={`sp-row-tag${r.apptStatus === 'arrived' ? ' hot' : ''}`}>{FLOW.appointment}: {r.apptStatusFa}</span>}
+                      {r.opStatusFa && <span className="sp-row-tag">{r.kind ? kindOf(r.kind).label : t.visit}: {r.opStatusFa}</span>}
                     </span>
                   </Row>
                 </li>
@@ -495,7 +518,9 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
         ? <h2><button type="button" className="sp-open" onClick={() => things.open({ type: 'visit', id: row.id, patientId: row.patientId })}>{row.fullName}</button></h2>
         : <h2>{row.fullName}</h2>}
       <DoctorTag name={row.doctor} />
-      <span>{row.code} · {faDate(row.opDate)} · {row.hospital || 'مرکز تعیین نشده'}</span>
+      {/* هشدار: کدِ لاتین جدا از تاریخ (قانونِ ۹، company-05): بی‌جداسازی مرورگر رقمِ روز را آن‌طرفِ کد می‌برد و
+          «۶ مهر ۱۴۰۵» به‌شکلِ «۶ · AM-0005-V1 مهر ۱۴۰۵» دیده می‌شد — روزِ عمل اشتباه خوانده می‌شد. */}
+      <span><bdi dir="ltr">{row.code}</bdi> · {faDate(row.opDate)} · {row.hospital || 'مرکز تعیین نشده'}</span>
       <span>{clinic ? [kindOf(row.kind).label, row.topic].filter(Boolean).join(' · ') : (row.procedure || 'عمل تعیین نشده')} · {status}</span>
       {row.report && <details><summary>گزارشِ ثبت‌شدهٔ {kindOf(row.kind).label}</summary><div className="sp-report">{row.report}</div></details>}
       {row.documents?.map((doc) => <button className="bl-mini" type="button" key={doc.id} onClick={() => document(doc)}>{doc.title || doc.fileName}</button>)}
@@ -521,6 +546,7 @@ function SurgeonCase({ row, clinic, implant, reload, things, access }) {
  * `selectionRequired` می‌گوید و این‌جا همان را راهنمایی می‌کند.
  */
 function SurgeonFinances({ pickId }) {
+  const { t, vertical } = useConfig();
   const [page, setPage] = useState(1), [data, setData] = useState(null), [error, setError] = useState('');
   useEffect(() => { let alive = true; setData(null); setError('');
     api(`/surgeon/finances?surgeonId=${pickId ?? ''}&page=${page}`).then((d) => { if (alive) setData(d); }).catch((e) => { if (alive) setError(e.message); });
@@ -531,10 +557,10 @@ function SurgeonFinances({ pickId }) {
     <p>همه مبالغ تومان است. سهم فقط از تسویه نهایی محاسبه می‌شود. پرداخت‌ها، ثبت‌های مالی شرکت هستند؛ ثبت چک به معنی وصول آن نیست. پرونده بدون تسویه نهایی، سهم قطعی ندارد.</p>
     {error && <p role="alert">{error}</p>}
     {!data && !error && <p>در حال دریافت بیلان…</p>}
-    {data?.selectionRequired && <p className="sp-empty">بیلان مالِ یک پزشک است: پزشک را از «میزِ کدام پزشک؟» بالای صفحه انتخاب کنید.</p>}
+    {data?.selectionRequired && <p className="sp-empty">بیلان مالِ یک {t.surgeon} است: {t.surgeon} را از «{vertical === 'clinic' ? 'میزِ' : 'پرتالِ'} کدام {t.surgeon}؟» بالای صفحه انتخاب کنید.</p>}
     {data && !data.selectionRequired && <><article className="sp-card"><h2>{data.surgeon}</h2><p>سهم نهایی: {money(data.earned)} · پرداخت ثبت‌شده: {money(data.paid)} · مانده: {money(data.balance)}</p></article>
       {data.rows.length === 0 && <p>مراجعه‌ای ثبت نشده است.</p>}
-      {data.rows.map((r) => <article className="sp-card" key={r.id}><h2>{r.patient}</h2><span>{r.code} · {faDate(r.date)} · {r.hospital}</span>
+      {data.rows.map((r) => <article className="sp-card" key={r.id}><h2>{r.patient}</h2><span><bdi dir="ltr">{r.code}</bdi> · {faDate(r.date)} · {r.hospital}</span>
         <p>{r.finalized ? `سهم نهایی: ${money(r.earned)}` : 'در انتظار تسویه نهایی'} · پرداخت: {money(r.paid)}{r.finalized ? ` · مانده: ${money(r.balance)}` : ''}</p>
         {r.payments.length > 0 && <details><summary>پرداخت‌های این مراجعه</summary>{r.payments.map((p) => <p key={p.id}>{faDate(p.paidAt)} · {money(p.amount)} تومان {p.reference ? `· پیگیری ${p.reference}` : ''}</p>)}</details>}
       </article>)}

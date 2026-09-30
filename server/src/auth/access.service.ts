@@ -13,6 +13,7 @@ import {
   PERMISSIONS,
   PERMISSION_BY_KEY,
 } from './access-registry';
+import { ROLE_GATED, eligibilityOf, seedFeatureRows } from '../features/features.service';
 
 export type AccessKind = 'feature' | 'permission';
 
@@ -61,10 +62,8 @@ export class AccessService {
   // ── seedِ تنبل ────────────────────────────────────────────────
 
   private async ensureSeeded() {
-    await this.prisma.feature.createMany({
-      data: FEATURES.map((f) => ({ key: f.key, minLevel: f.defaultLevel })),
-      skipDuplicates: true,
-    });
+    /* ماژولِ غایب به پلانِ نوعِ همین نصب، نه «روشن با سطحِ سراسری» (global-07). */
+    await seedFeatureRows(this.prisma);
     await this.prisma.permission.createMany({
       data: PERMISSIONS.map((p) => ({ key: p.key, minLevel: p.defaultLevel })),
       skipDuplicates: true,
@@ -192,6 +191,54 @@ export class AccessService {
       enabled: patch.enabled ?? undefined,
       roles: patch.roles ?? undefined,
     }, user, `access.${kind}.update`);
+  }
+
+  /**
+   * **اثرِ یک تغییر، پیش از اعمال** — چه کسانی در را از دست می‌دهند و چه کسانی به آن می‌رسند.
+   * فقط خواندن؛ هیچ ردیفی نوشته نمی‌شود.
+   *
+   * ⚠️ سمتِ سرور (بازبینیِ خصمانه، R9؛ قانونِ ۳): «سطوحِ دسترسی» تا امروز فرمولِ گارد را در کلاینت
+   * تکرار می‌کرد و صلاحیتِ نقش‌محورِ پنلِ کارشناسی، پرتالِ حمل‌ونقل و پرتالِ جراح را نمی‌دید —
+   * پرسشِ «۴ نفر دیگر دسترسی ندارند» نامِ کسانی را می‌آورد که هرگز دسترسی نداشتند (راننده برای
+   * پنلِ کارشناسی). حالا همان قاعدهٔ گاردها (روشن، سطح، نقشِ شغلی) و همان صلاحیتِ لانچر
+   * (`eligibleFrom`) این‌جا روی همهٔ کارکنانِ فعال سنجیده می‌شود. سوپرادمین همیشه عبور می‌کند،
+   * پس شمرده نمی‌شود.
+   */
+  async preview(kind: AccessKind, key: string, patch: AccessPatch) {
+    const def = this.def(kind, key);
+    this.guardLevel(patch.minLevel);
+    this.guardRoles(patch.roles);
+    await this.ensureSeeded();
+    const stored = kind === 'feature'
+      ? await this.prisma.feature.findUnique({ where: { key } })
+      : await this.prisma.permission.findUnique({ where: { key } });
+    const cur = this.row(kind, def, stored ?? undefined);
+    type Gate = { minLevel: number; enabled: boolean; roles: string[] };
+    const before: Gate = { minLevel: cur.minLevel, enabled: cur.enabled, roles: cur.roles };
+    const after: Gate = {
+      minLevel: patch.minLevel ?? before.minLevel,
+      enabled: patch.enabled ?? before.enabled,
+      roles: patch.roles ?? before.roles,
+    };
+    const people = await this.prisma.account.findMany({
+      where: { systemKey: null, status: 'active', level: { lt: LEVEL.SUPER_ADMIN } },
+      select: { id: true, level: true, jobRole: true, personId: true, username: true, person: { select: { firstName: true, lastName: true, phone: true } } },
+      orderBy: { id: 'asc' },
+    });
+    const elig = kind === 'feature' && ROLE_GATED.has(key) ? await eligibilityOf(this.prisma, people) : null;
+    type Person = (typeof people)[number];
+    const pass = (g: Gate, a: Person) => g.enabled
+      && a.level >= g.minLevel
+      && (!g.roles.length || g.roles.includes(a.jobRole ?? ''))
+      && (!elig || (elig.get(a.id) as Record<string, boolean> | undefined)?.[key] === true);
+    /* همان قاعدهٔ نامِ `publicUser`: نام، وگرنه نامِ کاربری، وگرنه شماره. */
+    const nameOf = (a: Person) =>
+      [a.person?.firstName, a.person?.lastName].filter(Boolean).join(' ').trim() || a.username || a.person?.phone || 'کاربر';
+    const list = (xs: Person[]) => xs.map((a) => ({ id: a.id, name: nameOf(a) }));
+    return {
+      lost: list(people.filter((a) => pass(before, a) && !pass(after, a))),
+      gained: list(people.filter((a) => !pass(before, a) && pass(after, a))),
+    };
   }
 
   /** بازگرداندنِ یک ردیف به پیش‌فرضِ کد. */

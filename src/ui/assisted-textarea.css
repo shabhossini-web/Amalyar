@@ -26,4 +26,4 @@
 .assisted-tools .at-ic:disabled { opacity: .45; cursor: default; }
 .assisted-tools .at-ic:focus-visible, .assisted-tools .vc-btn.vc-compact:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
 /* ضبطِ در جریان باید در همان آیکونِ کوچک هم از دور دیده شود (همان قرمزِ `voice.css`). */
-.assisted-tools .vc-btn.vc-compact.vc-rec { color: #f87171; border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .12); }
+.assisted-tools .vc-btn.vc-compact.vc-rec { color: var(--red-text); border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .12); }

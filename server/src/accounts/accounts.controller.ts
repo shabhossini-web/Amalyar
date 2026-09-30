@@ -73,8 +73,8 @@ export class AccountsController {
   }
 
   @Patch(':id')
-  updateProfile(@Param('id', ParseIntPipe) id: number, @Body() dto: StaffProfileDto) {
-    return this.accounts.updateProfile(id, dto);
+  updateProfile(@Param('id', ParseIntPipe) id: number, @Body() dto: StaffProfileDto, @CurrentUser() user: any) {
+    return this.accounts.updateProfile(id, dto, user);
   }
 
   @Post(':id/approve')

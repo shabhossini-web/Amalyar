@@ -36,8 +36,21 @@ try {
       ],
       consumables: [{ name: 'Electrode', irc: '9449874222229990', qty: 40 }],
     };
+    /* company-14 / DF2 / DF3: قلمِ مبلغِ کلِ مراجعه (همان «خدمت اولیه»ِ ثبت‌نام) و پرچم‌های سرور — از حالِ `bill`. */
+    const LUMP = { id: 1, title: 'خدمت اولیه', kind: 'service', quantity: 1, unitPrice: 30000000, amount: 30000000 };
+    const lumpInfo = () => {
+      const lump = bill.charges.filter(c => c.id === LUMP.id), neuro = bill.charges.some(c => c.neuroDetail && !c.neuroDetail.consumable);
+      return { lumpLines: lump.map(c => ({ id: c.id, title: c.title, amount: c.amount })), lumpBesideNeuro: lump.length > 0 && neuro, lumpKept: false, lumpDefault: lump.length ? (bill.paid > 0 ? null : 'replace') : null };
+    };
     const priceOf = (id, hours) => ({ professional: 1515 * hours, technical: 1482 * hours, total: 2997 * hours });
-    const quoteFor = (p) => { const items = p.items.map(id => { const s = catalog.services.find(x => x.id === id); return { id, code: s.code, label: s.label, title: s.title, hours: p.hours, deviceOwner: p.deviceOwner, coefficients: { professional: 15, technical: 7.3 }, factors: { professional: 101, technical: 203 }, ...priceOf(id, p.hours), tariff: { year: p.year, sector: 'public', sectorLabel: 'دولتی' } }; }); return { items, total: items.reduce((a, b) => a + b.total, 0) }; };
+    /* شکلِ `withPayState(summarize())`ِ سرور — ساختگیِ آزمون، نه فرمولِ کلاینت. */
+    const sum = (charges) => { const total = charges.reduce((a, c) => a + c.amount, 0), due = total - bill.paid; return { total, itemsTotal: total, paid: bill.paid, due, payState: due > 0 ? 'due' : due < 0 ? 'overpaid' : 'settled', payStateFa: due > 0 ? 'مانده' : due < 0 ? 'اضافه‌پرداخت' : 'تسویه', overpaid: due < 0 ? -due : 0 }; };
+    const quoteFor = (p) => {
+      const items = p.items.map(id => { const s = catalog.services.find(x => x.id === id); return { id, code: s.code, label: s.label, title: s.title, hours: p.hours, deviceOwner: p.deviceOwner, coefficients: { professional: 15, technical: 7.3 }, factors: { professional: 101, technical: 203 }, ...priceOf(id, p.hours), tariff: { year: p.year, sector: 'public', sectorLabel: 'دولتی' } }; });
+      const after = (replace) => sum([...bill.charges.filter(c => !c.neuroDetail && !replace.includes(c.id)), ...items.map(it => ({ amount: it.total }))]);
+      const lump = lumpInfo().lumpLines.map(c => c.id);
+      return { items, total: items.reduce((a, b) => a + b.total, 0), billing: { before: sum(bill.charges), after: after(p.replace ?? []), ...(lump.length ? { options: { replace: after(lump), keep: after([]) } } : {}) } };
+    };
     let doc = null;
     await ctx.route('**/api/**', async route => {
       const req = route.request(), path = new URL(req.url()).pathname.replace(/^\/api/, ''), method = req.method();
@@ -55,20 +68,21 @@ try {
       else if (path === '/bank-accounts') body = [bank];
       else if (path === '/ai/status') body = { enabled: false };
       else if (path === '/visits/charges/2' && method === 'DELETE') { bill = { ...bill, charges: bill.charges.filter(c => c.id !== 2), total: 30000000, due: 0 }; body = { ok: true }; }
-      else if (path === '/visits/1/invoices/neuro-catalog') body = catalog;
+      else if (path === '/visits/1/billing/invoice-account') { bill = { ...bill, invoiceType: payload.invoiceType, invoiceBankAccount: payload.bankAccountId === bank.id ? bank : null }; body = bill; }
+      else if (path === '/visits/1/invoices/neuro-catalog') body = { ...catalog, ...lumpInfo() };
       else if (path === '/visits/1/invoices/neuro-quote') body = quoteFor(payload);
       else if (path === '/visits/1/invoices/neuro-apply') {
         const q = quoteFor(payload);
         const rows = q.items.map((it, i) => ({ id: 10 + i, kind: 'service', title: `${it.label} — ${it.title}`, serviceCode: it.code, quantity: 1, unitPrice: it.total, amount: it.total, neuroDetail: it }));
         const cons = (payload.consumables ?? []).map((c, i) => ({ id: 50 + i, kind: 'item', title: c.name, quantity: c.qty, unitPrice: 0, amount: 0, notes: c.irc, neuroDetail: { consumable: true, irc: c.irc, qty: c.qty } }));
-        const kept = bill.charges.filter(c => !c.neuroDetail);
+        const kept = bill.charges.filter(c => !c.neuroDetail && !(payload.replace ?? []).includes(c.id));
         const total = kept.reduce((a, c) => a + c.amount, 0) + q.total;
         bill = { ...bill, charges: [...kept, ...rows, ...cons], total, due: total - bill.paid };
         body = { applied: rows.length, consumables: cons.length, total: q.total, billing: bill };
       }
       else if (path === '/visits/1/invoices') {
         if (method === 'POST') { doc ??= { id: 1, number: 'NM-F-000001', variant: 'formal', createdAt: '2026-09-08', snapshot: { visit, billing: structuredClone(bill), template: { title: 'صورتحساب نورومانیتورینگ', brand: { legalName: 'شرکت نورومانیتورینگ تست', registration: '98765' }, notes: 'توضیحات اختصاصی شرکت', signatures: ['تنظیم‌کننده', 'مهر شرکت'], showPayments: true } } }; body = doc; }
-        else body = { hours: 3, year: '1405', sector: 'public', documents: doc ? [doc] : [] };
+        else body = { hours: 3, year: '1405', sector: 'public', documents: doc ? [doc] : [], ...lumpInfo() };
       }
       else if (path === '/visits/1/invoices/1') body = doc;
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
@@ -94,6 +108,14 @@ try {
     check(await dlg.locator('.nv-svc').count() === 8, 'all eight neuromonitoring services are selectable at once');
     check(await dlg.getByLabel('مدت قابل صورتحساب').inputValue() === '3', 'visit duration prefills the hours');
     await dlg.locator('.nv-total b').filter({ hasText: 'تومان' }).waitFor();
+    /* DF2: قلمِ ثبت‌نامِ پرداخت‌شده — هیچ راهی پیش‌انتخاب نیست؛ پیامدِ هر دو راه پیش از انتخاب دیده می‌شود. */
+    const saveBtn = dlg.getByRole('button', { name: 'ثبتِ خدمات روی صورت‌حساب', exact: true });
+    await dlg.locator('.nv-opts').waitFor();
+    check(await saveBtn.isDisabled() && await dlg.locator('[role="radio"][aria-checked="true"]').filter({ hasText: /جایگزین|کنارش/ }).count() === 0, 'DF2: a paid registration line is not replaced by default — saving waits for an explicit choice');
+    check((await dlg.locator('.nv-opts').innerText()).includes('اضافه‌پرداخت'), 'DF2: each choice shows the resulting bill before choosing (replacing leaves an overpayment)');
+    await dlg.getByRole('radio', { name: 'جایگزینِ همین قلم شود', exact: true }).click();
+    await dlg.locator('.nv-after').filter({ hasText: 'اضافه‌پرداخت' }).waitFor();
+    check(!(await saveBtn.isDisabled()), 'DF2: after choosing, the footer previews the bill after saving and saving is enabled');
     const before = await dlg.locator('.nv-total b').innerText();
     await dlg.getByLabel('SEP 901320').uncheck();
     await page.waitForFunction((prev) => document.querySelector('.nv-total b')?.innerText !== prev && document.querySelector('.nv-total b')?.innerText.includes('تومان'), before);
@@ -104,7 +126,10 @@ try {
     await dlg.getByRole('button', { name: 'ثبتِ خدمات روی صورت‌حساب', exact: true }).click();
     await dlg.waitFor({ state: 'detached' });
     const sent = writes.find(w => w.path.endsWith('neuro-apply')).payload;
-    assert.deepEqual(Object.keys(sent).sort(), ['consumables', 'deviceOwner', 'hours', 'items', 'returnUnusedStock', 'year']);
+    assert.deepEqual(Object.keys(sent).sort(), ['consumables', 'deviceOwner', 'hours', 'items', 'keep', 'replace', 'returnUnusedStock', 'year']);
+    /* company-14 / DF2: «جایگزینِ همین قلم» که کاربر صریحاً زد — فقط شناسه می‌رود، نه مبلغ. */
+    assert.deepEqual(sent.replace, [1]); assert.deepEqual(sent.keep, []);
+    check(!bill.charges.some(c => c.id === 1), 'the registration lump line is replaced, not counted twice beside the neuro services');
     assert.deepEqual(sent.items, ['901290:EMG', '901325:MEP', '901300:Monitoring']);
     assert.deepEqual(sent.consumables, [{ name: 'Electrode', irc: '9449874222229990', qty: 41 }]);
     check(true, 'browser submits selection, duration and consumables — never financial totals');
@@ -141,6 +166,33 @@ try {
     const reprintWait = page.waitForEvent('popup'); await sheet.getByRole('button', { name: 'چاپ نسخه', exact: true }).click();
     const reprint = await reprintWait; await reprint.getByText('شرکت نورومانیتورینگ تست', { exact: true }).waitFor();
     check(writes.filter(w => w.path === '/visits/1/invoices').length === 1, 'history reprint does not issue another document'); await reprint.close();
+
+    // ── DF3: قلمِ ثبت‌نام کنارِ خدماتِ ریزشده، بی‌انتخابِ صریح — پنل هشدار می‌دهد و راهِ «جایگزینی» دارد ──
+    bill = { ...bill, charges: [LUMP, ...bill.charges] };
+    await sheet.getByRole('tab', { name: /^اقلام/ }).click();
+    await sheet.getByRole('tab', { name: 'صدور فاکتور', exact: true }).click();
+    const warn = sheet.locator('.nv-double'); await warn.waitFor();
+    check((await warn.innerText()).includes('دوبار شمرده'), 'DF3: a registration line beside itemised services is flagged as a likely double count');
+    await warn.getByRole('button', { name: 'جایگزینیِ قلمِ ثبت‌نام', exact: true }).click();
+    await dlg.waitFor(); await dlg.locator('.nv-lump').waitFor();
+    check(await dlg.getByRole('radio', { name: 'جایگزینِ همین قلم شود', exact: true }).getAttribute('aria-checked') === 'true', 'DF3: the warning opens the services dialog with "replace" chosen, preview first');
+    await dlg.getByRole('button', { name: 'بستن', exact: true }).click(); await dlg.waitFor({ state: 'detached' });
+
+    // ── DF1: مراجعهٔ ایمپلنت در شرکتِ دوخدمته پنجرهٔ خدماتِ نورو (و «جایگزین») را نمی‌گیرد ──
+    visit.service = 'implant';
+    /* DF9 (همین بارگذاری): حسابِ فاکتور هنوز ثبت نشده و پرداخت به حسابِ رسمیِ ۱ رفته — پیشنهادِ پیش‌فرض. */
+    bill = { ...bill, invoiceType: null, invoiceBankAccount: null, payments: bill.payments.map(p => ({ ...p, bankAccountId: bank.id })) };
+    await page.goto(`${base}/app/dashboard`); await page.getByTitle('صورت‌حساب', { exact: true }).click();
+    await sheet.waitFor(); await sheet.getByRole('tab', { name: 'صدور فاکتور', exact: true }).click();
+    await sheet.getByRole('heading', { name: 'فاکتور شرکت', exact: true }).waitFor();
+    check(await sheet.getByRole('button', { name: /انتخابِ خدمات و مصرفی‌ها|ویرایشِ خدمات و مصرفی‌ها/ }).count() === 0 && await sheet.locator('.nv-double').count() === 0, 'DF1: an implant visit gets no neuro services dialog — its lump line cannot be replaced');
+
+    // ── DF9: ثبتِ حسابِ پیشنهادی (از حسابِ پرداخت) کشویی‌ها را خالی نمی‌کند ──
+    const acctType = sheet.getByLabel('نوع فاکتور', { exact: true }), acctBank = sheet.getByLabel('حساب فاکتور', { exact: true });
+    check(await acctType.inputValue() === 'formal' && await acctBank.inputValue() === String(bank.id), 'DF9: the payment account is suggested as the invoice account');
+    await sheet.getByRole('button', { name: 'ثبت اتصال حساب', exact: true }).click();
+    await sheet.getByText('حساب ثبت‌شده:', { exact: false }).waitFor();
+    check(await acctType.inputValue() === 'formal' && await acctBank.inputValue() === String(bank.id), 'DF9: after saving, both selects keep the saved type and account');
     check(!errors.length, `no runtime errors: ${errors.join('; ')}`);
     await ctx.close();
   }

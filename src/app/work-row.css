@@ -1,0 +1,35 @@
+/* ردیفِ کار — تکه‌هایی که مالِ خودِ `WorkRow`اند (قانونِ ۲۱: کامپوننتِ مشترک با CSSِ خودش).
+   پوستهٔ ردیف و دکمه‌ها (`.wk-row`، `.wk-btn`) در `work.css` است؛ این‌جا فقط «بستن بدونِ
+   اقدام» و پرسشِ تأییدش. همهٔ رنگ‌ها از توکن (قانونِ ۲۳) — در هر دو تم خوانده می‌شوند. */
+
+/* سه دکمه در موبایل یک ردیف‌اند؛ اگر جا نشد، به خطِ بعد بروند نه بیرون از کارت. */
+.wk-row .wk-actions { flex-wrap: wrap; }
+
+/* «بستن بدونِ اقدام» — کنشِ فرعی و کم‌تأکید: بی‌قاب تا با «یادآوریِ فردا» هم‌وزن دیده نشود،
+   ولی متنش همچنان خوانا (`--text2`، نه `--text3`: کنشِ واقعی است، نه برچسب). */
+.wk-actions .wk-quiet {
+  color: var(--text2); background: none; border-color: transparent; font-weight: 600;
+  text-decoration: underline dotted rgba(var(--veil-rgb), .35); text-underline-offset: 3px;
+}
+.wk-actions .wk-quiet:hover:not(:disabled),
+.wk-actions .wk-quiet:focus-visible { color: var(--text1); border-color: rgba(var(--veil-rgb), .2); }
+
+/* پرسشِ تأیید — داخلِ همان ردیف، زیرِ متنِ کار؛ دکمه‌های ردیف تا جواب پنهان‌اند. */
+.wk-dismiss {
+  margin-top: 6px; padding: 10px 12px; border-radius: 12px;
+  background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.wk-dismiss p { margin: 0 0 8px; font-size: 12.5px; line-height: 1.85; color: var(--text2); }
+.wk-dismiss p b { color: var(--text1); }
+.wk-dismiss-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+/* تأیید با رنگِ «احتیاط» (متنِ کهربایی، نه پرِ برند): کنشِ اصلیِ صفحه نیست. دو کلاس، چون
+   `work.css` (`.wk-btn`) در چانکِ صفحه دیرتر از این فایل بار می‌شود و هم‌وزن می‌بَرد. */
+.wk-dismiss .wk-dismiss-yes { color: var(--amber-text); border-color: currentColor; }
+.wk-dismiss .wk-dismiss-yes:hover:not(:disabled),
+.wk-dismiss .wk-dismiss-yes:focus-visible { color: var(--amber-text); border-color: currentColor; background: rgba(var(--veil-rgb), .06); }
+.wk-dismiss .wk-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+
+/* لمس: هدفِ ≥ ۴۴px برای همهٔ دکمه‌های ردیف (پوسته ۴۰px می‌داد). */
+@media (pointer: coarse) {
+  .wk-row .wk-actions .wk-btn, .wk-dismiss .wk-btn { min-height: 44px; }
+}

@@ -1,18 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
-import { isoToJStr, jStrToIso, toEnDigits } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
+import { isValidNationalId } from '../lib/identity.js';
 import JDate from '../app/JDate.jsx';
-import Mark from '../components/Mark.jsx';
 import './intake.css';
-import { Alert, Bank, Box, CheckCircle, Clock, Refresh, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Info, Lock, Money, Pencil, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
+import { BrandMark, CallLink, PublicError, PublicFoot, RetryButton, faPhone, loadErrorText, telHref, useFallbackFace } from './PublicBits.jsx';
+import { adoptFace } from '../lib/public-face.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
+/**
+ * مقدارِ ذخیره‌شدهٔ کادرِ «تاریخ» ← شمسیِ کادرِ `JDate`.
+ *
+ * هشدار: سرور تاریخِ کلیدهای مراجعه (`opDate`…) را هنگامِ ثبت به ISO برمی‌گرداند؛ بیمارِ برگشته تا
+ * دیروز «۲۰۲۶-۱۰-۰۳» را در کادر می‌دید با خطای «تاریخ باید به شکل ۱۴۰۵/۰۵/۰۷ باشد» — یعنی
+ * نمی‌توانست بی‌تایپِ دوباره ثبت کند. مقدارِ از قبل شمسی (پیش‌نویس) دست نمی‌خورد.
+ */
+const jBack = (v) => {
+  if (typeof v !== 'string') return v;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return ymdToJStr(v) || v;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(v)) return isoToJStr(v) || v;
+  return v;
+};
 /* ⚠️ مبلغ‌ها در کلِ عمل‌یار **تومان**اند (مثلِ `Charge.amount`). نسخهٔ اول
    این‌جا بر ۱۰ تقسیم می‌کرد چون قراردادِ ریالیِ سامانهٔ قبلی را آورده بودم —
    یعنی بیمار یک‌دهمِ مبلغ را می‌دید. */
@@ -36,28 +51,55 @@ export default function Intake({ step }) {
 /* ── گامِ ۱: اطلاعاتِ پایه + کپچا ───────────────────────────────── */
 function Register() {
   const { token } = useParams();
+  const navigate = useNavigate();
   const [link, setLink] = useState(null);
   const [err, setErr] = useState('');
+  /* خطای بارگذاریِ خودِ لینک (status + message) — صفحهٔ خطا از status می‌گوید چه شد و چه کنید (بندِ ۱۱۰). */
+  const [loadErr, setLoadErr] = useState(null);
+  /* کدِ خطای آخر — ۴۰۹ (برخوردِ کدِ ملی) را بیمار به‌تنهایی حل نمی‌کند و کنارش دکمهٔ تماس می‌آید. */
+  const [errStatus, setErrStatus] = useState(0);
+  /* خطای هر کادر، زیرِ خودِ همان کادر (بازبینیِ UX، بندِ ۱۰۵): تا دیروز یک پیامِ ته فرم بود و خطاها
+     یکی‌یکی می‌آمدند — چهار بار «ادامه» برای چهار اشتباه. */
+  const [fErr, setFErr] = useState({});
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ firstName: '', lastName: '', nationalId: '', phone: '', birthDate: '', address: '', referralSourceId: '', referralNote: '' });
   /* ⚠️ کانال‌ها از یک endpointِ **عمومی** می‌آیند که فقط نام و شناسه می‌دهد —
      نه تعدادِ بیمارِ هر کانال، که دادهٔ تجاریِ شرکت است و روی صفحهٔ بی‌احراز
      جایی ندارد. */
   const [sources, setSources] = useState([]);
+  /* «قبلاً ثبت‌نام کرده‌اید؟» — ادامه با موبایل + کد به‌جای پرکردنِ دوبارهٔ فرم (بازبینیِ UX، بندِ ۱۰۳). */
+  const [resume, setResume] = useState(false);
+  /* پاسخِ «ثبت‌نامِ باز هست» (بستهٔ PS، PS1): سرور دیگر ثبت‌نامِ باز را تحویل نمی‌دهد و صفحه با همین به نمای
+     «ادامه با موبایل + کد» می‌رود — `smsTo` فقط برچسبِ ثابتِ «شمارهٔ ثبت‌شده در پرونده» است یا هیچ. */
+  const [resumeHit, setResumeHit] = useState(null);
+  /* پرسشِ امنیتی با همان ثبت‌نام مصرف شد؛ برگشت به فرم پرسشِ تازه می‌خواهد. */
+  const capSpent = useRef(false);
+  /* فوکوس با عوض‌شدنِ نما (PF13): رفتن ← کادرِ موبایلِ «ادامه» (autoFocus)؛ برگشت ← همان دکمه‌ای که بازش کرد. */
+  const resumeBtn = useRef(null);
+  const resumeBack = useRef(false);
+  useEffect(() => {
+    if (!resume && resumeBack.current) { resumeBack.current = false; resumeBtn.current?.focus(); }
+  }, [resume]);
+  /* «کدِ ملیِ ایرانی ندارم» (بازبینیِ UX، بندِ ۱۰۹) — راهِ تلفنیِ بیمارِ اتباع؛ با خطای کدِ ملی خودش باز می‌شود. */
+  const [noNid, setNoNid] = useState(false);
   /* پرسشِ امنیتی را **سرور** می‌سازد: تصویرِ دو عدد + نشانی که پاسخ را رمزشده در خود دارد
      (`server/src/patients/intake-captcha.ts`). مرورگر پاسخ را نمی‌داند — تا دیروز خودش دو عدد را
      انتخاب می‌کرد و هر اسکریپتی با `1 + 1 = 2` ثبت‌نام می‌ساخت. هر نشان یک‌بار سنجیده می‌شود. */
   const [cap, setCap] = useState(null);
   const [capErr, setCapErr] = useState('');
   const [answer, setAnswer] = useState('');
+  /* لحظهٔ رسیدنِ پرسش به **ساعتِ همین مرورگر** — سنِ پرسش از این سنجیده می‌شود نه از `expiresAt`ِ
+     سرور، که با ساعتِ غلطِ گوشی هر پرسشی را «کهنه» نشان می‌داد. */
+  const capAt = useRef(0);
   const loadCap = useCallback(() => {
     setCapErr(''); setAnswer('');
     return api(`/public/intake/link/${token}/captcha`, { auth: false })
-      .then(setCap)
+      .then((c) => { capAt.current = Date.now(); setCap(c); })
       .catch((e) => { setCap(null); setCapErr(e.message); });
   }, [token]);
 
-  useEffect(() => { document.title = 'ثبت‌نام'; }, []);
+  /* عنوانِ زبانه با نامِ مطب — بیمار چند زبانه باز دارد و «ثبت‌نام» تنها معلوم نمی‌کرد کجاست. */
+  useEffect(() => { document.title = link?.brand?.name ? `ثبت‌نام — ${link.brand.name}` : 'ثبت‌نام'; }, [link]);
   useEffect(() => {
     /* خطا بلعیده می‌شود: نبودِ فهرستِ کانال‌ها نباید جلوی ثبت‌نام را بگیرد —
        این یک پرسشِ اختیاری است، نه شرطِ پذیرش. */
@@ -68,15 +110,53 @@ function Register() {
        یک رسمِ تصویر روی سرور است و از سقفِ نرخِ همین نشانی کم می‌کند. */
     let live = true;
     api(`/public/intake/link/${token}`, { auth: false })
-      .then((l) => { if (live) { setLink(l); loadCap(); } })
-      .catch((e) => { if (live) setErr(e.message); });
+      .then((l) => { if (live) { adoptFace(l); setLink(l); loadCap(); } })
+      .catch((e) => { if (live) setLoadErr(e); });
     return () => { live = false; };
   }, [token, loadCap]);
 
-  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  /* لینک باز نشد ← هویت و تمِ مطب از مسیرِ عمومیِ جدا، تا صفحهٔ خطا هم نام و تلفن داشته باشد. */
+  const fallback = useFallbackFace(!!loadErr && !link);
+
+  const set = (k) => (e) => { setF((s) => ({ ...s, [k]: e.target.value })); setFErr((x) => (x[k] ? { ...x, [k]: '' } : x)); };
+
+  /** همهٔ کادرها یک‌جا، پیش از ارسال — همان قاعده‌های سرور (رقمِ کنترلِ کدِ ملی، «۰۹» و ۱۱ رقم). */
+  const validate = () => {
+    const e = {};
+    if (f.firstName.trim().length < 2) e.firstName = 'نام را کامل بنویسید';
+    if (f.lastName.trim().length < 2) e.lastName = 'نامِ خانوادگی را کامل بنویسید';
+    const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
+    if (!nid) e.nationalId = 'کدِ ملی را بنویسید';
+    else if (!isValidNationalId(nid)) e.nationalId = 'این کدِ ملی درست نیست — ۱۰ رقمِ روی کارت را دوباره نگاه کنید';
+    const ph = toEnDigits(f.phone).replace(/[^0-9]/g, '');
+    if (!ph) e.phone = 'شمارهٔ موبایل را بنویسید';
+    else if (!/^09\d{9}$/.test(ph)) e.phone = 'شمارهٔ موبایل ۱۱ رقم است و با ۰۹ شروع می‌شود';
+    if (!toEnDigits(answer).trim()) e.captcha = 'حاصلِ جمعِ دو عددِ تصویر را بنویسید';
+    return e;
+  };
+  /* ترتیبِ فوکوس = ترتیبِ کادرها روی صفحه. */
+  const FIELD_IDS = { firstName: 'ik-first', lastName: 'ik-last', nationalId: 'ik-nid', phone: 'ik-phone', captcha: 'ik-cap-answer' };
+  const showErrors = (e) => {
+    setFErr(e);
+    const keys = Object.keys(FIELD_IDS).filter((k) => e[k]);
+    if (!keys.length) return false;
+    setErr(keys.length === 1 ? 'یک کادر را اصلاح کنید.' : `${faNum(keys.length)} کادر را اصلاح کنید.`);
+    setErrStatus(0);
+    requestAnimationFrame(() => document.getElementById(FIELD_IDS[keys[0]])?.focus());
+    return true;
+  };
 
   const submit = async () => {
-    setErr(''); setBusy(true);
+    if (showErrors(validate())) return;
+    /* هر پرسش ۱۰ دقیقه اعتبار دارد و بیمارِ مسن ممکن است بیشتر طول بکشد: پرسشِ نزدیک به انقضا پیش از
+       ارسال تازه می‌شود، نه اینکه سرور ردش کند و بیمار یک رفت‌وبرگشتِ دیگر بخورد. */
+    if (cap && Date.now() - capAt.current > 9.5 * 60_000) {
+      setErr('پرسشِ امنیتی تازه شد (هر پرسش تا ۱۰ دقیقه اعتبار دارد) — پاسخِ پرسشِ تازه را بنویسید.');
+      setErrStatus(0);
+      loadCap();
+      return;
+    }
+    setErr(''); setErrStatus(0); setBusy(true);
     try {
       const r = await api(`/public/intake/link/${token}/register`, {
         auth: false,
@@ -94,27 +174,74 @@ function Register() {
       });
       // از این‌جا به بعد، نشانیِ خودِ بیمار است — با replace تا دکمهٔ برگشت
       // بیمار را به فرمِ خالیِ ثبت‌نام برنگرداند.
-      window.location.replace(`/f/${r.token}`);
+      // هشدار: `navigate` نه `location.replace`: بارگذاریِ کاملِ اپ روی گوشیِ کند یعنی چند
+      // ثانیه صفحهٔ سفید و دانلودِ دوبارهٔ همهٔ چانک‌ها برای رفتن به صفحهٔ بعدیِ همین اپ.
+      /* هشدار — ثبت‌نامِ باز با همین کدِ ملی و نامِ خانوادگی (بستهٔ PS، PS1): نه توکنی می‌آید نه داده‌ای؛ ادامه
+         فقط با موبایل + کدِ شمارهٔ پرونده. شمارهٔ تایپ‌شده در کادرِ «ادامه» پیش‌پر می‌شود. */
+      if (r?.resume) {
+        capSpent.current = true;
+        setResumeHit({ phone: toEnDigits(f.phone).replace(/[^0-9]/g, ''), smsTo: r.linkSmsTo ?? null });
+        setResume(true);
+        setBusy(false);
+        return;
+      }
+      /* «شمارهٔ ثبت‌شده در پرونده» — جایی که لینکِ ادامه پیامک شد؛ صفحهٔ فرم همان را می‌گوید. */
+      navigate(`/f/${r.token}`, { replace: true, state: { smsTo: r.linkSmsTo ?? null } });
     } catch (e) {
-      setErr(e.message); setBusy(false);
-      /* ۴۲۲ = نشان همین حالا مصرف شد (پاسخِ غلط یا منقضی) — پرسشِ تازه، نه ارسالِ دوباره. */
-      if (e.status === 422) loadCap();
+      setErr(e.message); setErrStatus(e.status ?? 0); setBusy(false);
+      /* پیامِ سرورِ مربوط به یک کادر زیرِ همان کادر هم می‌نشیند. */
+      if (e.status === 400 && /کدِ ملی/.test(e.message)) setFErr((x) => ({ ...x, nationalId: e.message }));
+      else if (e.status === 400 && /موبایل/.test(e.message)) setFErr((x) => ({ ...x, phone: e.message }));
+      else if (e.status === 422) setFErr((x) => ({ ...x, captcha: e.message }));
+      /* هشدار: هر خطایی **پس از** سنجشِ پرسش یعنی نشان مصرف شده (بازبینیِ UX، بندِ ۹۸): ۴۲۲ (پاسخِ غلط یا
+         کهنه)، ۴۰۹ (کدِ ملی با نامِ خانوادگیِ دیگر)، خطای سرور یا قطعِ اتصال. تا دیروز فقط روی ۴۲۲
+         پرسشِ تازه می‌آمد و تلاشِ بعد از ۴۰۹ با «منقضی شده» رد می‌شد — سه رفت‌وبرگشت. فقط ۴۰۰
+         (سنجشِ نام/کدِ ملی/موبایل، پیش از پرسش) نشان را نمی‌سوزاند و پاسخ سرِ جایش می‌ماند. */
+      if (e.status !== 400) loadCap();
     }
   };
 
-  if (err && !link) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
+  /* کیبوردِ گوشی (بازبینیِ UX، بندِ ۱۱۶): کادرها داخلِ <form>اند تا «برو»ِ کیبورد کار کند، ولی Enter در هر کادری
+     جز پاسخِ پرسش به کادرِ **بعدی** می‌رود — بی‌این، «بعدی»ِ آیفون در کادرِ «نام» کلِ فرم را با خطای کادرهای
+     خالیِ بعدی می‌فرستاد. فقط پاسخِ پرسش (enterKeyHint=go) می‌فرستد. */
+  const onFormKey = (e) => {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT' || e.target.id === 'ik-cap-answer') return;
+    e.preventDefault();
+    const list = [...e.currentTarget.querySelectorAll('input:not([type=hidden]):not(:disabled)')];
+    list[list.indexOf(e.target) + 1]?.focus();
+  };
+  const onFormSubmit = (e) => { e.preventDefault(); if (!busy && cap) submit(); };
+
+  if (loadErr && !link) return <LoadError brand={fallback?.brand} err={loadErr} />;
 
   return (
-    <Shell title={link?.title} amount={link?.amount}>
+    <Shell brand={link?.brand} title={link?.title}>
+      {resume ? (
+        <Resume token={token} hit={resumeHit}
+                onBack={() => {
+                  resumeBack.current = true; setResumeHit(null); setResume(false);
+                  if (capSpent.current) { capSpent.current = false; loadCap(); }
+                }} />
+      ) : (<>
+      {link && <Ahead link={link} />}
+      <button type="button" className="ik-resume-toggle" ref={resumeBtn} onClick={() => setResume(true)}>
+        قبلاً ثبت‌نام کرده‌اید؟ <b>ادامه با شمارهٔ موبایل</b>
+      </button>
+      {/* noValidate: سنجش مالِ `validate()` است (پیام زیرِ هر کادر، فارسی) نه حبابِ انگلیسیِ مرورگر. */}
+      <form className="ik-reg" onSubmit={onFormSubmit} onKeyDown={onFormKey} noValidate>
+      {/* autocomplete + name: پرکنندهٔ خودکارِ اندروید/آیفون نام و موبایل را پر می‌کند (بندِ ۱۱۶). تاریخِ تولد
+          عمداً `bday` ندارد: پرکننده تاریخِ میلادی می‌گذارد و این کادر شمسی است. */}
       <div className="ik-grid">
-        <Field label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} />
-        <Field label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} />
-        <Field label="کدِ ملی *" value={f.nationalId} onChange={set('nationalId')} disabled={busy} dir="ltr" inputMode="numeric" />
-        <Field label="شمارهٔ موبایل *" value={f.phone} onChange={set('phone')} disabled={busy} dir="ltr" inputMode="numeric" placeholder="09xxxxxxxxx" />
+        <Field id="ik-first" name="firstName" autoComplete="given-name" enterKeyHint="next" label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} error={fErr.firstName} />
+        <Field id="ik-last" name="lastName" autoComplete="family-name" enterKeyHint="next" label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} error={fErr.lastName} />
+        <Field id="ik-nid" name="nationalId" autoComplete="off" enterKeyHint="next" label="کدِ ملی *" value={f.nationalId} onChange={set('nationalId')} disabled={busy} dir="ltr" inputMode="numeric" error={fErr.nationalId}
+               after={<NoNationalId brand={link?.brand} open={noNid || !!fErr.nationalId} onOpen={() => setNoNid(true)} />} />
+        <Field id="ik-phone" name="phone" type="tel" autoComplete="tel" enterKeyHint="next" label="شمارهٔ موبایل *" value={f.phone} onChange={set('phone')} disabled={busy} dir="ltr" inputMode="numeric" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" error={fErr.phone} />
         {/* JDate خودش برچسب دارد؛ پیچیدنش در label یعنی دو برچسب. */}
-        <JDate className="ik-field" mode="birth" label="تاریخِ تولد" value={f.birthDate}
+        {/* نمونه‌ای که شبیهِ تاریخِ تولد است — پیش‌فرضِ «۱۴۰۵/۰۱/۰۱» یعنی امسال (بازبینیِ UX، بندِ ۱۱۳). */}
+        <JDate className="ik-field" mode="birth" label="تاریخِ تولد" value={f.birthDate} placeholder="مثلاً ۱۳۶۵/۰۴/۲۰"
                onChange={(v) => setF((s) => ({ ...s, birthDate: v }))} disabled={busy} />
-        <Field label="نشانی" value={f.address} onChange={set('address')} disabled={busy} />
+        <Field name="address" autoComplete="street-address" enterKeyHint="next" label="نشانی" value={f.address} onChange={set('address')} disabled={busy} />
 
         {/* ⚠️ «چطور با ما آشنا شدید» همین‌جا پرسیده می‌شود و نه در نظرسنجیِ
             بعدی: بیمار الان یادش هست چطور پیدایمان کرده. پرسیدنش هفته‌ها بعد
@@ -123,20 +250,23 @@ function Register() {
         {sources.length > 0 && (
           <label className="ik-field">
             <span>چطور با ما آشنا شدید؟</span>
-            <select
-              value={f.referralSourceId}
-              disabled={busy}
-              onChange={(e) => setF((s2) => ({ ...s2, referralSourceId: e.target.value, referralNote: '' }))}
-            >
-              <option value="">— انتخاب کنید —</option>
-              {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select>
+            <span className="ik-select">
+              <select
+                value={f.referralSourceId}
+                disabled={busy}
+                onChange={(e) => setF((s2) => ({ ...s2, referralSourceId: e.target.value, referralNote: '' }))}
+              >
+                <option value="">— انتخاب کنید —</option>
+                {sources.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <Caret className="ik-select-ic" width="17" height="17" aria-hidden="true" />
+            </span>
           </label>
         )}
         {/* نامِ معرف فقط برای کانال‌هایی که معرف دارند — پرسیدنش از کسی که
             «اینستاگرام» زده، سؤالِ بی‌جواب است. */}
         {sources.find((o) => String(o.id) === String(f.referralSourceId))?.asksWho && (
-          <Field label="نامِ معرف" value={f.referralNote} onChange={set('referralNote')} disabled={busy} />
+          <Field name="referralNote" autoComplete="off" enterKeyHint="next" label="نامِ معرف" value={f.referralNote} onChange={set('referralNote')} disabled={busy} />
         )}
       </div>
 
@@ -149,20 +279,149 @@ function Register() {
           <button type="button" className="ik-cap-new" onClick={loadCap} disabled={busy} aria-label="پرسشِ دیگر" title="پرسشِ دیگر">
             <Refresh width="17" height="17" />
           </button>
-          <input dir="ltr" inputMode="numeric" aria-labelledby="ik-cap-q" value={answer}
-                 onChange={(e) => setAnswer(e.target.value)} disabled={busy || !cap} />
+          <input id="ik-cap-answer" name="captcha" dir="ltr" inputMode="numeric" autoComplete="off" enterKeyHint="go" aria-labelledby="ik-cap-q" value={answer}
+                 aria-invalid={fErr.captcha ? true : undefined} aria-describedby={fErr.captcha ? 'ik-cap-answer-err' : undefined}
+                 onChange={(e) => { setAnswer(e.target.value); setFErr((x) => (x.captcha ? { ...x, captcha: '' } : x)); }} disabled={busy || !cap} />
         </div>
+        {fErr.captcha && <em id="ik-cap-answer-err" className="ik-ferr">{fErr.captcha}</em>}
+        {/* پرسشِ تصویری برای بیمارِ کم‌بینا یا صفحه‌خوان راهِ دیگری ندارد (بندِ ۱۱۶) — دست‌کم «پرسشِ دیگر» و تماس. */}
+        <small className="ik-cap-help">
+          اگر عددها را نمی‌توانید بخوانید، «پرسشِ دیگر» را بزنید
+          {link?.brand?.phone
+            ? <> یا با <a href={telHref(link.brand.phone)}><bdi dir="ltr">{faPhone(link.brand.phone)}</bdi></a> تماس بگیرید؛ ثبت‌نام را تلفنی هم انجام می‌دهیم.</>
+            : '.'}
+        </small>
       </div>
 
-      {err && <p className="ik-bad"><Alert width="15" height="15" /> {err}</p>}
-      <button type="button" className="ik-go" disabled={busy || !cap} onClick={submit}>
+      {err && <p className="ik-bad" role="alert"><Alert width="15" height="15" /> <span>{err}</span></p>}
+      {err && errStatus === 409 && (
+        <CallLink phone={link?.brand?.phone} label={link?.brand?.name ? `تماس با ${link.brand.name}` : 'تماس'} className="ik-err-call" />
+      )}
+      <button type="submit" className="ik-go" disabled={busy || !cap}>
         {busy ? 'در حال ثبت…' : 'ادامه'}
       </button>
+      </form>
+      </>)}
     </Shell>
   );
 }
 
+/**
+ * **ادامهٔ ثبت‌نامِ قبلی با موبایل + کد** (بازبینیِ UX، بندِ ۱۰۳) — روی همان لینکِ ثبت‌نام.
+ *
+ * بیمارِ مرورگرِ داخلیِ اینستاگرام که برای واریز به اپِ بانک رفته و برگشته، یا پیامکِ لینکش را پاک
+ * کرده، تا دیروز فقط با پرکردنِ دوبارهٔ همهٔ فیلدها + کپچا برمی‌گشت. پاسخِ «ارسالِ کد» همیشه یکی است
+ * (سرور وجودِ ثبت‌نام را لو نمی‌دهد)؛ کدِ درست مستقیم به `/f/…` می‌برد.
+ */
+function Resume({ token, hit, onBack }) {
+  const navigate = useNavigate();
+  const [phone, setPhone] = useState(hit?.phone ?? '');
+  const [code, setCode] = useState('');
+  const [step, setStep] = useState('phone');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [dev, setDev] = useState('');
+  const digits = (v) => toEnDigits(v).replace(/[^0-9]/g, '');
+
+  /* WebOTP — اندروید کدِ پیامک را خودش پر می‌کند (همان الگوی صفحهٔ ورود). */
+  useEffect(() => {
+    if (step !== 'code' || !('OTPCredential' in window)) return undefined;
+    const ac = new AbortController();
+    navigator.credentials.get({ otp: { transport: ['sms'] }, signal: ac.signal })
+      .then((o) => { if (o?.code) setCode(o.code); })
+      .catch(() => {});
+    return () => ac.abort();
+  }, [step]);
+
+  const send = async (e) => {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    try {
+      const r = await api(`/public/intake/link/${token}/resume/request`, { method: 'POST', body: { phone: digits(phone) } });
+      setDev(r?.devCode ?? '');
+      setCode(r?.devCode ?? '');
+      setStep('code');
+    } catch (x) { setErr(x.message); } finally { setBusy(false); }
+  };
+  const verify = async (e) => {
+    e.preventDefault();
+    setErr(''); setBusy(true);
+    try {
+      const r = await api(`/public/intake/link/${token}/resume/verify`, { method: 'POST', body: { phone: digits(phone), code: digits(code) } });
+      navigate(`/f/${r.token}`, { replace: true });
+    } catch (x) { setErr(x.message); setBusy(false); }
+  };
+
+  return (
+    <section className="ik-resume" aria-labelledby="ik-resume-h">
+      <h2 id="ik-resume-h">ادامهٔ ثبت‌نامِ قبلی</h2>
+      {/* از ثبت‌نام آمده (PS1): چرا فرم باز نشد و راهِ ادامه — بی هیچ رقمی از شمارهٔ پرونده. */}
+      {hit && step === 'phone' && (
+        <div className="ik-note ik-resume-hit" role="status">
+          <Info width="16" height="16" aria-hidden="true" />
+          <span>
+            با همین کدِ ملی و نامِ خانوادگی ثبت‌نامِ نیمه‌تمامی روی این لینک هست. برای حفظِ اطلاعاتِ بیمار، فقط با
+            شمارهٔ موبایلِ ثبت‌شده در پرونده ادامه پیدا می‌کند
+            {hit.smsTo ? ` — لینکِ ادامه همین حالا به ${hit.smsTo} پیامک شد؛ از همان پیامک برگردید یا همین‌جا کدِ تأیید بگیرید.` : '؛ شماره را بنویسید تا کدِ تأیید پیامک شود.'}
+            {' '}اگر به آن شماره دسترسی ندارید، با ما تماس بگیرید.
+          </span>
+        </div>
+      )}
+      {step === 'phone' ? (
+        <form className="ik-resume-form" onSubmit={send}>
+          {!hit && <p className="ik-hint">شماره‌ای را که با آن ثبت‌نام کرده‌اید بنویسید؛ یک کدِ ۶رقمی برایتان پیامک می‌شود.</p>}
+          {/* autoFocus: نمای تازه بی‌فوکوس بود و صفحه‌خوان/کیبورد روی دکمه‌ای می‌ماند که دیگر نیست (PF13). */}
+          <Field label="شمارهٔ موبایل" type="tel" dir="ltr" inputMode="numeric" autoComplete="tel" enterKeyHint="send" autoFocus
+                 placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} required />
+          <button type="submit" className="ik-go" disabled={busy || digits(phone).length < 11}>{busy ? 'در حال ارسال…' : 'ارسالِ کد'}</button>
+        </form>
+      ) : (
+        <form className="ik-resume-form" onSubmit={verify}>
+          <p className="ik-note" role="status">
+            <span>اگر ثبت‌نامِ بازی با شمارهٔ <bdi dir="ltr">{faDigits(digits(phone))}</bdi> باشد، کد تا یکی‌دو دقیقه پیامک می‌شود.</span>
+          </p>
+          {dev && <p className="ik-note"><span>پیامک هنوز وصل نیست — کدِ آزمون: <b dir="ltr">{faDigits(dev)}</b></span></p>}
+          <Field label="کدِ ۶رقمی" dir="ltr" inputMode="numeric" autoComplete="one-time-code" enterKeyHint="go" maxLength={6} autoFocus
+                 value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} required />
+          <button type="submit" className="ik-go" disabled={busy || digits(code).length < 6}>{busy ? 'در حال بررسی…' : 'ادامهٔ فرم'}</button>
+          <button type="button" className="ik-linkbtn" disabled={busy} onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>
+            اصلاحِ شماره یا گرفتنِ کدِ تازه
+          </button>
+        </form>
+      )}
+      {err && <p className="ik-bad" role="alert"><Alert width="15" height="15" /> {err}</p>}
+      <button type="button" className="ik-linkbtn" onClick={onBack}>نه، ثبت‌نامِ تازه</button>
+    </section>
+  );
+}
+
 /* ── گامِ ۲: اطلاعاتِ مراجعه + فیش ──────────────────────────────── */
+
+/**
+ * ردیف‌های کارتِ خلاصهٔ مرحلهٔ واریز — «برچسب: مقدار» از پاسخ‌های همین فرم (حداکثر شش ردیف).
+ * فقط نوع‌هایی که یک خطِ متن‌اند؛ عکس، پیوند و کادرِ پرداخت در خلاصه جا ندارند.
+ */
+const SUMMARY_TYPES = new Set(['text', 'textarea', 'number', 'money', 'phone', 'date', 'time', 'select', 'multiselect', undefined]);
+function summaryOf(d, vals, f) {
+  const fields = d.form?.fields ?? [];
+  if (!fields.length) {
+    return [['نوعِ عمل', f.procedure], ['نامِ جراح', f.surgeonName], ['بیمارستان', f.hospitalName], ['تاریخِ عمل', f.opDate]]
+      .filter(([, v]) => v);
+  }
+  const label = (fl, x) => (fl.options ?? []).find((o) => o?.v === x)?.l ?? String(x);
+  const rows = [];
+  for (const fl of fields) {
+    if (fl.active === false || !SUMMARY_TYPES.has(fl.type)) continue;
+    const v = vals[fl.key] ?? d.data?.[fl.key];
+    if (v == null || v === '' || (Array.isArray(v) && !v.length) || typeof v === 'object' && !Array.isArray(v)) continue;
+    let text = Array.isArray(v) ? v.map((x) => label(fl, x)).join('، ') : fl.type === 'select' ? label(fl, v) : String(v);
+    if (fl.type === 'money' || fl.type === 'number') text = faNum(toEnDigits(String(v)).replace(/[^0-9]/g, ''));
+    if (text.length > 60) text = `${text.slice(0, 58)}…`;
+    rows.push([fl.label, text]);
+    if (rows.length >= 6) break;
+  }
+  return rows;
+}
 
 /** شناسهٔ فیش‌های این ثبت‌نام — `receiptDocumentIds` (چندتایی) با سازگاریِ عقب‌روِ کلیدِ تکی. */
 const receiptsOf = (d) => {
@@ -186,22 +445,76 @@ const receiptsOf = (d) => {
  * صفِ بررسی هم ندارد (سرور مستقیم تأیید می‌کند)، پس مرحلهٔ آخرش «ثبت شد» است.
  */
 function stepsFor(d) {
-  const S = PATIENT.intake.step;
   const makesVisit = d.makesVisit !== false;
   const hasPaymentBox = !!d.form?.fields?.some((x) => x.type === 'payment');
   const needsReceipt = (d.payable ?? d.amount ?? 0) > 0 || hasPaymentBox
     || d.status === 'pending_payment' || receiptsOf(d).length > 0;
   const needsReview = makesVisit || needsReceipt || d.status === 'pending_approval';
+  /* بیماری که از صفحهٔ ثبت‌نام آمده «مشخصات» را پشتِ سر گذاشته — همان شماره‌هایی که آن صفحه گفت. */
+  return [...(d.registered ? [REGISTER_STEP] : []), ...flowSteps({ makesVisit, needsReceipt, needsReview })];
+}
+
+/** مرحلهٔ صفحهٔ ثبت‌نام — اولِ «چه پیش رو دارید» و، برای بیمارِ همان صفحه، اولِ مرحله‌نمای فرم. */
+const REGISTER_STEP = { key: 'register', label: 'مشخصات' };
+
+/** مرحله‌های بعد از ثبت‌نام از سه واقعیتِ مسیر — مشترکِ مرحله‌نمای فرم و «چه پیش رو دارید». */
+function flowSteps({ makesVisit, needsReceipt, needsReview }) {
+  const S = PATIENT.intake.step;
   const steps = [{ key: 'pending_fill', label: makesVisit ? S.fill : S.answer }];
   if (needsReceipt) steps.push({ key: 'pending_payment', label: S.receipt });
   steps.push(needsReview ? { key: 'pending_approval', label: S.review } : { key: 'approved', label: S.saved });
   return steps;
 }
 
+/** «۴۰ میلیون تومان» برای مبلغِ رُند — بیمار هشت رقم را نمی‌شمارد؛ مبلغِ غیرِرُند کامل نوشته می‌شود. */
+const feeFa = (n) => (n >= 1_000_000 && n % 100_000 === 0 ? `${faNum(n / 1_000_000)} میلیون تومان` : `${faNum(n)} تومان`);
+
+/**
+ * «چه پیش رو دارید» بالای صفحهٔ ثبت‌نام (بازبینیِ UX، بندِ ۱۰۷): مرحله‌ها، مبلغ با برچسب و زمانِ پرداخت،
+ * و اینکه کدِ ملی و تاریخِ تولد برای چیست و نزدِ کیست. تا دیروز اولین چیزِ صفحهٔ شرکت چیپِ بی‌برچسبِ
+ * «۴۰٬۰۰۰٬۰۰۰ تومان» بود و مرحله‌نما فقط از صفحهٔ دوم پیدا می‌شد.
+ */
+function Ahead({ link }) {
+  const flow = link.flow;
+  const steps = flow
+    ? [REGISTER_STEP, ...flowSteps({ makesVisit: flow.makesVisit, needsReceipt: flow.payment, needsReview: flow.review })]
+    : [REGISTER_STEP];
+  const who = link.brand?.name;
+  return (
+    <section className="ik-ahead" aria-labelledby="ik-ahead-t">
+      <b id="ik-ahead-t">چه پیش رو دارید</b>
+      {steps.length > 1 && (
+        <ol>
+          {steps.map((s, i) => (
+            <li key={s.key} className={i === 0 ? 'now' : undefined} aria-current={i === 0 ? 'step' : undefined}>
+              <i>{faNum(i + 1)}</i>{s.label}
+            </li>
+          ))}
+        </ol>
+      )}
+      {flow?.booking && <p><Calendar width="16" height="16" /> <span>روزِ نوبت را در مرحلهٔ بعد خودتان انتخاب می‌کنید.</span></p>}
+      {link.amount > 0 && (
+        <p className="ik-fee">
+          <Money width="16" height="16" />
+          <span>هزینهٔ خدمت: <b>{feeFa(link.amount)}</b> — پس از تکمیلِ فرم پرداخت می‌شود.</span>
+        </p>
+      )}
+      <p>
+        <Lock width="16" height="16" />
+        <span>کدِ ملی و تاریخِ تولد فقط برای تشکیلِ پرونده است؛ اطلاعاتِ شما نزدِ {who || 'مطب'} می‌ماند.</span>
+      </p>
+    </section>
+  );
+}
+
 function Form() {
   const { token } = useParams();
+  /* شمارهٔ پوشیده‌ای که ثبت‌نام همین حالا لینکِ این فرم را به آن پیامک کرد (`state` از `Register`). */
+  const smsTo = useLocation().state?.smsTo ?? null;
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
+  /* خطای بارگذاریِ فرم (status + message) — فقط وقتی هنوز چیزی نیامده صفحهٔ خطا می‌شود. */
+  const [loadErr, setLoadErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ procedure: '', surgeonName: '', hospitalName: '', opDate: '', notes: '' });
   /* پاسخِ فیلدهای **دلخواهِ** فرمِ ساخته‌شده — جدا از `f` که فیلدهای ثابت است. */
@@ -209,6 +522,32 @@ function Form() {
   const [vErr, setVErr] = useState({});
   const [page, setPage] = useState(1);
   const [code, setCode] = useState('');
+  /* خطای کدِ تخفیف **زیرِ همان کادر**، جدا از خطای سراسریِ ته کارت (بازبینیِ UX، بندِ ۱۰۴): تا دیروز
+     ۷۰۰ پیکسل پایین‌تر می‌نشست و تا اقدامِ بعدی هم می‌ماند. */
+  const [codeErr, setCodeErr] = useState('');
+  /* مرحلهٔ واریز: فرمِ پرشده به یک کارتِ خلاصه تا می‌شود؛ «ویرایش» بازش می‌کند. */
+  const [editing, setEditing] = useState(false);
+  /* فوکوس با عوض‌شدنِ نما (PF13): «ویرایش» ← سرتیترِ فرم؛ «انصراف» ← همان دکمهٔ «ویرایش». و عکسِ فیلدهای ثابت
+     پیش از ویرایش — «انصراف — بدونِ تغییر» باید همان را برگرداند (PF8). */
+  const editBtn = useRef(null);
+  const editHead = useRef(null);
+  const editMove = useRef(null);
+  const editSnap = useRef(null);
+  useEffect(() => {
+    const m = editMove.current;
+    editMove.current = null;
+    if (m === 'in') editHead.current?.focus();
+    else if (m === 'out') editBtn.current?.focus();
+  }, [editing]);
+  const payRef = useRef(null);
+  /* «روزِ نوبت را انتخاب کنید» روی خودِ تقویم، نه زیرِ دکمهٔ ذخیره که ۸۰۰ پیکسل پایین‌تر است (بندِ ۱۰۵). */
+  const [bookErr, setBookErr] = useState('');
+  const bookRef = useRef(null);
+  const smoothScroll = () => !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const showBookErr = (msg) => {
+    setBookErr(msg);
+    requestAnimationFrame(() => bookRef.current?.scrollIntoView({ behavior: smoothScroll() ? 'smooth' : 'auto', block: 'start' }));
+  };
   /* بیمار همین حالا فیش می‌گذارد — تا خودش «تمام شد» نزده، کادرِ فیش سرِ جایش می‌ماند.
      ⚠️ مالک (۱۴۰۵/۰۷/۰۵): «بعد از انتخابِ اولین عکسِ واریز فرم خودبه‌خود به مرحلهٔ بعد می‌رود و
      اجازهٔ چند عکس نمی‌دهد». سرور با اولین فیش ثبت‌نام را به صفِ بررسی می‌فرستد (درست است: کارکنان
@@ -234,10 +573,11 @@ function Form() {
   const lastRev = useRef(0);
   const nextRev = () => { lastRev.current = Math.max(Date.now(), lastRev.current + 1); return lastRev.current; };
 
-  useEffect(() => { document.title = 'فرمِ مراجعه'; }, []);
+  useEffect(() => { document.title = d?.brand?.name ? `فرمِ مراجعه — ${d.brand.name}` : 'فرمِ مراجعه'; }, [d?.brand?.name]);
   const load = useCallback(async () => {
     try {
       const r = await api(`/public/intake/form/${token}`, { auth: false });
+      adoptFace(r);
       setD(r);
       setF((s) => ({
         procedure: r.data?.procedure ?? s.procedure,
@@ -255,7 +595,8 @@ function Form() {
         setVals((s) => {
           const next = { ...s };
           for (const fl of r.form.fields) {
-            if (r.data?.[fl.key] !== undefined && next[fl.key] === undefined) next[fl.key] = r.data[fl.key];
+            if (r.data?.[fl.key] === undefined || next[fl.key] !== undefined) continue;
+            next[fl.key] = fl.type === 'date' ? jBack(r.data[fl.key]) : r.data[fl.key];
           }
           return next;
         });
@@ -266,9 +607,11 @@ function Form() {
       const savedPage = Number(r.data?._page);
       const pageCount = r.form?.pages ?? 1;
       if (Number.isInteger(savedPage) && savedPage >= 1 && savedPage <= pageCount) setPage(savedPage);
-    } catch (e) { setErr(e.message); }
+      setLoadErr(null);
+    } catch (e) { setErr(e.message); setLoadErr(e); }
   }, [token]);
   useEffect(() => { load(); }, [load]);
+  const fallback = useFallbackFace(!!loadErr && !d);
 
   /**
    * ذخیرهٔ پیش‌نویس روی سرور — W1.8.
@@ -294,11 +637,14 @@ function Form() {
     }
   }, [token, vals]);
 
-  /* روی blur، با مکثِ ۱٫۵ ثانیه (قرارداد §۶) — نه به‌ازای هر حرف. */
+  /* روی blur، با مکثِ ۱٫۵ ثانیه (قرارداد §۶) — نه به‌ازای هر حرف.
+     هشدار (بستهٔ PF، PF8): **در ویرایشِ مرحلهٔ واریز نه.** آن‌جا فرم یک «ذخیرهٔ تغییرات» و یک «انصراف — بدونِ
+     تغییر» دارد؛ پیش‌نویسِ خودکار تغییر را پیش از هر دو روی سرور می‌نشاند و انصراف دیگر چیزی را دور نمی‌ریخت. */
   const draftSoon = useCallback(() => {
+    if (editing) return;
     clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(() => saveDraft(), 1500);
-  }, [saveDraft]);
+  }, [saveDraft, editing]);
   useEffect(() => () => clearTimeout(draftTimer.current), []);
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -322,7 +668,11 @@ function Form() {
     : null;
 
   const saveFill = async () => {
-    setErr(''); setBusy(true);
+    /* نوبت لازم است و هنوز روزی زده نشده ← همان‌جا بگو، بی‌رفت‌وبرگشت (قاعدهٔ `fill()` سرور؛ «رزرو بدون
+       تاریخ» استثناست). */
+    const undated = vals.opDateOpen === true || vals.opDateOpen === 'true';
+    if (d.booking?.required && !d.booking.appointment && !undated) { showBookErr('روزِ نوبت را از تقویمِ بالا انتخاب کنید.'); return; }
+    setErr(''); setBookErr(''); setBusy(true);
     /* ثبت همهٔ پاسخ‌ها را می‌برد؛ ذخیرهٔ خودکارِ در صف دیگر فقط یک نوشتنِ اضافه بود که
        با همین ثبت هم‌زمان می‌رسید. */
     clearTimeout(draftTimer.current);
@@ -331,8 +681,21 @@ function Form() {
        سرور آن را سالِ ۱۴۰۵ **میلادی** می‌فهمید — و مراجعه بی‌سروصدا شش قرن
        عقب ثبت می‌شد. هیچ خطایی نمی‌داد؛ فقط از تقویم و گزارش‌ها غیب می‌شد. */
     const body = { ...f, opDate: f.opDate.trim() ? jStrToIso(f.opDate) : '', values: vals, hospitalId: vals.hospitalId, rev: nextRev() };
-    try { setD(await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body })); }
-    catch (e) { setErr(e.message); } finally { setBusy(false); }
+    try {
+      const next = await api(`/public/intake/form/${token}/fill`, { auth: false, method: 'POST', body });
+      setD(next);
+      setEditing(false);
+      /* هشدار: بعد از «ثبت و مرحلهٔ بعد» صفحه همان‌جا می‌ماند و بخشِ واریز ته صفحه اضافه می‌شد — بیمار
+         نمی‌فهمید ثبت شد یا نه و ممکن بود دوباره «ثبت» بزند (بازبینیِ UX، بندِ ۱۰۴). */
+      if (next?.status === 'pending_payment') {
+        const smooth = !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+        requestAnimationFrame(() => payRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' }));
+      }
+    }
+    catch (e) {
+      if (/روزِ نوبت/.test(e.message)) showBookErr(e.message);
+      else setErr(e.message);
+    } finally { setBusy(false); }
   };
 
   /**
@@ -350,9 +713,11 @@ function Form() {
     const next = page + 1;
     setPage(next);
     /* ذخیره **با** شمارهٔ صفحهٔ تازه: رفرشِ بعدی باید همان‌جا برگردد نه یک
-       صفحه عقب‌تر. مکثِ blur لغو می‌شود تا دو ذخیرهٔ پشت‌سرهم نرود. */
-    clearTimeout(draftTimer.current);
-    saveDraft(next);
+       صفحه عقب‌تر. مکثِ blur لغو می‌شود تا دو ذخیرهٔ پشت‌سرهم نرود. در ویرایشِ مرحلهٔ واریز پیش‌نویس نه (PF8). */
+    if (!editing) {
+      clearTimeout(draftTimer.current);
+      saveDraft(next);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -364,6 +729,9 @@ function Form() {
          بدونِ اینکه بداند کدام کادر را باید پر کند. */
       const bad = (d.form.fields ?? []).find((x) => e[x.key]);
       if (bad) setPage(bad.page ?? 1);
+      /* و به خودِ اولین کادرِ غلط برو — صفحهٔ بلند یعنی خطا زیرِ تا بود. */
+      requestAnimationFrame(() => document.querySelector('.ik-card .pf-err')?.closest('label, .pf-field, .dyn-field')
+        ?.scrollIntoView({ behavior: smoothScroll() ? 'smooth' : 'auto', block: 'center' }));
       return;
     }
     await saveFill();
@@ -412,9 +780,9 @@ function Form() {
   };
 
   const applyCode = async () => {
-    setErr(''); setBusy(true);
+    setErr(''); setCodeErr(''); setBusy(true);
     try { setD(await api(`/public/intake/form/${token}/discount`, { auth: false, method: 'POST', body: { code: code.trim() } })); }
-    catch (e) { setErr(e.message); } finally { setBusy(false); }
+    catch (e) { setCodeErr(e.message); } finally { setBusy(false); }
   };
 
   /* ⚠️ خطا **پرتاب** می‌شود تا همان فایل در فهرستِ کادر قرمز شود؛ پیامِ
@@ -423,6 +791,7 @@ function Form() {
     /* پیش از ارسال: پاسخی که وضعیت را «در انتظارِ بررسی» می‌کند نباید کادر را زیرِ پای صفِ
        آپلودِ چندفایلی بردارد. */
     setAddingReceipts(true);
+    setCodeErr('');
     const fd = new FormData();
     fd.append('file', file);
     const next = await apiUpload(`/public/intake/form/${token}/receipt`, fd);
@@ -448,7 +817,7 @@ function Form() {
     catch (e) { setErr(e.message); }
   };
 
-  if (err && !d) return <Shell><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
+  if (loadErr && !d) return <LoadError brand={fallback?.brand} err={loadErr} />;
   if (!d) return <Shell><p className="ik-note">در حال بارگذاری…</p></Shell>;
 
   const done = d.status === 'approved';
@@ -469,10 +838,25 @@ function Form() {
   /* کادرِ بیمارستان جدا از `DynForm` کشیده می‌شود (جست‌وجو با پیشنهاد)، ولی برچسب، ستاره و
      روشن/خاموشش همان فیلدِ فرم‌ساز است. */
   const hospitalField = d.form?.fields?.find((x) => x.key === 'hospitalName' && x.active !== false && (x.page ?? 1) === page);
-  const submitLabel = paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
+  const submitLabel = editing ? 'ذخیرهٔ تغییرات' : paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
+  /* انصرافِ ویرایش: پاسخ‌های ذخیره‌شده برمی‌گردند — خلاصه نباید تغییرِ ثبت‌نشده را «ثبت شد» نشان دهد.
+     هشدار (PF8): پیش‌نویسِ در صف دور ریخته می‌شود و `draftSeq` جلو می‌رود تا پاسخِ دیررسی «ذخیره شد» نشان ندهد؛
+     فیلدهای ثابت (بی‌فرم) از عکسِ پیش از ویرایش برمی‌گردند — `load` فقط کلیدهایی را که سرور دارد می‌نشاند. */
+  const startEdit = () => { editSnap.current = { f }; setDraftState('idle'); editMove.current = 'in'; setEditing(true); };
+  const cancelEdit = () => {
+    clearTimeout(draftTimer.current);
+    draftSeq.current += 1;
+    setDraftState('idle');
+    editMove.current = 'out';
+    setEditing(false);
+    if (editSnap.current) setF(editSnap.current.f);
+    setVals({});
+    load();
+  };
 
   return (
-    <Shell title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}>
+    <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={rejected || expired ? 0 : d.amount}
+           footCall={!(d.status === 'pending_approval' && !payOpen) && !rejected && !expired}>
       {/* نوارِ مرحله — بیمار باید بداند کجای کار است و چه چیزی مانده؛ و در
           پایان، اینکه چیزی نمانده. مرحله‌ها از وضعیتِ همین فرم ساخته می‌شوند. */}
       {!rejected && !expired && (
@@ -485,6 +869,23 @@ function Form() {
         </ol>
       )}
 
+      {/* لینکِ ادامه و مهلتِ فرم (بازبینیِ UX، بندِ ۱۰۳): بیمار باید بداند اگر این صفحه بسته شد از کجا
+          برگردد و تا کِی وقت دارد. */}
+      {(d.status === 'pending_fill' || d.status === 'pending_payment') && smsTo && (
+        <p className="ik-note ik-sms-note" role="status">
+          <Info width="15" height="15" />
+          {/* هشدار: یک span: `.ik-note` فلکس است و متن + bdi بی‌این سه ستونِ جدا می‌شدند. */}
+          {/* شمارهٔ پوشیده فقط وقتی تایپ‌کننده همان شماره را داده؛ وگرنه سرور «شمارهٔ ثبت‌شده در پرونده» می‌فرستد (PF12). */}
+          <span>لینکِ ادامهٔ همین فرم به {/\d/.test(smsTo) ? <bdi dir="ltr">{faDigits(smsTo)}</bdi> : smsTo} پیامک شد؛ اگر این صفحه بسته شد، از همان پیامک برگردید.</span>
+        </p>
+      )}
+      {(d.status === 'pending_fill' || d.status === 'pending_payment') && d.expiresFa && (
+        <p className="ik-deadline">
+          <Clock width="14" height="14" aria-hidden="true" />
+          {paidNext ? `مهلتِ تکمیل و بارگذاریِ فیش: تا ${d.expiresFa}` : `این فرم تا ${d.expiresFa} باز است`}
+        </p>
+      )}
+
       {/* برگشت برای اصلاح (مالک، ۱۴۰۵/۰۷/۰۱): بیمار باید بداند **کدام بخش** و **چرا** — نه فقط
           یک یادداشت. مرحله و راهنما از سرور (`intake-return.ts`) می‌آیند. */}
       {d.returned ? (
@@ -493,7 +894,7 @@ function Form() {
           <p>{d.returned.note}</p>
           <small>{d.returned.hint}</small>
         </div>
-      ) : d.reviewNote && !done && (
+      ) : d.reviewNote && !done && !rejected && (
         <p className="ik-warn"><Alert width="15" height="15" /> {d.reviewNote}</p>
       )}
 
@@ -503,8 +904,19 @@ function Form() {
           <CheckCircle width="16" height="16" /> {makesVisit ? T.approved.visit : T.approved.record}
         </p>
       )}
-      {rejected && <p className="ik-bad"><Alert width="16" height="16" /> {d.reviewNote || T.rejected}</p>}
-      {expired && <p className="ik-bad"><Clock width="16" height="16" /> {T.expired}</p>}
+      {/* ردشده و منقضی بن‌بست نیستند (بازبینیِ UX، بندِ ۱۱۰): چه شد + چرا + چه کنید — «ثبتِ درخواستِ
+          تازه» / «شروعِ دوباره» روی همان لینکِ ثبت‌نام (اگر هنوز فعال است) و تماس با مطب. */}
+      {rejected && (
+        <PublicError brand={d.brand} title={T.rejected.title} reason={d.reviewNote ? T.rejected.because(d.reviewNote) : T.rejected.noNote}>
+          {d.restartToken && <Link className="pb-act" to={`/r/${d.restartToken}`}><Refresh width="16" height="16" aria-hidden="true" /> {T.rejected.again}</Link>}
+        </PublicError>
+      )}
+      {expired && (
+        <PublicError brand={d.brand} tone="warn" icon={<Clock width="22" height="22" />} title={T.expired.title}
+                     reason={T.expired.reason(d.expiresFa, !!d.restartToken)}>
+          {d.restartToken && <Link className="pb-act" to={`/r/${d.restartToken}`}><Refresh width="16" height="16" aria-hidden="true" /> {T.expired.again}</Link>}
+        </PublicError>
+      )}
 
       {/* ⚠️ **فرمِ ساخته‌شده جایگزینِ فیلدهای هاردکد می‌شود، نه اضافه بر آن.**
           اگر هر دو رندر می‌شدند، بیمار «نوعِ عمل» را دو بار می‌دید — یک بار
@@ -516,10 +928,36 @@ function Form() {
           می‌کند اصلاً نوبتی نگرفته. نصبی که برنامهٔ کاری ندارد این بخش را
           اصلاً نمی‌بیند (`booking.required === false`). */}
       {(d.status === 'pending_fill' || d.status === 'pending_payment') && d.booking?.required && (
-        <BookingPick token={token} booking={d.booking} disabled={busy} onBooked={setD} />
+        <div ref={bookRef} className="ik-book-anchor">
+          <BookingPick token={token} booking={d.booking} disabled={busy} error={bookErr}
+                       onBooked={(next) => { setBookErr(''); setD(next); }} />
+        </div>
       )}
 
-      {(d.status === 'pending_fill' || d.status === 'pending_payment') && (
+      {/* ── مرحلهٔ واریز: فرمِ پرشده یک کارتِ خلاصه است، نه همان فرم و همان دکمهٔ «ثبت» (بندِ ۱۰۴) ── */}
+      {d.status === 'pending_payment' && !editing && (
+        <section className="ik-sum" aria-labelledby="ik-sum-h">
+          <div className="ik-sum-head">
+            <b id="ik-sum-h"><CheckCircle width="16" height="16" aria-hidden="true" /> اطلاعاتِ مراجعه ثبت شد</b>
+            <button type="button" className="ik-sum-edit" ref={editBtn} onClick={startEdit} disabled={busy}>
+              <Pencil width="15" height="15" aria-hidden="true" /> ویرایش
+            </button>
+          </div>
+          {summaryOf(d, vals, f).length > 0 && (
+            <dl>
+              {summaryOf(d, vals, f).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+            </dl>
+          )}
+        </section>
+      )}
+
+      {d.status === 'pending_payment' && editing && (
+        <div className="ik-edit-head">
+          <h2 ref={editHead} tabIndex={-1}>ویرایشِ اطلاعاتِ مراجعه</h2>
+          <p>تغییرات فقط با «ذخیرهٔ تغییرات» ثبت می‌شوند؛ «انصراف» همه را برمی‌گرداند.</p>
+        </div>
+      )}
+      {(d.status === 'pending_fill' || (d.status === 'pending_payment' && editing)) && (
         d.form?.fields?.length ? (
           <>
             {d.form.hint && <p className="ik-hint">{d.form.hint}</p>}
@@ -529,7 +967,7 @@ function Form() {
               )}
               {/* W1.8 — بیمار باید **ببیند** که نوشته‌اش جایی رفته. بدونِ این،
                   ذخیرهٔ خودکار از نبودش قابلِ تشخیص نیست. */}
-              {draftState !== 'idle' && (
+              {!editing && draftState !== 'idle' && (
                 <span className={`ik-draft ${draftState}`} role="status" aria-live="polite">
                   {draftState === 'saving' ? 'در حالِ ذخیره…'
                     : draftState === 'saved' ? 'ذخیره شد'
@@ -547,7 +985,11 @@ function Form() {
             {/* ذخیرهٔ خودکار روی blur. `onBlur` در ری‌اکت **حباب می‌کند**، پس
                 این یک لایه کافی است و `DynForm`ِ مشترک دست نمی‌خورد. */}
             <div onBlur={draftSoon}>
+            {/* کوچک‌سازی و سقفِ ۸ مگابایت فقط برای فرمِ عمومیِ بیمار (PF9) — همان سقفِ `FileInterceptor`ِ مسیرِ
+                عکسِ فرمِ بیمار در `intake.controller.ts`. */}
             <DynForm
+              shrink
+              maxMb={8}
               fields={d.form.fields.filter((x) => (x.page ?? 1) === page && x.key !== 'hospitalName')}
               values={vals}
               errors={vErr}
@@ -569,11 +1011,14 @@ function Form() {
               {page < (d.form.pages ?? 1) ? (
                 <button type="button" className="ik-go" disabled={busy} onClick={nextPage}>بعدی</button>
               ) : (
-                <button type="button" className="ik-go ghost" disabled={busy} onClick={saveForm}>
+                /* دکمهٔ اصلیِ صفحه — نه شبح (بازبینیِ UX، بندِ ۱۱۵): «ادامه» و «بعدی» حلقهٔ نئونی داشتند و
+                   مهم‌ترین دکمه، «ثبت»، کم‌رنگ‌ترینِ صفحه بود. */
+                <button type="button" className="ik-go" disabled={busy} onClick={saveForm}>
                   {busy ? 'در حال ذخیره…' : submitLabel}
                 </button>
               )}
             </div>
+            {editing && <button type="button" className="ik-linkbtn" onClick={cancelEdit} disabled={busy}>انصراف — بدونِ تغییر</button>}
           </>
         ) : (
           <>
@@ -588,15 +1033,16 @@ function Form() {
               <span>توضیح (اختیاری)</span>
               <textarea rows={2} value={f.notes} onChange={set('notes')} disabled={busy} />
             </label>
-            <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
+            <button type="button" className="ik-go" disabled={busy} onClick={saveFill}>
               {busy ? 'در حال ذخیره…' : submitLabel}
             </button>
+            {editing && <button type="button" className="ik-linkbtn" onClick={cancelEdit} disabled={busy}>انصراف — بدونِ تغییر</button>}
           </>
         )
       )}
 
       {payOpen && (
-        <div className="ik-pay">
+        <div className="ik-pay" ref={payRef}>
           {/* ⚠️ ترتیب: **اول چقدر، بعد به کجا.** نسخهٔ اول شماره‌حساب‌ها را
               بالای مبلغ می‌گذاشت و بیمار پیش از دانستنِ عدد با فهرستِ کارت
               روبه‌رو می‌شد؛ و مبلغ زیرِ فهرست، خارج از دیدِ صفحه می‌افتاد.
@@ -610,10 +1056,15 @@ function Form() {
           </p>
           {/* ⚠️ فقط کد فرستاده می‌شود؛ مبلغ را سرور حساب می‌کند. */}
           {!d.discountCode && (
-            <div className="ik-code">
-              <input value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} placeholder="کدِ تخفیف (اختیاری)" />
-              <button type="button" disabled={busy || code.trim().length < 3} onClick={applyCode}>اعمال</button>
-            </div>
+            <>
+              <div className="ik-code">
+                <input value={code} onChange={(e) => { setCode(e.target.value); setCodeErr(''); }} disabled={busy}
+                       placeholder="کدِ تخفیف (اختیاری)" aria-invalid={codeErr ? true : undefined}
+                       aria-describedby={codeErr ? 'ik-code-err' : undefined} />
+                <button type="button" disabled={busy || code.trim().length < 3} onClick={applyCode}>اعمال</button>
+              </div>
+              {codeErr && <p id="ik-code-err" className="ik-bad ik-code-err" role="alert"><Alert width="15" height="15" /> <span>{codeErr}</span></p>}
+            </>
           )}
           {/* توضیحِ شرکت دربارهٔ واریز — یک متن برای همهٔ لینک‌ها (تنظیمات → پذیرشِ آنلاین). */}
           {d.paymentNote && (
@@ -627,9 +1078,10 @@ function Form() {
               {d.payTo.map((a) => <BankCard key={a.id} acc={a} />)}
             </div>
           ) : (
-            <p className="ik-warn">
-              <Alert width="15" height="15" /> شمارهٔ حسابی تنظیم نشده — پیش از واریز با ما تماس بگیرید.
-            </p>
+            <div className="ik-warn ik-warn-call">
+              <p><Alert width="15" height="15" /> شمارهٔ حسابی تنظیم نشده — پیش از واریز تماس بگیرید.</p>
+              <CallLink phone={d.brand?.phone} label={d.brand?.name ? `تماس با ${d.brand.name}` : 'تماس'} />
+            </div>
           )}
           {/* فیش هم چندتایی است: دو قسط، یا عکسِ ناخوانا که دوباره فرستاده
               می‌شود. کادر همان کادرِ مشترکِ سامانه است. */}
@@ -666,18 +1118,41 @@ function Form() {
         </div>
       )}
 
+      {/* ── کارتِ پایانی (بازبینیِ UX، بندِ ۱۰۲) ──
+          تا دیروز فقط یک جملهٔ «بررسی می‌کند» بود و بزرگ‌ترین دکمهٔ صفحه «افزودنِ فیشِ دیگر» — بیمار
+          گمان می‌کرد کارش ناقص مانده؛ نوبتی را هم که همین حالا گرفته بود دیگر نمی‌دید. */}
       {d.status === 'pending_approval' && !payOpen && (
-        <>
+        <section className="ik-final" aria-labelledby="ik-final-h">
+          <span className="ik-final-ic" aria-hidden="true"><CheckCircle width="30" height="30" /></span>
+          <h2 id="ik-final-h">{T.final.title}</h2>
           <p className="ik-note">
             {/* ⚠️ فرمِ رایگان فیش ندارد — «فیشِ شما دریافت شد» برای آن دروغ است
                 و بیمار را دنبالِ فیشی می‌فرستد که هرگز نفرستاده. */}
             <Clock width="15" height="15" /> {receipts.length ? T.review.withReceipt : T.review.noReceipt}
           </p>
-          {/* قسطِ دوم یا عکسِ خواناتر — تا کسی بررسی نکرده، راهِ برگشت به کادرِ فیش باز است. */}
-          {receipts.length > 0 && (
-            <button type="button" className="ik-go ghost" onClick={() => setAddingReceipts(true)}>{T.receiptsMore}</button>
+          {d.booking?.appointment && (
+            <div className="ik-final-appt">
+              <Calendar width="20" height="20" aria-hidden="true" />
+              <div>
+                <span>نوبتِ شما</span>
+                <b>
+                  {d.booking.appointment.whenFa ?? faDate(d.booking.appointment.date)}
+                  {d.booking.appointment.timeFa && <>، ساعتِ <bdi dir="ltr">{d.booking.appointment.timeFa}</bdi></>}
+                </b>
+                {d.booking.appointment.topicName && <small>{d.booking.appointment.topicName}</small>}
+                <em>{d.booking.appointment.status === 'confirmed' ? T.final.confirmed : T.final.held(d.brand?.name)}</em>
+              </div>
+            </div>
           )}
-        </>
+          <p className="ik-final-when">{T.final.when}</p>
+          {d.brand?.phone && <p className="ik-final-q">سؤالی دارید؟</p>}
+          <CallLink phone={d.brand?.phone} label={d.brand?.name ? `تماس با ${d.brand.name}` : 'تماس'} />
+          {/* قسطِ دوم یا عکسِ خواناتر — تا کسی بررسی نکرده، راهِ برگشت به کادرِ فیش باز است؛ ولی
+              کنشِ فرعی است، نه دکمهٔ اصلیِ صفحه. */}
+          {receipts.length > 0 && (
+            <button type="button" className="ik-linkbtn" onClick={() => setAddingReceipts(true)}>{T.receiptsMore}</button>
+          )}
+        </section>
       )}
 
       {err && <p className="ik-bad"><Alert width="15" height="15" /> {err}</p>}
@@ -759,31 +1234,83 @@ function BankCard({ acc }) {
   );
 }
 
+/**
+ * **بیمارِ بی‌کدِ ملیِ ایرانی** (اتباع: کدِ فراگیر یا گذرنامه — بازبینیِ UX، بندِ ۱۰۹). تا دیروز فقط «کدِ ملی
+ * معتبر نیست» می‌دید که القا می‌کرد اشتباه تایپ کرده، و هیچ راهی جلویش نبود. ثبت‌نامِ آنلاین با کدِ دیگر
+ * ستونِ تازه‌ای در پرونده می‌خواهد (`Patient.nationalId` یکتا و در پنلِ کارکنان هم سنجیده می‌شود)؛ تا آن
+ * روز راهِ درست تلفن است — کارکنان دستی ثبتش می‌کنند.
+ */
+function NoNationalId({ brand, open, onOpen }) {
+  if (!open) {
+    return <button type="button" className="ik-nonid-btn" onClick={onOpen}>کدِ ملیِ ایرانی ندارم</button>;
+  }
+  return (
+    <div className="ik-nonid">
+      <p>اگر کدِ ملیِ ایرانی ندارید (کدِ فراگیرِ اتباع یا گذرنامه)، ثبت‌نامتان را تلفنی انجام می‌دهیم{brand?.phone ? ':' : ' — با ما تماس بگیرید.'}</p>
+      <CallLink phone={brand?.phone} label={brand?.name ? `تماس با ${brand.name}` : 'تماس'} />
+    </div>
+  );
+}
+
+/**
+ * لینک یا فرم **باز نشد** — همان پوستهٔ صفحه با الگوی «چه شد + چرا + چه کنید» (بازبینیِ UX، بندِ ۱۱۰):
+ * ۴۰۴ «شاید ناقص کپی شده؛ لینکِ کاملِ پیامک را دوباره لمس کنید»، ۴۰۳ «دیگر فعال نیست»، اتصال با
+ * «تلاشِ دوباره» روی همین نشانی — و همیشه تماس با مطب.
+ */
+function LoadError({ brand, err }) {
+  const t = loadErrorText(err, 'لینک');
+  return (
+    <Shell brand={brand} footCall={false}>
+      <PublicError brand={brand} title={t.title} reason={t.reason}>{t.retry && <RetryButton />}</PublicError>
+    </Shell>
+  );
+}
+
 /* ── پوسته ─────────────────────────────────────────────────────── */
-function Shell({ title, amount, children }) {
+/**
+ * سربرگ = **هویتِ مطب/شرکت**، نه نامِ نرم‌افزار (بازبینیِ UX، بندِ ۹۲).
+ *
+ * هشدار: تا دیروز بالای فرم «عمل‌یار» بود (`data-brand-name` که هیچ کدی پرش نمی‌کرد): بیمار از
+ * لینکِ «مطب دکتر رحیمی» می‌آمد، نامِ دیگری می‌دید که کدِ ملی و ۴۰ میلیون می‌خواهد، و ته صفحه
+ * «به شرکت نوروپایش واریز کنید» — برای بیمارِ نگران یعنی کلاه‌برداری. حالا نام و تلفن از
+ * پاسخِ خودِ صفحه می‌آید و «عمل‌یار» فقط کوچک در پاورقی است. نامِ نیامده (پاسخِ قدیمی)
+ * «ثبت‌نام» می‌شود، هرگز «عمل‌یار».
+ */
+function Shell({ brand, title, amount, children, footCall = true }) {
   return (
     <div className="ik">
       <div className="ik-bg" aria-hidden="true" />
       <main className="ik-card">
         <header className="ik-head">
-          <Mark className="ik-mark" gradient aria-hidden="true" />
+          <BrandMark brand={brand} />
           <div>
-            <b data-brand-name>عمل‌یار</b>
+            <b>{brand?.name || 'ثبت‌نام'}</b>
             {title && <small>{title}</small>}
           </div>
-          {amount > 0 && <span className="ik-amount">{faNum(amount)} تومان</span>}
+          {/* با برچسب (بازبینیِ UX، بندِ ۱۰۷): چیپِ تنهای «۴۰٬۰۰۰٬۰۰۰ تومان» نمی‌گفت این چه مبلغی است. */}
+          {amount > 0 && <span className="ik-amount">هزینه: {feeFa(amount)}</span>}
         </header>
         {children}
+        <PublicFoot brand={brand} call={footCall} />
       </main>
     </div>
   );
 }
 
-function Field({ label, dir = 'rtl', inputMode, placeholder, ...rest }) {
+function Field({ label, dir = 'rtl', inputMode, placeholder, error, id, after = null, ...rest }) {
+  /* خطای هر کادر زیرِ خودش، با قابِ قرمز و aria-invalid (بازبینیِ UX، بندِ ۱۰۵). هشدار: خطا **بیرونِ**
+     `<label>` است: داخلش جزوِ نامِ دسترس‌پذیرِ کادر خوانده می‌شد و صفحه‌خوان آن را دو بار می‌گفت. */
+  /* هشدار: پوستهٔ `div` همیشه هست، نه فقط وقتِ خطا: عوض‌شدنِ ریشه کادر را از نو می‌ساخت و با پاک‌شدنِ خطا
+     حینِ تایپ، فوکوس می‌پرید. */
   return (
-    <label className="ik-field">
-      <span>{label}</span>
-      <input type="text" dir={dir} inputMode={inputMode} placeholder={placeholder} {...rest} />
-    </label>
+    <div className="ik-fieldwrap">
+      <label className={`ik-field${error ? ' bad' : ''}`}>
+        <span>{label}</span>
+        <input type="text" id={id} dir={dir} inputMode={inputMode} placeholder={placeholder}
+               aria-invalid={error ? true : undefined} aria-describedby={error && id ? `${id}-err` : undefined} {...rest} />
+      </label>
+      {error && <em id={id ? `${id}-err` : undefined} className="ik-ferr">{error}</em>}
+      {after}
+    </div>
   );
 }

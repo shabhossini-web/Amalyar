@@ -5,8 +5,10 @@ import { AuditService } from '../audit/audit.service';
 import { TenantContext } from '../tenant/tenant-context';
 import {
   SETTING_BY_KEY, SETTING_GROUPS, SETTINGS, SettingDef,
-  coerce, isDefault, parse, serialize,
+  coerce, isDefault, orgWord, parse, serialize, withOrg,
 } from './settings-registry';
+import { KEY_SERVICES, TenantProfile, profileOf } from './tenant-profile';
+import { DEFAULT_VERTICAL, isVertical } from './verticals';
 
 /** عمرِ کش. کوتاه است چون چند replica هم‌زمان بالا هستند و هرکدام کشِ خودش را دارد. */
 const TTL_MS = 30_000;
@@ -84,15 +86,36 @@ export class SettingsService {
 
   // ── صفحهٔ تنظیمات ────────────────────────────────────────────
 
+  /**
+   * نوعِ نصب (مطب/شرکت) و خدمات — برای واژهٔ «سازمان» در برچسب‌ها. همان قاعدهٔ
+   * `ConfigService.profile()`؛ این‌جا مستقیم خوانده می‌شود چون `ConfigService` خودش به همین
+   * سرویس وابسته است. خطا صفحه را نمی‌اندازد: پیش‌فرض همان «شرکت» است که تا دیروز بود.
+   */
+  private async profile(): Promise<TenantProfile> {
+    /* `Promise.resolve().then` تا حتی خطای هم‌زمان (استابِ آزمونی بی‌`setting`) هم به پیش‌فرض برگردد. */
+    const read = (key: string) => Promise.resolve().then(() => this.prisma.setting.findUnique({ where: { key } })).catch(() => null);
+    const [v, sv] = await Promise.all([read('vertical'), read(KEY_SERVICES)]);
+    return profileOf(isVertical(v?.value) ? v!.value : DEFAULT_VERTICAL, sv?.value ?? null);
+  }
+
   /** فهرستِ گروه‌بندی‌شده برای رابط. کلاینت هیچ کلیدی را hardcode نمی‌کند. */
   async all() {
-    const rows = await this.rows();
+    const [rows, profile, features] = await Promise.all([
+      this.rows(), this.profile(),
+      Promise.resolve().then(() => this.prisma.feature.findMany({ select: { key: true, enabled: true } }))
+        .catch(() => [] as { key: string; enabled: boolean }[]),
+    ]);
+    const org = orgWord(profile.kind);
+    /* گروهِ ماژولِ خاموش («انبار»، «حمل و نقل» در مطب) و فیلدِ خدمتی که نصب ندارد (فاکتورِ نورو)
+       اصلاً نمی‌آیند — بازبینیِ UX ۱۴۰۵/۰۷. ردیفِ نبوده در `features` یعنی هنوز seed نشده: روشن. */
+    const off = new Set(features.filter((f) => !f.enabled).map((f) => f.key));
+    const hasService = (d: SettingDef) => !d.services || d.services.some((x) => (profile.services as string[]).includes(x));
     const item = (d: SettingDef) => {
       const value = parse(d, rows.get(d.key));
       return {
         key: d.key,
-        label: d.label,
-        hint: d.hint ?? null,
+        label: withOrg(d.label, org),
+        hint: d.hint ? withOrg(d.hint, org) : null,
         type: d.type,
         value,
         default: d.default,
@@ -105,10 +128,11 @@ export class SettingsService {
       };
     };
     return {
-      groups: SETTING_GROUPS.map((g) => ({
-        ...g,
-        hint: g.hint ?? null,
-        items: SETTINGS.filter((d) => d.group === g.key && !d.hidden).map(item),
+      groups: SETTING_GROUPS.filter((g) => !g.feature || !off.has(g.feature)).map((g) => ({
+        key: g.key,
+        label: withOrg(g.label, org),
+        hint: g.hint ? withOrg(g.hint, org) : null,
+        items: SETTINGS.filter((d) => d.group === g.key && !d.hidden && hasService(d)).map(item),
       })).filter((g) => g.items.length > 0),
     };
   }
@@ -130,9 +154,10 @@ export class SettingsService {
 
     const errors: string[] = [];
     const wanted: { def: SettingDef; value: string | number | boolean }[] = [];
+    const org = orgWord((await this.profile()).kind);
     for (const [key, raw] of entries) {
       const def = SETTING_BY_KEY.get(key)!;
-      const got = coerce(def, raw);
+      const got = coerce(def, raw, org);
       if (got.error) errors.push(got.error);
       else wanted.push({ def, value: got.value! });
     }

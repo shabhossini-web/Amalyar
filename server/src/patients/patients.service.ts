@@ -7,12 +7,13 @@ import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { syncVisitDuty } from './hospital-duties.service';
-import { visitTitleOf } from './visit-title';
+import { serviceTitleOf, visitTitleOf } from './visit-title';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
+import { foldText } from '../common/name-match';
 import { digitVariants, textSearchOr } from '../common/search';
-import { toDateValue } from '../common/jalali';
+import { jalaliText, toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -29,7 +30,7 @@ import { planKindPhases, planSubforms, subformDataHasValue, subformDerived, subf
 import { vitalsRowsFor } from './vitals';
 import { DOCUMENT_PHASE_FA } from './document-categories';
 import { actorName } from '../common/person';
-import { summarize } from './billing.service';
+import { summarize, withPayState } from './billing.service';
 import { todayRangeUtc } from '../common/clinic-day';
 import {
   CODING_TWIN, CODING_TWIN_KEYS, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
@@ -161,7 +162,8 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
     // جمع‌های مالی از ردیف‌ها مشتق می‌شوند (قانونِ computeVisit)؛ هیچ render ای
     // اجازهٔ جمع‌زدن ندارد و هیچ ستونِ سرجمعی در DB نیست که از واقعیت عقب بماند.
     // مدلِ «گلوبال» همین‌جا اعمال می‌شود تا کارت و فهرست همان عددِ فاکتور را ببینند.
-    ...summarize(v.charges ?? [], v.payments ?? [], v),
+    // «مانده / تسویه / اضافه‌پرداخت» هم از همین‌جا (`payState*`)، نه `due > 0 ? … : 'تسویه'`ِ کلاینت (DF2).
+    ...withPayState(summarize(v.charges ?? [], v.payments ?? [], v)),
     pricingModel: v.pricingModel,
     globalAmount: v.globalAmount,
     notes: v.notes,
@@ -273,6 +275,9 @@ export type VisitFilter = {
   to?: Date;
   /// فقط مراجعاتی که هنوز بدهی دارند.
   owing?: boolean;
+  /// مرحلهٔ جامانده (بازبینیِ UX، global-04/company-13): `tech` بی‌کارشناس، `report` انجام‌شدهٔ بی‌گزارش،
+  /// `invoice` انجام‌شدهٔ بی‌فاکتور — همان پرسشِ صبحِ مدیرِ شرکت.
+  missing?: 'tech' | 'report' | 'invoice';
   sort?: string;
   dir?: string;
   page?: number;
@@ -381,6 +386,9 @@ export interface IntakeCompanyRule {
   /** بیمار «رزرو بدون تاریخ» زده — تاریخِ عمل اجباری نیست. */
   undated: boolean;
 }
+
+/** کلیدِ تطبیقِ نامِ خانوادگی: حروفِ یکسان‌شده، بی‌فاصله و بی‌نیم‌فاصله. */
+const surnameKey = (s: string | null | undefined) => foldText(s).replace(/ /g, '');
 
 @Injectable()
 export class PatientsService {
@@ -515,7 +523,7 @@ export class PatientsService {
    * اگر خروجی شرطِ خودش را می‌ساخت، اولین فیلترِ تازه در یکی اضافه می‌شد و در
    * دیگری نه؛ کاربر «همین فهرست» را خروجی می‌گرفت و چیزِ دیگری تحویل می‌گرفت.
    */
-  private visitWhere(f: VisitFilter, user?: any) {
+  private visitWhere(f: VisitFilter, user?: any, clinic = false) {
     const { q, status, kind } = f;
     const where: any = {};
     if (status && status !== 'all') where.opStatus = status;
@@ -530,6 +538,21 @@ export class PatientsService {
     const and: any[] = [];
     if (f.procedureTypeId) and.push(visitHasProcedure(f.procedureTypeId));
     if (f.diagnosisId) and.push(visitHasDiagnosis(f.diagnosisId));
+    /* مرحلهٔ جامانده — تعریفِ «گزارش» همان `work-detectors` است (سندِ گزارش، و **فقط در مطب** شرحِ عمل
+       هم؛ DF7) و «فاکتور» سندِ فاکتورِ جاری (جایگزین‌نشده). گزارش و فاکتور فقط برای عملِ **انجام‌شده** معنا
+       دارند؛ عملِ هفتهٔ بعد که هنوز گزارش ندارد «جامانده» نیست. */
+    if (f.missing === 'tech') and.push({ techId: null, opStatus: { not: 'cancelled' } });
+    if (f.missing === 'report') {
+      and.push({
+        opStatus: 'done',
+        documents: { none: { category: 'report', deletedAt: null } },
+        /* ⚠️ در شرکت «گزارشِ خدمت» سندی است که کارشناس بارگذاری می‌کند؛ شرحِ عملِ جراح گزارشِ شرکت نیست.
+           تا دیروز این شرط برای همه بود و عملی با شرحِ عمل ولی بی‌سندِ گزارش از «بی‌گزارش» می‌افتاد و نشانش
+           «رسیده» بود، در حالی که `work-detectors` همان عمل را «گزارش نرسیده» می‌دانست. */
+        ...(clinic ? { clinicalNotes: { none: { kind: 'op', replacedAt: null } } } : {}),
+      });
+    }
+    if (f.missing === 'invoice') and.push({ opStatus: 'done', invoices: { none: { supersededAt: null } } });
     if (and.length) where.AND = and;
 
     // بازهٔ تاریخِ عمل. «تا» شاملِ خودِ روز است — کاربری که یک تاریخ را به‌عنوان
@@ -581,7 +604,8 @@ export class PatientsService {
   }
 
   async listVisits(f: VisitFilter = {}, user?: any) {
-    const scoped = this.visitWhere(f, user);
+    const clinic = (await this.forms.workflow()) === 'clinic';
+    const scoped = this.visitWhere(f, user, clinic);
 
     const pageSize = clamp(f.pageSize ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
     const page = Math.max(1, f.page ?? 1);
@@ -607,7 +631,7 @@ export class PatientsService {
         /* ⚠️ `.map(enrich)`ِ خالی ننویس: `Array.map` ایندکس را به‌عنوانِ
            آرگومانِ دوم می‌فرستد و آن‌وقت یک **عدد** به‌جای نگاشتِ نوع‌ها
            می‌رسید. TypeScript گرفتش؛ در JS بی‌صدا `undefined` می‌داد. */
-        rows: pageIds.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds)),
+        rows: await this.withStages(pageIds.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds)), clinic),
         total, page, pageSize,
         pages: Math.max(1, Math.ceil(total / pageSize)),
         sort: moneySort ? f.sort : DEFAULT_SORT,
@@ -633,7 +657,7 @@ export class PatientsService {
     const kinds = await this.forms.kindMap();
 
     return {
-      rows: rows.map((v) => enrich(v, kinds)),
+      rows: await this.withStages(rows.map((v) => enrich(v, kinds)), clinic),
       total,
       page,
       pageSize,
@@ -642,6 +666,37 @@ export class PatientsService {
       dir: f.dir === 'asc' ? 'asc' : 'desc',
       stats,
     };
+  }
+
+  /**
+   * **نشان‌های مرحله** برای ردیف‌های یک صفحه (بازبینیِ UX، global-04/company-13): کارشناس، ساعت،
+   * گزارش، فاکتور — تا مدیر بی‌بازکردنِ تک‌تکِ کارت‌ها ببیند کدام عمل چه کم دارد.
+   * ⚠️ سه کوئری برای کلِ صفحه، نه N تا؛ تعریفِ «گزارش» همان `work-detectors` (سند، و فقط در مطب شرحِ عمل —
+   * DF7).
+   */
+  private async withStages<T extends { id: number; techId?: number | null; opStartTime?: string | null; opStatus?: string | null }>(rows: T[], clinic: boolean) {
+    const ids = rows.map((r) => r.id);
+    if (!ids.length) return rows;
+    const [docs, notes, invoices] = await Promise.all([
+      this.prisma.document.findMany({ where: { visitId: { in: ids }, category: 'report', deletedAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
+      clinic
+        ? this.prisma.clinicalNote.findMany({ where: { visitId: { in: ids }, kind: 'op', replacedAt: null }, select: { visitId: true }, distinct: ['visitId'] })
+        : Promise.resolve([] as { visitId: number | null }[]),
+      this.prisma.invoiceDocument.findMany({ where: { visitId: { in: ids }, supersededAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
+    ]);
+    const reported = new Set([...docs, ...notes].map((d) => d.visitId));
+    const invoiced = new Set(invoices.map((d) => d.visitId));
+    /* مرحله‌ها با وضعیتِ عمل ساخته می‌شوند، نه در کلاینت (DF8، قانون ۱۵): لغوشده هیچ نشانی ندارد (کاری از آن
+       نمانده)، و گزارش و فاکتور فقط پس از «انجام شد» معنا دارند — برای عملِ آینده `null` (خنثی، «پس از انجام»)
+       نه `false` («ندارد») که هر عملِ هفتهٔ بعد را کهربایی و «جامانده» نشان می‌داد. همان قاعدهٔ فیلترِ «جامانده». */
+    return rows.map((r) => ({
+      ...r,
+      stages: r.opStatus === 'cancelled' ? null : {
+        tech: !!r.techId, time: !!r.opStartTime,
+        report: r.opStatus === 'done' ? reported.has(r.id) : null,
+        invoice: r.opStatus === 'done' ? invoiced.has(r.id) : null,
+      },
+    }));
   }
 
   /**
@@ -688,7 +743,7 @@ export class PatientsService {
    * فرض می‌کند و رویش تصمیم می‌گیرد.
    */
   async exportVisits(f: VisitFilter = {}, user?: any) {
-    const scoped = this.visitWhere(f, user);
+    const scoped = this.visitWhere(f, user, (await this.forms.workflow()) === 'clinic');
 
     // ⚠️ خروجی باید **همان** فیلتر و سورتِ فهرست را بفهمد، از جمله مالی‌ها.
     // اگر این‌جا مسیرِ مالی نمی‌آمد، CSVِ «فقط بدهکار» همهٔ مراجعات را
@@ -749,7 +804,7 @@ export class PatientsService {
       this.prisma.visit.count({ where: { ...live, AND: [...live.AND, { opDate: { gte: dayStart, lte: dayEnd } }] } }),
       // نوع‌های موجود در کلِ نتیجه — نه فقط صفحهٔ جاری، وگرنه چیپِ «ویزیت» با
       // ورق‌زدن ظاهر و ناپدید می‌شود.
-      this.prisma.visit.groupBy({ by: ['kind'], where: scoped }),
+      this.prisma.visit.groupBy({ by: ['kind'], where: scoped, _count: { _all: true } }),
       /**
        * ⚠️ **همان قاعدهٔ صورت‌حساب، نه یک جمعِ دستی.** نسخهٔ قبلی این‌جا
        * `charge.groupBy` می‌زد و `pricingModel === 'global'` را نمی‌دید —
@@ -792,7 +847,9 @@ export class PatientsService {
       byPayer = [...acc.entries()].map(([key, v]) => ({ key, ...v })).sort((a, b) => b.due - a.due);
     }
 
-    return { total, pending, today, due, byPayer, kinds: kinds.map((k) => k.kind) };
+    /* شمارِ هر نوع — کاشیِ شمارشِ «بیماران» عمل‌ها را «ویزیت» نمی‌نامد (بازبینیِ UX، clinic-daily-04). */
+    const kindCounts = kinds.map((k) => ({ kind: k.kind, count: k._count._all }));
+    return { total, pending, today, due, byPayer, kinds: kinds.map((k) => k.kind), kindCounts };
   }
 
   async getVisit(id: number, user?: any) {
@@ -1114,7 +1171,11 @@ export class PatientsService {
     const existing = await tx.patient.findUnique({ where: { nationalId } });
     if (!existing) return null;
 
-    const same = existing.lastName.trim() === lastName.trim();
+    /* ⚠️ مقایسه روی **شکلِ کانونی**، نه حرف‌به‌حرف (بازبینیِ UX، بندِ ۹۸): «آزمونی فر» (فاصله)،
+       «آزمونی‌فر» (نیم‌فاصله) و «آزمونيفر» (ی عربی) روی صفحه یکی دیده می‌شوند و بیمار نمی‌داند منشی
+       کدام را تایپ کرده؛ تا دیروز بیمارِ قبلی با همین تفاوت رد می‌شد. همان نرمال‌سازِ `name-match`
+       (ي/ی، ك/ک، نیم‌فاصله، اعراب) و بی‌فاصله — «نام کاملاً متفاوت» همچنان ۴۰۹ است. */
+    const same = surnameKey(existing.lastName) === surnameKey(lastName);
     if (!same) {
       /* ⚠️ دو مخاطب، دو پیام. پیامِ ادمین نام و کدِ پرونده را می‌گوید چون
          فهرستِ بیماران جلوی چشمش است و انتخاب از آن معنی دارد. همان پیام روی
@@ -1154,7 +1215,8 @@ export class PatientsService {
    * نفر دو پرونده می‌گیرد.
    *
    * شماره و تاریخِ تولدِ تازه فقط جاهای **خالی** را پر می‌کنند: فرمی که بیمار
-   * خودش پر کرده نباید دادهٔ تأییدشدهٔ پرونده را بازنویسی کند.
+   * خودش پر کرده نباید دادهٔ تأییدشدهٔ پرونده را بازنویسی کند. شماره از فرمِ **عمومی**
+   * اصلاً روی پروندهٔ موجود نمی‌نشیند (PS12) — فقط پروندهٔ تازه با آن ساخته می‌شود.
    */
   async resolveOrCreatePatient(
     tx: any,
@@ -1167,7 +1229,12 @@ export class PatientsService {
 
     if (match) {
       const fill: any = {};
-      if (dto.phone && !match.patient.phone) fill.phone = dto.phone;
+      /* هشدار — **فرمِ عمومی شماره را روی پروندهٔ موجود نمی‌نشاند** (بستهٔ PS، PS12). تطبیق فقط کدِ ملی + نامِ
+         خانوادگی است؛ روی پرونده‌ای که کارکنان بی‌موبایل ساخته بودند، هر کس این دو را داشت شمارهٔ خودش را
+         می‌نشاند و از آن به بعد «ادامه با موبایل + کد»، یادآوری‌ها و لینک‌های همان بیمار به گوشیِ او می‌رفت.
+         شمارهٔ ثبت‌نام در خودِ ثبت‌نام می‌ماند (کارهای همان ثبت‌نام با آن پیش می‌روند) و با **تأییدِ کارکنان**
+         روی پرونده می‌نشیند (`IntakeService.approve`). */
+      if (dto.phone && !match.patient.phone && !opts?.public) fill.phone = dto.phone;
       if (dto.birthDate && !match.patient.birthDate) fill.birthDate = toDateValue(dto.birthDate) ?? null;
       if (Object.keys(fill).length) await tx.patient.update({ where: { id: match.patient.id }, data: fill });
       return { patientId: match.patient.id, patientStatus: match.restored ? 'restored' : 'matched' };
@@ -1662,7 +1729,11 @@ export class PatientsService {
       const existingAmount = existingServices?._sum.amount ?? 0;
       if (target && charge > 0 && existingAmount > 0 && existingAmount !== charge) throw new BadRequestException('مبلغ مراجعهٔ موجود با ثبت‌نام متفاوت است؛ ابتدا مبلغ را بررسی کنید');
       if (charge > 0 && !existingAmount) {
-        const title = (refs.opType || dto.opType?.trim() || 'خدمتِ ثبت‌شده').slice(0, 120);
+        /* نامِ خدمتِ شرکت جلوی نامِ عمل (بازبینیِ UX، company-14): «نورومانیتورینگ — فیوژن»، نه «فیوژن» که
+           شبیهِ هزینهٔ خودِ عملِ جراح بود و کنارِ خدماتِ نوروی فاکتور معلوم نبود همان خدمت است. */
+        const what = refs.opType || dto.opType?.trim() || '';
+        const svc = serviceTitleOf({ kind: dto.kind || 'surgery', service });
+        const title = ((svc ? [svc, what].filter(Boolean).join(' — ') : what) || 'خدمتِ ثبت‌شده').slice(0, 120);
         await tx.charge.create({
           data: {
             visitId: visit.id, kind: 'service', title,
@@ -2032,7 +2103,7 @@ export class PatientsService {
     });
     if (cancelling) {
       await this.reminders.notifyCancelled('visit', v.patientId, cancel!.reason!, {
-        when: v.opDate ? v.opDate.toISOString().slice(0, 10) : null,
+        when: v.opDate ? jalaliText(v.opDate) : null, // «۸ مهر ۱۴۰۵» — نه ISOِ میلادی (clinic-daily-12)
       });
     }
     /* لغوِ عمل باید یادآوریِ «عملِ پیشِ‌رو» را هم باطل کند. */

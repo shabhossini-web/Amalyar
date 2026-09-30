@@ -20,7 +20,7 @@
 .tp-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .tp-hint, .tp-err { display: block; margin-top: 4px; font-style: normal; font-size: 11px; font-weight: 600; }
 .tp-hint { color: var(--text3); }
-.tp-err { color: #fda4af; }
+.tp-err { color: var(--red-text); }
 
 /* ── فهرستِ ساعت ──
    z-index هم‌ترازِ تقویم (۹۰): هر دو از داخلِ شیت باز می‌شوند و باید رویش بیایند. */
@@ -61,8 +61,10 @@
   flex: 1; padding: 10px; border-radius: 11px; cursor: pointer; font: inherit; font-size: 12.5px;
 }
 .tp-ghost {
-  color: #fda4af; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(251, 113, 133, .28);
+  color: var(--red-text); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(251, 113, 133, .28);
 }
+/* «اکنون» کنشِ خنثی است، نه پاک‌کردن — رنگِ هشدارِ «پاک‌کردن» را نمی‌گیرد (بازبینیِ UX ۱۴۰۵/۰۷). */
+.tp-foot .tp-now-ghost { color: var(--text2); border-color: rgba(var(--veil-rgb), .2); }
 .tp-now {
   color: #fff; font-weight: 800; border: 0;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));

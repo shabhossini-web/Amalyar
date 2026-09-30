@@ -1,16 +1,17 @@
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiDataUrl } from '../lib/api.js';
 import { faDate, jToFa } from '../lib/jalali.js';
-import { useConfig } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { printLetter } from './exports.js';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 import './launcher.css'; /* lx-toast */
 import './letters.css';
-import { Alert, Back, Close, Mail, Plus, Print, Search, Trash } from '../ui/icons.jsx';
+import { Alert, Close, Plus, Print, Search, Trash } from '../ui/icons.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 /**
  * نامهٔ اداری (#47) — سندِ رسمیِ شرکت روی سربرگِ آپلودشده در تنظیمات.
@@ -24,12 +25,13 @@ export default function Letters() {
   const [q, setQ] = useState('');
   const [sheet, setSheet] = useState(null); // null | {} | {row}
   const [err, setErr] = useState('');
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(3500);
   const [letterheadUrl, setLetterheadUrl] = useState(null);
   const row = useStagger();
   const tRef = useRef(0);
 
-  useEffect(() => { document.title = 'عمل‌یار — نامهٔ اداری'; }, []);
+  /* «سربرگِ مطب» / «سربرگِ شرکت» — واژهٔ سازمان از حوزه (بازبینیِ UX). */
+  const { org } = useTerms();
   useEffect(() => { apiDataUrl('/settings/letterhead').then(setLetterheadUrl); }, []);
 
   const load = (term = q) =>
@@ -45,11 +47,6 @@ export default function Letters() {
     tRef.current = setTimeout(() => load(v), 350);
   };
 
-  useEffect(() => {
-    if (!toast) return undefined;
-    const id = setTimeout(() => setToast(''), 3500);
-    return () => clearTimeout(id);
-  }, [toast]);
 
   const print = (r) => {
     if (!printLetter({ letter: r, brand: cfg.brand, letterheadUrl })) {
@@ -60,16 +57,11 @@ export default function Letters() {
   return (
     <div className="lt">
       <div className="lt-bg" aria-hidden="true" />
-      <header className="lt-head">
-        <Link to="/app" className="lt-back"><Back width="15" height="15" /> سامانه</Link>
-        <div className="lt-title">
-          <h1><Mail width="20" height="20" /> نامهٔ اداری</h1>
-          <p>نامهٔ رسمی روی سربرگِ شرکت — شماره خودکار، چاپ و بایگانی.</p>
-        </div>
+      <PageHeader tool="letter" sub={`نامهٔ رسمی روی سربرگِ ${org} — شماره خودکار، چاپ و بایگانی.`}>
         <button type="button" className="lt-new" onClick={() => setSheet({})}>
           <Plus width="14" height="14" /> نامهٔ تازه
         </button>
-      </header>
+      </PageHeader>
 
       <div className="lt-search">
         <Search width="15" height="15" aria-hidden="true" />
@@ -112,7 +104,7 @@ export default function Letters() {
             onSaved={(saved, wasEdit) => {
               setSheet(null);
               load();
-              setToast(wasEdit ? 'نامه ویرایش شد ✓' : `نامهٔ ${jToFa(saved.no)} صادر شد ✓`);
+              setToast(wasEdit ? 'نامه ویرایش شد' : `نامهٔ ${jToFa(saved.no)} صادر شد`);
             }}
             onDeleted={() => { setSheet(null); load(); setToast('نامه حذف شد'); }}
             onPrint={print}
@@ -121,7 +113,7 @@ export default function Letters() {
         )}
       </AnimatePresence>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }
