@@ -31,6 +31,8 @@ try {
   ok(await page.locator('.st-tariff select option:has-text("نیروهای مسلح")').count() === 1,
     '**بخشِ «نیروهای مسلح» در فرمِ تعرفه هست**');
   const row = page.locator('.st-tlist .df-row', { hasText: 'نیروهای مسلح' }).first();
+  /* فهرستِ تعرفه‌ها جدا از فرم می‌رسد — زیرِ بارِ CI گاهی دیرتر از ۲ ثانیه. */
+  await row.waitFor({ timeout: 15000 }).catch(() => {});
   ok(await row.count() === 1, 'ردیفِ تعرفهٔ مرکزی در فهرست دیده می‌شود');
   ok(await row.locator('.st-tsrc:has-text("سراسری")').count() === 1, '**با نشانِ «سراسری»**');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

@@ -115,7 +115,8 @@ try {
     await page.waitForURL('**/app**', { timeout: 15000 });
 
     await page.goto(BASE + `/app/dashboard?patient=${visit.id}`);
-    await page.waitForTimeout(2600);
+    /* انتظارِ شرطی نه خوابِ ثابت: زیرِ بارِ سه شاردِ هم‌زمان فهرست گاهی دیرتر از ۲٫۶ ثانیه می‌رسید. */
+    await page.waitForFunction(() => document.querySelectorAll('.db-order').length >= 4, null, { timeout: 15000 }).catch(() => {});
     ok(await page.locator('.db-order').count() === 4, `چهار سفارشِ موجود زیرِ مراجعه دیده می‌شوند (${await page.locator('.db-order').count()})`);
 
     /* از بستهٔ زیرفرم‌ها (۱۴۰۵/۰۷/۰۳) درخواست‌ها یک زیرفرم‌اند نه چیپِ تصمیم؛ مراجعهٔ
