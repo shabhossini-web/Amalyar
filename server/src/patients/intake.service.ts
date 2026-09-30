@@ -1,8 +1,8 @@
 import {
-  BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException,
+  BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { createHash, randomBytes, randomInt } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -36,6 +36,7 @@ import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { referrerStats } from './crm-referrers';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
+import { otpHash } from '../common/otp-hash';
 
 /** سال و ماهِ شمسیِ یک تاریخ — برای گرفتنِ تقویمِ همان ماه (قانون ۱۴). */
 function jalaliYm(d: Date): [number, number] {
@@ -77,10 +78,14 @@ function storedMime(file: { mimetype?: string; buffer: Buffer }): string {
 
 /** روزهای اعتبارِ یک ثبت‌نامِ نیمه‌کاره. */
 const TTL_DAYS = 14;
+/** پیامکِ «لینکِ ادامه»: سقفِ بی‌صدا به‌ازای شماره (در ساعت) و به‌ازای لینکِ ثبت‌نام (در روز) — بستهٔ PF، PF7. */
+const LINK_SMS_PER_PHONE_HOUR = 2;
+const LINK_SMS_PER_LINK_DAY = 150;
+/** جای شماره در «لینک به … پیامک شد» وقتی تایپ‌کننده شمارهٔ دیگری داده (PF12). */
+const ON_RECORD_PHONE = 'شمارهٔ ثبت‌شده در پرونده';
 /** کدِ «ادامه با موبایل» — همان قراردادِ کدِ ورود (`auth.service.ts`): ۵ دقیقه، ۵ تلاش. */
 const RESUME_OTP_TTL_MS = 5 * 60_000;
 const RESUME_OTP_MAX_ATTEMPTS = 5;
-const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /** سقفِ فهرستِ «پیگیری‌نشده» — فهرستِ کارِ امروزِ منشی است، نه آرشیو.
     خروجی `capped` و `total` را هم می‌دهد تا بریدگی **دیده شود** (W1.1). */
@@ -183,6 +188,14 @@ export class IntakeService {
     private events: EventsService,
     private rateLimit: RateLimitService,
   ) {}
+
+  /** هشدار: هیچ لاگی شماره، کد یا متنِ پیامک را نمی‌نویسد — فقط شناسه‌ها. */
+  private readonly logger = new Logger(IntakeService.name);
+
+  /** شرکتِ همین درخواست در کلیدِ سطلِ سقفِ نرخ — `RateLimitService` یکی است برای همهٔ شرکت‌ها (بستهٔ PF). */
+  private get tid() {
+    return this.tenant.current?.()?.tenantId ?? '-';
+  }
 
   private token() {
     return randomBytes(18).toString('base64url');
@@ -577,7 +590,7 @@ export class IntakeService {
       orderBy: { id: 'desc' },
     });
     /* بیمارِ برگشته احتمالاً لینکش را گم کرده — همان لینک دوباره پیامک می‌شود (با سقفِ ۱۰دقیقه‌ای). */
-    if (open) return { ...(await this.publicView(open.token)), linkSmsTo: await this.sendContinueLink(patientId, open.token, link.title) };
+    if (open) return { ...(await this.publicView(open.token)), linkSmsTo: await this.sendContinueLink(patientId, open.token, link.title, link.id, phone) };
 
     const row = await this.prisma.intakeSubmission.create({
       data: {
@@ -592,7 +605,7 @@ export class IntakeService {
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
       },
     });
-    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row.token, link.title) };
+    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row.token, link.title, link.id, phone) };
   }
 
   /**
@@ -604,18 +617,27 @@ export class IntakeService {
    * ⚠️ منتظرِ درگاهِ پیامک نمی‌ماند — ثبت‌نام روی اینترنتِ کند نباید پشتِ درگاه گیر کند؛ ارسال در
    * پس‌زمینه است و نتیجه‌اش (فرستاده/ناموفق) مثلِ «ارسالِ فرم» در دفترِ پیام‌های بیمار می‌نشیند.
    * ⚠️ برای هر ثبت‌نام حداکثر یک پیامک در ۱۰ دقیقه — تکرارِ ثبت‌نام بمبارانِ پیامک نمی‌سازد.
-   * خروجی: شمارهٔ **پوشیده** برای جملهٔ «لینک به … پیامک شد»، یا `null` (شمارهٔ نامعتبر).
+   * هشدار — **و برای هر شماره دو پیامک در ساعت، و برای هر لینکِ ثبت‌نام ۱۵۰ در روز** (بستهٔ PF، PF7): سقفِ
+   * بالا فقط به‌ازای **ثبت‌نام** بود، پس سه بیمارِ ساختگی با یک شماره روی سه لینک، سه پیامک به همان شماره
+   * می‌فرستادند — بمبارانِ پیامکی با هزینهٔ مطب. سقف‌ها بی‌صدا‌اند: ثبت‌نام پیش می‌رود و فقط پیامک نمی‌رود.
+   * خروجی: شمارهٔ **پوشیده** برای جملهٔ «لینک به … پیامک شد» — فقط اگر تایپ‌کننده همین شماره را داده
+   * (PF12؛ وگرنه «شمارهٔ ثبت‌شده در پرونده»: کسی که کدِ ملیِ دیگری را تایپ کرده نباید رقم‌های شمارهٔ او را
+   * ببیند) — یا `null` (شمارهٔ نامعتبر، یا پیامکی که سقف جلویش را گرفت).
    */
-  private async sendContinueLink(patientId: number, token: string, title: string): Promise<string | null> {
+  private async sendContinueLink(patientId: number, token: string, title: string, linkId: number, typedPhone: string): Promise<string | null> {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, deletedAt: null }, select: { phone: true } });
     const to = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
     if (!/^09\d{9}$/.test(to)) return null;
-    const masked = `${to.slice(0, 4)}…${to.slice(-3)}`;
-    try {
-      this.rateLimit.hit(`intake-link-sms:${token}`, 1, 10 * 60_000);
-    } catch {
-      return masked; // همین چند دقیقه پیش رفته است
-    }
+    const typed = toEnDigits(String(typedPhone ?? '')).replace(/[^0-9]/g, '');
+    const shown = typed === to ? `${to.slice(0, 4)}…${to.slice(-3)}` : ON_RECORD_PHONE;
+    const byToken = `intake-link-sms:${token}`;
+    const byPhone = `intake-link-sms:${this.tid}:phone:${to}`;
+    const byLink = `intake-link-sms:${this.tid}:link:${linkId}`;
+    if (!this.rateLimit.peek(byToken, 1)) return shown; // همین چند دقیقه پیش رفته است
+    if (!this.rateLimit.peek(byPhone, LINK_SMS_PER_PHONE_HOUR) || !this.rateLimit.peek(byLink, LINK_SMS_PER_LINK_DAY)) return null;
+    this.rateLimit.hit(byToken, 1, 10 * 60_000);
+    this.rateLimit.hit(byPhone, LINK_SMS_PER_PHONE_HOUR, 3600_000);
+    this.rateLimit.hit(byLink, LINK_SMS_PER_LINK_DAY, 24 * 3600_000);
     const smsCfg = await this.settings.sms();
     const text = renderSms(smsCfg.formSendText, { title, link: this.publicFormLink(token) });
     void (async () => {
@@ -624,7 +646,7 @@ export class IntakeService {
         data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },
       }).catch(() => undefined);
     })().catch(() => undefined);
-    return masked;
+    return shown;
   }
 
   /* ── ادامه با موبایل + کد (بازبینیِ UX، بندِ ۱۰۳) ─────────────────────────
@@ -656,41 +678,68 @@ export class IntakeService {
   }
 
   async resumeRequest(linkToken: string, rawPhone: string, ip = 'unknown') {
-    this.rateLimit.hit(`intake-resume:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
     const phone = IntakeService.resumePhone(rawPhone);
-    this.rateLimit.hit(`intake-resume:phone:${phone}`, 3, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume:${this.tid}:phone:${phone}`, 3, 15 * 60_000);
     const link = await this.resumeLink(linkToken);
-    const purpose = `intake-resume:${link.id}`;
     const answer = { ok: true, ttl: RESUME_OTP_TTL_MS / 1000 };
-    const open = await this.openByPhone(link.id, phone);
-    if (!open) return answer;
+    /* همان قراردادِ ورود: کدِ آزمون فقط در محیطِ test و با درگاهِ stub — آن‌جا منتظرِ کار می‌مانیم تا کد برگردد. */
+    if (process.env.NODE_ENV === 'test') {
+      const devCode = await this.issueResumeCode(link.id, phone);
+      return devCode ? { ...answer, devCode } : answer;
+    }
+    /* هشدار — **پاسخ منتظرِ هیچ‌چیز نمی‌ماند** (بستهٔ PF، PF3). نسخهٔ قبلی فقط وقتی ثبت‌نامِ باز بود `await
+       sms.sendOtp` می‌کرد، پس زمانِ پاسخ (تا ۲۰ ثانیه) می‌گفت این شماره روی این لینک ثبت‌نامِ باز دارد — همان
+       چیزی که پاسخِ یکسان پنهانش می‌کرد. حالا یافتن، ساختنِ کد و پیامک همه پس از پاسخ‌اند. */
+    setImmediate(() => {
+      /* فقط نامِ خطا: پیامِ خطای Prisma آرگومان‌ها (شماره) را هم چاپ می‌کند. */
+      this.issueResumeCode(link.id, phone).catch((e) => this.logger.warn(`intake resume code for link ${link.id} failed (${e?.name ?? 'Error'})`));
+    });
+    return answer;
+  }
+
+  /**
+   * کدِ «ادامه با موبایل» — فقط اگر این شماره روی این لینک ثبت‌نامِ باز دارد. خروجی خودِ کد است فقط وقتی
+   * درگاه stub بود (محیطِ آزمون)؛ وگرنه `null`. پیامکِ نرفته کدش را پاک می‌کند تا کدِ بعدی پشتِ پنجرهٔ
+   * یک‌دقیقه‌ایِ «همین حالا کد رفته» گیر نکند.
+   */
+  private async issueResumeCode(linkId: number, phone: string): Promise<string | null> {
+    const purpose = `intake-resume:${linkId}`;
+    const open = await this.openByPhone(linkId, phone);
+    if (!open) return null;
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone, purpose, createdAt: { gt: new Date(Date.now() - 60_000) } },
     });
-    if (recent) return answer; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
+    if (recent) return null; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
     const code = String(randomInt(100000, 1000000));
-    await this.prisma.otpCode.create({
-      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
+    const otp = await this.prisma.otpCode.create({
+      data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
     });
-    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => ({ sent: false, stub: false }));
-    /* همان قراردادِ ورود: کدِ آزمون فقط در محیطِ test و با درگاهِ stub. */
-    return { ...answer, ...(res.stub && process.env.NODE_ENV === 'test' ? { devCode: code } : {}) };
+    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => null);
+    if (!res || (!res.sent && !res.stub)) {
+      await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
+      this.logger.warn(`intake resume sms for link ${linkId} was not delivered`);
+      return null;
+    }
+    return res.stub ? code : null;
   }
 
   async resumeVerify(linkToken: string, rawPhone: string, rawCode: string, ip = 'unknown') {
-    this.rateLimit.hit(`intake-resume-verify:ip:${ip}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume-verify:${this.tid}:ip:${ip}`, 20, 15 * 60_000);
     const phone = IntakeService.resumePhone(rawPhone);
-    this.rateLimit.hit(`intake-resume-verify:phone:${phone}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume-verify:${this.tid}:phone:${phone}`, 8, 15 * 60_000);
     const code = toEnDigits(String(rawCode ?? '')).replace(/[^0-9]/g, '');
     const link = await this.resumeLink(linkToken);
     const purpose = `intake-resume:${link.id}`;
     const wrong = () => new BadRequestException('کدِ تأیید درست نیست یا منقضی شده — کدِ تازه بگیرید');
     const otp = await this.prisma.otpCode.findFirst({ where: { phone, purpose, consumedAt: null }, orderBy: { createdAt: 'desc' } });
-    if (!otp || otp.expiresAt < new Date() || otp.attempts >= RESUME_OTP_MAX_ATTEMPTS) throw wrong();
-    if (sha256(code) !== otp.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-      throw wrong();
-    }
+    if (!otp || otp.expiresAt < new Date()) throw wrong();
+    /* شمارشِ تلاش پیش از مقایسه و اتمی — همان قاعدهٔ بازیابیِ رمز (بستهٔ PF، PF4). */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: RESUME_OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw wrong();
+    if (otpHash(purpose, phone, code) !== otp.codeHash) throw wrong();
     const consumed = await this.prisma.otpCode.updateMany({
       where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
     });

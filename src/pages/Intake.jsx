@@ -69,6 +69,12 @@ function Register() {
   const [sources, setSources] = useState([]);
   /* «قبلاً ثبت‌نام کرده‌اید؟» — ادامه با موبایل + کد به‌جای پرکردنِ دوبارهٔ فرم (بازبینیِ UX، بندِ ۱۰۳). */
   const [resume, setResume] = useState(false);
+  /* فوکوس با عوض‌شدنِ نما (PF13): رفتن ← کادرِ موبایلِ «ادامه» (autoFocus)؛ برگشت ← همان دکمه‌ای که بازش کرد. */
+  const resumeBtn = useRef(null);
+  const resumeBack = useRef(false);
+  useEffect(() => {
+    if (!resume && resumeBack.current) { resumeBack.current = false; resumeBtn.current?.focus(); }
+  }, [resume]);
   /* «کدِ ملیِ ایرانی ندارم» (بازبینیِ UX، بندِ ۱۰۹) — راهِ تلفنیِ بیمارِ اتباع؛ با خطای کدِ ملی خودش باز می‌شود. */
   const [noNid, setNoNid] = useState(false);
   /* پرسشِ امنیتی را **سرور** می‌سازد: تصویرِ دو عدد + نشانی که پاسخ را رمزشده در خود دارد
@@ -196,9 +202,9 @@ function Register() {
 
   return (
     <Shell brand={link?.brand} title={link?.title}>
-      {resume ? <Resume token={token} onBack={() => setResume(false)} /> : (<>
+      {resume ? <Resume token={token} onBack={() => { resumeBack.current = true; setResume(false); }} /> : (<>
       {link && <Ahead link={link} />}
-      <button type="button" className="ik-resume-toggle" onClick={() => setResume(true)}>
+      <button type="button" className="ik-resume-toggle" ref={resumeBtn} onClick={() => setResume(true)}>
         قبلاً ثبت‌نام کرده‌اید؟ <b>ادامه با شمارهٔ موبایل</b>
       </button>
       {/* noValidate: سنجش مالِ `validate()` است (پیام زیرِ هر کادر، فارسی) نه حبابِ انگلیسیِ مرورگر. */}
@@ -332,7 +338,8 @@ function Resume({ token, onBack }) {
       {step === 'phone' ? (
         <form className="ik-resume-form" onSubmit={send}>
           <p className="ik-hint">شماره‌ای را که با آن ثبت‌نام کرده‌اید بنویسید؛ یک کدِ ۶رقمی برایتان پیامک می‌شود.</p>
-          <Field label="شمارهٔ موبایل" type="tel" dir="ltr" inputMode="numeric" autoComplete="tel" enterKeyHint="send"
+          {/* autoFocus: نمای تازه بی‌فوکوس بود و صفحه‌خوان/کیبورد روی دکمه‌ای می‌ماند که دیگر نیست (PF13). */}
+          <Field label="شمارهٔ موبایل" type="tel" dir="ltr" inputMode="numeric" autoComplete="tel" enterKeyHint="send" autoFocus
                  placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} required />
           <button type="submit" className="ik-go" disabled={busy || digits(phone).length < 11}>{busy ? 'در حال ارسال…' : 'ارسالِ کد'}</button>
         </form>
@@ -342,7 +349,7 @@ function Resume({ token, onBack }) {
             <span>اگر ثبت‌نامِ بازی با شمارهٔ <bdi dir="ltr">{faDigits(digits(phone))}</bdi> باشد، کد تا یکی‌دو دقیقه پیامک می‌شود.</span>
           </p>
           {dev && <p className="ik-note"><span>پیامک هنوز وصل نیست — کدِ آزمون: <b dir="ltr">{faDigits(dev)}</b></span></p>}
-          <Field label="کدِ ۶رقمی" dir="ltr" inputMode="numeric" autoComplete="one-time-code" enterKeyHint="go" maxLength={6}
+          <Field label="کدِ ۶رقمی" dir="ltr" inputMode="numeric" autoComplete="one-time-code" enterKeyHint="go" maxLength={6} autoFocus
                  value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} required />
           <button type="submit" className="ik-go" disabled={busy || digits(code).length < 6}>{busy ? 'در حال بررسی…' : 'ادامهٔ فرم'}</button>
           <button type="button" className="ik-linkbtn" disabled={busy} onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>
@@ -488,6 +495,18 @@ function Form() {
   const [codeErr, setCodeErr] = useState('');
   /* مرحلهٔ واریز: فرمِ پرشده به یک کارتِ خلاصه تا می‌شود؛ «ویرایش» بازش می‌کند. */
   const [editing, setEditing] = useState(false);
+  /* فوکوس با عوض‌شدنِ نما (PF13): «ویرایش» ← سرتیترِ فرم؛ «انصراف» ← همان دکمهٔ «ویرایش». و عکسِ فیلدهای ثابت
+     پیش از ویرایش — «انصراف — بدونِ تغییر» باید همان را برگرداند (PF8). */
+  const editBtn = useRef(null);
+  const editHead = useRef(null);
+  const editMove = useRef(null);
+  const editSnap = useRef(null);
+  useEffect(() => {
+    const m = editMove.current;
+    editMove.current = null;
+    if (m === 'in') editHead.current?.focus();
+    else if (m === 'out') editBtn.current?.focus();
+  }, [editing]);
   const payRef = useRef(null);
   /* «روزِ نوبت را انتخاب کنید» روی خودِ تقویم، نه زیرِ دکمهٔ ذخیره که ۸۰۰ پیکسل پایین‌تر است (بندِ ۱۰۵). */
   const [bookErr, setBookErr] = useState('');
@@ -586,11 +605,14 @@ function Form() {
     }
   }, [token, vals]);
 
-  /* روی blur، با مکثِ ۱٫۵ ثانیه (قرارداد §۶) — نه به‌ازای هر حرف. */
+  /* روی blur، با مکثِ ۱٫۵ ثانیه (قرارداد §۶) — نه به‌ازای هر حرف.
+     هشدار (بستهٔ PF، PF8): **در ویرایشِ مرحلهٔ واریز نه.** آن‌جا فرم یک «ذخیرهٔ تغییرات» و یک «انصراف — بدونِ
+     تغییر» دارد؛ پیش‌نویسِ خودکار تغییر را پیش از هر دو روی سرور می‌نشاند و انصراف دیگر چیزی را دور نمی‌ریخت. */
   const draftSoon = useCallback(() => {
+    if (editing) return;
     clearTimeout(draftTimer.current);
     draftTimer.current = setTimeout(() => saveDraft(), 1500);
-  }, [saveDraft]);
+  }, [saveDraft, editing]);
   useEffect(() => () => clearTimeout(draftTimer.current), []);
 
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -659,9 +681,11 @@ function Form() {
     const next = page + 1;
     setPage(next);
     /* ذخیره **با** شمارهٔ صفحهٔ تازه: رفرشِ بعدی باید همان‌جا برگردد نه یک
-       صفحه عقب‌تر. مکثِ blur لغو می‌شود تا دو ذخیرهٔ پشت‌سرهم نرود. */
-    clearTimeout(draftTimer.current);
-    saveDraft(next);
+       صفحه عقب‌تر. مکثِ blur لغو می‌شود تا دو ذخیرهٔ پشت‌سرهم نرود. در ویرایشِ مرحلهٔ واریز پیش‌نویس نه (PF8). */
+    if (!editing) {
+      clearTimeout(draftTimer.current);
+      saveDraft(next);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -783,8 +807,20 @@ function Form() {
      روشن/خاموشش همان فیلدِ فرم‌ساز است. */
   const hospitalField = d.form?.fields?.find((x) => x.key === 'hospitalName' && x.active !== false && (x.page ?? 1) === page);
   const submitLabel = editing ? 'ذخیرهٔ تغییرات' : paidNext ? T.submit.paid : makesVisit ? T.submit.visit : T.submit.record;
-  /* انصرافِ ویرایش: پاسخ‌های ذخیره‌شده برمی‌گردند — خلاصه نباید تغییرِ ثبت‌نشده را «ثبت شد» نشان دهد. */
-  const cancelEdit = () => { setEditing(false); setVals({}); load(); };
+  /* انصرافِ ویرایش: پاسخ‌های ذخیره‌شده برمی‌گردند — خلاصه نباید تغییرِ ثبت‌نشده را «ثبت شد» نشان دهد.
+     هشدار (PF8): پیش‌نویسِ در صف دور ریخته می‌شود و `draftSeq` جلو می‌رود تا پاسخِ دیررسی «ذخیره شد» نشان ندهد؛
+     فیلدهای ثابت (بی‌فرم) از عکسِ پیش از ویرایش برمی‌گردند — `load` فقط کلیدهایی را که سرور دارد می‌نشاند. */
+  const startEdit = () => { editSnap.current = { f }; setDraftState('idle'); editMove.current = 'in'; setEditing(true); };
+  const cancelEdit = () => {
+    clearTimeout(draftTimer.current);
+    draftSeq.current += 1;
+    setDraftState('idle');
+    editMove.current = 'out';
+    setEditing(false);
+    if (editSnap.current) setF(editSnap.current.f);
+    setVals({});
+    load();
+  };
 
   return (
     <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={rejected || expired ? 0 : d.amount}
@@ -807,7 +843,8 @@ function Form() {
         <p className="ik-note ik-sms-note" role="status">
           <Info width="15" height="15" />
           {/* هشدار: یک span: `.ik-note` فلکس است و متن + bdi بی‌این سه ستونِ جدا می‌شدند. */}
-          <span>لینکِ ادامهٔ همین فرم به <bdi dir="ltr">{faDigits(smsTo)}</bdi> پیامک شد؛ اگر این صفحه بسته شد، از همان پیامک برگردید.</span>
+          {/* شمارهٔ پوشیده فقط وقتی تایپ‌کننده همان شماره را داده؛ وگرنه سرور «شمارهٔ ثبت‌شده در پرونده» می‌فرستد (PF12). */}
+          <span>لینکِ ادامهٔ همین فرم به {/\d/.test(smsTo) ? <bdi dir="ltr">{faDigits(smsTo)}</bdi> : smsTo} پیامک شد؛ اگر این صفحه بسته شد، از همان پیامک برگردید.</span>
         </p>
       )}
       {(d.status === 'pending_fill' || d.status === 'pending_payment') && d.expiresFa && (
@@ -870,7 +907,7 @@ function Form() {
         <section className="ik-sum" aria-labelledby="ik-sum-h">
           <div className="ik-sum-head">
             <b id="ik-sum-h"><CheckCircle width="16" height="16" aria-hidden="true" /> اطلاعاتِ مراجعه ثبت شد</b>
-            <button type="button" className="ik-sum-edit" onClick={() => setEditing(true)} disabled={busy}>
+            <button type="button" className="ik-sum-edit" ref={editBtn} onClick={startEdit} disabled={busy}>
               <Pencil width="15" height="15" aria-hidden="true" /> ویرایش
             </button>
           </div>
@@ -882,6 +919,12 @@ function Form() {
         </section>
       )}
 
+      {d.status === 'pending_payment' && editing && (
+        <div className="ik-edit-head">
+          <h2 ref={editHead} tabIndex={-1}>ویرایشِ اطلاعاتِ مراجعه</h2>
+          <p>تغییرات فقط با «ذخیرهٔ تغییرات» ثبت می‌شوند؛ «انصراف» همه را برمی‌گرداند.</p>
+        </div>
+      )}
       {(d.status === 'pending_fill' || (d.status === 'pending_payment' && editing)) && (
         d.form?.fields?.length ? (
           <>
@@ -892,7 +935,7 @@ function Form() {
               )}
               {/* W1.8 — بیمار باید **ببیند** که نوشته‌اش جایی رفته. بدونِ این،
                   ذخیرهٔ خودکار از نبودش قابلِ تشخیص نیست. */}
-              {draftState !== 'idle' && (
+              {!editing && draftState !== 'idle' && (
                 <span className={`ik-draft ${draftState}`} role="status" aria-live="polite">
                   {draftState === 'saving' ? 'در حالِ ذخیره…'
                     : draftState === 'saved' ? 'ذخیره شد'
@@ -910,7 +953,11 @@ function Form() {
             {/* ذخیرهٔ خودکار روی blur. `onBlur` در ری‌اکت **حباب می‌کند**، پس
                 این یک لایه کافی است و `DynForm`ِ مشترک دست نمی‌خورد. */}
             <div onBlur={draftSoon}>
+            {/* کوچک‌سازی و سقفِ ۸ مگابایت فقط برای فرمِ عمومیِ بیمار (PF9) — همان سقفِ `FileInterceptor`ِ مسیرِ
+                عکسِ فرمِ بیمار در `intake.controller.ts`. */}
             <DynForm
+              shrink
+              maxMb={8}
               fields={d.form.fields.filter((x) => (x.page ?? 1) === page && x.key !== 'hospitalName')}
               values={vals}
               errors={vErr}

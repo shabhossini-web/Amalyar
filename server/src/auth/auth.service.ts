@@ -13,6 +13,7 @@ import { RateLimitService } from '../common/rate-limit.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { AuditService } from '../audit/audit.service';
 import { toEnDigits } from '../common/identity';
+import { otpHash } from '../common/otp-hash';
 import type { Request, Response } from 'express';
 import { expireProvisional, expireProvisionalInTransaction, isProvisional } from '../accounts/provisional';
 import { isTestAccount, testAccountsEnabled } from '../accounts/test-accounts';
@@ -63,6 +64,15 @@ export class AuthService {
     private audit?: AuditService,
   ) {}
 
+  /**
+   * شرکتِ همین درخواست در کلیدِ سطلِ سقفِ نرخ (بستهٔ PF، PF2). `RateLimitService` یک نمونه برای **همهٔ**
+   * شرکت‌هاست؛ بی‌این پیشوند هشت ورودِ غلط با «admin» در شرکتِ الف، «admin»ِ همهٔ شرکت‌ها را قفل می‌کرد.
+   */
+  private get tid() {
+    /* `current?.()`: آزمون‌های درونِ فرایند (company-operations، test-accounts) زمینهٔ شرکتِ نیمه‌ساختگی می‌دهند. */
+    return this.tenantContext.current?.()?.tenantId ?? '-';
+  }
+
   async setupStatus() {
     const count = await this.prisma.account.count();
     return { needsSetup: count === 0 };
@@ -70,8 +80,8 @@ export class AuthService {
 
   // ── ثبت‌نام: مرحلهٔ ۱ — ارسالِ کدِ یکبارمصرف ────────────────
   async requestSignupOtp(phone: string, ip = 'unknown') {
-    this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
-    this.rateLimit.hit(`otp:phone:${phone}`, 3, 15 * 60_000);
+    this.rateLimit.hit(`otp:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`otp:${this.tid}:phone:${phone}`, 3, 15 * 60_000);
     /**
      * ⚠️ «شماره تکراری است» فقط وقتی درست است که آن شخص **حساب** داشته باشد.
      *
@@ -102,7 +112,7 @@ export class AuthService {
 
     const code = String(randomInt(100000, 1000000)); // ۶ رقمی
     const otp = await this.prisma.otpCode.create({
-      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     try {
       // هاستِ WebOTP باید میزبانِ همان شرکت باشد، وگرنه مرورگر کد را اتوفیل نمی‌کند
@@ -132,20 +142,22 @@ export class AuthService {
   }
 
   private async consumePhoneOtp(dto: { phone: string; code: string }, purpose: string, ip: string) {
-    this.rateLimit.hit(`otp-verify:ip:${ip}`, 20, 15 * 60_000);
-    this.rateLimit.hit(`otp-verify:phone:${dto.phone}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`otp-verify:${this.tid}:ip:${ip}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`otp-verify:${this.tid}:phone:${dto.phone}`, 8, 15 * 60_000);
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone: dto.phone, purpose, consumedAt: null },
       orderBy: { createdAt: 'desc' },
     });
     if (!otp) throw new BadRequestException('برای این شماره کدی صادر نشده است');
     if (otp.expiresAt < new Date()) throw new BadRequestException('کد منقضی شده؛ دوباره درخواست دهید');
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw new BadRequestException('تعداد تلاش زیاد است؛ کد جدید بگیرید');
+    /* شمارشِ تلاش پیش از مقایسه و اتمی — همان قاعدهٔ بازیابیِ رمز (بستهٔ PF، PF4): سنجش و افزایشِ جدا یعنی
+       حدس‌های هم‌زمان همه «۰ تلاش» را می‌خواندند و سقفِ پنج‌تایی دور زده می‌شد. */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw new BadRequestException('تعداد تلاش زیاد است؛ کد جدید بگیرید');
 
-    if (sha256(dto.code) !== otp.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-      throw new BadRequestException('کد تأیید اشتباه است');
-    }
+    if (otpHash(purpose, dto.phone, dto.code) !== otp.codeHash) throw new BadRequestException('کد تأیید اشتباه است');
     const consumed = await this.prisma.otpCode.updateMany({ where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
     if (!consumed.count) throw new BadRequestException('کد قبلاً استفاده شده یا منقضی است');
 
@@ -154,8 +166,8 @@ export class AuthService {
   async requestPhoneVerification(user: any, ip: string) {
     if (!isProvisional(user)) throw new BadRequestException('حساب نیازی به تأیید موقت ندارد');
     if (isTestAccount(user)) {
-      this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
-      this.rateLimit.hit(`otp:phone:${user.person.phone}`, 3, 15 * 60_000);
+      this.rateLimit.hit(`otp:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+      this.rateLimit.hit(`otp:${this.tid}:phone:${user.person.phone}`, 3, 15 * 60_000);
       return this.sendPhoneOtp(user.person.phone, `test-account:${user.id}`);
     }
     return this.requestSignupOtp(user.person.phone, ip);
@@ -286,8 +298,8 @@ export class AuthService {
 
   // ── ورود ───────────────────────────────────────────────────
   async login(dto: LoginDto, meta: { ua?: string; ip?: string }) {
-    this.rateLimit.hit(`login:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
-    this.rateLimit.hit(`login:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`login:${this.tid}:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
+    this.rateLimit.hit(`login:${this.tid}:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
     const id = dto.identifier.trim();
     // ورود با نام کاربری (روی Account) یا موبایل (روی Person).
     const account = await this.prisma.account.findFirst({
@@ -451,62 +463,98 @@ export class AuthService {
     /* تصاحب‌نشده راهِ خودش را دارد (ثبت‌نام + کد)؛ حسابِ موقت شماره‌اش هنوز تأیید نشده — کدِ بازیابی
        به شماره‌ای که مالکیتش ثابت نشده یعنی تحویلِ حساب به هر کسی که آن شماره دستش است. */
     if (!account || account.status !== 'active' || isUnclaimedAccount(account) || isProvisional(account) || isTestAccount(account)) return null;
+    /* **سوپرادمین بازیابیِ فقط‌پیامکی ندارد** (بازبینیِ امنیتیِ بستهٔ P، PF1) — همان پاسخِ بی‌صدا.
+       کدِ پیامکی فقط ثابت می‌کند «این سیم‌کارت دستِ من است»، و شمارهٔ `Person` را کسانی جز خودِ صاحبِ حساب
+       هم نوشته‌اند: تا دیروز `definitions.manage` (سطح ۵) تلفنِ جراحِ متصل به بنیان‌گذارِ مطب را عوض می‌کرد.
+       آن در بسته شد (`definitions.service.ts`، `refuseAccountPhone`)، ولی مدلِ داده «شمارهٔ تأییدشده» را
+       جدا از «شمارهٔ فعلی» نگه نمی‌دارد: `phoneVerifiedAt` زمانِ تأیید است نه خودِ شماره، و حساب‌های پیش از
+       migrationِ `provisional_accounts` اصلاً مقدار ندارند. پس نمی‌شود ثابت کرد شمارهٔ امروزِ Person همانی است
+       که صاحبِ حساب تأیید کرده بود. برای پرارزش‌ترین حساب — کسی که بقیه را می‌سازد و سطح می‌دهد — ریسکِ
+       همین شکاف پذیرفته نیست؛ مدیرِ کل از راهِ پشتیبانی بازیابی می‌کند (صفحهٔ ورود همین را می‌گوید). بقیهٔ
+       سطح‌ها بازیابی را دارند: بدترین حالتشان تصاحبِ حسابی است که سوپرادمین می‌تواند ببندد. */
+    if (account.level >= LEVEL.SUPER_ADMIN) return null;
     const phone = account.person?.phoneScope === 'primary' ? account.person.phone : null;
     return phone ? { account, phone } : null;
   }
 
   async requestPasswordReset(identifier: string, ip = 'unknown') {
     const key = toEnDigits(identifier).trim().toLowerCase();
-    this.rateLimit.hit(`pwreset:ip:${ip}`, 10, 15 * 60_000);
-    this.rateLimit.hit(`pwreset:id:${key}`, 3, 15 * 60_000);
+    this.rateLimit.hit(`pwreset:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`pwreset:${this.tid}:id:${key}`, 3, 15 * 60_000);
     const same = { ok: true, ttl: OTP_TTL_MS / 1000 };
+    /* فقط محیطِ آزمون با پیامکِ ساختگی کد را برمی‌گرداند (همان قراردادِ ثبت‌نام، برای e2e) — آن‌جا منتظرِ کار می‌مانیم. */
+    if (process.env.NODE_ENV === 'test') {
+      const devCode = await this.issueResetCode(identifier);
+      return devCode ? { ...same, devCode } : same;
+    }
+    /* هشدار — **پاسخ منتظرِ هیچ‌چیز نمی‌ماند** (بستهٔ PF، PF5). پیامک از قبل بی‌انتظار بود، ولی برای حسابِ
+       موجود هنوز یک SELECT و یک INSERTِ اضافه پیش از پاسخ می‌رفت؛ همین چند میلی‌ثانیه، با تکرار، می‌گفت این
+       شناسه حساب دارد. یافتنِ حساب، ساختنِ کد و پیامک همه پس از پاسخ‌اند (زمینهٔ شرکت با AsyncLocalStorage
+       همراهِ کار می‌رود). */
+    setImmediate(() => {
+      /* فقط نامِ خطا: پیامِ خطای Prisma آرگومان‌ها (شماره) را هم چاپ می‌کند — قاعدهٔ لاگ (PF10). */
+      this.issueResetCode(identifier).catch((e) => this.logger.warn(`password reset code could not be issued (${e?.name ?? 'Error'})`));
+    });
+    return same;
+  }
+
+  /**
+   * کدِ بازیابی برای حسابی که `resetTarget` مجاز می‌داند. خروجی خودِ کد است فقط وقتی درگاه stub بود (محیطِ
+   * آزمون)؛ وگرنه `null`. کدِ همین دقیقه هنوز معتبر است — بی‌صدا، نه «کمی صبر کنید» (آن پیام فقط برای حسابِ
+   * موجود بود). پیامکِ نرفته کدش را پاک می‌کند تا کدِ بعدی پشتِ پنجرهٔ ارسالِ دوباره گیر نکند.
+   */
+  private async issueResetCode(identifier: string): Promise<string | null> {
     const target = await this.resetTarget(identifier);
-    if (!target) return same;
-    /* کدِ همین دقیقه هنوز معتبر است — بی‌صدا، نه «کمی صبر کنید» (آن پیام فقط برای حسابِ موجود بود). */
+    if (!target) return null;
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone: target.phone, purpose: RESET_PURPOSE, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
     });
-    if (recent) return same;
+    if (recent) return null;
     const code = String(randomInt(100000, 1000000));
     const otp = await this.prisma.otpCode.create({
-      data: { phone: target.phone, codeHash: sha256(code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { phone: target.phone, codeHash: otpHash(RESET_PURPOSE, target.phone, code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
-    const sending = this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname)
-      .then((res) => {
-        if (!res.sent && !res.stub) throw new Error('درگاهِ پیامک کد را نپذیرفت');
-        return res;
-      })
-      .catch(async (e) => {
-        /* کدِ نرفته نباید تا پایانِ پنجرهٔ ارسالِ دوباره جلوی کدِ بعدی را بگیرد. */
-        await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
-        this.logger.warn(`password reset sms failed for account ${target.account.id}: ${e?.message ?? e}`);
-        return null;
-      });
-    /* فقط محیطِ آزمون با پیامکِ ساختگی کد را برمی‌گرداند (همان قراردادِ ثبت‌نام، برای e2e). */
-    if (process.env.NODE_ENV === 'test') {
-      const res = await sending;
-      if (res?.stub) return { ...same, devCode: code };
+    const res = await this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname, RESET_PURPOSE).catch((e) => {
+      this.logger.warn(`password reset sms failed for account ${target.account.id}: ${e?.message ?? e}`);
+      return null;
+    });
+    if (!res || (!res.sent && !res.stub)) {
+      await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
+      return null;
     }
-    return same;
+    return res.stub ? code : null;
   }
 
   async resetPassword(dto: { identifier: string; code: string; password: string }, meta: { ua?: string; ip?: string }) {
     const key = toEnDigits(dto.identifier).trim().toLowerCase();
-    this.rateLimit.hit(`pwreset-verify:ip:${meta.ip ?? 'unknown'}`, 20, 15 * 60_000);
-    this.rateLimit.hit(`pwreset-verify:id:${key}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`pwreset-verify:${this.tid}:ip:${meta.ip ?? 'unknown'}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`pwreset-verify:${this.tid}:id:${key}`, 8, 15 * 60_000);
     const target = await this.resetTarget(dto.identifier);
     if (!target) throw new BadRequestException(RESET_BAD);
+    /* **بودجهٔ حدس مالِ حساب است، نه متنِ تایپ‌شده** (بستهٔ PF، PF4): نامِ کاربری و موبایلِ یک حساب تا دیروز
+       دو سطلِ جدا بودند (۸ + ۸ حدس)، و سقفِ روزانه هم نبود. سرریزِ این دو سطل همان خطای عام است نه ۴۲۹ —
+       ۴۲۹ می‌گفت «این نامِ کاربری و این موبایل مالِ یک حساب‌اند». */
+    try {
+      this.rateLimit.hit(`pwreset-verify:${this.tid}:acct:${target.account.id}`, 8, 15 * 60_000);
+      this.rateLimit.hit(`pwreset-verify:${this.tid}:acct-day:${target.account.id}`, 20, 24 * 3600_000);
+    } catch {
+      throw new BadRequestException(RESET_BAD);
+    }
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone: target.phone, purpose: RESET_PURPOSE, consumedAt: null },
       orderBy: { createdAt: 'desc' },
     });
-    if (!otp || otp.expiresAt < new Date() || otp.attempts >= OTP_MAX_ATTEMPTS) throw new BadRequestException(RESET_BAD);
-    if (sha256(toEnDigits(dto.code).trim()) !== otp.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-      throw new BadRequestException(RESET_BAD);
-    }
+    if (!otp || otp.expiresAt < new Date()) throw new BadRequestException(RESET_BAD);
+    /* هشدار — **شمارشِ تلاش پیش از مقایسه و اتمی** (PF4): سنجش و افزایش جدا بودند، پس حدس‌های هم‌زمان همه
+       «۰ تلاش» را می‌خواندند و هر کدام مقایسه می‌شد — کدِ پنج‌تلاشی با ده درخواستِ هم‌زمان ده حدس می‌خورد.
+       حالا هر حدس اول یک خانه از پنج خانه را می‌گیرد؛ خانه نماند ← همان خطای عام. */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw new BadRequestException(RESET_BAD);
+    if (otpHash(RESET_PURPOSE, target.phone, toEnDigits(dto.code).trim()) !== otp.codeHash) throw new BadRequestException(RESET_BAD);
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    await this.prisma.$transaction(async (tx) => {
+    const passkeysRemoved = await this.prisma.$transaction(async (tx) => {
       const consumed = await tx.otpCode.updateMany({
         where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
       });
@@ -514,12 +562,17 @@ export class AuthService {
       await tx.account.update({ where: { id: target.account.id }, data: { passwordHash } });
       /* مثلِ تغییرِ رمز: همهٔ نشست‌ها باطل — کسی که رمز را داشت (شاید همان که باعثِ بازیابی شد) بیرون می‌افتد. */
       await tx.session.updateMany({ where: { accountId: target.account.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      /* **پس‌کی‌ها هم** (بستهٔ PF، PF6): کسی که رمز را داشت می‌توانست اثر انگشتِ دستگاهِ خودش را ثبت کند؛ با
+         ماندنش، بازیابیِ رمز او را بیرون نمی‌کرد — فردا با همان پس‌کی برمی‌گشت. صاحبِ حساب پس از ورود دوباره
+         ثبتش می‌کند (صفحهٔ ورود همین را می‌گوید). */
+      const passkeys = await tx.webauthnCredential.deleteMany({ where: { accountId: target.account.id } });
       await this.audit?.record({
         actorId: target.account.id, action: 'auth.password.reset', entityType: 'account', entityId: target.account.id,
-        ip: meta.ip, userAgent: meta.ua?.slice(0, 255),
+        ip: meta.ip, userAgent: meta.ua?.slice(0, 255), after: { passkeysRemoved: passkeys.count },
       }, tx);
+      return passkeys.count;
     });
-    return { ok: true, sessionsRevoked: true };
+    return { ok: true, sessionsRevoked: true, passkeysRemoved };
   }
 
   async changePassword(id: number, current: string, next: string) {
