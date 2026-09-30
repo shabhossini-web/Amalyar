@@ -35,7 +35,7 @@
 
 /* ستارهٔ اجباری — همان رنگی که در فرم‌ساز دیده می‌شود، تا کاربر بین دو صفحه
    یک زبان ببیند. */
-.dyn-star { color: #f87171; font-style: normal; font-weight: 900; }
+.dyn-star { color: var(--red-text); font-style: normal; font-weight: 900; }
 
 /* برچسبِ بخشِ نقش («هر کس قسمتِ خودش را پر کند») و فیلدِ قفل‌شده. */
 .dyn-role {

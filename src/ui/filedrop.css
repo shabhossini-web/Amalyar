@@ -32,9 +32,9 @@
 .fdrop-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .fdrop-meta b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text2); }
 .fdrop-meta small { font-size: 10.5px; color: var(--text3); }
-.fdrop-item.error .fdrop-meta small { color: #f87171; }
-.fdrop-ok { color: #34d399; }
-.fdrop-bad { color: #f87171; }
+.fdrop-item.error .fdrop-meta small { color: var(--red-text); }
+.fdrop-ok { color: var(--green-text); }
+.fdrop-bad { color: var(--red-text); }
 .fdrop-spin {
   width: 14px; height: 14px; border-radius: 50%;
   border: 2px solid rgba(var(--brand-2-rgb), .3); border-top-color: var(--brand-2);
@@ -51,7 +51,7 @@
   width: 26px; height: 26px; cursor: pointer; color: var(--text3);
   background: none; border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 9px;
 }
-.fdrop-x:hover { color: #f87171; border-color: rgba(248, 113, 113, .4); }
+.fdrop-x:hover { color: var(--red-text); border-color: rgba(248, 113, 113, .4); }
 
 /* حالتِ دکمهٔ فشرده — برای پنل‌های متراکم؛ صف و وضعیت همان است. */
 .fdrop-compact { gap: 6px; }

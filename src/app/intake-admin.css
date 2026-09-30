@@ -219,7 +219,7 @@
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ia-money b { color: var(--text1); font-weight: 800; }
-.ia-money .off { color: #6ee7b7; }
+.ia-money .off { color: var(--green-text); }
 .ia-money .pay { margin-inline-start: auto; }
 
 .ia-zoom {
@@ -239,8 +239,8 @@
 .ia-check input { width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; }
 
 /* ── حذفِ لینک و ثبت‌نام ─────────────────────────────────────────── */
-.ia-del { color: #fda4af; }
-.ia-del:hover { color: #fb7185; }
+.ia-del { color: var(--red-text); }
+.ia-del:hover { color: var(--red-text); }
 .ia-cardel {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
@@ -248,7 +248,7 @@
   color: var(--text3); background: rgba(var(--veil-rgb), 0.04);
   border: 1px solid rgba(var(--veil-rgb), 0.08);
 }
-.ia-cardel:hover { color: #fb7185; border-color: rgba(251, 113, 133, 0.4); }
+.ia-cardel:hover { color: var(--red-text); border-color: rgba(251, 113, 133, 0.4); }
 
 .ia-definition-head { display: flex; align-items: center; gap: 8px; }
 .ia-definition-head button { display: inline-flex; padding: 5px; border: 1px solid var(--card-border); border-radius: 8px; background: transparent; color: inherit; }

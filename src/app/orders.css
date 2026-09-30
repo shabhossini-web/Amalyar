@@ -59,8 +59,8 @@
   font-style: normal; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
   color: var(--text3); background: rgba(var(--veil-rgb), .07);
 }
-.db-order i.sent { color: #38bdf8; background: rgba(56, 189, 248, .14); }
-.db-order i.answered { color: #34d399; background: rgba(52, 211, 153, .14); }
+.db-order i.sent { color: rgb(var(--kind-sky)); background: rgba(56, 189, 248, .14); }
+.db-order i.answered { color: var(--green-text); background: rgba(52, 211, 153, .14); }
 .db-order button {
   padding: 5px 11px; cursor: pointer; font: inherit; font-size: 11px; font-weight: 700; color: var(--brand-2);
   background: none; border: 1px solid rgba(var(--brand-2-rgb), .4); border-radius: 99px;

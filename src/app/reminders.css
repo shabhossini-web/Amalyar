@@ -67,7 +67,7 @@
   font-style: normal; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.rm-tag.s-sent { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.rm-tag.s-sent { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
 .rm-tag.s-failed { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .rm-text { margin-top: 6px; font-size: 12.5px; line-height: 1.8; color: var(--text2); white-space: pre-wrap; }
 .rm-fail { margin-top: 4px; font-size: 11px; color: var(--red-text); }

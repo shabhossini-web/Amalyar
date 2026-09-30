@@ -16,6 +16,7 @@
 .us-card:hover { transform: none; }
 .us-row { display: flex; align-items: center; gap: 12px; }
 .us-avatar {
+  /* روی گرادیانِ برند که تیره در هر دو تم می‌ماند — حرفِ روشن عمدی است (نگهبانِ ⑦). */
   flex: 0 0 auto; border-radius: 50%; overflow: hidden; display: grid; place-items: center; color: #d6ccff;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-dark));
   box-shadow: inset 0 1px 0 rgba(var(--veil-rgb), 0.25);

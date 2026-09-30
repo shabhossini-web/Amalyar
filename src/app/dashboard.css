@@ -488,18 +488,18 @@ a.db-ico { text-decoration: none; }
    پس عمداً کهربایی و پررنگ است، نه یک hint خاکستری. */
 .db-nidmatch {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-  font-size: 12.5px; color: #fde68a;
+  font-size: 12.5px; color: var(--amber-text);
   background: rgba(251, 191, 36, 0.09); border: 1px solid rgba(251, 191, 36, 0.4);
   border-radius: 12px; padding: 11px 13px;
 }
 .db-nidmatch b { flex: 1 0 100%; font-weight: 800; font-size: 12.5px; }
-.db-nidmatch > span { color: #fef3c7; }
+.db-nidmatch > span { color: var(--amber-text); }
 .db-nidmatch button {
   margin-inline-start: auto; font-family: inherit; font-size: 11.5px; font-weight: 800;
   cursor: pointer; color: var(--ink-bright); background: #fbbf24; border: none;
   border-radius: 9px; padding: 6px 12px;
 }
-.db-hint.bad { color: #fda4af; font-weight: 700; }
+.db-hint.bad { color: var(--red-text); font-weight: 700; }
 
 /* ── گام‌های ثبتِ مراجعه: پرونده → نوعِ فرم → تکمیل ── */
 /* گامِ پنهان **در DOM می‌ماند** (دلیلش در Dashboard.jsx کنارِ `db-step`)، پس
@@ -545,7 +545,7 @@ a.db-ico { text-decoration: none; }
 /* خطای گام کنارِ خودِ دکمه می‌نشیند، نه در toast: toast می‌رود و کاربر با یک
    دکمهٔ بی‌جواب می‌ماند. */
 .db-steperr {
-  margin: 0; font-size: 12.5px; line-height: 1.7; color: #fda4af;
+  margin: 0; font-size: 12.5px; line-height: 1.7; color: var(--red-text);
   background: rgba(244, 63, 94, .1); border: 1px solid rgba(244, 63, 94, .3);
   border-radius: 11px; padding: 9px 12px;
 }
@@ -593,12 +593,12 @@ a.db-ico { text-decoration: none; }
 .bl-summary .bl-due b { color: var(--amber-text); }
 /* اضافه‌پرداخت خطا نیست ولی باید به چشم بیاید — معمولاً یعنی جایی اشتباه ثبت شده. */
 .bl-summary .bl-over { background: rgba(34, 211, 238, .08); border-color: rgba(34, 211, 238, .3); }
-.bl-summary .bl-over b { color: #22d3ee; }
+.bl-summary .bl-over b { color: var(--cyan); }
 
 /* نشانِ کدِ داخلیِ مطب — تا از کدِ کتابِ ارزش نسبی جدا دیده شود. */
 .bl-internal-tag {
   font-style: normal; font-size: 9px; font-weight: 800; padding: 1px 7px; border-radius: 99px;
-  color: #6ee7b7; background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .32);
+  color: var(--green-text); background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .32);
 }
 
 /* مدلِ قیمت‌گذاری — با کد / گلوبال */
@@ -635,7 +635,7 @@ a.db-ico { text-decoration: none; }
 .bl-invoice-panel details > summary { cursor: pointer; padding: 8px 0; }
 .bl-invoice-panel details[open] > * + * { margin-top: 12px; }
 .bl-neuro-preview { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--brand); border-radius: 12px; }
-.bl-error { color: #fda4af; padding: 12px; border: 1px solid currentColor; border-radius: 12px; }
+.bl-error { color: var(--red-text); padding: 12px; border: 1px solid currentColor; border-radius: 12px; }
 .bl-issued-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(var(--veil-rgb), .1); }
 .bl-issued-row > span { flex: 1; min-width: 160px; }
 .bl-sheet fieldset.db-field { min-width: 0; margin: 0; padding: 14px; border: 1px solid rgba(var(--brand-soft-rgb),.2); border-radius: 14px; display: grid; gap: 10px; }
@@ -648,19 +648,19 @@ a.db-ico { text-decoration: none; }
 .bl-row-main b { display: block; font-size: 13px; }
 .bl-row-main small { display: block; margin-top: 3px; font-size: 10.5px; color: var(--text3); }
 .bl-amount { flex-shrink: 0; font-size: 13.5px; font-weight: 900; }
-.bl-amount.neg { color: #6ee7b7; }
+.bl-amount.neg { color: var(--green-text); }
 
 .bl-tag {
   flex-shrink: 0; font-size: 10px; font-weight: 700; border-radius: 99px; padding: 3px 9px; white-space: nowrap;
-  color: #c4b5fd; background: rgba(var(--brand-rgb), .14); border: 1px solid rgba(var(--brand-2-rgb), .3);
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .14); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
-.bl-tag.t-item     { color: #67e8f9; background: rgba(34, 211, 238, .12); border-color: rgba(34, 211, 238, .3); }
-.bl-tag.t-discount { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .3); }
-.bl-tag.t-pay      { color: #fcd34d; background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .3); }
+.bl-tag.t-item     { color: var(--cyan); background: rgba(34, 211, 238, .12); border-color: rgba(34, 211, 238, .3); }
+.bl-tag.t-discount { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .3); }
+.bl-tag.t-pay      { color: var(--amber-text); background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .3); }
 
 .bl-del {
   width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center; border-radius: 9px;
-  cursor: pointer; color: #fda4af;
+  cursor: pointer; color: var(--red-text);
   background: rgba(251, 113, 133, .08); border: 1px solid rgba(251, 113, 133, .22);
 }
 
@@ -675,11 +675,11 @@ a.db-ico { text-decoration: none; }
 .bl-codesearch { position: relative; }
 .bl-picked {
   display: flex; align-items: center; gap: 8px; margin-top: 6px;
-  font-style: normal; font-size: 11px; color: #6ee7b7;
+  font-style: normal; font-size: 11px; color: var(--green-text);
 }
 .bl-picked b { font-weight: 800; }
 .bl-picked button {
-  font: inherit; font-size: 10px; cursor: pointer; color: #fda4af;
+  font: inherit; font-size: 10px; cursor: pointer; color: var(--red-text);
   background: none; border: 1px solid rgba(251, 113, 133, .3); border-radius: 7px; padding: 2px 7px;
 }
 .bl-hits {
@@ -695,15 +695,15 @@ a.db-ico { text-decoration: none; }
   background: none; border: 0; border-radius: 9px; padding: 8px 9px;
 }
 .bl-hits button:hover { background: rgba(var(--brand-rgb), .18); }
-.bl-hits b { flex-shrink: 0; font-weight: 800; color: #c4b5fd; }
+.bl-hits b { flex-shrink: 0; font-weight: 800; color: var(--brand-text); }
 .bl-hits span { line-height: 1.7; }
 
 /* انتخابِ لاتِ انبار روی قلمِ کالا */
 .bl-lotpick select { width: 100%; }
-.bl-lotpick > span { color: #6ee7b7; }
+.bl-lotpick > span { color: var(--green-text); }
 .bl-lot {
   display: inline-block; margin-inline-start: 8px; padding: 1px 7px; border-radius: 7px;
-  font-style: normal; font-size: 10px; color: #6ee7b7;
+  font-style: normal; font-size: 10px; color: var(--green-text);
   background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .25);
 }
 
@@ -711,16 +711,16 @@ a.db-ico { text-decoration: none; }
 
 /* مغایرتِ فاکتور در برابرِ مصرف — نه خطا، نمای واقعیت */
 .bl-rec { margin-block-start: 14px; padding-block-start: 12px; border-block-start: 1px dashed rgba(var(--veil-rgb), .12); }
-.bl-rec > b { display: block; font-size: 12px; color: #a5b4fc; margin-block-end: 8px; }
+.bl-rec > b { display: block; font-size: 12px; color: var(--brand-text); margin-block-end: 8px; }
 .bl-rec-g { margin-block-end: 9px; }
 .bl-rec-g > span {
   display: inline-block; padding: 2px 9px; border-radius: 8px; font-size: 10.5px;
-  color: #a7f3d0; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .22);
+  color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .22);
 }
-.bl-rec-g.warn > span { color: #fcd34d; background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .25); }
+.bl-rec-g.warn > span { color: var(--amber-text); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .25); }
 .bl-rec-g ul { margin: 6px 0 0; padding-inline-start: 18px; }
 .bl-rec-g li { font-size: 11.5px; line-height: 1.9; color: rgba(var(--veil-rgb), .84); }
-.bl-rec-g li i { font-style: normal; color: #c4b5fd; }
+.bl-rec-g li i { font-style: normal; color: var(--brand-text); }
 .bl-rec-g li em { font-style: normal; color: var(--red-text); }
 .bl-rec-g li small { color: rgba(var(--veil-rgb), .5); }
 
@@ -734,7 +734,7 @@ a.db-ico { text-decoration: none; }
   width: 100%; padding: 10px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
   color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
-.bl-ask-alt { margin-block-end: 8px; color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
+.bl-ask-alt { margin-block-end: 8px; color: var(--amber-text); border-color: rgba(251, 191, 36, .3); }
 .bl-ask-cancel { color: rgba(var(--veil-rgb), .55); background: none; border-color: transparent; }
 
 /* ── جستجوی پیشرفته، سورت و صفحه‌بندی ── */
@@ -753,7 +753,7 @@ a.db-ico { text-decoration: none; }
   font: inherit; font-size: 11.5px; cursor: pointer; color: var(--brand-text);
   background: rgba(var(--brand-rgb), .16); border: 1px solid rgba(var(--brand-soft-rgb), .3);
 }
-.db-chips .db-chip-clear { color: #fda4af; background: none; border-color: rgba(251, 113, 133, .3); }
+.db-chips .db-chip-clear { color: var(--red-text); background: none; border-color: rgba(251, 113, 133, .3); }
 
 .db-sortbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 11px 0 2px; }
 .db-sortbar label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text3); }
@@ -782,7 +782,7 @@ a.db-ico { text-decoration: none; }
   padding: 8px 13px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
   color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
-.db-hint-bad { color: #fda4af; font-size: 11.5px; margin: 0; }
+.db-hint-bad { color: var(--red-text); font-size: 11.5px; margin: 0; }
 .db-sheet-foot { display: flex; gap: 9px; justify-content: flex-end; margin-top: 14px; }
 .db-sheet-foot .db-submit { padding: 11px 24px; font-size: 13px; }
 .db-ghost {
@@ -794,7 +794,7 @@ a.db-ico { text-decoration: none; }
 .db-grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 @media (max-width: 430px) { .db-grid3 { grid-template-columns: 1fr 1fr; } }
 .db-grid3 input { width: 100%; font-family: inherit; }
-.db-durhint { color: #6ee7b7; }
+.db-durhint { color: var(--green-text); }
 .db-expbtn { width: 32px; height: 30px; }
 /* لینکِ تعاریف در نوارِ ابزار — مثل دکمه دیده شود، نه لینکِ آبی. */
 a.db-defbtn { text-decoration: none; }
@@ -802,11 +802,11 @@ a.db-defbtn { text-decoration: none; }
 /* ── تسویه (تقسیمِ سهم) داخلِ صورت‌حساب ── */
 .bl-split { padding-block-start: 4px; }
 .bl-warns { margin-block-end: 12px; }
-.bl-warns p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.9; color: #fcd34d; }
+.bl-warns p { margin: 0 0 6px; font-size: 11.5px; line-height: 1.9; color: var(--amber-text); }
 .bl-splithead { font-size: 11.5px; color: rgba(var(--veil-rgb), .55); margin-block-end: 10px; }
 .bl-vtag { display: inline-block; padding: 2px 9px; margin-inline-end: 7px; border-radius: 8px; font-size: 10.5px; }
-.bl-vtag.draft { color: #fcd34d; background: rgba(251, 191, 36, .12); }
-.bl-vtag.final { color: #6ee7b7; background: rgba(52, 211, 153, .12); }
+.bl-vtag.draft { color: var(--amber-text); background: rgba(251, 191, 36, .12); }
+.bl-vtag.final { color: var(--green-text); background: rgba(52, 211, 153, .12); }
 
 .bl-shares { display: flex; flex-direction: column; gap: 6px; margin-block-end: 12px; }
 .bl-share {
@@ -818,29 +818,29 @@ a.db-defbtn { text-decoration: none; }
 .bl-share span { flex: 1; font-size: 10.5px; color: rgba(var(--veil-rgb), .45); }
 .bl-share i { font-style: normal; font-weight: 700; }
 .bl-share.total { background: rgba(var(--brand-rgb), .14); border-color: rgba(var(--brand-rgb), .3); }
-.bl-share.p-surgeon i { color: #93c5fd; }
-.bl-share.p-tech i    { color: #6ee7b7; }
+.bl-share.p-surgeon i { color: rgb(var(--kind-sky)); }
+.bl-share.p-tech i    { color: var(--green-text); }
 .bl-share.p-cost i    { color: var(--red-text); }
-.bl-share.p-partner i { color: #c4b5fd; }
+.bl-share.p-partner i { color: var(--brand-text); }
 
-.bl-stale { font-size: 11.5px; line-height: 1.9; color: #fcd34d; margin: 0 0 12px; }
+.bl-stale { font-size: 11.5px; line-height: 1.9; color: var(--amber-text); margin: 0 0 12px; }
 .bl-splitacts { display: flex; gap: 8px; }
 .bl-splitacts .db-submit { flex: 1; }
 .bl-mini {
   padding: 10px 14px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
   color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
-.bl-mini.warn { flex: 1; color: #fcd34d; border-color: rgba(251, 191, 36, .3); }
+.bl-mini.warn { flex: 1; color: var(--amber-text); border-color: rgba(251, 191, 36, .3); }
 
 /* پرداختِ سهم داخلِ تبِ تسویه */
 .bl-payouts { margin-block-end: 12px; padding-block-start: 10px; border-block-start: 1px dashed rgba(var(--veil-rgb), .12); }
-.bl-payouts > b { display: block; font-size: 12px; color: #a5b4fc; margin-block-end: 8px; }
+.bl-payouts > b { display: block; font-size: 12px; color: var(--brand-text); margin-block-end: 8px; }
 .bl-po { display: flex; align-items: center; gap: 10px; padding: 8px 11px; margin-block-end: 6px; border-radius: 11px; background: rgba(var(--veil-rgb), .04); font-size: 12px; }
 .bl-po > span { flex: 1; }
 .bl-po i { font-style: normal; font-size: 11px; color: rgba(var(--veil-rgb), .55); }
-.bl-po em { font-style: normal; font-size: 11px; color: #6ee7b7; }
+.bl-po em { font-style: normal; font-size: 11px; color: var(--green-text); }
 .bl-po.done { opacity: .65; }
-.bl-po button { padding: 6px 11px; border-radius: 9px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
+.bl-po button { padding: 6px 11px; border-radius: 9px; font: inherit; font-size: 11.5px; cursor: pointer; color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
 
 /* فیلترِ مالی در سرچِ پیشرفته */
 .db-owing { display: flex; align-items: center; gap: 8px; margin-block-start: 10px; font-size: 12.5px; cursor: pointer; }
