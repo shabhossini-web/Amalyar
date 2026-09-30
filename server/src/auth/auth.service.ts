@@ -554,20 +554,23 @@ export class AuthService {
     this.rateLimit.hit(`pwreset-verify:${this.tid}:id:${key}`, 8, 15 * 60_000);
     const target = await this.resetTarget(dto.identifier);
     if (!target) throw new BadRequestException(RESET_BAD);
+    const otp = await this.prisma.otpCode.findFirst({
+      where: { phone: target.phone, purpose: RESET_PURPOSE, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!otp || otp.expiresAt < new Date()) throw new BadRequestException(RESET_BAD);
     /* **بودجهٔ حدس مالِ حساب است، نه متنِ تایپ‌شده** (بستهٔ PF، PF4): نامِ کاربری و موبایلِ یک حساب تا دیروز
        دو سطلِ جدا بودند (۸ + ۸ حدس)، و سقفِ روزانه هم نبود. سرریزِ این دو سطل همان خطای عام است نه ۴۲۹ —
-       ۴۲۹ می‌گفت «این نامِ کاربری و این موبایل مالِ یک حساب‌اند». */
+       ۴۲۹ می‌گفت «این نامِ کاربری و این موبایل مالِ یک حساب‌اند».
+       هشدار — و **فقط وقتی کدِ زنده‌ای هست** می‌سوزد (بستهٔ PS، PS4): پیش از یافتنِ کد، بیست حدس روی حسابی که
+       اصلاً کدی نداشت صاحبش را بی‌آنکه پیامکی دیده باشد ۲۴ ساعت از بازیابی بیرون می‌کرد. کدِ زنده یعنی پیامکی
+       که صاحبِ حساب دیده؛ بی‌کد، حدس چیزی را باز نمی‌کند و سطل‌های IP و شناسه (بالا) برای جلوی سیل بس‌اند. */
     try {
       this.rateLimit.hit(`pwreset-verify:${this.tid}:acct:${target.account.id}`, 8, 15 * 60_000);
       this.rateLimit.hit(`pwreset-verify:${this.tid}:acct-day:${target.account.id}`, 20, 24 * 3600_000);
     } catch {
       throw new BadRequestException(RESET_BAD);
     }
-    const otp = await this.prisma.otpCode.findFirst({
-      where: { phone: target.phone, purpose: RESET_PURPOSE, consumedAt: null },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (!otp || otp.expiresAt < new Date()) throw new BadRequestException(RESET_BAD);
     /* هشدار — **شمارشِ تلاش پیش از مقایسه و اتمی** (PF4): سنجش و افزایش جدا بودند، پس حدس‌های هم‌زمان همه
        «۰ تلاش» را می‌خواندند و هر کدام مقایسه می‌شد — کدِ پنج‌تلاشی با ده درخواستِ هم‌زمان ده حدس می‌خورد.
        حالا هر حدس اول یک خانه از پنج خانه را می‌گیرد؛ خانه نماند ← همان خطای عام. */

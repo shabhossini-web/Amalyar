@@ -465,6 +465,20 @@ function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
 }
 
 {
+  /* PS4 — بودجهٔ حدسِ حساب فقط وقتی می‌سوزد که **کدِ زنده‌ای** هست (یعنی پیامکی که صاحبِ حساب دیده). تا دیروز هشت
+     حدس روی حسابی که هیچ کدی نداشت (چهار با نامِ کاربری، چهار با موبایل) سطلِ ۱۵دقیقه‌ای را پر می‌کرد، و بیست تا
+     سطلِ روزانه را — صاحبِ حساب بی‌آنکه پیامکی دیده باشد تا فردا نمی‌توانست رمزش را بازیابی کند. */
+  const { svc, db, account } = fakeAuth();
+  const bad = [];
+  for (let i = 0; i < 4; i++) bad.push(await svc.resetPassword({ identifier: account.username, code: '000000', password: 'ps4-pass-1' }, { ip: `10.82.0.${i + 1}` }).catch((e) => e));
+  for (let i = 0; i < 4; i++) bad.push(await svc.resetPassword({ identifier: account.person.phone, code: '000000', password: 'ps4-pass-1' }, { ip: `10.82.1.${i + 1}` }).catch((e) => e));
+  ok(bad.every((e) => e?.status === 400), `PS4: هشت حدس بی‌کدِ زنده ← همه همان خطای عام (${bad.map((e) => e?.status).join('،')})`);
+  const issued = await inTest(() => svc.requestPasswordReset(account.username, '10.82.2.1'));
+  const done = await svc.resetPassword({ identifier: account.username, code: issued?.devCode, password: 'ps4-pass-1' }, { ip: '10.82.2.2' }).catch((e) => e);
+  ok(done?.ok === true && db.passwords.length === 1, `PS4: صاحبِ حساب پس از آن با کدِ پیامکش رمز را عوض می‌کند (${done?.ok ?? done?.message})`);
+}
+
+{
   /* PF5 — درخواستِ کد: پاسخ منتظرِ یافتنِ حساب و ساختنِ کد نمی‌ماند؛ زمانش نمی‌گوید حساب هست یا نه. */
   const { svc, db, account } = fakeAuth({ findDelay: 300 });
   const hit = await inProd(() => timed(() => svc.requestPasswordReset(account.username, '10.81.0.1')));
