@@ -30,7 +30,9 @@ try {
   const { context, errors } = await mockContext(browser, ({ path, method }) => {
     if (path === '/auth/me') return { id: 1, firstName: 'تست', lastName: 'مدیر', level: 6, status: 'active' };
     if (path === '/auth/accounts') return [];
-    if (path === '/config') return { vertical: 'clinic', brand: {}, verticals: [] };
+    /* فیلترِ وضعیتِ «بیماران» از `statuses.visit`ِ سرور ساخته می‌شود (بازبینیِ UX، company-17) — بی‌آن فقط «همه» می‌ماند. */
+    if (path === '/config') return { vertical: 'clinic', brand: {}, verticals: [],
+      statuses: { visit: [{ key: 'pending', label: 'در انتظار' }, { key: 'done', label: 'انجام شد' }, { key: 'cancelled', label: 'لغو' }] } };
     if (path === '/features') return [{ key: 'dashboard', allowed: true }];
     if (path === '/visits/1') return visit;
     if (path === '/visits') return { rows: [visit], total: 1, pages: 1, stats: { total: 1, pending: 1, today: 0, due: 0, kinds: [] } };
