@@ -280,6 +280,7 @@ export default function Login() {
         {step !== 'done' && (
           <Tabs
             variant="inset"
+            className="lg-tabs"
             label="ورود یا ثبت‌نام"
             value={tab}
             onChange={(k) => { setTab(k); setErr(''); }}

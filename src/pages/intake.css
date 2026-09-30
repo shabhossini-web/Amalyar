@@ -244,7 +244,8 @@
    محتوا جمع می‌کرد — تقویمِ ۲۰۶ پیکسلی با خانه‌های ۲۴ پیکسلی روی گوشی. حالا خانه‌ها حدودِ ۴۴ پیکسل‌اند
    و در دسکتاپ هم تقویم از ۴۴۰ پیکسل پهن‌تر نمی‌شود. */
 .ik-book .jg { width: 100%; max-width: 440px; }
-.ik-book .jg.compact .jg-grid, .ik-book .jg.compact .jg-dows { gap: 4px; }
+/* فاصلهٔ ۳ پیکسل (نه ۴): روی گوشیِ ۳۹۰ هر خانه ۴۴ پیکسل می‌شود نه ۴۳ (بازبینیِ UX، بندِ ۱۱۴). */
+.ik-book .jg.compact .jg-grid, .ik-book .jg.compact .jg-dows { gap: 3px; }
 .ik-book .jg.compact .jg-num { font-size: 15px; }
 .ik-book .jg-head button { width: 44px; height: 44px; }
 .ik-book .jg-head .jg-today { min-height: 44px; font-size: 13px; }
@@ -261,7 +262,7 @@
 .ik-book-topics { display: flex; flex-wrap: wrap; gap: 6px; }
 .ik-book-topics button {
   font-family: inherit; font-size: 14px; cursor: pointer; color: var(--text2);
-  padding: 7px 13px; border-radius: 99px;
+  min-height: 44px; padding: 7px 14px; border-radius: 99px;
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .ik-book-topics button.on { color: var(--press-ink); font-weight: 800; background: rgba(var(--brand-2-rgb), .22); border-color: rgba(var(--brand-2-rgb), .55); }
@@ -304,7 +305,7 @@
 .ik-slots { display: flex; flex-wrap: wrap; gap: 6px; }
 /* هدفِ ضربه دستِ‌کم ۴۴ پیکسل — بیمار روی موبایل با انگشت می‌زند. */
 .ik-slots button {
-  min-width: 68px; min-height: 40px; font-family: inherit; font-size: 15px; cursor: pointer;
+  min-width: 68px; min-height: 44px; font-family: inherit; font-size: 15px; cursor: pointer;
   color: var(--text1); padding: 8px 10px; border-radius: 10px;
   background: rgba(var(--brand-2-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .28);
 }
@@ -338,7 +339,7 @@
 .ik-receipt-row b { flex: 1; font-size: 14px; color: var(--text1); }
 /* هدفِ لمسیِ «حذف» — تا ۱۴۰۵/۰۷/۰۵ حدودِ ۲۴ پیکسل بود؛ حالا که فیشِ چندتایی جریانِ اصلی است، کافی. */
 .ik-receipt-row button {
-  min-height: 40px; min-width: 60px; padding: 4px 14px; cursor: pointer; font: inherit; font-size: 13.5px;
+  min-height: 44px; min-width: 60px; padding: 4px 14px; cursor: pointer; font: inherit; font-size: 13.5px;
   color: var(--red-text); background: none; border: 1px solid rgba(248, 113, 113, .45); border-radius: 99px;
 }
 .ik-receipt-row button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
@@ -487,3 +488,10 @@
 .ik-ahead p { margin: 0; display: flex; align-items: flex-start; gap: 7px; font-size: 14px; line-height: 1.8; color: var(--text2); }
 .ik-ahead p svg { flex: 0 0 auto; margin-top: 5px; color: var(--brand-text); }
 .ik-ahead .ik-fee b { color: var(--text1); font-weight: 800; }
+
+/* ── هدفِ لمسیِ دستِ‌کم ۴۴×۴۴ روی صفحهٔ بیمار (بازبینیِ UX، بندِ ۱۱۴) ──
+   کادرهای مشترک (JDate، DynForm، FileDrop) در پنلِ کارکنان فشرده می‌مانند؛ فقط زیرِ `.ik`. */
+.ik .jd-btn { width: 44px; }
+.ik .dyn-pill { min-height: 44px; }
+.ik .dyn-img-has button, .ik .dyn-pay-row button, .ik .fdrop-x { min-width: 44px; min-height: 44px; }
+.ik .fdrop-retry, .ik .fdrop-clear { min-height: 44px; padding-inline: 14px; }

@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import './portal.css';
 import { ChevronEnd } from '../ui/icons.jsx';
 import { adoptFace } from '../lib/public-face.js';
-import { PublicErrorPage, useFallbackFace } from './PublicBits.jsx';
+import { PublicErrorPage, PublicFoot, useFallbackFace } from './PublicBits.jsx';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — `/p/<token>`، عمومی و دائمی.
@@ -194,10 +194,8 @@ export default function Portal() {
         </section>
       )}
 
-      <footer className="po-foot">
-        {data.brand.phone && <a href={`tel:${data.brand.phone}`} dir="ltr">{data.brand.phone}</a>}
-        {data.brand.address && <small>{data.brand.address}</small>}
-      </footer>
+      {/* «تماس با مطب» دکمه با آیکون و رقمِ فارسی (بازبینیِ UX، بندِ ۱۱۴) — نه متنِ ۲۴ پیکسلیِ لاتین. */}
+      <PublicFoot brand={data.brand} />
     </div>
   );
 }

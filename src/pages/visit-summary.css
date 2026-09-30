@@ -34,7 +34,8 @@
 /* نشان + نامِ مطب؛ تلفن لمس‌شدنی (`tel:`) ولی روی کاغذ همان متنِ ساده (بازبینیِ UX، بندِ ۱۱۲). */
 .vs-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .vs-logo { width: 44px; height: 44px; border-radius: 12px; font-size: 22px; box-shadow: none; }
-.vs-tel { display: inline-block; margin-top: 2px; color: var(--paper-label); text-decoration: none; font-variant-numeric: tabular-nums; }
+/* ناحیهٔ لمس ۴۴ پیکسل بی‌تغییرِ ظاهرِ سند: padding با margin منفی خنثی می‌شود (بازبینیِ UX، بندِ ۱۱۴). */
+.vs-tel { display: inline-block; margin-top: 2px; padding-block: 9px; margin-block: -7px -9px; color: var(--paper-label); text-decoration: none; font-variant-numeric: tabular-nums; }
 .vs-tel:focus-visible { outline: 2px solid var(--paper-ink); outline-offset: 2px; border-radius: 4px; }
 .vs-doc { text-align: left; }
 .vs-doc b { display: block; font-size: 14px; }

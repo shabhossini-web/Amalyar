@@ -152,16 +152,17 @@
 
 /* password eye */
 .pw-wrap { position: relative; }
-.pw-wrap .pw-input { width: 100%; padding-inline-end: 44px; }
+.pw-wrap .pw-input { width: 100%; padding-inline-end: 50px; }
 .pw-eye {
-  position: absolute; inset-inline-end: 6px; top: 50%; transform: translateY(-50%);
-  width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer;
+  position: absolute; inset-inline-end: 3px; top: 50%; transform: translateY(-50%);
+  /* ۴۴×۴۴ — هدفِ لمسیِ انگشت (بازبینیِ UX، بندِ ۱۱۴)؛ تا دیروز ۳۴. */
+  width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer;
   background: none; border: none; color: var(--text3); border-radius: 9px; transition: color .2s, background .2s;
 }
 .pw-eye:hover { color: var(--text1); background: rgba(var(--veil-rgb), 0.07); }
 
 /* remember me */
-.lg-remember { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; user-select: none; padding: 2px; }
+.lg-remember { display: flex; align-items: center; gap: 9px; min-height: 44px; font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; user-select: none; padding: 2px; }
 .lg-remember input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .lg-check {
   width: 19px; height: 19px; border-radius: 6px; flex: 0 0 auto; position: relative;
@@ -195,3 +196,9 @@
 @media (prefers-reduced-motion: reduce) {
   .lg-btn { transition: none; }
 }
+
+/* تب‌های «ورود / ثبت‌نام» — هر تب نیمی از عرض و دستِ‌کم ۴۴ پیکسل (بازبینیِ UX، بندِ ۱۱۴؛ تا دیروز ۳۷×۴۲). */
+/* `margin-inline: 0`: حاشیهٔ خودکارِ `.ui-tabs` در ستونِ فلکسِ کارت نمی‌گذاشت نوار کش بیاید. ⚠️ با `.lg-card`
+   جلو: `ui.css`ِ کامپوننتِ Tabs بعد از این فایل بار می‌شود و قاعدهٔ هم‌وزنش برنده بود. */
+.lg-card .lg-tabs { margin-inline: 0; }
+.lg-card .lg-tabs > button { flex: 1 1 0; min-height: 44px; }
