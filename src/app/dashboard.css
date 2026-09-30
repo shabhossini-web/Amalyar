@@ -1106,6 +1106,19 @@ a.db-defbtn { text-decoration: none; }
 .nv-total span { font-size: 10.5px; color: var(--text3); }
 .nv-total b { font-size: 17px; font-weight: 900; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .nv-svc { transition: none; } }
+/* قلمِ مبلغِ کلِ مراجعه — جایگزین یا کنارِ خدمات (company-14). */
+.nv-lump {
+  display: grid; gap: 8px; padding: 10px 12px; border-radius: 12px;
+  background: rgba(var(--veil-rgb), .03); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
+}
+.nv-lump .nv-h { margin: 0; }
+.nv-lump-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; font-size: 13px; }
+.nv-lump-row span { font-weight: 800; font-variant-numeric: tabular-nums; }
+.nv-lump .bl-pricing-tabs button { min-height: 40px; }
+@media (max-width: 640px) { .nv-lump .bl-pricing-tabs button { min-height: 44px; } }
+.nv-why { color: var(--amber-text); }
+.nv-fixlink { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: var(--brand-text); text-decoration: underline; text-underline-offset: 3px; }
+.nv-fixlink:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
 
 /* کارتِ آماده‌سازیِ ویزیت (W3.2، §۴.۴) — بالای فرمِ مراجعهٔ ذخیره‌شده.
    هشدارِ بالینی باز است و سابقه بسته: اگر همه باز باشد فرم زیرِ متن دفن می‌شود،

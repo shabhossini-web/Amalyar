@@ -27,6 +27,8 @@ class NeuroApplyDto extends NeuroQuoteDto {
   @IsOptional() @IsBoolean() returnUnusedStock?: boolean;
   /** `{name, irc?, qty}` — شکلِ دقیق در سرویس سنجیده می‌شود. */
   @IsOptional() @IsArray() consumables?: unknown[];
+  /** شناسهٔ قلم‌های مبلغِ کلِ مراجعه که با این خدمات جایگزین می‌شوند (company-14) — سرویس می‌سنجد. */
+  @IsOptional() @IsArray() replace?: unknown[];
 }
 class IssueInvoiceDto { @IsIn(['formal', 'informal']) variant!: string; }
 

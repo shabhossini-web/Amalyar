@@ -35,6 +35,8 @@ try {
         { id: '901300:Monitoring', code: '901300', label: 'Monitoring', title: 'مانیتورینگ', defaultOn: true },
       ],
       consumables: [{ name: 'Electrode', irc: '9449874222229990', qty: 40 }],
+      /* company-14: قلمِ مبلغِ کلِ مراجعه (همان «خدمت اولیه»ِ ثبت‌نام) — پنجره می‌پرسد جایگزین شود یا بماند. */
+      lumpLines: [{ id: 1, title: 'خدمت اولیه', amount: 30000000 }],
     };
     const priceOf = (id, hours) => ({ professional: 1515 * hours, technical: 1482 * hours, total: 2997 * hours });
     const quoteFor = (p) => { const items = p.items.map(id => { const s = catalog.services.find(x => x.id === id); return { id, code: s.code, label: s.label, title: s.title, hours: p.hours, deviceOwner: p.deviceOwner, coefficients: { professional: 15, technical: 7.3 }, factors: { professional: 101, technical: 203 }, ...priceOf(id, p.hours), tariff: { year: p.year, sector: 'public', sectorLabel: 'دولتی' } }; }); return { items, total: items.reduce((a, b) => a + b.total, 0) }; };
@@ -61,7 +63,7 @@ try {
         const q = quoteFor(payload);
         const rows = q.items.map((it, i) => ({ id: 10 + i, kind: 'service', title: `${it.label} — ${it.title}`, serviceCode: it.code, quantity: 1, unitPrice: it.total, amount: it.total, neuroDetail: it }));
         const cons = (payload.consumables ?? []).map((c, i) => ({ id: 50 + i, kind: 'item', title: c.name, quantity: c.qty, unitPrice: 0, amount: 0, notes: c.irc, neuroDetail: { consumable: true, irc: c.irc, qty: c.qty } }));
-        const kept = bill.charges.filter(c => !c.neuroDetail);
+        const kept = bill.charges.filter(c => !c.neuroDetail && !(payload.replace ?? []).includes(c.id));
         const total = kept.reduce((a, c) => a + c.amount, 0) + q.total;
         bill = { ...bill, charges: [...kept, ...rows, ...cons], total, due: total - bill.paid };
         body = { applied: rows.length, consumables: cons.length, total: q.total, billing: bill };
@@ -104,7 +106,10 @@ try {
     await dlg.getByRole('button', { name: 'ثبتِ خدمات روی صورت‌حساب', exact: true }).click();
     await dlg.waitFor({ state: 'detached' });
     const sent = writes.find(w => w.path.endsWith('neuro-apply')).payload;
-    assert.deepEqual(Object.keys(sent).sort(), ['consumables', 'deviceOwner', 'hours', 'items', 'returnUnusedStock', 'year']);
+    assert.deepEqual(Object.keys(sent).sort(), ['consumables', 'deviceOwner', 'hours', 'items', 'replace', 'returnUnusedStock', 'year']);
+    /* company-14: بی‌خدمتِ نوروی قبلی، پیش‌فرض «جایگزینِ همین قلم» است — فقط شناسه می‌رود، نه مبلغ. */
+    assert.deepEqual(sent.replace, [1]);
+    check(!bill.charges.some(c => c.id === 1), 'the registration lump line is replaced, not counted twice beside the neuro services');
     assert.deepEqual(sent.items, ['901290:EMG', '901325:MEP', '901300:Monitoring']);
     assert.deepEqual(sent.consumables, [{ name: 'Electrode', irc: '9449874222229990', qty: 41 }]);
     check(true, 'browser submits selection, duration and consumables — never financial totals');

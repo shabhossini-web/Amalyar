@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { syncVisitDuty } from './hospital-duties.service';
-import { visitTitleOf } from './visit-title';
+import { serviceTitleOf, visitTitleOf } from './visit-title';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
@@ -1700,7 +1700,11 @@ export class PatientsService {
       const existingAmount = existingServices?._sum.amount ?? 0;
       if (target && charge > 0 && existingAmount > 0 && existingAmount !== charge) throw new BadRequestException('مبلغ مراجعهٔ موجود با ثبت‌نام متفاوت است؛ ابتدا مبلغ را بررسی کنید');
       if (charge > 0 && !existingAmount) {
-        const title = (refs.opType || dto.opType?.trim() || 'خدمتِ ثبت‌شده').slice(0, 120);
+        /* نامِ خدمتِ شرکت جلوی نامِ عمل (بازبینیِ UX، company-14): «نورومانیتورینگ — فیوژن»، نه «فیوژن» که
+           شبیهِ هزینهٔ خودِ عملِ جراح بود و کنارِ خدماتِ نوروی فاکتور معلوم نبود همان خدمت است. */
+        const what = refs.opType || dto.opType?.trim() || '';
+        const svc = serviceTitleOf({ kind: dto.kind || 'surgery', service });
+        const title = ((svc ? [svc, what].filter(Boolean).join(' — ') : what) || 'خدمتِ ثبت‌شده').slice(0, 120);
         await tx.charge.create({
           data: {
             visitId: visit.id, kind: 'service', title,
