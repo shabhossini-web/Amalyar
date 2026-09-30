@@ -1,0 +1,64 @@
+/* سربرگِ مشترکِ صفحه‌های /app (`PageHeader.jsx`) — بازبینیِ UX ۱۴۰۵/۰۷، یافتهٔ shell-15.
+   همهٔ رنگ‌ها از توکن‌های `index.css`؛ هیچ صفحه‌ای ظاهرِ سربرگ را بازنویسی نمی‌کند.
+
+   چیدمان: [بازگشت] [آیکون + عنوان / زیرعنوان] … [اکشن‌ها]. روی دسکتاپ یک ردیف؛ اگر اکشن‌ها
+   جا نشوند خودشان به ردیفِ بعد می‌روند. روی گوشی سه ردیف: بازگشت، عنوان، اکشن‌ها — تا
+   زیرعنوان و نامِ بلند کنارِ قرصِ بازگشت له نشوند. */
+.ph {
+  display: flex; flex-wrap: wrap; align-items: flex-start;
+  column-gap: 14px; row-gap: 10px;
+  /* هم‌عرضِ محتوای همان صفحه: ریشهٔ صفحه `--page-w` را می‌گذارد — `--maxw` (فهرست/جدول) یا
+     `--maxw-form` (فرم)، یا `none` برای تخته‌های تمام‌عرضِ عمدی. */
+  width: 100%; max-width: var(--page-w); margin: 0 auto 18px;
+  color: var(--text1);
+}
+
+/* بازگشت — فقط به اندازهٔ خودش (نه کلِ ردیف)، با نامِ مقصد. ارتفاعش همان ارتفاعِ خطِ عنوان است
+   تا هر دو روی یک خط بنشینند. */
+.ph-back {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 0 14px; border-radius: 999px;
+  font: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; white-space: nowrap;
+  color: var(--text2); text-decoration: none; cursor: pointer;
+  background: var(--ghost-bg); border: 1px solid rgba(var(--veil-rgb), .14); box-shadow: var(--ghost-shadow);
+  transition: color .2s, border-color .2s, background .2s;
+}
+.ph-back:hover { color: var(--brand-text); border-color: rgba(var(--brand-2-rgb), .45); background: var(--ghost-bg-hover); }
+.ph-back svg { flex: none; }
+
+/* پایهٔ ۱۲۰ پیکسل فقط برای شکستنِ خط است، نه اندازه: عنوان همیشه باقیِ ردیف را پر می‌کند؛ ولی
+   ستونِ باریکِ پیام‌رسان (۳۰۰ پیکسل) هم بازگشت و عنوان و «+» را در یک ردیف جا می‌دهد. */
+.ph-head { flex: 1 1 120px; min-width: 0; }
+.ph-title {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 40px; margin: 0;
+  font-size: 21px; font-weight: 900; line-height: 1.5; color: var(--text1);
+}
+.ph-ic {
+  flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-2-rgb), .3);
+}
+.ph-name { min-width: 0; overflow-wrap: anywhere; }
+.ph-sub { margin: 2px 0 0; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
+
+.ph-actions {
+  flex: 0 1 auto; margin-inline-start: auto; min-height: 40px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px;
+}
+/* اکشنی که خودش `null` برگرداند (خلاصهٔ ارجاع وقتی دستیار خاموش است) ردیفِ خالی نسازد. */
+.ph-actions:empty { display: none; }
+
+@media (max-width: 640px) {
+  .ph { column-gap: 10px; margin-bottom: 14px; }
+  .ph-head { flex-basis: 100%; }
+  .ph-title { font-size: 20px; min-height: 0; }
+  .ph-actions { flex-basis: 100%; margin-inline-start: 0; min-height: 0; justify-content: flex-start; }
+}
+/* هدفِ لمسی ≥ ۴۴ (قاعدهٔ press.css) — روی هر صفحهٔ لمسی، نه فقط زیرِ ۶۴۰ پیکسل. */
+@media (max-width: 640px), (pointer: coarse) {
+  .ph-back { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ph-back { transition: none; }
+}

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { JOB_ROLES, fieldRoles } from '../lib/job-roles.js';
@@ -7,11 +6,12 @@ import { useConfig } from './config.jsx';
 import './definitions.css';
 import './formbuilder.css';
 import './launcher.css'; // شِلِ استانداردِ صفحه (lx-*) + glass
-import { ArrowDown, ArrowUp, Back, Close, Eye, EyeOff, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import { ArrowDown, ArrowUp, Close, Eye, EyeOff, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import { COLOR_KEYS, FORM_COLORS } from '../lib/formColor.js';
 import { toEnDigits } from '../lib/identity.js';
 import { toFa } from '../lib/utils.js';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import DynForm from '../ui/DynForm.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -121,7 +121,6 @@ export default function FormBuilder() {
   const [reorder, setReorder] = useState(false);
   const wide = useWide();
 
-  useEffect(() => { document.title = 'عمل‌یار — فرم‌ساز'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2400);
@@ -290,10 +289,7 @@ export default function FormBuilder() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell">
-        <header className="df-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>فرم‌ساز</h1>
-        </header>
+        <PageHeader tool="forms" />
 
         <p className="fb-lead">
           هر فرم را می‌توانید کامل بچینید: فیلدِ تازه اضافه کنید، ترتیب را عوض کنید،

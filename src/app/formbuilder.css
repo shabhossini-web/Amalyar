@@ -342,13 +342,15 @@
 .fb-work, .fb-nav, .fb-body { display: flex; flex-direction: column; min-width: 0; }
 .fb-newform-t { display: none; }
 
+/* زیرِ ۱۱۰۰ پیکسل ستونِ «فرم»ِ استاندارد (shell-15؛ تا آن روز ستونِ ۴۶۸ پیکسلیِ لانچر بود) — ۴۰ پیکسل
+   حاشیهٔ دوطرفهٔ `.lx-shell`. بالای آن ویرایشگرِ سه‌ستونیِ تمام‌عرض، مثلِ تقویم و اتاقِ عمل. */
+.fb .lx-shell { --page-w: var(--maxw-form); max-width: calc(var(--page-w) + 40px); }
 @media (min-width: 1100px) {
   /* ستونِ ۴۶۸ پیکسلیِ لانچر برای فرم‌ساز تنگ بود: فرمِ ۹ فیلدی دو صفحه اسکرول می‌خورد. */
-  .fb .lx-shell { max-width: 1320px; }
+  .fb .lx-shell { --page-w: none; max-width: 1320px; }
   /* `overflow: hidden`ِ `.lx`/`.df` ظرفِ اسکرول می‌سازد و ستون‌های چسبان را از کار می‌اندازد؛ `clip`
      همان برش را دارد بی‌آنکه ظرفِ اسکرول بسازد. */
   .fb.lx.df { overflow: clip; }
-  .fb .df-head { max-width: none; margin: 0 0 18px; }
   .fb-work {
     display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 400px);
     gap: 22px; align-items: start;

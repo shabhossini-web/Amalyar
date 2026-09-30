@@ -23,8 +23,9 @@ import './launcher.css';
 import './users.css';
 import './dashboard.css';
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
-import { Arrive, ArrowStart, Back, Book, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, More, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
+import { Arrive, ArrowStart, Book, Calendar, Clock, Close, Diagnosis, Doctor, Download, Filter, Gear, Hospital, Money, More, Pencil, Plus, Print, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
@@ -862,7 +863,6 @@ export default function Dashboard() {
   const qRef = useRef(q);
   qRef.current = q;
 
-  useEffect(() => { document.title = 'عمل‌یار — بیماران'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     // پیامِ «کدام پرونده، چندمین مراجعه» بلند است؛ ۲۲۰۰ms برای خواندنش کم بود.
@@ -1156,12 +1156,9 @@ export default function Dashboard() {
       <div className="lx-bg" aria-hidden="true" />
       <div className="lx-grid" aria-hidden="true" />
       <div className={`lx-shell us-shell db-shell${asTable ? ' is-table' : ''}`}>
-        <header className="us-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          {/* نام با کاشیِ لانچر یکی است (W3.7/B3): کاربر روی «بیماران» می‌زند
-              و باید به صفحه‌ای با همان نام برسد. */}
-          <h1>بیماران</h1>
-        </header>
+        {/* نام و آیکون از کاشیِ «بیماران» (W3.7/B3 · قانونِ ۲۴): کاربر روی «بیماران» می‌زند و به
+            صفحه‌ای با همان نام می‌رسد — سربرگِ مشترکِ همهٔ صفحه‌ها (shell-15). */}
+        <PageHeader tool="dashboard" />
 
         {!denied && (<>
         <div className="db-stats">

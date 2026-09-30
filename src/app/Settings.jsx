@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { useConfig, useTerms } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
-import { useToolTitle } from './tools.jsx';
 import { randomNationalId, toEnDigits } from '../lib/identity.js';
 import { jToFa, todayJStr } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import './launcher.css';
 import './definitions.css';
 import './settings.css';
-import { Back, Check } from '../ui/icons.jsx';
+import { Check } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Toast, { useToast } from '../ui/Toast.jsx';
 
 
@@ -29,8 +28,6 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
 export default function Settings() {
   const { kind, services, kinds = [], serviceCatalog = [], error: configError, reload, brandName } = useConfig();
   const { user: me } = useAuth();
-  /* «تنظیماتِ مطب» / «تنظیماتِ شرکت» — نامِ کاشی از کاتالوگ، واژهٔ سازمان از حوزه (بازبینیِ UX). */
-  const { label: title } = useToolTitle('settings');
   const { org } = useTerms();
   /* گروه‌های تنظیم از `Knobs` می‌آیند (رجیستریِ سرور) تا فهرستِ پرشِ بالای صفحه همان‌ها را بشناسد. */
   const [knobGroups, setKnobGroups] = useState([]);
@@ -113,15 +110,13 @@ export default function Settings() {
   const ACTION = { create: 'روشن می‌شود', enable: 'روشن می‌شود', disable: 'خاموش می‌شود', relevel: 'سطحِ پیش‌فرضش عوض می‌شود' };
 
   return (
-    <div className="df">
+    <div className="df df-form">
       <div className="df-bg" />
-      <header className="df-head">
-        <Link className="df-back" to="/app"><Back width="14" height="14" /> سامانه</Link>
-        <div>
-          <h1>{title}</h1>
-          <p>نوعِ نصب و خدماتِ {org} تعیین می‌کند کدام ماژول‌ها و فرم‌های ثبت‌نام فعال باشند و کاربر چه کلماتی ببیند.</p>
-        </div>
-      </header>
+      {/* «تنظیماتِ مطب» / «تنظیماتِ شرکت» — نامِ کاشی از کاتالوگ، واژهٔ سازمان از حوزه (بازبینیِ UX). */}
+      <PageHeader
+        tool="settings"
+        sub={`نوعِ نصب و خدماتِ ${org} تعیین می‌کند کدام ماژول‌ها و فرم‌های ثبت‌نام فعال باشند و کاربر چه کلماتی ببیند.`}
+      />
 
       <SectionNav items={[
         { id: 'st-kind', label: 'نوعِ نصب' },

@@ -4,7 +4,7 @@
    پس عمداً بالای صفحه و با رنگِ وضعیت است، نه یک سوییچِ گمشده در فهرست. */
 .st-publish {
   display: flex; align-items: center; gap: 14px;
-  max-width: 900px; margin: 0 auto 14px; padding: 14px 16px; border-radius: 15px;
+  max-width: var(--page-w); margin: 0 auto 14px; padding: 14px 16px; border-radius: 15px;
   background: rgba(var(--veil-rgb), 0.04); border: 1px solid rgba(var(--veil-rgb), 0.1);
 }
 .st-publish.on { border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.07); }
@@ -20,7 +20,7 @@
   background: rgba(var(--veil-rgb), 0.03); border: 1px solid rgba(var(--brand-soft-rgb), 0.18); }
 .st-group h2 { margin: 0 0 12px; font-size: 13px; font-weight: 800; color: var(--text1); }
 
-.st-save { max-width: 900px; margin: 14px auto 0; display: flex; justify-content: flex-end; }
+.st-save { max-width: var(--page-w); margin: 14px auto 0; display: flex; justify-content: flex-end; }
 .st-save button { height: 46px; padding: 0 26px; border-radius: 12px; font: inherit; font-weight: 800; cursor: pointer; border: 0; }
 
 /* انتخابِ آیکونِ خدمت */

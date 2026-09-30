@@ -14,13 +14,13 @@ import { faDate } from '../lib/jalali.js';
 import './definitions.css';
 import './launcher.css';
 import './users.css';
-import { Back, Caret, Check, Close, Lock, Plus, Search, User } from '../ui/icons.jsx';
+import { Caret, Check, Close, Lock, Plus, Search, User } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useConfirm } from '../ui/Confirm.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 import Toast, { useToast } from '../ui/Toast.jsx';
-import { useToolTitle } from './tools.jsx';
 import { useConfig } from './config.jsx';
 import { roleShown } from '../lib/terms.js';
 import { PENDING_CHANGED } from './usePending.js';
@@ -176,8 +176,6 @@ export default function Users() {
   const [creating, setCreating] = useState(false);
   const [testingEnabled, setTestingEnabled] = useState(false), [modeBusy, setModeBusy] = useState(false);
 
-  /* نامِ صفحه همان نامِ کاشی است («کاربران») — قانونِ ۲۴؛ کاتالوگ تنها منبعِ نام است. */
-  const { label: title } = useToolTitle('users');
 
   const load = useCallback(async () => {
     try {
@@ -279,12 +277,11 @@ export default function Users() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell us-shell">
-        <header className="us-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>{title}</h1>
+        {/* نامِ صفحه همان نامِ کاشی است («کاربران») — قانونِ ۲۴؛ کاتالوگ تنها منبعِ نام است. */}
+        <PageHeader tool="users">
           {/* «دسترسی‌ها» تبی بود که فقط یک لینک داشت — حالا خودِ لینک کنارِ عنوان است. */}
           <Link to="/app/access" className="us-headlink"><Lock width="14" height="14" aria-hidden="true" /> سطوحِ دسترسی</Link>
-        </header>
+        </PageHeader>
 
         {/* کارِ اصلیِ صفحه — تأییدِ کارکنان و فهرستِ همه — بالا؛ ساختِ حساب یک دکمهٔ عادی کنارِ آن،
             نه پررنگ‌ترین دکمهٔ صفحه، و ابزارِ آزمایشیِ نقش‌ها تاشو پایینِ صفحه (بازبینیِ UX ۱۴۰۵/۰۷). */}

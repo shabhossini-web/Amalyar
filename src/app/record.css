@@ -1,5 +1,5 @@
 /* پروندهٔ بیمار — روی همان پایهٔ definitions.css سوار است (df-*, pf-*) */
-.rc-body { max-width: 900px; margin: 0 auto; }
+.rc-body { max-width: var(--page-w); margin: 0 auto; }
 .rc-form { display: grid; gap: 12px; }
 
 .rc-h3 {
@@ -27,7 +27,7 @@
 
 /* هشدارِ حساسیت — باید از همه‌چیز بیشتر به چشم بیاید */
 .rc-alert {
-  max-width: 900px; margin: 0 auto 12px; padding: 11px 15px; border-radius: 12px;
+  max-width: var(--page-w); margin: 0 auto 12px; padding: 11px 15px; border-radius: 12px;
   font-size: 13px; font-weight: 800; color: var(--red-text);
   background: rgba(239, 68, 68, .12); border: 1px solid rgba(248, 113, 113, .45);
 }
@@ -340,7 +340,7 @@
 .rc-last,
 .rc-next,
 .rc-path,
-.rc-tl { max-width: 900px; margin-inline: auto; }
+.rc-tl { max-width: var(--page-w); margin-inline: auto; }
 
 /* ── کارتِ هویت: فقط‌خواندنی، ویرایش یک اقدام است ── */
 .rc-id {

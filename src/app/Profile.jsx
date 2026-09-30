@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
 import PasswordInput from './PasswordInput.jsx';
@@ -10,7 +9,8 @@ import './profile.css';
 import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/identity.js';
 import { faDate } from '../lib/jalali.js';
-import { Back, User } from '../ui/icons.jsx';
+import { User } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Toast, { useToast } from '../ui/Toast.jsx';
 
 
@@ -34,7 +34,6 @@ export default function Profile() {
     } catch (e) { setPhoneMessage(e.message); } finally { setPhoneBusy(false); }
   };
 
-  useEffect(() => { document.title = 'عمل‌یار — پروفایل من'; }, []);
   useEffect(() => {
     setFirstName(user?.firstName || '');
     setLastName(user?.lastName || '');
@@ -88,10 +87,8 @@ export default function Profile() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell us-shell">
-        <header className="us-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>پروفایل من</h1>
-        </header>
+        {/* صفحهٔ حسابِ خودِ کاربر کاشی نیست؛ آیکونش همان آیکونِ «پروفایلِ من» در منوی پروفایل است. */}
+        <PageHeader title="پروفایل من" icon={User} />
 
         {user.verificationDueAt && !user.phoneVerifiedAt && <section className="glass us-card pf-card"><h2 className="pf-h2">تأیید حساب موقت</h2>
           <p>شماره {user.phone} را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>
