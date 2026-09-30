@@ -82,6 +82,8 @@ try {
   const testWrite = writes.filter(w => w.path === '/accounts/temporary').at(-1).payload;
   assert.equal(testWrite.testAccount, true); assert.equal(testWrite.phone, user.phone); assert.equal(testWrite.username, 'test-doctor');
   await page.goto(`${base}/app/users`);
+  /* بارگذاریِ دوباره تاشو را بسته برمی‌گرداند — دکمهٔ «پایان تست» هم داخلِ همان است. */
+  await page.locator('.us-testing summary').click();
   await page.getByRole('button', { name: 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' }).click();
   await page.getByRole('button', { name: 'فعال‌کردن ساخت حساب آزمایشی' }).waitFor();
   assert.equal(writes.filter(w => w.path === '/accounts/testing-mode').at(-1).payload.enabled, false);
