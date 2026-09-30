@@ -1,7 +1,8 @@
 /* پیام‌رسانِ سازمانی — دوستونه در دسکتاپ، تک‌نما در موبایل. */
 /* ارتفاعِ ثابتِ «صفحه‌نما منهای نوارِ پوسته» — فهرست و پیام‌ها هرکدام خودشان اسکرول می‌شوند و
-   کادرِ نوشتن پایینِ صفحه‌نما می‌ماند (با `100dvh` نوارِ بالا رویش اضافه می‌شد و کادر بیرون می‌افتاد). */
-.ch { position: relative; height: calc(100dvh - var(--shell-h)); min-height: 360px; display: flex; color: var(--text1); }
+   کادرِ نوشتن پایینِ صفحه‌نما می‌ماند (با `100dvh` نوارِ بالا رویش اضافه می‌شد و کادر بیرون می‌افتاد).
+   `--install-h` = بنرِ نصبِ اپ زیرِ نوار، وقتی هست (`Shell.jsx`، R7). */
+.ch { position: relative; height: calc(100dvh - var(--shell-h) - var(--install-h, 0px)); min-height: 360px; display: flex; color: var(--text1); }
 .ch-bg {
   position: fixed; inset: 0; z-index: -1;
   background:

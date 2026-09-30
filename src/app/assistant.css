@@ -1,9 +1,10 @@
 /* دستیارِ هوشمندِ مدیریت — چتِ زندهٔ تمام‌صفحه. */
 /* ⚠️ ارتفاع = صفحه‌نما **منهای نوارِ پوسته** (`--shell-h`)، نه `100dvh`: نوارِ ۶۳ پیکسلی رویش اضافه
    می‌شد و کادرِ پرسش زیرِ لبهٔ صفحه می‌افتاد (بازبینیِ UX ۱۴۰۵/۰۷). ارتفاعِ ثابت + گفتگوی
-   اسکرول‌شونده یعنی کادرِ نوشتن همیشه پایینِ صفحه‌نما چسبیده است. */
+   اسکرول‌شونده یعنی کادرِ نوشتن همیشه پایینِ صفحه‌نما چسبیده است. `--install-h` = بنرِ نصبِ اپ
+   زیرِ نوار، وقتی هست (`Shell.jsx`، R7). */
 .as {
-  position: relative; height: calc(100dvh - var(--shell-h)); min-height: 360px;
+  position: relative; height: calc(100dvh - var(--shell-h) - var(--install-h, 0px)); min-height: 360px;
   display: flex; flex-direction: column; padding: 16px 14px calc(14px + env(safe-area-inset-bottom, 0px)); color: var(--text1);
 }
 .as-bg {

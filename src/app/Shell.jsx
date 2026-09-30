@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import { useConfig } from './config.jsx';
@@ -76,12 +76,31 @@ const dismissed = () => { try { return !!localStorage.getItem(A2HS_KEY); } catch
  */
 function InstallBanner({ onToast }) {
   const [evt, setEvt] = useState(null);
+  const ref = useRef(null);
   useEffect(() => {
     if (dismissed()) return undefined;
     const h = (e) => { e.preventDefault(); setEvt(e); };
     window.addEventListener('beforeinstallprompt', h);
     return () => window.removeEventListener('beforeinstallprompt', h);
   }, []);
+  /* ارتفاعِ بنر (با فاصلهٔ بالایش) در `--install-h` روی ریشه (بازبینیِ خصمانه، R7): صفحه‌های
+     تمام‌قد («پیام‌رسان»، «دستیار») `100dvh - --shell-h` می‌گیرند و بنرِ داخلِ جریان — روی گوشی
+     دوخطی، حدودِ ۸۰ پیکسل — کادرِ نوشتنشان را زیرِ لبهٔ صفحه می‌برد. آن دو صفحه این را هم کم
+     می‌کنند؛ بی‌بنر متغیر برداشته می‌شود و پیش‌فرضِ ۰ می‌ماند. با تغییرِ عرض (چرخشِ گوشی) دوباره
+     اندازه گرفته می‌شود. */
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const measure = () => {
+      const top = parseFloat(getComputedStyle(el).marginTop) || 0;
+      root.style.setProperty('--install-h', `${Math.ceil(el.getBoundingClientRect().height + top)}px`);
+    };
+    measure();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty('--install-h'); };
+  }, [evt]);
   if (!evt) return null;
   const install = async () => {
     evt.prompt();
@@ -94,7 +113,7 @@ function InstallBanner({ onToast }) {
     setEvt(null);
   };
   return (
-    <div className="sh-install" role="region" aria-label="نصبِ اپلیکیشن">
+    <div ref={ref} className="sh-install" role="region" aria-label="نصبِ اپلیکیشن">
       <span className="sh-install-txt">عمل‌یار را روی گوشی نصب کنید — بی‌مرورگر و با یک لمس باز می‌شود.</span>
       <button type="button" className="sh-install-ok" onClick={install}>نصب</button>
       <button type="button" className="sh-install-no" onClick={later}>بعداً</button>
