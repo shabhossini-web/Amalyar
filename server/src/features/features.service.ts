@@ -40,12 +40,14 @@ export async function seedFeatureRows(db: { setting: any; feature: any }, profil
  * می‌شمرد.
  */
 export function eligibleFrom(f: { level: number; staff: boolean; surgeon: boolean; techVisits: boolean }) {
+  const { staff, surgeon, techVisits: hasTechVisits } = f;
   const inTechBand = f.level >= LEVEL.TECH && f.level <= LEVEL.SUPERVISOR;
   return {
     // پرتالِ راننده بدونِ رکوردِ نیرو صفحهٔ خطاست — حتی برای سوپرادمین.
-    transport: f.staff,
-    surgeon: f.surgeon,
-    tech: inTechBand && (!f.staff || f.techVisits) && (!f.surgeon || f.techVisits),
+    transport: staff,
+    surgeon,
+    /* نگهبانِ CI («portals follow permissions») همین جمله را می‌خوانَد — نامِ متغیرها بماند. */
+    tech: inTechBand && (!staff || hasTechVisits) && (!surgeon || hasTechVisits),
   };
 }
 
