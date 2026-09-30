@@ -326,3 +326,9 @@
 .db-phase > .db-postop { margin-top: 0; }
 .db-phase .db-postop > h4 { font-size: 14px; color: var(--brand-text); }
 .db-phase .db-postop > .db-hint { font-size: 11.5px; font-weight: 500; line-height: 1.9; color: var(--text3); }
+
+/* ── سربرگِ شیت: عنوان + «برای کیست» (surgery-13) — همان الگوی پنجرهٔ «بستنِ تصمیم»: خطِ دوم نام و کدِ
+   پرونده، کوچک‌تر و هم‌رنگِ متنِ فرعی. `min-width:0` تا نامِ بلند ضربدر را از سطر بیرون نکند. */
+.vf-sheet-titles { display: grid; gap: 2px; min-width: 0; }
+.vf-sheet-who { font-size: 12.5px; font-weight: 600; line-height: 1.7; color: var(--text2); overflow-wrap: anywhere; }
+.vf-sheet-who bdi { font-variant-numeric: tabular-nums; color: var(--text3); }

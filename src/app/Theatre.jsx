@@ -309,6 +309,9 @@ export default function Theatre() {
             canFollowUp={!!card.can?.followup}
             followLock={card.locks?.followup ?? null}
             already={!!card.visit.dischargeAt}
+            patientName={card.patient?.fullName ?? ''}
+            patientCode={card.patient?.code ?? ''}
+            procedure={card.visit.procedure ?? ''}
             busy={busy === 'discharge'}
             onClose={() => setDischarging(false)}
             onSave={async (f) => {
@@ -1073,7 +1076,7 @@ function DeskSubforms({ subforms, canWrite, canAttach, busy, onAct, onToast, uns
  * است که می‌گوید بیمار رفت و نمی‌گوید در چه حالی — و همان سطر سندِ پرونده
  * می‌شود. سرور هم دوباره همین را می‌سنجد.
  */
-function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = false, canFollowUp = false, followLock = null }) {
+function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = false, canFollowUp = false, followLock = null, patientName = '', patientCode = '', procedure = '' }) {
   const dispositions = useStatusList('disposition');
   const [f, setF] = useState(initial);
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -1092,12 +1095,19 @@ function DischargeDialog({ initial, already, busy, onClose, onSave, clinical = f
   return (
     <Overlay
       backdrop="th-overlay" panel="th-dialog" as="form" from="center"
-      closable={!busy} onClose={onClose} aria-label="ثبتِ ترخیص"
+      closable={!busy} onClose={onClose} aria-label={patientName ? `ترخیصِ ${patientName}` : 'ثبتِ ترخیص'}
       dirty={dirty} onSave="submit" backdropClose={false} history
       onSubmit={(e) => { e.preventDefault(); if (ok && !busy) onSave(f); }}
     >
+      {/* برای کیست؟ (surgery-13) — در موبایل این پنجره کلِ میز را می‌پوشاند؛ نامِ بیمار در عنوان و عمل و
+          کدِ پرونده در خطِ دوم، همان الگوی پنجرهٔ «بستنِ تصمیم». */}
       <header className="th-dialog-head">
-        <b>{already ? 'ویرایشِ ترخیص' : 'ترخیصِ بیمار'}</b>
+        <div className="th-dialog-titles">
+          <b data-dialog-title>{`${already ? 'ویرایشِ ترخیصِ' : 'ترخیصِ'} ${patientName || 'بیمار'}`}</b>
+          {(procedure || patientCode) && (
+            <small data-dialog-sub>{procedure}{procedure && patientCode ? ' · ' : ''}{patientCode && <bdi dir="ltr">{patientCode}</bdi>}</small>
+          )}
+        </div>
         <CloseButton className="th-x" aria-label="بستن"><Close width="18" height="18" /></CloseButton>
       </header>
       {/* وضعیتِ خروج دکمه است نه کشویی: یک لمس، و هر چهار گزینه همیشه

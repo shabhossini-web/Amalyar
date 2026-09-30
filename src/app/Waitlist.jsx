@@ -71,7 +71,7 @@ export default function Waitlist() {
   /* «برنامهٔ عمل»: فرمِ عملِ تازه، گره‌خورده به همان ویزیتِ تصمیم، در حالتِ «هنوز تاریخ ندارد». */
   const plan = (r) => things.show({ type: 'visit', prefill: {
     ...surgeryPrefill({
-      id: r.decision.visitId, patientId: r.patient.id, surgeonId: r.surgeonId ?? null,
+      id: r.decision.visitId, patientId: r.patient.id, patientCode: r.patient.code ?? null, surgeonId: r.surgeonId ?? null,
       chiefComplaint: r.decision.chiefComplaint ?? '', opDate: r.decision.date,
     }, r.patient.fullName),
     undated: true,

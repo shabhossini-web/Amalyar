@@ -69,7 +69,7 @@ const DECISION_HINTS = {
  */
 export function surgeryPrefill(saved, patientName) {
   return {
-    patientId: saved.patientId, patientName: patientName ?? saved.fullName ?? '', kind: 'surgery',
+    patientId: saved.patientId, patientName: patientName ?? saved.fullName ?? '', patientCode: saved.patientCode ?? null, kind: 'surgery',
     surgeonId: saved.surgeonId ?? null,
     decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
   };
@@ -2083,6 +2083,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   };
   const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key));
   const sideKeys = SIDE_KEYS.filter((key) => builtinNodes[key]);
+  /* بیمارِ همین ثبتِ تازه برای سربرگ — پروندهٔ انتخاب‌شده (با کد)، یا نامِ تایپ‌شدهٔ پروندهٔ تازه پس از گامِ ۱. */
+  const typedName = `${f.firstName} ${f.lastName}`.trim();
+  const sheetWho = editing ? null
+    : picked?.fullName ? { name: picked.fullName, code: picked.code ?? prefill?.patientCode ?? null }
+      : mode === 'new' && step > 1 && typedName ? { name: typedName, code: null } : null;
 
   return (
     <AiContext.Provider value={aiCoding}>
@@ -2098,7 +2103,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     >
       <header className="db-sheet-head" ref={sheetHead}>
         {/* نوعِ «عمل» نامِ خودش را دارد (`surgery`/`surgeryNew`ِ واژگان) — فرمِ عملِ مطب «ویزیتِ جدید» می‌نوشت. */}
-        <b data-sheet-title>{editing ? `ویرایشِ ${f.kind === 'surgery' ? t.surgery : t.visit} ${initial.code}` : f.kind === 'surgery' ? t.surgeryNew : t.visitNew}</b>
+        <div className="vf-sheet-titles">
+          <b data-sheet-title>{editing ? `ویرایشِ ${f.kind === 'surgery' ? t.surgery : t.visit} ${initial.code}` : f.kind === 'surgery' ? t.surgeryNew : t.visitNew}</b>
+          {/* برای کیست؟ (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-13): «برنامهٔ عمل» مستقیم گامِ ۳ را باز می‌کند و نامِ
+              بیمار فقط در گامِ ۱ِ پنهان بود. همان الگوی پنجرهٔ «بستنِ تصمیم»: عنوان + خطِ نام و کدِ پرونده.
+              ویرایش این خط را نمی‌خواهد — خلاصهٔ بیمار درست زیرِ سربرگ است. */}
+          {sheetWho && (
+            <small className="vf-sheet-who" data-sheet-patient>
+              {sheetWho.name}{sheetWho.code && <> · <bdi dir="ltr">{sheetWho.code}</bdi></>}
+            </small>
+          )}
+        </div>
         <CloseButton className="db-x" aria-label="بستن"><Close width="18" height="18" /></CloseButton>
       </header>
 

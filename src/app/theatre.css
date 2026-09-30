@@ -297,6 +297,10 @@
 }
 .th-dialog-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .th-dialog-head b { margin-inline-end: auto; font-size: 16px; }
+/* عنوان + «برای کیست» (surgery-13): نامِ بیمار در عنوان، عمل و کدِ پرونده در خطِ دوم. */
+.th-dialog-titles { display: grid; gap: 2px; min-width: 0; margin-inline-end: auto; }
+.th-dialog-titles small { font-size: 12.5px; font-weight: 600; line-height: 1.7; color: var(--text2); overflow-wrap: anywhere; }
+.th-dialog-titles bdi { font-variant-numeric: tabular-nums; color: var(--text3); }
 .th-x {
   display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; cursor: pointer;
   color: var(--text2); background: none; border: 1px solid rgba(var(--veil-rgb), .14);
