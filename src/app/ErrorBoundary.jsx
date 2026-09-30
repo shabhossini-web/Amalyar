@@ -103,7 +103,7 @@ export default class ErrorBoundary extends Component {
               borderRadius: 9, padding: '6px 14px',
             }}
           >
-            {this.state.copied ? 'کپی شد ✓' : 'کپیِ متنِ خطا'}
+            {this.state.copied ? 'کپی شد' : 'کپیِ متنِ خطا'}
           </button>
         </details>
 

@@ -119,7 +119,7 @@ function ProfileTab({ rec, onSave, toast }) {
           'emergencyName', 'emergencyPhone', 'emergencyRelation', 'notes']) delete body[k];
       }
       await onSave(body);
-      toast('پرونده به‌روز شد ✓');
+      toast('پرونده به‌روز شد');
     } catch (e) {
       toast(e.message, true);
     } finally {
@@ -467,7 +467,7 @@ function DocsTab({ rec, reload, toast }) {
     await apiUpload(`/patients/${rec.id}/documents`, fd);
     setTitle('');
     await reload();
-    toast('توضیحِ صوتی ثبت شد ✓');
+    toast('توضیحِ صوتی ثبت شد');
   };
 
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
@@ -502,7 +502,7 @@ function DocsTab({ rec, reload, toast }) {
       });
       setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId(''); setPhase(''); setLinkUser(''); setLinkPass(''); setLinkAuth(false);
       await reload();
-      toast('لینک ثبت شد ✓');
+      toast('لینک ثبت شد');
     } catch (e) {
       toast(e.message, true);
     } finally {
@@ -842,7 +842,7 @@ function NotesTab({ rec, reload, toast }) {
       }
       lastDraftRef.current = null;
       setBody(''); setVisitId('');
-      toast('شرح ثبت شد ✓');
+      toast('شرح ثبت شد');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
@@ -858,7 +858,7 @@ function NotesTab({ rec, reload, toast }) {
         return;
       }
       setEditing(null);
-      toast('نسخهٔ تازه ثبت شد ✓ (نسخهٔ قبلی در تاریخچه می‌ماند)');
+      toast('نسخهٔ تازه ثبت شد (نسخهٔ قبلی در تاریخچه می‌ماند)');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
@@ -1171,7 +1171,7 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
     try {
       await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
       window.dispatchEvent(new Event(WORK_CHANGED));
-      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد ✓') : 'یادآوری به فردا افتاد');
+      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
       await onActed();
     } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
   };
@@ -1400,7 +1400,7 @@ function Pathway({ patientId, toast }) {
     setBusy(step.id);
     try {
       await api(`/pathway/steps/${step.id}`, { method: 'PATCH', body: { status } });
-      toast(status === 'done' ? 'مرحله انجام شد ✓' : 'مرحله رد شد');
+      toast(status === 'done' ? 'مرحله انجام شد' : 'مرحله رد شد');
       await load();
     } catch (e) { toast(e?.message || 'ثبت نشد', true); } finally { setBusy(0); }
   };
@@ -1659,12 +1659,12 @@ export default function PatientRecord() {
           load();
           /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
           if (opts?.openSurgery) {
-            say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+            say('تصمیم ثبت شد؛ حالا فرمِ عمل را برای همین بیمار پر کنید');
             /* همان پیوندِ داشبورد — شکایتِ اولیه از ویزیتِ تصمیم مشتق می‌شود. */
             setTimeout(() => things.show({ type: 'visit', prefill: surgeryPrefill(saved, rec.fullName) }), 400);
             return;
           }
-          say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
+          say(wasEdit ? `${t.visit} ویرایش شد` : `${t.visit} ثبت شد`);
         }}
       />
 
@@ -1710,7 +1710,7 @@ function RefSummary({ rec, toast }) {
   };
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(text); toast('کپی شد ✓'); }
+    try { await navigator.clipboard.writeText(text); toast('کپی شد'); }
     catch { toast('کپی نشد — دستی انتخاب کنید', true); }
   };
 
@@ -1718,7 +1718,7 @@ function RefSummary({ rec, toast }) {
     setBusy(true);
     try {
       await api(`/patients/${rec.id}/notes`, { method: 'POST', body: { kind: 'consult', body: text } });
-      toast('به‌عنوانِ «مشاوره» در پرونده ثبت شد ✓');
+      toast('به‌عنوانِ «مشاوره» در پرونده ثبت شد');
       setText(null);
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };

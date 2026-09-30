@@ -191,7 +191,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
       setC({ kind: 'service', title: '', quantity: '1', unitPrice: '', serviceCode: '', codeSystem: '', itemId: null, lotId: null, stockEffect: 'virtual' });
       setLots([]);
       await load(); onChanged?.();
-      onToast('قلم اضافه شد ✓');
+      onToast('قلم اضافه شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -215,7 +215,7 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
       });
       setP({ amount: '', method: 'cash', dateJ: todayJStr(), reference: '', bankAccountId: '', receivedById: '' });
       await load(); onChanged?.();
-      onToast('پرداخت ثبت شد ✓');
+      onToast('پرداخت ثبت شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -573,7 +573,7 @@ function PricingBar({ data, busy, setBusy, onToast, visitId, reload }) {
         body: model === 'global' ? { pricingModel: 'global', globalAmount: amountToman } : { pricingModel: 'coded' },
       });
       await reload();
-      onToast(model === 'global' ? 'مدلِ گلوبال با مبلغِ توافقی ذخیره شد ✓' : 'مدل به «با کد» برگشت — جمعِ اقلام ملاک است');
+      onToast(model === 'global' ? 'مدلِ گلوبال با مبلغِ توافقی ذخیره شد' : 'مدل به «با کد» برگشت — جمعِ اقلام ملاک است');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -668,12 +668,12 @@ function Settlement({ visitId, onToast, onChanged }) {
         ) : (
           <>
             <button type="button" className="db-submit" disabled={busy}
-                    onClick={() => act(`/visits/${visitId}/settlement`, 'تسویه محاسبه شد ✓')}>
+                    onClick={() => act(`/visits/${visitId}/settlement`, 'تسویه محاسبه شد')}>
               {saved ? 'محاسبهٔ دوباره' : 'محاسبه و ذخیره'}
             </button>
             {saved && (
               <button type="button" className="bl-mini" disabled={busy}
-                      onClick={() => act(`/visits/${visitId}/settlement/finalize`, 'تسویه نهایی شد ✓')}>
+                      onClick={() => act(`/visits/${visitId}/settlement/finalize`, 'تسویه نهایی شد')}>
                 نهایی‌کردن
               </button>
             )}
@@ -711,7 +711,7 @@ function Payouts({ visitId, onToast }) {
           amount: row.remaining, bankAccountId: bankAccountId || undefined,
         },
       });
-      await load(); onToast('پرداختِ سهم ثبت شد ✓');
+      await load(); onToast('پرداختِ سهم ثبت شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -727,7 +727,7 @@ function Payouts({ visitId, onToast }) {
             <button type="button" disabled={busy} onClick={() => pay(r, banks[0]?.id)}>
               پرداختِ {money(r.remaining)}
             </button>
-          ) : <em>تسویه ✓</em>}
+          ) : <em>تسویه شد</em>}
         </div>
       ))}
     </div>

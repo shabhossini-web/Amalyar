@@ -109,7 +109,7 @@ export default function IntakeAdmin() {
 
   const copyLink = async (token) => {
     const url = `${window.location.origin}/r/${token}`;
-    try { await navigator.clipboard.writeText(url); setToast('لینک کپی شد ✓'); }
+    try { await navigator.clipboard.writeText(url); setToast('لینک کپی شد'); }
     catch { setToast(url); }
   };
 
@@ -888,7 +888,7 @@ function SmsSheet({ link, onClose, onDone }) {
          هیچ پیامکی نرفته — و همان اشتباه روی سرورِ بدونِ کلید تکرار می‌شد. */
       onDone(r.stub
         ? 'سرویسِ پیامک پیکربندی نشده — چیزی ارسال نشد'
-        : r.sent ? `لینک به ${faDigits(r.to)} پیامک شد ✓` : 'ارسال انجام نشد — شماره یا سرویس را بررسی کنید');
+        : r.sent ? `لینک به ${faDigits(r.to)} پیامک شد` : 'ارسال انجام نشد — شماره یا سرویس را بررسی کنید');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 
@@ -981,7 +981,7 @@ function LinkSheet({ initial, onClose, onDone }) {
           bankAccountId: needsBank && bankId ? Number(bankId) : 0,
         },
       });
-      onDone(editing ? 'لینک ویرایش شد ✓' : 'لینک ساخته شد ✓');
+      onDone(editing ? 'لینک ویرایش شد' : 'لینک ساخته شد');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
 

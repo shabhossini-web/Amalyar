@@ -104,7 +104,7 @@ export function OpDefaultSave({ text, typed = true, noTarget, procedureName, mis
       const r = await onSave(title.trim() || undefined);
       onToast(r?.duplicate
         ? `همین متن از قبل پیش‌فرضِ «${procedureName}» است`
-        : `به پیش‌فرض‌های «${procedureName}» اضافه شد ✓`);
+        : `به پیش‌فرض‌های «${procedureName}» اضافه شد`);
       close();
     } catch (e) {
       onToast(e?.message || 'به پیش‌فرض‌ها اضافه نشد', true);

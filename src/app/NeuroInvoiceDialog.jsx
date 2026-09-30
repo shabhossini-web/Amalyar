@@ -100,7 +100,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
     try {
       await api(`${root}/neuro-apply`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, consumables: payloadCons(), returnUnusedStock, replace: replace ? lump.map((c) => c.id) : [] } });
       await reload();
-      onToast(`${fa(ids.length)} خدمت و ${fa(cons.length)} مصرفی روی صورت‌حساب نشست ✓`);
+      onToast(`${fa(ids.length)} خدمت و ${fa(cons.length)} مصرفی روی صورت‌حساب نشست`);
       onClose();
       if (thenIssue) onIssue?.(printWindow);
     } catch (e) { printWindow?.close(); setErr(e.message); } finally { setBusy(false); }
@@ -114,7 +114,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
         invoice_neuro_defaults: ids.join(','),
         invoice_neuro_consumables: JSON.stringify(payloadCons().map(({ chargeId, lotId, ...c }) => c)),
       } } });
-      onToast('پیش‌فرضِ شرکت ذخیره شد ✓ — از این به بعد همین‌ها تیک دارند');
+      onToast('پیش‌فرضِ شرکت ذخیره شد — از این به بعد همین‌ها تیک دارند');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 

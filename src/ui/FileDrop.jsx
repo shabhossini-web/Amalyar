@@ -14,7 +14,7 @@
  * - سقفِ حجم این‌جا هم چک می‌شود تا کاربر پیشِ آپلود بفهمد، نه بعدِ انتظار.
  * - **`onAllDone({ ok, failed })`** پایانِ هر دورِ صف است، نه «همه رفت»: `ok` = چند فایل در
  *   همین دور رفت، `failed` = چند فایلِ فهرست هنوز خطا دارد (شکستِ ارسال، یا حجمِ بیش از سقف که
- *   اصلاً فرستاده نشد). ⚠️ تا بازبینیِ خصمانه (R2) بی‌آرگومان بود و هر مصرف‌کننده روی آن
+ *   اصلاً فرستاده نشد). هشدار: تا بازبینیِ خصمانه (R2) بی‌آرگومان بود و هر مصرف‌کننده روی آن
  *   «ثبت شد» می‌گفت — حتی وقتی همهٔ فایل‌ها خطا خورده بودند؛ پنجرهٔ گزارش بسته می‌شد و خطا گم.
  *   «ثبت شد» فقط با `ok && !failed`.
  */
@@ -153,7 +153,7 @@ export default function FileDrop({
                 <div className="fdrop-meta">
                   <b title={i.name}>{i.name}</b>
                   <small>
-                    {i.status === 'done' ? 'ارسال شد ✓'
+                    {i.status === 'done' ? 'ارسال شد'
                       : i.status === 'uploading' ? 'در حالِ ارسال…'
                         : i.status === 'error' ? i.error
                           : `در صف · ${fmtSize(i.size)}`}
@@ -213,7 +213,7 @@ export default function FileDrop({
               <div className="fdrop-meta">
                 <b title={i.name}>{i.name}</b>
                 <small>
-                  {i.status === 'done' ? 'ارسال شد ✓'
+                  {i.status === 'done' ? 'ارسال شد'
                     : i.status === 'uploading' ? 'در حالِ ارسال…'
                       : i.status === 'error' ? i.error
                         : `در صف · ${fmtSize(i.size)}`}

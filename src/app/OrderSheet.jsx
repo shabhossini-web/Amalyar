@@ -157,7 +157,7 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       // یادداشتِ خالی برای «بررسی شد» مجاز است؛ برچسبِ پیش‌فرض را **سرور** می‌گذارد
       // (قانون یک‌جا بماند، وگرنه دو لایه دو حرفِ متفاوت می‌زنند).
       await api(`/orders/${kind}/${order.id}/review`, { method: 'POST', body: { status, reviewNote: note } });
-      onToast(status === 'reviewed' ? 'ثبت شد — بررسی ثبت شد ✓' : 'ثبت شد — بیمار باید دوباره بفرستد');
+      onToast(status === 'reviewed' ? 'ثبت شد — بررسی ثبت شد' : 'ثبت شد — بیمار باید دوباره بفرستد');
       onSaved();
       onClose();
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
@@ -193,9 +193,9 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
         : await api(`/orders/${kind}`, { method: 'POST', body: body() });
       if (thenSend) {
         const res = await api(`/orders/${kind}/${saved.id}/send`, { method: 'POST' });
-        onToast(res?.stub ? 'ثبت شد ✓ (سرویسِ پیامک آزمایشی است)' : `لینک برای بیمار فرستاده شد ✓ ${res?.to ?? ''}`);
+        onToast(res?.stub ? 'ثبت شد (سرویسِ پیامک آزمایشی است)' : `لینک برای بیمار فرستاده شد${res?.to ? ` به ${res.to}` : ''}`);
       } else {
-        onToast('ثبت شد ✓');
+        onToast('ثبت شد');
       }
       onSaved();
       onClose();
@@ -292,7 +292,7 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
                 fdv.append('title', `توضیحِ صوتی — ${meta.fa}${f.specialty ? ` — ${f.specialty}` : ''}`.slice(0, 120));
                 if (visitId) fdv.append('visitId', String(visitId));
                 await apiUpload(`/patients/${patientId}/documents`, fdv);
-                onToast('توضیحِ صوتی در مدارکِ پرونده ثبت شد ✓');
+                onToast('توضیحِ صوتی در مدارکِ پرونده ثبت شد');
               }}
             />
           </div>

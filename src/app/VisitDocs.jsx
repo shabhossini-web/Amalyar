@@ -85,7 +85,7 @@ export default function VisitDocs({ patientId, visitId, phase = null, phaseFa = 
         },
       });
       setLink(EMPTY_LINK);
-      onToast?.('لینک ثبت شد ✓');
+      onToast?.('لینک ثبت شد');
       load();
     } catch (e) { onToast?.(e.message, true); } finally { setSaving(false); }
   };
@@ -181,7 +181,7 @@ export default function VisitDocs({ patientId, visitId, phase = null, phaseFa = 
             disabled={off}
             onSave={async (file) => {
               await upload(file, `توضیحِ صوتی — ${phase ? phaseFa : catFa[cat]}`);
-              onToast?.('توضیحِ صوتی ثبت شد ✓');
+              onToast?.('توضیحِ صوتی ثبت شد');
               load();
             }}
           />

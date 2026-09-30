@@ -143,14 +143,14 @@ export default function Dispatch() {
     newRun && guard(async () => {
       await api('/routes', { method: 'POST', body: { staffId: Number(newRun), runDate: onIso } });
       setNewRun('');
-    }, 'مسیر ساخته شد ✓');
+    }, 'مسیر ساخته شد');
 
   const addStop = (runId, body) =>
-    guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body }), 'توقف اضافه شد ✓');
+    guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body }), 'توقف اضافه شد');
 
   /** توقفِ بی‌راننده را به مسیرِ یک نیرو می‌سپارد. */
   const assignStop = (stopId, runId) =>
-    guard(() => api(`/routes/stops/${stopId}/assign`, { method: 'POST', body: { runId: Number(runId) } }), 'به مسیر سپرده شد ✓');
+    guard(() => api(`/routes/stops/${stopId}/assign`, { method: 'POST', body: { runId: Number(runId) } }), 'به مسیر سپرده شد');
 
   const patchStop = (id, body) => guard(() => api(`/routes/stops/${id}`, { method: 'PATCH', body }));
   /* ⚠️ ساعتِ توقف هم باید از همان دروازهٔ اعتبارسنجی رد شود؛ پیش از این متنِ
@@ -171,7 +171,7 @@ export default function Dispatch() {
     await apiUpload(`/routes/stops/${stopId}/proofs`, fd);
   };
 
-  const addTo = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers`, { method: 'POST', body: { transferIds: [tid] } }), 'بار به توقف اضافه شد ✓');
+  const addTo = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers`, { method: 'POST', body: { transferIds: [tid] } }), 'بار به توقف اضافه شد');
   const move = (run, i, dir) => {
     const ids = run.stops.map((s) => s.id);
     const j = i + dir;
@@ -192,7 +192,7 @@ export default function Dispatch() {
   const copy = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      setToast('متن کپی شد ✓');
+      setToast('متن کپی شد');
     } catch {
       // Safariِ قدیمی و بسترهای بدونِ clipboard API: کاربر خودش انتخاب کند
       setToast('کپیِ خودکار ممکن نشد — متن را دستی انتخاب کنید');
@@ -320,7 +320,7 @@ export default function Dispatch() {
             <div className={`dp-loose${loose.length ? ' has' : ''}`}>
               <b>بارِ بی‌مسیر {loose.length > 0 && <i>{faNum(loose.length)}</i>}</b>
               {loose.length === 0
-                ? <span className="dp-none ok">همهٔ بارِ امروز روی مسیر است ✓</span>
+                ? <span className="dp-none ok">همهٔ بارِ امروز روی مسیر است</span>
                 : loose.map((t) => (
                   <span key={t.id} className="dp-chip cargo" title={t.lines.map((l) => l.itemName).join('، ')}>
                     <em dir="ltr">{t.code}</em>

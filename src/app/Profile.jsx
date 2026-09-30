@@ -58,7 +58,7 @@ export default function Profile() {
       });
       setSelfie('');
       setRetaking(false);
-      setToast('پروفایل ذخیره شد ✓');
+      setToast('پروفایل ذخیره شد');
     } catch (e2) {
       setToast(e2.message);
     } finally {
@@ -74,7 +74,7 @@ export default function Profile() {
       await changePassword(curPw, newPw);
       setCurPw('');
       setNewPw('');
-      setToast('رمز عبور تغییر کرد ✓');
+      setToast('رمز عبور تغییر کرد');
     } catch (e2) {
       setPwErr(e2.message);
     } finally {

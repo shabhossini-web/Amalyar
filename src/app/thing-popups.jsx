@@ -148,12 +148,12 @@ export function ThingPopups({ things, onVisitSaved }) {
                  فقط از همین prefill می‌آید). مکث تا فرمِ قبلی پیاده شود و این یکی
                  با وضعیتِ تازه سوار شود. */
               if (opts?.openSurgery && saved?.id) {
-                say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+                say('تصمیم ثبت شد؛ حالا فرمِ عمل را برای همین بیمار پر کنید');
                 setTimeout(() => things.show({ type: 'visit', prefill: surgeryPrefill(saved) }), 400);
                 return;
               }
               const word = saved?.kind === 'surgery' ? t.surgery : t.visit;
-              say(wasEdit ? `${word} ویرایش شد ✓` : `${word} ثبت شد ✓`);
+              say(wasEdit ? `${word} ویرایش شد` : `${word} ثبت شد`);
             }}
             onToast={(m) => say(m)}
           />
@@ -218,7 +218,7 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
  * (چندصفحه‌ای، با صف و تلاشِ دوباره). رویدادِ `report.uploaded` کار را می‌بندد؛ بعد از
  * آخرین فایل پنجره بسته و فهرست تازه می‌شود.
  *
- * ⚠️ فقط وقتی **همه** رفتند (بازبینیِ خصمانه، R2): تا دیروز پایانِ صف — حتی وقتی هر فایل خطا
+ * هشدار: فقط وقتی **همه** رفتند (بازبینیِ خصمانه، R2): تا دیروز پایانِ صف — حتی وقتی هر فایل خطا
  * خورده بود یا از سقفِ حجم بزرگ‌تر بود — پنجره را می‌بست و «ثبت شد» می‌گفت؛ خطا با پنجره گم
  * می‌شد. حالا با خطا پنجره می‌ماند و خطای هر فایل با «تلاشِ دوباره» جلوی چشم است. اگر بخشی رفته
  * و کاربر خودش پنجره را ببندد، فهرست تازه می‌شود و توست می‌گوید چند فایل رفت و چند نه.
@@ -294,7 +294,7 @@ function ReminderPop({ row, item, onClose, onActed, toast }) {
     setBusy(true);
     try {
       await api(`/reminders/${r.id}/${what}`, { method: 'POST', ...(what === 'cancel' ? { body: { reason: 'لغو از پروندهٔ بیمار' } } : {}) });
-      toast(what === 'retry' ? 'دوباره در صف نشست ✓' : 'پیام لغو شد ✓');
+      toast(what === 'retry' ? 'دوباره در صف نشست' : 'پیام لغو شد');
       await onActed();
       onClose();
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
@@ -373,7 +373,7 @@ function ApptPop({ id, item, onClose, onActed, toast, onStarted }) {
     setBusy(true);
     try {
       await api(`/frontdesk/appointments/${id}/status`, { method: 'POST', body: { status, ...extra } });
-      toast('وضعیتِ نوبت ثبت شد ✓');
+      toast('وضعیتِ نوبت ثبت شد');
       await onActed();
       onClose();
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
