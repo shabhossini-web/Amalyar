@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
-import { Back, Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
+import { Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -45,7 +45,6 @@ export default function Inventory() {
   const [tab, setTab] = useState('lots');
   const [openTransfers, setOpenTransfers] = useState(0);
 
-  useEffect(() => { document.title = 'عمل‌یار — انبار'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2600);
@@ -83,13 +82,7 @@ export default function Inventory() {
   return (
     <div className="iv">
       <div className="iv-bg" aria-hidden="true" />
-      <header className="iv-head">
-        <Link to="/app" className="iv-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>انبار</h1>
-          <p>موجودی جمعِ دفترِ حرکت است — هر ورود و مصرف ردیفِ خودش را دارد و پاک نمی‌شود.</p>
-        </div>
-      </header>
+      <PageHeader tool="inventory" sub="موجودی جمعِ دفترِ حرکت است — هر ورود و مصرف ردیفِ خودش را دارد و پاک نمی‌شود." />
 
       <Tabs
         label="بخش‌های انبار"

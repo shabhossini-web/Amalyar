@@ -2,7 +2,6 @@ import HospitalDirectory from './HospitalDirectory.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { createPortal } from 'react-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/jalali.js';
@@ -10,7 +9,8 @@ import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
 import './users.css'; // کلیدِ دوحالتهٔ `us-switch` — همان کلیدِ بخش‌های «سایت» (قانونِ ۲۱: صریح ایمپورت)
 import './def-acts.css';
-import { Back, Check, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import { Check, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -322,7 +322,6 @@ export default function Definitions() {
     el?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
   }, [tab, merging, tabSig]);
 
-  useEffect(() => { document.title = 'عمل‌یار — تعاریف پایه'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2400);
@@ -369,13 +368,7 @@ export default function Definitions() {
   return (
     <div className="df">
       <div className="df-bg" aria-hidden="true" />
-      <header className="df-head">
-        <Link to="/app" className="df-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>تعاریف پایه</h1>
-          <p>هر موجودیت یک‌بار این‌جا تعریف می‌شود و همه‌جای سامانه از همین تعریف استفاده می‌کند.</p>
-        </div>
-      </header>
+      <PageHeader tool="definitions" sub="هر موجودیت یک‌بار این‌جا تعریف می‌شود و همه‌جای سامانه از همین تعریف استفاده می‌کند." />
 
       <Tabs
         label="بخش‌های تعاریفِ پایه"

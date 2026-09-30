@@ -1,6 +1,7 @@
 /* ── داشبوردِ مدیریت — مراجعات ── */
-.db-shell { max-width: 560px; }
-.db-shell .us-head h1 { font-size: 17px; white-space: nowrap; }
+/* عرضِ صفحه = یکی از دو عرضِ استاندارد (shell-15): کارت‌ها ستونِ «فرم»، جدول «فهرست». `--page-w` را
+   سربرگ (`PageHeader`) و نوارِ تب هم می‌خوانند؛ ۴۰ پیکسل = حاشیهٔ دوطرفهٔ `.lx-shell`. */
+.db-shell { --page-w: var(--maxw-form); max-width: calc(var(--page-w) + 40px); }
 
 /* آمارِ بالای صفحه */
 /* تعدادِ کارت‌ها متغیر است (ماندهٔ کل فقط وقتی بدهی هست ظاهر می‌شود)،
@@ -289,7 +290,7 @@ a.db-ico { text-decoration: none; }
 /* ── نمای جدولیِ دسکتاپ (بازبینیِ UX، global-04 + company-13) ──
    یک ردیف برای هر مراجعه؛ همان داده و همان کارهای کارت. پوسته در این نما پهن می‌شود (کارت‌ها
    ستونِ ۵۶۰ پیکسلی بودند و دوسومِ صفحهٔ دسکتاپ خالی می‌ماند). */
-.db-shell.is-table { max-width: 1240px; }
+.db-shell.is-table { --page-w: var(--maxw); }
 .db-tablewrap {
   border-radius: 16px; border: 1px solid rgba(var(--brand-soft-rgb), .16);
   background: rgba(var(--surface-rgb), .55);

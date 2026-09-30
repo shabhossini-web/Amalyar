@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import { toEnDigits } from '../lib/identity.js';
 import { faTime } from '../lib/time.js';
 import JGrid from './JGrid.jsx';
 import TimePick from '../ui/TimePick.jsx';
-import { ChevronEnd, Plus, Trash } from '../ui/icons.jsx';
+import { Plus, Trash } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import './schedule.css';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -58,7 +58,6 @@ export default function Schedule() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  useEffect(() => { document.title = 'عمل‌یار — برنامهٔ کاری'; }, []);
 
   const loadDefs = useCallback(async () => {
     try {
@@ -164,13 +163,7 @@ export default function Schedule() {
     <div className="sc">
       <div className="sc-bg" aria-hidden="true" />
 
-      <header className="sc-head">
-        <Link to="/app" className="sc-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>برنامهٔ کاری</h1>
-          <p>روزها و ساعت‌هایی که بیمار می‌تواند نوبت بگیرد</p>
-        </div>
-      </header>
+      <PageHeader tool="schedule" sub="روزها و ساعت‌هایی که بیمار می‌تواند نوبت بگیرد" />
 
       <section className="sc-card">
         <div className="sc-title">

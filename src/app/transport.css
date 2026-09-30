@@ -1,7 +1,8 @@
 /* پرتالِ تیمِ حمل‌ونقل.
    موبایل‌اول: این صفحه پشتِ فرمان و در حیاطِ بیمارستان باز می‌شود، نه پشتِ میز.
    پس دکمه‌ها بزرگ‌اند و شماره‌ها لمسیِ tel: هستند. */
-.tr { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و کارت‌ها از `--page-w` می‌خوانند. */
+.tr { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .tr-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -10,24 +11,15 @@
     var(--bg);
 }
 
-.tr-head { max-width: 940px; margin: 0 auto 14px; }
-.tr-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.tr-back:hover { color: var(--brand-2); }
-.tr-head h1 { font-size: 20px; font-weight: 900; }
-.tr-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
-
 .tr-err {
-  display: flex; align-items: center; gap: 7px; max-width: 940px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 
 .tr-sum {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-  max-width: 940px; margin: 12px auto;
+  max-width: var(--page-w); margin: 12px auto;
 }
 .tr-sum div {
   display: grid; gap: 2px; padding: 9px; text-align: center; border-radius: 12px;
@@ -37,7 +29,7 @@
 .tr-sum span { font-size: 10.5px; color: var(--text3); }
 .tr-sum .warn b { color: var(--amber-text); }
 
-.tr-list { display: grid; gap: 11px; max-width: 940px; margin: 0 auto; }
+.tr-list { display: grid; gap: 11px; max-width: var(--page-w); margin: 0 auto; }
 .tr-empty {
   padding: 26px 16px; text-align: center; font-size: 13px; color: var(--text3);
   border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
@@ -172,6 +164,6 @@
 @media (prefers-reduced-motion: reduce) { .tr-toast { transition: none; } }
 
 @media (max-width: 560px) {
-  .tr { padding: 12px 10px 32px; }
+  .tr { padding: 20px 10px 32px; }
   .tr-card { padding: 11px; }
 }

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { J_MONTHS, faDate, jStrToIso, jToFa, todayJStr, toEnDigits } from '../lib/jalali.js';
 import { useConfig, useTerms } from './config.jsx';
 import JDate from './JDate.jsx';
 import './accounting.css';
-import { Alert, Bank, Book, Calendar, Chart, ChevronEnd, Doctor, Money, Pencil, Plus, Users } from '../ui/icons.jsx';
+import { Alert, Bank, Book, Calendar, Chart, Doctor, Money, Pencil, Plus, Users } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 
@@ -27,7 +27,6 @@ export default function Accounting() {
   const [tab, setTab] = useState('report');
   const [toast, setToast] = useState('');
 
-  useEffect(() => { document.title = 'عمل‌یار — حسابداری'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 3200);
@@ -37,13 +36,7 @@ export default function Accounting() {
   return (
     <div className="ac">
       <div className="ac-bg" aria-hidden="true" />
-      <header className="ac-head">
-        <Link to="/app" className="ac-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>حسابداری</h1>
-          <p>قاعده‌ها این‌جا تعریف می‌شوند؛ تقسیمِ سهمِ هر عمل در صورت‌حسابِ همان مراجعه است.</p>
-        </div>
-      </header>
+      <PageHeader tool="accounting" sub="قاعده‌ها این‌جا تعریف می‌شوند؛ تقسیمِ سهمِ هر عمل در صورت‌حسابِ همان مراجعه است." />
 
       <Tabs
         label="بخش‌های حسابداری"

@@ -10,7 +10,7 @@
   position: relative;              /* قرصِ لغزان absolute نسبت به همین می‌نشیند */
   display: flex;
   gap: 8px;
-  max-width: 940px;
+  max-width: var(--page-w);        /* هم‌عرضِ محتوای صفحه (shell-15)، نه ستونِ ثابتِ ۹۴۰ پیکسلی */
   margin: 0 auto 14px;
 }
 

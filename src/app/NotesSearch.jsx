@@ -7,8 +7,8 @@ import Pick from '../ui/Pick.jsx';
 import { useStagger } from '../ui/stagger.js';
 import './launcher.css'; /* lx-toast */
 import './notes-search.css';
-import { Alert, Back, Search } from '../ui/icons.jsx';
-import { useToolTitle } from './tools.jsx';
+import { Alert, Search } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
 import { useStatusList, useTerms } from './config.jsx';
 
@@ -56,8 +56,6 @@ export default function NotesSearch() {
     } catch (e) { setAiErr(e.message); } finally { setAiBusy(false); }
   };
 
-  /* نام و آیکون همان کاشی (`NoteSearch`) — `Book` آیکونِ کاشیِ دیگری بود (قانونِ ۲۴ و W3.7). */
-  const { label: title, icon: TitleIcon } = useToolTitle('notes');
   useEffect(() => {
     Promise.all([
       api('/procedure-types').catch(() => []),
@@ -99,11 +97,8 @@ export default function NotesSearch() {
   return (
     <div className="ns">
       <div className="ns-bg" aria-hidden="true" />
-      <header className="ns-head">
-        <Link to="/app" className="ns-back"><Back width="15" height="15" /> سامانه</Link>
-        <h1>{TitleIcon && <TitleIcon width="20" height="20" aria-hidden="true" />} {title}</h1>
-        <p>جستجو در همهٔ شرح‌های پرونده‌ها — با نوعِ شرح، نوعِ عمل، تشخیص، موضوع و متن.</p>
-      </header>
+      {/* نام و آیکون همان کاشی (`NoteSearch`) — `Book` آیکونِ کاشیِ دیگری بود (قانونِ ۲۴ و W3.7). */}
+      <PageHeader tool="notes" sub="جستجو در همهٔ شرح‌های پرونده‌ها — با نوعِ شرح، نوعِ عمل، تشخیص، موضوع و متن." />
 
       {aiOn && (
         <section className="ns-ai" aria-label="دستیارِ جستجوی بالینی">

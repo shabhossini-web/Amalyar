@@ -12,7 +12,8 @@ import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
 import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import { Arrive, Close, Money, Phone, Plus, Search } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
+import { Close, Money, Phone, Plus, Search } from '../ui/icons.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import CancelReason from '../ui/CancelReason.jsx';
 import './launcher.css';
@@ -107,7 +108,6 @@ export default function FrontDesk() {
     } catch { return {}; }
   }, []);
 
-  useEffect(() => { document.title = 'میزِ پذیرش — عمل‌یار'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const id = setTimeout(() => setToast(''), toast.length > 40 ? 4500 : 2200);
@@ -213,11 +213,8 @@ export default function FrontDesk() {
   return (
     <div className="fd">
       <div className="df-bg" />
-      <header className="fd-head">
-        <div>
-          <h1><Arrive width="19" height="19" aria-hidden="true" /> میزِ پذیرش</h1>
-          <p>{faDate(iso)}{data?.isToday ? ' — امروز' : ''}</p>
-        </div>
+      {/* تا بازبینیِ UX (shell-15) میزِ پذیرش اصلاً بازگشت نداشت؛ حالا همان سربرگِ همهٔ صفحه‌ها. */}
+      <PageHeader tool="frontdesk" sub={`${faDate(iso)}${data?.isToday ? ' — امروز' : ''}`}>
         <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
         <button type="button" className="fd-today" onClick={() => setJday(todayJStr())}>امروز</button>
         {/* بیمارِ بدونِ نوبت — تصمیمِ مالک ۱۴۰۵/۰۶/۳۰: «ممکن است حضوری بیاید که
@@ -233,7 +230,7 @@ export default function FrontDesk() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام، کدِ پرونده یا شماره" aria-label="جستجوی نام، کدِ پرونده یا شماره" />
           {q && <button type="button" className="fd-find-x" onClick={() => setQ('')} aria-label="پاک‌کردنِ جستجو"><Close width="13" height="13" /></button>}
         </label>
-      </header>
+      </PageHeader>
 
       {err && err.status !== 403 && <div className="fd-err" role="alert">{err.message}</div>}
 

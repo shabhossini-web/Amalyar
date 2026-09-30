@@ -2,6 +2,8 @@
 .iv {
   min-height: 100vh; background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+  /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و بلوک‌ها از همین می‌خوانند. */
+  --page-w: var(--maxw);
 }
 .iv * { box-sizing: border-box; }
 .iv-bg {
@@ -12,22 +14,12 @@
 }
 .iv > *:not(.iv-bg) { position: relative; }
 
-.iv-head { display: flex; align-items: flex-start; gap: 14px; max-width: 940px; margin: 0 auto 18px; }
-.iv-back {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  color: var(--text1); text-decoration: none; font-size: 12px;
-  padding: 9px 13px; border-radius: 11px;
-  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
-}
-.iv-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
-.iv-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
-
 /* ⚠️ سه‌ستونهٔ ثابت نه: چهار کارت روی سه ستون یعنی کارتِ چهارم تنها در ردیفِ
    دوم می‌ماند و کج به‌نظر می‌رسد — همان چیزی که مالکِ محصول در موبایل دید.
    با auto-fit، کارت‌ها خودشان بینِ دو و سه ستون پخش می‌شوند. */
 .iv-stats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 9px; max-width: 940px; margin: 0 auto 14px;
+  gap: 9px; max-width: var(--page-w); margin: 0 auto 14px;
 }
 .iv-stats > div {
   padding: 13px 14px; border-radius: 14px; text-align: center;
@@ -40,7 +32,7 @@
 
 .iv-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
-  max-width: 940px; margin: 0 auto 12px;
+  max-width: var(--page-w); margin: 0 auto 12px;
 }
 .iv-search {
   flex: 1 1 240px; min-width: 0; padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 13px;
@@ -59,7 +51,7 @@
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
 
-.iv-list { display: grid; gap: 9px; max-width: 940px; margin: 0 auto; }
+.iv-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .iv-empty {
   padding: 26px 16px; text-align: center; font-size: 12.5px; color: var(--text3);
   border-radius: 15px; background: rgba(var(--surface-rgb), .55); border: 1px dashed rgba(var(--brand-soft-rgb), .2);

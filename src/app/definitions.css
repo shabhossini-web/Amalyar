@@ -10,7 +10,12 @@
   /* `clip` نه `hidden`: `hidden` صفحه را ظرفِ اسکرول می‌کند و هر `position: sticky`ِ درونش
      (فهرستِ پرشِ «تنظیمات») می‌میرد. مرورگری که `clip` نمی‌شناسد همان `hidden` را نگه می‌دارد. */
   overflow-x: clip;
+  /* عرضِ محتوا = یکی از دو عرضِ استاندارد (shell-15): فهرست/جدول `--maxw`، و صفحهٔ فرم‌گونه
+     (تنظیمات، سایت) با `.df-form` ستونِ `--maxw-form`. سربرگ (`PageHeader`) و نوارِ تب همین را
+     می‌خوانند، پس لبه‌های سربرگ و محتوا همیشه یکی‌اند. */
+  --page-w: var(--maxw);
 }
+.df-form { --page-w: var(--maxw-form); }
 .df * { box-sizing: border-box; }
 .df-bg {
   position: fixed; inset: 0; pointer-events: none; opacity: .3;
@@ -25,17 +30,7 @@
    بدهد برنده است — بی‌وابستگی به ترتیبِ بارشدنِ CSSِ چانک‌ها. */
 :where(.df > :not(.df-bg)) { position: relative; }
 
-.df-head { display: flex; align-items: flex-start; gap: 14px; max-width: 900px; margin: 0 auto 18px; }
-.df-back {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  color: var(--text1); text-decoration: none; font-size: 12px;
-  padding: 9px 13px; border-radius: 11px;
-  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
-}
-.df-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
-.df-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
-
-.df-tabs { display: flex; gap: 6px; overflow-x: auto; max-width: 900px; margin: 0 auto 14px; padding-bottom: 3px; }
+.df-tabs { display: flex; gap: 6px; overflow-x: auto; max-width: var(--page-w); margin: 0 auto 14px; padding-bottom: 3px; }
 .df-tabs button {
   flex: 0 0 auto; padding: 10px 16px; border-radius: 12px; font: inherit; font-size: 13px;
   cursor: pointer; color: var(--text2); background: rgba(var(--veil-rgb), .04);
@@ -49,14 +44,14 @@
 /* کادرِ راهنما — متن از `--text2` و قاب/زمینهٔ فیروزه‌ای از `--cyan` (در هر تم شدتِ خودش).
    ‎#c8f7ffِ خام در تمِ روشن سفید روی سفید بود (کنتراست ≈۱) و همین کلاس در هشت صفحه است. */
 .df-note {
-  max-width: 900px; margin: 0 auto 12px; padding: 11px 14px; border-radius: 12px;
+  max-width: var(--page-w); margin: 0 auto 12px; padding: 11px 14px; border-radius: 12px;
   font-size: 12px; line-height: 1.9; color: var(--text2);
   background: color-mix(in srgb, var(--cyan) 7%, transparent);
   border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent);
 }
 .df-note b { color: var(--text1); }
 
-.df-toolbar { display: flex; align-items: center; gap: 10px; max-width: 900px; margin: 0 auto 12px; }
+.df-toolbar { display: flex; align-items: center; gap: 10px; max-width: var(--page-w); margin: 0 auto 12px; }
 .df-add {
   display: inline-flex; align-items: center; gap: 7px; padding: 11px 17px; border-radius: 12px;
   font: inherit; font-weight: 800; cursor: pointer; color: #fff; border: 0;
@@ -64,7 +59,7 @@
 }
 .df-count { margin-right: auto; font-size: 11px; color: var(--text3); color: var(--text3); }
 
-.df-list { display: grid; gap: 9px; max-width: 900px; margin: 0 auto; }
+.df-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .df-row {
   display: flex; align-items: center; gap: 12px; padding: 14px 15px; border-radius: 15px;
   background: rgba(var(--surface-rgb), .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
@@ -132,8 +127,7 @@
 }
 
 @media (max-width: 620px) {
-  .df { padding: 14px 12px 60px; }
-  .df-head { flex-direction: column; gap: 10px; }
+  .df { padding: 20px 12px 60px; }
   .df-uses { display: none; }
 }
 
@@ -153,11 +147,11 @@
 .st-check.on { background: var(--green); border-color: var(--green); }
 
 .st-h3 {
-  max-width: 900px; margin: 0 auto 10px; font-size: 12px; font-weight: 800; color: var(--brand-text);
+  max-width: var(--page-w); margin: 0 auto 10px; font-size: 12px; font-weight: 800; color: var(--brand-text);
   padding-bottom: 7px; border-bottom: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
 .st-brand {
-  display: grid; gap: 12px; max-width: 900px; margin: 0 auto; padding: 16px; border-radius: 16px;
+  display: grid; gap: 12px; max-width: var(--page-w); margin: 0 auto; padding: 16px; border-radius: 16px;
   background: rgba(var(--surface-rgb), .7); border: 1px solid rgba(var(--brand-soft-rgb), .18);
 }
 .st-brand .df-save { height: 46px; }
@@ -172,7 +166,7 @@
 }
 
 /* وارد کردنِ دادهٔ سامانهٔ قبلی */
-.st-import { display: flex; flex-wrap: wrap; gap: 8px; max-width: 900px; margin: 0 auto 12px; align-items: stretch; }
+.st-import { display: flex; flex-wrap: wrap; gap: 8px; max-width: var(--page-w); margin: 0 auto 12px; align-items: stretch; }
 .st-file {
   flex: 1 1 220px; min-width: 0; display: flex; align-items: center; padding: 11px 14px;
   border-radius: 12px; cursor: pointer; font-size: 12.5px; color: var(--text1);
@@ -184,7 +178,7 @@
 .st-dry { background: color-mix(in srgb, var(--cyan) 14%, transparent) !important; color: var(--cyan) !important; }
 /* پیش‌نمایشِ سربرگ — قاب روشن چون سربرگِ واقعی روی کاغذِ سفید چاپ می‌شود. */
 .st-letterhead-preview {
-  max-width: 900px; margin: 0 auto 18px; padding: 10px; border-radius: 14px;
+  max-width: var(--page-w); margin: 0 auto 18px; padding: 10px; border-radius: 14px;
   background: #fff; border: 1px solid rgba(var(--veil-rgb), .18);
 }
 .st-letterhead-preview img { display: block; width: 100%; height: auto; max-height: 420px; object-fit: contain; }
@@ -207,7 +201,7 @@
 
 /* خطای بارگذاری — به‌جای بخشِ خالی و بی‌توضیح */
 .st-fail {
-  max-width: 900px; margin: 0 auto 14px; padding: 13px 15px; border-radius: 14px;
+  max-width: var(--page-w); margin: 0 auto 14px; padding: 13px 15px; border-radius: 14px;
   display: grid; gap: 6px; justify-items: start;
   background: rgba(251, 113, 133, .08); border: 1px solid rgba(251, 113, 133, .3);
 }
@@ -245,7 +239,7 @@
 /* ── تنظیماتِ اختصاصیِ شرکت ─────────────────────────────────── */
 /* همان ستونِ ۹۰۰ پیکسلیِ بالای صفحه — تا امروز از «قالب فاکتور» به بعد فیلدها تمام‌عرضِ
    پنجره می‌شدند و سرتیترها به لبه می‌چسبیدند (بازبینیِ UX ۱۴۰۵/۰۷). */
-.st-group { max-width: 900px; margin: 14px auto 6px; }
+.st-group { max-width: var(--page-w); margin: 14px auto 6px; }
 .st-group-head { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
 .st-group-head b { font-size: 14px; }
 .st-group-head small { font-size: 12px; opacity: .7; line-height: 1.7; }
@@ -291,7 +285,7 @@
 .st-reset:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 /* نوارِ ذخیرهٔ تنظیمات. نامش `st-savebar` است نه `st-knobsave`: `press.css` آن نام را جزوِ
    **دکمه‌های** نئون می‌شمرد و کلِ نوار حلقه و هالهٔ دکمه می‌گرفت. */
-.st-savebar { display: flex; gap: 8px; align-items: center; max-width: 900px; margin: 14px auto 20px; }
+.st-savebar { display: flex; gap: 8px; align-items: center; max-width: var(--page-w); margin: 14px auto 20px; }
 /* دکمهٔ ذخیره باید هم‌اندازهٔ بقیهٔ دکمه‌های ذخیرهٔ همین صفحه دیده شود، وگرنه
    کنارِ فرمِ بزرگ به‌چشم نمی‌آید و کاربر فکر می‌کند تغییرش ذخیره نشده. */
 .st-savebar .df-save { padding: 9px 20px; border-radius: 11px; font-size: 13px; border: 0; cursor: pointer; }

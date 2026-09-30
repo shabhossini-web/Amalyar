@@ -1,5 +1,6 @@
 /* ماتریسِ سطوحِ دسترسی — ردیف‌ها درها، ستون‌ها سطح‌ها. */
-.ax { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 16px 14px 60px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
+.ax { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 20px 14px 60px; color: var(--text1); --page-w: var(--maxw); }
 .ax-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -7,25 +8,16 @@
     var(--bg);
 }
 
-.ax-head { max-width: 980px; margin: 0 auto 14px; }
-.ax-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.ax-back:hover { color: var(--brand-2); }
-.ax-head h1 { font-size: 20px; font-weight: 900; }
-.ax-head p { margin-top: 5px; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
-
 .ax-err {
-  display: flex; align-items: center; gap: 7px; max-width: 980px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
-.ax-empty { max-width: 980px; margin: 0 auto; padding: 26px; text-align: center; color: var(--text3); font-size: 13px; }
+.ax-empty { max-width: var(--page-w); margin: 0 auto; padding: 26px; text-align: center; color: var(--text3); font-size: 13px; }
 
 /* ذره‌بینِ سطح */
 .ax-lens {
-  display: flex; gap: 6px; overflow-x: auto; max-width: 980px; margin: 0 auto 8px;
+  display: flex; gap: 6px; overflow-x: auto; max-width: var(--page-w); margin: 0 auto 8px;
   padding-bottom: 3px; scrollbar-width: thin;
 }
 .ax-lens button {
@@ -37,10 +29,10 @@
   color: #fff; border-color: transparent;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
-.ax-lenshint { max-width: 980px; margin: 0 auto 12px; font-size: 12px; color: var(--text3); }
+.ax-lenshint { max-width: var(--page-w); margin: 0 auto 12px; font-size: 12px; color: var(--text3); }
 .ax-lenshint b { color: var(--brand-2); }
 
-.ax-group { max-width: 980px; margin: 0 auto 18px; }
+.ax-group { max-width: var(--page-w); margin: 0 auto 18px; }
 .ax-group h2 { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
 /* گروهِ تاشو — سرتیتر خودش دکمه است (بازبینیِ UX ۱۴۰۵/۰۷: صفحه ۲۱ هزار پیکسل بود). */
 .ax-gtoggle {
@@ -57,7 +49,7 @@
 
 /* جستجو */
 .ax-search {
-  display: flex; align-items: center; gap: 8px; max-width: 980px; margin: 0 auto 10px; padding: 0 12px;
+  display: flex; align-items: center; gap: 8px; max-width: var(--page-w); margin: 0 auto 10px; padding: 0 12px;
   min-height: 44px; border-radius: 13px; color: var(--text3);
   background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), .14);
 }
@@ -139,7 +131,7 @@
 }
 
 @media (max-width: 620px) {
-  .ax { padding: 12px 10px 40px; }
+  .ax { padding: 20px 10px 40px; }
   /* در موبایل: نام بالا، سطح‌ها تمام‌عرض (هر خانه ≥۴۴ پیکسل)، بعد روشن/خاموش و نقش‌ها. */
   .ax-row { grid-template-columns: 1fr; }
   .ax-name, .ax-cells, .ax-acts, .ax-roles { grid-column: 1; grid-row: auto; }

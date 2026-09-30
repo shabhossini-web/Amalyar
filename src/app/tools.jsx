@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from './auth.jsx';
-import { useTerms } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
 import { ArrowStart, Bank, Book, Box, Calendar, Chart, Chat, Clock, Dispatch, Doctor, Form, FormEdit, Gear, Globe, Lock, Mail, NoteSearch, Patients, Slots, Sparkle, Tag, Theatre, Truck, Users, Wave , Arrive, Pathway, Waitlist } from '../ui/icons.jsx';
 
 /**
@@ -135,14 +135,25 @@ export const toolsOfFeature = (fkey, t) => ALL.filter((x) => (x.feature ?? x.key
 export const allTools = (t) => ALL.map((x) => toolOf(x.key, t));
 
 /**
- * عنوانِ صفحه‌ای که یک کاشی بازش می‌کند: نامِ همان کاشی، و `document.title` به شکلِ
- * «نام — عمل‌یار» (نامِ صفحه اول، تا در زبانهٔ باریکِ مرورگر دیده شود).
+ * عنوانِ زبانه — همیشه «نامِ صفحه — نامِ مطب/شرکت» (نامِ صفحه اول، تا در زبانهٔ باریکِ
+ * مرورگر دیده شود؛ نامِ شرکت تا کاربری که چند نصب را باز دارد زبانه‌ها را از هم بشناسد).
+ *
+ * ⚠️ بازبینیِ UX (shell-15): زبانه‌ها گاهی «امروز — عمل‌یار» بودند و گاهی «عمل‌یار — بیماران».
+ * هر صفحه‌ای که عنوان می‌گذارد از همین می‌گذرد (`PageHeader` خودش صدایش می‌زند).
  */
+export function usePageTitle(label) {
+  const { brandName } = useConfig();
+  useEffect(() => {
+    if (label) document.title = `${label} — ${brandName || 'عمل‌یار'}`;
+  }, [label, brandName]);
+}
+
+/** نام و آیکونِ کاشیِ یک صفحه + عنوانِ زبانه‌اش. */
 export function useToolTitle(key) {
   const t = useTerms();
   const tool = toolOf(key, t);
   const label = tool?.label ?? '';
-  useEffect(() => { if (label) document.title = `${label} — عمل‌یار`; }, [label]);
+  usePageTitle(label);
   return { label, icon: tool?.icon ?? null };
 }
 

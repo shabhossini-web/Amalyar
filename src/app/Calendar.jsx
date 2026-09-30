@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
@@ -10,7 +9,8 @@ import { FLOW } from '../lib/terms.js';
 import CancelReason from '../ui/CancelReason.jsx';
 import { ThingPopups, useThings } from './thing-popups.jsx';
 import './calendar.css';
-import { ChevronEnd, Clock } from '../ui/icons.jsx';
+import { Clock } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { kindOf } from './visit-kinds.js';
 import { faTime } from '../lib/time.js';
 
@@ -55,7 +55,6 @@ export default function Calendar() {
   /* هشدار: نام و واژه‌ها از واژه‌نامهٔ حوزه (بازبینیِ UX، clinic-daily-05): در مطب این صفحه بیشتر نوبت
      و ویزیت نشان می‌دهد و «تقویمِ عمل‌ها / ۱۱ عمل در مهر / عملی ثبت نشده» برای منشی غلط بود.
      کاشیِ لانچر همان `t.calendar` را می‌خواند (قانونِ ۲۴: نامِ کاشی = عنوانِ صفحه). */
-  useEffect(() => { document.title = `عمل‌یار — ${t.calendar}`; }, [t.calendar]);
 
   const load = useCallback(async (y, m) => {
     setErr('');
@@ -107,17 +106,13 @@ export default function Calendar() {
   return (
     <div className="cal">
       <div className="cal-bg" aria-hidden="true" />
-      <header className="cal-head">
-        <Link to="/app" className="cal-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>{t.calendar}</h1>
-          <p>
-            {data
-              ? `${faNum(data.total)} ${t.calendarUnit}${data.appointments ? ` و ${faNum(data.appointments)} ${FLOW.appointment}` : ''} در ${J_MONTHS[ym.m - 1]}`
-              : 'در حال بارگذاری…'}
-          </p>
-        </div>
-      </header>
+      {/* نامِ حوزه‌ایِ کاشی («تقویمِ نوبت‌ها» در مطب) و آیکونش از کاتالوگ (قانونِ ۲۴). */}
+      <PageHeader
+        tool="calendar"
+        sub={data
+          ? `${faNum(data.total)} ${t.calendarUnit}${data.appointments ? ` و ${faNum(data.appointments)} ${FLOW.appointment}` : ''} در ${J_MONTHS[ym.m - 1]}`
+          : 'در حال بارگذاری…'}
+      />
 
       {err && <div className="cal-err">{err}</div>}
 

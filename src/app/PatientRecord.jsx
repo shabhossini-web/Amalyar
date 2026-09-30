@@ -16,10 +16,11 @@ import JDate from './JDate.jsx';
 import './work.css';
 import './record.css';
 import {
-  Alert, Back, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
+  Alert, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
   Mic, Money, Pencil, Phone, Plus, Send, Trash,
 } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useConfig, useStatusList } from './config.jsx';
 import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
@@ -1561,14 +1562,13 @@ export default function PatientRecord() {
     navigate(location.pathname, { replace: true, state: null });
   }, [location.key]);
 
-  useEffect(() => {
-    document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
-  }, [rec]);
-
   const save = async (body) => { setRec(await api(`/patients/${id}`, { method: 'PATCH', body })); };
 
-  if (err) return <div className="df"><div className="df-bg" /><div className="df-empty">{err}</div></div>;
-  if (!rec) return <div className="df"><div className="df-bg" /><div className="df-empty">در حال بارگذاری…</div></div>;
+  /* پرونده زیرصفحهٔ «بیماران» است: بازگشت به همان فهرست، و آیکونِ همان کاشی. سربرگ در بارگذاری و
+     خطا هم هست — راهِ برگشت نباید منتظرِ پاسخِ سرور بماند (shell-15). */
+  const back = { to: '/app/dashboard', label: 'بیماران' };
+  if (err) return <div className="df"><div className="df-bg" /><PageHeader className="df-head" tool="dashboard" title="پروندهٔ بیمار" back={back} /><div className="df-empty">{err}</div></div>;
+  if (!rec) return <div className="df"><div className="df-bg" /><PageHeader className="df-head" tool="dashboard" title="پروندهٔ بیمار" back={back} /><div className="df-empty">در حال بارگذاری…</div></div>;
 
   const last = lastClinical(rec);
   const medsInLast = !!(last && !last.rx?.body && rec.medications);
@@ -1591,22 +1591,22 @@ export default function PatientRecord() {
   return (
     <div className="df">
       <div className="df-bg" />
-      <header className="df-head">
-        <Link className="df-back" to="/app/dashboard"><Back width="14" height="14" /> بیماران</Link>
-        <div>
-          <h1>{rec.fullName}</h1>
-          <p>
-            <span dir="ltr">{rec.code}</span>
-            {rec.age != null && ` · ${faNum(rec.age)} ساله`}
-            {rec.gender && ` · ${rec.gender === 'female' ? 'زن' : 'مرد'}`}
-            {rec.nationalId && ` · کد ملی ${faNum(rec.nationalId)}`}
-            {rec.phone && ` · ${faNum(rec.phone)}`}
-          </p>
-        </div>
+      {/* `df-head` فقط قلابِ آزمون است (کنتراستِ نامِ بیمار)؛ ظاهر از `PageHeader`. */}
+      <PageHeader
+        className="df-head" tool="dashboard" back={back}
+        title={rec.fullName} docTitle={`پروندهٔ ${rec.fullName}`}
+        sub={<>
+          <span dir="ltr">{rec.code}</span>
+          {rec.age != null && ` · ${faNum(rec.age)} ساله`}
+          {rec.gender && ` · ${rec.gender === 'female' ? 'زن' : 'مرد'}`}
+          {rec.nationalId && ` · کد ملی ${faNum(rec.nationalId)}`}
+          {rec.phone && ` · ${faNum(rec.phone)}`}
+        </>}
+      >
         {rec.clinicalVisible && (
           <RefSummary rec={rec} toast={say} />
         )}
-      </header>
+      </PageHeader>
 
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
       {rec.allergies && <div className="rc-alert"><Alert size={13} /> حساسیت: {rec.allergies}</div>}

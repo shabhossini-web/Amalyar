@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import WorkRow from './WorkRow.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
-import { Back } from '../ui/icons.jsx';
+import { Bell } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import './shell.css';
 import './work.css';
@@ -51,7 +52,6 @@ export default function WorkList() {
   const waiting = facetKey !== 'all' && meta === null;
   const req = useRef(0);
 
-  useEffect(() => { document.title = 'کارهای من — عمل‌یار'; }, []);
 
   const loadMeta = useCallback(() => {
     api('/work/counts?owners=1').then(setMeta).catch(() => setMeta({ team: false }));
@@ -149,10 +149,8 @@ export default function WorkList() {
 
   return (
     <div className="wk-page">
-      <header className="wk-head">
-        <Link to="/app" className="wk-back"><Back width="15" height="15" /> سامانه</Link>
-        <h1>کارهای من</h1>
-      </header>
+      {/* صفحهٔ زنگِ کارها (کاشی نیست) — آیکونش همان زنگی است که به این‌جا می‌رساند. */}
+      <PageHeader title="کارهای من" icon={Bell} />
 
       <form className="wk-new" onSubmit={create}>
         <input id="wk-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="یادداشتِ کاری برای خودم… (مثلاً تماس با بیمارِ فلان)" aria-label="کارِ تازه برای خودم" maxLength={160} />
