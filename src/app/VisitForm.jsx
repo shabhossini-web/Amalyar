@@ -1080,7 +1080,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const submit = async (e) => {
     e.preventDefault();
     if (busy || aiBusy) return;
-    /* ⚠️ Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
+    /* هشدار: Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
        زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
        کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
     if (!editing && step < 3) { goNext(); return; }
@@ -2588,7 +2588,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </p>
           )}
           {careField('pre')}
-          {/* ⚠️ این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
+          {/* هشدار: این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
               آن است — برعکسِ مراقبتِ بعد از عمل. */}
           <div className="db-daychips db-whenchips">
             {[{ v: false, l: 'فقط طبقِ زمان‌بندی' }, { v: true, l: 'به‌محضِ ثبت + زمان‌بندی' }].map((o) => (

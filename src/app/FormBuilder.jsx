@@ -330,7 +330,7 @@ export default function FormBuilder() {
                     onChange={setTab}
                     items={shownForms.map((f) => ({ key: f.key, label: f.title }))}
                   />
-                  {/* ⚠️ ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
+                  {/* هشدار: ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
                       مسیرش «ویزیت → درمان → پیگیری» است، «درمان» را خودش
                       می‌سازد؛ ما ترتیب را تحمیل نمی‌کنیم. */}
                   <button type="button" className="fb-newform" onClick={() => setNewForm(true)} title="فرمِ تازه" aria-label="فرمِ تازه">

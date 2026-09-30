@@ -227,7 +227,7 @@ export default function Overlay({
   }, [requestClose]);
 
   /* فوکوس: ورود به پنل، بازگشت به بازکننده.
-     ⚠️ بازکننده **هنگامِ رندرِ اول** گرفته می‌شود، نه در effect: کادری با `autoFocus` درونِ پنل (جست‌وجوی
+     هشدار: بازکننده **هنگامِ رندرِ اول** گرفته می‌شود، نه در effect: کادری با `autoFocus` درونِ پنل (جست‌وجوی
      گامِ ۱ِ «مراجعهٔ جدید») در commit فوکوس را می‌گیرد و effect آن کادرِ درونی را «بازکننده» می‌دید —
      با بسته‌شدنِ پنجره کادر از DOM می‌رفت و فوکوس روی body رها می‌شد (w0-6-a11y). */
   const [openerAtMount] = useState(() => (typeof document === 'undefined' ? null : document.activeElement));
