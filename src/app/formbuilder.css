@@ -58,6 +58,16 @@
   box-shadow: inset 0 0 0 1px rgba(var(--veil-rgb), .12);
 }
 .fb-color.auto.on { color: var(--text1); border-color: var(--text1); }
+/* کلیدِ «رنگِ کارت» فقط در موبایل پالت را باز/بسته می‌کند (surgery-18)؛ این‌جا نامرئی است و قاب
+   (`display: contents`) در چیدمانِ `.fb-meta` هیچ اثری ندارد — پالت مثلِ قبل همیشه دیده می‌شود. */
+.fb-colorpick { display: contents; }
+.fb-colortoggle {
+  display: none; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--text2); border-radius: 999px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.fb-colortoggle i { width: 14px; height: 14px; border-radius: 5px; background: var(--sw, rgba(var(--veil-rgb), .3)); }
+.fb-colortoggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* حرکت اختیاری است، نه بخشی از معنی — کاربری که کاهشِ حرکت خواسته، نباید
    برای فهمیدنِ رنگِ انتخاب‌شده به بزرگ‌شدنِ سوآچ تکیه کند. */
@@ -73,14 +83,28 @@
 /* خاموش کم‌رنگ می‌شود ولی خوانا می‌ماند — کاربر باید بتواند دوباره روشنش کند. */
 .fb-row.off { opacity: .5; }
 
-.fb-order { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+.fb-order { display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; }
+/* ۲۲×۱۸ بود — روی دسکتاپ هم نشانه‌گرفتنش سخت بود (surgery-18). موبایل پایین‌تر ۴۴ است. */
 .fb-order button {
-  width: 22px; height: 18px; display: grid; place-items: center; cursor: pointer;
+  width: 30px; height: 24px; display: grid; place-items: center; cursor: pointer;
   color: var(--text3); background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--veil-rgb), .1); border-radius: 6px;
 }
 .fb-order button:hover:not(:disabled) { color: var(--text1); background: rgba(var(--veil-rgb), .1); }
 .fb-order button:disabled { opacity: .3; cursor: default; }
+.fb-order button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* کلیدِ «جابه‌جاییِ ترتیب» — فقط موبایل (پایین‌تر)؛ دسکتاپ پیکان‌ها را همیشه در ردیف دارد. */
+.fb-listbar { display: none; }
+.fb-reorder {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 800; color: var(--text2); border-radius: 999px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.fb-reorder-ic { display: inline-flex; flex-direction: column; line-height: 0; }
+.fb-reorder-ic svg + svg { margin-top: -3px; }
+.fb-reorder.on { color: var(--brand-text); background: rgba(var(--brand-rgb), .12); border-color: rgba(var(--brand-rgb), .45); }
+.fb-reorder:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .fb-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fb-main b { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 4px; }
@@ -167,7 +191,7 @@
      صفحه به ۳۲۸۴px می‌رسید؛ برای دیدنِ فیلدِ آخر باید هشت بار اسکرول می‌شد.
      حالا برچسبِ «اجباری» جمع می‌شود و فقط ستاره می‌ماند (معنی در aria/title)،
      و فهرستِ گزینه‌ها به پنلِ کناری می‌رود که جایش همان‌جاست. */
-  .fb-row { gap: 7px; padding: 7px 10px; }
+  .fb-row { gap: 7px; padding: 5px 10px; }
   .fb-main { gap: 2px; }
   .fb-main b { font-size: 12.5px; line-height: 1.3; }
   .fb-main > span { font-size: 9.5px; line-height: 1.4; gap: 3px; }
@@ -176,11 +200,21 @@
      می‌گوید (فیلدِ هسته‌ای سطل ندارد)، و بودنش خطِ مشخصات را به دو خط
      می‌برد — یعنی پانزده خطِ اضافه در کلِ فهرست. */
   .fb-tag.custom { display: none; }
+  /* «هسته‌ای» هم به همان دلیل: نبودِ سطل همین را می‌گوید، و با کلیدهای ۴۴ پیکسلی خطِ مشخصاتِ فیلدهای
+     هسته را به دو خط می‌برد. */
+  .fb-tag.core { display: none; }
   .fb-opts { display: none; }
+  .fb-colortoggle { display: inline-flex; margin-inline-start: auto; }
+  .fb-colorpick:not(.open) .fb-colors { display: none; }
+  .fb-colorpick.open .fb-colors { flex-basis: 100%; }
   .fb-req { padding: 6px 8px; }
   .fb-req em { display: none; }
-  .fb-acts { gap: 3px; }
-  .fb-acts .df-act { width: 30px; height: 30px; }
+  .fb-acts { gap: 4px; }
+  /* جابه‌جایی یک حالت است (surgery-18): پیکانِ ۴۴ پیکسلی کنارِ چهار کلیدِ ۴۴ پیکسلی برای نامِ فیلد جا
+     نمی‌گذاشت. عادی = کلیدهای ردیف؛ «جابه‌جاییِ ترتیب» = فقط پیکان‌ها. */
+  .fb-listbar { display: flex; margin: 0 0 8px; }
+  .fb-list:not(.is-reorder) .fb-order { display: none; }
+  .fb-list.is-reorder .fb-acts { display: none; }
   /* ⚠️ فلش‌ها در موبایل **کنارِ هم** می‌نشینند، نه روی هم. `press.css` کفِ
      تاچ‌تارگت را ۲۶px گذاشته (قاعدهٔ درستی است و با آن نمی‌جنگیم)، پس ستونی
      یعنی ۵۴px — بلندترین جزءِ ردیف، در حالی که خودِ مشخصات ۳۶px است. افقی
@@ -188,6 +222,21 @@
   .fb-order { flex-direction: row; }
   .fb-count { margin-inline-start: 0; }
   .fb-matrix-scroll, .fb-preview > .pf { padding-inline: 10px; }
+}
+
+/* ── کفِ لمسیِ ۴۴px (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18) ─────────────────────────────
+   پیکان‌ها ۳۰×۲۶، کلیدِ اجباری ۲۴×۳۴ و خانه‌های رنگ ۲۶×۲۶ بودند. `press.css` کفِ عمومیِ کمتری
+   می‌گذارد و آخر لود می‌شود، پس این‌جا وزنِ انتخاب‌گر بیشتر است نه ترتیبِ فایل. */
+@media (max-width: 640px), (pointer: coarse) {
+  .fb-row .fb-order { flex-direction: row; gap: 4px; }
+  .fb-row .fb-order button { width: 44px; height: 44px; border-radius: 12px; }
+  .fb-acts .df-act { width: 44px; height: 44px; padding: 0; margin: 0; border-radius: 12px; }
+  .fb-acts .fb-req { min-width: 44px; min-height: 44px; justify-content: center; }
+  /* خانهٔ رنگ ۳۲ پیکسل دیده می‌شود و ۴۴ لمس می‌شود — فاصلهٔ ۱۲ یعنی ناحیه‌های لمس روی هم نمی‌افتند. */
+  .fb-colors { gap: 12px; }
+  .fb-colors .fb-color { position: relative; width: 32px; height: 32px; }
+  .fb-colors .fb-color.auto { width: auto; height: 32px; min-height: 32px; padding: 0 11px; }
+  .fb-colors .fb-color::after { content: ''; position: absolute; inset: -8px; }
 }
 
 /* ⚠️ `.df-ghost` فقط پوستهٔ دکمهٔ شبح است؛ اندازه‌اش را `.df-sheet-foot`ِ تعریف‌ها می‌داد.

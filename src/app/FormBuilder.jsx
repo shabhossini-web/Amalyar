@@ -97,6 +97,9 @@ export default function FormBuilder() {
   /* مقادیرِ پیش‌نمایش — فقط در همین صفحه زندگی می‌کنند و هیچ‌جا ذخیره نمی‌شوند. */
   const [preview, setPreview] = useState({});
   const [previewPage, setPreviewPage] = useState(1);
+  /* حالتِ «جابه‌جایی» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18) — فقط موبایل از آن استفاده می‌کند: پیکان‌ها
+     ۴۴ پیکسلی‌اند و کنارِ چهار کلیدِ ۴۴ پیکسلیِ ردیف جا نمی‌شوند، پس یا این یا آن. دسکتاپ هر دو را با هم دارد. */
+  const [reorder, setReorder] = useState(false);
 
   useEffect(() => { document.title = 'عمل‌یار — فرم‌ساز'; }, []);
   useEffect(() => {
@@ -397,7 +400,20 @@ export default function FormBuilder() {
                     فیلدهای دلخواه، فرمِ تکمیلیِ همین نوع‌اند.
                   </p>
                 )}
-                <div className="fb-list">
+                {form.fields.length > 1 && (
+                  <div className="fb-listbar">
+                    <button
+                      type="button"
+                      className={`fb-reorder${reorder ? ' on' : ''}`}
+                      aria-pressed={reorder}
+                      onClick={() => setReorder((x) => !x)}
+                    >
+                      <span className="fb-reorder-ic" aria-hidden="true"><ArrowUp width="13" height="13" /><ArrowDown width="13" height="13" /></span>
+                      {reorder ? 'پایانِ جابه‌جایی' : 'جابه‌جاییِ ترتیب'}
+                    </button>
+                  </div>
+                )}
+                <div className={`fb-list${reorder ? ' is-reorder' : ''}`}>
                   {form.fields.map((f, i) => (
                     <motion.article key={f.id} {...stagger(i)} className={`glass fb-row${f.active ? '' : ' off'}`}>
                       <div className="fb-order">
@@ -407,8 +423,8 @@ export default function FormBuilder() {
                         {/* ترتیبِ بخشِ استاندارد ثابت است (سرور هسته را اول می‌چیند)؛
                             فلشِ غیرفعال از فلشی که کار نمی‌کند صادق‌تر است — برای
                             اولین ردیفِ دلخواه هم، چون بالاترش هسته است. */}
-                        <button type="button" onClick={() => move(f, -1)} disabled={busy || i === 0 || f.core || form.fields[i - 1]?.core} aria-label="بالاتر"><ArrowUp width="11" height="11" /></button>
-                        <button type="button" onClick={() => move(f, 1)} disabled={busy || i === form.fields.length - 1 || f.core} aria-label="پایین‌تر"><ArrowDown width="11" height="11" /></button>
+                        <button type="button" onClick={() => move(f, -1)} disabled={busy || i === 0 || f.core || form.fields[i - 1]?.core} aria-label={`بالاتر بردنِ «${f.label}»`}><ArrowUp width="13" height="13" /></button>
+                        <button type="button" onClick={() => move(f, 1)} disabled={busy || i === form.fields.length - 1 || f.core} aria-label={`پایین‌تر بردنِ «${f.label}»`}><ArrowDown width="13" height="13" /></button>
                       </div>
 
                       <div className="fb-main">
@@ -588,30 +604,40 @@ export default function FormBuilder() {
  * هیچ اطلاعاتی حمل نمی‌کرد. انتخاب حالا فقط با مقایسهٔ خودِ رنگ مشخص می‌شود.
  */
 function ColorPick({ form, busy, onPick }) {
+  /* موبایل (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18): نُه خانهٔ رنگ با کفِ لمسیِ ۴۴ پیکسل دو سطرِ کامل
+     می‌گرفتند، برای کاری که کم پیش می‌آید. پالت پشتِ یک کلیدِ «رنگِ کارت» است؛ دسکتاپ همیشه باز. */
+  const [open, setOpen] = useState(false);
+  const cur = FORM_COLORS[form.color];
   return (
-    <span className="fb-colors" role="group" aria-label="رنگِ کارت">
-      <button
-        type="button"
-        className="fb-color auto"
-        disabled={busy}
-        onClick={() => onPick('')}
-        title="یک رنگِ آزاد از پالت بگیر"
-      >
-        خودکار
+    <span className={`fb-colorpick${open ? ' open' : ''}`}>
+      <button type="button" className="fb-colortoggle" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
+        <i style={cur ? { '--sw': cur.solid } : undefined} aria-hidden="true" />
+        {cur ? `رنگِ کارت: ${cur.fa}` : 'رنگِ کارت'}
       </button>
-      {COLOR_KEYS.map((k) => (
+      <span className="fb-colors" role="group" aria-label="رنگِ کارت">
         <button
-          key={k}
           type="button"
-          className={`fb-color${form.color === k ? ' on' : ''}`}
-          style={{ '--sw': FORM_COLORS[k].solid }}
+          className="fb-color auto"
           disabled={busy}
-          onClick={() => onPick(k)}
-          aria-pressed={form.color === k}
-          aria-label={FORM_COLORS[k].fa}
-          title={FORM_COLORS[k].fa}
-        />
-      ))}
+          onClick={() => onPick('')}
+          title="یک رنگِ آزاد از پالت بگیر"
+        >
+          خودکار
+        </button>
+        {COLOR_KEYS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={`fb-color${form.color === k ? ' on' : ''}`}
+            style={{ '--sw': FORM_COLORS[k].solid }}
+            disabled={busy}
+            onClick={() => onPick(k)}
+            aria-pressed={form.color === k}
+            aria-label={FORM_COLORS[k].fa}
+            title={FORM_COLORS[k].fa}
+          />
+        ))}
+      </span>
     </span>
   );
 }

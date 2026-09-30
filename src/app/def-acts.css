@@ -1,10 +1,47 @@
 /*
- * کنترل‌های ردیفِ «تعاریف پایه» (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-15، surgery-18).
+ * کنترل‌های ردیفِ «تعاریف پایه» (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-15، surgery-17، surgery-18).
  *
- * ⚠️ فایلِ جدا از `definitions.css`: آن فایل پوستهٔ مشترکِ چند صفحه است (میزِ اتاقِ عمل، تنظیمات، …)
- * و این‌جا فقط ردیف‌های همین صفحه عوض می‌شوند. قاعده‌ها زیرِ `.df-row` نشسته‌اند تا به کلاس‌های
- * هم‌نامِ صفحه‌های دیگر نرسند.
+ * ⚠️ فایلِ جدا از `definitions.css`: آن فایل پوستهٔ مشترکِ چند صفحه است (پرونده، تنظیمات، سایت، …)
+ * و این‌جا فقط ردیف‌های همین صفحه عوض می‌شوند. همه زیرِ `.df-defs` (فهرستِ همین صفحه) نشسته‌اند:
+ * پس از بازشدنِ این چانک CSS در سند می‌ماند و `.df-acts`ِ پرونده و سایت نباید چیزی از آن بگیرند.
  */
 
+.df-defs .df-acts { align-items: center; gap: 6px; }
+.df-defs .df-acts > button { width: 36px; height: 36px; }
+
+/* «الگوی اقلام» / «محتویات» دکمهٔ متنی است نه آیکونی: عرضِ آزاد و یک‌خطی — در موبایل متن از قابِ
+   ۳۳×۳۳ بیرون می‌زد. رنگ از `--cyan` تا در تمِ روشن هم خوانا بماند. */
+.df-defs .df-acts > button.df-parts {
+  width: auto; padding: 0 12px; white-space: nowrap; font-weight: 700; color: var(--cyan);
+}
+
 /* سطل از کلیدِ فعال/غیرفعال دور می‌نشیند — یک لمسِ اشتباه روی «فعال» نباید به «حذف» برسد. */
-.df-row .df-acts .df-del { margin-inline-start: 8px; color: var(--red-text); }
+.df-defs .df-acts .df-del { margin-inline-start: 8px; color: var(--red-text); }
+
+/* کلیدِ دوحالتهٔ نوشته‌دار (پایه‌اش `.us-switch` در users.css) — حالت روی خودِ کلید نوشته است. */
+.df-defs .df-switch {
+  gap: 8px; min-height: 36px; padding-inline: 8px 11px; border-radius: 999px;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.df-defs .df-switch-t { min-width: 3.9em; font-size: 12px; font-weight: 700; color: var(--text3); }
+.df-defs .df-switch input:checked ~ .df-switch-t { color: var(--text1); }
+.df-defs .df-switch:has(input:disabled) { cursor: progress; }
+
+/* ردیفِ غیرفعال: فقط متن کم‌رنگ می‌شود، نه کنترل‌ها — کلید و متنِ «غیرفعال» باید خوانا بمانند. */
+.df-defs .df-row.off { opacity: 1; }
+.df-defs .df-row.off .df-row-main, .df-defs .df-row.off .df-uses { opacity: .55; }
+
+/* موبایل: کنترل‌ها سطرِ خودشان را می‌گیرند تا عنوان جا داشته باشد؛ کفِ لمسی ۴۴px. */
+@media (max-width: 620px) {
+  .df-defs .df-row { flex-wrap: wrap; row-gap: 10px; }
+  .df-defs .df-acts { flex-basis: 100%; }
+}
+@media (max-width: 620px), (pointer: coarse) {
+  .df-defs .df-acts > button { width: 44px; height: 44px; }
+  .df-defs .df-acts > button.df-parts { width: auto; }
+  .df-defs .df-switch { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .df-defs .us-track, .df-defs .us-track::after { transition: none; }
+}

@@ -363,3 +363,16 @@
 .vf-backsearch:hover { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .45); }
 .vf-newrec:focus-visible, .vf-backsearch:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (max-width: 620px) { .vf-backsearch { min-height: 44px; } }
+
+/* ── کفِ لمسیِ ۴۴px در فرمِ ویزیت/عمل و پنجرهٔ «الصاقِ فرم» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18) ──
+   چیپ‌ها ۳۶–۳۸، ضربدر و ستاره ۳۲ و «الصاق» ۳۷ پیکسل بودند. جای لمس بزرگ می‌شود، نه نوشته.
+   زیرِ `.db-sheet`/`.vf-pick` تا به شیت‌های دیگری که همین کلاس‌ها را دارند نرسد. */
+@media (max-width: 640px), (pointer: coarse) {
+  .db-sheet .db-sheet-head .db-x, .vf-pick .vf-pick-head .db-x { width: 44px; height: 44px; }
+  .db-sheet .db-daychips .db-daychip, .db-sheet .db-daychips .db-dayinput { min-height: 44px; }
+  .db-sheet .vf-attach, .db-sheet .vf-pin, .db-sheet .vf-phase-attach { min-height: 44px; }
+  .db-sheet .vf-card > header .vf-ic, .db-sheet .vf-card > header .vf-card-lock { width: 44px; height: 44px; }
+  .vf-pick .vf-star { width: 44px; height: 44px; }
+  .vf-pick .vf-add { min-height: 44px; min-width: 64px; }
+  .vf-pick .vf-pick-phase button { min-height: 44px; padding-inline: 16px; }
+}
