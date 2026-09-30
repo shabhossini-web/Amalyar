@@ -17,7 +17,7 @@ import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
 import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import JDate from './JDate.jsx';
-import { Close, Copy, Pencil, Plus } from '../ui/icons.jsx';
+import { Close, Copy, Pencil, Plus, Search } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay, { CloseButton } from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
@@ -153,6 +153,12 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
   );
 }
 
+/* «کدِ آزمایشی» (کدِ ملیِ تصادفیِ معتبر برای بیمارِ آزمایشی) فقط در **محیطِ آزمایشی** — سرورِ توسعه،
+   نشانیِ محلی یا staging (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-22): در مطبِ واقعی سوپرادمین خودِ پزشک است و
+   دکمهٔ تست کنارِ کدِ ملیِ بیمارِ واقعی جایی ندارد. ابزارِ همین کار در «تنظیمات» سرِ جایش است. */
+const TEST_ENV = !!import.meta.env.DEV
+  || (typeof window !== 'undefined' && /(^|[.-])staging([.-]|$)|^localhost$|^127\./.test(window.location.hostname));
+
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
 /** برچسبِ سه مرحله — همان واژه‌های تبِ مرحله، تا بج و تب دو حرفِ متفاوت نزنند. */
 const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'بعد از عمل' };
@@ -176,8 +182,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const pickService = tenantKind === 'company' && offered.length > 1;
   const editing = !!initial?.id;
   /* prefill = ادامهٔ یک تصمیم («کاندیدای جراحی» در ویزیتِ قبلی): پرونده از
-     قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم. */
-  const [mode, setMode] = useState(prefill?.patientId ? 'existing' : 'new');
+     قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم.
+     **گامِ ۱ یک جست‌وجوی واحد است** (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-22): تا دیروز همیشه روی «بیمارِ
+     جدید» باز می‌شد، در حالی که بیشترِ ویزیت‌های مطب پیگیریِ بیمارِ قدیمی است و پروندهٔ تکراری راحت
+     ساخته می‌شد. حالا اول «نام، موبایل یا کدِ ملی»؛ پیدا نشد → «ساختِ پروندهٔ تازه با همین نام» (`mode='new'`). */
+  const [mode, setMode] = useState('existing');
   const [pQuery, setPQuery] = useState('');
   const [pResults, setPResults] = useState([]);
   const [picked, setPicked] = useState(prefill?.patientId ? { id: prefill.patientId, fullName: prefill.patientName ?? '' } : null);
@@ -389,6 +398,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         nationalId: s2.nationalId.trim() ? s2.nationalId : (fields.nationalId || s2.nationalId),
         notes: fields.notes ? (s2.notes.trim() ? `${s2.notes}\n${fields.notes}` : fields.notes) : s2.notes,
       }));
+      /* دیکته از خودِ جست‌وجو هم زده می‌شود — نتیجه‌اش پروندهٔ تازه است، پس همان فرم دیده شود. */
+      if (!editing) { setPicked(null); setMode('new'); }
       onToast('فیلدها از دیکته پر شدند — پیش از ادامه مرورشان کنید');
     } catch (e) { onToast(e.message); } finally { setAiBusy(false); }
   };
@@ -774,7 +785,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (mode !== 'existing') return undefined;
     const t = setTimeout(() => {
       api(`/patients?q=${encodeURIComponent(pQuery)}`)
-        .then(setPResults)
+        .then((r) => setPResults(Array.isArray(r) ? r : []))
         .catch(() => setPResults([]));
     }, 250);
     return () => clearTimeout(t);
@@ -816,7 +827,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    * دستِ آخر خطایی می‌گرفت که ربطی به گامِ سوم نداشت.
    */
   const stepOneProblem = () => {
-    if (mode === 'existing') return picked ? '' : `${t.record}ی انتخاب نشده — از فهرست یکی را بردارید`;
+    if (mode === 'existing') return picked ? '' : `${t.record}‌ای انتخاب نشده — از فهرست یکی را بردارید یا «ساختِ ${t.record}ٔ تازه» را بزنید`;
     if (f.firstName.trim().length < 2) return 'نام را وارد کنید';
     if (f.lastName.trim().length < 2) return 'نام خانوادگی را وارد کنید';
     const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
@@ -832,6 +843,29 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    * انتخابِ پروندهٔ موجود — پزشک و مرکزِ **آخرین مراجعه** در کادرِ خالی می‌نشیند (بازبینیِ
    * ۱۴۰۵/۰۷/۰۳: «پیوستگیِ اطلاعات»). فقط جای خالی: انتخابی که کاربر همین حالا کرده بازنویسی نمی‌شود.
    */
+  /** «ساختِ پروندهٔ تازه با همین نام» — جست‌وجو پایهٔ پروندهٔ تازه می‌شود: عدد به موبایل یا کدِ ملی،
+   *  متن به نام و نام‌خانوادگی (اولین فاصله). فوکوس به «نام» می‌رود تا کاربر همان‌جا ادامه دهد. */
+  const firstNameRef = useRef(null);
+  const startNew = () => {
+    const q = pQuery.trim();
+    setPicked(null);
+    setStepErr('');
+    setMode('new');
+    if (q) {
+      const digits = toEnDigits(q).replace(/[^0-9]/g, '');
+      const numeric = /^[\d۰-۹\s()+-]+$/.test(q);
+      setF((s2) => {
+        if (!numeric) {
+          const [first, ...rest] = q.split(/\s+/);
+          return { ...s2, firstName: first ?? '', lastName: rest.join(' ') };
+        }
+        if (digits.length === 10 && isValidNationalId(digits) && !s2.nationalId.trim()) return { ...s2, nationalId: digits };
+        if (/^0?9\d{9}$/.test(digits) && !s2.phone.trim()) return { ...s2, phone: digits.startsWith('0') ? digits : `0${digits}` };
+        return s2;
+      });
+    }
+    requestAnimationFrame(() => firstNameRef.current?.focus());
+  };
   const pickPatient = (p) => {
     setPicked(p);
     const last = p?.last;
@@ -2169,18 +2203,26 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         <small>
           {editing
             ? 'مشخصاتِ بیمار — تغییرش روی همهٔ مراجعاتِ همین پرونده اثر می‌گذارد.'
-            : 'اول بیمار: پروندهٔ جدید بسازید یا پروندهٔ موجود را جستجو کنید — مراجعه زیرِ همین پرونده ثبت می‌شود.'}
+            : `اول بیمار را پیدا کنید — نام، موبایل یا کدِ ملی؛ اگر ${t.record}‌ای نبود، از همین‌جا ${t.record}ٔ تازه بسازید. ${t.visit} زیرِ همین ${t.record} ثبت می‌شود.`}
         </small>
       </div>
-      {!editing && (
-        <Tabs
-          variant="inset"
-          className="db-modetabs"
-          label="نوعِ ثبت"
-          value={mode}
-          onChange={(k) => { setMode(k); if (k === 'existing') setPicked(null); }}
-          items={[{ key: 'new', label: 'بیمارِ جدید' }, { key: 'existing', label: 'بیمارِ موجود' }]}
-        />
+
+      {/* دیکتهٔ بیمارِ جدید — ضبط → ویسپر → تحلیلِ دستیار → پرشدنِ فیلدها؛ از خودِ جست‌وجو هم در دسترس است و
+          پس از تحلیل به فرمِ پروندهٔ تازه می‌رود (clinic-daily-22). */}
+      {sttOn && !editing && !picked && (
+        <div className="db-dictate">
+          <VoiceInput
+            label="دیکتهٔ بیمارِ جدید"
+            disabled={busy || !!aiBusy}
+            onText={dictatePatient}
+            onErr={(m) => onToast(m)}
+          />
+          <small className="db-hint">
+            {aiBusy === 'dictate'
+              ? 'دستیار در حالِ تحلیلِ دیکته…'
+              : 'مثلاً بگویید: «علی رضایی، ۰۹۱۲…، کد ملی…، شکایت از…» — دستیار فیلدها را پر می‌کند.'}
+          </small>
+        </div>
       )}
 
       {(!editing && mode === 'existing') ? (
@@ -2195,14 +2237,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
           ) : (
             <>
+              {/* ⚠️ یک کادر برای هر سه: جست‌وجوی سرور نام، کدِ پرونده، موبایل و کدِ ملی را با هم می‌گردد. */}
               <input
                 type="text"
                 value={pQuery}
                 onChange={(e) => setPQuery(e.target.value)}
-                placeholder="جستجوی نام / کد پرونده / موبایل / کد ملی…"
+                placeholder="نام، موبایل یا کدِ ملی…"
+                aria-label={`جست‌وجوی ${t.record} — نام، موبایل یا کدِ ملی`}
+                data-patient-search
                 autoFocus
               />
-              <div className="db-plist">
+              <div className="db-plist" aria-live="polite">
                 {/* ⚠️ کدِ ملی و موبایل **متن‌اند نه عدد** (بازبینیِ UX، clinic-daily-11): `faNum` آن‌ها را
                     `Number` می‌کرد — «۰۰۲۷۰۲۵۸۵۳» می‌شد «۲۷٬۰۲۵٬۸۵۳»، صفرِ اول می‌افتاد و «· ۱ ویزیت» به
                     عدد می‌چسبید؛ منشی‌ای که برای جداکردنِ دو هم‌نام کدِ ملی را با کارت مقایسه می‌کند عددِ
@@ -2217,28 +2262,28 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                     </small>
                   </button>
                 ))}
-                {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
+                {pResults.length === 0 && pQuery.trim() && <div className="db-pnone">{`${t.record}‌ای با «${pQuery.trim()}» پیدا نشد`}</div>}
               </div>
+              {/* «ساختِ پروندهٔ تازه با همین نام» — نبودِ نتیجه یعنی دکمهٔ اصلی؛ با نتیجه، راهِ دومِ آرام
+                  (هم‌نامِ دیگری هم ممکن است باشد). بی‌متن: پروندهٔ خالی. */}
+              <button
+                type="button"
+                className={`vf-newrec${pQuery.trim() && pResults.length === 0 ? ' is-main' : ''}`}
+                data-act="new-record"
+                onClick={startNew}
+              >
+                <Plus width="15" height="15" aria-hidden="true" />
+                {pQuery.trim() ? `ساختِ ${t.record}ٔ تازه با همین نام` : `ساختِ ${t.record}ٔ تازه`}
+              </button>
             </>
           )}
         </div>
       ) : (
         <>
-          {/* دیکتهٔ بیمارِ جدید — ضبط → ویسپر → تحلیلِ دستیار → پرشدنِ فیلدها. */}
-          {sttOn && !editing && (
-            <div className="db-dictate">
-              <VoiceInput
-                label="دیکتهٔ بیمارِ جدید"
-                disabled={busy || !!aiBusy}
-                onText={dictatePatient}
-                onErr={(m) => onToast(m)}
-              />
-              <small className="db-hint">
-                {aiBusy === 'dictate'
-                  ? 'دستیار در حالِ تحلیلِ دیکته…'
-                  : 'مثلاً بگویید: «علی رضایی، ۰۹۱۲…، کد ملی…، شکایت از…» — دستیار فیلدها را پر می‌کند.'}
-              </small>
-            </div>
+          {!editing && (
+            <button type="button" className="vf-backsearch" data-act="back-to-search" onClick={() => { setStepErr(''); setMode('existing'); }}>
+              <Search width="14" height="14" aria-hidden="true" />{`جست‌وجوی ${t.record}‌های موجود`}
+            </button>
           )}
           <div className="db-grid2">
             {/* ⚠️ `required` فقط وقتی که این گام **دیده می‌شود**. کادرِ
@@ -2247,7 +2292,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                 اتفاقی نمی‌افتد. اعتبارسنجیِ واقعیِ این گام در
                 `stepOneProblem` است که پیام را کنارِ دکمه می‌نویسد. */}
             <label className="db-field"><span>نام</span>
-              <input type="text" value={f.firstName} onChange={set('firstName')} required={editing ? idOpen : step === 1} minLength={2} />
+              <input ref={firstNameRef} type="text" value={f.firstName} onChange={set('firstName')} required={editing ? idOpen : step === 1} minLength={2} />
             </label>
             <label className="db-field"><span>نام خانوادگی</span>
               <input type="text" value={f.lastName} onChange={set('lastName')} required={editing ? idOpen : step === 1} minLength={2} />
@@ -2257,13 +2302,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </label>
             <label className={`db-field${nidBad || coreErr.nationalId ? ' bad' : ''}`} data-core="nationalId"><span>کد ملی
               {/* موقت — بیمارِ آزمایشی (خواستهٔ مالک): کدِ تصادفیِ معتبر تا
-                  اعتبارسنجی رد شود. فقط سوپرادمین می‌بیند. */}
-              {me?.level >= 6 && !editing && (
+                  اعتبارسنجی رد شود. فقط سوپرادمین و فقط در محیطِ آزمایشی (`TEST_ENV`) می‌بیند. */}
+              {TEST_ENV && me?.level >= 6 && !editing && (
                 <button type="button" className="db-nidtest" title="فقط برای بیمارِ آزمایشی — کدِ تصادفیِ معتبر (موقت)"
                   onClick={() => setF((s) => ({ ...s, nationalId: randomNationalId() }))}>کدِ آزمایشی</button>
               )}
             </span>
-              <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')} placeholder="کلیدِ پرونده — اختیاری" />
+              <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')}
+                placeholder={tenantKind === 'company' ? '۱۰ رقم — اختیاری' : 'کدِ ملی ۱۰ رقمی (اختیاری)'} />
               {nidBad && <small className="db-hint bad">کد ملی معتبر نیست</small>}
             </label>
           </div>
@@ -2696,6 +2742,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           {/* ⚠️ دلیلِ نرفتن **کنارِ خودِ دکمه** نوشته می‌شود، نه در toast:
               toast می‌رود و کاربر با یک دکمهٔ بی‌جواب می‌ماند. */}
           {stepErr && <p className="db-steperr" role="alert">{stepErr}</p>}
+          {/* گامِ ۱ در حالِ جست‌وجو و بی‌انتخاب «بعدی» ندارد (clinic-daily-22): راهِ جلو یا انتخابِ یک ردیف است یا
+              «ساختِ پروندهٔ تازه» — دو دکمهٔ بنفشِ هم‌وزن زیرِ هم، یکی‌شان فقط خطا می‌داد. */}
+          {!(step === 1 && mode === 'existing' && !picked) && (
           <div className="db-stepnav">
             {step > 1 && (
               <button type="button" className="db-stepback" onClick={() => { setStepErr(''); setStep(step - 1); }}>
@@ -2704,6 +2753,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             )}
             <button type="button" className="db-submit" onClick={goNext}>بعدی</button>
           </div>
+          )}
         </>
       )}
     </Overlay>

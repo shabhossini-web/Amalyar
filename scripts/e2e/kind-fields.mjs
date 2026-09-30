@@ -86,6 +86,8 @@ try {
   const stepThreeLabels = async (kindKey) => {
     await p.locator('.db-add').click();
     await p.waitForTimeout(700);
+    /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+    await p.locator('.db-sheet [data-act="new-record"]').click();
     await p.locator('input[required]').first().fill('آزمونِ');
     await p.locator('input[required]').nth(1).fill('فرمِ نوع');
     await p.locator('.db-stepnav .db-submit').click();

@@ -7,7 +7,8 @@
  *   - شیت `role="dialog"` و `aria-modal` دارد و با باز شدن فوکوس به داخلش می‌آید
  *   - Tab داخلِ شیت می‌چرخد و به پشتِ پوشش نمی‌رود؛ Shift+Tab از اولی به آخری
  *   - Escape شیت را می‌بندد و هیچ پوششی نمی‌ماند؛ فوکوس به دکمهٔ بازکننده برمی‌گردد
- *   - تب‌ها roving tabindex دارند و با فلش/Home/End عوض می‌شوند
+ *   - تب‌ها roving tabindex دارند و با فلش/Home/End عوض می‌شوند (فیلترِ وضعیتِ همان داشبورد — گامِ ۱ِ شیت از
+ *     بازبینیِ UX، clinic-daily-22، یک جست‌وجوی واحد است و تب ندارد)
  *  نباید بیفتد:
  *   - Escape روی تقویمِ بازِ داخلِ شیت فقط تقویم را می‌بندد، نه شیت را (لایه‌ها)
  *  نگهبانِ تغییرِ ذخیره‌نشده (بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-08):
@@ -65,6 +66,11 @@ try {
   ok(a.inSheet, `فوکوس داخلِ شیت است (${a.tag}.${String(a.cls).split(' ')[0]})`);
 
   console.log('\n۲) Tab داخلِ شیت می‌چرخد');
+  /* فرمِ پروندهٔ تازه — گامِ ۱ با جست‌وجو باز می‌شود و کنترل‌های بیشتر پشتِ «ساختِ پروندهٔ تازه» است. */
+  await page.locator('.db-sheet [data-act="new-record"]').click();
+  await page.waitForFunction(() => !!document.activeElement?.closest('.db-sheet .db-grid2'), null, { timeout: 3000 }).catch(() => {});
+  a = await active();
+  ok(a.inSheet && a.tag === 'INPUT', `«ساختِ پروندهٔ تازه» فوکوس را به کادرِ «نام» می‌برد (${a.tag})`);
   const n = await page.evaluate(() => {
     const SEL = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]';
     return [...document.querySelector('.db-sheet').querySelectorAll(SEL)].filter((e) => e.getClientRects().length > 0 && !e.closest('[hidden]')).length;
@@ -110,6 +116,7 @@ try {
   await page.locator('.db-overlay').click({ position: { x: 8, y: 8 } });
   await page.waitForTimeout(300);
   ok((await page.locator('.db-sheet').count()) === 1, 'کلیک روی پس‌زمینه شیتِ مراجعه را نبست');
+  await page.locator('.db-sheet [data-act="new-record"]').click();
   const nameBox = page.locator('.db-sheet .db-grid2 input').first();
   await nameBox.fill('نوشته');
   await page.keyboard.press('Escape');
@@ -128,13 +135,14 @@ try {
   ok((await overlays()) === 0, '«دور ریختن» بست، بدونِ پوششِ باقی‌مانده');
 
   console.log('\n۶) تب‌ها — roving tabindex و کلیدهای جهت');
-  await openSheet();
-  const tabs = page.locator('.db-modetabs button[role="tab"]');
-  ok((await tabs.count()) === 2, 'دو تب');
+  /* همان `Tabs`ِ مشترک — فیلترِ وضعیتِ داشبورد (گامِ ۱ِ شیت دیگر تب ندارد؛ clinic-daily-22). */
+  const tabs = page.locator('.db-filters:not(.db-kindfilter) button[role="tab"]');
+  const nTabs = await tabs.count();
+  ok(nTabs >= 2, `${nTabs} تب`);
   const tabState = () => tabs.evaluateAll((els) => els.map((b) => ({ sel: b.getAttribute('aria-selected'), ti: b.getAttribute('tabindex'), focused: b === document.activeElement })));
   let ts = await tabState();
-  ok(ts[0].sel === 'true' && ts[0].ti === '0' && ts[1].ti === '-1', 'فقط تبِ فعال tabindex=0 دارد');
-  const rtl = await page.evaluate(() => getComputedStyle(document.querySelector('.db-modetabs')).direction === 'rtl');
+  ok(ts[0].sel === 'true' && ts[0].ti === '0' && ts.slice(1).every((x) => x.ti === '-1'), 'فقط تبِ فعال tabindex=0 دارد');
+  const rtl = await page.evaluate(() => getComputedStyle(document.querySelector('.db-filters')).direction === 'rtl');
   const nextKey = rtl ? 'ArrowLeft' : 'ArrowRight';
   const prevKey = rtl ? 'ArrowRight' : 'ArrowLeft';
   await tabs.nth(0).focus();
@@ -150,14 +158,12 @@ try {
   await page.keyboard.press('End');
   await page.waitForTimeout(150);
   ts = await tabState();
-  ok(ts[1].sel === 'true', 'End آخرین تب را انتخاب کرد');
-  await tabs.nth(1).focus();
+  ok(ts[nTabs - 1].sel === 'true', 'End آخرین تب را انتخاب کرد');
+  await tabs.nth(nTabs - 1).focus();
   await page.keyboard.press('Home');
   await page.waitForTimeout(150);
   ts = await tabState();
   ok(ts[0].sel === 'true' && ts[0].focused, 'Home اولین تب را انتخاب کرد');
-  await page.keyboard.press('Escape');
-  await page.locator('.db-sheet').waitFor({ state: 'detached' });
 
   console.log('\n۷) بدونِ خطای JS');
   ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');

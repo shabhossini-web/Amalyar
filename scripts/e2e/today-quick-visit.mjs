@@ -86,6 +86,8 @@ try {
   console.log('\n۴) ثبتِ یک مراجعهٔ دستی از همین‌جا');
   await fab.click();
   await page.waitForSelector('.db-sheet', { timeout: 8000 });
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await page.locator('.db-sheet [data-act="new-record"]').click();
   await page.locator('.db-sheet input[required]').first().fill('بیمارِ');
   await page.locator('.db-sheet input[required]').nth(1).fill(`سریع${tag}`);
   await page.locator('.db-stepnav .db-submit').click();
@@ -164,6 +166,7 @@ try {
   await pd.waitForSelector('.td-hello', { timeout: 15000 });
   await pd.locator('[data-quick-visit]').click();
   await pd.waitForSelector('.db-sheet', { timeout: 8000 });
+  await pd.locator('.db-sheet [data-act="new-record"]').click();
   await pd.locator('.db-sheet input[required]').first().fill('بیمارِ');
   await pd.locator('.db-sheet input[required]').nth(1).fill(`سریع${tag}`);
   await pd.locator('.db-stepnav .db-submit').click();

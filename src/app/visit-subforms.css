@@ -344,3 +344,22 @@
 
 /* ── منتخب‌ها بی‌اسلاتِ خالی (surgery-22) — تا ستاره‌ای نخورده، یک خطِ راهنما کنارِ «الصاقِ فرم». */
 .vf-pin-hint { flex: 1 1 200px; min-width: 0; font-size: 11.5px; font-weight: 600; line-height: 1.8; color: var(--text3); }
+
+/* ── گامِ ۱: یک جست‌وجو + «ساختِ پروندهٔ تازه» (clinic-daily-22) ────────────────────
+   تا چیزی پیدا نشده، ساختن دکمهٔ اصلی است؛ با نتیجه، راهِ دومِ آرام (خط‌چین) — هم‌نامِ دیگری هم ممکن است
+   باشد. از فرمِ پروندهٔ تازه همیشه یک قدم تا جست‌وجو فاصله است. */
+.vf-newrec {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px;
+  padding: 0 16px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 800;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .06); border: 1px dashed rgba(var(--brand-2-rgb), .45);
+}
+.vf-newrec:hover { background: rgba(var(--brand-rgb), .12); }
+.vf-newrec.is-main { color: #fff; border: 0; background: linear-gradient(135deg, var(--brand-2), var(--brand)); }
+.vf-backsearch {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
+  border-radius: 10px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
+  background: none; border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.vf-backsearch:hover { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .45); }
+.vf-newrec:focus-visible, .vf-backsearch:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (max-width: 620px) { .vf-backsearch { min-height: 44px; } }

@@ -41,6 +41,8 @@ try {
   /* تا گامِ ۳ فرمِ ویزیت. */
   await page.locator('.db-add').click();
   await page.waitForTimeout(700);
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await page.locator('.db-sheet [data-act="new-record"]').click();
   await page.locator('input[required]').first().fill('آزمونِ');
   await page.locator('input[required]').nth(1).fill('بازشو');
   await page.locator('.db-stepnav .db-submit').click();

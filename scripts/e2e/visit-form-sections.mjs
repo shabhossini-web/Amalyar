@@ -37,6 +37,9 @@ try {
   ok((await page.locator('.db-sect small').first().innerText()).includes('پرونده'),
     '**توضیح می‌گوید این بخش چه کاری می‌کند**');
 
+  ok(await page.locator('.db-sheet [data-patient-search]').count() === 1, '**گامِ ۱ با جست‌وجوی واحدِ پرونده باز می‌شود** (clinic-daily-22)');
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await page.locator('.db-sheet [data-act="new-record"]').click();
   await page.locator('input[required]').first().fill('آزمونِ');
   await page.locator('input[required]').nth(1).fill('تفکیک');
   await page.locator('.db-stepnav .db-submit').click();

@@ -82,6 +82,8 @@ try {
     p.setDefaultTimeout(9000);
     await p.goto(`${vite.base}/app/dashboard`, { waitUntil: 'networkidle' });
     await p.locator('.db-add').first().click();
+    /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+    await p.locator('.db-sheet [data-act="new-record"]').click();
     await p.locator('input[required]').first().fill('بیمارِ');
     await p.locator('input[required]').nth(1).fill('خدمت');
     await p.locator('.db-stepnav .db-submit').click();

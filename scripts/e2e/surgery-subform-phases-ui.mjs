@@ -282,6 +282,8 @@ try {
   await p2.goto(`${UI}/app/dashboard`, { waitUntil: 'networkidle' });
   await p2.locator('.db-add').first().click();
   await p2.waitForTimeout(600);
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await p2.locator('.db-sheet [data-act="new-record"]').click();
   const nameInp = p2.locator('.db-sheet .db-grid2 input');
   await nameInp.nth(0).fill('تازهٔ');
   await nameInp.nth(1).fill(`مرحله${tag}`);

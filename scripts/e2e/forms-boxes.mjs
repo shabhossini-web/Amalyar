@@ -64,6 +64,8 @@ ok('شیت باز شد', await page.locator('.db-sheet').count() > 0);
    این آزمون باید تا آن‌جا برود. پیش از این، سرِ گامِ ۱ دنبالِ `.dyn-img`
    می‌گشت و صفر پیدا می‌کرد. */
 {
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await page.locator('.db-sheet [data-act="new-record"]').click();
   const inp = page.locator('.db-sheet .db-grid2 input');
   await inp.nth(0).fill('باکس'); await inp.nth(1).fill('آزما');
   await page.locator('.db-stepnav button').last().click();
