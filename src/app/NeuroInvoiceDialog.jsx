@@ -138,7 +138,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
           {err}
           {/* خطای تعرفه راهِ رفع را هم نشان می‌دهد (company-14) — تبِ تازه تا این پنجره سرِ جایش بماند. */}
           {tariffMissing && (user?.level >= 6
-            ? <> <Link className="nv-fixlink" to="/app/settings" target="_blank" rel="noopener noreferrer">تعریفِ تعرفه <External width="12" height="12" /></Link></>
+            ? <> <Link className="nv-fixlink" to="/app/settings#st-tariff" target="_blank" rel="noopener noreferrer">تعریفِ تعرفه <External width="12" height="12" /></Link></>
             : <> از مدیرِ سامانه بخواهید ضریب را در «تنظیماتِ شرکت» ثبت کند.</>)}
         </p>
       )}

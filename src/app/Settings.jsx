@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { useConfig, useTerms } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
@@ -42,6 +42,30 @@ export default function Settings() {
   const [codes, setCodes] = useState({ total: 0, version: null });
   const [tf, setTf] = useState({ year: '', sector: 'private', professional: '', technical: '', anesthesia: '' });
   const setT = (k) => (e) => setTf((s) => ({ ...s, [k]: e.target.value }));
+
+  /* **پیوند به یک بخش** (`/app/settings#st-tariff` — «تعریفِ تعرفه»ِ پنجرهٔ خدماتِ صورت‌حساب، بازبینیِ
+     خصمانه R16): صفحه تنبل بار می‌شود و بخش پس از رسیدنِ چانک ساخته می‌شود، پس پرشِ خودِ مرورگر به
+     `#…` هنگامِ بارگذاری جایی پیدا نمی‌کند و صفحه از بالا باز می‌شد. تا ۵ ثانیه منتظرِ همان شناسه
+     می‌ماند (گروه‌های تنظیم دیرتر می‌رسند)، بعد همان پرشِ فهرستِ بخش‌ها: اسکرول (بی‌انیمیشن با
+     کاهشِ حرکت) و فوکوس روی سرتیتر. */
+  const location = useLocation();
+  useEffect(() => {
+    const id = decodeURIComponent((location.hash || '').slice(1));
+    if (!id) return undefined;
+    let tries = 0;
+    let timer = 0;
+    const jump = () => {
+      const el = document.getElementById(id);
+      if (!el) { if (tries++ < 50) timer = setTimeout(jump, 100); return; }
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      /* فوکوس روی سرتیتر — صفحه‌خوان همان‌جا شروع می‌کند، و حلقه‌اش «این‌جا» را نشان می‌دهد تا
+         اولین لمس یا کلیک. */
+      el.focus({ preventScroll: true });
+    };
+    timer = setTimeout(jump, 0);
+    return () => clearTimeout(timer);
+  }, [location.key, location.hash]);
 
   const [codesError, setCodesError] = useState(null);
   const loadTariffs = useCallback(async () => {
