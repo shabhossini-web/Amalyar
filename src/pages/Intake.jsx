@@ -11,7 +11,7 @@ import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
-import { BrandMark, CallLink, PublicError, PublicFoot, RetryButton, loadErrorText, useFallbackFace } from './PublicBits.jsx';
+import { BrandMark, CallLink, PublicError, PublicFoot, RetryButton, faPhone, loadErrorText, telHref, useFallbackFace } from './PublicBits.jsx';
 import { adoptFace } from '../lib/public-face.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -179,6 +179,17 @@ function Register() {
     }
   };
 
+  /* کیبوردِ گوشی (بازبینیِ UX، بندِ ۱۱۶): کادرها داخلِ <form>اند تا «برو»ِ کیبورد کار کند، ولی Enter در هر کادری
+     جز پاسخِ پرسش به کادرِ **بعدی** می‌رود — بی‌این، «بعدی»ِ آیفون در کادرِ «نام» کلِ فرم را با خطای کادرهای
+     خالیِ بعدی می‌فرستاد. فقط پاسخِ پرسش (enterKeyHint=go) می‌فرستد. */
+  const onFormKey = (e) => {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT' || e.target.id === 'ik-cap-answer') return;
+    e.preventDefault();
+    const list = [...e.currentTarget.querySelectorAll('input:not([type=hidden]):not(:disabled)')];
+    list[list.indexOf(e.target) + 1]?.focus();
+  };
+  const onFormSubmit = (e) => { e.preventDefault(); if (!busy && cap) submit(); };
+
   if (loadErr && !link) return <LoadError brand={fallback?.brand} err={loadErr} />;
 
   return (
@@ -188,16 +199,20 @@ function Register() {
       <button type="button" className="ik-resume-toggle" onClick={() => setResume(true)}>
         قبلاً ثبت‌نام کرده‌اید؟ <b>ادامه با شمارهٔ موبایل</b>
       </button>
+      {/* noValidate: سنجش مالِ `validate()` است (پیام زیرِ هر کادر، فارسی) نه حبابِ انگلیسیِ مرورگر. */}
+      <form className="ik-reg" onSubmit={onFormSubmit} onKeyDown={onFormKey} noValidate>
+      {/* autocomplete + name: پرکنندهٔ خودکارِ اندروید/آیفون نام و موبایل را پر می‌کند (بندِ ۱۱۶). تاریخِ تولد
+          عمداً `bday` ندارد: پرکننده تاریخِ میلادی می‌گذارد و این کادر شمسی است. */}
       <div className="ik-grid">
-        <Field id="ik-first" label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} error={fErr.firstName} />
-        <Field id="ik-last" label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} error={fErr.lastName} />
-        <Field id="ik-nid" label="کدِ ملی *" value={f.nationalId} onChange={set('nationalId')} disabled={busy} dir="ltr" inputMode="numeric" error={fErr.nationalId} />
-        <Field id="ik-phone" label="شمارهٔ موبایل *" value={f.phone} onChange={set('phone')} disabled={busy} dir="ltr" inputMode="numeric" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" error={fErr.phone} />
+        <Field id="ik-first" name="firstName" autoComplete="given-name" enterKeyHint="next" label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} error={fErr.firstName} />
+        <Field id="ik-last" name="lastName" autoComplete="family-name" enterKeyHint="next" label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} error={fErr.lastName} />
+        <Field id="ik-nid" name="nationalId" autoComplete="off" enterKeyHint="next" label="کدِ ملی *" value={f.nationalId} onChange={set('nationalId')} disabled={busy} dir="ltr" inputMode="numeric" error={fErr.nationalId} />
+        <Field id="ik-phone" name="phone" type="tel" autoComplete="tel" enterKeyHint="next" label="شمارهٔ موبایل *" value={f.phone} onChange={set('phone')} disabled={busy} dir="ltr" inputMode="numeric" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" error={fErr.phone} />
         {/* JDate خودش برچسب دارد؛ پیچیدنش در label یعنی دو برچسب. */}
         {/* نمونه‌ای که شبیهِ تاریخِ تولد است — پیش‌فرضِ «۱۴۰۵/۰۱/۰۱» یعنی امسال (بازبینیِ UX، بندِ ۱۱۳). */}
         <JDate className="ik-field" mode="birth" label="تاریخِ تولد" value={f.birthDate} placeholder="مثلاً ۱۳۶۵/۰۴/۲۰"
                onChange={(v) => setF((s) => ({ ...s, birthDate: v }))} disabled={busy} />
-        <Field label="نشانی" value={f.address} onChange={set('address')} disabled={busy} />
+        <Field name="address" autoComplete="street-address" enterKeyHint="next" label="نشانی" value={f.address} onChange={set('address')} disabled={busy} />
 
         {/* ⚠️ «چطور با ما آشنا شدید» همین‌جا پرسیده می‌شود و نه در نظرسنجیِ
             بعدی: بیمار الان یادش هست چطور پیدایمان کرده. پرسیدنش هفته‌ها بعد
@@ -222,7 +237,7 @@ function Register() {
         {/* نامِ معرف فقط برای کانال‌هایی که معرف دارند — پرسیدنش از کسی که
             «اینستاگرام» زده، سؤالِ بی‌جواب است. */}
         {sources.find((o) => String(o.id) === String(f.referralSourceId))?.asksWho && (
-          <Field label="نامِ معرف" value={f.referralNote} onChange={set('referralNote')} disabled={busy} />
+          <Field name="referralNote" autoComplete="off" enterKeyHint="next" label="نامِ معرف" value={f.referralNote} onChange={set('referralNote')} disabled={busy} />
         )}
       </div>
 
@@ -235,20 +250,28 @@ function Register() {
           <button type="button" className="ik-cap-new" onClick={loadCap} disabled={busy} aria-label="پرسشِ دیگر" title="پرسشِ دیگر">
             <Refresh width="17" height="17" />
           </button>
-          <input id="ik-cap-answer" dir="ltr" inputMode="numeric" aria-labelledby="ik-cap-q" value={answer}
+          <input id="ik-cap-answer" name="captcha" dir="ltr" inputMode="numeric" autoComplete="off" enterKeyHint="go" aria-labelledby="ik-cap-q" value={answer}
                  aria-invalid={fErr.captcha ? true : undefined} aria-describedby={fErr.captcha ? 'ik-cap-answer-err' : undefined}
                  onChange={(e) => { setAnswer(e.target.value); setFErr((x) => (x.captcha ? { ...x, captcha: '' } : x)); }} disabled={busy || !cap} />
         </div>
         {fErr.captcha && <em id="ik-cap-answer-err" className="ik-ferr">{fErr.captcha}</em>}
+        {/* پرسشِ تصویری برای بیمارِ کم‌بینا یا صفحه‌خوان راهِ دیگری ندارد (بندِ ۱۱۶) — دست‌کم «پرسشِ دیگر» و تماس. */}
+        <small className="ik-cap-help">
+          اگر عددها را نمی‌توانید بخوانید، «پرسشِ دیگر» را بزنید
+          {link?.brand?.phone
+            ? <> یا با <a href={telHref(link.brand.phone)}><bdi dir="ltr">{faPhone(link.brand.phone)}</bdi></a> تماس بگیرید؛ ثبت‌نام را تلفنی هم انجام می‌دهیم.</>
+            : '.'}
+        </small>
       </div>
 
       {err && <p className="ik-bad" role="alert"><Alert width="15" height="15" /> <span>{err}</span></p>}
       {err && errStatus === 409 && (
         <CallLink phone={link?.brand?.phone} label={link?.brand?.name ? `تماس با ${link.brand.name}` : 'تماس'} className="ik-err-call" />
       )}
-      <button type="button" className="ik-go" disabled={busy || !cap} onClick={submit}>
+      <button type="submit" className="ik-go" disabled={busy || !cap}>
         {busy ? 'در حال ثبت…' : 'ادامه'}
       </button>
+      </form>
       </>)}
     </Shell>
   );

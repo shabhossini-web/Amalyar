@@ -495,3 +495,13 @@
 .ik .dyn-pill { min-height: 44px; }
 .ik .dyn-img-has button, .ik .dyn-pay-row button, .ik .fdrop-x { min-width: 44px; min-height: 44px; }
 .ik .fdrop-retry, .ik .fdrop-clear { min-height: 44px; padding-inline: 14px; }
+
+/* ── فرمِ ثبت‌نام داخلِ <form> (بازبینیِ UX، بندِ ۱۱۶) — همان فاصلهٔ کارت، حالا که فرزندانِ کارت یک ظرف‌اند ── */
+.ik-reg { display: grid; gap: 13px; }
+/* راهِ دیگرِ پرسشِ تصویری: «پرسشِ دیگر» یا تماس. ناحیهٔ لمسِ شماره ۴۴ پیکسل بی‌تغییرِ سطر. */
+.ik-cap-help { flex: 1 1 100%; font-size: 13.5px; line-height: 1.8; color: var(--text2); }
+.ik-cap-help a {
+  display: inline-block; padding-block: 11px; margin-block: -11px; font-weight: 800; text-decoration: none;
+  color: var(--brand-text); font-variant-numeric: tabular-nums;
+}
+.ik-cap-help a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
