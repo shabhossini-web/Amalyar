@@ -128,26 +128,37 @@ export class WaitlistService {
     }
 
     /* ── ۲) عمل‌های ساخته‌شده و هنوز انجام‌نشده: بی‌تاریخ یا رزروشده ── */
-    const surgeries = await this.prisma.visit.findMany({
-      where: {
-        AND: [scope, live, {
-          kind: 'surgery', opStatus: 'pending',
-          OR: [{ opDate: null }, { opDate: { gte: today } }, { opDate: { lt: today }, opStartTime: null }],
-        }],
-      },
-      select: {
-        id: true, seq: true, opDate: true, plannedDate: true, createdAt: true, opType: true,
-        procedureTypeId: true, procedureType: { select: { name: true } }, otherProcedures: OTHER_PX,
-        hospitalName: true, hospital: { select: { name: true } },
-        surgeonId: true, surgeonName: true, surgeon: person,
-        patient: patientSel,
-        decidedIn: { select: decisionSel },
-      },
-      orderBy: [{ opDate: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
-      take: CAP + 1,
-    });
-    const surgeriesTruncated = surgeries.length > CAP;
-    if (surgeriesTruncated) surgeries.length = CAP;
+    const surgerySel = {
+      id: true, seq: true, opDate: true, plannedDate: true, createdAt: true, opType: true,
+      procedureTypeId: true, procedureType: { select: { name: true } }, otherProcedures: OTHER_PX,
+      hospitalName: true, hospital: { select: { name: true } },
+      surgeonId: true, surgeonName: true, surgeon: person,
+      patient: patientSel,
+      decidedIn: { select: decisionSel },
+    } as const;
+    /* ⚠️ **«موعد گذشته» کوئریِ جدا با سقفِ خودش** (بازبینیِ خصمانهٔ بستهٔ F، FF5). تا دیروز یک کوئریِ
+       اجتماع بود با ترتیبِ «قدیمی‌ترین تاریخ اول» و یک سقف: شاخهٔ موعدگذشته کفِ تاریخ ندارد، پس چند صد
+       عملِ ثبت‌نشدهٔ سال‌های قبل کلِ سقفِ ۳۰۰ را پر می‌کرد و عمل‌های بی‌تاریخ، امروز و رزروشده — همان
+       کارِ جاری — از فهرست می‌افتادند. حالا هر بخش سقفِ خودش را دارد و از موعدگذشته‌ها تازه‌ترین‌ها
+       می‌مانند (کارِ باز و هنوز قابلِ پیگیری)؛ بیشتر از سقف با `truncated` گفته می‌شود. */
+    const [upcoming, overdue] = await Promise.all([
+      this.prisma.visit.findMany({
+        where: { AND: [scope, live, { kind: 'surgery', opStatus: 'pending', OR: [{ opDate: null }, { opDate: { gte: today } }] }] },
+        select: surgerySel,
+        orderBy: [{ opDate: { sort: 'asc', nulls: 'first' } }, { id: 'asc' }],
+        take: CAP + 1,
+      }),
+      this.prisma.visit.findMany({
+        where: { AND: [scope, live, { kind: 'surgery', opStatus: 'pending', opDate: { lt: today }, opStartTime: null }] },
+        select: surgerySel,
+        orderBy: [{ opDate: 'desc' }, { id: 'desc' }],
+        take: CAP + 1,
+      }),
+    ]);
+    const surgeriesTruncated = upcoming.length > CAP || overdue.length > CAP;
+    if (upcoming.length > CAP) upcoming.length = CAP;
+    if (overdue.length > CAP) overdue.length = CAP;
+    const surgeries = [...overdue, ...upcoming];
     const rowsS = surgeries.map((s) => {
       const d = s.decidedIn;
       const at = s.opDate ? +dayOfDate(s.opDate) : null;

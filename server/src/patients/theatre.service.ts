@@ -6,7 +6,7 @@ import { LEVEL } from '../common/levels';
 import { isUnrestricted, ownVisitWhere } from '../common/own-scope';
 import { actorName } from '../common/person';
 import { DISCHARGE_NOTES, currentNotes, noteBody, setVisitNote } from './clinical-note';
-import { ANESTHESIA_LABELS, DISPOSITION_LABELS } from './labels';
+import { ANESTHESIA_LABELS, DISPOSITION_LABELS, OP_LABELS } from './labels';
 import { vitalView } from './vitals';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { RecordService } from './record.service';
@@ -22,7 +22,7 @@ import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
 import { ConfigService } from '../config/config.service';
 import { toDateValue } from '../common/jalali';
-import { CLINIC_TZ } from '../common/clinic-day';
+import { CLINIC_TZ, clinicTodayIso } from '../common/clinic-day';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
@@ -94,10 +94,15 @@ const roomState = (v: { opStatus: string | null; opStartTime: string | null; opE
      همان تلهٔ `finished` که یک‌بار روی `cancelled` خورده بود. */
   if (v.dischargeAt) return { state: 'discharged', stateFa: 'ترخیص شد' };
   if (v.opEndTime) return { state: 'finished', stateFa: 'در ریکاوری' };
+  /* ⚠️ عملی که «انجام شد» خورده (از فهرستِ انتظار یا داشبورد) ولی ساعتش سرِ میز زده نشد، روی تخته
+     «در انتظار» می‌ماند — یعنی تخته می‌گفت کسی منتظرِ عملی است که تمام شده (بازبینیِ خصمانهٔ بستهٔ F،
+     FF8). پیش از هر برچسبِ ساعت‌محور؛ برچسب همان `OP_LABELS` است نه متنِ دوم. */
+  if (v.opStatus === 'done') return { state: 'finished', stateFa: OP_LABELS.done };
   const day = v.opDate ? v.opDate.toISOString().slice(0, 10) : null;
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  /* «امروز» به وقتِ مطب، نه کانتینر (FF6): کانتینر روی UTC است و بینِ ۰۰:۰۰ تا ۰۳:۳۰ تهران روزِ UTC
+     هنوز دیروز است — عملِ امروزِ بی‌شروع «انجام‌نشده»ی دیروز را نمی‌گرفت ولی عملِ دیروز «در انتظار»
+     می‌ماند و شروع‌شدهٔ دیروز «در جریان». همان تعریفِ `common/clinic-day` که بقیهٔ میزها دارند. */
+  const todayIso = clinicTodayIso();
   if (!v.opStartTime) {
     /* ⚠️ روزِ گذشتهٔ بی‌شروع «در انتظار» نیست (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-16): کسی منتظرِ عملِ دیروز
        نیست؛ یا انجام نشد یا ثبت نشد، و همین برچسب کارِ کسی است که باید تکلیفش را روشن کند. همان عمل

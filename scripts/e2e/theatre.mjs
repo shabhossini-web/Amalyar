@@ -173,6 +173,12 @@ try {
   ok('… و با شروعِ بی‌پایان «در جریان»', (await send(`/theatre/visits/${v.id}`)).json?.visit?.state === 'running');
   sql(`UPDATE visits SET op_start_time=NULL WHERE id=${v.id}`);
   ok('… و بی‌ساعت «در انتظار»', (await send(`/theatre/visits/${v.id}`)).json?.visit?.state === 'waiting');
+  /* ⚠️ بستهٔ FF (FF8): عملی که از فهرستِ انتظار «انجام شد» خورد ولی ساعتش سرِ میز زده نشد «در انتظار» می‌ماند. */
+  sql(`UPDATE visits SET op_status='done' WHERE id=${v.id}`);
+  const doneRow = (await send(`/theatre/visits/${v.id}`)).json?.visit;
+  ok('**نباید بیفتد:** عملِ «انجام شد»ِ بی‌ساعت روی تخته «در انتظار» بماند',
+    doneRow?.state === 'finished' && doneRow?.stateFa === 'انجام شد', JSON.stringify([doneRow?.state, doneRow?.stateFa]));
+  sql(`UPDATE visits SET op_status='pending' WHERE id=${v.id}`);
   /* 🔴 **ساعتِ شروعِ آینده برنامه است، نه جریان.** مطب ساعتِ برنامه‌ریزی‌شده را در
      همین فیلد می‌نویسد؛ بدونِ این شرط، ساعتِ ۹ صبح عملِ ۲۳:۵۹ هم «در جریان» بود. */
   sql(`UPDATE visits SET op_start_time='23:59' WHERE id=${v.id}`);
