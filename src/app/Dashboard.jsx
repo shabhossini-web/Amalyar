@@ -909,19 +909,26 @@ export default function Dashboard() {
   const deepRef = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
+  /* «مراجعهٔ جدید» از پروندهٔ زنده (W3.1): بیمار در `state` می‌آید نه در
+     کوئری — نامِ بیمار نباید در URL و تاریخچهٔ مرورگر بنشیند. `replace`
+     می‌زنیم تا back به یک شیتِ دوباره‌باز نرسد.
+     `firstName`/`phone`: «ثبتِ بیمارِ تازه» از جستجوی سراسری وقتی بیماری پیدا نشد (shell-25).
+     ⚠️ effectِ جدا با `location.key`، نه mountِ اول (بازبینیِ خصمانه، R5): جستجوی سراسری روی
+     **خودِ همین صفحه** هم `navigate` می‌زند و صفحه دوباره mount نمی‌شود — نسخهٔ قبلی فقط یک‌بار
+     می‌خواندش و «ثبتِ بیمارِ تازه» این‌جا هیچ کاری نمی‌کرد. `replace` با `state: null` کلیدِ
+     تازه‌ای می‌سازد که همین effect را بی‌اثر دوباره می‌زند. */
+  const prefillIn = (st) => { const pre = st?.prefill; return pre?.patientId || pre?.firstName || pre?.phone ? pre : null; };
+  useEffect(() => {
+    const pre = prefillIn(location.state);
+    if (!pre) return;
+    setModal({ prefill: pre });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key]);
   useEffect(() => {
     if (deepRef.current) return;
     deepRef.current = true;
-    /* «مراجعهٔ جدید» از پروندهٔ زنده (W3.1): بیمار در `state` می‌آید نه در
-       کوئری — نامِ بیمار نباید در URL و تاریخچهٔ مرورگر بنشیند. `replace`
-       می‌زنیم تا back به یک شیتِ دوباره‌باز نرسد. */
-    const pre = location.state?.prefill;
-    /* `firstName`/`phone`: «ثبتِ بیمارِ تازه» از جستجوی سراسری وقتی بیماری پیدا نشد (shell-25). */
-    if (pre?.patientId || pre?.firstName || pre?.phone) {
-      setModal({ prefill: pre });
-      navigate(location.pathname, { replace: true, state: null });
-      return;
-    }
+    /* بیمارِ پیش‌پر همین حالا فرمِ تازه را باز کرده (effectِ بالا) — دیپ‌لینکِ `?patient=` رویش ننشیند. */
+    if (prefillIn(location.state)) return;
     const vid = Number(new URLSearchParams(window.location.search).get('patient'));
     if (!vid) return;
     api(`/visits/${vid}`)
