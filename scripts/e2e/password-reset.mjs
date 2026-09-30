@@ -10,6 +10,9 @@
  *  - کدِ درست ← رمزِ تازه؛ همهٔ نشست‌های قبلی باطل؛ رمزِ قبلی رد، رمزِ تازه قبول؛ کد یک‌بارمصرف
  *  - خطاهای سنجش فارسی‌اند (قانونِ ۸)؛ سقفِ نرخ برای شناسهٔ ناموجود هم می‌خورد (۴۲۹ فارسی)
  *
+ * بازبینیِ امنیتیِ بستهٔ P (بستهٔ PF) — هر بخش سنجه‌ای است که **بی‌اصلاح قرمز** می‌شد:
+ *  - PF1: شمارهٔ کسی که حساب دارد از «تعاریف» (جراح/راننده) عوض نمی‌شود (۴۰۳)، و سوپرادمین کدِ پیامکی نمی‌گیرد
+ *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
  */
@@ -43,9 +46,9 @@ const keys = (o) => JSON.stringify(Object.keys(o ?? {}).sort());
 const run = String(Date.now()).slice(-6);
 const SELFIE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 
-/** حسابِ تازه از مسیرِ واقعیِ ثبت‌نام (OTPِ ساختگی)؛ `approve` ← فعال با سطحِ ۲. */
-async function newAccount(tag, adminBearer, approve = true) {
-  const phone = `0936${run}${tag}`.slice(0, 11).padEnd(11, '0');
+/** حسابِ تازه از مسیرِ واقعیِ ثبت‌نام (OTPِ ساختگی)؛ `approve` ← فعال با سطحِ ۲ (یا `level`). */
+async function newAccount(tag, adminBearer, approve = true, { phone: fixedPhone, level = 2 } = {}) {
+  const phone = fixedPhone ?? `0936${run}${tag}`.slice(0, 11).padEnd(11, '0');
   const username = `e2ereset${tag}${run}`;
   const otp = await call('/auth/signup/request-otp', { body: { phone } });
   const ver = await call('/auth/signup/verify-otp', { body: { phone, code: otp.json?.devCode } });
@@ -53,8 +56,8 @@ async function newAccount(tag, adminBearer, approve = true) {
     signupToken: ver.json?.signupToken, firstName: 'آزمونی', lastName: 'بازیابی', username, password: 'old-pass-1', selfie: SELFIE,
   } });
   const id = done.json?.user?.id;
-  if (id && approve) await call(`/accounts/${id}/approve`, { body: { level: 2 }, bearer: adminBearer });
-  return { id, phone, username };
+  if (id && approve) await call(`/accounts/${id}/approve`, { body: { level }, bearer: adminBearer });
+  return { id, phone, username, personId: done.json?.user?.personId };
 }
 
 console.log('۰) آماده‌سازی: مدیر + حسابِ فعال + حسابِ در انتظار');
@@ -107,7 +110,43 @@ ok(loginNew.status < 300, `رمزِ تازه با موبایل پذیرفته م
 const reuse = await call('/auth/password/reset', { body: { identifier: acc.username, code: real.json?.devCode, password: 'new-pass-3' } });
 ok(reuse.status === 400 && msg(reuse) === msg(wrong), 'کد یک‌بارمصرف است — همان پیامِ عام');
 
-console.log('\n۴) سقفِ نرخ برای شناسهٔ ناموجود هم');
+console.log('\n۴) PF1 — تصاحبِ حساب با عوض‌کردنِ تلفن در «تعاریف» بسته است');
+const bearer = admin.json?.accessToken;
+const LOCKED = 'شمارهٔ کسی که حسابِ کاربری دارد فقط از «مدیریتِ کاربران» عوض می‌شود.';
+const attacker = `0935${run}7`;
+/* الف) جراحِ متصل به حساب — همان شکلِ بنیان‌گذارِ مطب (`promoteSoleFounder`): نقشِ «پزشک» ← تعریفِ جراح روی همان Person. */
+const doc = await newAccount('3', bearer);
+await call(`/accounts/${doc.id}/job-role`, { body: { jobRole: 'doctor' }, bearer });
+const sg = ((await call('/surgeons', { method: 'GET', bearer })).json ?? []).find((x) => x.personId === doc.personId);
+ok(!!sg, 'حسابِ پزشک یک تعریفِ جراح دارد');
+const hijack = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { phone: attacker }, bearer });
+ok(hijack.status === 403 && msg(hijack) === LOCKED, `شمارهٔ جراحِ صاحبِ حساب از «تعاریف» عوض نمی‌شود (${hijack.status} «${msg(hijack)}»)`);
+const sgAfter = ((await call('/surgeons', { method: 'GET', bearer })).json ?? []).find((x) => x.id === sg?.id);
+ok(sgAfter?.phone === doc.phone, 'شماره سرِ جایش ماند');
+const stolen = await call('/auth/password/request-otp', { body: { identifier: attacker } });
+ok(!stolen.json?.devCode, 'شمارهٔ مهاجم کدِ بازیابیِ آن حساب را نمی‌گیرد');
+/* فرمِ «تعاریف» همهٔ فیلدها را می‌فرستد: همان شماره + فیلدِ دیگر باید مثلِ قبل ذخیره شود (سنجهٔ منفی). */
+const sameSave = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { phone: doc.phone, specialty: 'آزمونی' }, bearer });
+ok(sameSave.status < 300 && sameSave.json?.specialty === 'آزمونی', `ذخیرهٔ هم‌شماره (فیلدهای دیگر) رد نمی‌شود (${sameSave.status})`);
+/* جراحِ بی‌حساب همچنان شماره‌اش عوض می‌شود — نگهبان فقط صاحبانِ حساب را می‌گیرد (سنجهٔ منفی). */
+const bare = await call('/surgeons', { body: { firstName: 'آزمونی', lastName: `بی‌حساب${run}`, phone: `0934${run}1` }, bearer });
+const bareEdit = await call(`/surgeons/${bare.json?.id}`, { method: 'PATCH', body: { phone: `0934${run}2` }, bearer });
+ok(bareEdit.status < 300 && bareEdit.json?.phone === `0934${run}2`, `شمارهٔ جراحِ بی‌حساب عوض می‌شود (${bareEdit.status})`);
+/* ب) رانندهٔ تعریف‌شده که بعد با همان شماره ثبت‌نام کرده (Personِ مشترک). */
+const drvPhone = `0933${run}5`;
+const drv = await call('/transport-staff', { body: { firstName: 'آزمونی', lastName: 'راننده', phone: drvPhone, role: 'driver' }, bearer });
+await newAccount('5', bearer, true, { phone: drvPhone });
+const drvHijack = await call(`/transport-staff/${drv.json?.id}`, { method: 'PATCH', body: { phone: attacker }, bearer });
+ok(drvHijack.status === 403 && msg(drvHijack) === LOCKED, `شمارهٔ رانندهٔ صاحبِ حساب هم (${drvHijack.status})`);
+/* ج) سوپرادمین بازیابیِ فقط‌پیامکی ندارد — همان پاسخِ بی‌صدا، بی‌کد. */
+const boss = await newAccount('6', bearer, true, { level: 6 });
+const bossReq = await call('/auth/password/request-otp', { body: { identifier: boss.username } });
+ok(bossReq.status < 300 && !bossReq.json?.devCode && keys(bossReq.json) === keys(ghost.json), 'سوپرادمین ← همان پاسخِ ناموجود، بی‌کد');
+const bossReset = await call('/auth/password/reset', { body: { identifier: boss.phone, code: '123456', password: 'new-pass-2' } });
+ok(bossReset.status === 400 && msg(bossReset) === msg(wrong), 'و تأییدش همان پیامِ عام');
+await call(`/accounts/${boss.id}/reject`, { body: {}, bearer }); // سوپرادمینِ آزمونی فعال نماند
+
+console.log('\n۵) سقفِ نرخ برای شناسهٔ ناموجود هم');
 const probe = `ratelimit${run}`;
 const codes = [];
 for (let i = 0; i < 4; i++) codes.push(await call('/auth/password/request-otp', { body: { identifier: probe } }));

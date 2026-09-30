@@ -414,6 +414,8 @@ export default function Login() {
               <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
                 placeholder="نام کاربری یا ۰۹…" autoComplete="username" enterKeyHint="send" required />)}
             <button className="lg-btn" type="submit" disabled={busy || !identifier.trim()}>{busy ? '…' : 'ارسالِ کد'}</button>
+            {/* سوپرادمین کدِ پیامکی نمی‌گیرد (`resetTarget`، PF1) — بی این جمله منتظرِ پیامکی می‌ماند که نمی‌آید. */}
+            <p className="lg-hint">رمزِ مدیرِ کل (سوپرادمین) با پیامک بازیابی نمی‌شود؛ از پشتیبانیِ عمل‌یار کمک بگیرید.</p>
             <button type="button" className="lg-link" onClick={closeForgot} disabled={busy}>
               <Back width="15" height="15" aria-hidden="true" /> بازگشت به ورود
             </button>

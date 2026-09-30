@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
@@ -12,6 +12,9 @@ import { addOpTemplate, listOpTemplates } from './op-templates';
 import { BUILTIN_SUBFORMS, isBuiltinSubform } from './subforms';
 
 const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier: 'پیک' };
+
+/** پیامِ ردِ عوض‌کردنِ شمارهٔ صاحبِ حساب از «تعاریف» (PF1) — آزمونِ `password-reset.mjs` همین را می‌سنجد. */
+export const ACCOUNT_PHONE_LOCKED = 'شمارهٔ کسی که حسابِ کاربری دارد فقط از «مدیریتِ کاربران» عوض می‌شود.';
 
 /**
  * تعریف‌های عملیاتیِ ماژولِ بیماران: جراحان و بیمارستان‌ها (+ فهرستِ کارشناسان).
@@ -27,6 +30,30 @@ export class DefinitionsService {
       where: { name: { equals: name.trim(), mode: 'insensitive' }, ...(exceptId ? { id: { not: exceptId } } : {}) },
     });
     if (row) throw new BadRequestException('این نام قبلاً ثبت شده است');
+  }
+
+  /**
+   * **شمارهٔ کسی که حسابِ کاربری دارد از «تعاریف» عوض نمی‌شود** (بازبینیِ امنیتیِ بستهٔ P، PF1).
+   *
+   * شمارهٔ `Person` همان نشانی‌ای است که کدِ بازیابیِ رمز و کدِ تصاحبِ حساب به آن پیامک می‌شود.
+   * `definitions.manage` (پیش‌فرض سطح ۵) تا دیروز تلفنِ هر جراح و راننده را می‌نوشت — از جمله جراحِ
+   * متصل به **سوپرادمینِ بنیان‌گذارِ مطب** (`promoteSoleFounder`) و پزشکی که مدیر برایش حسابِ موقت
+   * ساخته. ادمین شمارهٔ «دکتر X» را سیم‌کارتِ خودش می‌کرد و با «رمز را فراموش کرده‌ام» (یا ثبت‌نامِ
+   * تصاحب) صاحبِ آن حساب می‌شد. مسیرِ درست «مدیریتِ کاربران» است (`accounts.service.updateProfile`،
+   * فقط سوپرادمین) که حساب را «موقت» می‌کند تا صاحبِ شمارهٔ تازه با کد تأییدش کند.
+   *
+   * هشدار — رد، نه موقت‌کردن: این‌جا جای تصمیم‌گرفتن دربارهٔ حساب نیست. شمارهٔ **یکسان** (فرمِ تعاریف همیشه
+   * همهٔ فیلدها را می‌فرستد) و شخصِ بی‌حساب (رانندهٔ معمولی) مثلِ قبل ذخیره می‌شوند.
+   * هشدار — قفلِ ردیف لازم است، نه فقط خواندن: ثبت‌نامی که هم‌زمان همین شخص را به حسابی وصل می‌کند
+   * (`completeSignup`، `connect`) برای کلیدِ خارجی `FOR KEY SHARE` می‌گیرد و پشتِ این `FOR UPDATE`
+   * می‌ماند؛ بی‌قفل، حساب درست پس از سنجش ساخته می‌شد و شماره باز هم عوض.
+   */
+  private async refuseAccountPhone(tx: any, personId: number, patch: Record<string, unknown>) {
+    if (patch.phone === undefined) return;
+    await tx.$queryRaw`SELECT id FROM people WHERE id = ${personId} FOR UPDATE`;
+    const p = await tx.person.findUnique({ where: { id: personId }, select: { phone: true, account: { select: { id: true } } } });
+    const same = String(patch.phone ?? '') === String(p?.phone ?? '');
+    if (p?.account && !same) throw new ForbiddenException(ACCOUNT_PHONE_LOCKED);
   }
 
   /// جراح = نقش روی Person؛ نام و تلفن از همان‌جا می‌آیند، نه از خودِ رکوردِ جراح.
@@ -82,15 +109,18 @@ export class DefinitionsService {
     const s = await this.prisma.surgeon.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('جراح یافت نشد');
     const personPatch = buildPersonPatch(dto, false);
-    const updated = await this.prisma.surgeon.update({
-      where: { id },
-      data: {
-        ...(dto.specialty !== undefined ? { specialty: dto.specialty?.trim() || null } : {}),
-        ...(dto.licenseNo !== undefined ? { licenseNo: dto.licenseNo?.trim() || null } : {}),
-        ...(dto.active !== undefined ? { active: dto.active } : {}),
-        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
-      },
-      include: DefinitionsService.SURGEON_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.refuseAccountPhone(tx, s.personId, personPatch);
+      return tx.surgeon.update({
+        where: { id },
+        data: {
+          ...(dto.specialty !== undefined ? { specialty: dto.specialty?.trim() || null } : {}),
+          ...(dto.licenseNo !== undefined ? { licenseNo: dto.licenseNo?.trim() || null } : {}),
+          ...(dto.active !== undefined ? { active: dto.active } : {}),
+          ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+        },
+        include: DefinitionsService.SURGEON_INCLUDE,
+      });
     });
     // ⚠️ عمداً visit.surgeonName را به‌روز نمی‌کنیم: آن فیلد «عکسِ لحظهٔ ثبت» است و
     // فقط وقتی خوانده می‌شود که رابطه از بین رفته باشد. خواندن همیشه رابطه را
@@ -170,16 +200,19 @@ export class DefinitionsService {
     const s = await this.prisma.transportStaff.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('نیرو یافت نشد');
     const personPatch = buildPersonPatch(dto, false);
-    const updated = await this.prisma.transportStaff.update({
-      where: { id },
-      data: {
-        ...(dto.role !== undefined ? { role: dto.role } : {}),
-        ...(dto.vehicle !== undefined ? { vehicle: dto.vehicle?.trim() || null } : {}),
-        ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
-        ...(dto.active !== undefined ? { active: dto.active } : {}),
-        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
-      },
-      include: DefinitionsService.STAFF_INCLUDE,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.refuseAccountPhone(tx, s.personId, personPatch);
+      return tx.transportStaff.update({
+        where: { id },
+        data: {
+          ...(dto.role !== undefined ? { role: dto.role } : {}),
+          ...(dto.vehicle !== undefined ? { vehicle: dto.vehicle?.trim() || null } : {}),
+          ...(dto.notes !== undefined ? { notes: dto.notes?.trim() || null } : {}),
+          ...(dto.active !== undefined ? { active: dto.active } : {}),
+          ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+        },
+        include: DefinitionsService.STAFF_INCLUDE,
+      });
     });
     return this.staffView(updated);
   }
