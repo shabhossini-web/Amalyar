@@ -22,6 +22,14 @@
  *  - PF11: هشِ کد HMAC با رازِ سرور است نه SHA-256ِ بی‌کلید (جدولِ otp_codes)
  *  - PF12: «لینک به … پیامک شد» شمارهٔ پرونده را به کسی که شمارهٔ دیگری تایپ کرده نشان نمی‌دهد
  *
+ * دورِ دومِ امنیتی (بستهٔ PS) — همان قاعده، هر بند سنجه‌ای که بی‌اصلاح قرمز می‌شد:
+ *  - PS1: ثبت‌نامِ عمومی ثبت‌نامِ بازِ بیمارِ دیگر را تحویل نمی‌دهد (نه توکن، نه داده، نه شماره) + چرخشِ توکن
+ *  - PS4: بودجهٔ حدسِ کدِ بازیابی فقط با کدِ زنده می‌سوزد · PS5: شبا/نامِ صاحبِ حساب از «تعاریف» عوض نمی‌شود + ممیزی
+ *  - PS6: «آماده‌سازی حسابِ پرتال» شمارهٔ جراح را از سوپرادمین می‌گیرد · PS7: سطلِ مشترکِ پیامکِ عمومی و سقفِ لینک
+ *  - PS8: هشدارِ «به هیچ‌کس ندهید» برای کدِ ثبت‌نام و «ادامه» · PS10: پنلِ پلتفرم (IP از ته، تلاشِ اتمی)
+ *  - PS11: کلیدِ HMACِ کد زیرکلیدِ مشتق است · PS12: شمارهٔ ثبت‌نام روی پروندهٔ موجودِ بی‌شماره نمی‌نشیند
+ *  (PS2، PS3 و PS9 در `test-accounts.mjs` — دیتابیسِ یک‌بارمصرف)
+ *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
  */
@@ -103,9 +111,14 @@ const real = await call('/auth/password/request-otp', { body: { identifier: acc.
 ok(real.status < 300 && /^\d{6}$/.test(real.json?.devCode ?? ''), 'حسابِ فعال ← کد (devCodeِ محیطِ آزمون)', JSON.stringify(real.json));
 /* PF11: هشِ کد در دیتابیس با کلید است — شش رقم با SHA-256ِ بی‌کلید از یک دامپِ دیتابیس در کسری از ثانیه برمی‌گشت. */
 const stored = sql(`SELECT code_hash FROM otp_codes WHERE phone = '${acc.phone}' AND purpose = 'password-reset' AND consumed_at IS NULL ORDER BY id DESC LIMIT 1`);
-const keyed = createHmac('sha256', process.env.JWT_SECRET ?? '').update(`password-reset:${acc.phone}:${real.json?.devCode}`).digest('hex');
+/* PS11: کلیدِ HMAC زیرکلیدِ مشتق از رازِ سرور است (مثلِ `intake-captcha.ts`)، نه خودِ JWT_SECRET — همان راز کلیدِ
+   امضای نشست‌ها هم هست و هر جا با هدفِ دیگری مستقیم به کار رود، دو کاربرد به هم گره می‌خورند. */
+const subkey = createHash('sha256').update(`${process.env.JWT_SECRET ?? ''}|otp-hash`).digest();
+const keyed = createHmac('sha256', subkey).update(`password-reset:${acc.phone}:${real.json?.devCode}`).digest('hex');
+const rawKeyed = createHmac('sha256', process.env.JWT_SECRET ?? '').update(`password-reset:${acc.phone}:${real.json?.devCode}`).digest('hex');
 ok(stored === keyed && stored !== createHash('sha256').update(String(real.json?.devCode)).digest('hex'),
   'PF11: هشِ کد HMAC(رازِ سرور، هدف:شماره:کد) است نه SHA-256ِ خامِ کد', stored.slice(0, 12));
+ok(stored !== rawKeyed, 'PS11: کلیدِ HMAC زیرکلیدِ مشتق است، نه خودِ JWT_SECRET');
 const { devCode: _dev, ...realShape } = real.json ?? {};
 ok(keys(realShape) === keys(ghost.json) && realShape.ttl === ghost.json?.ttl, 'بی devCode، پاسخِ حسابِ موجود و ناموجود هم‌شکل است');
 const again = await call('/auth/password/request-otp', { body: { identifier: acc.username } });

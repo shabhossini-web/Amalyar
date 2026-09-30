@@ -556,7 +556,8 @@ export class AuthService {
       data: { phone: target.phone, codeHash: otpHash(RESET_PURPOSE, target.phone, code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     const res = await this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname, RESET_PURPOSE).catch((e) => {
-      this.logger.warn(`password reset sms failed for account ${target.account.id}: ${e?.message ?? e}`);
+      /* فقط نامِ خطا (بستهٔ PS، PS11؛ قاعدهٔ لاگِ PF10): پیامِ خطا ممکن است شماره یا متنِ پیامک را داشته باشد. */
+      this.logger.warn(`password reset sms failed for account ${target.account.id} (${e?.name ?? 'Error'})`);
       return null;
     });
     if (!res || (!res.sent && !res.stub)) {
