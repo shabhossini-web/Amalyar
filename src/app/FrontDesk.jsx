@@ -154,10 +154,10 @@ export default function FrontDesk() {
     const name = row.fullName || 'بیمار';
     const to = updated?.lane ?? null;
     if (to === 'cancelled') { setShowCancelled(true); setToast(`${name} لغو شد — در «لغوشده‌ها»ست`); return; }
-    if (!to) { setToast('ثبت شد ✓'); return; }
+    if (!to) { setToast('ثبت شد'); return; }
     const found = (data?.lanes ?? []).find((l) => l.key === to);
     if (to !== lane) setLane(to);
-    setToast(found ? `${name} رفت به «${laneTitle(to, found.title)}»` : 'ثبت شد ✓');
+    setToast(found ? `${name} رفت به «${laneTitle(to, found.title)}»` : 'ثبت شد');
   };
 
   /* لغوِ نوبت هم دلیل می‌خواهد: نوبت یادآوریِ روزِ قبل دارد، پس بیمارِ بی‌خبر
@@ -315,7 +315,7 @@ export default function FrontDesk() {
               /* «کاندیدای جراحی» — همان قولِ فرم در داشبورد و پرونده (بازبینیِ ۱۴۰۵/۰۷/۰۳):
                  تا دیروز میزِ پذیرش `openSurgery` را نادیده می‌گرفت و عمل به ویزیتِ تصمیم گره نمی‌خورد. */
               if (opts?.openSurgery && saved?.id) {
-                setToast('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+                setToast('تصمیم ثبت شد؛ حالا فرمِ عمل را برای همین بیمار پر کنید');
                 setTimeout(() => setSheet({ prefill: surgeryPrefill(saved) }), 400);
               }
             }}
@@ -362,13 +362,18 @@ export default function FrontDesk() {
               /* همان قاعدهٔ `follow`: کارت به بخشِ تاشوی «لغوشده‌ها» می‌رود، پس
                  همان بخش باز می‌شود — وگرنه بیمار بی‌هیچ ردی از تخته می‌رفت. */
               setShowCancelled(true);
-              setToast('لغو ثبت شد و به بیمار اطلاع داده شد ✓');
+              setToast('لغو ثبت شد و به بیمار اطلاع داده شد');
             }}
           />
         )}
       </AnimatePresence>
 
-      {toast && <button type="button" className="fd-toast" aria-live="polite" onClick={() => setToast('')}>{toast}</button>}
+      {/* ناحیهٔ زنده **همیشه در DOM** است و فقط محتوایش عوض می‌شود (بازبینیِ خصمانه، R15): `aria-live`
+          روی عنصری که همراهِ متنش ساخته می‌شود معمولاً خوانده نمی‌شود — صفحه‌خوان تغییرِ «درونِ»
+          ناحیه‌ای را که از قبل بوده اعلام می‌کند. */}
+      <div role="status" aria-live="polite" aria-atomic="true">
+        {toast && <button type="button" className="fd-toast" onClick={() => setToast('')}>{toast}</button>}
+      </div>
     </div>
   );
 }
@@ -428,8 +433,8 @@ function WalkInSheet({ date, canCreate, onCreate, onClose, onDone }) {
     try {
       const r = await api('/frontdesk/walk-in', { method: 'POST', body: { patientId: picked.id, date, note: note.trim() || undefined } });
       onDone(r?.beyondCapacity
-        ? `${picked.fullName} پذیرش شد — بیش از ظرفیتِ امروز ✓`
-        : `${picked.fullName} پذیرش شد ✓`);
+        ? `${picked.fullName} پذیرش شد — بیش از ظرفیتِ امروز`
+        : `${picked.fullName} پذیرش شد`);
     } catch (e2) { setErr(e2?.message || 'پذیرش نشد'); setBusy(false); }
   };
 

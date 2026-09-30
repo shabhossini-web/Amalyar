@@ -108,7 +108,7 @@ export default function Schedule() {
       setForm(EMPTY);
       setAdding(false);
       await Promise.all([loadDefs(), loadCal(ym.y, ym.m)]);
-      say('روزِ کاری اضافه شد ✓');
+      say('روزِ کاری اضافه شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
@@ -130,7 +130,7 @@ export default function Schedule() {
     try {
       await api(`/availability/rules/${r.id}`, { method: 'DELETE' });
       await Promise.all([loadDefs(), loadCal(ym.y, ym.m)]);
-      say('حذف شد ✓');
+      say('حذف شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
@@ -142,7 +142,7 @@ export default function Schedule() {
     try {
       await api('/availability/exceptions', { method: 'POST', body: { date: picked.date, closed: true } });
       await loadCal(ym.y, ym.m);
-      say('این روز تعطیل شد ✓');
+      say('این روز تعطیل شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
@@ -154,7 +154,7 @@ export default function Schedule() {
       const row = list.find((x) => String(x.date).slice(0, 10) === picked.date);
       if (row) await api(`/availability/exceptions/${row.id}`, { method: 'DELETE' });
       await loadCal(ym.y, ym.m);
-      say('تعطیلی برداشته شد ✓');
+      say('تعطیلی برداشته شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 

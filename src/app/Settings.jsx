@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { useConfig, useTerms } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
-import { useToolTitle } from './tools.jsx';
+import { invalidateFeatures, useToolTitle } from './tools.jsx';
 import { randomNationalId, toEnDigits } from '../lib/identity.js';
+import { setLeaveGuard } from '../lib/leave-guard.js';
 import { jToFa, todayJStr } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import './launcher.css';
@@ -41,6 +42,30 @@ export default function Settings() {
   const [codes, setCodes] = useState({ total: 0, version: null });
   const [tf, setTf] = useState({ year: '', sector: 'private', professional: '', technical: '', anesthesia: '' });
   const setT = (k) => (e) => setTf((s) => ({ ...s, [k]: e.target.value }));
+
+  /* **پیوند به یک بخش** (`/app/settings#st-tariff` — «تعریفِ تعرفه»ِ پنجرهٔ خدماتِ صورت‌حساب، بازبینیِ
+     خصمانه R16): صفحه تنبل بار می‌شود و بخش پس از رسیدنِ چانک ساخته می‌شود، پس پرشِ خودِ مرورگر به
+     `#…` هنگامِ بارگذاری جایی پیدا نمی‌کند و صفحه از بالا باز می‌شد. تا ۵ ثانیه منتظرِ همان شناسه
+     می‌ماند (گروه‌های تنظیم دیرتر می‌رسند)، بعد همان پرشِ فهرستِ بخش‌ها: اسکرول (بی‌انیمیشن با
+     کاهشِ حرکت) و فوکوس روی سرتیتر. */
+  const location = useLocation();
+  useEffect(() => {
+    const id = decodeURIComponent((location.hash || '').slice(1));
+    if (!id) return undefined;
+    let tries = 0;
+    let timer = 0;
+    const jump = () => {
+      const el = document.getElementById(id);
+      if (!el) { if (tries++ < 50) timer = setTimeout(jump, 100); return; }
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+      /* فوکوس روی سرتیتر — صفحه‌خوان همان‌جا شروع می‌کند، و حلقه‌اش «این‌جا» را نشان می‌دهد تا
+         اولین لمس یا کلیک. */
+      el.focus({ preventScroll: true });
+    };
+    timer = setTimeout(jump, 0);
+    return () => clearTimeout(timer);
+  }, [location.key, location.hash]);
 
   const [codesError, setCodesError] = useState(null);
   const loadTariffs = useCallback(async () => {
@@ -105,6 +130,8 @@ export default function Settings() {
     setBusy(true);
     try {
       await api('/config/profile', { method: 'PATCH', body: body() });
+      /* نوعِ نصب ماژول‌ها را روشن/خاموش می‌کند — کشِ کاشی‌ها هم باید برود (R10). */
+      invalidateFeatures();
       await reload();
       setPreview(null);
       setToast(`نوع و خدماتِ ${org} ذخیره شد`);
@@ -728,11 +755,14 @@ function SectionNav({ items }) {
 /**
  * هشدارِ ترکِ صفحه با تغییرِ ذخیره‌نشده. `beforeunload` فقط بستن/تازه‌کردنِ زبانه را می‌گیرد؛
  * لینک‌های داخلِ سامانه (react-router) در فازِ capture گرفته می‌شوند — پیش از آنکه `Link`
- * ناوبری کند.
+ * ناوبری کند. جابه‌جاییِ **برنامه‌ای** (`navigate()`ِ منوی پروفایل، جستجوی سراسری، زنگِ کارها)
+ * لینک نیست و از این دو رد می‌شد (بازبینیِ خصمانه، R11) — همان پرسش در `leave-guard` هم ثبت
+ * می‌شود و آن‌ها پیش از رفتن می‌پرسندش.
  */
 function useUnsavedGuard(on) {
   useEffect(() => {
     if (!on) return undefined;
+    const ask = () => window.confirm('تغییراتِ ذخیره‌نشدهٔ تنظیمات از دست می‌رود. صفحه را ترک می‌کنید؟');
     const unload = (e) => { e.preventDefault(); e.returnValue = ''; };
     const click = (e) => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -740,14 +770,15 @@ function useUnsavedGuard(on) {
       if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
       const url = new URL(a.href, window.location.href);
       if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
-      if (!window.confirm('تغییراتِ ذخیره‌نشدهٔ تنظیمات از دست می‌رود. صفحه را ترک می‌کنید؟')) {
+      if (!ask()) {
         e.preventDefault();
         e.stopPropagation();
       }
     };
+    const off = setLeaveGuard(ask);
     window.addEventListener('beforeunload', unload);
     document.addEventListener('click', click, true);
-    return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', click, true); };
+    return () => { off(); window.removeEventListener('beforeunload', unload); document.removeEventListener('click', click, true); };
   }, [on]);
 }
 

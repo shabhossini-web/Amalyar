@@ -314,7 +314,10 @@ export default function Pathways() {
         </section>
       )}
 
-      {toast && <button type="button" className="pw-toast" aria-live="polite" onClick={() => setToast('')}>{toast}</button>}
+      {/* ناحیهٔ زنده همیشه در DOM، محتوایش عوض می‌شود — `aria-live` روی عنصرِ تازه‌ساخته خوانده نمی‌شود (R15). */}
+      <div role="status" aria-live="polite" aria-atomic="true">
+        {toast && <button type="button" className="pw-toast" onClick={() => setToast('')}>{toast}</button>}
+      </div>
     </div>
   );
 }

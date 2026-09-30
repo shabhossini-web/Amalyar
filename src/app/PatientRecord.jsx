@@ -1,6 +1,6 @@
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import VoiceNote, { VoiceClip } from '../ui/VoiceNote.jsx';
@@ -119,7 +119,7 @@ function ProfileTab({ rec, onSave, toast }) {
           'emergencyName', 'emergencyPhone', 'emergencyRelation', 'notes']) delete body[k];
       }
       await onSave(body);
-      toast('پرونده به‌روز شد ✓');
+      toast('پرونده به‌روز شد');
     } catch (e) {
       toast(e.message, true);
     } finally {
@@ -467,7 +467,7 @@ function DocsTab({ rec, reload, toast }) {
     await apiUpload(`/patients/${rec.id}/documents`, fd);
     setTitle('');
     await reload();
-    toast('توضیحِ صوتی ثبت شد ✓');
+    toast('توضیحِ صوتی ثبت شد');
   };
 
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
@@ -502,7 +502,7 @@ function DocsTab({ rec, reload, toast }) {
       });
       setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId(''); setPhase(''); setLinkUser(''); setLinkPass(''); setLinkAuth(false);
       await reload();
-      toast('لینک ثبت شد ✓');
+      toast('لینک ثبت شد');
     } catch (e) {
       toast(e.message, true);
     } finally {
@@ -561,10 +561,13 @@ function DocsTab({ rec, reload, toast }) {
           maxMb={25}
           hint={`عکس، PDF یا هر مدرکِ دیگر — تا ${faNum(25)} مگابایت`}
           onUpload={upload}
-          onAllDone={async () => {
-            setTitle(''); setTakenJ(''); setVisitId(''); setPhase('');
+          onAllDone={async ({ ok = 0, failed = 0 } = {}) => {
+            if (!ok) return;
+            /* «اضافه شدند» فقط وقتی همه رفتند (R2). با فایلِ خطادار عنوان، تاریخ و مراجعه
+               می‌مانند تا «تلاشِ دوباره»ِ همان فایل با همان‌ها برود، نه بی‌برچسب. */
+            if (!failed) { setTitle(''); setTakenJ(''); setVisitId(''); setPhase(''); }
             await reload();
-            toast('مدارک اضافه شدند ✓');
+            if (!failed) toast('مدارک اضافه شدند');
           }}
         />
         {/* لینک به‌جای فایل: MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود. */}
@@ -839,7 +842,7 @@ function NotesTab({ rec, reload, toast }) {
       }
       lastDraftRef.current = null;
       setBody(''); setVisitId('');
-      toast('شرح ثبت شد ✓');
+      toast('شرح ثبت شد');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
@@ -855,7 +858,7 @@ function NotesTab({ rec, reload, toast }) {
         return;
       }
       setEditing(null);
-      toast('نسخهٔ تازه ثبت شد ✓ (نسخهٔ قبلی در تاریخچه می‌ماند)');
+      toast('نسخهٔ تازه ثبت شد (نسخهٔ قبلی در تاریخچه می‌ماند)');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
@@ -1168,7 +1171,7 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
     try {
       await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
       window.dispatchEvent(new Event(WORK_CHANGED));
-      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد ✓') : 'یادآوری به فردا افتاد');
+      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
       await onActed();
     } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
   };
@@ -1397,7 +1400,7 @@ function Pathway({ patientId, toast }) {
     setBusy(step.id);
     try {
       await api(`/pathway/steps/${step.id}`, { method: 'PATCH', body: { status } });
-      toast(status === 'done' ? 'مرحله انجام شد ✓' : 'مرحله رد شد');
+      toast(status === 'done' ? 'مرحله انجام شد' : 'مرحله رد شد');
       await load();
     } catch (e) { toast(e?.message || 'ثبت نشد', true); } finally { setBusy(0); }
   };
@@ -1545,6 +1548,18 @@ export default function PatientRecord() {
      همان‌جا خوانده می‌شود، و هر ثبتی «پاسخ» را تازه می‌کند. */
   const things = useThings({ patientId: Number(id), onChanged: loadLive, toast: say });
   const openThing = things.open;
+  /* **مقصدِ یک کار از بیرونِ پرونده** — زنگِ کارها (`WorkBell`، بازبینیِ خصمانه R12) پرونده را با
+     `state.open` باز می‌کند و همان پاپ‌آپ («ثبتِ وضعیت»، «بارگذاریِ گزارش»، سفارش…) این‌جا باز
+     می‌شود؛ پرونده میزبانِ پاپ‌آپ‌هاست. `replace` با `state: null` تا «بازگشت» دوباره بازش نکند.
+     کلیدِ `location.key`، نه mountِ اول: زنگ روی خودِ همین پرونده هم می‌تواند بزند. */
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const spec = location.state?.open;
+    if (!spec?.type) return;
+    openThing({ ...spec, patientId: spec.patientId ?? Number(id) });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key]);
 
   useEffect(() => {
     document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
@@ -1644,12 +1659,12 @@ export default function PatientRecord() {
           load();
           /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
           if (opts?.openSurgery) {
-            say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+            say('تصمیم ثبت شد؛ حالا فرمِ عمل را برای همین بیمار پر کنید');
             /* همان پیوندِ داشبورد — شکایتِ اولیه از ویزیتِ تصمیم مشتق می‌شود. */
             setTimeout(() => things.show({ type: 'visit', prefill: surgeryPrefill(saved, rec.fullName) }), 400);
             return;
           }
-          say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
+          say(wasEdit ? `${t.visit} ویرایش شد` : `${t.visit} ثبت شد`);
         }}
       />
 
@@ -1695,7 +1710,7 @@ function RefSummary({ rec, toast }) {
   };
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(text); toast('کپی شد ✓'); }
+    try { await navigator.clipboard.writeText(text); toast('کپی شد'); }
     catch { toast('کپی نشد — دستی انتخاب کنید', true); }
   };
 
@@ -1703,7 +1718,7 @@ function RefSummary({ rec, toast }) {
     setBusy(true);
     try {
       await api(`/patients/${rec.id}/notes`, { method: 'POST', body: { kind: 'consult', body: text } });
-      toast('به‌عنوانِ «مشاوره» در پرونده ثبت شد ✓');
+      toast('به‌عنوانِ «مشاوره» در پرونده ثبت شد');
       setText(null);
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };

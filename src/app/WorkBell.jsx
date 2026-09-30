@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
+import { guardedNavigate } from '../lib/leave-guard.js';
 import WorkRow from './WorkRow.jsx';
+import { workTarget } from './work-target.js';
 import { useAuth } from './auth.jsx';
 import { usePendingAccounts } from './usePending.js';
 import { ArrowStart, Bell, Users } from '../ui/icons.jsx';
@@ -66,6 +68,20 @@ export default function WorkBell({ onToast }) {
     return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
   }, [open]);
 
+  /* **خودِ کار از زنگ** (بازبینیِ خصمانه، R12): پاپ‌آپ‌های «خودِ کار» میزبانی می‌خواهند و کشوی
+     کوچکِ زنگ جای فرمِ مراجعه نیست — پس ردیف پروندهٔ همان بیمار را باز می‌کند و مقصد را با خودش
+     می‌برد (`state.open`)؛ پرونده همان پاپ‌آپ را همان‌جا باز می‌کند. تا امروز این‌جا `onOpen` نبود و
+     کارِ رویدادی («وضعیتِ عمل»، «گزارشِ خدمت»…) در زنگ هیچ دکمهٔ اصلی نداشت. ردیفِ بی‌بیمار یا
+     بی‌مقصد مثلِ قبل می‌ماند. */
+  const navigate = useNavigate();
+  const openRow = (w) => {
+    const pid = w.patient?.id ?? w.patientId;
+    const target = workTarget(w);
+    if (!pid || !target) return;
+    if (guardedNavigate(navigate, `/app/patients/${pid}`, { state: { open: target } })) setOpen(false);
+  };
+  const opens = (w) => !!(w.patient?.id ?? w.patientId) && !!workTarget(w);
+
   const act = async (w, action, body = {}) => {
     setBusy(w.id);
     try {
@@ -125,7 +141,7 @@ export default function WorkBell({ onToast }) {
           {rows && rows.length === 0 && <div className="wb-empty">{team ? 'تیم کارِ بازی ندارد.' : 'کاری منتظرِ شما نیست.'}</div>}
           {rows && rows.length > 0 && (
             <ul className="wk-list compact">
-              {rows.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact />)}
+              {rows.map((w) => <WorkRow key={w.id} w={w} onAct={act} busy={busy} compact onOpen={opens(w) ? openRow : undefined} />)}
             </ul>
           )}
           <Link to="/app/work" className="wb-all" onClick={() => setOpen(false)}>همهٔ کارها</Link>

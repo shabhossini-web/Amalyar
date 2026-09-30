@@ -122,6 +122,6 @@
 @media (pointer: coarse) {
   .pm-item { min-height: 44px; }
   .pm-acc-out { width: 44px; height: 44px; }
-  .pm-seg button { min-height: 40px; }
+  .pm-seg button { min-height: 44px; }
 }
 .pm .pm-menu:focus { outline: none; }

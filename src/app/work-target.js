@@ -37,14 +37,21 @@ export function workTarget(w, kind) {
   const pid = w?.patientId ?? w?.patient?.id ?? null;
   const visitId = w?.visitId ?? (w?.refType === 'visit' ? w?.refId : null) ?? null;
   const about = { visit: w?.visit ?? null, patientName: w?.patient?.fullName ?? '' };
-  if (w?.type === 'confirm_surgery_done' && visitId) {
+  /* پاپ‌آپِ «ثبتِ وضعیت» و «بارگذاریِ گزارش» مسیرِ پنلِ کارشناس‌اند و فقط عملِ خودِ کارشناس
+     را می‌پذیرند (سوپرادمین: هر عملی که کارشناس دارد) — سرور برای همین کاربر و همین کار
+     می‌گوید باز می‌شود یا نه (`visit.techPopup`، قانونِ ۳). کارِ بی‌مسئول، واگذارشده به دیگری،
+     یا شرکتِ بی‌ماژولِ کارشناس فرمِ همان مراجعه را باز می‌کند، نه پنجره‌ای که ۴۰۴/۴۰۳ بخورد. */
+  const techPopup = w?.visit?.techPopup === true;
+  if (w?.type === 'confirm_surgery_done' && visitId && techPopup) {
     return targetForKind({ type: 'opstatus', id: visitId, patientId: pid, ...about }, kind);
   }
-  if (w?.type === 'complete_report' && visitId) {
+  if (w?.type === 'complete_report' && visitId && techPopup) {
     return targetForKind({ type: 'report', id: visitId, patientId: pid, ...about }, kind);
   }
+  /* پنجرهٔ تأیید پشتِ ماژولِ «ثبت‌نام‌های آنلاین» است ولی کار در صفِ منشی است — منشیِ بی‌دسترسی
+     دکمهٔ اصلی نمی‌گیرد (`intakePopup` از سرور، R6)، نه پنجره‌ای که ۴۰۳ بخورد. */
   if (w?.type === 'approve_intake' && w.refType === 'intake_submission' && w.refId) {
-    return { type: 'intake', id: w.refId, patientId: pid };
+    return w.intakePopup === true ? { type: 'intake', id: w.refId, patientId: pid } : null;
   }
   const m = /^(lab|imaging|consult|referral)_order$/.exec(w?.refType ?? '');
   if (m && w.refId) return { type: 'order', kind: m[1], id: w.refId, patientId: pid };

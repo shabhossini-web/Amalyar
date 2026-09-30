@@ -763,7 +763,7 @@ function NextVisitBook({ data, onClose, onToast }) {
       {booked ? (
         <div className="db-nvb-done">
           <p>
-            نوبتِ <b>{dateFa}</b> ثبت شد ✓
+            نوبتِ <b>{dateFa}</b> ثبت شد
             {booked.time ? <> — ساعتِ <b dir="ltr">{faTime(booked.time)}</b></> : booked.seq ? <> — شمارهٔ صف <b>{faNum(booked.seq)}</b></> : null}
           </p>
           <em>یادآوریِ پیامکیِ نوبت، عصرِ روزِ قبل خودکار می‌رود.</em>
@@ -909,19 +909,26 @@ export default function Dashboard() {
   const deepRef = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
+  /* «مراجعهٔ جدید» از پروندهٔ زنده (W3.1): بیمار در `state` می‌آید نه در
+     کوئری — نامِ بیمار نباید در URL و تاریخچهٔ مرورگر بنشیند. `replace`
+     می‌زنیم تا back به یک شیتِ دوباره‌باز نرسد.
+     `firstName`/`phone`: «ثبتِ بیمارِ تازه» از جستجوی سراسری وقتی بیماری پیدا نشد (shell-25).
+     هشدار: effectِ جدا با `location.key`، نه mountِ اول (بازبینیِ خصمانه، R5): جستجوی سراسری روی
+     **خودِ همین صفحه** هم `navigate` می‌زند و صفحه دوباره mount نمی‌شود — نسخهٔ قبلی فقط یک‌بار
+     می‌خواندش و «ثبتِ بیمارِ تازه» این‌جا هیچ کاری نمی‌کرد. `replace` با `state: null` کلیدِ
+     تازه‌ای می‌سازد که همین effect را بی‌اثر دوباره می‌زند. */
+  const prefillIn = (st) => { const pre = st?.prefill; return pre?.patientId || pre?.firstName || pre?.phone ? pre : null; };
+  useEffect(() => {
+    const pre = prefillIn(location.state);
+    if (!pre) return;
+    setModal({ prefill: pre });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key]);
   useEffect(() => {
     if (deepRef.current) return;
     deepRef.current = true;
-    /* «مراجعهٔ جدید» از پروندهٔ زنده (W3.1): بیمار در `state` می‌آید نه در
-       کوئری — نامِ بیمار نباید در URL و تاریخچهٔ مرورگر بنشیند. `replace`
-       می‌زنیم تا back به یک شیتِ دوباره‌باز نرسد. */
-    const pre = location.state?.prefill;
-    /* `firstName`/`phone`: «ثبتِ بیمارِ تازه» از جستجوی سراسری وقتی بیماری پیدا نشد (shell-25). */
-    if (pre?.patientId || pre?.firstName || pre?.phone) {
-      setModal({ prefill: pre });
-      navigate(location.pathname, { replace: true, state: null });
-      return;
-    }
+    /* بیمارِ پیش‌پر همین حالا فرمِ تازه را باز کرده (effectِ بالا) — دیپ‌لینکِ `?patient=` رویش ننشیند. */
+    if (prefillIn(location.state)) return;
     const vid = Number(new URLSearchParams(window.location.search).get('patient'));
     if (!vid) return;
     api(`/visits/${vid}`)
@@ -1052,7 +1059,7 @@ export default function Dashboard() {
         const name = downloadCsv(visitsToCsv(res.rows, opts));
         setToast(res.truncated
           ? `${faNum(res.rows.length)} ردیف در «${name}» — نتیجه از سقفِ ${faNum(res.limit)} بیشتر بود`
-          : `${faNum(res.rows.length)} ردیف در «${name}» ذخیره شد ✓`);
+          : `${faNum(res.rows.length)} ردیف در «${name}» ذخیره شد`);
       } else if (!printVisits(res.rows, opts)) {
         setToast('پنجرهٔ چاپ مسدود شد — اجازهٔ پاپ‌آپ را برای این سایت بدهید');
       }
@@ -1090,7 +1097,7 @@ export default function Dashboard() {
        بلافاصله باز می‌شود تا نوبت و اطلاعاتِ عمل در همان نشست ثبت شود —
        نه اینکه کاربر خودش دنبالِ دکمهٔ «مراجعهٔ تازه» بگردد. */
     if (opts?.openSurgery) {
-      setToast('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+      setToast('تصمیم ثبت شد؛ حالا فرمِ عمل را برای همین بیمار پر کنید');
       /* ⚠️ `decidedInVisitId` یعنی عمل **به همین ویزیت گره می‌خورد**، نه اینکه
          متنش کپی شود: شکایتِ اولیه از همان‌جا خوانده می‌شود، پس اصلاحِ بعدیِ
          ویزیت همان لحظه در میزِ اتاقِ عمل هم دیده می‌شود. متن و تاریخ فقط
@@ -1100,18 +1107,18 @@ export default function Dashboard() {
     }
     /* «عمل» نامِ خودش را دارد — در مطب «ویزیت ثبت شد» برای یک عمل غلط بود. */
     const word = saved?.kind === 'surgery' ? t.surgery : t.visit;
-    if (wasEdit) { setToast(`${word} ویرایش شد ✓`); return; }
+    if (wasEdit) { setToast(`${word} ویرایش شد`); return; }
 
     // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی
     // کد ملی به پروندهٔ موجود خورده و پروندهٔ تکراری ساخته نشده است.
     const seq = faNum(saved.code.split('-V')[1] || '1');
     const where = `${t.record} ${saved.patientCode} — ${t.visit} ${seq}`;
     setToast({
-      new: `${t.record}ِ جدید ساخته شد ✓ ${where}`,
-      matched: `بیمار از قبل ${t.record} داشت؛ ${word}ِ تازه ثبت شد ✓ ${where}`,
-      restored: `${t.record}ِ حذف‌شده برگشت و ${word}ِ تازه ثبت شد ✓ ${where}`,
-      existing: `${word} ثبت شد ✓ ${where}`,
-    }[saved.patientStatus] ?? `${word} ${saved.code} ثبت شد ✓`);
+      new: `${t.record}ِ جدید ساخته شد؛ ${where}`,
+      matched: `بیمار از قبل ${t.record} داشت؛ ${word}ِ تازه ثبت شد؛ ${where}`,
+      restored: `${t.record}ِ حذف‌شده برگشت و ${word}ِ تازه ثبت شد؛ ${where}`,
+      existing: `${word} ثبت شد؛ ${where}`,
+    }[saved.patientStatus] ?? `${word} ${saved.code} ثبت شد`);
   };
 
   /* نوشتنِ وضعیت — **می‌اندازد**، نمی‌بلعد: پنجرهٔ دلیلِ لغو باید خطا را
@@ -1425,7 +1432,7 @@ export default function Dashboard() {
             onConfirm={async (c) => {
               await runStatus(cancelAsk, 'cancelled', c);
               setCancelAsk(null);
-              setToast('لغو ثبت شد و به بیمار اطلاع داده شد ✓');
+              setToast('لغو ثبت شد و به بیمار اطلاع داده شد');
             }}
           />
         )}
