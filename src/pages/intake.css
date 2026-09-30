@@ -505,3 +505,15 @@
   color: var(--brand-text); font-variant-numeric: tabular-nums;
 }
 .ik-cap-help a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+
+/* ── «کدِ ملیِ ایرانی ندارم» (بازبینیِ UX، بندِ ۱۰۹) ── */
+.ik-nonid-btn {
+  justify-self: start; min-height: 44px; padding: 0 2px; cursor: pointer; font: inherit; font-size: 13.5px;
+  color: var(--brand-text); background: none; border: 0; text-decoration: underline; text-underline-offset: 4px;
+}
+.ik-nonid-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+.ik-nonid {
+  display: grid; gap: 8px; justify-items: start; padding: 10px 12px; border-radius: 12px;
+  background: rgba(var(--brand-rgb), .06); border: 1px solid rgba(var(--brand-2-rgb), .3);
+}
+.ik-nonid p { margin: 0; font-size: 14px; line-height: 1.8; color: var(--text2); }

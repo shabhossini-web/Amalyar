@@ -69,6 +69,8 @@ function Register() {
   const [sources, setSources] = useState([]);
   /* «قبلاً ثبت‌نام کرده‌اید؟» — ادامه با موبایل + کد به‌جای پرکردنِ دوبارهٔ فرم (بازبینیِ UX، بندِ ۱۰۳). */
   const [resume, setResume] = useState(false);
+  /* «کدِ ملیِ ایرانی ندارم» (بازبینیِ UX، بندِ ۱۰۹) — راهِ تلفنیِ بیمارِ اتباع؛ با خطای کدِ ملی خودش باز می‌شود. */
+  const [noNid, setNoNid] = useState(false);
   /* پرسشِ امنیتی را **سرور** می‌سازد: تصویرِ دو عدد + نشانی که پاسخ را رمزشده در خود دارد
      (`server/src/patients/intake-captcha.ts`). مرورگر پاسخ را نمی‌داند — تا دیروز خودش دو عدد را
      انتخاب می‌کرد و هر اسکریپتی با `1 + 1 = 2` ثبت‌نام می‌ساخت. هر نشان یک‌بار سنجیده می‌شود. */
@@ -206,7 +208,8 @@ function Register() {
       <div className="ik-grid">
         <Field id="ik-first" name="firstName" autoComplete="given-name" enterKeyHint="next" label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} error={fErr.firstName} />
         <Field id="ik-last" name="lastName" autoComplete="family-name" enterKeyHint="next" label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} error={fErr.lastName} />
-        <Field id="ik-nid" name="nationalId" autoComplete="off" enterKeyHint="next" label="کدِ ملی *" value={f.nationalId} onChange={set('nationalId')} disabled={busy} dir="ltr" inputMode="numeric" error={fErr.nationalId} />
+        <Field id="ik-nid" name="nationalId" autoComplete="off" enterKeyHint="next" label="کدِ ملی *" value={f.nationalId} onChange={set('nationalId')} disabled={busy} dir="ltr" inputMode="numeric" error={fErr.nationalId}
+               after={<NoNationalId brand={link?.brand} open={noNid || !!fErr.nationalId} onOpen={() => setNoNid(true)} />} />
         <Field id="ik-phone" name="phone" type="tel" autoComplete="tel" enterKeyHint="next" label="شمارهٔ موبایل *" value={f.phone} onChange={set('phone')} disabled={busy} dir="ltr" inputMode="numeric" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" error={fErr.phone} />
         {/* JDate خودش برچسب دارد؛ پیچیدنش در label یعنی دو برچسب. */}
         {/* نمونه‌ای که شبیهِ تاریخِ تولد است — پیش‌فرضِ «۱۴۰۵/۰۱/۰۱» یعنی امسال (بازبینیِ UX، بندِ ۱۱۳). */}
@@ -1151,6 +1154,24 @@ function BankCard({ acc }) {
 }
 
 /**
+ * **بیمارِ بی‌کدِ ملیِ ایرانی** (اتباع: کدِ فراگیر یا گذرنامه — بازبینیِ UX، بندِ ۱۰۹). تا دیروز فقط «کدِ ملی
+ * معتبر نیست» می‌دید که القا می‌کرد اشتباه تایپ کرده، و هیچ راهی جلویش نبود. ثبت‌نامِ آنلاین با کدِ دیگر
+ * ستونِ تازه‌ای در پرونده می‌خواهد (`Patient.nationalId` یکتا و در پنلِ کارکنان هم سنجیده می‌شود)؛ تا آن
+ * روز راهِ درست تلفن است — کارکنان دستی ثبتش می‌کنند.
+ */
+function NoNationalId({ brand, open, onOpen }) {
+  if (!open) {
+    return <button type="button" className="ik-nonid-btn" onClick={onOpen}>کدِ ملیِ ایرانی ندارم</button>;
+  }
+  return (
+    <div className="ik-nonid">
+      <p>اگر کدِ ملیِ ایرانی ندارید (کدِ فراگیرِ اتباع یا گذرنامه)، ثبت‌نامتان را تلفنی انجام می‌دهیم{brand?.phone ? ':' : ' — با ما تماس بگیرید.'}</p>
+      <CallLink phone={brand?.phone} label={brand?.name ? `تماس با ${brand.name}` : 'تماس'} />
+    </div>
+  );
+}
+
+/**
  * لینک یا فرم **باز نشد** — همان پوستهٔ صفحه با الگوی «چه شد + چرا + چه کنید» (بازبینیِ UX، بندِ ۱۱۰):
  * ۴۰۴ «شاید ناقص کپی شده؛ لینکِ کاملِ پیامک را دوباره لمس کنید»، ۴۰۳ «دیگر فعال نیست»، اتصال با
  * «تلاشِ دوباره» روی همین نشانی — و همیشه تماس با مطب.
@@ -1195,7 +1216,7 @@ function Shell({ brand, title, amount, children, footCall = true }) {
   );
 }
 
-function Field({ label, dir = 'rtl', inputMode, placeholder, error, id, ...rest }) {
+function Field({ label, dir = 'rtl', inputMode, placeholder, error, id, after = null, ...rest }) {
   /* خطای هر کادر زیرِ خودش، با قابِ قرمز و aria-invalid (بازبینیِ UX، بندِ ۱۰۵). هشدار: خطا **بیرونِ**
      `<label>` است: داخلش جزوِ نامِ دسترس‌پذیرِ کادر خوانده می‌شد و صفحه‌خوان آن را دو بار می‌گفت. */
   /* هشدار: پوستهٔ `div` همیشه هست، نه فقط وقتِ خطا: عوض‌شدنِ ریشه کادر را از نو می‌ساخت و با پاک‌شدنِ خطا
@@ -1208,6 +1229,7 @@ function Field({ label, dir = 'rtl', inputMode, placeholder, error, id, ...rest 
                aria-invalid={error ? true : undefined} aria-describedby={error && id ? `${id}-err` : undefined} {...rest} />
       </label>
       {error && <em id={id ? `${id}-err` : undefined} className="ik-ferr">{error}</em>}
+      {after}
     </div>
   );
 }
