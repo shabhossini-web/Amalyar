@@ -276,7 +276,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
           {tab === 'invoice' ? (
             <>
               <InvoiceAccount data={data} banks={banks} visitId={visit.id} onSaved={setData} onToast={onToast} />
-              <InvoicePanel visit={visit} billing={data} neuro={hasService(cfg, 'ionm')} onToast={onToast} reload={async () => { await load(); onChanged?.(); }} />
+              {/* فاکتورِ نورو از خدمتِ **همین مراجعه**، نه از بستهٔ خدماتِ شرکت (DF1): در شرکتِ دوخدمته مراجعهٔ ایمپلنت
+                  پنجرهٔ خدماتِ نورو را نمی‌گیرد — «جایگزین» آن‌جا قلمِ ایمپلنت را برمی‌داشت. خدمتِ خالی (ردیفِ قدیمی) همان
+                  رفتارِ دیروز است. */}
+              <InvoicePanel visit={visit} billing={data} neuro={visit.service ? visit.service === 'ionm' : hasService(cfg, 'ionm')} onToast={onToast} reload={async () => { await load(); onChanged?.(); }} />
             </>
           ) : tab === 'split' ? (
             <Settlement visitId={visit.id} onToast={onToast} onChanged={onChanged} />

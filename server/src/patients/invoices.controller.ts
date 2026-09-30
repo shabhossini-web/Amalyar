@@ -22,13 +22,16 @@ class NeuroQuoteDto {
   @IsInt() @Min(1) @Max(72) hours!: number;
   @IsString() @Matches(/^\d{4}$/) year!: string;
   @IsIn(['company', 'hospital']) deviceOwner!: string;
+  /** شناسهٔ قلم‌های مبلغِ کلِ مراجعه که با این خدمات جایگزین می‌شوند (company-14) — سرویس می‌سنجد.
+   *  در `neuro-quote` هم هست تا پیش‌نمایشِ «صورت‌حسابِ پس از ثبت» همان جایگزینی را بسنجد (DF2). */
+  @IsOptional() @IsArray({ message: 'فهرستِ قلم‌های جایگزین‌شونده باید آرایه باشد' }) replace?: unknown[];
 }
 class NeuroApplyDto extends NeuroQuoteDto {
   @IsOptional() @IsBoolean() returnUnusedStock?: boolean;
   /** `{name, irc?, qty}` — شکلِ دقیق در سرویس سنجیده می‌شود. */
   @IsOptional() @IsArray() consumables?: unknown[];
-  /** شناسهٔ قلم‌های مبلغِ کلِ مراجعه که با این خدمات جایگزین می‌شوند (company-14) — سرویس می‌سنجد. */
-  @IsOptional() @IsArray() replace?: unknown[];
+  /** شناسهٔ قلم‌های مبلغِ کلی که کاربر صریحاً گفت «کنارش بماند» (DF3) — ماندگار روی خطوطِ نوروی تازه. */
+  @IsOptional() @IsArray({ message: 'فهرستِ قلم‌های نگه‌داشته باید آرایه باشد' }) keep?: unknown[];
 }
 class IssueInvoiceDto { @IsIn(['formal', 'informal']) variant!: string; }
 

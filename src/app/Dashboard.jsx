@@ -40,6 +40,9 @@ import { kindOf } from './visit-kinds.js';
 
 const ADV_IDS = ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'];
 const EMPTY_ADV = { surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '', diagnosisId: '', fromJ: '', toJ: '', owing: false };
+/** رنگِ وضعیتِ پولیِ ردیف — کلید همان `payState`ِ سرور است (DF2). */
+const PAY_CLASS = { due: 'due', overpaid: 'over', settled: 'ok' };
+
 const EMPTY_META = { total: 0, pages: 1, stats: { total: 0, pending: 0, today: 0, due: 0, kinds: [] } };
 
 const SORT_OPTIONS = [
@@ -480,8 +483,11 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
                  aria-label={`وصولِ صورت‌حسابِ ${v.fullName}`}>
               <i style={{ inlineSize: `${v.paidPct}%` }} />
             </div>
-            <small className={v.due <= 0 ? 'ok' : undefined}>
-              {v.due > 0 ? `مانده ${fmtMoney(v.due)} از ${fmtToman(v.total)}` : `تسویه — ${fmtToman(v.total)}`}
+            {/* «تسویه» فقط وقتی مانده صفر است؛ اضافه‌پرداخت برچسب و مبلغِ خودش را دارد — هر دو از سرور (DF2). */}
+            <small className={PAY_CLASS[v.payState]}>
+              {v.payState === 'due' ? `${v.payStateFa} ${fmtMoney(v.due)} از ${fmtToman(v.total)}`
+                : v.payState === 'overpaid' ? `${v.payStateFa} ${fmtMoney(v.overpaid)} — جمع ${fmtToman(v.total)}`
+                  : `${v.payStateFa} — ${fmtToman(v.total)}`}
             </small>
           </div>
         )}
@@ -599,9 +605,9 @@ function VisitRow({ v, busy, onEdit, onStatus, onDelete, onBilling, onToast, sta
       {company && <td><StageBadges v={v} t={t} /></td>}
       <td><StatusPick v={v} busy={busy} onStatus={onStatus} statuses={statuses} t={t} compact /></td>
       <td className="db-t-money">
-        {v.total ? (
+        {v.total || v.overpaid ? (
           <>
-            <b className={v.due > 0 ? 'due' : 'ok'}>{v.due > 0 ? `مانده ${fmtToman(v.due)}` : 'تسویه'}</b>
+            <b className={PAY_CLASS[v.payState]}>{v.payStateFa}{v.payState === 'due' ? ` ${fmtToman(v.due)}` : v.payState === 'overpaid' ? ` ${fmtToman(v.overpaid)}` : ''}</b>
             <small>وصول {faNum(v.paidPct)}٪ از {fmtToman(v.total)}</small>
           </>
         ) : <span className="db-t-none">بی‌صورت‌حساب</span>}

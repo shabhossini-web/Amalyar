@@ -5,7 +5,7 @@ import { fmtMoney } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
 import { useAuth } from './auth.jsx';
 import Overlay from '../ui/Overlay.jsx';
-import { Close, External, Plus, Trash } from '../ui/icons.jsx';
+import { ArrowStart, Close, External, Plus, Trash } from '../ui/icons.jsx';
 
 const int = (v, lo, hi) => {
   const n = parseInt(toEnDigits(String(v ?? '')).replace(/[^0-9]/g, ''), 10);
@@ -13,6 +13,11 @@ const int = (v, lo, hi) => {
 };
 const fa = (n) => Number(n || 0).toLocaleString('fa-IR');
 const SECTOR_FA = { public: 'دولتی', private: 'خصوصی', nonprofit: 'غیرانتفاعی', charity: 'خیریه' };
+const NONE = [];
+/** دو راهِ «با قلمِ مبلغِ کل چه شود؟» — کلید همان کلیدِ `billing.options`ِ سرور است. */
+const LUMP_CHOICES = [['replace', 'جایگزینِ همین قلم شود'], ['keep', 'کنارش بماند']];
+/** «مانده ۸٬۹۹۸» / «اضافه‌پرداخت ۳۹٬۹۹۱٬۰۰۲» / «تسویه» — برچسب و مبلغ هر دو از سرور (`payState*`، قانون ۱۵). */
+const payText = (b) => `${b.payStateFa}${b.payState === 'due' ? ` ${fmtMoney(b.due)}` : b.payState === 'overpaid' ? ` ${fmtMoney(b.overpaid)}` : ''}`;
 
 /**
  * پاپ‌آپِ صدورِ فاکتورِ نورومانیتورینگ — الگوی ملک‌طب.
@@ -23,7 +28,7 @@ const SECTOR_FA = { public: 'دولتی', private: 'خصوصی', nonprofit: 'غ�
  * زیرش‌اند، و یک دکمه همه را روی صورت‌حساب می‌نشاند (و اگر خواستی صادر و چاپ
  * می‌کند). هیچ مبلغی این‌جا حساب نمی‌شود — همه از `neuro-quote` سرور (قانون ۱۵).
  */
-export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, reload, onIssue }) {
+export default function NeuroInvoiceDialog({ visit, billing, intent, onClose, onToast, reload, onIssue }) {
   const { user } = useAuth();
   const root = `/visits/${visit.id}/invoices`;
   const [cat, setCat] = useState(null);
@@ -36,8 +41,11 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
   useEffect(() => { if (!stockOpen) return; let alive = true; const t = setTimeout(() => api(`/stock/lots?q=${encodeURIComponent(stockQuery)}`).then(d => { if (alive) { setStock(d); setStockError(''); } }).catch(e => { if (alive) setStockError(e.message); }), 250); return () => { alive = false; clearTimeout(t); }; }, [stockQuery, stockOpen]);
   const [draft, setDraft] = useState({ name: '', irc: '', qty: '1' });
   const [quote, setQuote] = useState(null);
-  /* قلمِ مبلغِ کلِ مراجعه (مبلغِ ثبت‌نام) جایگزین شود یا کنارِ خدمات بماند — صریح، نه ضمنی (company-14). */
-  const [replace, setReplace] = useState(true);
+  /* قلمِ مبلغِ کلِ مراجعه (مبلغِ ثبت‌نام) جایگزین شود یا کنارِ خدمات بماند — صریح، نه ضمنی (company-14).
+     `null` = هنوز انتخاب نشده. پیش‌فرض از سرور (`lumpDefault`، DF2/DF3): «کنار» فقط وقتی کاربر قبلاً صریحاً
+     گفته؛ وقتی پول گرفته شده هیچ پیش‌فرضی نیست — تا دیروز «جایگزین» پیش‌فرض بود و قلمِ ۴۰ میلیونیِ پرداخت‌شده
+     بی‌پیش‌نمایش با ۸٬۹۹۸ عوض می‌شد. `intent` از هشدارِ دوبارشماریِ پنل می‌آید (کاربر «جایگزینی» را زده). */
+  const [choice, setChoice] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   /* وضعیتِ صورت‌حساب در لحظهٔ بازشدن — بازخوانی‌های بعدی انتخابِ کاربر را نمی‌پرانند. */
@@ -56,8 +64,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
           .map((x) => `${x.serviceCode}:${x.neuroDetail.label ?? ''}`)
           .filter((id) => c.services.some((s) => s.id === id));
         setSel(new Set(fromVisit.length ? fromVisit : c.services.filter((s) => s.defaultOn).map((s) => s.id)));
-        /* خدماتِ نورو که از قبل هست و قلمِ کل هنوز کنارش است یعنی بارِ قبل «کنارش بماند» انتخاب شده بود. */
-        setReplace(!existing.length);
+        setChoice(intent ?? c.lumpDefault ?? null);
         setHours(String(existing[0]?.neuroDetail?.hours ?? c.hours ?? ''));
         setYear(String(c.year ?? ''));
         setOwner(existing[0]?.neuroDetail?.deviceOwner ?? c.deviceOwner ?? 'company');
@@ -67,24 +74,30 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
       })
       .catch((e) => { if (live) setErr(e.message); });
     return () => { live = false; };
+    /* `intent` مثلِ `openedWith` فقط مقدارِ آغازین است — عوض‌شدنش پنجره را از نو نمی‌خواند. */
   }, [root]);
 
   const h = int(hours, 0, 72);
   const y = toEnDigits(year).replace(/\D/g, '');
   const ids = useMemo(() => (cat ? cat.services.filter((s) => sel.has(s.id)).map((s) => s.id) : []), [cat, sel]);
+  const lump = cat?.lumpLines ?? NONE;
+  const lumpIds = useMemo(() => lump.map((c) => c.id), [lump]);
+  const replaceIds = choice === 'replace' ? lumpIds : NONE;
+  /* قلمِ مبلغِ کل هست و هنوز تصمیمی نیست — ثبت خاموش است (سرور هم ثبتِ بی‌تصمیم را رد می‌کند). */
+  const needChoice = lumpIds.length > 0 && !choice;
 
-  /* جمعِ زنده — با هر تغییرِ تیک/مدت/سال/مالک، از سرور (debounce). */
+  /* جمعِ زنده و صورت‌حسابِ پس از ثبت — با هر تغییرِ تیک/مدت/سال/مالک/جایگزینی، از سرور (debounce؛ DF2). */
   useEffect(() => {
     setQuote(null);
     if (!cat || !ids.length || h < 1 || !/^\d{4}$/.test(y)) { setQuote(null); return undefined; }
     let live = true;
     const t = setTimeout(() => {
-      api(`${root}/neuro-quote`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner } })
+      api(`${root}/neuro-quote`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, replace: replaceIds } })
         .then((q) => { if (live) { setQuote(q); setErr(''); } })
         .catch((e) => { if (live) { setQuote(null); setErr(e.message); } });
     }, 250);
     return () => { live = false; clearTimeout(t); };
-  }, [cat, ids, h, y, owner, root]);
+  }, [cat, ids, h, y, owner, root, replaceIds]);
 
   const toggle = (id) => setSel((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const setQty = (i, qty) => setCons((l) => l.map((x, j) => (j === i ? { ...x, qty } : x)));
@@ -93,14 +106,16 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
   const apply = async (thenIssue) => {
     if (!ids.length) { onToast('دستِ‌کم یک خدمت انتخاب کنید'); return; }
     if (h < 1) { onToast('مدتِ قابلِ صورتحساب را وارد کنید'); return; }
+    if (needChoice) { onToast('با قلمِ مبلغِ کلِ مراجعه چه شود؟ یکی را انتخاب کنید'); return; }
     const printWindow = thenIssue ? window.open('', '_blank') : null;
     if (thenIssue && !printWindow) { setErr('برای چاپ، اجازهٔ بازشدن پنجره را بدهید'); return; }
     if (printWindow) printWindow.document.body.textContent = 'در حال آماده‌سازی فاکتور…';
     setBusy(true); setErr('');
     try {
-      await api(`${root}/neuro-apply`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, consumables: payloadCons(), returnUnusedStock, replace: replace ? lump.map((c) => c.id) : [] } });
+      await api(`${root}/neuro-apply`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, consumables: payloadCons(), returnUnusedStock,
+        replace: replaceIds, keep: choice === 'keep' ? lumpIds : [] } });
       await reload();
-      onToast(`${fa(ids.length)} خدمت و ${fa(cons.length)} مصرفی روی صورت‌حساب نشست ✓`);
+      onToast(`${fa(ids.length)} خدمت و ${fa(cons.length)} مصرفی روی صورت‌حساب نشست`);
       onClose();
       if (thenIssue) onIssue?.(printWindow);
     } catch (e) { printWindow?.close(); setErr(e.message); } finally { setBusy(false); }
@@ -119,12 +134,15 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
   };
 
   const canIssue = !!billing?.invoiceType && !!billing?.invoiceBankAccount;
-  const lump = cat?.lumpLines ?? [];
+  /* صورت‌حسابِ پیش و پس از ثبت — هر دو از سرور (`neuro-quote`، DF2)؛ پنجره فقط نشان می‌دهد. */
+  const bill = quote?.billing;
+  const after = bill && !needChoice ? bill.after : null;
   /* چرا دکمه‌های ثبت خاموش‌اند — کنارِ خودِ دکمه‌ها، نه فقط خطِ خطای بالای پنجره (company-14). */
   const whyNot = !cat ? '' : !ids.length ? 'دستِ‌کم یک خدمت انتخاب کنید.'
     : h < 1 ? 'مدتِ قابلِ صورتحساب را وارد کنید.'
       : !/^\d{4}$/.test(y) ? 'سالِ تعرفه را چهاررقمی وارد کنید.'
-        : !quote ? (err || 'در حالِ محاسبهٔ جمع…') : '';
+        : needChoice ? 'با قلمِ مبلغِ کلِ مراجعه چه شود؟ «جایگزینِ همین قلم شود» یا «کنارش بماند» را انتخاب کنید.'
+          : !quote ? (err || 'در حالِ محاسبهٔ جمع…') : '';
   const tariffMissing = /تعرفه/.test(err);
 
   return (
@@ -186,14 +204,28 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
               {lump.map((c) => (
                 <div key={c.id} className="nv-lump-row"><b>{c.title}</b><span>{fmtMoney(c.amount)} تومان</span></div>
               ))}
-              <div className="bl-pricing-tabs" role="radiogroup" aria-label="با قلمِ مبلغِ کل چه شود؟">
-                <button type="button" role="radio" aria-checked={replace} className={replace ? 'on' : ''} disabled={busy} onClick={() => setReplace(true)}>جایگزینِ همین قلم شود</button>
-                <button type="button" role="radio" aria-checked={!replace} className={!replace ? 'on' : ''} disabled={busy} onClick={() => setReplace(false)}>کنارش بماند</button>
+              <div className="bl-pricing-tabs" role="radiogroup" aria-label="با قلمِ مبلغِ کل چه شود؟" aria-required="true">
+                {LUMP_CHOICES.map(([key, label]) => (
+                  <button key={key} type="button" role="radio" aria-checked={choice === key} className={choice === key ? 'on' : ''} disabled={busy} onClick={() => setChoice(key)}>{label}</button>
+                ))}
               </div>
+              {/* پیامدِ هر راه پیش از انتخاب — جمع و مانده/اضافه‌پرداختِ صورت‌حساب پس از ثبت، از سرور (DF2). */}
+              {bill?.options && (
+                <dl className="nv-opts" aria-label="پیامدِ هر راه روی صورت‌حساب">
+                  {LUMP_CHOICES.map(([key, label]) => (
+                    <div key={key} className={choice === key ? 'on' : undefined}>
+                      <dt>{label}</dt>
+                      <dd>جمع {fmtMoney(bill.options[key].total)} · <span className={`nv-pay ${bill.options[key].payState}`}>{payText(bill.options[key])}</span></dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
               <p className="db-hint">
-                {replace
-                  ? 'با ثبت، این قلم برداشته می‌شود و خدماتِ بالا جایش می‌نشینند؛ پرداخت‌ها دست نمی‌خورند.'
-                  : 'هر دو در جمعِ صورت‌حساب می‌آیند — فقط وقتی درست است که این قلم خدمتِ دیگری باشد، وگرنه یک خدمت دو بار حساب می‌شود.'}
+                {choice === 'replace'
+                  ? 'با ثبت، این قلم برداشته می‌شود و خدماتِ بالا جایش می‌نشینند. پرداخت‌های ثبت‌شده سرِ جایشان می‌مانند؛ اگر جمعِ تازه از پرداخت‌شده کمتر شود، مابه‌التفاوت «اضافه‌پرداخت» است و باید برگردانده یا تسویه شود.'
+                  : choice === 'keep'
+                    ? 'هر دو در جمعِ صورت‌حساب می‌آیند — فقط وقتی درست است که این قلم خدمتِ دیگری باشد، وگرنه یک خدمت دو بار حساب می‌شود.'
+                    : 'برای این مراجعه پرداخت ثبت شده و هر دو راه جمع و مانده را عوض می‌کنند؛ پیامدِ هرکدام را ببینید و یکی را انتخاب کنید.'}
               </p>
             </section>
           )}
@@ -237,11 +269,23 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
           {whyNot && <p className="db-hint nv-why" aria-live="polite">{whyNot}</p>}
           <div className="nv-foot">
             <div className="nv-total"><span>جمعِ خدمات</span><b>{quote ? `${fmtMoney(quote.total)} تومان` : '—'}</b></div>
+            {/* صورت‌حسابِ پس از ثبت (DF2) — تا کاربر پیش از ثبت ببیند جمعِ کل و مانده (یا اضافه‌پرداخت) چه می‌شود. */}
+            {after && (
+              <div className="nv-after" aria-live="polite">
+                <span>جمعِ صورت‌حساب پس از ثبت</span>
+                <b>
+                  {after.total === bill.before.total ? <>{fmtMoney(after.total)} <small>بی‌تغییر</small></> : (
+                    <><s>{fmtMoney(bill.before.total)}</s> <ArrowStart width="13" height="13" /><span className="db-sr"> به </span> {fmtMoney(after.total)}</>
+                  )}
+                </b>
+                <em className={`nv-pay ${after.payState}`}>{payText(after)}</em>
+              </div>
+            )}
             {user?.level >= 6 && (
               <button type="button" className="bl-mini" disabled={busy || !ids.length} onClick={saveDefaults}>ذخیره به‌عنوانِ پیش‌فرضِ شرکت</button>
             )}
-            <button type="button" className="bl-mini" disabled={busy || !quote} onClick={() => apply(false)}>ثبتِ خدمات روی صورت‌حساب</button>
-            <button type="button" className="db-submit bl-btn" disabled={busy || !quote || !canIssue} onClick={() => apply(true)}>ثبت، صدور و چاپ فاکتور</button>
+            <button type="button" className="bl-mini" disabled={busy || !quote || needChoice} onClick={() => apply(false)}>ثبتِ خدمات روی صورت‌حساب</button>
+            <button type="button" className="db-submit bl-btn" disabled={busy || !quote || needChoice || !canIssue} onClick={() => apply(true)}>ثبت، صدور و چاپ فاکتور</button>
           </div>
           {!canIssue && <p className="db-hint">برای صدور، نوعِ فاکتور و حسابِ دریافت باید ثبت شده باشد؛ ثبتِ خدمات بدونِ آن هم ممکن است.</p>}
         </>

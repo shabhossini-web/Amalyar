@@ -218,6 +218,8 @@
 @media (prefers-reduced-motion: reduce) { .db-prog-bar i { transition: none; } }
 .db-prog small { font-size: 11px; color: var(--text3); }
 .db-prog small.ok { color: var(--green-text); }
+/* اضافه‌پرداخت «تسویه» نیست (DF2) — همان فیروزه‌ایِ خلاصهٔ صورت‌حساب (`.bl-over`). */
+.db-prog small.over { color: var(--cyan); font-weight: 700; }
 
 /* ردیفِ کنش‌ها — بیرونِ پنل، مثلِ طرحِ مرجع.
    دو طبقه: بالا انتخابگرِ وضعیت (که خودش برچسبِ وضعیت هم هست)، پایین چهار کارِ
@@ -326,6 +328,7 @@ a.db-ico { text-decoration: none; }
 .db-t-money b { display: block; font-size: 12.5px; white-space: nowrap; }
 .db-t-money b.due { color: var(--amber-text); }
 .db-t-money b.ok { color: var(--green-text); }
+.db-t-money b.over { color: var(--cyan); }
 .db-t-acts { white-space: nowrap; }
 .db-t-acts > * { vertical-align: middle; }
 .db-t-acts .db-ico { display: inline-grid; width: 32px; height: 32px; margin-inline-end: 4px; }
@@ -1117,6 +1120,35 @@ a.db-defbtn { text-decoration: none; }
 .nv-lump .bl-pricing-tabs button { min-height: 40px; }
 @media (max-width: 640px) { .nv-lump .bl-pricing-tabs button { min-height: 44px; } }
 .nv-why { color: var(--amber-text); }
+/* پیامدِ هر راهِ قلمِ مبلغِ کل و صورت‌حسابِ پس از ثبت (DF2) — اعداد از سرور؛ رنگِ وضعیت همان زبانِ خلاصهٔ
+   صورت‌حساب: مانده کهربایی، اضافه‌پرداخت فیروزه‌ای، تسویه سبز. */
+.nv-opts { display: grid; gap: 6px; margin: 0; }
+.nv-opts > div {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 10px;
+  padding: 7px 10px; border-radius: 10px; font-size: 12px; border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.nv-opts > div.on { background: rgba(var(--brand-rgb), .1); border-color: rgba(var(--brand-2-rgb), .55); }
+.nv-opts dt { font-weight: 700; color: var(--text2); }
+.nv-opts dd { margin: 0; font-variant-numeric: tabular-nums; color: var(--text1); }
+.nv-after { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nv-after > span { font-size: 10.5px; color: var(--text3); }
+.nv-after b { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.nv-after b s { font-weight: 600; color: var(--text3); }
+.nv-after b small { font-size: 10.5px; font-weight: 600; color: var(--text3); }
+.nv-after em { font-style: normal; font-size: 12px; font-weight: 800; }
+.nv-pay.due { color: var(--amber-text); }
+.nv-pay.overpaid { color: var(--cyan); }
+.nv-pay.settled { color: var(--green-text); }
+/* هشدارِ دوبارشماری در پنلِ فاکتور (DF3) — قلمِ مبلغِ کل و خدماتِ ریزشده هر دو در جمع. کهربا = «بخوان». */
+.nv-double {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin: 8px 0 0;
+  padding: 10px 12px; border-radius: 12px; background: var(--amber-bg); border: 1px solid var(--amber-text);
+}
+.nv-double > svg { color: var(--amber-text); }
+.nv-double b { display: block; font-size: 13px; color: var(--text1); line-height: 1.8; }
+.nv-double small { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.9; color: var(--text2); }
+.nv-double .bl-mini { min-height: 44px; }
+@media (max-width: 640px) { .nv-double { grid-template-columns: auto 1fr; } .nv-double .bl-mini { grid-column: 1 / -1; } }
 .nv-fixlink { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: var(--brand-text); text-decoration: underline; text-underline-offset: 3px; }
 .nv-fixlink:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 4px; }
 

@@ -158,10 +158,37 @@ try {
   assert.deepEqual((await invoices.list(iv.id, user)).lumpLines, [{ id: lump.id, title: 'نورومانیتورینگ — فیوژن', amount: 40000000 }]);
   assert.deepEqual((await invoices.catalog(iv.id, user)).lumpLines.map(x => x.id), [lump.id]);
   pass('company-14: the lump-sum line of the visit is exposed to the services dialog; a hand-made service line is not');
-  let lb = (await invoices.apply(iv.id, bulk, user)).billing;
+  // ── DF2: پیش‌نمایشِ «صورت‌حسابِ پس از ثبت» از سرور؛ وقتی پول گرفته شده پیش‌فرضی نیست و ثبتِ بی‌تصمیم رد می‌شود ──
+  const ivList = await invoices.list(iv.id, user);
+  assert.equal(ivList.lumpDefault, null, 'DF2: registration line already paid — no silent default');
+  assert.equal(ivList.lumpBesideNeuro, false); assert.equal(ivList.lumpKept, false);
+  const chargesBefore = await prisma.charge.findMany({ where: { visitId: iv.id }, orderBy: { id: 'asc' } });
+  const pv = (await invoices.quote(iv.id, { ...bulk, replace: [lump.id] }, user)).billing;
+  assert.deepEqual([pv.before.total, pv.before.paid, pv.before.due, pv.before.payState], [40000007, 40000000, 7, 'due']);
+  assert.deepEqual([pv.after.total, pv.after.due, pv.after.payState, pv.after.payStateFa, pv.after.overpaid], [8998, 8998 - 40000000, 'overpaid', 'اضافه‌پرداخت', 39991002]);
+  assert.deepEqual(pv.options.replace, pv.after);
+  assert.deepEqual([pv.options.keep.total, pv.options.keep.due, pv.options.keep.payState], [40008998, 8998, 'due']);
+  assert.deepEqual((await invoices.quote(iv.id, bulk, user)).billing.after, pv.options.keep);
+  assert.deepEqual(await prisma.charge.findMany({ where: { visitId: iv.id }, orderBy: { id: 'asc' } }), chargesBefore, 'quote writes nothing');
+  pass('DF2: neuro-quote returns the bill before and after this very replacement (overpaid 39,991,002) and both lump choices — the dialog computes nothing');
+  await assert.rejects(() => invoices.apply(iv.id, bulk, user), /انتخاب کنید/);
+  await assert.rejects(() => invoices.apply(iv.id, { ...bulk, replace: [lump.id], keep: [lump.id] }, user), /هم جایگزین/);
+  assert.deepEqual(await prisma.charge.findMany({ where: { visitId: iv.id }, orderBy: { id: 'asc' } }), chargesBefore);
+  pass('DF2: applying services while a lump line is undecided is refused (the old silent double count) and changes nothing');
+  // ── DF3: دوبارشماریِ قدیمی (خدمتِ نورو کنارِ قلمِ ثبت‌نام، بی‌تصمیم) دیده می‌شود؛ «کنار» فقط صریح و ماندگار ──
+  const legacy = await invoices.addService(iv.id, dto, user);
+  let ivl = await invoices.list(iv.id, user);
+  assert.deepEqual([ivl.lumpBesideNeuro, ivl.lumpKept, ivl.lumpDefault], [true, false, null]);
+  pass('DF3: a registration line beside itemised neuro services without an explicit choice is flagged as a likely double count, never defaulted to "keep"');
+  let lb = (await invoices.apply(iv.id, { ...bulk, keep: [lump.id] }, user)).billing;
   assert.equal(lb.total, 40000000 + 7 + 8991); assert.equal(lb.due, 7 + 8991);
-  assert.ok(lb.charges.some(c => c.id === lump.id));
-  pass('company-14 PROOF: without replacing, the registration line (40,000,000) and the itemised neuro services (8,991) are BOTH in the total — one service counted twice');
+  assert.ok(lb.charges.some(c => c.id === lump.id) && !lb.charges.some(c => c.id === legacy.id));
+  assert.ok(lb.charges.filter(c => c.neuroDetail).every(c => c.neuroDetail.keptLumpIds?.includes(lump.id)));
+  ivl = await invoices.list(iv.id, user);
+  assert.deepEqual([ivl.lumpBesideNeuro, ivl.lumpKept, ivl.lumpDefault], [true, true, 'keep']);
+  const keptAudit = await prisma.auditEvent.findFirst({ where: { action: 'invoice.neuro.apply', entityId: String(iv.id) }, orderBy: { id: 'desc' } });
+  assert.deepEqual(keptAudit.beforeJson.kept, [{ id: lump.id, title: 'نورومانیتورینگ — فیوژن', amount: 40000000 }]);
+  pass('DF3: an explicit "keep beside" is persisted on the new neuro lines and audited — only then the dialog defaults to it and the panel stops warning');
   lb = (await invoices.apply(iv.id, { ...bulk, replace: [lump.id] }, user)).billing;
   assert.ok(!lb.charges.some(c => c.id === lump.id) && lb.charges.some(c => c.id === handMade.id));
   assert.equal(lb.charges.filter(c => c.neuroDetail).length, 1);
@@ -177,5 +204,21 @@ try {
   pass('company-14: replace refuses anything but a lump line of THIS visit (hand-made, already gone, another visit) and removes nothing then');
   await assert.rejects(() => invoices.price(iv.id, { ...dto, year: '1399' }, user), /تنظیماتِ شرکت/);
   pass('company-14: the missing-tariff error names where tariffs are defined');
+  // ── DF1: قلمِ مبلغِ کلِ مراجعهٔ ایمپلنت (شرکتِ دوخدمته) هرگز با خدماتِ نورو جایگزین نمی‌شود ──
+  const im = await prisma.visit.create({ data: { patientId: patient.id, seq: 4, hospitalId: hospital.id, service: 'implant', opDate: new Date('2026-09-08'), opStartTime: '10:00', opEndTime: '13:00' } });
+  const implantLump = await prisma.charge.create({ data: { visitId: im.id, kind: 'service', title: 'ایمپلنت — فیوژن', quantity: 1, unitPrice: 120000000, amount: 120000000 } });
+  const imList = await invoices.list(im.id, user);
+  assert.deepEqual(imList.lumpLines, []); assert.equal(imList.lumpDefault, null);
+  await assert.rejects(() => invoices.quote(im.id, { ...bulk, replace: [implantLump.id] }, user), /نورومانیتورینگ نیست/);
+  await assert.rejects(() => invoices.apply(im.id, { ...bulk, replace: [implantLump.id] }, user), /نورومانیتورینگ نیست/);
+  assert.ok((await billing.get(im.id, user)).charges.some(c => c.id === implantLump.id), 'implant line survives');
+  pass('DF1: an implant visit exposes no lump line to the neuro dialog; replacing its 120,000,000 line is refused in quote and apply');
+  // ── DF2: «تسویه» فقط وقتی مانده صفر است — اضافه‌پرداخت برچسبِ خودش را از سرور می‌گیرد ──
+  const payStateOf = cls('patients/billing.service', 'payStateOf');
+  assert.deepEqual(payStateOf({ total: 8998, due: 8998 - 40000000 }), { payState: 'overpaid', payStateFa: 'اضافه‌پرداخت', overpaid: 39991002 });
+  assert.deepEqual(payStateOf({ total: 10, due: 0 }), { payState: 'settled', payStateFa: 'تسویه', overpaid: 0 });
+  assert.deepEqual(payStateOf({ total: 10, due: 4 }), { payState: 'due', payStateFa: 'مانده', overpaid: 0 });
+  assert.deepEqual(payStateOf({ total: 0, due: 0 }), { payState: 'none', payStateFa: 'بی‌صورت‌حساب', overpaid: 0 });
+  pass('DF2: pay state (due / settled / overpaid) and its label come from the server, not from a client `due > 0` check');
   console.log(`${count} invoice integration scenarios passed`);
 } finally { if (prisma) await prisma.$disconnect(); server.close(); await db.close(); }

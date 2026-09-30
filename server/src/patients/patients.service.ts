@@ -30,7 +30,7 @@ import { planKindPhases, planSubforms, subformDataHasValue, subformDerived, subf
 import { vitalsRowsFor } from './vitals';
 import { DOCUMENT_PHASE_FA } from './document-categories';
 import { actorName } from '../common/person';
-import { summarize } from './billing.service';
+import { summarize, withPayState } from './billing.service';
 import { todayRangeUtc } from '../common/clinic-day';
 import {
   CODING_TWIN, CODING_TWIN_KEYS, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
@@ -162,7 +162,8 @@ function enrich(v: any, kinds?: KindMap, loaded: string[] = VISIT_NOTE_KINDS) {
     // جمع‌های مالی از ردیف‌ها مشتق می‌شوند (قانونِ computeVisit)؛ هیچ render ای
     // اجازهٔ جمع‌زدن ندارد و هیچ ستونِ سرجمعی در DB نیست که از واقعیت عقب بماند.
     // مدلِ «گلوبال» همین‌جا اعمال می‌شود تا کارت و فهرست همان عددِ فاکتور را ببینند.
-    ...summarize(v.charges ?? [], v.payments ?? [], v),
+    // «مانده / تسویه / اضافه‌پرداخت» هم از همین‌جا (`payState*`)، نه `due > 0 ? … : 'تسویه'`ِ کلاینت (DF2).
+    ...withPayState(summarize(v.charges ?? [], v.payments ?? [], v)),
     pricingModel: v.pricingModel,
     globalAmount: v.globalAmount,
     notes: v.notes,
