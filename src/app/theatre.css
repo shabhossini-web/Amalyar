@@ -139,6 +139,17 @@
 .th-link:disabled { opacity: .5; cursor: default; }
 .th-fix { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 6px; }
 .th-fix .th-fix-pick { flex: 1 1 150px; }
+/* تأییدِ مدتِ بیش از ۱۲ ساعت (بستهٔ FF، FF16) — کهربایی: «مطمئنی؟»، نه خطا. */
+.th-fix-long {
+  flex-basis: 100%; display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px;
+  background: var(--amber-bg); border: 1px solid rgba(251, 191, 36, .5);
+}
+.th-fix-long p { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 13.5px; line-height: 1.8; color: var(--text1); }
+.th-fix-long p svg { flex: none; margin-top: 5px; color: var(--amber-text); }
+.th-fix-long b { color: var(--amber-text); }
+.th-fix-long small { font-size: 12px; line-height: 1.8; color: var(--text2); }
+.th-fix-long-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.th-fix-long-acts .th-btn { flex: 1 1 140px; }
 .th-elapsed { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 13px; color: var(--text2); }
 .th-elapsed b { color: var(--text1); }
 /* نوارِ ۱۰ثانیه‌ایِ «… ثبت شد — برگرداندن» */
@@ -159,6 +170,11 @@
 .th-who-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .th-who-top .th-name { flex: 1 1 auto; min-width: 0; }
 .th-open-form { min-height: 36px; padding: 0 12px; border-radius: 99px; border: 1px solid rgba(var(--brand-2-rgb), .35); }
+/* کفِ لمسِ ۴۴px برای «اصلاحِ ساعت»، «برگرداندن» و «بازکردنِ فرمِ عمل» — نه فقط زیرِ ۵۶۰px: تبلتِ اتاقِ عمل
+   پهن‌تر است ولی همان انگشتِ دستکش‌دار را دارد (بستهٔ FF، FF13). */
+@media (max-width: 560px), (pointer: coarse) {
+  .th-link, .th-open-form { min-height: 44px; }
+}
 /* ⚠️ `inline-flex` + `align-items:center`: قاعدهٔ سراسریِ `svg { display:block }` (index.css) آیکونِ
    دکمه را به سطرِ خودش می‌برد و «ترخیص» دوخطی می‌شد — آیکون بالا، متن پایین. */
 .th-btn {
@@ -188,6 +204,28 @@
 .th-report textarea:focus, .th-dialog textarea:focus { outline: none; border-color: var(--brand-2); }
 .th-report-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .th-report-bar .th-hint { margin: 0; margin-inline-end: auto; }
+/* تعارضِ نوشتهٔ دستگاه با پرونده (بستهٔ FF، FF1): دو ستونِ هم‌وزن، هر کدام متن و دکمهٔ خودش — هیچ‌کدام
+   دکمهٔ اصلی نیست، چون هیچ‌کدام پیش‌فرضِ درست نیست. کهربایی: کارِ باز، نه خطا. */
+.th-conflict {
+  display: grid; gap: 10px; padding: 12px; border-radius: 14px;
+  background: var(--amber-bg); border: 1px solid rgba(251, 191, 36, .5);
+}
+.th-conflict-h { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 14px; font-weight: 800; line-height: 1.8; color: var(--amber-text); }
+.th-conflict-h svg { flex: none; margin-top: 5px; }
+.th-conflict-opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.th-conflict-opt {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: 12px;
+  background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.th-conflict-opt > b { font-size: 12px; font-weight: 800; color: var(--text2); }
+.th-conflict-opt > p {
+  flex: 1; margin: 0; max-height: 12em; overflow: auto; border-radius: 8px;
+  font-size: 14px; line-height: 1.85; color: var(--text1); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.th-conflict-opt > p:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.th-conflict-opt .th-btn { width: 100%; }
+.th-conflict-note { font-size: 12px; line-height: 1.8; color: var(--text2); }
+@media (max-width: 560px) { .th-conflict-opts { grid-template-columns: 1fr; } }
 
 /* مدارک — گروه‌شده به مرحله، هر کدام یک دکمهٔ بازکردن. */
 .th-docgroup + .th-docgroup { margin-top: 14px; }
@@ -349,7 +387,6 @@
   .th-step { flex-wrap: wrap; }
   .th-step > .th-btn { flex: 1 1 100%; }
   .th-btn { padding: 0 12px; }
-  .th-link, .th-open-form { min-height: 44px; }
 }
 
 /* بستهٔ ۸ — ارزیابیِ پیش از عمل (از زیرفرم‌های «قبل»)، فرم‌های حینِ عمل، ترخیصِ کامل. */

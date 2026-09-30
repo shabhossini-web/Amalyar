@@ -1,11 +1,12 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
 import { isUnrestricted, ownVisitWhere } from '../common/own-scope';
 import { actorName } from '../common/person';
 import { DISCHARGE_NOTES, currentNotes, noteBody, setVisitNote } from './clinical-note';
-import { ANESTHESIA_LABELS, DISPOSITION_LABELS } from './labels';
+import { ANESTHESIA_LABELS, DISPOSITION_LABELS, OP_LABELS } from './labels';
 import { vitalView } from './vitals';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { RecordService } from './record.service';
@@ -21,7 +22,7 @@ import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
 import { ConfigService } from '../config/config.service';
 import { toDateValue } from '../common/jalali';
-import { CLINIC_TZ } from '../common/clinic-day';
+import { CLINIC_TZ, clinicTodayIso } from '../common/clinic-day';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
@@ -93,10 +94,15 @@ const roomState = (v: { opStatus: string | null; opStartTime: string | null; opE
      همان تلهٔ `finished` که یک‌بار روی `cancelled` خورده بود. */
   if (v.dischargeAt) return { state: 'discharged', stateFa: 'ترخیص شد' };
   if (v.opEndTime) return { state: 'finished', stateFa: 'در ریکاوری' };
+  /* ⚠️ عملی که «انجام شد» خورده (از فهرستِ انتظار یا داشبورد) ولی ساعتش سرِ میز زده نشد، روی تخته
+     «در انتظار» می‌ماند — یعنی تخته می‌گفت کسی منتظرِ عملی است که تمام شده (بازبینیِ خصمانهٔ بستهٔ F،
+     FF8). پیش از هر برچسبِ ساعت‌محور؛ برچسب همان `OP_LABELS` است نه متنِ دوم. */
+  if (v.opStatus === 'done') return { state: 'finished', stateFa: OP_LABELS.done };
   const day = v.opDate ? v.opDate.toISOString().slice(0, 10) : null;
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  /* «امروز» به وقتِ مطب، نه کانتینر (FF6): کانتینر روی UTC است و بینِ ۰۰:۰۰ تا ۰۳:۳۰ تهران روزِ UTC
+     هنوز دیروز است — عملِ امروزِ بی‌شروع «انجام‌نشده»ی دیروز را نمی‌گرفت ولی عملِ دیروز «در انتظار»
+     می‌ماند و شروع‌شدهٔ دیروز «در جریان». همان تعریفِ `common/clinic-day` که بقیهٔ میزها دارند. */
+  const todayIso = clinicTodayIso();
   if (!v.opStartTime) {
     /* ⚠️ روزِ گذشتهٔ بی‌شروع «در انتظار» نیست (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-16): کسی منتظرِ عملِ دیروز
        نیست؛ یا انجام نشد یا ثبت نشد، و همین برچسب کارِ کسی است که باید تکلیفش را روشن کند. همان عمل
@@ -128,6 +134,11 @@ const ITEM_KEYS = new Map(SAFETY_STAGES.map((s) => [s.key as string, new Set(s.i
  */
 const CLINIC_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: CLINIC_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 const wallClock = () => CLINIC_CLOCK.format(new Date());
+
+/** ۴۰۹ِ ساعت — میز با آن کارت را تازه می‌کند تا ساعتِ واقعی دیده شود (FF3). */
+const TIMES_CONFLICT = 'ساعت را کسِ دیگری ثبت یا عوض کرده است — کارت تازه شد؛ اگر هنوز لازم است، دوباره اصلاحش کنید.';
+/** ۴۰۹ِ شرحِ عمل/یافته‌ها — پایهٔ نوشتهٔ میز با متنِ فعلیِ پرونده نمی‌خواند (FF1). */
+const NOTE_CONFLICT = 'متنِ پرونده از جای دیگری عوض شده است — نوشتهٔ شما روی همین دستگاه مانده؛ انتخاب کنید کدام بماند.';
 
 /**
  * **نمای اتاقِ عمل** (بستهٔ ۳ب، بازخوردِ مالک ۱۴۰۵/۰۶/۳۰: «وقتی تو اتاق عمل است
@@ -529,19 +540,28 @@ export class TheatreService {
     if (!v) throw new NotFoundException('عمل پیدا نشد');
     if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده ساعت نمی‌گیرد');
     if (which === 'finish' && !v.opStartTime) throw new BadRequestException('اول «شروع شد» را بزنید');
-    const already = which === 'start' ? v.opStartTime : v.opEndTime;
-    if (already) return this.card(visitId, user);
-    await this.prisma.visit.update({
-      where: { id: visitId },
-      data: which === 'start'
-        ? { opStartTime: wallClock(), opTimesUpdatedAt: new Date() }
-        : { opEndTime: wallClock(), opTimesUpdatedAt: new Date() },
+    const field = which === 'start' ? 'opStartTime' : 'opEndTime';
+    /* ⚠️ **`stamped`: این درخواست واقعاً ساعت را نوشت یا نه** (بازبینیِ خصمانهٔ بستهٔ F، FF3). ساعتِ
+       موجود بازنویسی نمی‌شود، ولی پاسخ همان کارت بود و میز نوارِ «… ثبت شد — برگرداندن» را نشان می‌داد —
+       یعنی «برگرداندن» ساعتی را پاک می‌کرد که کسِ دیگری زده بود. نوشتن هم شرطی است (`updateMany` روی
+       «هنوز خالی»)، نه «خواندن، بعد نوشتن»: دو لمسِ هم‌زمان از دو دستگاه فقط یک برنده دارند و فقط
+       همان یکی نوارِ برگرداندن می‌گیرد. */
+    const at = wallClock();
+    const where: Prisma.VisitWhereInput = which === 'start'
+      ? { id: visitId, OR: [{ opStartTime: null }, { opStartTime: '' }] }
+      : { id: visitId, OR: [{ opEndTime: null }, { opEndTime: '' }], AND: [{ opStartTime: { not: null } }, { NOT: { opStartTime: '' } }] };
+    const r = await this.prisma.visit.updateMany({
+      where,
+      data: which === 'start' ? { opStartTime: at, opTimesUpdatedAt: new Date() } : { opEndTime: at, opTimesUpdatedAt: new Date() },
     });
-    await this.audit.record({
-      actorId: user?.id, action: `visit.${which}`, entityType: 'visit', entityId: visitId,
-      after: { [which === 'start' ? 'opStartTime' : 'opEndTime']: wallClock() },
-    });
-    return this.card(visitId, user);
+    const stamped = r.count === 1;
+    if (stamped) {
+      await this.audit.record({
+        actorId: user?.id, action: `visit.${which}`, entityType: 'visit', entityId: visitId,
+        after: { [field]: at },
+      });
+    }
+    return { ...(await this.card(visitId, user)), stamped };
   }
 
   /**
@@ -553,7 +573,11 @@ export class TheatreService {
    * ⚠️ پایان بی‌شروع نمی‌ماند، و ساعتِ پایانِ بیمارِ ترخیص‌شده فقط اصلاح می‌شود نه پاک — ترخیصِ
    * بی‌پایان همان حالتی است که `discharge` رد می‌کند.
    */
-  async setTimes(visitId: number, dto: { opStartTime?: string | null; opEndTime?: string | null }, user: any) {
+  async setTimes(
+    visitId: number,
+    dto: { opStartTime?: string | null; opEndTime?: string | null; expect?: { opStartTime?: string | null; opEndTime?: string | null } },
+    user: any,
+  ) {
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
       select: { id: true, opStartTime: true, opEndTime: true, opStatus: true, dischargeAt: true },
@@ -564,11 +588,30 @@ export class TheatreService {
     if (dto.opStartTime !== undefined) patch.opStartTime = normalizeTime(dto.opStartTime, 'ساعتِ شروع');
     if (dto.opEndTime !== undefined) patch.opEndTime = normalizeTime(dto.opEndTime, 'ساعتِ پایان');
     if (!Object.keys(patch).length) throw new BadRequestException('ساعتی برای ثبت نیامده است');
+    /* ⚠️ **مقدارِ موردِ انتظار** (بازبینیِ خصمانهٔ بستهٔ F، FF3): «برگرداندن» و «اصلاحِ ساعت» می‌گویند
+       ساعتِ فعلی را چه دیده‌اند؛ اگر در این فاصله کسِ دیگری (دستگاهِ دیگر، فرمِ عمل) ساعت را زده یا عوض
+       کرده، ۴۰۹ — نه `null`ی که ساعتِ او را بی‌صدا پاک کند. نوشتن هم شرطی است (`updateMany` روی همان
+       مقدار)، نه «خواندن، بعد نوشتن». نیامدنِ `expect` یعنی رفتارِ قبلی (فرمِ عمل، پنلِ کارشناس). */
+    const guard: Prisma.VisitWhereInput[] = [];
+    if (dto.expect?.opStartTime !== undefined) {
+      const want = normalizeTime(dto.expect.opStartTime, 'ساعتِ شروع');
+      if ((v.opStartTime || null) !== want) throw new ConflictException(TIMES_CONFLICT);
+      guard.push(want === null ? { OR: [{ opStartTime: null }, { opStartTime: '' }] } : { opStartTime: want });
+    }
+    if (dto.expect?.opEndTime !== undefined) {
+      const want = normalizeTime(dto.expect.opEndTime, 'ساعتِ پایان');
+      if ((v.opEndTime || null) !== want) throw new ConflictException(TIMES_CONFLICT);
+      guard.push(want === null ? { OR: [{ opEndTime: null }, { opEndTime: '' }] } : { opEndTime: want });
+    }
     const start = patch.opStartTime !== undefined ? patch.opStartTime : v.opStartTime;
     const end = patch.opEndTime !== undefined ? patch.opEndTime : v.opEndTime;
     if (end && !start) throw new BadRequestException('پایان بی‌شروع ثبت نمی‌شود — اول ساعتِ پایان را بردارید یا شروع را بگذارید');
     if (v.dischargeAt && !end) throw new BadRequestException('بیمار ترخیص شده است؛ ساعتِ پایان فقط اصلاح می‌شود، پاک نه');
-    await this.prisma.visit.update({ where: { id: visitId }, data: { ...patch, opTimesUpdatedAt: new Date() } });
+    const r = await this.prisma.visit.updateMany({
+      where: { id: visitId, ...(guard.length ? { AND: guard } : {}) },
+      data: { ...patch, opTimesUpdatedAt: new Date() },
+    });
+    if (r.count !== 1) throw new ConflictException(TIMES_CONFLICT);
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: visitId,
       before: { opStartTime: v.opStartTime, opEndTime: v.opEndTime }, after: patch,
@@ -693,14 +736,26 @@ export class TheatreService {
    * مقصدش همان `ClinicalNote(kind='op')`ِ فرمِ مراجعه است — یک سند، دو میز.
    * اگر ستونِ جدایی می‌ساختیم، شرحی که جراح این‌جا می‌نویسد در پرونده نبود.
    */
-  async setReport(visitId: number, body: string, user: any, kind: 'op' | 'findings' = 'op') {
+  async setReport(visitId: number, body: string, user: any, kind: 'op' | 'findings' = 'op', base?: string) {
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
       select: { id: true, patientId: true, opStatus: true },
     });
     if (!v) throw new NotFoundException('عمل پیدا نشد');
     if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده شرح نمی‌گیرد');
-    await this.prisma.$transaction((tx) => setVisitNote(tx, v, kind, body, user));
+    await this.prisma.$transaction(async (tx) => {
+      /* ⚠️ **پایهٔ نوشته** (بازبینیِ خصمانهٔ بستهٔ F، FF1): میز می‌گوید متنش روی کدام متنِ پرونده نوشته
+         شد. اگر پرونده در این فاصله از جای دیگری (فرمِ عمل، دستگاهِ دیگر) عوض شده، ۴۰۹ — نه اینکه
+         پیش‌نویسِ کهنهٔ یک تبلت شرحِ تازه‌تر را بی‌صدا جایگزین کند. همان سندِ جاری که `setVisitNote`
+         نسخهٔ بعدی‌اش را می‌سازد؛ نیامدنِ `base` یعنی رفتارِ قبلی. */
+      if (base !== undefined) {
+        const cur = await tx.clinicalNote.findFirst({
+          where: { visitId: v.id, kind, replacedAt: null }, orderBy: { createdAt: 'desc' }, select: { body: true },
+        });
+        if ((cur?.body ?? '').trim() !== base.trim()) throw new ConflictException(NOTE_CONFLICT);
+      }
+      await setVisitNote(tx, v, kind, body, user);
+    });
     await this.audit.record({
       actorId: user?.id, action: kind === 'op' ? 'visit.op_report' : 'visit.op_findings', entityType: 'visit', entityId: visitId,
       after: { length: (body ?? '').trim().length },

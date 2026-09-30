@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
+import { clearUserDrafts } from '../lib/deviceDrafts.js';
 import {
   getAccounts,
   upsertAccount,
@@ -196,10 +197,16 @@ export function AuthProvider({ children }) {
 
   /** سوییچ به حسابِ دیگری از لیست — سمتِ سرور؛ اگر نشستش مرده بود از لیست حذف می‌شود. */
   const switchAccount = useCallback(async (id) => {
+    const prev = user?.id ?? null;
     try {
       const me = await api('/auth/switch', { method: 'POST', body: { accountId: id }, quiet401: true });
       setUser(me);
       updateAccountUser(id, me);
+      /* پیش‌نویس‌های بالینیِ دستگاه (میزِ اتاقِ عمل) با کنشِ **صریحِ** کاربر پاک می‌شوند — خروج، خروج از همه و
+         همین تعویضِ دستیِ حساب روی تبلتِ مشترک (بستهٔ FF، FF2). مسیرِ نشستِ مرده (`amalyar:unauthorized` ←
+         `fallbackToNext`) عمداً پاک نمی‌کند: شرحِ ذخیره‌نشدهٔ جراحی که نشستش وسطِ عمل باطل شد باید پس از ورودِ
+         دوباره برگردد؛ کلید شناسهٔ کاربر را دارد و نفرِ بعد آن را نمی‌بیند، و سقفِ ۲۴ ساعت هم هست. */
+      if (prev != null && prev !== me.id) clearUserDrafts(prev);
       bump();
       return me;
     } catch (e) {
@@ -210,12 +217,13 @@ export function AuthProvider({ children }) {
       }
       throw e; // خطای شبکه → حساب حذف نشود
     }
-  }, []);
+  }, [user]);
 
   /** خروجِ تکی از یک حساب (فعال یا غیرفعال). خروجی: id حسابِ فعالِ بعدی یا null */
   const logoutAccount = useCallback(
     async (id) => {
       let r = null;
+      clearUserDrafts(id);
       try {
         r = await api('/auth/logout', { method: 'POST', body: id !== user?.id ? { accountId: id } : {}, quiet401: true });
       } catch {
@@ -242,6 +250,7 @@ export function AuthProvider({ children }) {
 
   /** خروج از همهٔ حساب‌ها (سشن‌های سرور هم باطل می‌شوند) */
   const logoutAll = useCallback(async () => {
+    clearUserDrafts();
     try {
       await api('/auth/logout-all', { method: 'POST', quiet401: true });
     } catch {

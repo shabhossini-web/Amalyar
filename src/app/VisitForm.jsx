@@ -653,18 +653,27 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      در **ثبتِ تازه** نوع (با حوزه هم‌گام می‌شود) و «ارسالِ فوری» (از تاریخ مشتق می‌شود) در مبنا
      نیستند: خودکارند نه نوشتهٔ کاربر، و پرسشی که بی‌دلیل می‌آید کاربر را به «دور ریختن»ِ بی‌نگاه عادت
      می‌دهد. در ویرایش هر دو فقط با دستِ کاربر عوض می‌شوند و حساب‌اند. */
-  const unsavedSnap = JSON.stringify([
+  /* **مبنا از لحظهٔ باز شدن، نه از رسیدنِ زیرفرم‌ها** (بستهٔ FF، FF15): تا دیروز کلِ عکس وقتی مبنا می‌شد
+     که زیرفرم‌ها از سرور رسیده بودند — هرچه کاربر در آن فاصله نوشته بود جزوِ مبنا می‌شد و بستن بی‌پرسش
+     دورش می‌ریخت؛ و اگر خواندنِ زیرفرم‌ها شکست می‌خورد مبنایی ساخته نمی‌شد و نگهبان هرگز روشن نمی‌شد.
+     حالا فرم (هسته، فیلدهای دلخواه، علائمِ تایپ‌شده) از همان رندرِ اول مبناست و فقط بخشِ زیرفرم‌ها
+     بعداً — با رسیدنشان، یا با شکستِ خواندنشان (همان فهرستِ آن لحظه). */
+  const mainSnap = JSON.stringify([
     /* خدمتِ پیش‌انتخاب‌شدهٔ شرکت (company-24) هم خودکار است، نه نوشتهٔ کاربر. */
     editing ? f : { ...f, kind: undefined, preOpImmediate: undefined, service: undefined },
     extra,
-    subList.map((e) => [e.slot, e.data ?? null]),
     pendingVitals,
   ]);
+  const subSnap = JSON.stringify(subList.map((e) => [e.slot, e.data ?? null]));
+  const subSnapRef = useRef(subSnap);
+  subSnapRef.current = subSnap;
   const unsavedBase = useRef(null);
+  if (unsavedBase.current === null) unsavedBase.current = { main: mainSnap, subs: subLoaded ? subSnap : null };
   useEffect(() => {
-    if (unsavedBase.current === null && subLoaded) unsavedBase.current = unsavedSnap;
-  }, [subLoaded, unsavedSnap]);
-  const unsaved = unsavedBase.current !== null && unsavedSnap !== unsavedBase.current;
+    if (subLoaded && unsavedBase.current.subs === null) unsavedBase.current.subs = subSnap;
+  }, [subLoaded, subSnap]);
+  const unsaved = mainSnap !== unsavedBase.current.main
+    || (unsavedBase.current.subs !== null && subSnap !== unsavedBase.current.subs);
   useEffect(() => {
     if (subLoaded || !initial?.id) return undefined;
     let alive = true;
@@ -676,7 +685,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         setSubList(list.map(toEntry));
         setSubLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* الصاق خاموش می‌ماند (`subLoaded`)، ولی نگهبانِ بستن نه — مبنای زیرفرم‌ها همان فهرستِ فعلی است. */
+        if (alive && unsavedBase.current.subs === null) unsavedBase.current.subs = subSnapRef.current;
+      });
     return () => { alive = false; };
   }, [subLoaded, initial?.id]);
 
@@ -733,6 +745,16 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      خاصی ندارد (علائمِ حیاتی، ASA، فرمِ ساختِ خودتان) — آن‌ها به همان مرحلهٔ انتخابی می‌روند، بی‌هشدار. */
   const boundPhase = (it) => (isSurgery && (it?.defaultPhase === 'intra' || it?.defaultPhase === 'post') ? it.defaultPhase : null);
   const pickTarget = (it) => (pickExplicit ? pickPhase : boundPhase(it) ?? pickPhase);
+  /* ستارهٔ منتخبِ سربرگ (بستهٔ FF، FF10): روی زبانهٔ «مشخصات» مرحلهٔ **خودِ فرم** را می‌گیرد — همان قاعدهٔ
+     پنجرهٔ الصاق. تا دیروز `phase` بود، یعنی آخرین زبانهٔ مرحله‌ای که کاربر دیده بود (یا «قبل» اگر هیچ):
+     «فرمِ جزئیاتِ حینِ عمل» از ستاره به «قبل از عمل» می‌چسبید و سرِ میز دیده نمی‌شد. روی زبانهٔ یک مرحله،
+     همان مرحله — کاربر صریحاً آن‌جاست. «الصاق‌شده» و متنِ راهنمای هر ستاره هم به‌ازای همان مرحله است. */
+  const pinPhaseOf = (it) => (tab === 'info' ? (boundPhase(it) ?? phase) : phase);
+  const pinAttached = new Set((prefs.subformPins ?? []).filter((k) => {
+    if (!k) return false;
+    const ph = isSurgery ? pinPhaseOf(catByKey.get(k)) : '';
+    return subList.some((x) => x.key === k && (x.phase || '') === (ph || ''));
+  }));
   const removeSub = (slot) => {
     const gone = subList.find((x) => x.slot === slot);
     if (gone) removedData.current[slot] = { key: gone.key, phase: gone.phase, data: gone.builtin ? undefined : (gone.data ?? {}) };
@@ -804,15 +826,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     setCardsShut({});
   }, [isSurgery, editing]);
 
+  /* جست‌وجوی پرونده فقط در گامِ ۱ِ ثبتِ تازه و تا پرونده‌ای برنداشته‌اند (بستهٔ FF، FF11): فرمِ ویرایش گامِ ۱ ندارد
+     ولی `mode` همان «existing» است، و با هر بازشدن فهرستِ بیست پروندهٔ دیگر بی‌دلیل از سرور بیرون می‌آمد. */
   useEffect(() => {
-    if (mode !== 'existing') return undefined;
+    if (editing || picked || mode !== 'existing') return undefined;
     const t = setTimeout(() => {
       api(`/patients?q=${encodeURIComponent(pQuery)}`)
         .then((r) => setPResults(Array.isArray(r) ? r : []))
         .catch(() => setPResults([]));
     }, 250);
     return () => clearTimeout(t);
-  }, [pQuery, mode]);
+  }, [pQuery, mode, editing, picked]);
 
   /**
    * کد ملیِ کامل → همان لحظه پروندهٔ موجود را نشان بده.
@@ -1047,8 +1071,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const PATIENT_KEYS = ['nationalId', 'birthDate'];
   const revealCore = (key) => {
     if (PATIENT_KEYS.includes(key)) { if (editing) setIdOpen(true); else setStep(1); }
-    /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
-    else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : 'info');
+    /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، «ویزیتِ بعدی» در زبانهٔ «بعد» (کنارِ مراقبتِ پس از عمل —
+       بستهٔ FF، FF9)، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
+    else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : key === 'nextVisitDate' ? 'post' : 'info');
     revealSel(`[data-core="${key}"]`);
   };
 
@@ -1502,25 +1527,31 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           </div>
         </div>
       ) : (
-        <label className="db-field">
-          <span>{ccLabel}</span>
-          <textarea
-            rows={2}
-            value={f.chiefComplaint}
-            onChange={set('chiefComplaint')}
-            placeholder="به زبانِ خودِ بیمار…"
-            autoFocus={ccOwn && !f.chiefComplaint}
-          />
+        /* «برگشت به شکایتِ …» **بیرون** از `<label>` (بستهٔ FF، FF12): دکمه داخلِ برچسب HTMLِ نامعتبر است (دو
+           کنترل در یک برچسب) و متنِ توضیح و دکمه جزوِ نامِ دسترس‌پذیرِ کادر می‌شد — صفحه‌خوان به‌جای «شکایتِ
+           اولیه» یک پاراگراف می‌خواند. توضیح حالا با `aria-describedby` به کادر وصل است. */
+        <div className="vf-cc-col">
+          <label className="db-field">
+            <span>{ccLabel}</span>
+            <textarea
+              rows={2}
+              value={f.chiefComplaint}
+              onChange={set('chiefComplaint')}
+              placeholder="به زبانِ خودِ بیمار…"
+              autoFocus={ccOwn && !f.chiefComplaint}
+              aria-describedby={inheritedComplaint ? `${ccId}-back` : undefined}
+            />
+          </label>
           {inheritedComplaint && (
-            <span className="vf-cc-back">
-              <small>{f.chiefComplaint.trim() ? 'به‌جای' : 'خالی بماند تا'} شکایتِ {complaintSourceLabel}{f.chiefComplaint.trim() ? '' : ' برگردد'}: «{inheritedComplaint}»</small>
+            <div className="vf-cc-back">
+              <small id={`${ccId}-back`}>{f.chiefComplaint.trim() ? 'به‌جای' : 'خالی بماند تا'} شکایتِ {complaintSourceLabel}{f.chiefComplaint.trim() ? '' : ' برگردد'}: «{inheritedComplaint}»</small>
               <button type="button" className="vf-cc-own" data-act="complaint-inherit"
                       onClick={() => { setF((s2) => ({ ...s2, chiefComplaint: '' })); setCcOwn(false); }}>
                 برگشت به شکایتِ {complaintSourceWord}
               </button>
-            </span>
+            </div>
           )}
-        </label>
+        </div>
       )}
       {durationField && (
         <label className={`db-field${extraErr[durationField.key] ? ' bad' : ''}`} data-field={durationField.key}>
@@ -1987,7 +2018,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      حینِ عمل داخلِ تبِ خودشان‌اند، پس بعد از بقیه. */
   const orderCore = (keys) => {
     const base = ['nationalId', 'birthDate', 'service', ...builtinOrder];
-    const rank = (k) => (base.indexOf(k) < 0 ? 999 : base.indexOf(k)) + (f.kind === 'surgery' && INTRA_KEYS.includes(k) ? 500 : 0);
+    const rank = (k) => (base.indexOf(k) < 0 ? 999 : base.indexOf(k))
+      + (f.kind === 'surgery' && INTRA_KEYS.includes(k) ? 500 : 0) + (f.kind === 'surgery' && k === 'nextVisitDate' ? 1000 : 0);
     return [...keys].sort((a, b) => rank(a) - rank(b));
   };
 
@@ -2167,6 +2199,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     <Overlay
       backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom"
       onClose={onClose} onSubmit={submit} closable={!busy}
+      /* `noValidate` (بستهٔ FF، FF7): سنجش همه در JS است (`parseCore`، `dynErrors`) و هر خطا به زبانه و کنارِ
+         فیلدِ خودش می‌رود. سنجشِ بومیِ مرورگر روی کادرِ پنهان (`type="url"`ِ لینک در زبانهٔ «مشخصات» وقتی کاربر
+         در زبانهٔ دیگر است) ذخیره را **بی‌صدا** می‌بست: «An invalid form control is not focusable». */
+      noValidate
       /* نگهبانِ تغییرِ ذخیره‌نشده — «ذخیره» همان ارسالِ فرم است با همهٔ اعتبارسنجی‌ها؛ پیش از گامِ
          «تکمیل» هنوز چیزی برای ذخیره نیست و پرسش فقط «دور ریختن / ادامه» می‌دهد. لمسِ پس‌زمینه این
          فرمِ بلند را نمی‌بندد: بیشتر اشتباهِ انگشت است تا خواستنِ بستن. */
@@ -2444,10 +2480,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         pins={prefs.subformPins}
         byKey={catByKey}
         kind={f.kind}
-        attached={attachedIn(isSurgery ? phase : '')}
-        pinPhase={isSurgery ? PHASE_FA[phase] : null}
+        attached={pinAttached}
+        pinPhase={isSurgery ? (it) => PHASE_FA[pinPhaseOf(it)] : null}
         onAttach={() => openPicker(phase)}
-        onPin={(it) => attachSub(it, isSurgery ? phase : '')}
+        onPin={(it) => attachSub(it, isSurgery ? pinPhaseOf(it) : '')}
         disabled={busy || !subLoaded}
         showAttach={canAttach}
       />
@@ -2702,12 +2738,15 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <span>اولین مراجعهٔ بعد از عمل (ویزیتِ پست‌آپ)</span>
               <i>{timing ? `یادآوری: ${faNum(timing.nextVisitDays)} روز قبل از همان تاریخ` : 'یادآوری پیش از موعد'}</i>
             </div>
-            <JDate
-              className="db-field jd-next"
-              value={f.nextVisitDateJ}
-              onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
-              placeholder="سال / ماه / روز"
-            />
+            <div data-core="nextVisitDate" className={coreErr.nextVisitDate ? 'vf-bad' : undefined}>
+              <JDate
+                className="db-field jd-next"
+                value={f.nextVisitDateJ}
+                onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
+                placeholder="سال / ماه / روز"
+              />
+              {coreErr.nextVisitDate && <small className="vf-core-err" role="alert">{coreErr.nextVisitDate}</small>}
+            </div>
           </div>
           <p className="db-postop-plan">
             {timing && timing.followUpFormReady === false

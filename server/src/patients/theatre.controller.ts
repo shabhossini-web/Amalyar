@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
-import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength, ValidateIf, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { DISPOSITION_KEYS } from './labels';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
@@ -29,6 +30,30 @@ class ReportDto {
   @IsString({ message: 'شرحِ عمل نامعتبر است' })
   @MaxLength(20000, { message: 'شرحِ عمل طولانی است' })
   body!: string;
+
+  /** متنِ پرونده‌ای که این نوشته رویش ساخته شد — اگر پرونده از جای دیگری عوض شده، ۴۰۹ (FF1). نیامده = بی‌سنجش. */
+  @IsOptional() @IsString({ message: 'پایهٔ شرح نامعتبر است' })
+  @MaxLength(20000, { message: 'پایهٔ شرح طولانی است' })
+  base?: string;
+}
+
+/** ساعتی که میز «دیده» — `null` یعنی «خالی دیدم» (FF3). */
+class TimesExpectDto {
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opStartTime?: string | null;
+
+  @IsOptional() @IsString() @MaxLength(5, { message: 'ساعت باید به شکلِ ۰۸:۳۰ باشد' })
+  opEndTime?: string | null;
+}
+
+/**
+ * اصلاح/برگرداندنِ ساعت از میز — همان `VisitTimesDto` به‌اضافهٔ `expect`: مقداری که میز هنگامِ
+ * «برگرداندن» یا بازکردنِ «اصلاحِ ساعت» دید. جدا از `VisitTimesDto` تا پنلِ کارشناس و داشبورد دست نخورند.
+ */
+class TheatreTimesDto extends VisitTimesDto {
+  @IsOptional() @IsObject({ message: 'ساعتِ موردِ انتظار نامعتبر است' })
+  @ValidateNested() @Type(() => TimesExpectDto)
+  expect?: TimesExpectDto;
 }
 
 /** «افزودن به پیش‌فرض» از میزِ اتاق — نوعِ عمل از خودِ مراجعه می‌آید، نه از کاربر. */
@@ -132,14 +157,14 @@ export class TheatreController {
   /** اصلاح/برگرداندنِ ساعتِ شروع و پایان از خودِ میز (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-04). */
   @RequirePermissions('visits.times')
   @Post('visits/:id/times')
-  times(@Param('id', ParseIntPipe) id: number, @Body() dto: VisitTimesDto, @CurrentUser() user: any) {
+  times(@Param('id', ParseIntPipe) id: number, @Body() dto: TheatreTimesDto, @CurrentUser() user: any) {
     return this.theatre.setTimes(id, dto, user);
   }
 
   @RequirePermissions('theatre.report')
   @Post('visits/:id/report')
   report(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportDto, @CurrentUser() user: any) {
-    return this.theatre.setReport(id, dto.body, user);
+    return this.theatre.setReport(id, dto.body, user, 'op', dto.base);
   }
 
   /* پیش‌فرض‌های شرحِ عمل (چیپ‌ها + «افزودن به پیش‌فرض») — `op-templates.ts`. */
@@ -160,7 +185,7 @@ export class TheatreController {
   @RequirePermissions('theatre.report')
   @Post('visits/:id/findings')
   findings(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportDto, @CurrentUser() user: any) {
-    return this.theatre.setReport(id, dto.body, user, 'findings');
+    return this.theatre.setReport(id, dto.body, user, 'findings', dto.base);
   }
 
   /**

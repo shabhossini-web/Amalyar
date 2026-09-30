@@ -90,6 +90,10 @@ for (const f of [...walk(path.join('server', 'src')), ...walkAny(path.join('scri
     .replace(/^\s*\/\/.*$/gm, '');
   src.split('\n').forEach((line, i) => {
     if (/set(UTC)?Hours\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)/.test(line)) strays.push(`${f}:${i + 1}`);
+    /* ⚠️ «امروز» از اجزای ساعتِ **کانتینر** (`getFullYear` + `getMonth`/`getDate` در یک سطر) — همان تعریفِ
+       دومی که `roomState`ِ تختهٔ اتاقِ عمل داشت و بینِ ۰۰:۰۰ تا ۰۳:۳۰ِ تهران روزِ UTC را «امروز» می‌گرفت
+       (بستهٔ FF، FF6). این نگهبان تا آن روز فقط `setHours(0,0,0,0)` را می‌شناخت. */
+    if (/\.getFullYear\(\)[^\n]*\.get(Month|Date)\(\)/.test(line)) strays.push(`${f}:${i + 1}`);
   });
 }
 ok(strays.length === 0,

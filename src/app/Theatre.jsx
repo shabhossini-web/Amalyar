@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import { faDuration, faTime } from '../lib/time.js';
+import { draftKey, dropDraft, readDraft, writeDraft } from '../lib/deviceDrafts.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
-import Overlay, { CloseButton, UnsavedPrompt } from '../ui/Overlay.jsx';
+import Overlay, { CloseButton, UnsavedPrompt, staleBackEntry, useBackEntry, whenBackSettled } from '../ui/Overlay.jsx';
+import { setLeaveGuard } from '../lib/leave-guard.js';
 import Tabs from '../ui/Tabs.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
@@ -50,21 +52,9 @@ const minutesBetween = (from, to) => {
   return (b - a + 1440) % 1440;
 };
 
-/* **پیش‌نویسِ روی دستگاه** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-07): «شرحِ عمل»ِ ذخیره‌نشده با زدنِ «فهرستِ
-   روز»، برگشتِ گوشی یا تازه‌کردنِ صفحه پاک می‌شد. حالا تا «ذخیره» یا «دور ریختن» روی همین دستگاه
-   می‌ماند و با بازکردنِ دوبارهٔ کارت برمی‌گردد. کلید شناسهٔ کاربر را دارد (دستگاهِ مشترکِ اتاقِ عمل)
-   و پس از یک روز کهنه حساب و پاک می‌شود. */
-const DRAFT_TTL = 24 * 3600e3;
-const draftKey = (uid, visitId, field) => `amalyar_draft:${uid ?? 0}:${visitId}:${field}`;
-const readDraft = (k) => {
-  try {
-    const v = JSON.parse(localStorage.getItem(k) ?? 'null');
-    if (!v || typeof v.text !== 'string' || Date.now() - (Number(v.at) || 0) > DRAFT_TTL) { localStorage.removeItem(k); return null; }
-    return v.text;
-  } catch { return null; }
-};
-const writeDraft = (k, text) => { try { localStorage.setItem(k, JSON.stringify({ text, at: Date.now() })); } catch { /* حالتِ ناشناس — فقط همین صفحه */ } };
-const dropDraft = (k) => { try { localStorage.removeItem(k); } catch { /* همان */ } };
+/* **پیش‌نویسِ روی دستگاه** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-07): «شرحِ عمل»ِ ذخیره‌نشده تا «ذخیره» یا «دور
+   ریختن» روی همین دستگاه می‌ماند و با بازکردنِ دوبارهٔ کارت برمی‌گردد — **همراهِ پایه‌اش** (بستهٔ FF، FF1):
+   پیش‌نویسی که روی متنِ دیگری از پرونده نوشته شده بی‌صدا برنمی‌گردد. ابزارها در `lib/deviceDrafts.js`. */
 
 /**
  * **نمای اتاقِ عمل** — یک عمل، یک صفحه، در لحظه.
@@ -86,6 +76,7 @@ const dropDraft = (k) => { try { localStorage.removeItem(k); } catch { /* هما
  */
 export default function Theatre() {
   const t = useTerms();
+  const { user: me } = useAuth();
   /* **نشانی منبعِ حقیقتِ روز و عملِ باز است** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-06):
      «/app/theatre?date=1405-07-06&visit=19». تا دیروز هر دو فقط در state بودند: «برگشت»ِ گوشی به‌جای
      فهرستِ روز از کلِ صفحه بیرون می‌رفت، تازه‌کردن عملِ باز و روزِ انتخابی را گم می‌کرد و پیوندِ یک عمل
@@ -107,10 +98,24 @@ export default function Theatre() {
      کارتِ یک عمل همان فیلتر بماند. */
   const [who, setWho] = useState('all');
   /* **نوشته‌های ذخیره‌نشدهٔ کارت** (surgery-07) — هر جعبه (شرحِ عمل، یافته‌ها، فرمِ حینِ عمل) خودش
-     را این‌جا ثبت می‌کند: `{label, save, discard}`. «فهرستِ روز» پیش از بستنِ کارت همین را می‌پرسد. */
-  const unsaved = useRef(new Map()).current;
+     را این‌جا ثبت می‌کند: `{label, save, discard}`. «فهرستِ روز» پیش از بستنِ کارت همین را می‌پرسد.
+     شمارش state است نه فقط Map (بستهٔ FF، FF4): نگهبانِ «برگشت»ِ گوشی با همین روشن و خاموش می‌شود. */
+  const [unsavedN, setUnsavedN] = useState(0);
+  const [unsaved] = useState(() => {
+    const m = new Map();
+    const sync = () => setUnsavedN(m.size);
+    return {
+      get size() { return m.size; },
+      values: () => m.values(),
+      set(k, v) { m.set(k, v); sync(); return this; },
+      delete(k) { const had = m.delete(k); if (had) sync(); return had; },
+      clear() { m.clear(); sync(); },
+    };
+  });
   const [leaving, setLeaving] = useState(null); // null | برچسب‌های ذخیره‌نشده
   const [leaveBusy, setLeaveBusy] = useState(false);
+  /* «فهرستِ روز» پس از ذخیره/دور ریختن: اول نگهبان خاموش و ورودی‌اش از تاریخچه برداشته می‌شود، بعد کارت. */
+  const [closing, setClosing] = useState(false);
 
   const iso = jStrToIso(jday);
 
@@ -176,19 +181,6 @@ export default function Theatre() {
     return () => { alive = false; };
   }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** هر کنشِ کارت یک POST و یک کارتِ تازه — فهرستِ روز هم با آن هم‌گام می‌شود. */
-  const act = async (path, key, body) => {
-    setBusy(key);
-    try {
-      setCard(await api(`/theatre/visits/${openId}${path}`, { method: 'POST', ...(body ? { body } : {}) }));
-      await loadDay();
-      return true;
-    } catch (e) { setToast(e.message); return false; }
-    finally { setBusy(''); }
-  };
-
-  /* کارتی که همین‌جا باز شد یک ورودیِ تاریخچه دارد — «فهرستِ روز» همان را برمی‌دارد (برگشتِ بعدی
-     صفحه را عوض می‌کند، نه اینکه کارت را دوباره باز کند)؛ کارتی که از پیوند آمد فقط از نشانی می‌رود. */
   /* «بازکردنِ فرمِ عمل» روی خودِ میز (surgery-04) — همان میزبانِ پاپ‌آپِ «فهرستِ انتظار»؛ بعد از ذخیره
      کارت و فهرستِ روز تازه می‌شوند. */
   const reloadCard = useCallback(async () => {
@@ -197,8 +189,34 @@ export default function Theatre() {
   }, [openId, loadDay]);
   const things = useThings({ onChanged: reloadCard, toast: (m) => setToast(m) });
 
+  /**
+   * هر کنشِ کارت یک POST و یک کارتِ تازه — فهرستِ روز هم با آن هم‌گام می‌شود. خروجی خودِ پاسخ است
+   * (`stamped`ِ «ثبتِ شروع/پایان» را می‌خواهد) یا `false`.
+   * ۴۰۹ یعنی نمای همین کارت کهنه است — کسِ دیگری همین حالا ساعت یا متن را عوض کرده (بستهٔ FF، FF1/FF3) —
+   * پس کارت تازه می‌شود تا مقدارِ واقعی دیده شود، نه اینکه کاربر روی نمای کهنه دوباره تصمیم بگیرد.
+   */
+  const act = async (path, key, body) => {
+    setBusy(key);
+    try {
+      const r = await api(`/theatre/visits/${openId}${path}`, { method: 'POST', ...(body ? { body } : {}) });
+      setCard(r);
+      await loadDay();
+      return r || true;
+    } catch (e) {
+      setToast(e.message);
+      if (e.status === 409) await reloadCard();
+      return false;
+    } finally { setBusy(''); }
+  };
+
+  /* کارتی که همین‌جا باز شد یک ورودیِ تاریخچه دارد — «فهرستِ روز» همان را برمی‌دارد (برگشتِ بعدی
+     صفحه را عوض می‌کند، نه اینکه کارت را دوباره باز کند)؛ کارتی که از پیوند آمد فقط از نشانی می‌رود. */
+
+  /* ورودیِ جامانده از پنجره‌ای که دیگر باز نیست (با ناوبری رفت، یا بسته‌شدنش وسطِ برگشتِ دیگری افتاد)
+     همان نشانیِ کارت را دارد: `navigate(-1)` فقط به ورودیِ زیرش می‌رسید و کارت باز می‌ماند — «فهرستِ روز»
+     دوضربه‌ای می‌شد (بستهٔ FF، FF14). چنین ورودی‌ای جایش را به فهرستِ روز می‌دهد. */
   const closeCard = () => {
-    if (location.state?.thCard) navigate(-1);
+    if (location.state?.thCard && !staleBackEntry()) navigate(-1);
     else setParams((p) => { const n = new URLSearchParams(p); n.delete('visit'); return n; }, { replace: true });
   };
   /** برگشت به فهرستِ روز — نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود (ذخیره / دور ریختن / ادامهٔ ویرایش). */
@@ -214,15 +232,46 @@ export default function Theatre() {
         if (!(await u.save())) { setLeaving(null); return; }
       }
       setLeaving(null);
-      closeCard();
+      setClosing(true);
     } finally { setLeaveBusy(false); }
   };
   const leaveDiscarding = () => {
     for (const u of unsaved.values()) u.discard?.();
     unsaved.clear();
     setLeaving(null);
-    closeCard();
+    setClosing(true);
   };
+
+  /* **«برگشت»ِ گوشی روی کارتِ دست‌خورده** (بستهٔ FF، FF4): تا دیروز فقط دکمهٔ «فهرستِ روز» می‌پرسید و ژستِ
+     برگشتِ اندروید فرمِ حینِ عملِ نیمه‌پر را بی‌پرسش دور می‌ریخت. تا وقتی نوشتهٔ ذخیره‌نشده هست، کارت یک
+     ورودیِ نگهبان در تاریخچه دارد (همان `useBackEntry`ِ پنجره‌ها): «برگشت» همان پرسشِ «فهرستِ روز» را
+     می‌آورد، و «برگشت» روی پرسشِ باز یعنی «ادامهٔ ویرایش». */
+  const guarding = !!openId && !!card && unsavedN > 0;
+  const leavingRef = useRef(leaving);
+  leavingRef.current = leaving;
+  const leaveBusyRef = useRef(leaveBusy);
+  leaveBusyRef.current = leaveBusy;
+  useBackEntry(guarding, () => {
+    if (leaveBusyRef.current) return true;
+    if (leavingRef.current) { setLeaving(null); return true; }
+    setLeaving([...unsaved.values()].map((u) => u.label));
+    return true;
+  });
+  /* پس از «ذخیره»/«دور ریختن»: نگهبان در همین commit خاموش می‌شود و ورودی‌اش را با `history.back()`
+     برمی‌دارد؛ کارت بعد از رسیدنِ همان برگشت بسته می‌شود — دو برگشتِ هم‌زمان روی هم نمی‌افتند. */
+  useEffect(() => {
+    if (!closing || guarding) return;
+    setClosing(false);
+    whenBackSettled(closeCard);
+  }, [closing, guarding]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* تعویضِ حساب، خروج و رفتن از منوی پروفایل/جستجو هم همین نوشته‌ها را رها می‌کنند — و خروج پیش‌نویسِ
+     دستگاه را هم پاک می‌کند (FF2)؛ پس پیش از خودِ کار پرسیده می‌شود (`leave-guard`، الگوی «تنظیمات»). */
+  useEffect(() => {
+    if (!guarding) return undefined;
+    return setLeaveGuard(() => window.confirm(
+      `${[...unsaved.values()].map((u) => `«${u.label}»`).join('، ')} هنوز ذخیره نشده — اگر بروید از بین می‌رود. بروید؟`,
+    ));
+  }, [guarding, unsaved]);
 
   /* دسته‌ها و شمارشان از سرور می‌آیند (`day.owners`، فقط در نمای سرپرستی)؛ این‌جا فقط
      انتخاب می‌شوند. با یک نفر چیزی برای فیلترکردن نیست. دسته‌ای که با عوض‌شدنِ روز
@@ -279,6 +328,9 @@ export default function Theatre() {
       {openId && !card && <p className="th-empty">در حالِ بارگذاری…</p>}
       {openId && card && (
         <Card
+          /* کارت مالِ کاربرِ فعال است: تعویضِ حساب از منوی پروفایل آن را از نو می‌سازد — نوشتهٔ یک نفر زیرِ
+             کلیدِ پیش‌نویسِ نفرِ بعدی نمی‌نشیند (FF2). */
+          key={me?.id ?? 0}
           card={card}
           team={!!day?.team}
           techLabel={t.tech}
@@ -408,27 +460,53 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
   const [undo, setUndo] = useState(null); // {which, at}
   const [fixing, setFixing] = useState(null); // 'start' | 'end'
   const [draft, setDraft] = useState('');
+  /* ساعتی که «اصلاحِ ساعت» با آن باز شد — همراهِ ذخیره می‌رود تا اصلاحِ هم‌زمانِ کسِ دیگر بی‌صدا
+     بازنویسی نشود (بستهٔ FF، FF3). */
+  const [fixFrom, setFixFrom] = useState(null);
+  const timeAt = (k) => (k === 'start' ? v.opStartTime : k === 'end' ? v.opEndTime : null) ?? null;
   useEffect(() => {
     if (!undo) return undefined;
     const h = setTimeout(() => setUndo(null), 10000);
     return () => clearTimeout(h);
   }, [undo]);
+  /* ساعتی که زیرِ دستِ کاربر عوض شد (دستگاهِ دیگر، فرمِ عمل، تازه‌شدنِ کارت پس از ۴۰۹) نوارِ «برگرداندن»
+     و کادرِ اصلاح را می‌بندد — هر دو دربارهٔ مقداری بودند که دیگر روی کارت نیست. */
+  useEffect(() => {
+    if (undo && timeAt(undo.which) !== undo.at) setUndo(null);
+    if (fixing && fixFrom != null && timeAt(fixing) !== fixFrom) setFixing(null);
+  }, [v.opStartTime, v.opEndTime]); // eslint-disable-line react-hooks/exhaustive-deps
   const cancelled = v.state === 'cancelled';
   const stamp = async (which) => {
-    if (await onAct(which === 'start' ? '/start' : '/finish', which === 'start' ? 'start' : 'finish')) {
-      setUndo({ which });
-    }
+    const r = await onAct(which === 'start' ? '/start' : '/finish', which === 'start' ? 'start' : 'finish');
+    if (!r) return;
+    const at = (which === 'start' ? r.visit?.opStartTime : r.visit?.opEndTime) ?? null;
+    /* نوارِ «برگرداندن» فقط وقتی همین لمس ساعت را نوشت (FF3). اگر کسِ دیگری پیش‌تر زده بود، کارت همان
+       ساعت را نشان می‌دهد و گفته می‌شود — برداشتنِ ساعتِ او کارِ این لمس نیست. */
+    if (r.stamped === true && at) setUndo({ which, at });
+    else if (r.stamped === false && at) onToast(`${which === 'start' ? 'شروعِ' : 'پایانِ'} عمل از پیش ساعتِ ${faTime(at)} ثبت شده بود — دوباره ثبت نشد`);
   };
   const revert = async () => {
     const u = undo;
     setUndo(null);
-    if (await onAct('/times', 'times', u.which === 'start' ? { opStartTime: null } : { opEndTime: null })) {
+    const key = u.which === 'start' ? 'opStartTime' : 'opEndTime';
+    /* فقط همان ساعتی که این لمس نوشت برداشته می‌شود؛ اگر در این فاصله عوض شده، سرور ۴۰۹ می‌دهد. */
+    if (await onAct('/times', 'times', { [key]: null, expect: { [key]: u.at } })) {
       onToast(u.which === 'start' ? 'شروعِ عمل برگشت — دوباره می‌شود ثبتش کرد' : 'پایانِ عمل برگشت — عمل دوباره در جریان است');
     }
   };
-  const saveFix = async () => {
+  /* **مدتِ بیش از ۱۲ ساعت پیش از ذخیره پرسیده می‌شود** (بستهٔ FF، FF16): پایانِ پیش از شروع یعنی عمل از
+     نیمه‌شب گذشته (`minutesBetween`)، پس یک جابه‌جاییِ اشتباهِ ۱۰:۰۰/۰۸:۰۰ بی‌صدا «۲۲ ساعت» ثبت می‌شد.
+     عددِ مدت همان‌جا گفته می‌شود تا کاربر ببیند چه چیزی را تأیید می‌کند. */
+  const [longFix, setLongFix] = useState(null); // دقیقه، وقتی تأییدِ صریح لازم است
+  useEffect(() => { setLongFix(null); }, [draft, fixing]);
+  const saveFix = async (confirmed = false) => {
     const key = fixing === 'start' ? 'opStartTime' : 'opEndTime';
-    if (await onAct('/times', 'times', { [key]: draft })) { setFixing(null); onToast('ساعت اصلاح شد'); }
+    const span = fixing === 'start' ? minutesBetween(draft, v.opEndTime) : minutesBetween(v.opStartTime, draft);
+    if (!confirmed && span != null && span > 12 * 60) { setLongFix(span); return; }
+    setLongFix(null);
+    if (await onAct('/times', 'times', { [key]: draft, ...(fixFrom != null ? { expect: { [key]: fixFrom } } : {}) })) {
+      setFixing(null); onToast('ساعت اصلاح شد');
+    }
   };
   const steps = [
     { key: 'start', label: 'شروعِ عمل', verb: 'ثبتِ شروع', act: 'start', at: v.opStartTime, wait: '' },
@@ -454,15 +532,30 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
                 {state === 'wait' && <small id={`th-wait-${st.key}`}>{cancelled ? 'عمل لغو شده است' : st.wait}</small>}
                 {done && canTimes && t && fixing !== st.key && (
                   <button type="button" className="th-link" data-act={`fix-${st.key}`}
-                          onClick={() => { setFixing(st.key); setDraft(t); setUndo(null); }}>
+                          onClick={() => { setFixing(st.key); setDraft(t); setFixFrom(t); setUndo(null); }}>
                     <Pencil width="13" height="13" aria-hidden="true" /> اصلاحِ ساعت
                   </button>
                 )}
                 {fixing === st.key && (
                   <div className="th-fix">
                     <TimePick label={`ساعتِ ${st.key === 'start' ? 'شروع' : 'پایان'}`} value={draft} onChange={setDraft} className="db-field th-fix-pick" />
-                    <button type="button" className="th-btn primary" onClick={saveFix} disabled={busy === 'times' || !draft}>ذخیرهٔ ساعت</button>
+                    <button type="button" className="th-btn primary" onClick={() => saveFix()} disabled={busy === 'times' || !draft || longFix != null} data-act="fix-save">ذخیرهٔ ساعت</button>
                     <button type="button" className="th-btn" onClick={() => setFixing(null)} disabled={busy === 'times'}>انصراف</button>
+                    {longFix != null && (
+                      <div className="th-fix-long" role="alert" data-fix-long>
+                        <p>
+                          <Alert width="15" height="15" aria-hidden="true" />
+                          <span>با این ساعت مدتِ عمل <b>{faDuration(longFix)}</b> می‌شود — درست است؟</span>
+                        </p>
+                        <small>{st.key === 'start' ? 'شروع بعد از پایانِ ثبت‌شده است' : 'پایان پیش از شروعِ ثبت‌شده است'}؛ یعنی عمل از نیمه‌شب گذشته. اگر نه، ساعت را اصلاح کنید.</small>
+                        <div className="th-fix-long-acts">
+                          <button type="button" className="th-btn" onClick={() => saveFix(true)} disabled={busy === 'times'} data-act="fix-confirm">
+                            {`بله، ${faDuration(longFix)}`}
+                          </button>
+                          <button type="button" className="th-btn" onClick={() => setLongFix(null)} data-act="fix-recheck">اصلاح می‌کنم</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -487,7 +580,7 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
         <div className="th-undo" role="status">
           <span>
             {undo.which === 'start' ? 'شروعِ عمل' : 'پایانِ عمل'} ساعتِ{' '}
-            <b dir="ltr">{faTime(undo.which === 'start' ? v.opStartTime : v.opEndTime)}</b> ثبت شد
+            <b dir="ltr">{faTime(undo.at)}</b> ثبت شد
           </span>
           {canTimes && <button type="button" className="th-link" data-act="undo" onClick={revert} disabled={busy === 'times'}>برگرداندن</button>}
         </div>
@@ -747,51 +840,113 @@ function CodingList({ items, label }) {
  * متن در stateِ محلی می‌ماند و فقط با «ذخیره» می‌رود: ذخیرهٔ خودکار وسطِ
  * تایپِ جراح یعنی هر مکث یک نسخهٔ تازه در پرونده — و این سند نسخه‌دار است.
  *
- * اگر سرور متنِ تازه‌تری داشت (کسی از فرمِ مراجعه نوشته)، پیش‌نویسِ روی
- * صفحه بازنویسی **نمی‌شود**؛ فقط وقتی هم‌گام می‌شویم که کاربر چیزی ننوشته
- * باشد. همان قاعدهٔ `JDate`: نوشتهٔ کاربر زیرِ دستش عوض نمی‌شود.
+ * اگر سرور متنِ تازه‌تری داشت (کسی از فرمِ مراجعه نوشته)، نوشتهٔ روی صفحه
+ * بازنویسی **نمی‌شود** — همان قاعدهٔ `JDate`: نوشتهٔ کاربر زیرِ دستش عوض نمی‌شود.
+ * ولی بی‌صدا هم جای متنِ تازه نمی‌نشیند (بستهٔ FF، FF1): تا دیروز پیش‌نویسِ کهنهٔ
+ * همین دستگاه «ذخیره‌نشده» می‌ماند و یک «ذخیره» — از خودِ کارت یا از پرسشِ «فهرستِ
+ * روز» — شرحِ تازه‌ترِ پرونده را پاک می‌کرد، و تا ۲۴ ساعت در نشستِ بعد هم همین.
+ * حالا نوشته **پایه** دارد (متنِ پرونده‌ای که رویش نوشته شد): اگر پرونده از جای دیگری
+ * عوض شد، کارت هر دو را نشان می‌دهد و می‌پرسد کدام بماند — هیچ‌کدام پیش‌فرضِ بی‌صدا
+ * نیست، و تا انتخاب نشده نه ذخیره می‌شود، نه در پرسشِ «فهرستِ روز» می‌آید، نه از دستگاه
+ * پاک می‌شود. سرور هم همان پایه را دوباره می‌سنجد (`base` ← ۴۰۹).
  */
 function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, busy, onAct, onToast, unsaved }) {
   const { user: me } = useAuth();
+  const cid = useId();
   const dk = draftKey(me?.id, visit.id, field);
-  /* پیش‌نویسِ همین دستگاه (اگر با پرونده فرق دارد) جای متنِ پرونده می‌نشیند — «ذخیره نشده» می‌ماند
-     تا کاربر خودش ذخیره یا دور بریزد. */
-  const [fromDevice] = useState(() => {
+  const server = visit[field] ?? '';
+  /* وضعیتِ آغازین از پیش‌نویسِ همین دستگاه: نبود یا همان متنِ پرونده ← متنِ پرونده؛ پایه‌اش همین
+     متنِ پرونده ← برمی‌گردد و «ذخیره نشده» می‌ماند؛ پایه‌اش چیزِ دیگری (یا نامعلوم، نسخهٔ پیشین) ← تعارض. */
+  const [init] = useState(() => {
     const d = readDraft(dk);
-    return d != null && d.trim() !== (visit[field] ?? '').trim() ? d : null;
+    if (!d || d.text.trim() === server.trim()) {
+      if (d) dropDraft(dk);
+      return { text: server, base: server, dirty: false, conflict: null, from: null };
+    }
+    if (d.base != null && d.base.trim() === server.trim()) return { text: d.text, base: server, dirty: true, conflict: null, from: 'device' };
+    return { text: d.text, base: d.base ?? '', dirty: true, conflict: { mine: d.text, theirs: server }, from: 'device' };
   });
-  const [text, setText] = useState(fromDevice ?? visit[field] ?? '');
-  const dirty = useRef(fromDevice != null);
+  const [text, setText] = useState(init.text);
+  /* متنِ پرونده‌ای که `text` رویش نوشته شد — همراهِ پیش‌نویس روی دستگاه و همراهِ «ذخیره» به سرور می‌رود. */
+  const [base, setBase] = useState(init.base);
+  const dirty = useRef(init.dirty);
+  const [conflict, setConflict] = useState(init.conflict);
+  /* «ذخیره نشده» از کجا آمد — برای راهنمای زیرِ کادر: پیش‌نویسِ دستگاه، یا نوشته‌ای که آگاهانه جای متنِ تازه‌تر ماند. */
+  const [from, setFrom] = useState(init.from);
+  /* افکتِ پرونده باید تازه‌ترینِ این‌ها را ببیند، نه مقدارِ رندرِ قبلی. */
+  const live = useRef({});
+  live.current = { text, base, conflict };
+  /* متنی که همین حالا در راهِ ذخیره است — برگشتنش از سرور «تعارض» نیست. */
+  const pending = useRef(null);
   /* «نوشتهٔ خودم»: برخلافِ `dirty` با ذخیره پاک نمی‌شود — «بنویس، ذخیره کن، بعد
      به پیش‌فرض بیفزا» باید کار کند، ولی شرحی که میز با آن باز شده نه. */
   const [touched, setTouched] = useState(false);
+  const edit = (next) => { dirty.current = true; setTouched(true); setText(next); };
+
+  /* پرونده عوض شد — ذخیرهٔ خودِ همین جعبه، فرمِ عمل، دستگاهِ دیگر یا بازخوانیِ کارت. */
   useEffect(() => {
-    if (dirty.current) return;
-    setText(visit[field] ?? '');
+    const srv = visit[field] ?? '';
+    const cur = live.current;
+    if (cur.conflict) {
+      /* در تعارض فقط سمتِ «پرونده» تازه می‌شود؛ اگر پرونده همان نوشتهٔ ما شد، دیگر تعارضی نیست. */
+      if (srv.trim() === cur.conflict.mine.trim()) {
+        dirty.current = false; dropDraft(dk);
+        setText(srv); setBase(srv); setConflict(null); setFrom(null);
+      } else if (srv !== cur.conflict.theirs) setConflict({ ...cur.conflict, theirs: srv });
+      return;
+    }
+    if (!dirty.current) { setText(srv); setBase(srv); return; }
+    if (srv.trim() === cur.base.trim()) return;
+    if (srv.trim() === cur.text.trim()) { dirty.current = false; setBase(srv); setFrom(null); return; }
+    /* ذخیرهٔ خودِ ما برگشت و کاربر در همین فاصله باز هم نوشته — پایه جلو می‌رود، تعارض نیست. */
+    if (pending.current != null && srv.trim() === pending.current.trim()) { pending.current = null; setBase(srv); return; }
+    /* نوشتهٔ ذخیره‌نشده روی متنی بود که دیگر در پرونده نیست — پیش‌نویسِ دستگاه با همان پایهٔ قدیم می‌ماند،
+       پس بستن و بازکردنِ کارت هم همین پرسش را دوباره می‌آورد. */
+    setConflict({ mine: cur.text, theirs: srv });
   }, [visit[field]]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saved = (visit[field] ?? '').trim();
+  const saved = server.trim();
   const changed = text.trim() !== saved;
-  /* هر تغییرِ کاربر (تایپ یا چیپِ پیش‌فرض) روی دستگاه می‌نشیند؛ برگشت به متنِ پرونده پاکش می‌کند. */
+  /* هر تغییرِ کاربر (تایپ یا چیپِ پیش‌فرض) با پایه‌اش روی دستگاه می‌نشیند؛ برگشت به متنِ پرونده پاکش
+     می‌کند. در تعارض دست نمی‌خورد: همان پیش‌نویسِ پایه‌قدیم می‌ماند تا کاربر انتخاب کند. */
   useEffect(() => {
-    if (!dirty.current) return;
-    if (changed) writeDraft(dk, text); else dropDraft(dk);
-  }, [text, changed, dk]);
+    if (!dirty.current || conflict) return;
+    if (changed) writeDraft(dk, text, base); else dropDraft(dk);
+  }, [text, base, changed, dk, conflict]);
   const saveNow = async () => {
-    const done = await onAct(path, actKey, { body: text });
-    if (done) { dirty.current = false; dropDraft(dk); onToast(savedMsg); }
+    const body = live.current.text;
+    pending.current = body;
+    const done = await onAct(path, actKey, { body, base: live.current.base });
+    if (!done) { pending.current = null; return false; }
+    /* چیزی که بعد از زدنِ «ذخیره» تایپ شد هنوز ذخیره‌نشده است — نه اینکه با پاک‌شدنِ پیش‌نویس گم شود. */
+    const more = live.current.text.trim() !== body.trim();
+    dirty.current = more;
+    if (!more) { pending.current = null; dropDraft(dk); }
+    setFrom(null);
+    onToast(savedMsg);
     return done;
   };
   const saveRef = useRef(saveNow);
   saveRef.current = saveNow;
-  /* ثبت در فهرستِ «ذخیره‌نشده»های کارت — «فهرستِ روز» پیش از رفتن همین را می‌پرسد. */
+  /* ثبت در فهرستِ «ذخیره‌نشده»های کارت — «فهرستِ روز» پیش از رفتن همین را می‌پرسد. نوشتهٔ در تعارض
+     این‌جا نیست: «ذخیره»ِ آن پرسش یعنی همان جایگزینیِ بی‌صدا. */
   useEffect(() => {
     if (!unsaved) return undefined;
     const key = `note:${field}`;
-    if (!changed) { unsaved.delete(key); return undefined; }
+    if (!changed || conflict) { unsaved.delete(key); return undefined; }
     unsaved.set(key, { label: title, save: () => saveRef.current(), discard: () => dropDraft(dk) });
     return () => { unsaved.delete(key); };
-  }, [unsaved, changed, field, title, dk]);
+  }, [unsaved, changed, conflict, field, title, dk]);
+  /* دو گزینهٔ تعارض — هم‌وزن، هیچ‌کدام از پیش انتخاب‌شده نیست. */
+  const keepRecord = () => {
+    dirty.current = false; dropDraft(dk);
+    setText(server); setBase(server); setConflict(null); setFrom(null);
+  };
+  const keepMine = () => {
+    /* پایه همین متنِ پرونده می‌شود: کاربر آن را دید و نوشتهٔ خودش را برگزید — «ذخیره»ِ بعدی دیگر کور نیست. */
+    dirty.current = true;
+    setText(conflict.mine); setBase(server); setConflict(null); setFrom('mine');
+  };
 
   /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) — فقط برای شرحِ عمل ──
      چیپ‌ها و «افزودن به پیش‌فرض» همان کامپوننتِ فرمِ عمل‌اند؛ مسیرِ سرور زیرِ
@@ -812,6 +967,41 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
     return () => { alive = false; };
   }, [isOp, visit.id, procKey, tplRev]);
 
+  const hint = changed
+    ? (from === 'device' ? 'پیش‌نویسِ ذخیره‌نشدهٔ همین دستگاه — هنوز در پرونده نیست'
+      : from === 'mine' ? 'ذخیره نشده — با «ذخیره» جای متنِ فعلیِ پرونده را می‌گیرد' : 'ذخیره نشده')
+    : saved ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز نوشته نشده';
+
+  if (conflict) {
+    return (
+      <section className="th-report" aria-label={title} data-note={field}>
+        <h3><Form width="15" height="15" aria-hidden="true" /> {title}</h3>
+        <div className="th-conflict" role="group" aria-labelledby={`${cid}-h`} data-note-conflict>
+          <p className="th-conflict-h" id={`${cid}-h`} role="alert">
+            <Alert width="15" height="15" aria-hidden="true" />
+            <span>{`متنِ «${title}» در پرونده از جای دیگری عوض شده — کدام بماند؟`}</span>
+          </p>
+          <div className="th-conflict-opts">
+            <div className="th-conflict-opt" data-side="record">
+              <b id={`${cid}-r`}>متنِ فعلیِ پرونده</b>
+              <p tabIndex={0} aria-labelledby={`${cid}-r`}>{conflict.theirs.trim() || 'خالی — در پرونده متنی نیست'}</p>
+              <button type="button" className="th-btn" data-conflict="record" onClick={keepRecord}>نگه‌داشتنِ متنِ پرونده</button>
+            </div>
+            <div className="th-conflict-opt" data-side="device">
+              <b id={`${cid}-m`}>نوشتهٔ ذخیره‌نشدهٔ شما</b>
+              <p tabIndex={0} aria-labelledby={`${cid}-m`}>{conflict.mine}</p>
+              <button type="button" className="th-btn" data-conflict="device" onClick={keepMine}>ادامه با نوشتهٔ من</button>
+            </div>
+          </div>
+          <small className="th-conflict-note">
+            تا یکی را انتخاب نکنید نه چیزی ذخیره می‌شود نه پاک، و نوشتهٔ شما روی همین دستگاه می‌ماند.
+            «ادامه با نوشتهٔ من» هنوز ذخیره نیست — بعدش «ذخیره» را بزنید.
+          </small>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="th-report" aria-label={title} data-note={field}>
       <h3><Form width="15" height="15" aria-hidden="true" /> {title}</h3>
@@ -819,7 +1009,7 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
         <OpDefaultChips
           items={tpl.items}
           disabled={busy === actKey}
-          onPick={(t) => { dirty.current = true; setTouched(true); setText((cur) => withTemplate(cur, t.body)); }}
+          onPick={(t) => edit(withTemplate(text, t.body))}
         />
       )}
       <textarea
@@ -827,14 +1017,10 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
         value={text}
         {...(field === 'opReport' ? { 'data-report': true } : { 'data-findings': true })}
         placeholder={placeholder}
-        onChange={(e) => { dirty.current = true; setTouched(true); setText(e.target.value); }}
+        onChange={(e) => edit(e.target.value)}
       />
       <div className="th-report-bar">
-        <span className={`th-hint${changed ? ' is-warn' : ''}`} data-note-state={changed ? 'unsaved' : 'saved'}>
-          {changed
-            ? (fromDevice ? 'پیش‌نویسِ ذخیره‌نشدهٔ همین دستگاه — هنوز در پرونده نیست' : 'ذخیره نشده')
-            : saved ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز نوشته نشده'}
-        </span>
+        <span className={`th-hint${changed ? ' is-warn' : ''}`} data-note-state={changed ? 'unsaved' : 'saved'}>{hint}</span>
         <button
           type="button" className="th-btn" data-act={field === 'opReport' ? 'save-report' : 'save-findings'}
           disabled={!changed || busy === actKey}
