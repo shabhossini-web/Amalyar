@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import { faDuration, faTime } from '../lib/time.js';
+import { draftKey, dropDraft, readDraft, writeDraft } from '../lib/deviceDrafts.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
 import Overlay, { CloseButton, UnsavedPrompt } from '../ui/Overlay.jsx';
@@ -49,21 +50,9 @@ const minutesBetween = (from, to) => {
   return (b - a + 1440) % 1440;
 };
 
-/* **پیش‌نویسِ روی دستگاه** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-07): «شرحِ عمل»ِ ذخیره‌نشده با زدنِ «فهرستِ
-   روز»، برگشتِ گوشی یا تازه‌کردنِ صفحه پاک می‌شد. حالا تا «ذخیره» یا «دور ریختن» روی همین دستگاه
-   می‌ماند و با بازکردنِ دوبارهٔ کارت برمی‌گردد. کلید شناسهٔ کاربر را دارد (دستگاهِ مشترکِ اتاقِ عمل)
-   و پس از یک روز کهنه حساب و پاک می‌شود. */
-const DRAFT_TTL = 24 * 3600e3;
-const draftKey = (uid, visitId, field) => `amalyar_draft:${uid ?? 0}:${visitId}:${field}`;
-const readDraft = (k) => {
-  try {
-    const v = JSON.parse(localStorage.getItem(k) ?? 'null');
-    if (!v || typeof v.text !== 'string' || Date.now() - (Number(v.at) || 0) > DRAFT_TTL) { localStorage.removeItem(k); return null; }
-    return v.text;
-  } catch { return null; }
-};
-const writeDraft = (k, text) => { try { localStorage.setItem(k, JSON.stringify({ text, at: Date.now() })); } catch { /* حالتِ ناشناس — فقط همین صفحه */ } };
-const dropDraft = (k) => { try { localStorage.removeItem(k); } catch { /* همان */ } };
+/* **پیش‌نویسِ روی دستگاه** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-07): «شرحِ عمل»ِ ذخیره‌نشده تا «ذخیره» یا «دور
+   ریختن» روی همین دستگاه می‌ماند و با بازکردنِ دوبارهٔ کارت برمی‌گردد — **همراهِ پایه‌اش** (بستهٔ FF، FF1):
+   پیش‌نویسی که روی متنِ دیگری از پرونده نوشته شده بی‌صدا برنمی‌گردد. ابزارها در `lib/deviceDrafts.js`. */
 
 /**
  * **نمای اتاقِ عمل** — یک عمل، یک صفحه، در لحظه.
@@ -176,19 +165,6 @@ export default function Theatre() {
     return () => { alive = false; };
   }, [openId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /** هر کنشِ کارت یک POST و یک کارتِ تازه — فهرستِ روز هم با آن هم‌گام می‌شود. */
-  const act = async (path, key, body) => {
-    setBusy(key);
-    try {
-      setCard(await api(`/theatre/visits/${openId}${path}`, { method: 'POST', ...(body ? { body } : {}) }));
-      await loadDay();
-      return true;
-    } catch (e) { setToast(e.message); return false; }
-    finally { setBusy(''); }
-  };
-
-  /* کارتی که همین‌جا باز شد یک ورودیِ تاریخچه دارد — «فهرستِ روز» همان را برمی‌دارد (برگشتِ بعدی
-     صفحه را عوض می‌کند، نه اینکه کارت را دوباره باز کند)؛ کارتی که از پیوند آمد فقط از نشانی می‌رود. */
   /* «بازکردنِ فرمِ عمل» روی خودِ میز (surgery-04) — همان میزبانِ پاپ‌آپِ «فهرستِ انتظار»؛ بعد از ذخیره
      کارت و فهرستِ روز تازه می‌شوند. */
   const reloadCard = useCallback(async () => {
@@ -196,6 +172,29 @@ export default function Theatre() {
     loadDay();
   }, [openId, loadDay]);
   const things = useThings({ onChanged: reloadCard, toast: (m) => setToast(m) });
+
+  /**
+   * هر کنشِ کارت یک POST و یک کارتِ تازه — فهرستِ روز هم با آن هم‌گام می‌شود. خروجی خودِ پاسخ است
+   * (`stamped`ِ «ثبتِ شروع/پایان» را می‌خواهد) یا `false`.
+   * ۴۰۹ یعنی نمای همین کارت کهنه است — کسِ دیگری همین حالا ساعت یا متن را عوض کرده (بستهٔ FF، FF1/FF3) —
+   * پس کارت تازه می‌شود تا مقدارِ واقعی دیده شود، نه اینکه کاربر روی نمای کهنه دوباره تصمیم بگیرد.
+   */
+  const act = async (path, key, body) => {
+    setBusy(key);
+    try {
+      const r = await api(`/theatre/visits/${openId}${path}`, { method: 'POST', ...(body ? { body } : {}) });
+      setCard(r);
+      await loadDay();
+      return r || true;
+    } catch (e) {
+      setToast(e.message);
+      if (e.status === 409) await reloadCard();
+      return false;
+    } finally { setBusy(''); }
+  };
+
+  /* کارتی که همین‌جا باز شد یک ورودیِ تاریخچه دارد — «فهرستِ روز» همان را برمی‌دارد (برگشتِ بعدی
+     صفحه را عوض می‌کند، نه اینکه کارت را دوباره باز کند)؛ کارتی که از پیوند آمد فقط از نشانی می‌رود. */
 
   const closeCard = () => {
     if (location.state?.thCard) navigate(-1);
@@ -748,51 +747,113 @@ function CodingList({ items, label }) {
  * متن در stateِ محلی می‌ماند و فقط با «ذخیره» می‌رود: ذخیرهٔ خودکار وسطِ
  * تایپِ جراح یعنی هر مکث یک نسخهٔ تازه در پرونده — و این سند نسخه‌دار است.
  *
- * اگر سرور متنِ تازه‌تری داشت (کسی از فرمِ مراجعه نوشته)، پیش‌نویسِ روی
- * صفحه بازنویسی **نمی‌شود**؛ فقط وقتی هم‌گام می‌شویم که کاربر چیزی ننوشته
- * باشد. همان قاعدهٔ `JDate`: نوشتهٔ کاربر زیرِ دستش عوض نمی‌شود.
+ * اگر سرور متنِ تازه‌تری داشت (کسی از فرمِ مراجعه نوشته)، نوشتهٔ روی صفحه
+ * بازنویسی **نمی‌شود** — همان قاعدهٔ `JDate`: نوشتهٔ کاربر زیرِ دستش عوض نمی‌شود.
+ * ولی بی‌صدا هم جای متنِ تازه نمی‌نشیند (بستهٔ FF، FF1): تا دیروز پیش‌نویسِ کهنهٔ
+ * همین دستگاه «ذخیره‌نشده» می‌ماند و یک «ذخیره» — از خودِ کارت یا از پرسشِ «فهرستِ
+ * روز» — شرحِ تازه‌ترِ پرونده را پاک می‌کرد، و تا ۲۴ ساعت در نشستِ بعد هم همین.
+ * حالا نوشته **پایه** دارد (متنِ پرونده‌ای که رویش نوشته شد): اگر پرونده از جای دیگری
+ * عوض شد، کارت هر دو را نشان می‌دهد و می‌پرسد کدام بماند — هیچ‌کدام پیش‌فرضِ بی‌صدا
+ * نیست، و تا انتخاب نشده نه ذخیره می‌شود، نه در پرسشِ «فهرستِ روز» می‌آید، نه از دستگاه
+ * پاک می‌شود. سرور هم همان پایه را دوباره می‌سنجد (`base` ← ۴۰۹).
  */
 function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, busy, onAct, onToast, unsaved }) {
   const { user: me } = useAuth();
+  const cid = useId();
   const dk = draftKey(me?.id, visit.id, field);
-  /* پیش‌نویسِ همین دستگاه (اگر با پرونده فرق دارد) جای متنِ پرونده می‌نشیند — «ذخیره نشده» می‌ماند
-     تا کاربر خودش ذخیره یا دور بریزد. */
-  const [fromDevice] = useState(() => {
+  const server = visit[field] ?? '';
+  /* وضعیتِ آغازین از پیش‌نویسِ همین دستگاه: نبود یا همان متنِ پرونده ← متنِ پرونده؛ پایه‌اش همین
+     متنِ پرونده ← برمی‌گردد و «ذخیره نشده» می‌ماند؛ پایه‌اش چیزِ دیگری (یا نامعلوم، نسخهٔ پیشین) ← تعارض. */
+  const [init] = useState(() => {
     const d = readDraft(dk);
-    return d != null && d.trim() !== (visit[field] ?? '').trim() ? d : null;
+    if (!d || d.text.trim() === server.trim()) {
+      if (d) dropDraft(dk);
+      return { text: server, base: server, dirty: false, conflict: null, from: null };
+    }
+    if (d.base != null && d.base.trim() === server.trim()) return { text: d.text, base: server, dirty: true, conflict: null, from: 'device' };
+    return { text: d.text, base: d.base ?? '', dirty: true, conflict: { mine: d.text, theirs: server }, from: 'device' };
   });
-  const [text, setText] = useState(fromDevice ?? visit[field] ?? '');
-  const dirty = useRef(fromDevice != null);
+  const [text, setText] = useState(init.text);
+  /* متنِ پرونده‌ای که `text` رویش نوشته شد — همراهِ پیش‌نویس روی دستگاه و همراهِ «ذخیره» به سرور می‌رود. */
+  const [base, setBase] = useState(init.base);
+  const dirty = useRef(init.dirty);
+  const [conflict, setConflict] = useState(init.conflict);
+  /* «ذخیره نشده» از کجا آمد — برای راهنمای زیرِ کادر: پیش‌نویسِ دستگاه، یا نوشته‌ای که آگاهانه جای متنِ تازه‌تر ماند. */
+  const [from, setFrom] = useState(init.from);
+  /* افکتِ پرونده باید تازه‌ترینِ این‌ها را ببیند، نه مقدارِ رندرِ قبلی. */
+  const live = useRef({});
+  live.current = { text, base, conflict };
+  /* متنی که همین حالا در راهِ ذخیره است — برگشتنش از سرور «تعارض» نیست. */
+  const pending = useRef(null);
   /* «نوشتهٔ خودم»: برخلافِ `dirty` با ذخیره پاک نمی‌شود — «بنویس، ذخیره کن، بعد
      به پیش‌فرض بیفزا» باید کار کند، ولی شرحی که میز با آن باز شده نه. */
   const [touched, setTouched] = useState(false);
+  const edit = (next) => { dirty.current = true; setTouched(true); setText(next); };
+
+  /* پرونده عوض شد — ذخیرهٔ خودِ همین جعبه، فرمِ عمل، دستگاهِ دیگر یا بازخوانیِ کارت. */
   useEffect(() => {
-    if (dirty.current) return;
-    setText(visit[field] ?? '');
+    const srv = visit[field] ?? '';
+    const cur = live.current;
+    if (cur.conflict) {
+      /* در تعارض فقط سمتِ «پرونده» تازه می‌شود؛ اگر پرونده همان نوشتهٔ ما شد، دیگر تعارضی نیست. */
+      if (srv.trim() === cur.conflict.mine.trim()) {
+        dirty.current = false; dropDraft(dk);
+        setText(srv); setBase(srv); setConflict(null); setFrom(null);
+      } else if (srv !== cur.conflict.theirs) setConflict({ ...cur.conflict, theirs: srv });
+      return;
+    }
+    if (!dirty.current) { setText(srv); setBase(srv); return; }
+    if (srv.trim() === cur.base.trim()) return;
+    if (srv.trim() === cur.text.trim()) { dirty.current = false; setBase(srv); setFrom(null); return; }
+    /* ذخیرهٔ خودِ ما برگشت و کاربر در همین فاصله باز هم نوشته — پایه جلو می‌رود، تعارض نیست. */
+    if (pending.current != null && srv.trim() === pending.current.trim()) { pending.current = null; setBase(srv); return; }
+    /* نوشتهٔ ذخیره‌نشده روی متنی بود که دیگر در پرونده نیست — پیش‌نویسِ دستگاه با همان پایهٔ قدیم می‌ماند،
+       پس بستن و بازکردنِ کارت هم همین پرسش را دوباره می‌آورد. */
+    setConflict({ mine: cur.text, theirs: srv });
   }, [visit[field]]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saved = (visit[field] ?? '').trim();
+  const saved = server.trim();
   const changed = text.trim() !== saved;
-  /* هر تغییرِ کاربر (تایپ یا چیپِ پیش‌فرض) روی دستگاه می‌نشیند؛ برگشت به متنِ پرونده پاکش می‌کند. */
+  /* هر تغییرِ کاربر (تایپ یا چیپِ پیش‌فرض) با پایه‌اش روی دستگاه می‌نشیند؛ برگشت به متنِ پرونده پاکش
+     می‌کند. در تعارض دست نمی‌خورد: همان پیش‌نویسِ پایه‌قدیم می‌ماند تا کاربر انتخاب کند. */
   useEffect(() => {
-    if (!dirty.current) return;
-    if (changed) writeDraft(dk, text); else dropDraft(dk);
-  }, [text, changed, dk]);
+    if (!dirty.current || conflict) return;
+    if (changed) writeDraft(dk, text, base); else dropDraft(dk);
+  }, [text, base, changed, dk, conflict]);
   const saveNow = async () => {
-    const done = await onAct(path, actKey, { body: text });
-    if (done) { dirty.current = false; dropDraft(dk); onToast(savedMsg); }
+    const body = live.current.text;
+    pending.current = body;
+    const done = await onAct(path, actKey, { body, base: live.current.base });
+    if (!done) { pending.current = null; return false; }
+    /* چیزی که بعد از زدنِ «ذخیره» تایپ شد هنوز ذخیره‌نشده است — نه اینکه با پاک‌شدنِ پیش‌نویس گم شود. */
+    const more = live.current.text.trim() !== body.trim();
+    dirty.current = more;
+    if (!more) { pending.current = null; dropDraft(dk); }
+    setFrom(null);
+    onToast(savedMsg);
     return done;
   };
   const saveRef = useRef(saveNow);
   saveRef.current = saveNow;
-  /* ثبت در فهرستِ «ذخیره‌نشده»های کارت — «فهرستِ روز» پیش از رفتن همین را می‌پرسد. */
+  /* ثبت در فهرستِ «ذخیره‌نشده»های کارت — «فهرستِ روز» پیش از رفتن همین را می‌پرسد. نوشتهٔ در تعارض
+     این‌جا نیست: «ذخیره»ِ آن پرسش یعنی همان جایگزینیِ بی‌صدا. */
   useEffect(() => {
     if (!unsaved) return undefined;
     const key = `note:${field}`;
-    if (!changed) { unsaved.delete(key); return undefined; }
+    if (!changed || conflict) { unsaved.delete(key); return undefined; }
     unsaved.set(key, { label: title, save: () => saveRef.current(), discard: () => dropDraft(dk) });
     return () => { unsaved.delete(key); };
-  }, [unsaved, changed, field, title, dk]);
+  }, [unsaved, changed, conflict, field, title, dk]);
+  /* دو گزینهٔ تعارض — هم‌وزن، هیچ‌کدام از پیش انتخاب‌شده نیست. */
+  const keepRecord = () => {
+    dirty.current = false; dropDraft(dk);
+    setText(server); setBase(server); setConflict(null); setFrom(null);
+  };
+  const keepMine = () => {
+    /* پایه همین متنِ پرونده می‌شود: کاربر آن را دید و نوشتهٔ خودش را برگزید — «ذخیره»ِ بعدی دیگر کور نیست. */
+    dirty.current = true;
+    setText(conflict.mine); setBase(server); setConflict(null); setFrom('mine');
+  };
 
   /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) — فقط برای شرحِ عمل ──
      چیپ‌ها و «افزودن به پیش‌فرض» همان کامپوننتِ فرمِ عمل‌اند؛ مسیرِ سرور زیرِ
@@ -813,6 +874,41 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
     return () => { alive = false; };
   }, [isOp, visit.id, procKey, tplRev]);
 
+  const hint = changed
+    ? (from === 'device' ? 'پیش‌نویسِ ذخیره‌نشدهٔ همین دستگاه — هنوز در پرونده نیست'
+      : from === 'mine' ? 'ذخیره نشده — با «ذخیره» جای متنِ فعلیِ پرونده را می‌گیرد' : 'ذخیره نشده')
+    : saved ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز نوشته نشده';
+
+  if (conflict) {
+    return (
+      <section className="th-report" aria-label={title} data-note={field}>
+        <h3><Form width="15" height="15" aria-hidden="true" /> {title}</h3>
+        <div className="th-conflict" role="group" aria-labelledby={`${cid}-h`} data-note-conflict>
+          <p className="th-conflict-h" id={`${cid}-h`} role="alert">
+            <Alert width="15" height="15" aria-hidden="true" />
+            <span>{`متنِ «${title}» در پرونده از جای دیگری عوض شده — کدام بماند؟`}</span>
+          </p>
+          <div className="th-conflict-opts">
+            <div className="th-conflict-opt" data-side="record">
+              <b id={`${cid}-r`}>متنِ فعلیِ پرونده</b>
+              <p tabIndex={0} aria-labelledby={`${cid}-r`}>{conflict.theirs.trim() || 'خالی — در پرونده متنی نیست'}</p>
+              <button type="button" className="th-btn" data-conflict="record" onClick={keepRecord}>نگه‌داشتنِ متنِ پرونده</button>
+            </div>
+            <div className="th-conflict-opt" data-side="device">
+              <b id={`${cid}-m`}>نوشتهٔ ذخیره‌نشدهٔ شما</b>
+              <p tabIndex={0} aria-labelledby={`${cid}-m`}>{conflict.mine}</p>
+              <button type="button" className="th-btn" data-conflict="device" onClick={keepMine}>ادامه با نوشتهٔ من</button>
+            </div>
+          </div>
+          <small className="th-conflict-note">
+            تا یکی را انتخاب نکنید نه چیزی ذخیره می‌شود نه پاک، و نوشتهٔ شما روی همین دستگاه می‌ماند.
+            «ادامه با نوشتهٔ من» هنوز ذخیره نیست — بعدش «ذخیره» را بزنید.
+          </small>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="th-report" aria-label={title} data-note={field}>
       <h3><Form width="15" height="15" aria-hidden="true" /> {title}</h3>
@@ -820,7 +916,7 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
         <OpDefaultChips
           items={tpl.items}
           disabled={busy === actKey}
-          onPick={(t) => { dirty.current = true; setTouched(true); setText((cur) => withTemplate(cur, t.body)); }}
+          onPick={(t) => edit(withTemplate(text, t.body))}
         />
       )}
       <textarea
@@ -828,14 +924,10 @@ function NoteBox({ visit, field, path, actKey, title, placeholder, savedMsg, bus
         value={text}
         {...(field === 'opReport' ? { 'data-report': true } : { 'data-findings': true })}
         placeholder={placeholder}
-        onChange={(e) => { dirty.current = true; setTouched(true); setText(e.target.value); }}
+        onChange={(e) => edit(e.target.value)}
       />
       <div className="th-report-bar">
-        <span className={`th-hint${changed ? ' is-warn' : ''}`} data-note-state={changed ? 'unsaved' : 'saved'}>
-          {changed
-            ? (fromDevice ? 'پیش‌نویسِ ذخیره‌نشدهٔ همین دستگاه — هنوز در پرونده نیست' : 'ذخیره نشده')
-            : saved ? 'ذخیره شده در پروندهٔ بیمار' : 'هنوز نوشته نشده'}
-        </span>
+        <span className={`th-hint${changed ? ' is-warn' : ''}`} data-note-state={changed ? 'unsaved' : 'saved'}>{hint}</span>
         <button
           type="button" className="th-btn" data-act={field === 'opReport' ? 'save-report' : 'save-findings'}
           disabled={!changed || busy === actKey}

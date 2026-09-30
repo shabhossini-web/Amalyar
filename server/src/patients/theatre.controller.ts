@@ -29,6 +29,11 @@ class ReportDto {
   @IsString({ message: 'شرحِ عمل نامعتبر است' })
   @MaxLength(20000, { message: 'شرحِ عمل طولانی است' })
   body!: string;
+
+  /** متنِ پرونده‌ای که این نوشته رویش ساخته شد — اگر پرونده از جای دیگری عوض شده، ۴۰۹ (FF1). نیامده = بی‌سنجش. */
+  @IsOptional() @IsString({ message: 'پایهٔ شرح نامعتبر است' })
+  @MaxLength(20000, { message: 'پایهٔ شرح طولانی است' })
+  base?: string;
 }
 
 /** «افزودن به پیش‌فرض» از میزِ اتاق — نوعِ عمل از خودِ مراجعه می‌آید، نه از کاربر. */
@@ -139,7 +144,7 @@ export class TheatreController {
   @RequirePermissions('theatre.report')
   @Post('visits/:id/report')
   report(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportDto, @CurrentUser() user: any) {
-    return this.theatre.setReport(id, dto.body, user);
+    return this.theatre.setReport(id, dto.body, user, 'op', dto.base);
   }
 
   /* پیش‌فرض‌های شرحِ عمل (چیپ‌ها + «افزودن به پیش‌فرض») — `op-templates.ts`. */
@@ -160,7 +165,7 @@ export class TheatreController {
   @RequirePermissions('theatre.report')
   @Post('visits/:id/findings')
   findings(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportDto, @CurrentUser() user: any) {
-    return this.theatre.setReport(id, dto.body, user, 'findings');
+    return this.theatre.setReport(id, dto.body, user, 'findings', dto.base);
   }
 
   /**

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { LEVEL } from '../common/levels';
@@ -128,6 +128,9 @@ const ITEM_KEYS = new Map(SAFETY_STAGES.map((s) => [s.key as string, new Set(s.i
  */
 const CLINIC_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: CLINIC_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 const wallClock = () => CLINIC_CLOCK.format(new Date());
+
+/** ۴۰۹ِ شرحِ عمل/یافته‌ها — پایهٔ نوشتهٔ میز با متنِ فعلیِ پرونده نمی‌خواند (FF1). */
+const NOTE_CONFLICT = 'متنِ پرونده از جای دیگری عوض شده است — نوشتهٔ شما روی همین دستگاه مانده؛ انتخاب کنید کدام بماند.';
 
 /**
  * **نمای اتاقِ عمل** (بستهٔ ۳ب، بازخوردِ مالک ۱۴۰۵/۰۶/۳۰: «وقتی تو اتاق عمل است
@@ -693,14 +696,26 @@ export class TheatreService {
    * مقصدش همان `ClinicalNote(kind='op')`ِ فرمِ مراجعه است — یک سند، دو میز.
    * اگر ستونِ جدایی می‌ساختیم، شرحی که جراح این‌جا می‌نویسد در پرونده نبود.
    */
-  async setReport(visitId: number, body: string, user: any, kind: 'op' | 'findings' = 'op') {
+  async setReport(visitId: number, body: string, user: any, kind: 'op' | 'findings' = 'op', base?: string) {
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
       select: { id: true, patientId: true, opStatus: true },
     });
     if (!v) throw new NotFoundException('عمل پیدا نشد');
     if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده شرح نمی‌گیرد');
-    await this.prisma.$transaction((tx) => setVisitNote(tx, v, kind, body, user));
+    await this.prisma.$transaction(async (tx) => {
+      /* ⚠️ **پایهٔ نوشته** (بازبینیِ خصمانهٔ بستهٔ F، FF1): میز می‌گوید متنش روی کدام متنِ پرونده نوشته
+         شد. اگر پرونده در این فاصله از جای دیگری (فرمِ عمل، دستگاهِ دیگر) عوض شده، ۴۰۹ — نه اینکه
+         پیش‌نویسِ کهنهٔ یک تبلت شرحِ تازه‌تر را بی‌صدا جایگزین کند. همان سندِ جاری که `setVisitNote`
+         نسخهٔ بعدی‌اش را می‌سازد؛ نیامدنِ `base` یعنی رفتارِ قبلی. */
+      if (base !== undefined) {
+        const cur = await tx.clinicalNote.findFirst({
+          where: { visitId: v.id, kind, replacedAt: null }, orderBy: { createdAt: 'desc' }, select: { body: true },
+        });
+        if ((cur?.body ?? '').trim() !== base.trim()) throw new ConflictException(NOTE_CONFLICT);
+      }
+      await setVisitNote(tx, v, kind, body, user);
+    });
     await this.audit.record({
       actorId: user?.id, action: kind === 'op' ? 'visit.op_report' : 'visit.op_findings', entityType: 'visit', entityId: visitId,
       after: { length: (body ?? '').trim().length },

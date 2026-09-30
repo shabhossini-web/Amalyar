@@ -3296,6 +3296,8 @@ jobs:
 
       - name: Verify draft resume, indicator and no browser storage (W1.8 UI)
         run: node scripts/e2e/w1-8-draft-ui.mjs
+      - name: Verify the theatre desk never replaces a newer operation note with a stale device draft
+        run: node scripts/e2e/theatre-desk-ui.mjs
 
       # ⚠️ W1.9/§8: syncNextVisit cancelled and recreated every pending
       # reminder on each call, and 'uncertain' was effectively terminal --
