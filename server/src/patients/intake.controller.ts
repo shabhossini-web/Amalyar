@@ -428,6 +428,13 @@ export class IntakeController {
     return this.intake.list(status);
   }
 
+  /** شمارِ هر وضعیت — روی زبانه‌های صفِ پذیرش (بازبینیِ UX، company-19). */
+  @RequirePermissions('intake.read')
+  @Get('submissions/counts')
+  submissionCounts() {
+    return this.intake.counts();
+  }
+
   @RequirePermissions('intake.manage')
   @Delete('submissions/:id')
   deleteSubmission(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {

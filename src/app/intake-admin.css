@@ -140,7 +140,8 @@
 }
 .ia-sheet-body { display: grid; gap: 10px; padding: 14px 15px 16px; }
 .ia-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-.ia-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
+/* `align-content: start`: کنارِ فیلدی که یادداشت یا خطا دارد، کشوییِ همسایه کش نیاید (company-19). */
+.ia-field { display: grid; gap: 5px; align-content: start; font-size: 12px; color: var(--text2); }
 .ia-field input, .ia-field select {
   font: inherit; font-size: 13px; color: var(--text1); padding: 9px 10px; border-radius: 10px;
   background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
@@ -156,12 +157,34 @@
 .ia-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  /* متن `--text1` نه سفیدِ خام: زمینه `--surface-rgb` است و در تمِ روشن سفید — توست نامرئی بود. */
+  color: var(--text1); background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .ia-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
+/* توستِ قدمِ بعد (company-19) — دکمه دارد، پس لمس‌پذیر است و خودش زود نمی‌رود. */
+.ia-toast.has-act {
+  pointer-events: auto; display: flex; align-items: center; gap: 10px; z-index: 70;
+  max-width: calc(100vw - 24px); box-shadow: var(--shadow-card);
+}
+.ia-toast-act {
+  flex: none; min-height: 36px; padding: 0 14px; border-radius: 10px; cursor: pointer;
+  /* سفید روی گرادیانِ برند در هر دو تم — همان `.rc-act.is-main` و `.ia-ok`. */
+  font: inherit; font-size: 12.5px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: 0;
+}
+.ia-toast-x {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  cursor: pointer; color: var(--text2); background: transparent; border: 0; border-radius: 8px;
+}
+.ia-toast-act:focus-visible, .ia-toast-x:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .ia-toast { transition: none; } }
 
 @media (max-width: 560px) {
+  .ia-toast.has-act { inset-inline: 12px; transform: none; justify-content: space-between; }
+  .ia-toast-act { min-height: 44px; }
+  .ia-toast-x { width: 44px; height: 44px; }
+  .ia-definition-head button, .ia-manage { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; }
   .ia { padding: 12px 10px 32px; }
   .ia-grid { grid-template-columns: 1fr; }
   .ia-acts { flex-direction: column; }
@@ -228,8 +251,20 @@
 .ia-cardel:hover { color: #fb7185; border-color: rgba(251, 113, 133, 0.4); }
 
 .ia-definition-head { display: flex; align-items: center; gap: 8px; }
-.ia-definition-head a { margin-inline-start: auto; font-size: 11px; color: var(--text1); }
 .ia-definition-head button { display: inline-flex; padding: 5px; border: 1px solid var(--card-border); border-radius: 8px; background: transparent; color: inherit; }
+/* «مدیریتِ فهرست» — آیکون، نه متنِ «تعریف پایه» که کنارِ «+» شبیهِ برچسب بود (company-19). */
+.ia-manage {
+  margin-inline-start: auto; display: inline-flex; padding: 5px; border-radius: 8px;
+  color: var(--text2); border: 1px solid var(--card-border);
+}
+.ia-manage:hover { color: var(--brand-text); border-color: rgba(var(--brand-2-rgb), .55); }
+.ia-manage:focus-visible, .ia-definition-head button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+/* خطا و یادداشتِ تطبیق زیرِ خودِ کشویی. */
+.ia-field select[aria-invalid="true"] { border-color: rgba(248, 113, 113, .75); }
+.ia-field-err { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 11.5px; font-weight: 700; color: var(--red-text); }
+.ia-field > .ia-note { padding: 5px 9px; font-size: 11.5px; line-height: 1.8; }
+/* وضعیتِ لینک چیپ است و دکمه فعل. */
+.ia-chip.ia-state.on { color: var(--green-text); background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .35); }
 
 /* خدمتِ ثبت‌نام (شرکتِ دوخدمته) — نشانِ کارت و انتخابگرِ پاپ‌آپ. */
 .ia-tag.ia-svc { color: var(--brand-text); border-color: rgba(var(--brand-rgb), .35); background: rgba(var(--brand-rgb), .1); }

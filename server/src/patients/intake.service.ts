@@ -2088,6 +2088,14 @@ export class IntakeService {
     return matchIntakeRefs(this.prisma, row.data);
   }
 
+  /** شمارِ هر وضعیت (و `all`) برای زبانه‌های صف — یک `groupBy`، نه خواندنِ ردیف‌ها (company-19). */
+  async counts() {
+    const rows = await this.prisma.intakeSubmission.groupBy({ by: ['status'], _count: { _all: true } });
+    const out: Record<string, number> = { all: 0 };
+    for (const r of rows) { out[r.status] = r._count._all; out.all += r._count._all; }
+    return out;
+  }
+
   async list(status?: string) {
     const workflow = await this.forms.workflow();
     const profile = await this.forms.profile();
@@ -2098,7 +2106,7 @@ export class IntakeService {
       orderBy: { id: 'desc' },
       take: 200,
       include: {
-        link: { select: { title: true } },
+        link: { select: { title: true, bankAccountId: true } },
         patient: { select: { id: true, code: true, firstName: true, lastName: true, phone: true, nationalId: true, birthDate: true } },
         visit: { select: { id: true, seq: true } },
         /* فرمِ **همین ثبت‌نام** (عکسِ لحظه‌ای)، نه فرمِ فعلیِ لینک: پنلِ تأیید
@@ -2120,6 +2128,10 @@ export class IntakeService {
       ? await this.prisma.document.findMany({ where: { id: { in: docIds }, deletedAt: null }, select: { id: true, fileName: true, mimeType: true } })
       : [];
     const docById = new Map(docs.map((x) => [x.id, x]));
+    /* حسابی که بیمار روی فرم دید — پیش‌فرضِ «به کدام حساب واریز شده؟» در پاپ‌آپِ تأیید (company-19).
+       همان قاعدهٔ `payTo`: حسابِ لینک اگر هنوز روی فرم است، وگرنه اگر فرم فقط یک حساب نشان می‌داد همان. */
+    const onForm = (await this.prisma.bankAccount.findMany({ where: { active: true, showOnIntake: true }, select: { id: true } })).map((a) => a.id);
+    const payToOf = (linkBank: number | null | undefined) => (linkBank && onForm.includes(linkBank) ? linkBank : onForm.length === 1 ? onForm[0] : null);
     const docView = (id: number) => {
       const x = docById.get(id)!;
       return { id, name: x.fileName, pdf: x.mimeType === 'application/pdf' };
@@ -2160,6 +2172,7 @@ export class IntakeService {
       /* لینک nullable شد: ثبت‌نامِ مستقیم (از کارتِ مراجعه) لینک ندارد و
          لینکِ حذف‌شده هم SetNull می‌شود. */
       linkTitle: r.link?.title ?? null,
+      payToAccountId: payToOf(r.link?.bankAccountId),
       direct: r.linkId === null,
       formTitle: r.form?.title ?? null,
       formColor: r.form?.color ?? null,
