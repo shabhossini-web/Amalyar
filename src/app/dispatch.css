@@ -2,6 +2,8 @@
 .dp {
   min-height: 100vh; background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+  /* گریدِ ماه پهن‌ترین عرضِ استاندارد را می‌گیرد (shell-15) — هم‌عرضِ نوارِ پوسته؛ سربرگ و گرید از همین. */
+  --page-w: var(--maxw);
 }
 .dp * { box-sizing: border-box; }
 .dp-bg {
@@ -12,18 +14,8 @@
 }
 .dp > *:not(.dp-bg) { position: relative; }
 
-.dp-head { display: flex; align-items: flex-start; gap: 14px; max-width: 940px; margin: 0 auto 18px; }
-.dp-back {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  color: var(--text1); text-decoration: none; font-size: 12px;
-  padding: 9px 13px; border-radius: 11px;
-  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
-}
-.dp-head > div { flex: 1; min-width: 0; }
-.dp-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
-.dp-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
 .dp-gapnote { font-style: normal; color: var(--amber-text); }
-.dp-err { max-width: 940px; margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }
+.dp-err { max-width: var(--page-w); margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }
 
 /* تب‌ها */
 
@@ -44,7 +36,7 @@
 @media (max-width: 640px) { .dp-cell i.t { font-size: 9px; } .dp-cell i.g { font-size: 0; } .dp-cell i.g::before { content: '●'; font-size: 10px; } }
 
 /* تختهٔ روز */
-.dp-day { max-width: 940px; margin: 18px auto 0; }
+.dp-day { max-width: var(--page-w); margin: 18px auto 0; }
 .dp-day > b { display: block; font-size: 14px; margin-block-end: 10px; }
 .dp-empty {
   padding: 26px 16px; text-align: center; font-size: 12.5px; color: var(--text3);
@@ -154,7 +146,7 @@
 @media (prefers-reduced-motion: reduce) { .dp-brief-btn { transition: none; } }
 .dp-nopool a { color: var(--amber-text); text-decoration: underline; text-underline-offset: 3px; }
 .dp-nopool {
-  max-width: 940px; margin: 12px auto 0; padding: 14px 16px; border-radius: 14px;
+  max-width: var(--page-w); margin: 12px auto 0; padding: 14px 16px; border-radius: 14px;
   font-size: 12px; color: var(--amber-text); line-height: 2;
   background: rgba(245, 158, 11, .07); border: 1px dashed rgba(245, 158, 11, .3);
 }

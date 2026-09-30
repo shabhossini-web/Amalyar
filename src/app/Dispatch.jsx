@@ -6,8 +6,9 @@ import FileDrop from '../ui/FileDrop.jsx';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
-import { Alert, ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
+import { Alert, ArrowDown, ArrowUp, CheckCircle, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import HospitalRoster from './HospitalRoster.jsx';
@@ -59,7 +60,6 @@ export default function Dispatch() {
   const [brief, setBrief] = useState(null); // {visitId, role, text}
   const [costFor, setCostFor] = useState(null); // مسیرِ در حالِ هزینه‌گذاری
 
-  useEffect(() => { document.title = 'عمل‌یار — چینش'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2200);
@@ -208,20 +208,17 @@ export default function Dispatch() {
   return (
     <div className="dp">
       <div className="dp-bg" aria-hidden="true" />
-      <header className="dp-head">
-        <Link to="/app" className="dp-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>چینشِ نیروها</h1>
-          <p>
-            {month ? `${faNum(month.total)} ${terms.surgery} در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}
-            {gapNow > 0 && (
-              <em className="dp-gapnote">
-                {' — '}{faNum(gapNow)} {terms.surgery} بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
-              </em>
-            )}
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        tool="dispatch"
+        sub={<>
+          {month ? `${faNum(month.total)} ${terms.surgery} در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}
+          {gapNow > 0 && (
+            <em className="dp-gapnote">
+              {' — '}{faNum(gapNow)} {terms.surgery} بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
+            </em>
+          )}
+        </>}
+      />
 
       <Tabs
         label="نوعِ چینش"

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import Tabs from '../ui/Tabs.jsx';
-import { ArrowDown, ArrowUp, Back, Plus, Trash } from '../ui/icons.jsx';
+import { ArrowDown, ArrowUp, Plus, Trash } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import './pathways.css';
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
@@ -75,7 +75,6 @@ export default function Pathways() {
     [],
   );
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { document.title = 'مسیرِ درمان — عمل‌یار'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const id = setTimeout(() => setToast(''), 3000);
@@ -133,11 +132,7 @@ export default function Pathways() {
   return (
     <div className="pw">
       <div className="pw-bg" aria-hidden="true" />
-      <header className="pw-head">
-        <Link to="/app" className="pw-back"><Back width="15" height="15" /> سامانه</Link>
-        <h1>مسیرِ درمان</h1>
-        <p>دورهٔ خدمت را یک‌بار الگو کن — مرحله، مسئول، موعد و پیامِ بیمار. هر انتشار یک نسخهٔ تازه است و دوره‌های در جریان دست نمی‌خورند.</p>
-      </header>
+      <PageHeader tool="pathway" sub="دورهٔ خدمت را یک‌بار الگو کن — مرحله، مسئول، موعد و پیامِ بیمار. هر انتشار یک نسخهٔ تازه است و دوره‌های در جریان دست نمی‌خورند." />
 
       {err && <p className="pw-err" role="alert">{err}</p>}
 

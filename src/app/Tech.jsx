@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr } from '../lib/jalali.js';
 import './tech.css';
-import { Alert, Arrive, Back, CheckCircle, Clock, Close, Hospital, Doctor, Box, User, Users, Wave } from '../ui/icons.jsx';
+import { Alert, Arrive, CheckCircle, Clock, Close, Hospital, Doctor, Box, User, Users, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import CancelReason from '../ui/CancelReason.jsx';
@@ -143,7 +143,6 @@ export default function Tech() {
   const [stamping, setStamping] = useState(null); // شناسهٔ عملی که «شروع شد / پایان یافت»ش در راه است
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — پنلِ کارشناسی'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2600);
@@ -211,18 +210,16 @@ export default function Tech() {
   return (
     <div className="tk">
       <div className="tk-bg" aria-hidden="true" />
-      <header className="tk-head">
-        <Link to="/app" className="tk-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>{team ? `دفترِ کارِ ${terms.techs}` : 'دفترِ کار'}</h1>
-          {/* تا پاسخ نیامده متنِ خنثی — وگرنه سوپرادمین یک لحظه «شما» را می‌دید. */}
-          <p>
-            {team
-              ? `نمای سرپرستی — کارِ همهٔ ${terms.techs}، با نامِ صاحب روی هر کارت. هر کاری این‌جا از طرفِ همان نفر ثبت می‌شود.`
-              : data ? 'عمل‌هایی که کارشناسشان شما هستید — ساعت، ست، مصرف و گزارش.' : 'ساعت، ست، مصرف و گزارش.'}
-          </p>
-        </div>
-      </header>
+      {/* عنوان به نقش بسته است (قانونِ ۲۹: «مالِ کیست») و آیکون همان کاشیِ «پنل کارشناسی»؛ `tk-head`
+          قلابِ آزمون است (superadmin-field)، ظاهر از `PageHeader`. تا پاسخ نیامده متنِ خنثی — وگرنه
+          سوپرادمین یک لحظه «شما» را می‌دید. */}
+      <PageHeader
+        className="tk-head" tool="tech"
+        title={team ? `دفترِ کارِ ${terms.techs}` : 'دفترِ کار'}
+        sub={team
+          ? `نمای سرپرستی — کارِ همهٔ ${terms.techs}، با نامِ صاحب روی هر کارت. هر کاری این‌جا از طرفِ همان نفر ثبت می‌شود.`
+          : data ? 'عمل‌هایی که کارشناسشان شما هستید — ساعت، ست، مصرف و گزارش.' : 'ساعت، ست، مصرف و گزارش.'}
+      />
 
       <Tabs label="بازهٔ کار" tone="brand" value={scope} onChange={setScope} items={SCOPES} />
 

@@ -1,5 +1,6 @@
 /* گریدِ ماهانهٔ شمسی — مشترک بینِ تقویم و چینش */
-.jg { max-width: 940px; margin: 0 auto; }
+/* هم‌عرضِ محتوای همان صفحه (`--page-w`، shell-15) — تا لبه‌هایش با سربرگ یکی بماند. */
+.jg { max-width: var(--page-w); margin: 0 auto; }
 .jg * { box-sizing: border-box; }
 
 .jg-head { display: flex; align-items: center; gap: 8px; margin-block-end: 12px; }
