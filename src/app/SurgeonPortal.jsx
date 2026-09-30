@@ -15,6 +15,7 @@ import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
+import { FLOW } from '../lib/terms.js';
 import JDate from './JDate.jsx';
 import './surgeon-portal.css';
 import './launcher.css';
@@ -376,9 +377,13 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
                       <span className="sp-row-meta">{[r.topic, r.hospital, r.code].filter(Boolean).join(' · ') || (r.visitId ? '' : 'هنوز مراجعه‌ای ثبت نشده')}</span>
                       {due > 0 && <span className="sp-due">مانده {fmtMoney(due)} تومان</span>}
                     </span>
+                    {/* هشدار: هر برچسب پیشوندِ صاحبش را دارد (بازبینیِ UX، clinic-daily-20): «انجام شد» و
+                        «در انتظار» کنارِ هم می‌آمدند و معلوم نبود کدام مالِ نوبت است و کدام مالِ
+                        ویزیت — دو خبرِ به‌ظاهر متناقض. واژهٔ دوم نوعِ همین مراجعه است («عمل جراحی»)،
+                        و اگر نوع نیامد واژهٔ حوزه. خودِ وضعیت‌ها همچنان از سرورند. */}
                     <span className="sp-row-tags">
-                      {r.apptStatusFa && <span className={`sp-row-tag${r.apptStatus === 'arrived' ? ' hot' : ''}`}>{r.apptStatusFa}</span>}
-                      {r.opStatusFa && <span className="sp-row-tag">{r.opStatusFa}</span>}
+                      {r.apptStatusFa && <span className={`sp-row-tag${r.apptStatus === 'arrived' ? ' hot' : ''}`}>{FLOW.appointment}: {r.apptStatusFa}</span>}
+                      {r.opStatusFa && <span className="sp-row-tag">{r.kind ? kindOf(r.kind).label : t.visit}: {r.opStatusFa}</span>}
                     </span>
                   </Row>
                 </li>

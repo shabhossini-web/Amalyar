@@ -164,7 +164,7 @@ try {
      این بند دوباره چیزی را نمی‌بینند (همان تلهٔ بندِ بالا، از راهِ دیگر). */
   const appt = {
     id: 7, fullName: 'بیمار آزمایشی', status: 'confirmed', statusLabel: 'قطعی', time: '10:00', seq: 1,
-    next: ['arrived'], nextOptions: [{ status: 'arrived', label: 'رسید' }],
+    next: ['arrived'], nextOptions: [{ status: 'arrived', label: 'ثبتِ رسیدن' }],
     canStart: true, startHint: null,
     visitId: null, topicName: '', patientCode: 'AM-001', phone: '',
   };

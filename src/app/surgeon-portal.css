@@ -100,6 +100,9 @@
 /* دو برچسب کنارِ هم (وضعیتِ نوبت + وضعیتِ مراجعه) روی یک ردیفِ ادغام‌شده */
 .sp-row-tags { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .sp-row-tags .sp-row-tag { grid-column: auto; grid-row: auto; }
+/* روی گوشی دو برچسبِ پیشونددار («نوبت: …»، «ویزیت: …») زیرِ هم می‌نشینند: کنارِ هم، ستونِ نام را
+   آن‌قدر تنگ می‌کردند که نام دوخطی و برچسبِ پزشک «!…» می‌شد (clinic-daily-20). */
+@media (max-width: 560px) { .sp-row-tags { flex-direction: column; align-items: flex-end; } }
 /* مبلغ هرگز کوتاه نمی‌شود — متنِ کنارش کوتاه می‌شود. */
 .sp-due { flex: 0 0 auto; color: var(--amber-text); font-weight: 700; white-space: nowrap; }
 .sp-due::before { content: '·'; margin-inline-end: 6px; color: var(--text3); font-weight: 400; }

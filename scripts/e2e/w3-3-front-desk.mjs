@@ -99,8 +99,9 @@ try {
 
   console.log('\n۲) برچسب‌ها و دکمه‌ها مشتقِ سرورند');
   const conf = day.rows.find((r) => r.id === aConf);
-  ok(conf.nextOptions.some((o) => o.status === 'arrived' && o.label === 'رسید'),
-    'برچسبِ **اقدام** («رسید») می‌آید نه برچسبِ وضعیت («در مطب»)');
+  /* از بازبینیِ UX (clinic-daily-20) برچسبِ اقدام **فعل** است: «ثبتِ رسیدن» نه «رسید». */
+  ok(conf.nextOptions.some((o) => o.status === 'arrived' && o.label === 'ثبتِ رسیدن'),
+    'برچسبِ **اقدام** («ثبتِ رسیدن») می‌آید نه برچسبِ وضعیت («در مطب»)');
   ok(!conf.nextOptions.some((o) => o.status === 'done'),
     '**نباید بیفتد:** گذارِ نامجاز به دکمه تبدیل شود (قطعی مستقیم «تمام شد» ندارد)');
   ok(conf.canStart === true && day.rows.find((r) => r.id === aHeld).canStart === false,
@@ -210,9 +211,9 @@ try {
     const m = page.locator(`.fd-card[data-appt="${aConf3}"]`);
     await m.waitFor({ timeout: 8000 });
     ok(await m.isVisible(), 'کارت در ستونِ «نوبت‌دار» دیده می‌شود');
-    await m.getByRole('button', { name: 'رسید' }).click();
+    await m.getByRole('button', { name: 'ثبتِ رسیدن' }).click();
     await page.waitForTimeout(1200);
-    ok(await m.isVisible(), '**بعد از «رسید» هنوز دیده می‌شود** — نما ستونِ مقصد را باز کرد');
+    ok(await m.isVisible(), '**بعد از «ثبتِ رسیدن» هنوز دیده می‌شود** — نما ستونِ مقصد را باز کرد');
     ok(await m.getByRole('button', { name: /شروعِ/ }).isVisible(),
       '**و دکمهٔ شروعِ ویزیت روی همان کارت در دسترس است**');
     const moveToast = await page.locator('.fd-toast').innerText().catch(() => '');

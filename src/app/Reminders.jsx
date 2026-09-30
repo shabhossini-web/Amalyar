@@ -25,7 +25,7 @@ const DELIVERY_FA = { unknown: 'رسیدن به گوشی هنوز تأیید ن�
    دروغ بگوید. `sending` هم نیست چون همین حالا دستِ سرور است. */
 const RETRYABLE = ['failed', 'uncertain', 'simulated'];
 const CANCELLABLE = ['pending', 'uncertain', 'failed'];
-/* ⚠️ جمعِ تب‌ها باید با «همه» بخواند (بازبینیِ UX، clinic-daily-17): «آزمایشی — ارسال نشده» تبِ
+/* هشدار: جمعِ تب‌ها باید با «همه» بخواند (بازبینیِ UX، clinic-daily-17): «آزمایشی — ارسال نشده» تبِ
    خودش را نداشت و «همه ۱۵» در برابرِ جمعِ ۸ بقیه می‌ایستاد؛ «در حالِ ارسال» هم جزوِ «در صف» است. */
 const TABS = [
   { key: 'all', label: 'همه' },

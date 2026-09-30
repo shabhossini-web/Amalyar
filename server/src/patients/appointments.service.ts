@@ -26,16 +26,31 @@ export { APPT_LABELS } from './labels';
 /**
  * برچسبِ **اقدام** — با `APPT_LABELS` یکی نیست و نباید یکی شود.
  * `APPT_LABELS` می‌گوید «الان کجاست» («در مطب»)، این می‌گوید «اگر بزنی چه می‌شود»
- * («رسید»). میزِ پذیرش دکمه است، پس فعل می‌خواهد نه صفت.
+ * («ثبتِ رسیدن»). میزِ پذیرش دکمه است، پس فعل می‌خواهد نه صفت.
  */
 export const APPT_ACTIONS: Record<string, string> = {
-  held: 'برگشت به انتظار',
-  confirmed: 'قطعی شد',
-  arrived: 'رسید',
-  done: 'تمام شد',
-  noshow: 'نیامد',
-  cancelled: 'لغو',
+  held: 'برگرداندن به انتظارِ پرداخت',
+  confirmed: 'قطعی‌کردن',
+  arrived: 'ثبتِ رسیدن',
+  done: 'پایانِ نوبت',
+  noshow: 'ثبتِ غیبت',
+  cancelled: 'لغوِ نوبت',
 };
+/**
+ * هشدار: **فعل، نه جملهٔ خبری** (بازبینیِ UX، clinic-daily-20): «قطعی شد»، «رسید»، «تمام شد»، «نیامد» روی
+ * دکمه خبر بودند نه کار — و روی بیمارِ «در مطب» دکمهٔ «قطعی شد» در واقع **برگرداندن** بود. معنای یک
+ * گذار گاهی به **مبدأ** بسته است، پس این‌جا استثنای مبدأ‌به‌مقصد؛ بقیه همان `APPT_ACTIONS`.
+ *
+ * هشدار: `done` «پایانِ **نوبت**» است نه «پایانِ ویزیت»: این گذار فقط نوبت را می‌بندد و `Visit.opStatus`
+ * را دست نمی‌زند، پس «پایانِ ویزیت» ادعای کاری را می‌کرد که رخ نمی‌دهد (میزِ پزشک همان لحظه
+ * «ویزیت: در انتظار» نشان می‌دهد). «نوبت» هم در هر سه حوزه یکی است (`FLOW`) و سرور واژهٔ حوزه ندارد —
+ * میزِ پذیرش در شرکت هم روشن است. هم‌خانوادهٔ «لغوِ نوبت».
+ */
+const APPT_ACTIONS_FROM: Record<string, Record<string, string>> = {
+  arrived: { confirmed: 'برگرداندن به نوبت‌دار' },
+  noshow: { confirmed: 'برگرداندن به نوبت‌دار' },
+};
+export const apptActionLabel = (from: string, to: string) => APPT_ACTIONS_FROM[from]?.[to] ?? APPT_ACTIONS[to] ?? to;
 
 /**
  * ستونِ میزِ پذیرش — مشتقِ سرور (قانون ۱۵) و تک‌منبع.
@@ -159,7 +174,7 @@ export class AppointmentsService {
       /* دکمه‌های میز: هر گذارِ مجاز با فعلِ خودش. برچسب این‌جا ساخته می‌شود تا
          نگاشتِ کلاینتیِ دوم (مثلِ آنکه در `Calendar.jsx` بود) لازم نشود. */
       nextOptions: (APPT_TRANSITIONS[a.status] ?? []).map((st) => ({
-        status: st, label: APPT_ACTIONS[st] ?? st,
+        status: st, label: apptActionLabel(a.status, st),
       })),
       lane: apptLane(a.status, a.visitId ?? null),
       /* «شروعِ ویزیت» هم مشتقِ سرور است — و این‌جا، کنارِ `lane` و
