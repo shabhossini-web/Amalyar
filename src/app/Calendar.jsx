@@ -288,12 +288,18 @@ export default function Calendar() {
       <div className="cal-layer">
         <ThingPopups things={things} />
 
-        {note && (
-          <button type="button" className={`cal-toast${note.bad ? ' bad' : ''}`} onClick={() => setNote(null)}
-                  aria-live={note.bad ? 'assertive' : 'polite'}>
-            {note.text}
-          </button>
-        )}
+        {/* ظرف‌های زنده همیشه در DOM‌اند و فقط محتوایشان عوض می‌شود (DF15): `aria-live` روی عنصری که همراهِ متنش
+            سوار می‌شود اعلام نمی‌شود — صفحه‌خوان تغییرِ یک منطقهٔ زندهٔ **موجود** را می‌خواند، نه تولدش را. */}
+        <div role="status" aria-live="polite">
+          {note && !note.bad && (
+            <button type="button" className="cal-toast" onClick={() => setNote(null)}>{note.text}</button>
+          )}
+        </div>
+        <div role="alert" aria-live="assertive">
+          {note?.bad && (
+            <button type="button" className="cal-toast bad" onClick={() => setNote(null)}>{note.text}</button>
+          )}
+        </div>
 
         <AnimatePresence>
           {cancelAsk && (

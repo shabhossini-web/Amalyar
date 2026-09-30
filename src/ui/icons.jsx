@@ -277,7 +277,7 @@ export const Gear = (p) => (
 export const More = (p) => (
   <Svg {...p}><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></Svg>
 );
-/** بازشدن در برگهٔ تازه — «مدیریتِ فهرست ↗». */
+/** بازشدن در برگهٔ تازه — کنارِ پیوندی مثلِ «مدیریتِ فهرست» که برگهٔ دیگری باز می‌کند. */
 export const External = (p) => (
   <Svg {...p}><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></Svg>
 );

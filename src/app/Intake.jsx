@@ -330,18 +330,22 @@ export default function IntakeAdmin() {
       </AnimatePresence>
 
       <ThingPopups things={things} />
-      {next ? (
-        <div className="ia-toast on has-act" role="status">
-          <span>{next.text}</span>
-          <button type="button" className="ia-toast-act"
-                  onClick={() => { const id = next.visitId; setNext(null); things.open({ type: 'visit', id }); }}>
-            {next.label}
-          </button>
-          <button type="button" className="ia-toast-x" aria-label="بستن" onClick={() => setNext(null)}><Close width="14" height="14" /></button>
-        </div>
-      ) : (
-        <div className={`ia-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
-      )}
+      {/* دو ظرفِ زنده، هر دو همیشه در DOM (DF14): توستِ «قدمِ بعد» (دکمه‌دار، ۱۲ ثانیه) و پیامِ عادی **بالای** آن —
+          تا دیروز قدمِ بعد جای ظرفِ پیام را می‌گرفت و هر پیامِ تازه (خطا، «لینک کپی شد») تا ۱۲ ثانیه دیده و خوانده
+          نمی‌شد؛ ظرفی هم که همراهِ متنش سوار می‌شود را صفحه‌خوان اعلام نمی‌کند. */}
+      <div role="status" aria-live="polite">
+        {next && (
+          <div className="ia-toast on has-act">
+            <span>{next.text}</span>
+            <button type="button" className="ia-toast-act"
+                    onClick={() => { const id = next.visitId; setNext(null); things.open({ type: 'visit', id }); }}>
+              {next.label}
+            </button>
+            <button type="button" className="ia-toast-x" aria-label="بستن" onClick={() => setNext(null)}><Close width="14" height="14" /></button>
+          </div>
+        )}
+      </div>
+      <div className={`ia-toast${toast ? ' on' : ''}${next ? ' above' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }
@@ -634,6 +638,11 @@ export function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialA
     const keys = ['surgeons', 'hospitals', 'techs', 'types', 'banks'];
     const paths = ['/surgeons', '/hospitals', '/techs', '/procedure-types', '/bank-accounts'];
     const results = await Promise.allSettled(paths.map(path => api(path)));
+    /* DF5: `/bank-accounts` پلنِ حسابداری می‌خواهد؛ بی‌آن فهرستِ حساب‌ها را از `/intake/link-options` بگیر (همان
+       حساب‌هایی که روی فرمِ بیمار نشان داده می‌شوند، فقط نام) تا حسابِ لینک دیده و انتخاب‌شدنی بماند. */
+    if (results[4].status === 'rejected') {
+      try { results[4] = { status: 'fulfilled', value: (await api('/intake/link-options')).banks ?? [] }; } catch { /* همان خطای بالا */ }
+    }
     setRefs(Object.fromEntries(results.map((r, i) => [keys[i], r.status === 'fulfilled' ? r.value : []])));
     const failed = results.flatMap((r, i) => r.status === 'rejected' ? [['جراحان', 'بیمارستان‌ها', 'کارشناسان', 'انواع عمل', 'حساب‌ها'][i]] : []);
     if (failed.length) setErr(`دریافت ${failed.join('، ')} انجام نشد؛ بقیهٔ انتخابگرها قابل استفاده‌اند.`);
@@ -650,6 +659,10 @@ export function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialA
     reload(); window.addEventListener('focus', reload);
     return () => window.removeEventListener('focus', reload);
   }, [loadRefs]);
+
+  /* DF5: حسابی فقط وقتی انتخاب‌شده است که در همین فهرست دیده شود — وگرنه کشویی «نامشخص» نشان می‌داد و
+     شناسهٔ حسابِ لینک بی‌صدا فرستاده می‌شد. */
+  const bankShown = refs.banks.some((b) => String(b.id) === f.bankAccountId) ? f.bankAccountId : '';
 
   const save = async () => {
     /* همان قاعدهٔ `approve()`ِ سرور برای شرکت (جراح و بیمارستانِ تعریف‌شده الزامی)؛ سرور همچنان داور
@@ -677,7 +690,7 @@ export function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialA
           opDate: f.opDate.trim() ? jStrToIso(f.opDate) : undefined,
           opStartTime: f.opStartTime || undefined,
           registerPayment: f.registerPayment,
-          bankAccountId: f.bankAccountId ? Number(f.bankAccountId) : undefined,
+          bankAccountId: f.registerPayment && bankShown ? Number(bankShown) : undefined,
           extra: Object.fromEntries((fields ?? []).filter(field => !field.builtin && field.active !== false).map(field => [field.key, extra[field.key]])),
           ...(row.makesVisit !== false && row.serviceAmbiguous && service ? { service } : {}),
           ...(workflow === 'implant' ? { requiredItems: requiredItems.map(({ itemId, quantity, notes }) => ({ itemId, quantity, notes: notes || '' })) } : {}),
@@ -815,12 +828,12 @@ export function ApproveSheet({ row, onClose, onDone, onZoom, onChanged, initialA
             {f.registerPayment && (
               <label className="ia-field">
                 <span>به کدام حساب واریز شده؟</span>
-                <select value={f.bankAccountId} disabled={busy}
+                <select value={bankShown} disabled={busy}
                         onChange={(e) => setF((s) => ({ ...s, bankAccountId: e.target.value }))}>
                   <option value="">— نامشخص —</option>
-                  {refs.banks.map((b) => <option key={b.id} value={b.id}>{[b.ownerName, b.bankName].filter(Boolean).join(" — ")}</option>)}
+                  {refs.banks.map((b) => <option key={b.id} value={b.id}>{b.label ?? [b.ownerName, b.bankName].filter(Boolean).join(" — ")}</option>)}
                 </select>
-                {row.payToAccountId && f.bankAccountId === String(row.payToAccountId) && (
+                {row.payToAccountId && bankShown === String(row.payToAccountId) && (
                   <small className="ia-hint">همان حسابی که روی فرمِ بیمار بود</small>
                 )}
               </label>

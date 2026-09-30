@@ -7,11 +7,13 @@ import { fmtMoney } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { printIssuedInvoice } from './invoice-print.js';
 import NeuroInvoiceDialog from './NeuroInvoiceDialog.jsx';
+import { Alert } from '../ui/icons.jsx';
 
 export default function InvoicePanel({ visit, billing, neuro, onToast, reload }) {
   const { user } = useAuth();
   const [info, setInfo] = useState(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const [picker, setPicker] = useState(false);
+  /* پنجرهٔ خدمات: `null` بسته؛ `{}` باز؛ `{ intent: 'replace' }` از هشدارِ دوبارشماری (DF3). */
+  const [picker, setPicker] = useState(null);
   const root = `/visits/${visit.id}/invoices`;
   const refresh = useCallback(async () => setInfo(await api(root)), [root]);
   useEffect(() => { refresh().catch(e => setError(e.message)); }, [refresh]);
@@ -34,6 +36,10 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
   const neuroCons = billing.charges.filter(c => c.neuroDetail?.consumable);
   /* قلمِ مبلغِ کلِ مراجعه (سرور، `lumpLines`) — تا پنل نگوید «خدمتی نیست» وقتی قلمِ ثبت‌نام همان خدمت است (company-14). */
   const lump = info?.lumpLines ?? [];
+  /* DF3: قلمِ مبلغِ کل و خدماتِ ریزشده هر دو روی صورت‌حساب‌اند و کاربر هرگز صریحاً «کنار» نگفته — مثلاً ثبتی که
+     پیش از پرسیدنِ «جایگزین یا کنار» انجام شده. تا دیروز پنل در این حال فقط خدمات را نشان می‌داد و قلمِ کل را
+     پنهان می‌کرد، پس دوبارشماری از این‌جا دیده نمی‌شد. هر دو پرچم از سرور است. */
+  const doubled = neuro && info?.lumpBesideNeuro && !info?.lumpKept;
   return <section className="bl-invoice-panel">
     <h3 className="bl-section-title">{neuro ? 'فاکتور خدمات نورومانیتورینگ' : 'فاکتور شرکت'}</h3>
     {user?.level >= 6 && <Link className="bl-mini" to="/app/settings">تنظیم قالب و مشخصات صادرکننده</Link>}
@@ -42,15 +48,28 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
       {/* یک پاپ‌آپ برای همهٔ خدمات — نه یکی‌یکی. وضعیتِ فعلی همین‌جا خلاصه می‌شود تا کاربر بداند چه روی فاکتور است. */}
       <div className="nv-launch-sum">
         {neuroLines.length
-          ? <><b>{neuroLines.map(c => c.neuroDetail.label ?? c.title).join(' · ')}</b><small>{neuroLines[0].neuroDetail.hours} ساعت · مالک دستگاه: {neuroLines[0].neuroDetail.deviceOwner === 'hospital' ? 'بیمارستان' : 'شرکت'}{neuroCons.length ? ` · ${neuroCons.length.toLocaleString('fa-IR')} قلم مصرفی` : ''}</small></>
+          ? <><b>{neuroLines.map(c => c.neuroDetail.label ?? c.title).join(' · ')}</b><small>{Number(neuroLines[0].neuroDetail.hours ?? 0).toLocaleString('fa-IR')} ساعت · مالک دستگاه: {neuroLines[0].neuroDetail.deviceOwner === 'hospital' ? 'بیمارستان' : 'شرکت'}{neuroCons.length ? ` · ${neuroCons.length.toLocaleString('fa-IR')} قلم مصرفی` : ''}{info?.lumpKept ? ` · کنارِ ${lump.map(c => c.title).join('، ')} (به انتخابِ شما)` : ''}</small></>
           : lump.length
             ? <><b>روی صورت‌حساب: {lump.map(c => `${c.title} · ${fmtMoney(c.amount)} تومان`).join('، ')}</b><small>این قلمِ مبلغِ کل است، نه ریزِ خدمات. برای فاکتور خدمات را انتخاب کنید؛ همان‌جا می‌گویید جایگزینِ این قلم شوند یا کنارش بمانند.</small></>
             : <><b>هنوز خدمتِ نورومانیتورینگی روی این صورت‌حساب نیست</b><small>خدمات با تیکِ پیش‌فرضِ شرکت و مدتِ عمل پیش‌پر می‌آیند؛ فقط تأیید کنید.</small></>}
       </div>
-      <button type="button" className="db-submit bl-btn" disabled={busy || !info} onClick={() => setPicker(true)}>
+      <button type="button" className="db-submit bl-btn" disabled={busy || !info} onClick={() => setPicker({})}>
         {neuroLines.length ? 'ویرایشِ خدمات و مصرفی‌ها' : 'انتخابِ خدمات و مصرفی‌ها'}
       </button>
     </div>}
+    {doubled && (
+      <div className="nv-double" role="alert">
+        <Alert width="20" height="20" />
+        <div>
+          <b>این صورت‌حساب هم مبلغِ کلِ ثبت‌نام و هم خدماتِ ریزشده را دارد — احتمالاً دوبار شمرده شده.</b>
+          <small>
+            {lump.map(c => `${c.title} (${fmtMoney(c.amount)} تومان)`).join('، ')} کنارِ خدماتِ نورو در جمع آمده است.
+            اگر همان خدمت است جایگزینش کنید؛ اگر خدمتِ دیگری است، در پنجرهٔ خدمات «کنارش بماند» را بزنید تا این هشدار نیاید.
+          </small>
+        </div>
+        <button type="button" className="bl-mini" disabled={busy} onClick={() => setPicker({ intent: 'replace' })}>جایگزینیِ قلمِ ثبت‌نام</button>
+      </div>
+    )}
     <p className="db-hint">صدور، نسخه‌ای با شمارهٔ ثابت ثبت می‌کند. صدور مجدد بدون تغییر، همان شماره را برمی‌گرداند؛ پس از تغییر، نسخهٔ جدید جایگزین می‌شود و قبلی در سوابق می‌ماند.</p>
     <button type="button" className="db-submit bl-btn" disabled={busy || !info || !billing.invoiceType || !billing.invoiceBankAccount || !billing.charges.length} onClick={() => print()}>
       صدور و چاپ فاکتور {billing.invoiceType === 'informal' ? 'غیررسمی' : 'رسمی'}
@@ -60,9 +79,9 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
     <AnimatePresence>
       {picker && (
         <NeuroInvoiceDialog
-          visit={visit} billing={billing} onToast={onToast}
+          visit={visit} billing={billing} onToast={onToast} intent={picker.intent}
           reload={async () => { await reload(); await refresh().catch(() => {}); }}
-          onClose={() => setPicker(false)}
+          onClose={() => setPicker(null)}
           onIssue={w => print(undefined, w)}
         />
       )}

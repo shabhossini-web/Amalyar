@@ -41,6 +41,9 @@ import { kindOf } from './visit-kinds.js';
 
 const ADV_IDS = ['surgeonId', 'hospitalId', 'techId', 'procedureTypeId', 'diagnosisId'];
 const EMPTY_ADV = { surgeonId: '', hospitalId: '', techId: '', procedureTypeId: '', diagnosisId: '', fromJ: '', toJ: '', owing: false };
+/** رنگِ وضعیتِ پولیِ ردیف — کلید همان `payState`ِ سرور است (DF2). */
+const PAY_CLASS = { due: 'due', overpaid: 'over', settled: 'ok' };
+
 const EMPTY_META = { total: 0, pages: 1, stats: { total: 0, pending: 0, today: 0, due: 0, kinds: [] } };
 
 const SORT_OPTIONS = [
@@ -211,7 +214,9 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
 
   const showForms = async () => {
     setView('forms');
-    if (recordFormsCache) return;
+    /* کش مالِ کلِ صفحه است ولی state مالِ همین منو (DF6): منوی ردیفِ دوم که پیش از پرشدنِ کش ساخته شده
+       `forms`ش null مانده بود و بی‌این `setForms` تا ابد «در حال بارگذاری…» نشان می‌داد. */
+    if (recordFormsCache) { setForms(recordFormsCache); return; }
     try {
       const all = await api('/forms');
       recordFormsCache = (all ?? []).filter((f) => f.scope === 'record' && f.active !== false);
@@ -336,6 +341,11 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
  * فهرست از سرور (`/config`) — دکمه‌ها باید **همهٔ** گزینه‌ها را نشان دهند.
  */
 function StatusPick({ v, busy, onStatus, statuses, t, compact = false }) {
+  /* فهرستِ وضعیت‌ها از `/config` نیامده (هنوز نرسیده یا شکست خورده؛ DF10) — دست‌کم وضعیتِ خودِ ردیف به‌صورتِ
+     چیپِ فقط‌خواندنی دیده شود، نه یک جای خالی که انگار مراجعه وضعیتی ندارد. برچسب از سرور است (`opStatusFa`). */
+  if (!statuses?.length) {
+    return <span className={`db-stchip db-st-${v.opStatus}${compact ? ' db-stchip-sm' : ''}`}>{statusLabel(v)}</span>;
+  }
   return (
     <div className={`db-statuspick${compact ? ' db-statuspick-sm' : ''}`} role="group" aria-label={`وضعیتِ ${visitNoun(v, t)}`}>
       {statuses.map(({ key: k, label: l }) => {
@@ -481,8 +491,11 @@ function VisitCard({ v, index, busy, onEdit, onStatus, onDelete, onBilling, onTo
                  aria-label={`وصولِ صورت‌حسابِ ${v.fullName}`}>
               <i style={{ inlineSize: `${v.paidPct}%` }} />
             </div>
-            <small className={v.due <= 0 ? 'ok' : undefined}>
-              {v.due > 0 ? `مانده ${fmtMoney(v.due)} از ${fmtToman(v.total)}` : `تسویه — ${fmtToman(v.total)}`}
+            {/* «تسویه» فقط وقتی مانده صفر است؛ اضافه‌پرداخت برچسب و مبلغِ خودش را دارد — هر دو از سرور (DF2). */}
+            <small className={PAY_CLASS[v.payState]}>
+              {v.payState === 'due' ? `${v.payStateFa} ${fmtMoney(v.due)} از ${fmtToman(v.total)}`
+                : v.payState === 'overpaid' ? `${v.payStateFa} ${fmtMoney(v.overpaid)} — جمع ${fmtToman(v.total)}`
+                  : `${v.payStateFa} — ${fmtToman(v.total)}`}
             </small>
           </div>
         )}
@@ -547,19 +560,24 @@ const VIEW_KEY = 'amalyar_dashboard_view';
 const readView = () => { try { return localStorage.getItem(VIEW_KEY) === 'cards' ? 'cards' : 'table'; } catch { return 'table'; } };
 const saveView = (v) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* حالتِ خصوصی — بی‌اثر */ } };
 
+/* `stages` را سرور با وضعیتِ عمل می‌سازد (DF8): لغوشده `null` (بی‌نشان)، و گزارش/فاکتورِ عملِ هنوز انجام‌نشده
+   `null` = خنثی («پس از انجام»)، نه «ندارد». */
+const stageClass = (on) => (on == null ? 'na' : on ? 'ok' : 'miss');
+
 function StageBadges({ v, t }) {
   const s = v.stages;
   if (!s) return null;
+  const later = 'پس از انجامِ عمل';
   const list = [
     ['tech', t.tech, User, s.tech ? (v.techName || 'تعیین شده') : 'تعیین نشده'],
     ['time', 'ساعت', Clock, s.time ? faTime(v.opStartTime) : 'ثبت نشده'],
-    ['report', t.workReport, Book, s.report ? 'رسیده' : 'نرسیده'],
-    ['invoice', 'فاکتور', Money, s.invoice ? 'صادر شده' : 'صادر نشده'],
+    ['report', t.workReport, Book, s.report == null ? later : s.report ? 'رسیده' : 'نرسیده'],
+    ['invoice', 'فاکتور', Money, s.invoice == null ? later : s.invoice ? 'صادر شده' : 'صادر نشده'],
   ];
   return (
     <ul className="db-stages" aria-label="مرحله‌ها">
       {list.map(([k, label, Icon, state]) => (
-        <li key={k} className={s[k] ? 'ok' : 'miss'} title={`${label}: ${state}`} aria-label={`${label}: ${state}`}>
+        <li key={k} className={stageClass(s[k])} title={`${label}: ${state}`} aria-label={`${label}: ${state}`}>
           <Icon width="12" height="12" aria-hidden="true" />
           <span>{label}</span>
         </li>
@@ -600,9 +618,9 @@ function VisitRow({ v, busy, onEdit, onStatus, onDelete, onBilling, onToast, sta
       {company && <td><StageBadges v={v} t={t} /></td>}
       <td><StatusPick v={v} busy={busy} onStatus={onStatus} statuses={statuses} t={t} compact /></td>
       <td className="db-t-money">
-        {v.total ? (
+        {v.total || v.overpaid ? (
           <>
-            <b className={v.due > 0 ? 'due' : 'ok'}>{v.due > 0 ? `مانده ${fmtToman(v.due)}` : 'تسویه'}</b>
+            <b className={PAY_CLASS[v.payState]}>{v.payStateFa}{v.payState === 'due' ? ` ${fmtToman(v.due)}` : v.payState === 'overpaid' ? ` ${fmtToman(v.overpaid)}` : ''}</b>
             <small>وصول {faNum(v.paidPct)}٪ از {fmtToman(v.total)}</small>
           </>
         ) : <span className="db-t-none">بی‌صورت‌حساب</span>}
@@ -1321,7 +1339,9 @@ export default function Dashboard() {
           {!denied && visits === null && <div className="us-empty">در حال بارگذاری…</div>}
           {denied && <div className="us-empty">دسترسیِ کافی برای این بخش ندارید — مدیرِ سامانه باید سطحِ شما را ارتقا دهد.</div>}
           {!denied && visits?.length === 0 && (
-            <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد' : t.emptyList}</div>
+            /* فهرستِ خالی زیرِ یک فیلتر «اولین مراجعه را ثبت کن» نیست (DF11) — مرحلهٔ جامانده، نوع یا جستجوی پیشرفته. */
+            <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد'
+              : missing !== 'all' || kind !== 'all' || advCount ? 'نتیجه‌ای با این فیلتر نیست' : t.emptyList}</div>
           )}
           {asTable && visits?.length > 0 && (
             <VisitTable

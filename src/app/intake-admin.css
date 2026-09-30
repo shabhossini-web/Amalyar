@@ -153,6 +153,8 @@
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .ia-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
+/* پیامِ عادی وقتی توستِ «قدمِ بعد» هست، بالای آن می‌نشیند نه زیرش (DF14). */
+.ia-toast.above { inset-block-end: 84px; z-index: 71; }
 /* توستِ قدمِ بعد (company-19) — دکمه دارد، پس لمس‌پذیر است و خودش زود نمی‌رود. */
 .ia-toast.has-act {
   pointer-events: auto; display: flex; align-items: center; gap: 10px; z-index: 70;
@@ -174,6 +176,7 @@
 
 @media (max-width: 560px) {
   .ia-toast.has-act { inset-inline: 12px; transform: none; justify-content: space-between; }
+  .ia-toast.above { inset-block-end: 96px; }
   .ia-toast-act { min-height: 44px; }
   .ia-toast-x { width: 44px; height: 44px; }
   .ia-definition-head button, .ia-manage { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; }

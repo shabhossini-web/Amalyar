@@ -259,6 +259,20 @@ export const INTAKE_LABELS: Record<string, string> = {
   expired: 'رها‌شده',
 };
 
+/**
+ * وضعیتِ پولیِ مراجعه (`payStateOf` در `billing.service.ts`) — بستهٔ DF، DF2.
+ *
+ * ⚠️ «تسویه» فقط وقتی است که مانده دقیقاً صفر باشد. تا دیروز فهرستِ بیماران هر `due <= 0` را
+ * «تسویه» می‌نوشت، پس مراجعه‌ای که پس از جایگزینیِ قلمِ مبلغِ کل ۳۹ میلیون اضافه‌پرداخت داشت
+ * در فهرست «تسویه» دیده می‌شد — بدهیِ ما به بیمار نامرئی بود.
+ */
+export const PAY_STATE_LABELS: Record<string, string> = {
+  due: 'مانده',
+  settled: 'تسویه',
+  overpaid: 'اضافه‌پرداخت',
+  none: 'بی‌صورت‌حساب',
+};
+
 /** برچسب، وگرنه خودِ کلید — نمایشِ کلیدِ خام از نمایشِ «نامشخص» صادقانه‌تر است. */
 export const faOf = (map: Record<string, string>, key: string | null | undefined) =>
   (key == null ? null : map[key] ?? key);

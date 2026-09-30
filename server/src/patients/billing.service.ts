@@ -7,6 +7,7 @@ import { InventoryService } from './inventory.service';
 import { TreasuryService } from './treasury.service';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere } from '../common/own-scope';
+import { PAY_STATE_LABELS } from './labels';
 
 /** نوعِ قلمِ صورت‌حساب. discount همیشه مبلغِ منفی می‌سازد. */
 export const CHARGE_KINDS = ['service', 'item', 'discount'] as const;
@@ -389,6 +390,22 @@ export function summarize(
   const paidPct = total > 0 ? Math.min(100, Math.max(0, Math.round((paid / total) * 100))) : 0;
   return { total, itemsTotal, paid, due: total - paid, paidPct };
 }
+
+/**
+ * **وضعیتِ پولیِ یک جمع‌بندی** — «مانده / تسویه / اضافه‌پرداخت» (بستهٔ DF، DF2؛ قانون ۱۵).
+ *
+ * ⚠️ عمداً کنارِ `summarize` است نه داخلش: خروجیِ `summarize` عیناً در snapshotِ فاکتورِ صادرشده
+ * می‌نشیند و اثرانگشتش را می‌سازد؛ کلیدِ تازه در آن یعنی صدورِ دوبارهٔ فاکتورِ **بی‌تغییر** یک شمارهٔ
+ * رسمیِ تازه بسوزاند. فهرستِ مراجعه‌ها و پیش‌نمایشِ پنجرهٔ خدمات این را کنارش می‌گیرند.
+ *
+ * ⚠️ `due < 0` «تسویه» نیست — پرداختِ بیشتر از جمع بدهیِ ما به بیمار است و `overpaid` مبلغِ مثبتِ
+ * همان است، تا کلاینت برای نمایشش علامت برنگرداند.
+ */
+export function payStateOf(s: { total: number; due: number }) {
+  const payState = s.due > 0 ? 'due' : s.due < 0 ? 'overpaid' : s.total === 0 ? 'none' : 'settled';
+  return { payState, payStateFa: PAY_STATE_LABELS[payState], overpaid: s.due < 0 ? -s.due : 0 };
+}
+export const withPayState = <T extends { total: number; due: number }>(s: T) => ({ ...s, ...payStateOf(s) });
 
 type ChargeRow = { id: number; kind: string; title: string; quantity: number; stockEffect: string };
 type MoveRow = {

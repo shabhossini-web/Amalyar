@@ -8,7 +8,7 @@ import { toEnDigits } from '../lib/identity.js';
 import InvoicePanel from './InvoicePanel.jsx';
 import { useConfig } from './config.jsx';
 import { hasService } from '../lib/profile.js';
-import { Alert, Close, Plus, Trash } from '../ui/icons.jsx';
+import { Alert, Close, External, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import MoneyInput from '../ui/MoneyInput.jsx';
@@ -276,7 +276,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
           {tab === 'invoice' ? (
             <>
               <InvoiceAccount data={data} banks={banks} visitId={visit.id} onSaved={setData} onToast={onToast} />
-              <InvoicePanel visit={visit} billing={data} neuro={hasService(cfg, 'ionm')} onToast={onToast} reload={async () => { await load(); onChanged?.(); }} />
+              {/* فاکتورِ نورو از خدمتِ **همین مراجعه**، نه از بستهٔ خدماتِ شرکت (DF1): در شرکتِ دوخدمته مراجعهٔ ایمپلنت
+                  پنجرهٔ خدماتِ نورو را نمی‌گیرد — «جایگزین» آن‌جا قلمِ ایمپلنت را برمی‌داشت. خدمتِ خالی (ردیفِ قدیمی) همان
+                  رفتارِ دیروز است. */}
+              <InvoicePanel visit={visit} billing={data} neuro={visit.service ? visit.service === 'ionm' : hasService(cfg, 'ionm')} onToast={onToast} reload={async () => { await load(); onChanged?.(); }} />
             </>
           ) : tab === 'split' ? (
             <Settlement visitId={visit.id} onToast={onToast} onChanged={onChanged} />
@@ -839,8 +842,11 @@ function InvoiceAccount({ data, banks, visitId, onSaved, onToast }) {
   const paidBank = !data.invoiceBankAccount && paidTo.length === 1 ? banks.find((b) => b.id === paidTo[0] && b.active !== false) ?? null : null;
   const classified = (b) => b?.classification === 'formal' || b?.classification === 'informal';
   const hint = classified(paidBank) ? paidBank : null;
-  const shownType = type || hint?.classification || '';
-  const shownBank = bankId || (hint && shownType === hint.classification ? hint.id : '');
+  /* پس از «ثبت اتصال حساب» `data` حسابِ ثبت‌شده را دارد و پیشنهاد (`hint`) می‌رود؛ بی‌این دو fallback هر دو
+     کشویی خالی می‌شدند و انگار چیزی ثبت نشده بود (DF9). */
+  const shownType = type || data.invoiceType || hint?.classification || '';
+  const savedBank = data.invoiceBankAccount && data.invoiceType === shownType ? data.invoiceBankAccount.id : '';
+  const shownBank = bankId || savedBank || (hint && shownType === hint.classification ? hint.id : '');
   const save = async () => {
     setBusy(true);
     try {
@@ -863,10 +869,10 @@ function InvoiceAccount({ data, banks, visitId, onSaved, onToast }) {
     {/* بن‌بستِ بی‌توضیح نه: حسابی که نوعِ فاکتور ندارد در هیچ‌کدام از دو فهرست نمی‌آید (company-14). */}
     {paidBank && !hint && (
       <small>حسابِ پرداختِ این مراجعه ({paidBank.ownerName}{paidBank.bankName ? ` · ${paidBank.bankName}` : ''}) هنوز رسمی یا غیررسمی نشده؛
-        در <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حسابداری ← حساب‌های بانکی</Link> نوعش را بگذارید تا همین‌جا پیش‌فرض شود.</small>
+        در <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حساب‌های بانکیِ حسابداری <External width="12" height="12" /></Link> نوعش را بگذارید تا همین‌جا پیش‌فرض شود.</small>
     )}
     {!paidBank && shownType && !banks.some((b) => b.classification === shownType) && (
-      <small>حسابِ {shownType === 'formal' ? 'رسمی' : 'غیررسمی'} تعریف نشده — <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حسابداری ← حساب‌های بانکی</Link></small>
+      <small>حسابِ {shownType === 'formal' ? 'رسمی' : 'غیررسمی'} تعریف نشده — در <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حساب‌های بانکیِ حسابداری <External width="12" height="12" /></Link> تعریفش کنید.</small>
     )}
   </fieldset>;
 }
