@@ -27,8 +27,15 @@
 .po-head em { font-style: normal; font-size: 13px; color: var(--text3); }
 
 .po-tabs {
-  display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-bottom: 14px;
+  /* یک ردیفِ اسکرولی (بازبینیِ UX، بندِ ۱۱۵) — در گوشی از کنار اسکرول می‌خورد و در دسکتاپ وسط می‌نشیند:
+     حاشیهٔ خودکارِ اولین و آخرین تب وقتی جا هست وسط‌چین می‌کند و وقتی نیست صفر می‌شود (نه `justify-content:
+     center` که سرِ ردیفِ سرریزکرده را بیرون از دسترسِ اسکرول می‌برد). */
+  display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto; margin: 0 -14px 14px; padding: 2px 14px 4px;
+  scrollbar-width: none; overscroll-behavior-x: contain;
 }
+.po-tabs::-webkit-scrollbar { display: none; }
+.po-tabs > button:first-child { margin-inline-start: auto; }
+.po-tabs > button:last-child { margin-inline-end: auto; }
 .po-tabs button {
   cursor: pointer; font: inherit; font-size: 14px; font-weight: 700;
   display: inline-flex; align-items: center; gap: 6px;
@@ -41,6 +48,10 @@
   border-color: rgba(var(--brand-soft-rgb, 167, 139, 250), .55);
 }
 .po-tabs i { font-style: normal; font-size: 12.5px; opacity: .85; }
+.po-tabs button { flex: 0 0 auto; }
+/* تبِ خالی کم‌رنگ — نه پنهان: بیمار باید ببیند آن بخش هست و فعلاً چیزی ندارد. */
+.po-tabs button.empty:not(.on) { color: var(--text3); background: transparent; border-style: dashed; }
+.po-tabs button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .po-list { display: grid; gap: 9px; }
 .po-empty {

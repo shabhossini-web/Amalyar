@@ -19,10 +19,13 @@ const visit = await fetch(API + '/visits', {
   method: 'POST', headers: A,
   body: JSON.stringify({
     kind: tag, firstName: 'بیمارِ', lastName: 'چشمی', phone: '09120000812',
-    opDate: new Date().toISOString(),
+    /* بازبینیِ UX (بندِ ۱۰۰): «مراجعات» فقط گذشته است و فقط مراجعهٔ **انجام‌شده** به خلاصه لینک دارد؛
+       مراجعهٔ امروزِ در انتظار «پیشِ‌رو»ست. پس مراجعهٔ این آزمون گذشته و انجام‌شده است. */
+    opDate: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
     nextVisitDate: new Date(Date.now() + 6 * 24 * 3600 * 1000).toISOString(),
   }),
 }).then((r) => r.json());
+await fetch(`${API}/visits/${visit.id}/status`, { method: 'PATCH', headers: A, body: JSON.stringify({ opStatus: 'done' }) });
 const link = await fetch(`${API}/patients/${visit.patientId}/portal-link`, { method: 'POST', headers: A }).then((r) => r.json());
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true });

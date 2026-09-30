@@ -69,6 +69,10 @@ export default function Portal() {
   }, [token]);
   /* پرونده باز نشد ← تم و هویتِ مطب از مسیرِ عمومیِ جدا. */
   const fallback = useFallbackFace(!!err);
+  /* تبِ فعال در ردیفِ اسکرولیِ تب‌ها همیشه در دید (مثلاً «پیام‌ها» پس از بازگشت از خلاصه با ?tab=). */
+  useEffect(() => {
+    document.querySelector('.po-tabs button.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [tab, data]);
 
   /* «چه شد + چرا + چه کنید» با نام و تلفنِ مطب — نه یک خطِ صورتی روی صفحهٔ خالی (بازبینیِ UX، بندِ ۱۱۰). */
   if (err) return <PublicErrorPage brand={fallback?.brand} err={err} />;
@@ -107,11 +111,14 @@ export default function Portal() {
         <em dir="ltr">{data.patient.code}</em>
       </header>
 
+      {/* یک ردیفِ اسکرولی، تبِ خالی کم‌رنگ (بازبینیِ UX، بندِ ۱۱۵): پنج تب با چهار «۰» در دو ردیف می‌شکست و
+          «پیام‌ها» تنها در ردیفِ دوم می‌ماند؛ تبِ خالی عمداً پنهان نیست تا بیمار بداند آن بخش هست و خالی است. */}
       <nav className="po-tabs" role="radiogroup" aria-label="بخش‌های پرونده">
         {SECTIONS.map((s) => (
           <button
             key={s.key} type="button" role="radio" aria-checked={tab === s.key}
-            className={tab === s.key ? 'on' : ''} onClick={() => setTab(s.key)}
+            className={[tab === s.key ? 'on' : '', (data[s.key] ?? []).length ? '' : 'empty'].join(' ').trim()}
+            onClick={() => setTab(s.key)}
           >
             {s.label}
             <i>{(data[s.key] ?? []).length.toLocaleString('fa-IR')}</i>

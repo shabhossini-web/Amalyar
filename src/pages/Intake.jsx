@@ -932,7 +932,9 @@ function Form() {
               {page < (d.form.pages ?? 1) ? (
                 <button type="button" className="ik-go" disabled={busy} onClick={nextPage}>بعدی</button>
               ) : (
-                <button type="button" className="ik-go ghost" disabled={busy} onClick={saveForm}>
+                /* دکمهٔ اصلیِ صفحه — نه شبح (بازبینیِ UX، بندِ ۱۱۵): «ادامه» و «بعدی» حلقهٔ نئونی داشتند و
+                   مهم‌ترین دکمه، «ثبت»، کم‌رنگ‌ترینِ صفحه بود. */
+                <button type="button" className="ik-go" disabled={busy} onClick={saveForm}>
                   {busy ? 'در حال ذخیره…' : submitLabel}
                 </button>
               )}
@@ -952,7 +954,7 @@ function Form() {
               <span>توضیح (اختیاری)</span>
               <textarea rows={2} value={f.notes} onChange={set('notes')} disabled={busy} />
             </label>
-            <button type="button" className="ik-go ghost" disabled={busy} onClick={saveFill}>
+            <button type="button" className="ik-go" disabled={busy} onClick={saveFill}>
               {busy ? 'در حال ذخیره…' : submitLabel}
             </button>
             {editing && <button type="button" className="ik-linkbtn" onClick={cancelEdit} disabled={busy}>انصراف — بدونِ تغییر</button>}
