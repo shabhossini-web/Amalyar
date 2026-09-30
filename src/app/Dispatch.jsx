@@ -507,7 +507,7 @@ export default function Dispatch() {
         )}
       </AnimatePresence>
 
-      <div className={`dp-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`dp-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

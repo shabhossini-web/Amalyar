@@ -56,7 +56,8 @@ try {
   });
   const page = await ctx.newPage(); page.on('pageerror', e => errors.push(e.message));
   await page.goto(`${base}/app/users`);
-  await page.getByRole('button', { name: '+ ساخت حساب موقت', exact: true }).click();
+  /* دکمه دیگر «+ ساخت حساب موقت»ِ سبزِ تمام‌عرض نیست — «ساختِ حسابِ موقت» کنارِ زبانه‌ها (بازبینیِ UX، shell-18). */
+  await page.getByRole('button', { name: 'ساختِ حسابِ موقت', exact: true }).click();
   await page.getByLabel('نام *', { exact: true }).fill('فرد');
   await page.getByLabel('نام خانوادگی *', { exact: true }).fill('آزمایشی');
   await page.getByLabel('موبایل', { exact: true }).fill('۰۹۱۲۰۰۰۰۰۰۹');
@@ -66,8 +67,10 @@ try {
   assert.equal(created.payload.phone, '09120000009'); assert.equal(created.payload.level, 2);
   pass('manager creates provisional account on mobile and sees one-time credentials');
   await page.goto(`${base}/app/users`);
+  /* ابزارِ آزمایشیِ نقش‌ها تاشوی پایینِ صفحه است — اول باز می‌شود (shell-18). */
+  await page.locator('.us-testing summary').click();
   await page.getByRole('button', { name: 'فعال‌کردن ساخت حساب آزمایشی', exact: true }).click();
-  await page.getByRole('button', { name: '+ ساخت حساب موقت', exact: true }).click();
+  await page.getByRole('button', { name: 'ساختِ حسابِ موقت', exact: true }).click();
   await page.getByRole('checkbox', { name: 'حساب آزمایشی با شماره مشترک' }).check();
   await page.getByLabel('نام کاربری (الزامی)', { exact: true }).fill('test-doctor');
   await page.getByLabel('نام *', { exact: true }).fill('پزشک');

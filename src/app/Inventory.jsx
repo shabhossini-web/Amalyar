@@ -121,6 +121,7 @@ export default function Inventory() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="جستجو: نامِ کالا، شمارهٔ لات، سریال یا محلِ نگه‌داری"
+          aria-label="جستجو در انبار"
         />
         <div className="iv-filters">
           {FILTERS.map((f) => (

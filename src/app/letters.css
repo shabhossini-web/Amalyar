@@ -1,5 +1,5 @@
 /* نامهٔ اداری — فهرست، ویرایش و چاپ روی سربرگ. */
-.lt { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+.lt { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 16px 14px 40px; color: var(--text1); }
 .lt-bg {
   position: fixed; inset: 0; z-index: -1;
   background:

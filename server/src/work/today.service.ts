@@ -7,13 +7,67 @@ import { isUnrestricted, ownVisitWhere } from '../common/own-scope';
 import { AvailabilityService } from '../patients/availability.service';
 import { WorkService } from './work.service';
 import { canAccess } from '../auth/access-check';
-import { clinicTodayIso, todayRangeUtc } from '../common/clinic-day';
+import { CLINIC_TZ, clinicTodayIso, todayRangeUtc } from '../common/clinic-day';
 
 /* سقفِ فهرستِ کارها روی «امروز»: هشت تا برای «کارهای من»؛ نمای تیم کمی بیشتر چون صفِ
    همه است — ولی نه آن‌قدر که عمل‌ها و نوبت‌های امروز زیرش گم شوند. فهرستِ کامل (و
    فیلترِ هر شخص) در `/app/work` است و فیلترِ «مالِ کیست» همین صفحه هم از سرور می‌پرسد. */
 const WORK_LIMIT = 8;
 const TEAM_WORK_LIMIT = 12;
+
+/**
+ * نوعِ مراجعه به فارسی — برای چیپِ هر ردیف در «امروز». مطب ویزیت و عمل را در یک فهرست
+ * دارد و تا دیروز همه «ویزیت» خوانده می‌شدند؛ ردیفی با «بیمارستان پارس» ویزیت بود و یک
+ * بیمار یک‌بار «در انتظار» و یک‌بار «انجام شد» می‌آمد بی‌آنکه معلوم باشد کدام عمل است
+ * (بازبینیِ UX ۱۴۰۵/۰۷). نوعِ ناشناخته عنوانِ فرمِ خودش را می‌گیرد، نه «عمل».
+ */
+/* ساعتِ «اکنون» به وقتِ مطب (`HH:MM`) — فرمتر یک‌بار ساخته می‌شود (ساختنِ `Intl` گران است). */
+const HHMM = new Intl.DateTimeFormat('en-GB', { timeZone: CLINIC_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const nowHHMM = (at: Date) => HHMM.format(at);
+
+const KIND_FA: Record<string, string> = {
+  surgery: 'عمل', clinic: 'ویزیت', followup: 'پیگیری', consult: 'مشاوره',
+};
+
+/**
+ * رویدادِ دامنه به فارسی — کارتِ «رویدادِ پردازش‌نشده» در نمای استثنا تا دیروز نوعِ خامِ
+ * انگلیسی (`appointment.cancelled`) را نشان می‌داد. کلید همان `RULES`ِ `work-rules.ts` است؛
+ * نوعِ تازه‌ای که این‌جا نیامده «رویدادِ سامانه» می‌خورد، نه کلیدِ خام.
+ */
+const EVENT_FA: Record<string, string> = {
+  'order.answered': 'پاسخِ سفارش رسید',
+  'order.reviewed': 'سفارش بررسی شد',
+  'order.needs_action': 'نتیجه باید دوباره فرستاده شود',
+  'form.answered': 'پاسخِ فرمِ بیمار رسید',
+  'form.reviewed': 'پاسخِ فرم بررسی شد',
+  'form.unanswered': 'فرمِ پیگیری بی‌پاسخ ماند',
+  'pathway.step_overdue': 'مرحلهٔ مسیرِ درمان عقب افتاد',
+  'pathway.step_closed': 'مرحلهٔ مسیرِ درمان بسته شد',
+  'intake.submitted': 'ثبت‌نامِ تازه رسید',
+  'intake.returned': 'ثبت‌نام برای اصلاح برگشت',
+  'intake.approved': 'ثبت‌نام تأیید شد',
+  'intake.rejected': 'ثبت‌نام رد شد',
+  'intake.approve_failed': 'تأییدِ ثبت‌نام ناتمام ماند',
+  'intake.approval_sync_pending': 'تأییدِ ثبت‌نام در انتظارِ هم‌گام‌سازی',
+  'intake.approval_synced': 'تأییدِ ثبت‌نام هم‌گام شد',
+  'appointment.held': 'نوبت نگه داشته شد',
+  'appointment.confirmed': 'نوبت قطعی شد',
+  'appointment.cancelled': 'نوبت لغو شد',
+  'appointment.noshow': 'بیمار سرِ نوبت نیامد',
+  'appointment.started': 'مراجعه از نوبت شروع شد',
+  'visit.unconfirmed': 'وضعیتِ مراجعه ثبت نشده',
+  'visit.done': 'مراجعه انجام شد',
+  'visit.postponed': 'مراجعه موکول شد',
+  'visit.cancelled': 'مراجعه لغو شد',
+  'report.missing': 'گزارشِ مراجعه ثبت نشده',
+  'report.uploaded': 'گزارشِ مراجعه بارگذاری شد',
+  'usage.unconfirmed': 'مصرفِ اقلام تأیید نشده',
+  'usage.confirmed': 'مصرفِ اقلام تأیید شد',
+  'invoice.ready': 'آمادهٔ صدورِ فاکتور',
+  'invoice.issued': 'فاکتور صادر شد',
+  'sms.failed': 'پیامک نرسید',
+  'sms.sent': 'پیامک رفت',
+};
 
 /**
  * صفحهٔ «امروز» (W2.3) — یک پاسخ برای «الان چه کار کنم؟».
@@ -68,7 +122,7 @@ export class TodayService {
        `inbox`ش خودش همه را دارد — به‌علاوهٔ تفکیکِ «مالِ کیست» برای فیلترِ بالای فهرست.
        رابط سطح را حساب نمی‌کند؛ همین `team` را می‌خواند (قانونِ ۳). */
     const team = isUnrestricted(user);
-    const [counts, items, visits, appointments, intakePending, exceptions, canProcess, canCreateVisit] = await Promise.all([
+    const [counts, items, visits, appointments, intakePending, exceptions, canProcess, canCreateVisit, bookingOn] = await Promise.all([
       this.work.counts(user, { owners: team }),
       this.work.list(user, { scope: 'inbox', limit: team ? TEAM_WORK_LIMIT : WORK_LIMIT }),
       seesVisits ? this.visitsToday(user, level, start, end) : Promise.resolve([]),
@@ -86,13 +140,28 @@ export class TodayService {
          `patients.create`)، نه حدسِ سطح در رابط (قانونِ ۳): دکمه‌ای که به ۴۰۳
          می‌خورد بدتر از نبودنش است. */
       canAccess(this.prisma, user, 'dashboard', ['patients.create']).catch(() => false),
+      /* «نوبت‌دهی دارد؟» — همان قاعدهٔ `IntakeService.bookingOn()`: دست‌کم یک برنامهٔ کاریِ فعال. */
+      can('calendar')
+        ? this.prisma.availabilityRule.count({ where: { active: true } }).then((n) => n > 0).catch(() => false)
+        : Promise.resolve(false),
     ]);
+    /* بخشِ نوبت‌ها فقط برای نصبی که **نوبت‌دهی** دارد — نه هر کسی که «تقویمِ عمل‌ها» را باز
+       می‌کند. شرکتی که برنامهٔ کاری ندارد هر روز «۰ نوبتِ امروز» و «امروز نوبتی نیست» می‌دید
+       (بازبینیِ UX ۱۴۰۵/۰۷). نوبتی که با این همه امروز ثبت شده باشد، بخش را باز می‌کند. */
+    const apptSection = can('calendar') && (bookingOn || appointments.length > 0);
 
-    /* «کارِ بعدی» = نزدیک‌ترین چیزی که ساعت دارد — عمل یا نوبت، هرکدام زودتر. */
-    const nextAt = [
-      ...visits.filter((v) => v.opStartTime).map((v) => v.opStartTime as string),
-      ...appointments.filter((a) => a.time && a.status !== 'cancelled').map((a) => a.time as string),
-    ].sort()[0] ?? null;
+    /* «بعدی» = نزدیک‌ترین چیزی که ساعت دارد و **هنوز نرسیده** — عمل یا نوبت، هرکدام زودتر؛
+       با نامِ بیمار. تا بازبینیِ UX (۱۴۰۵/۰۷) زودترین ساعتِ کلِ روز بود و عصر هم «اولین ساعت
+       08:30» را نشان می‌داد. انجام‌شده، لغوشده و «نیامد» دیگر «بعدی» نیستند. */
+    const clock = nowHHMM(now);
+    const upcoming = [
+      ...visits.filter((v) => v.opStartTime && v.opStatus === 'pending')
+        .map((v) => ({ at: v.opStartTime as string, name: v.fullName, patientId: v.patientId, kind: 'visit' as const })),
+      ...appointments.filter((a) => a.time && !['cancelled', 'done', 'noshow'].includes(a.status))
+        .map((a) => ({ at: a.time as string, name: a.fullName, patientId: a.patientId, kind: 'appointment' as const })),
+    ].filter((x) => x.at >= clock).sort((a, b) => a.at.localeCompare(b.at));
+    const next = upcoming[0] ?? null;
+    const nextAt = next?.at ?? null;
 
     return {
       now: now.toISOString(),
@@ -108,6 +177,7 @@ export class TodayService {
         appointments: appointments.filter((a) => a.status !== 'cancelled').length,
         intakePending,
         nextAt,
+        next,
       },
       work: items,
       visits,
@@ -117,7 +187,7 @@ export class TodayService {
       canCreateVisit,
       /* «امروز»ِ مطب (YYYY-MM-DD) — تاریخِ پیش‌فرضِ «+»، همان تعریفی که فهرستِ امروز با آن فیلتر می‌شود. */
       clinicToday: clinicTodayIso(now),
-      sections: { visits: seesVisits, appointments: can('calendar'), intake: can('formgen'), exceptions: seesExceptions },
+      sections: { visits: seesVisits, appointments: apptSection, intake: can('formgen'), exceptions: seesExceptions },
     };
   }
 
@@ -194,7 +264,10 @@ export class TodayService {
 
     return {
       unowned: { count: unownedCount, items: unowned.map((w) => ({ ...w, patient: byPatient.get(w.patientId ?? -1) ?? null })) },
-      stuckEvents: { count: stuckCount, items: stuck.map((e) => ({ ...e, patient: byPatient.get(e.patientId ?? -1) ?? null })) },
+      stuckEvents: {
+        count: stuckCount,
+        items: stuck.map((e) => ({ ...e, typeFa: EVENT_FA[e.type] ?? 'رویدادِ سامانه', patient: byPatient.get(e.patientId ?? -1) ?? null })),
+      },
       unreviewed,
       halfApproved: { count: halfCount, items: half.map(({ patient, ...i }) => ({ ...i, patient: TodayService.person(patient) })) },
     };
@@ -253,7 +326,7 @@ export class TodayService {
 
   /** عمل‌های امروز — دامنهٔ دید مثلِ خودِ فهرستِ مراجعات: زیرِ سوپروایزر فقط مالِ خودش. */
   private async visitsToday(user: any, level: number, start: Date, end: Date) {
-    const rows = await this.prisma.visit.findMany({
+    const [rows, forms] = await Promise.all([this.prisma.visit.findMany({
       where: {
         opDate: { gte: start, lte: end },
         opStatus: { not: 'cancelled' },
@@ -266,14 +339,21 @@ export class TodayService {
         id: true, seq: true, kind: true, opStartTime: true, opStatus: true,
         hospitalName: true, surgeonName: true,
         patient: { select: { id: true, code: true, firstName: true, lastName: true } },
+        /* کارشناسِ مسئول — مهم‌ترین سؤالِ مدیرِ شرکت دربارهٔ عملِ امروز (بازبینیِ UX ۱۴۰۵/۰۷). */
+        tech: { select: { username: true, person: { select: { firstName: true, lastName: true } } } },
       },
-    });
+    }),
+    /* عنوانِ فرمِ هر نوعِ ناشناخته — «فرمِ پیگیریِ ارتوپدی» → «پیگیریِ ارتوپدی». */
+    this.prisma.formDef.findMany({ where: { scope: 'visit', visitKind: { not: null } }, select: { visitKind: true, title: true } })
+      .catch(() => [] as { visitKind: string | null; title: string }[])]);
+    const formTitle = new Map(forms.map((f) => [f.visitKind, f.title.replace(/^فرمِ?\s+/, '').trim()]));
     return rows.map((v) => ({
       id: v.id,
       patientId: v.patient.id,
       code: `${v.patient.code}-V${v.seq}`,
       fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
       kind: v.kind,
+      kindFa: KIND_FA[v.kind] ?? (formTitle.get(v.kind) || v.kind),
       opStartTime: v.opStartTime,
       opStatus: v.opStatus,
       /* برچسب از `labels.ts` می‌آید، نه از نگاشتِ کلاینتی — قانونِ «یک وضعیت،
@@ -281,6 +361,7 @@ export class TodayService {
       opStatusFa: OP_LABELS[v.opStatus] ?? v.opStatus,
       hospitalName: v.hospitalName,
       surgeonName: v.surgeonName,
+      techName: v.tech ? (`${v.tech.person?.firstName ?? ''} ${v.tech.person?.lastName ?? ''}`.trim() || v.tech.username || null) : null,
     }));
   }
 

@@ -1,5 +1,11 @@
 /* دستیارِ هوشمندِ مدیریت — چتِ زندهٔ تمام‌صفحه. */
-.as { position: relative; min-height: 100dvh; display: flex; flex-direction: column; padding: 16px 14px 14px; color: var(--text1); }
+/* ⚠️ ارتفاع = صفحه‌نما **منهای نوارِ پوسته** (`--shell-h`)، نه `100dvh`: نوارِ ۶۳ پیکسلی رویش اضافه
+   می‌شد و کادرِ پرسش زیرِ لبهٔ صفحه می‌افتاد (بازبینیِ UX ۱۴۰۵/۰۷). ارتفاعِ ثابت + گفتگوی
+   اسکرول‌شونده یعنی کادرِ نوشتن همیشه پایینِ صفحه‌نما چسبیده است. */
+.as {
+  position: relative; height: calc(100dvh - var(--shell-h)); min-height: 360px;
+  display: flex; flex-direction: column; padding: 16px 14px calc(14px + env(safe-area-inset-bottom, 0px)); color: var(--text1);
+}
 .as-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -15,11 +21,11 @@
 .as-off {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 760px; width: 100%; margin: 0 auto 10px;
   padding: 11px 14px; border-radius: 13px; font-size: 12.5px;
-  color: #fcd34d; background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35);
+  color: var(--amber-text); background: var(--amber-bg); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
 }
-.as-off a { color: var(--brand-2); }
+.as-off a { color: var(--brand-text); font-weight: 700; }
 
-.as-chat { flex: 1; max-width: 760px; width: 100%; margin: 0 auto; overflow-y: auto; padding-bottom: 10px; }
+.as-chat { flex: 1; min-height: 0; max-width: 760px; width: 100%; margin: 0 auto; overflow-y: auto; padding-bottom: 10px; }
 .as-empty { padding: 26px 14px; text-align: center; color: var(--text3); font-size: 13px; }
 .as-starters { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
 .as-starters button {
@@ -47,7 +53,7 @@
 .as-link { color: var(--brand-2); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 
 .as-inputbar {
-  display: flex; gap: 8px; max-width: 760px; width: 100%; margin: 0 auto;
+  flex: 0 0 auto; display: flex; gap: 8px; max-width: 760px; width: 100%; margin: 0 auto;
   padding: 10px; border-radius: 16px;
   background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }

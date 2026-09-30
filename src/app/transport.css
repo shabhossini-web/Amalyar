@@ -164,8 +164,8 @@
 .tr-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  /* متن از توکن: سطحِ توست در تمِ روشن سفید است و `#fff` رویش نامرئی می‌شد. */
-  color: var(--text1); background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  /* رنگ از توکنِ توست (index.css) — یک ظاهر برای همهٔ توست‌ها، خوانا در هر دو تم. */
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .tr-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }

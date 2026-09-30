@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
-import { useConfig } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
+import { useToolTitle } from './tools.jsx';
 import { randomNationalId, toEnDigits } from '../lib/identity.js';
+import { jToFa, todayJStr } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import './launcher.css';
 import './definitions.css';
 import './settings.css';
 import { Back, Check } from '../ui/icons.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 
 /** بخش‌های تعرفه‌ای — باید با SECTORS سمتِ سرور یکی بماند. */
@@ -24,10 +27,15 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
  * تا از تغییرش نترسد.
  */
 export default function Settings() {
-  const { kind, services, kinds = [], serviceCatalog = [], error: configError, reload } = useConfig();
+  const { kind, services, kinds = [], serviceCatalog = [], error: configError, reload, brandName } = useConfig();
   const { user: me } = useAuth();
+  /* «تنظیماتِ مطب» / «تنظیماتِ شرکت» — نامِ کاشی از کاتالوگ، واژهٔ سازمان از حوزه (بازبینیِ UX). */
+  const { label: title } = useToolTitle('settings');
+  const { org } = useTerms();
+  /* گروه‌های تنظیم از `Knobs` می‌آیند (رجیستریِ سرور) تا فهرستِ پرشِ بالای صفحه همان‌ها را بشناسد. */
+  const [knobGroups, setKnobGroups] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(2200);
 
   const [tariffs, setTariffs] = useState([]);
   const [codes, setCodes] = useState({ total: 0, version: null });
@@ -62,16 +70,9 @@ export default function Settings() {
         },
       });
       await loadTariffs();
-      setToast('ضریبِ تعرفه ذخیره شد ✓');
+      setToast('ضریبِ تعرفه ذخیره شد');
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
-
-  useEffect(() => { document.title = 'عمل‌یار — تنظیماتِ شرکت'; }, []);
-  useEffect(() => {
-    if (!toast) return undefined;
-    const timer = setTimeout(() => setToast(''), toast.length > 40 ? 4500 : 2200);
-    return () => clearTimeout(timer);
-  }, [toast]);
 
   /**
    * **نوعِ نصب و بستهٔ خدمات** (مالک، ۱۴۰۵/۰۷/۰۱): مطب/کلینیک یا شرکتی، و شرکت
@@ -106,7 +107,7 @@ export default function Settings() {
       await api('/config/profile', { method: 'PATCH', body: body() });
       await reload();
       setPreview(null);
-      setToast('نوع و خدماتِ شرکت ذخیره شد ✓');
+      setToast(`نوع و خدماتِ ${org} ذخیره شد`);
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
   const ACTION = { create: 'روشن می‌شود', enable: 'روشن می‌شود', disable: 'خاموش می‌شود', relevel: 'سطحِ پیش‌فرضش عوض می‌شود' };
@@ -117,11 +118,21 @@ export default function Settings() {
       <header className="df-head">
         <Link className="df-back" to="/app"><Back width="14" height="14" /> سامانه</Link>
         <div>
-          <h1>تنظیماتِ شرکت</h1>
-          <p>نوعِ نصب و خدماتِ شرکت تعیین می‌کند کدام ماژول‌ها و فرم‌های ثبت‌نام فعال باشند و کاربر چه کلماتی ببیند.</p>
+          <h1>{title}</h1>
+          <p>نوعِ نصب و خدماتِ {org} تعیین می‌کند کدام ماژول‌ها و فرم‌های ثبت‌نام فعال باشند و کاربر چه کلماتی ببیند.</p>
         </div>
       </header>
 
+      <SectionNav items={[
+        { id: 'st-kind', label: 'نوعِ نصب' },
+        { id: 'st-tariff', label: 'ضریبِ تعرفه' },
+        ...knobGroups.map((g) => ({ id: `st-g-${g.key}`, label: g.label })),
+        { id: 'st-letterhead', label: 'سربرگ' },
+        { id: 'st-import', label: 'ورودِ داده' },
+        ...(me?.level >= 6 ? [{ id: 'st-test', label: 'دادهٔ آزمایشی' }] : []),
+      ]} />
+
+      <h3 className="st-h3" id="st-kind" tabIndex={-1}>نوعِ نصب{draft.kind === 'company' ? ' و خدمات' : ''}</h3>
       <div className="df-note">
         نصب یا <b>مطب / کلینیک</b> است یا <b>شرکتی</b>؛ شرکت خودش انتخاب می‌کند چه خدماتی می‌دهد.
         این تغییر هیچ داده‌ای را پاک یا تبدیل نمی‌کند — فقط ماژول‌ها، فرم‌های ثبت‌نام و واژگان.
@@ -130,7 +141,7 @@ export default function Settings() {
 
       {configError && (
         <div className="st-fail">
-          <b>پیکربندیِ شرکت خوانده نشد</b>
+          <b>پیکربندیِ {org} خوانده نشد</b>
           <small>{configError}</small>
           <small>حوزهٔ کاری و نامِ برند تا وقتی این خطا هست نمایش داده نمی‌شوند. بقیهٔ سامانه با واژگانِ پیش‌فرض کار می‌کند.</small>
           <button type="button" onClick={() => reload()}>تلاشِ دوباره</button>
@@ -201,7 +212,7 @@ export default function Settings() {
         </div>
       )}
 
-      <h3 className="st-h3">ضریبِ ریالیِ تعرفه</h3>
+      <h3 className="st-h3" id="st-tariff" tabIndex={-1}>ضریبِ ریالیِ تعرفه</h3>
       <div className="df-note st-tnote">
         فیِ هر خدمت = ارزشِ نسبی (از کتاب) × ضریبِ ریالی. ضریب‌های <b>سراسری</b> سالی
         یک‌بار مرکزی اعلام می‌شوند و لازم نیست چیزی وارد کنید؛ اگر قراردادِ خاصی
@@ -249,7 +260,7 @@ export default function Settings() {
                   {faNum(t.year)} — {t.sectorLabel}
                   {/* منبعِ ضریب: سراسری از مرکز می‌آید، اختصاصی را خودِ شرکت گذاشته و مقدم است. */}
                   <i className={`st-tsrc${t.source === 'local' ? ' own' : ''}`}>
-                    {t.source === 'local' ? 'اختصاصیِ شرکت' : 'سراسری'}
+                    {t.source === 'local' ? `اختصاصیِ ${org}` : 'سراسری'}
                   </i>
                 </b>
                 <small>
@@ -265,15 +276,15 @@ export default function Settings() {
         </div>
       )}
 
-      <Knobs onToast={setToast} onSaved={reload} />
+      <Knobs onToast={setToast} onSaved={reload} org={org} brand={brandName} onGroups={setKnobGroups} />
 
-      <LetterheadPanel onToast={setToast} />
+      <LetterheadPanel onToast={setToast} org={org} />
 
       <ImportPanel onToast={setToast} />
 
       {me?.level >= 6 && <TestDataPanel onToast={setToast} />}
 
-      {toast && <div className="df-toast">{toast}</div>}
+      <Toast msg={toast} />
     </div>
   );
 }
@@ -286,11 +297,11 @@ export default function Settings() {
 function TestDataPanel({ onToast }) {
   const [nid, setNid] = useState('');
   const copy = async () => {
-    try { await navigator.clipboard.writeText(nid); onToast('کپی شد ✓'); } catch { onToast(nid); }
+    try { await navigator.clipboard.writeText(nid); onToast('کپی شد'); } catch { onToast(nid); }
   };
   return (
     <div className="st-brand st-testdata">
-      <h3 className="st-h3">دادهٔ آزمایشی (موقت)</h3>
+      <h3 className="st-h3" id="st-test" tabIndex={-1}>دادهٔ آزمایشی (موقت)</h3>
       <div className="df-note">
         فقط برای ثبتِ بیمارِ تستی. کد تصادفی و از نظرِ رقمِ کنترلی معتبر است؛ متعلق به کسی نیست
         ولی ممکن است تصادفاً با یک کدِ واقعی یکی باشد — روی بیمارِ واقعی استفاده نکنید.
@@ -316,7 +327,7 @@ function TestDataPanel({ onToast }) {
  * همین‌جا خودش ظاهر می‌شود — وگرنه هر تنظیمِ جدید دو تغییر لازم داشت و دیر یا
  * زود یکی‌شان جا می‌ماند.
  */
-function Knobs({ onToast, onSaved }) {
+function Knobs({ onToast, onSaved, org, brand, onGroups }) {
   const [groups, setGroups] = useState(null);
   const [draft, setDraft] = useState({});     // فقط فیلدهای دست‌خورده
   const [busy, setBusy] = useState(false);
@@ -326,12 +337,13 @@ function Knobs({ onToast, onSaved }) {
     try {
       const d = await api('/settings');
       setGroups(d.groups);
+      onGroups?.(d.groups);
       setDraft({});
       setError(null);
     } catch (e) {
       setError(e?.status ? `${e.message} (کد ${e.status})` : e?.message || 'ارتباط با سرور برقرار نشد');
     }
-  }, []);
+  }, [onGroups]);
   useEffect(() => { load(); }, [load]);
 
   const items = (groups ?? []).flatMap((g) => g.items);
@@ -343,6 +355,9 @@ function Knobs({ onToast, onSaved }) {
 
   const set = (key, v) => setDraft((d) => ({ ...d, [key]: v }));
   const reset = (it) => set(it.key, it.default);
+  /* ترکِ صفحه با تغییرِ ذخیره‌نشده هشدار می‌دهد (بازبینیِ UX ۱۴۰۵/۰۷): هم بستن/تازه‌کردنِ زبانه،
+     هم لینک‌های داخلِ خودِ سامانه (نوارِ بالا، «سامانه») که `beforeunload` نمی‌بیندشان. */
+  useUnsavedGuard(dirty.length > 0);
 
   const save = async () => {
     if (!dirty.length || busy) return;
@@ -354,7 +369,7 @@ function Knobs({ onToast, onSaved }) {
       setDraft({});
       // پیکربندی دوباره خوانده می‌شود تا نامِ برند در همین لحظه در رابط عوض شود.
       await onSaved?.();
-      onToast(`${faNum(d.changed)} تنظیم ذخیره شد ✓`);
+      onToast(`${faNum(d.changed)} تنظیم ذخیره شد`);
     } catch (e) {
       // پیام‌های گروهی را خودِ لایهٔ api به هم چسبانده؛ همه را نشان می‌دهیم نه فقط اولی.
       onToast(e.message);
@@ -363,9 +378,9 @@ function Knobs({ onToast, onSaved }) {
 
   return (
     <>
-      <h3 className="st-h3">تنظیماتِ شرکت</h3>
+      <h3 className="st-h3" id="st-knobs" tabIndex={-1}>تنظیماتِ {org}</h3>
       <div className="df-note">
-        این‌ها فقط برای همین شرکت‌اند و روی نصبِ بقیه اثری ندارند. «پیش‌فرض» یعنی
+        این‌ها فقط برای همین {org}‌اند و روی نصبِ بقیه اثری ندارند. «پیش‌فرض» یعنی
         هنوز دست نخورده — و اگر روزی پیش‌فرضِ سامانه بهتر شود، همین‌ها خودشان به‌روز می‌شوند.
       </div>
 
@@ -378,24 +393,29 @@ function Knobs({ onToast, onSaved }) {
       )}
 
       {(groups ?? []).map((g) => (
-        <div key={g.key} className="st-group">
+        <div key={g.key} className="st-group" id={`st-g-${g.key}`} tabIndex={-1}>
           <div className="st-group-head">
             <b>{g.label}</b>
             {g.hint && <small>{g.hint}</small>}
           </div>
-          {g.key === 'ai' && <AiGuide />}
+          {g.key === 'ai' && <AiGuide org={org} />}
           <div className="st-knobs">
             {g.items.map((it) => {
               const v = valueOf(it);
               const touched = String(v) !== String(it.default);
               return (
-                <label key={it.key} className={`pf-field st-knob${it.type === 'textarea' ? ' wide' : ''}`}>
-                  <span>
+                /* متنِ پیامک دکمه و پیش‌نمایش دارد — داخلِ <label> نمی‌نشیند (نامِ دسترس‌پذیرِ کادر
+                   همهٔ آن‌ها را می‌خواند)؛ آن‌جا عنوان با `aria-labelledby` به کادر وصل است. */
+                <Wrap key={it.key} kind={it.type === 'textarea' && g.key === 'sms' ? 'div' : 'label'}
+                  className={`pf-field st-knob${it.type === 'textarea' ? ' wide' : ''}`}>
+                  <span id={`st-l-${it.key}`}>
                     {it.label}
                     {!touched && <i className="st-tag">پیش‌فرض</i>}
                     {touched && <button type="button" className="st-reset" onClick={() => reset(it)}>بازگرداندن</button>}
                   </span>
-                  {it.type === 'textarea' ? (
+                  {it.type === 'textarea' && g.key === 'sms' ? (
+                    <SmsText it={it} value={v} brand={brand} onChange={(x) => set(it.key, x)} />
+                  ) : it.type === 'textarea' ? (
                     <textarea rows={2} maxLength={it.maxLength ?? undefined} value={v}
                       onChange={(e) => set(it.key, e.target.value)} />
                   ) : it.type === 'bool' ? (
@@ -423,17 +443,20 @@ function Knobs({ onToast, onSaved }) {
                     />
                   )}
                   {it.hint && <em className="st-hint">{it.hint}</em>}
-                </label>
+                </Wrap>
               );
             })}
           </div>
         </div>
       ))}
 
+      {/* نوارِ ذخیره: تا تغییری هست **چسبانِ پایینِ صفحه** است — متنِ پیامک پنج صفحه بالاتر از
+          تنها دکمهٔ ذخیره بود و کاربر نمی‌دانست ذخیره شده یا نه (بازبینیِ UX ۱۴۰۵/۰۷). */}
       {groups && (
-        <div className="st-knobsave">
+        <div className={`st-savebar${dirty.length ? ' on' : ''}`} role="region" aria-label="ذخیرهٔ تنظیمات">
+          {dirty.length > 0 && <span className="st-savebar-t">{faNum(dirty.length)} تغییرِ ذخیره‌نشده</span>}
           <button type="button" className="df-save" disabled={busy || !dirty.length} onClick={save}>
-            {dirty.length ? `ذخیرهٔ ${faNum(dirty.length)} تغییر` : 'تغییری نداده‌اید'}
+            {busy ? 'در حالِ ذخیره…' : dirty.length ? `ذخیرهٔ ${faNum(dirty.length)} تغییر` : 'تغییری نداده‌اید'}
           </button>
           {dirty.length > 0 && (
             <button type="button" className="st-load" disabled={busy} onClick={() => setDraft({})}>انصراف</button>
@@ -450,7 +473,7 @@ function Knobs({ onToast, onSaved }) {
  * فایل پشتِ Authorization است، پس پیش‌نمایش با blob URL می‌آید نه `<img src>`ِ
  * مستقیم — همان الگوی مدارکِ پرونده.
  */
-function LetterheadPanel({ onToast }) {
+function LetterheadPanel({ onToast, org }) {
   const [preview, setPreview] = useState(null); // blob URL یا null = سربرگی نیست
   const [busy, setBusy] = useState(false);
 
@@ -477,7 +500,7 @@ function LetterheadPanel({ onToast }) {
       fd.append('file', f);
       await apiUpload('/settings/letterhead', fd);
       await load();
-      onToast('سربرگ ذخیره شد ✓');
+      onToast('سربرگ ذخیره شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -493,7 +516,7 @@ function LetterheadPanel({ onToast }) {
 
   return (
     <>
-      <h3 className="st-h3">سربرگِ شرکت</h3>
+      <h3 className="st-h3" id="st-letterhead" tabIndex={-1}>سربرگِ {org}</h3>
       <div className="df-note">
         تصویرِ سربرگِ رسمی (PNG، JPEG یا WebP — ترجیحاً اندازهٔ A4). روی فاکتورِ رسمی
         و نامهٔ اداری همین چاپ می‌شود؛ تا وقتی سربرگی نگذاشته‌اید، اسناد بدونِ سربرگ چاپ می‌شوند.
@@ -549,7 +572,7 @@ function ImportPanel({ onToast }) {
     try {
       const res = await api(`/import/malekteb${dryRun ? '?dryRun=1' : ''}`, { method: 'POST', body: dump });
       setReport(res);
-      onToast(dryRun ? 'اجرای آزمایشی انجام شد — چیزی ذخیره نشد' : 'ایمپورت انجام شد ✓');
+      onToast(dryRun ? 'اجرای آزمایشی انجام شد — چیزی ذخیره نشد' : 'ایمپورت انجام شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
 
@@ -560,7 +583,7 @@ function ImportPanel({ onToast }) {
 
   return (
     <>
-      <h3 className="st-h3">وارد کردنِ دادهٔ سامانهٔ قبلی</h3>
+      <h3 className="st-h3" id="st-import" tabIndex={-1}>وارد کردنِ دادهٔ سامانهٔ قبلی</h3>
       <div className="df-note">
         فایلِ backupِ JSON را انتخاب کنید. اول «اجرای آزمایشی» بزنید تا ببینید چه چیزی وارد می‌شود؛
         هیچ‌چیز ذخیره نمی‌شود. مبالغ از ریال به تومان تبدیل می‌شوند و اجرای دوباره رکوردِ تکراری نمی‌سازد.
@@ -625,7 +648,7 @@ function ImportPanel({ onToast }) {
  * متنِ آموزشیِ دستیارِ هوشمند — داخلِ همان گروهِ تنظیمات، تاشو، تا صفحهٔ
  * تنظیمات را بلند نکند ولی همیشه دمِ دست باشد.
  */
-function AiGuide() {
+function AiGuide({ org }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="st-aiguide">
@@ -649,12 +672,137 @@ function AiGuide() {
           <p><b>حریمِ بیمار:</b> نام و شمارهٔ بیمار هرگز به سرویسِ بیرونی نمی‌رود — فقط بافتارِ بالینی
           (نوعِ عمل/تشخیص/موضوع) و متنی که خودتان نوشته‌اید. هیچ پیش‌نویسی هم تا «ثبت» نزنید در پرونده نمی‌نشیند.</p>
           <p><b>راه‌اندازی:</b> اگر مدیرِ سامانه پیکربندیِ مرکزی را روشن کرده باشد، همین حالا کار می‌کند و
-          لازم نیست این‌جا چیزی پر کنید. اگر می‌خواهید سرویس/کلیدِ خودِ شرکت را داشته باشید، «نشانیِ پایه» و
+          لازم نیست این‌جا چیزی پر کنید. اگر می‌خواهید سرویس/کلیدِ خودِ {org} را داشته باشید، «نشانیِ پایه» و
           «کلید» را از ارائه‌دهنده (AvalAI، GapGPT، …) بگیرید و این‌جا بگذارید — تنظیمِ شما بر مرکزی مقدم است.</p>
           <p><b>دستورِ اختصاصی:</b> اگر می‌خواهید دستیار همیشه قاعده‌ای را رعایت کند (مثلاً «توصیه‌های پس از
-          عمل را جدا بیاور»)، آن را در فیلدهای «دستورِ اختصاصیِ شرکت» بنویسید.</p>
+          عمل را جدا بیاور»)، آن را در فیلدهای «دستورِ اختصاصیِ {org}» بنویسید.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/** پوستهٔ هر تنظیم: `<label>` برای فیلدِ ساده، `<div>` برای فیلدی که کنترل‌های دیگری هم دارد. */
+function Wrap({ kind, children, ...rest }) {
+  return kind === 'div' ? <div {...rest}>{children}</div> : <label {...rest}>{children}</label>;
+}
+
+/**
+ * فهرستِ پرش به بخش‌ها — بالای صفحه و چسبان زیرِ نوارِ پوسته. «تنظیمات» شش تا نُه هزار پیکسل
+ * است و پیش از این راهی برای رسیدن به «پیامک‌ها» یا «سربرگ» جز اسکرولِ طولانی نبود. بخشِ
+ * جاری با `aria-current` علامت می‌خورد؛ پرش فوکوس را هم به سرتیترِ همان بخش می‌برد.
+ */
+function SectionNav({ items }) {
+  const [active, setActive] = useState(items[0]?.id ?? '');
+  const ids = items.map((x) => x.id).join('|');
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return undefined;
+    const els = ids.split('|').map((id) => document.getElementById(id)).filter(Boolean);
+    const io = new IntersectionObserver((entries) => {
+      const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (hit) setActive(hit.target.id);
+    }, { rootMargin: '-120px 0px -60% 0px' });
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [ids]);
+  const go = (e, id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+    el.focus({ preventScroll: true });
+    setActive(id);
+  };
+  return (
+    <nav className="st-nav" aria-label="بخش‌های تنظیمات">
+      {items.map((x) => (
+        <a key={x.id} href={`#${x.id}`} className={active === x.id ? 'on' : ''} aria-current={active === x.id ? 'location' : undefined}
+          onClick={(e) => go(e, x.id)}>{x.label}</a>
+      ))}
+    </nav>
+  );
+}
+
+/**
+ * هشدارِ ترکِ صفحه با تغییرِ ذخیره‌نشده. `beforeunload` فقط بستن/تازه‌کردنِ زبانه را می‌گیرد؛
+ * لینک‌های داخلِ سامانه (react-router) در فازِ capture گرفته می‌شوند — پیش از آنکه `Link`
+ * ناوبری کند.
+ */
+function useUnsavedGuard(on) {
+  useEffect(() => {
+    if (!on) return undefined;
+    const unload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    const click = (e) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target.closest?.('a[href]');
+      if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+      const url = new URL(a.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      if (!window.confirm('تغییراتِ ذخیره‌نشدهٔ تنظیمات از دست می‌رود. صفحه را ترک می‌کنید؟')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', unload);
+    document.addEventListener('click', click, true);
+    return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', click, true); };
+  }, [on]);
+}
+
+/* جای‌گیرهای پیامک به فارسی — همان کلیدهای `renderSms`ِ سرور (`common/sms-template.ts`). */
+const SMS_VARS = {
+  date: 'تاریخ', time: 'ساعت', topic: 'موضوع', title: 'نامِ فرم', link: 'لینک', reason: 'دلیل', stage: 'مرحله', care: 'متنِ مراقبت',
+};
+
+/**
+ * متنِ پیامک با دکمه‌های «+ تاریخ»، «+ لینک»، … و پیش‌نمایشِ زنده.
+ *
+ * بازبینیِ UX (۱۴۰۵/۰۷): متن با جای‌گیرهای انگلیسیِ `{date}` و `{link}` و بی‌پیش‌نمایش نوشته
+ * می‌شد و کاربر نمی‌دانست پیامکش چند قسمت می‌شود. جای‌گیرهای هر متن از **پیش‌فرضِ همان متن**
+ * خوانده می‌شوند (سرور فقط همان‌ها را پر می‌کند)؛ پیش‌نمایش مثلِ سرور نامِ برند را اولِ پیامک
+ * می‌گذارد و ساعت و موضوع را با جداکنندهٔ خودشان.
+ */
+function SmsText({ it, value, brand, onChange }) {
+  const ref = useRef(null);
+  const vars = [...new Set(String(it.default ?? '').match(/\{(\w+)\}/g) ?? [])].map((x) => x.slice(1, -1)).filter((k) => SMS_VARS[k]);
+  const sample = {
+    date: jToFa(todayJStr()), time: '، ساعتِ 10:30', topic: ' (ویزیتِ عمومی)', title: 'فرمِ پیگیری',
+    link: `https://${window.location.host}/f/k3Jd9sQa`, reason: 'تصویرِ فیش خوانا نیست', stage: 'فیشِ واریزی',
+    care: 'تا دو روز پانسمان را خشک نگه دارید.',
+  };
+  const body = String(value ?? '').replace(/\{(\w+)\}/g, (_, k) => sample[k] ?? '').trim();
+  const text = `${brand ? `${brand}\n` : ''}${body}`;
+  /* پیامکِ فارسی UCS-2 است: تک‌پیامک ۷۰ نویسه، چندتکه‌ای هر تکه ۶۷. */
+  const ucs = /[^\x00-\x7F]/.test(text);
+  const len = [...text].length;
+  const parts = len === 0 ? 0 : len <= (ucs ? 70 : 160) ? 1 : Math.ceil(len / (ucs ? 67 : 153));
+  const insert = (k) => {
+    const el = ref.current;
+    const token = `{${k}}`;
+    const v = String(value ?? '');
+    const at = el ? el.selectionStart ?? v.length : v.length;
+    const end = el ? el.selectionEnd ?? at : at;
+    onChange(v.slice(0, at) + token + v.slice(end));
+    requestAnimationFrame(() => { if (el) { el.focus(); el.setSelectionRange(at + token.length, at + token.length); } });
+  };
+  const pid = `st-sms-${it.key}`;
+  return (
+    <div className="st-sms">
+      <textarea ref={ref} rows={3} maxLength={it.maxLength ?? undefined} value={value}
+        aria-labelledby={`st-l-${it.key}`} aria-describedby={pid} onChange={(e) => onChange(e.target.value)} />
+      {vars.length > 0 && (
+        <div className="st-vars" role="group" aria-label={`افزودنِ جای‌گیر به «${it.label}»`}>
+          {vars.map((k) => (
+            <button key={k} type="button" className="st-var" onClick={() => insert(k)}>+ {SMS_VARS[k]}</button>
+          ))}
+        </div>
+      )}
+      <div className="st-sms-preview" id={pid}>
+        <b>پیش‌نمایش</b>
+        <p className="st-sms-body" dir="auto">{text || '—'}</p>
+        <small>{faNum(len)} نویسه · {parts > 1 ? `${faNum(parts)} پیامک` : 'یک پیامک'}</small>
+      </div>
     </div>
   );
 }

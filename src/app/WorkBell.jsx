@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import WorkRow from './WorkRow.jsx';
-import { Bell } from '../ui/icons.jsx';
+import { useAuth } from './auth.jsx';
+import { usePendingAccounts } from './usePending.js';
+import { ArrowStart, Bell, Users } from '../ui/icons.jsx';
 import './work.css';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
@@ -23,6 +25,11 @@ export const WORK_CHANGED = 'amalyar:work-changed';
  * فهرستِ افراد نیست) — در «امروز» و «کارهای من» است.
  */
 export default function WorkBell({ onToast }) {
+  const { user } = useAuth();
+  /* درخواست‌های عضویتِ در انتظار **یک کارِ سوپرادمین**اند (بازبینیِ UX ۱۴۰۵/۰۷): منشیِ تازه تا
+     وقتی سوپرادمین خودش سراغِ «کاربران» نمی‌رفت منتظر می‌ماند و هیچ‌جا خبری نبود. ردیفِ کار
+     نیستند (در `/work` ثبت نمی‌شوند)، پس `data-count` همان شمارِ سرور می‌ماند و عددِ دیدنی جمعِ هر دو است. */
+  const pending = usePendingAccounts((user?.level ?? 0) >= 6, { poll: 60_000 });
   const [counts, setCounts] = useState(null);
   const [enabled, setEnabled] = useState(true);
   const [open, setOpen] = useState(false);
@@ -77,16 +84,21 @@ export default function WorkBell({ onToast }) {
   const total = counts?.total ?? 0;
   const overdue = counts?.overdue ?? 0;
   const heading = team ? 'کارهای تیم' : 'کارهای من';
+  const shown = total + pending;
+  const label = [
+    total ? `${team ? 'کارهای تیم' : 'کارها'}: ${faNum(total)}${overdue ? `، ${faNum(overdue)} عقب‌افتاده` : ''}` : 'کارها',
+    pending ? `${faNum(pending)} درخواستِ عضویت` : '',
+  ].filter(Boolean).join('، ');
 
   return (
     <div className="wb" ref={ref}>
       <button
         type="button" id="wb-btn" className={`wb-btn${overdue > 0 ? ' hot' : ''}`}
-        aria-label={total ? `${team ? 'کارهای تیم' : 'کارها'}: ${faNum(total)}${overdue ? `، ${faNum(overdue)} عقب‌افتاده` : ''}` : 'کارها'}
+        aria-label={label}
         aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}
       >
         <Bell width="20" height="20" />
-        {total > 0 && <span className="wb-badge" data-count={total}>{faNum(total)}</span>}
+        {shown > 0 && <span className="wb-badge" data-count={total} data-pending={pending || undefined}>{faNum(shown)}</span>}
       </button>
       {open && (
         <div className="wb-menu" role="dialog" aria-label={heading}>
@@ -99,6 +111,16 @@ export default function WorkBell({ onToast }) {
               {overdue > 0 && <> · <em>{faNum(overdue)} عقب‌افتاده</em></>}
             </span>
           </div>
+          {pending > 0 && (
+            <Link to="/app/users" className="wb-pend" onClick={() => setOpen(false)}>
+              <Users width="18" height="18" aria-hidden="true" />
+              <span className="wb-pend-t">
+                <b>{faNum(pending)} درخواستِ عضویت در انتظارِ تأیید</b>
+                <small>تأیید یا رد در «کاربران» — تا آن‌وقت نمی‌توانند وارد شوند.</small>
+              </span>
+              <ArrowStart width="16" height="16" aria-hidden="true" />
+            </Link>
+          )}
           {rows === null && <div className="wb-empty">در حال بارگذاری…</div>}
           {rows && rows.length === 0 && <div className="wb-empty">{team ? 'تیم کارِ بازی ندارد.' : 'کاری منتظرِ شما نیست.'}</div>}
           {rows && rows.length > 0 && (

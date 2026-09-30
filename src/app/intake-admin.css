@@ -84,8 +84,8 @@
   flex: 0 0 auto; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.ia-tag.s-pending_approval { color: #fcd34d; background: rgba(245, 158, 11, .12); border-color: rgba(251, 191, 36, .4); }
-.ia-tag.s-approved { color: #6ee7b7; background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+.ia-tag.s-pending_approval { color: var(--amber-text); background: var(--amber-bg); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
+.ia-tag.s-approved { color: var(--green); background: var(--green-bg); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
 .ia-tag.s-rejected { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .ia-amount { flex: 0 0 auto; font-size: 12px; font-weight: 800; }
 
@@ -149,7 +149,7 @@
 .ia-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .ia-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }

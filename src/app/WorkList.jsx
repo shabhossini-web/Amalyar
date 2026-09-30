@@ -9,6 +9,7 @@ import { Back } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import './shell.css';
 import './work.css';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 const NONE = [];
@@ -35,7 +36,7 @@ export default function WorkList() {
   const [scope, setScope] = useState('inbox');
   const [rows, setRows] = useState(null);
   const [busy, setBusy] = useState(0);
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1800);
   const [title, setTitle] = useState('');
   const [due, setDue] = useState('');
   const supervisor = (user?.level ?? 0) >= 4;
@@ -51,7 +52,6 @@ export default function WorkList() {
   const req = useRef(0);
 
   useEffect(() => { document.title = 'کارهای من — عمل‌یار'; }, []);
-  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 1800); return () => clearTimeout(t); }, [toast]);
 
   const loadMeta = useCallback(() => {
     api('/work/counts?owners=1').then(setMeta).catch(() => setMeta({ team: false }));
@@ -155,7 +155,7 @@ export default function WorkList() {
       </header>
 
       <form className="wk-new" onSubmit={create}>
-        <input id="wk-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="یادداشتِ کاری برای خودم… (مثلاً تماس با بیمارِ فلان)" maxLength={160} />
+        <input id="wk-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="یادداشتِ کاری برای خودم… (مثلاً تماس با بیمارِ فلان)" aria-label="کارِ تازه برای خودم" maxLength={160} />
         <select id="wk-new-due" value={due} onChange={(e) => setDue(e.target.value)} aria-label="مهلت">
           <option value="">بدونِ مهلت</option>
           <option value="today">امروز</option>
@@ -198,7 +198,7 @@ export default function WorkList() {
         </>
       )}
       <ThingPopups things={things} />
-      {toast && <div className="sh-toast" role="status">{toast}</div>}
+      <Toast msg={toast} />
     </div>
   );
 }

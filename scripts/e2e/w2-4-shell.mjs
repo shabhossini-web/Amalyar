@@ -5,6 +5,7 @@
  * - Escape می‌بندد؛ `/` وقتی در فیلدی نیستی باز می‌کند و وقتی در فیلدی هستی باز نمی‌کند
  * - زنگ: شمارنده بعد از ساختِ کار بالا می‌رود؛ «انجام شد» از کشو آن را پایین می‌آورد
  * - صفحهٔ /app/work فهرست را نشان می‌دهد
+ * - منوی پروفایل نوار را بلند نمی‌کند و کشوی زنگ روی گوشیِ ۳۹۰ پیکسلی داخلِ صفحه می‌ماند
  */
 import { chromium } from 'playwright-core';
 import { randomBytes } from 'node:crypto';
@@ -94,7 +95,39 @@ try {
   ok(after.total === before.total, '«انجام شد» از کشو کار را بست و شمارنده برگشت');
   ok((await send(`/work?scope=mine&state=done`, 'GET')).json.some((w) => w.id === created.id), 'در سرور done است');
 
-  console.log('\n۴) سلامتِ صفحه');
+  console.log('\n۴) لایه‌های شناورِ نوار (بازبینیِ UX ۱۴۰۵/۰۷)');
+  /* منوی پروفایل روی صفحه شناور است، نه داخلِ نوار: `.glass { position: relative }`ِ
+     لانچر یک‌بار `position: absolute`ِ منو را خنثی کرد و نوار از ۶۳ به ۴۴۵ پیکسل رسید. */
+  await page.goto(UI + '/app/work', { waitUntil: 'networkidle' });
+  const barH = () => page.evaluate(() => document.querySelector('.sh-bar').getBoundingClientRect().height);
+  const h0 = await barH();
+  await page.click('.pm-chip');
+  await page.waitForSelector('.pm-menu', { timeout: 5000 });
+  await page.waitForTimeout(250);
+  const h1 = await barH();
+  ok(Math.abs(h1 - h0) < 2, `بازشدنِ منوی پروفایل نوار را بلند نمی‌کند (${Math.round(h0)} → ${Math.round(h1)})`);
+  await page.keyboard.press('Escape');
+  /* کشوی زنگ روی گوشیِ ۳۹۰ پیکسلی داخلِ صفحه می‌ماند (قبلاً تا ۵۲۳ پیکسل بیرون می‌زد). */
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(UI + '/app/work', { waitUntil: 'networkidle' });
+  await page.click('#wb-btn');
+  await page.waitForSelector('.wb-menu', { timeout: 5000 });
+  const box = await page.evaluate(() => {
+    const r = document.querySelector('.wb-menu').getBoundingClientRect();
+    return { l: r.left, r: r.right, sw: document.documentElement.scrollWidth };
+  });
+  ok(box.l >= 0 && box.r <= 390 && box.sw <= 390, `کشوی زنگ در ۳۹۰ پیکسل می‌ماند (${Math.round(box.l)}…${Math.round(box.r)})`);
+  await page.keyboard.press('Escape');
+  const m0 = await barH();
+  await page.click('.pm-chip');
+  await page.waitForSelector('.pm-menu', { timeout: 5000 });
+  await page.waitForTimeout(250);
+  const pm = await page.evaluate(() => { const r = document.querySelector('.pm-menu').getBoundingClientRect(); return { l: r.left, r: r.right }; });
+  ok(Math.abs((await barH()) - m0) < 2 && pm.l >= 0 && pm.r <= 390, 'منوی پروفایل روی موبایل هم شناور و داخلِ صفحه است');
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 1200, height: 800 });
+
+  console.log('\n۵) سلامتِ صفحه');
   ok(errors.length === 0, `بدونِ خطای جاوااسکریپت (${errors.length})`);
   if (errors.length) console.log(errors.slice(0, 3));
 } finally {

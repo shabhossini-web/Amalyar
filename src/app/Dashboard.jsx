@@ -729,7 +729,8 @@ export default function Dashboard() {
        کوئری — نامِ بیمار نباید در URL و تاریخچهٔ مرورگر بنشیند. `replace`
        می‌زنیم تا back به یک شیتِ دوباره‌باز نرسد. */
     const pre = location.state?.prefill;
-    if (pre?.patientId) {
+    /* `firstName`/`phone`: «ثبتِ بیمارِ تازه» از جستجوی سراسری وقتی بیماری پیدا نشد (shell-25). */
+    if (pre?.patientId || pre?.firstName || pre?.phone) {
       setModal({ prefill: pre });
       navigate(location.pathname, { replace: true, state: null });
       return;
@@ -1191,7 +1192,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`lx-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

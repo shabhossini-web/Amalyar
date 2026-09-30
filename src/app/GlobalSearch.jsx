@@ -3,9 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import Overlay from '../ui/Overlay.jsx';
 import { api } from '../lib/api.js';
-import { Close, Search } from '../ui/icons.jsx';
+import { Close, Plus, Search } from '../ui/icons.jsx';
+import { useTerms } from './config.jsx';
+import { useAllowedTools } from './tools.jsx';
+import { jToFa } from '../lib/jalali.js';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
+const toEn = (v) => String(v ?? '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 const isTyping = (el) => {
   const t = el?.tagName;
   return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || !!el?.isContentEditable;
@@ -26,6 +30,10 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
   const inputRef = useRef(null);
   const seq = useRef(0);
   const navigate = useNavigate();
+  /* «۲ ویزیت» در مطب، «۲ مراجعه»/«۲ عمل» جای دیگر — واژهٔ حوزه (قانونِ ۲۴). */
+  const t = useTerms();
+  /* «ثبتِ بیمارِ تازه» فقط برای کسی که کاشیِ «بیماران» را دارد (همان‌جا فرمِ ثبت باز می‌شود). */
+  const { hero } = useAllowedTools();
 
   useEffect(() => {
     const onKey = (e) => {
@@ -74,10 +82,24 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
     navigate(`/app/patients/${p.id}`);
   }, [navigate, onClose]);
 
+  /* بی‌نتیجه؟ راهِ بعدی همین‌جاست (بازبینیِ UX ۱۴۰۵/۰۷): منشی‌ای که نامِ بیمارِ تازه را جستجو
+     می‌کرد باید پالت را می‌بست و دنبالِ «+» می‌گشت. همان فرمِ «مراجعهٔ جدید»ِ «بیماران»، با نام
+     (یا موبایل، اگر عدد جستجو شده) از پیش پرشده — از راهِ `state`، نه URL (نام در تاریخچه نمی‌نشیند). */
+  const term = q.trim();
+  const digits = toEn(term).replace(/[\s-]/g, '');
+  const asPhone = /^\+?\d{7,}$/.test(digits);
+  const noHits = !busy && !err && term.length >= 2 && rows.length === 0;
+  const canCreate = !!hero && noHits && (asPhone || !/\d/.test(toEn(term)));
+  const createNew = useCallback(() => {
+    const [first, ...rest] = term.split(/\s+/);
+    onClose();
+    navigate('/app/dashboard', { state: { prefill: asPhone ? { phone: digits } : { firstName: first, lastName: rest.join(' ') } } });
+  }, [term, asPhone, digits, navigate, onClose]);
+
   const onKeyDown = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, Math.max(rows.length - 1, 0))); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setIdx((i) => Math.max(i - 1, 0)); }
-    else if (e.key === 'Enter') { e.preventDefault(); go(rows[idx]); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (rows[idx]) go(rows[idx]); else if (canCreate) createNew(); }
     else if (e.key === 'Tab') { e.preventDefault(); inputRef.current?.focus(); }
   };
 
@@ -107,17 +129,28 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
                 <span className="gs-name">{p.fullName}</span>
                 <span className="gs-meta">
                   <code dir="ltr">{p.code}</code>
-                  {p.phone && <span dir="ltr">{p.phone}</span>}
-                  <span>{faNum(p.visitCount)} مراجعه</span>
+                  {/* ارقامِ یکدست: موبایل هم فارسی، کنارِ «۲ ویزیت» (بازبینیِ UX ۱۴۰۵/۰۷). */}
+                  {p.phone && <bdi dir="ltr">{jToFa(p.phone)}</bdi>}
+                  <span>{faNum(p.visitCount)} {t.visit}</span>
                 </span>
               </li>
             ))}
             {q.trim().length < 2 && (
               <li className="gs-hint">دستِ‌کم دو حرف بنویسید · <kbd>↑</kbd><kbd>↓</kbd> انتخاب · <kbd>Enter</kbd> بازکردنِ پرونده · <kbd>Esc</kbd> بستن</li>
             )}
-            {!busy && q.trim().length >= 2 && rows.length === 0 && !err && <li className="gs-empty">بیماری با این مشخصات پیدا نشد</li>}
             {err && <li className="gs-empty">{err}</li>}
           </ul>
+          {noHits && (
+            <div className="gs-none">
+              <p className="gs-empty">بیماری با این مشخصات پیدا نشد.</p>
+              {canCreate && (
+                <button type="button" className="gs-new" onClick={createNew}>
+                  <Plus width="16" height="16" aria-hidden="true" />
+                  <span>ثبتِ بیمارِ تازه با {asPhone ? 'موبایلِ' : 'نامِ'} «<bdi>{asPhone ? jToFa(digits) : term}</bdi>»</span>
+                </button>
+              )}
+            </div>
+          )}
         </Overlay>
       )}
     </AnimatePresence>

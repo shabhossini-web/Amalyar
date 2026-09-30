@@ -1,26 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import { useAuth } from './auth.jsx';
 import { useConfig } from './config.jsx';
-import ProfileMenu from './ProfileMenu.jsx';
+import { usePendingAccounts } from './usePending.js';
+import { useChatUnread } from './ChatBell.jsx';
 import './launcher.css';
 import { ArrowStart, Back } from '../ui/icons.jsx';
 /* کاتالوگِ کاشی‌ها از W2.3 مشترک است — صفحهٔ «امروز» هم از همین می‌خواند. */
-import { HERO, useAllowedTools, track } from './tools.jsx';
+import { HERO, groupTools, useAllowedTools, track } from './tools.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 
 export default function Launcher() {
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1600);
   const { user } = useAuth();
   const { brandName } = useConfig();
   const navigate = useNavigate();
   useEffect(() => { document.title = 'همهٔ ابزارها — عمل‌یار'; }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1600);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const soon = (label) => setToast(`«${label}» به‌زودی`);
   const open = (t) => (t.to ? navigate(t.to) : soon(t.label));
@@ -28,42 +25,13 @@ export default function Launcher() {
   const lvl = user?.level ?? 0;
   const { hero, daily, tools, nothing } = useAllowedTools();
   const showHero = !!hero;
+  /* کاشی‌ها گروه‌بندی‌شده (کارِ روزانه بالا) — «بیماران» کارتِ بزرگِ بالاست و در گروه‌ها تکرار نمی‌شود. */
+  const groups = groupTools([...daily, ...tools]);
 
-  // بنرِ نصبِ PWA (اندروید/کروم — beforeinstallprompt)
-  const [installEvt, setInstallEvt] = useState(null);
-  useEffect(() => {
-    if (localStorage.getItem('amalyar_a2hs_dismissed')) return;
-    const h = (e) => {
-      e.preventDefault();
-      setInstallEvt(e);
-    };
-    window.addEventListener('beforeinstallprompt', h);
-    return () => window.removeEventListener('beforeinstallprompt', h);
-  }, []);
-  const doInstall = async () => {
-    if (!installEvt) return;
-    installEvt.prompt();
-    const { outcome } = await installEvt.userChoice;
-    if (outcome === 'accepted') setToast('عمل‌یار نصب شد ✓');
-    setInstallEvt(null);
-  };
-  const dismissInstall = () => {
-    localStorage.setItem('amalyar_a2hs_dismissed', '1');
-    setInstallEvt(null);
-  };
-
-  // نشانِ تعدادِ در انتظارِ تأیید (فقط سوپرادمین)
-  const [pendingCount, setPendingCount] = useState(0);
-  useEffect(() => {
-    if (lvl < 6) return;
-    let alive = true;
-    import('../lib/api.js').then(({ api }) =>
-      api('/accounts/pending')
-        .then((rows) => { if (alive) setPendingCount(rows.length); })
-        .catch(() => {}),
-    );
-    return () => { alive = false; };
-  }, [lvl]);
+  /* بنرِ نصب به پوسته رفت (همهٔ صفحه‌ها)؛ شمارِ درخواست‌های عضویت از همان قلابِ زنگ و «امروز». */
+  const pendingCount = usePendingAccounts(lvl >= 6);
+  /* پیام‌های نخوانده روی کاشیِ «پیام‌رسان» — همان شمارِ نوارِ پوسته (shell-22). */
+  const chatUnread = useChatUnread(daily.some((x) => x.key === 'messenger'));
 
   return (
     /* `theme-dark`: لانچر ویترین است و شیشه و نئونش را در هر تمی نگه می‌دارد (§۴.۸). */
@@ -75,9 +43,11 @@ export default function Launcher() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell">
+        {/* بازگشت به «امروز»، نه به سایتِ عمومی: «سایت» کاربرِ واردشده را از سامانه بیرون می‌برد
+            (در این نصب به صفحهٔ تبلیغاتیِ عمل‌یار). منوی پروفایل هم مثلِ بقیهٔ صفحه‌ها در نوارِ پوسته است. */}
         <div className="lx-top">
-          <Link to="/" className="lx-back" aria-label="بازگشت به سایت"><Back width="15" height="15" /> سایت</Link>
-          <ProfileMenu onToast={setToast} />
+          <Link to="/app" className="lx-back"><Back width="15" height="15" /> امروز</Link>
+          <h1 className="lx-title">همهٔ ابزارها</h1>
         </div>
 
         <header className="lx-brand">
@@ -101,35 +71,25 @@ export default function Launcher() {
             </button>
           )}
 
-          {daily.length > 0 && (
-            <div className="lx-row">
-              {daily.map((t) => (
-                <button key={t.key} className="glass lx-card" onMouseMove={track} onClick={() => open(t)}>
-                  <span className="glass-glow" aria-hidden="true" />
-                  <span className="lx-card-ic"><t.icon width="24" height="24" /></span>
-                  <span className="lx-card-title">{t.label}</span>
-                  {!t.ready && <em className="soon dot" title="به‌زودی" />}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {tools.length > 0 && (
-            <>
-              <div className="lx-tools-label">ابزارها</div>
+          {groups.map((g) => (
+            <section key={g.key} className="lx-group" aria-labelledby={`lx-g-${g.key}`}>
+              <h2 id={`lx-g-${g.key}`} className="lx-tools-label">{g.label}</h2>
               <div className="lx-tools">
-                {tools.map((t) => (
+                {g.tools.map((t) => (
                   <button key={t.key} className="glass lx-tile" onMouseMove={track} onClick={() => open(t)}>
                     <span className="glass-glow" aria-hidden="true" />
-                    <span className={`lx-tile-ic tint-${t.tint}`}><t.icon width="24" height="24" /></span>
+                    <span className={`lx-tile-ic tint-${t.tint || 'violet'}`}><t.icon width="24" height="24" /></span>
                     <span className="lx-tile-label">{t.label}</span>
                     {!t.ready && <em className="soon dot" title="به‌زودی" />}
-                    {t.key === 'users' && pendingCount > 0 && <span className="lx-badge">{pendingCount}</span>}
+                    {t.key === 'users' && pendingCount > 0 && <span className="lx-badge">{Number(pendingCount).toLocaleString('fa-IR')}</span>}
+                    {t.key === 'messenger' && chatUnread > 0 && (
+                      <span className="lx-badge" aria-label={`${Number(chatUnread).toLocaleString('fa-IR')} پیامِ نخوانده`}>{Number(chatUnread).toLocaleString('fa-IR')}</span>
+                    )}
                   </button>
                 ))}
               </div>
-            </>
-          )}
+            </section>
+          ))}
 
           {nothing && (
             <div className="glass lx-hero" style={{ cursor: 'default' }}>
@@ -143,15 +103,7 @@ export default function Launcher() {
 
       </div>
 
-      {installEvt && (
-        <div className="glass lx-install" role="dialog" aria-label="نصبِ اپلیکیشن">
-          <span className="lx-install-txt">عمل‌یار را روی گوشی نصب کن</span>
-          <button className="lx-install-ok" onClick={doInstall}>نصب</button>
-          <button className="lx-install-no" onClick={dismissInstall}>بعداً</button>
-        </div>
-      )}
-
-      <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
+import { useToolTitle } from './tools.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* ⚠️ برای شماره‌ی موبایل `faNum` **غلط** است: `Number` صفرِ اول را می‌خورد و
@@ -63,7 +64,8 @@ export default function IntakeAdmin() {
   const [zoom, setZoom] = useState(null); // نشانیِ blobِ فیشِ در حالِ بزرگ‌نمایی
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — پذیرش'; }, []);
+  /* نامِ صفحه = نامِ کاشی از کاتالوگ («ثبت‌نام‌های آنلاین») — بازبینیِ UX، shell-17. */
+  const { label: title } = useToolTitle('formgen');
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2400);
@@ -132,7 +134,7 @@ export default function IntakeAdmin() {
       <header className="ia-head">
         <Link to="/app" className="ia-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
-          <h1>پذیرش</h1>
+          <h1>{title}</h1>
           <p>فرم‌هایی که بیماران از لینکِ عمومی پر کرده‌اند. تا تأیید نشوند، مراجعه‌ای ساخته نمی‌شود.</p>
         </div>
       </header>
@@ -314,7 +316,7 @@ export default function IntakeAdmin() {
         {zoom && <ReceiptZoom url={zoom} onClose={() => setZoom(null)} />}
       </AnimatePresence>
 
-      <div className={`ia-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`ia-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

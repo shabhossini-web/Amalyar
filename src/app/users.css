@@ -84,3 +84,32 @@
 .us-test-toggle { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; color: var(--text1); }
 .us-test-toggle input { width: 18px; height: 18px; flex: 0 0 18px; accent-color: var(--brand); }
 .us-test-toggle input:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 4px; }
+
+/* ── بازبینیِ UX (۱۴۰۵/۰۷): کارِ اصلی بالا، ابزارِ آزمایشی تاشو پایین ── */
+.us-headlink {
+  margin-inline-start: auto; display: inline-flex; align-items: center; gap: 5px;
+  min-height: 36px; padding: 6px 12px; border-radius: 99px; text-decoration: none;
+  font-size: 12.5px; font-weight: 700; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), 0.08); border: 1px solid rgba(var(--brand-2-rgb), 0.35);
+}
+.us-headlink:hover { background: rgba(var(--brand-rgb), 0.16); }
+.us-headlink:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.us-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.us-bar .us-tabs { margin-bottom: 0; flex: 1 1 260px; }
+.us-new { display: inline-flex; align-items: center; gap: 5px; }
+.us-search {
+  display: flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 44px; border-radius: 13px;
+  color: var(--text3); background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), 0.14);
+}
+.us-search:focus-within { border-color: rgba(var(--brand-2-rgb), 0.6); }
+.us-search input { flex: 1 1 auto; min-width: 0; height: 42px; border: 0; background: none; color: var(--text1); font: inherit; font-size: 14px; outline: none; }
+.us-testing { margin-top: 18px; }
+.us-testing summary { cursor: pointer; font-weight: 800; font-size: 13.5px; min-height: 32px; display: flex; align-items: center; }
+.us-testing summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 6px; }
+.us-testing p { font-size: 12.5px; line-height: 1.9; color: var(--text2); }
+@media (pointer: coarse) { .us-headlink { min-height: 44px; } .us-testing summary { min-height: 44px; } }
+.us-testing summary { list-style: none; gap: 6px; }
+.us-testing summary::-webkit-details-marker { display: none; }
+.us-caret { color: var(--text3); transition: transform .2s; }
+.us-testing[open] .us-caret { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .us-caret { transition: none; } }

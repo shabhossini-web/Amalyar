@@ -97,8 +97,8 @@
 .pw-toast {
   position: fixed; inset-inline: 0; bottom: 18px; margin-inline: auto; width: max-content; max-width: 90vw;
   font: inherit; font-size: 13px; cursor: pointer; padding: 10px 16px; border-radius: 12px;
-  color: var(--text1); background: rgba(var(--surface-rgb), 0.95);
-  border: 1px solid rgba(var(--veil-rgb), 0.16); box-shadow: var(--shadow-card);
+  color: var(--toast-ink); background: var(--toast-bg);
+  border: 1px solid var(--toast-edge); box-shadow: var(--shadow-card);
 }
 @media (max-width: 560px) {
   .pw-prev-when { width: auto; display: flex; gap: 6px; align-items: baseline; }

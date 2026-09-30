@@ -312,7 +312,7 @@ export default function Pathways() {
         </section>
       )}
 
-      {toast && <button type="button" className="pw-toast" onClick={() => setToast('')}>{toast}</button>}
+      {toast && <button type="button" className="pw-toast" aria-live="polite" onClick={() => setToast('')}>{toast}</button>}
     </div>
   );
 }

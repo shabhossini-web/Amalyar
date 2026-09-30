@@ -5,8 +5,10 @@
   color: var(--text2); border: 1px solid rgba(var(--veil-rgb), 0.12); background: rgba(var(--veil-rgb), 0.05);
   transition: color .2s, border-color .2s, background .2s;
 }
-.wb-btn:hover, .wb-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); outline: none; }
+.wb-btn:hover, .wb-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); background: rgba(var(--brand-rgb), 0.10); }
 .wb-btn.hot { color: var(--amber); }
+/* هدفِ لمسیِ زنگ روی گوشی دست‌کم ۴۴ پیکسل (بازبینیِ UX ۱۴۰۵/۰۷). */
+@media (max-width: 640px) { .wb-btn { width: 44px; height: 44px; } }
 .wb-badge {
   position: absolute; top: -6px; inset-inline-end: -6px; min-width: 20px; height: 20px; padding: 0 6px;
   border-radius: 99px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 800;
@@ -19,13 +21,36 @@
   border: 1px solid rgba(var(--brand-2-rgb), 0.4); border-radius: 18px; padding: 8px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
 }
+/* زیرِ ۶۴۰ پیکسل کشو **شیتِ تمام‌عرض** است، بسته به لبه‌های صفحه نه به دکمه: زنگ وسطِ
+   نوار است و کشوی ۳۵۸ پیکسلی‌ای که از لبهٔ چپِ آن باز می‌شد تا ۵۲۳ پیکسل می‌رفت — عنوان،
+   «انجام شد» و «فردا» بیرونِ صفحهٔ ۳۹۰ پیکسلی بودند (بازبینیِ UX ۱۴۰۵/۰۷). ⚠️ `fixed` این‌جا
+   نسبت به خودِ نوار است، نه پنجره: `backdrop-filter`ِ `.sh-bar` بلوکِ دربرگیرنده می‌سازد؛ نوار
+   چسبانِ بالای صفحه و تمام‌عرض است، پس نتیجه همان است. سنجه: `scripts/e2e/w2-4-shell.mjs`. */
+@media (max-width: 640px) {
+  .wb-menu {
+    position: fixed; top: calc(var(--shell-h) + 6px); inset-inline: 16px; width: auto;
+    max-height: calc(100dvh - var(--shell-h) - 24px); overflow-y: auto;
+  }
+}
 .wb-head { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px 10px; border-bottom: 1px solid rgba(var(--veil-rgb), .08); }
 .wb-head b { font-size: 14px; }
 .wb-counts { font-size: 12px; color: var(--text2); }
 .wb-counts em { color: var(--amber); font-style: normal; font-weight: 700; }
 .wb-empty { padding: 18px 10px; color: var(--text3); font-size: 13px; text-align: center; }
+/* درخواستِ عضویتِ در انتظار — کارِ سوپرادمین، بالای فهرستِ کارها (بازبینیِ UX ۱۴۰۵/۰۷). */
+.wb-pend {
+  display: flex; align-items: center; gap: 10px; margin: 8px 2px 2px; padding: 10px 12px; border-radius: 14px;
+  color: var(--text1); text-decoration: none;
+  background: var(--amber-bg); border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+}
+.wb-pend > svg:first-child { color: var(--amber-text); flex: 0 0 auto; }
+.wb-pend > svg:last-child { color: var(--text3); flex: 0 0 auto; }
+.wb-pend-t { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wb-pend-t b { font-size: 13px; font-weight: 800; }
+.wb-pend-t small { font-size: 11.5px; color: var(--text2); }
+.wb-pend:hover { border-color: var(--amber); }
 .wb-all { display: block; text-align: center; padding: 10px; color: var(--brand-2); font-weight: 700; font-size: 13px; text-decoration: none; border-top: 1px solid rgba(var(--veil-rgb), .08); margin-top: 4px; }
-.wb-all:hover, .wb-all:focus-visible { color: var(--cyan); outline: none; }
+.wb-all:hover, .wb-all:focus-visible { color: var(--cyan); }
 
 .wk-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .wk-list.compact { max-height: 48vh; overflow-y: auto; padding: 6px 2px; }
@@ -49,7 +74,8 @@
   font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 10px; color: var(--text2);
   border: 1px solid rgba(var(--veil-rgb), 0.14); background: rgba(var(--veil-rgb), 0.04); white-space: nowrap;
 }
-.wk-btn:hover:not(:disabled), .wk-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); outline: none; }
+/* فوکوس با حلقهٔ سراسری (index.css) — بوردرِ «انجام شد»ِ بنفش شفاف است و تغییرش دیده نمی‌شد. */
+.wk-btn:hover:not(:disabled), .wk-btn:focus-visible { color: var(--text1); border-color: rgba(var(--brand-2-rgb), 0.55); }
 .wk-btn.primary { background: linear-gradient(135deg, var(--brand-2), var(--brand-dark)); color: #fff; border-color: transparent; }
 .wk-btn:disabled { opacity: .5; cursor: default; }
 
@@ -69,6 +95,7 @@
 }
 .wk-new input { flex: 1 1 auto; min-width: 0; }
 .wk-new input:focus, .wk-new select:focus { border-color: rgba(var(--brand-2-rgb), 0.55); }
+.wk-new input:focus-visible, .wk-new select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .wk-tabs { margin-bottom: 12px; }
 .wk-count { font-size: 12px; color: var(--text3); margin-bottom: 8px; }
 .wk-empty { padding: 30px 12px; text-align: center; color: var(--text3); }
