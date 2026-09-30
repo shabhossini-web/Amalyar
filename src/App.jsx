@@ -69,7 +69,7 @@ function TenantAwareRoot() {
 /**
  * **پوستهٔ کارکنان** — احراز و پیکربندی فقط دورِ مسیرهایی که حساب دارند.
  *
- * ⚠️ صفحه‌های بیمار (`/r` `/f` `/s` `/v` `/p` `/o`) و ریشهٔ دامنه **بیرونِ** این‌اند
+ * هشدار: صفحه‌های بیمار (`/r` `/f` `/s` `/v` `/p` `/o`) و ریشهٔ دامنه **بیرونِ** این‌اند
  * (بازبینیِ UX، بندِ ۹۴). تا دیروز هر دو Provider دورِ همهٔ مسیرها بودند: هر بارِ
  * بازشدنِ فرمِ بیمار، `/config` بی‌احراز ۴۰۱ می‌گرفت و رویدادِ «نشست مرد» را می‌فرستاد،
  * `AuthProvider` دوباره `/auth/me` و `/auth/accounts` را می‌زد — چهار ۴۰۱ هم‌زمان با
@@ -108,7 +108,7 @@ export default function App() {
       <Suspense fallback={<div className="lx-boot">در حال بارگذاری…</div>}>
         <Routes>
           <Route path="/" element={<TenantAwareRoot />} />
-          {/* ⚠️ عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. بیرونِ StaffProviders هم
+          {/* هشدار: عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. بیرونِ StaffProviders هم
               هست: هیچ درخواستِ احرازی (`/config`, `/auth/*`) از این صفحه‌ها نمی‌رود. */}
           <Route path="/r/:token" element={<Intake step="register" />} />
           <Route path="/f/:token" element={<Intake step="form" />} />

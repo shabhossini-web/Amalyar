@@ -137,7 +137,7 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
               <small id="ik-slots-q">ساعت را انتخاب کنید</small>
               <div className="ik-slots" role="radiogroup" aria-labelledby="ik-slots-q">
                 {picked.windows.filter((w) => w.mode === 'slot').flatMap((w) => w.slots).map((sl) => {
-                  /* ⚠️ ساعتِ **خودِ بیمار** «انتخاب‌شده» است، نه «پر» (بازبینیِ UX، بندِ ۹۶): سرور آن را
+                  /* هشدار: ساعتِ **خودِ بیمار** «انتخاب‌شده» است، نه «پر» (بازبینیِ UX، بندِ ۹۶): سرور آن را
                      هم «گرفته» می‌شمارد (نوبتِ خودش جا را گرفته) و تا دیروز دکمه‌اش کم‌رنگ و خط‌خورده می‌شد —
                      بیمار فکر می‌کرد رزرو نشده. زدنِ دوباره‌اش کاری نمی‌کند. */
                   const mine = chosen?.date === picked.date && chosen?.startMin === sl.startMin;

@@ -72,7 +72,7 @@ export default function Portal() {
   if (err) return <div className="po-err">{err}</div>;
   if (!data) return <div className="po-err quiet">در حال بارگذاری…</div>;
 
-  /* ⚠️ فقط مراجعهٔ **انجام‌شده** خلاصه دارد (سرور `summaryUrl` را برای بقیه تهی می‌فرستد): تا دیروز
+  /* هشدار: فقط مراجعهٔ **انجام‌شده** خلاصه دارد (سرور `summaryUrl` را برای بقیه تهی می‌فرستد): تا دیروز
      لمسِ نوبتِ فردا «خلاصهٔ ویزیت»ِ کاری را باز می‌کرد که هنوز انجام نشده (بازبینیِ UX، بندِ ۱۰۰). */
   const VisitRow = (v) => {
     const body = (
@@ -84,7 +84,7 @@ export default function Portal() {
         <span className={`po-tag s-${v.status}`}>{v.statusFa ?? v.status}</span>
       </>
     );
-    /* ⚠️ همان زبانه، نه زبانهٔ تازه (بازبینیِ UX، بندِ ۱۱۵): بیمارِ مسن از زبانهٔ تازه راهِ برگشت را پیدا
+    /* هشدار: همان زبانه، نه زبانهٔ تازه (بازبینیِ UX، بندِ ۱۱۵): بیمارِ مسن از زبانهٔ تازه راهِ برگشت را پیدا
        نمی‌کرد. `state.back` دکمهٔ «بازگشت به پروندهٔ من» را در خلاصه روشن می‌کند. */
     return v.summaryUrl
       ? (

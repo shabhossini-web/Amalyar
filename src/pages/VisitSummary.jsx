@@ -26,7 +26,7 @@ export default function VisitSummary() {
   const [err, setErr] = useState('');
 
   const isSurgery = data?.visit?.kind === 'surgery';
-  /* ⚠️ عنوان و برچسب‌ها از **نوعِ مراجعه** (بازبینیِ UX، بندِ ۱۱۲): سندِ کرانیوتومی تا دیروز «خلاصهٔ
+  /* هشدار: عنوان و برچسب‌ها از **نوعِ مراجعه** (بازبینیِ UX، بندِ ۱۱۲): سندِ کرانیوتومی تا دیروز «خلاصهٔ
      ویزیت / تاریخِ ویزیت / پزشک» چاپ می‌شد. */
   const docTitle = isSurgery ? 'خلاصهٔ عمل' : 'خلاصهٔ ویزیت';
   useEffect(() => {
