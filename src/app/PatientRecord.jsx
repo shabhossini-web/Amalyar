@@ -1222,6 +1222,72 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
 }
 
 /**
+ * عرضِ گوشی — همان مرزِ `record.css` که نوارِ مرحله در آن یک‌خطی می‌شود.
+ * هشدار: شمارِ ردیف‌های «چه شده» با CSS نمی‌شود (متنِ «بیشتر» شمار را می‌گوید)، پس این‌جا
+ * پرسیده می‌شود؛ قاعدهٔ دیداریِ همان مرز در CSS است.
+ */
+const NARROW_Q = '(max-width: 720px)';
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(NARROW_Q).matches : false));
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia(NARROW_Q);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return narrow;
+}
+
+/**
+ * **خلاصهٔ آخرین مراجعه** (بازبینیِ UX، clinic-daily-21) — تشخیص، طرحِ درمان، دارو، حساسیت، بالای صفحه.
+ * پزشکی که بینِ دو بیمار پرونده را روی گوشی باز می‌کرد این چهار را زیرِ دو صفحه اسکرول پیدا می‌کرد.
+ *
+ * هشدار: فرمولی این‌جا نیست — فهرست‌ها مرتب از سرور می‌آیند (`visits` تازه‌ترین تاریخ اول،
+ * `clinicalNotes` تازه‌ترین اول و فقط نسخهٔ جاری) و این‌جا فقط «اولیِ هر کدام» برداشته می‌شود.
+ * «آخرین» یعنی آخرین مراجعه‌ای که **رخ داده** و محتوای بالینی دارد: عملِ فردا هنوز خبری ندارد و
+ * طرحِ درمان در ویزیتِ قبلش است. اگر هیچ‌کدام نگذشته، اولین مراجعهٔ دارای محتوا.
+ */
+function lastClinical(rec) {
+  if (!rec.clinicalVisible) return null;
+  const notes = rec.clinicalNotes ?? [];
+  const rich = (rec.visits ?? []).filter((v) => v.diagnoses?.length > 0 || notes.some((n) => n.visitId === v.id));
+  const now = Date.now();
+  const v = rich.find((x) => !x.opDate || new Date(x.opDate).getTime() <= now) ?? rich[0];
+  if (!v) return null;
+  const note = (kind) => notes.find((n) => n.visitId === v.id && n.kind === kind) ?? null;
+  return { v, dx: v.diagnoses?.find((d) => d.primary) ?? v.diagnoses?.[0] ?? null, plan: note('plan'), rx: note('rx') };
+}
+
+/**
+ * هشدار: حساسیتِ **ثبت‌شده** این‌جا تکرار نمی‌شود — بنرِ قرمزِ `rc-alert` درست بالای همین کارت است
+ * و باید تنها و پررنگ بماند. فقط نبودنش گفته می‌شود («ثبت نشده»): برای پزشک «نمی‌دانیم» با «ندارد»
+ * فرق دارد. داروی بیمار هم اگر نسخه‌ای نیست از پروفایل می‌آید و آن‌وقت کارتِ هویت تکرارش نمی‌کند.
+ */
+function LastVisit({ s, rec, t, onOpen }) {
+  const { v, dx, plan, rx } = s;
+  const meds = rx?.body || rec.medications || '';
+  return (
+    <section className="rc-last" aria-labelledby="rc-last-h">
+      <h3 id="rc-last-h">
+        <button type="button" className="rc-last-open" onClick={() => onOpen({ type: 'visit', id: v.id, patientId: rec.id })}>
+          <span>آخرین {v.kindTitle || t.visit}</span>
+          {v.opDate && <time dateTime={v.opDate}>{faDate(v.opDate)}</time>}
+          <bdi dir="ltr">{v.code}</bdi>
+        </button>
+      </h3>
+      <dl>
+        {dx && <div><dt>تشخیص</dt><dd>{dx.title}{dx.icdCode && <> <bdi dir="ltr" className="rc-last-icd">{dx.icdCode}</bdi></>}</dd></div>}
+        {plan && <div><dt>{plan.kindFa}</dt><dd>{faNum(plan.body)}</dd></div>}
+        <div><dt>دارو</dt><dd className={meds ? '' : 'is-none'}>{meds ? faNum(meds) : 'ثبت نشده'}</dd></div>
+        {!rec.allergies && <div><dt>حساسیت</dt><dd className="is-none">ثبت نشده</dd></div>}
+      </dl>
+    </section>
+  );
+}
+
+/**
  * خطِ زمانِ واحد — مراجعه، نوبت، سفارش، مدرک، شرح، یادآوری در یک ستون.
  *
  * ⚠️ هر ردیفی که به جایی می‌رود **کلیک‌پذیر** است و ردیفی که نمی‌رود، نه.
@@ -1231,9 +1297,12 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
 function Timeline({ live, onGo, t, onOpen }) {
   const noteFa = Object.fromEntries(useStatusList('note').map((k) => [k.key, k.label]));
   const [all, setAll] = useState(false);
+  /* روی گوشی سه ردیفِ آخر (بازبینیِ UX، clinic-daily-21): بیشترِ «چه شده» تکرارِ همان تب‌های پایین
+     است و دوازده ردیف تب‌ها را تا دو صفحه پایین‌تر هل می‌داد. */
+  const limit = useNarrow() ? 3 : 12;
   const tl = live.timeline;
   if (!tl?.items?.length) return null;
-  const items = all ? tl.items : tl.items.slice(0, 12);
+  const items = all ? tl.items : tl.items.slice(0, limit);
 
   return (
     <section className="rc-tl" aria-label="خطِ زمانِ پرونده">
@@ -1281,9 +1350,9 @@ function Timeline({ live, onGo, t, onOpen }) {
           return <li key={it.id} className="rc-tl-row"><div>{inner}</div></li>;
         })}
       </ol>
-      {tl.items.length > 12 && (
-        <button type="button" className="rc-tl-more" onClick={() => setAll(!all)}>
-          {all ? 'کوتاه کن' : `${faNum(tl.items.length - 12)} رویدادِ قدیمی‌تر`}
+      {tl.items.length > limit && (
+        <button type="button" className="rc-tl-more" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? 'کوتاه کن' : `بیشتر — ${faNum(tl.items.length - limit)} رویدادِ قدیمی‌تر`}
         </button>
       )}
       {/* ⚠️ بریدنِ بی‌صدا ممنوع: اگر سرور سقف زده، صفحه باید بگوید — و متنش
@@ -1486,6 +1555,9 @@ export default function PatientRecord() {
   if (err) return <div className="df"><div className="df-bg" /><div className="df-empty">{err}</div></div>;
   if (!rec) return <div className="df"><div className="df-bg" /><div className="df-empty">در حال بارگذاری…</div></div>;
 
+  const last = lastClinical(rec);
+  const medsInLast = !!(last && !last.rx?.body && rec.medications);
+
   const TABS = [
     /* «خلاصه» نامِ درستی نبود: این تب یک فرمِ ویرایشِ کامل است و خلاصه حالا
        بالای صفحه است. اسمِ درست، انتظارِ درست. */
@@ -1524,15 +1596,18 @@ export default function PatientRecord() {
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
       {rec.allergies && <div className="rc-alert"><Alert size={13} /> حساسیت: {rec.allergies}</div>}
 
-      {/* کارتِ هویت **فقط‌خواندنی** است و ویرایش یک اقدام (§۴.۳ بندِ ۱). */}
-      {(rec.insurer || rec.bloodType || rec.chronicConditions || rec.medications) && (
+      {/* کارتِ هویت **فقط‌خواندنی** است و ویرایش یک اقدام (§۴.۳ بندِ ۱). داروها وقتی کارتِ «آخرین
+          مراجعه» نسخه ندارد همان‌جا نشان داده می‌شوند، نه دو بار (clinic-daily-21). */}
+      {(rec.insurer || rec.bloodType || rec.chronicConditions || (rec.medications && !medsInLast)) && (
         <dl className="rc-id">
           {rec.bloodType && <div><dt>گروهِ خونی</dt><dd dir="ltr">{rec.bloodType}</dd></div>}
           {rec.insurer && <div><dt>بیمه</dt><dd>{rec.insurer}{rec.insuranceNo ? ` — ${faNum(rec.insuranceNo)}` : ''}</dd></div>}
           {rec.chronicConditions && <div><dt>بیماریِ زمینه‌ای</dt><dd>{rec.chronicConditions}</dd></div>}
-          {rec.medications && <div><dt>داروها</dt><dd>{rec.medications}</dd></div>}
+          {rec.medications && !medsInLast && <div><dt>داروها</dt><dd>{rec.medications}</dd></div>}
         </dl>
       )}
+
+      {last && <LastVisit s={last} rec={rec} t={t} onOpen={openThing} />}
 
       <RecordActions
         rec={rec} onEdit={() => goTab('profile')} toast={say} t={t}

@@ -336,6 +336,7 @@
    وگرنه تنها بخشی است که تا لبهٔ صفحه کش می‌آید (W4.1 همین را خورد و فقط با
    اسکرین‌شات دیده شد). */
 .rc-stage,
+.rc-last,
 .rc-next,
 .rc-path,
 .rc-tl { max-width: 900px; margin-inline: auto; }
@@ -404,6 +405,34 @@
 /* ⚠️ گامِ ردشده محو می‌شود ولی **حذف نمی‌شود**: شکلِ نوار باید برای همهٔ
    بیمارها یکی بماند، وگرنه مقایسه با یک نگاه ممکن نیست. */
 .rc-step.is-skipped { opacity: .42; }
+
+/* ── خلاصهٔ آخرین مراجعه (clinic-daily-21): تشخیص، طرحِ درمان، دارو، حساسیت — بالای صفحه ── */
+.rc-last {
+  padding: 11px 14px; border-radius: 14px; margin-bottom: 12px;
+  background: rgba(var(--surface-rgb), .5); border: 1px solid rgba(var(--brand-soft-rgb), .24);
+}
+.rc-last h3 { margin: 0 0 7px; font-size: 12px; }
+.rc-last-open {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; min-height: 30px; padding: 0;
+  cursor: pointer; font: inherit; color: var(--text2); text-align: start; background: none; border: 0;
+}
+.rc-last-open span {
+  font-size: 12.5px; font-weight: 800; color: var(--brand-text);
+  text-decoration: underline dotted rgba(var(--brand-2-rgb), .7); text-underline-offset: 3px;
+}
+.rc-last-open time, .rc-last-open bdi { font-size: 11.5px; color: var(--text3); }
+.rc-last-open:hover span { color: var(--text1); }
+.rc-last-open:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; border-radius: 6px; }
+.rc-last dl { margin: 0; display: grid; gap: 5px; }
+.rc-last dl > div { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.rc-last dt { font-size: 11.5px; color: var(--text3); }
+/* متنِ بلند (طرحِ درمان، نسخه) سه خط؛ متنِ کامل در پاپ‌آپِ همان مراجعه است — سرخط بازش می‌کند. */
+.rc-last dd {
+  margin: 0; font-size: 12.5px; font-weight: 600; color: var(--text1); overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.rc-last dd.is-none { font-weight: 400; color: var(--text3); }
+.rc-last-icd { font-size: 11px; font-weight: 600; color: var(--text3); }
 
 /* ── «چه مانده» ── */
 .rc-next { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; margin-bottom: 12px; }
@@ -493,7 +522,18 @@
 
 @media (max-width: 720px) {
   .rc-next { grid-template-columns: 1fr; }
-  .rc-step { flex-basis: 100%; }
+  /* نوارِ مرحله روی گوشی **یک خط** است: «الان کجاییم» + نقطه‌های پیشرفت (clinic-daily-21). فهرستِ
+     عمودیِ شش‌گامی ۴۰۰ پیکسل می‌گرفت و تب‌ها را زیرِ دو صفحه اسکرول می‌برد. متنِ گام‌ها برای
+     صفحه‌خوان می‌ماند (پنهانِ دیداری، نه `display: none`). */
+  .rc-stage { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+  .rc-stage-now { flex: 1; min-width: 0; margin: 0; font-size: 12.5px; }
+  .rc-steps { flex: none; flex-wrap: nowrap; gap: 5px; }
+  .rc-step { flex: none; min-width: 0; }
+  .rc-step-dot { width: 13px; height: 13px; margin-top: 0; }
+  .rc-step-dot svg { width: 9px; height: 9px; }
+  .rc-step-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .rc-last-open { min-height: 44px; }
+  .rc-last dl > div { grid-template-columns: 70px minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
   .rc-act, .rc-tl-row.is-link > a, .rc-tl-row.is-link > button { transition: none; }
