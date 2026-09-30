@@ -1,4 +1,5 @@
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { clinicDateIso, clinicTodayIso, dayUtc } from '../common/clinic-day';
 
 /** شمارِ ماه‌های پنجره — نیم‌سال: روند دیده شود و «این ماه» با ماه‌های قبل مقایسه شود. */
 export const REFERRER_MONTHS = 6;
@@ -21,7 +22,9 @@ type Row = { key: string; name: string; byMonth: number[]; total: number; upcomi
  *   هنوز در تعاریفِ پایه نیامده از آمار غیب می‌شد.
  */
 export async function referrerStats(prisma: any, now = new Date()) {
-  const [cy, cm] = toJalali(now);
+  /* «این ماه» ماهِ **روزِ تهران** است، نه روزِ UTCِ کانتینر (DF12؛ `common/clinic-day.ts`): بی‌این، از ۰۰:۰۰ تا
+     ۰۳:۳۰ِ روزِ اولِ هر ماه «این ماه» هنوز ماهِ قبل بود و جراحی که همان روز کار فرستاده بود «ساکت» دیده می‌شد. */
+  const [cy, cm] = toJalali(dayUtc(clinicTodayIso(now)));
   const months: { jy: number; jm: number }[] = [];
   for (let i = REFERRER_MONTHS - 1; i >= 0; i -= 1) {
     let jy = cy;
@@ -34,7 +37,8 @@ export async function referrerStats(prisma: any, now = new Date()) {
   const visits: any[] = await prisma.visit.findMany({
     where: {
       kind: 'surgery', opStatus: { not: 'cancelled' }, patient: { deletedAt: null },
-      OR: [{ opDate: { gte: from } }, { opDate: null, createdAt: { gte: from, lt: end } }],
+      /* `createdAt` لحظه است نه روز؛ یک روز پیش از مرز هم خوانده می‌شود و ماهش پایین‌تر با روزِ تهران تعیین می‌شود. */
+      OR: [{ opDate: { gte: from } }, { opDate: null, createdAt: { gte: new Date(from.getTime() - 86_400_000), lt: end } }],
     },
     select: {
       opDate: true, createdAt: true, surgeonId: true, surgeonName: true, hospitalId: true, hospitalName: true,
@@ -52,7 +56,8 @@ export async function referrerStats(prisma: any, now = new Date()) {
       if (!key) continue;
       const row = rows.get(key) ?? { key, name: nameOf(v), byMonth: months.map(() => 0), total: 0, upcoming: 0, lastAt: null };
       rows.set(key, row);
-      const at: Date = v.opDate ?? v.createdAt;
+      /* مراجعهٔ بی‌تاریخ با **روزِ تهرانِ** ثبتش — همان قراردادِ `opDate` (نیمه‌شبِ UTCِ روزِ تقویمی؛ DF12). */
+      const at: Date = v.opDate ?? dayUtc(clinicDateIso(v.createdAt));
       if (at >= end) { row.upcoming += 1; continue; }
       const i = idx.get(toJalali(at).slice(0, 2).join('/'));
       if (i === undefined) continue;
