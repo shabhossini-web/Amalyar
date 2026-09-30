@@ -279,8 +279,10 @@ try {
     const body = await page.locator('.df').innerText();
     ok(!body.includes('{visit}') && !body.includes('{tech}'),
       '**نباید بیفتد:** جای خالیِ واژه (`{visit}`، `{tech}`) خام روی صفحه دیده شود');
-    ok(/مراجع/.test(await page.locator('.rc-stage').innerText()),
-      'واژهٔ حوزه از `useTerms()` پُر شد (حوزهٔ پیش‌فرض: مراجعه)');
+    /* نوارِ شرکت از بازبینیِ UX (company-08) گام‌های خودش را دارد — «تعیینِ {tech}»، نه «{visit}»ِ
+       مطب — پس واژهٔ پرشده یا «مراجعه» است یا «کارشناس»؛ جای خالیِ خام را بندِ قبلی می‌گیرد. */
+    ok(/مراجع|کارشناس/.test(await page.locator('.rc-stage').innerText()),
+      'واژهٔ حوزه از `useTerms()` پُر شد (مراجعه/کارشناس)');
     ok(await page.locator('.rc-id').count() === 1 && await page.locator('.rc-id input, .rc-id select').count() === 0,
       '**نباید بیفتد:** کارتِ هویت فیلدِ ویرایش داشته باشد (هویت فقط‌خواندنی است)');
     ok(await page.locator('.rc-next-main').count() === 1 && /بررسیِ نتیجهٔ MRI/.test(await page.locator('.rc-next-main').innerText()),

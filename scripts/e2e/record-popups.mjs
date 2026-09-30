@@ -109,8 +109,11 @@ try {
     steps.includes(surgeryFa), `${steps.join(' | ')} ← انتظار: ${surgeryFa}`);
   ok('تبِ مراجعات واژهٔ خنثی دارد', (await page.getByRole('tab', { name: /مراجعه‌ها/ }).count()) === 1);
   const kindsSeen = await page.locator('.rc-kind').allInnerTexts();
+  /* نامِ قالبیِ فرمِ مطب («فرمِ ویزیت») جای نوع را نمی‌گیرد و واژهٔ حوزه («ویزیت») می‌نشیند —
+     `visitTitleOf` در سرور، بازبینیِ UX clinic-daily-04. نامِ دست‌گذاشتهٔ شرکت همان می‌ماند. */
+  const shownAs = (fa) => kindsSeen.includes(fa) || (/^فرمِ /.test(fa ?? '') && kindsSeen.includes(fa.replace(/^فرمِ /, '')));
   ok('هر کارت نوعِ خودش را می‌گوید — با همان نام',
-    kindsSeen.includes(surgeryFa) && kindsSeen.includes(clinicFa),
+    shownAs(surgeryFa) && shownAs(clinicFa),
     `${kindsSeen.join(' | ')} ← انتظار: ${surgeryFa} + ${clinicFa}`);
   /* ⚠️ ادعای اصلی: **نوار و کارت یک چیز بگویند.** همین بود که شکسته بود. */
   ok('⚠️ **نباید بیفتد:** نوارِ مرحله و کارتِ مراجعه دو نامِ متفاوت بدهند',

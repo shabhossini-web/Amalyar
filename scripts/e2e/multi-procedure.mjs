@@ -165,7 +165,8 @@ try {
     JSON.stringify([VM?.otherProcedureTypeIds, dbRows(VM?.id)]));
   ok('**یک** قلمِ خدمت با عنوانِ عملِ اصلی (مبلغ مالِ مراجعه است)',
     num(`SELECT count(*) FROM charges WHERE visit_id=${VM.id} AND kind='service'`) === 1
-    && sql(`SELECT title FROM charges WHERE visit_id=${VM.id} AND kind='service'`) === P1.name,
+    /* در شرکت نامِ خدمت جلوی نامِ عمل می‌آید («نورومانیتورینگ — P1»، بازبینیِ UX company-14)؛ P2 هرگز. */
+    && ((t) => t === P1.name || (t.endsWith(` — ${P1.name}`) && !t.includes(P2.name)))(sql(`SELECT title FROM charges WHERE visit_id=${VM.id} AND kind='service'`)),
     sql(`SELECT string_agg(title, ' | ') FROM charges WHERE visit_id=${VM.id}`));
 
   console.log('\nB2) پیامکِ مراقبت و موج‌های پیگیری فقط از اصلی');
