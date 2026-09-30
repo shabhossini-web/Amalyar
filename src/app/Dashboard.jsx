@@ -213,7 +213,9 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
 
   const showForms = async () => {
     setView('forms');
-    if (recordFormsCache) return;
+    /* کش مالِ کلِ صفحه است ولی state مالِ همین منو (DF6): منوی ردیفِ دوم که پیش از پرشدنِ کش ساخته شده
+       `forms`ش null مانده بود و بی‌این `setForms` تا ابد «در حال بارگذاری…» نشان می‌داد. */
+    if (recordFormsCache) { setForms(recordFormsCache); return; }
     try {
       const all = await api('/forms');
       recordFormsCache = (all ?? []).filter((f) => f.scope === 'record' && f.active !== false);
