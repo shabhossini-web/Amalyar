@@ -9,7 +9,7 @@ import WorkRow from './WorkRow.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { JOB_ROLES } from '../lib/job-roles.js';
 import { WORK_CHANGED } from './WorkBell.jsx';
-import { groupTools, useAllowedTools, track } from './tools.jsx';
+import { groupTools, usePageTitle, useAllowedTools, track } from './tools.jsx';
 import { usePrefs } from './usePrefs.jsx';
 import { usePendingAccounts } from './usePending.js';
 import { useChatUnread } from './ChatBell.jsx';
@@ -83,7 +83,8 @@ export default function Today() {
      نوعِ ردیف همان «عمل»ِ پیش‌فرضِ فهرست نیست. برچسب را سرور می‌دهد (`kindFa`). */
   const kindChip = (v) => (vertical === 'clinic' || v.kind !== 'surgery') && (v.kindFa || v.kind);
 
-  useEffect(() => { document.title = 'امروز — عمل‌یار'; }, []);
+  /* زبانه هم مثلِ همهٔ صفحه‌ها «نامِ صفحه — نامِ مطب/شرکت» (shell-15). */
+  usePageTitle('امروز');
 
   const load = useCallback(() => {
     api('/work/today')

@@ -1,19 +1,11 @@
 /* فهرستِ انتظارِ عمل (بستهٔ ۹) — روی توکن‌ها، بی‌تاریِ تودرتو (ردیف سطحِ کار است نه قاب؛ قانونِ ۱۶). */
-.wl { position: relative; min-height: 100dvh; padding: 16px 16px 48px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و ردیف‌ها از `--page-w` می‌خوانند. */
+.wl { position: relative; min-height: 100dvh; padding: 16px 16px 48px; color: var(--text1); --page-w: var(--maxw); }
 .wl-bg {
   position: fixed; inset: 0; z-index: -1;
   background: radial-gradient(900px 520px at 50% -10%, rgba(var(--brand-rgb), .15), transparent 60%), var(--bg);
 }
-.wl-head, .wl-kpis, .wl-tabs, .wl-list, .wl-empty, .wl-err, .wl-note { max-width: 920px; margin-inline: auto; }
-.wl-head { margin-bottom: 14px; }
-.wl-back {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-bottom: 4px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.wl-back:hover, .wl-back:focus-visible { color: var(--brand-2); outline: none; }
-.wl-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.wl-title h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
-.wl-title p { margin-top: 4px; font-size: 12.5px; color: var(--text2); max-width: 560px; }
+.wl-kpis, .wl-tabs, .wl-list, .wl-empty, .wl-err, .wl-note { max-width: var(--page-w); margin-inline: auto; }
 .wl-who { display: flex; align-items: center; gap: 8px; min-width: 220px; }
 .wl-who-l { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text3); white-space: nowrap; }
 .wl-who .pk-btn { min-width: 170px; }

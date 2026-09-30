@@ -9,6 +9,7 @@ import { HERO, useAllowedTools } from './tools.jsx';
 import RequiredItems from './RequiredItems.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Pick from '../ui/Pick.jsx';
 import { Doctor, Eye } from '../ui/icons.jsx';
 import WorkRow from './WorkRow.jsx';
@@ -115,7 +116,6 @@ export default function SurgeonPortal() {
   const [grantBusy, setGrantBusy] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => { document.title = `${t.portal} — عمل‌یار`; }, [t.portal]);
   useEffect(() => { if (!toast) return; const h = setTimeout(() => setToast(''), 2200); return () => clearTimeout(h); }, [toast]);
 
   /* هر پنل بازخوانیِ خودش را این‌جا می‌گذارد تا پاپ‌آپ بعد از ثبت همان را تازه کند. */
@@ -148,7 +148,9 @@ export default function SurgeonPortal() {
 
   return (
     <main className="sp-page">
-      <header className="sp-head"><h1>{t.portal}</h1><Link to="/app">سامانه</Link></header>
+      {/* «میزِ پزشک» / «پرتال جراح» از واژگانِ حوزه (قانونِ ۲۴) با آیکونِ همان کاشی؛ بازگشت تا بازبینیِ UX
+          (shell-15) یک لینکِ بی‌آیکونِ «سامانه» ته سربرگ بود. */}
+      <PageHeader tool="surgeon" />
       {!desk ? <p className="sp-empty">در حالِ بارگذاری…</p> : (
         <>
           <p className="sp-hint">{verticalLabel} · {hint}</p>

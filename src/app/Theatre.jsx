@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import { faDuration, faTime } from '../lib/time.js';
@@ -8,12 +8,13 @@ import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
 import Overlay, { CloseButton, UnsavedPrompt } from '../ui/Overlay.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import { AttachPicker, useSubformCatalog } from './VisitSubforms.jsx';
 import { ThingPopups, useThings } from './thing-popups.jsx';
 import { useAuth } from './auth.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
-import { Alert, Back, Check, Close, Clock, Form, LogOut, Pencil, Plus, Theatre as TheatreIcon, User, Users } from '../ui/icons.jsx';
+import { Alert, Check, Close, Clock, Form, LogOut, Pencil, Plus, User, Users } from '../ui/icons.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import './theatre.css';
 import './definitions.css';
@@ -122,7 +123,6 @@ export default function Theatre() {
     } catch { return {}; }
   }, []);
 
-  useEffect(() => { document.title = 'اتاقِ عمل — عمل‌یار'; }, []);
   useEffect(() => { if (!toast) return undefined; const t = setTimeout(() => setToast(''), 2600); return () => clearTimeout(t); }, [toast]);
 
   const loadDay = useCallback(async () => {
@@ -234,32 +234,31 @@ export default function Theatre() {
   const visible = day ? (pickedOwner ? day.visits.filter((v) => (v.techId ?? null) === pickedOwner.techId) : day.visits) : [];
 
   if (err?.status === 403) {
-    return <div className="th"><div className="th-note" role="status">{err.message} — از «همهٔ ابزارها» به بخش‌های خودتان بروید.</div></div>;
+    return <div className="th"><PageHeader className="th-head" tool="theatre" /><div className="th-note" role="status">{err.message} — از «همهٔ ابزارها» به بخش‌های خودتان بروید.</div></div>;
   }
 
   return (
     <div className="th">
-      <header className="th-head">
-        <div>
-          <h1><TheatreIcon width="20" height="20" aria-hidden="true" /> اتاقِ عمل</h1>
-          <p>{faDate(iso)}</p>
+      {/* یک عمل که باز است، بازگشت به «فهرستِ روز» است (نمای درونِ همین صفحه)؛ وگرنه «امروز»ِ همهٔ
+          صفحه‌ها — تا بازبینیِ UX (shell-15) یک لینکِ بی‌آیکونِ «سامانه» ته سربرگ بود. `th-head` قلابِ
+          آزمون است (superadmin-portals). */}
+      <PageHeader
+        className="th-head" tool="theatre"
+        back={openId ? { onClick: backToDay, label: 'فهرستِ روز' } : undefined}
+        sub={<>
+          {faDate(iso)}
           {/* نمای سرپرستی (قانونِ ۲۹) — تصمیمش از سرور می‌آید (`day.team`)، نه از
               سطحِ کاربر؛ بقیه همان عنوانِ دیروز را می‌بینند. */}
           {day?.team && !openId && (
-            <p className="th-scope"><Users width="14" height="14" aria-hidden="true" /> {`عمل‌های همه — نامِ جراح و ${t.tech}ِ هر عمل روی ردیفش است`}</p>
+            <span className="th-scope"><Users width="14" height="14" aria-hidden="true" /> {`عمل‌های همه — نامِ جراح و ${t.tech}ِ هر عمل روی ردیفش است`}</span>
           )}
-        </div>
+        </>}
+      >
         {!openId && <>
           <JDate value={jday} onChange={setJday} loadMarks={loadMarks} />
           <button type="button" className="th-today" onClick={() => setJday(todayJStr())}>امروز</button>
         </>}
-        {openId && (
-          <button type="button" className="th-today" onClick={backToDay}>
-            <Back width="15" height="15" aria-hidden="true" /> فهرستِ روز
-          </button>
-        )}
-        <Link className="th-exit" to="/app">سامانه</Link>
-      </header>
+      </PageHeader>
 
       {err && err.status !== 403 && <div className="th-err" role="alert">{err.message}</div>}
 

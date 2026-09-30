@@ -10,6 +10,7 @@ import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import CancelReason from '../ui/CancelReason.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Pick from '../ui/Pick.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { Alert, Back, Close, Doctor, Refresh, Waitlist as WaitlistIcon } from '../ui/icons.jsx';
 import './waitlist.css';
 
@@ -43,7 +44,6 @@ export default function Waitlist() {
   const [cancelAsk, setCancelAsk] = useState(null);
   const [busyStatus, setBusyStatus] = useState(false);
 
-  useEffect(() => { document.title = 'فهرستِ انتظارِ عمل — عمل‌یار'; }, []);
   useEffect(() => { if (!toast) return undefined; const x = setTimeout(() => setToast(''), 2600); return () => clearTimeout(x); }, [toast]);
 
   const load = useCallback(async () => {
@@ -108,29 +108,23 @@ export default function Waitlist() {
   return (
     <div className="wl">
       <div className="wl-bg" aria-hidden="true" />
-      <header className="wl-head">
-        <Link to="/app" className="wl-back"><Back width="15" height="15" aria-hidden="true" /> سامانه</Link>
-        <div className="wl-title">
-          <div>
-            <h1><WaitlistIcon width="20" height="20" aria-hidden="true" /> فهرستِ انتظارِ عمل</h1>
-            {!absent && (
-              <p>
-                بیمارانی که در {t.visit} «کاندیدای جراحی» شده‌اند و هنوز عمل نشده‌اند — طولانی‌ترین انتظار بالا.
-                {data && !data.team ? ' فقط بیمارانِ خودتان.' : ''}
-              </p>
-            )}
+      <PageHeader
+        tool="waitlist"
+        sub={!absent && <>
+          بیمارانی که در {t.visit} «کاندیدای جراحی» شده‌اند و هنوز عمل نشده‌اند — طولانی‌ترین انتظار بالا.
+          {data && !data.team ? ' فقط بیمارانِ خودتان.' : ''}
+        </>}
+      >
+        {data?.team && surgeons.length > 1 && (
+          <div className="wl-who">
+            <span className="wl-who-l" id="wl-who-l"><Doctor width="14" height="14" aria-hidden="true" /> پزشک</span>
+            <Pick
+              label="پزشک" value={sel} onChange={setSurgeonId} options={surgeons}
+              placeholder="همهٔ پزشک‌ها" clearable
+            />
           </div>
-          {data?.team && surgeons.length > 1 && (
-            <div className="wl-who">
-              <span className="wl-who-l" id="wl-who-l"><Doctor width="14" height="14" aria-hidden="true" /> پزشک</span>
-              <Pick
-                label="پزشک" value={sel} onChange={setSurgeonId} options={surgeons}
-                placeholder="همهٔ پزشک‌ها" clearable
-              />
-            </div>
-          )}
-        </div>
-      </header>
+        )}
+      </PageHeader>
 
       {absent && (
         <section className="wl-absent" aria-labelledby="wl-absent-t">
@@ -140,7 +134,7 @@ export default function Waitlist() {
             فهرستِ انتظارِ عمل بیمارانی را نشان می‌دهد که پزشکِ مطب در ویزیت «کاندیدای جراحی»شان کرده است.
             در این مجموعه ویزیتِ مطب ثبت نمی‌شود، پس این‌جا چیزی برای پیگیری نیست.
           </p>
-          <Link to="/app" className="wl-absent-back"><Back width="15" height="15" aria-hidden="true" /> بازگشت به سامانه</Link>
+          <Link to="/app" className="wl-absent-back"><Back width="15" height="15" aria-hidden="true" /> بازگشت به امروز</Link>
         </section>
       )}
 
