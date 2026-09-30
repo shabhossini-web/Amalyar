@@ -1,25 +1,25 @@
 <!-- claim:begin -->
 agent: claude-fable
 status: active
-branch: claude/ux-audit
-since: 2026-09-28
+branch: claude/ux-sec2-rest
+since: 2026-09-30
 paths:
-  - .claude/skills/ux-audit/
-  - .claude/skills/ui-ux-pro-max/SKILL.md
-  - scripts/ux/
-  - scripts/verify-theme-tokens.js
-  - src/app/
-  - src/ui/
-  - src/pages/
-  - src/lib/
-  - src/index.css
-  - src/App.jsx
-  - src/main.jsx
-  - server/src/
+  - server/src/auth/
+  - server/src/accounts/
+  - server/src/platform/
+  - server/src/sms/
+  - server/src/common/otp-hash.ts
+  - src/app/Login.jsx
+  - src/app/Users.jsx
+  - scripts/e2e/password-reset.mjs
+  - scripts/e2e/test-accounts.mjs
+  - scripts/e2e/clinical-orders.mjs
+  - scripts/e2e/postop-visit.mjs
+  - scripts/e2e/central-tariffs-ui.mjs
 note: >-
-  بررسیِ کاملِ UX عمل‌یار به خواستِ مالک (۱۴۰۵/۰۷/۰۶): اسکیلِ تازهٔ `ux-audit` + ابزارِ عکس‌برداری
-  (`scripts/ux/*`) + گزارشِ بند‌به‌بند برای تصمیمِ مالک. حالا: رفعِ ۶۶ باگِ قطعیِ گزارش در چند شاخهٔ
-  موازیِ `claude/ux-fix-*` که روی همین شاخه مرج می‌شوند — مسیرهای بالا تا مرج در دستِ این لِین است.
+  بازبینیِ کاملِ UX (۱۱۶ یافته) + بازبینی‌های خصمانه + PS1–PS7/PS12 با #119 رفت. باقی: PS8–PS11ِ دورِ دومِ
+  امنیت (متنِ پیامکِ کدِ ثبت‌نام، ابهامِ نامِ کاربری/موبایل، XFF و شمارشِ اتمیِ پنلِ پلتفرم، کلیدِ HMACِ مشتق) +
+  مقاوم‌کردنِ سه سوییتِ زندهٔ خوابِ ثابت — PRِ کوتاهِ بعدی؛ مسیرهای بالا تا مرجِ آن در دستِ این لِین است.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
