@@ -38,6 +38,7 @@ import { scopedVisitWhere } from '../common/own-scope';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
 import { otpHash } from '../common/otp-hash';
+import { takePublicSms } from '../common/public-sms';
 
 /** سال و ماهِ شمسیِ یک تاریخ — برای گرفتنِ تقویمِ همان ماه (قانون ۱۴). */
 function jalaliYm(d: Date): [number, number] {
@@ -82,6 +83,8 @@ const TTL_DAYS = 14;
 /** پیامکِ «لینکِ ادامه»: سقفِ بی‌صدا به‌ازای شماره (در ساعت) و به‌ازای لینکِ ثبت‌نام (در روز) — بستهٔ PF، PF7. */
 const LINK_SMS_PER_PHONE_HOUR = 2;
 const LINK_SMS_PER_LINK_DAY = 150;
+/** …و به‌ازای هر نشانیِ فرستنده در روز (بستهٔ PS، PS7) — یک نفر سقفِ کلِ لینک را برای بیمارانِ واقعی نسوزاند. */
+const LINK_SMS_PER_IP_DAY = 20;
 /** جای شماره در «لینک به … پیامک شد» — **همیشه** همین برچسب (بستهٔ PS، PS1؛ PF12 فقط وقتِ نابرابری بود). */
 const ON_RECORD_PHONE = 'شمارهٔ ثبت‌شده در پرونده';
 /** کدِ «ادامه با موبایل» — همان قراردادِ کدِ ورود (`auth.service.ts`): ۵ دقیقه، ۵ تلاش. */
@@ -598,7 +601,7 @@ export class IntakeService {
        را هم بی‌اثر می‌کرد. حالا فقط «ادامه» گفته می‌شود: لینک به **شمارهٔ پرونده** پیامک می‌شود (با توکنِ نو —
        `sendContinueLink`) و صفحه به «ادامه با موبایل + کد» می‌رود. پاسخ به شمارهٔ تایپ‌شده بستگی ندارد تا
        راهِ تأییدِ حدسِ شماره نشود. */
-    if (open) return { resume: true as const, linkSmsTo: await this.sendContinueLink(patientId, open, link.title, link.id, { rotate: true }) };
+    if (open) return { resume: true as const, linkSmsTo: await this.sendContinueLink(patientId, open, link.title, link.id, { rotate: true, ip }) };
 
     const row = await this.prisma.intakeSubmission.create({
       data: {
@@ -613,7 +616,7 @@ export class IntakeService {
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
       },
     });
-    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row, link.title, link.id) };
+    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row, link.title, link.id, { ip }) };
   }
 
   /**
@@ -639,7 +642,7 @@ export class IntakeService {
    * واقعی که بعداً ثبت‌نام می‌کرد پیامکی با **همان** توکن می‌گرفت و هر چه در فرم می‌نوشت به دستِ او هم می‌رسید.
    * بهای کم: برگهٔ بازِ قبلی دیگر باز نمی‌شود — لینکِ تازه همان لحظه پیامک شده است.
    */
-  private async sendContinueLink(patientId: number, sub: { id: number; token: string; data?: unknown }, title: string, linkId: number, opts: { rotate?: boolean } = {}): Promise<string | null> {
+  private async sendContinueLink(patientId: number, sub: { id: number; token: string; data?: unknown }, title: string, linkId: number, opts: { rotate?: boolean; ip?: string } = {}): Promise<string | null> {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, deletedAt: null }, select: { phone: true } });
     /* پروندهٔ بی‌شماره ← شمارهٔ خودِ همین ثبت‌نام (PS12). */
     const to = patient ? submissionPhone(patient.phone, sub.data) : null;
@@ -648,11 +651,16 @@ export class IntakeService {
     const bySub = `intake-link-sms:${this.tid}:sub:${sub.id}`;
     const byPhone = `intake-link-sms:${this.tid}:phone:${to}`;
     const byLink = `intake-link-sms:${this.tid}:link:${linkId}`;
+    /* سهمِ روزانهٔ هر نشانی (بستهٔ PS، PS7): سقفِ ۱۵۰تاییِ لینک را یک فرستنده با ۱۵۰ ثبت‌نامِ ساختگی پر می‌کرد و
+       بیمارانِ واقعیِ همان لینک تا فردا بی‌خبر پیامک نمی‌گرفتند. */
+    const byIp = opts.ip ? `intake-link-sms:${this.tid}:ip:${opts.ip}` : null;
     if (!this.rateLimit.peek(bySub, 1)) return null; // همین چند دقیقه پیش رفته است — راهِ ادامه «موبایل + کد»
-    if (!this.rateLimit.peek(byPhone, LINK_SMS_PER_PHONE_HOUR) || !this.rateLimit.peek(byLink, LINK_SMS_PER_LINK_DAY)) return null;
+    if (!this.rateLimit.peek(byLink, LINK_SMS_PER_LINK_DAY)) { this.noteLinkSmsCapped(linkId); return null; }
+    if (!this.rateLimit.peek(byPhone, LINK_SMS_PER_PHONE_HOUR) || (byIp && !this.rateLimit.peek(byIp, LINK_SMS_PER_IP_DAY))) return null;
     this.rateLimit.hit(bySub, 1, 10 * 60_000);
     this.rateLimit.hit(byPhone, LINK_SMS_PER_PHONE_HOUR, 3600_000);
     this.rateLimit.hit(byLink, LINK_SMS_PER_LINK_DAY, 24 * 3600_000);
+    if (byIp) this.rateLimit.hit(byIp, LINK_SMS_PER_IP_DAY, 24 * 3600_000);
     const token = opts.rotate ? await this.rotateToken(sub.id) : sub.token;
     const smsCfg = await this.settings.sms();
     const text = renderSms(smsCfg.formSendText, { title, link: this.publicFormLink(token) });
@@ -663,6 +671,18 @@ export class IntakeService {
       }).catch(() => undefined);
     })().catch(() => undefined);
     return ON_RECORD_PHONE;
+  }
+
+  /**
+   * پرشدنِ سقفِ روزانهٔ «لینکِ ادامه»ی یک لینک **دیده می‌شود** (بستهٔ PS، PS7) — یک ردِ ممیزی در روز برای هر لینک.
+   * تا دیروز بی‌صدا بود: کارکنان نمی‌فهمیدند چرا بیمارانِ امروزِ آن لینک پیامکِ ادامه نگرفته‌اند.
+   */
+  private noteLinkSmsCapped(linkId: number) {
+    const key = `intake-link-sms-capped:${this.tid}:${linkId}`;
+    if (!this.rateLimit.peek(key, 1)) return;
+    this.rateLimit.hit(key, 1, 24 * 3600_000);
+    void Promise.resolve(this.audit?.record({ action: 'intake.link_sms_capped', entityType: 'intake_link', entityId: linkId,
+      after: { perDay: LINK_SMS_PER_LINK_DAY } })).catch(() => undefined);
   }
 
   /** توکنِ تازه برای یک ثبت‌نام — توکنِ پیشین از همین لحظه هیچ‌چیز باز نمی‌کند (PS1). */
@@ -741,6 +761,8 @@ export class IntakeService {
       where: { phone, purpose, createdAt: { gt: new Date(Date.now() - 60_000) } },
     });
     if (recent) return null; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
+    /* سطلِ مشترکِ پیامکِ عمومی به این شماره (بستهٔ PS، PS7) — بی‌صدا؛ پاسخِ درخواست از پیش یکسان است. */
+    if (!takePublicSms(this.rateLimit, this.tid, phone)) return null;
     const code = String(randomInt(100000, 1000000));
     const otp = await this.prisma.otpCode.create({
       data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },

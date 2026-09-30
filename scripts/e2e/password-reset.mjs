@@ -342,7 +342,7 @@ const inProd = inEnv('production');
 const inTest = inEnv('test');
 
 /** IntakeService با دیتابیس و درگاهِ ساختگی — فقط همان چیزهایی که «ادامه با موبایل» و لینکِ ادامه لازم دارند. */
-function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = '09120000000' } = {}) {
+function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = '09120000000', rateLimit = new RateLimitService() } = {}) {
   const seen = { created: [], deleted: [], sent: [], reminders: 0 };
   const prisma = {
     intakeLink: { findUnique: async () => ({ id: 7, token: 'tok', active: true }) },
@@ -365,7 +365,7 @@ function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = 
   const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }), require: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
   const settings = { sms: async () => ({ formSendText: 'فرمِ {title}: {link}' }) };
   const svc = new IntakeService(prisma, undefined, undefined, undefined, undefined, undefined, undefined,
-    sms, tenant, undefined, undefined, undefined, settings, undefined, new RateLimitService());
+    sms, tenant, undefined, undefined, undefined, settings, undefined, rateLimit);
   return { svc, seen };
 }
 
@@ -427,7 +427,7 @@ const cond = (v, c) => {
   return true;
 };
 const matches = (o, w) => Object.entries(w ?? {}).every(([k, c]) => cond(o[k], c));
-function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
+function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitService() } = {}) {
   const db = { otps: [], sent: [], passwords: [], passkeysDeleted: [], barrier: null };
   const account = {
     id: 41, username: 'inproc', status: 'active', level: 2, passwordHash: '$2a$12$fixture', jobRole: null,
@@ -463,13 +463,14 @@ function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
     },
     session: { updateMany: async () => ({ count: 1 }) },
     webauthnCredential: { deleteMany: async ({ where }) => { db.passkeysDeleted.push(where); return { count: 2 }; } },
+    person: { findUnique: async () => null },
   };
   prisma.$transaction = async (fn) => fn(prisma);
   const sms = {
     sendOtp: async (phone, code, host, purpose) => { db.sent.push({ phone, code, host, purpose }); await later(smsDelay); return { sent: false, stub: true }; },
   };
   const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }), require: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
-  const svc = new AuthService(prisma, new JwtService({ secret: process.env.JWT_SECRET }), sms, new RateLimitService(), tenant);
+  const svc = new AuthService(prisma, new JwtService({ secret: process.env.JWT_SECRET }), sms, rateLimit, tenant);
   return { svc, db, account };
 }
 
@@ -506,6 +507,43 @@ function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
   const issued = await inTest(() => svc.requestPasswordReset(account.username, '10.82.2.1'));
   const done = await svc.resetPassword({ identifier: account.username, code: issued?.devCode, password: 'ps4-pass-1' }, { ip: '10.82.2.2' }).catch((e) => e);
   ok(done?.ok === true && db.passwords.length === 1, `PS4: صاحبِ حساب پس از آن با کدِ پیامکش رمز را عوض می‌کند (${done?.ok ?? done?.message})`);
+}
+
+{
+  /* PS7 — سطلِ مشترکِ «پیامکِ عمومی به این شماره»: «ادامه با موبایل»، کدِ ثبت‌نامِ حساب و بازیابی هرکدام سقفِ خودش را
+     داشت (هر یک ۱۲ تا ۲۴ پیامک در ساعت به یک شماره) و با هم بمبارانِ پیامکی با هزینهٔ مطب می‌ساختند. حالا روی هم
+     چهار در ساعت، بی‌صدا: پاسخ همان است، فقط پیامک نمی‌رود. */
+  const rl = new RateLimitService();
+  const intake = fakeIntake({ open: true, rateLimit: rl });
+  const auth = fakeAuth({ rateLimit: rl });
+  const P = auth.account.person.phone;
+  const answers = [];
+  for (let i = 0; i < 3; i++) answers.push(await inTest(() => intake.svc.resumeRequest('tok', P, `10.83.0.${i + 1}`)));
+  const signup = await inTest(() => auth.svc.requestSignupOtp(P, '10.83.1.1'));
+  const reset = await inTest(() => auth.svc.requestPasswordReset(auth.account.username, '10.83.2.1'));
+  await later(30);
+  const sent = intake.seen.sent.filter((x) => x === P).length + auth.db.sent.filter((x) => x.phone === P).length;
+  ok(sent === 4, `PS7: سه «ادامه با موبایل» + کدِ ثبت‌نام + بازیابی به یک شماره ← چهار پیامک، نه پنج (${sent})`);
+  ok(keys(reset) === keys({ ok: true, ttl: 300 }) && !reset.devCode && keys(signup).includes('ttl'),
+    `PS7: پیامکی که سطل نگه داشت همان پاسخِ بی‌کد را دارد، نه ۴۲۹ (${JSON.stringify(reset)})`);
+}
+
+{
+  /* PS7 — سقفِ روزانهٔ «لینکِ ادامه»ی یک لینک دیگر بی‌صدا پر نمی‌شود: پرشدنش یک‌بار در ممیزی دیده می‌شود، و هر نشانی
+     سهمِ روزانهٔ خودش را دارد تا یک فرستنده ۱۵۰ پیامکِ بیمارانِ واقعیِ آن لینک را نسوزاند. */
+  let n = 0;
+  const box = fakeIntake({ recordPhone: '' });
+  const audits = [];
+  box.svc.audit = { record: async (e) => { audits.push(e); } };
+  box.svc.prisma.patient.findFirst = async () => ({ phone: `0913${String(++n).padStart(7, '0')}` });
+  const fromOne = [];
+  for (let i = 1; i <= 21; i++) fromOne.push(await box.svc.sendContinueLink(1, { id: 5000 + i, token: `ip-${i}` }, 'فرم', 8, { ip: '10.84.0.1' }));
+  ok(fromOne.slice(0, 20).every((x) => x) && fromOne[20] === null, `PS7: یک نشانی بیش از ۲۰ لینکِ ادامه در روز نمی‌فرستد (${fromOne.filter(Boolean).length})`);
+  for (let i = 1; i <= 140; i++) await box.svc.sendContinueLink(1, { id: 6000 + i, token: `cap-${i}` }, 'فرم', 8, { ip: `10.85.${Math.floor(i / 200)}.${i % 200}` });
+  const capped = await box.svc.sendContinueLink(1, { id: 7001, token: 'cap-x' }, 'فرم', 8, { ip: '10.86.0.1' });
+  await box.svc.sendContinueLink(1, { id: 7002, token: 'cap-y' }, 'فرم', 8, { ip: '10.86.0.2' });
+  const capAudits = audits.filter((a) => a.action === 'intake.link_sms_capped');
+  ok(capped === null && capAudits.length === 1 && capAudits[0].entityId === 8, `PS7: پرشدنِ سقفِ روزانهٔ لینک یک‌بار در ممیزی ثبت شد (${capAudits.length})`);
 }
 
 {

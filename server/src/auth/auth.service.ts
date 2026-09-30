@@ -14,6 +14,7 @@ import { TenantContext } from '../tenant/tenant-context';
 import { AuditService } from '../audit/audit.service';
 import { toEnDigits } from '../common/identity';
 import { otpHash } from '../common/otp-hash';
+import { takePublicSms } from '../common/public-sms';
 import type { Request, Response } from 'express';
 import { expireProvisional, expireProvisionalInTransaction, isProvisional, isSoleActiveSuperAdmin, isVerificationOverdue, provisionalLapsed } from '../accounts/provisional';
 import { isTestAccount, testAccountsEnabled } from '../accounts/test-accounts';
@@ -109,14 +110,16 @@ export class AuthService {
       throw new BadRequestException('این شماره قبلاً ثبت شده است');
     }
 
-    return this.sendPhoneOtp(phone, 'signup');
+    return this.sendPhoneOtp(phone, 'signup', { publicBucket: true });
   }
 
-  private async sendPhoneOtp(phone: string, purpose: string) {
+  private async sendPhoneOtp(phone: string, purpose: string, opts: { publicBucket?: boolean } = {}) {
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone, purpose, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
     });
     if (recent) throw new BadRequestException('کمی صبر کنید و دوباره تلاش کنید');
+    /* سطلِ مشترکِ پیامکِ عمومی به این شماره (بستهٔ PS، PS7) — بی‌صدا: همان پاسخ، بی‌پیامک و بی‌کد. */
+    if (opts.publicBucket && !takePublicSms(this.rateLimit, this.tid, phone)) return { ok: true, ttl: OTP_TTL_MS / 1000 };
 
     const code = String(randomInt(100000, 1000000)); // ۶ رقمی
     const otp = await this.prisma.otpCode.create({
@@ -533,6 +536,8 @@ export class AuthService {
       where: { phone: target.phone, purpose: RESET_PURPOSE, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
     });
     if (recent) return null;
+    /* سطلِ مشترکِ پیامکِ عمومی به این شماره (PS7) — بی‌صدا، مثلِ بقیهٔ این مسیر. */
+    if (!takePublicSms(this.rateLimit, this.tid, target.phone)) return null;
     const code = String(randomInt(100000, 1000000));
     const otp = await this.prisma.otpCode.create({
       data: { phone: target.phone, codeHash: otpHash(RESET_PURPOSE, target.phone, code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
