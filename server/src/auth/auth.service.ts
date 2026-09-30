@@ -63,6 +63,14 @@ export class AuthService {
     private audit?: AuditService,
   ) {}
 
+  /**
+   * شرکتِ همین درخواست در کلیدِ سطلِ سقفِ نرخ (بستهٔ PF، PF2). `RateLimitService` یک نمونه برای **همهٔ**
+   * شرکت‌هاست؛ بی‌این پیشوند هشت ورودِ غلط با «admin» در شرکتِ الف، «admin»ِ همهٔ شرکت‌ها را قفل می‌کرد.
+   */
+  private get tid() {
+    return this.tenantContext.current()?.tenantId ?? '-';
+  }
+
   async setupStatus() {
     const count = await this.prisma.account.count();
     return { needsSetup: count === 0 };
@@ -70,8 +78,8 @@ export class AuthService {
 
   // ── ثبت‌نام: مرحلهٔ ۱ — ارسالِ کدِ یکبارمصرف ────────────────
   async requestSignupOtp(phone: string, ip = 'unknown') {
-    this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
-    this.rateLimit.hit(`otp:phone:${phone}`, 3, 15 * 60_000);
+    this.rateLimit.hit(`otp:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`otp:${this.tid}:phone:${phone}`, 3, 15 * 60_000);
     /**
      * ⚠️ «شماره تکراری است» فقط وقتی درست است که آن شخص **حساب** داشته باشد.
      *
@@ -132,8 +140,8 @@ export class AuthService {
   }
 
   private async consumePhoneOtp(dto: { phone: string; code: string }, purpose: string, ip: string) {
-    this.rateLimit.hit(`otp-verify:ip:${ip}`, 20, 15 * 60_000);
-    this.rateLimit.hit(`otp-verify:phone:${dto.phone}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`otp-verify:${this.tid}:ip:${ip}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`otp-verify:${this.tid}:phone:${dto.phone}`, 8, 15 * 60_000);
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone: dto.phone, purpose, consumedAt: null },
       orderBy: { createdAt: 'desc' },
@@ -154,8 +162,8 @@ export class AuthService {
   async requestPhoneVerification(user: any, ip: string) {
     if (!isProvisional(user)) throw new BadRequestException('حساب نیازی به تأیید موقت ندارد');
     if (isTestAccount(user)) {
-      this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
-      this.rateLimit.hit(`otp:phone:${user.person.phone}`, 3, 15 * 60_000);
+      this.rateLimit.hit(`otp:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+      this.rateLimit.hit(`otp:${this.tid}:phone:${user.person.phone}`, 3, 15 * 60_000);
       return this.sendPhoneOtp(user.person.phone, `test-account:${user.id}`);
     }
     return this.requestSignupOtp(user.person.phone, ip);
@@ -286,8 +294,8 @@ export class AuthService {
 
   // ── ورود ───────────────────────────────────────────────────
   async login(dto: LoginDto, meta: { ua?: string; ip?: string }) {
-    this.rateLimit.hit(`login:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
-    this.rateLimit.hit(`login:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`login:${this.tid}:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
+    this.rateLimit.hit(`login:${this.tid}:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
     const id = dto.identifier.trim();
     // ورود با نام کاربری (روی Account) یا موبایل (روی Person).
     const account = await this.prisma.account.findFirst({
@@ -467,8 +475,8 @@ export class AuthService {
 
   async requestPasswordReset(identifier: string, ip = 'unknown') {
     const key = toEnDigits(identifier).trim().toLowerCase();
-    this.rateLimit.hit(`pwreset:ip:${ip}`, 10, 15 * 60_000);
-    this.rateLimit.hit(`pwreset:id:${key}`, 3, 15 * 60_000);
+    this.rateLimit.hit(`pwreset:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`pwreset:${this.tid}:id:${key}`, 3, 15 * 60_000);
     const same = { ok: true, ttl: OTP_TTL_MS / 1000 };
     const target = await this.resetTarget(identifier);
     if (!target) return same;
@@ -502,8 +510,8 @@ export class AuthService {
 
   async resetPassword(dto: { identifier: string; code: string; password: string }, meta: { ua?: string; ip?: string }) {
     const key = toEnDigits(dto.identifier).trim().toLowerCase();
-    this.rateLimit.hit(`pwreset-verify:ip:${meta.ip ?? 'unknown'}`, 20, 15 * 60_000);
-    this.rateLimit.hit(`pwreset-verify:id:${key}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`pwreset-verify:${this.tid}:ip:${meta.ip ?? 'unknown'}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`pwreset-verify:${this.tid}:id:${key}`, 8, 15 * 60_000);
     const target = await this.resetTarget(dto.identifier);
     if (!target) throw new BadRequestException(RESET_BAD);
     const otp = await this.prisma.otpCode.findFirst({

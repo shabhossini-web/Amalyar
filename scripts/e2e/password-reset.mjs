@@ -12,6 +12,7 @@
  *
  * بازبینیِ امنیتیِ بستهٔ P (بستهٔ PF) — هر بخش سنجه‌ای است که **بی‌اصلاح قرمز** می‌شد:
  *  - PF1: شمارهٔ کسی که حساب دارد از «تعاریف» (جراح/راننده) عوض نمی‌شود (۴۰۳)، و سوپرادمین کدِ پیامکی نمی‌گیرد
+ *  - PF2: سطلِ سقفِ نرخ به‌ازای نشانیِ واقعی (تهِ X-Forwarded-For) و جدا برای هر شرکت
  *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
@@ -33,11 +34,15 @@ class Jar {
   }
   header() { return [...this.c].map(([k, v]) => `${k}=${v}`).join('; '); }
 }
-const call = async (path, { method = 'POST', body, jar, bearer } = {}) => {
+/* شرکتِ دوم روی همان API (میزبانِ دیگر) — `bootstrap-env.mjs` همین میزبان را ثبت می‌کند. */
+const API_B = process.env.E2E_API_B ?? API.replace(/\/\/(localhost|127\.0\.0\.1)(?=[:/])/, `//${process.env.E2E_HOST_B ?? '127.0.0.2'}`);
+const call = async (path, { method = 'POST', body, jar, bearer, ip, base = API } = {}) => {
   const headers = { 'Content-Type': 'application/json' };
   if (jar) headers.Cookie = jar.header();
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
-  const res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  /* نشانیِ بازدیدکننده همان‌طور که Traefik می‌فرستد (تهِ `X-Forwarded-For`) — هر بخش سطلِ IPِ خودش. */
+  if (ip) headers['X-Forwarded-For'] = ip;
+  const res = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
   jar?.absorb(res);
   return { status: res.status, json: await res.json().catch(() => null) };
 };
@@ -146,7 +151,24 @@ const bossReset = await call('/auth/password/reset', { body: { identifier: boss.
 ok(bossReset.status === 400 && msg(bossReset) === msg(wrong), 'و تأییدش همان پیامِ عام');
 await call(`/accounts/${boss.id}/reject`, { body: {}, bearer }); // سوپرادمینِ آزمونی فعال نماند
 
-console.log('\n۵) سقفِ نرخ برای شناسهٔ ناموجود هم');
+console.log('\n۵) PF2 — سقفِ نرخِ بازیابی به‌ازای نشانیِ واقعی و جدا برای هر شرکت');
+/* پشتِ Traefik همهٔ درخواست‌ها یک `req.ip` دارند؛ سطلِ ۱۰تاییِ IP روی آن یعنی ده درخواستِ هر کسی بازیابی را
+   برای همه قفل می‌کرد. ۱۱ بازدیدکنندهٔ جدا (هرکدام شناسهٔ خودش) ← هیچ‌کدام ۴۲۹ نمی‌گیرد. */
+const crowd = [];
+for (let i = 1; i <= 11; i++) crowd.push(await call('/auth/password/request-otp', { body: { identifier: `crowd${i}x${run}` }, ip: `10.61.${i}.1` }));
+ok(crowd.every((r) => r.status < 300), `۱۱ نشانیِ جدا ← بی ۴۲۹ (${crowd.map((r) => r.status).join('،')})`);
+/* خانهٔ اولِ X-Forwarded-For را خودِ فرستنده می‌نویسد — جعلش سطلِ تازه نمی‌دهد (سنجهٔ منفی). */
+const spoof = [];
+for (let i = 1; i <= 11; i++) spoof.push(await call('/auth/password/request-otp', { body: { identifier: `spoof${i}x${run}` }, ip: `1.2.3.${i}, 10.62.0.1` }));
+ok(spoof.slice(0, 10).every((r) => r.status < 300) && spoof[10].status === 429, `جعلِ خانهٔ اول از سطلِ ۱۰تایی بیرون نمی‌برد (${spoof.map((r) => r.status).join('،')})`);
+/* سطلِ شناسه مالِ همان شرکت است: «admin» در هر شرکت یک حسابِ دیگر است. */
+const tid = `tenant${run}`;
+const inA = [];
+for (let i = 0; i < 4; i++) inA.push(await call('/auth/password/request-otp', { body: { identifier: tid }, ip: '10.63.0.1' }));
+const inB = await call('/auth/password/request-otp', { body: { identifier: tid }, ip: '10.63.0.1', base: API_B }).catch((e) => ({ status: 0, json: { message: e.message } }));
+ok(inA[3].status === 429 && inB.status < 300, `شناسهٔ پرشده در شرکتِ الف، شرکتِ ب را قفل نمی‌کند (الف: ${inA.map((r) => r.status).join('،')} · ب: ${inB.status})`, msg(inB));
+
+console.log('\n۶) سقفِ نرخ برای شناسهٔ ناموجود هم');
 const probe = `ratelimit${run}`;
 const codes = [];
 for (let i = 0; i < 4; i++) codes.push(await call('/auth/password/request-otp', { body: { identifier: probe } }));
