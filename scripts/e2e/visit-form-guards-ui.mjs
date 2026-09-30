@@ -5,6 +5,8 @@
  *
  *  باید بیفتد:
  *   - FF15: نوشته‌ای که پیش از رسیدنِ زیرفرم‌ها تایپ شد «ذخیره‌نشده» است؛ و اگر خواندنشان شکست خورد، نگهبان باز هم کار می‌کند
+ *   - FF7: لینکِ نامعتبر در زبانهٔ پنهانِ «مشخصات» ذخیره را بی‌صدا نمی‌بندد — فرم به همان زبانه و فیلد می‌رود (شرکت)
+ *   - FF9: خطای «ویزیتِ بعدی» در فرمِ عمل به زبانهٔ «بعد از عمل» می‌رود و کنارِ خودِ کادر دیده می‌شود
  *  نباید بیفتد:
  *   - FF11: فرمِ ویرایش پرونده جست‌وجو کند (`/patients?q=`)
  */
@@ -141,6 +143,39 @@ try {
     ok(await sheetOpen(page), 'فرم باز است');
   });
 
+  await scene('\n۵) FF9 — خطای «ویزیتِ بعدی» به زبانهٔ «بعد از عمل» می‌رود', async () => {
+    const o = {};
+    const { page } = await openForm(o);
+    await page.getByRole('tab', { name: 'بعد از عمل' }).click();
+    const next = page.locator('.jd-next input').first();
+    await next.fill('1405/13/40');
+    await page.getByRole('tab', { name: /مشخصات/ }).click();
+    await page.locator('.db-sheet .db-submit').last().click();
+    await page.locator('[data-core="nextVisitDate"].vf-bad').waitFor({ timeout: 5000 }).catch(() => {});
+    const sel = await page.getByRole('tab', { name: 'بعد از عمل' }).getAttribute('aria-selected');
+    ok(sel === 'true', '**باید بیفتد:** فرم به زبانهٔ «بعد از عمل» رفت', String(sel));
+    ok(await page.locator('[data-core="nextVisitDate"].vf-bad .vf-core-err').count() === 1, 'خطا کنارِ خودِ کادرِ «ویزیتِ بعدی» است');
+    ok(!(o.patches ?? []).length, 'چیزی ذخیره نشد');
+  });
+
+  await scene('\n۷) FF7 — لینکِ نامعتبرِ زبانهٔ پنهان ذخیره را بی‌صدا نمی‌بندد (شرکت)', async () => {
+    const o = { company: true, custom: [{ key: 'refs', label: 'لینک‌های آزمونی', type: 'links', active: true }] };
+    const { page } = await openForm(o);
+    await page.getByRole('tab', { name: /مشخصات/ }).click();
+    /* دکمه لبهٔ پایینِ شیت است و نوارِ چسبانِ «ذخیره» رویش می‌افتد — اول وسطِ دید. */
+    const add = page.locator('.db-sheet .dyn-links .dyn-img-pick').first();
+    await add.evaluate((b) => b.scrollIntoView({ block: 'center' }));
+    await add.click();
+    await page.locator('.db-sheet input[type="url"]').first().fill('example.com/بی‌پروتکل');
+    await page.getByRole('tab', { name: 'حین عمل' }).click();
+    await page.locator('.db-sheet .db-submit').last().click();
+    await page.waitForFunction(() => document.querySelector('.db-sheet [data-tab="info"]')?.hidden === false, null, { timeout: 5000 }).catch(() => {});
+    ok(await page.locator('.db-sheet [data-tab="info"]').evaluate((e) => !e.hidden), '**باید بیفتد:** فرم به زبانهٔ «مشخصات» رفت');
+    const err = await page.locator('.db-sheet').innerText();
+    ok(/http/.test(err) && err.includes('لینک‌های آزمونی'), 'خطای «نشانی باید با http شروع شود» دیده می‌شود');
+    ok(!(o.patches ?? []).length, 'چیزی ذخیره نشد');
+    ok(await page.locator('.db-sheet form, form.db-sheet').first().evaluate((f) => f.noValidate), 'فرم `noValidate` است');
+  });
 } finally {
   await browser.close();
   vite.stop();

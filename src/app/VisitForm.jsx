@@ -1061,8 +1061,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const PATIENT_KEYS = ['nationalId', 'birthDate'];
   const revealCore = (key) => {
     if (PATIENT_KEYS.includes(key)) { if (editing) setIdOpen(true); else setStep(1); }
-    /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
-    else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : 'info');
+    /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، «ویزیتِ بعدی» در زبانهٔ «بعد» (کنارِ مراقبتِ پس از عمل —
+       بستهٔ FF، FF9)، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
+    else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : key === 'nextVisitDate' ? 'post' : 'info');
     revealSel(`[data-core="${key}"]`);
   };
 
@@ -2001,7 +2002,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      حینِ عمل داخلِ تبِ خودشان‌اند، پس بعد از بقیه. */
   const orderCore = (keys) => {
     const base = ['nationalId', 'birthDate', 'service', ...builtinOrder];
-    const rank = (k) => (base.indexOf(k) < 0 ? 999 : base.indexOf(k)) + (f.kind === 'surgery' && INTRA_KEYS.includes(k) ? 500 : 0);
+    const rank = (k) => (base.indexOf(k) < 0 ? 999 : base.indexOf(k))
+      + (f.kind === 'surgery' && INTRA_KEYS.includes(k) ? 500 : 0) + (f.kind === 'surgery' && k === 'nextVisitDate' ? 1000 : 0);
     return [...keys].sort((a, b) => rank(a) - rank(b));
   };
 
@@ -2181,6 +2183,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     <Overlay
       backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom"
       onClose={onClose} onSubmit={submit} closable={!busy}
+      /* ⚠️ `noValidate` (بستهٔ FF، FF7): سنجش همه در JS است (`parseCore`، `dynErrors`) و هر خطا به زبانه و کنارِ
+         فیلدِ خودش می‌رود. سنجشِ بومیِ مرورگر روی کادرِ پنهان (`type="url"`ِ لینک در زبانهٔ «مشخصات» وقتی کاربر
+         در زبانهٔ دیگر است) ذخیره را **بی‌صدا** می‌بست: «An invalid form control is not focusable». */
+      noValidate
       /* نگهبانِ تغییرِ ذخیره‌نشده — «ذخیره» همان ارسالِ فرم است با همهٔ اعتبارسنجی‌ها؛ پیش از گامِ
          «تکمیل» هنوز چیزی برای ذخیره نیست و پرسش فقط «دور ریختن / ادامه» می‌دهد. لمسِ پس‌زمینه این
          فرمِ بلند را نمی‌بندد: بیشتر اشتباهِ انگشت است تا خواستنِ بستن. */
@@ -2716,12 +2722,15 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <span>اولین مراجعهٔ بعد از عمل (ویزیتِ پست‌آپ)</span>
               <i>{timing ? `یادآوری: ${faNum(timing.nextVisitDays)} روز قبل از همان تاریخ` : 'یادآوری پیش از موعد'}</i>
             </div>
-            <JDate
-              className="db-field jd-next"
-              value={f.nextVisitDateJ}
-              onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
-              placeholder="سال / ماه / روز"
-            />
+            <div data-core="nextVisitDate" className={coreErr.nextVisitDate ? 'vf-bad' : undefined}>
+              <JDate
+                className="db-field jd-next"
+                value={f.nextVisitDateJ}
+                onChange={(v) => setF((s2) => ({ ...s2, nextVisitDateJ: v }))}
+                placeholder="سال / ماه / روز"
+              />
+              {coreErr.nextVisitDate && <small className="vf-core-err" role="alert">{coreErr.nextVisitDate}</small>}
+            </div>
           </div>
           <p className="db-postop-plan">
             {timing && timing.followUpFormReady === false
