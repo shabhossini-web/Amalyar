@@ -9,7 +9,7 @@ import { useStagger } from '../ui/stagger.js';
 import Toast, { useToast } from '../ui/Toast.jsx';
 import { useConfig, useTerms } from './config.jsx';
 import { roleShown } from '../lib/terms.js';
-import { allTools, toolsOfFeature, useToolTitle } from './tools.jsx';
+import { allTools, invalidateFeatures, toolsOfFeature, useToolTitle } from './tools.jsx';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 
@@ -55,6 +55,8 @@ export default function Access() {
     setBusy(`${r.kind}:${r.key}`);
     try {
       await api(url(r), { method: 'PATCH', body });
+      /* کاشی‌ها از `/features`ِ کش‌شده ساخته می‌شوند — بی‌این، ماژولِ خاموش‌شده تا ۱۵ ثانیه کاشی داشت (R10). */
+      invalidateFeatures();
       /* «واگرد» در خودِ توست — تغییرِ دسترسی فوراً روی سرور می‌نشیند و تا بازبینیِ UX تنها
          بازخوردش توستی ۲٫۴ ثانیه‌ای بود. */
       setToast(msg, undo ? { ms: 7000, action: { label: 'واگرد', run: () => write(r, undo, `«${r.label}» به حالتِ قبل برگشت`, null) } } : {});
@@ -106,6 +108,7 @@ export default function Access() {
     setBusy(`${r.kind}:${r.key}`);
     try {
       await api(`${url(r)}/reset`, { method: 'POST' });
+      invalidateFeatures();
       setToast(`«${r.label}» به پیش‌فرض برگشت`);
       await load();
     } catch (e) { setToast(e.message); } finally { setBusy(''); }

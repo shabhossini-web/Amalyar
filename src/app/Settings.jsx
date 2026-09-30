@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { useConfig, useTerms } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
-import { useToolTitle } from './tools.jsx';
+import { invalidateFeatures, useToolTitle } from './tools.jsx';
 import { randomNationalId, toEnDigits } from '../lib/identity.js';
 import { jToFa, todayJStr } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
@@ -105,6 +105,8 @@ export default function Settings() {
     setBusy(true);
     try {
       await api('/config/profile', { method: 'PATCH', body: body() });
+      /* نوعِ نصب ماژول‌ها را روشن/خاموش می‌کند — کشِ کاشی‌ها هم باید برود (R10). */
+      invalidateFeatures();
       await reload();
       setPreview(null);
       setToast(`نوع و خدماتِ ${org} ذخیره شد`);
