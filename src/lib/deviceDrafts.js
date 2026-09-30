@@ -48,3 +48,46 @@ export function writeDraft(k, text, base) {
 export function dropDraft(k) {
   try { store()?.removeItem(k); } catch { /* همان */ }
 }
+
+/**
+ * **جارو** (بازبینیِ خصمانهٔ بستهٔ F، FF2): پیش‌نویسِ کهنه یا خراب تا دیروز فقط وقتی پاک می‌شد که
+ * همان کارت دوباره باز شود — یعنی متنِ بالینیِ عملی که کسی دیگر بازش نکرد روی تبلتِ مشترکِ اتاقِ عمل
+ * برای همیشه می‌ماند. حالا هر بارِ بارگذاریِ برنامه همه‌شان سنجیده می‌شوند (پایینِ همین فایل).
+ */
+export function sweepDrafts(now = Date.now()) {
+  const ls = store();
+  if (!ls) return 0;
+  try {
+    const dead = [];
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if (!k || !k.startsWith(DRAFT_PREFIX)) continue;
+      let v = null;
+      try { v = JSON.parse(ls.getItem(k) ?? 'null'); } catch { /* خراب — همان کهنه */ }
+      if (!fresh(v, now)) dead.push(k);
+    }
+    dead.forEach((k) => ls.removeItem(k));
+    return dead.length;
+  } catch { return 0; }
+}
+
+/**
+ * پیش‌نویس‌های یک کاربر — یا بی‌شناسه، همهٔ کاربرانِ این دستگاه. با خروج یا تعویضِ حساب صدا زده
+ * می‌شود (`auth.jsx`): روی تبلتِ مشترک، نفرِ بعدی نباید شرحِ عملِ ذخیره‌نشدهٔ نفرِ قبل را در
+ * ذخیره‌سازیِ مرورگر پیدا کند.
+ */
+export function clearUserDrafts(uid) {
+  const ls = store();
+  if (!ls) return;
+  const pre = uid == null ? DRAFT_PREFIX : `${DRAFT_PREFIX}${uid}:`;
+  try {
+    const keys = [];
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if (k && k.startsWith(pre)) keys.push(k);
+    }
+    keys.forEach((k) => ls.removeItem(k));
+  } catch { /* ذخیره‌سازیِ بسته */ }
+}
+
+sweepDrafts();

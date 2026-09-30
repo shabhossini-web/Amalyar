@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
+import { clearUserDrafts } from '../lib/deviceDrafts.js';
 import {
   getAccounts,
   upsertAccount,
@@ -53,6 +54,14 @@ export function AuthProvider({ children }) {
   // نسخهٔ لیستِ حساب‌ها — برای رفرشِ UI بعد از هر تغییرِ مخزن
   const [accountsVersion, setAccountsVersion] = useState(0);
   const bump = () => setAccountsVersion((v) => v + 1);
+  /* پیش‌نویس‌های بالینیِ دستگاه (میزِ اتاقِ عمل) مالِ همان کاربرند: با خروج یا تعویضِ حساب روی تبلتِ
+     مشترک پاک می‌شوند (بستهٔ FF، FF2) — هر راهی که کاربرِ فعال را عوض کند، از جمله نشستِ مرده. */
+  const lastUid = useRef(null);
+  useEffect(() => {
+    const was = lastUid.current;
+    lastUid.current = user?.id ?? null;
+    if (was != null && was !== lastUid.current) clearUserDrafts(was);
+  }, [user?.id]);
 
   /** فهرستِ زندهٔ سرور → کشِ محلی. خطای شبکه → کشِ قبلی می‌ماند. */
   const syncAccounts = useCallback(async () => {
@@ -216,6 +225,7 @@ export function AuthProvider({ children }) {
   const logoutAccount = useCallback(
     async (id) => {
       let r = null;
+      clearUserDrafts(id);
       try {
         r = await api('/auth/logout', { method: 'POST', body: id !== user?.id ? { accountId: id } : {}, quiet401: true });
       } catch {
@@ -242,6 +252,7 @@ export function AuthProvider({ children }) {
 
   /** خروج از همهٔ حساب‌ها (سشن‌های سرور هم باطل می‌شوند) */
   const logoutAll = useCallback(async () => {
+    clearUserDrafts();
     try {
       await api('/auth/logout-all', { method: 'POST', quiet401: true });
     } catch {

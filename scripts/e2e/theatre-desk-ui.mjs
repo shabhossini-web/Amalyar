@@ -7,9 +7,12 @@
  *   - FF1: همان پرسش پس از بستن و بازکردنِ کارت (پیش‌نویسِ دستگاه پایه‌اش را دارد)
  *   - FF1: پیش‌نویسِ هم‌پایه با پرونده بی‌پرسش برمی‌گردد و «ذخیره» پایه را هم می‌فرستد
  *   - FF1: «ادامه با نوشتهٔ من» فقط با «ذخیره»ِ صریح جایگزین می‌کند؛ ۴۰۹ِ سرور کارت را تازه می‌کند
+ *   - FF2: بارگذاریِ برنامه پیش‌نویسِ کهنه و خراب را جارو می‌کند
+ *   - FF2: خروج و تعویضِ حساب پیش‌نویس‌های همان کاربر را پاک می‌کنند
  *  نباید بیفتد:
  *   - FF1: شرحِ تازه‌ترِ پرونده با پیش‌نویسِ کهنه جایگزین شود — نه از «ذخیره»ِ کارت، نه از پرسشِ «فهرستِ روز»
  *   - FF1: پیش‌نویسِ بی‌پایه (نسخهٔ پیشین) بی‌صدا برگردد
+ *   - FF2: نوشتهٔ یک کاربر پس از تعویضِ حساب زیرِ کلیدِ کاربرِ بعدی بنشیند
  */
 import { startVite, launch, mockContext } from './lib/mock-ui.mjs';
 
@@ -41,11 +44,15 @@ const cardOf = (S) => ({
  * APIِ ساختگیِ stateful. `S` وضعیتِ «سرور» است و آزمون وسطِ راه عوضش می‌کند — همان کاری که
  * فرمِ عمل یا دستگاهِ دیگر با پرونده می‌کند. `S.onReport` پاسخِ ذخیرهٔ شرح را تعیین می‌کند.
  */
+const ME = { id: UID, level: 6, status: 'active', firstName: 'جراحِ', lastName: 'آزمونی', displayName: 'جراحِ آزمونی', levelName: 'سوپرادمین' };
+const NURSE = { id: 8, level: 2, status: 'active', firstName: 'پرستارِ', lastName: 'آزمونی', displayName: 'پرستارِ آزمونی', levelName: 'کارشناس' };
 const makeServer = (S) => ({ path, method, body }) => {
-  if (path === '/auth/me') return { id: UID, level: 6, status: 'active', firstName: 'جراحِ', lastName: 'آزمونی', displayName: 'جراحِ آزمونی' };
+  if (path === '/auth/me') return S.me ?? ME;
   if (path === '/config') return { vertical: 'clinic', kind: 'clinic', services: [], brand: {} };
   if (path === '/features') return ['theatre', 'dashboard'].map((key) => ({ key, allowed: true }));
-  if (path === '/auth/accounts') return [];
+  if (path === '/auth/accounts') return S.accounts ?? [];
+  if (path === '/auth/switch' && method === 'POST') { S.me = [ME, NURSE].find((u) => u.id === body?.accountId) ?? ME; return S.me; }
+  if (path === '/auth/logout' && method === 'POST') return { next: null };
   if (path.startsWith('/theatre/day')) {
     return { date: '2026-09-30', team: false, visits: [{ id: VID, code: 'AM-0001-V2', patientId: 5, patient: 'بیمارِ آزمونی', opStartTime: S.start, opEndTime: S.end, opStatus: 'pending', dischargeAt: null, state: 'waiting', stateFa: 'در انتظار', chiefComplaint: null, procedure: 'عملِ آزمونی', hospital: null, surgeon: null }] };
   }
@@ -77,7 +84,7 @@ const open = async (S, { seed = {}, viewport = { width: 390, height: 844 } } = {
     try {
       if (sessionStorage.getItem('__seeded')) return;
       sessionStorage.setItem('__seeded', '1');
-      for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, JSON.stringify(v));
+      for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
     } catch { /* سندِ بی‌ذخیره‌سازی */ }
   }, seed);
   const page = await c.context.newPage();
@@ -87,6 +94,7 @@ const open = async (S, { seed = {}, viewport = { width: 390, height: 844 } } = {
   return { ...c, page };
 };
 const draftOf = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), DKEY);
+const draftKeys = (page) => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('amalyar_draft:')).sort());
 const reportWrites = (w) => w.filter((x) => x.path === `/theatre/visits/${VID}/report`);
 
 try {
@@ -168,6 +176,68 @@ try {
     await page.locator('[data-note-conflict]').waitFor();
     ok((await page.locator('[data-note-conflict]').innerText()).includes('شرحِ ج — دستگاهِ دیگر'), '**باید بیفتد:** ۴۰۹ کارت را تازه کرد و متنِ واقعیِ پرونده در پرسش است');
     ok((await page.locator('.th-toast').innerText()).includes('عوض شده'), 'پیامِ فارسیِ سرور دیده شد');
+    await context.close();
+  }
+
+  console.log('\n۵) FF2 — جارو هنگامِ بارگذاری');
+  {
+    const S = { report: null, start: null, end: null };
+    const now = Date.now();
+    const { page, context } = await open(S, {
+      seed: {
+        [`amalyar_draft:${UID}:99:opReport`]: { text: 'متنِ یک روز و یک ساعت پیش', base: '', at: now - 25 * 3600e3 },
+        'amalyar_draft:8:98:findings': 'خراب{',
+        [`amalyar_draft:${UID}:97:opReport`]: { text: 'متنِ یک ساعت پیش', base: '', at: now - 3600e3 },
+        amalyar_unrelated: 'x',
+      },
+    });
+    const keys = await draftKeys(page);
+    ok(!keys.includes(`amalyar_draft:${UID}:99:opReport`) && !keys.includes('amalyar_draft:8:98:findings'),
+      '**باید بیفتد:** پیش‌نویسِ کهنه و خراب بی‌آنکه کارتش باز شود جارو شد', keys.join(' '));
+    ok(keys.includes(`amalyar_draft:${UID}:97:opReport`) && await page.evaluate(() => localStorage.getItem('amalyar_unrelated') === 'x'),
+      'پیش‌نویسِ تازه و کلیدِ بی‌ربط سرِ جایشان‌اند');
+    await context.close();
+  }
+
+  console.log('\n۶) FF2 — تعویضِ حساب روی تبلتِ مشترک');
+  {
+    const S = { report: null, start: null, end: null, accounts: [{ ...ME, active: true }, NURSE] };
+    const { page, context } = await open(S, {
+      seed: {
+        [DKEY]: { text: 'شرحِ ذخیره‌نشدهٔ جراح', base: '', at: Date.now() - 60e3 },
+        'amalyar_draft:8:50:opReport': { text: 'پیش‌نویسِ خودِ پرستار', base: '', at: Date.now() - 60e3 },
+      },
+    });
+    page.on('dialog', (d) => d.accept());
+    ok(await page.locator('[data-report]').inputValue() === 'شرحِ ذخیره‌نشدهٔ جراح', 'پیش‌نویسِ جراح روی کارتش برگشت');
+    await page.locator('.pm-chip').click();
+    await page.locator('.pm-acc-main', { hasText: 'پرستارِ آزمونی' }).click();
+    await page.locator('.pm-chip', { hasText: 'پرستارِ آزمونی' }).waitFor();
+    await page.waitForFunction((k) => !localStorage.getItem(k), DKEY);
+    const keys = await draftKeys(page);
+    ok(!keys.some((k) => k.startsWith(`amalyar_draft:${UID}:`)), '**باید بیفتد:** پیش‌نویس‌های جراح با تعویضِ حساب پاک شد', keys.join(' '));
+    ok(keys.includes('amalyar_draft:8:50:opReport'), 'پیش‌نویسِ کاربرِ تازه دست نخورد');
+    ok(!keys.includes(`amalyar_draft:8:${VID}:opReport`), '**نباید بیفتد:** نوشتهٔ جراح زیرِ کلیدِ پرستار ننشست', keys.join(' '));
+    ok(!(await page.locator('[data-report]').inputValue()).includes('جراح'), 'کارت برای کاربرِ تازه از نو ساخته شد');
+    await context.close();
+  }
+
+  console.log('\n۷) FF2 — خروج');
+  {
+    const S = { report: null, start: null, end: null };
+    const { page, context } = await open(S, {
+      seed: {
+        [`amalyar_draft:${UID}:61:opReport`]: { text: 'شرحِ عملِ دیگرِ جراح', base: '', at: Date.now() - 60e3 },
+        'amalyar_draft:8:50:opReport': { text: 'پیش‌نویسِ پرستار', base: '', at: Date.now() - 60e3 },
+      },
+    });
+    page.on('dialog', (d) => d.accept());
+    await page.locator('.pm-chip').click();
+    await page.locator('.pm-item', { hasText: /^\s*خروج\s*$/ }).click();
+    await page.waitForURL(/\/login/);
+    const keys = await draftKeys(page);
+    ok(!keys.some((k) => k.startsWith(`amalyar_draft:${UID}:`)), '**باید بیفتد:** خروج پیش‌نویس‌های همان کاربر را پاک کرد', keys.join(' '));
+    ok(keys.includes('amalyar_draft:8:50:opReport'), 'پیش‌نویسِ کاربرِ دیگرِ دستگاه دست نخورد (خروجِ او پاکش می‌کند)');
     await context.close();
   }
 } finally {

@@ -74,6 +74,7 @@ const minutesBetween = (from, to) => {
  */
 export default function Theatre() {
   const t = useTerms();
+  const { user: me } = useAuth();
   /* **نشانی منبعِ حقیقتِ روز و عملِ باز است** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-06):
      «/app/theatre?date=1405-07-06&visit=19». تا دیروز هر دو فقط در state بودند: «برگشت»ِ گوشی به‌جای
      فهرستِ روز از کلِ صفحه بیرون می‌رفت، تازه‌کردن عملِ باز و روزِ انتخابی را گم می‌کرد و پیوندِ یک عمل
@@ -279,6 +280,9 @@ export default function Theatre() {
       {openId && !card && <p className="th-empty">در حالِ بارگذاری…</p>}
       {openId && card && (
         <Card
+          /* کارت مالِ کاربرِ فعال است: تعویضِ حساب از منوی پروفایل آن را از نو می‌سازد — نوشتهٔ یک نفر زیرِ
+             کلیدِ پیش‌نویسِ نفرِ بعدی نمی‌نشیند (FF2). */
+          key={me?.id ?? 0}
           card={card}
           team={!!day?.team}
           techLabel={t.tech}
