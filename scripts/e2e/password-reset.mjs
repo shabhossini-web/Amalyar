@@ -175,5 +175,66 @@ for (let i = 0; i < 4; i++) codes.push(await call('/auth/password/request-otp', 
 ok(codes.slice(0, 3).every((r) => r.status < 300) && codes[3].status === 429 && /زیاد/.test(msg(codes[3])),
   `سه درخواست ← سپس ۴۲۹ فارسی (${codes.map((r) => r.status).join('،')})`);
 
+/* ── درونِ فرایند: چیزهایی که سرورِ زنده در NODE_ENV=test نشانشان نمی‌دهد ─────────────────────────────
+   آزمونِ زنده کد را از پاسخ می‌گیرد (devCode)، پس در محیطِ آزمون سرور عمداً منتظرِ کارش می‌ماند. رفتارِ
+   production (پاسخِ فوری، کارِ جداشده) این‌جا با خودِ کلاس‌های بیلدشده و دیتابیس/درگاهِ ساختگی سنجیده می‌شود. */
+console.log('\n۷) درونِ فرایند (NODE_ENV=production، دیتابیس و درگاهِ ساختگی)');
+const { createRequire } = await import('node:module');
+const requireServer = createRequire(new URL('../../server/package.json', import.meta.url));
+requireServer('reflect-metadata');
+const { IntakeService } = requireServer('./dist/patients/intake.service.js');
+const { RateLimitService } = requireServer('./dist/common/rate-limit.service.js');
+const later = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+const timed = async (fn) => { const t0 = performance.now(); const r = await fn(); return { r, ms: performance.now() - t0 }; };
+const inProd = async (fn) => {
+  const was = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try { return await fn(); } finally { process.env.NODE_ENV = was; }
+};
+
+/** IntakeService با دیتابیس و درگاهِ ساختگی — فقط همان چیزهایی که «ادامه با موبایل» و لینکِ ادامه لازم دارند. */
+function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = '09120000000' } = {}) {
+  const seen = { created: [], deleted: [], sent: [], reminders: 0 };
+  const prisma = {
+    intakeLink: { findUnique: async () => ({ id: 7, token: 'tok', active: true }) },
+    intakeSubmission: { findFirst: async () => (open ? { id: 1, token: 'sub' } : null) },
+    patient: { findFirst: async () => ({ phone: recordPhone }) },
+    reminder: { create: async () => { seen.reminders++; return {}; } },
+    otpCode: {
+      findFirst: async () => null,
+      create: async ({ data }) => { seen.created.push(data); return { id: 99, ...data }; },
+      deleteMany: async ({ where }) => { seen.deleted.push(where); return { count: 1 }; },
+    },
+  };
+  const deliver = async (to) => {
+    seen.sent.push(to);
+    await later(smsDelay);
+    if (smsFail) throw new Error('درگاهِ ساختگی نپذیرفت');
+    return { sent: true, stub: false };
+  };
+  const sms = { sendOtp: deliver, send: deliver };
+  const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
+  const settings = { sms: async () => ({ formSendText: 'فرمِ {title}: {link}' }) };
+  const svc = new IntakeService(prisma, undefined, undefined, undefined, undefined, undefined, undefined,
+    sms, tenant, undefined, undefined, undefined, settings, undefined, new RateLimitService());
+  return { svc, seen };
+}
+
+{
+  /* PF3 — «ادامه با موبایل»: پاسخ منتظرِ درگاهِ پیامک نمی‌ماند، پس زمانش نمی‌گوید ثبت‌نامِ بازی هست یا نه. */
+  const slow = fakeIntake({ open: true, smsDelay: 600 });
+  const none = fakeIntake({ open: false });
+  const a = await inProd(() => timed(() => slow.svc.resumeRequest('tok', '09120000001', '10.70.0.1')));
+  const b = await inProd(() => timed(() => none.svc.resumeRequest('tok', '09120000002', '10.70.0.2')));
+  ok(a.ms < 200, `PF3: ثبت‌نامِ باز + درگاهِ کند (۶۰۰ms) ← پاسخ در ${Math.round(a.ms)}ms`);
+  ok(JSON.stringify(a.r) === JSON.stringify(b.r), 'PF3: پاسخِ «ثبت‌نامِ باز هست» و «نیست» یکی است', `${JSON.stringify(a.r)} / ${JSON.stringify(b.r)}`);
+  await later(700);
+  ok(slow.seen.created.length === 1 && slow.seen.sent.length === 1, 'PF3: کد در پس‌زمینه ساخته و پیامک شد');
+  const broken = fakeIntake({ open: true, smsFail: true });
+  await inProd(() => broken.svc.resumeRequest('tok', '09120000003', '10.70.0.3'));
+  await later(60);
+  ok(broken.seen.deleted.length === 1, 'PF3: پیامکِ نرفته ← کدش پاک شد (کدِ بعدی پشتِ پنجرهٔ یک‌دقیقه‌ای گیر نمی‌کند)');
+}
+
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);
 process.exit(fail ? 1 : 0);

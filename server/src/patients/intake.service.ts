@@ -1,5 +1,5 @@
 import {
-  BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException,
+  BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { createHash, randomBytes, randomInt } from 'crypto';
@@ -183,6 +183,14 @@ export class IntakeService {
     private events: EventsService,
     private rateLimit: RateLimitService,
   ) {}
+
+  /** هشدار: هیچ لاگی شماره، کد یا متنِ پیامک را نمی‌نویسد — فقط شناسه‌ها. */
+  private readonly logger = new Logger(IntakeService.name);
+
+  /** شرکتِ همین درخواست در کلیدِ سطلِ سقفِ نرخ — `RateLimitService` یکی است برای همهٔ شرکت‌ها (بستهٔ PF). */
+  private get tid() {
+    return this.tenant.current()?.tenantId ?? '-';
+  }
 
   private token() {
     return randomBytes(18).toString('base64url');
@@ -656,31 +664,55 @@ export class IntakeService {
   }
 
   async resumeRequest(linkToken: string, rawPhone: string, ip = 'unknown') {
-    this.rateLimit.hit(`intake-resume:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
     const phone = IntakeService.resumePhone(rawPhone);
-    this.rateLimit.hit(`intake-resume:phone:${phone}`, 3, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume:${this.tid}:phone:${phone}`, 3, 15 * 60_000);
     const link = await this.resumeLink(linkToken);
-    const purpose = `intake-resume:${link.id}`;
     const answer = { ok: true, ttl: RESUME_OTP_TTL_MS / 1000 };
-    const open = await this.openByPhone(link.id, phone);
-    if (!open) return answer;
+    /* همان قراردادِ ورود: کدِ آزمون فقط در محیطِ test و با درگاهِ stub — آن‌جا منتظرِ کار می‌مانیم تا کد برگردد. */
+    if (process.env.NODE_ENV === 'test') {
+      const devCode = await this.issueResumeCode(link.id, phone);
+      return devCode ? { ...answer, devCode } : answer;
+    }
+    /* هشدار — **پاسخ منتظرِ هیچ‌چیز نمی‌ماند** (بستهٔ PF، PF3). نسخهٔ قبلی فقط وقتی ثبت‌نامِ باز بود `await
+       sms.sendOtp` می‌کرد، پس زمانِ پاسخ (تا ۲۰ ثانیه) می‌گفت این شماره روی این لینک ثبت‌نامِ باز دارد — همان
+       چیزی که پاسخِ یکسان پنهانش می‌کرد. حالا یافتن، ساختنِ کد و پیامک همه پس از پاسخ‌اند. */
+    setImmediate(() => {
+      this.issueResumeCode(link.id, phone).catch((e) => this.logger.warn(`intake resume code for link ${link.id} failed: ${e?.message ?? e}`));
+    });
+    return answer;
+  }
+
+  /**
+   * کدِ «ادامه با موبایل» — فقط اگر این شماره روی این لینک ثبت‌نامِ باز دارد. خروجی خودِ کد است فقط وقتی
+   * درگاه stub بود (محیطِ آزمون)؛ وگرنه `null`. پیامکِ نرفته کدش را پاک می‌کند تا کدِ بعدی پشتِ پنجرهٔ
+   * یک‌دقیقه‌ایِ «همین حالا کد رفته» گیر نکند.
+   */
+  private async issueResumeCode(linkId: number, phone: string): Promise<string | null> {
+    const purpose = `intake-resume:${linkId}`;
+    const open = await this.openByPhone(linkId, phone);
+    if (!open) return null;
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone, purpose, createdAt: { gt: new Date(Date.now() - 60_000) } },
     });
-    if (recent) return answer; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
+    if (recent) return null; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
     const code = String(randomInt(100000, 1000000));
-    await this.prisma.otpCode.create({
+    const otp = await this.prisma.otpCode.create({
       data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
     });
-    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => ({ sent: false, stub: false }));
-    /* همان قراردادِ ورود: کدِ آزمون فقط در محیطِ test و با درگاهِ stub. */
-    return { ...answer, ...(res.stub && process.env.NODE_ENV === 'test' ? { devCode: code } : {}) };
+    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => null);
+    if (!res || (!res.sent && !res.stub)) {
+      await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
+      this.logger.warn(`intake resume sms for link ${linkId} was not delivered`);
+      return null;
+    }
+    return res.stub ? code : null;
   }
 
   async resumeVerify(linkToken: string, rawPhone: string, rawCode: string, ip = 'unknown') {
-    this.rateLimit.hit(`intake-resume-verify:ip:${ip}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume-verify:${this.tid}:ip:${ip}`, 20, 15 * 60_000);
     const phone = IntakeService.resumePhone(rawPhone);
-    this.rateLimit.hit(`intake-resume-verify:phone:${phone}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`intake-resume-verify:${this.tid}:phone:${phone}`, 8, 15 * 60_000);
     const code = toEnDigits(String(rawCode ?? '')).replace(/[^0-9]/g, '');
     const link = await this.resumeLink(linkToken);
     const purpose = `intake-resume:${link.id}`;
