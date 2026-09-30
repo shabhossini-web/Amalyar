@@ -32,6 +32,7 @@ import { SETTING_BY_KEY } from '../config/settings-registry';
 import { TenantContext } from '../tenant/tenant-context';
 import { AvailabilityService } from './availability.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
+import { referrerStats } from './crm-referrers';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
 
@@ -1786,6 +1787,11 @@ export class IntakeService {
       patientsTotal: refRows.reduce((a, r) => a + r._count._all, 0),
       trend,
     };
+  }
+
+  /** ارجاع‌دهنده‌ها (جراح/بیمارستان) — آمارِ «تحلیلِ مشتریان» برای شرکت؛ منطق در `crm-referrers.ts` (company-25). */
+  referrers() {
+    return referrerStats(this.prisma);
   }
 
   /**

@@ -6,7 +6,8 @@ import { faDate, J_MONTHS } from '../lib/jalali.js';
 import './crm.css';
 import { Alert, Back, Chart, Star } from '../ui/icons.jsx';
 import { useStagger } from '../ui/stagger.js';
-import { useStatusMap, useTerms } from './config.jsx';
+import { useConfig, useStatusMap, useTerms } from './config.jsx';
+import Tabs from '../ui/Tabs.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
@@ -118,6 +119,60 @@ function UnfollowedCard({ unf }) {
   );
 }
 
+/**
+ * **ارجاع‌دهنده‌ها** — مشتریِ شرکتِ خدمات جراح و بیمارستان است، نه بیمار (بازبینیِ UX، company-25): چند
+ * کار فرستاده‌اند، روندِ شش ماهه، و کدام جراح این ماه هنوز کاری نفرستاده. همهٔ عددها و پرچمِ «ساکت» از
+ * سرور (`/intake/referrers`، قانونِ ۱۵)؛ این‌جا فقط ارتفاعِ نسبیِ ستونک‌ها، که خاصیتِ رسم است نه داده.
+ */
+function ReferrersCard({ data, t }) {
+  const [tab, setTab] = useState('surgeons');
+  const rows = tab === 'surgeons' ? data.surgeons : data.hospitals;
+  const peak = Math.max(1, ...rows.flatMap((r) => r.byMonth));
+  const label = (m) => `${J_MONTHS[m.jm - 1]} ${faNum(m.jy).replace(/٬/g, '')}`;
+  const quiet = data.quietSurgeons ?? [];
+  return (
+    <>
+      {quiet.length > 0 && (
+        <p className="crm-ref-warn" role="status">
+          <Alert width="14" height="14" />
+          <span>
+            <b>{faNum(quiet.length)} {t.surgeon}</b> که در ماه‌های قبل کار فرستاده‌اند این ماه هنوز کاری نفرستاده‌اند:
+            {' '}{quiet.slice(0, 4).map((q) => q.name).join('، ')}{quiet.length > 4 ? ` و ${faNum(quiet.length - 4)} نفرِ دیگر` : ''}
+          </span>
+        </p>
+      )}
+      <Tabs label="ارجاع‌دهنده" variant="inset" value={tab} onChange={setTab}
+            items={[{ key: 'surgeons', label: `${t.surgeon} (${faNum(data.surgeons.length)})` }, { key: 'hospitals', label: `بیمارستان (${faNum(data.hospitals.length)})` }]} />
+      {rows.length === 0 ? (
+        <div className="crm-empty">در شش ماهِ اخیر کاری ثبت نشده.</div>
+      ) : (
+        <div className="crm-refs">
+          {rows.map((r) => (
+            <article key={r.key} className={`crm-ref${r.quiet ? ' is-quiet' : ''}`}>
+              <div className="crm-ref-name">
+                <b>{r.name}</b>
+                {r.quiet && <span className="crm-chip u-quiet">این ماه کاری نفرستاده{r.lastAt ? ` — آخرین: ${faDate(r.lastAt)}` : ''}</span>}
+                {r.upcoming > 0 && <span className="crm-chip u-next">{faNum(r.upcoming)} عملِ ماه‌های بعد</span>}
+              </div>
+              <span className="crm-ref-spark" role="img"
+                    aria-label={`روندِ شش ماه: ${data.months.map((m, i) => `${label(m)} ${faNum(r.byMonth[i])}`).join('، ')}`}>
+                {r.byMonth.map((n, i) => (
+                  <i key={i} className={i === r.byMonth.length - 1 ? 'now' : ''} style={{ height: `${Math.max(6, (n / peak) * 100)}%` }}
+                     title={`${label(data.months[i])}: ${faNum(n)}`} data-zero={n === 0 ? '' : undefined} />
+                ))}
+              </span>
+              <span className="crm-ref-num"><span><b>{faNum(r.total)}</b> کار</span><small>این ماه {faNum(r.thisMonth)}</small></span>
+            </article>
+          ))}
+        </div>
+      )}
+      <div className="crm-legend">
+        شش ماهِ اخیر، ماه به ماه ({label(data.months[0])} تا {label(data.months[data.months.length - 1])}) — ستونِ پررنگ این ماه است؛ ماهِ هر کار ماهِ عملِ آن است.
+      </div>
+    </>
+  );
+}
+
 /** نوارِ افقیِ یک گزینه — سهمش از کلِ پاسخ‌ها. */
 function Bar({ label, count, total, tone }) {
   return (
@@ -193,7 +248,10 @@ function FieldBlock({ f }) {
 export default function Crm() {
   const intakeFa = useStatusMap('intake');
   const t = useTerms();
+  /* مشتریِ شرکت جراح و بیمارستان است (company-25) — بخشِ ارجاع‌دهنده‌ها فقط برای نصبِ شرکتی. */
+  const company = useConfig().kind === 'company';
   const [data, setData] = useState(null);
+  const [refs, setRefs] = useState(null);
   const [unf, setUnf] = useState(null);
   const [err, setErr] = useState('');
   const row = useStagger();
@@ -204,6 +262,10 @@ export default function Crm() {
     api('/intake/analytics').then(setData).catch((e) => setErr(e.message));
     api('/intake/unfollowed').then(setUnf).catch((e) => setErr(e.message));
   }, []);
+  useEffect(() => {
+    if (!company) return;
+    api('/intake/referrers').then(setRefs).catch((e) => setErr(e.message));
+  }, [company]);
 
   return (
     <div className="crm">
@@ -212,12 +274,24 @@ export default function Crm() {
         <Link to="/app" className="crm-back"><Back width="15" height="15" /> سامانه</Link>
         <div>
           <h1><Chart width="20" height="20" /> {t.crm}</h1>
-          <p>نتیجهٔ نظرسنجی‌ها و پرسش‌نامه‌های زیرپرونده، و این‌که بیماران از کجا می‌آیند.</p>
+          <p>{company
+            ? 'کدام جراح و بیمارستان کار می‌فرستد و روندش، و نظرِ بیماران در نظرسنجی‌ها.'
+            : 'نتیجهٔ نظرسنجی‌ها و پرسش‌نامه‌های زیرپرونده، و این‌که بیماران از کجا می‌آیند.'}</p>
         </div>
       </header>
 
       {err && <div className="crm-err"><Alert width="15" height="15" /> {err}</div>}
       {!data && !err && <div className="crm-empty">در حال بارگذاری…</div>}
+
+      {company && refs && (
+        <motion.section {...row(0)} className="crm-card">
+          <header className="crm-card-head">
+            <b>ارجاع‌دهنده‌ها</b>
+            <small>عمل‌های هر {t.surgeon} و بیمارستان</small>
+          </header>
+          <ReferrersCard data={refs} t={t} />
+        </motion.section>
+      )}
 
       {data && (
         <>

@@ -149,3 +149,32 @@
   .crm-mrt { font-size: 8px; }
   .crm-unf-op { flex-basis: 100%; margin-inline-start: 0; order: 3; }
 }
+
+/* ── ارجاع‌دهنده‌ها (company-25) — جراح و بیمارستان، روندِ شش ماهه ── */
+.crm-ref-warn {
+  display: flex; align-items: flex-start; gap: 7px; margin: 0 0 10px; padding: 9px 11px; border-radius: 11px;
+  font-size: 12.5px; line-height: 1.8; color: var(--amber-text);
+  background: rgba(245, 158, 11, .09); border: 1px solid rgba(251, 191, 36, .32);
+}
+.crm-ref-warn svg { flex: 0 0 auto; margin-top: 5px; }
+.crm-refs { display: grid; gap: 6px; margin-top: 10px; }
+.crm-ref {
+  display: grid; grid-template-columns: minmax(0, 1fr) 96px 72px; align-items: center; gap: 12px;
+  padding: 8px 11px; border-radius: 11px; background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--veil-rgb), .08);
+}
+.crm-ref.is-quiet { border-color: rgba(251, 191, 36, .38); }
+.crm-ref-name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.crm-ref-name b { font-size: 13px; overflow-wrap: anywhere; }
+.crm-chip.u-quiet { color: var(--amber-text); background: rgba(245, 158, 11, .1); border-color: rgba(251, 191, 36, .4); }
+.crm-chip.u-next { color: var(--text2); }
+.crm-ref-spark { display: flex; align-items: flex-end; gap: 3px; height: 30px; }
+.crm-ref-spark i { flex: 1; min-height: 3px; border-radius: 3px 3px 0 0; background: rgba(var(--brand-2-rgb), .45); }
+.crm-ref-spark i.now { background: var(--brand-2); }
+.crm-ref-spark i[data-zero] { background: rgba(var(--veil-rgb), .12); }
+.crm-ref-num { display: grid; justify-items: end; font-size: 11px; color: var(--text2); line-height: 1.5; }
+.crm-ref-num b { font-size: 15px; color: var(--text1); font-variant-numeric: tabular-nums; }
+.crm-ref-num small { font-size: 10.5px; color: var(--text3); }
+@media (max-width: 560px) {
+  .crm-ref { grid-template-columns: minmax(0, 1fr) auto; }
+  .crm-ref-name { grid-column: 1 / -1; }
+}

@@ -387,6 +387,13 @@ export class IntakeController {
     res.send(csv);
   }
 
+  /** ارجاع‌دهنده‌ها — عمل‌های هر جراح و بیمارستان در شش ماهِ اخیر (company-25). */
+  @RequirePermissions('intake.read')
+  @Get('referrers')
+  referrers() {
+    return this.intake.referrers();
+  }
+
   /** بیمارانِ عمل‌شده‌ای که فرمِ پیگیریِ پرشده ندارند. */
   @RequirePermissions('intake.read')
   @Get('unfollowed')
