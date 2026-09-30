@@ -917,7 +917,7 @@ export default function Dashboard() {
      **خودِ همین صفحه** هم `navigate` می‌زند و صفحه دوباره mount نمی‌شود — نسخهٔ قبلی فقط یک‌بار
      می‌خواندش و «ثبتِ بیمارِ تازه» این‌جا هیچ کاری نمی‌کرد. `replace` با `state: null` کلیدِ
      تازه‌ای می‌سازد که همین effect را بی‌اثر دوباره می‌زند. */
-  const prefillIn = (st) => { const pre = st?.prefill; return pre?.patientId || pre?.firstName || pre?.phone ? pre : null; };
+  const prefillIn = (st) => { const pre = st?.prefill; return pre?.patientId || pre?.firstName || pre?.phone || pre?.nationalId ? pre : null; };
   useEffect(() => {
     const pre = prefillIn(location.state);
     if (!pre) return;

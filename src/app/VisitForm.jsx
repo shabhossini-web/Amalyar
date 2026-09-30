@@ -188,7 +188,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      **گامِ ۱ یک جست‌وجوی واحد است** (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-22): تا دیروز همیشه روی «بیمارِ
      جدید» باز می‌شد، در حالی که بیشترِ ویزیت‌های مطب پیگیریِ بیمارِ قدیمی است و پروندهٔ تکراری راحت
      ساخته می‌شد. حالا اول «نام، موبایل یا کدِ ملی»؛ پیدا نشد → «ساختِ پروندهٔ تازه با همین نام» (`mode='new'`). */
-  const [mode, setMode] = useState('existing');
+  /* از «ثبتِ بیمارِ تازه»ِ جستجوی سراسری (نام/موبایل/کدِ ملی، بی‌پرونده): جست‌وجو همان‌جا انجام شده و
+     چیزی پیدا نشده، پس فرم مستقیم روی «پروندهٔ تازه» با همان مقدارها باز می‌شود (shell-25، R8). */
+  const [mode, setMode] = useState(prefill && !prefill.patientId && (prefill.firstName || prefill.phone || prefill.nationalId) ? 'new' : 'existing');
   const [pQuery, setPQuery] = useState('');
   const [pResults, setPResults] = useState([]);
   const [picked, setPicked] = useState(prefill?.patientId ? { id: prefill.patientId, fullName: prefill.patientName ?? '' } : null);
@@ -216,11 +218,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* پیش‌فرضِ نوع از حوزه (`/config.defaultKind`): مطب ویزیت، بقیه عمل (بستهٔ ۵ب). */
     kind: initial?.kind || prefill?.kind || defaultKind,
     service: initial?.service ?? '',
-    /* نام/موبایل از «ثبتِ بیمارِ تازه»ِ جستجوی سراسری (prefill) — بازبینیِ UX، shell-25. */
+    /* نام/موبایل/کدِ ملی از «ثبتِ بیمارِ تازه»ِ جستجوی سراسری (prefill) — بازبینیِ UX، shell-25 و R8. */
     firstName: initial?.firstName || prefill?.firstName || '',
     lastName: initial?.lastName || prefill?.lastName || '',
     phone: initial?.phone || prefill?.phone || '',
-    nationalId: initial?.nationalId || '',
+    nationalId: initial?.nationalId || prefill?.nationalId || '',
     birthDateJ: initial?.birthDate ? isoToJStr(initial.birthDate) : '',
     /* پیوستگی (۱۴۰۵/۰۷/۰۳): فرمِ عملِ «کاندیدای جراحی» پزشکِ همان ویزیت را می‌گیرد. */
     surgeonId: initial?.surgeonId ?? prefill?.surgeonId ?? null,

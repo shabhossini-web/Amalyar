@@ -89,21 +89,24 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
      (یا موبایل، اگر عدد جستجو شده) از پیش پرشده — از راهِ `state`، نه URL (نام در تاریخچه نمی‌نشیند). */
   const term = q.trim();
   const digits = toEn(term).replace(/[\s-]/g, '');
-  /* فقط **موبایلِ ایران** (۹۱۲…، ۰۹۱۲…، ۹۸۹۱۲… یا ‎+۹۸۹۱۲…) به کادرِ «موبایل» می‌رود، به شکلِ ۰۹…
-     هشدار: بازبینیِ خصمانه (R8): الگوی قبلی هر عددِ هفت‌رقمی به بالا بود و کدِ ملیِ پیدانشده (ده رقم)
-     در کادرِ «موبایل» پیش‌پر می‌شد. فرمِ ثبت هنوز کدِ ملیِ پیش‌پر را نمی‌خوانَد، پس برای کدِ ملی
-     (و هر عددِ دیگر) دکمهٔ «ثبتِ تازه» نمی‌آید — دکمه‌ای که بگوید «با کدِ ملیِ …» و خالی باز شود دروغ است. */
+  /* فقط **موبایلِ ایران** (۹۱۲…، ۰۹۱۲…، ۹۸۹۱۲… یا ‎+۹۸۹۱۲…) به کادرِ «موبایل» می‌رود، به شکلِ ۰۹…؛
+     ده رقمِ دیگر کدِ ملی است و به کادرِ «کدِ ملی» می‌رود (فرمِ ثبت `prefill.nationalId` را می‌خوانَد).
+     هشدار: بازبینیِ خصمانه (R8): الگوی قبلی هر عددِ هفت‌رقمی به بالا بود و کدِ ملیِ پیدانشده در کادرِ
+     «موبایل» پیش‌پر می‌شد. عددِ دیگر (نه موبایل، نه ده رقم) دکمهٔ «ثبتِ تازه» نمی‌گیرد. */
   const mobile = /^(?:\+?98|0)?(9\d{9})$/.exec(digits);
   const asPhone = !!mobile;
   const phone = mobile ? `0${mobile[1]}` : '';
+  const nid = !mobile && /^\d{10}$/.test(digits) ? digits : '';
+  const asNid = !!nid;
   const noHits = !busy && !err && term.length >= 2 && rows.length === 0;
-  const canCreate = !!hero && noHits && (asPhone || !/\d/.test(toEn(term)));
+  const canCreate = !!hero && noHits && (asPhone || asNid || !/\d/.test(toEn(term)));
   const createNew = useCallback(() => {
     if (!canLeave('/app/dashboard')) return;
     const [first, ...rest] = term.split(/\s+/);
     onClose();
-    navigate('/app/dashboard', { state: { prefill: asPhone ? { phone } : { firstName: first, lastName: rest.join(' ') } } });
-  }, [term, asPhone, phone, navigate, onClose]);
+    const prefill = asPhone ? { phone } : asNid ? { nationalId: nid } : { firstName: first, lastName: rest.join(' ') };
+    navigate('/app/dashboard', { state: { prefill } });
+  }, [term, asPhone, phone, asNid, nid, navigate, onClose]);
 
   const onKeyDown = (e) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setIdx((i) => Math.min(i + 1, Math.max(rows.length - 1, 0))); }
@@ -155,7 +158,7 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
               {canCreate && (
                 <button type="button" className="gs-new" onClick={createNew}>
                   <Plus width="16" height="16" aria-hidden="true" />
-                  <span>ثبتِ بیمارِ تازه با {asPhone ? 'موبایلِ' : 'نامِ'} «<bdi>{asPhone ? jToFa(phone) : term}</bdi>»</span>
+                  <span>ثبتِ بیمارِ تازه با {asPhone ? 'موبایلِ' : asNid ? 'کدِ ملیِ' : 'نامِ'} «<bdi>{asPhone ? jToFa(phone) : asNid ? jToFa(nid) : term}</bdi>»</span>
                 </button>
               )}
             </div>
