@@ -156,7 +156,7 @@ function ClockPick({ value, step, title, onPick, onClose }) {
 
       <footer className="tp-foot">
         <button type="button" className="tp-ghost" onClick={() => onPick('')}>پاک‌کردن</button>
-        <button type="button" className="tp-ghost" onClick={() => onPick(now())}>اکنون</button>
+        <button type="button" className="tp-ghost tp-now-ghost" onClick={() => onPick(now())}>اکنون</button>
         <button type="button" className="tp-ok" onClick={() => onPick(`${two(h)}:${two(m)}`)}>تأیید</button>
       </footer>
     </Overlay>,
