@@ -337,18 +337,22 @@ export default function IntakeAdmin() {
       </AnimatePresence>
 
       <ThingPopups things={things} />
-      {next ? (
-        <div className="ia-toast on has-act" role="status">
-          <span>{next.text}</span>
-          <button type="button" className="ia-toast-act"
-                  onClick={() => { const id = next.visitId; setNext(null); things.open({ type: 'visit', id }); }}>
-            {next.label}
-          </button>
-          <button type="button" className="ia-toast-x" aria-label="بستن" onClick={() => setNext(null)}><Close width="14" height="14" /></button>
-        </div>
-      ) : (
-        <div className={`ia-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
-      )}
+      {/* دو ظرفِ زنده، هر دو همیشه در DOM (DF14): توستِ «قدمِ بعد» (دکمه‌دار، ۱۲ ثانیه) و پیامِ عادی **بالای** آن —
+          تا دیروز قدمِ بعد جای ظرفِ پیام را می‌گرفت و هر پیامِ تازه (خطا، «لینک کپی شد») تا ۱۲ ثانیه دیده و خوانده
+          نمی‌شد؛ ظرفی هم که همراهِ متنش سوار می‌شود را صفحه‌خوان اعلام نمی‌کند. */}
+      <div role="status" aria-live="polite">
+        {next && (
+          <div className="ia-toast on has-act">
+            <span>{next.text}</span>
+            <button type="button" className="ia-toast-act"
+                    onClick={() => { const id = next.visitId; setNext(null); things.open({ type: 'visit', id }); }}>
+              {next.label}
+            </button>
+            <button type="button" className="ia-toast-x" aria-label="بستن" onClick={() => setNext(null)}><Close width="14" height="14" /></button>
+          </div>
+        )}
+      </div>
+      <div className={`ia-toast${toast ? ' on' : ''}${next ? ' above' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }

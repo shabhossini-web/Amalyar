@@ -84,6 +84,16 @@ try {
     await approval.getByRole('button', { name: 'تأیید و ساختِ مراجعه', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('.ia-sheet'));
     check(writes.some((w) => w.path.endsWith('/approve') && w.body.registerPayment && w.body.bankAccountId === 1 && w.body.hospitalId === 51), 'approval transmits payment and new hospital selection');
+    /* DF14: توستِ «قدمِ بعد» (۱۲ ثانیه) پیامِ تازه را نمی‌پوشاند — پیام بالای آن دیده می‌شود و ظرفِ زنده سرِ جایش است. */
+    const nextToast = page.locator('.ia-toast.has-act'); await nextToast.waitFor();
+    page.once('dialog', (d) => d.accept());
+    await page.locator('.ia-card .ia-cardel').first().click();
+    const plain = page.locator('.ia-toast.above.on[role="status"]'); await plain.waitFor();
+    await delay(350); // گذارِ ورودِ توست (۰٫۲s) تمام شود، بعد اندازه
+    const [nb, pb] = [await nextToast.boundingBox(), await plain.boundingBox()];
+    check((await plain.innerText()).includes('ثبت‌نام حذف شد') && await nextToast.isVisible() && pb.y + pb.height <= nb.y + 1,
+      'DF14: a new message shows above the next-step toast instead of being hidden for 12 seconds');
+    check(await page.locator('[role="status"][aria-live="polite"]').count() >= 2, 'DF14: both live regions stay mounted');
     /* DF5: حسابِ لینک (۷) فقط وقتی پیش‌پر و فرستاده می‌شود که در فهرستِ پنجره دیده شود — بی‌پلنِ حسابداری فهرست از
        `/intake/link-options` می‌آید؛ اگر آن‌جا هم نبود، کشویی «نامشخص» است و شناسهٔ نادیده نمی‌رود. */
     bankDenied = true;
