@@ -85,7 +85,9 @@ const openVisit = async (p, id) => {
   await p.locator('.db-sheet [data-visit-bar]').waitFor({ timeout: 15000 }).catch(() => {});
   await p.waitForTimeout(700);
 };
-const tab = (p, label) => p.locator('.db-postop .ui-tabs button', { hasText: label }).click();
+/* زبانه‌های فرمِ عمل از بازبینیِ UX (surgery-10) زیرِ سربرگ‌اند: «مشخصات | قبل | حین | بعد». */
+const tab = (p, label) => p.locator('.db-sheet .db-phasetabs button', { hasText: label }).click();
+const activeTab = (p) => p.locator('.db-sheet .db-phasetabs button[aria-selected="true"]').innerText();
 const card = (p, key, ph) => p.locator(`[data-subform="${key}"][data-subform-phase="${ph}"]`);
 
 try {
@@ -119,7 +121,7 @@ try {
 
   console.log('۱) عملِ موجود — علائمِ حیاتی دیگر کادرِ ثابت نیست');
   await openVisit(page, S.id);
-  ok('عملِ آینده روی «قبل از عمل» باز شد', (await page.locator('.db-postop .ui-tabs button[aria-selected="true"]').innerText()).includes('قبل از عمل'));
+  ok('عملِ آینده روی «قبل از عمل» باز شد', (await activeTab(page)).includes('قبل از عمل'));
   ok('**هیچ کادرِ علائمِ حیاتیِ بیرون از کارت نیست**',
     await page.locator('.db-sheet .vs-box').count() === await page.locator('.db-sheet .vf-card .vs-box').count());
   ok('**اندازهٔ قبلیِ «قبل» کارتِ ضمنیِ همان تب را دارد** (با «داده دارد» و قفل، نه ×)',
@@ -157,7 +159,7 @@ try {
   await page.locator('.vf-pick [data-subform-item="subform.asa"] [data-act="attach"]').click();
   await page.waitForTimeout(500);
   ok('**الصاق تب را به همان مرحله برد و کارت آن‌جاست**',
-    (await page.locator('.db-postop .ui-tabs button[aria-selected="true"]').innerText()).includes('قبل از عمل')
+    (await activeTab(page)).includes('قبل از عمل')
     && await card(page, 'subform.asa', 'pre').count() === 1);
   await page.locator('.vf-attach').click();
   await page.locator('.vf-pick').waitFor({ timeout: 5000 });
@@ -276,11 +278,14 @@ try {
   await kindBtn(surgeryKind).click();
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(900);
+  /* ثبتِ تازه روی زبانهٔ «مشخصات» باز می‌شود (هسته هنوز خالی است) — کارتِ جابه‌جاشده در زبانهٔ «قبل». */
+  ok('ثبتِ تازهٔ عمل روی زبانهٔ «مشخصات» باز شد', (await activeTab(p2)).includes('مشخصات'), await activeTab(p2).catch(() => ''));
+  await tab(p2, 'قبل از عمل');
   ok('**عوض‌شدنِ نوع: کارت و اندازهٔ تایپ‌شده به «قبل از عمل» رفت**',
     await card(p2, 'vitals', 'pre').count() === 1 && (await card(p2, 'vitals', 'pre').locator('[data-vital="hr"]').inputValue()) === '66'
     && await p2.locator('[data-subform="vitals"]:not([data-subform-phase])').count() === 0);
   /* عمل → ویزیت: دو مرحله با پاسخ یعنی یکی‌کردنِ دو اندازه — نوع عوض نمی‌شود و گفته می‌شود چرا. */
-  await p2.locator('.db-postop .ui-tabs button', { hasText: 'بعد از عمل' }).click();
+  await tab(p2, 'بعد از عمل');
   await p2.locator('[data-act="phase-attach"][data-phase="post"]').click();
   await p2.locator('.vf-pick [data-subform-item="vitals"] [data-act="attach"]').click();
   await card(p2, 'vitals', 'post').locator('[data-vital="spo2"]').fill('97');
@@ -294,7 +299,7 @@ try {
     await p2.locator('.lx-toast').innerText().catch(() => ''));
   await p2.locator('.db-stepnav button').last().click();
   await p2.waitForTimeout(700);
-  await p2.locator('.db-postop .ui-tabs button', { hasText: 'قبل از عمل' }).click();
+  await tab(p2, 'قبل از عمل');
   await card(p2, 'vitals', 'pre').locator('[data-vital="hr"]').fill('');
   await p2.locator('.db-steps li').nth(1).locator('button').click();
   await p2.waitForTimeout(400);
@@ -346,9 +351,9 @@ try {
   await fakeAi(m);
   await browserLogin(m, login.accessToken, { ui: UI });
   await openVisit(m, S.id);
-  await m.locator('.db-postop .ui-tabs button', { hasText: 'حین عمل' }).click();
+  await tab(m, 'حین عمل');
   ok('موبایل: کارتِ «حین» و «+ الصاقِ فرم» در تب', await card(m, 'vitals', 'intra').count() === 1 && await m.locator('[data-act="phase-attach"][data-phase="intra"]').count() === 1);
-  await m.locator('.db-postop .ui-tabs button', { hasText: 'قبل از عمل' }).click();
+  await tab(m, 'قبل از عمل');
   await m.locator('[data-care-open="pre"]').click();
   await m.locator('[data-care-sheet="pre"]').waitFor({ timeout: 5000 });
   const over = await m.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

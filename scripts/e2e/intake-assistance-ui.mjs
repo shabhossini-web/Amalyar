@@ -129,6 +129,9 @@ try {
       const beforeWrites = writes.length;
       await page.goto(`${base}/app/dashboard?patient=1`);
       const sheet = page.locator('.db-sheet');
+      /* فرمِ عمل روی زبانهٔ مرحلهٔ زمانی باز می‌شود؛ مبلغ و تاریخ در زبانهٔ «مشخصات»‌اند (بازبینیِ UX، surgery-10). */
+      const toInfo = () => (state.kind === 'surgery' ? sheet.locator('.db-phasetabs button').first().click() : null);
+      await toInfo();
       await sheet.getByLabel('وضعیت مالی ثبت‌شده').waitFor();
       check((await sheet.getByLabel('وضعیت مالی ثبت‌شده').innerText()).includes(state.total.toLocaleString('fa-IR')), `edit shows server invoice total ${state.total}`);
       const date = sheet.locator('.db-builtins .jd-row input').first();
@@ -141,6 +144,7 @@ try {
       assert.equal(writes.slice(beforeWrites).filter((w) => /payment|charge|billing/.test(w.path)).length, 0);
       check(true, `date edit persists without financial writes (${state.kind}, ${state.total})`);
       await page.goto(`${base}/app/dashboard?patient=1`);
+      await toInfo();
       await sheet.getByLabel('وضعیت مالی ثبت‌شده').waitFor();
       /* کادرِ تاریخ در حالتِ **غیرِ ویرایش** ارقامش فارسی است (`JDate`): تقویم
          روزها را فارسی می‌کشد و placeholder هم فارسی است، پس مقدارِ لاتین یعنی

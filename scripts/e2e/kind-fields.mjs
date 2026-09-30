@@ -95,10 +95,11 @@ try {
     await p.waitForTimeout(900);
     const collect = () => p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span').allInnerTexts();
     let labels = await collect();
-    /* بستهٔ ۴: فرمِ عمل مرحله‌های قبل/حین/بعد را در سه تب دارد و فقط تبِ فعال رندر می‌شود
-       (ثبتِ تازه روی «قبل» باز می‌شود)؛ برچسب‌های هر سه تب جمع می‌شوند تا «شرحِ عمل»
-       (تبِ حین) هم دیده شود. فرمِ ویزیت تب ندارد و همان یک‌بار کافی است. */
-    const phaseTabs = p.locator('.db-sheet .db-postop .ui-tabs button');
+    /* فرمِ عمل زبانه‌های «مشخصات | قبل | حین | بعد» را زیرِ سربرگ دارد (بستهٔ ۴؛ بازبینیِ UX،
+       surgery-10) و فقط زبانهٔ فعالِ مرحله رندر می‌شود (ثبتِ تازه روی «مشخصات» باز می‌شود)؛
+       برچسب‌های همهٔ زبانه‌ها جمع می‌شوند تا «شرحِ عمل» (زبانهٔ حین) هم دیده شود. فرمِ ویزیت
+       زبانه ندارد و همان یک‌بار کافی است. */
+    const phaseTabs = p.locator('.db-sheet .db-phasetabs button');
     for (let i = 0, n = await phaseTabs.count(); i < n; i++) {
       await phaseTabs.nth(i).click();
       await p.waitForTimeout(200);

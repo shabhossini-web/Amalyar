@@ -312,3 +312,17 @@
   border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;
   box-shadow: 0 -10px 24px rgba(var(--surface-rgb), .85);
 }
+
+/* ── فرمِ عمل: زبانه‌ها ساختارِ اصلی‌اند (surgery-10) ─────────────────────────────
+   «مشخصاتِ عمل | قبل | حین | بعد» درست زیرِ سربرگ؛ کارتِ هسته همان زبانهٔ «مشخصات» است و با
+   `hidden` پنهان می‌شود — `display:flex`ِ `.db-formcard` بی‌این قاعده بر `hidden` می‌چربید. نوارِ زبانه
+   هم‌عرضِ خودِ فرم است، نه ستونِ ۹۴۰پیکسلیِ وسط‌چینِ `.ui-tabs`. */
+.db-formcard[hidden] { display: none; }
+.db-sheet .vf-sectabs { max-width: none; margin: 0; }
+@media (max-width: 620px) { .db-sheet .vf-sectabs button { min-height: 44px; } }
+/* «برنامهٔ مراقبت و پیگیری» حالا درونِ زبانهٔ «بعد از عمل» است: فاصلهٔ بالایش را گپِ زبانه می‌دهد، عنوان
+   با `--brand-text` (بنفشِ `--brand-2` روی زمینهٔ روشن زیرِ حدِ خوانایی بود) و راهنما کوچک‌تر از عنوان —
+   تا دیروز متنِ راهنما با قلمِ بدنه درشت‌تر از خودِ عنوانِ بخش بود. */
+.db-phase > .db-postop { margin-top: 0; }
+.db-phase .db-postop > h4 { font-size: 14px; color: var(--brand-text); }
+.db-phase .db-postop > .db-hint { font-size: 11.5px; font-weight: 500; line-height: 1.9; color: var(--text3); }

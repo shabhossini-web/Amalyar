@@ -418,11 +418,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return Math.round((day(d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
   })();
   const opIsToday = opDayDelta === 0;
-  /* تب‌های مرحلهٔ عمل (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹): پایینِ فرمِ عمل سه بخشِ
-     «قبل / حین / بعد از عمل» به‌جای یک ستونِ شلوغ. تبِ آغازین از **زمانِ عمل**
-     می‌آید — ثبتِ تازه یا عملِ آینده: قبل؛ همین امروز: حین؛ گذشته: تا شرح نوشته
-     نشده حین، بعدش بعد. فقط یک‌بار در باز شدن حساب می‌شود تا تایپِ شرح
-     تب را زیرِ دستِ کاربر عوض نکند. */
+  /* مرحلهٔ عمل (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹): سه مرحلهٔ «قبل / حین / بعد از عمل» به‌جای یک ستونِ
+     شلوغ. مرحلهٔ آغازین از **زمانِ عمل** می‌آید — ثبتِ تازه یا عملِ آینده: قبل؛ همین امروز: حین؛
+     گذشته: تا شرح نوشته نشده حین، بعدش بعد. فقط یک‌بار در باز شدن حساب می‌شود تا تایپِ شرح
+     مرحله را زیرِ دستِ کاربر عوض نکند. */
   const [phase, setPhase] = useState(() => {
     if (!initial?.id || !initial?.opDate) return 'pre';
     const d = new Date(initial.opDate);
@@ -433,6 +432,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (delta === 0) return 'intra';
     return (initial.opReport || '').trim() ? 'post' : 'intra';
   });
+  /* **زبانه‌های فرمِ عمل = ساختارِ اصلیِ فرم** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-10): «مشخصاتِ عمل |
+     قبل | حین | بعد» درست زیرِ سربرگ؛ تا دیروز سه زبانهٔ مرحله حدودِ ۱۷۰۰ پیکسل پایین‌تر و داخلِ
+     «برنامهٔ مراقبت و پیگیری» بودند و جراحی که ساعت یا شرحِ عمل را می‌خواست پیدایشان نمی‌کرد.
+     ثبتِ تازه روی «مشخصات» باز می‌شود (هسته هنوز خالی است و ذخیره همان را می‌خواهد)؛ ویرایش روی
+     مرحلهٔ زمانی (عملِ امروز «حین»). `phase` مرحلهٔ **کاری** می‌ماند — آخرین مرحله‌ای که دیده شد —
+     تا منتخب‌ها و «الصاقِ فرم»ِ سربرگ روی زبانهٔ «مشخصات» هم بدانند به کجا الصاق کنند. */
+  const [tab, setTab] = useState(() => (initial?.id ? phase : 'info'));
+  const goTab = (k) => { setTab(k); if (k !== 'info') setPhase(k); };
   /* پیش‌فرض فقط تا وقتی کاربر خودش دست نزده — بعدش انتخابِ او حاکم است. */
   /* سفارش‌های همین مراجعه (آزمایش/عکس/مشاوره/ارجاع) — چیپِ تصمیم فقط
      «ثبتِ تصمیم» نیست: فرمش را همان‌جا باز می‌کند و ارسال می‌کند. */
@@ -656,7 +663,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       setSubList((l) => [...l, { key: it.key, phase: where, slot, builtin: !!it.builtin, title: it.title, data: {}, hasData: false, fresh: true }]);
     }
     setPickOpen(false);
-    if (where) setPhase(where);
+    if (where) goTab(where);
     reveal(it.key, where);
   };
   /* **فرم‌های پیش‌فرضِ موضوع** (بستهٔ ۹): با انتخابِ موضوعِ ویزیت در ثبتِ تازه، زیرفرم‌هایی که در
@@ -974,7 +981,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const PATIENT_KEYS = ['nationalId', 'birthDate'];
   const revealCore = (key) => {
     if (PATIENT_KEYS.includes(key)) { if (editing) setIdOpen(true); else setStep(1); }
-    else if (f.kind === 'surgery' && INTRA_KEYS.includes(key)) setPhase('intra');
+    /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
+    else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : 'info');
     revealSel(`[data-core="${key}"]`);
   };
 
@@ -1001,6 +1009,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     setErrKeys([]);
     if (Object.keys(eCustom).length) {
       setFormErr(`${Object.values(eCustom)[0]}${Object.keys(eCustom).length > 1 ? ` — و ${faNum(Object.keys(eCustom).length - 1)} مورد دیگر` : ''}`);
+      if (f.kind === 'surgery') goTab('info'); // فیلدهای دلخواه در زبانهٔ «مشخصات»‌اند
       revealSel('.vf-extra .pf-field.bad, [data-field].bad');
       return;
     }
@@ -1020,7 +1029,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       const e0 = subList.find((x) => x.slot === firstSub[0]);
       setCardsShut((c) => ({ ...c, [firstSub[0]]: false }));
       /* کارتِ عمل داخلِ تبِ مرحلهٔ خودش است — تب به همان‌جا می‌رود تا ستاره دیده شود. */
-      if (e0?.phase) setPhase(e0.phase);
+      if (e0?.phase) goTab(e0.phase);
       setFormErr(`${catByKey.get(e0?.key)?.title ?? ''}${e0?.phase ? ` (${PHASE_FA[e0.phase]})` : ''}: ${Object.values(firstSub[1])[0]}`);
       revealSel(`[data-subform="${CSS.escape(e0?.key ?? '')}"]${e0?.phase ? `[data-subform-phase="${e0.phase}"]` : ''} .pf-field.bad, [data-subform="${CSS.escape(e0?.key ?? '')}"]`);
       return;
@@ -2339,11 +2348,28 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         disabled={busy || !subLoaded}
         showAttach={canAttach}
       />
-      {editing && serviceEl}
-      {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. */}
+      {/* ── فرمِ عمل: زبانه‌ها ساختارِ اصلی‌اند (surgery-10) — درست زیرِ سربرگ. ⚠️ کلاسِ `db-phasetabs`
+          همان نشانیِ آزمون‌ها و پاپ‌آپ‌هاست؛ «مشخصات» واژهٔ حوزه را می‌گیرد («مشخصاتِ مراجعه» در
+          نورومانیتورینگ). مقدارها همه در `f` می‌مانند، پس جابه‌جایی چیزی را پاک نمی‌کند. */}
+      {isSurgery && (
+        <Tabs
+          variant="inset"
+          className="db-phasetabs vf-sectabs"
+          label={`بخش‌های فرمِ ${t.surgery}`}
+          value={tab}
+          onChange={goTab}
+          items={[{ key: 'info', label: `مشخصاتِ ${t.surgery}` }, ...PHASE_ITEMS]}
+        />
+      )}
+      {editing && (!isSurgery || tab === 'info') && serviceEl}
+      {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. فرمِ عمل: همین کارت زبانهٔ «مشخصات» است —
+          ⚠️ پنهان می‌شود نه unmount، تا انتخابگرها و کادرهای نیمه‌تایپ‌شدهٔ هسته با رفت‌وآمدِ زبانه از
+          نو ساخته نشوند (و فهرست‌هایشان دوباره از سرور خوانده نشود). */}
       <div
         className="db-formcard"
         style={kindMeta?.color ? { '--k': `var(--kind-${kindMeta.color})` } : undefined}
+        hidden={isSurgery && tab !== 'info'}
+        {...(isSurgery ? { role: 'tabpanel', 'aria-label': `مشخصاتِ ${t.surgery}`, 'data-tab': 'info' } : {})}
       >
       {/* فرمِ عمل ستونِ زیرفرم ندارد (کارت‌ها در تبِ مرحلهٔ خودشان‌اند) و ستونِ کناری‌اش فقط «مبلغ» و
           «توضیحات» است — دوستونه یعنی نیمهٔ خالی؛ پس یک‌ستونه، و همان دو کادر زیرِ هسته. */}
@@ -2405,14 +2431,76 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       </div>
       </div>
 
-      {/* ── برنامهٔ مراقبت و پیگیری — در ادامهٔ خودِ فرمِ عمل ──
-          جراح همان‌جا که شرح را می‌نویسد برنامهٔ بعد را هم می‌بندد. قاعدهٔ
-          کلیدی: **پیش‌فرضِ نوعِ عمل همیشه دیده می‌شود** — خالی‌گذاشتن یعنی
-          «همان پیش‌فرض اجرا شود»، و نوشتن یعنی «فقط برای همین بیمار این».
-          اگر نوعِ عمل هنوز قالبی ندارد (روزهای اولِ راه‌اندازی)، به‌جای
-          سکوت، صریح گفته می‌شود و راهِ ثبتِ دائمی‌اش نشان داده می‌شود. */}
-      {f.kind === 'surgery' && (
-        <div className="db-postop">
+      {/* ── زبانه‌های مرحلهٔ عمل (قبل / حین / بعد) — فقط زبانهٔ فعال رندر می‌شود؛ مقدارها در `f` می‌مانند،
+          پس «ذخیره» هر سه را با هم می‌فرستد. «برنامهٔ مراقبت و پیگیری» از بالای زبانه‌ها به درونِ «بعد از
+          عمل» آمد (surgery-10): مراقبتِ قبل از عمل در زبانهٔ خودش، و برنامهٔ پس از عمل با خلاصه‌اش. */}
+      {isSurgery && tab === 'pre' && (
+      <div className="db-phase" data-phase="pre" role="tabpanel" aria-label={PHASE_FA.pre}>
+        {decidedCard}
+        {/* ── مراقبتِ قبل از عمل ── */}
+        <div className="db-careblock">
+          <div className="db-carehead">
+            <span>مراقبت‌های قبل از عمل — پیامک به بیمار</span>
+            <i>{preWhen}</i>
+          </div>
+          {opIsToday && (
+            <p className="db-decide-hint">
+              عملْ همین امروز است — معمولاً دیگر پیامِ «قبل از عمل» لازم نیست؛ اگر لازم است، «به‌محضِ ثبت» را بزنید.
+            </p>
+          )}
+          {careField('pre')}
+          {/* ⚠️ این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
+              آن است — برعکسِ مراقبتِ بعد از عمل. */}
+          <div className="db-daychips db-whenchips">
+            {[{ v: false, l: 'فقط طبقِ زمان‌بندی' }, { v: true, l: 'به‌محضِ ثبت + زمان‌بندی' }].map((o) => (
+              <button
+                key={String(o.v)} type="button"
+                className={!!f.preOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
+                aria-pressed={!!f.preOpImmediate === o.v}
+                onClick={() => { preTouched.current = true; setF((s2) => ({ ...s2, preOpImmediate: o.v })); }}
+              >{o.l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="db-careblock">
+          <div className="db-carehead">
+            <span>درخواست‌های پیش از عمل — آزمایش، تصویربرداری، مشاوره</span>
+            {!initial?.id && <i>بعد از ذخیره</i>}
+          </div>
+          {initial?.id
+            ? ordersBlock
+            : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
+        </div>
+
+        {phaseSubs('pre')}
+        {phaseDocs}
+      </div>
+      )}
+
+      {isSurgery && tab === 'intra' && (
+      <div className="db-phase" data-phase="intra" role="tabpanel" aria-label={PHASE_FA.intra}>
+        {INTRA_KEYS.some((k) => builtinNodes[k]) ? (
+          <div className="db-grid2 db-builtins">
+            {INTRA_KEYS.map(cell)}
+          </div>
+        ) : (
+          <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان{isClinicCore ? '' : '، یافته‌ها'}، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
+        )}
+
+        {phaseSubs('intra')}
+        {phaseDocs}
+      </div>
+      )}
+
+      {isSurgery && tab === 'post' && (
+      <div className="db-phase" data-phase="post" role="tabpanel" aria-label={PHASE_FA.post}>
+        {/* ── برنامهٔ مراقبت و پیگیری — جراح همان‌جا که کارِ پس از عمل را می‌بندد پیامک و پیگیری را هم
+            می‌بیند. قاعدهٔ کلیدی: **پیش‌فرضِ نوعِ عمل همیشه دیده می‌شود** — خالی‌گذاشتن یعنی «همان
+            پیش‌فرض اجرا شود»، و نوشتن یعنی «فقط برای همین بیمار این». اگر نوعِ عمل هنوز قالبی ندارد
+            (روزهای اولِ راه‌اندازی)، به‌جای سکوت، صریح گفته می‌شود و راهِ ثبتِ دائمی‌اش نشان داده می‌شود.
+            راهنما کوچک‌تر از عنوان است (`visit-subforms.css`). */}
+        <section className="db-postop" data-section="care-plan">
           <h4>برنامهٔ مراقبت و پیگیری</h4>
           {procDefaults.has ? (
             <p className="db-hint">
@@ -2450,82 +2538,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               )}
             </div>
           )}
-
-
-          {/* ── سه مرحله، سه تب (بازخوردِ مالک: «قبل/حین/بعد از عمل به‌صورتِ تبِ جدا؛
-              الان خیلی شلوغ است»). فقط تبِ فعال رندر می‌شود؛ مقدارها در `f` می‌مانند،
-              پس جابه‌جایی چیزی را پاک نمی‌کند و «ذخیره» هر سه را با هم می‌فرستد.
-              خطِ برنامه (پایین) بیرونِ تب‌هاست تا خلاصهٔ هر سه همیشه دیده شود. */}
-          <Tabs
-            variant="inset"
-            className="db-phasetabs"
-            label="مرحلهٔ عمل"
-            value={phase}
-            onChange={setPhase}
-            items={PHASE_ITEMS}
-          />
-
-          {phase === 'pre' && (
-          <div className="db-phase" data-phase="pre">
-          {decidedCard}
-          {/* ── مراقبتِ قبل از عمل ── */}
-          <div className="db-careblock">
-            <div className="db-carehead">
-              <span>مراقبت‌های قبل از عمل — پیامک به بیمار</span>
-              <i>{preWhen}</i>
-            </div>
-            {opIsToday && (
-              <p className="db-decide-hint">
-                عملْ همین امروز است — معمولاً دیگر پیامِ «قبل از عمل» لازم نیست؛ اگر لازم است، «به‌محضِ ثبت» را بزنید.
-              </p>
-            )}
-            {careField('pre')}
-            {/* ⚠️ این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
-                آن است — برعکسِ مراقبتِ بعد از عمل. */}
-            <div className="db-daychips db-whenchips">
-              {[{ v: false, l: 'فقط طبقِ زمان‌بندی' }, { v: true, l: 'به‌محضِ ثبت + زمان‌بندی' }].map((o) => (
-                <button
-                  key={String(o.v)} type="button"
-                  className={!!f.preOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
-                  aria-pressed={!!f.preOpImmediate === o.v}
-                  onClick={() => { preTouched.current = true; setF((s2) => ({ ...s2, preOpImmediate: o.v })); }}
-                >{o.l}</button>
-              ))}
-            </div>
-          </div>
-
-          <div className="db-careblock">
-            <div className="db-carehead">
-              <span>درخواست‌های پیش از عمل — آزمایش، تصویربرداری، مشاوره</span>
-              {!initial?.id && <i>بعد از ذخیره</i>}
-            </div>
-            {initial?.id
-              ? ordersBlock
-              : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
-          </div>
-
-          {phaseSubs('pre')}
-          {phaseDocs}
-          </div>
-          )}
-
-          {phase === 'intra' && (
-          <div className="db-phase" data-phase="intra">
-            {INTRA_KEYS.some((k) => builtinNodes[k]) ? (
-              <div className="db-grid2 db-builtins">
-                {INTRA_KEYS.map(cell)}
-              </div>
-            ) : (
-              <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان{isClinicCore ? '' : '، یافته‌ها'}، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
-            )}
-
-            {phaseSubs('intra')}
-            {phaseDocs}
-          </div>
-          )}
-
-          {phase === 'post' && (
-          <div className="db-phase" data-phase="post">
           {/* ── مراقبتِ بعد از عمل ── */}
           <div className="db-careblock">
             <div className="db-carehead">
@@ -2594,12 +2606,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               placeholder="سال / ماه / روز"
             />
           </div>
-
-          {phaseSubs('post')}
-          {phaseDocs}
-          </div>
-          )}
-
           <p className="db-postop-plan">
             {timing && timing.followUpFormReady === false
               ? 'پیگیری: ارسال نمی‌شود (فرمِ پیگیری تعریف نشده)'
@@ -2612,9 +2618,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             {`مراقبتِ قبل: ${f.preOpCare.trim() ? 'متنِ همین فرم' : procDefaults.preOpCare ? 'قالبِ نوعِ عمل' : 'ارسال نمی‌شود'}`}
             {(f.preOpCare.trim() || procDefaults.preOpCare) ? (f.preOpImmediate ? '، به‌محضِ ثبت + موعدِ مقرر' : '، موعدِ مقرر') : ''}
           </p>
-        </div>
+        </section>
+        {phaseSubs('post')}
+        {phaseDocs}
+      </div>
       )}
-
 
       <AttachPicker
         open={pickOpen}
