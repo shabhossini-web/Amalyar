@@ -22,4 +22,14 @@ export class RateLimitService {
       );
     }
   }
+
+  /**
+   * بی‌شمردن: آیا یک `hit` دیگر زیرِ سقف می‌ماند؟ برای سقفِ **بی‌صدا** با چند سطل که فقط وقتی کار قطعی شد
+   * شمرده می‌شود (پیامکِ لینکِ ادامه، بستهٔ PF): اگر سطلِ اول شمرده می‌شد و دومی جلوی ارسال را می‌گرفت، اولی
+   * پیامکی را شمرده بود که هرگز نرفت.
+   */
+  peek(key: string, limit: number): boolean {
+    const current = this.buckets.get(key);
+    return !current || current.resetAt <= Date.now() || current.count < limit;
+  }
 }

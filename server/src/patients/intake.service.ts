@@ -77,6 +77,11 @@ function storedMime(file: { mimetype?: string; buffer: Buffer }): string {
 
 /** روزهای اعتبارِ یک ثبت‌نامِ نیمه‌کاره. */
 const TTL_DAYS = 14;
+/** پیامکِ «لینکِ ادامه»: سقفِ بی‌صدا به‌ازای شماره (در ساعت) و به‌ازای لینکِ ثبت‌نام (در روز) — بستهٔ PF، PF7. */
+const LINK_SMS_PER_PHONE_HOUR = 2;
+const LINK_SMS_PER_LINK_DAY = 150;
+/** جای شماره در «لینک به … پیامک شد» وقتی تایپ‌کننده شمارهٔ دیگری داده (PF12). */
+const ON_RECORD_PHONE = 'شمارهٔ ثبت‌شده در پرونده';
 /** کدِ «ادامه با موبایل» — همان قراردادِ کدِ ورود (`auth.service.ts`): ۵ دقیقه، ۵ تلاش. */
 const RESUME_OTP_TTL_MS = 5 * 60_000;
 const RESUME_OTP_MAX_ATTEMPTS = 5;
@@ -585,7 +590,7 @@ export class IntakeService {
       orderBy: { id: 'desc' },
     });
     /* بیمارِ برگشته احتمالاً لینکش را گم کرده — همان لینک دوباره پیامک می‌شود (با سقفِ ۱۰دقیقه‌ای). */
-    if (open) return { ...(await this.publicView(open.token)), linkSmsTo: await this.sendContinueLink(patientId, open.token, link.title) };
+    if (open) return { ...(await this.publicView(open.token)), linkSmsTo: await this.sendContinueLink(patientId, open.token, link.title, link.id, phone) };
 
     const row = await this.prisma.intakeSubmission.create({
       data: {
@@ -600,7 +605,7 @@ export class IntakeService {
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
       },
     });
-    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row.token, link.title) };
+    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row.token, link.title, link.id, phone) };
   }
 
   /**
@@ -612,18 +617,27 @@ export class IntakeService {
    * ⚠️ منتظرِ درگاهِ پیامک نمی‌ماند — ثبت‌نام روی اینترنتِ کند نباید پشتِ درگاه گیر کند؛ ارسال در
    * پس‌زمینه است و نتیجه‌اش (فرستاده/ناموفق) مثلِ «ارسالِ فرم» در دفترِ پیام‌های بیمار می‌نشیند.
    * ⚠️ برای هر ثبت‌نام حداکثر یک پیامک در ۱۰ دقیقه — تکرارِ ثبت‌نام بمبارانِ پیامک نمی‌سازد.
-   * خروجی: شمارهٔ **پوشیده** برای جملهٔ «لینک به … پیامک شد»، یا `null` (شمارهٔ نامعتبر).
+   * هشدار — **و برای هر شماره دو پیامک در ساعت، و برای هر لینکِ ثبت‌نام ۱۵۰ در روز** (بستهٔ PF، PF7): سقفِ
+   * بالا فقط به‌ازای **ثبت‌نام** بود، پس سه بیمارِ ساختگی با یک شماره روی سه لینک، سه پیامک به همان شماره
+   * می‌فرستادند — بمبارانِ پیامکی با هزینهٔ مطب. سقف‌ها بی‌صدا‌اند: ثبت‌نام پیش می‌رود و فقط پیامک نمی‌رود.
+   * خروجی: شمارهٔ **پوشیده** برای جملهٔ «لینک به … پیامک شد» — فقط اگر تایپ‌کننده همین شماره را داده
+   * (PF12؛ وگرنه «شمارهٔ ثبت‌شده در پرونده»: کسی که کدِ ملیِ دیگری را تایپ کرده نباید رقم‌های شمارهٔ او را
+   * ببیند) — یا `null` (شمارهٔ نامعتبر، یا پیامکی که سقف جلویش را گرفت).
    */
-  private async sendContinueLink(patientId: number, token: string, title: string): Promise<string | null> {
+  private async sendContinueLink(patientId: number, token: string, title: string, linkId: number, typedPhone: string): Promise<string | null> {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, deletedAt: null }, select: { phone: true } });
     const to = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
     if (!/^09\d{9}$/.test(to)) return null;
-    const masked = `${to.slice(0, 4)}…${to.slice(-3)}`;
-    try {
-      this.rateLimit.hit(`intake-link-sms:${token}`, 1, 10 * 60_000);
-    } catch {
-      return masked; // همین چند دقیقه پیش رفته است
-    }
+    const typed = toEnDigits(String(typedPhone ?? '')).replace(/[^0-9]/g, '');
+    const shown = typed === to ? `${to.slice(0, 4)}…${to.slice(-3)}` : ON_RECORD_PHONE;
+    const byToken = `intake-link-sms:${token}`;
+    const byPhone = `intake-link-sms:${this.tid}:phone:${to}`;
+    const byLink = `intake-link-sms:${this.tid}:link:${linkId}`;
+    if (!this.rateLimit.peek(byToken, 1)) return shown; // همین چند دقیقه پیش رفته است
+    if (!this.rateLimit.peek(byPhone, LINK_SMS_PER_PHONE_HOUR) || !this.rateLimit.peek(byLink, LINK_SMS_PER_LINK_DAY)) return null;
+    this.rateLimit.hit(byToken, 1, 10 * 60_000);
+    this.rateLimit.hit(byPhone, LINK_SMS_PER_PHONE_HOUR, 3600_000);
+    this.rateLimit.hit(byLink, LINK_SMS_PER_LINK_DAY, 24 * 3600_000);
     const smsCfg = await this.settings.sms();
     const text = renderSms(smsCfg.formSendText, { title, link: this.publicFormLink(token) });
     void (async () => {
@@ -632,7 +646,7 @@ export class IntakeService {
         data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },
       }).catch(() => undefined);
     })().catch(() => undefined);
-    return masked;
+    return shown;
   }
 
   /* ── ادامه با موبایل + کد (بازبینیِ UX، بندِ ۱۰۳) ─────────────────────────

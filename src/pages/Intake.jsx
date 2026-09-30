@@ -807,7 +807,8 @@ function Form() {
         <p className="ik-note ik-sms-note" role="status">
           <Info width="15" height="15" />
           {/* هشدار: یک span: `.ik-note` فلکس است و متن + bdi بی‌این سه ستونِ جدا می‌شدند. */}
-          <span>لینکِ ادامهٔ همین فرم به <bdi dir="ltr">{faDigits(smsTo)}</bdi> پیامک شد؛ اگر این صفحه بسته شد، از همان پیامک برگردید.</span>
+          {/* شمارهٔ پوشیده فقط وقتی تایپ‌کننده همان شماره را داده؛ وگرنه سرور «شمارهٔ ثبت‌شده در پرونده» می‌فرستد (PF12). */}
+          <span>لینکِ ادامهٔ همین فرم به {/\d/.test(smsTo) ? <bdi dir="ltr">{faDigits(smsTo)}</bdi> : smsTo} پیامک شد؛ اگر این صفحه بسته شد، از همان پیامک برگردید.</span>
         </p>
       )}
       {(d.status === 'pending_fill' || d.status === 'pending_payment') && d.expiresFa && (

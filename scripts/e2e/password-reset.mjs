@@ -17,15 +17,19 @@
  *  - PF4: بودجهٔ حدسِ کد به‌ازای حساب است نه متنِ تایپ‌شده، و شمارشِ تلاش اتمی است
  *  - PF5: درخواستِ کدِ بازیابی بیرون از محیطِ آزمون منتظرِ یافتنِ حساب نمی‌ماند (درونِ فرایند)
  *  - PF6: بازیابی پس‌کی‌های حساب را هم پاک می‌کند و تعدادشان را می‌گوید
+ *  - PF7: ثبت‌نامِ بیمار برای بمبارانِ پیامکیِ یک شماره به کار نمی‌آید (سقفِ بی‌صدا به‌ازای شماره و لینک)
+ *  - PF12: «لینک به … پیامک شد» شمارهٔ پرونده را به کسی که شمارهٔ دیگری تایپ کرده نشان نمی‌دهد
  *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
  */
 import { execSync } from 'node:child_process';
+import { captchaFor } from './lib/captcha.mjs';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 /* دیتابیسِ همان شرکت — فقط برای چیدنِ حالتی که از بیرون ساختنی نیست (مثلِ صفرکردنِ تلاش‌های یک کد). */
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
 const sql = (q) => execSync(`psql "${DB}" -qtAc ${JSON.stringify(q)}`).toString().trim();
+const later = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
 let pass = 0, fail = 0;
 const ok = (c, m, extra = '') => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m + (extra ? ` — ${extra}` : '')); } };
 
@@ -196,7 +200,39 @@ sql(`UPDATE otp_codes SET attempts = 0 WHERE phone = '${guess.phone}' AND purpos
 const ninth = await call('/auth/password/reset', { body: { identifier: guess.phone, code: gCode, password: 'guess-pass-1' }, ip: '10.64.0.1' });
 ok(ninth.status === 400 && msg(ninth) === msg(wrong), `حدسِ نهم با موبایلِ همان حساب — حتی با کدِ درست — رد می‌شود (${ninth.status})`, msg(ninth));
 
-console.log('\n۷) سقفِ نرخ برای شناسهٔ ناموجود هم');
+console.log('\n۷) PF7 و PF12 — پیامکِ «لینکِ ادامه» پس از ثبت‌نامِ بیمار');
+/** کدِ ملیِ معتبر (رقمِ کنترلی) — هر اجرا کدهای خودش. */
+const nid = (seed) => {
+  const base = String(seed % 1_000_000_000).padStart(9, '0');
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += Number(base[i]) * (10 - i);
+  return base + String(sum % 11 < 2 ? sum % 11 : 11 - (sum % 11));
+};
+const links = [];
+for (let i = 0; i < 3; i++) links.push((await call('/intake/links', { body: { title: `آزمونی PF7-${i} ${run}`, amount: 0 }, bearer })).json);
+const register = async (link, who) => call(`/public/intake/link/${link.token}/register`, {
+  body: { firstName: 'آزمونی', ...who, ...(await captchaFor(API, link.token)) }, ip: '10.66.0.1',
+});
+const notices = async (phone) => { await later(400); return Number(sql(`SELECT count(*) FROM reminders WHERE phone = '${phone}' AND kind = 'notice'`)); };
+/* PF12 — پرونده با شمارهٔ P ساخته شده؛ کسی کدِ ملی و نامِ خانوادگیِ درست را با شمارهٔ دیگری تایپ می‌کند. پیامک
+   به شمارهٔ **پرونده** می‌رود (درست)، ولی پاسخ نباید چهار رقمِ اول و سه رقمِ آخرِ آن را به او نشان دهد. */
+const recPhone = `0939${run}3`;
+const recNid = nid(Number(run) * 10 + 1);
+const own = await register(links[0], { lastName: 'پرونده‌دار', nationalId: recNid, phone: recPhone });
+ok(own.status < 300 && own.json?.linkSmsTo === `${recPhone.slice(0, 4)}…${recPhone.slice(-3)}`, `شمارهٔ تایپ‌شده همان شمارهٔ پرونده ← پوشیده‌اش (${own.status} «${own.json?.linkSmsTo}»)`, msg(own));
+const other = await register(links[1], { lastName: 'پرونده‌دار', nationalId: recNid, phone: `0938${run}2` });
+ok(other.status < 300 && other.json?.linkSmsTo === 'شمارهٔ ثبت‌شده در پرونده', `PF12: شمارهٔ دیگر ← «شمارهٔ ثبت‌شده در پرونده»، نه ${recPhone.slice(0, 4)}… (${other.status} «${other.json?.linkSmsTo}»)`, msg(other));
+/* PF7 — سه بیمارِ تازه، یک شماره، سه لینک: سقفِ «یک پیامک در ده دقیقه» فقط به‌ازای ثبت‌نام بود، پس هر ثبت‌نام
+   یک پیامکِ دیگر به همان شماره می‌فرستاد. سقفِ تازه: دو پیامک در ساعت به هر شماره، بی‌صدا. */
+const bombed = `0937${run}1`;
+const shots = [];
+for (let i = 0; i < 3; i++) shots.push(await register(links[i], { lastName: `بمباران${i}`, nationalId: nid(Number(run) * 10 + 5 + i), phone: bombed }));
+ok(shots.every((r) => r.status < 300), `سه ثبت‌نام پذیرفته شد — سقف بی‌صداست (${shots.map((r) => r.status).join('،')})`);
+const sent = await notices(bombed);
+ok(sent === 2 && shots[2].json?.linkSmsTo == null, `PF7: پیامکِ سوم به همان شماره نرفت (رفته: ${sent}؛ پاسخِ سوم: «${shots[2].json?.linkSmsTo}»)`);
+for (const l of links) await call(`/intake/links/${l.id}`, { method: 'PATCH', body: { active: false }, bearer });
+
+console.log('\n۸) سقفِ نرخ برای شناسهٔ ناموجود هم');
 const probe = `ratelimit${run}`;
 const codes = [];
 for (let i = 0; i < 4; i++) codes.push(await call('/auth/password/request-otp', { body: { identifier: probe } }));
@@ -206,13 +242,12 @@ ok(codes.slice(0, 3).every((r) => r.status < 300) && codes[3].status === 429 && 
 /* ── درونِ فرایند: چیزهایی که سرورِ زنده در NODE_ENV=test نشانشان نمی‌دهد ─────────────────────────────
    آزمونِ زنده کد را از پاسخ می‌گیرد (devCode)، پس در محیطِ آزمون سرور عمداً منتظرِ کارش می‌ماند. رفتارِ
    production (پاسخِ فوری، کارِ جداشده) این‌جا با خودِ کلاس‌های بیلدشده و دیتابیس/درگاهِ ساختگی سنجیده می‌شود. */
-console.log('\n۸) درونِ فرایند (NODE_ENV=production، دیتابیس و درگاهِ ساختگی)');
+console.log('\n۹) درونِ فرایند (NODE_ENV=production، دیتابیس و درگاهِ ساختگی)');
 const { createRequire } = await import('node:module');
 const requireServer = createRequire(new URL('../../server/package.json', import.meta.url));
 requireServer('reflect-metadata');
 const { IntakeService } = requireServer('./dist/patients/intake.service.js');
 const { RateLimitService } = requireServer('./dist/common/rate-limit.service.js');
-const later = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
 const timed = async (fn) => { const t0 = performance.now(); const r = await fn(); return { r, ms: performance.now() - t0 }; };
 const inEnv = (env) => async (fn) => {
   const was = process.env.NODE_ENV;
@@ -243,7 +278,7 @@ function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = 
     return { sent: true, stub: false };
   };
   const sms = { sendOtp: deliver, send: deliver };
-  const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
+  const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }), require: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
   const settings = { sms: async () => ({ formSendText: 'فرمِ {title}: {link}' }) };
   const svc = new IntakeService(prisma, undefined, undefined, undefined, undefined, undefined, undefined,
     sms, tenant, undefined, undefined, undefined, settings, undefined, new RateLimitService());
@@ -264,6 +299,17 @@ function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = 
   await inProd(() => broken.svc.resumeRequest('tok', '09120000003', '10.70.0.3'));
   await later(60);
   ok(broken.seen.deleted.length === 1, 'PF3: پیامکِ نرفته ← کدش پاک شد (کدِ بعدی پشتِ پنجرهٔ یک‌دقیقه‌ای گیر نمی‌کند)');
+}
+
+{
+  /* PF7 — سقفِ روزانهٔ لینک: ۱۵۱ ثبت‌نامِ ساختگی (هر کدام شماره و توکنِ خودش) روی یک لینک ← ۱۵۰ پیامک. */
+  let n = 0;
+  const box = fakeIntake({ recordPhone: '' });
+  box.svc.prisma.patient.findFirst = async () => ({ phone: `0912${String(++n).padStart(7, '0')}` });
+  const shown = [];
+  for (let i = 1; i <= 151; i++) shown.push(await box.svc.sendContinueLink(1, `tok-${i}`, 'فرم', 7, `0912${String(i).padStart(7, '0')}`));
+  await later(30);
+  ok(box.seen.sent.length === 150 && shown[150] === null, `PF7: سقفِ روزانهٔ لینک — ۱۵۰ پیامک از ۱۵۱ ثبت‌نام (${box.seen.sent.length})، و پاسخِ آخری ادعای «پیامک شد» ندارد`);
 }
 
 /** AuthService روی یک دیتابیسِ درون‌حافظه‌ایِ کوچک — فقط جدول‌هایی که بازیابیِ رمز می‌خواند و می‌نویسد. */
