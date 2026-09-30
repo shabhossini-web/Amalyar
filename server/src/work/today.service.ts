@@ -257,19 +257,19 @@ export class TodayService {
       }),
     ]);
 
-    /* خلاصهٔ مراجعه (و «پاپ‌آپِ خودِ کار شدنی است؟») همان‌که صفِ کار دارد (`visitBriefs`، R1):
-       بی‌آن «ثبتِ وضعیت»ِ ردیفِ بی‌مسئول پرسشِ «عملِ آینده» را دور می‌زد و مسیرِ پنلِ
+    /* خلاصهٔ مراجعه و «پاپ‌آپِ خودِ کار شدنی است؟» همان‌که صفِ کار دارد (`WorkService.targets`،
+       R1/R6): بی‌آن «ثبتِ وضعیت»ِ ردیفِ بی‌مسئول پرسشِ «عملِ آینده» را دور می‌زد و مسیرِ پنلِ
        کارشناس را برای عملی باز می‌کرد که کارشناس ندارد (۴۰۴). */
-    const [unreviewed, byPatient, visitOf] = await Promise.all([
+    const [unreviewed, byPatient, targetOf] = await Promise.all([
       this.unreviewedOrders(ago(48)),
       this.patientsById([...unowned.map((w) => w.patientId), ...stuck.map((e) => e.patientId)]),
-      this.work.visitBriefs(user, unowned),
+      this.work.targets(user, unowned),
     ]);
 
     return {
       unowned: {
         count: unownedCount,
-        items: unowned.map((w) => ({ ...w, patient: byPatient.get(w.patientId ?? -1) ?? null, visit: visitOf(w) })),
+        items: unowned.map((w) => ({ ...w, patient: byPatient.get(w.patientId ?? -1) ?? null, ...targetOf(w) })),
       },
       stuckEvents: {
         count: stuckCount,

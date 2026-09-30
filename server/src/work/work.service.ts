@@ -215,10 +215,10 @@ export class WorkService {
    * آن پاپ‌آپ ۴۰۴/۴۰۳ می‌گرفت. پس سرور همین را برای **همین کاربر و همین نوعِ کار** می‌گوید
    * (قانونِ ۳) و رابط بی‌آن فرمِ همان مراجعه را باز می‌کند — کاری که پیش از پاپ‌آپ‌ها می‌کرد.
    *
-   * عمومی است چون نمای استثنای «امروز» (`TodayService.exceptions`) هم ردیفِ کارِ خام دارد
-   * و همان پاپ‌آپ‌ها را باز می‌کند؛ یک تعریف، نه دو.
+   * نمای استثنای «امروز» (`TodayService.exceptions`) هم ردیفِ کارِ خام دارد و همان پاپ‌آپ‌ها را
+   * باز می‌کند، پس هر دو از `targets` (پایین) می‌خوانند؛ یک تعریف، نه دو.
    */
-  async visitBriefs(user: any, rows: { type?: string | null; visitId?: number | null }[]) {
+  private async visitBriefs(user: any, rows: { type?: string | null; visitId?: number | null }[]) {
     const vids = [...new Set(rows.map((r) => r.visitId).filter(Boolean))] as number[];
     const needs = (type: string) => rows.some((r) => r.type === type && r.visitId);
     const [visits, canStatus, canReport] = await Promise.all([
@@ -251,6 +251,28 @@ export class WorkService {
     };
   }
 
+  /**
+   * **مقصدِ «خودِ کار» برای همین کاربر** — خلاصهٔ مراجعه (`visit`، با `techPopup`) و برای کارِ
+   * «بررسی و تأییدِ ثبت‌نام» `intakePopup`.
+   *
+   * ⚠️ `intakePopup` (بازبینیِ خصمانه، R6): پنجرهٔ تأیید ردیفِ ثبت‌نام را از `/intake/submissions`
+   * می‌خوانَد که پشتِ ماژولِ `formgen` و مجوزِ `intake.read` است (پیش‌فرض سطحِ ادمین)؛ کار ولی
+   * در **صفِ منشی** می‌نشیند. منشیِ بی‌دسترسی با «بررسی و تأیید» ۴۰۳ می‌گرفت. بی‌این پرچم ردیف
+   * دکمهٔ اصلی ندارد — همان «یادآوریِ فردا» و «بستن بدونِ اقدام»ِ پیش از پاپ‌آپ‌ها.
+   */
+  async targets(user: any, rows: { type?: string | null; visitId?: number | null }[]) {
+    const [visitOf, canIntake] = await Promise.all([
+      this.visitBriefs(user, rows),
+      rows.some((r) => r.type === 'approve_intake')
+        ? canAccess(this.prisma, user, 'formgen', ['intake.read']).catch(() => false)
+        : Promise.resolve(false),
+    ]);
+    return (r: { type?: string | null; visitId?: number | null }) => ({
+      visit: visitOf(r),
+      ...(r.type === 'approve_intake' ? { intakePopup: canIntake } : {}),
+    });
+  }
+
   /** بیمار/مراجعه را سمتِ سرور ضمیمه می‌کند (قانونِ ۱۵ — render فرمول ندارد). */
   private async enrich(user: any, rows: any[]) {
     const pids = [...new Set(rows.map((r) => r.patientId).filter(Boolean))] as number[];
@@ -259,12 +281,12 @@ export class WorkService {
        کارهای یک بیمار را می‌بیند (`scope=patient`) نامِ هم‌تیمی‌ها را تازه نمی‌گیرد. */
     const team = isUnrestricted(user);
     /* نامِ مالک‌ها هم‌زمان با بیمارها و مراجعه‌ها — یک کوئری برای همهٔ ردیف‌ها، و فقط وقتی لازم است. */
-    const [patients, names, visitOf] = await Promise.all([
+    const [patients, names, targetOf] = await Promise.all([
       pids.length
         ? this.prisma.patient.findMany({ where: { id: { in: pids } }, select: { id: true, code: true, firstName: true, lastName: true, phone: true } })
         : Promise.resolve([] as { id: number; code: string; firstName: string; lastName: string; phone: string | null }[]),
       team ? this.accountNames(rows.map((r) => r.ownerAccountId)) : Promise.resolve(new Map<number, string>()),
-      this.visitBriefs(user, rows),
+      this.targets(user, rows),
     ]);
     const byId = new Map(patients.map((p) => [p.id, { ...p, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() }]));
     /* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده (W0.8) کنارِ ردیف می‌آیند —
@@ -292,7 +314,7 @@ export class WorkService {
       return {
         ...r,
         patient: r.patientId ? byId.get(r.patientId) ?? null : null,
-        visit: visitOf(r),
+        ...targetOf(r),
         /* «انجام شد»ِ خالی فقط برای یادداشتِ دستی است (`act`)؛ کارِ رویدادی با انجامِ خودش
            بسته می‌شود یا با «بستن بدونِ اقدام». رابط همین را می‌خواند، نه فهرستِ نوع‌ها. */
         manual: isManual(r),
