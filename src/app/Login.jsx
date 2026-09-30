@@ -294,7 +294,7 @@ export default function Login() {
           <form onSubmit={doLogin} className="lg-form">
             {field('نام کاربری یا موبایل',
               <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="username یا 09..." autoComplete="username" required />)}
+                placeholder="نام کاربری یا ۰۹…" autoComplete="username" required />)}
             {field('رمز عبور',
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="رمز عبور" autoComplete="current-password" required />)}
@@ -321,7 +321,7 @@ export default function Login() {
           <form onSubmit={sendOtp} className="lg-form">
             {field('شمارهٔ موبایل',
               <input type="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)}
-                placeholder="09..." autoComplete="tel" required />)}
+                placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" autoComplete="tel" required />)}
             <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'ارسالِ کدِ تأیید'}</button>
             <p className="lg-hint">کدِ تأیید با پیامک به موبایل شما ارسال می‌شود.</p>
           </form>

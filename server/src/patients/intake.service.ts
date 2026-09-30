@@ -11,7 +11,7 @@ import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
-import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS, UNDATED_KEY, isUndated } from './form-presets';
+import { BUILTIN_VISIT_KEYS, REGISTRATION_HINTS, REGISTRATION_PRESETS, UNDATED_KEY, isUndated } from './form-presets';
 import { normalizeLinks } from './forms.service';
 import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
@@ -1029,7 +1029,9 @@ export class IntakeService {
     return {
       key: f.key,
       title: f.title,
-      hint: f.hint,
+      /* راهنمای پیش‌فرضِ قدیمی زبانِ کارکنان بود («فرم عمل از مسیر جداگانهٔ مطب…») — متنِ دست‌نخورده‌اش
+         برای بیمار به متنِ تازه برمی‌گردد (بندِ ۱۱۳)؛ راهنمای نوشتهٔ مدیر همان می‌ماند. */
+      hint: Object.values(REGISTRATION_HINTS).find((h) => h.was === f.hint)?.now ?? f.hint,
       /* صفحه‌شمار سمتِ سرور (قانون ۱۵) — و از روی همین فیلدهای دیده‌شده، نه
          از کلِ فرم: اگر تنها فیلدِ صفحهٔ ۲ خاموش باشد، صفحهٔ ۲ وجود ندارد. */
       pages: fields.reduce((m, x) => Math.max(m, x.page), 1),

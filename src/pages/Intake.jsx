@@ -190,9 +190,10 @@ function Register() {
         <Field id="ik-first" label="نام *" value={f.firstName} onChange={set('firstName')} disabled={busy} error={fErr.firstName} />
         <Field id="ik-last" label="نامِ خانوادگی *" value={f.lastName} onChange={set('lastName')} disabled={busy} error={fErr.lastName} />
         <Field id="ik-nid" label="کدِ ملی *" value={f.nationalId} onChange={set('nationalId')} disabled={busy} dir="ltr" inputMode="numeric" error={fErr.nationalId} />
-        <Field id="ik-phone" label="شمارهٔ موبایل *" value={f.phone} onChange={set('phone')} disabled={busy} dir="ltr" inputMode="numeric" placeholder="09xxxxxxxxx" error={fErr.phone} />
+        <Field id="ik-phone" label="شمارهٔ موبایل *" value={f.phone} onChange={set('phone')} disabled={busy} dir="ltr" inputMode="numeric" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" error={fErr.phone} />
         {/* JDate خودش برچسب دارد؛ پیچیدنش در label یعنی دو برچسب. */}
-        <JDate className="ik-field" mode="birth" label="تاریخِ تولد" value={f.birthDate}
+        {/* نمونه‌ای که شبیهِ تاریخِ تولد است — پیش‌فرضِ «۱۴۰۵/۰۱/۰۱» یعنی امسال (بازبینیِ UX، بندِ ۱۱۳). */}
+        <JDate className="ik-field" mode="birth" label="تاریخِ تولد" value={f.birthDate} placeholder="مثلاً ۱۳۶۵/۰۴/۲۰"
                onChange={(v) => setF((s) => ({ ...s, birthDate: v }))} disabled={busy} />
         <Field label="نشانی" value={f.address} onChange={set('address')} disabled={busy} />
 
