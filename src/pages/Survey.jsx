@@ -100,7 +100,7 @@ export default function Survey() {
         {view.hint && <p>{view.hint}</p>}
       </header>
 
-      {err && <div className="ik-err">{err}</div>}
+      {err && <div className="ik-bad" role="alert">{err}</div>}
 
       <DynForm fields={view.fields} values={answers} errors={errors} onChange={setAnswers} disabled={busy} />
 

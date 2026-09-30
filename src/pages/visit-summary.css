@@ -11,7 +11,7 @@
   --paper-rule: #16132b;  /* خطِ زیرِ سربرگ */
   min-height: 100dvh; background: #eceaf3; color: var(--paper-ink);
   display: flex; flex-direction: column; align-items: center;
-  padding: 18px 10px 90px; font-size: 14px;
+  padding: 18px 10px 110px; font-size: 15px; line-height: 1.7;
 }
 .vs-err {
   min-height: 100dvh; display: grid; place-items: center; background: #eceaf3;
@@ -37,8 +37,8 @@
 .vs-tel { display: inline-block; margin-top: 2px; color: var(--paper-label); text-decoration: none; font-variant-numeric: tabular-nums; }
 .vs-tel:focus-visible { outline: 2px solid var(--paper-ink); outline-offset: 2px; border-radius: 4px; }
 .vs-doc { text-align: left; }
-.vs-doc b { display: block; font-size: 13px; }
-.vs-doc small { color: var(--paper-label); font-size: 11px; }
+.vs-doc b { display: block; font-size: 14px; }
+.vs-doc small { color: var(--paper-label); font-size: 12.5px; }
 
 .vs-patient {
   display: flex; align-items: baseline; gap: 10px; padding: 12px 0 4px;
@@ -52,23 +52,23 @@
   background: #f6f5fa; border-radius: 10px;
 }
 .vs-facts div { display: flex; gap: 7px; align-items: baseline; }
-.vs-facts dt { color: var(--paper-label); font-size: 12px; flex: 0 0 auto; }
+.vs-facts dt { color: var(--paper-label); font-size: 13.5px; flex: 0 0 auto; }
 .vs-facts dt::after { content: ':'; }
-.vs-facts dd { font-weight: 700; font-size: 13px; }
+.vs-facts dd { font-weight: 700; font-size: 14.5px; }
 
 .vs-block { padding: 8px 0; border-bottom: 1px solid #eeecf4; }
-.vs-block h2 { font-size: 13px; color: #4b3f78; margin-bottom: 4px; }
-.vs-block p { font-size: 13.5px; line-height: 1.9; white-space: pre-wrap; }
+.vs-block h2 { font-size: 14.5px; color: #4b3f78; margin-bottom: 4px; }
+.vs-block p { font-size: 15px; line-height: 1.8; white-space: pre-wrap; }
 
 .vs-next {
   margin-top: 14px; padding: 12px 14px; border-radius: 10px;
   background: #eefaf4; border: 1px solid #b7e7cf;
 }
-.vs-next b { display: block; color: #047857; font-size: 14px; }
-.vs-next small { color: #059669; font-size: 12px; }
+.vs-next b { display: block; color: #047857; font-size: 15px; }
+.vs-next small { color: #047857; font-size: 13px; }
 
 .vs-foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #eeecf4; text-align: center; }
-.vs-foot small { color: var(--paper-label); font-size: 11px; }
+.vs-foot small { color: var(--paper-label); font-size: 12.5px; }
 
 .vs-actions {
   position: fixed; inset-inline: 0; bottom: 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;
