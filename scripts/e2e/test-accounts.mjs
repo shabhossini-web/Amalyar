@@ -138,6 +138,21 @@ try {
   await prisma.account.update({ where: { id: admin.id }, data: { phoneVerifiedAt: beforeSelf.phoneVerifiedAt, verificationDueAt: beforeSelf.verificationDueAt, person: { update: { phone: beforeSelf.person.phone } } } });
   pass('PS3: a phone change revokes that account\'s sessions except the editor\'s own current one');
 
+  /* PS9 — شناسهٔ موبایل‌شکل اول با **شماره** پیدا می‌شود. نامِ کاربری می‌توانست تمام‌رقم باشد و `findFirst` روی
+     «نامِ کاربری یا موبایل» ترتیب نداشت: حسابی با نامِ کاربریِ «۰۹۱۲…» ورود و بازیابیِ صاحبِ آن شماره را می‌گرفت. */
+  const bcrypt = require('../../server/node_modules/bcryptjs');
+  const legacy = await prisma.account.create({ data: { username: '09121110031', status: 'active', level: 2, passwordHash: await bcrypt.hash('legacy-password-1', 4), phoneVerifiedAt: new Date(), person: { create: { firstName: 'آزمونی', lastName: 'نام‌کاربریِ‌رقمی', phone: '09121110039' } } } });
+  const owner = await accounts.createTemporary({ firstName: 'آزمونی', lastName: 'صاحبِ‌شماره', phone: '09121110031', username: 'ps9-owner', level: 2, jobRole: 'technician' }, admin.id);
+  await prisma.account.update({ where: { id: owner.account.id }, data: { phoneVerifiedAt: new Date() } });
+  const byPhone = await auth.login({ identifier: '09121110031', password: owner.temporaryPassword }, {});
+  assert.equal(byPhone.user.id, owner.account.id, 'موبایل‌شکل ← حسابِ صاحبِ همان شماره');
+  const legacyStill = await auth.login({ identifier: '09121110039', password: 'legacy-password-1' }, {});
+  assert.equal(legacyStill.user.id, legacy.id, 'حسابِ قدیمی با شمارهٔ خودش وارد می‌شود (دست‌نخورده)');
+  await assert.rejects(() => accounts.createTemporary({ firstName: 'آزمونی', lastName: 'رقمی', phone: '09121110038', username: '09121110037', level: 2, jobRole: 'technician' }, admin.id), /حرفِ لاتین/);
+  const digitsSignup = await jwt.signAsync({ phone: '09121110036', purpose: 'signup' });
+  await assert.rejects(() => auth.completeSignup({ signupToken: digitsSignup, username: '09121110035', password: 'digits-password-1', firstName: 'آزمونی', lastName: 'رقمی', selfie: 'fixture' }, {}), /حرفِ لاتین/);
+  pass('PS9: a mobile-shaped identifier resolves by phone first; new usernames need a Latin letter');
+
   /* PS2 — «اولین حساب = سوپرادمین» یعنی «هیچ حسابی نیست»، نه «سوپرادمینِ فعالی نیست». تا دیروز: سوپرادمینِ تنها
      شماره‌اش را در پروفایل عوض می‌کرد، هفت روز تأیید نمی‌کرد، انقضای حسابِ موقت غیرفعالش می‌کرد و **اولین
      ثبت‌نامِ عمومی** سوپرادمینِ فعالِ سامانه می‌شد. */

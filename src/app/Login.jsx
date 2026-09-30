@@ -500,7 +500,7 @@ export default function Login() {
             </div>
             {field('نام کاربری',
               <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                placeholder="لاتین/عدد" autoComplete="username" required />)}
+                placeholder="لاتین/عدد، با دست‌کم یک حرف" autoComplete="username" required />)}
             {field('رمز عبور',
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="حداقل ۶ کاراکتر" autoComplete="new-password" required />)}

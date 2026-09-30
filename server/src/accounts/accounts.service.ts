@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthService } from '../auth/auth.service';
+import { AuthService, USERNAME_NEEDS_LETTER, usernameHasLetter } from '../auth/auth.service';
 import { LEVEL } from '../common/levels';
 import { JOB_ROLE_KEYS } from '../common/job-roles';
 import { buildPersonPatch, PersonInput } from '../common/person';
@@ -32,6 +32,8 @@ export class AccountsService {
       const existing = dto.testAccount ? null : await tx.person.findUnique({ where: { phone_phoneScope: { phone: String(person.phone), phoneScope: 'primary' } }, include: { account: true } });
       if (existing?.account) throw new BadRequestException('این شماره حساب دارد؛ حساب موجود را ویرایش کنید');
       const username = dto.username?.trim() || `staff-${randomBytes(5).toString('hex')}`;
+      /* تمام‌رقم با شمارهٔ موبایلِ کسِ دیگری اشتباه می‌شد (بستهٔ PS، PS9). */
+      if (!usernameHasLetter(username)) throw new BadRequestException(USERNAME_NEEDS_LETTER);
       if (await tx.account.findUnique({ where: { username } })) throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
       if (dto.testAccount) (person as any).phoneScope = `test:${randomUUID()}`;
       const row = await tx.account.create({ data: { ...(existing ? { personId: existing.id } : { person: { create: person as any } }), username, passwordHash, level: dto.level, jobRole: dto.jobRole, status: 'active', verificationDueAt: verificationDeadline(), approvedById: actorId, approvedAt: new Date() }, include: { person: true } });

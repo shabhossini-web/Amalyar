@@ -456,7 +456,8 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
     account: {
       findFirst: async ({ where }) => {
         await later(findDelay);
-        const ids = (where?.OR ?? []).map((w) => w.username ?? w.person?.phone);
+        /* هر دو شکل: `OR`ِ قدیمی و جست‌وجوی جدا با شماره یا نامِ کاربری (PS9). */
+        const ids = [where?.username, where?.person?.phone, ...(where?.OR ?? []).map((w) => w.username ?? w.person?.phone)].filter(Boolean);
         return ids.includes(account.username) || ids.includes(account.person.phone) ? { ...account } : null;
       },
       update: async ({ data }) => { if (data.passwordHash) db.passwords.push(data.passwordHash); return { ...account }; },
