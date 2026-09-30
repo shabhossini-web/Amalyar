@@ -11,6 +11,7 @@ import { ChangePasswordDto, UpdatePrefsDto, UpdateProfileDto } from './dto/profi
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { CompleteSignupDto } from './dto/complete-signup.dto';
+import { PasswordResetDto, PasswordResetRequestDto } from './dto/password-reset.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
 import { clearSessionCookies, csrfMatches, setSessionCookies } from './session-cookie';
@@ -65,6 +66,17 @@ export class AuthController {
   async completeSignup(@Body() dto: CompleteSignupDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const r: any = await this.auth.completeSignup(dto, meta(req));
     return r.accessToken ? this.attach(req, res, r, true) : r;
+  }
+
+  /* بازیابیِ رمز (بازبینیِ UX، بندِ ۱۹) — بی‌احراز مثلِ ثبت‌نام؛ پاسخِ درخواست برای حسابِ موجود و ناموجود یکی است. */
+  @Post('password/request-otp')
+  requestPasswordReset(@Body() dto: PasswordResetRequestDto, @Req() req: Request) {
+    return this.auth.requestPasswordReset(dto.identifier, req.ip ?? 'unknown');
+  }
+
+  @Post('password/reset')
+  resetPassword(@Body() dto: PasswordResetDto, @Req() req: Request) {
+    return this.auth.resetPassword(dto, meta(req));
   }
 
   @Post('login')

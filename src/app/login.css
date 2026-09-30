@@ -202,3 +202,12 @@
    جلو: `ui.css`ِ کامپوننتِ Tabs بعد از این فایل بار می‌شود و قاعدهٔ هم‌وزنش برنده بود. */
 .lg-card .lg-tabs { margin-inline: 0; }
 .lg-card .lg-tabs > button { flex: 1 1 0; min-height: 44px; }
+
+/* ── بازیابیِ رمز و نامِ مطب/شرکت (بازبینیِ UX، بندِ ۱۹) ── */
+/* نامِ مطب/شرکت زیرِ نشان — کارکن مطمئن شود واردِ سامانهٔ درست شده. */
+.lg-tenant { margin-top: 6px; font-size: 15px; font-weight: 800; color: var(--text2); text-align: center; line-height: 1.6; }
+.lg-fp-text { font-size: 13.5px; line-height: 1.8; color: var(--text2); text-align: center; }
+/* پیوندهای متنیِ کارت (بازگشت، ارسالِ دوباره، فراموشیِ رمز) — هدفِ لمسیِ ۴۴ پیکسل (بندِ ۱۱۴). */
+.lg-link { min-height: 44px; }
+.lg-link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }
+.lg-forgot { align-self: flex-start; margin-block: -8px -6px; font-size: 13px; color: var(--brand-text); }
