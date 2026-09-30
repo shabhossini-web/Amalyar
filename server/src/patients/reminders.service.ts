@@ -602,21 +602,30 @@ export class RemindersService {
    *
    * ⚠️ تا پیش از این `status, dueAt desc` بود: اول پیامِ ۱۶ مهر می‌آمد و پیام‌های امروز و
    * عقب‌افتاده پایینِ یک فهرستِ بلند. حالا: گیرکرده‌ها (نرفته/نامشخص) اول، بعد صف با نزدیک‌ترین موعد،
-   * بعد آزمایشی‌ها، و در آخر رفته‌ها از تازه به کهنه. دو کوئری با سقفِ جدا تا انبوهِ رفته‌ها صفِ
-   * زنده را از قابِ ۱۰۰تایی بیرون نکنند.
+   * بعد آزمایشی‌ها، و در آخر رفته‌ها از تازه به کهنه.
+   *
+   * ⚠️ **هر گروه کوئری و سقفِ خودش را دارد** (بستهٔ DF، DF4). نسخهٔ قبل یک کوئری با
+   * `notIn [cancelled, sent]`، `dueAt asc` و سقفِ ۱۵۰ بود و گروه‌بندی را **بعد** از بریدن می‌کرد: ۱۵۰
+   * ردیفِ «نرفته/نامشخص/آزمایشی»ِ ماه‌های پیش — که قدیمی‌ترین موعدها را دارند — کلِ قاب را پر می‌کردند و
+   * صفِ زنده (`pending`) اصلاً به صفحه نمی‌رسید. حالا: صفِ زنده نزدیک‌ترین موعد اول؛ گیرکرده‌ها و آزمایشی‌ها
+   * تازه‌ترین اول (کهنه‌ها جا را از تازه‌ها نمی‌گیرند)؛ رفته‌ها تازه‌ترین ارسال اول.
    */
   private async queue<I extends object>(include: I) {
-    const [open, sent] = await Promise.all([
+    const [stuck, live, simulated, sent] = await Promise.all([
       this.prisma.reminder.findMany({
-        where: { status: { notIn: ['cancelled', 'sent'] } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 150, include,
+        where: { status: { in: ['failed', 'uncertain'] } }, orderBy: [{ dueAt: 'desc' }, { id: 'desc' }], take: 50, include,
+      }),
+      this.prisma.reminder.findMany({
+        where: { status: { in: ['pending', 'sending'] } }, orderBy: [{ dueAt: 'asc' }, { id: 'asc' }], take: 150, include,
+      }),
+      this.prisma.reminder.findMany({
+        where: { status: 'simulated' }, orderBy: [{ dueAt: 'desc' }, { id: 'desc' }], take: 50, include,
       }),
       this.prisma.reminder.findMany({
         where: { status: 'sent' }, orderBy: [{ sentAt: 'desc' }, { id: 'desc' }], take: 50, include,
       }),
     ]);
-    const rank = (st: string) => (st === 'failed' || st === 'uncertain' ? 0 : st === 'pending' || st === 'sending' ? 1 : 2);
-    const sorted = [...open].sort((a, b) => rank(a.status) - rank(b.status) || +a.dueAt - +b.dueAt || a.id - b.id);
-    return [...sorted, ...sent];
+    return [...stuck, ...live, ...simulated, ...sent];
   }
 
   /**
