@@ -3300,6 +3300,8 @@ jobs:
         run: node scripts/e2e/w1-8-draft-ui.mjs
       - name: Verify the theatre desk never replaces a newer operation note with a stale device draft
         run: node scripts/e2e/theatre-desk-ui.mjs
+      - name: Verify the visit form guards unsaved text from the first render and sends each error to its own tab
+        run: node scripts/e2e/visit-form-guards-ui.mjs
 
       # ⚠️ W1.9/§8: syncNextVisit cancelled and recreated every pending
       # reminder on each call, and 'uncertain' was effectively terminal --

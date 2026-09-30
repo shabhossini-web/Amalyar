@@ -653,18 +653,27 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      در **ثبتِ تازه** نوع (با حوزه هم‌گام می‌شود) و «ارسالِ فوری» (از تاریخ مشتق می‌شود) در مبنا
      نیستند: خودکارند نه نوشتهٔ کاربر، و پرسشی که بی‌دلیل می‌آید کاربر را به «دور ریختن»ِ بی‌نگاه عادت
      می‌دهد. در ویرایش هر دو فقط با دستِ کاربر عوض می‌شوند و حساب‌اند. */
-  const unsavedSnap = JSON.stringify([
+  /* ⚠️ **مبنا از لحظهٔ باز شدن، نه از رسیدنِ زیرفرم‌ها** (بستهٔ FF، FF15): تا دیروز کلِ عکس وقتی مبنا می‌شد
+     که زیرفرم‌ها از سرور رسیده بودند — هرچه کاربر در آن فاصله نوشته بود جزوِ مبنا می‌شد و بستن بی‌پرسش
+     دورش می‌ریخت؛ و اگر خواندنِ زیرفرم‌ها شکست می‌خورد مبنایی ساخته نمی‌شد و نگهبان هرگز روشن نمی‌شد.
+     حالا فرم (هسته، فیلدهای دلخواه، علائمِ تایپ‌شده) از همان رندرِ اول مبناست و فقط بخشِ زیرفرم‌ها
+     بعداً — با رسیدنشان، یا با شکستِ خواندنشان (همان فهرستِ آن لحظه). */
+  const mainSnap = JSON.stringify([
     /* خدمتِ پیش‌انتخاب‌شدهٔ شرکت (company-24) هم خودکار است، نه نوشتهٔ کاربر. */
     editing ? f : { ...f, kind: undefined, preOpImmediate: undefined, service: undefined },
     extra,
-    subList.map((e) => [e.slot, e.data ?? null]),
     pendingVitals,
   ]);
+  const subSnap = JSON.stringify(subList.map((e) => [e.slot, e.data ?? null]));
+  const subSnapRef = useRef(subSnap);
+  subSnapRef.current = subSnap;
   const unsavedBase = useRef(null);
+  if (unsavedBase.current === null) unsavedBase.current = { main: mainSnap, subs: subLoaded ? subSnap : null };
   useEffect(() => {
-    if (unsavedBase.current === null && subLoaded) unsavedBase.current = unsavedSnap;
-  }, [subLoaded, unsavedSnap]);
-  const unsaved = unsavedBase.current !== null && unsavedSnap !== unsavedBase.current;
+    if (subLoaded && unsavedBase.current.subs === null) unsavedBase.current.subs = subSnap;
+  }, [subLoaded, subSnap]);
+  const unsaved = mainSnap !== unsavedBase.current.main
+    || (unsavedBase.current.subs !== null && subSnap !== unsavedBase.current.subs);
   useEffect(() => {
     if (subLoaded || !initial?.id) return undefined;
     let alive = true;
@@ -676,7 +685,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         setSubList(list.map(toEntry));
         setSubLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        /* الصاق خاموش می‌ماند (`subLoaded`)، ولی نگهبانِ بستن نه — مبنای زیرفرم‌ها همان فهرستِ فعلی است. */
+        if (alive && unsavedBase.current.subs === null) unsavedBase.current.subs = subSnapRef.current;
+      });
     return () => { alive = false; };
   }, [subLoaded, initial?.id]);
 
@@ -804,15 +816,17 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     setCardsShut({});
   }, [isSurgery, editing]);
 
+  /* جست‌وجوی پرونده فقط در گامِ ۱ِ ثبتِ تازه و تا پرونده‌ای برنداشته‌اند (بستهٔ FF، FF11): فرمِ ویرایش گامِ ۱ ندارد
+     ولی `mode` همان «existing» است، و با هر بازشدن فهرستِ بیست پروندهٔ دیگر بی‌دلیل از سرور بیرون می‌آمد. */
   useEffect(() => {
-    if (mode !== 'existing') return undefined;
+    if (editing || picked || mode !== 'existing') return undefined;
     const t = setTimeout(() => {
       api(`/patients?q=${encodeURIComponent(pQuery)}`)
         .then((r) => setPResults(Array.isArray(r) ? r : []))
         .catch(() => setPResults([]));
     }, 250);
     return () => clearTimeout(t);
-  }, [pQuery, mode]);
+  }, [pQuery, mode, editing, picked]);
 
   /**
    * کد ملیِ کامل → همان لحظه پروندهٔ موجود را نشان بده.
