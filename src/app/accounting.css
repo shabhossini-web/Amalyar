@@ -67,7 +67,7 @@
 .ac-row-main b { display: block; font-size: 13.5px; }
 .ac-row-main small { display: block; margin-top: 4px; font-size: 11px; color: var(--text3); }
 .ac-sub2 { color: var(--text3) !important; }
-.ac-expired { color: #fda4af; font-weight: 700; }
+.ac-expired { color: var(--red-text); font-weight: 700; }
 
 .ac-field { display: block; position: relative; }
 .ac-field > span { display: block; margin-bottom: 5px; font-size: 11px; color: var(--text3); }
@@ -77,9 +77,12 @@
 }
 .ac-field input::placeholder { color: var(--text3); font-size: 12px; }
 
+/* ⚠️ رنگ‌های متنِ این صفحه همه از توکن‌اند (قانونِ ۲۳، بازبینیِ UX ۱۴۰۵/۰۷): هگزهای روشنِ
+   قبلی مخصوصِ تمِ تیره بودند و در تمِ روشن — پیش‌فرضِ مطب — عددهای اصلیِ گزارش ۱٫۱ تا ۱٫۸ به ۱
+   می‌شدند؛ یعنی عملاً نامرئی. */
 .ac-hint {
   margin: 0; padding: 10px 13px; border-radius: 11px; font-size: 11.5px; line-height: 1.9;
-  color: #c8f7ff; background: rgba(34, 211, 238, .07); border: 1px solid rgba(34, 211, 238, .18);
+  color: var(--text2); background: rgba(var(--veil-rgb), .035); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 
 .ac-toast {
@@ -93,9 +96,9 @@
 .ac-note { flex: 1; margin: 0; font-size: 11.5px; line-height: 1.9; color: rgba(var(--veil-rgb), .6); }
 .ac-tr .ac-qty b { font-size: 15px; }
 .ac-tag { padding: 1px 8px; border-radius: 8px; font-size: 10px; }
-.ac-tag.s-sent     { color: #93c5fd; background: rgba(59, 130, 246, .12); }
-.ac-tag.s-received { color: #fcd34d; background: rgba(251, 191, 36, .12); }
-.ac-tag.s-closed   { color: #6ee7b7; background: rgba(52, 211, 153, .12); }
+.ac-tag.s-sent     { color: var(--cyan); background: rgba(59, 130, 246, .12); }
+.ac-tag.s-received { color: var(--amber-text); background: rgba(251, 191, 36, .12); }
+.ac-tag.s-closed   { color: var(--green-text); background: rgba(52, 211, 153, .12); }
 .ac-row.st-closed { opacity: .72; }
 
 /* ── مخصوصِ حسابداری ── */
@@ -108,16 +111,17 @@
 .ac-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-block-end: 10px; }
 .ac-field { display: block; font-size: 11.5px; }
 .ac-field > span { display: block; margin-block-end: 5px; color: rgba(var(--veil-rgb), .62); }
+/* ⚠️ متنِ کادر `--text1` و پُرش `--field-bg`: سفیدِ خام روی فیلدِ سفیدِ تمِ روشن نامرئی بود. */
 .ac-field input, .ac-field select {
   width: 100%; padding: 10px; border-radius: 11px; font: inherit; font-size: 13px;
-  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .14);
+  color: var(--text1); background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), .14);
 }
-.ac-hint { font-size: 11.5px; line-height: 2; color: rgba(var(--veil-rgb), .55); margin: 0 0 12px; }
-.ac-hint b { color: #c4b5fd; }
+.ac-hint { font-size: 11.5px; line-height: 2; color: var(--text2); margin: 0 0 12px; }
+.ac-hint b { color: var(--brand-text); }
 .ac-submit {
   width: 100%; padding: 12px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  color: #fff; border: 0; background: linear-gradient(135deg, var(--brand), #4c1d95);
+  color: #fff; border: 0; background: linear-gradient(135deg, var(--brand), var(--brand-dark));
 }
 .ac-submit:disabled { opacity: .5; cursor: default; }
 
@@ -127,12 +131,12 @@
 }
 .ac-row.off { opacity: .5; }
 .ac-val { min-width: 82px; text-align: center; }
-.ac-val b { display: block; font-size: 17px; color: #c4b5fd; }
-.ac-val span { font-size: 10px; color: rgba(var(--veil-rgb), .45); }
+.ac-val b { display: block; font-size: 17px; color: var(--brand-text); font-variant-numeric: tabular-nums; }
+.ac-val span { font-size: 10.5px; color: var(--text3); }
 .ac-row-main { flex: 1; min-width: 0; }
 .ac-row-main b { display: block; font-size: 13.5px; }
-.ac-row-main small { display: block; font-size: 11px; color: rgba(var(--veil-rgb), .55); line-height: 1.9; }
-.ac-note { color: rgba(var(--veil-rgb), .4) !important; }
+.ac-row-main small { display: block; font-size: 11px; color: var(--text3); line-height: 1.9; }
+.ac-note { color: var(--text3) !important; }
 .ac-off {
   padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .25);
@@ -150,7 +154,7 @@
   color: rgba(var(--veil-rgb), .72); background: rgba(var(--veil-rgb), .06);
   border: 1px solid rgba(var(--veil-rgb), .14);
 }
-.ac-edit:hover:not(:disabled) { color: #fff; background: rgba(var(--veil-rgb), .1); }
+.ac-edit:hover:not(:disabled) { color: var(--text1); background: rgba(var(--veil-rgb), .1); }
 .ac-edit:disabled { opacity: .5; cursor: default; }
 .ac-editbox { flex: 1 1 100%; margin-block-start: 4px; }
 .ac-editacts { display: flex; gap: 8px; margin-block-start: 9px; }
@@ -166,7 +170,7 @@
 .ac-pname { flex: 1 1 140px; }
 .ac-prow input {
   padding: 10px; border-radius: 11px; font: inherit; font-size: 13px;
-  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .14);
+  color: var(--text1); background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ac-pname { flex: 1; }
 .ac-ppct { width: 74px; text-align: center; }
@@ -177,46 +181,54 @@
 .ac-padd {
   padding: 9px 13px; margin-block-end: 12px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px;
-  color: #c4b5fd; background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .3);
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .3);
 }
-.ac-total { font-size: 12.5px; color: #fcd34d; margin: 0 0 12px; }
-.ac-total.ok { color: #6ee7b7; }
+.ac-total { font-size: 12.5px; color: var(--amber-text); margin: 0 0 12px; }
+.ac-total.ok { color: var(--green-text); }
 
 .ac-pair { display: flex; align-items: center; gap: 10px; padding: 12px; margin-block-end: 8px; border-radius: 13px; background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .25); font-size: 13px; }
 .ac-pair span { color: rgba(var(--veil-rgb), .5); font-size: 11px; }
-.ac-pair i { flex: 1; font-style: normal; font-weight: 800; color: #fcd34d; text-align: end; }
-.ac-mini { padding: 8px 12px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
+.ac-pair i { flex: 1; font-style: normal; font-weight: 800; color: var(--amber-text); text-align: end; }
+.ac-mini { padding: 8px 12px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer; color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
 
 /* خزانه */
 .ac-tre { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-block-end: 10px; }
 .ac-tre div { padding: 13px; border-radius: 14px; background: rgba(var(--veil-rgb), .04); text-align: center; }
 .ac-tre .big { background: rgba(var(--brand-rgb), .14); border: 1px solid rgba(var(--brand-rgb), .3); }
-.ac-tre b { display: block; font-size: 19px; font-weight: 900; }
-.ac-tre .in { color: #6ee7b7; }
-.ac-tre .out { color: #fcd34d; }
-.ac-tre span { font-size: 10.5px; color: rgba(var(--veil-rgb), .55); }
+.ac-tre b { display: block; font-size: 19px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.ac-tre .in { color: var(--green-text); }
+.ac-tre .out { color: var(--amber-text); }
+.ac-tre span { font-size: 11px; color: var(--text2); }
 
 /* چک */
 .ac-chq { display: flex; gap: 6px; }
-.ac-chq button { padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer; color: #6ee7b7; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
+.ac-chq button { padding: 7px 11px; border-radius: 10px; font: inherit; font-size: 11.5px; cursor: pointer; color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .3); }
 .ac-chq button.warn { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
-.ac-soon { font-style: normal; color: #fcd34d; }
+.ac-soon { font-style: normal; color: var(--amber-text); }
 
-/* گزارشِ مالی */
-.ac-rep { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); margin-block-start: 12px; }
+/* گزارشِ مالی
+   ⚠️ شبکهٔ ثابتِ چهارتایی (دو تایی در گوشی): هشت کاشی در `auto-fit` روی ۹۴۰px هفت‌تا در یک سطر
+   می‌نشستند و «مراجعه» تنها در سطرِ دوم می‌افتاد. */
+.ac-rep { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block-start: 8px; }
+@media (min-width: 560px) { .ac-rep { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .ac-rep .due { color: var(--amber-text); }
 /* ⚠️ پیش‌دریافت رنگِ خودش را دارد و عمداً **نه سبزِ درآمد است نه زردِ بدهکاری**:
    پولی است که رسیده (پس بد نیست) ولی هنوز مالِ شرکت نیست (پس خوب هم نیست). */
-.ac-rep .wait { color: #a5b4fc; }
-.ac-secttl { display: block; font-size: 12.5px; color: #a5b4fc; margin-block-end: 9px; }
+.ac-rep .wait { color: var(--brand-text); }
+.ac-secttl { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; color: var(--brand-text); margin-block-end: 9px; }
+.ac-secttl small { font-size: 11px; font-weight: 600; color: var(--text3); }
+/* سطرِ «واحد و بازه» بالای عددها — تا روشن باشد عددها چه‌اند و مالِ چه بازه‌ای. */
+.ac-scope { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 12px 0 0; font-size: 12px; color: var(--text2); }
+.ac-scope b { color: var(--text1); font-weight: 800; }
 .ac-chart { display: flex; align-items: flex-end; gap: 8px; height: 150px; padding: 10px 4px 0; }
 .ac-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; }
 .ac-bar-stack { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
 .ac-bar i { flex: 1; max-width: 16px; border-radius: 4px 4px 0 0; min-height: 2px; }
 .ac-bar i.rev, .ac-legend i.rev { background: linear-gradient(180deg, var(--brand-2), var(--brand-mid)); }
 .ac-bar i.exp, .ac-legend i.exp { background: linear-gradient(180deg, #fbbf24, #b45309); }
-.ac-bar span { font-size: 10px; color: rgba(var(--veil-rgb), .5); }
-.ac-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: rgba(var(--veil-rgb), .55); margin-block-start: 8px; }
+.ac-bar span { font-size: 11px; color: var(--text2); white-space: nowrap; }
+.ac-bar small { display: block; font-size: 9.5px; color: var(--text3); }
+.ac-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); margin-block-start: 8px; }
 .ac-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; }
 
 /* کلیدِ «روی فرمِ بیمار» — تنها راهِ عمومی‌شدنِ یک شمارهٔ حساب. */

@@ -96,7 +96,8 @@ try {
     /* الف) فرمِ عمل — چیپِ زمانِ ارسالِ قبل از عمل. */
     await page.goto(BASE + `/app/dashboard?patient=${vFuture.id}`);
     await page.waitForTimeout(2600);
-    const preBlock = page.locator('.db-postop .db-careblock').first();
+    /* مراقبتِ قبل از عمل در زبانهٔ «قبل از عمل» است (عملِ آینده روی همان باز می‌شود؛ surgery-10). */
+    const preBlock = page.locator('.db-phase[data-phase="pre"] .db-careblock').first();
     const preChips = preBlock.locator('.db-daychip');
     ok(await preChips.count() === 2, `چیپِ زمانِ مراقبتِ قبل از عمل هست (${await preChips.count()})`);
     await preChips.filter({ hasText: 'به‌محضِ ثبت' }).click();
@@ -116,8 +117,8 @@ try {
     const planText = await plan.innerText();
     ok(planText.includes('یادآوریِ ویزیتِ بعدی'), `متنِ برنامه پیام را نام می‌برد (${planText.slice(0, 60)}…)`);
     ok(/روز قبل|ساعتِ/.test(planText), '**زمانِ ارسال صریح گفته شده**');
-    ok(await page.locator('.db-postop:not(.db-msgplan)').count() === 0,
-      'برنامهٔ مراقبتِ مخصوصِ عمل در فرمِ ویزیت نیست');
+    ok(await page.locator('.db-postop:not(.db-msgplan)').count() === 0 && await page.locator('.db-sheet .db-phasetabs').count() === 0,
+      'برنامهٔ مراقبت و زبانه‌های مخصوصِ عمل در فرمِ ویزیت نیست');
     ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
   } finally {
     await browser.close();

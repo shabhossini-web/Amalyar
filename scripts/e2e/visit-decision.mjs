@@ -16,9 +16,10 @@ const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const BASE = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
 const PHONE = '09120000961';
-/* برنامهٔ مراقبتِ **فرمِ عمل**. فرمِ ویزیت هم یک `.db-postop` دارد (`.db-msgplan`،
-   «برنامهٔ پیام‌ها») — نشانهٔ بی‌قید هر دو را می‌گیرد. */
-const OP_PLAN = '.db-postop:not(.db-msgplan)';
+/* نشانهٔ **فرمِ عمل**: زبانه‌های «مشخصات | قبل | حین | بعد» زیرِ سربرگ (بازبینیِ UX، surgery-10).
+   تا پیش از آن «برنامهٔ مراقبت» (`.db-postop:not(.db-msgplan)`) نشانه بود؛ حالا آن بخش درونِ زبانهٔ
+   «بعد از عمل» است و فرمِ تازه روی «مشخصات» باز می‌شود. فرمِ ویزیت این نوار را ندارد. */
+const OP_PLAN = '.db-sheet .db-phasetabs';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m); } };
@@ -124,13 +125,13 @@ try {
     /* ذخیره → همان ویزیت پره‌آپ می‌شود و **فرمِ عملِ همان بیمار** باز می‌شود. */
     await page.locator('.db-submit').click();
     /* ⚠️ انتظار تا بازشدنِ خودِ فرمِ عمل، نه خوابِ ثابتِ ۳ ثانیه: زیرِ بارِ CI
-       محلیِ هم‌زمان شیتِ عمل گاهی هنوز نیامده بود و «برنامهٔ مراقبت داخلش هست»
-       قرمز می‌شد. ⚠️ نشانه **`.db-postop` تنها نیست**: فرمِ ویزیت هم یک
-       `.db-postop.db-msgplan` («برنامهٔ پیام‌ها») دارد؛ نسخهٔ اولِ همین انتظار
-       روی آن فوراً رد شد و سنجه‌ها را روی فرمِ ویزیتِ هنوز‌بازِ پیش از ذخیره
-       خواند (تصمیمِ خالی، ردیفِ تصمیم حاضر). پس: فقط **یک** شیت و برنامهٔ
-       مراقبتِ **فرمِ عمل**. فرمِ عمل پس از پاسخِ ذخیره باز می‌شود، پس رسیدنش
-       یعنی ذخیره هم تمام شده. اگر هرگز نیاید، سنجه‌های زیر قرمز می‌شوند. */
+       محلیِ هم‌زمان شیتِ عمل گاهی هنوز نیامده بود و «زبانه‌های فرمِ عمل داخلش هست»
+       قرمز می‌شد. ⚠️ نشانه باید **مخصوصِ فرمِ عمل** باشد: نسخهٔ اولِ همین انتظار
+       `.db-postop` بود که فرمِ ویزیت هم (`.db-msgplan`) دارد، پس فوراً رد شد و
+       سنجه‌ها را روی فرمِ ویزیتِ هنوز‌بازِ پیش از ذخیره خواند (تصمیمِ خالی، ردیفِ
+       تصمیم حاضر). پس: فقط **یک** شیت و زبانه‌های **فرمِ عمل**. فرمِ عمل پس از
+       پاسخِ ذخیره باز می‌شود، پس رسیدنش یعنی ذخیره هم تمام شده. اگر هرگز نیاید،
+       سنجه‌های زیر قرمز می‌شوند. */
     await page.waitForFunction((sel) => document.querySelectorAll('.db-sheet').length === 1 && !!document.querySelector(sel),
       OP_PLAN, { timeout: 15000 }).catch(() => {});
     const savedDec = sql(`SELECT array_to_string(decisions, ',') FROM visits WHERE id=${v.id}`);
@@ -139,7 +140,7 @@ try {
     ok((topicName ?? '').includes('پره‌آپ'), `**موضوعِ ویزیت خودکار پره‌آپ شد** (${topicName || '—'})`);
     const opSheet = page.locator('.db-sheet');
     ok(await opSheet.count() === 1, '**فرمِ عمل بلافاصله باز شد**');
-    ok(await page.locator(OP_PLAN).count() === 1, 'و برنامهٔ مراقبتِ فرمِ عمل داخلش هست');
+    ok(await page.locator(OP_PLAN).count() === 1, 'و زبانه‌های فرمِ عمل (مشخصات / قبل / حین / بعد) داخلش هست');
     ok(await page.locator('.db-decide').count() === 0, 'در فرمِ عمل تصمیم نیست');
     await page.locator('.db-sheet .db-x').click();
     await page.waitForTimeout(800);
@@ -155,7 +156,7 @@ try {
        **بی‌معنا سبز** می‌شد (هیچ‌چیز نبود که تصمیم داشته باشد). */
     await page.locator(OP_PLAN).first().waitFor({ timeout: 15000 }).catch(() => {});
     ok(await page.locator('.db-decide').count() === 0, '**در فرمِ عمل تصمیم نیست**');
-    ok(await page.locator(OP_PLAN).count() === 1, 'و به‌جایش برنامهٔ مراقبت هست');
+    ok(await page.locator(OP_PLAN).count() === 1, 'و به‌جایش زبانه‌های فرمِ عمل هست');
     ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
   } finally {
     await browser.close();

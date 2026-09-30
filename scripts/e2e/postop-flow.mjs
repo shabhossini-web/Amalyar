@@ -202,14 +202,18 @@ try {
 
     await page.goto(BASE + `/app/dashboard?patient=${visit.id}`);
     await page.waitForTimeout(2500);
-    const sect = page.locator('.db-postop');
-    ok(await sect.count() === 1, '**بخشِ «پیگیری و مراقبتِ پس از عمل» در ادامهٔ فرم هست**');
-    ok((await sect.locator('h4').innerText()).includes('برنامهٔ مراقبت و پیگیری'), 'عنوانِ بخش درست است');
-    /* از بستهٔ ۴ (بازخوردِ مالک) سه مرحله سه تب‌اند: قبل / حین / بعد از عمل. عملِ آینده روی «قبل» باز می‌شود. */
-    const tab = (name) => sect.locator('.ui-tabs button', { hasText: name }).click();
-    ok(await sect.locator('.ui-tabs button').count() === 3, '**سه تبِ مرحله (قبل/حین/بعد از عمل)**');
-    ok((await sect.locator('.ui-tabs button[aria-selected="true"]').innerText()).includes('قبل از عمل'), 'عملِ آینده روی تبِ «قبل از عمل» باز می‌شود');
+    /* از بستهٔ ۴ (بازخوردِ مالک) مرحله‌ها زبانه‌اند، و از بازبینیِ UX (surgery-10) زبانه‌ها ساختارِ اصلیِ
+       فرم‌اند — «مشخصات | قبل | حین | بعد» زیرِ سربرگ — و «برنامهٔ مراقبت و پیگیری» درونِ «بعد از عمل». */
+    const sheet = page.locator('.db-sheet');
+    const tab = (name) => sheet.locator('.db-phasetabs button', { hasText: name }).click();
+    ok(await sheet.locator('.db-phasetabs button').count() === 4, '**چهار زبانه (مشخصات/قبل/حین/بعد از عمل)**');
+    ok((await sheet.locator('.db-phasetabs button[aria-selected="true"]').innerText()).includes('قبل از عمل'), 'عملِ آینده روی زبانهٔ «قبل از عمل» باز می‌شود');
     await tab('بعد از عمل');
+    const sect = sheet.locator('.db-phase[data-phase="post"] .db-postop');
+    const pre = sheet.locator('.db-phase[data-phase="pre"]');
+    ok(await sect.count() === 1, '**بخشِ «برنامهٔ مراقبت و پیگیری» درونِ زبانهٔ «بعد از عمل» هست**');
+    ok((await sect.locator('h4').innerText()).includes('برنامهٔ مراقبت و پیگیری'), 'عنوانِ بخش درست است');
+    ok(await sect.locator('.db-nodefault').count() === 0, 'چون نوعِ عمل قالب دارد، هشدارِ «تعریف نشده» نیست');
 
     /* چیپِ روزها ↔ ورودیِ آزاد هم‌گام‌اند. */
     const dayInput = sect.locator('.db-dayinput');
@@ -225,17 +229,16 @@ try {
     /* پیش‌فرضِ نوعِ عمل باید **دیده** شود — نه اینکه کاربر حدس بزند؛ هر مرحله در تبِ خودش. */
     ok((await sect.locator('.db-default').innerText()).includes('پانسمان'), '**پیش‌فرضِ بعد از عمل در تبِ «بعد از عمل» است**');
     await tab('قبل از عمل');
-    const defaults = sect.locator('.db-default');
+    const defaults = pre.locator('.db-default');
     ok(await defaults.count() === 1 && (await defaults.first().innerText()).includes('ناشتا'), '**متنِ پیش‌فرضِ قبل از عمل در تبِ «قبل از عمل» است**');
-    ok(await sect.locator('.db-nodefault').count() === 0, 'چون نوعِ عمل قالب دارد، هشدارِ «تعریف نشده» نیست');
     /* زمانِ ارسال کنارِ عنوان نوشته می‌شود. */
     /* نشانِ زمان کنارِ عنوان — از #63 پیشوندِ «ارسال:» ندارد و خودِ زمان را
        می‌گوید («۲ روز قبل از عمل، ساعتِ ۱۰»)، چون با «به‌محضِ ثبت» جمع می‌شود. */
-    ok(/روز قبل از عمل|ساعتِ|به‌محضِ ثبت/.test(await sect.locator('.db-carehead').first().innerText()),
+    ok(/روز قبل از عمل|ساعتِ|به‌محضِ ثبت/.test(await pre.locator('.db-carehead').first().innerText()),
       '**زمانِ ارسال کنارِ عنوان صریح گفته شده**');
     /* «استفاده و ویرایش» پیش‌فرض را داخلِ کادر می‌ریزد تا جراح تغییرش دهد. */
     await defaults.first().locator('button').click();
-    ok((await sect.locator('.db-careblock').first().locator('textarea').inputValue()).includes('ناشتا'),
+    ok((await pre.locator('.db-careblock').first().locator('textarea').inputValue()).includes('ناشتا'),
       '**«استفاده و ویرایش» پیش‌فرض را در کادر گذاشت**');
     /* ویزیتِ بعدی داخلِ همین بخش (تبِ «بعد از عمل») است و در فرم دوبار نیامده. */
     await tab('بعد از عمل');

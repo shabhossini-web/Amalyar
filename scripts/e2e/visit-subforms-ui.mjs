@@ -2,7 +2,8 @@
  * **رابطِ زیرفرم‌های مراجعه** (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳) — سمتِ API در `visit-subforms.mjs`.
  *
  *  باید بیفتد:
- *   - سربرگ فقط نامِ مراجعه + موضوع + «الصاقِ فرم» + سه «فرمِ منتخب»؛ ویرایش انتخابگرِ نوع ندارد
+ *   - سربرگ فقط نامِ مراجعه + موضوع + «الصاقِ فرم» + منتخب‌ها (تا ستاره‌ای نخورده، یک خطِ راهنما به‌جای سه
+ *     اسلاتِ خالی — بازبینیِ UX، surgery-22)؛ ویرایش انتخابگرِ نوع ندارد
  *   - ستاره در پنجرهٔ الصاق فرم را منتخب می‌کند (سمتِ سرور) و اسلات با یک کلیک الصاقش می‌کند
  *   - زیرفرمِ پرشده با ذخیرهٔ مراجعه می‌نشیند و دوباره باز می‌شود؛ × فقط روی خالی
  *   - تصمیمِ کشویی: گزینهٔ انحصاری بقیه را پاک می‌کند
@@ -98,8 +99,9 @@ try {
   const bar = page.locator('.db-sheet [data-visit-bar]');
   ok('سربرگِ مراجعه هست', await bar.count() === 1);
   ok('ویرایش انتخابگرِ نوع ندارد', await page.locator('.db-sheet .db-kindrow').count() === 0);
-  ok('«الصاقِ فرم» و سه خانهٔ خالیِ «فرمِ منتخب»',
-    await bar.locator('.vf-attach').count() === 1 && await bar.locator('.vf-pin[data-pin-slot]:not([data-pin])').count() === 3);
+  ok('«الصاقِ فرم» و به‌جای سه خانهٔ خالیِ «فرمِ منتخب» یک خطِ راهنما (surgery-22)',
+    await bar.locator('.vf-attach').count() === 1 && await bar.locator('.vf-pin').count() === 0
+    && (await bar.locator('[data-pin-hint]').innerText()).includes('ستاره'));
   ok('**جعبهٔ «اطلاعات تکمیلی» برنگشت**', !(await page.locator('.db-sheet').innerText()).includes('اطلاعات تکمیلی'));
   ok('برگهٔ پهن', await page.locator('.db-sheet.vf-wide').count() === 1);
   const main = await page.locator('.vf-main').boundingBox();
@@ -135,6 +137,7 @@ try {
   await page.waitForTimeout(400);
   const slot = bar.locator('.vf-pin[data-pin="subform.wound"]');
   ok('اسلاتِ اول «زخم» شد', await slot.count() === 1 && (await slot.innerText()).includes('زخم'));
+  ok('با اولین منتخب خطِ راهنما کنار رفت', await bar.locator('[data-pin-hint]').count() === 0);
   await slot.click();
   const wound = page.locator('[data-subform="subform.wound"]');
   await wound.waitFor({ timeout: 5000 }).catch(() => {});

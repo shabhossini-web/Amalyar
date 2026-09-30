@@ -141,9 +141,10 @@ try {
     await p.goto(`${UI}/app/waitlist`, { waitUntil: 'domcontentloaded' });
     await p.locator('.wl-row').first().waitFor({ timeout: 20000 });
     /* تب‌ها از `/config` می‌آیند و آن درخواست با فهرست مسابقه می‌دهد — منتظرِ خودِ نتیجه، نه ساعت. */
-    await p.waitForFunction(() => document.querySelectorAll('.wl-tabs [role="tab"]').length >= 5, null, { timeout: 10000 }).catch(() => {});
+    /* «همه» + شش وضعیت — «موعد گذشته» و «امروز در اتاقِ عمل» از بازبینیِ UX (surgery-16) آمدند. */
+    await p.waitForFunction(() => document.querySelectorAll('.wl-tabs [role="tab"]').length >= 7, null, { timeout: 10000 }).catch(() => {});
     const seen = [await p.locator(`[data-wl-row="awaiting:${B.id}"]`).count(), await p.locator('.wl-kpi').count(), await p.locator('.wl-tabs [role="tab"]').count()];
-    ok(`U4 ${theme}/${w}: ردیف‌ها، دو عددِ آمار و تب‌ها`, seen[0] === 1 && seen[1] === 2 && seen[2] === 5, JSON.stringify(seen));
+    ok(`U4 ${theme}/${w}: ردیف‌ها، دو عددِ آمار و تب‌ها`, seen[0] === 1 && seen[1] === 2 && seen[2] === 7, JSON.stringify(seen));
     ok(`U4 ${theme}/${w}: بی‌سرریزِ افقی`, await noHScroll(p));
     ok(`U4 ${theme}/${w}: عنوانِ صفحه = نامِ کاشی`, (await p.title()).startsWith('فهرستِ انتظارِ عمل') && (await p.locator('h1').innerText()).includes('فهرستِ انتظارِ عمل'));
     await shot(p, `u4-waitlist-${theme}-${w}`);

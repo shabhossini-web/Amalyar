@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -17,11 +17,12 @@ import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import VoiceInput from '../ui/VoiceInput.jsx';
 import OrderSheet, { ORDER_META } from './OrderSheet.jsx';
 import JDate from './JDate.jsx';
-import { Close, Copy, Pencil, Plus } from '../ui/icons.jsx';
+import { Close, Copy, Pencil, Plus, Search } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { CloseButton } from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import Pick from '../ui/Pick.jsx';
+import MoneyInput from '../ui/MoneyInput.jsx';
 import CodingChips, { PrimaryBadge } from './CodingChips.jsx';
 import { OpDefaultChips, OpDefaultSave, withTemplate } from './OpDefaults.jsx';
 import { KINDS, kindOf } from './visit-kinds.js';
@@ -68,7 +69,7 @@ const DECISION_HINTS = {
  */
 export function surgeryPrefill(saved, patientName) {
   return {
-    patientId: saved.patientId, patientName: patientName ?? saved.fullName ?? '', kind: 'surgery',
+    patientId: saved.patientId, patientName: patientName ?? saved.fullName ?? '', patientCode: saved.patientCode ?? null, kind: 'surgery',
     surgeonId: saved.surgeonId ?? null,
     decidedInVisitId: saved.id, chiefComplaint: saved.chiefComplaint, decidedInDate: saved.opDate,
   };
@@ -152,6 +153,12 @@ function DefSelect({ label, icon, value, onChange, options, onQuickAdd, addPlace
   );
 }
 
+/* «کدِ آزمایشی» (کدِ ملیِ تصادفیِ معتبر برای بیمارِ آزمایشی) فقط در **محیطِ آزمایشی** — سرورِ توسعه،
+   نشانیِ محلی یا staging (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-22): در مطبِ واقعی سوپرادمین خودِ پزشک است و
+   دکمهٔ تست کنارِ کدِ ملیِ بیمارِ واقعی جایی ندارد. ابزارِ همین کار در «تنظیمات» سرِ جایش است. */
+const TEST_ENV = !!import.meta.env.DEV
+  || (typeof window !== 'undefined' && /(^|[.-])staging([.-]|$)|^localhost$|^127\./.test(window.location.hostname));
+
 /* ── فرمِ ثبت/ویرایشِ مراجعه ── */
 /** برچسبِ سه مرحله — همان واژه‌های تبِ مرحله، تا بج و تب دو حرفِ متفاوت نزنند. */
 const PHASE_FA = { pre: 'قبل از عمل', intra: 'حین عمل', post: 'بعد از عمل' };
@@ -170,13 +177,18 @@ const VISIT_DOC_CATEGORIES = {
 const PHASE_DOC_CATS = Object.entries(VISIT_DOC_CATEGORIES).map(([key, label]) => ({ key, label }));
 
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
-  const { t, defaultKind = 'surgery', kind: tenantKind, services: offered = [], serviceCatalog = [] } = useConfig();
+  const { t, defaultKind = 'surgery', kind: tenantKind, services: offered = [], serviceCatalog = [], vertical } = useConfig();
   /* خدمتِ مراجعه (`Visit.service`) فقط در شرکتِ **دوخدمته** پرسیده می‌شود؛ تک‌خدمته را سرور خودش پر می‌کند. */
   const pickService = tenantKind === 'company' && offered.length > 1;
+  /* خدمتِ اصلیِ شرکت — همان حوزهٔ نصب اگر جزوِ بستهٔ خدمات است، وگرنه اولیِ بسته (company-24: پیش‌انتخاب). */
+  const mainService = offered.includes(vertical) ? vertical : offered[0] ?? '';
   const editing = !!initial?.id;
   /* prefill = ادامهٔ یک تصمیم («کاندیدای جراحی» در ویزیتِ قبلی): پرونده از
-     قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم. */
-  const [mode, setMode] = useState(prefill?.patientId ? 'existing' : 'new');
+     قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم.
+     **گامِ ۱ یک جست‌وجوی واحد است** (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-22): تا دیروز همیشه روی «بیمارِ
+     جدید» باز می‌شد، در حالی که بیشترِ ویزیت‌های مطب پیگیریِ بیمارِ قدیمی است و پروندهٔ تکراری راحت
+     ساخته می‌شد. حالا اول «نام، موبایل یا کدِ ملی»؛ پیدا نشد → «ساختِ پروندهٔ تازه با همین نام» (`mode='new'`). */
+  const [mode, setMode] = useState('existing');
   const [pQuery, setPQuery] = useState('');
   const [pResults, setPResults] = useState([]);
   const [picked, setPicked] = useState(prefill?.patientId ? { id: prefill.patientId, fullName: prefill.patientName ?? '' } : null);
@@ -389,6 +401,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         nationalId: s2.nationalId.trim() ? s2.nationalId : (fields.nationalId || s2.nationalId),
         notes: fields.notes ? (s2.notes.trim() ? `${s2.notes}\n${fields.notes}` : fields.notes) : s2.notes,
       }));
+      /* دیکته از خودِ جست‌وجو هم زده می‌شود — نتیجه‌اش پروندهٔ تازه است، پس همان فرم دیده شود. */
+      if (!editing) { setPicked(null); setMode('new'); }
       onToast('فیلدها از دیکته پر شدند — پیش از ادامه مرورشان کنید');
     } catch (e) { onToast(e.message); } finally { setAiBusy(false); }
   };
@@ -418,11 +432,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return Math.round((day(d) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
   })();
   const opIsToday = opDayDelta === 0;
-  /* تب‌های مرحلهٔ عمل (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹): پایینِ فرمِ عمل سه بخشِ
-     «قبل / حین / بعد از عمل» به‌جای یک ستونِ شلوغ. تبِ آغازین از **زمانِ عمل**
-     می‌آید — ثبتِ تازه یا عملِ آینده: قبل؛ همین امروز: حین؛ گذشته: تا شرح نوشته
-     نشده حین، بعدش بعد. فقط یک‌بار در باز شدن حساب می‌شود تا تایپِ شرح
-     تب را زیرِ دستِ کاربر عوض نکند. */
+  /* مرحلهٔ عمل (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹): سه مرحلهٔ «قبل / حین / بعد از عمل» به‌جای یک ستونِ
+     شلوغ. مرحلهٔ آغازین از **زمانِ عمل** می‌آید — ثبتِ تازه یا عملِ آینده: قبل؛ همین امروز: حین؛
+     گذشته: تا شرح نوشته نشده حین، بعدش بعد. فقط یک‌بار در باز شدن حساب می‌شود تا تایپِ شرح
+     مرحله را زیرِ دستِ کاربر عوض نکند. */
   const [phase, setPhase] = useState(() => {
     if (!initial?.id || !initial?.opDate) return 'pre';
     const d = new Date(initial.opDate);
@@ -433,6 +446,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (delta === 0) return 'intra';
     return (initial.opReport || '').trim() ? 'post' : 'intra';
   });
+  /* **زبانه‌های فرمِ عمل = ساختارِ اصلیِ فرم** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-10): «مشخصاتِ عمل |
+     قبل | حین | بعد» درست زیرِ سربرگ؛ تا دیروز سه زبانهٔ مرحله حدودِ ۱۷۰۰ پیکسل پایین‌تر و داخلِ
+     «برنامهٔ مراقبت و پیگیری» بودند و جراحی که ساعت یا شرحِ عمل را می‌خواست پیدایشان نمی‌کرد.
+     ثبتِ تازه روی «مشخصات» باز می‌شود (هسته هنوز خالی است و ذخیره همان را می‌خواهد)؛ ویرایش روی
+     مرحلهٔ زمانی (عملِ امروز «حین»). `phase` مرحلهٔ **کاری** می‌ماند — آخرین مرحله‌ای که دیده شد —
+     تا منتخب‌ها و «الصاقِ فرم»ِ سربرگ روی زبانهٔ «مشخصات» هم بدانند به کجا الصاق کنند. */
+  const [tab, setTab] = useState(() => (initial?.id ? phase : 'info'));
+  const goTab = (k) => { setTab(k); if (k !== 'info') setPhase(k); };
   /* پیش‌فرض فقط تا وقتی کاربر خودش دست نزده — بعدش انتخابِ او حاکم است. */
   /* سفارش‌های همین مراجعه (آزمایش/عکس/مشاوره/ارجاع) — چیپِ تصمیم فقط
      «ثبتِ تصمیم» نیست: فرمش را همان‌جا باز می‌کند و ارسال می‌کند. */
@@ -446,6 +467,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [reportOpen, setReportOpen] = useState(false);
   /* متنِ پیش‌فرضی که بازکردنِ پاپ‌آپ در شرح گذاشت (اگر گذاشت) — برای «نوشتهٔ کاربر» حساب نشود. */
   const [reportPrefill, setReportPrefill] = useState(null);
+  /* «شکایتِ جدا برای این عمل» — تا کاربر نخواهد، شکایتِ ارثی فقط‌خواندنی دیده می‌شود (surgery-21). */
+  const [ccOwn, setCcOwn] = useState(false);
+  const ccId = `vf-cc-${useId().replace(/:/g, '')}`;
   useEffect(() => {
     if (!initial?.id) return;
     let on = true;
@@ -518,6 +542,23 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
      فیلدهای دلخواهی که سوپرادمین ساخته. */
   const fd = useFormDef(f.kind);
+  /* **فرمِ تک‌نوع** (company-24): وقتی نصب فقط یک فرمِ مراجعه دارد، پرسشِ «برای چه آمده؟» با تنها گزینه‌اش
+     پنهان است و همان نوع خودش انتخاب می‌شود؛ اگر چیزِ دیگری هم در گامِ ۲ نیست (نصبِ تک‌خدمته)، خودِ گام پریده
+     می‌شود. */
+  const onlyKind = !editing && (fd.kinds?.length ?? 0) === 1 && !!fd.kinds[0]?.kind;
+  const skipKindStep = onlyKind && !pickService;
+  useEffect(() => {
+    if (!onlyKind) return;
+    const only = fd.kinds[0].kind;
+    setF((s2) => (s2.kind === only ? s2 : { ...s2, kind: only }));
+  }, [onlyKind, fd.kinds]);
+  /* فهرستِ نوع‌ها دیرتر از «بعدی» رسید و گامِ ۲ خالی ماند؟ همان‌جا به «تکمیل» برو، نه صفحه‌ای بی‌پرسش. */
+  useEffect(() => { if (step === 2 && skipKindStep) setStep(3); }, [step, skipKindStep]);
+  /* خدمتِ اصلی از پیش انتخاب است (company-24) — «بی‌پیش‌انتخاب» یعنی یک لمسِ اجباری روی همان گزینهٔ همیشگی. */
+  useEffect(() => {
+    if (editing || !pickService || !mainService) return;
+    setF((s2) => (s2.service ? s2 : { ...s2, service: mainService }));
+  }, [editing, pickService, mainService]);
   /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) ──
      چیپ‌های «قالبِ آماده» بالای کادر و «افزودن به پیش‌فرض» زیرش. عمل‌ها از
      **همین فرم** خوانده می‌شوند نه از مراجعهٔ ذخیره‌شده: فرمِ ساخت هنوز مراجعه
@@ -597,11 +638,31 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [subErr, setSubErr] = useState({});
   const [cardsShut, setCardsShut] = useState({});
   const [pickOpen, setPickOpen] = useState(false);
-  /* مرحلهٔ پنجرهٔ الصاق در فرمِ عمل — پیش‌فرض همان تبی که کاربر در آن است. */
+  /* مرحلهٔ پنجرهٔ الصاق در فرمِ عمل — پیش‌فرض همان تبی که کاربر در آن است. `pickExplicit`: کاربر خودش
+     مرحله را گفته (دکمهٔ «الصاقِ فرم به این مرحله» یا زدنِ «الصاق به») — نه پیش‌فرضِ سربرگ (surgery-11). */
   const [pickPhase, setPickPhase] = useState('pre');
+  const [pickExplicit, setPickExplicit] = useState(false);
   /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخوردهٔ علائمِ حیاتی — به‌ازای کارت؛ «ذخیره» همراهِ خودش می‌برد. */
   const [pendingVitals, setPendingVitals] = useState({});
   const [vitalsCount, setVitalsCount] = useState({});
+  /* **تغییرِ ذخیره‌نشده** (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-08، surgery-07): پزشک روی گوشی شکایت و
+     شرحِ حال را نوشت و یک لمسِ پس‌زمینه یا ضربدر همه را بی‌پرسش دور ریخت. عکسِ دادهٔ فرم وقتی فرم
+     «آرام گرفت» (ویرایش: بعد از رسیدنِ زیرفرم‌ها) مبنا می‌شود و هر فرقی با آن یعنی بستن اول بپرسد.
+     در **ثبتِ تازه** نوع (با حوزه هم‌گام می‌شود) و «ارسالِ فوری» (از تاریخ مشتق می‌شود) در مبنا
+     نیستند: خودکارند نه نوشتهٔ کاربر، و پرسشی که بی‌دلیل می‌آید کاربر را به «دور ریختن»ِ بی‌نگاه عادت
+     می‌دهد. در ویرایش هر دو فقط با دستِ کاربر عوض می‌شوند و حساب‌اند. */
+  const unsavedSnap = JSON.stringify([
+    /* خدمتِ پیش‌انتخاب‌شدهٔ شرکت (company-24) هم خودکار است، نه نوشتهٔ کاربر. */
+    editing ? f : { ...f, kind: undefined, preOpImmediate: undefined, service: undefined },
+    extra,
+    subList.map((e) => [e.slot, e.data ?? null]),
+    pendingVitals,
+  ]);
+  const unsavedBase = useRef(null);
+  useEffect(() => {
+    if (unsavedBase.current === null && subLoaded) unsavedBase.current = unsavedSnap;
+  }, [subLoaded, unsavedSnap]);
+  const unsaved = unsavedBase.current !== null && unsavedSnap !== unsavedBase.current;
   useEffect(() => {
     if (subLoaded || !initial?.id) return undefined;
     let alive = true;
@@ -636,7 +697,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       setSubList((l) => [...l, { key: it.key, phase: where, slot, builtin: !!it.builtin, title: it.title, data: {}, hasData: false, fresh: true }]);
     }
     setPickOpen(false);
-    if (where) setPhase(where);
+    if (where) goTab(where);
     reveal(it.key, where);
   };
   /* **فرم‌های پیش‌فرضِ موضوع** (بستهٔ ۹): با انتخابِ موضوعِ ویزیت در ثبتِ تازه، زیرفرم‌هایی که در
@@ -662,7 +723,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       return next;
     });
   }, [f.topicId, catalog, editing, isSurgery]); // eslint-disable-line react-hooks/exhaustive-deps
-  const openPicker = (ph) => { setPickPhase(ph || phase); setPickOpen(true); };
+  const openPicker = (ph, explicit = false) => { setPickPhase(ph || phase); setPickExplicit(explicit); setPickOpen(true); };
+  /* **مرحلهٔ خودِ فرم** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-11): «فرمِ جزئیاتِ حینِ عمل» از «الصاقِ فرم»ِ سربرگ بی‌هیچ
+     هشداری به «قبل از عمل» می‌چسبید و سرِ میزِ اتاقِ عمل زیرِ «فرم‌های حینِ عمل» نمی‌آمد. فرمی که کاتالوگ
+     صریحاً به «حین» یا «بعد» بسته (`defaultPhase`) همان‌جا الصاق می‌شود، مگر کاربر خودش مرحلهٔ دیگری گفته
+     باشد — آن‌وقت پنجره کنارِ همان ردیف هشدار می‌دهد. «قبل» پیش‌فرضِ عمومیِ کاتالوگ برای فرمی است که مرحلهٔ
+     خاصی ندارد (علائمِ حیاتی، ASA، فرمِ ساختِ خودتان) — آن‌ها به همان مرحلهٔ انتخابی می‌روند، بی‌هشدار. */
+  const boundPhase = (it) => (isSurgery && (it?.defaultPhase === 'intra' || it?.defaultPhase === 'post') ? it.defaultPhase : null);
+  const pickTarget = (it) => (pickExplicit ? pickPhase : boundPhase(it) ?? pickPhase);
   const removeSub = (slot) => {
     const gone = subList.find((x) => x.slot === slot);
     if (gone) removedData.current[slot] = { key: gone.key, phase: gone.phase, data: gone.builtin ? undefined : (gone.data ?? {}) };
@@ -738,7 +806,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (mode !== 'existing') return undefined;
     const t = setTimeout(() => {
       api(`/patients?q=${encodeURIComponent(pQuery)}`)
-        .then(setPResults)
+        .then((r) => setPResults(Array.isArray(r) ? r : []))
         .catch(() => setPResults([]));
     }, 250);
     return () => clearTimeout(t);
@@ -780,7 +848,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    * دستِ آخر خطایی می‌گرفت که ربطی به گامِ سوم نداشت.
    */
   const stepOneProblem = () => {
-    if (mode === 'existing') return picked ? '' : `${t.record}ی انتخاب نشده — از فهرست یکی را بردارید`;
+    if (mode === 'existing') return picked ? '' : `${t.record}‌ای انتخاب نشده — از فهرست یکی را بردارید یا «ساختِ ${t.record}ٔ تازه» را بزنید`;
     if (f.firstName.trim().length < 2) return 'نام را وارد کنید';
     if (f.lastName.trim().length < 2) return 'نام خانوادگی را وارد کنید';
     const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
@@ -796,6 +864,29 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
    * انتخابِ پروندهٔ موجود — پزشک و مرکزِ **آخرین مراجعه** در کادرِ خالی می‌نشیند (بازبینیِ
    * ۱۴۰۵/۰۷/۰۳: «پیوستگیِ اطلاعات»). فقط جای خالی: انتخابی که کاربر همین حالا کرده بازنویسی نمی‌شود.
    */
+  /** «ساختِ پروندهٔ تازه با همین نام» — جست‌وجو پایهٔ پروندهٔ تازه می‌شود: عدد به موبایل یا کدِ ملی،
+   *  متن به نام و نام‌خانوادگی (اولین فاصله). فوکوس به «نام» می‌رود تا کاربر همان‌جا ادامه دهد. */
+  const firstNameRef = useRef(null);
+  const startNew = () => {
+    const q = pQuery.trim();
+    setPicked(null);
+    setStepErr('');
+    setMode('new');
+    if (q) {
+      const digits = toEnDigits(q).replace(/[^0-9]/g, '');
+      const numeric = /^[\d۰-۹\s()+-]+$/.test(q);
+      setF((s2) => {
+        if (!numeric) {
+          const [first, ...rest] = q.split(/\s+/);
+          return { ...s2, firstName: first ?? '', lastName: rest.join(' ') };
+        }
+        if (digits.length === 10 && isValidNationalId(digits) && !s2.nationalId.trim()) return { ...s2, nationalId: digits };
+        if (/^0?9\d{9}$/.test(digits) && !s2.phone.trim()) return { ...s2, phone: digits.startsWith('0') ? digits : `0${digits}` };
+        return s2;
+      });
+    }
+    requestAnimationFrame(() => firstNameRef.current?.focus());
+  };
   const pickPatient = (p) => {
     setPicked(p);
     const last = p?.last;
@@ -817,7 +908,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        باید برای اصلاحش دوباره به عقب برگردد. */
     if (step === 2 && pickService && !f.service) { setStepErr('خدمتِ این مراجعه را انتخاب کنید'); return; }
     setStepErr('');
-    setStep((s) => Math.min(3, s + 1));
+    setStep((s) => Math.min(3, s + (s === 1 && skipKindStep ? 2 : 1)));
   };
 
   // تشخیص با `title` ساخته می‌شود، بقیهٔ تعاریف با `name`.
@@ -857,65 +948,48 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return v;
   };
 
-  const submit = async (e) => {
-    e.preventDefault();
-    if (busy || aiBusy) return;
-    /* ⚠️ Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
-       زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
-       کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
-    if (!editing && step < 3) { goNext(); return; }
+  /**
+   * **سنجشِ فیلدهای هسته** — یک‌جا، برای ذخیره و برای پاک‌شدنِ زندهٔ خطا وقتی کاربر اصلاحش کرد.
+   * `problems` کلید → پیام؛ بقیه همان مقدارهای خوانده‌شده که ذخیره لازم دارد.
+   */
+  const parseCore = () => {
+    const problems = {};
     /* «هنوز تاریخ ندارد» (بستهٔ ۹ب) — فقط عمل؛ کادرِ تاریخ آن‌وقت دیده نمی‌شود و خوانده هم نمی‌شود. */
     const undatedNow = f.kind === 'surgery' && f.undated;
     let opDate;
     if (!undatedNow && f.opDateJ.trim()) {
       opDate = jStrToIso(f.opDateJ);
-      if (!opDate) { onToast(`${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`); return; }
+      if (!opDate) problems.opDate = `${kindOf(f.kind).date} نامعتبر است (مثال: ۱۴۰۵/۰۴/۲۸)`;
     }
     let plannedDate;
     if (undatedNow && f.plannedDateJ.trim()) {
       plannedDate = jStrToIso(f.plannedDateJ);
-      if (!plannedDate) { onToast('تاریخِ تقریبی نامعتبر است (مثال: ۱۴۰۵/۰۸/۰۱)'); return; }
+      if (!plannedDate) problems.opDate = 'تاریخِ تقریبی نامعتبر است (مثال: ۱۴۰۵/۰۸/۰۱)';
     }
     let nextVisitDate;
     if (f.nextVisitDateJ.trim()) {
       nextVisitDate = jStrToIso(f.nextVisitDateJ);
-      if (!nextVisitDate) { onToast('تاریخِ ویزیتِ بعدی نامعتبر است (مثال: ۱۴۰۵/۰۵/۱۰)'); return; }
+      if (!nextVisitDate) problems.nextVisitDate = 'تاریخِ ویزیتِ بعدی نامعتبر است (مثال: ۱۴۰۵/۰۵/۱۰)';
     }
     let birthDate;
     if (f.birthDateJ.trim()) {
       birthDate = jStrToIso(f.birthDateJ);
-      if (!birthDate) { onToast('تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)'); return; }
+      if (!birthDate) problems.birthDate = 'تاریخِ تولد نامعتبر است (مثال: ۱۳۷۰/۰۱/۱۵)';
     }
     // ساعت‌ها پیش از ارسال نرمال می‌شوند (کاربر ممکن است بدونِ blur ذخیره بزند).
     const times = {
       opStartTime: normTime(f.opStartTime),
       opEndTime: normTime(f.opEndTime),
     };
-    const badKey = Object.entries(times).find(([, v]) => badTime(v));
-    if (badKey) { onToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
-
+    for (const [k, v] of Object.entries(times)) if (badTime(v)) problems[k] = 'ساعت باید به شکلِ ۰۸:۳۰ باشد';
     const nid = toEnDigits(f.nationalId).replace(/[^0-9]/g, '');
     // اعتبارسنجیِ سمتِ کاربر تا پیشِ ارسال بازخورد بگیرد؛ اعتبارِ واقعی سمتِ سرور است.
-    if (nid && !isValidNationalId(nid)) { onToast('کد ملی معتبر نیست — رقم‌ها را بررسی کنید'); return; }
-
-    /* ⚠️ ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها.
-       سرور هر دو را می‌سنجد؛ این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود.
-       مقدارها از دو جا می‌آیند چون هسته‌ای‌ها در `f` هستند و دلخواه‌ها در
-       `extra` — همان تقسیمی که سرور هم دارد. */
-    /* مطب: باکس‌های عکس/لینکِ فرم در ویرایش جای خود را به `VisitDocs` داده‌اند — ستارهٔ
-       کادری که دیده نمی‌شود نباید ذخیره را بی‌صدا ببندد. */
-    /* «طرح»ِ تک‌انتخابیِ قالبِ قدیمی هم در مطب دیده نمی‌شود (جایش کشوی تصمیم است) — آینهٔ `shownFields`ِ سرور. */
-    const eCustom = dynErrors(isClinicCore
-      ? fd.customFields.filter((x) => x.type !== 'image' && x.type !== 'links' && x.key !== INLINE_KEYS.legacyPlan)
-      : fd.customFields, extra, myRole);
-    setExtraErr(eCustom);
-    if (Object.keys(eCustom).length) {
-      onToast(Object.values(eCustom)[0]);
-      return;
-    }
+    if (nid && !isValidNationalId(nid)) problems.nationalId = 'کد ملی معتبر نیست — رقم‌ها را بررسی کنید';
     /* ⚠️ مراجعهٔ تازه در شرکتِ دوخدمته بی‌خدمت ثبت نمی‌شود: پرتالِ جراح ویرایشگرِ اقلام را فقط برای
        مراجعهٔ ایمپلنتی باز می‌کند، و مراجعهٔ دستیِ بی‌خدمت هیچ نشانه‌ای از ایمپلنتی‌بودن نداشت. */
-    if (pickService && !editing && !f.service) { onToast('خدمتِ این مراجعه را انتخاب کنید'); return; }
+    if (pickService && !editing && !f.service) problems.service = 'خدمتِ این مراجعه را انتخاب کنید';
+    /* ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها. سرور هر دو را می‌سنجد؛
+       این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود. */
     const builtinVals = {
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
       /* ستارهٔ فیلد روی **اصلی** است؛ چون فهرست هرگز بدونِ اصلی نمی‌ماند
@@ -941,7 +1015,69 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       builtinVals,
       myRole,
     );
-    if (Object.keys(eBuiltin).length) { onToast(Object.values(eBuiltin)[0]); return; }
+    for (const [k, v] of Object.entries(eBuiltin)) if (!problems[k]) problems[k] = v;
+    return { problems, undatedNow, opDate, plannedDate, nextVisitDate, birthDate, times, nid };
+  };
+  /* مطب: باکس‌های عکس/لینکِ فرم در ویرایش جای خود را به `VisitDocs` داده‌اند — ستارهٔ کادری که دیده
+     نمی‌شود نباید ذخیره را بی‌صدا ببندد. «طرح»ِ تک‌انتخابیِ قالبِ قدیمی هم در مطب دیده نمی‌شود (جایش
+     کشوی تصمیم است) — آینهٔ `shownFields`ِ سرور. */
+  const customProblems = () => dynErrors(isClinicCore
+    ? fd.customFields.filter((x) => x.type !== 'image' && x.type !== 'links' && x.key !== INLINE_KEYS.legacyPlan)
+    : fd.customFields, extra, myRole);
+  /* کلیدهایی که آخرین ذخیره رد کرد — خطایشان تا وقتی واقعاً درست نشده‌اند می‌ماند و با اصلاح
+     همان لحظه می‌رود (سنجشِ زنده، نه تا ذخیرهٔ بعدی). */
+  const [errKeys, setErrKeys] = useState([]);
+  /* خطای غیرِ هسته (فیلدِ دلخواه، زیرفرم، پاسخِ سرور) — تا تغییرِ بعدیِ فرم کنارِ دکمه می‌ماند. */
+  const [formErr, setFormErr] = useState('');
+  useEffect(() => { setFormErr(''); }, [extra, subList]);
+  const sheetHead = useRef(null);
+  /** تا فیلد برو و فوکوس بده — دو فریم: یکی برای رندرِ تب/کلاسِ خطا، یکی برای چیدمان. */
+  const revealSel = (sel) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    const root = sheetHead.current?.closest('.db-sheet') ?? document;
+    const el = root.querySelector(sel);
+    if (!el) return;
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    const target = el.matches('input, textarea, select, button') ? el : el.querySelector('input:not([type="hidden"]):not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled])');
+    target?.focus({ preventScroll: true });
+  }));
+  /* فیلدهای پرونده در گامِ ۱ (ثبتِ تازه) یا پشتِ «ویرایشِ مشخصات» (ویرایش) پنهان‌اند. */
+  const PATIENT_KEYS = ['nationalId', 'birthDate'];
+  const revealCore = (key) => {
+    if (PATIENT_KEYS.includes(key)) { if (editing) setIdOpen(true); else setStep(1); }
+    /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
+    else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : 'info');
+    revealSel(`[data-core="${key}"]`);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy || aiBusy) return;
+    /* ⚠️ Enter داخلِ یک ورودیِ متنی فرم را submit می‌کند. بدونِ این سد،
+       زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
+       کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
+    if (!editing && step < 3) { goNext(); return; }
+    /* هر خطای فیلدِ هسته **کنارِ خودِ فیلد** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-08): قرمز، متن زیرش،
+       اسکرول و فوکوس، و پیامِ کنارِ دکمه تا اصلاح بماند — نه یک toastِ ۲٫۶ثانیه‌ای روی دکمه در
+       حالی که فیلد ۱۳۴۷ پیکسل بالاتر است. همان کاری که زیرفرم‌ها از قبل می‌کردند. */
+    const core = parseCore();
+    const eCustom = customProblems();
+    setExtraErr(eCustom);
+    const bad = orderCore(Object.keys(core.problems));
+    if (bad.length) {
+      setErrKeys(bad);
+      setFormErr('');
+      revealCore(bad[0]);
+      return;
+    }
+    setErrKeys([]);
+    if (Object.keys(eCustom).length) {
+      setFormErr(`${Object.values(eCustom)[0]}${Object.keys(eCustom).length > 1 ? ` — و ${faNum(Object.keys(eCustom).length - 1)} مورد دیگر` : ''}`);
+      if (f.kind === 'surgery') goTab('info'); // فیلدهای دلخواه در زبانهٔ «مشخصات»‌اند
+      revealSel('.vf-extra .pf-field.bad, [data-field].bad');
+      return;
+    }
+    const { undatedNow, opDate, plannedDate, nextVisitDate, birthDate, times, nid } = core;
 
     /* زیرفرم‌ها: ستارهٔ هر کدام کنارِ همان کادر، و اولین خطا با نامِ زیرفرم. */
     const eSubs = {};
@@ -957,10 +1093,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       const e0 = subList.find((x) => x.slot === firstSub[0]);
       setCardsShut((c) => ({ ...c, [firstSub[0]]: false }));
       /* کارتِ عمل داخلِ تبِ مرحلهٔ خودش است — تب به همان‌جا می‌رود تا ستاره دیده شود. */
-      if (e0?.phase) setPhase(e0.phase);
-      onToast(`${catByKey.get(e0?.key)?.title ?? ''}${e0?.phase ? ` (${PHASE_FA[e0.phase]})` : ''}: ${Object.values(firstSub[1])[0]}`);
+      if (e0?.phase) goTab(e0.phase);
+      setFormErr(`${catByKey.get(e0?.key)?.title ?? ''}${e0?.phase ? ` (${PHASE_FA[e0.phase]})` : ''}: ${Object.values(firstSub[1])[0]}`);
+      revealSel(`[data-subform="${CSS.escape(e0?.key ?? '')}"]${e0?.phase ? `[data-subform-phase="${e0.phase}"]` : ''} .pf-field.bad, [data-subform="${CSS.escape(e0?.key ?? '')}"]`);
       return;
     }
+    setFormErr('');
     /* دلتا، نه کلِ فهرست: فقط زیرفرمی که در همین فرم الصاق/پر/برداشته شد می‌رود — با مرحله‌اش
        در فرمِ عمل (سرور بندِ بی‌مرحلهٔ عمل را رد می‌کند). */
     const subformsOut = [];
@@ -1127,6 +1265,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       onSaved(saved, editing, { openSurgery: newSurgery });
     } catch (err) {
       onToast(err.message);
+      setFormErr(err.message);
     } finally {
       setBusy(false);
     }
@@ -1151,6 +1290,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const complaintSourceKind = initial?.chiefComplaintFrom?.kind ?? 'clinic';
   const complaintSourceWord = kindOf(complaintSourceKind).label;
   const complaintSourceLabel = complaintSourceIso ? `${complaintSourceWord}ِ ${faDate(complaintSourceIso)}` : `${complaintSourceWord}ِ مرتبط`;
+  /* خطای زندهٔ فیلدهای هسته (surgery-08) — این‌جا و نه کنارِ `parseCore`: سنجش در رندر اجرا می‌شود
+     و به `inheritedComplaint`ِ بالا نیاز دارد (پیش از اعلامش خطای TDZ می‌داد). */
+  const liveCore = errKeys.length ? parseCore().problems : null;
+  const coreErr = liveCore ? Object.fromEntries(errKeys.filter((k) => liveCore[k]).map((k) => [k, liveCore[k]])) : {};
+  const coreErrKeys = Object.keys(coreErr);
+  const saveErr = coreErrKeys.length
+    ? `${coreErr[coreErrKeys[0]]}${coreErrKeys.length > 1 ? ` — و ${faNum(coreErrKeys.length - 1)} مورد دیگر` : ''}`
+    : formErr;
 
   const activeSurgeons = defs.surgeons.filter((s) => s.active || s.id === f.surgeonId);
   const activeHospitals = defs.hospitals.filter((h) => h.active || h.id === f.hospitalId);
@@ -1332,22 +1479,47 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* «مدتِ علائم» (فیلدِ فرم‌سازِ قالبِ قدیمیِ مطب) کنارِ شکایت می‌نشیند، نه در جعبهٔ جدای
      «اطلاعاتِ تکمیلی» — آن جعبه فقط همین یک کادر را داشت (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳). */
   const durationField = fd.customFields.find((x) => x.key === INLINE_KEYS.duration && x.type === 'text') ?? null;
+  /* بازبینیِ UX ۱۴۰۵/۰۷ (surgery-21): کادر برچسبِ دسترس‌پذیر نداشت (یک `span` داخلِ `div`، تنها کادرِ
+     بی‌نامِ فرمِ عمل) و شکایتِ ارثی فقط جای‌نگهدارِ کم‌رنگی بود که با اولین حرف ناپدید می‌شد. حالا
+     ارثی یک متنِ فقط‌خواندنیِ دیدنی است با دکمهٔ «نوشتنِ شکایتِ جدا»؛ کادر فقط وقتی باز می‌شود که
+     کاربر واقعاً شکایتِ دیگری برای همین عمل دارد — و «برگشت به ارثی» همان خالی‌کردن است. */
+  const ccLabel = <>{fd.labelOf('chiefComplaint', 'شکایتِ اولیه')}{star(fd.requiredOf('chiefComplaint'))}</>;
+  const ccInherited = !!inheritedComplaint && !f.chiefComplaint.trim() && !ccOwn;
   if (fd.isOn('chiefComplaint')) builtinNodes.chiefComplaint = { wide: true, el: (
     <div className={durationField ? 'vf-cc' : undefined}>
-      <div className="db-field">
-        <span>{fd.labelOf('chiefComplaint', 'شکایتِ اولیه')}{star(fd.requiredOf('chiefComplaint'))}</span>
-        <textarea
-          rows={2}
-          value={f.chiefComplaint}
-          onChange={set('chiefComplaint')}
-          placeholder={inheritedComplaint || 'به زبانِ خودِ بیمار…'}
-        />
-        {inheritedComplaint && !f.chiefComplaint.trim() && (
-          <p className="db-hint" data-complaint-source>
-            از {complaintSourceLabel} به ارث می‌رسد — خالی بماند تا همیشه هم‌گام بماند.
-          </p>
-        )}
-      </div>
+      {ccInherited ? (
+        <div className="db-field" role="group" aria-labelledby={`${ccId}-l`}>
+          <span id={`${ccId}-l`}>{ccLabel}</span>
+          <div className="vf-cc-inherit" data-complaint-source>
+            <p>{inheritedComplaint}</p>
+            <small>از {complaintSourceLabel} — با همان هم‌گام می‌ماند.</small>
+            <button type="button" className="vf-cc-own" data-act="complaint-own" disabled={keyLocked('chiefComplaint')}
+                    onClick={() => setCcOwn(true)}>
+              <Pencil width="14" height="14" aria-hidden="true" /> نوشتنِ شکایتِ جدا برای این {t.surgery}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <label className="db-field">
+          <span>{ccLabel}</span>
+          <textarea
+            rows={2}
+            value={f.chiefComplaint}
+            onChange={set('chiefComplaint')}
+            placeholder="به زبانِ خودِ بیمار…"
+            autoFocus={ccOwn && !f.chiefComplaint}
+          />
+          {inheritedComplaint && (
+            <span className="vf-cc-back">
+              <small>{f.chiefComplaint.trim() ? 'به‌جای' : 'خالی بماند تا'} شکایتِ {complaintSourceLabel}{f.chiefComplaint.trim() ? '' : ' برگردد'}: «{inheritedComplaint}»</small>
+              <button type="button" className="vf-cc-own" data-act="complaint-inherit"
+                      onClick={() => { setF((s2) => ({ ...s2, chiefComplaint: '' })); setCcOwn(false); }}>
+                برگشت به شکایتِ {complaintSourceWord}
+              </button>
+            </span>
+          )}
+        </label>
+      )}
       {durationField && (
         <label className={`db-field${extraErr[durationField.key] ? ' bad' : ''}`} data-field={durationField.key}>
           <span>{durationField.label}{star(durationField.required)}</span>
@@ -1594,9 +1766,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     />) };
   /* مبلغ فقط هنگامِ ثبتِ مراجعهٔ تازه — تا مراجعهٔ صفرتومانی ساخته نشود.
      در ویرایش، صورت‌حساب جای اصلاح است. */
+  /* باکسِ مبلغِ مشترک (قانونِ ۱۳): سه‌رقمی در blur + «به‌حروف»ِ زنده — «20000000»ِ خام صفرِ کم/زیاد را پنهان می‌کرد. */
   if (!editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
     <label className="db-field"><span>{fd.labelOf('amount', 'مبلغِ توافقی (تومان)')}{star(fd.requiredOf('amount') && !(f.kind === 'surgery' && f.undated && tenantKind === 'clinic'))}</span>
-      <input dir="ltr" inputMode="numeric" value={f.amount} onChange={set('amount')}
+      <MoneyInput value={f.amount} onChange={(v) => setF((s) => ({ ...s, amount: v }))}
              placeholder="اختیاری — قلمِ خدمت در صورت‌حساب ساخته می‌شود" />
     </label>) };
   if (editing && fd.isOn('amount')) builtinNodes.amount = { wide: true, el: (
@@ -1808,6 +1981,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const builtinOrder = isClinicCore
     ? CLINIC_LAYOUT[f.kind === 'surgery' ? 'surgery' : 'visit']
     : fd.orderBuiltins(BUILTIN_ORDER);
+  /* «اولین خطا» به ترتیبِ دیداری: پرونده و خدمت بالا، بعد هسته به چینشِ فرم؛ در فرمِ عمل فیلدهای
+     حینِ عمل داخلِ تبِ خودشان‌اند، پس بعد از بقیه. */
+  const orderCore = (keys) => {
+    const base = ['nationalId', 'birthDate', 'service', ...builtinOrder];
+    const rank = (k) => (base.indexOf(k) < 0 ? 999 : base.indexOf(k)) + (f.kind === 'surgery' && INTRA_KEYS.includes(k) ? 500 : 0);
+    return [...keys].sort((a, b) => rank(a) - rank(b));
+  };
 
   /* ویزیتِ تصمیم (فقط‌خواندنی) — کارتِ اولِ تبِ «قبل از عمل». */
   const decidedCard = decidedVisit ? (
@@ -1839,6 +2019,25 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      انتخاب‌شده («نورومانیتورینگ»/«ایمپلنت») به‌جای «خدمت»ِ مشترک — نگاشتش از سرور (`serviceTitles`). */
   const visitTitle = (kindMeta?.serviceTitles?.[f.service] ?? kindMeta?.title ?? fd.def?.title ?? initial?.kindTitle ?? kindOf(f.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
   const topicName = (defs.topics ?? []).find((tp) => tp.id === f.topicId)?.name ?? initial?.topicName ?? null;
+  /* **برچسبِ نوعِ مراجعه از واژه‌نامهٔ حوزه** (clinic-daily-04): «ویزیت» و «عمل»، نه عنوانِ فرم.
+     نوعی که حوزه واژه‌ای برایش ندارد (پیگیری/مشاوره یا نوعِ ساختِ فرم‌ساز) از پشتیبان یا همان
+     عنوانِ بی‌پیشوندِ «فرمِ» می‌آید — همان قاعدهٔ `visitTitle`.
+     اگر دو نوع به یک واژه برسند (نورومانیتورینگ به هر دو «مراجعه» می‌گوید)، واژه چیزی را از هم
+     جدا نمی‌کند و همان عنوانِ بی‌پیشوند برمی‌گردد — دو دکمهٔ هم‌نام از یک دکمهٔ فنی بدتر است. */
+  const kindChoices = fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label }));
+  const plainTitle = (k) => String(k.title ?? kindOf(k.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
+  const vocabOf = (k) => (k.kind === 'surgery' ? t.surgery : k.kind === 'clinic' ? t.visit : KINDS[k.kind]?.label ?? plainTitle(k));
+  const vocabClash = new Set(kindChoices.map(vocabOf)).size < kindChoices.length;
+  const kindLabel = (k) => (vocabClash ? plainTitle(k) : vocabOf(k));
+  /* نامِ گامِ دوم در نشانگر — «ویزیت یا عمل» (همان پرسشِ گام)؛ جز این «نوعِ مراجعه». تا پاسخِ
+     سرور نرسیده همان «نوعِ مراجعه»، نه فهرستِ چهارتاییِ پشتیبان. */
+  const kindStepLabel = fd.kinds?.length === 2 ? fd.kinds.map(kindLabel).join(' یا ') : 'نوعِ مراجعه';
+  /* گام‌های ثبتِ تازه — شماره‌ٔ درونیِ گام همان ۱/۲/۳ است؛ وقتی گامِ ۲ چیزی برای پرسیدن ندارد (فرمِ تک‌نوع در
+     نصبِ تک‌خدمته) پریده می‌شود و گامِ «خدمت»ِ شرکتِ دوخدمته نامِ خودش را می‌گیرد (company-24). */
+  const stepList = skipKindStep
+    ? [{ n: 1, label: t.record }, { n: 3, label: 'تکمیل' }]
+    : [{ n: 1, label: t.record }, { n: 2, label: onlyKind && pickService ? 'خدمت' : kindStepLabel }, { n: 3, label: 'تکمیل' }];
+
   const attachItems = (catalog?.items ?? []).filter((x) => attachableOn(x, f.kind));
   const canBuildSubform = (myTools ?? []).some((x) => x.key === 'forms');
   const canAttach = !!catalog && attachItems.length > 0;
@@ -1851,16 +2050,18 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return (
       <div className="vf-phase-subs" data-phase-subforms={ph}>
         {cards}
-        {canAttach && <PhaseAttach phase={ph} label={PHASE_FA[ph]} onClick={() => openPicker(ph)} disabled={busy || !subLoaded} />}
+        {canAttach && <PhaseAttach phase={ph} label={PHASE_FA[ph]} onClick={() => openPicker(ph, true)} disabled={busy || !subLoaded} />}
       </div>
     );
   };
 
   /* خدمتِ مراجعه (شرکتِ دوخدمته) — در ثبتِ تازه گامِ دوم، در ویرایش زیرِ سربرگ. */
-  const serviceEl = pickService ? (<>
+  /* توضیح به زبانِ کاربر (company-24): «ویرایشگرِ اقلامِ پرتالِ جراح…» برای مدیر معنایی نداشت. وقتی فرم
+     تک‌نوع است و پرسشِ نوع پنهان، همین «خدمت» گامِ ۲ است و شمارهٔ گام را می‌گیرد. */
+  const serviceEl = pickService ? (<div data-core="service" className={coreErr.service ? 'vf-bad' : undefined}>
     <div className="db-sect">
-      <b>خدمت</b>
-      <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟ ویرایشگرِ اقلامِ پرتالِ جراح فقط برای «ایمپلنت» باز می‌شود.</small>
+      <b>{!editing && onlyKind && <i>{faNum(2)}</i>}خدمت</b>
+      <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟{offered.includes('implant') ? ' برای ایمپلنت، اقلامِ لازم را هم می‌پرسیم.' : ''}</small>
     </div>
     <div className="db-kindbox">
       <div className="db-kindrow" role="radiogroup" aria-label={`خدمتِ این ${t.visit}`}>
@@ -1871,14 +2072,22 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         ))}
       </div>
     </div>
-  </>) : null;
+    {coreErr.service && <small className="vf-core-err" role="alert">{coreErr.service}</small>}
+  </div>) : null;
 
   /* ── چیدمان: هسته (ستونِ اصلی)، زیرفرم‌ها و باقی (ستونِ کناری) ── */
   const SIDE_KEYS = f.kind === 'surgery' ? ['amount', 'notes'] : ['media', 'decisions', 'nextVisitDate', 'amount', 'notes'];
+  /* هر فیلدِ هسته با `data-core` — نشانیِ «برو به همین فیلد»ِ خطای ذخیره (surgery-08). */
   const cell = (key) => {
     const node = builtinNodes[key];
     if (!node) return null;
-    return <div key={key} className={node.wide ? 'db-span2' : undefined}>{node.el}</div>;
+    const err = coreErr[key];
+    return (
+      <div key={key} data-core={key} className={[node.wide ? 'db-span2' : '', err ? 'vf-bad' : ''].filter(Boolean).join(' ') || undefined}>
+        {node.el}
+        {err && <small className="vf-core-err" role="alert">{err}</small>}
+      </div>
+    );
   };
   /* «کِی می‌رود» — هم سرِ کادرِ مراقبت در تب، هم بالای پاپ‌آپش. */
   const preWhen = [
@@ -1945,14 +2154,38 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   };
   const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key));
   const sideKeys = SIDE_KEYS.filter((key) => builtinNodes[key]);
+  /* بیمارِ همین ثبتِ تازه برای سربرگ — پروندهٔ انتخاب‌شده (با کد)، یا نامِ تایپ‌شدهٔ پروندهٔ تازه پس از گامِ ۱. */
+  const typedName = `${f.firstName} ${f.lastName}`.trim();
+  const sheetWho = editing ? null
+    : picked?.fullName ? { name: picked.fullName, code: picked.code ?? prefill?.patientCode ?? null }
+      : mode === 'new' && step > 1 && typedName ? { name: typedName, code: null } : null;
 
   return (
     <AiContext.Provider value={aiCoding}>
-    <Overlay backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom" onClose={onClose} onSubmit={submit}>
-      <header className="db-sheet-head">
+    <Overlay
+      backdrop="db-overlay" panel={`glass db-sheet${editing || step === 3 ? ' vf-wide' : ''}`} as="form" from="bottom"
+      onClose={onClose} onSubmit={submit} closable={!busy}
+      /* نگهبانِ تغییرِ ذخیره‌نشده — «ذخیره» همان ارسالِ فرم است با همهٔ اعتبارسنجی‌ها؛ پیش از گامِ
+         «تکمیل» هنوز چیزی برای ذخیره نیست و پرسش فقط «دور ریختن / ادامه» می‌دهد. لمسِ پس‌زمینه این
+         فرمِ بلند را نمی‌بندد: بیشتر اشتباهِ انگشت است تا خواستنِ بستن. */
+      dirty={unsaved} onSave={editing || step === 3 ? 'submit' : undefined} backdropClose={false}
+      /* «برگشت»ِ گوشی اول همین فرم را می‌بندد، نه صفحهٔ زیرش را (surgery-06). */
+      history
+    >
+      <header className="db-sheet-head" ref={sheetHead}>
         {/* نوعِ «عمل» نامِ خودش را دارد (`surgery`/`surgeryNew`ِ واژگان) — فرمِ عملِ مطب «ویزیتِ جدید» می‌نوشت. */}
-        <b data-sheet-title>{editing ? `ویرایشِ ${f.kind === 'surgery' ? t.surgery : t.visit} ${initial.code}` : f.kind === 'surgery' ? t.surgeryNew : t.visitNew}</b>
-        <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
+        <div className="vf-sheet-titles">
+          <b data-sheet-title>{editing ? `ویرایشِ ${f.kind === 'surgery' ? t.surgery : t.visit} ${initial.code}` : f.kind === 'surgery' ? t.surgeryNew : t.visitNew}</b>
+          {/* برای کیست؟ (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-13): «برنامهٔ عمل» مستقیم گامِ ۳ را باز می‌کند و نامِ
+              بیمار فقط در گامِ ۱ِ پنهان بود. همان الگوی پنجرهٔ «بستنِ تصمیم»: عنوان + خطِ نام و کدِ پرونده.
+              ویرایش این خط را نمی‌خواهد — خلاصهٔ بیمار درست زیرِ سربرگ است. */}
+          {sheetWho && (
+            <small className="vf-sheet-who" data-sheet-patient>
+              {sheetWho.name}{sheetWho.code && <> · <bdi dir="ltr">{sheetWho.code}</bdi></>}
+            </small>
+          )}
+        </div>
+        <CloseButton className="db-x" aria-label="بستن"><Close width="18" height="18" /></CloseButton>
       </header>
 
       {editing && <PatientSummary prep={prep} f={f} idOpen={idOpen} onToggleId={() => setIdOpen((x) => !x)} />}
@@ -1966,14 +2199,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       {/* نشانگرِ گام — کاربر باید بداند کجای کار است و چند قدم مانده. */}
       {!editing && (
         <ol className="db-steps" aria-label="گام‌های ثبت">
-          {[t.record, `نوعِ ${t.visit}`, 'تکمیل'].map((label, i) => (
-            <li key={label} className={step === i + 1 ? 'on' : step > i + 1 ? 'done' : ''}>
+          {stepList.map(({ n, label }, i) => (
+            <li key={n} className={step === n ? 'on' : step > n ? 'done' : ''}>
               {/* برگشت فقط به گامِ **گذشته** — پرشِ رو به جلو همان دور زدنِ
                   اعتبارسنجیِ گام است. */}
               <button
                 type="button"
-                disabled={step <= i + 1}
-                onClick={() => { setStepErr(''); setStep(i + 1); }}
+                disabled={step <= n}
+                onClick={() => { setStepErr(''); setStep(n); }}
               >
                 <i>{faNum(i + 1)}</i>{label}
               </button>
@@ -1998,18 +2231,26 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         <small>
           {editing
             ? 'مشخصاتِ بیمار — تغییرش روی همهٔ مراجعاتِ همین پرونده اثر می‌گذارد.'
-            : 'اول بیمار: پروندهٔ جدید بسازید یا پروندهٔ موجود را جستجو کنید — مراجعه زیرِ همین پرونده ثبت می‌شود.'}
+            : `اول بیمار را پیدا کنید — نام، موبایل یا کدِ ملی؛ اگر ${t.record}‌ای نبود، از همین‌جا ${t.record}ٔ تازه بسازید. ${t.visit} زیرِ همین ${t.record} ثبت می‌شود.`}
         </small>
       </div>
-      {!editing && (
-        <Tabs
-          variant="inset"
-          className="db-modetabs"
-          label="نوعِ ثبت"
-          value={mode}
-          onChange={(k) => { setMode(k); if (k === 'existing') setPicked(null); }}
-          items={[{ key: 'new', label: 'بیمارِ جدید' }, { key: 'existing', label: 'بیمارِ موجود' }]}
-        />
+
+      {/* دیکتهٔ بیمارِ جدید — ضبط → ویسپر → تحلیلِ دستیار → پرشدنِ فیلدها؛ از خودِ جست‌وجو هم در دسترس است و
+          پس از تحلیل به فرمِ پروندهٔ تازه می‌رود (clinic-daily-22). */}
+      {sttOn && !editing && !picked && (
+        <div className="db-dictate">
+          <VoiceInput
+            label="دیکتهٔ بیمارِ جدید"
+            disabled={busy || !!aiBusy}
+            onText={dictatePatient}
+            onErr={(m) => onToast(m)}
+          />
+          <small className="db-hint">
+            {aiBusy === 'dictate'
+              ? 'دستیار در حالِ تحلیلِ دیکته…'
+              : 'مثلاً بگویید: «علی رضایی، ۰۹۱۲…، کد ملی…، شکایت از…» — دستیار فیلدها را پر می‌کند.'}
+          </small>
+        </div>
       )}
 
       {(!editing && mode === 'existing') ? (
@@ -2024,43 +2265,53 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
           ) : (
             <>
+              {/* یک کادر برای هر سه: جست‌وجوی سرور نام، کدِ پرونده، موبایل و کدِ ملی را با هم می‌گردد. */}
               <input
                 type="text"
                 value={pQuery}
                 onChange={(e) => setPQuery(e.target.value)}
-                placeholder="جستجوی نام / کد پرونده / موبایل / کد ملی…"
+                placeholder="نام، موبایل یا کدِ ملی…"
+                aria-label={`جست‌وجوی ${t.record} — نام، موبایل یا کدِ ملی`}
+                data-patient-search
                 autoFocus
               />
-              <div className="db-plist">
+              <div className="db-plist" aria-live="polite">
+                {/* کدِ ملی و موبایل **متن‌اند نه عدد** (بازبینیِ UX، clinic-daily-11): `faNum` آن‌ها را
+                    `Number` می‌کرد — «۰۰۲۷۰۲۵۸۵۳» می‌شد «۲۷٬۰۲۵٬۸۵۳»، صفرِ اول می‌افتاد و «· ۱ ویزیت» به
+                    عدد می‌چسبید؛ منشی‌ای که برای جداکردنِ دو هم‌نام کدِ ملی را با کارت مقایسه می‌کند عددِ
+                    غلط می‌دید. حالا فقط رقم‌ها فارسی می‌شوند، با برچسب، و شمارِ مراجعه جداست. */}
                 {pResults.map((p) => (
-                  <button type="button" key={p.id} onClick={() => pickPatient(p)}>
-                    <b>{p.fullName}</b>
-                    <span dir="ltr">{p.code}</span>
-                    <small>{p.nationalId ? `${faNum(p.nationalId)} · ` : ''}{faNum(p.visitCount)} {t.visit}</small>
+                  <button type="button" key={p.id} className="vf-pitem" onClick={() => pickPatient(p)}>
+                    <span className="vf-pitem-top"><b>{p.fullName}</b><span dir="ltr">{p.code}</span></span>
+                    <small className="vf-pitem-meta">
+                      {p.nationalId && <span>کد ملی <bdi dir="ltr">{jToFa(p.nationalId)}</bdi></span>}
+                      {p.phone && <span>موبایل <bdi dir="ltr">{jToFa(p.phone)}</bdi></span>}
+                      <span className="vf-pitem-n">{p.visitCount ? `${faNum(p.visitCount)} ${t.visit}` : `بدونِ ${t.visit}`}</span>
+                    </small>
                   </button>
                 ))}
-                {pResults.length === 0 && <div className="db-pnone">بیماری پیدا نشد</div>}
+                {pResults.length === 0 && pQuery.trim() && <div className="db-pnone">{`${t.record}‌ای با «${pQuery.trim()}» پیدا نشد`}</div>}
               </div>
+              {/* «ساختِ پروندهٔ تازه با همین نام» — نبودِ نتیجه یعنی دکمهٔ اصلی؛ با نتیجه، راهِ دومِ آرام
+                  (هم‌نامِ دیگری هم ممکن است باشد). بی‌متن: پروندهٔ خالی. */}
+              <button
+                type="button"
+                className={`vf-newrec${pQuery.trim() && pResults.length === 0 ? ' is-main' : ''}`}
+                data-act="new-record"
+                onClick={startNew}
+              >
+                <Plus width="15" height="15" aria-hidden="true" />
+                {pQuery.trim() ? `ساختِ ${t.record}ٔ تازه با همین نام` : `ساختِ ${t.record}ٔ تازه`}
+              </button>
             </>
           )}
         </div>
       ) : (
         <>
-          {/* دیکتهٔ بیمارِ جدید — ضبط → ویسپر → تحلیلِ دستیار → پرشدنِ فیلدها. */}
-          {sttOn && !editing && (
-            <div className="db-dictate">
-              <VoiceInput
-                label="دیکتهٔ بیمارِ جدید"
-                disabled={busy || !!aiBusy}
-                onText={dictatePatient}
-                onErr={(m) => onToast(m)}
-              />
-              <small className="db-hint">
-                {aiBusy === 'dictate'
-                  ? 'دستیار در حالِ تحلیلِ دیکته…'
-                  : 'مثلاً بگویید: «علی رضایی، ۰۹۱۲…، کد ملی…، شکایت از…» — دستیار فیلدها را پر می‌کند.'}
-              </small>
-            </div>
+          {!editing && (
+            <button type="button" className="vf-backsearch" data-act="back-to-search" onClick={() => { setStepErr(''); setMode('existing'); }}>
+              <Search width="14" height="14" aria-hidden="true" />{`جست‌وجوی ${t.record}‌های موجود`}
+            </button>
           )}
           <div className="db-grid2">
             {/* ⚠️ `required` فقط وقتی که این گام **دیده می‌شود**. کادرِ
@@ -2069,7 +2320,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                 اتفاقی نمی‌افتد. اعتبارسنجیِ واقعیِ این گام در
                 `stepOneProblem` است که پیام را کنارِ دکمه می‌نویسد. */}
             <label className="db-field"><span>نام</span>
-              <input type="text" value={f.firstName} onChange={set('firstName')} required={editing ? idOpen : step === 1} minLength={2} />
+              <input ref={firstNameRef} type="text" value={f.firstName} onChange={set('firstName')} required={editing ? idOpen : step === 1} minLength={2} />
             </label>
             <label className="db-field"><span>نام خانوادگی</span>
               <input type="text" value={f.lastName} onChange={set('lastName')} required={editing ? idOpen : step === 1} minLength={2} />
@@ -2077,15 +2328,16 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             <label className="db-field"><span>موبایل</span>
               <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
             </label>
-            <label className={`db-field${nidBad ? ' bad' : ''}`}><span>کد ملی
+            <label className={`db-field${nidBad || coreErr.nationalId ? ' bad' : ''}`} data-core="nationalId"><span>کد ملی
               {/* موقت — بیمارِ آزمایشی (خواستهٔ مالک): کدِ تصادفیِ معتبر تا
-                  اعتبارسنجی رد شود. فقط سوپرادمین می‌بیند. */}
-              {me?.level >= 6 && !editing && (
+                  اعتبارسنجی رد شود. فقط سوپرادمین و فقط در محیطِ آزمایشی (`TEST_ENV`) می‌بیند. */}
+              {TEST_ENV && me?.level >= 6 && !editing && (
                 <button type="button" className="db-nidtest" title="فقط برای بیمارِ آزمایشی — کدِ تصادفیِ معتبر (موقت)"
                   onClick={() => setF((s) => ({ ...s, nationalId: randomNationalId() }))}>کدِ آزمایشی</button>
               )}
             </span>
-              <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')} placeholder="کلیدِ پرونده — اختیاری" />
+              <input type="text" dir="ltr" inputMode="numeric" maxLength={12} value={f.nationalId} onChange={set('nationalId')}
+                placeholder={tenantKind === 'company' ? '۱۰ رقم — اختیاری' : 'کدِ ملی ۱۰ رقمی (اختیاری)'} />
               {nidBad && <small className="db-hint bad">کد ملی معتبر نیست</small>}
             </label>
           </div>
@@ -2101,13 +2353,16 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
           )}
 
-          <JDate
-            label="تاریخِ تولد (شمسی)"
-            mode="birth"
-            value={f.birthDateJ}
-            onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
-            placeholder="سال / ماه / روز — اختیاری"
-          />
+          <div data-core="birthDate" className={coreErr.birthDate ? 'vf-bad' : undefined}>
+            <JDate
+              label="تاریخِ تولد (شمسی)"
+              mode="birth"
+              value={f.birthDateJ}
+              onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))}
+              placeholder="سال / ماه / روز — اختیاری"
+            />
+            {coreErr.birthDate && <small className="vf-core-err" role="alert">{coreErr.birthDate}</small>}
+          </div>
         </>
       )}
 
@@ -2134,12 +2389,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
 
           تا وقتی پاسخِ سرور نرسیده فهرستِ پشتیبان می‌ماند، وگرنه یک قطعیِ
           لحظه‌ای ردیف را **خالی** می‌کرد. */}
+      {/* پرسش به زبانِ پذیرش است نه سامانه (بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-04): «برای چه
+          آمده؟ ویزیت یا عمل». عنوانِ فرم («فرمِ ویزیت / فرمِ جراحی») فقط مالِ فرم‌ساز است؛ منشی‌ای که
+          «فرمِ جراحی» می‌خواند نمی‌داند نوعِ مراجعه را انتخاب می‌کند یا یک سند را. */}
+      {/* فرمِ تک‌نوع (company-24): پرسشی با یک گزینه پرسش نیست — پنهان، و گامِ ۲ فقط «خدمت» است. */}
+      {!onlyKind && (<>
       <div className="db-sect">
-        <b>{!editing && <i>{faNum(2)}</i>}نوعِ فرم</b>
-        <small>
-          این {t.visit} با کدام فرم ثبت شود؟ هر دکمه یکی از فرم‌های ساخته‌شده در
-          فرم‌ساز است و رنگش، رنگِ کارتِ همان فرم روی داشبورد.
-        </small>
+        <b>{!editing && <i>{faNum(2)}</i>}برای چه آمده؟</b>
+        <small>فرمِ گامِ بعد بر همین پایه چیده می‌شود.</small>
       </div>
       {/* جعبهٔ خنثیِ خط‌چین — تا ردیفِ انتخابِ نوع از کارتِ رنگیِ خودِ فرم
           (پایین) جدا دیده شود؛ گزارشِ کاربر: «رنگ‌ها قاطی می‌شد». */}
@@ -2155,21 +2412,22 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           </div>
         ) : (
         <div className="db-kindrow" role="radiogroup" aria-label={`نوعِ ${t.visit}`}>
-          {(fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label })))
-            .map((k) => (
+          {kindChoices.map((k) => (
             <button
               key={k.kind}
               type="button"
               role="radio"
+              data-kind={k.kind}
               aria-checked={f.kind === k.kind}
               className={f.kind === k.kind ? 'on' : ''}
               style={k.color ? { '--k': `var(--kind-${k.color})` } : undefined}
               onClick={() => pickKind(k.kind)}
-            >{k.title}</button>
+            >{kindLabel(k)}</button>
           ))}
         </div>
         )}
       </div>
+      </>)}
       {serviceEl}
 
       </>)}
@@ -2191,11 +2449,28 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         disabled={busy || !subLoaded}
         showAttach={canAttach}
       />
-      {editing && serviceEl}
-      {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. */}
+      {/* ── فرمِ عمل: زبانه‌ها ساختارِ اصلی‌اند (surgery-10) — درست زیرِ سربرگ. کلاسِ `db-phasetabs`
+          همان نشانیِ آزمون‌ها و پاپ‌آپ‌هاست؛ «مشخصات» واژهٔ حوزه را می‌گیرد («مشخصاتِ مراجعه» در
+          نورومانیتورینگ). مقدارها همه در `f` می‌مانند، پس جابه‌جایی چیزی را پاک نمی‌کند. */}
+      {isSurgery && (
+        <Tabs
+          variant="inset"
+          className="db-phasetabs vf-sectabs"
+          label={`بخش‌های فرمِ ${t.surgery}`}
+          value={tab}
+          onChange={goTab}
+          items={[{ key: 'info', label: `مشخصاتِ ${t.surgery}` }, ...PHASE_ITEMS]}
+        />
+      )}
+      {editing && (!isSurgery || tab === 'info') && serviceEl}
+      {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. فرمِ عمل: همین کارت زبانهٔ «مشخصات» است —
+          پنهان می‌شود نه unmount، تا انتخابگرها و کادرهای نیمه‌تایپ‌شدهٔ هسته با رفت‌وآمدِ زبانه از
+          نو ساخته نشوند (و فهرست‌هایشان دوباره از سرور خوانده نشود). */}
       <div
         className="db-formcard"
         style={kindMeta?.color ? { '--k': `var(--kind-${kindMeta.color})` } : undefined}
+        hidden={isSurgery && tab !== 'info'}
+        {...(isSurgery ? { role: 'tabpanel', 'aria-label': `مشخصاتِ ${t.surgery}`, 'data-tab': 'info' } : {})}
       >
       {/* فرمِ عمل ستونِ زیرفرم ندارد (کارت‌ها در تبِ مرحلهٔ خودشان‌اند) و ستونِ کناری‌اش فقط «مبلغ» و
           «توضیحات» است — دوستونه یعنی نیمهٔ خالی؛ پس یک‌ستونه، و همان دو کادر زیرِ هسته. */}
@@ -2257,14 +2532,76 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       </div>
       </div>
 
-      {/* ── برنامهٔ مراقبت و پیگیری — در ادامهٔ خودِ فرمِ عمل ──
-          جراح همان‌جا که شرح را می‌نویسد برنامهٔ بعد را هم می‌بندد. قاعدهٔ
-          کلیدی: **پیش‌فرضِ نوعِ عمل همیشه دیده می‌شود** — خالی‌گذاشتن یعنی
-          «همان پیش‌فرض اجرا شود»، و نوشتن یعنی «فقط برای همین بیمار این».
-          اگر نوعِ عمل هنوز قالبی ندارد (روزهای اولِ راه‌اندازی)، به‌جای
-          سکوت، صریح گفته می‌شود و راهِ ثبتِ دائمی‌اش نشان داده می‌شود. */}
-      {f.kind === 'surgery' && (
-        <div className="db-postop">
+      {/* ── زبانه‌های مرحلهٔ عمل (قبل / حین / بعد) — فقط زبانهٔ فعال رندر می‌شود؛ مقدارها در `f` می‌مانند،
+          پس «ذخیره» هر سه را با هم می‌فرستد. «برنامهٔ مراقبت و پیگیری» از بالای زبانه‌ها به درونِ «بعد از
+          عمل» آمد (surgery-10): مراقبتِ قبل از عمل در زبانهٔ خودش، و برنامهٔ پس از عمل با خلاصه‌اش. */}
+      {isSurgery && tab === 'pre' && (
+      <div className="db-phase" data-phase="pre" role="tabpanel" aria-label={PHASE_FA.pre}>
+        {decidedCard}
+        {/* ── مراقبتِ قبل از عمل ── */}
+        <div className="db-careblock">
+          <div className="db-carehead">
+            <span>مراقبت‌های قبل از عمل — پیامک به بیمار</span>
+            <i>{preWhen}</i>
+          </div>
+          {opIsToday && (
+            <p className="db-decide-hint">
+              عملْ همین امروز است — معمولاً دیگر پیامِ «قبل از عمل» لازم نیست؛ اگر لازم است، «به‌محضِ ثبت» را بزنید.
+            </p>
+          )}
+          {careField('pre')}
+          {/* ⚠️ این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
+              آن است — برعکسِ مراقبتِ بعد از عمل. */}
+          <div className="db-daychips db-whenchips">
+            {[{ v: false, l: 'فقط طبقِ زمان‌بندی' }, { v: true, l: 'به‌محضِ ثبت + زمان‌بندی' }].map((o) => (
+              <button
+                key={String(o.v)} type="button"
+                className={!!f.preOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
+                aria-pressed={!!f.preOpImmediate === o.v}
+                onClick={() => { preTouched.current = true; setF((s2) => ({ ...s2, preOpImmediate: o.v })); }}
+              >{o.l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="db-careblock">
+          <div className="db-carehead">
+            <span>درخواست‌های پیش از عمل — آزمایش، تصویربرداری، مشاوره</span>
+            {!initial?.id && <i>بعد از ذخیره</i>}
+          </div>
+          {initial?.id
+            ? ordersBlock
+            : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
+        </div>
+
+        {phaseSubs('pre')}
+        {phaseDocs}
+      </div>
+      )}
+
+      {isSurgery && tab === 'intra' && (
+      <div className="db-phase" data-phase="intra" role="tabpanel" aria-label={PHASE_FA.intra}>
+        {INTRA_KEYS.some((k) => builtinNodes[k]) ? (
+          <div className="db-grid2 db-builtins">
+            {INTRA_KEYS.map(cell)}
+          </div>
+        ) : (
+          <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان{isClinicCore ? '' : '، یافته‌ها'}، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
+        )}
+
+        {phaseSubs('intra')}
+        {phaseDocs}
+      </div>
+      )}
+
+      {isSurgery && tab === 'post' && (
+      <div className="db-phase" data-phase="post" role="tabpanel" aria-label={PHASE_FA.post}>
+        {/* ── برنامهٔ مراقبت و پیگیری — جراح همان‌جا که کارِ پس از عمل را می‌بندد پیامک و پیگیری را هم
+            می‌بیند. قاعدهٔ کلیدی: **پیش‌فرضِ نوعِ عمل همیشه دیده می‌شود** — خالی‌گذاشتن یعنی «همان
+            پیش‌فرض اجرا شود»، و نوشتن یعنی «فقط برای همین بیمار این». اگر نوعِ عمل هنوز قالبی ندارد
+            (روزهای اولِ راه‌اندازی)، به‌جای سکوت، صریح گفته می‌شود و راهِ ثبتِ دائمی‌اش نشان داده می‌شود.
+            راهنما کوچک‌تر از عنوان است (`visit-subforms.css`). */}
+        <section className="db-postop" data-section="care-plan">
           <h4>برنامهٔ مراقبت و پیگیری</h4>
           {procDefaults.has ? (
             <p className="db-hint">
@@ -2302,86 +2639,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               )}
             </div>
           )}
-
-
-          {/* ── سه مرحله، سه تب (بازخوردِ مالک: «قبل/حین/بعد از عمل به‌صورتِ تبِ جدا؛
-              الان خیلی شلوغ است»). فقط تبِ فعال رندر می‌شود؛ مقدارها در `f` می‌مانند،
-              پس جابه‌جایی چیزی را پاک نمی‌کند و «ذخیره» هر سه را با هم می‌فرستد.
-              خطِ برنامه (پایین) بیرونِ تب‌هاست تا خلاصهٔ هر سه همیشه دیده شود. */}
-          <Tabs
-            variant="inset"
-            className="db-phasetabs"
-            label="مرحلهٔ عمل"
-            value={phase}
-            onChange={setPhase}
-            items={PHASE_ITEMS}
-          />
-
-          {phase === 'pre' && (
-          <div className="db-phase" data-phase="pre">
-          {decidedCard}
-          {/* ── مراقبتِ قبل از عمل ── */}
-          <div className="db-careblock">
-            <div className="db-carehead">
-              <span>مراقبت‌های قبل از عمل — پیامک به بیمار</span>
-              <i>{preWhen}</i>
-            </div>
-            {opIsToday && (
-              <p className="db-decide-hint">
-                عملْ همین امروز است — معمولاً دیگر پیامِ «قبل از عمل» لازم نیست؛ اگر لازم است، «به‌محضِ ثبت» را بزنید.
-              </p>
-            )}
-            {careField('pre')}
-            {/* ⚠️ این‌جا «به‌محضِ ثبت» **جایگزینِ** موعدِ مقرر نیست، اضافه بر
-                آن است — برعکسِ مراقبتِ بعد از عمل. */}
-            <div className="db-daychips db-whenchips">
-              {[{ v: false, l: 'فقط طبقِ زمان‌بندی' }, { v: true, l: 'به‌محضِ ثبت + زمان‌بندی' }].map((o) => (
-                <button
-                  key={String(o.v)} type="button"
-                  className={!!f.preOpImmediate === o.v ? 'db-daychip on' : 'db-daychip'}
-                  aria-pressed={!!f.preOpImmediate === o.v}
-                  onClick={() => { preTouched.current = true; setF((s2) => ({ ...s2, preOpImmediate: o.v })); }}
-                >{o.l}</button>
-              ))}
-            </div>
-          </div>
-
-          <div className="db-careblock">
-            <div className="db-carehead">
-              <span>درخواست‌های پیش از عمل — آزمایش، تصویربرداری، مشاوره</span>
-              {!initial?.id && <i>بعد از ذخیره</i>}
-            </div>
-            {initial?.id
-              ? ordersBlock
-              : <p className="db-decide-hint">بعد از ذخیرهٔ همین مراجعه، از همین‌جا درخواست ثبت و برای بیمار فرستاده می‌شود.</p>}
-          </div>
-
-          {phaseSubs('pre')}
-          {phaseDocs}
-          </div>
-          )}
-
-          {phase === 'intra' && (
-          <div className="db-phase" data-phase="intra">
-            {INTRA_KEYS.some((k) => builtinNodes[k]) ? (
-              <div className="db-grid2 db-builtins">
-                {INTRA_KEYS.map((key) => {
-                  const node = builtinNodes[key];
-                  if (!node) return null;
-                  return <div key={key} className={node.wide ? 'db-span2' : undefined}>{node.el}</div>;
-                })}
-              </div>
-            ) : (
-              <p className="db-decide-hint">فیلدهای حینِ عمل (ساعتِ شروع/پایان{isClinicCore ? '' : '، یافته‌ها'}، شرحِ عمل) در فرم‌ساز برای این فرم خاموش‌اند.</p>
-            )}
-
-            {phaseSubs('intra')}
-            {phaseDocs}
-          </div>
-          )}
-
-          {phase === 'post' && (
-          <div className="db-phase" data-phase="post">
           {/* ── مراقبتِ بعد از عمل ── */}
           <div className="db-careblock">
             <div className="db-carehead">
@@ -2450,12 +2707,6 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               placeholder="سال / ماه / روز"
             />
           </div>
-
-          {phaseSubs('post')}
-          {phaseDocs}
-          </div>
-          )}
-
           <p className="db-postop-plan">
             {timing && timing.followUpFormReady === false
               ? 'پیگیری: ارسال نمی‌شود (فرمِ پیگیری تعریف نشده)'
@@ -2468,9 +2719,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             {`مراقبتِ قبل: ${f.preOpCare.trim() ? 'متنِ همین فرم' : procDefaults.preOpCare ? 'قالبِ نوعِ عمل' : 'ارسال نمی‌شود'}`}
             {(f.preOpCare.trim() || procDefaults.preOpCare) ? (f.preOpImmediate ? '، به‌محضِ ثبت + موعدِ مقرر' : '، موعدِ مقرر') : ''}
           </p>
-        </div>
+        </section>
+        {phaseSubs('post')}
+        {phaseDocs}
+      </div>
       )}
-
 
       <AttachPicker
         open={pickOpen}
@@ -2478,14 +2731,18 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         visitWord={isSurgery ? 'عمل' : t.visit}
         groups={catalog?.groups ?? []}
         items={attachItems}
-        attached={attachedIn(isSurgery ? pickPhase : '')}
+        attached={isSurgery
+          ? new Set(attachItems.filter((it) => subList.some((x) => x.key === it.key && x.phase === pickTarget(it))).map((it) => it.key))
+          : attachedIn('')}
         pins={prefs.subformPins}
         onPin={pinSub}
-        onAttach={(it) => attachSub(it, isSurgery ? pickPhase : '')}
+        onAttach={(it) => attachSub(it, isSurgery ? pickTarget(it) : '')}
         canBuild={canBuildSubform}
         phases={isSurgery ? PHASE_ITEMS : null}
         phase={pickPhase}
-        onPhase={setPickPhase}
+        onPhase={(k) => { setPickPhase(k); setPickExplicit(true); }}
+        boundOf={isSurgery ? boundPhase : null}
+        explicit={pickExplicit}
       />
 
       {/* میزبان همیشه سوار است و خودش presence را می‌گرداند (OrderSheet.jsx). */}
@@ -2500,9 +2757,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         onToast={onToast}
       />
 
-      <button className="db-submit" type="submit" disabled={busy || !!aiBusy}>
-        {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : f.kind === 'surgery' ? t.surgeryOne : t.visitOne}
-      </button>
+      {/* نوارِ ذخیره — پیامِ خطا **کنارِ خودِ دکمه** و تا اصلاح می‌ماند (surgery-08)؛ toast می‌رود و
+          کاربر با دکمه‌ای می‌ماند که نمی‌داند چرا کار نکرد. */}
+      <div className="vf-savebar">
+        {saveErr && <p className="vf-saveerr" role="alert" data-save-error>{saveErr}</p>}
+        <button className="db-submit" type="submit" disabled={busy || !!aiBusy}>
+          {busy ? 'در حال ذخیره…' : editing ? 'ذخیرهٔ تغییرات' : f.kind === 'surgery' ? t.surgeryOne : t.visitOne}
+        </button>
+      </div>
       </>)}
 
       {/* ── ناوبریِ گام ── */}
@@ -2511,6 +2773,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           {/* ⚠️ دلیلِ نرفتن **کنارِ خودِ دکمه** نوشته می‌شود، نه در toast:
               toast می‌رود و کاربر با یک دکمهٔ بی‌جواب می‌ماند. */}
           {stepErr && <p className="db-steperr" role="alert">{stepErr}</p>}
+          {/* گامِ ۱ در حالِ جست‌وجو و بی‌انتخاب «بعدی» ندارد (clinic-daily-22): راهِ جلو یا انتخابِ یک ردیف است یا
+              «ساختِ پروندهٔ تازه» — دو دکمهٔ بنفشِ هم‌وزن زیرِ هم، یکی‌شان فقط خطا می‌داد. */}
+          {!(step === 1 && mode === 'existing' && !picked) && (
           <div className="db-stepnav">
             {step > 1 && (
               <button type="button" className="db-stepback" onClick={() => { setStepErr(''); setStep(step - 1); }}>
@@ -2519,6 +2784,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             )}
             <button type="button" className="db-submit" onClick={goNext}>بعدی</button>
           </div>
+          )}
         </>
       )}
     </Overlay>

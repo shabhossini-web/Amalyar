@@ -322,17 +322,19 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await browserLogin(page, login.accessToken);
+    /* زبانه‌های فرمِ عمل زیرِ سربرگ‌اند و «برنامهٔ مراقبت و پیگیری» (با هشدارِ عملِ همزمان) درونِ
+       زبانهٔ «بعد از عمل» است (بازبینیِ UX، surgery-10). */
     const openVisit = async (id) => {
       await page.goto(`${UI}/app/dashboard?patient=${id}`, { waitUntil: 'networkidle' });
       await page.waitForTimeout(1800);
-      return page.locator('.db-sheet .db-postop');
+      return page.locator('.db-sheet');
     };
-    const tab = (sect, name) => sect.locator('.ui-tabs button', { hasText: name }).click().then(() => page.waitForTimeout(350));
+    const tab = (sect, name) => sect.locator('.db-phasetabs button', { hasText: name }).click().then(() => page.waitForTimeout(350));
     const defaults = async (sect) => {
       await tab(sect, 'قبل از عمل');
-      const pre = await sect.locator('.db-default').allInnerTexts();
+      const pre = await sect.locator('.db-phase[data-phase="pre"] .db-default').allInnerTexts();
       await tab(sect, 'بعد از عمل');
-      const post = await sect.locator('.db-default').allInnerTexts();
+      const post = await sect.locator('.db-phase[data-phase="post"] .db-default').allInnerTexts();
       return { pre, post };
     };
     /* شاهد: تک‌عملی — شمارِ `.db-default` که `postop-flow.mjs` سنجاقش کرده. */
@@ -340,6 +342,7 @@ try {
     const single = await defaults(sect);
     ok('تک‌عمل: بدونِ هشدارِ عملِ همزمان', await sect.locator('.db-careother').count() === 0);
     sect = await openVisit(VM.id);
+    await tab(sect, 'بعد از عمل');
     const hint = sect.locator('.db-careother');
     ok('دوعملی: هشدارِ `.db-careother` آمد', await hint.count() === 1);
     const hintText = await hint.innerText().catch(() => '');
@@ -356,7 +359,7 @@ try {
     await insert.click();
     await page.waitForTimeout(400);
     await tab(sect, 'بعد از عمل');
-    const areas = await sect.locator('textarea').evaluateAll((els) => els.map((e) => e.value));
+    const areas = await sect.locator('.db-phase[data-phase="post"] textarea').evaluateAll((els) => els.map((e) => e.value));
     ok('ضربه: متنِ P2 زیرِ قالبِ P1 در متنِ اختصاصی نشست (اصلی حذف نشد)',
       areas.some((v) => v.includes(`پس-یک ${tag}`) && v.includes(`پس-دو ${tag}`)), JSON.stringify(areas.map((v) => v.slice(0, 60))));
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/multi-procedure-careother.png` }).catch(() => {});

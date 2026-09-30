@@ -30,14 +30,18 @@ const median = (xs: number[]) => {
 /**
  * **فهرستِ انتظارِ عمل** (بستهٔ ۹ج، طرحِ مصوبِ ۱۴۰۵/۰۷/۰۶ — بندِ «ه» گزارشِ HIS).
  *
- * چهار وضعیت، همه **مشتق** (هیچ ستونِ وضعیتی ساخته نشد):
+ * شش وضعیت، همه **مشتق** (هیچ ستونِ وضعیتی ساخته نشد):
  *  - `awaiting`: ویزیتی «کاندیدای جراحی» زده و هنوز هیچ عملِ لغونشده‌ای برایش نیست — نه عملِ
  *    گره‌خورده (`decidedInVisitId`) و نه عملِ همان بیمار که بعد از تصمیم ساخته یا تاریخ خورده. عملِ
  *    فقط-لغوشده ردیف را برمی‌گرداند (بیمار هنوز برنامه می‌خواهد) با دلیلِ آخرین لغو. هر بیمار یک
  *    ردیف: تازه‌ترین تصمیم.
  *  - `closed`: همان تصمیم که پزشک با دلیل بسته است (برگشت‌پذیر).
  *  - `planned`: عملِ ساخته‌شدهٔ `pending` بی‌`opDate` («هنوز تاریخ ندارد»، بستهٔ ۹ب).
- *  - `booked`: عملِ `pending` با تاریخِ امروز یا بعد.
+ *  - `booked`: عملِ `pending` با تاریخِ بعد از امروز؛ `today`: همان، برای امروز («امروز در اتاقِ عمل»).
+ *  - `overdue`: عملِ `pending`ِ تاریخ‌گذشته که **هرگز شروع نشد** (بی `opStartTime`) — «موعد گذشته — ثبت
+ *    نشده»، بالای فهرست تا منشی تکلیفش را روشن کند (انجام شد / لغو / تاریخِ تازه). تا بازبینیِ UX
+ *    ۱۴۰۵/۰۷ (surgery-16) چنین عملی فردای روزِ رزرو بی‌صدا از همهٔ زبانه‌ها می‌افتاد، با اینکه نه عمل
+ *    شده بود نه لغو. عملی که شروع شده و بسته نشده مالِ میزِ اتاقِ عمل است («ناتمام»)، نه این فهرست.
  *
  * ⚠️ دامنه همان قاعدهٔ همه‌جا (`scopedVisitWhere`): زیرِ سوپروایزر فقط مراجعه‌ای که جراح یا کارشناسش
  * خودِ کاربر است — با `AND`، نه spread. سوپروایزر به بالا همه را می‌بیند و پاسخ می‌گوید (`team`)،
@@ -128,7 +132,7 @@ export class WaitlistService {
       where: {
         AND: [scope, live, {
           kind: 'surgery', opStatus: 'pending',
-          OR: [{ opDate: null }, { opDate: { gte: today } }],
+          OR: [{ opDate: null }, { opDate: { gte: today } }, { opDate: { lt: today }, opStartTime: null }],
         }],
       },
       select: {
@@ -146,8 +150,10 @@ export class WaitlistService {
     if (surgeriesTruncated) surgeries.length = CAP;
     const rowsS = surgeries.map((s) => {
       const d = s.decidedIn;
+      const at = s.opDate ? +dayOfDate(s.opDate) : null;
+      const state = at == null ? 'planned' : at < +today ? 'overdue' : at === +today ? 'today' : 'booked';
       return {
-        key: `surgery:${s.id}`, state: s.opDate ? 'booked' : 'planned',
+        key: `surgery:${s.id}`, state,
         patient: WaitlistService.patientOf(s.patient),
         decision: d ? {
           visitId: d.id, code: `${s.patient.code}-V${d.seq}`, date: d.opDate ?? d.createdAt,
@@ -170,22 +176,26 @@ export class WaitlistService {
       };
     });
 
+    /* «موعد گذشته» همیشه بالای فهرست — کارِ باز است نه فقط انتظارِ طولانی؛ بقیه طولانی‌ترین انتظار اول. */
+    const first = (r: any) => (r.state === 'overdue' ? 0 : 1);
     const rows = [...awaiting, ...rowsS].map((r) => ({
       ...r,
       stateFa: WAITLIST_LABELS[r.state],
       waitingDays: Math.max(0, Math.round((+today - +(r.waitStartApprox ? dayOfStamp : dayOfDate)(new Date(r.waitStart))) / DAY)),
-    })).sort((a, b) => b.waitingDays - a.waitingDays || a.key.localeCompare(b.key));
+    })).sort((a, b) => first(a) - first(b) || b.waitingDays - a.waitingDays || a.key.localeCompare(b.key));
 
     /* کارهای مجازِ ردیف از سرور (قانونِ ۳): «برنامهٔ عمل» = ساختِ مراجعه، «تعیینِ تاریخ» = ویرایشِ آن. */
-    const [plan, edit, manage] = await Promise.all([
+    /* `status` = «انجام شد / لغو»ِ همان ردیفِ «موعد گذشته» — همان مجوزِ دکمه‌های وضعیتِ داشبورد. */
+    const [plan, edit, manage, status] = await Promise.all([
       canAccess(this.prisma, user, 'dashboard', ['patients.create']).catch(() => false),
       canAccess(this.prisma, user, 'dashboard', ['patients.update']).catch(() => false),
       canAccess(this.prisma, user, 'waitlist', ['waitlist.manage']).catch(() => false),
+      canAccess(this.prisma, user, 'dashboard', ['patients.status']).catch(() => false),
     ]);
     return {
       rows,
       stats: await this.stats(rows, scope, live, today),
-      can: { plan, edit, manage },
+      can: { plan, edit, manage, status },
       /* نمای همه (سوپروایزر به بالا) — رابط نامِ پزشکِ هر ردیف و فیلترِ پزشک را نشان می‌دهد. */
       team: !isScoped(user),
       truncated: decisionsTruncated || surgeriesTruncated,
@@ -215,6 +225,7 @@ export class WaitlistService {
       .map((s) => Math.max(0, Math.round((+dayOfDate(s.opDate!) - +startDayOf(s.decidedIn!)) / DAY)));
     return {
       awaiting: count('awaiting'), closed: count('closed'), planned: count('planned'), booked: count('booked'),
+      overdue: count('overdue'), today: count('today'),
       medianWaitDays: median(rows.filter((r) => r.state !== 'closed').map((r) => r.waitingDays)),
       decisionToSurgery: { medianDays: median(gaps), n: gaps.length },
     };

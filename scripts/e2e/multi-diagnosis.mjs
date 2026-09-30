@@ -671,6 +671,8 @@ try {
     try {
       await sp.page.goto(`${UI}/app/dashboard?patient=${rX2.json.id}`, { waitUntil: 'networkidle' });
       await sp.page.waitForTimeout(1800);
+      /* عملِ آینده روی زبانهٔ «قبل از عمل» باز می‌شود؛ تشخیص در زبانهٔ «مشخصات» است (بازبینیِ UX، surgery-10). */
+      await sp.page.locator('.db-sheet .db-phasetabs button').first().click();
       const copy = sp.page.locator('[data-coding-copy]');
       ok('فرمِ عمل جعبهٔ «تشخیصِ ویزیتِ تصمیم» را نشان می‌دهد', await copy.count() === 1);
       ok('… با برچسبِ کاملِ آن ویزیت', (await copy.innerText().catch(() => '')).includes(d1.title) && (await copy.innerText().catch(() => '')).includes(d3.title));

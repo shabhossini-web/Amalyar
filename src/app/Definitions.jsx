@@ -8,11 +8,14 @@ import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/jalali.js';
 import PersonFields, { personErrors } from './PersonFields.jsx';
 import './definitions.css';
+import './users.css'; // کلیدِ دوحالتهٔ `us-switch` — همان کلیدِ بخش‌های «سایت» (قانونِ ۲۱: صریح ایمپورت)
+import './def-acts.css';
 import { Back, Check, Close, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 import { useConfig } from './config.jsx';
+import { hasService } from '../lib/profile.js';
 
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
@@ -213,6 +216,28 @@ const SECTIONS = [
 ];
 
 /**
+ * بخشی که فقط با یک ماژول معنا دارد (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-17).
+ *
+ * «تعاریف پایه»ِ مطب یازده زبانه داشت: «راننده و پیک»، «کالاها» و «محل‌های تحویل» (ابزارِ حمل و
+ * انبارِ شرکت) جلو بودند و «تشخیص‌ها» و «موضوعِ ویزیت» ته نوار و بیرون از دید. حالا بخشی که ماژولش
+ * در این نصب **خاموش** است دیده نمی‌شود. ملاک `enabled`ِ ردیفِ `/features` است نه `allowed`:
+ * `allowed`ِ «حمل‌ونقل» یعنی «این حساب خودش راننده است» و مدیرِ تعریف‌کنندهٔ راننده‌ها را هم کنار
+ * می‌گذاشت. ردیفِ غایب (mock، ماژولِ ثبت‌نشده) یعنی روشن — پنهان‌کردن فقط ادب است؛ خودِ endpointها
+ * همچنان پشتِ گاردِ «تعاریف»اند و داده‌ای جابه‌جا نمی‌شود.
+ */
+const SECTION_NEEDS = {
+  'transport-staff': (on) => on('transport') || on('dispatch'),
+  // کالا هم در انبار به کار می‌آید هم در اقلامِ مراجعهٔ ایمپلنت (پرتالِ جراح، پذیرش).
+  items: (on, implant) => on('inventory') || implant,
+  // چیپ‌های محلِ تحویل در سه صفحه‌اند: حمل‌ونقل، چینش و پنلِ کارشناسی.
+  'delivery-places': (on) => on('inventory') || on('transport') || on('dispatch') || on('tech'),
+};
+/** «الگوی اقلامِ» نوعِ عمل — تختهٔ چینش و پذیرشِ ایمپلنت از آن می‌خوانند. */
+const needsTemplateOn = (on, implant) => on('dispatch') || implant;
+/** مطب: پرکاربردها جلو (بقیه به همان ترتیبِ `SECTIONS` پشتِ این‌ها). */
+const CLINIC_ORDER = ['surgeons', 'procedure-types', 'diagnoses', 'visit-topics', 'note-templates', 'internal-codes', 'hospitals'];
+
+/**
  * **فرم‌های خودکارِ یک موضوعِ ویزیت** (بستهٔ ۹) — چیپ‌های روشن/خاموش از همان کاتالوگِ «الصاقِ فرم»
  * (`/forms/subforms`)؛ فقط فرم‌هایی که روی ویزیت الصاق می‌شوند.
  */
@@ -256,8 +281,46 @@ export default function Definitions() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
   const [editing, setEditing] = useState(null); // null | {} (جدید) | row (ویرایش)
+  /* حذف اول می‌پرسد (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-15): سطلِ هر ردیف با یک لمس و بی‌برگشت پاک
+     می‌کرد، درست کنارِ کلیدِ فعال/غیرفعال. */
+  const [deleting, setDeleting] = useState(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   const section = useMemo(() => SECTIONS.find((s) => s.key === tab), [tab]);
+
+  /* بخش‌های این نصب (surgery-17) — ماژول‌های خاموش بیرون، پرکاربردهای مطب جلو.
+     تا رسیدنِ `/features` حدس از نوعِ نصب است (مطب: ابزارِ شرکت خاموش) تا نوار نپرد. */
+  const cfg = useConfig();
+  const clinic = cfg.kind === 'clinic';
+  const implant = hasService(cfg, 'implant');
+  const [mods, setMods] = useState(null); // key → ردیفِ `/features`
+  useEffect(() => {
+    let alive = true;
+    api('/features')
+      .then((rows) => { if (alive) setMods(Object.fromEntries((Array.isArray(rows) ? rows : []).map((r) => [r.key, r]))); })
+      .catch(() => { if (alive) setMods({}); });
+    return () => { alive = false; };
+  }, []);
+  const modOn = useCallback((k) => (mods ? mods[k]?.enabled !== false : !clinic), [mods, clinic]);
+  const sections = useMemo(() => {
+    const list = SECTIONS.filter((s) => !SECTION_NEEDS[s.key] || SECTION_NEEDS[s.key](modOn, implant));
+    if (!clinic) return list;
+    const rank = (k) => { const i = CLINIC_ORDER.indexOf(k); return i < 0 ? CLINIC_ORDER.length : i; };
+    return [...list].sort((a, b) => rank(a.key) - rank(b.key));
+  }, [modOn, implant, clinic]);
+  const needsOn = needsTemplateOn(modOn, implant);
+  /* پیوندِ مستقیم به بخشی که این نصب ندارد (‎?section=items در مطب) به بخشِ اول می‌رود —
+     فقط پس از رسیدنِ پاسخ، تا حدسِ اولیه پیوندِ درست را نبرد. */
+  useEffect(() => {
+    if (mods && sections.length && !sections.some((s) => s.key === tab)) setTab(sections[0].key);
+  }, [mods, sections, tab]);
+  /* زبانهٔ فعال همیشه در دید (surgery-17): با ‎?section=visit-topics زبانه بیرون از نوار می‌ماند و
+     هیچ زبانه‌ای روشن دیده نمی‌شد. `nearest` برای عمود تا صفحه نپرد؛ `center` تا از زیرِ محوشدگیِ لبه بیرون بیاید. */
+  const tabSig = sections.map((s) => s.key).join('|');
+  useEffect(() => {
+    const el = document.querySelector('.df-sectabs [role="tab"][aria-selected="true"]');
+    el?.scrollIntoView?.({ block: 'nearest', inline: 'center' });
+  }, [tab, merging, tabSig]);
 
   useEffect(() => { document.title = 'عمل‌یار — تعاریف پایه'; }, []);
   useEffect(() => {
@@ -282,20 +345,25 @@ export default function Definitions() {
 
   useEffect(() => { load(); }, [load]);
 
+  const [toggling, setToggling] = useState(null); // شناسهٔ ردیفی که کلیدش در راه است
   const toggle = async (row) => {
+    setToggling(row.id);
     try {
       await api(`${section.path}/${row.id}`, { method: 'PATCH', body: { active: !row.active } });
       setToast(row.active ? 'غیرفعال شد' : 'فعال شد ✓');
       await load();
     } catch (e) { setToast(e.message); }
+    finally { setToggling(null); }
   };
 
   const remove = async (row) => {
+    setDelBusy(true);
     try {
       const r = await api(`${section.path}/${row.id}`, { method: 'DELETE' });
-      setToast(r.deactivated ? 'به‌دلیلِ سابقهٔ استفاده، غیرفعال شد' : 'حذف شد');
+      setToast(r.deactivated ? `«${section.title(row)}» به‌دلیلِ سابقهٔ استفاده فقط غیرفعال شد` : `«${section.title(row)}» حذف شد`);
       await load();
     } catch (e) { setToast(e.message); }
+    finally { setDelBusy(false); setDeleting(null); }
   };
 
   return (
@@ -312,14 +380,16 @@ export default function Definitions() {
       <Tabs
         label="بخش‌های تعاریفِ پایه"
         variant="scroll"
+        className="df-sectabs"
         value={merging ? '__merge' : tab}
         onChange={(k) => {
           if (k === '__merge') { setMerging(true); return; }
           setTab(k); setMerging(false);
         }}
+        /* «یکسان‌سازیِ نام‌ها» ابزارِ نگهداری است نه بخشِ روزمره — آخرِ نوار. */
         items={[
+          ...sections.map((s) => ({ key: s.key, label: s.label })),
           { key: '__merge', label: 'یکسان‌سازیِ نام‌ها' },
-          ...SECTIONS.map((s) => ({ key: s.key, label: s.label })),
         ]}
       />
 
@@ -335,7 +405,7 @@ export default function Definitions() {
         <span className="df-count">{loading ? '…' : `${faNum(rows.length)} مورد`}</span>
       </div>
 
-      <div className="df-list">
+      <div className="df-list df-defs">
         {loading && <div className="df-empty">در حال بارگذاری…</div>}
         {!loading && rows.length === 0 && <div className="df-empty">{section.empty}</div>}
         {!loading && rows.map((row, i) => (
@@ -352,14 +422,24 @@ export default function Definitions() {
               )}
               {/* الگوی اقلامِ نوعِ عمل — تختهٔ چینش از همین می‌فهمد که
                   «نورومانیتورینگِ بدونِ دستگاه» کسری دارد. */}
-              {tab === 'procedure-types' && (
+              {tab === 'procedure-types' && needsOn && (
                 <button type="button" className="df-parts" onClick={() => setNeedsFor(row)}>الگوی اقلام</button>
               )}
-              <button type="button" title="ویرایش" onClick={() => setEditing(row)}><Pencil width="15" height="15" /></button>
-              <button type="button" title={row.active ? 'غیرفعال کن' : 'فعال کن'} onClick={() => toggle(row)}>
-                <span className={`df-dot${row.active ? ' on' : ''}`} />
-              </button>
-              <button type="button" className="df-del" title="حذف" onClick={() => remove(row)}><Trash width="15" height="15" /></button>
+              <button type="button" className="df-edit" title="ویرایش" aria-label={`ویرایشِ ${section.title(row)}`} onClick={() => setEditing(row)}><Pencil width="15" height="15" /></button>
+              {/* کلیدِ دوحالتهٔ نوشته‌دار به‌جای نقطهٔ سبزِ بی‌متن (surgery-18) — حالت روی خودِ کلید خوانده می‌شود. */}
+              <label className="us-switch df-switch" title={row.active ? 'غیرفعال کن' : 'فعال کن'}>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={!!row.active}
+                  disabled={toggling === row.id}
+                  aria-label={`فعال‌بودنِ ${section.title(row)}`}
+                  onChange={() => toggle(row)}
+                />
+                <span className="us-track" aria-hidden="true" />
+                <span className="df-switch-t" aria-hidden="true">{row.active ? 'فعال' : 'غیرفعال'}</span>
+              </label>
+              <button type="button" className="df-del" title="حذف" aria-label={`حذفِ ${section.title(row)}`} onClick={() => setDeleting(row)}><Trash width="15" height="15" /></button>
             </div>
           </motion.article>
         ))}
@@ -367,6 +447,18 @@ export default function Definitions() {
 
       </>
       )}
+
+      <AnimatePresence>
+        {deleting && (
+          <ConfirmDialog
+            title={`حذفِ «${section.title(deleting)}»؟`}
+            text="این کار برگشت ندارد. اگر در مراجعه یا سندی به کار رفته باشد، پاک نمی‌شود و فقط غیرفعال می‌شود."
+            busy={delBusy}
+            onConfirm={() => remove(deleting)}
+            onCancel={() => setDeleting(null)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={setToast} />}

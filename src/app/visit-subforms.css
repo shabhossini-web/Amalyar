@@ -209,11 +209,6 @@
   }
   .db-sheet.vf-wide .vf-cols.vf-flat { grid-template-columns: minmax(0, 1fr); grid-template-areas: "main" "side"; }
   .vf-cols.vf-flat .vf-side .db-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  /* ذخیره همیشه در دسترس — فرمِ بلند دیگر تا ته اسکرول نمی‌خواهد. */
-  .db-sheet.vf-wide > .db-submit {
-    position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); z-index: 5;
-    box-shadow: 0 -10px 30px rgba(var(--surface-rgb), .9);
-  }
 }
 
 /* ── تراکم داخلِ کارت‌ها (بازخورد: «UI خیلی باز است») ──
@@ -241,3 +236,143 @@
 .vf-extra .pf.dyn > [data-ftype="bool"], .vf-extra .pf.dyn > [data-ftype="rating"],
 .vf-extra .pf.dyn > [data-ftype="payment"] { grid-column: 1 / -1; }
 @media (max-width: 480px) { .vf-extra .pf.dyn, .vf-card .pf.dyn { grid-template-columns: minmax(0, 1fr); } }
+
+/* ── فهرستِ «بیمارِ موجود» در گامِ ۱ (clinic-daily-11) ─────────────────────────
+   دو سطر: نام و کدِ پرونده، و زیرش شناسه‌ها با برچسب — کدِ ملی و موبایل متن‌اند نه عدد،
+   و شمارِ مراجعه جدا تا به عدد نچسبد. پوستهٔ ردیف همان `.db-plist button`ِ dashboard.css است. */
+.db-plist button.vf-pitem { flex-direction: column; align-items: stretch; flex-shrink: 0; gap: 3px; min-height: 44px; }
+.vf-pitem-top { display: flex; align-items: baseline; gap: 10px; }
+.vf-pitem-top b { flex: 1; }
+.vf-pitem-meta { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.db-plist .vf-pitem-meta span { font-size: 11.5px; color: var(--text2); }
+.vf-pitem-meta bdi { font-variant-numeric: tabular-nums; color: var(--text1); font-weight: 600; }
+.db-plist .vf-pitem-meta .vf-pitem-n { margin-inline-start: auto; color: var(--text3); }
+.db-plist button.vf-pitem:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ── خطای ذخیره کنارِ خودِ فیلد (surgery-08) ─────────────────────────────────
+   فیلدِ هستهٔ ردشده قرمز می‌شود و متنِ خطا زیرش می‌نشیند؛ نوارِ ذخیره همان پیام را تا اصلاح نگه
+   می‌دارد. رنگ از توکنِ دوتمی — `.db-hint.bad`ِ قدیمی صورتیِ خام بود و در تمِ روشن کم‌رنگ. */
+.vf-bad :is(input, textarea, select, .pk-btn) { border-color: var(--red-text) !important; }
+.vf-bad > .db-field > span:first-child,
+.vf-bad .jd-wrap > span:first-child,
+.vf-bad .db-when-l { color: var(--red-text); }
+.vf-core-err { display: block; margin-top: 5px; font-size: 12px; font-weight: 700; line-height: 1.7; color: var(--red-text); }
+.vf-savebar { display: grid; gap: 8px; }
+.vf-saveerr {
+  margin: 0; padding: 9px 12px; border-radius: 11px;
+  font-size: 12.5px; font-weight: 700; line-height: 1.7;
+  color: var(--red-text); background: rgba(var(--surface-rgb), .96);
+  border: 1px solid var(--red-text);
+}
+
+/* ── «روزهای پیگیری (دلخواه)» در تبِ «بعد از عمل» (surgery-20) ─────────────────
+   کادر استایلِ فیلدها را نمی‌گرفت: در تمِ تیره یک مستطیلِ سفیدِ خام وسطِ صفحه بود و از چیپ‌های کنارش
+   کوتاه‌تر. حالا همان توکن‌های `.db-field input` (زمینه، بوردر، رنگِ متن) و هم‌قدِ چیپ‌ها. */
+.db-daychips .db-dayinput {
+  box-sizing: border-box; min-height: 38px; width: 130px;
+  font-family: inherit; color: var(--text1);
+  background: rgba(var(--veil-rgb), 0.05); border: 1px solid rgba(var(--veil-rgb), 0.13);
+  border-radius: 99px; outline: none; transition: border-color .15s;
+}
+.db-daychips .db-dayinput::placeholder { color: var(--text3); }
+.db-daychips .db-dayinput:focus { border-color: rgba(var(--brand-2-rgb), 0.65); }
+.db-daychips .db-daychip { min-height: 38px; }
+
+/* ── شکایتِ اولیهٔ ارثی (surgery-21) ─────────────────────────────────────────
+   متنِ فقط‌خواندنی به‌جای جای‌نگهدارِ کم‌رنگ — دیده می‌شود و با اولین حرف ناپدید نمی‌شود. */
+.vf-cc-inherit {
+  display: grid; gap: 6px; padding: 10px 12px; border-radius: 11px;
+  background: rgba(var(--veil-rgb), .035); border: 1px dashed rgba(var(--veil-rgb), .2);
+}
+.vf-cc-inherit p { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.8; color: var(--text1); white-space: pre-wrap; }
+.vf-cc-inherit small { font-size: 11.5px; color: var(--text3); }
+.vf-cc-back { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.vf-cc-back small { font-weight: 600; color: var(--text3); }
+.vf-cc-own {
+  justify-self: start; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 0 12px; border-radius: 99px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 800; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), .08); border: 1px solid rgba(var(--brand-2-rgb), .35);
+}
+.vf-cc-own:hover { background: rgba(var(--brand-rgb), .14); }
+.vf-cc-own:disabled { opacity: .5; cursor: default; }
+.vf-cc-own:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (max-width: 620px) { .vf-cc-own { min-height: 44px; } }
+
+/* ── ذخیره همیشه دمِ دست — در **همهٔ** عرض‌ها (surgery-09) ─────────────────────
+   تا بازبینیِ UX ۱۴۰۵/۰۷ فقط از ۱۰۲۴px به بالا چسبان بود؛ در موبایل «ذخیرهٔ تغییرات» ته شیتی به بلندیِ
+   حدودِ ۳۰۰۰px بود و پس از عوض‌کردنِ یک ساعت در تبِ «حین عمل» باید تا ته رفت. نوار تا لبه‌های شیت کش
+   می‌آید (منفیِ همان padding) و فاصلهٔ safe-area را خودش نگه می‌دارد تا زیرِ نوارِ خانهٔ گوشی نرود. */
+.db-sheet.vf-wide > .vf-savebar {
+  position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom, 0px)); z-index: 5;
+  margin: 0 -18px calc(-18px - env(safe-area-inset-bottom, 0px));
+  padding: 10px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: rgba(var(--surface-rgb), .97);
+  border-top: 1px solid rgba(var(--veil-rgb), .1);
+  border-bottom-left-radius: inherit; border-bottom-right-radius: inherit;
+  box-shadow: 0 -10px 24px rgba(var(--surface-rgb), .85);
+}
+
+/* ── فرمِ عمل: زبانه‌ها ساختارِ اصلی‌اند (surgery-10) ─────────────────────────────
+   «مشخصاتِ عمل | قبل | حین | بعد» درست زیرِ سربرگ؛ کارتِ هسته همان زبانهٔ «مشخصات» است و با
+   `hidden` پنهان می‌شود — `display:flex`ِ `.db-formcard` بی‌این قاعده بر `hidden` می‌چربید. نوارِ زبانه
+   هم‌عرضِ خودِ فرم است، نه ستونِ ۹۴۰پیکسلیِ وسط‌چینِ `.ui-tabs`. */
+.db-formcard[hidden] { display: none; }
+.db-sheet .vf-sectabs { max-width: none; margin: 0; }
+@media (max-width: 620px) { .db-sheet .vf-sectabs button { min-height: 44px; } }
+/* «برنامهٔ مراقبت و پیگیری» حالا درونِ زبانهٔ «بعد از عمل» است: فاصلهٔ بالایش را گپِ زبانه می‌دهد، عنوان
+   با `--brand-text` (بنفشِ `--brand-2` روی زمینهٔ روشن زیرِ حدِ خوانایی بود) و راهنما کوچک‌تر از عنوان —
+   تا دیروز متنِ راهنما با قلمِ بدنه درشت‌تر از خودِ عنوانِ بخش بود. */
+.db-phase > .db-postop { margin-top: 0; }
+.db-phase .db-postop > h4 { font-size: 14px; color: var(--brand-text); }
+.db-phase .db-postop > .db-hint { font-size: 11.5px; font-weight: 500; line-height: 1.9; color: var(--text3); }
+
+/* ── سربرگِ شیت: عنوان + «برای کیست» (surgery-13) — همان الگوی پنجرهٔ «بستنِ تصمیم»: خطِ دوم نام و کدِ
+   پرونده، کوچک‌تر و هم‌رنگِ متنِ فرعی. `min-width:0` تا نامِ بلند ضربدر را از سطر بیرون نکند. */
+.vf-sheet-titles { display: grid; gap: 2px; min-width: 0; }
+.vf-sheet-who { font-size: 12.5px; font-weight: 600; line-height: 1.7; color: var(--text2); overflow-wrap: anywhere; }
+.vf-sheet-who bdi { font-variant-numeric: tabular-nums; color: var(--text3); }
+
+/* ── مرحلهٔ خودِ فرم در پنجرهٔ الصاق (surgery-11) ─────────────────────────────────
+   «معمولاً: حین عمل» کنارِ فرمی که مالِ یک مرحلهٔ خاص است؛ اگر کاربر خودش مرحلهٔ دیگری زده، همان سطر
+   کهربایی می‌شود و می‌گوید کجا الصاق می‌شود — هشدار کنارِ همان ردیفی که قرار است زده شود. */
+.vf-pick-row small.vf-pick-usual { font-weight: 700; color: var(--brand-text); }
+.vf-pick-row small.vf-pick-usual.is-off {
+  color: var(--amber-text); background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .35);
+  border-radius: 7px; padding: 2px 8px; line-height: 1.8;
+}
+
+/* ── منتخب‌ها بی‌اسلاتِ خالی (surgery-22) — تا ستاره‌ای نخورده، یک خطِ راهنما کنارِ «الصاقِ فرم». */
+.vf-pin-hint { flex: 1 1 200px; min-width: 0; font-size: 11.5px; font-weight: 600; line-height: 1.8; color: var(--text3); }
+
+/* ── گامِ ۱: یک جست‌وجو + «ساختِ پروندهٔ تازه» (clinic-daily-22) ────────────────────
+   تا چیزی پیدا نشده، ساختن دکمهٔ اصلی است؛ با نتیجه، راهِ دومِ آرام (خط‌چین) — هم‌نامِ دیگری هم ممکن است
+   باشد. از فرمِ پروندهٔ تازه همیشه یک قدم تا جست‌وجو فاصله است. */
+.vf-newrec {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px;
+  padding: 0 16px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 800;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .06); border: 1px dashed rgba(var(--brand-2-rgb), .45);
+}
+.vf-newrec:hover { background: rgba(var(--brand-rgb), .12); }
+.vf-newrec.is-main { color: #fff; border: 0; background: linear-gradient(135deg, var(--brand-2), var(--brand)); }
+.vf-backsearch {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px;
+  border-radius: 10px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--text2);
+  background: none; border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.vf-backsearch:hover { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .45); }
+.vf-newrec:focus-visible, .vf-backsearch:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (max-width: 620px) { .vf-backsearch { min-height: 44px; } }
+
+/* ── کفِ لمسیِ ۴۴px در فرمِ ویزیت/عمل و پنجرهٔ «الصاقِ فرم» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18) ──
+   چیپ‌ها ۳۶–۳۸، ضربدر و ستاره ۳۲ و «الصاق» ۳۷ پیکسل بودند. جای لمس بزرگ می‌شود، نه نوشته.
+   زیرِ `.db-sheet`/`.vf-pick` تا به شیت‌های دیگری که همین کلاس‌ها را دارند نرسد. */
+@media (max-width: 640px), (pointer: coarse) {
+  .db-sheet .db-sheet-head .db-x, .vf-pick .vf-pick-head .db-x { width: 44px; height: 44px; }
+  .db-sheet .db-daychips .db-daychip, .db-sheet .db-daychips .db-dayinput { min-height: 44px; }
+  .db-sheet .vf-attach, .db-sheet .vf-pin, .db-sheet .vf-phase-attach { min-height: 44px; }
+  .db-sheet .vf-card > header .vf-ic, .db-sheet .vf-card > header .vf-card-lock { width: 44px; height: 44px; }
+  .vf-pick .vf-star { width: 44px; height: 44px; }
+  .vf-pick .vf-add { min-height: 44px; min-width: 64px; }
+  .vf-pick .vf-pick-phase button { min-height: 44px; padding-inline: 16px; }
+}

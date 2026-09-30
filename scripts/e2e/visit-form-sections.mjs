@@ -18,6 +18,15 @@ const login = await fetch(API + '/auth/login', {
   body: JSON.stringify({ identifier: 'admin', password: 'test1234' }),
 }).then((r) => r.json());
 
+/* گامِ ۲ (انتخابِ نوع) فقط وقتی هست که بیش از یک فرمِ مراجعه باشد (بازبینیِ UX، company-24) — نصبِ تازهٔ
+   نورومانیتورینگ یک فرم دارد و گامش پریده می‌شود. فرمِ ویزیت ساخته می‌شود تا جعبهٔ نوع سنجیده شود و آخرِ کار
+   برمی‌گردد. */
+const A = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + login.accessToken };
+const kinds0 = await fetch(API + '/forms/visit-kinds', { headers: A }).then((r) => r.json()).catch(() => []);
+const madeForm = (Array.isArray(kinds0) ? kinds0 : []).some((k) => k.kind === 'clinic') ? null
+  : await fetch(API + '/forms', { method: 'POST', headers: A, body: JSON.stringify({ key: 'clinic', title: 'فرمِ ویزیت', scope: 'visit' }) })
+    .then((r) => r.json()).catch(() => null);
+
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true });
 const page = await browser.newPage({ viewport: { width: 480, height: 1000 } });
 const errors = [];
@@ -37,6 +46,9 @@ try {
   ok((await page.locator('.db-sect small').first().innerText()).includes('پرونده'),
     '**توضیح می‌گوید این بخش چه کاری می‌کند**');
 
+  ok(await page.locator('.db-sheet [data-patient-search]').count() === 1, '**گامِ ۱ با جست‌وجوی واحدِ پرونده باز می‌شود** (clinic-daily-22)');
+  /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+  await page.locator('.db-sheet [data-act="new-record"]').click();
   await page.locator('input[required]').first().fill('آزمونِ');
   await page.locator('input[required]').nth(1).fill('تفکیک');
   await page.locator('.db-stepnav .db-submit').click();
@@ -44,8 +56,9 @@ try {
 
   console.log('\n۲) گامِ ۲ — نوعِ فرم در جعبهٔ خنثی');
   ok(await page.locator('.db-kindbox .db-kindrow button').count() >= 1, '**ردیفِ نوع‌ها داخلِ جعبهٔ خط‌چین است**');
-  ok((await page.locator('.db-sect small').last().innerText()).includes('فرم‌ساز'),
-    'توضیحِ بالای انتخابگر هست');
+  /* از بازبینیِ UX (clinic-daily-04) پرسش به زبانِ پذیرش است: «برای چه آمده؟»، نه «نوعِ فرم» با توضیحِ فرم‌ساز. */
+  ok((await page.locator('.db-sect b').last().innerText()).includes('برای چه آمده') && (await page.locator('.db-sect small').last().innerText()).trim().length > 0,
+    'سرصفحهٔ گام «برای چه آمده؟» و یک خط توضیح دارد');
   const boxBorder = await page.locator('.db-kindbox').evaluate((el) => getComputedStyle(el).borderTopStyle);
   ok(boxBorder === 'dashed', 'جعبهٔ نوع‌ها خط‌چین است (خنثی)');
   const kindBtn = page.locator('.db-kindbox .db-kindrow button').first();
@@ -71,6 +84,7 @@ try {
   ok(errors.length === 0, errors.length ? 'خطای JS: ' + errors[0] : 'بدونِ خطای JS');
 } finally {
   await browser.close();
+  if (madeForm?.id) await fetch(API + `/forms/${madeForm.id}`, { method: 'DELETE', headers: A }).catch(() => {});
 }
 
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);

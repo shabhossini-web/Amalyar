@@ -9,7 +9,7 @@ import { ANESTHESIA_LABELS, DISPOSITION_LABELS } from './labels';
 import { vitalView } from './vitals';
 import { DOCUMENT_PHASES, DOCUMENT_PHASE_FA } from './document-categories';
 import { RecordService } from './record.service';
-import { PatientsService } from './patients.service';
+import { PatientsService, normalizeTime } from './patients.service';
 import { subformSummary } from './subforms';
 import { fieldRoles, jobRoleLabel } from '../common/job-roles';
 import { monthDayCounts } from './month-summary';
@@ -21,6 +21,7 @@ import { canAccess } from '../auth/access-check';
 import { addOpTemplate, listOpTemplates } from './op-templates';
 import { ConfigService } from '../config/config.service';
 import { toDateValue } from '../common/jalali';
+import { CLINIC_TZ } from '../common/clinic-day';
 
 /**
  * **چک‌لیستِ ایمنیِ جراحی** — سه مرحله‌ی سازمانِ جهانیِ بهداشت، کوتاه‌شده به آنچه
@@ -92,32 +93,41 @@ const roomState = (v: { opStatus: string | null; opStartTime: string | null; opE
      همان تلهٔ `finished` که یک‌بار روی `cancelled` خورده بود. */
   if (v.dischargeAt) return { state: 'discharged', stateFa: 'ترخیص شد' };
   if (v.opEndTime) return { state: 'finished', stateFa: 'در ریکاوری' };
-  if (!v.opStartTime) return { state: 'waiting', stateFa: 'در انتظار' };
-  /* ⚠️ **ساعتِ شروعِ آینده یعنی برنامه، نه جریان.** `opStartTime` فیلدِ حینِ عمل
-     است (`INTRA_KEYS` در فرم) ولی هیچ‌چیز جلوی مطبی را نمی‌گیرد که ساعتِ
-     برنامه‌ریزی‌شده را همان‌جا بنویسد — و آن‌وقت ساعتِ ۹ صبح، عملِ ۱۳:۰۰ هم
-     «در جریان» می‌شد. در اولین اسکرین‌شات هر سه ردیفِ روز همین را نشان دادند. */
   const day = v.opDate ? v.opDate.toISOString().slice(0, 10) : null;
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
   const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  if (!v.opStartTime) {
+    /* ⚠️ روزِ گذشتهٔ بی‌شروع «در انتظار» نیست (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-16): کسی منتظرِ عملِ دیروز
+       نیست؛ یا انجام نشد یا ثبت نشد، و همین برچسب کارِ کسی است که باید تکلیفش را روشن کند. همان عمل
+       در «فهرستِ انتظار» با «موعد گذشته — ثبت نشده» بالای فهرست می‌ماند. */
+    if (day && day < todayIso && v.opStatus === 'pending') return { state: 'missed', stateFa: 'انجام‌نشده' };
+    return { state: 'waiting', stateFa: 'در انتظار' };
+  }
+  /* ⚠️ **ساعتِ شروعِ آینده یعنی برنامه، نه جریان.** `opStartTime` فیلدِ حینِ عمل
+     است (`INTRA_KEYS` در فرم) ولی هیچ‌چیز جلوی مطبی را نمی‌گیرد که ساعتِ
+     برنامه‌ریزی‌شده را همان‌جا بنویسد — و آن‌وقت ساعتِ ۹ صبح، عملِ ۱۳:۰۰ هم
+     «در جریان» می‌شد. در اولین اسکرین‌شات هر سه ردیفِ روز همین را نشان دادند. */
   if (day && day > todayIso) return { state: 'waiting', stateFa: 'در انتظار' };
   /* روزِ گذشته با شروعِ بی‌پایان «در جریان» نیست — **ناتمام** است، و همین
      برچسب کارِ کسی است که باید ببنددش. */
   if (day && day < todayIso) return { state: 'open', stateFa: 'ناتمام' };
-  const nowHHMM = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  if (v.opStartTime > nowHHMM) return { state: 'waiting', stateFa: 'در انتظار' };
+  if (v.opStartTime > wallClock()) return { state: 'waiting', stateFa: 'در انتظار' };
   return { state: 'running', stateFa: 'در جریان' };
 };
 
 const STAGE_KEYS = new Set(SAFETY_STAGES.map((s) => s.key as string));
 const ITEM_KEYS = new Map(SAFETY_STAGES.map((s) => [s.key as string, new Set(s.items.map((i) => i.key as string))]));
 
-/** «HH:MM» از ساعتِ همین لحظه — همان قراردادِ `Visit.opStartTime` (رشته، نه DateTime). */
-const wallClock = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
+/**
+ * «HH:MM»ِ همین لحظه **به وقتِ مطب** — همان قراردادِ `Visit.opStartTime` (رشته، نه DateTime).
+ *
+ * ⚠️ تا بازبینیِ UX ۱۴۰۵/۰۷ ساعتِ **کانتینر** بود و کانتینر روی UTC می‌دود (`common/clinic-day`): «شروع شد»ِ
+ * ساعتِ ۲۳:۲۶ِ تهران «۱۹:۵۶» ثبت می‌شد و مدتِ زندهٔ میز — که مرورگر با ساعتِ خودش حساب می‌کند — از لحظهٔ
+ * اول «۳ ساعت و ۳۰ دقیقه» می‌گفت. فرمتر یک‌بار ساخته می‌شود (ساختنِ `Intl` گران است).
+ */
+const CLINIC_CLOCK = new Intl.DateTimeFormat('en-GB', { timeZone: CLINIC_TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const wallClock = () => CLINIC_CLOCK.format(new Date());
 
 /**
  * **نمای اتاقِ عمل** (بستهٔ ۳ب، بازخوردِ مالک ۱۴۰۵/۰۶/۳۰: «وقتی تو اتاق عمل است
@@ -341,10 +351,14 @@ export class TheatreService {
        قفلِ نقشِ فیلدِ «ویزیتِ بعدی» همان است که ترخیص هنگامِ نوشتن می‌سنجد: میز نباید
        چیزی را پیشنهاد کند که سرور رد می‌کند. */
     const clinical = await this.clinical();
-    const [canWriteSubforms, canFollowup, followLock] = await Promise.all([
+    const [canWriteSubforms, canFollowup, followLock, canTimes, canForm] = await Promise.all([
       canAccess(this.prisma, user, 'theatre', ['theatre.report']).catch(() => false),
       clinical ? canAccess(this.prisma, user, 'theatre', ['theatre.followup']).catch(() => false) : Promise.resolve(false),
       clinical ? this.patients.fieldLock(v.kind, 'nextVisitDate', user) : Promise.resolve(null),
+      /* بازبینیِ UX ۱۴۰۵/۰۷ (surgery-04): «برگرداندن / اصلاحِ ساعت» از خودِ میز، و پیوندِ «بازکردنِ فرمِ عمل»
+         فقط برای کسی که فرمِ مراجعه را واقعاً باز و ذخیره می‌تواند (پرستارِ سطحِ ۲ داشبورد ندارد). */
+      canAccess(this.prisma, user, 'theatre', ['visits.times']).catch(() => false),
+      canAccess(this.prisma, user, 'dashboard', ['patients.update']).catch(() => false),
     ]);
     const p = v.patient;
     const done = new Map(v.safetyChecks.map((c) => [`${c.stage}/${c.key}`, c]));
@@ -417,7 +431,7 @@ export class TheatreService {
       /* `clinical`: داروهای ترخیص و ویزیتِ بعدی فقط در مطب — رابط از همین پرچم می‌خوانَد نه از حدسِ حوزه.
          `locks.followup`: نامِ نقشی که «ویزیتِ بعدی» مالِ اوست، برای متنِ رابط (null = قفلی نیست). */
       clinical,
-      can: { subforms: canWriteSubforms, followup: clinical && canFollowup && !followLock },
+      can: { subforms: canWriteSubforms, followup: clinical && canFollowup && !followLock, times: canTimes, form: canForm },
       locks: { followup: followLock },
       /* ⚠️ همچنان برمی‌گردد با اینکه رابط دیگر نشانش نمی‌دهد: `setCheck`
          پاسخش همین کارت است و کارتِ بدونِ چک‌لیست یعنی endpointی که نتیجهٔ
@@ -526,6 +540,38 @@ export class TheatreService {
     await this.audit.record({
       actorId: user?.id, action: `visit.${which}`, entityType: 'visit', entityId: visitId,
       after: { [which === 'start' ? 'opStartTime' : 'opEndTime']: wallClock() },
+    });
+    return this.card(visitId, user);
+  }
+
+  /**
+   * **اصلاح یا برگرداندنِ ساعت از خودِ میز** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-04).
+   *
+   * «شروع شد» و «پایان یافت» یک لمس‌اند و عمداً ساعتِ ثبت‌شده را بازنویسی نمی‌کنند (`stamp`)؛ پس لمسِ
+   * اشتباهِ دستِ دستکش‌دار روی «پایان» تا دیروز فقط از فرمِ عمل یا پنلِ کارشناس درست می‌شد و میز راهی
+   * نداشت. این مسیر **صریح** است: مقدارِ داده‌شده می‌نشیند و `null` یعنی برگرداندن (پاک‌کردن).
+   * ⚠️ پایان بی‌شروع نمی‌ماند، و ساعتِ پایانِ بیمارِ ترخیص‌شده فقط اصلاح می‌شود نه پاک — ترخیصِ
+   * بی‌پایان همان حالتی است که `discharge` رد می‌کند.
+   */
+  async setTimes(visitId: number, dto: { opStartTime?: string | null; opEndTime?: string | null }, user: any) {
+    const v = await this.prisma.visit.findFirst({
+      where: { id: visitId, ...this.scope(user), patient: { deletedAt: null } },
+      select: { id: true, opStartTime: true, opEndTime: true, opStatus: true, dischargeAt: true },
+    });
+    if (!v) throw new NotFoundException('عمل پیدا نشد');
+    if (v.opStatus === 'cancelled') throw new BadRequestException('عملِ لغوشده ساعت نمی‌گیرد');
+    const patch: Record<string, string | null> = {};
+    if (dto.opStartTime !== undefined) patch.opStartTime = normalizeTime(dto.opStartTime, 'ساعتِ شروع');
+    if (dto.opEndTime !== undefined) patch.opEndTime = normalizeTime(dto.opEndTime, 'ساعتِ پایان');
+    if (!Object.keys(patch).length) throw new BadRequestException('ساعتی برای ثبت نیامده است');
+    const start = patch.opStartTime !== undefined ? patch.opStartTime : v.opStartTime;
+    const end = patch.opEndTime !== undefined ? patch.opEndTime : v.opEndTime;
+    if (end && !start) throw new BadRequestException('پایان بی‌شروع ثبت نمی‌شود — اول ساعتِ پایان را بردارید یا شروع را بگذارید');
+    if (v.dischargeAt && !end) throw new BadRequestException('بیمار ترخیص شده است؛ ساعتِ پایان فقط اصلاح می‌شود، پاک نه');
+    await this.prisma.visit.update({ where: { id: visitId }, data: { ...patch, opTimesUpdatedAt: new Date() } });
+    await this.audit.record({
+      actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: visitId,
+      before: { opStartTime: v.opStartTime, opEndTime: v.opEndTime }, after: patch,
     });
     return this.card(visitId, user);
   }

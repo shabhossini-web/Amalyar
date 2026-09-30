@@ -145,6 +145,8 @@ try {
     await page.waitForTimeout(1200);
     await page.locator('.db-add').first().click();
     await page.waitForTimeout(700);
+    /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
+    await page.locator('.db-sheet [data-act="new-record"]').click();
     const nameInp = page.locator('.db-sheet .db-grid2 input');
     await nameInp.nth(0).fill('پیگیریِ'); await nameInp.nth(1).fill(`آزما${tag}`);
     await page.locator('.db-stepnav button').last().click();
