@@ -16,6 +16,7 @@
  *  - PF3: «ادامه با موبایلِ» ثبت‌نامِ بیمار منتظرِ درگاهِ پیامک نمی‌ماند (درونِ فرایند)
  *  - PF4: بودجهٔ حدسِ کد به‌ازای حساب است نه متنِ تایپ‌شده، و شمارشِ تلاش اتمی است
  *  - PF5: درخواستِ کدِ بازیابی بیرون از محیطِ آزمون منتظرِ یافتنِ حساب نمی‌ماند (درونِ فرایند)
+ *  - PF6: بازیابی پس‌کی‌های حساب را هم پاک می‌کند و تعدادشان را می‌گوید
  *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
@@ -111,8 +112,12 @@ const badFmt = await call('/auth/password/reset', { body: { identifier: acc.user
 ok(badFmt.status === 400 && /۶ رقم/.test(msg(badFmt)), `کدِ نادرست‌شکل ← ۴۰۰ فارسی («${msg(badFmt)}»)`);
 
 console.log('\n۳) کدِ درست ← رمزِ تازه، نشست‌های قبلی باطل');
+/* PF6: پس‌کیِ ثبت‌شدهٔ همین حساب — کسی که رمز را دزدیده بود ممکن است اثر انگشتِ خودش را هم ثبت کرده باشد. */
+sql(`INSERT INTO webauthn_credentials (account_id, cred_id, public_key, name) VALUES (${acc.id}, 'e2e-pf6-${run}', 'AAAA', 'آزمونی')`);
 const reset = await call('/auth/password/reset', { body: { identifier: acc.username, code: real.json?.devCode, password: 'new-pass-2' } });
 ok(reset.status < 300 && reset.json?.ok === true, `بازیابی (${reset.status})`, msg(reset));
+const leftKeys = Number(sql(`SELECT count(*) FROM webauthn_credentials WHERE account_id = ${acc.id}`));
+ok(leftKeys === 0 && reset.json?.passkeysRemoved === 1, `PF6: پس‌کی‌های حساب با بازیابی پاک شدند (مانده: ${leftKeys}، گزارش: ${reset.json?.passkeysRemoved})`);
 const meOld = await call('/auth/me', { method: 'GET', jar: jarA });
 ok(meOld.status === 401, `نشستِ پیش از بازیابی باطل شد (${meOld.status})`);
 const loginOld = await call('/auth/login', { body: { identifier: acc.username, password: 'old-pass-1' } });

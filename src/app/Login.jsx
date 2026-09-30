@@ -209,12 +209,14 @@ export default function Login() {
     setErr('');
     setBusy(true);
     try {
-      await api('/auth/password/reset', { method: 'POST', body: { identifier: toEnDigits(identifier).trim(), code: c, password: fpPass } });
+      const r = await api('/auth/password/reset', { method: 'POST', body: { identifier: toEnDigits(identifier).trim(), code: c, password: fpPass } });
       setForgot(null);
       setPassword('');
       setFpPass('');
       setFpCode('');
-      setNotice('رمزِ تازه ذخیره شد؛ حالا با آن وارد شوید. نشست‌های قبلیِ این حساب بسته شدند.');
+      /* بازیابی پس‌کی‌های حساب را هم پاک می‌کند (PF6) — بی این جمله «ورود با اثر انگشت» بی‌دلیل خطا می‌داد. */
+      setNotice(`رمزِ تازه ذخیره شد؛ حالا با آن وارد شوید. نشست‌های قبلیِ این حساب بسته شدند.${
+        r?.passkeysRemoved ? ' اثر انگشت/پس‌کیِ این حساب هم پاک شد؛ پس از ورود، از منوی حساب «فعال‌سازی ورود با اثر انگشت» را دوباره بزنید.' : ''}`);
     } catch (e2) {
       setErr(e2.message);
     } finally {

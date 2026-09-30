@@ -551,7 +551,7 @@ export class AuthService {
     if (!slot.count) throw new BadRequestException(RESET_BAD);
     if (sha256(toEnDigits(dto.code).trim()) !== otp.codeHash) throw new BadRequestException(RESET_BAD);
     const passwordHash = await bcrypt.hash(dto.password, 12);
-    await this.prisma.$transaction(async (tx) => {
+    const passkeysRemoved = await this.prisma.$transaction(async (tx) => {
       const consumed = await tx.otpCode.updateMany({
         where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
       });
@@ -559,12 +559,17 @@ export class AuthService {
       await tx.account.update({ where: { id: target.account.id }, data: { passwordHash } });
       /* مثلِ تغییرِ رمز: همهٔ نشست‌ها باطل — کسی که رمز را داشت (شاید همان که باعثِ بازیابی شد) بیرون می‌افتد. */
       await tx.session.updateMany({ where: { accountId: target.account.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      /* **پس‌کی‌ها هم** (بستهٔ PF، PF6): کسی که رمز را داشت می‌توانست اثر انگشتِ دستگاهِ خودش را ثبت کند؛ با
+         ماندنش، بازیابیِ رمز او را بیرون نمی‌کرد — فردا با همان پس‌کی برمی‌گشت. صاحبِ حساب پس از ورود دوباره
+         ثبتش می‌کند (صفحهٔ ورود همین را می‌گوید). */
+      const passkeys = await tx.webauthnCredential.deleteMany({ where: { accountId: target.account.id } });
       await this.audit?.record({
         actorId: target.account.id, action: 'auth.password.reset', entityType: 'account', entityId: target.account.id,
-        ip: meta.ip, userAgent: meta.ua?.slice(0, 255),
+        ip: meta.ip, userAgent: meta.ua?.slice(0, 255), after: { passkeysRemoved: passkeys.count },
       }, tx);
+      return passkeys.count;
     });
-    return { ok: true, sessionsRevoked: true };
+    return { ok: true, sessionsRevoked: true, passkeysRemoved };
   }
 
   async changePassword(id: number, current: string, next: string) {
