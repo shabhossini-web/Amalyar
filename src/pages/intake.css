@@ -4,6 +4,9 @@
 .ik {
   position: relative; min-height: 100dvh; display: grid; place-items: start center;
   padding: 22px 14px 40px; color: var(--text1);
+  /* ⚠️ مقیاسِ جدا برای صفحه‌های بیمار (بازبینیِ UX، بندِ ۱۰۶): خواننده بیمارِ نگران یا همراهِ مسن روی
+     گوشیِ ارزان است — متن ۱۵، برچسب ۱۴، ورودی ۱۶ (زیرِ ۱۶ آیفون هنگامِ فوکوس زوم می‌کند)، کمینه ۱۲٫۵. */
+  font-size: 15px; line-height: 1.7;
 }
 .ik-bg {
   position: fixed; inset: 0; z-index: -1;
@@ -18,59 +21,62 @@
   border: 1px solid rgba(var(--brand-soft-rgb), .22);
 }
 .ik-head { display: flex; align-items: center; gap: 10px; }
-.ik-mark { width: 34px; height: 34px; flex: 0 0 auto; }
 .ik-head > div { flex: 1; min-width: 0; }
-.ik-head b { display: block; font-size: 15px; font-weight: 900; }
-.ik-head small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--text3); }
+.ik-head b { display: block; font-size: 16.5px; font-weight: 900; }
+.ik-head small { display: block; margin-top: 2px; font-size: 13px; color: var(--text2); }
 .ik-amount {
-  flex: 0 0 auto; font-size: 11.5px; font-weight: 700; padding: 5px 10px; border-radius: 99px;
-  color: #6ee7b7; background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .32);
+  flex: 0 0 auto; font-size: 13px; font-weight: 700; padding: 5px 10px; border-radius: 99px;
+  color: var(--green-text); background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .32);
 }
 
 /* ── نوارِ مرحله ── */
 .ik-steps { list-style: none; display: flex; gap: 6px; }
 .ik-steps li {
   flex: 1; display: flex; align-items: center; gap: 6px; padding: 8px 9px;
-  border-radius: 12px; font-size: 11px; color: var(--text3);
+  border-radius: 12px; font-size: 13.5px; color: var(--text2);
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .08);
 }
 .ik-steps i {
   display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto;
-  border-radius: 99px; font-style: normal; font-size: 10.5px; font-weight: 800;
+  border-radius: 99px; font-style: normal; font-size: 12.5px; font-weight: 800;
   background: rgba(var(--veil-rgb), .08);
 }
 .ik-steps li.now { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .5); }
 .ik-steps li.now i { color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
-.ik-steps li.ok { color: #6ee7b7; border-color: rgba(52, 211, 153, .28); }
-.ik-steps li.ok i { color: #6ee7b7; background: rgba(52, 211, 153, .14); }
+.ik-steps li.ok { color: var(--green-text); border-color: rgba(52, 211, 153, .4); }
+.ik-steps li.ok i { color: var(--green-text); background: rgba(52, 211, 153, .14); }
 
 /* ── فیلدها ── */
 .ik-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
-.ik-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
-.ik-field > span { font-size: 11.5px; }
+.ik-field { display: grid; gap: 6px; font-size: 14px; color: var(--text2); }
+.ik-field > span { font-size: 14px; }
 .ik-field input, .ik-field textarea {
-  font: inherit; font-size: 13.5px; color: var(--text1); padding: 10px 11px; border-radius: 11px;
+  font: inherit; font-size: 16px; color: var(--text1); padding: 11px 12px; border-radius: 11px;
   background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
   width: 100%;
 }
 .ik-field input:focus, .ik-field textarea:focus { border-color: rgba(var(--brand-2-rgb), .6); }
 /* ⚠️ select هم باید همان پوستِ inputها را بگیرد — بدونِ این، مرورگر کنترلِ
    سفیدِ پیش‌فرضش را وسطِ فرمِ تیره می‌گذاشت (اسکرین‌شاتِ کاربر، اندروید).
-   appearance خاموش و فلشِ خودمان با SVGِ inline؛ رنگِ optionها هم صریح،
-   چون بعضی مرورگرها پس‌زمینهٔ منو را از option می‌گیرند نه از select. */
+   رنگِ optionها هم صریح، چون بعضی مرورگرها پس‌زمینهٔ منو را از option می‌گیرند.
+   ⚠️ فلش یک SVGِ واقعی کنارِ کشویی است (`.ik-select-ic`)، نه data-URI: تصویرِ data-URI
+   `currentColor` را از صفحه نمی‌گیرد و رنگِ ثابتش (`#b8b3d6`) در تمِ روشن محو بود؛ زمینهٔ
+   `veil .05` هم در تمِ روشن خاکستریِ «غیرفعال» می‌شد (بازبینیِ UX، بندِ ۹۳). */
+.ik-select { position: relative; display: block; color: var(--text2); }
+.ik-select-ic {
+  position: absolute; inset-inline-end: 14px; top: 50%; pointer-events: none;
+  transform: translateY(-50%);
+}
 .ik-field select {
   width: 100%;
   appearance: none; -webkit-appearance: none;
-  background-color: rgba(var(--veil-rgb), .05);
+  background: rgba(var(--surface-rgb), .6);
   border: 1px solid rgba(var(--veil-rgb), .14);
   border-radius: 12px;
   color: var(--text1);
-  font-family: inherit; font-size: 15px;
-  padding: 12px 14px; padding-inline-start: 38px;
+  font-family: inherit; font-size: 16px;
+  padding: 12px 14px; padding-inline-end: 42px;
   min-height: 48px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b8b3d6' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: left 12px center;
   cursor: pointer;
   transition: border-color .2s;
 }
@@ -80,29 +86,36 @@
 
 .ik-cap {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 10px 12px; border-radius: 13px; font-size: 12px; color: var(--text2);
+  padding: 10px 12px; border-radius: 13px; font-size: 14px; color: var(--text2);
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .ik-cap > span { flex: 1 1 100%; line-height: 1.8; }
-/* تصویرِ پرسش از سرور — روشن در هر دو تم (پس‌زمینهٔ خودِ PNG). */
-.ik-cap-row { display: flex; align-items: center; gap: 8px; width: 100%; }
-.ik-cap-img { width: 180px; height: 64px; flex: 0 0 auto; border-radius: 10px; border: 1px solid rgba(var(--veil-rgb), .16); }
-.ik-cap-empty { display: grid; place-items: center; padding: 6px; text-align: center; font-size: 11.5px; line-height: 1.6; background: rgba(var(--veil-rgb), .06); }
+/* تصویرِ پرسش از سرور — روشن در هر دو تم (پس‌زمینهٔ خودِ PNG).
+   ⚠️ ردیف **منعطف** است (بازبینیِ UX، بندِ ۹۵): تا دیروز تصویرِ ثابتِ ۱۸۰ + دکمه + کادرِ ۷۰ هیچ‌کدام
+   کوچک نمی‌شدند و کارت در گوشیِ ۳۶۰ پیکسلی ۱۸ و در ۳۲۰ پیکسلی ۵۸ پیکسل از صفحه بیرون می‌زد.
+   حالا تصویر تا ۱۴۰ کوچک می‌شود (هم‌نسبت)، کادرِ پاسخ جای خالی را می‌گیرد، و اگر باز هم جا نبود
+   کادرِ پاسخ به خطِ بعد می‌رود — ۳۹۰ و ۳۶۰ یک ردیف، ۳۲۰ دو ردیف. */
+.ik-cap-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; }
+.ik-cap-img {
+  flex: 1 1 140px; min-width: 0; max-width: 180px; height: auto; aspect-ratio: 180 / 64;
+  border-radius: 10px; border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.ik-cap-empty { display: grid; place-items: center; padding: 6px; text-align: center; font-size: 12.5px; line-height: 1.6; background: rgba(var(--veil-rgb), .06); }
 .ik-cap-new {
-  display: grid; place-items: center; width: 38px; height: 38px; flex: 0 0 auto; cursor: pointer; border-radius: 10px;
+  display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 auto; cursor: pointer; border-radius: 12px;
   color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .ik-cap-new:hover:not(:disabled) { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .5); }
 .ik-cap-new:focus-visible, .ik-cap input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .ik-cap input {
-  font: inherit; width: 70px; margin-inline-start: auto; text-align: center;
-  font-size: 14px; color: var(--text1); padding: 8px; border-radius: 10px;
+  font: inherit; flex: 1 1 72px; min-width: 0; min-height: 44px; text-align: center;
+  font-size: 16px; color: var(--text1); padding: 8px; border-radius: 10px;
   background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .16); outline: none;
 }
 
 .ik-go {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  font: inherit; font-size: 14px; font-weight: 800; cursor: pointer; border-radius: 13px;
+  font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; border-radius: 13px;
   padding: 13px; color: #fff; border: 0;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
@@ -115,13 +128,19 @@
 .ik-pay { display: grid; gap: 9px; }
 .ik-note, .ik-good, .ik-bad, .ik-warn {
   display: flex; align-items: center; gap: 7px; padding: 10px 12px; border-radius: 12px;
-  font-size: 12.5px; line-height: 1.9;
+  font-size: 14px; line-height: 1.8;
 }
 .ik-note { color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1); }
 .ik-good { color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .32); }
 .ik-bad { color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .32); }
 .ik-warn { color: var(--amber-text); background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .35); }
 .ik-note svg, .ik-good svg, .ik-bad svg, .ik-warn svg { flex: 0 0 auto; }
+/* «شمارهٔ حسابی نیست — تماس بگیرید» همراهِ خودِ دکمهٔ تماس، نه جملهٔ بی‌شماره. */
+.ik-warn-call { flex-direction: column; align-items: stretch; gap: 9px; }
+.ik-warn-call p { margin: 0; display: flex; align-items: center; gap: 7px; }
+.ik-warn-call .pb-call { align-self: flex-start; }
+/* دکمهٔ تماس زیرِ خطایی که بیمار خودش حل نمی‌کند (برخوردِ کدِ ملی). */
+.ik-err-call { justify-self: start; }
 
 @media (max-width: 460px) {
   .ik-grid { grid-template-columns: 1fr; }
@@ -131,40 +150,40 @@
 /* کدِ تخفیف — کنارِ دکمهٔ آپلود، چون همان لحظه‌ای است که بیمار به مبلغ نگاه می‌کند. */
 .ik-code { display: flex; gap: 7px; }
 .ik-code input {
-  flex: 1; font: inherit; font-size: 13px; color: var(--text1); padding: 10px 11px;
+  flex: 1; font: inherit; font-size: 16px; color: var(--text1); padding: 10px 11px;
   border-radius: 11px; background: rgba(var(--surface-rgb), .6);
   border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
 }
 .ik-code input:focus { border-color: rgba(var(--brand-2-rgb), .6); }
 .ik-code button {
-  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; padding: 0 16px;
+  font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; padding: 0 16px; min-height: 44px;
   border-radius: 11px; color: var(--text1);
   background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .16);
 }
 .ik-code button:disabled { opacity: .45; cursor: not-allowed; }
-.ik-off { font-style: normal; font-size: 11.5px; color: #6ee7b7; }
+.ik-off { font-style: normal; font-size: 13px; color: var(--green-text); }
 
 /* ── شمارهٔ حسابِ واریز ── */
 .ik-pay-to {
   display: grid; gap: 8px; padding: 11px 12px; border-radius: 13px;
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .11);
 }
-.ik-pay-to > b { font-size: 12.5px; }
+.ik-pay-to > b { font-size: 14px; }
 .ik-acc { display: grid; gap: 6px; }
-.ik-acc-who { font-size: 12px; color: var(--text2); }
+.ik-acc-who { font-size: 13.5px; color: var(--text2); }
 .ik-copy {
   display: flex; align-items: center; gap: 9px; width: 100%; cursor: pointer;
   font: inherit; text-align: start; padding: 9px 11px; border-radius: 11px;
   background: rgba(var(--surface-rgb), .6); border: 1px solid rgba(var(--veil-rgb), .14);
 }
-.ik-copy span { font-size: 11px; color: var(--text3); flex: 0 0 auto; }
-.ik-copy b { flex: 1; font-size: 14.5px; font-weight: 800; letter-spacing: .5px; color: var(--text1); }
+.ik-copy span { font-size: 12.5px; color: var(--text2); flex: 0 0 auto; }
+.ik-copy b { flex: 1; font-size: 16px; font-weight: 800; letter-spacing: .5px; color: var(--text1); }
 .ik-copy i {
-  flex: 0 0 auto; font-style: normal; font-size: 11px; padding: 3px 9px; border-radius: 8px;
+  flex: 0 0 auto; font-style: normal; font-size: 12.5px; padding: 3px 9px; border-radius: 8px;
   color: var(--text2); background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .13);
 }
 .ik-copy.ok { border-color: rgba(52, 211, 153, .45); }
-.ik-copy.ok i { color: #6ee7b7; background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .35); }
+.ik-copy.ok i { color: var(--green-text); background: rgba(52, 211, 153, .14); border-color: rgba(52, 211, 153, .35); }
 .ik-copy:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* ── کارتِ بانکی ──
@@ -204,11 +223,11 @@
 /* ── فرمِ ساخته‌شده روی صفحهٔ بیمار ──
    ⚠️ `.dyn`ِ مشترک استایلِ خودش را از `definitions.css` می‌گیرد؛ این‌جا فقط
    چیزهایی است که مالِ همین صفحه است. */
-.ik-hint { margin: 0 0 10px; font-size: 12px; line-height: 2; color: rgba(var(--veil-rgb), .6); }
-.ik-pages { margin: 0; font-size: 11.5px; color: rgba(var(--veil-rgb), .5); }
+.ik-hint { margin: 0 0 10px; font-size: 14px; line-height: 1.8; color: var(--text2); }
+.ik-pages { margin: 0; font-size: 13px; color: var(--text3); }
 /* W1.8 — نشانگرِ پیش‌نویس کنارِ شمارهٔ صفحه. رنگ‌ها از توکن‌های دوتمی (قانونِ ۲۳). */
 .ik-pagerow { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 8px; }
-.ik-draft { font-size: 11px; margin-inline-start: auto; transition: color .25s cubic-bezier(.2,.7,.2,1); }
+.ik-draft { font-size: 12.5px; margin-inline-start: auto; transition: color .25s cubic-bezier(.2,.7,.2,1); }
 .ik-draft.saving { color: var(--text3); }
 .ik-draft.saved { color: var(--green-text); }
 .ik-draft.offline { color: var(--amber-text); }
@@ -221,58 +240,84 @@
 
 /* ── انتخابِ نوبت — `docs/BOOKING.md` مرحلهٔ ۳ ── */
 .ik-book { display: grid; gap: 10px; margin-bottom: 18px; }
-.ik-book h3 { margin: 0; font-size: 14px; font-weight: 800; }
+/* ⚠️ تمام‌عرض (بازبینیِ UX، بندِ ۹۶): `margin: 0 auto`ِ گریدِ مشترک داخلِ این گرید آن را تا اندازهٔ
+   محتوا جمع می‌کرد — تقویمِ ۲۰۶ پیکسلی با خانه‌های ۲۴ پیکسلی روی گوشی. حالا خانه‌ها حدودِ ۴۴ پیکسل‌اند
+   و در دسکتاپ هم تقویم از ۴۴۰ پیکسل پهن‌تر نمی‌شود. */
+.ik-book .jg { width: 100%; max-width: 440px; }
+/* فاصلهٔ ۳ پیکسل (نه ۴): روی گوشیِ ۳۹۰ هر خانه ۴۴ پیکسل می‌شود نه ۴۳ (بازبینیِ UX، بندِ ۱۱۴). */
+.ik-book .jg.compact .jg-grid, .ik-book .jg.compact .jg-dows { gap: 3px; }
+.ik-book .jg.compact .jg-num { font-size: 15px; }
+.ik-book .jg-head button { width: 44px; height: 44px; }
+.ik-book .jg-head .jg-today { min-height: 44px; font-size: 13px; }
+.ik-book h3 { margin: 0; font-size: 16px; font-weight: 800; }
 .ik-book-has {
-  margin: 0; padding: 9px 11px; border-radius: 11px; font-size: 12.5px;
+  margin: 0; padding: 9px 11px; border-radius: 11px; font-size: 14px;
   background: rgba(var(--brand-2-rgb), .12); border: 1px solid rgba(var(--brand-2-rgb), .3);
 }
-.ik-book-has small { display: block; margin-top: 3px; font-size: 10.5px; opacity: .75; }
+.ik-book-has small { display: block; margin-top: 3px; font-size: 12.5px; color: var(--text2); }
 .ik-book-err {
-  padding: 9px 11px; border-radius: 10px; font-size: 12px; color: var(--red-text);
-  background: rgba(127, 29, 29, .5); border: 1px solid rgba(248, 113, 113, .45);
+  padding: 9px 11px; border-radius: 10px; font-size: 13.5px; color: var(--red-text);
+  background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .45);
 }
 .ik-book-topics { display: flex; flex-wrap: wrap; gap: 6px; }
 .ik-book-topics button {
-  font-family: inherit; font-size: 12px; cursor: pointer; color: var(--text2);
-  padding: 7px 13px; border-radius: 99px;
+  font-family: inherit; font-size: 14px; cursor: pointer; color: var(--text2);
+  min-height: 44px; padding: 7px 14px; border-radius: 99px;
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--brand-soft-rgb), .2);
 }
-.ik-book-topics button.on { color: #fff; background: rgba(var(--brand-2-rgb), .22); border-color: rgba(var(--brand-2-rgb), .55); }
+.ik-book-topics button.on { color: var(--press-ink); font-weight: 800; background: rgba(var(--brand-2-rgb), .22); border-color: rgba(var(--brand-2-rgb), .55); }
 
 /* سلولِ تقویمِ نوبت — نمای compact: روزِ باز فقط یک نقطهٔ نئونیِ کوچک دارد
    و شمارهٔ روزش روشن‌تر است؛ عددِ ظرفیت به کارتِ پایین رفت. */
 .ik-cell { display: grid; place-items: center; min-height: 0; }
 .ik-dot {
   width: 5px; height: 5px; border-radius: 50%;
-  background: linear-gradient(135deg, rgb(var(--brand-2-rgb)), #00e5ff);
+  background: linear-gradient(135deg, rgb(var(--brand-2-rgb)), var(--cyan));
   box-shadow: 0 0 8px rgba(var(--brand-2-rgb), .9), 0 0 3px rgba(0, 229, 255, .8);
 }
-/* روزی که جا دارد، شماره‌اش هم زنده است — روزِ بسته کم‌رنگ می‌ماند. */
-.jg.compact .jg-cell:has(.ik-cell.open) { border-color: rgba(var(--brand-soft-rgb), .28); background: rgba(var(--brand-rgb), .07); }
-.jg.compact .jg-cell:has(.ik-cell.open) .jg-num { color: #efeaff; }
-.jg.compact .jg-cell.sel .ik-dot { background: #fff; box-shadow: 0 0 8px rgba(var(--veil-rgb), .9); }
+/* روزی که جا دارد، شماره‌اش هم زنده است — روزِ بسته کم‌رنگ می‌ماند.
+   ⚠️ `:not(.sel)`: این قاعده (با `:has`) از قاعدهٔ «انتخاب‌شده»ِ `jgrid.css` سنگین‌تر است و تا دیروز
+   گرادیانِ انتخاب را روی روزِ باز می‌پوشاند — روزِ انتخاب‌شده فقط یک هالهٔ کم‌رنگ بود و شماره‌اش
+   سفید روی زمینهٔ روشن (بازبینیِ UX، بند‌های ۹۳ و ۹۶). */
+.jg.compact .jg-cell:has(.ik-cell.open):not(.sel) { border-color: rgba(var(--brand-soft-rgb), .4); background: rgba(var(--brand-rgb), .08); }
+.jg.compact .jg-cell:has(.ik-cell.open):not(.sel) .jg-num { color: var(--text1); font-weight: 800; }
+.jg.compact .jg-cell.sel .ik-dot { background: #fff; box-shadow: 0 0 8px rgba(var(--sheen-rgb), .9); }
+/* امروز و نامِ روزها در گریدِ مشترک رنگِ ثابتِ تیره‌محور دارند (سیانِ روشن، veil ۳۵٪) —
+   روی صفحهٔ بیمار که در تمِ روشن هم باز می‌شود، از توکن. */
+/* روزِ انتخاب‌شده روی لمس هم «انتخاب‌شده» بماند: گوشی پس از لمس `:hover` را روی همان خانه نگه
+   می‌دارد و هاورِ گریدِ مشترک (سنگین‌تر از `.sel`) گرادیان را می‌پوشاند — بیمار نمی‌دید کدام روز را زده. */
+.ik-book .jg.compact .jg-cell.sel,
+.ik-book .jg.compact .jg-cell.sel:hover {
+  background: linear-gradient(135deg, var(--brand-2), var(--brand) 55%, var(--brand-dark));
+  border-color: transparent; transform: none;
+}
+.ik-book .jg.compact .jg-cell.today:not(.sel) { border-color: var(--cyan); }
+.ik-book .jg.compact .jg-cell.today .jg-num { color: var(--cyan); }
+.ik-book .jg.compact .jg-cell.sel .jg-num { color: #fff; }
+.ik-book .jg.compact .jg-dows span { color: var(--text3); font-size: 13px; letter-spacing: 0; }
 
 .ik-book-day {
   display: grid; gap: 7px; padding: 11px 12px; border-radius: 12px;
   background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--brand-soft-rgb), .14);
 }
-.ik-book-day > b { font-size: 13px; }
-.ik-book-day > small { font-size: 11.5px; color: var(--text3); }
+.ik-book-day > b { font-size: 15px; }
+.ik-book-day > small { font-size: 13px; color: var(--text2); }
 .ik-slots { display: flex; flex-wrap: wrap; gap: 6px; }
 /* هدفِ ضربه دستِ‌کم ۴۴ پیکسل — بیمار روی موبایل با انگشت می‌زند. */
 .ik-slots button {
-  min-width: 68px; min-height: 40px; font-family: inherit; font-size: 12.5px; cursor: pointer;
+  min-width: 68px; min-height: 44px; font-family: inherit; font-size: 15px; cursor: pointer;
   color: var(--text1); padding: 8px 10px; border-radius: 10px;
   background: rgba(var(--brand-2-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .28);
 }
-.ik-slots button.on { color: #fff; background: rgba(var(--brand-2-rgb), .35); border-color: rgba(var(--brand-2-rgb), .7); }
-/* اشغال: خط‌خورده و کم‌رنگ — «نمی‌شود گرفت» باید در یک نگاه پیدا باشد. */
-.ik-slots button:disabled {
+.ik-slots button.on { color: var(--press-ink); font-weight: 800; background: rgba(var(--brand-2-rgb), .35); border-color: rgba(var(--brand-2-rgb), .7); cursor: default; }
+/* اشغال: خط‌خورده و کم‌رنگ — «نمی‌شود گرفت» باید در یک نگاه پیدا باشد.
+   ⚠️ `:not(.on)`: ساعتِ خودِ بیمار وقتی فرم «در حالِ ثبت» است هم باید «انتخاب‌شده» بماند. */
+.ik-slots button:disabled:not(.on) {
   cursor: default; color: var(--text3); text-decoration: line-through;
   background: rgba(var(--veil-rgb), .03); border-color: rgba(var(--veil-rgb), .1);
 }
 .ik-book-go {
-  justify-self: start; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; color: #fff;
+  justify-self: start; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer; color: #fff;
   padding: 11px 18px; border-radius: 11px; border: none;
   background: linear-gradient(135deg, rgb(var(--brand-2-rgb)), rgb(var(--brand-soft-rgb)));
 }
@@ -291,10 +336,10 @@
   display: grid; place-items: center; color: var(--text3);
   background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.ik-receipt-row b { flex: 1; font-size: 13px; color: var(--text1); }
+.ik-receipt-row b { flex: 1; font-size: 14px; color: var(--text1); }
 /* هدفِ لمسیِ «حذف» — تا ۱۴۰۵/۰۷/۰۵ حدودِ ۲۴ پیکسل بود؛ حالا که فیشِ چندتایی جریانِ اصلی است، کافی. */
 .ik-receipt-row button {
-  min-height: 40px; min-width: 60px; padding: 4px 14px; cursor: pointer; font: inherit; font-size: 12px;
+  min-height: 44px; min-width: 60px; padding: 4px 14px; cursor: pointer; font: inherit; font-size: 13.5px;
   color: var(--red-text); background: none; border: 1px solid rgba(248, 113, 113, .45); border-radius: 99px;
 }
 .ik-receipt-row button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
@@ -308,7 +353,167 @@
   display: grid; gap: 4px; padding: 11px 13px; border-radius: 13px;
   color: var(--text1); background: rgba(245, 158, 11, .1); border: 1px solid rgba(251, 191, 36, .4);
 }
-.ik-returned b { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--amber-text); }
+.ik-returned b { display: flex; align-items: center; gap: 7px; font-size: 14.5px; color: var(--amber-text); }
 .ik-returned b svg { flex: 0 0 auto; }
-.ik-returned p { margin: 0; font-size: 13px; line-height: 1.9; }
-.ik-returned small { font-size: 11.5px; color: var(--text2); line-height: 1.8; }
+.ik-returned p { margin: 0; font-size: 14.5px; line-height: 1.8; }
+.ik-returned small { font-size: 13px; color: var(--text2); line-height: 1.8; }
+
+/* ── کارتِ پایانی: ثبت شد + نوبت + «کِی خبر می‌شوم» + تماس (بازبینیِ UX، بندِ ۱۰۲) ── */
+.ik-final {
+  display: grid; justify-items: center; gap: 10px; text-align: center; padding: 18px 14px; border-radius: 18px;
+  background: rgba(52, 211, 153, .06); border: 1px solid rgba(52, 211, 153, .35);
+}
+.ik-final-ic {
+  display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; color: var(--green-text);
+  background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .4);
+}
+.ik-final h2 { margin: 0; font-size: 18px; font-weight: 900; color: var(--text1); }
+.ik-final .ik-note { width: 100%; text-align: start; }
+.ik-final-appt {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: start; padding: 12px 14px; border-radius: 14px;
+  color: var(--text1); background: rgba(var(--brand-rgb), .08); border: 1px solid rgba(var(--brand-2-rgb), .35);
+}
+.ik-final-appt > svg { flex: 0 0 auto; margin-top: 4px; color: var(--brand-text); }
+.ik-final-appt span { display: block; font-size: 13px; color: var(--text2); }
+.ik-final-appt b { display: block; font-size: 16px; font-weight: 800; line-height: 1.7; }
+.ik-final-appt b bdi { font-variant-numeric: tabular-nums; }
+.ik-final-appt small { display: block; font-size: 13px; color: var(--text2); }
+.ik-final-appt em { display: inline-block; margin-top: 4px; font-style: normal; font-size: 13px; font-weight: 700; color: var(--amber-text); }
+.ik-final-when { margin: 0; font-size: 14px; line-height: 1.8; color: var(--text2); }
+.ik-final-q { margin: 4px 0 -4px; font-size: 13.5px; font-weight: 700; color: var(--text2); }
+/* کنشِ فرعی به‌شکلِ پیوند — ولی هدفِ لمسیِ ۴۴ پیکسلی. */
+.ik-linkbtn {
+  min-height: 44px; padding: 8px 12px; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700;
+  color: var(--brand-text); background: none; border: none; text-decoration: underline; text-underline-offset: 5px;
+}
+.ik-linkbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }
+
+/* ── «قبلاً ثبت‌نام کرده‌اید؟» — ادامه با موبایل + کد (بازبینیِ UX، بندِ ۱۰۳) ── */
+.ik-resume-toggle {
+  display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; min-height: 44px;
+  padding: 8px 12px; border-radius: 12px; cursor: pointer; font: inherit; font-size: 14px; color: var(--text2);
+  background: rgba(var(--brand-rgb), .06); border: 1px dashed rgba(var(--brand-2-rgb), .45);
+}
+.ik-resume-toggle b { color: var(--brand-text); }
+.ik-resume-toggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.ik-resume { display: grid; gap: 10px; }
+.ik-resume h2 { margin: 0; font-size: 17px; font-weight: 900; }
+.ik-resume-form { display: grid; gap: 10px; }
+.ik-resume-form .ik-hint { margin: 0; }
+.ik-resume .ik-linkbtn { justify-self: center; }
+.ik-sms-note { align-items: flex-start; }
+.ik-sms-note svg { margin-top: 6px; }
+/* مهلتِ فرم — ریز ولی خوانا، زیرِ نوارِ مرحله. */
+.ik-deadline { display: flex; align-items: center; gap: 6px; margin: -4px 0 0; font-size: 13px; color: var(--text2); }
+.ik-deadline svg { flex: 0 0 auto; color: var(--text3); }
+
+/* ── مرحلهٔ واریز: خلاصهٔ تاشدهٔ فرم + «ویرایش» (بازبینیِ UX، بندِ ۱۰۴) ── */
+.ik-sum {
+  display: grid; gap: 8px; padding: 12px 14px; border-radius: 14px;
+  background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(52, 211, 153, .35);
+}
+.ik-sum-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ik-sum-head b { display: inline-flex; align-items: center; gap: 7px; font-size: 14.5px; color: var(--green-text); }
+.ik-sum-edit {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 6px 14px; border-radius: 999px;
+  cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), .07); border: 1px solid rgba(var(--brand-2-rgb), .4);
+}
+.ik-sum-edit:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.ik-sum dl { display: grid; gap: 4px; margin: 0; }
+.ik-sum dl div { display: flex; gap: 8px; align-items: baseline; font-size: 13.5px; line-height: 1.8; }
+.ik-sum dt { flex: 0 0 auto; color: var(--text2); }
+.ik-sum dt::after { content: ':'; }
+.ik-sum dd { margin: 0; min-width: 0; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; }
+/* خطای کدِ تخفیف همان زیرِ کادرش. */
+.ik-code-err { margin-top: -3px; }
+/* پس از «ثبت و مرحلهٔ بعد» بخشِ واریز زیرِ نوارِ بالای گوشی گم نشود. */
+.ik-pay { scroll-margin-top: 12px; }
+
+/* ── خطای هر کادر، زیرِ همان کادر (بازبینیِ UX، بندِ ۱۰۵) ── */
+.ik-field.bad input, .ik-field.bad select, .ik-field.bad textarea { border-color: rgba(248, 113, 113, .75); }
+.ik-fieldwrap { display: grid; gap: 4px; align-content: start; }
+.ik-ferr { display: block; font-style: normal; font-size: 13.5px; line-height: 1.7; color: var(--red-text); }
+.ik-cap .ik-ferr { flex: 1 1 100%; }
+.ik-cap:has(.ik-ferr) { border-color: rgba(248, 113, 113, .6); }
+/* تقویمِ نوبت وقتی روزی زده نشده. */
+.ik-book.bad { padding: 10px; margin-inline: -10px; border-radius: 16px; border: 1px solid rgba(248, 113, 113, .6); }
+.ik-book-anchor { scroll-margin-top: 12px; }
+
+/* ── مقیاسِ خوانایی: کادرهای مشترک (DynForm, FileDrop) روی صفحهٔ بیمار (بازبینیِ UX، بندِ ۱۰۶) ──
+   پوستهٔ این‌ها با کارکنان مشترک است (`index.css`, `dynform.css`, `filedrop.css`) و آن‌جا عمداً فشرده
+   می‌ماند؛ فقط زیرِ `.ik` بزرگ می‌شوند. */
+.ik .pf-field > span { font-size: 14px; margin-bottom: 7px; }
+.ik .pf-field input, .ik .pf-field textarea, .ik .pf-field select { font-size: 16px; }
+.ik .pf-err { font-size: 13px; }
+.ik .pf-hint, .ik .dyn .dyn-note, .ik .dyn .dyn-img .dyn-note { font-size: 13px; opacity: 1; }
+.ik .dyn-pill, .ik .dyn-img-pick, .ik .dyn-img-has b { font-size: 14px; }
+.ik .dyn-link input { font-size: 16px; }
+.ik .dyn-link-kinds .dyn-pill { font-size: 13px; }
+.ik .dyn-voice-done, .ik .dyn-bool i { font-size: 13.5px; }
+.ik .dyn-role { font-size: 12.5px; }
+.ik .fdrop-drop b { font-size: 15px; }
+.ik .fdrop-drop small { font-size: 13px; color: var(--text2); }
+.ik .fdrop-meta b { font-size: 13.5px; }
+.ik .fdrop-meta small { font-size: 12.5px; }
+.ik .fdrop-retry, .ik .fdrop-clear { font-size: 12.5px; }
+.ik .fdrop-doc { font-size: 12.5px; }
+.ik .dyn-pay-head { font-size: 15px; }
+.ik .dyn-pay-head i, .ik .dyn-pay-row i { font-size: 13.5px; }
+.ik .dyn-pay-row code { font-size: 15px; }
+.ik .vn .vc-btn { font-size: 14px; min-height: 44px; }
+.ik .vn-rec time, .ik .vn-ghost, .ik .vn-err { font-size: 13.5px; }
+.ik .vn-ghost { min-height: 44px; }
+
+/* ── «چه پیش رو دارید» بالای ثبت‌نام (بازبینیِ UX، بندِ ۱۰۷) ──
+   همان شماره‌ها و برچسب‌های مرحله‌نمای فرم، ولی فشرده و پیچنده — ستونِ چهار ردیفه روی گوشی فیلدها را
+   از دید بیرون می‌برد. */
+.ik-ahead {
+  display: grid; gap: 8px; padding: 12px 13px; border-radius: 14px;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.ik-ahead > b { font-size: 14.5px; font-weight: 800; }
+.ik-ahead ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ik-ahead li {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 12px; border-radius: 99px;
+  font-size: 13.5px; color: var(--text2);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.ik-ahead li i {
+  display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 99px;
+  font-style: normal; font-size: 12.5px; font-weight: 800; background: rgba(var(--veil-rgb), .08);
+}
+.ik-ahead li.now { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .5); }
+.ik-ahead li.now i { color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
+.ik-ahead p { margin: 0; display: flex; align-items: flex-start; gap: 7px; font-size: 14px; line-height: 1.8; color: var(--text2); }
+.ik-ahead p svg { flex: 0 0 auto; margin-top: 5px; color: var(--brand-text); }
+.ik-ahead .ik-fee b { color: var(--text1); font-weight: 800; }
+
+/* ── هدفِ لمسیِ دستِ‌کم ۴۴×۴۴ روی صفحهٔ بیمار (بازبینیِ UX، بندِ ۱۱۴) ──
+   کادرهای مشترک (JDate، DynForm، FileDrop) در پنلِ کارکنان فشرده می‌مانند؛ فقط زیرِ `.ik`. */
+.ik .jd-btn { width: 44px; }
+.ik .dyn-pill { min-height: 44px; }
+.ik .dyn-img-has button, .ik .dyn-pay-row button, .ik .fdrop-x { min-width: 44px; min-height: 44px; }
+.ik .fdrop-retry, .ik .fdrop-clear { min-height: 44px; padding-inline: 14px; }
+
+/* ── فرمِ ثبت‌نام داخلِ <form> (بازبینیِ UX، بندِ ۱۱۶) — همان فاصلهٔ کارت، حالا که فرزندانِ کارت یک ظرف‌اند ── */
+.ik-reg { display: grid; gap: 13px; }
+/* راهِ دیگرِ پرسشِ تصویری: «پرسشِ دیگر» یا تماس. ناحیهٔ لمسِ شماره ۴۴ پیکسل بی‌تغییرِ سطر. */
+.ik-cap-help { flex: 1 1 100%; font-size: 13.5px; line-height: 1.8; color: var(--text2); }
+.ik-cap-help a {
+  display: inline-block; padding-block: 11px; margin-block: -11px; font-weight: 800; text-decoration: none;
+  color: var(--brand-text); font-variant-numeric: tabular-nums;
+}
+.ik-cap-help a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+
+/* ── «کدِ ملیِ ایرانی ندارم» (بازبینیِ UX، بندِ ۱۰۹) ── */
+.ik-nonid-btn {
+  justify-self: start; min-height: 44px; padding: 0 2px; cursor: pointer; font: inherit; font-size: 13.5px;
+  color: var(--brand-text); background: none; border: 0; text-decoration: underline; text-underline-offset: 4px;
+}
+.ik-nonid-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+.ik-nonid {
+  display: grid; gap: 8px; justify-items: start; padding: 10px 12px; border-radius: 12px;
+  background: rgba(var(--brand-rgb), .06); border: 1px solid rgba(var(--brand-2-rgb), .3);
+}
+.ik-nonid p { margin: 0; font-size: 14px; line-height: 1.8; color: var(--text2); }

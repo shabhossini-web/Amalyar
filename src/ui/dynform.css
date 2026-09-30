@@ -139,7 +139,7 @@
   border-radius: 12px; background: rgba(var(--veil-rgb), .04);
   border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.dyn-pay-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #fff; }
+.dyn-pay-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text1); }
 .dyn-pay-head i { font-style: normal; font-size: 11.5px; color: var(--text2); }
 .dyn-pay-row { display: flex; align-items: center; gap: 8px; }
 .dyn-pay-row i {
@@ -151,7 +151,7 @@
 .dyn-pay-row code {
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   font-size: 13px; letter-spacing: .04em; font-variant-numeric: tabular-nums;
-  color: #fff; direction: ltr; unicode-bidi: isolate;
+  color: var(--text1); direction: ltr; unicode-bidi: isolate;
   overflow-x: auto; white-space: nowrap;
 }
 .dyn-pay-row button {
@@ -160,7 +160,7 @@
   border: 1px solid rgba(var(--veil-rgb), .12); transition: color .15s, background .15s;
   margin-inline-start: auto; flex-shrink: 0;
 }
-.dyn-pay-row button:hover { color: #fff; background: rgba(var(--veil-rgb), .08); }
+.dyn-pay-row button:hover { color: var(--text1); background: rgba(var(--veil-rgb), .08); }
 
 /* ── باکسِ لینک ──────────────────────────────────────────────────────────
    هر لینک یک کارت: نشانی + حذف، عنوان، نوعِ مدرک (پیل)، و ورودِ پورتال. */

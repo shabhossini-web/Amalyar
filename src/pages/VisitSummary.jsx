@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import './visit-summary.css';
+import { adoptFace } from '../lib/public-face.js';
+import { BrandMark, PublicErrorPage, faPhone, telHref, useFallbackFace } from './PublicBits.jsx';
+import { Back, Print } from '../ui/icons.jsx';
 
 /**
  * خلاصهٔ ویزیت — سندی که به دستِ بیمار می‌رسد (`/v/<token>`، عمومی).
@@ -13,17 +16,33 @@ import './visit-summary.css';
  */
 export default function VisitSummary() {
   const { token } = useParams();
+  /* «بازگشت به پروندهٔ من» فقط وقتی بیمار **از پرونده آمده** (پرتال با `state` باز می‌کند): پیوندِ
+     پرونده عمداً در پاسخِ خلاصه نیست — خلاصه ممکن است برای پزشکِ دیگری فرستاده شود و نباید درِ کلِ
+     پرونده را باز کند. */
+  const back = useLocation().state?.back;
+  const fromPortal = typeof back === 'string' && back.startsWith('/p/');
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState(null);
 
-  useEffect(() => { document.title = 'خلاصهٔ ویزیت'; }, []);
+  const isSurgery = data?.visit?.kind === 'surgery';
+  /* هشدار: عنوان و برچسب‌ها از **نوعِ مراجعه** (بازبینیِ UX، بندِ ۱۱۲): سندِ کرانیوتومی تا دیروز «خلاصهٔ
+     ویزیت / تاریخِ ویزیت / پزشک» چاپ می‌شد. */
+  const docTitle = isSurgery ? 'خلاصهٔ عمل' : 'خلاصهٔ ویزیت';
+  useEffect(() => {
+    document.title = data?.brand?.name ? `${docTitle} — ${data.brand.name}` : docTitle;
+  }, [docTitle, data?.brand?.name]);
   useEffect(() => {
     api(`/public/visit-summary/${token}`, { auth: false })
-      .then(setData)
-      .catch((e) => setErr(e.message));
+      /* خودِ سند رنگِ کاغذ دارد و از تم نمی‌گیرد (`visit-summary.css`)؛ تم و رنگِ مطب برای قابِ
+         صفحه و صفحهٔ خطاست — این صفحه `/config` نمی‌خوانَد (بیرونِ Providerها). */
+      .then((d) => { adoptFace(d); setData(d); })
+      .catch((e) => setErr(e));
   }, [token]);
+  const fallback = useFallbackFace(!!err);
 
-  if (err) return <div className="vs-err">{err}</div>;
+  /* خطا صفحهٔ کاغذی نیست: الگوی «چه شد + چرا + چه کنید» با نام و تلفنِ مطب (بازبینیِ UX، بندِ ۱۱۰). */
+  if (err) return <PublicErrorPage brand={fallback?.brand} err={err} />;
   if (!data) return <div className="vs-err quiet">در حال بارگذاری…</div>;
 
   const { brand, patient, visit, answers, nextVisitDateFa } = data;
@@ -32,8 +51,8 @@ export default function VisitSummary() {
      fallbackِ سرورِ قدیمی است. `procedure` همین حالا برچسبِ ترکیبی است. */
   const manyDx = (visit.diagnoses ?? []).length > 1;
   const facts = [
-    ['تاریخِ ویزیت', visit.opDateFa],
-    ['پزشک', visit.doctorName],
+    [isSurgery ? 'تاریخِ عمل' : 'تاریخِ ویزیت', visit.opDateFa],
+    [isSurgery ? 'جراح' : 'پزشک', visit.doctorName],
     ['موضوع', visit.topicName],
     ['مرکز', visit.hospitalName],
     [manyDx ? 'تشخیص‌ها' : 'تشخیص', visit.diagnosisLabel ?? visit.diagnosisTitle],
@@ -44,12 +63,16 @@ export default function VisitSummary() {
     <div className="vs">
       <div className="vs-page">
         <header className="vs-head">
-          <div>
-            <h1>{brand.name ?? 'خلاصهٔ ویزیت'}</h1>
-            {brand.phone && <small dir="ltr">{brand.phone}</small>}
+          <div className="vs-brand">
+            <BrandMark brand={brand} className="vs-logo" />
+            <div>
+              <h1>{brand.name ?? docTitle}</h1>
+              {/* تلفن لمس‌شدنی — روی کاغذ همان متن است. */}
+              {brand.phone && <a className="vs-tel" href={telHref(brand.phone)} dir="ltr">{faPhone(brand.phone)}</a>}
+            </div>
           </div>
           <div className="vs-doc">
-            <b>خلاصهٔ ویزیت</b>
+            <b>{docTitle}</b>
             <small dir="ltr">{visit.code}</small>
           </div>
         </header>
@@ -86,7 +109,16 @@ export default function VisitSummary() {
 
       {/* فقط روی صفحه؛ در چاپ پنهان است. */}
       <div className="vs-actions">
-        <button type="button" onClick={() => window.print()}>چاپ / ذخیرهٔ PDF</button>
+        {/* برگشت = همان صفحهٔ قبلیِ تاریخچه (پرونده، با همان زبانه)، نه یک ورودیِ تازه که «بازگشت»ِ
+            مرورگر را دوباره به خلاصه برگرداند. */}
+        {fromPortal && (
+          <button type="button" className="vs-back" onClick={() => navigate(-1)}>
+            <Back width="16" height="16" aria-hidden="true" /> بازگشت به پروندهٔ من
+          </button>
+        )}
+        <button type="button" className="vs-print" onClick={() => window.print()}>
+          <Print width="16" height="16" aria-hidden="true" /> چاپ / ذخیرهٔ PDF
+        </button>
       </div>
     </div>
   );

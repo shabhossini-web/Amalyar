@@ -7,6 +7,7 @@ import TimePick from './TimePick.jsx';
 import Pick from './Pick.jsx';
 import './dynform.css';
 import { toEnDigits } from '../lib/identity.js';
+import { shrinkImage } from '../lib/image-shrink.js';
 import { Bank, Camera, Check, Copy, LinkIcon, Mic, Star, Trash } from './icons.jsx';
 
 /** مدتِ صدا — «۱:۰۵» با ارقامِ فارسی. */
@@ -316,7 +317,7 @@ function Rating({ value, set, disabled }) {
           /* زدنِ دوباره‌ی همان امتیاز پاکش می‌کند — تنها راهِ «اشتباه زدم». */
           onClick={() => set(n === value ? 0 : n)}
         >
-          {/* ⚠️ SVG و نه نویسه‌ی `★`: نویسه روی اندروید و iOS با فونتِ متفاوت
+          {/* هشدار: SVG و نه نویسهٔ ستاره (U+2605): نویسه روی اندروید و iOS با فونتِ متفاوت
               رندر می‌شود و گاهی به‌شکلِ ایموجیِ رنگی درمی‌آید که با رنگِ تمِ
               برنامه نمی‌خواند. نگهبانِ CI همین را می‌گیرد. */}
           <Star width="24" height="24" />
@@ -334,6 +335,10 @@ function Rating({ value, set, disabled }) {
  * فهرستِ مراجعات همان چند مگابایت را هم می‌کشد. فایل جای خودش می‌رود و
  * فرم فقط نشانی‌اش را نگه می‌دارد.
  */
+/** سقفِ عکسِ کادرِ فرم — همان سقفِ `FileInterceptor`ِ مسیرِ عکسِ فرمِ بیمار (`intake.controller.ts`). */
+const IMAGE_MAX_MB = 8;
+const TOO_BIG = 'حجمِ عکس زیاد است (بیش از ۸ مگابایت)؛ عکس را دوباره بگیرید یا کوچک‌تر بفرستید';
+
 function ImageBox({ field: f, value, set, disabled, onUpload, onRemove }) {
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
@@ -360,13 +365,18 @@ function ImageBox({ field: f, value, set, disabled, onUpload, onRemove }) {
     setBusy(true);
     /* ترتیبی، نه موازی — و خطای یک فایل بقیه را زمین نمی‌زند. */
     const added = [];
-    for (const file of files) {
+    for (const raw of files) {
       if (list.length + added.length >= max) { setErr(`حداکثر ${max} فایل`); break; }
+      /* هشدار: اول کوچک، بعد سقف، بعد ارسال (بازبینیِ UX، بندِ ۹۹): عکسِ ۱۲ مگابایتیِ دوربین با ۱۶۰۰ پیکسل
+         زیرِ نیم مگابایت می‌شود و روی اینترنتِ کندِ بیمار چند ثانیه می‌رود نه چند دقیقه؛ فایلی که
+         کوچک نشد و هنوز از سقف بزرگ‌تر است اصلاً فرستاده نمی‌شود. */
+      const file = await shrinkImage(raw);
+      if (file.size > IMAGE_MAX_MB * 1024 * 1024) { setErr(TOO_BIG); continue; }
       try {
         const r = await onUpload(file, f);
-        if (r?.id || r?.url) added.push({ id: r.id, url: r.url, name: r.name ?? file.name });
+        if (r?.id || r?.url) added.push({ id: r.id, url: r.url, name: r.name ?? raw.name });
       } catch (ex) {
-        setErr(ex?.message || 'آپلود انجام نشد');
+        setErr(ex?.status === 413 ? TOO_BIG : ex?.message || 'آپلود انجام نشد');
       }
     }
     if (added.length) set([...list, ...added]);

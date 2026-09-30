@@ -2,7 +2,7 @@ import {
   BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -11,14 +11,15 @@ import { StorageService } from '../storage/storage.service';
 import { BillingService } from './billing.service';
 import { SurveyService } from './survey.service';
 import { FormsService, FORM_SCOPES } from './forms.service';
-import { BUILTIN_VISIT_KEYS, REGISTRATION_PRESETS, UNDATED_KEY, isUndated } from './form-presets';
+import { BUILTIN_VISIT_KEYS, REGISTRATION_HINTS, REGISTRATION_PRESETS, UNDATED_KEY, isUndated } from './form-presets';
 import { normalizeLinks } from './forms.service';
 import { toDateValue } from '../common/jalali';
 import { syncLinkDocuments } from './link-documents';
 import { hospitalTypeahead, matchIntakeHospital, matchIntakeRefs } from './intake-match';
 import { serviceLabel, serviceOf } from './intake-service-of';
 import { imageRefsOf, receiptIdsOf } from './intake-docs';
-import { UsedChallenges, issueChallenge, verifyChallenge } from './intake-captcha';
+import { UsedChallenges, issueChallenge, openChallenge, verifyChallenge } from './intake-captcha';
+import { faClock, faDayLong } from './fa-when';
 import { RETURN_STAGES, applyReturn, currentReturn, isReturnStage, returnsOf, withoutReturns } from './intake-return';
 import { procedureRequirements, RequiredItemInput, resolveRequirements } from './visit-requirements';
 import { OTHER_PX, procedureLabel } from './visit-coding';
@@ -76,6 +77,10 @@ function storedMime(file: { mimetype?: string; buffer: Buffer }): string {
 
 /** روزهای اعتبارِ یک ثبت‌نامِ نیمه‌کاره. */
 const TTL_DAYS = 14;
+/** کدِ «ادامه با موبایل» — همان قراردادِ کدِ ورود (`auth.service.ts`): ۵ دقیقه، ۵ تلاش. */
+const RESUME_OTP_TTL_MS = 5 * 60_000;
+const RESUME_OTP_MAX_ATTEMPTS = 5;
+const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /** سقفِ فهرستِ «پیگیری‌نشده» — فهرستِ کارِ امروزِ منشی است، نه آرشیو.
     خروجی `capped` و `total` را هم می‌دهد تا بریدگی **دیده شود** (W1.1). */
@@ -464,7 +469,28 @@ export class IntakeService {
     const link = await this.prisma.intakeLink.findUnique({ where: { token } });
     if (!link) throw new NotFoundException('این لینک معتبر نیست');
     if (!link.active) throw new ForbiddenException('این لینک غیرفعال شده است');
-    return { title: link.title, amount: link.amount };
+    /* نام و تلفنِ مطب/شرکت (بازبینیِ UX، بندِ ۹۲): بیمار از لینکِ «مطب دکتر رحیمی» می‌آید و
+       تا دیروز بالای فرم «عمل‌یار» می‌دید که کدِ ملی و ۴۰ میلیون می‌خواهد — شبیهِ کلاه‌برداری. */
+    /* «چه پیش رو دارید» (بازبینیِ UX، بندِ ۱۰۷): صفحهٔ اولِ ثبت‌نام باید مسیرِ **همین** لینک را بگوید —
+       مراجعه می‌سازد؟ نوبت دارد؟ واریز دارد؟ — با همان قاعده‌های `publicView` و `fill` (مشتقِ سرور،
+       قانونِ ۱۵)، نه حدسِ مرورگر از مبلغ. */
+    const scope = await this.formScope(link.formId);
+    const makesVisit = scope !== 'record';
+    const hasPaymentBox = !!(await this.formView(link.formId))?.fields.some((x: any) => x.type === 'payment');
+    const payment = link.amount > 0 || hasPaymentBox;
+    return {
+      title: link.title, amount: link.amount,
+      flow: { makesVisit, booking: makesVisit && (await this.bookingOn()), payment, review: makesVisit || payment },
+      ...(await this.portal.publicFace()),
+    };
+  }
+
+  /**
+   * هویتِ شرکت برای صفحه‌ای که **دادهٔ خودش نیامد** — لینکِ ناقص‌کپی‌شده، منقضی یا خطای
+   * اتصال. صفحهٔ خطا بی‌این نه نامِ مطب را داشت نه تلفنش را (بازبینیِ UX، بندِ ۱۱۰).
+   */
+  publicFace() {
+    return this.portal.publicFace();
   }
 
   /**
@@ -512,15 +538,22 @@ export class IntakeService {
        طول را می‌سنجید، پس کدِ ملیِ بی‌اعتبار از **درِ عمومی** وارد می‌شد و
        هنگامِ تأیید هم دوباره سنجیده نمی‌شد (چون آن‌جا با `patientId` می‌رویم).
        نتیجه: پرونده‌ای با کدِ ملیِ غلط که ادمین هرگز نمی‌توانست بسازد. */
-    if (!isValidNationalId(nationalId)) throw new BadRequestException('کدِ ملی معتبر نیست');
+    /* راهِ بیمارِ اتباع را هم بگوید (بازبینیِ UX، بندِ ۱۰۹) — «معتبر نیست» تنها القا می‌کرد اشتباه تایپ کرده. */
+    if (!isValidNationalId(nationalId)) throw new BadRequestException('کدِ ملی معتبر نیست؛ اگر کدِ ملیِ ایرانی ندارید، برای ثبت‌نام با ما تماس بگیرید');
     if (!/^09\d{9}$/.test(phone)) throw new BadRequestException('شمارهٔ موبایل نامعتبر است');
     /* ⚠️ ۴۲۲ و نه ۴۰۰: صفحه از روی همین کد می‌فهمد که باید **پرسشِ تازه** بگیرد — نشان همین حالا
        مصرف شد (درست یا غلط)، پس ارسالِ دوباره با همان نشان بی‌فایده است. */
     const verdict = verifyChallenge(captchaSecret(), USED_CHALLENGES, linkToken, dto.captchaToken, dto.captchaAnswer);
     if (verdict !== 'ok') {
+      /* «کهنه» دو علت دارد و بیمار باید بداند کدام (بازبینیِ UX، بندِ ۹۸): پرسشی که یک‌بار فرستاده شده
+         (مثلاً پیش از خطای کدِ ملی) یا بیش از ۱۰ دقیقه پیش آمده. صفحه در هر دو حالت پرسشِ تازه می‌گیرد. */
+      const opened = verdict === 'stale' ? openChallenge(captchaSecret(), dto.captchaToken) : null;
+      const expired = !!opened && opened.s === linkToken && opened.e <= Date.now();
       throw new UnprocessableEntityException(verdict === 'wrong'
         ? 'پاسخِ پرسشِ امنیتی درست نیست — پرسشِ تازه را جواب دهید'
-        : 'پرسشِ امنیتی منقضی شده — پرسشِ تازه را جواب دهید');
+        : expired
+          ? 'پرسشِ امنیتی منقضی شده (بیش از ۱۰ دقیقه گذشته) — پرسشِ تازه را جواب دهید'
+          : 'این پرسش یک‌بار مصرف شد؛ پرسشِ تازه را جواب دهید');
     }
 
     const { patientId } = await this.prisma.$transaction((tx) =>
@@ -543,7 +576,8 @@ export class IntakeService {
       where: { patientId, linkId: link.id, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] } },
       orderBy: { id: 'desc' },
     });
-    if (open) return this.publicView(open.token);
+    /* بیمارِ برگشته احتمالاً لینکش را گم کرده — همان لینک دوباره پیامک می‌شود (با سقفِ ۱۰دقیقه‌ای). */
+    if (open) return { ...(await this.publicView(open.token)), linkSmsTo: await this.sendContinueLink(patientId, open.token, link.title) };
 
     const row = await this.prisma.intakeSubmission.create({
       data: {
@@ -558,7 +592,112 @@ export class IntakeService {
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
       },
     });
-    return this.publicView(row.token);
+    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row.token, link.title) };
+  }
+
+  /**
+   * **پیامکِ «لینکِ ادامهٔ همین فرم»** — بلافاصله پس از ثبت‌نام (بازبینیِ UX، بندِ ۱۰۳).
+   *
+   * ⚠️ چرا: بیمار معمولاً از مرورگرِ داخلیِ اینستاگرام/تلگرام آمده و وسطِ کار برای واریز به اپِ بانک
+   * می‌رود؛ بسته‌شدنِ آن مرورگر تا دیروز یعنی پرکردنِ دوبارهٔ همهٔ فیلدها + کپچا.
+   *
+   * ⚠️ منتظرِ درگاهِ پیامک نمی‌ماند — ثبت‌نام روی اینترنتِ کند نباید پشتِ درگاه گیر کند؛ ارسال در
+   * پس‌زمینه است و نتیجه‌اش (فرستاده/ناموفق) مثلِ «ارسالِ فرم» در دفترِ پیام‌های بیمار می‌نشیند.
+   * ⚠️ برای هر ثبت‌نام حداکثر یک پیامک در ۱۰ دقیقه — تکرارِ ثبت‌نام بمبارانِ پیامک نمی‌سازد.
+   * خروجی: شمارهٔ **پوشیده** برای جملهٔ «لینک به … پیامک شد»، یا `null` (شمارهٔ نامعتبر).
+   */
+  private async sendContinueLink(patientId: number, token: string, title: string): Promise<string | null> {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, deletedAt: null }, select: { phone: true } });
+    const to = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(to)) return null;
+    const masked = `${to.slice(0, 4)}…${to.slice(-3)}`;
+    try {
+      this.rateLimit.hit(`intake-link-sms:${token}`, 1, 10 * 60_000);
+    } catch {
+      return masked; // همین چند دقیقه پیش رفته است
+    }
+    const smsCfg = await this.settings.sms();
+    const text = renderSms(smsCfg.formSendText, { title, link: this.publicFormLink(token) });
+    void (async () => {
+      const res = await this.sms.send(to, text).catch(() => ({ sent: false, stub: false }));
+      await this.prisma.reminder.create({
+        data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },
+      }).catch(() => undefined);
+    })().catch(() => undefined);
+    return masked;
+  }
+
+  /* ── ادامه با موبایل + کد (بازبینیِ UX، بندِ ۱۰۳) ─────────────────────────
+     بیماری که لینکِ فرمش را گم کرده، روی همان لینکِ ثبت‌نام شماره‌اش را می‌دهد و با کدِ پیامکی به
+     ثبت‌نامِ بازِ خودش برمی‌گردد — بی‌پرکردنِ دوبارهٔ فرم و کپچا.
+     ⚠️ **بی‌شمارش**: پاسخِ درخواست همیشه یکی است («اگر ثبت‌نامِ بازی باشد کد پیامک می‌شود»)؛ وجود یا
+     نبودِ ثبت‌نام از بیرون خوانده نمی‌شود. کد در همان جدولِ `otpCode`ِ ورود با هدفِ جدا (`intake-resume`)،
+     هش‌شده، ۵ دقیقه، ۵ تلاش، یک‌بارمصرف. */
+
+  private async openByPhone(linkId: number, phone: string) {
+    return this.prisma.intakeSubmission.findFirst({
+      where: { linkId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] }, patient: { phone, deletedAt: null } },
+      orderBy: { id: 'desc' },
+      select: { id: true, token: true },
+    });
+  }
+
+  private async resumeLink(linkToken: string) {
+    const link = await this.prisma.intakeLink.findUnique({ where: { token: linkToken } });
+    if (!link) throw new NotFoundException('این لینک معتبر نیست');
+    if (!link.active) throw new ForbiddenException('این لینک غیرفعال شده است');
+    return link;
+  }
+
+  private static resumePhone(raw: unknown) {
+    const phone = toEnDigits(String(raw ?? '')).replace(/[^0-9]/g, '');
+    if (!/^09\d{9}$/.test(phone)) throw new BadRequestException('شمارهٔ موبایل را کامل بنویسید (مثلاً ۰۹۱۲۳۴۵۶۷۸۹)');
+    return phone;
+  }
+
+  async resumeRequest(linkToken: string, rawPhone: string, ip = 'unknown') {
+    this.rateLimit.hit(`intake-resume:ip:${ip}`, 10, 15 * 60_000);
+    const phone = IntakeService.resumePhone(rawPhone);
+    this.rateLimit.hit(`intake-resume:phone:${phone}`, 3, 15 * 60_000);
+    const link = await this.resumeLink(linkToken);
+    const purpose = `intake-resume:${link.id}`;
+    const answer = { ok: true, ttl: RESUME_OTP_TTL_MS / 1000 };
+    const open = await this.openByPhone(link.id, phone);
+    if (!open) return answer;
+    const recent = await this.prisma.otpCode.findFirst({
+      where: { phone, purpose, createdAt: { gt: new Date(Date.now() - 60_000) } },
+    });
+    if (recent) return answer; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
+    const code = String(randomInt(100000, 1000000));
+    await this.prisma.otpCode.create({
+      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
+    });
+    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => ({ sent: false, stub: false }));
+    /* همان قراردادِ ورود: کدِ آزمون فقط در محیطِ test و با درگاهِ stub. */
+    return { ...answer, ...(res.stub && process.env.NODE_ENV === 'test' ? { devCode: code } : {}) };
+  }
+
+  async resumeVerify(linkToken: string, rawPhone: string, rawCode: string, ip = 'unknown') {
+    this.rateLimit.hit(`intake-resume-verify:ip:${ip}`, 20, 15 * 60_000);
+    const phone = IntakeService.resumePhone(rawPhone);
+    this.rateLimit.hit(`intake-resume-verify:phone:${phone}`, 8, 15 * 60_000);
+    const code = toEnDigits(String(rawCode ?? '')).replace(/[^0-9]/g, '');
+    const link = await this.resumeLink(linkToken);
+    const purpose = `intake-resume:${link.id}`;
+    const wrong = () => new BadRequestException('کدِ تأیید درست نیست یا منقضی شده — کدِ تازه بگیرید');
+    const otp = await this.prisma.otpCode.findFirst({ where: { phone, purpose, consumedAt: null }, orderBy: { createdAt: 'desc' } });
+    if (!otp || otp.expiresAt < new Date() || otp.attempts >= RESUME_OTP_MAX_ATTEMPTS) throw wrong();
+    if (sha256(code) !== otp.codeHash) {
+      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+      throw wrong();
+    }
+    const consumed = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
+    });
+    if (!consumed.count) throw wrong();
+    const open = await this.openByPhone(link.id, phone);
+    if (!open) throw wrong();
+    return { token: open.token };
   }
 
   /**
@@ -584,7 +723,7 @@ export class IntakeService {
   /** تقویمِ آزادِ ماه برای صفحهٔ بیمار — بدونِ نیاز به لاگین، فقط با توکن. */
   async publicSlots(token: string, jy: number, jm: number, topicId?: number) {
     await this.expireIfDue(token); // توکنِ نامعتبر همین‌جا رد می‌شود
-    return this.availability.month(jy, jm, { topicId });
+    return this.availability.month(jy, jm, { topicId, patient: true });
   }
 
   /** موضوع‌های قابلِ انتخاب — فقط آن‌هایی که واقعاً روزی دارند. */
@@ -634,17 +773,29 @@ export class IntakeService {
        دقیقه باز مانده باشد و آن جا از دست رفته باشد؛ اعتمادِ به کلاینت یعنی
        رزروِ روی روزِ تعطیل یا ظرفیتِ پرشده. */
     const [jy, jm] = jalaliYm(date);
-    const cal = await this.availability.month(jy, jm, { topicId: dto.topicId });
+    /* ⚠️ همان نمای بیمار (`patient: true`) که صفحه نشان داده: ساعتِ گذشتهٔ امروز این‌جا هم رد
+       می‌شود، نه فقط در تقویم (بازبینیِ UX، بندِ ۹۷). */
+    const cal = await this.availability.month(jy, jm, { topicId: dto.topicId, patient: true });
     const day = cal.days.find((d: any) => d.date === dto.date);
-    if (!day || !day.open) throw new BadRequestException('این روز دیگر آزاد نیست — روزِ دیگری انتخاب کنید');
+    if (!day || !day.open) {
+      /* امروزی که ساعت‌هایش گذشته با «پر شد» یکی نیست — بیمار باید بداند چرا. */
+      const late = !!day && !day.past && day.windows.some((w: any) => w.past || (w.slots ?? []).some((x: any) => x.past));
+      throw new BadRequestException(day?.past ? 'این روز گذشته است — روزِ دیگری انتخاب کنید'
+        : late ? 'وقتِ نوبت‌دهیِ امروز تمام شده — روزِ دیگری انتخاب کنید'
+          : 'این روز دیگر آزاد نیست — روزِ دیگری انتخاب کنید');
+    }
 
     const slotMode = day.windows.some((w: any) => w.mode === 'slot');
     if (slotMode) {
-      const free = day.windows
+      const sl = day.windows
         .filter((w: any) => w.mode === 'slot')
         .flatMap((w: any) => w.slots)
-        .find((sl: any) => sl.startMin === dto.startMin && !sl.taken);
-      if (!free) throw new BadRequestException('این ساعت دیگر آزاد نیست — ساعتِ دیگری انتخاب کنید');
+        .find((x: any) => x.startMin === dto.startMin);
+      if (!sl || sl.taken) {
+        throw new BadRequestException(sl?.past
+          ? 'این ساعت گذشته یا خیلی نزدیک است — ساعتِ دیگری انتخاب کنید'
+          : 'این ساعت دیگر آزاد نیست — ساعتِ دیگری انتخاب کنید');
+      }
     }
 
     try {
@@ -686,6 +837,7 @@ export class IntakeService {
 
   async publicView(token: string) {
     const row = await this.expireIfDue(token);
+    const face = await this.portal.publicFace();
     /* یک‌بار برای دو مصرف: هم `makesVisit` هم خاموش‌کردنِ نوبت‌دهی. */
     const scope = await this.formScope(row.formId);
     /* ⚠️ حساب از **لینکِ همین ثبت‌نام** خوانده می‌شود، نه از خودِ ثبت‌نام.
@@ -695,7 +847,7 @@ export class IntakeService {
     /* ثبت‌نامِ مستقیم (ارسال از کارتِ مراجعه) لینک ندارد → حسابِ سراسری. */
     const link = row.linkId === null ? null : await this.prisma.intakeLink.findUnique({
       where: { id: row.linkId },
-      select: { bankAccountId: true },
+      select: { bankAccountId: true, token: true, active: true },
     });
     return {
       // ⚠️ بدونِ این، بیمار مبلغ را می‌بیند ولی نمی‌داند **به کجا** بریزد —
@@ -713,6 +865,13 @@ export class IntakeService {
       form: await this.formView(row.formId, row.extraFormIds ?? []),
       token: row.token,
       status: row.status,
+      /* بیمار از صفحهٔ ثبت‌نام آمده (نه فرمِ مستقیمِ کارکنان) — مرحله‌نمای فرم «مشخصات»ِ انجام‌شده را
+         اولِ کار نشان می‌دهد تا شماره‌ها با «چه پیش رو دارید»ِ همان صفحه یکی باشند (بندِ ۱۰۷). */
+      registered: row.linkId !== null,
+      /* «شروعِ دوباره» / «ثبتِ درخواستِ تازه» برای فرمِ منقضی یا ردشده (بازبینیِ UX، بندِ ۱۱۰): همان لینکِ
+         ثبت‌نامی که بیمار از آن آمده — فقط اگر هنوز فعال است؛ وگرنه صفحه فقط «تماس» می‌گذارد. لینکِ
+         ثبت‌نام خودش عمومی است (بیو، پیامک)، پس دادنش به دارندهٔ همین فرم چیزی را باز نمی‌کند. */
+      restartToken: (row.status === 'expired' || row.status === 'rejected') && link?.active ? link.token : null,
       /* ⚠️ نوبت‌دهی فقط وقتی در صفحهٔ بیمار ظاهر می‌شود که نصب برنامهٔ کاری
          داشته باشد. نصبی که ندارد باید دقیقاً مثلِ دیروز کار کند — نه اینکه
          به گامی برسد که هیچ روزی برای انتخاب ندارد.
@@ -733,6 +892,10 @@ export class IntakeService {
                 date: a.date.toISOString().slice(0, 10),
                 startMin: a.startMin,
                 time: a.startMin == null ? null : AvailabilityService.minToHHMM(a.startMin),
+                /* «چهارشنبه ۸ مهر ۱۴۰۵» و «۱۶:۰۰» — کارتِ پایانیِ فرم نوبت را به زبانِ بیمار می‌گوید
+                   (بازبینیِ UX، بندِ ۱۰۲). */
+                whenFa: faDayLong(a.date),
+                timeFa: a.startMin == null ? null : faClock(AvailabilityService.minToHHMM(a.startMin)),
                 status: a.status,
                 topicId: a.topic?.id ?? null,
                 topicName: a.topic?.name ?? null,
@@ -756,6 +919,10 @@ export class IntakeService {
       /* برگشتِ جاری (مرحله، دلیل، راهنما) — تا وقتی بیمار اصلاح را نفرستاده. */
       returned: currentReturn(row.data, row.status),
       expiresAt: row.expiresAt,
+      /* مهلتِ فرم به زبانِ بیمار («دوشنبه ۲۱ مهر ۱۴۰۵») — تا دیروز هیچ‌جا گفته نمی‌شد (بندِ ۱۰۳). */
+      expiresFa: row.expiresAt ? faDayLong(row.expiresAt) : null,
+      /* نام/تلفنِ مطب و حوزه (تم) — همان `publicLink`. */
+      ...face,
     };
   }
 
@@ -868,7 +1035,9 @@ export class IntakeService {
     return {
       key: f.key,
       title: f.title,
-      hint: f.hint,
+      /* راهنمای پیش‌فرضِ قدیمی زبانِ کارکنان بود («فرم عمل از مسیر جداگانهٔ مطب…») — متنِ دست‌نخورده‌اش
+         برای بیمار به متنِ تازه برمی‌گردد (بندِ ۱۱۳)؛ راهنمای نوشتهٔ مدیر همان می‌ماند. */
+      hint: Object.values(REGISTRATION_HINTS).find((h) => h.was === f.hint)?.now ?? f.hint,
       /* صفحه‌شمار سمتِ سرور (قانون ۱۵) — و از روی همین فیلدهای دیده‌شده، نه
          از کلِ فرم: اگر تنها فیلدِ صفحهٔ ۲ خاموش باشد، صفحهٔ ۲ وجود ندارد. */
       pages: fields.reduce((m, x) => Math.max(m, x.page), 1),

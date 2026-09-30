@@ -11,6 +11,7 @@ import { renderSms } from '../common/sms-template';
 import { currentNotes, noteBody } from './clinical-note';
 import { OTHER_DX, OTHER_PX, diagnosisLabel, diagnosisList, principalDiagnosisTitle, procedureLabel } from './visit-coding';
 import { visitTitleOf } from './visit-title';
+import { publicFaceOf } from './public-face';
 
 /**
  * بخش‌های هسته که در **خلاصهٔ بیمار** دیده می‌شوند — کلیدِ فرم → نوعِ سند.
@@ -157,16 +158,20 @@ export class SummaryService {
       .filter((r) => typeof r.body === 'string' && r.body.trim() !== '')
       .map((r) => ({ label: r.label, body: String(r.body).trim() }));
 
-    const brand = await this.settings.brand();
+    /* رنگ و حوزه هم (بازبینیِ UX، بندِ ۹۴): صفحه بیرونِ `ConfigProvider` است و تم/رنگِ مطب را از همین می‌گیرد. */
+    const face = await publicFaceOf(this.settings, this.prisma);
     const person = v.surgeon?.person;
     return {
-      brand: { name: brand.name, phone: brand.phone, address: (brand as any).address ?? null, logo: (brand as any).logo ?? null },
+      brand: face.brand,
+      vertical: face.vertical,
       patient: {
         fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
         code: v.patient.code,
       },
       visit: {
         code: `${v.patient.code}-V${v.seq}`,
+        /* نوع — سند «خلاصهٔ عمل / تاریخِ عمل / جراح» را از «خلاصهٔ ویزیت» جدا می‌کند (بازبینیِ UX، بندِ ۱۱۲). */
+        kind: v.kind,
         /* همان قاعدهٔ نامِ مراجعه که بقیهٔ صفحه‌ها دارند — `visit-title.ts`. */
         kindTitle: visitTitleOf(v, def?.title),
         opDate: v.opDate,

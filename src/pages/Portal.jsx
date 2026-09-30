@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import './portal.css';
 import { ChevronEnd } from '../ui/icons.jsx';
+import { adoptFace } from '../lib/public-face.js';
+import { PublicErrorPage, PublicFoot, useFallbackFace } from './PublicBits.jsx';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — `/p/<token>`، عمومی و دائمی.
@@ -42,33 +44,63 @@ const linkify = (text) =>
 export default function Portal() {
   const { token } = useParams();
   const [data, setData] = useState(null);
-  const [err, setErr] = useState('');
-  const [tab, setTab] = useState('tasks');
+  /* خودِ خطا (status + message)، نه فقط متن — صفحهٔ خطا از status می‌گوید چه شد و چه کنید. */
+  const [err, setErr] = useState(null);
+  const [tab, setTabState] = useState('tasks');
+  /* زبانه در نشانی (`?tab=`) هم می‌نشیند تا «بازگشت» از خلاصه به همان زبانه برگردد، نه به پیش‌فرض. */
+  const [params, setParams] = useSearchParams();
+  const setTab = (k) => { setTabState(k); setParams({ tab: k }, { replace: true }); };
 
   useEffect(() => { document.title = 'پروندهٔ الکترونیک'; }, []);
   useEffect(() => {
     api(`/public/portal/${token}`, { auth: false })
       .then((d) => {
+        /* تم و رنگِ مطب از همین پاسخ — این صفحه `/config` نمی‌خوانَد (بیرونِ Providerها). */
+        adoptFace(d);
         setData(d);
         /* تبِ خالی خوش‌آمد نیست. ترتیبِ اهمیت: کاری که از بیمار خواسته شده ←
-           برنامهٔ پیشِ‌رو ← تاریخچه. */
-        setTab(d.tasks?.length ? 'tasks' : d.upcoming?.length ? 'upcoming' : 'visits');
+           برنامهٔ پیشِ‌رو ← تاریخچه. زبانهٔ نشانی (بازگشت از خلاصه) مقدم است اگر خالی نباشد. */
+        const want = params.get('tab');
+        setTabState(want && SECTIONS.some((x) => x.key === want) && (d[want] ?? []).length
+          ? want
+          : d.tasks?.length ? 'tasks' : d.upcoming?.length ? 'upcoming' : 'visits');
       })
-      .catch((e) => setErr(e.message));
+      .catch((e) => setErr(e));
   }, [token]);
+  /* پرونده باز نشد ← تم و هویتِ مطب از مسیرِ عمومیِ جدا. */
+  const fallback = useFallbackFace(!!err);
+  /* تبِ فعال در ردیفِ اسکرولیِ تب‌ها همیشه در دید (مثلاً «پیام‌ها» پس از بازگشت از خلاصه با ?tab=). */
+  useEffect(() => {
+    document.querySelector('.po-tabs button.on')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [tab, data]);
 
-  if (err) return <div className="po-err">{err}</div>;
+  /* «چه شد + چرا + چه کنید» با نام و تلفنِ مطب — نه یک خطِ صورتی روی صفحهٔ خالی (بازبینیِ UX، بندِ ۱۱۰). */
+  if (err) return <PublicErrorPage brand={fallback?.brand} err={err} />;
   if (!data) return <div className="po-err quiet">در حال بارگذاری…</div>;
 
-  const VisitRow = (v) => (
-    <a key={v.code} className="po-row" href={v.summaryUrl} target="_blank" rel="noopener noreferrer">
-      <div className="po-row-main">
-        <b>{v.kindTitle ?? 'مراجعه'}</b>
-        <small>{[v.dateFa, v.doctorName, v.procedure ?? v.topicName].filter(Boolean).join(' · ')}</small>
-      </div>
-      <span className={`po-tag s-${v.status}`}>{v.statusFa ?? v.status}</span>
-    </a>
-  );
+  /* هشدار: فقط مراجعهٔ **انجام‌شده** خلاصه دارد (سرور `summaryUrl` را برای بقیه تهی می‌فرستد): تا دیروز
+     لمسِ نوبتِ فردا «خلاصهٔ ویزیت»ِ کاری را باز می‌کرد که هنوز انجام نشده (بازبینیِ UX، بندِ ۱۰۰). */
+  const VisitRow = (v) => {
+    const body = (
+      <>
+        <div className="po-row-main">
+          <b>{v.kindTitle ?? 'مراجعه'}</b>
+          <small>{[v.dateFa, v.doctorName, v.procedure ?? v.topicName].filter(Boolean).join(' · ')}</small>
+        </div>
+        <span className={`po-tag s-${v.status}`}>{v.statusFa ?? v.status}</span>
+      </>
+    );
+    /* هشدار: همان زبانه، نه زبانهٔ تازه (بازبینیِ UX، بندِ ۱۱۵): بیمارِ مسن از زبانهٔ تازه راهِ برگشت را پیدا
+       نمی‌کرد. `state.back` دکمهٔ «بازگشت به پروندهٔ من» را در خلاصه روشن می‌کند. */
+    return v.summaryUrl
+      ? (
+        <Link key={v.code} className="po-row" to={v.summaryUrl} state={{ back: `/p/${token}` }}>
+          {body}
+          <ChevronEnd className="po-go" width="15" height="15" aria-hidden="true" />
+        </Link>
+      )
+      : <div key={v.code} className="po-row po-row-plain">{body}</div>;
+  };
 
   return (
     <div className="po">
@@ -79,11 +111,14 @@ export default function Portal() {
         <em dir="ltr">{data.patient.code}</em>
       </header>
 
+      {/* یک ردیفِ اسکرولی، تبِ خالی کم‌رنگ (بازبینیِ UX، بندِ ۱۱۵): پنج تب با چهار «۰» در دو ردیف می‌شکست و
+          «پیام‌ها» تنها در ردیفِ دوم می‌ماند؛ تبِ خالی عمداً پنهان نیست تا بیمار بداند آن بخش هست و خالی است. */}
       <nav className="po-tabs" role="radiogroup" aria-label="بخش‌های پرونده">
         {SECTIONS.map((s) => (
           <button
             key={s.key} type="button" role="radio" aria-checked={tab === s.key}
-            className={tab === s.key ? 'on' : ''} onClick={() => setTab(s.key)}
+            className={[tab === s.key ? 'on' : '', (data[s.key] ?? []).length ? '' : 'empty'].join(' ').trim()}
+            onClick={() => setTab(s.key)}
           >
             {s.label}
             <i>{(data[s.key] ?? []).length.toLocaleString('fa-IR')}</i>
@@ -120,10 +155,18 @@ export default function Portal() {
           {/* یک مرحله = یک کارت (DECISIONS.md #۵): وقتی نوبتِ قطعی برای همان
               «ویزیتِ بعدی» گرفته شده، سرور یک ردیفِ `booked` می‌دهد و توصیهٔ
               پزشک زیرش توضیح می‌شود — نه دو ردیفِ رقیب با دو تاریخ. */}
+          {/* «کِی بیایم؟» اولین سؤالِ بیمار است: روزِ هفته + تاریخ + ساعت درشت، بعد پزشک و «کجا»
+              (بازبینیِ UX، بندِ ۱۰۰). پاسخِ سرورِ قدیمی (فقط `dateFa`) هم همان کارت را می‌سازد. */}
           {data.upcoming.map((u, i) => (
             <div key={i} className={`po-row po-up${u.booked ? ' booked' : ''}`}>
               <div className="po-row-main">
-                <b>{u.label}: {u.dateFa}</b>
+                <b>{u.label}</b>
+                <span className="po-when">
+                  {u.whenFa ?? u.dateFa}
+                  {u.timeFa && <>، ساعتِ <bdi dir="ltr">{u.timeFa}</bdi></>}
+                </span>
+                {u.doctorName && <small>پزشک: {u.doctorName}</small>}
+                {(u.place || u.address) && <small>{[u.place, u.address].filter(Boolean).join(' — ')}</small>}
                 {u.detail && <small>{u.detail}</small>}
               </div>
             </div>
@@ -135,7 +178,7 @@ export default function Portal() {
         <section className="po-list">
           {data.visits.length === 0 && <div className="po-empty">هنوز مراجعه‌ای ثبت نشده است</div>}
           {data.visits.map(VisitRow)}
-          {data.visits.length > 0 && <p className="po-hint">با لمسِ هر مراجعه، خلاصهٔ آن باز می‌شود.</p>}
+          {data.visits.some((v) => v.summaryUrl) && <p className="po-hint">با لمسِ مراجعهٔ انجام‌شده، خلاصهٔ آن باز می‌شود.</p>}
         </section>
       )}
 
@@ -158,10 +201,8 @@ export default function Portal() {
         </section>
       )}
 
-      <footer className="po-foot">
-        {data.brand.phone && <a href={`tel:${data.brand.phone}`} dir="ltr">{data.brand.phone}</a>}
-        {data.brand.address && <small>{data.brand.address}</small>}
-      </footer>
+      {/* «تماس با مطب» دکمه با آیکون و رقمِ فارسی (بازبینیِ UX، بندِ ۱۱۴) — نه متنِ ۲۴ پیکسلیِ لاتین. */}
+      <PublicFoot brand={data.brand} />
     </div>
   );
 }

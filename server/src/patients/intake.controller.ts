@@ -31,6 +31,14 @@ class RegisterDto {
   @Type(() => Number) @IsInt({ message: 'پاسخِ پرسشِ امنیتی را به عدد بنویسید' }) captchaAnswer!: number;
 }
 
+class ResumeRequestDto {
+  @IsString({ message: 'شمارهٔ موبایل را بنویسید' }) @MaxLength(20) phone!: string;
+}
+class ResumeVerifyDto {
+  @IsString({ message: 'شمارهٔ موبایل را بنویسید' }) @MaxLength(20) phone!: string;
+  @IsString({ message: 'کدِ تأیید را بنویسید' }) @MaxLength(12) code!: string;
+}
+
 /**
  * پیش‌نویسِ فرم — عمداً هیچ فیلدِ ثابتی ندارد (نه `opDate`، نه `hospitalId`…):
  * آن‌ها را `fill` سرِ ثبتِ نهایی می‌گیرد. این‌جا فقط پاسخِ کادرهای فرم و
@@ -196,6 +204,12 @@ export class PublicIntakeController {
   @Get('form/:token/hospitals')
   hospitals(@Param('token') token: string, @Query('q') q?: string) { return this.intake.publicHospitals(token, q); }
 
+  /** هویتِ عمومیِ شرکت (نام، تلفن، نشانی، رنگ، حوزه) — برای صفحهٔ خطای بیمار. */
+  @Get('brand')
+  brand() {
+    return this.intake.publicFace();
+  }
+
   @Get('link/:token')
   link(@Param('token') token: string) {
     return this.intake.publicLink(token);
@@ -210,6 +224,18 @@ export class PublicIntakeController {
   @Post('link/:token/register')
   register(@Param('token') token: string, @Body() dto: RegisterDto, @Req() req: Request) {
     return this.intake.register(token, dto, clientIp(req));
+  }
+
+  /** «قبلاً ثبت‌نام کرده‌اید؟» — کدِ پیامکی برای ثبت‌نامِ بازِ همین شماره روی همین لینک (بی‌شمارش). */
+  @Post('link/:token/resume/request')
+  resumeRequest(@Param('token') token: string, @Body() dto: ResumeRequestDto, @Req() req: Request) {
+    return this.intake.resumeRequest(token, dto.phone, clientIp(req));
+  }
+
+  /** کدِ درست ← توکنِ فرمِ باز (`/f/…`). */
+  @Post('link/:token/resume/verify')
+  resumeVerify(@Param('token') token: string, @Body() dto: ResumeVerifyDto, @Req() req: Request) {
+    return this.intake.resumeVerify(token, dto.phone, dto.code, clientIp(req));
   }
 
   @Get('form/:token')

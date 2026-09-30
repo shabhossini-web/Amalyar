@@ -437,11 +437,30 @@ const SERVICE_INFO: PresetField[] = [
  */
 export const REGISTRATION_PAY_BOX_LABEL = 'پرداخت و فیش واریزی';
 
+/**
+ * راهنمای بالای فرمِ ثبت‌نام — **بیمار** می‌خواندش (بازبینیِ UX، بندِ ۱۱۳).
+ *
+ * ⚠️ پیش‌فرضِ قبلی زبانِ کارکنان بود: «فرم عمل از مسیر جداگانهٔ مطب انتخاب می‌شود»، «پس از بررسی
+ * شرکت، مراجعه ثبت می‌شود». نصب‌های موجود همان متن را در `form_defs.hint` دارند؛ `was` برای نمای
+ * بیمار به `now` برگردانده می‌شود (`IntakeService.formView`) — فقط متنِ **دست‌نخوردهٔ** پیش‌فرض،
+ * راهنمایی که مدیر نوشته دست نمی‌خورد.
+ */
+export const REGISTRATION_HINTS = {
+  clinic: {
+    was: 'ثبت‌نام اولیه و درخواست ویزیت؛ فرم عمل از مسیر جداگانهٔ مطب انتخاب می‌شود.',
+    now: 'مشخصات و علتِ مراجعه را بنویسید و روزِ نوبت را انتخاب کنید؛ مطب نوبت را تأیید می‌کند.',
+  },
+  ionm: {
+    was: 'مشخصات بیمار، اطلاعات عمل و فیش؛ پس از بررسی شرکت، مراجعه ثبت می‌شود.',
+    now: 'اطلاعاتِ عمل و مدارک را کامل کنید و در مرحلهٔ بعد فیشِ واریزی را بارگذاری کنید؛ پس از بررسی، نتیجه برایتان پیامک می‌شود.',
+  },
+} as const;
+
 /** Public registration is a separate workflow from the team's clinical visit form. */
 export const REGISTRATION_PRESETS: Record<VerticalKey, PresetForm> = {
   ionm: {
     ...INTAKE, key: 'intake.ionm', title: 'ثبت‌نام خدمات نورومانیتورینگ', visitKind: 'surgery',
-    hint: 'مشخصات بیمار، اطلاعات عمل و فیش؛ پس از بررسی شرکت، مراجعه ثبت می‌شود.',
+    hint: REGISTRATION_HINTS.ionm.now,
     fields: [...INTAKE.fields.filter(f => !['address', 'referralSource'].includes(f.key)), ...SERVICE_INFO,
       { key: 'patientNotes', label: 'توضیحات بیمار', type: 'textarea' }],
   },
@@ -452,7 +471,7 @@ export const REGISTRATION_PRESETS: Record<VerticalKey, PresetForm> = {
       { key: 'patientNotes', label: 'شرح دستور و توضیحات', type: 'textarea' }],
   },
   clinic: { ...INTAKE, key: 'intake.clinic', title: 'ثبت‌نام مطب و درخواست ویزیت', visitKind: 'clinic',
-    hint: 'ثبت‌نام اولیه و درخواست ویزیت؛ فرم عمل از مسیر جداگانهٔ مطب انتخاب می‌شود.',
+    hint: REGISTRATION_HINTS.clinic.now,
     fields: [...INTAKE.fields, { key: 'chiefComplaint', label: 'علت مراجعه', type: 'textarea', required: true }, { key: 'patientNotes', label: 'توضیحات تکمیلی', type: 'textarea' }] },
 };
 

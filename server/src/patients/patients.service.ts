@@ -11,6 +11,7 @@ import { serviceTitleOf, visitTitleOf } from './visit-title';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
+import { foldText } from '../common/name-match';
 import { digitVariants, textSearchOr } from '../common/search';
 import { jalaliText, toDateValue } from '../common/jalali';
 import { RemindersService } from './reminders.service';
@@ -384,6 +385,9 @@ export interface IntakeCompanyRule {
   /** بیمار «رزرو بدون تاریخ» زده — تاریخِ عمل اجباری نیست. */
   undated: boolean;
 }
+
+/** کلیدِ تطبیقِ نامِ خانوادگی: حروفِ یکسان‌شده، بی‌فاصله و بی‌نیم‌فاصله. */
+const surnameKey = (s: string | null | undefined) => foldText(s).replace(/ /g, '');
 
 @Injectable()
 export class PatientsService {
@@ -1152,7 +1156,11 @@ export class PatientsService {
     const existing = await tx.patient.findUnique({ where: { nationalId } });
     if (!existing) return null;
 
-    const same = existing.lastName.trim() === lastName.trim();
+    /* ⚠️ مقایسه روی **شکلِ کانونی**، نه حرف‌به‌حرف (بازبینیِ UX، بندِ ۹۸): «آزمونی فر» (فاصله)،
+       «آزمونی‌فر» (نیم‌فاصله) و «آزمونيفر» (ی عربی) روی صفحه یکی دیده می‌شوند و بیمار نمی‌داند منشی
+       کدام را تایپ کرده؛ تا دیروز بیمارِ قبلی با همین تفاوت رد می‌شد. همان نرمال‌سازِ `name-match`
+       (ي/ی، ك/ک، نیم‌فاصله، اعراب) و بی‌فاصله — «نام کاملاً متفاوت» همچنان ۴۰۹ است. */
+    const same = surnameKey(existing.lastName) === surnameKey(lastName);
     if (!same) {
       /* ⚠️ دو مخاطب، دو پیام. پیامِ ادمین نام و کدِ پرونده را می‌گوید چون
          فهرستِ بیماران جلوی چشمش است و انتخاب از آن معنی دارد. همان پیام روی

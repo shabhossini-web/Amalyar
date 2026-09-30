@@ -38,7 +38,7 @@ try {
     page.setDefaultTimeout(8000);
 
     await page.goto(`${vite.base}/r/tok`, { waitUntil: 'networkidle' });
-    const go = page.getByRole('button', { name: 'ادامه' });
+    const go = page.getByRole('button', { name: 'ادامه', exact: true });
     await go.waitFor();
     ok(await page.evaluate(() => document.documentElement.dataset.theme) === theme, `تم روی <html> همان ${theme} است`);
     const a = await lum(go);

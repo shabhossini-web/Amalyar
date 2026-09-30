@@ -6,10 +6,11 @@
    و «تا دیده‌شدنِ محتوا» روی ۴G ایران ۸٫۰ → ۵٫۲ ثانیه.
    افزودنِ صفحهٔ تازه هم باید `lazy` باشد، وگرنه بی‌سروصدا به ورودی برمی‌گردد. */
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import ErrorBoundary from './app/ErrorBoundary.jsx';
 import { AuthProvider, useAuth } from './app/auth.jsx';
 import { ConfigProvider } from './app/config.jsx';
+import { hostKind } from './lib/host-mode.js';
 const Landing = lazy(() => import('./pages/Landing.jsx'));
 const TenantSite = lazy(() => import('./pages/TenantLanding.jsx').then((m) => ({ default: m.TenantSite })));
 const Intake = lazy(() => import('./pages/Intake.jsx'));
@@ -55,20 +56,43 @@ const PlatformAdmin = lazy(() => import('./app/PlatformAdmin.jsx'));
 /* دکمه‌های سه‌بعدی + کفِ تاچ‌تارگت — سراسری، بعد از CSSهای صفحه‌ها تا برنده شود. */
 import './ui/press.css';
 
-const MARKETING_HOSTS = new Set(['amalyar.com', 'www.amalyar.com', 'localhost', '127.0.0.1']);
-const PLATFORM_HOSTS = new Set((import.meta.env.VITE_PLATFORM_HOSTS || 'admin-staging.amalyar.com').split(',').map((host) => host.trim().toLowerCase()).filter(Boolean));
-
+/* نوعِ میزبان یک تعریف دارد (`lib/host-mode.js`) — صفحهٔ ورود هم «بازگشت به سایت» را از همان می‌فهمد. */
 function TenantAwareRoot() {
-  const hostname = typeof window === 'undefined' ? '' : window.location.hostname.toLowerCase();
-  if (PLATFORM_HOSTS.has(hostname)) return <Navigate to="/platform-admin" replace />;
-  const forced = import.meta.env.VITE_TENANT_UI;
-  const tenantMode =
-    forced === 'true' ||
-    (forced !== 'false' && typeof window !== 'undefined' && !MARKETING_HOSTS.has(window.location.hostname));
-  if (!tenantMode) return <Landing />;
+  const kind = hostKind();
+  if (kind === 'platform') return <Navigate to="/platform-admin" replace />;
+  if (kind === 'marketing') return <Landing />;
   /* ریشهٔ دامنهٔ شرکت: اگر سایتِ معرفی روشن باشد همان را نشان بده، وگرنه —
      مثلِ همیشه — فرمِ ورود. تصمیم با سرور است (`/public/site`)، نه با کلاینت. */
   return <TenantSite fallback={<Navigate to="/login" replace />} />;
+}
+
+/**
+ * **پوستهٔ کارکنان** — احراز و پیکربندی فقط دورِ مسیرهایی که حساب دارند.
+ *
+ * هشدار: صفحه‌های بیمار (`/r` `/f` `/s` `/v` `/p` `/o`) و ریشهٔ دامنه **بیرونِ** این‌اند
+ * (بازبینیِ UX، بندِ ۹۴). تا دیروز هر دو Provider دورِ همهٔ مسیرها بودند: هر بارِ
+ * بازشدنِ فرمِ بیمار، `/config` بی‌احراز ۴۰۱ می‌گرفت و رویدادِ «نشست مرد» را می‌فرستاد،
+ * `AuthProvider` دوباره `/auth/me` و `/auth/accounts` را می‌زد — چهار ۴۰۱ هم‌زمان با
+ * چانکِ خودِ صفحه روی اینترنتِ کندِ گوشی، و دوباره پس از ثبت‌نام. و چون `/config` هرگز
+ * نمی‌رسید، تم و رنگِ مطب هم به بیمار نمی‌رسید؛ حالا خودِ صفحه آن‌ها را از پاسخِ عمومیِ
+ * خودش می‌گیرد (`lib/public-face.js`).
+ *
+ * صفحهٔ بیماری که روزی `useAuth()`/`useConfig()` لازم داشته باشد این‌جا جایش نیست —
+ * `useConfig()` بیرونِ Provider پیش‌فرض برمی‌گرداند، ولی `useAuth()` تهی است.
+ *
+ * `Suspense`ِ درونی عمداً همان جایِ قبلی است (داخلِ Providerها): بارشدنِ چانکِ یک صفحهٔ
+ * کارکنان نباید پوستهٔ احراز را پشتِ پردهٔ بارگذاری ببرد.
+ */
+function StaffProviders() {
+  return (
+    <AuthProvider>
+      <ConfigProvider>
+        <Suspense fallback={<div className="lx-boot">در حال بارگذاری…</div>}>
+          <Outlet />
+        </Suspense>
+      </ConfigProvider>
+    </AuthProvider>
+  );
 }
 
 function Protected({ children }) {
@@ -81,13 +105,11 @@ function Protected({ children }) {
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <ConfigProvider>
-        <Suspense fallback={<div className="lx-boot">در حال بارگذاری…</div>}>
+      <Suspense fallback={<div className="lx-boot">در حال بارگذاری…</div>}>
         <Routes>
           <Route path="/" element={<TenantAwareRoot />} />
-          <Route path="/login" element={<Login />} />
-          {/* ⚠️ عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. */}
+          {/* هشدار: عمومی و بیرونِ Protected — بیمار حسابِ کاربری ندارد. بیرونِ StaffProviders هم
+              هست: هیچ درخواستِ احرازی (`/config`, `/auth/*`) از این صفحه‌ها نمی‌رود. */}
           <Route path="/r/:token" element={<Intake step="register" />} />
           <Route path="/f/:token" element={<Intake step="form" />} />
           {/* نظرسنجیِ بیمار — عمومی، مثلِ لینک‌های ثبت‌نام. */}
@@ -98,49 +120,50 @@ export default function App() {
           <Route path="/p/:token" element={<Portal />} />
           {/* سفارشِ بالینی — چیزی که بیمار از لینکِ پیامک باز می‌کند. */}
           <Route path="/o/:token" element={<OrderPublic />} />
-          <Route path="/platform-admin" element={<PlatformAdmin />} />
-          {/* پوستهٔ سراسری (W2.4): یک نوارِ ثابت بالای همهٔ صفحاتِ سامانه — Shell خودش lazy است. */}
-          <Route element={<Protected><Shell /></Protected>}>
-            <Route path="/app/surgeon" element={<Gate feature="surgeon"><SurgeonPortal /></Gate>} />
-            {/* W2.3 (`DECISIONS.md` #۲): صفحهٔ نخست «امروز» است؛ کاشی‌ها در کشوی «همهٔ ابزارها» و نمای کاملشان روی `/app/tools`. */}
-            <Route path="/app" element={<Today />} />
-            <Route path="/app/tools" element={<Launcher />} />
-            <Route path="/app/dashboard" element={<Gate feature="dashboard"><Dashboard /></Gate>} />
-            <Route path="/app/users" element={<Gate feature="users"><Users /></Gate>} />
-            <Route path="/app/access" element={<Gate feature="access"><Access /></Gate>} />
-            <Route path="/app/definitions" element={<Definitions />} />
-            <Route path="/app/forms" element={<FormBuilder />} />
-            <Route path="/app/inventory" element={<Gate feature="inventory"><Inventory /></Gate>} />
-            <Route path="/app/accounting" element={<Gate feature="accounting"><Accounting /></Gate>} />
-            <Route path="/app/calendar" element={<Gate feature="calendar"><Calendar /></Gate>} />
-            <Route path="/app/frontdesk" element={<Gate feature="frontdesk"><FrontDesk /></Gate>} />
-            <Route path="/app/theatre" element={<Gate feature="theatre"><Theatre /></Gate>} />
-            <Route path="/app/waitlist" element={<Gate feature="waitlist"><Waitlist /></Gate>} />
-            <Route path="/app/schedule" element={<Gate feature="calendar"><Schedule /></Gate>} />
-            <Route path="/app/dispatch" element={<Gate feature="dispatch"><Dispatch /></Gate>} />
-            <Route path="/app/tech" element={<Gate feature="tech"><Tech /></Gate>} />
-            <Route path="/app/transport" element={<Gate feature="transport"><Transport /></Gate>} />
-            <Route path="/app/intake" element={<Gate feature="formgen"><IntakeAdmin /></Gate>} />
-            <Route path="/app/crm" element={<Gate feature="formgen"><Crm /></Gate>} />
-            <Route path="/app/reminders" element={<Gate feature="dashboard"><Reminders /></Gate>} />
-            <Route path="/app/letters" element={<Letters />} />
-            <Route path="/app/notes" element={<Gate feature="dashboard"><NotesSearch /></Gate>} />
-            <Route path="/app/assistant" element={<Assistant />} />
-            <Route path="/app/chat" element={<Chat />} />
-            <Route path="/app/patients/:id" element={<PatientRecord />} />
-            <Route path="/app/pathways" element={<Gate feature="pathway"><Pathways /></Gate>} />
-            <Route path="/app/site" element={<Gate feature="site"><Site /></Gate>} />
-            <Route path="/app/settings" element={<Settings />} />
-            <Route path="/app/profile" element={<Profile />} />
-            <Route path="/app/work" element={<Gate feature="work"><WorkList /></Gate>} />
+          <Route element={<StaffProviders />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/platform-admin" element={<PlatformAdmin />} />
+            {/* پوستهٔ سراسری (W2.4): یک نوارِ ثابت بالای همهٔ صفحاتِ سامانه — Shell خودش lazy است. */}
+            <Route element={<Protected><Shell /></Protected>}>
+              <Route path="/app/surgeon" element={<Gate feature="surgeon"><SurgeonPortal /></Gate>} />
+              {/* W2.3 (`DECISIONS.md` #۲): صفحهٔ نخست «امروز» است؛ کاشی‌ها در کشوی «همهٔ ابزارها» و نمای کاملشان روی `/app/tools`. */}
+              <Route path="/app" element={<Today />} />
+              <Route path="/app/tools" element={<Launcher />} />
+              <Route path="/app/dashboard" element={<Gate feature="dashboard"><Dashboard /></Gate>} />
+              <Route path="/app/users" element={<Gate feature="users"><Users /></Gate>} />
+              <Route path="/app/access" element={<Gate feature="access"><Access /></Gate>} />
+              <Route path="/app/definitions" element={<Definitions />} />
+              <Route path="/app/forms" element={<FormBuilder />} />
+              <Route path="/app/inventory" element={<Gate feature="inventory"><Inventory /></Gate>} />
+              <Route path="/app/accounting" element={<Gate feature="accounting"><Accounting /></Gate>} />
+              <Route path="/app/calendar" element={<Gate feature="calendar"><Calendar /></Gate>} />
+              <Route path="/app/frontdesk" element={<Gate feature="frontdesk"><FrontDesk /></Gate>} />
+              <Route path="/app/theatre" element={<Gate feature="theatre"><Theatre /></Gate>} />
+              <Route path="/app/waitlist" element={<Gate feature="waitlist"><Waitlist /></Gate>} />
+              <Route path="/app/schedule" element={<Gate feature="calendar"><Schedule /></Gate>} />
+              <Route path="/app/dispatch" element={<Gate feature="dispatch"><Dispatch /></Gate>} />
+              <Route path="/app/tech" element={<Gate feature="tech"><Tech /></Gate>} />
+              <Route path="/app/transport" element={<Gate feature="transport"><Transport /></Gate>} />
+              <Route path="/app/intake" element={<Gate feature="formgen"><IntakeAdmin /></Gate>} />
+              <Route path="/app/crm" element={<Gate feature="formgen"><Crm /></Gate>} />
+              <Route path="/app/reminders" element={<Gate feature="dashboard"><Reminders /></Gate>} />
+              <Route path="/app/letters" element={<Letters />} />
+              <Route path="/app/notes" element={<Gate feature="dashboard"><NotesSearch /></Gate>} />
+              <Route path="/app/assistant" element={<Assistant />} />
+              <Route path="/app/chat" element={<Chat />} />
+              <Route path="/app/patients/:id" element={<PatientRecord />} />
+              <Route path="/app/pathways" element={<Gate feature="pathway"><Pathways /></Gate>} />
+              <Route path="/app/site" element={<Gate feature="site"><Site /></Gate>} />
+              <Route path="/app/settings" element={<Settings />} />
+              <Route path="/app/profile" element={<Profile />} />
+              <Route path="/app/work" element={<Gate feature="work"><WorkList /></Gate>} />
+            </Route>
+            {/* CRM زیرِ همان featureِ formgen: داده‌اش تماماً از ثبت‌نام‌ها می‌آید
+                و مجوزِ تازه در ماتریسِ دسترسی یعنی یک ردیفِ پیکربندی برای هر نصب. */}
+            {/* دفترِ یادآوری‌ها — زیرِ featureِ داشبورد؛ داده‌اش از همان مراجعات است. */}
           </Route>
-          {/* CRM زیرِ همان featureِ formgen: داده‌اش تماماً از ثبت‌نام‌ها می‌آید
-              و مجوزِ تازه در ماتریسِ دسترسی یعنی یک ردیفِ پیکربندی برای هر نصب. */}
-          {/* دفترِ یادآوری‌ها — زیرِ featureِ داشبورد؛ داده‌اش از همان مراجعات است. */}
         </Routes>
-        </Suspense>
-        </ConfigProvider>
-      </AuthProvider>
+      </Suspense>
     </ErrorBoundary>
   );
 }
