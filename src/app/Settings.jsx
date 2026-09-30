@@ -126,7 +126,7 @@ export default function Settings() {
       <SectionNav items={[
         { id: 'st-kind', label: 'نوعِ نصب' },
         { id: 'st-tariff', label: 'ضریبِ تعرفه' },
-        ...knobGroups.map((g) => ({ id: `st-g-${g.key}`, label: g.label })),
+        ...(knobGroups ?? []).map((g) => ({ id: `st-g-${g.key}`, label: g.label })),
         { id: 'st-letterhead', label: 'سربرگ' },
         { id: 'st-import', label: 'ورودِ داده' },
         ...(me?.level >= 6 ? [{ id: 'st-test', label: 'دادهٔ آزمایشی' }] : []),
@@ -336,8 +336,9 @@ function Knobs({ onToast, onSaved, org, brand, onGroups }) {
   const load = useCallback(async () => {
     try {
       const d = await api('/settings');
-      setGroups(d.groups);
-      onGroups?.(d.groups);
+      /* شکلِ نامنتظرهٔ پاسخ (بی `groups`) نباید کلِ صفحه را بیندازد — فهرستِ پرشِ بالا `.map` می‌زند. */
+      setGroups(d?.groups ?? []);
+      onGroups?.(d?.groups ?? []);
       setDraft({});
       setError(null);
     } catch (e) {
