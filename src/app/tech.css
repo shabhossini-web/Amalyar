@@ -183,8 +183,17 @@
 .tk-note.no { color: var(--red-text); }
 .tk-done-note { display: flex; align-items: center; gap: 6px; font-weight: 700; }
 .tk-done-note svg { flex: 0 0 auto; }
-.tk-done-note:focus { outline: none; }
-.tk-done-note:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+/* پرسشِ «عملِ آینده — تاریخ به امروز؟» (company-20). پرسشِ احتیاط است نه خطا: کهربایی فقط
+   در نوارِ کنار و عنوان، متن خوانا روی سطحِ گود. */
+.tk-ask {
+  display: grid; gap: 4px; padding: 11px 13px; border-radius: 12px;
+  background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .12);
+  border-inline-start: 3px solid var(--amber-text);
+}
+.tk-ask b { font-size: 13px; line-height: 1.8; color: var(--amber-text); }
+.tk-ask p { font-size: 12px; line-height: 1.9; color: var(--text2); }
+.tk-ask:focus, .tk-done-note:focus { outline: none; }
+.tk-ask:focus-visible, .tk-done-note:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* ── وضعیتِ عمل: انجام شد / موکول شد / لغو شد (مالک، ۱۴۰۵/۰۷/۰۵) ──
    سه گزینهٔ بزرگ و خوانا، نه کشویی: کارشناس سرِ عمل با یک دست روی گوشی انتخاب می‌کند و باید

@@ -315,6 +315,24 @@ try {
       ok(true, `توست «موکول شد به ${faDate(later)}»`);
       ok((await visit(ids.b)).opDate?.toISOString().startsWith(later), 'تاریخِ تازه روی سرور نشست');
 
+      /* ب۲) «انجام شد» روی عملِ آینده بی‌پرسش ثبت نمی‌شود (بازبینیِ UX company-20). */
+      await p.getByRole('tab', { name: 'پیشِ رو' }).tap();
+      await card(pb).waitFor();
+      sheet = await openStatus(pb);
+      await sheet.getByRole('radio', { name: /انجام شد/ }).tap();
+      await sheet.locator('.tk-save').tap();
+      const ask = sheet.locator('.tk-ask');
+      await ask.waitFor();
+      ok((await ask.innerText()).includes(`برای ${faDate(later)} است`), `**«انجام شد» روی عملِ آینده می‌پرسد: «… برای ${faDate(later)} است — تاریخش به امروز عوض شود؟»**`, await ask.innerText());
+      await sheet.getByRole('button', { name: 'نه، برگرد' }).tap();
+      await sheet.getByRole('radiogroup', { name: 'وضعیتِ عمل' }).waitFor();
+      const bRow = await visit(ids.b);
+      ok(bRow.opStatus === 'pending' && bRow.opDate?.toISOString().startsWith(later), '… و «نه، برگرد» چیزی را عوض نکرد');
+      await sheet.getByRole('button', { name: 'بستن' }).tap();
+      await sheet.waitFor({ state: 'detached' });
+      await p.getByRole('tab', { name: 'امروز' }).tap();
+      await card(pc).waitFor();
+
       /* ج) انجام شد — شروع ثبت شده و پایان خالی: همان‌جا ساعت را می‌پرسد و پایان با «الان» پیش‌پر
          است (بازبینیِ UX company-15)؛ «انجام شد» پیش از این گام روی سرور نشسته است. */
       sheet = await openStatus(pc);

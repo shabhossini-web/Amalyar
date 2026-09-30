@@ -354,7 +354,11 @@ const STATUS_CHOICES = [
  * ⚠️ «موکول» بی‌تاریخ هم پذیرفته است (خالی = «هنوز تاریخ ندارد»): کارشناسِ سرِ عمل معمولاً
  * فقط می‌داند که امروز نشد، نه روزِ بعدش را؛ تاریخ را مدیر بعداً می‌گذارد.
  *
- * گامِ پس از «انجام شد» (بازبینیِ UX، ۱۴۰۵/۰۷):
+ * دو گامِ پس از «انجام شد» (بازبینیِ UX، ۱۴۰۵/۰۷):
+ *  - **عملِ آینده** (company-20): یک لمسِ اشتباه روی کارتِ فردا عمل را بی‌پرسش انجام‌شده
+ *    می‌کرد. حالا می‌پرسد «این عمل برای ۸ مهر است — تاریخش به امروز عوض شود؟»؛ «بله» اول
+ *    تاریخ را به امروز می‌آورد (همان مسیرِ «موکول»، که امروز را هم می‌پذیرد، با همان ممیزی و
+ *    رویداد) و بعد «انجام شد» را ثبت می‌کند.
  *  - **ساعتِ خالی** (company-15): «انجام شد» ساعت نمی‌پرسید و مدتِ عمل خالی می‌ماند. حالا اگر
  *    شروع یا پایان خالی است همین شیت می‌پرسد — پایانِ عملِ امروز با «الان» پیش‌پر. وضعیت پیش
  *    از این گام ثبت شده، پس «بعداً» و بستنِ شیت هر دو یعنی «بی‌ساعت، فعلاً»، نه انصراف.
@@ -367,11 +371,18 @@ export function StatusSheet({ visit, today, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [asking, setAsking] = useState(false);
-  const [step, setStep] = useState('pick'); // pick · times
+  const [step, setStep] = useState('pick'); // pick · future · times
   const [times, setTimes] = useState(null); // { f, msg, missing, prefilled }
-  /* با گامِ ساعت فوکوس روی نتیجهٔ همان گام — صفحه‌خوان «ثبت شد» را بخواند، نه سکوت. */
+  /* اگر جابه‌جاییِ تاریخ رفت و «انجام شد» نه، تلاشِ دوباره تاریخ را دوباره جابه‌جا نمی‌کند. */
+  const moved = useRef(false);
+  /* با هر گامِ تازه فوکوس روی متنِ همان گام — صفحه‌خوان پرسش یا نتیجه را بخواند، نه سکوت؛
+     و در برگشت به انتخاب، روی همان گزینهٔ انتخاب‌شده (دکمهٔ «نه، برگرد» دیگر وجود ندارد). */
   const stepRef = useRef(null);
-  useEffect(() => { if (step !== 'pick') stepRef.current?.focus(); }, [step]);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) { firstStep.current = false; return; }
+    stepRef.current?.focus();
+  }, [step]);
   const day = today || deviceToday();
 
   const send = async (body, msg) => {
@@ -381,11 +392,15 @@ export function StatusSheet({ visit, today, onClose, onSaved }) {
       onSaved(msg);
     } catch (e) { setErr(e.message); setBusy(false); throw e; }
   };
-  const markDone = async () => {
+  const markDone = async (toToday) => {
     setBusy(true); setErr('');
     try {
+      if (toToday && !moved.current) {
+        await api(`/tech/visits/${visit.id}/status`, { method: 'POST', body: { status: 'postponed', opDate: day } });
+        moved.current = true;
+      }
       const r = await api(`/tech/visits/${visit.id}/status`, { method: 'POST', body: { status: 'done' } });
-      const msg = 'انجام شد — ثبت شد';
+      const msg = toToday ? 'انجام شد — تاریخِ عمل امروز شد' : 'انجام شد — ثبت شد';
       const start = r?.opStartTime ?? '';
       const end = r?.opEndTime ?? '';
       if (start && end) { onSaved(msg); return; }
@@ -402,7 +417,11 @@ export function StatusSheet({ visit, today, onClose, onSaved }) {
   };
   const save = async () => {
     if (pick === 'cancelled') { setAsking(true); return; }
-    if (pick === 'done') { await markDone(); return; }
+    if (pick === 'done') {
+      if (visit.opDate && dayOf(visit.opDate) > day) { setErr(''); setStep('future'); return; }
+      await markDone(false);
+      return;
+    }
     const iso = date.trim() ? jStrToIso(date) : '';
     if (date.trim() && !iso) { setErr('تاریخ را به شکلِ ۱۴۰۵/۰۷/۱۲ بنویسید'); return; }
     await send({ status: 'postponed', ...(iso ? { opDate: iso } : {}) },
@@ -453,6 +472,7 @@ export function StatusSheet({ visit, today, onClose, onSaved }) {
             <div className="tk-status" role="radiogroup" aria-label="وضعیتِ عمل">
               {STATUS_CHOICES.map(({ key, label, hint, icon: Icon }) => (
                 <button key={key} type="button" role="radio" aria-checked={pick === key} disabled={busy}
+                        ref={pick === key ? stepRef : undefined}
                         className={`tk-status-opt k-${key}${pick === key ? ' on' : ''}`} onClick={() => { setPick(key); setErr(''); }}>
                   <Icon width="18" height="18" aria-hidden="true" />
                   <span><b>{label}</b><small>{hint}</small></span>
@@ -466,6 +486,22 @@ export function StatusSheet({ visit, today, onClose, onSaved }) {
             {err && <p className="tk-note no" role="alert">{err}</p>}
             <button type="button" className="tk-save" disabled={busy || !pick} onClick={save}>
               {busy ? 'در حال ثبت…' : cta}
+            </button>
+          </>
+        )}
+
+        {step === 'future' && (
+          <>
+            <div className="tk-ask" ref={stepRef} tabIndex={-1}>
+              <b>این عمل برای {faDate(visit.opDate)} است — تاریخش به امروز عوض شود؟</b>
+              <p>اگر امروز انجام شد، «بله» تاریخِ عمل را امروز می‌کند و «انجام شد» را ثبت می‌کند. اگر اشتباهی زدید، برگردید.</p>
+            </div>
+            {err && <p className="tk-note no" role="alert">{err}</p>}
+            <button type="button" className="tk-save" disabled={busy} onClick={() => markDone(true)}>
+              {busy ? 'در حال ثبت…' : 'بله، امروز انجام شد'}
+            </button>
+            <button type="button" className="tk-ghost" disabled={busy} onClick={() => { setErr(''); setStep('pick'); }}>
+              نه، برگرد
             </button>
           </>
         )}
