@@ -10,12 +10,16 @@
  *   - FF2: بارگذاریِ برنامه پیش‌نویسِ کهنه و خراب را جارو می‌کند
  *   - FF2: خروج و تعویضِ حساب پیش‌نویس‌های همان کاربر را پاک می‌کنند
  *   - FF3: «برگرداندن» فقط ساعتی را برمی‌دارد که همین لمس نوشت (`expect`)؛ ۴۰۹ کارت را تازه می‌کند
+ *   - FF4: «برگشت»ِ گوشی روی کارتِ دست‌خورده همان پرسشِ «فهرستِ روز» را می‌آورد؛ «برگشت» روی پرسش = ادامه
+ *   - FF4: تعویضِ حساب با نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود
+ *   - FF14: ورودیِ جامانده از پنجره «فهرستِ روز» را دوضربه‌ای نمی‌کند
  *  نباید بیفتد:
  *   - FF1: شرحِ تازه‌ترِ پرونده با پیش‌نویسِ کهنه جایگزین شود — نه از «ذخیره»ِ کارت، نه از پرسشِ «فهرستِ روز»
  *   - FF1: پیش‌نویسِ بی‌پایه (نسخهٔ پیشین) بی‌صدا برگردد
  *   - FF2: نوشتهٔ یک کاربر پس از تعویضِ حساب زیرِ کلیدِ کاربرِ بعدی بنشیند
  *   - FF3: لمسی که ساعتی ننوشت (کسِ دیگری پیش‌تر زده بود) نوارِ «برگرداندن» بگیرد
  *   - FF3: «برگرداندن» ساعتی را پاک کند که در این فاصله کسِ دیگری عوض کرده
+ *   - FF4: ژستِ برگشت فرمِ حینِ عملِ نیمه‌پر را بی‌پرسش دور بریزد
  */
 import { startVite, launch, mockContext } from './lib/mock-ui.mjs';
 
@@ -39,9 +43,16 @@ const cardOf = (S) => ({
   },
   patient: { id: 5, code: 'AM-0001', fullName: 'بیمارِ آزمونی', age: 40, gender: 'male', bloodType: 'O+' },
   decided: null, vitals: [], alerts: { allergies: null, chronicConditions: null, medications: null },
-  items: [], documents: [], subforms: [], clinical: true,
-  can: { subforms: false, followup: false, times: true, form: false }, locks: { followup: null }, checklist: [],
+  items: [], documents: [], clinical: true,
+  subforms: S.subforms ?? [],
+  can: { subforms: !!S.subforms, followup: false, times: true, form: false }, locks: { followup: null }, checklist: [],
 });
+/** زیرفرمِ «حینِ عمل» — همان شکلِ `subformView`ِ سرور. */
+const INTRA_FORM = {
+  key: 'intra-detail', phase: 'intra', title: 'فرمِ آزمونیِ حینِ عمل', inactive: false,
+  fields: [{ key: 'bleed', label: 'خون‌ریزی', type: 'text', required: false, options: [], active: true, roles: [] }],
+  data: {}, summary: [],
+};
 
 /**
  * APIِ ساختگیِ stateful. `S` وضعیتِ «سرور» است و آزمون وسطِ راه عوضش می‌کند — همان کاری که
@@ -97,8 +108,9 @@ const makeServer = (S) => ({ path, method, body }) => {
 
 const vite = await startVite(5231);
 const browser = await launch();
-/** یک مرورگرِ تازه — `seed` پیش‌نویس‌هایی است که پیش از بارگذاریِ صفحه روی «دستگاه» می‌نشینند. */
-const open = async (S, { seed = {}, viewport = { width: 390, height: 844 } } = {}) => {
+/** یک مرورگرِ تازه — `seed` پیش‌نویس‌هایی است که پیش از بارگذاریِ صفحه روی «دستگاه» می‌نشینند.
+ *  `fromList`: اول فهرستِ روز و بعد لمسِ ردیف — همان مسیری که کارت ورودیِ تاریخچهٔ خودش را می‌گیرد. */
+const open = async (S, { seed = {}, viewport = { width: 390, height: 844 }, fromList = false } = {}) => {
   const c = await mockContext(browser, makeServer(S), { viewport });
   /* فقط یک بار (نه در هر بارگذاری) و فقط روی سندی که ذخیره‌سازی دارد — `about:blank` ندارد. */
   await c.context.addInitScript((kv) => {
@@ -110,17 +122,27 @@ const open = async (S, { seed = {}, viewport = { width: 390, height: 844 } } = {
   }, seed);
   const page = await c.context.newPage();
   page.setDefaultTimeout(8000);
-  await page.goto(`${vite.base}/app/theatre?visit=${VID}`, { waitUntil: 'networkidle' });
+  if (fromList) {
+    await page.goto(`${vite.base}/app/theatre`, { waitUntil: 'networkidle' });
+    await page.locator(`[data-visit-id="${VID}"]`).click();
+  } else {
+    await page.goto(`${vite.base}/app/theatre?visit=${VID}`, { waitUntil: 'networkidle' });
+  }
   await page.locator('[data-note="opReport"]').waitFor();
   return { ...c, page };
 };
 const draftOf = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), DKEY);
 const draftKeys = (page) => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('amalyar_draft:')).sort());
 const reportWrites = (w) => w.filter((x) => x.path === `/theatre/visits/${VID}/report`);
+/** هر سناریو شکستِ خودش را ثبت می‌کند و بقیه ادامه می‌دهند — کدِ قدیمی باید **همهٔ** سنجه‌هایش را قرمز نشان دهد، نه اولی را. */
+const scene = async (title, fn) => {
+  console.log(title);
+  try { await fn(); } catch (e) { fail++; console.log(`  ✘ ${title.trim()} — ${String(e?.message ?? e).split('\n')[0]}`); }
+  finally { for (const c of browser.contexts()) await c.close().catch(() => {}); }
+};
 
 try {
-  console.log('۱) FF1 — پرونده زیرِ دستِ کاربر عوض شد');
-  {
+  await scene('۱) FF1 — پرونده زیرِ دستِ کاربر عوض شد', async () => {
     const S = { report: null, start: null, end: null };
     const { page, writes, errors, context } = await open(S);
     const box = page.locator('[data-report]');
@@ -154,10 +176,9 @@ try {
     ok(await draftOf(page) === null && reportWrites(writes).length === 0, 'پیش‌نویسِ دستگاه پاک شد و چیزی به پرونده نرفت');
     ok(errors.length === 0, 'بدونِ خطای JS', errors[0]);
     await context.close();
-  }
+  });
 
-  console.log('\n۲) FF1 — پیش‌نویسِ هم‌پایه برمی‌گردد؛ «ذخیره» پایه را هم می‌فرستد');
-  {
+  await scene('\n۲) FF1 — پیش‌نویسِ هم‌پایه برمی‌گردد؛ «ذخیره» پایه را هم می‌فرستد', async () => {
     const S = { report: 'شرحِ ب', start: null, end: null };
     const { page, writes, context } = await open(S, { seed: { [DKEY]: { text: 'شرحِ ب + ادامه', base: 'شرحِ ب', at: Date.now() - 60e3 } } });
     ok(await page.locator('[data-report]').inputValue() === 'شرحِ ب + ادامه', 'پیش‌نویس بی‌پرسش برگشت');
@@ -168,10 +189,9 @@ try {
     ok(w?.body === 'شرحِ ب + ادامه' && w?.base === 'شرحِ ب', '«ذخیره» متن و پایه‌اش را می‌فرستد', JSON.stringify(w));
     ok(await draftOf(page) === null, 'پس از ذخیره پیش‌نویسِ دستگاه پاک شد');
     await context.close();
-  }
+  });
 
-  console.log('\n۳) FF1 — پیش‌نویسِ بی‌پایه (نسخهٔ پیشین) و «ادامه با نوشتهٔ من»');
-  {
+  await scene('\n۳) FF1 — پیش‌نویسِ بی‌پایه (نسخهٔ پیشین) و «ادامه با نوشتهٔ من»', async () => {
     const S = { report: 'شرحِ ب', start: null, end: null };
     const { page, writes, context } = await open(S, { seed: { [DKEY]: { text: 'شرحِ کهنه', at: Date.now() - 60e3 } } });
     ok(await page.locator('[data-note-conflict]').count() === 1, '**نباید بیفتد:** پیش‌نویسِ بی‌پایه بی‌صدا برنمی‌گردد — پرسیده می‌شود');
@@ -185,10 +205,9 @@ try {
     const w = reportWrites(writes).at(-1)?.body;
     ok(w?.body === 'شرحِ کهنه' && w?.base === 'شرحِ ب', 'جایگزینی فقط با «ذخیره»ِ صریح، با پایهٔ درست', JSON.stringify(w));
     await context.close();
-  }
+  });
 
-  console.log('\n۴) FF1 — سرور پایه را رد کرد (۴۰۹): کارت تازه و پرسش');
-  {
+  await scene('\n۴) FF1 — سرور پایه را رد کرد (۴۰۹): کارت تازه و پرسش', async () => {
     const S = { report: 'شرحِ ب', start: null, end: null };
     S.onReport = () => { S.report = 'شرحِ ج — دستگاهِ دیگر'; return { status: 409, body: { message: 'متنِ پرونده از جای دیگری عوض شده است' } }; };
     const { page, context } = await open(S);
@@ -198,10 +217,9 @@ try {
     ok((await page.locator('[data-note-conflict]').innerText()).includes('شرحِ ج — دستگاهِ دیگر'), '**باید بیفتد:** ۴۰۹ کارت را تازه کرد و متنِ واقعیِ پرونده در پرسش است');
     ok((await page.locator('.th-toast').innerText()).includes('عوض شده'), 'پیامِ فارسیِ سرور دیده شد');
     await context.close();
-  }
+  });
 
-  console.log('\n۵) FF2 — جارو هنگامِ بارگذاری');
-  {
+  await scene('\n۵) FF2 — جارو هنگامِ بارگذاری', async () => {
     const S = { report: null, start: null, end: null };
     const now = Date.now();
     const { page, context } = await open(S, {
@@ -218,10 +236,9 @@ try {
     ok(keys.includes(`amalyar_draft:${UID}:97:opReport`) && await page.evaluate(() => localStorage.getItem('amalyar_unrelated') === 'x'),
       'پیش‌نویسِ تازه و کلیدِ بی‌ربط سرِ جایشان‌اند');
     await context.close();
-  }
+  });
 
-  console.log('\n۶) FF2 — تعویضِ حساب روی تبلتِ مشترک');
-  {
+  await scene('\n۶) FF2 — تعویضِ حساب روی تبلتِ مشترک', async () => {
     const S = { report: null, start: null, end: null, accounts: [{ ...ME, active: true }, NURSE] };
     const { page, context } = await open(S, {
       seed: {
@@ -241,10 +258,9 @@ try {
     ok(!keys.includes(`amalyar_draft:8:${VID}:opReport`), '**نباید بیفتد:** نوشتهٔ جراح زیرِ کلیدِ پرستار ننشست', keys.join(' '));
     ok(!(await page.locator('[data-report]').inputValue()).includes('جراح'), 'کارت برای کاربرِ تازه از نو ساخته شد');
     await context.close();
-  }
+  });
 
-  console.log('\n۷) FF2 — خروج');
-  {
+  await scene('\n۷) FF2 — خروج', async () => {
     const S = { report: null, start: null, end: null };
     const { page, context } = await open(S, {
       seed: {
@@ -260,10 +276,9 @@ try {
     ok(!keys.some((k) => k.startsWith(`amalyar_draft:${UID}:`)), '**باید بیفتد:** خروج پیش‌نویس‌های همان کاربر را پاک کرد', keys.join(' '));
     ok(keys.includes('amalyar_draft:8:50:opReport'), 'پیش‌نویسِ کاربرِ دیگرِ دستگاه دست نخورد (خروجِ او پاکش می‌کند)');
     await context.close();
-  }
+  });
 
-  console.log('\n۸) FF3 — «برگرداندن» فقط ساعتِ خودِ همین لمس');
-  {
+  await scene('\n۸) FF3 — «برگرداندن» فقط ساعتِ خودِ همین لمس', async () => {
     const S = { report: null, start: null, end: null };
     const { page, writes, context } = await open(S);
     const timesW = () => writes.filter((w) => w.path === `/theatre/visits/${VID}/times`);
@@ -295,7 +310,74 @@ try {
     await page.locator('.th-step[data-step="end"] .th-step-at', { hasText: '۱۱:۵۵' }).waitFor();
     ok(true, '۴۰۹ کارت را تازه کرد و ساعتِ واقعی دیده می‌شود');
     await context.close();
-  }
+  });
+
+  await scene('\n۹) FF4 — «برگشت»ِ گوشی روی کارتِ دست‌خورده', async () => {
+    const S = { report: null, start: null, end: null, subforms: [INTRA_FORM] };
+    const { page, writes, errors, context } = await open(S, { fromList: true });
+    await page.locator('[data-act="desk-subform-edit"]').click();
+    const len = await page.evaluate(() => history.length);
+    await page.getByLabel('خون‌ریزی').fill('۲۰۰ سی‌سی — آزمونی');
+    await page.waitForFunction((n) => history.length === n + 1, len);
+    await page.goBack();
+    await page.locator('[data-unsaved="keep"]').waitFor();
+    ok((await page.locator('.ov-ask').innerText()).includes('فرمِ آزمونیِ حینِ عمل'),
+      '**باید بیفتد:** برگشتِ گوشی همان پرسشِ «ذخیره نشده» را آورد، با نامِ فرم');
+    ok(await page.getByLabel('خون‌ریزی').inputValue() === '۲۰۰ سی‌سی — آزمونی', '**نباید بیفتد:** فرمِ نیمه‌پر دور ریخته شود');
+    /* «برگشت» روی پرسشِ باز = «ادامهٔ ویرایش» — همان قاعدهٔ پنجره‌ها. */
+    await page.goBack();
+    await page.locator('.ov-ask').waitFor({ state: 'detached' });
+    ok(await page.getByLabel('خون‌ریزی').inputValue() === '۲۰۰ سی‌سی — آزمونی', 'برگشت روی پرسش = ادامهٔ ویرایش؛ کارت سرِ جایش');
+    await page.goBack();
+    await page.locator('[data-unsaved="discard"]').click();
+    await page.locator('.th-list').waitFor();
+    ok(!new URL(page.url()).searchParams.get('visit') && !writes.some((w) => w.path.endsWith('/subforms')),
+      '«دور ریختن» ← فهرستِ روز، بی‌آنکه چیزی ذخیره شود');
+    ok(errors.length === 0, 'بدونِ خطای JS', errors[0]);
+    await context.close();
+  });
+
+  await scene('۹ب) FF4 — «ذخیره»ِ پرسشِ برگشت', async () => {
+    const S = { report: null, start: null, end: null };
+    const { page, writes, context } = await open(S, { fromList: true });
+    const len = await page.evaluate(() => history.length);
+    await page.locator('[data-report]').fill('شرحِ آزمونی برای ذخیره از پرسشِ برگشت');
+    await page.waitForFunction((n) => history.length === n + 1, len);
+    await page.goBack();
+    await page.locator('[data-unsaved="save"]').click();
+    await page.locator('.th-list').waitFor();
+    await page.waitForFunction(() => !new URLSearchParams(location.search).get('visit'));
+    ok(reportWrites(writes).length === 1 && reportWrites(writes)[0].body?.body === 'شرحِ آزمونی برای ذخیره از پرسشِ برگشت',
+      '«ذخیره»ِ پرسشِ برگشت: یک ذخیره و یک بار بسته شد', JSON.stringify(reportWrites(writes).map((w) => w.body)));
+    await page.locator(`[data-visit-id="${VID}"]`).waitFor();
+    await context.close();
+  });
+
+  await scene('\n۱۰) FF14 — ورودیِ جامانده «فهرستِ روز» را دوضربه‌ای نمی‌کند', async () => {
+    const S = { report: null, start: null, end: null };
+    const { page, context } = await open(S, { fromList: true });
+    /* پنجره‌ای که با ناوبری رفت ورودی‌اش را جا گذاشته — همان نشانیِ کارت، با نشانهٔ پنجرهٔ مرده. */
+    await page.evaluate(() => history.pushState({ ...history.state, amalyarOverlay: 'ov-dead-test' }, ''));
+    await page.getByRole('button', { name: 'فهرستِ روز' }).click();
+    await page.locator('.th-list').waitFor();
+    ok(!new URL(page.url()).searchParams.get('visit'), '**باید بیفتد:** یک لمس کافی بود');
+    await context.close();
+  });
+
+  await scene('\n۱۱) FF4 — تعویضِ حساب با نوشتهٔ ذخیره‌نشده', async () => {
+    const S = { report: null, start: null, end: null, accounts: [{ ...ME, active: true }, NURSE] };
+    const { page, writes, context } = await open(S);
+    await page.locator('[data-report]').fill('شرحِ نیمه‌کارهٔ آزمونی');
+    let asked = '';
+    page.once('dialog', (d) => { asked = d.message(); d.dismiss(); });
+    await page.locator('.pm-chip').click();
+    await page.locator('.pm-acc-main', { hasText: 'پرستارِ آزمونی' }).click();
+    await page.waitForFunction(() => true);
+    ok(asked.includes('ذخیره نشده') && !writes.some((w) => w.path === '/auth/switch'),
+      '**باید بیفتد:** پیش از تعویضِ حساب پرسیده شد و «نه» یعنی ماندن', asked);
+    ok(await page.locator('[data-report]').inputValue() === 'شرحِ نیمه‌کارهٔ آزمونی', 'نوشته سرِ جایش ماند');
+    await context.close();
+  });
 } finally {
   await browser.close();
   vite.stop();

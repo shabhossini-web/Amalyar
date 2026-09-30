@@ -7,7 +7,8 @@ import { faDuration, faTime } from '../lib/time.js';
 import { draftKey, dropDraft, readDraft, writeDraft } from '../lib/deviceDrafts.js';
 import JDate from './JDate.jsx';
 import { useConfig, useStatusList, useTerms } from './config.jsx';
-import Overlay, { CloseButton, UnsavedPrompt } from '../ui/Overlay.jsx';
+import Overlay, { CloseButton, UnsavedPrompt, staleBackEntry, useBackEntry, whenBackSettled } from '../ui/Overlay.jsx';
+import { setLeaveGuard } from '../lib/leave-guard.js';
 import Tabs from '../ui/Tabs.jsx';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import { AttachPicker, useSubformCatalog } from './VisitSubforms.jsx';
@@ -96,10 +97,24 @@ export default function Theatre() {
      کارتِ یک عمل همان فیلتر بماند. */
   const [who, setWho] = useState('all');
   /* **نوشته‌های ذخیره‌نشدهٔ کارت** (surgery-07) — هر جعبه (شرحِ عمل، یافته‌ها، فرمِ حینِ عمل) خودش
-     را این‌جا ثبت می‌کند: `{label, save, discard}`. «فهرستِ روز» پیش از بستنِ کارت همین را می‌پرسد. */
-  const unsaved = useRef(new Map()).current;
+     را این‌جا ثبت می‌کند: `{label, save, discard}`. «فهرستِ روز» پیش از بستنِ کارت همین را می‌پرسد.
+     شمارش state است نه فقط Map (بستهٔ FF، FF4): نگهبانِ «برگشت»ِ گوشی با همین روشن و خاموش می‌شود. */
+  const [unsavedN, setUnsavedN] = useState(0);
+  const [unsaved] = useState(() => {
+    const m = new Map();
+    const sync = () => setUnsavedN(m.size);
+    return {
+      get size() { return m.size; },
+      values: () => m.values(),
+      set(k, v) { m.set(k, v); sync(); return this; },
+      delete(k) { const had = m.delete(k); if (had) sync(); return had; },
+      clear() { m.clear(); sync(); },
+    };
+  });
   const [leaving, setLeaving] = useState(null); // null | برچسب‌های ذخیره‌نشده
   const [leaveBusy, setLeaveBusy] = useState(false);
+  /* «فهرستِ روز» پس از ذخیره/دور ریختن: اول نگهبان خاموش و ورودی‌اش از تاریخچه برداشته می‌شود، بعد کارت. */
+  const [closing, setClosing] = useState(false);
 
   const iso = jStrToIso(jday);
 
@@ -197,8 +212,11 @@ export default function Theatre() {
   /* کارتی که همین‌جا باز شد یک ورودیِ تاریخچه دارد — «فهرستِ روز» همان را برمی‌دارد (برگشتِ بعدی
      صفحه را عوض می‌کند، نه اینکه کارت را دوباره باز کند)؛ کارتی که از پیوند آمد فقط از نشانی می‌رود. */
 
+  /* ⚠️ ورودیِ جامانده از پنجره‌ای که دیگر باز نیست (با ناوبری رفت، یا بسته‌شدنش وسطِ برگشتِ دیگری افتاد)
+     همان نشانیِ کارت را دارد: `navigate(-1)` فقط به ورودیِ زیرش می‌رسید و کارت باز می‌ماند — «فهرستِ روز»
+     دوضربه‌ای می‌شد (بستهٔ FF، FF14). چنین ورودی‌ای جایش را به فهرستِ روز می‌دهد. */
   const closeCard = () => {
-    if (location.state?.thCard) navigate(-1);
+    if (location.state?.thCard && !staleBackEntry()) navigate(-1);
     else setParams((p) => { const n = new URLSearchParams(p); n.delete('visit'); return n; }, { replace: true });
   };
   /** برگشت به فهرستِ روز — نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود (ذخیره / دور ریختن / ادامهٔ ویرایش). */
@@ -214,15 +232,46 @@ export default function Theatre() {
         if (!(await u.save())) { setLeaving(null); return; }
       }
       setLeaving(null);
-      closeCard();
+      setClosing(true);
     } finally { setLeaveBusy(false); }
   };
   const leaveDiscarding = () => {
     for (const u of unsaved.values()) u.discard?.();
     unsaved.clear();
     setLeaving(null);
-    closeCard();
+    setClosing(true);
   };
+
+  /* **«برگشت»ِ گوشی روی کارتِ دست‌خورده** (بستهٔ FF، FF4): تا دیروز فقط دکمهٔ «فهرستِ روز» می‌پرسید و ژستِ
+     برگشتِ اندروید فرمِ حینِ عملِ نیمه‌پر را بی‌پرسش دور می‌ریخت. تا وقتی نوشتهٔ ذخیره‌نشده هست، کارت یک
+     ورودیِ نگهبان در تاریخچه دارد (همان `useBackEntry`ِ پنجره‌ها): «برگشت» همان پرسشِ «فهرستِ روز» را
+     می‌آورد، و «برگشت» روی پرسشِ باز یعنی «ادامهٔ ویرایش». */
+  const guarding = !!openId && !!card && unsavedN > 0;
+  const leavingRef = useRef(leaving);
+  leavingRef.current = leaving;
+  const leaveBusyRef = useRef(leaveBusy);
+  leaveBusyRef.current = leaveBusy;
+  useBackEntry(guarding, () => {
+    if (leaveBusyRef.current) return true;
+    if (leavingRef.current) { setLeaving(null); return true; }
+    setLeaving([...unsaved.values()].map((u) => u.label));
+    return true;
+  });
+  /* پس از «ذخیره»/«دور ریختن»: نگهبان در همین commit خاموش می‌شود و ورودی‌اش را با `history.back()`
+     برمی‌دارد؛ کارت بعد از رسیدنِ همان برگشت بسته می‌شود — دو برگشتِ هم‌زمان روی هم نمی‌افتند. */
+  useEffect(() => {
+    if (!closing || guarding) return;
+    setClosing(false);
+    whenBackSettled(closeCard);
+  }, [closing, guarding]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* تعویضِ حساب، خروج و رفتن از منوی پروفایل/جستجو هم همین نوشته‌ها را رها می‌کنند — و خروج پیش‌نویسِ
+     دستگاه را هم پاک می‌کند (FF2)؛ پس پیش از خودِ کار پرسیده می‌شود (`leave-guard`، الگوی «تنظیمات»). */
+  useEffect(() => {
+    if (!guarding) return undefined;
+    return setLeaveGuard(() => window.confirm(
+      `${[...unsaved.values()].map((u) => `«${u.label}»`).join('، ')} هنوز ذخیره نشده — اگر بروید از بین می‌رود. بروید؟`,
+    ));
+  }, [guarding, unsaved]);
 
   /* دسته‌ها و شمارشان از سرور می‌آیند (`day.owners`، فقط در نمای سرپرستی)؛ این‌جا فقط
      انتخاب می‌شوند. با یک نفر چیزی برای فیلترکردن نیست. دسته‌ای که با عوض‌شدنِ روز

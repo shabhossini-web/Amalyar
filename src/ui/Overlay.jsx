@@ -22,7 +22,7 @@ if (typeof window !== 'undefined') {
     afterBack.splice(0).forEach((f) => f());
   });
 }
-function useBackEntry(enabled, onBack) {
+export function useBackEntry(enabled, onBack) {
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
   useEffect(() => {
@@ -59,6 +59,26 @@ function useBackEntry(enabled, onBack) {
       if (mine && window.history.state?.amalyarOverlay === token) { backPending = true; window.history.back(); }
     };
   }, [enabled]);
+}
+
+/**
+ * «برگشتی» که پنجره‌ای هنگامِ بسته‌شدن زده (`history.back()`ِ ناهم‌گام) هنوز نرسیده؟ `fn` بعد از رسیدنش
+ * اجرا می‌شود، وگرنه همین حالا. صفحه‌ای که پس از بستنِ نگهبانِ خودش ناوبری می‌کند (میزِ اتاقِ عمل ←
+ * «فهرستِ روز»، بستهٔ FF، FF4) با این دو برگشت را روی هم نمی‌اندازد.
+ */
+export function whenBackSettled(fn) {
+  if (backPending) afterBack.push(fn);
+  else fn();
+}
+
+/**
+ * ورودیِ فعلیِ تاریخچه مالِ پنجره‌ای است که دیگر باز نیست (با ناوبری رفت، یا بسته‌شدنش وسطِ برگشتِ
+ * دیگری افتاد)؟ «برگشت» روی چنین ورودی‌ای به **همان** نشانی می‌رسد و کاربر باید دوبار بزند (FF14).
+ */
+export function staleBackEntry() {
+  if (typeof window === 'undefined') return false;
+  const t = window.history.state?.amalyarOverlay;
+  return !!t && !liveEntries.has(t);
 }
 
 /* بستنِ «محافظت‌شده» برای دکمه‌های داخلِ پنجره (ضربدر، انصراف) — همان مسیری که Escape و
