@@ -69,6 +69,8 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
             if (!it) return null;
             const usable = attachableOn(it, kind);
             const on = attached.has(key);
+            /* مرحلهٔ مقصدِ هر ستاره می‌تواند فرق کند (زبانهٔ «مشخصات»ِ فرمِ عمل: مرحلهٔ خودِ فرم) — تابع یا متن. */
+            const ph = typeof pinPhase === 'function' ? pinPhase(it) : pinPhase;
             return (
               <button
                 key={`slot-${i}`} type="button" data-pin-slot={i} data-pin={key}
@@ -76,7 +78,7 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
                 onClick={() => onPin(it)} disabled={disabled || !usable}
                 title={!usable ? `«${it.title}» در این فرم در دسترس نیست`
                   : on ? `«${it.title}» الصاق شده — برو به آن`
-                    : pinPhase ? `الصاقِ «${it.title}» به «${pinPhase}»` : `الصاقِ «${it.title}»`}
+                    : ph ? `الصاقِ «${it.title}» به «${ph}»` : `الصاقِ «${it.title}»`}
               >
                 <Star width="13" height="13" aria-hidden="true" />{it.short}
               </button>

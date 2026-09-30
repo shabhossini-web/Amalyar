@@ -286,7 +286,9 @@
 }
 .vf-cc-inherit p { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.8; color: var(--text1); white-space: pre-wrap; }
 .vf-cc-inherit small { font-size: 11.5px; color: var(--text3); }
-.vf-cc-back { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+/* ستونِ «شکایتِ اولیه» + «برگشت به شکایتِ …» زیرش — یک خانهٔ گریدِ `.vf-cc`، بیرون از برچسب (FF12). */
+.vf-cc-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.vf-cc-back { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; }
 .vf-cc-back small { font-weight: 600; color: var(--text3); }
 .vf-cc-own {
   justify-self: start; display: inline-flex; align-items: center; gap: 6px;

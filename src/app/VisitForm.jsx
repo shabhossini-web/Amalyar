@@ -745,6 +745,16 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      خاصی ندارد (علائمِ حیاتی، ASA، فرمِ ساختِ خودتان) — آن‌ها به همان مرحلهٔ انتخابی می‌روند، بی‌هشدار. */
   const boundPhase = (it) => (isSurgery && (it?.defaultPhase === 'intra' || it?.defaultPhase === 'post') ? it.defaultPhase : null);
   const pickTarget = (it) => (pickExplicit ? pickPhase : boundPhase(it) ?? pickPhase);
+  /* ستارهٔ منتخبِ سربرگ (بستهٔ FF، FF10): روی زبانهٔ «مشخصات» مرحلهٔ **خودِ فرم** را می‌گیرد — همان قاعدهٔ
+     پنجرهٔ الصاق. تا دیروز `phase` بود، یعنی آخرین زبانهٔ مرحله‌ای که کاربر دیده بود (یا «قبل» اگر هیچ):
+     «فرمِ جزئیاتِ حینِ عمل» از ستاره به «قبل از عمل» می‌چسبید و سرِ میز دیده نمی‌شد. روی زبانهٔ یک مرحله،
+     همان مرحله — کاربر صریحاً آن‌جاست. «الصاق‌شده» و متنِ راهنمای هر ستاره هم به‌ازای همان مرحله است. */
+  const pinPhaseOf = (it) => (tab === 'info' ? (boundPhase(it) ?? phase) : phase);
+  const pinAttached = new Set((prefs.subformPins ?? []).filter((k) => {
+    if (!k) return false;
+    const ph = isSurgery ? pinPhaseOf(catByKey.get(k)) : '';
+    return subList.some((x) => x.key === k && (x.phase || '') === (ph || ''));
+  }));
   const removeSub = (slot) => {
     const gone = subList.find((x) => x.slot === slot);
     if (gone) removedData.current[slot] = { key: gone.key, phase: gone.phase, data: gone.builtin ? undefined : (gone.data ?? {}) };
@@ -1517,25 +1527,31 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           </div>
         </div>
       ) : (
-        <label className="db-field">
-          <span>{ccLabel}</span>
-          <textarea
-            rows={2}
-            value={f.chiefComplaint}
-            onChange={set('chiefComplaint')}
-            placeholder="به زبانِ خودِ بیمار…"
-            autoFocus={ccOwn && !f.chiefComplaint}
-          />
+        /* «برگشت به شکایتِ …» **بیرون** از `<label>` (بستهٔ FF، FF12): دکمه داخلِ برچسب HTMLِ نامعتبر است (دو
+           کنترل در یک برچسب) و متنِ توضیح و دکمه جزوِ نامِ دسترس‌پذیرِ کادر می‌شد — صفحه‌خوان به‌جای «شکایتِ
+           اولیه» یک پاراگراف می‌خواند. توضیح حالا با `aria-describedby` به کادر وصل است. */
+        <div className="vf-cc-col">
+          <label className="db-field">
+            <span>{ccLabel}</span>
+            <textarea
+              rows={2}
+              value={f.chiefComplaint}
+              onChange={set('chiefComplaint')}
+              placeholder="به زبانِ خودِ بیمار…"
+              autoFocus={ccOwn && !f.chiefComplaint}
+              aria-describedby={inheritedComplaint ? `${ccId}-back` : undefined}
+            />
+          </label>
           {inheritedComplaint && (
-            <span className="vf-cc-back">
-              <small>{f.chiefComplaint.trim() ? 'به‌جای' : 'خالی بماند تا'} شکایتِ {complaintSourceLabel}{f.chiefComplaint.trim() ? '' : ' برگردد'}: «{inheritedComplaint}»</small>
+            <div className="vf-cc-back">
+              <small id={`${ccId}-back`}>{f.chiefComplaint.trim() ? 'به‌جای' : 'خالی بماند تا'} شکایتِ {complaintSourceLabel}{f.chiefComplaint.trim() ? '' : ' برگردد'}: «{inheritedComplaint}»</small>
               <button type="button" className="vf-cc-own" data-act="complaint-inherit"
                       onClick={() => { setF((s2) => ({ ...s2, chiefComplaint: '' })); setCcOwn(false); }}>
                 برگشت به شکایتِ {complaintSourceWord}
               </button>
-            </span>
+            </div>
           )}
-        </label>
+        </div>
       )}
       {durationField && (
         <label className={`db-field${extraErr[durationField.key] ? ' bad' : ''}`} data-field={durationField.key}>
@@ -2464,10 +2480,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         pins={prefs.subformPins}
         byKey={catByKey}
         kind={f.kind}
-        attached={attachedIn(isSurgery ? phase : '')}
-        pinPhase={isSurgery ? PHASE_FA[phase] : null}
+        attached={pinAttached}
+        pinPhase={isSurgery ? (it) => PHASE_FA[pinPhaseOf(it)] : null}
         onAttach={() => openPicker(phase)}
-        onPin={(it) => attachSub(it, isSurgery ? phase : '')}
+        onPin={(it) => attachSub(it, isSurgery ? pinPhaseOf(it) : '')}
         disabled={busy || !subLoaded}
         showAttach={canAttach}
       />

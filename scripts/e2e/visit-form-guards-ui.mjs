@@ -7,8 +7,10 @@
  *   - FF15: نوشته‌ای که پیش از رسیدنِ زیرفرم‌ها تایپ شد «ذخیره‌نشده» است؛ و اگر خواندنشان شکست خورد، نگهبان باز هم کار می‌کند
  *   - FF7: لینکِ نامعتبر در زبانهٔ پنهانِ «مشخصات» ذخیره را بی‌صدا نمی‌بندد — فرم به همان زبانه و فیلد می‌رود (شرکت)
  *   - FF9: خطای «ویزیتِ بعدی» در فرمِ عمل به زبانهٔ «بعد از عمل» می‌رود و کنارِ خودِ کادر دیده می‌شود
+ *   - FF10: ستارهٔ منتخبِ سربرگ روی زبانهٔ «مشخصات» فرم را به مرحلهٔ خودش (حین) می‌چسباند
  *  نباید بیفتد:
  *   - FF11: فرمِ ویرایش پرونده جست‌وجو کند (`/patients?q=`)
+ *   - FF12: «برگشت به شکایتِ …» داخلِ `<label>`ِ کادرِ شکایت بماند (نامِ دسترس‌پذیر و HTMLِ معتبر)
  */
 import { startVite, launch, mockContext } from './lib/mock-ui.mjs';
 
@@ -143,6 +145,29 @@ try {
     ok(await sheetOpen(page), 'فرم باز است');
   });
 
+  await scene('\n۴) FF12 — «برگشت به شکایتِ …» بیرون از برچسبِ کادر', async () => {
+    const o = { cc: 'ضعفِ پای چپِ آزمونی' };
+    const { page } = await openForm(o);
+    await page.getByRole('tab', { name: /مشخصات/ }).click();
+    await page.locator('[data-act="complaint-own"]').click();
+    const box = page.locator('.db-sheet [data-act="complaint-inherit"]');
+    await box.waitFor();
+    const shape = await page.evaluate(() => {
+      const back = document.querySelector('.db-sheet [data-act="complaint-inherit"]');
+      const ta = back?.closest('.vf-cc-col, .vf-cc, [data-core="chiefComplaint"]')?.querySelector('textarea');
+      const label = ta?.closest('label');
+      return {
+        backInLabel: !!back?.closest('label'),
+        labelHasButton: !!label?.querySelector('button'),
+        labelText: label?.textContent?.trim() ?? '',
+        described: !!(ta?.getAttribute('aria-describedby') && document.getElementById(ta.getAttribute('aria-describedby'))),
+      };
+    });
+    ok(!shape.backInLabel && !shape.labelHasButton, '**نباید بیفتد:** دکمهٔ «برگشت» داخلِ `<label>`ِ کادرِ شکایت', JSON.stringify(shape));
+    ok(!shape.labelText.includes('برگشت') && !shape.labelText.includes('ضعفِ پای'), 'نامِ کادر فقط عنوانِ خودش است', shape.labelText);
+    ok(shape.described, 'توضیحِ «خالی بماند تا …» با aria-describedby به کادر وصل است');
+  });
+
   await scene('\n۵) FF9 — خطای «ویزیتِ بعدی» به زبانهٔ «بعد از عمل» می‌رود', async () => {
     const o = {};
     const { page } = await openForm(o);
@@ -156,6 +181,20 @@ try {
     ok(sel === 'true', '**باید بیفتد:** فرم به زبانهٔ «بعد از عمل» رفت', String(sel));
     ok(await page.locator('[data-core="nextVisitDate"].vf-bad .vf-core-err').count() === 1, 'خطا کنارِ خودِ کادرِ «ویزیتِ بعدی» است');
     ok(!(o.patches ?? []).length, 'چیزی ذخیره نشد');
+  });
+
+  await scene('\n۶) FF10 — ستارهٔ منتخب روی «مشخصات» فرم را به مرحلهٔ خودش می‌چسباند', async () => {
+    const o = { pins: ['intra-detail', null, null], catalog: [INTRA_ITEM] };
+    const { page } = await openForm(o);
+    ok(await page.getByRole('tab', { name: 'قبل از عمل' }).getAttribute('aria-selected') === 'true', 'پیش‌شرط: فرم روی مرحلهٔ «قبل» باز شد');
+    await page.getByRole('tab', { name: /مشخصات/ }).click();
+    const pin = page.locator('.vf-pin[data-pin="intra-detail"]');
+    ok((await pin.getAttribute('title'))?.includes('حین عمل'), 'راهنمای ستاره مرحلهٔ مقصدِ واقعی را می‌گوید', await pin.getAttribute('title'));
+    await pin.click();
+    await page.locator('[data-subform="intra-detail"]').first().waitFor();
+    const phases = await page.$$eval('[data-subform="intra-detail"]', (els) => els.map((e) => e.dataset.subformPhase));
+    ok(phases.join() === 'intra', '**باید بیفتد:** الصاق به «حین عمل»، نه به «قبل از عمل»', phases.join());
+    ok(await pin.evaluate((b) => b.classList.contains('is-attached')), 'ستاره حالا «الصاق شده» است');
   });
 
   await scene('\n۷) FF7 — لینکِ نامعتبرِ زبانهٔ پنهان ذخیره را بی‌صدا نمی‌بندد (شرکت)', async () => {
