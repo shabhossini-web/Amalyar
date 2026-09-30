@@ -34,6 +34,7 @@ import { TenantContext } from '../tenant/tenant-context';
 import { AvailabilityService } from './availability.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { referrerStats } from './crm-referrers';
+import { scopedVisitWhere } from '../common/own-scope';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
 
@@ -1958,9 +1959,10 @@ export class IntakeService {
     };
   }
 
-  /** ارجاع‌دهنده‌ها (جراح/بیمارستان) — آمارِ «تحلیلِ مشتریان» برای شرکت؛ منطق در `crm-referrers.ts` (company-25). */
-  referrers() {
-    return referrerStats(this.prisma);
+  /** ارجاع‌دهنده‌ها (جراح/بیمارستان) — آمارِ «تحلیلِ مشتریان» برای شرکت؛ منطق در `crm-referrers.ts` (company-25).
+   *  با مرزِ دادهٔ همین کاربر (DF13): کارشناس فقط عمل‌های منتسب به خودش را می‌شمارد، نه کلِ شرکت. */
+  referrers(user: any) {
+    return referrerStats(this.prisma, new Date(), scopedVisitWhere(user));
   }
 
   /**

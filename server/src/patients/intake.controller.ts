@@ -416,8 +416,8 @@ export class IntakeController {
   /** ارجاع‌دهنده‌ها — عمل‌های هر جراح و بیمارستان در شش ماهِ اخیر (company-25). */
   @RequirePermissions('intake.read')
   @Get('referrers')
-  referrers() {
-    return this.intake.referrers();
+  referrers(@CurrentUser() user: any) {
+    return this.intake.referrers(user);
   }
 
   /** بیمارانِ عمل‌شده‌ای که فرمِ پیگیریِ پرشده ندارند. */

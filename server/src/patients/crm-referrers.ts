@@ -21,7 +21,7 @@ type Row = { key: string; name: string; byMonth: number[]; total: number; upcomi
  * - جراح/بیمارستانِ تعریف‌نشده با نامِ متنیِ روی مراجعه شمرده می‌شود، نه دور ریخته — وگرنه همان کسی که
  *   هنوز در تعاریفِ پایه نیامده از آمار غیب می‌شد.
  */
-export async function referrerStats(prisma: any, now = new Date()) {
+export async function referrerStats(prisma: any, now = new Date(), scope: Record<string, any> = {}) {
   /* «این ماه» ماهِ **روزِ تهران** است، نه روزِ UTCِ کانتینر (DF12؛ `common/clinic-day.ts`): بی‌این، از ۰۰:۰۰ تا
      ۰۳:۳۰ِ روزِ اولِ هر ماه «این ماه» هنوز ماهِ قبل بود و جراحی که همان روز کار فرستاده بود «ساکت» دیده می‌شد. */
   const [cy, cm] = toJalali(dayUtc(clinicTodayIso(now)));
@@ -36,6 +36,9 @@ export async function referrerStats(prisma: any, now = new Date()) {
   const end = jalaliMonthRange(cy, cm)[1];
   const visits: any[] = await prisma.visit.findMany({
     where: {
+      /* مرزِ دادهٔ کاربر (DF13، قانون ۴): زیرِ سوپروایزر فقط مراجعه‌های منتسب به خودش. `AND` نه spread — شرطِ
+         «خودش» ممکن است `OR` باشد و `OR`ِ بازهٔ تاریخ را بپوشاند. */
+      AND: [scope],
       kind: 'surgery', opStatus: { not: 'cancelled' }, patient: { deletedAt: null },
       /* `createdAt` لحظه است نه روز؛ یک روز پیش از مرز هم خوانده می‌شود و ماهش پایین‌تر با روزِ تهران تعیین می‌شود. */
       OR: [{ opDate: { gte: from } }, { opDate: null, createdAt: { gte: new Date(from.getTime() - 86_400_000), lt: end } }],
