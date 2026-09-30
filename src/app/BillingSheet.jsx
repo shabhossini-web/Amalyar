@@ -842,8 +842,11 @@ function InvoiceAccount({ data, banks, visitId, onSaved, onToast }) {
   const paidBank = !data.invoiceBankAccount && paidTo.length === 1 ? banks.find((b) => b.id === paidTo[0] && b.active !== false) ?? null : null;
   const classified = (b) => b?.classification === 'formal' || b?.classification === 'informal';
   const hint = classified(paidBank) ? paidBank : null;
-  const shownType = type || hint?.classification || '';
-  const shownBank = bankId || (hint && shownType === hint.classification ? hint.id : '');
+  /* پس از «ثبت اتصال حساب» `data` حسابِ ثبت‌شده را دارد و پیشنهاد (`hint`) می‌رود؛ بی‌این دو fallback هر دو
+     کشویی خالی می‌شدند و انگار چیزی ثبت نشده بود (DF9). */
+  const shownType = type || data.invoiceType || hint?.classification || '';
+  const savedBank = data.invoiceBankAccount && data.invoiceType === shownType ? data.invoiceBankAccount.id : '';
+  const shownBank = bankId || savedBank || (hint && shownType === hint.classification ? hint.id : '');
   const save = async () => {
     setBusy(true);
     try {

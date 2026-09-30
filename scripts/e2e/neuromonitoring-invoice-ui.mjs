@@ -68,6 +68,7 @@ try {
       else if (path === '/bank-accounts') body = [bank];
       else if (path === '/ai/status') body = { enabled: false };
       else if (path === '/visits/charges/2' && method === 'DELETE') { bill = { ...bill, charges: bill.charges.filter(c => c.id !== 2), total: 30000000, due: 0 }; body = { ok: true }; }
+      else if (path === '/visits/1/billing/invoice-account') { bill = { ...bill, invoiceType: payload.invoiceType, invoiceBankAccount: payload.bankAccountId === bank.id ? bank : null }; body = bill; }
       else if (path === '/visits/1/invoices/neuro-catalog') body = { ...catalog, ...lumpInfo() };
       else if (path === '/visits/1/invoices/neuro-quote') body = quoteFor(payload);
       else if (path === '/visits/1/invoices/neuro-apply') {
@@ -179,10 +180,19 @@ try {
 
     // ── DF1: مراجعهٔ ایمپلنت در شرکتِ دوخدمته پنجرهٔ خدماتِ نورو (و «جایگزین») را نمی‌گیرد ──
     visit.service = 'implant';
+    /* DF9 (همین بارگذاری): حسابِ فاکتور هنوز ثبت نشده و پرداخت به حسابِ رسمیِ ۱ رفته — پیشنهادِ پیش‌فرض. */
+    bill = { ...bill, invoiceType: null, invoiceBankAccount: null, payments: bill.payments.map(p => ({ ...p, bankAccountId: bank.id })) };
     await page.goto(`${base}/app/dashboard`); await page.getByTitle('صورت‌حساب', { exact: true }).click();
     await sheet.waitFor(); await sheet.getByRole('tab', { name: 'صدور فاکتور', exact: true }).click();
     await sheet.getByRole('heading', { name: 'فاکتور شرکت', exact: true }).waitFor();
     check(await sheet.getByRole('button', { name: /انتخابِ خدمات و مصرفی‌ها|ویرایشِ خدمات و مصرفی‌ها/ }).count() === 0 && await sheet.locator('.nv-double').count() === 0, 'DF1: an implant visit gets no neuro services dialog — its lump line cannot be replaced');
+
+    // ── DF9: ثبتِ حسابِ پیشنهادی (از حسابِ پرداخت) کشویی‌ها را خالی نمی‌کند ──
+    const acctType = sheet.getByLabel('نوع فاکتور', { exact: true }), acctBank = sheet.getByLabel('حساب فاکتور', { exact: true });
+    check(await acctType.inputValue() === 'formal' && await acctBank.inputValue() === String(bank.id), 'DF9: the payment account is suggested as the invoice account');
+    await sheet.getByRole('button', { name: 'ثبت اتصال حساب', exact: true }).click();
+    await sheet.getByText('حساب ثبت‌شده:', { exact: false }).waitFor();
+    check(await acctType.inputValue() === 'formal' && await acctBank.inputValue() === String(bank.id), 'DF9: after saving, both selects keep the saved type and account');
     check(!errors.length, `no runtime errors: ${errors.join('; ')}`);
     await ctx.close();
   }
