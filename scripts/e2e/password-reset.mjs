@@ -188,6 +188,19 @@ const bareIban = await call(`/surgeons/${bare.json?.id}`, { method: 'PATCH', bod
 const bareAudit = sql(`SELECT before_json::text || ' → ' || after_json::text FROM audit_events WHERE action = 'definitions.surgeon.update' AND entity_id = '${bare.json?.personId ?? ''}' ORDER BY id DESC LIMIT 1`);
 ok(bareIban.status < 300 && bareAudit.includes(IBAN_B) && /"phone"/.test(bareAudit) && /"nationalId"/.test(bareAudit),
   `PS5: شبای جراحِ بی‌حساب عوض می‌شود و ممیزی قبل/بعد دارد (${bareIban.status} ${bareAudit.slice(0, 120)})`);
+/* PS6 — «آماده‌سازی حساب پرتال» شمارهٔ جراح را از خودِ سوپرادمین می‌گیرد و با تعاریف می‌سنجد. تا دیروز به شمارهٔ
+   «تعاریف» اعتماد می‌کرد: سطحِ ۵ شمارهٔ جراحِ بی‌حساب را سیم‌کارتِ خودش می‌کرد، سوپرادمین حساب می‌ساخت و صاحبِ آن
+   سیم‌کارت با ثبت‌نام و کدِ پیامکی تحویلش می‌گرفت. */
+const grantPhone = `0932${run}6`;
+const toGrant = await call('/surgeons', { body: { firstName: 'آزمونی', lastName: `پرتال${run}`, phone: grantPhone }, bearer });
+const grantBare = await call(`/surgeon/accounts/${toGrant.json?.id}`, { body: {}, bearer });
+ok(grantBare.status === 400 && /شماره/.test(msg(grantBare)), `PS6: بی‌شمارهٔ تأییدشده حسابی ساخته نمی‌شود (${grantBare.status} «${msg(grantBare)}»)`);
+const grantWrong = await call(`/surgeon/accounts/${toGrant.json?.id}`, { body: { phone: attacker }, bearer });
+ok(grantWrong.status === 400 && /تعاریف/.test(msg(grantWrong)), `PS6: شمارهٔ ناهمخوان با تعاریف رد می‌شود (${grantWrong.status} «${msg(grantWrong)}»)`);
+const grantOk = await call(`/surgeon/accounts/${toGrant.json?.id}`, { body: { phone: grantPhone }, bearer });
+const grantAudit = sql(`SELECT after_json::text FROM audit_events WHERE action = 'surgeon.account.create' AND after_json->>'surgeonId' = '${toGrant.json?.id}' ORDER BY id DESC LIMIT 1`);
+ok(grantOk.status < 300 && grantOk.json?.existing === false && grantAudit.includes(grantPhone), `PS6: با شمارهٔ درست حساب ساخته شد و ممیزی شمارهٔ تأییدشده را دارد (${grantOk.status})`, msg(grantOk) || grantAudit);
+
 /* ج) سوپرادمین بازیابیِ فقط‌پیامکی ندارد — همان پاسخِ بی‌صدا، بی‌کد. */
 const boss = await newAccount('6', bearer, true, { level: 6 });
 const bossReq = await call('/auth/password/request-otp', { body: { identifier: boss.username } });

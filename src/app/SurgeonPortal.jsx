@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
-import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
+import { faDate, jStrToIso, toEnDigits, todayJStr } from '../lib/jalali.js';
 import { fmtMoney, fmtToman } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { useConfig, useStatusMap } from './config.jsx';
@@ -112,6 +112,9 @@ export default function SurgeonPortal() {
   useEffect(() => { if (!tabPicked.current) setTab(clinic ? 'today' : 'visits'); }, [clinic]);
   const [toast, setToast] = useState('');
   const [surgeonId, setSurgeonId] = useState('');
+  /* شمارهٔ جراح را خودِ سوپرادمین می‌نویسد و سرور با «تعاریف» می‌سنجد (بستهٔ PS، PS6) — نه اعتماد به تعاریف. */
+  const [grantPhone, setGrantPhone] = useState('');
+  const grantDigits = toEnDigits(grantPhone).replace(/[^0-9]/g, '');
   const [notice, setNotice] = useState('');
   const [grantBusy, setGrantBusy] = useState(false);
   const [error, setError] = useState('');
@@ -125,7 +128,8 @@ export default function SurgeonPortal() {
   const grant = async () => {
     setGrantBusy(true);
     try {
-      const result = await api(`/surgeon/accounts/${surgeonId}`, { method: 'POST', body: {} });
+      setError('');
+      const result = await api(`/surgeon/accounts/${surgeonId}`, { method: 'POST', body: { phone: grantDigits } });
       setNotice(result.existing ? `حساب جراح موجود است (سطح ${result.level}، وضعیت ${result.status}). وضعیت و سطح از مدیریت کاربران قابل بررسی است.` : 'حساب جراح آماده شد. جراح با شمارهٔ ثبت‌شده، از «ثبت‌نام» و کد پیامکی حسابش را تحویل می‌گیرد؛ نیازی به ساخت هویت تکراری نیست.');
     } catch (e) { setError(e.message); } finally { setGrantBusy(false); }
   };
@@ -181,7 +185,11 @@ export default function SurgeonPortal() {
       {supervising && (
         <details className="sp-card sp-setup"><summary>فعال‌سازی حساب جراح از تعاریف پایه</summary>
           <label className="ia-field"><span>جراح</span><select value={surgeonId} onChange={(e) => setSurgeonId(e.target.value)}><option value="">انتخاب جراح</option>{desk.doctors.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
-          <button className="bl-mini" disabled={!surgeonId || grantBusy} type="button" onClick={grant}>آماده‌سازی حساب پرتال</button>
+          <label className="ia-field"><span>موبایلِ جراح — از خودِ او بپرسید</span>
+            <input type="tel" dir="ltr" inputMode="numeric" autoComplete="off" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={grantPhone}
+                   onChange={(e) => setGrantPhone(e.target.value)} aria-describedby="sp-grant-note" /></label>
+          <p id="sp-grant-note" className="sp-hint">حساب فقط وقتی ساخته می‌شود که این شماره با شمارهٔ جراح در «تعاریف» یکی باشد؛ کدِ تحویلِ حساب به همین شماره پیامک می‌شود.</p>
+          <button className="bl-mini" disabled={!surgeonId || grantDigits.length !== 11 || grantBusy} type="button" onClick={grant}>آماده‌سازی حساب پرتال</button>
           <Link to="/app/definitions?section=surgeons">تعریف یا اصلاح مشخصات جراح</Link>
           {notice && <p role="status">{notice}</p>}
         </details>
