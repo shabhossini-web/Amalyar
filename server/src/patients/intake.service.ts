@@ -767,7 +767,7 @@ export class IntakeService {
     const otp = await this.prisma.otpCode.create({
       data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
     });
-    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => null);
+    const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname, purpose).catch(() => null);
     if (!res || (!res.sent && !res.stub)) {
       await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
       this.logger.warn(`intake resume sms for link ${linkId} was not delivered`);

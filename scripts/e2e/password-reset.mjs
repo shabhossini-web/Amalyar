@@ -559,7 +559,9 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
 }
 
 {
-  /* PF10 — متنِ پیامکِ بازیابی: «به هیچ‌کس، حتی پشتیبانی، ندهید» + خطِ آخرِ WebOTP؛ کدِ ثبت‌نام همان متنِ قبلی. */
+  /* PF10 — متنِ پیامکِ بازیابی: «به هیچ‌کس، حتی پشتیبانی، ندهید» + خطِ آخرِ WebOTP.
+     PS8 — کدِ ثبت‌نام/تصاحب/تأییدِ شماره و کدِ «ادامهٔ ثبت‌نامِ» بیمار هم همان هشدار را دارند (کدی که حسابی را تحویل
+     می‌دهد یا فرمِ پزشکیِ بیمار را باز می‌کند همان‌قدر ارزش دارد)؛ کدِ بی‌هدف (ورودِ پلتفرم) همان متنِ قبلی. */
   const { SmsService } = requireServer('./dist/sms/sms.service.js');
   const env = { key: process.env.MELI_API_KEY, from: process.env.MELI_FROM, fetch: globalThis.fetch };
   const texts = [];
@@ -568,16 +570,34 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
   try {
     await inTest(() => new SmsService().sendOtp('09121234567', '123456', 'clinic.amalyar.com', 'password-reset'));
     await inTest(() => new SmsService().sendOtp('09121234567', '654321', 'clinic.amalyar.com'));
+    await inTest(() => new SmsService().sendOtp('09121234567', '111222', 'clinic.amalyar.com', 'signup'));
+    await inTest(() => new SmsService().sendOtp('09121234567', '333444', 'clinic.amalyar.com', 'intake-resume:7'));
   } finally {
     globalThis.fetch = env.fetch;
     if (env.key === undefined) delete process.env.MELI_API_KEY; else process.env.MELI_API_KEY = env.key;
     if (env.from === undefined) delete process.env.MELI_FROM; else process.env.MELI_FROM = env.from;
   }
-  const [resetText, signupText] = texts;
+  const [resetText, plainText, signupText, resumeText] = texts;
   ok(/کدِ بازیابیِ رمزِ عمل‌یار: 123456/.test(resetText ?? '') && /حتی پشتیبانی، ندهید/.test(resetText ?? '') && /درخواست نکرده‌اید/.test(resetText ?? ''),
     'PF10: پیامکِ بازیابی می‌گوید کدِ چیست و آن را به هیچ‌کس ندهید', JSON.stringify(resetText));
-  ok((resetText ?? '').endsWith('\n@clinic.amalyar.com #123456') && (signupText ?? '').endsWith('\n@clinic.amalyar.com #654321') && /کد تأیید شما 654321/.test(signupText ?? ''),
-    'PF10: خطِ آخرِ WebOTP در هر دو سرِ جایش؛ پیامکِ ثبت‌نام همان متنِ قبلی');
+  ok((resetText ?? '').endsWith('\n@clinic.amalyar.com #123456') && (plainText ?? '').endsWith('\n@clinic.amalyar.com #654321') && /کد تأیید شما 654321/.test(plainText ?? ''),
+    'PF10: خطِ آخرِ WebOTP سرِ جایش؛ کدِ بی‌هدف همان متنِ قبلی');
+  ok(/111222/.test(signupText ?? '') && /حتی پشتیبانی، ندهید/.test(signupText ?? '') && (signupText ?? '').endsWith('\n@clinic.amalyar.com #111222'),
+    'PS8: پیامکِ کدِ ثبت‌نام/تصاحب می‌گوید کد را به هیچ‌کس، حتی پشتیبانی، ندهید (خطِ WebOTP سرِ جایش)', JSON.stringify(signupText));
+  ok(/333444/.test(resumeText ?? '') && /حتی پشتیبانی، ندهید/.test(resumeText ?? '') && (resumeText ?? '').endsWith('\n@clinic.amalyar.com #333444'),
+    'PS8: کدِ «ادامهٔ ثبت‌نامِ» بیمار هم', JSON.stringify(resumeText));
+}
+
+{
+  /* PS8 — خودِ مسیرها هدفشان را به درگاه می‌گویند؛ بی‌این، متنِ هشدار هرگز به کدِ ثبت‌نام نمی‌رسید. */
+  const auth = fakeAuth();
+  await inTest(() => auth.svc.requestSignupOtp('09127770099', '10.87.0.1'));
+  const intake = fakeIntake({ open: true });
+  const purposes = [];
+  intake.svc.sms.sendOtp = async (to, _code, _host, purpose) => { purposes.push(purpose); return { sent: false, stub: true }; };
+  await inTest(() => intake.svc.resumeRequest('tok', '09127770098', '10.87.0.2'));
+  ok(auth.db.sent.at(-1)?.purpose === 'signup' && /^intake-resume:/.test(purposes[0] ?? ''),
+    `PS8: کدِ ثبت‌نام با هدفِ «signup» و کدِ ادامه با هدفِ خودش به درگاه می‌روند (${auth.db.sent.at(-1)?.purpose} / ${purposes[0]})`);
 }
 
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);

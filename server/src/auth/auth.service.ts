@@ -128,7 +128,7 @@ export class AuthService {
     try {
       // هاستِ WebOTP باید میزبانِ همان شرکت باشد، وگرنه مرورگر کد را اتوفیل نمی‌کند
       // (WebOTP به origin گره خورده است).
-      const res = await this.sms.sendOtp(phone, code, this.tenantContext.current()?.hostname);
+      const res = await this.sms.sendOtp(phone, code, this.tenantContext.current()?.hostname, purpose);
       if (!res.sent && process.env.NODE_ENV === 'production') {
         throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
       }
