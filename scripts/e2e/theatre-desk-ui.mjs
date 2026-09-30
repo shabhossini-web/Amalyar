@@ -9,6 +9,7 @@
  *   - FF1: «ادامه با نوشتهٔ من» فقط با «ذخیره»ِ صریح جایگزین می‌کند؛ ۴۰۹ِ سرور کارت را تازه می‌کند
  *   - FF2: بارگذاریِ برنامه پیش‌نویسِ کهنه و خراب را جارو می‌کند
  *   - FF2: خروج و تعویضِ حساب پیش‌نویس‌های همان کاربر را پاک می‌کنند
+ *   - FF2: نشستِ مرده (۴۰۱ روی «ذخیره») پیش‌نویس را پاک **نمی‌کند** و ورودِ دوبارهٔ همان کاربر برش می‌گرداند
  *   - FF3: «برگرداندن» فقط ساعتی را برمی‌دارد که همین لمس نوشت (`expect`)؛ ۴۰۹ کارت را تازه می‌کند
  *   - FF4: «برگشت»ِ گوشی روی کارتِ دست‌خورده همان پرسشِ «فهرستِ روز» را می‌آورد؛ «برگشت» روی پرسش = ادامه
  *   - FF4: تعویضِ حساب با نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود
@@ -62,7 +63,10 @@ const INTRA_FORM = {
  */
 const ME = { id: UID, level: 6, status: 'active', firstName: 'جراحِ', lastName: 'آزمونی', displayName: 'جراحِ آزمونی', levelName: 'سوپرادمین' };
 const NURSE = { id: 8, level: 2, status: 'active', firstName: 'پرستارِ', lastName: 'آزمونی', displayName: 'پرستارِ آزمونی', levelName: 'کارشناس' };
+const DEAD = { status: 401, body: { message: 'نشست منقضی شده است' } };
 const makeServer = (S) => ({ path, method, body }) => {
+  /* `S.dead`: نشستِ همین مرورگر همین حالا باطل شد (ادمین شماره را عوض کرد، «خروج از همه» از دستگاهِ دیگر). */
+  if (S.dead && (path === '/auth/me' || path === '/auth/accounts' || method !== 'GET')) return DEAD;
   if (path === '/auth/me') return S.me ?? ME;
   if (path === '/config') return { vertical: 'clinic', kind: 'clinic', services: [], brand: {} };
   if (path === '/features') return ['theatre', 'dashboard'].map((key) => ({ key, allowed: true }));
@@ -277,6 +281,27 @@ try {
     const keys = await draftKeys(page);
     ok(!keys.some((k) => k.startsWith(`amalyar_draft:${UID}:`)), '**باید بیفتد:** خروج پیش‌نویس‌های همان کاربر را پاک کرد', keys.join(' '));
     ok(keys.includes('amalyar_draft:8:50:opReport'), 'پیش‌نویسِ کاربرِ دیگرِ دستگاه دست نخورد (خروجِ او پاکش می‌کند)');
+    await context.close();
+  });
+
+  await scene('\n۷ب) FF2 — نشستِ مرده پیش‌نویس را پاک نمی‌کند؛ ورودِ دوباره برش می‌گرداند', async () => {
+    const S = { report: null, start: null, end: null };
+    const { page, context } = await open(S);
+    await page.locator('[data-report]').fill('شرحِ جراح پیش از باطل‌شدنِ نشست');
+    await page.waitForFunction((k) => !!localStorage.getItem(k), DKEY);
+    /* «ذخیره» ۴۰۱ می‌خورد ← `amalyar:unauthorized` ← `/auth/me` هم ۴۰۱ ← حسابِ دیگری نیست ← صفحهٔ ورود. */
+    S.dead = true;
+    await page.locator('[data-act="save-report"]').click();
+    await page.waitForURL(/\/login/);
+    ok((await draftOf(page))?.text === 'شرحِ جراح پیش از باطل‌شدنِ نشست',
+      '**نباید بیفتد:** نشستِ مرده شرحِ ذخیره‌نشده را از دستگاه پاک کند', JSON.stringify(await draftOf(page)));
+    /* همان کاربر دوباره وارد می‌شود و کارت را باز می‌کند. */
+    S.dead = false;
+    await page.goto(`${vite.base}/app/theatre?visit=${VID}`, { waitUntil: 'networkidle' });
+    await page.locator('[data-report]').waitFor();
+    ok(await page.locator('[data-report]').inputValue() === 'شرحِ جراح پیش از باطل‌شدنِ نشست'
+      && (await page.locator('[data-note-state]').innerText()).includes('همین دستگاه'),
+    '**باید بیفتد:** پس از ورودِ دوباره همان شرح روی کارت برگشت («ذخیره‌نشدهٔ همین دستگاه»)');
     await context.close();
   });
 

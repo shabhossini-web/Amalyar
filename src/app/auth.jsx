@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { clearUserDrafts } from '../lib/deviceDrafts.js';
 import {
@@ -54,14 +54,6 @@ export function AuthProvider({ children }) {
   // نسخهٔ لیستِ حساب‌ها — برای رفرشِ UI بعد از هر تغییرِ مخزن
   const [accountsVersion, setAccountsVersion] = useState(0);
   const bump = () => setAccountsVersion((v) => v + 1);
-  /* پیش‌نویس‌های بالینیِ دستگاه (میزِ اتاقِ عمل) مالِ همان کاربرند: با خروج یا تعویضِ حساب روی تبلتِ
-     مشترک پاک می‌شوند (بستهٔ FF، FF2) — هر راهی که کاربرِ فعال را عوض کند، از جمله نشستِ مرده. */
-  const lastUid = useRef(null);
-  useEffect(() => {
-    const was = lastUid.current;
-    lastUid.current = user?.id ?? null;
-    if (was != null && was !== lastUid.current) clearUserDrafts(was);
-  }, [user?.id]);
 
   /** فهرستِ زندهٔ سرور → کشِ محلی. خطای شبکه → کشِ قبلی می‌ماند. */
   const syncAccounts = useCallback(async () => {
@@ -205,10 +197,16 @@ export function AuthProvider({ children }) {
 
   /** سوییچ به حسابِ دیگری از لیست — سمتِ سرور؛ اگر نشستش مرده بود از لیست حذف می‌شود. */
   const switchAccount = useCallback(async (id) => {
+    const prev = user?.id ?? null;
     try {
       const me = await api('/auth/switch', { method: 'POST', body: { accountId: id }, quiet401: true });
       setUser(me);
       updateAccountUser(id, me);
+      /* پیش‌نویس‌های بالینیِ دستگاه (میزِ اتاقِ عمل) با کنشِ **صریحِ** کاربر پاک می‌شوند — خروج، خروج از همه و
+         همین تعویضِ دستیِ حساب روی تبلتِ مشترک (بستهٔ FF، FF2). مسیرِ نشستِ مرده (`amalyar:unauthorized` ←
+         `fallbackToNext`) عمداً پاک نمی‌کند: شرحِ ذخیره‌نشدهٔ جراحی که نشستش وسطِ عمل باطل شد باید پس از ورودِ
+         دوباره برگردد؛ کلید شناسهٔ کاربر را دارد و نفرِ بعد آن را نمی‌بیند، و سقفِ ۲۴ ساعت هم هست. */
+      if (prev != null && prev !== me.id) clearUserDrafts(prev);
       bump();
       return me;
     } catch (e) {
@@ -219,7 +217,7 @@ export function AuthProvider({ children }) {
       }
       throw e; // خطای شبکه → حساب حذف نشود
     }
-  }, []);
+  }, [user]);
 
   /** خروجِ تکی از یک حساب (فعال یا غیرفعال). خروجی: id حسابِ فعالِ بعدی یا null */
   const logoutAccount = useCallback(
