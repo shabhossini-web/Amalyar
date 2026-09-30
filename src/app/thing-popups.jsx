@@ -217,22 +217,38 @@ const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹
  * دکمهٔ پنلِ کارشناس (`POST /tech/visits/:id/report`) و همان کادرِ مشترکِ `FileDrop`
  * (چندصفحه‌ای، با صف و تلاشِ دوباره). رویدادِ `report.uploaded` کار را می‌بندد؛ بعد از
  * آخرین فایل پنجره بسته و فهرست تازه می‌شود.
+ *
+ * ⚠️ فقط وقتی **همه** رفتند (بازبینیِ خصمانه، R2): تا دیروز پایانِ صف — حتی وقتی هر فایل خطا
+ * خورده بود یا از سقفِ حجم بزرگ‌تر بود — پنجره را می‌بست و «ثبت شد» می‌گفت؛ خطا با پنجره گم
+ * می‌شد. حالا با خطا پنجره می‌ماند و خطای هر فایل با «تلاشِ دوباره» جلوی چشم است. اگر بخشی رفته
+ * و کاربر خودش پنجره را ببندد، فهرست تازه می‌شود و توست می‌گوید چند فایل رفت و چند نه.
  */
 function ReportPop({ visit, onClose, onDone }) {
   const t = useTerms();
   const [busy, setBusy] = useState(false);
+  /* آخرین دورِ صف: چند فایل رفته و چند فایل هنوز خطا دارد — برای بستنِ دستی پس از ارسالِ بخشی. */
+  const tally = useRef({ sent: 0, failed: 0 });
   const send = async (file) => {
     setBusy(true);
     const fd = new FormData();
     fd.append('file', file);
     try { await apiUpload(`/tech/visits/${visit.id}/report`, fd); } finally { setBusy(false); }
   };
+  const allDone = ({ ok = 0, failed = 0 } = {}) => {
+    tally.current = { sent: tally.current.sent + ok, failed };
+    if (ok && !failed) onDone(`${t.workReport} ثبت شد`);
+  };
+  const close = () => {
+    const { sent, failed } = tally.current;
+    if (!sent) { onClose(); return; }
+    onDone(failed ? `${faNum(sent)} فایل ثبت شد؛ ${faNum(failed)} فایل نرفت` : `${t.workReport} ثبت شد`);
+  };
   return (
-    <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-report" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label={t.workReport}>
+    <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-report" as="section" onClose={close} closable={!busy} role="dialog" aria-modal="true" aria-label={t.workReport}>
       <header>
         <Upload width="15" height="15" />
         <b>{t.workReport}{visit.patientName ? ` — ${visit.patientName}` : ''}</b>
-        <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+        <button type="button" onClick={close} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       {(visit.code || visit.opDate) && (
         <dl>
@@ -249,7 +265,7 @@ function ReportPop({ visit, onClose, onDone }) {
         label={`انتخابِ فایلِ ${t.workReport}`}
         hint="عکس یا PDF؛ گزارشِ چندصفحه‌ای را یک‌جا انتخاب کنید."
         onUpload={send}
-        onAllDone={() => onDone(`${t.workReport} ثبت شد`)}
+        onAllDone={allDone}
       />
     </Overlay>
   );

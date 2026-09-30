@@ -575,7 +575,12 @@ function ReportButton({ visit, onDone, onError }) {
       accept="image/*,application/pdf"
       label={visit.reportAt ? `گزارش ثبت شده — ${faDate(visit.reportAt)} · افزودنِ صفحه` : `آپلودِ ${visit.reportLabel || 'گزارشِ خدمت'}`}
       onUpload={send}
-      onAllDone={() => onDone(`${visit.reportLabel || 'گزارشِ خدمت'} ثبت شد`)}
+      /* «ثبت شد» فقط وقتی همه رفتند (R2)؛ با خطا کادر خطای هر فایل را با «تلاشِ دوباره»
+         نگه می‌دارد، و اگر بخشی رفته، دفتر تازه می‌شود تا «گزارش ثبت شده» روی کارت بنشیند. */
+      onAllDone={({ ok = 0, failed = 0 } = {}) => {
+        if (!ok) return;
+        onDone(failed ? `${num(ok)} فایل ثبت شد؛ ${num(failed)} فایل نرفت` : `${visit.reportLabel || 'گزارشِ خدمت'} ثبت شد`);
+      }}
     />
   );
 }

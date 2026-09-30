@@ -423,7 +423,7 @@ export default function Dispatch() {
                           disabled={busy}
                           label="+ رسیدِ تحویل"
                           onUpload={(file) => addProof(st.id, file)}
-                          onAllDone={() => { refresh(); setToast("رسید ثبت شد ✓"); }}
+                          onAllDone={({ ok = 0, failed = 0 } = {}) => { if (!ok) return; refresh(); if (!failed) setToast('رسید ثبت شد'); }}
                         />
                         {st.handedTo && <span className="dp-handed">تحویل به: {st.handedTo}</span>}
                       </div>

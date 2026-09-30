@@ -321,7 +321,8 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
               if (visitId) fd.append('visitId', String(visitId));
               await apiUpload(`/patients/${patientId}/documents`, fd);
             }}
-            onAllDone={() => onToast('عکسِ جواب در مدارکِ پرونده ثبت شد ✓')}
+            /* «ثبت شد» فقط وقتی همه رفتند (R2)؛ فایلِ خطادار با «تلاشِ دوباره» در همین کادر می‌ماند. */
+            onAllDone={({ ok = 0, failed = 0 } = {}) => { if (ok && !failed) onToast('عکسِ جواب در مدارکِ پرونده ثبت شد'); }}
           />
           {reviewable && (
             <div className="od-review">

@@ -561,10 +561,13 @@ function DocsTab({ rec, reload, toast }) {
           maxMb={25}
           hint={`عکس، PDF یا هر مدرکِ دیگر — تا ${faNum(25)} مگابایت`}
           onUpload={upload}
-          onAllDone={async () => {
-            setTitle(''); setTakenJ(''); setVisitId(''); setPhase('');
+          onAllDone={async ({ ok = 0, failed = 0 } = {}) => {
+            if (!ok) return;
+            /* «اضافه شدند» فقط وقتی همه رفتند (R2). با فایلِ خطادار عنوان، تاریخ و مراجعه
+               می‌مانند تا «تلاشِ دوباره»ِ همان فایل با همان‌ها برود، نه بی‌برچسب. */
+            if (!failed) { setTitle(''); setTakenJ(''); setVisitId(''); setPhase(''); }
             await reload();
-            toast('مدارک اضافه شدند ✓');
+            if (!failed) toast('مدارک اضافه شدند');
           }}
         />
         {/* لینک به‌جای فایل: MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود. */}

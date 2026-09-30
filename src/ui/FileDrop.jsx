@@ -12,6 +12,11 @@
  *   یا خطا با دکمهٔ تلاشِ دوباره. خطای یک فایل بقیه را زمین نمی‌زند.
  * - ترتیبی می‌فرستد نه موازی: سرورِ اشتراکی با ده آپلودِ هم‌زمان می‌ایستد.
  * - سقفِ حجم این‌جا هم چک می‌شود تا کاربر پیشِ آپلود بفهمد، نه بعدِ انتظار.
+ * - **`onAllDone({ ok, failed })`** پایانِ هر دورِ صف است، نه «همه رفت»: `ok` = چند فایل در
+ *   همین دور رفت، `failed` = چند فایلِ فهرست هنوز خطا دارد (شکستِ ارسال، یا حجمِ بیش از سقف که
+ *   اصلاً فرستاده نشد). ⚠️ تا بازبینیِ خصمانه (R2) بی‌آرگومان بود و هر مصرف‌کننده روی آن
+ *   «ثبت شد» می‌گفت — حتی وقتی همهٔ فایل‌ها خطا خورده بودند؛ پنجرهٔ گزارش بسته می‌شد و خطا گم.
+ *   «ثبت شد» فقط با `ok && !failed`.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Check, Close, Trash } from './icons.jsx';
@@ -52,12 +57,17 @@ export default function FileDrop({
   /* پیش‌نمایش‌ها blob‌اند — با unmount آزاد شوند وگرنه حافظه نشت می‌کند. */
   useEffect(() => () => { itemsRef.current.forEach((i) => i.url && URL.revokeObjectURL(i.url)); }, []);
 
-  const patch = (id, data) => setItems((s) => s.map((i) => (i.id === id ? { ...i, ...data } : i)));
+  /* ref هم‌زمان جلو می‌رود، نه در رندرِ بعد: پایانِ `drain` از روی آن می‌شمارد چند فایل هنوز خطا دارد. */
+  const patch = (id, data) => {
+    itemsRef.current = itemsRef.current.map((i) => (i.id === id ? { ...i, ...data } : i));
+    setItems((s) => s.map((i) => (i.id === id ? { ...i, ...data } : i)));
+  };
 
   /** صف را ترتیبی خالی می‌کند؛ اگر از قبل در حالِ اجراست، دوباره شروع نمی‌شود. */
   const drain = async () => {
     if (runningRef.current) return;
     runningRef.current = true;
+    let ok = 0;
     try {
       for (;;) {
         const next = itemsRef.current.find((i) => i.status === 'queued');
@@ -65,13 +75,14 @@ export default function FileDrop({
         patch(next.id, { status: 'uploading', error: '' });
         try {
           await onUpload(next.file);
+          ok += 1;
           if (keepDone) patch(next.id, { status: 'done' });
           else drop(next.id);
         } catch (e) {
           patch(next.id, { status: 'error', error: e?.message || 'ارسال نشد' });
         }
       }
-      onAllDone?.();
+      onAllDone?.({ ok, failed: itemsRef.current.filter((i) => i.status === 'error').length });
     } finally {
       runningRef.current = false;
     }
