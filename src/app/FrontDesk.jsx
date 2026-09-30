@@ -1,12 +1,15 @@
 import { AnimatePresence } from 'framer-motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { fmtMoney } from '../lib/money.js';
+import { fmtToman } from '../lib/money.js';
 import { faDate, jStrToIso, todayJStr, toEnDigits } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import { useTerms } from './config.jsx';
+import { useAllowedTools } from './tools.jsx';
 import { useVisitDefs } from './visit-defs.js';
 import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
+import BillingSheet from './BillingSheet.jsx';
 import JDate from './JDate.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import { Arrive, Close, Money, Phone, Plus, Search } from '../ui/icons.jsx';
@@ -15,6 +18,8 @@ import CancelReason from '../ui/CancelReason.jsx';
 import './launcher.css';
 import './definitions.css';
 import './frontdesk.css';
+import './users.css';     // `.us-empty`ِ پنجرهٔ صورت‌حساب
+import './dashboard.css'; // پنجرهٔ صورت‌حساب (`BillingSheet`) روی پوستهٔ `db-*` سوار است
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
@@ -50,6 +55,14 @@ export default function FrontDesk() {
      جستجوی باز فراموش می‌کند سه نفر دیگر هم منتظرند. */
   const [q, setQ] = useState('');
   const [walkIn, setWalkIn] = useState(false);
+  /* ساختِ پرونده = ثبتِ مراجعه (فرمِ «بیماران»)، پس فقط برای کسی که آن ماژول را دارد — تصمیم از
+     سرور (`/features`)، همان الگوی میزِ پزشک؛ سرور به‌هرحال خودش می‌سنجد. */
+  const { hero } = useAllowedTools();
+  const canCreate = hero?.key === 'dashboard';
+  /* پرونده و صورت‌حساب هم APIِ همان «بیماران»اند — پیوندِ نام و دکمهٔ «دریافت» فقط برای کسی که آن را
+     دارد (clinic-daily-19)؛ برای بقیه نام متن می‌ماند، نه پیوندی به صفحهٔ ممنوع. */
+  const canPatients = canCreate;
+  const [billing, setBilling] = useState(null); // مراجعه‌ای که صورت‌حسابش همین‌جا باز است
 
   /* تنبل: تا شیت باز نشود، شش fetchِ تعریف‌ها نمی‌رود. */
   const { defs, reload: reloadDefs } = useVisitDefs(!!sheet, user?.id);
@@ -69,7 +82,7 @@ export default function FrontDesk() {
   /* ⚠️ پنجرهٔ دلیلِ لغو هم «باز» حساب می‌شود: تازه‌سازی ردیف‌ها را از نو
      می‌سازد و یادداشتی که کاربر در حالِ نوشتنش است زیرِ دستش عوض می‌شود. */
   const sheetRef = useRef(sheet);
-  sheetRef.current = sheet || cancelAsk;
+  sheetRef.current = sheet || cancelAsk || billing;
   useEffect(() => {
     const tick = () => { if (!sheetRef.current && document.visibilityState === 'visible') load(); };
     const id = setInterval(tick, POLL_MS);
@@ -172,6 +185,16 @@ export default function FrontDesk() {
   };
 
 
+  /* «دریافت» — پنجرهٔ صورت‌حسابِ همان مراجعه همین‌جا، نه «بیماران ← کارت ← صورت‌حساب ← پرداخت‌ها»
+     (شش لمس و یک صفحهٔ دیگر). ردیفِ تخته کدِ مراجعه ندارد، پس نمای کاملش خوانده می‌شود. */
+  const pay = async (row) => {
+    const id = row.visitId ?? row.forVisitId;
+    if (!id) return;
+    setBusy(row.id);
+    try { setBilling(await api(`/visits/${id}`)); }
+    catch (e) { setToast(e?.message || 'باز نشد'); } finally { setBusy(0); }
+  };
+
   if (err && err.status === 403) {
     return (
       <div className="fd"><div className="df-bg" />
@@ -242,7 +265,7 @@ export default function FrontDesk() {
             <h2>{laneTitle(l.key, l.title)} <em>{faNum(l.count)}</em></h2>
             <ul>
               {rows.filter((r) => r.lane === l.key).map((r) => (
-                <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} />
+                <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} canPatients={canPatients} onPay={pay} />
               ))}
               {!rows.some((r) => r.lane === l.key) && <li className="fd-empty">{needle && all.some((r) => r.lane === l.key) ? 'در این ستون نتیجه‌ای نیست' : '—'}</li>}
             </ul>
@@ -254,7 +277,7 @@ export default function FrontDesk() {
         <section className="fd-cancelled" aria-label="لغوشده‌های امروز">
           <h2>لغوشده</h2>
           <ul>{rows.filter((r) => r.lane === 'cancelled').map((r) => (
-            <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} />
+            <Card key={r.id} row={r} t={t} busy={busy} onAct={act} onOpen={open} canPatients={canPatients} onPay={pay} />
           ))}</ul>
         </section>
       )}
@@ -269,13 +292,25 @@ export default function FrontDesk() {
         {sheet && (
           <VisitForm
             key={sheet.visit?.id ?? 'new-surgery'}
-            initial={sheet.visit}
+            initial={sheet.visit ?? sheet.initial}
             prefill={sheet.prefill}
             defs={defs}
             onDefsChanged={reloadDefs}
             onClose={() => setSheet(null)}
-            onSaved={(saved, wasEdit, opts) => {
+            onSaved={async (saved, wasEdit, opts) => {
+              const admit = sheet.admit;
               setSheet(null);
+              /* «ساختِ پروندهٔ تازه»ِ بیمارِ بدونِ نوبت: پرونده و مراجعهٔ امروزش ساخته شد؛ حالا خودِ
+                 پذیرش — نوبتِ حضوریِ **هدفِ همان مراجعه**، تا روی تخته دیده شود و «شروعِ ویزیت»
+                 مراجعهٔ دوم نسازد (clinic-daily-07). */
+              if (admit && !wasEdit && saved?.id && saved?.patientId) {
+                try {
+                  const r = await api('/frontdesk/walk-in', { method: 'POST', body: { patientId: saved.patientId, date: iso, visitId: saved.id } });
+                  setToast(`پروندهٔ ${saved.fullName ?? 'بیمار'} ساخته و پذیرش شد${r?.beyondCapacity ? ' — بیش از ظرفیتِ امروز' : ''}`);
+                } catch (e) { setToast(`پرونده ساخته شد ولی پذیرش نشد: ${e?.message || 'خطا'} — از «بیمارِ بدونِ نوبت» دوباره بپذیرید`); }
+                after();
+                return;
+              }
               after();
               /* «کاندیدای جراحی» — همان قولِ فرم در داشبورد و پرونده (بازبینیِ ۱۴۰۵/۰۷/۰۳):
                  تا دیروز میزِ پذیرش `openSurgery` را نادیده می‌گرفت و عمل به ویزیتِ تصمیم گره نمی‌خورد. */
@@ -290,9 +325,25 @@ export default function FrontDesk() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {billing && (
+          <BillingSheet
+            visit={billing}
+            onClose={() => setBilling(null)}
+            onChanged={after}
+            onToast={setToast}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {walkIn && (
           <WalkInSheet
             date={iso}
+            canCreate={canCreate}
+            onCreate={(typed) => {
+              setWalkIn(false);
+              setSheet({ initial: seedFromQuery(typed), prefill: { opDateJ: todayJStr() }, admit: true });
+            }}
             onClose={() => setWalkIn(false)}
             onDone={(msg) => { setWalkIn(false); setToast(msg); after(); }}
           />
@@ -323,17 +374,32 @@ export default function FrontDesk() {
 }
 
 /**
+ * نام/شمارهٔ تایپ‌شده در جستجو ← پیش‌پرِ فرمِ ثبتِ بیمار. شمارهٔ موبایل شماره است، کدِ پرونده
+ * چیزی برای پیش‌پر ندارد، و بقیه نام است (اولین کلمه نام، بقیه نامِ خانوادگی).
+ */
+function seedFromQuery(raw) {
+  const s = toEnDigits(String(raw ?? '').trim());
+  const digits = s.replace(/[\s-]/g, '');
+  if (/^0?9\d{9}$/.test(digits)) return { phone: digits.startsWith('0') ? digits : `0${digits}` };
+  if (/^[a-z]{2}-?\d/i.test(s) || /^\d+$/.test(digits)) return {};
+  const [first = '', ...rest] = String(raw).trim().split(/\s+/);
+  return { firstName: first, lastName: rest.join(' ') };
+}
+
+/**
  * **پذیرشِ بیمارِ بدونِ نوبت.**
  *
- * ⚠️ فقط بیمارِ **موجود** — پروندهٔ تازه از «پذیرش» ساخته می‌شود، نه از این
- * پنجره: ساختنِ پرونده کدِ ملی و تأییدِ شماره می‌خواهد و فشردنش در یک پنجرهٔ
- * سه‌فیلدی یعنی پرونده‌های نصفه که بعداً باید ادغام شوند.
+ * هشدار: این پنجره پرونده **نمی‌سازد** — ساختنِ پرونده کدِ ملی و تأییدِ شماره می‌خواهد و فشردنش
+ * در یک پنجرهٔ سه‌فیلدی یعنی پرونده‌های نصفه که بعداً باید ادغام شوند. ولی بن‌بست هم نیست
+ * (بازبینیِ UX، clinic-daily-07): اگر پرونده پیدا نشد، «ساختِ پروندهٔ تازه» فرمِ کاملِ ثبت را با
+ * همان نام/شماره باز می‌کند و بعد از ذخیره خودِ پذیرش هم انجام می‌شود؛ کسی که اجازهٔ ساخت ندارد
+ * دقیق می‌خواند از چه کسی بخواهد.
  *
  * ⚠️ ظرفیت **نشان داده می‌شود ولی مانع نیست** (تصمیمِ مالک): اگر روز پر باشد،
  * پنجره می‌گوید و اجازه می‌دهد — قاضیِ «وقت هست یا نه» منشی است. رد فقط برای
  * دو چیز است که قضاوت نیستند: روزِ تعطیل، و اسلاتِ پرِ نام‌برده.
  */
-function WalkInSheet({ date, onClose, onDone }) {
+function WalkInSheet({ date, canCreate, onCreate, onClose, onDone }) {
   const [q, setQ] = useState('');
   const [rows, setRows] = useState(null);
   const [picked, setPicked] = useState(null);
@@ -381,7 +447,21 @@ function WalkInSheet({ date, onClose, onDone }) {
             <input value={q} onChange={(ev) => setQ(ev.target.value)} autoFocus placeholder="دستِ‌کم دو حرف" />
           </label>
           {rows === null && <p className="fd-sheet-hint">برای یافتنِ پرونده بنویسید.</p>}
-          {rows?.length === 0 && <p className="fd-sheet-hint">پرونده‌ای پیدا نشد. پروندهٔ تازه از «ثبت‌نام‌های آنلاین» ساخته می‌شود.</p>}
+          {rows?.length === 0 && (
+            <div className="fd-none" role="status">
+              <p className="fd-sheet-hint">پرونده‌ای با «{q.trim()}» پیدا نشد.</p>
+              {canCreate ? (
+                <button type="button" className="fd-btn primary fd-create" onClick={() => onCreate(q)}>
+                  <Plus width="15" height="15" aria-hidden="true" /> ساختِ پروندهٔ تازه
+                </button>
+              ) : (
+                <p className="fd-sheet-hint">
+                  ساختِ پروندهٔ تازه با کسی است که به «بیماران» دسترسی دارد (مثلاً مدیر)؛ از او بخواهید
+                  پرونده را بسازد، بعد همین‌جا جستجو و پذیرش کنید.
+                </p>
+              )}
+            </div>
+          )}
           {rows?.length > 0 && (
             <ul className="fd-found">
               {rows.map((r) => (
@@ -393,6 +473,11 @@ function WalkInSheet({ date, onClose, onDone }) {
                 </li>
               ))}
             </ul>
+          )}
+          {rows?.length > 0 && canCreate && (
+            <button type="button" className="fd-create-link" onClick={() => onCreate(q)}>
+              در فهرست نیست؟ ساختِ پروندهٔ تازه
+            </button>
           )}
         </>
       )}
@@ -412,7 +497,7 @@ function WalkInSheet({ date, onClose, onDone }) {
 
       {err && <p className="fd-sheet-err" role="alert">{err}</p>}
       <div className="fd-sheet-acts">
-        <button type="submit" className="fd-btn primary" disabled={!picked || busy}>{busy ? 'در حالِ ثبت…' : 'پذیرش'}</button>
+        <button type="submit" className="fd-btn primary" disabled={!picked || busy}>{busy ? 'در حالِ ثبت…' : 'پذیرشِ بیمار'}</button>
         <button type="button" className="fd-btn" onClick={onClose} disabled={busy}>انصراف</button>
       </div>
     </Overlay>
@@ -420,7 +505,7 @@ function WalkInSheet({ date, onClose, onDone }) {
 }
 
 /** یک کارتِ بیمار روی تخته. همهٔ برچسب‌ها از سرور می‌آیند. */
-function Card({ row, t, busy, onAct, onOpen }) {
+function Card({ row, t, busy, onAct, onOpen, canPatients, onPay }) {
   const due = row.billing && row.billing.total > 0 ? row.billing.due : 0;
   /* بدهیِ مراجعه‌های **دیگرِ** همین بیمار — سرور جمعش را داده و مراجعهٔ وصل‌شده
      را کنار گذاشته، پس با `due` بالا دوبار شمرده نمی‌شود. */
@@ -431,7 +516,12 @@ function Card({ row, t, busy, onAct, onOpen }) {
         {/* سه‌راهه: ساعت، وگرنه شمارهٔ نوبت، وگرنه هیچ — نوبتِ آنلاین و
             حضوریِ اسلات‌محور `seq` ندارند. */}
         <span className="fd-when" dir="ltr">{row.time ? faNum(row.time) : row.seq ? `#${faNum(row.seq)}` : '—'}</span>
-        <b>{row.fullName ?? '—'}</b>
+        {/* نام درِ پرونده است — منشی سابقه و شماره را از همین‌جا باز می‌کند، نه از جستجوی بالا (clinic-daily-19). */}
+        <b>
+          {canPatients && row.patientId && row.fullName
+            ? <Link className="fd-name" to={`/app/patients/${row.patientId}`} title="پروندهٔ بیمار">{row.fullName}</Link>
+            : (row.fullName ?? '—')}
+        </b>
         {row.patientCode && <span className="fd-code" dir="ltr">{row.patientCode}</span>}
       </div>
       <div className="fd-card-meta">
@@ -444,11 +534,11 @@ function Card({ row, t, busy, onAct, onOpen }) {
         {row.phone && <a className="fd-tel" href={`tel:${row.phone}`}><Phone width="12" height="12" /> تماس</a>}
       </div>
       {due > 0 && (
-        <p className="fd-money"><Money width="12" height="12" /> مانده <b>{fmtMoney(due)}</b></p>
+        <p className="fd-money"><Money width="12" height="12" /> مانده <b>{fmtToman(due)}</b></p>
       )}
       {debt > 0 && (
         <p className="fd-money fd-debt">
-          <Money width="12" height="12" /> بدهیِ قبلی <b>{fmtMoney(debt)}</b>
+          <Money width="12" height="12" /> بدهیِ قبلی <b>{fmtToman(debt)}</b>
           {row.debt.visits > 1 && <span> ({faNum(row.debt.visits)} مراجعه)</span>}
         </p>
       )}
@@ -465,6 +555,11 @@ function Card({ row, t, busy, onAct, onOpen }) {
           <button key={o.status} type="button" className={`fd-btn${o.status === 'cancelled' ? ' danger' : ''}`}
             disabled={busy === row.id} onClick={() => onAct(row, o.status)}>{o.label}</button>
         ))}
+        {canPatients && (row.visitId || row.forVisitId) && (
+          <button type="button" className="fd-btn fd-pay" disabled={busy === row.id} onClick={() => onPay(row)}>
+            <Money width="13" height="13" aria-hidden="true" /> {due > 0 ? 'دریافت' : 'صورت‌حساب'}
+          </button>
+        )}
       </div>
     </li>
   );

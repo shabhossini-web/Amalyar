@@ -149,5 +149,33 @@ try {
   assert.equal(charges.filter(c => c.neuroDetail).length, 1); assert.ok(charges.some(c => c.id === manual.id));
   await assert.rejects(() => invoices.apply(v.id, bulk, outsider), /مراجعه/);
   pass('apply replaces neuro lines and consumables as a whole, keeps manual charges, and removes nothing when pricing fails');
+  // ── company-14: قلمِ مبلغِ کلِ مراجعه (ثبت‌نام) در برابرِ خدماتِ نوروی کتاب ──
+  // مراجعه‌ای مثلِ تأییدِ ثبت‌نام: قلمِ خدمتِ بی‌کد و بی‌سازنده با مبلغِ لینک، و پرداختِ همان مبلغ.
+  const iv = await prisma.visit.create({ data: { patientId: patient.id, seq: 3, hospitalId: hospital.id, service: 'ionm', opDate: new Date('2026-09-08'), opStartTime: '10:00', opEndTime: '13:00' } });
+  const lump = await prisma.charge.create({ data: { visitId: iv.id, kind: 'service', title: 'نورومانیتورینگ — فیوژن', quantity: 1, unitPrice: 40000000, amount: 40000000 } });
+  await prisma.payment.create({ data: { visitId: iv.id, amount: 40000000, paidAt: new Date('2026-09-08'), method: 'transfer', bankAccountId: bank.id } });
+  const handMade = await billing.addCharge(iv.id, { kind: 'service', title: 'خدمتِ دستی', unitPrice: 7 }, user);
+  assert.deepEqual((await invoices.list(iv.id, user)).lumpLines, [{ id: lump.id, title: 'نورومانیتورینگ — فیوژن', amount: 40000000 }]);
+  assert.deepEqual((await invoices.catalog(iv.id, user)).lumpLines.map(x => x.id), [lump.id]);
+  pass('company-14: the lump-sum line of the visit is exposed to the services dialog; a hand-made service line is not');
+  let lb = (await invoices.apply(iv.id, bulk, user)).billing;
+  assert.equal(lb.total, 40000000 + 7 + 8991); assert.equal(lb.due, 7 + 8991);
+  assert.ok(lb.charges.some(c => c.id === lump.id));
+  pass('company-14 PROOF: without replacing, the registration line (40,000,000) and the itemised neuro services (8,991) are BOTH in the total — one service counted twice');
+  lb = (await invoices.apply(iv.id, { ...bulk, replace: [lump.id] }, user)).billing;
+  assert.ok(!lb.charges.some(c => c.id === lump.id) && lb.charges.some(c => c.id === handMade.id));
+  assert.equal(lb.charges.filter(c => c.neuroDetail).length, 1);
+  assert.equal(lb.total, 7 + 8991); assert.equal(lb.paid, 40000000); assert.equal(lb.due, 7 + 8991 - 40000000);
+  const replacedAudit = await prisma.auditEvent.findFirst({ where: { action: 'invoice.neuro.apply', entityId: String(iv.id) }, orderBy: { id: 'desc' } });
+  assert.deepEqual(replacedAudit.beforeJson.replaced, [{ id: lump.id, title: 'نورومانیتورینگ — فیوژن', amount: 40000000 }]);
+  pass('company-14: replace removes only the lump line in the same transaction; payment and hand-made line stay; audit records what was replaced');
+  await assert.rejects(() => invoices.apply(iv.id, { ...bulk, replace: [handMade.id] }, user), /مبلغِ کل/);
+  await assert.rejects(() => invoices.apply(iv.id, { ...bulk, replace: [lump.id] }, user), /مبلغِ کل/);
+  await assert.rejects(() => invoices.apply(iv.id, { ...bulk, replace: [charges[0].id] }, user), /مبلغِ کل/);
+  await assert.rejects(() => invoices.apply(iv.id, { ...bulk, replace: ['x'] }, user), /نامعتبر/);
+  assert.ok((await billing.get(iv.id, user)).charges.some(c => c.id === handMade.id));
+  pass('company-14: replace refuses anything but a lump line of THIS visit (hand-made, already gone, another visit) and removes nothing then');
+  await assert.rejects(() => invoices.price(iv.id, { ...dto, year: '1399' }, user), /تنظیماتِ شرکت/);
+  pass('company-14: the missing-tariff error names where tariffs are defined');
   console.log(`${count} invoice integration scenarios passed`);
 } finally { if (prisma) await prisma.$disconnect(); server.close(); await db.close(); }

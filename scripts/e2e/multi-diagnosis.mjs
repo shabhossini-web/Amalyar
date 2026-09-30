@@ -570,7 +570,8 @@ try {
       await m.page.waitForTimeout(1200);
       await m.page.locator('.db-search input').fill(LASTB);
       await m.page.waitForTimeout(1800);
-      const cardRow = m.page.locator('.db-card').filter({ has: m.page.locator('.db-code', { hasText: vb.code }) });
+      /* کارت (موبایل) یا ردیفِ جدول (دسکتاپ، global-04) — `.db-code` و `.db-open` در هر دو هست. */
+      const cardRow = m.page.locator(':is(.db-card, .db-row)').filter({ has: m.page.locator('.db-code', { hasText: vb.code }) });
       ok('ردیفِ همین مراجعه در فهرستِ داشبورد', await cardRow.count() === 1);
       /* صفحه‌کلید، نه کلیکِ مختصاتی: مرکزِ کارت روی موبایل ممکن است روی لینکِ
          نام (پرونده) بیفتد — `card-targets.mjs` همین دو مقصد را جدا می‌سنجد. */

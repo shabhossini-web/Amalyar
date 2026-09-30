@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiDataUrl } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
+import { fmtMoney } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { printIssuedInvoice } from './invoice-print.js';
 import NeuroInvoiceDialog from './NeuroInvoiceDialog.jsx';
@@ -31,6 +32,8 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
   };
   const neuroLines = billing.charges.filter(c => c.neuroDetail && !c.neuroDetail.consumable);
   const neuroCons = billing.charges.filter(c => c.neuroDetail?.consumable);
+  /* قلمِ مبلغِ کلِ مراجعه (سرور، `lumpLines`) — تا پنل نگوید «خدمتی نیست» وقتی قلمِ ثبت‌نام همان خدمت است (company-14). */
+  const lump = info?.lumpLines ?? [];
   return <section className="bl-invoice-panel">
     <h3 className="bl-section-title">{neuro ? 'فاکتور خدمات نورومانیتورینگ' : 'فاکتور شرکت'}</h3>
     {user?.level >= 6 && <Link className="bl-mini" to="/app/settings">تنظیم قالب و مشخصات صادرکننده</Link>}
@@ -40,7 +43,9 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
       <div className="nv-launch-sum">
         {neuroLines.length
           ? <><b>{neuroLines.map(c => c.neuroDetail.label ?? c.title).join(' · ')}</b><small>{neuroLines[0].neuroDetail.hours} ساعت · مالک دستگاه: {neuroLines[0].neuroDetail.deviceOwner === 'hospital' ? 'بیمارستان' : 'شرکت'}{neuroCons.length ? ` · ${neuroCons.length.toLocaleString('fa-IR')} قلم مصرفی` : ''}</small></>
-          : <><b>هنوز خدمتِ نورومانیتورینگی روی این صورت‌حساب نیست</b><small>خدمات با تیکِ پیش‌فرضِ شرکت و مدتِ عمل پیش‌پر می‌آیند؛ فقط تأیید کنید.</small></>}
+          : lump.length
+            ? <><b>روی صورت‌حساب: {lump.map(c => `${c.title} · ${fmtMoney(c.amount)} تومان`).join('، ')}</b><small>این قلمِ مبلغِ کل است، نه ریزِ خدمات. برای فاکتور خدمات را انتخاب کنید؛ همان‌جا می‌گویید جایگزینِ این قلم شوند یا کنارش بمانند.</small></>
+            : <><b>هنوز خدمتِ نورومانیتورینگی روی این صورت‌حساب نیست</b><small>خدمات با تیکِ پیش‌فرضِ شرکت و مدتِ عمل پیش‌پر می‌آیند؛ فقط تأیید کنید.</small></>}
       </div>
       <button type="button" className="db-submit bl-btn" disabled={busy || !info} onClick={() => setPicker(true)}>
         {neuroLines.length ? 'ویرایشِ خدمات و مصرفی‌ها' : 'انتخابِ خدمات و مصرفی‌ها'}
@@ -55,7 +60,8 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
     <AnimatePresence>
       {picker && (
         <NeuroInvoiceDialog
-          visit={visit} billing={billing} onToast={onToast} reload={reload}
+          visit={visit} billing={billing} onToast={onToast}
+          reload={async () => { await reload(); await refresh().catch(() => {}); }}
           onClose={() => setPicker(false)}
           onIssue={w => print(undefined, w)}
         />

@@ -387,6 +387,13 @@ export class IntakeController {
     res.send(csv);
   }
 
+  /** ارجاع‌دهنده‌ها — عمل‌های هر جراح و بیمارستان در شش ماهِ اخیر (company-25). */
+  @RequirePermissions('intake.read')
+  @Get('referrers')
+  referrers() {
+    return this.intake.referrers();
+  }
+
   /** بیمارانِ عمل‌شده‌ای که فرمِ پیگیریِ پرشده ندارند. */
   @RequirePermissions('intake.read')
   @Get('unfollowed')
@@ -426,6 +433,13 @@ export class IntakeController {
   @Get('submissions')
   submissions(@Query('status') status?: string) {
     return this.intake.list(status);
+  }
+
+  /** شمارِ هر وضعیت — روی زبانه‌های صفِ پذیرش (بازبینیِ UX، company-19). */
+  @RequirePermissions('intake.read')
+  @Get('submissions/counts')
+  submissionCounts() {
+    return this.intake.counts();
   }
 
   @RequirePermissions('intake.manage')

@@ -209,8 +209,10 @@ try {
       `نوبتِ ویزیت‌دار «بازکردن» می‌گوید نه «شروع» (${label.trim()})`);
     await openBtn.click();
     await p.waitForTimeout(2500);
-    ok(/\/app\/dashboard\?patient=/.test(p.url()), `به داشبورد رفت (${p.url().split('/app')[1]})`);
-    ok(await p.locator('.db-sheet').count() === 1, '**و شیتِ همان مراجعه باز شد**');
+    /* از بازبینیِ UX (clinic-daily-06) فرم **همین‌جا** باز می‌شود، نه با پرش به «بیماران»:
+       بستنش کاربر را روی همان روزِ تقویم نگه می‌دارد (و کاربرِ بی‌«بیماران» به بن‌بست نمی‌رسد). */
+    ok(/\/app\/calendar/.test(p.url()), `روی همان تقویم ماند (${p.url().split('/app')[1]})`);
+    ok(await p.locator('.db-sheet').count() === 1, '**و شیتِ همان مراجعه همین‌جا باز شد**');
   } finally {
     console.log('خطای جاوااسکریپت:', errs.length ? errs : 'ندارد');
     await b.close();

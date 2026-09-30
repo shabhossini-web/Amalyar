@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../work/events.service';
 import { SettingsService } from '../config/settings.service';
 import { BillingService, summarize } from './billing.service';
-import { ServiceCodesService } from './service-codes.service';
+import { SECTOR_LABELS, ServiceCodesService } from './service-codes.service';
 import { durationOf } from './patients.service';
 import { InventoryService } from './inventory.service';
 import { canAccess } from '../auth/access-check';
@@ -31,6 +31,18 @@ export const NEURO_CATALOG: { id: string; code: string; label: string }[] = [
 const NEURO_BY_ID = new Map(NEURO_CATALOG.map((s) => [s.id, s]));
 
 type NeuroBulk = { items: unknown; hours: number; year: string; deviceOwner: string };
+
+/**
+ * **قلمِ مبلغِ کلِ مراجعه** — همان که سامانه هنگامِ ساختِ مراجعه از «مبلغ» می‌سازد (تأییدِ ثبت‌نام، فرمِ
+ * مراجعه، ورود از ملک‌طب): خدمتِ بی‌کد، بی‌جزئیاتِ نورو و بی‌سازنده (`createdById` خالی؛ قلمِ دستی سازنده دارد).
+ *
+ * هشدار (بازبینیِ UX، company-14): این قلم **همان خدمتی** است که خدماتِ نوروی کتاب ریزش می‌کنند. `apply`
+ * تا امروز فقط خطوطِ نوروی قبلی را جایگزین می‌کرد و این یکی کنارشان می‌ماند — جمع = مبلغِ ثبت‌نام + جمعِ
+ * تعرفه، یعنی یک خدمت دو بار (سنجه: `scripts/e2e/neuromonitoring-invoice.mjs`). حالا پنجرهٔ خدمات صریح
+ * می‌پرسد «جایگزین یا کنارش» و `apply` فقط همین قلم‌ها را با `replace` برمی‌دارد — نه هیچ قلمِ دیگری.
+ */
+const lumpLinesOf = <T extends { kind: string; neuroDetail: unknown; serviceCode: string | null; createdById: number | null }>(charges: T[]) =>
+  charges.filter((c) => c.kind === 'service' && !c.neuroDetail && !c.serviceCode && c.createdById === null);
 type Consumable = { name: string; irc: string; qty: number; itemId?: number; lotId?: number; chargeId?: number; stockEffect?: 'virtual' | 'consumed' };
 
 /** تنظیمِ «مصرفی‌های پرتکرار»: هر خط `نام | IRC | تعداد`. خطِ خراب نادیده می‌شود، نه خطا. */
@@ -72,7 +84,10 @@ export class InvoicesService {
   async list(id: number, user: any) {
     const v = await this.visit(id, user);
     const duration = durationOf(v.opStartTime, v.opEndTime);
+    const charges = await this.prisma.charge.findMany({ where: { visitId: id }, orderBy: { id: 'asc' } });
     return {
+      /* قلمِ مبلغِ کل — پنجرهٔ خدمات می‌پرسد با آن چه کند (company-14). */
+      lumpLines: lumpLinesOf(charges).map((c) => ({ id: c.id, title: c.title, amount: c.amount })),
       hours: duration ? Math.max(1, Math.round(duration / 60)) : null,
       year: new Intl.DateTimeFormat('en-US-u-ca-persian', { year: 'numeric', timeZone: 'UTC' }).format(v.opDate ?? new Date()).replace(/\D/g, ''),
       sector: v.hospital?.sector ?? 'private',
@@ -84,7 +99,11 @@ export class InvoicesService {
     const v = await this.visit(id, user);
     if (!Number.isInteger(dto.hours) || dto.hours < 1 || dto.hours > 72 || !/^\d{4}$/.test(dto.year) || !['company', 'hospital'].includes(dto.deviceOwner)) throw new BadRequestException('مدت، سال تعرفه یا مالک دستگاه نامعتبر است');
     const price = await this.codes.priceOf(dto.code, dto.year, v.hospital?.sector ?? 'private');
-    if (price.price === null || !price.tariff || !price.coefficients || !price.factors) throw new BadRequestException('تعرفهٔ این سال و نوع بیمارستان در تعاریف پایه ثبت نشده است');
+    /* جای درستِ رفع را بگوید (company-14): ضریبِ تعرفه در «تنظیماتِ شرکت» است و نوعِ بیمارستان در تعاریفِ پایه —
+       متنِ قبلی هر دو را «تعاریف پایه» می‌نامید و پنجره راهی به تعریفِ تعرفه نشان نمی‌داد. */
+    if (price.price === null || !price.tariff || !price.coefficients || !price.factors) {
+      throw new BadRequestException(`ضریبِ تعرفهٔ سالِ ${dto.year.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)])} برای بیمارستانِ ${SECTOR_LABELS[v.hospital?.sector ?? 'private'] ?? 'این نوع'} ثبت نشده است — «تنظیماتِ شرکت ← ضریبِ ریالیِ تعرفه»`);
+    }
     const professional = Math.round(price.coefficients.professional * price.factors.professional * dto.hours);
     const technical = Math.round(price.coefficients.technical * price.factors.technical * dto.hours);
     const total = professional + technical;
@@ -150,8 +169,12 @@ export class InvoicesService {
    * قیمت‌گیری **پیش از هر حذفی** است تا خطای تعرفه فاکتور را نیمه‌کاره نکند.
    * مصرفی‌ها بدون مبلغ‌اند (هزینه در خدمت است)؛ اثر انبار انتخابی و مصرف هر قلم تجمعی است.
    */
-  async apply(id: number, dto: NeuroBulk & { consumables?: unknown; returnUnusedStock?: boolean }, user: any) {
+  async apply(id: number, dto: NeuroBulk & { consumables?: unknown; returnUnusedStock?: boolean; replace?: unknown }, user: any) {
     const q = await this.quote(id, dto, user);
+    /* قلم‌های مبلغِ کلی که کاربر صریحاً گفته «جایگزین شوند» (company-14) — فقط شناسه، و داخلِ تراکنش سنجیده
+       می‌شود که واقعاً قلمِ مبلغِ کلِ **همین** مراجعه‌اند؛ هیچ قلمِ دیگری از این راه پاک نمی‌شود. */
+    const replace = Array.isArray(dto.replace) ? [...new Set(dto.replace.map(Number))] : [];
+    if (replace.some((x) => !Number.isSafeInteger(x) || x < 1)) throw new BadRequestException('قلمِ جایگزین‌شونده نامعتبر است');
     const consumables = normalizeConsumables(dto.consumables);
     const selectedLots = consumables.flatMap(c => c.lotId ? [c.lotId] : []);
     if (new Set(selectedLots).size !== selectedLots.length) throw new BadRequestException('هر لات را یک بار انتخاب و تعداد آن را اصلاح کنید');
@@ -162,7 +185,9 @@ export class InvoicesService {
       const existing = await tx.charge.findMany({ where: { visitId: id } });
       const previousCons = existing.filter(c => (c.neuroDetail as any)?.consumable);
       const oldIds = existing.filter(c => c.neuroDetail && !(c.neuroDetail as any)?.consumable).map(c => c.id);
-      await tx.charge.deleteMany({ where: { id: { in: oldIds } } });
+      const lumpIds = new Set(lumpLinesOf(existing).map(c => c.id));
+      if (replace.some((x) => !lumpIds.has(x))) throw new BadRequestException('فقط قلمِ مبلغِ کلِ همین مراجعه جایگزین می‌شود؛ صورت‌حساب را دوباره باز کنید');
+      await tx.charge.deleteMany({ where: { id: { in: [...oldIds, ...replace] } } });
       for (const it of q.items) {
         const { id: _serviceId, label, ...detail } = it;
         const title = detail.title && detail.title !== label ? `${label} — ${detail.title}` : label;
@@ -185,7 +210,7 @@ export class InvoicesService {
         if (dto.returnUnusedStock) await this.inventory.setChargeConsumption(tx, null, 0, id, old.id, user, true);
         await tx.charge.delete({ where: { id: old.id } });
       }
-      await tx.auditEvent.create({ data: { actorId: user.id, action: 'invoice.neuro.apply', entityType: 'visit', entityId: String(id), beforeJson: { chargeIds: oldIds }, afterJson: { services: q.items.map(it => it.id), consumables, total: q.total } } });
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'invoice.neuro.apply', entityType: 'visit', entityId: String(id), beforeJson: { chargeIds: oldIds, replaced: existing.filter(c => replace.includes(c.id)).map(c => ({ id: c.id, title: c.title, amount: c.amount })) }, afterJson: { services: q.items.map(it => it.id), consumables, total: q.total } } });
     }, { timeout: 15000 });
     return { applied: q.items.length, consumables: consumables.length, total: q.total, billing: await this.billing.get(id, user) };
   }

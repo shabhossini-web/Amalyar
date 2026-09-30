@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { faDate, jStrToIso, todayJStr } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
@@ -236,7 +237,10 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
 
       {!data ? <div className="us-empty">در حال بارگذاری…</div> : (
         <>
-          {/* سه عددِ اصلی همیشه بالا — کاربر برای «چقدر مانده» نباید اسکرول کند. */}
+          {/* سه عددِ اصلی همیشه بالا — کاربر برای «چقدر مانده» نباید اسکرول کند.
+              واحدِ همهٔ مبلغ‌های این پنجره یک‌بار و صریح (clinic-daily-10): عددِ بی‌واحد کنارِ ریالِ
+              کارت‌خوان گمراه‌کننده است. */}
+          <p className="bl-unit">مبالغ به تومان</p>
           <div className="bl-summary">
             <div>
               <b>{money(data.total)}</b>
@@ -320,7 +324,8 @@ export default function BillingSheet({ visit, onClose, onChanged, onToast }) {
                     جستجو را به اولین کنترلِ همان label هم می‌فرستد و انتخاب
                     بلافاصله پس گرفته می‌شود. */}
                 <div className="db-field bl-codesearch">
-                  <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : 'کدِ خدمت (کتابِ ارزش نسبی یا کدِ داخلیِ مطب)'}</span>
+                  {/* «کدِ داخلیِ مطب» در شرکت هم نوشته می‌شد (بازبینیِ UX، company-23) — واژهٔ سازمان از نوعِ نصب. */}
+                  <span>{c.kind === 'item' ? 'کالا (از کاتالوگ)' : `کدِ خدمت (کتابِ ارزش نسبی یا کدِ داخلیِ ${cfg.kind === 'clinic' ? 'مطب' : 'شرکت'})`}</span>
                   <input
                     value={codeQ}
                     onChange={(e) => setCodeQ(e.target.value)}
@@ -826,23 +831,41 @@ function InvoiceAccount({ data, banks, visitId, onSaved, onToast }) {
   const [type, setType] = useState(data.invoiceType ?? '');
   const [bankId, setBankId] = useState(data.invoiceBankAccount?.id ?? '');
   const [busy, setBusy] = useState(false);
+  /* پیش‌فرض از حسابِ پرداخت‌های همین مراجعه (بازبینیِ UX، company-14): سرور فاکتوری را که حسابش با حسابِ
+     پرداخت‌ها فرق کند صادر نمی‌کند، پس وقتی همهٔ پرداخت‌های بانکی (مثلاً واریزِ ثبت‌نام) به یک حساب رفته‌اند
+     انتخابِ دیگری معنا ندارد و نباید برای هر مراجعه از نو انتخاب شود. فقط پیشنهاد است؛ ثبت با همان دکمه. */
+  const paidTo = [...new Set((data.payments ?? []).map((p) => p.bankAccountId).filter(Boolean))];
+  const paidBank = !data.invoiceBankAccount && paidTo.length === 1 ? banks.find((b) => b.id === paidTo[0] && b.active !== false) ?? null : null;
+  const classified = (b) => b?.classification === 'formal' || b?.classification === 'informal';
+  const hint = classified(paidBank) ? paidBank : null;
+  const shownType = type || hint?.classification || '';
+  const shownBank = bankId || (hint && shownType === hint.classification ? hint.id : '');
   const save = async () => {
     setBusy(true);
     try {
-      onSaved(await api(`/visits/${visitId}/billing/invoice-account`, { method: 'POST', body: { invoiceType: type, bankAccountId: Number(bankId) } }));
+      onSaved(await api(`/visits/${visitId}/billing/invoice-account`, { method: 'POST', body: { invoiceType: shownType, bankAccountId: Number(shownBank) } }));
       onToast('نوع فاکتور و حساب دریافت ذخیره شد');
     } catch (e) { onToast(e.message); } finally { setBusy(false); }
   };
   return <fieldset className="db-field" disabled={busy}>
     <legend>نوع فاکتور و حساب دریافت</legend>
-    <select aria-label="نوع فاکتور" value={type} onChange={(e) => { setType(e.target.value); setBankId(''); }}>
+    <select aria-label="نوع فاکتور" value={shownType} onChange={(e) => { setType(e.target.value); setBankId(''); }}>
       <option value="">انتخاب کنید</option><option value="formal">رسمی</option><option value="informal">غیررسمی</option>
     </select>
-    <select aria-label="حساب فاکتور" value={bankId} onChange={(e) => setBankId(e.target.value)}>
+    <select aria-label="حساب فاکتور" value={shownBank} onChange={(e) => setBankId(e.target.value)}>
       <option value="">حساب هم‌نوع فاکتور را انتخاب کنید</option>
-      {banks.filter((b) => b.classification === type).map((b) => <option key={b.id} value={b.id}>{b.ownerName} · {b.bankName}</option>)}
+      {banks.filter((b) => b.classification === shownType).map((b) => <option key={b.id} value={b.id}>{b.ownerName} · {b.bankName}</option>)}
     </select>
-    <button type="button" className="bl-mini" disabled={!type || !bankId || busy} onClick={save}>ثبت اتصال حساب</button>
+    <button type="button" className="bl-mini" disabled={!shownType || !shownBank || busy} onClick={save}>ثبت اتصال حساب</button>
     {data.invoiceBankAccount && <small>حساب ثبت‌شده: {data.invoiceBankAccount.ownerName} · {data.invoiceType === 'formal' ? 'رسمی' : 'غیررسمی'}</small>}
+    {hint && String(shownBank) === String(hint.id) && <small>پیش‌فرض از حسابِ پرداختِ همین مراجعه — «ثبت اتصال حساب» را بزنید.</small>}
+    {/* بن‌بستِ بی‌توضیح نه: حسابی که نوعِ فاکتور ندارد در هیچ‌کدام از دو فهرست نمی‌آید (company-14). */}
+    {paidBank && !hint && (
+      <small>حسابِ پرداختِ این مراجعه ({paidBank.ownerName}{paidBank.bankName ? ` · ${paidBank.bankName}` : ''}) هنوز رسمی یا غیررسمی نشده؛
+        در <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حسابداری ← حساب‌های بانکی</Link> نوعش را بگذارید تا همین‌جا پیش‌فرض شود.</small>
+    )}
+    {!paidBank && shownType && !banks.some((b) => b.classification === shownType) && (
+      <small>حسابِ {shownType === 'formal' ? 'رسمی' : 'غیررسمی'} تعریف نشده — <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حسابداری ← حساب‌های بانکی</Link></small>
+    )}
   </fieldset>;
 }

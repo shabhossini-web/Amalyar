@@ -3,7 +3,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { scopedVisitWhere } from '../common/own-scope';
 import { AppointmentsService } from './appointments.service';
+import { FormsService } from './forms.service';
 import { OTHER_PX, procedureLabel } from './visit-coding';
+import { visitTitleOf } from './visit-title';
 
 /**
  * تقویمِ ماهانهٔ عمل‌ها.
@@ -18,7 +20,7 @@ import { OTHER_PX, procedureLabel } from './visit-coding';
  */
 @Injectable()
 export class CalendarService {
-  constructor(private prisma: PrismaService, private appts: AppointmentsService) {}
+  constructor(private prisma: PrismaService, private appts: AppointmentsService, private forms: FormsService) {}
 
   async month(jy: number, jm: number, user?: any) {
     if (!Number.isInteger(jy) || jy < 1300 || jy > 1500) throw new BadRequestException('سالِ نامعتبر');
@@ -41,6 +43,11 @@ export class CalendarService {
       },
     });
 
+    /* نامِ نوعِ هر مراجعه — همان نگاشت و همان `visitTitleOf` که کارتِ «بیماران» دارد («ویزیت»/«عمل»
+       در مطب، نامِ خدمت در شرکت). تا بازبینیِ UX (clinic-daily-05) تقویم نگاشتِ هاردکدِ خودش را داشت
+       و «ویزیت/پیگیری/مشاوره» را در هر حوزه‌ای ثابت می‌نوشت. */
+    const kinds = await this.forms.kindMap();
+
     const days = new Map<number, any[]>();
     for (const v of rows) {
       const [, , jd] = toJalali(v.opDate!);
@@ -50,6 +57,7 @@ export class CalendarService {
         code: `${v.patient.code}-V${v.seq}`,
         fullName: `${v.patient.firstName} ${v.patient.lastName}`.trim(),
         kind: v.kind,
+        kindTitle: visitTitleOf(v, v.kind ? kinds.get(v.kind)?.title : null),
         opStatus: v.opStatus,
         opStartTime: v.opStartTime,
         opEndTime: v.opEndTime,
@@ -108,6 +116,8 @@ export class CalendarService {
           },
         })),
       total: rows.length,
+      /* شمارِ نوبت‌های ماه — زیرعنوانِ تقویم («۱۱ مراجعه و ۷ نوبت در مهر»). */
+      appointments: appts.length,
     };
   }
 }

@@ -150,11 +150,13 @@ export default function Pathways() {
               <div className="pw-card-main">
                 <b>{t.title}</b>
                 {t.notes && <small>{t.notes}</small>}
+                {/* هشدار: نقطهٔ وسط کنارِ رقمِ فارسی شبیهِ «۰» است: «نسخهٔ ۱ · ۴ مرحله» «۴۰۱ مرحله» خوانده
+                    می‌شد (بازبینیِ UX، clinic-daily-16). جداکنندهٔ بلند و ویرگول، نه «·». */}
                 <small className="pw-meta">
                   {t.publishedVersion
-                    ? `نسخهٔ ${faNum(t.publishedVersion.version)} · ${faNum(t.publishedVersion.steps.length)} مرحله`
+                    ? `نسخهٔ ${faNum(t.publishedVersion.version)} — ${faNum(t.publishedVersion.steps.length)} مرحله`
                     : 'بدونِ نسخهٔ منتشرشده'}
-                  {t.episodes > 0 && ` · ${faNum(t.episodes)} دورهٔ ساخته‌شده`}
+                  {t.episodes > 0 && `، ${faNum(t.episodes)} دورهٔ ساخته‌شده`}
                 </small>
               </div>
               <button type="button" className="pw-btn" onClick={() => choose(t)}>ویرایش و انتشار</button>

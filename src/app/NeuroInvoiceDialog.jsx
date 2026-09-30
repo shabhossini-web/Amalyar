@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { fmtMoney } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
 import { useAuth } from './auth.jsx';
 import Overlay from '../ui/Overlay.jsx';
-import { Close, Plus, Trash } from '../ui/icons.jsx';
+import { Close, External, Plus, Trash } from '../ui/icons.jsx';
 
 const int = (v, lo, hi) => {
   const n = parseInt(toEnDigits(String(v ?? '')).replace(/[^0-9]/g, ''), 10);
@@ -35,6 +36,8 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
   useEffect(() => { if (!stockOpen) return; let alive = true; const t = setTimeout(() => api(`/stock/lots?q=${encodeURIComponent(stockQuery)}`).then(d => { if (alive) { setStock(d); setStockError(''); } }).catch(e => { if (alive) setStockError(e.message); }), 250); return () => { alive = false; clearTimeout(t); }; }, [stockQuery, stockOpen]);
   const [draft, setDraft] = useState({ name: '', irc: '', qty: '1' });
   const [quote, setQuote] = useState(null);
+  /* قلمِ مبلغِ کلِ مراجعه (مبلغِ ثبت‌نام) جایگزین شود یا کنارِ خدمات بماند — صریح، نه ضمنی (company-14). */
+  const [replace, setReplace] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   /* وضعیتِ صورت‌حساب در لحظهٔ بازشدن — بازخوانی‌های بعدی انتخابِ کاربر را نمی‌پرانند. */
@@ -53,6 +56,8 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
           .map((x) => `${x.serviceCode}:${x.neuroDetail.label ?? ''}`)
           .filter((id) => c.services.some((s) => s.id === id));
         setSel(new Set(fromVisit.length ? fromVisit : c.services.filter((s) => s.defaultOn).map((s) => s.id)));
+        /* خدماتِ نورو که از قبل هست و قلمِ کل هنوز کنارش است یعنی بارِ قبل «کنارش بماند» انتخاب شده بود. */
+        setReplace(!existing.length);
         setHours(String(existing[0]?.neuroDetail?.hours ?? c.hours ?? ''));
         setYear(String(c.year ?? ''));
         setOwner(existing[0]?.neuroDetail?.deviceOwner ?? c.deviceOwner ?? 'company');
@@ -93,7 +98,7 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
     if (printWindow) printWindow.document.body.textContent = 'در حال آماده‌سازی فاکتور…';
     setBusy(true); setErr('');
     try {
-      await api(`${root}/neuro-apply`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, consumables: payloadCons(), returnUnusedStock } });
+      await api(`${root}/neuro-apply`, { method: 'POST', body: { items: ids, hours: h, year: y, deviceOwner: owner, consumables: payloadCons(), returnUnusedStock, replace: replace ? lump.map((c) => c.id) : [] } });
       await reload();
       onToast(`${fa(ids.length)} خدمت و ${fa(cons.length)} مصرفی روی صورت‌حساب نشست ✓`);
       onClose();
@@ -114,6 +119,13 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
   };
 
   const canIssue = !!billing?.invoiceType && !!billing?.invoiceBankAccount;
+  const lump = cat?.lumpLines ?? [];
+  /* چرا دکمه‌های ثبت خاموش‌اند — کنارِ خودِ دکمه‌ها، نه فقط خطِ خطای بالای پنجره (company-14). */
+  const whyNot = !cat ? '' : !ids.length ? 'دستِ‌کم یک خدمت انتخاب کنید.'
+    : h < 1 ? 'مدتِ قابلِ صورتحساب را وارد کنید.'
+      : !/^\d{4}$/.test(y) ? 'سالِ تعرفه را چهاررقمی وارد کنید.'
+        : !quote ? (err || 'در حالِ محاسبهٔ جمع…') : '';
+  const tariffMissing = /تعرفه/.test(err);
 
   return (
     <Overlay backdrop="db-overlay" panel="glass db-sheet nv-sheet" from="bottom" onClose={onClose} closable={!busy} role="dialog" aria-label="صدور فاکتور نورومانیتورینگ">
@@ -121,7 +133,15 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
         <b>فاکتورِ نورومانیتورینگ · {visit.code}</b>
         <button type="button" className="db-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
       </header>
-      {err && <p className="bl-error" role="alert">{err}</p>}
+      {err && (
+        <p className="bl-error" role="alert">
+          {err}
+          {/* خطای تعرفه راهِ رفع را هم نشان می‌دهد (company-14) — تبِ تازه تا این پنجره سرِ جایش بماند. */}
+          {tariffMissing && (user?.level >= 6
+            ? <> <Link className="nv-fixlink" to="/app/settings" target="_blank" rel="noopener noreferrer">تعریفِ تعرفه <External width="12" height="12" /></Link></>
+            : <> از مدیرِ سامانه بخواهید ضریب را در «تنظیماتِ شرکت» ثبت کند.</>)}
+        </p>
+      )}
       {!cat ? <div className="us-empty">در حال بارگذاری…</div> : (
         <>
           <div className="nv-params">
@@ -160,6 +180,24 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
             })}
           </div>
 
+          {lump.length > 0 && (
+            <section className="nv-lump" aria-labelledby="nv-lump-h">
+              <h4 className="nv-h" id="nv-lump-h">قلمِ مبلغِ کلِ مراجعه <small>همین خدمت، پیش از ریزشدن</small></h4>
+              {lump.map((c) => (
+                <div key={c.id} className="nv-lump-row"><b>{c.title}</b><span>{fmtMoney(c.amount)} تومان</span></div>
+              ))}
+              <div className="bl-pricing-tabs" role="radiogroup" aria-label="با قلمِ مبلغِ کل چه شود؟">
+                <button type="button" role="radio" aria-checked={replace} className={replace ? 'on' : ''} disabled={busy} onClick={() => setReplace(true)}>جایگزینِ همین قلم شود</button>
+                <button type="button" role="radio" aria-checked={!replace} className={!replace ? 'on' : ''} disabled={busy} onClick={() => setReplace(false)}>کنارش بماند</button>
+              </div>
+              <p className="db-hint">
+                {replace
+                  ? 'با ثبت، این قلم برداشته می‌شود و خدماتِ بالا جایش می‌نشینند؛ پرداخت‌ها دست نمی‌خورند.'
+                  : 'هر دو در جمعِ صورت‌حساب می‌آیند — فقط وقتی درست است که این قلم خدمتِ دیگری باشد، وگرنه یک خدمت دو بار حساب می‌شود.'}
+              </p>
+            </section>
+          )}
+
           <h4 className="nv-h">اقلامِ مصرفی <small>روی فاکتور چاپ می‌شود، بدونِ مبلغ</small></h4>
           <p className="db-hint">برای اقلام انبار، «فقط فاکتور» یا «کاهش موجودی» را انتخاب کنید. پیش‌فرض مصرفی از کاتالوگ حفظ می‌شود؛ لات مصرف را برای هر مراجعه انتخاب کنید.</p>
           <button type="button" className="bl-mini" onClick={() => setStockOpen(v => !v)} disabled={busy}>انتخاب مصرفی از انبار</button>
@@ -195,6 +233,8 @@ export default function NeuroInvoiceDialog({ visit, billing, onClose, onToast, r
 
           <label className="db-hint"><input type="checkbox" checked={returnUnusedStock} disabled={busy} onChange={e => setReturnUnusedStock(e.target.checked)} /> مقدار حذف‌شده یا کاهش‌یافته واقعاً مصرف نشده و به موجودی برگردد</label>
           <p className="db-hint">بدون این انتخاب، حذف یا کاهش قلم فقط فاکتور را اصلاح می‌کند و مصرف قبلی در دفتر انبار باقی می‌ماند.</p>
+          <p className="db-hint">اقلامِ دیگرِ صورت‌حساب — کالای انبار، تخفیف، خدمتِ دستی — دست نمی‌خورند.</p>
+          {whyNot && <p className="db-hint nv-why" aria-live="polite">{whyNot}</p>}
           <div className="nv-foot">
             <div className="nv-total"><span>جمعِ خدمات</span><b>{quote ? `${fmtMoney(quote.total)} تومان` : '—'}</b></div>
             {user?.level >= 6 && (

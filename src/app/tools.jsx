@@ -115,6 +115,9 @@ export function toolLabel(key, t) {
   const x = ALL.find((y) => y.key === key);
   if (!x) return null;
   if (key === 'surgeon' && t?.portal) return t.portal;
+  /* تقویم و CRM هم نامِ حوزه‌ای دارند («تقویمِ نوبت‌ها» در مطب) — بازبینیِ UX: clinic-daily-05. */
+  if (key === 'calendar' && t?.calendar) return t.calendar;
+  if (key === 'crm' && t?.crm) return t.crm;
   if (key === 'settings' && t?.org) return `تنظیماتِ ${t.org}`;
   return x.label;
 }

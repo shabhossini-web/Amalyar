@@ -9,6 +9,7 @@ import { AvailabilityService } from './availability.service';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { RemindersService } from './reminders.service';
 import { clinicTodayIso, dayUtc } from '../common/clinic-day';
+import { jalaliText } from '../common/jalali';
 
 /** برچسب‌های فارسیِ وضعیتِ نوبت — مشتقِ سرور (قانون ۱۵). */
 /* ⚠️ خانه‌اش `labels.ts` است (تنها منبعِ برچسب‌های وضعیت). این‌جا فقط دوباره
@@ -25,16 +26,31 @@ export { APPT_LABELS } from './labels';
 /**
  * برچسبِ **اقدام** — با `APPT_LABELS` یکی نیست و نباید یکی شود.
  * `APPT_LABELS` می‌گوید «الان کجاست» («در مطب»)، این می‌گوید «اگر بزنی چه می‌شود»
- * («رسید»). میزِ پذیرش دکمه است، پس فعل می‌خواهد نه صفت.
+ * («ثبتِ رسیدن»). میزِ پذیرش دکمه است، پس فعل می‌خواهد نه صفت.
  */
 export const APPT_ACTIONS: Record<string, string> = {
-  held: 'برگشت به انتظار',
-  confirmed: 'قطعی شد',
-  arrived: 'رسید',
-  done: 'تمام شد',
-  noshow: 'نیامد',
-  cancelled: 'لغو',
+  held: 'برگرداندن به انتظارِ پرداخت',
+  confirmed: 'قطعی‌کردن',
+  arrived: 'ثبتِ رسیدن',
+  done: 'پایانِ نوبت',
+  noshow: 'ثبتِ غیبت',
+  cancelled: 'لغوِ نوبت',
 };
+/**
+ * هشدار: **فعل، نه جملهٔ خبری** (بازبینیِ UX، clinic-daily-20): «قطعی شد»، «رسید»، «تمام شد»، «نیامد» روی
+ * دکمه خبر بودند نه کار — و روی بیمارِ «در مطب» دکمهٔ «قطعی شد» در واقع **برگرداندن** بود. معنای یک
+ * گذار گاهی به **مبدأ** بسته است، پس این‌جا استثنای مبدأ‌به‌مقصد؛ بقیه همان `APPT_ACTIONS`.
+ *
+ * هشدار: `done` «پایانِ **نوبت**» است نه «پایانِ ویزیت»: این گذار فقط نوبت را می‌بندد و `Visit.opStatus`
+ * را دست نمی‌زند، پس «پایانِ ویزیت» ادعای کاری را می‌کرد که رخ نمی‌دهد (میزِ پزشک همان لحظه
+ * «ویزیت: در انتظار» نشان می‌دهد). «نوبت» هم در هر سه حوزه یکی است (`FLOW`) و سرور واژهٔ حوزه ندارد —
+ * میزِ پذیرش در شرکت هم روشن است. هم‌خانوادهٔ «لغوِ نوبت».
+ */
+const APPT_ACTIONS_FROM: Record<string, Record<string, string>> = {
+  arrived: { confirmed: 'برگرداندن به نوبت‌دار' },
+  noshow: { confirmed: 'برگرداندن به نوبت‌دار' },
+};
+export const apptActionLabel = (from: string, to: string) => APPT_ACTIONS_FROM[from]?.[to] ?? APPT_ACTIONS[to] ?? to;
 
 /**
  * ستونِ میزِ پذیرش — مشتقِ سرور (قانون ۱۵) و تک‌منبع.
@@ -158,7 +174,7 @@ export class AppointmentsService {
       /* دکمه‌های میز: هر گذارِ مجاز با فعلِ خودش. برچسب این‌جا ساخته می‌شود تا
          نگاشتِ کلاینتیِ دوم (مثلِ آنکه در `Calendar.jsx` بود) لازم نشود. */
       nextOptions: (APPT_TRANSITIONS[a.status] ?? []).map((st) => ({
-        status: st, label: APPT_ACTIONS[st] ?? st,
+        status: st, label: apptActionLabel(a.status, st),
       })),
       lane: apptLane(a.status, a.visitId ?? null),
       /* «شروعِ ویزیت» هم مشتقِ سرور است — و این‌جا، کنارِ `lane` و
@@ -250,12 +266,24 @@ export class AppointmentsService {
    * کسِ دیگر.
    */
   async walkIn(
-    dto: { patientId: number; date: string; startMin?: number; topicId?: number; note?: string },
+    dto: { patientId: number; date: string; startMin?: number; topicId?: number; note?: string; visitId?: number },
     user: any,
     opts: { desk?: boolean } = {},
   ) {
     const patient = await this.prisma.patient.findUnique({ where: { id: dto.patientId }, select: { id: true } });
     if (!patient) throw new NotFoundException('پرونده پیدا نشد');
+    /* پرونده‌ای که همین حالا از «ساختِ پروندهٔ تازه»ِ میزِ پذیرش ساخته شد، با مراجعهٔ امروزش می‌آید
+       (بازبینیِ UX، clinic-daily-07): نوبتِ حضوری **هدفِ** همان مراجعه می‌شود (`forVisitId`)، تا
+       «شروعِ ویزیت» همان را باز کند و مراجعهٔ دوم نسازد. */
+    if (dto.visitId != null) {
+      const target = await this.prisma.visit.findUnique({ where: { id: dto.visitId }, select: { patientId: true, opStatus: true } });
+      if (!target || target.patientId !== dto.patientId) throw new BadRequestException('این مراجعه به پروندهٔ این بیمار تعلق ندارد');
+      if (target.opStatus === 'cancelled') throw new BadRequestException('این مراجعه لغو شده است');
+      const taken = await this.prisma.appointment.findFirst({
+        where: { OR: [{ visitId: dto.visitId }, { forVisitId: dto.visitId }], status: { not: 'cancelled' } }, select: { id: true },
+      });
+      if (taken) throw new BadRequestException('این مراجعه از قبل نوبت دارد');
+    }
     const d = new Date(`${dto.date}T00:00:00.000Z`);
     if (Number.isNaN(d.getTime())) throw new BadRequestException('تاریخ نامعتبر است');
 
@@ -287,7 +315,7 @@ export class AppointmentsService {
         const appt = await tx.appointment.create({
           data: {
             patientId: dto.patientId,
-            forVisitId: await this.patients.appointmentTarget(tx, dto.patientId, d),
+            forVisitId: dto.visitId ?? await this.patients.appointmentTarget(tx, dto.patientId, d),
             topicId: dto.topicId ?? null,
             date: d,
             startMin: wantsSlot ? dto.startMin ?? null : null,
@@ -388,7 +416,7 @@ export class AppointmentsService {
     await this.reminders.syncAppointment(id);
     if (cancelling) {
       await this.reminders.notifyCancelled('appointment', row.patientId, cancel!.reason!, {
-        when: row.date.toISOString().slice(0, 10),
+        when: jalaliText(row.date), // «۸ مهر ۱۴۰۵» — نه ISOِ میلادی (clinic-daily-12)
       });
     }
     /* قرینهٔ خاموشیِ walkIn: نوبتی که «ویزیتِ بعدی» را پوشش می‌داد اگر لغو یا
