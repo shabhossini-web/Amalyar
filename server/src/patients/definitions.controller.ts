@@ -346,8 +346,8 @@ export class DefinitionsController {
 
   @RequirePermissions('definitions.manage')
   @Patch('surgeons/:id')
-  patchSurgeon(@Param('id', ParseIntPipe) id: number, @Body() dto: SurgeonPatchDto) {
-    return this.defs.updateSurgeon(id, dto);
+  patchSurgeon(@Param('id', ParseIntPipe) id: number, @Body() dto: SurgeonPatchDto, @CurrentUser() user: any) {
+    return this.defs.updateSurgeon(id, dto, user);
   }
 
   @RequirePermissions('definitions.manage')
@@ -594,8 +594,8 @@ export class DefinitionsController {
 
   @RequirePermissions('definitions.manage')
   @Patch('transport-staff/:id')
-  updateStaff(@Param('id', ParseIntPipe) id: number, @Body() dto: StaffPatchDto) {
-    return this.defs.updateTransportStaff(id, dto);
+  updateStaff(@Param('id', ParseIntPipe) id: number, @Body() dto: StaffPatchDto, @CurrentUser() user: any) {
+    return this.defs.updateTransportStaff(id, dto, user);
   }
 
   @RequirePermissions('definitions.manage')

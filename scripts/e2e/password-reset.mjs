@@ -171,6 +171,36 @@ const drv = await call('/transport-staff', { body: { firstName: 'آزمونی', 
 await newAccount('5', bearer, true, { phone: drvPhone });
 const drvHijack = await call(`/transport-staff/${drv.json?.id}`, { method: 'PATCH', body: { phone: attacker }, bearer });
 ok(drvHijack.status === 403 && msg(drvHijack) === LOCKED, `شمارهٔ رانندهٔ صاحبِ حساب هم (${drvHijack.status})`);
+/* PS5 — شبا (مقصدِ پرداختِ سهم)، نام و عکسِ صاحبِ حساب هم از «تعاریف» عوض نمی‌شوند، و هر ویرایشِ تعریف ردِ ممیزیِ
+   قبل/بعدِ شبا، شماره و کدِ ملی دارد. تا دیروز سطحِ ۵ شبای «دکتر X» را حسابِ خودش می‌کرد، بی هیچ ردی. */
+const IBAN_A = 'IR820540102680020817909002', IBAN_B = 'IR062960000000100324200001';
+const ibanHijack = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { phone: doc.phone, iban: IBAN_A }, bearer });
+ok(ibanHijack.status === 403 && /فقط از «مدیریتِ کاربران» عوض می‌شود/.test(msg(ibanHijack)) && /شبا/.test(msg(ibanHijack)),
+  `PS5: شبای جراحِ صاحبِ حساب از «تعاریف» عوض نمی‌شود (${ibanHijack.status} «${msg(ibanHijack)}»)`);
+const nameHijack = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { firstName: 'غریبه' }, bearer });
+ok(nameHijack.status === 403 && /نام/.test(msg(nameHijack)), `PS5: نامِ صاحبِ حساب هم (${nameHijack.status} «${msg(nameHijack)}»)`);
+const drvIban = await call(`/transport-staff/${drv.json?.id}`, { method: 'PATCH', body: { iban: IBAN_A }, bearer });
+ok(drvIban.status === 403, `PS5: شبای رانندهٔ صاحبِ حساب هم (${drvIban.status})`);
+const sgNow = ((await call('/surgeons', { method: 'GET', bearer })).json ?? []).find((x) => x.id === sg?.id);
+const sameAll = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { firstName: sgNow?.firstName, lastName: sgNow?.lastName, phone: sgNow?.phone, iban: sgNow?.iban ?? '', specialty: 'آزمونی ۲' }, bearer });
+ok(sameAll.status < 300, `PS5: فرمِ تعاریف با همان مقادیر (نام، شماره، شبا) مثلِ قبل ذخیره می‌شود (${sameAll.status})`, msg(sameAll));
+const bareIban = await call(`/surgeons/${bare.json?.id}`, { method: 'PATCH', body: { iban: IBAN_B }, bearer });
+const bareAudit = sql(`SELECT before_json::text || ' → ' || after_json::text FROM audit_events WHERE action = 'definitions.surgeon.update' AND entity_id = '${bare.json?.personId ?? ''}' ORDER BY id DESC LIMIT 1`);
+ok(bareIban.status < 300 && bareAudit.includes(IBAN_B) && /"phone"/.test(bareAudit) && /"nationalId"/.test(bareAudit),
+  `PS5: شبای جراحِ بی‌حساب عوض می‌شود و ممیزی قبل/بعد دارد (${bareIban.status} ${bareAudit.slice(0, 120)})`);
+/* PS6 — «آماده‌سازی حساب پرتال» شمارهٔ جراح را از خودِ سوپرادمین می‌گیرد و با تعاریف می‌سنجد. تا دیروز به شمارهٔ
+   «تعاریف» اعتماد می‌کرد: سطحِ ۵ شمارهٔ جراحِ بی‌حساب را سیم‌کارتِ خودش می‌کرد، سوپرادمین حساب می‌ساخت و صاحبِ آن
+   سیم‌کارت با ثبت‌نام و کدِ پیامکی تحویلش می‌گرفت. */
+const grantPhone = `0932${run}6`;
+const toGrant = await call('/surgeons', { body: { firstName: 'آزمونی', lastName: `پرتال${run}`, phone: grantPhone }, bearer });
+const grantBare = await call(`/surgeon/accounts/${toGrant.json?.id}`, { body: {}, bearer });
+ok(grantBare.status === 400 && /شماره/.test(msg(grantBare)), `PS6: بی‌شمارهٔ تأییدشده حسابی ساخته نمی‌شود (${grantBare.status} «${msg(grantBare)}»)`);
+const grantWrong = await call(`/surgeon/accounts/${toGrant.json?.id}`, { body: { phone: attacker }, bearer });
+ok(grantWrong.status === 400 && /تعاریف/.test(msg(grantWrong)), `PS6: شمارهٔ ناهمخوان با تعاریف رد می‌شود (${grantWrong.status} «${msg(grantWrong)}»)`);
+const grantOk = await call(`/surgeon/accounts/${toGrant.json?.id}`, { body: { phone: grantPhone }, bearer });
+const grantAudit = sql(`SELECT after_json::text FROM audit_events WHERE action = 'surgeon.account.create' AND after_json->>'surgeonId' = '${toGrant.json?.id}' ORDER BY id DESC LIMIT 1`);
+ok(grantOk.status < 300 && grantOk.json?.existing === false && grantAudit.includes(grantPhone), `PS6: با شمارهٔ درست حساب ساخته شد و ممیزی شمارهٔ تأییدشده را دارد (${grantOk.status})`, msg(grantOk) || grantAudit);
+
 /* ج) سوپرادمین بازیابیِ فقط‌پیامکی ندارد — همان پاسخِ بی‌صدا، بی‌کد. */
 const boss = await newAccount('6', bearer, true, { level: 6 });
 const bossReq = await call('/auth/password/request-otp', { body: { identifier: boss.username } });
@@ -212,7 +242,7 @@ sql(`UPDATE otp_codes SET attempts = 0 WHERE phone = '${guess.phone}' AND purpos
 const ninth = await call('/auth/password/reset', { body: { identifier: guess.phone, code: gCode, password: 'guess-pass-1' }, ip: '10.64.0.1' });
 ok(ninth.status === 400 && msg(ninth) === msg(wrong), `حدسِ نهم با موبایلِ همان حساب — حتی با کدِ درست — رد می‌شود (${ninth.status})`, msg(ninth));
 
-console.log('\n۷) PF7 و PF12 — پیامکِ «لینکِ ادامه» پس از ثبت‌نامِ بیمار');
+console.log('\n۷) PS1، PF7 و PF12 — ثبت‌نامِ بازِ بیمار و پیامکِ «لینکِ ادامه»');
 /** کدِ ملیِ معتبر (رقمِ کنترلی) — هر اجرا کدهای خودش. */
 const nid = (seed) => {
   const base = String(seed % 1_000_000_000).padStart(9, '0');
@@ -228,12 +258,54 @@ const register = async (link, who) => call(`/public/intake/link/${link.token}/re
 const notices = async (phone) => { await later(400); return Number(sql(`SELECT count(*) FROM reminders WHERE phone = '${phone}' AND kind = 'notice'`)); };
 /* PF12 — پرونده با شمارهٔ P ساخته شده؛ کسی کدِ ملی و نامِ خانوادگیِ درست را با شمارهٔ دیگری تایپ می‌کند. پیامک
    به شمارهٔ **پرونده** می‌رود (درست)، ولی پاسخ نباید چهار رقمِ اول و سه رقمِ آخرِ آن را به او نشان دهد. */
+const ON_RECORD = 'شمارهٔ ثبت‌شده در پرونده';
 const recPhone = `0939${run}3`;
 const recNid = nid(Number(run) * 10 + 1);
 const own = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: recPhone });
-ok(own.status < 300 && own.json?.linkSmsTo === `${recPhone.slice(0, 4)}…${recPhone.slice(-3)}`, `شمارهٔ تایپ‌شده همان شمارهٔ پرونده ← پوشیده‌اش (${own.status} «${own.json?.linkSmsTo}»)`, msg(own));
+ok(own.status < 300 && !!own.json?.token, `صاحبِ پرونده ثبت‌نامِ تازه و توکنِ فرمش را می‌گیرد (${own.status})`, msg(own));
+/* PS1: برچسب **همیشه** ثابت است، حتی وقتی شمارهٔ تایپ‌شده همان شمارهٔ پرونده است — پوشیده‌اش فقط وقتِ برابری
+   برمی‌گشت، پس خودش تأییدِ حدسِ شماره بود. */
+ok(own.json?.linkSmsTo === ON_RECORD, `PS1: «لینک به … پیامک شد» برچسبِ ثابت است، نه ${recPhone.slice(0, 4)}… («${own.json?.linkSmsTo}»)`);
+/* PS1 — غریبه‌ای که کدِ ملی و نامِ خانوادگیِ درست را با شمارهٔ خودش تایپ می‌کند. تا دیروز ثبت‌نامِ بازِ همان بیمار
+   را کامل تحویل می‌گرفت: توکنِ فرم (خواندن/پرکردن/نوبت/حذفِ فیش) و `data` با موبایل، کدِ ملی، نشانی و پاسخ‌ها. */
+const leaks = (r) => {
+  const s = JSON.stringify(r.json ?? {});
+  return [...(s.match(/09\d{9}/g) ?? []), ...(s.includes(recNid) ? ['کدِ ملی'] : []), ...(own.json?.token && s.includes(own.json.token) ? ['توکن'] : [])];
+};
 const other = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: `0938${run}2` });
-ok(other.status < 300 && other.json?.linkSmsTo === 'شمارهٔ ثبت‌شده در پرونده', `PF12: شمارهٔ دیگر ← «شمارهٔ ثبت‌شده در پرونده»، نه ${recPhone.slice(0, 4)}… (${other.status} «${other.json?.linkSmsTo}»)`, msg(other));
+ok(other.status < 300 && other.json?.resume === true, `PS1: ثبت‌نامِ باز ← فقط «ادامه با موبایل + کد» (${other.status})`, JSON.stringify(other.json ?? {}).slice(0, 160));
+ok(!!other.json && !('token' in other.json) && !('data' in other.json) && leaks(other).length === 0,
+  `PS1: پاسخِ غریبه نه توکن دارد نه داده نه هیچ شمارهٔ کاملی (${leaks(other).join('، ') || 'هیچ'})`);
+ok(other.json?.linkSmsTo == null || other.json?.linkSmsTo === ON_RECORD, `PF12: شمارهٔ دیگر ← «${ON_RECORD}» یا هیچ، نه ${recPhone.slice(0, 4)}… («${other.json?.linkSmsTo}»)`, msg(other));
+/* کسی که شمارهٔ پرونده را هم می‌داند **همان** پاسخ را می‌گیرد — هر تفاوتی تأییدِ حدسِ شماره بود. */
+const knows = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: recPhone });
+ok(knows.status < 300 && keys(knows.json) === keys(other.json) && knows.json?.linkSmsTo === other.json?.linkSmsTo && leaks(knows).length === 0,
+  `PS1: با شمارهٔ درستِ پرونده هم همان پاسخ، بی‌توکن (${keys(knows.json)} / ${keys(other.json)})`);
+/* صاحبِ اصلی با «ادامه با موبایل + کد» به **همان** فرم می‌رسد — و توکنِ قبلی (که شاید کسِ دیگری با ثبت‌نامِ اول
+   گرفته بود) از همان لحظه دیگر چیزی باز نمی‌کند. */
+const resumeReq = await call(`/public/intake/link/${link.token}/resume/request`, { body: { phone: recPhone }, ip: '10.66.0.2' });
+const resumed = await call(`/public/intake/link/${link.token}/resume/verify`, { body: { phone: recPhone, code: resumeReq.json?.devCode }, ip: '10.66.0.2' });
+const back = await call(`/public/intake/form/${resumed.json?.token}`, { method: 'GET' });
+ok(resumed.status < 300 && back.status < 300 && back.json?.data?.nationalId === recNid,
+  `PS1: صاحبِ پرونده با موبایل + کد به همان فرم رسید (${resumeReq.status}/${resumed.status}/${back.status})`, msg(resumed) || msg(back));
+const stale = await call(`/public/intake/form/${own.json?.token}`, { method: 'GET' });
+ok(!!resumed.json?.token && resumed.json.token !== own.json?.token && stale.status === 404,
+  `PS1: ادامه با کد توکنِ فرم را نو می‌کند؛ توکنِ پیشین دیگر باز نمی‌کند (${stale.status})`);
+/* PS12 — پروندهٔ **بی‌شماره** (کارکنان بی‌موبایل ساخته‌اند): ثبت‌نامِ عمومی با کدِ ملی و نامِ خانوادگیِ درست
+   تا دیروز شمارهٔ **ثبت‌نام‌کننده** را روی خودِ پرونده می‌نشاند — از آن به بعد «ادامه با موبایل + کد»، یادآوری‌ها
+   و لینک‌های همان بیمار به گوشیِ او می‌رفت. حالا پرونده دست نمی‌خورد تا کارکنان با تأییدِ ثبت‌نام بپذیرندش؛
+   کارِ خودِ ثبت‌نام (لینکِ ادامه، «ادامه با موبایل + کد») با شمارهٔ خودِ همان ثبت‌نام پیش می‌رود. */
+const bareNid = nid(Number(run) * 10 + 9);
+const bareId = Number(sql(`INSERT INTO patients (code, first_name, last_name, national_id) VALUES ('AM-PS12-${run}', 'آزمونی', 'بی‌شماره', '${bareNid}') RETURNING id`).split('\n')[0]);
+const bareRegPhone = `0931${run}4`;
+const onBare = await register(link, { lastName: 'بی‌شماره', nationalId: bareNid, phone: bareRegPhone });
+ok(onBare.status < 300 && !!onBare.json?.token, `ثبت‌نام روی پروندهٔ بی‌شماره پذیرفته شد (${onBare.status})`, msg(onBare));
+const bareAfter = sql(`SELECT coalesce(phone, '') FROM patients WHERE id = ${bareId}`);
+ok(bareAfter === '', `PS12: شمارهٔ ثبت‌نام‌کننده روی پروندهٔ موجودِ بی‌شماره ننشست («${bareAfter}»)`);
+ok(await notices(bareRegPhone) === 1, 'PS12: لینکِ ادامهٔ همین ثبت‌نام همچنان به شمارهٔ خودِ ثبت‌نام‌کننده رفت');
+const bareReq = await call(`/public/intake/link/${link.token}/resume/request`, { body: { phone: bareRegPhone }, ip: '10.66.0.3' });
+const bareBack = await call(`/public/intake/link/${link.token}/resume/verify`, { body: { phone: bareRegPhone, code: bareReq.json?.devCode }, ip: '10.66.0.3' });
+ok(bareBack.status < 300 && !!bareBack.json?.token, `PS12: «ادامه با موبایل + کد» با شمارهٔ همان ثبت‌نام کار می‌کند (${bareReq.status}/${bareBack.status})`, msg(bareBack));
 /* PF7 — سه بیمارِ تازه، یک شماره: سقفِ «یک پیامک در ده دقیقه» فقط به‌ازای ثبت‌نام بود، پس هر ثبت‌نام یک
    پیامکِ دیگر به همان شماره می‌فرستاد. سقفِ تازه: دو پیامک در ساعت به هر شماره، بی‌صدا. */
 const bombed = `0937${run}1`;
@@ -270,7 +342,7 @@ const inProd = inEnv('production');
 const inTest = inEnv('test');
 
 /** IntakeService با دیتابیس و درگاهِ ساختگی — فقط همان چیزهایی که «ادامه با موبایل» و لینکِ ادامه لازم دارند. */
-function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = '09120000000' } = {}) {
+function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = '09120000000', rateLimit = new RateLimitService() } = {}) {
   const seen = { created: [], deleted: [], sent: [], reminders: 0 };
   const prisma = {
     intakeLink: { findUnique: async () => ({ id: 7, token: 'tok', active: true }) },
@@ -293,7 +365,7 @@ function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = 
   const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }), require: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
   const settings = { sms: async () => ({ formSendText: 'فرمِ {title}: {link}' }) };
   const svc = new IntakeService(prisma, undefined, undefined, undefined, undefined, undefined, undefined,
-    sms, tenant, undefined, undefined, undefined, settings, undefined, new RateLimitService());
+    sms, tenant, undefined, undefined, undefined, settings, undefined, rateLimit);
   return { svc, seen };
 }
 
@@ -319,9 +391,27 @@ function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = 
   const box = fakeIntake({ recordPhone: '' });
   box.svc.prisma.patient.findFirst = async () => ({ phone: `0912${String(++n).padStart(7, '0')}` });
   const shown = [];
-  for (let i = 1; i <= 151; i++) shown.push(await box.svc.sendContinueLink(1, `tok-${i}`, 'فرم', 7, `0912${String(i).padStart(7, '0')}`));
+  for (let i = 1; i <= 151; i++) shown.push(await box.svc.sendContinueLink(1, { id: i, token: `tok-${i}` }, 'فرم', 7));
   await later(30);
   ok(box.seen.sent.length === 150 && shown[150] === null, `PF7: سقفِ روزانهٔ لینک — ۱۵۰ پیامک از ۱۵۱ ثبت‌نام (${box.seen.sent.length})، و پاسخِ آخری ادعای «پیامک شد» ندارد`);
+}
+
+{
+  /* PS1 — ثبت‌نامِ دوباره روی ثبت‌نامِ باز: پیامکِ شمارهٔ پرونده توکنِ **نو** می‌برد و توکنِ پیشین (که شاید کسی با
+     ثبت‌نامِ اول گرفته بود) باطل می‌شود. پیامکی که سقف جلویش را گرفته نه توکن را عوض می‌کند نه ادعای «پیامک شد». */
+  const box = fakeIntake({ recordPhone: '09127770001' });
+  const rotated = [];
+  box.svc.prisma.intakeSubmission.update = async ({ where, data }) => { rotated.push({ id: where.id, token: data.token }); return {}; };
+  const texts = [];
+  box.svc.sms.send = async (to, text) => { texts.push(text); return { sent: true, stub: false }; };
+  const first = await box.svc.sendContinueLink(1, { id: 41, token: 'held-by-first-registrant' }, 'فرم', 7, { rotate: true });
+  await later(30);
+  const fresh = rotated[0]?.token ?? '';
+  ok(first === 'شمارهٔ ثبت‌شده در پرونده' && rotated.length === 1 && rotated[0].id === 41 && fresh.length >= 20 && fresh !== 'held-by-first-registrant',
+    `PS1: پیش از پیامک توکنِ ثبت‌نامِ باز نو شد (${rotated.length})`);
+  ok(texts.length === 1 && texts[0].includes(`/f/${fresh}`) && !texts[0].includes('held-by-first-registrant'), 'PS1: پیامک لینکِ توکنِ نو را می‌برد، نه توکنِ پیشین');
+  const again = await box.svc.sendContinueLink(1, { id: 41, token: fresh }, 'فرم', 7, { rotate: true });
+  ok(again === null && rotated.length === 1 && texts.length === 1, 'PS1: درخواستِ دوم در ده دقیقه ← نه پیامک، نه توکنِ نو، نه ادعای «پیامک شد»');
 }
 
 /** AuthService روی یک دیتابیسِ درون‌حافظه‌ایِ کوچک — فقط جدول‌هایی که بازیابیِ رمز می‌خواند و می‌نویسد. */
@@ -337,7 +427,7 @@ const cond = (v, c) => {
   return true;
 };
 const matches = (o, w) => Object.entries(w ?? {}).every(([k, c]) => cond(o[k], c));
-function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
+function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitService() } = {}) {
   const db = { otps: [], sent: [], passwords: [], passkeysDeleted: [], barrier: null };
   const account = {
     id: 41, username: 'inproc', status: 'active', level: 2, passwordHash: '$2a$12$fixture', jobRole: null,
@@ -373,13 +463,14 @@ function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
     },
     session: { updateMany: async () => ({ count: 1 }) },
     webauthnCredential: { deleteMany: async ({ where }) => { db.passkeysDeleted.push(where); return { count: 2 }; } },
+    person: { findUnique: async () => null },
   };
   prisma.$transaction = async (fn) => fn(prisma);
   const sms = {
     sendOtp: async (phone, code, host, purpose) => { db.sent.push({ phone, code, host, purpose }); await later(smsDelay); return { sent: false, stub: true }; },
   };
   const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }), require: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
-  const svc = new AuthService(prisma, new JwtService({ secret: process.env.JWT_SECRET }), sms, new RateLimitService(), tenant);
+  const svc = new AuthService(prisma, new JwtService({ secret: process.env.JWT_SECRET }), sms, rateLimit, tenant);
   return { svc, db, account };
 }
 
@@ -402,6 +493,57 @@ function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
   ok(a.status === 'rejected' && b.status === 'rejected' && db.passwords.length === 0,
     `PF4: حدسِ ششمِ هم‌زمان حتی با کدِ درست رد شد (${a.status}/${b.status}، رمزِ نوشته‌شده: ${db.passwords.length})`, b.reason?.message);
   ok(db.otps.at(-1).attempts <= 5, `PF4: شمارندهٔ تلاش از سقف رد نشد (${db.otps.at(-1).attempts})`);
+}
+
+{
+  /* PS4 — بودجهٔ حدسِ حساب فقط وقتی می‌سوزد که **کدِ زنده‌ای** هست (یعنی پیامکی که صاحبِ حساب دیده). تا دیروز هشت
+     حدس روی حسابی که هیچ کدی نداشت (چهار با نامِ کاربری، چهار با موبایل) سطلِ ۱۵دقیقه‌ای را پر می‌کرد، و بیست تا
+     سطلِ روزانه را — صاحبِ حساب بی‌آنکه پیامکی دیده باشد تا فردا نمی‌توانست رمزش را بازیابی کند. */
+  const { svc, db, account } = fakeAuth();
+  const bad = [];
+  for (let i = 0; i < 4; i++) bad.push(await svc.resetPassword({ identifier: account.username, code: '000000', password: 'ps4-pass-1' }, { ip: `10.82.0.${i + 1}` }).catch((e) => e));
+  for (let i = 0; i < 4; i++) bad.push(await svc.resetPassword({ identifier: account.person.phone, code: '000000', password: 'ps4-pass-1' }, { ip: `10.82.1.${i + 1}` }).catch((e) => e));
+  ok(bad.every((e) => e?.status === 400), `PS4: هشت حدس بی‌کدِ زنده ← همه همان خطای عام (${bad.map((e) => e?.status).join('،')})`);
+  const issued = await inTest(() => svc.requestPasswordReset(account.username, '10.82.2.1'));
+  const done = await svc.resetPassword({ identifier: account.username, code: issued?.devCode, password: 'ps4-pass-1' }, { ip: '10.82.2.2' }).catch((e) => e);
+  ok(done?.ok === true && db.passwords.length === 1, `PS4: صاحبِ حساب پس از آن با کدِ پیامکش رمز را عوض می‌کند (${done?.ok ?? done?.message})`);
+}
+
+{
+  /* PS7 — سطلِ مشترکِ «پیامکِ عمومی به این شماره»: «ادامه با موبایل»، کدِ ثبت‌نامِ حساب و بازیابی هرکدام سقفِ خودش را
+     داشت (هر یک ۱۲ تا ۲۴ پیامک در ساعت به یک شماره) و با هم بمبارانِ پیامکی با هزینهٔ مطب می‌ساختند. حالا روی هم
+     چهار در ساعت، بی‌صدا: پاسخ همان است، فقط پیامک نمی‌رود. */
+  const rl = new RateLimitService();
+  const intake = fakeIntake({ open: true, rateLimit: rl });
+  const auth = fakeAuth({ rateLimit: rl });
+  const P = auth.account.person.phone;
+  const answers = [];
+  for (let i = 0; i < 3; i++) answers.push(await inTest(() => intake.svc.resumeRequest('tok', P, `10.83.0.${i + 1}`)));
+  const signup = await inTest(() => auth.svc.requestSignupOtp(P, '10.83.1.1'));
+  const reset = await inTest(() => auth.svc.requestPasswordReset(auth.account.username, '10.83.2.1'));
+  await later(30);
+  const sent = intake.seen.sent.filter((x) => x === P).length + auth.db.sent.filter((x) => x.phone === P).length;
+  ok(sent === 4, `PS7: سه «ادامه با موبایل» + کدِ ثبت‌نام + بازیابی به یک شماره ← چهار پیامک، نه پنج (${sent})`);
+  ok(keys(reset) === keys({ ok: true, ttl: 300 }) && !reset.devCode && keys(signup).includes('ttl'),
+    `PS7: پیامکی که سطل نگه داشت همان پاسخِ بی‌کد را دارد، نه ۴۲۹ (${JSON.stringify(reset)})`);
+}
+
+{
+  /* PS7 — سقفِ روزانهٔ «لینکِ ادامه»ی یک لینک دیگر بی‌صدا پر نمی‌شود: پرشدنش یک‌بار در ممیزی دیده می‌شود، و هر نشانی
+     سهمِ روزانهٔ خودش را دارد تا یک فرستنده ۱۵۰ پیامکِ بیمارانِ واقعیِ آن لینک را نسوزاند. */
+  let n = 0;
+  const box = fakeIntake({ recordPhone: '' });
+  const audits = [];
+  box.svc.audit = { record: async (e) => { audits.push(e); } };
+  box.svc.prisma.patient.findFirst = async () => ({ phone: `0913${String(++n).padStart(7, '0')}` });
+  const fromOne = [];
+  for (let i = 1; i <= 21; i++) fromOne.push(await box.svc.sendContinueLink(1, { id: 5000 + i, token: `ip-${i}` }, 'فرم', 8, { ip: '10.84.0.1' }));
+  ok(fromOne.slice(0, 20).every((x) => x) && fromOne[20] === null, `PS7: یک نشانی بیش از ۲۰ لینکِ ادامه در روز نمی‌فرستد (${fromOne.filter(Boolean).length})`);
+  for (let i = 1; i <= 140; i++) await box.svc.sendContinueLink(1, { id: 6000 + i, token: `cap-${i}` }, 'فرم', 8, { ip: `10.85.${Math.floor(i / 200)}.${i % 200}` });
+  const capped = await box.svc.sendContinueLink(1, { id: 7001, token: 'cap-x' }, 'فرم', 8, { ip: '10.86.0.1' });
+  await box.svc.sendContinueLink(1, { id: 7002, token: 'cap-y' }, 'فرم', 8, { ip: '10.86.0.2' });
+  const capAudits = audits.filter((a) => a.action === 'intake.link_sms_capped');
+  ok(capped === null && capAudits.length === 1 && capAudits[0].entityId === 8, `PS7: پرشدنِ سقفِ روزانهٔ لینک یک‌بار در ممیزی ثبت شد (${capAudits.length})`);
 }
 
 {

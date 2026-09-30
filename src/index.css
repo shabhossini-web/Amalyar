@@ -618,6 +618,9 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 @media print { .version-notice { display: none; } }
 
 .account-verification-notice { padding: .75rem 1rem; background: var(--bg3); color: var(--text1); text-align: center; position: relative; z-index: 50; }
+/* مهلتِ تأییدِ شماره گذشته و حساب فقط چون آخرین سوپرادمین است باز مانده (بستهٔ PS، PS2) — هشدار، نه اطلاع. */
+.account-verification-notice.overdue { background: var(--amber-bg); color: var(--amber-text); font-weight: 700; }
+.account-verification-notice.overdue a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 
 .nv-con > label { grid-column: 1 / -1; display: grid; gap: .5rem; min-width: 0; }
 .nv-con > label select { width: 100%; max-width: 100%; background: var(--bg3); color: var(--text1); border: 1px solid var(--card-border); border-radius: 12px; padding: .6rem; }

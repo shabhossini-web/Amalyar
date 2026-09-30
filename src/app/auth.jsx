@@ -304,7 +304,14 @@ export function AuthProvider({ children }) {
         setUser,
       }}
     >
-      {user?.verificationDueAt && !user.phoneVerifiedAt && <div className="account-verification-notice" role="status">حساب شما موقت است؛ پیش از پایان هفت روز <a href="/app/profile">شماره را تأیید و پروفایل را تکمیل کنید</a>.</div>}
+      {user?.verificationDueAt && !user.phoneVerifiedAt && (
+        <div className={`account-verification-notice${user.verificationOverdue ? ' overdue' : ''}`} role="status">
+          {/* مهلت گذشته ولی حساب باز است — فقط آخرین سوپرادمینِ فعال (بستهٔ PS، PS2؛ مشتقِ سرور). */}
+          {user.verificationOverdue
+            ? <>مهلتِ تأییدِ شمارهٔ شما گذشته است؛ حساب فقط چون تنها مدیرِ کلِ فعالِ سامانه هستید باز مانده — <a href="/app/profile">همین حالا شماره را تأیید کنید</a>.</>
+            : <>حساب شما موقت است؛ پیش از پایان هفت روز <a href="/app/profile">شماره را تأیید و پروفایل را تکمیل کنید</a>.</>}
+        </div>
+      )}
       {children}
     </AuthCtx.Provider>
   );

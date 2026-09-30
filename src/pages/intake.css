@@ -401,6 +401,9 @@
 .ik-resume-form { display: grid; gap: 10px; }
 .ik-resume-form .ik-hint { margin: 0; }
 .ik-resume .ik-linkbtn { justify-self: center; }
+/* «ثبت‌نامِ نیمه‌تمامی هست» (PS1) چندخطی است — آیکون کنارِ خطِ اول، نه وسطِ پاراگراف. */
+.ik-resume-hit { align-items: flex-start; }
+.ik-resume-hit svg { margin-top: 6px; }
 .ik-sms-note { align-items: flex-start; }
 .ik-sms-note svg { margin-top: 6px; }
 /* مهلتِ فرم — ریز ولی خوانا، زیرِ نوارِ مرحله. */

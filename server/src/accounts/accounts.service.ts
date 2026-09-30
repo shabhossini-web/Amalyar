@@ -223,20 +223,30 @@ export class AccountsService {
    * مقصدِ پرداخت است و دستمزد رقمِ قرارداد — هیچ‌کدام نباید با حسابِ لو رفتهٔ
    * خودِ کاربر قابلِ تغییر باشند.
    */
-  async updateProfile(id: number, dto: PersonInput & { fee?: number | null }) {
+  async updateProfile(id: number, dto: PersonInput & { fee?: number | null }, actor?: { id?: number; sid?: string }) {
     const acc = await this.prisma.account.findUnique({ where: { id }, include: { person: true } });
     if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
 
     const personPatch = buildPersonPatch(dto, false);
     const phoneChanged = personPatch.phone !== undefined && personPatch.phone !== acc.person.phone;
     if (phoneChanged && !personPatch.phone) throw new BadRequestException('حساب کاربری باید شماره همراه داشته باشد');
-    await this.prisma.account.update({
-      where: { id },
-      data: {
-        ...(phoneChanged ? { phoneVerifiedAt: null, verificationDueAt: verificationDeadline() } : {}),
-        ...(dto.fee !== undefined ? { fee: dto.fee === null ? null : Math.max(0, Math.trunc(dto.fee)) } : {}),
-        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { id },
+        data: {
+          ...(phoneChanged ? { phoneVerifiedAt: null, verificationDueAt: verificationDeadline() } : {}),
+          ...(dto.fee !== undefined ? { fee: dto.fee === null ? null : Math.max(0, Math.trunc(dto.fee)) } : {}),
+          ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+        },
+      });
+      if (!phoneChanged) return;
+      /* هشدار — **شماره عوض شد ← نشست‌های همان حساب بسته** (بستهٔ PS، PS3). شماره راهِ ورود و بازیابی است؛
+         نشستی که با شمارهٔ قبلی باز شده بود نباید بماند. فقط نشستِ جاریِ خودِ کسی که شمارهٔ **خودش** را عوض
+         می‌کند می‌ماند — وگرنه با ذخیرهٔ فرم بیرون می‌افتاد. */
+      const keep = actor?.id === id && actor?.sid ? actor.sid : undefined;
+      await tx.session.updateMany({ where: { accountId: id, revokedAt: null, ...(keep ? { id: { not: keep } } : {}) }, data: { revokedAt: new Date() } });
+      await tx.auditEvent.create({ data: { actorId: actor?.id ?? null, action: 'account.phone.change', entityType: 'account', entityId: String(id),
+        beforeJson: { phone: acc.person.phone }, afterJson: { phone: String(personPatch.phone) } } });
     });
     return this.get(id);
   }

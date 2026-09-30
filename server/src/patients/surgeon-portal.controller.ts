@@ -21,6 +21,11 @@ class InstructionsDto {
   @IsOptional() @IsArray() @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ItemDto) requiredItems?: ItemDto[];
 }
 
+/** «آماده‌سازی حسابِ پرتال» — شمارهٔ جراح را خودِ سوپرادمین تأیید می‌کند (بستهٔ PS، PS6). */
+class GrantAccountDto {
+  @IsOptional() @IsString({ message: 'شمارهٔ موبایلِ جراح را بنویسید' }) @MaxLength(20, { message: 'شمارهٔ موبایل بیش از حد طولانی است' }) phone?: string;
+}
+
 /**
  * `surgeonId` در کوئریِ میز (نمای ناظرِ سوپرادمین، قانونِ ۲۹): عددِ مثبت یا خالی — بقیه ۴۰۰،
  * نه نادیده‌گرفتنِ بی‌صدا. اینکه **چه کسی** می‌تواند پزشکِ دیگری بدهد را سرویس می‌سنجد.
@@ -68,5 +73,5 @@ export class SurgeonPortalController {
     this.storage.stream(doc.sha256).pipe(res);
   }
   @Post('accounts/:surgeonId') @RequirePermissions('users.manage')
-  account(@Param('surgeonId', ParseIntPipe) id: number, @CurrentUser() user: any) { return this.portal.grantAccount(id, user); }
+  account(@Param('surgeonId', ParseIntPipe) id: number, @Body() dto: GrantAccountDto, @CurrentUser() user: any) { return this.portal.grantAccount(id, user, dto.phone); }
 }

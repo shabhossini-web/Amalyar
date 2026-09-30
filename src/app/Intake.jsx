@@ -436,7 +436,10 @@ function IdentityCard({ row, who, onSaved }) {
         <dl className="ia-id">
           <div><dt>نام</dt><dd>{name || '—'}</dd></div>
           <div><dt>کدِ ملی</dt><dd dir="ltr">{faDigits(who?.nationalId ?? d.nationalId ?? '—')}</dd></div>
-          <div><dt>موبایل</dt><dd dir="ltr">{faDigits(who?.phone ?? d.phone ?? '—')}</dd></div>
+          <div><dt>موبایل</dt><dd dir="ltr">{faDigits(who?.phone ?? d.phone ?? '—')}</dd>
+            {/* پروندهٔ بی‌شماره: شماره از خودِ ثبت‌نام است و فقط با تأیید روی پرونده می‌نشیند (بستهٔ PS، PS12). */}
+            {who && !who.phone && d.phone && <small className="ia-id-hint">از همین ثبت‌نام — با تأیید روی پرونده می‌نشیند</small>}
+          </div>
           {who?.code && <div><dt>پرونده</dt><dd dir="ltr">{who.code}</dd></div>}
           {birth && <div><dt>تاریخِ تولد</dt><dd>{faDate(birth)}</dd></div>}
         </dl>

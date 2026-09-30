@@ -1215,7 +1215,8 @@ export class PatientsService {
    * نفر دو پرونده می‌گیرد.
    *
    * شماره و تاریخِ تولدِ تازه فقط جاهای **خالی** را پر می‌کنند: فرمی که بیمار
-   * خودش پر کرده نباید دادهٔ تأییدشدهٔ پرونده را بازنویسی کند.
+   * خودش پر کرده نباید دادهٔ تأییدشدهٔ پرونده را بازنویسی کند. شماره از فرمِ **عمومی**
+   * اصلاً روی پروندهٔ موجود نمی‌نشیند (PS12) — فقط پروندهٔ تازه با آن ساخته می‌شود.
    */
   async resolveOrCreatePatient(
     tx: any,
@@ -1228,7 +1229,12 @@ export class PatientsService {
 
     if (match) {
       const fill: any = {};
-      if (dto.phone && !match.patient.phone) fill.phone = dto.phone;
+      /* هشدار — **فرمِ عمومی شماره را روی پروندهٔ موجود نمی‌نشاند** (بستهٔ PS، PS12). تطبیق فقط کدِ ملی + نامِ
+         خانوادگی است؛ روی پرونده‌ای که کارکنان بی‌موبایل ساخته بودند، هر کس این دو را داشت شمارهٔ خودش را
+         می‌نشاند و از آن به بعد «ادامه با موبایل + کد»، یادآوری‌ها و لینک‌های همان بیمار به گوشیِ او می‌رفت.
+         شمارهٔ ثبت‌نام در خودِ ثبت‌نام می‌ماند (کارهای همان ثبت‌نام با آن پیش می‌روند) و با **تأییدِ کارکنان**
+         روی پرونده می‌نشیند (`IntakeService.approve`). */
+      if (dto.phone && !match.patient.phone && !opts?.public) fill.phone = dto.phone;
       if (dto.birthDate && !match.patient.birthDate) fill.birthDate = toDateValue(dto.birthDate) ?? null;
       if (Object.keys(fill).length) await tx.patient.update({ where: { id: match.patient.id }, data: fill });
       return { patientId: match.patient.id, patientStatus: match.restored ? 'restored' : 'matched' };

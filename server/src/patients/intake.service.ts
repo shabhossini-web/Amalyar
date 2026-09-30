@@ -26,7 +26,7 @@ import { OTHER_PX, procedureLabel } from './visit-coding';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
 import { RemindersService } from './reminders.service';
-import { isValidNationalId, toEnDigits } from '../common/identity';
+import { isValidNationalId, mobileOf, submissionPhone, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { SETTING_BY_KEY } from '../config/settings-registry';
@@ -38,6 +38,7 @@ import { scopedVisitWhere } from '../common/own-scope';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
 import { otpHash } from '../common/otp-hash';
+import { takePublicSms } from '../common/public-sms';
 
 /** سال و ماهِ شمسیِ یک تاریخ — برای گرفتنِ تقویمِ همان ماه (قانون ۱۴). */
 function jalaliYm(d: Date): [number, number] {
@@ -82,7 +83,9 @@ const TTL_DAYS = 14;
 /** پیامکِ «لینکِ ادامه»: سقفِ بی‌صدا به‌ازای شماره (در ساعت) و به‌ازای لینکِ ثبت‌نام (در روز) — بستهٔ PF، PF7. */
 const LINK_SMS_PER_PHONE_HOUR = 2;
 const LINK_SMS_PER_LINK_DAY = 150;
-/** جای شماره در «لینک به … پیامک شد» وقتی تایپ‌کننده شمارهٔ دیگری داده (PF12). */
+/** …و به‌ازای هر نشانیِ فرستنده در روز (بستهٔ PS، PS7) — یک نفر سقفِ کلِ لینک را برای بیمارانِ واقعی نسوزاند. */
+const LINK_SMS_PER_IP_DAY = 20;
+/** جای شماره در «لینک به … پیامک شد» — **همیشه** همین برچسب (بستهٔ PS، PS1؛ PF12 فقط وقتِ نابرابری بود). */
 const ON_RECORD_PHONE = 'شمارهٔ ثبت‌شده در پرونده';
 /** کدِ «ادامه با موبایل» — همان قراردادِ کدِ ورود (`auth.service.ts`): ۵ دقیقه، ۵ تلاش. */
 const RESUME_OTP_TTL_MS = 5 * 60_000;
@@ -529,9 +532,10 @@ export class IntakeService {
    * (هر تلاش، حتی غلط، شمرده می‌شود) → لینک → فیلدها → پرسش → نوشتن. فیلدها **پیش از** پرسش
    * سنجیده می‌شوند تا غلطِ کدِ ملی نشان را نسوزاند و بیمار مجبور نشود دوباره پرسش را جواب دهد.
    *
-   * ⚠️ اگر همین بیمار ثبت‌نامِ ناتمامی دارد، **همان** برگردانده می‌شود نه یک
-   * ردیفِ تازه — وگرنه هر بار که بیمار لینک را دوباره باز کند یک ثبت‌نامِ
-   * نیمه‌کارهٔ دیگر می‌سازد و صفِ تأیید پر می‌شود از تکراری.
+   * ⚠️ اگر همین بیمار ثبت‌نامِ ناتمامی دارد، ردیفِ تازه ساخته نمی‌شود — وگرنه هر بار که بیمار لینک را
+   * دوباره باز کند یک ثبت‌نامِ نیمه‌کارهٔ دیگر می‌سازد و صفِ تأیید پر می‌شود از تکراری. ولی **همان ثبت‌نام
+   * هم تحویل داده نمی‌شود** (بستهٔ PS، PS1): پاسخ فقط `{ resume: true, linkSmsTo }` است و راهِ ادامه
+   * «موبایل + کد» یا پیامکِ شمارهٔ پرونده.
    */
   async register(
     linkToken: string,
@@ -590,8 +594,14 @@ export class IntakeService {
       where: { patientId, linkId: link.id, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] } },
       orderBy: { id: 'desc' },
     });
-    /* بیمارِ برگشته احتمالاً لینکش را گم کرده — همان لینک دوباره پیامک می‌شود (با سقفِ ۱۰دقیقه‌ای). */
-    if (open) return { ...(await this.publicView(open.token)), linkSmsTo: await this.sendContinueLink(patientId, open.token, link.title, link.id, phone) };
+    /* هشدار — **ثبت‌نامِ باز به ثبت‌نام‌کننده تحویل داده نمی‌شود** (بستهٔ PS، PS1؛ روی سایتِ زنده بود). تطبیقِ
+       پرونده فقط کدِ ملی + نامِ خانوادگی است — دو چیزی که همسایه، همکار یا هر کسی که یک برگهٔ کپیِ کارتِ ملی
+       دیده می‌داند. پاسخِ قبلی `publicView(open.token)` بود: توکنِ فرم (خواندن، پرکردن، نوبت‌گرفتن، حذفِ فیش و
+       عکس‌ها) و کلِ `data` با موبایل، کدِ ملی، نشانی، تاریخِ تولد و پاسخ‌های پرسش‌نامه — و «ادامه با موبایل + کد»
+       را هم بی‌اثر می‌کرد. حالا فقط «ادامه» گفته می‌شود: لینک به **شمارهٔ پرونده** پیامک می‌شود (با توکنِ نو —
+       `sendContinueLink`) و صفحه به «ادامه با موبایل + کد» می‌رود. پاسخ به شمارهٔ تایپ‌شده بستگی ندارد تا
+       راهِ تأییدِ حدسِ شماره نشود. */
+    if (open) return { resume: true as const, linkSmsTo: await this.sendContinueLink(patientId, open, link.title, link.id, { rotate: true, ip }) };
 
     const row = await this.prisma.intakeSubmission.create({
       data: {
@@ -606,7 +616,7 @@ export class IntakeService {
         expiresAt: new Date(Date.now() + TTL_DAYS * 24 * 3600 * 1000),
       },
     });
-    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row.token, link.title, link.id, phone) };
+    return { ...(await this.publicView(row.token)), linkSmsTo: await this.sendContinueLink(patientId, row, link.title, link.id, { ip }) };
   }
 
   /**
@@ -621,24 +631,37 @@ export class IntakeService {
    * هشدار — **و برای هر شماره دو پیامک در ساعت، و برای هر لینکِ ثبت‌نام ۱۵۰ در روز** (بستهٔ PF، PF7): سقفِ
    * بالا فقط به‌ازای **ثبت‌نام** بود، پس سه بیمارِ ساختگی با یک شماره روی سه لینک، سه پیامک به همان شماره
    * می‌فرستادند — بمبارانِ پیامکی با هزینهٔ مطب. سقف‌ها بی‌صدا‌اند: ثبت‌نام پیش می‌رود و فقط پیامک نمی‌رود.
-   * خروجی: شمارهٔ **پوشیده** برای جملهٔ «لینک به … پیامک شد» — فقط اگر تایپ‌کننده همین شماره را داده
-   * (PF12؛ وگرنه «شمارهٔ ثبت‌شده در پرونده»: کسی که کدِ ملیِ دیگری را تایپ کرده نباید رقم‌های شمارهٔ او را
-   * ببیند) — یا `null` (شمارهٔ نامعتبر، یا پیامکی که سقف جلویش را گرفت).
+   * خروجی: برچسبِ ثابتِ «شمارهٔ ثبت‌شده در پرونده» برای جملهٔ «لینک به … پیامک شد» — **هرگز** رقم‌های شماره
+   * (بستهٔ PS، PS1): PF12 شمارهٔ پوشیده را وقتی برمی‌گرداند که تایپ‌کننده همان شماره را داده بود، یعنی پاسخ
+   * برای کسی که کدِ ملی و نامِ خانوادگیِ دیگری را دارد تأییدِ حدسِ شمارهٔ او بود. یا `null`: شمارهٔ نامعتبر،
+   * یا پیامکی که سقف جلویش را گرفت — از جمله پیامکِ همین ثبت‌نام در ده دقیقهٔ گذشته، چون ممکن است همان را
+   * کسِ دیگری با ثبت‌نامِ اول راه انداخته باشد و توکنش را داشته باشد.
+   *
+   * `rotate` (فقط ثبت‌نامِ بازی که دوباره ثبت‌نام شده): پیش از پیامک **توکنِ فرم نو می‌شود** (PS1). بی‌این، کسی
+   * که کدِ ملی و نامِ خانوادگیِ بیمار را دارد اول خودش ثبت‌نام می‌کرد (توکن را می‌گرفت) و منتظر می‌ماند؛ بیمارِ
+   * واقعی که بعداً ثبت‌نام می‌کرد پیامکی با **همان** توکن می‌گرفت و هر چه در فرم می‌نوشت به دستِ او هم می‌رسید.
+   * بهای کم: برگهٔ بازِ قبلی دیگر باز نمی‌شود — لینکِ تازه همان لحظه پیامک شده است.
    */
-  private async sendContinueLink(patientId: number, token: string, title: string, linkId: number, typedPhone: string): Promise<string | null> {
+  private async sendContinueLink(patientId: number, sub: { id: number; token: string; data?: unknown }, title: string, linkId: number, opts: { rotate?: boolean; ip?: string } = {}): Promise<string | null> {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, deletedAt: null }, select: { phone: true } });
-    const to = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
-    if (!/^09\d{9}$/.test(to)) return null;
-    const typed = toEnDigits(String(typedPhone ?? '')).replace(/[^0-9]/g, '');
-    const shown = typed === to ? `${to.slice(0, 4)}…${to.slice(-3)}` : ON_RECORD_PHONE;
-    const byToken = `intake-link-sms:${token}`;
+    /* پروندهٔ بی‌شماره ← شمارهٔ خودِ همین ثبت‌نام (PS12). */
+    const to = patient ? submissionPhone(patient.phone, sub.data) : null;
+    if (!to) return null;
+    /* سطلِ ثبت‌نام به‌ازای **شناسه** نه توکن — توکن با `rotate` عوض می‌شود و سقف نباید با آن صفر شود. */
+    const bySub = `intake-link-sms:${this.tid}:sub:${sub.id}`;
     const byPhone = `intake-link-sms:${this.tid}:phone:${to}`;
     const byLink = `intake-link-sms:${this.tid}:link:${linkId}`;
-    if (!this.rateLimit.peek(byToken, 1)) return shown; // همین چند دقیقه پیش رفته است
-    if (!this.rateLimit.peek(byPhone, LINK_SMS_PER_PHONE_HOUR) || !this.rateLimit.peek(byLink, LINK_SMS_PER_LINK_DAY)) return null;
-    this.rateLimit.hit(byToken, 1, 10 * 60_000);
+    /* سهمِ روزانهٔ هر نشانی (بستهٔ PS، PS7): سقفِ ۱۵۰تاییِ لینک را یک فرستنده با ۱۵۰ ثبت‌نامِ ساختگی پر می‌کرد و
+       بیمارانِ واقعیِ همان لینک تا فردا بی‌خبر پیامک نمی‌گرفتند. */
+    const byIp = opts.ip ? `intake-link-sms:${this.tid}:ip:${opts.ip}` : null;
+    if (!this.rateLimit.peek(bySub, 1)) return null; // همین چند دقیقه پیش رفته است — راهِ ادامه «موبایل + کد»
+    if (!this.rateLimit.peek(byLink, LINK_SMS_PER_LINK_DAY)) { this.noteLinkSmsCapped(linkId); return null; }
+    if (!this.rateLimit.peek(byPhone, LINK_SMS_PER_PHONE_HOUR) || (byIp && !this.rateLimit.peek(byIp, LINK_SMS_PER_IP_DAY))) return null;
+    this.rateLimit.hit(bySub, 1, 10 * 60_000);
     this.rateLimit.hit(byPhone, LINK_SMS_PER_PHONE_HOUR, 3600_000);
     this.rateLimit.hit(byLink, LINK_SMS_PER_LINK_DAY, 24 * 3600_000);
+    if (byIp) this.rateLimit.hit(byIp, LINK_SMS_PER_IP_DAY, 24 * 3600_000);
+    const token = opts.rotate ? await this.rotateToken(sub.id) : sub.token;
     const smsCfg = await this.settings.sms();
     const text = renderSms(smsCfg.formSendText, { title, link: this.publicFormLink(token) });
     void (async () => {
@@ -647,7 +670,26 @@ export class IntakeService {
         data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },
       }).catch(() => undefined);
     })().catch(() => undefined);
-    return shown;
+    return ON_RECORD_PHONE;
+  }
+
+  /**
+   * پرشدنِ سقفِ روزانهٔ «لینکِ ادامه»ی یک لینک **دیده می‌شود** (بستهٔ PS، PS7) — یک ردِ ممیزی در روز برای هر لینک.
+   * تا دیروز بی‌صدا بود: کارکنان نمی‌فهمیدند چرا بیمارانِ امروزِ آن لینک پیامکِ ادامه نگرفته‌اند.
+   */
+  private noteLinkSmsCapped(linkId: number) {
+    const key = `intake-link-sms-capped:${this.tid}:${linkId}`;
+    if (!this.rateLimit.peek(key, 1)) return;
+    this.rateLimit.hit(key, 1, 24 * 3600_000);
+    void Promise.resolve(this.audit?.record({ action: 'intake.link_sms_capped', entityType: 'intake_link', entityId: linkId,
+      after: { perDay: LINK_SMS_PER_LINK_DAY } })).catch(() => undefined);
+  }
+
+  /** توکنِ تازه برای یک ثبت‌نام — توکنِ پیشین از همین لحظه هیچ‌چیز باز نمی‌کند (PS1). */
+  private async rotateToken(id: number): Promise<string> {
+    const token = this.token();
+    await this.prisma.intakeSubmission.update({ where: { id }, data: { token } });
+    return token;
   }
 
   /* ── ادامه با موبایل + کد (بازبینیِ UX، بندِ ۱۰۳) ─────────────────────────
@@ -659,7 +701,14 @@ export class IntakeService {
 
   private async openByPhone(linkId: number, phone: string) {
     return this.prisma.intakeSubmission.findFirst({
-      where: { linkId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] }, patient: { phone, deletedAt: null } },
+      where: {
+        linkId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] },
+        OR: [
+          { patient: { phone, deletedAt: null } },
+          /* پروندهٔ بی‌شماره (PS12): فقط ثبت‌نامی که با **همین** شماره ساخته شده — کد به همان شماره می‌رود. */
+          { patient: { deletedAt: null, OR: [{ phone: null }, { phone: '' }] }, data: { path: ['phone'], equals: phone } },
+        ],
+      },
       orderBy: { id: 'desc' },
       select: { id: true, token: true },
     });
@@ -712,6 +761,8 @@ export class IntakeService {
       where: { phone, purpose, createdAt: { gt: new Date(Date.now() - 60_000) } },
     });
     if (recent) return null; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
+    /* سطلِ مشترکِ پیامکِ عمومی به این شماره (بستهٔ PS، PS7) — بی‌صدا؛ پاسخِ درخواست از پیش یکسان است. */
+    if (!takePublicSms(this.rateLimit, this.tid, phone)) return null;
     const code = String(randomInt(100000, 1000000));
     const otp = await this.prisma.otpCode.create({
       data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
@@ -747,7 +798,10 @@ export class IntakeService {
     if (!consumed.count) throw wrong();
     const open = await this.openByPhone(link.id, phone);
     if (!open) throw wrong();
-    return { token: open.token };
+    /* هشدار — توکنِ **نو** (بستهٔ PS، PS1): کد ثابت کرد این شخص صاحبِ شمارهٔ پرونده است. توکنِ قبلی ممکن است
+       دستِ کسی باشد که با کدِ ملی و نامِ خانوادگیِ همین بیمار اول ثبت‌نام کرده بود؛ از این لحظه فقط صاحبِ شماره
+       فرم را باز می‌کند. */
+    return { token: await this.rotateToken(open.id) };
   }
 
   /**
@@ -2599,8 +2653,12 @@ export class IntakeService {
         if (current.status !== 'pending_approval' || current.updatedAt.getTime() !== row.updatedAt.getTime()) {
           throw new ConflictException('اطلاعات ثبت‌نام تغییر کرده است؛ صفحه را تازه کنید');
         }
-        const patient = await tx.patient.findFirst({ where: { id: row.patientId!, deletedAt: null }, select: { id: true } });
+        const patient = await tx.patient.findFirst({ where: { id: row.patientId!, deletedAt: null }, select: { id: true, phone: true } });
         if (!patient) throw new BadRequestException('پرونده فعال نیست');
+        /* شمارهٔ ثبت‌نام روی پروندهٔ **بی‌شماره** با تأییدِ کارکنان می‌نشیند (PS12) — فرمِ عمومی دیگر خودش
+           نمی‌نشاندش؛ کارتِ «هویت» همین شماره را پیش از تأیید نشان می‌دهد. پیش از پیامکِ تأیید، تا همان برود. */
+        const phoneFromIntake = !String(patient.phone ?? '').trim() ? mobileOf((current.data as any)?.phone) : null;
+        if (phoneFromIntake) await tx.patient.update({ where: { id: patient.id }, data: { phone: phoneFromIntake } });
         await tx.$queryRaw`SELECT id FROM appointments WHERE submission_id = ${id} FOR UPDATE`;
         const appointment = await tx.appointment.findUnique({ where: { submissionId: id } });
         if (!!appointment !== !!held || (appointment && held && (
@@ -2637,7 +2695,8 @@ export class IntakeService {
           reviewedAt: new Date(), approvalKey: key, approvalResult: response } });
         await this.audit.record({ actorId: user?.id, action: visit ? 'intake.approve' : 'intake.approve.record',
           entityType: 'intake_submission', entityId: id,
-          after: { visitId: visit?.id ?? null, charged: visit ? row.amount : 0, discount: row.discountAmount, paid: visit && pay ? paidAmount : 0 } }, tx);
+          after: { visitId: visit?.id ?? null, charged: visit ? row.amount : 0, discount: row.discountAmount, paid: visit && pay ? paidAmount : 0,
+            ...(phoneFromIntake ? { phoneFromIntake: true } : {}) } }, tx);
         await this.events.emit({ type: 'intake.approved', refType: 'intake_submission', refId: id,
           patientId: row.patientId, visitId: visit?.id ?? null, actorId: user?.id ?? null }, tx);
         if (queueNotice && visit) await queueNotice(tx, row.patientId!, visit.id, id, user?.id ?? null);
@@ -2779,8 +2838,11 @@ export class IntakeService {
     }) => {
       if (!o.patientId) return null;
       const patient = await tx.patient.findFirst({ where: { id: o.patientId, deletedAt: null }, select: { phone: true } });
-      const phone = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
-      if (!/^09\d{9}$/.test(phone)) return null;
+      if (!patient) return null;
+      /* برگشت و رد پیامِ **همین ثبت‌نام** است — پروندهٔ بی‌شماره ← شمارهٔ خودِ ثبت‌نام (PS12). */
+      const own = mobileOf(patient.phone) ? null : await tx.intakeSubmission.findUnique({ where: { id: o.submissionId }, select: { data: true } });
+      const phone = submissionPhone(patient.phone, own?.data);
+      if (!phone) return null;
       const body = `${brand.name ? brand.name + '\n' : ''}${renderSms(o.template, o.vars)}`;
       const reminder = await tx.reminder.upsert({ where: { dedupeKey: o.dedupeKey }, update: {}, create: {
         patientId: o.patientId, kind: 'notice', dueAt: new Date(), phone, text: body, status: 'pending', dedupeKey: o.dedupeKey,

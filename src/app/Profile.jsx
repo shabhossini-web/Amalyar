@@ -70,10 +70,11 @@ export default function Profile() {
     setPwErr('');
     setSavingPw(true);
     try {
-      await changePassword(curPw, newPw);
+      const r = await changePassword(curPw, newPw);
       setCurPw('');
       setNewPw('');
-      setToast('رمز عبور تغییر کرد');
+      /* پس‌کی‌ها هم با تغییرِ رمز پاک می‌شوند (بستهٔ PS، PS3) — کاربر باید بداند چرا اثر انگشت دیگر کار نمی‌کند. */
+      setToast(`رمز عبور تغییر کرد.${r?.passkeysRemoved ? ' اثر انگشت/پس‌کیِ این حساب هم پاک شد؛ پس از ورودِ دوباره، از منوی حساب «فعال‌سازی ورود با اثر انگشت» را دوباره بزنید.' : ''}`);
     } catch (e2) {
       setPwErr(e2.message);
     } finally {
@@ -91,7 +92,9 @@ export default function Profile() {
         <PageHeader title="پروفایل من" icon={User} />
 
         {user.verificationDueAt && !user.phoneVerifiedAt && <section className="glass us-card pf-card"><h2 className="pf-h2">تأیید حساب موقت</h2>
-          <p>شماره {user.phone} را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>
+          {user.verificationOverdue
+            ? <p>مهلتِ تأییدِ شمارهٔ <bdi dir="ltr">{user.phone}</bdi> ({faDate(user.verificationDueAt)}) گذشته است. حسابتان فقط چون تنها مدیرِ کلِ فعالِ سامانه هستید بسته نشد — همین حالا شماره را تأیید کنید.</p>
+            : <p>شماره <bdi dir="ltr">{user.phone}</bdi> را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>}
           <button className="us-btn" disabled={phoneBusy} onClick={() => verifyPhone(false)}>دریافت کد پیامکی</button>
           <label className="lg-field"><span>کد تأیید</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={phoneCode} onChange={e => setPhoneCode(toEnDigits(e.target.value).replace(/[^0-9]/g, ''))} /></label>
           <button className="lg-btn" disabled={phoneBusy || phoneCode.length < 5} onClick={() => verifyPhone(true)}>تأیید شماره</button>
