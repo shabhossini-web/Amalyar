@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
-import { fetchFace } from '../lib/public-face.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
-import { CheckCircle, Alert } from '../ui/icons.jsx';
+import { CheckCircle, Clock } from '../ui/icons.jsx';
+import { PublicError, PublicErrorPage, useFallbackFace } from './PublicBits.jsx';
 import '../app/definitions.css';
 import './intake.css';
 import './survey.css';
@@ -27,15 +27,17 @@ export default function Survey() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState('');
+  /* خطای بارگذاری (status + message) — صفحهٔ خطا از status می‌گوید چه شد و چه کنید (بندِ ۱۱۰). */
+  const [loadErr, setLoadErr] = useState(null);
 
   useEffect(() => { document.title = 'نظرسنجی'; }, []);
   /* تم و رنگِ مطب (بازبینیِ UX، بندِ ۹۴): پاسخِ نظرسنجی عمداً جز سؤال‌ها چیزی ندارد، پس هویت از
      مسیرِ عمومیِ جدا می‌آید — هم‌زمان با خودِ سؤال‌ها، نه پشتِ سرشان. */
-  useEffect(() => { fetchFace(); }, []);
+  const face = useFallbackFace(true);
   useEffect(() => {
     api(`/public/survey/${token}`, { auth: false })
       .then(setView)
-      .catch((e) => setErr(e.message));
+      .catch((e) => setLoadErr(e));
   }, [token]);
 
   const submit = async () => {
@@ -61,14 +63,8 @@ export default function Survey() {
     </div>
   );
 
-  if (err && !view) {
-    return shell(
-      <div className="sv-msg">
-        <Alert width="34" height="34" />
-        <b>{err}</b>
-      </div>,
-    );
-  }
+  /* لینکِ ناقص/کهنه یا قطعِ اتصال: «چه شد + چرا + چه کنید» با نام و تلفنِ مطب، نه یک خطِ تنها. */
+  if (loadErr && !view) return <PublicErrorPage brand={face?.brand} err={loadErr} />;
   if (!view) return shell(<p className="ik-loading">در حال بارگذاری…</p>);
 
   /* ⚠️ «قبلاً جواب داده‌اید» و «مهلت تمام شده» دو پیامِ متفاوت‌اند و عمداً
@@ -85,11 +81,9 @@ export default function Survey() {
   }
   if (view.status === 'expired') {
     return shell(
-      <div className="sv-msg">
-        <Alert width="34" height="34" />
-        <b>مهلتِ این نظرسنجی تمام شده</b>
-        <p>اگر نکته‌ای دارید، با ما تماس بگیرید — خوشحال می‌شویم بشنویم.</p>
-      </div>,
+      <PublicError brand={face?.brand} tone="warn" icon={<Clock width="22" height="22" />}
+                   title="مهلتِ این نظرسنجی تمام شده"
+                   reason="اگر نکته‌ای دارید، خوشحال می‌شویم بشنویم — تماس بگیرید." />,
     );
   }
 

@@ -52,7 +52,7 @@ try {
   const open = async (v) => {
     current = v;
     await page.goto(`${vite.base}/f/tok`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.ik-card .ik-steps, .ik-card .ik-bad');
+    await page.waitForSelector('.ik-card .ik-steps, .ik-card .ik-bad, .ik-card .pb-err');
     seen.push(await page.locator('.ik-card').innerText());
   };
   /* برچسبِ خالصِ هر مرحله = گره‌های متنیِ <li> (نه شمارهٔ داخلِ <i>) + کلاسِ وضعیت. */
@@ -125,13 +125,18 @@ try {
   s = await steps();
   ok(s.length === 3 && s.every((x) => x.cls === 'ok'), 'هر سه مرحله ✓');
 
-  console.log('\n۸) رد و منقضی — پیام از واژه‌نامه، بدونِ نوار');
+  console.log('\n۸) رد و منقضی — «چه شد + چرا + چه کنید»، بدونِ نوار (بازبینیِ UX، بندِ ۱۱۰)');
   await open(view({ status: 'rejected' }));
-  ok((await page.locator('.ik-bad').innerText()).includes('تأیید نشد') && (await page.locator('.ik-steps').count()) === 0, 'ردشده');
-  await open(view({ status: 'rejected', reviewNote: 'فیش ناخوانا بود' }));
-  ok((await page.locator('.ik-bad').innerText()).includes('فیش ناخوانا بود'), 'یادداشتِ ردِ ادمین جای پیامِ عام را می‌گیرد');
-  await open(view({ status: 'expired' }));
-  ok((await page.locator('.ik-bad').innerText()).includes('مهلتِ این فرم تمام شده'), 'منقضی');
+  ok((await page.locator('.pb-err').innerText()).includes('تأیید نشد') && (await page.locator('.ik-steps').count()) === 0, 'ردشده');
+  ok((await page.locator('.pb-err').innerText()).includes('تماس بگیرید') && (await page.locator('.pb-err a.pb-act').count()) === 0,
+    'بی‌دلیل: «برای دانستنِ دلیل… تماس بگیرید»؛ بی‌لینکِ فعال دکمهٔ «ثبتِ درخواستِ تازه» نیست');
+  await open(view({ status: 'rejected', reviewNote: 'فیش ناخوانا بود', restartToken: 'lnk' }));
+  ok((await page.locator('.pb-err').innerText()).includes('فیش ناخوانا بود'), 'یادداشتِ ردِ ادمین جای پیامِ عام را می‌گیرد');
+  ok((await page.locator('.ik-warn').count()) === 0, 'یادداشتِ رد دوبار (کادرِ هشدار + کارتِ رد) نمی‌آید');
+  ok((await page.locator('.pb-err a.pb-act').getAttribute('href')) === '/r/lnk', '«ثبتِ درخواستِ تازه» به همان لینکِ ثبت‌نام');
+  await open(view({ status: 'expired', restartToken: 'lnk' }));
+  ok((await page.locator('.pb-err').innerText()).includes('مهلتِ این فرم تمام شده'), 'منقضی');
+  ok((await page.locator('.pb-err a.pb-act').getAttribute('href')) === '/r/lnk', '«شروعِ دوباره» به همان لینکِ ثبت‌نام');
 
   console.log('\n۹) هیچ کلیدِ خام، هیچ «بررسیِ ما»، بدونِ خطای JS و سرریز');
   const leaked = seen.flatMap((t) => RAW.filter((k) => t.includes(k)));

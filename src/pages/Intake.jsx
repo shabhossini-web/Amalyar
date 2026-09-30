@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
@@ -11,7 +11,7 @@ import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
 import BookingPick from './BookingPick.jsx';
-import { BrandMark, CallLink, PublicFoot, useFallbackFace } from './PublicBits.jsx';
+import { BrandMark, CallLink, PublicError, PublicFoot, RetryButton, loadErrorText, useFallbackFace } from './PublicBits.jsx';
 import { adoptFace } from '../lib/public-face.js';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -54,6 +54,8 @@ function Register() {
   const navigate = useNavigate();
   const [link, setLink] = useState(null);
   const [err, setErr] = useState('');
+  /* خطای بارگذاریِ خودِ لینک (status + message) — صفحهٔ خطا از status می‌گوید چه شد و چه کنید (بندِ ۱۱۰). */
+  const [loadErr, setLoadErr] = useState(null);
   /* کدِ خطای آخر — ۴۰۹ (برخوردِ کدِ ملی) را بیمار به‌تنهایی حل نمی‌کند و کنارش دکمهٔ تماس می‌آید. */
   const [errStatus, setErrStatus] = useState(0);
   /* خطای هر کادر، زیرِ خودِ همان کادر (بازبینیِ UX، بندِ ۱۰۵): تا دیروز یک پیامِ ته فرم بود و خطاها
@@ -96,12 +98,12 @@ function Register() {
     let live = true;
     api(`/public/intake/link/${token}`, { auth: false })
       .then((l) => { if (live) { adoptFace(l); setLink(l); loadCap(); } })
-      .catch((e) => { if (live) setErr(e.message); });
+      .catch((e) => { if (live) setLoadErr(e); });
     return () => { live = false; };
   }, [token, loadCap]);
 
   /* لینک باز نشد ← هویت و تمِ مطب از مسیرِ عمومیِ جدا، تا صفحهٔ خطا هم نام و تلفن داشته باشد. */
-  const fallback = useFallbackFace(!!err && !link);
+  const fallback = useFallbackFace(!!loadErr && !link);
 
   const set = (k) => (e) => { setF((s) => ({ ...s, [k]: e.target.value })); setFErr((x) => (x[k] ? { ...x, [k]: '' } : x)); };
 
@@ -177,7 +179,7 @@ function Register() {
     }
   };
 
-  if (err && !link) return <Shell brand={fallback?.brand}><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
+  if (loadErr && !link) return <LoadError brand={fallback?.brand} err={loadErr} />;
 
   return (
     <Shell brand={link?.brand} title={link?.title}>
@@ -446,6 +448,8 @@ function Form() {
   const smsTo = useLocation().state?.smsTo ?? null;
   const [d, setD] = useState(null);
   const [err, setErr] = useState('');
+  /* خطای بارگذاریِ فرم (status + message) — فقط وقتی هنوز چیزی نیامده صفحهٔ خطا می‌شود. */
+  const [loadErr, setLoadErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({ procedure: '', surgeonName: '', hospitalName: '', opDate: '', notes: '' });
   /* پاسخِ فیلدهای **دلخواهِ** فرمِ ساخته‌شده — جدا از `f` که فیلدهای ثابت است. */
@@ -526,10 +530,11 @@ function Form() {
       const savedPage = Number(r.data?._page);
       const pageCount = r.form?.pages ?? 1;
       if (Number.isInteger(savedPage) && savedPage >= 1 && savedPage <= pageCount) setPage(savedPage);
-    } catch (e) { setErr(e.message); }
+      setLoadErr(null);
+    } catch (e) { setErr(e.message); setLoadErr(e); }
   }, [token]);
   useEffect(() => { load(); }, [load]);
-  const fallback = useFallbackFace(!!err && !d);
+  const fallback = useFallbackFace(!!loadErr && !d);
 
   /**
    * ذخیرهٔ پیش‌نویس روی سرور — W1.8.
@@ -730,7 +735,7 @@ function Form() {
     catch (e) { setErr(e.message); }
   };
 
-  if (err && !d) return <Shell brand={fallback?.brand}><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
+  if (loadErr && !d) return <LoadError brand={fallback?.brand} err={loadErr} />;
   if (!d) return <Shell><p className="ik-note">در حال بارگذاری…</p></Shell>;
 
   const done = d.status === 'approved';
@@ -756,8 +761,8 @@ function Form() {
   const cancelEdit = () => { setEditing(false); setVals({}); load(); };
 
   return (
-    <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={d.amount}
-           footCall={!(d.status === 'pending_approval' && !payOpen)}>
+    <Shell brand={d.brand} title={`${d.data?.firstName ?? ''} ${d.data?.lastName ?? ''}`.trim()} amount={rejected || expired ? 0 : d.amount}
+           footCall={!(d.status === 'pending_approval' && !payOpen) && !rejected && !expired}>
       {/* نوارِ مرحله — بیمار باید بداند کجای کار است و چه چیزی مانده؛ و در
           پایان، اینکه چیزی نمانده. مرحله‌ها از وضعیتِ همین فرم ساخته می‌شوند. */}
       {!rejected && !expired && (
@@ -794,7 +799,7 @@ function Form() {
           <p>{d.returned.note}</p>
           <small>{d.returned.hint}</small>
         </div>
-      ) : d.reviewNote && !done && (
+      ) : d.reviewNote && !done && !rejected && (
         <p className="ik-warn"><Alert width="15" height="15" /> {d.reviewNote}</p>
       )}
 
@@ -804,8 +809,19 @@ function Form() {
           <CheckCircle width="16" height="16" /> {makesVisit ? T.approved.visit : T.approved.record}
         </p>
       )}
-      {rejected && <p className="ik-bad"><Alert width="16" height="16" /> {d.reviewNote || T.rejected}</p>}
-      {expired && <p className="ik-bad"><Clock width="16" height="16" /> {T.expired}</p>}
+      {/* ردشده و منقضی بن‌بست نیستند (بازبینیِ UX، بندِ ۱۱۰): چه شد + چرا + چه کنید — «ثبتِ درخواستِ
+          تازه» / «شروعِ دوباره» روی همان لینکِ ثبت‌نام (اگر هنوز فعال است) و تماس با مطب. */}
+      {rejected && (
+        <PublicError brand={d.brand} title={T.rejected.title} reason={d.reviewNote ? T.rejected.because(d.reviewNote) : T.rejected.noNote}>
+          {d.restartToken && <Link className="pb-act" to={`/r/${d.restartToken}`}><Refresh width="16" height="16" aria-hidden="true" /> {T.rejected.again}</Link>}
+        </PublicError>
+      )}
+      {expired && (
+        <PublicError brand={d.brand} tone="warn" icon={<Clock width="22" height="22" />} title={T.expired.title}
+                     reason={T.expired.reason(d.expiresFa, !!d.restartToken)}>
+          {d.restartToken && <Link className="pb-act" to={`/r/${d.restartToken}`}><Refresh width="16" height="16" aria-hidden="true" /> {T.expired.again}</Link>}
+        </PublicError>
+      )}
 
       {/* ⚠️ **فرمِ ساخته‌شده جایگزینِ فیلدهای هاردکد می‌شود، نه اضافه بر آن.**
           اگر هر دو رندر می‌شدند، بیمار «نوعِ عمل» را دو بار می‌دید — یک بار
@@ -1108,6 +1124,20 @@ function BankCard({ acc }) {
         {acc.accountNumber && <CopyRow label="شمارهٔ حساب" value={acc.accountNumber} />}
       </figcaption>
     </figure>
+  );
+}
+
+/**
+ * لینک یا فرم **باز نشد** — همان پوستهٔ صفحه با الگوی «چه شد + چرا + چه کنید» (بازبینیِ UX، بندِ ۱۱۰):
+ * ۴۰۴ «شاید ناقص کپی شده؛ لینکِ کاملِ پیامک را دوباره لمس کنید»، ۴۰۳ «دیگر فعال نیست»، اتصال با
+ * «تلاشِ دوباره» روی همین نشانی — و همیشه تماس با مطب.
+ */
+function LoadError({ brand, err }) {
+  const t = loadErrorText(err, 'لینک');
+  return (
+    <Shell brand={brand} footCall={false}>
+      <PublicError brand={brand} title={t.title} reason={t.reason}>{t.retry && <RetryButton />}</PublicError>
+    </Shell>
   );
 }
 

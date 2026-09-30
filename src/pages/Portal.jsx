@@ -4,7 +4,7 @@ import { api } from '../lib/api.js';
 import './portal.css';
 import { ChevronEnd } from '../ui/icons.jsx';
 import { adoptFace } from '../lib/public-face.js';
-import { useFallbackFace } from './PublicBits.jsx';
+import { PublicErrorPage, useFallbackFace } from './PublicBits.jsx';
 
 /**
  * پروندهٔ الکترونیکِ بیمار — `/p/<token>`، عمومی و دائمی.
@@ -44,7 +44,8 @@ const linkify = (text) =>
 export default function Portal() {
   const { token } = useParams();
   const [data, setData] = useState(null);
-  const [err, setErr] = useState('');
+  /* خودِ خطا (status + message)، نه فقط متن — صفحهٔ خطا از status می‌گوید چه شد و چه کنید. */
+  const [err, setErr] = useState(null);
   const [tab, setTabState] = useState('tasks');
   /* زبانه در نشانی (`?tab=`) هم می‌نشیند تا «بازگشت» از خلاصه به همان زبانه برگردد، نه به پیش‌فرض. */
   const [params, setParams] = useSearchParams();
@@ -64,12 +65,13 @@ export default function Portal() {
           ? want
           : d.tasks?.length ? 'tasks' : d.upcoming?.length ? 'upcoming' : 'visits');
       })
-      .catch((e) => setErr(e.message));
+      .catch((e) => setErr(e));
   }, [token]);
   /* پرونده باز نشد ← تم و هویتِ مطب از مسیرِ عمومیِ جدا. */
-  useFallbackFace(!!err);
+  const fallback = useFallbackFace(!!err);
 
-  if (err) return <div className="po-err">{err}</div>;
+  /* «چه شد + چرا + چه کنید» با نام و تلفنِ مطب — نه یک خطِ صورتی روی صفحهٔ خالی (بازبینیِ UX، بندِ ۱۱۰). */
+  if (err) return <PublicErrorPage brand={fallback?.brand} err={err} />;
   if (!data) return <div className="po-err quiet">در حال بارگذاری…</div>;
 
   /* هشدار: فقط مراجعهٔ **انجام‌شده** خلاصه دارد (سرور `summaryUrl` را برای بقیه تهی می‌فرستد): تا دیروز

@@ -104,6 +104,29 @@ export function PublicError({ brand, title, reason, children, tone = 'bad', icon
   );
 }
 
+/**
+ * **صفحهٔ کاملِ خطا** برای صفحه‌ای که دادهٔ خودش نیامد — پرتال، خلاصه، نظرسنجی (بندِ ۱۱۰). تا دیروز
+ * همین‌جا یک خطِ صورتی وسطِ صفحهٔ خالی بود، بی‌نامِ مطب و بی‌تلفن. `err` خودِ خطای `api` است (status
+ * و message) تا متن از `loadErrorText` بیاید: ۴۰۴ «شاید ناقص کپی شده»، صفر «اتصال» با «تلاشِ دوباره».
+ */
+export function PublicErrorPage({ brand, err, what = 'لینک' }) {
+  const t = loadErrorText(err, what);
+  return (
+    <div className="pb-page">
+      <div className="pb-page-bg" aria-hidden="true" />
+      <main className="pb-page-card">
+        {brand?.name && (
+          <header className="pb-page-head"><BrandMark brand={brand} /><b>{brand.name}</b></header>
+        )}
+        <PublicError brand={brand} title={t.title} reason={t.reason}>
+          {t.retry && <RetryButton />}
+        </PublicError>
+        <PublicFoot brand={brand} call={false} />
+      </main>
+    </div>
+  );
+}
+
 /** «تلاشِ دوباره» روی **همان نشانی** — بیمار حسابی ندارد که به صفحهٔ ورود برود. */
 export function RetryButton({ label = 'تلاشِ دوباره' }) {
   return (

@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import './visit-summary.css';
 import { adoptFace } from '../lib/public-face.js';
-import { BrandMark, faPhone, telHref, useFallbackFace } from './PublicBits.jsx';
+import { BrandMark, PublicErrorPage, faPhone, telHref, useFallbackFace } from './PublicBits.jsx';
 import { Back, Print } from '../ui/icons.jsx';
 
 /**
@@ -23,7 +23,7 @@ export default function VisitSummary() {
   const fromPortal = typeof back === 'string' && back.startsWith('/p/');
   const navigate = useNavigate();
   const [data, setData] = useState(null);
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState(null);
 
   const isSurgery = data?.visit?.kind === 'surgery';
   /* هشدار: عنوان و برچسب‌ها از **نوعِ مراجعه** (بازبینیِ UX، بندِ ۱۱۲): سندِ کرانیوتومی تا دیروز «خلاصهٔ
@@ -37,11 +37,12 @@ export default function VisitSummary() {
       /* خودِ سند رنگِ کاغذ دارد و از تم نمی‌گیرد (`visit-summary.css`)؛ تم و رنگِ مطب برای قابِ
          صفحه و صفحهٔ خطاست — این صفحه `/config` نمی‌خوانَد (بیرونِ Providerها). */
       .then((d) => { adoptFace(d); setData(d); })
-      .catch((e) => setErr(e.message));
+      .catch((e) => setErr(e));
   }, [token]);
-  useFallbackFace(!!err);
+  const fallback = useFallbackFace(!!err);
 
-  if (err) return <div className="vs-err">{err}</div>;
+  /* خطا صفحهٔ کاغذی نیست: الگوی «چه شد + چرا + چه کنید» با نام و تلفنِ مطب (بازبینیِ UX، بندِ ۱۱۰). */
+  if (err) return <PublicErrorPage brand={fallback?.brand} err={err} />;
   if (!data) return <div className="vs-err quiet">در حال بارگذاری…</div>;
 
   const { brand, patient, visit, answers, nextVisitDateFa } = data;
