@@ -340,6 +340,11 @@ function MoreMenu({ v, busy, onToast, onDelete, t, compact = false }) {
  * فهرست از سرور (`/config`) — دکمه‌ها باید **همهٔ** گزینه‌ها را نشان دهند.
  */
 function StatusPick({ v, busy, onStatus, statuses, t, compact = false }) {
+  /* فهرستِ وضعیت‌ها از `/config` نیامده (هنوز نرسیده یا شکست خورده؛ DF10) — دست‌کم وضعیتِ خودِ ردیف به‌صورتِ
+     چیپِ فقط‌خواندنی دیده شود، نه یک جای خالی که انگار مراجعه وضعیتی ندارد. برچسب از سرور است (`opStatusFa`). */
+  if (!statuses?.length) {
+    return <span className={`db-stchip db-st-${v.opStatus}${compact ? ' db-stchip-sm' : ''}`}>{statusLabel(v)}</span>;
+  }
   return (
     <div className={`db-statuspick${compact ? ' db-statuspick-sm' : ''}`} role="group" aria-label={`وضعیتِ ${visitNoun(v, t)}`}>
       {statuses.map(({ key: k, label: l }) => {
