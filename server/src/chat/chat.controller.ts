@@ -5,6 +5,8 @@ import type { Response } from 'express';
 import { Type } from 'class-transformer';
 import { IsArray, IsInt, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { FeatureGuard } from '../auth/feature.guard';
+import { Feature } from '../auth/feature.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ChatService } from './chat.service';
 
@@ -31,9 +33,18 @@ class ReadDto {
   lastId!: number;
 }
 
-/** چتِ سازمانی — هر حسابِ فعالِ واردشده؛ عضویتِ کانال داخلِ سرویس چک می‌شود. */
+/**
+ * چتِ سازمانی — هر حسابی که ماژولِ «پیام‌رسان» را دارد؛ عضویتِ کانال داخلِ سرویس چک می‌شود.
+ *
+ * ⚠️ `FeatureGuard` + `@Feature('messenger')` روی **کلِ** کنترلر (بازبینیِ خصمانه، R14؛ قانونِ ۳):
+ * تا امروز فقط `JwtAuthGuard` بود — ماژولِ خاموش‌شده در «سطوحِ دسترسی» کاشی نداشت ولی
+ * `/chat/unread`، فهرست، پیام و SSE همچنان برای هر حسابِ واردشده باز بودند. گارد فقط روشن/خاموش،
+ * سطح و نقشِ ماژول را می‌سنجد؛ «چه کسی کدام گفتگو را می‌بیند» همچنان فقط عضویت است (سرویس) —
+ * سوپرادمین از گارد رد می‌شود ولی گفتگوی خصوصیِ دیگران را نمی‌بیند (قانونِ ۲۹، استثنا).
+ */
 @Controller('chat')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureGuard)
+@Feature('messenger')
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
 
