@@ -3,7 +3,7 @@
    نمی‌شود؛ بقیه این‌جاست چون این صفحه چانکِ خودش است (قانون ۲۱).
    ⚠️ هیچ رنگِ خامی: همه از توکن‌هایی که با تم می‌چرخند (قانون ۲۳). */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
-.pw { position: relative; min-height: 100dvh; padding: 18px 16px 40px; --page-w: var(--maxw); }
+.pw { position: relative; min-height: 100dvh; padding: 20px 16px 40px; --page-w: var(--maxw); }
 .pw-bg {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: radial-gradient(1200px 600px at 80% -10%, rgba(var(--brand-2-rgb), 0.16), transparent 60%);

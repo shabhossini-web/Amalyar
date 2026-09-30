@@ -127,7 +127,7 @@
 }
 
 @media (max-width: 620px) {
-  .df { padding: 14px 12px 60px; }
+  .df { padding: 20px 12px 60px; }
   .df-uses { display: none; }
 }
 

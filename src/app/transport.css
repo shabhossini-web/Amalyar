@@ -2,7 +2,7 @@
    موبایل‌اول: این صفحه پشتِ فرمان و در حیاطِ بیمارستان باز می‌شود، نه پشتِ میز.
    پس دکمه‌ها بزرگ‌اند و شماره‌ها لمسیِ tel: هستند. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و کارت‌ها از `--page-w` می‌خوانند. */
-.tr { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
+.tr { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .tr-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -164,6 +164,6 @@
 @media (prefers-reduced-motion: reduce) { .tr-toast { transition: none; } }
 
 @media (max-width: 560px) {
-  .tr { padding: 12px 10px 32px; }
+  .tr { padding: 20px 10px 32px; }
   .tr-card { padding: 11px; }
 }

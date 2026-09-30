@@ -1,7 +1,7 @@
 /* پنلِ کارشناسی — دفترِ کار.
    موبایل‌اول: این صفحه در راهروی بیمارستان روی گوشی باز می‌شود، نه پشتِ میز. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و کارت‌ها از `--page-w` می‌خوانند. */
-.tk { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
+.tk { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .tk-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -233,7 +233,7 @@
 @media (prefers-reduced-motion: reduce) { .tk-toast { transition: none; } }
 
 @media (max-width: 560px) {
-  .tk { padding: 12px 10px 32px; }
+  .tk { padding: 20px 10px 32px; }
   .tk-card { padding: 11px; }
   /* دو دکمهٔ کوتاه («وضعیتِ عمل»، «ثبتِ ساعت») کنارِ هم و گزارش در ردیفِ خودش — با دکمهٔ سوم،
      چیدمانِ ستونیِ قبلی هر کارت را سه ردیفِ تمام‌عرض بلند می‌کرد. */

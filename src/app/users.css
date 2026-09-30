@@ -1,7 +1,9 @@
 /* ── مدیریت کاربران (سوپرادمین) ── */
 /* ستونِ «فرم»ِ استاندارد (shell-15) — کاربران، پروفایل و کارت‌های «بیماران». سربرگ و نوارِ تب
    `--page-w` را می‌خوانند؛ ۴۰ پیکسل = حاشیهٔ دوطرفهٔ `.lx-shell`. */
-.us-shell { --page-w: var(--maxw-form); max-width: calc(var(--page-w) + 40px); }
+/* `width: 100%`: ریشهٔ پروفایل کلاسِ `pf` هم دارد که در `index.css` گرید است؛ آن‌جا حاشیهٔ خودکار
+   کش‌آمدن را خاموش می‌کرد و ستون به اندازهٔ محتوایش (۴۵۰) می‌ماند نه ۷۲۰. */
+.us-shell { --page-w: var(--maxw-form); width: 100%; max-width: calc(var(--page-w) + 40px); }
 .us-tabs { margin-bottom: 14px; }
 .us-count {
   font-style: normal; font-size: 11px; font-weight: 800; margin-inline-start: 7px;

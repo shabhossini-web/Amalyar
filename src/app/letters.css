@@ -1,6 +1,6 @@
 /* نامهٔ اداری — فهرست، ویرایش و چاپ روی سربرگ. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
-.lt { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
+.lt { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .lt-bg {
   position: fixed; inset: 0; z-index: -1;
   background:

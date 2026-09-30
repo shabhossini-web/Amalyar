@@ -1,5 +1,5 @@
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ ۳۲ پیکسل = حاشیهٔ دوطرفه. */
-.sp-page { --page-w: var(--maxw); max-width: calc(var(--page-w) + 32px); margin: auto; padding: 24px 16px 70px; }
+.sp-page { --page-w: var(--maxw); max-width: calc(var(--page-w) + 32px); margin: auto; padding: 20px 16px 70px; }
 .sp-list { display: grid; gap: 18px; margin: 20px 0; }
 .sp-card { border: 1px solid rgba(var(--brand-soft-rgb),.3); border-radius: 18px; padding: 20px; display: grid; gap: 12px; }
 .sp-card h2 { font-size: 18px; margin: 0; }

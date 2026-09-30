@@ -1,6 +1,6 @@
 /* جستجوی بالینی — شرح‌های همهٔ پرونده‌ها با فیلترِ نوع/عمل/تشخیص/موضوع. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
-.ns { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
+.ns { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .ns-bg {
   position: fixed; inset: 0; z-index: -1;
   background:

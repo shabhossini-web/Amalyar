@@ -4,7 +4,7 @@
    اسکرول‌شونده یعنی کادرِ نوشتن همیشه پایینِ صفحه‌نما چسبیده است. */
 .as {
   position: relative; height: calc(100dvh - var(--shell-h)); min-height: 360px;
-  display: flex; flex-direction: column; padding: 16px 14px calc(14px + env(safe-area-inset-bottom, 0px)); color: var(--text1);
+  display: flex; flex-direction: column; padding: 20px 14px calc(14px + env(safe-area-inset-bottom, 0px)); color: var(--text1);
   /* گفتگو ستونِ «فرم/خواندن»ِ استاندارد است (shell-15)؛ سربرگ و بلوک‌ها از همین می‌خوانند. */
   --page-w: var(--maxw-form);
 }

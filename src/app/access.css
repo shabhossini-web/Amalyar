@@ -1,6 +1,6 @@
 /* ماتریسِ سطوحِ دسترسی — ردیف‌ها درها، ستون‌ها سطح‌ها. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
-.ax { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 16px 14px 60px; color: var(--text1); --page-w: var(--maxw); }
+.ax { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 20px 14px 60px; color: var(--text1); --page-w: var(--maxw); }
 .ax-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -131,7 +131,7 @@
 }
 
 @media (max-width: 620px) {
-  .ax { padding: 12px 10px 40px; }
+  .ax { padding: 20px 10px 40px; }
   /* در موبایل: نام بالا، سطح‌ها تمام‌عرض (هر خانه ≥۴۴ پیکسل)، بعد روشن/خاموش و نقش‌ها. */
   .ax-row { grid-template-columns: 1fr; }
   .ax-name, .ax-cells, .ax-acts, .ax-roles { grid-column: 1; grid-row: auto; }

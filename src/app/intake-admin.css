@@ -1,6 +1,6 @@
 /* صفِ ثبت‌نامِ بیماران. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و کارت‌ها از `--page-w` می‌خوانند. */
-.ia { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
+.ia { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .ia-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -177,7 +177,7 @@
   .ia-toast-act { min-height: 44px; }
   .ia-toast-x { width: 44px; height: 44px; }
   .ia-definition-head button, .ia-manage { min-width: 44px; min-height: 44px; justify-content: center; align-items: center; }
-  .ia { padding: 12px 10px 32px; }
+  .ia { padding: 20px 10px 32px; }
   .ia-grid { grid-template-columns: 1fr; }
   .ia-acts { flex-direction: column; }
   .ia-ok { min-width: 0; }

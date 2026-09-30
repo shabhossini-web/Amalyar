@@ -1,6 +1,6 @@
 /* دفترِ یادآوری‌ها. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
-.rm { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
+.rm { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .rm-bg {
   position: fixed; inset: 0; z-index: -1;
   background:

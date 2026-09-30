@@ -1,6 +1,6 @@
 /* تحلیل و CRM — نسخهٔ اول: نظرسنجی‌های زیرپرونده + کانالِ آشنایی. */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و کارت‌ها از `--page-w` می‌خوانند. */
-.crm { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
+.crm { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .crm-bg {
   position: fixed; inset: 0; z-index: -1;
   background:

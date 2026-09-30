@@ -1,6 +1,6 @@
 /* فهرستِ انتظارِ عمل (بستهٔ ۹) — روی توکن‌ها، بی‌تاریِ تودرتو (ردیف سطحِ کار است نه قاب؛ قانونِ ۱۶). */
 /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و ردیف‌ها از `--page-w` می‌خوانند. */
-.wl { position: relative; min-height: 100dvh; padding: 16px 16px 48px; color: var(--text1); --page-w: var(--maxw); }
+.wl { position: relative; min-height: 100dvh; padding: 20px 16px 48px; color: var(--text1); --page-w: var(--maxw); }
 .wl-bg {
   position: fixed; inset: 0; z-index: -1;
   background: radial-gradient(900px 520px at 50% -10%, rgba(var(--brand-rgb), .15), transparent 60%), var(--bg);
@@ -155,7 +155,7 @@
 .wl-toast.on { opacity: 1; }
 
 @media (max-width: 620px) {
-  .wl { padding: 12px 12px 40px; }
+  .wl { padding: 20px 12px 40px; }
   .wl-kpis { gap: 8px; }
   .wl-kpi { flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; }
   .wl-kpi b { font-size: 20px; }
