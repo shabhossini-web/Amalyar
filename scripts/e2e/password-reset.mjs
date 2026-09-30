@@ -220,8 +220,8 @@ const nid = (seed) => {
   for (let i = 0; i < 9; i++) sum += Number(base[i]) * (10 - i);
   return base + String(sum % 11 < 2 ? sum % 11 : 11 - (sum % 11));
 };
-const links = [];
-for (let i = 0; i < 3; i++) links.push((await call('/intake/links', { body: { title: `آزمونی PF7-${i} ${run}`, amount: 0 }, bearer })).json);
+/* یک لینک بس است: هر بیمارِ تازه ثبت‌نام (و توکنِ) خودش را می‌گیرد، و بیمارِ تکراری همان ثبت‌نامِ باز را. */
+const link = (await call('/intake/links', { body: { title: `آزمونی PF7 ${run}`, amount: 0 }, bearer })).json;
 const register = async (link, who) => call(`/public/intake/link/${link.token}/register`, {
   body: { firstName: 'آزمونی', ...who, ...(await captchaFor(API, link.token)) }, ip: '10.66.0.1',
 });
@@ -230,19 +230,19 @@ const notices = async (phone) => { await later(400); return Number(sql(`SELECT c
    به شمارهٔ **پرونده** می‌رود (درست)، ولی پاسخ نباید چهار رقمِ اول و سه رقمِ آخرِ آن را به او نشان دهد. */
 const recPhone = `0939${run}3`;
 const recNid = nid(Number(run) * 10 + 1);
-const own = await register(links[0], { lastName: 'پرونده‌دار', nationalId: recNid, phone: recPhone });
+const own = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: recPhone });
 ok(own.status < 300 && own.json?.linkSmsTo === `${recPhone.slice(0, 4)}…${recPhone.slice(-3)}`, `شمارهٔ تایپ‌شده همان شمارهٔ پرونده ← پوشیده‌اش (${own.status} «${own.json?.linkSmsTo}»)`, msg(own));
-const other = await register(links[1], { lastName: 'پرونده‌دار', nationalId: recNid, phone: `0938${run}2` });
+const other = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: `0938${run}2` });
 ok(other.status < 300 && other.json?.linkSmsTo === 'شمارهٔ ثبت‌شده در پرونده', `PF12: شمارهٔ دیگر ← «شمارهٔ ثبت‌شده در پرونده»، نه ${recPhone.slice(0, 4)}… (${other.status} «${other.json?.linkSmsTo}»)`, msg(other));
-/* PF7 — سه بیمارِ تازه، یک شماره، سه لینک: سقفِ «یک پیامک در ده دقیقه» فقط به‌ازای ثبت‌نام بود، پس هر ثبت‌نام
-   یک پیامکِ دیگر به همان شماره می‌فرستاد. سقفِ تازه: دو پیامک در ساعت به هر شماره، بی‌صدا. */
+/* PF7 — سه بیمارِ تازه، یک شماره: سقفِ «یک پیامک در ده دقیقه» فقط به‌ازای ثبت‌نام بود، پس هر ثبت‌نام یک
+   پیامکِ دیگر به همان شماره می‌فرستاد. سقفِ تازه: دو پیامک در ساعت به هر شماره، بی‌صدا. */
 const bombed = `0937${run}1`;
 const shots = [];
-for (let i = 0; i < 3; i++) shots.push(await register(links[i], { lastName: `بمباران${i}`, nationalId: nid(Number(run) * 10 + 5 + i), phone: bombed }));
+for (let i = 0; i < 3; i++) shots.push(await register(link, { lastName: `بمباران${i}`, nationalId: nid(Number(run) * 10 + 5 + i), phone: bombed }));
 ok(shots.every((r) => r.status < 300), `سه ثبت‌نام پذیرفته شد — سقف بی‌صداست (${shots.map((r) => r.status).join('،')})`);
 const sent = await notices(bombed);
 ok(sent === 2 && shots[2].json?.linkSmsTo == null, `PF7: پیامکِ سوم به همان شماره نرفت (رفته: ${sent}؛ پاسخِ سوم: «${shots[2].json?.linkSmsTo}»)`);
-for (const l of links) await call(`/intake/links/${l.id}`, { method: 'PATCH', body: { active: false }, bearer });
+await call(`/intake/links/${link.id}`, { method: 'PATCH', body: { active: false }, bearer });
 
 console.log('\n۸) سقفِ نرخ برای شناسهٔ ناموجود هم');
 const probe = `ratelimit${run}`;
