@@ -8,7 +8,7 @@ import { toEnDigits } from '../lib/identity.js';
 import InvoicePanel from './InvoicePanel.jsx';
 import { useConfig } from './config.jsx';
 import { hasService } from '../lib/profile.js';
-import { Alert, Close, Plus, Trash } from '../ui/icons.jsx';
+import { Alert, Close, External, Plus, Trash } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import MoneyInput from '../ui/MoneyInput.jsx';
@@ -869,10 +869,10 @@ function InvoiceAccount({ data, banks, visitId, onSaved, onToast }) {
     {/* بن‌بستِ بی‌توضیح نه: حسابی که نوعِ فاکتور ندارد در هیچ‌کدام از دو فهرست نمی‌آید (company-14). */}
     {paidBank && !hint && (
       <small>حسابِ پرداختِ این مراجعه ({paidBank.ownerName}{paidBank.bankName ? ` · ${paidBank.bankName}` : ''}) هنوز رسمی یا غیررسمی نشده؛
-        در <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حسابداری ← حساب‌های بانکی</Link> نوعش را بگذارید تا همین‌جا پیش‌فرض شود.</small>
+        در <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حساب‌های بانکیِ حسابداری <External width="12" height="12" /></Link> نوعش را بگذارید تا همین‌جا پیش‌فرض شود.</small>
     )}
     {!paidBank && shownType && !banks.some((b) => b.classification === shownType) && (
-      <small>حسابِ {shownType === 'formal' ? 'رسمی' : 'غیررسمی'} تعریف نشده — <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حسابداری ← حساب‌های بانکی</Link></small>
+      <small>حسابِ {shownType === 'formal' ? 'رسمی' : 'غیررسمی'} تعریف نشده — در <Link to="/app/accounting" target="_blank" rel="noopener noreferrer">حساب‌های بانکیِ حسابداری <External width="12" height="12" /></Link> تعریفش کنید.</small>
     )}
   </fieldset>;
 }
