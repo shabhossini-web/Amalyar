@@ -341,3 +341,6 @@
   color: var(--amber-text); background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .35);
   border-radius: 7px; padding: 2px 8px; line-height: 1.8;
 }
+
+/* ── منتخب‌ها بی‌اسلاتِ خالی (surgery-22) — تا ستاره‌ای نخورده، یک خطِ راهنما کنارِ «الصاقِ فرم». */
+.vf-pin-hint { flex: 1 1 200px; min-width: 0; font-size: 11.5px; font-weight: 600; line-height: 1.8; color: var(--text3); }

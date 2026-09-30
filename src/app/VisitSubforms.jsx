@@ -20,8 +20,6 @@ import './visit-subforms.css';
  * «درخواست/انحصاری»شان از `/config` (`labels.ts`) می‌آیند.
  */
 
-const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
-
 /**
  * کاتالوگِ زیرفرم‌ها — هر بار که فرم باز می‌شود از نو: فرم‌ساز ممکن است همین حالا عوضش کرده باشد.
  * `enabled`: میزِ اتاقِ عمل فقط وقتی پنجرهٔ الصاق باز شد می‌خوانَدش، نه با هر بازشدنِ کارت.
@@ -49,6 +47,9 @@ export const attachableOn = (item, kind) => !!item && item.active !== false && !
  * ⚠️ اسلاتِ پر روی فرمی که این‌جا الصاق‌شدنی نیست (درخواست در فرمِ عمل، یا خاموش در
  * فرم‌ساز) غیرفعال است با توضیح — پنهان‌کردنش جای اسلات‌ها را جابه‌جا می‌کرد. در فرمِ عمل منتخب
  * به تبِ فعال الصاق می‌شود (`pinPhase`).
+ * ⚠️ اسلاتِ **خالی** دیده نمی‌شود (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-22): سه دکمهٔ خط‌چینِ «+ فرمِ منتخب ۱/۲/۳»
+ * دقیقاً همان کارِ «الصاقِ فرم» را می‌کردند، در موبایل یک ردیفِ کامل می‌گرفتند و نمی‌گفتند «منتخب» چیست. تا
+ * ستاره‌ای نخورده یک خطِ راهنما جایشان است؛ منتخب‌ها همان‌جا که ستاره خوردند سرِ جای خودشان می‌نشینند.
  */
 export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached, pinPhase, onAttach, onPin, disabled, showAttach }) {
   return (
@@ -65,13 +66,7 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
           </button>
           {pins.map((key, i) => {
             const it = key ? byKey.get(key) : null;
-            if (!it) {
-              return (
-                <button key={`slot-${i}`} type="button" className="vf-pin" onClick={onAttach} disabled={disabled} data-pin-slot={i}>
-                  <Plus width="13" height="13" aria-hidden="true" />فرمِ منتخب {faNum(i + 1)}
-                </button>
-              );
-            }
+            if (!it) return null;
             const usable = attachableOn(it, kind);
             const on = attached.has(key);
             return (
@@ -87,6 +82,9 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
               </button>
             );
           })}
+          {!pins.some((key) => key && byKey.get(key)) && (
+            <small className="vf-pin-hint" data-pin-hint>فرم‌هایی را که در فهرستِ الصاق ستاره بزنید این‌جا یک‌لمسی می‌شوند</small>
+          )}
         </div>
       )}
     </div>
