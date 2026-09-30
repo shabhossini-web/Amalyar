@@ -463,3 +463,27 @@
 .ik .vn .vc-btn { font-size: 14px; min-height: 44px; }
 .ik .vn-rec time, .ik .vn-ghost, .ik .vn-err { font-size: 13.5px; }
 .ik .vn-ghost { min-height: 44px; }
+
+/* ── «چه پیش رو دارید» بالای ثبت‌نام (بازبینیِ UX، بندِ ۱۰۷) ──
+   همان شماره‌ها و برچسب‌های مرحله‌نمای فرم، ولی فشرده و پیچنده — ستونِ چهار ردیفه روی گوشی فیلدها را
+   از دید بیرون می‌برد. */
+.ik-ahead {
+  display: grid; gap: 8px; padding: 12px 13px; border-radius: 14px;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.ik-ahead > b { font-size: 14.5px; font-weight: 800; }
+.ik-ahead ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ik-ahead li {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 12px; border-radius: 99px;
+  font-size: 13.5px; color: var(--text2);
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.ik-ahead li i {
+  display: grid; place-items: center; width: 20px; height: 20px; flex: 0 0 auto; border-radius: 99px;
+  font-style: normal; font-size: 12.5px; font-weight: 800; background: rgba(var(--veil-rgb), .08);
+}
+.ik-ahead li.now { color: var(--text1); border-color: rgba(var(--brand-2-rgb), .5); }
+.ik-ahead li.now i { color: #fff; background: linear-gradient(135deg, var(--brand-2), var(--brand-mid)); }
+.ik-ahead p { margin: 0; display: flex; align-items: flex-start; gap: 7px; font-size: 14px; line-height: 1.8; color: var(--text2); }
+.ik-ahead p svg { flex: 0 0 auto; margin-top: 5px; color: var(--brand-text); }
+.ik-ahead .ik-fee b { color: var(--text1); font-weight: 800; }

@@ -470,7 +470,18 @@ export class IntakeService {
     if (!link.active) throw new ForbiddenException('این لینک غیرفعال شده است');
     /* نام و تلفنِ مطب/شرکت (بازبینیِ UX، بندِ ۹۲): بیمار از لینکِ «مطب دکتر رحیمی» می‌آید و
        تا دیروز بالای فرم «عمل‌یار» می‌دید که کدِ ملی و ۴۰ میلیون می‌خواهد — شبیهِ کلاه‌برداری. */
-    return { title: link.title, amount: link.amount, ...(await this.portal.publicFace()) };
+    /* «چه پیش رو دارید» (بازبینیِ UX، بندِ ۱۰۷): صفحهٔ اولِ ثبت‌نام باید مسیرِ **همین** لینک را بگوید —
+       مراجعه می‌سازد؟ نوبت دارد؟ واریز دارد؟ — با همان قاعده‌های `publicView` و `fill` (مشتقِ سرور،
+       قانونِ ۱۵)، نه حدسِ مرورگر از مبلغ. */
+    const scope = await this.formScope(link.formId);
+    const makesVisit = scope !== 'record';
+    const hasPaymentBox = !!(await this.formView(link.formId))?.fields.some((x: any) => x.type === 'payment');
+    const payment = link.amount > 0 || hasPaymentBox;
+    return {
+      title: link.title, amount: link.amount,
+      flow: { makesVisit, booking: makesVisit && (await this.bookingOn()), payment, review: makesVisit || payment },
+      ...(await this.portal.publicFace()),
+    };
   }
 
   /**
@@ -852,6 +863,9 @@ export class IntakeService {
       form: await this.formView(row.formId, row.extraFormIds ?? []),
       token: row.token,
       status: row.status,
+      /* بیمار از صفحهٔ ثبت‌نام آمده (نه فرمِ مستقیمِ کارکنان) — مرحله‌نمای فرم «مشخصات»ِ انجام‌شده را
+         اولِ کار نشان می‌دهد تا شماره‌ها با «چه پیش رو دارید»ِ همان صفحه یکی باشند (بندِ ۱۰۷). */
+      registered: row.linkId !== null,
       /* ⚠️ نوبت‌دهی فقط وقتی در صفحهٔ بیمار ظاهر می‌شود که نصب برنامهٔ کاری
          داشته باشد. نصبی که ندارد باید دقیقاً مثلِ دیروز کار کند — نه اینکه
          به گامی برسد که هیچ روزی برای انتخاب ندارد.

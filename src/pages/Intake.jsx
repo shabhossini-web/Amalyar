@@ -6,7 +6,7 @@ import { faDate, isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jala
 import { isValidNationalId } from '../lib/identity.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
-import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Info, Pencil, Refresh, Upload } from '../ui/icons.jsx';
+import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Info, Lock, Money, Pencil, Refresh, Upload } from '../ui/icons.jsx';
 import { PATIENT } from '../lib/terms.js';
 import DynForm, { dynErrors } from '../ui/DynForm.jsx';
 import HospitalLookup from '../ui/HospitalLookup.jsx';
@@ -180,8 +180,9 @@ function Register() {
   if (err && !link) return <Shell brand={fallback?.brand}><p className="ik-bad"><Alert width="16" height="16" /> {err}</p></Shell>;
 
   return (
-    <Shell brand={link?.brand} title={link?.title} amount={link?.amount}>
+    <Shell brand={link?.brand} title={link?.title}>
       {resume ? <Resume token={token} onBack={() => setResume(false)} /> : (<>
+      {link && <Ahead link={link} />}
       <button type="button" className="ik-resume-toggle" onClick={() => setResume(true)}>
         قبلاً ثبت‌نام کرده‌اید؟ <b>ادامه با شمارهٔ موبایل</b>
       </button>
@@ -376,16 +377,66 @@ const receiptsOf = (d) => {
  * صفِ بررسی هم ندارد (سرور مستقیم تأیید می‌کند)، پس مرحلهٔ آخرش «ثبت شد» است.
  */
 function stepsFor(d) {
-  const S = PATIENT.intake.step;
   const makesVisit = d.makesVisit !== false;
   const hasPaymentBox = !!d.form?.fields?.some((x) => x.type === 'payment');
   const needsReceipt = (d.payable ?? d.amount ?? 0) > 0 || hasPaymentBox
     || d.status === 'pending_payment' || receiptsOf(d).length > 0;
   const needsReview = makesVisit || needsReceipt || d.status === 'pending_approval';
+  /* بیماری که از صفحهٔ ثبت‌نام آمده «مشخصات» را پشتِ سر گذاشته — همان شماره‌هایی که آن صفحه گفت. */
+  return [...(d.registered ? [REGISTER_STEP] : []), ...flowSteps({ makesVisit, needsReceipt, needsReview })];
+}
+
+/** مرحلهٔ صفحهٔ ثبت‌نام — اولِ «چه پیش رو دارید» و، برای بیمارِ همان صفحه، اولِ مرحله‌نمای فرم. */
+const REGISTER_STEP = { key: 'register', label: 'مشخصات' };
+
+/** مرحله‌های بعد از ثبت‌نام از سه واقعیتِ مسیر — مشترکِ مرحله‌نمای فرم و «چه پیش رو دارید». */
+function flowSteps({ makesVisit, needsReceipt, needsReview }) {
+  const S = PATIENT.intake.step;
   const steps = [{ key: 'pending_fill', label: makesVisit ? S.fill : S.answer }];
   if (needsReceipt) steps.push({ key: 'pending_payment', label: S.receipt });
   steps.push(needsReview ? { key: 'pending_approval', label: S.review } : { key: 'approved', label: S.saved });
   return steps;
+}
+
+/** «۴۰ میلیون تومان» برای مبلغِ رُند — بیمار هشت رقم را نمی‌شمارد؛ مبلغِ غیرِرُند کامل نوشته می‌شود. */
+const feeFa = (n) => (n >= 1_000_000 && n % 100_000 === 0 ? `${faNum(n / 1_000_000)} میلیون تومان` : `${faNum(n)} تومان`);
+
+/**
+ * «چه پیش رو دارید» بالای صفحهٔ ثبت‌نام (بازبینیِ UX، بندِ ۱۰۷): مرحله‌ها، مبلغ با برچسب و زمانِ پرداخت،
+ * و اینکه کدِ ملی و تاریخِ تولد برای چیست و نزدِ کیست. تا دیروز اولین چیزِ صفحهٔ شرکت چیپِ بی‌برچسبِ
+ * «۴۰٬۰۰۰٬۰۰۰ تومان» بود و مرحله‌نما فقط از صفحهٔ دوم پیدا می‌شد.
+ */
+function Ahead({ link }) {
+  const flow = link.flow;
+  const steps = flow
+    ? [REGISTER_STEP, ...flowSteps({ makesVisit: flow.makesVisit, needsReceipt: flow.payment, needsReview: flow.review })]
+    : [REGISTER_STEP];
+  const who = link.brand?.name;
+  return (
+    <section className="ik-ahead" aria-labelledby="ik-ahead-t">
+      <b id="ik-ahead-t">چه پیش رو دارید</b>
+      {steps.length > 1 && (
+        <ol>
+          {steps.map((s, i) => (
+            <li key={s.key} className={i === 0 ? 'now' : undefined} aria-current={i === 0 ? 'step' : undefined}>
+              <i>{faNum(i + 1)}</i>{s.label}
+            </li>
+          ))}
+        </ol>
+      )}
+      {flow?.booking && <p><Calendar width="16" height="16" /> <span>روزِ نوبت را در مرحلهٔ بعد خودتان انتخاب می‌کنید.</span></p>}
+      {link.amount > 0 && (
+        <p className="ik-fee">
+          <Money width="16" height="16" />
+          <span>هزینهٔ خدمت: <b>{feeFa(link.amount)}</b> — پس از تکمیلِ فرم پرداخت می‌شود.</span>
+        </p>
+      )}
+      <p>
+        <Lock width="16" height="16" />
+        <span>کدِ ملی و تاریخِ تولد فقط برای تشکیلِ پرونده است؛ اطلاعاتِ شما نزدِ {who || 'مطب'} می‌ماند.</span>
+      </p>
+    </section>
+  );
 }
 
 function Form() {
@@ -1080,7 +1131,8 @@ function Shell({ brand, title, amount, children, footCall = true }) {
             <b>{brand?.name || 'ثبت‌نام'}</b>
             {title && <small>{title}</small>}
           </div>
-          {amount > 0 && <span className="ik-amount">{faNum(amount)} تومان</span>}
+          {/* با برچسب (بازبینیِ UX، بندِ ۱۰۷): چیپِ تنهای «۴۰٬۰۰۰٬۰۰۰ تومان» نمی‌گفت این چه مبلغی است. */}
+          {amount > 0 && <span className="ik-amount">هزینه: {feeFa(amount)}</span>}
         </header>
         {children}
         <PublicFoot brand={brand} call={footCall} />
