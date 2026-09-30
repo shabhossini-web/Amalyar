@@ -32,11 +32,20 @@ const ORDER = [{ priority: 'desc' as const }, { dueAt: 'asc' as const }, { id: '
 const SETTLE_FRESH_MS = 3600 * 1000;
 
 /**
- * **کارِ دستی** («یادداشتِ کاری» از `POST /work`) در برابرِ کارِ **رویدادی** (همهٔ نوع‌های دیگر).
- * کارِ رویدادی با انجامِ خودِ چیز بسته می‌شود (رویدادِ `visit.done`، `report.uploaded`،
- * `intake.approved` …)، نه با دکمهٔ «انجام شد» روی یادآوری‌اش.
+ * کارهایی که **خودشان کارِ دستِ آدم‌اند** و «انجام شد» دارند، در برابرِ کارِ **رویدادی** که با
+ * انجامِ خودِ چیز بسته می‌شود (رویدادِ `visit.done`، `report.uploaded`، `intake.approved` …)،
+ * نه با دکمهٔ «انجام شد» روی یادآوری‌اش.
+ *
+ * - `manual` — یادداشتِ کاری (`POST /work`).
+ * - `call_patient` («تماس با بیمارِ غایب») و `follow_up_unanswered` («تماس با بیمار — فرمِ پیگیری
+ *   بی‌پاسخ») — خودِ کار **تماس** است و هیچ رویدادی در سامانه تماس را ثبت نمی‌کند. ⚠️ بازبینیِ
+ *   خصمانه (R4): با قاعدهٔ «فقط یادداشتِ دستی» تنها راهِ بستنشان «بستن بدونِ اقدام» مانده بود —
+ *   یعنی منشی‌ای که تماس گرفته بود باید می‌نوشت «کاری نکردم»، و یادآوریِ پیگیری هر هفته برمی‌گشت.
+ *   «انجام شد»ِ این دو `closedBy: 'hand'` می‌گیرد و آشکارساز دیگر بازش نمی‌کند (`upsertWork`).
  */
-const isManual = (row: { type?: string | null }) => (row?.type ?? 'manual') === 'manual';
+const HAND_DONE = new Set(['manual', 'call_patient', 'follow_up_unanswered']);
+const isManual = (row: { type?: string | null }) => HAND_DONE.has(row?.type ?? 'manual');
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * برچسبِ فارسیِ نقشِ مالک. `OWNER_ROLE_FA` نقش‌هایی را دارد که لایهٔ کار **صادر**
@@ -465,10 +474,15 @@ export class WorkService {
         if (!isManual(row) && !dismissed) {
           throw new BadRequestException('این کار با انجامِ خودش بسته می‌شود؛ اگر فقط می‌خواهید یادآوری کنار برود، «بستن بدونِ اقدام» را بزنید');
         }
+        /* `outcome`: «کنار گذاشته شد» (`dismiss`) از «انجام شد» جدا — یادداشتِ کاری همان خروجیِ
+           آزادش را نگه می‌دارد؛ کارِ تماس `closedBy: 'hand'` می‌گیرد تا آشکارساز بازش نکند. */
+        const outcome = dismissed ? { closedBy: 'dismiss' }
+          : (row.type ?? 'manual') === 'manual' ? body.outcome ?? undefined
+            : { ...(isObj(body.outcome) ? body.outcome : {}), closedBy: 'hand' };
         /* مالک همان می‌ماند (کارِ سارا که سوپرادمین بست، هنوز «کارِ سارا» است)؛ «چه کسی بست» در `completedById`. */
         data = {
           state: 'done', completedAt: new Date(), completedById: user.id,
-          outcome: isManual(row) ? body.outcome ?? undefined : { closedBy: 'dismiss' },
+          outcome,
           ownerAccountId: row.ownerAccountId ?? user.id,
         };
         break;
