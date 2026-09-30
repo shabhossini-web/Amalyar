@@ -225,7 +225,9 @@ export default function NeuroInvoiceDialog({ visit, billing, intent, onClose, on
                   ? 'با ثبت، این قلم برداشته می‌شود و خدماتِ بالا جایش می‌نشینند. پرداخت‌های ثبت‌شده سرِ جایشان می‌مانند؛ اگر جمعِ تازه از پرداخت‌شده کمتر شود، مابه‌التفاوت «اضافه‌پرداخت» است و باید برگردانده یا تسویه شود.'
                   : choice === 'keep'
                     ? 'هر دو در جمعِ صورت‌حساب می‌آیند — فقط وقتی درست است که این قلم خدمتِ دیگری باشد، وگرنه یک خدمت دو بار حساب می‌شود.'
-                    : 'برای این مراجعه پرداخت ثبت شده و هر دو راه جمع و مانده را عوض می‌کنند؛ پیامدِ هرکدام را ببینید و یکی را انتخاب کنید.'}
+                    : billing?.paid > 0
+                      ? 'برای این مراجعه پرداخت ثبت شده و هر دو راه جمع و مانده را عوض می‌کنند؛ پیامدِ هرکدام را ببینید و یکی را انتخاب کنید.'
+                      : 'پیامدِ هر راه را روی جمع و مانده ببینید و یکی را انتخاب کنید.'}
               </p>
             </section>
           )}
@@ -270,8 +272,10 @@ export default function NeuroInvoiceDialog({ visit, billing, intent, onClose, on
           <div className="nv-foot">
             <div className="nv-total"><span>جمعِ خدمات</span><b>{quote ? `${fmtMoney(quote.total)} تومان` : '—'}</b></div>
             {/* صورت‌حسابِ پس از ثبت (DF2) — تا کاربر پیش از ثبت ببیند جمعِ کل و مانده (یا اضافه‌پرداخت) چه می‌شود. */}
+            {/* اعلامِ صفحه‌خوان از ظرفِ همیشگی (همان قاعدهٔ DF15)؛ بلوکِ دیدنیِ زیر با هر محاسبه از نو سوار می‌شود. */}
+            <p className="db-sr" role="status" aria-live="polite">{after ? `جمعِ صورت‌حساب پس از ثبت ${fmtMoney(after.total)} تومان؛ ${payText(after)}` : ''}</p>
             {after && (
-              <div className="nv-after" aria-live="polite">
+              <div className="nv-after">
                 <span>جمعِ صورت‌حساب پس از ثبت</span>
                 <b>
                   {after.total === bill.before.total ? <>{fmtMoney(after.total)} تومان <small>بی‌تغییر</small></> : (
