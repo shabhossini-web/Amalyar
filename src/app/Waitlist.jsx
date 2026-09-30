@@ -31,6 +31,9 @@ export default function Waitlist() {
   const states = useStatusList('waitlist');
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
+  /* نصبی که این فهرست را ندارد (شرکت) — سرور ۴۰۴ می‌دهد. بازبینیِ UX ۱۴۰۵/۰۷ — shell-06: کادرِ قرمز و
+     «دوباره»ای که هرگز درست نمی‌شد جایش را به یک توضیحِ آرام می‌دهد. */
+  const [absent, setAbsent] = useState(false);
   const [tab, setTab] = useState('open');
   const [surgeonId, setSurgeonId] = useState(null);
   const [toast, setToast] = useState('');
@@ -44,7 +47,9 @@ export default function Waitlist() {
   useEffect(() => { if (!toast) return undefined; const x = setTimeout(() => setToast(''), 2600); return () => clearTimeout(x); }, [toast]);
 
   const load = useCallback(async () => {
-    try { setData(await api('/waitlist')); setErr(''); } catch (e) { setErr(e.message); }
+    try { setData(await api('/waitlist')); setErr(''); setAbsent(false); } catch (e) {
+      if (e.status === 404) { setAbsent(true); setErr(''); } else setErr(e.message);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
   const things = useThings({ onChanged: load, toast: (m) => setToast(m) });
@@ -108,10 +113,12 @@ export default function Waitlist() {
         <div className="wl-title">
           <div>
             <h1><WaitlistIcon width="20" height="20" aria-hidden="true" /> فهرستِ انتظارِ عمل</h1>
-            <p>
-              بیمارانی که در {t.visit} «کاندیدای جراحی» شده‌اند و هنوز عمل نشده‌اند — طولانی‌ترین انتظار بالا.
-              {data && !data.team ? ' فقط بیمارانِ خودتان.' : ''}
-            </p>
+            {!absent && (
+              <p>
+                بیمارانی که در {t.visit} «کاندیدای جراحی» شده‌اند و هنوز عمل نشده‌اند — طولانی‌ترین انتظار بالا.
+                {data && !data.team ? ' فقط بیمارانِ خودتان.' : ''}
+              </p>
+            )}
           </div>
           {data?.team && surgeons.length > 1 && (
             <div className="wl-who">
@@ -124,6 +131,18 @@ export default function Waitlist() {
           )}
         </div>
       </header>
+
+      {absent && (
+        <section className="wl-absent" aria-labelledby="wl-absent-t">
+          <span className="wl-absent-ic" aria-hidden="true"><WaitlistIcon width="22" height="22" /></span>
+          <b id="wl-absent-t">این فهرست مخصوصِ مطب است</b>
+          <p>
+            فهرستِ انتظارِ عمل بیمارانی را نشان می‌دهد که پزشکِ مطب در ویزیت «کاندیدای جراحی»شان کرده است.
+            در این مجموعه ویزیتِ مطب ثبت نمی‌شود، پس این‌جا چیزی برای پیگیری نیست.
+          </p>
+          <Link to="/app" className="wl-absent-back"><Back width="15" height="15" aria-hidden="true" /> بازگشت به سامانه</Link>
+        </section>
+      )}
 
       {err && (
         <div className="wl-err" role="alert">
@@ -148,9 +167,9 @@ export default function Waitlist() {
         </section>
       )}
 
-      <Tabs label="وضعیتِ انتظار" variant="scroll" className="wl-tabs" value={tab} onChange={setTab} items={tabs} />
+      {!absent && <Tabs label="وضعیتِ انتظار" variant="scroll" className="wl-tabs" value={tab} onChange={setTab} items={tabs} />}
 
-      {data === null && !err && (
+      {data === null && !err && !absent && (
         <div className="wl-list" aria-busy="true" aria-label="در حالِ بارگذاری">
           {[0, 1, 2].map((i) => <div key={i} className="wl-row wl-skel" aria-hidden="true"><i /><i /><i /></div>)}
         </div>

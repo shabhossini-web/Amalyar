@@ -178,3 +178,23 @@
   .wl-toast, .wl-act { transition: none; }
   .wl-skel i { animation: none; }
 }
+
+/* نصبی که این فهرست را ندارد (shell-06) — توضیحِ آرام، نه خطا: رنگِ برند و متنِ عادی، بی‌«دوباره». */
+.wl-absent {
+  max-width: 560px; margin: 28px auto 0; padding: 26px 22px; border-radius: 18px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: var(--row-bg); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+}
+.wl-absent-ic {
+  width: 48px; height: 48px; display: grid; place-items: center; border-radius: 16px; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .3);
+}
+.wl-absent b { font-size: 15.5px; font-weight: 900; color: var(--text1); }
+.wl-absent p { margin: 0; font-size: 13px; line-height: 2; color: var(--text2); }
+.wl-absent-back {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 4px; padding: 0 16px;
+  border-radius: 12px; font-size: 13px; font-weight: 800; text-decoration: none;
+  color: var(--text1); background: var(--ghost-bg); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.wl-absent-back:hover { background: var(--ghost-bg-hover); }
+.wl-absent-back:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
