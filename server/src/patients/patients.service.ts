@@ -523,7 +523,7 @@ export class PatientsService {
    * اگر خروجی شرطِ خودش را می‌ساخت، اولین فیلترِ تازه در یکی اضافه می‌شد و در
    * دیگری نه؛ کاربر «همین فهرست» را خروجی می‌گرفت و چیزِ دیگری تحویل می‌گرفت.
    */
-  private visitWhere(f: VisitFilter, user?: any) {
+  private visitWhere(f: VisitFilter, user?: any, clinic = false) {
     const { q, status, kind } = f;
     const where: any = {};
     if (status && status !== 'all') where.opStatus = status;
@@ -538,15 +538,18 @@ export class PatientsService {
     const and: any[] = [];
     if (f.procedureTypeId) and.push(visitHasProcedure(f.procedureTypeId));
     if (f.diagnosisId) and.push(visitHasDiagnosis(f.diagnosisId));
-    /* مرحلهٔ جامانده — تعریفِ «گزارش» همان `work-detectors` است (سندِ گزارش، یا در مطب شرحِ عمل)
-       و «فاکتور» سندِ فاکتورِ جاری (جایگزین‌نشده). گزارش و فاکتور فقط برای عملِ **انجام‌شده** معنا
+    /* مرحلهٔ جامانده — تعریفِ «گزارش» همان `work-detectors` است (سندِ گزارش، و **فقط در مطب** شرحِ عمل
+       هم؛ DF7) و «فاکتور» سندِ فاکتورِ جاری (جایگزین‌نشده). گزارش و فاکتور فقط برای عملِ **انجام‌شده** معنا
        دارند؛ عملِ هفتهٔ بعد که هنوز گزارش ندارد «جامانده» نیست. */
     if (f.missing === 'tech') and.push({ techId: null, opStatus: { not: 'cancelled' } });
     if (f.missing === 'report') {
       and.push({
         opStatus: 'done',
         documents: { none: { category: 'report', deletedAt: null } },
-        clinicalNotes: { none: { kind: 'op', replacedAt: null } },
+        /* ⚠️ در شرکت «گزارشِ خدمت» سندی است که کارشناس بارگذاری می‌کند؛ شرحِ عملِ جراح گزارشِ شرکت نیست.
+           تا دیروز این شرط برای همه بود و عملی با شرحِ عمل ولی بی‌سندِ گزارش از «بی‌گزارش» می‌افتاد و نشانش
+           «رسیده» بود، در حالی که `work-detectors` همان عمل را «گزارش نرسیده» می‌دانست. */
+        ...(clinic ? { clinicalNotes: { none: { kind: 'op', replacedAt: null } } } : {}),
       });
     }
     if (f.missing === 'invoice') and.push({ opStatus: 'done', invoices: { none: { supersededAt: null } } });
@@ -601,7 +604,8 @@ export class PatientsService {
   }
 
   async listVisits(f: VisitFilter = {}, user?: any) {
-    const scoped = this.visitWhere(f, user);
+    const clinic = (await this.forms.workflow()) === 'clinic';
+    const scoped = this.visitWhere(f, user, clinic);
 
     const pageSize = clamp(f.pageSize ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
     const page = Math.max(1, f.page ?? 1);
@@ -627,7 +631,7 @@ export class PatientsService {
         /* ⚠️ `.map(enrich)`ِ خالی ننویس: `Array.map` ایندکس را به‌عنوانِ
            آرگومانِ دوم می‌فرستد و آن‌وقت یک **عدد** به‌جای نگاشتِ نوع‌ها
            می‌رسید. TypeScript گرفتش؛ در JS بی‌صدا `undefined` می‌داد. */
-        rows: await this.withStages(pageIds.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds))),
+        rows: await this.withStages(pageIds.map((id) => byId.get(id)).filter(Boolean).map((v) => enrich(v, kinds)), clinic),
         total, page, pageSize,
         pages: Math.max(1, Math.ceil(total / pageSize)),
         sort: moneySort ? f.sort : DEFAULT_SORT,
@@ -653,7 +657,7 @@ export class PatientsService {
     const kinds = await this.forms.kindMap();
 
     return {
-      rows: await this.withStages(rows.map((v) => enrich(v, kinds))),
+      rows: await this.withStages(rows.map((v) => enrich(v, kinds)), clinic),
       total,
       page,
       pageSize,
@@ -667,14 +671,17 @@ export class PatientsService {
   /**
    * **نشان‌های مرحله** برای ردیف‌های یک صفحه (بازبینیِ UX، global-04/company-13): کارشناس، ساعت،
    * گزارش، فاکتور — تا مدیر بی‌بازکردنِ تک‌تکِ کارت‌ها ببیند کدام عمل چه کم دارد.
-   * ⚠️ سه کوئری برای کلِ صفحه، نه N تا؛ تعریفِ «گزارش» همان `work-detectors` (سند یا شرحِ عمل).
+   * ⚠️ سه کوئری برای کلِ صفحه، نه N تا؛ تعریفِ «گزارش» همان `work-detectors` (سند، و فقط در مطب شرحِ عمل —
+   * DF7).
    */
-  private async withStages<T extends { id: number; techId?: number | null; opStartTime?: string | null }>(rows: T[]) {
+  private async withStages<T extends { id: number; techId?: number | null; opStartTime?: string | null }>(rows: T[], clinic: boolean) {
     const ids = rows.map((r) => r.id);
     if (!ids.length) return rows;
     const [docs, notes, invoices] = await Promise.all([
       this.prisma.document.findMany({ where: { visitId: { in: ids }, category: 'report', deletedAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
-      this.prisma.clinicalNote.findMany({ where: { visitId: { in: ids }, kind: 'op', replacedAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
+      clinic
+        ? this.prisma.clinicalNote.findMany({ where: { visitId: { in: ids }, kind: 'op', replacedAt: null }, select: { visitId: true }, distinct: ['visitId'] })
+        : Promise.resolve([] as { visitId: number | null }[]),
       this.prisma.invoiceDocument.findMany({ where: { visitId: { in: ids }, supersededAt: null }, select: { visitId: true }, distinct: ['visitId'] }),
     ]);
     const reported = new Set([...docs, ...notes].map((d) => d.visitId));
@@ -729,7 +736,7 @@ export class PatientsService {
    * فرض می‌کند و رویش تصمیم می‌گیرد.
    */
   async exportVisits(f: VisitFilter = {}, user?: any) {
-    const scoped = this.visitWhere(f, user);
+    const scoped = this.visitWhere(f, user, (await this.forms.workflow()) === 'clinic');
 
     // ⚠️ خروجی باید **همان** فیلتر و سورتِ فهرست را بفهمد، از جمله مالی‌ها.
     // اگر این‌جا مسیرِ مالی نمی‌آمد، CSVِ «فقط بدهکار» همهٔ مراجعات را
