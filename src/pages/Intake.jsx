@@ -69,6 +69,11 @@ function Register() {
   const [sources, setSources] = useState([]);
   /* «قبلاً ثبت‌نام کرده‌اید؟» — ادامه با موبایل + کد به‌جای پرکردنِ دوبارهٔ فرم (بازبینیِ UX، بندِ ۱۰۳). */
   const [resume, setResume] = useState(false);
+  /* پاسخِ «ثبت‌نامِ باز هست» (بستهٔ PS، PS1): سرور دیگر ثبت‌نامِ باز را تحویل نمی‌دهد و صفحه با همین به نمای
+     «ادامه با موبایل + کد» می‌رود — `smsTo` فقط برچسبِ ثابتِ «شمارهٔ ثبت‌شده در پرونده» است یا هیچ. */
+  const [resumeHit, setResumeHit] = useState(null);
+  /* پرسشِ امنیتی با همان ثبت‌نام مصرف شد؛ برگشت به فرم پرسشِ تازه می‌خواهد. */
+  const capSpent = useRef(false);
   /* فوکوس با عوض‌شدنِ نما (PF13): رفتن ← کادرِ موبایلِ «ادامه» (autoFocus)؛ برگشت ← همان دکمه‌ای که بازش کرد. */
   const resumeBtn = useRef(null);
   const resumeBack = useRef(false);
@@ -171,7 +176,16 @@ function Register() {
       // بیمار را به فرمِ خالیِ ثبت‌نام برنگرداند.
       // هشدار: `navigate` نه `location.replace`: بارگذاریِ کاملِ اپ روی گوشیِ کند یعنی چند
       // ثانیه صفحهٔ سفید و دانلودِ دوبارهٔ همهٔ چانک‌ها برای رفتن به صفحهٔ بعدیِ همین اپ.
-      /* شمارهٔ پوشیده‌ای که لینکِ ادامه به آن پیامک شد — صفحهٔ فرم همان را می‌گوید. */
+      /* هشدار — ثبت‌نامِ باز با همین کدِ ملی و نامِ خانوادگی (بستهٔ PS، PS1): نه توکنی می‌آید نه داده‌ای؛ ادامه
+         فقط با موبایل + کدِ شمارهٔ پرونده. شمارهٔ تایپ‌شده در کادرِ «ادامه» پیش‌پر می‌شود. */
+      if (r?.resume) {
+        capSpent.current = true;
+        setResumeHit({ phone: toEnDigits(f.phone).replace(/[^0-9]/g, ''), smsTo: r.linkSmsTo ?? null });
+        setResume(true);
+        setBusy(false);
+        return;
+      }
+      /* «شمارهٔ ثبت‌شده در پرونده» — جایی که لینکِ ادامه پیامک شد؛ صفحهٔ فرم همان را می‌گوید. */
       navigate(`/f/${r.token}`, { replace: true, state: { smsTo: r.linkSmsTo ?? null } });
     } catch (e) {
       setErr(e.message); setErrStatus(e.status ?? 0); setBusy(false);
@@ -202,7 +216,13 @@ function Register() {
 
   return (
     <Shell brand={link?.brand} title={link?.title}>
-      {resume ? <Resume token={token} onBack={() => { resumeBack.current = true; setResume(false); }} /> : (<>
+      {resume ? (
+        <Resume token={token} hit={resumeHit}
+                onBack={() => {
+                  resumeBack.current = true; setResumeHit(null); setResume(false);
+                  if (capSpent.current) { capSpent.current = false; loadCap(); }
+                }} />
+      ) : (<>
       {link && <Ahead link={link} />}
       <button type="button" className="ik-resume-toggle" ref={resumeBtn} onClick={() => setResume(true)}>
         قبلاً ثبت‌نام کرده‌اید؟ <b>ادامه با شمارهٔ موبایل</b>
@@ -293,9 +313,9 @@ function Register() {
  * کرده، تا دیروز فقط با پرکردنِ دوبارهٔ همهٔ فیلدها + کپچا برمی‌گشت. پاسخِ «ارسالِ کد» همیشه یکی است
  * (سرور وجودِ ثبت‌نام را لو نمی‌دهد)؛ کدِ درست مستقیم به `/f/…` می‌برد.
  */
-function Resume({ token, onBack }) {
+function Resume({ token, hit, onBack }) {
   const navigate = useNavigate();
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(hit?.phone ?? '');
   const [code, setCode] = useState('');
   const [step, setStep] = useState('phone');
   const [busy, setBusy] = useState(false);
@@ -335,9 +355,21 @@ function Resume({ token, onBack }) {
   return (
     <section className="ik-resume" aria-labelledby="ik-resume-h">
       <h2 id="ik-resume-h">ادامهٔ ثبت‌نامِ قبلی</h2>
+      {/* از ثبت‌نام آمده (PS1): چرا فرم باز نشد و راهِ ادامه — بی هیچ رقمی از شمارهٔ پرونده. */}
+      {hit && step === 'phone' && (
+        <div className="ik-note ik-resume-hit" role="status">
+          <Info width="16" height="16" aria-hidden="true" />
+          <span>
+            با همین کدِ ملی و نامِ خانوادگی ثبت‌نامِ نیمه‌تمامی روی این لینک هست. برای حفظِ اطلاعاتِ بیمار، فقط با
+            شمارهٔ موبایلِ ثبت‌شده در پرونده ادامه پیدا می‌کند
+            {hit.smsTo ? ` — لینکِ ادامه همین حالا به ${hit.smsTo} پیامک شد؛ از همان پیامک برگردید یا همین‌جا کدِ تأیید بگیرید.` : '؛ شماره را بنویسید تا کدِ تأیید پیامک شود.'}
+            {' '}اگر به آن شماره دسترسی ندارید، با ما تماس بگیرید.
+          </span>
+        </div>
+      )}
       {step === 'phone' ? (
         <form className="ik-resume-form" onSubmit={send}>
-          <p className="ik-hint">شماره‌ای را که با آن ثبت‌نام کرده‌اید بنویسید؛ یک کدِ ۶رقمی برایتان پیامک می‌شود.</p>
+          {!hit && <p className="ik-hint">شماره‌ای را که با آن ثبت‌نام کرده‌اید بنویسید؛ یک کدِ ۶رقمی برایتان پیامک می‌شود.</p>}
           {/* autoFocus: نمای تازه بی‌فوکوس بود و صفحه‌خوان/کیبورد روی دکمه‌ای می‌ماند که دیگر نیست (PF13). */}
           <Field label="شمارهٔ موبایل" type="tel" dir="ltr" inputMode="numeric" autoComplete="tel" enterKeyHint="send" autoFocus
                  placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} required />

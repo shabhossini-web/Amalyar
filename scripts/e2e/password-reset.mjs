@@ -212,7 +212,7 @@ sql(`UPDATE otp_codes SET attempts = 0 WHERE phone = '${guess.phone}' AND purpos
 const ninth = await call('/auth/password/reset', { body: { identifier: guess.phone, code: gCode, password: 'guess-pass-1' }, ip: '10.64.0.1' });
 ok(ninth.status === 400 && msg(ninth) === msg(wrong), `حدسِ نهم با موبایلِ همان حساب — حتی با کدِ درست — رد می‌شود (${ninth.status})`, msg(ninth));
 
-console.log('\n۷) PF7 و PF12 — پیامکِ «لینکِ ادامه» پس از ثبت‌نامِ بیمار');
+console.log('\n۷) PS1، PF7 و PF12 — ثبت‌نامِ بازِ بیمار و پیامکِ «لینکِ ادامه»');
 /** کدِ ملیِ معتبر (رقمِ کنترلی) — هر اجرا کدهای خودش. */
 const nid = (seed) => {
   const base = String(seed % 1_000_000_000).padStart(9, '0');
@@ -228,12 +228,39 @@ const register = async (link, who) => call(`/public/intake/link/${link.token}/re
 const notices = async (phone) => { await later(400); return Number(sql(`SELECT count(*) FROM reminders WHERE phone = '${phone}' AND kind = 'notice'`)); };
 /* PF12 — پرونده با شمارهٔ P ساخته شده؛ کسی کدِ ملی و نامِ خانوادگیِ درست را با شمارهٔ دیگری تایپ می‌کند. پیامک
    به شمارهٔ **پرونده** می‌رود (درست)، ولی پاسخ نباید چهار رقمِ اول و سه رقمِ آخرِ آن را به او نشان دهد. */
+const ON_RECORD = 'شمارهٔ ثبت‌شده در پرونده';
 const recPhone = `0939${run}3`;
 const recNid = nid(Number(run) * 10 + 1);
 const own = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: recPhone });
-ok(own.status < 300 && own.json?.linkSmsTo === `${recPhone.slice(0, 4)}…${recPhone.slice(-3)}`, `شمارهٔ تایپ‌شده همان شمارهٔ پرونده ← پوشیده‌اش (${own.status} «${own.json?.linkSmsTo}»)`, msg(own));
+ok(own.status < 300 && !!own.json?.token, `صاحبِ پرونده ثبت‌نامِ تازه و توکنِ فرمش را می‌گیرد (${own.status})`, msg(own));
+/* PS1: برچسب **همیشه** ثابت است، حتی وقتی شمارهٔ تایپ‌شده همان شمارهٔ پرونده است — پوشیده‌اش فقط وقتِ برابری
+   برمی‌گشت، پس خودش تأییدِ حدسِ شماره بود. */
+ok(own.json?.linkSmsTo === ON_RECORD, `PS1: «لینک به … پیامک شد» برچسبِ ثابت است، نه ${recPhone.slice(0, 4)}… («${own.json?.linkSmsTo}»)`);
+/* PS1 — غریبه‌ای که کدِ ملی و نامِ خانوادگیِ درست را با شمارهٔ خودش تایپ می‌کند. تا دیروز ثبت‌نامِ بازِ همان بیمار
+   را کامل تحویل می‌گرفت: توکنِ فرم (خواندن/پرکردن/نوبت/حذفِ فیش) و `data` با موبایل، کدِ ملی، نشانی و پاسخ‌ها. */
+const leaks = (r) => {
+  const s = JSON.stringify(r.json ?? {});
+  return [...(s.match(/09\d{9}/g) ?? []), ...(s.includes(recNid) ? ['کدِ ملی'] : []), ...(own.json?.token && s.includes(own.json.token) ? ['توکن'] : [])];
+};
 const other = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: `0938${run}2` });
-ok(other.status < 300 && other.json?.linkSmsTo === 'شمارهٔ ثبت‌شده در پرونده', `PF12: شمارهٔ دیگر ← «شمارهٔ ثبت‌شده در پرونده»، نه ${recPhone.slice(0, 4)}… (${other.status} «${other.json?.linkSmsTo}»)`, msg(other));
+ok(other.status < 300 && other.json?.resume === true, `PS1: ثبت‌نامِ باز ← فقط «ادامه با موبایل + کد» (${other.status})`, JSON.stringify(other.json ?? {}).slice(0, 160));
+ok(!!other.json && !('token' in other.json) && !('data' in other.json) && leaks(other).length === 0,
+  `PS1: پاسخِ غریبه نه توکن دارد نه داده نه هیچ شمارهٔ کاملی (${leaks(other).join('، ') || 'هیچ'})`);
+ok(other.json?.linkSmsTo == null || other.json?.linkSmsTo === ON_RECORD, `PF12: شمارهٔ دیگر ← «${ON_RECORD}» یا هیچ، نه ${recPhone.slice(0, 4)}… («${other.json?.linkSmsTo}»)`, msg(other));
+/* کسی که شمارهٔ پرونده را هم می‌داند **همان** پاسخ را می‌گیرد — هر تفاوتی تأییدِ حدسِ شماره بود. */
+const knows = await register(link, { lastName: 'پرونده‌دار', nationalId: recNid, phone: recPhone });
+ok(knows.status < 300 && keys(knows.json) === keys(other.json) && knows.json?.linkSmsTo === other.json?.linkSmsTo && leaks(knows).length === 0,
+  `PS1: با شمارهٔ درستِ پرونده هم همان پاسخ، بی‌توکن (${keys(knows.json)} / ${keys(other.json)})`);
+/* صاحبِ اصلی با «ادامه با موبایل + کد» به **همان** فرم می‌رسد — و توکنِ قبلی (که شاید کسِ دیگری با ثبت‌نامِ اول
+   گرفته بود) از همان لحظه دیگر چیزی باز نمی‌کند. */
+const resumeReq = await call(`/public/intake/link/${link.token}/resume/request`, { body: { phone: recPhone }, ip: '10.66.0.2' });
+const resumed = await call(`/public/intake/link/${link.token}/resume/verify`, { body: { phone: recPhone, code: resumeReq.json?.devCode }, ip: '10.66.0.2' });
+const back = await call(`/public/intake/form/${resumed.json?.token}`, { method: 'GET' });
+ok(resumed.status < 300 && back.status < 300 && back.json?.data?.nationalId === recNid,
+  `PS1: صاحبِ پرونده با موبایل + کد به همان فرم رسید (${resumeReq.status}/${resumed.status}/${back.status})`, msg(resumed) || msg(back));
+const stale = await call(`/public/intake/form/${own.json?.token}`, { method: 'GET' });
+ok(!!resumed.json?.token && resumed.json.token !== own.json?.token && stale.status === 404,
+  `PS1: ادامه با کد توکنِ فرم را نو می‌کند؛ توکنِ پیشین دیگر باز نمی‌کند (${stale.status})`);
 /* PF7 — سه بیمارِ تازه، یک شماره: سقفِ «یک پیامک در ده دقیقه» فقط به‌ازای ثبت‌نام بود، پس هر ثبت‌نام یک
    پیامکِ دیگر به همان شماره می‌فرستاد. سقفِ تازه: دو پیامک در ساعت به هر شماره، بی‌صدا. */
 const bombed = `0937${run}1`;
@@ -319,9 +346,27 @@ function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = 
   const box = fakeIntake({ recordPhone: '' });
   box.svc.prisma.patient.findFirst = async () => ({ phone: `0912${String(++n).padStart(7, '0')}` });
   const shown = [];
-  for (let i = 1; i <= 151; i++) shown.push(await box.svc.sendContinueLink(1, `tok-${i}`, 'فرم', 7, `0912${String(i).padStart(7, '0')}`));
+  for (let i = 1; i <= 151; i++) shown.push(await box.svc.sendContinueLink(1, { id: i, token: `tok-${i}` }, 'فرم', 7));
   await later(30);
   ok(box.seen.sent.length === 150 && shown[150] === null, `PF7: سقفِ روزانهٔ لینک — ۱۵۰ پیامک از ۱۵۱ ثبت‌نام (${box.seen.sent.length})، و پاسخِ آخری ادعای «پیامک شد» ندارد`);
+}
+
+{
+  /* PS1 — ثبت‌نامِ دوباره روی ثبت‌نامِ باز: پیامکِ شمارهٔ پرونده توکنِ **نو** می‌برد و توکنِ پیشین (که شاید کسی با
+     ثبت‌نامِ اول گرفته بود) باطل می‌شود. پیامکی که سقف جلویش را گرفته نه توکن را عوض می‌کند نه ادعای «پیامک شد». */
+  const box = fakeIntake({ recordPhone: '09127770001' });
+  const rotated = [];
+  box.svc.prisma.intakeSubmission.update = async ({ where, data }) => { rotated.push({ id: where.id, token: data.token }); return {}; };
+  const texts = [];
+  box.svc.sms.send = async (to, text) => { texts.push(text); return { sent: true, stub: false }; };
+  const first = await box.svc.sendContinueLink(1, { id: 41, token: 'held-by-first-registrant' }, 'فرم', 7, { rotate: true });
+  await later(30);
+  const fresh = rotated[0]?.token ?? '';
+  ok(first === 'شمارهٔ ثبت‌شده در پرونده' && rotated.length === 1 && rotated[0].id === 41 && fresh.length >= 20 && fresh !== 'held-by-first-registrant',
+    `PS1: پیش از پیامک توکنِ ثبت‌نامِ باز نو شد (${rotated.length})`);
+  ok(texts.length === 1 && texts[0].includes(`/f/${fresh}`) && !texts[0].includes('held-by-first-registrant'), 'PS1: پیامک لینکِ توکنِ نو را می‌برد، نه توکنِ پیشین');
+  const again = await box.svc.sendContinueLink(1, { id: 41, token: fresh }, 'فرم', 7, { rotate: true });
+  ok(again === null && rotated.length === 1 && texts.length === 1, 'PS1: درخواستِ دوم در ده دقیقه ← نه پیامک، نه توکنِ نو، نه ادعای «پیامک شد»');
 }
 
 /** AuthService روی یک دیتابیسِ درون‌حافظه‌ایِ کوچک — فقط جدول‌هایی که بازیابیِ رمز می‌خواند و می‌نویسد. */
